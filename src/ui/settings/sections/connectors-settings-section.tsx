@@ -5,6 +5,7 @@ import { useRef, useState } from "react";
 import type { HubClient } from "@/hub/client";
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
 import { invalidateMcpConnectorProjection } from "@/ui/mcp/use-mcp-projection";
+import { invalidateCustomApiProjection } from "@/ui/mcp/use-custom-api-projection";
 import { McpContent } from "@/ui/mcp/mcp-content";
 import { McpCreateDialog } from "@/ui/mcp/mcp-create-dialog";
 import type { McpCreateMode } from "@/ui/mcp/mcp-panel-model";
@@ -25,7 +26,6 @@ export function ConnectorsSettingsSection({
   readBoundary,
 }: ConnectorsSettingsSectionProps) {
   const [mode, setMode] = useState<McpCreateMode | null>(null);
-  const [connectorRefreshKey, setConnectorRefreshKey] = useState(0);
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const openCreate = (
     nextMode: McpCreateMode,
@@ -43,7 +43,6 @@ export function ConnectorsSettingsSection({
         embedded
         initialView="connections"
         settingsLayout
-        refreshKey={connectorRefreshKey}
         brandName={brandName}
         {...(readBoundary === undefined ? {} : { readBoundary })}
         onCreateMcp={openCreate}
@@ -57,10 +56,10 @@ export function ConnectorsSettingsSection({
             if (!open) setMode(null);
           }}
           onDone={async () => {
-            if (mode === "custom-api") setConnectorRefreshKey((value) => value + 1);
+            const identity = preview ? "preview" : readBoundary?.admitted ? readBoundary.subject : null;
+            if (mode === "custom-api" && identity != null) invalidateCustomApiProjection(client, identity);
             else if (mode !== "json") {
               // Register and remote Prepare/OAuth can settle in different reads.
-              const identity = preview ? "preview" : readBoundary?.admitted ? readBoundary.subject : null;
               if (identity != null) invalidateMcpConnectorProjection(client, identity);
             }
             setMode(null);

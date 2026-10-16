@@ -1,3 +1,7 @@
+### Custom API 创建投影刷新
+
+全局创建与 Settings 内部创建在确认成功后，共用 `invalidateCustomApiProjection` 精确失活原 client／subject 的 Custom API 投影；不重挂整个 Settings、不误刷新 MCP／Provider。既有 rail 行为测试覆盖打开前的旧预热、挂载共享读者及取消后迟到的旧页，不把创建表单的准入／未知结果恢复冒称完成。
+
 ### 登录 URL 日志边界
 
 `next.config.ts` 对既有验证链接/登录交互及精确 OAuth authorize、产品 callback 路径关闭开发请求 URL 日志，避免记录授权参数；不关闭普通业务日志，不改变路由或认证。`tests/system/iam-relay-next-http.integration.test.ts` 通过隔离真实 Next 的 stdout 验证敏感 marker 不出现，普通及 callback 相似路径 marker 继续出现。

@@ -7,7 +7,7 @@ import type { SkillCard } from "@/hub/schemas";
 import type { SkillsScopeFilter } from "@/ui/skills/skills-scope";
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
 import { browserHubClient } from "@/ui/shell/page-clients";
-import { warmCustomApiProjection } from "@/ui/mcp/use-custom-api-projection";
+import { invalidateCustomApiProjection, warmCustomApiProjection } from "@/ui/mcp/use-custom-api-projection";
 import { invalidateMcpConnectorProjection, warmMcpProjection } from "@/ui/mcp/use-mcp-projection";
 import { createManusSkillHubClient, retainManusSkillHubClient } from "@/ui/skills/manus-skill-client";
 import { warmSkillsPool } from "@/ui/skills/skills-panel";
@@ -131,7 +131,9 @@ export function AppFrameOverlaySurfaces({
             if (connectorIdentity !== null) invalidateMcpConnectorProjection(browserHubClient({ preview }), connectorIdentity);
           }}
           onDone={async () => {
-            if ((mcpCreateMode === "form" || mcpCreateMode === "url") && connectorIdentity !== null)
+            if (mcpCreateMode === "custom-api" && connectorIdentity !== null)
+              invalidateCustomApiProjection(browserHubClient({ preview }), connectorIdentity);
+            else if ((mcpCreateMode === "form" || mcpCreateMode === "url") && connectorIdentity !== null)
               invalidateMcpConnectorProjection(browserHubClient({ preview }), connectorIdentity);
           }}
           returnFocusRef={mcpCreateReturnFocusRef}

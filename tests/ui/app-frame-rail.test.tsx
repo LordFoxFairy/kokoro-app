@@ -2505,6 +2505,88 @@ it.each([false, true])("a global MCP import invalidates Settings before it opens
 })
 
 
+it.each([
+  { entry: "global", pendingWarm: false }, { entry: "global", pendingWarm: true },
+  { entry: "settings", pendingWarm: false }, { entry: "settings", pendingWarm: true },
+])("$entry API creation refreshes shared readers only after ACK (old warm pending: $pendingWarm)", async ({ entry, pendingWarm }) => {
+  const pageClients = await import("@/ui/shell/page-clients")
+  const { ConnectorsSettingsSection } = await import("@/ui/settings/sections/connectors-settings-section")
+  const { warmCustomApiProjection, useCustomApiProjection } = await import("@/ui/mcp/use-custom-api-projection")
+  const empty = { items: [], page: { next_cursor: null } }
+  const profile = { profile_id: "created-api", name: "New shared API", state_version: "1",
+    created_at: "2026-10-16T12:00:00Z", updated_at: "2026-10-16T12:00:00Z", environment: [] }
+  let resolveOld!: (value: typeof empty) => void, acknowledge!: () => void
+  const oldWarm = new Promise<typeof empty>(resolve => { resolveOld = resolve })
+  const acknowledgement = new Promise<void>(resolve => { acknowledge = resolve })
+  let created = false
+  const list = vi.fn().mockImplementationOnce(() => pendingWarm ? oldWarm : Promise.resolve(empty))
+    .mockImplementation(async () => ({ ...empty, items: created ? [profile] : [] }))
+  const hub = { ...createHubClient(), listCustomApis: list,
+    listMcpConnectors: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+    listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+    listSkills: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+    createCustomApi: vi.fn(async () => { await acknowledgement; created = true; return profile }),
+  }
+  vi.spyOn(pageClients, "browserHubClient").mockReturnValue(hub)
+  const release = warmCustomApiProjection({ client: hub, identity: "preview" })
+  const reader = entry === "settings"
+    ? renderHook(() => useCustomApiProjection({ client: hub, identity: "preview", refreshKey: 0 })) : null
+  // Both the same client's other actor and another client are outside this write.
+  const otherRelease = warmCustomApiProjection({ client: hub, identity: "preview-other" })
+  const other = renderHook(() => useCustomApiProjection({ client: hub, identity: "preview-other", refreshKey: 0 }))
+  const otherHub = { ...hub, listCustomApis: vi.fn().mockResolvedValue(empty) }
+  const independent = renderHook(() => useCustomApiProjection({ client: otherHub, identity: "preview", refreshKey: 0 }))
+  await waitFor(() => expect(other.result.current.loading).toBe(false))
+  await waitFor(() => expect(independent.result.current.loading).toBe(false))
+  function Shell() {
+    const [mode, setMode] = useState<import("@/ui/mcp/mcp-panel-model").McpCreateMode | null>(null)
+    const [settings, setSettings] = useState<"mcp" | null>(null)
+    const shell = useRef<HTMLDivElement | null>(null), trigger = useRef<HTMLElement | null>(null)
+    return <div ref={shell}>
+      <button onClick={() => setMode("custom-api")}>Global API create</button>
+      <button onClick={() => setSettings("mcp")}>Manage connectors</button>
+      <AppFrameOverlaySurfaces mounted settingsTab={settings} preview brandName="Kokoro"
+        onCloseSettings={() => setSettings(null)} onTabChange={tab => setSettings(tab === "mcp" ? "mcp" : null)}
+        onCreateSkillWithAi={vi.fn()} onTrySkill={() => false} settingsReturnFocusRef={trigger} shellRef={shell}
+        mcpCreateMode={mode} setMcpCreateMode={setMode} mcpCreateReturnFocusRef={trigger}
+        commandMenu={() => null} commandProps={{ onNewChat: vi.fn(), onOpenSettings: vi.fn() }}
+        commandOpen={false} onCommandOpenChange={vi.fn()} />
+    </div>
+  }
+  render(<StrictMode><LocaleProvider>{entry === "global" ? <Shell /> :
+    <ConnectorsSettingsSection client={hub} preview brandName="Kokoro" />}</LocaleProvider></StrictMode>)
+  await act(async () => { await Promise.resolve() })
+  if (entry === "global") fireEvent.click(screen.getByRole("button", { name: "Global API create" }))
+  else {
+    fireEvent.keyDown(screen.getByRole("button", { name: "创建" }), { key: "ArrowDown" })
+    fireEvent.click(await screen.findByRole("menuitem", { name: "自定义 API" }))
+  }
+  const input = await screen.findByRole("textbox", { name: "名称" })
+  fireEvent.change(input, { target: { value: profile.name } })
+  fireEvent.click(screen.getByRole("button", { name: "保存" }))
+  await waitFor(() => expect(hub.createCustomApi).toHaveBeenCalledOnce())
+  expect(list).toHaveBeenCalledTimes(2)
+  const connectorReads = hub.listMcpConnectors.mock.calls.length
+  const providerReads = hub.listMcpConnectorProviders.mock.calls.length
+  await act(async () => { acknowledge(); await acknowledgement })
+  await waitFor(() => expect(input.isConnected).toBe(false))
+  if (entry === "global") fireEvent.click(screen.getByRole("button", { name: "Manage connectors" }))
+  if (reader) await waitFor(() => expect(reader.result.current.data.items).toEqual([profile]))
+  expect(await screen.findByRole("button", { name: "New shared API" })).toBeVisible()
+  expect(list).toHaveBeenCalledTimes(3)
+  expect(hub.listMcpConnectors).toHaveBeenCalledTimes(connectorReads)
+  expect(hub.listMcpConnectorProviders).toHaveBeenCalledTimes(providerReads)
+  if (pendingWarm) await act(async () => { resolveOld(empty); await oldWarm })
+  reader?.unmount()
+  const reopened = renderHook(() => useCustomApiProjection({ client: hub, identity: "preview", refreshKey: 0 }))
+  expect(reopened.result.current.data.items).toEqual([profile])
+  expect(list).toHaveBeenCalledTimes(3)
+  expect(other.result.current.data.items).toEqual([])
+  expect(independent.result.current.data.items).toEqual([])
+  expect(otherHub.listCustomApis).toHaveBeenCalledOnce()
+  release(); otherRelease(); reopened.unmount(); other.unmount(); independent.unmount()
+})
+
 it("connector invalidation preserves another actor and retries a failed mounted read without a remount", async () => {
   const { invalidateMcpConnectorProjection, useMcpProjection } = await import("@/ui/mcp/use-mcp-projection")
   const page = (name: string) => ({ items: [{ connector_id: name, connector_type: "mcp" as const,

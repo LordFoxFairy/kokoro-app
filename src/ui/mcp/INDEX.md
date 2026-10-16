@@ -23,14 +23,14 @@ OAuth 点击同步预开并隔离 popup，再使用 owner 返回的 HTTPS URL；
 - `mcp-projection-types.ts`：共享的投影视图类型、分类词汇和 owner artwork/status 映射；不含请求或模拟数据。
 
 
-MCP 注册／原子导入与已确认的个人命令，统一失活当前 client／subject 的连接器页和首屏持久投影，并通知挂载读者重新读取；Provider 元数据保持独立。旧预热与旧请求按共享 revision 退休，即使取消后迟到也不写回。全局创建和 Settings 内部创建共用该规则，Settings 不再因写入重挂整个连接器内容，搜索等用户意图保留；Custom API 是独立投影，不把此 MCP 规则冒称全局 API 创建闭环。
+MCP 注册／原子导入与已确认的个人命令，统一失活当前 client／subject 的连接器页和首屏持久投影，并通知挂载读者重新读取；Provider 元数据保持独立。旧预热与旧请求按共享 revision 退休，即使取消后迟到也不写回。全局创建和 Settings 内部创建共用该规则，Settings 不再因写入重挂整个连接器内容，搜索等用户意图保留。Custom API 是独立投影：两个创建入口确认成功后统一调用 `invalidateCustomApiProjection`，取消原主体的旧预热／读取并通知共享读者，不刷新其他主体、client、MCP 或 Provider；仅本地 refreshKey 不再充当创建刷新机制。
 
 
 ## 同 actor 登录重核
 
 查询、分类、cursor、目录开关和精确 connector/server、provider/connection、API profile locator 属于 actor 稳定的展示意图；Settings 与 Plugins 不因临时失准入卸载整面板。所有 owner 投影、私有详情、错误/忙态与删除确认按 client/主体/准入代际退休；失准入只显示无私有数据的详情壳，恢复后从新页精确找回原资源，缺失或读取失败保留显式重试，不按名称或新绑定替代。换 actor（包括 A→B→A）清空意图。
 
-已打开的自定义详情保持 Dialog DOM；配置仅保用户明确输入的 dirty 字段，未编辑字段从新 owner 配置读取，保存使用新 CAS。旧读取消且迟到不展示；旧命令不关当前窗口、不发布旧 ACK，已确认写仍按原 actor 失活正确的 MCP／Custom API 独立投影。OAuth popup 在准入退休时关闭、取消并禁止迟到导航，旧 Create 确认也失活 pending 连接，而不继续旧授权。新 create/browse 在重核期间暂停；现创建表单自身完整恢复矩阵与全局 Custom API 创建投影仍为独立后继，不冒称本片已覆盖。
+已打开的自定义详情保持 Dialog DOM；配置仅保用户明确输入的 dirty 字段，未编辑字段从新 owner 配置读取，保存使用新 CAS。旧读取消且迟到不展示；旧命令不关当前窗口、不发布旧 ACK，已确认写仍按原 actor 失活正确的 MCP／Custom API 独立投影。OAuth popup 在准入退休时关闭、取消并禁止迟到导航，旧 Create 确认也失活 pending 连接，而不继续旧授权。新 create/browse 在重核期间暂停；现创建表单自身完整准入与未知结果恢复矩阵仍为独立后继，不冒称本片已覆盖。
 
 
 配置编辑的准入重核不重建表单或文本控件：尚未明确修改的owner值和已配置header/env描述立即清空，dirty用户输入仅在本actor内保留；控件readonly且保存/Prepare/管理/草稿增删暂停，Close/Retry仍可用。`use-mcp-editor-selection.ts`只保存字段ID、选择范围/方向/文本长度和控件内部scroll，不保字段值、已移除控件或凭据；恢复时限定当前仍聚焦的本表单控件，裁剪并更新范围，承接pending期间的新选择而非抢回旧焦点。原生不支持selection API的URL控件不强设range；generic provider editor/创建表单不冒称已覆盖本片。
