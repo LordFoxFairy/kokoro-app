@@ -37,6 +37,8 @@ import type {
 } from "@/hub/mcp-connector.schema";
 import { useT } from "@/i18n/context";
 
+import type { McpManagementSummary } from "./mcp-management-commands";
+import { McpManagementStatus } from "./mcp-management-status";
 import styles from "./custom-mcp-detail-dialog.module.css";
 import { useMcpEditorSelection } from "./use-mcp-editor-selection";
 import { isMcpCustomHeaderName } from "./mcp-header-validation";
@@ -52,6 +54,9 @@ export function CustomMcpDetailDialog({
   connector,
   server,
   actionId,
+  admitted,
+  managementCommand,
+  onResumeManagement,
   actionError,
   deleteId,
   returnFocusRef,
@@ -74,6 +79,9 @@ export function CustomMcpDetailDialog({
   pendingError?: boolean;
   onRetry?: () => void;
   actionId: string | null;
+  admitted: boolean;
+  managementCommand: McpManagementSummary | undefined;
+  onResumeManagement: () => void;
   actionError: boolean;
   deleteId: string | null;
   returnFocusRef: RefObject<HTMLElement | null>;
@@ -92,7 +100,7 @@ export function CustomMcpDetailDialog({
   onDelete: () => void;
 }) {
   const t = useT();
-  const ready = server !== null && connector !== null;
+  const ready = admitted && server !== null && connector !== null;
   const currentServer = ready ? server : null;
   const [editing, setEditing] = useState(false);
   // Store only explicit user edits across a recheck, never the previous owner
@@ -106,8 +114,15 @@ export function CustomMcpDetailDialog({
   const [managementOpen, setManagementOpen] = useState(false);
   const [headers, setHeaders] = useState<HeaderDraft[]>([]);
   const [removedHeaders, setRemovedHeaders] = useState<string[]>([]);
-  const busy = actionId === connector?.connector_id;
-  const locked = busy || !ready || preparationState === "unknown" || preparationState === "completed";
+  const managementLocked = managementCommand !== undefined && managementCommand.kind !== "rejected";
+  const busy = actionId === connector?.connector_id || managementCommand?.kind === "running";
+  const [observedKind, setObservedKind] = useState(managementCommand?.kind);
+  if (observedKind !== managementCommand?.kind) {
+    setObservedKind(managementCommand?.kind);
+    if (managementCommand?.kind === "completed") { setHeaders([]); setRemovedHeaders([]); }
+  }
+  const managementStatus = <McpManagementStatus command={managementCommand} admitted={admitted} onResume={onResumeManagement} />;
+  const locked = managementLocked || busy || !ready || preparationState === "unknown" || preparationState === "completed";
   const prepareLabel = preparationState === "unknown" ? t(connectorCommandMayResume(preparationFailure) ? "mcp.retryOriginal" : "mcp.recovery.inspectRequired") : preparationState === "completed" ? t("mcp.creationDone") : "试用一下";
   const selectionProps = useMcpEditorSelection(ready);
   const invalidHeaderName = headers.some(
@@ -145,7 +160,7 @@ export function CustomMcpDetailDialog({
     <Dialog
       open
       onOpenChange={(next) => {
-        if (!next && (actionId === null || preparationState === "running")) onClose();
+        if (!next && (managementLocked || actionId === null || preparationState === "running")) onClose();
       }}
     >
       <DialogContent
@@ -164,6 +179,7 @@ export function CustomMcpDetailDialog({
             aria-busy={!ready && !pendingError}
           >
             <div className={styles.configurationBody}>
+              {managementStatus}
               <header className={styles.configurationHeader}>
                 <DialogTitle>MCP 配置</DialogTitle>
                 <Button
@@ -196,11 +212,11 @@ export function CustomMcpDetailDialog({
                 <div className={styles.field}>
                   <Label htmlFor="custom-mcp-name">服务器名称</Label>
                   <Input
-                    readOnly={!ready}
+                    readOnly={locked}
                     id="custom-mcp-name"
                     value={name}
                     maxLength={100}
-                    onChange={(event) => ready && setName(event.target.value)}
+                    onChange={(event) => !locked && setName(event.target.value)}
                     required
                   />
                 </div>
@@ -227,22 +243,22 @@ export function CustomMcpDetailDialog({
                   备注 <span className={styles.optional}>（可选）</span>
                 </Label>
                 <Textarea
-                  readOnly={!ready}
+                  readOnly={locked}
                   id="custom-mcp-notes"
                   value={notes}
                   placeholder="提供 MCP 文档或说明，以告知 Kokoro 如何及何时使用此 MCP"
                   maxLength={4000}
-                  onChange={(event) => ready && setNotes(event.target.value)}
+                  onChange={(event) => !locked && setNotes(event.target.value)}
                 />
               </div>
               <div className={styles.field}>
                 <Label htmlFor="custom-mcp-server-url">服务器 URL</Label>
                 <Input
-                  readOnly={!ready}
+                  readOnly={locked}
                   id="custom-mcp-server-url"
                   type="url"
                   value={serverUrl}
-                  onChange={(event) => ready && setServerUrl(event.target.value)}
+                  onChange={(event) => !locked && setServerUrl(event.target.value)}
                   required
                 />
               </div>
@@ -273,12 +289,12 @@ export function CustomMcpDetailDialog({
                 {headers.map((header) => (
                   <div className={styles.headerDraft} key={header.id}>
                     <Input
-                      readOnly={!ready}
+                      readOnly={locked}
                       id={`mcp-header-${header.id}-name`}
                       aria-label="Header name"
                       value={header.name}
                       onChange={(event) =>
-                        ready && setHeaders((items) =>
+                        !locked && setHeaders((items) =>
                           items.map((item) =>
                             item.id === header.id
                               ? { ...item, name: event.target.value }
@@ -288,13 +304,13 @@ export function CustomMcpDetailDialog({
                       }
                     />
                     <Input
-                      readOnly={!ready}
+                      readOnly={locked}
                       id={`mcp-header-${header.id}-value`}
                       aria-label="Header value"
                       type="password"
                       value={header.value}
                       onChange={(event) =>
-                        ready && setHeaders((items) =>
+                        !locked && setHeaders((items) =>
                           items.map((item) =>
                             item.id === header.id
                               ? { ...item, value: event.target.value }
@@ -310,7 +326,7 @@ export function CustomMcpDetailDialog({
                       disabled={locked}
                       aria-label="移除新增 Header"
                       onClick={() =>
-                        ready && setHeaders((items) =>
+                        !locked && setHeaders((items) =>
                           items.filter((item) => item.id !== header.id),
                         )
                       }
@@ -364,7 +380,7 @@ export function CustomMcpDetailDialog({
                 </DropdownMenuContent>
               </DropdownMenu>
               <div className={styles.configurationActions}>
-                <Button type="button" variant="outline" disabled={busy || !ready || !connectorCommandMayResume(preparationFailure)} onClick={onPrepare}>
+                <Button type="button" variant="outline" disabled={managementLocked || busy || !ready || !connectorCommandMayResume(preparationFailure)} onClick={onPrepare}>
                   {busy ? <Spinner aria-hidden="true" /> : <Send aria-hidden="true" />}
                   {prepareLabel}
                 </Button>
@@ -391,6 +407,7 @@ export function CustomMcpDetailDialog({
           <section className={styles.detail} aria-busy={!pendingError}>
             <header className={styles.detailHero}><DialogTitle>{t("mcp.edit")}</DialogTitle></header>
             <div className={styles.detailBody}>
+              {managementStatus}
               {pendingError ? <Alert variant="destructive" role="alert"><AlertDescription>{t("mcp.loadError")}</AlertDescription><Button type="button" variant="outline" onClick={onRetry}>{t("mcp.retry")}</Button></Alert> : <span role="status">{t("mcp.loading")}</span>}
             </div>
           </section>
@@ -402,7 +419,7 @@ export function CustomMcpDetailDialog({
               </span>
               <DialogTitle>{server.display_name}</DialogTitle>
               <div className={styles.detailActions}>
-                <Button type="button" disabled={busy || !connectorCommandMayResume(preparationFailure)} onClick={onPrepare}>
+                <Button type="button" disabled={managementLocked || busy || !connectorCommandMayResume(preparationFailure)} onClick={onPrepare}>
                   {busy ? (
                     <Spinner aria-hidden="true" />
                   ) : (
@@ -412,7 +429,7 @@ export function CustomMcpDetailDialog({
                 </Button>
                 <DropdownMenu open={managementOpen} onOpenChange={setManagementOpen}>
                   <DropdownMenuTrigger asChild>
-                    <Button type="button" variant="outline">
+                    <Button type="button" variant="outline" disabled={managementLocked}>
                       管理
                       <ChevronDown aria-hidden="true" />
                     </Button>
@@ -421,7 +438,7 @@ export function CustomMcpDetailDialog({
                     align="start"
                     className={styles.managementMenu}
                   >
-                    <DropdownMenuItem disabled={busy} onSelect={onDisconnect}>
+                    <DropdownMenuItem disabled={managementLocked || busy} onSelect={onDisconnect}>
                       <Link2Off aria-hidden="true" />
                       断开连接
                     </DropdownMenuItem>
@@ -438,7 +455,7 @@ export function CustomMcpDetailDialog({
                     <DropdownMenuSeparator className={styles.managementDivider} />
                     <DropdownMenuItem
                       className={styles.dangerMenuItem}
-                      disabled={busy}
+                      disabled={managementLocked || busy}
                       onSelect={onDeleteIntent}
                     >
                       <Trash2 aria-hidden="true" />
@@ -449,6 +466,7 @@ export function CustomMcpDetailDialog({
               </div>
             </header>
             <div className={styles.detailBody}>
+              {managementStatus}
               {actionError ? (
                 <Alert variant="destructive" role="alert">
                   <AlertDescription>{t("mcp.actionFailed")}</AlertDescription>
@@ -487,7 +505,7 @@ export function CustomMcpDetailDialog({
                   <Button
                     type="button"
                     variant="destructive"
-                    disabled={busy}
+                    disabled={managementLocked || busy}
                     onClick={onDelete}
                   >
                     {t("mcp.deleteConfirm")}
@@ -495,7 +513,7 @@ export function CustomMcpDetailDialog({
                   <Button
                     type="button"
                     variant="outline"
-                    disabled={busy}
+                    disabled={managementLocked || busy}
                     onClick={onCancelDelete}
                   >
                     {t("mcp.cancel")}

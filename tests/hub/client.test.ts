@@ -416,16 +416,16 @@ describe("hub client", () => {
         display_name: "Renamed",
         description: "Ready",
         expected_state_version: "2",
-      }),
+      }, "management-key"),
     ).resolves.toMatchObject({ display_name: "Renamed", state_version: "3" });
     await expect(
       client.setMcpConnectorEnabled("connector-1", {
         enabled: false,
         expected_state_version: "2",
-      }),
+      }, "management-key"),
     ).resolves.toMatchObject({ enabled: false });
     await expect(
-      client.removeMcpConnector("connector-1", { expected_state_version: "2" }),
+      client.removeMcpConnector("connector-1", { expected_state_version: "2" }, "management-key"),
     ).resolves.toMatchObject({ status: "revoked" });
 
     expect(
@@ -1088,10 +1088,11 @@ describe("hub client", () => {
     const updated = await client.updatePrivateMcpServer?.("server-private", {
       expected_state_version: prepared!.server.state_version,
       display_name: "Renamed",
-    });
+    }, "update-command-key");
     await client.deletePrivateMcpServer?.(
       "server-private",
       updated!.server.state_version,
+      "delete-command-key",
     );
     expect(fetchMock.mock.calls.map(([path]) => path)).toEqual([
       "/api/hub/mcp/servers",
@@ -1114,10 +1115,9 @@ describe("hub client", () => {
     expect(fetchMock.mock.calls.slice(0, 2).map(([, init]) =>
       new Headers((init as RequestInit).headers).get("idempotency-key"),
     )).toEqual(["register-command-key", "prepare-command-key"]);
-    for (const [, init] of fetchMock.mock.calls.slice(2))
-      expect(
-        new Headers((init as RequestInit).headers).get("idempotency-key"),
-      ).toMatch(/^mcp-private-server:/);
+    expect(fetchMock.mock.calls.slice(2).map(([, init]) =>
+      new Headers((init as RequestInit).headers).get("idempotency-key"),
+    )).toEqual(["update-command-key", "delete-command-key"]);
   });
 
 });
@@ -1946,4 +1946,33 @@ it("binds API edit ACK fields and descriptors and preserves the explicit managem
   fetchMock.mockResolvedValueOnce(publicResponse({ data: { profile_id: "managed-api", deleted: true, replayed: true } }));
   await expect(hub.removeCustomApi!("managed-api", { expected_state_version: "1" }, "management-key")).resolves.toBeUndefined();
   for (const [, request] of fetchMock.mock.calls) expect(new Headers(request?.headers).get("Idempotency-Key")).toBe("management-key");
+});
+
+it("rejects MCP management ACKs bound to another target instead of acknowledging the requested write", async () => {
+  const fetchMock = vi.fn<typeof fetch>(); vi.stubGlobal("fetch", fetchMock);
+  const hub = createHubClient();
+  const connector = { connector_id: "other-connector", connector_type: "mcp", provider_key: "fixture", display_name: "Edited", description: "Note", status: "active", enabled: false, approved_scopes: [], state_version: "2" };
+  for (const action of [() => hub.updateMcpConnector("target-connector", { display_name: "Edited", description: "Note", expected_state_version: "1" }, "management-key"), () => hub.setMcpConnectorEnabled("target-connector", { enabled: false, expected_state_version: "1" }, "management-key"), () => hub.removeMcpConnector("target-connector", { expected_state_version: "1" }, "management-key")]) {
+    fetchMock.mockResolvedValueOnce(publicResponse({ data: { connector } }));
+    await expect(action()).rejects.toMatchObject({ reason: "parse" });
+  }
+  const server = { server_id: "other-server", display_name: "Edited", server_url: "https://mcp.example.test/", status: "pending", state_version: "2", headers: [], prepare_status: "pending_prepare", declarations: [], declarations_available: false };
+  fetchMock.mockResolvedValueOnce(publicResponse({ data: { server, connector: { ...connector, server_id: server.server_id }, replayed: false } }));
+  await expect(hub.updatePrivateMcpServer!("target-server", { expected_state_version: "1", display_name: "Edited" }, "management-key")).rejects.toMatchObject({ reason: "parse" });
+  fetchMock.mockResolvedValueOnce(publicResponse({ data: { server_id: "other-server", deleted: true, replayed: false } }));
+  await expect(hub.deletePrivateMcpServer!("target-server", "1", "management-key")).rejects.toMatchObject({ reason: "parse" });
+});
+
+it("requires private MCP edit ACKs to reflect the explicitly written safe fields and header descriptors", async () => {
+  const fetchMock = vi.fn<typeof fetch>(); vi.stubGlobal("fetch", fetchMock);
+  const hub = createHubClient();
+  const connector = { connector_id: "edited-connector", server_id: "edited-server", connector_type: "mcp", provider_key: "fixture", display_name: "Edited", description: "Note", status: "pending", enabled: false, approved_scopes: [], state_version: "2" };
+  const server = { server_id: "edited-server", display_name: "Edited", server_url: "https://mcp.example.test/new", notes: "New note", status: "pending", state_version: "2", headers: [{ name: "x-test", configured: true, status: "active", state_version: "1" }], prepare_status: "pending_prepare", declarations: [], declarations_available: false };
+  const input = { expected_state_version: "1", display_name: "Edited", server_url: "https://mcp.example.test/new", notes: "New note", header_upserts: [{ name: "x-test", value: "fixture-only" }], header_removals: ["x-old"] };
+  for (const wrong of [{ ...server, display_name: "Other" }, { ...server, server_url: "https://mcp.example.test/old" }, { ...server, notes: "Old note" }, { ...server, headers: [] }, { ...server, headers: [...server.headers, { name: "x-old", configured: true, status: "active", state_version: "1" }] }]) {
+    fetchMock.mockResolvedValueOnce(publicResponse({ data: { server: wrong, connector, replayed: false } }));
+    await expect(hub.updatePrivateMcpServer!("edited-server", input, "management-key")).rejects.toMatchObject({ reason: "parse" });
+  }
+  fetchMock.mockResolvedValueOnce(publicResponse({ data: { server, connector, replayed: true } }));
+  await expect(hub.updatePrivateMcpServer!("edited-server", input, "management-key")).resolves.toMatchObject({ server });
 });

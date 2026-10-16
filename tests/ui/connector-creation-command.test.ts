@@ -166,7 +166,7 @@ describe("private MCP creation registration and preparation", () => {
       preparePrivateMcpServer: vi.fn<NonNullable<HubClient["preparePrivateMcpServer"]>>(async () => { ready = true; return { server: server(true), connector: connector(true), declarations: [], replayed: false } }),
       beginMcpConnectorAuthorization: vi.fn(),
     }
-    const changed = vi.fn(), preparation = createMcpPreparationCommands({ client: hub, boundary, onConfirmed: changed })
+    const changed = vi.fn(), preparation = createMcpPreparationCommands({ canPrepare: () => true, client: hub, boundary, onConfirmed: changed })
     const source = createMcpServerCreationFlow({ client: hub, preparation, boundary, onChanged: changed })
     // The shell binds both lifetimes; the form owns neither actor admission.
     const flow = { ...source, bind: (value: typeof boundary) => { preparation.bind(value); source.bind(value) } }
@@ -314,7 +314,7 @@ describe("per-resource MCP preparation command owner", () => {
   it("independent resources do not block each other and unknown retries keep their own key/version", async () => {
     const call = vi.fn<NonNullable<HubClient["preparePrivateMcpServer"]>>().mockRejectedValueOnce(new Error("lost ACK"))
       .mockResolvedValueOnce(response("two-server", "two-connector")).mockResolvedValue(response())
-    const commands = createMcpPreparationCommands({ client: { preparePrivateMcpServer: call }, boundary: admitted, onConfirmed: vi.fn() })
+    const commands = createMcpPreparationCommands({ canPrepare: () => true, client: { preparePrivateMcpServer: call }, boundary: admitted, onConfirmed: vi.fn() })
     expect(await commands.prepare(target, admitted)).toBe(false)
     expect(await commands.prepare({ serverId: "two-server", connectorId: "two-connector", version: "8" }, admitted)).toBe(true)
     expect(await commands.prepare({ ...target, version: "99" }, admitted)).toBe(true)
@@ -327,7 +327,7 @@ describe("per-resource MCP preparation command owner", () => {
     let acknowledge!: (value: ReturnType<typeof response>) => void
     const call = vi.fn<NonNullable<HubClient["preparePrivateMcpServer"]>>(() => new Promise(resolve => { acknowledge = resolve }))
     const changed = vi.fn()
-    const commands = createMcpPreparationCommands({ client: { preparePrivateMcpServer: call }, boundary: admitted, onConfirmed: changed })
+    const commands = createMcpPreparationCommands({ canPrepare: () => true, client: { preparePrivateMcpServer: call }, boundary: admitted, onConfirmed: changed })
     const running = commands.prepare(target, admitted)
     commands.bind({ ...admitted, subject: "other-actor", generation: 2 })
     expect(call.mock.calls[0]?.[3]?.aborted).toBe(true)
@@ -339,7 +339,7 @@ describe("per-resource MCP preparation command owner", () => {
   it("a mismatched connector ACK remains unknown and a StrictMode lease replay preserves the command", async () => {
     const call = vi.fn<NonNullable<HubClient["preparePrivateMcpServer"]>>().mockResolvedValueOnce(response("one-server", "wrong-connector")).mockResolvedValue(response())
     const changed = vi.fn()
-    const commands = createMcpPreparationCommands({ client: { preparePrivateMcpServer: call }, boundary: admitted, onConfirmed: changed })
+    const commands = createMcpPreparationCommands({ canPrepare: () => true, client: { preparePrivateMcpServer: call }, boundary: admitted, onConfirmed: changed })
     const release = commands.retain(admitted)
     expect(await commands.prepare(target, admitted)).toBe(false)
     expect(changed).not.toHaveBeenCalled()
@@ -357,7 +357,7 @@ describe("per-resource MCP preparation command owner", () => {
       .mockImplementationOnce((_id, _version, _key, signal) => new Promise((_resolve, reject) => {
         signal?.addEventListener("abort", () => reject(new Error("current wait cancelled by known ACK")), { once: true })
       }))
-    const commands = createMcpPreparationCommands({ client: { preparePrivateMcpServer: call }, boundary: admitted, onConfirmed: vi.fn() })
+    const commands = createMcpPreparationCommands({ canPrepare: () => true, client: { preparePrivateMcpServer: call }, boundary: admitted, onConfirmed: vi.fn() })
     const old = commands.prepare(target, admitted)
     commands.bind({ ...admitted, admitted: false, generation: 2 })
     const current = { ...admitted, generation: 2 }; commands.bind(current)
@@ -408,7 +408,7 @@ it("published recoverable states resume only the original key/body and clear the
 
 it("an expired Prepare remains blocked across fresh CAS inputs and admission changes", async () => {
   const call = vi.fn().mockRejectedValue(new HubClientError("http", "safe", "mcp_personal_command_replay_expired", 412, false));
-  const commands = createMcpPreparationCommands({ client: { preparePrivateMcpServer: call }, boundary: admitted, onConfirmed: vi.fn() });
+  const commands = createMcpPreparationCommands({ canPrepare: () => true, client: { preparePrivateMcpServer: call }, boundary: admitted, onConfirmed: vi.fn() });
   const target = { serverId: "server-blocked", connectorId: "connector-blocked", version: "2" };
   await commands.prepare(target, admitted);
   expect(commands.getSnapshot()[0]).toMatchObject({ kind: "unknown", failure: "replay_expired" });
@@ -509,4 +509,87 @@ it("an earlier management ACK settles an active explicit retry without letting t
   expect(flow.finish("late-api", admitted)).toBe(true)
   expect(confirmed).toHaveBeenCalledTimes(2)
   expect(remove.mock.calls[0]?.slice(0, 3)).toEqual(remove.mock.calls[1]?.slice(0, 3))
+})
+
+describe("MCP typed management and Prepare interlock", () => {
+  const connector = { connector_id: "managed-connector", server_id: "managed-server", connector_type: "mcp" as const, provider_key: "fixture", status: "active" as const, enabled: true, state_version: "2", approved_scopes: [] }
+  const server = { server_id: "managed-server", display_name: "Edited", server_url: "https://mcp.example.test/", status: "pending" as const, state_version: "2", headers: [], prepare_status: "pending_prepare" as const, declarations: [], declarations_available: false }
+  const client = () => ({ updatePrivateMcpServer: vi.fn().mockResolvedValue({ server, connector, replayed: false }), deletePrivateMcpServer: vi.fn().mockResolvedValue({ server_id: server.server_id, deleted: true, replayed: false }), updateMcpConnector: vi.fn().mockResolvedValue(connector), setMcpConnectorEnabled: vi.fn().mockResolvedValue(connector), removeMcpConnector: vi.fn().mockResolvedValue({ ...connector, status: "revoked", enabled: false }), preparePrivateMcpServer: vi.fn().mockRejectedValue(new Error("unknown prepare")) })
+
+  it("freezes each of the five original operations and cannot replace it with another edit or new CAS", async () => {
+    const { createMcpLifecycleCommands } = await import("@/ui/mcp/mcp-management-commands")
+    const intents: import("@/ui/mcp/mcp-management-commands").McpManagementIntent[] = [
+      { operation: "update_server", connectorId: connector.connector_id, serverId: server.server_id, input: { expected_state_version: "1", display_name: "Edited", header_upserts: [{ name: "x-test", value: "frozen-header-value" }] } },
+      { operation: "delete_server", connectorId: connector.connector_id, serverId: server.server_id, input: { expected_state_version: "1" } },
+      { operation: "update_connector", connectorId: connector.connector_id, input: { expected_state_version: "1", display_name: "Edited", description: "Note" } },
+      { operation: "set_enabled", connectorId: connector.connector_id, input: { expected_state_version: "1", enabled: true } },
+      { operation: "disconnect", connectorId: connector.connector_id, input: { expected_state_version: "1" } },
+    ]
+    for (const intent of intents) {
+      const hub = client(), changed = vi.fn(), flow = createMcpLifecycleCommands({ client: hub, boundary: admitted, onConfirmed: changed })
+      const methods = { update_server: hub.updatePrivateMcpServer, delete_server: hub.deletePrivateMcpServer, update_connector: hub.updateMcpConnector, set_enabled: hub.setMcpConnectorEnabled, disconnect: hub.removeMcpConnector }
+      const method = methods[intent.operation]; method.mockRejectedValueOnce(new Error("lost ACK"))
+      expect(await flow.management.submit(intent, admitted)).toBe(false)
+      intent.input.expected_state_version = "9"
+      if (intent.operation === "update_server") intent.input.header_upserts![0]!.value = "changed header"
+      expect(await flow.management.submit({ operation: "disconnect", connectorId: connector.connector_id, input: { expected_state_version: "9" } }, admitted)).toBe(false)
+      const current = { ...admitted, generation: 2 }
+      flow.management.bind({ ...current, admitted: false }); flow.preparation.bind({ ...current, admitted: false })
+      flow.management.bind(current); flow.preparation.bind(current)
+      expect(await flow.management.resume(connector.connector_id, current)).toBe(true)
+      expect(method.mock.calls[0]?.slice(0, 3)).toEqual(method.mock.calls[1]?.slice(0, 3))
+      expect(JSON.stringify(flow.management.getSnapshot())).not.toMatch(/frozen-header-value|changed header|expected_state_version/)
+      expect(changed).toHaveBeenCalledOnce(); expect(flow.management.finish(connector.connector_id, current)).toBe(true)
+    }
+  })
+
+  it("blocks configuration changes during unknown Prepare but still permits explicit cleanup and only retires Prepare at its ACK", async () => {
+    const { createMcpLifecycleCommands } = await import("@/ui/mcp/mcp-management-commands")
+    const hub = client(), flow = createMcpLifecycleCommands({ client: hub, boundary: admitted, onConfirmed: vi.fn() })
+    const target = { serverId: server.server_id, connectorId: connector.connector_id, version: "1" }
+    expect(await flow.preparation.prepare(target, admitted)).toBe(false)
+    expect(await flow.management.submit({ operation: "update_server", connectorId: connector.connector_id, serverId: server.server_id, input: { expected_state_version: "2", display_name: "Other" } }, admitted)).toBe(false)
+    expect(hub.updatePrivateMcpServer).not.toHaveBeenCalled()
+    hub.removeMcpConnector.mockRejectedValueOnce(new Error("cleanup unknown"))
+    expect(await flow.management.submit({ operation: "disconnect", connectorId: connector.connector_id, serverId: server.server_id, input: { expected_state_version: "2" } }, admitted)).toBe(false)
+    expect(flow.preparation.getSnapshot()[0]?.kind).toBe("unknown")
+    expect(await flow.preparation.resume(server.server_id, connector.connector_id, admitted)).toBe(false)
+    expect(hub.preparePrivateMcpServer).toHaveBeenCalledOnce()
+    expect(await flow.management.resume(connector.connector_id, admitted)).toBe(true)
+    expect(flow.preparation.getSnapshot()).toEqual([])
+    expect(await flow.preparation.resume(server.server_id, connector.connector_id, admitted)).toBe(false)
+    expect(flow.management.finish(connector.connector_id, admitted)).toBe(true)
+  })
+
+  it("management locks only its exact resource, preserves terminal failures over recheck, and retires on actor change", async () => {
+    const { createMcpLifecycleCommands } = await import("@/ui/mcp/mcp-management-commands")
+    const hub = client(), flow = createMcpLifecycleCommands({ client: hub, boundary: admitted, onConfirmed: vi.fn() })
+    hub.updateMcpConnector.mockRejectedValue(new HubClientError("http", "safe", "mcp_personal_command_replay_expired", 412, false))
+    expect(await flow.management.submit({ operation: "update_connector", connectorId: connector.connector_id, input: { expected_state_version: "1", display_name: "Edited", description: "Note" } }, admitted)).toBe(false)
+    expect(await flow.preparation.prepare({ serverId: server.server_id, connectorId: connector.connector_id, version: "2" }, admitted)).toBe(false)
+    expect(await flow.preparation.prepare({ serverId: "other-server", connectorId: "other-connector", version: "1" }, admitted)).toBe(false)
+    expect(hub.preparePrivateMcpServer).toHaveBeenCalledOnce()
+    flow.management.bind({ ...admitted, generation: 2 }); flow.preparation.bind({ ...admitted, generation: 2 })
+    expect(await flow.management.resume(connector.connector_id, { ...admitted, generation: 2 })).toBe(false)
+    expect(hub.updateMcpConnector).toHaveBeenCalledOnce()
+    expect(flow.management.getSnapshot()[0]?.failure).toBe("replay_expired")
+    flow.management.bind({ ...admitted, subject: "other-actor" }); flow.preparation.bind({ ...admitted, subject: "other-actor" })
+    expect(flow.management.getSnapshot()).toEqual([]); expect(flow.preparation.getSnapshot()).toEqual([])
+  })
+
+  it("a closed management wait retains its exact target and accepts a late ACK without dispatching again", async () => {
+    const { createMcpLifecycleCommands } = await import("@/ui/mcp/mcp-management-commands")
+    const hub = client(), changed = vi.fn(), flow = createMcpLifecycleCommands({ client: hub, boundary: admitted, onConfirmed: changed })
+    let finish!: (value: typeof connector) => void
+    const pending = new Promise<typeof connector>(resolve => { finish = resolve })
+    hub.setMcpConnectorEnabled.mockReturnValue(pending)
+    const close = new AbortController()
+    const wait = flow.management.submit({ operation: "set_enabled", connectorId: connector.connector_id, serverId: server.server_id, input: { expected_state_version: "1", enabled: true } }, admitted, close.signal)
+    close.abort(); expect(hub.setMcpConnectorEnabled.mock.calls[0]?.[3].aborted).toBe(true)
+    expect(flow.management.getSnapshot()[0]?.kind).toBe("unknown")
+    finish(connector); expect(await wait).toBe(false)
+    expect(await flow.management.resume(connector.connector_id, admitted)).toBe(true)
+    expect(flow.management.finish(connector.connector_id, admitted)).toBe(true)
+    expect(hub.setMcpConnectorEnabled).toHaveBeenCalledOnce(); expect(changed).toHaveBeenCalledOnce()
+  })
 })

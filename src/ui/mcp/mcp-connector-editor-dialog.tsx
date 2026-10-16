@@ -20,6 +20,8 @@ import type { McpConnectorProvider } from "@/hub/mcp-connector.schema";
 import { useT } from "@/i18n/context";
 
 import type { McpConnectorEditor } from "./mcp-projection-types";
+import type { McpManagementSummary } from "./mcp-management-commands";
+import { McpManagementStatus } from "./mcp-management-status";
 import styles from "./mcp-projection-read.module.css";
 
 export function McpConnectorEditorDialog({
@@ -27,6 +29,9 @@ export function McpConnectorEditorDialog({
   displayName,
   description,
   actionId,
+  admitted,
+  managementCommand,
+  onResumeManagement,
   actionError,
   deleteId,
   providersByKey,
@@ -52,6 +57,9 @@ export function McpConnectorEditorDialog({
   displayName: string;
   description: string;
   actionId: string | null;
+  admitted: boolean;
+  managementCommand: McpManagementSummary | undefined;
+  onResumeManagement: () => void;
   actionError: boolean;
   deleteId: string | null;
   providersByKey: Map<string, McpConnectorProvider>;
@@ -82,6 +90,8 @@ export function McpConnectorEditorDialog({
     event.preventDefault();
     window.requestAnimationFrame(() => target.focus({ preventScroll: true }));
   };
+  const managementLocked = managementCommand !== undefined && managementCommand.kind !== "rejected";
+  const locked = managementLocked || !admitted || actionId !== null;
   const connector = editor?.connector;
   const provider = connector
     ? providersByKey.get(connector.provider_key)
@@ -98,7 +108,7 @@ export function McpConnectorEditorDialog({
     <Dialog
       open={open ?? editor !== null}
       onOpenChange={(open) => {
-        if (!open && actionId === null) onClose();
+        if (!open && (actionId === null || managementLocked)) onClose();
       }}
     >
       <DialogContent
@@ -111,10 +121,11 @@ export function McpConnectorEditorDialog({
           <DialogTitle>{t("mcp.edit")}</DialogTitle>
           <DialogDescription>{t("mcp.description")}</DialogDescription>
         </DialogHeader>
+        <McpManagementStatus command={managementCommand} admitted={admitted} onResume={onResumeManagement} />
         {editor && connector ? (
           <form
             className={styles.editorForm}
-            onSubmit={(event) => onSubmit(event, editor)}
+            onSubmit={(event) => { event.preventDefault(); if (!locked) onSubmit(event, editor); }}
           >
             {actionError ? (
               <Alert
@@ -128,9 +139,10 @@ export function McpConnectorEditorDialog({
             <div className={styles.field}>
               <Label htmlFor="mcp-display-name">{t("mcp.fieldName")}</Label>
               <Input
+                readOnly={locked}
                 id="mcp-display-name"
                 value={displayName}
-                onChange={(event) => onDisplayNameChange(event.target.value)}
+                onChange={(event) => { if (!locked) onDisplayNameChange(event.target.value); }}
                 maxLength={100}
                 required
                 autoFocus
@@ -139,9 +151,10 @@ export function McpConnectorEditorDialog({
             <div className={styles.field}>
               <Label htmlFor="mcp-description">{t("mcp.description")}</Label>
               <Textarea
+                readOnly={locked}
                 id="mcp-description"
                 value={description}
-                onChange={(event) => onDescriptionChange(event.target.value)}
+                onChange={(event) => { if (!locked) onDescriptionChange(event.target.value); }}
                 maxLength={1000}
               />
             </div>
@@ -152,7 +165,7 @@ export function McpConnectorEditorDialog({
                 <Button
                   type="button"
                   variant="outline"
-                  disabled={actionId !== null}
+                  disabled={locked}
                   onClick={() =>
                     onRetryAuthorization(connector.connector_id, serverId)
                   }
@@ -169,7 +182,7 @@ export function McpConnectorEditorDialog({
                 <Button
                   type="button"
                   variant="outline"
-                  disabled={actionId !== null}
+                  disabled={locked}
                   onClick={() => onToggleEnabled(editor)}
                 >
                   {busy ? (
@@ -185,7 +198,7 @@ export function McpConnectorEditorDialog({
                   <Button
                     type="button"
                     variant="destructive"
-                    disabled={actionId !== null}
+                    disabled={locked}
                     onClick={() => onDelete(editor)}
                   >
                     {busy ? <Spinner aria-hidden="true" /> : null}
@@ -194,7 +207,7 @@ export function McpConnectorEditorDialog({
                   <Button
                     type="button"
                     variant="outline"
-                    disabled={actionId !== null}
+                    disabled={locked}
                     onClick={onCancelDelete}
                   >
                     {t("mcp.cancel")}
@@ -205,7 +218,7 @@ export function McpConnectorEditorDialog({
                   type="button"
                   variant="ghost"
                   className={styles.removeAction}
-                  disabled={actionId !== null}
+                  disabled={locked}
                   onClick={() => onDeleteIntent(connector.connector_id)}
                 >
                   <Trash2 aria-hidden="true" />
@@ -218,11 +231,10 @@ export function McpConnectorEditorDialog({
                 type="button"
                 variant="outline"
                 onClick={onClose}
-                disabled={actionId !== null}
               >
                 {t("mcp.cancel")}
               </Button>
-              <Button type="submit" disabled={actionId !== null}>
+              <Button type="submit" disabled={locked}>
                 {busy ? <Spinner aria-hidden="true" /> : null}
                 <Pencil aria-hidden="true" />
                 {t("mcp.saveChanges")}

@@ -563,23 +563,24 @@ export function mcpPrivateServerMatches(
       )
     );
   }
+  const parsed = mcpPrivateServerUpdateSchema.safeParse(
+    typeof value === "object" && value !== null && "data" in value ? value.data : undefined,
+  );
+  const request = mcpPrivateServerUpdateInputSchema.safeParse(input);
+  if (!parsed.success || !request.success) return false;
+  const server = parsed.data.server, update = request.data;
+  const headers = new Map(server.headers.map(header => [header.name, header]));
   return (
-    z.object({ data: mcpPrivateServerUpdateSchema }).strict().safeParse(value)
-      .success &&
-    body !== undefined &&
-    privateServerResponseMatches(
-      value,
-      serverId,
-      body,
-      body.server_url !== undefined ||
-        (Array.isArray(body.header_upserts) &&
-          body.header_upserts.length > 0) ||
-        (Array.isArray(body.header_removals) &&
-          body.header_removals.length > 0) ||
-        body.oauth_client !== undefined ||
-        body.revoke_oauth_client === true
-        ? false
-        : undefined,
+    (update.display_name === undefined || server.display_name === update.display_name) &&
+    (update.server_url === undefined || server.server_url === update.server_url) &&
+    (update.notes === undefined || server.notes === update.notes) &&
+    (update.clear_notes !== true || server.notes === undefined) &&
+    (update.header_upserts ?? []).every(header => headers.get(header.name)?.configured === true) &&
+    (update.header_removals ?? []).every(name => headers.get(name)?.configured !== true) &&
+    (update.oauth_client === undefined || (server.oauth_client?.configured === true && server.oauth_client.client_id === update.oauth_client.client_id && server.oauth_client.origin === "byo")) &&
+    (update.revoke_oauth_client !== true || server.oauth_client?.configured !== true) &&
+    privateServerResponseMatches(value, serverId, body,
+      update.server_url !== undefined || (update.header_upserts?.length ?? 0) > 0 || (update.header_removals?.length ?? 0) > 0 || update.oauth_client !== undefined || update.revoke_oauth_client === true ? false : undefined,
     )
   );
 }

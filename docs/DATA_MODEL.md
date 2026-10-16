@@ -1284,3 +1284,6 @@ Connector命令快照只增加可选非敏感失败reason，原正文/key仍仅a
 
 
 Custom API管理pending意图只在当前actor/client RAM，以profile ID索引一个typed update/remove命令。snapshot仅ID/operation/kind/failure，不含正文、key、owner事实或secret；原env写值仅为未决原请求短存，ACK或actor退休清除。没有browser持久化/SQL/Redis或额外receipt事实源，列表缺资源不证明命令完成。
+
+
+MCP管理按actor/client、connector locator保存五项typed原命令，仅未决body/key/CAS在RAM；summary仅operation/locator/kind/failure，无owner事实/header值。现Prepare仍独立typed槽并与管理互锁，清理ACK精确退休Prepare；关闭/重核保原命令、actor退休/ACK清正文，列表缺行不生成事实或本地完成。无SQL/Redis/browser持久化或owner schema变化。

@@ -2473,3 +2473,8 @@ Prepare 的正文/CAS/key 在派发前冻结；unknown 只显式恢复原命令�
 Hub update/remove签名显式caller key，删隐式随机key，不留旧签名fallback。update ACK核精确ID及本次明确写入/清除字段、env upserts已配置/removals缺失；remove ACK核精确ID/deleted。仅确认后失活原主体API投影。详情window/准入代际各有取消信号，关闭允许且保原意图；旧ACK只失活原主体，不关新窗口。原dirty输入在unknown时只读，确认清真实secret，即使重核/旧ACK也不复活；恢复请求不依赖现输入或新读版本。
 
 删除先沿原明确确认，再重放原已确认意图，不自动删除/新key；正常浏览器不执行未经当次确认的永久删除，先以行为/受控传输验该风险。原HTTP/Schema/鉴权/owner事务不改。写区为Hub管理签名/ACK、typed命令index、现provider/协调/详情、现纯command/rail/client测试与设计/INDEX；复用现失败reason与i18n，不加网络协议、存储或依赖。先错误ACK/unknown编辑RED，再核心及UI主路径，最后本仓相关门。
+
+
+### MCP 管理原命令（2026-10-16 实施设计）
+
+稳定shell构造一个MCP lifecycle set，将现typed Prepare与五项typed management（server update/delete、connector update/enabled/disconnect）用闭包的必需predicate接线；不建跨业务通用registry、不把API/OAuth并入。按connector及可选private server精确定位原意图，管理unknown阻止新Prepare和其他管理，Prepare未结时阻止非清理修改；断开/删除仍可执行，ACK才退休相应Prepare。更新/启停/断开不从新GET替换原body/CAS/key。三个详情和缺行意图入口显示同一管理状态；window/admission token限制完成和关闭，ACK清实际secret草稿。owner wire/数据不变。

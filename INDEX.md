@@ -1,3 +1,7 @@
+### MCP 管理原请求与 Prepare 互锁
+
+`src/ui/mcp/mcp-management-commands.ts` 在现稳定shell构造typed MCP lifecycle，五项管理沿原key/body/CAS恢复，`mcp-preparation-commands`通过必需predicate承接互锁；API/JSON/OAuth不进入该管理index。`mcp-management-status.tsx`只为三个既有详情呈现非敏感状态。Hub五方法显式caller key并复用同源adapter的正式ACK matcher；缺行不结清命令。正常元数据编辑/断开与故障覆盖范围见CURRENT及现三suite，不另建UI测试中心。
+
 ### Custom API 管理原命令恢复
 
 `src/ui/mcp/custom-api-management-commands.ts` 由现稳定shell按actor/client持有每profile的typed update/remove意图，复用现单命令核；`custom-api-detail-dialog`承接只读未知态/原请求恢复/ACK清草稿。Hub update/remove显式要求caller key，核目标与已写安全字段。窗口/准入退休保原命令，actor退休清理，列表缺资源不充当ACK。纯命令、现rail与Hub三suite承接独有风险，不另建UI套件；实际正常编辑/回读与故障证据范围见CURRENT。

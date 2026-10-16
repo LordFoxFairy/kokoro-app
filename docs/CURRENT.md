@@ -1811,3 +1811,10 @@ API/JSON/Register/共享Prepare在actor RAM保存固定profile严格核过的失
 当前App工作树在3b25bc6基础上将API update/remove移出通用runAction，接稳定actor/client按profile的原命令管理。未知编辑只读、显式恢复原key/body/CAS，不允许换删除/新版本；正常关闭暂停等待，不冒回滚。列表缺资源仍可打开原意图；ACK清secret草稿，旧窗口不关闭新窗口。Hub显式caller key并核目标/修改字段/env安全描述，原wire和后端不改。
 
 现有三suite316PASS，实际两产品缺陷RED（错目标ACK放行、编辑未知无恢复）及重复env ACK负控RED后修复；初始UI用错“保存更改”标签、后继取消按钮多匹配/完成微任务等待和错误构造参数测试fixture问题已纠正，未据此改产品契约。正常3310当前Session对自有零密钥API执行改名→列表刷新→精确详情回读→恢复原名→硬刷新持久保持，未删除/执行模型/工具/改资金。未知提交/缺行删除/过期/迟到ACK为受控组件与纯flow证据，不冒真实后端故障注入或全产品验收。最终相同业务/测试字节在Node22.22.2下contract280、architecture50、lint/typecheck退出0，默认181files/3250PASS/0skip/187.55s（2workers）；同字节原候选build0、现公共壳E2E桌面/窄屏6PASS/8.2s（1worker）、后继typecheck0。23路径冻结只读复核未见新增确定P0–P2，主方再次核hash；此结果仅本App候选，不称Platform历史format12失败或整体组合合并门已过。公共壳E2E只覆盖既有页面几何，不充当新管理故障或OAuth真实证据；没有新增suite/恢复五套退役UI。
+
+
+## 2026-10-16 MCP 管理原请求候选
+
+App57b510d后的本片把五项管理（server编辑/删除、connector编辑/启停/断开）移出runAction，接稳定actor/client按connector及private server绑定的typed原意图；现Prepare保独立槽并由单一构造器接必需互锁predicate，不新造通用registry/owner事实。管理未知保持原key/body/CAS且只读，新Prepare被拒；Prepare未知阻止修改，明确断开/删除仍可执行，只有ACK退休其精确Prepare。三现详情都有原请求状态、缺行入口和window/admission围栏；ACK清实际header草稿，非敏感输入保留至显式Done。Hub五方法删除隐式key生成并沿现单一matcher严格核目标、写入字段、安全header/OAuth描述和撤销/删除结果；原wire/生成物/后端不变。
+
+错目标ACK、未知配置缺恢复及错误安全字段ACK均实际RED后修复；复用现Hub/rail/纯flow（加原schema回归）验证五项冻结恢复/互锁/同actor重核/actor退休/缺行删除/迟到provider ACK/实际header清理，无新suite。旧prefix测试改为caller key契约，原非敏感dirty编辑准入回归继续保留；曾误在Root调用vitest报无入口，未作产品RED，通过正确App目录取得实际RED。正常3310当前Session在自有无凭据loopback元数据fixture上Register/Prepare成功，改名→精确详情回读→恢复原名→正常断开→硬刷新已无样本，原两个API保留。仅initialize/通知与三个声明list各一次，无tools/call、模型、外部grant/凭据/资金或配置变更；未永久删除。未知/过期/缺行删除/启停故障为受控证据，不冒真实owner故障或整站1:1。临时tab/fixture已关闭；最终相同业务/测试字节Node22.22.2下contract280、architecture50、lint/typecheck0；默认181files/3262PASS/0skip/188.21s（2workers）；原同字节候选build0、公共壳桌面/窄屏6PASS/7.7s（1worker）、posttype0。19路径冻结只读复核未见新增确定P0–P2，主方复核hash；仅CURRENT结果段后补，业务/测试字节不变。新增12项独有风险行为而非新suite；原跨Document/色彩warning保留，公共壳E2E不冒新管理故障真实验收。Platform12个基线format历史失败、原生OAuth/create恢复/显式结清与整个文档恢复及全目标仍未闭环，不称整体合并就绪。

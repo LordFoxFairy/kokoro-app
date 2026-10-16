@@ -3166,7 +3166,7 @@ it("MCP recheck restores typed configuration against fresh facts/CAS and an old 
   expect(screen.getByRole("textbox", { name: "服务器名称" })).toHaveValue("My explicit edit")
   expect(screen.getByRole("textbox", { name: "备注 （可选）" })).toHaveValue("Owner note 2")
   fireEvent.click(screen.getByRole("button", { name: "保存" }))
-  await waitFor(() => expect(update).toHaveBeenCalledWith("draft-server", { expected_state_version: "2", display_name: "My explicit edit" }))
+  await waitFor(() => expect(update).toHaveBeenCalledWith("draft-server", { expected_state_version: "2", display_name: "My explicit edit" }, expect.any(String), expect.any(AbortSignal)))
   round = 3
   view.rerender(content(false, 3))
   view.rerender(content(true, 3))
@@ -3476,7 +3476,7 @@ it.each([
     instructions: fresh ? "Fresh owner note" : "Retired owner note", state_version: fresh ? "2" : "1",
     created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-16T00:00:00Z", environment: [] })
   const content = (ready: boolean, fresh = false, partial = false) => <LocaleProvider>{kind === "mcp" ?
-    <CustomMcpDetailDialog connector={ready ? connector : null} server={ready || partial ? server(fresh) : null}
+    <CustomMcpDetailDialog admitted={ready} managementCommand={undefined} onResumeManagement={() => {}} connector={ready ? connector : null} server={ready || partial ? server(fresh) : null}
       actionId={null} actionError={false} deleteId={null} returnFocusRef={{ current: null }} onClose={close}
       onSaveConfiguration={save} onPrepare={prepare} onDisconnect={vi.fn()} onDeleteIntent={vi.fn()} onCancelDelete={vi.fn()} onDelete={vi.fn()} /> :
     <CustomApiDetailDialog admitted={ready} command={undefined} canUpdate canRemove onResume={() => {}} profile={ready ? profile(fresh) : null} busy={false} actionError={false}
@@ -3530,7 +3530,7 @@ it.each(["mcp", "api"])("%s configuration restores a bounded range without steal
   const profile = (name: string) => ({ profile_id: "focus-choice-api", name, instructions: "Fresh note paragraph", state_version: "1",
     created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-16T00:00:00Z", environment: [] })
   const content = (name: string | null, pendingError = false) => <LocaleProvider>{kind === "mcp" ?
-    <CustomMcpDetailDialog connector={name === null ? null : connector} server={name === null ? null : server(name)}
+    <CustomMcpDetailDialog admitted={name !== null} managementCommand={undefined} onResumeManagement={() => {}} connector={name === null ? null : connector} server={name === null ? null : server(name)}
       actionId={null} actionError={false} deleteId={null} returnFocusRef={{ current: null }} onClose={vi.fn()} pendingError={pendingError} onRetry={vi.fn()}
       onSaveConfiguration={vi.fn()} onPrepare={vi.fn()} onDisconnect={vi.fn()} onDeleteIntent={vi.fn()} onCancelDelete={vi.fn()} onDelete={vi.fn()} /> :
     <CustomApiDetailDialog admitted={name !== null} command={undefined} canUpdate canRemove onResume={() => {}} profile={name === null ? null : profile(name)} busy={false} actionError={false}
@@ -3591,7 +3591,7 @@ it.each(["form", "url"] as const)("%s MCP completion failure remains named and o
     getMcpConnector: vi.fn(async () => ({ ...registration.connector, status: prepared ? "active" as const : "pending" as const, enabled: prepared })),
     preparePrivateMcpServer: vi.fn(async () => { prepared = true; return { ...registration, declarations: [] } }) }
   const boundary = { admitted: true, subject: `completion-${mode}`, generation: 1 }
-  const flow = createMcpServerCreationFlow({ client: hub, preparation: createMcpPreparationCommands({ client: hub, boundary, onConfirmed: vi.fn() }), boundary, onChanged: vi.fn() })
+  const flow = createMcpServerCreationFlow({ client: hub, preparation: createMcpPreparationCommands({ canPrepare: () => true, client: hub, boundary, onConfirmed: vi.fn() }), boundary, onChanged: vi.fn() })
   const onDone = vi.fn().mockRejectedValueOnce(new Error("close failed")).mockResolvedValue(undefined)
   const Form = mode === "form" ? CustomMcpForm : UrlMcpForm
   const form = (generation: number) => <LocaleProvider><Dialog open><DialogContent><Form flow={flow} boundary={{ ...boundary, generation }} onCancel={vi.fn()} onDone={onDone} /></DialogContent></Dialog></LocaleProvider>
@@ -3669,7 +3669,7 @@ it("URL Save-and-publish closes the reservation without an error when owner disc
     getMcpConnector: vi.fn(async () => ({ ...registration.connector, enabled: prepared, status: prepared ? "active" as const : "pending" as const })),
     preparePrivateMcpServer: vi.fn(async () => { prepared = true; return { ...registration, declarations: [] } }) }
   const boundary = { admitted: true, subject: "publish-no-oauth", generation: 1 }
-  const flow = createMcpServerCreationFlow({ client: hub, preparation: createMcpPreparationCommands({ client: hub, boundary, onConfirmed: vi.fn() }), boundary, onChanged: vi.fn() })
+  const flow = createMcpServerCreationFlow({ client: hub, preparation: createMcpPreparationCommands({ canPrepare: () => true, client: hub, boundary, onConfirmed: vi.fn() }), boundary, onChanged: vi.fn() })
   const onDone = vi.fn().mockResolvedValue(undefined)
   render(<LocaleProvider><Dialog open><DialogContent><UrlMcpForm flow={flow} boundary={boundary} onCancel={vi.fn()} onDone={onDone} /></DialogContent></Dialog></LocaleProvider>)
   fireEvent.change(screen.getByRole("textbox", { name: /^服务器名称\*?$/ }), { target: { value: "Creation MCP" } })
@@ -3884,4 +3884,124 @@ it("a mounted API editor clears secret values on ACK and rejects submitted edits
   view.rerender(content("completed"))
   expect(screen.queryByLabelText("密钥值")).not.toBeInTheDocument()
   expect(screen.getByRole("button", { name: "完成" })).toBeEnabled()
+})
+
+it("an unknown private MCP edit is read-only and offers the original management request instead of a new save", async () => {
+  const { McpContent: Content } = await import("@/ui/mcp/mcp-content")
+  const McpContent = withMcpCommandOwner(Content)
+  const connector = { connector_id: "managed-mcp", server_id: "managed-server", connector_type: "mcp" as const, provider_key: "fixture", display_name: "Managed MCP", status: "pending" as const, enabled: false, approved_scopes: [], state_version: "1" }
+  const server = { server_id: "managed-server", display_name: "Managed MCP", server_url: "https://mcp.example.test/", status: "pending", state_version: "1", headers: [], prepare_status: "pending_prepare", declarations: [], declarations_available: false }
+  const update = vi.fn().mockRejectedValue(new Error("lost edit ACK"))
+  const hub = { ...createHubClient(), updatePrivateMcpServer: update, getPrivateMcpServer: vi.fn().mockResolvedValue(server), listMcpConnectors: vi.fn().mockResolvedValue({ items: [connector], next_cursor: null }), listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }), listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }) }
+  render(<LocaleProvider><McpContent client={hub} initialView="connections" readBoundary={{ admitted: true, generation: 1, subject: "managed-mcp-actor" }} /></LocaleProvider>)
+  fireEvent.click(await screen.findByRole("button", { name: "Managed MCP" }))
+  fireEvent.keyDown(await screen.findByRole("button", { name: "管理" }), { key: "ArrowDown" })
+  fireEvent.click(await screen.findByRole("menuitem", { name: "编辑配置" }))
+  const name = screen.getByLabelText("服务器名称")
+  fireEvent.change(name, { target: { value: "Original MCP edit" } })
+  fireEvent.click(screen.getByRole("button", { name: "保存" }))
+  await waitFor(() => expect(update).toHaveBeenCalledOnce())
+  expect(await screen.findByRole("button", { name: "重试原请求" })).toBeEnabled()
+  expect(name).toHaveAttribute("readonly")
+})
+
+it.each(["toggle", "disconnect"] as const)("provider %s resumes its original command after closing and re-reading a changed CAS", async (operation) => {
+  const { McpContent: Content } = await import("@/ui/mcp/mcp-content")
+  const McpContent = withMcpCommandOwner(Content)
+  let version = "1"
+  const provider = { provider_key: "managed-provider", display_name: "Managed provider", directory_type: "app" as const, category_keys: [], example_prompts: [], enabled: true, state_version: "1" }
+  const row = () => ({ connector_id: "provider-managed", connector_type: "mcp" as const, provider_key: provider.provider_key, display_name: "Provider row", status: "active" as const, enabled: true, approved_scopes: [], state_version: version })
+  const command = vi.fn().mockRejectedValueOnce(new Error("lost ACK")).mockImplementation(async () => ({ ...row(), ...(operation === "disconnect" ? { status: "revoked" as const, enabled: false } : { enabled: false }) }))
+  const hub = { ...createHubClient(), ...(operation === "toggle" ? { setMcpConnectorEnabled: command } : { removeMcpConnector: command }),
+    listMcpConnectors: vi.fn(async () => ({ items: [row()], next_cursor: null })), listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [provider], next_cursor: null }), listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }) }
+  const content = (generation: number) => <LocaleProvider><McpContent client={hub} initialView="connections" readBoundary={{ admitted: true, generation, subject: `provider-${operation}-actor` }} /></LocaleProvider>
+  const view = render(content(1))
+  fireEvent.click(await screen.findByRole("button", { name: "Provider row" }))
+  await screen.findByRole("dialog", { name: "Managed provider" })
+  fireEvent.click(screen.getByRole("button", { name: operation === "toggle" ? "停用" : "断开连接" }))
+  if (operation === "disconnect") fireEvent.click(screen.getByRole("button", { name: "确认断开" }))
+  await screen.findByRole("button", { name: "重试原请求" })
+  fireEvent.click(within(screen.getByRole("dialog")).getAllByRole("button", { name: "取消" }).at(-1)!)
+  version = "9"; view.rerender(content(2))
+  fireEvent.click(await screen.findByRole("button", { name: "Provider row" }))
+  fireEvent.click(await screen.findByRole("button", { name: "重试原请求" }))
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+  expect(command).toHaveBeenCalledTimes(2)
+  expect(command.mock.calls[0]?.slice(0, 3)).toEqual(command.mock.calls[1]?.slice(0, 3))
+  expect(command.mock.calls[1]?.[1].expected_state_version).toBe("1")
+})
+
+it("a mounted MCP editor clears header secrets on management ACK but preserves non-secret edits while waiting for Done", async () => {
+  const { CustomMcpDetailDialog } = await import("@/ui/mcp/custom-mcp-detail-dialog")
+  const connector = { connector_id: "mounted-mcp", server_id: "mounted-server", connector_type: "mcp" as const, provider_key: "fixture", status: "pending" as const, enabled: false, approved_scopes: [], state_version: "1" }
+  const server = { server_id: "mounted-server", display_name: "Mounted MCP", server_url: "https://mcp.example.test/", status: "pending" as const, state_version: "1", headers: [], prepare_status: "pending_prepare" as const, declarations: [], declarations_available: false }
+  const save = vi.fn()
+  const content = (kind?: "unknown" | "completed") => <LocaleProvider><CustomMcpDetailDialog connector={connector} server={server} admitted
+    managementCommand={kind ? { connectorId: connector.connector_id, serverId: server.server_id, operation: "update_server", kind } : undefined}
+    onResumeManagement={vi.fn()} actionId={null} actionError={false} deleteId={null} returnFocusRef={{ current: null }}
+    onClose={vi.fn()} onSaveConfiguration={save} onPrepare={vi.fn()} onDisconnect={vi.fn()} onDeleteIntent={vi.fn()} onCancelDelete={vi.fn()} onDelete={vi.fn()} /></LocaleProvider>
+  const view = render(content())
+  fireEvent.keyDown(screen.getByRole("button", { name: "管理" }), { key: "ArrowDown" })
+  fireEvent.click(await screen.findByRole("menuitem", { name: "编辑配置" }))
+  fireEvent.click(screen.getByRole("button", { name: "添加自定义 header" }))
+  fireEvent.change(screen.getByLabelText("Header name"), { target: { value: "x-test" } })
+  fireEvent.change(screen.getByLabelText("Header value"), { target: { value: "mounted-header" } })
+  const name = screen.getByLabelText("服务器名称") as HTMLInputElement
+  fireEvent.change(name, { target: { value: "My draft" } })
+  view.rerender(content("unknown"))
+  expect(name).toHaveAttribute("readonly")
+  expect(screen.getByRole("button", { name: "试用一下" })).toBeDisabled()
+  fireEvent.submit(name.closest("form")!); expect(save).not.toHaveBeenCalled()
+  view.rerender(content("completed"))
+  expect(screen.queryByLabelText("Header value")).not.toBeInTheDocument()
+  expect(name.value).toBe("My draft")
+  expect(screen.getByRole("button", { name: "完成" })).toBeEnabled()
+})
+
+it("a lost private MCP deletion ACK remains reachable after its row disappears and replays only the confirmed original intent", async () => {
+  const { McpContent: Content } = await import("@/ui/mcp/mcp-content")
+  const McpContent = withMcpCommandOwner(Content)
+  let listed = true
+  const connector = { connector_id: "missing-managed-mcp", server_id: "missing-managed-server", connector_type: "mcp" as const, provider_key: "fixture", display_name: "Missing managed MCP", status: "pending" as const, enabled: false, approved_scopes: [], state_version: "1" }
+  const server = { server_id: "missing-managed-server", display_name: "Missing managed MCP", server_url: "https://mcp.example.test/", status: "pending", state_version: "1", headers: [], prepare_status: "pending_prepare", declarations: [], declarations_available: false }
+  const remove = vi.fn().mockRejectedValueOnce(new Error("lost deletion ACK")).mockResolvedValue({ server_id: server.server_id, deleted: true, replayed: true })
+  const hub = { ...createHubClient(), deletePrivateMcpServer: remove, getPrivateMcpServer: vi.fn().mockResolvedValue(server), listMcpConnectors: vi.fn(async () => ({ items: listed ? [connector] : [], next_cursor: null })), listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }), listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }) }
+  const content = (generation: number) => <LocaleProvider><McpContent client={hub} initialView="connections" readBoundary={{ admitted: true, generation, subject: "missing-mcp-management-actor" }} /></LocaleProvider>
+  const view = render(content(1))
+  fireEvent.click(await screen.findByRole("button", { name: "Missing managed MCP" }))
+  fireEvent.keyDown(await screen.findByRole("button", { name: "管理" }), { key: "ArrowDown" })
+  fireEvent.click(await screen.findByRole("menuitem", { name: "删除" }))
+  fireEvent.click(screen.getByRole("button", { name: "确认移除" }))
+  await screen.findByRole("button", { name: "重试原请求" })
+  fireEvent.click(within(screen.getByRole("dialog")).getAllByRole("button", { name: "取消" }).at(-1)!)
+  listed = false; view.rerender(content(2))
+  fireEvent.click(await screen.findByRole("button", { name: "重试原请求 · missing-managed-mcp" }))
+  expect(remove).toHaveBeenCalledOnce()
+  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "重试原请求" }))
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+  expect(remove.mock.calls[0]?.slice(0, 3)).toEqual(remove.mock.calls[1]?.slice(0, 3))
+  expect(remove).toHaveBeenCalledTimes(2)
+})
+
+it("a late provider toggle ACK does not close a successor provider window", async () => {
+  const { McpContent: Content } = await import("@/ui/mcp/mcp-content")
+  const McpContent = withMcpCommandOwner(Content)
+  const provider = { provider_key: "late-provider", display_name: "Late provider", directory_type: "app" as const, category_keys: [], example_prompts: [], enabled: true, state_version: "1" }
+  const otherProvider = { ...provider, provider_key: "successor-provider", display_name: "Successor provider" }
+  const connector = { connector_id: "late-provider-connection", connector_type: "mcp" as const, provider_key: provider.provider_key, display_name: "Late provider row", status: "active" as const, enabled: true, approved_scopes: [], state_version: "1" }
+  const other = { ...connector, connector_id: "successor-connection", provider_key: otherProvider.provider_key, display_name: "Successor row" }
+  let acknowledge!: (value: typeof connector) => void
+  const pending = new Promise<typeof connector>(resolve => { acknowledge = resolve })
+  const toggle = vi.fn().mockReturnValue(pending)
+  const hub = { ...createHubClient(), setMcpConnectorEnabled: toggle, listMcpConnectors: vi.fn().mockResolvedValue({ items: [connector, other], next_cursor: null }), listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [provider, otherProvider], next_cursor: null }), listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }) }
+  render(<LocaleProvider><McpContent client={hub} initialView="connections" readBoundary={{ admitted: true, generation: 1, subject: "late-provider-management-actor" }} /></LocaleProvider>)
+  fireEvent.click(await screen.findByRole("button", { name: "Late provider row" }))
+  fireEvent.click(await screen.findByRole("button", { name: "停用" }))
+  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "取消" }))
+  expect(toggle.mock.calls[0]?.[3].aborted).toBe(true)
+  fireEvent.click(screen.getByRole("button", { name: "Successor row" }))
+  const successor = await screen.findByRole("dialog", { name: "Successor provider" })
+  await act(async () => { acknowledge({ ...connector, enabled: false }); await pending })
+  expect(screen.getByRole("dialog")).toBe(successor)
+  expect(toggle).toHaveBeenCalledOnce()
 })

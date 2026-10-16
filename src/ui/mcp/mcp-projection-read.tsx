@@ -11,7 +11,7 @@ import type {
 } from "@/hub/mcp-connector.schema";
 import { useT } from "@/i18n/context";
 
-import { useCustomApiManagementCommands, useMcpPreparationCommands } from "./connector-command-context";
+import { useCustomApiManagementCommands, useMcpManagementCommands, useMcpPreparationCommands } from "./connector-command-context";
 import { McpConnectionList } from "./mcp-connection-list";
 import { McpConnectorEditorDialog } from "./mcp-connector-editor-dialog";
 import { CustomMcpDetailDialog } from "./custom-mcp-detail-dialog";
@@ -32,6 +32,8 @@ import { useCustomApiProjection } from "./use-custom-api-projection";
 import { invalidateMcpConnectorProjection, useMcpProjection } from "./use-mcp-projection";
 
 import type { CustomApiManagementIntent } from "./custom-api-management-commands";
+
+import type { McpManagementIntent } from "./mcp-management-commands";
 
 const EMPTY_PROVIDERS: McpConnectorProvider[] = [];
 
@@ -80,6 +82,8 @@ export function McpProjectionRead({
   const preparationStates = useSyncExternalStore(preparation.subscribe, preparation.getSnapshot, preparation.getSnapshot);
   const apiManagement = useCustomApiManagementCommands(client, identity);
   const apiManagementStates = useSyncExternalStore(apiManagement.subscribe, apiManagement.getSnapshot, apiManagement.getSnapshot);
+  const management = useMcpManagementCommands(client, identity);
+  const managementStates = useSyncExternalStore(management.subscribe, management.getSnapshot, management.getSnapshot);
   const commandBoundary = { subject: identity, admitted, generation: readGeneration };
   const owner = useMemo(() => ({ client, identity, admitted, readGeneration }), [client, identity, admitted, readGeneration]);
   const ownerRef = useRef<typeof owner | null>(owner);
@@ -107,8 +111,17 @@ export function McpProjectionRead({
     };
   }, [connectorIntent?.window, owner]);
   const preparationState = preparationStates.find(item => item.serverId === connectorIntent?.serverId && item.connectorId === connectorIntent?.connectorId);
+  const [providerWindowToken, setProviderWindowToken] = useState<object>({});
+  const providerWindow = useRef<{ intent: object; controller: AbortController } | null>(null);
   const [selectedProviderKey, setSelectedProviderKey] = useState<string | null>(null);
   const [selectedProviderConnectionId, setSelectedProviderConnectionId] = useState<string | null>(null);
+  useLayoutEffect(() => {
+    const wait = selectedProviderKey ? { intent: providerWindowToken, controller: new AbortController() } : null;
+    providerWindow.current = wait;
+    return () => { if (providerWindow.current === wait) providerWindow.current = null; wait?.controller.abort(); };
+  }, [providerWindowToken, selectedProviderKey, owner]);
+  const managementState = managementStates.find(item => item.connectorId === connectorIntent?.connectorId);
+  const providerManagementState = managementStates.find(item => item.connectorId === selectedProviderConnectionId);
   const [apiIntent, setApiIntent] = useState<{ profileId: string; window: object } | null>(null);
   const selectedCustomApiId = apiIntent?.profileId ?? null;
   const apiWindow = useRef<{ intent: object; controller: AbortController } | null>(null);
@@ -255,6 +268,19 @@ export function McpProjectionRead({
     if (!confirmed || ownerRef.current !== owner || apiWindow.current !== wait) return;
     if (apiManagement.finish(apiIntent.profileId, commandBoundary)) setApiIntent(null);
   };
+  const runManagement = async (origin: "editor" | "provider", connectorId: string, input?: McpManagementIntent) => {
+    const wait = origin === "editor" ? editorWindow.current : providerWindow.current;
+    const currentWindow = () => origin === "editor" ? editorWindow.current : providerWindow.current;
+    const expectedWindow = origin === "editor" ? connectorIntent?.window : providerWindowToken;
+    const expectedConnector = origin === "editor" ? connectorIntent?.connectorId : selectedProviderConnectionId;
+    if (!wait || wait.intent !== expectedWindow || connectorId !== expectedConnector || ownerRef.current !== owner || !admitted) return;
+    const operation = input?.operation ?? management.getSnapshot().find(item => item.connectorId === connectorId)?.operation;
+    const confirmed = input ? await management.submit(input, commandBoundary, wait.controller.signal) : await management.resume(connectorId, commandBoundary, wait.controller.signal);
+    if (!confirmed || ownerRef.current !== owner || currentWindow() !== wait || !management.finish(connectorId, commandBoundary)) return;
+    if (operation === "disconnect" || operation === "delete_server") hideConfirmedRemovedConnector(connectorId);
+    if (origin === "editor") resetEditor();
+    else { setSelectedProviderKey(null); setSelectedProviderConnectionId(null); }
+  };
   const beginEdit = (connector: McpConnector, returnFocus: HTMLElement) => {
     if (!owner.admitted || ownerRef.current !== owner) return;
     editorReturnFocusRef.current = returnFocus;
@@ -282,6 +308,7 @@ export function McpProjectionRead({
         if (!active || ownerRef.current !== owner) return;
         if (serverId && (!server || server.server_id !== serverId)) throw Error("MCP detail identity mismatch");
         if (!server && selectedConnectorProvider) {
+          setProviderWindowToken({});
           setSelectedProviderConnectionId(selectedConnector.connector_id);
           setSelectedProviderKey(selectedConnector.provider_key);
           setConnectorIntent(null);
@@ -375,26 +402,16 @@ export function McpProjectionRead({
     event.preventDefault();
     if (!displayName.trim()) return;
     const { connector, server } = editorValue;
-    if (server && client.updatePrivateMcpServer) {
-      void runAction(server.server_id, async () => {
-        await client.updatePrivateMcpServer!(server.server_id, {
-          expected_state_version: server.state_version,
-          display_name: displayName.trim(),
-          ...(description.trim()
-            ? { notes: description.trim() }
-            : { clear_notes: true }),
-        });
-      });
-      return;
-    }
-    void runAction(connector.connector_id, () =>
-      client.updateMcpConnector(connector.connector_id, {
-        display_name: displayName.trim(),
-        description: description.trim(),
-        expected_state_version: connector.state_version,
-      }),
-    );
+    if (!admitted || management.isBlocked(connector.connector_id)) return;
+    if (server) {
+      void runManagement("editor", connector.connector_id, { operation: "update_server", connectorId: connector.connector_id, serverId: server.server_id, input: {
+        expected_state_version: server.state_version, display_name: displayName.trim(), ...(description.trim() ? { notes: description.trim() } : { clear_notes: true }),
+      } });
+    } else void runManagement("editor", connector.connector_id, { operation: "update_connector", connectorId: connector.connector_id, ...(connector.server_id ? { serverId: connector.server_id } : {}), input: {
+      display_name: displayName.trim(), description: description.trim(), expected_state_version: connector.state_version,
+    } });
   };
+
   const openCatalog = (target?: HTMLElement) => {
     if (ownerRef.current !== owner || !admitted) return;
     catalogReturnFocusRef.current =
@@ -412,6 +429,7 @@ export function McpProjectionRead({
     if (ownerRef.current !== owner || !admitted) return;
     providerReturnFocusRef.current = trigger;
     setActionError(false);
+    setProviderWindowToken({});
     setSelectedProviderConnectionId(null);
     setSelectedProviderKey(provider.provider_key);
   };
@@ -496,6 +514,11 @@ export function McpProjectionRead({
           />
         </div>
       ) : null}
+      {view === "connections" && admitted ? managementStates.filter(item => item.kind !== "rejected" && !connectors.some(connector => connector.connector_id === item.connectorId)).map(item =>
+        <Button key={item.connectorId} type="button" variant="outline" className="max-w-full" onClick={event => {
+          editorReturnFocusRef.current = event.currentTarget; setActionError(false); setEditor(null);
+          setConnectorIntent({ connectorId: item.connectorId, ...(item.serverId ? { serverId: item.serverId } : {}), entered: true, window: {} });
+        }}><span className="truncate">{t(item.kind === "completed" ? "mcp.creationDone" : "mcp.retryOriginal")} · {item.connectorId}</span></Button>) : null}
       {view === "connections" && admitted ? apiManagementStates.filter(item =>
         item.kind !== "rejected" && !customApis.some(profile => profile.profile_id === item.profileId)
       ).map(item => <Button key={item.profileId} type="button" variant="outline" className="max-w-full" onClick={event => {
@@ -564,10 +587,13 @@ export function McpProjectionRead({
           server={editor?.server ?? null}
           pendingError={admitted && (actionError || connectorState.error || (connectorProjection !== undefined && !selectedConnector))}
           onRetry={() => { if (ownerRef.current !== owner || !admitted) return; setActionError(false); if (!selectedConnector || connectorState.error) reload("connectors"); else setDetailRetry(value => value + 1); }}
+          admitted={admitted}
+          managementCommand={managementState}
+          onResumeManagement={() => { if (connectorIntent) void runManagement("editor", connectorIntent.connectorId); }}
           preparationState={preparationState?.kind ?? "idle"}
           preparationFailure={preparationState?.failure}
           actionId={preparationState?.kind === "running" ? connectorIntent.connectorId : actionId}
-          actionError={actionError}
+          actionError={actionError || managementState?.kind === "rejected"}
           deleteId={deleteId}
           returnFocusRef={editorReturnFocusRef}
           onClose={resetEditor}
@@ -587,24 +613,14 @@ export function McpProjectionRead({
             // disconnected a prepared connector.
             if (!notesChanged && !nameChanged && !urlChanged && !headersChanged)
               return;
-            void runAction(editor.server.server_id, () =>
-              client.updatePrivateMcpServer!(editor.server!.server_id, {
-                expected_state_version: editor.server!.state_version,
-                ...(nameChanged ? { display_name: input.display_name } : {}),
-                ...(urlChanged ? { server_url: input.server_url } : {}),
-                ...(notesChanged
-                  ? input.notes
-                    ? { notes: input.notes }
-                    : { clear_notes: true }
-                  : {}),
-                ...(input.header_upserts.length
-                  ? { header_upserts: input.header_upserts }
-                  : {}),
-                ...(input.header_removals.length
-                  ? { header_removals: input.header_removals }
-                  : {}),
-              }),
-            );
+            void runManagement("editor", editor.connector.connector_id, { operation: "update_server", connectorId: editor.connector.connector_id, serverId: server.server_id, input: {
+              expected_state_version: server.state_version,
+              ...(nameChanged ? { display_name: input.display_name } : {}),
+              ...(urlChanged ? { server_url: input.server_url } : {}),
+              ...(notesChanged ? input.notes ? { notes: input.notes } : { clear_notes: true } : {}),
+              ...(input.header_upserts.length ? { header_upserts: input.header_upserts } : {}),
+              ...(input.header_removals.length ? { header_removals: input.header_removals } : {}),
+            } });
           }}
           onPrepare={() => {
             if (!editor?.server || !admitted || ownerRef.current !== owner || !preparation.available) return;
@@ -623,42 +639,13 @@ export function McpProjectionRead({
           }}
           onDisconnect={() => {
             if (!editor) return;
-            void runAction(
-              editor.connector.connector_id,
-              () =>
-                client.removeMcpConnector(editor.connector.connector_id, {
-                  expected_state_version: editor.connector.state_version,
-                }).then(result => {
-                  if (editor.server) preparation.retireTarget(editor.server.server_id, editor.connector.connector_id);
-                  return result;
-                }),
-              () => {
-                hideConfirmedRemovedConnector(editor.connector.connector_id);
-                editorReturnFocusRef.current = null;
-              },
-            );
+            void runManagement("editor", editor.connector.connector_id, { operation: "disconnect", connectorId: editor.connector.connector_id, ...(editor.server ? { serverId: editor.server.server_id } : {}), input: { expected_state_version: editor.connector.state_version } });
           }}
-          onDeleteIntent={() =>
-            editor && setDeleteId(editor.connector.connector_id)
-          }
+          onDeleteIntent={() => editor && setDeleteId(editor.connector.connector_id)}
           onCancelDelete={() => setDeleteId(null)}
           onDelete={() => {
-            if (!editor?.server || !client.deletePrivateMcpServer) return;
-            void runAction(
-              editor.connector.connector_id,
-              () =>
-                client.deletePrivateMcpServer!(
-                  editor.server!.server_id,
-                  editor.server!.state_version,
-                ).then(result => {
-                  preparation.retireTarget(editor.server!.server_id, editor.connector.connector_id);
-                  return result;
-                }),
-              () => {
-                hideConfirmedRemovedConnector(editor.connector.connector_id);
-                editorReturnFocusRef.current = null;
-              },
-            );
+            if (!editor?.server) return;
+            void runManagement("editor", editor.connector.connector_id, { operation: "delete_server", connectorId: editor.connector.connector_id, serverId: editor.server.server_id, input: { expected_state_version: editor.server.state_version } });
           }}
         />
       ) : null}
@@ -675,13 +662,16 @@ export function McpProjectionRead({
         displayName={displayName}
         description={description}
         actionId={actionId}
-        actionError={actionError}
+        actionError={actionError || managementState?.kind === "rejected"}
         deleteId={deleteId}
+        admitted={admitted}
+        managementCommand={managementState}
+        onResumeManagement={() => { if (connectorIntent) void runManagement("editor", connectorIntent.connectorId); }}
         providersByKey={providersByKey}
         surfaceRef={surfaceRef}
         returnFocusRef={editorReturnFocusRef}
-        onDisplayNameChange={setDisplayName}
-        onDescriptionChange={setDescription}
+        onDisplayNameChange={value => { if (!managementState || managementState.kind === "rejected") setDisplayName(value); }}
+        onDescriptionChange={value => { if (!managementState || managementState.kind === "rejected") setDescription(value); }}
         onSubmit={submitEdit}
         onClose={resetEditor}
         onDeleteIntent={setDeleteId}
@@ -692,45 +682,20 @@ export function McpProjectionRead({
           );
           if (connector) restartAuthorization(connector, serverId);
         }}
-        onToggleEnabled={(editorValue) =>
-          void runAction(editorValue.connector.connector_id, () =>
-            client.setMcpConnectorEnabled(editorValue.connector.connector_id, {
-              enabled: !editorValue.connector.enabled,
-              expected_state_version: editorValue.connector.state_version,
-            }),
-          )
-        }
-        onDelete={(editorValue) =>
-          void runAction(
-            editorValue.connector.connector_id,
-            () =>
-              editorValue.server && client.deletePrivateMcpServer
-                ? client.deletePrivateMcpServer(
-                    editorValue.server.server_id,
-                    editorValue.server.state_version,
-                  )
-                : client.removeMcpConnector(
-                    editorValue.connector.connector_id,
-                    {
-                      expected_state_version:
-                        editorValue.connector.state_version,
-                    },
-                  ),
-            () => {
-              hideConfirmedRemovedConnector(editorValue.connector.connector_id);
-              editorReturnFocusRef.current = null;
-            },
-          )
-        }
+        onToggleEnabled={(editorValue) => void runManagement("editor", editorValue.connector.connector_id, { operation: "set_enabled", connectorId: editorValue.connector.connector_id, ...(editorValue.connector.server_id ? { serverId: editorValue.connector.server_id } : {}), input: { enabled: !editorValue.connector.enabled, expected_state_version: editorValue.connector.state_version } })}
+        onDelete={(editorValue) => void runManagement("editor", editorValue.connector.connector_id, { operation: "disconnect", connectorId: editorValue.connector.connector_id, ...(editorValue.connector.server_id ? { serverId: editorValue.connector.server_id } : {}), input: { expected_state_version: editorValue.connector.state_version } })}
       />
       <McpProviderDetailDialog
         open={selectedProviderKey !== null}
         pendingError={admitted && (providerState.error || (providerProjection !== undefined && selectedProvider === null && (selectedProviderConnectionId === null || !connectorState.loading)))}
         onRetry={() => { if (ownerRef.current !== owner || !admitted) return; reload("providers"); reload("connectors"); }}
+        admitted={admitted}
+        managementCommand={providerManagementState}
+        onResumeManagement={() => { if (selectedProviderConnectionId) void runManagement("provider", selectedProviderConnectionId); }}
         provider={selectedProvider}
         connection={selectedProviderConnection}
         actionId={actionId}
-        actionError={actionError}
+        actionError={actionError || providerManagementState?.kind === "rejected"}
         returnFocusRef={providerReturnFocusRef}
         onClose={() => {
           setSelectedProviderKey(null);
@@ -748,28 +713,8 @@ export function McpProjectionRead({
           const serverId = provider.connection_server_id;
           if (serverId) restartAuthorization(connection, serverId);
         }}
-        onToggleEnabled={(connection) =>
-          void runAction(connection.connector_id, () =>
-            client.setMcpConnectorEnabled(connection.connector_id, {
-              enabled: !connection.enabled,
-              expected_state_version: connection.state_version,
-            }),
-          )
-        }
-        onRemoveConnection={(connection) =>
-          void runAction(
-            connection.connector_id,
-            () =>
-              client.removeMcpConnector(connection.connector_id, {
-                expected_state_version: connection.state_version,
-              }),
-            () => {
-              hideConfirmedRemovedConnector(connection.connector_id);
-              setSelectedProviderKey(null);
-              setSelectedProviderConnectionId(null);
-            },
-          )
-        }
+        onToggleEnabled={(connection) => void runManagement("provider", connection.connector_id, { operation: "set_enabled", connectorId: connection.connector_id, ...(connection.server_id ? { serverId: connection.server_id } : {}), input: { enabled: !connection.enabled, expected_state_version: connection.state_version } })}
+        onRemoveConnection={(connection) => void runManagement("provider", connection.connector_id, { operation: "disconnect", connectorId: connection.connector_id, ...(connection.server_id ? { serverId: connection.server_id } : {}), input: { expected_state_version: connection.state_version } })}
         {...(onPrompt ? { onPrompt: (prompt: string) => { if (ownerRef.current === owner && admitted) onPrompt(prompt); } } : {})}
       />
       {selectedCustomApiId ? (

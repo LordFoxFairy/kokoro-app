@@ -21,6 +21,7 @@ export function createMcpPreparationCommands(options: {
   client: Pick<HubClient, "preparePrivateMcpServer">;
   boundary: ProjectReadBoundary;
   onConfirmed: () => void;
+  canPrepare: (target: Target) => boolean;
 }) {
   const actor = options.boundary.subject;
   let boundary = { ...options.boundary }, leases = 0, retired = false;
@@ -57,7 +58,7 @@ export function createMcpPreparationCommands(options: {
     publish();
   };
   const run = async (entry: Entry, value: ProjectReadBoundary, signal?: AbortSignal) => {
-    if (!matches(value) || signal?.aborted || entries.get(entry.target.serverId) !== entry) return false;
+    if (!matches(value) || signal?.aborted || entries.get(entry.target.serverId) !== entry || !options.canPrepare(entry.target)) return false;
     const kind = entry.command.getSnapshot().kind;
     if (kind === "completed") return true;
     if (kind === "running") return false;
@@ -92,6 +93,7 @@ export function createMcpPreparationCommands(options: {
     prepare: (input: Target, value: ProjectReadBoundary, signal?: AbortSignal) => {
       if (!matches(value) || signal?.aborted || !options.client.preparePrivateMcpServer) return Promise.resolve(false);
       const target = Object.freeze(targetSchema.parse(input));
+      if (!options.canPrepare(target)) return Promise.resolve(false);
       let entry = entries.get(target.serverId);
       if (entry && entry.target.connectorId !== target.connectorId) return Promise.resolve(false);
       if (entry?.command.getSnapshot().kind === "rejected") { remove(entry); entry = undefined; }

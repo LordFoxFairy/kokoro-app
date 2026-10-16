@@ -1634,3 +1634,6 @@ Connector恢复UX只消费已固定BFF browser-private profile的合法tuple，�
 
 
 Custom API本地Hub updateCustomApi(profileId,input,key,signal?)、removeCustomApi(profileId,input,key,signal?)均要求caller合法Idempotency-Key，不保旧隐式随机入口。原wire不变；update严格核目标及明确写入字段/环境变量描述，remove核profile_id/deleted，不以GET/404结清命令。状态层保冻结operation/id/body/CAS/key，恢复只同请求，删除仍只承接原用户已确认意图。
+
+
+MCP管理Hub五方法显式caller key（其后signal?），不保隐式随机key入口；原HTTP方法/body及发布契约不变。沿现mcpConnectorMatches/mcpPrivateServerMatches核精确locator、请求写入字段/安全header描述及删除/撤销ACK，管理index另核捕获connector/private server绑定。不把GET/404、popup或错误视作ACK，不改变原生OAuth协议。

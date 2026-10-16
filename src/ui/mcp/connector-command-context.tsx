@@ -3,7 +3,7 @@
 import { createContext, useContext, useLayoutEffect, useMemo, type ReactNode } from "react";
 import type { HubClient } from "@/hub/client";
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
-import { createMcpPreparationCommands, type McpPreparationCommands } from "./mcp-preparation-commands";
+import { type McpPreparationCommands } from "./mcp-preparation-commands";
 import { createCustomApiCreateFlow, type CustomApiCreateFlow } from "./custom-api-create-flow";
 import { createMcpJsonImportFlow, type McpJsonImportFlow } from "./mcp-json-import-flow";
 import { JsonMcpImportForm } from "./mcp-json-import-form";
@@ -16,17 +16,20 @@ import { invalidateCustomApiProjection } from "./use-custom-api-projection";
 
 import { createCustomApiManagementCommands, type CustomApiManagementCommands } from "./custom-api-management-commands";
 
-const Commands = createContext<{ api: CustomApiCreateFlow; apiManagement: CustomApiManagementCommands; json: McpJsonImportFlow; server: McpServerCreationFlow; preparation: McpPreparationCommands; client: HubClient; boundary: ProjectReadBoundary } | null>(null);
+import { createMcpLifecycleCommands, type McpManagementCommands } from "./mcp-management-commands";
+
+const Commands = createContext<{ api: CustomApiCreateFlow; apiManagement: CustomApiManagementCommands; json: McpJsonImportFlow; server: McpServerCreationFlow; preparation: McpPreparationCommands; management: McpManagementCommands; client: HubClient; boundary: ProjectReadBoundary } | null>(null);
 
 /** The stable app shell owns the command; closing a modal does not abandon it. */
 export function ConnectorCommandProvider({ client, boundary, children }: {
   client: HubClient; boundary: ProjectReadBoundary; children: ReactNode;
 }) {
   const { subject, admitted, generation } = boundary;
-  const preparation = useMemo(() => createMcpPreparationCommands({
+  const mcp = useMemo(() => createMcpLifecycleCommands({
     client, boundary: { subject, admitted: false, generation: 0 },
     onConfirmed: () => { if (subject !== null) invalidateMcpConnectorProjection(client, subject); },
   }), [client, subject]);
+  const { preparation, management } = mcp;
   const apiManagement = useMemo(() => createCustomApiManagementCommands({
     client, boundary: { subject, admitted: false, generation: 0 },
     onConfirmed: () => { if (subject !== null) invalidateCustomApiProjection(client, subject); },
@@ -44,14 +47,15 @@ export function ConnectorCommandProvider({ client, boundary, children }: {
     onChanged: () => { if (subject !== null) invalidateMcpConnectorProjection(client, subject); },
   }), [client, subject, preparation]);
   useLayoutEffect(() => {
+    const releaseManagement = management.retain({ subject, admitted, generation });
     const releasePreparation = preparation.retain({ subject, admitted, generation });
     const releaseApiManagement = apiManagement.retain({ subject, admitted, generation });
     const releaseApi = api.retain({ subject, admitted, generation });
     const releaseJson = json.retain({ subject, admitted, generation });
     const releaseServer = server.retain({ subject, admitted, generation });
-    return () => { releaseApiManagement(); releaseApi(); releaseJson(); releaseServer(); releasePreparation(); };
-  }, [api, apiManagement, json, server, preparation, subject, admitted, generation]);
-  const value = useMemo(() => ({ api, apiManagement, json, server, preparation, client, boundary: { subject, admitted, generation } }), [api, apiManagement, json, server, preparation, client, subject, admitted, generation]);
+    return () => { releaseManagement(); releaseApiManagement(); releaseApi(); releaseJson(); releaseServer(); releasePreparation(); };
+  }, [api, apiManagement, json, server, preparation, management, subject, admitted, generation]);
+  const value = useMemo(() => ({ api, apiManagement, json, server, preparation, management, client, boundary: { subject, admitted, generation } }), [api, apiManagement, json, server, preparation, management, client, subject, admitted, generation]);
   return <Commands.Provider value={value}>{children}</Commands.Provider>;
 }
 
@@ -86,4 +90,11 @@ export function useCustomApiManagementCommands(client: HubClient, identity: stri
   if (value === null || value.client !== client || value.boundary.subject !== identity)
     throw new Error("Custom API management requires the exact actor/client shell owner");
   return value.apiManagement;
+}
+
+export function useMcpManagementCommands(client: HubClient, identity: string) {
+  const value = useContext(Commands);
+  if (value === null || value.client !== client || value.boundary.subject !== identity)
+    throw new Error("MCP management requires the exact actor/client shell owner");
+  return value.management;
 }

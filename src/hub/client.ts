@@ -9,6 +9,8 @@ import {
   mcpConnectorSchema,
   mcpConnectorIdSchema,
   mcpPrivateServerMatches,
+  mcpConnectorMatches,
+  mcpConnectorCommandRequestSchemas,
   mcpConnectorErrorAllowed,
   mcpConnectorErrorSchema,
   mcpConnectorProviderPageSchema,
@@ -882,26 +884,31 @@ export type HubClient = {
   updatePrivateMcpServer?: (
     serverId: string,
     input: McpPrivateServerUpdateInput,
+    key: string,
     signal?: AbortSignal,
   ) => Promise<McpPrivateServerUpdate>;
   deletePrivateMcpServer?: (
     serverId: string,
     expectedStateVersion: string,
+    key: string,
     signal?: AbortSignal,
   ) => Promise<McpPrivateServerDeletion>;
   updateMcpConnector: (
     connectorId: string,
     input: McpConnectorUpdateInput,
+    key: string,
     signal?: AbortSignal,
   ) => Promise<McpConnector>;
   setMcpConnectorEnabled: (
     connectorId: string,
     input: McpConnectorEnabledInput,
+    key: string,
     signal?: AbortSignal,
   ) => Promise<McpConnector>;
   removeMcpConnector: (
     connectorId: string,
     input: McpConnectorRemoveInput,
+    key: string,
     signal?: AbortSignal,
   ) => Promise<McpConnector>;
   beginMcpConnectorAuthorization: (
@@ -1157,80 +1164,46 @@ export function createHubClient(): HubClient {
           throw new HubClientError("parse", "MCP preparation ACK binding mismatch", null, null);
         return result;
       }),
-    updatePrivateMcpServer: (serverId, input, signal) =>
-      requestMcpConnector(
-        "updateServer",
-        `/mcp/servers/${encodeURIComponent(serverId)}`,
-        mcpPrivateServerUpdateSchema,
-        {
-          method: "PATCH",
-          headers: idempotencyHeaders("mcp-private-server", {
-            ...JSON_HEADERS,
-          }),
-          body: JSON.stringify(mcpPrivateServerUpdateInputSchema.parse(input)),
-        },
-        signal,
-      ),
-    deletePrivateMcpServer: (serverId, expectedStateVersion, signal) =>
-      requestMcpConnector(
-        "deleteServer",
-        `/mcp/servers/${encodeURIComponent(serverId)}`,
-        mcpPrivateServerDeletionSchema,
-        {
-          method: "DELETE",
-          headers: idempotencyHeaders("mcp-private-server", {
-            ...JSON_HEADERS,
-          }),
-          body: JSON.stringify(
-            mcpPrivateServerPrepareInputSchema.parse({
-              expected_state_version: expectedStateVersion,
-            }),
-          ),
-        },
-        signal,
-      ),
-    updateMcpConnector: async (connectorId, input, signal) =>
-      (
-        await requestMcpConnector(
-          "update",
-          `/mcp/connectors/${encodeURIComponent(connectorId)}`,
-          z.object({ connector: mcpConnectorSchema }).strict(),
-          {
-            method: "PATCH",
-            headers: idempotencyHeaders("mcp-connector", { ...JSON_HEADERS }),
-            body: JSON.stringify(input),
-          },
-          signal,
-        )
-      ).connector,
-    setMcpConnectorEnabled: async (connectorId, input, signal) =>
-      (
-        await requestMcpConnector(
-          "enabled",
-          `/mcp/connectors/${encodeURIComponent(connectorId)}/enabled`,
-          z.object({ connector: mcpConnectorSchema }).strict(),
-          {
-            method: "PUT",
-            headers: idempotencyHeaders("mcp-connector", { ...JSON_HEADERS }),
-            body: JSON.stringify(input),
-          },
-          signal,
-        )
-      ).connector,
-    removeMcpConnector: async (connectorId, input, signal) =>
-      (
-        await requestMcpConnector(
-          "remove",
-          `/mcp/connectors/${encodeURIComponent(connectorId)}`,
-          z.object({ connector: mcpConnectorSchema }).strict(),
-          {
-            method: "DELETE",
-            headers: idempotencyHeaders("mcp-connector", { ...JSON_HEADERS }),
-            body: JSON.stringify(input),
-          },
-          signal,
-        )
-      ).connector,
+    updatePrivateMcpServer: async (serverId, input, key, signal) => {
+      const id = mcpConnectorIdSchema.parse(serverId), body = mcpPrivateServerUpdateInputSchema.parse(input);
+      const result = await requestMcpConnector("updateServer", `/mcp/servers/${encodeURIComponent(id)}`, mcpPrivateServerUpdateSchema,
+        { method: "PATCH", headers: { ...JSON_HEADERS, "Idempotency-Key": connectorCreationKeySchema.parse(key) }, body: JSON.stringify(body) }, signal);
+      if (!mcpPrivateServerMatches("updateServer", { data: result }, id, body))
+        throw new HubClientError("parse", "MCP update ACK binding mismatch", null, null);
+      return result;
+    },
+    deletePrivateMcpServer: async (serverId, expectedStateVersion, key, signal) => {
+      const id = mcpConnectorIdSchema.parse(serverId), body = mcpPrivateServerPrepareInputSchema.parse({ expected_state_version: expectedStateVersion });
+      const result = await requestMcpConnector("deleteServer", `/mcp/servers/${encodeURIComponent(id)}`, mcpPrivateServerDeletionSchema,
+        { method: "DELETE", headers: { ...JSON_HEADERS, "Idempotency-Key": connectorCreationKeySchema.parse(key) }, body: JSON.stringify(body) }, signal);
+      if (!mcpPrivateServerMatches("deleteServer", { data: result }, id, body))
+        throw new HubClientError("parse", "MCP deletion ACK binding mismatch", null, null);
+      return result;
+    },
+    updateMcpConnector: async (connectorId, input, key, signal) => {
+      const id = mcpConnectorIdSchema.parse(connectorId), body = mcpConnectorCommandRequestSchemas.update.parse(input);
+      const result = await requestMcpConnector("update", `/mcp/connectors/${encodeURIComponent(id)}`, z.object({ connector: mcpConnectorSchema }).strict(),
+        { method: "PATCH", headers: { ...JSON_HEADERS, "Idempotency-Key": connectorCreationKeySchema.parse(key) }, body: JSON.stringify(body) }, signal);
+      if (!mcpConnectorMatches("update", { data: result }, id, new URLSearchParams(), body))
+        throw new HubClientError("parse", "MCP update ACK binding mismatch", null, null);
+      return result.connector;
+    },
+    setMcpConnectorEnabled: async (connectorId, input, key, signal) => {
+      const id = mcpConnectorIdSchema.parse(connectorId), body = mcpConnectorCommandRequestSchemas.enabled.parse(input);
+      const result = await requestMcpConnector("enabled", `/mcp/connectors/${encodeURIComponent(id)}/enabled`, z.object({ connector: mcpConnectorSchema }).strict(),
+        { method: "PUT", headers: { ...JSON_HEADERS, "Idempotency-Key": connectorCreationKeySchema.parse(key) }, body: JSON.stringify(body) }, signal);
+      if (!mcpConnectorMatches("enabled", { data: result }, id, new URLSearchParams(), body))
+        throw new HubClientError("parse", "MCP enabled ACK binding mismatch", null, null);
+      return result.connector;
+    },
+    removeMcpConnector: async (connectorId, input, key, signal) => {
+      const id = mcpConnectorIdSchema.parse(connectorId), body = mcpConnectorCommandRequestSchemas.remove.parse(input);
+      const result = await requestMcpConnector("remove", `/mcp/connectors/${encodeURIComponent(id)}`, z.object({ connector: mcpConnectorSchema }).strict(),
+        { method: "DELETE", headers: { ...JSON_HEADERS, "Idempotency-Key": connectorCreationKeySchema.parse(key) }, body: JSON.stringify(body) }, signal);
+      if (!mcpConnectorMatches("remove", { data: result }, id, new URLSearchParams(), body))
+        throw new HubClientError("parse", "MCP remove ACK binding mismatch", null, null);
+      return result.connector;
+    },
     beginMcpConnectorAuthorization: (connectorId, input, signal) =>
       requestMcpConnector(
         "beginAuthorization",
