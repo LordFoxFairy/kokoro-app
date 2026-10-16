@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, renderHook, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
-import { StrictMode } from "react"
+import { StrictMode, useState } from "react"
 
 const pathname = vi.hoisted(() => ({ value: "/app" }))
 
@@ -15,7 +15,7 @@ import { useAppFrameActions } from "@/components/blocks/app-frame/use-app-frame-
 import { LocaleProvider } from "@/i18n/context"
 import { ThemeProvider } from "@/ui/theme/theme-context"
 import { createSessionEngine, type SessionEngine } from "@/engine/machine"
-import { createSessionClient } from "@/engine/client"
+import { createSessionClient, SessionClientError } from "@/engine/client"
 import type { ConversationStore } from "@/core/conversations"
 import { makeSnapshot } from "../core/fixtures"
 import { createFakeClient, createMemoryStorage, makeReceipt, type FakeClient } from "../engine/fakes"
@@ -1583,4 +1583,207 @@ it("ordinary account capability read uses its own exact endpoint and exposes no 
   await screen.findByRole("menu")
   expect(screen.queryByRole("menuitem", { name: /后台管理/ })).toBeNull()
   expect(document.querySelector('a[href="/manage"]')).toBeNull()
+})
+
+const executableTrial = {
+  skill_id: "trial-series", revision_skill_id: "trial-version", source_ref: "skill:trial-version",
+  installed_source_ref: "skill:trial-version", installation_id: "trial-installation",
+  name: "Owner trial", description: "Owner description", content_hash: "digest", scope: "personal", enabled: true,
+}
+
+function trialActions(trialEngine = engine, preview = false, projectRef?: string, strict = false) {
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "trial-actor")
+  const updateDraft = vi.fn()
+  const closeSettings = vi.fn()
+  const syncConversationUrl = vi.fn()
+  const view = renderHook(({ admitted, generation }) => useAppFrameActions({
+    engine: trialEngine, preview, readBoundary: { admitted, subject: "trial-actor", generation },
+    projectWorkspace: projectRef !== undefined, ...(projectRef === undefined ? {} : { projectRef }),
+    standaloneSurface: !projectRef && window.location.pathname === "/app/skills", chatHref: "/app",
+    activeId: trialEngine.getSnapshot().store?.activeId ?? null, draft: "", clearDraft: vi.fn(), updateDraft,
+    setDeploymentIntent: vi.fn(), syncConversationUrl, setConversationRouteId: vi.fn(), focusComposer: vi.fn(),
+    closeSettings, brandName: "Kokoro", commandNewChatTimerRef: { current: null },
+  }), { wrapper: strict ? ({ children }) => <StrictMode><LocaleProvider>{children}</LocaleProvider></StrictMode> : LocaleProvider, initialProps: { admitted: true, generation: 1 } })
+  return { ...view, updateDraft, closeSettings, syncConversationUrl }
+}
+
+it("skill trial stages an exact selected version on the new direct conversation and removes it explicitly", async () => {
+  window.history.replaceState({}, "", "/app/skills")
+  const view = trialActions()
+  let accepted: boolean | undefined
+  act(() => { accepted = view.result.current.startSkillUseFromSettings(executableTrial, "editable example") })
+  expect(accepted).toBe(true)
+  expect(window.location.pathname).toBe("/app")
+  expect(view.result.current.selectedSkill).toMatchObject({ name: "Owner trial", sourceRef: "skill:trial-version" })
+  await act(async () => { engine.submit("edited example") })
+  expect(client.createCalls[0]?.body.selected_skill_source_refs).toEqual(["skill:trial-version"])
+  act(() => view.result.current.clearSelectedSkill())
+  view.rerender({ admitted: true, generation: 1 })
+  expect(view.result.current.selectedSkill).toBeNull()
+})
+
+it("skill trial preserves the project workspace instead of reusing a direct engine", async () => {
+  const projectRef = "project_00000000-0000-4000-8000-000000000901"
+  window.history.replaceState({}, "", `/app/project/${projectRef}`)
+  const projectClient = createFakeClient()
+  const projectEngine = createSessionEngine({ client: projectClient, storage: createMemoryStorage<ConversationStore>(null), scope: { kind: "project", projectRef } })
+  const view = trialActions(projectEngine, false, projectRef)
+  try {
+    act(() => { view.result.current.startSkillUseFromSettings(executableTrial) })
+    expect(window.location.pathname).toBe(`/app/project/${projectRef}`)
+    await act(async () => { projectEngine.submit("project example") })
+    expect(projectClient.createCalls[0]?.body).toMatchObject({ project_ref: projectRef, selected_skill_source_refs: ["skill:trial-version"] })
+    expect(client.createCalls).toEqual([])
+  } finally { view.unmount(); projectEngine.dispose() }
+})
+
+it("skill trial blocks mismatched installation and revoked handlers before changing the conversation", () => {
+  const view = trialActions()
+  const create = vi.spyOn(engine, "newConversation")
+  act(() => { view.result.current.startSkillUseFromSettings({ ...executableTrial, installed_source_ref: "skill:older" }) })
+  expect(create).not.toHaveBeenCalled()
+  const old = view.result.current.startSkillUseFromSettings
+  view.rerender({ admitted: false, generation: 2 })
+  act(() => { old(executableTrial) })
+  expect(create).not.toHaveBeenCalled()
+  expect(view.closeSettings).not.toHaveBeenCalled()
+  expect(view.updateDraft).not.toHaveBeenCalled()
+})
+
+it("skill trial selection permanently retires on conversation A to B to A", () => {
+  const view = trialActions()
+  act(() => { view.result.current.startSkillUseFromSettings(executableTrial) })
+  const a = engine.getSnapshot().store!.activeId!
+  act(() => { engine.newConversation(); engine.selectConversation(a) })
+  view.rerender({ admitted: true, generation: 1 })
+  expect(view.result.current.selectedSkill).toBeNull()
+})
+
+it("preview skill trial remains editable text and never selects an execution source", async () => {
+  const view = trialActions(engine, true)
+  act(() => { view.result.current.startSkillUseFromSettings(executableTrial, "preview text") })
+  expect(view.result.current.selectedSkill).toBeNull()
+  await act(async () => { engine.submit("preview text") })
+  expect(client.createCalls[0]?.body.selected_skill_source_refs).toEqual([])
+})
+
+it("a departed route's skill handler stays retired after route A to B to A", () => {
+  const view = trialActions()
+  const old = view.result.current.startSkillUseFromSettings
+  const create = vi.spyOn(engine, "newConversation")
+  act(() => {
+    window.history.replaceState({}, "", "/app/library")
+    window.dispatchEvent(new PopStateEvent("popstate"))
+    window.history.replaceState({}, "", "/app")
+    window.dispatchEvent(new PopStateEvent("popstate"))
+    old(executableTrial)
+  })
+  expect(create).not.toHaveBeenCalled()
+  expect(view.closeSettings).not.toHaveBeenCalled()
+})
+
+it("Strict Mode and route cleanup preserve the new trial but an old remove action does not clear its replacement", () => {
+  const view = trialActions(engine, false, undefined, true)
+  act(() => { view.result.current.startSkillUseFromSettings(executableTrial) })
+  const oldRemove = view.result.current.clearSelectedSkill
+  act(() => { view.result.current.startSkillUseFromSettings({ ...executableTrial, name: "Replacement" }) })
+  act(() => oldRemove())
+  expect(view.result.current.selectedSkill?.name).toBe("Replacement")
+  view.rerender({ admitted: true, generation: 2 })
+  expect(view.result.current.selectedSkill).toBeNull()
+})
+
+it("removing a trial cannot rewrite the frozen unknown request on retry", async () => {
+  const view = trialActions()
+  act(() => { view.result.current.startSkillUseFromSettings(executableTrial) })
+  client.nextCreate = () => Promise.reject(new SessionClientError("network", "unknown commit"))
+  await act(async () => { engine.submit("frozen example") })
+  expect(engine.getSnapshot().canRetryPendingSubmission).toBe(true)
+  act(() => view.result.current.clearSelectedSkill())
+  client.nextCreate = () => Promise.resolve(makeReceipt("run_trial_retry"))
+  await act(async () => { engine.retry() })
+  expect(client.createCalls).toHaveLength(2)
+  expect(client.createCalls[1]).toEqual(client.createCalls[0])
+  expect(client.createCalls[1]?.body.selected_skill_source_refs).toEqual(["skill:trial-version"])
+  expect(view.result.current.selectedSkill).toBeNull()
+})
+
+it("trial cleanup clears only future selection and leaves no hidden source in a later conversation", async () => {
+  const view = trialActions()
+  act(() => { view.result.current.startSkillUseFromSettings(executableTrial) })
+  view.unmount()
+  await act(async () => { engine.submit("ordinary message") })
+  expect(client.createCalls[0]?.body.selected_skill_source_refs).toEqual([])
+})
+
+
+it("trial selection retires when another tab changes actor before an old admission rerenders", async () => {
+  const view = trialActions()
+  act(() => { view.result.current.startSkillUseFromSettings(executableTrial) })
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "other-actor")
+  view.rerender({ admitted: true, generation: 1 })
+  expect(view.result.current.selectedSkill).toBeNull()
+  const create = vi.spyOn(engine, "newConversation")
+  let accepted: boolean | undefined
+  act(() => { accepted = view.result.current.startSkillUseFromSettings(executableTrial) })
+  expect(accepted).toBe(false)
+  expect(create).not.toHaveBeenCalled()
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "trial-actor")
+  view.rerender({ admitted: true, generation: 1 })
+  expect(view.result.current.selectedSkill).toBeNull()
+  await act(async () => { engine.submit("ordinary message") })
+  expect(client.createCalls[0]?.body.selected_skill_source_refs).toEqual([])
+})
+
+it("a storage actor change retires trial sources before another render", async () => {
+  const view = trialActions()
+  act(() => { view.result.current.startSkillUseFromSettings(executableTrial) })
+  act(() => {
+    window.localStorage.setItem("kokoro.web.auth-index-subject", "other-actor")
+    window.dispatchEvent(new StorageEvent("storage", { key: "kokoro.web.auth-index-subject", newValue: "other-actor" }))
+  })
+  expect(view.result.current.selectedSkill).toBeNull()
+  await act(async () => { engine.submit("ordinary message") })
+  expect(client.createCalls[0]?.body.selected_skill_source_refs).toEqual([])
+})
+
+it("trial action requires the marker to match its admitted subject, not a new render snapshot", () => {
+  const view = trialActions()
+  const create = vi.spyOn(engine, "newConversation")
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "other-actor")
+  view.rerender({ admitted: true, generation: 1 })
+  let accepted: boolean | undefined
+  act(() => { accepted = view.result.current.startSkillUseFromSettings(executableTrial) })
+  expect(accepted).toBe(false)
+  expect(create).not.toHaveBeenCalled()
+  expect(view.updateDraft).not.toHaveBeenCalled()
+  expect(view.closeSettings).not.toHaveBeenCalled()
+})
+
+it("project trial survives the actual URL handoff and Composer submit action", async () => {
+  const projectRef = "project_00000000-0000-4000-8000-000000000902"
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "trial-actor")
+  window.history.replaceState({}, "", `/app/project/${projectRef}`)
+  const projectClient = createFakeClient()
+  const projectEngine = createSessionEngine({ client: projectClient, storage: createMemoryStorage<ConversationStore>(null), scope: { kind: "project", projectRef } })
+  const view = renderHook(() => {
+    const [routedConversationId, setConversationRouteId] = useState<string | null>(null)
+    return useAppFrameActions({
+      engine: projectEngine, preview: false, readBoundary: { admitted: true, subject: "trial-actor", generation: 1 },
+      projectWorkspace: true, projectRef, routedConversationId, standaloneSurface: false, chatHref: "/app",
+      activeId: projectEngine.getSnapshot().store?.activeId ?? null, draft: "edited project example", clearDraft: vi.fn(), updateDraft: vi.fn(),
+      setDeploymentIntent: vi.fn(), setConversationRouteId, focusComposer: vi.fn(), closeSettings: vi.fn(),
+      syncConversationUrl: id => window.history.replaceState({}, "", `/app/project/${projectRef}?conversation=${encodeURIComponent(id!)}`),
+      brandName: "Kokoro", commandNewChatTimerRef: { current: null },
+    })
+  }, { wrapper: LocaleProvider })
+  try {
+    act(() => { expect(view.result.current.startSkillUseFromSettings(executableTrial, "project example")).toBe(true) })
+    const conversationId = new URL(window.location.href).searchParams.get("conversation")
+    expect(conversationId).toBe(projectEngine.getSnapshot().store?.activeId)
+    await act(async () => { view.result.current.submitDraft() })
+    expect(projectClient.createCalls).toHaveLength(1)
+    expect(projectClient.createCalls[0]).toMatchObject({ sessionId: conversationId, body: { project_ref: projectRef, selected_skill_source_refs: ["skill:trial-version"] } })
+    expect(client.createCalls).toEqual([])
+  } finally { view.unmount(); projectEngine.dispose(); window.history.replaceState({}, "", "/app") }
 })

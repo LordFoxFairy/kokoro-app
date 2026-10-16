@@ -1526,6 +1526,20 @@ it("preserves catalog revision Skill ID separately from series and checksum for 
   });
 });
 
+it.each(["revision-a", "revision-b"])("keeps the installed %s distinct from the latest catalog revision", async (installedRevision) => {
+  const { createManusSkillHubClient } = await import("@/ui/skills/manus-skill-client");
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => jsonResponse(
+    String(input).endsWith("ListHubSkills")
+      ? { skills: [{ skillId: "trial-series", currentVersion: { versionUid: "revision-b" } }], tagOptions: {} }
+      : { userAddedSkills: [{ id: "trial-series", version: installedRevision, installationId: "trial-installation", added: true, enabled: true }], officialSkills: [] },
+  )));
+  const result = await createManusSkillHubClient(createHubClient(), { admitted: true, subject: "trial-reader", generation: 1 }).listSkillCatalog();
+  expect(result.skills[0]).toMatchObject({
+    skill_id: "trial-series", source_ref: "skill:revision-b", revision_skill_id: "revision-b",
+    installed_source_ref: `skill:${installedRevision}`, installation_id: "trial-installation", installed: true, enabled: true,
+  });
+});
+
 it.each([
   [undefined, "unknown"],
   ["SKILL_HUB_PUBLISHER_TYPE_FUTURE", "unknown"],

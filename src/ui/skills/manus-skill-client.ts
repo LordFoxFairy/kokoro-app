@@ -117,7 +117,7 @@ function sourceKind(skill: HubSkill): "official" | "third_party" | "unknown" {
   return "unknown"
 }
 
-function toCard(skill: HubSkill, added: ReadonlyMap<string, Readonly<{ installed: boolean; enabled: boolean; installationId?: string }>>): SkillCatalogCard {
+function toCard(skill: HubSkill, added: ReadonlyMap<string, Readonly<{ installed: boolean; enabled: boolean; installationId?: string; sourceRef?: string }>>): SkillCatalogCard {
   const createdAt = skill.createdAt === undefined ? undefined : Date.parse(skill.createdAt)
   return {
     name: skill.displayName ?? skill.originalName ?? skill.skillId,
@@ -133,6 +133,7 @@ function toCard(skill: HubSkill, added: ReadonlyMap<string, Readonly<{ installed
     installed: added.get(skill.skillId)?.installed === true,
     enabled: added.get(skill.skillId)?.enabled === true,
     ...(added.get(skill.skillId)?.installationId === undefined ? {} : { installation_id: added.get(skill.skillId)?.installationId }),
+    ...(added.get(skill.skillId)?.sourceRef === undefined ? {} : { installed_source_ref: added.get(skill.skillId)?.sourceRef }),
     categories: (skill.tags?.values ?? []).map((value) => {
       if (!(value in categories)) throw new Error("skill_response_invalid")
       return categories[value as keyof typeof categories]
@@ -164,7 +165,7 @@ async function installedCards(lifetimeSignal: AbortSignal, assertCurrent: () => 
         ids.add(item.installation_id); series.add(item.series_id)
         cards.push({
           skill_id: item.series_id, installation_id: item.installation_id,
-          source_ref: item.source_ref, revision_skill_id: item.source_ref.slice(6),
+          source_ref: item.source_ref, installed_source_ref: item.source_ref, revision_skill_id: item.source_ref.slice(6),
           name: item.display_name, description: item.summary, content_hash: item.series_id,
           scope: item.product.source_kind ?? "unknown", enabled: item.enabled,
           updated_at: Math.floor(Date.parse(item.skill_updated_at) / 1000),
@@ -220,13 +221,14 @@ export function createManusSkillHubClient(base: HubClient, boundary: ProjectRead
         post("ListSkills", {}, manuscriptListSchema, signal),
       ])
       assertCurrent()
-      const added = new Map<string, Readonly<{ installed: boolean; enabled: boolean; installationId?: string }>>()
+      const added = new Map<string, Readonly<{ installed: boolean; enabled: boolean; installationId?: string; sourceRef?: string }>>()
       for (const skill of installed.userAddedSkills) {
         if (added.has(skill.id) || skill.added === false) throw new Error("skill_response_invalid")
         added.set(skill.id, {
           installed: true,
           enabled: skill.enabled === true,
           ...(skill.installationId === undefined ? {} : { installationId: skill.installationId }),
+          ...(skill.version === undefined ? {} : { sourceRef: `skill:${skill.version}` }),
         })
       }
       const seenOfficial = new Set<string>()
@@ -238,6 +240,7 @@ export function createManusSkillHubClient(base: HubClient, boundary: ProjectRead
             installed: true,
             enabled: skill.enabled === true,
             ...(skill.installationId === undefined ? {} : { installationId: skill.installationId }),
+            ...(skill.version === undefined ? {} : { sourceRef: `skill:${skill.version}` }),
           })
       }
       const skills = hub.skills

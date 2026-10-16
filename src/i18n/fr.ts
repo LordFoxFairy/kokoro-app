@@ -4,6 +4,10 @@
 import type { MessageKey } from "./messages"
 
 export const fr: Partial<Record<MessageKey, string>> = {
+  "skills.tryRequiresEnabledVersion": "Ajoutez et activez cette version exacte avant d’utiliser un exemple. Un changement de version nécessite une mise à jour explicite.",
+  "skills.tryUnavailable": "L’essai n’a pas démarré. Vérifiez la connexion de la conversation et l’état de la compétence, puis réessayez.",
+  "composer.removeSelectedSkill": "Retirer la compétence sélectionnée {name}",
+
   "firstSite.renameProject": "Renommer le projet",
   "firstSite.projectName": "Nom du projet",
   "firstSite.projectRenameDescription": "Le projet actuel est relu après confirmation. Les conversations et les brouillons restent inchangés.",

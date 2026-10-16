@@ -80,7 +80,7 @@ type SettingsModalProps = {
   // 内部切 tab 时上抛,供 shell 同步 URL `?settings=`(刷新/深链/可分享)。
   onTabChange?: (tab: SettingsTab) => void;
   onCreateSkillWithAi?: (prompt?: string) => void;
-  onTrySkill?: (skill: SkillCard) => void;
+  onTrySkill?: (skill: SkillCard, prompt?: string) => boolean;
 };
 
 export function SettingsModal({

@@ -614,6 +614,9 @@ export const zh = {
   "skills.githubFixtureDescription": "来自 {owner}/{name} 的技能预览。",
   "skills.detailClose": "关闭技能详情",
   "skills.detailTry": "试试看",
+  "skills.tryRequiresEnabledVersion": "请先添加并启用所选版本，再使用示例；不同版本需要明确更新。",
+  "skills.tryUnavailable": "当前暂不能开始试用，请检查会话连接和技能状态后重试。",
+  "composer.removeSelectedSkill": "移除所选技能 {name}",
   "skills.tryPrompt":
     "我刚为 {brand} 新增了 {name} 技能，你能用一些很棒的示例示范一下吗？",
   "skills.detailFiles": "文件",

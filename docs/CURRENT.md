@@ -1750,3 +1750,9 @@ BFF 仍是 HTTP fixture，
    legacy Chat 双读另由 W1D generated Product consumer/AG-UI 切片删除。
 2. 统一 route envelope、request/trace ID、日志与 telemetry，并补 health/ready 与生产观测证据。
 3. 独立完成遗留 UI/CSS 切片、视觉回归、bundle budget 与 live release acceptance。
+
+## 2026-10-16 Skills 示例试用接线候选（正常业务验收待完成）
+
+当前分支将真实安装 source 与目录 current version 分开；只有启用安装、详情示例与精确 revision 一致时才允许试用。外部目录保留 Direct、项目设置保留 Project，在新会话实际 ID 上设置既有 `selected_skill_source_refs`，输入区显示可移除技能名。未就绪/身份或版本不一致保留详情，不退化为文字冒成功；preview 仅文字。
+
+已有 AppFrame/Composer/纯模型回归承接版本、route、actor/storage、Strict Mode、A→B→A 与 frozen retry 风险，未恢复已退役五套 Skills/Settings/MCP UI tests。正常本地唯一技能暂无示例，详情按钮→Composer 的真实正向旅程仍待验；Agent 模型授权 consumer 前置未闭合，不据浏览器 wire 或工程检查宣称实际技能执行完成。具体最终命令证据在本次交付记录；本节不代表 PR 已更新或已合并。

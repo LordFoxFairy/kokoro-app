@@ -26,7 +26,7 @@ type SettingsPanelProps = {
   teamClient: TeamClient;
   onSelectTab: (tab: SettingsTab) => void;
   onCreateSkillWithAi?: (prompt?: string) => void;
-  onTrySkill?: (skill: SkillCard) => void;
+  onTrySkill?: (skill: SkillCard, prompt?: string) => boolean;
 };
 
 /**

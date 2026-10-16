@@ -175,7 +175,7 @@ export type EmptyStateProps = {
   ) => void;
   /** Skill catalog actions hand off to the shell-owned direct Chat session. */
   onCreateSkillWithAi?: (prompt?: string) => void;
-  onTrySkill?: (skill: SkillCard, prompt?: string) => void;
+  onTrySkill?: (skill: SkillCard, prompt?: string) => boolean;
   /** Optional live model catalog for site-owned empty surfaces. */
   models?: readonly ModelCandidate[];
   selectedModel?: string | null;

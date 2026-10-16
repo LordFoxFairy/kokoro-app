@@ -404,6 +404,8 @@ function AppFrameRuntime({
   })
 
   const actions = useAppFrameActions({
+    preview,
+    ...(projectReadBoundary === undefined ? {} : { readBoundary: projectReadBoundary }),
     engine,
     projectWorkspace,
     ...(projectRef === undefined ? {} : { projectRef }),
@@ -562,6 +564,8 @@ function AppFrameRuntime({
     onOpenSettings: overlays.openSettings,
     draft,
     onDraftChange: updateDraft,
+    selectedSkill: actions.selectedSkill,
+    onRemoveSelectedSkill: actions.clearSelectedSkill,
     onKeyDown: actions.handleKeyDown,
     onSubmit: actions.handleSubmit,
     isStreaming,

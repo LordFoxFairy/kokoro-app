@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import type { SkillCatalogCard } from "@/hub/schemas"
 import { mergeSkillCatalogPages, skillStateKey } from "@/ui/skills/skills-pool-model"
+import { skillTrialSourceRef } from "@/ui/skills/skills-card-model"
 
 // This is a projection-identity rule, not a DOM/layout fixture: one owner
 // series must never inherit another series' pending/error/enabled override.
@@ -65,4 +66,31 @@ it("keeps owner-bound and display-only cards separate even when names mimic key 
   }
   expect(mergeSkillCatalogPages([{ skills: [owner, preview], next_cursor: null }]).skills)
     .toEqual([owner, preview])
+})
+
+const trialCard = {
+  ...card("trial"), source_ref: "skill:revision-trial", installed_source_ref: "skill:revision-trial", enabled: true, installed: true,
+}
+
+it("uses the exact installed revision for a trial, never a title or series ID", () => {
+  expect(skillTrialSourceRef(trialCard)).toBe("skill:revision-trial")
+  expect(skillTrialSourceRef({ ...trialCard, name: "Different title" })).toBe("skill:revision-trial")
+})
+
+it.each([
+  { installed_source_ref: "skill:older-revision" },
+  { revision_skill_id: "different-revision" },
+  { enabled: false },
+  { source_ref: "skill:revision-trial\n", installed_source_ref: "skill:revision-trial\n", revision_skill_id: "revision-trial\n" },
+])("does not infer an executable trial from inconsistent or unavailable facts %j", (change) => {
+  expect(skillTrialSourceRef({ ...trialCard, ...change })).toBeNull()
+})
+
+it("does not manufacture a missing installation or source binding", () => {
+  const { installed_source_ref: omittedInstallation, ...withoutInstallation } = trialCard
+  const { source_ref: omittedSource, ...withoutSource } = trialCard
+  expect(omittedInstallation).toBe(omittedSource)
+  expect(skillTrialSourceRef(withoutInstallation)).toBeNull()
+  expect(skillTrialSourceRef(withoutSource)).toBeNull()
+  expect(skillTrialSourceRef({ ...trialCard, installed: false })).toBeNull()
 })

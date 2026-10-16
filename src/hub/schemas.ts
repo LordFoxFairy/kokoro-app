@@ -41,6 +41,8 @@ const skillCardSchema = z
     // derived from a visible skill title or from the catalog series identity.
     installation_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u).optional(),
     source_ref: z.string().regex(/^skill:[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u).optional(),
+    // Internal view binding from the exact installation, not Hub currentVersion.
+    installed_source_ref: z.string().regex(/^skill:[A-Za-z0-9][A-Za-z0-9._:-]{0,190}(?![\s\S])/u).optional(),
     revision_skill_id: z
       .string()
       .regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u)
@@ -67,6 +69,8 @@ const skillCatalogCardSchema = z
     skill_id: z.string().min(1).optional(),
     installation_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u).optional(),
     source_ref: z.string().regex(/^skill:[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u).optional(),
+    // Internal view binding from the exact installation, not Hub currentVersion.
+    installed_source_ref: z.string().regex(/^skill:[A-Za-z0-9][A-Za-z0-9._:-]{0,190}(?![\s\S])/u).optional(),
     revision_skill_id: z
       .string()
       .regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u)

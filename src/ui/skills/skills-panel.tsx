@@ -75,7 +75,7 @@ type SkillsPanelProps = {
   onClose: () => void;
   pinned: readonly string[];
   onTogglePin: (name: string) => void;
-  onTrySkill?: (skill: SkillCard, prompt?: string) => void;
+  onTrySkill?: (skill: SkillCard, prompt?: string) => boolean;
 };
 
 export function SkillsPanel({
@@ -144,7 +144,7 @@ type SkillsContentProps = {
   brandName?: string;
   pinned: readonly string[];
   onTogglePin: (name: string) => void;
-  onTrySkill?: (skill: SkillCard, prompt?: string) => void;
+  onTrySkill?: (skill: SkillCard, prompt?: string) => boolean;
   embedded?: boolean;
   /** Opens the shared direct-chat Composer with the skill-creator prompt. */
   onCreateWithAi?: (prompt?: string) => void;
@@ -191,6 +191,7 @@ export function SkillsContent(props: SkillsContentProps) {
 function InstalledSkillsContent({
   readBoundary,
   client,
+  preview = false,
   brandName,
   pinned,
   onTogglePin,
@@ -305,6 +306,14 @@ function InstalledSkillsContent({
       if (!mountedRef.current || attempt !== mutationAttemptRef.current) return;
       setBusy(null);
       if (outcome.ok) {
+        setDetailSelection(current => {
+          if (!current || current.skill.skill_id !== skill.skill_id || current.skill.revision_skill_id !== skill.revision_skill_id) return current;
+          const source = skill.installation_id === undefined ? skill.source_ref : skill.installed_source_ref;
+          const next = { ...current.skill, enabled, installed: enabled || current.installationState.installed };
+          delete next.installed_source_ref;
+          if (source !== undefined) next.installed_source_ref = source;
+          return { skill: next, installationState: { installed: next.installed, enabled } };
+        });
         setEnabledOverrides((current) =>
           new Map(current).set(stateKey, enabled),
         );
@@ -402,6 +411,7 @@ function InstalledSkillsContent({
       />
       {detailSelection !== null ? (
         <ManusSkillDetailDialog
+          preview={preview}
           readBoundary={readBoundary}
           skill={detailSelection.skill}
           publisherLabel={brandName ?? "Kokoro"}
@@ -421,14 +431,9 @@ function InstalledSkillsContent({
           }
           onTry={(prompt) => {
             const detailSkill = toSkillActionCard(detailSelection.skill);
-            if (onTrySkill) onTrySkill(detailSkill, prompt);
-            else if (
-              detailSelection.installationState.installed &&
-              !pinned.includes(detailSkill.name)
-            ) {
-              onTogglePin(detailSkill.name);
-            }
-            setDetailSelection(null);
+            if (onTrySkill?.(detailSkill, prompt)) { setDetailSelection(null); return true; }
+            if (preview && !onTrySkill) { if (!pinned.includes(detailSkill.name)) onTogglePin(detailSkill.name); setDetailSelection(null); return true; }
+            return false;
           }}
         />
       ) : null}

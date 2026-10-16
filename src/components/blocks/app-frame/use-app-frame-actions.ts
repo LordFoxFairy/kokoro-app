@@ -14,10 +14,14 @@ import type { CreationIntent } from "@/ui/composer/creation-intent-pill"
 import { stashConversationDraft } from "@/ui/shell/use-draft"
 import { navigateMountedSurface } from "@/ui/navigation/mounted-surface-navigation"
 import { overlayHandoffDelay } from "@/ui/shell/overlay-handoff"
+import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
+import { useAppFrameSkillTrial } from "./use-app-frame-skill-trial"
 
 import { COMMAND_SETTINGS_HANDOFF_MS } from "./app-frame-helpers"
 
 export type AppFrameActionsOptions = {
+  preview?: boolean
+  readBoundary?: ProjectReadBoundary
   engine: SessionEngine | null
   projectWorkspace: boolean
   projectRef?: string
@@ -39,6 +43,8 @@ export type AppFrameActionsOptions = {
 
 /** Owns user actions that bridge the shell state to session and Composer commands. */
 export function useAppFrameActions({
+  preview = false,
+  readBoundary,
   engine,
   projectWorkspace,
   projectRef,
@@ -260,11 +266,11 @@ export function useAppFrameActions({
     handOffSkillPrompt(creationPrompt ?? t("skills.createPrompt"))
   }, [handOffSkillPrompt, t])
 
+  const { startTrial, selectedSkill, clearSelectedSkill } = useAppFrameSkillTrial({ engine, preview, boundary: readBoundary, handOffPrompt: handOffSkillPrompt })
+
   const startSkillUseFromSettings = useCallback((skill: SkillCard, prompt?: string) => {
-    // Preview's name-based Try action may seed editable text, but it must not
-    // mutate the formal engine's typed Skill source selection.
-    handOffSkillPrompt(prompt ?? t("skills.tryPrompt", { brand: brandName ?? "Kokoro", name: skill.name }))
-  }, [brandName, handOffSkillPrompt, t])
+    return startTrial(skill, prompt ?? t("skills.tryPrompt", { brand: brandName ?? "Kokoro", name: skill.name }))
+  }, [brandName, t, startTrial])
 
   const dismissCreationIntent = useCallback(() => {
     setDeploymentIntent(null)
@@ -286,6 +292,8 @@ export function useAppFrameActions({
     startNewChatAndFocus,
     startSkillCreationFromSettings,
     startSkillUseFromSettings,
+    selectedSkill,
+    clearSelectedSkill,
     dismissCreationIntent,
   }
 }

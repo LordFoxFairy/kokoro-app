@@ -17,3 +17,6 @@
 - 首条消息后模式/模型/agent 锁定（`modeLocked`）：由 shell 传入，组件不自持锁态。
 
 - Send 的可见性只由运行态与非空 draft 决定；disabled 消费上游 engine admission，非空但暂不可提交时保留按钮与草稿，Stop 不受该判定阻断。
+## 显式技能选择
+
+`SelectedSkillPill` 仅显示 shell 传入的真实选择名称并提供键盘/触屏移除入口；不管理安装或 source 授权。清除只影响未来消息，不修改 engine 已冻结的未知提交。选择名不写入提示词充当能力身份。

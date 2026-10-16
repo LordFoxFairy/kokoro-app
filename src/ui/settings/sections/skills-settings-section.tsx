@@ -14,7 +14,7 @@ type SkillsSettingsSectionProps = {
   hubClient: HubClient;
   preview: boolean;
   brandName: string;
-  onTrySkill?: (skill: SkillCard) => void;
+  onTrySkill?: (skill: SkillCard, prompt?: string) => boolean;
   onCreateWithAi?: (prompt?: string) => void;
   embeddedCatalogOpen: boolean;
   onEmbeddedCatalogOpenChange: (open: boolean) => void;

@@ -4,6 +4,10 @@
 import type { MessageKey } from "./messages"
 
 export const ja: Partial<Record<MessageKey, string>> = {
+  "skills.tryRequiresEnabledVersion": "このバージョンを追加して有効にしてから例を使用してください。別バージョンへの変更には明示的な更新が必要です。",
+  "skills.tryUnavailable": "試用を開始できません。会話の接続とスキルの状態を確認して再試行してください。",
+  "composer.removeSelectedSkill": "選択したスキル {name} を外す",
+
   "firstSite.renameProject": "プロジェクト名を変更",
   "firstSite.projectName": "プロジェクト名",
   "firstSite.projectRenameDescription": "確認後に現在のプロジェクトを再読み込みします。会話と下書きはそのままです。",

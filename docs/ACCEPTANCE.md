@@ -221,3 +221,9 @@ python3 scripts/verify-ten-repository-standard.py --format json
 本验收不覆盖当前 IAB、真实 BFF/Agent owner、全部 actor/scope 矩阵或完整产品目标；工程门不得解释为全用户闭环。实际提交与发布状态以本仓 HEAD 和 Root gitlink 为准。
 
 ---
+
+## 2026-10-16 Skills 试用候选的验收边界
+
+- 当前自动回归覆盖精确安装与目录版本分离、同版本 handoff、Project URL→submitDraft wire、可移除标签及身份/会话退役；未知结果重试继续使用原冻结请求。仅扩展已有低层充分测试，不恢复已退役 UI 套件。
+- 尚需正常 owner 示例→详情点击→Direct/Project Composer 可见标签→编辑/移除/提交的真实浏览器旅程。当前本地样本无 example，不能用替身或 DOM 注入补成验收。
+- Agent 正式模型调用授权与相关 owner fresh authorization/真实运行仍是独立前置；preview E2E、构建、单元或非空 wire 均不替代。功能完成和远端 PR merge 分开记录，CI 暂停期间不冒已通过。

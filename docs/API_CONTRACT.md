@@ -903,8 +903,9 @@ BFF public 唯一 owner 为 `571b51de2057905c74c78ac966c8cf5ac11eca93`，其 Ope
 `pinned_skills`、重复、17 项、数组 JSON 超 4 KiB、前后空白/空 suffix 与多余字段。
 
 个人 Skill GET 的 `source_ref/revision` 仅给选择标签与 exact identity；它不是 installed/enabled/executable proof。
-当前正式页面没有选择入口，Agent 非空 reader 也未接，因此当前只提供 typed consumer/default `[]`，不宣称非空请求可执行。preview 名称动作
-不进入此 wire；旧 `kokoro.web.pinned_skills` 不读取、不迁移、不作 fallback。
+2026-10-16 的 Skills 示例选择接线承接上述 wire：当前可信身份下，详情/安装/精确 revision 绑定一致且已启用后，才创建目标工作区的新会话、预填可编辑文字并设置 exact source。callback 返回的成功只表示本地 handoff 已接纳，不表示消息已发送或 Agent 已执行。失败保留详情；版本不符不升级、不装入另一 source。preview 名称动作不进入此 wire；旧 `kokoro.web.pinned_skills` 不读取、不迁移、不作 fallback。
+
+当前 Agent 已有非空 reader 的 resolve/load-package，不能继续用“未接 reader”描述现源码；正式模型发送、执行资格与真实 Run 仍需联合验收。浏览器内部 `installed_source_ref` 仅保存原安装版本，与 catalog current version 分离，不扩展 BFF owner wire 或代替授权。
 
 ## W3 第二阶段 B：正式 Skill 写候选消费（2026-09-29；待 Root 真链验收）
 

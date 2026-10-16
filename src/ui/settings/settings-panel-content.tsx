@@ -38,7 +38,7 @@ type SettingsPanelContentProps = {
   onOpenSubscription: () => void;
   onOpenPricing: () => void;
   onCreateSkillWithAi?: (prompt?: string) => void;
-  onTrySkill?: (skill: SkillCard) => void;
+  onTrySkill?: (skill: SkillCard, prompt?: string) => boolean;
   skillsCatalogOpen: boolean;
   onSkillsCatalogOpenChange: (open: boolean) => void;
   skillsCatalogTriggerRef: RefObject<HTMLButtonElement | null>;

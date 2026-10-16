@@ -1252,3 +1252,9 @@ BFF snapshot + command receipt + durable AG-UI events
 
 当前缺少统一 browser-data inventory 自动测试、logout 后草稿清理策略和用户可见数据清理入口；这些是隐私
 与产品决策项，不通过新增 Web 数据库解决。
+
+## Skills 试用的临时显示绑定（2026-10-16）
+
+不新增 SQL/Redis/browser storage。Skill 卡片的内部 `installed_source_ref` 来自已验证安装投影的精确 source（目录 join 使用安装的 version UID），和目录 current source 分开；缺失时不合成。它不是新增 owner wire 字段，亦非可执行授权。
+
+试用选择仅在内存持有 name/sourceRef、engine、实际 conversation ID 与 admission owner；名称只用于标签，只有 exact source ref 进入既有消息数组。第一次离开该会话/身份即退役，不因返回相同 ID 复活，不从旧 pinned name 或持久草稿恢复隐含选择。原消息提交冻结集合及幂等重试保持。

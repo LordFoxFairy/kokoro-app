@@ -24,7 +24,7 @@ export type AppFrameOverlaySurfacesProps = {
   onCloseSettings: () => void;
   onTabChange: (tab: SettingsTab) => void;
   onCreateSkillWithAi: (prompt?: string) => void;
-  onTrySkill: (skill: SkillCard, prompt?: string) => void;
+  onTrySkill: (skill: SkillCard, prompt?: string) => boolean;
   settingsReturnFocusRef: RefObject<HTMLElement | null>;
   shellRef: RefObject<HTMLDivElement | null>;
   mcpCreateMode: McpCreateMode | null;

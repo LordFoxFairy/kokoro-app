@@ -125,6 +125,6 @@ export default function SharedSkillPage() {
       installationState={{ installed: Boolean(fact?.value?.installed && !differentPin), enabled: Boolean(fact?.value?.enabled && !differentPin) }} actionFailed={writeFailed}
       installationNotice={fact?.failed ? t("skills.shareInstallationUnavailable") : differentPin ? t("skills.shareOtherPin") : undefined} onRetryInstallation={fact?.failed ? () => setAttempt(value => value + 1) : undefined}
       publisherLabel={summary.skill.author?.display_name ?? (summary.skill.source_kind === "third_party" ? t("skills.community") : manifest.brand.name)}
-      categoryLabels={summary.skill.category_keys.map(value => t(category[value]))} onAdd={add} onAddShared={() => void add()} onTry={() => undefined} onOpenChange={open => { if (!open) router.push("/app/skills") }} />
+      categoryLabels={summary.skill.category_keys.map(value => t(category[value]))} onAdd={add} onAddShared={() => void add()} onTry={() => false} onOpenChange={open => { if (!open) router.push("/app/skills") }} />
   </main>
 }

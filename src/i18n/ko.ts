@@ -4,6 +4,10 @@
 import type { MessageKey } from "./messages"
 
 export const ko: Partial<Record<MessageKey, string>> = {
+  "skills.tryRequiresEnabledVersion": "예제를 사용하기 전에 이 버전을 추가하고 활성화하세요. 버전 변경에는 명시적인 업데이트가 필요합니다.",
+  "skills.tryUnavailable": "시험을 시작하지 못했습니다. 대화 연결과 스킬 상태를 확인한 후 다시 시도하세요.",
+  "composer.removeSelectedSkill": "선택한 스킬 {name} 제거",
+
   "firstSite.renameProject": "프로젝트 이름 바꾸기",
   "firstSite.projectName": "프로젝트 이름",
   "firstSite.projectRenameDescription": "확인 후 현재 프로젝트를 다시 읽습니다. 대화와 초안은 그대로 유지됩니다.",

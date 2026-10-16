@@ -28,6 +28,7 @@ import { ManusSkillDetailDialog } from "@/ui/skills/manus-skill-detail-dialog"
 import { createManusSkillHubClient, SKILL_CATALOG_RESOURCE_KEY } from "@/ui/skills/manus-skill-client"
 import { skillResourceKey } from "@/ui/skills/skills-resource-cache"
 import { stashPendingDraft } from "@/ui/shell/use-draft"
+import { toSkillActionCard } from "@/ui/skills/skills-card-model"
 import { BrandFallback } from "@/components/blocks/brand-mark/brand-mark"
 import { navigateMountedSurface } from "@/ui/navigation/mounted-surface-navigation"
 
@@ -106,7 +107,7 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
   const [busy, setBusy] = useState<string | null>(null)
   const [errorName, setErrorName] = useState<string | null>(null)
   const [lastAddedSkill, setLastAddedSkill] = useState<string | null>(null)
-  const [installationFacts, setInstallationFacts] = useState<Readonly<Record<string, { catalog: SkillCatalog | undefined; installed: boolean; enabled: boolean }>>>({})
+  const [installationFacts, setInstallationFacts] = useState<Readonly<Record<string, { catalog: SkillCatalog | undefined; installed: boolean; enabled: boolean; installed_source_ref: string }>>>({})
   const installationIntents = useRef(new Map<string, InstallationIntent>())
   const submittingInstallation = useRef(false)
   const installationLifetime = useRef<AbortController | null>(null)
@@ -150,7 +151,7 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
     const normalized = query.trim().toLocaleLowerCase()
     return (displayedCatalog?.skills ?? []).map((skill) => {
       const facts = skill.skill_id === undefined ? undefined : installationFacts[skill.skill_id]
-      return facts === undefined || facts.catalog !== catalog.data ? skill : { ...skill, installed: facts.installed, enabled: facts.enabled }
+      return facts === undefined || facts.catalog !== catalog.data ? skill : { ...skill, installed: facts.installed, enabled: facts.enabled, installed_source_ref: facts.installed_source_ref }
     }).filter((skill) => {
       const matchesCategory = category === "all" || skillCategories(skill).includes(category)
       const matchesQuery = normalized === ""
@@ -232,7 +233,7 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
       if (installation.source_ref !== intent.sourceRef || installation.series_id !== intent.seriesId
         || !installation.installed || !installation.enabled) throw new Error("installation ACK does not match the command")
       installationIntents.current.delete(stateKey)
-      const facts = { installed: installation.installed, enabled: installation.enabled }
+      const facts = { installed: installation.installed, enabled: installation.enabled, installed_source_ref: installation.source_ref }
       setInstallationFacts((current) => ({ ...current, [intent.seriesId]: { catalog: catalog.data, ...facts } }))
       setDetailSkill((current) => current !== null && actionIdentity(current) === stateKey ? { ...current, ...facts } : current)
       setLastAddedSkill(skill.name)
@@ -257,7 +258,10 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
     const facts = detailSkill.skill_id === undefined ? undefined : installationFacts[detailSkill.skill_id]
     const current = facts !== undefined && facts.catalog === catalog.data ? facts
       : catalog.data?.skills.find((skill) => skill.skill_id === detailSkill.skill_id) ?? detailSkill
-    return { ...detailSkill, installed: current.installed === true, enabled: current.enabled === true }
+    const result = { ...detailSkill, installed: current.installed === true, enabled: current.enabled === true }
+    delete result.installed_source_ref
+    if (current.installed_source_ref !== undefined) result.installed_source_ref = current.installed_source_ref
+    return result
   })()
   const detailPublisher = currentDetailSkill === null ? undefined : publisherLabel(currentDetailSkill)
 
@@ -407,6 +411,7 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
       <GithubImportDialog readBoundary={readBoundary} open={githubOpen} onOpenChange={setGithubOpen} returnFocusRef={githubRef} onImported={handleImported} />
       <SkillUploadDialog readBoundary={readBoundary} open={uploadOpen} onOpenChange={setUploadOpen} returnFocusRef={uploadRef} onPublished={() => invalidate(catalogKey)} />
       <ManusSkillDetailDialog
+        preview={preview}
         readBoundary={readBoundary}
         key={detailSkill?.skill_id ?? "closed"}
         skill={currentDetailSkill}
@@ -420,9 +425,9 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
         returnFocusRef={detailRef}
         onAdd={(skill) => void setEnabled(skill)}
         onTry={(prompt) => {
-          setDetailSkill(null)
-          if (onTrySkill) onTrySkill({ name: detailSkill?.name ?? "", description: detailSkill?.description ?? "", content_hash: detailSkill?.content_hash ?? "", scope: detailSkill?.scope ?? "official", enabled: true }, prompt)
-          else startChat(prompt)
+          if (onTrySkill && currentDetailSkill && onTrySkill(toSkillActionCard(currentDetailSkill), prompt)) { setDetailSkill(null); return true }
+          if (preview && !onTrySkill) { startChat(prompt); setDetailSkill(null); return true }
+          return false
         }}
       />
     </div>

@@ -2390,3 +2390,11 @@ Web 不复制 BFF OpenAPI，也不把同源 contract 放进 Developer API。详�
 4. 更新状态机/UI consumer；删除旧 wire/fallback，而不是双读长期共存。
 5. 运行 contract、architecture、lint、typecheck、test、build、E2E/live smoke。
 6. 同 commit 更新 CURRENT、ACCEPTANCE 和必要 runbook。
+
+## Skills 示例试用的会话选择（2026-10-16）
+
+试用仍使用既有 `selected_skill_source_refs` 和 AG-UI，不新增 owner、HTTP API、数据库或授权旁路。Project 设置中的试用保留当前项目并创建新会话，外部 Skills 目录使用同一 Direct engine 返回聊天；不另造跨 scope handoff 服务。
+
+`use-app-frame-skill-trial` 只持有浏览器选择与标签，将已确认的精确 source 绑定到 newConversation 后的实际 ID。engine/admission lifetime 与来源 route callback fence 分开：导航关闭设置不清同会话选择；首次 active ID 不匹配则同步永久退役，避免 A→B→A 标签复活。跨标签页身份 marker 必须匹配准入 subject；storage 或重渲染发现不匹配时永久退役旧 owner，marker 返回原值也不恢复。marker 不作为认证凭据。旧 cleanup 只能清自身 owner 的选择；新建、换身份、代际变化和卸载清 future refs，不改写已经冻结的未知提交。
+
+示例、详情版本和精确安装 source 必须一致且安装启用；catalog 系列级 added 不等于 latest revision 已安装。版本变化、未就绪或失败保留详情与原因，不静默升级/安装，不把预填文字作为正式试用成功。输入区显示真实技能名称并可移除。preview 仅预填文字，不能设置正式 source。下游 owner 仍 fresh 授权；浏览器回归或非空 wire 不是实际 Agent 运行证明。

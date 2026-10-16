@@ -1,7 +1,7 @@
 "use client"
 
 import Image from "next/image"
-import { ChevronDown, ChevronRight, Download, FileText, Folder, Menu, MessageCircle, Plus, Share } from "lucide-react"
+import { ChevronDown, ChevronRight, Download, FileText, Folder, Menu, Plus, Share } from "lucide-react"
 import { useEffect, useRef, useState, type RefObject } from "react"
 
 import { Badge } from "@/components/ui/badge"
@@ -15,6 +15,9 @@ import { createSkillShareClient } from "@/hub/skill-share-client"
 import type { ShareAck, ShareSummary } from "@/hub/skill-share.schema"
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
 import { ownerCoverPath } from "@/ui/skills/manus-skill-client"
+
+import { skillTrialSourceRef } from "./skills-card-model"
+import { SkillTrialExamples } from "./skill-trial-examples"
 
 import styles from "./manus-skill-detail-dialog.module.css"
 import { SkillPackageDocument } from "./skill-package-document"
@@ -98,6 +101,7 @@ function subscribeSkillDetail(cacheKey: string, skillId: string): DetailSubscrip
 
 type Props = {
   readBoundary: ProjectReadBoundary
+  preview?: boolean
   sharedSummary?: ShareSummary
   onAddShared?: () => void
   installationNotice?: string | undefined
@@ -111,7 +115,7 @@ type Props = {
   categoryLabels?: readonly string[]
   onOpenChange: (open: boolean) => void
   onAdd: (skill: SkillCatalogCard) => void
-  onTry: (prompt: string) => void
+  onTry: (prompt: string) => boolean
   returnFocusRef?: RefObject<HTMLElement | null>
 }
 
@@ -152,7 +156,7 @@ function displayDate(value: string | undefined, locale: string): string | null {
 /** A stable, server-backed catalog detail dialog. It never synthesizes prompts,
  * source state or package identifiers in the browser. Package text comes only
  * from the admitted published-revision inspection boundary. */
-export function ManusSkillDetailDialog({ readBoundary: boundary, skill, open, busy = false, installationState, actionFailed = false, publisherLabel, categoryLabels = [], onOpenChange, onAdd, onTry, returnFocusRef, sharedSummary, onAddShared, installationNotice, onRetryInstallation }: Props) {
+export function ManusSkillDetailDialog({ preview = false, readBoundary: boundary, skill, open, busy = false, installationState, actionFailed = false, publisherLabel, categoryLabels = [], onOpenChange, onAdd, onTry, returnFocusRef, sharedSummary, onAddShared, installationNotice, onRetryInstallation }: Props) {
   const { locale, t } = useLocale()
   const shareIntents = useRef(new Map<string, { ack: ShareAck | null; unknown: boolean; pending: boolean; controller: AbortController | null }>())
   type ShareState = "pending" | "copied" | "copyFailed" | "failed" | "unknown"
@@ -369,6 +373,7 @@ export function ManusSkillDetailDialog({ readBoundary: boundary, skill, open, bu
   const examples = sharedSummary?.skill.example_prompts ?? record?.exampleQuestions ?? skill?.example_questions ?? []
   const updated = displayDate(sharedSummary?.skill.updated_at ?? record?.updatedAt ?? (skill?.updated_at ? new Date(skill.updated_at * 1000).toISOString() : undefined), locale)
   const installed = installationState === undefined ? record?.added ?? skill?.installed ?? false : installationState.installed && installationState.enabled
+  const trialReady = !sharedSummary && (preview || boundary.admitted && boundary.subject !== null && installed && boundRevision !== null && skill !== null && skillTrialSourceRef(skill) === `skill:${boundRevision}`)
   const cover = sharedSummary?.skill.cover_image === undefined ? record?.coverImage ?? skill?.cover_image : ownerCoverPath(sharedSummary.skill.cover_image, sharedSummary.skill.skill_id)
   const canShare = Boolean(sharedSummary || skill?.revision_skill_id)
   const canDownload = Boolean(downloadInfo || sharedSummary)
@@ -455,7 +460,7 @@ export function ManusSkillDetailDialog({ readBoundary: boundary, skill, open, bu
           {loading ? <p className={styles.status}>{t("skills.detailLoading")}</p> : null}
           {failed ? <p className={styles.status}>{t("skills.detailUnavailable")}</p> : null}
           {record !== null && skill?.revision_skill_id !== undefined && record.version !== skill.revision_skill_id ? <p className={styles.status}>{t("skills.packageChanged")}</p> : null}
-          {examples.length > 0 ? <div className={styles.examples}>{examples.map((example) => <button key={example} type="button" disabled={Boolean(sharedSummary)} onClick={() => onTry(example)}><MessageCircle aria-hidden="true" /><span>{example}</span></button>)}</div> : null}
+          {examples.length > 0 ? <SkillTrialExamples key={JSON.stringify([boundary.subject, boundary.generation, skill?.skill_id, boundRevision, skill?.installed_source_ref, trialReady])} examples={examples} ready={trialReady} onTry={onTry} /> : null}
         </section>}
         {readerOpen ? <section className={styles.reader} aria-label={t("skills.packageReader")}>
             <button

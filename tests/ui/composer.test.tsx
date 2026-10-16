@@ -44,6 +44,15 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
+it("shows the selected exact skill as removable context without changing the editable prompt", () => {
+  const props = renderComposer({ draft: "editable prompt", selectedSkill: { name: "Exact skill", sourceRef: "skill:revision-one" }, onRemoveSelectedSkill: vi.fn() })
+  expect(screen.getByText("Exact skill")).toBeVisible()
+  fireEvent.click(screen.getByRole("button", { name: /Exact skill/ }))
+  expect(props.onRemoveSelectedSkill).toHaveBeenCalledOnce()
+  expect(screen.getByRole("textbox")).toHaveValue("editable prompt")
+  expect(props.onSubmit).not.toHaveBeenCalled()
+})
+
 describe("Composer model selector", () => {
   it("fast 输入使用中性提示，不作免费或扣点承诺", () => {
     renderComposer({ mode: "fast" })
