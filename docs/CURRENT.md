@@ -1,3 +1,13 @@
+## SET53 六个灰色入口补齐（2026-10-16；页面完成，完整门仍有失败）
+
+基线主线 d42fe1d29e984fccabd1d4916afb534ff0450cab，交付前核对远端未前移。Computer Use 实际查看 Manus 当前 Mail、邮箱、电话、钱包、集成、开发者六页；本轮已将六个灰色入口补为可进入页面，含导航/深链/搜索/compact More、Mail 设置/收件箱及开发者 API 密钥/Webhooks 局部页签。电脑仍禁用，Skills/MCP 业务排除。BFF public16 当前没有这些资产管理 API，未伪造邮箱地址、号码、密钥、余额、连接状态或无资产结论；创建/授权/绑定/连接/文档等无正式服务的动作明确说明并禁用。此处完成的是页面，不是六项后台服务。
+
+真实 E2E 先发现 320px More 的 body portal 位于 Dialog 焦点范围外，导致键盘选择无法关闭菜单；保持失败断言，仅将现菜单归入所属 Dialog 并转换定位坐标。CUA 又发现 Webhooks 换行及页签竖滚动，修正限于新服务页 CSS，实际文字行数/几何/无溢出断言保留。最终 25 writer/7 Root 文档/974 protected；只读审查三轮无确定 P1/P2。
+
+最终修正树：设置 UI 92 PASS；contract 284 PASS；architecture 50 PASS；lint/typecheck/build exit0。构建最初两次被本地复用依赖的软链接越过 Turbopack root 拒绝；仅将现锁定依赖克隆到本 worktree，并将三个 workspace 链接等价规范化为本地相对路径，随后正式 pnpm build 通过，未改依赖、lock 或 Next 配置。最终浏览器 29 PASS/3 FAIL；新增六个 SET53 desktop/mobile 用例全部通过（320/1600 导航键盘及 320/856/1600 文字布局）。失败为原 SET36 两项目在编辑快捷键按钮可见前的工作区加载超时，以及原 mobile project 链接超时，尚未归因，不宣称全门绿。修正前完整 test 为 3723 PASS/10 FAIL（411.28s，212 files，全部3733用例执行）；失败集中于 IAM/RP 登录跳转及项目会话系统用例。该完整结果对应修正前冻结树，未冒称最终键盘/CSS增量已重跑完整门。更早首轮 3649 PASS/3 FAIL/81 因 beforeAll 失败未运行的结果保留，不能当作81通过。
+
+最终冻结 manifest SHA-256 0e3bf8caeb675deed3de149891f25ba8c8fe786b542625a653d63a2df805d3a6；各资源门前后 PG/Redis 库存恢复、源码哈希匹配。验收后仅 CURRENT 更新结果；产品源及测试保持冻结。现有 owned 3313 隔离验收实例经 HMR 接入最终页面及菜单，无服务/数据库重置；正常已登录 Computer Use 实际打开六页、切换两组局部页签，并在320px用 Enter 从 More 打开邮箱且菜单关闭，随后恢复默认视口。该实例仍是本地验收夹具，不能冒称全部后台服务或生产可用；3311/3312未部署或重启。本分支交付 draft PR，不合入主干。
+
 ## SET49 最新主线整合验证与交付（2026-10-16）
 
 本分支已合入最新抓取主线dcd0c836564ed024250c255b8edfc83070c292a1，保留主线登录回调、导航header、项目链接及提交失败展示，账户/设备/Team/搜索/个性化CAS/分享/归档仍完整接线。Skills/MCP/hub业务源码与该main完全相同；本次只整合设置宿主与正式固定消费者。消费BFF正式30df0c428c592ed2710d62035ceb5855d20c7506/public16.0.0/146，全文SHA-256 b4e91483e425fdcc9547eac8bcda554273cbee0863ccb0ddfb185fae18e4e267，六正常生成入口及历史inverse原oracle通过。

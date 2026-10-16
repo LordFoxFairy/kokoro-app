@@ -266,6 +266,12 @@ const NAV_TAB_KEYS = [
   "mcp",
   "skills",
   "subscription",
+  "mail",
+  "email",
+  "phone",
+  "wallet",
+  "integration",
+  "developer",
   "team",
 ];
 
@@ -406,17 +412,17 @@ describe("SettingsModal 设置中心模态", () => {
     );
   });
 
-  it("设置导航遵循 Manus 的分组顺序，并以置灰行呈现尚未接通的分区", () => {
+  it("设置导航遵循 Manus 的分组顺序，并将电脑保留为置灰分区", () => {
     renderSettings();
 
     expect(screen.getByTestId("settings-tab-team")).toBeInTheDocument();
-    for (const id of ["mail", "computer", "email", "phone", "wallet", "integration", "developer"]) {
+    for (const id of ["computer"]) {
       expect(screen.getByTestId(`settings-placeholder-${id}`)).toHaveAttribute("aria-disabled", "true");
     }
     expect(screen.queryByTestId("settings-tab-deployment")).toBeNull();
-    expect(screen.queryByTestId("settings-tab-integration")).toBeNull();
+    expect(screen.getByTestId("settings-tab-integration")).toBeInTheDocument();
     expect(screen.queryByTestId("settings-tab-library")).toBeNull();
-    expect(screen.queryByTestId("settings-tab-developer")).toBeNull();
+    expect(screen.getByTestId("settings-tab-developer")).toBeInTheDocument();
   });
 
   it("SET21 Data is selectable and exposes same-page sections with unavailable management disabled", () => {
@@ -1873,8 +1879,8 @@ describe("SET40 concrete settings search", () => {
   it("SET40 a disabled menu match remains unavailable and cannot change the selected panel", () => {
     const onTabChange = vi.fn();
     renderSettings(() => {}, onTabChange);
-    searchFor("钱包");
-    const matches = within(navigation()).getAllByText("钱包", { exact: true });
+    searchFor("电脑");
+    const matches = within(navigation()).getAllByText("电脑", { exact: true });
     for (const match of matches) {
       expect(match.closest('[aria-disabled="true"]')).not.toBeNull();
       fireEvent.click(match);
@@ -1918,3 +1924,69 @@ describe("SET40 concrete settings search", () => {
   });
 });
 // SET40-END: concrete-setting-search
+
+// SET53-BEGIN: service-settings-pages
+describe("SET53 service settings stay honest about unavailable owner services", () => {
+  it.each([
+    ["mail", "Mail Kokoro"],
+    ["email", "邮箱"],
+    ["phone", "电话"],
+    ["wallet", "钱包"],
+    ["integration", "集成"],
+    ["developer", "开发者"],
+  ] as const)("opens %s from a normalized deep link without service IO or actionable fake assets", async (tab, title) => {
+    const fetcher = vi.fn().mockRejectedValue(new Error("unexpected service request"));
+    vi.stubGlobal("fetch", fetcher);
+    expect(normalizeSettingsTab(tab)).toBe(tab);
+    renderSettings(() => {}, undefined, false, undefined, tab);
+    expect(screen.getByRole("heading", { name: title, level: 1 })).toBeVisible();
+    const page = screen.getByTestId(`settings-service-${tab}`);
+    expect(page).toHaveTextContent("尚未接通");
+    const actions = within(page).getAllByRole("button");
+    expect(actions.length).toBeGreaterThan(0);
+    for (const action of actions) {
+      expect(action).toBeDisabled();
+      const reason = document.getElementById(action.getAttribute("aria-describedby") ?? "");
+      expect(reason).not.toBeNull();
+      expect(reason).toBeVisible();
+      expect(reason?.textContent).toMatch(/尚未接通|暂未提供/u);
+      fireEvent.click(action);
+    }
+    expect(page.querySelector("a, input, textarea")).toBeNull();
+    await Promise.resolve();
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("keeps Mail and developer sub-tabs local and restores their initial view after leaving", async () => {
+    const fetcher = vi.fn().mockRejectedValue(new Error("unexpected service request"));
+    vi.stubGlobal("fetch", fetcher);
+    renderSettings(() => {}, undefined, false, undefined, "mail");
+    fireEvent.keyDown(screen.getByRole("tab", { name: "收件箱" }), { key: "Enter" });
+    expect(screen.getByRole("button", { name: "刷新收件箱" })).toBeDisabled();
+    expect(screen.getByText("收件箱服务尚未接通，暂时无法读取邮件。")).toBeVisible();
+    fireEvent.keyDown(screen.getByTestId("settings-tab-developer"), { key: "Enter" });
+    fireEvent.keyDown(screen.getByRole("tab", { name: "Webhooks" }), { key: "Enter" });
+    expect(screen.getByRole("button", { name: "创建 Webhook" })).toBeDisabled();
+    fireEvent.keyDown(screen.getByTestId("settings-tab-mail"), { key: "Enter" });
+    expect(screen.getByRole("tab", { name: "设置" })).toHaveAttribute("aria-selected", "true");
+    fireEvent.keyDown(screen.getByTestId("settings-tab-developer"), { key: "Enter" });
+    expect(screen.getByRole("tab", { name: "API 密钥" })).toHaveAttribute("aria-selected", "true");
+    await Promise.resolve();
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("finds visible service fields and selects the destination while computer stays unavailable", () => {
+    const onTabChange = vi.fn();
+    renderSettings(() => {}, onTabChange, true, undefined, "mail");
+    const search = screen.getByRole("textbox", { name: "搜索" });
+    fireEvent.change(search, { target: { value: "支付方式" } });
+    const result = within(screen.getByRole("navigation", { name: "设置" })).getByRole("button", { name: "支付方式" });
+    fireEvent.click(result);
+    expect(onTabChange).toHaveBeenLastCalledWith("wallet");
+    expect(screen.getByRole("heading", { name: "钱包", level: 1 })).toBeVisible();
+    expect(search).toHaveValue("支付方式");
+    expect(screen.getByRole("button", { name: "添加" })).toBeDisabled();
+    expect(screen.getByTestId("settings-placeholder-computer")).toHaveAttribute("aria-disabled", "true");
+  });
+});
+// SET53-END: service-settings-pages

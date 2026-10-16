@@ -1,3 +1,20 @@
+## SET53 资产及服务设置页面（2026-10-16；实施方案）
+
+实际对照 Manus 的 Mail、邮箱、电话、钱包、集成、开发者六页。Web 拥有展示、导航、搜索及本地页签；现固定 BFF public16 没有这些资产管理契约。邮箱资产与登录邮箱分开，钱包与用量积分分开。当前实现六个可进入的页面及明确不可用的服务动作，电脑仍禁用，Skills/MCP 由另一开发者负责。
+
+| 放置项 | 决定 |
+| --- | --- |
+| 入口与复用 | 现 settings-types/navigation-model/navigation/header/dispatcher，沿用原 Modal、Panel、URL、搜索和窄屏 More，不另建设置壳。 |
+| 新文件 | 现 sections 下六个具名组件：mail-settings-section、email-assets-section、phone-assets-section、wallet-settings-section、integration-settings-section、developer-settings-section。各自只拥有该页面展示及局部页签；共享现 sections CSS、Button、Tabs、设计 token。 |
+| 选择理由 | 六个能力独立演进，合为万能 unavailable 组件会混合业务语义；新顶层 assets 模块会脱离唯一设置入口。沿现 sections 是最小边界，无新服务/依赖。 |
+| 状态 | Mail 设置/收件箱及开发者 API 密钥/Webhooks 可切换；其余页面展示服务尚未接通。没有权威读取时不显示“无资产”“零账单”等业务结论。创建、授权、绑定、连接、文档动作如无正式支持则禁用并给可见说明；不造地址、密钥、支付方式或成功回执。 |
+| 本地化 | 九种现有 locale 增加实际调用文案；不改 Skills/MCP 文案。 |
+| 验证与删除 | 替换六个旧 placeholder，电脑保留；调整对应两项旧禁用断言，保留其余 oracle。验证导航/深链/搜索/More/页签/禁用零 IO、完整规定门及正常已登录 Computer Use。 |
+
+本地页签只属于组件生命周期，不持久化资产、不建立 fake client 或 API。既有 beta agent connection setup 尚无完整产品闭环，本次不调用；集成与 MCP 连接器不是同一能力。Root 管文档、任务卡、Git 和集成验证，同仓只允许一个源码 writer。
+
+SET53 窄屏验收补充：真实 320px 键盘测试证明 compact More 的 body portal 位于 Dialog 焦点范围外，菜单项 focus 被捕获，Enter 无法完成选择。仅扩展现 settings-compact-more-menu.tsx，将菜单 portal 放在其所属 settings-modal 内，保留固定定位、原选择/关闭/事件逻辑和原失败断言；不放宽 Dialog 焦点保护、不建第二菜单。writer 增至25，protected为974；Root文档仍7。
+
 ## SET49 主线与设置分支整合（2026-10-16）
 
 从既有设置分支合入主线，保留主线 SettingsPanel、navigation model/brand/rail、compact More、Skills scope及独立项目/任务侧栏。设置分支已有账户资料/设备、Team准入、个性化CAS/unknown恢复、搜索和归档生命周期迁入这些现有边界；不恢复主线已退休的项目内私有任务展开分支，不修改Skills/连接器业务。唯一writer与验证证据由Root整合维护，所有PR仍draft。

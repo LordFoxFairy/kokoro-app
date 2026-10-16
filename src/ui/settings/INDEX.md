@@ -1,3 +1,7 @@
+SET53：sections 下 mail-settings-section、email-assets-section、phone-assets-section、wallet-settings-section、integration-settings-section、developer-settings-section 各自负责一个页面，局部页签不持久化。导航/搜索/header/dispatcher 增加六个可访问页面；具体服务动作无契约则禁用并给可见说明，无资产伪数据。电脑继续禁用，Skills/MCP 不改。
+
+SET53 compact More：现 settings-compact-more-menu 将 portal 归入所属 settings-modal 的焦点范围，保证窄屏键盘可选择；沿用单一菜单和原关闭逻辑。
+
 SET49：主线Panel/navigation拆分保持；既有Data、Help、账户/设备、Team和个性化以readBoundary接入dispatcher。Brand维护唯一搜索/清除与结果viewport，navigation维护静态标签索引，rail维护主线compact More与选择可见性；归档回调通过Panel传递。永久subject缓存不替代正式代际/CAS读取。
 
 <!-- SET47 archive consumer: 2026-10-15 -->

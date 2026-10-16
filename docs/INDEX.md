@@ -1,3 +1,5 @@
+SET53：TECHNICAL_DESIGN/API_CONTRACT/DATA_MODEL 顶部定义六个资产及服务设置页面的放置、可导航范围及未接通动作边界；CURRENT 记录实际验证。无新 API、持久化或依赖，不把页面可打开当作资产服务已经可用。
+
 <!-- SET47 archive consumer: 2026-10-15 -->
 SET47当前设计入口：TECHNICAL_DESIGN、API_CONTRACT、DATA_MODEL顶部记录已消费BFF53f222e/public15.4.0（150操作）的候选、回执先后顺序、provenance退休与测试边界；CURRENT只记录实际已跑结果。完整门/E2E及正常新run由Root续接。
 

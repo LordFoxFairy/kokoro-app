@@ -25,6 +25,12 @@ import {
   PersonalizationCard,
   ShortcutsCard,
   SkillsSettingsSection,
+  MailSettingsSection,
+  EmailAssetsSection,
+  PhoneAssetsSection,
+  WalletSettingsSection,
+  IntegrationSettingsSection,
+  DeveloperSettingsSection,
 } from "./sections";
 import type { SettingsTab } from "./settings-types";
 
@@ -75,6 +81,18 @@ export function SettingsPanelContent({
   initialSkillsScope,
 }: SettingsPanelContentProps) {
   switch (tab) {
+    case "mail":
+      return <MailSettingsSection brandName={brandName} />;
+    case "email":
+      return <EmailAssetsSection />;
+    case "phone":
+      return <PhoneAssetsSection />;
+    case "wallet":
+      return <WalletSettingsSection />;
+    case "integration":
+      return <IntegrationSettingsSection />;
+    case "developer":
+      return <DeveloperSettingsSection />;
     case "data-management":
       return <DataManagementSection {...(onArchiveChanged===undefined?{}:{onArchiveChanged})} preview={preview} {...(readBoundary === undefined ? {} : { readBoundary })} />;
     case "help":

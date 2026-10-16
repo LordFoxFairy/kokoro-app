@@ -43,7 +43,10 @@ export function SettingsCompactMoreMenu({
   itemClassName,
 }: SettingsCompactMoreMenuProps) {
   const [open, setOpen] = useState(false);
-  const [menuPosition, setMenuPosition] = useState<CSSProperties | null>(null);
+  const [menuLayer, setMenuLayer] = useState<{
+    host: HTMLElement;
+    position: CSSProperties;
+  } | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const menuId = useId();
@@ -54,25 +57,27 @@ export function SettingsCompactMoreMenu({
     const updatePosition = (): void => {
       const trigger =
         rootRef.current?.querySelector<HTMLButtonElement>("button");
-      const dialog = document.querySelector<HTMLElement>(
-        '[data-testid="settings-modal"]',
+      const dialog = rootRef.current?.closest<HTMLElement>(
+        '[data-testid="settings-modal"][data-slot="dialog-content"]',
       );
       if (!trigger || !dialog) return;
 
       const triggerRect = trigger.getBoundingClientRect();
       const dialogRect = dialog.getBoundingClientRect();
       const width = Math.min(144, Math.max(0, dialogRect.width - 16));
-      setMenuPosition({
-        position: "fixed",
-        top: `${triggerRect.bottom + 4}px`,
-        bottom: `${Math.max(8, window.innerHeight - dialogRect.bottom + 8)}px`,
-        left: `${Math.max(
-          dialogRect.left + 8,
-          dialogRect.right - 72 - width,
-        )}px`,
-        right: "auto",
-        width: `${width}px`,
-        minWidth: `${width}px`,
+      setMenuLayer({
+        host: dialog,
+        // The menu belongs to this Dialog's focus scope. Position against the
+        // same host, whose centering transform also contains fixed children.
+        position: {
+          position: "absolute",
+          top: `${triggerRect.bottom - dialogRect.top + 4}px`,
+          bottom: "8px",
+          left: `${Math.max(8, dialogRect.width - 72 - width)}px`,
+          right: "auto",
+          width: `${width}px`,
+          minWidth: `${width}px`,
+        },
       });
     };
 
@@ -132,7 +137,7 @@ export function SettingsCompactMoreMenu({
       >
         <Menu aria-hidden="true" />
       </button>
-      {open && typeof document !== "undefined"
+      {open && menuLayer
         ? createPortal(
             <div
               ref={menuRef}
@@ -140,7 +145,7 @@ export function SettingsCompactMoreMenu({
               className={menuClassName}
               data-settings-compact-more-menu
               role="menu"
-              style={menuPosition ?? undefined}
+              style={menuLayer.position}
             >
               {items.map((item) => (
                 <button
@@ -162,7 +167,7 @@ export function SettingsCompactMoreMenu({
                 </button>
               ))}
             </div>,
-            document.body,
+            menuLayer.host,
           )
         : null}
     </div>

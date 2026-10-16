@@ -1,3 +1,5 @@
+SET53：设置 sections 新增 Mail、邮箱资产、电话资产、钱包、集成、开发者六个独立页面，原导航/搜索/标题/内容分派复用唯一设置壳。服务动作仍按实际能力禁用，电脑及 Skills/MCP 不在本轮实施范围。设计和真实验收状态见 docs/TECHNICAL_DESIGN.md 与 docs/CURRENT.md。
+
 <!-- SET47 archive consumer: 2026-10-15 -->
 SET47：任务菜单与Data归档恢复通过现AppFrame接线；新schema/raw JSON、lib/server归档列表与状态adapter、四操作generated组、settings客户端/hooks及shell active-state/command hooks各有单一职责。BFF归档事实唯一owner，Web无archive数据库或全局缓存。完整验收与正常3312激活待Root，3311保留。
 

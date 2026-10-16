@@ -44,10 +44,22 @@ function panelTitle(
       return t("settings.helpTitle");
     case "team":
       return t("rail.navTeams");
+    case "mail":
+      return t("settings.mailTitle");
+    case "email":
+      return t("settings.email");
+    case "phone":
+      return t("settings.phoneTitle");
+    case "wallet":
+      return t("settings.walletTitle");
+    case "integration":
+      return t("settings.integrationTitle");
+    case "developer":
+      return t("settings.developerTitle");
   }
 }
 
-/** Shared settings heading for panels backed by a current owner contract. */
+/** Shared heading for each navigable settings page. */
 export function SettingsPanelHeader({
   tab,
   accountLoginMethods,
