@@ -2647,11 +2647,12 @@ it("MCP recheck restores typed configuration against fresh facts/CAS and an old 
   round = 2
   view.rerender(content(false, 2))
   expect(screen.getByRole("dialog")).toBe(dialog)
-  expect(screen.queryByRole("textbox", { name: "服务器 URL" })).not.toBeInTheDocument()
+  expect(screen.getByRole("textbox", { name: "服务器 URL" })).toHaveValue("")
+  expect(screen.getByRole("textbox", { name: "服务器 URL" })).toHaveAttribute("readonly")
   expect(screen.queryByText("Owner note 1")).not.toBeInTheDocument()
   view.rerender(content(true, 2))
-  await waitFor(() => expect(screen.getByRole("textbox", { name: "服务器名称" })).toHaveValue("My explicit edit"))
-  expect(screen.getByRole("textbox", { name: "服务器 URL" })).toHaveValue("https://mcp.example.test/v2")
+  await waitFor(() => expect(screen.getByRole("textbox", { name: "服务器 URL" })).toHaveValue("https://mcp.example.test/v2"))
+  expect(screen.getByRole("textbox", { name: "服务器名称" })).toHaveValue("My explicit edit")
   expect(screen.getByRole("textbox", { name: "备注 （可选）" })).toHaveValue("Owner note 2")
   fireEvent.click(screen.getByRole("button", { name: "保存" }))
   await waitFor(() => expect(update).toHaveBeenCalledWith("draft-server", { expected_state_version: "2", display_name: "My explicit edit" }))
@@ -2937,4 +2938,124 @@ it("MCP first-open locator can retry its missing row after recheck instead of re
   expect(await screen.findByRole("dialog", { name: "Initial missing" })).toBeVisible()
   await act(async () => { finish({ ...server, display_name: "Retired initial result" }); await old })
   expect(screen.queryByText("Retired initial result")).not.toBeInTheDocument()
+})
+
+it.each([
+  { kind: "mcp", dirty: false, target: "name" }, { kind: "mcp", dirty: true, target: "name" },
+  { kind: "api", dirty: false, target: "name" }, { kind: "api", dirty: true, target: "name" },
+  { kind: "mcp", dirty: true, target: "secret" }, { kind: "api", dirty: true, target: "secret" },
+])("$kind configuration keeps its focused field and selection through admission recheck (dirty: $dirty; field: $target)", async ({ kind, dirty, target }) => {
+  const { CustomMcpDetailDialog } = await import("@/ui/mcp/custom-mcp-detail-dialog")
+  const { CustomApiDetailDialog } = await import("@/ui/mcp/custom-api-detail-dialog")
+  const close = vi.fn(), save = vi.fn(), prepare = vi.fn()
+  const connector = { connector_id: "selection-connector", connector_type: "mcp" as const, provider_key: "selection",
+    server_id: "selection-server", display_name: "Original server", status: "pending" as const, approved_scopes: [], enabled: false, state_version: "1" }
+  const server = (fresh: boolean) => ({ server_id: "selection-server", display_name: fresh ? "Updated server" : "Original server",
+    notes: fresh ? "Fresh owner note" : "Retired owner note", server_url: "https://mcp.example.test/selection",
+    status: "pending" as const, state_version: fresh ? "2" : "1", headers: [{ name: "x-existing", configured: true, state_version: "1", status: "active" as const }],
+    prepare_status: "pending_prepare" as const, declarations: [], declarations_available: false })
+  const profile = (fresh: boolean) => ({ profile_id: "selection-api", name: fresh ? "Updated server" : "Original server",
+    instructions: fresh ? "Fresh owner note" : "Retired owner note", state_version: fresh ? "2" : "1",
+    created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-16T00:00:00Z", environment: [] })
+  const content = (ready: boolean, fresh = false, partial = false) => <LocaleProvider>{kind === "mcp" ?
+    <CustomMcpDetailDialog connector={ready ? connector : null} server={ready || partial ? server(fresh) : null}
+      actionId={null} actionError={false} deleteId={null} returnFocusRef={{ current: null }} onClose={close}
+      onSaveConfiguration={save} onPrepare={prepare} onDisconnect={vi.fn()} onDeleteIntent={vi.fn()} onCancelDelete={vi.fn()} onDelete={vi.fn()} /> :
+    <CustomApiDetailDialog profile={ready ? profile(fresh) : null} busy={false} actionError={false}
+      returnFocusRef={{ current: null }} onClose={close} onSave={save} onDelete={vi.fn()} />}</LocaleProvider>
+  const view = render(content(true))
+  if (kind === "mcp") {
+    fireEvent.keyDown(screen.getByRole("button", { name: "管理" }), { key: "ArrowDown" })
+    fireEvent.click(await screen.findByRole("menuitem", { name: "编辑配置" }))
+  } else fireEvent.click(screen.getByRole("button", { name: "编辑" }))
+  const label = kind === "mcp" ? "服务器名称" : "名称"
+  if (target === "secret") fireEvent.click(screen.getByRole("button", { name: kind === "mcp" ? "添加自定义 header" : "添加密钥" }))
+  const control = () => target === "secret" ? screen.getByLabelText(kind === "mcp" ? "Header value" : "密钥值") : screen.getByRole("textbox", { name: label })
+  const field = control() as HTMLInputElement
+  if (dirty) fireEvent.change(field, { target: { value: "Explicit user text" } })
+  act(() => { field.focus(); field.setSelectionRange(2, 6, "backward"); fireEvent.select(field) })
+  expect(field).toHaveFocus()
+  view.rerender(content(false))
+  expect(control()).toBe(field)
+  expect(field).toHaveFocus()
+  expect(field).toHaveAttribute("readonly")
+  expect(field).toHaveValue(dirty ? "Explicit user text" : "")
+  if (kind === "mcp") {
+    view.rerender(content(false, false, true))
+    expect(field).toHaveValue(dirty ? "Explicit user text" : "")
+    expect(screen.getByRole("textbox", { name: "备注 （可选）" })).toHaveValue("")
+  }
+  expect(screen.queryByText("Retired owner note")).not.toBeInTheDocument()
+  if (kind === "mcp") {
+    expect(screen.queryByText("x-existing")).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "试用一下" })).toBeDisabled()
+  }
+  expect(screen.getByRole("button", { name: kind === "mcp" ? "保存" : "保存修改" })).toBeDisabled()
+  if (dirty) act(() => { field.setSelectionRange(0, field.value.length, "forward"); fireEvent.select(field) })
+  else fireEvent.select(field)
+  view.rerender(content(true, true))
+  expect(control()).toBe(field)
+  expect(field).toHaveFocus()
+  expect(field).not.toHaveAttribute("readonly")
+  expect(field).toHaveValue(dirty ? "Explicit user text" : "Updated server")
+  expect([field.selectionStart, field.selectionEnd, field.selectionDirection]).toEqual(dirty ? [0, "Explicit user text".length, "forward"] : [2, 6, "backward"])
+  expect(save).not.toHaveBeenCalled(); expect(prepare).not.toHaveBeenCalled()
+})
+
+it.each(["mcp", "api"])("%s configuration restores a bounded range without stealing a focus choice made during recheck", async kind => {
+  const { CustomMcpDetailDialog } = await import("@/ui/mcp/custom-mcp-detail-dialog")
+  const { CustomApiDetailDialog } = await import("@/ui/mcp/custom-api-detail-dialog")
+  const connector = { connector_id: "focus-choice", connector_type: "mcp" as const, provider_key: "focus-choice",
+    server_id: "focus-choice-server", status: "pending" as const, approved_scopes: [], enabled: false, state_version: "1" }
+  const server = (name: string) => ({ server_id: "focus-choice-server", display_name: name, notes: "Fresh note paragraph", server_url: "https://mcp.example.test/focus-choice",
+    status: "pending" as const, state_version: "1", headers: [], prepare_status: "pending_prepare" as const, declarations: [], declarations_available: false })
+  const profile = (name: string) => ({ profile_id: "focus-choice-api", name, instructions: "Fresh note paragraph", state_version: "1",
+    created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-16T00:00:00Z", environment: [] })
+  const content = (name: string | null, pendingError = false) => <LocaleProvider>{kind === "mcp" ?
+    <CustomMcpDetailDialog connector={name === null ? null : connector} server={name === null ? null : server(name)}
+      actionId={null} actionError={false} deleteId={null} returnFocusRef={{ current: null }} onClose={vi.fn()} pendingError={pendingError} onRetry={vi.fn()}
+      onSaveConfiguration={vi.fn()} onPrepare={vi.fn()} onDisconnect={vi.fn()} onDeleteIntent={vi.fn()} onCancelDelete={vi.fn()} onDelete={vi.fn()} /> :
+    <CustomApiDetailDialog profile={name === null ? null : profile(name)} busy={false} actionError={false}
+      returnFocusRef={{ current: null }} onClose={vi.fn()} onSave={vi.fn()} onDelete={vi.fn()} pendingError={pendingError} onRetry={vi.fn()} />}</LocaleProvider>
+  const view = render(content("Long original name"))
+  if (kind === "mcp") {
+    fireEvent.keyDown(screen.getByRole("button", { name: "管理" }), { key: "ArrowDown" })
+    fireEvent.click(await screen.findByRole("menuitem", { name: "编辑配置" }))
+  } else fireEvent.click(screen.getByRole("button", { name: "编辑" }))
+  const field = screen.getByRole("textbox", { name: kind === "mcp" ? "服务器名称" : "名称" }) as HTMLInputElement
+  act(() => { field.focus(); field.setSelectionRange(5, 9); fireEvent.select(field) })
+  view.rerender(content(null))
+  view.rerender(content("Hi"))
+  expect(field).toHaveFocus()
+  expect([field.selectionStart, field.selectionEnd]).toEqual([2, 2])
+  view.rerender(content(null))
+  view.rerender(content("Longer fresh name"))
+  expect([field.selectionStart, field.selectionEnd]).toEqual([2, 2])
+  view.rerender(content(null))
+  fireEvent.keyDown(field, { key: "a", ctrlKey: true })
+  fireEvent.select(field)
+  view.rerender(content("Owner returns after selection"))
+  expect(field).toHaveFocus()
+  expect([field.selectionStart, field.selectionEnd]).toEqual([0, 0])
+  view.rerender(content(null))
+  const note = screen.getByRole("textbox", { name: kind === "mcp" ? "备注 （可选）" : "备注（可选）" }) as HTMLTextAreaElement
+  act(() => { note.focus(); note.setSelectionRange(0, 0); fireEvent.select(note) })
+  view.rerender(content("Recovered paragraph"))
+  expect(note).toHaveFocus()
+  expect(note).toHaveValue("Fresh note paragraph")
+  expect([note.selectionStart, note.selectionEnd]).toEqual([0, 0])
+  act(() => { note.scrollTop = 8; note.scrollLeft = 4; fireEvent.scroll(note) })
+  view.rerender(content(null))
+  act(() => { note.scrollTop = 0; note.scrollLeft = 0; fireEvent.scroll(note) })
+  view.rerender(content("Restored field scroll"))
+  expect([note.scrollTop, note.scrollLeft]).toEqual([8, 4])
+  view.rerender(content(null, true))
+  const retry = screen.getByRole("button", { name: "重试" })
+  act(() => retry.focus())
+  // A focused Close button remains mounted even when Retry disappears.
+  const close = screen.getAllByRole("button", { name: "取消" }).find(button => !button.hasAttribute("disabled"))!
+  act(() => close.focus())
+  view.rerender(content("Recovered name"))
+  expect(close).toHaveFocus()
+  expect(field).not.toHaveFocus()
 })

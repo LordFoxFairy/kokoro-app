@@ -36,6 +36,7 @@ import type {
 import { useT } from "@/i18n/context";
 
 import styles from "./custom-mcp-detail-dialog.module.css";
+import { useMcpEditorSelection } from "./use-mcp-editor-selection";
 import { isMcpCustomHeaderName } from "./mcp-header-validation";
 
 type HeaderDraft = { id: string; name: string; value: string };
@@ -85,19 +86,23 @@ export function CustomMcpDetailDialog({
   onDelete: () => void;
 }) {
   const t = useT();
+  const ready = server !== null && connector !== null;
+  const currentServer = ready ? server : null;
   const [editing, setEditing] = useState(false);
   // Store only explicit user edits across a recheck, never the previous owner
   // projection. Untouched fields resolve from the newly admitted server.
   const [nameDraft, setName] = useState<string | null>(null);
   const [notesDraft, setNotes] = useState<string | null>(null);
   const [urlDraft, setServerUrl] = useState<string | null>(null);
-  const name = nameDraft ?? server?.display_name ?? "";
-  const notes = notesDraft ?? server?.notes ?? "";
-  const serverUrl = urlDraft ?? server?.server_url ?? "";
+  const name = nameDraft ?? currentServer?.display_name ?? "";
+  const notes = notesDraft ?? currentServer?.notes ?? "";
+  const serverUrl = urlDraft ?? currentServer?.server_url ?? "";
   const [managementOpen, setManagementOpen] = useState(false);
   const [headers, setHeaders] = useState<HeaderDraft[]>([]);
   const [removedHeaders, setRemovedHeaders] = useState<string[]>([]);
   const busy = actionId === connector?.connector_id;
+  const locked = busy || !ready;
+  const selectionProps = useMcpEditorSelection(ready);
   const invalidHeaderName = headers.some(
     (item) => Boolean(item.name.trim()) && !isMcpCustomHeaderName(item.name),
   );
@@ -143,15 +148,13 @@ export function CustomMcpDetailDialog({
         closeLabel={t("mcp.cancel")}
         onCloseAutoFocus={closeFocus}
       >
-        {!server || !connector ? (
-          <section className={styles.detail} aria-busy={!pendingError}>
-            <header className={styles.detailHero}><DialogTitle>{t("mcp.edit")}</DialogTitle></header>
-            <div className={styles.detailBody}>
-              {pendingError ? <Alert variant="destructive" role="alert"><AlertDescription>{t("mcp.loadError")}</AlertDescription><Button type="button" variant="outline" onClick={onRetry}>{t("mcp.retry")}</Button></Alert> : <span role="status">{t("mcp.loading")}</span>}
-            </div>
-          </section>
-        ) : editing ? (
-          <form className={styles.configuration} onSubmit={save}>
+        {editing ? (
+          <form
+            {...selectionProps}
+            className={styles.configuration}
+            onSubmit={save}
+            aria-busy={!ready && !pendingError}
+          >
             <div className={styles.configurationBody}>
               <header className={styles.configurationHeader}>
                 <DialogTitle>MCP 配置</DialogTitle>
@@ -159,14 +162,23 @@ export function CustomMcpDetailDialog({
                   type="button"
                   variant="outline"
                   size="sm"
+                  disabled={locked}
                   onClick={() =>
-                    void navigator.clipboard?.writeText(server.server_id)
+                    currentServer && void navigator.clipboard?.writeText(currentServer.server_id)
                   }
                 >
                   <Copy aria-hidden="true" />
                   复制 UUID
                 </Button>
               </header>
+              {!ready ? pendingError ? (
+                <Alert variant="destructive" role="alert">
+                  <AlertDescription>{t("mcp.loadError")}</AlertDescription>
+                  <Button type="button" variant="outline" onClick={onRetry} disabled={!onRetry}>
+                    {t("mcp.retry")}
+                  </Button>
+                </Alert>
+              ) : <span className="sr-only" role="status">{t("mcp.loading")}</span> : null}
               {actionError ? (
                 <Alert variant="destructive" role="alert">
                   <AlertDescription>{t("mcp.actionFailed")}</AlertDescription>
@@ -176,10 +188,11 @@ export function CustomMcpDetailDialog({
                 <div className={styles.field}>
                   <Label htmlFor="custom-mcp-name">服务器名称</Label>
                   <Input
+                    readOnly={!ready}
                     id="custom-mcp-name"
                     value={name}
                     maxLength={100}
-                    onChange={(event) => setName(event.target.value)}
+                    onChange={(event) => ready && setName(event.target.value)}
                     required
                   />
                 </div>
@@ -195,7 +208,7 @@ export function CustomMcpDetailDialog({
                 <Label>图标</Label>
                 <div className={styles.iconUploadRow}>
                   <span className={styles.configurationIcon} aria-hidden="true">
-                    {server.display_name.slice(0, 1)}
+                    {currentServer?.display_name.slice(0, 1) ?? ""}
                   </span>
                   <span className={styles.uploadUnavailable}>上传</span>
                   <small>PNG 或 JPG，最大 1 MB。推荐尺寸 256×256 像素。</small>
@@ -206,20 +219,22 @@ export function CustomMcpDetailDialog({
                   备注 <span className={styles.optional}>（可选）</span>
                 </Label>
                 <Textarea
+                  readOnly={!ready}
                   id="custom-mcp-notes"
                   value={notes}
                   placeholder="提供 MCP 文档或说明，以告知 Kokoro 如何及何时使用此 MCP"
                   maxLength={4000}
-                  onChange={(event) => setNotes(event.target.value)}
+                  onChange={(event) => ready && setNotes(event.target.value)}
                 />
               </div>
               <div className={styles.field}>
                 <Label htmlFor="custom-mcp-server-url">服务器 URL</Label>
                 <Input
+                  readOnly={!ready}
                   id="custom-mcp-server-url"
                   type="url"
                   value={serverUrl}
-                  onChange={(event) => setServerUrl(event.target.value)}
+                  onChange={(event) => ready && setServerUrl(event.target.value)}
                   required
                 />
               </div>
@@ -227,7 +242,7 @@ export function CustomMcpDetailDialog({
                 <legend>
                   自定义 headers <span className={styles.optional}>（可选）</span>
                 </legend>
-                {server.headers
+                {(currentServer?.headers ?? [])
                   .filter((header) => !removedHeaders.includes(header.name))
                   .map((header) => (
                     <div className={styles.existingHeader} key={header.name}>
@@ -237,6 +252,7 @@ export function CustomMcpDetailDialog({
                         type="button"
                         size="icon"
                         variant="ghost"
+                        disabled={locked}
                         aria-label={`移除 ${header.name}`}
                         onClick={() =>
                           setRemovedHeaders((items) => [...items, header.name])
@@ -249,10 +265,12 @@ export function CustomMcpDetailDialog({
                 {headers.map((header) => (
                   <div className={styles.headerDraft} key={header.id}>
                     <Input
+                      readOnly={!ready}
+                      id={`mcp-header-${header.id}-name`}
                       aria-label="Header name"
                       value={header.name}
                       onChange={(event) =>
-                        setHeaders((items) =>
+                        ready && setHeaders((items) =>
                           items.map((item) =>
                             item.id === header.id
                               ? { ...item, name: event.target.value }
@@ -262,11 +280,13 @@ export function CustomMcpDetailDialog({
                       }
                     />
                     <Input
+                      readOnly={!ready}
+                      id={`mcp-header-${header.id}-value`}
                       aria-label="Header value"
                       type="password"
                       value={header.value}
                       onChange={(event) =>
-                        setHeaders((items) =>
+                        ready && setHeaders((items) =>
                           items.map((item) =>
                             item.id === header.id
                               ? { ...item, value: event.target.value }
@@ -279,9 +299,10 @@ export function CustomMcpDetailDialog({
                       type="button"
                       size="icon"
                       variant="ghost"
+                      disabled={locked}
                       aria-label="移除新增 Header"
                       onClick={() =>
-                        setHeaders((items) =>
+                        ready && setHeaders((items) =>
                           items.filter((item) => item.id !== header.id),
                         )
                       }
@@ -299,6 +320,7 @@ export function CustomMcpDetailDialog({
                   type="button"
                   variant="outline"
                   size="sm"
+                  disabled={locked}
                   onClick={() =>
                     setHeaders((items) => [
                       ...items,
@@ -313,7 +335,7 @@ export function CustomMcpDetailDialog({
             <footer className={styles.configurationFooter}>
               <DropdownMenu open={managementOpen} onOpenChange={setManagementOpen}>
                 <DropdownMenuTrigger asChild>
-                  <Button type="button" variant="outline" size="sm" disabled={busy}>
+                  <Button type="button" variant="outline" size="sm" disabled={locked}>
                     管理
                     <ChevronDown aria-hidden="true" />
                   </Button>
@@ -323,7 +345,7 @@ export function CustomMcpDetailDialog({
                   <DropdownMenuSeparator className={styles.managementDivider} />
                   <DropdownMenuItem
                     className={styles.dangerMenuItem}
-                    disabled={busy}
+                    disabled={locked}
                     onSelect={() => {
                       setEditing(false);
                       onDeleteIntent();
@@ -334,18 +356,18 @@ export function CustomMcpDetailDialog({
                 </DropdownMenuContent>
               </DropdownMenu>
               <div className={styles.configurationActions}>
-                <Button type="button" variant="outline" disabled={busy} onClick={onPrepare}>
+                <Button type="button" variant="outline" disabled={locked} onClick={onPrepare}>
                   {busy ? <Spinner aria-hidden="true" /> : <Send aria-hidden="true" />}
                   试用一下
                 </Button>
                 <span className={styles.saveSplit}>
-                  <Button type="submit" disabled={busy || invalidHeaderName}>
+                  <Button type="submit" disabled={locked || invalidHeaderName}>
                     {busy ? <Spinner aria-hidden="true" /> : null}
                     保存
                   </Button>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button type="button" aria-label="保存选项" disabled={busy}>
+                      <Button type="button" aria-label="保存选项" disabled={locked}>
                         <ChevronDown aria-hidden="true" />
                       </Button>
                     </DropdownMenuTrigger>
@@ -357,6 +379,13 @@ export function CustomMcpDetailDialog({
               </div>
             </footer>
           </form>
+        ) : !server || !connector ? (
+          <section className={styles.detail} aria-busy={!pendingError}>
+            <header className={styles.detailHero}><DialogTitle>{t("mcp.edit")}</DialogTitle></header>
+            <div className={styles.detailBody}>
+              {pendingError ? <Alert variant="destructive" role="alert"><AlertDescription>{t("mcp.loadError")}</AlertDescription><Button type="button" variant="outline" onClick={onRetry}>{t("mcp.retry")}</Button></Alert> : <span role="status">{t("mcp.loading")}</span>}
+            </div>
+          </section>
         ) : (
           <section className={styles.detail}>
             <header className={styles.detailHero}>

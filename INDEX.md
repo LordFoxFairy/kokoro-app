@@ -248,3 +248,6 @@ lint、typecheck、test、build、浏览器 E2E 或 live BFF 验收。
 ## MCP 同 actor 重核（2026-10-16 候选）
 
 MCP Settings/Plugins 的纯展示意图按 actor 保持，事实/命令按 read generation 退休；精确详情、配置 dirty 字段和目录控件不因重核整面板重挂。`src/ui/mcp/INDEX.md` 记录事实重读、失败恢复、OAuth 退休与独立 Custom API 写后失活边界。行为回归复用既有 rail suite，不恢复已退役的 UI 套件；正常浏览器与完整门的当前证据归 Root 有效闭环计划，不由此索引宣称完成。
+
+
+MCP/Custom API配置的焦点后继：保留readonly配置控件而不是临时卸载；owner-only值仍立即退休，选择/内部滚动按纯metadata恢复且不抢用户新焦点。具体边界见`src/ui/mcp/INDEX.md`，不涉及auth/owner契约或数据库变更。

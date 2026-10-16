@@ -22,6 +22,7 @@ import type {
 import { useT } from "@/i18n/context";
 
 import styles from "./custom-mcp-detail-dialog.module.css";
+import { useMcpEditorSelection } from "./use-mcp-editor-selection";
 
 type SecretDraft = { id: string; name: string; value: string };
 
@@ -57,6 +58,9 @@ export function CustomApiDetailDialog({
   const [facts, setFacts] = useState(profile);
   if (facts !== profile) { setFacts(profile); setDeleteArmed(false); }
   const [secrets, setSecrets] = useState<SecretDraft[]>([]);
+  const ready = profile !== null;
+  const locked = busy || !ready;
+  const selectionProps = useMcpEditorSelection(ready);
   const configuredNames = useMemo(
     () => new Set(profile?.environment.map(({ name }) => name) ?? []),
     [profile],
@@ -103,13 +107,10 @@ export function CustomApiDetailDialog({
         closeLabel={t("mcp.cancel")}
         onCloseAutoFocus={closeFocus}
       >
-        {!profile ? (
-          <section className={styles.detail} aria-busy={!pendingError}>
-            <header className={styles.detailHero}><DialogTitle>自定义 API</DialogTitle></header>
-            <div className={styles.detailBody}>{pendingError ? <Alert variant="destructive" role="alert"><AlertDescription>{t("mcp.loadError")}</AlertDescription><Button type="button" variant="outline" onClick={onRetry}>{t("mcp.retry")}</Button></Alert> : <span role="status">{t("mcp.loading")}</span>}</div>
-          </section>
-        ) : editing ? (
+        {editing ? (
           <form
+            {...selectionProps}
+            aria-busy={!ready && !pendingError}
             className={`${styles.configuration} ${styles.apiConfiguration}`}
             onSubmit={save}
           >
@@ -122,6 +123,14 @@ export function CustomApiDetailDialog({
               </div>
             </header>
             <div className={styles.apiConfigurationBody}>
+              {!ready ? pendingError ? (
+                <Alert variant="destructive" role="alert">
+                  <AlertDescription>{t("mcp.loadError")}</AlertDescription>
+                  <Button type="button" variant="outline" onClick={onRetry} disabled={!onRetry}>
+                    {t("mcp.retry")}
+                  </Button>
+                </Alert>
+              ) : <span className="sr-only" role="status">{t("mcp.loading")}</span> : null}
               {actionError ? (
                 <Alert variant="destructive" role="alert">
                   <AlertDescription>{t("mcp.actionFailed")}</AlertDescription>
@@ -130,10 +139,11 @@ export function CustomApiDetailDialog({
               <div className={styles.field}>
                 <Label htmlFor="custom-api-detail-name">名称</Label>
                 <Input
+                  readOnly={!ready}
                   id="custom-api-detail-name"
                   value={name}
                   maxLength={400}
-                  onChange={(event) => setName(event.target.value)}
+                  onChange={(event) => ready && setName(event.target.value)}
                   required
                 />
               </div>
@@ -142,15 +152,16 @@ export function CustomApiDetailDialog({
                   备注（可选）
                 </Label>
                 <Textarea
+                  readOnly={!ready}
                   id="custom-api-detail-instructions"
                   value={instructions}
                   maxLength={4000}
-                  onChange={(event) => setInstructions(event.target.value)}
+                  onChange={(event) => ready && setInstructions(event.target.value)}
                 />
               </div>
               <fieldset className={styles.headers}>
                 <legend>密钥（环境变量）</legend>
-                {profile.environment.map(({ name: environmentName }) => (
+                {(profile?.environment ?? []).map(({ name: environmentName }) => (
                   <div className={styles.existingHeader} key={environmentName}>
                     <span>{environmentName}</span>
                     <small>已配置</small>
@@ -159,10 +170,12 @@ export function CustomApiDetailDialog({
                 {secrets.map((secret) => (
                   <div className={styles.headerDraft} key={secret.id}>
                     <Input
+                      readOnly={!ready}
+                      id={`api-secret-${secret.id}-name`}
                       aria-label="密钥名称"
                       value={secret.name}
                       onChange={(event) =>
-                        setSecrets((items) =>
+                        ready && setSecrets((items) =>
                           items.map((item) =>
                             item.id === secret.id
                               ? { ...item, name: event.target.value }
@@ -172,12 +185,14 @@ export function CustomApiDetailDialog({
                       }
                     />
                     <Input
+                      readOnly={!ready}
+                      id={`api-secret-${secret.id}-value`}
                       aria-label="密钥值"
                       type="password"
                       value={secret.value}
                       autoComplete="new-password"
                       onChange={(event) =>
-                        setSecrets((items) =>
+                        ready && setSecrets((items) =>
                           items.map((item) =>
                             item.id === secret.id
                               ? { ...item, value: event.target.value }
@@ -190,9 +205,10 @@ export function CustomApiDetailDialog({
                       type="button"
                       size="icon"
                       variant="ghost"
+                      disabled={locked}
                       aria-label="移除新增密钥"
                       onClick={() =>
-                        setSecrets((items) =>
+                        ready && setSecrets((items) =>
                           items.filter((item) => item.id !== secret.id),
                         )
                       }
@@ -204,6 +220,7 @@ export function CustomApiDetailDialog({
                 <Button
                   type="button"
                   variant="outline"
+                  disabled={locked}
                   onClick={() =>
                     setSecrets((items) => [
                       ...items,
@@ -220,12 +237,12 @@ export function CustomApiDetailDialog({
               <Button
                 type="button"
                 variant="outline"
-                disabled={busy}
+                disabled={locked}
                 onClick={() => setEditing(false)}
               >
                 {t("mcp.cancel")}
               </Button>
-              <Button type="submit" disabled={busy || !valid}>
+              <Button type="submit" disabled={locked || !valid}>
                 {busy ? (
                   <Spinner aria-hidden="true" />
                 ) : (
@@ -235,6 +252,11 @@ export function CustomApiDetailDialog({
               </Button>
             </footer>
           </form>
+        ) : !profile ? (
+          <section className={styles.detail} aria-busy={!pendingError}>
+            <header className={styles.detailHero}><DialogTitle>自定义 API</DialogTitle></header>
+            <div className={styles.detailBody}>{pendingError ? <Alert variant="destructive" role="alert"><AlertDescription>{t("mcp.loadError")}</AlertDescription><Button type="button" variant="outline" onClick={onRetry}>{t("mcp.retry")}</Button></Alert> : <span role="status">{t("mcp.loading")}</span>}</div>
+          </section>
         ) : (
           <section className={`${styles.detail} ${styles.apiDetail}`}>
             <header className={styles.apiDetailHeader}>
