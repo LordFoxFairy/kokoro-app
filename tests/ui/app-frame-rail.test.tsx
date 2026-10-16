@@ -37,7 +37,7 @@ function mountFrame(props: Partial<React.ComponentProps<typeof AppFrame>> = {}) 
   )
 }
 
-function setDesktopViewport(width: number) {
+function setDesktopViewport(width: number, pointer: "fine" | "coarse" = "fine") {
   desktopViewportWidth = width
   Object.defineProperty(window, "innerWidth", { configurable: true, value: width, writable: true })
   window.matchMedia = vi.fn().mockImplementation((query: string) => {
@@ -47,9 +47,9 @@ function setDesktopViewport(width: number) {
     const mobileWidth = query.includes("max-width: 767px")
     return {
       matches: finePointer
-        ? compactWidth && desktopViewportWidth <= 768
+        ? pointer === "fine" && compactWidth && desktopViewportWidth <= 768
         : coarsePointer
-          ? mobileWidth && desktopViewportWidth <= 767
+          ? pointer === "coarse" && mobileWidth && desktopViewportWidth <= 767
           : false,
       media: query,
       onchange: null,
@@ -257,6 +257,23 @@ it("768px 细指针桌面隐藏 Rail，展开后 seam 和焦点入口同步恢�
     expect(shell?.querySelector('[data-seam="rail"]')).toBeNull()
     expect(screen.getByRole("dialog")).toContainElement(document.activeElement as HTMLElement)
   })
+})
+
+it("触屏导航抽屉的打开和关闭不改变桌面侧栏偏好", async () => {
+  setDesktopViewport(412, "coarse")
+  mountFrame({ desktopRailCollapsed: false })
+
+  const shell = document.querySelector('[data-slot="sidebar-wrapper"]')
+  const trigger = await screen.findByRole("button", { name: "展开侧栏" })
+  expect(trigger).toHaveAttribute("aria-expanded", "false")
+  expect(shell).toHaveAttribute("data-rail-collapsed", "false")
+  fireEvent.click(trigger)
+  const drawer = await screen.findByRole("dialog")
+  expect(shell).toHaveAttribute("data-rail-collapsed", "false")
+  fireEvent.keyDown(drawer, { key: "Escape" })
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+  expect(trigger).toHaveAttribute("aria-expanded", "false")
+  expect(shell).toHaveAttribute("data-rail-collapsed", "false")
 })
 
 it("隐藏共享 Header 的独立 Web 页面仍保留唯一导航入口", async () => {

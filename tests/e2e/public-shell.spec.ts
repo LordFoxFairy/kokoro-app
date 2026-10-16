@@ -23,7 +23,7 @@ test.describe("项目会话", () => {
     await page.addInitScript(() => window.localStorage.setItem("kokoro.locale", "zh-CN"))
   })
 
-  test("从项目概览提交后进入项目会话，并且不写入直接会话列表", async ({ page }) => {
+  test("预览中从项目概览提交后进入项目会话，并且不写入直接会话列表", async ({ page, isMobile }) => {
     const prompt = "验证项目会话闭环"
     await page.goto("/app/project/preview-project", { waitUntil: "domcontentloaded" })
 
@@ -33,10 +33,20 @@ test.describe("项目会话", () => {
     await expect(page).toHaveURL(/\/app\/project\/preview-project\?conversation=conv_[a-z0-9-]+$/)
     await expect(page.getByRole("log")).toContainText(prompt)
 
+    if (isMobile) {
+      const navigationTrigger = page.getByRole("button", { name: /展开侧栏|Expand sidebar/ })
+      await expect(navigationTrigger).toHaveAttribute("aria-expanded", "false")
+      await navigationTrigger.click()
+      await expect(page.getByRole("dialog")).toBeVisible()
+    }
     await page.getByRole("link", { name: /当前项目|Current project/ }).click()
     await expect(page).toHaveURL(/\/app\/project\/preview-project$/)
     await expect(page.getByRole("heading", { name: /项目会话|Project conversations/ })).toBeVisible()
     await expect(page.getByRole("main")).toContainText(prompt)
+    if (isMobile) {
+      await expect(page.getByRole("dialog")).not.toBeVisible()
+      await page.getByRole("button", { name: /展开侧栏|Expand sidebar/ }).click()
+    }
     await expect(page.getByRole("navigation", { name: /直接会话|Direct chats/ })).not.toContainText(prompt)
   })
 })

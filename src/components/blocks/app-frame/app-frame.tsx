@@ -628,8 +628,8 @@ function AppFrameRuntime({
 
   const toggleNavigationRail = useCallback(() => {
     if (layout.compactDesktopRail) layout.setCompactRailOpen((open) => !open)
-    else layout.setRailCollapsed((collapsed) => !collapsed)
-  }, [layout])
+    else if (!narrowWeb) layout.setRailCollapsed((collapsed) => !collapsed)
+  }, [layout, narrowWeb])
 
   const mainSurface = (
     <AppFrameMainSurface
