@@ -1,6 +1,12 @@
-## SET51 登录表单真实 Next 回归修复进行中（2026-10-16）
+## SET51 登录表单真实 Next 回归已适配，完整门仍 FAILED（2026-10-16）
 
-已重新抓取五相关远端，主干与上一轮已合并结果相同；同事的新 Skills/连接器/侧栏分支保留。Web 基线 d42fe1d29e984fccabd1d4916afb534ff0450cab，现有四个登录回归在原字节基线上实际 4 FAIL、145 CLI 名称过滤，49.38 秒，PG/Redis 库存与 1000 tracked 文件前后 exact。当前生产 `/login` 是受 CSRF/CSP 保护的浏览器表单，旧测试仍预期 GET 302。仅准现两个真实 Next 测试按当前表单完整提交并保持所有安全断言；未修改生产源，尚未据此宣称修复通过。其余六个项目/侧栏失败不在本片，完整门仍 FAILED。
+已重新抓取五个相关远端，主干与上一轮已合并结果相同；同事尚未合并的 Skills/连接器/侧栏分支保留。Web 基线 d42fe1d29e984fccabd1d4916afb534ff0450cab。仅修改两现有真实 Next 测试中的四个登录用例及必要 helper：原 HTTP 验证实际 GET 200 表单、唯一 CSRF、cookie 摘要、nonce/meta；真实浏览器验证 GET 安全头与签发 cookie、实际导航 POST 的唯一 token、摘要、原 cookie 回传、Origin:null、无 Referer、302/state。没有正文读取或导航拦截；原 CSP、新凭据表单、匿名安全壳、零业务 IO、次数、退出生命周期和期限全部保留。生产源、依赖、API/Schema、Skills/连接器及其余项目用例未改。
+
+验证源码 c1b59f708440bacc24e3161f58dfcbc726d7c7cf，独立只读审查无确定 P1/P2、新秘密输出或成功标准放宽。Node22 实际 contract 284 PASS、architecture 50 PASS，lint/typecheck/build 均 exit0。首次完整 test：212 files，3719 PASS/6 FAIL，376.17 秒；四个登录用例全部通过，剩余六个原项目/侧栏用例为 R139、R192、R195×2、R231×2。完整 Playwright：25 PASS/1 FAIL，36.3 秒；24 个设置旅程全通过，失败仍为原手机项目链接超时。未增加 skip/retry、预热请求或预算，未重跑完整门寻绿。
+
+原字节基线四例 4 FAIL/145 CLI 名称过滤；适配后的窄门曾出现 IAM provider POST 503，闭集记录为 rp_unavailable、无 Location/Set-Cookie、signin catch marker。私有阶段诊断四例通过且未复现 503，最终完整门亦未复现，因此原因仍未查明，不能宣称已修复该 503。期间被拒绝的正文采集/导航暂持方案已从最终源码删除。
+
+各实际门的 PG/Redis 库存均恢复，冻结源码 hash 完全一致，993 个范围外 tracked 文件与基线 exact。最终只更新本段验证记录，测试及生产字节保持上述已验证版本；本地原服务与用户数据保留。完整项目门仍 FAILED，不等于完整产品或生产验收通过。
 
 ## SET49 最新主线整合验证与交付（2026-10-16）
 
