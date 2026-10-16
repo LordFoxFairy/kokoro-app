@@ -1,3 +1,11 @@
+## 2026-10-16 Skills 显式更新：正常产品旅程验收
+
+固定业务源码 App `d40c839`、BFF `615b16a`、Platform `11cb760`。用户批准本地短暂重启后，正常 Product Session→Web 同源→BFF→Platform→Storage/现有 PostgreSQL 完成自有 private 样本安装 v1→v2：确认前无 POST，确认后仅一次 strict 两 pin/原幂等 key 的 update，200 ACK→安装 GET 200→列表 GET 200；没有 Remove/Install。独立正常登录回读证明 installation ID、series、installed_at、enabled=true 均保持，目标严格等于原 `available_update`，余额仍 1,000 积分/held=0/流水1条且内容未变。没有直库写、凭据注入、模型发送或重复充值。
+
+键盘 Enter 完成后焦点返回搜索，更新按钮消失且正常开关恢复；硬刷新仍为新状态。详情使用既有 GetSkill 的 series 查询，返回版本必须与所选安装 B 的不可变 UID 一致才放行示例；不要把 series 查询 UID 冒称 B 的 UID。实际新版示例启用、旧例子未混入；390px 窄屏最终详情 x=9.75/width=370.5、页面 scrollWidth=clientWidth=390，新版示例可交给 Composer，名称和文本到位，但未发送任务。尺寸初次在 0.2s resize 过渡中大于视口，稳定后已回到上述范围；这不是整站逐帧/物理触屏或窄屏第二次更新写入的验收。自有草稿/视口/网络观察/临时标签均已清理。
+
+范围：本轮证明真实 happy path、原身份/启用态保留、刷新与新版示例交接；unknown/并发/disabled=false 的风险证据分别沿现 pure flow/client/真实隔离 PostgreSQL，不把它们冒成已做正常浏览器故障注入。机器 profile 的 `runtime_verified=false` 未重新发行，不扩大为全 operation runtime 认证。完整 Skills/Admin/MCP、正式 Agent/Billing 执行与远端 PR/gitlink 合并仍未完成。
+
 ## 2026-10-16 Skills 显式安装更新候选（正常产品链待验）
 
 App 沿 BFF `615b16a` / public 14.8 / 139 operations 的原字节 snapshot 和既有两生成器接入唯一 update。安装池显示 owner 的 `available_update`，显式核对旧/新 pin 后更新同一安装，不拼 Remove/Install、不自动追目录最新版。actor-owned holder 保留同 actor 重核期间的原命令及幂等 key，失准入/代际更换撤销旧读取和旧回调；412 不当成回滚证明，未知结果只显式恢复原命令，ACK-known 后只重读。真实 `enabled=false` 由 owner 保留，不被 UI 推断为启用。
