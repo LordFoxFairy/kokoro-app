@@ -193,3 +193,53 @@ it("preserves only the owner-declared update target, without changing the curren
   const [card] = await createManusSkillHubClient(createHubClient(), boundary).listSkillPool();
   expect(card).toMatchObject({ source_ref: "skill:version-old", installed_source_ref: "skill:version-old", available_update });
 });
+
+it("installed package and download bind source and decimal revision without series lookup", async () => {
+  const { inspectInstallationPackage, downloadInstallationPackage } = await import("@/hub/skill-installation-content")
+  const target = { installation_id: "pin-install", source_ref: "skill:pin-A", revision: "7" }
+  const directory = { source_ref: target.source_ref, revision: "7", files: [{ path: "SKILL.md", size_bytes: "3" }], selected_file: null }
+  const ack = { source_ref: target.source_ref, revision: "7", download_info: { download_url: `/skill-downloads/${"a".repeat(43)}`, filename: "A.zip", expires_at: "2999-01-01T00:00:00Z" } }
+  const fetcher = vi.fn().mockResolvedValueOnce(response({ data: directory })).mockResolvedValueOnce(response({ data: { ...directory, selected_file: { path: "SKILL.md", text: "ABC" } } })).mockResolvedValueOnce(response({ data: ack }))
+  vi.stubGlobal("fetch", fetcher)
+  await expect(inspectInstallationPackage(target)).resolves.toEqual(directory)
+  await expect(inspectInstallationPackage(target, "SKILL.md", undefined, directory)).resolves.toMatchObject({ selected_file: { text: "ABC" } })
+  await expect(downloadInstallationPackage(target)).resolves.toEqual(ack)
+  expect(fetcher.mock.calls.map(call => call[0])).toEqual(["/api/hub/skill-installations/pin-install/package", "/api/hub/skill-installations/pin-install/package?file_path=SKILL.md", "/api/hub/skill-installations/pin-install/download"])
+  expect(fetcher.mock.calls[2]?.[1]).toMatchObject({ method: "POST", credentials: "same-origin", redirect: "error", cache: "no-store" })
+  expect(fetcher.mock.calls[2]?.[1].body).toBeUndefined()
+  expect(fetcher.mock.calls[2]?.[1].headers).not.toHaveProperty("idempotency-key")
+})
+
+it.each(["package", "download"] as const)("installed %s rejects a changed pin, numeric revision, directory or download locator", async operation => {
+  const { inspectInstallationPackage, downloadInstallationPackage } = await import("@/hub/skill-installation-content")
+  const target = { installation_id: "pin-install", source_ref: "skill:pin-A", revision: "7" }
+  const valid = operation === "package" ? { source_ref: target.source_ref, revision: "7", files: [], selected_file: null } : { source_ref: target.source_ref, revision: "7", download_info: { download_url: `/skill-downloads/${"b".repeat(43)}`, filename: "A.zip", expires_at: "2999-01-01T00:00:00Z" } }
+  for (const data of [{ ...valid, source_ref: "skill:pin-B" }, { ...valid, revision: "8" }, { ...valid, extra: true }, ...(operation === "download" ? [{ ...valid, download_info: { download_url: "https://objects.example/A.zip", filename: "A.zip", expires_at: "2999-01-01T00:00:00Z" } }] : [{ ...valid, selected_file: { path: "SKILL.md", text: "unexpected" } }])]) {
+    const fetcher = vi.fn().mockResolvedValue(response({ data })); vi.stubGlobal("fetch", fetcher)
+    await expect(operation === "package" ? inspectInstallationPackage(target) : downloadInstallationPackage(target)).rejects.toMatchObject({ reason: "parse" })
+    expect(fetcher).toHaveBeenCalledTimes(1)
+  }
+})
+
+it.each(["package", "download"] as const)("installed %s independently enforces denial, ten-second deadline, caller abort and late-body cleanup", async operation => {
+  const { inspectInstallationPackage, downloadInstallationPackage } = await import("@/hub/skill-installation-content")
+  const target = { installation_id: "pin-install", source_ref: "skill:pin-A", revision: "7" }
+  const run = (signal?: AbortSignal) => operation === "package" ? inspectInstallationPackage(target, undefined, signal) : downloadInstallationPackage(target, signal)
+  const code = operation === "package" ? "skill_package_not_found" : "skill_download_forbidden"
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response({ error: { code, message: "Denied", retryable: false } }, operation === "package" ? 404 : 403)))
+  await expect(run()).rejects.toMatchObject({ reason: "http", code })
+  vi.useFakeTimers()
+  let finish!: (value: Response) => void
+  vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(resolve => { finish = resolve })))
+  const timed = run().catch(error => error)
+  await vi.advanceTimersByTimeAsync(10_000)
+  expect(await timed).toMatchObject({ reason: "network" })
+  const cancel = vi.fn(); finish(new Response(new ReadableStream({ cancel })))
+  await Promise.resolve(); await Promise.resolve()
+  expect(cancel).toHaveBeenCalledOnce()
+  const controller = new AbortController(), aborted = run(controller.signal).catch(error => error)
+  controller.abort()
+  expect(await aborted).toMatchObject({ reason: "aborted" })
+  finish(new Response(null)); await Promise.resolve()
+  expect(vi.getTimerCount()).toBe(0)
+})

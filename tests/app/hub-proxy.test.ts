@@ -4721,3 +4721,56 @@ it("preserves valid Custom API recovery errors while rejecting those write recei
     expect((await read.json()).error.code).toBe("custom_api_response_invalid");
   }
 });
+
+it("routes installed package and download to exact installation BFF boundaries, not the series catalog", async () => {
+  const { GET, POST } = await import("@/app/api/hub/[...path]/route")
+  vi.mocked(requestWithDomain).mockResolvedValueOnce(Response.json(catalogPackage, { headers: catalogPackageHeaders }))
+  const read = await GET(new Request("http://localhost/api/hub/skill-installations/install-A/package"), params(["skill-installations", "install-A", "package"]))
+  expect(read.status).toBe(200)
+  expect(await read.json()).toEqual(catalogPackage)
+  expect(requestWithDomain).toHaveBeenLastCalledWith("http://bff.test/v1/skill-installations/install-A/package", ENV.KOKORO_DOMAIN, expect.objectContaining({ method: "GET" }))
+  const ack = { data: { source_ref: "skill:revision-exact", revision: "7", download_info: { download_url: `/skill-downloads/${"a".repeat(43)}`, filename: "A.zip", expires_at: "2999-01-01T00:00:00Z" } } }
+  vi.mocked(requestWithDomain).mockResolvedValueOnce(Response.json(ack, { headers: catalogPackageHeaders }))
+  const download = await POST(new Request("http://localhost/api/hub/skill-installations/install-A/download", { method: "POST", headers: { origin: ENV.KOKORO_WEB_ORIGIN } }), params(["skill-installations", "install-A", "download"]))
+  expect(download.status).toBe(200)
+  expect(await download.json()).toEqual(ack)
+  expect(requestWithDomain).toHaveBeenLastCalledWith("http://bff.test/browser/v1/skill-installations/install-A/download", ENV.KOKORO_DOMAIN, expect.objectContaining({ method: "POST" }))
+})
+
+it("installed content rejects malformed local requests before admission or BFF IO", async () => {
+  const { GET, POST } = await import("@/app/api/hub/[...path]/route")
+  currentProductSession.mockClear()
+  for (const [method, tail, query, headers, body] of [
+    ["GET", "package", "?file_path=SKILL.md&file_path=other", {}, undefined],
+    ["GET", "package", "?file_path=..%2Fsecret", {}, undefined],
+    ["GET", "package", "?file_path=%ZZ", {}, undefined],
+    ["GET", "package", "", { "idempotency-key": "forbidden" }, undefined],
+    ["POST", "download", "?file_path=SKILL.md", { origin: ENV.KOKORO_WEB_ORIGIN }, undefined],
+    ["POST", "download", "", { origin: ENV.KOKORO_WEB_ORIGIN, "idempotency-key": "forbidden" }, undefined],
+    ["POST", "download", "", { origin: ENV.KOKORO_WEB_ORIGIN }, "{}"],
+    ["POST", "download", "", { origin: "https://other.example" }, undefined],
+  ] as const) {
+    const request = new Request(`http://localhost/api/hub/skill-installations/install-A/${tail}${query}`, { method, headers, ...(body === undefined ? {} : { body }) })
+    const result = await (method === "GET" ? GET : POST)(request, params(["skill-installations", "install-A", tail]))
+    expect([400, 403]).toContain(result.status)
+  }
+  expect(currentProductSession).not.toHaveBeenCalled()
+  expect(requestWithDomain).not.toHaveBeenCalled()
+})
+
+it("installed inspection keeps its exact error contract separate from catalog and download errors", async () => {
+  const { GET } = await import("@/app/api/hub/[...path]/route")
+  for (const [status, code, retryable, valid] of [
+    [404, "skill_package_not_found", false, true],
+    [412, "skill_package_precondition_failed", false, true],
+    [429, "skill_package_limit_exceeded", false, true],
+    [503, "skill_package_dependency_unavailable", true, true],
+    [404, "skill_not_found", false, false],
+    [503, "skill_package_dependency_unavailable", false, false],
+  ] as const) {
+    vi.mocked(requestWithDomain).mockResolvedValueOnce(Response.json({ error: { code, message: "Bound error", retryable } }, { status, headers: catalogPackageHeaders }))
+    const result = await GET(new Request("http://localhost/api/hub/skill-installations/install-A/package"), params(["skill-installations", "install-A", "package"]))
+    expect(result.status).toBe(valid ? status : 502)
+    expect((await result.json()).error.code).toBe(valid ? code : "skill_package_response_invalid")
+  }
+})

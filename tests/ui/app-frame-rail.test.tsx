@@ -4005,3 +4005,58 @@ it("a late provider toggle ACK does not close a successor provider window", asyn
   expect(screen.getByRole("dialog")).toBe(successor)
   expect(toggle).toHaveBeenCalledOnce()
 })
+
+it("installation detail keeps pin A metadata and reader when the catalog current revision is B", async () => {
+  const requests: string[] = []
+  const text = "# Installed A"
+  vi.spyOn(globalThis, "fetch").mockImplementation(async input => {
+    const path = String(input); requests.push(path)
+    const headers = { "cache-control": "private, no-store", "x-request-id": "pin-detail" }
+    if (path.endsWith("GetSkill")) return Response.json({ skill: { id: "pin-series", version: "pin-B", displayName: "Catalog B", description: "B summary" }, downloadInfo: { downloadUrl: "/api/skill-downloads/current-B", filename: "B.zip", expiresAt: "2028-01-01T00:00:00Z" } }, { headers })
+    if (path.endsWith("/download")) return Response.json({ error: { code: "skill_download_forbidden", message: "Download denied independently", retryable: false } }, { status: 403, headers })
+    if (path.includes("/package")) return Response.json({ data: { source_ref: "skill:pin-A", revision: "1", files: [{ path: "SKILL.md", size_bytes: String(new TextEncoder().encode(text).byteLength) }], selected_file: path.includes("file_path=") ? { path: "SKILL.md", text } : null } }, { headers })
+    return Response.json({ data: { installation_id: "pin-install", series_id: "pin-series", source_ref: "skill:pin-A", revision: "1", installed: true, enabled: false, display_name: "Installed A", summary: "A summary", source_status: "withdrawn", installed_at: "2026-10-15T00:00:00Z", updated_at: "2026-10-15T00:00:00Z", skill_updated_at: "2026-10-14T00:00:00Z", example_prompts: ["A example"], category_keys: [], tags: [], product: { publication_audience: "catalog", state_version: "1", source_kind: "personal" } } }, { headers })
+  })
+  render(<LocaleProvider><ManusSkillDetailDialog detailSource="installation" readBoundary={{ admitted: true, subject: "pin-reader", generation: 1 }} skill={{ skill_id: "pin-series", revision_skill_id: "pin-A", source_ref: "skill:pin-A", installed_source_ref: "skill:pin-A", installation_id: "pin-install", name: "Installed A", description: "Card A", content_hash: "pin-series", scope: "personal", installed: true, enabled: false }} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={() => false} /></LocaleProvider>)
+  await screen.findByText("A summary")
+  expect(screen.getByRole("button", { name: "启用" })).toBeEnabled()
+  expect(screen.queryByText("B summary")).toBeNull()
+  expect(screen.queryByRole("heading", { name: "Catalog B" })).toBeNull()
+  const reader = screen.getByRole("button", { name: "查看详情" })
+  expect(reader).toBeEnabled()
+  fireEvent.click(reader)
+  await screen.findByRole("heading", { name: "Installed A", level: 1 })
+  expect(requests).toContain("/api/hub/skill-installations/pin-install/package?file_path=SKILL.md")
+  expect(requests.some(path => path.endsWith("GetSkill") || path.includes("/skills/pin-A/package"))).toBe(false)
+  fireEvent.click(screen.getByRole("button", { name: "下载技能" }))
+  await screen.findByRole("alert")
+  expect(screen.getByText("技能详情暂时不可用")).toBeVisible()
+})
+
+
+it("catalog detail still reads current B even when its card also carries installation A", async () => {
+  const requests: string[] = []
+  vi.spyOn(globalThis, "fetch").mockImplementation(async input => {
+    requests.push(String(input))
+    return Response.json({ skill: { id: "separate-series", version: "current-B", displayName: "Catalog current B", description: "Catalog B metadata" }, downloadInfo: { downloadUrl: "/api/skill-downloads/catalog-B", filename: "B.zip", expiresAt: "2028-01-01T00:00:00Z" } })
+  })
+  render(<LocaleProvider><ManusSkillDetailDialog readBoundary={{ admitted: true, subject: "catalog-pin-reader", generation: 1 }} skill={{ skill_id: "separate-series", revision_skill_id: "current-B", source_ref: "skill:current-B", installed_source_ref: "skill:installed-A", installation_id: "installed-A-id", name: "Catalog card", description: "Current card", content_hash: "series", scope: "official", installed: true, enabled: true }} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={() => false} /></LocaleProvider>)
+  await screen.findByText("Catalog B metadata")
+  expect(screen.getByRole("button", { name: "查看详情" })).toBeEnabled()
+  expect(requests).toHaveLength(1)
+  expect(requests[0]).toContain("GetSkill")
+})
+
+it.each(["pin-changed", "series-changed", "removed"])("installation detail rejects %s without using a catalog fallback", async scenario => {
+  const fetcher = vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json({ data: {
+    installation_id: "reject-install", series_id: scenario === "series-changed" ? "another-series" : "reject-series", source_ref: scenario === "pin-changed" ? "skill:new-B" : "skill:old-A", revision: "1", installed: scenario !== "removed", enabled: false,
+    ...(scenario === "removed" ? { removed_at: "2026-10-16T00:00:00Z" } : {}),
+    installed_at: "2026-10-15T00:00:00Z", updated_at: "2026-10-16T00:00:00Z", skill_updated_at: "2026-10-15T00:00:00Z", display_name: "Untrusted replacement", summary: "Never display replacement facts", source_status: "active", example_prompts: [], category_keys: [], tags: [], product: { publication_audience: "catalog", state_version: "1" },
+  } }, { headers: { "cache-control": "no-store", "x-request-id": "rejected-pin" } }))
+  render(<LocaleProvider><ManusSkillDetailDialog detailSource="installation" readBoundary={{ admitted: true, subject: `rejected-pin-${scenario}`, generation: 1 }} skill={{ installation_id: "reject-install", skill_id: "reject-series", revision_skill_id: "old-A", source_ref: "skill:old-A", installed_source_ref: "skill:old-A", name: "Selected A", description: "Selected A facts", content_hash: "series", scope: "personal", installed: true, enabled: false }} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={() => false} /></LocaleProvider>)
+  await screen.findByText("技能详情暂时不可用")
+  expect(screen.queryByText("Never display replacement facts")).toBeNull()
+  expect(screen.getByRole("button", { name: "查看详情" })).toBeDisabled()
+  expect(fetcher).toHaveBeenCalledTimes(1)
+  expect(fetcher.mock.calls[0]?.[0]).toBe("/api/hub/self/skill-installations/reject-install")
+})

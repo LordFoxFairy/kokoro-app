@@ -947,6 +947,18 @@ export const CATALOG_PACKAGE_ERRORS: Readonly<Record<number, readonly string[]>>
   502: ["skill_response_invalid"],
   503: ["product_tenant_not_configured", "iam_admission_unavailable", "skill_dependency_unavailable"],
 }
+// Existing BFF personal-installation inspection has a distinct error contract.
+export function installationPackageErrorAllowed(status: number, code: string, retryable: boolean, retryAfter: string | null): boolean {
+  const codes: Readonly<Record<number, readonly string[]>> = {
+    400: ["invalid_skill_package_request"], 401: ["session_authentication_required", "session_invalid"],
+    403: ["service_auth_failed", "session_forbidden", "product_tenant_forbidden"],
+    404: ["skill_package_not_found"], 412: ["skill_package_precondition_failed"],
+    429: ["session_rate_limited", "skill_package_limit_exceeded"], 502: ["skill_package_response_invalid"],
+    503: ["product_tenant_not_configured", "iam_admission_unavailable", "skill_package_dependency_unavailable"],
+  }
+  return (codes[status]?.includes(code) ?? false) && retryable === (status === 503 || code === "session_rate_limited")
+    && (retryAfter === null || code === "session_rate_limited" && /^[1-9][0-9]{0,4}(?![\s\S])/u.test(retryAfter) && Number(retryAfter) <= 86400)
+}
 export function catalogPackageMatches(value: CatalogPackageData, revisionSkillId: string, filePath?: string, expectedDirectory?: CatalogPackageData): boolean {
   return (
     value.source_ref === `skill:${revisionSkillId}` &&

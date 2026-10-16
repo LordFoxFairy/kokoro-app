@@ -2478,3 +2478,7 @@ Hub update/remove签名显式caller key，删隐式随机key，不留旧签名fa
 ### MCP 管理原命令（2026-10-16 实施设计）
 
 稳定shell构造一个MCP lifecycle set，将现typed Prepare与五项typed management（server update/delete、connector update/enabled/disconnect）用闭包的必需predicate接线；不建跨业务通用registry、不把API/OAuth并入。按connector及可选private server精确定位原意图，管理unknown阻止新Prepare和其他管理，Prepare未结时阻止非清理修改；断开/删除仍可执行，ACK才退休相应Prepare。更新/启停/断开不从新GET替换原body/CAS/key。三个详情和缺行意图入口显示同一管理状态；window/admission token限制完成和关闭，ACK清实际secret草稿。owner wire/数据不变。
+
+### 已安装技能详情的精确版本（2026-10-16，实施设计）
+
+安装池入口显式选择 installation 详情，目录入口仍选择 catalog current；不能仅凭 catalog 卡片也带 installation_id 推断入口。安装详情经既有 GET personal installation 重核 series/source/installed，展示该 pin 的名称、摘要、示例和日期，随后通过既有 installation package / browser download 读取同 source 与 decimal revision。目录 GetSkill 不参与安装详情，不降级到 series current；原安装更新仍只能经明确 update 操作。失去准入、换主体/代际、关闭或更换 installation/source 均退休请求和私有展示；禁用安装允许阅读，移除/隔离或 pin 变化显示失败而不换版本。读权限不代表下载授权，下载由 BFF 独立判定。无新 owner、依赖、数据模型或后端契约；只消费当前固定 BFF 已发布接口。

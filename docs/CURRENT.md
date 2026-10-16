@@ -1818,3 +1818,13 @@ API/JSON/Register/共享Prepare在actor RAM保存固定profile严格核过的失
 App57b510d后的本片把五项管理（server编辑/删除、connector编辑/启停/断开）移出runAction，接稳定actor/client按connector及private server绑定的typed原意图；现Prepare保独立槽并由单一构造器接必需互锁predicate，不新造通用registry/owner事实。管理未知保持原key/body/CAS且只读，新Prepare被拒；Prepare未知阻止修改，明确断开/删除仍可执行，只有ACK退休其精确Prepare。三现详情都有原请求状态、缺行入口和window/admission围栏；ACK清实际header草稿，非敏感输入保留至显式Done。Hub五方法删除隐式key生成并沿现单一matcher严格核目标、写入字段、安全header/OAuth描述和撤销/删除结果；原wire/生成物/后端不变。
 
 错目标ACK、未知配置缺恢复及错误安全字段ACK均实际RED后修复；复用现Hub/rail/纯flow（加原schema回归）验证五项冻结恢复/互锁/同actor重核/actor退休/缺行删除/迟到provider ACK/实际header清理，无新suite。旧prefix测试改为caller key契约，原非敏感dirty编辑准入回归继续保留；曾误在Root调用vitest报无入口，未作产品RED，通过正确App目录取得实际RED。正常3310当前Session在自有无凭据loopback元数据fixture上Register/Prepare成功，改名→精确详情回读→恢复原名→正常断开→硬刷新已无样本，原两个API保留。仅initialize/通知与三个声明list各一次，无tools/call、模型、外部grant/凭据/资金或配置变更；未永久删除。未知/过期/缺行删除/启停故障为受控证据，不冒真实owner故障或整站1:1。临时tab/fixture已关闭；最终相同业务/测试字节Node22.22.2下contract280、architecture50、lint/typecheck0；默认181files/3262PASS/0skip/188.21s（2workers）；原同字节候选build0、公共壳桌面/窄屏6PASS/7.7s（1worker）、posttype0。19路径冻结只读复核未见新增确定P0–P2，主方复核hash；仅CURRENT结果段后补，业务/测试字节不变。新增12项独有风险行为而非新suite；原跨Document/色彩warning保留，公共壳E2E不冒新管理故障真实验收。Platform12个基线format历史失败、原生OAuth/create恢复/显式结清与整个文档恢复及全目标仍未闭环，不称整体合并就绪。
+
+### 安装 pin 详情/正文/下载（2026-10-16，验收进行中）
+
+基线 fb8bbb5。安装池显式走本人 installation 重核 metadata、exact package 与 download；目录仍 current，分享仍 exact share。已复现 RED：A 安装被 B metadata 覆盖、installation package 404；修复后定向通过。新 consumer 校验 source/decimal revision/文件目录/受控下载句柄，保持准入与取消围栏，不借 catalog 回退。停用安装显示“启用”，不伪装未安装；reader 内下载拒绝独立可见，不清正文。
+
+正常同源 Admin 创建本轮“Kokoro pin consistency 20261016”两真实 ZIP 版本：先安装 A，再发布 current B；刷新安装仍 A，目录 B，二者下载哈希分别等于各自原 ZIP。停用后明确 update 到 B，保留停用，安装 reader/download 均为 B；Admin 可逆隔离 B 后 package 与下载拒绝，恢复同一 B 后原 reader 重试成功。正常当前样本保留已发布、安装 B 停用；未永久删除。无模型/计费/角色变更。原始截图、下载哈希和收据只在 Root ignored `var/dev/auth-p3-runtime/pairing-repair/pin-*`；`pin-disabled-A.png` 为开发 HMR 后摘要，不作停用 A 正文证明。
+
+本片完整冻结门禁待下方补记；首轮全套3272通过发生于最终局部提示修改前，只是阶段证据。真实另一主体/撤回矩阵与完整 Manus 视觉、公开 v2 八类事实裁决、项目默认及正式执行、OAuth 创建恢复和远程 PR/Root main 汇总仍未闭环。Admin 临时开发进程与两自建浏览器标签已回收，正常共享服务保留。
+
+最终冻结验证（同15路径，业务/测试字节停写后）：Node22 `pnpm contract`280 PASS、`pnpm test:architecture`50 PASS、`pnpm lint`/`pnpm typecheck`0；`pnpm test --maxWorkers=2`181 files / 3275 PASS / 0 SKIP / 182.03秒。独立同基线候选 `pnpm build`0，`KOKORO_E2E_PORT=3325 pnpm test:e2e tests/e2e/public-shell.spec.ts --workers=1`桌面/移动6 PASS / 8.3秒，随后typecheck0。全测一条既有 jsdom navigation 诊断、E2E颜色环境 warnings 非失败，不冒零诊断。独审15冻结hash一致且无确定新增P0–P2；这只证明本片，不替代正常跨主体/撤回、完整视觉或全目标。最终只追加本段文档，14其它路径保持冻结。远程未操作，Root index空；BFF d176e3d/Platform ac56a1f clean，Storage原35 dirty paths保留。

@@ -1637,3 +1637,7 @@ Custom API本地Hub updateCustomApi(profileId,input,key,signal?)、removeCustomA
 
 
 MCP管理Hub五方法显式caller key（其后signal?），不保隐式随机key入口；原HTTP方法/body及发布契约不变。沿现mcpConnectorMatches/mcpPrivateServerMatches核精确locator、请求写入字段/安全header描述及删除/撤销ACK，管理index另核捕获connector/private server绑定。不把GET/404、popup或错误视作ACK，不改变原生OAuth协议。
+
+### Installation exact content（2026-10-16，实施设计）
+
+新增 browser-private `/api/hub/skill-installations/{id}/package` GET 与 `/api/hub/skill-installations/{id}/download` POST，分别固定转发已发布 BFF `/v1/skill-installations/{id}/package` 与 `/browser/v1/skill-installations/{id}/download`。GET 仅可有单个 file_path；POST 无 query、key 或非空 body。两者复用正式 Product Session 准入、同源 Origin、十秒预算、1 MiB 严格 JSON 边界；installation inspection 使用其专属 skill_package_* 错误，download 使用独立 download 错误矩阵。成功 source/revision 必须匹配本次权威 installation；文件路径/清单绑定原目录，下载只消费未过期受控 /skill-downloads 句柄，不接受对象存储 URL。目录与分享现有接口语义不变。

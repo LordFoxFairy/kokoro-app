@@ -1287,3 +1287,7 @@ Custom API管理pending意图只在当前actor/client RAM，以profile ID索引�
 
 
 MCP管理按actor/client、connector locator保存五项typed原命令，仅未决body/key/CAS在RAM；summary仅operation/locator/kind/failure，无owner事实/header值。现Prepare仍独立typed槽并与管理互锁，清理ACK精确退休Prepare；关闭/重核保原命令、actor退休/ACK清正文，列表缺行不生成事实或本地完成。无SQL/Redis/browser持久化或owner schema变化。
+
+### Installation exact content（2026-10-16，实施设计）
+
+无 Web 持久模型。已安装详情只在当前 subject/admission generation/resource 生命周期持有权威 PersonalInstallation 与精确 package directory；不把 catalog current 元数据覆写安装 pin，不解析 SKILL.md 冒充 owner metadata。安装源变化只失效本次读取并请求用户刷新，不自动更新安装、不合成 download 权限。

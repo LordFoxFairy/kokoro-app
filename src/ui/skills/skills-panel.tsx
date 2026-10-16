@@ -491,6 +491,7 @@ function InstalledSkillsContent({
       />
       {detailIntent !== null ? (
         <ManusSkillDetailDialog
+          detailSource={detailIntent.source === "pool" ? "installation" : "catalog"}
           preview={preview}
           readBoundary={readBoundary}
           skill={detailSelection?.skill ?? null}
