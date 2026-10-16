@@ -6,7 +6,7 @@ import { createServer, request as httpRequest, type Server } from "node:http"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { createClient } from "redis"
-import { chromium, type Response as BrowserResponse } from "@playwright/test"
+import { chromium, type Page, type Route, type Response as BrowserResponse } from "@playwright/test"
 import AxeBuilder from "@axe-core/playwright"
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
@@ -64,13 +64,36 @@ function providerStartLocation(response: HttpResult, origin: string): URL {
   return location
 }
 
-async function expectBrowserLoginStart(login: BrowserResponse, signin: BrowserResponse): Promise<void> {
-  const issued = (await login.headersArray()).filter(({ name }) => name.toLowerCase() === "set-cookie")
+async function captureLoginBeforeProvider(page: Page, login: Promise<BrowserResponse>): Promise<Readonly<{
+  document: Promise<Readonly<{ response: BrowserResponse; body: string }>>
+  dispose: () => Promise<void>
+}>> {
+  let releaseProvider!: () => void
+  const released = new Promise<void>((resolve) => { releaseProvider = resolve })
+  const providerUrl = new URL("/api/auth/signin/kokoro-iam", page.url()).href
+  const holdProvider = async (route: Route): Promise<void> => {
+    if (route.request().method() === "POST") await released
+    await route.continue()
+  }
+  // Read this document's real response while its automatic form navigation is held.
+  const document = login.then(async (response) => ({ response, body: await response.text() }))
+  void document.then(releaseProvider, releaseProvider)
+  await page.route(providerUrl, holdProvider)
+  return { document, dispose: async () => {
+    releaseProvider()
+    await page.unroute(providerUrl, holdProvider)
+  } }
+}
+
+async function expectBrowserLoginStart(
+  login: Readonly<{ response: BrowserResponse; body: string }>, signin: BrowserResponse,
+): Promise<void> {
+  const issued = (await login.response.headersArray()).filter(({ name }) => name.toLowerCase() === "set-cookie")
     .map(({ value }) => value)
-  const token = loginStartCsrf({ status: login.status(), headers: { ...await login.allHeaders(), "set-cookie": issued },
-    body: await login.text() })
+  const token = loginStartCsrf({ status: login.response.status(), headers: { ...await login.response.allHeaders(), "set-cookie": issued },
+    body: login.body })
   const request = signin.request()
-  const origin = new URL(login.url()).origin
+  const origin = new URL(login.response.url()).origin
   expect(request.url()).toBe(`${origin}/api/auth/signin/kokoro-iam`)
   expect(request.method()).toBe("POST")
   expect(request.isNavigationRequest()).toBe(true)
@@ -1077,6 +1100,7 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
   it("submits an old native DOM with expired CSRF into a fresh form without a CSP violation", async () => {
     const browser = await chromium.launch({ headless: true })
     const violations: string[] = []
+    let disposeLoginCapture: (() => Promise<void>) | undefined
     try {
       const context = await browser.newContext()
       const page = await context.newPage()
@@ -1094,12 +1118,14 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
       await page.getByLabel("邮箱").fill("user@example.test")
       await page.getByLabel("密码").fill("secret")
       const login = page.waitForResponse((response) => new URL(response.url()).pathname === "/login")
+      const capture = await captureLoginBeforeProvider(page, login)
+      disposeLoginCapture = capture.dispose
       const signin = page.waitForResponse((response) => new URL(response.url()).pathname === "/api/auth/signin/kokoro-iam" &&
         response.request().method() === "POST")
       const post = page.waitForResponse((response) => new URL(response.url()).pathname === "/auth/sign-in" &&
         response.request().method() === "POST")
       await page.getByRole("button", { name: "登录" }).click()
-      const [expiredForm, loginStart, providerStart] = await Promise.all([post, login, signin])
+      const [expiredForm, loginStart, providerStart] = await Promise.all([post, capture.document, signin])
       expect(expiredForm.status()).toBe(303)
       await expectBrowserLoginStart(loginStart, providerStart)
       await page.waitForURL(`http://localhost:${nextPort}/auth/sign-in?sig=fresh`)
@@ -1111,7 +1137,8 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
       expect(receivedPaths).not.toContain("/iam/oauth2/continue")
       expect(violations).toEqual([])
     } finally {
-      await browser.close()
+      try { await disposeLoginCapture?.() }
+      finally { await browser.close() }
     }
   }, 30_000)
 
