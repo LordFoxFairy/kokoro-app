@@ -610,18 +610,29 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
 
   afterAll(() => cleanupResources())
 
-  it("starts Product OIDC from the server login route", async () => {
+  it("starts Product OIDC through the browser-owned native provider POST", async () => {
     const response = await rawHttp(nextPort, "/login")
-    if (response.status !== 302) throw new Error(`login status ${response.status}; ${nextOutput.slice(-1000)}`)
-    expect(response.headers.location).toContain("/iam/oauth2/authorize?")
+    expect(response.status).toBe(200)
+    expect(response.headers["content-type"]).toContain("text/html")
+    expect(response.headers["content-security-policy"]).toContain("form-action 'self'")
+    expect(response.body).toContain('method="post" action="/api/auth/signin/kokoro-iam"')
+    const token = response.body.match(/name="csrfToken" value="([a-f0-9]{64})"/u)?.[1]
+    expect(token).toBeDefined()
     const issued = response.headers["set-cookie"] as string[] | undefined
-    expect(issued?.some((cookie) => cookie.startsWith("next-auth.csrf-token="))).toBe(true)
     expect(issued?.filter((cookie) => cookie.startsWith("next-auth.csrf-token="))).toHaveLength(1)
-    expect(issued?.some((cookie) => cookie.startsWith("next-auth.state="))).toBe(true)
-    const returning = await rawHttp(nextPort, "/login", `localhost:${nextPort}`, undefined, {
-      cookie: issued?.map((cookie) => cookie.split(";", 1)[0]).join("; ") ?? "",
-    })
-    expect(returning.status).toBe(302)
+    // The GET only hands the form to the browser; OIDC state is issued by
+    // Auth.js after that browser presents its fresh double-submit cookie.
+    expect(issued?.some((cookie) => cookie.startsWith("next-auth.state="))).toBe(false)
+    const cookie = issued?.map((entry) => entry.split(";", 1)[0]).join("; ") ?? ""
+    const started = await rawPost(nextPort, "/api/auth/signin/kokoro-iam",
+      new URLSearchParams({ csrfToken: token! }).toString(), {
+        origin: `http://localhost:${nextPort}`, cookie,
+      })
+    expect(started.status).toBe(302)
+    expect(started.headers.location).toContain("/iam/oauth2/authorize?")
+    expect((started.headers["set-cookie"] as string[] | undefined)?.some((entry) => entry.startsWith("next-auth.state="))).toBe(true)
+    const returning = await rawHttp(nextPort, "/login", `localhost:${nextPort}`, undefined, { cookie })
+    expect(returning.status).toBe(200)
   })
 
   it("navigates a real Chromium tab from authorize JSON to the Web sign-in page", async () => {
@@ -1013,7 +1024,7 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
       const post = page.waitForResponse((response) => response.request().method() === "POST")
       await page.getByRole("button", { name: "登录" }).click()
       expect((await post).status()).toBe(303)
-      expect((await login).status()).toBe(302)
+      expect((await login).status()).toBe(200)
       await page.waitForURL(`http://localhost:${nextPort}/auth/sign-in?sig=fresh`)
       await expect.poll(() => page.getByRole("heading", { name: "欢迎回来" }).isVisible()).toBe(true)
       expect(await page.locator('input[name="csrf_token"]').inputValue()).not.toBe(oldToken)

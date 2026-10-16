@@ -1609,6 +1609,20 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     await expect.poll(() => rail.getAttribute("data-collapsed"), { timeout: 10_000 }).toBe("false")
   }
 
+  async function expandProjectConversations(page: Page, projectId: string): Promise<void> {
+    // Address the owner project and its accessible disclosure, not a private
+    // generated id prefix that changes when the rail is reorganized.
+    const row = page.locator(`[data-project-id="${projectId}"]`)
+    const toggle = row.locator("button[aria-controls][aria-expanded]")
+    if (await toggle.getAttribute("aria-expanded") === "false") await toggle.click()
+    expect(await toggle.getAttribute("aria-expanded")).toBe("true")
+    const controlledId = await toggle.getAttribute("aria-controls")
+    expect(controlledId).not.toBeNull()
+    await page.locator(`[id="${controlledId}"] [data-conversation-list="project-conversation"]`)
+      .waitFor({ state: "visible", timeout: 10_000 })
+  }
+
+
   async function directAnonymousControlDiagnostic(): Promise<string> {
     let browser: Browser | undefined
     let context: Awaited<ReturnType<Browser["newContext"]>> | undefined
@@ -3473,7 +3487,8 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       await requireStableAuthenticatedWorkspace(
         "no_interstitial_recovery", page, response, proxy, outputStart, recoveryDeadline,
       )
-      expect(resource("/login")?.upstream_statuses).toContain(302)
+      expect(resource("/login")?.upstream_statuses).toContain(200)
+      expect(resource("/api/auth/signin/kokoro-iam")?.upstream_statuses).toContain(302)
       expect(resource("/iam/oauth2/authorize")?.upstream_statuses).toContain(302)
       expect(resource("/api/auth/callback/kokoro-iam")?.upstream_statuses).toContain(303)
       expect((resource("/app")?.request_categories.document ?? 0) - appDocumentsBeforeHandoff).toBeGreaterThanOrEqual(2)
@@ -3558,7 +3573,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       const firstMain = firstPage.locator('[data-app-frame-main="true"]')
       await firstMain.waitFor({ state: "visible", timeout: 15_000 })
 
-      const newChat = firstPage.getByRole("button", { name: /New chat|新对话/iu }).first()
+      const newChat = firstPage.getByTestId("rail-new-conversation")
       await newChat.click()
       const composer = firstPage.locator('[data-slot="composer-input"]')
       const draft = "same subject second document draft"
@@ -3893,9 +3908,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       await page.getByRole("link", { name: "Move target alpha", exact: true }).click()
       await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 })
         .toBe(`/app/project/${moveProjectA}`)
-      const targetFolderToggle = page.locator(`button[aria-controls="project-children-${encodeURIComponent(moveProjectA)}"]`)
-      if (await targetFolderToggle.getAttribute("aria-expanded") === "false") await targetFolderToggle.click()
-      expect(await targetFolderToggle.getAttribute("aria-expanded")).toBe("true")
+      await expandProjectConversations(page, moveProjectA)
       const projectList = page.locator('[data-conversation-list="project-conversation"]')
       await expect.poll(() => moveBindingSnapshotGets.length, { timeout: 10_000 })
         .toBeGreaterThan(snapshotGetsBeforeProjectOpen)
@@ -4286,9 +4299,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       expect(moveBindingScopeGets.filter((entry) => entry.scope === `project:${moveProjectA}`).at(-1)).toEqual({
         scope: `project:${moveProjectA}`, bindingAtRead: moveProjectA, sessionIds: [moveConversationA],
       })
-      const targetFolderToggle = page.locator(`button[aria-controls="project-children-${encodeURIComponent(moveProjectA)}"]`)
-      if (await targetFolderToggle.getAttribute("aria-expanded") === "false") await targetFolderToggle.click()
-      expect(await targetFolderToggle.getAttribute("aria-expanded")).toBe("true")
+      await expandProjectConversations(page, moveProjectA)
       await page.locator('[data-conversation-list="project-conversation"]')
         .locator(`[data-conversation-id="${moveConversationA}"]`).waitFor({ state: "visible", timeout: 10_000 })
 
@@ -4389,9 +4400,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
           .toBe(`/app/project/${moveProjectA}`)
       }
       if (recoveryProject !== null) {
-        const targetFolderToggle = page.locator(`button[aria-controls="project-children-${encodeURIComponent(recoveryProject)}"]`)
-        if (await targetFolderToggle.getAttribute("aria-expanded") === "false") await targetFolderToggle.click()
-        expect(await targetFolderToggle.getAttribute("aria-expanded")).toBe("true")
+        await expandProjectConversations(page, recoveryProject)
       }
       const recoveryList = page.locator(`[data-conversation-list="${recoveryProject === null ? "direct" : "project-conversation"}"]`)
       const recoveryRow = recoveryList.locator(
@@ -5404,8 +5413,15 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     expect(confirmed.headers.location).toBe("/login")
     expect(confirmed.body).toBe("")
     const nextLogin = await http(nextPort, confirmed.headers.location as string, "GET", "")
-    expect(nextLogin.status).toBe(302)
-    expect(nextLogin.headers.location).toMatch(new RegExp(`^http://localhost:${nextPort}/iam/oauth2/authorize\\?`, "u"))
+    expect(nextLogin.status).toBe(200)
+    const nextToken = nextLogin.body.match(/name="csrfToken" value="([a-f0-9]{64})"/u)?.[1]
+    expect(nextToken).toBeDefined()
+    const nextStart = await http(nextPort, "/api/auth/signin/kokoro-iam", "POST",
+      new URLSearchParams({ csrfToken: nextToken! }).toString(), {
+        origin: `http://localhost:${nextPort}`, cookie: cookieHeader(nextLogin),
+      })
+    expect(nextStart.status).toBe(302)
+    expect(nextStart.headers.location).toMatch(new RegExp(`^http://localhost:${nextPort}/iam/oauth2/authorize\\?`, "u"))
     const issuerAfter = cookieHeader(authorize, get, confirmed)
     expect((await http(nextPort, "/iam/get-session", "GET", "", { cookie: issuerAfter })).body)
       .toContain('"session":null')
