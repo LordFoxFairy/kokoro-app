@@ -1,5 +1,7 @@
 # ui/shell — 页面装配层
 
+- 挂载内导航：独立目录页面不解释/写入 conversation URL，不接管聊天恢复、错误或 Todo 状态；目录组件 key 不随后台 activeId 改变。返回 Direct/Project 仍按原会话深链恢复。
+
 ## 职责
 持有页面级引擎单例，订阅快照，把纯投影接线到各 UI 域。本层只做插槽接线；域内状态一律下沉到 controller。
 

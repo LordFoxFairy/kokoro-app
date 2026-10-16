@@ -140,6 +140,16 @@ it.each([
   expect(document.cookie).toBe(cookieBeforeMount)
 })
 
+it("catalog controls survive the background conversation engine changing identity", async () => {
+  window.history.replaceState(null, "", "/app/plugins")
+  const Catalog = () => <input aria-label="Catalog query" defaultValue="" />
+  render(<ThemeProvider><LocaleProvider><AppFrame engine={engine} chatHref="/app" standaloneSurface emptyState={Catalog} /></LocaleProvider></ThemeProvider>)
+  const query = await screen.findByRole("textbox", { name: "Catalog query" })
+  fireEvent.change(query, { target: { value: "retained query" } })
+  act(() => { engine.newConversation() })
+  expect(screen.getByRole("textbox", { name: "Catalog query" })).toHaveValue("retained query")
+})
+
 it("R255 StrictMode rail keeps mounted navigation state without rereading a changed cookie or route default", async () => {
   setDesktopViewport(1200)
   const DestinationSurface = () => <div>mounted rail destination</div>

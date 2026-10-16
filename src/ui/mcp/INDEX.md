@@ -1,5 +1,7 @@
 # ui/mcp — 连接面板
 
+- 广场分类使用参考的 32px 高、4px 横向 gap；控件区与结果区之间保留 16px 底距，空态与有卡片时使用同一基线。
+
 ## 当前边界
 正式 Settings/MCP 与目录经 `mcp-projection-read.tsx` 渲染 BFF owner-native 投影和 opaque cursor，并通过现有 CAS 命令完成编辑、启停、删除和授权重试；URL、secret、revision、allowed_tools 不进入正式视图。旧的 server pool、凭据池和 preview 入口已删除，不保留兼容分支。
 

@@ -174,6 +174,7 @@ function AppFrameRuntime({
     engine,
     projectRef,
     projectWorkspace,
+    standaloneSurface,
     mounted,
     activeId,
     threadMessageCount: thread.messages.length,

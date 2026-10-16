@@ -165,7 +165,7 @@ export function AppFrameMainSurface({
           ) : null}
         </div>
       ) : null}
-      {mounted && connection.status !== "connected" ? (
+      {mounted && !standaloneSurface && connection.status !== "connected" ? (
         <AppFrameConnectionStatus connection={connection} onReconnect={onReconnect} />
       ) : null}
       <div
@@ -174,9 +174,9 @@ export function AppFrameMainSurface({
       >
         {!mounted ? (
           <AppFrameLoadingSurface />
-        ) : conversationHydrating ? (
+        ) : !standaloneSurface && conversationHydrating ? (
           <AppFrameLoadingSurface />
-        ) : conversationHydrationFailed ? (
+        ) : !standaloneSurface && conversationHydrationFailed ? (
           <AppFrameConversationErrorSurface
             detail={machineError}
             onRetry={retryConversationHydration}
@@ -190,7 +190,9 @@ export function AppFrameMainSurface({
             // A new conversation is a fresh workbench, not a continuation of
             // the previous welcome surface. Project-local upload intents must
             // also remount when the project identity changes, even without a session.
-            key={projectWorkspace ? JSON.stringify(["project", projectRef ?? null, activeId, emptyStateProps.preview ?? false]) : activeId ?? "new-workspace"}
+            // Catalogs are not conversations: background engine restoration
+            // must not reset their controls or repeat their initial reads.
+            key={standaloneSurface ? "standalone" : projectWorkspace ? JSON.stringify(["project", projectRef ?? null, activeId, emptyStateProps.preview ?? false]) : activeId ?? "new-workspace"}
             {...emptyStateProps}
           />
         )}
@@ -204,7 +206,7 @@ export function AppFrameMainSurface({
       </div>
 
       {/* 计划条钉在输入框正上方，可收缩；思考/工具/子智能体在 ConversationThread 内联呈现。 */}
-      {mounted ? <TodoBar todos={thread.todos} /> : null}
+      {mounted && !standaloneSurface ? <TodoBar todos={thread.todos} /> : null}
 
       {/* Site-owned empty surfaces may move the same composer into their own
           welcome layout; active conversations always use the shell slot. */}

@@ -16,6 +16,7 @@ export type AppFrameNavigationOptions = {
   engine: SessionEngine | null
   projectRef: string | undefined
   projectWorkspace: boolean
+  standaloneSurface?: boolean
   mounted: boolean
   activeId: string | null
   threadMessageCount: number
@@ -28,6 +29,7 @@ export function useAppFrameNavigation({
   engine,
   projectRef,
   projectWorkspace,
+  standaloneSurface = false,
   mounted,
   activeId,
   threadMessageCount,
@@ -70,7 +72,6 @@ export function useAppFrameNavigation({
   }, [deploymentIntent, projectWorkspace, setDeploymentIntent])
 
   const settingsHistoryEntryRef = useRef(false)
-  const initialConversationRef = useRef<string | null>(conversationIdFromLocation())
   const conversationUrlRef = useRef<string | null>(conversationIdFromLocation())
   const conversationUrlHydratedRef = useRef(false)
   const [conversationRouteId, setConversationRouteId] = useState<string | null>(null)
@@ -111,7 +112,7 @@ export function useAppFrameNavigation({
   }, [])
 
   const syncConversationUrl = useCallback((id: string | null, mode: "push" | "replace"): void => {
-    if (typeof window === "undefined") {
+    if (typeof window === "undefined" || !isConversationLocation()) {
       return
     }
     const url = new URL(window.location.href)
@@ -141,6 +142,7 @@ export function useAppFrameNavigation({
   useEffect(() => {
     const onPopState = () => {
       setSettingsTab(settingsTabFromLocation())
+      if (!isConversationLocation()) return
       const requestedConversation = conversationIdFromLocation()
       const previousConversation = conversationUrlRef.current
       conversationUrlRef.current = requestedConversation
@@ -173,6 +175,7 @@ export function useAppFrameNavigation({
   // when entering/leaving a project so a stale conversation query cannot make
   // the next project overview look like an active task.
   useEffect(() => {
+    if (standaloneSurface || !isConversationLocation()) return
     const requestedConversation = conversationIdFromLocation()
     conversationUrlRef.current = requestedConversation
     // Route leaves are intentionally empty so AppFrame stays mounted. Apply a
@@ -183,35 +186,37 @@ export function useAppFrameNavigation({
     }
     const frame = window.requestAnimationFrame(() => setConversationRouteId(requestedConversation))
     return () => window.cancelAnimationFrame(frame)
-  }, [engine, projectRef, projectWorkspace])
+  }, [engine, projectRef, projectWorkspace, standaloneSurface])
 
   // Deep links are applied after hydration so the URL wins over the locally
   // remembered active session without changing the SSR/first paint contract.
   useEffect(() => {
-    if (!mounted || conversationUrlHydratedRef.current) {
+    if (!mounted || standaloneSurface || !isConversationLocation() || conversationUrlHydratedRef.current) {
       return
     }
     conversationUrlHydratedRef.current = true
-    const requestedConversation = initialConversationRef.current
+    // The shell may have first mounted on a catalog and only now entered
+    // chat. Only this location may supply a deep-link, not that catalog's URL.
+    const requestedConversation = conversationIdFromLocation()
     if (requestedConversation !== null && requestedConversation !== activeId) {
       engine?.openConversation(requestedConversation)
     }
-  }, [activeId, engine, mounted])
+  }, [activeId, engine, mounted, standaloneSurface])
 
   // A restored direct session and a newly submitted first message both acquire
   // a stable URL without adding an extra history entry on every stream event.
   // Project overview is intentionally a URL without `conversation`; it is a
   // workspace landing surface, not an implicit redirect to the last task.
   useEffect(() => {
-    if (!mounted || projectWorkspace || activeId === null || threadMessageCount === 0) {
+    if (!mounted || standaloneSurface || projectWorkspace || activeId === null || threadMessageCount === 0) {
       return
     }
     if (conversationIdFromLocation() === null) {
       syncConversationUrl(activeId, "replace")
     }
-  }, [activeId, mounted, projectWorkspace, syncConversationUrl, threadMessageCount])
+  }, [activeId, mounted, projectWorkspace, standaloneSurface, syncConversationUrl, threadMessageCount])
 
-  const resolvedConversationRouteId = mounted
+  const resolvedConversationRouteId = standaloneSurface ? null : mounted
     ? conversationIdFromLocation()
     : conversationRouteId
   // A mounted shell can cross from direct chat into a project overview without
@@ -282,6 +287,14 @@ export function useAppFrameNavigation({
     syncConversationUrl,
     settingsHistoryEntryRef,
   }
+}
+
+// History events arrive before React commits the next surface. Check the
+// actual location as well as props so a departing chat effect cannot attach
+// its conversation to a catalog or hydrate it during browser back/forward.
+function isConversationLocation(): boolean {
+  return /^\/app\/?$/.test(window.location.pathname)
+    || /^\/app\/project\/[^/]+\/?$/.test(window.location.pathname)
 }
 
 export { settingsTabFromLocation }
