@@ -37,10 +37,19 @@ export function validIamRpCallbackNavigation(value: string, webOrigin: string): 
     const target = new URL(value, webOrigin)
     if (target.origin !== webOrigin || target.username !== "" || target.password !== "") return false
     const query = target.searchParams
-    return [...query.keys()].length === 3 && query.getAll("code").length === 1 && query.getAll("state").length === 1 &&
-      query.getAll("iss").length === 1 && query.get("iss") === `${webOrigin}/iam` &&
-      /^[A-Za-z0-9._~-]{1,2048}$/u.test(query.get("code") ?? "") &&
-      /^[A-Za-z0-9_-]{16,256}$/u.test(query.get("state") ?? "")
+    const values = [...query.entries()]
+    if (new Set(values.map(([name]) => name)).size !== values.length ||
+      query.getAll("state").length !== 1 || query.getAll("iss").length !== 1 ||
+      query.get("iss") !== `${webOrigin}/iam` || !/^[A-Za-z0-9_-]{16,256}$/u.test(query.get("state") ?? "")) return false
+    const code = query.get("code")
+    const error = query.get("error")
+    if (code !== null && error === null) return values.length === 3 && /^[A-Za-z0-9._~-]{1,2048}$/u.test(code)
+    if (code !== null || error === null || !/^[a-z_]{1,64}$/u.test(error)) return false
+    if (values.some(([name]) => !["error", "error_description", "error_uri", "iss", "state"].includes(name))) return false
+    return ["error_description", "error_uri"].every((name) => {
+      const value = query.get(name)
+      return value === null || (query.getAll(name).length === 1 && Buffer.byteLength(value) <= 1024 && !/[\u0000-\u001f\u007f]/u.test(value))
+    })
   } catch { return false }
 }
 

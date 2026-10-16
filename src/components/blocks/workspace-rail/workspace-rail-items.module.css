@@ -138,11 +138,11 @@
   [data-desktop-web="true"]:not([data-desktop-rail="true"]) .itemRenameInput { min-height: 2.75rem; }
 }
 
-/* Conversation controls are real siblings, not overlays. Reserving padding
- * only shortened the title text while the absolute action hit areas still
- * covered its button. Let flex layout assign one disjoint hit box per control;
- * the existing desktop/mobile rules continue to own their 32px/44px sizes. */
-.item[data-drag-kind="conversation"] > .itemSelect { padding-right: 0.55rem; }
+/* Row controls are real siblings, not overlays. Reserving padding only
+ * shortened the title text while the controls already occupy their own flex
+ * space. Project rows have the same geometry even before hover reveals actions. */
+.item[data-drag-kind="conversation"] > .itemSelect,
+.item[data-drag-kind="project"] > .itemSelect { padding-right: 0.55rem; }
 .item[data-drag-kind="conversation"] > .itemRename,
 .item[data-drag-kind="conversation"] > .itemMove,
 .item[data-drag-kind="conversation"] > .itemArchive,

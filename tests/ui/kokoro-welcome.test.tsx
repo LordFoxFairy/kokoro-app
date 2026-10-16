@@ -80,7 +80,7 @@ it("设计能力提示填写专用草稿和意图，不沿用数据分析语义"
   expect(onCreationIntentSelect).not.toHaveBeenCalled()
 })
 
-it("显式网站意图切换为专案归档与创建类型布局", () => {
+it("显式网站意图切换为项目归档与创建类型布局", () => {
   render(
     <LocaleProvider>
       <KokoroDirectChatWelcome preview draft="帮我建立一个产品网站" creationIntent="website" />
@@ -89,7 +89,7 @@ it("显式网站意图切换为专案归档与创建类型布局", () => {
 
   expect(screen.getByText("让你的网站井然有序").tagName).toBe("P")
   expect(screen.getByText("将所有任务、版本和更新集中保存在一个地方。").tagName).toBe("P")
-  expect(screen.getByRole("button", { name: "新增到专案" })).toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "新增到项目" })).toBeInTheDocument()
   expect(screen.getByText("您想建立什么？").tagName).toBe("P")
   expect(screen.getByRole("button", { name: /电子商务/ })).toBeInTheDocument()
   expect(screen.getByRole("button", { name: "从 Figma 汇入" }).querySelector('[data-slot="figma-mark"]')).toBeInTheDocument()
@@ -126,7 +126,7 @@ it("网站分类点击只展开 Manus 式灵感层级，选中前不改写草稿
   expect(onPrompt).toHaveBeenCalledWith(expect.stringContaining("建立一个发布页"), "website")
 })
 
-it("网站创建空态仍保留专案归档轨道并禁用空提交", () => {
+it("网站创建空态仍保留项目归档轨道并禁用空提交", () => {
   render(
     <LocaleProvider>
       <KokoroDirectChatWelcome preview creationIntent="website" />
@@ -134,7 +134,7 @@ it("网站创建空态仍保留专案归档轨道并禁用空提交", () => {
   )
 
   expect(screen.getByText("让你的网站井然有序")).toBeInTheDocument()
-  expect(screen.getByRole("button", { name: "新增到专案" })).toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "新增到项目" })).toBeInTheDocument()
   expect(screen.getByText("强大的内建整合")).toBeInTheDocument()
 })
 
@@ -212,20 +212,20 @@ it("关闭网站胶囊后保留草稿，但移除网站上下文和空态快捷�
   expect(screen.queryByRole("group", { name: "选一个场景开始，或直接把想法说给我" })).toBeNull()
 })
 
-it("预览缺创建回调时入口禁用，不产生伪专案选择", () => {
+it("预览缺创建回调时入口禁用，不产生伪项目选择", () => {
   render(<LocaleProvider><KokoroDirectChatWelcome preview draft="建立网站" creationIntent="website" /></LocaleProvider>)
-  expect(screen.getByRole("button", { name: "新增到专案" })).toBeDisabled()
+  expect(screen.getByRole("button", { name: "新增到项目" })).toBeDisabled()
   expect(screen.queryByRole("menuitem")).not.toBeInTheDocument()
 })
 
-it("专案菜单不以品牌猜测已有专案身份", () => {
+it("项目菜单不以品牌猜测已有项目身份", () => {
   render(<LocaleProvider><KokoroDirectChatWelcome preview draft="建立网站" creationIntent="website" onOpenProject={vi.fn()} /></LocaleProvider>)
-  fireEvent.pointerDown(screen.getByRole("button", { name: "新增到专案" }))
+  fireEvent.pointerDown(screen.getByRole("button", { name: "新增到项目" }))
   expect(screen.queryByRole("menuitem", { name: "Kokoro" })).not.toBeInTheDocument()
-  expect(screen.getByRole("menuitem", { name: "新建专案" })).toBeInTheDocument()
+  expect(screen.getByRole("menuitem", { name: "新建项目" })).toBeInTheDocument()
 })
 
-it("新建专案动作会生成唯一的本地预览专案引用并承接聊天", () => {
+it("新建项目动作会生成唯一的本地预览项目引用并承接聊天", () => {
   const onOpenProject = vi.fn()
   render(
     <LocaleProvider>
@@ -238,21 +238,21 @@ it("新建专案动作会生成唯一的本地预览专案引用并承接聊天"
     </LocaleProvider>,
   )
 
-  fireEvent.pointerDown(screen.getByRole("button", { name: "新增到专案" }))
-  fireEvent.click(screen.getByRole("menuitem", { name: "新建专案" }))
+  fireEvent.pointerDown(screen.getByRole("button", { name: "新增到项目" }))
+  fireEvent.click(screen.getByRole("menuitem", { name: "新建项目" }))
   expect(onOpenProject).toHaveBeenCalledWith(expect.stringMatching(/^preview-project-[a-z0-9-]+$/), "建立网站")
 })
 
-it("正式欢迎页的新建专案只上报创建意图，不预造 preview 项目", () => {
+it("正式欢迎页的新建项目只上报创建意图，不预造 preview 项目", () => {
   const onCreateProject = vi.fn()
   render(
     <LocaleProvider>
       <KokoroDirectChatWelcome preview={false} draft="正式草稿" creationIntent="website" onCreateProject={onCreateProject} />
     </LocaleProvider>,
   )
-  fireEvent.pointerDown(screen.getByRole("button", { name: "新增到专案" }))
-  fireEvent.click(screen.getByRole("menuitem", { name: "新建专案" }))
-  expect(onCreateProject).toHaveBeenCalledWith("正式草稿")
+  fireEvent.pointerDown(screen.getByRole("button", { name: "新增到项目" }))
+  fireEvent.click(screen.getByRole("menuitem", { name: "新建项目" }))
+  expect(onCreateProject).toHaveBeenCalledWith({ draft: "正式草稿" })
 })
 
 it("创建类型更多按钮横向浏览隐藏选项", () => {
@@ -287,7 +287,7 @@ it("正式首页不宣传未接通集成且品牌文案完成插值", () => {
 it("正式欢迎页没有创建回调时不生成或打开猜测项目", () => {
   const onOpenProject = vi.fn()
   render(<LocaleProvider><KokoroDirectChatWelcome preview={false} draft="草稿" creationIntent="website" onOpenProject={onOpenProject} /></LocaleProvider>)
-  expect(screen.queryByRole("button", { name: "新增到专案" })).not.toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "新增到项目" })).not.toBeInTheDocument()
   expect(onOpenProject).not.toHaveBeenCalled()
 })
 
@@ -297,7 +297,7 @@ it("正式网站提示流程不展示虚构 Figma/Shopify 与内建集成", () =
   expect(screen.queryByRole("button", { name: "从 Figma 汇入" })).not.toBeInTheDocument()
   expect(document.querySelector('[data-slot="shopify-mark"]')).not.toBeInTheDocument()
   expect(screen.queryByText("强大的内建整合")).not.toBeInTheDocument()
-  expect(screen.getByRole("button", { name: "新增到专案" })).toBeEnabled()
+  expect(screen.getByRole("button", { name: "新增到项目" })).toBeEnabled()
 })
 
 it.each([

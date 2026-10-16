@@ -121,24 +121,31 @@ function Sidebar({
 function SidebarTrigger({
   className,
   onClick,
+  onToggle,
   children,
   ...props
-}: React.ComponentProps<typeof Button>) {
+}: React.ComponentProps<typeof Button> & { onToggle?: () => void }) {
   const { toggleSidebar } = useSidebar()
   const label = props["aria-label"] ?? "Toggle Sidebar"
 
   return (
     <Button
+      {...props}
       data-sidebar="trigger"
       data-slot="sidebar-trigger"
       variant="ghost"
       size="icon"
       className={cn("size-7", className)}
       onClick={(event) => {
+        if (onToggle) {
+          onToggle()
+          // Keep the provider's visual state in step with the shell-owned
+          // layout state. The shell callback owns persistence and responsive
+          // policy; this call keeps the mounted sidebar projection current.
+          toggleSidebar()
+        } else toggleSidebar()
         onClick?.(event)
-        toggleSidebar()
       }}
-      {...props}
     >
       {children ?? <PanelLeftIcon aria-hidden="true" />}
       <span className="sr-only">{label}</span>

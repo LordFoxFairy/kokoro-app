@@ -10,6 +10,8 @@
 
 主线删除原SettingsModal测试时，一并退休了旧目录/JSON/URL/MCP表单结构的四个用例；本次保留并迁移三个设置宿主边界：关闭GitHub子窗仍保留设置、AI入口交接Composer、自定义API失败仍保留输入与父窗。其他Settings原断言保留。E2E首页按夹具明确设置的英语断言准确标题；窄屏搜索以完整二维边界判无重叠，保留输入位于弹窗内、无横向溢出及关闭可达性。
 
+验证中再抓取主线dcd0c836，直接继承登录/回调、导航header拆分及folder intent退休。主线已删除旧app-frame.smoke和web-governance大文件；SET36复制的完整marked测试区迁入现app-frame-rail测试（只适配fixture符号/必要imports），不恢复已退休旧3915行smoke。浏览器SET36/40/41/42/47原marked区域迁至具名`tests/e2e/settings-regression.spec.ts`；新文件只负责设置旅程，不搬已退休的494行旧治理/流式旅程。选择沿现e2e目录独立文件使主线删除仍生效，放public-shell会混合认证/设置两个变化原因，恢复旧文件会重建退休套件，均不采用；只依赖现Playwright test，不加helper/跨仓import或产品状态。
+
 ## SET47 归档任务消费者（2026-10-15；已实现候选，Root完整验收待完成）
 
 SET47传输边界补充：WHATWG会规范化单独的`.`/`..`段及其percentencoded形式；BFF保持原始HTTP的exact encodeURIComponent契约。Web对仅这两个历史ID在任何fetch前拒绝并将动作禁用、解释不可用；不使用双重解码/替代API，也不宣称任意历史ID浏览器皆可操作。其余合法Unicode ID不限制为conv UUID。依据：[URL Standard](https://url.spec.whatwg.org/#single-dot-url-path-segment)。
@@ -1979,7 +1981,7 @@ ScheduledTask 是 BFF 的调度产品定义；Agent Run 是执行实例。四者
    - `src/features/app/kokoro-welcome.tsx`、`kokoro-welcome-content.tsx`：去掉未接通广告/无效轮播状态；所有保留品牌文案传 `{ brand: brandName }`；正式 project 动作只显式调用新建或已知 ID 打开，不生成 preview ID。
    - `src/ui/composer/composer.module.css`：沿语义 token 仅保留一个可见编辑焦点边界；不改全局 Textarea 影响其他表单，不删除按钮自身键盘焦点。
    - `src/i18n/messages.ts`、`en.ts`：新增准确的 project conversation 文案并切换调用；不要修改仍属真正任务功能的共用 task 文案。其他 locale 缺词按现翻译机制，任何新增具体 overlay 需列入授权，禁止批量无关翻译。
-   - 直接测试 `tests/ui/workspace-rail.test.tsx`、`app-frame-rail.test.tsx`、`app-frame.smoke.test.tsx`、`kokoro-project-workspace.test.tsx`、`kokoro-welcome.test.tsx`、`composer.test.tsx`；必要现 `tests/i18n/resolve.test.ts`、`no-hardcoded-ui.test.ts` 和 `src/components/blocks/workspace-rail/workspace-rail-split.test.mjs` 同步准确语义断言。
+   - 直接测试 `tests/ui/workspace-rail.test.tsx`、`app-frame-rail.test.tsx`、`kokoro-project-workspace.test.tsx`、`kokoro-welcome.test.tsx`、`composer.test.tsx` 与 `skills-import-regression.test.tsx`；`tests/i18n/resolve.test.ts` 只验证用户可见文案解析，允许既定的中文 fallback。已退役的 `app-frame.smoke.test.tsx`、`no-hardcoded-ui.test.ts`、`workspace-rail-split.test.mjs` 和 `web-governance.spec.ts` 分别以组件细节、源码扫描、行数约束或登录状态/像素几何/截图附件锁死实现；公开壳层 E2E 仅检查可达性与无横向溢出。
 2. **后继真实 Project 集合/专属调度消费单独授写**：目前 rail 有 projects 注入接口，但 AppFrame 没有 typed Project list 消费；现 ProjectIdentity 仍按品牌显示。首片删除猜测项目而不伪称已完成完整列表/详情名称。若需所有项目列表、项目专属 ScheduledTask 列表/回执接线，先给既有 client/schema/read-state 的精确扩展集；不在首片引入项目持久 store，也不把个人 task 全集当项目列表。已知 projectRef 的独立页面/Conversation 过滤保留。
 
 首片 RED 必须覆盖：project conversation 的创建/选择仍操作同一 Conversation ID；“任务”入口不调用 startNewChat；

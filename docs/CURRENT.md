@@ -1,3 +1,11 @@
+## SET49 最新主线整合验证与交付（2026-10-16）
+
+本分支已合入最新抓取主线dcd0c836564ed024250c255b8edfc83070c292a1，保留主线登录回调、导航header、项目链接及提交失败展示，账户/设备/Team/搜索/个性化CAS/分享/归档仍完整接线。Skills/MCP/hub业务源码与该main完全相同；本次只整合设置宿主与正式固定消费者。消费BFF正式30df0c428c592ed2710d62035ceb5855d20c7506/public16.0.0/146，全文SHA-256 b4e91483e425fdcc9547eac8bcda554273cbee0863ccb0ddfb185fae18e4e267，六正常生成入口及历史inverse原oracle通过。
+
+最终门：focused9files321PASS，contract24files284PASS，architecture50PASS，lint/typecheck/build均0。完整test212files3715PASS/10FAIL、366.368秒；失败只在两实际Next登录/RP系统测试文件，当前仍未关闭，不把200/302或proxy状态的不同擅自归因为旧故障。浏览器25PASS/1FAIL，24设置旅程全通过；失败是主线新增mobile project链接超时，原字节最新main独立fixture同样3PASS/1相同FAIL。原参数化复制负控全部保留于app-frame-rail；SET36/40/41/42/47浏览器原marked区域完整迁入settings-regression，主线退休旧大套件删除生效。
+
+冻结manifest357572ffc5e86ccc93d9e740b5e2131e81326c825952ada5484831c8564beb74覆盖1000files；独立审查hash exact、无确定P1/P2；本次最终测试源码全量hash exact且PG/Redis库存恢复。最终交付只在这些门后更新本CURRENT记录。完整门仍FAILED，原PR保持draft，不merge main。正常3311/3312仍跑此前源码，本次Git push未部署或重启它们；不把预览旅程说成正常已登录非空任务/支付/完整Agent验收。下面SET49中间树结果仅供追溯，最终以本段为准。
+
 ## SET49 整合验证进行中（2026-10-16）
 
 已合并初次抓取主线bd2bf510与设置bb3bc5a。该中间树完整test为3822PASS/115FAIL，377.5秒，冻结999files；资源库存与源码hash完全恢复。纯contract初轮283PASS/1旧全文pin断言FAIL，typecheck发现测试RTL exact属性不合法，两处已窄修，尚未据此宣称完整门绿。
@@ -656,6 +664,9 @@ Web现mcp-content传已有embedded，mcp-projection-read按embedded省重复h2�
 未完成：当前展示Server全局声明，不是Platform 3.2.0本人connections；BFF/Web未消费connections，非GET MCP正式503，Platform旧register RPC Unimplemented，静态名牌不是授权/handshake/invoke。后继沿当前owner artifact→BFF→Web补正式用户路径，不直写owner库/造成功/复活旧preview命令。全链仍OPEN；只读证据Root var/dev/r255-preserve/r255-connectors-current-failure-review.md。九既有服务已实际探测200，不等于创建/启用/模型或工具E2E通过。
 
 ## R255 本次左栏留白与重核展开意图（2026-10-06）
+
+> **已于 2026-10-15 退役。** 项目已改为平铺概览入口，任务列表独立；下列 folder 展开/新建意图记录仅保留为历史取证，不再是当前实现或验收基线。当前 rail 只保留可观察的导航与数据分区测试，不用源码行数、CSS 字符串或已删除交互阻断修复。
+> 本轮同时退役耦合过多的 `app-frame.smoke.test.tsx`、源码扫描 `no-hardcoded-ui.test.ts`、行数约束 `workspace-rail-split.test.mjs`，以及把登录状态、像素几何、截图附件和内部 DOM 细节混在一起的 `web-governance.spec.ts`；保留的 rail、项目、欢迎页、编辑器、技能导入与 i18n 测试仅断言用户可观察的点击、焦点、文案解析及数据分区。Playwright 仅保留公开壳层的可达性与无横向溢出检查；覆盖率百分比或翻译 key 数量不作为发布阻断。
 
 Web bf04df7 基线，现4生产路径与现workspace-rail测试窄修：空folder branch桌面43.52→26.80px；非数据folderIntentIdentity按已验证subject隔离，与read generation分离。同主体pending仍撤准入/卸载私有分支，恢复保展开；换subject/null清意图，原未提供稳定key的受控退役case保持。无新存储/API/认证例外。
 

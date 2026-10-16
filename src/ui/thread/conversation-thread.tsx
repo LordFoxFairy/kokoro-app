@@ -82,6 +82,8 @@ export type ConversationThreadProps = {
   // 重连续传态：在途轮的 live 锚点改为「重连中…」，区别于普通「正在思考…」。
   isReconnecting: boolean
   hasFailed: boolean
+  // Public BFF code for a failed message admission before a Run exists.
+  submissionFailureCode?: string | null
   canRetryResume?: boolean
   onRetryResume?: () => void
   canRetryPendingSubmission: boolean
@@ -134,8 +136,12 @@ function agentFailureCopyKey(code: AgentFailureCode): MessageKey {
   }
 }
 
-export function failureCopyKey(runError: RunFailure | null): MessageKey {
-  return runError?.kind === "agent" ? agentFailureCopyKey(runError.profile.code) : "fail.generic"
+export function failureCopyKey(runError: RunFailure | null, submissionFailureCode?: string | null): MessageKey {
+  if (runError?.kind === "agent") return agentFailureCopyKey(runError.profile.code)
+  // This code is part of the BFF's public mutation error contract. It means a
+  // retry cannot make the local Agent dependency available on its own.
+  if (submissionFailureCode === "agent_not_configured") return "fail.agentNotConfigured"
+  return "fail.generic"
 }
 
 function TerminalFailureFeedback({ failure }: { failure: AttributedRunFailure }) {
@@ -182,6 +188,7 @@ function ConversationThreadSurface({
   executionPhase,
   isReconnecting,
   hasFailed,
+  submissionFailureCode,
   canRetryResume = false,
   onRetryResume,
   canRetryPendingSubmission,
@@ -250,7 +257,7 @@ function ConversationThreadSurface({
         </Alert>
       ) : (
         <Alert variant="destructive" className={styles.error}>
-          <AlertTitle>{t(failureCopyKey(thread.unattributedFailure))}</AlertTitle>
+          <AlertTitle>{t(failureCopyKey(thread.unattributedFailure, submissionFailureCode))}</AlertTitle>
           <AlertDescription className={styles.errorLayout}>
             <div className={styles.errorBody}>
               {thread.unattributedFailure?.kind === "agent" && thread.unattributedFailure.profile.code === "internal_error" ? (

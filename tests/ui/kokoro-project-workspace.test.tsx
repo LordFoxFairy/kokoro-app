@@ -116,7 +116,7 @@ it("项目会话路由优先显示清单错误而不是误报空会话", () => {
 
   expect(screen.getByTestId("project-conversations-error")).toHaveTextContent("会话暂时无法加载。")
   expect(document.querySelector('[data-slot="project-conversation-welcome"]')).toBeNull()
-  expect(screen.queryByText("还没有专案会话。新建一个会话以开始。")).toBeNull()
+  expect(screen.queryByText("还没有项目会话。新建一个会话以开始。")).toBeNull()
   fireEvent.click(screen.getByRole("button", { name: "重试" }))
   expect(onRetryProjectConversations).toHaveBeenCalledTimes(1)
 
@@ -134,7 +134,7 @@ it("项目会话路由优先显示清单错误而不是误报空会话", () => {
   )
   expect(screen.getByTestId("project-conversations-loading")).toHaveTextContent("正在加载会话…")
   expect(document.querySelector('[data-slot="project-conversation-welcome"]')).toBeNull()
-  expect(screen.queryByText("还没有专案会话。新建一个会话以开始。")).toBeNull()
+  expect(screen.queryByText("还没有项目会话。新建一个会话以开始。")).toBeNull()
 })
 
 it("在项目页内打开指令 Dialog 并通过项目保存回调持久化", async () => {
@@ -164,7 +164,7 @@ it("在项目页内打开指令 Dialog 并通过项目保存回调持久化", as
     "instructions trigger",
   )
   fireEvent.click(instructionsTrigger)
-  const editor = screen.getByRole("textbox", { name: "专案指令" })
+  const editor = screen.getByRole("textbox", { name: "项目指令" })
   expect(editor).toHaveValue("默认先给出摘要。")
   fireEvent.change(editor, { target: { value: "所有回复先给出结论。" } })
   fireEvent.click(screen.getByRole("button", { name: "保存" }))
@@ -264,7 +264,7 @@ it("不可恢复的幂等冲突不提供同键重试，提示重新选择文件"
   expect(within(dialog).getByRole("list", { name: "文件和资源" })).not.toHaveTextContent("conflict.txt")
 })
 
-it("专案指令历史使用双栏版本 Dialog 并可切换正文", () => {
+it("项目指令历史使用双栏版本 Dialog 并可切换正文", () => {
   const { container } = render(
     <LocaleProvider>
       <KokoroProjectWorkspace preview
@@ -289,7 +289,7 @@ it("专案指令历史使用双栏版本 Dialog 并可切换正文", () => {
   ))
   fireEvent.click(screen.getByRole("button", { name: "历史记录" }))
 
-  const historyDialog = screen.getByRole("dialog", { name: "专案指令历史" })
+  const historyDialog = screen.getByRole("dialog", { name: "项目指令历史" })
   expect(historyDialog).toHaveTextContent("当前版本")
   expect(historyDialog).toHaveTextContent("当前规则")
   const revisions = within(within(historyDialog).getByRole("list")).getAllByRole("button")
@@ -323,7 +323,7 @@ it("在项目页内打开独立技能 Dialog，并持久化技能启用状态", 
   ))
 
   const dialog = screen.getByRole("dialog")
-  expect(dialog).toHaveTextContent("专案技能")
+  expect(dialog).toHaveTextContent("项目技能")
   expect(onOpenSettings).not.toHaveBeenCalled()
 
   const skillSwitch = screen.getByRole("switch", { name: "技能构建器" })
@@ -382,7 +382,7 @@ it("资源筛选与技能搜索会实际过滤本地预览数据", () => {
   fireEvent.click(within(resourcesDialog).getByRole("button", { name: "关闭对话框" }))
 
   fireEvent.click(within(resourcesCard).getByRole("button", { name: /^技能$/ }))
-  const skillsDialog = screen.getByRole("dialog", { name: "专案技能" })
+  const skillsDialog = screen.getByRole("dialog", { name: "项目技能" })
   fireEvent.change(within(skillsDialog).getByRole("textbox", { name: "搜索技能" }), { target: { value: "不存在" } })
   expect(skillsDialog).toHaveTextContent("暂无已添加的技能")
   expect(skillsDialog).not.toHaveTextContent("技能构建器")
@@ -427,7 +427,7 @@ it("网站入口打开项目级选择弹窗而不是向 Composer 注入提示词
   const addButtons = screen.getAllByRole("button", { name: "新增" })
   fireEvent.click(at(addButtons, -2, "website add button"))
 
-  expect(screen.getByRole("dialog", { name: "新增网站至当前专案" })).toBeInTheDocument()
+  expect(screen.getByRole("dialog", { name: "新增网站至当前项目" })).toBeInTheDocument()
   expect(screen.getByRole("textbox", { name: "搜索网站" })).toBeInTheDocument()
   expect(onPrompt).not.toHaveBeenCalled()
 })
@@ -441,7 +441,7 @@ it("网站选择器可以搜索、选择并保存合成网站", async () => {
 
   const addButtons = screen.getAllByRole("button", { name: "新增" })
   fireEvent.click(at(addButtons, -2, "website add button"))
-  const dialog = screen.getByRole("dialog", { name: "新增网站至当前专案" })
+  const dialog = screen.getByRole("dialog", { name: "新增网站至当前项目" })
   const search = within(dialog).getByRole("textbox", { name: "搜索网站" })
   fireEvent.change(search, { target: { value: "Kokoro" } })
   const website = within(dialog).getByRole("button", { name: /Kokoro 产品网站/ })
@@ -492,7 +492,7 @@ it("定时任务入口打开选择弹窗和编辑器，并提交项目级任务"
   await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
 })
 
-it("正式专案任务入口到独立任务页，不提供样例选择或本地成功", () => {
+it("正式项目任务入口到独立任务页，不提供样例选择或本地成功", () => {
   const { container } = render(<LocaleProvider><KokoroProjectWorkspace preview={false} projectRef="project-real" onPrompt={vi.fn()} workspaceCapabilities={capabilities} /></LocaleProvider>)
   const card = contextCard(container, "scheduled")
   const link = within(card).getByRole("link")
@@ -501,7 +501,7 @@ it("正式专案任务入口到独立任务页，不提供样例选择或本地�
   expect(within(card).queryByRole("button")).not.toBeInTheDocument()
 })
 
-it("新的专案会话欢迎面使用 Conversation DOM 与标题关联", () => {
+it("新的项目会话欢迎面使用 Conversation DOM 与标题关联", () => {
   render(<LocaleProvider><KokoroProjectWorkspace projectConversation onPrompt={vi.fn()} composer={<textarea aria-label="测试输入" />} /></LocaleProvider>)
   const surface = document.querySelector('[data-slot="project-conversation-welcome"]')
   expect(surface).toBeInTheDocument()
@@ -509,7 +509,7 @@ it("新的专案会话欢迎面使用 Conversation DOM 与标题关联", () => {
   expect(screen.getByRole("heading", { name: "新对话" })).toHaveAttribute("id", "kokoro-project-conversation-heading")
 })
 
-it("正式专案任务入口精确编码 opaque projectRef，缺少引用时不猜测关联", () => {
+it("正式项目任务入口精确编码 opaque projectRef，缺少引用时不猜测关联", () => {
   const encoded = render(<LocaleProvider><KokoroProjectWorkspace preview={false} projectRef="项目/one two" onPrompt={vi.fn()} workspaceCapabilities={capabilities} /></LocaleProvider>)
   expect(within(contextCard(encoded.container, "scheduled")).getByRole("link")).toHaveAttribute(
     "href",
@@ -532,7 +532,7 @@ it("正式项目标题/时间只消费 canonical detail，切换 loading/error �
   expect(screen.queryByText("今天更新")).toBeNull()
   view.rerender(<LocaleProvider><KokoroProjectWorkspace {...props} projectRef="canonical-B" projectDetail={{ status: "loading" }} /></LocaleProvider>)
   expect(screen.queryByRole("heading", { name: "真正的项目名" })).toBeNull()
-  expect(screen.getByTestId("project-detail-loading")).toHaveTextContent("正在加载专案…")
+  expect(screen.getByTestId("project-detail-loading")).toHaveTextContent("正在加载项目…")
   view.rerender(<LocaleProvider><KokoroProjectWorkspace {...props} projectDetail={{ status: "error", retryable: false }} /></LocaleProvider>)
   expect(screen.getByTestId("project-detail-error")).toBeInTheDocument()
   expect(screen.getByRole("button", { name: "重试" })).toBeDisabled()

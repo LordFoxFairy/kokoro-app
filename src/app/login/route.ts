@@ -1,17 +1,14 @@
-import { randomUUID } from "node:crypto"
+import { createHash, randomBytes, randomUUID } from "node:crypto"
 
 import { NextRequest } from "next/server"
-import { cookies as requestCookies } from "next/headers"
 
-import { GET as authGet, POST as authPost } from "@/app/api/auth/[...nextauth]/route"
 import { DEFAULT_PRODUCT_RETURN_TARGET, parseProductReturnTarget } from "@/lib/product-return-target"
+import { escapeInteractionHtml } from "@/lib/server/iam-interaction-route"
+import { productLoginReturnCookie } from "@/lib/server/product-login-return"
 import { oidcRpConfig } from "@/lib/server/oidc-provider"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
-
-const CSRF_PARTS = { params: Promise.resolve({ nextauth: ["csrf"] }) }
-const SIGN_IN_PARTS = { params: Promise.resolve({ nextauth: ["signin", "kokoro-iam"] }) }
 
 function unavailable(phase: string): Response {
   console.error("Kokoro Product login start unavailable:", phase)
@@ -22,16 +19,14 @@ function unavailable(phase: string): Response {
   } })
 }
 
-function cookiePairs(response: Response): string[] | null {
-  const cookies = response.headers.getSetCookie()
-  if (cookies.length > 4) return null
-  const pairs: string[] = []
-  for (const cookie of cookies) {
-    const pair = cookie.split(";", 1)[0]
-    if (!pair || !/^(?:__Host-|__Secure-)?next-auth\.(?:csrf-token|callback-url)=[^;]+$/u.test(pair)) return null
-    pairs.push(pair)
-  }
-  return pairs
+function csrfCookie(name: string, token: string, secret: string, secure: boolean): string {
+  const digest = createHash("sha256").update(`${token}${secret}`).digest("hex")
+  return `${name}=${encodeURIComponent(`${token}|${digest}`)}; Path=/; HttpOnly; SameSite=Lax${secure ? "; Secure" : ""}`
+}
+
+function loginStartDocument(token: string, nonce: string): string {
+  const csrf = escapeInteractionHtml(token)
+  return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="referrer" content="no-referrer"><meta name="robots" content="noindex"><title>登录 Kokoro</title></head><body><form id="kokoro-login-start" method="post" action="/api/auth/signin/kokoro-iam"><input type="hidden" name="csrfToken" value="${csrf}"></form><script nonce="${nonce}">document.getElementById("kokoro-login-start")?.submit()</script></body></html>`
 }
 
 export async function GET(request: NextRequest): Promise<Response> {
@@ -48,63 +43,24 @@ export async function GET(request: NextRequest): Promise<Response> {
       ? parseProductReturnTarget(query.get("return_to") ?? "") : null
   if (target === null) return unavailable("return_target")
 
-  const base = config.relay.webOrigin
-  const headers = new Headers({ host: config.relay.webHost, accept: "application/json" })
-  try {
-    const csrf = await authGet(new NextRequest(`${base}/api/auth/csrf`, { headers }), CSRF_PARTS)
-    if (csrf.status !== 200) return unavailable("csrf_status")
-    const body: unknown = await csrf.json()
-    const token = typeof body === "object" && body !== null ? (body as { csrfToken?: unknown }).csrfToken : null
-    const issuedCookies = cookiePairs(csrf)
-    if (typeof token !== "string" || !/^[A-Za-z0-9]+$/u.test(token) || issuedCookies === null) return unavailable("csrf_shape")
-    // Auth.js v4's Route Handler reads cookies() from the active Next request
-    // context, not from a synthetic NextRequest passed to its handler.
-    const activeCookies = await requestCookies()
-    const csrfName = `${config.relay.secureCookies ? "__Host-" : ""}next-auth.csrf-token`
-    const cookies = [...issuedCookies]
-    if (!cookies.some((pair) => pair.startsWith(`${csrfName}=`))) {
-      const existing = activeCookies.get(csrfName)?.value
-      if (existing?.split("|", 1)[0] !== token) return unavailable("csrf_cookie_missing")
-      cookies.push(`${csrfName}=${encodeURIComponent(existing)}`)
-    }
-    for (const pair of cookies) {
-      const separator = pair.indexOf("=")
-      activeCookies.set(pair.slice(0, separator), decodeURIComponent(pair.slice(separator + 1)), {
-        path: "/", httpOnly: true, sameSite: "lax", secure: config.relay.secureCookies,
-      })
-    }
-
-    const signIn = await authPost(new NextRequest(`${base}/api/auth/signin/kokoro-iam`, {
-      method: "POST",
-      headers: {
-        host: config.relay.webHost,
-        origin: base,
-        cookie: cookies.join("; "),
-        accept: "text/html",
-        "content-type": "application/x-www-form-urlencoded",
-      },
-      body: new URLSearchParams({ csrfToken: token }).toString(),
-    }), { ...SIGN_IN_PARTS, productReturnTarget: target })
-    const location = signIn.headers.get("location")
-    if (signIn.status !== 302 || location === null ||
-      !location.startsWith(`${base}/iam/oauth2/authorize?`)) {
-      const path = location === null ? "none" : new URL(location, base).pathname
-      return unavailable(`signin_response_${signIn.status}_${path}`)
-    }
-
-    const responseHeaders = new Headers({
-      location,
-      "cache-control": "no-store",
-      "referrer-policy": "no-referrer",
-      "x-request-id": randomUUID(),
-    })
-    for (const cookie of [...csrf.headers.getSetCookie(), ...signIn.headers.getSetCookie()]) {
-      responseHeaders.append("set-cookie", cookie)
-    }
-    return new Response(null, { status: 302, headers: responseHeaders })
-  } catch {
-    return unavailable("start_exception")
-  }
+  // Auth.js obtains cookies from the live browser request context. A server-side
+  // nested Route Handler call cannot move a newly issued cookie into that context,
+  // so issue its compatible double-submit cookie and let the browser make the
+  // one fixed provider POST.
+  const token = randomBytes(32).toString("hex")
+  const nonce = request.headers.get("x-nonce")
+  if (nonce === null || !/^[A-Za-z0-9_-]{16,128}$/u.test(nonce)) return unavailable("request_nonce")
+  const csrfName = `${config.relay.secureCookies ? "__Host-" : ""}next-auth.csrf-token`
+  const headers = new Headers({
+    "cache-control": "no-store",
+    "content-security-policy": `default-src 'none'; script-src 'nonce-${nonce}'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'`,
+    "content-type": "text/html; charset=utf-8",
+    "referrer-policy": "no-referrer",
+    "x-request-id": randomUUID(),
+  })
+  headers.append("set-cookie", csrfCookie(csrfName, token, config.authSecret, config.relay.secureCookies))
+  headers.append("set-cookie", productLoginReturnCookie(target, config.authSecret, config.relay.secureCookies))
+  return new Response(loginStartDocument(token, nonce), { status: 200, headers })
 }
 
 export function HEAD(): Response {

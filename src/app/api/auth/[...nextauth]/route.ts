@@ -11,6 +11,7 @@ import { IAM_RELAY_POLICY } from "@/lib/server/iam-relay-policy"
 import { oidcAuthOptions, oidcRpConfig, OIDC_RESOURCE, OIDC_SCOPE, type VerifiedOidcTokens } from "@/lib/server/oidc-provider"
 import { verifyProductIdentity } from "@/lib/server/product-identity"
 import { consumeOidcState, issueOidcState, rpCleanupCookies } from "@/lib/server/oidc-rp-transaction"
+import { clearProductLoginReturnCookie, productLoginReturnTarget } from "@/lib/server/product-login-return"
 import { clearProductSessionCookie, currentProductSession, decodeProductSession, productSessionCookie, type ProductClaims } from "@/lib/server/product-session"
 import { createSession, finalizeRefresh, invalidatePending, newSessionCandidate, reserveRefresh, tombstoneSession } from "@/lib/server/product-session-store"
 import { refreshOidcToken, revokeOidcToken } from "@/lib/server/oidc-token"
@@ -159,7 +160,13 @@ async function handle(request: NextRequest, context: Context, method: "GET" | "P
   if (config === null) return errorResponse(503, "rp_unavailable")
   const expectedPath = `/api/auth/${parts.join("/")}`
   const url = request.nextUrl
-  if (url.pathname !== expectedPath || !matchesCanonicalWebRequest(request, config.relay, method)) {
+  // The no-referrer login handoff makes Chromium send the fixed browser form
+  // POST with `Origin: null`. It remains bound to the live Auth.js double-submit
+  // CSRF cookie below; admit this exact provider-start exception only.
+  const browserProviderFormPost = action === "signin" && method === "POST" &&
+    request.headers.get("host") === config.relay.webHost && request.headers.get("origin") === "null"
+  if (url.pathname !== expectedPath ||
+    (!matchesCanonicalWebRequest(request, config.relay, method) && !browserProviderFormPost)) {
     return errorResponse(403, "rp_origin_rejected")
   }
   if (request.headers.has("authorization") || request.headers.has("x-kokoro-service") || request.headers.has("x-kokoro-internal-secret")) {
@@ -193,11 +200,12 @@ async function handle(request: NextRequest, context: Context, method: "GET" | "P
   }
 
   if (action === "signin") {
-    const target = parseProductReturnTarget(context.productReturnTarget ?? DEFAULT_PRODUCT_RETURN_TARGET)
-    if (target === null) return errorResponse(400, "rp_signin_rejected")
     if (url.search !== "" || request.headers.get("content-type") !== "application/x-www-form-urlencoded") {
       return errorResponse(400, "rp_signin_rejected")
     }
+    const target = productLoginReturnTarget(request.headers.get("cookie"), config.authSecret) ??
+      parseProductReturnTarget(context.productReturnTarget ?? DEFAULT_PRODUCT_RETURN_TARGET)
+    if (target === null) return errorResponse(400, "rp_signin_rejected")
     const form = await boundedInteractionForm(request, ["csrfToken"])
     if (form === null || !/^[A-Za-z0-9]+$/u.test(form.get("csrfToken") ?? "")) return errorResponse(400, "rp_signin_rejected")
     try {
@@ -218,6 +226,7 @@ async function handle(request: NextRequest, context: Context, method: "GET" | "P
       await issueOidcState({ redisUrl: config.redisUrl, webOrigin: config.relay.webOrigin, state, setCookies, target, authSecret: config.authSecret })
       response.headers.set("cache-control", "no-store")
       response.headers.set("referrer-policy", "no-referrer")
+      response.headers.append("set-cookie", clearProductLoginReturnCookie(config.relay.secureCookies))
       return response
     } catch { console.error("Kokoro RP sign-in start threw"); return errorResponse(503, "rp_unavailable") }
   }

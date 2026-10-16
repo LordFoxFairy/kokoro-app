@@ -24,6 +24,7 @@ vi.mock("@/lib/server/product-session-store", async (original) => ({
 }))
 
 import { parseProductReturnTarget } from "@/lib/product-return-target"
+import { productLoginReturnCookie } from "@/lib/server/product-login-return"
 import { GET, POST } from "@/app/api/auth/[...nextauth]/route"
 import { oidcAuthOptions, oidcRpConfig, OIDC_SCOPE } from "@/lib/server/oidc-provider"
 
@@ -147,6 +148,15 @@ describe("Product OIDC fixed-tenant Team and Skill scopes", () => {
     expect(issueOidcState).toHaveBeenCalledOnce()
     expect(issueOidcState).toHaveBeenCalledWith(expect.objectContaining({ state: "s".repeat(32) }))
   })
+  it("accepts the fixed no-referrer browser document navigation emitted by Chromium", async () => {
+    nextAuth.mockResolvedValueOnce(authorizeResponse(EXPECTED_SCOPE))
+    const response = await POST(new NextRequest(`${ENV.NEXTAUTH_URL}/signin/kokoro-iam`, {
+      method: "POST", headers: { host: "web.example.test", origin: "null", "content-type": "application/x-www-form-urlencoded" },
+      body: "csrfToken=Token123",
+    }), { params: Promise.resolve({ nextauth: ["signin", "kokoro-iam"] }) })
+    expect(response.status).toBe(302)
+    expect(issueOidcState).toHaveBeenCalledWith(expect.objectContaining({ target: "/app" }))
+  })
 
   it.each([
     ["legacy scope", BASE_SCOPE],
@@ -222,6 +232,17 @@ describe("transaction-bound Product login return", () => {
     }), { params: Promise.resolve({ nextauth: ["signin", "kokoro-iam"] }) })
     expect(response.status).toBe(302)
     expect(issueOidcState).toHaveBeenCalledWith(expect.objectContaining({ target: "/app" }))
+  })
+  it("uses only the signed /login return cookie when browser-native provider POST starts", async () => {
+    nextAuth.mockResolvedValue(authorizeResponse(EXPECTED_SCOPE))
+    const cookie = productLoginReturnCookie(target, ENV.KOKORO_WEB_AUTH_SECRET, false).split(";", 1)[0]!
+    const response = await POST(new NextRequest(`${ENV.NEXTAUTH_URL}/signin/kokoro-iam`, {
+      method: "POST", headers: { host: "web.example.test", origin: ENV.KOKORO_WEB_ORIGIN,
+        "content-type": "application/x-www-form-urlencoded", cookie }, body: "csrfToken=Token123",
+    }), { params: Promise.resolve({ nextauth: ["signin", "kokoro-iam"] }) })
+    expect(response.status).toBe(302)
+    expect(issueOidcState).toHaveBeenCalledWith(expect.objectContaining({ target }))
+    expect(response.headers.getSetCookie()).toContain("kokoro_product_login_return=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax")
   })
   it("rejects public extra form target without issuing a transaction", async () => {
     expect((await signIn(undefined, `csrfToken=Token123&return_to=${encodeURIComponent(target)}`)).status).toBe(400)

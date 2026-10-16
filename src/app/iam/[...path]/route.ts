@@ -37,6 +37,32 @@ function safeShortHeader(value: string): boolean {
   return Buffer.byteLength(value) <= 256 && /^[\x20-\x7e]*$/u.test(value)
 }
 
+// Diagnostics intentionally retain only routing shape: the relay Location can
+// carry OIDC state and authorization codes, which must never enter logs.
+function authorizeLocationDiagnostics(value: string | null, webOrigin: string): Record<string, string | number | boolean> {
+  if (value === null) return { location_present: false }
+  try {
+    const target = new URL(value, webOrigin)
+    const rawTarget = `${target.pathname}${target.search}`
+    const path = target.pathname === "/api/auth/callback/kokoro-iam"
+      ? "rp_callback"
+      : IAM_RELAY_POLICY.webInteractionPaths.includes(target.pathname)
+        ? "interaction"
+        : resolveBrowserIamGet(`/iam${rawTarget}`, "GET") === null
+          ? "other"
+          : "iam_relay"
+    return {
+      location_present: true,
+      location_relative: value.startsWith("/"),
+      location_same_origin: target.origin === webOrigin,
+      location_path_kind: path,
+      location_query_count: [...target.searchParams.keys()].length,
+    }
+  } catch {
+    return { location_present: true, location_parseable: false }
+  }
+}
+
 function rawPathAndQuery(absoluteUrl: string): string | null {
   const scheme = absoluteUrl.indexOf("://")
   if (scheme < 1) return null
@@ -96,7 +122,11 @@ export async function GET(request: Request, context: RouteContext): Promise<Resp
   if (request.headers.has("authorization")) return browserResponse(errorResponse("iam_relay_credential_rejected", 403, id))
   const config = iamRelayConfig(process.env)
   if (config === null) return browserResponse(errorResponse("iam_relay_unavailable", 503, id))
-  if (!matchesCanonicalWebRequest(request, config, "GET")) return browserResponse(errorResponse("iam_relay_origin_rejected", 403, id))
+  const opaqueAuthorizeNavigation = route.relativePath === "/oauth2/authorize" &&
+    request.headers.get("host") === config.webHost && request.headers.get("origin") === "null"
+  if (!matchesCanonicalWebRequest(request, config, "GET") && !opaqueAuthorizeNavigation) {
+    return browserResponse(errorResponse("iam_relay_origin_rejected", 403, id))
+  }
   if (route.relativePath === "/oauth2/end-session") {
     const query = new URLSearchParams(route.query)
     const clientId = process.env.KOKORO_OIDC_CLIENT_ID?.trim()
@@ -122,7 +152,7 @@ export async function GET(request: Request, context: RouteContext): Promise<Resp
     if (!safeShortHeader(accept)) return browserResponse(errorResponse("iam_relay_header_invalid", 400, id))
     headers.set("accept", accept)
   }
-  if (origin !== null) headers.set("origin", origin)
+  if (origin === config.webOrigin) headers.set("origin", origin)
   if (cookie !== "") headers.set("cookie", cookie)
   headers.set(SERVICE_HEADER, SERVICE_VALUE)
   headers.set(INTERNAL_SECRET_HEADER, config.secret)
@@ -140,6 +170,16 @@ export async function GET(request: Request, context: RouteContext): Promise<Resp
     const response = route.relativePath === "/oauth2/authorize"
       ? browserAuthorizeResponse(upstream, config.webOrigin, config.secureCookies, id)
       : nativeIamResponse(upstream, config.webOrigin, config.secureCookies, id, route.relativePath)
+    if (response === null && route.relativePath === "/oauth2/authorize") {
+      console.error("Kokoro IAM authorize relay rejected", {
+        status: upstream.status,
+        content_type: upstream.headers.get("content-type") ?? "none",
+        has_location: upstream.headers.has("location"),
+        set_cookie_names: upstream.setCookies.map((cookie) => cookie.split("=", 1)[0] ?? "").join(","),
+        body_bytes: upstream.body.byteLength,
+        ...authorizeLocationDiagnostics(upstream.headers.get("location"), config.webOrigin),
+      })
+    }
     return browserResponse(response
       ?? errorResponse("iam_relay_response_invalid", 502, id))
   } catch {
