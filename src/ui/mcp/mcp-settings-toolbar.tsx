@@ -20,9 +20,11 @@ export function McpSettingsToolbar({
   showBrowse = true,
   showSearch = true,
   settingsLayout = false,
+  plazaLayout = false,
 }: {
   view: "catalog" | "connections"
   settingsLayout?: boolean
+  plazaLayout?: boolean
   query: string
   onQueryChange: (value: string) => void
   onBrowse: (target: HTMLElement) => void
@@ -48,7 +50,7 @@ export function McpSettingsToolbar({
         {onCreate ? <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button ref={triggerRef} type="button" variant="outline" className={styles.toolbarButton} data-settings-layout={settingsLayout || undefined} data-settings-control="create">
-              {settingsLayout ? null : <Plus aria-hidden="true" />}{t("plugins.create")}<ChevronDown aria-hidden="true" />
+              {settingsLayout || plazaLayout ? null : <Plus aria-hidden="true" />}{t("plugins.create")}<ChevronDown aria-hidden="true" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className={styles.createMenu}>

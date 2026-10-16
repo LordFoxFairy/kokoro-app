@@ -147,6 +147,7 @@ export function McpProjectionRead({
     connectorState.loading || connectorState.requestIdentity !== identity;
   const refreshing =
     view === "catalog" ? providerRefreshing : connectorRefreshing;
+  const plaza = embedded && !settingsLayout && initialView === "catalog";
 
   const hideConfirmedRemovedConnector = (connectorId: string) => {
     setConfirmedRemovedConnectorIds((current) => {
@@ -341,13 +342,15 @@ export function McpProjectionRead({
       data-testid="mcp-projection-read"
       data-embedded={embedded || undefined}
       data-settings-layout={settingsLayout || undefined}
+      data-presentation={plaza ? "plaza" : undefined}
       aria-busy={refreshing || undefined}
     >
       <header className={styles.header}>
-        {settingsLayout ? null : <h2>{t("rail.navPlugins")}</h2>}
+        {plaza ? <h1>{t("rail.plugins")}</h1> : settingsLayout ? null : <h2>{t("rail.navPlugins")}</h2>}
         <McpSettingsToolbar
           view={view}
           settingsLayout={settingsLayout}
+          plazaLayout={plaza}
           query={view === "connections" ? connectorQuery : providerQuery}
           onQueryChange={
             view === "connections" ? setConnectorQuery : setProviderQuery
@@ -371,7 +374,7 @@ export function McpProjectionRead({
           {...(onCreateMcp ? { onCreate: onCreateMcp } : {})}
         />
       </header>
-
+      <div className={styles.body}>
       {view === "catalog" &&
       providerProjection === undefined &&
       providerRefreshing ? (
@@ -454,6 +457,7 @@ export function McpProjectionRead({
         </div>
       ) : null}
 
+      </div>
       <McpProviderCatalogDialog
         open={catalogOpen}
         {...(providerProjection ? { providers: providerProjection.items } : {})}

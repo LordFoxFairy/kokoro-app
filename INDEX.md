@@ -223,3 +223,4 @@ lint、typecheck、test、build、浏览器 E2E 或 live BFF 验收。
 
 - 目录重核：外层保同 actor 的搜索/筛选/精确详情 locator；`use-catalog-skill-installation` 拥有本代安装动作与冻结未知命令。详情/包文件展示仍按代际退休，`SkillPackageFiles` 仅渲染 owner 文件树。分享未知墓碑与当代 ACK 分离，导入只读/已确认结果重核退役，未知恢复意图保留。
 - 技能广场和 Settings Explore：每页9条，只有默认首读传 `shuffle:true`，续页由 owner cursor 延续同一随机序列，查询/分类首读不传 shuffle。两种展示使用独立内存资源键，写后失活整个 client 目录 namespace。探索页的 query/category 同样由 owner 查询；本地筛选只用于 preview 或新读期间的上页临时投影，未确认页禁动作、失败显式重读。分页按已提交的 key/base/next-cursor/open 退休，迟到的旧 observer 也没有重新发读或占用当前 pending 的资格。
+- 插件广场：route wrapper铺满主区，MCP reader的plaza展示独立48px标题栏与内部滚动body，管理/创建锚定标题栏右端，目录限宽768px居中；Settings与非plaza保持原布局。管理入口仍交给同源Settings，创建只交付原命令选择；推荐区不使用静态实体或伪连接，仍需owner运营展示数据后继。

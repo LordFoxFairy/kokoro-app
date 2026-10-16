@@ -18,6 +18,7 @@ import { ManusSkillDetailDialog } from "@/ui/skills/manus-skill-detail-dialog"
 import { KokoroSkillsSurface } from "@/features/app/kokoro-skills-surface"
 import { SkillsSettingsSection } from "@/ui/settings/sections/skills-settings-section"
 import { createHubClient } from "@/hub/client"
+import { McpProjectionRead } from "@/ui/mcp/mcp-projection-read"
 import { useAppFrameActions } from "@/components/blocks/app-frame/use-app-frame-actions"
 import { LocaleProvider } from "@/i18n/context"
 import { ThemeProvider } from "@/ui/theme/theme-context"
@@ -1819,6 +1820,25 @@ it("project trial survives the actual URL handoff and Composer submit action", a
   } finally { view.unmount(); projectEngine.dispose(); window.history.replaceState({}, "", "/app") }
 })
 
+
+it("keeps plugin page management in its page header and hands off to Settings without replacing the directory", async () => {
+  const onManage = vi.fn(), onCreate = vi.fn()
+  const hub = { ...createHubClient(),
+    listMcpConnectorProviders: vi.fn(async () => ({ items: [], next_cursor: null })),
+    listMcpConnectors: vi.fn(async () => ({ items: [], next_cursor: null })),
+    listCustomApis: vi.fn(async () => ({ items: [], page: { next_cursor: null } })),
+  }
+  render(<LocaleProvider><McpProjectionRead client={hub} identity="plugin-layout-reader" embedded initialView="catalog" onManageConnectors={onManage} onCreateMcp={onCreate} /></LocaleProvider>)
+  await screen.findByRole("heading", { name: "插件", level: 1 })
+  await screen.findByRole("searchbox", { name: "搜索连接器" })
+  const manage = screen.getByRole("button", { name: "管理连接器" })
+  fireEvent.click(manage)
+  expect(onManage).toHaveBeenCalledExactlyOnceWith(manage)
+  expect(screen.getByRole("heading", { name: "插件", level: 1 })).toBeInTheDocument()
+  fireEvent.keyDown(screen.getByRole("button", { name: "创建" }), { key: "ArrowDown" })
+  fireEvent.click(await screen.findByRole("menuitem", { name: "通过 JSON 导入 MCP" }))
+  expect(onCreate).toHaveBeenCalledExactlyOnceWith("json", expect.any(HTMLButtonElement))
+})
 
 function observeSettingsCatalogPages() {
   const observers = new Set<IntersectionObserverCallback>()
