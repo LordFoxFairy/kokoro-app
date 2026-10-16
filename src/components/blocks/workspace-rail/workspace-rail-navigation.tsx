@@ -117,6 +117,7 @@ export function WorkspaceRailNavigation({
   // visible in the project index.
   const [projectConversationExpansion, setProjectConversationExpansion] = useState<ReadonlyMap<string, boolean>>(new Map())
   const [projectCreateOpen, setProjectCreateOpen] = useState(false)
+  const [moreOpen, setMoreOpen] = useState(false)
   const keyboardShortcuts = useKeyboardShortcuts()
   const enabledNavigation = navigation?.filter((item) => isRuntimeNavigationEnabled(item, featureFlags))
   const workbenchNavigation: WorkbenchNavigationItem[] = (enabledNavigation ?? []).map((item) => ({
@@ -138,7 +139,7 @@ export function WorkspaceRailNavigation({
   const moreActive = tuckedDestinations.some((item) => item.key === activeNavigationKey)
   const renderTuckedDestination = ({ key, label, icon: Icon, settingsTab, href }: WorkbenchNavigationItem) => href ? (
     <DropdownMenuItem key={key} asChild>
-      <Link href={href} {...(mountedSurfacePrefetch === undefined ? {} : { prefetch: mountedSurfacePrefetch })} onClickCapture={(event) => interceptMountedSurfaceNavigation(event, href)} onClick={closeNavigation} aria-current={activeNavigationKey === key ? "page" : undefined}>
+      <Link href={href} {...(mountedSurfacePrefetch === undefined ? {} : { prefetch: mountedSurfacePrefetch })} onClickCapture={(event) => interceptMountedSurfaceNavigation(event, href)} onClick={() => { setMoreOpen(false); closeNavigation() }} aria-current={activeNavigationKey === key ? "page" : undefined}>
         <span className={navigationStyles.moreGlyph}><Icon aria-hidden="true" /></span>
         <span>{label}</span>
         {activeNavigationKey === key ? <Check className={navigationStyles.moreCheck} aria-hidden="true" /> : null}
@@ -297,7 +298,7 @@ export function WorkspaceRailNavigation({
             })() : null}
 
             {tuckedDestinations.length > 0 ? <SidebarMenuItem>
-              <DropdownMenu modal={false}>
+              <DropdownMenu modal={false} open={moreOpen} onOpenChange={setMoreOpen}>
                 <DropdownMenuTrigger asChild>
                   <SidebarMenuButton
                     type="button"
