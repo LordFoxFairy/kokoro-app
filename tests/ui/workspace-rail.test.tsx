@@ -204,11 +204,13 @@ it("项目清单和任务清单分别支持键盘排序，不会互相移动", (
   })
 
   const project = screen.getByTestId("rail-project")
+  const expandedBeforeSort = project.getAttribute("aria-expanded")
   project.focus()
   fireEvent.keyDown(project, { key: " " })
   fireEvent.keyDown(project, { key: "ArrowDown" })
   fireEvent.keyDown(project, { key: " " })
   expect(onReorderProjects).toHaveBeenCalledWith(["project_b", "project_a"])
+  expect(project.getAttribute("aria-expanded")).toBe(expandedBeforeSort)
   expect(onReorderConversations).not.toHaveBeenCalled()
 
   const task = screen.getByRole("button", { name: "第一个任务" })
@@ -897,13 +899,59 @@ it("会话重命名只提交 conversation 身份，canonical Project 名称与 i
   fireEvent.change(input, { target: { value: "新会话标题" } })
   fireEvent.keyDown(input, { key: "Enter" })
   expect(onRenameConversation).toHaveBeenCalledWith("ses_1", "新会话标题")
-  const project = screen.getByRole("link", { name: "独立项目名称" })
+  const project = screen.getByRole("link", { name: "新对话 · 独立项目名称" })
   expect(project).toHaveAttribute("href", "/app/project/canonical-project")
   expect(project.closest("[data-project-id]")).toHaveAttribute("data-project-id", "canonical-project")
   expect(document.querySelector('[data-project-list] a[aria-label="新会话标题"]')).toBeNull()
 })
 
-it("项目行的显式重命名动作交给路由 owner，不制造本地副本", () => {
+it("项目整行只展开任务，快捷入口进项目，重命名独立在菜单", async () => {
+  const onRequestProjectRename = vi.fn()
+  const ensureScope = vi.fn()
+  let emptyProject = false
+  const oldLocation = `${window.location.pathname}${window.location.search}`
+  renderRail({
+    projects: [{ id: "project_a", name: "产品规划", href: "/app/project/project_a" }],
+    projectListStatus: "ready", onRequestProjectRename,
+    conversationReads: {
+      scope: { kind: "direct" }, identity: "project-controls", admitted: true,
+      ensureScope, activeId: null, failedMoveScopeKey: null,
+      read: (scope) => ({
+        conversations: scope.kind === "project" && !emptyProject ? [{ id: "conv-a", title: "项目内任务" }] : [],
+        loading: false, loadingMore: false, error: false, hasMore: false,
+        refresh: () => {}, loadMore: () => {}, deleteConversation: async () => true, renameConversation: () => {},
+      }),
+      onSelect: () => {}, onNewChat: () => {}, onMove: () => {},
+    },
+  })
+  const row = screen.getByRole("button", { name: "产品规划" })
+  expect(row).toHaveAttribute("aria-expanded", "false")
+  fireEvent.click(row)
+  expect(row).toHaveAttribute("aria-expanded", "true")
+  expect(await screen.findByRole("button", { name: "项目内任务" })).toBeVisible()
+  expect(`${window.location.pathname}${window.location.search}`).toBe(oldLocation)
+  expect(onRequestProjectRename).not.toHaveBeenCalled()
+  fireEvent.click(row)
+  expect(row).toHaveAttribute("aria-expanded", "false")
+  expect(screen.queryByRole("button", { name: "项目内任务" })).toBeNull()
+  emptyProject = true
+  fireEvent.click(row)
+  expect(within(screen.getByRole("navigation", { name: "项目会话" })).getByRole("status")).toHaveTextContent("暂无任务")
+  const compose = screen.getByRole("link", { name: "新对话 · 产品规划" })
+  expect(compose).toHaveAttribute("href", "/app/project/project_a")
+  try {
+    fireEvent.click(compose)
+    expect(window.location.pathname).toBe("/app/project/project_a")
+    expect(window.location.search).toBe("")
+    expect(onRequestProjectRename).not.toHaveBeenCalled()
+  } finally { window.history.replaceState({}, "", oldLocation) }
+  const controls = within(row.closest("[data-project-id]") as HTMLElement)
+  fireEvent.pointerDown(controls.getByRole("button", { name: "项目选项" }), { button: 0 })
+  fireEvent.click(await screen.findByRole("menuitem", { name: "重命名项目" }))
+  expect(onRequestProjectRename).toHaveBeenCalledExactlyOnceWith("project_a")
+})
+
+it("项目菜单的重命名动作交给路由 owner，不制造本地副本", async () => {
   const onRequestProjectRename = vi.fn()
   renderRail({
     projects: [{ id: "project_a", name: "独立项目名称", href: "/app/project/project_a" }],
@@ -911,11 +959,13 @@ it("项目行的显式重命名动作交给路由 owner，不制造本地副本"
     onRequestProjectRename,
   })
 
-  fireEvent.click(screen.getByRole("button", { name: "重命名项目" }))
+  const projectRow = screen.getByRole("button", { name: "独立项目名称" }).closest("[data-project-id]") as HTMLElement
+  fireEvent.pointerDown(within(projectRow).getByRole("button", { name: "项目选项" }), { button: 0 })
+  fireEvent.click(await screen.findByRole("menuitem", { name: "重命名项目" }))
   expect(onRequestProjectRename).toHaveBeenCalledExactlyOnceWith("project_a")
 })
 
-it("项目保持单层概览入口，任务区仍然独立", () => {
+it("无 scoped reader 仍保持整行展开语义，只展示不可用而不借用直接任务", () => {
   renderRail({
     projects: [{ id: "project_a", name: "独立项目名称", href: "/app/project/project_a", active: true }],
     projectListStatus: "ready",
@@ -925,10 +975,13 @@ it("项目保持单层概览入口，任务区仍然独立", () => {
     activeId: null,
   })
 
-  const project = screen.getByRole("link", { name: "独立项目名称" })
+  const project = screen.getByRole("link", { name: "新对话 · 独立项目名称" })
   const projectRow = project.closest("[data-project-id]")
-  expect(project.querySelectorAll("svg")).toHaveLength(1)
-  expect(projectRow?.querySelector('button[aria-label*="展开项目"], button[aria-label*="收起项目"]')).toBeNull()
+  const disclosure = within(projectRow as HTMLElement).getByRole("button", { name: "独立项目名称" })
+  expect(disclosure).toHaveAttribute("aria-expanded", "true")
+  expect(within(document.getElementById(disclosure.getAttribute("aria-controls")!)!).getByRole("status")).toHaveTextContent("不可用")
+  fireEvent.click(disclosure)
+  expect(disclosure).toHaveAttribute("aria-expanded", "false")
   expect(projectRow?.querySelector('[data-conversation-list]')).toBeNull()
   expect(screen.getByRole("navigation", { name: "直接会话" })).toBeInTheDocument()
 })
@@ -938,10 +991,10 @@ it("正式 rail 只有当前路由而无集合时不造通用项目；显式 pre
   expect(document.querySelector('[data-project-list] [data-project-id]')).toBeNull()
   cleanup()
   renderRail({ projectHref: "/app/project/preview-project", preview: true })
-  expect(screen.getByRole("link", { name: "当前项目" })).toHaveAttribute("href", "/app/project/preview-project")
+  expect(screen.getByRole("link", { name: "新对话 · 当前项目" })).toHaveAttribute("href", "/app/project/preview-project")
 })
 
-it("R254 当前项目选择不替换普通持久会话分区，项目名称仍是概览Link", () => {
+it("R254 项目展开和快捷概览入口都不替换普通持久会话分区", () => {
   renderRail({
     projects: [{ id: "project_a", name: "产品规划", href: "/app/project/project_a", active: true }],
     projectHref: "/app/project/project_a",
@@ -952,7 +1005,7 @@ it("R254 当前项目选择不替换普通持久会话分区，项目名称仍�
   const direct = screen.getByRole("navigation", { name: "直接会话" })
   expect(direct).toHaveAttribute("data-conversation-list", "direct")
   expect(within(direct).getByRole("button", { name: "普通持久会话" })).toBeInTheDocument()
-  expect(screen.getByRole("link", { name: "产品规划" })).toHaveAttribute("href", "/app/project/project_a")
+  expect(screen.getByRole("link", { name: "新对话 · 产品规划" })).toHaveAttribute("href", "/app/project/project_a")
   expect(screen.queryByRole("navigation", { name: "项目会话" })).not.toBeInTheDocument()
 })
 

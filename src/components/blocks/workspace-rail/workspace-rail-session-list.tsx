@@ -245,7 +245,7 @@ export function WorkspaceRailSessionList({
             </>
           ) : projectActive ? (
             <p className={itemStyles.empty} role="status">
-              {t(query !== "" ? "rail.emptyResult" : "firstSite.noProjectConversations")}
+              {t(query !== "" ? "rail.emptyResult" : "rail.noProjectTasks")}
             </p>
           ) : (
             <p className={itemStyles.empty}>{t(searchOpen ? "rail.emptyResult" : "rail.emptyChats")}</p>

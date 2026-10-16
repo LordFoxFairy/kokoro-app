@@ -420,48 +420,36 @@ export function WorkspaceRailNavigation({
                 return (
                   <Fragment key={project.id}>
                   <SidebarMenuItem
-                    className={cn(itemStyles.item, conversationReads && navigationStyles.projectRow, dragging && itemStyles.itemDragging, dragOver && itemStyles.itemDragOver)}
+                    className={cn(itemStyles.item, navigationStyles.projectRow, dragging && itemStyles.itemDragging, dragOver && itemStyles.itemDragOver)}
                     data-project-id={project.id}
                     data-drag-kind="project"
                     data-project-active={active ? "true" : "false"}
                     data-dragging={dragging ? "true" : "false"}
                     data-drag-over={dragOver ? "true" : "false"}
                   >
-                    <SidebarMenuButton asChild type="button" className={itemStyles.itemSelect} isActive={active}>
-                      <Link
-                        href={project.href}
-                        {...(mountedSurfacePrefetch === undefined ? {} : { prefetch: mountedSurfacePrefetch })}
-                        {...dragProps("project", project.id)}
-                        onPointerDown={markPointerFocus}
-                        onClickCapture={(event) => interceptMountedSurfaceNavigation(event, project.href)}
-                        onClick={closeNavigation}
-                        aria-label={project.name}
-                        aria-current={active ? "page" : undefined}
-                        data-testid={testId}
-                        data-navigation-section="project"
-                      >
-                        <span className={itemStyles.projectGlyph} data-project-glyph="true" aria-hidden="true">
-                          <Folder className={cn(railStyles.icon, itemStyles.projectFolderIcon)} />
-                        </span>
-                        <span className={itemStyles.itemTitle}>{project.name}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                    {conversationReads ? <Button
+                    <SidebarMenuButton
                       type="button"
-                      variant="ghost"
-                      size="icon-xs"
-                      className={navigationStyles.projectConversationToggle}
-                      aria-label={t(conversationsExpanded ? "rail.collapseProjectAria" : "rail.expandProjectAria", { name: project.name, position: String(orderedProjects.indexOf(project) + 1) })}
+                      className={itemStyles.itemSelect}
+                      isActive={active}
+                      {...dragProps("project", project.id)}
+                      onPointerDown={markPointerFocus}
+                      onClick={() => toggleProjectConversations(project.id, conversationsExpanded)}
+                      aria-label={project.name}
                       aria-expanded={conversationsExpanded}
                       aria-controls={`rail-project-conversations-${project.id}`}
-                      onClick={() => toggleProjectConversations(project.id, conversationsExpanded)}
+                      data-testid={testId}
+                      data-navigation-section="project"
                     >
-                      <ChevronDown aria-hidden="true" />
-                    </Button> : null}
-                    {onRequestProjectRename ? <span className={itemStyles.projectActions}>
-                      <DropdownMenu>
+                      <span className={itemStyles.projectGlyph} aria-hidden="true">
+                        <Folder className={cn(railStyles.icon, itemStyles.projectFolderIcon)} />
+                        <ChevronRight className={cn(railStyles.icon, itemStyles.projectChevron)} />
+                      </span>
+                      <span className={itemStyles.itemTitle}>{project.name}</span>
+                    </SidebarMenuButton>
+                    <span className={itemStyles.projectActions}>
+                      {onRequestProjectRename ? <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button type="button" variant="ghost" size="icon-xs" className={itemStyles.projectAction} aria-label={t("firstSite.projectOptions")}>
+                          <Button type="button" variant="ghost" size="icon-xs" className={cn(itemStyles.projectAction, itemStyles.projectOptions)} aria-label={t("firstSite.projectOptions")}>
                             <Ellipsis aria-hidden="true" />
                           </Button>
                         </DropdownMenuTrigger>
@@ -471,17 +459,26 @@ export function WorkspaceRailNavigation({
                             {t("firstSite.renameProject")}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
-                      </DropdownMenu>
-                      <Button type="button" variant="ghost" size="icon-xs" className={itemStyles.projectAction} aria-label={t("firstSite.renameProject")} onClick={() => onRequestProjectRename(project.id)}>
-                        <SquarePen aria-hidden="true" />
+                      </DropdownMenu> : null}
+                      <Button asChild variant="ghost" size="icon-xs" className={itemStyles.projectAction}>
+                        <Link href={project.href}
+                          {...(mountedSurfacePrefetch === undefined ? {} : { prefetch: mountedSurfacePrefetch })}
+                          onPointerDown={markPointerFocus}
+                          onClickCapture={(event) => interceptMountedSurfaceNavigation(event, project.href)}
+                          onClick={closeNavigation}
+                          aria-label={`${t("rail.newChat")} · ${project.name}`}
+                          aria-current={active ? "page" : undefined}
+                        >
+                          <SquarePen aria-hidden="true" />
+                        </Link>
                       </Button>
-                    </span> : null}
+                    </span>
                   </SidebarMenuItem>
-                  {conversationsExpanded && conversationReads ? <SidebarMenuItem
+                  {conversationsExpanded ? <SidebarMenuItem
                       id={`rail-project-conversations-${project.id}`}
                       className={navigationStyles.projectConversationGroup}
                     >
-                      <ScopedConversationGroup
+                      {conversationReads ? <ScopedConversationGroup
                         scope={{ kind: "project", projectRef: project.id }}
                         reads={conversationReads}
                         compactDesktop={false}
@@ -498,7 +495,7 @@ export function WorkspaceRailNavigation({
                         projects={orderedProjects}
                         projectListReady={projectListStatus === "ready"}
                         onRequestDelete={onRequestDelete}
-                      />
+                      /> : <p className={itemStyles.empty} role="status">{t("firstSite.unavailable")}</p>}
                     </SidebarMenuItem> : null}
                   </Fragment>
                 )

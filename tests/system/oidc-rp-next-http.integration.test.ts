@@ -1609,6 +1609,15 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     await expect.poll(() => rail.getAttribute("data-collapsed"), { timeout: 10_000 }).toBe("false")
   }
 
+  async function openProjectWorkspace(page: Page, projectId: string): Promise<void> {
+    // The row discloses tasks; its one adjacent Link opens the workspace.
+    // Hover matches the real desktop affordance instead of clicking a hidden
+    // action or relying on the removed whole-row navigation.
+    const row = page.locator(`[data-project-id="${projectId}"]`)
+    await row.hover()
+    await row.getByRole("link").click()
+  }
+
   async function expandProjectConversations(page: Page, projectId: string): Promise<void> {
     // Address the owner project and its accessible disclosure, not a private
     // generated id prefix that changes when the rail is reorganized.
@@ -3914,7 +3923,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       expect(new URL(page.url()).searchParams.get("conversation")).toBeNull()
 
       const snapshotGetsBeforeProjectOpen = moveBindingSnapshotGets.length
-      await page.getByRole("link", { name: "Move target alpha", exact: true }).click()
+      await openProjectWorkspace(page, moveProjectA)
       await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 })
         .toBe(`/app/project/${moveProjectA}`)
       await expandProjectConversations(page, moveProjectA)
@@ -4253,7 +4262,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
       await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: 15_000 })
       await expandDesktopRail(page)
-      await page.getByRole("link", { name: "Move target alpha", exact: true }).click()
+      await openProjectWorkspace(page, moveProjectA)
       await expect.poll(() => moveBindingScopeGets.filter((entry) => entry.scope === `project:${moveProjectA}`).length, {
         timeout: 10_000,
       }).toBeGreaterThan(0)
@@ -4271,7 +4280,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       await page.getByRole("menuitem", { name: "Move target alpha", exact: true }).click()
       await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(1)
 
-      await page.getByRole("link", { name: "Move target beta", exact: true }).click()
+      await openProjectWorkspace(page, moveProjectB)
       await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 })
         .toBe(`/app/project/${moveProjectB}`)
       await expect.poll(() => moveBindingScopeGets.filter((entry) => entry.scope === `project:${moveProjectB}`).length, {
@@ -4302,7 +4311,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
         scope: "direct", bindingAtRead: moveProjectA, sessionIds: [moveConversationB],
       })
 
-      await page.getByRole("link", { name: "Move target alpha", exact: true }).click()
+      await openProjectWorkspace(page, moveProjectA)
       await expect.poll(() => moveBindingScopeGets.filter((entry) => entry.scope === `project:${moveProjectA}`).length, {
         timeout: 10_000,
       }).toBeGreaterThan(targetReadsBeforeAck)
@@ -4313,7 +4322,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       await page.locator('[data-conversation-list="project-conversation"]')
         .locator(`[data-conversation-id="${moveConversationA}"]`).waitFor({ state: "visible", timeout: 10_000 })
 
-      await page.getByRole("link", { name: "Move target beta", exact: true }).click()
+      await openProjectWorkspace(page, moveProjectB)
       await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 })
         .toBe(`/app/project/${moveProjectB}`)
       await expect.poll(() => page.locator('[data-slot="composer-input"]').inputValue(), { timeout: 10_000 })
@@ -4385,7 +4394,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(1)
       const frozenRequest = moveBoundaryRequests[0]
 
-      await page.getByRole("link", { name: "Move target beta", exact: true }).click()
+      await openProjectWorkspace(page, moveProjectB)
       await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 })
         .toBe(`/app/project/${moveProjectB}`)
       const projectBDraft = `R195 ${code} keeps Project B mounted`
@@ -4404,7 +4413,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
         await page.locator('a[href="/app"]').first().click()
         await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 }).toBe("/app")
       } else {
-        await page.getByRole("link", { name: "Move target alpha", exact: true }).click()
+        await openProjectWorkspace(page, moveProjectA)
         await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 })
           .toBe(`/app/project/${moveProjectA}`)
       }

@@ -175,21 +175,27 @@
 /* A project row is the scope boundary. Keep its disclosure compact and place
  * only that project's owner-backed conversations beneath it; it must not look
  * like another top-level task section. */
-.projectConversationToggle {
-  position: absolute;
-  inset-inline-start: 0.15rem;
-  top: 0.22rem;
-  z-index: 1;
-  width: 1.5rem;
-  height: 1.5rem;
-  color: var(--muted-foreground);
-}
 .projectRow > :global([data-slot="sidebar-menu-button"]) { padding-inline-start: 0.5rem; }
-.projectConversationToggle svg { width: 0.875rem; height: 0.875rem; transition: transform var(--motion-fast) var(--ease-standard); }
-.projectConversationToggle[aria-expanded="false"] svg { transform: rotate(-90deg); }
-.projectConversationGroup { margin: 0.0625rem 0 0.375rem 1.45rem; min-width: 0; }
-.projectConversationGroup :global([data-conversation-list="project-conversation"]) { padding-inline: 0; }
-.projectConversationGroup :global([data-conversation-list="project-conversation"] [data-sidebar="menu-button"]) { min-height: 2rem; font-size: 0.8125rem; }
+.projectConversationGroup { margin: 0; min-width: 0; }
+.projectConversationGroup :global([data-conversation-list="project-conversation"]) { margin: 0; padding-inline: 0; }
+[data-desktop-rail="true"] .projectConversationGroup :global([data-conversation-list="project-conversation"]) { margin-top: 0; }
+.projectConversationGroup > p,
+.projectConversationGroup :global([data-conversation-list="project-conversation"]) > p {
+  display: flex;
+  min-height: 2.75rem;
+  align-items: center;
+  margin: 0;
+  padding: 0 0.5rem 0 2.25rem;
+  font-size: var(--rail-font-size);
+  line-height: 1.25rem;
+}
+.projectConversationGroup :global([data-conversation-list="project-conversation"] [data-sidebar="menu-button"]) {
+  padding-inline-start: 2.25rem;
+  font-size: var(--rail-font-size);
+}
+[data-desktop-rail="true"] .projectConversationGroup > p,
+[data-desktop-rail="true"] .projectConversationGroup :global([data-conversation-list="project-conversation"]) > p,
+[data-desktop-rail="true"] .projectConversationGroup :global([data-conversation-list="project-conversation"] [data-sidebar="menu-button"]) { min-height: var(--rail-row-height); }
 
 /* SVG paths are decorative; the shadcn control remains the complete hit
  * target at every browser zoom level. */
@@ -214,11 +220,6 @@
 [data-desktop-rail="true"] .navItem:hover { background: color-mix(in srgb, var(--accent) 70%, var(--card)); }
 [data-desktop-rail="true"] .navItem[data-active="true"],
 [data-desktop-rail="true"] .navItem[aria-current="page"] { background: var(--sidebar-accent); color: var(--foreground); font-weight: 400; }
-[data-desktop-rail="true"] .projectConversationToggle { inset-inline-start: 0.5rem; top: 0; width: 1.25rem; height: var(--rail-row-height); opacity: 0; }
-[data-desktop-rail="true"] .projectRow:hover .projectConversationToggle,
-[data-desktop-rail="true"] .projectRow:focus-within .projectConversationToggle { opacity: 1; }
-[data-desktop-rail="true"] .projectRow:hover :global([data-project-glyph]),
-[data-desktop-rail="true"] .projectRow:focus-within :global([data-project-glyph]) { visibility: hidden; }
 [data-desktop-rail="true"] .navItem[data-pointer-focus="true"]:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 2px;

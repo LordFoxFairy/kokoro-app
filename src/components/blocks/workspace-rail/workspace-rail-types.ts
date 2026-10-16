@@ -46,7 +46,7 @@ export type WorkspaceRailProps = {
   projectActive?: boolean
   /** Optional host action for the project-creation menu entry. */
   onCreateProject?: (input?: Readonly<{ name?: string; draft?: string }>) => void
-  /** Routes a project row's explicit rename affordance to the owner-backed editor. */
+  /** Routes the project options menu's rename action to the owner-backed editor. */
   onRequestProjectRename?: (projectId: string) => void
   /** Owner-confirmed project collection. A known projectHref alone is only a current-route shortcut. */
   projects?: readonly WorkspaceRailProject[]
