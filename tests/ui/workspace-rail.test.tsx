@@ -309,6 +309,42 @@ it("活动项目在侧栏展开其 own scope 的会话，不与直接任务混�
   expect(selectProjectConversation).toHaveBeenCalledWith({ kind: "project", projectRef: projectId }, "conv_project_1")
 })
 
+it.each([true, false])("项目展开独立于当前路由，主动收起后再次进入不反弹（初始活动=%s）", (initialActive) => {
+  const projectId = "project_22222222-2222-4222-8222-222222222222"
+  function RouteHarness() {
+    const [active, setActive] = useState(initialActive)
+    return <ThemeProvider><LocaleProvider>
+      <button onClick={() => setActive(false)}>前往资料库</button>
+      <button onClick={() => setActive(true)}>进入项目</button>
+      <WorkspaceRail collapsed={false} onToggleCollapse={() => {}} onNewChat={() => {}} chatHref="/app"
+        projectActive={active} projectHref={`/app/project/${projectId}`} projectListStatus="ready"
+        projects={[{ id: projectId, name: "产品规划", href: `/app/project/${projectId}`, active }]}
+        conversations={[]} activeId={null} awaitingIds={new Set()} onSelectConversation={() => {}}
+        onDeleteConversation={async () => true} onRenameConversation={() => {}} onOpenSettings={() => {}} onOpenNotifications={() => {}}
+        listLoading={false} listError={false} hasMore={false} onLoadMore={() => {}}
+        conversationReads={{
+          scope: active ? { kind: "project", projectRef: projectId } : { kind: "direct" }, identity: "same-admitted-reader", admitted: true,
+          read: (scope) => ({ conversations: scope.kind === "project" ? [{ id: "conv_project_1", title: "项目内会话" }] : [], loading: false, loadingMore: false, error: false, hasMore: false, refresh: () => {}, loadMore: () => {}, deleteConversation: async () => true, renameConversation: () => {} }),
+          ensureScope: () => {}, activeId: null, failedMoveScopeKey: null, onSelect: () => {}, onNewChat: () => {}, onMove: () => {},
+        }}
+      />
+    </LocaleProvider></ThemeProvider>
+  }
+  render(<RouteHarness />)
+  const project = () => screen.getByRole("button", { name: "产品规划" })
+  expect(project()).toHaveAttribute("aria-expanded", String(initialActive))
+  fireEvent.click(screen.getByRole("button", { name: "进入项目" }))
+  expect(project()).toHaveAttribute("aria-expanded", "true")
+  fireEvent.click(screen.getByRole("button", { name: "前往资料库" }))
+  expect(project()).toHaveAttribute("aria-expanded", "true")
+  expect(within(screen.getByRole("navigation", { name: "项目会话" })).getByRole("button", { name: "项目内会话" })).toBeInTheDocument()
+  expect(within(screen.getByRole("navigation", { name: "直接会话" })).queryByText("项目内会话")).toBeNull()
+  fireEvent.click(project())
+  fireEvent.click(screen.getByRole("button", { name: "进入项目" }))
+  expect(project()).toHaveAttribute("aria-expanded", "false")
+  expect(screen.queryByRole("navigation", { name: "项目会话" })).toBeNull()
+})
+
 it("已准入但 reader 尚未注册时显示加载态，不误报不可用", () => {
   renderRail({
     conversationReads: {

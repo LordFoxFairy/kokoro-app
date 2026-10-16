@@ -114,6 +114,20 @@ export function WorkspaceRailNavigation({
   // mounted, so it cannot issue a background session read merely because it is
   // visible in the project index.
   const [projectConversationExpansion, setProjectConversationExpansion] = useState<ReadonlyMap<string, boolean>>(new Map())
+  // Opening a project seeds a presentation choice once; leaving its route
+  // must not collapse the same scoped tasks. A recorded false is an explicit
+  // user choice and must not be overwritten by later route activation.
+  const newlyActiveProjects = orderedProjects.filter((project) =>
+    ((projectActive && project.href === projectHref) || project.active === true)
+    && !projectConversationExpansion.has(project.id),
+  )
+  if (conversationReads?.admitted !== false
+    && (projectListStatus === undefined || projectListStatus === "ready")
+    && newlyActiveProjects.length > 0) {
+    const next = new Map(projectConversationExpansion)
+    for (const project of newlyActiveProjects) next.set(project.id, true)
+    setProjectConversationExpansion(next)
+  }
   const [projectCreateOpen, setProjectCreateOpen] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false)
   const keyboardShortcuts = useKeyboardShortcuts()

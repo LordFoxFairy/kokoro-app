@@ -4,7 +4,7 @@
 - History 和延迟 URL 写入必须匹配当前 engine 的精确 scope pathname；跨 Direct/Project 的旧闭包不打开、清空或取消会话。新路由的 scope 自己恢复，未知地址不回落为 Direct。
 - 侧栏桌面密度按实测使用 14px 正文、13px 分组、36px 行；触屏 44px 命中区仅由显式 drawer 标记控制。“更多”按参考保留 Computer Use/Skills/个性化；Computer Use 未开放时明确禁用，不伪造可用能力。已启用的 scheduled 进入一级“自动化”（保持原正式路径和 mounted 导航），不再在更多重复；缺失/关闭时仍明确不可用。其他 manifest 独有入口保持原访问。
 
-- 项目整行仅披露自身任务，装饰 folder/chevron 不单独命中；右侧快捷 Link 进入 project.href 根工作区（不创建会话或改名），rename 只走项目选项菜单。无 scoped reader 的受控嵌入仍保持展开语义并明确不可用，不借 Direct 数据；Space/方向键/ESC 保排序，Enter 展开。项目空清单仅成功空读时显示“暂无任务”。
+- 项目整行仅披露自身任务，装饰 folder/chevron 不单独命中；右侧快捷 Link 进入 project.href 根工作区（不创建会话或改名），rename 只走项目选项菜单。无 scoped reader 的受控嵌入仍保持展开语义并明确不可用，不借 Direct 数据；Space/方向键/ESC 保排序，Enter 展开。项目空清单仅成功空读时显示“暂无任务”。首次进入活动项目只初始化一次展开意图，离开项目路由不收起；用户主动收起后再次进入不强制展开。
 
 - Direct 与首次展开/访问的 Project 各自由 AppFrame 内 keyed reader host 常驻持有，侧栏/主区共用同一 controller；折叠和路由切换只换视图与 engine 附着，不重建分页/命令队列。shell-local registry 仅发布稳定 controller 引用，身份/generation/admission 立即隔离旧投影；未注册明确 loading，不再创建 Independent reader 或跨身份全局缓存。Move revision 对各 scope 单调，只失效本次 source/target；运行结束刷新只比较同生命周期、已就绪且非水合中的 engine 状态，离开页面不冒充结束。
 
