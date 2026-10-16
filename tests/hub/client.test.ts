@@ -1526,6 +1526,39 @@ it("preserves catalog revision Skill ID separately from series and checksum for 
   });
 });
 
+it.each([
+  [undefined, "unknown"],
+  ["SKILL_HUB_PUBLISHER_TYPE_FUTURE", "unknown"],
+  ["SKILL_HUB_PUBLISHER_TYPE_MANUS_OFFICIAL", "official"],
+  ["SKILL_HUB_PUBLISHER_TYPE_COMMUNITY", "third_party"],
+])("catalog publisher %s carries only proven source classification", async (publisherType, scope) => {
+  const { createManusSkillHubClient } = await import("@/ui/skills/manus-skill-client");
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => jsonResponse(
+    String(input).endsWith("ListHubSkills")
+      ? { skills: [{
+          skillId: "publisher-series",
+          displayName: "Published skill",
+          currentVersion: { versionUid: "publisher-revision" },
+          ...(publisherType === undefined ? {} : { publisherType }),
+        }], tagOptions: {} }
+      : { userAddedSkills: [{ id: "publisher-series", installationId: "installation-publisher", added: true, enabled: false }], officialSkills: [] },
+  )));
+  const client = createManusSkillHubClient(createHubClient());
+  const result = await client.listSkillCatalog();
+  expect(result.skills).toHaveLength(1);
+  expect(result.skills[0]).toMatchObject({
+    skill_id: "publisher-series", revision_skill_id: "publisher-revision",
+    source_ref: "skill:publisher-revision", installation_id: "installation-publisher",
+    installed: true, enabled: false, scope,
+  });
+  // Missing metadata is not a third-party fact. The card remains readable and
+  // bound to its real installation, but must not enter either known filter.
+  for (const filter of ["official", "third_party"] as const) {
+    const filtered = await client.listSkillCatalog({ scope: filter });
+    expect(filtered.skills).toHaveLength(scope === filter ? 1 : 0);
+  }
+});
+
 const inspected = {
   source_ref: "skill:revision-1",
   revision: "4",

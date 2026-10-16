@@ -73,7 +73,7 @@ export function KokoroSkillsSurface(props: KokoroSkillsSurfaceProps) {
 function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kokoro", onOpenSettings, onCreateSkillWithAi, onTrySkill, projectReadBoundary }: KokoroSkillsSurfaceProps) {
   const t = useT()
   const readBoundary = projectReadBoundary ?? { admitted: preview, subject: preview ? "preview" : null, generation: 0 }
-  const publisherLabel = (skill: Pick<SkillCatalogCard, "scope">) => skill.scope === "third_party" ? t("skills.community") : brandName
+  const publisherLabel = (skill: Pick<SkillCatalogCard, "scope">) => skill.scope === "official" ? brandName : skill.scope === "third_party" ? t("skills.community") : undefined
   const categoryLabel = (value: CatalogSkillCategory) => t(CATEGORIES.find((item) => item.value === value)?.key ?? "skills.categoryCoding")
   // The standalone page and the embedded Settings page must consume the same
   // owner-backed Skills projection.  The generic Hub client still addresses
@@ -245,6 +245,7 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
       : catalog.data?.skills.find((skill) => skill.skill_id === detailSkill.skill_id) ?? detailSkill
     return { ...detailSkill, installed: current.installed === true, enabled: current.enabled === true }
   })()
+  const detailPublisher = currentDetailSkill === null ? undefined : publisherLabel(currentDetailSkill)
 
   return (
     <div className={styles.surface} data-testid="skills-surface" data-web-skin="kokoro">
@@ -337,6 +338,7 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
                 const installed = skill.installed
                 const actionPending = busy === stateKey
                 const categoryValues = skillCategories(skill)
+                const publisher = publisherLabel(skill)
                 return (
                   <Card
                     className={styles.card}
@@ -360,7 +362,7 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
                       <button type="button" className={styles.cardTitle} onClick={(event) => { detailRef.current = event.currentTarget; setDetailSkill(skill) }}>{skill.name}</button>
                       <p className={styles.cardDescription}>{skill.description}</p>
                       <div className={styles.cardMeta}>
-                        <span className={cn(styles.metaPill, styles.owner)}><BrandFallback aria-hidden="true" /><span>{publisherLabel(skill)}</span></span>
+                        {publisher === undefined ? null : <span className={cn(styles.metaPill, styles.owner)}><BrandFallback aria-hidden="true" /><span>{publisher}</span></span>}
                         {categoryValues.map((value) => <span className={styles.metaPill} key={value}>{categoryLabel(value)}</span>)}
                       </div>
                       <div className={styles.cardFooter}>
@@ -394,7 +396,7 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
         readBoundary={readBoundary}
         key={detailSkill?.skill_id ?? "closed"}
         skill={currentDetailSkill}
-        publisherLabel={detailSkill === null ? "" : publisherLabel(detailSkill)}
+        {...(detailPublisher === undefined ? {} : { publisherLabel: detailPublisher })}
         categoryLabels={detailSkill === null ? [] : skillCategories(detailSkill).map(categoryLabel)}
         open={detailSkill !== null}
         busy={detailSkill !== null && busy === actionIdentity(detailSkill)}

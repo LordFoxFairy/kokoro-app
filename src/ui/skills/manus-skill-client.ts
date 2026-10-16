@@ -94,8 +94,10 @@ async function readJson(url: string, init: RequestInit, signal?: AbortSignal): P
   } finally { clearTimeout(timer); void response?.body?.cancel().catch(() => undefined) }
 }
 
-function sourceKind(skill: HubSkill): "official" | "third_party" {
-  return skill.publisherType === "SKILL_HUB_PUBLISHER_TYPE_MANUS_OFFICIAL" ? "official" : "third_party"
+function sourceKind(skill: HubSkill): "official" | "third_party" | "unknown" {
+  if (skill.publisherType === "SKILL_HUB_PUBLISHER_TYPE_MANUS_OFFICIAL") return "official"
+  if (skill.publisherType === "SKILL_HUB_PUBLISHER_TYPE_COMMUNITY") return "third_party"
+  return "unknown"
 }
 
 function toCard(skill: HubSkill, added: ReadonlyMap<string, Readonly<{ installed: boolean; enabled: boolean; installationId?: string }>>): SkillCatalogCard {

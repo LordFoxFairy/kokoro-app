@@ -26,6 +26,8 @@
 browser-private 展示操作分开治理，均由 BFF 聚合实际 owner 事实。主页与 Settings 使用
 `hub/skills/catalog` 缓存命名空间，提交成功时按此前缀失活；目录没有 quota 投影，不请求旧 quota 路径。
 
+目录来源仅识别 owner 明确的 `MANUS_OFFICIAL` 与 `COMMUNITY` 发布者类型。缺失或未来值保留为 unknown，不猜为第三方、个人或品牌官方；卡片与详情省略无事实的发布者标签，series/revision 和安装状态不受影响，未知项只在“全部”中出现。这里的发布者来源不等同公开 `owner_type` 或 Hub/Device 安装来源。
+
 ## W3 第二阶段 B 当前边界
 正式 `/app/skills` 与 Settings Skills 共用 `personal-skills-read.tsx` 的单 ZIP 发布入口；`personal-skill-publish-dialog.tsx` 管本地输入/阶段和关闭重开同意图，`personal-skill-publish-flow.ts` 管 CreateDraft→Get→Begin→PUT→Complete→Validate→Publish 的同键恢复。Draft raw body ≤65,536 字节、Begin filename 先本地预检，输入错误可编辑重选，不先创建 Draft。Complete pending/unknown 只显示 partial，复核当前 attempt 后可继续，旧 attempt 明确重新开始；首轮未知 Publish 只核 by-ID，后续显式复核仍 404 才原 key/零 body 重发。只有 ACTIVE Publish 回执或本人 by-ID 核回显示发布，401/403 原码失败且不重发。网络/签名 PUT 和严格 wire 在 `src/hub/skill-publish-client.ts`。旧 `SkillUploadDialog`/GitHub import/preview-confirm 仍仅显式 preview fixture；下文旧说明只适用于 preview，不是正式 API。六项 BFF 写候选 default-off，真浏览器 owner 验收另门。
 
