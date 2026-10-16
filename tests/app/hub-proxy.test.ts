@@ -1436,11 +1436,38 @@ it("personal installation reads preserve strict owner headers and reject DELETE 
 });
 
 it.each([
+  ["personal", "财务报告"],
+  ["official", "report builder"],
+  ["third_party", "📄".repeat(1024)],
+])("forwards installation source %s and literal search to the formal BFF operation", async (sourceKind, query) => {
+  const { GET } = await import("@/app/api/hub/[...path]/route");
+  vi.mocked(requestWithDomain).mockResolvedValue(new Response(JSON.stringify({ data: [] }), {
+    headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "installation-filter" },
+  }));
+  const search = new URLSearchParams({ source_kind: sourceKind!, query: query!, enabled: "false", limit: "50" });
+  const response = await GET(new Request(`http://localhost/api/hub/self/skill-installations?${search}`), params(["self", "skill-installations"]));
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ data: [] });
+  expect(requestWithDomain).toHaveBeenCalledTimes(1);
+  const upstreamUrl = new URL(vi.mocked(requestWithDomain).mock.calls[0]![0]);
+  expect(upstreamUrl.pathname).toBe("/v1/skill-installations");
+  expect(upstreamUrl.searchParams.get("source_kind")).toBe(sourceKind);
+  expect(upstreamUrl.searchParams.get("query")).toBe(query);
+  expect(upstreamUrl.searchParams.get("enabled")).toBe("false");
+});
+
+it.each([
   ["GET", "?enabled=0", null, null],
   ["GET", "?installed=false&installed=true", null, null],
   ["GET", "?scope=personal", null, null],
   ["GET", "?limit=0", null, null],
   ["GET", "?cursor=", null, null],
+  ["GET", "?source_kind=hub", null, null],
+  ["GET", "?source_kind=personal&source_kind=official", null, null],
+  ["GET", "?query=", null, null],
+  ["GET", "?query=%20", null, null],
+  ["GET", "?query=one&query=two", null, null],
+  ["GET", `?query=${"a".repeat(1025)}`, null, null],
   ["GET", "", "key", null],
   ["POST", "?tenant=forged", "key", '{"source_ref":"skill:s1"}'],
   ["POST", "", "key,second", '{"source_ref":"skill:s1"}'],

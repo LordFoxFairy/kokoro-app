@@ -14,7 +14,9 @@
 
 ## 当前投影身份
 
-已绑定 owner 的安装卡片、探索目录分页合并与 mutation pending/error/enabled 状态统一使用 `skill_id`（series ID），不以显示名判同。重命名保持同一状态，同名不同 series 不互相覆盖；仅无 owner binding 的 preview entry 使用 scope/name 显示键。GitHub 导入后的排序提示绑定返回的精确 revision Skill ID。
+已绑定 owner 的安装卡片、探索目录分页合并与 mutation pending/error/enabled 状态统一使用 `skill_id`（series ID），不以显示名判同。重命名保持同一状态，同名不同 series 不互相覆盖；无 owner binding 的 preview entry 使用独立标签的 scope/name tuple，不与真实 ID 或含分隔符的名称碰撞。GitHub 导入后的排序提示绑定返回的精确 revision Skill ID。
+
+安装列表的 `source_kind`、`query` 由客户端和同源 adapter 校验并转发给 BFF `/v1/skill-installations`，由 owner 在分页前筛选；不在浏览器先截取一页再假装完整过滤。搜索长度按正式契约的 Unicode scalar（最多 1024）计数，重复或未知参数仍拒绝。
 
 ## V1 目录读取
 

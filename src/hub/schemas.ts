@@ -667,7 +667,7 @@ export const installationListQuerySchema = z
       .string()
       .trim()
       .min(1)
-      .max(1024)
+      .refine((value) => [...value].length <= 1024)
       .refine((value) => !/[\uD800-\uDFFF]/u.test(value))
       .optional(),
     limit: z.number().int().min(1).max(100).optional(),

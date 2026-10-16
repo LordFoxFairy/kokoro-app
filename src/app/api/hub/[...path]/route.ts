@@ -1060,7 +1060,7 @@ async function proxyInstallation(
     if (
       [...query.keys()].some(
         (key) =>
-          !["installed", "enabled", "limit", "cursor"].includes(key) ||
+          !["installed", "enabled", "limit", "cursor", "source_kind", "query"].includes(key) ||
           query.getAll(key).length !== 1,
       )
     )

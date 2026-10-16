@@ -5,7 +5,9 @@ export type SkillsPool = { skills: SkillCard[]; quota: SkillQuota | null };
 /** Owner series identity outlives titles and is shared by pool/catalog actions.
  * Display-only preview entries have no owner binding and stay in their own key space. */
 export function skillStateKey(scope: string, name: string, skillId?: string): string {
-  return skillId === undefined ? `${scope}/${name}` : `skill/${skillId}`;
+  return skillId === undefined
+    ? JSON.stringify(["preview", scope, name])
+    : JSON.stringify(["skill", skillId]);
 }
 
 /** Cursor pages may repeat an owner series after a refresh; only that same

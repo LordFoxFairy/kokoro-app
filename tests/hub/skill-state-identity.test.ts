@@ -22,6 +22,10 @@ describe("Skill projection identity", () => {
   it("does not confuse an owner identity with a display-only preview entry", () => {
     expect(key("official", "Report builder", "series-a"))
       .not.toBe(skillStateKey("official", "Report builder"))
+    expect(key("official", "Report builder", "series-a"))
+      .not.toBe(skillStateKey("skill", "series-a"))
+    expect(skillStateKey("a/b", "c"))
+      .not.toBe(skillStateKey("a", "b/c"))
   })
 })
 
@@ -51,4 +55,14 @@ it("keeps same-name catalog series on separate cursor pages and replaces only re
 it("preserves the final opaque cursor and a real empty catalog", () => {
   expect(mergeSkillCatalogPages([{ skills: [card("a")], next_cursor: "NEXT" }]).next_cursor).toBe("NEXT")
   expect(mergeSkillCatalogPages([])).toEqual({ skills: [], next_cursor: null })
+})
+
+it("keeps owner-bound and display-only cards separate even when names mimic key syntax", () => {
+  const owner = card("series-a")
+  const preview: SkillCatalogCard = {
+    scope: "skill", name: "series-a", description: "Display-only entry",
+    content_hash: "preview", installed: false, enabled: false,
+  }
+  expect(mergeSkillCatalogPages([{ skills: [owner, preview], next_cursor: null }]).skills)
+    .toEqual([owner, preview])
 })
