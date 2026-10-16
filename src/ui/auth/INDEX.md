@@ -1,3 +1,21 @@
+## SET33 两条原生withdraw测试的就绪前置（2026-10-15；D0，仅现测试）
+
+基线Web d7f5d5d41ce4740de219480ccd6d7bf7d9166d40，939 tracked clean；runtime_audit唯一writer仅现native测试，931保护/Root7。Root资源/Git/docs/独审/正常运行；全部product source及原计数/安全assert/timeout/mock/cleanup仍保护。
+
+仅两初始native withdraw测试开启cold/reload请求到达前置；所有产品源码、其余调用和原断言保护。
+
+## SET32 原生登录请求顺序诊断（2026-10-15；D0，仅现测试）
+
+基线Web 52b535789b93ebac740db7aa8e5296c82b6622b6，939 tracked clean；runtime_audit唯一writer仅tests/system/oidc-rp-next-http.integration.test.ts，931保护/Root7。Root设计/docs/独审/资源/Git与正常实例。现runtime修补已接收，终态20focused/3987PASS7旧FAIL/Playwright20PASS4原SKIP；不能据此认定R175/R177旧native多请求根因。
+
+现native HTTP集成测试仅新增可关闭的请求顺序诊断；原helper、断言和product source逐字保护。
+
+## SET31 runtime请求退休（2026-10-15；D0，先tests-only）
+
+基线Web dc26502bfa47ba0c22422623118b455d46644be0，939 tracked clean；runtime_audit唯一writer，1既有hook/1既有test/930最终保护/Root7，先仅tests其余931保护。Root设计/docs/独审/资源/Git/正常激活/CUA。AppGate及原生R175/R177全部源码/oracle保护；不扩大trusted admission接口，不把hook负控冒称原生多请求根因。
+
+现runtime hook owned dispatch/commit退休与局部scope呈现，AppGate接口和原生观察计数保护；原9测试仅追加负控。
+
 # ui/auth — 登录与会话态门面
 
 ## 职责

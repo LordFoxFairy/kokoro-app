@@ -24,6 +24,7 @@ type SettingsNavigationRailProps = {
   activeTabRef: RefObject<HTMLButtonElement | null>;
   onSelectTab: (tab: SettingsTab) => void;
   moreLabel: string;
+  unavailableId: string;
   isFiltered: boolean;
   groupLabel: (entry: SettingsNavigationEntry) => string | null;
 };
@@ -39,6 +40,7 @@ export function SettingsNavigationRail({
   activeTabRef,
   onSelectTab,
   moreLabel,
+  unavailableId,
   isFiltered,
   groupLabel,
 }: SettingsNavigationRailProps) {
@@ -206,6 +208,7 @@ export function SettingsNavigationRail({
                   data-testid={`settings-placeholder-${entry.id}`}
                   data-compact-primary="false"
                   aria-disabled="true"
+                  aria-describedby={unavailableId}
                 >
                   <Icon aria-hidden="true" />
                   <span className={styles.tabLabel}>{entry.label}</span>

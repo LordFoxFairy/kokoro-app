@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { CircleHelp, KeyRound, LogOut, Sparkles } from "lucide-react"
 
@@ -12,6 +12,12 @@ import { Spinner } from "@/components/ui/spinner"
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Dialog, DialogClose, DialogContent, DialogFooter, DialogTitle } from "@/components/ui/dialog"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
+
+import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
+import { useAccountProfileEditor } from "../use-account-profile-editor"
+import { useAccountProfile } from "../use-account-profile"
+
+import { AccountDevicesDialog } from "./account-devices-dialog"
 
 import styles from "./settings-sections.module.css"
 
@@ -48,40 +54,56 @@ function LoginProviderIcon({ provider }: { provider: "google" | "microsoft" | "a
 export function AccountCard({
   brandName,
   preview = false,
-  subject = null,
+  readBoundary,
   loginMethodsOpen,
   onLoginMethodsChange,
   onOpenSubscription,
 }: {
   brandName?: string
   preview?: boolean
-  /**
-   * This is the already-admitted Product Session subject supplied by the
-   * shell. Account does not issue a second session request just to redraw
-   * information that the shell has already verified.
-   */
-  subject?: string | null
+  readBoundary?: ProjectReadBoundary
   loginMethodsOpen: boolean
   onLoginMethodsChange: (open: boolean) => void
   onOpenSubscription: () => void
 }) {
   const t = useT()
+  const unavailableActionsId = useId()
   const router = useRouter()
   const previewAccount = makePreviewAccount(t)
   const [previewAccountEdits, setPreviewAccountEdits] = useState<Partial<AccountProjection>>({})
+  const live = useAccountProfile(preview, readBoundary);
+  const nameEditor = useAccountProfileEditor(preview ? "" : live.scope, live.profile, live.reload);
   const account = preview
     ? { ...previewAccount, ...previewAccountEdits }
-    : subject === null
-      ? null
-      : {
-          displayName: subject,
-          email: "",
-          userId: subject,
-          planLabel: "",
-          credits: "",
+    : live.profile
+      ? {
+          displayName: live.profile.name,
+          email: live.profile.email,
+          userId: live.profile.subject,
+          planLabel: null,
+          credits: null,
           loginMethods: [],
         }
-  const [loggingOut, setLoggingOut] = useState(false)
+      : null;
+  const [devicesOpen, setDevicesOpen] = useState(false)
+  const logoutScope = JSON.stringify([preview, readBoundary?.admitted ?? false, readBoundary?.subject ?? null, readBoundary?.generation ?? null])
+  const [logoutState, setLogoutState] = useState({ scope: logoutScope, busy: false, failed: false })
+  if (logoutState.scope !== logoutScope) {
+    setLogoutState({ scope: logoutScope, busy: false, failed: false })
+  }
+  const loggingOut = logoutState.scope === logoutScope && logoutState.busy
+  const logoutFailed = logoutState.scope === logoutScope && logoutState.failed
+  const logoutOperation = useRef<{ controller: AbortController; clear: () => void } | null>(null)
+  const currentLogoutScope = useRef(logoutScope)
+  useLayoutEffect(() => {
+    currentLogoutScope.current = logoutScope
+    return () => {
+      const operation = logoutOperation.current
+      logoutOperation.current = null
+      operation?.controller.abort(new DOMException("Logout retired", "AbortError"))
+      operation?.clear()
+    }
+  }, [logoutScope])
   const [emailOpen, setEmailOpen] = useState(false)
   const [emailStep, setEmailStep] = useState<"verify" | "replace">("verify")
   const [verificationCode, setVerificationCode] = useState("")
@@ -91,23 +113,121 @@ export function AccountCard({
   const [verificationBusy, setVerificationBusy] = useState<"email" | "delete" | null>(null)
   const [deletingAccount, setDeletingAccount] = useState(false)
   const [loginMethodBusy, setLoginMethodBusy] = useState<AccountProjection["loginMethods"][number]["id"] | null>(null)
-  const [copied, setCopied] = useState(false)
+  const [copyState, setCopyState] = useState<{
+    scope: string;
+    status: "copied" | "failed";
+  } | null>(null);
+  const copyScope = preview ? "preview" : live.scope;
+  const copyRef = useRef({ scope: copyScope, version: 0, retired: false });
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
+  useLayoutEffect(() => {
+    copyRef.current = {
+      scope: copyScope,
+      version: copyRef.current.version + 1,
+      retired: false,
+    };
+    clearTimeout(copyTimer.current);
+    return () => {
+      copyRef.current.retired = true;
+      copyRef.current.version++;
+      clearTimeout(copyTimer.current);
+    };
+  }, [copyScope]);
+  useEffect(
+    () => () => {
+      copyRef.current.retired = true;
+      clearTimeout(copyTimer.current);
+    },
+    [],
+  );
+  const copied =
+    copyState?.scope === copyScope && copyState.status === "copied";
+  const copyUserId = async () => {
+    if (!account?.userId) return;
+    const active = copyRef.current;
+    const version = ++active.version;
+    clearTimeout(copyTimer.current);
+    try {
+      await navigator.clipboard.writeText(account.userId);
+      if (
+        active !== copyRef.current ||
+        active.retired ||
+        version !== active.version
+      )
+        return;
+      setCopyState({ scope: copyScope, status: "copied" });
+      copyTimer.current = setTimeout(() => {
+        if (
+          active === copyRef.current &&
+          !active.retired &&
+          version === active.version
+        )
+          setCopyState(null);
+      }, 1200);
+    } catch {
+      if (
+        active === copyRef.current &&
+        !active.retired &&
+        version === active.version
+      )
+        setCopyState({ scope: copyScope, status: "failed" });
+    }
+  };
+
 
   const logout = async (): Promise<void> => {
-    setLoggingOut(true)
-    if (preview) {
-      router.push("/")
-      return
+    if (logoutOperation.current) return
+    const controller = new AbortController()
+    const deadline = performance.now() + 10_000
+    const timer = setTimeout(() => controller.abort(new DOMException("Logout timed out", "TimeoutError")), 10_000)
+    let rejectAbort!: (reason: unknown) => void
+    const interrupted = new Promise<never>((_resolve, reject) => { rejectAbort = reject })
+    // Preview and synchronous client failures can finish before the race is attached.
+    void interrupted.catch(() => undefined)
+    const abort = () => rejectAbort(controller.signal.reason)
+    controller.signal.addEventListener("abort", abort, { once: true })
+    const operation = {
+      controller,
+      clear: () => {
+        clearTimeout(timer)
+        controller.signal.removeEventListener("abort", abort)
+      },
+    }
+    logoutOperation.current = operation
+    const active = () => logoutOperation.current === operation && currentLogoutScope.current === logoutScope && !controller.signal.aborted
+    setLogoutState({ scope: logoutScope, busy: true, failed: false })
+    let handedOff = false
+    const navigate = (url: string) => {
+      if (!active()) return
+      if (performance.now() >= deadline) {
+        controller.abort(new DOMException("Logout timed out", "TimeoutError"))
+        return
+      }
+      window.location.assign(url)
+      handedOff = true
+      operation.clear()
     }
     try {
-      await endProductSession()
+      if (preview) {
+        router.push("/")
+        handedOff = true
+      } else {
+        await Promise.race([endProductSession(navigate, controller.signal), interrupted])
+      }
     } catch {
-      // 登出失败也回首页：信封若仍在，首页闸会重新裁决。
+      if (!handedOff && logoutOperation.current === operation && currentLogoutScope.current === logoutScope) {
+        logoutOperation.current = null
+        setLogoutState({ scope: logoutScope, busy: false, failed: true })
+      }
+    } finally {
+      operation.clear()
     }
-    // Product sign-out owns the issuer confirmation navigation.
+    // A confirmed handoff stays busy until navigation leaves this component.
   }
 
-  const displayName = account?.displayName ?? ""
+  const displayName = account?.displayName ?? "—"
   const initial = (displayName.trim().charAt(0) || "K").toUpperCase()
   const saveName = async (name: string): Promise<void> => {
     if (!preview || !account || !name.trim() || name.trim() === account.displayName) return
@@ -163,22 +283,24 @@ export function AccountCard({
     }
   }
 
-  if (preview && loginMethodsOpen) {
+  if (loginMethodsOpen && !preview) return <p role="status">{t("firstSite.unavailable")}</p>
+
+  if (loginMethodsOpen) {
     return (
       <div className={styles.loginMethods} data-testid="settings-login-methods">
         <div className={styles.loginProviderList}>
-          {(account?.loginMethods ?? previewAccount.loginMethods).map((method) => (
+          {(preview ? account?.loginMethods ?? previewAccount.loginMethods : []).map((method) => (
             <div className={styles.loginProvider} key={method.id}>
               <span className={styles.providerMark} data-provider={method.id}><LoginProviderIcon provider={method.id} /></span>
               <div><strong>{method.label}</strong>{method.account ? <span>{method.account}</span> : null}</div>
-              <Button variant="outline" size="sm" type="button" disabled={loginMethodBusy !== null} onClick={() => void toggleLoginMethod(method)}>
+              <Button variant="outline" size="sm" type="button" disabled={!preview || loginMethodBusy !== null} onClick={() => void toggleLoginMethod(method)}>
                 {loginMethodBusy === method.id ? <Spinner aria-hidden="true" /> : null}
                 {method.connected ? t("settings.disconnect") : t("settings.connect")}
               </Button>
             </div>
           ))}
         </div>
-        <div className={styles.passkeyHead}><div><strong>{t("settings.passkey")}</strong><span>{t("settings.passkeyHint")}</span></div><Button variant="outline" size="sm">{t("settings.addPasskey")}</Button></div>
+        <div className={styles.passkeyHead}><div><strong>{t("settings.passkey")}</strong><span>{t("settings.passkeyHint")}</span></div><Button variant="outline" size="sm" disabled={!preview}>{t("settings.addPasskey")}</Button></div>
         <Empty className={styles.passkeyEmpty}>
           <EmptyMedia><KeyRound aria-hidden="true" /></EmptyMedia>
           <EmptyHeader>
@@ -192,14 +314,96 @@ export function AccountCard({
 
   return (
     <div className={styles.accountSettings} data-settings-card data-testid="settings-account">
+      <AccountDevicesDialog open={devicesOpen} onOpenChange={setDevicesOpen} preview={preview} {...(readBoundary === undefined ? {} : { readBoundary })} />
+      {!preview && live.scope && live.phase==="loading" ? <p role="status">{t("billing.loading")}</p> : null}
+      {!preview && live.phase==="error" ? <div role="alert">{t("billing.loadError")}<Button variant="outline" size="sm" onClick={live.retry}>{t("billing.retry")}</Button></div> : null}
+      {copyState?.scope===copyScope && copyState.status==="failed" ? <p role="alert">{t("share.projectCopyFailed")}</p> : null}
       <div className={styles.accountIdentityRow}>
         <div className={styles.identity}>
           <span className={styles.identityAvatar} aria-hidden>{initial}</span>
           <div className={styles.identityText}>
             <span className={styles.identityFieldLabel}>{t("settings.fullName")}</span>
-            {preview
-              ? <Input className={styles.identityInput} defaultValue={displayName} aria-label={t("settings.fullName")} onBlur={(event) => void saveName(event.currentTarget.value)} />
-              : <strong className={styles.identityValue} data-testid="settings-account-subject">{displayName}</strong>}
+            <Input
+              className={styles.identityInput}
+              value={
+                preview
+                  ? displayName
+                  : nameEditor.initialized
+                    ? nameEditor.draft
+                    : "—"
+              }
+              onChange={(event) => {
+                if (preview)
+                  setPreviewAccountEdits((current) => ({
+                    ...current,
+                    displayName: event.target.value,
+                  }));
+                else nameEditor.change(event.target.value);
+              }}
+              aria-label={t("settings.fullName")}
+              aria-invalid={!preview && nameEditor.phase === "invalid"}
+              onBlur={(event) => {
+                if (preview) void saveName(event.currentTarget.value);
+              }}
+              disabled={!preview && !nameEditor.editable}
+            />
+            {!preview ? (
+              <div className={styles.nameActions}>
+                <Button
+                  size="sm"
+                  type="button"
+                  disabled={!nameEditor.canSave}
+                  onClick={() => void nameEditor.save()}
+                >
+                  {t("settings.name.save")}
+                </Button>
+                {nameEditor.phase === "submitting" ? (
+                  <p role="status">{t("settings.name.saving")}</p>
+                ) : null}
+                {nameEditor.phase === "saved" ? (
+                  <p role="status">{t("settings.name.saved")}</p>
+                ) : null}
+                {nameEditor.phase === "invalid" ? (
+                  <p role="alert">{t("settings.name.invalid")}</p>
+                ) : null}
+                {["conflict", "reconciliationRequired", "readFailed"].includes(
+                  nameEditor.phase,
+                ) ? (
+                  <div role="alert">
+                    <p>{t("settings.name.readRequired")}</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void nameEditor.retryRead()}
+                    >
+                      {t("billing.retry")}
+                    </Button>
+                  </div>
+                ) : null}
+                {nameEditor.phase === "review" ? (
+                  <div role="alert">
+                    <p>{t("settings.name.review")}</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={nameEditor.adoptServer}
+                    >
+                      {t("settings.name.adopt")}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={nameEditor.keepDraft}
+                    >
+                      {t("settings.name.keep")}
+                    </Button>
+                  </div>
+                ) : null}
+                {nameEditor.phase === "rejected" ? (
+                  <p role="alert">{t("settings.name.rejected")}</p>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         </div>
         <Button variant="outline" size="icon-sm" type="button" aria-label={t("settings.logout")} data-testid="settings-logout" onClick={() => void logout()} disabled={loggingOut}>
@@ -207,48 +411,57 @@ export function AccountCard({
         </Button>
       </div>
 
-      {preview ? (
-        <div className={styles.planCard}>
-          <div className={styles.planHeader}><strong>{account?.planLabel}</strong><Button variant="default" size="sm" type="button" onClick={onOpenSubscription}>{t("firstSite.upgrade")}</Button></div>
-          <div className={styles.planBody} data-slot="account-plan-body">
-            <div className={styles.creditGroup} data-slot="account-credit-group">
-              <div className={styles.creditTotal}><span><Sparkles />{t("settings.creditsMenu")}<CircleHelp /></span><strong>{account?.credits}</strong></div>
-            </div>
+      {logoutFailed ? <p role="alert">{t("settings.logoutUnconfirmed")}</p> : null}
+
+      <div className={styles.planCard}>
+        <div className={styles.planHeader}><strong>{account?.planLabel ?? "—"}</strong><Button variant="default" size="sm" type="button" onClick={onOpenSubscription}>{t("firstSite.upgrade")}</Button></div>
+        <div className={styles.planBody} data-slot="account-plan-body">
+          <div className={styles.creditGroup} data-slot="account-credit-group">
+            <div className={styles.creditTotal}><span><Sparkles />{t("settings.creditsMenu")}<CircleHelp /></span><strong>{account?.credits ?? "—"}</strong></div>
           </div>
         </div>
-      ) : null}
+      </div>
 
+      {/* Keep the account sheet's information architecture intact without
+       * inventing identity data that the current Web contract does not
+       * provide. The unavailable values intentionally remain em dashes. */}
+      {!preview ? <FieldDescription id={unavailableActionsId}>{t("settings.accountActionsUnavailable")}</FieldDescription> : null}
       <div className={styles.accountDetailRows}>
         <div className={styles.accountDetailRow}>
           <div>
-            <strong>{t("settings.userId")}</strong>
-            <span>{account?.userId ?? ""}</span>
+            <strong>{t("settings.email")}</strong>
+            <span>{account?.email ?? "—"}</span>
           </div>
-          <Button variant="outline" size="sm" type="button" disabled={!account?.userId} onClick={() => { if (account?.userId) void navigator.clipboard.writeText(account.userId).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1200) }) }}>{copied ? t("settings.copied") : t("settings.copyUserId")}</Button>
+          <Button variant="outline" size="sm" type="button" aria-describedby={!preview ? unavailableActionsId : undefined} disabled={!preview || !account?.email} onClick={() => setEmailOpen(true)}>{t("settings.changeEmail")}</Button>
         </div>
-        {preview ? <>
-          <div className={styles.accountDetailRow}>
-            <div>
-              <strong>{t("settings.email")}</strong>
-              <span>{account?.email}</span>
-            </div>
-            <Button variant="outline" size="sm" type="button" onClick={() => setEmailOpen(true)}>{t("settings.changeEmail")}</Button>
+        <div className={styles.accountDetailRow}>
+          <div>
+            <strong>{t("settings.userId")}</strong>
+            <span>{account?.userId ?? "—"}</span>
           </div>
-          <div className={styles.accountDetailRow}>
-            <div>
-              <strong>{t("settings.loginMethod")}</strong>
-              <span>{t("settings.loginMethodHint", { brand: brandName ?? "Kokoro" })}</span>
-            </div>
-            <Button variant="outline" size="sm" type="button" onClick={() => onLoginMethodsChange(true)}>{t("settings.manage")}</Button>
+          <Button variant="outline" size="sm" type="button" disabled={!account?.userId} onClick={() => void copyUserId()}>{copied ? t("settings.copied") : t("settings.copyUserId")}</Button>
+        </div>
+        <div className={styles.accountDetailRow}>
+          <div>
+            <strong>{t("settings.loginMethod")}</strong>
+            <span>{t("settings.loginMethodHint", { brand: brandName ?? "Kokoro" })}</span>
           </div>
-          <div className={`${styles.accountDetailRow} ${styles.dangerRow}`}>
-            <div>
-              <strong>{t("settings.deleteAccount")}</strong>
-              <span>{t("settings.deleteAccountHint")}</span>
-            </div>
-            <Button variant="outline" size="sm" type="button" onClick={() => setDeleteOpen(true)}>{t("settings.deleteAccount")}</Button>
+          <Button variant="outline" size="sm" type="button" aria-describedby={!preview ? unavailableActionsId : undefined} onClick={() => onLoginMethodsChange(true)} disabled={!preview}>{t("settings.manage")}</Button>
+        </div>
+        <div className={styles.accountDetailRow}>
+          <div>
+            <strong>{t("settings.devices.title")}</strong>
+            <span>{t("settings.devices.description")}</span>
           </div>
-        </> : null}
+          <Button variant="outline" size="sm" type="button" aria-label={t("settings.devices.title")} disabled={preview || !readBoundary?.admitted || readBoundary.subject === null} onClick={() => setDevicesOpen(true)}>{t("settings.manage")}</Button>
+        </div>
+        <div className={`${styles.accountDetailRow} ${styles.dangerRow}`}>
+          <div>
+            <strong>{t("settings.deleteAccount")}</strong>
+            <span>{t("settings.deleteAccountHint")}</span>
+          </div>
+          <Button variant="outline" size="sm" type="button" aria-describedby={!preview ? unavailableActionsId : undefined} onClick={() => setDeleteOpen(true)} disabled={!preview}>{t("settings.deleteAccount")}</Button>
+        </div>
       </div>
 
       <Dialog open={emailOpen} onOpenChange={setEmailOpen}>

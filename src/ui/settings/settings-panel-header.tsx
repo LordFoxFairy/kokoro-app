@@ -38,6 +38,10 @@ function panelTitle(
       return t("settings.creditsTitle");
     case "subscription":
       return t("settings.subTitle");
+    case "data-management":
+      return t("settings.dataManagementTitle");
+    case "help":
+      return t("settings.helpTitle");
     case "team":
       return t("rail.navTeams");
   }

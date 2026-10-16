@@ -67,6 +67,7 @@ type SettingsModalProps = {
   // 服务端按 host 解析的站点品牌名(SITE-REAL);缺省回退 Kokoro。
   brandName?: string;
   preview?: boolean;
+  onArchiveChanged?: (state: import("@/lib/archived-tasks.schema").ArchiveState) => void;
   readBoundary?: import("@/ui/auth/use-session-state").ProjectReadBoundary;
   // 打开时的初始 tab(shell 从入口/URL 传入);变化即重置内部 tab(支持重开切 tab)。
   initialTab: SettingsTab;
@@ -87,6 +88,7 @@ export function SettingsModal({
   brandName,
   preview = false,
   readBoundary,
+  onArchiveChanged,
   initialTab,
   initialSkillsScope,
   onClose,
@@ -203,9 +205,10 @@ export function SettingsModal({
             // Let the browser reveal a deep-linked tab in the same scrolling
             // rail that owns keyboard focus. Preventing scroll here left the
             // selected Skills tab off-screen after a hard refresh.
-            activeTabRef.current?.focus();
+            activeTabRef.current?.focus({ preventScroll: true });
             window.requestAnimationFrame(() => {
-              activeTabRef.current?.focus();
+              const modal = activeTabRef.current?.closest('[data-testid="settings-modal"]');
+              if (!modal?.contains(document.activeElement)) activeTabRef.current?.focus({ preventScroll: true });
             });
           }}
           onCloseAutoFocus={(event) => {
@@ -245,6 +248,7 @@ export function SettingsModal({
 
               <SettingsPanel
                 activeTab={tab}
+                {...(onArchiveChanged === undefined ? {} : { onArchiveChanged })}
                 {...(resolvedInitialSkillsScope === undefined ? {} : { initialSkillsScope: resolvedInitialSkillsScope })}
                 brandName={resolvedBrandName}
                 preview={preview}

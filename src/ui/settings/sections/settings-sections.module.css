@@ -1,5 +1,5 @@
 /* 设置分区内容皮肤。模态外壳由 settings-modal.module.css 负责；这里
-   只保留 Account / Appearance / Chat 三个分区实际使用的 class。 */
+   保留各设置分区实际使用的 class。 */
 
 .card {
   border: 1px solid var(--border);
@@ -98,6 +98,7 @@
 
 .generalSettings .select[data-slot="select-trigger"] {
   width: 13rem;
+  max-width: 100%;
   /* Settings uses the same compact desktop control as Manus. The shared
    * Web button contract intentionally preserves a 44px touch minimum, but
    * that minimum must not leak into this desktop dialog and push every
@@ -190,6 +191,7 @@
 
 .chatPreferencesSection .select[data-slot="select-trigger"] {
   width: 13rem;
+  max-width: 100%;
   height: 2.25rem;
   min-height: 0;
   border-color: rgb(255 255 255 / 20%);
@@ -291,6 +293,7 @@
 
 .themeChoices {
   display: flex;
+  flex-wrap: wrap;
   width: 100%;
   align-items: flex-start;
   gap: 0.5rem;
@@ -407,9 +410,10 @@
   box-sizing: border-box;
   margin-top: 1rem;
   padding: 0 1rem;
-  border: 1px solid rgb(0 0 0 / 6%);
+  border: 1px solid var(--border);
   border-radius: 12px;
-  background: rgb(250 250 250);
+  background: var(--secondary);
+  color: var(--foreground);
 }
 
 .planHeader {
@@ -422,7 +426,7 @@
 .planHeader {
   height: 3.5625rem;
   padding: 0.75rem 0;
-  border-bottom: 1px dashed rgb(0 0 0 / 14%);
+  border-bottom: 1px dashed var(--border);
 }
 .planHeader strong {
   font-family:
@@ -1047,6 +1051,11 @@
 }
 
 @media (max-width: 480px) {
+  .chatPreferenceRow {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
   .accountSettings[data-settings-card] {
     padding-top: 1rem;
   }
@@ -1263,6 +1272,46 @@
   color: var(--muted-foreground);
   font-size: 0.8125rem;
   line-height: 1.125rem;
+}
+
+.communicationFeedback {
+  margin-block: 0.75rem;
+  color: var(--muted-foreground);
+}
+.communicationFeedback button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.devicesDialog { max-height: min(85dvh, 48rem); overflow-y: auto; }
+.deviceRow { display: grid; gap: var(--spacing-2, 0.5rem); border-block-end: 1px solid var(--border); padding-block: 1rem; overflow-wrap: anywhere; }
+
+.nameActions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.nameActions p { color: var(--muted-foreground); font-size: 0.875rem; }
+
+.personalizationImport {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 1.5rem 0;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+.personalizationImport h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+.personalizationImport p,
+.personalizationUnavailable {
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+}
+.personalizationImport p {
+  margin: 0;
 }
 
 /* Initial reads are silent and the cached snapshot keeps this section stable.

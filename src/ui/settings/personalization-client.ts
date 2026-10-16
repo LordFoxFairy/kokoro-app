@@ -1,128 +1,91 @@
-import { z } from "zod";
+import { PersonalizationClientError } from "./personalization-error";
+import { requestPersonalization } from "./personalization-request";
+import {
+  personalizationErrorSchema,
+  personalizationResponseSchema,
+  personalizationSaveResponseSchema,
+  type PersonalizationFields,
+  type PersonalizationSnapshot,
+} from "./personalization-schema";
 
-const fieldsSchema = z
-  .object({
-    nickname: z.string(),
-    occupation: z.string(),
-    about: z.string(),
-    instructions: z.string(),
-  })
-  .strict();
+export { PersonalizationClientError } from "./personalization-error";
+export type {
+  PersonalizationFields,
+  PersonalizationSnapshot,
+} from "./personalization-schema";
 
-const snapshotSchema = z
-  .object({
-    personalization: fieldsSchema.nullable(),
-    revision: z.number().int().nonnegative(),
-  })
-  .strict();
-
-const responseSchema = z.object({ data: snapshotSchema }).strict();
-const saveResponseSchema = z
-  .object({
-    data: snapshotSchema.refine(
-      (snapshot) => snapshot.personalization !== null && snapshot.revision > 0,
-    ),
-  })
-  .strict();
-const errorSchema = z
-  .object({
-    error: z.object({ code: z.string(), message: z.string() }).passthrough(),
-  })
-  .passthrough();
-
-export type PersonalizationFields = z.infer<typeof fieldsSchema>;
-export type PersonalizationSnapshot = z.infer<typeof snapshotSchema>;
-
-export class PersonalizationClientError extends Error {
-  readonly status: number;
-  readonly code: string | null;
-
-  constructor(message: string, status: number, code: string | null = null) {
-    super(message);
-    this.name = "PersonalizationClientError";
-    this.status = status;
-    this.code = code;
-  }
-}
-
-const endpoint = "/api/hub/preferences/personalization";
-
-// Settings panels intentionally unmount when users switch sections. Keep a
-// per-subject snapshot for the lifetime of the browser document so returning
-// to Personalization does not flash an empty, disabled form before issuing the
-// same private read again. The cache is never shared across subjects.
-const snapshots = new Map<string, PersonalizationSnapshot>();
-const reads = new Map<string, Promise<PersonalizationSnapshot>>();
-
-async function parseError(
-  response: Response,
-): Promise<PersonalizationClientError> {
-  const parsed = errorSchema.safeParse(await response.json().catch(() => null));
+function parseError(
+  status: number,
+  value: unknown,
+): PersonalizationClientError {
+  const parsed = personalizationErrorSchema.safeParse(value);
   return new PersonalizationClientError(
     parsed.success
       ? parsed.data.error.message
       : "Personalization request failed",
-    response.status,
+    status,
     parsed.success ? parsed.data.error.code : null,
   );
 }
 
 /** Browser-private adapter for the BFF-owned personalization projection. */
-export function cachedPersonalization(
-  subject: string,
-): PersonalizationSnapshot | undefined {
-  return snapshots.get(subject);
-}
-
 export async function readPersonalization(
-  subject: string,
+  signal?: AbortSignal,
 ): Promise<PersonalizationSnapshot> {
-  const cached = snapshots.get(subject);
-  if (cached !== undefined) return cached;
-  const pending = reads.get(subject);
-  if (pending !== undefined) return pending;
-
-  const request = fetch(endpoint, { cache: "no-store" })
-    .then(async (response) => {
-      if (!response.ok) throw await parseError(response);
-      const parsed = responseSchema.safeParse(await response.json());
-      if (!parsed.success) {
-        throw new PersonalizationClientError(
-          "Personalization response is invalid",
-          response.status,
-        );
-      }
-      snapshots.set(subject, parsed.data.data);
-      return parsed.data.data;
-    })
-    .finally(() => {
-      reads.delete(subject);
-    });
-  reads.set(subject, request);
-  return request;
-}
-
-export async function replacePersonalization(
-  subject: string,
-  fields: PersonalizationFields,
-  expectedRevision: number,
-): Promise<PersonalizationSnapshot> {
-  const response = await fetch(endpoint, {
-    method: "PUT",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      expected_revision: expectedRevision,
-      ...fields,
-    }),
-  });
-  if (!response.ok) throw await parseError(response);
-  const parsed = saveResponseSchema.safeParse(await response.json());
-  if (!parsed.success) {
+  const response = await requestPersonalization({ cache: "no-store" }, signal);
+  if (!response.ok) throw parseError(response.status, response.value);
+  const parsed = personalizationResponseSchema.safeParse(response.value);
+  if (!parsed.success)
     throw new PersonalizationClientError(
       "Personalization response is invalid",
       response.status,
     );
+  return parsed.data.data;
+}
+
+export async function replacePersonalization(
+  fields: PersonalizationFields,
+  expectedRevision: number,
+  signal?: AbortSignal,
+): Promise<PersonalizationSnapshot> {
+  if (
+    !Number.isSafeInteger(expectedRevision) ||
+    expectedRevision < 0 ||
+    expectedRevision === Number.MAX_SAFE_INTEGER
+  ) {
+    throw new PersonalizationClientError(
+      "Personalization revision is invalid",
+      0,
+    );
   }
-  snapshots.set(subject, parsed.data.data);
+  const response = await requestPersonalization(
+    {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ expected_revision: expectedRevision, ...fields }),
+    },
+    signal,
+  );
+  if (!response.ok) throw parseError(response.status, response.value);
+  const parsed = personalizationSaveResponseSchema.safeParse(response.value);
+  if (!parsed.success)
+    throw new PersonalizationClientError(
+      "Personalization response is invalid",
+      response.status,
+    );
+  if (
+    parsed.data.data.revision !== expectedRevision + 1 ||
+    Object.keys(fields).some(
+      (key) =>
+        parsed.data.data.personalization?.[
+          key as keyof PersonalizationFields
+        ] !== fields[key as keyof PersonalizationFields],
+    )
+  ) {
+    throw new PersonalizationClientError(
+      "Personalization acknowledgement does not match",
+      response.status,
+    );
+  }
   return parsed.data.data;
 }

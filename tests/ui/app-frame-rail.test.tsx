@@ -16,9 +16,9 @@ import { LocaleProvider } from "@/i18n/context"
 import { ThemeProvider } from "@/ui/theme/theme-context"
 import { createSessionEngine, type SessionEngine } from "@/engine/machine"
 import { createSessionClient } from "@/engine/client"
-import type { ConversationStore } from "@/core/conversations"
+import { addConversation, type ConversationStore } from "@/core/conversations"
 import { makeSnapshot } from "../core/fixtures"
-import { createFakeClient, createMemoryStorage, makeReceipt, type FakeClient } from "../engine/fakes"
+import { createFakeClient, createMemoryStorage, makeReceipt, settle, type FakeClient } from "../engine/fakes"
 
 let client: FakeClient
 let engine: SessionEngine
@@ -1410,3 +1410,188 @@ it("ordinary account capability read uses its own exact endpoint and exposes no 
   expect(screen.queryByRole("menuitem", { name: /后台管理/ })).toBeNull()
   expect(document.querySelector('a[href="/manage"]')).toBeNull()
 })
+
+import * as pageClients from "@/ui/shell/page-clients";
+function set36StubSuccessfulSessionList() {
+  const listClient = { ...client, listSessions: vi.fn().mockResolvedValue({ sessions: [], next_cursor: null }) };
+  return vi.spyOn(pageClients, "browserListClient").mockReturnValue(listClient);
+}
+function set36BuildEngine(initial: ConversationStore | null = null) {
+  engine.dispose();
+  client = createFakeClient();
+  let idCounter = 0;
+  engine = createSessionEngine({
+    client,
+    storage: createMemoryStorage<ConversationStore>(initial),
+    now: () => 1_000,
+    createId: (prefix) => `${prefix}_${(idCounter += 1)}`,
+  });
+}
+
+// SET36-BEGIN: copy-current-persisted-task-link
+const set36TaskId = "ses_copy_current";
+const set36Boundary = { admitted: true, subject: "local-user", generation: 1 };
+async function set36PrepareTask(persisted = true) {
+  engine.dispose();
+  client = createFakeClient();
+  client.nextSnapshot = async () => persisted ? makeSnapshot({
+    sessionId: set36TaskId,
+    messages: [{ message_id: "copy-message", role: "assistant", run_id: "copy-run", content: "current persisted task", status: "completed", created_at: "2026-07-02T00:00:01Z" }],
+  }) : null;
+  engine = createSessionEngine({ client, storage: createMemoryStorage<ConversationStore>(addConversation(null, set36TaskId, 500)), now: () => 1_000, createId: (prefix) => `${prefix}_copy` });
+  await settle();
+  if (persisted) expect(engine.getSnapshot().thread.meta).not.toBeNull();
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "local-user");
+}
+function set36Frame(props: Partial<Parameters<typeof AppFrame>[0]> = {}) {
+  return <ThemeProvider><LocaleProvider><AppFrame engine={engine} chatHref="/app" projectReadBoundary={set36Boundary} {...props} /></LocaleProvider></ThemeProvider>;
+}
+function set36Route(url = `/app?conversation=${set36TaskId}&unrelated=discard`) {
+  window.history.replaceState(null, "", url);
+  pathname.value = new URL(window.location.href).pathname;
+}
+function set36Press(options: KeyboardEventInit = {}) {
+  fireEvent.keyDown(window, { key: "L", ctrlKey: true, shiftKey: true, ...options });
+}
+function set36Clipboard(writeText = vi.fn<(value: string) => Promise<void>>().mockResolvedValue(undefined)) {
+  const previous = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+  return { writeText, restore: () => { if (previous) Object.defineProperty(navigator, "clipboard", previous); else Reflect.deleteProperty(navigator, "clipboard"); } };
+}
+it.each([false, true])("SET36 copies canonical same-origin %s project task URL once without shares", async (project) => {
+  await set36PrepareTask();
+  const path = project ? "/app/project/project-copy" : "/app";
+  set36Route(`${path}?conversation=${set36TaskId}&unrelated=discard`);
+  const clipboard = set36Clipboard();
+  const createShare = vi.spyOn(client, "createShare");
+  const revokeShare = vi.spyOn(client, "revokeShare");
+  const lists = set36StubSuccessfulSessionList();
+  try {
+    render(set36Frame(project ? { projectWorkspace: true, projectRef: "project-copy" } : { chatHref: `${window.location.origin}/app` }));
+    set36Press();
+    await waitFor(() => expect(clipboard.writeText).toHaveBeenCalledExactlyOnceWith(`${window.location.origin}${path}?conversation=${set36TaskId}`));
+    const copied = await screen.findByText("任务链接已复制", { exact: true });
+    expect(copied.closest('[role="status"]')).toBeVisible();
+    expect(createShare).not.toHaveBeenCalled();
+    expect(revokeShare).not.toHaveBeenCalled();
+  } finally { cleanup(); lists.mockRestore(); createShare.mockRestore(); revokeShare.mockRestore(); clipboard.restore(); }
+});
+it.each([
+  { label: "missing boundary", props: { projectReadBoundary: undefined } },
+  { label: "withdrawn", props: { projectReadBoundary: { ...set36Boundary, admitted: false } } },
+  { label: "blank subject", props: { projectReadBoundary: { ...set36Boundary, subject: " " } } },
+  { label: "invalid generation", props: { projectReadBoundary: { ...set36Boundary, generation: -1 } } },
+  { label: "foreign chatHref", props: { chatHref: "https://foreign.invalid/app" } },
+  { label: "standalone", props: { standaloneSurface: true } },
+])("SET36 $label has zero clipboard calls", async ({ props }) => {
+  await set36PrepareTask(); set36Route();
+  const clipboard = set36Clipboard(); const lists = set36StubSuccessfulSessionList();
+  try { render(set36Frame(props as Partial<Parameters<typeof AppFrame>[0]>)); set36Press(); await act(async () => settle()); expect(clipboard.writeText).not.toHaveBeenCalled(); }
+  finally { cleanup(); lists.mockRestore(); clipboard.restore(); }
+});
+it.each([
+  `/app?conversation=${set36TaskId}&conversation=${set36TaskId}`,
+  "/app?conversation=another-task",
+  "/app",
+  `/app/project/wrong?conversation=${set36TaskId}`,
+])("SET36 wrong or ambiguous visible route %s has zero clipboard calls", async (route) => {
+  await set36PrepareTask(); set36Route(route);
+  const clipboard = set36Clipboard(); const lists = set36StubSuccessfulSessionList();
+  try { render(set36Frame()); set36Route(route); set36Press(); await act(async () => settle()); expect(clipboard.writeText).not.toHaveBeenCalled(); }
+  finally { cleanup(); lists.mockRestore(); clipboard.restore(); }
+});
+it("SET36 an unsaved local placeholder never grants task-link copying", async () => {
+  set36BuildEngine(addConversation(null, set36TaskId, 500)); await settle(); set36Route();
+  expect(engine.getSnapshot().thread.meta).toBeNull();
+  const clipboard = set36Clipboard(); const lists = set36StubSuccessfulSessionList();
+  try { render(set36Frame({ preview: true })); set36Press(); await act(async () => settle()); expect(clipboard.writeText).not.toHaveBeenCalled(); }
+  finally { cleanup(); lists.mockRestore(); clipboard.restore(); }
+});
+it("SET36 marker mismatch cannot grant task copying", async () => {
+  await set36PrepareTask(); set36Route(); localStorage.setItem("kokoro.web.auth-index-subject", "other-user");
+  const clipboard = set36Clipboard(); const lists = set36StubSuccessfulSessionList();
+  try { render(set36Frame()); set36Press(); await act(async () => settle()); expect(clipboard.writeText).not.toHaveBeenCalled(); }
+  finally { cleanup(); lists.mockRestore(); clipboard.restore(); }
+});
+it("SET36 actual keyboard guards reject typing dialogs repeats IME and prevented events", async () => {
+  await set36PrepareTask(); set36Route();
+  const clipboard = set36Clipboard(); const lists = set36StubSuccessfulSessionList();
+  const input = document.createElement("textarea"); const dialog = document.createElement("div"); dialog.setAttribute("role", "dialog"); document.body.append(input, dialog);
+  try {
+    render(set36Frame());
+    for (const target of [input, dialog]) fireEvent.keyDown(target, { key: "L", ctrlKey: true, shiftKey: true });
+    set36Press({ repeat: true }); set36Press({ isComposing: true }); set36Press({ shiftKey: false });
+    const prevented = new KeyboardEvent("keydown", { key: "L", ctrlKey: true, shiftKey: true, cancelable: true }); prevented.preventDefault(); window.dispatchEvent(prevented);
+    await act(async () => settle()); expect(clipboard.writeText).not.toHaveBeenCalled();
+  } finally { input.remove(); dialog.remove(); cleanup(); lists.mockRestore(); clipboard.restore(); }
+});
+it("SET36 clipboard rejection reports failure rather than copied success", async () => {
+  await set36PrepareTask(); set36Route();
+  const clipboard = set36Clipboard(vi.fn<(value: string) => Promise<void>>().mockRejectedValue(new Error("permission denied"))); const lists = set36StubSuccessfulSessionList();
+  try {
+    render(set36Frame()); set36Press();
+    const copyFailure = await screen.findByText(/^无法复制任务链接/u);
+    expect(copyFailure.closest('[role="alert"]')).toBeVisible();
+    expect(clipboard.writeText).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("任务链接已复制")).toBeNull();
+  } finally { cleanup(); lists.mockRestore(); clipboard.restore(); }
+});
+it("SET36 in-flight duplicate suppression and identity retirement prevent late copied feedback", async () => {
+  await set36PrepareTask(); set36Route();
+  let resolve!: () => void;
+  const clipboard = set36Clipboard(vi.fn<(value: string) => Promise<void>>(() => new Promise<void>((done) => { resolve = done; }))); const lists = set36StubSuccessfulSessionList();
+  try {
+    const view = render(set36Frame()); set36Press(); set36Press();
+    expect(clipboard.writeText).toHaveBeenCalledTimes(1);
+    view.rerender(set36Frame({ projectReadBoundary: { ...set36Boundary, generation: 2, admitted: false } }));
+    await act(async () => { resolve(); await settle(); });
+    expect(screen.queryByText("任务链接已复制")).toBeNull();
+    set36Press(); expect(clipboard.writeText).toHaveBeenCalledTimes(1);
+  } finally { cleanup(); lists.mockRestore(); clipboard.restore(); }
+});
+it("SET36 navigation retirement prevents late clipboard failure from resurfacing", async () => {
+  await set36PrepareTask(); set36Route();
+  let reject!: (error: Error) => void;
+  const clipboard = set36Clipboard(vi.fn<(value: string) => Promise<void>>(() => new Promise<void>((_, fail) => { reject = fail; }))); const lists = set36StubSuccessfulSessionList();
+  try {
+    const view = render(set36Frame()); set36Press(); expect(clipboard.writeText).toHaveBeenCalledTimes(1);
+    set36Route("/app"); act(() => window.dispatchEvent(new Event("popstate"))); view.rerender(set36Frame());
+    await act(async () => { reject(new Error("late denied")); await settle(); });
+    expect(screen.queryByText(/无法复制任务链接/u)).toBeNull();
+  } finally { cleanup(); lists.mockRestore(); clipboard.restore(); }
+});
+it("SET36 missing clipboard support reports an explicit failure", async () => {
+  await set36PrepareTask(); set36Route();
+  const previous = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: undefined });
+  const lists = set36StubSuccessfulSessionList();
+  try {
+    render(set36Frame()); set36Press();
+    const copyFailure = await screen.findByText(/^无法复制任务链接/u);
+    expect(copyFailure.closest('[role="alert"]')).toBeVisible();
+    expect(screen.queryByText("任务链接已复制")).toBeNull();
+  } finally { cleanup(); lists.mockRestore(); if (previous) Object.defineProperty(navigator, "clipboard", previous); else Reflect.deleteProperty(navigator, "clipboard"); }
+});
+it("SET36 pending owner hydration is not a persisted visible task", async () => {
+  await set36PrepareTask(); set36Route();
+  let finish!: (snapshot: ReturnType<typeof makeSnapshot>) => void;
+  client.nextSnapshot = () => new Promise((resolve) => { finish = resolve; });
+  engine.openConversation("ses_other_pending");
+  set36Route("/app?conversation=ses_other_pending");
+  expect(engine.getSnapshot().hydrating).toBe(true);
+  const clipboard = set36Clipboard(); const lists = set36StubSuccessfulSessionList();
+  try { render(set36Frame()); set36Press(); await act(async () => settle()); expect(clipboard.writeText).not.toHaveBeenCalled(); }
+  finally { cleanup(); finish(makeSnapshot({ sessionId: "ses_other_pending" })); await settle(); lists.mockRestore(); clipboard.restore(); }
+});
+it("SET36 unmount retires a clipboard promise that ignores the view lifetime", async () => {
+  await set36PrepareTask(); set36Route();
+  let resolve!: () => void;
+  const clipboard = set36Clipboard(vi.fn<(value: string) => Promise<void>>(() => new Promise<void>((done) => { resolve = done; }))); const lists = set36StubSuccessfulSessionList();
+  try {
+    const view = render(set36Frame()); set36Press(); expect(clipboard.writeText).toHaveBeenCalledTimes(1);
+    view.unmount(); await act(async () => { resolve(); await settle(); });
+    expect(screen.queryByText("任务链接已复制")).toBeNull();
+    expect(screen.queryByText(/无法复制任务链接/u)).toBeNull();
+  } finally { cleanup(); lists.mockRestore(); clipboard.restore(); }
+});
+// SET36-END: copy-current-persisted-task-link

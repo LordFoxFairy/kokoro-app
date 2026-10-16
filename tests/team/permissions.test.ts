@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import { canInvite, canReadInvitations, canRemoveMember, canReplaceMemberRoles, canManageInvitations } from "@/team/permissions"
 import type { TeamRole } from "@/team/client"
+import { teamRolesResponseSchema } from "@/team/schema"
 
 const catalog: TeamRole[] = [
   { role_id: null, name: "owner", kind: "builtin", permissions: { member: ["create", "read", "update", "delete"], invitation: ["create", "read", "cancel"] } },
@@ -10,6 +11,20 @@ const catalog: TeamRole[] = [
 ]
 
 describe("Team controls are hints derived from owner role permissions", () => {
+  it("checks platform and skill permissions when comparing role replacements", () => {
+    const complete = teamRolesResponseSchema.parse({
+      data: [
+        { role_id: "role-limited", name: "limited", kind: "custom", permissions: { member: ["update"] } },
+        { role_id: "role-runner", name: "runner", kind: "custom", permissions: { member: ["update"], platform: ["execute"] } },
+        { role_id: "role-publisher", name: "publisher", kind: "custom", permissions: { skill: ["publish"] } },
+      ],
+      meta: { request_id: "req-permissions", next_cursor: null },
+    }).data
+    expect(canReplaceMemberRoles(["limited"], ["limited"], ["runner"], complete)).toBe(false)
+    expect(canReplaceMemberRoles(["runner"], ["limited"], ["runner"], complete)).toBe(true)
+    expect(canReplaceMemberRoles(["runner"], ["limited"], ["publisher"], complete)).toBe(false)
+  })
+
   it("allows invitation and member controls for owner/admin but not plain member", () => {
     for (const actor of [["owner"], ["admin"]]) {
       expect(canInvite(actor, catalog)).toBe(true)

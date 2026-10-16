@@ -1,3 +1,246 @@
+## SET49 主线与设置契约组合（2026-10-16）
+
+本次不增加浏览器API或授权能力。Web继续只消费BFF固定发行，承接主线已批准的MCP契约删除以及现设置账户/分享/归档增量；所有既有生成组必须从同一正式owner全文、commit、digest正规再生成，不混合pin或手改generated。当前已运行实例不因源码push自动切换。
+
+
+当前固定BFF30df0c428c592ed2710d62035ceb5855d20c7506/public16.0.0/146，全文SHA-256 b4e91483e425fdcc9547eac8bcda554273cbee0863ccb0ddfb185fae18e4e267。严格继承主线四个MCP公开写操作退休；七段精确逆向仅为测试保留旧设置契约oracle，不进入产品。下方SET47 pin属历史发行。
+
+## SET47 归档任务同源消费者（2026-10-15；已消费正式owner候选）
+
+SET47传输边界补充：WHATWG会规范化单独的`.`/`..`段及其percentencoded形式；BFF保持原始HTTP的exact encodeURIComponent契约。Web对仅这两个历史ID在任何fetch前拒绝并将动作禁用、解释不可用；不使用双重解码/替代API，也不宣称任意历史ID浏览器皆可操作。其余合法Unicode ID不限制为conv UUID。依据：[URL Standard](https://url.spec.whatwg.org/#single-dot-url-path-segment)。
+
+唯一外部事实源是BFF public15.4.0/150正式发行53f222ec41500d7a608da0c221a4695c402ff678（全文SHA-256 87186311e67eeebcd5f27d7974326186e1912de49d18d4d524a0bcbc940a0817），四操作：listOwnedArchivedTasks、getSessionArchiveState、archiveSession、restoreSession；只读src/generated/bff-public-openapi.yaml已固定owner原字节并正常生成新窄客户端，禁止手改产物。历史15.3/146全包digest为694251d4f4c1bcc9a79ae4fd2d4c050c87a0a8af39bea0a9f0bed3a4dcae5ad5。新outer inverse先严格恢复该完整旧包，再运行所有旧断言/hash/negative；生成器及whole-artifact provenance按新发行精确迁移，不修改Skills/连接器业务断言。
+
+Web browser-private固定GET /api/account/archived-tasks与GET/POST /api/session/sessions/{encoded-id}/archive、POST /api/session/sessions/{encoded-id}/restore。沿既有session catch-all在generic proxy前精确分派archive/restore，其他操作不扩展；方法不允许则405。历史非空Unicode session ID采用唯一可逆encodeURIComponent编码，不强制conv UUID。列表仅limit/cursor闭集，POST仅严格JSON空对象、实际body含EOF最多4096字节、允许未指定或identity编码、允许chunked但拒Content-Length冲突和不支持的编码和唯一可见ASCII无逗号/空格1..128 idempotency-key，命令禁止query。状态/ACK为data.session_id+archived_at，不构造旧Chat meta envelope。
+
+两个具名server adapter沿固定Host/scheme，GET如带Origin须精确匹配，命令必需精确Origin；Product Session必须在线有效，所有BFF调用使用现正式server-only admission headers。参数Promise、body EOF、会话读、固定上游headers/EOF/strict JSON以及最终会话六字段id/generation/subject/access/accessExpiresAt/expiresAt复验共享单绝对10秒与request.signal。严禁重定向/透传Location/Set-Cookie；响应头+body最多1MiB、UTF8 fatal/BOM/重复键拒绝、精确request ID/JSON/no-store；success/error嵌套严格schema、精确目标session ID、cursor身份与limit/顺序闭集，错误message受控清洗，Retry-After仅正式429范围。
+
+浏览器具名四方法均支持AbortSignal，POST不自动retry；不新增machine token或浏览器自报tenant/subject。可读任务不推导可写权限。超时/断线的写入结果未知，UI先权威重读再显式继续，不将本地marker/旧ACK等同当前owner状态。新system测试当前为具名handler与依赖替身验证，覆盖总预算、EOF、最终六字段会话退休、严格目标/action及合法framing；真实Next HTTP和正常认证CUA仍由Root后续验收，不能以handler测试冒称端到端。
+
+## SET43 已移除会话的账户资料读取（2026-10-15；D0，先真实HTTP负控）
+
+测试夹具补充：GET不执行的Auth.js agent factory因server-only导入需空stub；身份准入与requestWithDomain仍是真实HTTP。前两轮仅collection失败，不算行为RED。
+
+仅browser-private GET /api/account/profile：已确认BFF401 session_invalid在线拒绝映射既有401 account_profile_session_required；服务认证/503/畸形或未绑定结果仍503，不把所有401当失效登录。BFF /v1/me原精确error/meta envelope，不接受retryable plain包络；本次outbound ID绑定x-request-id及meta，JSON MIME允许charset、不接受json-malicious，no-store且无Location/Set-Cookie。其余原200/userinfo/错误形状、上限和总预算保持；不新增owner API、scope或授权。auth/session GET本地投影、callback/refresh策略不改。
+
+## SET42 任务发送行窄屏排版（2026-10-15；D0）
+
+任务发送现禁用queue选项仅改窄屏排版，无HTTP/事件/授权/契约/provider变化；不得开启灰选项或宣称其它发送策略已实现。
+
+<!-- SET41 V2 D0: V2只增加General现滚动table固定布局和语言select宽度上限，无任何传输边界变化；不改共享组件或radio/provider语义。 -->
+
+## SET41 主题选项窄屏可达性（2026-10-15；D0）
+
+仅现主题布局换行；无wire、HTTP、事件、授权、幂等或版本变化。原radio语义与provider存写接口保持。
+
+## SET40 V3 焦点协调归属（2026-10-15）
+
+扩现AppFrame overlay hook，只在焦点未处于设置内部时执行原初始handoff；无API/wire、授权、schema或持久化变化。Root唯一writer；Skills/连接器业务不变。
+
+## SET40 具体设置项搜索（2026-10-15；D0，先tests-only）
+
+基线Web f82c891965f80eed9ff0c022d3f77b39bdbad42e，939 tracked clean。Computer Use实际Manus：昵称→个性化+昵称、点child切页并保query/结果焦点；通知→通用+浏览器通知；仅菜单名命中只parent；无匹配未找到结果、当前内容不变。现仅菜单过滤且强留selected，窄屏隐藏search，存在明确功能缺口。
+
+现Navigation/Modal/CSS提供静态设置项搜索，仅导航既有页；无API/wire/schema/owner授权/持久化变化，Skills/连接器业务保护。
+
+## SET39 英日文实际设置缺译（2026-10-15；D0）
+
+仅现有en/ja补实际调用MessageKey值；无API/wire/schema变化，全旧值、全tests及其它源保护。
+
+## SET38 六种语言的实际设置缺译（2026-10-15；D0）
+
+基线Web 76a42c2e574eda12b86d97eaaf30d1bad3380068，939 tracked clean。runtime_audit唯一writer仅现ko/es/fr/de/pt/ru六locale，926文件保护/Root7；所有tests和产品逻辑字节不变。
+
+仅现六locale补既有MessageKey native值，无API/wire/schema/owner/依赖变化，原value/全部tests与其它产品源保护。
+
+## SET37 登录刷新早期失败诊断（2026-10-15；D0）
+
+基线Web 01780925f62f5cdf2552567d8f97d0c0ee85abc5。runtime_audit仅改现OIDC实际Next测试；932文件保护，Root6文档。产品源码、原race/count/oracle/timeout/fixture/cleanup均不变。
+
+仅测试观察增强，无API/wire/存储schema/owner变化；所有产品源码和原业务断言保护，已有诊断输出净化不变。
+
+## SET36 复制当前任务链接（2026-10-15；D0，先tests-only）
+
+基线Web 97a6d9694cf9e52d54c50d516fac7cde2889bcf1，939 tracked clean；runtime_audit唯一writer，最终13现source/4现test/914保护/Root8。先仅四现test可追加，927其余字节保护。Root方案/docs/独审/原source RED/Git/资源与正常激活。
+
+仅复制当前同源需登录的正规任务URL；不调用share/create权限接口，不增加wire/owner授权或改变现后端契约。所有Clipboard仅当前用户明确按键动作发起。
+
+## SET35 十四个实际设置日文提示（2026-10-15；D0，仅现locale）
+
+基线Web 3f97368ef38c9cea4c88d53ad29e61b83a8716eb，939 tracked clean；runtime_audit唯一writer仅现src/i18n/ja.ts，931保护/Root7。Root设计/docs/独审/Git/资源与实际回归；全部tests与其它locale/产品逻辑字节保护。
+
+无API/wire、授权、owner或HTTP行为变化；仅现locale提供实际设置提示的日文内容。
+
+## SET34 到期日期测试按实际时区验日末（2026-10-15；D0，仅现测试）
+
+基线Web fd627496a6f860c7ed3e1afef51c65fbc3bcca57，939 tracked clean；runtime_audit唯一writer仅现tests/ui/kokoro-scheduled-surface.test.tsx，932保护/Root6。Root设计/docs/独审/Git/实际复核；全product source与其它全部测试字节保护。
+
+不改产品API或wire；仍提交同一timezone与UTC expiresAt，只修测试对所选当地日期日末的独立预期。
+
+## SET33 两条原生withdraw测试的就绪前置（2026-10-15；D0，仅现测试）
+
+基线Web d7f5d5d41ce4740de219480ccd6d7bf7d9166d40，939 tracked clean；runtime_audit唯一writer仅现native测试，931保护/Root7。Root资源/Git/docs/独审/正常运行；全部product source及原计数/安全assert/timeout/mock/cleanup仍保护。
+
+无产品API/授权/owner变更，仅测试初始准备阶段确认runtime请求到达；原HTTP/status及全部count/safety断言保持。
+
+## SET32 原生登录请求顺序诊断（2026-10-15；D0，仅现测试）
+
+基线Web 52b535789b93ebac740db7aa8e5296c82b6622b6，939 tracked clean；runtime_audit唯一writer仅tests/system/oidc-rp-next-http.integration.test.ts，931保护/Root7。Root设计/docs/独审/资源/Git与正常实例。现runtime修补已接收，终态20focused/3987PASS7旧FAIL/Playwright20PASS4原SKIP；不能据此认定R175/R177旧native多请求根因。
+
+只在测试进程输出closed category、sequence、相对elapsed ms、status、phase及stage；不得记录原URL/query/header/body/cookie/token/异常全文。无正式API/contract/owner/授权变化，不能用诊断记录替代原生实际断言。
+
+## SET31 runtime请求退休（2026-10-15；D0，先tests-only）
+
+基线Web dc26502bfa47ba0c22422623118b455d46644be0，939 tracked clean；runtime_audit唯一writer，1既有hook/1既有test/930最终保护/Root7，先仅tests其余931保护。Root设计/docs/独审/资源/Git/正常激活/CUA。AppGate及原生R175/R177全部源码/oracle保护；不扩大trusted admission接口，不把hook负控冒称原生多请求根因。
+
+沿原同源 /api/system/runtime-manifest、原product_id/locale/surface_id和Accept header，System仍是正式呈现事实owner，认证仍由Product session负责。无新授权、contract/HTTP错误/status/query或owner服务变更，取消只退休本hook拥有的请求。System可选呈现不可阻塞核心Chat。
+
+## SET30 未接通菜单与账户操作说明（2026-10-15；正式D0）
+
+基线Web 0ab7bfaedf7425332049f5f867bcec79fccd285c，939 tracked clean；runtime_audit唯一writer，12既有source/920保护/Root7。所有tests原字节保护；Root设计、docs、独审、资源、Git、正常激活/CUA。实际Manus菜单已有对应本地入口，七个placeholder及三账户按钮仍按能力不可用，不引入owner/contract/API/deps或新source。
+
+两个新增纯本地化key settings.unavailableNavigation、settings.accountActionsUnavailable；中文zh位于messages.ts的zh对象，八语言overlay各自翻译，只可追加这两项，原locale数据逐字保护。说明不表明接通新服务，也不重新启用或请求任何禁用能力；团队仍是当前部署租户的成员管理，不冒称创建团队。
+
+## SET29 侧栏账户余额可信读取（2026-10-15；D0，先tests-only）
+
+Web基线2d31cd502db44b5b0ad74e52321cba755624896f，939 tracked clean；runtime_audit唯一writer本片4既有source+1既有rail测试，927最终保护/Root7；先仅测试准入，其余931字节保护。Root管设计/docs/Git/资源/正式激活/CUA，Skills/连接器业务排除。
+
+Web只调用原browserBillingClient.summary(signal)→同源→正式BFF/Billing；服务器权限/契约/金额/checkout/依赖/generated不变。本片是读取资格与本地投影生命周期，不是新授权或业务余额事实。admin-access/menu/signout原子树与其他读取不改。
+
+## SET28 Web阅读轴滚动槽修补（2026-10-15；正式D0）
+
+正式Web基线7e062cd5e69847bfb34181b6674cb998c4cc50f1，939 tracked clean。runtime_audit唯一writer仅app-frame-main.module.css；931保护/Root7。Root设计/docs/Git/资源/正常激活/CUA。既有精确E2E已多次真实RED，无新tests-only或新增镜像测试；全部tests/阈值/mock/skip/等待保持字节。
+
+本片无API/权限/owner/依赖/新源文件/生成变化，所有请求与状态控制保留；仅Web现有阅读视图样式。Skills/连接器与设置行为排除。
+
+## SET27 个性化未接通入口（2026-10-15；正式D0）
+
+Web基线91fb1aee87df9e6dc0acadcdda4db5375623a13a，939 tracked clean；runtime_audit现Web唯一writer，12具名路径/920保护/Root7。Root设计/文档/Git/资源/运行/CUA。独立候选审查无确定P1/P2；原SET26已接收，本轮只个人资料呈现，不混入余额/支付/阅读轴。
+
+无新增API/contract/owner/依赖/源文件/业务调用；知识与导入只可见禁用，不请求服务。四字段继续现正式profile读取与保存，不能误断言整个面板零请求。hook/client/schema与其他设置/source字节保护。
+
+## SET26 body retirement correction (2026-10-15)
+
+The plans optional AbortSignal and total 10s contract also retire the owned real body reader. Reading and decoding remain within that same budget; timeout and parent abort cancel the reader and release the lock. GET/no-store, schema, 503 mapping, money wire and the entire checkout transport stay unchanged. No additional body limit or header requirement.
+
+## SET26 用量与套餐可信读取（2026-10-15；正式D0，先tests-only）
+
+正式Web基线a9183585ab403797f79b522aedb120de562a64e9、939 tracked clean。仅现Web Billing/Pricing/settings消费接缝，runtime_audit唯一writer，17具名路径/914保护/Root8；Root独占设计/docs/Git/资源/正常运行/CUA。候选独审无确定阻断P1/P2。Skills/连接器、owner契约/SQL/generated/依赖、checkout源码与全局QueryStore保护；无新源文件/模块/owner。
+
+仅既有PricingClient.plans加可选AbortSignal及准确timeout/aborted failure reason，现同源GET/no-store/严格schema/503 not_configured/金额wire保持；每call一个绝对10s race，signal转owned fetch，取消body可用时执行，headers/body/schema无phase预算重置或自动retry。checkout整体原字节保护，当前UI永久disabled购买且0checkout/redirect，owner capability不因目录非空而成立。可信scope只本地投影/生命周期，不把subject/generation/actor写wire，不复制BFF/Billing契约。
+
+## SET25 浏览器测试就绪边界窄准入（2026-10-15）
+
+仅现tests/e2e/web-governance.spec.ts原65/107/267/405/470五个初始/app goto覆盖六例：networkidle改DOMContentLoaded后准确Chat input可见/启用/可编辑web断言。原229及其余goto保持。已有实际六desktop等待超时证据及只读独审无确定P1/P2；官方Playwright建议测试以web断言判断ready。原logout POST/issuer、reading轴/长markdown/stream/HITL所有业务oracle、mock、skip、timeout、route保持，R137观察器仍先于首次发送。不能以输入就绪冒称业务通过，也不宣定位具体网络请求根因。无Product源码/fixture/权限改动；沿runtime_audit同一writer，SET25扩为13writer/919保护/Root7，仅本项追加范围，其余原边界保持。最终正规E2E运行仍待验。
+
+## SET25 原有模型偏好深链可靠性（2026-10-15；正式D0，先tests-only）
+
+Web既有chat-prefs/ChatPreferencesSection/旧chat深链局部修补；正式基线6921a1cbffd723fc37c4cc64342bb3a6f89369a1，939 tracked clean，12writer/920保护/Root7绑定。唯一writer runtime_audit，Root设计/文档/Git/资源/运行/CUA；候选独审无确定P1/P2。Manus General实为任务发送偏好，现TaskDelivery已对应，不加General模型/左栏入口，更正旧卡注释。无新源文件/模块/owner/依赖/CSS，通用store/client/API/generated/Skills/连接器保护。
+
+无网络/API/owner/contract/generated/auth scope变更；现同源model list与ModelCandidate类型保持，listModels()不扩signal。单10s只截止UI观察，不表示底层请求已取消。writeChatModel从void改准确boolean仅本仓内部函数，唯一写caller消费成功，readChatModel/composer保持。目录Retry仅原GET，保存retry仅localStorage，无模型执行或BFF写。
+
+## SET24 账户退出失败恢复（2026-10-15；正式D0，先tests-only）
+
+Web现有AccountCard退出交互的局部修补；基线03fc794403116f93c318eeec3534ae0d199cb690，939 tracked clean。Root绑定921原保护，唯一writer runtime_audit；Root独占三设计/CURRENT/相邻INDEX与Git/资源/运行/浏览器，storage_platform_audit只读审查。Skills/连接器、Product auth client源码、API/contract/generated/lock/依赖/CSS及其他owner排除。独立D0审查无确定P1/P2。
+
+不改传输或正式owner合同。现endProductSession(navigate,signal)完整保留：GET /api/auth/csrf、form POST /api/auth/signout、既有合法issuer URL与503 handoff。AccountCard只提供有界生命周期和导航护栏，无新scope/header/API/授权、CSRF绕过或host放宽。未确认结果不能自动POST重试或假成功跳首页；手动重试由用户明确点击。
+
+## SET23 通用语言与主题保存失败反馈（2026-10-15；D0与Root真实RED通过，具名source准入）
+
+归属Web现有浏览器偏好Provider和General AppearanceCard，是现文件局部修补，不新增模块、API、owner、依赖或存储框架。正式基线293ac84d7b2b6562b73e46c56436aadc4c1c2e3b，939 tracked clean已绑定；原主题/语言即时生效，setItem失败无提示，不能说整体不可用。候选独审无确定P1/P2。
+
+本片无网络或机器contract变更，仅两现内部Context增加分别的persistenceFailed boolean。现setMode/setLocale签名与调用保持；只有显式当前选择或重试调用写原localStorage。成功仅清自身失败，其他Provider错误不变。alert及retry两文案键在九语言追加，旧键逐字保持。不改变账户、Team、Data、Skills/连接器请求或正式BFF15.3 pin。
+
+SET21分享浏览器接缝准入澄清：现 engine/client.ts 仅 createShare/revokeShare 两方法可共用具名有界分享调用，createShare 增可选 AbortSignal，原 POST {}、idempotency key/value、路径编码和 flat ShareReceipt 保持。两分享操作各浏览器单10s覆盖 fetch/headers/body/strict ACK，停止分享外部单10s同时涵盖写与完整重读；不扩大 generic postJson、其他会话/SSE/Move 方法或 ShareButton 源，不新文件/框架/依赖。现 client-artifact-share 测试可沿这两个方法补具名 deadline/abort/坏ACK负控，原 oracle 保持。现 lint/type 通过是阶段输出，终态仍须重新冻结和复验。
+
+SET21/22阶段更新：两冻结原client/modal入口由Root实际复现4FAIL/47PASS，現沿CURRENT具名source/正常正式生成实施；D0预算/身份/closed ACK/恢复和当前同页Data结构不变。历史tests-only文字不再表示当前无source权限。
+
+SET21/22正式消费前置：BFF eec3244645d5129407147774ecb07e03848420c4，public15.3.0/146全文SHA256 694251d4f4c1bcc9a79ae4fd2d4c050c87a0a8af39bea0a9f0bed3a4dcae5ad5；当前只授CURRENT具名两现tests-only真RED，source/机器等待Root复现。旧15.2消费pin仅待正规整包原字节与正常窄生成更新，不手改生成。
+
+SET21/22参考页面澄清（Root实际CUA）：Manus Data为同页依次“已分享任务”“已分享文件”“已归档任务”三段，不是页内三个tab；其下授权应用、云浏览器数据、已购买域名各有管理入口。Web只新增Data/Help两导航tab，Data内容沿同页三段及三管理行。现只任务分享具备真实owner，其他段保不可用说明/禁用管理，不制造“暂无”的假空事实。Help为侧栏底部本产品帮助入口，不能复用Manus客服。
+
+## SET-21/22 browser-private Data/Help（2026-10-15；D0独审通过）
+
+server以正规oidcRpConfig固定tenant及HttpOnly subject校验sht1；不接受browser/URL/body自报tenant。browser ProjectReadBoundary无tenant，只核subject与已由server验证的分页一致性。
+
+新列表title保旧原string；同毫秒session_id顺序使用正式owner拟定的UTF8字节序（COLLATE "C"），不以JS UTF16或localeCompare猜序。正式发行前仍不消费该候选。
+
+public唯一BFF，当前正式a88/15.2/145；拟15.3的GET /v1/account/shared-tasks在正式提交前不作为消费依据。后继单正规artifact+窄generated包含新GET和原createShare/revokeShare，旧能力shape/hash逆门不放宽。
+
+GET /api/account/shared-tasks映射新public GET；query仅canonical limit1..100（本页固定100）/非空≤2048 cursor，拒未知/重复/坏percent/UTF8/body framing/encoding/Idempotency-Key；200恰{data:{items:[{session_id,title,shared_at,expires_at}],next_cursor}}，无meta/capability/URL。cursor须closed sht1实际tenant/subject/limit/末条anchor一致、next唯一、items安全排序且唯一；空页next=null。public错误closed error.code/message/retryable及status按正式机器，Web私有metadata/会话/响应校验错误独立且不伪称public。no-store/requestID只header，429 Retry-After沿正式可缺省/存在1..86400，其余无。
+
+Share继续现/api/session/sessions/:id/share POST/DELETE，仅该exact路径入新有界支路；正规query scope/project_ref和Idempotency-Key保现语义，不加UUID/trim/ID长度猜测。POST真实{}、DELETE真实EOF（Node Next可能有空stream）。200原BFF closed data.share_id/meta.request_id严格原文+请求header绑定后投影原flat {share_id}；不存在session_id ACK字段，不能称ACK逐目标字段绑定。删除ok:true错误解析，无新停止分享endpoint。正规error envelope先闭集/请求ID验证后沿原flat错误，非法/未知响应502且视unknown；不透SQL/owner message。非share generic/SSE/Move行为保持。
+
+单10s含params/body/session/上游/最终六字段栅栏，BFF响应和browser响应总≤1MiB、fatal UTF8/BOM/decoded重复key/深度32，browser redirect:error。mutation明确canonical Origin，GET允许无Origin或完全一致。无自动重试/新scope/client/credentials；preview、Help、禁用区域零API。
+
+## SET-20 browser-private Team 可靠性（2026-10-15；V2冻结独审通过，Root集成验收中）
+
+唯一正式合同仍为BFF a88/public15.2九个Team operation；本片不编辑snapshot/generated/public schema或IAM API。现/api/team/[...path]只映射现members/invitations/roles及六mutation；成功均200，closed data/meta字段与正式error envelope保持。caller actor/tenant永不从body读取，leave内部期望memberID只用于客户端ACK校验，不传输为身份字段。
+
+canonical scheme/Host全部核，GET Origin缺省或完全相同，mutation Origin必须明确完全相同。无query的mutation同时拒bare?；未发布Idempotency-Key、content-encoding或body字段不接受。create/replace JSON原文≤16KiB、fatal UTF8/duplicate/closed；resend/cancel/remove/leave只允许实际EOF，在同一预算内验证为空，不转发fake空JSON。路径及page query沿原闭集，不新增接受/切团队/创建团队API。
+
+server单10s从入口含params/body/session/BFF全响应及最终六session等值有效核；browser单10s、2MiB headers+body且主动取消不合作读取/迟到fetch。成功严格raw schema、200、no-store、meta/header request-id一致，正式4xx拒绝与未知网络/401最终身份变化/5xx/坏ACK区分；错误message不透未验证的原始upstream值。九操作429的Retry-After可缺省，存在时为^[1-9][0-9]{0,4}$即1..99999；503及其他未声明状态不接受该头，不套用姓名的必填或86400规则。server final-session退役即便owner已成功写仍401，客户端不能假未提交。
+
+创建invitation ACK只新ID/pending；resend/cancel绑定请求invitationID；replace/remove绑定请求memberID，replace绑定完整角色集合；leave绑定已完整权限加载得到的actor memberID。首次权限加载查actor及全role有界20页/2000条、whole-read10s；未知写或ACK后刷新失败拒第二写，只有完整成功authority reload及显式决定可继续，More不提供该资格。subject/admission/generation/close/unmount退役结果及signout signal，无自动mutation retry或邮箱投递承诺。
+
+## SET-19 browser-private 姓名PATCH（2026-10-15；源码已接收，正常浏览器待验）
+
+现GET /api/account/profile保留userinfo读取。新PATCH同一路径只调用正式BFF a88e710d2201342200017f44c2bc34325937b5d0/public15.2.0 updateAccountProfile；唯一canonical全文SHA256 3214e32d273fbc514db1c1f2307f7855b623f1f613fb1da710cc51d23c41f453，唯一输入已按该正式Git对象更新，不创建第二份可编辑public schema。新增窄正常生成器消费唯一正式artifact，由generated派生严格input/ACK/error并在strip前校验原始JSON（含重复键/坏UTF8）。其余方法405/Allow GET,PATCH，不新增通用proxy。
+
+PATCH严格同canonical scheme/Host、必须明确同Origin；无query/Idempotency-Key，唯一application/json，Content-Encoding仅缺省/identity，真实正文≤65536bytes。body恰{name,expected_name}；name1..100 UTF16、well-formed Unicode、无C0/C1和ECMAScript trim边界；expected_name恰正规userinfo原string≤16384 UTF16，不修剪/归一化/过滤旧值。name缺失/null不授予保存，不自报subject/tenant/client。仅HttpOnly session中的access经productBffHeaders提交BFF。
+
+成功200严格{data:{subject,name}}，subject绑定同一可信session、name绑定提交原文；PATCH plain error严格{error:{code,message,retryable}}，private/no-store与合法x-request-id仅header，无meta、凭据或raw owner消息。BFF正规status/code/retryable tuple安全投影；本地400 account_profile_input_invalid、403 account_profile_forbidden、413 account_profile_request_too_large、401 session_invalid、502 account_profile_response_invalid、503 account_profile_unavailable，retryable只有429/503真。429必须有合法1..86400 Retry-After，其他状态出现该header拒绝。既有非PATCH方法405 account_profile_method_not_allowed保持原错误形状/private,no-store/Allow: GET,PATCH，不声称具备PATCH receipt。server/browser单10s，BFF headers+body总≤1MiB，最后same-session复核同一预算；未知写结果绝不自动retry或宣称未提交。
+
+权威GET仍原5s与原四字段安全投影，只name放宽到原string≤16384 UTF16；响应总256KiB（含header与body）覆盖合法旧值JSON escaping，sub/email规则及userinfo其他字段剥离保持。GET和PATCH最终session的id/generation/subject/access/两个expiry逐项等值且未过期。PATCH ACK后的GET失败不构造本地profile；409、失去ACK、取消/超时/非法上游结果均需成功GET reconciliation后再由用户显式决定新PATCH。401可能由owner成功写入后的最终session退役产生，同样锁写、保草稿、权威重读，不把失败响应解释为数据库未写。
+
+原十五OIDC scope严格有序追加iam:account-profile.write，16项只由fresh authorize获得，不改旧refresh/userinfo/ID token生命周期。正常scope资源与启动由Root在三owner正式提交后集成，不用旧运行假测试。Skills/连接器不变。
+
+## SET-18 正文为空的 DELETE 输入核验（2026-10-14）
+
+Account session DELETE 仍禁止业务正文、Transfer-Encoding、非零 Content-Length 和 idempotency-key。Next Node adapter 可为合法无正文请求提供非 null stream，故同源 adapter 在既有十秒总预算内验证 EOF；发现任何正文 byte 即拒绝，悬挂读取主动取消并释放 reader，未验证为空前不读取 session 或调用 BFF。空 stream 不构成新正文合同，不转发至 owner；其他 Host/Origin/path/ACK/final-session 约束保持。
+
+## SET-18 browser-private 登录Session（2026-10-14；源码已接收，运行待验）
+
+正式前置已接收：IAM284bfd8fea91d57dae18fa2b7c772d75c7b6dcd9/internal0.12/f6f3588d；BFF53996400e4100ed5940b104f0dce139d44fec383/public15.1.0/canonical与inventory144/SHA2565972f7be07a0117d8ee036fa4e742da7942b3c864d009c2847e70e69112a747d。Root沿SET18-Web任务卡授billing_scheduler_audit唯一源码writer；D0同一sessionID/generation/subject/access与session寿命最终复核规则保持。实现已冻结、独审并由Root接收，正常运行/browser尚未完成。Web实际OIDC_SCOPE按现原十三项严格顺序append账户read/revoke两scope，以正规fresh authorize取得；不得用旧refresh/machine提升。
+
+独审后继规则：未知DELETE结果设独立reconciliationRequired写栅栏，hook与移除确认共同守卫；分页读取、分页失败或首屏读取失败不得清除，只有成功首屏relist核对权威目标状态后恢复合法写入。提示notice不是写资格。原分页/身份取消/正常ACK读回规则不变。
+
+新同源GET /api/account/sessions只承接正式BFF GET /v1/account/sessions（limit1..100默认25、可选非空cursor≤2048）；DELETE /api/account/sessions/{sessionId}只承接正式BFF DELETE同sid，非空≤255且与正式owner约束一致，无query/body/Idempotency-Key。所有method/未知/重复参数/非法路径编码/非空body显式拒绝；其他method405并Allow。不与聊天/api/session混用，不新增IAM relay规则或通用URL。
+
+GET校验部署侧canonical webOrigin的scheme/Host，Origin缺省或精确同canonical值；DELETE要求Origin必须存在且精确canonical webOrigin，同时Host/scheme匹配，不能用现sameOriginOk的missing-Origin允许路径。不信Forwarded/browser origin选owner。HttpOnly currentProductSession为cookie边界，沿productBffConfig/productBffHeaders只向固定BFF传单Bearer；缺配置503、匿名/过期401、不合Origin403、存储/准入不可确认503，subject来自session/BFF，不从body。
+
+成功仅校验正式BFF15.1 generated closed response（current_session/sessions/created_at/expires_at，meta.request_id/next_cursor；撤销session_id/revoked:true与请求一致），零凭据、private/no-store、同一合法x-request-id。上游JSON/headers+body总1MiB/同request-id/no-store及状态code一致才输出，schema strip未知字段不可冒strict校验；错/多字段、current在other、重复ID/分页矛盾、错ACK、header绑定错误502。传输/timeout/不完整503，BFF正规拒绝沿正式closed error family，不透内部message/token。Web自有invalid_request400、forbidden_origin403、method_not_allowed405、session_required401、dependency_unavailable503、response_invalid502使用具名account_session前缀；同一error响应有安全message/request-id，不与public错误伪合并。
+
+DELETE结果未知只提示重新list核目标active，不自动retry/宣成功；current409、foreign/不存在404、本人expired保留重复200/cleanup后404由IAM经BFF裁决。响应返回前再读取同一当前Websession（opaqueID+ProductSession generation+subject+accessExpiresAt/session expiresAt仍有效，含同一ID/subject的刷新或权限代际变化），identity退役返回401/503而非把迟到数据给新用户；该未知也不证明owner写回滚。
+
+正式发行顺序：IAM0.12→BFF15.1不可变commit/digest→本仓正常narrow生成与完整出处更新；不从IAM源文件/未提交BFF复制类型，不放宽Team/Agent/Skills/MCP原schema。新scope只能正规provisioning与fresh authorize，不能修改旧refresh或用machine/admin替本人。当前源码唯一artifact已逐字节核验为BFF15.1；正常部署、fresh授权和真实用户旅程仍待成对验证。
+
+## SET-17 支付未提供的现有边界（2026-10-14，目标待验）
+
+不新增/改写BFF public或owner机器契约。套餐GET仍经当前同源adapter消费正式目录；固定checkout503不提供交易，UI不发checkout请求。旧browser-private `/api/billing/mock-pay`保留配置503、Origin403、匿名401、准入失败503守卫，已准入请求在所有环境都503 `mock_pay_unavailable`，没有支付owner请求或成功ACK；其旧开发relay退役，在线身份准入所需的读取保留。直接pay页面只说明不可用，不证明URL中的orderId存在或已支付。Team只消费现有固定团队九操作，导航改名不产生创建tenant/team契约。验证守卫和零支付owner I/O，不调用支付或伪造账单。
+
+## SET-16 通用通知与声音：沿已有任务契约（2026-10-13，实现候选）
+
+2026-10-14 修正：仍无 wire/generated 改动。可信原始 subject 与 engine/scope 是长期资源身份，readBoundary admission/generation 是同步投递门；同主体重验保留已验证锚、去重和已解锁音频，但门关闭期间零投递且不补播。设置授权异步结果仍绑定当次 admission/generation，Audio unlock 单次 attempt fence 防止旧完成影响新尝试；真实主体/logout/preview/engine/scope/dispose 退役。readBoundary generation 不授予新任务或历史通知资格。
+
+本片无新HTTP、owner API、权限、版本或generated改变。唯一任务事实仍为现固定BFF public15.0.0 validated AG-UI、MessageCreateReceipt与SessionSnapshot；Web只新增内部typed任务信号订阅，不成为第二套wire。完成严格取run.completed且status=completed，失败/取消/dispatch_failed/ACK/EOF不替代；快照event_watermark与active execution_head只用于正规恢复和锚定，不发历史通知。请求/音频许可是浏览器能力，不授权运行或服务端写入。
+
+资源主体来自受信readBoundary原始subject，当次投递仍需layout已提交admission；设置授权异步结果受当次generation绑定，scope/session/run标识来自现引擎。不得从browser body、localStorage偏好、preview、ready或任意feature flag推断准入。营销通知没有正式owner契约，disabled且恒false；不新增假成功API。当前模型授权硬门与正式支付缺口仍未闭合。
+
+实现补充：active execution_head搭配合法null watermark亦可锚定未来live事件，null不被解释为历史完成；快照自身不投递。引擎receipt/snapshot捕获通知代际，身份退役后迟到事实不能重授通知资格。Audio create/resume由手势同步启动，resume单次3s预算，超时/拒绝/退役关闭owned context并拒绝late复活；无自动resume或补播。任务观察者逐事件隔离异常；切会话/身份/scope关闭owned投递，声音刷新/退役后需再次手势。无新契约、SQL、依赖、营销订阅或Skills/连接器改动。
+
+V2实现补充（2026-10-14）：同subject临时失准入只更新layout投递门，长期observer/audio及engine锚保持；门内终态仍被正规引擎消费，不缓存或补播。真实资源替换仅退役旧engine，保留新engine已经合法锚定的owner head。AppFrame awaiting身份不含read generation，旧主体未变化的waiting投影不在退休后立即重登记。现page-clients engine lease在StrictMode重新取得时取消延迟release，真正无owner时正规engine.dispose清锚和listeners；hook关闭owned Notification/Audio并取消订阅，不增加第二个dispose owner。每次Audio unlock递增独立attempt fence，旧resolve/reject/timeout不得关闭同subject后发有效context；Settings组件仍以当次admission/generation取消迟到许可和保存。
+
+## SET-SHORTCUTS：无网络协议变更
+
+快捷键编辑、清空和重设只写既有浏览器localStorage偏好，无请求、用户身份/API/权限/SQL/generated变更。保存成功只表示当前浏览器存储写入成功，不声称跨设备同步。语音输入无能力契约，显示不可用。
+
+## SET-13 TeamRole public15严格消费目标（2026-10-13）
+
+BFF是唯一可编辑public机器owner。等待SET13审查并提交后，由其不可变SHA/digest原字节替换src/generated/bff-public-openapi.yaml；两既有generator固定同一来源。正常生成Team SDK与Agent failure provenance，失败片段/roles/tuples及非Team语义不手改。TeamRole.permissions只接受现八域，platform仅execute，skill仅固定IAM十五动作，数组非空；未知域/动作继续拒绝，保原错误/paging/mutation输入/输出。
+
+strict response集合扩展为breaking，15.0.0 /v1仅Root此次自有开发配对，不能冒minor或稳定生产兼容。先owner固定、再Web单pin/生成/严格测试、最后Root真实组合；不混新旧response。Admin consumer与未来稳定/v2激活规则见BFF三设计，日常/main/生产切换未授权。完整snapshot会继承95fbd894相对于Web旧413e3bbe已有的非Team机器差异，本片不编辑这些owner字段或Skills/MCP运行行为。
+
 <!-- BEGIN:T-K03.13-WEB-MCP-PERSONAL-READ-D0 -->
 
 ## T-K03.13 Web 本人 MCP 读取 D0（目标，尚未实施）
@@ -1605,3 +1848,12 @@ fixture and never sends this mutation. Error response or malformed success stays
 Compatible extra owner fields are ignored by the consumer validator; required Project identity fields
 remain mandatory. Once a valid owner 200 has returned, a failed navigation retry reuses that confirmed
 id and does not resend POST.
+## SET-05 个性化可靠保存（2026-10-13，候选已实现，待主控验收）
+
+沿用唯一现有 browser-private `/api/hub/preferences/personalization` → BFF `/v1/preferences/personalization`，GET 返回 personalization(nullable)/revision，PUT 四字段与 expected_revision，冲突码 personalization_revision_conflict。不新增 owner API、公开版本、generated pin 或 alias。昵称128、职业256、about2000、instructions8000的Unicode码点上限保持；编辑与响应校验使用同一规则，不使用UTF-16 maxLength。snapshot revision为非负safe integer，null iff revision0；PUT ACK必须四字段匹配且revision精确expected+1，不能接受跳跃。client 接收 AbortSignal，10s总deadline涵盖fetch与body、响应限64KiB；超时仅取消当前request、迟到body清理，不取消编辑session或自动重试。取消/迟到结果不得推进当前草稿或显示保存成功。首次读取失败不具备写入基准，禁止 PUT；冲突必须显式恢复，未知写结果保原草稿及状态，不自动换revision重放。
+
+## SET-07：本人资料 browser-private projection
+
+唯一新Web入口GET /api/account/profile，不是新的公开Product或IAM业务API；禁止query/body，canonical Web请求，GET以外不提供动作。调用现BFF /v1/me在线准入与/iam/oauth2/userinfo；不直接访问IAM。成功仅{data:{subject,name,email,email_verified}}，后3字段可为null，姓名/邮箱缺scope不是匿名或伪造默认值；userinfo sub与Product subject必须一致。其他IAM字段不透传，包含token、credential、cookie、Location或原始error body均不得回浏览器。
+
+所有响应private,no-store；无有效会话401、请求不合法400/403、依赖或登记未配置503、非法上游502，错误只用本片稳定安全类别，不显示原始异常。userinfo401/403失败关闭，429/5xx不得转成功空资料。单请求总5秒包含所有读取与body，上限16KiB，取消/迟到拒成功；身份校验与最终session复验同一原request，不由浏览器传subject/tenant。现IAM/BFF contract、generated pin和scope权限语义不变。

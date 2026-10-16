@@ -184,3 +184,13 @@ describe("explicit prompt identity and fail-closed boundaries", () => {
     expect(window.sessionStorage.getItem(handoff)).toBeNull()
   })
 })
+
+// SET47-BEGIN: cached engine creation proof must retire on true actor switch, not renewal.
+it("SET47 index invalidation retires live engine provenance without deleting a task or disposing its Run",async()=>{
+ const {browserEngine,invalidateBrowserAuthSessionIndexes}=await import("@/ui/shell/page-clients");
+ window.localStorage.setItem(SUBJECT_MARKER,"alice");const engine=browserEngine({preview:false})!;engine.newConversation();const id=engine.getSnapshot().store!.activeId;
+ expect(engine.getSnapshot().locallyCreatedSessionId).toBe(id);expect(admitBrowserAuthSessionIndexes("alice","alice")).toBe(true);expect(engine.getSnapshot().locallyCreatedSessionId).toBe(id);
+ invalidateBrowserAuthSessionIndexes();expect(engine.getSnapshot().locallyCreatedSessionId).toBeUndefined();expect(engine.getSnapshot().store?.activeId).toBe(id);expect(engine.getSnapshot().canSubmitMessage).toBe(true);
+ engine.dispose();
+});
+// SET47-END

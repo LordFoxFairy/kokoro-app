@@ -4,6 +4,8 @@
 // BFF envelope 适配时解包。变更类请求校验同源 Origin。
 
 import { z } from "zod"
+import { sessionArchive } from "@/lib/server/session-archive"
+import { sessionShare } from "@/lib/server/session-share"
 
 import { canonicalConversationIdSchema } from "@/contract/conversation-move"
 import { sameOriginOk } from "@/lib/server/same-origin"
@@ -31,6 +33,8 @@ const AGUI_STREAM_IDLE_TIMEOUT_MS = 60_000
 const FORWARD_HEADERS = ["accept", "content-type", "last-event-id", "idempotency-key"] as const
 
 async function proxy(request: Request, context: { params: Promise<{ path: string[] }> }): Promise<Response> {
+  if (/^\/api\/session\/sessions\/[^/]+\/(?:archive|restore)$/u.test(new URL(request.url).pathname)) return sessionArchive(request, context.params)
+  if (["POST", "DELETE"].includes(request.method) && /^\/api\/session\/sessions\/[^/]+\/share$/u.test(new URL(request.url).pathname)) return sessionShare(request, context.params)
   const requestId = requestIdForRequest(request)
   const config = productBffConfig()
   if (config === null) {

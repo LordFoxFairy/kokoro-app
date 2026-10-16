@@ -47,3 +47,9 @@ export function setAwaiting(sessionId: string, awaiting: boolean): void {
   awaitingIds = next
   emit()
 }
+
+export function resetAwaiting(): void {
+  if (awaitingIds.size === 0) return
+  awaitingIds = EMPTY
+  emit()
+}

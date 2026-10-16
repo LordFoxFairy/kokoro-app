@@ -16,6 +16,8 @@ import {
 } from "@/ui/shell/page-clients";
 
 import {
+  DataManagementSection,
+  HelpSection,
   AccountCard,
   AppearanceCard,
   ChatPrefsCard,
@@ -30,6 +32,7 @@ type SettingsPanelContentProps = {
   tab: SettingsTab;
   brandName: string;
   preview: boolean;
+  onArchiveChanged?: (state: import("@/lib/archived-tasks.schema").ArchiveState) => void;
   readBoundary?: ProjectReadBoundary;
   hubClient: HubClient;
   teamClient: TeamClient;
@@ -37,6 +40,7 @@ type SettingsPanelContentProps = {
   onAccountLoginMethodsChange: (open: boolean) => void;
   onOpenSubscription: () => void;
   onOpenPricing: () => void;
+  onSelectSetting: (tab: SettingsTab) => void;
   onCreateSkillWithAi?: (prompt?: string) => void;
   onTrySkill?: (skill: SkillCard) => void;
   skillsCatalogOpen: boolean;
@@ -55,12 +59,14 @@ export function SettingsPanelContent({
   brandName,
   preview,
   readBoundary,
+  onArchiveChanged,
   hubClient,
   teamClient,
   accountLoginMethods,
   onAccountLoginMethodsChange,
   onOpenSubscription,
   onOpenPricing,
+  onSelectSetting,
   onCreateSkillWithAi,
   onTrySkill,
   skillsCatalogOpen,
@@ -69,30 +75,25 @@ export function SettingsPanelContent({
   initialSkillsScope,
 }: SettingsPanelContentProps) {
   switch (tab) {
+    case "data-management":
+      return <DataManagementSection {...(onArchiveChanged===undefined?{}:{onArchiveChanged})} preview={preview} {...(readBoundary === undefined ? {} : { readBoundary })} />;
+    case "help":
+      return <HelpSection onSelectSetting={onSelectSetting} />;
     case "account":
       return (
         <AccountCard
           brandName={brandName}
           preview={preview}
-          subject={
-            readBoundary?.admitted === true ? readBoundary.subject : null
-          }
+          {...(readBoundary === undefined ? {} : { readBoundary })}
           loginMethodsOpen={accountLoginMethods}
           onLoginMethodsChange={onAccountLoginMethodsChange}
           onOpenSubscription={onOpenSubscription}
         />
       );
     case "appearance":
-      return <AppearanceCard />;
+      return <AppearanceCard preview={preview} {...(readBoundary === undefined ? {} : { readBoundary })} />;
     case "personalization":
-      return (
-        <PersonalizationCard
-          preview={preview}
-          subject={
-            readBoundary?.admitted === true ? readBoundary.subject : null
-          }
-        />
-      );
+      return <PersonalizationCard preview={preview} {...(readBoundary === undefined ? {} : { readBoundary })} />;
     case "chat":
       return <ChatPrefsCard preview={preview} />;
     case "shortcuts":
@@ -100,6 +101,8 @@ export function SettingsPanelContent({
     case "credits":
       return (
         <BillingContent
+          preview={preview}
+          {...(readBoundary === undefined ? {} : { readBoundary })}
           client={browserBillingClient({ preview })}
           onOpenPricing={onOpenPricing}
           embedded
@@ -107,7 +110,7 @@ export function SettingsPanelContent({
       );
     case "subscription":
       return (
-        <PricingContent client={browserPricingClient({ preview })} embedded />
+        <PricingContent preview={preview} {...(readBoundary === undefined ? {} : { readBoundary })} client={browserPricingClient({ preview })} embedded />
       );
     case "skills":
       return (
@@ -138,6 +141,6 @@ export function SettingsPanelContent({
         />
       );
     case "team":
-      return <TeamContent client={teamClient} embedded />;
+      return <TeamContent client={teamClient} preview={preview} {...(readBoundary === undefined ? {} : { readBoundary })} embedded />;
   }
 }

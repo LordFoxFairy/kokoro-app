@@ -22,6 +22,7 @@ type SettingsPanelProps = {
   brandName: string;
   preview: boolean;
   readBoundary?: ProjectReadBoundary;
+  onArchiveChanged?: (state: import("@/lib/archived-tasks.schema").ArchiveState) => void;
   hubClient: HubClient;
   teamClient: TeamClient;
   onSelectTab: (tab: SettingsTab) => void;
@@ -41,6 +42,7 @@ export function SettingsPanel({
   brandName,
   preview,
   readBoundary,
+  onArchiveChanged,
   hubClient,
   teamClient,
   onSelectTab,
@@ -97,6 +99,8 @@ export function SettingsPanel({
                 />
                 <SettingsPanelContent
                   tab={panelTab}
+                  onSelectSetting={onSelectTab}
+                  {...(onArchiveChanged === undefined ? {} : { onArchiveChanged })}
                   brandName={brandName}
                   preview={preview}
                   {...(readBoundary === undefined ? {} : { readBoundary })}

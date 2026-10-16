@@ -165,7 +165,7 @@ describe("IAM and RP origin admission behind a real local HTTPS reverse proxy", 
       next.stdout?.on("data", (chunk: Buffer) => { output += chunk.toString("utf8") })
       next.stderr?.on("data", (chunk: Buffer) => { output += chunk.toString("utf8") })
       for (let attempt = 0; attempt < 200; attempt += 1) {
-        try { if ((await http(proxyPort, "/")).status !== 502) return } catch { /* wait for Next */ }
+        try { if ((await http(proxyPort, "/iam/jwks")).status === 200) return } catch { /* wait for Next */ }
         await new Promise((resolve) => setTimeout(resolve, 50))
       }
       throw new Error(`proxy Next fixture did not become ready\n${output.slice(0, 2_000)}`)

@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import type { ModelCandidate } from "@/contract/http";
 import { useT } from "@/i18n/context";
 import { browserListClient } from "@/ui/shell/page-clients";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Field, FieldLabel } from "@/components/ui/field";
 import {
@@ -41,15 +42,47 @@ export function ChatPreferencesSection({
   // 就地保存反馈：改动后闪一枚「已保存」徽标，约 1.6s 后自动消（setState 在 timeout 内，非 effect 体内直接调）。
   const [saved, setSaved] = useState(false);
 
-  useEffect(() => {
-    let live = true;
-    void browserListClient({ preview })
-      .listModels()
-      .then((list) => live && setModels(list.models))
-      .catch(() => live && setModels([]));
-    return () => {
-      live = false;
+  const [saveFailed, setSaveFailed] = useState(false);
+  const [catalogState, setCatalogState] = useState<{ preview: boolean; phase: "loading" | "error" | "ready" }>({ preview, phase: "loading" });
+  if (catalogState.preview !== preview) setCatalogState({ preview, phase: "loading" });
+  const catalog = catalogState.preview === preview ? catalogState.phase : "loading";
+  const setCatalog = (phase: "loading" | "error" | "ready") => setCatalogState({ preview, phase });
+  const attempt = useRef<{ epoch: number; clear: () => void } | null>(null);
+  const epoch = useRef(0);
+
+  const loadModels = (): void => {
+    attempt.current?.clear();
+    const currentEpoch = ++epoch.current;
+    const deadline = performance.now() + 10_000;
+    const active = () => attempt.current?.epoch === currentEpoch;
+    const fail = () => {
+      if (!active()) return;
+      attempt.current?.clear();
+      attempt.current = null;
+      setCatalog("error");
     };
+    const timer = setTimeout(fail, 10_000);
+    attempt.current = { epoch: currentEpoch, clear: () => clearTimeout(timer) };
+    try {
+      void browserListClient({ preview }).listModels().then((list) => {
+        if (!active()) return;
+        if (performance.now() >= deadline) { fail(); return; }
+        attempt.current?.clear();
+        attempt.current = null;
+        setModels(list.models);
+        setCatalog("ready");
+      }).catch(fail);
+    } catch { queueMicrotask(fail); }
+  };
+
+  useLayoutEffect(() => {
+    loadModels();
+    return () => {
+      attempt.current?.clear();
+      attempt.current = null;
+    };
+    // A preview commit owns a fresh attempt; explicit retry uses the same caller.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [preview]);
 
   useEffect(() => {
@@ -62,8 +95,9 @@ export function ChatPreferencesSection({
 
   const onModelChange = (value: string): void => {
     setModel(value);
-    writeChatModel(value === FOLLOW_PROFILE ? null : value);
-    setSaved(true);
+    const written = writeChatModel(value === FOLLOW_PROFILE ? null : value);
+    setSaved(written);
+    setSaveFailed(!written);
   };
 
   return (
@@ -87,6 +121,14 @@ export function ChatPreferencesSection({
           </div>
         ) : null}
       </div>
+      {catalog === "loading" ? <p role="status">{t("settings.modelCatalogLoading")}</p> : null}
+      {catalog === "error" ? (
+        <div role="alert">
+          <p>{t("settings.modelCatalogFailed")}</p>
+          <Button variant="outline" size="sm" onClick={() => { setCatalog("loading"); loadModels(); }}>{t("settings.modelCatalogRetry")}</Button>
+        </div>
+      ) : null}
+      {catalog === "ready" && models.length === 0 ? <p>{t("settings.modelCatalogEmpty")}</p> : null}
       <Field orientation="horizontal" className={styles.chatPreferenceRow}>
         <FieldLabel
           className={styles.rowLabel}
@@ -106,15 +148,19 @@ export function ChatPreferencesSection({
             id="settings-default-model"
             className={styles.select}
             data-testid="settings-default-model"
+            disabled={catalog === "error"}
           >
-            <SelectValue placeholder={t("settings.followProfile")} />
+            <SelectValue placeholder={t("settings.followProfile")}>
+              {catalog !== "ready" ? (model === FOLLOW_PROFILE ? t("settings.followProfile") : model) : undefined}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectGroup>
-              <SelectItem value={FOLLOW_PROFILE_VALUE}>
+              {catalog === "loading" ? <p role="status">{t("settings.modelCatalogLoading")}</p> : null}
+              {catalog === "ready" ? <SelectItem value={FOLLOW_PROFILE_VALUE}>
                 {t("settings.followProfile")}
-              </SelectItem>
-              {models.map((candidate) => (
+              </SelectItem> : null}
+              {(catalog === "ready" ? models : []).map((candidate) => (
                 <SelectItem
                   key={modelSelector(candidate)}
                   value={modelSelector(candidate)}
@@ -126,13 +172,19 @@ export function ChatPreferencesSection({
           </SelectContent>
         </Select>
       </Field>
+      {saveFailed ? (
+        <div role="alert">
+          <p>{t("settings.modelPreferenceNotSaved")}</p>
+          <Button variant="outline" size="sm" onClick={() => onModelChange(model)}>{t("settings.retryPreferenceSave")}</Button>
+        </div>
+      ) : null}
       <p className={styles.chatPreferenceHint}>{t("settings.chatHint")}</p>
     </section>
   );
 }
 
 /** Kept as a deep-linkable panel for existing /settings/chat URLs. The left rail
- * follows Manus and surfaces this real preference within General instead. */
+ * follows Manus; this model preference is not a General control. */
 export function ChatPrefsCard({ preview = false }: { preview?: boolean }) {
   return (
     <Card

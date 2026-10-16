@@ -87,12 +87,14 @@ export function useAppFrameOverlays({
   useEffect(() => {
     if (!mounted || settingsTab === null) return;
     const focusTab = () => {
-      const target = document.querySelector<HTMLElement>(
-        `[data-testid="settings-tab-${settingsTab}"]`,
-      );
-      target?.focus();
-    };
-    focusTab();
+      const modal = document.querySelector<HTMLElement>('[data-testid="settings-modal"]')
+      // Initial handoffs recover focus from a closing command menu. Once
+      // focus is inside settings, tab navigation must preserve that control.
+      if (modal?.contains(document.activeElement)) return
+      const target = modal?.querySelector<HTMLElement>(`[data-testid="settings-tab-${settingsTab}"]`)
+      target?.focus()
+    }
+    focusTab()
     const frame = window.requestAnimationFrame(() => {
       focusTab();
     });

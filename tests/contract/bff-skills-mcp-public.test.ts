@@ -22,9 +22,9 @@ import {
   type InstallationOperation,
 } from "@/hub/schemas"
 
-const OWNER_COMMIT = "413e3bbe4a8f5ad5baa43cc4841d95c9f3c1d1a0"
-const OWNER_SHA256 = "68a6b678aa72f0a7f3ab03fbcb1b50f7db899c127d852322912a4ad0e1d01b9d"
-const OWNER_VERSION = "14.7.0"
+const OWNER_COMMIT = "30df0c428c592ed2710d62035ceb5855d20c7506"
+const OWNER_SHA256 = "b4e91483e425fdcc9547eac8bcda554273cbee0863ccb0ddfb185fae18e4e267"
+const OWNER_VERSION = "16.0.0"
 const SNAPSHOT = resolve(process.cwd(), "src/generated/bff-public-openapi.yaml")
 
 type Shape = {
@@ -197,7 +197,7 @@ function assertProjectionSemantics(spec: Spec): void {
 describe("pinned BFF Skills and MCP public consumer contract", () => {
   it("pins exact owner bytes and six current Skill draft/publish operations", async () => {
     const bytes = await readFile(SNAPSHOT)
-    expect(OWNER_COMMIT).toBe("413e3bbe4a8f5ad5baa43cc4841d95c9f3c1d1a0")
+    expect(OWNER_COMMIT).toBe("30df0c428c592ed2710d62035ceb5855d20c7506")
     expect(createHash("sha256").update(bytes).digest("hex")).toBe(OWNER_SHA256)
     const spec = YAML.parse(bytes.toString()) as Spec
     expect(spec.info.version).toBe(OWNER_VERSION)

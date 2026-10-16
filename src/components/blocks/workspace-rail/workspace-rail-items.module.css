@@ -96,12 +96,15 @@
 .itemAwaiting { width: 0.45rem; height: 0.45rem; flex: 0 0 auto; border-radius: 999px; background: var(--warning); }
 .itemRename,
 .itemMove,
+.itemArchive,
 .itemDelete { width: 2rem; height: 2rem; flex: 0 0 auto; padding: 0; color: var(--muted-foreground); }
 .itemRename::after,
 .itemMove::after,
+.itemArchive::after,
 .itemDelete::after { inset: 0; }
 .itemRename:hover,
 .itemMove:hover,
+.itemArchive:hover,
 .itemDelete:hover { color: var(--foreground); }
 .itemRename { right: 4.25rem; }
 .itemMove { right: 2.25rem; }
@@ -109,6 +112,7 @@
 .itemRenameInput { min-width: 0; flex: 1; margin: 0.2rem 0.35rem; border-color: var(--ring); border-radius: var(--radius-sm); font-size: 0.85rem; }
 .itemRename svg,
 .itemMove svg,
+.itemArchive svg,
 .itemDelete svg { width: 0.9rem; height: 0.9rem; }
 .loadMore { width: calc(100% - 1.3rem); margin: 0.35rem 0.65rem 0.2rem; border-radius: var(--radius-sm); font-size: 0.8rem; }
 
@@ -126,6 +130,7 @@
   [data-desktop-web="true"]:not([data-desktop-rail="true"]) .itemSelect { min-height: 2.75rem; padding-right: 8.75rem; }
   [data-desktop-web="true"]:not([data-desktop-rail="true"]) .itemRename,
   [data-desktop-web="true"]:not([data-desktop-rail="true"]) .itemMove,
+  [data-desktop-web="true"]:not([data-desktop-rail="true"]) .itemArchive,
   [data-desktop-web="true"]:not([data-desktop-rail="true"]) .itemDelete { top: 50%; width: 2.75rem; height: 2.75rem; transform: translateY(-50%); }
   [data-desktop-web="true"]:not([data-desktop-rail="true"]) .itemRename { right: 5.75rem; }
   [data-desktop-web="true"]:not([data-desktop-rail="true"]) .itemMove { right: 3rem; }
@@ -140,6 +145,7 @@
 .item[data-drag-kind="project"] > .itemSelect { padding-right: 0.55rem; }
 .item[data-drag-kind="conversation"] > .itemRename,
 .item[data-drag-kind="conversation"] > .itemMove,
+.item[data-drag-kind="conversation"] > .itemArchive,
 .item[data-drag-kind="conversation"] > .itemDelete {
   position: relative;
   inset: auto;

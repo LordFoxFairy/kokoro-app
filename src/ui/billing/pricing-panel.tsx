@@ -1,4 +1,6 @@
 "use client"
+
+import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -6,11 +8,10 @@ import { Empty, EmptyDescription } from "@/components/ui/empty"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 
-// 价格/购买面板（PAY-2）：套餐卡（权益列表 + 价格 + 购买按钮）。目录经 `/api/billing/plans` BFF 拉取
-// （site/owner 从信封派生）。诚实态优先：payment 未配置 / checkout 501 → 显式「支付暂未开通」+ 禁用购买，
-// 状态真来自后端，绝不放假按钮。金额/积分全程 BigInt 换算展示（不过 Number 丢精度）。
+// Read the canonical catalog; the paired BFF does not provide checkout.
+// Money and credits remain exact BigInt-based presentations.
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useLayoutEffect, useState, useRef } from "react"
 
 import { formatMicros, formatMinor } from "@/billing/format"
 import { planIntervalKey } from "@/billing/rules"
@@ -18,13 +19,10 @@ import type { PlanCatalogEntry, PricingClient } from "@/billing/pricing"
 import { PricingClientError } from "@/billing/pricing"
 import { useT } from "@/i18n/context"
 import { cn } from "@/lib/utils"
-import { useResource } from "@/lib/query"
 
 import styles from "./pricing-panel.module.css"
 import { useOverlayClose } from "@/ui/shell/use-overlay-close"
 
-// 套餐目录查询键（单发只读）：checkout 购买不改目录，故无失活。
-const CATALOG_KEY = "billing/plans"
 
 type CatalogState =
   | { kind: "loading" }
@@ -33,11 +31,13 @@ type CatalogState =
   | { kind: "ready"; plans: PlanCatalogEntry[] }
 
 type PricingPanelProps = {
+  preview?: boolean
+  readBoundary?: ProjectReadBoundary
   client: PricingClient
   onClose: () => void
 }
 
-export function PricingPanel({ client, onClose }: PricingPanelProps) {
+export function PricingPanel({ preview = false, readBoundary, client, onClose }: PricingPanelProps) {
   const t = useT()
   const { open, requestClose, onCloseAutoFocus } = useOverlayClose(onClose)
   return (
@@ -53,77 +53,82 @@ export function PricingPanel({ client, onClose }: PricingPanelProps) {
         <header className={styles.head}>
           <h2 className={styles.title}>{t("pricing.title")}</h2>
         </header>
-        <PricingContent client={client} />
+        <PricingContent preview={preview} {...(readBoundary === undefined ? {} : { readBoundary })} client={client} />
       </DialogContent>
     </Dialog>
   )
 }
 
 type PricingContentProps = {
+  preview?: boolean
+  readBoundary?: ProjectReadBoundary
   client: PricingClient
   embedded?: boolean
 }
 
-export function PricingContent({ client, embedded = false }: PricingContentProps) {
+export function PricingContent(props: PricingContentProps) {
+  const { preview = false, readBoundary, client } = props
   const t = useT()
-  // 目录经查询层单发读；ResourceResult 映射回四态判别式——payment 未配置（not_configured）→
-  // 诚实未开通态 unavailable，其余失败=加载错误，展示分支不变。
-  const catalogRes = useResource<PlanCatalogEntry[]>(
-    CATALOG_KEY,
-    useCallback(async () => (await client.plans()).plans, [client]),
-  )
-  const catalog: CatalogState =
-    catalogRes.data !== undefined
-      ? { kind: "ready", plans: catalogRes.data }
-      : catalogRes.error !== undefined
-        ? catalogRes.error instanceof PricingClientError && catalogRes.error.reason === "not_configured"
-          ? { kind: "unavailable" }
-          : { kind: "error" }
-        : { kind: "loading" }
-  // 购买诚实态（来自后端 checkout 响应）：unavailable=501 未开通（禁用购买）；login=401 未登录。
-  const [purchaseNotice, setPurchaseNotice] = useState<"none" | "unavailable" | "login">("none")
-  const [pendingPlan, setPendingPlan] = useState<string | null>(null)
-  const purchaseNoticeRef = useRef<HTMLDivElement | null>(null)
+  const [clientIdentity, setClientIdentity] = useState({ client, epoch: 0 })
+  if (clientIdentity.client !== client) setClientIdentity({ client, epoch: clientIdentity.epoch + 1 })
+  const identity = clientIdentity.client === client ? clientIdentity.epoch : clientIdentity.epoch + 1
+  const admitted = preview || (readBoundary?.admitted === true && typeof readBoundary.subject === "string" && readBoundary.subject.trim() !== "" && Number.isSafeInteger(readBoundary.generation) && readBoundary.generation >= 0)
+  const scope = JSON.stringify([preview, readBoundary?.admitted, readBoundary?.subject, readBoundary?.generation, identity])
+  if (!admitted) return <p>{t("settings.billingRequiresIdentity")}</p>
+  return <PricingScopedContent key={scope} {...props} />
+}
 
-  useEffect(() => {
-    if (purchaseNotice === "none") return
-    const frame = window.requestAnimationFrame(() => purchaseNoticeRef.current?.focus())
-    return () => window.cancelAnimationFrame(frame)
-  }, [purchaseNotice])
-
-  const buy = useCallback(
-    async (planId: string) => {
-      setPendingPlan(planId)
-      setPurchaseNotice("none")
-      try {
-        const result = await client.checkout(planId)
-        if (result.status === "ok") {
-          // provider 已配置：跳转 provider 托管收银台（V1 无 provider，此路径暂不可达）。
-          window.location.assign(result.checkout_url)
-          return
-        }
-        // 诚实态：状态真来自后端。501=未开通（禁用后续购买）；401=未登录。
-        setPurchaseNotice(result.status === "unavailable" ? "unavailable" : "login")
-      } catch {
-        setPurchaseNotice("unavailable")
-      } finally {
-        setPendingPlan(null)
+function PricingScopedContent({ client, embedded = false }: PricingContentProps) {
+  const t = useT()
+  const [catalog, setCatalog] = useState<CatalogState>({ kind: "loading" })
+  const attempt = useRef<{ controller: AbortController; settled: boolean; clear: () => void } | null>(null)
+  const load = useCallback(() => {
+    attempt.current?.controller.abort()
+    attempt.current?.clear()
+    const controller = new AbortController()
+    const deadline = performance.now() + 10_000
+    let rejectAbort!: (reason: unknown) => void
+    const interrupted = new Promise<never>((_resolve, reject) => { rejectAbort = reject })
+    const abort = () => rejectAbort(controller.signal.reason)
+    controller.signal.addEventListener("abort", abort, { once: true })
+    const timer = setTimeout(() => controller.abort(new PricingClientError("timeout", "Catalog timed out", null)), 10_000)
+    const flight = { controller, settled: false, clear: () => { clearTimeout(timer); controller.signal.removeEventListener("abort", abort) } }
+    attempt.current = flight
+    const current = () => attempt.current === flight
+    const operation = async () => {
+      const value = await client.plans(controller.signal)
+      controller.signal.throwIfAborted()
+      if (performance.now() >= deadline) {
+        controller.abort(new PricingClientError("timeout", "Catalog timed out", null))
+        controller.signal.throwIfAborted()
       }
-    },
-    [client],
-  )
-
-  const checkoutBlocked = purchaseNotice === "unavailable"
-
+      return value
+    }
+    void Promise.race([operation(), interrupted]).then((value) => {
+      if (current()) setCatalog({ kind: "ready", plans: value.plans })
+    }).catch((error: unknown) => {
+      if (current()) setCatalog({ kind: error instanceof PricingClientError && error.reason === "not_configured" ? "unavailable" : "error" })
+    }).finally(() => { flight.settled = true; flight.clear() })
+  }, [client])
+  useLayoutEffect(() => {
+    load()
+    return () => {
+      const flight = attempt.current
+      attempt.current = null
+      flight?.controller.abort(new PricingClientError("aborted", "Catalog retired", null))
+      flight?.clear()
+    }
+  }, [load])
+  const catalogLoading = catalog.kind === "loading"
+  const retry = () => {
+    if (attempt.current && !attempt.current.settled) return
+    setCatalog({ kind: "loading" }); load()
+  }
   return (
     <div className={cn(styles.body, embedded && styles.embeddedBody)} data-embedded={embedded || undefined}>
-          {purchaseNotice === "unavailable" ? (
-            <Alert ref={purchaseNoticeRef} tabIndex={-1} variant="destructive" className={styles.unavailable}>
+          {catalog.kind === "ready" && catalog.plans.length > 0 ? (
+            <Alert className={styles.unavailable}>
               <AlertDescription>{t("pricing.unavailable")}</AlertDescription>
-            </Alert>
-          ) : purchaseNotice === "login" ? (
-            <Alert ref={purchaseNoticeRef} tabIndex={-1} variant="destructive" className={styles.unavailable}>
-              <AlertDescription>{t("pricing.loginRequired")}</AlertDescription>
             </Alert>
           ) : null}
 
@@ -137,9 +142,9 @@ export function PricingContent({ client, embedded = false }: PricingContentProps
             <Alert variant="destructive" className={styles.feedback}>
               <AlertDescription>
                 <p>{t("pricing.loadError")}</p>
-              <Button variant="outline" size="sm" type="button" disabled={catalogRes.loading} aria-busy={catalogRes.loading} onClick={catalogRes.refetch}>
-                {catalogRes.loading ? <Spinner aria-hidden="true" /> : null}
-                {catalogRes.loading ? t("pricing.loading") : t("pricing.retry")}
+              <Button variant="outline" size="sm" type="button" disabled={catalogLoading} aria-busy={catalogLoading} onClick={retry}>
+                {catalogLoading ? <Spinner aria-hidden="true" /> : null}
+                {catalogLoading ? t("pricing.loading") : t("pricing.retry")}
               </Button>
               </AlertDescription>
             </Alert>
@@ -170,15 +175,9 @@ export function PricingContent({ client, embedded = false }: PricingContentProps
                   <Button variant="default"
                     type="button"
                     className={styles.buy}
-                    disabled={checkoutBlocked || pendingPlan !== null}
-                    aria-busy={pendingPlan === plan.id}
-                    onClick={() => void buy(plan.id)}
+                    disabled
                   >
-                    {checkoutBlocked
-                      ? t("pricing.buyUnavailable")
-                      : pendingPlan === plan.id
-                        ? <><Spinner aria-hidden="true" />{t("pricing.buying")}</>
-                        : t("pricing.buy")}
+                    {t("pricing.buyUnavailable")}
                   </Button>
                 </li>
               ))}

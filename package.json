@@ -16,7 +16,7 @@
     "cf:typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "next typegen && tsc --noEmit",
-    "contract": "pnpm contract:check:bff-team && pnpm contract:check:bff-agent-failure && vitest run contract tests/contract",
+    "contract": "pnpm contract:check:bff-archived-tasks && pnpm contract:check:bff-shared-tasks && pnpm contract:check:bff-account-profile && pnpm contract:check:bff-account-sessions && pnpm contract:check:bff-team && pnpm contract:check:bff-agent-failure && vitest run contract tests/contract",
     "contract:generate:bff-agent-failure": "node scripts/generate-bff-agent-failure.mjs --write",
     "contract:generate:bff-team": "node scripts/generate-bff-team-client.mjs --write",
     "contract:check:bff-agent-failure": "node scripts/generate-bff-agent-failure.mjs --check",
@@ -25,7 +25,15 @@
     "test:e2e": "playwright test",
     "test": "vitest run",
     "smoke:first-site": "node scripts/first-site-smoke.mjs",
-    "check": "pnpm contract && pnpm test:architecture && pnpm lint && pnpm typecheck && pnpm test && pnpm build"
+    "check": "pnpm contract && pnpm test:architecture && pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "contract:generate:bff-account-sessions": "node scripts/generate-bff-account-sessions-client.mjs --write",
+    "contract:check:bff-account-sessions": "node scripts/generate-bff-account-sessions-client.mjs --check",
+    "contract:generate:bff-account-profile": "node scripts/generate-bff-account-profile-client.mjs --write",
+    "contract:check:bff-account-profile": "node scripts/generate-bff-account-profile-client.mjs --check",
+    "contract:generate:bff-shared-tasks": "node scripts/generate-bff-shared-tasks-client.mjs --write",
+    "contract:check:bff-shared-tasks": "node scripts/generate-bff-shared-tasks-client.mjs --check",
+    "contract:generate:bff-archived-tasks": "node scripts/generate-bff-archived-tasks-client.mjs --write",
+    "contract:check:bff-archived-tasks": "node scripts/generate-bff-archived-tasks-client.mjs --check"
   },
   "dependencies": {
     "@ag-ui/core": "0.0.59",

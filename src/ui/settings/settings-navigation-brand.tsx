@@ -1,4 +1,5 @@
-import { ChevronsUpDown, Search } from "lucide-react";
+import { useRef, type ReactNode } from "react";
+import { ChevronsUpDown, Search, X } from "lucide-react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
@@ -9,6 +10,8 @@ type SettingsNavigationBrandProps = {
   brandName: string;
   scopeLabel: string;
   searchLabel: string;
+  clearLabel: string;
+  children?: ReactNode;
   value: string;
   onValueChange: (value: string) => void;
 };
@@ -19,9 +22,12 @@ export function SettingsNavigationBrand({
   brandName,
   scopeLabel,
   searchLabel,
+  clearLabel,
+  children,
   value,
   onValueChange,
 }: SettingsNavigationBrandProps) {
+  const searchRef = useRef<HTMLInputElement | null>(null);
   return (
     <>
       <div className={styles.brand}>
@@ -38,15 +44,20 @@ export function SettingsNavigationBrand({
           <ChevronsUpDown className={styles.brandSwitcher} aria-hidden="true" />
         </div>
       </div>
-      <label className={styles.settingsSearch}>
+      <div className={styles.searchToolbar}>
+      <div className={styles.settingsSearch}>
         <Search aria-hidden="true" />
         <Input
+          ref={searchRef}
           value={value}
           aria-label={searchLabel}
           placeholder={searchLabel}
           onChange={(event) => onValueChange(event.target.value)}
         />
-      </label>
+        {value.length > 0 ? <button type="button" className={styles.searchClear} aria-label={clearLabel} onClick={() => { onValueChange(""); searchRef.current?.focus(); }}><X aria-hidden="true" /></button> : null}
+      </div>
+      {children}
+      </div>
     </>
   );
 }

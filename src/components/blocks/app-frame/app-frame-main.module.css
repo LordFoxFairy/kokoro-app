@@ -364,3 +364,9 @@
 .main[data-desktop-web="true"][data-web-view="thread"] :global([data-slot="workspace-header"] > div:last-child > :last-child) {
   margin-left: 0.25rem;
 }
+
+/* Hide only the Web thread scrollbar so reserved gutters do not shift the
+ * reading axis. Scrolling remains enabled; visible scrollbar dragging does not. */
+.main[data-desktop-web="true"][data-web-view="thread"] :global([data-slot="message-scroller-viewport"]) {
+  scrollbar-width: none;
+}

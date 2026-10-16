@@ -206,7 +206,7 @@ it("填写标题后保存结构化排程数据", () => {
   });
 });
 
-it("勾选到期日期后必须先填写日期，短视口也不会把保存区推出 Dialog", () => {
+it("勾选到期日期后必须先填写日期，并按所选时区的当地日末保存", () => {
   const onSave = renderScheduled();
   fireEvent.click(screen.getByRole("button", { name: /建立您的排程任务/ }));
   fireEvent.change(screen.getByRole("textbox", { name: "未读邮件摘要" }), {
@@ -228,10 +228,34 @@ it("勾选到期日期后必须先填写日期，短视口也不会把保存区�
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   expect(onSave).toHaveBeenCalledWith(
     expect.objectContaining({
-      expiresAt: expect.stringMatching(/^2026-10-01T0[0-9]:59:59\.999Z$/u),
+      expiresAt: expect.any(String),
       timezone,
     }),
   );
+  // SET34-BEGIN: independently-verify-local-day-end
+  const submitted = onSave.mock.calls[0]?.[0];
+  const expiresAt = new Date(submitted.expiresAt);
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(expiresAt);
+  const local = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+  expect(local).toMatchObject({
+    year: "2026",
+    month: "09",
+    day: "30",
+    hour: "23",
+    minute: "59",
+    second: "59",
+  });
+  expect(expiresAt.getUTCMilliseconds()).toBe(999);
+  // SET34-END: independently-verify-local-day-end
 });
 
 it("预览排程保存后进入列表并持久化本地 fixture", async () => {

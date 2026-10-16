@@ -9,7 +9,6 @@ import {
   messagesPath,
   parseSessionSnapshot,
   runControlReceiptSchema,
-  mutationReceiptSchema,
   sessionListSchema,
   sessionsPath,
   sharePath,
@@ -22,7 +21,6 @@ import {
   type ModelCandidateList,
   type RunControlBody,
   type RunControlReceipt,
-  type MutationReceipt,
   type SessionList,
   type SessionSnapshot,
   runProcessPageSchema,
@@ -53,6 +51,8 @@ import { AgUiChatTransport } from "./agui-chat-transport"
 import { SessionClientError, type ClientFailureReason } from "./client-error"
 import { ConversationMoveError } from "./conversation-move-error"
 import type { SessionScope } from "./session-scope"
+import { shareErrorSchema } from "@/lib/shared-tasks.schema"
+import { parseSharedTasksJson } from "@/lib/shared-tasks-json"
 
 export { SessionClientError }
 export type { ClientFailureReason }
@@ -101,9 +101,132 @@ export type SessionClient = {
   listModels: () => Promise<ModelCandidateList>
   // 作品库（ARTIFACT-LIB）：属主 namespace 全部成果跨会话聚合、复合游标分页（cursor 缺省=首页）。
   // 分享（SHARE-1）：创建返 share_id（活跃分享幂等返同 id）；撤销置失效（公共读随即 404）。
-  createShare: (sessionId: string) => Promise<ShareReceipt>
-  revokeShare: (sessionId: string) => Promise<MutationReceipt>
+  createShare: (sessionId: string, signal?: AbortSignal) => Promise<ShareReceipt>
+  revokeShare: (sessionId: string, signal?: AbortSignal) => Promise<ShareReceipt>
   openEvents: (args: OpenEventsArgs) => EventStreamHandle
+}
+
+
+async function shareMutation(
+  target: string,
+  method: "POST" | "DELETE",
+  signal?: AbortSignal,
+): Promise<ShareReceipt> {
+  const controller = new AbortController(),
+    deadline = performance.now() + 10_000;
+  let reader: ReadableStreamDefaultReader<Uint8Array> | undefined,
+    response: Response | undefined,
+    retired = false,
+    reject!: (reason: unknown) => void;
+  const cancelled = new Promise<never>((_, no) => {
+    reject = no;
+  });
+  const stop = () => {
+    controller.abort();
+    if (reader) {
+      void reader.cancel().catch(() => undefined);
+      try {
+        reader.releaseLock();
+      } catch {}
+      reader = undefined;
+    }
+    if (response?.body && !response.body.locked)
+      void response.body.cancel().catch(() => undefined);
+  };
+  const abort = () => {
+    stop();
+    reject(new SessionClientError("network", "Share request retired"));
+  };
+  const timer = setTimeout(abort, 10_000);
+  signal?.addEventListener("abort", abort, { once: true });
+  if (signal?.aborted) abort();
+  const check = () => {
+    if (retired || controller.signal.aborted || performance.now() >= deadline)
+      throw new SessionClientError("network", "Share request retired");
+  };
+  const operation = async () => {
+    check();
+    response = await fetch(target, {
+      method,
+      credentials: "same-origin",
+      cache: "no-store",
+      redirect: "error",
+      signal: controller.signal,
+      headers: {
+        "idempotency-key": `session-mutation:${crypto.randomUUID()}`,
+        ...(method === "POST" ? { "content-type": "application/json" } : {}),
+      },
+      ...(method === "POST" ? { body: "{}" } : {}),
+    });
+    if (retired || controller.signal.aborted) {
+      stop();
+      check();
+    }
+    check();
+    if (
+      !/^application\/json(?:\s*;|$)/iu.test(
+        response.headers.get("content-type") ?? "",
+      ) ||
+      !/(?:^|,)\s*no-store\s*(?:,|$)/iu.test(
+        response.headers.get("cache-control") ?? "",
+      ) ||
+      !response.headers.get("x-request-id") ||
+      response.headers.get("x-request-id")!.length > 256 ||
+      response.headers.has("location") ||
+      response.headers.has("set-cookie")
+    )
+      throw Error("Invalid share headers");
+    const retry = response.headers.get("retry-after");
+    if (
+      retry !== null &&
+      (response.status !== 429 ||
+        !/^[1-9]\d{0,4}$/u.test(retry) ||
+        Number(retry) > 86400)
+    )
+      throw Error("Invalid share retry header");
+    let bytes = 0;
+    response.headers.forEach((v, k) => {
+      bytes += new TextEncoder().encode(`${k}: ${v}\r\n`).length;
+    });
+    let text = "";
+    const decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
+    if (bytes > 1_048_576) throw Error("Share response oversized");
+    if (response.body) {
+      reader = response.body.getReader();
+      for (;;) {
+        const p = await reader.read();
+        check();
+        if (p.done) break;
+        bytes += p.value.length;
+        if (bytes > 1_048_576) throw Error("Share response oversized");
+        text += decoder.decode(p.value, { stream: true });
+      }
+      text += decoder.decode();
+    }
+    check();
+    const raw = parseSharedTasksJson(text);
+    if (response.status !== 200) {
+      if (
+        ![400, 401, 403, 404, 409, 413, 422, 429, 502, 503].includes(
+          response.status,
+        )
+      )
+        throw Error("Invalid share status");
+      const error = shareErrorSchema.parse(raw);
+      if (error.meta.request_id !== response.headers.get("x-request-id"))
+        throw Error("Invalid share binding");
+      throw new SessionClientError("http", error.error.code, error.error.code);
+    }
+    return shareReceiptSchema.parse(raw);
+  };
+  try {
+    return await Promise.race([cancelled, operation()]);
+  } finally {
+    retired = true;
+    clearTimeout(timer);
+    signal?.removeEventListener("abort", abort);
+    stop();
+  }
 }
 
 const MOVE_DEADLINE_MS = 10_000
@@ -386,22 +509,8 @@ export function createSessionClient(options: { baseUrl: string }): SessionClient
       return parseJsonResponse(response, (raw) => runProcessPageSchema.parse(raw))
     },
 
-    createShare: (sessionId) =>
-      postJson(url(sharePath(sessionId)), {}, (raw) => shareReceiptSchema.parse(raw)),
-
-    revokeShare: async (sessionId) => {
-      const target = url(sharePath(sessionId))
-      let response: Response
-      try {
-        response = await fetch(target, { method: "DELETE", headers: { "idempotency-key": `session-mutation:${crypto.randomUUID()}` } })
-      } catch (error) {
-        throw new SessionClientError("network", describeUnknown(error))
-      }
-      if (!response.ok) {
-        throw await httpError("DELETE", target, response)
-      }
-      return parseJsonResponse(response, (raw) => mutationReceiptSchema.parse(raw))
-    },
+    createShare: (sessionId, signal) => shareMutation(url(sharePath(sessionId)), "POST", signal),
+    revokeShare: (sessionId, signal) => shareMutation(url(sharePath(sessionId)), "DELETE", signal),
 
     sendControl: (sessionId, runId, body, commandId) =>
       postJson(url(controlPath(sessionId, runId)), body, (raw) => runControlReceiptSchema.parse(raw), commandId),

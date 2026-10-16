@@ -1,3 +1,11 @@
+<!-- SET47 archive consumer: 2026-10-15 -->
+SET47：可选EngineSnapshot.locallyCreatedSessionId仅证明当前engine尚未确认持久化的本地创建任务。首次submit/newConversation同步产生；历史打开、外部store、dispose、subject/logout、owner snapshot/message receipt与当前列表/状态/归档ACK证明后退休。retireLocalCreationProvenance只清证明并通知，不清线程或取消Run。归档请求由页面hook持有，engine不新增归档数据库/网络真源。
+
+## SET21 停止分享回执
+
+`SessionClient.revokeShare` 接受正式平面 `ShareReceipt`（share_id），与 createShare 使用相同回执形状；旧 ok:true 不再表示成功。该方法可接收 AbortSignal，让设置页停止分享和完整重读共用一次总预算。ShareButton 原交互以及其他会话、移动、SSE 方法保持各自既有职责。
+
+<!-- SET16：task-notification.ts 只认本页MessageCreateReceipt或validated active execution_head及其nullable event_watermark；machine直接逐事件subscribeTaskNotifications，不用React快照充当消息队列。retireTaskNotifications使旧receipt/snapshot代际失效；view-only注入engine可无订阅，正式engine总接线。 -->
 # engine — 会话引擎（状态机 + 浏览器 I/O 唯一编排者）
 
 ## R141 会话列表读取边界

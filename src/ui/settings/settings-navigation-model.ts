@@ -118,6 +118,7 @@ export function createSettingsNavigation(
       icon: Cable,
     },
     { kind: "tab", key: "skills", label: t("rail.navSkills"), icon: Puzzle },
+    { kind: "tab", key: "subscription", label: t("settings.subTitle"), icon: WalletCards },
     {
       kind: "placeholder",
       id: "mail",
@@ -150,8 +151,8 @@ export function createSettingsNavigation(
       icon: WalletCards,
     },
     {
-      kind: "placeholder",
-      id: "data-management",
+      kind: "tab",
+      key: "data-management",
       label: t("settings.dataManagementTitle"),
       icon: DatabaseBackup,
       group: "data",
@@ -171,13 +172,13 @@ export function createSettingsNavigation(
     {
       kind: "tab",
       key: "team",
-      label: t("settings.createTeam"),
+      label: t("rail.navTeams"),
       icon: Building2,
       group: "support",
     },
     {
-      kind: "placeholder",
-      id: "help",
+      kind: "tab",
+      key: "help",
       label: t("settings.helpTitle"),
       icon: CircleHelp,
     },

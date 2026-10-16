@@ -1,5 +1,6 @@
 import type { ComponentType, RefObject, SVGProps } from "react"
 
+import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
 import type { SettingsTab } from "@/ui/settings/settings-modal"
 import type { ConversationSummary } from "@/ui/rail/rail-search"
 import type { RuntimeFeatureFlag, RuntimeNavigationItem } from "@/system/runtime-navigation"
@@ -19,6 +20,10 @@ export type RailConversationReads = {
   identity: string
   admitted: boolean
   scopeVersions: ReadonlyMap<string, number>
+  archiveReceipt?: import("@/lib/archived-tasks.schema").ArchiveState | null
+  archiveRevision?: number
+  archiveBusy?: boolean
+  onArchive?: (id:string)=>void
   failedMoveScopeKey: string | null
   focusComposer: () => void
   onSelect: (scope: SessionScope, id: string) => void
@@ -71,6 +76,8 @@ export type WorkspaceRailProps = {
   awaitingIds: ReadonlySet<string>
   onSelectConversation: (id: string) => void
   onDeleteConversation: (id: string) => Promise<boolean>
+  onArchiveConversation?: (id:string)=>void
+  archiveBusy?: boolean
   onRequestDelete?: (conversation: ConversationSummary, remove?: (id: string) => Promise<boolean>) => void
   /** Live per-scope readers. Standalone controlled rails supply their direct list explicitly. */
   conversationReads?: RailConversationReads
@@ -90,6 +97,8 @@ export type WorkspaceRailProps = {
   onOpenSettings: (tab: SettingsTab) => void
   /** Bottom utility action opens the floating notification center, not Settings. */
   onOpenNotifications?: (returnTarget?: HTMLElement | null) => void
+  /** Verified Product identity for private balance reads, separate from conversation readers. */
+  readBoundary?: ProjectReadBoundary
   preview?: boolean
   // 清单服务端水合态（SESS-LIST）：加载/错误态与滚动翻页入口。
   listLoading: boolean

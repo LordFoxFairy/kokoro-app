@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState, type RefObject } from "react"
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react"
 import Link from "next/link"
 import { ArrowUpRight, Bell, ChevronRight, ChevronsUpDown, CircleHelp, FileText, Grid2X2, Home, LogOut, Monitor, ShieldCheck, SlidersHorizontal, Sparkles, UserRound } from "lucide-react"
 
@@ -20,6 +20,7 @@ import { formatCredits } from "@/billing/format"
 import { useT } from "@/i18n/context"
 import { endProductSession } from "@/ui/auth/product-auth-client"
 import { browserBillingClient } from "@/ui/shell/page-clients"
+import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
 import type { SettingsTab } from "@/ui/settings/settings-modal"
 import { NotificationPanel } from "@/ui/notifications/notification-panel"
 import notificationStyles from "@/ui/notifications/notification-panel.module.css"
@@ -27,7 +28,7 @@ import { interceptMountedSurfaceNavigation } from "@/ui/navigation/mounted-surfa
 
 import { accountStyles, railStyles } from "./workspace-rail-styles"
 
-// The existing admission marker only retires a display result; it grants no access.
+// The local marker is only an additional consistency guard; it grants no access.
 function readCreditActor(): string | null | undefined {
   try { return window.localStorage.getItem("kokoro.web.auth-index-subject") } catch { return undefined }
 }
@@ -35,6 +36,7 @@ function readCreditActor(): string | null | undefined {
 export type WorkspaceRailAccountProps = {
   brandName?: string
   preview?: boolean
+  readBoundary?: ProjectReadBoundary
   compactDesktop: boolean
   onOpenSettings: (tab: SettingsTab) => void
   onOpenNotifications?: (returnTarget?: HTMLElement | null) => void
@@ -45,6 +47,7 @@ export type WorkspaceRailAccountProps = {
 export function WorkspaceRailAccount({
   brandName,
   preview = false,
+  readBoundary,
   compactDesktop,
   onOpenSettings,
   onOpenNotifications,
@@ -54,13 +57,20 @@ export function WorkspaceRailAccount({
   const [accountMenuOpen, setAccountMenuOpen] = useState(false)
   const [adminAccess, setAdminAccess] = useState<{ manageUrl: string } | null>(null)
   const actor = readCreditActor()
-  const [credit, setCredit] = useState<{ actor: string | null | undefined; preview: boolean; balance: string }>({ actor, preview, balance: "—" })
-  if (credit.actor !== actor || credit.preview !== preview) {
-    // Permanently retire the old projection even if A is readmitted before B resolves.
-    setCredit({ actor, preview, balance: "—" })
+  const admitted = readBoundary?.admitted === true
+  const subject = readBoundary?.subject ?? null
+  const generation = readBoundary?.generation ?? null
+  // A new object retires the prior attempt even if an old A tuple returns after B.
+  const creditScope = useMemo(() => ({ preview, admitted, subject, generation, actor }), [preview, admitted, subject, generation, actor])
+  const creditEligible = preview || (admitted && typeof subject === "string" && subject.trim().length > 0
+    && generation !== null && Number.isSafeInteger(generation) && generation >= 0 && actor === subject)
+  const [credit, setCredit] = useState<{ scope: typeof creditScope; balance: string }>({ scope: creditScope, balance: "—" })
+  if (credit.scope !== creditScope) {
+    // Permanently retire, rather than cache, the old private display projection.
+    setCredit({ scope: creditScope, balance: "—" })
   }
   const creditAttempt = useRef<AbortController | null>(null)
-  const creditBalance = credit.actor === actor && credit.preview === preview ? credit.balance : "—"
+  const creditBalance = creditEligible && credit.scope === creditScope ? credit.balance : "—"
   const accountSettingsFrameRef = useRef<number | null>(null)
   const previousCompactDesktopRef = useRef(compactDesktop)
   // The deployment tenant is fixed; the rail shows product identity, not an IAM namespace switcher.
@@ -106,17 +116,16 @@ export function WorkspaceRailAccount({
     }
   }, [compactDesktop])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    if (!creditEligible) return
     const controller = new AbortController()
     creditAttempt.current = controller
-    const current = () => creditAttempt.current === controller && !controller.signal.aborted && readCreditActor() === actor
-    if (preview || typeof actor === "string") {
-      void browserBillingClient({ preview }).summary(controller.signal)
-        .then((summary) => { if (current()) setCredit({ actor, preview, balance: formatCredits(summary.available_micros) }) })
-        .catch(() => { if (current()) setCredit({ actor, preview, balance: "—" }) })
-    }
+    const current = () => creditAttempt.current === controller && !controller.signal.aborted && readCreditActor() === creditScope.actor
+    void browserBillingClient({ preview: creditScope.preview }).summary(controller.signal)
+      .then((summary) => { if (current()) setCredit({ scope: creditScope, balance: formatCredits(summary.available_micros) }) })
+      .catch(() => { if (current()) setCredit({ scope: creditScope, balance: "—" }) })
     return () => { controller.abort(); if (creditAttempt.current === controller) creditAttempt.current = null }
-  }, [actor, preview])
+  }, [creditEligible, creditScope])
 
   const openSettingsFromAccount = (tab: SettingsTab) => {
     if (accountSettingsFrameRef.current !== null) {

@@ -1,3 +1,20 @@
+<!-- SET47 archive consumer: 2026-10-15 -->
+SET47：archived-tasks.ts仅代理本人归档列表；session-archive.ts仅承接现session catch-all的GETarchive/POSTarchive|restore。固定BFF、server-only bearer、Origin/Host/scheme、严格raw闭集JSON与目标/action、1MiB、一次总10秒含params/body/会话/上游EOF/final六字段复验。POST允许identity/chunked的合法framing，拒冲突与不支持encoding，实际4096B+EOF；不改generic Chat/SSE代理。
+
+## SET43 已移除会话的账户资料读取（2026-10-15；D0，先真实HTTP负控）
+
+测试夹具补充：GET不执行的Auth.js agent factory因server-only导入需空stub；身份准入与requestWithDomain仍是真实HTTP。前两轮仅collection失败，不算行为RED。
+
+runtime_audit唯一产品writer，Root设计/文档/资源/审查/Git/接入。现product-identity只对已配置BFF /v1/me的401、严格error/meta闭集及session_invalid、非空message、本次outbound ID同时绑定x-request-id与meta.request_id、JSON精确media type、no-store且无Location/Set-Cookie，抛具名ProductIdentitySessionRejectedError；16KiB/5s/取消保留，401正文解析后复核signal。标准JSON解析后做结构校验，不宣称raw重复键防护。其余错误及原200验证保持。现account-profile catch先check()，仅此instanceof→401 account_profile_session_required，其余503，零userinfo回退。
+
+product-identity.error.ts只维护内部异常类型；不返回原始BFF错误、token或消息。原callback/refresh仍fail closed，未改其状态策略。
+
+## SET21 分享边界
+
+`shared-tasks.ts` 承接具名 `/api/account/shared-tasks` GET，使用正式 BFF public artifact 的闭合 schema、单 10 秒总预算及 1 MiB 正文限额，核对部署固定租户、受信 subject 和最终同一有效 Product Session。它只调用 BFF，不读取分享数据库或内部 owner 服务。
+
+`session-share.ts` 只承接原 session catch-all 的精确分享 POST/DELETE，保持原 scope、project_ref、Idempotency-Key 和请求正文语义，校验 canonical Origin 与正式 share_id ACK；非分享及 SSE 原路径不变。`lib/shared-tasks-json.ts` 只负责本片 raw JSON 的 UTF-8、重复键和深度边界，`lib/shared-tasks.schema.ts` 由正式生成形状派生运行时校验，不建立另一份可编辑 contract。
+
 # lib/server — Web BFF 服务端边界
 
 ## 职责
@@ -6,6 +23,8 @@
 runtime token、内部服务地址、workload secret 或后端隔离键。
 
 ## 公开 API
+
+- `account-sessions.ts`：两条 `/api/account/sessions` route 的具名 BFF adapter；GET 可选 canonical Origin，DELETE 必需 canonical Origin，并在总预算内证明入站 stream 为 EOF，拒绝实际正文。严格正式生成合同、单 10 秒/1 MiB、主动取消及最终同一有效 Product Session 复核；禁止转发 issuer cookie、自动写重试或把未知结果视为成功。共用 `lib/account-sessions.schema.ts`，生成出处由正式 BFF artifact 唯一提供。
 
 - `same-origin.ts`：六条业务同源 adapter 的变更请求 Origin/Host 守卫；不读取 IAM、cookie、Redis 或 SQL。
 - `domain-context.ts`

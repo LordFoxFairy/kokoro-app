@@ -1,7 +1,7 @@
 "use client"
 
 import { type RefObject, useState } from "react"
-import { FolderInput, Pencil, X } from "lucide-react"
+import { Archive, FolderInput, Pencil, X } from "lucide-react"
 
 import { Input } from "@/components/ui/input"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -11,6 +11,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import type { ConversationMoveIntent } from "@/engine/engine-types"
+import { archiveIdAvailable } from "@/lib/archived-tasks.schema"
 import { cn } from "@/lib/utils"
 import { useT } from "@/i18n/context"
 import type { ConversationSummary } from "@/ui/rail/rail-search"
@@ -34,6 +35,8 @@ export type WorkspaceRailSessionItemProps = {
   onCancelRename: (restoreFocus?: boolean) => void
   onSelect: (id: string) => void
   onStartRename: (id: string, current: string) => void
+  onArchiveConversation?: (id:string)=>void
+  archiveBusy?: boolean
   onRequestDelete: (conversation: ConversationSummary) => void
   moveDestinations: readonly Readonly<{ id: string | null; name: string }>[]
   conversationMove: ConversationMoveIntent | null
@@ -60,6 +63,8 @@ export function WorkspaceRailSessionItem({
   onSelect,
   onStartRename,
   onRequestDelete,
+  onArchiveConversation,
+  archiveBusy,
   moveDestinations,
   conversationMove,
   conversationMovePending,
@@ -153,6 +158,7 @@ export function WorkspaceRailSessionItem({
               </DropdownMenuContent>
             </DropdownMenu>
           ) : null}
+          {onArchiveConversation ? <DropdownMenu><DropdownMenuTrigger asChild><SidebarMenuAction showOnHover className={itemStyles.itemArchive} type="button" aria-label={t("archive.action")} disabled={archiveBusy}><Archive aria-hidden="true" /></SidebarMenuAction></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem disabled={archiveBusy||!archiveIdAvailable(conversation.id)} onSelect={()=>onArchiveConversation(conversation.id)}>{t("archive.action")}</DropdownMenuItem>{!archiveIdAvailable(conversation.id)?<p>{t("archive.idUnavailable")}</p>:null}</DropdownMenuContent></DropdownMenu> : null}
           <SidebarMenuAction
             showOnHover
             className={cn(itemStyles.itemDelete, itemStyles.itemDeleteAction)}

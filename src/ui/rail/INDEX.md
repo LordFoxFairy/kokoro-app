@@ -1,3 +1,9 @@
+## SET29 侧栏账户余额可信读取（2026-10-15；D0，先tests-only）
+
+Web基线2d31cd502db44b5b0ad74e52321cba755624896f，939 tracked clean；runtime_audit唯一writer本片4既有source+1既有rail测试，927最终保护/Root7；先仅测试准入，其余931字节保护。Root管设计/docs/Git/资源/正式激活/CUA，Skills/连接器业务排除。
+
+AppFrame可信ProjectReadBoundary沿原rail props/shell进入account余额；同subject/generation退役隐藏及取消，marker不授准入。
+
 # ui/rail — 侧栏
 
 ## 职责

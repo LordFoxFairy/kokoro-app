@@ -239,28 +239,64 @@ describe("POST /api/billing/checkout", () => {
 })
 
 describe("POST /api/billing/mock-pay", () => {
-  it("keeps local mock confirmation out of production", async () => {
-    vi.stubEnv("NODE_ENV", "production")
-    const fetchMock = vi.fn()
+  it.each(["development", "test", "production"])("rejects mock payments in %s without owner I/O", async (environment) => {
+    vi.stubEnv("NODE_ENV", environment)
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { data: { ok: true } }))
     vi.stubGlobal("fetch", fetchMock)
     const { POST } = await import("@/app/api/billing/mock-pay/route")
-    const response = await POST(
-      new Request("http://localhost/api/billing/mock-pay", {
-        method: "POST",
-        headers: {
-          cookie: sessionCookie(),
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({ order_id: "checkout-1" }),
-      }),
-    )
+    const response = await POST(new Request("http://localhost/api/billing/mock-pay", {
+      method: "POST", headers: { origin: "http://localhost", host: "localhost", "content-type": "application/json" },
+      body: JSON.stringify({ order_id: "checkout-1" }),
+    }))
     expect(response.status).toBe(503)
     expect(await response.json()).toEqual({ error: "mock_pay_unavailable" })
     expect(fetchMock).not.toHaveBeenCalled()
   })
+  it.each([
+    ["anonymous", null, false, "http://localhost", 401, "unauthenticated"],
+    ["foreign origin", "session", false, "http://evil.test", 403, "forbidden_origin"],
+    ["admission failure", "session", true, "http://localhost", 503, "session_unavailable"],
+  ])("preserves %s admission without owner I/O", async (_name, session, reject, origin, status, error) => {
+    if (reject) currentProductSession.mockRejectedValueOnce(new Error("fixture admission failure"))
+    else if (session === null) currentProductSession.mockResolvedValueOnce(null)
+    const fetchMock = vi.fn()
+    vi.stubGlobal("fetch", fetchMock)
+    const { POST } = await import("@/app/api/billing/mock-pay/route")
+    const response = await POST(new Request("http://localhost/api/billing/mock-pay", {
+      method: "POST", headers: { origin: String(origin), host: "localhost" }, body: "not JSON",
+    }))
+    expect(response.status).toBe(status)
+    expect(await response.json()).toEqual({ error })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it("does not consume an admitted request body or require payment fields", async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal("fetch", fetchMock)
+    const request = new Request("http://localhost/api/billing/mock-pay", {
+      method: "POST", headers: { origin: "http://localhost", host: "localhost" }, body: "not JSON",
+    })
+    const json = vi.spyOn(request, "json")
+    const { POST } = await import("@/app/api/billing/mock-pay/route")
+    expect((await POST(request)).status).toBe(503)
+    expect(json).not.toHaveBeenCalled()
+    expect(request.bodyUsed).toBe(false)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it("retains missing deployment configuration before session admission", async () => {
+    delete process.env.KOKORO_BFF_BASE_URL
+    const fetchMock = vi.fn()
+    vi.stubGlobal("fetch", fetchMock)
+    const { POST } = await import("@/app/api/billing/mock-pay/route")
+    const response = await POST(new Request("http://localhost/api/billing/mock-pay", { method: "POST" }))
+    expect(response.status).toBe(503)
+    expect(await response.json()).toEqual({ error: "auth_not_configured" })
+    expect(currentProductSession).not.toHaveBeenCalled()
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
 })
-
-
 describe("R255 existing session adapter personal Credit reads", () => {
   beforeEach(() => requestWithDomain.mockReset())
 

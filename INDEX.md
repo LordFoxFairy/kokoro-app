@@ -1,3 +1,87 @@
+<!-- SET47 archive consumer: 2026-10-15 -->
+SET47：任务菜单与Data归档恢复通过现AppFrame接线；新schema/raw JSON、lib/server归档列表与状态adapter、四操作generated组、settings客户端/hooks及shell active-state/command hooks各有单一职责。BFF归档事实唯一owner，Web无archive数据库或全局缓存。完整验收与正常3312激活待Root，3311保留。
+
+## SET43 已移除会话的账户资料读取（2026-10-15；D0，先真实HTTP负控）
+
+测试夹具补充：GET不执行的Auth.js agent factory因server-only导入需空stub；身份准入与requestWithDomain仍是真实HTTP。前两轮仅collection失败，不算行为RED。
+
+服务器账户资料失效状态由现lib/server/account-profile.ts投影；BFF身份校验由product-identity.ts负责，新增独立product-identity.error.ts只定义共享内部类型；无新模块/目录/服务。
+
+## SET42 任务发送行窄屏排版（2026-10-15；D0）
+
+现General任务发送行窄屏堆叠由settings-sections.module.css负责；原禁用业务边界保持。
+
+<!-- SET41 V2 D0: SET41 V2：General父级table布局约束归现settings-modal.module.css；主题和语言控件可用宽归现sections CSS。 -->
+
+## SET41 主题选项窄屏可达性（2026-10-15；D0）
+
+主题窄屏可达性归src/ui/settings/sections/settings-sections.module.css；追加原E2E尾部回归，业务provider保持。
+
+SET40：`src/components/blocks/app-frame/use-app-frame-overlays.ts` 协调初始设置handoff，保留设置内搜索结果的焦点；设置搜索仍归现Navigation。
+
+## SET40 具体设置项搜索（2026-10-15；D0，先tests-only）
+
+基线Web f82c891965f80eed9ff0c022d3f77b39bdbad42e，939 tracked clean。Computer Use实际Manus：昵称→个性化+昵称、点child切页并保query/结果焦点；通知→通用+浏览器通知；仅菜单名命中只parent；无匹配未找到结果、当前内容不变。现仅菜单过滤且强留selected，窄屏隐藏search，存在明确功能缺口。
+
+现Navigation/Modal/CSS提供静态设置项搜索，仅导航既有页；无API/wire/schema/owner授权/持久化变化，Skills/连接器业务保护。
+
+## SET39 英日文实际设置缺译（2026-10-15；D0）
+
+仅现有en/ja补实际调用MessageKey值；无API/wire/schema变化，全旧值、全tests及其它源保护。
+
+## SET38 六种语言的实际设置缺译（2026-10-15；D0）
+
+基线Web 76a42c2e574eda12b86d97eaaf30d1bad3380068，939 tracked clean。runtime_audit唯一writer仅现ko/es/fr/de/pt/ru六locale，926文件保护/Root7；所有tests和产品逻辑字节不变。
+
+仅现六locale补既有MessageKey native值，无API/wire/schema/owner/依赖变化，原value/全部tests与其它产品源保护。
+
+## SET37 登录刷新早期失败诊断（2026-10-15；D0）
+
+基线Web 01780925f62f5cdf2552567d8f97d0c0ee85abc5。runtime_audit仅改现OIDC实际Next测试；932文件保护，Root6文档。产品源码、原race/count/oracle/timeout/fixture/cleanup均不变。
+
+仅测试观察增强，无API/wire/存储schema/owner变化；所有产品源码和原业务断言保护，已有诊断输出净化不变。
+
+## SET36 复制当前任务链接（2026-10-15；D0，先tests-only）
+
+基线Web 97a6d9694cf9e52d54c50d516fac7cde2889bcf1，939 tracked clean；runtime_audit唯一writer，最终13现source/4现test/914保护/Root8。先仅四现test可追加，927其余字节保护。Root方案/docs/独审/原source RED/Git/资源与正常激活。
+
+现keyboard shortcut/Card/AppFrame+九locale及现四测试，复制当前真实task leaf，不公开分享；原测试完整保留，先RED后source，原三快捷键与权限边界保护。
+
+## SET35 十四个实际设置日文提示（2026-10-15；D0，仅现locale）
+
+基线Web 3f97368ef38c9cea4c88d53ad29e61b83a8716eb，939 tracked clean；runtime_audit唯一writer仅现src/i18n/ja.ts，931保护/Root7。Root设计/docs/独审/Git/资源与实际回归；全部tests与其它locale/产品逻辑字节保护。
+
+src/i18n/ja.ts仅新增十四个现设置调用key的日文；原values/其它locale/全tests保护，覆盖率是含英文回退的key集指标。
+
+## SET34 到期日期测试按实际时区验日末（2026-10-15；D0，仅现测试）
+
+基线Web fd627496a6f860c7ed3e1afef51c65fbc3bcca57，939 tracked clean；runtime_audit唯一writer仅现tests/ui/kokoro-scheduled-surface.test.tsx，932保护/Root6。Root设计/docs/独审/Git/实际复核；全product source与其它全部测试字节保护。
+
+现scheduled UI test中一项时区预期修正；其它测试及全部product source保护，不冒称jsdom已测窄屏geometry。
+
+## SET33 两条原生withdraw测试的就绪前置（2026-10-15；D0，仅现测试）
+
+基线Web d7f5d5d41ce4740de219480ccd6d7bf7d9166d40，939 tracked clean；runtime_audit唯一writer仅现native测试，931保护/Root7。Root资源/Git/docs/独审/正常运行；全部product source及原计数/安全assert/timeout/mock/cleanup仍保护。
+
+仅两初始native withdraw测试开启cold/reload请求到达前置；所有产品源码、其余调用和原断言保护。
+
+## SET32 原生登录请求顺序诊断（2026-10-15；D0，仅现测试）
+
+基线Web 52b535789b93ebac740db7aa8e5296c82b6622b6，939 tracked clean；runtime_audit唯一writer仅tests/system/oidc-rp-next-http.integration.test.ts，931保护/Root7。Root设计/docs/独审/资源/Git与正常实例。现runtime修补已接收，终态20focused/3987PASS7旧FAIL/Playwright20PASS4原SKIP；不能据此认定R175/R177旧native多请求根因。
+
+现native HTTP集成测试仅新增可关闭的请求顺序诊断；原helper、断言和product source逐字保护。
+
+## SET31 runtime请求退休（2026-10-15；D0，先tests-only）
+
+基线Web dc26502bfa47ba0c22422623118b455d46644be0，939 tracked clean；runtime_audit唯一writer，1既有hook/1既有test/930最终保护/Root7，先仅tests其余931保护。Root设计/docs/独审/资源/Git/正常激活/CUA。AppGate及原生R175/R177全部源码/oracle保护；不扩大trusted admission接口，不把hook负控冒称原生多请求根因。
+
+现runtime hook owned dispatch/commit退休与局部scope呈现，AppGate接口和原生观察计数保护；原9测试仅追加负控。
+
+<!-- SET20：TeamContent→use-team-settings拥有admitted subject/generation内权限首读、单次写与unknown重读/显式继续；team/client拥有固定同源I/O/ACK，team/json拒原文重复键；现team route保持九operation/单预算/EOF与最终身份栅栏。验收与未决见CURRENT。 -->
+<!-- SET19：AccountCard显式保存→account-profile-update-client→/api/account/profile PATCH→lib/server/account-profile-update→正式BFF15.2/IAM0.13；use-account-profile-editor拥有身份代际内草稿/unknown重读，account-profile-update.schema只负责generated-derived closed wire/原文JSON。userinfo权威GET保持独立，正常浏览器验收见CURRENT。 -->
+<!-- SET18：账户已连接设备入口复用现AccountCard；account-sessions-client/use-account-sessions/account-devices-dialog分别负责I/O、身份代际状态和确认视图；/api/account/sessions两route→lib/server/account-sessions→正式BFF15.1；schema消费唯一artifact的正规bff-account-sessions窄生成。真实浏览器撤销验收见CURRENT，不伪造设备/位置。 -->
+<!-- SET16：engine/task-notification.ts 负责已锚typed live任务信号；notifications/communication-preferences.ts 按可信subject存浏览器偏好；task-browser-notification.ts/task-completion-sound.ts 分别拥有浏览器实例/手势音频；shell/use-task-notifications.ts 仅绑定已准入非preview页面；原awaiting只保badge/title。 -->
+<!-- SET-SHORTCUTS: 快捷键规则 src/lib/keyboard-shortcuts.ts；订阅 src/hooks/use-keyboard-shortcuts.ts；编辑 src/ui/settings/sections/shortcuts-card.tsx；回归 tests/lib/keyboard-shortcuts.test.ts 与 tests/ui/keyboard-shortcuts.test.tsx。 -->
 ### T-K03.13 本人 MCP 只读接线
 
 `src/app/api/hub/[...path]/route.ts` 精确保 self 映射四个已发行本人 reads；`src/hub/mcp-personal.schema.ts` 校验独立 wire/错误/资源绑定，原 active Connection projection 不变。相邻 `tests/app/hub-proxy.test.ts` 与 `tests/hub/mcp-personal-schema.test.ts` 覆盖闭集及网络生命周期；CRUD/授权 connection/Admin 是后继，不冒本片完成。

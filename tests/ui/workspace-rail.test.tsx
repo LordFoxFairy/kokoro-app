@@ -1,3 +1,8 @@
+import type { ConversationListController } from "@/ui/shell/use-conversation-list"
+import type { ConversationStore } from "@/core/conversations"
+import { createFakeClient, createMemoryStorage } from "../engine/fakes"
+import { createSessionEngine } from "@/engine/machine"
+import { createSessionClient } from "@/engine/client"
 // 侧栏会话重命名内联编辑（CONV-UX）：双击/✎ 进入编辑，Enter 提交、Escape 取消、空题与未改动不上抛。
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
@@ -7,6 +12,7 @@ import { LocaleProvider } from "@/i18n/context"
 import { WorkspaceRailAccount } from "@/components/blocks/workspace-rail/workspace-rail-account"
 import { WorkspaceRail } from "@/components/blocks/workspace-rail/workspace-rail"
 import railStyles from "@/components/blocks/workspace-rail/workspace-rail.module.css"
+import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
 import type { ConversationSummary } from "@/ui/rail/rail-search"
 import * as pageClients from "@/ui/shell/page-clients"
 import { ThemeProvider } from "@/ui/theme/theme-context"
@@ -45,7 +51,85 @@ function renderRail(overrides?: Partial<Parameters<typeof WorkspaceRail>[0]>) {
   return { ...view, onRenameConversation, onOpenSettings, onOpenNotifications }
 }
 
+// Owner-confirmed project folders with the real scoped list parser. Controlled
+// `conversations` in a standalone rail now represents the always-present inbox.
+function renderProjectFolderRail(overrides: Partial<Parameters<typeof WorkspaceRail>[0]> = {}) {
+  const projectRef = "project_a"
+  const onNewChat = vi.fn()
+  const onFolderNewChat = vi.fn()
+  const transient = createSessionEngine({ client: createFakeClient(), storage: createMemoryStorage<ConversationStore>(null) })
+  const thread = transient.getSnapshot().thread
+  transient.dispose()
+  const listClient = createSessionClient({ baseUrl: "http://s.local" })
+  const fetchMock = stubBusinessFetch(vi.fn<typeof fetch>(async (input) => {
+    const url = new URL(input instanceof Request ? input.url : String(input), window.location.origin)
+    const project = url.searchParams.get("project_ref")
+    return Response.json({ sessions: [{ session_id: project === projectRef ? "task_a" : "conv_direct", title: project === projectRef ? "整理需求" : "普通持久会话", updated_at: "2026-10-01T00:00:00.000Z" }], next_cursor: null })
+  }))
+  // Import binding is the existing browser client; no extra engine is created
+  // to read an expanded folder's durable rows.
+  vi.spyOn(pageClients, "browserListClient").mockReturnValue(listClient)
+  const currentController: ConversationListController = {
+    conversations: [{ id: "task_a", title: "整理需求" }], loading: false, loadingMore: false, error: false,
+    refresh: vi.fn(), hasMore: false, loadMore: vi.fn(), selectConversation: vi.fn(),
+    deleteConversation: vi.fn().mockResolvedValue(true), renameConversation: vi.fn(), startNewChat: vi.fn(),
+  }
+  return {
+    ...renderRail({
+      projects: [{ id: projectRef, name: "产品规划", href: `/app/project/${projectRef}`, active: true }, { id: "project_b", name: "发布清单", href: "/app/project/project_b" }],
+      projectListStatus: "ready", projectHref: `/app/project/${projectRef}`, projectActive: true,
+      onNewChat,
+      conversationReads: { engine: null, scope: { kind: "project", projectRef }, currentController, activeId: null, thread, isStreaming: false, identity: "folder-fixture", admitted: true, scopeVersions: new Map(), failedMoveScopeKey: null, focusComposer: () => {}, onSelect: vi.fn(), onNewChat: onFolderNewChat, onMove: vi.fn(), onDeleteConfirmed: vi.fn() },
+      ...overrides,
+    }), onNewChat, onFolderNewChat, projectRef, fetchMock, currentController,
+  }
+}
+
+
+// Admin capability reads are independent of the business response queue.
+const adminAccessFetch = vi.fn<typeof fetch>(async (input, init) => {
+  expect(input).toBe("/api/admin-access")
+  expect(init).toEqual(expect.objectContaining({ cache: "no-store", signal: expect.any(AbortSignal) }))
+  return Response.json({ platform_admin: false }, { headers: { "cache-control": "private, no-store", "x-request-id": "req-ordinary-account" } })
+})
+function stubBusinessFetch<T extends typeof fetch>(businessFetch: T): T {
+  vi.spyOn(globalThis, "fetch").mockImplementation((input, init) =>
+    new URL(input instanceof Request ? input.url : String(input), window.location.origin).pathname === "/api/admin-access"
+      ? adminAccessFetch(input, init)
+      : businessFetch(input, init),
+  )
+  return businessFetch
+}
+
+
+function retirementRailFixture() {
+  const transient = createSessionEngine({ client: createFakeClient(), storage: createMemoryStorage<ConversationStore>(null) })
+  const thread = transient.getSnapshot().thread
+  transient.dispose()
+  const list = createSessionClient({ baseUrl: "http://s.local" })
+  vi.spyOn(pageClients, "browserListClient").mockReturnValue(list)
+  const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+    const url = new URL(input instanceof Request ? input.url : String(input), window.location.origin)
+    const project = url.searchParams.get("project_ref")
+    return Response.json({ sessions: project === null ? [] : [{ session_id: `conv_${project}`, title: `会话${project}`, updated_at: "2026-10-01T00:00:00Z" }], next_cursor: null })
+  })
+  const props: Parameters<typeof WorkspaceRail>[0] = {
+    collapsed: false, onToggleCollapse: vi.fn(), onNewChat: vi.fn(), chatHref: "/app", conversations: [], activeId: null,
+    awaitingIds: new Set(), onSelectConversation: vi.fn(), onDeleteConversation: vi.fn().mockResolvedValue(true), onRenameConversation: vi.fn(), onOpenSettings: vi.fn(), listLoading: false, listError: false, hasMore: false, onLoadMore: vi.fn(),
+    projects: [{ id: "P", name: "同名专案", href: "/app/project/P" }, { id: "Q", name: "同名专案", href: "/app/project/Q" }], projectListStatus: "ready",
+    conversationReads: { engine: null, scope: { kind: "direct" }, currentController: {
+      conversations: [], loading: false, loadingMore: false, error: false, refresh: vi.fn(), hasMore: false,
+      loadMore: vi.fn(), selectConversation: vi.fn(), deleteConversation: vi.fn().mockResolvedValue(true),
+      renameConversation: vi.fn(), startNewChat: vi.fn(),
+    }, activeId: null, thread, isStreaming: false, identity: "retire-actor", admitted: true, scopeVersions: new Map(), failedMoveScopeKey: null, focusComposer: vi.fn(), onSelect: vi.fn(), onNewChat: vi.fn(), onMove: vi.fn(), onDeleteConfirmed: vi.fn() },
+  }
+  const frame = (admitted: boolean) => <ThemeProvider><LocaleProvider><WorkspaceRail {...props} conversationReads={{ ...props.conversationReads!, admitted }} /></LocaleProvider></ThemeProvider>
+  return { props, frame, fetchMock }
+}
+
+
 beforeEach(() => {
+  adminAccessFetch.mockClear()
   window.localStorage.clear()
   window.localStorage.setItem("kokoro.locale", "zh")
 })
@@ -896,7 +980,7 @@ it.each([false, true])("账户菜单精确显示 available 且不虚构免费套
     ledger: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }),
   })
   window.localStorage.setItem("kokoro.web.auth-index-subject", "r255-credit-owner")
-  renderRail()
+  renderRail({ readBoundary: { admitted: true, subject: "r255-credit-owner", generation: 1 } })
   const account = screen.getByRole("button", { name: /个人工作区|用户范围/ })
   fireEvent.pointerDown(account, { button: 0 })
   fireEvent.click(account)
@@ -912,8 +996,8 @@ function r255DeferredAccount() {
   return { promise, resolve }
 }
 const r255AccountValue = { credit_account_id: "11111111-1111-4111-8111-111111111111", status: "active" as const, available_micros: "42000000", held_micros: "0" }
-function r255AccountElement() {
-  return <ThemeProvider><LocaleProvider><WorkspaceRailAccount compactDesktop={false} onOpenSettings={() => {}} /></LocaleProvider></ThemeProvider>
+function r255AccountElement(readBoundary: ProjectReadBoundary) {
+  return <ThemeProvider><LocaleProvider><WorkspaceRailAccount compactDesktop={false} onOpenSettings={() => {}} readBoundary={readBoundary} /></LocaleProvider></ThemeProvider>
 }
 async function r255OpenAccountMenu() {
   const button = screen.getByRole("button", { name: /个人工作区|用户范围/ })
@@ -928,11 +1012,11 @@ it("账户余额主体切换先撤旧值，旧读取迟到不覆盖B且取消原
   const summary = vi.fn((signal?: AbortSignal) => { signals.push(signal); return signals.length === 1 ? late.promise : fresh.promise })
   vi.spyOn(pageClients, "browserBillingClient").mockReturnValue({ summary, ledger: vi.fn() })
   window.localStorage.setItem("kokoro.web.auth-index-subject", "r255-A")
-  const view = render(r255AccountElement())
+  const view = render(r255AccountElement({ admitted: true, subject: "r255-A", generation: 1 }))
   const menu = await r255OpenAccountMenu()
   await waitFor(() => expect(summary).toHaveBeenCalledTimes(1))
   window.localStorage.setItem("kokoro.web.auth-index-subject", "r255-B")
-  view.rerender(r255AccountElement())
+  view.rerender(r255AccountElement({ admitted: true, subject: "r255-B", generation: 2 }))
   await act(async () => { late.resolve(r255AccountValue); await Promise.resolve() })
   expect(menu).not.toHaveTextContent("42")
   expect(signals[0]?.aborted).toBe(true)
@@ -945,17 +1029,17 @@ it("账户准入marker撤回时立即隐藏旧余额而不读取未知主体", a
   const summary = vi.fn().mockResolvedValueOnce(r255AccountValue).mockImplementationOnce(() => readmit.promise)
   vi.spyOn(pageClients, "browserBillingClient").mockReturnValue({ summary, ledger: vi.fn() })
   window.localStorage.setItem("kokoro.web.auth-index-subject", "r255-A")
-  const view = render(r255AccountElement())
+  const view = render(r255AccountElement({ admitted: true, subject: "r255-A", generation: 1 }))
   const menu = await r255OpenAccountMenu()
   await waitFor(() => expect(menu).toHaveTextContent("42"))
   window.localStorage.removeItem("kokoro.web.auth-index-subject")
-  view.rerender(r255AccountElement())
+  view.rerender(r255AccountElement({ admitted: true, subject: "r255-A", generation: 1 }))
   await act(async () => { await Promise.resolve() })
   expect(menu).not.toHaveTextContent("42")
   expect(menu).toHaveTextContent("—")
   expect(summary).toHaveBeenCalledTimes(1)
   window.localStorage.setItem("kokoro.web.auth-index-subject", "r255-A")
-  view.rerender(r255AccountElement())
+  view.rerender(r255AccountElement({ admitted: true, subject: "r255-A", generation: 1 }))
   expect(menu).not.toHaveTextContent("42")
   expect(summary).toHaveBeenCalledTimes(2)
   await act(async () => { readmit.resolve({ ...r255AccountValue, available_micros: "7000000" }); await Promise.resolve() })
@@ -967,10 +1051,196 @@ it("账户卸载真正abort且迟到completion不进入后续菜单", async () =
   const summary = vi.fn((value?: AbortSignal) => { signal = value; return late.promise })
   vi.spyOn(pageClients, "browserBillingClient").mockReturnValue({ summary, ledger: vi.fn() })
   window.localStorage.setItem("kokoro.web.auth-index-subject", "r255-A")
-  const view = render(r255AccountElement())
+  const view = render(r255AccountElement({ admitted: true, subject: "r255-A", generation: 1 }))
   await waitFor(() => expect(summary).toHaveBeenCalledTimes(1))
   view.unmount()
   expect(signal?.aborted).toBe(true)
   await act(async () => { late.resolve(r255AccountValue); await Promise.resolve() })
   expect(screen.queryByRole("menu")).toBeNull()
 })
+
+
+// SET49: main retired expandable project-task branches. Project links must
+// never start private folder reads during admission or identity transitions.
+it.each(["same-subject", "actor-B", null])("R255 project links retain no private P/Q task branches across %s retirement", async (nextActor) => {
+  const { props, fetchMock } = retirementRailFixture()
+  const frame = (actor: string | null, generation: number, admitted: boolean) => {
+    const conversationReads = { ...props.conversationReads!, identity: `${actor ?? "unknown"}:gen${generation}`, admitted, folderIntentIdentity: actor }
+    return <ThemeProvider><LocaleProvider><WorkspaceRail {...props} conversationReads={conversationReads} /></LocaleProvider></ThemeProvider>
+  }
+  const view = render(frame("actor-A", 1, true))
+  const assertNoBranches = () => {
+    expect(document.querySelectorAll('[data-conversation-list="project-conversation"]')).toHaveLength(0)
+    for (const id of ["P", "Q"]) {
+      expect(document.querySelector(`[data-project-id="${id}"] button[aria-expanded]`)).toBeNull()
+      expect(screen.queryByRole("button", { name: `会话${id}` })).toBeNull()
+      expect(document.querySelector(`[data-project-id="${id}"] a`)).toHaveAttribute("href", `/app/project/${id}`)
+    }
+    expect(screen.getByRole("navigation", { name: "直接会话" })).toBeInTheDocument()
+  }
+  assertNoBranches()
+  view.rerender(frame(nextActor === "same-subject" ? "actor-A" : nextActor, 2, false))
+  assertNoBranches()
+  view.rerender(frame("actor-A", 3, true))
+  await act(async () => { await Promise.resolve() })
+  assertNoBranches()
+  expect(props.onDeleteConversation).not.toHaveBeenCalled()
+  for (const [input] of fetchMock.mock.calls) {
+    const url = new URL(input instanceof Request ? input.url : String(input), window.location.origin)
+    expect(url.searchParams.has("project_ref")).toBe(false)
+  }
+})
+
+it("ordinary account capability read uses its own exact endpoint and exposes no Admin entry", async () => {
+  renderProjectFolderRail()
+  await waitFor(() => expect(adminAccessFetch).toHaveBeenCalled())
+  for (const [input, init] of adminAccessFetch.mock.calls) {
+    expect(input).toBe("/api/admin-access")
+    expect(init).toEqual(expect.objectContaining({ cache: "no-store", signal: expect.any(AbortSignal) }))
+  }
+  const account = screen.getByRole("button", { name: /个人工作区|用户范围/ })
+  fireEvent.pointerDown(account, { button: 0 })
+  fireEvent.click(account)
+  await screen.findByRole("menu")
+  expect(screen.queryByRole("menuitem", { name: /后台管理/ })).toBeNull()
+  expect(document.querySelector('a[href="/manage"]')).toBeNull()
+})
+
+// SET29: trusted rail balance lifecycle
+function set29Account(readBoundary?: ProjectReadBoundary, preview = false) {
+  return <ThemeProvider><LocaleProvider><WorkspaceRailAccount compactDesktop={false} onOpenSettings={() => {}} preview={preview} {...(readBoundary === undefined ? {} : { readBoundary })} /></LocaleProvider></ThemeProvider>
+}
+function set29Summary() {
+  const summary = vi.fn().mockResolvedValue(r255AccountValue)
+  const client = vi.spyOn(pageClients, "browserBillingClient").mockReturnValue({ summary, ledger: vi.fn() })
+  return { summary, client }
+}
+const set29A = { admitted: true, subject: "set29-A", generation: 1 }
+it("SET29 same-subject withdrawal synchronously hides 42 and reads zero until readmitted", async () => {
+  const { summary } = set29Summary()
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "set29-A")
+  const view = render(set29Account(set29A))
+  const menu = await r255OpenAccountMenu()
+  await waitFor(() => expect(menu).toHaveTextContent("42"))
+  view.rerender(set29Account({ ...set29A, admitted: false, generation: 2 }))
+  expect(menu).not.toHaveTextContent("42")
+  expect(menu).toHaveTextContent("—")
+  await act(async () => { await Promise.resolve() })
+  expect(summary).toHaveBeenCalledTimes(1)
+  summary.mockResolvedValue({ ...r255AccountValue, available_micros: "7000000" })
+  view.rerender(set29Account({ ...set29A, generation: 2 }))
+  expect(menu).not.toHaveTextContent("42")
+  await waitFor(() => expect(menu).toHaveTextContent("7"))
+  expect(summary).toHaveBeenCalledTimes(2)
+})
+it("SET29 pending same-subject generation retires signal and ignores late result before new 7", async () => {
+  const late = r255DeferredAccount()
+  const fresh = r255DeferredAccount()
+  const signals: (AbortSignal | undefined)[] = []
+  const summary = vi.fn((signal?: AbortSignal) => { signals.push(signal); return signals.length === 1 ? late.promise : fresh.promise })
+  vi.spyOn(pageClients, "browserBillingClient").mockReturnValue({ summary, ledger: vi.fn() })
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "set29-A")
+  const view = render(set29Account(set29A))
+  const menu = await r255OpenAccountMenu()
+  await waitFor(() => expect(summary).toHaveBeenCalledTimes(1))
+  view.rerender(set29Account({ ...set29A, admitted: false, generation: 2 }))
+  expect(signals[0]?.aborted).toBe(true)
+  expect(summary).toHaveBeenCalledTimes(1)
+  await act(async () => { late.resolve(r255AccountValue); await Promise.resolve() })
+  expect(menu).not.toHaveTextContent("42")
+  view.rerender(set29Account({ ...set29A, generation: 2 }))
+  expect(summary).toHaveBeenCalledTimes(2)
+  await act(async () => { fresh.resolve({ ...r255AccountValue, available_micros: "7000000" }); await Promise.resolve() })
+  expect(menu).toHaveTextContent("7")
+})
+it("SET29 A-B-A does not revive the original ready tuple or B late completion", async () => {
+  const pendingB = r255DeferredAccount()
+  const newA = r255DeferredAccount()
+  const summary = vi.fn().mockResolvedValueOnce(r255AccountValue).mockImplementationOnce(() => pendingB.promise).mockImplementationOnce(() => newA.promise)
+  vi.spyOn(pageClients, "browserBillingClient").mockReturnValue({ summary, ledger: vi.fn() })
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "set29-A")
+  const view = render(set29Account(set29A))
+  const menu = await r255OpenAccountMenu()
+  await waitFor(() => expect(menu).toHaveTextContent("42"))
+  // The marker is unchanged: mismatched B may not use it as admission authority.
+  view.rerender(set29Account({ admitted: true, subject: "set29-B", generation: 2 }))
+  expect(menu).not.toHaveTextContent("42")
+  expect(summary).toHaveBeenCalledTimes(1)
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "set29-B")
+  view.rerender(set29Account({ admitted: true, subject: "set29-B", generation: 2 }))
+  await waitFor(() => expect(summary).toHaveBeenCalledTimes(2))
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "set29-A")
+  view.rerender(set29Account(set29A))
+  expect(menu).not.toHaveTextContent("42")
+  await waitFor(() => expect(summary).toHaveBeenCalledTimes(3))
+  await act(async () => { pendingB.resolve({ ...r255AccountValue, available_micros: "99000000" }); await Promise.resolve() })
+  expect(menu).not.toHaveTextContent("99")
+  await act(async () => { newA.resolve({ ...r255AccountValue, available_micros: "7000000" }); await Promise.resolve() })
+  expect(menu).toHaveTextContent("7")
+})
+it.each([
+  ["missing boundary", undefined],
+  ["not admitted", { ...set29A, admitted: false }],
+  ["null subject", { ...set29A, subject: null }],
+  ["empty subject", { ...set29A, subject: "" }],
+  ["blank subject", { ...set29A, subject: "   " }],
+  ["negative generation", { ...set29A, generation: -1 }],
+  ["fractional generation", { ...set29A, generation: 1.5 }],
+  ["unsafe generation", { ...set29A, generation: Number.MAX_SAFE_INTEGER + 1 }],
+  ["nonfinite generation", { ...set29A, generation: Number.NaN }],
+] as const)("SET29 %s reads no summary despite a marker", async (_label, boundary) => {
+  const { summary } = set29Summary()
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "set29-A")
+  render(set29Account(boundary))
+  await act(async () => { await Promise.resolve() })
+  expect(summary).not.toHaveBeenCalled()
+  const menu = await r255OpenAccountMenu()
+  expect(menu).toHaveTextContent("—")
+  expect(menu).not.toHaveTextContent("42")
+})
+it.each(["missing", "mismatch", "failure"])("SET29 marker %s cannot authorize a trusted live boundary", async (kind) => {
+  const { summary } = set29Summary()
+  if (kind === "mismatch") window.localStorage.setItem("kokoro.web.auth-index-subject", "set29-B")
+  if (kind === "failure") {
+    const getItem = Storage.prototype.getItem
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(function (this: Storage, key) {
+      if (key === "kokoro.web.auth-index-subject") throw new Error("storage unavailable")
+      return getItem.call(this, key)
+    })
+  }
+  render(set29Account(set29A))
+  await act(async () => { await Promise.resolve() })
+  expect(summary).not.toHaveBeenCalled()
+  const menu = await r255OpenAccountMenu()
+  expect(menu).toHaveTextContent("—")
+})
+it("SET29 actual rail shell forwards trusted balance admission and retires it", async () => {
+  const { summary } = set29Summary()
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "set29-A")
+  const { rerender } = renderRail({ readBoundary: set29A })
+  const menu = await r255OpenAccountMenu()
+  await waitFor(() => expect(menu).toHaveTextContent("42"))
+  const frame = (readBoundary: ProjectReadBoundary) => <ThemeProvider><LocaleProvider><WorkspaceRail collapsed={false} onToggleCollapse={() => {}} onNewChat={() => {}} chatHref="/app" conversations={[]} activeId={null} awaitingIds={new Set()} onSelectConversation={() => {}} onDeleteConversation={async () => true} onRenameConversation={() => {}} onOpenSettings={() => {}} listLoading={false} listError={false} hasMore={false} onLoadMore={() => {}} readBoundary={readBoundary} /></LocaleProvider></ThemeProvider>
+  rerender(frame({ ...set29A, admitted: false, generation: 2 }))
+  expect(menu).not.toHaveTextContent("42")
+  await act(async () => { await Promise.resolve() })
+  expect(summary).toHaveBeenCalledTimes(1)
+})
+it("SET29 preview keeps the published preview balance path without a live boundary or marker", async () => {
+  const { summary, client } = set29Summary()
+  render(set29Account(undefined, true))
+  const menu = await r255OpenAccountMenu()
+  await waitFor(() => expect(menu).toHaveTextContent("42"))
+  expect(client).toHaveBeenCalledWith({ preview: true })
+  expect(summary).toHaveBeenCalledTimes(1)
+})
+
+// SET47-BEGIN: the row menu delegates archive without destructive delete.
+import { itemStyles as set47ItemStyles } from "@/components/blocks/workspace-rail/workspace-rail-styles"
+it("SET47 task archive is a keyboard-accessible menu action with its own caller",async()=>{
+ const archive=vi.fn();const remove=vi.fn();renderRail({onArchiveConversation:archive,onDeleteConversation:remove});
+ const trigger=screen.getByRole("button",{name:"归档任务"});expect(set47ItemStyles.itemArchive).toBeTruthy();expect(trigger).toHaveClass(set47ItemStyles.itemArchive!);
+ fireEvent.keyDown(trigger,{key:"Enter",code:"Enter"});
+ const item=await screen.findByRole("menuitem",{name:"归档任务"});fireEvent.click(item);expect(archive).toHaveBeenCalledWith("ses_1");expect(remove).not.toHaveBeenCalled();
+});
+// SET47-END

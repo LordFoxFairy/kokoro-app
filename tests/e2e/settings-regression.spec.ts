@@ -1,0 +1,202 @@
+import { expect, test } from "@playwright/test";
+
+// SET36-BEGIN: copy-task-link-real-browser
+test("SET36 copy task link settings persist and actual current task copies a canonical URL", async ({ page, context }, testInfo) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.addInitScript(() => window.localStorage.setItem("kokoro.locale", "en"));
+  await page.goto("/app#settings/shortcuts", { waitUntil: "domcontentloaded" });
+  const edit = page.getByRole("button", { name: "Edit Copy task link shortcut" });
+  await expect(edit).toBeVisible();
+  await edit.click();
+  await page.keyboard.press("ControlOrMeta+Shift+J");
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("kokoro.web.keyboard-shortcuts") ?? "{}").copyTaskLink?.key)).toBe("j");
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await expect(edit).toContainText("J");
+  await page.screenshot({ path: testInfo.outputPath("set36-copy-task-link-settings.png"), fullPage: true });
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("settings-modal")).toHaveCount(0);
+  const input = page.getByRole("textbox", { name: "Chat input" });
+  await expect(input).toBeEditable();
+  await input.fill("SET36 persisted preview task");
+  await page.getByRole("button", { name: "Send message" }).click();
+  await expect(page.getByText("预览模式：已收到「SET36 persisted preview task」。", { exact: true })).toBeVisible();
+  await expect.poll(() => new URL(page.url()).searchParams.getAll("conversation").length).toBe(1);
+  const current = new URL(page.url());
+  const expected = `${current.origin}${current.pathname}?conversation=${encodeURIComponent(current.searchParams.get("conversation")!)}`;
+  await input.blur();
+  await page.keyboard.press("ControlOrMeta+Shift+J");
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(expected);
+  await expect(page.getByRole("status").filter({ hasText: "Task link copied" })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("set36-copy-task-link-feedback.png"), fullPage: true });
+});
+// SET36-END: copy-task-link-real-browser
+
+// SET40-BEGIN: settings-search-real-layout
+for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 }]) {
+  test(`SET40 settings item search keyboard and bounded results at ${viewport.width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize(viewport);
+    await page.addInitScript(() => window.localStorage.setItem("kokoro.locale", "en"));
+    await page.goto("/app#settings/account", { waitUntil: "domcontentloaded" });
+    const modal = page.getByTestId("settings-modal");
+    const search = modal.getByRole("textbox", { name: "Search", exact: true });
+    await expect(search).toHaveCount(1);
+    await expect(search).toBeVisible();
+    await search.fill("Nickname");
+    await expect(modal.getByRole("button", { name: "Personalization", exact: true })).toBeVisible();
+    const nickname = modal.getByRole("button", { name: "Nickname", exact: true });
+    await nickname.focus();
+    await page.keyboard.press("Enter");
+    await expect(modal.getByRole("heading", { name: "Personalization", level: 1 })).toBeVisible();
+    await expect(search).toHaveValue("Nickname");
+    await expect(nickname).toBeFocused();
+    await modal.getByRole("button", { name: "Clear search", exact: true }).click();
+    await expect(search).toHaveValue("");
+    await expect(search).toBeFocused();
+    await search.fill("Browser notifications");
+    const notification = modal.getByRole("button", { name: "Browser notifications", exact: true });
+    await notification.focus();
+    await page.keyboard.press("Space");
+    await expect(modal.getByRole("heading", { name: "General", level: 1 })).toBeVisible();
+    await expect(notification).toBeFocused();
+    await expect(search).toHaveValue("Browser notifications");
+    await search.fill("a");
+    const firstResult = modal.getByRole("button", { name: "Account", exact: true });
+    await expect(firstResult).toBeVisible();
+    const scroll = await firstResult.evaluate((element) => {
+      let ancestor = element.parentElement;
+      while (ancestor) {
+        const style = getComputedStyle(ancestor);
+        if (/(auto|scroll)/u.test(style.overflowY) && ancestor.scrollHeight > ancestor.clientHeight) {
+          ancestor.scrollTop = ancestor.scrollHeight;
+          return { height: ancestor.clientHeight, scrollTop: ancestor.scrollTop };
+        }
+        ancestor = ancestor.parentElement;
+      }
+      return null;
+    });
+    expect(scroll).not.toBeNull();
+    expect(scroll!.scrollTop).toBeGreaterThan(0);
+    if (viewport.width === 390) expect(scroll!.height).toBeLessThanOrEqual(193);
+    await expect(modal.getByTestId("settings-tab-account")).toBeVisible({ visible: viewport.width === 390 });
+    const dimensions = await modal.evaluate((element) => ({ scroll: element.scrollWidth, client: element.clientWidth }));
+    expect(dimensions.scroll).toBeLessThanOrEqual(dimensions.client);
+    const close = page.getByTestId("settings-close");
+    await expect(close).toBeVisible();
+    const closeBox = await close.boundingBox();
+    const searchBox = await search.boundingBox();
+    expect(closeBox).not.toBeNull();
+    expect(searchBox).not.toBeNull();
+    const modalBox = await modal.boundingBox();
+    expect(modalBox).not.toBeNull();
+    expect(searchBox!.x).toBeGreaterThanOrEqual(modalBox!.x);
+    expect(searchBox!.x + searchBox!.width).toBeLessThanOrEqual(modalBox!.x + modalBox!.width);
+    const disjoint = searchBox!.x + searchBox!.width <= closeBox!.x
+      || closeBox!.x + closeBox!.width <= searchBox!.x
+      || searchBox!.y + searchBox!.height <= closeBox!.y
+      || closeBox!.y + closeBox!.height <= searchBox!.y;
+    expect(disjoint).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath(`set40-search-${viewport.width}.png`), fullPage: true });
+    await close.click();
+    await expect(modal).toHaveCount(0);
+  });
+}
+// SET40-END: settings-search-real-layout
+
+// SET41-BEGIN: theme-options-within-content
+for (const width of [1280, 390, 320]) {
+  test(`SET41 all theme options remain reachable at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 844 });
+    await page.addInitScript(() => window.localStorage.setItem("kokoro.locale", "en"));
+    await page.goto("/app#/account/settings/general", { waitUntil: "domcontentloaded" });
+    const modal = page.getByTestId("settings-modal");
+    const appearance = modal.getByTestId("settings-appearance");
+    const contentViewport = modal.getByRole("tabpanel").locator('[data-slot="scroll-area-viewport"]');
+    const light = appearance.getByRole("radio", { name: "Light", exact: true });
+    const dark = appearance.getByRole("radio", { name: "Dark", exact: true });
+    const auto = appearance.getByRole("radio", { name: "Auto", exact: true });
+    await appearance.scrollIntoViewIfNeeded();
+    for (const label of ["Light", "Dark", "Auto"]) {
+      const option = appearance.getByRole("radio", { name: label, exact: true });
+      await expect(option).toBeVisible();
+      const clip = await contentViewport.boundingBox();
+      const button = await option.boundingBox();
+      const text = await option.getByText(label, { exact: true }).boundingBox();
+      expect(clip).not.toBeNull();
+      for (const box of [button, text]) {
+        expect(box).not.toBeNull();
+        expect(box!.x).toBeGreaterThanOrEqual(clip!.x - 1);
+        expect(box!.x + box!.width).toBeLessThanOrEqual(clip!.x + clip!.width + 1);
+      }
+    }
+    await light.click();
+    await expect(light).toBeChecked();
+    await auto.click();
+    await expect(auto).toBeChecked();
+    await auto.press("ArrowLeft");
+    await expect(dark).toBeFocused();
+    await dark.press("Space");
+    await expect(dark).toBeChecked();
+    await dark.press("ArrowRight");
+    await expect(auto).toBeFocused();
+    await auto.press("Space");
+    await expect(auto).toBeChecked();
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await expect(auto).toBeChecked();
+    await page.screenshot({ path: testInfo.outputPath(`set41-theme-${width}.png`), fullPage: true });
+  });
+}
+// SET41-END: theme-options-within-content
+
+// SET42-BEGIN: task-delivery-narrow-layout
+for (const width of [1280, 390, 320]) {
+  test(`SET42 task delivery label and control stay separate at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 844 });
+    await page.addInitScript(() => window.localStorage.setItem("kokoro.locale", "en"));
+    await page.goto("/app#/account/settings/general", { waitUntil: "domcontentloaded" });
+    const modal = page.getByTestId("settings-modal");
+    const section = modal.getByRole("region", { name: "Chat preferences", exact: true });
+    await section.scrollIntoViewIfNeeded();
+    const label = section.getByText("Default behavior while a task is running", { exact: true });
+    const control = section.getByRole("combobox", { name: "Default behavior while a task is running", exact: true });
+    await expect(control).toBeDisabled();
+    await expect(control).toHaveText("Add to queue");
+    const labelBox = await label.boundingBox();
+    const controlBox = await control.boundingBox();
+    const viewportBox = await modal.getByRole("tabpanel").locator('[data-slot="scroll-area-viewport"]').boundingBox();
+    expect(labelBox).not.toBeNull();
+    expect(controlBox).not.toBeNull();
+    expect(viewportBox).not.toBeNull();
+    const separate = labelBox!.x + labelBox!.width <= controlBox!.x + 1 ||
+      labelBox!.y + labelBox!.height <= controlBox!.y + 1;
+    expect(separate).toBe(true);
+    for (const box of [labelBox!, controlBox!]) {
+      expect(box.x).toBeGreaterThanOrEqual(viewportBox!.x - 1);
+      expect(box.x + box.width).toBeLessThanOrEqual(viewportBox!.x + viewportBox!.width + 1);
+    }
+    await page.screenshot({ path: testInfo.outputPath(`set42-task-row-${width}.png`), fullPage: true });
+  });
+}
+// SET42-END: task-delivery-narrow-layout
+
+// SET47-BEGIN: preview archive boundary, not authenticated mutation evidence.
+for(const width of [1280,390]) {
+ test(`SET47 preview Data archive boundary is readable and has zero archive IO at ${width}px`,async({page})=>{
+  await page.setViewportSize({width,height:844});
+  await page.addInitScript(()=>window.localStorage.setItem("kokoro.locale","en"));
+  let archiveCalls=0;page.on("request",request=>{if(/\/api\/(?:account\/archived-tasks|session\/sessions\/[^/]+\/(?:archive|restore))(?:[?]|$)/u.test(request.url()))archiveCalls++;});
+  await page.goto("/app#/account/settings/data-management",{waitUntil:"domcontentloaded"});
+  const modal=page.getByTestId("settings-modal");const data=modal.getByTestId("settings-data-management");
+  await expect(data.getByRole("heading",{name:"Archived tasks",exact:true})).toBeVisible();
+  await expect(data.getByRole("button",{name:"Restore task",exact:true})).toHaveCount(0);
+  await expect(data.getByRole("button",{name:"Manage",exact:true})).toHaveCount(3);
+  for(const button of await data.getByRole("button",{name:"Manage",exact:true}).all())await expect(button).toBeDisabled();
+  await expect(data.getByText("No archived tasks.",{exact:true})).toHaveCount(0);
+  await expect(modal).toBeVisible();expect(archiveCalls).toBe(0);
+  const bounds=await data.evaluate(node=>({width:node.clientWidth,scroll:node.scrollWidth}));expect(bounds.scroll).toBeLessThanOrEqual(bounds.width+1);
+  const close=page.getByTestId("settings-close");await close.focus();await expect(close).toBeFocused();
+  await page.keyboard.press("Tab");
+  const focused=await modal.evaluate(node=>node.contains(document.activeElement));expect(focused).toBe(true);
+  await page.keyboard.press("Escape");await expect(modal).toHaveCount(0);expect(archiveCalls).toBe(0);
+ });
+}
+// SET47-END

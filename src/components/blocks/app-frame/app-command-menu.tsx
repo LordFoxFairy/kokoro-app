@@ -12,8 +12,7 @@ import {
   CommandShortcut,
 } from "@/components/ui/command"
 import { MessageSquarePlus, Settings2 } from "lucide-react"
-import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts"
-import { keyboardShortcutParts } from "@/lib/keyboard-shortcuts"
+import { useKeyboardShortcuts, useKeyboardShortcutParts } from "@/hooks/use-keyboard-shortcuts"
 import { cn } from "@/lib/utils"
 
 import type { SettingsTab } from "@/ui/settings/settings-modal"
@@ -62,6 +61,7 @@ export function AppCommandMenu({
 }: AppCommandMenuProps) {
   const t = useT()
   const keyboardShortcuts = useKeyboardShortcuts()
+  const keyboardShortcutParts = useKeyboardShortcutParts()
   // Settings opens a second modal in the same event. Let that modal perform
   // its own focus handoff instead of briefly returning focus to the command
   // trigger and stealing it back from the newly opened panel.

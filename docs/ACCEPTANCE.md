@@ -1,3 +1,15 @@
+## SET-20 团队可靠恢复验收（2026-10-15；Root门执行中）
+
+真实行为RED28FAIL已修；原52业务oracle独立PASS，七专项172PASS且Root独立复跑一致。V2仅client显式redirect:error及其测试，2新增RED转绿、client39PASS，25writer/875保护经Root逐hash核且独审无剩余确定P1/P2。normal contract282/architecture50及lint/type/build通过；Root真实Next HTTP5PASS含EOF/Origin，首轮500原输出保留，不冒首次即绿。
+
+Root最终七专项174PASS/build exit0；完整normal两轮3833PASS/8FAIL及3830PASS/11FAIL，波动五项隔离分轮通过，原输出保留；Playwright14PASS/6既有桌面超时/4SKIP。测试资源集合恢复。正常团队CUA尚待浏览器HTTP恢复。邀请/角色/移除/退出使用真实owner合同与单次意图，unknown必须权威完整重读后显式继续。没有邮箱投递、付款、模型或完整设置完成承诺；技能/连接器业务排除。
+
+## SET-19 姓名保存验收（2026-10-15）
+
+formal IAM c64/internal0.13→BFF a88/public15.2/145；Web冻结64源/833原保护独审通过。175专项、282正常contract、50architecture、lint/type/build通过；Root真实Next HTTP四项通过，正常全测3759PASS/7原复现FAIL/0SKIP，隔离normal Playwright14PASS/6既有具名FAIL/4SKIP，原失败与资源初始化诊断保持。unknown/401/CAS锁写、权威GET和显式review选择均被具名负控覆盖；资源精确恢复见Root私有日志，不记录凭据。
+
+正常fresh16scope登录、真实改名→权威读回→刷新→退出重新登录仍待Root CUA；此项未完成前不将姓名页记为产品通过。技能和连接器功能排除，整个设置Goal不因本切片停止。
+
 ## R256 会话标题与工具按钮独立命中（2026-10-06）
 
 Root冻结后明确Node22.22.2复跑lint/typecheck/3现UI文件167断言/build，原句柄37970实际exit0；首次wrapper漏打印句柄未作为exit证据，确认原build结束后独立重跑本次终态。未跑全量system/test:e2e/axe/视觉预算，不替代以上原页面用户证据。

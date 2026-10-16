@@ -24,6 +24,14 @@ export function readChatModel(): string | null {
   return store.read()?.model ?? null
 }
 
-export function writeChatModel(value: string | null): void {
-  store.write({ ...(store.read() ?? {}), model: value })
+export function writeChatModel(value: string | null): boolean {
+  const parsed = chatPrefsSchema.safeParse({ model: value })
+  if (!parsed.success) return false
+  try {
+    window.localStorage.setItem("kokoro.web.chat-prefs", JSON.stringify(parsed.data))
+    return true
+  } catch {
+    // The persisted store reparses only a successful changed raw value.
+    return false
+  }
 }
