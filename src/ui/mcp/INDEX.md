@@ -28,6 +28,8 @@ MCP 注册／原子导入与已确认的个人命令，统一失活当前 client
 
 ## 同 actor 登录重核
 
+`mcp-create-dialog.tsx` 单独拥有创建窗口的关闭：已提交的 client／mode／open 生命周期变化或卸载后，旧完成仍通知其原确认回调失活投影，但不关闭后开的创建窗口；Settings 不在确认回调内第二次关闭。排队的首次聚焦在窗口退休时取消，迟到帧也不操作新窗口。此处不把取消当作写入回滚，也不取消／自动重试 owner 命令；创建表单自身的准入、Register→Prepare 及未知结果恢复仍是后继。
+
 查询、分类、cursor、目录开关和精确 connector/server、provider/connection、API profile locator 属于 actor 稳定的展示意图；Settings 与 Plugins 不因临时失准入卸载整面板。所有 owner 投影、私有详情、错误/忙态与删除确认按 client/主体/准入代际退休；失准入只显示无私有数据的详情壳，恢复后从新页精确找回原资源，缺失或读取失败保留显式重试，不按名称或新绑定替代。换 actor（包括 A→B→A）清空意图。
 
 已打开的自定义详情保持 Dialog DOM；配置仅保用户明确输入的 dirty 字段，未编辑字段从新 owner 配置读取，保存使用新 CAS。旧读取消且迟到不展示；旧命令不关当前窗口、不发布旧 ACK，已确认写仍按原 actor 失活正确的 MCP／Custom API 独立投影。OAuth popup 在准入退休时关闭、取消并禁止迟到导航，旧 Create 确认也失活 pending 连接，而不继续旧授权。新 create/browse 在重核期间暂停；现创建表单自身完整准入与未知结果恢复矩阵仍为独立后继，不冒称本片已覆盖。

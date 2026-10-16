@@ -62,7 +62,6 @@ export function ConnectorsSettingsSection({
               // Register and remote Prepare/OAuth can settle in different reads.
               if (identity != null) invalidateMcpConnectorProjection(client, identity);
             }
-            setMode(null);
           }}
           onRegistered={() => {
             const identity = preview ? "preview" : readBoundary?.admitted ? readBoundary.subject : null;

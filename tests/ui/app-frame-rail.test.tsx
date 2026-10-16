@@ -2587,6 +2587,87 @@ it.each([
   release(); otherRelease(); reopened.unmount(); other.unmount(); independent.unmount()
 })
 
+it.each(["global", "settings"] as const)("%s creation ACK cannot close a newer creation window", async (entry) => {
+  const pageClients = await import("@/ui/shell/page-clients")
+  const { ConnectorsSettingsSection } = await import("@/ui/settings/sections/connectors-settings-section")
+  const { useCustomApiProjection } = await import("@/ui/mcp/use-custom-api-projection")
+  let acknowledge!: () => void
+  const pending = new Promise<void>(resolve => { acknowledge = resolve })
+  const profile = { profile_id: "closed-window-api", name: "Previously submitted API", state_version: "1",
+    created_at: "2026-10-16T12:00:00Z", updated_at: "2026-10-16T12:00:00Z", environment: [] }
+  let created = false
+  const hub = { ...createHubClient(),
+    listCustomApis: vi.fn(async () => ({ items: created ? [profile] : [], page: { next_cursor: null } })),
+    listMcpConnectors: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+    listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+    listSkills: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+    createCustomApi: vi.fn(async () => { await pending; created = true; return profile }),
+  }
+  vi.spyOn(pageClients, "browserHubClient").mockReturnValue(hub)
+  const shared = renderHook(() => useCustomApiProjection({ client: hub, identity: "preview", refreshKey: 0 }))
+  function Shell() {
+    const [mode, setMode] = useState<import("@/ui/mcp/mcp-panel-model").McpCreateMode | null>(null)
+    const shell = useRef<HTMLDivElement | null>(null), trigger = useRef<HTMLElement | null>(null)
+    return <div ref={shell}>
+      <button onClick={() => setMode("custom-api")}>Global API create</button>
+      <button onClick={() => setMode("json")}>Global JSON create</button>
+      <AppFrameOverlaySurfaces mounted settingsTab={null} preview brandName="Kokoro" onCloseSettings={vi.fn()} onTabChange={vi.fn()}
+        onCreateSkillWithAi={vi.fn()} onTrySkill={() => false} settingsReturnFocusRef={trigger} shellRef={shell}
+        mcpCreateMode={mode} setMcpCreateMode={setMode} mcpCreateReturnFocusRef={trigger}
+        commandMenu={() => null} commandProps={{ onNewChat: vi.fn(), onOpenSettings: vi.fn() }} commandOpen={false} onCommandOpenChange={vi.fn()} />
+    </div>
+  }
+  render(<StrictMode><LocaleProvider>{entry === "global" ? <Shell /> : <ConnectorsSettingsSection client={hub} preview brandName="Kokoro" />}</LocaleProvider></StrictMode>)
+  const open = async (kind: "api" | "json") => {
+    if (entry === "global") fireEvent.click(screen.getByRole("button", { name: kind === "api" ? "Global API create" : "Global JSON create" }))
+    else {
+      fireEvent.keyDown(screen.getByRole("button", { name: "创建" }), { key: "ArrowDown" })
+      fireEvent.click(await screen.findByRole("menuitem", { name: kind === "api" ? "自定义 API" : "通过 JSON 导入 MCP" }))
+    }
+  }
+  await waitFor(() => expect(shared.result.current.loading).toBe(false))
+  await open("api")
+  fireEvent.change(await screen.findByRole("textbox", { name: "名称" }), { target: { value: profile.name } })
+  fireEvent.click(screen.getByRole("button", { name: "保存" }))
+  await waitFor(() => expect(hub.createCustomApi).toHaveBeenCalledOnce())
+  // The Dialog's close button remains available even while the footer is busy.
+  fireEvent.click(screen.getAllByRole("button", { name: "取消" }).at(-1)!)
+  await waitFor(() => expect(screen.queryByRole("textbox", { name: "名称" })).toBeNull())
+  await open("json")
+  const draft = await screen.findByRole("textbox", { name: "请粘贴您的配置 JSON" })
+  fireEvent.change(draft, { target: { value: "new window draft" } })
+  await act(async () => { acknowledge(); await pending })
+  await waitFor(() => expect(shared.result.current.data.items).toEqual([profile]))
+  expect(draft.isConnected).toBe(true)
+  expect(draft).toHaveValue("new window draft")
+  expect(screen.getByRole("dialog", { name: "通过 JSON 导入" })).toBeVisible()
+  expect(hub.createCustomApi).toHaveBeenCalledOnce()
+  shared.unmount()
+})
+
+it.each(["mode", "visibility"] as const)("a retained creation host fences old completion after its %s changes", async (transition) => {
+  const { McpCreateDialog } = await import("@/ui/mcp/mcp-create-dialog")
+  let acknowledge!: () => void
+  const pending = new Promise<void>(resolve => { acknowledge = resolve })
+  const hub = { ...createHubClient(), createCustomApi: vi.fn().mockResolvedValue({ profile_id: "retained-host-api", name: "Old API", state_version: "1", environment: [], created_at: "2026-10-16T12:00:00Z", updated_at: "2026-10-16T12:00:00Z" }) }
+  const close = vi.fn(), confirmed = vi.fn(async () => { await pending })
+  const dialog = (mode: "custom-api" | "json", open = true) => <StrictMode><LocaleProvider><McpCreateDialog client={hub} mode={mode} open={open} onOpenChange={close} onDone={confirmed} /></LocaleProvider></StrictMode>
+  const view = render(dialog("custom-api"))
+  fireEvent.change(screen.getByRole("textbox", { name: "名称" }), { target: { value: "Old API" } })
+  fireEvent.click(screen.getByRole("button", { name: "保存" }))
+  await waitFor(() => expect(hub.createCustomApi).toHaveBeenCalledOnce())
+  await waitFor(() => expect(confirmed).toHaveBeenCalledOnce())
+  if (transition === "visibility") view.rerender(dialog("custom-api", false))
+  view.rerender(dialog(transition === "mode" ? "json" : "custom-api"))
+  const draft = transition === "mode" ? screen.getByRole("textbox", { name: "请粘贴您的配置 JSON" }) : screen.getByRole("textbox", { name: "名称" })
+  fireEvent.change(draft, { target: { value: "new window draft" } })
+  await act(async () => { acknowledge(); await pending })
+  await waitFor(() => expect(confirmed).toHaveBeenCalledOnce())
+  expect(close).not.toHaveBeenCalled()
+  expect(draft).toHaveValue("new window draft")
+  expect(draft.isConnected).toBe(true)
+})
+
 it("connector invalidation preserves another actor and retries a failed mounted read without a remount", async () => {
   const { invalidateMcpConnectorProjection, useMcpProjection } = await import("@/ui/mcp/use-mcp-projection")
   const page = (name: string) => ({ items: [{ connector_id: name, connector_type: "mcp" as const,

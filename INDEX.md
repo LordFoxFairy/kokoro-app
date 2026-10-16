@@ -1,3 +1,7 @@
+### 创建窗口的迟到完成
+
+`McpCreateDialog` 将关闭与排队聚焦限制在已提交的 client／mode／open 窗口生命周期内。旧窗口的已确认写仍执行原投影失活，但迟到完成不关闭后开的窗口；Settings 不再另行重复关闭。现 rail 回归覆盖两个入口、组件保留时的模式切换与关闭重开。此围栏不是创建表单的完整准入或未知命令恢复实现。
+
 ### Custom API 创建投影刷新
 
 全局创建与 Settings 内部创建在确认成功后，共用 `invalidateCustomApiProjection` 精确失活原 client／subject 的 Custom API 投影；不重挂整个 Settings、不误刷新 MCP／Provider。既有 rail 行为测试覆盖打开前的旧预热、挂载共享读者及取消后迟到的旧页，不把创建表单的准入／未知结果恢复冒称完成。

@@ -1,6 +1,6 @@
 "use client";
 
-import type { RefObject } from "react";
+import { useLayoutEffect, useMemo, useRef, type RefObject } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { useT } from "@/i18n/context";
 import { cn } from "@/lib/utils";
@@ -32,14 +32,30 @@ export function McpCreateDialog({
   returnFocusRef?: RefObject<HTMLElement | null>;
 }) {
   const t = useT();
-  const close = (): void => onOpenChange(false);
+  const lifetime = useMemo(() => ({ client, mode, open }), [client, mode, open]);
+  const committed = useRef<typeof lifetime | null>(null);
+  const focusFrame = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    committed.current = lifetime;
+    return () => {
+      if (committed.current === lifetime) committed.current = null;
+      if (focusFrame.current !== null) window.cancelAnimationFrame(focusFrame.current);
+      focusFrame.current = null;
+    };
+  }, [lifetime]);
+  const changeOpen = (value: boolean): void => {
+    if (lifetime.open && committed.current === lifetime) onOpenChange(value);
+  };
+  const close = (): void => changeOpen(false);
   const complete = async (): Promise<void> => {
+    // A confirmed write still invalidates its original actor's projection.
+    // Only dismissal belongs to this exact mounted window, not its successor.
     await onDone?.();
     close();
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={changeOpen}>
       <DialogContent
         className={cn(
           mode === "json"
@@ -56,11 +72,13 @@ export function McpCreateDialog({
         onOpenAutoFocus={(event) => {
           if (mode !== "form" && mode !== "custom-api") return;
           event.preventDefault();
-          window.requestAnimationFrame(() =>
+          focusFrame.current = window.requestAnimationFrame(() => {
+            focusFrame.current = null;
+            if (committed.current !== lifetime) return;
             document.getElementById(
               mode === "custom-api" ? "custom-api-name" : "url-mcp-name",
-            )?.focus(),
-          );
+            )?.focus();
+          });
         }}
         onCloseAutoFocus={(event) => {
           const target = returnFocusRef?.current;
