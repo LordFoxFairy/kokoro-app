@@ -357,6 +357,27 @@ it("更多保留技能导航与个性化设置，明确电脑能力未开放", (
   expect(onOpenSettings).toHaveBeenCalledWith("personalization")
 })
 
+it("已接入排程从自动化主入口访问，不再挤入更多菜单", () => {
+  renderRail({ navigation: [{ key: "skills", label: "技能" }, { key: "scheduled", label: "已排程" }], activeNavigationKey: "scheduled" })
+  const automation = screen.getByRole("link", { name: "自动化" })
+  expect(automation).toHaveAttribute("href", "/app/scheduled?tab=calendar")
+  expect(automation).toHaveAttribute("aria-current", "page")
+  expect(screen.getByTestId("rail-more")).not.toHaveAttribute("aria-current")
+  fireEvent.pointerDown(screen.getByTestId("rail-more"))
+  expect(screen.getAllByRole("menuitem").map((item) => item.textContent)).toEqual(["Computer Use", "技能", "个性化"])
+  fireEvent.keyDown(screen.getByRole("menu", { name: "更多" }), { key: "Escape" })
+  fireEvent.click(automation)
+  expect(window.location.pathname + window.location.search).toBe("/app/scheduled?tab=calendar")
+})
+
+it("排程被运行配置关闭时自动化明确不可用，不暴露可点击替代入口", () => {
+  renderRail({ navigation: [{ key: "skills", label: "技能" }, { key: "scheduled", label: "已排程", featureFlag: "scheduler" }], featureFlags: [{ key: "scheduler", enabled: false }] })
+  expect(screen.getByRole("button", { name: "自动化" })).toBeDisabled()
+  expect(screen.queryByRole("link", { name: "自动化" })).toBeNull()
+  fireEvent.pointerDown(screen.getByTestId("rail-more"))
+  expect(screen.queryByRole("menuitem", { name: "已排程" })).toBeNull()
+})
+
 it("更多的站内导航提交后关闭菜单，不残留在目标页面上", () => {
   renderRail({ navigation: [{ key: "skills", label: "技能" }] })
   fireEvent.pointerDown(screen.getByTestId("rail-more"))

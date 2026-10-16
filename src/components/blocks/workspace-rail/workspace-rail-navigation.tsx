@@ -2,7 +2,7 @@
 
 import { Fragment, type Dispatch, type RefObject, type SetStateAction, useState } from "react"
 import Link from "next/link"
-import { Bot, Check, ChevronDown, ChevronRight, Ellipsis, Folder, Grid2X2, Monitor, Plus, SquareMousePointer, SquarePen, WandSparkles } from "lucide-react"
+import { Check, ChevronDown, ChevronRight, Ellipsis, Folder, Shapes, Monitor, Plus, SquareMousePointer, SquarePen, WandSparkles, Workflow } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -131,9 +131,12 @@ export function WorkspaceRailNavigation({
     .filter((item): item is WorkbenchNavigationItem => item !== undefined)
   const pluginsDestination = navigationByKey.get("mcp")
   const PluginsIcon = pluginsDestination?.icon
-  // Manus' main More actions are Computer Use, Skills and Personalization.
-  // Keep actual Kokoro-only destinations separately instead of removing access.
-  const tuckedDestinations = workbenchNavigation.filter((item) => !primaryDestinations.includes(item) && item !== pluginsDestination)
+  const automationDestination = navigationByKey.get("scheduled")
+  const automationHref = automationDestination?.href
+  // Scheduled tasks already have the Automation destination. Do not duplicate
+  // them in More or leave the primary affordance disabled while it is enabled.
+  // Other manifest-provided Kokoro destinations retain their existing access.
+  const tuckedDestinations = workbenchNavigation.filter((item) => !primaryDestinations.includes(item) && item !== pluginsDestination && item !== automationDestination)
   const moreActive = tuckedDestinations.some((item) => item.key === activeNavigationKey)
   const renderTuckedDestination = ({ key, label, icon: Icon, settingsTab, href }: WorkbenchNavigationItem) => href ? (
     <DropdownMenuItem key={key} asChild>
@@ -267,7 +270,19 @@ export function WorkspaceRailNavigation({
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <SidebarMenuButton
+              {automationHref ? <SidebarMenuButton
+                asChild
+                tooltip={t("rail.automation")}
+                tooltipKey={navigationTransitionKey}
+                className={navigationStyles.navItem}
+                data-navigation-section="automation"
+                isActive={activeNavigationKey === "scheduled"}
+              >
+                <Link href={automationHref} {...(mountedSurfacePrefetch === undefined ? {} : { prefetch: mountedSurfacePrefetch })} aria-label={t("rail.automation")} aria-current={activeNavigationKey === "scheduled" ? "page" : undefined} onPointerDown={markPointerFocus} onClickCapture={(event) => interceptMountedSurfaceNavigation(event, automationHref)} onClick={closeNavigation}>
+                  <Workflow className={railStyles.icon} />
+                  {navigationExpanded ? <span className={railStyles.navLabel}>{t("rail.automation")}</span> : null}
+                </Link>
+              </SidebarMenuButton> : <SidebarMenuButton
                 type="button"
                 disabled
                 aria-disabled="true"
@@ -276,9 +291,9 @@ export function WorkspaceRailNavigation({
                 className={cn(navigationStyles.navItem, navigationStyles.unavailableItem)}
                 data-navigation-section="automation"
               >
-                <Bot className={railStyles.icon} />
+                <Workflow className={railStyles.icon} />
                 {navigationExpanded ? <span className={railStyles.navLabel}>{t("rail.automation")}</span> : null}
-              </SidebarMenuButton>
+              </SidebarMenuButton>}
             </SidebarMenuItem>
             {pluginsDestination?.href && PluginsIcon ? (() => {
               const pluginsHref = pluginsDestination.href;
@@ -318,7 +333,7 @@ export function WorkspaceRailNavigation({
                   </DropdownMenuItem>
                   {tuckedDestinations.filter((item) => item.key === "skills").map(renderTuckedDestination)}
                   <DropdownMenuItem onSelect={() => { onOpenSettings("personalization"); closeNavigation() }}>
-                    <span className={navigationStyles.moreGlyph}><Grid2X2 aria-hidden="true" /></span><span>{t("settings.personalizationTitle")}</span>
+                    <span className={navigationStyles.moreGlyph}><Shapes aria-hidden="true" /></span><span>{t("settings.personalizationTitle")}</span>
                   </DropdownMenuItem>
                   {tuckedDestinations.some((item) => item.key !== "skills") ? <DropdownMenuSeparator /> : null}
                   {tuckedDestinations.filter((item) => item.key !== "skills").map(renderTuckedDestination)}

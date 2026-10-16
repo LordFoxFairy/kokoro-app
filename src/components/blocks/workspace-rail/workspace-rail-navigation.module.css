@@ -213,7 +213,7 @@
   min-height: 2.4rem;
   border-radius: 0.7rem;
   padding-inline: 0.5rem;
-  color: color-mix(in srgb, var(--foreground) 82%, var(--muted-foreground));
+  color: var(--foreground);
   cursor: pointer;
   touch-action: manipulation;
 }
@@ -238,7 +238,7 @@
   font-weight: 500;
   line-height: 1.125rem;
   text-transform: none;
-  letter-spacing: normal;
+  letter-spacing: -0.007em;
 }
 [data-desktop-rail="true"] .projectGroup { margin-top: 0.75rem; }
 [data-desktop-rail="true"] .projectGroup .navGroupLabel {
