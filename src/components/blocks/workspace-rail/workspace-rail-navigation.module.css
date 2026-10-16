@@ -197,6 +197,10 @@
 [data-desktop-rail="true"] .projectConversationGroup :global([data-conversation-list="project-conversation"]) > p,
 [data-desktop-rail="true"] .projectConversationGroup :global([data-conversation-list="project-conversation"] [data-sidebar="menu-button"]) { min-height: var(--rail-row-height); }
 
+.projectConversationGroup :global([data-conversation-list="project-conversation"]) > :global([role="status"]) {
+  padding-inline: 2.25rem 0.5rem;
+}
+
 /* SVG paths are decorative; the shadcn control remains the complete hit
  * target at every browser zoom level. */
 [data-desktop-rail="true"] .navItem > svg { pointer-events: none; }

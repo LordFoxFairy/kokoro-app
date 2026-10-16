@@ -177,6 +177,16 @@
   .projectAction { width: 2.75rem; height: 2.75rem; }
 }
 
+/* Pending, empty and populated reads share one desktop row. A larger
+ * skeleton used to push the Tasks section down, then shrink when an empty
+ * project resolved. Touch rows keep their separate 44px targets. */
+[data-desktop-rail="true"] .loadingPlaceholder,
+[data-desktop-rail="true"] .empty {
+  box-sizing: border-box;
+  min-height: var(--rail-row-height);
+}
+[data-desktop-rail="true"] .empty { display: flex; align-items: center; }
+
 /* One measured desktop rhythm for section captions and owner-backed rows. */
 [data-desktop-rail="true"] .list { gap: 0.1875rem; margin-top: 0.875rem; }
 [data-desktop-rail="true"] .sectionRow { min-height: var(--rail-row-height); }
