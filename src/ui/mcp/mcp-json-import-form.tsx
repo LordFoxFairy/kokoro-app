@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useCallback, useState, type FormEvent } from "react";
 
 import { Button } from "@/components/ui/button";
 import { DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import type { HubClient } from "@/hub/client";
+import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
+import type { McpJsonImportFlow } from "./mcp-json-import-flow";
+import { useConnectorCreationForm } from "./use-connector-creation-form";
 import { useT } from "@/i18n/context";
 
 import styles from "./mcp-create-dialog.module.css";
@@ -16,39 +18,30 @@ import styles from "./mcp-create-dialog.module.css";
  * screen: Platform validates and persists the document atomically.
  */
 export function JsonMcpImportForm({
-  client,
+  flow,
+  boundary,
   onCancel,
   onDone,
-  onRegistered,
 }: {
-  client: HubClient;
+  flow: McpJsonImportFlow;
+  boundary: ProjectReadBoundary;
   onCancel: () => void;
   onDone: () => Promise<void>;
-  onRegistered?: () => void;
 }) {
   const t = useT();
   const [config, setConfig] = useState("");
-  const [failed, setFailed] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+  const clearDocument = useCallback(() => setConfig(""), []);
+  const { state, completion, admitted, submitting, locked, editable, maySubmit, done } =
+    useConnectorCreationForm(flow, boundary, onDone, clearDocument);
+  const failed = state.kind === "unknown" || state.kind === "rejected";
+  const completed = state.kind === "completed" || completion !== "idle";
 
   const submit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
-    if (submitting || !config.trim() || !client.importPrivateMcpJson) {
-      setFailed(true);
-      return;
-    }
-    setFailed(false);
-    setSubmitting(true);
-    try {
-      await client.importPrivateMcpJson(config);
-      onRegistered?.();
-      await onDone();
-    } catch {
-      // Keep the editor and its original document intact for a correction.
-      setFailed(true);
-    } finally {
-      setSubmitting(false);
-    }
+    if (!maySubmit()) return;
+    const confirmed = state.kind === "unknown" ? await flow.retry(boundary)
+      : editable() && Boolean(config.trim()) && await flow.submit(config, boundary);
+    if (confirmed) await done();
   };
 
   return (
@@ -62,22 +55,25 @@ export function JsonMcpImportForm({
       <p className={styles.compactDialogDescription}>
         {t("mcp.jsonImportDescription")}
       </p>
+      {!admitted ? <p className="sr-only" role="status">{t("mcp.creationSession")}</p> : null}
       <Textarea
         autoFocus
         value={config}
+        readOnly={locked}
         aria-label={t("mcp.jsonImportDescription")}
         aria-invalid={failed || undefined}
         aria-busy={submitting || undefined}
         onChange={(event) => {
-          setConfig(event.target.value);
-          setFailed(false);
+          if (editable()) setConfig(event.target.value);
         }}
       />
       {failed ? (
         <p className={styles.compactDialogError} role="alert">
-          {t("mcp.jsonImportInvalid")}
+          {t(state.kind === "unknown" ? "mcp.jsonImportUnknown" : "mcp.jsonImportInvalid")}
         </p>
       ) : null}
+      {completed ? <p role="status">{t("mcp.jsonImportConfirmed")}</p> : null}
+      {completion === "retry" ? <p role="alert">{t("mcp.actionFailed")}</p> : null}
       <div className={styles.jsonImportActions}>
         <Button
           type="button"
@@ -87,9 +83,9 @@ export function JsonMcpImportForm({
         >
           {t("mcp.cancel")}
         </Button>
-        <Button type="submit" disabled={!config.trim() || submitting}>
-          {t("mcp.jsonImportAction")}
-        </Button>
+        {completed ? <Button type="button" disabled={!admitted || completion === "closing"} onClick={() => void done()}>{t("mcp.creationDone")}</Button> : <Button type="submit" disabled={!admitted || !flow.available || submitting || (state.kind !== "unknown" && !config.trim())}>
+          {t(state.kind === "unknown" ? "mcp.retryOriginal" : "mcp.jsonImportAction")}
+        </Button>}
       </div>
     </form>
   );

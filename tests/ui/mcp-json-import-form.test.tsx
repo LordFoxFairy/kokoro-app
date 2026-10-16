@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { HubClient } from "@/hub/client";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { LocaleProvider } from "@/i18n/context";
+import { createMcpJsonImportFlow } from "@/ui/mcp/mcp-json-import-flow";
 import { JsonMcpImportForm } from "@/ui/mcp/mcp-json-import-form";
 
 const documentValue = JSON.stringify({
@@ -26,14 +27,16 @@ function renderForm(
   onDone = vi.fn().mockResolvedValue(undefined),
 ) {
   const onRegistered = vi.fn();
+  const boundary = { admitted: true, subject: "json-form-test", generation: 1 };
+  const flow = createMcpJsonImportFlow({ client, boundary, onConfirmed: onRegistered });
   render(
     <Dialog open>
       <DialogContent>
         <JsonMcpImportForm
-          client={client as HubClient}
+          flow={flow}
+          boundary={boundary}
           onCancel={vi.fn()}
           onDone={onDone}
-          onRegistered={onRegistered}
         />
       </DialogContent>
     </Dialog>,
@@ -58,7 +61,7 @@ describe("JsonMcpImportForm", () => {
     fireEvent.click(screen.getByRole("button", { name: /Import|导入/u }));
 
     await waitFor(() =>
-      expect(importPrivateMcpJson).toHaveBeenCalledWith(documentValue),
+      expect(importPrivateMcpJson).toHaveBeenCalledWith(documentValue, expect.any(String), expect.any(AbortSignal)),
     );
     await waitFor(() => expect(onRegistered).toHaveBeenCalledOnce());
     await waitFor(() => expect(onDone).toHaveBeenCalledOnce());

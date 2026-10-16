@@ -28,6 +28,18 @@ describe("Custom API actor-owned creation command", () => {
     expect(flow.finish(admitted)).toBe(true)
   })
 
+  it("does not dispatch if a subscriber synchronously retires admission before I/O", async () => {
+    const create = vi.fn().mockResolvedValue(profile)
+    const flow = createCustomApiCreateFlow({ client: { createCustomApi: create }, boundary: admitted, onConfirmed: vi.fn() })
+    const unsubscribe = flow.subscribe(() => {
+      if (flow.getSnapshot().kind === "running") flow.bind({ ...admitted, admitted: false, generation: 2 })
+    })
+    expect(await flow.submit(input(), admitted)).toBe(false)
+    expect(create).not.toHaveBeenCalled()
+    expect(flow.getSnapshot().kind).toBe("unknown")
+    unsubscribe()
+  })
+
   it("blocks duplicate dispatch synchronously and keeps commands out of unadmitted callbacks", async () => {
     let acknowledge!: (value: typeof profile) => void
     const create = vi.fn<NonNullable<HubClient["createCustomApi"]>>(() => new Promise<typeof profile>(resolve => { acknowledge = resolve }))
@@ -95,5 +107,44 @@ describe("Custom API actor-owned creation command", () => {
     releaseAgain(); await Promise.resolve()
     expect(flow.getSnapshot().kind).toBe("idle")
     expect(await flow.retry(admitted)).toBe(false)
+  })
+})
+
+
+describe("MCP JSON owner-atomic creation command", () => {
+  it("freezes one complete document and key across recheck and unknown outcomes", async () => {
+    const { createMcpJsonImportFlow } = await import("@/ui/mcp/mcp-json-import-flow")
+    const document = ' {"mcpServers":{"One":{"type":"streamableHttp","url":"https://mcp.example.test/one","headers":{"x-check":"fixture-only"}},"Two":{"type":"streamableHttp","url":"https://mcp.example.test/two"}}} '
+    const create = vi.fn().mockRejectedValueOnce(new Error("lost ACK")).mockResolvedValue({ imports: [], replayed: true })
+    const confirmed = vi.fn(), key = vi.fn(() => "original-json-command")
+    const flow = createMcpJsonImportFlow({ client: { importPrivateMcpJson: create }, boundary: admitted, onConfirmed: confirmed, key })
+    await flow.submit(document, admitted)
+    expect(flow.getSnapshot()).toEqual({ kind: "unknown" })
+    expect(await flow.submit("changed", admitted)).toBe(false)
+    flow.bind({ ...admitted, admitted: false, generation: 2 })
+    expect(await flow.retry({ ...admitted, admitted: false, generation: 2 })).toBe(false)
+    flow.bind({ ...admitted, generation: 2 })
+    expect(create).toHaveBeenCalledOnce()
+    expect(await flow.retry({ ...admitted, generation: 2 })).toBe(true)
+    expect(create.mock.calls.map(call => call.slice(0, 2))).toEqual([[document, "original-json-command"], [document, "original-json-command"]])
+    expect(key).toHaveBeenCalledOnce()
+    expect(confirmed).toHaveBeenCalledOnce()
+    expect(flow.getSnapshot()).toEqual({ kind: "completed" })
+    expect(flow.finish({ ...admitted, generation: 2 })).toBe(true)
+    expect(await flow.retry({ ...admitted, generation: 2 })).toBe(false)
+  })
+
+  it("releases a first owner validation rejection and rejects oversized documents before dispatch", async () => {
+    const { createMcpJsonImportFlow } = await import("@/ui/mcp/mcp-json-import-flow")
+    const create = vi.fn().mockRejectedValue(new HubClientError("http", "invalid", "invalid_mcp_personal_request", 400))
+    const key = vi.fn().mockReturnValueOnce("first-json").mockReturnValueOnce("corrected-json")
+    const flow = createMcpJsonImportFlow({ client: { importPrivateMcpJson: create }, boundary: admitted, onConfirmed: vi.fn(), key })
+    await flow.submit("x".repeat(65_537), admitted)
+    expect(create).not.toHaveBeenCalled()
+    expect(key).not.toHaveBeenCalled()
+    await flow.submit("invalid JSON", admitted)
+    expect(flow.getSnapshot().kind).toBe("rejected")
+    await flow.submit("corrected JSON", admitted)
+    expect(create.mock.calls.map(call => call[1])).toEqual(["first-json", "corrected-json"])
   })
 })

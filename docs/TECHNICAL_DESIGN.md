@@ -2419,6 +2419,13 @@ Web 不复制 BFF OpenAPI，也不把同源 contract 放进 Developer API。详�
 
 ### Custom API 创建命令的 actor 生命周期（2026-10-16）
 
-AppFrameOverlaySurfaces 在稳定 app segment 内持有唯一 CustomApiCreationProvider，覆盖全局和 Settings 两个入口；不把命令放在短命的 form/Dialog 或独立全局注册表中。actor/client 更换整体退休，临时 admission/generation 更换保原 key/body、取消旧等待并进入 unknown；不自动重放。只有当前准入的用户显式恢复才重发原命令。UI 草稿按 flow 实例分隔，失准入只读、换 actor 清空，纯输入不当作 owner 事实。
+AppFrameOverlaySurfaces 在稳定 app segment 内持有唯一 ConnectorCreationProvider，覆盖全局和 Settings 两个入口；不把命令放在短命的 form/Dialog 或独立全局注册表中。actor/client 更换整体退休，临时 admission/generation 更换保原 key/body、取消旧等待并进入 unknown；不自动重放。只有当前准入的用户显式恢复才重发原命令。UI 草稿按 flow 实例分隔，失准入只读、换 actor 清空，纯输入不当作 owner 事实。
 
 命令仅内存持有冻结的合法创建请求（含 write-only secret）和 caller-issued key；idle/running/unknown/rejected/completed 显式区分。超时、取消、畸形 ACK、冲突／前置条件等不证明未提交；只有已验证的 invalid_custom_api_request 拒绝释放冻结意图。确认 ACK 后清掉命令正文，仅保非敏感完成状态；已退休窗口不关闭新窗口。确认投影失活由 flow 捕获的原 client/subject 负责，即使旧请求晚到也不把旧事实发布给新主体。关闭 Dialog 不取消或自动重新发送命令；provider 卸载清理等待与内存。原 MCP Register/Prepare/OAuth 不在本切片冒称完成。
+
+
+### MCP JSON 创建恢复与共享本地生命周期（2026-10-16）
+
+沿既有 App owner/命令协议扩展：JSON 原子导入与 Custom API 创建共用仅管理单个内存命令的纯生命周期函数（准入、冻结 key/body、显式恢复、StrictMode lease、退休和完成），不引入服务注册表/通用网络代理。各自保留 typed validator、client 调用和确认投影失活；Register/Prepare/OAuth 仍为独立后继，不塞进通用状态机。稳定 AppFrame 的唯一 ConnectorCreationProvider 明确持有 API 与 JSON 两个槽，窗口以上保留未知请求，actor/client 更换全退役；删除旧 API-only context 名称而不留兼容 alias。
+
+两表单共用本地完成/关闭生命周期 hook，UI 和输入校验各自独立。JSON 原文可含secret，只在当前actor RAM；发送前冻结完整文档和合法key，未知结果不得编辑后换key重试；ACK清原文及命令，关闭重开只恢复未知命令而非新事实。Hub client沿原schema及现mcpPrivateJsonImportMatches绑定ACK，owner继续原子导入全部项并持久receipt；无wire/Schema/权限/后端依赖变化。失败恢复仍显式，generic412不当成未提交。验证原API既有回归不退化，JSON准入/换actor/原key-body/关闭重开/迟到ACK，最后主路径浏览器与资源回收。

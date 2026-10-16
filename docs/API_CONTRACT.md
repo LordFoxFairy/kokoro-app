@@ -1616,3 +1616,6 @@ id and does not resend POST.
 Skills 目录重核修复仅改变 Web 内部展示/请求生命周期：不新增 HTTP 字段、endpoint 或授权协议。正常 session 重核期间私有 API client 按既有准入代际退休，详情 placeholder 不发送 owner 请求；恢复后仅使用本代列表与详情。安装仍为既有严格 typed command 和同键未知结果恢复，未增加个人原子升级或前端移除/重装旁路。
 
 Custom API 创建恢复仅调整 Web 内部 client API：createCustomApi(input, key, signal?) 必须由调用者传合法 Idempotency-Key，取消每次调用隐式生成新 key。浏览器路径、body、header wire、BFF/Platform 固定 artifact 不变。未知结果重试同 key、同正文，按原 owner durable receipt 重放；GET 不作为 ACK。响应仍走既有严格 safe profile 校验并绑定原 name/instructions/environment names；结构或语义不符保留 unknown，而非重新创建。原 OAuth 原生协议不添加此 header。
+
+
+MCP JSON创建恢复的本地client签名为importPrivateMcpJson(configJson, key, signal?)，与API创建一样显式caller key，无默认新key。原/v1 browser/BFF/Platform contract、header及config_json wire不变；完整原文冻结、同key恢复，ACK沿既有mcpPrivateJsonImportMatches绑定。原子导入不主动Prepare、不逐条Register，原生OAuth没有新增header。

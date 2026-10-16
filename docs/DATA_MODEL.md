@@ -1266,3 +1266,6 @@ BFF snapshot + command receipt + durable AG-UI events
 目录搜索/筛选/详情 locator 是 actor 所属的内存展示意图，不包含名称、描述、安装权限、包文本或执行能力；代际变化保留意图，不保留过期私有事实。分页 cursor 仍属于本代实际页，不随 locator 迁移。未知安装命令的 source/key 是冻结意图而非确认状态；跨 actor 整体退休，无新 browser storage 或 owner schema。
 
 Custom API 创建恢复状态只在稳定 actor/client 的 App 内存 holder 中存在：冻结请求及 key 不写 localStorage/sessionStorage/IndexedDB、URL、日志或数据库；环境变量原文仅为恢复原请求而暂存，确认后或 actor/provider 退休时清理。公开 snapshot 不包含请求正文、key 或 secret，只含状态及用户输入的名称。无新 owner Schema、缓存事实或业务记录；完成提示不是可执行授权。
+
+
+JSON创建与API创建在同一稳定actor/client provider拥有两个明确且互相隔离的内存槽；共享纯生命周期不维护额外profile/server投影。原始JSON可能含header secret，故只在当前actor RAM保存未知请求，ACK清原文及body，换actor/真正卸载清理；无browser持久存储、URL或日志，没有新owner Schema。

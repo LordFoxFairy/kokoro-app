@@ -2,6 +2,7 @@
 // 入站过 Zod，失败以类型化错误上抛；错误体尽力取 hub 错误码（如 hub.skill_required）供 UI 本地化。
 
 import { z, ZodError, type ZodTypeAny } from "zod";
+import { connectorCreationKeySchema } from "./connector-creation-key.schema";
 import { createSkillPublishClient } from "./skill-publish-client";
 import {
   mcpConnectorPageSchema,
@@ -11,6 +12,7 @@ import {
   mcpConnectorProviderPageSchema,
   mcpPrivateServerRegistrationInputSchema,
   mcpPrivateServerRegistrationSchema,
+  mcpPrivateJsonImportMatches,
   mcpPrivateJsonImportInputSchema,
   mcpPrivateJsonImportSchema,
   mcpPrivateServerPrepareInputSchema,
@@ -49,7 +51,6 @@ import {
   type McpConnectorCreateConnectionInput,
 } from "./mcp-connector-authorization.schema";
 import {
-  customApiCommandKeySchema,
   customApiCreateInputSchema,
   customApiCreateSchema,
   customApiErrorSchema,
@@ -855,6 +856,7 @@ export type HubClient = {
   ) => Promise<McpPrivateServerRegistration>;
   importPrivateMcpJson?: (
     configJson: string,
+    key: string,
     signal?: AbortSignal,
   ) => Promise<McpPrivateJsonImport>;
   getPrivateMcpServer?: (
@@ -1009,7 +1011,7 @@ export function createHubClient(): HubClient {
           customApiCreateSchema,
           {
             method: "POST",
-            headers: { ...JSON_HEADERS, "Idempotency-Key": customApiCommandKeySchema.parse(key) },
+            headers: { ...JSON_HEADERS, "Idempotency-Key": connectorCreationKeySchema.parse(key) },
             body: JSON.stringify(body),
           },
           signal,
@@ -1084,22 +1086,24 @@ export function createHubClient(): HubClient {
         },
         signal,
       ),
-    importPrivateMcpJson: (configJson, signal) =>
+    importPrivateMcpJson: async (configJson, key, signal) =>
       requestMcpConnector(
         "importJson",
         "/mcp/servers/import",
         mcpPrivateJsonImportSchema,
         {
           method: "POST",
-          headers: idempotencyHeaders("mcp-private-import", {
-            ...JSON_HEADERS,
-          }),
+          headers: { ...JSON_HEADERS, "Idempotency-Key": connectorCreationKeySchema.parse(key) },
           body: JSON.stringify(
             mcpPrivateJsonImportInputSchema.parse({ config_json: configJson }),
           ),
         },
         signal,
-      ),
+      ).then(result => {
+        if (!mcpPrivateJsonImportMatches({ data: result }, { config_json: configJson }))
+          throw new HubClientError("parse", "MCP JSON import ACK binding mismatch", null, null);
+        return result;
+      }),
     getPrivateMcpServer: async (serverId, signal) =>
       (
         await requestMcpConnector(

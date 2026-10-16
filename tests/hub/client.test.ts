@@ -1809,3 +1809,31 @@ it.each(["", "invalid\nkey", "k".repeat(192)])("Custom API rejects an invalid ca
   await expect(createHubClient().createCustomApi!({ name: "Valid API", environment: [] }, key)).rejects.toBeInstanceOf(Error)
   expect(request).not.toHaveBeenCalled()
 })
+
+
+it("MCP JSON import keeps its caller key and entire original document and rejects an unrelated ACK", async () => {
+  const document = ' {"mcpServers":{"Original import":{"type":"streamableHttp","url":"https://mcp.example.test/original"}}} '
+  const server = { server_id: "json-server", display_name: "Original import", server_url: "https://mcp.example.test/original", status: "pending", state_version: "1", headers: [], prepare_status: "pending_prepare", declarations: [], declarations_available: false }
+  const connector = { connector_id: "json-connector", connector_type: "mcp", provider_key: "private-json", server_id: server.server_id, status: "pending", approved_scopes: [], enabled: false, state_version: "1" }
+  const receipt = { imports: [{ server, connector }], replayed: true }
+  const request = vi.fn<typeof fetch>().mockRejectedValueOnce(new Error("lost response"))
+    .mockImplementation(async () => publicResponse({ data: receipt }, 201))
+  vi.stubGlobal("fetch", request)
+  const hub = createHubClient()
+  await expect(hub.importPrivateMcpJson!(document, "original-json-key")).rejects.toBeInstanceOf(HubClientError)
+  await expect(hub.importPrivateMcpJson!(document, "original-json-key")).resolves.toEqual(receipt)
+  for (const [path, init] of request.mock.calls) {
+    expect(path).toBe("/api/hub/mcp/servers/import")
+    expect(new Headers(init?.headers).get("idempotency-key")).toBe("original-json-key")
+    expect(JSON.parse(String(init?.body))).toEqual({ config_json: document })
+  }
+  request.mockImplementation(async () => publicResponse({ data: { ...receipt, imports: [{ server: { ...server, server_url: "https://mcp.example.test/unrelated" }, connector }] } }, 201))
+  await expect(hub.importPrivateMcpJson!(document, "mismatched-json-key")).rejects.toMatchObject({ reason: "parse" })
+})
+
+it.each(["", "invalid\nkey", "k".repeat(192)])("MCP JSON import rejects an invalid caller key before dispatch", async key => {
+  const request = vi.fn<typeof fetch>()
+  vi.stubGlobal("fetch", request)
+  await expect(createHubClient().importPrivateMcpJson!("{}", key)).rejects.toBeInstanceOf(Error)
+  expect(request).not.toHaveBeenCalled()
+})

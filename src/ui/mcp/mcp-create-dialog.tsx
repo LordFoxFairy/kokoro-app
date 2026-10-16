@@ -9,9 +9,8 @@ import type { HubClient } from "@/hub/client";
 import styles from "./mcp-create-dialog.module.css";
 import type { McpCreateMode } from "./mcp-panel-model";
 import { CustomMcpForm } from "./mcp-custom-form";
-import { JsonMcpImportForm } from "./mcp-json-import-form";
 import { UrlMcpForm } from "./mcp-url-form";
-import { CustomApiCreationForm } from "./custom-api-creation-context";
+import { CustomApiCreationForm, JsonMcpCreationForm } from "./connector-creation-context";
 
 export function McpCreateDialog({
   client,
@@ -90,12 +89,7 @@ export function McpCreateDialog({
         {mode === "custom-api" ? (
           <CustomApiCreationForm onCancel={close} onDone={complete} />
         ) : mode === "json" ? (
-          <JsonMcpImportForm
-            client={client}
-            onCancel={close}
-            onDone={complete}
-            {...(onRegistered === undefined ? {} : { onRegistered })}
-          />
+          <JsonMcpCreationForm onCancel={close} onDone={complete} />
         ) : mode === "url" ? (
           <UrlMcpForm
             client={client}

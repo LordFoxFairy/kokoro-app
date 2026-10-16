@@ -20,7 +20,7 @@ import { KokoroSkillsSurface } from "@/features/app/kokoro-skills-surface"
 import { SkillsSettingsSection } from "@/ui/settings/sections/skills-settings-section"
 import { createHubClient } from "@/hub/client"
 import { McpProjectionRead } from "@/ui/mcp/mcp-projection-read"
-import { CustomApiCreationProvider } from "@/ui/mcp/custom-api-creation-context"
+import { ConnectorCreationProvider } from "@/ui/mcp/connector-creation-context"
 import { SkillCatalogDialog, type CatalogDetailProjection } from "@/ui/skills/skills-catalog-dialog"
 import { createManusSkillHubClient } from "@/ui/skills/manus-skill-client"
 import { useAppFrameActions } from "@/components/blocks/app-frame/use-app-frame-actions"
@@ -2555,7 +2555,7 @@ it.each([
     </div>
   }
   render(<StrictMode><LocaleProvider>{entry === "global" ? <Shell /> :
-    <CustomApiCreationProvider client={hub} boundary={{ admitted: true, subject: "preview", generation: 0 }}><ConnectorsSettingsSection client={hub} preview brandName="Kokoro" /></CustomApiCreationProvider>}</LocaleProvider></StrictMode>)
+    <ConnectorCreationProvider client={hub} boundary={{ admitted: true, subject: "preview", generation: 0 }}><ConnectorsSettingsSection client={hub} preview brandName="Kokoro" /></ConnectorCreationProvider>}</LocaleProvider></StrictMode>)
   await act(async () => { await Promise.resolve() })
   if (entry === "global") fireEvent.click(screen.getByRole("button", { name: "Global API create" }))
   else {
@@ -2618,7 +2618,7 @@ it.each(["global", "settings"] as const)("%s creation ACK cannot close a newer c
         commandMenu={() => null} commandProps={{ onNewChat: vi.fn(), onOpenSettings: vi.fn() }} commandOpen={false} onCommandOpenChange={vi.fn()} />
     </div>
   }
-  render(<StrictMode><LocaleProvider>{entry === "global" ? <Shell /> : <CustomApiCreationProvider client={hub} boundary={{ admitted: true, subject: "preview", generation: 0 }}><ConnectorsSettingsSection client={hub} preview brandName="Kokoro" /></CustomApiCreationProvider>}</LocaleProvider></StrictMode>)
+  render(<StrictMode><LocaleProvider>{entry === "global" ? <Shell /> : <ConnectorCreationProvider client={hub} boundary={{ admitted: true, subject: "preview", generation: 0 }}><ConnectorsSettingsSection client={hub} preview brandName="Kokoro" /></ConnectorCreationProvider>}</LocaleProvider></StrictMode>)
   const open = async (kind: "api" | "json") => {
     if (entry === "global") fireEvent.click(screen.getByRole("button", { name: kind === "api" ? "Global API create" : "Global JSON create" }))
     else {
@@ -2652,7 +2652,7 @@ it.each(["mode", "visibility"] as const)("a retained creation host fences old co
   const pending = new Promise<void>(resolve => { acknowledge = resolve })
   const hub = { ...createHubClient(), createCustomApi: vi.fn().mockResolvedValue({ profile_id: "retained-host-api", name: "Old API", state_version: "1", environment: [], created_at: "2026-10-16T12:00:00Z", updated_at: "2026-10-16T12:00:00Z" }) }
   const close = vi.fn(), confirmed = vi.fn(async () => { await pending })
-  const dialog = (mode: "custom-api" | "json", open = true) => <StrictMode><LocaleProvider><CustomApiCreationProvider client={hub} boundary={{ admitted: true, subject: "preview", generation: 0 }}><McpCreateDialog client={hub} mode={mode} open={open} onOpenChange={close} onDone={confirmed} /></CustomApiCreationProvider></LocaleProvider></StrictMode>
+  const dialog = (mode: "custom-api" | "json", open = true) => <StrictMode><LocaleProvider><ConnectorCreationProvider client={hub} boundary={{ admitted: true, subject: "preview", generation: 0 }}><McpCreateDialog client={hub} mode={mode} open={open} onOpenChange={close} onDone={confirmed} /></ConnectorCreationProvider></LocaleProvider></StrictMode>
   const view = render(dialog("custom-api"))
   fireEvent.change(screen.getByRole("textbox", { name: "名称" }), { target: { value: "Old API" } })
   fireEvent.click(screen.getByRole("button", { name: "保存" }))
@@ -2669,8 +2669,8 @@ it.each(["mode", "visibility"] as const)("a retained creation host fences old co
   expect(draft.isConnected).toBe(true)
 })
 
-function apiCreationOverlay(boundary: import("@/ui/auth/use-session-state").ProjectReadBoundary, mode: import("@/ui/mcp/mcp-panel-model").McpCreateMode | null = "custom-api") {
-  return <LocaleProvider><AppFrameOverlaySurfaces mounted settingsTab={null} preview={false} readBoundary={boundary}
+function apiCreationOverlay(boundary: import("@/ui/auth/use-session-state").ProjectReadBoundary, mode: import("@/ui/mcp/mcp-panel-model").McpCreateMode | null = "custom-api", settingsTab: "mcp" | null = null) {
+  return <LocaleProvider><AppFrameOverlaySurfaces mounted settingsTab={settingsTab} preview={false} readBoundary={boundary}
     brandName="Kokoro" onCloseSettings={vi.fn()} onTabChange={vi.fn()} onCreateSkillWithAi={vi.fn()} onTrySkill={() => false}
     settingsReturnFocusRef={{ current: null }} shellRef={{ current: null }} mcpCreateMode={mode} setMcpCreateMode={vi.fn()}
     mcpCreateReturnFocusRef={{ current: null }} commandMenu={() => null} commandProps={{ onNewChat: vi.fn(), onOpenSettings: vi.fn() }}
@@ -2685,6 +2685,106 @@ function apiCreationHub() {
     listSkills: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
   }
 }
+
+const atomicMcpDocument = JSON.stringify({ mcpServers: { "Original import": { type: "streamableHttp", url: "https://mcp.example.test/original", headers: { "x-acceptance-check": "fixture-only" } } } })
+
+it("JSON creation pauses for the current actor recheck without losing the editor and clears another actor's draft", async () => {
+  const pageClients = await import("@/ui/shell/page-clients")
+  const hub = { ...apiCreationHub(), importPrivateMcpJson: vi.fn() }
+  vi.spyOn(pageClients, "browserHubClient").mockReturnValue(hub)
+  const boundary = { admitted: true, subject: "json-actor", generation: 1 }
+  const view = render(apiCreationOverlay(boundary, "json"))
+  const editor = screen.getByRole("textbox", { name: "请粘贴您的配置 JSON" })
+  fireEvent.change(editor, { target: { value: atomicMcpDocument } })
+  view.rerender(apiCreationOverlay({ ...boundary, admitted: false, generation: 2 }, "json"))
+  expect(editor.isConnected).toBe(true)
+  expect(editor).toHaveAttribute("readonly")
+  expect(screen.getByRole("button", { name: "导入" })).toBeDisabled()
+  fireEvent.submit(editor.closest("form")!)
+  expect(hub.importPrivateMcpJson).not.toHaveBeenCalled()
+  view.rerender(apiCreationOverlay({ ...boundary, generation: 2 }, "json"))
+  expect(screen.getByRole("textbox", { name: "请粘贴您的配置 JSON" })).toBe(editor)
+  expect(editor).toHaveValue(atomicMcpDocument)
+  expect(screen.getByRole("button", { name: "导入" })).toBeEnabled()
+  view.rerender(apiCreationOverlay({ ...boundary, subject: "other-actor", generation: 3 }, "json"))
+  expect(screen.getByRole("textbox", { name: "请粘贴您的配置 JSON" })).toHaveValue("")
+  view.rerender(apiCreationOverlay({ ...boundary, generation: 4 }, "json"))
+  expect(screen.getByRole("textbox", { name: "请粘贴您的配置 JSON" })).toHaveValue("")
+})
+
+it("JSON unknown creation survives closing and recheck and only retries its original key and complete document", async () => {
+  const pageClients = await import("@/ui/shell/page-clients")
+  const write = vi.fn().mockRejectedValue(new Error("lost ACK"))
+  const hub = { ...apiCreationHub(), importPrivateMcpJson: write }
+  vi.spyOn(pageClients, "browserHubClient").mockReturnValue(hub)
+  const boundary = { admitted: true, subject: "json-unknown", generation: 1 }
+  const view = render(apiCreationOverlay(boundary, "json"))
+  const editor = screen.getByRole("textbox", { name: "请粘贴您的配置 JSON" })
+  fireEvent.change(editor, { target: { value: atomicMcpDocument } })
+  fireEvent.click(screen.getByRole("button", { name: "导入" }))
+  await screen.findByRole("alert")
+  expect(editor).toHaveAttribute("readonly")
+  expect(write).toHaveBeenCalledOnce()
+  expect(write.mock.calls[0]?.[1]).toEqual(expect.any(String))
+  view.rerender(apiCreationOverlay(boundary, null))
+  view.rerender(apiCreationOverlay({ ...boundary, admitted: false, generation: 2 }, "json"))
+  expect(screen.getByRole("button", { name: "重试原请求" })).toBeDisabled()
+  view.rerender(apiCreationOverlay({ ...boundary, generation: 2 }, "json"))
+  expect(write).toHaveBeenCalledOnce()
+  fireEvent.click(screen.getByRole("button", { name: "重试原请求" }))
+  await waitFor(() => expect(write).toHaveBeenCalledTimes(2))
+  expect(write.mock.calls[1]?.slice(0, 2)).toEqual(write.mock.calls[0]?.slice(0, 2))
+  expect(write.mock.calls[1]?.[0]).toBe(atomicMcpDocument)
+})
+
+it("JSON unknown creation is shared between global and Settings windows without replay on navigation", async () => {
+  const pageClients = await import("@/ui/shell/page-clients")
+  const write = vi.fn().mockRejectedValue(new Error("lost ACK"))
+  const hub = { ...apiCreationHub(), importPrivateMcpJson: write }
+  vi.spyOn(pageClients, "browserHubClient").mockReturnValue(hub)
+  const boundary = { admitted: true, subject: "json-cross-entry", generation: 1 }
+  const view = render(apiCreationOverlay(boundary, "json"))
+  fireEvent.change(screen.getByRole("textbox", { name: "请粘贴您的配置 JSON" }), { target: { value: atomicMcpDocument } })
+  fireEvent.click(screen.getByRole("button", { name: "导入" }))
+  await screen.findByRole("alert")
+  view.rerender(apiCreationOverlay(boundary, null, "mcp"))
+  await screen.findByRole("heading", { name: "已添加的连接器" })
+  fireEvent.keyDown(screen.getByRole("button", { name: "创建" }), { key: "ArrowDown" })
+  fireEvent.click(await screen.findByRole("menuitem", { name: "通过 JSON 导入 MCP" }))
+  expect(screen.getByRole("textbox", { name: "请粘贴您的配置 JSON" })).toHaveValue("")
+  expect(screen.getByRole("textbox", { name: "请粘贴您的配置 JSON" })).toHaveAttribute("readonly")
+  expect(write).toHaveBeenCalledOnce()
+  fireEvent.click(screen.getByRole("button", { name: "重试原请求" }))
+  await waitFor(() => expect(write).toHaveBeenCalledTimes(2))
+  expect(write.mock.calls[1]?.slice(0, 2)).toEqual(write.mock.calls[0]?.slice(0, 2))
+})
+
+it("a late JSON creation ACK clears the raw document and requires current Done rather than closing through a retired boundary", async () => {
+  const pageClients = await import("@/ui/shell/page-clients")
+  let acknowledge!: () => void
+  const pending = new Promise<void>(resolve => { acknowledge = resolve })
+  const write = vi.fn<NonNullable<import("@/hub/client").HubClient["importPrivateMcpJson"]>>(async () => { await pending; return { imports: [], replayed: false } })
+  const hub = { ...apiCreationHub(), importPrivateMcpJson: write }
+  vi.spyOn(pageClients, "browserHubClient").mockReturnValue(hub)
+  const boundary = { admitted: true, subject: "json-late-ack", generation: 1 }
+  const view = render(apiCreationOverlay(boundary, "json"))
+  const editor = screen.getByRole("textbox", { name: "请粘贴您的配置 JSON" })
+  fireEvent.change(editor, { target: { value: atomicMcpDocument } })
+  fireEvent.click(screen.getByRole("button", { name: "导入" }))
+  await waitFor(() => expect(write).toHaveBeenCalledOnce())
+  const signal = write.mock.calls[0]?.[2] as AbortSignal | undefined
+  view.rerender(apiCreationOverlay({ ...boundary, admitted: false, generation: 2 }, "json"))
+  expect(signal?.aborted).toBe(true)
+  await act(async () => { acknowledge(); await pending })
+  expect(editor).toHaveValue("")
+  expect(editor).toHaveAttribute("readonly")
+  expect(screen.getByRole("button", { name: "完成" })).toBeDisabled()
+  view.rerender(apiCreationOverlay({ ...boundary, generation: 2 }, "json"))
+  expect(screen.getByRole("button", { name: "完成" })).toBeEnabled()
+  expect(screen.getByRole("dialog", { name: "通过 JSON 导入" })).toBeVisible()
+  fireEvent.click(screen.getByRole("button", { name: "完成" }))
+  expect(write).toHaveBeenCalledOnce()
+})
 
 it("API creation pauses during same-actor recheck and clears drafts on actor replacement", async () => {
   const pageClients = await import("@/ui/shell/page-clients")

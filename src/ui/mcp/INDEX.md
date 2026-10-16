@@ -20,7 +20,8 @@ OAuth 点击同步预开并隔离 popup，再使用 owner 返回的 HTTPS URL；
 - `mcp-provider-catalog-dialog.tsx`、`mcp-provider-detail-dialog.tsx`、`mcp-connector-editor-dialog.tsx`：分别拥有目录、Provider 详情、Provider 生命周期编辑的焦点/弹窗边界。
 - `custom-mcp-detail-dialog.tsx`：只拥有自定义 MCP 的详情、管理菜单与 `MCP 配置`；读取 owner-issued server ID 后才渲染，绝不按显示名猜类型。
 - `custom-api-detail-dialog.tsx` / `custom-api-form.tsx` / `use-custom-api-projection.ts`：只拥有 Custom API profile 的安全详情和编辑；环境变量值永不进入读取视图。
-- `custom-api-create-flow.ts` / `custom-api-creation-context.tsx`：稳定 app shell 的 actor/client 创建命令及 React 适配。冻结正文/key 仅内存，unknown 显式同命令恢复；窗口关闭不丢命令，准入退休撤销等待，不新增 provider 或 profile 事实源。完成由捕获的原主体失活独立 API 投影，Form/Dialog 仅处理当前窗口关闭。
+- `connector-creation-command.ts` / `use-connector-creation-form.ts`：仅本地单命令的准入/lease/unknown及异步完成关闭机制，由 API 与 JSON 两个真实消费者共用，不是网络代理或命令注册表。
+- `custom-api-create-flow.ts` / `mcp-json-import-flow.ts` / `connector-creation-context.tsx`：各自 typed 输入/创建命令与稳定 App shell 的两个 actor/client 命令槽。冻结正文/key只在RAM，unknown显式同请求恢复；关闭窗口不丢命令，换actor/真正卸载退休。确认清实际secret/JSON原文，API和JSON分别失活捕获主体的独立投影，Form/Dialog只拥有当前窗口关闭。JSON仍一次原子HTTP导入，不循环Register。
 - `mcp-projection-types.ts`：共享的投影视图类型、分类词汇和 owner artwork/status 映射；不含请求或模拟数据。
 
 
