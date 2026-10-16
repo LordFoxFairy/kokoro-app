@@ -74,3 +74,32 @@ test.describe("项目会话", () => {
     await expect(page.getByRole("navigation", { name: /直接会话|Direct chats/ })).not.toContainText(prompt)
   })
 })
+
+test("技能探索的封面、文字和操作在当前视口互不重叠", async ({ page }) => {
+  await page.addInitScript(() => window.localStorage.setItem("kokoro.locale", "zh"))
+  await page.goto("/app#/account/settings/skills", { waitUntil: "domcontentloaded" })
+  await page.getByRole("button", { name: "探索技能", exact: true }).click()
+
+  const catalog = page.getByRole("region", { name: "探索技能", exact: true })
+  const details = catalog.getByRole("button", { name: /^查看详情 / })
+  await expect(details.first()).toBeVisible()
+  // Check rendered geometry, not CSS implementation or a fixed pixel baseline.
+  const rows = await details.evaluateAll((buttons) => buttons.map((button) => {
+    const cover = button.previousElementSibling?.getBoundingClientRect()
+    const text = button.getBoundingClientRect()
+    const action = button.nextElementSibling?.getBoundingClientRect()
+    return {
+      coverBeforeText: cover !== undefined && cover.right <= text.left,
+      textBeforeAction: action !== undefined && text.right <= action.left,
+      textHasWidth: text.width > 0,
+    }
+  }))
+  for (const row of rows) {
+    expect(row).toEqual({ coverBeforeText: true, textBeforeAction: true, textHasWidth: true })
+  }
+  const dimensions = await page.evaluate(() => ({
+    clientWidth: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+  }))
+  expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.clientWidth)
+})

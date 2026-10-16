@@ -1,3 +1,7 @@
+### Skills 探索条目响应式布局
+
+`src/ui/skills/skills-panel.module.css` 的窄屏封面与其网格列同宽，覆盖 inline 样式的尺寸优先级，避免遮住标题/说明；桌面布局保持。既有 `tests/e2e/public-shell.spec.ts` 用实际渲染的封面、文字与操作几何关系验证互不重叠，不锁 CSS 字符串或固定像素基线；显式预览数据不代表正常 owner 链路验收。
+
 ### T-K03.13 本人 MCP 只读接线
 
 `src/app/api/hub/[...path]/route.ts` 精确保 self 映射四个已发行本人 reads；`src/hub/mcp-personal.schema.ts` 校验独立 wire/错误/资源绑定，原 active Connection projection 不变。相邻 `tests/app/hub-proxy.test.ts` 与 `tests/hub/mcp-personal-schema.test.ts` 覆盖闭集及网络生命周期；CRUD/授权 connection/Admin 是后继，不冒本片完成。
