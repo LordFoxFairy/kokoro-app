@@ -245,6 +245,8 @@ function InstalledSkillsContent({
   updateLocked,
   updatePending,
 }: SkillsContentProps & { onUpdateSkill: (skill: SkillCard, source: HTMLElement) => boolean; updateFallbackFocus: RefObject<HTMLInputElement | null>; updateLocked: () => boolean; updatePending: boolean }) {
+  // Importers retire their own facts/work on every admission/generation change.
+  // Keep only window intent here; the actor-keyed parent clears it on switch.
   const [githubOpen, setGithubOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
   const githubReturnFocusRef = useRef<HTMLElement | null>(null);
@@ -309,7 +311,6 @@ function InstalledSkillsContent({
     setLocked(new Set()); setBusy(null); setDisableError(null);
     setEnabledOverrides(new Map()); setInstalledOverrides(new Map());
     setExpanded(null); setGithubImportNotice(null); setRecentSkillKey(null);
-    setGithubOpen(false); setUploadOpen(false);
   }
   const mutationBusyRef = useRef(false);
   const mutationAttemptRef = useRef(0);

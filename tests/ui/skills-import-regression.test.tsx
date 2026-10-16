@@ -46,6 +46,34 @@ it("keeps explicit Settings preview usable without granting a live session or is
   expect(fetch).not.toHaveBeenCalled()
 })
 
+it.each(["local", "github"] as const)("keeps the %s import window across same-actor rechecks without admitting actions or carrying it to another actor", async (source) => {
+  const client = createPreviewHubClient()
+  const content = (admitted: boolean, subject: string, generation: number) => <LocaleProvider><SkillsContent readBoundary={{ admitted, subject, generation }} client={client} pinned={[]} onTogglePin={() => {}} embedded /></LocaleProvider>
+  const view = render(content(true, "upload-window-actor", 1))
+  await screen.findByRole("button", { name: "探索技能" })
+  fireEvent.keyDown(screen.getByRole("button", { name: "添加" }), { key: "ArrowDown" })
+  fireEvent.click(await screen.findByRole("menuitem", { name: source === "local" ? "上传技能" : "从 GitHub 导入技能" }))
+  const dialogId = source === "local" ? "skill-upload-dialog" : "github-import-dialog"
+  const dialog = await screen.findByTestId(dialogId)
+  const action = () => source === "local" ? within(dialog).getByRole("button", { name: "拖放或点击以上传" }) : within(dialog).getByTestId("github-import-submit")
+  if (source === "github") fireEvent.change(within(dialog).getByTestId("github-repository-input"), { target: { value: "acme/skills" } })
+  expect(action()).toBeEnabled()
+
+  view.rerender(content(false, "upload-window-actor", 2))
+  expect(screen.getByTestId(dialogId)).toBe(dialog)
+  expect(action()).toBeDisabled()
+  if (source === "local") expect(within(dialog).getByTestId("skill-upload-input")).toBeDisabled()
+  else expect(within(dialog).getByTestId("github-repository-input")).toHaveValue("acme/skills")
+  view.rerender(content(true, "upload-window-actor", 2))
+  expect(screen.getByTestId(dialogId)).toBe(dialog)
+  expect(action()).toBeEnabled()
+
+  view.rerender(content(true, "another-upload-actor", 3))
+  expect(screen.queryByTestId(dialogId)).toBeNull()
+  view.rerender(content(true, "upload-window-actor", 4))
+  expect(screen.queryByTestId(dialogId)).toBeNull()
+})
+
 it("hands AI skill creation to the shared composer instead of only writing an orphaned pending draft", async () => {
   const onPrompt = renderSurface()
   await screen.findByTestId("skills-catalog-grid")

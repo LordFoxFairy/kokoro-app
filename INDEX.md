@@ -2,6 +2,10 @@
 
 `src/ui/skills/skills-panel.module.css` 的窄屏封面与其网格列同宽，覆盖 inline 样式的尺寸优先级，避免遮住标题/说明；桌面布局保持。既有 `tests/e2e/public-shell.spec.ts` 用实际渲染的封面、文字与操作几何关系验证互不重叠，不锁 CSS 字符串或固定像素基线；显式预览数据不代表正常 owner 链路验收。
 
+### Skills 导入窗口展示意图
+
+`src/ui/skills/skills-panel.tsx` 只保留同 actor 的本地上传/GitHub 窗口打开意图。两个 importer 仍独立按 admission/generation 退休私有事实与未决工作、阻止失准入操作；actor-keyed 父级负责换账号清除窗口。相邻 `tests/ui/skills-import-regression.test.tsx` 验证父级重核、暂停操作及 A→B→A 不复活，原 flow/回执退休回归继续保留。
+
 ### T-K03.13 本人 MCP 只读接线
 
 `src/app/api/hub/[...path]/route.ts` 精确保 self 映射四个已发行本人 reads；`src/hub/mcp-personal.schema.ts` 校验独立 wire/错误/资源绑定，原 active Connection projection 不变。相邻 `tests/app/hub-proxy.test.ts` 与 `tests/hub/mcp-personal-schema.test.ts` 覆盖闭集及网络生命周期；CRUD/授权 connection/Admin 是后继，不冒本片完成。
