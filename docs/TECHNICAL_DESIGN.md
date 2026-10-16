@@ -1,3 +1,9 @@
+## SET51 真实 Next 登录回归与当前浏览器表单对齐（2026-10-16）
+
+当前 main 的 `/login` 已在 b2f652e、cdcee3d 改为 200、no-store 的不可见浏览器启动表单：固定同源 provider POST、Auth.js double-submit CSRF cookie/hidden token、当前请求 CSP nonce；浏览器提交后才签发 OIDC state 并 302 到同源 authorize。旧“GET 直接 302”描述已被本段替代，不恢复嵌套 Route Handler 调用或可见重试中转页。SET51 仅在两现有真实 Next HTTP 集成测试验证该链和重新登录/退出确认，保留原 cookie、Origin、CSP、匿名零业务读取及 issuer 退出断言；不修改生产认证源码、超时、skip、owner API 或 Skills/MCP。Root 维护设计和资源门，Web owner 只写获准测试范围；原六个项目/侧栏失败保留为独立范围。
+
+验证分工：原始 HTTP 用例检查实际 HTML 的单表单、唯一 hidden token、固定 action、script nonce 与 no-referrer meta；浏览器用例不读取已跳离文档正文或拦截导航，而以实际 GET 安全头/签发 cookie 和真实导航 POST 的唯一 token、摘要、cookie 回传、Origin 与 302/state 联合验证。它们不作为无干预时延基准。
+
 ## SET49 主线与设置分支整合（2026-10-16）
 
 从既有设置分支合入主线，保留主线 SettingsPanel、navigation model/brand/rail、compact More、Skills scope及独立项目/任务侧栏。设置分支已有账户资料/设备、Team准入、个性化CAS/unknown恢复、搜索和归档生命周期迁入这些现有边界；不恢复主线已退休的项目内私有任务展开分支，不修改Skills/连接器业务。唯一writer与验证证据由Root整合维护，所有PR仍draft。

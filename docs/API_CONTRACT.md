@@ -1,3 +1,7 @@
+## SET51 当前 `/login` 的浏览器启动表达（2026-10-16）
+
+当前成功 `GET /login` 是 `200 text/html`、no-store、单一固定 `/api/auth/signin/kokoro-iam` POST 表单；Web 签发 HttpOnly CSRF cookie，浏览器携同 hidden token 提交后，provider 才返回 302 到同源 `/iam/oauth2/authorize` 并签发 state。当前请求 nonce 对应最终 HTTP CSP，文档 meta 要求 no-referrer；真实 Chromium 因此发送 `Origin: null`，沿用现有固定 provider-start、canonical Host 与 double-submit CSRF 共同限定的窄例外。它不扩展其它 action 的 Origin 资格，错误 Origin/CSRF 仍拒绝。无可见重试界面；先前“GET 成功直接 302”的说明已被替代。SET51 只更新真实 Next 回归，不新增或修改业务契约或 issuer/回调/退出确认规则。
+
 ## SET49 主线与设置契约组合（2026-10-16）
 
 本次不增加浏览器API或授权能力。Web继续只消费BFF固定发行，承接主线已批准的MCP契约删除以及现设置账户/分享/归档增量；所有既有生成组必须从同一正式owner全文、commit、digest正规再生成，不混合pin或手改generated。当前已运行实例不因源码push自动切换。
