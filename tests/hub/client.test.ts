@@ -1,15 +1,27 @@
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { catalogPackageResponseSchema, catalogPackageMatches, catalogPackagePrivatePath, skillCatalogSchema } from "@/hub/schemas"
+import {
+  catalogPackageResponseSchema,
+  catalogPackageMatches,
+  catalogPackagePrivatePath,
+  skillCatalogSchema,
+} from "@/hub/schemas";
 
-import { createHubClient, createSkillInstallationClient, HubClientError } from "@/hub/client"
+import {
+  createHubClient,
+  createSkillInstallationClient,
+  HubClientError,
+} from "@/hub/client";
 
 function jsonResponse(data: unknown, status = 200): Response {
-  return new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json" } })
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
 }
 
 function managedResponse(data: object, status = 200): Response {
-  return publicResponse({ ...data, meta: { request_id: "request-1" } }, status)
+  return publicResponse({ ...data, meta: { request_id: "request-1" } }, status);
 }
 const managedSkill = {
   skill_id: "skill-1",
@@ -24,148 +36,237 @@ const managedSkill = {
   category_keys: [],
   skill_updated_at: "2026-10-10T00:00:00Z",
   product: { publication_audience: "owner", state_version: "5" },
-}
+};
 
 function publicResponse(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "request-1" },
-  })
+    headers: {
+      "content-type": "application/json",
+      "cache-control": "no-store",
+      "x-request-id": "request-1",
+    },
+  });
 }
 
 afterEach(() => {
-  vi.unstubAllGlobals()
-})
+  vi.unstubAllGlobals();
+});
 
 describe("browser Hub cache directive boundary", () => {
   const consumers = [
     {
       name: "personal Skills",
       read: () => createHubClient().listPersonalSkills(),
-      body: { data: { skills: [], next_cursor: null }, meta: { request_id: "request-1" } },
+      body: {
+        data: { skills: [], next_cursor: null },
+        meta: { request_id: "request-1" },
+      },
       expected: { skills: [], next_cursor: null },
     },
-    { name: "MCP projection", read: () => createHubClient().listMcpConnections(), body: { data: { connections: [] } }, expected: { connections: [] } },
-    { name: "installations", read: () => createSkillInstallationClient().list(), body: { data: [] }, expected: { data: [] } },
-  ]
-  it.each(consumers)("accepts final Proxy no-store directives for $name", async ({ read, body, expected }) => {
-    for (const cacheControl of [
-      "private, no-store, max-age=0",
-      "NO-STORE, private",
-      "private,\tno-store\t, max-age=0",
-      'extension="value, no-store, value", no-store',
-    ]) {
-      const response = publicResponse(body)
-      response.headers.set("cache-control", cacheControl)
-      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response))
-      await expect(read()).resolves.toEqual(expected)
-    }
-  })
-  it.each(consumers)("rejects missing or lookalike no-store directives for $name", async ({ read, body }) => {
-    for (const cacheControl of [
-      null,
-      "private, max-age=0",
-      "no-cache",
-      "x-no-store",
-      "no-store-extra",
-      "no-store=1",
-      'extension="value, no-store, value"',
-      'no-store, extension="unterminated',
-    ]) {
-      const response = publicResponse(body)
-      if (cacheControl === null) response.headers.delete("cache-control")
-      else response.headers.set("cache-control", cacheControl)
-      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response))
-      await expect(read()).rejects.toMatchObject({ reason: "parse", status: 200 })
-    }
-  })
-  it.each(consumers)("preserves strict media, request ID and schema validation for $name", async ({ read, body }) => {
-    for (const [name, value] of [
-      ["content-type", "text/plain"],
-      ["x-request-id", "invalid request id"],
-      ["x-request-id", ""],
-    ]) {
-      const response = publicResponse(body)
-      response.headers.set("cache-control", "private, no-store, max-age=0")
-      response.headers.set(name!, value!)
-      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response))
-      await expect(read()).rejects.toMatchObject({ reason: "parse", status: 200 })
-    }
-    const response = publicResponse({ ...body, unexpected: true })
-    response.headers.set("cache-control", "private, no-store, max-age=0")
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response))
-    await expect(read()).rejects.toMatchObject({ reason: "parse", status: 200 })
-  })
-  it.each(consumers)("preserves typed authorization rejection under final Proxy headers for $name", async ({ read }) => {
-    const response = publicResponse(
-      read === consumers[0]?.read
-        ? { error: { code: "session_invalid", message: "revoked" }, meta: { request_id: "request-1" } }
-        : { error: { code: "session_invalid", message: "revoked", retryable: false } },
-      401,
-    )
-    response.headers.set("cache-control", "private, no-store, max-age=0")
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response))
-    await expect(read()).rejects.toMatchObject({ reason: "http", status: 401, code: "session_invalid" })
-  })
-})
+    {
+      name: "MCP projection",
+      read: () => createHubClient().listMcpConnections(),
+      body: { data: { connections: [] } },
+      expected: { connections: [] },
+    },
+    {
+      name: "installations",
+      read: () => createSkillInstallationClient().list(),
+      body: { data: [] },
+      expected: { data: [] },
+    },
+  ];
+  it.each(consumers)(
+    "accepts final Proxy no-store directives for $name",
+    async ({ read, body, expected }) => {
+      for (const cacheControl of [
+        "private, no-store, max-age=0",
+        "NO-STORE, private",
+        "private,\tno-store\t, max-age=0",
+        'extension="value, no-store, value", no-store',
+      ]) {
+        const response = publicResponse(body);
+        response.headers.set("cache-control", cacheControl);
+        vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response));
+        await expect(read()).resolves.toEqual(expected);
+      }
+    },
+  );
+  it.each(consumers)(
+    "rejects missing or lookalike no-store directives for $name",
+    async ({ read, body }) => {
+      for (const cacheControl of [
+        null,
+        "private, max-age=0",
+        "no-cache",
+        "x-no-store",
+        "no-store-extra",
+        "no-store=1",
+        'extension="value, no-store, value"',
+        'no-store, extension="unterminated',
+      ]) {
+        const response = publicResponse(body);
+        if (cacheControl === null) response.headers.delete("cache-control");
+        else response.headers.set("cache-control", cacheControl);
+        vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response));
+        await expect(read()).rejects.toMatchObject({
+          reason: "parse",
+          status: 200,
+        });
+      }
+    },
+  );
+  it.each(consumers)(
+    "preserves strict media, request ID and schema validation for $name",
+    async ({ read, body }) => {
+      for (const [name, value] of [
+        ["content-type", "text/plain"],
+        ["x-request-id", "invalid request id"],
+        ["x-request-id", ""],
+      ]) {
+        const response = publicResponse(body);
+        response.headers.set("cache-control", "private, no-store, max-age=0");
+        response.headers.set(name!, value!);
+        vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response));
+        await expect(read()).rejects.toMatchObject({
+          reason: "parse",
+          status: 200,
+        });
+      }
+      const response = publicResponse({ ...body, unexpected: true });
+      response.headers.set("cache-control", "private, no-store, max-age=0");
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response));
+      await expect(read()).rejects.toMatchObject({
+        reason: "parse",
+        status: 200,
+      });
+    },
+  );
+  it.each(consumers)(
+    "preserves typed authorization rejection under final Proxy headers for $name",
+    async ({ read }) => {
+      const response = publicResponse(
+        read === consumers[0]?.read
+          ? {
+              error: { code: "session_invalid", message: "revoked" },
+              meta: { request_id: "request-1" },
+            }
+          : {
+              error: {
+                code: "session_invalid",
+                message: "revoked",
+                retryable: false,
+              },
+            },
+        401,
+      );
+      response.headers.set("cache-control", "private, no-store, max-age=0");
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response));
+      await expect(read()).rejects.toMatchObject({
+        reason: "http",
+        status: 401,
+        code: "session_invalid",
+      });
+    },
+  );
+});
 
 describe("hub client", () => {
   it("rejects non-JSON success and error projection bodies but accepts UTF-8 JSON", async () => {
-    const headers = { "cache-control": "no-store", "x-request-id": "req-json" }
+    const headers = { "cache-control": "no-store", "x-request-id": "req-json" };
     vi.stubGlobal(
       "fetch",
       vi
         .fn()
         .mockResolvedValueOnce(
-          new Response('{"data":{"skills":[],"next_cursor":null},"meta":{"request_id":"req-json"}}', {
-            status: 200,
-            headers: { ...headers, "content-type": "text/plain" },
-          }),
+          new Response(
+            '{"data":{"skills":[],"next_cursor":null},"meta":{"request_id":"req-json"}}',
+            {
+              status: 200,
+              headers: { ...headers, "content-type": "text/plain" },
+            },
+          ),
         )
         .mockResolvedValueOnce(
-          new Response('{"error":{"code":"session_invalid","message":"expired"},"meta":{"request_id":"req-json"}}', {
-            status: 401,
-            headers: { ...headers, "content-type": "text/plain" },
-          }),
+          new Response(
+            '{"error":{"code":"session_invalid","message":"expired"},"meta":{"request_id":"req-json"}}',
+            {
+              status: 401,
+              headers: { ...headers, "content-type": "text/plain" },
+            },
+          ),
         )
         .mockResolvedValueOnce(
-          new Response('{"data":{"skills":[],"next_cursor":null},"meta":{"request_id":"req-json"}}', {
-            status: 200,
-            headers: { ...headers, "content-type": "application/json; charset=utf-8" },
-          }),
+          new Response(
+            '{"data":{"skills":[],"next_cursor":null},"meta":{"request_id":"req-json"}}',
+            {
+              status: 200,
+              headers: {
+                ...headers,
+                "content-type": "application/json; charset=utf-8",
+              },
+            },
+          ),
         )
         .mockResolvedValueOnce(
-          new Response('{"error":{"code":"session_invalid","message":"expired"},"meta":{"request_id":"req-json"}}', {
-            status: 401,
-            headers: { ...headers, "content-type": "application/json; charset=utf-8" },
-          }),
+          new Response(
+            '{"error":{"code":"session_invalid","message":"expired"},"meta":{"request_id":"req-json"}}',
+            {
+              status: 401,
+              headers: {
+                ...headers,
+                "content-type": "application/json; charset=utf-8",
+              },
+            },
+          ),
         ),
-    )
-    const client = createHubClient()
-    await expect(client.listPersonalSkills()).rejects.toMatchObject({ reason: "parse", status: 200 })
-    await expect(client.listPersonalSkills()).rejects.toMatchObject({ reason: "parse", status: 401 })
-    expect(await client.listPersonalSkills()).toEqual({ skills: [], next_cursor: null })
-    await expect(client.listPersonalSkills()).rejects.toMatchObject({ reason: "http", status: 401, code: "session_invalid" })
-  })
+    );
+    const client = createHubClient();
+    await expect(client.listPersonalSkills()).rejects.toMatchObject({
+      reason: "parse",
+      status: 200,
+    });
+    await expect(client.listPersonalSkills()).rejects.toMatchObject({
+      reason: "parse",
+      status: 401,
+    });
+    expect(await client.listPersonalSkills()).toEqual({
+      skills: [],
+      next_cursor: null,
+    });
+    await expect(client.listPersonalSkills()).rejects.toMatchObject({
+      reason: "http",
+      status: 401,
+      code: "session_invalid",
+    });
+  });
 
   it("reads personal Skill pages by opaque cursor and resolves ACTIVE by ID without old catalog", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(managedResponse({ data: { skills: [managedSkill], next_cursor: "opaque-next" } }))
-      .mockResolvedValueOnce(managedResponse({ data: managedSkill }))
-    vi.stubGlobal("fetch", fetchMock)
-    const client = createHubClient()
+      .mockResolvedValueOnce(
+        managedResponse({
+          data: { skills: [managedSkill], next_cursor: "opaque-next" },
+        }),
+      )
+      .mockResolvedValueOnce(managedResponse({ data: managedSkill }));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createHubClient();
 
-    const page = await client.listPersonalSkills("opaque-current")
-    expect(page.skills[0]).toMatchObject({ source_ref: "skill:skill-1", revision: "2" })
-    expect(page.next_cursor).toBe("opaque-next")
-    const published = await client.getPublishedPersonalSkill("skill-1")
-    expect(published).toEqual(managedSkill)
+    const page = await client.listPersonalSkills("opaque-current");
+    expect(page.skills[0]).toMatchObject({
+      source_ref: "skill:skill-1",
+      revision: "2",
+    });
+    expect(page.next_cursor).toBe("opaque-next");
+    const published = await client.getPublishedPersonalSkill("skill-1");
+    expect(published).toEqual(managedSkill);
     expect(fetchMock.mock.calls.map(([path]) => path)).toEqual([
       "/api/hub/self/skills/managed?status=active&limit=50&cursor=opaque-current",
       "/api/hub/self/skills/managed/skill-1",
-    ])
-  })
+    ]);
+  });
 
   it("reads only owner-native MCP connection fields and rejects Server fields", async () => {
     const connection = {
@@ -175,17 +276,37 @@ describe("hub client", () => {
       provider_key: "provider",
       transport: "streamable_http",
       status: "active",
-    }
+    };
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(publicResponse({ data: { connections: [connection], next_cursor: "next" } }))
-      .mockResolvedValueOnce(publicResponse({ data: { connections: [{ ...connection, declaration_digest: "a".repeat(64) }] } }))
-    vi.stubGlobal("fetch", fetchMock)
-    const client = createHubClient()
-    expect(await client.listMcpConnections()).toEqual({ connections: [connection], next_cursor: "next" })
-    await expect(client.listMcpConnections()).rejects.toMatchObject({ reason: "parse" })
-    expect(fetchMock.mock.calls.map(([path]) => path)).toEqual(["/api/hub/mcp/connections", "/api/hub/mcp/connections"])
-  })
+      .mockResolvedValueOnce(
+        publicResponse({
+          data: { connections: [connection], next_cursor: "next" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        publicResponse({
+          data: {
+            connections: [
+              { ...connection, declaration_digest: "a".repeat(64) },
+            ],
+          },
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createHubClient();
+    expect(await client.listMcpConnections()).toEqual({
+      connections: [connection],
+      next_cursor: "next",
+    });
+    await expect(client.listMcpConnections()).rejects.toMatchObject({
+      reason: "parse",
+    });
+    expect(fetchMock.mock.calls.map(([path]) => path)).toEqual([
+      "/api/hub/mcp/connections",
+      "/api/hub/mcp/connections",
+    ]);
+  });
 
   it("uses formal personal connector V1 routes, strict envelopes, idempotency, and CAS payloads", async () => {
     const connector = {
@@ -198,7 +319,7 @@ describe("hub client", () => {
       state_version: "2",
       display_name: "Connector",
       description: "Ready",
-    }
+    };
     const provider = {
       provider_key: "provider-one",
       display_name: "Provider One",
@@ -207,61 +328,155 @@ describe("hub client", () => {
       example_prompts: ["Connect me"],
       enabled: true,
       state_version: "1",
-    }
+    };
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(publicResponse({ data: { items: [connector], next_cursor: null } }))
-      .mockResolvedValueOnce(publicResponse({ data: { items: [provider], next_cursor: null } }))
       .mockResolvedValueOnce(
-        publicResponse({ data: { connector: { ...connector, connector_id: "connector-2", status: "pending", enabled: false, state_version: "1" } } }, 201),
+        publicResponse({ data: { items: [connector], next_cursor: null } }),
       )
-      .mockResolvedValueOnce(publicResponse({ data: { connector: { ...connector, display_name: "Renamed", state_version: "3" } } }))
-      .mockResolvedValueOnce(publicResponse({ data: { connector: { ...connector, enabled: false, state_version: "3" } } }))
-      .mockResolvedValueOnce(publicResponse({ data: { connector: { ...connector, enabled: false, status: "revoked", state_version: "3" } } }))
-    vi.stubGlobal("fetch", fetchMock)
-    const client = createHubClient()
+      .mockResolvedValueOnce(
+        publicResponse({ data: { items: [provider], next_cursor: null } }),
+      )
+      .mockResolvedValueOnce(
+        publicResponse(
+          {
+            data: {
+              connector: {
+                ...connector,
+                connector_id: "connector-2",
+                status: "pending",
+                enabled: false,
+                state_version: "1",
+              },
+            },
+          },
+          201,
+        ),
+      )
+      .mockResolvedValueOnce(
+        publicResponse({
+          data: {
+            connector: {
+              ...connector,
+              display_name: "Renamed",
+              state_version: "3",
+            },
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        publicResponse({
+          data: {
+            connector: { ...connector, enabled: false, state_version: "3" },
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        publicResponse({
+          data: {
+            connector: {
+              ...connector,
+              enabled: false,
+              status: "revoked",
+              state_version: "3",
+            },
+          },
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createHubClient();
 
-    await expect(client.listMcpConnectors({ status: "active", limit: 25, cursor: "opaque" })).resolves.toEqual({ items: [connector], next_cursor: null })
-    await expect(client.listMcpConnectorProviders({ directory_type: "app", category_key: "development", limit: 25 })).resolves.toEqual({
+    await expect(
+      client.listMcpConnectors({
+        status: "active",
+        limit: 25,
+        cursor: "opaque",
+      }),
+    ).resolves.toEqual({ items: [connector], next_cursor: null });
+    await expect(
+      client.listMcpConnectorProviders({
+        directory_type: "app",
+        category_key: "development",
+        limit: 25,
+      }),
+    ).resolves.toEqual({
       items: [provider],
       next_cursor: null,
-    })
+    });
     await expect(
-      client.createMcpConnector({ provider_key: "provider-one", connector_type: "mcp", display_name: "New connector", description: "" }),
-    ).resolves.toMatchObject({ connector_id: "connector-2", enabled: false })
+      client.createMcpConnector({
+        provider_key: "provider-one",
+        connector_type: "mcp",
+        display_name: "New connector",
+        description: "",
+      }),
+    ).resolves.toMatchObject({ connector_id: "connector-2", enabled: false });
     await expect(
-      client.updateMcpConnector("connector-1", { display_name: "Renamed", description: "Ready", expected_state_version: "2" }),
-    ).resolves.toMatchObject({ display_name: "Renamed", state_version: "3" })
-    await expect(client.setMcpConnectorEnabled("connector-1", { enabled: false, expected_state_version: "2" })).resolves.toMatchObject({ enabled: false })
-    await expect(client.removeMcpConnector("connector-1", { expected_state_version: "2" })).resolves.toMatchObject({ status: "revoked" })
+      client.updateMcpConnector("connector-1", {
+        display_name: "Renamed",
+        description: "Ready",
+        expected_state_version: "2",
+      }),
+    ).resolves.toMatchObject({ display_name: "Renamed", state_version: "3" });
+    await expect(
+      client.setMcpConnectorEnabled("connector-1", {
+        enabled: false,
+        expected_state_version: "2",
+      }),
+    ).resolves.toMatchObject({ enabled: false });
+    await expect(
+      client.removeMcpConnector("connector-1", { expected_state_version: "2" }),
+    ).resolves.toMatchObject({ status: "revoked" });
 
-    expect(fetchMock.mock.calls.map(([path]) => new URL(path, "http://localhost").pathname)).toEqual([
+    expect(
+      fetchMock.mock.calls.map(
+        ([path]) => new URL(path, "http://localhost").pathname,
+      ),
+    ).toEqual([
       "/api/hub/mcp/connectors",
       "/api/hub/mcp/providers",
       "/api/hub/mcp/connectors",
       "/api/hub/mcp/connectors/connector-1",
       "/api/hub/mcp/connectors/connector-1/enabled",
       "/api/hub/mcp/connectors/connector-1",
-    ])
-    const connectorQuery = new URL(fetchMock.mock.calls[0]![0], "http://localhost").searchParams
+    ]);
+    const connectorQuery = new URL(
+      fetchMock.mock.calls[0]![0],
+      "http://localhost",
+    ).searchParams;
     expect([...connectorQuery]).toEqual([
       ["status", "active"],
       ["limit", "25"],
       ["cursor", "opaque"],
-    ])
-    const createInit = fetchMock.mock.calls[2]![1] as RequestInit
-    expect(createInit.method).toBe("POST")
-    expect(createInit.headers).toMatchObject({ "content-type": "application/json" })
-    expect((createInit.headers as Record<string, string>)["Idempotency-Key"]).toMatch(/^mcp-connector:/u)
-    expect(JSON.parse(String(createInit.body))).toEqual({ provider_key: "provider-one", connector_type: "mcp", display_name: "New connector", description: "" })
-    expect(JSON.parse(String((fetchMock.mock.calls[3]![1] as RequestInit).body))).toEqual({
+    ]);
+    const createInit = fetchMock.mock.calls[2]![1] as RequestInit;
+    expect(createInit.method).toBe("POST");
+    expect(createInit.headers).toMatchObject({
+      "content-type": "application/json",
+    });
+    expect(
+      (createInit.headers as Record<string, string>)["Idempotency-Key"],
+    ).toMatch(/^mcp-connector:/u);
+    expect(JSON.parse(String(createInit.body))).toEqual({
+      provider_key: "provider-one",
+      connector_type: "mcp",
+      display_name: "New connector",
+      description: "",
+    });
+    expect(
+      JSON.parse(String((fetchMock.mock.calls[3]![1] as RequestInit).body)),
+    ).toEqual({
       display_name: "Renamed",
       description: "Ready",
       expected_state_version: "2",
-    })
-    expect(JSON.parse(String((fetchMock.mock.calls[4]![1] as RequestInit).body))).toEqual({ enabled: false, expected_state_version: "2" })
-    expect(JSON.parse(String((fetchMock.mock.calls[5]![1] as RequestInit).body))).toEqual({ expected_state_version: "2" })
-  })
+    });
+    expect(
+      JSON.parse(String((fetchMock.mock.calls[4]![1] as RequestInit).body)),
+    ).toEqual({ enabled: false, expected_state_version: "2" });
+    expect(
+      JSON.parse(String((fetchMock.mock.calls[5]![1] as RequestInit).body)),
+    ).toEqual({ expected_state_version: "2" });
+  });
 
   it("uses the exact self OAuth and Connection lifecycle routes and headers", async () => {
     const connector = {
@@ -272,12 +487,12 @@ describe("hub client", () => {
       approved_scopes: ["tools.read"],
       enabled: false,
       state_version: "2",
-    }
+    };
     const authorization = {
       authorization_id: "authorization-1",
       authorization_url: "https://oauth.example.test/authorize?state=opaque",
       expires_at: "2027-01-15T08:00:00.000Z",
-    }
+    };
     const connection = {
       connection_id: "connection-1",
       connector_id: "connector-1",
@@ -285,46 +500,89 @@ describe("hub client", () => {
       allowed_selectors: ["tool:read"],
       policy_digest: "a".repeat(64),
       status: "active",
-    }
+    };
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(publicResponse({ data: { authorization, connector } }))
-      .mockResolvedValueOnce(publicResponse({ data: { authorization, connector: { ...connector, state_version: "3" } } }))
-      .mockResolvedValueOnce(publicResponse({ data: { connector: { ...connector, status: "active", state_version: "4" } } }))
-      .mockResolvedValueOnce(publicResponse({ data: { connection } }, 201))
-    vi.stubGlobal("fetch", fetchMock)
-    const client = createHubClient()
+      .mockResolvedValueOnce(
+        publicResponse({ data: { authorization, connector } }),
+      )
+      .mockResolvedValueOnce(
+        publicResponse({
+          data: {
+            authorization,
+            connector: { ...connector, state_version: "3" },
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        publicResponse({
+          data: {
+            connector: { ...connector, status: "active", state_version: "4" },
+          },
+        }),
+      )
+      .mockResolvedValueOnce(publicResponse({ data: { connection } }, 201));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createHubClient();
 
-    await expect(client.beginMcpConnectorAuthorization("connector-1", { server_id: "server-1", expected_state_version: "1" })).resolves.toEqual({
+    await expect(
+      client.beginMcpConnectorAuthorization("connector-1", {
+        server_id: "server-1",
+        expected_state_version: "1",
+      }),
+    ).resolves.toEqual({
       authorization,
       connector,
-    })
-    await expect(client.reconnectMcpConnectorAuthorization("connector-1", { server_id: "server-1", expected_state_version: "2" })).resolves.toMatchObject({
-      connector: { state_version: "3" },
-    })
-    await expect(client.completeMcpConnectorAuthorization({ state: "opaque", code: "code" })).resolves.toMatchObject({ connector: { status: "active" } })
+    });
     await expect(
-      client.createMcpConnectorConnection({ connector_id: "connector-1", server_id: "server-1", allowed_selectors: ["tool:read"], expected_state_version: "4" }),
-    ).resolves.toEqual({ connection })
+      client.reconnectMcpConnectorAuthorization("connector-1", {
+        server_id: "server-1",
+        expected_state_version: "2",
+      }),
+    ).resolves.toMatchObject({
+      connector: { state_version: "3" },
+    });
+    await expect(
+      client.completeMcpConnectorAuthorization({
+        state: "opaque",
+        code: "code",
+      }),
+    ).resolves.toMatchObject({ connector: { status: "active" } });
+    await expect(
+      client.createMcpConnectorConnection({
+        connector_id: "connector-1",
+        server_id: "server-1",
+        allowed_selectors: ["tool:read"],
+        expected_state_version: "4",
+      }),
+    ).resolves.toEqual({ connection });
 
     expect(fetchMock.mock.calls.map(([path]) => path)).toEqual([
       "/api/hub/mcp/connectors/connector-1/authorization",
       "/api/hub/mcp/connectors/connector-1/authorization/reconnect",
       "/api/hub/mcp/authorization/callback",
       "/api/hub/mcp/connections",
-    ])
+    ]);
     for (const index of [0, 1, 2]) {
-      const init = fetchMock.mock.calls[index]![1] as RequestInit
-      expect(init.method).toBe("POST")
-      expect(init.headers).toEqual({ "content-type": "application/json" })
+      const init = fetchMock.mock.calls[index]![1] as RequestInit;
+      expect(init.method).toBe("POST");
+      expect(init.headers).toEqual({ "content-type": "application/json" });
     }
-    const connectionInit = fetchMock.mock.calls[3]![1] as RequestInit
-    expect(connectionInit.headers).toMatchObject({ "content-type": "application/json" })
-    expect((connectionInit.headers as Record<string, string>)["Idempotency-Key"]).toMatch(/^mcp-connector:/u)
-  })
+    const connectionInit = fetchMock.mock.calls[3]![1] as RequestInit;
+    expect(connectionInit.headers).toMatchObject({
+      "content-type": "application/json",
+    });
+    expect(
+      (connectionInit.headers as Record<string, string>)["Idempotency-Key"],
+    ).toMatch(/^mcp-connector:/u);
+  });
 
   it("bounds MCP connection response bytes, UTF-8, error status and caller cancellation", async () => {
-    const validHeaders = { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "connection-read" }
+    const validHeaders = {
+      "content-type": "application/json",
+      "cache-control": "no-store",
+      "x-request-id": "connection-read",
+    };
     const connection = {
       connection_id: "connection-1",
       connector_id: "connector-1",
@@ -332,93 +590,148 @@ describe("hub client", () => {
       provider_key: "provider",
       transport: "streamable_http",
       status: "active",
-    }
+    };
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(new Response(new Uint8Array([123, 34, 255, 34, 58, 49, 125]), { status: 200, headers: validHeaders }))
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ data: { connections: [connection] } }), {
+        new Response(new Uint8Array([123, 34, 255, 34, 58, 49, 125]), {
           status: 200,
-          headers: { ...validHeaders, "content-length": String(1024 * 1024 + 1) },
+          headers: validHeaders,
         }),
       )
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ error: { code: "session_invalid", message: "expired", retryable: false } }), { status: 503, headers: validHeaders }),
+        new Response(JSON.stringify({ data: { connections: [connection] } }), {
+          status: 200,
+          headers: {
+            ...validHeaders,
+            "content-length": String(1024 * 1024 + 1),
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            error: {
+              code: "session_invalid",
+              message: "expired",
+              retryable: false,
+            },
+          }),
+          { status: 503, headers: validHeaders },
+        ),
       )
       .mockImplementationOnce(
         (_input, init: RequestInit) =>
           new Promise((_resolve, reject) => {
-            init.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true })
+            init.signal?.addEventListener(
+              "abort",
+              () => reject(init.signal?.reason),
+              { once: true },
+            );
           }),
-      )
-    vi.stubGlobal("fetch", fetchMock)
-    const client = createHubClient()
-    await expect(client.listMcpConnections()).rejects.toMatchObject({ reason: "parse", status: 200 })
-    await expect(client.listMcpConnections()).rejects.toMatchObject({ reason: "parse", status: 200 })
-    await expect(client.listMcpConnections()).rejects.toMatchObject({ reason: "parse", status: 503 })
-    const controller = new AbortController()
-    const pending = client.listMcpConnections({}, controller.signal)
-    controller.abort()
-    await expect(pending).rejects.toMatchObject({ reason: "aborted" })
-  })
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createHubClient();
+    await expect(client.listMcpConnections()).rejects.toMatchObject({
+      reason: "parse",
+      status: 200,
+    });
+    await expect(client.listMcpConnections()).rejects.toMatchObject({
+      reason: "parse",
+      status: 200,
+    });
+    await expect(client.listMcpConnections()).rejects.toMatchObject({
+      reason: "parse",
+      status: 503,
+    });
+    const controller = new AbortController();
+    const pending = client.listMcpConnections({}, controller.signal);
+    controller.abort();
+    await expect(pending).rejects.toMatchObject({ reason: "aborted" });
+  });
 
   it("applies one ten-second MCP Connection deadline to the pending response", async () => {
-    vi.useFakeTimers()
+    vi.useFakeTimers();
     try {
       vi.stubGlobal(
         "fetch",
         vi.fn(
           (_input, init: RequestInit) =>
             new Promise((_resolve, reject) => {
-              init.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true })
+              init.signal?.addEventListener(
+                "abort",
+                () => reject(init.signal?.reason),
+                { once: true },
+              );
             }),
         ),
-      )
-      const pending = createHubClient().listMcpConnections()
-      const rejected = expect(pending).rejects.toMatchObject({ reason: "aborted" })
-      await vi.advanceTimersByTimeAsync(10_001)
-      await rejected
+      );
+      const pending = createHubClient().listMcpConnections();
+      const rejected = expect(pending).rejects.toMatchObject({
+        reason: "aborted",
+      });
+      await vi.advanceTimersByTimeAsync(10_001);
+      await rejected;
     } finally {
-      vi.useRealTimers()
+      vi.useRealTimers();
     }
-  })
+  });
 
   it("cancels an unread MCP response body when strict headers reject it early", async () => {
-    const cancel = vi.fn().mockResolvedValue(undefined)
+    const cancel = vi.fn().mockResolvedValue(undefined);
     const body = new ReadableStream<Uint8Array>({
       pull(controller) {
-        controller.enqueue(new TextEncoder().encode("{}"))
+        controller.enqueue(new TextEncoder().encode("{}"));
       },
       cancel,
-    })
+    });
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
         new Response(body, {
           status: 200,
-          headers: { "content-type": "text/plain", "cache-control": "no-store", "x-request-id": "connection-early-reject" },
+          headers: {
+            "content-type": "text/plain",
+            "cache-control": "no-store",
+            "x-request-id": "connection-early-reject",
+          },
         }),
       ),
-    )
+    );
 
-    await expect(createHubClient().listMcpConnections()).rejects.toMatchObject({ reason: "parse", status: 200 })
-    expect(cancel).toHaveBeenCalledOnce()
-  })
+    await expect(createHubClient().listMcpConnections()).rejects.toMatchObject({
+      reason: "parse",
+      status: 200,
+    });
+    expect(cancel).toHaveBeenCalledOnce();
+  });
 
   it("sends each MCP connection filter once and preserves opaque pagination", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(publicResponse({ data: { connections: [], next_cursor: "opaque-next" } }))
-    vi.stubGlobal("fetch", fetchMock)
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        publicResponse({
+          data: { connections: [], next_cursor: "opaque-next" },
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
     await expect(
-      createHubClient().listMcpConnections({ connection_id: "connection-1", provider_key: "provider-one", limit: 25, cursor: "opaque-current" }),
-    ).resolves.toEqual({ connections: [], next_cursor: "opaque-next" })
-    const query = new URL(fetchMock.mock.calls[0]![0], "http://localhost").searchParams
+      createHubClient().listMcpConnections({
+        connection_id: "connection-1",
+        provider_key: "provider-one",
+        limit: 25,
+        cursor: "opaque-current",
+      }),
+    ).resolves.toEqual({ connections: [], next_cursor: "opaque-next" });
+    const query = new URL(fetchMock.mock.calls[0]![0], "http://localhost")
+      .searchParams;
     expect([...query]).toEqual([
       ["connection_id", "connection-1"],
       ["provider_key", "provider-one"],
       ["limit", "25"],
       ["cursor", "opaque-current"],
-    ])
-  })
+    ]);
+  });
 
   it("applies MCP provider and cursor bounds by Unicode code point", async () => {
     const row = {
@@ -428,75 +741,170 @@ describe("hub client", () => {
       provider_key: "😀".repeat(191),
       transport: "streamable_http",
       status: "active",
-    }
+    };
     vi.stubGlobal(
       "fetch",
       vi
         .fn()
-        .mockResolvedValueOnce(publicResponse({ data: { connections: [row], next_cursor: "😀".repeat(2048) } }))
-        .mockResolvedValueOnce(publicResponse({ data: { connections: [{ ...row, provider_key: row.provider_key + "😀" }] } }))
-        .mockResolvedValueOnce(publicResponse({ data: { connections: [], next_cursor: "😀".repeat(2049) } })),
-    )
-    const client = createHubClient()
-    await expect(client.listMcpConnections()).resolves.toEqual({ connections: [row], next_cursor: "😀".repeat(2048) })
-    await expect(client.listMcpConnections()).rejects.toMatchObject({ reason: "parse" })
-    await expect(client.listMcpConnections()).rejects.toMatchObject({ reason: "parse" })
-  })
+        .mockResolvedValueOnce(
+          publicResponse({
+            data: { connections: [row], next_cursor: "😀".repeat(2048) },
+          }),
+        )
+        .mockResolvedValueOnce(
+          publicResponse({
+            data: {
+              connections: [{ ...row, provider_key: row.provider_key + "😀" }],
+            },
+          }),
+        )
+        .mockResolvedValueOnce(
+          publicResponse({
+            data: { connections: [], next_cursor: "😀".repeat(2049) },
+          }),
+        ),
+    );
+    const client = createHubClient();
+    await expect(client.listMcpConnections()).resolves.toEqual({
+      connections: [row],
+      next_cursor: "😀".repeat(2048),
+    });
+    await expect(client.listMcpConnections()).rejects.toMatchObject({
+      reason: "parse",
+    });
+    await expect(client.listMcpConnections()).rejects.toMatchObject({
+      reason: "parse",
+    });
+  });
 
   it("fails closed on unknown personal Skill state, unauthorized owner response and bad headers", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
         publicResponse({
-          data: { skill_id: "skill-1", source_ref: "skill:skill-1", revision: "2", status: "draft", name: "Mine", summary: "Private", tags: [] },
+          data: {
+            skill_id: "skill-1",
+            source_ref: "skill:skill-1",
+            revision: "2",
+            status: "draft",
+            name: "Mine",
+            summary: "Private",
+            tags: [],
+          },
         }),
       )
-      .mockResolvedValueOnce(managedResponse({ error: { code: "session_invalid", message: "revoked" } }, 401))
-      .mockResolvedValueOnce(jsonResponse({ data: { skills: [], next_cursor: null } }))
-    vi.stubGlobal("fetch", fetchMock)
-    const client = createHubClient()
-    await expect(client.getPublishedPersonalSkill("skill-1")).rejects.toMatchObject({ reason: "parse" })
-    await expect(client.getPublishedPersonalSkill("skill-1")).rejects.toMatchObject({ reason: "http", status: 401, code: "session_invalid" })
-    await expect(client.listPersonalSkills()).rejects.toMatchObject({ reason: "parse" })
-  })
+      .mockResolvedValueOnce(
+        managedResponse(
+          { error: { code: "session_invalid", message: "revoked" } },
+          401,
+        ),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({ data: { skills: [], next_cursor: null } }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createHubClient();
+    await expect(
+      client.getPublishedPersonalSkill("skill-1"),
+    ).rejects.toMatchObject({ reason: "parse" });
+    await expect(
+      client.getPublishedPersonalSkill("skill-1"),
+    ).rejects.toMatchObject({
+      reason: "http",
+      status: 401,
+      code: "session_invalid",
+    });
+    await expect(client.listPersonalSkills()).rejects.toMatchObject({
+      reason: "parse",
+    });
+  });
   it("rejects a by-ID Skill response for another personal identity", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
         publicResponse({
-          data: { skill_id: "skill-other", source_ref: "skill:skill-other", revision: "2", status: "active", name: "Other", summary: "Private", tags: [] },
+          data: {
+            skill_id: "skill-other",
+            source_ref: "skill:skill-other",
+            revision: "2",
+            status: "active",
+            name: "Other",
+            summary: "Private",
+            tags: [],
+          },
         }),
       ),
-    )
-    await expect(createHubClient().getPublishedPersonalSkill("skill-1")).rejects.toMatchObject({ reason: "parse" })
-  })
+    );
+    await expect(
+      createHubClient().getPublishedPersonalSkill("skill-1"),
+    ).rejects.toMatchObject({ reason: "parse" });
+  });
   it.each([
     [401, "session_invalid"],
     [403, "session_forbidden"],
     [404, "skill_not_found"],
     [503, "skill_dependency_unavailable"],
-  ])("preserves by-ID owner error %i without claiming ACTIVE", async (status, code) => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(managedResponse({ error: { code, message: "owner rejected" } }, status)))
-    await expect(createHubClient().getPublishedPersonalSkill("skill-1")).rejects.toMatchObject({ reason: "http", status, code })
-  })
+  ])(
+    "preserves by-ID owner error %i without claiming ACTIVE",
+    async (status, code) => {
+      vi.stubGlobal(
+        "fetch",
+        vi
+          .fn()
+          .mockResolvedValue(
+            managedResponse(
+              { error: { code, message: "owner rejected" } },
+              status,
+            ),
+          ),
+      );
+      await expect(
+        createHubClient().getPublishedPersonalSkill("skill-1"),
+      ).rejects.toMatchObject({ reason: "http", status, code });
+    },
+  );
   it("rejects managed dependency code at the wrong 502 status", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(managedResponse({ error: { code: "skill_dependency_unavailable", message: "owner rejected" } }, 502)))
-    await expect(createHubClient().getPublishedPersonalSkill("skill-1")).rejects.toMatchObject({ reason: "parse", status: 502, code: null })
-  })
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          managedResponse(
+            {
+              error: {
+                code: "skill_dependency_unavailable",
+                message: "owner rejected",
+              },
+            },
+            502,
+          ),
+        ),
+    );
+    await expect(
+      createHubClient().getPublishedPersonalSkill("skill-1"),
+    ).rejects.toMatchObject({ reason: "parse", status: 502, code: null });
+  });
   it("unwraps { data } and returns the skill pool", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
         data: {
-          skills: [{ name: "brainstorming", description: "d", content_hash: "h1", scope: "official" }],
+          skills: [
+            {
+              name: "brainstorming",
+              description: "d",
+              content_hash: "h1",
+              scope: "official",
+            },
+          ],
         },
       }),
-    )
-    vi.stubGlobal("fetch", fetchMock)
-    const pool = await createHubClient().listSkillPool()
-    expect(pool).toHaveLength(1)
-    expect(pool[0]?.name).toBe("brainstorming")
-    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/hub/self/skills/pool")
-  })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const pool = await createHubClient().listSkillPool();
+    expect(pool).toHaveLength(1);
+    expect(pool[0]?.name).toBe("brainstorming");
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/hub/self/skills/pool");
+  });
 
   it("requests the discoverable skill catalog separately from the installed pool", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
@@ -515,277 +923,200 @@ describe("hub client", () => {
           next_cursor: "CURSOR",
         },
       }),
-    )
-    vi.stubGlobal("fetch", fetchMock)
+    );
+    vi.stubGlobal("fetch", fetchMock);
 
-    const catalog = await createHubClient().listSkillCatalog({ scope: "official", query: "Builder" })
+    const catalog = await createHubClient().listSkillCatalog({
+      scope: "official",
+      query: "Builder",
+    });
 
-    expect(catalog.skills[0]?.installed).toBe(false)
-    expect(catalog.next_cursor).toBe("CURSOR")
-    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/hub/self/skills/catalog?scope=official&query=Builder")
-  })
+    expect(catalog.skills[0]?.installed).toBe(false);
+    expect(catalog.next_cursor).toBe("CURSOR");
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      "/api/hub/self/skills/catalog?scope=official&query=Builder",
+    );
+  });
 
   it("surfaces the hub error code on a 409 required-skill disable", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ error: { code: "hub.skill_required", message: "required" } }, 409)))
-    const client = createHubClient()
-    await expect(client.setSkillEnabled("installation-brainstorming", false)).rejects.toMatchObject({
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          jsonResponse(
+            { error: { code: "hub.skill_required", message: "required" } },
+            409,
+          ),
+        ),
+    );
+    const client = createHubClient();
+    await expect(
+      client.setSkillEnabled("installation-brainstorming", false),
+    ).rejects.toMatchObject({
       code: "hub.skill_required",
       status: 409,
-    } satisfies Partial<HubClientError>)
-  })
+    } satisfies Partial<HubClientError>);
+  });
 
   it("mutates a skill installation by its stable identity rather than its display name", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ data: { installation_id: "installation-copy-editor", enabled: false } }))
-    vi.stubGlobal("fetch", fetchMock)
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        jsonResponse({
+          data: { installation_id: "installation-copy-editor", enabled: false },
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
 
-    await createHubClient().setSkillEnabled("installation-copy-editor", false)
+    await createHubClient().setSkillEnabled("installation-copy-editor", false);
 
-    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/skill.v1.SkillOptionalService/SetSkillInstallationEnabled")
-    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
-    expect(new Headers(init.headers).get("idempotency-key")).toMatch(/^skill-installation:/)
-    expect(init.body).toBe(JSON.stringify({ installationId: "installation-copy-editor", enabled: false }))
-  })
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      "/api/skill.v1.SkillOptionalService/SetSkillInstallationEnabled",
+    );
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(new Headers(init.headers).get("idempotency-key")).toMatch(
+      /^skill-installation:/,
+    );
+    expect(init.body).toBe(
+      JSON.stringify({
+        installationId: "installation-copy-editor",
+        enabled: false,
+      }),
+    );
+  });
 
   it("removes retired preview/confirm methods instead of exposing nonexistent upload endpoints", () => {
-    const client = createHubClient()
-    expect(client).not.toHaveProperty("previewUpload")
-    expect(client).not.toHaveProperty("confirmUpload")
-  })
+    const client = createHubClient();
+    expect(client).not.toHaveProperty("previewUpload");
+    expect(client).not.toHaveProperty("confirmUpload");
+  });
 
   it("fails loud (parse) when the pool payload violates the schema", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ data: { skills: [{ name: "x" }] } })))
-    await expect(createHubClient().listSkillPool()).rejects.toBeInstanceOf(HubClientError)
-  })
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(jsonResponse({ data: { skills: [{ name: "x" }] } })),
+    );
+    await expect(createHubClient().listSkillPool()).rejects.toBeInstanceOf(
+      HubClientError,
+    );
+  });
 
-  it("unwraps { servers } from the MCP server pool", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      jsonResponse({
-        data: {
-          servers: [
-            {
-              scope: "team_1",
-              name: "my-tools",
-              revision: 1,
-              transport: "streamable_http",
-              url: "https://own.example.com/mcp",
-              allowed_tools: [],
-              secret_ref: null,
-              enabled: true,
-            },
-          ],
-        },
-      }),
-    )
-    vi.stubGlobal("fetch", fetchMock)
-    const servers = await createHubClient().listMcpServers()
-    expect(servers).toHaveLength(1)
-    expect(servers[0]?.name).toBe("my-tools")
-    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/hub/mcp/servers")
-  })
-
-  it("posts the register body as JSON and returns the created server", async () => {
+  it("uses the private-server V1 lifecycle and never receives supplied secret values", async () => {
     const server = {
-      scope: "team_1",
-      name: "svc",
-      revision: 1,
-      transport: "http" as const,
-      url: "https://svc.example.com/mcp",
-      allowed_tools: ["search"],
-      secret_ref: "handle:srt_00000000000000000000000000000001",
-      enabled: true,
-    }
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ data: { server } }, 201))
-    vi.stubGlobal("fetch", fetchMock)
-    const created = await createHubClient().registerMcpServer({
-      name: "svc",
-      transport: "http",
-      url: "https://svc.example.com/mcp",
-      allowed_tools: ["search"],
-      secret_ref: "handle:srt_00000000000000000000000000000001",
-    })
-    expect(created.name).toBe("svc")
-    const [path, init] = fetchMock.mock.calls[0] as [string, RequestInit]
-    expect(path).toBe("/api/hub/mcp/servers")
-    expect(init.method).toBe("POST")
-    expect(new Headers(init.headers).get("idempotency-key")).toMatch(/^hub-mutation:/)
-    expect(JSON.parse(init.body as string)).toMatchObject({
-      name: "svc",
-      transport: "http",
-      secret_ref: "handle:srt_00000000000000000000000000000001",
-    })
-  })
-
-  it("omits secret_ref from the register body when none is selected", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      jsonResponse(
+      server_id: "server-private",
+      display_name: "Private tools",
+      server_url: "https://private.example/mcp",
+      status: "registered",
+      state_version: "2",
+      headers: [
         {
-          data: {
-            server: {
-              scope: "team_1",
-              name: "svc",
-              revision: 1,
-              transport: "http",
-              url: "https://svc.example.com/mcp",
-              allowed_tools: [],
-              secret_ref: null,
-              enabled: true,
-            },
-          },
-        },
-        201,
-      ),
-    )
-    vi.stubGlobal("fetch", fetchMock)
-    await createHubClient().registerMcpServer({
-      name: "svc",
-      transport: "http",
-      url: "https://svc.example.com/mcp",
-      allowed_tools: [],
-      secret_ref: null,
-    })
-    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
-    expect(Object.keys(JSON.parse(init.body as string))).not.toContain("secret_ref")
-  })
-
-  it("posts a custom MCP connector without browser-supplied tenant identity", async () => {
-    const server = {
-      scope: "team_1",
-      name: "custom-search",
-      revision: 1,
-      transport: "http" as const,
-      url: "https://mcp.example.test/mcp",
-      allowed_tools: [],
-      secret_ref: null,
-      enabled: true,
-    }
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ data: { server } }, 201))
-    vi.stubGlobal("fetch", fetchMock)
-
-    await createHubClient().registerCustomMcp?.({
-      name: "custom-search",
-      transport: "http",
-      endpoint_url: "https://mcp.example.test/mcp",
-      icon_asset_id: "asset_icon_1",
-      instructions: "Use for research",
-      headers: [{ name: "Authorization", value: "Bearer TOKEN" }],
-      enabled: true,
-    })
-
-    const [path, init] = fetchMock.mock.calls[0] as [string, RequestInit]
-    const body = JSON.parse(init.body as string) as Record<string, unknown>
-    expect(path).toBe("/api/hub/self/connectors/mcp")
-    expect(init).toMatchObject({ method: "POST", headers: { "content-type": "application/json" } })
-    expect(new Headers(init.headers).get("idempotency-key")).toMatch(/^hub-mutation:/)
-    expect(body).toEqual({
-      name: "custom-search",
-      transport: "http",
-      endpoint_url: "https://mcp.example.test/mcp",
-      icon_asset_id: "asset_icon_1",
-      instructions: "Use for research",
-      headers: [{ name: "Authorization", value: "Bearer TOKEN" }],
-      enabled: true,
-    })
-    expect(body).not.toHaveProperty("tenant_id")
-  })
-
-  it("posts a custom API with write-only secrets and no browser-supplied tenant identity", async () => {
-    const customApi = {
-      id: "custom_api_1",
-      kind: "custom_api" as const,
-      name: "CRM API",
-      notes: "Use for customer lookup",
-      icon_url: "/assets/crm.png",
-      secret_entries: [
-        {
-          id: "secret_1",
-          name: "CRM_TOKEN",
-          created_at: "2026-08-29T12:00:00Z",
-          updated_at: "2026-08-29T12:00:00Z",
-          in_use_by: 0,
+          name: "x-api-key",
+          configured: true,
+          state_version: "1",
+          status: "active",
         },
       ],
-      enabled: true,
-      revision: "rev_1",
-      created_at: "2026-08-29T12:00:00Z",
-      updated_at: "2026-08-29T12:00:00Z",
-    }
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ data: customApi }, 201))
-    vi.stubGlobal("fetch", fetchMock)
+      oauth_client: {
+        client_id: "client-id",
+        configured: true,
+        origin: "byo",
+        status: "configured",
+        state_version: "1",
+      },
+      prepare_status: "ready",
+      declarations: [],
+      declaration_digest: "a".repeat(64),
+      declarations_available: true,
+    };
+    const connector = {
+      connector_id: "connector-private",
+      connector_type: "mcp",
+      provider_key: "private-tools",
+      status: "active",
+      approved_scopes: [],
+      enabled: false,
+      state_version: "2",
+      server_id: "server-private",
+      display_name: "Private tools",
+      description: "",
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        publicResponse({ data: { server, connector, replayed: false } }, 201),
+      )
+      .mockResolvedValueOnce(
+        publicResponse({
+          data: {
+            server: { ...server, state_version: "3" },
+            connector: { ...connector, state_version: "3" },
+            declarations: [],
+            replayed: false,
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        publicResponse({
+          data: {
+            server: { ...server, state_version: "4", display_name: "Renamed" },
+            connector: { ...connector, state_version: "4" },
+            replayed: false,
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        publicResponse({
+          data: { server_id: "server-private", deleted: true, replayed: false },
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createHubClient();
+    const registered = await client.registerPrivateMcpServer?.({
+      display_name: "Private tools",
+      server_url: "https://private.example/mcp",
+      headers: [{ name: "x-api-key", value: "WRITE_ONLY" }],
+      oauth_client: { client_id: "client-id", client_secret: "WRITE_ONLY" },
+    });
+    const prepared = await client.preparePrivateMcpServer?.(
+      "server-private",
+      registered!.server.state_version,
+    );
+    const updated = await client.updatePrivateMcpServer?.("server-private", {
+      expected_state_version: prepared!.server.state_version,
+      display_name: "Renamed",
+    });
+    await client.deletePrivateMcpServer?.(
+      "server-private",
+      updated!.server.state_version,
+    );
+    expect(fetchMock.mock.calls.map(([path]) => path)).toEqual([
+      "/api/hub/mcp/servers",
+      "/api/hub/mcp/servers/server-private/prepare",
+      "/api/hub/mcp/servers/server-private",
+      "/api/hub/mcp/servers/server-private",
+    ]);
+    const registerBody = JSON.parse(
+      (fetchMock.mock.calls[0]?.[1] as RequestInit).body as string,
+    );
+    expect(registerBody).toMatchObject({
+      oauth_client: { client_id: "client-id" },
+      headers: [{ name: "x-api-key" }],
+    });
+    expect(registered?.server.oauth_client).toEqual(
+      expect.objectContaining({ client_id: "client-id", configured: true }),
+    );
+    expect(registered?.server).not.toHaveProperty("client_secret");
+    expect(registered?.server.headers[0]).not.toHaveProperty("value");
+    for (const [, init] of fetchMock.mock.calls)
+      expect(
+        new Headers((init as RequestInit).headers).get("idempotency-key"),
+      ).toMatch(/^mcp-private-server:/);
+  });
 
-    const created = await createHubClient().registerCustomApi?.({
-      name: "CRM API",
-      notes: "Use for customer lookup",
-      icon_asset_id: "asset_crm",
-      secrets: [{ name: "CRM_TOKEN", value: "WRITE_ONLY_TOKEN" }],
-      enabled: true,
-    })
-
-    expect(created).toEqual(customApi)
-    const [path, init] = fetchMock.mock.calls[0] as [string, RequestInit]
-    const body = JSON.parse(init.body as string) as Record<string, unknown>
-    expect(path).toBe("/api/hub/self/connectors/custom-apis")
-    expect(body).toEqual({
-      name: "CRM API",
-      notes: "Use for customer lookup",
-      icon_asset_id: "asset_crm",
-      secrets: [{ name: "CRM_TOKEN", value: "WRITE_ONLY_TOKEN" }],
-      enabled: true,
-    })
-    expect(new Headers(init.headers).get("idempotency-key")).toMatch(/^hub-mutation:/)
-    expect(body).not.toHaveProperty("tenant_id")
-    expect(customApi.secret_entries[0]).not.toHaveProperty("value")
-  })
-
-  it("uploads a connector icon as multipart file and validates the asset response", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ data: { asset_id: "asset_icon_1", url: "/assets/connector/asset_icon_1.png" } }, 201))
-    vi.stubGlobal("fetch", fetchMock)
-    const file = new File(["png"], "connector.png", { type: "image/png" })
-
-    const uploaded = await createHubClient().uploadConnectorIcon?.(file)
-
-    expect(uploaded).toEqual({ asset_id: "asset_icon_1", url: "/assets/connector/asset_icon_1.png" })
-    const [path, init] = fetchMock.mock.calls[0] as [string, RequestInit]
-    expect(path).toBe("/api/hub/self/connectors/assets")
-    expect(init.method).toBe("POST")
-    expect(new Headers(init.headers).get("idempotency-key")).toMatch(/^hub-mutation:/)
-    expect(init.body).toBeInstanceOf(FormData)
-    expect((init.body as FormData).get("file")).toBeInstanceOf(File)
-    expect(((init.body as FormData).get("file") as File).name).toBe("connector.png")
-  })
-
-  it("surfaces the hub error code when the mutation gate is closed", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ error: { code: "capability_registration_disabled", message: "off" } }, 503)))
-    await expect(
-      createHubClient().registerMcpServer({
-        name: "svc",
-        transport: "http",
-        url: "https://svc.example.com/mcp",
-        allowed_tools: [],
-        secret_ref: null,
-      }),
-    ).rejects.toMatchObject({ code: "capability_registration_disabled", status: 503 })
-  })
-
-  it("creates a secret and returns only the handle (value never echoed)", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ data: { handle: "srt_00000000000000000000000000000001" } }, 201))
-    vi.stubGlobal("fetch", fetchMock)
-    const handle = await createHubClient().createMcpSecret("search-key", "super-secret")
-    expect(handle).toBe("srt_00000000000000000000000000000001")
-    const [path, init] = fetchMock.mock.calls[0] as [string, RequestInit]
-    expect(path).toBe("/api/hub/mcp/secrets")
-    expect(new Headers(init.headers).get("idempotency-key")).toMatch(/^hub-mutation:/)
-    expect(JSON.parse(init.body as string)).toEqual({ name: "search-key", value: "super-secret" })
-  })
-
-  it("deletes an MCP server via DELETE without a body", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ data: { ok: true } }))
-    vi.stubGlobal("fetch", fetchMock)
-    await createHubClient().deleteMcpServer("my-tools")
-    const [path, init] = fetchMock.mock.calls[0] as [string, RequestInit]
-    expect(path).toBe("/api/hub/mcp/servers/my-tools")
-    expect(init.method).toBe("DELETE")
-  })
-})
+});
 
 describe("personal installation consumer", () => {
   const installation = {
@@ -805,37 +1136,66 @@ describe("personal installation consumer", () => {
     enabled: true,
     installed_at: "2026-09-30T10:00:00.000Z",
     updated_at: "2026-09-30T10:00:00.000Z",
-  }
+  };
   it("preserves list envelope, false presence, exact cursor and current GET identity", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(publicResponse({ data: [installation], meta: { next_cursor: "opaque +/=" } }))
-      .mockResolvedValueOnce(publicResponse({ data: installation }))
-    vi.stubGlobal("fetch", fetchMock)
-    const client = createSkillInstallationClient()
-    expect(await client.list({ installed: false, enabled: false, limit: 50, cursor: "opaque +/=" })).toEqual({
+      .mockResolvedValueOnce(
+        publicResponse({
+          data: [installation],
+          meta: { next_cursor: "opaque +/=" },
+        }),
+      )
+      .mockResolvedValueOnce(publicResponse({ data: installation }));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createSkillInstallationClient();
+    expect(
+      await client.list({
+        installed: false,
+        enabled: false,
+        limit: 50,
+        cursor: "opaque +/=",
+      }),
+    ).toEqual({
       data: [installation],
       meta: { next_cursor: "opaque +/=" },
-    })
-    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("installed=false&enabled=false&limit=50&cursor=opaque+%2B%2F%3D")
-    expect(await client.get("install-1")).toEqual(installation)
-  })
+    });
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
+      "installed=false&enabled=false&limit=50&cursor=opaque+%2B%2F%3D",
+    );
+    expect(await client.get("install-1")).toEqual(installation);
+  });
   it("keeps caller mutation key and parses real receipt instead of void", async () => {
-    const receipt = { installation, change: "installed", event_id: "event-1", replayed: true }
-    const fetchMock = vi.fn().mockResolvedValue(publicResponse({ data: receipt }))
-    vi.stubGlobal("fetch", fetchMock)
-    expect(await createSkillInstallationClient().install("skill:mine-1", "frozen-key")).toEqual(receipt)
+    const receipt = {
+      installation,
+      change: "installed",
+      event_id: "event-1",
+      replayed: true,
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(publicResponse({ data: receipt }));
+    vi.stubGlobal("fetch", fetchMock);
+    expect(
+      await createSkillInstallationClient().install(
+        "skill:mine-1",
+        "frozen-key",
+      ),
+    ).toEqual(receipt);
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/hub/self/skill-installations",
       expect.objectContaining({
         method: "POST",
-        headers: { "content-type": "application/json", "idempotency-key": "frozen-key" },
+        headers: {
+          "content-type": "application/json",
+          "idempotency-key": "frozen-key",
+        },
         body: '{"source_ref":"skill:mine-1"}',
         redirect: "error",
       }),
-    )
-  })
-})
+    );
+  });
+});
 
 describe("personal installation strict boundaries", () => {
   const item = {
@@ -855,7 +1215,7 @@ describe("personal installation strict boundaries", () => {
     enabled: false,
     installed_at: "2026-09-30T10:00:00Z",
     updated_at: "2026-09-30T10:00:00Z",
-  }
+  };
   it.each([
     { ...item, tenant: "secret" },
     { ...item, revision: "18446744073709551616" },
@@ -869,15 +1229,22 @@ describe("personal installation strict boundaries", () => {
     { ...item, installation_id: "i1\n" },
     { ...item, installed: false },
     { ...item, removed_at: null },
-    { ...item, installed: false, enabled: true, removed_at: "2026-09-30T11:00:00Z" },
+    {
+      ...item,
+      installed: false,
+      enabled: true,
+      removed_at: "2026-09-30T11:00:00Z",
+    },
     { ...item, removed_at: "2026-09-30T11:00:00Z" },
     { ...item, installed_at: "2026-02-30T10:00:00Z" },
     { ...item, updated_at: "2026-09-29T10:00:00Z" },
     { ...item, installed_at: "2026-09-30T10:00:00+00:00" },
   ])("rejects malformed/private installation %#", async (data) => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(publicResponse({ data })))
-    await expect(createSkillInstallationClient().get("i1")).rejects.toMatchObject({ reason: "parse" })
-  })
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(publicResponse({ data })));
+    await expect(
+      createSkillInstallationClient().get("i1"),
+    ).rejects.toMatchObject({ reason: "parse" });
+  });
   it.each([
     { data: [], meta: {} },
     { data: [], meta: { next_cursor: null } },
@@ -887,66 +1254,141 @@ describe("personal installation strict boundaries", () => {
     { data: { installations: [] } },
     { data: [], meta: { next_cursor: "next", has_more: true } },
   ])("rejects invalid page presence or duplicate IDs %#", async (data) => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(publicResponse(data)))
-    await expect(createSkillInstallationClient().list()).rejects.toMatchObject({ reason: "parse" })
-  })
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(publicResponse(data)));
+    await expect(createSkillInstallationClient().list()).rejects.toMatchObject({
+      reason: "parse",
+    });
+  });
   it.each([
     { installation: item, change: "unchanged", event_id: "e", replayed: true },
     { installation: item, change: "installed", replayed: false },
-    { installation: item, change: "unexpected", event_id: "e", replayed: false },
+    {
+      installation: item,
+      change: "unexpected",
+      event_id: "e",
+      replayed: false,
+    },
     { installation: item, change: "disabled", event_id: "e", replayed: false },
-    { installation: { ...item, source_ref: "skill:other" }, change: "installed", event_id: "e", replayed: false },
+    {
+      installation: { ...item, source_ref: "skill:other" },
+      change: "installed",
+      event_id: "e",
+      replayed: false,
+    },
   ])("rejects malformed or wrong-operation install ACK %#", async (data) => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(publicResponse({ data })))
-    await expect(createSkillInstallationClient().install("skill:s1", "key")).rejects.toMatchObject({ reason: "parse" })
-  })
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(publicResponse({ data })));
+    await expect(
+      createSkillInstallationClient().install("skill:s1", "key"),
+    ).rejects.toMatchObject({ reason: "parse" });
+  });
   it("sends false and empty DELETE correctly, preserves receipt and removed current read", async () => {
-    const removed = { ...item, installed: false, removed_at: "2026-09-30T10:00:00Z" }
+    const removed = {
+      ...item,
+      installed: false,
+      removed_at: "2026-09-30T10:00:00Z",
+    };
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(publicResponse({ data: { installation: item, change: "disabled", event_id: "e", replayed: false } }))
-      .mockResolvedValueOnce(publicResponse({ data: { installation: removed, change: "removed", event_id: "e2", replayed: false } }))
-      .mockResolvedValueOnce(publicResponse({ data: removed }))
-    vi.stubGlobal("fetch", fetchMock)
-    const client = createSkillInstallationClient()
-    await client.setEnabled("i1", false, "disable-key")
-    await client.remove("i1", "remove-key")
-    expect(await client.get("i1")).toEqual(removed)
-    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ method: "PUT", body: '{"enabled":false}' })
-    expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({ method: "DELETE", headers: { "idempotency-key": "remove-key" } })
-    expect(fetchMock.mock.calls[1]?.[1]).not.toHaveProperty("body")
-  })
+      .mockResolvedValueOnce(
+        publicResponse({
+          data: {
+            installation: item,
+            change: "disabled",
+            event_id: "e",
+            replayed: false,
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        publicResponse({
+          data: {
+            installation: removed,
+            change: "removed",
+            event_id: "e2",
+            replayed: false,
+          },
+        }),
+      )
+      .mockResolvedValueOnce(publicResponse({ data: removed }));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createSkillInstallationClient();
+    await client.setEnabled("i1", false, "disable-key");
+    await client.remove("i1", "remove-key");
+    expect(await client.get("i1")).toEqual(removed);
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
+      method: "PUT",
+      body: '{"enabled":false}',
+    });
+    expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({
+      method: "DELETE",
+      headers: { "idempotency-key": "remove-key" },
+    });
+    expect(fetchMock.mock.calls[1]?.[1]).not.toHaveProperty("body");
+  });
   it("uses only legal operation/status error codes and keeps safe correlation/retry fields", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(publicResponse({ error: { code: "skill_installation_not_found", message: "hidden", retryable: false } }, 404))
-      .mockResolvedValueOnce(publicResponse({ error: { code: "skill_installation_dependency_timeout", message: "SENTINEL", retryable: true } }, 504))
-    vi.stubGlobal("fetch", fetchMock)
-    await expect(createSkillInstallationClient().list()).rejects.toMatchObject({ reason: "parse", status: 404 })
-    await expect(createSkillInstallationClient().install("skill:s1", "key")).rejects.toMatchObject({
+      .mockResolvedValueOnce(
+        publicResponse(
+          {
+            error: {
+              code: "skill_installation_not_found",
+              message: "hidden",
+              retryable: false,
+            },
+          },
+          404,
+        ),
+      )
+      .mockResolvedValueOnce(
+        publicResponse(
+          {
+            error: {
+              code: "skill_installation_dependency_timeout",
+              message: "SENTINEL",
+              retryable: true,
+            },
+          },
+          504,
+        ),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(createSkillInstallationClient().list()).rejects.toMatchObject({
+      reason: "parse",
+      status: 404,
+    });
+    await expect(
+      createSkillInstallationClient().install("skill:s1", "key"),
+    ).rejects.toMatchObject({
       reason: "http",
       status: 504,
       code: "skill_installation_dependency_timeout",
       retryable: true,
       requestId: "request-1",
       message: "Installation request rejected",
-    })
-  })
+    });
+  });
   it("rejects invalid selectors before network and propagates cancellation", async () => {
-    const fetchMock = vi.fn().mockImplementation(async (_path: string, init: RequestInit) => {
-      expect(init.signal).toBeInstanceOf(AbortSignal)
-      controller.abort()
-      expect(init.signal?.aborted).toBe(true)
-      return publicResponse({ data: [] })
-    })
-    const controller = new AbortController()
-    vi.stubGlobal("fetch", fetchMock)
-    await expect(createSkillInstallationClient().list({ limit: 0 })).rejects.toThrow()
-    await expect(createSkillInstallationClient().get("i1\n")).rejects.toThrow()
-    expect(fetchMock).not.toHaveBeenCalled()
-    await expect(createSkillInstallationClient().list({}, controller.signal)).rejects.toMatchObject({ reason: "aborted" })
-  })
-})
+    const fetchMock = vi
+      .fn()
+      .mockImplementation(async (_path: string, init: RequestInit) => {
+        expect(init.signal).toBeInstanceOf(AbortSignal);
+        controller.abort();
+        expect(init.signal?.aborted).toBe(true);
+        return publicResponse({ data: [] });
+      });
+    const controller = new AbortController();
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(
+      createSkillInstallationClient().list({ limit: 0 }),
+    ).rejects.toThrow();
+    await expect(createSkillInstallationClient().get("i1\n")).rejects.toThrow();
+    expect(fetchMock).not.toHaveBeenCalled();
+    await expect(
+      createSkillInstallationClient().list({}, controller.signal),
+    ).rejects.toMatchObject({ reason: "aborted" });
+  });
+});
 
 it("requires every current installation field and rejects unknown owner fields", async () => {
   const item = {
@@ -966,25 +1408,29 @@ it("requires every current installation field and rejects unknown owner fields",
     category_keys: [],
     product: { publication_audience: "owner", state_version: "5" },
     tags: [],
-  }
+  };
   for (const field of Object.keys(item)) {
-    const data: Record<string, unknown> = { ...item }
-    delete data[field]
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(publicResponse({ data })))
-    await expect(createSkillInstallationClient().get("i1")).rejects.toMatchObject({ reason: "parse" })
+    const data: Record<string, unknown> = { ...item };
+    delete data[field];
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(publicResponse({ data })));
+    await expect(
+      createSkillInstallationClient().get("i1"),
+    ).rejects.toMatchObject({ reason: "parse" });
   }
   for (const data of [
     { ...item, internal_secret: "private" },
     { ...item, product: { ...item.product, state_version: "0" } },
     { ...item, product: { ...item.product, execution_allowed: true } },
   ]) {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(publicResponse({ data })))
-    await expect(createSkillInstallationClient().get("i1")).rejects.toMatchObject({ reason: "parse" })
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(publicResponse({ data })));
+    await expect(
+      createSkillInstallationClient().get("i1"),
+    ).rejects.toMatchObject({ reason: "parse" });
   }
-})
+});
 
 it("preserves current command-only 403 skill_forbidden without widening installation reads", async () => {
-  const client = createSkillInstallationClient()
+  const client = createSkillInstallationClient();
   for (const [command, expected] of [
     [() => client.install("skill:s1", "key"), "http"],
     [() => client.setEnabled("i1", false, "key"), "http"],
@@ -992,10 +1438,29 @@ it("preserves current command-only 403 skill_forbidden without widening installa
     [() => client.list(), "parse"],
     [() => client.get("i1"), "parse"],
   ] as const) {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(publicResponse({ error: { code: "skill_forbidden", message: "Denied", retryable: false } }, 403)))
-    await expect(command()).rejects.toMatchObject({ reason: expected, status: 403 })
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          publicResponse(
+            {
+              error: {
+                code: "skill_forbidden",
+                message: "Denied",
+                retryable: false,
+              },
+            },
+            403,
+          ),
+        ),
+    );
+    await expect(command()).rejects.toMatchObject({
+      reason: expected,
+      status: 403,
+    });
   }
-})
+});
 
 it("accepts APPS only on current catalog cards and keeps unknown catalog categories closed", () => {
   const card = {
@@ -1007,45 +1472,94 @@ it("accepts APPS only on current catalog cards and keeps unknown catalog categor
     installed: true,
     enabled: false,
     categories: ["apps"],
-  }
-  expect(skillCatalogSchema.shape.skills.element.parse(card)).toMatchObject({ categories: ["apps"], installed: true, enabled: false })
-  expect(skillCatalogSchema.shape.skills.element.safeParse({ ...card, categories: ["invented"] }).success).toBe(false)
-  expect(skillCatalogSchema.shape.skills.element.safeParse({ ...card, extra: true }).success).toBe(false)
-})
+  };
+  expect(skillCatalogSchema.shape.skills.element.parse(card)).toMatchObject({
+    categories: ["apps"],
+    installed: true,
+    enabled: false,
+  });
+  expect(
+    skillCatalogSchema.shape.skills.element.safeParse({
+      ...card,
+      categories: ["invented"],
+    }).success,
+  ).toBe(false);
+  expect(
+    skillCatalogSchema.shape.skills.element.safeParse({ ...card, extra: true })
+      .success,
+  ).toBe(false);
+});
 
 it("preserves catalog revision Skill ID separately from series and checksum for package reads", async () => {
-  const { createManusSkillHubClient } = await import("@/ui/skills/manus-skill-client")
+  const { createManusSkillHubClient } =
+    await import("@/ui/skills/manus-skill-client");
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL) =>
       jsonResponse(
         String(input).endsWith("ListHubSkills")
-          ? { skills: [{ skillId: "series-id", displayName: "Live", currentVersion: { versionUid: "revision-id", checksum: "digest" } }], tagOptions: {} }
+          ? {
+              skills: [
+                {
+                  skillId: "series-id",
+                  displayName: "Live",
+                  currentVersion: {
+                    versionUid: "revision-id",
+                    checksum: "digest",
+                  },
+                },
+              ],
+              tagOptions: {},
+            }
           : { userAddedSkills: [], officialSkills: [] },
       ),
     ),
-  )
-  const result = await createManusSkillHubClient(createHubClient()).listSkillCatalog()
-  expect(result.skills[0]).toMatchObject({ skill_id: "series-id", revision_skill_id: "revision-id", content_hash: "digest" })
-})
+  );
+  const result =
+    await createManusSkillHubClient(createHubClient()).listSkillCatalog();
+  expect(result.skills[0]).toMatchObject({
+    skill_id: "series-id",
+    revision_skill_id: "revision-id",
+    content_hash: "digest",
+  });
+});
 
 const inspected = {
   source_ref: "skill:revision-1",
   revision: "4",
   files: [{ path: "SKILL.md", size_bytes: "6" }],
   selected_file: { path: "SKILL.md", text: "实际" },
-}
+};
 it("binds package text to owner revision, decimal revision, file inventory and exact UTF8 bytes", () => {
-  expect(catalogPackageResponseSchema.safeParse({ data: inspected }).success).toBe(true)
-  expect(catalogPackageMatches(inspected, "revision-1", "SKILL.md", { ...inspected, selected_file: null })).toBe(true)
-  expect(catalogPackageMatches(inspected, "series-1", "SKILL.md")).toBe(false)
-  expect(catalogPackageMatches(inspected, "revision-1", "other.txt")).toBe(false)
-  expect(catalogPackageMatches(inspected, "revision-1", "SKILL.md", { ...inspected, revision: "5" })).toBe(false)
-  expect(catalogPackageMatches(inspected, "revision-1", "SKILL.md", { ...inspected, files: [] })).toBe(false)
+  expect(
+    catalogPackageResponseSchema.safeParse({ data: inspected }).success,
+  ).toBe(true);
+  expect(
+    catalogPackageMatches(inspected, "revision-1", "SKILL.md", {
+      ...inspected,
+      selected_file: null,
+    }),
+  ).toBe(true);
+  expect(catalogPackageMatches(inspected, "series-1", "SKILL.md")).toBe(false);
+  expect(catalogPackageMatches(inspected, "revision-1", "other.txt")).toBe(
+    false,
+  );
+  expect(
+    catalogPackageMatches(inspected, "revision-1", "SKILL.md", {
+      ...inspected,
+      revision: "5",
+    }),
+  ).toBe(false);
+  expect(
+    catalogPackageMatches(inspected, "revision-1", "SKILL.md", {
+      ...inspected,
+      files: [],
+    }),
+  ).toBe(false);
   expect(catalogPackagePrivatePath("revision-1", "文档/说明.txt")).toBe(
     "/api/hub/skills/revision-1/package?file_path=%E6%96%87%E6%A1%A3%2F%E8%AF%B4%E6%98%8E.txt",
-  )
-})
+  );
+});
 it("rejects package unknown fields, unsafe paths, invalid decimal revision and byte mismatches", () => {
   for (const data of [
     { ...inspected, extra: true },
@@ -1054,87 +1568,113 @@ it("rejects package unknown fields, unsafe paths, invalid decimal revision and b
     { ...inspected, files: [{ path: "SKILL.md", size_bytes: "06" }] },
     { ...inspected, files: [{ path: "SKILL.md", size_bytes: "2" }] },
     { ...inspected, files: [...inspected.files, ...inspected.files] },
-    { ...inspected, selected_file: { path: "SKILL.md", text: "实际", extra: 1 } },
-    ...["../SKILL.md", "/SKILL.md", "a\\b", "a//b", "e\u0301.md"].map((path) => ({ ...inspected, files: [{ path, size_bytes: "6" }], selected_file: null })),
+    {
+      ...inspected,
+      selected_file: { path: "SKILL.md", text: "实际", extra: 1 },
+    },
+    ...["../SKILL.md", "/SKILL.md", "a\\b", "a//b", "e\u0301.md"].map(
+      (path) => ({
+        ...inspected,
+        files: [{ path, size_bytes: "6" }],
+        selected_file: null,
+      }),
+    ),
   ])
-    expect(catalogPackageResponseSchema.safeParse({ data }).success).toBe(false)
-})
+    expect(catalogPackageResponseSchema.safeParse({ data }).success).toBe(
+      false,
+    );
+});
 
 it("removes the retired Github URL methods from the generic Hub client", () => {
-  expect(createHubClient()).not.toHaveProperty("previewGithub")
-  expect(createHubClient()).not.toHaveProperty("importGithub")
-})
+  expect(createHubClient()).not.toHaveProperty("previewGithub");
+  expect(createHubClient()).not.toHaveProperty("importGithub");
+});
 
 describe("installation request total budget", () => {
-  afterEach(() => vi.useRealTimers())
+  afterEach(() => vi.useRealTimers());
   it("ends a stalled fetch within the total deadline and cleans up its late body", async () => {
-    vi.useFakeTimers()
-    let resolve!: (response: Response) => void
-    const cancelled = vi.fn()
+    vi.useFakeTimers();
+    let resolve!: (response: Response) => void;
+    const cancelled = vi.fn();
     vi.stubGlobal(
       "fetch",
       vi.fn(
         () =>
           new Promise<Response>((done) => {
-            resolve = done
+            resolve = done;
           }),
       ),
-    )
+    );
     const result = createSkillInstallationClient()
       .list()
-      .catch((error: unknown) => error)
-    await vi.advanceTimersByTimeAsync(10_001)
-    const error = await Promise.race([result, Promise.resolve("still pending")])
-    expect(error).toBeInstanceOf(HubClientError)
-    resolve(new Response(new ReadableStream({ cancel: cancelled })))
-    await Promise.resolve()
-    await Promise.resolve()
-    expect(cancelled).toHaveBeenCalledOnce()
-  })
+      .catch((error: unknown) => error);
+    await vi.advanceTimersByTimeAsync(10_001);
+    const error = await Promise.race([
+      result,
+      Promise.resolve("still pending"),
+    ]);
+    expect(error).toBeInstanceOf(HubClientError);
+    resolve(new Response(new ReadableStream({ cancel: cancelled })));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(cancelled).toHaveBeenCalledOnce();
+  });
   it("cancels an oversized installation stream before parsing", async () => {
-    const cancelled = vi.fn()
+    const cancelled = vi.fn();
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
         new Response(
           new ReadableStream({
             start(controller) {
-              controller.enqueue(new Uint8Array(1_048_577))
+              controller.enqueue(new Uint8Array(1_048_577));
             },
             cancel: cancelled,
           }),
-          { headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "request-1" } },
+          {
+            headers: {
+              "content-type": "application/json",
+              "cache-control": "no-store",
+              "x-request-id": "request-1",
+            },
+          },
         ),
       ),
-    )
+    );
     const result = createSkillInstallationClient()
       .list()
-      .catch((error: unknown) => error)
-    await new Promise((resolve) => setTimeout(resolve, 10))
-    expect(await Promise.race([result, Promise.resolve("still pending")])).toMatchObject({ reason: "parse" })
-    expect(cancelled).toHaveBeenCalledOnce()
-  })
+      .catch((error: unknown) => error);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(
+      await Promise.race([result, Promise.resolve("still pending")]),
+    ).toMatchObject({ reason: "parse" });
+    expect(cancelled).toHaveBeenCalledOnce();
+  });
   it("cancels a stalled body when its caller leaves", async () => {
     const controller = new AbortController(),
-      cancelled = vi.fn()
+      cancelled = vi.fn();
     vi.stubGlobal(
       "fetch",
-      vi
-        .fn()
-        .mockResolvedValue(
-          new Response(new ReadableStream({ cancel: cancelled }), {
-            headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "request-1" },
-          }),
-        ),
-    )
+      vi.fn().mockResolvedValue(
+        new Response(new ReadableStream({ cancel: cancelled }), {
+          headers: {
+            "content-type": "application/json",
+            "cache-control": "no-store",
+            "x-request-id": "request-1",
+          },
+        }),
+      ),
+    );
     const result = createSkillInstallationClient()
       .list({}, controller.signal)
-      .catch((error: unknown) => error)
-    await Promise.resolve()
-    await Promise.resolve()
-    controller.abort()
-    await new Promise((resolve) => setTimeout(resolve, 10))
-    expect(await Promise.race([result, Promise.resolve("still pending")])).toMatchObject({ reason: "aborted" })
-    expect(cancelled).toHaveBeenCalledOnce()
-  })
-})
+      .catch((error: unknown) => error);
+    await Promise.resolve();
+    await Promise.resolve();
+    controller.abort();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(
+      await Promise.race([result, Promise.resolve("still pending")]),
+    ).toMatchObject({ reason: "aborted" });
+    expect(cancelled).toHaveBeenCalledOnce();
+  });
+});

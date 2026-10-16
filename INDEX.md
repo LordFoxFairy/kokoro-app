@@ -136,7 +136,7 @@ Root Node22辅助门：lint0/typecheck0、contract275/0、architecture50/0；最
 ## R85 Plugins目录真实度切片（2026-10-02）
 
 - `src/features/app/kokoro-plugins-surface.tsx`：发现目录、搜索、分页、轮播及已有管理入口；不拥有连接安装/授权事实，删除本地Set形成的Add/Remove/checkmark假成功。
-- `tests/ui/kokoro-plugins-surface.test.tsx`：锁无owner回执时不产生连接事实，保原目录/管理交互。
+- 连接器广场不再保留 UI 测试套件；视觉与交互以已登录 Manus 页面、真实 owner 返回与浏览器主路径为唯一验收基线。
 - 实际Root门与尚未接通的MCP调用链见`docs/CURRENT.md` R85；此源码切片不是正式连接或整个用户旅程已完成。
 
 ## R79-WEB-PROJECT-D0 当前入口（2026-10-02；仅方案，待 Root 门审）

@@ -148,6 +148,10 @@
      skin boundary (rather than overriding individual surfaces) prevents the
      rail, dialog portals, and route pages from drifting into separate whites. */
   --background: #ffffff;
+  --settings-surface: #f8f8f7;
+  --settings-control-fill: rgb(55 53 47 / 8%);
+  --settings-control-border: rgb(0 0 0 / 14%);
+  --settings-description-foreground: #4d4d4d;
   --foreground: #1a1a1a;
   --card: #ffffff;
   --card-foreground: #1a1a1a;
@@ -177,6 +181,10 @@
 
 .dark [data-web-skin="kokoro"] {
   --background: #171716;
+  --settings-surface: var(--background);
+  --settings-control-fill: color-mix(in srgb, var(--foreground) 8%, transparent);
+  --settings-control-border: color-mix(in srgb, var(--foreground) 14%, transparent);
+  --settings-description-foreground: var(--muted-foreground);
   --foreground: #f2f1ec;
   --card: #20201f;
   --card-foreground: #f2f1ec;

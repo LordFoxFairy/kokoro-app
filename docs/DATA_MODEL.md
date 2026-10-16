@@ -1,3 +1,7 @@
+## SET49 整合的数据边界（2026-10-16）
+
+无Web数据库、schema、迁移、cookie或持久化键新增。账户/个性化/余额/归档请求继续绑定准入与代际；主线项目链接不建立私有子任务reader。正常服务与业务事实保持，验证仅使用自有隔离fixture并复用现基础设施。
+
 ## SET47 无Web归档持久化owner（2026-10-15；候选实现）
 
 SET47传输边界补充：WHATWG会规范化单独的`.`/`..`段及其percentencoded形式；BFF保持原始HTTP的exact encodeURIComponent契约。Web对仅这两个历史ID在任何fetch前拒绝并将动作禁用、解释不可用；不使用双重解码/替代API，也不宣称任意历史ID浏览器皆可操作。其余合法Unicode ID不限制为conv UUID。依据：[URL Standard](https://url.spec.whatwg.org/#single-dot-url-path-segment)。

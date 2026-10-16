@@ -689,6 +689,7 @@ export const de: Partial<Record<MessageKey, string>> = {
   "mcp.errSecretRef": "Die ausgewählten Anmeldeinformationen sind ungültig oder nicht vorhanden.",
   "mcp.errNotFound": "Die Verbindung wurde nicht gefunden.",
   "mcp.errInvalid": "Falsche Eingabe: Bitte überprüfen Sie Name, URL und Übertragungsmethode.",
+  "mcp.errDuplicateUrl": "Diese Server-URL ist bereits hinzugefügt. Bearbeiten Sie den vorhandenen Connector oder verwenden Sie eine andere URL.",
   "mcp.errGeneric": "Der Vorgang ist fehlgeschlagen. Bitte versuchen Sie es später erneut.",
   "composer.modelSwitch": "Modell wechseln",
   "composer.modelLocked": "Modell: {model} (in dieser Runde gesperrt)",

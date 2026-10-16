@@ -1,51 +1,228 @@
-.dialog[data-slot="dialog-content"] { width:min(90rem,calc(100vw - 2rem)); max-width:calc(100vw - 2rem); height:min(68rem,calc(100dvh - 2rem)); min-height:0; display:flex; flex-direction:column; max-height:calc(100dvh - 2rem); gap:0; overflow:hidden; padding:0; border-radius:1rem; background:color-mix(in srgb,var(--background) 97%,var(--foreground) 3%); }
+.dialog[data-slot="dialog-content"] {
+  /* A summary is a lightweight preview, not a document workspace. Keep it
+   * content-sized so a skill without prompts does not leave a large inert
+   * white panel below its real description. The package reader explicitly
+   * opts into the fixed 800 × 600 workspace further down. */
+  width:min(50rem,calc(100vw - 2rem));
+  max-width:calc(100vw - 2rem);
+  height:auto;
+  min-height:0;
+  display:flex;
+  flex-direction:column;
+  max-height:calc(100dvh - 2rem);
+  gap:0;
+  overflow:hidden;
+  padding:0;
+  border-radius:1rem;
+  background:var(--background);
+}
 .overlay { background:rgb(0 0 0 / 40%); backdrop-filter:blur(5px); }
-.dialog > :global([data-slot="dialog-close"]) { top:1.4rem; right:1.5rem; z-index:3; }
-.topActions { position:absolute; top:1.4rem; right:4.5rem; z-index:3; display:flex; gap:.25rem; }
-.topActions svg,.iconLink svg { width:1.25rem; height:1.25rem; }
+.dialog > :global([data-slot="dialog-close"]) { top:1.25rem; right:1.5rem; z-index:3; }
+.topActions { position:absolute; top:1.25rem; right:4.25rem; z-index:3; display:flex; gap:.125rem; }
+.readerTopActions { position:absolute; top:1.25rem; right:4.25rem; z-index:3; display:flex; gap:.125rem; }
+.topActions svg,.iconLink svg { width:1.125rem; height:1.125rem; }
 .iconLink { display:inline-flex; width:2rem; height:2rem; align-items:center; justify-content:center; color:var(--muted-foreground); border-radius:.5rem; }
-.hero { flex:0 0 auto; position:relative; min-height:19rem; box-sizing:border-box; display:flex; flex-direction:row; align-items:center; padding:3rem 3rem 2rem; border-bottom:1px solid var(--border); text-align:left; }
-.copy { display:flex; width:100%; min-width:0; max-width:100%; flex-direction:column; align-items:flex-start; gap:.75rem; }
-.hero[data-has-cover="true"] { min-height:19rem; }
-.hero[data-has-cover="true"] .copy { max-width:calc(100% - 15rem); }
-.categories { display:flex; flex-wrap:wrap; gap:.5rem; }
-.copy :global([data-slot="badge"]) { border:0; color:var(--muted-foreground); font-weight:500; }
-.copy h2 { margin:0; font-size:clamp(1.8rem, 3vw, 2.6rem); line-height:1.13; letter-spacing:-.02em; overflow-wrap:anywhere; }
-.meta { display:flex; flex-wrap:wrap; gap:.55rem; margin:0; font-size:.875rem; color:var(--muted-foreground); }
-.separator { margin-right:.55rem; }
-.detailLabel { display:inline-flex; height:2.75rem; align-items:center; gap:.45rem; padding:0 .8rem; border:1px solid var(--border); border-radius:.7rem; color:var(--muted-foreground); }
-.detailLabel svg { width:1.1rem; height:1.1rem; }
-.actions { display:flex; gap:.65rem; margin-top:1.5rem; }.actions button { box-sizing:border-box; min-height:2.8rem; height:2.8rem; padding:0 .95rem; border-radius:.7rem; font-size:.95rem; font-weight:650; line-height:1.2rem; }.actions svg { width:1.1rem; height:1.1rem; }
-.cover { pointer-events:none; position:absolute; right:5rem; bottom:0; width:12rem; height:14rem; overflow:hidden; border-radius:.75rem .75rem 0 0; background:var(--muted); box-shadow:0 .75rem 1.5rem rgb(0 0 0 / 10%); }.cover img { object-fit:cover; }
-.body { flex:1 1 auto; min-height:0; overflow:auto; padding:2.5rem 3rem 3rem; }.description { max-width:66rem; margin:0 0 2.25rem; font-size:1.15rem; line-height:1.75rem; color:var(--foreground); }.status { color:var(--muted-foreground); }
-.examples { display:grid; gap:.75rem; }.examples button { box-sizing:border-box; min-height:4.75rem; display:flex; align-items:center; gap:.875rem; width:100%; padding:1rem; border:1px solid var(--border); border-radius:12px; background:transparent; color:var(--foreground); text-align:left; font:inherit; cursor:pointer; }.examples button:hover { background:var(--muted); }.examples button span { font-size:.95rem; line-height:1.4rem; }.examples svg { width:1rem; height:1rem; flex:0 0 1rem; color:var(--muted-foreground); }
-@media(max-width:42rem) { .dialog[data-slot="dialog-content"] { width:min(90rem,calc(100vw - 2rem)); min-height:0; }.hero{min-height:0;padding:3.5rem 1.25rem 1.5rem;align-items:flex-start}.copy{max-width:100%}.hero[data-has-cover="true"] .copy{max-width:100%}.copy h2{font-size:1.75rem}.hero[data-has-cover="true"]{min-height:0}.cover{display:none}.body{padding:1.5rem 1.25rem 2rem}.actions{flex-wrap:wrap;margin-top:1.25rem}.topActions{right:3.8rem} }
+.hero { flex:0 0 auto; position:relative; min-height:13.875rem; box-sizing:border-box; display:flex; flex-direction:row; align-items:center; padding:3.75rem 1.5rem 1.5rem; border-bottom:1px solid var(--border); text-align:left; }
+.copy { display:flex; width:100%; min-width:0; max-width:100%; flex-direction:column; align-items:flex-start; gap:.375rem; }
+.hero[data-has-cover="true"] { min-height:13.875rem; }
+.hero[data-has-cover="true"] .copy { max-width:calc(100% - 10rem); }
+.categories { display:flex; flex-wrap:wrap; gap:.375rem; }
+.copy :global([data-slot="badge"]) { border:0; color:var(--muted-foreground); font-size:.75rem; font-weight:500; }
+.copy h2 { margin:0; font-size:1.25rem; line-height:1.35; letter-spacing:-.015em; overflow-wrap:anywhere; }
+.meta { display:flex; flex-wrap:wrap; gap:.375rem; margin:0; font-size:.8125rem; line-height:1.25rem; color:var(--muted-foreground); }
+.separator { margin-right:.375rem; }
+.detailLabel { display:inline-flex; height:2rem; align-items:center; gap:.375rem; padding:0 .75rem; border:1px solid var(--border); border-radius:.5rem; color:var(--muted-foreground); }
+.detailLabel svg { width:1rem; height:1rem; }
+.actions { display:flex; gap:.5rem; margin-top:.875rem; }.actions button { box-sizing:border-box; min-height:2rem; height:2rem; padding:0 .75rem; border-radius:.5rem; font-size:.875rem; font-weight:500; line-height:1rem; }.actions svg { width:1rem; height:1rem; }
+.cover { pointer-events:none; position:absolute; right:3rem; bottom:0; width:8.5rem; height:8.5rem; overflow:hidden; border-radius:.5rem .5rem 0 0; background:var(--muted); box-shadow:0 .5rem 1rem rgb(0 0 0 / 10%); }.cover img { object-fit:cover; }
+.body { flex:0 1 auto; min-height:0; max-height:calc(100dvh - 15.875rem); overflow:auto; padding:1.5rem; }.description { max-width:46rem; margin:0 0 1rem; font-size:.875rem; line-height:1.5rem; color:var(--foreground); }.status { color:var(--muted-foreground); }
+.examples { display:grid; gap:.625rem; }.examples button { box-sizing:border-box; min-height:2.75rem; display:flex; align-items:center; gap:.625rem; width:100%; padding:.625rem .75rem; border:1px solid var(--border); border-radius:.5rem; background:transparent; color:var(--foreground); text-align:left; font:inherit; cursor:pointer; }.examples button:hover { background:var(--muted); }.examples button span { font-size:.8125rem; line-height:1.25rem; }.examples svg { width:1rem; height:1rem; flex:0 0 1rem; color:var(--muted-foreground); }
+@media(max-width:42rem) {
+  /* The compact summary keeps its title and action block stable, while the
+   * overall sheet follows the content just like its desktop counterpart. */
+  .dialog[data-slot="dialog-content"] {
+    width:min(90rem,95vw);
+    max-width:95vw;
+    min-height:0;
+  }
+  .hero {
+    min-height:13.875rem;
+    padding:3.75rem 1.5rem 1.5rem;
+    align-items:flex-start;
+  }
+  .copy { max-width:100%; }
+  .hero[data-has-cover="true"] .copy { max-width:100%; }
+  .copy h2 {
+    font-size:1.25rem;
+    font-weight:600;
+    letter-spacing:normal;
+    line-height:1.625rem;
+  }
+  .hero[data-has-cover="true"] { min-height:13.875rem; }
+  .cover { display:none; }
+  .body { padding:1.5rem 1.5rem 2rem; }
+  .description {
+    margin-bottom:1.5rem;
+    line-height:1.25rem;
+  }
+  .examples { gap:.75rem; }
+  .examples button {
+    min-height:3.875rem;
+    padding:.75rem;
+    border-radius:.75rem;
+  }
+  .actions { flex-wrap:wrap; margin-top:1.25rem; }
+  .topActions,.readerTopActions { right:3.8rem; }
+}
 
 .reader { display:grid; grid-template-columns:minmax(10rem,15rem) minmax(0,1fr); margin:1.5rem 0; border:1px solid var(--border); border-radius:.75rem; overflow:hidden; }
 .fileList { display:flex; flex-direction:column; gap:.25rem; padding:.75rem; border-right:1px solid var(--border); max-height:26rem; overflow:auto; }
+.fileNavHeading { margin:.25rem .65rem .6rem; color:var(--muted-foreground); font-size:.875rem; font-weight:500; line-height:1.25rem; }
 .fileList button { border:0; border-radius:.4rem; padding:.55rem .65rem; color:var(--foreground); background:transparent; font:inherit; text-align:left; overflow-wrap:anywhere; cursor:pointer; }
 .fileList button:hover,.fileList button[aria-pressed="true"] { background:var(--muted); }
 .fileList button:focus-visible { outline:2px solid var(--ring); outline-offset:2px; }
 .fileContent { min-height:14rem; max-height:32rem; overflow:auto; padding:1.25rem; overflow-wrap:anywhere; }
 .fileContent pre { white-space:pre-wrap; overflow-wrap:anywhere; font-family:var(--font-mono); }
 .fileContent ul { list-style:disc; padding-left:1.5rem; }.fileContent ol { list-style:decimal; padding-left:1.5rem; }
-.fileContent h1,.fileContent h2,.fileContent h3 { margin:1rem 0 .5rem; font-weight:600; }.fileContent p { margin:.65rem 0; }
+/* The package body is a document reader, not a compact card description.
+ * Manus gives the first Markdown heading a clear reading anchor below the
+ * YAML block, then steps down through the remaining document hierarchy. */
+.fileContent h1,
+.fileContent h2,
+.fileContent h3 {
+  color:var(--foreground);
+  font-weight:600;
+  letter-spacing:-.018em;
+}
+.fileContent h1 {
+  margin:2rem 0 .75rem;
+  font-size:1.75rem;
+  line-height:2.125rem;
+}
+.fileContent h2 {
+  margin:1.75rem 0 .625rem;
+  font-size:1.25rem;
+  line-height:1.75rem;
+}
+.fileContent h3 {
+  margin:1.5rem 0 .5rem;
+  font-size:1.0625rem;
+  line-height:1.5rem;
+}
+.fileContent p { margin:.65rem 0; }
+.frontmatter { margin:0 0 2rem; overflow:hidden; border:1px solid var(--border); border-radius:.5rem; background:var(--muted); }
+.frontmatterHeader { display:flex; min-height:2.25rem; align-items:center; justify-content:space-between; padding:0 .75rem; background:color-mix(in srgb,var(--foreground) 4%,transparent); color:var(--foreground); font-size:.8125rem; font-weight:500; }
+.frontmatterHeader button { width:2rem; height:2rem; padding:0; color:var(--muted-foreground); }
+.frontmatterHeader svg { width:1rem; height:1rem; }
+.frontmatter pre { margin:0; overflow:auto; padding:.875rem 1rem; color:#5c8a5a; font-family:var(--font-mono); font-size:.8125rem; line-height:1.25rem; white-space:pre-wrap; }
 @media(max-width:42rem) { .reader { grid-template-columns:minmax(0,1fr); }.fileList { max-height:10rem; border-right:0; border-bottom:1px solid var(--border); }.fileContent { padding:1rem; } }
 
-/* Independent package reader: compact header, real path tree and text pane. */
-.readerDialog[data-slot="dialog-content"] { max-width:960px; height:min(48rem,calc(100dvh - 4rem)); min-height:0; display:flex; flex-direction:column; overflow:hidden; }
-.readerHeader { display:flex; flex:0 0 auto; align-items:center; flex-direction:row; gap:1rem; padding:1rem 4.5rem 1rem 1.25rem; border-bottom:1px solid var(--border); text-align:left; }
-.readerHeader h2 { margin:0; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:1.1rem; }
+/* Package reader shares the compact detail-dialog geometry while retaining
+ * a stable file tree and rendered-document split on desktop. */
+.readerDialog[data-slot="dialog-content"] { width:min(50rem,calc(100vw - 2rem)); max-width:calc(100vw - 2rem); height:min(37.5rem,calc(100dvh - 2rem)); max-height:calc(100dvh - 2rem); min-height:0; display:flex; flex-direction:column; overflow:hidden; }
+.readerHeader { display:flex; flex:0 0 auto; min-height:3.75rem; box-sizing:border-box; align-items:center; flex-direction:row; gap:.5rem; padding:.625rem 3.75rem .625rem 1.25rem; border-bottom:1px solid var(--border); text-align:left; }
+.readerHeader h2 { margin:0; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:1rem; }
+.readerHeader > button { min-height:2rem; padding-inline:0; font-size:1.125rem; font-weight:600; letter-spacing:normal; line-height:1.5rem; }
 .backIcon { transform:rotate(180deg); }
-.readerDialog .reader { flex:1 1 auto; min-height:0; margin:0; border:0; border-radius:0; grid-template-columns:13.75rem minmax(0,1fr); }
+.readerDialog .reader { flex:1 1 auto; min-height:0; margin:0; border:0; border-radius:0; grid-template-columns:12.5rem minmax(0,1fr); }
 .readerDialog .fileList,.readerDialog .fileContent { min-height:0; max-height:none; overflow:auto; }
+.readerDialog .fileContent { padding:1.5rem; }
+.readerDialog .fileContent .fileHeading { display:none; }
+/* Keep the reader's owner-backed request visually in the final document
+ * rhythm. A naked loading sentence made the 800×600 surface jump as YAML and
+ * Markdown arrived; these neutral placeholders reserve exactly that reading
+ * structure without inventing package content. */
+.readerLoading { display:grid; gap:.875rem; padding-top:.25rem; }
+.readerLoadingYaml { display:grid; height:7.25rem; align-content:center; gap:.55rem; padding:1rem; overflow:hidden; border:1px solid var(--border); border-radius:.5rem; background:var(--muted); }
+.readerLoadingYaml i,.readerLoadingTitle,.readerLoadingLine { display:block; height:.75rem; border-radius:999px; background:linear-gradient(90deg, color-mix(in srgb,var(--foreground) 6%,transparent), color-mix(in srgb,var(--foreground) 11%,transparent), color-mix(in srgb,var(--foreground) 6%,transparent)); background-size:200% 100%; animation:reader-loading-sheen 1.25s ease-in-out infinite; }
+.readerLoadingYaml i:nth-child(1) { width:35%; }.readerLoadingYaml i:nth-child(2) { width:82%; }.readerLoadingYaml i:nth-child(3) { width:58%; }
+.readerLoadingTitle { width:38%; height:1.5rem; margin-top:1.5rem; }
+.readerLoadingLine { width:88%; }.readerLoadingLineShort { width:66%; }
+@keyframes reader-loading-sheen { to { background-position:-200% 0; } }
+@media (prefers-reduced-motion: reduce) { .readerLoadingYaml i,.readerLoadingTitle,.readerLoadingLine { animation:none; } }
+.mobileFileToggle { display:none; }
 .fileList ul { list-style:none; margin:0; padding:0; }.fileList ul ul { padding-left:1rem; }
 .fileList button { display:flex; align-items:center; gap:.35rem; width:100%; min-height:2.25rem; }
 .fileList button svg { width:1rem; height:1rem; flex:0 0 1rem; color:var(--muted-foreground); }
 .fileList button span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .fileHeading { display:flex; align-items:center; gap:.5rem; margin-bottom:1rem; padding-bottom:.75rem; border-bottom:1px solid var(--border); color:var(--muted-foreground); font-size:.875rem; overflow-wrap:anywhere; }
 .fileHeading svg { width:1rem; height:1rem; flex:0 0 1rem; }
-@media(max-width:42rem) { .readerDialog[data-slot="dialog-content"] { height:calc(100dvh - 1.25rem); }.readerHeader { gap:.5rem; padding:1rem 3.5rem 1rem .5rem; }.readerDialog .reader { grid-template-columns:minmax(7.5rem,32%) minmax(0,1fr); }.readerDialog .fileList { border-right:1px solid var(--border); border-bottom:0; padding:.35rem; }.fileList ul ul { padding-left:.5rem; }.readerDialog .fileContent { padding:.75rem; } }
+@media(max-width:42rem) {
+  /* Manus keeps the package reader at the same 95vw × min(600px, 90dvh)
+   * dialogue envelope as the preview.  Expanding it to the whole viewport
+   * made the reader feel like an unrelated page and displaced its heading. */
+  .readerDialog[data-slot="dialog-content"] {
+    width:95vw;
+    max-width:95vw;
+    height:min(37.5rem,90dvh);
+    max-height:min(43.75rem,90dvh);
+  }
+  .readerHeader {
+    min-height:3.75rem;
+    gap:.5rem;
+    padding:1.25rem 1.25rem .75rem 1rem;
+  }
+  .readerHeader > button {
+    min-height:1.75rem;
+    font-size:1.125rem;
+    font-weight:600;
+    letter-spacing:normal;
+    line-height:1.5rem;
+  }
+  /* Manus collapses the file tree to a 52px opener in the compact reader.
+   * Rendering a permanent 32% sidebar squeezed the actual SKILL.md into an
+   * unrelated two-column layout. */
+  .readerDialog .reader { position:relative; display:block; }
+  .readerDialog .reader::after {
+    position:absolute;
+    z-index:1;
+    top:3.25rem;
+    right:0;
+    left:0;
+    height:1px;
+    background:var(--border);
+    content:"";
+    pointer-events:none;
+  }
+  .mobileFileToggle {
+    position:absolute;
+    top:.625rem;
+    left:.625rem;
+    z-index:2;
+    display:inline-flex;
+    width:2rem;
+    height:2rem;
+    align-items:center;
+    justify-content:center;
+    padding:0;
+    border:0;
+    background:transparent;
+    color:var(--foreground);
+  }
+  .mobileFileToggle svg { width:1.25rem; height:1.25rem; }
+  .readerDialog .fileList {
+    position:absolute;
+    z-index:3;
+    top:3.25rem;
+    bottom:0;
+    left:0;
+    display:none;
+    width:min(15rem,76%);
+    box-sizing:border-box;
+    border:0;
+    border-right:1px solid var(--border);
+    border-top:1px solid var(--border);
+    padding:.75rem;
+    background:var(--background);
+    box-shadow:.5rem .5rem 1rem rgb(0 0 0 / 10%);
+  }
+  .readerDialog .fileList.mobileFileListOpen { display:flex; }
+  .fileList ul ul { padding-left:.5rem; }
+  /* The compact Manus reader surfaces the file through its own code header
+   * (YAML), not a second visible “SKILL.md” strip. */
+  .readerDialog .fileContent .fileHeading { display:none; }
+  .readerDialog .fileContent { height:100%; box-sizing:border-box; padding:5.125rem 1.5rem 1.5rem; }
+}
 
 /* Short summaries retain all header actions and text in one scroll surface. */
 @media(max-height:42rem) {

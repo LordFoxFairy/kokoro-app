@@ -689,6 +689,7 @@ export const pt: Partial<Record<MessageKey, string>> = {
   "mcp.errSecretRef": "As credenciais selecionadas são inválidas ou não existem.",
   "mcp.errNotFound": "A conexão não foi encontrada.",
   "mcp.errInvalid": "Entrada incorreta: verifique o nome, URL e método de transferência.",
+  "mcp.errDuplicateUrl": "Esta URL de servidor já foi adicionada. Edite o conector existente ou use outra URL.",
   "mcp.errGeneric": "A operação falhou. Tente novamente mais tarde.",
   "composer.modelSwitch": "Modelo de troca",
   "composer.modelLocked": "Modelo: {model} (bloqueado nesta rodada)",

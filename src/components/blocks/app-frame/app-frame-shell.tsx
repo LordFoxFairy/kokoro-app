@@ -84,9 +84,9 @@ export function AppFrameShell({
       <SidebarProvider
         ref={shellRef}
         className={styles.shell}
-        // User Web keeps the desktop Sidebar primitive for fine-pointer windows;
-        // the narrow desktop contract hides its track without switching to
-        // the phone Sheet. Only a coarse-pointer phone uses the mobile surface.
+        // The compact boundary belongs to the Sheet composition regardless of
+        // pointer type. This keeps a narrow desktop canvas from reserving an
+        // in-flow rail gap while its navigation is opened.
         forceDesktop={!narrowWeb}
         data-desktop-web="true"
         data-web-skin={webSkin}

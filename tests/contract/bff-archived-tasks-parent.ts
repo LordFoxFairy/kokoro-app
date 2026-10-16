@@ -1,7 +1,8 @@
+import { restorePublic154Integration } from "./bff-integration-parent";
 import { createHash } from "node:crypto";
 const hash=(value:string|Uint8Array)=>createHash("sha256").update(value).digest("hex");
 /** Consumer proof only: remove the two exact owner-published additive blocks, verify full old bytes. */
-export function restorePublic153(bytes:Uint8Array):Buffer {
+function restoreOriginalPublic153(bytes:Uint8Array):Buffer {
  let text=Buffer.from(bytes).toString("utf8");
  if(hash(bytes)!=="87186311e67eeebcd5f27d7974326186e1912de49d18d4d524a0bcbc940a0817")throw Error("not fixed public15.4");
  const remove=(start:string,end:string,digest:string)=>{const a=text.indexOf(start),b=text.indexOf(end);if(a<0||b<a||text.indexOf(start,a+start.length)!==-1||hash(text.slice(a,b))!==digest)throw Error("archive block drift");text=text.slice(0,a)+text.slice(b);};
@@ -10,4 +11,8 @@ export function restorePublic153(bytes:Uint8Array):Buffer {
  if(text.split("  version: 15.4.0\n").length!==2)throw Error("version drift");
  text=text.replace("  version: 15.4.0\n","  version: 15.3.0\n");
  if(hash(text)!=="694251d4f4c1bcc9a79ae4fd2d4c050c87a0a8af39bea0a9f0bed3a4dcae5ad5")throw Error("old public15.3 drift");return Buffer.from(text);
+}
+
+export function restorePublic153(bytes: Uint8Array): Buffer {
+  return restoreOriginalPublic153(restorePublic154Integration(bytes));
 }

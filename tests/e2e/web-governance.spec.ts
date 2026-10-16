@@ -37,7 +37,7 @@ test.describe("Web production boundary", () => {
     })
     const home = await page.goto("/", { waitUntil: "domcontentloaded" })
     expect(home?.status()).toBe(200)
-    await expect(page.getByRole("heading", { name: "把想法说给它，收回能用的成果" })).toBeVisible()
+    await expect(page.getByRole("heading", { name: "Tell it what you want, get back something you can use" })).toBeVisible()
     const login = await page.goto("/login", { waitUntil: "domcontentloaded" })
     expect(login?.status()).toBe(503)
     await expect(page.getByRole("heading", { name: "Sign in" })).toHaveCount(0)
@@ -594,7 +594,15 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 
     const searchBox = await search.boundingBox();
     expect(closeBox).not.toBeNull();
     expect(searchBox).not.toBeNull();
-    if (viewport.width === 390) expect(searchBox!.x + searchBox!.width).toBeLessThanOrEqual(closeBox!.x);
+    const modalBox = await modal.boundingBox();
+    expect(modalBox).not.toBeNull();
+    expect(searchBox!.x).toBeGreaterThanOrEqual(modalBox!.x);
+    expect(searchBox!.x + searchBox!.width).toBeLessThanOrEqual(modalBox!.x + modalBox!.width);
+    const disjoint = searchBox!.x + searchBox!.width <= closeBox!.x
+      || closeBox!.x + closeBox!.width <= searchBox!.x
+      || searchBox!.y + searchBox!.height <= closeBox!.y
+      || closeBox!.y + closeBox!.height <= searchBox!.y;
+    expect(disjoint).toBe(true);
     await page.screenshot({ path: testInfo.outputPath(`set40-search-${viewport.width}.png`), fullPage: true });
     await close.click();
     await expect(modal).toHaveCount(0);

@@ -69,6 +69,19 @@ async function withRedis<T>(url: string, operation: (client: ReturnType<typeof c
 export type StoreConfig = Readonly<{ redisUrl: string; webOrigin: string; secret: string }>
 export type SessionCandidate = Readonly<{ id: string; expiresAt: number }>
 
+// A Settings open starts several independent BFF reads at once. Coalesce only
+// their concurrent Redis admission inspection; entries are removed as soon as
+// Redis answers, so revocation remains visible to every later request.
+const sessionInspectionFlights = new Map<string, Promise<boolean>>();
+
+function sessionInspectionKey(
+  config: StoreConfig,
+  id: string,
+  generation: number,
+): string {
+  return JSON.stringify([config.redisUrl, config.webOrigin, id, generation]);
+}
+
 export function newSessionCandidate(): SessionCandidate {
   return { id: randomUUID(), expiresAt: Date.now() + PRODUCT_SESSION_MAX_AGE_SECONDS * 1_000 }
 }
@@ -88,12 +101,24 @@ export async function createSession(config: StoreConfig, refresh: string, candid
 }
 
 export async function inspectSession(config: StoreConfig, id: string, generation: number): Promise<boolean> {
-  const [record, tombstone] = keys(config.webOrigin, id)
-  const script = `if redis.call('EXISTS', KEYS[2]) == 1 then return 0 end
-    local raw=redis.call('GET', KEYS[1]); if not raw then return 0 end
-    local v=cjson.decode(raw); if v.state ~= 'active' or v.generation ~= tonumber(ARGV[1]) or v.expiresAt <= tonumber(ARGV[2]) then return 0 end
-    return 1`
-  return (await withRedis(config.redisUrl, (client) => client.eval(script, { keys: [record, tombstone], arguments: [String(generation), String(Date.now())] }))) === 1
+  const key = sessionInspectionKey(config, id, generation)
+  const joined = sessionInspectionFlights.get(key)
+  if (joined !== undefined) return joined
+  const inspection = (async () => {
+    const [record, tombstone] = keys(config.webOrigin, id)
+    const script = `if redis.call('EXISTS', KEYS[2]) == 1 then return 0 end
+      local raw=redis.call('GET', KEYS[1]); if not raw then return 0 end
+      local v=cjson.decode(raw); if v.state ~= 'active' or v.generation ~= tonumber(ARGV[1]) or v.expiresAt <= tonumber(ARGV[2]) then return 0 end
+      return 1`
+    return (await withRedis(config.redisUrl, (client) => client.eval(script, { keys: [record, tombstone], arguments: [String(generation), String(Date.now())] }))) === 1
+  })()
+  sessionInspectionFlights.set(key, inspection)
+  const clear = () => {
+    if (sessionInspectionFlights.get(key) === inspection)
+      sessionInspectionFlights.delete(key)
+  }
+  void inspection.then(clear, clear)
+  return inspection
 }
 
 export async function reserveRefresh(config: StoreConfig, id: string, generation: number): Promise<{ reservation: string; refresh: string } | null> {

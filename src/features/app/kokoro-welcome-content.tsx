@@ -91,7 +91,7 @@ export function DirectWelcomeContent({ brandName, composer, draft, selectedCreat
                   sideOffset={6}
                 >
                   <DropdownMenuItem onSelect={() => {
-                    onCreateProject?.(draft)
+                    onCreateProject?.({ draft })
                   }}>
                     {t("firstSite.newProject")}
                   </DropdownMenuItem>

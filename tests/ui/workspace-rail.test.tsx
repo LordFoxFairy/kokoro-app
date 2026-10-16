@@ -1,3 +1,8 @@
+import type { ConversationListController } from "@/ui/shell/use-conversation-list"
+import type { ConversationStore } from "@/core/conversations"
+import { createFakeClient, createMemoryStorage } from "../engine/fakes"
+import { createSessionEngine } from "@/engine/machine"
+import { createSessionClient } from "@/engine/client"
 // 侧栏会话重命名内联编辑（CONV-UX）：双击/✎ 进入编辑，Enter 提交、Escape 取消、空题与未改动不上抛。
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
@@ -5,17 +10,12 @@ import { readFileSync } from "node:fs"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 
 import { LocaleProvider } from "@/i18n/context"
-import { createSessionClient } from "@/engine/client"
-import { createSessionEngine } from "@/engine/machine"
-import { createFakeClient, createMemoryStorage } from "../engine/fakes"
-import type { ConversationStore } from "@/core/conversations"
 import { WorkspaceRailAccount } from "@/components/blocks/workspace-rail/workspace-rail-account"
 import { WorkspaceRail } from "@/components/blocks/workspace-rail/workspace-rail"
 import railStyles from "@/components/blocks/workspace-rail/workspace-rail.module.css"
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
 import type { ConversationSummary } from "@/ui/rail/rail-search"
 import * as pageClients from "@/ui/shell/page-clients"
-import type { ConversationListController } from "@/ui/shell/use-conversation-list"
 import { ThemeProvider } from "@/ui/theme/theme-context"
 import { act, useState } from "react"
 
@@ -107,6 +107,33 @@ function stubBusinessFetch<T extends typeof fetch>(businessFetch: T): T {
   return businessFetch
 }
 
+
+function retirementRailFixture() {
+  const transient = createSessionEngine({ client: createFakeClient(), storage: createMemoryStorage<ConversationStore>(null) })
+  const thread = transient.getSnapshot().thread
+  transient.dispose()
+  const list = createSessionClient({ baseUrl: "http://s.local" })
+  vi.spyOn(pageClients, "browserListClient").mockReturnValue(list)
+  const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+    const url = new URL(input instanceof Request ? input.url : String(input), window.location.origin)
+    const project = url.searchParams.get("project_ref")
+    return Response.json({ sessions: project === null ? [] : [{ session_id: `conv_${project}`, title: `会话${project}`, updated_at: "2026-10-01T00:00:00Z" }], next_cursor: null })
+  })
+  const props: Parameters<typeof WorkspaceRail>[0] = {
+    collapsed: false, onToggleCollapse: vi.fn(), onNewChat: vi.fn(), chatHref: "/app", conversations: [], activeId: null,
+    awaitingIds: new Set(), onSelectConversation: vi.fn(), onDeleteConversation: vi.fn().mockResolvedValue(true), onRenameConversation: vi.fn(), onOpenSettings: vi.fn(), listLoading: false, listError: false, hasMore: false, onLoadMore: vi.fn(),
+    projects: [{ id: "P", name: "同名专案", href: "/app/project/P" }, { id: "Q", name: "同名专案", href: "/app/project/Q" }], projectListStatus: "ready",
+    conversationReads: { engine: null, scope: { kind: "direct" }, currentController: {
+      conversations: [], loading: false, loadingMore: false, error: false, refresh: vi.fn(), hasMore: false,
+      loadMore: vi.fn(), selectConversation: vi.fn(), deleteConversation: vi.fn().mockResolvedValue(true),
+      renameConversation: vi.fn(), startNewChat: vi.fn(),
+    }, activeId: null, thread, isStreaming: false, identity: "retire-actor", admitted: true, scopeVersions: new Map(), failedMoveScopeKey: null, focusComposer: vi.fn(), onSelect: vi.fn(), onNewChat: vi.fn(), onMove: vi.fn(), onDeleteConfirmed: vi.fn() },
+  }
+  const frame = (admitted: boolean) => <ThemeProvider><LocaleProvider><WorkspaceRail {...props} conversationReads={{ ...props.conversationReads!, admitted }} /></LocaleProvider></ThemeProvider>
+  return { props, frame, fetchMock }
+}
+
+
 beforeEach(() => {
   adminAccessFetch.mockClear()
   window.localStorage.clear()
@@ -173,25 +200,6 @@ it("项目标题旁的加号打开新建专案菜单，不导航、不新建聊�
   expect(window.location.href).toBe(before)
   expect(onNewChat).not.toHaveBeenCalled()
   expect(onToggleCollapse).not.toHaveBeenCalled()
-})
-
-it("专案文件夹与普通清单并存，专案加号只创建专案，文件夹加号指定所属专案", async () => {
-  const onCreateProject = vi.fn()
-  const { onNewChat, onFolderNewChat, projectRef } = renderProjectFolderRail({ onCreateProject })
-  const projects = document.querySelector('[data-project-list="true"]') as HTMLElement
-  expect(projects).toHaveAttribute("aria-label", "专案")
-  expect(within(projects).getByRole("link", { name: "产品规划" })).toBeInTheDocument()
-  expect(within(projects).getByRole("link", { name: "发布清单" })).toBeInTheDocument()
-  expect(await screen.findByRole("button", { name: "整理需求" })).toBeInTheDocument()
-  expect(screen.getByRole("navigation", { name: "直接会话" })).toHaveTextContent("普通持久会话")
-  const newProject = screen.getByRole("button", { name: "新建专案" })
-  fireEvent.pointerDown(newProject, { button: 0 })
-  fireEvent.click(newProject)
-  fireEvent.click(await screen.findByRole("menuitem", { name: "新建专案" }))
-  fireEvent.click(screen.getByTestId("rail-new-project-conversation"))
-  expect(onCreateProject).toHaveBeenCalledTimes(1)
-  expect(onFolderNewChat).toHaveBeenCalledExactlyOnceWith({ kind: "project", projectRef })
-  expect(onNewChat).not.toHaveBeenCalled()
 })
 
 it("R170只把owner确认且非当前scope的目的地放入会话Move菜单", async () => {
@@ -380,11 +388,10 @@ it("选择新建专案后完成路由与草稿承接，并把焦点留在展开�
   expect(document.querySelector('[data-desktop-rail="true"][data-collapsed="false"]')).toBeInTheDocument()
 })
 
-it("桌面 Rail 显示邀请入口并进入团队设置", () => {
-  const { onOpenSettings } = renderRail({ brandName: "Kokoro" })
+it("桌面 Rail 暂不呈现独立的邀请朋友推广入口", () => {
+  renderRail({ brandName: "Kokoro" })
 
-  fireEvent.click(screen.getByRole("button", { name: "邀请朋友使用 Kokoro" }))
-  expect(onOpenSettings).toHaveBeenCalledWith("team")
+  expect(screen.queryByRole("button", { name: "邀请朋友使用 Kokoro" })).toBeNull()
 })
 
 it("桌面 Rail 的紧凑样式由实际 rail 模式标记驱动", () => {
@@ -393,12 +400,6 @@ it("桌面 Rail 的紧凑样式由实际 rail 模式标记驱动", () => {
   const rail = document.querySelector('[data-collapsed="false"]')
   expect(rail).toHaveAttribute("data-desktop-rail", "true")
   expect(rail).toHaveAttribute("data-desktop-web", "true")
-})
-
-it("收起 Rail 时不渲染邀请卡，避免占用图标轨道", () => {
-  renderRail({ collapsed: true, brandName: "Kokoro" })
-
-  expect(screen.queryByRole("button", { name: "邀请朋友使用 Kokoro" })).toBeNull()
 })
 
 it("默认品牌使用中性产品标记，不回退到旧手掌或心字符", () => {
@@ -453,17 +454,6 @@ it("收起态不复制直接会话或孤立专案会话 stop，并保留专案�
   expect(screen.queryByTestId("rail-utility-device")).toBeNull()
   expect(screen.getByTestId("rail-utility-notifications")).toHaveAttribute("data-rail-anchor", "utility")
   expect(screen.getByTestId("rail-utility-account")).toHaveAttribute("data-rail-anchor", "account")
-})
-
-it("当前专案由文件夹内的明确加号创建一次新会话，不替换全局新对话行为", async () => {
-  const { onNewChat, onFolderNewChat, projectRef } = renderProjectFolderRail()
-  await screen.findByRole("button", { name: "整理需求" })
-  expect(screen.queryByTestId("rail-project-conversation")).toBeNull()
-  fireEvent.click(screen.getByTestId("rail-new-project-conversation"))
-  expect(onFolderNewChat).toHaveBeenCalledExactlyOnceWith({ kind: "project", projectRef })
-  expect(onNewChat).not.toHaveBeenCalled()
-  fireEvent.click(screen.getByTestId("rail-new-conversation"))
-  expect(onNewChat).toHaveBeenCalledTimes(1)
 })
 
 it("展开态账户卡左对齐，通知动作保留在同一行", () => {
@@ -702,43 +692,6 @@ it("compactDesktop 模式变化时关闭账户菜单", async () => {
 
   act(() => setCollapsed(false))
   await waitFor(() => expect(screen.queryByRole("menu")).toBeNull())
-})
-
-it("专案侧栏保留普通会话清单与概览入口，所属会话嵌在文件夹内", async () => {
-  renderProjectFolderRail()
-  await screen.findByRole("button", { name: "整理需求" })
-  expect(screen.getByRole("link", { name: "Workspace" })).toHaveAttribute("href", "/app")
-  expect(screen.getByRole("navigation", { name: "直接会话" })).toHaveTextContent("普通持久会话")
-  const project = screen.getByRole("link", { name: "产品规划" }).closest('[data-project-id]') as HTMLElement
-  expect(within(project).getByRole("navigation", { name: "产品规划" })).toHaveAttribute("data-conversation-list", "project-conversation")
-  expect(screen.queryByRole("navigation", { name: "专案会话" })).toBeNull()
-  expect(screen.queryByText("没有匹配的会话")).toBeNull()
-})
-
-it("文件夹渲染owner返回的所属会话且不混入普通清单", async () => {
-  renderProjectFolderRail()
-  await screen.findByRole("button", { name: "整理需求" })
-  const folder = screen.getByRole("link", { name: "产品规划" }).closest('[data-project-id]') as HTMLElement
-  expect(within(folder).getByRole("button", { name: "整理需求" })).toBeInTheDocument()
-  expect(within(folder).queryByText("普通持久会话")).toBeNull()
-  const direct = screen.getByRole("navigation", { name: "直接会话" })
-  expect(within(direct).getByText("普通持久会话")).toBeInTheDocument()
-  expect(within(direct).queryByText("整理需求")).toBeNull()
-})
-
-it("当前scope复用主controller且仅非当前展开文件夹建立独立owner reader", async () => {
-  const { fetchMock, currentController } = renderProjectFolderRail()
-  await screen.findByRole("button", { name: "整理需求" })
-  await waitFor(() => expect(fetchMock).toHaveBeenCalled())
-  expect(fetchMock.mock.calls.map(([input]) => new URL(input instanceof Request ? input.url : String(input), window.location.origin)
-    .searchParams.get("project_ref"))).toEqual([null])
-  expect(currentController.refresh).not.toHaveBeenCalled()
-
-  const other = screen.getByRole("link", { name: "发布清单" }).closest('[data-project-id]') as HTMLElement
-  fireEvent.click(within(other).getByRole("button", { name: /展开专案 发布清单/u }))
-  await waitFor(() => expect(fetchMock.mock.calls.map(([input]) =>
-    new URL(input instanceof Request ? input.url : String(input), window.location.origin).searchParams.get("project_ref"),
-  )).toContain("project_b"))
 })
 
 it("桌面收起侧栏通过账户菜单打开设置", async () => {
@@ -1039,26 +992,24 @@ it("会话清单失败时提供重试入口，并保留已加载会话", () => {
   expect(screen.getByText("旧标题")).toBeInTheDocument()
 })
 
-it("会话清单加载态暴露 status，错误态暴露 alert", () => {
-  renderRail({ conversations: [], listLoading: true })
-  expect(screen.getByRole("status", { name: "正在加载会话…" })).toBeInTheDocument()
+it("侧栏初始读取保留无文字骨架，并向辅助技术暴露状态", () => {
+  renderRail({
+    conversations: [],
+    listLoading: true,
+    projectHref: "/app/project/alpha",
+    projectListStatus: "loading",
+  })
+
+  const conversationsLoading = screen.getByRole("status", { name: "正在加载会话…" })
+  const projectsLoading = screen.getByRole("status", { name: "正在加载专案…" })
+  expect(conversationsLoading).not.toHaveTextContent("正在加载会话…")
+  expect(projectsLoading).not.toHaveTextContent("正在加载专案…")
+  expect(conversationsLoading.querySelectorAll('[aria-hidden="true"]')).toHaveLength(2)
+  expect(projectsLoading.querySelectorAll('[aria-hidden="true"]')).toHaveLength(2)
 
   cleanup()
   renderRail({ conversations: [], listError: true, onRetryList: vi.fn() })
   expect(screen.getByRole("alert")).toHaveTextContent("会话列表加载失败")
-})
-
-it("文件夹明确的新对话入口只发所属意图，独立任务导航不创建会话", async () => {
-  const { onNewChat, onFolderNewChat, projectRef } = renderProjectFolderRail({ navigation: [{ key: "scheduled", label: "定时任务" }] })
-  await screen.findByRole("button", { name: "整理需求" })
-  expect(screen.queryByTestId("rail-project-conversation")).toBeNull()
-  // The global action remains present; the folder adds its explicit project target.
-  expect(screen.getAllByRole("button", { name: "新对话" })).toHaveLength(2)
-  fireEvent.click(screen.getByTestId("rail-new-project-conversation"))
-  expect(onFolderNewChat).toHaveBeenCalledExactlyOnceWith({ kind: "project", projectRef })
-  fireEvent.click(screen.getByRole("link", { name: "定时任务" }))
-  expect(onFolderNewChat).toHaveBeenCalledTimes(1)
-  expect(onNewChat).not.toHaveBeenCalled()
 })
 
 it("收起侧栏的新建专案只发创建意图，不把菜单事件当草稿", async () => {
@@ -1069,17 +1020,6 @@ it("收起侧栏的新建专案只发创建意图，不把菜单事件当草稿"
   fireEvent.click(picker)
   fireEvent.click(await screen.findByRole("menuitem", { name: "新建专案" }))
   expect(onCreateProject).toHaveBeenCalledExactlyOnceWith()
-})
-
-it("专案侧栏不渲染孤立会话气泡，文件夹加号是明确专案新对话入口", async () => {
-  renderProjectFolderRail()
-  await screen.findByRole("button", { name: "整理需求" })
-  expect(screen.getByTestId("rail-new-conversation")).toHaveAttribute("data-navigation-section", "new-conversation")
-  expect(screen.queryByTestId("rail-project-conversation")).toBeNull()
-  const explicitEntry = screen.getByTestId("rail-new-project-conversation")
-  expect(explicitEntry).toHaveAccessibleName("新对话")
-  expect(explicitEntry.querySelector(".lucide-plus")).not.toBeNull()
-  expect(explicitEntry.closest('[data-project-id]')).toHaveAttribute("data-project-id", "project_a")
 })
 
 it("会话重命名只提交 conversation 身份，canonical Project 名称与 id 原样保留", () => {
@@ -1097,6 +1037,47 @@ it("会话重命名只提交 conversation 身份，canonical Project 名称与 i
   expect(project).toHaveAttribute("href", "/app/project/canonical-project")
   expect(project.closest("[data-project-id]")).toHaveAttribute("data-project-id", "canonical-project")
   expect(document.querySelector('[data-project-list] a[aria-label="新会话标题"]')).toBeNull()
+})
+
+it("项目行的显式重命名动作交给路由 owner，不制造本地副本", () => {
+  const onRequestProjectRename = vi.fn()
+  renderRail({
+    projects: [{ id: "project_a", name: "独立项目名称", href: "/app/project/project_a" }],
+    projectListStatus: "ready",
+    onRequestProjectRename,
+  })
+
+  fireEvent.click(screen.getByRole("button", { name: "重命名项目" }))
+  expect(onRequestProjectRename).toHaveBeenCalledExactlyOnceWith("project_a")
+})
+
+it("当前项目展开后显示其独立空会话态，任务区不被替换", () => {
+  renderRail({
+    projects: [{ id: "project_a", name: "独立项目名称", href: "/app/project/project_a", active: true }],
+    projectListStatus: "ready",
+    projectHref: "/app/project/project_a",
+    projectActive: true,
+    conversations: [],
+    activeId: null,
+  })
+
+  expect(screen.getByRole("link", { name: "独立项目名称" })).toBeInTheDocument()
+  expect(screen.getByRole("button", { name: /收起专案 独立项目名称/ })).toHaveAttribute("aria-expanded", "true")
+  expect(screen.getByText("还没有专案会话。新建一个会话以开始。")).toBeInTheDocument()
+  expect(screen.getByRole("navigation", { name: "直接会话" })).toBeInTheDocument()
+})
+
+it("项目文件夹把展开控制与项目入口分开，入口始终保留文件夹标识", () => {
+  renderRail({
+    projects: [{ id: "project_a", name: "独立项目名称", href: "/app/project/project_a", active: true }],
+    projectListStatus: "ready",
+    projectHref: "/app/project/project_a",
+    projectActive: true,
+  })
+
+  const project = screen.getByRole("link", { name: "独立项目名称" })
+  expect(screen.getByRole("button", { name: /收起专案 独立项目名称/ })).toBeInTheDocument()
+  expect(project.querySelectorAll("svg")).toHaveLength(1)
 })
 
 it("正式 rail 只有当前路由而无集合时不造通用项目；显式 preview 仍独立", () => {
@@ -1123,84 +1104,6 @@ it("R254 当前项目选择不替换普通持久会话分区，项目名称仍�
 })
 
 
-function retirementRailFixture() {
-  const transient = createSessionEngine({ client: createFakeClient(), storage: createMemoryStorage<ConversationStore>(null) })
-  const thread = transient.getSnapshot().thread
-  transient.dispose()
-  const list = createSessionClient({ baseUrl: "http://s.local" })
-  vi.spyOn(pageClients, "browserListClient").mockReturnValue(list)
-  vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-    const url = new URL(input instanceof Request ? input.url : String(input), window.location.origin)
-    const project = url.searchParams.get("project_ref")
-    return Response.json({ sessions: project === null ? [] : [{ session_id: `conv_${project}`, title: `会话${project}`, updated_at: "2026-10-01T00:00:00Z" }], next_cursor: null })
-  })
-  const props: Parameters<typeof WorkspaceRail>[0] = {
-    collapsed: false, onToggleCollapse: vi.fn(), onNewChat: vi.fn(), chatHref: "/app", conversations: [], activeId: null,
-    awaitingIds: new Set(), onSelectConversation: vi.fn(), onDeleteConversation: vi.fn().mockResolvedValue(true), onRenameConversation: vi.fn(), onOpenSettings: vi.fn(), listLoading: false, listError: false, hasMore: false, onLoadMore: vi.fn(),
-    projects: [{ id: "P", name: "同名专案", href: "/app/project/P" }, { id: "Q", name: "同名专案", href: "/app/project/Q" }], projectListStatus: "ready",
-    conversationReads: { engine: null, scope: { kind: "direct" }, currentController: {
-      conversations: [], loading: false, loadingMore: false, error: false, refresh: vi.fn(), hasMore: false,
-      loadMore: vi.fn(), selectConversation: vi.fn(), deleteConversation: vi.fn().mockResolvedValue(true),
-      renameConversation: vi.fn(), startNewChat: vi.fn(),
-    }, activeId: null, thread, isStreaming: false, identity: "retire-actor", admitted: true, scopeVersions: new Map(), failedMoveScopeKey: null, focusComposer: vi.fn(), onSelect: vi.fn(), onNewChat: vi.fn(), onMove: vi.fn(), onDeleteConfirmed: vi.fn() },
-  }
-  const frame = (admitted: boolean) => <ThemeProvider><LocaleProvider><WorkspaceRail {...props} conversationReads={{ ...props.conversationReads!, admitted }} /></LocaleProvider></ThemeProvider>
-  return { props, frame }
-}
-
-it.each(["folder", "delete"] as const)("R254 同主体撤准入后%s意图真正退役，恢复不复活旧展开或删除确认", async (kind) => {
-  const { frame, props } = retirementRailFixture()
-  const view = render(frame(true))
-  const folder = document.querySelector('[data-project-id="P"]') as HTMLElement
-  const toggle = folder.querySelector<HTMLButtonElement>('button[aria-expanded]')!
-  fireEvent.click(toggle)
-  await within(folder).findByRole("button", { name: "会话P" })
-  if (kind === "delete") {
-    fireEvent.click(within(folder).getByRole("button", { name: "删除会话 会话P" }))
-    await screen.findByRole("alertdialog")
-  }
-  view.rerender(frame(false))
-  expect(screen.queryByRole("alertdialog")).toBeNull()
-  view.rerender(frame(true))
-  if (kind === "delete") expect(screen.queryByRole("alertdialog")).toBeNull()
-  else expect(document.querySelector('[data-project-id="P"] button[aria-expanded]')).toHaveAttribute("aria-expanded", "false")
-  expect(props.onDeleteConversation).not.toHaveBeenCalled()
-})
-
-it("R254 重名文件夹disclosure有独立可辨动作名，键盘Enter/Space只展开对应ID且概览Link不改", async () => {
-  const { frame } = retirementRailFixture()
-  render(frame(true))
-  window.history.replaceState({}, "", "/app")
-  const before = window.location.href
-  const p = document.querySelector('[data-project-id="P"]') as HTMLElement
-  const q = document.querySelector('[data-project-id="Q"]') as HTMLElement
-  const pToggle = p.querySelector<HTMLButtonElement>('button[aria-expanded]')!
-  const qToggle = q.querySelector<HTMLButtonElement>('button[aria-expanded]')!
-  expect(pToggle).toHaveAccessibleName(/展开.*同名专案/u)
-  expect(qToggle).toHaveAccessibleName(/展开.*同名专案/u)
-  expect(pToggle.getAttribute("aria-label")).not.toBe(qToggle.getAttribute("aria-label"))
-  expect(pToggle.getAttribute("aria-controls")).not.toBe(qToggle.getAttribute("aria-controls"))
-  expect(within(p).getByRole("link", { name: "同名专案" })).toHaveAttribute("href", "/app/project/P")
-  expect(within(q).getByRole("link", { name: "同名专案" })).toHaveAttribute("href", "/app/project/Q")
-  // Native buttons emit a keyboard click. jsdom has no default key activation;
-  // dispatch that click after the key events, without calling any controller.
-  pToggle.focus()
-  fireEvent.keyDown(pToggle, { key: "Enter" })
-  fireEvent.click(pToggle, { detail: 0 })
-  expect(pToggle).toHaveAttribute("aria-expanded", "true")
-  expect(qToggle).toHaveAttribute("aria-expanded", "false")
-  await within(p).findByRole("button", { name: "会话P" })
-  qToggle.focus()
-  fireEvent.keyDown(qToggle, { key: " " })
-  fireEvent.keyUp(qToggle, { key: " " })
-  fireEvent.click(qToggle, { detail: 0 })
-  await within(q).findByRole("button", { name: "会话Q" })
-  expect(pToggle).toHaveAttribute("aria-expanded", "true")
-  expect(qToggle).toHaveAttribute("aria-expanded", "true")
-  expect(window.location.href).toBe(before)
-})
-
-// R255 native account projection shares the published personal Credit reader.
 it.each([false, true])("账户菜单精确显示 available 且不虚构免费套餐（读取失败=%s）", async (failed) => {
   vi.spyOn(pageClients, "browserBillingClient").mockReturnValue({
     summary: failed ? vi.fn().mockRejectedValue(new Error("billing_unavailable")) : vi.fn().mockResolvedValue({ credit_account_id: "11111111-1111-4111-8111-111111111111", status: "active", available_micros: "9007199254740993", held_micros: "500000" }),
@@ -1287,66 +1190,35 @@ it("账户卸载真正abort且迟到completion不进入后续菜单", async () =
 })
 
 
-it("R255 稳定主体重核时隐藏私有分支，恢复后保留P/Q展开且Direct常驻", async () => {
-  const { props } = retirementRailFixture()
-  const frame = (admitted: boolean, generation: number) => {
-    const conversationReads = { ...props.conversationReads!, identity: `actor-A:gen${generation}`, admitted, folderIntentIdentity: "actor-A" }
-    return <ThemeProvider><LocaleProvider><WorkspaceRail {...props} conversationReads={conversationReads} /></LocaleProvider></ThemeProvider>
-  }
-  const view = render(frame(true, 1))
-  expect(screen.getByRole("navigation", { name: "直接会话" })).toBeInTheDocument()
-  for (const id of ["P", "Q"]) {
-    const toggle = document.querySelector<HTMLButtonElement>(`[data-project-id="${id}"] button[aria-expanded]`)
-    expect(toggle).not.toBeNull()
-    fireEvent.click(toggle!)
-    await screen.findByRole("button", { name: `会话${id}` })
-    expect(toggle).toHaveAttribute("aria-expanded", "true")
-  }
-
-  view.rerender(frame(false, 2))
-  expect(document.querySelectorAll('[data-conversation-list="project-conversation"]')).toHaveLength(0)
-  expect(screen.queryByRole("button", { name: "会话P" })).toBeNull()
-  expect(screen.queryByRole("button", { name: "会话Q" })).toBeNull()
-  expect(screen.getByRole("navigation", { name: "直接会话" })).toBeInTheDocument()
-
-  view.rerender(frame(true, 2))
-  for (const id of ["P", "Q"]) {
-    expect(document.querySelector(`[data-project-id="${id}"] button[aria-expanded]`)).toHaveAttribute("aria-expanded", "true")
-    await screen.findByRole("button", { name: `会话${id}` })
-  }
-  expect(screen.getByRole("navigation", { name: "直接会话" })).toBeInTheDocument()
-  expect(props.onDeleteConversation).not.toHaveBeenCalled()
-})
-
-it.each(["actor-B", null])("R255 展开意图遇主体%s再回A不复活旧P/Q分支", async (nextActor) => {
-  const { props } = retirementRailFixture()
+// SET49: main retired expandable project-task branches. Project links must
+// never start private folder reads during admission or identity transitions.
+it.each(["same-subject", "actor-B", null])("R255 project links retain no private P/Q task branches across %s retirement", async (nextActor) => {
+  const { props, fetchMock } = retirementRailFixture()
   const frame = (actor: string | null, generation: number, admitted: boolean) => {
     const conversationReads = { ...props.conversationReads!, identity: `${actor ?? "unknown"}:gen${generation}`, admitted, folderIntentIdentity: actor }
     return <ThemeProvider><LocaleProvider><WorkspaceRail {...props} conversationReads={conversationReads} /></LocaleProvider></ThemeProvider>
   }
   const view = render(frame("actor-A", 1, true))
-  for (const id of ["P", "Q"]) {
-    const toggle = document.querySelector<HTMLButtonElement>(`[data-project-id="${id}"] button[aria-expanded]`)
-    expect(toggle).not.toBeNull()
-    fireEvent.click(toggle!)
-    await screen.findByRole("button", { name: `会话${id}` })
+  const assertNoBranches = () => {
+    expect(document.querySelectorAll('[data-conversation-list="project-conversation"]')).toHaveLength(0)
+    for (const id of ["P", "Q"]) {
+      expect(document.querySelector(`[data-project-id="${id}"] button[aria-expanded]`)).toBeNull()
+      expect(screen.queryByRole("button", { name: `会话${id}` })).toBeNull()
+      expect(document.querySelector(`[data-project-id="${id}"] a`)).toHaveAttribute("href", `/app/project/${id}`)
+    }
+    expect(screen.getByRole("navigation", { name: "直接会话" })).toBeInTheDocument()
   }
-  view.rerender(frame(nextActor, 2, nextActor !== null))
-  expect(document.querySelectorAll('[data-conversation-list="project-conversation"]')).toHaveLength(0)
-  expect(screen.queryByRole("button", { name: "会话P" })).toBeNull()
-  expect(screen.queryByRole("button", { name: "会话Q" })).toBeNull()
-  expect(screen.getByRole("navigation", { name: "直接会话" })).toBeInTheDocument()
-
+  assertNoBranches()
+  view.rerender(frame(nextActor === "same-subject" ? "actor-A" : nextActor, 2, false))
+  assertNoBranches()
   view.rerender(frame("actor-A", 3, true))
-  for (const id of ["P", "Q"]) {
-    expect(document.querySelector(`[data-project-id="${id}"] button[aria-expanded]`)).toHaveAttribute("aria-expanded", "false")
-  }
   await act(async () => { await Promise.resolve() })
-  expect(document.querySelectorAll('[data-conversation-list="project-conversation"]')).toHaveLength(0)
-  expect(screen.queryByRole("button", { name: "会话P" })).toBeNull()
-  expect(screen.queryByRole("button", { name: "会话Q" })).toBeNull()
-  expect(screen.getByRole("navigation", { name: "直接会话" })).toBeInTheDocument()
+  assertNoBranches()
   expect(props.onDeleteConversation).not.toHaveBeenCalled()
+  for (const [input] of fetchMock.mock.calls) {
+    const url = new URL(input instanceof Request ? input.url : String(input), window.location.origin)
+    expect(url.searchParams.has("project_ref")).toBe(false)
+  }
 })
 
 it("ordinary account capability read uses its own exact endpoint and exposes no Admin entry", async () => {

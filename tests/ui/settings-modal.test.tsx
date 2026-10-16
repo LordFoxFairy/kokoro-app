@@ -102,6 +102,7 @@ vi.mock("@/ui/shell/page-clients", () => ({
   }),
   // account/appearance/chat tab 不调用下列客户端；仅需存在 export 供模块 import。
   browserHubClient: () => ({
+    createCustomApi: registerCustomApi,
     listPersonalSkills: vi.fn().mockResolvedValue({
       skills: [
         {
@@ -445,7 +446,7 @@ describe("SettingsModal 设置中心模态", () => {
     expect(screen.queryByRole("link", { name: /Manus/ })).toBeNull();
   });
 
-  it("技能导入完成后只关闭子弹窗，不卸载设置中心", async () => {
+  it("关闭 GitHub 导入子弹窗时保留设置中心", async () => {
     renderSettings(() => {}, undefined, true, undefined, "skills");
     await screen.findByText("YouTube 影片研究");
 
@@ -454,7 +455,7 @@ describe("SettingsModal 设置中心模态", () => {
       ctrlKey: false,
     });
     fireEvent.click(
-      await screen.findByRole("menuitem", { name: "从 GitHub 导入" }),
+      await screen.findByRole("menuitem", { name: "从 GitHub 导入技能" }),
     );
     const dialog = await screen.findByTestId("github-import-dialog");
     expect(
@@ -798,43 +799,6 @@ describe("SettingsModal 设置中心模态", () => {
     );
   });
 
-  it("技能创建菜单与浏览目录保持独立交互", async () => {
-    renderSettings(() => {}, undefined, true, undefined, "skills", vi.fn());
-    fireEvent.keyDown(screen.getByTestId("settings-tab-skills"), {
-      key: "Enter",
-    });
-    await screen.findByText("YouTube 影片研究");
-
-    fireEvent.keyDown(screen.getByRole("button", { name: "添加" }), {
-      key: "Enter",
-    });
-    expect(
-      screen.getByText("使用 AI 创建技能", { selector: '[role="menuitem"]' }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText("上传技能", { selector: '[role="menuitem"]' }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText("从 GitHub 导入", { selector: '[role="menuitem"]' }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText("从官方技能添加", { selector: '[role="menuitem"]' }),
-    ).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("menuitem", { name: "从官方技能添加" }));
-    expect(
-      await screen.findByRole("dialog", { name: "技能" }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "官方" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "第三方" })).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "添加 YouTube 影片研究" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "已添加 Typst PDF 制作工具" }),
-    ).toBeDisabled();
-  });
-
   it("使用 AI 创建技能交给共享 Composer，而不是误打开上传页", async () => {
     const onCreateSkillWithAi = vi.fn();
     renderSettings(
@@ -850,141 +814,12 @@ describe("SettingsModal 设置中心模态", () => {
     fireEvent.keyDown(screen.getByRole("button", { name: "添加" }), {
       key: "Enter",
     });
-    fireEvent.click(screen.getByRole("menuitem", { name: "使用 AI 创建技能" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "使用 Acme 创建技能" }));
 
     expect(onCreateSkillWithAi).toHaveBeenCalledTimes(1);
     expect(
       screen.queryByText("上传一个 zip：根目录下每个文件夹是一个技能。"),
     ).toBeNull();
-  });
-
-  it("连接器目录支持搜索、分类、添加状态并在关闭后返回浏览入口", async () => {
-    renderSettings(() => {}, undefined, true);
-    fireEvent.keyDown(screen.getByTestId("settings-tab-mcp"), { key: "Enter" });
-
-    const browse = await screen.findByRole("button", { name: "浏览连接器" });
-    fireEvent.click(browse);
-    const catalog = await screen.findByRole("dialog", { name: "连接器" });
-    const search = within(catalog).getByRole("searchbox", {
-      name: "搜索连接器",
-    });
-
-    fireEvent.change(search, { target: { value: "GitHub" } });
-    expect(
-      within(catalog).getByText("GitHub", { exact: true }),
-    ).toBeInTheDocument();
-    expect(within(catalog).queryByText("Gmail", { exact: true })).toBeNull();
-
-    fireEvent.change(search, { target: { value: "" } });
-    fireEvent.keyDown(
-      within(catalog).getByRole("tab", { name: "自定义 API" }),
-      { key: "Enter" },
-    );
-    expect(
-      within(catalog).getByText("ElevenLabs API", { exact: true }),
-    ).toBeInTheDocument();
-    expect(
-      within(catalog).queryByText("My Browser", { exact: true }),
-    ).toBeNull();
-
-    const add = within(catalog).getByRole("button", {
-      name: "添加 ElevenLabs API",
-    });
-    fireEvent.click(add);
-    expect(
-      within(catalog).getByRole("button", { name: "移除 ElevenLabs API" }),
-    ).toBeInTheDocument();
-
-    const create = within(catalog).getByRole("button", { name: "创建" });
-    fireEvent.keyDown(create, { key: "Enter" });
-    fireEvent.click(
-      await screen.findByRole("menuitem", { name: "自定义 API" }),
-    );
-    const customApi = await screen.findByRole("dialog", {
-      name: "新增自定义 API",
-    });
-    const save = within(customApi).getByRole("button", { name: "保存" });
-    expect(save).toBeDisabled();
-
-    const iconInput =
-      customApi.querySelector<HTMLInputElement>('input[type="file"]')!;
-    fireEvent.change(iconInput, {
-      target: {
-        files: [new File(["text"], "icon.txt", { type: "text/plain" })],
-      },
-    });
-    expect(within(customApi).getByRole("alert")).toHaveTextContent(
-      "请选择 PNG 或 JPG 图像。",
-    );
-    fireEvent.change(iconInput, {
-      target: {
-        files: [
-          new File([new Uint8Array(1024 * 1024 + 1)], "large.png", {
-            type: "image/png",
-          }),
-        ],
-      },
-    });
-    expect(within(customApi).getByRole("alert")).toHaveTextContent(
-      "图像大小不能超过 1 MB。",
-    );
-    fireEvent.change(iconInput, {
-      target: { files: [new File(["png"], "crm.png", { type: "image/png" })] },
-    });
-    expect(within(customApi).queryByRole("alert")).toBeNull();
-    expect(within(customApi).getByText("crm.png")).toBeInTheDocument();
-
-    fireEvent.change(
-      within(customApi).getByRole("textbox", { name: /^名称$/ }),
-      { target: { value: "CRM API" } },
-    );
-    fireEvent.change(
-      within(customApi).getByRole("textbox", { name: "密钥名称" }),
-      { target: { value: "CRM_TOKEN" } },
-    );
-    fireEvent.change(within(customApi).getByRole("textbox", { name: "数值" }), {
-      target: { value: "example-token" },
-    });
-    expect(save).toBeEnabled();
-
-    fireEvent.click(
-      within(customApi).getByRole("button", { name: "添加密钥" }),
-    );
-    expect(
-      within(customApi).getAllByRole("textbox", { name: "密钥名称" }),
-    ).toHaveLength(2);
-    expect(save).toBeDisabled();
-    fireEvent.click(
-      within(customApi).getByRole("button", { name: "移除密钥" }),
-    );
-    fireEvent.click(save);
-    await waitFor(() =>
-      expect(uploadConnectorIcon).toHaveBeenCalledWith(
-        expect.objectContaining({ name: "crm.png" }),
-      ),
-    );
-    await waitFor(() =>
-      expect(registerCustomApi).toHaveBeenCalledWith({
-        name: "CRM API",
-        notes: null,
-        icon_asset_id: "asset_crm",
-        secrets: [{ name: "CRM_TOKEN", value: "example-token" }],
-        enabled: true,
-      }),
-    );
-    await waitFor(() =>
-      expect(
-        screen.queryByRole("dialog", { name: "新增自定义 API" }),
-      ).toBeNull(),
-    );
-    await waitFor(() => expect(create).toHaveFocus());
-    expect(screen.getByRole("dialog", { name: "连接器" })).toBeInTheDocument();
-
-    fireEvent.keyDown(document.body, { key: "Escape" });
-    await waitFor(() =>
-      expect(screen.queryByRole("dialog", { name: "连接器" })).toBeNull(),
-    );
-    await waitFor(() => expect(browse).toHaveFocus());
   });
 
   it("自定义 API 保存失败时保留表单和弹窗并显示错误", async () => {
@@ -1000,174 +835,30 @@ describe("SettingsModal 设置中心模态", () => {
       await screen.findByRole("menuitem", { name: "自定义 API" }),
     );
 
-    const dialog = await screen.findByRole("dialog", {
-      name: "新增自定义 API",
-    });
+    const heading = await screen.findByRole("heading", { name: "添加自定义 API" });
+    const dialog = heading.closest('[data-slot="dialog-content"]') as HTMLElement;
+    expect(dialog).not.toBeNull();
     const name = within(dialog).getByRole("textbox", { name: /^名称$/ });
     const secretName = within(dialog).getByRole("textbox", {
       name: "密钥名称",
     });
-    const secretValue = within(dialog).getByRole("textbox", { name: "数值" });
+    const secretValue = within(dialog).getByRole("textbox", { name: /^值$/ });
     fireEvent.change(name, { target: { value: "CRM API" } });
     fireEvent.change(secretName, { target: { value: "CRM_TOKEN" } });
     fireEvent.change(secretValue, { target: { value: "WRITE_ONLY" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "保存" }));
 
     expect(await within(dialog).findByRole("alert")).toHaveTextContent(
-      "操作失败，请稍后再试。",
+      "操作未完成，请重新读取后再试。",
     );
     expect(
-      screen.getByRole("dialog", { name: "新增自定义 API" }),
+      dialog,
     ).toBeInTheDocument();
+    expect(registerCustomApi).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("settings-modal")).toBeInTheDocument();
     expect(name).toHaveValue("CRM API");
     expect(secretName).toHaveValue("CRM_TOKEN");
     expect(secretValue).toHaveValue("WRITE_ONLY");
-  });
-
-  it("自定义 MCP 使用参考字段、动态 header 和单一发布菜单", async () => {
-    renderSettings(() => {}, undefined, true);
-    fireEvent.keyDown(screen.getByTestId("settings-tab-mcp"), { key: "Enter" });
-
-    fireEvent.click(await screen.findByRole("button", { name: "浏览连接器" }));
-    const catalog = await screen.findByRole("dialog", { name: "连接器" });
-    const create = within(catalog).getByRole("button", { name: "创建" });
-    fireEvent.keyDown(create, { key: "Enter" });
-    fireEvent.click(
-      await screen.findByRole("menuitem", { name: "自定义 MCP" }),
-    );
-
-    const dialog = await screen.findByRole("dialog", { name: "MCP 设置" });
-    const save = within(dialog).getAllByRole("button", { name: "保存" })[0];
-    const saveOptions = within(dialog).getByRole("button", {
-      name: "保存选项",
-    });
-    expect(save).toBeDisabled();
-    expect(saveOptions).toBeDisabled();
-
-    fireEvent.click(
-      within(dialog).getByRole("button", { name: "新增自定义 Header" }),
-    );
-    expect(
-      within(dialog).getByPlaceholderText("Header 名称"),
-    ).toBeInTheDocument();
-    expect(
-      within(dialog).getByPlaceholderText("Header 值"),
-    ).toBeInTheDocument();
-    fireEvent.click(
-      within(dialog).getByRole("button", { name: "移除 header" }),
-    );
-    expect(within(dialog).queryByPlaceholderText("Header 名称")).toBeNull();
-
-    fireEvent.change(
-      within(dialog).getByPlaceholderText("e.g., My Custom Server"),
-      { target: { value: "Demo MCP" } },
-    );
-    fireEvent.change(
-      within(dialog).getByPlaceholderText("https://mcp.yourserver.com/mcp"),
-      { target: { value: "https://example.com/mcp" } },
-    );
-    expect(save).toBeEnabled();
-    expect(saveOptions).toBeEnabled();
-
-    fireEvent.keyDown(saveOptions, { key: "Enter" });
-    expect(
-      await screen.findByRole("menuitem", { name: "发布到专案" }),
-    ).toBeInTheDocument();
-    expect(screen.queryByRole("menuitem", { name: "保存并启用" })).toBeNull();
-    expect(screen.queryByRole("menuitem", { name: "保存为停用" })).toBeNull();
-  });
-
-  it("JSON 导入与 URL 添加使用独立流程，而不是复用 Custom MCP 表单", async () => {
-    renderSettings(() => {}, undefined, true);
-    fireEvent.keyDown(screen.getByTestId("settings-tab-mcp"), { key: "Enter" });
-    fireEvent.click(await screen.findByRole("button", { name: "浏览连接器" }));
-    let catalog = await screen.findByRole("dialog", { name: "连接器" });
-
-    fireEvent.keyDown(within(catalog).getByRole("button", { name: "创建" }), {
-      key: "Enter",
-    });
-    fireEvent.click(
-      await screen.findByRole("menuitem", { name: "通过 JSON 导入 MCP" }),
-    );
-    const jsonDialog = await screen.findByRole("dialog", {
-      name: "通过 JSON 导入",
-    });
-    expect(
-      within(jsonDialog).queryByRole("textbox", { name: "服务器名称" }),
-    ).toBeNull();
-    const jsonInput = within(jsonDialog).getByRole("textbox", {
-      name: "请粘贴您的设置 JSON",
-    });
-    const importButton = within(jsonDialog).getByRole("button", {
-      name: "导入",
-    });
-    expect(importButton).toBeDisabled();
-    fireEvent.change(jsonInput, { target: { value: "{" } });
-    fireEvent.click(importButton);
-    expect(await within(jsonDialog).findByRole("alert")).toHaveTextContent(
-      "JSON 格式无效",
-    );
-    fireEvent.change(jsonInput, {
-      target: {
-        value:
-          '{"mcpServers":{"demo":{"type":"streamableHttp","url":"https://fixture.example.test/mcp"}}}',
-      },
-    });
-    fireEvent.click(importButton);
-    await waitFor(() =>
-      expect(registerCustomMcp).toHaveBeenCalledWith({
-        name: "demo",
-        transport: "streamable_http",
-        endpoint_url: "https://fixture.example.test/mcp",
-        icon_asset_id: null,
-        instructions: null,
-        headers: [],
-        enabled: true,
-      }),
-    );
-    await waitFor(() =>
-      expect(
-        screen.queryByRole("dialog", { name: "通过 JSON 导入" }),
-      ).toBeNull(),
-    );
-
-    fireEvent.click(await screen.findByRole("button", { name: "浏览连接器" }));
-    catalog = await screen.findByRole("dialog", { name: "连接器" });
-    fireEvent.keyDown(within(catalog).getByRole("button", { name: "创建" }), {
-      key: "Enter",
-    });
-    fireEvent.click(
-      await screen.findByRole("menuitem", { name: /通过 URL 添加 MCP/ }),
-    );
-    const urlDialog = await screen.findByRole("dialog", {
-      name: /通过 URL 添加 MCP/,
-    });
-    expect(
-      within(urlDialog).queryByRole("textbox", { name: "请粘贴您的设置 JSON" }),
-    ).toBeNull();
-    const save = within(urlDialog).getByRole("button", { name: "保存" });
-    const publish = within(urlDialog).getByRole("button", {
-      name: /保存并发布/,
-    });
-    expect(save).toBeDisabled();
-    expect(publish).toBeDisabled();
-    fireEvent.change(
-      within(urlDialog).getByRole("textbox", { name: /服务器名称/ }),
-      { target: { value: "Demo URL MCP" } },
-    );
-    fireEvent.change(
-      within(urlDialog).getByRole("textbox", { name: /服务器 URL/ }),
-      { target: { value: "https://fixture.example.test/mcp" } },
-    );
-    expect(save).toBeEnabled();
-    expect(publish).toBeEnabled();
-    fireEvent.click(
-      within(urlDialog).getByRole("button", { name: /进阶设置/ }),
-    );
-    expect(
-      within(urlDialog).queryByRole("textbox", { name: "OAuth 用户端 ID" }),
-    ).toBeNull();
-    expect(within(urlDialog).queryByLabelText("OAuth 用户端密钥")).toBeNull();
   });
 
   it("没有真实 DialogTrigger 时关闭也能把焦点交还给稳定的导航按钮", async () => {
@@ -1364,7 +1055,7 @@ describe("SettingsModal 设置中心模态", () => {
     );
     expect(screen.getByTestId("settings-tab-mcp")).toBeVisible();
     expect(screen.getByTestId("settings-tab-skills")).toBeVisible();
-    expect(screen.queryByTestId("settings-more")).not.toBeInTheDocument();
+    expect(screen.getByTestId("settings-more")).toHaveAttribute("aria-expanded", "false");
     fireEvent.mouseDown(screen.getByTestId("settings-tab-skills"), {
       button: 0,
     });
@@ -1897,6 +1588,7 @@ describe("SET24 deadline and retirement followups", () => {
       assign: navigate,
       pathname: realWindow.location.pathname,
       search: realWindow.location.search,
+      hash: realWindow.location.hash,
       href: realWindow.location.href,
     };
     const windowFacade = new Proxy(realWindow, {

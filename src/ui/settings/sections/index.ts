@@ -10,3 +10,5 @@ export { ShortcutsCard } from "./shortcuts-card";
 
 export { DataManagementSection } from "./data-management-section"
 export { HelpSection } from "./help-section"
+export { SkillsSettingsSection } from "./skills-settings-section";
+export { ConnectorsSettingsSection } from "./connectors-settings-section";

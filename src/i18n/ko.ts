@@ -689,6 +689,7 @@ export const ko: Partial<Record<MessageKey, string>> = {
   "mcp.errSecretRef": "선택한 자격 증명이 잘못되었거나 존재하지 않습니다.",
   "mcp.errNotFound": "연결을 찾을 수 없습니다.",
   "mcp.errInvalid": "잘못된 입력: 이름, URL, 전송 방법을 확인하세요.",
+  "mcp.errDuplicateUrl": "이 서버 URL은 이미 추가되어 있습니다. 기존 커넥터를 편집하거나 다른 URL을 사용하세요.",
   "mcp.errGeneric": "작업이 실패했습니다. 나중에 다시 시도해 주세요.",
   "composer.modelSwitch": "모델 전환",
   "composer.modelLocked": "모델: {model}(이 라운드에 고정됨)",

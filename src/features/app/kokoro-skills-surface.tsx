@@ -4,7 +4,7 @@ import type { GithubImported } from "@/ui/skills/personal-skill-github-import-fl
 
 import Image from "next/image"
 import { useCallback, useMemo, useRef, useState } from "react"
-import { Check, ChevronDown, LoaderCircle, Plus, Search, SquarePen, Upload, X } from "lucide-react"
+import { Check, CircleDot, ChevronDown, LoaderCircle, Plus, Search, SquarePen, Upload, X } from "lucide-react"
 
 import type { EmptyStateProps } from "@/components/blocks/app-frame/app-frame"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -71,20 +71,27 @@ function formatUsage(value: string): string {
   return `${compact >= 100 ? Math.round(compact) : compact.toFixed(1).replace(/\.0$/u, "")}k`
 }
 
-type KokoroSkillsSurfaceProps = Pick<EmptyStateProps, "preview" | "onPrompt" | "brandName" | "onOpenSettings" | "onCreateSkillWithAi" | "onTrySkill">
+type KokoroSkillsSurfaceProps = Pick<EmptyStateProps, "preview" | "onPrompt" | "brandName" | "onOpenSettings" | "onCreateSkillWithAi" | "onTrySkill" | "projectReadBoundary">
 
 export function KokoroSkillsSurface(props: KokoroSkillsSurfaceProps) {
   return <PreviewKokoroSkillsSurface {...props} />
 }
 
-function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kokoro", onOpenSettings, onCreateSkillWithAi, onTrySkill }: KokoroSkillsSurfaceProps) {
+function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kokoro", onOpenSettings, onCreateSkillWithAi, onTrySkill, projectReadBoundary }: KokoroSkillsSurfaceProps) {
   const t = useT()
+  const readBoundary = projectReadBoundary ?? { admitted: preview, subject: preview ? "preview" : null, generation: 0 }
   const publisherLabel = (skill: Pick<SkillCatalogCard, "scope">) => skill.scope === "third_party" ? t("skills.community") : brandName
   const categoryLabel = (value: CatalogSkillCategory) => t(CATEGORIES.find((item) => item.value === value)?.key ?? "skills.categoryCoding")
-  const client = useMemo(() => {
-    const base = browserHubClient({ preview })
-    return preview ? base : createManusSkillHubClient(base)
-  }, [preview])
+  // The standalone page and the embedded Settings page must consume the same
+  // owner-backed Skills projection.  The generic Hub client still addresses
+  // the retired `/self/skills/catalog` route, which the BFF deliberately
+  // rejects; leaving it here made the outer Skills page fail while Settings
+  // appeared healthy.  Keep one typed read adapter for both entry points so
+  // a tab switch never turns into a different data contract or an error card.
+  const client = useMemo(
+    () => preview ? browserHubClient({ preview }) : createManusSkillHubClient(browserHubClient({ preview })),
+    [preview],
+  )
   const catalog = useResource<SkillCatalog>(
     `${SKILL_CATALOG_RESOURCE_KEY}/${preview ? "preview" : "live"}`,
     useCallback(() => client.listSkillCatalog(), [client]),
@@ -257,14 +264,20 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
             {query ? <Button type="button" variant="ghost" size="icon-xs" aria-label={t("skills.clearSearch")} onClick={() => setQuery("")}><X aria-hidden="true" /></Button> : null}
           </label>
           <div className={styles.headerActions}>
-            <Button type="button" variant="outline" className={styles.mySkillsButton} onClick={(event) => onOpenSettings?.("skills", event.currentTarget)}>{t("skills.mySkills")}</Button>
+            <Button
+              type="button"
+              variant="outline"
+              className={styles.mySkillsButton}
+              onClick={(event) => onOpenSettings?.("skills", event.currentTarget, { skillsScope: "personal" })}
+            >{t("skills.mySkills")}</Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button ref={createRef} type="button" variant="outline" className={styles.createButton}>{t("skills.create")}<ChevronDown aria-hidden="true" /></Button>
+                <Button ref={createRef} type="button" variant="outline" className={styles.createButton}>{t("skills.createMarketplace")}<ChevronDown aria-hidden="true" /></Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className={styles.createMenu}>
                 <DropdownMenuGroup>
                   <DropdownMenuItem onSelect={() => onCreateSkillWithAi ? onCreateSkillWithAi() : startChat(t("skills.createPrompt"))}><span className={styles.createMenuIcon}><SquarePen aria-hidden="true" /></span>{t("skills.createWithBrand", { brand: brandName })}</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => onCreateSkillWithAi ? onCreateSkillWithAi(t("skills.recordPrompt")) : startChat(t("skills.recordPrompt"))}><span className={styles.createMenuIcon}><CircleDot aria-hidden="true" /></span>{t("skills.recordSkill")}</DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => { uploadRef.current = createRef.current; setUploadOpen(true) }}><span className={styles.createMenuIcon}><Upload aria-hidden="true" /></span>{t("skills.uploadSkill")}</DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => { githubRef.current = createRef.current; setGithubOpen(true) }}><span className={styles.createMenuIcon}><Image src="/assets/connectors/github.webp" alt="" width={16} height={16} /></span>{t("skills.importGithub")}</DropdownMenuItem>
                 </DropdownMenuGroup>
@@ -280,18 +293,20 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
             {t("skills.added")} {lastAddedSkill}
           </span>
         ) : null}
-          <div className={styles.content}>
-          <nav className={styles.categoryTabs} aria-label={t("skills.categoryAria")}>
-            {CATEGORIES.map(({ value, key }) => (
-              <button
-                key={value}
-                type="button"
-                aria-pressed={category === value}
-                onClick={() => setCategory(value)}
-              >
-                {t(key)}
-              </button>
-            ))}
+        <div className={styles.content}>
+          <nav className={styles.categoryFilter} aria-label={t("skills.categoryAria")}>
+            <div className={styles.compactCategoryTabs} role="group" aria-label={t("skills.categoryAria")}>
+              {CATEGORIES.map(({ value, key }) => (
+                <button
+                  key={value}
+                  type="button"
+                  data-active={category === value || undefined}
+                  onClick={() => setCategory(value)}
+                >
+                  {t(key)}
+                </button>
+              ))}
+            </div>
           </nav>
 
           {importNotice ? (
@@ -309,7 +324,17 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
           ) : catalog.error !== undefined && catalog.data === undefined ? (
             <div className={styles.errorState} role="alert"><p>{t("skills.loadError")}</p><Button type="button" variant="outline" onClick={catalog.refetch} disabled={catalog.loading}>{catalog.loading ? <Spinner aria-hidden="true" /> : null}{t("skills.retry")}</Button></div>
           ) : filtered.length === 0 ? (
-            <div className={styles.emptyState} data-testid="skills-catalog-empty"><Search aria-hidden="true" /><p>{t("skills.noMatch")}</p></div>
+            <div className={styles.emptyState} data-testid="skills-catalog-empty">
+              <Search aria-hidden="true" />
+              {displayedCatalog?.skills.length === 0 && query.trim() === "" && category === "all" ? (
+                <>
+                  <p>{t("skills.empty")}</p>
+                  <span>{t("skills.emptyGuide")}</span>
+                </>
+              ) : (
+                <p>{t("skills.noMatch")}</p>
+              )}
+            </div>
           ) : (
             <>
               <div className={styles.grid} data-testid="skills-catalog-grid">
@@ -334,7 +359,9 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
                     }}
                   >
                     <button type="button" className={styles.cardArt} onClick={(event) => { detailRef.current = event.currentTarget; setDetailSkill(skill) }} aria-label={`${t("skills.viewDetails")} ${skill.name}`}>
-                      {skill.cover_image ? <Image src={skill.cover_image} alt="" fill sizes="(max-width: 42rem) 100vw, 30rem" unoptimized /> : <span className={styles.coverUnavailable} aria-hidden="true"><BrandFallback /></span>}
+                      <span className={styles.bookCover}>
+                        {skill.cover_image ? <Image src={skill.cover_image} alt="" fill sizes="(max-width: 42rem) 7.5rem, 7.5rem" unoptimized /> : <span className={styles.coverUnavailable} aria-hidden="true"><BrandFallback /></span>}
+                      </span>
                     </button>
                     <CardContent className={styles.cardBody}>
                       <button type="button" className={styles.cardTitle} onClick={(event) => { detailRef.current = event.currentTarget; setDetailSkill(skill) }}>{skill.name}</button>
@@ -368,9 +395,10 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
         </div>
       </main>
 
-      <GithubImportDialog open={githubOpen} onOpenChange={setGithubOpen} returnFocusRef={githubRef} onImported={handleImported} />
-      <SkillUploadDialog open={uploadOpen} onOpenChange={setUploadOpen} returnFocusRef={uploadRef} onPublished={() => invalidate(`${SKILL_CATALOG_RESOURCE_KEY}/${preview ? "preview" : "live"}`)} />
+      <GithubImportDialog readBoundary={readBoundary} open={githubOpen} onOpenChange={setGithubOpen} returnFocusRef={githubRef} onImported={handleImported} />
+      <SkillUploadDialog readBoundary={readBoundary} open={uploadOpen} onOpenChange={setUploadOpen} returnFocusRef={uploadRef} onPublished={() => invalidate(`${SKILL_CATALOG_RESOURCE_KEY}/${preview ? "preview" : "live"}`)} />
       <ManusSkillDetailDialog
+        readBoundary={readBoundary}
         key={detailSkill?.skill_id ?? "closed"}
         skill={currentDetailSkill}
         publisherLabel={detailSkill === null ? "" : publisherLabel(detailSkill)}

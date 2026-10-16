@@ -11,6 +11,8 @@ type SettingsPanelHeaderProps = {
   tab: SettingsTab;
   accountLoginMethods: boolean;
   onBackFromLoginMethods: () => void;
+  skillsCatalogOpen?: boolean;
+  onBackFromSkillsCatalog?: () => void;
 };
 
 function panelTitle(
@@ -50,26 +52,32 @@ export function SettingsPanelHeader({
   tab,
   accountLoginMethods,
   onBackFromLoginMethods,
+  skillsCatalogOpen = false,
+  onBackFromSkillsCatalog,
 }: SettingsPanelHeaderProps) {
   const { t } = useLocale();
   const hasDescription = tab === "shortcuts" || tab === "personalization";
+  const showingSkillsCatalog = tab === "skills" && skillsCatalogOpen;
   const title = accountLoginMethods
     ? t("settings.loginMethod")
-    : panelTitle(t, tab);
+    : showingSkillsCatalog
+      ? t("skills.browse")
+      : panelTitle(t, tab);
 
   return (
     <header
       className={styles.panelHeader}
       data-panel={tab}
       data-with-description={hasDescription || undefined}
+      data-skills-catalog-open={showingSkillsCatalog || undefined}
     >
       <h1 className={styles.panelTitle}>
-        {accountLoginMethods ? (
+        {accountLoginMethods || showingSkillsCatalog ? (
           <button
             type="button"
             className={styles.panelBack}
-            onClick={onBackFromLoginMethods}
-            aria-label={t("settings.loginMethod")}
+            onClick={accountLoginMethods ? onBackFromLoginMethods : onBackFromSkillsCatalog}
+            aria-label={accountLoginMethods ? t("settings.loginMethod") : t("skills.addedTitle")}
           >
             <ChevronRight aria-hidden="true" />
           </button>

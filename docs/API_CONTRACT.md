@@ -1,3 +1,10 @@
+## SET49 主线与设置契约组合（2026-10-16）
+
+本次不增加浏览器API或授权能力。Web继续只消费BFF固定发行，承接主线已批准的MCP契约删除以及现设置账户/分享/归档增量；所有既有生成组必须从同一正式owner全文、commit、digest正规再生成，不混合pin或手改generated。当前已运行实例不因源码push自动切换。
+
+
+当前固定BFF30df0c428c592ed2710d62035ceb5855d20c7506/public16.0.0/146，全文SHA-256 b4e91483e425fdcc9547eac8bcda554273cbee0863ccb0ddfb185fae18e4e267。严格继承主线四个MCP公开写操作退休；七段精确逆向仅为测试保留旧设置契约oracle，不进入产品。下方SET47 pin属历史发行。
+
 ## SET47 归档任务同源消费者（2026-10-15；已消费正式owner候选）
 
 SET47传输边界补充：WHATWG会规范化单独的`.`/`..`段及其percentencoded形式；BFF保持原始HTTP的exact encodeURIComponent契约。Web对仅这两个历史ID在任何fetch前拒绝并将动作禁用、解释不可用；不使用双重解码/替代API，也不宣称任意历史ID浏览器皆可操作。其余合法Unicode ID不限制为conv UUID。依据：[URL Standard](https://url.spec.whatwg.org/#single-dot-url-path-segment)。

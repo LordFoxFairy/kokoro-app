@@ -7,20 +7,23 @@
 // 会话态由 AppFrame 保证（仅在信封有效时渲染），本组件不再自持匿名闸。
 // 壳层只编排导航与面板；每个设置能力在 sections/ 或独立产品面板中维护。
 
-import { useMemo, useRef, useState, type RefObject } from "react";
-import { cn } from "@/lib/utils";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 
+import { cn } from "@/lib/utils";
 import { useLocale } from "@/i18n/context";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { Tabs, TabsContent } from "@/components/ui/tabs";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs } from "@/components/ui/tabs";
 import { browserHubClient, browserTeamClient } from "@/ui/shell/page-clients";
 import type { SkillCard } from "@/hub/schemas";
+import type { SkillsScopeFilter } from "@/ui/skills/skills-scope";
 import styles from "./settings-modal.module.css";
 import { useOverlayClose } from "@/ui/shell/use-overlay-close";
+import { settingsSkillsScopeFromLocation } from "./settings-location";
+import { useWarmMcpProjection } from "@/ui/mcp/use-mcp-projection";
+import { warmCustomApiProjection } from "@/ui/mcp/use-custom-api-projection";
+
 import { SettingsNavigation } from "./settings-navigation";
-import { SettingsPanelContent } from "./settings-panel-content";
-import { SettingsPanelHeader } from "./settings-panel-header";
+import { SettingsPanel } from "./settings-panel";
 import { SETTINGS_TABS, type SettingsTab } from "./settings-types";
 
 export type { SettingsTab } from "./settings-types";
@@ -68,6 +71,8 @@ type SettingsModalProps = {
   readBoundary?: import("@/ui/auth/use-session-state").ProjectReadBoundary;
   // 打开时的初始 tab(shell 从入口/URL 传入);变化即重置内部 tab(支持重开切 tab)。
   initialTab: SettingsTab;
+  /** Optional entry intent for the one shared Skills panel. */
+  initialSkillsScope?: SkillsScopeFilter;
   onClose: () => void;
   /** Controlled Dialogs have no trigger in the shell; return focus to the invoking control. */
   returnFocusRef?: RefObject<HTMLElement | null>;
@@ -75,7 +80,7 @@ type SettingsModalProps = {
   focusScopeRef?: RefObject<HTMLElement | null>;
   // 内部切 tab 时上抛,供 shell 同步 URL `?settings=`(刷新/深链/可分享)。
   onTabChange?: (tab: SettingsTab) => void;
-  onCreateSkillWithAi?: () => void;
+  onCreateSkillWithAi?: (prompt?: string) => void;
   onTrySkill?: (skill: SkillCard) => void;
 };
 
@@ -85,6 +90,7 @@ export function SettingsModal({
   readBoundary,
   onArchiveChanged,
   initialTab,
+  initialSkillsScope,
   onClose,
   onTabChange,
   returnFocusRef,
@@ -94,6 +100,9 @@ export function SettingsModal({
 }: SettingsModalProps) {
   const { t } = useLocale();
   const resolvedBrandName = brandName ?? "Kokoro";
+  // `/settings/skills/personal` is the marketplace handoff URL used by Manus.
+  // A reload keeps the same one-panel intent; direct Settings opens keep All.
+  const resolvedInitialSkillsScope = initialSkillsScope ?? settingsSkillsScopeFromLocation();
   // Keep the mounted shell immediately responsive to a rail click, then
   // reconcile it with a deep link or outer-shell change. The previous
   // render-only value made the modal depend on parent navigation to reflect
@@ -104,7 +113,6 @@ export function SettingsModal({
     value: SettingsTab;
   }>(() => ({ source: initialTab, value: initialTab }));
   const tab = localTab.source === initialTab ? localTab.value : initialTab;
-  const [accountLoginMethods, setAccountLoginMethods] = useState(false);
   const { open, requestClose } = useOverlayClose(onClose);
   const activeTabRef = useRef<HTMLButtonElement | null>(null);
   // Keep one injected Hub client for the lifetime of the settings surface.
@@ -113,23 +121,31 @@ export function SettingsModal({
   // instead of a process singleton.
   const hubClient = useMemo(() => browserHubClient({ preview }), [preview]);
   const teamClient = useMemo(() => browserTeamClient({ preview }), [preview]);
-  // Preview-only name toggles stay local to this mounted fixture. Formal
-  // Chat selection is exact source_ref state owned by the engine, not a name store.
-  const [previewPinnedSkills, setPreviewPinnedSkills] = useState<
-    readonly string[]
-  >([]);
-
-  const togglePreviewPinnedSkill = (name: string): void => {
-    setPreviewPinnedSkills((current) =>
-      current.includes(name)
-        ? current.filter((item) => item !== name)
-        : [...current, name],
-    );
-  };
-
+  useWarmMcpProjection({
+    client: hubClient,
+    identity: preview
+      ? "preview"
+      : readBoundary?.admitted === true
+        ? readBoundary.subject
+        : null,
+  });
+  // Custom API profiles share the same Settings entry point as MCP rows. Warm
+  // them here so opening the connector tab joins a settled owner read instead
+  // of briefly showing an empty or loading collection.
+  const connectorIdentity = preview
+    ? "preview"
+    : readBoundary?.admitted === true
+      ? readBoundary.subject
+      : null;
+  useEffect(() => {
+    if (connectorIdentity === null) return undefined;
+    return warmCustomApiProjection({
+      client: hubClient,
+      identity: connectorIdentity,
+    });
+  }, [connectorIdentity, hubClient]);
   const selectTab = (next: SettingsTab): void => {
     setLocalTab({ source: initialTab, value: next });
-    if (next !== "account") setAccountLoginMethods(false);
     onTabChange?.(next);
   };
 
@@ -156,6 +172,7 @@ export function SettingsModal({
             if (
               target instanceof Element &&
               (target.closest('[data-slot="dialog-content"]') !== null ||
+                target.closest("[data-settings-compact-more-menu]") !== null ||
                 // DropdownMenu content is portalled to document.body. Without
                 // treating it as an owned child surface, selecting Skills →
                 // Create → GitHub is seen as an outside click and the Settings
@@ -185,9 +202,13 @@ export function SettingsModal({
             // useful entry point from. Start keyboard users on the selected tab
             // instead of leaving focus on the rail trigger/body.
             event.preventDefault();
+            // Let the browser reveal a deep-linked tab in the same scrolling
+            // rail that owns keyboard focus. Preventing scroll here left the
+            // selected Skills tab off-screen after a hard refresh.
             activeTabRef.current?.focus({ preventScroll: true });
             window.requestAnimationFrame(() => {
-              activeTabRef.current?.focus({ preventScroll: true });
+              const modal = activeTabRef.current?.closest('[data-testid="settings-modal"]');
+              if (!modal?.contains(document.activeElement)) activeTabRef.current?.focus({ preventScroll: true });
             });
           }}
           onCloseAutoFocus={(event) => {
@@ -222,61 +243,24 @@ export function SettingsModal({
                 brandName={resolvedBrandName}
                 selectedTab={tab}
                 activeTabRef={activeTabRef}
-                onSelectSetting={selectTab}
+                onSelectTab={selectTab}
               />
 
-              {SETTINGS_TABS.map((panelTab) => (
-                <TabsContent
-                  key={panelTab}
-                  value={panelTab}
-                  className={styles.content}
-                  data-testid={`settings-panel-${panelTab}`}
-                >
-                  {panelTab === tab ? (
-                    <ScrollArea
-                      key={panelTab}
-                      className={cn(
-                        styles.contentBody,
-                        panelTab === "shortcuts" && styles.shortcutsBody,
-                        panelTab === "mcp" && styles.mcpBody,
-                      )}
-                      tabIndex={0}
-                    >
-                      <div className={styles.contentColumn}>
-                        <SettingsPanelHeader
-                          tab={panelTab}
-                          accountLoginMethods={accountLoginMethods}
-                          onBackFromLoginMethods={() =>
-                            setAccountLoginMethods(false)
-                          }
-                        />
-                        <SettingsPanelContent
-                          {...(onArchiveChanged===undefined?{}:{onArchiveChanged})}
-                          tab={panelTab}
-                          brandName={resolvedBrandName}
-                          preview={preview}
-                          {...(readBoundary === undefined
-                            ? {}
-                            : { readBoundary })}
-                          hubClient={hubClient}
-                          teamClient={teamClient}
-                          accountLoginMethods={accountLoginMethods}
-                          previewPinnedSkills={previewPinnedSkills}
-                          onAccountLoginMethodsChange={setAccountLoginMethods}
-                          onOpenSubscription={() => selectTab("subscription")}
-                          onTogglePreviewPinnedSkill={togglePreviewPinnedSkill}
-                          onOpenPricing={() => selectTab("subscription")}
-                          onSelectSetting={selectTab}
-                          {...(onCreateSkillWithAi === undefined
-                            ? {}
-                            : { onCreateSkillWithAi })}
-                          {...(onTrySkill === undefined ? {} : { onTrySkill })}
-                        />
-                      </div>
-                    </ScrollArea>
-                  ) : null}
-                </TabsContent>
-              ))}
+              <SettingsPanel
+                activeTab={tab}
+                {...(onArchiveChanged === undefined ? {} : { onArchiveChanged })}
+                {...(resolvedInitialSkillsScope === undefined ? {} : { initialSkillsScope: resolvedInitialSkillsScope })}
+                brandName={resolvedBrandName}
+                preview={preview}
+                {...(readBoundary === undefined ? {} : { readBoundary })}
+                hubClient={hubClient}
+                teamClient={teamClient}
+                onSelectTab={selectTab}
+                {...(onCreateSkillWithAi === undefined
+                  ? {}
+                  : { onCreateSkillWithAi })}
+                {...(onTrySkill === undefined ? {} : { onTrySkill })}
+              />
             </div>
           </Tabs>
         </DialogContent>

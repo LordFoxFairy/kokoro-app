@@ -84,9 +84,9 @@
   display: none;
 }
 
-/* Embedded Settings owns the page heading and toolbar. The pool/upload
- * switch is an implementation detail here and must not occupy a second
- * visible navigation row (the standalone Skills dialog still shows it). */
+/* The shared Settings header owns the page title. The pool/upload switch is
+ * an implementation detail here and must not occupy a second visible
+ * navigation row (the standalone Skills dialog still shows it). */
 .tabs.embeddedTabs[data-orientation="horizontal"] .tabList {
   display: none;
 }
@@ -316,7 +316,10 @@
     justify-content: center;
   }
   .embeddedCreate {
-    width: 4rem;
+    /* Manus uses an explicit plus, label and chevron in this control. Its
+       116px measured footprint keeps the browse action beside search rather
+       than leaving a misleading empty gulf in the toolbar. */
+    width: 7.25rem;
     justify-content: center;
   }
 }
@@ -400,6 +403,23 @@
   text-align: center;
 }
 
+/* The installed-skills empty state is a quiet center stage in Manus, not a
+ * message pinned immediately beneath the filters. The icon retains the same
+ * affordance when owner data is genuinely empty. */
+.embeddedBody .emptyState {
+  min-height: 25rem;
+  justify-content: center;
+  padding: 0 1rem;
+}
+.embeddedBody .emptyState :global([data-slot="empty-icon"]) {
+  margin: 0 0 0.25rem;
+  color: var(--muted-foreground);
+}
+.embeddedBody .emptyState :global([data-slot="empty-icon"] svg) {
+  width: 1.75rem;
+  height: 1.75rem;
+  stroke-width: 1.75;
+}
 .noMatch {
   min-height: 8rem;
   padding: 1.25rem;
@@ -1240,7 +1260,22 @@
   .tabs.embeddedTabs { padding: 0; }
   .body { padding: 1.35rem 2rem 2rem; }
   .embeddedBody { padding-inline: 0; }
-  .list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
+  .embeddedSearchField { width: 20rem; }
+  /* The desktop settings workbench uses the same two-column installed-card
+   * grid as Manus. The compact sheet below retains one column, so a viewport
+   * change changes density rather than card behavior. */
+  .embeddedBody .list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+  }
+  .embeddedBody .installedCard[data-slot="card"] {
+    height: 13.75rem;
+    min-height: 13.75rem;
+  }
+  .embeddedBody .installedCardMeta {
+    margin-top: auto;
+  }
   .item { min-height: 8.45rem; padding: 1rem; border-radius: var(--radius-lg); }
   .itemContent { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; gap: 0.75rem; }
   .itemMain { min-width: 0; }
@@ -1253,9 +1288,8 @@
   .filterBar { margin-bottom: 1rem; }
 }
 
-/* The same catalogue geometry must apply to a desktop browser whose CSS
- * viewport is reduced by zoom. Settings selects the wide two-column shell by
- * pointer capability, so Skills must use the matching card grid as well. */
+/* Pointer precision must not change the information architecture. The desktop
+ * breakpoint above, rather than input hardware, owns the two-column mode. */
 @media (pointer: fine) {
   .embeddedBody .list {
     display: grid;
@@ -1360,7 +1394,9 @@
   display: grid;
   min-height: 0;
   flex: 1;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  /* Explore is a reader-first directory: one full-width skill row preserves
+   artwork/detail affordances instead of compressing the result into tiles. */
+  grid-template-columns: minmax(0, 1fr);
   grid-auto-rows: 8.4375rem;
   gap: 0.75rem;
   overflow-y: auto;
@@ -1408,6 +1444,16 @@
 .catalogLoadError button {
   min-width: 5rem;
 }
+
+.catalogMore {
+  display: flex;
+  min-height: 2.75rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  padding: 0 1.5rem 1rem;
+}
+.catalogMore > button { min-width: 5rem; }
 
 .catalogEmpty { grid-column: 1 / -1; min-height: 12rem; border: 0; }
 .uploadBack { align-self: flex-start; margin-bottom: 0.5rem; padding-inline: 0; }
@@ -1479,6 +1525,39 @@
 
 }
 
+/* At the compact Settings width the former fixed 200px search field and
+ * 116px create control occupied more horizontal space than their grid track.
+ * The search therefore painted over the Browse button: it looked visible but
+ * intercepted the click. Keep all three controls in their assigned tracks,
+ * using the Manus compact Create footprint. */
+@media (max-width: 47.99rem) {
+  .tabs.embeddedTabs .embeddedBody {
+    /* Manus starts the installed-skills toolbar 8px below the shared Settings
+     * rail. The desktop 24px lead left an extra 16px band in compact mode. */
+    padding-top: 0.5rem;
+  }
+
+  .embeddedBody .list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .embeddedSearchField {
+    width: auto;
+  }
+
+  /* The compact Settings card has only the remaining content viewport below
+   * the shared nav and two-row toolbar. A desktop-sized 25rem empty stage
+   * pushes its title and guidance below the clipped dialog instead of
+   * centering a usable empty state. */
+  .embeddedBody .emptyState {
+    min-height: 10.25rem;
+  }
+
+  .embeddedCreate {
+    width: 5.25rem;
+  }
+}
+
 /* The Settings surface remains a horizontal control row at the compact Web
  * width used by the reference (the 2x browser capture is 447 CSS px). The
  * previous 640px breakpoint stacked the search field and scope selector,
@@ -1503,4 +1582,184 @@
     padding-inline: 0.35rem;
     line-height: 1.15;
   }
+}
+
+/* Settings keeps the shared navigation shell when exploring the catalog.
+ * The catalog is a right-pane state, not a second modal stacked on the first. */
+.catalogInline {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: visible;
+}
+.catalogInline .catalogSearch {
+  width: 100%;
+  height: 2rem;
+  min-height: 2rem;
+  margin: 0 0 0.75rem;
+  padding-inline: 0.625rem;
+  border: 1px solid color-mix(in srgb, var(--foreground) 13%, transparent);
+  background: transparent;
+}
+.catalogInline .catalogSearch > svg { width: 1rem; height: 1rem; }
+.catalogInline .catalogSearch :global(input) { height: 1.25rem; min-height: 1.25rem; font-size: 0.875rem; }
+.catalogInline .catalogToolbar { padding: 0 0 0.5rem; }
+.catalogInline .catalogGrid {
+  display: block;
+  min-height: 0;
+  flex: 0 0 auto;
+  overflow: visible;
+  padding: 0.5rem 0 1.5rem;
+}
+/* Manus renders Settings Explore as a continuous reader list, not a stack of
+ * floating cards. Keep its separators and content axis local to this inline
+ * view; the standalone catalog remains a dialog with its own card geometry. */
+.catalogInline .catalogCard[data-slot="card"] {
+  height: auto;
+  min-height: 0;
+  border-width: 0 0 1px;
+  border-radius: 0;
+  background: transparent;
+}
+.catalogInline .catalogCardContent[data-slot="card-content"] {
+  display: block;
+  height: auto;
+}
+.catalogCardRow {
+  display: grid;
+  height: 100%;
+  grid-template-columns: 6.25rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+}
+.catalogInline .catalogCardRow {
+  height: auto;
+  min-height: 6.875rem;
+  padding: 0.75rem 0;
+}
+.catalogInline .catalogCover { width: 5rem; height: 5rem; border-radius: 0.5rem; }
+.catalogInline .catalogCardAction { min-width: 3.75rem; }
+.catalogInline .catalogCardAction > button { min-width: 3.75rem; padding-inline: 0.5rem; }
+.catalogCover {
+  position: relative;
+  width: 6.25rem;
+  height: 6.25rem;
+  overflow: hidden;
+  border-radius: 0.625rem;
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+}
+.catalogCover :global(img) { object-fit: cover; }
+.catalogCardCopy {
+  min-width: 0;
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+  text-align: start;
+}
+.catalogCardCopy:focus-visible {
+  border-radius: 0.5rem;
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+.catalogCardName {
+  margin: 0;
+  overflow: hidden;
+  color: var(--foreground);
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.375rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.catalogCardDescription {
+  display: -webkit-box;
+  margin: 0.25rem 0 0;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.catalogCardCopy .installedCardMeta { margin-top: 0.45rem; }
+.catalogCardAction {
+  display: flex;
+  min-width: 5.25rem;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.375rem;
+}
+.catalogCardAction > button { min-width: 5.25rem; gap: 0.25rem; }
+.catalogCardError { width: 100%; margin: 0; text-align: right; }
+
+@media (max-width: 42rem) {
+  .catalogCardRow { grid-template-columns: 3.75rem minmax(0, 1fr) auto; gap: 0.75rem; padding-inline: 0.75rem; }
+  .catalogCover { width: 3.75rem; height: 3.75rem; }
+  .catalogCardAction { min-width: auto; }
+  .catalogCardAction > button { min-width: 0; padding-inline: 0.625rem; }
+}
+
+/* The inline catalog is measured against the same single toolbar row as
+ * Manus: search consumes the flexible column and the scope menu occupies the
+ * fixed trailing control. Keep the standalone catalog's vertical composition
+ * untouched. */
+.catalogControls { display: contents; }
+.catalogInlineControls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 0.5rem;
+  /* Settings supplies part of the lead beneath the Explore divider. A single
+   * 16px complement matches Manus; the former additional 24px band pushed
+   * search and the first result visibly too low. */
+  margin-bottom: 0.5rem;
+  padding-top: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--foreground) 9%, transparent);
+}
+.catalogInline .catalogInlineControls .catalogSearch {
+  width: auto;
+  min-width: 0;
+  margin: 0;
+}
+.catalogInline .catalogInlineControls .catalogToolbar {
+  height: auto;
+  min-height: 0;
+  padding: 0;
+}
+.catalogScopeFilter {
+  height: 2rem;
+  min-height: 2rem;
+  gap: 0.3125rem;
+  padding-inline: 0.625rem;
+  border-color: color-mix(in srgb, var(--foreground) 12%, transparent);
+  background: transparent;
+  box-shadow: none;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+.catalogScopeFilter > svg { width: 1rem; height: 1rem; }
+
+/* Settings Explore uses the compact directory control from Manus: one search
+ * field plus a trailing category menu. Installed Skills keeps its separate
+ * scope controls; catalog categories never become a second visible tab row. */
+.catalogInlineControls {
+  grid-template-rows: 2rem;
+  row-gap: 0;
+}
+.catalogInline .catalogInlineControls .catalogToolbar {
+  display: block;
+}
+.catalogScopeFilterMenu { min-width: 9rem; }
+.catalogScopeFilterMenu :global([data-slot="dropdown-menu-item"]) {
+  justify-content: space-between;
+}
+.catalogScopeFilterMenu :global([data-slot="dropdown-menu-item"] > svg) {
+  width: 1rem;
+  height: 1rem;
 }

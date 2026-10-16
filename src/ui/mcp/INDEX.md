@@ -1,20 +1,21 @@
 # ui/mcp — 连接面板
 
-## W3 第二阶段 A 当前边界
-正式 Settings/MCP 与面板经 `mcp-projection-read.tsx` 只渲染 BFF 六个 owner-native 字段、opaque cursor；URL、secret、revision、allowed_tools 和启停/删除不进入正式视图。以下旧池、凭据、操作控件只服务显式 preview fixture，非 BFF 当前 public 投影。
+## 当前边界
+正式 Settings/MCP 与目录经 `mcp-projection-read.tsx` 渲染 BFF owner-native 投影和 opaque cursor，并通过现有 CAS 命令完成编辑、启停、删除和授权重试；URL、secret、revision、allowed_tools 不进入正式视图。旧的 server pool、凭据池和 preview 入口已删除，不保留兼容分支。
 
-## 职责
-hub self 面 MCP server 池（注册/启停/软删）+ 凭据 handle 管理（创建/列表/删除，值只进不出）。
+Settings 的已添加连接器由同一 owner 投影渲染为可聚焦的紧凑卡片；搜索只过滤当前已读取页的真实名称、说明和已解析 provider 名称，不展示 opaque `provider_key`。卡片打开现有 CAS 管理弹窗，编辑、启停、删除及授权重试仍通过正式命令；仅在 owner 返回前后游标时显示分页。
+Settings 的 Browse 与空态添加入口打开独立目录弹窗，不替换已添加列表；目录和已添加列表各自保留搜索条件。外部 Plugins 页面继续以内联目录呈现，但与弹窗复用同一 provider 投影、卡片生成和详情/Connect 行为。
+Provider 目录与个人连接列表分别读取、分别保留成功投影并独立显示失败/重试；任一 owner read 延迟或失败不阻塞另一侧已成功内容。每份投影绑定当前 read identity，身份变化时旧数据立即退出渲染，inflight 仍按订阅生命周期取消。
+OAuth 点击同步预开并隔离 popup，再使用 owner 返回的 HTTPS URL；callback Complete 在 StrictMode 下共享 inflight，只通过 BroadcastChannel 发送 connector_id 触发 owner projection 重读，不广播 code/state/token，也不以通知判定 active。popup 阻止时不发起 owner command，关闭、过期与卸载均清理句柄。
 
-## 公开件
-- `McpPanel`（`mcp-panel.tsx`）：props `client: HubClient` / `onClose`。
+创建入口严格按 Manus 已观察顺序拆分为 `custom-api`、`custom-mcp`、`json` 与 `url`；它们不得落入同一个泛化表单。Custom MCP 先显示详情层，再进入独立 `MCP 配置`；Custom API 使用独立 profile/环境变量详情。JSON 的来源格式含 STDIO、SSE、Streamable HTTP，必须只调用 Platform 原子 import contract：浏览器不得把 JSON 拆成多个 Register 请求或把非 HTTP 条目改写为 HTTP。当前该 Platform 能力尚未进入 BFF/App 的固定发布 artifact，旧的单项浏览器导入实现是待删除项，不能作为功能闭环证据。URL 的 BYO OAuth 字段仅属于 URL 高级层，值只提交给 owner，不在投影或浏览器存储回显。
 
-## 协作者
-- `@/hub/client`（纯请求）、`@/hub/schemas`（`MCP_TRANSPORTS` 等）。
-- `@/lib/query`：server+secret 合并读走 `useResource("hub/mcp")`；任一变更后 `invalidate("hub/mcp")`。
+## 当前组件职责
 
-## 陷阱
-- secrets 尽力而为：secret broker 未配置（503）容错回空池，不拖垮整个面板。
-- official server 只读（徽标标注）；namespace 自有项可启停/软删。
-- 凭据 value 只进不出：secret_ref 恒为 `handle:srt_...` 引用或 null。
-- hub 拒绝（mutation 门 / 私网 URL / 非法凭据引用）经错误码人话化（`humanizeError`）。
+- `mcp-projection-read.tsx`：用户意图与 v1 owner command 协调；不保存第二份投影。
+- `use-mcp-projection.ts`：按身份、资源和 cursor 共享单飞投影读取，保留最后确认结果。
+- `mcp-provider-directory.tsx` / `mcp-connection-list.tsx`：仅负责真实 owner 投影的筛选与卡片呈现。
+- `mcp-provider-catalog-dialog.tsx`、`mcp-provider-detail-dialog.tsx`、`mcp-connector-editor-dialog.tsx`：分别拥有目录、Provider 详情、Provider 生命周期编辑的焦点/弹窗边界。
+- `custom-mcp-detail-dialog.tsx`：只拥有自定义 MCP 的详情、管理菜单与 `MCP 配置`；读取 owner-issued server ID 后才渲染，绝不按显示名猜类型。
+- `custom-api-detail-dialog.tsx` / `custom-api-form.tsx` / `use-custom-api-projection.ts`：只拥有 Custom API profile 的安全详情和编辑；环境变量值永不进入读取视图。
+- `mcp-projection-types.ts`：共享的投影视图类型、分类词汇和 owner artwork/status 映射；不含请求或模拟数据。

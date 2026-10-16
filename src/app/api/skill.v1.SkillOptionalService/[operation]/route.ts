@@ -19,6 +19,32 @@ function error(code: string, status: number): Response {
   })
 }
 
+async function boundedMutationBody(response: Response): Promise<Uint8Array> {
+  if (response.body === null) throw new Error("skill_response_invalid")
+  const reader = response.body.getReader()
+  const chunks: Uint8Array[] = []
+  let size = 0
+  try {
+    for (;;) {
+      const item = await reader.read()
+      if (item.done) break
+      size += item.value.byteLength
+      if (size > 65_536) throw new Error("skill_response_invalid")
+      chunks.push(item.value)
+    }
+  } finally {
+    void reader.cancel().catch(() => undefined)
+    reader.releaseLock()
+  }
+  const body = new Uint8Array(size)
+  let offset = 0
+  for (const chunk of chunks) {
+    body.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return body
+}
+
 export async function POST(request: Request, context: { params: Promise<{ operation: string }> }): Promise<Response> {
   const { operation } = await context.params
   if (!OPERATIONS.has(operation)) return error("skill_operation_not_found", 404)
@@ -68,6 +94,31 @@ export async function POST(request: Request, context: { params: Promise<{ operat
   if (contentType === null || !JSON_MEDIA_TYPE.test(contentType) || requestIdHeader === null) {
     await upstream.body?.cancel()
     return error("skill_response_invalid", 502)
+  }
+  // Command callers deliberately do not consume a response body. Drain this
+  // small JSON acknowledgement before replying so the Node upstream stream can
+  // finish and the button does not remain pending behind an unread bridge.
+  if (operation === "SetSkillInstallationEnabled") {
+    let mutationBody: Uint8Array
+    try {
+      mutationBody = await boundedMutationBody(upstream)
+    } catch {
+      return error("skill_response_invalid", 502)
+    }
+    // A fresh Uint8Array owns an ArrayBuffer (rather than the generic
+    // ArrayBufferLike view returned by stream readers), which is a valid
+    // Response BodyInit in the server runtime.
+    const bufferedMutationBody = new Uint8Array(mutationBody.byteLength)
+    bufferedMutationBody.set(mutationBody)
+    return new Response(bufferedMutationBody.buffer, {
+      status: upstream.status,
+      headers: {
+        "content-type": contentType,
+        "content-length": String(mutationBody.byteLength),
+        "cache-control": "private, no-store",
+        "x-request-id": requestIdHeader,
+      },
+    })
   }
   return new Response(upstream.body, {
     status: upstream.status,

@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useT } from "@/i18n/context";
 import { cn } from "@/lib/utils";
 import { TeamClientError, type TeamClient } from "@/team/client";
@@ -158,7 +159,7 @@ function TeamActiveContent({
           </Button>
         </div>
       ) : snapshot === null ? (
-        <p className={styles.hint}>{t("team.loading")}</p>
+        <div className={styles.loadingState} role="status" aria-label={t("team.loading")}><Skeleton className={styles.loadingLine} /><Skeleton className={styles.loadingLine} /></div>
       ) : (
         <>
           {notice && (

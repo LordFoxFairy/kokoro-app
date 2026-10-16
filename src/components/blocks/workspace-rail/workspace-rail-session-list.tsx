@@ -20,6 +20,7 @@ import { filterConversations, type ConversationSummary } from "@/ui/rail/rail-se
 
 import { useWorkspaceRailActions, type RailDragKind, type RailDragProps, type RailDragState } from "./workspace-rail-actions"
 import { itemStyles } from "./workspace-rail-styles"
+import { WorkspaceRailLoadingPlaceholder } from "./workspace-rail-loading-placeholder"
 import { WorkspaceRailSessionItem } from "./workspace-rail-session-item"
 import type { ConversationMoveIntent } from "@/engine/engine-types"
 import { DIRECT_SESSION_SCOPE, sessionScopeKey, type SessionScope } from "@/engine/session-scope"
@@ -29,6 +30,9 @@ import type { RailConversationReads, WorkspaceRailProps } from "./workspace-rail
 export type WorkspaceRailSessionListProps = {
   projectActive: boolean
   groupLabel?: string
+  /** The shell may own a section disclosure (for the top-level task list).
+   * Nested project lists retain their own compact action row. */
+  hideSectionHeader?: boolean
   blocked?: boolean
   compactDesktop: boolean
   searchOpen: boolean
@@ -71,6 +75,7 @@ export type WorkspaceRailSessionListProps = {
 export function WorkspaceRailSessionList({
   projectActive,
   groupLabel,
+  hideSectionHeader = false,
   blocked = false,
   compactDesktop,
   searchOpen,
@@ -123,7 +128,7 @@ export function WorkspaceRailSessionList({
     >
       {!compactDesktop ? (
         <>
-          <div className={itemStyles.sectionRow}>
+          {!hideSectionHeader ? <div className={itemStyles.sectionRow}>
             {/* `conversations` is already scope-filtered by the host. */}
             <p className={itemStyles.section}>{groupLabel ?? (projectActive ? t("firstSite.projectConversations") : t("rail.directChats"))}</p>
             {projectActive ? (
@@ -161,7 +166,7 @@ export function WorkspaceRailSessionList({
                 </DropdownMenu>
               </div>
             ) : null}
-          </div>
+          </div> : null}
           {conversationMoveFailed ? (
             <div className={itemStyles.listNotice} role="alert">{t("rail.moveFailed")}</div>
           ) : null}
@@ -178,7 +183,10 @@ export function WorkspaceRailSessionList({
               ) : null}
             </div>
           ) : listLoading && !hasConversations ? (
-            <p className={itemStyles.empty} role="status" aria-label={t("rail.listLoading")}>{t("rail.listLoading")}</p>
+            <WorkspaceRailLoadingPlaceholder
+              label={t("rail.listLoading")}
+              testId="conversations-loading"
+            />
           ) : ordered.length > 0 ? (
             <>
               {listError && onRetryList ? (
@@ -322,7 +330,7 @@ export function ConversationGroup({ scopeKey, onRenameConversation, onReorderCon
 
 type ScopedGroupProps = Pick<WorkspaceRailSessionListProps,
   "compactDesktop" | "query" | "searchOpen" | "awaitingIds" | "closeNavigation" | "onNewChat" |
-  "groupLabel" | "conversationMove" | "conversationMovePending" | "conversationMoveFailed" | "onRetryConversationMove"
+  "groupLabel" | "hideSectionHeader" | "conversationMove" | "conversationMovePending" | "conversationMoveFailed" | "onRetryConversationMove"
 > & {
   scope: SessionScope
   reads: RailConversationReads

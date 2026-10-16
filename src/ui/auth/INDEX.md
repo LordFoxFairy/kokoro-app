@@ -23,7 +23,7 @@
 
 ## 公开件
 - `useSessionState`（`use-session-state.ts`）：探正式 `GET /api/auth/session` → `"checking"|"pass"|"anonymous"|"unavailable"`；preview 仅由非生产显式开关放行，探针故障保持显式重试面，不降级为 anonymous。
-- `useSessionProbe`：在同一探针结果中保留 `preview|authenticated` 模式，供 `/app` 选择 Preview Transport 或真实 Session BFF。
+- `useSessionProbe`：在同一探针结果中保留 `preview|authenticated` 模式，供 `/app` 选择 Preview Transport 或真实 Session BFF；同一浏览器返回产生的 focus/visibility 事件共用一次未决检查和一次 read-boundary generation，pagehide 仍会退役该轮并允许 pageshow 建立新检查。
 - `/` 是固定 Kokoro 公开首页；`/login` 是固定 Product RP 登录；`/app` 是受保护工作台。`/auth/sign-in` 只承载 IAM issuer 交互，不是 Product 登录页。
 - `AppGate`（`app-gate.tsx`）：`/app` 的认证闸；首文档由 app layout 复用 Product Session owner 判定，anonymous 在 SSR 阶段转到固定 `/login`，配置或 Redis 故障显示可手动 reload 重验的 fail-closed unavailable；authenticated 才渲染产品工作台。挂载后的 AppGate 继续真实探针、focus/revocation 与原生 document sign-in 恢复，System manifest 仅在已验证时覆盖品牌、导航与 feature flags。
 - 首次可信身份按 UI subject marker 决定是否清理 Web 自有会话索引；同 subject 新文档不清。身份切换先撤销 Project 读取、清理索引并硬刷新，旧引擎不承接新主体；marker 不参与认证或授权。

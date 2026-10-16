@@ -376,17 +376,21 @@
 
 .accountIdentityRow {
   display: flex;
+  min-width: 0;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
 }
 
 .accountSettings[data-settings-card] {
+  min-width: 0;
   width: 100%;
   padding-top: 1.5rem;
 }
 
 .accountIdentityRow .identity {
+  min-width: 0;
+  flex: 1 1 auto;
   margin-bottom: 0;
 }
 .accountIdentityRow > button {
@@ -528,6 +532,7 @@
 }
 
 .accountDetailRows {
+  min-width: 0;
   margin-top: 0.9375rem;
 }
 
@@ -544,6 +549,7 @@
 .accountDetailRow > div {
   display: flex;
   min-width: 0;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: 0.15rem;
 }
@@ -556,9 +562,12 @@
 }
 
 .accountDetailRow span {
+  overflow: hidden;
   color: var(--muted-foreground);
   font-size: 0.78rem;
   line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .accountDetailRow button {
@@ -624,6 +633,7 @@
 
 .identityText {
   min-width: 0;
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
@@ -636,13 +646,24 @@
 }
 
 .identityInput {
-  width: 17.5rem;
+  width: min(17.5rem, 100%);
   height: 2.25rem;
   border: 0;
   border-radius: 8px;
   background: rgb(55 53 47 / 4%);
   box-shadow: none;
   font-size: 0.88rem;
+}
+
+.identityValue {
+  display: block;
+  overflow: hidden;
+  color: var(--foreground);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  line-height: 1.375rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .loginMethods {
@@ -1035,6 +1056,50 @@
     gap: 0.5rem;
   }
 
+  .accountSettings[data-settings-card] {
+    padding-top: 1rem;
+  }
+
+  .accountIdentityRow {
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .accountIdentityRow .identity {
+    gap: 0.75rem;
+  }
+
+  .identityAvatar {
+    width: 3rem;
+    height: 3rem;
+    flex-basis: 3rem;
+    font-size: 1.375rem;
+  }
+
+  .identityInput {
+    width: 100%;
+  }
+
+  .accountDetailRow {
+    min-height: 3.75rem;
+    height: auto;
+    padding-block: 0.625rem;
+    gap: 0.75rem;
+  }
+
+  .accountDetailRow:first-child,
+  .accountDetailRow:nth-child(2),
+  .accountDetailRow:nth-child(3),
+  .accountDetailRow:nth-child(4) {
+    min-height: 3.75rem;
+    height: auto;
+    margin-top: 0;
+  }
+
+  .accountDetailRow > div {
+    min-width: 0;
+  }
+
   .row {
     flex-direction: column;
     align-items: flex-start;
@@ -1247,4 +1312,10 @@
 }
 .personalizationImport p {
   margin: 0;
+}
+
+/* Initial reads are silent and the cached snapshot keeps this section stable.
+ * Mutation feedback still takes its natural space only when it exists. */
+.profileStatusSlot {
+  min-height: 0;
 }

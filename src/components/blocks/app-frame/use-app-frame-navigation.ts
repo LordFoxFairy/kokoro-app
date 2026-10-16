@@ -3,6 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import type { SessionEngine, MachineState } from "@/engine/machine"
 import type { CreationIntent } from "@/ui/composer/creation-intent-pill"
 import type { SettingsTab } from "@/ui/settings/settings-modal"
+import type { SkillsScopeFilter } from "@/ui/skills/skills-scope"
 
 import {
   conversationIdFromLocation,
@@ -84,7 +85,7 @@ export function useAppFrameNavigation({
     }
   }, [])
 
-  const syncSettingsUrl = useCallback((tab: SettingsTab | null, mode: "push" | "replace"): void => {
+  const syncSettingsUrl = useCallback((tab: SettingsTab | null, mode: "push" | "replace", skillsScope?: SkillsScopeFilter): void => {
     setSettingsTab(tab)
     if (typeof window === "undefined") {
       return
@@ -101,7 +102,9 @@ export function useAppFrameNavigation({
       // alternate between two address-bar formats.
       url.searchParams.delete("settings")
       const routeTab = tab === "appearance" ? "general" : tab
-      url.hash = `#/account/settings/${routeTab}`
+      url.hash = tab === "skills" && skillsScope !== undefined && skillsScope !== "all"
+        ? `#/account/settings/${routeTab}/${skillsScope}`
+        : `#/account/settings/${routeTab}`
     }
     const write = mode === "push" ? window.history.pushState : window.history.replaceState
     write.call(window.history, window.history.state, "", url.pathname + url.search + url.hash)

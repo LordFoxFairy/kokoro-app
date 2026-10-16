@@ -716,8 +716,8 @@ async function r76PublicSpec() {
 describe("R255 ScheduledTask owner recurrence graph under the public14.5 pin", () => {
   it("consumes the exact locally accepted public14.5 canonical bytes", async () => {
     const { bytes, spec } = await r76PublicSpec()
-    expect(r76Hash("sha256").update(bytes).digest("hex")).toBe("87186311e67eeebcd5f27d7974326186e1912de49d18d4d524a0bcbc940a0817")
-    expect(spec.info.version).toBe("15.4.0")
+    expect(r76Hash("sha256").update(bytes).digest("hex")).toBe("b4e91483e425fdcc9547eac8bcda554273cbee0863ccb0ddfb185fae18e4e267")
+    expect(spec.info.version).toBe("16.0.0")
   })
 
   it("requires a present nullable owner next run while create accepts only an optional recurrence anchor", async () => {

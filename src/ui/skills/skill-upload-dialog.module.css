@@ -6,10 +6,9 @@
 .dialog[data-slot="dialog-content"] {
   display: flex;
   box-sizing: border-box;
-  width: min(25rem, calc(100vw - 2rem));
-  max-width: min(25rem, calc(100vw - 2rem));
-  min-height: min(21.75rem, calc(100vh - 1.5rem));
-  max-height: calc(100vh - 1.5rem);
+  width: min(25rem, 95vw);
+  max-width: min(25rem, 95vw);
+  max-height: 95vh;
   flex-direction: column;
   gap: 0;
   overflow-y: auto;
@@ -17,7 +16,7 @@
   padding: 0;
   border: 0;
   border-radius: 1rem;
-  background: var(--background);
+  background: var(--settings-surface, var(--background));
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--foreground) 7%, transparent), 0 24px 24px -12px color-mix(in srgb, var(--foreground) 14%, transparent), 0 8px 16px -8px color-mix(in srgb, var(--foreground) 12%, transparent);
 }
 
@@ -30,7 +29,8 @@
   height: 3.5rem;
   min-height: 3.5rem;
   align-items: flex-start;
-  padding: 1rem 3rem 0 1.25rem;
+  gap: 0;
+  padding: 1.25rem 3.5rem 0.75rem 1.25rem;
   text-align: left;
 }
 
@@ -60,15 +60,15 @@
 .dropzone {
   box-sizing: border-box;
   width: calc(100% - 2.5rem);
-  height: 9.5rem;
-  min-height: 9.5rem;
+  height: 9.4375rem;
+  min-height: 9.4375rem;
   margin: 0 1.25rem 1rem;
   flex-direction: column;
   gap: 0.75rem;
-  border: 1px dashed color-mix(in srgb, var(--foreground) 18%, transparent);
+  border: 2px dashed var(--settings-control-border, var(--border));
   border-radius: 0.75rem;
-  background: color-mix(in srgb, var(--foreground) 2%, transparent);
-  color: var(--muted-foreground);
+  background: var(--settings-control-fill, var(--muted));
+  color: var(--settings-description-foreground, var(--muted-foreground));
   font-size: 0.875rem;
   font-weight: 400;
 }
@@ -88,23 +88,31 @@
 
 .requirements {
   box-sizing: border-box;
-  padding: 0 1.25rem 1rem;
-  color: var(--muted-foreground);
-  font-size: 0.75rem;
-  line-height: 1.25rem;
+  padding: 0 1.25rem 1.25rem;
+  color: var(--settings-description-foreground, var(--muted-foreground));
+  font-size: 0.8125rem;
+  line-height: 1.21875rem;
 }
 
 .requirements h3 {
-  margin: 0 0 0.15rem;
+  margin: 0 0 0.25rem;
   color: var(--foreground);
   font-size: 0.875rem;
-  font-weight: 500;
-  line-height: 1.25rem;
+  font-weight: 400;
+  line-height: 1.3125rem;
 }
 
 .requirements ul {
-  margin: 0.1rem 0 0.6rem;
-  padding-left: 1.1rem;
+  margin: 0 0 1rem;
+  padding-left: 1rem;
+}
+
+.requirements li {
+  min-height: 1.25rem;
+}
+
+.requirements li + li {
+  margin-top: 0.25rem;
 }
 
 .learn {
@@ -113,6 +121,7 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 0.15rem 0.3rem;
+  color: var(--muted-foreground);
 }
 
 .learn > svg {
@@ -169,6 +178,11 @@
   box-sizing: border-box;
   width: 100%;
   padding: 0 1.25rem 1.25rem;
+}
+
+/* Idle uploads have no actions; an empty footer must not add phantom space. */
+.footer:empty {
+  display: none;
 }
 
 .footer > button {

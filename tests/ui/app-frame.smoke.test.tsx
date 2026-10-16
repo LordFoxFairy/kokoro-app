@@ -27,6 +27,22 @@ it("窄屏 active Composer 复用本体紧凑内边距而不覆盖成额外顶�
   expect(rule).not.toMatch(/padding:\s*1\.7rem 0\.85rem 0\.3rem;/)
 })
 
+it("服务端已准入的首帧保留静态工作台骨架且不展示加载文案", () => {
+  render(
+    <ThemeProvider>
+      <LocaleProvider>
+        <AppFrame booting chatHref="/app" />
+      </LocaleProvider>
+    </ThemeProvider>,
+  )
+
+  expect(document.querySelector('[data-server-admitted-shell="true"]')).toBeInTheDocument()
+  expect(document.querySelector('aside[aria-hidden="true"]')).toBeInTheDocument()
+  expect(document.querySelector('[data-server-admitted-shell="true"] header[aria-hidden="true"]')).toBeInTheDocument()
+  expect(screen.queryByText("正在加载…")).toBeNull()
+  expect(screen.getByRole("group", { name: "正在加载工作区" })).toBeDisabled()
+})
+
 it("viewport 独占顶部呼吸且所有会话项保持统一轮间距", () => {
   const appFrameCss = readFileSync(`${process.cwd()}/src/components/blocks/app-frame/app-frame-main.module.css`, "utf8")
   const threadCss = readFileSync(`${process.cwd()}/src/ui/thread/thread.module.css`, "utf8")

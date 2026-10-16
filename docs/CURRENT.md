@@ -1,3 +1,9 @@
+## SET49 整合验证进行中（2026-10-16）
+
+已合并初次抓取主线bd2bf510与设置bb3bc5a。该中间树完整test为3822PASS/115FAIL，377.5秒，冻结999files；资源库存与源码hash完全恢复。纯contract初轮283PASS/1旧全文pin断言FAIL，typecheck发现测试RTL exact属性不合法，两处已窄修，尚未据此宣称完整门绿。
+
+验证期间远端主线更新至dcd0c836，已抓取，后继立即合并其登录回调/rail修复及已退休测试文件删除，保留本分支SET36复制与SET40/41/42/47设置保护。不可把该中间115失败视为最终版结果。最新主线独立UI基线194PASS；此前bd2侧栏43PASS/18FAIL仅证明旧抓取时的基线。
+
 ## SET47 真实归档/恢复消费者（2026-10-15；源码与浏览器回归已验，完整门FAILED）
 
 基线Web b979cc946166df9e8d75ecdb3d958239aa286e55，固定消费BFF53f222ec41500d7a608da0c221a4695c402ff678的public15.4.0/150原字节，SHA-256 87186311e67eeebcd5f27d7974326186e1912de49d18d4d524a0bcbc940a0817。任务菜单归档、Data本人分页与恢复、独立archive revision和active状态GET已接线；旧ACK只压过更早读取，post-ACK状态/列表可覆盖；真正尚未持久化draft有同步provenance，列表/状态/成功回执或owner snapshot证明后退休，后续404不合成已删除任务。归档不删除、不清engine、不取消Run、不撤销Share。预览/未可信准入不发archive IO；unknown不自动重写，权威重读后需显式继续。点段历史ID禁用并展示理由，合法历史Unicode保留。技能/连接器业务未改；原测试全文prefix、超时、skip保留，相关声明与owner全文inverse分别核验。

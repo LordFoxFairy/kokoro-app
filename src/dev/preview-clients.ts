@@ -8,10 +8,6 @@ import type { BillingLedger } from "@/contract/http"
 import type { HubClient } from "@/hub/client"
 import type { McpConnector, McpConnectorProvider } from "@/hub/mcp-connector.schema"
 import type {
-  McpRegisterInput,
-  CustomApiView,
-  McpSecret,
-  McpServerView,
   SkillCard,
   SkillCatalog,
   SkillCatalogCard,
@@ -60,8 +56,6 @@ export function createPreviewHubClient(): HubClient {
   let skills = [...previewSkills]
   // A fresh User Web starts with no user-managed connectors, matching the
   // product empty state. Registration remains available for interaction QA.
-  let servers: McpServerView[] = []
-  let secrets: McpSecret[] = []
   let personalConnectors: McpConnector[] = []
   const personalProviders: McpConnectorProvider[] = [
     {
@@ -75,7 +69,6 @@ export function createPreviewHubClient(): HubClient {
       state_version: "1",
     },
   ]
-  let customApiCount = 0
   const quota = { ...previewQuota }
   return {
     listPersonalSkills: () => Promise.resolve({ skills: skills.filter((skill) => skill.scope === "personal").map((skill, index) => ({
@@ -85,11 +78,7 @@ export function createPreviewHubClient(): HubClient {
       const skill = skills.filter((item) => item.scope === "personal")[Number(id.replace(/^preview-/u, "")) - 1]
       return skill ? Promise.resolve({ skill_id: id, source_ref: `skill:${id}`, revision: "1", status: "active" as const, name: skill.name, summary: skill.description, tags: [], series_id: `preview-series-${id}`, example_prompts: [], category_keys: [], skill_updated_at: "2026-10-10T00:00:00Z", product: { state_version: "1", publication_audience: "owner" as const } }) : Promise.reject(new Error("preview Skill not found"))
     },
-    listMcpConnections: () => Promise.resolve({ connections: servers.filter((server) => server.enabled).map((server, index) => ({
-      connection_id: `preview-connection-${index + 1}`, connector_id: `preview-connector-${index + 1}`,
-      server_id: `preview-server-${index + 1}`, provider_key: server.name,
-      transport: "streamable_http" as const, status: "active" as const,
-    })) }),
+    listMcpConnections: () => Promise.resolve({ connections: [] }),
     listMcpConnectors: () => Promise.resolve({ items: personalConnectors, next_cursor: null }),
     listMcpConnectorProviders: () => Promise.resolve({ items: personalProviders, next_cursor: null }),
     createMcpConnector: (input) => {
@@ -197,71 +186,7 @@ export function createPreviewHubClient(): HubClient {
       }
       return Promise.resolve()
     },
-    listMcpServers: () => Promise.resolve(servers),
-    registerMcpServer: (input: McpRegisterInput) => {
-      const server: McpServerView = { scope: "namespace", name: input.name, revision: 1, transport: input.transport, url: input.url, allowed_tools: input.allowed_tools, secret_ref: input.secret_ref, enabled: true }
-      servers = [...servers, server]
-      return Promise.resolve(server)
-    },
-    registerCustomMcp: (input) => {
-      const server: McpServerView = {
-        scope: "namespace",
-        name: input.name,
-        revision: 1,
-        transport: input.transport,
-        url: input.endpoint_url,
-        allowed_tools: [],
-        secret_ref: input.headers.length > 0 ? "handle:preview-write-only" : null,
-        enabled: input.enabled,
-      }
-      servers = [...servers, server]
-      return Promise.resolve(server)
-    },
-    registerCustomApi: (input) => {
-      customApiCount += 1
-      const timestamp = new Date(previewUpdatedAt + customApiCount).toISOString()
-      const customApi: CustomApiView = {
-        id: `custom_api_preview_${customApiCount}`,
-        kind: "custom_api",
-        name: input.name,
-        notes: input.notes,
-        icon_url: input.icon_asset_id ? `/api/dev/preview-files/${input.icon_asset_id}` : null,
-        secret_entries: input.secrets.map((secret, index) => ({
-          id: `secret_preview_${customApiCount}_${index + 1}`,
-          name: secret.name,
-          created_at: timestamp,
-          updated_at: timestamp,
-          in_use_by: 0,
-        })),
-        enabled: input.enabled,
-        revision: `preview:${customApiCount}`,
-        created_at: timestamp,
-        updated_at: timestamp,
-      }
-      return Promise.resolve(customApi)
-    },
-    uploadConnectorIcon: (file) => Promise.resolve({
-      asset_id: `preview-connector-${encodeURIComponent(file.name)}`,
-      url: `/api/dev/preview-files/preview-connector-${encodeURIComponent(file.name)}`,
-    }),
-    setMcpEnabled: (name, enabled) => {
-      servers = servers.map((server) => server.name === name ? { ...server, enabled } : server)
-      return Promise.resolve()
-    },
-    deleteMcpServer: (name) => {
-      servers = servers.filter((server) => server.name !== name)
-      return Promise.resolve()
-    },
-    listMcpSecrets: () => Promise.resolve(secrets),
-    createMcpSecret: (name) => {
-      const handle = `srt_preview_${secrets.length + 1}`
-      secrets = [...secrets, { handle, name, createdAt: Date.now() }]
-      return Promise.resolve(handle)
-    },
-    deleteMcpSecret: (handle) => {
-      secrets = secrets.filter((secret) => secret.handle !== handle)
-      return Promise.resolve()
-    },
+
   }
 }
 

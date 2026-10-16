@@ -1,3 +1,15 @@
+## SET49 主线与设置分支整合（2026-10-16）
+
+从既有设置分支合入主线，保留主线 SettingsPanel、navigation model/brand/rail、compact More、Skills scope及独立项目/任务侧栏。设置分支已有账户资料/设备、Team准入、个性化CAS/unknown恢复、搜索和归档生命周期迁入这些现有边界；不恢复主线已退休的项目内私有任务展开分支，不修改Skills/连接器业务。唯一writer与验证证据由Root整合维护，所有PR仍draft。
+
+选择扩展新Panel/dispatcher与navigation模块；整文件回退旧Modal/导航会丢失同事的分层与compact行为，另建平行设置入口会复制状态，均不采用。Brand持唯一搜索输入/清除，navigation仅静态可见标签索引与结果，rail独占选择可见性/compact菜单。Panel完整传readBoundary、archive callback和Help导航；账户/个性化继续原代际退休、绝对预算、严格确认和失败状态，不采用永久subject缓存代替权威读取。项目只呈现主线链接，任务区保持归档和独立收起语义。
+
+验证保留账户、设备、Data、搜索、个性化、Billing和Team用例；针对主线退休结构的旧断言按真实能力边界迁移，不能把删测试当功能通过。完整门及主线隔离对照结果另记CURRENT；正常运行实例及数据不由本次Git整合更新。
+
+消费者固定更新至BFF发行30df0c428c592ed2710d62035ceb5855d20c7506（public16.0.0/146操作，全文SHA-256 b4e91483e425fdcc9547eac8bcda554273cbee0863ccb0ddfb185fae18e4e267），通过六个原生成入口更新artifact，不手改生成类型。测试专用`tests/contract/bff-integration-parent.ts`只反转该发行与原15.4之间的七段确定差异，校验两端全文摘要，随后复用原归档/分享父契约oracle；它不供产品导入、不接受其他版本、不建立第二份可编辑契约。保留主线退休的四个MCP公开写操作缺席，不恢复旧wire。
+
+主线删除原SettingsModal测试时，一并退休了旧目录/JSON/URL/MCP表单结构的四个用例；本次保留并迁移三个设置宿主边界：关闭GitHub子窗仍保留设置、AI入口交接Composer、自定义API失败仍保留输入与父窗。其他Settings原断言保留。E2E首页按夹具明确设置的英语断言准确标题；窄屏搜索以完整二维边界判无重叠，保留输入位于弹窗内、无横向溢出及关闭可达性。
+
 ## SET47 归档任务消费者（2026-10-15；已实现候选，Root完整验收待完成）
 
 SET47传输边界补充：WHATWG会规范化单独的`.`/`..`段及其percentencoded形式；BFF保持原始HTTP的exact encodeURIComponent契约。Web对仅这两个历史ID在任何fetch前拒绝并将动作禁用、解释不可用；不使用双重解码/替代API，也不宣称任意历史ID浏览器皆可操作。其余合法Unicode ID不限制为conv UUID。依据：[URL Standard](https://url.spec.whatwg.org/#single-dot-url-path-segment)。
