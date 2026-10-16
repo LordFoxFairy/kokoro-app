@@ -143,10 +143,10 @@
 /* Standalone catalogs hide WorkspaceHeader but still expose the same compact
  * desktop hamburger. Reserve its 32px control lane in the route-owned header;
  * otherwise the trigger and the page title paint on top of one another at the
- * narrow desktop breakpoint. This is deliberately fine-pointer only so the
- * mobile presentation remains owned by its existing surface. */
-@media (pointer: fine) and (max-width: 48rem) {
-  .shell[data-rail-hidden="true"] :global([data-app-frame-main="true"][data-standalone-surface="true"]) header {
+ * narrow breakpoint. Touch catalogs use the same lane for their Sheet trigger,
+ * rather than losing navigation when the shared header is hidden. */
+@media (max-width: 48rem) {
+  .shell:is([data-rail-hidden="true"], [data-narrow-web="true"]) :global([data-app-frame-main="true"][data-standalone-surface="true"]) header {
     padding-inline-start: 3.5rem;
   }
 }

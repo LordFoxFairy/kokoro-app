@@ -303,6 +303,17 @@ it("隐藏共享 Header 的独立 Web 页面仍保留唯一导航入口", async 
   expect(await screen.findByRole("dialog")).toBeInTheDocument()
 })
 
+it("触屏独立目录仍可打开和关闭导航抽屉", async () => {
+  setDesktopViewport(390, "coarse")
+  mountFrame({ hideWorkspaceHeader: true, standaloneSurface: true })
+  const trigger = await screen.findByRole("button", { name: "展开侧栏" })
+  fireEvent.click(trigger)
+  const drawer = await screen.findByRole("dialog")
+  fireEvent.keyDown(drawer, { key: "Escape" })
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+  expect(trigger).toHaveAttribute("aria-expanded", "false")
+})
+
 it("窄桌面临时展开不覆盖宽桌面的 Sidebar cookie 偏好", async () => {
   document.cookie = "sidebar_state=false; path=/"
   expect(document.cookie).toContain("sidebar_state=false")
