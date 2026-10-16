@@ -5,7 +5,6 @@ import { useRef, useState } from "react";
 import type { HubClient } from "@/hub/client";
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
 import { invalidateMcpConnectorProjection } from "@/ui/mcp/use-mcp-projection";
-import { invalidateCustomApiProjection } from "@/ui/mcp/use-custom-api-projection";
 import { McpContent } from "@/ui/mcp/mcp-content";
 import { McpCreateDialog } from "@/ui/mcp/mcp-create-dialog";
 import type { McpCreateMode } from "@/ui/mcp/mcp-panel-model";
@@ -57,8 +56,7 @@ export function ConnectorsSettingsSection({
           }}
           onDone={async () => {
             const identity = preview ? "preview" : readBoundary?.admitted ? readBoundary.subject : null;
-            if (mode === "custom-api" && identity != null) invalidateCustomApiProjection(client, identity);
-            else if (mode !== "json") {
+            if (mode === "form" || mode === "url") {
               // Register and remote Prepare/OAuth can settle in different reads.
               if (identity != null) invalidateMcpConnectorProjection(client, identity);
             }

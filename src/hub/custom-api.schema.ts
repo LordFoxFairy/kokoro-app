@@ -5,6 +5,7 @@ const profileId = z
   .regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}(?![\s\S])/u);
 const stateVersion = z.string().regex(/^[1-9][0-9]{0,15}(?![\s\S])/u);
 const environmentName = z.string().regex(/^[A-Z_][A-Z0-9_]{0,127}(?![\s\S])/u);
+export const customApiCommandKeySchema = z.string().regex(/^[\x21-\x7e]{1,191}(?![\s\S])/u);
 const writeOnlySecret = z
   .string()
   .min(1)

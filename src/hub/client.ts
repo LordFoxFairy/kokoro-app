@@ -49,6 +49,7 @@ import {
   type McpConnectorCreateConnectionInput,
 } from "./mcp-connector-authorization.schema";
 import {
+  customApiCommandKeySchema,
   customApiCreateInputSchema,
   customApiCreateSchema,
   customApiErrorSchema,
@@ -827,6 +828,7 @@ export type HubClient = {
   /** Distinct owner aggregate; custom API secrets never enter any MCP route. */
   createCustomApi?: (
     input: CustomApiCreateInput,
+    key: string,
     signal?: AbortSignal,
   ) => Promise<CustomApiProfile>;
   listCustomApis?: (
@@ -999,19 +1001,28 @@ export function createHubClient(): HubClient {
           signal,
         )
       ).connector,
-    createCustomApi: async (input, signal) =>
-      (
+    createCustomApi: async (input, key, signal) => {
+      const body = customApiCreateInputSchema.parse(input);
+      const profile = (
         await requestCustomApi(
           "/connectors/custom-apis",
           customApiCreateSchema,
           {
             method: "POST",
-            headers: idempotencyHeaders("custom-api", { ...JSON_HEADERS }),
-            body: JSON.stringify(customApiCreateInputSchema.parse(input)),
+            headers: { ...JSON_HEADERS, "Idempotency-Key": customApiCommandKeySchema.parse(key) },
+            body: JSON.stringify(body),
           },
           signal,
         )
-      ).custom_api,
+      ).custom_api;
+      const names = body.environment.map(value => value.name).sort();
+      const received = profile.environment.map(value => value.name).sort();
+      if (profile.name !== body.name || profile.instructions !== body.instructions ||
+        names.length !== received.length || names.some((name, index) => name !== received[index]) ||
+        profile.environment.some(value => !value.configured))
+        throw new HubClientError("parse", "Custom API creation ACK binding mismatch", null, null);
+      return profile;
+    },
     listCustomApis: (query = {}, signal) => {
       const search = new URLSearchParams();
       if (query.limit !== undefined) search.set("limit", String(query.limit));

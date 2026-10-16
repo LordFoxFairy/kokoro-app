@@ -20,6 +20,7 @@ import { KokoroSkillsSurface } from "@/features/app/kokoro-skills-surface"
 import { SkillsSettingsSection } from "@/ui/settings/sections/skills-settings-section"
 import { createHubClient } from "@/hub/client"
 import { McpProjectionRead } from "@/ui/mcp/mcp-projection-read"
+import { CustomApiCreationProvider } from "@/ui/mcp/custom-api-creation-context"
 import { SkillCatalogDialog, type CatalogDetailProjection } from "@/ui/skills/skills-catalog-dialog"
 import { createManusSkillHubClient } from "@/ui/skills/manus-skill-client"
 import { useAppFrameActions } from "@/components/blocks/app-frame/use-app-frame-actions"
@@ -2554,7 +2555,7 @@ it.each([
     </div>
   }
   render(<StrictMode><LocaleProvider>{entry === "global" ? <Shell /> :
-    <ConnectorsSettingsSection client={hub} preview brandName="Kokoro" />}</LocaleProvider></StrictMode>)
+    <CustomApiCreationProvider client={hub} boundary={{ admitted: true, subject: "preview", generation: 0 }}><ConnectorsSettingsSection client={hub} preview brandName="Kokoro" /></CustomApiCreationProvider>}</LocaleProvider></StrictMode>)
   await act(async () => { await Promise.resolve() })
   if (entry === "global") fireEvent.click(screen.getByRole("button", { name: "Global API create" }))
   else {
@@ -2617,7 +2618,7 @@ it.each(["global", "settings"] as const)("%s creation ACK cannot close a newer c
         commandMenu={() => null} commandProps={{ onNewChat: vi.fn(), onOpenSettings: vi.fn() }} commandOpen={false} onCommandOpenChange={vi.fn()} />
     </div>
   }
-  render(<StrictMode><LocaleProvider>{entry === "global" ? <Shell /> : <ConnectorsSettingsSection client={hub} preview brandName="Kokoro" />}</LocaleProvider></StrictMode>)
+  render(<StrictMode><LocaleProvider>{entry === "global" ? <Shell /> : <CustomApiCreationProvider client={hub} boundary={{ admitted: true, subject: "preview", generation: 0 }}><ConnectorsSettingsSection client={hub} preview brandName="Kokoro" /></CustomApiCreationProvider>}</LocaleProvider></StrictMode>)
   const open = async (kind: "api" | "json") => {
     if (entry === "global") fireEvent.click(screen.getByRole("button", { name: kind === "api" ? "Global API create" : "Global JSON create" }))
     else {
@@ -2651,7 +2652,7 @@ it.each(["mode", "visibility"] as const)("a retained creation host fences old co
   const pending = new Promise<void>(resolve => { acknowledge = resolve })
   const hub = { ...createHubClient(), createCustomApi: vi.fn().mockResolvedValue({ profile_id: "retained-host-api", name: "Old API", state_version: "1", environment: [], created_at: "2026-10-16T12:00:00Z", updated_at: "2026-10-16T12:00:00Z" }) }
   const close = vi.fn(), confirmed = vi.fn(async () => { await pending })
-  const dialog = (mode: "custom-api" | "json", open = true) => <StrictMode><LocaleProvider><McpCreateDialog client={hub} mode={mode} open={open} onOpenChange={close} onDone={confirmed} /></LocaleProvider></StrictMode>
+  const dialog = (mode: "custom-api" | "json", open = true) => <StrictMode><LocaleProvider><CustomApiCreationProvider client={hub} boundary={{ admitted: true, subject: "preview", generation: 0 }}><McpCreateDialog client={hub} mode={mode} open={open} onOpenChange={close} onDone={confirmed} /></CustomApiCreationProvider></LocaleProvider></StrictMode>
   const view = render(dialog("custom-api"))
   fireEvent.change(screen.getByRole("textbox", { name: "名称" }), { target: { value: "Old API" } })
   fireEvent.click(screen.getByRole("button", { name: "保存" }))
@@ -2666,6 +2667,132 @@ it.each(["mode", "visibility"] as const)("a retained creation host fences old co
   expect(close).not.toHaveBeenCalled()
   expect(draft).toHaveValue("new window draft")
   expect(draft.isConnected).toBe(true)
+})
+
+function apiCreationOverlay(boundary: import("@/ui/auth/use-session-state").ProjectReadBoundary, mode: import("@/ui/mcp/mcp-panel-model").McpCreateMode | null = "custom-api") {
+  return <LocaleProvider><AppFrameOverlaySurfaces mounted settingsTab={null} preview={false} readBoundary={boundary}
+    brandName="Kokoro" onCloseSettings={vi.fn()} onTabChange={vi.fn()} onCreateSkillWithAi={vi.fn()} onTrySkill={() => false}
+    settingsReturnFocusRef={{ current: null }} shellRef={{ current: null }} mcpCreateMode={mode} setMcpCreateMode={vi.fn()}
+    mcpCreateReturnFocusRef={{ current: null }} commandMenu={() => null} commandProps={{ onNewChat: vi.fn(), onOpenSettings: vi.fn() }}
+    commandOpen={false} onCommandOpenChange={vi.fn()} /></LocaleProvider>
+}
+
+function apiCreationHub() {
+  return { ...createHubClient(),
+    listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }),
+    listMcpConnectors: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+    listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+    listSkills: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+  }
+}
+
+it("API creation pauses during same-actor recheck and clears drafts on actor replacement", async () => {
+  const pageClients = await import("@/ui/shell/page-clients")
+  const hub = { ...apiCreationHub(), createCustomApi: vi.fn() }
+  vi.spyOn(pageClients, "browserHubClient").mockReturnValue(hub)
+  const view = render(apiCreationOverlay({ admitted: true, subject: "create-actor", generation: 1 }))
+  const name = screen.getByRole("textbox", { name: "名称" })
+  fireEvent.change(name, { target: { value: "Actor draft" } })
+  fireEvent.change(screen.getByRole("textbox", { name: "密钥名称" }), { target: { value: "DUMMY_SECRET" } })
+  fireEvent.change(screen.getByRole("textbox", { name: "值" }), { target: { value: "dummy-fixture-only" } })
+  view.rerender(apiCreationOverlay({ admitted: false, subject: "create-actor", generation: 2 }))
+  expect(name.isConnected).toBe(true)
+  expect(name).toHaveValue("Actor draft")
+  expect(name).toHaveAttribute("readonly")
+  expect(screen.getByRole("button", { name: "保存" })).toBeDisabled()
+  fireEvent.submit(name.closest("form")!)
+  expect(hub.createCustomApi).not.toHaveBeenCalled()
+  view.rerender(apiCreationOverlay({ admitted: true, subject: "create-actor", generation: 2 }))
+  expect(screen.getByRole("textbox", { name: "名称" })).toBe(name)
+  expect(screen.getByRole("button", { name: "保存" })).toBeEnabled()
+  view.rerender(apiCreationOverlay({ admitted: true, subject: "replacement-actor", generation: 3 }))
+  expect(screen.getByRole("textbox", { name: "名称" })).toHaveValue("")
+  expect(screen.getByRole("textbox", { name: "值" })).toHaveValue("")
+  view.rerender(apiCreationOverlay({ admitted: true, subject: "create-actor", generation: 4 }))
+  expect(screen.getByRole("textbox", { name: "名称" })).toHaveValue("")
+})
+
+it("API creation preserves one frozen command after a lost acknowledgement", async () => {
+  const pageClients = await import("@/ui/shell/page-clients")
+  const create = vi.fn().mockRejectedValueOnce(new Error("lost response"))
+  const hub = { ...apiCreationHub(), createCustomApi: create }
+  vi.spyOn(pageClients, "browserHubClient").mockReturnValue(hub)
+  render(apiCreationOverlay({ admitted: true, subject: "unknown-create-actor", generation: 1 }))
+  const name = screen.getByRole("textbox", { name: "名称" })
+  fireEvent.change(name, { target: { value: "Original API" } })
+  fireEvent.click(screen.getByRole("button", { name: "保存" }))
+  await screen.findByRole("alert")
+  expect(name).toHaveAttribute("readonly")
+  expect(screen.getByRole("button", { name: "重试原请求" })).toBeEnabled()
+  expect(create).toHaveBeenCalledOnce()
+  expect(create.mock.calls[0]?.[1]).toEqual(expect.any(String))
+})
+
+it("API creation resumes the original request after closing the window and rechecking its actor", async () => {
+  const pageClients = await import("@/ui/shell/page-clients")
+  const profile = { profile_id: "resumed-api", name: "Original API", state_version: "1", environment: [], created_at: "2026-10-16T12:00:00Z", updated_at: "2026-10-16T12:00:00Z" }
+  const create = vi.fn().mockRejectedValueOnce(new Error("lost ACK")).mockResolvedValue(profile)
+  const hub = { ...apiCreationHub(), createCustomApi: create }
+  vi.spyOn(pageClients, "browserHubClient").mockReturnValue(hub)
+  const boundary = { admitted: true, subject: "resuming-actor", generation: 1 }
+  const view = render(apiCreationOverlay(boundary))
+  fireEvent.change(screen.getByRole("textbox", { name: "名称" }), { target: { value: profile.name } })
+  fireEvent.click(screen.getByRole("button", { name: "保存" }))
+  await screen.findByRole("alert")
+  view.rerender(apiCreationOverlay(boundary, null))
+  expect(screen.queryByRole("textbox", { name: "名称" })).toBeNull()
+  view.rerender(apiCreationOverlay(boundary))
+  expect(screen.getByRole("textbox", { name: "名称" })).toHaveValue("")
+  view.rerender(apiCreationOverlay({ ...boundary, admitted: false, generation: 2 }))
+  expect(screen.getByRole("button", { name: "重试原请求" })).toBeDisabled()
+  view.rerender(apiCreationOverlay({ ...boundary, generation: 2 }))
+  expect(create).toHaveBeenCalledOnce()
+  fireEvent.click(screen.getByRole("button", { name: "重试原请求" }))
+  await waitFor(() => expect(create).toHaveBeenCalledTimes(2))
+  expect(create.mock.calls[1]?.slice(0, 2)).toEqual(create.mock.calls[0]?.slice(0, 2))
+  expect(create.mock.calls[1]?.[0]).toEqual({ name: profile.name, environment: [] })
+})
+
+it.each([false, true])("an acknowledged API secret stays cleared and Done can recover a close failure (recheck: %s)", async recheckClosing => {
+  const { CustomApiForm } = await import("@/ui/mcp/custom-api-form")
+  const { createCustomApiCreateFlow } = await import("@/ui/mcp/custom-api-create-flow")
+  let acknowledge!: () => void, rejectClosing!: (cause: Error) => void
+  const pending = new Promise<void>(resolve => { acknowledge = resolve })
+  const closing = new Promise<void>((_resolve, reject) => { rejectClosing = reject })
+  const create = vi.fn(async () => { await pending; return { profile_id: "secret-ack-api", name: "Secret API", state_version: "1", environment: [], created_at: "2026-10-16T12:00:00Z", updated_at: "2026-10-16T12:00:00Z" } })
+  const boundary = { admitted: true, subject: "secret-ack-actor", generation: 1 }
+  const flow = createCustomApiCreateFlow({ client: { createCustomApi: create }, boundary, onConfirmed: vi.fn() })
+  const onDone = vi.fn().mockImplementationOnce(async () => { await closing }).mockResolvedValue(undefined)
+  const form = (generation: number) => <LocaleProvider><CustomApiForm flow={flow} boundary={{ ...boundary, generation }} onCancel={vi.fn()} onDone={onDone} /></LocaleProvider>
+  const view = render(form(1))
+  fireEvent.change(screen.getByRole("textbox", { name: "名称" }), { target: { value: "Secret API" } })
+  fireEvent.change(screen.getByRole("textbox", { name: "密钥名称" }), { target: { value: "DUMMY_KEY" } })
+  const secret = screen.getByRole("textbox", { name: "值" })
+  fireEvent.change(secret, { target: { value: "fixture-only" } })
+  fireEvent.click(screen.getByRole("button", { name: "保存" }))
+  act(() => flow.bind({ ...boundary, generation: 2 }))
+  view.rerender(form(2))
+  await act(async () => { acknowledge(); await pending })
+  await screen.findByText("已添加自定义 API。")
+  expect(secret).toHaveValue("")
+  fireEvent.click(screen.getByRole("button", { name: "完成" }))
+  await waitFor(() => expect(onDone).toHaveBeenCalledOnce())
+  expect(secret).toHaveValue("")
+  expect(secret).toHaveAttribute("readonly")
+  expect(screen.getByRole("button", { name: "完成" })).toBeDisabled()
+  fireEvent.submit(secret.closest("form")!)
+  expect(create).toHaveBeenCalledOnce()
+  if (recheckClosing) {
+    act(() => flow.bind({ ...boundary, admitted: false, generation: 3 }))
+    view.rerender(form(3))
+    act(() => flow.bind({ ...boundary, generation: 3 }))
+  }
+  await act(async () => { rejectClosing(new Error("close failed")); await closing.catch(() => undefined) })
+  expect(screen.getByRole("button", { name: "完成" })).toBeEnabled()
+  expect(secret).toHaveValue("")
+  fireEvent.click(screen.getByRole("button", { name: "完成" }))
+  await waitFor(() => expect(onDone).toHaveBeenCalledTimes(2))
+  expect(create).toHaveBeenCalledOnce()
 })
 
 it("connector invalidation preserves another actor and retries a failed mounted read without a remount", async () => {

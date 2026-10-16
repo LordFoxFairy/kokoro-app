@@ -11,7 +11,7 @@ import type { McpCreateMode } from "./mcp-panel-model";
 import { CustomMcpForm } from "./mcp-custom-form";
 import { JsonMcpImportForm } from "./mcp-json-import-form";
 import { UrlMcpForm } from "./mcp-url-form";
-import { CustomApiForm } from "./custom-api-form";
+import { CustomApiCreationForm } from "./custom-api-creation-context";
 
 export function McpCreateDialog({
   client,
@@ -88,7 +88,7 @@ export function McpCreateDialog({
         }}
       >
         {mode === "custom-api" ? (
-          <CustomApiForm client={client} onCancel={close} onDone={complete} />
+          <CustomApiCreationForm onCancel={close} onDone={complete} />
         ) : mode === "json" ? (
           <JsonMcpImportForm
             client={client}

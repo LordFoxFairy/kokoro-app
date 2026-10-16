@@ -1784,3 +1784,28 @@ describe("explicit installation update", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
+it("Custom API creation uses its caller command key and binds the safe ACK to the frozen input", async () => {
+  const body = { name: "Original API", environment: [{ name: "DUMMY_KEY", value: "fixture-only" }] }
+  const profile = { profile_id: "api-command-profile", name: body.name, state_version: "1", created_at: "2026-10-16T12:00:00Z", updated_at: "2026-10-16T12:00:00Z", environment: [{ name: "DUMMY_KEY", configured: true, state_version: "1", status: "active" }] }
+  const request = vi.spyOn(globalThis, "fetch").mockRejectedValueOnce(new Error("lost response"))
+    .mockImplementation(async () => publicResponse({ data: { custom_api: profile, replayed: true } }, 201))
+  const hub = createHubClient()
+  await expect(hub.createCustomApi!(body, "original-api-key")).rejects.toBeInstanceOf(HubClientError)
+  await expect(hub.createCustomApi!(body, "original-api-key")).resolves.toEqual(profile)
+  expect(request).toHaveBeenCalledTimes(2)
+  for (const [path, init] of request.mock.calls) {
+    expect(path).toBe("/api/hub/connectors/custom-apis")
+    expect(new Headers(init?.headers).get("idempotency-key")).toBe("original-api-key")
+    expect(JSON.parse(String(init?.body))).toEqual(body)
+  }
+  request.mockImplementation(async () => publicResponse({ data: { custom_api: { ...profile, name: "Another API" }, replayed: false } }, 201))
+  await expect(hub.createCustomApi!(body, "binding-check-key")).rejects.toMatchObject({ reason: "parse" })
+})
+
+it.each(["", "invalid\nkey", "k".repeat(192)])("Custom API rejects an invalid caller key before dispatch", async key => {
+  const request = vi.fn<typeof fetch>()
+  vi.stubGlobal("fetch", request)
+  await expect(createHubClient().createCustomApi!({ name: "Valid API", environment: [] }, key)).rejects.toBeInstanceOf(Error)
+  expect(request).not.toHaveBeenCalled()
+})

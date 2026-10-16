@@ -2416,3 +2416,9 @@ Web 不复制 BFF OpenAPI，也不把同源 contract 放进 Developer API。详�
 安装命令捕获自己的代际 scope token 和 signal；重核退休旧 scope，旧 ACK/catch/finally/invalidate 均不得影响新代 busy 或事实。已派发但未知结果只保留本 actor 的原 source/key，用户显式恢复前不重放；同系列新 revision 不得绕过未知旧命令另建意图。切换 actor 销毁这些局部能力，A→B→A 不从全局缓存复活旧 token。
 
 分享的未知结果墓碑仅按 actor/source 保留，ACK/剪贴板展示按当前准入代际隔离。重核不把未知分享变成可直接重发；只有明确“创建新的分享”可发新命令。安装只有经严格校验的非 retryable、非 409 确定 4xx 拒绝才能释放冻结意图。GitHub 重核清只读选择和已确认结果，保留未知写入 selector/key；本地导入仅清已确认 completed 展示，不丢未知恢复 locator。详情追加页失败在模态内可见，并使用当前 cursor 显式重试。
+
+### Custom API 创建命令的 actor 生命周期（2026-10-16）
+
+AppFrameOverlaySurfaces 在稳定 app segment 内持有唯一 CustomApiCreationProvider，覆盖全局和 Settings 两个入口；不把命令放在短命的 form/Dialog 或独立全局注册表中。actor/client 更换整体退休，临时 admission/generation 更换保原 key/body、取消旧等待并进入 unknown；不自动重放。只有当前准入的用户显式恢复才重发原命令。UI 草稿按 flow 实例分隔，失准入只读、换 actor 清空，纯输入不当作 owner 事实。
+
+命令仅内存持有冻结的合法创建请求（含 write-only secret）和 caller-issued key；idle/running/unknown/rejected/completed 显式区分。超时、取消、畸形 ACK、冲突／前置条件等不证明未提交；只有已验证的 invalid_custom_api_request 拒绝释放冻结意图。确认 ACK 后清掉命令正文，仅保非敏感完成状态；已退休窗口不关闭新窗口。确认投影失活由 flow 捕获的原 client/subject 负责，即使旧请求晚到也不把旧事实发布给新主体。关闭 Dialog 不取消或自动重新发送命令；provider 卸载清理等待与内存。原 MCP Register/Prepare/OAuth 不在本切片冒称完成。
