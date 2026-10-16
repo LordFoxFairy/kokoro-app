@@ -38,3 +38,8 @@ it("preserves the Import CAS across an authoritative metadata read",async()=>{
 it("only clears a completed intent and permits a second import with fresh command keys",async()=>{
  const {flow,deps}=setup();await flow.preview(url);flow.select("one");deps.github.import.mockRejectedValueOnce(new HubClientError("network","lost",null,null));await flow.confirm();flow.finishCompleted();expect(flow.getSnapshot().kind).toBe("unknown");await flow.retry();expect(flow.getSnapshot().kind).toBe("completed");flow.finishCompleted();expect(flow.getSnapshot().kind).toBe("idle");deps.key.mockReturnValue("fresh-key");await flow.preview(url);flow.select("two");await flow.confirm();expect(flow.getSnapshot().kind).toBe("completed");expect(deps.github.import.mock.calls.at(-1)?.[1]).toBe("fresh-key");expect(deps.github.import.mock.calls.at(-1)?.[0].path).toBe("two")
 })
+
+
+it("retires recheck preview facts but preserves unknown write selectors and keys", async () => {
+ const {flow,deps}=setup();await flow.preview(url);flow.retireRead();expect(flow.getSnapshot()).toEqual({kind:"idle"});await flow.preview(url);flow.select("one");deps.github.import.mockRejectedValueOnce(new HubClientError("network","unknown",null,null));await flow.confirm();flow.retireRead();expect(flow.getSnapshot()).toMatchObject({kind:"unknown",stage:"import"});await flow.retry();expect(deps.github.import.mock.calls[1]?.slice(0,-1)).toEqual(deps.github.import.mock.calls[0]?.slice(0,-1));expect(flow.getSnapshot().kind).toBe("completed");flow.retireRead();expect(flow.getSnapshot()).toEqual({kind:"idle"})
+})

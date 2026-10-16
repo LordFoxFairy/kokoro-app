@@ -27,7 +27,7 @@ export function GithubImportDialog({ readBoundary: boundary, open, onOpenChange,
   const [value, setValue] = useState(""), [invalid, setInvalid] = useState(false)
   const completed = useRef<unknown>(null), callback = useRef(onImported)
   useEffect(() => { callback.current = onImported }, [onImported])
-  useLayoutEffect(() => { flow.setAdmitted(boundary.admitted && Boolean(boundary.subject)); return () => flow.cancel() }, [flow, boundary.admitted, boundary.subject, boundary.generation])
+  useLayoutEffect(() => { flow.setAdmitted(boundary.admitted && Boolean(boundary.subject)); return () => flow.retireRead() }, [flow, boundary.admitted, boundary.subject, boundary.generation])
   useEffect(() => { if (boundary.subject === null) flow.retire() }, [boundary.subject, flow])
   useEffect(() => () => flow.retire(), [flow])
   useLayoutEffect(() => { if (!open) { flow.cancel(); flow.finishCompleted() } }, [open, flow])
@@ -46,10 +46,10 @@ export function GithubImportDialog({ readBoundary: boundary, open, onOpenChange,
           <p id="github-repository-help" className="sr-only">{t("skills.githubDescription")}</p>
           {invalid ? <Alert id="github-repository-error" role="alert" variant="destructive" className={styles.error}><AlertDescription>{t("skills.githubInvalid")}</AlertDescription></Alert> : null}
           {busy ? <p role="status" data-testid="github-import-status">{stageLabel}</p> : null}
-          {state.kind === "select" ? <fieldset className={styles.paths}><legend>{t("skills.githubChoosePath")}</legend>{state.paths?.map(path => <Button key={path} type="button" variant="outline" disabled={!authorized} onClick={() => flow.select(path)}>{path || "/"}</Button>)}</fieldset> : null}
-          {state.kind === "ready" ? <p>{state.name ?? t("skills.githubSelectedPath")}<span data-testid="github-selected-path">{state.path || "/"}</span><span className={styles.commit}>{state.commit}</span></p> : null}
-          {state.kind === "failed" || state.kind === "unknown" ? <Alert role="alert" variant="destructive" className={styles.error}><AlertDescription>{t(state.kind === "unknown" ? "skills.githubUnknown" : "skills.githubImportFailed")}</AlertDescription>{state.code ? <p>{state.code}</p> : null}{state.skillId ? <p>{state.skillId}</p> : null}</Alert> : null}
-          {state.kind === "completed" ? <div className={styles.result} data-testid="github-import-complete" role="status"><p className={styles.success}><Check aria-hidden="true" />{t("skills.githubImported")}</p><p>{state.result?.name}</p></div> : null}
+          {authorized && state.kind === "select" ? <fieldset className={styles.paths}><legend>{t("skills.githubChoosePath")}</legend>{state.paths?.map(path => <Button key={path} type="button" variant="outline" disabled={!authorized} onClick={() => flow.select(path)}>{path || "/"}</Button>)}</fieldset> : null}
+          {authorized && state.kind === "ready" ? <p>{state.name ?? t("skills.githubSelectedPath")}<span data-testid="github-selected-path">{state.path || "/"}</span><span className={styles.commit}>{state.commit}</span></p> : null}
+          {state.kind === "failed" || state.kind === "unknown" ? <Alert role="alert" variant="destructive" className={styles.error}><AlertDescription>{t(state.kind === "unknown" ? "skills.githubUnknown" : "skills.githubImportFailed")}</AlertDescription>{state.code ? <p>{state.code}</p> : null}</Alert> : null}
+          {authorized && state.kind === "completed" ? <div className={styles.result} data-testid="github-import-complete" role="status"><p className={styles.success}><Check aria-hidden="true" />{t("skills.githubImported")}</p><p>{state.result?.name}</p></div> : null}
         </div>
       </div>
       <DialogFooter className={styles.footer}>

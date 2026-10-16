@@ -2398,3 +2398,11 @@ Web 不复制 BFF OpenAPI，也不把同源 contract 放进 Developer API。详�
 `use-app-frame-skill-trial` 只持有浏览器选择与标签，将已确认的精确 source 绑定到 newConversation 后的实际 ID。engine/admission lifetime 与来源 route callback fence 分开：导航关闭设置不清同会话选择；首次 active ID 不匹配则同步永久退役，避免 A→B→A 标签复活。跨标签页身份 marker 必须匹配准入 subject；storage 或重渲染发现不匹配时永久退役旧 owner，marker 返回原值也不恢复。marker 不作为认证凭据。旧 cleanup 只能清自身 owner 的选择；新建、换身份、代际变化和卸载清 future refs，不改写已经冻结的未知提交。
 
 示例、详情版本和精确安装 source 必须一致且安装启用；catalog 系列级 added 不等于 latest revision 已安装。版本变化、未就绪或失败保留详情与原因，不静默升级/安装，不把预填文字作为正式试用成功。输入区显示真实技能名称并可移除。preview 仅预填文字，不能设置正式 source。下游 owner 仍 fresh 授权；浏览器回归或非空 wire 不是实际 Agent 运行证明。
+
+### Skills 目录重核的展示与请求寿命（2026-10-16）
+
+正常 session 重核不再用 admission/generation 卸载整个目录。外层仅按 preview/subject 分隔：保留 query、category 和精确 series/revision locator，目录基页、追加页、安装事实及详情/reader/share/download 仍按当前代际退休；不把旧卡片当 locator 的兜底。Dialog 的外壳保留，等待当前代读取时只显示通用加载/失败，不显示旧私有内容或动作。新第一页未找到可能是分页未覆盖，允许用当前 opaque cursor 继续加载，不无界自动翻页，也不自动换同系列的新 revision。
+
+安装命令捕获自己的代际 scope token 和 signal；重核退休旧 scope，旧 ACK/catch/finally/invalidate 均不得影响新代 busy 或事实。已派发但未知结果只保留本 actor 的原 source/key，用户显式恢复前不重放；同系列新 revision 不得绕过未知旧命令另建意图。切换 actor 销毁这些局部能力，A→B→A 不从全局缓存复活旧 token。
+
+分享的未知结果墓碑仅按 actor/source 保留，ACK/剪贴板展示按当前准入代际隔离。重核不把未知分享变成可直接重发；只有明确“创建新的分享”可发新命令。安装只有经严格校验的非 retryable、非 409 确定 4xx 拒绝才能释放冻结意图。GitHub 重核清只读选择和已确认结果，保留未知写入 selector/key；本地导入仅清已确认 completed 展示，不丢未知恢复 locator。详情追加页失败在模态内可见，并使用当前 cursor 显式重试。

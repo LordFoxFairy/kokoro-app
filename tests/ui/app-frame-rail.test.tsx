@@ -11,6 +11,11 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/engine/config", () => ({ sessionBaseUrl: () => "http://s.local" }))
 
 import { AppFrame } from "@/components/blocks/app-frame/app-frame"
+import { useCatalogSkillInstallation } from "@/features/app/use-catalog-skill-installation"
+import { GithubImportDialog } from "@/ui/skills/github-import-dialog"
+import { SkillUploadDialog } from "@/ui/skills/skill-upload-dialog"
+import { ManusSkillDetailDialog } from "@/ui/skills/manus-skill-detail-dialog"
+import { KokoroSkillsSurface } from "@/features/app/kokoro-skills-surface"
 import { useAppFrameActions } from "@/components/blocks/app-frame/use-app-frame-actions"
 import { LocaleProvider } from "@/i18n/context"
 import { ThemeProvider } from "@/ui/theme/theme-context"
@@ -1786,4 +1791,201 @@ it("project trial survives the actual URL handoff and Composer submit action", a
     expect(projectClient.createCalls[0]).toMatchObject({ sessionId: conversationId, body: { project_ref: projectRef, selected_skill_source_refs: ["skill:trial-version"] } })
     expect(client.createCalls).toEqual([])
   } finally { view.unmount(); projectEngine.dispose(); window.history.replaceState({}, "", "/app") }
+})
+
+
+it("same actor recheck preserves catalog search and detail chrome while retiring private facts", async () => {
+  let round = 1
+  const response = (body: unknown) => Response.json(body, { headers: { "cache-control": "private, no-store", "x-request-id": "req-catalog-recheck" } })
+  const card = { skillId: "series-recheck", displayName: "Private title", userDescription: "Private facts", currentVersion: { versionUid: "revision-recheck" } }
+  const reads = vi.spyOn(globalThis, "fetch").mockImplementation(async input => {
+    const path = String(input)
+    if (path.endsWith("ListHubSkills")) return response({ skills: [card], tagOptions: {} })
+    if (path.endsWith("ListSkills")) return response({ userAddedSkills: [], officialSkills: [] })
+    if (path.endsWith("GetSkill")) return response({ skill: { id: "series-recheck", version: "revision-recheck", displayName: "Private title", description: round === 1 ? "Private facts" : "Fresh facts" }, downloadInfo: { downloadUrl: "/api/skill-downloads/recheck", filename: "fixture.zip", expiresAt: "2028-01-01T00:00:00Z" } })
+    throw Error("Unexpected catalog request")
+  })
+  const view = render(<LocaleProvider><KokoroSkillsSurface preview={false} projectReadBoundary={{ admitted: true, subject: "catalog-recheck-actor", generation: 1 }} onPrompt={vi.fn()} /></LocaleProvider>)
+  await screen.findByRole("button", { name: "Private title" })
+  const search = screen.getByRole("searchbox", { name: "搜索技能" })
+  fireEvent.change(search, { target: { value: "Private" } })
+  fireEvent.click(screen.getByRole("button", { name: "Private title" }))
+  await screen.findByRole("button", { name: "查看详情" })
+  const dialog = screen.getByRole("dialog")
+  const beforeRecheck = reads.mock.calls.length
+  round = 2
+  view.rerender(<LocaleProvider><KokoroSkillsSurface preview={false} projectReadBoundary={{ admitted: false, subject: "catalog-recheck-actor", generation: 2 }} onPrompt={vi.fn()} /></LocaleProvider>)
+  expect(screen.getByRole("searchbox", { hidden: true, name: "搜索技能" })).toBe(search)
+  expect(search).toHaveValue("Private")
+  expect(screen.getByRole("dialog")).toBe(dialog)
+  expect(screen.queryByText("Private facts")).toBeNull()
+  await act(async () => { await Promise.resolve() })
+  expect(reads).toHaveBeenCalledTimes(beforeRecheck)
+  view.rerender(<LocaleProvider><KokoroSkillsSurface preview={false} projectReadBoundary={{ admitted: true, subject: "catalog-recheck-actor", generation: 2 }} onPrompt={vi.fn()} /></LocaleProvider>)
+  await screen.findByRole("heading", { name: "Private title" })
+  await within(dialog).findByText("Fresh facts")
+  expect(screen.getByRole("dialog")).toBe(dialog)
+  fireEvent.click(screen.getByRole("button", { name: "Close" }))
+  await waitFor(() => expect(screen.getByRole("button", { name: "Private title" })).toHaveFocus())
+  view.rerender(<LocaleProvider><KokoroSkillsSurface preview={false} projectReadBoundary={{ admitted: true, subject: "other-catalog-actor", generation: 3 }} onPrompt={vi.fn()} /></LocaleProvider>)
+  expect(screen.getByRole("searchbox", { name: "搜索技能" })).toHaveValue("")
+  view.rerender(<LocaleProvider><KokoroSkillsSurface preview={false} projectReadBoundary={{ admitted: true, subject: "catalog-recheck-actor", generation: 4 }} onPrompt={vi.fn()} /></LocaleProvider>)
+  expect(screen.getByRole("searchbox", { name: "搜索技能" })).toHaveValue("")
+  expect(screen.queryByRole("dialog")).toBeNull()
+})
+
+
+it("catalog installation recheck rejects old callbacks and retries only the frozen source and key", async () => {
+  const resolvers: Array<(response: Response) => void> = []
+  const calls: RequestInit[] = []
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
+    calls.push(init!)
+    return new Promise<Response>(resolve => resolvers.push(resolve))
+  })
+  const card = { ...executableTrial, installed: false, enabled: false }
+  const identify = (value: import("@/hub/schemas").SkillCatalogCard) => `${value.skill_id}:${value.revision_skill_id}`
+  const view = renderHook(({ generation }) => useCatalogSkillInstallation({ admitted: true, subject: "installation-reader", generation }, undefined, "test-catalog-scope", identify), { initialProps: { generation: 1 } })
+  let first!: Promise<void>, retry!: Promise<void>
+  act(() => { first = view.result.current.setEnabled(card) })
+  await waitFor(() => expect(calls).toHaveLength(1))
+  const old = view.result.current.setEnabled
+  view.rerender({ generation: 2 })
+  await act(async () => { await old(card) })
+  expect(calls).toHaveLength(1)
+  act(() => { void view.result.current.setEnabled({ ...card, revision_skill_id: "new-revision", source_ref: "skill:new-revision" }) })
+  expect(calls).toHaveLength(1)
+  act(() => { retry = view.result.current.setEnabled(card) })
+  await waitFor(() => expect(calls).toHaveLength(2))
+  expect(calls[1]?.body).toBe(calls[0]?.body)
+  expect(new Headers(calls[1]?.headers).get("idempotency-key")).toBe(new Headers(calls[0]?.headers).get("idempotency-key"))
+  const receipt = () => Response.json({ data: { installation: {
+    installation_id: "trial-installation", source_ref: "skill:trial-version", series_id: "trial-series", revision: "1", installed: true, enabled: true,
+    installed_at: "2026-10-16T00:00:00Z", updated_at: "2026-10-16T00:00:00Z", display_name: "Owner trial", summary: "Owner description", source_status: "active", skill_updated_at: "2026-10-16T00:00:00Z", example_prompts: [], category_keys: [], product: { publication_audience: "owner", state_version: "1" }, tags: [],
+  }, change: "installed", event_id: "trial-event", replayed: false } }, { headers: { "cache-control": "private, no-store", "x-request-id": "req-installation-recheck" } })
+  await act(async () => { resolvers[0]!(receipt()); await first })
+  expect(view.result.current.busy).toBe(identify(card))
+  expect(view.result.current.installationFacts).toEqual({})
+  await act(async () => { resolvers[1]!(receipt()); await retry })
+  expect(view.result.current.busy).toBeNull()
+  expect(view.result.current.installationFacts[card.skill_id]).toMatchObject({ installed_source_ref: "skill:trial-version", enabled: true })
+})
+
+
+it.each([false, true])("catalog detail recheck uses the current cursor and never substitutes a later revision (%s)", async (changed) => {
+  let round = 1
+  const cursorCalls: string[] = []
+  let failCurrentPage = true
+  const response = (body: unknown) => Response.json(body, { headers: { "cache-control": "private, no-store", "x-request-id": "req-catalog-paging" } })
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    const path = String(input)
+    if (path.endsWith("ListSkills")) return response({ userAddedSkills: [], officialSkills: [] })
+    if (path.endsWith("ListHubSkills")) {
+      const body = JSON.parse(String(init?.body))
+      if (!body.pageToken) return response({ skills: [{ skillId: "first-series", displayName: "First card", currentVersion: { versionUid: "first-revision" } }], nextPageToken: round === 1 ? "old-next" : "current-next", tagOptions: {} })
+      cursorCalls.push(body.pageToken)
+      if (round === 2 && failCurrentPage) { failCurrentPage = false; throw Error("current page failed") }
+      return response({ skills: [{ skillId: "paged-series", displayName: "Paged skill", currentVersion: { versionUid: round === 2 && changed ? "newer-revision" : "paged-revision" } }], tagOptions: {} })
+    }
+    if (path.endsWith("GetSkill")) return response({ skill: { id: "paged-series", version: "paged-revision", displayName: "Paged skill", description: "Private page-two detail" }, downloadInfo: { downloadUrl: "/api/skill-downloads/paged", filename: "paged.zip", expiresAt: "2028-01-01T00:00:00Z" } })
+    throw Error("Unexpected catalog request")
+  })
+  const surface = (admitted: boolean, generation: number) => <LocaleProvider><KokoroSkillsSurface preview={false} projectReadBoundary={{ admitted, subject: `paged-actor-${changed}`, generation }} onPrompt={vi.fn()} /></LocaleProvider>
+  const view = render(surface(true, 1))
+  fireEvent.click(await screen.findByRole("button", { name: "加载更多" }))
+  fireEvent.click(await screen.findByRole("button", { name: "Paged skill" }))
+  await screen.findByText("Private page-two detail")
+  const dialog = screen.getByRole("dialog")
+  round = 2
+  view.rerender(surface(false, 2))
+  expect(screen.getByRole("dialog")).toBe(dialog)
+  expect(within(dialog).queryByText("Private page-two detail")).toBeNull()
+  view.rerender(surface(true, 2))
+  fireEvent.click(await screen.findByRole("button", { name: "加载更多" }))
+  await within(dialog).findByRole("alert")
+  fireEvent.click(within(dialog).getByRole("button", { name: "加载更多" }))
+  await waitFor(() => expect(cursorCalls).toEqual(["old-next", "current-next", "current-next"]))
+  if (changed) {
+    await within(dialog).findByRole("alert")
+    expect(within(dialog).queryByRole("heading", { name: "Paged skill" })).toBeNull()
+    expect(within(dialog).queryByText("Private page-two detail")).toBeNull()
+  } else await within(dialog).findByRole("heading", { name: "Paged skill" })
+  expect(screen.getByRole("dialog")).toBe(dialog)
+})
+
+
+it.each(["network", "retired"])("unknown share survives same actor recheck without an implicit second command (%s)", async kind => {
+  const writes = vi.fn(async () => {
+    if (kind === "network") throw Error("unknown network result")
+    return new Promise<Response>(() => undefined)
+  })
+  vi.spyOn(globalThis, "fetch").mockImplementation(async input => {
+    if (String(input).endsWith("/skill-shares")) return writes()
+    return Response.json({ skill: { id: "trial-series", version: "trial-version", displayName: "Owner trial", description: "Owner facts" }, downloadInfo: { downloadUrl: "/api/skill-downloads/trial", filename: "fixture.zip", expiresAt: "2028-01-01T00:00:00Z" } })
+  })
+  const dialog = (admitted: boolean, generation: number) => <LocaleProvider><ManusSkillDetailDialog readBoundary={{ admitted, subject: `share-recheck-${kind}`, generation }} skill={{ ...executableTrial, installed: true }} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={() => false} /></LocaleProvider>
+  const view = render(dialog(true, 1))
+  fireEvent.click(await screen.findByRole("button", { name: "分享技能" }))
+  await waitFor(() => expect(writes).toHaveBeenCalledTimes(1))
+  if (kind === "network") await screen.findByRole("button", { name: "创建新的分享" })
+  view.rerender(dialog(false, 2))
+  view.rerender(dialog(true, 2))
+  const newShare = await screen.findByRole("button", { name: "创建新的分享" })
+  expect(screen.getByRole("button", { name: "分享技能" })).toBeDisabled()
+  expect(writes).toHaveBeenCalledTimes(1)
+  fireEvent.click(newShare)
+  await waitFor(() => expect(writes).toHaveBeenCalledTimes(2))
+})
+
+it.each([403, 412])("a confirmed installation rejection permits a new revision intent (%s)", async status => {
+  const writes = vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json({ error: { code: status === 403 ? "skill_forbidden" : "skill_installation_precondition_failed", message: "Rejected", retryable: false } }, { status, headers: { "cache-control": "private, no-store", "x-request-id": "req-known-rejection" } }))
+  const card = { ...executableTrial, installed: false, enabled: false }
+  const identify = (value: import("@/hub/schemas").SkillCatalogCard) => `${value.skill_id}:${value.revision_skill_id}`
+  const view = renderHook(({ generation }) => useCatalogSkillInstallation({ admitted: true, subject: `rejected-${status}`, generation }, undefined, "known-rejection", identify), { initialProps: { generation: 1 } })
+  await act(async () => { await view.result.current.setEnabled(card) })
+  expect(writes).toHaveBeenCalledTimes(1)
+  view.rerender({ generation: 2 })
+  await act(async () => { await view.result.current.setEnabled({ ...card, revision_skill_id: "replacement-revision" }) })
+  expect(writes).toHaveBeenCalledTimes(2)
+  expect(JSON.parse(String(writes.mock.calls[1]?.[1]?.body))).toEqual({ source_ref: "skill:replacement-revision" })
+})
+
+
+it("catalog GitHub recheck retires private preview choices without losing typed repository input", async () => {
+  const reads = vi.spyOn(globalThis, "fetch").mockImplementation(async () => Response.json({ data: { selection_required: true, repository_url: "https://github.com/acme/skills", commit: "a".repeat(40), paths: ["private-one", "private-two"] } }, { headers: { "cache-control": "private, no-store", "x-request-id": "req-github-recheck" } }))
+  const dialog = (admitted: boolean, generation: number) => <LocaleProvider><GithubImportDialog readBoundary={{ admitted, subject: "github-recheck", generation }} open onOpenChange={vi.fn()} /></LocaleProvider>
+  const view = render(dialog(true, 1))
+  fireEvent.change(screen.getByTestId("github-repository-input"), { target: { value: "acme/skills" } })
+  fireEvent.click(screen.getByTestId("github-import-submit"))
+  await screen.findByRole("button", { name: "private-one" })
+  view.rerender(dialog(false, 2))
+  expect(screen.queryByRole("button", { name: "private-one" })).toBeNull()
+  expect(screen.getByTestId("github-repository-input")).toHaveValue("acme/skills")
+  view.rerender(dialog(true, 2))
+  expect(screen.queryByRole("button", { name: "private-one" })).toBeNull()
+  expect(reads).toHaveBeenCalledTimes(1)
+  fireEvent.click(screen.getByTestId("github-import-submit"))
+  await screen.findByRole("button", { name: "private-one" })
+  expect(reads).toHaveBeenCalledTimes(2)
+})
+
+it("catalog local import recheck retires an acknowledged result rather than redisplaying private metadata", async () => {
+  const expiry = "2999-01-01T00:00:00Z"
+  window.sessionStorage.setItem("kokoro.skills.local-import.v1", JSON.stringify({ subject: "upload-recheck", intent_id: "own-intent", expires_at: expiry }))
+  const reads = vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json({ data: {
+    intent_id: "own-intent", skill_id: "own-series", phase: "completed", expires_at: expiry,
+    upload_proof: { upload_id: "own-upload", asset_id: "own-asset", source_version_id: "own-version", size_bytes: "3", content_sha256: "a".repeat(64) },
+    skill: { skill_id: "own-revision", source_ref: "skill:own-revision", series_id: "own-series", revision: "1", status: "active", name: "Private imported name", summary: "Owner description", tags: [], example_prompts: [], category_keys: [], skill_updated_at: "2026-10-10T00:00:00Z", product: { publication_audience: "owner", state_version: "4", source_kind: "personal" }, package_phase: "valid" },
+  } }, { headers: { "cache-control": "private, no-store", "x-request-id": "req-upload-recheck" } }))
+  const completed = vi.fn()
+  const dialog = (admitted: boolean, generation: number) => <LocaleProvider><SkillUploadDialog readBoundary={{ admitted, subject: "upload-recheck", generation }} open onOpenChange={vi.fn()} onPublished={completed} /></LocaleProvider>
+  const view = render(dialog(true, 1))
+  fireEvent.click(screen.getByRole("button", { name: "查询导入状态" }))
+  await screen.findByText("Private imported name")
+  expect(completed).toHaveBeenCalledTimes(1)
+  view.rerender(dialog(false, 2))
+  expect(screen.queryByText("Private imported name")).toBeNull()
+  view.rerender(dialog(true, 2))
+  expect(screen.queryByText("Private imported name")).toBeNull()
+  expect(reads).toHaveBeenCalledTimes(1)
+  expect(completed).toHaveBeenCalledTimes(1)
 })

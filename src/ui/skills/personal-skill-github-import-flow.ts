@@ -66,6 +66,9 @@ export function createPersonalSkillGithubImportFlow(options: { github: ReturnTyp
   return {
     subscribe: (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener) } }, getSnapshot: () => state,
     setAdmitted: (value: boolean) => { admitted = value; if (!value) cancel() }, cancel,
+    // Rechecks retire read-only choices and acknowledged result presentation,
+    // not an unresolved write's immutable selector or command keys.
+    retireRead: () => { cancel(); if (["select", "ready", "completed"].includes(state.kind)) clearIntent() },
     retire: () => { admitted = false; cancel(); clearIntent() },
     finishCompleted: () => { if (state.kind === "completed") clearIntent() },
     preview: async (url: string) => { if (active || state.kind !== "idle" && !(state.kind === "failed" && state.stage === "preview")) return; repositoryUrl = url; await run("preview") },

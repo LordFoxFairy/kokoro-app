@@ -1606,3 +1606,5 @@ fixture and never sends this mutation. Error response or malformed success stays
 Compatible extra owner fields are ignored by the consumer validator; required Project identity fields
 remain mandatory. Once a valid owner 200 has returned, a failed navigation retry reuses that confirmed
 id and does not resend POST.
+
+Skills 目录重核修复仅改变 Web 内部展示/请求生命周期：不新增 HTTP 字段、endpoint 或授权协议。正常 session 重核期间私有 API client 按既有准入代际退休，详情 placeholder 不发送 owner 请求；恢复后仅使用本代列表与详情。安装仍为既有严格 typed command 和同键未知结果恢复，未增加个人原子升级或前端移除/重装旁路。

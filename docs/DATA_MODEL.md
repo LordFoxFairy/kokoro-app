@@ -1258,3 +1258,5 @@ BFF snapshot + command receipt + durable AG-UI events
 不新增 SQL/Redis/browser storage。Skill 卡片的内部 `installed_source_ref` 来自已验证安装投影的精确 source（目录 join 使用安装的 version UID），和目录 current source 分开；缺失时不合成。它不是新增 owner wire 字段，亦非可执行授权。
 
 试用选择仅在内存持有 name/sourceRef、engine、实际 conversation ID 与 admission owner；名称只用于标签，只有 exact source ref 进入既有消息数组。第一次离开该会话/身份即退役，不因返回相同 ID 复活，不从旧 pinned name 或持久草稿恢复隐含选择。原消息提交冻结集合及幂等重试保持。
+
+目录搜索/筛选/详情 locator 是 actor 所属的内存展示意图，不包含名称、描述、安装权限、包文本或执行能力；代际变化保留意图，不保留过期私有事实。分页 cursor 仍属于本代实际页，不随 locator 迁移。未知安装命令的 source/key 是冻结意图而非确认状态；跨 actor 整体退休，无新 browser storage 或 owner schema。

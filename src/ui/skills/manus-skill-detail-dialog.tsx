@@ -1,8 +1,8 @@
 "use client"
 
 import Image from "next/image"
-import { ChevronDown, ChevronRight, Download, FileText, Folder, Menu, Plus, Share } from "lucide-react"
-import { useEffect, useRef, useState, type RefObject } from "react"
+import { ChevronRight, Download, FileText, Menu, Plus, Share } from "lucide-react"
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -21,6 +21,7 @@ import { SkillTrialExamples } from "./skill-trial-examples"
 
 import styles from "./manus-skill-detail-dialog.module.css"
 import { SkillPackageDocument } from "./skill-package-document"
+import { SkillPackageFiles } from "./skill-package-files"
 
 type DetailFlight = {
   controller: AbortController
@@ -102,6 +103,10 @@ function subscribeSkillDetail(cacheKey: string, skillId: string): DetailSubscrip
 type Props = {
   readBoundary: ProjectReadBoundary
   preview?: boolean
+  pending?: boolean
+  pendingFailed?: boolean
+  pendingBusy?: boolean
+  onLoadMore?: () => void
   sharedSummary?: ShareSummary
   onAddShared?: () => void
   installationNotice?: string | undefined
@@ -156,14 +161,15 @@ function displayDate(value: string | undefined, locale: string): string | null {
 /** A stable, server-backed catalog detail dialog. It never synthesizes prompts,
  * source state or package identifiers in the browser. Package text comes only
  * from the admitted published-revision inspection boundary. */
-export function ManusSkillDetailDialog({ preview = false, readBoundary: boundary, skill, open, busy = false, installationState, actionFailed = false, publisherLabel, categoryLabels = [], onOpenChange, onAdd, onTry, returnFocusRef, sharedSummary, onAddShared, installationNotice, onRetryInstallation }: Props) {
+export function ManusSkillDetailDialog({ preview = false, pending = false, pendingFailed = false, pendingBusy = false, onLoadMore, readBoundary: boundary, skill, open, busy = false, installationState, actionFailed = false, publisherLabel, categoryLabels = [], onOpenChange, onAdd, onTry, returnFocusRef, sharedSummary, onAddShared, installationNotice, onRetryInstallation }: Props) {
   const { locale, t } = useLocale()
-  const shareIntents = useRef(new Map<string, { ack: ShareAck | null; unknown: boolean; pending: boolean; controller: AbortController | null }>())
+  const shareIntents = useRef(new Map<string, { identity: string; ack: ShareAck | null; unknown: boolean; pending: boolean; controller: AbortController | null }>())
   type ShareState = "pending" | "copied" | "copyFailed" | "failed" | "unknown"
   const [shareStates, setShareStates] = useState<Record<string, ShareState>>({})
+  const [unknownShares, setUnknownShares] = useState<Record<string, boolean>>({})
   const [shareSubject, setShareSubject] = useState(boundary.subject)
-  if (shareSubject !== boundary.subject) { setShareSubject(boundary.subject); setShareStates({}) }
-  useEffect(() => {
+  if (shareSubject !== boundary.subject) { setShareSubject(boundary.subject); setShareStates({}); setUnknownShares({}) }
+  useLayoutEffect(() => {
     const intents = shareIntents.current
     return () => { for (const intent of intents.values()) intent.controller?.abort(); intents.clear() }
   }, [boundary.subject])
@@ -181,7 +187,17 @@ export function ManusSkillDetailDialog({ preview = false, readBoundary: boundary
   const [readerAttempt, setReaderAttempt] = useState(0)
   const [collapsedFolders, setCollapsedFolders] = useState<ReadonlySet<string>>(new Set())
   const [mobileFilesOpen, setMobileFilesOpen] = useState(false)
-  const identity = !open ? null : sharedSummary ? JSON.stringify(["shared", boundary.subject, sharedSummary.share_id, sharedSummary.source_ref]) : skill?.skill_id ? JSON.stringify([skill.skill_id, skill.revision_skill_id]) : null
+  const resourceIdentity = !open ? null : sharedSummary ? JSON.stringify(["shared", boundary.subject, sharedSummary.share_id, sharedSummary.source_ref]) : skill?.skill_id ? JSON.stringify([skill.skill_id, skill.revision_skill_id]) : null
+  const identity = resourceIdentity === null ? null : JSON.stringify([resourceIdentity, boundary.admitted, boundary.subject, boundary.generation])
+  const token = useMemo(() => ({ identity }), [identity])
+  const liveToken = useRef<object | null>(null)
+  useLayoutEffect(() => { liveToken.current = token; return () => { if (liveToken.current === token) liveToken.current = null } }, [token])
+  const isLive = useCallback(() => identity !== null && boundary.admitted && boundary.subject !== null && liveToken.current === token, [boundary.admitted, boundary.subject, identity, token])
+  const dialogRef = useRef<HTMLDivElement | null>(null)
+  const [detailHeight, setDetailHeight] = useState<number | null>(null)
+  useLayoutEffect(() => {
+    if (!pending) { const height = dialogRef.current?.getBoundingClientRect().height; if (height) setDetailHeight(height) }
+  }, [pending, identity, detail, readerOpen, directory, readerFile])
   const [currentIdentity, setCurrentIdentity] = useState(identity)
   const downloadIdentity = sharedSummary ? JSON.stringify([identity, boundary.admitted]) : identity
   const [currentDownloadIdentity, setCurrentDownloadIdentity] = useState(downloadIdentity)
@@ -217,23 +233,23 @@ export function ManusSkillDetailDialog({ preview = false, readBoundary: boundary
   const sharedDownloadAdmitted = sharedSummary ? boundary.admitted : true
   const sharedDownloadSubject = sharedSummary ? boundary.subject : null
   useEffect(() => {
-    if (!open || sharedSummary && !sharedDownloadAdmitted || !skill?.skill_id && !sharedSummary) return
+    if (!open || !boundary.admitted || boundary.subject === null || !skill?.skill_id && !sharedSummary) return
     if (sharedSummary || !skill?.skill_id) return
     let active = true
-    const cacheKey = JSON.stringify([currentFetchScope(), boundary.subject ?? "anonymous", skill.skill_id, skill.revision_skill_id ?? null])
+    const cacheKey = JSON.stringify([currentFetchScope(), boundary.subject ?? "anonymous", boundary.generation, skill.skill_id, skill.revision_skill_id ?? null])
     const subscription = subscribeSkillDetail(cacheKey, skill.skill_id)
     void subscription.promise.then((next) => {
-      if (active) setDetail(next)
+      if (active && isLive()) setDetail(next)
     }).catch(() => {
-      if (active) setFailed(true)
+      if (active && isLive()) setFailed(true)
     })
     return () => {
       active = false
       subscription.release()
     }
-  }, [open, skill?.skill_id, skill?.revision_skill_id, sharedSummary, sharedDownloadAdmitted, sharedDownloadSubject, boundary.subject])
+  }, [open, skill?.skill_id, skill?.revision_skill_id, sharedSummary, sharedDownloadAdmitted, sharedDownloadSubject, boundary.subject, boundary.admitted, boundary.generation, isLive])
 
-  const boundRevision = open && sharedSummary ? boundary.admitted ? sharedSummary.skill.skill_id : null : open && skill?.revision_skill_id !== undefined && detail !== null && detail.skill.id === skill.skill_id
+  const boundRevision = !boundary.admitted || boundary.subject === null ? null : open && sharedSummary ? boundary.admitted ? sharedSummary.skill.skill_id : null : open && skill?.revision_skill_id !== undefined && detail !== null && detail.skill.id === skill.skill_id
     && detail.skill.version === skill.revision_skill_id ? skill.revision_skill_id : null
 
   const sharedRevision = sharedSummary?.skill.revision
@@ -242,33 +258,33 @@ export function ManusSkillDetailDialog({ preview = false, readBoundary: boundary
     if (!readerOpen || boundRevision === null) return
     const controller = new AbortController()
     void getManusSkillPackage(boundRevision, undefined, controller.signal).then((value) => {
-      if (controller.signal.aborted) return
+      if (controller.signal.aborted || !isLive()) return
       if (sharedRevision !== undefined && value.revision !== sharedRevision) throw new Error("skill_response_invalid")
       setDirectory(value)
       const path = value.files.some((file) => file.path === "SKILL.md") ? "SKILL.md" : null
       setSelectedPath(path)
       setReaderLoading(path !== null)
     }).catch(() => {
-      if (!controller.signal.aborted) { setReaderFailed(true); setReaderLoading(false) }
+      if (!controller.signal.aborted && isLive()) { setReaderFailed(true); setReaderLoading(false) }
     })
     return () => controller.abort()
-  }, [readerOpen, boundRevision, readerAttempt, sharedRevision])
+  }, [readerOpen, boundRevision, readerAttempt, sharedRevision, isLive])
 
   useEffect(() => {
     if (!readerOpen || boundRevision === null || directory === null || selectedPath === null) return
     const controller = new AbortController()
     void getManusSkillPackage(boundRevision, selectedPath, controller.signal, directory).then((value) => {
-      if (controller.signal.aborted) return
+      if (controller.signal.aborted || !isLive()) return
       setReaderFile(value.selected_file)
       setReaderLoading(false)
     }).catch(() => {
-      if (!controller.signal.aborted) { setReaderFailed(true); setReaderLoading(false) }
+      if (!controller.signal.aborted && isLive()) { setReaderFailed(true); setReaderLoading(false) }
     })
     return () => controller.abort()
-  }, [readerOpen, boundRevision, directory, selectedPath])
+  }, [readerOpen, boundRevision, directory, selectedPath, isLive])
 
   const restartReader = () => {
-    if (boundRevision === null) return
+    if (boundRevision === null || !isLive()) return
     setReaderOpen(true)
     setCollapsedFolders(new Set())
     setDirectory(null)
@@ -280,7 +296,7 @@ export function ManusSkillDetailDialog({ preview = false, readBoundary: boundary
     setReaderAttempt((attempt) => attempt + 1)
   }
   const selectFile = (path: string) => {
-    if (path === selectedPath) return
+    if (path === selectedPath || !isLive()) return
     setSelectedPath(path)
     setReaderFile(null)
     setReaderFailed(false)
@@ -288,7 +304,7 @@ export function ManusSkillDetailDialog({ preview = false, readBoundary: boundary
   }
 
   const download = async () => {
-    if ((!skill?.skill_id && !sharedSummary) || downloading) return
+    if (!isLive() || (!skill?.skill_id && !sharedSummary) || downloading) return
     const controller = new AbortController()
     downloadRequest.current?.abort()
     downloadRequest.current = controller
@@ -296,43 +312,46 @@ export function ManusSkillDetailDialog({ preview = false, readBoundary: boundary
     try {
       if (sharedSummary) {
         const result = await createSkillShareClient().download(sharedSummary.share_id, sharedSummary.source_ref, sharedSummary.skill.revision, controller.signal)
-        if (!controller.signal.aborted) window.location.assign(`/api${result.download_info.download_url}`)
+        if (!controller.signal.aborted && isLive()) window.location.assign(`/api${result.download_info.download_url}`)
       } else if (skill?.skill_id) {
         const result = await downloadManusSkill(skill.skill_id, controller.signal)
-        if (!controller.signal.aborted) window.location.assign(result.downloadInfo.downloadUrl)
+        if (!controller.signal.aborted && isLive()) window.location.assign(result.downloadInfo.downloadUrl)
       }
-    } catch { if (!controller.signal.aborted) setFailed(true) }
+    } catch { if (!controller.signal.aborted && isLive()) setFailed(true) }
     finally {
       if (downloadRequest.current === controller) downloadRequest.current = null
-      if (!controller.signal.aborted) setDownloading(false)
+      if (!controller.signal.aborted && isLive()) setDownloading(false)
     }
   }
 
   const sourceRef = boundRevision === null ? null : `skill:${boundRevision}`
-  const shareIdentity = boundary.admitted && boundary.subject && identity && sourceRef ? JSON.stringify([boundary.subject, sourceRef]) : null
+  // The command's unknown-result tombstone belongs to actor/source, while
+  // ACK and clipboard presentation belong only to this admitted read lifetime.
+  const shareSource = boundary.subject && sourceRef ? JSON.stringify([boundary.subject, sourceRef]) : null
+  const shareIdentity = boundary.admitted && identity && shareSource ? JSON.stringify([identity, shareSource]) : null
   const liveShareIdentity = useRef(shareIdentity)
-  useEffect(() => {
+  useLayoutEffect(() => {
     liveShareIdentity.current = shareIdentity
     const intents = shareIntents.current
-    if (shareIdentity === null) for (const intent of intents.values()) {
-      if (intent.pending && intent.ack === null) intent.unknown = true
+    return () => {
+      if (shareSource === null) return
+      const intent = intents.get(shareSource)
+      if (intent?.identity !== shareIdentity) return
+      if (intent.pending && intent.ack === null) {
+        intent.unknown = true
+        setUnknownShares(current => ({ ...current, [shareSource]: true }))
+      }
       intent.controller?.abort()
     }
-    return () => {
-      if (shareIdentity !== null) {
-        const intent = intents.get(shareIdentity)
-        if (intent?.pending && intent.ack === null) intent.unknown = true
-        intent?.controller?.abort()
-      }
-    }
-  }, [shareIdentity])
+  }, [shareIdentity, shareSource])
   const share = async (newIntent = false) => {
-    if (!shareIdentity || !sourceRef) return
-    let intent = shareIntents.current.get(shareIdentity)
+    if (!isLive() || !shareIdentity || !shareSource || !sourceRef) return
+    let intent = shareIntents.current.get(shareSource)
     if (intent?.pending || intent?.unknown && !newIntent) return
-    if (!intent || newIntent) {
-      intent = { ack: null, unknown: false, pending: false, controller: null }
-      shareIntents.current.set(shareIdentity, intent)
+    if (!intent || newIntent || intent.identity !== shareIdentity) {
+      intent = { identity: shareIdentity, ack: null, unknown: false, pending: false, controller: null }
+      shareIntents.current.set(shareSource, intent)
+      setUnknownShares(current => ({ ...current, [shareSource]: false }))
     }
     intent.pending = true
     const controller = new AbortController()
@@ -342,34 +361,35 @@ export function ManusSkillDetailDialog({ preview = false, readBoundary: boundary
       if (intent.ack === null) {
         try { intent.ack = await createSkillShareClient().create({ source_ref: sourceRef }, controller.signal) }
         catch (error) {
-          const known = error instanceof Error && "reason" in error && error.reason === "http" && "status" in error && typeof error.status === "number" && error.status < 500
+          const known = error instanceof Error && "reason" in error && error.reason === "http" && "status" in error && typeof error.status === "number" && error.status >= 400 && error.status < 500 && error.status !== 409
           intent.unknown = !known
-          if (shareIntents.current.get(shareIdentity) === intent) setShareStates(current => ({ ...current, [shareIdentity]: known ? "failed" : "unknown" }))
+          if (shareIntents.current.get(shareSource) === intent) setUnknownShares(current => ({ ...current, [shareSource]: !known }))
+          if (isLive() && shareIntents.current.get(shareSource) === intent) setShareStates(current => ({ ...current, [shareIdentity]: known ? "failed" : "unknown" }))
           return
         }
       }
-      if (controller.signal.aborted || liveShareIdentity.current !== shareIdentity) return
+      if (controller.signal.aborted || !isLive() || liveShareIdentity.current !== shareIdentity) return
       try {
         if (!navigator.clipboard?.writeText) throw new Error("clipboard unavailable")
         await navigator.clipboard.writeText(intent.ack.url)
-        if (!controller.signal.aborted && liveShareIdentity.current === shareIdentity) setShareStates(current => ({ ...current, [shareIdentity]: "copied" }))
+        if (!controller.signal.aborted && isLive() && liveShareIdentity.current === shareIdentity) setShareStates(current => ({ ...current, [shareIdentity]: "copied" }))
       } catch {
-        if (!controller.signal.aborted && liveShareIdentity.current === shareIdentity) setShareStates(current => ({ ...current, [shareIdentity]: "copyFailed" }))
+        if (!controller.signal.aborted && isLive() && liveShareIdentity.current === shareIdentity) setShareStates(current => ({ ...current, [shareIdentity]: "copyFailed" }))
       }
     } finally {
-      if (controller.signal.aborted && shareIntents.current.get(shareIdentity) === intent) setShareStates(current => ({ ...current, [shareIdentity]: intent.ack === null ? "unknown" : "copyFailed" }))
+      if (isLive() && controller.signal.aborted && shareIntents.current.get(shareSource) === intent) setShareStates(current => ({ ...current, [shareIdentity]: intent.ack === null ? "unknown" : "copyFailed" }))
       intent.pending = false
       if (intent.controller === controller) intent.controller = null
     }
   }
-  const shareStatus = shareIdentity === null ? null : shareStates[shareIdentity] ?? null
+  const shareStatus = shareIdentity === null ? null : shareSource !== null && unknownShares[shareSource] ? "unknown" : shareStates[shareIdentity] ?? null
 
-  if (!skill && !sharedSummary) return null
+  if (!skill && !sharedSummary && !pending) return null
   const record = detail !== null && detail.skill.id === skill?.skill_id ? detail.skill : null
   const downloadInfo = detail !== null && detail.skill.id === skill?.skill_id && !sharedSummary ? detail.downloadInfo : null
   const loading = !sharedSummary && open && skill?.skill_id !== undefined && record === null && !failed
-  const title = sharedSummary?.skill.display_name ?? record?.displayName ?? record?.name ?? skill!.name
-  const description = sharedSummary?.skill.description ?? record?.userDescription ?? record?.description ?? skill!.description
+  const title = sharedSummary?.skill.display_name ?? record?.displayName ?? record?.name ?? skill?.name ?? t("skills.title")
+  const description = sharedSummary?.skill.description ?? record?.userDescription ?? record?.description ?? skill?.description ?? ""
   const examples = sharedSummary?.skill.example_prompts ?? record?.exampleQuestions ?? skill?.example_questions ?? []
   const updated = displayDate(sharedSummary?.skill.updated_at ?? record?.updatedAt ?? (skill?.updated_at ? new Date(skill.updated_at * 1000).toISOString() : undefined), locale)
   const installed = installationState === undefined ? record?.added ?? skill?.installed ?? false : installationState.installed && installationState.enabled
@@ -377,32 +397,6 @@ export function ManusSkillDetailDialog({ preview = false, readBoundary: boundary
   const cover = sharedSummary?.skill.cover_image === undefined ? record?.coverImage ?? skill?.cover_image : ownerCoverPath(sharedSummary.skill.cover_image, sharedSummary.skill.skill_id)
   const canShare = Boolean(sharedSummary || skill?.revision_skill_id)
   const canDownload = Boolean(downloadInfo || sharedSummary)
-
-  // Folder nodes are presentation-only prefixes of the owner-approved paths.
-  // No archive member or generated content is added to the inventory.
-  const renderFiles = (prefix: string): React.ReactNode => {
-    const entries = new Map<string, { path: string; folder: boolean }>()
-    for (const file of directory?.files ?? []) {
-      if (!file.path.startsWith(prefix)) continue
-      const remainder = file.path.slice(prefix.length)
-      const name = remainder.split("/")[0]!
-      entries.set(name, { path: `${prefix}${name}`, folder: remainder.includes("/") })
-    }
-    return [...entries].map(([name, entry]) => {
-      if (!entry.folder) return <li key={entry.path}>
-        <button type="button" aria-label={entry.path} aria-pressed={entry.path === selectedPath} onClick={() => selectFile(entry.path)}><FileText aria-hidden="true" /><span>{name}</span></button>
-      </li>
-      const expanded = !collapsedFolders.has(entry.path)
-      return <li key={entry.path}>
-        <button type="button" aria-expanded={expanded} onClick={() => setCollapsedFolders((current) => {
-          const next = new Set(current)
-          if (next.has(entry.path)) next.delete(entry.path); else next.add(entry.path)
-          return next
-        })}>{expanded ? <ChevronDown aria-hidden="true" /> : <ChevronRight aria-hidden="true" />}<Folder aria-hidden="true" /><span>{name}</span></button>
-        {expanded ? <ul>{renderFiles(`${entry.path}/`)}</ul> : null}
-      </li>
-    })
-  }
 
   const metadata = [
     publisherLabel,
@@ -413,6 +407,8 @@ export function ManusSkillDetailDialog({ preview = false, readBoundary: boundary
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
+        ref={dialogRef}
+        style={pending && detailHeight ? { minHeight: `min(${detailHeight}px, calc(100dvh - 2rem))` } : undefined}
         className={readerOpen ? `${styles.dialog} ${styles.readerDialog}` : styles.dialog}
         overlayClassName={styles.overlay!}
         data-testid="manus-skill-detail-dialog"
@@ -423,6 +419,11 @@ export function ManusSkillDetailDialog({ preview = false, readBoundary: boundary
           target.focus({ preventScroll: true })
         }}
       >
+        {pending ? <div className={styles.body}>
+          <DialogTitle>{t("skills.title")}</DialogTitle>
+          <DialogDescription role={pendingFailed ? "alert" : "status"}>{t(pendingFailed ? "skills.detailUnavailable" : "skills.detailLoading")}</DialogDescription>
+          {onLoadMore ? <Button type="button" variant="outline" disabled={pendingBusy} onClick={onLoadMore}>{t("rail.loadMore")}</Button> : null}
+        </div> : <>
         <DetailToolbar
           readerOpen={readerOpen}
           canShare={canShare}
@@ -473,7 +474,9 @@ export function ManusSkillDetailDialog({ preview = false, readBoundary: boundary
             ><Menu aria-hidden="true" /></button>
             <nav id="manus-skill-package-files" className={`${styles.fileList} ${mobileFilesOpen ? styles.mobileFileListOpen : ""}`} aria-label={t("skills.detailFiles")}>
               <p className={styles.fileNavHeading}>{t("skills.detailFiles")}</p>
-              <ul>{renderFiles("")}</ul>
+              <ul><SkillPackageFiles files={directory?.files ?? []} selectedPath={selectedPath} collapsedFolders={collapsedFolders} onSelect={selectFile} onToggle={path => setCollapsedFolders(current => {
+                const next = new Set(current); if (next.has(path)) next.delete(path); else next.add(path); return next
+              })} /></ul>
             </nav>
             <div className={styles.fileContent} aria-busy={readerLoading}>
               {selectedPath !== null ? <div className={styles.fileHeading}><FileText aria-hidden="true" /><span>{selectedPath}</span></div> : null}
@@ -492,6 +495,7 @@ export function ManusSkillDetailDialog({ preview = false, readBoundary: boundary
               </> : null}
             </div>
           </section> : null}
+        </>}
       </DialogContent>
     </Dialog>
   )
