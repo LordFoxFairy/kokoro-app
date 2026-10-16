@@ -340,6 +340,15 @@ it("展开态账户卡左对齐，通知动作保留在同一行", () => {
   expect(accountStatus?.querySelector('[data-testid="rail-utility-notifications"]')).toBeInTheDocument()
 })
 
+it("更多保留技能导航与个性化设置，明确电脑能力未开放", () => {
+  const { onOpenSettings } = renderRail({ navigation: [{ key: "skills", label: "技能" }] })
+  fireEvent.pointerDown(screen.getByTestId("rail-more"))
+  expect(screen.getByRole("menuitem", { name: /Computer Use/ })).toHaveAttribute("aria-disabled", "true")
+  expect(screen.getByRole("menuitem", { name: "技能" })).toHaveAttribute("href", "/app/skills")
+  fireEvent.click(screen.getByRole("menuitem", { name: "个性化" }))
+  expect(onOpenSettings).toHaveBeenCalledWith("personalization")
+})
+
 it("Manus 紧凑 rail 保留一级入口，并把次级页面收进更多菜单", () => {
   renderRail({
     collapsed: true,

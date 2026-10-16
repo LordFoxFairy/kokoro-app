@@ -172,6 +172,8 @@ function AppFrameRuntime({
 
   const navigationState = useAppFrameNavigation({
     engine,
+    scope: sessionScope,
+    chatHref,
     projectRef,
     projectWorkspace,
     standaloneSurface,

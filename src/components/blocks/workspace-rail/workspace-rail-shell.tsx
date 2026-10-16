@@ -329,7 +329,7 @@ export function WorkspaceRailShell({
         data-collapsed={contentCollapsed}
         data-active-navigation-key={activeNavigationKey ?? "none"}
         data-desktop-web="true"
-        data-desktop-rail={!isMobile ? "true" : undefined}
+        data-desktop-rail={!isMobile ? "true" : "false"}
       >
         <WorkspaceRailHeader
           chatHref={chatHref}

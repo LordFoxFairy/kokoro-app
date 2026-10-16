@@ -2,13 +2,14 @@
 
 import { Fragment, type Dispatch, type RefObject, type SetStateAction, useState } from "react"
 import Link from "next/link"
-import { Bot, ChevronDown, ChevronRight, Ellipsis, Folder, Monitor, Plus, SquarePen, WandSparkles } from "lucide-react"
+import { Bot, Check, ChevronDown, ChevronRight, Ellipsis, Folder, Grid2X2, Monitor, Plus, SquareMousePointer, SquarePen, WandSparkles } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
@@ -131,11 +132,23 @@ export function WorkspaceRailNavigation({
     .filter((item): item is WorkbenchNavigationItem => item !== undefined)
   const pluginsDestination = navigationByKey.get("mcp")
   const PluginsIcon = pluginsDestination?.icon
-  // Skills and scheduled work are intentionally tucked behind “更多”, matching
-  // the live Manus rail. They retain their typed route contracts; this is only
-  // a presentation grouping, not another navigation model.
+  // Manus' main More actions are Computer Use, Skills and Personalization.
+  // Keep actual Kokoro-only destinations separately instead of removing access.
   const tuckedDestinations = workbenchNavigation.filter((item) => !primaryDestinations.includes(item) && item !== pluginsDestination)
   const moreActive = tuckedDestinations.some((item) => item.key === activeNavigationKey)
+  const renderTuckedDestination = ({ key, label, icon: Icon, settingsTab, href }: WorkbenchNavigationItem) => href ? (
+    <DropdownMenuItem key={key} asChild>
+      <Link href={href} {...(mountedSurfacePrefetch === undefined ? {} : { prefetch: mountedSurfacePrefetch })} onClickCapture={(event) => interceptMountedSurfaceNavigation(event, href)} onClick={closeNavigation} aria-current={activeNavigationKey === key ? "page" : undefined}>
+        <span className={navigationStyles.moreGlyph}><Icon aria-hidden="true" /></span>
+        <span>{label}</span>
+        {activeNavigationKey === key ? <Check className={navigationStyles.moreCheck} aria-hidden="true" /> : null}
+      </Link>
+    </DropdownMenuItem>
+  ) : settingsTab ? (
+    <DropdownMenuItem key={key} onSelect={() => { onOpenSettings(settingsTab); closeNavigation() }}>
+      <span className={navigationStyles.moreGlyph}><Icon aria-hidden="true" /></span><span>{label}</span>
+    </DropdownMenuItem>
+  ) : null
   const projectReadFeedback = projectListStatus === "loading" ? (
     <WorkspaceRailLoadingPlaceholder
       label={t("firstSite.projectsLoading")}
@@ -284,7 +297,7 @@ export function WorkspaceRailNavigation({
             })() : null}
 
             {tuckedDestinations.length > 0 ? <SidebarMenuItem>
-              <DropdownMenu>
+              <DropdownMenu modal={false}>
                 <DropdownMenuTrigger asChild>
                   <SidebarMenuButton
                     type="button"
@@ -300,20 +313,16 @@ export function WorkspaceRailNavigation({
                     {navigationExpanded ? <span className={railStyles.navLabel}>{t("rail.more")}</span> : null}
                   </SidebarMenuButton>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" side="right" sideOffset={8} className={navigationStyles.moreMenu}>
-                  {tuckedDestinations.map(({ key, label, icon: Icon, settingsTab, href }) => href ? (
-                    <DropdownMenuItem key={key} asChild>
-                      <Link href={href} {...(mountedSurfacePrefetch === undefined ? {} : { prefetch: mountedSurfacePrefetch })} onClickCapture={(event) => interceptMountedSurfaceNavigation(event, href)} onClick={closeNavigation} aria-current={activeNavigationKey === key ? "page" : undefined}>
-                        <Icon aria-hidden="true" />
-                        {label}
-                      </Link>
-                    </DropdownMenuItem>
-                  ) : settingsTab ? (
-                    <DropdownMenuItem key={key} onSelect={() => { onOpenSettings(settingsTab); closeNavigation() }}>
-                      <Icon aria-hidden="true" />
-                      {label}
-                    </DropdownMenuItem>
-                  ) : null)}
+                <DropdownMenuContent align="start" side="right" sideOffset={4} className={navigationStyles.moreMenu}>
+                  <DropdownMenuItem disabled aria-description={t("firstSite.unavailable")}>
+                    <span className={navigationStyles.moreGlyph}><SquareMousePointer aria-hidden="true" /></span><span>Computer Use</span>
+                  </DropdownMenuItem>
+                  {tuckedDestinations.filter((item) => item.key === "skills").map(renderTuckedDestination)}
+                  <DropdownMenuItem onSelect={() => { onOpenSettings("personalization"); closeNavigation() }}>
+                    <span className={navigationStyles.moreGlyph}><Grid2X2 aria-hidden="true" /></span><span>{t("settings.personalizationTitle")}</span>
+                  </DropdownMenuItem>
+                  {tuckedDestinations.some((item) => item.key !== "skills") ? <DropdownMenuSeparator /> : null}
+                  {tuckedDestinations.filter((item) => item.key !== "skills").map(renderTuckedDestination)}
                 </DropdownMenuContent>
               </DropdownMenu>
             </SidebarMenuItem> : null}
@@ -432,7 +441,7 @@ export function WorkspaceRailNavigation({
                         data-testid={testId}
                         data-navigation-section="project"
                       >
-                        <span className={itemStyles.projectGlyph} aria-hidden="true">
+                        <span className={itemStyles.projectGlyph} data-project-glyph="true" aria-hidden="true">
                           <Folder className={cn(railStyles.icon, itemStyles.projectFolderIcon)} />
                         </span>
                         <span className={itemStyles.itemTitle}>{project.name}</span>

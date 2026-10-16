@@ -1,6 +1,8 @@
 # ui/shell — 页面装配层
 
 - 挂载内导航：独立目录页面不解释/写入 conversation URL，不接管聊天恢复、错误或 Todo 状态；目录组件 key 不随后台 activeId 改变。返回 Direct/Project 仍按原会话深链恢复。
+- History 和延迟 URL 写入必须匹配当前 engine 的精确 scope pathname；跨 Direct/Project 的旧闭包不打开、清空或取消会话。新路由的 scope 自己恢复，未知地址不回落为 Direct。
+- 侧栏桌面密度按实测使用 14px 正文、13px 分组、36px 行；触屏 44px 命中区仅由显式 drawer 标记控制。“更多”保留 Skills/个性化和独立附加入口，Computer Use 未开放时明确禁用，不伪造可用能力。
 
 - Direct 会话清单由 AppFrame 常驻 reader 持有；进入 Project 不换成临时独立 reader。Project 当前清单仍按自身 scope 读取，身份/generation/admission、Move revision 和命令 ACK 仍决定失效；不引入跨身份全局缓存。运行结束刷新只比较同生命周期、已就绪且非水合中的 engine 状态，离开页面不冒充结束。
 

@@ -1,4 +1,4 @@
-import { cleanup, renderHook } from "@testing-library/react"
+import { act, cleanup, renderHook } from "@testing-library/react"
 import { afterEach, expect, it, vi } from "vitest"
 
 import { useAppFrameNavigation } from "@/components/blocks/app-frame/use-app-frame-navigation"
@@ -13,6 +13,8 @@ afterEach(() => {
 
 const options = {
   engine: null,
+  scope: { kind: "direct" } as const,
+  chatHref: "/app",
   projectRef: undefined,
   projectWorkspace: false,
   mounted: true,
@@ -44,6 +46,33 @@ it("direct chat still restores its shareable conversation URL", () => {
   expect(window.location.search).toBe("?conversation=conv-retained-direct")
 })
 
+it.each([
+  ["/app", "/app/project/project-next"],
+  ["/app", "/app/project/project-next?conversation=conv-next"],
+  ["/app/project/project-current", "/app?conversation=conv-next"],
+  ["/app/project/project-current", "/app/project/project-next?conversation=conv-next"],
+])("history from %s to %s never commands the departing scope", (source, destination) => {
+  window.history.replaceState(null, "", `${source}?conversation=conv-current`)
+  const engine = createSessionEngine({ client: createFakeClient(), storage: createMemoryStorage<ConversationStore>(null) })
+  engine.newConversation()
+  const open = vi.spyOn(engine, "openConversation").mockImplementation(() => {})
+  const create = vi.spyOn(engine, "newConversation").mockImplementation(() => {})
+  const project = source.includes("/project/")
+  renderHook(() => useAppFrameNavigation({ ...options, engine, activeId: "conv-current",
+    scope: project ? { kind: "project", projectRef: "project-current" } : options.scope,
+    projectWorkspace: project, projectRef: project ? "project-current" : undefined,
+  }))
+  open.mockClear()
+  act(() => {
+    window.history.replaceState(null, "", destination)
+    window.dispatchEvent(new PopStateEvent("popstate"))
+  })
+  expect(create).not.toHaveBeenCalled()
+  expect(open).not.toHaveBeenCalled()
+  expect(window.location.pathname + window.location.search).toBe(destination)
+  engine.dispose()
+})
+
 it.each(["/app", "/app/project/project-new?conversation=conv-project-new"])(
   "leaving a catalog for %s never restores the catalog's stale conversation query",
   (destination) => {
@@ -52,6 +81,7 @@ it.each(["/app", "/app/project/project-new?conversation=conv-project-new"])(
     const open = vi.spyOn(engine, "openConversation").mockImplementation(() => {})
     const view = renderHook(({ standaloneSurface }) => useAppFrameNavigation({
       ...options, engine, standaloneSurface,
+      scope: window.location.pathname.includes("/project/") ? { kind: "project", projectRef: "project-new" } : options.scope,
       projectWorkspace: window.location.pathname.includes("/project/"),
       projectRef: window.location.pathname.includes("/project/") ? "project-new" : undefined,
     }), { initialProps: { standaloneSurface: true } })

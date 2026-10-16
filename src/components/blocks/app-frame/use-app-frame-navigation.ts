@@ -4,6 +4,7 @@ import type { SessionEngine, MachineState } from "@/engine/machine"
 import type { CreationIntent } from "@/ui/composer/creation-intent-pill"
 import type { SettingsTab } from "@/ui/settings/settings-modal"
 import type { SkillsScopeFilter } from "@/ui/skills/skills-scope"
+import type { SessionScope } from "@/engine/session-scope"
 
 import {
   conversationIdFromLocation,
@@ -14,6 +15,8 @@ import {
 
 export type AppFrameNavigationOptions = {
   engine: SessionEngine | null
+  scope: SessionScope
+  chatHref: string
   projectRef: string | undefined
   projectWorkspace: boolean
   standaloneSurface?: boolean
@@ -27,6 +30,8 @@ export type AppFrameNavigationOptions = {
 /** Owns shareable URL state, route hydration, and creation-intent persistence. */
 export function useAppFrameNavigation({
   engine,
+  scope,
+  chatHref,
   projectRef,
   projectWorkspace,
   standaloneSurface = false,
@@ -36,6 +41,12 @@ export function useAppFrameNavigation({
   hydrating,
   machinePhase,
 }: AppFrameNavigationOptions) {
+  const scopePath = scope.kind === "project"
+    ? `/app/project/${encodeURIComponent(scope.projectRef)}`
+    : new URL(chatHref, "http://localhost").pathname
+  // popstate precedes the next React route commit. A departing engine must
+  // never interpret another scope's query (or overview) as a chat command.
+  const ownsLocation = useCallback(() => window.location.pathname.replace(/\/$/u, "") === scopePath.replace(/\/$/u, ""), [scopePath])
   // Client URL state starts from the server-safe empty value. Read the deep
   // link in a layout microtask so the first hydrated tree remains identical
   // to SSR while settings/capsules still appear before the next interaction.
@@ -112,7 +123,7 @@ export function useAppFrameNavigation({
   }, [])
 
   const syncConversationUrl = useCallback((id: string | null, mode: "push" | "replace"): void => {
-    if (typeof window === "undefined" || !isConversationLocation()) {
+    if (typeof window === "undefined" || !ownsLocation()) {
       return
     }
     const url = new URL(window.location.href)
@@ -135,14 +146,14 @@ export function useAppFrameNavigation({
     }
     const write = mode === "push" ? window.history.pushState : window.history.replaceState
     write.call(window.history, window.history.state, "", next)
-  }, [])
+  }, [ownsLocation])
 
   // A settings URL is a real client-side view state. Back/forward updates the
   // mounted Dialog without navigating away from the workspace shell.
   useEffect(() => {
     const onPopState = () => {
       setSettingsTab(settingsTabFromLocation())
-      if (!isConversationLocation()) return
+      if (!ownsLocation()) return
       const requestedConversation = conversationIdFromLocation()
       const previousConversation = conversationUrlRef.current
       conversationUrlRef.current = requestedConversation
@@ -169,13 +180,13 @@ export function useAppFrameNavigation({
     }
     window.addEventListener("popstate", onPopState)
     return () => window.removeEventListener("popstate", onPopState)
-  }, [engine, projectWorkspace, setDeploymentIntent])
+  }, [engine, ownsLocation, projectWorkspace, setDeploymentIntent])
 
   // AppFrame remains mounted across App Router transitions. Re-read the URL
   // when entering/leaving a project so a stale conversation query cannot make
   // the next project overview look like an active task.
   useEffect(() => {
-    if (standaloneSurface || !isConversationLocation()) return
+    if (standaloneSurface || !ownsLocation()) return
     const requestedConversation = conversationIdFromLocation()
     conversationUrlRef.current = requestedConversation
     // Route leaves are intentionally empty so AppFrame stays mounted. Apply a
@@ -186,12 +197,12 @@ export function useAppFrameNavigation({
     }
     const frame = window.requestAnimationFrame(() => setConversationRouteId(requestedConversation))
     return () => window.cancelAnimationFrame(frame)
-  }, [engine, projectRef, projectWorkspace, standaloneSurface])
+  }, [engine, ownsLocation, projectRef, projectWorkspace, standaloneSurface])
 
   // Deep links are applied after hydration so the URL wins over the locally
   // remembered active session without changing the SSR/first paint contract.
   useEffect(() => {
-    if (!mounted || standaloneSurface || !isConversationLocation() || conversationUrlHydratedRef.current) {
+    if (!mounted || standaloneSurface || !ownsLocation() || conversationUrlHydratedRef.current) {
       return
     }
     conversationUrlHydratedRef.current = true
@@ -201,7 +212,7 @@ export function useAppFrameNavigation({
     if (requestedConversation !== null && requestedConversation !== activeId) {
       engine?.openConversation(requestedConversation)
     }
-  }, [activeId, engine, mounted, standaloneSurface])
+  }, [activeId, engine, mounted, ownsLocation, standaloneSurface])
 
   // A restored direct session and a newly submitted first message both acquire
   // a stable URL without adding an extra history entry on every stream event.
@@ -287,14 +298,6 @@ export function useAppFrameNavigation({
     syncConversationUrl,
     settingsHistoryEntryRef,
   }
-}
-
-// History events arrive before React commits the next surface. Check the
-// actual location as well as props so a departing chat effect cannot attach
-// its conversation to a catalog or hydrate it during browser back/forward.
-function isConversationLocation(): boolean {
-  return /^\/app\/?$/.test(window.location.pathname)
-    || /^\/app\/project\/[^/]+\/?$/.test(window.location.pathname)
 }
 
 export { settingsTabFromLocation }
