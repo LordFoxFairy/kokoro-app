@@ -811,22 +811,32 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
     expect(receivedPaths.splice(0)).toEqual(["/iam/jwks"])
   })
 
-  it("omits the verification token from Next development incoming-request logs only", async () => {
+  it("omits token-bearing authentication URLs from Next development logs without hiding unrelated requests", async () => {
     const token = `verify-log-${randomUUID()}`
+    const authorization = `authorize-log-${randomUUID()}`
+    const code = `callback-log-${randomUUID()}`
+    const callbackLookalike = `lookalike-log-${randomUUID()}`
     const marker = `ordinary-log-${randomUUID()}`
     const verification = await rawHttp(nextPort, `/iam/verify-email?token=${token}`)
+    await rawHttp(nextPort, `/iam/oauth2/authorize?client_id=${authorization}`)
+    await rawHttp(nextPort, `/api/auth/callback/kokoro-iam?code=${code}`)
+    await rawHttp(nextPort, `/api/auth/callback/kokoro-iam-extra?probe=${callbackLookalike}`)
     const ordinary = await rawHttp(nextPort, `/iam/jwks?probe=${marker}`)
     expect(verification.status).toBe(200)
     expect(ordinary.status).toBe(200)
     expect(receivedPaths.splice(0)).toEqual([
       `/iam/verify-email?token=${token}`,
+      `/iam/oauth2/authorize?client_id=${authorization}`,
       `/iam/jwks?probe=${marker}`,
     ])
     for (let attempt = 0; attempt < 20 && !nextOutput.includes(marker); attempt += 1) {
       await new Promise((resolve) => setTimeout(resolve, 50))
     }
     expect(nextOutput).toContain(marker)
+    expect(nextOutput).toContain(callbackLookalike)
     expect(nextOutput).not.toContain(token)
+    expect(nextOutput).not.toContain(authorization)
+    expect(nextOutput).not.toContain(code)
   })
 
   it("accepts only fixed-origin verification redirects and fails closed without leaking Location", async () => {

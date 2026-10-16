@@ -1,3 +1,7 @@
+### 登录 URL 日志边界
+
+`next.config.ts` 对既有验证链接/登录交互及精确 OAuth authorize、产品 callback 路径关闭开发请求 URL 日志，避免记录授权参数；不关闭普通业务日志，不改变路由或认证。`tests/system/iam-relay-next-http.integration.test.ts` 通过隔离真实 Next 的 stdout 验证敏感 marker 不出现，普通及 callback 相似路径 marker 继续出现。
+
 ### Skills 探索条目响应式布局
 
 `src/ui/skills/skills-panel.module.css` 的窄屏封面与其网格列同宽，覆盖 inline 样式的尺寸优先级，避免遮住标题/说明；桌面布局保持。既有 `tests/e2e/public-shell.spec.ts` 用实际渲染的封面、文字与操作几何关系验证互不重叠，不锁 CSS 字符串或固定像素基线；显式预览数据不代表正常 owner 链路验收。
