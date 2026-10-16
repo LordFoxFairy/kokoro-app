@@ -323,8 +323,21 @@ test("SET53 service tabs keep complete words and documentation shares a roomy in
       expect(tabList.scrollHeight).toBeLessThanOrEqual(tabList.clientHeight);
       if (tab === "developer" && geometry.width >= 400) {
         checkedRoomyRow = true;
-        const description = await content.getByText("Manage keys for applications to access the Kokoro API.", { exact: true }).boundingBox();
-        const documentation = await content.getByRole("button", { name: "Documentation", exact: true }).boundingBox();
+        const { description, documentation } = await content.evaluate((element) => {
+          const description = Array.from(element.querySelectorAll("p")).find(
+            (paragraph) => paragraph.textContent === "Manage keys for applications to access the Kokoro API.",
+          );
+          const documentation = Array.from(description?.parentElement?.querySelectorAll("button") ?? []).find(
+            (button) => button.textContent === "Documentation",
+          );
+          // Both viewport coordinates must describe the same animation frame.
+          const descriptionRect = description?.getBoundingClientRect();
+          const documentationRect = documentation?.getBoundingClientRect();
+          return {
+            description: descriptionRect ? { x: descriptionRect.x, y: descriptionRect.y, width: descriptionRect.width } : null,
+            documentation: documentationRect ? { x: documentationRect.x, y: documentationRect.y, width: documentationRect.width } : null,
+          };
+        });
         expect(description).not.toBeNull();
         expect(documentation).not.toBeNull();
         expect(Math.abs(description!.y - documentation!.y)).toBeLessThanOrEqual(1);

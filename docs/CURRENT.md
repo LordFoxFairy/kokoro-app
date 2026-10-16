@@ -1,3 +1,11 @@
+## SET54-V1 同帧布局测量（2026-10-16；设置浏览器通过，完整门仍失败）
+
+仅把原SET53说明和文档两个boundingBox采样改成一次同步evaluate内真实DOMRect采样，保持非空、y差≤1px、文档在说明右方及全部其余断言；不改产品/CSS/动画/超时。此处是对0fe3980旧E2E精确单块例外，不能沿称旧E2E全文前缀exact。原trace两次采样跨数毫秒且窗口在开场动画中，不把相关性当唯一根因证明。
+
+最终完整E2E 33PASS/1FAIL，58.4s：SET53六项、SET54两项及其余设置全部通过；仍失败原mobile项目当前项目链接30秒超时。首次filtered repeat默认5workers有5项在工作区加载时找不到mail页、1PASS，保留原日志；同一冻结输入显式--workers 1重复desktop/mobile各三次共6PASS，21.4s，未扩大等待或改产品以掩盖失败。lint/typecheck exit0。Vitest明确排除tests/e2e，产品及Vitest输入相对0fe3980完全不变；不重复原3728PASS/10FAIL完整test，不宣新树重新跑全门。
+
+只读审查无确定P1/P2；1测试/2Root文档以外1003tracked逐文件保护、PG/Redis库存恢复。验收后仅本文记录结果，冻结manifest a7a1e6adffd079a3a2e59c722f544cc5eed75eb65e9090fe1ac92b81cf6e41d8 的产品与测试哈希不变。保留同一Draft PR，不合入main；后台功能及总体目标仍未完成。
+
 ## SET54 More 原生键盘操作验收（2026-10-16；组件通过，完整门仍失败）
 
 在SET53候选facd846上修复原生Enter/Space打不开More：现同一组件处理detail0原生激活、箭头首末项/循环/Home/End与禁用跳过、Escape仅关本菜单并回焦、选择回焦及外点不抢焦；window capture只处理最近所属Dialog，不拦嵌套Dialog。无API/数据/依赖/Skills业务变化。旧源码新增回归真实5FAIL；最终组件97PASS，原UI/E2E全文前缀精确保留。

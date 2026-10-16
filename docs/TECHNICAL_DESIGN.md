@@ -2837,3 +2837,5 @@ SET46验收范围：既有契约/架构/lint/type/build及38项浏览器回归�
 ## SET54 设置窄屏 More 完整键盘操作（2026-10-16）
 
 在 SET53 页面候选上，正常登录 Computer Use 证明320px的 More 按钮按 Enter 仍保持 collapsed；源只在 pointerdown 打开，click不处理键盘。归属现 settings-compact-more-menu.tsx，保持唯一菜单/所属Dialog portal/现定位，不创建文件或替代设置壳。补原生 Enter/Space 激活与 ArrowDown/ArrowUp 打开、首末 enabled 项定位、菜单方向键/Home/End 跳过禁用项、Escape 仅关闭菜单并回焦触发器；选择后也回焦，外点关闭不抢焦。保留指针路径且一次手势仅切换一次，不解除弹窗焦点保护、不修改 Skills/MCP 业务、无网络/持久化/依赖/公开类型改变。现 UI/E2E 文件追加真实键盘正控和 pointer 不双切/disabled 跳过/Escape 不关闭设置负控，先对旧实现 RED，保持已有断言，再修现组件并运行相关及规定门；Root 统一资源、独审、CUA、Git，writer只改这三个现文件。
+
+SET54布局测量后继：现E2E说明/文档几何分别经两次CDP调用取得，Dialog开场zoom期间可能不同帧。Root仅将此现测试的两rect读取合并进一个同步content.evaluate，仍保非空、y差≤1、文档在说明右边及所有原几何/文字/滚动断言；不改产品CSS或动画，不加sleep/延时/放宽阈值。实际英文desktop/mobile必须重新验证，未验证前不认定已关闭布局缺陷。
