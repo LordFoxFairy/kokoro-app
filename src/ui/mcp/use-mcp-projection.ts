@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import type { HubClient } from "@/hub/client";
 import {
@@ -24,6 +24,8 @@ type ProjectionFlight = {
     }>
   >;
   subscribers: number;
+  identity: string;
+  resource: McpProjectionResource;
 };
 
 type ProjectionSubscription = {
@@ -45,6 +47,46 @@ const resolved = new WeakMap<
 // session-restored value is immediately revalidated against the owner.
 const sessionCachePrefix = "kokoro:mcp-projection:v1:";
 
+type ConnectorRevision = { value: number; listeners: Set<() => void> };
+const connectorRevisions = new WeakMap<HubClient, Map<string, ConnectorRevision>>();
+function connectorRevision(client: HubClient, identity: string): ConnectorRevision {
+  let entries = connectorRevisions.get(client);
+  if (!entries) {
+    entries = new Map();
+    connectorRevisions.set(client, entries);
+  }
+  let revision = entries.get(identity);
+  if (!revision) {
+    revision = { value: 0, listeners: new Set() };
+    entries.set(identity, revision);
+  }
+  return revision;
+}
+
+/** A confirmed write retires only this subject's connector pages, not provider metadata. */
+export function invalidateMcpConnectorProjection(client: HubClient, identity: string): void {
+  const revision = connectorRevision(client, identity);
+  revision.value += 1;
+  for (const key of resolved.get(client)?.keys() ?? []) {
+    const [resource, subject] = JSON.parse(key) as [McpProjectionResource, string];
+    if (resource === "connectors" && subject === identity)
+      resolved.get(client)?.delete(key);
+  }
+  for (const [key, flight] of inflight.get(client) ?? []) {
+    if (flight.resource !== "connectors" || flight.identity !== identity) continue;
+    inflight.get(client)?.delete(key);
+    flight.controller.abort();
+  }
+  try {
+    window.sessionStorage.removeItem(
+      `${sessionCachePrefix}${projectionCacheKey("connectors", identity, null)}`,
+    );
+  } catch {
+    // Persistence is an optional paint optimization, not current facts.
+  }
+  revision.listeners.forEach((listener) => listener());
+}
+
 function projectionCacheKey(
   resource: McpProjectionResource,
   identity: string,
@@ -62,12 +104,14 @@ function projectionRequestKey(
   identity: string,
   cursor: string | null,
   generation: number,
+  revision = 0,
 ): string {
   return JSON.stringify([
     identity,
     resource === "connectors" ? cursor : null,
     generation,
     resource,
+    revision,
   ]);
 }
 
@@ -137,6 +181,7 @@ function subscribe(
   key: string,
   cursor: string | null,
   resource: McpProjectionResource,
+  identity: string,
 ): ProjectionSubscription {
   let requests = inflight.get(client);
   if (!requests) {
@@ -157,7 +202,7 @@ function subscribe(
               controller.signal,
             )
             .then((connectors) => ({ connectors }));
-    flight = { controller, promise, subscribers: 0 };
+    flight = { controller, promise, subscribers: 0, identity, resource };
     requests.set(key, flight);
     const clear = () => {
       if (requests?.get(key) === flight) requests.delete(key);
@@ -200,14 +245,17 @@ export function warmMcpProjection({
     const cursor = null;
     const cacheKey = projectionCacheKey(resource, identity, cursor);
     if (cached(client, cacheKey) !== undefined) return () => undefined;
+    const revision = resource === "connectors" ? connectorRevision(client, identity).value : 0;
     const subscription = subscribe(
       client,
-      projectionRequestKey(resource, identity, cursor, 0),
+      projectionRequestKey(resource, identity, cursor, 0, revision),
       cursor,
       resource,
+      identity,
     );
     void subscription.promise.then(
       (next) => {
+        if (resource === "connectors" && connectorRevision(client, identity).value !== revision) return;
         if (resource === "providers" && next.providers)
           remember(client, cacheKey, next.providers, {
             resource,
@@ -257,6 +305,12 @@ export function useMcpProjection({
   /** External mutation generation; bypasses a stale cached connector page. */
   connectorRefreshKey?: number;
 }) {
+  const revision = connectorRevision(client, identity);
+  const subscribeRevision = useCallback((listener: () => void) => {
+    revision.listeners.add(listener);
+    return () => { revision.listeners.delete(listener); };
+  }, [revision]);
+  const currentRevision = useSyncExternalStore(subscribeRevision, () => revision.value, () => 0);
   const [providerGeneration, setProviderGeneration] = useState(0);
   const [connectorGeneration, setConnectorGeneration] =
     useState(connectorRefreshKey);
@@ -274,9 +328,7 @@ export function useMcpProjection({
       client,
       projectionCacheKey("connectors", identity, cursor),
     ) ??
-    (sessionCached("connectors", identity, cursor) as
-      | McpConnectorPage
-      | undefined);
+    (currentRevision === 0 ? sessionCached("connectors", identity, cursor) as McpConnectorPage | undefined : undefined);
   const [providerState, setProviderState] = useState<
     McpResourceState<McpConnectorProviderPage>
   >(() =>
@@ -291,11 +343,12 @@ export function useMcpProjection({
         },
   );
   const [connectorState, setConnectorState] = useState<
-    McpResourceState<McpConnectorPage>
+    McpResourceState<McpConnectorPage> & { revision: number }
   >(() =>
     initialConnectors === undefined
-      ? { loading: true, error: false }
+      ? { loading: true, error: false, revision: currentRevision }
       : {
+          revision: currentRevision,
           data: initialConnectors,
           dataIdentity: identity,
           requestIdentity: identity,
@@ -321,6 +374,7 @@ export function useMcpProjection({
         identity,
         requestCursor,
         generation,
+        resource === "connectors" ? currentRevision : 0,
       );
       const cacheKey = projectionCacheKey(resource, identity, requestCursor);
       if (completed.current.has(requestKey)) return;
@@ -342,6 +396,7 @@ export function useMcpProjection({
           });
         } else {
           setConnectorState({
+            revision: currentRevision,
             data: existing as McpConnectorPage,
             dataIdentity: identity,
             requestIdentity: identity,
@@ -361,6 +416,7 @@ export function useMcpProjection({
       } else {
         setConnectorState((current) => ({
           ...current,
+          revision: currentRevision,
           requestIdentity: identity,
           loading: true,
           error: false,
@@ -371,11 +427,12 @@ export function useMcpProjection({
         requestKey,
         requestCursor,
         resource,
+        identity,
       );
       subscriptions.push(subscription);
       void subscription.promise.then(
         (next) => {
-          if (!active) return;
+          if (!active || (resource === "connectors" && revision.value !== currentRevision)) return;
           completed.current.add(requestKey);
           if (resource === "providers" && next.providers) {
             remember(client, cacheKey, next.providers, {
@@ -398,6 +455,7 @@ export function useMcpProjection({
               cursor,
             });
             setConnectorState({
+              revision: currentRevision,
               data: next.connectors,
               dataIdentity: identity,
               requestIdentity: identity,
@@ -408,7 +466,7 @@ export function useMcpProjection({
         },
         () => {
           completed.current.delete(requestKey);
-          if (!active) return;
+          if (!active || (resource === "connectors" && revision.value !== currentRevision)) return;
           if (resource === "providers") {
             setProviderState((current) => ({
               ...current,
@@ -433,7 +491,7 @@ export function useMcpProjection({
       active = false;
       subscriptions.forEach((subscription) => subscription.release());
     };
-  }, [client, connectorGeneration, cursor, identity, providerGeneration, view]);
+  }, [client, connectorGeneration, currentRevision, cursor, identity, providerGeneration, revision, view]);
 
   const providerProjection =
     providerState.dataIdentity === identity ? providerState.data : undefined;
@@ -446,7 +504,7 @@ export function useMcpProjection({
 
   return {
     providerState,
-    connectorState,
+    connectorState: { ...connectorState, loading: connectorState.loading || connectorState.revision !== currentRevision },
     providerProjection,
     connectorProjection,
     reload,

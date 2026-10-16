@@ -238,3 +238,8 @@ lint、typecheck、test、build、浏览器 E2E 或 live BFF 验收。
 - 插件广场：route wrapper铺满主区，MCP reader的plaza展示独立48px标题栏与内部滚动body，管理/创建锚定标题栏右端，目录限宽768px居中；Settings与非plaza保持原布局。管理入口仍交给同源Settings，创建只交付原命令选择；推荐区不使用静态实体或伪连接，仍需owner运营展示数据后继。
 
 - Settings技能重核：SkillsContent按actor/preview隔离纯展示意图，同actor换client保搜索/分类与精确series/revision详情窗口；池、目录追加页、开关投影、错误/忙态和命令闭包按当前owner退休。详情仅从新安装池或当前目录/游标页找回原版本，缺失保pending/error壳并可显式续页/重读；不缓存整张旧卡跨代替代新事实。关闭时原触发器失效则回当前搜索框。正文/文件读取仍沿原详情组件的代际清理，不承诺跨代保文件内容。显式preview只用fixture client，真实admission/updateFlow不放宽。
+
+
+## MCP 写后投影失效（2026-10-16）
+
+全局创建与 Settings 内部注册／JSON 导入成功后，按 client／subject 失活个人连接器缓存并重读；在途预热按 revision 退休，不覆盖写后新结果。个人已确认命令复用该投影失效入口，Provider 元数据不随之重读；内容不因写入重挂，原搜索保留。既有 AppFrame 行为文件覆盖全局导入后立即管理、迟到预热、另一主体隔离及读取失败重试；不新增 UI 套件或源码／样式字符串断言。

@@ -32,7 +32,7 @@ import { CustomApiDetailDialog } from "./custom-api-detail-dialog";
 import { McpSettingsToolbar } from "./mcp-settings-toolbar";
 import { useMcpOAuthPopup } from "./use-mcp-oauth-popup";
 import { useCustomApiProjection } from "./use-custom-api-projection";
-import { useMcpProjection } from "./use-mcp-projection";
+import { invalidateMcpConnectorProjection, useMcpProjection } from "./use-mcp-projection";
 
 /**
  * Product-level MCP surface coordinator. It owns user intent and owner commands;
@@ -173,7 +173,7 @@ export function McpProjectionRead({
       const result = await action();
       resetEditor();
       onSuccess?.(result);
-      reload("connectors");
+      invalidateMcpConnectorProjection(client, identity);
     } catch {
       setActionError(true);
     } finally {

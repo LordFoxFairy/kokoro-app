@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, renderHook, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
-import { StrictMode, useState } from "react"
+import { StrictMode, useRef, useState } from "react"
 
 const pathname = vi.hoisted(() => ({ value: "/app" }))
 
@@ -11,6 +11,7 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/engine/config", () => ({ sessionBaseUrl: () => "http://s.local" }))
 
 import { AppFrame } from "@/components/blocks/app-frame/app-frame"
+import { AppFrameOverlaySurfaces } from "@/components/blocks/app-frame/app-frame-overlay-surfaces"
 import { useCatalogSkillInstallation } from "@/features/app/use-catalog-skill-installation"
 import { GithubImportDialog } from "@/ui/skills/github-import-dialog"
 import { SkillUploadDialog } from "@/ui/skills/skill-upload-dialog"
@@ -2440,4 +2441,134 @@ it("catalog local import recheck retires an acknowledged result rather than redi
   expect(screen.queryByText("Private imported name")).toBeNull()
   expect(reads).toHaveBeenCalledTimes(1)
   expect(completed).toHaveBeenCalledTimes(1)
+})
+
+
+it.each([false, true])("a global MCP import invalidates Settings before it opens (old warm pending: %s)", async (pendingWarm) => {
+  const pageClients = await import("@/ui/shell/page-clients")
+  const { warmMcpProjection, useMcpProjection } = await import("@/ui/mcp/use-mcp-projection")
+  const empty = { items: [], next_cursor: null }
+  const imported = { connector_id: "global-import-connector", connector_type: "mcp" as const,
+    provider_key: "private-global-import", server_id: "global-import-server", display_name: "New global MCP",
+    status: "pending" as const, approved_scopes: [], enabled: false, state_version: "1" }
+  let resolveOld!: (value: typeof empty) => void
+  const oldWarm = new Promise<typeof empty>(resolve => { resolveOld = resolve })
+  const list = vi.fn().mockImplementationOnce(() => pendingWarm ? oldWarm : Promise.resolve(empty))
+    .mockResolvedValue({ items: [imported], next_cursor: null })
+  const hub = { ...createHubClient(), listMcpConnectors: list,
+    listMcpConnectorProviders: vi.fn().mockResolvedValue(empty),
+    listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }),
+    listSkills: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+    importPrivateMcpJson: vi.fn().mockResolvedValue({ imports: [], replayed: false }),
+  }
+  vi.spyOn(pageClients, "browserHubClient").mockReturnValue(hub)
+  // Another identity on an independent client must keep its own warmed facts.
+  const otherHub = { ...hub, listMcpConnectors: vi.fn().mockResolvedValue(empty) }
+  const otherRelease = warmMcpProjection({ client: otherHub, identity: "other-actor" })
+  const other = renderHook(() => useMcpProjection({ client: otherHub, identity: "other-actor", cursor: null, view: "connections" }))
+  const settingsClosed = vi.fn()
+  function Shell() {
+    const [mode, setMode] = useState<import("@/ui/mcp/mcp-panel-model").McpCreateMode | null>(null)
+    const [settings, setSettings] = useState<"mcp" | null>(null)
+    const shell = useRef<HTMLDivElement | null>(null), trigger = useRef<HTMLElement | null>(null)
+    return <div ref={shell}>
+      <button onClick={() => setMode("json")}>Global JSON import</button>
+      <button onClick={() => setSettings("mcp")}>Manage connectors</button>
+      <AppFrameOverlaySurfaces mounted settingsTab={settings} preview readBoundary={{ admitted: true, subject: "global-actor", generation: 1 }}
+        brandName="Kokoro" onCloseSettings={() => { setSettings(null); settingsClosed() }} onTabChange={tab => setSettings(tab === "mcp" ? "mcp" : null)}
+        onCreateSkillWithAi={vi.fn()} onTrySkill={() => false} settingsReturnFocusRef={trigger} shellRef={shell}
+        mcpCreateMode={mode} setMcpCreateMode={setMode} mcpCreateReturnFocusRef={trigger}
+        commandMenu={() => null} commandProps={{ onNewChat: vi.fn(), onOpenSettings: vi.fn() }}
+        commandOpen={false} onCommandOpenChange={vi.fn()} />
+    </div>
+  }
+  render(<StrictMode><LocaleProvider><Shell /></LocaleProvider></StrictMode>)
+  await waitFor(() => expect(list).toHaveBeenCalledTimes(1))
+  await act(async () => { await Promise.resolve() })
+  fireEvent.click(screen.getByRole("button", { name: "Global JSON import" }))
+  fireEvent.change(await screen.findByRole("textbox", { name: "请粘贴您的配置 JSON" }), { target: { value: '{"mcpServers":{"New global MCP":{"type":"streamableHttp","url":"https://mcp.example.test/import"}}}' } })
+  fireEvent.click(screen.getByRole("button", { name: "导入" }))
+  await waitFor(() => expect(screen.queryByRole("dialog", { name: "通过 JSON 导入" })).toBeNull())
+  fireEvent.click(screen.getByRole("button", { name: "Manage connectors" }))
+  await waitFor(() => expect(list).toHaveBeenCalledTimes(2))
+  await act(async () => { await Promise.resolve() })
+  expect(await screen.findByRole("button", { name: "New global MCP" })).toBeVisible()
+  if (pendingWarm) await act(async () => { resolveOld(empty); await oldWarm })
+  fireEvent.click(screen.getByRole("button", { name: "关闭设置" }))
+  await waitFor(() => expect(settingsClosed).toHaveBeenCalledOnce())
+  fireEvent.click(screen.getByRole("button", { name: "Manage connectors" }))
+  expect(await screen.findByRole("button", { name: "New global MCP" })).toBeVisible()
+  expect(list).toHaveBeenCalledTimes(2)
+  expect(other.result.current.connectorProjection?.items).toEqual([])
+  expect(otherHub.listMcpConnectors).toHaveBeenCalledTimes(1)
+  otherRelease(); other.unmount()
+})
+
+
+it("connector invalidation preserves another actor and retries a failed mounted read without a remount", async () => {
+  const { invalidateMcpConnectorProjection, useMcpProjection } = await import("@/ui/mcp/use-mcp-projection")
+  const page = (name: string) => ({ items: [{ connector_id: name, connector_type: "mcp" as const,
+    provider_key: "private-check", status: "pending" as const, approved_scopes: [], enabled: false,
+    state_version: "1", display_name: name }], next_cursor: null })
+  const list = vi.fn().mockResolvedValueOnce(page("old-a")).mockResolvedValueOnce(page("other-b"))
+    .mockRejectedValueOnce(new Error("temporary read failure")).mockResolvedValue(page("fresh-a"))
+  const providers = vi.fn().mockResolvedValue({ items: [], next_cursor: null })
+  const hub = { ...createHubClient(), listMcpConnectors: list, listMcpConnectorProviders: providers }
+  const a = renderHook(() => useMcpProjection({ client: hub, identity: "actor", cursor: null, view: "connections" }))
+  await waitFor(() => expect(a.result.current.connectorProjection?.items[0]?.display_name).toBe("old-a"))
+  const b = renderHook(() => useMcpProjection({ client: hub, identity: "actor-long", cursor: null, view: "connections" }))
+  await waitFor(() => expect(b.result.current.connectorProjection?.items[0]?.display_name).toBe("other-b"))
+  const providerReads = providers.mock.calls.length
+  act(() => invalidateMcpConnectorProjection(hub, "actor"))
+  await waitFor(() => expect(a.result.current.connectorState.error).toBe(true))
+  expect(a.result.current.connectorState.loading).toBe(false)
+  expect(b.result.current.connectorProjection?.items[0]?.display_name).toBe("other-b")
+  expect(list).toHaveBeenCalledTimes(3)
+  act(() => a.result.current.reload("connectors"))
+  await waitFor(() => expect(a.result.current.connectorProjection?.items[0]?.display_name).toBe("fresh-a"))
+  expect(a.result.current.connectorState.error).toBe(false)
+  expect(providers).toHaveBeenCalledTimes(providerReads)
+  expect(b.result.current.connectorProjection?.items[0]?.display_name).toBe("other-b")
+  a.unmount()
+  const reopened = renderHook(() => useMcpProjection({ client: hub, identity: "actor", cursor: null, view: "connections" }))
+  await waitFor(() => expect(reopened.result.current.connectorProjection?.items[0]?.display_name).toBe("fresh-a"))
+  expect(list).toHaveBeenCalledTimes(4)
+  reopened.unmount(); b.unmount()
+})
+
+
+it("Settings revalidates a registered MCP again after remote Prepare completes", async () => {
+  const { ConnectorsSettingsSection } = await import("@/ui/settings/sections/connectors-settings-section")
+  let finish!: () => void
+  const remote = new Promise<void>(resolve => { finish = resolve })
+  let registered = false, ready = false
+  const connector = () => ({ connector_id: "prepared-connector", connector_type: "mcp" as const,
+    provider_key: "private-prepared", server_id: "prepared-server", display_name: "Prepared MCP",
+    status: ready ? "active" as const : "pending" as const, approved_scopes: [], enabled: ready, state_version: ready ? "2" : "1" })
+  const registration = () => ({ server: { server_id: "prepared-server", display_name: "Prepared MCP", server_url: "https://mcp.example.test/prepare",
+    status: ready ? "registered" as const : "pending" as const, state_version: ready ? "2" : "1", headers: [],
+    prepare_status: ready ? "ready" as const : "pending_prepare" as const, declarations: [], declarations_available: ready }, connector: connector(), replayed: false })
+  const list = vi.fn(async () => ({ items: registered ? [connector()] : [], next_cursor: null }))
+  const hub = { ...createHubClient(), listMcpConnectors: list,
+    listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+    listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }),
+    registerPrivateMcpServer: vi.fn(async () => { registered = true; return registration() }),
+    preparePrivateMcpServer: vi.fn(async () => { await remote; ready = true; return { ...registration(), declarations: [] } }),
+  }
+  render(<LocaleProvider><ConnectorsSettingsSection client={hub} preview brandName="Kokoro" /></LocaleProvider>)
+  await waitFor(() => expect(list).toHaveBeenCalledOnce())
+  const query = screen.getByRole("searchbox", { name: "搜索连接器" })
+  fireEvent.change(query, { target: { value: "Prepared" } })
+  fireEvent.keyDown(screen.getByRole("button", { name: "创建" }), { key: "ArrowDown" })
+  fireEvent.click(await screen.findByRole("menuitem", { name: "自定义 MCP" }))
+  fireEvent.change(screen.getByRole("textbox", { name: "服务器名称" }), { target: { value: "Prepared MCP" } })
+  fireEvent.change(screen.getByRole("textbox", { name: "服务器 URL" }), { target: { value: "https://mcp.example.test/prepare" } })
+  fireEvent.click(screen.getByRole("button", { name: "保存" }))
+  await waitFor(() => expect(list).toHaveBeenCalledTimes(2))
+  await act(async () => { await Promise.resolve() })
+  await act(async () => { finish(); await remote })
+  await waitFor(() => expect(list).toHaveBeenCalledTimes(3))
+  expect(await screen.findByLabelText("已连接")).toBeVisible()
+  expect(screen.getByRole("searchbox", { name: "搜索连接器" })).toBe(query)
+  expect(query).toHaveValue("Prepared")
 })
