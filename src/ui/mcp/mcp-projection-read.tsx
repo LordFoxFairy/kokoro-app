@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type FormEvent, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import type {
 } from "@/hub/mcp-connector.schema";
 import { useT } from "@/i18n/context";
 
+import { useMcpPreparationCommands } from "./connector-command-context";
 import { McpConnectionList } from "./mcp-connection-list";
 import { McpConnectorEditorDialog } from "./mcp-connector-editor-dialog";
 import { CustomMcpDetailDialog } from "./custom-mcp-detail-dialog";
@@ -73,6 +74,8 @@ export function McpProjectionRead({
   brandName?: string;
 }) {
   const t = useT();
+  const preparation = useMcpPreparationCommands(client, identity);
+  const preparationStates = useSyncExternalStore(preparation.subscribe, preparation.getSnapshot, preparation.getSnapshot);
   const owner = useMemo(() => ({ client, identity, admitted, readGeneration }), [client, identity, admitted, readGeneration]);
   const ownerRef = useRef<typeof owner | null>(owner);
   useLayoutEffect(() => {
@@ -87,7 +90,18 @@ export function McpProjectionRead({
   const [actionError, setActionError] = useState(false);
   const [editor, setEditor] = useState<McpConnectorEditor | null>(null);
   // Only exact locators and typed input survive an admission recheck.
-  const [connectorIntent, setConnectorIntent] = useState<{ connectorId: string; serverId?: string; entered: boolean } | null>(null);
+  const [connectorIntent, setConnectorIntent] = useState<{ connectorId: string; serverId?: string; entered: boolean; window: object } | null>(null);
+  const editorWindow = useRef<{ intent: object; controller: AbortController } | null>(null);
+  useLayoutEffect(() => {
+    const window = connectorIntent?.window;
+    const wait = window ? { intent: window, controller: new AbortController() } : null;
+    editorWindow.current = wait;
+    return () => {
+      if (editorWindow.current === wait) editorWindow.current = null;
+      wait?.controller.abort();
+    };
+  }, [connectorIntent?.window, owner]);
+  const preparationState = preparationStates.find(item => item.serverId === connectorIntent?.serverId && item.connectorId === connectorIntent?.connectorId);
   const [selectedProviderKey, setSelectedProviderKey] = useState<string | null>(null);
   const [selectedProviderConnectionId, setSelectedProviderConnectionId] = useState<string | null>(null);
   const [selectedCustomApiId, setSelectedCustomApiId] = useState<string | null>(null);
@@ -227,7 +241,7 @@ export function McpProjectionRead({
     setDeleteId(null);
     setActionError(false);
     setEditor(null);
-    setConnectorIntent({ connectorId: connector.connector_id, ...(connector.server_id ? { serverId: connector.server_id } : {}), entered: false });
+    setConnectorIntent({ connectorId: connector.connector_id, ...(connector.server_id ? { serverId: connector.server_id } : {}), entered: false, window: {} });
   };
   const connectorId = connectorIntent?.connectorId;
   const serverId = connectorIntent?.serverId;
@@ -523,7 +537,8 @@ export function McpProjectionRead({
           server={editor?.server ?? null}
           pendingError={admitted && (actionError || connectorState.error || (connectorProjection !== undefined && !selectedConnector))}
           onRetry={() => { if (ownerRef.current !== owner || !admitted) return; setActionError(false); if (!selectedConnector || connectorState.error) reload("connectors"); else setDetailRetry(value => value + 1); }}
-          actionId={actionId}
+          preparationState={preparationState?.kind ?? "idle"}
+          actionId={preparationState?.kind === "running" ? connectorIntent.connectorId : actionId}
           actionError={actionError}
           deleteId={deleteId}
           returnFocusRef={editorReturnFocusRef}
@@ -564,14 +579,19 @@ export function McpProjectionRead({
             );
           }}
           onPrepare={() => {
-            if (!editor?.server || !client.preparePrivateMcpServer) return;
-            void runAction(editor.connector.connector_id, () =>
-              client.preparePrivateMcpServer!(
-                editor.server!.server_id,
-                editor.server!.state_version,
-                crypto.randomUUID(),
-              ),
-            );
+            if (!editor?.server || !admitted || ownerRef.current !== owner || !preparation.available) return;
+            const target = { serverId: editor.server.server_id, connectorId: editor.connector.connector_id,
+              version: editor.server.state_version };
+            const window = editorWindow.current;
+            if (!window || window.intent !== connectorIntent.window) return;
+            const boundary = { subject: identity, admitted, generation: readGeneration };
+            const current = () => ownerRef.current === owner && editorWindow.current === window;
+            setActionError(false);
+            void preparation.prepare(target, boundary, window.controller.signal).then(confirmed => {
+              if (!current()) return;
+              if (confirmed) { preparation.finish(target.serverId, boundary); resetEditor(); }
+              else if (preparation.getSnapshot().find(item => item.serverId === target.serverId)?.kind !== "unknown") setActionError(true);
+            }).catch(() => { if (current()) setActionError(true); });
           }}
           onDisconnect={() => {
             if (!editor) return;
@@ -580,6 +600,9 @@ export function McpProjectionRead({
               () =>
                 client.removeMcpConnector(editor.connector.connector_id, {
                   expected_state_version: editor.connector.state_version,
+                }).then(result => {
+                  if (editor.server) preparation.retireTarget(editor.server.server_id, editor.connector.connector_id);
+                  return result;
                 }),
               () => {
                 hideConfirmedRemovedConnector(editor.connector.connector_id);
@@ -599,7 +622,10 @@ export function McpProjectionRead({
                 client.deletePrivateMcpServer!(
                   editor.server!.server_id,
                   editor.server!.state_version,
-                ),
+                ).then(result => {
+                  preparation.retireTarget(editor.server!.server_id, editor.connector.connector_id);
+                  return result;
+                }),
               () => {
                 hideConfirmedRemovedConnector(editor.connector.connector_id);
                 editorReturnFocusRef.current = null;

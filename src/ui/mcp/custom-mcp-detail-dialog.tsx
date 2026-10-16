@@ -60,11 +60,13 @@ export function CustomMcpDetailDialog({
   onDeleteIntent,
   onCancelDelete,
   onDelete,
+  preparationState = "idle",
   pendingError = false,
   onRetry,
 }: {
   connector: McpConnector | null;
   server: McpPrivateServer | null;
+  preparationState?: "idle" | "running" | "unknown" | "rejected" | "completed";
   pendingError?: boolean;
   onRetry?: () => void;
   actionId: string | null;
@@ -101,7 +103,8 @@ export function CustomMcpDetailDialog({
   const [headers, setHeaders] = useState<HeaderDraft[]>([]);
   const [removedHeaders, setRemovedHeaders] = useState<string[]>([]);
   const busy = actionId === connector?.connector_id;
-  const locked = busy || !ready;
+  const locked = busy || !ready || preparationState === "unknown" || preparationState === "completed";
+  const prepareLabel = preparationState === "unknown" ? t("mcp.retryOriginal") : preparationState === "completed" ? t("mcp.creationDone") : "试用一下";
   const selectionProps = useMcpEditorSelection(ready);
   const invalidHeaderName = headers.some(
     (item) => Boolean(item.name.trim()) && !isMcpCustomHeaderName(item.name),
@@ -109,7 +112,7 @@ export function CustomMcpDetailDialog({
   const save = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (
-      !server || !connector ||
+      locked || !server || !connector ||
       !name.trim() ||
       !serverUrl.trim() ||
       invalidHeaderName ||
@@ -138,7 +141,7 @@ export function CustomMcpDetailDialog({
     <Dialog
       open
       onOpenChange={(next) => {
-        if (!next && actionId === null) onClose();
+        if (!next && (actionId === null || preparationState === "running")) onClose();
       }}
     >
       <DialogContent
@@ -148,6 +151,7 @@ export function CustomMcpDetailDialog({
         closeLabel={t("mcp.cancel")}
         onCloseAutoFocus={closeFocus}
       >
+        {preparationState === "unknown" ? <Alert role="alert"><AlertDescription>{t("mcp.serverCreateUnknown")}</AlertDescription></Alert> : null}
         {editing ? (
           <form
             {...selectionProps}
@@ -356,9 +360,9 @@ export function CustomMcpDetailDialog({
                 </DropdownMenuContent>
               </DropdownMenu>
               <div className={styles.configurationActions}>
-                <Button type="button" variant="outline" disabled={locked} onClick={onPrepare}>
+                <Button type="button" variant="outline" disabled={busy || !ready} onClick={onPrepare}>
                   {busy ? <Spinner aria-hidden="true" /> : <Send aria-hidden="true" />}
-                  试用一下
+                  {prepareLabel}
                 </Button>
                 <span className={styles.saveSplit}>
                   <Button type="submit" disabled={locked || invalidHeaderName}>
@@ -400,7 +404,7 @@ export function CustomMcpDetailDialog({
                   ) : (
                     <Send aria-hidden="true" />
                   )}
-                  试用一下
+                  {prepareLabel}
                 </Button>
                 <DropdownMenu open={managementOpen} onOpenChange={setManagementOpen}>
                   <DropdownMenuTrigger asChild>

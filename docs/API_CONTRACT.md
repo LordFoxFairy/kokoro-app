@@ -1622,3 +1622,6 @@ MCP JSON创建恢复的本地client签名为importPrivateMcpJson(configJson, key
 
 
 私有 MCP 创建的本地 client 签名为 registerPrivateMcpServer(input, key, signal?) 与 preparePrivateMcpServer(serverId, expectedStateVersion, key, signal?)；均须显式合法 caller key，不再每次调用生成新 key。已有 GET /mcp/connectors/:id 补 Hub 读取入口并严格核对精确 connector ID，与 GET /mcp/servers/:id 配对，不新增 wire。Register/Prepare 响应沿既有结构与 mcpPrivateServerMatches 绑定；新 Prepare 用 fresh server CAS，未知 Prepare 恢复原 key/version，不能把 GET 或 popup 通知当 ACK。原生 OAuth Begin/Complete 协议没有新增幂等 header。
+
+
+MCP 详情准备与创建共享 typed 原命令 holder，只调用既有 preparePrivateMcpServer(serverId, expectedStateVersion, key, signal?) 和原 wire；重开/重核不能按 fresh detail CAS 分配新 key 覆盖 unknown。确认响应额外核对原 connector ID，拒绝同 server 上不匹配的 connector ACK。确认断开/删除只退役相应精确目标，不把 GET 当 command receipt，不新增网络恢复协议。

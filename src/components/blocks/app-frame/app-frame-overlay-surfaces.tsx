@@ -8,7 +8,6 @@ import type { SkillsScopeFilter } from "@/ui/skills/skills-scope";
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
 import { browserHubClient } from "@/ui/shell/page-clients";
 import { warmCustomApiProjection } from "@/ui/mcp/use-custom-api-projection";
-import { ConnectorCreationProvider } from "@/ui/mcp/connector-creation-context";
 import { warmMcpProjection } from "@/ui/mcp/use-mcp-projection";
 import { createManusSkillHubClient, retainManusSkillHubClient } from "@/ui/skills/manus-skill-client";
 import { warmSkillsPool } from "@/ui/skills/skills-panel";
@@ -102,7 +101,7 @@ export function AppFrameOverlaySurfaces({
   }, [mounted, preview, readBoundary]);
 
   return (
-    <ConnectorCreationProvider client={browserHubClient({ preview })} boundary={preview ? { admitted: true, subject: "preview", generation: 0 } : readBoundary ?? { admitted: false, subject: null, generation: 0 }}>
+    <>
       {/* 设置中心：浮在工作区之上的模态卡片，语境原地保留。 */}
       {mounted && settingsTab !== null ? (
         <SettingsModal
@@ -137,6 +136,6 @@ export function AppFrameOverlaySurfaces({
         open={commandOpen}
         onOpenChange={onCommandOpenChange}
       />
-    </ConnectorCreationProvider>
+    </>
   );
 }

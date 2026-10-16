@@ -1,7 +1,7 @@
 import type { HubClient } from "@/hub/client";
 import { customApiCreateInputSchema, type CustomApiCreateInput } from "@/hub/custom-api.schema";
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
-import { createConnectorCreationCommand } from "./connector-creation-command";
+import { createConnectorCommand } from "./connector-command";
 
 /** API-specific input and confirmed projection; shared mechanics hold no owner facts. */
 export function createCustomApiCreateFlow(options: {
@@ -10,9 +10,9 @@ export function createCustomApiCreateFlow(options: {
   onConfirmed: () => void;
   key?: () => string;
 }) {
-  return createConnectorCreationCommand<CustomApiCreateInput>({
+  return createConnectorCommand<CustomApiCreateInput>({
     ...options,
-    create: options.client.createCustomApi,
+    execute: options.client.createCustomApi,
     invalidRequestCode: "invalid_custom_api_request",
     name: body => body.name,
     freeze: input => {

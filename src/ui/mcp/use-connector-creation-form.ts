@@ -2,9 +2,9 @@
 
 import { useCallback, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
-import type { createConnectorCreationCommand } from "./connector-creation-command";
+import type { createConnectorCommand } from "./connector-command";
 
-type Lifecycle = Pick<ReturnType<typeof createConnectorCreationCommand>, "subscribe" | "getSnapshot" | "matches" | "finish">;
+type Lifecycle = Pick<ReturnType<typeof createConnectorCommand>, "subscribe" | "getSnapshot" | "matches" | "finish">;
 
 /** The shared form lifetime owns close recovery, not network commands or drafts. */
 export function useConnectorCreationForm(flow: Lifecycle, boundary: ProjectReadBoundary,

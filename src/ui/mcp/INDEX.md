@@ -20,8 +20,8 @@ OAuth 点击同步预开并隔离 popup，再使用 owner 返回的 HTTPS URL；
 - `mcp-provider-catalog-dialog.tsx`、`mcp-provider-detail-dialog.tsx`、`mcp-connector-editor-dialog.tsx`：分别拥有目录、Provider 详情、Provider 生命周期编辑的焦点/弹窗边界。
 - `custom-mcp-detail-dialog.tsx`：只拥有自定义 MCP 的详情、管理菜单与 `MCP 配置`；读取 owner-issued server ID 后才渲染，绝不按显示名猜类型。
 - `custom-api-detail-dialog.tsx` / `custom-api-form.tsx` / `use-custom-api-projection.ts`：只拥有 Custom API profile 的安全详情和编辑；环境变量值永不进入读取视图。
-- `connector-creation-command.ts` / `use-connector-creation-form.ts`：仅本地单命令的准入/lease/unknown及异步完成关闭机制，由 API 与 JSON 两个真实消费者共用，不是网络代理或命令注册表。
-- `custom-api-create-flow.ts` / `mcp-json-import-flow.ts` / `connector-creation-context.tsx`：各自 typed 输入/创建命令与稳定 App shell 的 API/JSON actor/client 命令槽。冻结正文/key只在RAM，unknown显式同请求恢复；关闭窗口不丢命令，换actor/真正卸载退休。确认清实际secret/JSON原文，API和JSON分别失活捕获主体的独立投影，Form/Dialog只拥有当前窗口关闭。JSON仍一次原子HTTP导入，不循环Register。
+- `connector-command.ts` / `use-connector-creation-form.ts`：仅本地单命令的准入/lease/unknown及异步完成关闭机制，由 API/JSON 创建与 MCP Prepare 三个实际消费者共用，不是网络代理或命令注册表。
+- `custom-api-create-flow.ts` / `mcp-json-import-flow.ts` / `connector-command-context.tsx`：各自 typed 输入/创建命令与稳定 AppFrameRuntime 的 API/JSON actor/client 命令槽。冻结正文/key只在RAM，unknown显式同请求恢复；关闭窗口不丢命令，换actor/真正卸载退休。确认清实际secret/JSON原文，API和JSON分别失活捕获主体的独立投影，Form/Dialog只拥有当前窗口关闭。JSON仍一次原子HTTP导入，不循环Register。
 - `mcp-server-creation-flow.ts` / `use-mcp-server-creation.ts`：Custom/URL 多阶段创建的独立 actor/client 工作流和当前窗口消费者；原 Register/Prepare key、正文与 CAS 仅在 RAM 保留，未知结果显式恢复原命令。Register 确认只留精确 locator，新 Prepare 读取本代 server/connector，OAuth 不借旧准入，晚 ACK 仅刷新原主体。
 - `mcp-projection-types.ts`：共享的投影视图类型、分类词汇和 owner artwork/status 映射；不含请求或模拟数据。
 
@@ -41,3 +41,6 @@ MCP 注册／原子导入与已确认的个人命令，统一失活当前 client
 配置编辑的准入重核不重建表单或文本控件：尚未明确修改的owner值和已配置header/env描述立即清空，dirty用户输入仅在本actor内保留；控件readonly且保存/Prepare/管理/草稿增删暂停，Close/Retry仍可用。`use-mcp-editor-selection.ts`只保存字段ID、选择范围/方向/文本长度和控件内部scroll，不保字段值、已移除控件或凭据；恢复时限定当前仍聚焦的本表单控件，裁剪并更新范围，承接pending期间的新选择而非抢回旧焦点。原生不支持selection API的URL控件不强设range；generic provider editor/创建表单不冒称已覆盖本片。
 
 URL“保存并发布”先在用户点击中预开既有隔离 popup，再执行原创建与必要授权；弹窗被拦截时零注册，owner 无需 OAuth 时只清理预留窗口并完成。popup 关闭/超时与准入退休暂停当前两阶段等待，保留原 unknown 命令，不借旧 continuation 继续 Prepare/Begin；普通 Save 和显式 Connect 协议保持。第三方真实 OAuth 仍须单独验收。
+
+
+`mcp-preparation-commands.ts` 拥有按精确 server/connector 区分的原 Prepare 正文/CAS/key，创建和详情共用；不同资源互不阻塞，不新增第二份准备意图或 owner 投影。`connector-command-context.tsx` 的唯一 Provider 位于 AppFrameRuntime，覆盖主页面与 overlays，移除旧 overlay-only owner。unknown 关闭重开/重核仅恢复原命令，确认后只完成当前窗口；确认断开/删除退役精确命令，迟到 ACK 不复活已撤销目标。快照仅 locator/状态，无 private facts/secret，整个文档重载仍不持久恢复命令。 详情窗口/准入代际取消原等待；迟到的同命令 ACK 只可由当前显式重试或完成动作消费，不借旧窗口关闭新窗口。

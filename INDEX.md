@@ -1,6 +1,6 @@
 ### Custom API／JSON 创建命令恢复
 
-稳定 AppFrame overlay 的 `ConnectorCreationProvider` 在窗口／Settings 之外按 actor/client 明确保留 API 和原子 JSON 两个内存命令槽，两个入口共用；同 actor 重核暂停并保原 key/body，unknown 只显式恢复，确认后清命令正文，换 actor 清草稿。Hub client 创建签名显式要求 caller key，并严格绑定安全 ACK；API绑定名称、备注及环境变量名，JSON复用原完整导入投影校验，不拆成单项注册。共享纯命令核和表单关闭hook承接真实重复的准入/未知结果/清secret/关闭恢复机制，输入与投影失活仍由各自typed flow拥有。失败不是未提交证明，关闭也不是回滚；不写浏览器存储、不改 owner wire，MCP Register/Prepare/OAuth 仍待独立承接。纯 flow 单元和既有 rail/client 行为回归验证该边界，不新增 CSS/DOM 字符串套件。
+稳定 AppFrameRuntime 的 `ConnectorCommandProvider` 在窗口／Settings 之外按 actor/client 明确保留 API 和原子 JSON 两个内存命令槽，两个入口共用；同 actor 重核暂停并保原 key/body，unknown 只显式恢复，确认后清命令正文，换 actor 清草稿。Hub client 创建签名显式要求 caller key，并严格绑定安全 ACK；API绑定名称、备注及环境变量名，JSON复用原完整导入投影校验，不拆成单项注册。共享纯命令核和表单关闭hook承接真实重复的准入/未知结果/清secret/关闭恢复机制，输入与投影失活仍由各自typed flow拥有。失败不是未提交证明，关闭也不是回滚；不写浏览器存储、不改 owner wire，MCP 多阶段创建与共享 Prepare 见 `src/ui/mcp/INDEX.md`，不归 API/JSON 单步 flow 所有。纯 flow 单元和既有 rail/client 行为回归验证该边界，不新增 CSS/DOM 字符串套件。
 
 ### 创建窗口的迟到完成
 

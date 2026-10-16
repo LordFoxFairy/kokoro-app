@@ -8,7 +8,7 @@ import type { HubClient } from "@/hub/client";
 
 import styles from "./mcp-create-dialog.module.css";
 import type { McpCreateMode } from "./mcp-panel-model";
-import { CustomApiCreationForm, JsonMcpCreationForm, PrivateMcpCreationForm } from "./connector-creation-context";
+import { CustomApiCreationForm, JsonMcpCreationForm, PrivateMcpCreationForm } from "./connector-command-context";
 
 export function McpCreateDialog({
   client,

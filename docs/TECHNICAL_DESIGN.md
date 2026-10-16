@@ -2419,14 +2419,14 @@ Web 不复制 BFF OpenAPI，也不把同源 contract 放进 Developer API。详�
 
 ### Custom API 创建命令的 actor 生命周期（2026-10-16）
 
-AppFrameOverlaySurfaces 在稳定 app segment 内持有唯一 ConnectorCreationProvider，覆盖全局和 Settings 两个入口；不把命令放在短命的 form/Dialog 或独立全局注册表中。actor/client 更换整体退休，临时 admission/generation 更换保原 key/body、取消旧等待并进入 unknown；不自动重放。只有当前准入的用户显式恢复才重发原命令。UI 草稿按 flow 实例分隔，失准入只读、换 actor 清空，纯输入不当作 owner 事实。
+AppFrameRuntime 在稳定 app segment 内持有唯一 ConnectorCommandProvider，覆盖主页面、全局和 Settings 入口；不把命令放在短命的 form/Dialog 或独立全局注册表中。actor/client 更换整体退休，临时 admission/generation 更换保原 key/body、取消旧等待并进入 unknown；不自动重放。只有当前准入的用户显式恢复才重发原命令。UI 草稿按 flow 实例分隔，失准入只读、换 actor 清空，纯输入不当作 owner 事实。
 
 命令仅内存持有冻结的合法创建请求（含 write-only secret）和 caller-issued key；idle/running/unknown/rejected/completed 显式区分。超时、取消、畸形 ACK、冲突／前置条件等不证明未提交；只有已验证的 invalid_custom_api_request 拒绝释放冻结意图。确认 ACK 后清掉命令正文，仅保非敏感完成状态；已退休窗口不关闭新窗口。确认投影失活由 flow 捕获的原 client/subject 负责，即使旧请求晚到也不把旧事实发布给新主体。关闭 Dialog 不取消或自动重新发送命令；provider 卸载清理等待与内存。原 MCP Register/Prepare/OAuth 不在本切片冒称完成。
 
 
 ### MCP JSON 创建恢复与共享本地生命周期（2026-10-16）
 
-沿既有 App owner/命令协议扩展：JSON 原子导入与 Custom API 创建共用仅管理单个内存命令的纯生命周期函数（准入、冻结 key/body、显式恢复、StrictMode lease、退休和完成），不引入服务注册表/通用网络代理。各自保留 typed validator、client 调用和确认投影失活；Register/Prepare/OAuth 仍为独立后继，不塞进通用状态机。稳定 AppFrame 的唯一 ConnectorCreationProvider 明确持有 API 与 JSON 两个槽，窗口以上保留未知请求，actor/client 更换全退役；删除旧 API-only context 名称而不留兼容 alias。
+沿既有 App owner/命令协议扩展：JSON 原子导入与 Custom API 创建共用仅管理单个内存命令的纯生命周期函数（准入、冻结 key/body、显式恢复、StrictMode lease、退休和完成），不引入服务注册表/通用网络代理。各自保留 typed validator、client 调用和确认投影失活；Register/Prepare/OAuth 仍为独立后继，不塞进通用状态机。稳定 AppFrame 的唯一 ConnectorCommandProvider 明确持有 API 与 JSON 两个独立槽（MCP 共享 Prepare 见后文），窗口以上保留未知请求，actor/client 更换全退役；删除旧 API-only context 名称而不留兼容 alias。
 
 两表单共用本地完成/关闭生命周期 hook，UI 和输入校验各自独立。JSON 原文可含secret，只在当前actor RAM；发送前冻结完整文档和合法key，未知结果不得编辑后换key重试；ACK清原文及命令，关闭重开只恢复未知命令而非新事实。Hub client沿原schema及现mcpPrivateJsonImportMatches绑定ACK，owner继续原子导入全部项并持久receipt；无wire/Schema/权限/后端依赖变化。失败恢复仍显式，generic412不当成未提交。验证原API既有回归不退化，JSON准入/换actor/原key-body/关闭重开/迟到ACK，最后主路径浏览器与资源回收。
 
@@ -2440,3 +2440,9 @@ AppFrameOverlaySurfaces 在稳定 app segment 内持有唯一 ConnectorCreationP
 ### URL 创建授权窗口的用户手势（2026-10-16）
 
 仍沿原 Custom/URL 两阶段 owner 流程，不新增发布或授权协议。“保存并发布”在点击同步栈中预开现有隔离 popup，再执行 Register→fresh GET→Prepare→必要时原生 Begin；被浏览器拦截时不先创建隐形资源。owner 判定无需 OAuth 时只关闭预留窗口并完成，不把空窗口当授权失败。popup 关闭、超时、窗口/准入退休取消当前等待并保留原 unknown 命令，不继续旧 Prepare/Begin；晚 ACK 只更新原主体投影。普通 Save 和已有明确 Connect 入口保持各自时序，第三方真实授权闭环不由组件测试冒充。
+
+### MCP 准备命令在创建与详情之间的唯一归属（2026-10-16）
+
+替换前的创建 flow 和详情 runAction 分别分配 Prepare key；详情失败/关闭/重核后换 key 或新 CAS，且两个入口可能重复准备同一 server。改为 AppFrameRuntime 这一既有稳定 owner 中的 ConnectorCommandProvider：沿用 API/JSON/Register 的显式 typed 槽，另持当前 actor/client 下按精确 server/connector 标识划分的 Prepare 命令集合。每个资源独立串行、不同资源不互相阻塞；创建与详情共用同一资源的原命令，不是任意命令注册表。Provider 上移覆盖主页面与 overlays，旧 overlay-only provider 删除，不留双 owner 或 fallback。
+
+Prepare 的正文/CAS/key 在派发前冻结；unknown 只显式恢复原命令，已确认后只完成当前窗口或 fresh 读取，不换 key 再写。通用纯核仅承接三个实际消费者共用的单命令准入/unknown/lease机制，重命名为 connector-command，领域资源索引只属于 typed MCP Prepare owner。窗口退休不丢未知命令，准入/actor/client 退休取消旧等待和旧 UI 续接；晚 ACK 只失活原主体。确认断开/删除可退役精确资源命令，旧 ACK 不恢复已撤销连接。快照只含 locator/状态，不含 owner 正文、header 或 OAuth secret；无 browser 持久存储、新 owner/wire/Schema。详情的配置草稿、选择与事实代际规则沿现实现，权限/事务/receipt继续归BFF/Platform。 详情每个已提交窗口/准入代际持自己的等待取消信号，关闭、切页或重核立即暂停该等待但保留未知原命令。旧 ACK 可以确认同一冻结命令，只有仍准入的显式重试可消费该完成结果；退休窗口不关闭后继窗口，已撤销条目也不复活。

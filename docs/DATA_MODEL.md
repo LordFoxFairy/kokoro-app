@@ -1272,3 +1272,6 @@ JSON创建与API创建在同一稳定actor/client provider拥有两个明确且�
 
 
 Custom/URL 共用同一明确的私有 MCP actor/client 创建槽，独立于 API/JSON 单命令槽。未知 Register 原正文（可含 header/OAuth secret）与 Prepare 原 server/version/key 只在 RAM；确认后清注册正文/实际 secret 草稿，仅保精确 server/connector locator。准入或窗口退休立即清 owner facts，换 actor/真正卸载清全部意图；fresh GET 只形成当代显示事实，不覆盖未知原命令。无 browser 持久存储、日志、数据库或新 Schema。
+
+
+MCP Prepare 的临时意图现只有一个 typed actor/client owner：按精确 server/connector 保存原 CAS/key，创建 flow 不再复制 Prepare intent，详情读出的新 CAS 不替换 unknown 正文。内存快照仅资源 locator/命令状态；不同资源独立，确认完成或断开/删除清条目，actor/client/真正卸载清全部。Provider 上移至 AppFrameRuntime 覆盖页面和 overlays，无新 owner Schema、browser storage、SQL 或跨服务数据访问。

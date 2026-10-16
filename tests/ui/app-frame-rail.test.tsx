@@ -11,7 +11,7 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/engine/config", () => ({ sessionBaseUrl: () => "http://s.local" }))
 
 import { AppFrame } from "@/components/blocks/app-frame/app-frame"
-import { AppFrameOverlaySurfaces } from "@/components/blocks/app-frame/app-frame-overlay-surfaces"
+import { AppFrameOverlaySurfaces as RawAppFrameOverlaySurfaces } from "@/components/blocks/app-frame/app-frame-overlay-surfaces"
 import { useCatalogSkillInstallation } from "@/features/app/use-catalog-skill-installation"
 import { GithubImportDialog } from "@/ui/skills/github-import-dialog"
 import { SkillUploadDialog } from "@/ui/skills/skill-upload-dialog"
@@ -19,8 +19,10 @@ import { ManusSkillDetailDialog } from "@/ui/skills/manus-skill-detail-dialog"
 import { KokoroSkillsSurface } from "@/features/app/kokoro-skills-surface"
 import { SkillsSettingsSection } from "@/ui/settings/sections/skills-settings-section"
 import { createHubClient } from "@/hub/client"
-import { McpProjectionRead } from "@/ui/mcp/mcp-projection-read"
-import { ConnectorCreationProvider } from "@/ui/mcp/connector-creation-context"
+import { McpProjectionRead as RawMcpProjectionRead } from "@/ui/mcp/mcp-projection-read"
+import { browserHubClient } from "@/ui/shell/page-clients"
+import { createMcpPreparationCommands } from "@/ui/mcp/mcp-preparation-commands"
+import { ConnectorCommandProvider } from "@/ui/mcp/connector-command-context"
 import { SkillCatalogDialog, type CatalogDetailProjection } from "@/ui/skills/skills-catalog-dialog"
 import { createManusSkillHubClient } from "@/ui/skills/manus-skill-client"
 import { useAppFrameActions } from "@/components/blocks/app-frame/use-app-frame-actions"
@@ -31,6 +33,21 @@ import { createSessionClient, SessionClientError } from "@/engine/client"
 import type { ConversationStore } from "@/core/conversations"
 import { makeSnapshot } from "../core/fixtures"
 import { createFakeClient, createMemoryStorage, makeReceipt, type FakeClient } from "../engine/fakes"
+
+// Isolated surfaces use the same explicit actor/client owner as AppFrameRuntime.
+function AppFrameOverlaySurfaces(props: React.ComponentProps<typeof RawAppFrameOverlaySurfaces>) {
+  const boundary = props.preview ? { admitted: true, subject: "preview", generation: 0 } : props.readBoundary ?? { admitted: false, subject: null, generation: 0 }
+  return <ConnectorCommandProvider client={browserHubClient({ preview: props.preview })} boundary={boundary}><RawAppFrameOverlaySurfaces {...props} /></ConnectorCommandProvider>
+}
+function McpProjectionRead(props: React.ComponentProps<typeof RawMcpProjectionRead>) {
+  return <ConnectorCommandProvider client={props.client} boundary={{ admitted: props.admitted ?? true, subject: props.identity, generation: props.readGeneration ?? 0 }}><RawMcpProjectionRead {...props} /></ConnectorCommandProvider>
+}
+function withMcpCommandOwner(Content: typeof import("@/ui/mcp/mcp-content").McpContent) {
+  return function ScopedContent(props: React.ComponentProps<typeof Content>) {
+    const boundary = props.preview ? { admitted: true, subject: "preview", generation: 0 } : props.readBoundary ?? { admitted: false, subject: null, generation: 0 }
+    return <ConnectorCommandProvider client={props.client} boundary={boundary}><Content {...props} /></ConnectorCommandProvider>
+  }
+}
 
 let client: FakeClient
 let engine: SessionEngine
@@ -2555,7 +2572,7 @@ it.each([
     </div>
   }
   render(<StrictMode><LocaleProvider>{entry === "global" ? <Shell /> :
-    <ConnectorCreationProvider client={hub} boundary={{ admitted: true, subject: "preview", generation: 0 }}><ConnectorsSettingsSection client={hub} preview brandName="Kokoro" /></ConnectorCreationProvider>}</LocaleProvider></StrictMode>)
+    <ConnectorCommandProvider client={hub} boundary={{ admitted: true, subject: "preview", generation: 0 }}><ConnectorsSettingsSection client={hub} preview brandName="Kokoro" /></ConnectorCommandProvider>}</LocaleProvider></StrictMode>)
   await act(async () => { await Promise.resolve() })
   if (entry === "global") fireEvent.click(screen.getByRole("button", { name: "Global API create" }))
   else {
@@ -2618,7 +2635,7 @@ it.each(["global", "settings"] as const)("%s creation ACK cannot close a newer c
         commandMenu={() => null} commandProps={{ onNewChat: vi.fn(), onOpenSettings: vi.fn() }} commandOpen={false} onCommandOpenChange={vi.fn()} />
     </div>
   }
-  render(<StrictMode><LocaleProvider>{entry === "global" ? <Shell /> : <ConnectorCreationProvider client={hub} boundary={{ admitted: true, subject: "preview", generation: 0 }}><ConnectorsSettingsSection client={hub} preview brandName="Kokoro" /></ConnectorCreationProvider>}</LocaleProvider></StrictMode>)
+  render(<StrictMode><LocaleProvider>{entry === "global" ? <Shell /> : <ConnectorCommandProvider client={hub} boundary={{ admitted: true, subject: "preview", generation: 0 }}><ConnectorsSettingsSection client={hub} preview brandName="Kokoro" /></ConnectorCommandProvider>}</LocaleProvider></StrictMode>)
   const open = async (kind: "api" | "json") => {
     if (entry === "global") fireEvent.click(screen.getByRole("button", { name: kind === "api" ? "Global API create" : "Global JSON create" }))
     else {
@@ -2652,7 +2669,7 @@ it.each(["mode", "visibility"] as const)("a retained creation host fences old co
   const pending = new Promise<void>(resolve => { acknowledge = resolve })
   const hub = { ...createHubClient(), createCustomApi: vi.fn().mockResolvedValue({ profile_id: "retained-host-api", name: "Old API", state_version: "1", environment: [], created_at: "2026-10-16T12:00:00Z", updated_at: "2026-10-16T12:00:00Z" }) }
   const close = vi.fn(), confirmed = vi.fn(async () => { await pending })
-  const dialog = (mode: "custom-api" | "json", open = true) => <StrictMode><LocaleProvider><ConnectorCreationProvider client={hub} boundary={{ admitted: true, subject: "preview", generation: 0 }}><McpCreateDialog client={hub} mode={mode} open={open} onOpenChange={close} onDone={confirmed} /></ConnectorCreationProvider></LocaleProvider></StrictMode>
+  const dialog = (mode: "custom-api" | "json", open = true) => <StrictMode><LocaleProvider><ConnectorCommandProvider client={hub} boundary={{ admitted: true, subject: "preview", generation: 0 }}><McpCreateDialog client={hub} mode={mode} open={open} onOpenChange={close} onDone={confirmed} /></ConnectorCommandProvider></LocaleProvider></StrictMode>
   const view = render(dialog("custom-api"))
   fireEvent.change(screen.getByRole("textbox", { name: "名称" }), { target: { value: "Old API" } })
   fireEvent.click(screen.getByRole("button", { name: "保存" }))
@@ -3047,7 +3064,7 @@ it("Settings revalidates a registered MCP again after remote Prepare completes",
     registerPrivateMcpServer: vi.fn(async () => { registered = true; return registration() }),
     preparePrivateMcpServer: vi.fn(async () => { await remote; ready = true; return { ...registration(), declarations: [] } }),
   }
-  render(<LocaleProvider><ConnectorCreationProvider client={hub} boundary={{ admitted: true, subject: "preview", generation: 0 }}><ConnectorsSettingsSection client={hub} preview brandName="Kokoro" /></ConnectorCreationProvider></LocaleProvider>)
+  render(<LocaleProvider><ConnectorCommandProvider client={hub} boundary={{ admitted: true, subject: "preview", generation: 0 }}><ConnectorsSettingsSection client={hub} preview brandName="Kokoro" /></ConnectorCommandProvider></LocaleProvider>)
   await waitFor(() => expect(list).toHaveBeenCalledOnce())
   const query = screen.getByRole("searchbox", { name: "搜索连接器" })
   fireEvent.change(query, { target: { value: "Prepared" } })
@@ -3066,7 +3083,8 @@ it("Settings revalidates a registered MCP again after remote Prepare completes",
 })
 
 it("MCP same-actor recheck keeps search and the private detail shell but retires facts until a fresh read", async () => {
-  const { McpContent } = await import("@/ui/mcp/mcp-content")
+  const { McpContent: Content } = await import("@/ui/mcp/mcp-content")
+  const McpContent = withMcpCommandOwner(Content)
   let round = 1
   let finish!: (value: unknown) => void
   const nextServer = new Promise(resolve => { finish = resolve })
@@ -3112,7 +3130,8 @@ it("MCP same-actor recheck keeps search and the private detail shell but retires
 })
 
 it("MCP recheck restores typed configuration against fresh facts/CAS and an old command cannot close the current detail", async () => {
-  const { McpContent } = await import("@/ui/mcp/mcp-content")
+  const { McpContent: Content } = await import("@/ui/mcp/mcp-content")
+  const McpContent = withMcpCommandOwner(Content)
   let round = 1
   let acknowledge!: () => void
   const ack = new Promise<void>(resolve => { acknowledge = resolve })
@@ -3159,7 +3178,8 @@ it("MCP recheck restores typed configuration against fresh facts/CAS and an old 
 })
 
 it.each(["failure", "missing"])("MCP recheck keeps a recoverable detail when the new exact resource is %s", async kind => {
-  const { McpContent } = await import("@/ui/mcp/mcp-content")
+  const { McpContent: Content } = await import("@/ui/mcp/mcp-content")
+  const McpContent = withMcpCommandOwner(Content)
   let round = 1
   const connector = { connector_id: "retry-connector", connector_type: "mcp" as const, provider_key: "private-retry",
     server_id: "retry-server", display_name: "Retry server", status: "pending" as const,
@@ -3193,7 +3213,8 @@ it.each(["failure", "missing"])("MCP recheck keeps a recoverable detail when the
 })
 
 it("MCP initial private read failure remains visible and explicitly retryable on the list", async () => {
-  const { McpContent } = await import("@/ui/mcp/mcp-content")
+  const { McpContent: Content } = await import("@/ui/mcp/mcp-content")
+  const McpContent = withMcpCommandOwner(Content)
   const connector = { connector_id: "first-failure", connector_type: "mcp" as const, provider_key: "private-first",
     server_id: "first-server", display_name: "First read", status: "pending" as const, approved_scopes: [], enabled: false, state_version: "1" }
   const read = vi.fn().mockRejectedValueOnce(Error("temporary first read")).mockResolvedValue({ server_id: "first-server",
@@ -3213,7 +3234,8 @@ it("MCP initial private read failure remains visible and explicitly retryable on
 })
 
 it("MCP catalog recheck reports an absent exact provider without waiting for an unrelated connector read", async () => {
-  const { McpContent } = await import("@/ui/mcp/mcp-content")
+  const { McpContent: Content } = await import("@/ui/mcp/mcp-content")
+  const McpContent = withMcpCommandOwner(Content)
   let round = 1
   const provider = { provider_key: "provider-recheck", display_name: "Provider detail", directory_type: "app" as const,
     category_keys: [], example_prompts: [], enabled: true, state_version: "1" }
@@ -3288,7 +3310,8 @@ it("MCP retired OAuth Create still invalidates a confirmed new connector without
 })
 
 it("MCP plaza recheck keeps the directory search and category controls mounted without retaining old cards", async () => {
-  const { McpContent } = await import("@/ui/mcp/mcp-content")
+  const { McpContent: Content } = await import("@/ui/mcp/mcp-content")
+  const McpContent = withMcpCommandOwner(Content)
   let round = 1
   const provider = { provider_key: "stable-controls", display_name: "Stable directory provider", directory_type: "app" as const,
     category_keys: ["finance" as const], example_prompts: [], enabled: true, state_version: "1" }
@@ -3351,7 +3374,8 @@ it("MCP suspended prewarms cannot overwrite a fresh generation or be reused on r
 })
 
 it("Custom API same-actor recheck keeps its detail through a failed read and restores only current fields", async () => {
-  const { McpContent } = await import("@/ui/mcp/mcp-content")
+  const { McpContent: Content } = await import("@/ui/mcp/mcp-content")
+  const McpContent = withMcpCommandOwner(Content)
   let round = 1
   const profile = () => ({ profile_id: "recheck-api", name: `API ${round}`, instructions: `Instructions ${round}`, state_version: String(round),
     created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-16T00:00:00Z", environment: [] })
@@ -3376,7 +3400,8 @@ it("Custom API same-actor recheck keeps its detail through a failed read and res
 })
 
 it("Custom API late confirmed update invalidates its own current projection without closing the rechecked detail", async () => {
-  const { McpContent } = await import("@/ui/mcp/mcp-content")
+  const { McpContent: Content } = await import("@/ui/mcp/mcp-content")
+  const McpContent = withMcpCommandOwner(Content)
   const { useCustomApiProjection } = await import("@/ui/mcp/use-custom-api-projection")
   let finish!: () => void
   let updated = false
@@ -3406,7 +3431,8 @@ it("Custom API late confirmed update invalidates its own current projection with
 })
 
 it("MCP first-open locator can retry its missing row after recheck instead of retrying only an absent detail", async () => {
-  const { McpContent } = await import("@/ui/mcp/mcp-content")
+  const { McpContent: Content } = await import("@/ui/mcp/mcp-content")
+  const McpContent = withMcpCommandOwner(Content)
   let round = 1
   let finish!: (value: unknown) => void
   const old = new Promise(resolve => { finish = resolve })
@@ -3565,7 +3591,7 @@ it.each(["form", "url"] as const)("%s MCP completion failure remains named and o
     getMcpConnector: vi.fn(async () => ({ ...registration.connector, status: prepared ? "active" as const : "pending" as const, enabled: prepared })),
     preparePrivateMcpServer: vi.fn(async () => { prepared = true; return { ...registration, declarations: [] } }) }
   const boundary = { admitted: true, subject: `completion-${mode}`, generation: 1 }
-  const flow = createMcpServerCreationFlow({ client: hub, boundary, onChanged: vi.fn() })
+  const flow = createMcpServerCreationFlow({ client: hub, preparation: createMcpPreparationCommands({ client: hub, boundary, onConfirmed: vi.fn() }), boundary, onChanged: vi.fn() })
   const onDone = vi.fn().mockRejectedValueOnce(new Error("close failed")).mockResolvedValue(undefined)
   const Form = mode === "form" ? CustomMcpForm : UrlMcpForm
   const form = (generation: number) => <LocaleProvider><Dialog open><DialogContent><Form flow={flow} boundary={{ ...boundary, generation }} onCancel={vi.fn()} onDone={onDone} /></DialogContent></Dialog></LocaleProvider>
@@ -3643,7 +3669,7 @@ it("URL Save-and-publish closes the reservation without an error when owner disc
     getMcpConnector: vi.fn(async () => ({ ...registration.connector, enabled: prepared, status: prepared ? "active" as const : "pending" as const })),
     preparePrivateMcpServer: vi.fn(async () => { prepared = true; return { ...registration, declarations: [] } }) }
   const boundary = { admitted: true, subject: "publish-no-oauth", generation: 1 }
-  const flow = createMcpServerCreationFlow({ client: hub, boundary, onChanged: vi.fn() })
+  const flow = createMcpServerCreationFlow({ client: hub, preparation: createMcpPreparationCommands({ client: hub, boundary, onConfirmed: vi.fn() }), boundary, onChanged: vi.fn() })
   const onDone = vi.fn().mockResolvedValue(undefined)
   render(<LocaleProvider><Dialog open><DialogContent><UrlMcpForm flow={flow} boundary={boundary} onCancel={vi.fn()} onDone={onDone} /></DialogContent></Dialog></LocaleProvider>)
   fireEvent.change(screen.getByRole("textbox", { name: /^服务器名称\*?$/ }), { target: { value: "Creation MCP" } })
@@ -3655,4 +3681,102 @@ it("URL Save-and-publish closes the reservation without an error when owner disc
   expect(hub.preparePrivateMcpServer).toHaveBeenCalledOnce()
   expect(hub.beginMcpConnectorAuthorization).not.toHaveBeenCalled()
   expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+})
+
+it.each([false, true])("private detail Prepare restores the same original command after reopening (recheck: %s)", async recheck => {
+  const { McpContent } = await import("@/ui/mcp/mcp-content")
+  const registration = mcpCreationRegistration()
+  let version = "1"
+  const prepare = vi.fn<NonNullable<import("@/hub/client").HubClient["preparePrivateMcpServer"]>>().mockRejectedValue(new Error("lost prepare ACK"))
+  const hub = { ...apiCreationHub(), preparePrivateMcpServer: prepare,
+    listMcpConnectors: vi.fn(async () => ({ items: [{ ...registration.connector, state_version: version }], next_cursor: null })),
+    getPrivateMcpServer: vi.fn(async () => ({ ...registration.server, state_version: version })) }
+  const boundary = { admitted: true, subject: "detail-original-prepare", generation: 1 }
+  const content = (admitted = true, generation = 1) => <LocaleProvider><ConnectorCommandProvider client={hub} boundary={{ ...boundary, admitted, generation }}><McpContent client={hub} initialView="connections" readBoundary={{ ...boundary, admitted, generation }} /></ConnectorCommandProvider></LocaleProvider>
+  const view = render(content())
+  fireEvent.click(await screen.findByRole("button", { name: "Creation MCP" }))
+  fireEvent.click(await screen.findByRole("button", { name: "试用一下" }))
+  await screen.findByRole("alert")
+  expect(prepare).toHaveBeenCalledOnce()
+  fireEvent.click(screen.getByRole("button", { name: "取消" }))
+  if (recheck) { view.rerender(content(false, 2)); version = "9"; view.rerender(content(true, 2)) }
+  fireEvent.click(await screen.findByRole("button", { name: "Creation MCP" }))
+  const button = await screen.findByRole("button", { name: /^(试用一下|重试原请求)$/ })
+  fireEvent.click(button)
+  await waitFor(() => expect(prepare).toHaveBeenCalledTimes(2))
+  expect(prepare.mock.calls[1]?.slice(0, 3)).toEqual(prepare.mock.calls[0]?.slice(0, 3))
+  expect(prepare.mock.calls[1]?.[1]).toBe("1")
+})
+
+it("global creation and Settings detail restore one Prepare, and confirmed disconnect releases the closed creation intent", async () => {
+  const { McpCreateDialog } = await import("@/ui/mcp/mcp-create-dialog")
+  const { McpContent } = await import("@/ui/mcp/mcp-content")
+  const registration = mcpCreationRegistration()
+  let version = "1", removed = false
+  const prepare = vi.fn<NonNullable<import("@/hub/client").HubClient["preparePrivateMcpServer"]>>().mockRejectedValue(new Error("lost Prepare ACK"))
+  const remove = vi.fn(async () => { removed = true; return { ...registration.connector, status: "revoked" as const } })
+  const hub = { ...apiCreationHub(), preparePrivateMcpServer: prepare, removeMcpConnector: remove,
+    registerPrivateMcpServer: vi.fn().mockResolvedValue(registration),
+    getPrivateMcpServer: vi.fn(async () => ({ ...registration.server, state_version: version })),
+    getMcpConnector: vi.fn(async () => registration.connector),
+    listMcpConnectors: vi.fn(async () => ({ items: removed ? [] : [registration.connector], next_cursor: null })) }
+  const boundary = { admitted: true, subject: "cross-entry-preparation", generation: 1 }
+  // One production owner spans both consumers; neither isolated-surface helper is used.
+  const content = (creation: boolean) => <LocaleProvider><ConnectorCommandProvider client={hub} boundary={boundary}>
+    {creation ? <McpCreateDialog client={hub} mode="form" open onOpenChange={vi.fn()} /> :
+      <McpContent client={hub} initialView="connections" settingsLayout readBoundary={boundary} />}
+  </ConnectorCommandProvider></LocaleProvider>
+  const view = render(content(true))
+  fireEvent.change(screen.getByRole("textbox", { name: "服务器名称" }), { target: { value: "Creation MCP" } })
+  fireEvent.change(screen.getByRole("textbox", { name: "服务器 URL" }), { target: { value: registration.server.server_url } })
+  fireEvent.click(screen.getByRole("button", { name: "保存" }))
+  await screen.findByRole("button", { name: "重试原请求" })
+  expect(prepare).toHaveBeenCalledOnce()
+  version = "9"
+  view.rerender(content(false))
+  fireEvent.click(await screen.findByRole("button", { name: "Creation MCP" }))
+  const retry = await screen.findByRole("button", { name: "重试原请求" })
+  expect(prepare).toHaveBeenCalledOnce()
+  fireEvent.click(retry)
+  await waitFor(() => expect(prepare).toHaveBeenCalledTimes(2))
+  expect(prepare.mock.calls[1]?.slice(0, 3)).toEqual(prepare.mock.calls[0]?.slice(0, 3))
+  expect(prepare.mock.calls[1]?.[1]).toBe("1")
+  fireEvent.keyDown(screen.getByRole("button", { name: "管理" }), { key: "ArrowDown" })
+  fireEvent.click(await screen.findByRole("menuitem", { name: "断开连接" }))
+  await waitFor(() => expect(remove).toHaveBeenCalledOnce())
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+  view.rerender(content(true))
+  expect(screen.getByRole("textbox", { name: "服务器名称" })).toHaveValue("")
+  expect(screen.getByRole("button", { name: "保存" })).toBeDisabled()
+  expect(hub.registerPrivateMcpServer).toHaveBeenCalledOnce()
+  expect(prepare).toHaveBeenCalledTimes(2)
+})
+
+it("closing a preparing detail aborts its wait; a late ACK cannot close the successor window", async () => {
+  const { McpContent } = await import("@/ui/mcp/mcp-content")
+  const registration = mcpCreationRegistration()
+  let acknowledge!: () => void
+  const pending = new Promise<void>(resolve => { acknowledge = resolve })
+  const prepare = vi.fn<NonNullable<import("@/hub/client").HubClient["preparePrivateMcpServer"]>>(async () => {
+    await pending; return { ...registration, declarations: [] }
+  })
+  const hub = { ...apiCreationHub(), preparePrivateMcpServer: prepare,
+    getPrivateMcpServer: vi.fn(async () => registration.server),
+    listMcpConnectors: vi.fn(async () => ({ items: [registration.connector], next_cursor: null })) }
+  const boundary = { admitted: true, subject: "detail-window-prepare", generation: 1 }
+  render(<LocaleProvider><ConnectorCommandProvider client={hub} boundary={boundary}>
+    <McpContent client={hub} initialView="connections" readBoundary={boundary} />
+  </ConnectorCommandProvider></LocaleProvider>)
+  fireEvent.click(await screen.findByRole("button", { name: "Creation MCP" }))
+  fireEvent.click(await screen.findByRole("button", { name: "试用一下" }))
+  await waitFor(() => expect(prepare).toHaveBeenCalledOnce())
+  fireEvent.click(screen.getByRole("button", { name: "取消" }))
+  expect(prepare.mock.calls[0]?.[3]?.aborted).toBe(true)
+  fireEvent.click(await screen.findByRole("button", { name: "Creation MCP" }))
+  await screen.findByRole("button", { name: "重试原请求" })
+  await act(async () => { acknowledge(); await pending })
+  expect(screen.getByRole("dialog", { name: "Creation MCP" })).toBeVisible()
+  fireEvent.click(await screen.findByRole("button", { name: "完成" }))
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+  expect(prepare).toHaveBeenCalledOnce()
 })

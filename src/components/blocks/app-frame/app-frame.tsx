@@ -9,7 +9,7 @@ import { matchesKeyboardShortcut, readKeyboardShortcuts } from "@/lib/keyboard-s
 import { useIsMobile } from "@/hooks/use-mobile"
 import type { SessionClient } from "@/engine/client"
 import { useT } from "@/i18n/context"
-import { browserConversationMoveCoordinator, browserListClient, evictBrowserConversationIndex } from "@/ui/shell/page-clients"
+import { browserConversationMoveCoordinator, browserHubClient, browserListClient, evictBrowserConversationIndex } from "@/ui/shell/page-clients"
 import {
   createConversationMoveCoordinator,
   type ConversationMoveResult,
@@ -44,6 +44,7 @@ import { useAppFrameProject } from "./use-app-frame-project"
 import { useProjectList } from "@/features/app/use-project-list"
 import { navigateMountedSurface } from "@/ui/navigation/mounted-surface-navigation"
 import { sessionScopeKey } from "@/engine/session-scope"
+import { ConnectorCommandProvider } from "@/ui/mcp/connector-command-context"
 import shellStyles from "./app-frame.module.css"
 
 export type { AppCommandMenuProps }
@@ -797,6 +798,7 @@ function AppFrameRuntime({
   return (
     <>
     {conversationReaders.hosts}
+    <ConnectorCommandProvider client={browserHubClient({ preview })} boundary={preview ? { admitted: true, subject: "preview", generation: 0 } : projectReadBoundary ?? { admitted: false, subject: null, generation: 0 }}>
     <AppFrameShell
       preview={preview}
       webSkin={resolvedWebSkin}
@@ -823,6 +825,7 @@ function AppFrameRuntime({
       activeId={activeId}
       overlays={overlaySurfaces}
     />
+    </ConnectorCommandProvider>
     </>
   )
 }
