@@ -1,5 +1,7 @@
 "use client";
 
+import { connectorCommandFailureMessage } from "./connector-command-failure";
+
 import { useCallback, useState } from "react";
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
 import type { McpServerCreationFlow } from "./mcp-server-creation-flow";
@@ -112,17 +114,17 @@ export function UrlMcpForm({
       ...(showOAuth && clientId.trim() ? { oauth_client: { client_id: clientId.trim(), client_secret: clientSecret } } : {}),
     }, openOAuth);
   };
-  const submitLabel = t(submitting ? "mcp.submitting" : state.unknown ? "mcp.retryOriginal" : "mcp.save");
+  const submitLabel = t(submitting ? "mcp.submitting" : state.unknown ? creation.mayResume ? "mcp.retryOriginal" : "mcp.recovery.inspectRequired" : "mcp.save");
 
   if (state.registered || completion !== "idle") {
     return <section className={styles.urlMcpForm} aria-live="polite">
       {showTitle ? <DialogTitle className={styles.urlMcpTitle}>{state.facts?.server.display_name ?? (state.name || name)}</DialogTitle> : null}
       {!admitted ? <p className="sr-only" role="status">{t("mcp.creationSession")}</p> : <p className={styles.urlWarning}>{submitting ? t("mcp.submitting") : isReady ? t("mcp.active") : t("mcp.pending")}</p>}
-      {error || state.unknown ? <p className={styles.compactDialogError} role="alert">{t(state.unknown ? "mcp.serverCreateUnknown" : "mcp.error")}</p> : null}
+      {error || state.unknown ? <p className={styles.compactDialogError} role="alert">{t(connectorCommandFailureMessage(creation.failure, state.unknown ? "mcp.serverCreateUnknown" : "mcp.error"))}</p> : null}
       <div className={styles.urlMcpActions}>
         <Button type="button" variant="outline" onClick={creation.cancel}>{t("mcp.cancel")}</Button><span />
         {requiresOAuth ? <Button type="button" disabled={!admitted || submitting || Boolean(state.unknown)} onClick={() => void creation.authorize()}>{t("settings.connect")}</Button> : null}
-        {isReady && !state.unknown || completion !== "idle" ? <Button type="button" disabled={!admitted || submitting} onClick={() => void creation.done()}>{t("mcp.creationDone")}</Button> : !requiresOAuth || state.unknown ? <Button type="button" disabled={!admitted || submitting} onClick={() => void registerAndPrepare(false)}>{submitLabel}</Button> : null}
+        {isReady && !state.unknown || completion !== "idle" ? <Button type="button" disabled={!admitted || submitting || !creation.mayResume} onClick={() => void creation.done()}>{t("mcp.creationDone")}</Button> : !requiresOAuth || state.unknown ? <Button type="button" disabled={!admitted || submitting || !creation.mayResume} onClick={() => void registerAndPrepare(false)}>{submitLabel}</Button> : null}
       </div>
     </section>;
   }
@@ -296,7 +298,7 @@ export function UrlMcpForm({
       ) : null}
       {error || state.unknown ? (
         <p className={styles.compactDialogError} role="alert">
-          {t(state.unknown ? "mcp.serverCreateUnknown" : "mcp.error")}
+          {t(connectorCommandFailureMessage(creation.failure, state.unknown ? "mcp.serverCreateUnknown" : "mcp.error"))}
         </p>
       ) : null}
       <p className={styles.urlWarning}>{t("mcp.urlWarning")}</p>
@@ -305,12 +307,12 @@ export function UrlMcpForm({
           {t("mcp.cancel")}
         </Button>
         <span />
-        <Button type="submit" variant="outline" disabled={!admitted || submitting || (!state.unknown && !canSubmit)}>
+        <Button type="submit" variant="outline" disabled={!admitted || submitting || !creation.mayResume || (!state.unknown && !canSubmit)}>
           {submitLabel}
         </Button>
         <Button
           type="button"
-          disabled={!admitted || submitting || (!state.unknown && !canSubmit)}
+          disabled={!admitted || submitting || !creation.mayResume || (!state.unknown && !canSubmit)}
           onClick={() => void registerAndPrepare(true)}
         >
           {t("mcp.saveAndPublish")}

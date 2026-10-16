@@ -13,7 +13,7 @@ type Target = Readonly<z.infer<typeof targetSchema>>;
 type Command = ReturnType<typeof createConnectorCommand<Target>>;
 type Entry = { target: Target; command: Command; release: () => void; unsubscribe: () => void };
 export type McpPreparationSummary = Readonly<{
-  serverId: string; connectorId: string; kind: ConnectorCommandState["kind"];
+  serverId: string; connectorId: string; kind: ConnectorCommandState["kind"]; failure?: ConnectorCommandState["failure"];
 }>;
 
 /** Typed per-server Prepare intents shared by creation and detail, not owner facts. */
@@ -31,6 +31,7 @@ export function createMcpPreparationCommands(options: {
     snapshot = Object.freeze([...entries.values()].map(entry => Object.freeze({
       serverId: entry.target.serverId, connectorId: entry.target.connectorId,
       kind: entry.command.getSnapshot().kind,
+      ...(entry.command.getSnapshot().failure === undefined ? {} : { failure: entry.command.getSnapshot().failure }),
     })));
     listeners.forEach(listener => listener());
   };
@@ -95,7 +96,7 @@ export function createMcpPreparationCommands(options: {
       if (entry && entry.target.connectorId !== target.connectorId) return Promise.resolve(false);
       if (entry?.command.getSnapshot().kind === "rejected") { remove(entry); entry = undefined; }
       if (!entry) {
-        const command = createConnectorCommand<Target>({ boundary, invalidRequestCode: "invalid_mcp_personal_request",
+        const command = createConnectorCommand<Target>({ boundary, surface: "mcp", invalidRequestCode: "invalid_mcp_personal_request",
           freeze: body => Object.freeze(targetSchema.parse(body)),
           execute: async (body, key, requestSignal) => {
             const result = await options.client.preparePrivateMcpServer!(body.serverId, body.version, key, requestSignal);

@@ -12,6 +12,7 @@ export function createCustomApiCreateFlow(options: {
 }) {
   return createConnectorCommand<CustomApiCreateInput>({
     ...options,
+    surface: "custom_api",
     execute: options.client.createCustomApi,
     invalidRequestCode: "invalid_custom_api_request",
     name: body => body.name,

@@ -1,5 +1,7 @@
 "use client";
 
+import { connectorCommandMayResume, connectorCommandFailureMessage, type ConnectorCommandFailure } from "./connector-command-failure";
+
 import { type FormEvent, type RefObject, useState } from "react";
 import {
   ChevronDown,
@@ -61,12 +63,14 @@ export function CustomMcpDetailDialog({
   onCancelDelete,
   onDelete,
   preparationState = "idle",
+  preparationFailure,
   pendingError = false,
   onRetry,
 }: {
   connector: McpConnector | null;
   server: McpPrivateServer | null;
   preparationState?: "idle" | "running" | "unknown" | "rejected" | "completed";
+  preparationFailure?: ConnectorCommandFailure | undefined;
   pendingError?: boolean;
   onRetry?: () => void;
   actionId: string | null;
@@ -104,7 +108,7 @@ export function CustomMcpDetailDialog({
   const [removedHeaders, setRemovedHeaders] = useState<string[]>([]);
   const busy = actionId === connector?.connector_id;
   const locked = busy || !ready || preparationState === "unknown" || preparationState === "completed";
-  const prepareLabel = preparationState === "unknown" ? t("mcp.retryOriginal") : preparationState === "completed" ? t("mcp.creationDone") : "试用一下";
+  const prepareLabel = preparationState === "unknown" ? t(connectorCommandMayResume(preparationFailure) ? "mcp.retryOriginal" : "mcp.recovery.inspectRequired") : preparationState === "completed" ? t("mcp.creationDone") : "试用一下";
   const selectionProps = useMcpEditorSelection(ready);
   const invalidHeaderName = headers.some(
     (item) => Boolean(item.name.trim()) && !isMcpCustomHeaderName(item.name),
@@ -151,7 +155,7 @@ export function CustomMcpDetailDialog({
         closeLabel={t("mcp.cancel")}
         onCloseAutoFocus={closeFocus}
       >
-        {preparationState === "unknown" ? <Alert role="alert"><AlertDescription>{t("mcp.serverCreateUnknown")}</AlertDescription></Alert> : null}
+        {preparationState === "unknown" ? <Alert role="alert"><AlertDescription>{t(connectorCommandFailureMessage(preparationFailure, "mcp.serverCreateUnknown"))}</AlertDescription></Alert> : null}
         {editing ? (
           <form
             {...selectionProps}
@@ -360,7 +364,7 @@ export function CustomMcpDetailDialog({
                 </DropdownMenuContent>
               </DropdownMenu>
               <div className={styles.configurationActions}>
-                <Button type="button" variant="outline" disabled={busy || !ready} onClick={onPrepare}>
+                <Button type="button" variant="outline" disabled={busy || !ready || !connectorCommandMayResume(preparationFailure)} onClick={onPrepare}>
                   {busy ? <Spinner aria-hidden="true" /> : <Send aria-hidden="true" />}
                   {prepareLabel}
                 </Button>
@@ -398,7 +402,7 @@ export function CustomMcpDetailDialog({
               </span>
               <DialogTitle>{server.display_name}</DialogTitle>
               <div className={styles.detailActions}>
-                <Button type="button" disabled={busy} onClick={onPrepare}>
+                <Button type="button" disabled={busy || !connectorCommandMayResume(preparationFailure)} onClick={onPrepare}>
                   {busy ? (
                     <Spinner aria-hidden="true" />
                   ) : (

@@ -1585,4 +1585,14 @@ export const en: Partial<Record<MessageKey, string>> = {
   "agents.qrCode": "{platform} connection QR code",
   "agents.closeSetup": "Close Agent setup",
 
+  "mcp.recovery.in_progress": "The original request is processing. Resume the same request later.",
+  "mcp.recovery.outcome_unknown": "The result is unconfirmed. Resume uses the original request, not a new creation.",
+  "mcp.recovery.replay_expired": "The recovery period has expired. Close this window and check Manage connectors before creating anything again.",
+  "mcp.recovery.identity_conflict": "The original request identity conflicts. Check Manage connectors first.",
+  "mcp.recovery.ownership_lost": "Processing was interrupted. Explicitly resume the same request.",
+  "mcp.recovery.invalid": "The response did not pass validation. Check Manage connectors first.",
+  "mcp.recovery.not_prepared": "The connector is not prepared. Check its configuration and current status.",
+  "mcp.recovery.needs_client": "OAuth client configuration is missing. Check the connector client settings.",
+  "mcp.recovery.auth_method_unsupported": "This authentication method is unsupported. Check the connector configuration.",
+  "mcp.recovery.inspectRequired": "Check status first",
 }

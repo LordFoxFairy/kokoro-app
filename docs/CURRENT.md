@@ -1799,3 +1799,8 @@ BFF 仍是 HTTP fixture，
 ## 2026-10-16 Connector恢复错误消费者候选（未正常配对）
 
 固定BFF d176e3d browser-private profile，正规生成并在同源/Hub核status/code/retryable；MCP六receipt/三typed原因不再被旧generic规则吞成parse，Custom API从只验envelope收紧为已知tuple，read拒receipt写错误。public14.8、原wire成功形状/准入/预算/key与UI状态机不变；已实际复现旧typed误拒/错tuple放行RED，完整工程验证与提交由Root有效计划记录。页面仍统一unknown提示，分类UX/正常Platform-BFF-App成对加载与真实浏览器验收未完成，不冒本片产品闭环。
+
+
+## 2026-10-16 Connector恢复交互候选（未正常后端配对）
+
+API/JSON/Register/共享Prepare在actor RAM保存固定profile严格核过的失败reason，expired/conflict/invalid及配置前置原因阻断原请求重派；processing/unknown/ownership-lost只用户显式恢复原key/body。创建与Prepare详情复用原alert/button/九语言，不按message猜、不新建或GET冒ACK；原生OAuth创建窗口typed原因受当前scope保护。两项命令重派与JSON误导提示均有实际RED→GREEN；最终工程/审查/commit由Root计划记录。没有receipt人工结清API或真实OAuth完成证据，其他详情编辑失败恢复仍待处理。

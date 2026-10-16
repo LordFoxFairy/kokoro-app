@@ -1,5 +1,7 @@
 "use client";
 
+import { connectorCommandFailure, connectorCommandMayResume, type ConnectorCommandFailure } from "./connector-command-failure";
+
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
 import type { McpPrivateServerRegistrationInput } from "@/hub/mcp-connector.schema";
@@ -20,7 +22,7 @@ export function useMcpServerCreation(flow: McpServerCreationFlow, boundary: Proj
   }), [flow, clearSecrets]);
   const state = useSyncExternalStore(subscribe, flow.getSnapshot, flow.getSnapshot);
   const [completion, setCompletion] = useState<"idle" | "closing" | "retry">("idle");
-  const [popupError, setPopupError] = useState<typeof scope | null>(null);
+  const [popupError, setPopupError] = useState<{ scope: typeof scope; failure: ConnectorCommandFailure | undefined } | null>(null);
   const admitted = boundary.admitted && flow.matches(scope);
   const current = () => committed.current === scope && flow.matches(scope);
   useEffect(() => { if (admitted && state.registered) void flow.refresh(scope); }, [admitted, flow, scope, state.registered]);
@@ -58,10 +60,10 @@ export function useMcpServerCreation(flow: McpServerCreationFlow, boundary: Proj
     setPopupError(null);
     try {
       await startPopup(requestAuthorization);
-    } catch { if (current()) setPopupError(scope); }
+    } catch (error) { if (current()) setPopupError({ scope, failure: connectorCommandFailure("mcp", error) }); }
   };
   const save = async (input?: McpPrivateServerRegistrationInput, oauth = false) => {
-    if (!current() || state.busy || completion !== "idle") return;
+    if (!current() || state.busy || completion !== "idle" || !connectorCommandMayResume(state.failure)) return;
     setPopupError(null);
     const run = () => state.unknown ? flow.retry(scope)
       : state.registered ? flow.prepare(scope) : input ? flow.submit(input, scope) : Promise.resolve(false);
@@ -84,13 +86,15 @@ export function useMcpServerCreation(flow: McpServerCreationFlow, boundary: Proj
         } finally { signal.removeEventListener("abort", pause); }
       });
       if (connected && current()) await done();
-    } catch { if (current()) setPopupError(scope); }
+    } catch (error) { if (current()) setPopupError({ scope, failure: connectorCommandFailure("mcp", error) }); }
   };
   const locked = !admitted || state.busy || state.unknown !== null || state.registered || completion !== "idle";
   return { state, completion, admitted, submitting: state.busy || completion === "closing", locked,
     editable: () => !locked && current(), save, authorize, done,
     cancel: () => { if (committed.current === scope) { flow.dismiss(scope); onCancel(); } },
-    error: state.error || popupError === scope || completion === "retry",
+    error: state.error || popupError?.scope === scope || completion === "retry",
+    failure: state.failure ?? (popupError?.scope === scope ? popupError.failure : undefined),
+    mayResume: connectorCommandMayResume(state.failure),
     ready: state.facts?.server.prepare_status === "ready" && state.facts.connector.status === "active" && state.facts.connector.enabled,
     needsOAuth: state.facts?.server.prepare_status === "needs_oauth",
   };

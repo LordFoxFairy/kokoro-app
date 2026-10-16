@@ -1,5 +1,7 @@
 "use client";
 
+import { connectorCommandFailureMessage } from "./connector-command-failure";
+
 import { useCallback, useState, type FormEvent } from "react";
 import { ImagePlus, Link2, Plus, Trash2 } from "lucide-react";
 
@@ -101,11 +103,11 @@ export function CustomMcpForm({
     return <section className={styles.customMcpResult} aria-live="polite">
       <DialogTitle className={styles.customMcpTitle}>{state.facts?.server.display_name ?? (state.name || name)}</DialogTitle>
       {!admitted ? <p className="sr-only" role="status">{t("mcp.creationSession")}</p> : <p>{submitting ? t("mcp.submitting") : ready ? t("mcp.active") : t("mcp.pending")}</p>}
-      {error || state.unknown ? <p role="alert">{t(state.unknown ? "mcp.serverCreateUnknown" : "mcp.error")}</p> : null}
+      {error || state.unknown ? <p role="alert">{t(connectorCommandFailureMessage(creation.failure, state.unknown ? "mcp.serverCreateUnknown" : "mcp.error"))}</p> : null}
       <footer>
         <Button type="button" variant="outline" onClick={creation.cancel}>{t("mcp.cancel")}</Button>
         {needsOAuth ? <Button type="button" disabled={!admitted || submitting || Boolean(state.unknown)} onClick={() => void creation.authorize()}>{t("settings.connect")}</Button> : null}
-        {ready && !state.unknown || completion !== "idle" ? <Button type="button" disabled={!admitted || submitting} onClick={() => void creation.done()}>{t("mcp.creationDone")}</Button> : !needsOAuth || state.unknown ? <Button type="button" disabled={!admitted || submitting} onClick={() => save()}>{t(state.unknown ? "mcp.retryOriginal" : "mcp.retry")}</Button> : null}
+        {ready && !state.unknown || completion !== "idle" ? <Button type="button" disabled={!admitted || submitting || !creation.mayResume} onClick={() => void creation.done()}>{t("mcp.creationDone")}</Button> : !needsOAuth || state.unknown ? <Button type="button" disabled={!admitted || submitting || !creation.mayResume} onClick={() => save()}>{t(state.unknown ? creation.mayResume ? "mcp.retryOriginal" : "mcp.recovery.inspectRequired" : "mcp.retry")}</Button> : null}
       </footer>
     </section>;
   }
@@ -279,10 +281,10 @@ export function CustomMcpForm({
           </Button>
         </fieldset>
       </div>
-      {error || state.unknown ? <p className={styles.customMcpError} role="alert">{t(state.unknown ? "mcp.serverCreateUnknown" : "mcp.error")}</p> : null}
+      {error || state.unknown ? <p className={styles.customMcpError} role="alert">{t(connectorCommandFailureMessage(creation.failure, state.unknown ? "mcp.serverCreateUnknown" : "mcp.error"))}</p> : null}
       <footer className={styles.customMcpActions}>
-        <Button type="submit" disabled={!admitted || submitting || (!state.unknown && !canSubmit)}>
-          {submitting ? t("mcp.submitting") : t(state.unknown ? "mcp.retryOriginal" : "mcp.save")}
+        <Button type="submit" disabled={!admitted || submitting || !creation.mayResume || (!state.unknown && !canSubmit)}>
+          {submitting ? t("mcp.submitting") : t(state.unknown ? creation.mayResume ? "mcp.retryOriginal" : "mcp.recovery.inspectRequired" : "mcp.save")}
         </Button>
       </footer>
     </form>

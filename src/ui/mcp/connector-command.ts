@@ -1,3 +1,4 @@
+import { connectorCommandFailure, connectorCommandMayResume, type ConnectorCommandFailure, type ConnectorCommandSurface } from "./connector-command-failure";
 import { HubClientError } from "@/hub/client";
 import { connectorCreationKeySchema } from "@/hub/connector-creation-key.schema";
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
@@ -5,8 +6,9 @@ import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
 export type ConnectorCommandState = Readonly<{
   kind: "idle" | "running" | "unknown" | "rejected" | "completed";
   name?: string;
+  failure?: ConnectorCommandFailure;
 }>;
-type Command<T> = { readonly body: T; readonly key: string; readonly name: string | undefined; uncertain: boolean };
+type Command<T> = { readonly body: T; readonly key: string; readonly name: string | undefined; uncertain: boolean; failure: ConnectorCommandFailure | undefined };
 
 /** One actor-owned command, not a second profile projection. Secrets stay in RAM. */
 export function createConnectorCommand<T>(options: {
@@ -14,6 +16,7 @@ export function createConnectorCommand<T>(options: {
   freeze: (input: T) => T;
   name?: (input: T) => string;
   invalidRequestCode: string;
+  surface: ConnectorCommandSurface;
   boundary: ProjectReadBoundary;
   onConfirmed: () => void;
   key?: () => string;
@@ -29,8 +32,8 @@ export function createConnectorCommand<T>(options: {
     state = Object.freeze(next);
     listeners.forEach(listener => listener());
   };
-  const publish = (kind: ConnectorCommandState["kind"], name: string | undefined) =>
-    update(name === undefined ? { kind } : { kind, name });
+  const publish = (kind: ConnectorCommandState["kind"], name: string | undefined, failure?: ConnectorCommandFailure) =>
+    update({ kind, ...(name === undefined ? {} : { name }), ...(failure === undefined ? {} : { failure }) });
   const admitted = () => !retired && actor !== null && boundary.subject === actor && boundary.admitted;
   const matches = (value: ProjectReadBoundary) => !retired && value.subject === boundary.subject &&
     value.admitted === boundary.admitted && value.generation === boundary.generation;
@@ -39,7 +42,7 @@ export function createConnectorCommand<T>(options: {
     active = undefined;
     if (previous && command) {
       command.uncertain = true;
-      publish("unknown", command.name);
+      publish("unknown", command.name, command.failure);
     }
     previous?.controller.abort();
   };
@@ -59,9 +62,10 @@ export function createConnectorCommand<T>(options: {
   const run = async (value: ProjectReadBoundary): Promise<boolean> => {
     const intent = command;
     const execute = options.execute;
-    if (!matches(value) || !admitted() || active || !intent || !execute) return false;
+    if (!matches(value) || !admitted() || active || !intent || !execute || !connectorCommandMayResume(intent.failure)) return false;
     const running = { controller: new AbortController() };
     active = running;
+    intent.failure = undefined;
     publish("running", intent.name);
     try {
       // Store notifications may synchronously commit a new admission boundary.
@@ -83,8 +87,8 @@ export function createConnectorCommand<T>(options: {
         error.reason === "http" && error.status === 400 &&
         error.code === options.invalidRequestCode && !error.retryable;
       if (rejected) command = undefined;
-      else intent.uncertain = true;
-      publish(rejected ? "rejected" : "unknown", intent.name);
+      else { intent.uncertain = true; intent.failure = connectorCommandFailure(options.surface, error); }
+      publish(rejected ? "rejected" : "unknown", intent.name, intent.failure);
       return false;
     } finally {
       if (active === running) active = undefined;
@@ -119,7 +123,7 @@ export function createConnectorCommand<T>(options: {
       let body: T;
       try { body = options.freeze(input); }
       catch { update({ kind: "rejected" }); return Promise.resolve(false); }
-      command = { body, name: options.name?.(body), key: connectorCreationKeySchema.parse((options.key ?? (() => crypto.randomUUID()))()), uncertain: false };
+      command = { body, name: options.name?.(body), key: connectorCreationKeySchema.parse((options.key ?? (() => crypto.randomUUID()))()), uncertain: false, failure: undefined };
       return run(value);
     },
     retry: (value: ProjectReadBoundary) => state.kind === "unknown" ? run(value) : Promise.resolve(false),

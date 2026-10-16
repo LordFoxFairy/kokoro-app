@@ -268,3 +268,8 @@ MCP/Custom API配置的焦点后继：保留readonly配置控件而不是临时�
 ### Connector browser-private恢复错误消费
 
 `src/generated/bff-connector-command-errors.{json,ts}` 是固定BFF profile的原字节/正规派生；`scripts/generate-bff-connector-command-errors.mjs` 只检查或生成此窄profile。`src/hub/connector-command-error.ts` 与现MCP/Custom API schema在Hub和同源adapter共享严格tuple规则，不增网络层、错误registry或UI自动重试；后继actor恢复提示单独接线。
+
+
+### Connector恢复原因与原请求重试边界
+
+现 `src/ui/mcp/connector-command-failure.ts` 消费已固定profile给出非敏感reason/消息key；单命令和Register持失败限制，Prepare创建/详情共享，终止原因不重试、不换key。九语言与原alert/button接线，原UI布局/HTTP/owner事实保持；人工核验与真正OAuth闭环不冒本片完成。

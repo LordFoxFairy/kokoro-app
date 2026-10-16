@@ -1,5 +1,7 @@
 "use client";
 
+import { connectorCommandMayResume, connectorCommandFailureMessage } from "./connector-command-failure";
+
 import { useCallback, useState, type FormEvent } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -69,7 +71,7 @@ export function JsonMcpImportForm({
       />
       {failed ? (
         <p className={styles.compactDialogError} role="alert">
-          {t(state.kind === "unknown" ? "mcp.jsonImportUnknown" : "mcp.jsonImportInvalid")}
+          {t(state.kind === "unknown" ? connectorCommandFailureMessage(state.failure, "mcp.jsonImportUnknown") : "mcp.jsonImportInvalid")}
         </p>
       ) : null}
       {completed ? <p role="status">{t("mcp.jsonImportConfirmed")}</p> : null}
@@ -83,8 +85,8 @@ export function JsonMcpImportForm({
         >
           {t("mcp.cancel")}
         </Button>
-        {completed ? <Button type="button" disabled={!admitted || completion === "closing"} onClick={() => void done()}>{t("mcp.creationDone")}</Button> : <Button type="submit" disabled={!admitted || !flow.available || submitting || (state.kind !== "unknown" && !config.trim())}>
-          {t(state.kind === "unknown" ? "mcp.retryOriginal" : "mcp.jsonImportAction")}
+        {completed ? <Button type="button" disabled={!admitted || completion === "closing"} onClick={() => void done()}>{t("mcp.creationDone")}</Button> : <Button type="submit" disabled={!connectorCommandMayResume(state.failure) || !admitted || !flow.available || submitting || (state.kind !== "unknown" && !config.trim())}>
+          {t(state.kind === "unknown" ? connectorCommandMayResume(state.failure) ? "mcp.retryOriginal" : "mcp.recovery.inspectRequired" : "mcp.jsonImportAction")}
         </Button>}
       </div>
     </form>

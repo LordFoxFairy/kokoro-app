@@ -1278,3 +1278,6 @@ MCP Prepare 的临时意图现只有一个 typed actor/client owner：按精确 
 
 
 Connector恢复错误固定消费仅新增只读generated机器profile与provenance，Hub/adapter不保存owner异常或receipt副本，不新增SQL/Redis/browser持久化、字段或写入边界。仅严格校验现安全错误体并交付既有HubClientError；actor命令RAM生命周期本阶段不改，错误不是资源事实或执行授权。
+
+
+Connector命令快照只增加可选非敏感失败reason，原正文/key仍仅actor RAM；不持久化、不新增owner receipt副本。准入退休保原失败限制且清私有投影，actor/client退休清意图；晚ACK继续仅原主体确认失活，不借错误或读取结清未知写。

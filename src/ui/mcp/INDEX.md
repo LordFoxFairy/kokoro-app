@@ -47,3 +47,6 @@ URL“保存并发布”先在用户点击中预开既有隔离 popup，再执�
 
 
 Connector恢复错误当前已固定BFF browser-private profile并由Hub/同源adapter严格校验，拒绝错status/retryable及read上的receipt写错误。此阶段仅传递既有HubClientError的机器code；本目录actor命令/表单的差异化恢复UX仍待后继，不把profile的recovery当自动请求或新key许可。
+
+
+`connector-command-failure.ts` 仅将固定BFF合法tuple映射为非敏感reason/本地提示，single-command与Register持原失败限制；same_command显式恢复，inspect_owner/配置原因在状态层拒重试，不自动换key。创建API/JSON/Custom/URL及共享Prepare详情复用原alert/button展示九语言；窗口可关闭，核验提示不代表新建许可或GET结清。OAuth创建popup错误仅保当前scope的reason，其他详情生命周期/真实OAuth与人工结清产品流程仍未验。

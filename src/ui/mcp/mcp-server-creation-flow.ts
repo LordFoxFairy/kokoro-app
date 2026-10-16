@@ -1,3 +1,4 @@
+import { connectorCommandFailure, connectorCommandMayResume, type ConnectorCommandFailure } from "./connector-command-failure";
 import { HubClientError, type HubClient } from "@/hub/client";
 import { connectorCreationKeySchema } from "@/hub/connector-creation-key.schema";
 import { mcpPrivateServerRegistrationInputSchema, type McpPrivateServerRegistrationInput,
@@ -9,9 +10,9 @@ export type McpCreationScope = Readonly<{ boundary: ProjectReadBoundary; window:
 export type McpCreationFacts = Readonly<{ server: McpPrivateServer; connector: McpConnector }>;
 export type McpServerCreationState = Readonly<{
   registered: boolean; busy: boolean; unknown: "register" | "prepare" | null;
-  facts: McpCreationFacts | null; name: string; error: boolean;
+  facts: McpCreationFacts | null; name: string; error: boolean; failure?: ConnectorCommandFailure;
 }>;
-type Intent<T> = { body: T; key: string; uncertain: boolean; confirmed: boolean };
+type Intent<T> = { body: T; key: string; uncertain: boolean; confirmed: boolean; failure: ConnectorCommandFailure | undefined };
 type Flight = { kind: "register" | "prepare" | "read"; controller: AbortController; scope: McpCreationScope; read?: Promise<McpCreationFacts | null> };
 type Client = Pick<HubClient, "registerPrivateMcpServer" | "preparePrivateMcpServer" | "getPrivateMcpServer" | "getMcpConnector" | "beginMcpConnectorAuthorization">;
 
@@ -26,12 +27,16 @@ export function createMcpServerCreationFlow(options: { client: Client; preparati
   let active: Flight | undefined;
   let state: McpServerCreationState = { registered: false, busy: false, unknown: null, facts: null, name: "", error: false };
   const listeners = new Set<() => void>();
-  const preparationKind = () => {
+  const preparationState = () => {
     const target = locator;
-    return target ? preparation.getSnapshot().find(item => item.serverId === target.serverId && item.connectorId === target.connectorId)?.kind : undefined;
+    return target ? preparation.getSnapshot().find(item => item.serverId === target.serverId && item.connectorId === target.connectorId) : undefined;
   };
+  const preparationKind = () => preparationState()?.kind;
   const publish = (patch: Partial<McpServerCreationState> = {}) => {
-    state = Object.freeze({ ...state, ...patch, registered: locator !== undefined,
+    const previous = { ...state };
+    delete previous.failure;
+    const failure = registration?.failure ?? preparationState()?.failure;
+    state = Object.freeze({ ...previous, ...patch, ...(failure === undefined ? {} : { failure }), registered: locator !== undefined,
       busy: active !== undefined || preparationKind() === "running", unknown: registration?.uncertain ? "register" : preparationKind() === "unknown" ? "prepare" : null });
     listeners.forEach(listener => listener());
   };
@@ -125,9 +130,9 @@ export function createMcpServerCreationFlow(options: { client: Client; preparati
   };
   const runRegistration = async (scope: McpCreationScope): Promise<boolean> => {
     const intent = registration;
-    if (!intent || !matches(scope) || active || !client.registerPrivateMcpServer) return false;
+    if (!intent || !matches(scope) || active || !client.registerPrivateMcpServer || !connectorCommandMayResume(intent.failure)) return false;
     const flight: Flight = { kind: "register", controller: new AbortController(), scope };
-    active = flight; publish({ error: false, name: intent.body.display_name });
+    active = flight; intent.failure = undefined; publish({ error: false, name: intent.body.display_name });
     try {
       if (active !== flight || !matches(scope)) return false;
       const result = await client.registerPrivateMcpServer(intent.body, intent.key, flight.controller.signal);
@@ -144,7 +149,7 @@ export function createMcpServerCreationFlow(options: { client: Client; preparati
       if (!retired && registration === intent && active === flight) {
         if (!intent.uncertain && error instanceof HubClientError && error.reason === "http" &&
           error.status === 400 && error.code === "invalid_mcp_personal_request" && !error.retryable) registration = undefined;
-        else intent.uncertain = true;
+        else { intent.uncertain = true; intent.failure = connectorCommandFailure("mcp", error); }
         publish({ error: true });
       }
       return false;
@@ -199,7 +204,7 @@ export function createMcpServerCreationFlow(options: { client: Client; preparati
       const body = parsed.data;
       body.headers?.forEach(item => Object.freeze(item)); if (body.headers) Object.freeze(body.headers);
       if (body.oauth_client) Object.freeze(body.oauth_client); Object.freeze(body);
-      registration = { body, key: connectorCreationKeySchema.parse(crypto.randomUUID()), uncertain: false, confirmed: false };
+      registration = { body, key: connectorCreationKeySchema.parse(crypto.randomUUID()), uncertain: false, confirmed: false, failure: undefined };
       return runRegistration(scope);
     },
     retry: (scope: McpCreationScope) => registration ? runRegistration(scope) : prepare(scope),

@@ -1,5 +1,7 @@
 "use client";
 
+import { connectorCommandMayResume } from "./connector-command-failure";
+
 import { useCallback, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
 import type { createConnectorCommand } from "./connector-command";
@@ -39,6 +41,6 @@ export function useConnectorCreationForm(flow: Lifecycle, boundary: ProjectReadB
     catch { if (committed.current?.flow === flow) setCompletion("retry"); }
   };
 
-  const maySubmit = () => admitted && committed.current === scope && !submitting && completion === "idle";
+  const maySubmit = () => connectorCommandMayResume(state.failure) && admitted && committed.current === scope && !submitting && completion === "idle";
   return { state, completion, admitted, submitting, locked, editable, maySubmit, done };
 }

@@ -538,6 +538,7 @@ export function McpProjectionRead({
           pendingError={admitted && (actionError || connectorState.error || (connectorProjection !== undefined && !selectedConnector))}
           onRetry={() => { if (ownerRef.current !== owner || !admitted) return; setActionError(false); if (!selectedConnector || connectorState.error) reload("connectors"); else setDetailRetry(value => value + 1); }}
           preparationState={preparationState?.kind ?? "idle"}
+          preparationFailure={preparationState?.failure}
           actionId={preparationState?.kind === "running" ? connectorIntent.connectorId : actionId}
           actionError={actionError}
           deleteId={deleteId}

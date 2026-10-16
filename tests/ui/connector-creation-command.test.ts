@@ -186,6 +186,17 @@ describe("private MCP creation registration and preparation", () => {
     expect(flow.finish(scope)).toBe(true)
   })
 
+  it("expired registration stops at its original command across closing and recheck", async () => {
+    const { flow, hub, scope, detach } = await setup()
+    hub.registerPrivateMcpServer.mockRejectedValue(new HubClientError("http", "private", "mcp_personal_command_replay_expired", 412, false))
+    await flow.submit(input, scope)
+    await flow.retry(scope)
+    detach(); flow.bind({ ...admitted, generation: 2 }); flow.attach(scope.window)
+    await flow.retry({ ...scope, boundary: { ...admitted, generation: 2 } })
+    expect(hub.registerPrivateMcpServer).toHaveBeenCalledOnce()
+    expect(hub.preparePrivateMcpServer).not.toHaveBeenCalled()
+  })
+
   it("an unknown registration retains the complete frozen input/key across a closed window and recheck", async () => {
     const { flow, hub, scope, detach } = await setup()
     hub.registerPrivateMcpServer.mockRejectedValueOnce(new Error("lost registration ACK"))
@@ -359,3 +370,53 @@ describe("per-resource MCP preparation command owner", () => {
   })
 
 })
+
+it("expired and conflicting creation receipts retain intent but never dispatch another original or new command", async () => {
+  for (const [code, status] of [["custom_api_command_replay_expired", 412], ["custom_api_conflict", 409], ["custom_api_response_invalid", 502]] as const) {
+    const call = vi.fn().mockRejectedValue(new HubClientError("http", "private detail", code, status, false));
+    const key = vi.fn(() => "frozen-key");
+    const flow = createCustomApiCreateFlow({ client: { createCustomApi: call }, boundary: admitted, key, onConfirmed: vi.fn() });
+    await flow.submit(input(), admitted);
+    await flow.retry(admitted);
+    flow.bind({ ...admitted, admitted: false, generation: 2 });
+    flow.bind({ ...admitted, generation: 2 });
+    await flow.retry({ ...admitted, generation: 2 });
+    await flow.submit(input(), { ...admitted, generation: 2 });
+    expect(call, code).toHaveBeenCalledOnce();
+    expect(key).toHaveBeenCalledOnce();
+    expect(flow.getSnapshot().kind).toBe("unknown");
+    expect(JSON.stringify(flow.getSnapshot())).not.toMatch(/private detail|fixture-only|frozen-key/u);
+  }
+});
+
+it("published recoverable states resume only the original key/body and clear the hint only on ACK", async () => {
+  for (const [code, status, retryable, failure] of [
+    ["custom_api_command_in_progress", 409, true, "in_progress"],
+    ["custom_api_command_outcome_unknown", 503, false, "outcome_unknown"],
+    ["custom_api_command_ownership_lost", 409, false, "ownership_lost"],
+  ] as const) {
+    const call = vi.fn().mockRejectedValueOnce(new HubClientError("http", "safe", code, status, retryable)).mockResolvedValue(profile);
+    const flow = createCustomApiCreateFlow({ client: { createCustomApi: call }, boundary: admitted, key: () => "same-key", onConfirmed: vi.fn() });
+    await flow.submit(input(), admitted);
+    expect(flow.getSnapshot()).toMatchObject({ kind: "unknown", failure });
+    expect(call).toHaveBeenCalledOnce();
+    expect(await flow.retry(admitted)).toBe(true);
+    expect(call.mock.calls.map(v => v.slice(0, 2))).toEqual([[input(), "same-key"], [input(), "same-key"]]);
+    expect(flow.getSnapshot()).toEqual({ kind: "completed", name: "Original API" });
+  }
+});
+
+it("an expired Prepare remains blocked across fresh CAS inputs and admission changes", async () => {
+  const call = vi.fn().mockRejectedValue(new HubClientError("http", "safe", "mcp_personal_command_replay_expired", 412, false));
+  const commands = createMcpPreparationCommands({ client: { preparePrivateMcpServer: call }, boundary: admitted, onConfirmed: vi.fn() });
+  const target = { serverId: "server-blocked", connectorId: "connector-blocked", version: "2" };
+  await commands.prepare(target, admitted);
+  expect(commands.getSnapshot()[0]).toMatchObject({ kind: "unknown", failure: "replay_expired" });
+  await commands.prepare({ ...target, version: "99" }, admitted);
+  commands.bind({ ...admitted, admitted: false, generation: 2 }); commands.bind({ ...admitted, generation: 2 });
+  await commands.resume(target.serverId, target.connectorId, { ...admitted, generation: 2 });
+  expect(call).toHaveBeenCalledOnce();
+  expect(commands.finish(target.serverId, { ...admitted, generation: 2 })).toBe(false);
+  commands.bind({ ...admitted, subject: "other", generation: 3 });
+  expect(commands.getSnapshot()).toEqual([]);
+});

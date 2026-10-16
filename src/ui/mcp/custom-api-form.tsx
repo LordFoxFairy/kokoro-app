@@ -1,5 +1,7 @@
 "use client";
 
+import { connectorCommandMayResume, connectorCommandFailureMessage } from "./connector-command-failure";
+
 import { type FormEvent, useCallback, useState } from "react";
 import { ImagePlus, Plus, Trash2 } from "lucide-react";
 
@@ -92,7 +94,7 @@ export function CustomApiForm({
         {!admitted ? <p role="status" className="sr-only">{t("mcp.creationSession")}</p> : null}
         {state.kind === "unknown" || state.kind === "rejected" ? (
           <Alert variant="destructive" role="alert">
-            <AlertDescription>{state.kind === "unknown" && state.name ? <><strong>{state.name}</strong>{" — "}</> : null}{t(state.kind === "unknown" ? "mcp.apiCreateUnknown" : "mcp.actionFailed")}</AlertDescription>
+            <AlertDescription>{state.kind === "unknown" && state.name ? <><strong>{state.name}</strong>{" — "}</> : null}{t(state.kind === "unknown" ? connectorCommandFailureMessage(state.failure, "mcp.apiCreateUnknown") : "mcp.actionFailed")}</AlertDescription>
           </Alert>
         ) : null}
         {state.kind === "completed" || completion !== "idle" ? <p role="status">{t("mcp.apiCreateConfirmed")}</p> : null}
@@ -219,10 +221,10 @@ export function CustomApiForm({
         </Button>
         {state.kind === "completed" || completion !== "idle" ? <Button type="button" disabled={!admitted || completion === "closing"} onClick={() => void done()}>{t("mcp.creationDone")}</Button> : <Button
           type="submit"
-          disabled={!admitted || submitting || !flow.available || (state.kind !== "unknown" && !valid)}
+          disabled={!connectorCommandMayResume(state.failure) || !admitted || submitting || !flow.available || (state.kind !== "unknown" && !valid)}
         >
           {submitting ? <Spinner aria-hidden="true" /> : null}
-          {t(state.kind === "unknown" ? "mcp.retryOriginal" : "mcp.save")}
+          {t(state.kind === "unknown" ? connectorCommandMayResume(state.failure) ? "mcp.retryOriginal" : "mcp.recovery.inspectRequired" : "mcp.save")}
         </Button>}
       </footer>
     </form>

@@ -1628,3 +1628,6 @@ MCP 详情准备与创建共享 typed 原命令 holder，只调用既有 prepare
 
 
 Connector browser-private错误消费固定 BFF `d176e3d0cbbc2eab903dae2b2d969906ba5808fe` 的只读 `contract/connector-command-errors-v1.json`（SHA256 `24158f50a6f4dac1b34553797f0b1afcc8f99dbc79f36b916d03b56999a67a71`），独立snapshot与正规生成常量，不改变public14.8/139、HTTP路径/正文/header或成功契约。现MCP普通/私有/原生授权与Custom API同源adapter及Hub分别核严格tuple；新receipt未知/过期/ownership-lost的false retryable不能被旧“503总可重试”规则误拒，通用503仍true。错误profile只说明恢复分类，不授新key/自动请求/授权；当前阶段仅机器错误传递，原UI统一unknown提示仍待后继替换。
+
+
+Connector恢复UX只消费已固定BFF browser-private profile的合法tuple，再映射为本地reason；不改HTTP/成功ACK、原幂等正文/CAS/预算或原生OAuth协议。policy同请求恢复仅显式执行；inspect_owner或配置原因不触发retry/new key，GET不作ACK。错误提示不回显owner message、内部metadata或凭据；原创建/详情网络请求仍全部经现Hub。

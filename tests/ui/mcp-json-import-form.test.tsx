@@ -84,3 +84,17 @@ describe("JsonMcpImportForm", () => {
     expect(onDone).not.toHaveBeenCalled();
   });
 });
+
+it("an expired JSON receipt explains status inspection and disables its original retry without clearing the document", async () => {
+  const { HubClientError } = await import("@/hub/client");
+  const call = vi.fn().mockRejectedValue(new HubClientError("http", "private detail", "mcp_personal_command_replay_expired", 412, false));
+  const { onDone } = renderForm({ importPrivateMcpJson: call });
+  fireEvent.change(screen.getByRole("textbox"), { target: { value: documentValue } });
+  fireEvent.click(screen.getByRole("button", { name: /Import|导入/u }));
+  expect(await screen.findByRole("alert")).toHaveTextContent(/期限|expired/iu);
+  expect(screen.getByRole("button", { name: /核验|Check status/iu })).toBeDisabled();
+  expect(screen.getByRole("textbox")).toHaveValue(documentValue);
+  expect(screen.getByRole("textbox")).toHaveAttribute("readonly");
+  expect(call).toHaveBeenCalledOnce();
+  expect(onDone).not.toHaveBeenCalled();
+});

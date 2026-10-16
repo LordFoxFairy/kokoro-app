@@ -12,6 +12,7 @@ export function createMcpJsonImportFlow(options: {
 }) {
   return createConnectorCommand<string>({
     ...options,
+    surface: "mcp",
     execute: options.client.importPrivateMcpJson,
     invalidRequestCode: "invalid_mcp_personal_request",
     freeze: config => mcpPrivateJsonImportInputSchema.parse({ config_json: config }).config_json,
