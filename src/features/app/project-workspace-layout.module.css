@@ -10,21 +10,24 @@
   padding: 0;
   --project-document-width: min(100%, 73rem);
   --project-gutter: 1.125rem;
-  --project-context-width: 20rem;
   --project-column-gap: 2.75rem;
 }
-.document {
+.document,
+.composer {
   display: grid;
   grid-template-columns: minmax(24.375rem, 48rem) minmax(15rem, 20rem);
   grid-template-rows: auto 1fr;
   column-gap: var(--project-column-gap);
   width: var(--project-document-width);
-  height: 100%;
   margin-inline: auto;
+  padding-inline: var(--project-gutter);
+  box-sizing: border-box;
+}
+.document {
+  height: 100%;
   overflow-y: auto;
   overscroll-behavior-y: contain;
-  padding: 2rem var(--project-gutter) 0;
-  box-sizing: border-box;
+  padding-top: 2rem;
 }
 .projectIdentity {
   grid-column: 1;
@@ -47,19 +50,17 @@
   position: absolute;
   z-index: 2;
   bottom: 2rem;
-  left: max(
-    var(--project-gutter),
-    calc((100% - 73rem) / 2 + var(--project-gutter))
-  );
-  width: calc(
-    var(--project-document-width) - 2 * var(--project-gutter) -
-      var(--project-column-gap) - var(--project-context-width)
-  );
-  margin: 0;
+  inset-inline: 0;
+  pointer-events: none;
+}
+.composer > * {
+  grid-column: 1;
+  min-width: 0;
+  pointer-events: auto;
   border-radius: 1.375rem;
   background: var(--settings-surface, var(--background));
 }
-@container workspace-main (max-width: 60rem) {
+@container workspace-main (width < 48rem) {
   .surface {
     --project-document-width: min(100%, 48rem);
     --project-gutter: 1.5rem;
@@ -79,10 +80,6 @@
     flex: none;
   }
   .composer {
-    left: max(
-      var(--project-gutter),
-      calc((100% - 48rem) / 2 + var(--project-gutter))
-    );
-    width: calc(var(--project-document-width) - 2 * var(--project-gutter));
+    display: block;
   }
 }

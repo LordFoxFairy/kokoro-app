@@ -20,12 +20,39 @@ test.describe("公开壳层", () => {
 
 test.describe("项目会话", () => {
   test.beforeEach(async ({ page }) => {
-    await page.addInitScript(() => window.localStorage.setItem("kokoro.locale", "zh-CN"))
+    await page.addInitScript(() => window.localStorage.setItem("kokoro.locale", "zh"))
   })
 
   test("预览中从项目概览提交后进入项目会话，并且不写入直接会话列表", async ({ page, isMobile }) => {
     const prompt = "验证项目会话闭环"
     await page.goto("/app/project/preview-project", { waitUntil: "domcontentloaded" })
+
+    if (!isMobile) {
+      const viewport = page.viewportSize()
+      // Reference stays two-column at 768px of workspace, including when
+      // the context track is narrower than its 320px maximum.
+      for (const [width, twoColumns] of [[1103, true], [1067, false], [1068, true]] as const) {
+        await page.setViewportSize({ width, height: 800 })
+        await expect.poll(async () => {
+          const context = await page.getByRole("complementary", { name: /工作区状态|Workspace status/ }).boundingBox()
+          const composer = await page.getByRole("textbox").evaluate((element) => {
+            const form = element.closest("form")
+            if (!form) throw new Error("Project composer form is missing")
+            return form.getBoundingClientRect().toJSON()
+          })
+          if (!context) throw new Error("Project context is missing")
+          const history = await page.getByRole("heading", { name: /^(最近|Recent)$/ }).evaluate((element) => {
+            if (!element.parentElement) throw new Error("Project history is missing")
+            return element.parentElement.getBoundingClientRect().toJSON()
+          })
+          return {
+            twoColumns: context.x >= composer.right,
+            composerAligned: !twoColumns || Math.abs(composer.right - history.right) < 1,
+          }
+        }).toEqual({ twoColumns, composerAligned: true })
+      }
+      if (viewport) await page.setViewportSize(viewport)
+    }
 
     await page.getByRole("textbox").fill(prompt)
     await page.getByRole("button", { name: /发送消息|Send message/ }).click()
@@ -65,7 +92,7 @@ test.describe("项目会话", () => {
     }
     await page.getByRole("link", { name: /当前项目|Current project/ }).click()
     await expect(page).toHaveURL(/\/app\/project\/preview-project$/)
-    await expect(page.getByRole("heading", { name: /项目会话|Project conversations/ })).toBeVisible()
+    await expect(page.getByRole("heading", { name: /^(最近|Recent)$/ })).toBeVisible()
     await expect(page.getByRole("main")).toContainText(prompt)
     if (isMobile) {
       await expect(page.getByRole("dialog")).not.toBeVisible()

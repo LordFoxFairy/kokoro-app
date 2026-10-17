@@ -4,6 +4,8 @@
 
 ## 项目概览布局职责（2026-10-17）
 
+文档与文档外编辑区共用相同网格定义，实际 workspace 达768px才分双栏；中宽右栏未达320px时编辑区仍与左列严格同宽。断点与对齐保护并入原项目会话E2E，不另建像素快照套件。
+
 `src/features/app/project-conversations.tsx` 独立拥有最近会话的 loading/error/list/empty，workspace 只组合身份、上下文、会话与编辑区。`project-workspace-layout.module.css` 负责统一可滚动文档与文档外底部编辑区；卡片视觉仍在 `kokoro-project-workspace.module.css`。没有新增请求、权限或状态模型。 Toolbar与空态共用 `project-skill-add-menu.tsx`；真实空态不显示无效默认保存栏，有选择或未保存改动时仍可操作。
 
 ### Project Skills 独立业务组件
