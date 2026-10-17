@@ -105,6 +105,10 @@ test.describe("项目会话", () => {
     await expect(page).toHaveURL(/\/app\/project\/preview-project\?conversation=conv_[a-z0-9-]+$/)
     await expect(page.getByRole("log")).toContainText(prompt)
 
+    // The skin's neutral foreground must apply to inherited message text too,
+    // not only controls that explicitly consume the token.
+    await expect(page.getByRole("log")).toHaveCSS("color", "rgb(26, 26, 26)")
+
     // The submitted editor has its own measured layout, including inside a
     // project. Parent gutters must not subtract a second 48px from its width.
     const editor = await page.getByRole("textbox").evaluate((element) => {

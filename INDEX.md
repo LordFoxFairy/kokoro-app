@@ -1,3 +1,7 @@
+## Skin文字继承（2026-10-17）
+
+`src/app/globals.css` 的 `[data-web-skin="kokoro"]` 同时声明语义变量与 `color:var(--foreground)`；仅覆盖变量不会重新计算从body继承的颜色。正文、图标等未显式设色的组件沿skin继承，不逐组件复制中性色。原项目会话E2E通过公开计算样式承接回归。
+
 ## 动态响应式职责（2026-10-17）
 
 `src/ui/shell/layout-constraints.ts` 提供桌面起点768px；`use-mobile`、细指针rail观察与shell首屏CSS统一使用 `<768px`，含小数CSS视口，不把项目内容的容器断点与窗口断点混为一谈。项目网格、编辑器和技能面板仍各守原职责，未给总组件增加响应式业务分支。
