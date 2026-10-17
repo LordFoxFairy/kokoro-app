@@ -62,3 +62,6 @@ Connector恢复错误当前已固定BFF browser-private profile并由Hub/同源a
 私有MCP ACK清实际header草稿/移除意图；非敏感明确输入在只读完成窗口保留至Done，避免把新GET当原命令正文。Hub update/delete server与update/enabled/remove connector均显式caller key、严格locator/写入安全字段及ACK，不变HTTP或原生OAuth。旧runAction只留下未覆盖的目录创建/原生授权协调，不能据此声称其完整命令恢复已完成。整文档重载、显式结束未知等待、真实OAuth和剩余视觉仍待后继。
 
 API／JSON创建窗口的每次等待由use-connector-creation-form持有独立caller AbortSignal；取消或真实窗口/准入退休只停止本次flight，命令仍保unknown及原key/body。connector-command按flight关联处理abort、settle移除监听；旧窗口不取消后继重试，同值boundary对象重建不退休，迟到ACK不自动关闭后开窗口。此处不是owner撤销或人工结清能力。
+
+
+私有详情/配置的needs_oauth且pending/error主操作使用连接，不再错误派发Prepare。`use-private-mcp-authorization.ts` 仅消费当前窗口exact server/connector/CAS，复用原popup与正式Reconnect；单窗口在途单飞，关闭/切目标/重核取消等待，旧ACK只失活原主体、不导航或关新窗。Begin成功仍保详情、不冒active，回调通知后重新读取owner事实；未结Prepare/management先沿原命令。Provider/generic授权、创建及owner协议保持，秘密不入hook状态或浏览器存储。

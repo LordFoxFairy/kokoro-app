@@ -3478,7 +3478,7 @@ it.each([
   const content = (ready: boolean, fresh = false, partial = false) => <LocaleProvider>{kind === "mcp" ?
     <CustomMcpDetailDialog admitted={ready} managementCommand={undefined} onResumeManagement={() => {}} connector={ready ? connector : null} server={ready || partial ? server(fresh) : null}
       actionId={null} actionError={false} deleteId={null} returnFocusRef={{ current: null }} onClose={close}
-      onSaveConfiguration={save} onPrepare={prepare} onDisconnect={vi.fn()} onDeleteIntent={vi.fn()} onCancelDelete={vi.fn()} onDelete={vi.fn()} /> :
+      onSaveConfiguration={save} onPrepare={prepare} onAuthorize={vi.fn()} onDisconnect={vi.fn()} onDeleteIntent={vi.fn()} onCancelDelete={vi.fn()} onDelete={vi.fn()} /> :
     <CustomApiDetailDialog admitted={ready} command={undefined} canUpdate canRemove onResume={() => {}} profile={ready ? profile(fresh) : null} busy={false} actionError={false}
       returnFocusRef={{ current: null }} onClose={close} onSave={save} onDelete={vi.fn()} />}</LocaleProvider>
   const view = render(content(true))
@@ -3532,7 +3532,7 @@ it.each(["mcp", "api"])("%s configuration restores a bounded range without steal
   const content = (name: string | null, pendingError = false) => <LocaleProvider>{kind === "mcp" ?
     <CustomMcpDetailDialog admitted={name !== null} managementCommand={undefined} onResumeManagement={() => {}} connector={name === null ? null : connector} server={name === null ? null : server(name)}
       actionId={null} actionError={false} deleteId={null} returnFocusRef={{ current: null }} onClose={vi.fn()} pendingError={pendingError} onRetry={vi.fn()}
-      onSaveConfiguration={vi.fn()} onPrepare={vi.fn()} onDisconnect={vi.fn()} onDeleteIntent={vi.fn()} onCancelDelete={vi.fn()} onDelete={vi.fn()} /> :
+      onSaveConfiguration={vi.fn()} onPrepare={vi.fn()} onAuthorize={vi.fn()} onDisconnect={vi.fn()} onDeleteIntent={vi.fn()} onCancelDelete={vi.fn()} onDelete={vi.fn()} /> :
     <CustomApiDetailDialog admitted={name !== null} command={undefined} canUpdate canRemove onResume={() => {}} profile={name === null ? null : profile(name)} busy={false} actionError={false}
       returnFocusRef={{ current: null }} onClose={vi.fn()} onSave={vi.fn()} onDelete={vi.fn()} pendingError={pendingError} onRetry={vi.fn()} />}</LocaleProvider>
   const view = render(content("Long original name"))
@@ -3939,7 +3939,7 @@ it("a mounted MCP editor clears header secrets on management ACK but preserves n
   const content = (kind?: "unknown" | "completed") => <LocaleProvider><CustomMcpDetailDialog connector={connector} server={server} admitted
     managementCommand={kind ? { connectorId: connector.connector_id, serverId: server.server_id, operation: "update_server", kind } : undefined}
     onResumeManagement={vi.fn()} actionId={null} actionError={false} deleteId={null} returnFocusRef={{ current: null }}
-    onClose={vi.fn()} onSaveConfiguration={save} onPrepare={vi.fn()} onDisconnect={vi.fn()} onDeleteIntent={vi.fn()} onCancelDelete={vi.fn()} onDelete={vi.fn()} /></LocaleProvider>
+    onClose={vi.fn()} onSaveConfiguration={save} onPrepare={vi.fn()} onAuthorize={vi.fn()} onDisconnect={vi.fn()} onDeleteIntent={vi.fn()} onCancelDelete={vi.fn()} onDelete={vi.fn()} /></LocaleProvider>
   const view = render(content())
   fireEvent.keyDown(screen.getByRole("button", { name: "管理" }), { key: "ArrowDown" })
   fireEvent.click(await screen.findByRole("menuitem", { name: "编辑配置" }))
@@ -4061,4 +4061,82 @@ it.each(["pin-changed", "series-changed", "removed"])("installation detail rejec
   expect(screen.getByRole("button", { name: "查看详情" })).toBeDisabled()
   expect(fetcher).toHaveBeenCalledTimes(1)
   expect(fetcher.mock.calls[0]?.[0]).toBe("/api/hub/self/skill-installations/reject-install")
+})
+
+
+function privateOAuthDetailFixture() {
+  const base = mcpCreationRegistration()
+  const connector = { ...base.connector, state_version: "7" }
+  const server = { ...base.server, prepare_status: "needs_oauth" as const, authorization_status: "pending" as const }
+  const prepare = vi.fn()
+  const response = { connector, authorization: { authorization_id: "private-detail-attempt", authorization_url: "https://oauth.example.test/private-detail", expires_at: new Date(Date.now() + 60_000).toISOString() } }
+  const reconnect = vi.fn<(id: string, input: unknown, signal?: AbortSignal) => Promise<typeof response>>().mockResolvedValue(response)
+  const hub = { ...apiCreationHub(), getPrivateMcpServer: vi.fn().mockResolvedValue(server),
+    listMcpConnectors: vi.fn().mockResolvedValue({ items: [connector], next_cursor: null }),
+    preparePrivateMcpServer: prepare, reconnectMcpConnectorAuthorization: reconnect }
+  return { connector, server, hub, reconnect, prepare, response }
+}
+
+it.each(["detail", "configuration"] as const)("private OAuth %s reconnects after the creation window is gone without running Prepare", async mode => {
+  const f = privateOAuthDetailFixture(), navigate = vi.fn()
+  let acknowledge!: () => void
+  const gate = new Promise<void>(resolve => { acknowledge = resolve })
+  const response = f.response
+  f.reconnect.mockImplementation(async () => { await gate; return response })
+  render(<LocaleProvider><McpProjectionRead client={f.hub} identity={`private-detail-${mode}`} initialView="connections" onAuthorizationNavigate={navigate} /></LocaleProvider>)
+  fireEvent.click(await screen.findByRole("button", { name: /Creation MCP/ }))
+  const dialog = await screen.findByRole("dialog", { name: "Creation MCP" })
+  if (mode === "configuration") {
+    fireEvent.keyDown(within(dialog).getByRole("button", { name: "管理" }), { key: "ArrowDown" })
+    fireEvent.click(await screen.findByRole("menuitem", { name: "编辑配置" }))
+    await screen.findByRole("dialog", { name: "MCP 配置" })
+  }
+  const connect = within(dialog).getByRole("button", { name: "连接" })
+  fireEvent.click(connect); fireEvent.click(connect)
+  await waitFor(() => expect(f.reconnect).toHaveBeenCalledExactlyOnceWith(f.connector.connector_id,
+    { server_id: f.server.server_id, expected_state_version: "7" }, expect.any(AbortSignal)))
+  expect(connect).toBeDisabled()
+  await act(async () => { acknowledge(); await gate })
+  await waitFor(() => expect(navigate).toHaveBeenCalledExactlyOnceWith(response.authorization.authorization_url))
+  expect(dialog).toBeVisible()
+  expect(f.prepare).not.toHaveBeenCalled()
+})
+
+it.each(["close", "recheck"] as const)("private OAuth retires %s without blocking the next window or navigating a late ACK", async retirement => {
+  const f = privateOAuthDetailFixture(), navigate = vi.fn()
+  let acknowledge!: () => void, signal!: AbortSignal
+  const gate = new Promise<void>(resolve => { acknowledge = resolve })
+  let acknowledgeFresh!: () => void, attempt = 0
+  const freshGate = new Promise<void>(resolve => { acknowledgeFresh = resolve })
+  const response = f.response
+  f.reconnect.mockImplementation(async (_id, _input, requestSignal) => {
+    if (++attempt === 1) { signal = requestSignal!; await gate } else await freshGate
+    return response
+  })
+  const content = (admitted: boolean, readGeneration: number) => <LocaleProvider><McpProjectionRead client={f.hub} identity={`private-detail-${retirement}`} admitted={admitted} readGeneration={readGeneration} initialView="connections" onAuthorizationNavigate={navigate} /></LocaleProvider>
+  const view = render(content(true, 1))
+  fireEvent.click(await screen.findByRole("button", { name: /Creation MCP/ }))
+  const old = await screen.findByRole("dialog", { name: "Creation MCP" })
+  fireEvent.click(within(old).getByRole("button", { name: "连接" }))
+  await waitFor(() => expect(f.reconnect).toHaveBeenCalledOnce())
+  if (retirement === "close") {
+    fireEvent.click(within(old).getByRole("button", { name: "取消" }))
+    expect(signal.aborted).toBe(true)
+    fireEvent.click(await screen.findByRole("button", { name: /Creation MCP/ }))
+  } else {
+    view.rerender(content(false, 2))
+    expect(signal.aborted).toBe(true)
+    expect(f.reconnect).toHaveBeenCalledOnce()
+    view.rerender(content(true, 2))
+  }
+  const reopened = await screen.findByRole("dialog", { name: "Creation MCP" })
+  fireEvent.click(within(reopened).getByRole("button", { name: "连接" }))
+  await waitFor(() => expect(f.reconnect).toHaveBeenCalledTimes(2))
+  await act(async () => { acknowledge(); await gate })
+  await waitFor(() => expect(reopened).toBeVisible())
+  expect(navigate).not.toHaveBeenCalled()
+  expect(f.reconnect).toHaveBeenCalledTimes(2)
+  view.unmount()
+  await act(async () => { acknowledgeFresh(); await freshGate })
+  expect(navigate).not.toHaveBeenCalled()
 })

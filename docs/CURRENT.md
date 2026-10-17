@@ -1848,3 +1848,20 @@ App57b510d后的本片把五项管理（server编辑/删除、connector编辑/�
 正常3310复用当前Session从管理连接器分别打开API/JSON，在不提交情形下取消/API与Escape/JSON均返回原列表；只改临时草稿，未创建、删除、改角色/凭据/资金或运行模型。本次正常浏览器不证明在途故障取消，后者明确为deferred组件/命令证据；本轮自建tab28已关闭，截图/收据只ignored。项目技能默认仍为name-only写无回读/执行，已询问目标安装边界，本片不冒项目完整闭环或OAuth人工结清。
 
 本片最终业务/测试冻结：Node22 lint/typecheck退出0，相关4files/291 PASS；contract280/architecture50，完整181files/3282 PASS/0SKIP/186.69s（2workers）。同基线候选build0、公共壳桌面移动E2E6 PASS/7.7s（1worker）、posttype0；既有跨Document与颜色warning保留。独审9路径未见确定新增P0–P2，主方核冻结hash并复审diff；本段仅文档追加，另外8路径保持原冻结。E2E后临时Next数量0，3320/3324/3325/39216/39217/39218均无listener，App/IAM/BFF/Platform/Storage健康200。远程CI/PR/merge、Root stage未动，原生OAuth真实提供方/人工结清、项目安装默认、八类来源及完整产品仍未闭环。
+
+
+### 私有MCP详情重新授权（2026-10-16，验收进行中）
+
+App36dacf0基线私有详情/配置只有Prepare，创建窗关闭后needs_oauth资源缺连接入口。现沿既有Reconnect wire补窗口独立消费者，pending/error+fresh needs_oauth显示连接，ready仍原Prepare；未结管理/Prepare不借OAuth绕过原命令恢复。单窗口在途单飞，exact绑定/CAS由当前owner读，关闭或准入退休abort/popup cleanup，迟到ACK只失活原actor、不导航/关闭后开窗。Reconnect成功只等待AS，详情保留并由callback通知重新读取owner事实。无新API/Schema、授权registry、秘密状态或自动重发。
+
+原缺按钮3项实际RED→GREEN；又扩原迟到用例复现关窗后旧等待阻塞新窗，实际1FAIL后按scope清等待ref，新旧finally隔离。最终旧rail扩4项独有风险（详情/配置入口、关闭/重核两围栏），focused4 PASS，无新suite；先前测试fixture的未用形参lint和TestingLibrary多余exact选项及3个旧直挂组件缺新prop属测试接线修正，未据此放宽行为。完整冻结门禁、正常拒绝后重连与成功回验待后续结果。
+
+
+正常3310当前Session已验：新自有loopback URL Register/Prepare200后关闭创建，不从原窗口授权；管理列表重新打开同一私有详情显示连接。第一次详情Reconnect200/89.584ms，AS明确拒绝，callback Complete200/49.691ms；只读owner为error/disabled、failed、pending/state/verifier清、credential count0，fixture无换token或声明调用。详情保留可再连接；切MCP配置后显式第二次Reconnect200/85.996ms，AS同意→Complete200/73.628ms，原配置Dialog保留且主按钮回试用，不将Reconnect ACK直接当成功。只读owner为active/enabled、approved、registered/ready、有digest、一个active credential。DCR仅1、authorize2/deny1/allow1/PKCE换token1，五项声明各1，无额外Prepare/工具/模型执行。
+
+随后正式Disconnect200/58.622ms，UI无行，owner connector/credential均revoked、credential version2且同DB退役瞬时点，原两API保留，未永久删除。AS /consent独立标签由同浏览器自然共享原popup HttpOnly会话，未导出任何授权参数或秘密；原popup presentation仍未由inventory验证，不冒第三方提供方/到期刷新。截图与收据仅Root ignored private-oauth-detail-normal.json/private-oauth-config-reconnected.png。自有tabs35/36/37及fixture90210已回收，正常服务不重启。
+
+七路径首冻结已只读复核无确定新增P0–P2、精确hash一致。Node22 lint/typecheck退出0、contract280 PASS/architecture50 PASS；首全测命令因当前Vitest4不支持minWorkers而未启动，改用支持的maxWorkers=2后181files/3286 PASS/0SKIP/183.27s。没有恢复退役UI套件；原jsdom跨Document诊断保留。同字节独立候选非preview生产build已退出0；显式preview候选build/公共壳E2E与posttype仍待最终结果，本段只文档追加，另六路径原冻结。完整八类来源、项目安装/选择、跨主体/Admin矩阵、长OAuth重核UX/剩余Manus视觉和整文档恢复仍OPEN；远程CI/PR/merge与Root index不动。
+
+
+最终候选同业务/测试字节：production build退出0。第一次误将只支持development显式preview的公共壳E2E指向production start，得到2FAIL/1中断/3未运行；确认use-session-state的production禁止preview及既有Playwright webServer设计后停止该自有错误模式测试，preview进程由原finally回收，未改产品分支/断言。随后沿原Playwright管理的显式preview development server、3325独立端口、1worker重跑，桌面/移动6 PASS/8.3s、posttype退出0。该公共壳E2E只证明既有预览旅程/几何，不冒本片真实OAuth故障；后者为上方正常AS拒绝→显式重连→callback→fresh owner证据。既有颜色warning保留。仅追加本结果段，另外六路径仍原冻结；临时端口/进程回收与最终SHA由Root集成记录，未push/PR/merge。

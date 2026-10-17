@@ -2488,3 +2488,12 @@ Hub update/remove签名显式caller key，删隐式随机key，不留旧签名fa
 现稳定shell拥有原命令，窗口关闭不等于撤销owner写；但两个创建表单未把窗口退休传给在途命令，关闭后仍等待ACK或超时。本切只在既有App命令核和表单生命周期增加caller AbortSignal：每次派发前冻结原key/body，调用窗口拥有本次等待的controller；取消、卸载或真实actor/admission代际退休立即停止该等待，原命令保留unknown。signal只退休其关联flight，不得用旧窗口清理取消后继窗口的重试；同逻辑boundary重建对象不退休。迟到ACK只按现规则确认/失活原主体，不自动关闭后继窗口；显式恢复仍原key/body，expired/conflict等terminal阻断不解除。无新HTTP/owner/Schema/权限/持久化，不添加人工结清假成功或自动新命令。
 
 写区限 connector-command、use-connector-creation-form、Custom API/JSON两表单与相邻INDEX、既有connector-creation-command／mcp-json-import-form回归及CURRENT。先复现取消与卸载signal未abort；补pre-aborted零派发与窗口/代际/晚ACK围栏，复用现套件。主方串行相关门禁、候选build/E2E，运行结束复核临时进程与共享服务。项目技能默认另有name-only无回读/消费的契约缺口，已询问项目级安装与手动选择语义，不在本片把名称或空数组冒默认安装。
+
+
+### 私有MCP详情的重新授权（2026-10-16）
+
+既有私有详情只有Prepare/管理，关闭创建窗口后needs_oauth资源没有授权入口；不把Prepare成功或重复声明读取当OAuth。沿现owner ReconnectPersonalMcpConnectorAuthorization，pending/error且fresh私有server needs_oauth的主操作显示连接，ready保原Prepare，unknown/completed Prepare或未结管理先恢复原操作。详情与配置复用同一动作，不新增wire/Schema或从opaque名称猜绑定。
+
+新增窄use-private-mcp-authorization窗口消费者：复用现useMcpOAuthPopup，只持等待/非敏感错误状态与actor/client/window/admission围栏，不持凭据、第二份owner事实或授权命令registry。一个窗口一次在途Reconnect，同点击栈预开popup，exact server/connector/CAS来自本代详情；关闭/切目标/准入退休取消等待与popup，晚ACK仅失活原actor投影，不导航、不关闭后开窗口。Begin/Reconnect成功只代表等待授权，不关闭详情或伪造active；callback通知沿现owner projection重新读取，真实ready后才回原主动作。失败不自动重发、不借GET认定提交；用户显式新授权仍由owner CAS与pending/exchange约束裁决。
+
+写区本hook、现projection coordinator/custom detail、既有rail回归及MCP INDEX/CURRENT。原Provider/generic OAuth、URL创建、receipt unknown语义不迁移。先实际缺按钮RED和迟到/关窗围栏，再正常关闭创建→详情重连→AS拒绝→显式重连→成功及断开；自有loopback仅声明读取，无工具/模型/资金调用，原popup presentation与外部服务差异如实保留。

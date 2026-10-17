@@ -28,6 +28,7 @@ import styles from "./mcp-projection-read.module.css";
 import { CustomApiDetailDialog } from "./custom-api-detail-dialog";
 import { McpSettingsToolbar } from "./mcp-settings-toolbar";
 import { useMcpOAuthPopup } from "./use-mcp-oauth-popup";
+import { usePrivateMcpAuthorization } from "./use-private-mcp-authorization";
 import { useCustomApiProjection } from "./use-custom-api-projection";
 import { invalidateMcpConnectorProjection, useMcpProjection } from "./use-mcp-projection";
 
@@ -122,6 +123,11 @@ export function McpProjectionRead({
   }, [providerWindowToken, selectedProviderKey, owner]);
   const managementState = managementStates.find(item => item.connectorId === connectorIntent?.connectorId);
   const providerManagementState = managementStates.find(item => item.connectorId === selectedProviderConnectionId);
+  const privateAuthorization = usePrivateMcpAuthorization({ client, identity, admitted, readGeneration,
+    intent: connectorIntent,
+    blocked: Boolean((managementState && managementState.kind !== "rejected") || (preparationState && preparationState.kind !== "rejected")),
+    ...(onAuthorizationNavigate ? { onAuthorizationNavigate } : {}),
+  });
   const [apiIntent, setApiIntent] = useState<{ profileId: string; window: object } | null>(null);
   const selectedCustomApiId = apiIntent?.profileId ?? null;
   const apiWindow = useRef<{ intent: object; controller: AbortController } | null>(null);
@@ -593,7 +599,15 @@ export function McpProjectionRead({
           preparationState={preparationState?.kind ?? "idle"}
           preparationFailure={preparationState?.failure}
           actionId={preparationState?.kind === "running" ? connectorIntent.connectorId : actionId}
-          actionError={actionError || managementState?.kind === "rejected"}
+          actionError={actionError || managementState?.kind === "rejected" || privateAuthorization.error}
+          authorizationBusy={privateAuthorization.busy}
+          onAuthorize={() => {
+            if (!editor?.server || !connectorIntent || ownerRef.current !== owner || !admitted ||
+              editorWindow.current?.intent !== connectorIntent.window || management.isBlocked(editor.connector.connector_id)) return;
+            const preparing = preparation.getSnapshot().find(item => item.serverId === editor.server!.server_id);
+            if (preparing && preparing.kind !== "rejected") return;
+            void privateAuthorization.authorize(editor.connector, editor.server);
+          }}
           deleteId={deleteId}
           returnFocusRef={editorReturnFocusRef}
           onClose={resetEditor}

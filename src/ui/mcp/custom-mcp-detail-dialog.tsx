@@ -8,6 +8,7 @@ import {
   Copy,
   FolderOpen,
   Link2Off,
+  Link2,
   Pencil,
   Send,
   Trash2,
@@ -63,6 +64,8 @@ export function CustomMcpDetailDialog({
   onClose,
   onSaveConfiguration,
   onPrepare,
+  onAuthorize,
+  authorizationBusy = false,
   onDisconnect,
   onDeleteIntent,
   onCancelDelete,
@@ -94,6 +97,8 @@ export function CustomMcpDetailDialog({
     header_removals: string[];
   }) => void;
   onPrepare: () => void;
+  onAuthorize: () => void;
+  authorizationBusy?: boolean;
   onDisconnect: () => void;
   onDeleteIntent: () => void;
   onCancelDelete: () => void;
@@ -115,7 +120,7 @@ export function CustomMcpDetailDialog({
   const [headers, setHeaders] = useState<HeaderDraft[]>([]);
   const [removedHeaders, setRemovedHeaders] = useState<string[]>([]);
   const managementLocked = managementCommand !== undefined && managementCommand.kind !== "rejected";
-  const busy = actionId === connector?.connector_id || managementCommand?.kind === "running";
+  const busy = authorizationBusy || actionId === connector?.connector_id || managementCommand?.kind === "running";
   const [observedKind, setObservedKind] = useState(managementCommand?.kind);
   if (observedKind !== managementCommand?.kind) {
     setObservedKind(managementCommand?.kind);
@@ -124,6 +129,15 @@ export function CustomMcpDetailDialog({
   const managementStatus = <McpManagementStatus command={managementCommand} admitted={admitted} onResume={onResumeManagement} />;
   const locked = managementLocked || busy || !ready || preparationState === "unknown" || preparationState === "completed";
   const prepareLabel = preparationState === "unknown" ? t(connectorCommandMayResume(preparationFailure) ? "mcp.retryOriginal" : "mcp.recovery.inspectRequired") : preparationState === "completed" ? t("mcp.creationDone") : "试用一下";
+  const needsAuthorization = ready && server.prepare_status === "needs_oauth" && server.status !== "disabled" &&
+    (connector.status === "pending" || connector.status === "error") &&
+    (preparationState === "idle" || preparationState === "rejected");
+  const primaryAction = () => <Button type="button" variant={editing ? "outline" : "default"}
+    disabled={managementLocked || busy || !ready || !connectorCommandMayResume(preparationFailure)}
+    onClick={needsAuthorization ? onAuthorize : onPrepare}>
+    {busy ? <Spinner aria-hidden="true" /> : needsAuthorization ? <Link2 aria-hidden="true" /> : <Send aria-hidden="true" />}
+    {needsAuthorization ? t("settings.connect") : prepareLabel}
+  </Button>;
   const selectionProps = useMcpEditorSelection(ready);
   const invalidHeaderName = headers.some(
     (item) => Boolean(item.name.trim()) && !isMcpCustomHeaderName(item.name),
@@ -380,10 +394,7 @@ export function CustomMcpDetailDialog({
                 </DropdownMenuContent>
               </DropdownMenu>
               <div className={styles.configurationActions}>
-                <Button type="button" variant="outline" disabled={managementLocked || busy || !ready || !connectorCommandMayResume(preparationFailure)} onClick={onPrepare}>
-                  {busy ? <Spinner aria-hidden="true" /> : <Send aria-hidden="true" />}
-                  {prepareLabel}
-                </Button>
+                {primaryAction()}
                 <span className={styles.saveSplit}>
                   <Button type="submit" disabled={locked || invalidHeaderName}>
                     {busy ? <Spinner aria-hidden="true" /> : null}
@@ -419,14 +430,7 @@ export function CustomMcpDetailDialog({
               </span>
               <DialogTitle>{server.display_name}</DialogTitle>
               <div className={styles.detailActions}>
-                <Button type="button" disabled={managementLocked || busy || !connectorCommandMayResume(preparationFailure)} onClick={onPrepare}>
-                  {busy ? (
-                    <Spinner aria-hidden="true" />
-                  ) : (
-                    <Send aria-hidden="true" />
-                  )}
-                  {prepareLabel}
-                </Button>
+                {primaryAction()}
                 <DropdownMenu open={managementOpen} onOpenChange={setManagementOpen}>
                   <DropdownMenuTrigger asChild>
                     <Button type="button" variant="outline" disabled={managementLocked}>
