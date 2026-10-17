@@ -1,3 +1,11 @@
+## 2026-10-16 Skills 分享页重核生命周期（局部源码验收完成）
+
+沿基线7221780，将原分享页 actor/share 的展示身份与每代私有事实分开。先扩原8用例中的3项（不增case/suite）：旧源码实际 **3 FAIL / 5 PASS**，分别为generation-only未abort写、A→B未回读就返回A复活旧摘要、同actor重核保旧summary。现同actor/share保持同Dialog与reader，summary/installation/失败反馈/ACK随admission、generation、读重试即时清理；fresh resolve与summary精确source_ref相等才展示，fresh包仍核实际UID/decimal revision/目录字节，失败在原Dialog重试。换actor/share通过原identity key清reader意图，不给A→B→A复活事实。
+
+原unknown安装intent独立保identity/source/series/key；新代不自动重发，只有显式点击且fresh实际安装事实允许才复用原key。旧代读、ACK及finally都按token永久失效，已退役写signal取消，不借旧ACK清新意图；每代布局cleanup拥有写取消，旧读cleanup仅取消自己的controller，避免误取消后继写。没有新Schema/wire/owner/认证旁路或依赖。首useMemo空对象被exhaustive-deps指出依赖不被消费，改为显式identity/admitted/generation/attempt token；exactOptionalPropertyTypes保持，用条件spread而不是放宽sharedSummary类型。测试误用返回按钮译名已按现真实文案纠正，不当产品RED。现scoped lint/type与8定向通过。独审发现同subject保留但会话unavailable时原手动probe.retry丢失的P2，已在原reader用例实际RED后补pending错误、requestPending忙状态和当前token下的probe.retry，summary重试仍走admitted/attempt；复核该P2关闭且无新增确定P0–P2。最终停写四路径源门contract280/architecture50/lint/type/diff0，181files **3288 PASS / 0 SKIP / 187.24s**（runner187.67s）；独立同字节candidate production build0、现development public-shell E2E **6 PASS / 6.05s runner**、post-type0。独审4/4冻结SHA匹配，无新增确定P0–P2；不将公共壳E2E冒已登录分享包成功验收。
+
+正常3310沿现登录入口回到明确不存在的share，真实读取失败仍同一Dialog：鼠标Retry产生GET1→2、Tab落Retry后Enter产生第3GET，显式alert/retry保留、页面1280无横溢；截图仅ignored，自建45已关闭。没有创建分享或安装/模型/资金/权限写入。真实环境尚未找到本轮可复用的既有技能分享URL；不为阅读验收创建新的私有技能分享访问。非默认文件/240px滚动、summary失败、generation-only、迟到ACK和跨actor均为受控UI与严格实际client证据，不冒正常已登录分享happy path。原完整Skills/MCP/Admin/八来源/项目安装/手册及远端组合继续OPEN，远程CI/push/PR/merge、Root index/gitlink保持暂停。
+
 ## 2026-10-16 Skills Reader 同主体重核位置（局部验收完成）
 
 基线25da417。上一片观察的回退由正式重核输入可复现：同actor generation/admitted改变以及父级pending的skill=null触发同一identity reset，reader/path/folders一起被清；随后 fresh目录又强制SKILL.md。沿现Settings父级重核用例补真正非默认文件、旧事实退出、分页失败后显式重试恢复，实际RED为reader按钮消失。现在Settings以已有source＋精确locator固定Dialog实例；viewTarget和generation事实token分开，前者只保展示意图，后者仍同步清metadata/install/manifest/text/下载反馈并取消旧读。换主体、换资源或关闭仍清意图，A→B→A不复活；无新接口/Schema/凭据、认证降级或停周期。
