@@ -1,3 +1,11 @@
+## 2026-10-16 分享页正常成功链与真实非零滚动（补验）
+
+业务源码cd78cb9、正常BFF c6bb5d3/Platform0581429。此前未找到可复用分享URL并非必须扩权：正式源证明Skill Share只存固定revision locator，resolve/summary/package仍逐次按当前调用者资格读，不授匿名/跨tenant或creator替代权限。本轮经原UI对已有测试资源显式获取链接，不导出登录凭据、改ACL或直写数据库；链接保留未执行不可恢复撤销。
+
+有效settings-intent样本正式POST201→summary/package200，回执source_ref与摘要/包一致，decimal revision相同，真实SKILL.md正文可读；已有安装真实显示已添加且禁用添加按钮，无install/enable写。390×480稳定dialog370.5、页面无横溢，实际内容scroll范围324并以原生滚到324；自然下一次120s重核auth3→4/resolve2→3/summary2→3/package4→6后仍scrollTop324、正文在、同一Dialog backend。没有注入focus/visibility或关闭周期；整页刷新后相同标题和真实安装状态保持。此补上真实非零滚动，不再只有受控240px证据；非默认嵌套路径仍只受控fixture（真实包只SKILL.md）。
+
+来源页UI显示已复制，但Tab clipboard bridge读空，未把它当系统剪贴板正确性证明；仅从已观察到的正式201取得同源locator进入分享页。另发现已撤回revision2仍Create201/Resolve200却Summary404，原安装确为withdrawn/disabled：BFF把本人可预览当可分享，现正沿原route修复活动版本资格，不放宽owner的撤回拒绝。上述成功链绑定旧正常BFF，不冒新候选已激活/全产品完成。截图/网络窄投影仅ignored，46/47/48与临时视口/Network均清理，无新增常驻服务、模型/资金/角色操作。完整目标及远端CI/push/PR/merge、Root index/gitlink暂停保持。
+
 ## 2026-10-16 Skills 分享页重核生命周期（局部源码验收完成）
 
 沿基线7221780，将原分享页 actor/share 的展示身份与每代私有事实分开。先扩原8用例中的3项（不增case/suite）：旧源码实际 **3 FAIL / 5 PASS**，分别为generation-only未abort写、A→B未回读就返回A复活旧摘要、同actor重核保旧summary。现同actor/share保持同Dialog与reader，summary/installation/失败反馈/ACK随admission、generation、读重试即时清理；fresh resolve与summary精确source_ref相等才展示，fresh包仍核实际UID/decimal revision/目录字节，失败在原Dialog重试。换actor/share通过原identity key清reader意图，不给A→B→A复活事实。
