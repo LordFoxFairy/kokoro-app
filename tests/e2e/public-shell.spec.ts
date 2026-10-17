@@ -94,6 +94,35 @@ test.describe("项目会话", () => {
     await expect(page).toHaveURL(/\/app\/project\/preview-project\?conversation=conv_[a-z0-9-]+$/)
     await expect(page.getByRole("log")).toContainText(prompt)
 
+    // The submitted editor has its own measured layout, including inside a
+    // project. Parent gutters must not subtract a second 48px from its width.
+    const editor = await page.getByRole("textbox").evaluate((element) => {
+      const form = element.closest("form")
+      const main = element.closest('[data-app-frame-main="true"]')
+      if (!form || !main) throw new Error("Conversation editor is missing")
+      return { form: form.getBoundingClientRect().toJSON(), mainWidth: main.getBoundingClientRect().width }
+    })
+    expect(Math.abs(editor.form.width - Math.min(768, editor.mainWidth - 32))).toBeLessThan(1)
+    expect(editor.form.height).toBeGreaterThanOrEqual(120)
+
+    if (!isMobile) {
+      const viewport = page.viewportSize()
+      const textbox = page.getByRole("textbox")
+      const draft = "这是只用于观察输入区自动换行的本地草稿，不会发送。".repeat(4)
+      await textbox.fill(draft)
+      for (const width of [1280, 390, 1280]) {
+        await page.setViewportSize({ width, height: 720 })
+        await expect.poll(() => textbox.evaluate((element) => {
+          const input = element as HTMLTextAreaElement
+          return Math.abs(input.clientHeight - Math.min(input.scrollHeight, Number.parseFloat(getComputedStyle(input).maxHeight)))
+        })).toBeLessThanOrEqual(1)
+        await expect(textbox).toHaveValue(draft)
+        await expect(textbox).toBeFocused()
+      }
+      await textbox.fill("")
+      if (viewport) await page.setViewportSize(viewport)
+    }
+
     if (isMobile) {
       const navigationTrigger = page.getByRole("button", { name: /展开侧栏|Expand sidebar/ })
       await expect(navigationTrigger).toHaveAttribute("aria-expanded", "false")

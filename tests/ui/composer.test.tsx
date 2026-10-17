@@ -617,6 +617,16 @@ describe("Composer 状态契约", () => {
       expect(screen.getByRole("form", { name: "Message editor" })).toBeInTheDocument()
     expect(screen.getByRole("textbox", { name: "Chat input" })).toHaveAttribute("data-slot", "composer-input")
     expect(screen.getByTestId("composer-controls")).toHaveAttribute("data-slot", "composer-controls")
+    expect(screen.getByRole("textbox").closest('[data-slot="composer-wrap"]')).toHaveAttribute("data-layout", "conversation")
+    cleanup()
+    renderComposer({ emptyWorkspace: true })
+    expect(screen.getByRole("textbox").closest('[data-slot="composer-wrap"]')).toHaveAttribute("data-layout", "workspace")
+    cleanup()
+    renderComposer({ projectWorkspace: true, emptyWorkspace: true })
+    expect(screen.getByRole("textbox").closest('[data-slot="composer-wrap"]')).toHaveAttribute("data-layout", "workspace")
+    cleanup()
+    renderComposer({ projectWorkspace: true })
+    expect(screen.getByRole("textbox").closest('[data-slot="composer-wrap"]')).toHaveAttribute("data-layout", "conversation")
     expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled()
     expect(screen.queryByRole("status")).toBeNull()
   })
@@ -720,15 +730,45 @@ it("编辑器把可见焦点环画在圆角 shell，textarea 不出现直角内�
   expect(css).toContain("@container composer (max-width: 24rem)")
 })
 
-it("原生 Textarea 多行增高并在删除内容后收缩", () => {
-  const props = renderComposer()
-  const input = screen.getByRole("textbox") as HTMLTextAreaElement
-  let height = 112
-  Object.defineProperty(input, "scrollHeight", { configurable: true, get: () => height })
-  fireEvent.change(input, { target: { value: "第一行\n第二行\n第三行" } })
-  expect(input.style.height).toBe("112px")
-  expect(props.onDraftChange).toHaveBeenCalledWith("第一行\n第二行\n第三行")
-  height = 32
-  fireEvent.change(input, { target: { value: "短句" } })
-  expect(input.style.height).toBe("32px")
+it("Textarea 在输入、删除和宽度改变时增高/收缩，忽略纯高度通知并在卸载断开观察", () => {
+  const callbacks: ResizeObserverCallback[] = []
+  const observe = vi.fn()
+  const disconnect = vi.fn()
+  const observer = vi.spyOn(globalThis, "ResizeObserver").mockImplementation(class implements ResizeObserver {
+    constructor(callback: ResizeObserverCallback) { callbacks.push(callback) }
+    observe = observe
+    disconnect = disconnect
+    unobserve() {}
+  })
+  try {
+    const props = renderComposer()
+    const input = screen.getByRole("textbox") as HTMLTextAreaElement
+    let height = 112
+    let width = 640
+    Object.defineProperty(input, "scrollHeight", { configurable: true, get: () => height })
+    Object.defineProperty(input, "clientWidth", { configurable: true, get: () => width })
+    fireEvent.change(input, { target: { value: "第一行\n第二行\n第三行" } })
+    expect(input.style.height).toBe("112px")
+    expect(props.onDraftChange).toHaveBeenCalledWith("第一行\n第二行\n第三行")
+    height = 32
+    fireEvent.change(input, { target: { value: "短句" } })
+    expect(input.style.height).toBe("32px")
+    expect(observe).toHaveBeenCalledWith(input)
+    const notify = () => act(() => callbacks[0]?.([], {} as ResizeObserver))
+    width = 320
+    height = 160
+    notify()
+    expect(input.style.height).toBe("160px")
+    height = 200
+    notify()
+    expect(input.style.height).toBe("160px")
+    width = 640
+    height = 48
+    notify()
+    expect(input.style.height).toBe("48px")
+    cleanup()
+    expect(disconnect).toHaveBeenCalledOnce()
+  } finally {
+    observer.mockRestore()
+  }
 })

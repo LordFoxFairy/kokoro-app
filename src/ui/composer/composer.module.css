@@ -70,9 +70,44 @@
 /* Keep the keyboard ring above later empty-workspace and pointer borders. */
 .wrap .composer:has(.input:focus-visible) { border-color: transparent; box-shadow: 0 0 0 2px var(--ring); }
 
+/* Conversation is a measured component variant, not shell descendant patches.
+   Workspace/creation composers retain their independent layouts. */
+.wrap[data-layout="conversation"] {
+  padding: 0 1rem max(0.5rem, env(safe-area-inset-bottom));
+  gap: 0.5rem;
+}
+.wrap[data-layout="conversation"] .composer {
+  width: min(48rem, 100%);
+  min-height: 7.5rem;
+  border-radius: 1.375rem;
+  padding: 0.75rem 0;
+  gap: 0.75rem;
+  box-shadow: 0 0.75rem 2rem color-mix(in srgb, var(--foreground) 2%, transparent);
+}
+.wrap[data-layout="conversation"] .input {
+  min-height: 3.125rem;
+  max-height: 13.5rem;
+  padding: 0.0625rem 0.5rem 0 1rem;
+  font-size: 1rem;
+  line-height: 1.5rem;
+}
+.wrap[data-layout="conversation"] .controls { min-height: 2rem; padding-inline: 0.75rem; }
+.wrap[data-layout="conversation"] .disclaimer { margin: 0; font-size: 0.75rem; line-height: 1rem; }
+.wrap[data-layout="conversation"] .composer:has(.input:focus) {
+  border-color: color-mix(in srgb, var(--foreground) 20%, transparent);
+}
+.wrap[data-layout="conversation"] .composer:has(.input:focus-visible) {
+  border-color: color-mix(in srgb, var(--foreground) 60%, var(--background));
+  box-shadow: 0 0.75rem 2rem color-mix(in srgb, var(--foreground) 2%, transparent);
+}
+@media (max-width: 640px) {
+  .wrap[data-layout="conversation"] .input { font-size: 0.9375rem; }
+}
+
 @media (forced-colors: active) {
   .wrap .composer:has(.input:focus-visible) { outline: 2px solid Highlight; outline-offset: 2px; box-shadow: none; }
   .input:focus-visible { outline: none; }
+  .wrap[data-layout="conversation"] .composer:has(.input:focus-visible) { box-shadow: none; }
 }
 
 @container composer (max-width: 34rem) {

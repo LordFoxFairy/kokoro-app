@@ -102,8 +102,22 @@ export function Composer({ draft, onDraftChange, onKeyDown, onSubmit, isStreamin
     if (composerRef.current) resizeComposer(composerRef.current)
   }, [composerRef, draft])
 
+  useEffect(() => {
+    const input = composerRef.current
+    if (!input) return
+    let width = input.clientWidth
+    const observer = new ResizeObserver(() => {
+      const nextWidth = input.clientWidth
+      if (nextWidth === width) return
+      width = nextWidth
+      resizeComposer(input)
+    })
+    observer.observe(input)
+    return () => observer.disconnect()
+  }, [composerRef])
+
   return (
-    <div className={styles.wrap} data-slot="composer-wrap" data-desktop-web="true" data-empty-workspace={emptyWorkspace ? "true" : undefined} data-project-workspace={projectWorkspace ? "true" : undefined} data-creation-intent={creationIntent}>
+    <div className={styles.wrap} data-slot="composer-wrap" data-layout={emptyWorkspace ? "workspace" : "conversation"} data-desktop-web="true" data-empty-workspace={emptyWorkspace ? "true" : undefined} data-project-workspace={projectWorkspace ? "true" : undefined} data-creation-intent={creationIntent}>
       <form className={styles.composer} aria-label={t("composer.editArea")} aria-busy={isStreaming} data-state={isStreaming ? "running" : "idle"} data-voice-state={voiceInput.state === "listening" || voiceInput.state === "transcribing" ? voiceInput.state : undefined} onSubmit={onSubmit}>
         {projectWorkspace && environmentSelectorPlacement === "floating" ? <ComposerEnvironment label={environmentLabel} floating /> : null}
         <Textarea ref={composerRef} className={styles.input} data-slot="composer-input" data-settings-return-target="composer" aria-label={t("composer.inputAria")} placeholder={placeholder ?? t("composer.placeholder")} rows={1} maxLength={MAX_INPUT_LENGTH} value={draft} onChange={(event: ChangeEvent<HTMLTextAreaElement>) => { onDraftChange(event.target.value); resizeComposer(event.currentTarget) }} onKeyDown={onKeyDown} />

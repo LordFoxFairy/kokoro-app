@@ -1,3 +1,15 @@
+## 真实聊天舒适度与输入缩放（2026-10-17，局部）
+
+基线471a7e1。用户要求Manus/ChatGPT般舒服、克制的聊天界面，沿真实原会话及独立已登录Manus已完成任务只读对照，不再用组件测试页冒产品效果。参考2026-10-17 https://manus.im/app/xR2wFOL9238kc7A9Z4CFik ，中文/浅色；1280×720及1103×764 form768×120、input50、gap12、radius22，390×720 form358×120/input50、字号15（桌面16），line24。旧本地form约95高、中宽707宽；父壳层叠加gutter/压缩高度导致差异，真实DOM基线pass=false。
+
+Frame只摆放footer/header；删除其跨层thread宽高/内边距覆盖，Composer用既有emptyWorkspace投影data-layout并自持conversation样式，项目归属不等于概览（projectWorkspace=true且非empty也走conversation）。项目概览保workspace独立布局；真实QA宽436.5/高120未变。Thread自己持40顶部/16外gutter与768列内16padding，正文16/24。conversation键盘focus从2px外阴影改为1px高对比边框、微阴影；指针聚焦轻边线，高对比仍2pxHighlight outline；不移除可访问焦点，不改网络/模型/权限。
+
+真实100字草稿宽→窄原height73/scrollHeight121而未到上限，证实旧resize只在draft变更触发；保原输入/程序草稿更新，增加仅观察自身clientWidth变化的ResizeObserver，不随draft重建、先更新width、忽略纯高度通知、卸载disconnect。原unit先RED observe0，最终输入/删除、宽度往返、高度通知忽略与清理均承接。原UI case加四种workspace/conversation分型（先RED无data-layout），原E2E case补宽高/草稿缩放断言，均未新增case/suite或CSS字符串锁。
+
+Node22.22.2五个现suite158 PASS，tsc --noEmit、pnpm lint退出0；真实原会话五步1280→390→768×500→1103→1280，输入73→121→97→73→73，草稿100字/焦点保持/无横溢，之后清空未发送。最终三尺寸form宽高/input高度/字号与参考同值；保存同1103×764前后与参考截图并实看本地最终，内容/侧栏数据不同不做全页像素相等声称。真实键盘focus为1px边线；forced-colors outline2px/offset2、shadow none。只读review无确定P0–P2；完整E2E、全量3k和Next构建本片未跑，前轮预览冷编译缺口仍OPEN。无新测试服务、正常服务重启、登录/模型/积分/权限/持久业务写；原会话历史不变，临时草稿/媒体/视口恢复。执行链仍未联调，不将样式完成冒模型可用；远端及Root index/gitlink继续暂停。
+
+架构初跑2 FAIL/48 PASS的原因是旧forced-colors guard把媒体块恰好两条规则当契约；合法conversation无shadow规则被误报。已复用原atRuleBlock限定同一媒体块，仍验证完整shell的2px Highlight/offset2/no-shadow、只豁免同块一个精确input声明，原十项负控和跨文件拒绝全保留；未做文件白名单或丢断言。修正后architecture50 PASS、lint0，只读复核无新增确定P0–P2；不让旧字符串锁倒逼样式，也不掩盖真实焦点缺失。
+
 ## 聊天提交后空白：修复滚动所有权（2026-10-17，局部）
 
 基线89e0e6e。用户原会话只读核对：历史/问题仍在DOM；独立无请求的真实ConversationThread复现提交后scrollTop271.5、人工spacer529，最新问题和短历史全部被live助手顶部锚点推出视口。对照官方vercel/chatbot components/chat/messages.tsx与hooks/use-scroll-to-bottom.tsx，采用现shadcn原生贴底/读者主动滚动语义，不搬第二套hook/transport。删除live/scaffold两处scrollAnchor及原先仅补偿该spacer的几何effect/observer/工具；不改消息事实、AG-UI、恢复、HITL、产物或错误归属。
