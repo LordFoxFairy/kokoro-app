@@ -153,7 +153,6 @@ export type EmptyStateProps = {
     signal: AbortSignal,
   ) => Promise<ProjectResourceListPage>;
   projectRef?: string;
-  onSetProjectSkillEnabled?: (skill: string, enabled: boolean) => Promise<void>;
   /** Explicit preview fixture callback only; formal tasks use the independent live surface. */
   onCreateProjectScheduledTask?: (
     task: ProjectScheduledTaskInput,

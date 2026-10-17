@@ -1,3 +1,11 @@
+## Project Skills 独立面板（2026-10-17，本地组件验收）
+
+在7cce46a上，workspace只组装技能入口；独立section、安装卡片、来源选择器、请求hook和CSS分别维护。真实项目安装与默认选择分开，个人/官方来源只使用正式exact ref；原名称callback、假Skill Builder卡、聚合弹窗技能状态和序号定位CSS已删除，旧名称路径直接404。同主体重核保留未知原意图，换账号/项目退休；不自动重发，ACK后只回读。默认项先显式取消并保存才可停用/移除；更新保安装ID，不自动升级。
+
+实际旧行为RED后修复；沿原suite替换两条假卡用例，净增四条行为用例，无新suite。完整纯测试3102 PASS、contract281 PASS、architecture50 PASS、lint/typecheck及隔离Next16 Webpack生产build通过；原jsdom导航提醒保留。独立静态复核未发现确定P0–P2。按Manus当前项目空态只读测量800×680、标题18/24、搜索208×32；同字节显式空预览核1280×720及390×844布局、无横溢和Enter/Tab/Escape焦点。预览默认Turbopack因隔离目录依赖symlink边界退出，Webpack预览通过；自有预览/构建目录和进程已回收，正常开发输出未覆盖。
+
+全门后仅规范新组件排版，随后原三suite406 PASS、lint/typecheck与同字节隔离Webpack生产build再次通过。上述不代表正常项目数据/登录/执行整链验收；整套system、默认Turbopack build和正式产品浏览器E2E未运行。正常Schema/服务配对、Agent冻结执行与Admin current配对仍待续。正常服务、配置、权限、积分与模型调用未动，远端及Root index/gitlink继续暂停。
+
 ## Project Skills 传输组件（2026-10-17，本地验证，正常产品待接）
 
 在基线0bdfaea上，安装 adapter 从 catch-all 移到独立 server 文件，同一实现显式 personal/project 目标；个人路径/回执保持。项目默认 selection 的 schema/client/server adapter 分开，仅消费固定 BFF a804b0f/Public16；有序最多16个唯一installation ID、显式[]清空、原key/body、ACK项目与顺序绑定、总10秒/有界字节/fatal UTF-8/取消，无自动重试或self/projects别名。没有新依赖、owner API、表或Schema变更。

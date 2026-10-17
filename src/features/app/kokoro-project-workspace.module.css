@@ -154,8 +154,6 @@
 .cardFooter { display: flex; padding: 0.05rem 1rem 1rem; }
 .cardFooter button { min-height: 2rem; flex: 0 0 auto; border-radius: 8px; font-size: 14px; font-weight: 500; }
 .instructionAction { display: none; }
-.skillVisual { display: flex; min-height: 3.5rem; align-items: center; justify-content: flex-end; padding: 0 1rem 0.35rem; color: color-mix(in srgb, var(--muted-foreground) 24%, transparent); }
-.skillVisual svg { width: 3rem; height: 3rem; stroke-width: 1; }
 
 /* Website and scheduled-task actions live below their description in the
  * reference workbench. The website illustration shares that body row rather
@@ -166,9 +164,6 @@
   min-height: 7.5625rem;
   box-sizing: border-box;
   padding: 0;
-}
-.contextCard[data-context-kind="resources-skills"] {
-  min-height: 16.09375rem;
 }
 .contextCard[data-context-kind="websites"] .cardHeader { min-height: 2.75rem; }
 .contextCard[data-context-kind="websites"] .cardDescription {
@@ -253,7 +248,6 @@
     border-color: rgb(0 0 0 / 20%);
     border-radius: 22px;
   }
-  .contextCard[data-context-kind="resources-skills"] .cardEmpty { padding-bottom: 0.625rem; }
   .contextCard[data-context-kind="instructions"] {
     height: 149px;
     min-height: 149px;
@@ -283,127 +277,12 @@
     padding-top: 0.775rem;
     padding-bottom: 0.525rem;
   }
-  .contextCard[data-context-kind="resources-skills"] {
-    height: 208.5px;
-    min-height: 208.5px;
-    position: relative;
-  }
-  /* The reference resource section is a compact 120px row. The stock Card
-   * header/action padding was leaving it 5px too tall and moving every later
-   * module down. These explicit slots keep both button edges stable. */
-  .contextCard[data-context-kind="resources-skills"] > :nth-child(1) {
-    height: 2.25rem;
-    min-height: 2.25rem;
-    align-items: flex-start;
-    padding: 1rem 1rem 0;
-    box-sizing: border-box;
-  }
-  .contextCard[data-context-kind="resources-skills"] > :nth-child(2) {
-    position: absolute;
-    top: 2.75rem;
-    left: 0;
-    width: 100%;
-    height: 1.21875rem;
-    padding: 0 1rem;
-    box-sizing: border-box;
-  }
-  .contextCard[data-context-kind="resources-skills"] > :nth-child(3) {
-    position: absolute;
-    top: 4.46875rem;
-    left: 0;
-    width: 100%;
-    height: 3.5rem;
-    min-height: 3.5rem;
-    align-items: flex-start;
-    gap: 0.5rem;
-    padding: 0 1rem 1rem;
-    box-sizing: border-box;
-  }
-  .contextCard[data-context-kind="resources-skills"] > :nth-child(3) button {
-    width: auto;
-    min-width: 0;
-    flex: 0 0 auto;
-  }
-  .contextCard[data-context-kind="resources-skills"] > :nth-child(3) button:first-child { width: 8.3125rem; }
-  .contextCard[data-context-kind="resources-skills"] > :nth-child(3) button:last-child { width: 9.3125rem; }
   .actionStatusDot {
     width: 0.25rem;
     height: 0.25rem;
     flex: 0 0 0.25rem;
     border-radius: 999px;
     background: var(--primary);
-  }
-  .contextCard[data-context-kind="resources-skills"] > :nth-child(5) {
-    position: absolute;
-    top: 8rem;
-    right: 0;
-    width: 100%;
-    padding: 0 1rem;
-  }
-  .contextCard[data-context-kind="resources-skills"] > :nth-child(6) {
-    position: absolute;
-    top: 10.2rem;
-    left: 0;
-    width: 100%;
-    padding: 0 1rem;
-  }
-  .contextCard[data-context-kind="resources-skills"] > :nth-child(6) button { display: none; }
-  .contextCard[data-context-kind="resources-skills"] > :nth-child(4) {
-    position: absolute;
-    top: 7.71875rem;
-    left: 0;
-    width: 100%;
-    height: 5.40625rem;
-    min-height: 5.40625rem;
-    border-top: 1px solid var(--border);
-    align-items: flex-start;
-    padding: 1rem 0.75rem 1rem 1rem;
-    box-sizing: border-box;
-  }
-  .contextCard[data-context-kind="resources-skills"] > :nth-child(5) {
-    top: 10.78125rem;
-    height: 1.125rem;
-    min-height: 1.125rem;
-    padding: 0 1rem 0 2.25rem;
-    box-sizing: border-box;
-  }
-  .contextCard[data-context-kind="resources-skills"] > :nth-child(6) {
-    top: 10.78125rem;
-    left: 0;
-    right: auto;
-    width: 2.25rem;
-    height: 1.125rem;
-    min-height: 1.125rem;
-    padding: 0;
-    justify-content: center;
-  }
-  .contextCard[data-context-kind="resources-skills"] .skillVisual {
-    display: inline-flex;
-    width: 2rem;
-    min-height: 2rem;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-  }
-  .contextCard[data-context-kind="resources-skills"] .skillVisual svg {
-    width: 1rem;
-    height: 1rem;
-  }
-  .contextCard[data-context-kind="resources-skills"] > :nth-child(7) { display: none; }
-  .contextCard[data-context-kind="resources-skills"] > :nth-child(7) {
-    display: flex;
-    position: absolute;
-    top: 8.5rem;
-    right: 0.75rem;
-    width: 1.75rem;
-    height: 1.75rem;
-    padding: 0;
-  }
-  .contextCard[data-context-kind="resources-skills"] > :nth-child(7) button {
-    width: 1.75rem;
-    height: 1.75rem;
-    min-height: 1.75rem;
-    padding: 0;
   }
   .contextCard[data-context-kind="websites"] .cardFooter button,
   .contextCard[data-context-kind="scheduled"] .cardFooter button { width: 4rem; }
@@ -413,25 +292,6 @@
     width: 4.6875rem;
     height: 4rem;
   }
-  .contextCard[data-context-kind="resources-skills"] .cardFooter {
-    padding-bottom: 0.75rem;
-  }
-
-  /* CJK copy can match the compact one-line reference. The remaining site
-   * locales need a real second line; move the complete lower section as one
-   * track so copy never paints under the resource actions. */
-  .surface[data-resource-copy-lines="two"] .contextCard[data-context-kind="resources-skills"] {
-    height: 226.5px;
-    min-height: 226.5px;
-  }
-  .surface[data-resource-copy-lines="two"] .contextCard[data-context-kind="resources-skills"] > :nth-child(2) {
-    height: 2.25rem;
-  }
-  .surface[data-resource-copy-lines="two"] .contextCard[data-context-kind="resources-skills"] > :nth-child(3) { top: 5.59375rem; }
-  .surface[data-resource-copy-lines="two"] .contextCard[data-context-kind="resources-skills"] > :nth-child(4) { top: 8.84375rem; }
-  .surface[data-resource-copy-lines="two"] .contextCard[data-context-kind="resources-skills"] > :nth-child(5),
-  .surface[data-resource-copy-lines="two"] .contextCard[data-context-kind="resources-skills"] > :nth-child(6) { top: 11.90625rem; }
-  .surface[data-resource-copy-lines="two"] .contextCard[data-context-kind="resources-skills"] > :nth-child(7) { top: 9.625rem; }
   .contextCard[data-context-kind="websites"] {
     /* Manus keeps the website module tall enough for the illustration and
      * action row. The previous 114px slot clipped the lower artwork and

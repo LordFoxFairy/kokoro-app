@@ -1,6 +1,10 @@
+### Project Skills 独立业务组件
+
+`src/features/app/project-skills-section.tsx` 只组合项目技能入口、Dialog、默认草稿和确认交互；`project-skill-card.tsx` 只展示真实安装；`project-skill-source-picker.tsx` 独立读取个人安装池和正式官方目录；`use-project-skills.ts` 管本项目 lease、分页、真实命令与 ACK 后回读。安装≠默认；未知原意图跨同主体重核保留，不跨账号/项目，不自动重试。旧 workspace/dialog 聚合的技能名称开关、假卡、callback 和相邻 CSS 已退休，旧名称路径在同源边界直接拒绝。资源/技能使用明确 section 正常排版，不再依赖子元素序号定位。正常服务/库配对与执行链另验，不把组件或空预览成功冒完整产品验收。
+
 ### Project Skills 传输职责
 
-`src/lib/server/skill-installations.ts` 独立持有 personal/project 共用的安装生命周期 adapter，catch-all 只分派；`src/lib/server/project-skill-selection.ts` 仅处理项目默认 GET/PUT。`src/hub/project-skills.schema.ts` 与 `project-skill-selection-client.ts` 分别维护 wire 和浏览器请求。现安装 client 显式 Project target，个人默认不变；无新 owner/兼容路径。项目面板、旧名称开关删除与正常浏览器验收仍待后继。
+`src/lib/server/skill-installations.ts` 独立持有 personal/project 共用的安装生命周期 adapter，catch-all 只分派；`src/lib/server/project-skill-selection.ts` 仅处理项目默认 GET/PUT。`src/hub/project-skills.schema.ts` 与 `project-skill-selection-client.ts` 分别维护 wire 和浏览器请求。现安装 client 显式 Project target，个人默认不变；无新 owner/兼容路径。独立项目面板已接线、旧名称开关已删除；正常产品浏览器整链另验。
 
 ### 2026-10-17 S3 BFF 来源契约消费
 

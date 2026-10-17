@@ -1,6 +1,6 @@
 "use client"
 
-import { Cable, ChevronDown, ChevronRight, ListFilter, MessageSquare, Plus, Upload, Wrench } from "lucide-react"
+import { Cable, ChevronDown, ChevronRight, ListFilter, MessageSquare, Plus, Upload } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import { useCallback, useRef, useState, type MouseEvent, type SetStateAction } from "react"
@@ -17,6 +17,7 @@ import { ProjectContextCard, ProjectContextSection } from "./project-context-car
 import { ProjectIdentity } from "./project-identity"
 import { ProjectConversationEmpty } from "./project-conversation-empty"
 import { KokoroProjectConversationWelcome } from "./kokoro-project-conversation-welcome"
+import { ProjectSkillsSection } from "./project-skills-section"
 import { ProjectWorkspaceDialogs } from "./project-workspace-dialogs"
 import { previewScheduledTasks, previewWebsites, type ProjectScheduledPreview, type ResourceKind } from "./project-workspace-model"
 import { useProjectResources } from "./use-project-resources"
@@ -26,7 +27,7 @@ import layoutStyles from "./project-workspace-layout.module.css"
 type ProjectWorkspaceProps = Pick<
   EmptyStateProps,
   "brandName" | "composer" | "onOpenSettings" | "onPrompt" | "projectConversations" | "projectConversationsLoading" | "projectConversationsError" | "onRetryProjectConversations" | "activeProjectConversationId" | "onSelectProjectConversation" | "workspaceCapabilities"
-  | "projectConversation" | "projectInstructions" | "projectInstructionHistory" | "onSaveProjectInstructions" | "onUploadProjectResource" | "onListProjectResources" | "projectRef" | "preview" | "onSetProjectSkillEnabled" | "onCreateProjectScheduledTask" | "projectDetail" | "onRetryProjectRead" | "projectInstructionContext" | "projectHistoryStatus" | "projectHistoryRetryable"
+  | "projectConversation" | "projectInstructions" | "projectInstructionHistory" | "onSaveProjectInstructions" | "onUploadProjectResource" | "onListProjectResources" | "projectRef" | "preview" | "onCreateProjectScheduledTask" | "projectDetail" | "onRetryProjectRead" | "projectInstructionContext" | "projectHistoryStatus" | "projectHistoryRetryable" | "projectReadBoundary"
 >
 
 type InstructionEditorState = {
@@ -76,7 +77,7 @@ export function KokoroProjectWorkspace({
   projectHistoryStatus,
   projectHistoryRetryable,
   onRetryProjectRead,
-  onSetProjectSkillEnabled,
+  projectReadBoundary,
   onCreateProjectScheduledTask,
 }: ProjectWorkspaceProps) {
   const { locale, t } = useLocale()
@@ -115,10 +116,6 @@ export function KokoroProjectWorkspace({
   const activeResourceUploads = useRef(new Set<string>())
   const resourceInputRef = useRef<HTMLInputElement | null>(null)
   const resourceSearchRef = useRef<HTMLInputElement | null>(null)
-  const [skillsOpen, setSkillsOpen] = useState(false)
-  const [skillQuery, setSkillQuery] = useState("")
-  const [skillFilter, setSkillFilter] = useState<"all" | "official">("all")
-  const [skillBuilderEnabled, setSkillBuilderEnabled] = useState(true)
   const [websitesOpen, setWebsitesOpen] = useState(false)
   const [websiteQuery, setWebsiteQuery] = useState("")
   const [selectedWebsiteId, setSelectedWebsiteId] = useState<string | null>(null)
@@ -178,9 +175,6 @@ export function KokoroProjectWorkspace({
     const query = scheduledQuery.trim().toLocaleLowerCase()
     return query.length === 0 || `${task.title} ${task.prompt}`.toLocaleLowerCase().includes(query)
   })
-
-  const skillMatches = skillQuery.trim().length === 0 || t("firstSite.skillBuilder").toLocaleLowerCase().includes(skillQuery.trim().toLocaleLowerCase())
-  const skillVisible = skillMatches && (skillFilter === "all" || skillFilter === "official")
 
   const submitResourceUpload = async (intent: ResourceUploadIntent) => {
     if (activeResourceUploads.current.has(intent.id)) return
@@ -248,7 +242,6 @@ export function KokoroProjectWorkspace({
       className={cn(styles.surface, layoutStyles.surface)}
       data-slot="project-workspace"
       data-locale={locale}
-      data-resource-copy-lines={locale === "zh" || locale === "ko" ? "one" : "two"}
       aria-label={t("firstSite.projects")}
     >
       <div className={cn(styles.main, layoutStyles.main)}>
@@ -342,7 +335,7 @@ export function KokoroProjectWorkspace({
         {(capabilities?.resources || capabilities?.skills) ? (
           <Card className={styles.contextCard} data-context-kind="resources-skills">
             {capabilities.resources ? (
-              <ProjectContextSection
+              <section data-context-section="resources" aria-label={t("firstSite.filesAndResources")}><ProjectContextSection
                 title={t("firstSite.filesAndResources")}
                 description={t("firstSite.filesHint")}
                 actions={[
@@ -362,23 +355,13 @@ export function KokoroProjectWorkspace({
                     openResources(event, "web")
                   }
                 }}
-              />
+              /></section>
             ) : null}
             {capabilities.skills ? (
-              <ProjectContextSection
-                title={t("firstSite.skills")}
-                emptyLabel={t("firstSite.skillBuilder")}
-                icon={Wrench}
-                emptyVisual={<span className={styles.skillVisual}><Wrench aria-hidden="true" /></span>}
-                action={t("firstSite.add")}
-                actionIcon={Plus}
-                actionIconOnly
-                showChevron
-                onClick={(event) => {
-                  rememberContextOpener(event)
-                  setSkillsOpen(true)
-                }}
-              />
+              <ProjectSkillsSection key={JSON.stringify([projectReadBoundary?.subject ?? null, projectRef ?? null])}
+                preview={preview} {...(projectDetail === undefined ? {} : { projectDetail })}
+                {...(projectReadBoundary === undefined ? {} : { projectReadBoundary })}
+                {...(onOpenSettings === undefined ? {} : { onOpenSettings })} />
             ) : null}
           </Card>
         ) : null}
@@ -472,15 +455,6 @@ export function KokoroProjectWorkspace({
         resourceUploads={resourceUploads}
         onRetryResourceUpload={(intent) => { void submitResourceUpload(intent) }}
         handleResourceFiles={handleResourceFiles}
-        skillsOpen={skillsOpen}
-        setSkillsOpen={setSkillsOpen}
-        skillQuery={skillQuery}
-        setSkillQuery={setSkillQuery}
-        setSkillFilter={setSkillFilter}
-        skillBuilderEnabled={skillBuilderEnabled}
-        setSkillBuilderEnabled={setSkillBuilderEnabled}
-        skillVisible={skillVisible}
-        {...(onSetProjectSkillEnabled === undefined ? {} : { onSetProjectSkillEnabled })}
         websitesOpen={websitesOpen}
         setWebsitesOpen={setWebsitesOpen}
         websiteQuery={websiteQuery}

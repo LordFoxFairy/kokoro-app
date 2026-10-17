@@ -624,7 +624,6 @@ function AppFrameRuntime({
     onUploadProjectResource: project.uploadProjectResource,
     onListProjectResources: project.listProjectResources,
     ...(projectRef === undefined ? {} : { projectRef }),
-    onSetProjectSkillEnabled: project.setProjectSkillEnabled,
     projectConversation: projectConversationView,
     onOpenSettings: overlays.openSettings,
     onOpenProject: project.openProject,

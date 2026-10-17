@@ -1,3 +1,9 @@
+## Project Skills 面板职责（2026-10-17，既定模型内实施）
+
+保持 Browser→同源→BFF Public16，不改owner/契约/Schema。workspace只组合ProjectSkillsSection；独立面板/卡片与useProjectSkills维护展示和请求，来源选择器单独持个人/官方只读列表。使用ready canonical Project ID与当前subject/admission/generation；同actor重核与关闭退休私有事实/取消迟到工作但保未决原命令，换actor/project彻底清除。ACK后只回读，不凭GET推断未决命令成功；显式原key/body恢复，无自动升级、重装或默认勾选。启停/移除默认项前先显式取消并保存默认，避免隐式双写；update确认两pin后走原update。删除旧技能名称callback、聚合dialog状态/假卡及浏览器旧名称入口，不保alias。
+
+2026-10-17同已登录Manus参考项目只读实测：项目技能dialog800×680、圆角16，header/toolbar左右20、title18/24、search208×32，添加菜单含个人/官方/本地/GitHub，空态不造技能。沿该布局与现token实现，默认选择checkbox/保存是已批准Kokoro项目模型所需的明确业务差异；本地/GitHub仍从现个人管理正式流程取得后再显式装入项目，不伪造项目直导入。复用原UI用例验证真实HTTP意图、未知原key恢复、ACK后仅读、分页/取消/跨actor及键盘；正常配对/浏览器整链单独验收，不因源码测试冒一比一完成。
+
 ## 项目 Skills 传输职责（2026-10-17，本地组件，面板待接）
 
 沿已批准项目模型与固定 BFF a804b0f/Public16，分离项目技能的 wire/client、同源 adapter 与面板状态。先将现安装 adapter 原样移出 catch-all，再让同一生命周期实现显式选择 personal/project 目标；项目路径只用已读取的 canonical Project ID，不借个人安装或名称开关。独立 selection client/adapter 消费正式 GET/PUT skill-selection，保有序 ≤16 个唯一 installation ID、[]清空、原 key/body 和项目 ACK 绑定。保存 ACK 不代表重读后的当前默认，精确重放不会恢复后续变更。

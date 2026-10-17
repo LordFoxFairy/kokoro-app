@@ -4866,3 +4866,13 @@ it("rejects Project skill aliases and unadmitted mutation without dispatch", asy
   expect((await PUT(new Request(url, { method: "PUT", headers: { origin: "http://localhost", "idempotency-key": "key", "content-type": "application/json" }, body: '{"installation_ids":[]}' }), params(path))).status).toBe(401);
   expect(requestWithDomain).not.toHaveBeenCalled();
 });
+
+it("retires the project skill-name switch before any legacy Hub dispatch", async () => {
+  const { PATCH } = await import("@/app/api/hub/[...path]/route");
+  vi.mocked(requestWithDomain).mockResolvedValue(Response.json({ data: { enabled: true } }));
+  for (const path of [["projects", "project_11111111-1111-4111-8111-111111111111", "skills", "skill-builder"], ["self", "projects", "project_11111111-1111-4111-8111-111111111111", "skills", "skill-builder"]]) {
+    const response = await PATCH(new Request(`http://localhost/api/hub/${path.join("/")}`, { method: "PATCH", headers: { origin: "http://localhost", "content-type": "application/json", "idempotency-key": "old-name-key" }, body: '{"enabled":true}' }), params(path));
+    expect(response.status).toBe(404);
+  }
+  expect(requestWithDomain).not.toHaveBeenCalled();
+});

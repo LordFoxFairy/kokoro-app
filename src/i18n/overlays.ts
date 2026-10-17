@@ -420,6 +420,41 @@ const skillShareFallback: Partial<Record<MessageKey, string>> = {
   "skills.shareOtherPin": "Another pinned version is installed. This page will not upgrade it automatically.",
 }
 
+const projectSkillsFallback: Partial<Record<MessageKey, string>> = {
+  "projectSkills.title": "Project skills",
+  "projectSkills.description": "Reuse workflows across tasks when relevant.",
+  "projectSkills.defaultHint": "Installing and choosing defaults are separate. Saved defaults apply to new messages in this project.",
+  "projectSkills.viewMine": "View my skills",
+  "projectSkills.loading": "Loading skills\u2026",
+  "projectSkills.checking": "Checking project access\u2026",
+  "projectSkills.readFailed": "Could not read skills. Please retry.",
+  "projectSkills.defaultFor": "Use {name} by default",
+  "projectSkills.saveDefaults": "Save default skills",
+  "projectSkills.clear": "Clear defaults",
+  "projectSkills.selectedCount": "{count}/16 default skills selected",
+  "projectSkills.fromMine": "Import from my skills",
+  "projectSkills.fromOfficial": "Add official skills",
+  "projectSkills.back": "Back",
+  "projectSkills.nextPage": "Next page",
+  "projectSkills.loadMore": "Load more",
+  "projectSkills.unavailable": "This skill version is currently unavailable",
+  "projectSkills.enable": "Enable {name}",
+  "projectSkills.version": "Version {revision}",
+  "projectSkills.update": "Update skill",
+  "projectSkills.remove": "Remove skill",
+  "projectSkills.confirmChange": "Change \u201c{name}\u201d in this project? Other projects and personal installations remain unchanged.",
+  "projectSkills.confirm": "Confirm",
+  "projectSkills.clearBeforeRemove": "Clear this default and save before disabling or removing it.",
+  "projectSkills.refreshing": "The command is confirmed. Reading current state…",
+  "projectSkills.saving": "Saving\u2026",
+  "projectSkills.unknown": "The outcome is unconfirmed. Retry uses the original command, not a new request.",
+  "projectSkills.ackReadFailed": "The command is confirmed, but reading failed. Reloading will not repeat the command.",
+  "projectSkills.reload": "Reload",
+  "projectSkills.retryOriginal": "Retry original command",
+  "projectSkills.stopIntent": "End this command",
+  "projectSkills.stopWarning": "This does not undo a committed command. We will read current facts; a later action is a new explicit intent.",
+}
+
 const conversationFallback: Partial<Record<MessageKey, string>> = {
   "rail.deleteFailed": "Delete failed. The chat is still available; try again.",
 }
@@ -427,12 +462,12 @@ const conversationFallback: Partial<Record<MessageKey, string>> = {
 // zh 是源字典(住 messages.ts),自身无 overlay;其余各挂 MT 生成(可人工精修)的增量覆盖。
 export const OVERLAYS: Record<Locale, Partial<Record<MessageKey, string>>> = {
   zh: {},
-  en: { ...skillShareFallback, ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...conversationFallback, ...en },
-  ja: { ...skillShareFallback, ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...conversationFallback, ...ja },
-  ko: { ...skillShareFallback, ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...conversationFallback, ...ko },
-  es: { ...skillShareFallback, ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...conversationFallback, ...es },
-  fr: { ...skillShareFallback, ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...conversationFallback, ...fr },
-  de: { ...skillShareFallback, ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...conversationFallback, ...de },
-  pt: { ...skillShareFallback, ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...conversationFallback, ...pt },
-  ru: { ...skillShareFallback, ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...conversationFallback, ...ru },
+  en: { ...projectSkillsFallback, ...skillShareFallback, ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...conversationFallback, ...en },
+  ja: { ...projectSkillsFallback, ...skillShareFallback, ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...conversationFallback, ...ja },
+  ko: { ...projectSkillsFallback, ...skillShareFallback, ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...conversationFallback, ...ko },
+  es: { ...projectSkillsFallback, ...skillShareFallback, ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...conversationFallback, ...es },
+  fr: { ...projectSkillsFallback, ...skillShareFallback, ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...conversationFallback, ...fr },
+  de: { ...projectSkillsFallback, ...skillShareFallback, ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...conversationFallback, ...de },
+  pt: { ...projectSkillsFallback, ...skillShareFallback, ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...conversationFallback, ...pt },
+  ru: { ...projectSkillsFallback, ...skillShareFallback, ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...conversationFallback, ...ru },
 }

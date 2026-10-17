@@ -2324,6 +2324,8 @@ async function proxyHubRequest(
   )
     return proxyPersonalSkillLifecycle(request, path);
   if ((path[0] === "projects" && path[2] === "skill-selection") || (path[0] === "self" && path[1] === "projects" && path[3] === "skill-selection")) return proxyProjectSkillSelection(request, path);
+  if ((path[0] === "projects" && path[2] === "skills") || (path[0] === "self" && path[1] === "projects" && path[3] === "skills"))
+    return NextResponse.json({ error: "not_found" }, { status: 404, headers: { "cache-control": "no-store" } });
   if (path[0] === "skill-shares") return proxySkillShare(request, path);
   if (path[0] === "skills" && path[1] === "github")
     return proxyGithubSkillImport(request, path);
