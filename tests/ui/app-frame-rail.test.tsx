@@ -1838,6 +1838,9 @@ it("project trial survives the actual URL handoff and Composer submit action", a
     expect(projectClient.createCalls).toHaveLength(1)
     expect(projectClient.createCalls[0]).toMatchObject({ sessionId: conversationId, body: { project_ref: projectRef, selected_skill_source_refs: ["skill:trial-version"] } })
     expect(client.createCalls).toEqual([])
+    act(() => { projectEngine.newConversation() })
+    await act(async () => { projectEngine.submit("new project conversation") })
+    expect(projectClient.createCalls.at(-1)?.body).not.toHaveProperty("selected_skill_source_refs")
   } finally { view.unmount(); projectEngine.dispose(); window.history.replaceState({}, "", "/app") }
 })
 

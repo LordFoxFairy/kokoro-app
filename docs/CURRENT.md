@@ -1,3 +1,11 @@
+## S4d Composer 项目技能继承（2026-10-17，本地组件候选）
+
+沿现engine／execution adapter／Skill试用hook分工，项目省略继承、显式[]不选、exact refs覆盖；新建/切换/生命周期退休恢复作用域默认，用户清除仍为[]，未知重试保首发完整意图。strict消息回读接收owner冻结refs，不新增页面状态、服务或依赖。唯一snapshot固定BFF a804b0f/Public16，Team15生成文件保持，Agent failure仅更新provenance。
+
+实际RED3失败→聚焦267 PASS；原rail209 PASS、最终完整纯测试3088 PASS，contract281 PASS、architecture50 PASS，相关四路由242 PASS（含受控HTTP，不冒正常IAM/owner组合）；lint/typecheck通过。隔离Next16 Webpack生产build通过，原开发.next未覆盖、自有构建目录已删除；默认Turbopack build、整套system与浏览器E2E本片未运行。构建揭示并最窄修正两处为测试暴露的自定义Route export和IAM POST可选context；测试改走正式HTTP出口，既有拒绝断言/鉴权逻辑保持，未忽略构建类型错误。
+
+项目安装/默认选择面板仍待独立组件接线，旧名称入口未在App正常激活新模型；正常跨仓Schema/服务配对、Agent真实执行与浏览器验收未完成。无正常账号/权限/积分/模型配置变更，无远端CI/push/PR/merge或Root gitlink更新。
+
 ## 2026-10-17 来源 S3 固定消费（源码候选，正常配对待续）
 
 沿05d9504固定BFF `e60ff311075b01f1d0ca58f1cebc47080dbc3ea1` 的唯一Public15.0.0/139 operations，完整canonical SHA256 `e3f70ab1111295d1df10775853ff9c20bf85ea466da32996a73d37a8b16d54c0`。仅公开skill.list owner_type增加hub/device/unknown；本仓没有运行时调用该公开list，网站ListSkills/ListHubSkills/GetSkill、publisher分类和分享五类schema均保持原字节，不为配对凭空增加UI producer或扩大所有来源词表。

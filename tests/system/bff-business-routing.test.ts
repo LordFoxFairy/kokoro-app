@@ -23,7 +23,7 @@ vi.mock("@/lib/server/product-bff", () => ({
 }))
 vi.mock("@/lib/server/upstream-http", () => ({ requestWithDomain }))
 
-import { proxyScheduledTaskRequest } from "@/app/api/scheduled-tasks/[[...path]]/route"
+import { GET } from "@/app/api/scheduled-tasks/[[...path]]/route"
 
 describe("Web to business BFF route projection", () => {
   afterEach(() => {
@@ -54,7 +54,7 @@ describe("Web to business BFF route projection", () => {
       ),
     )
 
-    const response = await proxyScheduledTaskRequest(new Request("https://app.example/api/scheduled-tasks"), {
+    const response = await GET(new Request("https://app.example/api/scheduled-tasks"), {
       params: Promise.resolve({ path: [] }),
     })
 
@@ -90,7 +90,7 @@ describe("Web to business BFF route projection", () => {
       ),
     )
 
-    const response = await proxyScheduledTaskRequest(
+    const response = await GET(
       new Request("https://app.example/api/scheduled-tasks/scheduled_missing"),
       { params: Promise.resolve({ path: ["scheduled_missing"] }) },
     )

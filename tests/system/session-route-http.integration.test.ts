@@ -107,5 +107,13 @@ describe("Chat BFF against a local BFF contract fixture", () => {
     expect(receivedHeaders["x-kokoro-tenant-id"]).toBeUndefined()
     expect(receivedHeaders["x-kokoro-principal-id"]).toBeUndefined()
     expect(response.headers.get("cache-control")).toBe("private, no-store")
+    for (const selection of [[],["skill:revision_a"]]) {
+      const body={content:"hello",project_ref:"project_a",selected_skill_source_refs:selection}
+      const selected=await POST(new Request("https://first.example/api/session/sessions/ses_1/messages",{method:"POST",headers:{origin:"https://first.example","content-type":"application/json","idempotency-key":"explicit-selection"},body:JSON.stringify(body)}),{params:Promise.resolve({path:["sessions","ses_1","messages"]})})
+      expect(selected.status).toBe(200)
+      await selected.text()
+      expect(JSON.parse(receivedBody)).toEqual(body)
+    }
+
   })
 })

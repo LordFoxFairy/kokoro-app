@@ -1476,7 +1476,8 @@ it.each([
 ])(
   "rejects illegal installation input %s %s before upstream",
   async (method, search, key, body) => {
-    const { proxyHubRequest } = await import("@/app/api/hub/[...path]/route");
+    const route = await import("@/app/api/hub/[...path]/route");
+    const proxyHubRequest = method === "GET" ? route.GET : method === "PUT" ? route.PUT : route.POST;
     const response = await proxyHubRequest(
       new Request(
         `http://localhost/api/hub/self/skill-installations${search}`,
@@ -1607,7 +1608,8 @@ it.each([
 ] as const)(
   "rejects invalid installation media/body %s %#",
   async (method, path, contentType, body) => {
-    const { proxyHubRequest } = await import("@/app/api/hub/[...path]/route");
+    const route = await import("@/app/api/hub/[...path]/route");
+    const proxyHubRequest = method === "PUT" ? route.PUT : route.POST;
     const response = await proxyHubRequest(
       new Request(`http://localhost/api/hub/${path.join("/")}`, {
         method,
@@ -1626,14 +1628,14 @@ it.each([
 );
 
 it("rejects installation aliases/unknown methods and foreign Origin before owner calls", async () => {
-  const { proxyHubRequest } = await import("@/app/api/hub/[...path]/route");
+  const { GET, PATCH, POST } = await import("@/app/api/hub/[...path]/route");
   for (const path of [
     ["skill-installations"],
     ["self", "skill-installations", "i1", "unknown"],
   ]) {
     expect(
       (
-        await proxyHubRequest(
+        await GET(
           new Request(`http://localhost/api/hub/${path.join("/")}`),
           params(path),
         )
@@ -1642,7 +1644,7 @@ it("rejects installation aliases/unknown methods and foreign Origin before owner
   }
   expect(
     (
-      await proxyHubRequest(
+      await PATCH(
         new Request("http://localhost/api/hub/self/skill-installations", {
           method: "PATCH",
         }),
@@ -1652,7 +1654,7 @@ it("rejects installation aliases/unknown methods and foreign Origin before owner
   ).toBe(404);
   expect(
     (
-      await proxyHubRequest(
+      await POST(
         new Request("http://localhost/api/hub/self/skill-installations", {
           method: "POST",
           headers: { origin: "https://evil.test" },

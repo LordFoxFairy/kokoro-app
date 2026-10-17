@@ -20,7 +20,7 @@ import { fetchCompleteSnapshot } from "./hydrate-process"
 export type MessageExecutionOptions = {
   mode: AgentMode
   model: string | null
-  selectedSkillSourceRefs: readonly string[]
+  selectedSkillSourceRefs: readonly string[] | undefined
 }
 
 export type CreateMessageArgs = {
@@ -81,7 +81,7 @@ export function buildMessageCreateParams(args: {
     content: args.content,
     thinking: options.mode === "thinking",
     ...(options.model !== null ? { model: options.model } : {}),
-    selected_skill_source_refs: [...options.selectedSkillSourceRefs],
+    ...(options.selectedSkillSourceRefs === undefined ? {} : { selected_skill_source_refs: [...options.selectedSkillSourceRefs] }),
     ...(args.scope.kind === "project" ? { project_ref: args.scope.projectRef } : {}),
   }
 }

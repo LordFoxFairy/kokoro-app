@@ -187,9 +187,9 @@ export async function GET(request: Request, context: RouteContext): Promise<Resp
   }
 }
 
-export async function POST(request: Request, context?: RouteContext): Promise<Response> {
+export async function POST(request: Request, context: RouteContext): Promise<Response> {
   const id = requestId(request)
-  const path = context === undefined ? [] : (await context.params).path
+  const path = (await context.params).path
   const rawTarget = rawPathAndQuery(request.url)
   if (request.method !== "POST" || path.join("/") !== "oauth2/end-session/confirm" ||
     rawTarget !== "/iam/oauth2/end-session/confirm") return rejectMethod(request)

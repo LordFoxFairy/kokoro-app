@@ -1,3 +1,9 @@
+## S4d Composer 选择意图（2026-10-17，本地实施切片）
+
+沿已批准项目模型，固定BFF a804b0fd91d3f089afea8b48722095dbe71fbc3e/Public16。只维护现engine、execution adapter与Skill试用hook各自职责：项目未作选择时保留省略，[]为明确不选，非空refs为本次显式覆盖；Direct仍发送[]。新建/切换会话和生命周期退休恢复作用域默认，用户点击清除保持显式[]；未知提交继续冻结首次完整意图，重试不套用当前选择。历史消息接收owner新增exact refs，不能因strict schema拒绝正常回读。
+
+本片不增加页面状态、安装事实或选择框架；后继项目Skills选择器独立组件承接真实项目安装与默认保存，替换原名称假卡片，不继续堆进project-workspace-dialogs。正常Schema/服务切换、项目选择器与浏览器整链仍未完成；不以本片消费pin/engine验证冒整个产品已闭环。
+
 ## 2026-10-16 SKILLS-UPDATE U4（本地实现，正常产品链待验）
 
 目标沿已审 SKILLS-UPDATE U0/U3：既有安装池卡片展示 owner 的 available_update，显式确认旧 pin→目标 pin 后调用唯一 update，而不是 Remove/Install。Web 只持浏览器意图，BFF 准入/Platform 事务继续唯一写入；不新增模块、网关、数据库或依赖。

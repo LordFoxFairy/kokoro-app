@@ -1,3 +1,7 @@
+## 2026-10-17 S4d 当前消费候选
+
+唯一snapshot固定BFF `a804b0fd91d3f089afea8b48722095dbe71fbc3e`／Public16.0.0／146 operations，blob SHA256 `e15758fa80a62c4375e7d9b93784a1591b350f214f63c8483c2df27fc4800bd6`。Team原窄图与15生成文件保持；Agent-failure正规再生成，roles/12 tuples不变，ChatMessage fingerprint仅承接新增exact选择字段。Composer省略/[]语义见现engine与两设计前缀；项目选择器/正常配对未完成，旧版本段落仅历史。
+
 ## 2026-10-17 S3 唯一 current publication
 
 当前固定BFF `e60ff311075b01f1d0ca58f1cebc47080dbc3ea1` / Public15.0.0 /139 operations，原blob SHA256 `e3f70ab1111295d1df10775853ff9c20bf85ea466da32996a73d37a8b16d54c0`。对原14.8完整字节的唯一差异为version与公开skill.list的三新增枚举；不是Web私自扩网站/分享来源。Team窄图及15生成文件保持，Agent-failure三项provenance正规生成；原roles/12 tuples不变。既有whole-public测试承接新pin和八类/分享五类隔离，不新建套件。正常配对/项目安装/模型执行未验，实际门禁见docs/CURRENT；下方旧版本段落仅历史。

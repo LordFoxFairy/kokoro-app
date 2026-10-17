@@ -2535,7 +2535,7 @@ async function proxyPersonalSkillLifecycle(
   }
 }
 
-export async function proxyHubRequest(
+async function proxyHubRequest(
   request: Request,
   context: { params: Promise<{ path: string[] }> },
 ): Promise<Response> {

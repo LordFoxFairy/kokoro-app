@@ -1924,6 +1924,28 @@ describe("失败重试", () => {
     })
   })
 
+  it("freezes omitted project selection on unknown submission and resets explicit overrides for a new conversation", async () => {
+    buildEngine(null,undefined,{kind:"project",projectRef:"project_inherit"})
+    client.nextCreate = () => Promise.reject(new SessionClientError("network","unknown commit"))
+    engine.submit("inherit defaults")
+    await settle()
+    expect(client.createCalls[0]?.body).not.toHaveProperty("selected_skill_source_refs")
+    engine.setSelectedSkillSourceRefs([])
+    client.nextCreate = () => Promise.resolve(makeReceipt("run_retry"))
+    engine.retry()
+    await settle()
+    expect(client.createCalls[1]).toEqual(client.createCalls[0])
+    engine.newConversation()
+    engine.setSelectedSkillSourceRefs([])
+    engine.submit("explicit none")
+    await settle()
+    expect(client.createCalls.at(-1)?.body.selected_skill_source_refs).toEqual([])
+    engine.newConversation()
+    engine.submit("inherit again")
+    await settle()
+    expect(client.createCalls.at(-1)?.body).not.toHaveProperty("selected_skill_source_refs")
+  })
+
   it("未获回执重试冻结首发完整意图，偏好变化不改变同 key 的请求摘要", async () => {
     buildEngine()
     engine.setMode("thinking")

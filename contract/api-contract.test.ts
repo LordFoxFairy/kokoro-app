@@ -134,6 +134,12 @@ describe("checked-in HTTP request and response contracts", () => {
     expect(messageCreateParamsSchema.parse(input)).toEqual(input)
   })
 
+  it("keeps omitted selection distinct from explicit empty in the current message contract", () => {
+    const input={idempotency_key:"selection",content:"hello",project_ref:"project_a"}
+    expect(messageCreateParamsSchema.parse(input)).not.toHaveProperty("selected_skill_source_refs")
+    expect(messageCreateParamsSchema.parse({...input,selected_skill_source_refs:[]})).toHaveProperty("selected_skill_source_refs",[])
+  })
+
   it("accepts the canonical message request and rejects missing/unknown fields", () => {
     expect(
       messageCreateParamsSchema.parse({
@@ -716,8 +722,8 @@ async function r76PublicSpec() {
 describe("R255 ScheduledTask owner recurrence graph under the current public pin", () => {
   it("consumes the exact locally accepted current canonical bytes", async () => {
     const { bytes, spec } = await r76PublicSpec()
-    expect(r76Hash("sha256").update(bytes).digest("hex")).toBe("e3f70ab1111295d1df10775853ff9c20bf85ea466da32996a73d37a8b16d54c0")
-    expect(spec.info.version).toBe("15.0.0")
+    expect(r76Hash("sha256").update(bytes).digest("hex")).toBe("e15758fa80a62c4375e7d9b93784a1591b350f214f63c8483c2df27fc4800bd6")
+    expect(spec.info.version).toBe("16.0.0")
   })
 
   it("requires a present nullable owner next run while create accepts only an optional recurrence anchor", async () => {

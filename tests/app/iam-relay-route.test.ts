@@ -327,7 +327,7 @@ describe("/iam/[...path] read-only relay", () => {
     for (const method of ["POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"] as const) {
       const handler = route[method]
       expect(handler, `${method} handler`).toBeTypeOf("function")
-      const response = await handler(browserRequest("https://web.example.test/iam/oauth2/authorize", { method }))
+      const response = await handler(browserRequest("https://web.example.test/iam/oauth2/authorize", { method }), params(["oauth2", "authorize"]))
       expect(response.status, method).toBe(405)
       expect(response.headers.get("allow"), method).toBe("GET")
     }

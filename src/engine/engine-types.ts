@@ -88,7 +88,7 @@ export type SessionEngine = {
   reconcileConversationCache: (sessionId: string) => void
   setMode: (mode: AgentMode) => void
   // 当前会话的 exact Skill source refs；只在内存中保存，提交时冻结进 typed wire。
-  setSelectedSkillSourceRefs: (sourceRefs: readonly string[]) => void
+  setSelectedSkillSourceRefs: (sourceRefs: readonly string[] | undefined) => void
   // 选中模型（MODEL-UX）：首条消息上 wire 为 messageCreate.model。
   setModel: (model: string | null) => void
   dispose: () => void

@@ -40,11 +40,11 @@ export function useAppFrameSkillTrial({ engine, preview, boundary, handOffPrompt
   const selectionRef = useRef<TrialSelection | null>(null)
   const [selection, setSelection] = useState<TrialSelection | null>(null)
 
-  const retire = useCallback((value: TrialSelection) => {
+  const retire = useCallback((value: TrialSelection, explicitClear = false) => {
     value.active = false
     if (selectionRef.current !== value) return
     selectionRef.current = null
-    value.owner.engine.setSelectedSkillSourceRefs([])
+    value.owner.engine.setSelectedSkillSourceRefs(explicitClear ? [] : undefined)
     setSelection(null)
   }, [])
 
@@ -121,7 +121,7 @@ export function useAppFrameSkillTrial({ engine, preview, boundary, handOffPrompt
     ? { name: selection.name, sourceRef: selection.sourceRef } : null
   const clearSelectedSkill = useCallback(() => {
     if (selection?.active && selection.owner.context === lifetime && ownerRef.current === selection.owner
-      && selection.owner.engine.getSnapshot().store?.activeId === selection.conversationId) retire(selection)
+      && selection.owner.engine.getSnapshot().store?.activeId === selection.conversationId) retire(selection, true)
   }, [lifetime, retire, selection])
 
   return { startTrial, selectedSkill, clearSelectedSkill }
