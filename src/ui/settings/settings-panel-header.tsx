@@ -67,7 +67,7 @@ export function SettingsPanelHeader({
       data-with-description={hasDescription || undefined}
       data-skills-catalog-open={showingSkillsCatalog || undefined}
     >
-      <h1 className={styles.panelTitle}>
+      <h1 className={styles.panelTitle} aria-label={title}>
         {accountLoginMethods || showingSkillsCatalog ? (
           <button
             type="button"

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import type { SessionEngine, MachineState } from "@/engine/machine"
 import type { CreationIntent } from "@/ui/composer/creation-intent-pill"
 import type { SettingsTab } from "@/ui/settings/settings-modal"
-import type { SkillsScopeFilter } from "@/ui/skills/skills-scope"
+import type { SettingsSkillsView } from "@/ui/settings/settings-location"
 import type { SessionScope } from "@/engine/session-scope"
 
 import {
@@ -97,7 +97,7 @@ export function useAppFrameNavigation({
     }
   }, [])
 
-  const syncSettingsUrl = useCallback((tab: SettingsTab | null, mode: "push" | "replace", skillsScope?: SkillsScopeFilter): void => {
+  const syncSettingsUrl = useCallback((tab: SettingsTab | null, mode: "push" | "replace", skillsView?: SettingsSkillsView): void => {
     setSettingsTab(tab)
     if (typeof window === "undefined") {
       return
@@ -114,8 +114,8 @@ export function useAppFrameNavigation({
       // alternate between two address-bar formats.
       url.searchParams.delete("settings")
       const routeTab = tab === "appearance" ? "general" : tab
-      url.hash = tab === "skills" && skillsScope !== undefined && skillsScope !== "all"
-        ? `#/account/settings/${routeTab}/${skillsScope}`
+      url.hash = tab === "skills" && skillsView !== undefined && skillsView !== "all"
+        ? `#/account/settings/${routeTab}/${skillsView}`
         : `#/account/settings/${routeTab}`
     }
     const write = mode === "push" ? window.history.pushState : window.history.replaceState
@@ -178,8 +178,13 @@ export function useAppFrameNavigation({
         engine?.newConversation()
       }
     }
+    const onHashChange = () => setSettingsTab(settingsTabFromLocation())
     window.addEventListener("popstate", onPopState)
-    return () => window.removeEventListener("popstate", onPopState)
+    window.addEventListener("hashchange", onHashChange)
+    return () => {
+      window.removeEventListener("popstate", onPopState)
+      window.removeEventListener("hashchange", onHashChange)
+    }
   }, [engine, ownsLocation, projectWorkspace, setDeploymentIntent])
 
   // AppFrame remains mounted across App Router transitions. Re-read the URL

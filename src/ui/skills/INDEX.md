@@ -95,3 +95,11 @@ hub self 面技能池（有效可用项）：列表/启停/配额/版本历史 +
 详情只允许同版本、已安装启用的示例进入正式 handoff；内部 installed_source_ref 保存原安装 pin，不能由系列 added 或 current source 推导。外部目录和 Settings 都保留真实 action card 身份，失败不关闭详情或回落纯文本；preview 单独保持文字预填。实际执行仍由 owner 判定。
 
 - 目录重核：外层保同 actor 的搜索/筛选/精确详情 locator；`use-catalog-skill-installation` 拥有本代安装动作与冻结未知命令。详情/包文件展示仍按代际退休，`SkillPackageFiles` 仅渲染 owner 文件树。分享未知墓碑与当代 ACK 分离，导入只读/已确认结果重核退役，未知恢复意图保留。
+
+## 2026-10-16 Settings Explore 展示与地址恢复
+
+SettingsModal 拥有 Skills 的 installed scope / explore 展示意图，settings-location 读取同一 canonical hash；AppFrame 原 writer 负责 replace，不另加 history entry。My Skills 入口仍为 personal，手动范围选择同步地址，Explore 刷新恢复；箭头和导航再选技能明确返回 root / All。Panel 不再持独立 catalog 布尔值，Pool 在 Settings 下使用受控 scope，普通独立池仍自持；不以 key 重挂整个 Settings 或未决业务 holder。hash 不保存身份、安装或权限事实。
+
+探索页 desktop 标题带 81px；紧凑设置隐藏面板标题，通过现 More → 技能返回。目录工具栏以 ResizeObserver 测量实际容器与九个本地化标签的宽度（字体 ready、语言变化同样重测）：放得下时搜索独占一行、分类行上下各 16px；否则搜索 + 分类菜单同一行，底距 16px。布局切换保留分类/键盘焦点，隐藏测量行 inert，不产生第二组可操作控件。
+
+列表为 60×80 封面、16px 图文间距、14/20 标题、两行 13/18 说明、真实更新时间、28px 操作；分隔线仅从文字轴开始，hover 伸出内容轴 16px。空图不伪造封面或作者，已安装与可添加仍来自真实 owner。既有 rail suite 仅加两项独有风险回归（hash/返回/受控 scope 和分类宽度/焦点），不恢复已退役 UI suites；真实浏览器与最终门禁边界见 CURRENT。

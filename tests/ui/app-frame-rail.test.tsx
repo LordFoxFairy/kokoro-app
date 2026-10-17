@@ -1882,6 +1882,123 @@ function mountSettingsCatalog() {
   /></LocaleProvider>)
 }
 
+it("restores Explore from its Settings hash and returns to All without replacing the dialog", async () => {
+  const originalLocation = window.location.pathname + window.location.search + window.location.hash
+  window.history.replaceState(null, "", "/app#/account/settings/skills/personal")
+  const frame = () => (
+    <ThemeProvider>
+      <LocaleProvider>
+        <AppFrame engine={engine} chatHref="/app" preview />
+      </LocaleProvider>
+    </ThemeProvider>
+  )
+  let view = render(frame())
+  try {
+    const historyLength = window.history.length
+    fireEvent.click(await screen.findByRole("button", { name: "探索技能" }))
+    expect(window.location.hash).toBe("#/account/settings/skills/explore")
+    expect(window.history.length).toBe(historyLength)
+    view.unmount()
+    view = render(frame())
+    await screen.findByRole("region", { name: "探索技能" })
+    const dialog = screen.getByRole("dialog")
+    fireEvent.click(screen.getByRole("button", { name: "已添加的技能" }))
+    expect(window.location.hash).toBe("#/account/settings/skills")
+    expect(screen.getByRole("radio", { name: "全部" })).toHaveAttribute("data-state", "on")
+    await waitFor(() => expect(screen.getByRole("button", { name: "探索技能" })).toHaveFocus())
+    expect(screen.getByRole("dialog")).toBe(dialog)
+    fireEvent.click(screen.getByRole("radio", { name: "个人" }))
+    expect(window.location.hash).toBe("#/account/settings/skills/personal")
+    fireEvent.click(screen.getByRole("button", { name: "探索技能" }))
+    fireEvent.click(screen.getByRole("button", { name: "已添加的技能" }))
+    expect(screen.getByRole("radio", { name: "全部" })).toHaveAttribute("data-state", "on")
+    expect(window.location.hash).toBe("#/account/settings/skills")
+    act(() => {
+      window.history.replaceState(null, "", "/app#/account/settings/skills/explore")
+      window.dispatchEvent(new PopStateEvent("popstate"))
+    })
+    await screen.findByRole("region", { name: "探索技能" })
+    fireEvent.click(screen.getByRole("tab", { name: "技能" }))
+    expect(screen.queryByRole("region", { name: "探索技能" })).toBeNull()
+    expect(window.location.hash).toBe("#/account/settings/skills")
+    expect(screen.getByRole("dialog")).toBe(dialog)
+    act(() => {
+      window.history.replaceState(null, "", "/app#/account/settings/mcp")
+      window.dispatchEvent(new HashChangeEvent("hashchange"))
+    })
+    await screen.findByRole("heading", { name: "已添加的连接器" })
+    act(() => {
+      window.history.replaceState(null, "", "/app#/account/settings/skills/explore")
+      window.dispatchEvent(new HashChangeEvent("hashchange"))
+    })
+    await screen.findByRole("region", { name: "探索技能" })
+    expect(screen.getByRole("dialog")).toBe(dialog)
+    fireEvent.click(screen.getByRole("button", { name: "关闭设置" }))
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull())
+    await waitFor(() => expect(window.location.hash).toBe(""))
+    expect(window.location.pathname).toBe("/app")
+  } finally {
+    view.unmount()
+    window.history.replaceState(null, "", originalLocation)
+  }
+})
+
+it("keeps the selected Explore category and keyboard focus when its measured controls change layout", async () => {
+  let availableWidth = 755
+  const observers = new Set<ResizeObserverCallback>()
+  vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(() => availableWidth)
+  vi.spyOn(HTMLElement.prototype, "scrollWidth", "get").mockReturnValue(520)
+  const originalObserver = window.ResizeObserver
+  window.ResizeObserver = class {
+    constructor(private callback: ResizeObserverCallback) {}
+    observe() {
+      observers.add(this.callback)
+    }
+    unobserve() {}
+    disconnect() {
+      observers.delete(this.callback)
+    }
+  }
+  try {
+    const calls: Record<string, unknown>[] = []
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      if (String(input).endsWith("ListSkills")) return Response.json({ userAddedSkills: [], officialSkills: [] })
+      if (String(input).endsWith("ListHubSkills")) {
+        calls.push(JSON.parse(String(init?.body)))
+        return Response.json({ skills: [], tagOptions: {} })
+      }
+      throw Error("Unexpected responsive catalog request")
+    })
+    mountSettingsCatalog()
+    const coding = await screen.findByRole("button", { name: "编程" })
+    fireEvent.click(coding)
+    coding.focus()
+    await waitFor(() => expect(calls.at(-1)).toMatchObject({ tag: "SKILL_HUB_TAG_CODING" }))
+    const count = calls.length
+    act(() => {
+      availableWidth = 351
+      for (const callback of observers) callback([], {} as ResizeObserver)
+    })
+    const menu = screen.getByRole("button", { name: "技能分类" })
+    expect(menu).toHaveTextContent("编程")
+    expect(menu).toHaveFocus()
+    expect(screen.queryByRole("button", { name: "编程" })).toBeNull()
+    fireEvent.keyDown(menu, { key: "ArrowDown" })
+    const codingItem = await screen.findByRole("menuitem", { name: "编程" })
+    codingItem.focus()
+    act(() => {
+      availableWidth = 755
+      for (const callback of observers) callback([], {} as ResizeObserver)
+    })
+    expect(screen.getByRole("button", { name: "编程" })).toHaveAttribute("aria-pressed", "true")
+    expect(screen.getByRole("button", { name: "编程" })).toHaveFocus()
+    expect(screen.queryByRole("menu")).toBeNull()
+    expect(calls).toHaveLength(count)
+  } finally {
+    window.ResizeObserver = originalObserver
+  }
+})
+
 it("retires a previously published Settings retry callback instead of borrowing the new client's fetcher", async () => {
   let reads = 0
   const response = (body: unknown) => Response.json(body, { headers: { "cache-control": "private, no-store", "x-request-id": "settings-retired-retry" } })

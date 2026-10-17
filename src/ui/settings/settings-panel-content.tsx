@@ -42,7 +42,8 @@ type SettingsPanelContentProps = {
   skillsCatalogOpen: boolean;
   onSkillsCatalogOpenChange: (open: boolean) => void;
   skillsCatalogTriggerRef: RefObject<HTMLButtonElement | null>;
-  initialSkillsScope?: SkillsScopeFilter;
+  skillsScope: SkillsScopeFilter;
+  onSkillsScopeChange: (scope: SkillsScopeFilter) => void;
 };
 
 /**
@@ -66,7 +67,8 @@ export function SettingsPanelContent({
   skillsCatalogOpen,
   onSkillsCatalogOpenChange,
   skillsCatalogTriggerRef,
-  initialSkillsScope,
+  skillsScope,
+  onSkillsScopeChange,
 }: SettingsPanelContentProps) {
   switch (tab) {
     case "account":
@@ -125,7 +127,8 @@ export function SettingsPanelContent({
           embeddedCatalogOpen={skillsCatalogOpen}
           onEmbeddedCatalogOpenChange={onSkillsCatalogOpenChange}
           catalogTriggerRef={skillsCatalogTriggerRef}
-          {...(initialSkillsScope === undefined ? {} : { initialScope: initialSkillsScope })}
+          selectedScope={skillsScope}
+          onScopeChange={onSkillsScopeChange}
         />
       );
     case "mcp":

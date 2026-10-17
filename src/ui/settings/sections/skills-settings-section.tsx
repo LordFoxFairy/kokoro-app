@@ -19,7 +19,8 @@ type SkillsSettingsSectionProps = {
   embeddedCatalogOpen: boolean;
   onEmbeddedCatalogOpenChange: (open: boolean) => void;
   catalogTriggerRef: RefObject<HTMLButtonElement | null>;
-  initialScope?: SkillsScopeFilter;
+  selectedScope?: SkillsScopeFilter;
+  onScopeChange?: (scope: SkillsScopeFilter) => void;
 };
 
 /** Settings embedding for Skills. Preview-only pin intent belongs to this
@@ -34,7 +35,8 @@ export function SkillsSettingsSection({
   embeddedCatalogOpen,
   onEmbeddedCatalogOpenChange,
   catalogTriggerRef,
-  initialScope,
+  selectedScope,
+  onScopeChange,
 }: SkillsSettingsSectionProps) {
   // The legacy Hub pool projection is retired for the live Settings surface.
   // Manus-compatible Skills reads use their typed owner operations; preview
@@ -67,7 +69,8 @@ export function SkillsSettingsSection({
       embeddedCatalogOpen={embeddedCatalogOpen}
       onEmbeddedCatalogOpenChange={onEmbeddedCatalogOpenChange}
       catalogTriggerRef={catalogTriggerRef}
-      {...(initialScope === undefined ? {} : { initialScope })}
+      {...(selectedScope === undefined ? {} : { selectedScope })}
+      {...(onScopeChange === undefined ? {} : { onScopeChange })}
       embedded
     />
   );

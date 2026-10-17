@@ -140,7 +140,8 @@ export function SkillsPoolTab({
   onEmbeddedCatalogOpenChange,
   catalogTriggerRef: suppliedCatalogTriggerRef,
   searchInputRef,
-  initialScope = "all",
+  selectedScope,
+  onScopeChange,
   preview = false,
   selectedDetailKey,
   onDetailProjection,
@@ -186,13 +187,16 @@ export function SkillsPoolTab({
   catalogTriggerRef?: RefObject<HTMLButtonElement | null>;
   /** Stable keyboard return target when a completed update removes its trigger. */
   searchInputRef?: RefObject<HTMLInputElement | null>;
-  /** Initial intent supplied by the marketplace "我的技能" handoff. */
-  initialScope?: SkillsScopeFilter;
+  /** Settings controls its shareable scope; standalone pools own local scope. */
+  selectedScope?: SkillsScopeFilter;
+  onScopeChange?: (scope: SkillsScopeFilter) => void;
 }) {
   const t = useT();
   // 视图态:搜索词 / 范围筛选 / 停用二次确认(停用是破坏性——离池,先确认)。
   const [query, setQuery] = useState("");
-  const [scope, setScope] = useState<ScopeFilter>(initialScope);
+  const [localScope, setLocalScope] = useState<ScopeFilter>("all");
+  const scope = selectedScope ?? localScope;
+  const setScope = onScopeChange ?? setLocalScope;
   const [confirming, setConfirming] = useState<string | null>(null);
   const [localCatalogOpen, setLocalCatalogOpen] = useState(false);
   const [createMenuOpen, setCreateMenuOpen] = useState(false);

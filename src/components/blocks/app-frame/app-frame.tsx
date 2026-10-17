@@ -770,7 +770,7 @@ function AppFrameRuntime({
       preview={preview}
       {...(projectReadBoundary === undefined ? {} : { readBoundary: projectReadBoundary })}
       onCloseSettings={overlays.closeSettings}
-      onTabChange={(tab) => navigationState.syncSettingsUrl(tab, "replace")}
+      onTabChange={(tab, skillsView) => navigationState.syncSettingsUrl(tab, "replace", skillsView)}
       onCreateSkillWithAi={actions.startSkillCreationFromSettings}
       onTrySkill={actions.startSkillUseFromSettings}
       settingsReturnFocusRef={overlays.settingsReturnFocusRef}

@@ -122,6 +122,49 @@ export function SkillCatalogDialog({
   // Settings Explore is a catalog view, not the installed-skills scope picker.
   // Manus exposes server-classified categories directly on this reader list.
   const [category, setCategory] = useState<CatalogCategory>("all");
+  const [categoriesFit, setCategoriesFit] = useState(false);
+  const catalogControlsRef = useRef<HTMLDivElement | null>(null);
+  const categoryMeasureRef = useRef<HTMLDivElement | null>(null);
+  const categoryRowRef = useRef<HTMLDivElement | null>(null);
+  const categoryMenuRef = useRef<HTMLButtonElement | null>(null);
+  const categoryMenuOpenRef = useRef(false);
+  const categoryFocusPendingRef = useRef(false);
+  useLayoutEffect(() => {
+    if (!inline) return;
+    const controls = catalogControlsRef.current;
+    const measure = categoryMeasureRef.current;
+    if (!controls || !measure) return;
+    let retired = false;
+    const update = () => {
+      if (retired) return;
+      const fits = measure.scrollWidth > 0 && measure.scrollWidth <= controls.clientWidth;
+      const focused = document.activeElement;
+      if ((fits && (focused === categoryMenuRef.current || categoryMenuOpenRef.current)) ||
+          (!fits && categoryRowRef.current?.contains(focused))) {
+        categoryFocusPendingRef.current = true;
+      }
+      if (fits) categoryMenuOpenRef.current = false;
+      setCategoriesFit(fits);
+    };
+    const observer = new ResizeObserver(update);
+    observer.observe(controls);
+    observer.observe(measure);
+    const frame = window.requestAnimationFrame(update);
+    void document.fonts?.ready.then(update);
+    return () => {
+      retired = true;
+      window.cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, [inline, t]);
+  useLayoutEffect(() => {
+    if (!categoryFocusPendingRef.current) return;
+    categoryFocusPendingRef.current = false;
+    const target = categoriesFit
+      ? categoryRowRef.current?.querySelector<HTMLButtonElement>('[aria-pressed="true"]')
+      : categoryMenuRef.current;
+    target?.focus({ preventScroll: true });
+  }, [categoriesFit]);
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const createActionHandledRef = useRef(false);
   const catalogSearchRef = useRef<HTMLInputElement | null>(null);
@@ -327,12 +370,13 @@ export function SkillCatalogDialog({
 
   const selectedCategory = CATALOG_CATEGORIES.find((item) => item.value === category) ?? CATALOG_CATEGORIES[0]!;
   const scopeMenu = inline ? (
-    <DropdownMenu>
+    <DropdownMenu onOpenChange={(value) => { categoryMenuOpenRef.current = value; }}>
       <DropdownMenuTrigger asChild>
         <Button
           type="button"
           variant="outline"
           className={styles.catalogScopeFilter}
+          ref={categoryMenuRef}
           aria-label={t("skills.categoryAria")}
         >
           <ListFilter aria-hidden="true" />
@@ -378,7 +422,11 @@ export function SkillCatalogDialog({
 
   const catalogBody = (
     <>
-      <div className={cn(styles.catalogControls, inline && styles.catalogInlineControls)}>
+      <div
+        ref={catalogControlsRef}
+        className={cn(styles.catalogControls, inline && styles.catalogInlineControls)}
+        data-categories-fit={inline && categoriesFit || undefined}
+      >
         <label className={styles.catalogSearch}>
           <Search aria-hidden="true" />
           <Input
@@ -390,7 +438,7 @@ export function SkillCatalogDialog({
             onChange={(event) => setQuery(event.target.value)}
           />
         </label>
-        <div className={styles.catalogToolbar}>
+        {!inline || !categoriesFit ? <div className={styles.catalogToolbar}>
           {scopeMenu}
           {!inline ? (
             <DropdownMenu
@@ -452,7 +500,25 @@ export function SkillCatalogDialog({
               </DropdownMenuContent>
             </DropdownMenu>
           ) : null}
-        </div>
+        </div> : null}
+        {inline ? (
+          <>
+            {categoriesFit ? (
+              <div ref={categoryRowRef} className={styles.catalogCategoryRow} role="group" aria-label={t("skills.categoryAria")}>
+                {CATALOG_CATEGORIES.map(({ value, label }) => (
+                  <button key={value} type="button" className={styles.catalogCategoryButton} aria-pressed={category === value} onClick={() => setCategory(value)}>
+                    {t(label)}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            <div ref={categoryMeasureRef} className={styles.catalogCategoryMeasure} aria-hidden="true" inert>
+              {CATALOG_CATEGORIES.map(({ value, label }) => (
+                <span key={value} className={styles.catalogCategoryButton}>{t(label)}</span>
+              ))}
+            </div>
+          </>
+        ) : null}
       </div>
       {errorName ? (
         <Alert variant="destructive" className={styles.catalogFeedback}>

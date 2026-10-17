@@ -158,7 +158,8 @@ type SkillsContentProps = {
   embeddedCatalogOpen?: boolean;
   onEmbeddedCatalogOpenChange?: (open: boolean) => void;
   catalogTriggerRef?: RefObject<HTMLButtonElement | null>;
-  initialScope?: SkillsScopeFilter;
+  selectedScope?: SkillsScopeFilter;
+  onScopeChange?: (scope: SkillsScopeFilter) => void;
 };
 
 type SkillDetailSelection = Readonly<{
@@ -239,7 +240,8 @@ function InstalledSkillsContent({
   embeddedCatalogOpen,
   onEmbeddedCatalogOpenChange,
   catalogTriggerRef,
-  initialScope,
+  selectedScope,
+  onScopeChange,
   onUpdateSkill,
   updateFallbackFocus,
   updateLocked,
@@ -471,7 +473,8 @@ function InstalledSkillsContent({
               ? {}
               : { onEmbeddedCatalogOpenChange })}
             {...(catalogTriggerRef === undefined ? {} : { catalogTriggerRef })}
-            {...(initialScope === undefined ? {} : { initialScope })}
+            {...(selectedScope === undefined ? {} : { selectedScope })}
+            {...(onScopeChange === undefined ? {} : { onScopeChange })}
           />
         </div>
       </div>

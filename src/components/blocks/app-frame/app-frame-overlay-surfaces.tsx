@@ -4,6 +4,7 @@ import { McpCreateDialog } from "@/ui/mcp/mcp-create-dialog";
 import type { McpCreateMode } from "@/ui/mcp/mcp-panel-model";
 import { SettingsModal, type SettingsTab } from "@/ui/settings/settings-modal";
 import type { SkillCard } from "@/hub/schemas";
+import type { SettingsSkillsView } from "@/ui/settings/settings-location";
 import type { SkillsScopeFilter } from "@/ui/skills/skills-scope";
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
 import { browserHubClient } from "@/ui/shell/page-clients";
@@ -22,7 +23,7 @@ export type AppFrameOverlaySurfacesProps = {
   preview: boolean;
   readBoundary?: ProjectReadBoundary;
   onCloseSettings: () => void;
-  onTabChange: (tab: SettingsTab) => void;
+  onTabChange: (tab: SettingsTab, skillsView?: SettingsSkillsView) => void;
   onCreateSkillWithAi: (prompt?: string) => void;
   onTrySkill: (skill: SkillCard, prompt?: string) => boolean;
   settingsReturnFocusRef: RefObject<HTMLElement | null>;

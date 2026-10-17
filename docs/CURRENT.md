@@ -1,3 +1,19 @@
+## 2026-10-16 Settings Skills Explore 冻结终验
+
+18路径同一停写基线：Node22 diff/scoped settings CSS format/contract/architecture/lint/typecheck exit0；contract280、architecture50，181files3288 PASS/0SKIP/182.11s。独立候选18文件同hash production build0；原Playwright自动管理development preview3325，桌面/移动现公共壳E2E6 PASS/8.4s，posttype0。只新增上述两项行为回归，不新增suite。类型阶段误用Testing Library的exact选项已移除（ByRole字符串本身精确匹配），关闭用例等待既有220ms动画的URL交接；原jsdom跨文档导航/颜色诊断未屏蔽。
+
+完整Prettier格式不是本owner现manifest门，本轮核过受影响文件的HEAD，除settings CSS外已有未格式化基线；不为本需求重排整份历史文件，也不宣称全量format通过。新增两测试块定向格式化；静态独审18/18冻结hash匹配、含全部15生产路径，所发现的compact返回和等值scope P2均关闭。主方真实正常3310：Explore canonical hash及刷新恢复、箭头回root/All和焦点、同Dialog、手动个人后回All、compact More再选技能、分类选择/宽窄切换/打开菜单时焦点、真实查询空态清空和详情Escape返回已验。六viewport搜索锚点相同；行111及封面60×80/字体/操作按DOM样式核验，参考与本地实际条目不同，不把数据差异伪造成相同图。生产构建与development UI验收分别记，不称production私有UI实测。
+
+本轮未写后端/Schema/契约、未执行模型/工具/计费/权限操作，未改变未知命令/actor围栏或新增业务默认。只观察到本轮Manus Skills正常读取，不称每页API均完成。八类来源事实producer、项目技能安装执行、原生OAuth长授权/刷新及整体Admin/手册/逐仓PR和Root组合仍OPEN；远程CI/push/PR/merge与Root暂存/gitlink继续暂停。
+
+## 2026-10-16 Settings Skills Explore 交互与布局（本地终验中）
+
+基线 App a7cf9c66。正常 Manus 参考为 /app/skills#settings/skills/explore，2026-10-16、zh/light/DPR2；865 搜索原低63px、行高原约150px，现按81px标题带、32px搜索、111px行及60×80封面收敛；390紧凑标题不占带。六宽度对照同时发现宽容器755时参考显示九类横排，而451/348宽用菜单；改实际容器/本地化标签测量，不以固定viewport猜测。分类变换保留选择和焦点（含打开菜单时放宽），不触发新目录意图。
+
+Explore 原只有组件布尔值，刷新回安装页；现 Modal 唯一拥有 Skills 子视图及受控 scope，AppFrame 既有 hash writer replace，popstate/hashchange恢复，My Skills仍personal，内部箭头与导航再选明确root/All。不重挂Settings/身份或未决命令holder；同actor重核与换actor私有退休沿原边界。独审先发现 compact 返回入口和等值初始 scope 两项风险，已实测参考 More→技能回根并沿本地现入口承接，scope改受控而非加reset token。原业务身份/网络/Schema/后端/积分/模型不变。
+
+新分类测试首轮 mock ResizeObserver配置不可重定义是测试夹具错误，修正后实际RED为缺宽屏编程按钮；hash实际RED仍personal。两项扩现有rail suite，不新增suite；已定向GREEN，完整冻结门、隔离candidate build与现公共壳E2E待最终收据，不把阶段验证冒终验。正常浏览器已验Explore刷新、箭头All和焦点、窄屏More返回All、分类选择/宽窄焦点与目录空态。原始截图/几何与网络只保ignored；本轮观察到的Manus ListSkills ownerType/type/added/enabled彼此独立，仅脱敏规格，不宣称全站API或新Hub/Device来源producer完成。
+
 ## 2026-10-16 Settings/MCP 布局实测修复（局部验收进行中）
 
 基线 `6beec84`，复用现有 Settings 与 MCP feature，不新建页面、状态 owner、依赖或测试 suite。正常 Manus `/app/skills#settings/connectors` 与本地 `/app/plugins#/account/settings/mcp` 在同 light/zh/DPR2、865×764 下实测：原 toolbar 早16px、搜索281px而非200px、标签晚20px。根因是 feature 顶部8px/搜索320px、通用 embedded header 的48px底距，以及 shell/feature 重复 padding。feature 独占 desktop24/mobile8的顶部与12px底距；移除 shell 的两处mcpBody padding和unused class，专属选择器不依赖CSS chunk顺序。紧凑dialog改为参考380px/98vw envelope，卡片名称14px/500、说明13px/16px最多两行、76px卡高；不伪造目录/封面或连接。

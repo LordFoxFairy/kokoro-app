@@ -188,6 +188,9 @@ export function SettingsNavigationRail({
               {entry.kind === "tab" ? (
                 <TabsTrigger
                   value={entry.key}
+                  onClick={() => {
+                    if (entry.key === "skills" && selectedTab === "skills") onSelectTab("skills");
+                  }}
                   className={styles.tab}
                   ref={
                     entry.key === selectedTab ? setSelectedTabRef : undefined
