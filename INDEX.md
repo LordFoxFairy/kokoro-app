@@ -1,3 +1,7 @@
+### Project Skills 传输职责
+
+`src/lib/server/skill-installations.ts` 独立持有 personal/project 共用的安装生命周期 adapter，catch-all 只分派；`src/lib/server/project-skill-selection.ts` 仅处理项目默认 GET/PUT。`src/hub/project-skills.schema.ts` 与 `project-skill-selection-client.ts` 分别维护 wire 和浏览器请求。现安装 client 显式 Project target，个人默认不变；无新 owner/兼容路径。项目面板、旧名称开关删除与正常浏览器验收仍待后继。
+
 ### 2026-10-17 S3 BFF 来源契约消费
 
 唯一src/generated/bff-public-openapi.yaml固定BFF e60ff31/Public15；原Team与Agent-failure生成器同步精确digest，Team业务派生和failure tuples保持。公开八类只在owner快照，网站publisher与分享五类schema不改；本片没有新增公开list UI client。验收与正常配对后继见docs/CURRENT，不以pin更新冒功能执行完成。

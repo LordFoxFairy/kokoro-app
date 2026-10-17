@@ -1,3 +1,4 @@
+import { createProjectSkillSelectionClient } from "@/hub/project-skill-selection-client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -1171,6 +1172,21 @@ describe("personal installation consumer", () => {
     );
     expect(await client.get("install-1")).toEqual(installation);
   });
+  it("routes project lifecycle to the project without changing personal defaults or exact receipts", async () => {
+    const projectId = "project_11111111-1111-4111-8111-111111111111";
+    const receipt = { installation, change: "installed", event_id: "event-1", replayed: false };
+    const fetchMock = vi.fn().mockResolvedValueOnce(publicResponse({ data: [installation] }))
+      .mockResolvedValueOnce(publicResponse({ data: receipt }));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createSkillInstallationClient({ projectId });
+    expect(await client.list({ installed: true })).toEqual({ data: [installation] });
+    expect(await client.install(installation.source_ref, "project-install-key")).toEqual(receipt);
+    expect(fetchMock.mock.calls.map(call => call[0])).toEqual([
+      `/api/hub/projects/${projectId}/skill-installations?installed=true`,
+      `/api/hub/projects/${projectId}/skill-installations`,
+    ]);
+    expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({ body: JSON.stringify({ source_ref: installation.source_ref }) });
+  });
   it("keeps caller mutation key and parses real receipt instead of void", async () => {
     const receipt = {
       installation,
@@ -1975,4 +1991,57 @@ it("requires private MCP edit ACKs to reflect the explicitly written safe fields
   }
   fetchMock.mockResolvedValueOnce(publicResponse({ data: { server, connector, replayed: true } }));
   await expect(hub.updatePrivateMcpServer!("edited-server", input, "management-key")).resolves.toMatchObject({ server });
+});
+
+describe("Project default Skill selection", () => {
+  const projectId = "project_11111111-1111-4111-8111-111111111111";
+  it("preserves ordered defaults and explicit clear without changing caller intent or replay key", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(publicResponse({ data: { project_id: projectId, installation_ids: ["i2", "i1"] } }))
+      .mockResolvedValueOnce(publicResponse({ data: { project_id: projectId, installation_ids: [] } }));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createProjectSkillSelectionClient(projectId);
+    expect((await client.get()).installation_ids).toEqual(["i2", "i1"]);
+    const ids: string[] = [];
+    const saved = client.replace(ids, "original-selection-key");
+    ids.push("changed-after-dispatch");
+    expect((await saved).installation_ids).toEqual([]);
+    expect(fetchMock).toHaveBeenNthCalledWith(2, `/api/hub/projects/${projectId}/skill-selection`, expect.objectContaining({
+      method: "PUT", body: '{"installation_ids":[]}', cache: "no-store", redirect: "error",
+      headers: expect.objectContaining({ "idempotency-key": "original-selection-key" }),
+    }));
+    expect(() => client.replace(["i1", "i1"], "key")).toThrow();
+    expect(() => client.replace(Array.from({ length: 17 }, (_, i) => `i${i}`), "key")).toThrow();
+    expect(() => createProjectSkillSelectionClient("slug")).toThrow();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+  it("rejects wrong project, reordered ACK and unexpected fields instead of claiming selection saved", async () => {
+    const fetchMock = vi.fn(); vi.stubGlobal("fetch", fetchMock);
+    const client = createProjectSkillSelectionClient(projectId);
+    for (const data of [
+      { project_id: "project_22222222-2222-4222-8222-222222222222", installation_ids: ["i1", "i2"] },
+      { project_id: projectId, installation_ids: ["i2", "i1"] },
+      { project_id: projectId, installation_ids: ["i1", "i2"], source_refs: ["skill:new-current"] },
+    ]) {
+      fetchMock.mockResolvedValueOnce(publicResponse({ data }));
+      await expect(client.replace(["i1", "i2"], "same-key")).rejects.toMatchObject({ reason: "parse" });
+    }
+    fetchMock.mockRejectedValueOnce(new Error("commit response lost"));
+    await expect(client.replace(["i1", "i2"], "same-key")).rejects.toMatchObject({ reason: "network" });
+    expect(fetchMock).toHaveBeenCalledTimes(4); // no automatic retry or new-key command
+  });
+  it("cancels stalled selection bytes within the original budget, without a second request", async () => {
+    vi.useFakeTimers();
+    try {
+      const cancel = vi.fn();
+      const fetchMock = vi.fn().mockResolvedValue(new Response(new ReadableStream({ start(controller) { controller.enqueue(new TextEncoder().encode('{"data":')); }, cancel }), {
+        headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "selection-body" },
+      }));
+      vi.stubGlobal("fetch", fetchMock);
+      const pending = createProjectSkillSelectionClient(projectId).get();
+      const rejected = expect(pending).rejects.toMatchObject({ reason: "network" });
+      await vi.advanceTimersByTimeAsync(10_001);
+      await rejected;
+      expect(cancel).toHaveBeenCalled(); expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally { vi.useRealTimers(); }
+  });
 });

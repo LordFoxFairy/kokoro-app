@@ -4776,3 +4776,93 @@ it("installed inspection keeps its exact error contract separate from catalog an
     expect((await result.json()).error.code).toBe(valid ? code : "skill_package_response_invalid")
   }
 })
+
+// Project lifecycle must not fall through the legacy generic Hub adapter.
+it.each(["GET", "POST"] as const)("routes Project installation %s through the strict installation boundary", async (method) => {
+  const { GET, POST } = await import("@/app/api/hub/[...path]/route");
+  const projectId = "project_11111111-1111-4111-8111-111111111111";
+  vi.mocked(requestWithDomain).mockResolvedValue(new Response(JSON.stringify({ data: [] }), {
+    headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "project-installation" },
+  }));
+  const response = await (method === "GET" ? GET : POST)(new Request(`http://localhost/api/hub/projects/${projectId}/skill-installations`, {
+    method, ...(method === "POST" ? { headers: { origin: "http://localhost", "content-type": "application/json", "idempotency-key": "project-install-key" }, body: '{"source_ref":"skill:mine"}' } : {}),
+  }), params(["projects", projectId, "skill-installations"]));
+  expect(response.status).toBe(method === "GET" ? 200 : 502); // a list is never an installation ACK
+  expect(requestWithDomain).toHaveBeenCalledTimes(1);
+  expect(vi.mocked(requestWithDomain).mock.calls[0]?.[0]).toBe(`http://bff.test/v1/projects/${projectId}/skill-installations`);
+});
+
+it("binds Project defaults ACK to exact project and ordered intent, and keeps the original key", async () => {
+  const { GET, PUT } = await import("@/app/api/hub/[...path]/route");
+  const projectId = "project_11111111-1111-4111-8111-111111111111";
+  const path = ["projects", projectId, "skill-selection"];
+  const url = `http://localhost/api/hub/${path.join("/")}`;
+  const owner = (data: object) => new Response(JSON.stringify({ data }), { headers: {
+    "content-type": "application/json", "cache-control": "no-store", "x-request-id": "selection-request",
+  } });
+  vi.mocked(requestWithDomain).mockResolvedValueOnce(owner({ project_id: "project_22222222-2222-4222-8222-222222222222", installation_ids: [] }));
+  expect((await GET(new Request(url), params(path))).status).toBe(502);
+  vi.mocked(requestWithDomain).mockResolvedValueOnce(owner({ project_id: projectId, installation_ids: ["i2", "i1"] }));
+  const request = () => new Request(url, { method: "PUT", headers: { origin: "http://localhost", "content-type": "application/json", "idempotency-key": "frozen-selection" }, body: '{"installation_ids":["i1","i2"]}' });
+  expect((await PUT(request(), params(path))).status).toBe(502);
+  vi.mocked(requestWithDomain).mockResolvedValueOnce(owner({ project_id: projectId, installation_ids: ["i1", "i2"] }));
+  const saved = await PUT(request(), params(path));
+  expect(saved.status).toBe(200);
+  expect(await saved.json()).toEqual({ data: { project_id: projectId, installation_ids: ["i1", "i2"] } });
+  expect(new Headers(vi.mocked(requestWithDomain).mock.calls[2]?.[2]?.headers).get("idempotency-key")).toBe("frozen-selection");
+  vi.mocked(requestWithDomain).mockClear();
+  const invalid = new Request(url, { method: "PUT", headers: { origin: "http://localhost", "content-type": "application/json", "idempotency-key": "new-key" }, body: '{"installation_ids":["i1","i1"]}' });
+  expect((await PUT(invalid, params(path))).status).toBe(400);
+  expect(requestWithDomain).not.toHaveBeenCalled();
+});
+
+it("rejects invalid UTF-8 in Project selection errors rather than normalizing owner bytes", async () => {
+  const { GET } = await import("@/app/api/hub/[...path]/route");
+  const projectId = "project_11111111-1111-4111-8111-111111111111";
+  const prefix = new TextEncoder().encode('{"error":{"code":"project_not_found","message":"');
+  const suffix = new TextEncoder().encode('","retryable":false}}');
+  const bytes = new Uint8Array([...prefix, 0xff, ...suffix]);
+  vi.mocked(requestWithDomain).mockResolvedValue(new Response(bytes, { status: 404, headers: {
+    "content-type": "application/json", "cache-control": "no-store", "x-request-id": "selection-error",
+  } }));
+  expect((await GET(new Request(`http://localhost/api/hub/projects/${projectId}/skill-selection`), params(["projects", projectId, "skill-selection"]))).status).toBe(502);
+});
+
+it("uses Project segment identities for Get, enabled, update and remove, never a personal target", async () => {
+  const route = await import("@/app/api/hub/[...path]/route");
+  const projectId = "project_11111111-1111-4111-8111-111111111111";
+  const installation = { installation_id: "i1", source_ref: "skill:revision-a", series_id: "series-1", revision: "1",
+    installed: true, enabled: false, installed_at: "2026-10-10T00:00:00Z", updated_at: "2026-10-10T00:00:00Z",
+    display_name: "Project skill", summary: "Pinned", source_status: "active", skill_updated_at: "2026-10-10T00:00:00Z",
+    example_prompts: [], category_keys: [], product: { publication_audience: "owner", state_version: "5" }, tags: [] };
+  const cases = [
+    { method: "GET", suffix: ["i1"], input: undefined, data: installation },
+    { method: "PUT", suffix: ["i1", "enabled"], input: { enabled: true }, data: { installation: { ...installation, enabled: true }, change: "enabled", event_id: "event-1", replayed: false } },
+    { method: "POST", suffix: ["i1", "update"], input: { expected_source_ref: "skill:revision-a", source_ref: "skill:revision-b" }, data: { installation: { ...installation, source_ref: "skill:revision-b", revision: "2" }, change: "upgraded", event_id: "event-2", replayed: true } },
+    { method: "DELETE", suffix: ["i1"], input: undefined, data: { installation: { ...installation, installed: false, removed_at: "2026-10-10T00:00:00Z" }, change: "removed", event_id: "event-3", replayed: false } },
+  ] as const;
+  for (const entry of cases) {
+    const path = ["projects", projectId, "skill-installations", ...entry.suffix];
+    vi.mocked(requestWithDomain).mockResolvedValueOnce(Response.json({ data: entry.data }, { headers: { "cache-control": "no-store", "x-request-id": "project-lifecycle" } }));
+    const response = await route[entry.method](new Request(`http://localhost/api/hub/${path.join("/")}`, { method: entry.method,
+      ...(entry.method === "GET" ? {} : { headers: { origin: "http://localhost", "idempotency-key": "original-key", ...(entry.input === undefined ? {} : { "content-type": "application/json" }) } }),
+      ...(entry.input === undefined ? {} : { body: JSON.stringify(entry.input) }),
+    }), params(path));
+    expect(response.status).toBe(200); expect(await response.json()).toEqual({ data: entry.data });
+    expect(vi.mocked(requestWithDomain).mock.calls.at(-1)?.[0]).toBe(`http://bff.test/v1/${path.join("/")}`);
+  }
+});
+it("rejects Project skill aliases and unadmitted mutation without dispatch", async () => {
+  const { GET, PUT } = await import("@/app/api/hub/[...path]/route");
+  const projectId = "project_11111111-1111-4111-8111-111111111111";
+  for (const last of ["skill-selection", "skill-installations"]) {
+    const path = ["self", "projects", projectId, last];
+    expect((await GET(new Request(`http://localhost/api/hub/${path.join("/")}`), params(path))).status).toBe(404);
+  }
+  const path = ["projects", projectId, "skill-selection"];
+  const url = `http://localhost/api/hub/${path.join("/")}`;
+  expect((await PUT(new Request(url, { method: "PUT", headers: { origin: "https://other.example", "idempotency-key": "key", "content-type": "application/json" }, body: '{"installation_ids":[]}' }), params(path))).status).toBe(403);
+  currentProductSession.mockResolvedValueOnce(null);
+  expect((await PUT(new Request(url, { method: "PUT", headers: { origin: "http://localhost", "idempotency-key": "key", "content-type": "application/json" }, body: '{"installation_ids":[]}' }), params(path))).status).toBe(401);
+  expect(requestWithDomain).not.toHaveBeenCalled();
+});

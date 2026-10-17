@@ -1,3 +1,9 @@
+## 项目 Skills 传输职责（2026-10-17，本地组件，面板待接）
+
+沿已批准项目模型与固定 BFF a804b0f/Public16，分离项目技能的 wire/client、同源 adapter 与面板状态。先将现安装 adapter 原样移出 catch-all，再让同一生命周期实现显式选择 personal/project 目标；项目路径只用已读取的 canonical Project ID，不借个人安装或名称开关。独立 selection client/adapter 消费正式 GET/PUT skill-selection，保有序 ≤16 个唯一 installation ID、[]清空、原 key/body 和项目 ACK 绑定。保存 ACK 不代表重读后的当前默认，精确重放不会恢复后续变更。
+
+后继面板从 workspace/dialog aggregator 拆出，安装不等于默认选择；权限重核/换主体撤销私有事实，未知写只显式原意图重放，不按列表推断成功。复用现样式/安装能力，不建新框架、服务、Schema 或兼容接口。旧名称入口随面板替换删除。验证扩现 client/proxy/项目 UI 用例；正常服务/Schema/浏览器与执行链另验，本片不冒全功能完成。
+
 ## S4d Composer 选择意图（2026-10-17，本地实施切片）
 
 沿已批准项目模型，固定BFF a804b0fd91d3f089afea8b48722095dbe71fbc3e/Public16。只维护现engine、execution adapter与Skill试用hook各自职责：项目未作选择时保留省略，[]为明确不选，非空refs为本次显式覆盖；Direct仍发送[]。新建/切换会话和生命周期退休恢复作用域默认，用户点击清除保持显式[]；未知提交继续冻结首次完整意图，重试不套用当前选择。历史消息接收owner新增exact refs，不能因strict schema拒绝正常回读。

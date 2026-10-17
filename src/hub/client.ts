@@ -1,3 +1,4 @@
+import { projectSkillIdSchema } from "./project-skills.schema";
 // hub self 面 HTTP 客户端：同源 `/api/hub/*` BFF 代理（注入 web-bff 凭据 + 信封 scope/user）。
 // 入站过 Zod，失败以类型化错误上抛；错误体尽力取 hub 错误码（如 hub.skill_required）供 UI 本地化。
 
@@ -1324,8 +1325,9 @@ export type SkillInstallationClient = {
   ) => Promise<InstallationReceipt>;
 };
 
-export function createSkillInstallationClient(): SkillInstallationClient {
-  const base = "/api/hub/self/skill-installations";
+export function createSkillInstallationClient(target?: Readonly<{ projectId: string }>): SkillInstallationClient {
+  const base = target === undefined ? "/api/hub/self/skill-installations"
+    : `/api/hub/projects/${encodeURIComponent(projectSkillIdSchema.parse(target.projectId))}/skill-installations`;
   const idPath = (id: string) =>
     `${base}/${encodeURIComponent(installationIdSchema.parse(id))}`;
   const commandHeaders = (key: string, json: boolean) => ({

@@ -1,3 +1,11 @@
+## Project Skills 传输组件（2026-10-17，本地验证，正常产品待接）
+
+在基线0bdfaea上，安装 adapter 从 catch-all 移到独立 server 文件，同一实现显式 personal/project 目标；个人路径/回执保持。项目默认 selection 的 schema/client/server adapter 分开，仅消费固定 BFF a804b0f/Public16；有序最多16个唯一installation ID、显式[]清空、原key/body、ACK项目与顺序绑定、总10秒/有界字节/fatal UTF-8/取消，无自动重试或self/projects别名。没有新依赖、owner API、表或Schema变更。
+
+实际RED：Project安装错类型ACK、selection错项目ACK被旧generic代理当200；现为502。selection错误消息的非法UTF-8原被规范化404，现拒502。原两个client/proxy文件聚焦316 PASS；沿原HTTP文件扩1条真实网络到受控合同fixture，3 PASS（session为mock，非真实BFF/IAM）。复用原suite，新增11条case，不是新增3k测试。完整纯测试3098 PASS、contract281 PASS、architecture50 PASS、lint/typecheck通过；同字节独立candidate Next16 Webpack生产build通过，自有目录已删除、正常开发输出未覆盖。既有jsdom导航提醒保留；整套system、默认Turbopack和浏览器E2E本片未运行。独立只读复核未发现确定P0–P2。
+
+本片只完成面板所需的传输组件，不称已完成项目功能。后继直接拆出真实Project Skills面板/hook：安装与默认选择分开、未知命令跨同主体重核只显式原意图恢复、ACK后只回读；删除workspace聚合弹窗的名称假卡及onSetProjectSkillEnabled旧入口。正常Schema/服务配对、Agent冻结执行、Admin current配对和正常浏览器整链仍待后继。正常服务/配置/账号/权限/积分未动；远端CI/push/PR/merge与Root gitlink继续暂停。
+
 ## S4d Composer 项目技能继承（2026-10-17，本地组件候选）
 
 沿现engine／execution adapter／Skill试用hook分工，项目省略继承、显式[]不选、exact refs覆盖；新建/切换/生命周期退休恢复作用域默认，用户清除仍为[]，未知重试保首发完整意图。strict消息回读接收owner冻结refs，不新增页面状态、服务或依赖。唯一snapshot固定BFF a804b0f/Public16，Team15生成文件保持，Agent failure仅更新provenance。
