@@ -593,3 +593,14 @@ describe("MCP typed management and Prepare interlock", () => {
     expect(hub.setMcpConnectorEnabled).toHaveBeenCalledOnce(); expect(changed).toHaveBeenCalledOnce()
   })
 })
+
+
+it("a pre-aborted creation window does not freeze a new command or dispatch it", async () => {
+  const call = vi.fn().mockResolvedValue(profile), key = vi.fn(() => "not-dispatched");
+  const flow = createCustomApiCreateFlow({ client: { createCustomApi: call }, boundary: admitted, key, onConfirmed: vi.fn() });
+  const controller = new AbortController(); controller.abort();
+  expect(await flow.submit(input(), admitted, controller.signal)).toBe(false);
+  expect(call).not.toHaveBeenCalled();
+  expect(key).not.toHaveBeenCalled();
+  expect(flow.getSnapshot().kind).toBe("idle");
+});

@@ -2482,3 +2482,9 @@ Hub update/remove签名显式caller key，删隐式随机key，不留旧签名fa
 ### 已安装技能详情的精确版本（2026-10-16，实施设计）
 
 安装池入口显式选择 installation 详情，目录入口仍选择 catalog current；不能仅凭 catalog 卡片也带 installation_id 推断入口。安装详情经既有 GET personal installation 重核 series/source/installed，展示该 pin 的名称、摘要、示例和日期，随后通过既有 installation package / browser download 读取同 source 与 decimal revision。目录 GetSkill 不参与安装详情，不降级到 series current；原安装更新仍只能经明确 update 操作。失去准入、换主体/代际、关闭或更换 installation/source 均退休请求和私有展示；禁用安装允许阅读，移除/隔离或 pin 变化显示失败而不换版本。读权限不代表下载授权，下载由 BFF 独立判定。无新 owner、依赖、数据模型或后端契约；只消费当前固定 BFF 已发布接口。
+
+### API／JSON 创建窗口停止等待（2026-10-16）
+
+现稳定shell拥有原命令，窗口关闭不等于撤销owner写；但两个创建表单未把窗口退休传给在途命令，关闭后仍等待ACK或超时。本切只在既有App命令核和表单生命周期增加caller AbortSignal：每次派发前冻结原key/body，调用窗口拥有本次等待的controller；取消、卸载或真实actor/admission代际退休立即停止该等待，原命令保留unknown。signal只退休其关联flight，不得用旧窗口清理取消后继窗口的重试；同逻辑boundary重建对象不退休。迟到ACK只按现规则确认/失活原主体，不自动关闭后继窗口；显式恢复仍原key/body，expired/conflict等terminal阻断不解除。无新HTTP/owner/Schema/权限/持久化，不添加人工结清假成功或自动新命令。
+
+写区限 connector-command、use-connector-creation-form、Custom API/JSON两表单与相邻INDEX、既有connector-creation-command／mcp-json-import-form回归及CURRENT。先复现取消与卸载signal未abort；补pre-aborted零派发与窗口/代际/晚ACK围栏，复用现套件。主方串行相关门禁、候选build/E2E，运行结束复核临时进程与共享服务。项目技能默认另有name-only无回读/消费的契约缺口，已询问项目级安装与手动选择语义，不在本片把名称或空数组冒默认安装。

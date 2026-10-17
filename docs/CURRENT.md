@@ -1840,3 +1840,11 @@ App57b510d后的本片把五项管理（server编辑/删除、connector编辑/�
 14路径最终停写验证：Node22下lint/typecheck退出0、contract280 PASS、architecture50 PASS；默认181files/3277 PASS/0SKIP/185.26s（2workers）。同基线独立候选build0、公共壳桌面/移动E2E6 PASS/8.1s（1worker）、posttype0。定向share+rail 2files/188 PASS；既有jsdom跨Document诊断与E2E颜色环境warning如实保留。只读增量复核14hash一致，无确定新增P0–P2；保留分享错误绑定与不回退断言。最终只补本结果段，另外13路径不变。
 
 本轮按用途与父子/cwd核对进程：自有Admin已停止，首轮及最终测试临时Next/浏览器均结束，候选E2E退出后3320/3324/3325/39216/39217均无监听；App/IAM/BFF/Platform/Storage正式健康入口200。正常3310、受管服务、共享PG/Redis与桌面工具运行时保留，不因RSS大或PPID1终止；外部Clash零RSS僵尸不占本轮可回收内存，不连带结束父进程。串行跑完整测试、候选build与E2E，无重复预览常驻。本片不代表八类来源、跨主体矩阵、完整视觉或总目标完成，远程CI/PR/merge及Root暂存仍暂停。
+
+### API／JSON创建窗口立即停止等待（2026-10-16，验收进行中）
+
+基线0880ab6。只读查到表单取消只关闭窗口，稳定shell原请求仍等待ACK/超时；实际新增五项RED：两个表单各取消/卸载signal未abort，以及pre-aborted仍派发。改为窗口独立caller signal关联原flight，取消/卸载/真实准入退休立即停止等待，原unknown/key/body仍保存，显式恢复原命令；迟到ACK只确认原事实，后开窗口需显式完成，不换key、body或伪造回滚/结清。逻辑等价boundary对象重建不退休，原窗口清理不取消后继flight。复用既有两个suite，无新UI测试中心。首次lint指出memo对象突变，已改为ref持有窗口等待而非绕过规则；全门禁待下方真实记录。
+
+正常3310复用当前Session从管理连接器分别打开API/JSON，在不提交情形下取消/API与Escape/JSON均返回原列表；只改临时草稿，未创建、删除、改角色/凭据/资金或运行模型。本次正常浏览器不证明在途故障取消，后者明确为deferred组件/命令证据；本轮自建tab28已关闭，截图/收据只ignored。项目技能默认仍为name-only写无回读/执行，已询问目标安装边界，本片不冒项目完整闭环或OAuth人工结清。
+
+本片最终业务/测试冻结：Node22 lint/typecheck退出0，相关4files/291 PASS；contract280/architecture50，完整181files/3282 PASS/0SKIP/186.69s（2workers）。同基线候选build0、公共壳桌面移动E2E6 PASS/7.7s（1worker）、posttype0；既有跨Document与颜色warning保留。独审9路径未见确定新增P0–P2，主方核冻结hash并复审diff；本段仅文档追加，另外8路径保持原冻结。E2E后临时Next数量0，3320/3324/3325/39216/39217/39218均无listener，App/IAM/BFF/Platform/Storage健康200。远程CI/PR/merge、Root stage未动，原生OAuth真实提供方/人工结清、项目安装默认、八类来源及完整产品仍未闭环。

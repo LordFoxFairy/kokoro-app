@@ -33,7 +33,7 @@ export function JsonMcpImportForm({
   const t = useT();
   const [config, setConfig] = useState("");
   const clearDocument = useCallback(() => setConfig(""), []);
-  const { state, completion, admitted, submitting, locked, editable, maySubmit, done } =
+  const { state, completion, admitted, submitting, locked, editable, maySubmit, waitForCommand, cancel, done } =
     useConnectorCreationForm(flow, boundary, onDone, clearDocument);
   const failed = state.kind === "unknown" || state.kind === "rejected";
   const completed = state.kind === "completed" || completion !== "idle";
@@ -41,8 +41,8 @@ export function JsonMcpImportForm({
   const submit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
     if (!maySubmit()) return;
-    const confirmed = state.kind === "unknown" ? await flow.retry(boundary)
-      : editable() && Boolean(config.trim()) && await flow.submit(config, boundary);
+    const confirmed = await waitForCommand(signal => state.kind === "unknown" ? flow.retry(boundary, signal)
+      : editable() && Boolean(config.trim()) ? flow.submit(config, boundary, signal) : Promise.resolve(false));
     if (confirmed) await done();
   };
 
@@ -81,7 +81,7 @@ export function JsonMcpImportForm({
           type="button"
           variant="ghost"
           className={styles.visuallyHiddenCancel}
-          onClick={onCancel}
+          onClick={() => cancel(onCancel)}
         >
           {t("mcp.cancel")}
         </Button>

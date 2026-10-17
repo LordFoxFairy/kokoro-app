@@ -20,16 +20,40 @@ export function useConnectorCreationForm(flow: Lifecycle, boundary: ProjectReadB
   }), [flow, onAcknowledged]);
   const state = useSyncExternalStore(subscribe, flow.getSnapshot, flow.getSnapshot);
   const [completion, setCompletion] = useState<"idle" | "closing" | "retry">("idle");
-  const scope = useMemo(() => ({ flow, boundary }), [flow, boundary]);
+  const { admitted: boundaryAdmitted, subject, generation } = boundary;
+  const scope = useMemo(() => ({ flow, boundary: { admitted: boundaryAdmitted, subject, generation } }), [flow, boundaryAdmitted, subject, generation]);
   const committed = useRef<typeof scope | null>(null);
+  const waiting = useRef<{ scope: typeof scope; controller: AbortController } | null>(null);
   useLayoutEffect(() => {
     committed.current = scope;
-    return () => { if (committed.current === scope) committed.current = null; };
+    return () => {
+      if (committed.current === scope) committed.current = null;
+      if (waiting.current?.scope === scope) {
+        const previous = waiting.current;
+        waiting.current = null;
+        previous.controller.abort();
+      }
+    };
   }, [scope]);
   const admitted = boundary.admitted && flow.matches(boundary);
   const submitting = state.kind === "running";
   const locked = !admitted || submitting || state.kind === "unknown" || state.kind === "completed" || completion !== "idle";
   const editable = () => !locked && committed.current === scope;
+  const waitForCommand = async (run: (signal: AbortSignal) => Promise<boolean>) => {
+    if (committed.current !== scope || !admitted || waiting.current || completion !== "idle") return false;
+    const controller = new AbortController();
+    const request = { scope, controller };
+    waiting.current = request;
+    try {
+      const confirmed = await run(controller.signal);
+      return confirmed && !controller.signal.aborted && committed.current === scope;
+    } finally { if (waiting.current === request) waiting.current = null; }
+  };
+  const cancel = (onCancel: () => void) => {
+    if (committed.current !== scope) return;
+    if (waiting.current?.scope === scope) waiting.current.controller.abort();
+    onCancel();
+  };
   const done = async () => {
     if (committed.current !== scope || !admitted || completion === "closing") return;
     if (completion === "idle" && flow.getSnapshot().kind !== "completed") return;
@@ -42,5 +66,5 @@ export function useConnectorCreationForm(flow: Lifecycle, boundary: ProjectReadB
   };
 
   const maySubmit = () => connectorCommandMayResume(state.failure) && admitted && committed.current === scope && !submitting && completion === "idle";
-  return { state, completion, admitted, submitting, locked, editable, maySubmit, done };
+  return { state, completion, admitted, submitting, locked, editable, maySubmit, waitForCommand, cancel, done };
 }

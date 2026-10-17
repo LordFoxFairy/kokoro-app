@@ -1,4 +1,5 @@
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -97,4 +98,53 @@ it("an expired JSON receipt explains status inspection and disables its original
   expect(screen.getByRole("textbox")).toHaveAttribute("readonly");
   expect(call).toHaveBeenCalledOnce();
   expect(onDone).not.toHaveBeenCalled();
+});
+
+
+it.each(["api-cancel", "api-unmount", "json-cancel", "json-unmount"])("%s stops only its window wait and preserves the original command for explicit recovery", async scenario => {
+  const { createCustomApiCreateFlow } = await import("@/ui/mcp/custom-api-create-flow");
+  const { CustomApiForm } = await import("@/ui/mcp/custom-api-form");
+  const isApi = scenario.startsWith("api");
+  const boundary = { admitted: true, subject: "window-wait-actor", generation: 1 };
+  const pending: Array<() => void> = [];
+  const write = vi.fn().mockImplementation(() => new Promise<void>(resolve => pending.push(resolve)));
+  const confirmed = vi.fn(), onCancel = vi.fn(), oldDone = vi.fn().mockResolvedValue(undefined), nextDone = vi.fn().mockResolvedValue(undefined);
+  const flow = isApi ? createCustomApiCreateFlow({ client: { createCustomApi: write }, boundary, onConfirmed: confirmed })
+    : createMcpJsonImportFlow({ client: { importPrivateMcpJson: write }, boundary, onConfirmed: confirmed });
+  const release = flow.retain(boundary);
+  const content = (done: typeof oldDone) => isApi
+    ? <CustomApiForm flow={flow as ReturnType<typeof createCustomApiCreateFlow>} boundary={{ ...boundary }} onCancel={onCancel} onDone={done} />
+    : <Dialog open><DialogContent><JsonMcpImportForm flow={flow as ReturnType<typeof createMcpJsonImportFlow>} boundary={{ ...boundary }} onCancel={onCancel} onDone={done} /></DialogContent></Dialog>;
+  const oldWindow = render(content(oldDone), { wrapper: LocaleProvider });
+  fireEvent.change(isApi ? screen.getByLabelText(/^(Name|名称)$/u) : screen.getByRole("textbox"), { target: { value: isApi ? "Original API" : documentValue } });
+  fireEvent.click(screen.getByRole("button", { name: isApi ? /^(Save|保存)$/u : /^(Import|导入)$/u }));
+  await waitFor(() => expect(write).toHaveBeenCalledOnce());
+  const firstSignal = write.mock.calls[0]?.[2] as AbortSignal;
+  oldWindow.rerender(content(oldDone));
+  expect(firstSignal.aborted).toBe(false);
+  if (scenario.endsWith("cancel")) {
+    fireEvent.click(screen.getByRole("button", { name: /^(Cancel|取消)$/u }));
+    expect(onCancel).toHaveBeenCalledOnce();
+    expect(firstSignal.aborted).toBe(true);
+  }
+  oldWindow.unmount();
+  expect(firstSignal.aborted).toBe(true);
+  expect(flow.getSnapshot().kind).toBe("unknown");
+  render(content(nextDone), { wrapper: LocaleProvider });
+  expect(write).toHaveBeenCalledOnce();
+  fireEvent.click(screen.getByRole("button", { name: /重试原请求|Retry original/u }));
+  await waitFor(() => expect(write).toHaveBeenCalledTimes(2));
+  expect(write.mock.calls[1]?.slice(0, 2)).toEqual(write.mock.calls[0]?.slice(0, 2));
+  const secondSignal = write.mock.calls[1]?.[2] as AbortSignal;
+  expect(secondSignal.aborted).toBe(false);
+  await act(async () => { pending[0]!(); await Promise.resolve(); });
+  expect(confirmed).toHaveBeenCalledOnce();
+  expect(oldDone).not.toHaveBeenCalled();
+  expect(nextDone).not.toHaveBeenCalled();
+  expect(secondSignal.aborted).toBe(true);
+  await act(async () => { pending[1]!(); await Promise.resolve(); });
+  expect(nextDone).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: /^(Done|完成)$/u }));
+  await waitFor(() => expect(nextDone).toHaveBeenCalledOnce());
+  release();
 });

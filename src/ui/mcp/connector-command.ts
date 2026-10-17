@@ -59,12 +59,14 @@ export function createConnectorCommand<T>(options: {
     cancel();
     update({ ...state });
   };
-  const run = async (value: ProjectReadBoundary): Promise<boolean> => {
+  const run = async (value: ProjectReadBoundary, signal?: AbortSignal): Promise<boolean> => {
     const intent = command;
     const execute = options.execute;
-    if (!matches(value) || !admitted() || active || !intent || !execute || !connectorCommandMayResume(intent.failure)) return false;
+    if (signal?.aborted || !matches(value) || !admitted() || active || !intent || !execute || !connectorCommandMayResume(intent.failure)) return false;
     const running = { controller: new AbortController() };
     active = running;
+    const pauseWindow = () => { if (active === running) cancel(); };
+    signal?.addEventListener("abort", pauseWindow, { once: true });
     intent.failure = undefined;
     publish("running", intent.name);
     try {
@@ -91,6 +93,7 @@ export function createConnectorCommand<T>(options: {
       publish(rejected ? "rejected" : "unknown", intent.name, intent.failure);
       return false;
     } finally {
+      signal?.removeEventListener("abort", pauseWindow);
       if (active === running) active = undefined;
     }
   };
@@ -117,16 +120,16 @@ export function createConnectorCommand<T>(options: {
         });
       };
     },
-    submit: (input: T, value: ProjectReadBoundary) => {
-      if (!matches(value) || !admitted() || active || command || !options.execute ||
+    submit: (input: T, value: ProjectReadBoundary, signal?: AbortSignal) => {
+      if (signal?.aborted || !matches(value) || !admitted() || active || command || !options.execute ||
         (state.kind !== "idle" && state.kind !== "rejected")) return Promise.resolve(false);
       let body: T;
       try { body = options.freeze(input); }
       catch { update({ kind: "rejected" }); return Promise.resolve(false); }
       command = { body, name: options.name?.(body), key: connectorCreationKeySchema.parse((options.key ?? (() => crypto.randomUUID()))()), uncertain: false, failure: undefined };
-      return run(value);
+      return run(value, signal);
     },
-    retry: (value: ProjectReadBoundary) => state.kind === "unknown" ? run(value) : Promise.resolve(false),
+    retry: (value: ProjectReadBoundary, signal?: AbortSignal) => state.kind === "unknown" ? run(value, signal) : Promise.resolve(false),
     finish: (value: ProjectReadBoundary) => {
       if (!matches(value) || !admitted() || active || state.kind !== "completed") return false;
       update({ kind: "idle" }); return true;

@@ -46,7 +46,7 @@ export function CustomApiForm({
     { id: crypto.randomUUID(), name: "", value: "" },
   ]);
   const clearSecrets = useCallback(() => setEnvironment(items => items.map(item => ({ ...item, value: "" }))), []);
-  const { state, completion, admitted, submitting, locked, editable, maySubmit, done } =
+  const { state, completion, admitted, submitting, locked, editable, maySubmit, waitForCommand, cancel, done } =
     useConnectorCreationForm(flow, boundary, onDone, clearSecrets);
 
   const updateEnvironment = (id: string, patch: Partial<EnvironmentDraft>) =>
@@ -69,16 +69,16 @@ export function CustomApiForm({
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!maySubmit()) return;
-    const confirmed = state.kind === "unknown"
-      ? await flow.retry(boundary)
-      : editable() && valid && await flow.submit({
+    const confirmed = await waitForCommand(signal => state.kind === "unknown"
+      ? flow.retry(boundary, signal)
+      : editable() && valid ? flow.submit({
         name: name.trim(),
         ...(instructions.trim() ? { instructions: instructions.trim() } : {}),
         environment: configuredEnvironment.map((item) => ({
           name: item.name.trim(),
           value: item.value,
         })),
-      }, boundary);
+      }, boundary, signal) : Promise.resolve(false));
     if (confirmed) await done();
   };
 
@@ -215,7 +215,7 @@ export function CustomApiForm({
         <Button
           type="button"
           variant="outline"
-          onClick={onCancel}
+          onClick={() => cancel(onCancel)}
         >
           {t("mcp.cancel")}
         </Button>

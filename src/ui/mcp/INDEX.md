@@ -60,3 +60,5 @@ Connector恢复错误当前已固定BFF browser-private profile并由Hub/同源a
 `mcp-management-commands.ts` 只构造MCP固定五项typed management与现Prepare，不成为通用registry。每connector及可选private server绑定一个管理原命令，unknown冻结操作/body/CAS/key；其间新Prepare和其他管理被状态层拒绝，Prepare未结阻止修改配置/启停。明确disconnect/delete仍沿原清理语义允许，确认ACK才退休匹配Prepare。Provider/Private/Generic详情经同一index及`mcp-management-status.tsx`呈现，关闭/准入暂停当前等待、换actor退休；原窗口ACK只失活原投影，当前显式恢复/Done才可关闭当代window。列表缺行保locator恢复入口，不生成owner事实或GET结清。
 
 私有MCP ACK清实际header草稿/移除意图；非敏感明确输入在只读完成窗口保留至Done，避免把新GET当原命令正文。Hub update/delete server与update/enabled/remove connector均显式caller key、严格locator/写入安全字段及ACK，不变HTTP或原生OAuth。旧runAction只留下未覆盖的目录创建/原生授权协调，不能据此声称其完整命令恢复已完成。整文档重载、显式结束未知等待、真实OAuth和剩余视觉仍待后继。
+
+API／JSON创建窗口的每次等待由use-connector-creation-form持有独立caller AbortSignal；取消或真实窗口/准入退休只停止本次flight，命令仍保unknown及原key/body。connector-command按flight关联处理abort、settle移除监听；旧窗口不取消后继重试，同值boundary对象重建不退休，迟到ACK不自动关闭后开窗口。此处不是owner撤销或人工结清能力。
