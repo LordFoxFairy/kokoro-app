@@ -1,3 +1,7 @@
+## GitHub 导入结果未知
+
+`personal-skill-github-import-flow.ts` 将非preview阶段的正式HTTP5xx也归为unknown：已创建draft后的checkpoint/响应失败不证明未提交。保留原selector、各阶段body/key，仅显式恢复；preview仍是可重新输入的读取失败。404也没有证明可释放完整Import意图，因此不增加“换仓库/换key”旁路。
+
 ## Reader 展示意图与重核事实
 
 Settings 的详情实例按原 source＋精确 locator 绑定，actor 仍由外层清理。`ManusSkillDetailDialog` 的 viewTarget 仅保存同 actor/资源的 reader、文件路径、目录展开和文档 scroll 意图；每代 admission token 继续退休私有 metadata、installation、manifest、正文和旧请求。pending 展示通用 reader 框架，fresh pin/目录确认后才恢复有效路径和滚动；换 actor/目标、关闭清意图，显式重新进入重置，失败重试不强制 SKILL.md。没有修改 session 的周期、认证或任何网络契约。

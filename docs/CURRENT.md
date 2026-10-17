@@ -1,3 +1,11 @@
+## 2026-10-16 GitHub 导入 HTTP5xx 的结果未知分类（局部验收完成）
+
+基线38a1186。本轮完整目标审计后，独立只读复核找到可达P2：BFF已创建draft，后续checkpoint不可用或响应绑定失败可返回503/502；App严格client将合法错误构造成http reason，旧flow却展示确定failed，而不是unknown。现只把非preview的HTTP5xx纳入unknown，原selector/各stage key/body、显式原请求重试与actor/取消围栏不变；不清意图、不自动重发、不改后端/契约/Schema。
+
+先扩原11个flow用例中的现有参数及读回/CAS/重核分支：旧源码实际4FAIL/7PASS（import/publish/install与draft后read）；HTTP502/503、网络未知后，关闭/同actor重核不清意图、不能换仓库、恢复复用原body/key。preview502仍failed且可再读；Import404继续保原意图，不能因HTTP404就推断未建draft。候选两文件57PASS，scoped ESLint/diff0；停写四路径冻结后源门contract280/architecture50/lint/type/diff0，181files **3288 PASS / 0 SKIP / 189.23s**（runner189.69s）。独立同字节candidate production build0（17.14s）、现development public-shell E2E **6 PASS**（runner6.39s）、post-type0（5.02s）；独审4/4冻结SHA匹配，原P2关闭，无新增确定P0–P2。无新case/suite；公共壳E2E不是已登录GitHub故障注入。测试限制2workers，临时测试/预览树已退出、3324无监听；正常App3310/BFF/Platform健康200，不触碰正常App构建目录。初两次命令误在Root与将Platform Vitest2参数用于App Vitest4，均未收集测试；改用本App入口与maxWorkers2后才记录有效RED，不把启动错误当缺陷证据。
+
+最初推演GitHub仓库404可直接重新选择不成立：source GET404实际映射502，而aggregate Import404也可来自draft创建后步骤。已撤回该实施建议，不新增unsafe reset。完整安全换源恢复若需owner阶段证明仍是后继；本片只修当前表示不确定结果。尚未跑正常产品故障注入，不冒受控flow为真实HTTP/PG或正常GitHub写入旅程；无模型/权限/积分/远端/Rootgitlink变动，完整goal继续OPEN。
+
 ## 2026-10-16 Skills 下载正常产品补验（无源码变化）
 
 App 源码21a1fc5、BFF b4292b6、正常 Platform 行为0581429。正常3310当前开发账号从“我的技能”打开已有active安装详情，点击下载：正式 installation download receipt200，再由现同源会话绑定流返回application/zip200，浏览器实际保存446字节ZIP；未保留opaque下载token URL。归档CRC检查通过，仅SKILL.md，其UTF-8字节与此前同源正式package读取的同一所选文本逐字节相等，不执行包内容。
