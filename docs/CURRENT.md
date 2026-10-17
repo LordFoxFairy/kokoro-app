@@ -1,3 +1,11 @@
+## 聊天提交后空白：修复滚动所有权（2026-10-17，局部）
+
+基线89e0e6e。用户原会话只读核对：历史/问题仍在DOM；独立无请求的真实ConversationThread复现提交后scrollTop271.5、人工spacer529，最新问题和短历史全部被live助手顶部锚点推出视口。对照官方vercel/chatbot components/chat/messages.tsx与hooks/use-scroll-to-bottom.tsx，采用现shadcn原生贴底/读者主动滚动语义，不搬第二套hook/transport。删除live/scaffold两处scrollAnchor及原先仅补偿该spacer的几何effect/observer/工具；不改消息事实、AG-UI、恢复、HITL、产物或错误归属。
+
+原suite用两条原生行为回归承接短历史生命周期、长历史主动上滚/追加不抢/回最新后增长；删除10条手工造spacer的实现测试，两个旧live-anchor断言改为历史失败及当前反馈各唯一，不删其业务保护。首次回归实际RED：submitting scrollTop344而期望0。正常服务配置未改：当前BFF进程执行开关实测false，Agent未配置报错仍是真实独立执行链缺口；不假装前端滚动修复已让模型可运行。
+
+停写后Node22.22.2：六个现suite 275 PASS、architecture50 PASS，pnpm exec tsc --noEmit及pnpm lint退出0；早期shell自动切Node24的结果保留但不代替目标Node22。真实生产组件独立Vite渲染（非后台整链、无请求派发）1280/390/768三视口共24组状态，最新问题可见、短历史保持、人工spacer为0；长内容读到1537后提交/增量均保持1537，回最新恢复贴底，另五批增量长文底差≤1px，主动上滚后657不被增量拉走。原正常会话六项ID与空草稿保持。前后同1280×720/DPR2截图核对，未将受控fixture称为真实模型成功。只读review无新增确定P0–P2；本片不重跑全量3k、整套契约/E2E/Next构建，不冒整页/全产品完成。无正常服务重启、配置/角色/积分/模型改动；远端及Root index/gitlink继续暂停。
+
 ## 动态缩放与组件职责补验（2026-10-17，局部修复）
 
 基线68505ac。正常Manus/本地项目1280→375→1280往返26步发现窗口恰好768px本地提前隐藏300px侧栏，内容全宽误入项目双列；参考768仍侧栏300、主区468单列，767才隐藏侧栏。修复只在既有shell constraints、use-mobile/细指针观察与SSR CSS，不向项目workspace增加分支。独审另指出max767遗漏小数CSS区间；原case扩767.5↔768实际RED，最终订阅和snapshot均读width<768的matches，与CSS同谓词，不依赖取整innerWidth。

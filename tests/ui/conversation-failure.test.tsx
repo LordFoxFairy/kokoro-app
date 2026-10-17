@@ -54,16 +54,6 @@ function failedThread(code: AgentFailureCode): SessionStreamState {
   return failedThreadWithProfile(failureProfile(code))
 }
 
-function emptyFailedThread(): SessionStreamState {
-  return {
-    ...failedThread("internal_error"),
-    messages: [
-      { id: "m_u", role: "user", content: "do the thing", runId: "m_u" },
-      { id: "m_a", role: "assistant", content: "", runId: "run_1" },
-    ],
-  }
-}
-
 function renderFailure(thread: SessionStreamState, onRetry = vi.fn(), submissionFailureCode?: string | null) {
   return render(
     <ConversationThread
@@ -111,15 +101,6 @@ function rect(top: number, height: number): DOMRect {
   }
 }
 
-function scrollTopFromCall(call: unknown[]): number | undefined {
-  const first = call[0]
-  if (typeof first === "object" && first !== null && "top" in first) {
-    const top = (first as ScrollToOptions).top
-    return typeof top === "number" ? top : undefined
-  }
-  return typeof call[1] === "number" ? call[1] : undefined
-}
-
 function installGeometryHarness() {
   const originalResizeObserver = globalThis.ResizeObserver
   const originalWindowResizeObserver = window.ResizeObserver
@@ -163,7 +144,7 @@ function installGeometryHarness() {
     frames.set(id, callback)
     return id
   })
-  const cancelFrame = vi.spyOn(window, "cancelAnimationFrame").mockImplementation((id) => {
+  vi.spyOn(window, "cancelAnimationFrame").mockImplementation((id) => {
     frames.delete(id)
   })
   vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
@@ -231,18 +212,6 @@ function installGeometryHarness() {
     return { content, items, spacer, viewport }
   }
 
-  function geometryObserver(elements: readonly Element[]): ObservedResize | undefined {
-    return observers.find((observer) => !observer.disconnected && elements.every((element) => observer.elements.has(element)))
-  }
-
-  function trigger(observer: ObservedResize) {
-    observer.callback([], observer as unknown as ResizeObserver)
-  }
-
-  function zeroScrollCalls() {
-    return scrollTo.mock.calls.filter((call) => scrollTopFromCall(call) === 0)
-  }
-
   function restore() {
     if (originalResizeObserver !== undefined) globalThis.ResizeObserver = originalResizeObserver
     if (originalWindowResizeObserver !== undefined) window.ResizeObserver = originalWindowResizeObserver
@@ -254,25 +223,21 @@ function installGeometryHarness() {
   }
 
   return {
-    cancelFrame,
     configure,
     flushFrames,
     frames,
-    geometryObserver,
     observers,
     rects,
     restore,
     scrollTo,
-    trigger,
-    zeroScrollCalls,
   }
 }
 
-function renderGeometryThread(
+function geometryThread(
   thread: SessionStreamState,
   overrides: Partial<ConversationThreadProps> = {},
 ) {
-  return render(
+  return (
     <ConversationThread
       sessionId="ses_geometry"
       thread={thread}
@@ -289,9 +254,12 @@ function renderGeometryThread(
       hitlRunId={null}
       controlError={null}
       {...overrides}
-    />,
-    { wrapper: LocaleProvider },
+    />
   )
+}
+
+function renderGeometryThread(thread: SessionStreamState, overrides: Partial<ConversationThreadProps> = {}) {
+  return render(geometryThread(thread, overrides), { wrapper: LocaleProvider })
 }
 
 function settledMessages(messages: SessionStreamState["messages"]): SessionStreamState {
@@ -349,170 +317,86 @@ describe("failureCopyKey — generated 10-code safe profile localization", () =>
   })
 })
 
-describe("ConversationThread 紧凑线程几何", () => {
+describe("ConversationThread 原生滚动行为", () => {
   function geometry() {
     activeGeometryHarness = installGeometryHarness()
     return activeGeometryHarness
   }
 
-  it("全部三个短滚动项连同双层上下 padding 都容得下时只清一次 spacer", () => {
+  it("提交脚手架换为真实轮、流式和失败时保留短历史，不创建把问题推离视口的空白", async () => {
     const harness = geometry()
-    const thread = settledMessages([
-      { id: "m_u1", role: "user", content: "one", runId: "m_u1" },
-      { id: "m_a1", role: "assistant", content: "two", runId: "run_1" },
-      { id: "m_u2", role: "user", content: "three", runId: "m_u2" },
+    const history = settledMessages([
+      { id: "m_u1", role: "user", content: "original prompt", runId: "m_u1" },
+      { id: "m_a1", role: "assistant", content: "original answer", runId: "run_1" },
+      { id: "m_u2", role: "user", content: "new prompt", runId: "m_u2" },
     ])
-    const { container } = renderGeometryThread(thread)
-    const elements = harness.configure(container, [rect(30, 80), rect(138, 80), rect(246, 80)])
-
-    harness.scrollTo.mockClear()
-    act(() => harness.flushFrames())
-    expect(harness.zeroScrollCalls()).toHaveLength(1)
-
-    const observer = harness.geometryObserver([elements.viewport, elements.content, ...elements.items])
-    expect(observer).toBeDefined()
-    act(() => {
-      harness.trigger(observer as ObservedResize)
-      harness.flushFrames()
-    })
-    expect(harness.zeroScrollCalls()).toHaveLength(1)
-  })
-
-  it.each([
-    {
-      name: "首项很长而末项很短",
-      itemRects: [rect(30, 500), rect(558, 80)],
-      viewportHeight: 600,
-    },
-    {
-      name: "viewport clientHeight 为零",
-      itemRects: [rect(30, 80), rect(138, 80)],
-      viewportHeight: 0,
-    },
-    {
-      name: "Item 像素不是有限值",
-      itemRects: [rect(Number.NaN, 80), rect(138, 80)],
-      viewportHeight: 600,
-    },
-  ])("$name 时不清 spacer", ({ itemRects, viewportHeight }) => {
-    const harness = geometry()
-    const thread = settledMessages([
-      { id: "m_u", role: "user", content: "long prompt", runId: "m_u" },
-      { id: "m_a", role: "assistant", content: "short answer", runId: "run_1" },
-    ])
-    const { container } = renderGeometryThread(thread)
-    const elements = harness.configure(container, itemRects, { viewportHeight })
-
-    harness.scrollTo.mockClear()
-    act(() => harness.flushFrames())
-    expect(elements.spacer).not.toHaveAttribute("hidden")
-    expect(elements.spacer).toHaveStyle({ height: "180px" })
-  })
-
-  it("成果滚动项使总内容超高时不再只按末助手项误判", () => {
-    const harness = geometry()
-    const delivery: SessionDelivery = {
-      conversationId: "ses_geometry",
-      artifactId: "artifact_geometry",
-      assetId: "asset_geometry",
-      artifactKind: "document",
-      title: "Geometry report",
-      mime: "application/pdf",
-      size: 2048,
-      runId: "run_1",
-      createdAt: "2026-09-30T00:00:00Z",
+    const rendered = renderGeometryThread(history)
+    const originalPrompt = screen.getByText("original prompt", { selector: "p" })
+    for (const phase of ["submitting", "queued", "streaming", "reconnecting", "completed", "failed"] as const) {
+      const active = phase !== "completed" && phase !== "failed"
+      const thread = phase === "streaming" || phase === "completed"
+        ? { ...history, messages: [...history.messages, { id: "m_a2", role: "assistant" as const, content: "new answer", runId: "run_2" }] }
+        : history
+      rendered.rerender(geometryThread(thread, {
+        isStreaming: active,
+        isReconnecting: phase === "reconnecting",
+        currentRunId: phase === "submitting" ? null : "run_2",
+        executionPhase: phase === "completed" ? "idle" : phase === "failed" ? "error" : phase === "reconnecting" ? "streaming" : phase,
+        hasFailed: phase === "failed",
+        submissionFailureCode: phase === "failed" ? "agent_not_configured" : null,
+      }))
+      const items = [...rendered.container.querySelectorAll('[data-slot="message-scroller-item"]')]
+      const elements = harness.configure(rendered.container, items.map((_, index) => rect(20 + index * 108, 80)), {
+        scrollTop: 0, spacerHeight: 0,
+      })
+      elements.spacer.hidden = true
+      await act(async () => { await Promise.resolve(); harness.flushFrames() })
+      expect(elements.viewport.scrollTop, phase).toBe(0)
+      expect(Number.parseFloat(elements.spacer.style.height), phase).toBe(0)
+      expect(originalPrompt).toBeInTheDocument()
+      expect(screen.getByText("new prompt", { selector: "p" })).toBeInTheDocument()
     }
-    const thread = {
-      ...settledMessages([
-        { id: "m_u", role: "user" as const, content: "prompt", runId: "m_u" },
-        { id: "m_a", role: "assistant" as const, content: "answer", runId: "run_1" },
-      ]),
-      deliveries: [delivery],
-    }
-    const { container } = renderGeometryThread(thread, { onOpenDelivery: vi.fn() })
-    const elements = harness.configure(container, [rect(30, 80), rect(138, 80), rect(246, 340)])
-
-    harness.scrollTo.mockClear()
-    act(() => harness.flushFrames())
-    expect(elements.spacer).not.toHaveAttribute("hidden")
-    expect(elements.spacer).toHaveStyle({ height: "180px" })
   })
 
-  it.each([
-    { name: "流式", overrides: { isStreaming: true } },
-    { name: "重连", overrides: { isReconnecting: true } },
-    { name: "HITL", overrides: { hitlRunId: "run_1" } },
-  ])("$name 状态不取得紧凑滚动所有权", ({ overrides }) => {
+
+  it("长历史向上阅读时新内容不抢滚动，回到最新后恢复贴底增长", async () => {
     const harness = geometry()
-    const thread = settledMessages([
+    const history = settledMessages([
       { id: "m_u", role: "user", content: "prompt", runId: "m_u" },
-      { id: "m_a", role: "assistant", content: "answer", runId: "run_1" },
+      { id: "m_a", role: "assistant", content: "long answer", runId: "run_1" },
     ])
-    const { container } = renderGeometryThread(thread, overrides)
-    const items = [...container.querySelectorAll('[data-slot="message-scroller-item"]')]
-    harness.configure(container, items.map((_, index) => rect(30 + index * 108, 80)))
-
-    harness.scrollTo.mockClear()
-    act(() => harness.flushFrames())
-    expect(harness.zeroScrollCalls()).toHaveLength(0)
-  })
-
-  it("嵌入安全失败反馈参与 fit 且不提供 raw detail 动作", () => {
-    const harness = geometry()
-    const { container } = renderGeometryThread(emptyFailedThread(), {
-      hasFailed: false,
+    const rendered = renderGeometryThread(history)
+    const elements = harness.configure(rendered.container, [rect(-680, 80), rect(-572, 1200)], {
+      scrollTop: 700, spacerHeight: 0,
     })
-    const elements = harness.configure(container, [rect(30, 80), rect(138, 150)])
+    elements.spacer.hidden = true
+    Object.defineProperty(elements.viewport, "scrollHeight", { configurable: true, value: 1520 })
+    fireEvent.wheel(elements.viewport, { deltaY: -300 })
+    const updated = { ...history, messages: [...history.messages, {
+      id: "m_u2", role: "user" as const, content: "new prompt", runId: "m_u2",
+    }] }
+    rendered.rerender(geometryThread(updated, { isStreaming: true, currentRunId: "run_2" }))
+    const items = [...rendered.container.querySelectorAll('[data-slot="message-scroller-item"]')]
+    items.forEach((item, index) => harness.rects.set(item, index < 2
+      ? rect(-680 + index * 108, index === 1 ? 1200 : 80)
+      : rect(656 + (index - 2) * 108, 80)))
+    await act(async () => { await Promise.resolve(); harness.flushFrames() })
+    expect(elements.viewport.scrollTop).toBe(700)
+    expect(screen.getByText("long answer")).toBeInTheDocument()
 
-    harness.scrollTo.mockClear()
-    act(() => harness.flushFrames())
-    expect(harness.zeroScrollCalls()).toHaveLength(1)
-    expect(container.querySelector('[data-slot="collapsible"]')).toBeNull()
-    expect(elements.items).toHaveLength(2)
-  })
-
-  it("ResizeObserver 仅在不 fit 变 fit 时清 spacer，变长不跳尾且卸载清理 pending frame", () => {
-    const harness = geometry()
-    const thread = settledMessages([
-      { id: "m_u", role: "user", content: "prompt", runId: "m_u" },
-      { id: "m_a", role: "assistant", content: "answer", runId: "run_1" },
-    ])
-    const rendered = renderGeometryThread(thread)
-    const elements = harness.configure(rendered.container, [rect(30, 500), rect(558, 80)])
-
-    harness.scrollTo.mockClear()
-    act(() => harness.flushFrames())
-    expect(harness.zeroScrollCalls()).toHaveLength(0)
-
-    const observer = harness.geometryObserver([elements.viewport, elements.content, ...elements.items])
-    expect(observer).toBeDefined()
-    harness.rects.set(elements.items[0] as Element, rect(30, 80))
-    harness.rects.set(elements.items[1] as Element, rect(138, 80))
-    act(() => {
-      harness.trigger(observer as ObservedResize)
+    fireEvent.click(screen.getByRole("button", { name: tr("shell.backToLatest") }))
+    expect(elements.viewport.scrollTop).toBe(920)
+    Object.defineProperty(elements.viewport, "scrollHeight", { configurable: true, value: 1720 })
+    await act(async () => {
+      for (const observer of harness.observers) {
+        if (!observer.disconnected && observer.elements.has(elements.content)) {
+          observer.callback([], observer as unknown as ResizeObserver)
+        }
+      }
       harness.flushFrames()
     })
-    expect(harness.zeroScrollCalls()).toHaveLength(1)
-
-    harness.scrollTo.mockClear()
-    harness.rects.set(elements.items[0] as Element, rect(30, 500))
-    harness.rects.set(elements.items[1] as Element, rect(558, 80))
-    act(() => {
-      harness.trigger(observer as ObservedResize)
-      harness.flushFrames()
-    })
-    expect(harness.scrollTo).not.toHaveBeenCalled()
-
-    elements.spacer.hidden = false
-    elements.spacer.style.height = "180px"
-    elements.viewport.scrollTop = 80
-    harness.rects.set(elements.items[0] as Element, rect(30, 80))
-    harness.rects.set(elements.items[1] as Element, rect(138, 80))
-    act(() => harness.trigger(observer as ObservedResize))
-    expect(harness.frames.size).toBeGreaterThan(0)
-    rendered.unmount()
-    expect(observer?.disconnected).toBe(true)
-    expect(harness.cancelFrame).toHaveBeenCalled()
+    expect(elements.viewport.scrollTop).toBe(1120)
+    expect(Number.parseFloat(elements.spacer.style.height)).toBe(0)
   })
 })
 
@@ -584,7 +468,7 @@ describe("ConversationThread 失败卡渲染", () => {
   it.each([
     ["empty", ""],
     ["with body", "historical partial"],
-  ])("active run identity keeps replayed old failure visible without stealing live anchor: %s", (_label, content) => {
+  ])("active run identity keeps replayed old failure visible alongside current live feedback: %s", (_label, content) => {
     const profile = failureProfile("model_unavailable")
     const thread = {
       ...createSessionStreamState(),
@@ -615,10 +499,7 @@ describe("ConversationThread 失败卡渲染", () => {
       { wrapper: LocaleProvider },
     )
     expect(container.querySelector('[data-run-failure="run_old"]')).not.toBeNull()
-    expect(container.querySelector('[data-message-id="assistant:run_old:message:old_answer"]'))
-      .toHaveAttribute("data-scroll-anchor", "false")
-    expect(container.querySelector('[data-message-id="assistant:run_new:live"]'))
-      .toHaveAttribute("data-scroll-anchor", "true")
+    expect(screen.getAllByText(tr("thread.formingAnswer"))).toHaveLength(1)
 
     rerender(
       <LocaleProvider>
@@ -641,8 +522,7 @@ describe("ConversationThread 失败卡渲染", () => {
       </LocaleProvider>,
     )
     expect(container.querySelectorAll('[data-run-failure="run_old"]')).toHaveLength(1)
-    expect(container.querySelector('[data-message-id="assistant:run_new:live"]'))
-      .toHaveAttribute("data-scroll-anchor", "true")
+    expect(screen.getAllByText(tr("thread.formingAnswer"))).toHaveLength(1)
   })
 
   it("compact footer 在窄栏可换行且没有 terminal 可聚焦动作", () => {

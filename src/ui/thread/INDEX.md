@@ -5,7 +5,7 @@
 
 ## 公开件
 - `ConversationThread`（`conversation-thread.tsx`）：会话线主组件；产物/投递/工具打开回调由 shell 注入。
-- `useAutoScroll`：贴底跟随 / 回到最新信号。
+- 原生 `MessageScroller`：初始贴底；读者向上滚动后停止跟随，「回到最新」恢复。加载态与正文都留在同一消息列表；不把助手/脚手架设为顶部锚点，不额外创建清 spacer 的 observer。
 - `formatBytes`（`artifact-card.tsx`）：字节展示（被 library 等复用）。
 - 卡片子件：`ArtifactCard` / `DeliveryCard` / `ToolCallRow` / `SubagentRow` / `RunState` / `AssistantTurn` 等。
 
