@@ -1,3 +1,9 @@
+`sections/personalization-card.tsx` 同时呈现既有四字段的code point计数、超限尝试未采用提示与保存状态；反馈按身份代际退休，限制复用现schema，原blur/CAS不变。
+
+个性化内部界面：`sections/personalization-card.tsx` 管理资料/知识页签与原资料能力；`sections/personalization-knowledge-panel.tsx` 为知识界面和本次弹窗草稿；`sections/memory-import-dialog.tsx` 为复制提示词及粘贴内容界面。两个临时表单关闭或身份代际变化后卸载，最终服务写入保持禁用。`sections/data-management-section.tsx` 继续沿现分享/归档 hooks，只补管理用途说明与排列。
+
+资产页面内部布局：邮箱/电话的说明与创建按钮在内容区居中；钱包分为支付方式行和账单区；开发者页签下保留说明、文档不可用提示和独立内容区。样式只归 sections/settings-sections.module.css，不改变服务能力或网络边界。 Mail 设置改为四组配置行并保留收件箱；集成页用现有图标资源和应用用途卡片，窄屏单列。说明覆盖全部九种现有语言，应用卡片不表示已连接。
+
 SET53：sections 下 mail-settings-section、email-assets-section、phone-assets-section、wallet-settings-section、integration-settings-section、developer-settings-section 各自负责一个页面，局部页签不持久化。导航/搜索/header/dispatcher 增加六个可访问页面；具体服务动作无契约则禁用并给可见说明，无资产伪数据。电脑继续禁用，Skills/MCP 不改。
 
 SET53 compact More：现 settings-compact-more-menu 将 portal 归入所属 settings-modal 的焦点范围，保证窄屏键盘可选择；沿用单一菜单和原关闭逻辑。

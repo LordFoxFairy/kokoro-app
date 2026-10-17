@@ -1,3 +1,5 @@
+个性化知识与记忆导入内页的当前边界见 TECHNICAL_DESIGN/API_CONTRACT/DATA_MODEL 顶部；真实业务完成与验证结果以 CURRENT 为准。浏览弹窗不等同知识存储或记忆解析已接通。
+
 SET53：TECHNICAL_DESIGN/API_CONTRACT/DATA_MODEL 顶部定义六个资产及服务设置页面的放置、可导航范围及未接通动作边界；CURRENT 记录实际验证。无新 API、持久化或依赖，不把页面可打开当作资产服务已经可用。
 
 <!-- SET47 archive consumer: 2026-10-15 -->

@@ -1,3 +1,7 @@
+个人资料输入反馈归现 `src/ui/settings/sections/personalization-card.tsx`：复用 `personalization-schema.ts` 的code point限制，呈现计数、拒绝输入与保存中；原hook与网络契约保持。
+
+个性化内页：`src/ui/settings/sections/personalization-card.tsx` 保留既有资料读取与保存；同级 `personalization-knowledge-panel.tsx` 和 `memory-import-dialog.tsx` 分别拥有知识草稿弹窗、导入说明/复制及临时粘贴内容。未接服务的最终操作禁用，临时文本不持久化。
+
 SET53：设置 sections 新增 Mail、邮箱资产、电话资产、钱包、集成、开发者六个独立页面，原导航/搜索/标题/内容分派复用唯一设置壳。服务动作仍按实际能力禁用，电脑及 Skills/MCP 不在本轮实施范围。设计和真实验收状态见 docs/TECHNICAL_DESIGN.md 与 docs/CURRENT.md。
 
 <!-- SET47 archive consumer: 2026-10-15 -->

@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useLocale } from "@/i18n/context";
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
 import { useArchivedTasks } from "../use-archived-tasks";
@@ -42,6 +42,7 @@ function DataContent({
   t: ReturnType<typeof useLocale>["t"];
 }) {
   const archived=useArchivedTasks({preview,...(readBoundary?{boundary:readBoundary}:{}),...(onArchiveChanged?{onChanged:onArchiveChanged}:{})});
+  const managementId = useId();
   const data = useSharedTasks(preview, readBoundary),
     [target, setTarget] = useState<string | null>(null);
   return (
@@ -147,15 +148,18 @@ function DataContent({
           {archived.cursor?<button type="button" disabled={archived.busy||archived.blocked} onClick={()=>void archived.more()}>{t("data.more")}</button>:null}
         </>}
       </section>
-      {[
-        t("data.authorizedApps"),
-        t("data.cloudBrowser"),
-        t("data.domains"),
-      ].map((name) => (
-        <section key={name}>
-          <h2>{name}</h2>
-          <p>{t("data.unavailable")}</p>
-          <button type="button" disabled>
+      {([
+        ["data.authorizedApps", "data.authorizedAppsDescription"],
+        ["data.cloudBrowser", "data.cloudBrowserDescription"],
+        ["data.domains", "data.domainsDescription"],
+      ] as const).map(([title, description]) => (
+        <section key={title} className={styles.dataManagementRow} aria-labelledby={`${managementId}-${title}`}>
+          <div>
+            <h2 id={`${managementId}-${title}`}>{t(title)}</h2>
+            <p>{t(description)}</p>
+            <p id={`${managementId}-${title}-reason`}>{t("data.unavailable")}</p>
+          </div>
+          <button type="button" disabled aria-describedby={`${managementId}-${title}-reason`}>
             {t("data.manage")}
           </button>
         </section>

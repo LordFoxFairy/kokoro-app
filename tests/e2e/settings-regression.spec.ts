@@ -421,3 +421,81 @@ test("SET54 compact More opens and navigates with native keyboard without dismis
   await expect(modal).toHaveCount(0);
 });
 // SET54-END: compact-more-keyboard
+
+// SET59-BEGIN: local-personalization-interiors
+// Both configured projects exercise the actual nested Dialog focus/scroll behavior.
+test("SET59 knowledge and memory drafts keep Settings open and fit desktop or 320px", async ({ page, context }, testInfo) => {
+  const mobile = testInfo.project.name.startsWith("mobile");
+  await page.setViewportSize({ width: mobile ? 320 : 1280, height: 844 });
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.addInitScript(() => window.localStorage.setItem("kokoro.locale", "en"));
+  await page.goto("/app#settings/personalization", { waitUntil: "domcontentloaded" });
+  const settings = page.getByTestId("settings-modal");
+  await expect(settings).toBeVisible();
+  const businessRequests: string[] = [];
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname.startsWith("/api/session/")) businessRequests.push(request.method());
+  });
+  await settings.getByRole("tab", { name: "Knowledge", exact: true }).click();
+  await expect(settings.getByRole("textbox", { name: "Search knowledge" })).toBeDisabled();
+  await expect(settings.getByText("No knowledge yet", { exact: true })).toHaveCount(0);
+  const add = settings.getByRole("button", { name: "Add", exact: true });
+  await add.click();
+  let knowledge = page.getByRole("dialog", { name: "Add knowledge", exact: true });
+  await expect(knowledge).toBeVisible();
+  await knowledge.getByRole("textbox", { name: "Name", exact: true }).fill("Temporary knowledge");
+  await knowledge.getByRole("textbox", { name: "When to use" }).fill("Local preview only");
+  await knowledge.getByRole("textbox", { name: "Content", exact: true }).fill("Temporary content ".repeat(20));
+  await expect(knowledge.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+  await expect(knowledge.getByRole("button", { name: "Save", exact: true })).toHaveAccessibleDescription(/not connected/);
+  await expect.poll(() => knowledge.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0 && rect.bottom <= innerHeight && element.scrollWidth <= element.clientWidth;
+  })).toBe(true);
+  const knowledgeCancel = knowledge.getByRole("button", { name: "Cancel", exact: true });
+  await knowledgeCancel.scrollIntoViewIfNeeded();
+  await expect(knowledgeCancel).toBeInViewport();
+  await knowledgeCancel.click();
+  await expect(add).toBeFocused();
+  await add.click();
+  knowledge = page.getByRole("dialog", { name: "Add knowledge", exact: true });
+  await expect(knowledge.getByRole("textbox", { name: "Name", exact: true })).toHaveValue("");
+  await expect(knowledge.getByRole("textbox", { name: "Content", exact: true })).toHaveValue("");
+  await page.keyboard.press("Escape");
+  await expect(knowledge).toHaveCount(0);
+  await expect(settings).toBeVisible();
+  await expect(add).toBeFocused();
+  await settings.getByRole("tab", { name: "Profile", exact: true }).click();
+  const firstImport = settings.getByRole("button", { name: "Import", exact: true });
+  await firstImport.click();
+  let memory = page.getByRole("dialog", { name: "Import memory", exact: true });
+  await expect(memory).toBeVisible();
+  await memory.getByRole("textbox", { name: "Paste the response" }).fill("A private temporary response");
+  const prompt = await memory.locator("pre").textContent();
+  expect(prompt).toBeTruthy();
+  await memory.getByRole("button", { name: "Copy this prompt", exact: true }).click();
+  await expect(memory.getByRole("status")).toHaveText("Copied");
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(prompt);
+  const importAction = memory.getByRole("button", { name: "Import", exact: true });
+  await expect(importAction).toBeDisabled();
+  await expect(importAction).toHaveAccessibleDescription(/not connected/);
+  await importAction.scrollIntoViewIfNeeded();
+  await expect(importAction).toBeInViewport();
+  await expect.poll(() => memory.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0 && rect.bottom <= innerHeight && element.scrollWidth <= element.clientWidth;
+  })).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath("set59-memory-dialog.png"), fullPage: true });
+  await page.keyboard.press("Escape");
+  await expect(memory).toHaveCount(0);
+  await expect(settings).toBeVisible();
+  await expect(firstImport).toBeFocused();
+  await settings.getByRole("button", { name: "Import memory", exact: true }).click();
+  memory = page.getByRole("dialog", { name: "Import memory", exact: true });
+  await expect(memory.getByRole("textbox", { name: "Paste the response" })).toHaveValue("");
+  await expect(memory.getByRole("status")).toHaveCount(0);
+  await memory.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(settings).toBeVisible();
+  expect(businessRequests).toEqual([]);
+});
+// SET59-END: local-personalization-interiors

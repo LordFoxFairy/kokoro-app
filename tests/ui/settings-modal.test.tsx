@@ -2,6 +2,7 @@
 // 关闭出口(× / Esc / 背幕点击)均触发 onClose。会话态由 shell 保证,模态本身不再自持匿名闸。
 // page-clients 均注入 mock（不打网络）。
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -566,9 +567,9 @@ describe("SettingsModal 设置中心模态", () => {
         window.localStorage.getItem("kokoro.personalization.preview") ?? "{}",
       ),
     ).toMatchObject({ nickname: "小可" });
-    expect(screen.getByRole("tab", { name: "知识" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "匯入记忆" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "导入" })).toBeDisabled();
+    expect(screen.getByRole("tab", { name: "知识" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "导入记忆" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "导入" })).toBeEnabled();
     expect(screen.getByText("知识与记忆导入暂未接通。")).toBeInTheDocument();
   });
 
@@ -2135,3 +2136,98 @@ describe("SET54 compact More owns native keyboard activation and dismissal", () 
   });
 });
 // SET54-END: compact-more-keyboard
+
+// SET59: local forms remain inspectable without inventing owner reads or writes.
+describe("SET59 personalization interior drafts", () => {
+  const originalClipboard = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+  afterEach(() => {
+    if (originalClipboard) Object.defineProperty(navigator, "clipboard", originalClipboard);
+    else Reflect.deleteProperty(navigator, "clipboard");
+  });
+
+  it("discards a knowledge draft on close and tab changes, with nested Escape preserving Settings and trigger focus", async () => {
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    const onClose = vi.fn();
+    renderSettings(onClose, undefined, true, undefined, "personalization");
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "知识" }), { button: 0, ctrlKey: false });
+    expect(screen.getByRole("textbox", { name: "搜索知识" })).toBeDisabled();
+    expect(screen.queryByText("尚无知识")).not.toBeInTheDocument();
+    const add = screen.getByRole("button", { name: "新增" });
+    fireEvent.click(add);
+    let dialog = screen.getByRole("dialog", { name: "添加知识" });
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "名称" }), { target: { value: "private draft" } });
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "使用时机" }), { target: { value: "only locally" } });
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "内容" }), { target: { value: "临时内容" } });
+    expect(within(dialog).getByText("4/2000")).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "保存" })).toBeDisabled();
+    expect(within(dialog).getByRole("button", { name: "保存" })).toHaveAccessibleDescription(/暂未接通/);
+    fireEvent.click(within(dialog).getByRole("button", { name: "取消" }));
+    await waitFor(() => expect(add).toHaveFocus());
+    fireEvent.click(add);
+    dialog = screen.getByRole("dialog", { name: "添加知识" });
+    for (const name of ["名称", "使用时机", "内容"]) expect(within(dialog).getByRole("textbox", { name })).toHaveValue("");
+    expect(within(dialog).getByText("0/2000")).toBeInTheDocument();
+    fireEvent.keyDown(within(dialog).getByRole("textbox", { name: "名称" }), { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "添加知识" })).not.toBeInTheDocument());
+    expect(screen.getByTestId("settings-modal")).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+    await waitFor(() => expect(add).toHaveFocus());
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "个人资料" }), { button: 0, ctrlKey: false });
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "知识" }), { button: 0, ctrlKey: false });
+    fireEvent.click(screen.getByRole("button", { name: "新增" }));
+    expect(within(screen.getByRole("dialog", { name: "添加知识" })).getByRole("textbox", { name: "名称" })).toHaveValue("");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("reports clipboard rejection without copied feedback and both import entries reopen an empty local draft", async () => {
+    const copy = vi.fn().mockRejectedValue(new Error("permission denied"));
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: copy } });
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    renderSettings(() => {}, undefined, true, undefined, "personalization");
+    fireEvent.click(screen.getByRole("button", { name: "导入" }));
+    let dialog = screen.getByRole("dialog", { name: "导入记忆" });
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "粘贴回应内容" }), { target: { value: "private memory draft" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "复制此提示词" }));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("复制失败");
+    expect(within(dialog).queryByText("已复制", { exact: true })).not.toBeInTheDocument();
+    expect(copy).toHaveBeenCalledTimes(1);
+    expect(copy.mock.calls[0]?.[0]).not.toContain("private memory draft");
+    expect(within(dialog).getByRole("button", { name: "导入" })).toBeDisabled();
+    expect(within(dialog).getByRole("button", { name: "导入" })).toHaveAccessibleDescription(/暂未接通/);
+    fireEvent.click(within(dialog).getByRole("button", { name: "取消" }));
+    fireEvent.click(screen.getByRole("button", { name: "导入记忆" }));
+    dialog = screen.getByRole("dialog", { name: "导入记忆" });
+    expect(within(dialog).getByRole("textbox", { name: "粘贴回应内容" })).toHaveValue("");
+    expect(within(dialog).queryByRole("alert")).not.toBeInTheDocument();
+    fireEvent.keyDown(within(dialog).getByRole("textbox", { name: "粘贴回应内容" }), { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "导入记忆" })).not.toBeInTheDocument());
+    expect(screen.getByTestId("settings-modal")).toBeInTheDocument();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it.each(["subject", "generation", "preview"] as const)("retires pasted data and a late clipboard completion when %s changes", async (change) => {
+    let finish!: () => void;
+    const copy = vi.fn(() => new Promise<void>((resolve) => { finish = resolve; }));
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: copy } });
+    const draw = (next: boolean) => <ThemeProvider><LocaleProvider><SettingsModal
+      onClose={() => {}} initialTab="personalization" preview={change === "preview" ? !next : true}
+      readBoundary={{ admitted: true, subject: next && change === "subject" ? "owner-B" : "owner-A", generation: next && change === "generation" ? 2 : 1 }}
+    /></LocaleProvider></ThemeProvider>;
+    const view = render(draw(false));
+    fireEvent.click(screen.getByRole("button", { name: "导入记忆" }));
+    const dialog = screen.getByRole("dialog", { name: "导入记忆" });
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "粘贴回应内容" }), { target: { value: "old identity memory" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "复制此提示词" }));
+    expect(copy).toHaveBeenCalledTimes(1);
+    expect(within(dialog).queryByText("已复制", { exact: true })).not.toBeInTheDocument();
+    view.rerender(draw(true));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "导入记忆" })).not.toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "导入记忆" }));
+    const reopened = screen.getByRole("dialog", { name: "导入记忆" });
+    expect(within(reopened).getByRole("textbox", { name: "粘贴回应内容" })).toHaveValue("");
+    await act(async () => { finish(); });
+    expect(within(reopened).queryByText("已复制", { exact: true })).not.toBeInTheDocument();
+  });
+});

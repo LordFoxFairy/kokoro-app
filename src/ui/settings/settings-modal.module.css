@@ -1030,6 +1030,27 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+.dataManagement .dataManagementRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-block: 0.75rem;
+}
+.dataManagementRow > div {
+  display: grid;
+  flex: 1 1 14rem;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.dataManagementRow > button {
+  flex: 0 0 auto;
+}
+.dataManagementRow p {
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
 
 .unavailableNavigation {
   margin: 0.5rem 0 0.75rem;

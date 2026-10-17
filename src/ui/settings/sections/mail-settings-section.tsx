@@ -1,7 +1,7 @@
 "use client";
 
 import { useId } from "react";
-import { Mail } from "lucide-react";
+import { ArrowUpRight, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useT } from "@/i18n/context";
@@ -13,14 +13,12 @@ export function MailSettingsSection({ brandName }: { brandName: string }) {
   const inboxId = useId();
   const docsId = useId();
   return (
-    <div className={styles.servicePage} data-testid="settings-service-mail">
+    <div className={`${styles.servicePage} ${styles.mailPage}`} data-testid="settings-service-mail">
       <div className={styles.serviceInformation}>
         <p className={styles.serviceIntro}>{t("settingsServices.mailDescription")}</p>
-        <div className={styles.serviceDocumentation}>
-          <Button variant="link" disabled aria-describedby={docsId}>{t("settingsServices.docs")}</Button>
-          <p id={docsId}>{t("settingsServices.docsUnavailable")}</p>
-        </div>
+        <Button variant="link" disabled aria-describedby={docsId}>{t("settingsServices.docs")}<ArrowUpRight aria-hidden="true" /></Button>
       </div>
+      <p id={docsId} className={styles.serviceAvailability}>{t("settingsServices.docsUnavailable")}</p>
       <Tabs defaultValue="settings" className={styles.serviceTabs}>
         <TabsList variant="line" aria-label={t("settings.mailTitle")}>
           <TabsTrigger value="settings">{t("settingsServices.mailSettings")}</TabsTrigger>
@@ -28,27 +26,33 @@ export function MailSettingsSection({ brandName }: { brandName: string }) {
         </TabsList>
         <TabsContent value="settings" className={styles.serviceSections}>
           <p id={unavailableId} className={styles.serviceUnavailable}>{t("settingsServices.mailUnavailable")}</p>
-          <section className={styles.serviceCard}>
-            <div className={styles.serviceCardHeader}>
+          <section className={styles.mailSettingRow}>
+            <div>
               <h2>{t("settingsServices.mailbox", { brand: brandName })}</h2>
-              <Mail className={styles.serviceIcon} aria-hidden="true" />
+              <p>{t("settingsServices.mailAddressUnavailable")}</p>
             </div>
-            <p>{t("settingsServices.mailAddressUnavailable")}</p>
             <Button variant="outline" disabled aria-describedby={unavailableId}>{t("settingsServices.mailSettings")}</Button>
           </section>
-          <section className={styles.serviceCard}>
-            <h2>{t("settingsServices.workflows")}</h2>
-            <p>{t("settingsServices.workflowsDescription")}</p>
-            <Button variant="outline" disabled aria-describedby={unavailableId}>{t("settingsServices.add")}</Button>
+          <section className={styles.mailSettingRow}>
+            <div>
+              <h2>{t("settingsServices.workflows")}</h2>
+              <p>{t("settingsServices.workflowsDescription")}</p>
+            </div>
+            <Button variant="outline" disabled aria-describedby={unavailableId}><Plus aria-hidden="true" />{t("settingsServices.add")}</Button>
           </section>
-          <section className={styles.serviceCard}>
-            <h2>{t("settingsServices.triggers")}</h2>
+          <section className={styles.mailSettingRow}>
+            <div>
+              <h2>{t("settingsServices.triggers")}</h2>
+              <p>{t("settingsServices.triggersDescription")}</p>
+            </div>
             <Button variant="outline" disabled aria-describedby={unavailableId}>{t("settingsServices.fromAutomation")}</Button>
           </section>
-          <section className={styles.serviceCard}>
-            <h2>{t("settingsServices.senders")}</h2>
-            <p>{t("settingsServices.sendersDescription")}</p>
-            <Button variant="outline" disabled aria-describedby={unavailableId}>{t("settingsServices.add")}</Button>
+          <section className={styles.mailSettingRow}>
+            <div>
+              <h2>{t("settingsServices.senders")}</h2>
+              <p>{t("settingsServices.sendersDescription")}</p>
+            </div>
+            <Button variant="outline" disabled aria-describedby={unavailableId}><Plus aria-hidden="true" />{t("settingsServices.add")}</Button>
           </section>
         </TabsContent>
         <TabsContent value="inbox" className={styles.serviceCard}>
