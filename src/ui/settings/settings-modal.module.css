@@ -526,10 +526,6 @@
   padding-top: 0;
 }
 
-.mcpBody :global([data-embedded="true"]) {
-  padding-top: 1.5rem;
-}
-
 /* The compact Manus settings surface keeps its account identity and category
  * names visible.  Its navigation becomes one horizontally scrollable row,
  * never an unlabeled icon rail. */
@@ -542,8 +538,8 @@
   .dialogContent[data-slot="dialog-content"] {
     /* Measured directly against the current Manus compact Settings dialog:
      * 380 × 580 CSS px at a 448 × 764 CSS px viewport. A phone still uses
-     * the available width while preserving the 16px outer inset. */
-    width: min(23.75rem, calc(100vw - 2rem));
+     * the available width, capped by the shared 98vw envelope. */
+    width: min(23.75rem, 98vw);
     min-width: 0;
     height: min(36.25rem, calc(100vh - 2rem));
     max-height: calc(100vh - 2rem);
@@ -856,10 +852,6 @@
    * account rail already supplies context and the toolbar needs the space. */
   .panelHeader[data-panel="skills"]:not([data-skills-catalog-open="true"]) {
     display: none;
-  }
-
-  .mcpBody :global([data-embedded="true"]) {
-    padding-top: 0.25rem;
   }
 
   .contentBody :global([data-slot="scroll-area-viewport"]) {

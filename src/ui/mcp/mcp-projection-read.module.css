@@ -6,8 +6,12 @@
 
 /* The settings shell ends at the title divider. Keep the connector controls
    on the same 24px content baseline as Manus rather than pinning them to it. */
-.surface[data-settings-layout="true"] {
-  padding-top: 0.5rem;
+.surface[data-embedded="true"][data-settings-layout="true"] {
+  padding-top: 1.5rem;
+}
+
+.surface[data-embedded="true"][data-settings-layout="true"] .header {
+  margin-bottom: 0.75rem;
 }
 
 /* The settings dialog is intentionally compact, not a mobile connector page.
@@ -18,9 +22,20 @@
 }
 
 .surface[data-settings-layout="true"] .header:not(:has(h2)) .searchField {
-  width: 20rem;
+  width: 12.5rem;
   min-width: 0;
-  flex: 0 1 20rem;
+  flex: 0 1 12.5rem;
+}
+
+.surface[data-settings-layout="true"] .searchField :global(input) {
+  border-color: color-mix(in srgb, var(--foreground) 12%, transparent);
+  background: transparent;
+  padding-inline: 2.125rem 0.75rem;
+  line-height: 1.25rem;
+}
+
+.surface[data-settings-layout="true"] .searchField > svg {
+  left: 0.8125rem;
 }
 
 .surface[data-settings-layout="true"] .toolbarActions {
@@ -49,7 +64,8 @@
   gap: 1rem;
   margin-bottom: 1.5rem;
 }
-.surface:not([data-settings-layout="true"]):not([data-presentation="plaza"]) .header {
+.surface:not([data-settings-layout="true"]):not([data-presentation="plaza"])
+  .header {
   /* The standalone route shares this component with the compact settings
      sheet.  Its title must retain its intrinsic width: allowing the controls
      to consume the first grid column was what broke “连接器” into one glyph
@@ -179,7 +195,8 @@
   justify-content: space-between;
   gap: 0.75rem;
 }
-.surface:not([data-settings-layout="true"]):not([data-presentation="plaza"]) .settingsToolbar {
+.surface:not([data-settings-layout="true"]):not([data-presentation="plaza"])
+  .settingsToolbar {
   justify-content: flex-end;
 }
 .header:not(:has(h2)) {
@@ -219,6 +236,13 @@
 }
 .toolbarButton[data-settings-layout="true"] {
   padding-inline: 0.5rem;
+  box-shadow: none;
+  font-weight: 500;
+  line-height: 1.125rem;
+}
+.toolbarButton[data-settings-layout="true"]:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
 }
 .toolbarButton[data-settings-layout="true"][data-settings-control="browse"] {
   width: 5.375rem;
@@ -509,6 +533,9 @@
   font-size: 0.8125rem;
   line-height: 1.125rem;
 }
+.surface[data-settings-layout="true"] .connectionLabel {
+  line-height: 1.5;
+}
 .providerGrid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -523,8 +550,8 @@
 }
 .connectorGrid {
   display: grid;
-  /* The Settings modal is a reading list, not a dashboard: one full-width
-     connector per row keeps name and status together at every modal width. */
+  /* Compact Settings is one column; the measured desktop override below
+     keeps two 76px cards per row. */
   grid-template-columns: minmax(0, 1fr);
   gap: 0.75rem;
   margin: 0;
@@ -746,6 +773,19 @@
   line-height: 1rem;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.surface[data-settings-layout="true"] .connectorCard {
+  height: 4.75rem;
+}
+.surface[data-settings-layout="true"] .connectorIdentity strong {
+  font-weight: 500;
+}
+.surface[data-settings-layout="true"] .connectorIdentity small {
+  display: -webkit-box;
+  font-size: 0.8125rem;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 .connectorIdentity h4 {
   margin: 0;
@@ -1299,6 +1339,9 @@
   }
 }
 @media (max-width: 47.999rem) {
+  .surface[data-embedded="true"][data-settings-layout="true"] {
+    padding-top: 0.5rem;
+  }
   .surface[data-presentation="plaza"] .providerGrid {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -1375,11 +1418,6 @@
     align-items: center;
     flex-direction: row;
   }
-  .surface[data-settings-layout="true"] .header:not(:has(h2)) .searchField {
-    width: auto;
-    min-width: 0;
-    flex: 1 1 0;
-  }
   .surface[data-settings-layout="true"] .toolbarActions {
     justify-content: flex-end;
     flex-wrap: nowrap;
@@ -1392,7 +1430,8 @@
  * settings sheet keeps its intentionally single-row toolbar via the scoped
  * selector above. */
 @media (max-width: 56rem) {
-  .surface:not([data-settings-layout="true"]):not([data-presentation="plaza"]) .header {
+  .surface:not([data-settings-layout="true"]):not([data-presentation="plaza"])
+    .header {
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas:
       "title"
@@ -1400,7 +1439,8 @@
     align-items: stretch;
     gap: 1rem;
   }
-  .surface:not([data-settings-layout="true"]):not([data-presentation="plaza"]) .settingsToolbar {
+  .surface:not([data-settings-layout="true"]):not([data-presentation="plaza"])
+    .settingsToolbar {
     justify-content: space-between;
   }
   .surface:not([data-settings-layout="true"]) .searchField {

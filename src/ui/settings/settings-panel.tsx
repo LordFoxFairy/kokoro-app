@@ -78,7 +78,6 @@ export function SettingsPanel({
               className={cn(
                 styles.contentBody,
                 panelTab === "shortcuts" && styles.shortcutsBody,
-                panelTab === "mcp" && styles.mcpBody,
               )}
               tabIndex={0}
             >

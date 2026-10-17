@@ -1,3 +1,11 @@
+## 2026-10-16 Settings/MCP 布局实测修复（局部验收进行中）
+
+基线 `6beec84`，复用现有 Settings 与 MCP feature，不新建页面、状态 owner、依赖或测试 suite。正常 Manus `/app/skills#settings/connectors` 与本地 `/app/plugins#/account/settings/mcp` 在同 light/zh/DPR2、865×764 下实测：原 toolbar 早16px、搜索281px而非200px、标签晚20px。根因是 feature 顶部8px/搜索320px、通用 embedded header 的48px底距，以及 shell/feature 重复 padding。feature 独占 desktop24/mobile8的顶部与12px底距；移除 shell 的两处mcpBody padding和unused class，专属选择器不依赖CSS chunk顺序。紧凑dialog改为参考380px/98vw envelope，卡片名称14px/500、说明13px/16px最多两行、76px卡高；不伪造目录/封面或连接。
+
+正常服务HMR后，865工具栏、200px搜索、19.5px标签/列表基线与参考同值；390×844搜索x21/y357/w178/h32、标签x21/y401/w348/h19.5同值，375及767/768两侧搜索rect也相等，375/390无页面横溢。真实当前两API投影搜索保一项、无匹配空态、清空恢复；键盘搜索Tab到Browse、Enter打开目录、Escape回设置保焦点；整文档刷新保设置hash，Skills分区再切回仍是同一Dialog与真实列表。首次去除静态shadow遮住Tailwind ring已被本轮实测抓到，在原CSS补专属focus-visible轮廓后复核solid2px/offset2，不把中间失败当通过。截图/几何原始记录仅ignored；部分高层截图受浏览器面板缩放影响，另用Page.captureScreenshot固定CSS视口，未用缩放噪声冒像素对照。参考临时emulation已恢复。
+
+此只闭合当前连接器设置的布局锚点和上述交互，不代表所有Settings/Manus视觉、远程provider、运行权限或整体目标完成。无后端写、秘密/角色/资金/模型操作；远端及Rootindex/gitlink保持暂停。最终停写冻结验证：Node22 scoped CSS格式、contract、architecture、lint、typecheck均exit0；完整181files **3286 PASS / 0 SKIP / 188.11s**，未新增任何测试；既有独立同字节candidate production build0、development public-shell桌面/移动E2E **6 PASS / 7.8s**、posttype0。首阶段3286PASS192.99s仅阶段记录，最终以本次停写后结果为准；现有jsdom navigation/颜色诊断保留。只读静态复核含焦点增量无确定新增P0–P2，正常原始视口/标签已收尾，未以公共壳E2E冒正式已登录连接器交互证据。
+
 ## 2026-10-16 Skills 显式更新：正常产品旅程验收
 
 固定业务源码 App `d40c839`、BFF `615b16a`、Platform `11cb760`。用户批准本地短暂重启后，正常 Product Session→Web 同源→BFF→Platform→Storage/现有 PostgreSQL 完成自有 private 样本安装 v1→v2：确认前无 POST，确认后仅一次 strict 两 pin/原幂等 key 的 update，200 ACK→安装 GET 200→列表 GET 200；没有 Remove/Install。独立正常登录回读证明 installation ID、series、installed_at、enabled=true 均保持，目标严格等于原 `available_update`，余额仍 1,000 积分/held=0/流水1条且内容未变。没有直库写、凭据注入、模型发送或重复充值。

@@ -2,6 +2,10 @@
 
 - 广场分类使用参考的 32px 高、4px 横向 gap；控件区与结果区之间保留 16px 底距，空态与有卡片时使用同一基线。
 
+## Settings 布局基线（2026-10-16）
+
+同主题/语言、DPR2、865×764与390×844正常页面对照Manus：已添加连接器 toolbar 保32px，桌面标题divider后24px、窄屏8px；搜索200px仅收缩不扩张，操作组间距8px、左右12px，toolbar后12px接13px/19.5px标签。卡片76px、12px网格gap，桌面两列/窄屏一列；名称14px/500，说明13px/16px最多两行。MCP feature 独占自己的内容顶部与toolbar底距，不再由Settings shell的mcpBody重复写padding；其它嵌入feature不变。紧凑Settings沿参考380px/98vw envelope，390视口内内容348px，而非额外扣32px外边距。测量只证明这些布局锚点，原始截图/DOM在本地ignored，不冒全页面/全状态像素一致。
+
 ## 当前边界
 正式 Settings/MCP 与目录经 `mcp-projection-read.tsx` 渲染 BFF owner-native 投影和 opaque cursor，并通过现有 CAS 命令完成编辑、启停、删除和授权重试；URL、secret、revision、allowed_tools 不进入正式视图。旧的 server pool、凭据池和 preview 入口已删除，不保留兼容分支。
 
