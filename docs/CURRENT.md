@@ -1,3 +1,11 @@
+## 2026-10-16 连接器 Settings 实测与卡片表面（局部验收完成）
+
+基线086c840。沿当前正常3310与Manus已登录参考，只读固定相同1600×900/733×764：宽屏dialog1280×810、内容768、标题24/30、搜索200×32，紧凑dialog380×580、搜索178×32，浏览/创建86/64×32及8px gap均已一致；不是按旧截图猜。插件主页管理/创建在同一右上x1418/1512、y8；两侧栏按用户批准宽度有20px差异，不借插件任务改回侧栏。真实目录此刻为空，不能拿参考有推广/提供方时的搜索y226与本地空目录y88直接当同态差异，更未补造目录/推广数据。
+
+实际发现的卡片差异是共享provider/card样式溢入Settings：原normal近白底+11%黑边，hover2%底+20%边；参考透明底+6%边、hover4%底且边不变。只在data-settings-layout范围，以既有foreground语义token混合6%边及4%hover，不改尺寸、状态、Provider卡或网络；正常渲染失败基线已固定，HMR后透明/6%/4%及378×76实测GREEN。未增加CSS源码字符串/固定颜色单元测试或业务用例。停写三路径冻结后CSS Prettier/diff/lint/type0，现app-frame-rail定向 **186 PASS / 17.36s**（runner17.81s）；同字节独立candidate build0（16.53s）、既有public-shell **6 PASS / 5.0s**（runner5.50s）、post-type0（2.74s）；独审3/3冻结SHA匹配，无确定P0–P2。仅CSS上下文覆盖，不再机械重复无独有证据的3288项默认JS/契约/架构测试，最近全源门仍明确绑定086c840，不把它冒本片重跑。Next现锁定实现读取CIRCLE_NODE_TOTAL=3后cpus=2，只有本轮进程环境设置；build页面数据/生成与测试均实证2workers，无永久机器配置或业务代码改动。
+
+浏览器还核Settings连接器→技能→连接器两侧backendNodeId均保持不变；本地搜索Tab到浏览连接器，子目录关闭后保原Settings且焦点回Browse。紧凑子目录696.34375×680也与参考一致；修后733×764仍380×580/348×76卡片且scrollWidth=clientWidth=380，390×844时dialog380×580位于x5/y132，无横溢。截图只采稳定后的显式clip；初次tab截图与早期CDP图受缩放/动画影响，已排除，不据此调整样式。上述只证明明确几何/焦点锚点与卡片表面，不冒全部页面/权限/到期状态、目录非空或完整Skills/MCP完成；八来源、项目真实安装、refresh/执行准入等未决保持。无业务写、模型/角色/积分/凭据/远端/Rootgitlink变化。
+
 ## 2026-10-16 GitHub 导入 HTTP5xx 的结果未知分类（局部验收完成）
 
 基线38a1186。本轮完整目标审计后，独立只读复核找到可达P2：BFF已创建draft，后续checkpoint不可用或响应绑定失败可返回503/502；App严格client将合法错误构造成http reason，旧flow却展示确定failed，而不是unknown。现只把非preview的HTTP5xx纳入unknown，原selector/各stage key/body、显式原请求重试与actor/取消围栏不变；不清意图、不自动重发、不改后端/契约/Schema。

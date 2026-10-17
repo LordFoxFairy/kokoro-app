@@ -726,6 +726,15 @@
   border-color: rgb(0 0 0 / 20%);
   background: rgb(55 53 47 / 2%);
 }
+/* Installed cards share the Settings surface; hover changes only the fill,
+   not the quiet outline. Keep directory and standalone card styles separate. */
+.surface[data-settings-layout="true"] .connectorCard {
+  border-color: color-mix(in srgb, var(--foreground) 6%, transparent);
+  background: transparent;
+}
+.surface[data-settings-layout="true"] .connectorCard:hover {
+  background: color-mix(in srgb, var(--foreground) 4%, transparent);
+}
 .connectorTrigger {
   display: flex;
   width: 100%;
