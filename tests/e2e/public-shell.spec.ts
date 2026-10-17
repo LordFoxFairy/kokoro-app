@@ -26,12 +26,17 @@ test.describe("项目会话", () => {
   test("预览中从项目概览提交后进入项目会话，并且不写入直接会话列表", async ({ page, isMobile }) => {
     const prompt = "验证项目会话闭环"
     await page.goto("/app/project/preview-project", { waitUntil: "domcontentloaded" })
+    await page.getByRole("textbox").fill(prompt)
 
     if (!isMobile) {
       const viewport = page.viewportSize()
       // Reference stays two-column at 768px of workspace, including when
       // the context track is narrower than its 320px maximum.
-      for (const [width, twoColumns] of [[1103, true], [1067, false], [1068, true]] as const) {
+      for (const [width, twoColumns] of [
+        [1280, true], [1068, true], [1067, false], [769, false],
+        [768, false], [767, false], [390, false], [767, false],
+        [768, false], [769, false], [1067, false], [1068, true], [1280, true],
+      ] as const) {
         await page.setViewportSize({ width, height: 800 })
         await expect.poll(async () => {
           const context = await page.getByRole("complementary", { name: /工作区状态|Workspace status/ }).boundingBox()
@@ -50,11 +55,40 @@ test.describe("项目会话", () => {
             composerAligned: !twoColumns || Math.abs(composer.right - history.right) < 1,
           }
         }).toEqual({ twoColumns, composerAligned: true })
+        await expect(page.getByRole("textbox")).toHaveValue(prompt)
+        await expect(page.getByRole("textbox")).toBeFocused()
       }
       if (viewport) await page.setViewportSize(viewport)
+
+      await page.getByRole("button", { name: "技能", exact: true }).click()
+      const skills = page.getByRole("dialog")
+      const search = skills.getByPlaceholder("搜索技能")
+      await search.fill("动态适配")
+      for (const size of [
+        { width: 768, height: 800 }, { width: 375, height: 500 },
+        { width: 390, height: 520 }, { width: 1280, height: 800 },
+      ]) {
+        await page.setViewportSize(size)
+        // Check the first resized geometry, not a delayed settled position:
+        // interpolating an old width can leave the dialog outside the viewport.
+        const bounds = await page.evaluate(() => {
+          const dialog = document.querySelector('[role="dialog"]')
+          if (!dialog) throw new Error("Project skills dialog is missing")
+          return dialog.getBoundingClientRect().toJSON()
+        })
+        expect(bounds.left).toBeGreaterThanOrEqual(0)
+        expect(bounds.top).toBeGreaterThanOrEqual(0)
+        expect(bounds.right).toBeLessThanOrEqual(size.width)
+        expect(bounds.bottom).toBeLessThanOrEqual(size.height)
+        await expect(search).toHaveValue("动态适配")
+        await expect(search).toBeFocused()
+      }
+      await search.press("Escape")
+      await expect(skills).not.toBeVisible()
+      if (viewport) await page.setViewportSize(viewport)
+      await expect(page.getByRole("textbox")).toHaveValue(prompt)
     }
 
-    await page.getByRole("textbox").fill(prompt)
     await page.getByRole("button", { name: /发送消息|Send message/ }).click()
 
     await expect(page).toHaveURL(/\/app\/project\/preview-project\?conversation=conv_[a-z0-9-]+$/)

@@ -8,7 +8,7 @@ import {
 } from "react"
 import { flushSync } from "react-dom"
 
-import { WORKSPACE_MAIN_MIN } from "@/ui/shell/layout-constraints"
+import { WORKSPACE_DESKTOP_MIN_WIDTH, WORKSPACE_MAIN_MIN } from "@/ui/shell/layout-constraints"
 
 // 侧栏拖拽改宽的钳制边界：保证 rail 与 main 各有最小宽度，RAIL_MAX 再加一道硬顶。
 export const RAIL_MIN = 240
@@ -20,13 +20,9 @@ export const RAIL_COLLAPSED_WIDTH = 52
 // Measured from the reference project at 1280 CSS px (2026-10-17).
 // Keep one default for the track, seam and keyboard-resize starting point.
 export const RAIL_DEFAULT = 300
-// Keep the full Manus workbench above 768px. At exactly 768px the narrow
-// desktop destination must already be active; using 767 here created a
-// one-pixel layout discontinuity where the rail was expanded at 768 and
-// collapsed at 767, making a browser resize visibly jump between two
-// workbenches. The phone Sheet remains owned by useIsMobile and is not part
-// of this query.
-export const RAIL_COMPACT_BREAKPOINT = 768
+// Exclusive compact upper boundary, including fractional CSS viewport widths.
+// Actual 767↔768 reference observations keep desktop navigation at 768px.
+export const RAIL_COMPACT_BREAKPOINT = WORKSPACE_DESKTOP_MIN_WIDTH
 
 // Pointer coordinates are CSS pixels, while the seam is painted on the device
 // pixel grid. Keeping the track width on that grid prevents a fractional

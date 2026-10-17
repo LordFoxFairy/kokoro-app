@@ -125,7 +125,7 @@
 .bootingRailAction { width: 1.25rem; height: 1.25rem; }
 .bootingRailAccount { width: 1.5rem; height: 1.5rem; margin-top: auto; border-radius: 999px; }
 
-@media (max-width: 768px) {
+@media (width < 768px) {
   .bootingRail { display: none; }
 }
 
@@ -145,7 +145,7 @@
  * otherwise the trigger and the page title paint on top of one another at the
  * narrow breakpoint. Touch catalogs use the same lane for their Sheet trigger,
  * rather than losing navigation when the shared header is hidden. */
-@media (max-width: 48rem) {
+@media (width < 768px) {
   .shell:is([data-rail-hidden="true"], [data-narrow-web="true"]) :global([data-app-frame-main="true"][data-standalone-surface="true"]) header {
     padding-inline-start: 3.5rem;
   }
@@ -287,11 +287,11 @@
 @media (pointer: fine) {
   /* Match the compact fine-pointer layout from the very first browser paint.
    * `useCompactDesktopRail()` cannot know the client media query during SSR,
-   * so without this selector a hard refresh at 768px briefly paints the full
+   * so without this selector a hard refresh below 768px briefly paints the full
    * rail and then removes it after hydration. The data attribute becomes the
    * authoritative override as soon as React is mounted; an expanded compact
    * rail therefore remains visible after the user explicitly opens it. */
-  @media (max-width: 48rem) {
+  @media (width < 768px) {
     .shell[data-desktop-web="true"]:not([data-compact-desktop="true"]) :global([data-slot="sidebar"]),
     .shell[data-desktop-web="true"]:not([data-compact-desktop="true"]) :global([data-slot="sidebar-gap"]),
     .shell[data-desktop-web="true"]:not([data-compact-desktop="true"]) :global([data-slot="sidebar-container"]) {

@@ -126,11 +126,11 @@ export function writePendingCreationIntent(value: CreationIntent | null): void {
 export function useCompactDesktopRail(): boolean {
   return useSyncExternalStore(
     (onStoreChange) => {
-      const query = window.matchMedia(`(max-width: ${COMPACT_DESKTOP_RAIL_BREAKPOINT}px) and (pointer: fine)`)
+      const query = window.matchMedia(`(width < ${COMPACT_DESKTOP_RAIL_BREAKPOINT}px) and (pointer: fine)`)
       query.addEventListener("change", onStoreChange)
       return () => query.removeEventListener("change", onStoreChange)
     },
-    () => window.matchMedia(`(max-width: ${COMPACT_DESKTOP_RAIL_BREAKPOINT}px) and (pointer: fine)`).matches,
+    () => window.matchMedia(`(width < ${COMPACT_DESKTOP_RAIL_BREAKPOINT}px) and (pointer: fine)`).matches,
     () => false,
   )
 }

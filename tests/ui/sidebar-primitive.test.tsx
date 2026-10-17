@@ -8,6 +8,25 @@ import { LocaleProvider } from "@/i18n/context"
 const originalInnerWidth = window.innerWidth
 const originalMatchMedia = window.matchMedia
 
+function setViewport(width: number) {
+  const listeners = new Set<() => void>()
+  Object.defineProperty(window, "innerWidth", { configurable: true, value: width, writable: true })
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    value: (query: string) => ({
+      matches: query === "(width < 768px)" && window.innerWidth < 768,
+      media: query,
+      onchange: null,
+      addListener: () => undefined,
+      removeListener: () => undefined,
+      addEventListener: (_type: string, listener: () => void) => listeners.add(listener),
+      removeEventListener: (_type: string, listener: () => void) => listeners.delete(listener),
+      dispatchEvent: () => false,
+    }),
+  })
+  return listeners
+}
+
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
@@ -44,7 +63,7 @@ it("SidebarRail 继承调用方标签并同步 tooltip title", () => {
 })
 
 it.each([false, true])("mobile navigation reports drawer state instead of desktop expansion (expanded=%s)", async (expanded) => {
-  Object.defineProperty(window, "innerWidth", { configurable: true, value: 412 })
+  setViewport(412)
   render(
     <LocaleProvider>
       <SidebarProvider defaultOpen={expanded}>
@@ -69,21 +88,7 @@ it.each([false, true])("mobile navigation reports drawer state instead of deskto
 })
 
 it("跨越移动断点后不会在返回移动端时重新打开旧导航抽屉", async () => {
-  const listeners = new Set<() => void>()
-  Object.defineProperty(window, "innerWidth", { configurable: true, value: 700, writable: true })
-  Object.defineProperty(window, "matchMedia", {
-    configurable: true,
-    value: (query: string) => ({
-      matches: window.innerWidth <= 767,
-      media: query,
-      onchange: null,
-      addListener: () => undefined,
-      removeListener: () => undefined,
-      addEventListener: (_type: string, listener: () => void) => listeners.add(listener),
-      removeEventListener: (_type: string, listener: () => void) => listeners.delete(listener),
-      dispatchEvent: () => false,
-    }),
-  })
+  const listeners = setViewport(700)
 
   render(
     <SidebarProvider>

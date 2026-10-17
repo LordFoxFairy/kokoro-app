@@ -20,7 +20,7 @@ afterEach(() => {
 })
 
 describe("useRailResize", () => {
-  it("公开桌面 Rail 的 52px 收起轨道、300px 默认宽度和 768px 自动收起阈值", () => {
+  it("公开桌面 Rail 的 52px 收起轨道、300px 默认宽度和 768px 桌面起点", () => {
     expect(RAIL_COLLAPSED_WIDTH).toBe(52)
     expect(RAIL_DEFAULT).toBe(300)
     expect(RAIL_COMPACT_BREAKPOINT).toBe(768)

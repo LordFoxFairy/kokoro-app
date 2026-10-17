@@ -72,14 +72,17 @@ function setDesktopViewport(width: number, pointer: "fine" | "coarse" = "fine") 
   window.matchMedia = vi.fn().mockImplementation((query: string) => {
     const finePointer = query.includes("pointer: fine")
     const coarsePointer = query.includes("pointer: coarse")
-    const compactWidth = query.includes("max-width: 768px")
-    const mobileWidth = query.includes("max-width: 767px")
+    const maximumWidth = /max-width:\s*(\d+)px/u.exec(query)?.[1]
+    const desktopMinimum = /width\s*<\s*(\d+)px/u.exec(query)?.[1]
+    const withinWidth = desktopMinimum !== undefined
+      ? desktopViewportWidth < Number(desktopMinimum)
+      : maximumWidth !== undefined && desktopViewportWidth <= Number(maximumWidth)
     return {
       matches: finePointer
-        ? pointer === "fine" && compactWidth && desktopViewportWidth <= 768
+        ? pointer === "fine" && withinWidth
         : coarsePointer
-          ? pointer === "coarse" && mobileWidth && desktopViewportWidth <= 767
-          : false,
+          ? pointer === "coarse" && withinWidth
+          : withinWidth,
       media: query,
       onchange: null,
       addEventListener: (_type: string, listener: () => void) => mediaListeners.add(listener),
@@ -296,11 +299,17 @@ it("800px 仍是宽桌面收起轨道，展开收起的焦点都留在实际可�
   await waitFor(() => expect(screen.getByRole("button", { name: "收起侧栏" })).toHaveFocus())
 })
 
-it("768px 细指针桌面隐藏 Rail，展开后 seam 和焦点入口同步恢复", async () => {
+it("含767.5px缩放的768边界往返保持桌面偏好，不残留抽屉", async () => {
   setDesktopViewport(768)
   mountFrame({ desktopRailCollapsed: true })
 
   const shell = document.querySelector('[data-slot="sidebar-wrapper"]')
+  await waitFor(() => {
+    expect(shell).toHaveAttribute("data-rail-collapsed", "true")
+    expect(shell).not.toHaveAttribute("data-rail-hidden")
+  })
+
+  resizeDesktopViewport(767.5)
   await waitFor(() => {
     expect(shell).toHaveAttribute("data-rail-collapsed", "true")
     expect(shell).toHaveAttribute("data-rail-hidden", "true")
@@ -319,6 +328,15 @@ it("768px 细指针桌面隐藏 Rail，展开后 seam 和焦点入口同步恢�
     expect(shell?.querySelector('[data-seam="rail"]')).toBeNull()
     expect(screen.getByRole("dialog")).toContainElement(document.activeElement as HTMLElement)
   })
+
+  resizeDesktopViewport(768)
+  await waitFor(() => {
+    expect(shell).not.toHaveAttribute("data-rail-hidden")
+    expect(shell).toHaveAttribute("data-rail-collapsed", "true")
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+  })
+  resizeDesktopViewport(767)
+  await waitFor(() => expect(shell).toHaveAttribute("data-rail-hidden", "true"))
 })
 
 it("触屏导航抽屉的打开和关闭不改变桌面侧栏偏好", async () => {
@@ -339,7 +357,7 @@ it("触屏导航抽屉的打开和关闭不改变桌面侧栏偏好", async () =
 })
 
 it("隐藏共享 Header 的独立 Web 页面仍保留唯一导航入口", async () => {
-  setDesktopViewport(768)
+  setDesktopViewport(767)
   mountFrame({ hideWorkspaceHeader: true, standaloneSurface: true })
 
   const shell = document.querySelector('[data-slot="sidebar-wrapper"]')
@@ -369,7 +387,7 @@ it("触屏独立目录仍可打开和关闭导航抽屉", async () => {
 it("窄桌面临时展开不覆盖宽桌面的 Sidebar cookie 偏好", async () => {
   document.cookie = "sidebar_state=false; path=/"
   expect(document.cookie).toContain("sidebar_state=false")
-  setDesktopViewport(768)
+  setDesktopViewport(767)
   mountFrame({ desktopRailCollapsed: true })
 
   const shell = document.querySelector('[data-slot="sidebar-wrapper"]')
