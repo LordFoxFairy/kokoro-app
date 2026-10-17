@@ -4126,12 +4126,17 @@ it("a late provider toggle ACK does not close a successor provider window", asyn
 it.each(["forbidden", "not-found", "network"])("installation detail keeps pin A metadata and reader when the catalog current revision is B (%s download)", async downloadFailure => {
   const requests: string[] = []
   const text = "# Installed A"
+  const fileTexts = { "SKILL.md": text, "references/notes.md": "# Reader notes", "scripts/nested/check.py": "print(\"reader-check\")" }
+  const files = Object.entries(fileTexts).map(([path, value]) => ({ path, size_bytes: String(new TextEncoder().encode(value).byteLength) }))
   vi.spyOn(globalThis, "fetch").mockImplementation(async input => {
     const path = String(input); requests.push(path)
     const headers = { "cache-control": "private, no-store", "x-request-id": "pin-detail" }
     if (path.endsWith("GetSkill")) return Response.json({ skill: { id: "pin-series", version: "pin-B", displayName: "Catalog B", description: "B summary" }, downloadInfo: { downloadUrl: "/api/skill-downloads/current-B", filename: "B.zip", expiresAt: "2028-01-01T00:00:00Z" } }, { headers })
     if (path.endsWith("/download")) { if (downloadFailure === "network") throw new TypeError("network interrupted"); return Response.json({ error: { code: downloadFailure === "not-found" ? "skill_not_found" : "skill_download_forbidden", message: "Download denied independently", retryable: false } }, { status: downloadFailure === "not-found" ? 404 : 403, headers }) }
-    if (path.includes("/package")) return Response.json({ data: { source_ref: "skill:pin-A", revision: "1", files: [{ path: "SKILL.md", size_bytes: String(new TextEncoder().encode(text).byteLength) }], selected_file: path.includes("file_path=") ? { path: "SKILL.md", text } : null } }, { headers })
+    if (path.includes("/package")) {
+      const selected = new URL(path, "http://local.test").searchParams.get("file_path") as keyof typeof fileTexts | null
+      return Response.json({ data: { source_ref: "skill:pin-A", revision: "1", files, selected_file: selected === null ? null : { path: selected, text: fileTexts[selected] } } }, { headers })
+    }
     return Response.json({ data: { installation_id: "pin-install", series_id: "pin-series", source_ref: "skill:pin-A", revision: "1", installed: true, enabled: false, display_name: "Installed A", summary: "A summary", source_status: "withdrawn", installed_at: "2026-10-15T00:00:00Z", updated_at: "2026-10-15T00:00:00Z", skill_updated_at: "2026-10-14T00:00:00Z", example_prompts: ["A example"], category_keys: [], tags: [], product: { publication_audience: "catalog", state_version: "1", source_kind: "personal" } } }, { headers })
   })
   render(<LocaleProvider><ManusSkillDetailDialog detailSource="installation" readBoundary={{ admitted: true, subject: "pin-reader", generation: 1 }} skill={{ skill_id: "pin-series", revision_skill_id: "pin-A", source_ref: "skill:pin-A", installed_source_ref: "skill:pin-A", installation_id: "pin-install", name: "Installed A", description: "Card A", content_hash: "pin-series", scope: "personal", installed: true, enabled: false }} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={() => false} /></LocaleProvider>)
@@ -4145,6 +4150,40 @@ it.each(["forbidden", "not-found", "network"])("installation detail keeps pin A 
   await screen.findByRole("heading", { name: "Installed A", level: 1 })
   expect(requests).toContain("/api/hub/skill-installations/pin-install/package?file_path=SKILL.md")
   expect(requests.some(path => path.endsWith("GetSkill") || path.includes("/skills/pin-A/package"))).toBe(false)
+  if (downloadFailure === "forbidden") {
+    // Folder disclosure is presentation only. File bytes still use the exact
+    // admitted installation pin, and a new reader starts with closed folders.
+    const filesToggle = screen.getByRole("button", { name: /^文件$/ })
+    const beforeSameSelection = requests.length
+    fireEvent.click(filesToggle)
+    expect(filesToggle).toHaveAttribute("aria-expanded", "true")
+    fireEvent.click(screen.getByRole("button", { name: /^SKILL\.md$/ }))
+    expect(filesToggle).toHaveAttribute("aria-expanded", "false")
+    expect(filesToggle).toHaveFocus()
+    expect(requests).toHaveLength(beforeSameSelection)
+    const scripts = screen.getByRole("button", { name: /^scripts$/ })
+    expect(scripts).toHaveAttribute("aria-expanded", "false")
+    expect(screen.getByRole("button", { name: /^references$/ })).toHaveAttribute("aria-expanded", "false")
+    expect(screen.queryByRole("button", { name: "scripts/nested/check.py" })).not.toBeInTheDocument()
+    const reads = requests.filter(path => path.includes("/package")).length
+    fireEvent.click(scripts)
+    const nested = screen.getByRole("button", { name: /^nested$/ })
+    expect(nested).toHaveAttribute("aria-expanded", "false")
+    fireEvent.click(nested)
+    expect(requests.filter(path => path.includes("/package"))).toHaveLength(reads)
+    fireEvent.click(screen.getByRole("button", { name: "scripts/nested/check.py" }))
+    await screen.findByText(fileTexts["scripts/nested/check.py"])
+    expect(requests).toContain("/api/hub/skill-installations/pin-install/package?file_path=scripts%2Fnested%2Fcheck.py")
+    fireEvent.click(screen.getByRole("button", { name: /^SKILL\.md$/ }))
+    await screen.findByRole("heading", { name: "Installed A", level: 1 })
+    expect(scripts).toHaveAttribute("aria-expanded", "true")
+    expect(nested).toHaveAttribute("aria-expanded", "true")
+    fireEvent.click(screen.getByRole("button", { name: /^技能详情$/ }))
+    fireEvent.click(await screen.findByRole("button", { name: /^查看详情$/ }))
+    await screen.findByRole("heading", { name: "Installed A", level: 1 })
+    expect(screen.getByRole("button", { name: /^scripts$/ })).toHaveAttribute("aria-expanded", "false")
+    expect(screen.queryByRole("button", { name: "scripts/nested/check.py" })).not.toBeInTheDocument()
+  }
   fireEvent.click(screen.getByRole("button", { name: "下载技能" }))
   await screen.findByRole("alert")
   expect(screen.getByText(downloadFailure === "network" ? "下载未完成，请重试。" : "此技能当前未开放下载。")).toBeVisible()

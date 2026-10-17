@@ -191,8 +191,9 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
   const [readerLoading, setReaderLoading] = useState(false)
   const [readerFailed, setReaderFailed] = useState(false)
   const [readerAttempt, setReaderAttempt] = useState(0)
-  const [collapsedFolders, setCollapsedFolders] = useState<ReadonlySet<string>>(new Set())
+  const [expandedFolders, setExpandedFolders] = useState<ReadonlySet<string>>(new Set())
   const [mobileFilesOpen, setMobileFilesOpen] = useState(false)
+  const mobileFilesToggleRef = useRef<HTMLButtonElement | null>(null)
   const resourceIdentity = !open ? null : sharedSummary ? JSON.stringify(["shared", boundary.subject, sharedSummary.share_id, sharedSummary.source_ref]) : skill?.skill_id ? JSON.stringify([detailSource, skill.skill_id, skill.revision_skill_id, detailSource === "installation" ? skill.installation_id : null]) : null
   const identity = resourceIdentity === null ? null : JSON.stringify([resourceIdentity, boundary.admitted, boundary.subject, boundary.generation])
   const token = useMemo(() => ({ identity }), [identity])
@@ -234,7 +235,7 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
     setReaderFile(null)
     setReaderLoading(false)
     setReaderFailed(false)
-    setCollapsedFolders(new Set())
+    setExpandedFolders(new Set())
     setMobileFilesOpen(false)
   }
 
@@ -314,7 +315,7 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
   const restartReader = () => {
     if (boundRevision === null || !isLive()) return
     setReaderOpen(true)
-    setCollapsedFolders(new Set())
+    setExpandedFolders(new Set())
     setDirectory(null)
     setSelectedPath(null)
     setReaderFile(null)
@@ -324,7 +325,10 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
     setReaderAttempt((attempt) => attempt + 1)
   }
   const selectFile = (path: string) => {
-    if (path === selectedPath || !isLive()) return
+    if (!isLive()) return
+    setMobileFilesOpen(false)
+    if (mobileFilesOpen) mobileFilesToggleRef.current?.focus()
+    if (path === selectedPath) return
     setSelectedPath(path)
     setReaderFile(null)
     setReaderFailed(false)
@@ -509,6 +513,7 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
             <button
               type="button"
               className={styles.mobileFileToggle}
+              ref={mobileFilesToggleRef}
               aria-label={t("skills.detailFiles")}
               aria-controls="manus-skill-package-files"
               aria-expanded={mobileFilesOpen}
@@ -516,7 +521,7 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
             ><Menu aria-hidden="true" /></button>
             <nav id="manus-skill-package-files" className={`${styles.fileList} ${mobileFilesOpen ? styles.mobileFileListOpen : ""}`} aria-label={t("skills.detailFiles")}>
               <p className={styles.fileNavHeading}>{t("skills.detailFiles")}</p>
-              <ul><SkillPackageFiles files={directory?.files ?? []} selectedPath={selectedPath} collapsedFolders={collapsedFolders} onSelect={selectFile} onToggle={path => setCollapsedFolders(current => {
+              <ul><SkillPackageFiles files={directory?.files ?? []} selectedPath={selectedPath} expandedFolders={expandedFolders} onSelect={selectFile} onToggle={path => setExpandedFolders(current => {
                 const next = new Set(current); if (next.has(path)) next.delete(path); else next.add(path); return next
               })} /></ul>
             </nav>

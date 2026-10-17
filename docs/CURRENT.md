@@ -1,3 +1,13 @@
+## 2026-10-16 Skills 包文件导航对照（局部验证完成）
+
+基线 a74cb41，正常 Manus 技能包 reader 与本地当前安装 B 对照：桌面文件行原 16px/24px/41.59px，参考 13px/19.5px/27.5px；目录原全部展开，参考初始关闭，选文件保展开。现改为空展开集合，保 owner 目录/精确 revision 请求；本人管理 reader 删除重复树渲染，复用原纯 `SkillPackageFiles`。桌面同865×764下真实 SKILL.md 行 x47.5/y183/w171/h27.5、图标x73.5/文字x93.5，与参考一致。
+
+紧凑文件菜单原撑至 reader 底部，现为240px内容尺寸菜单；标题带原69px现60px，文件选择后收起（含当前文件、零额外GET）。键盘实测发现收起后焦点掉BODY，已补还给文件入口，并沿现安装 pin/下载错误参数用例增加断言，无新case/suite。文件菜单的Escape保持既有Dialog行为，参考实际Escape退出整个详情，不臆造只关菜单。865/673/672/390/375在实际CSS过渡完成后保当前B正文、无页面横溢；前一即时resize采样处于过渡中，不作最终布局证据。390最终dialog宽370.5、375宽356.25，标题带均60px。
+
+现真实本地两安装仅有SKILL.md，嵌套目录通过同一现有安装用例验证默认关闭、逐级打开不读、精确路径读、切回保展开/重新进入重置；不伪造正常嵌套包。首新增fixture未排序被既有严格wire拒绝，纠正fixture后实际RED为默认展开；菜单选择/焦点分别实际RED后GREEN。阶段typecheck查出新测试误用Testing Library exact选项，改为锚定name正则后重新冻结完整门，不放宽断言。最终Node22 contract280/architecture50/lint/type均0，181文件 **3288 PASS / 0 SKIP / 185.45s**；同字节独立候选production build0、development public-shell E2E **6 PASS / 6.0s**、post-type0。独立只读审查冻结7/7 SHA且无新增确定P0–P2。正常当前安装B最终键盘文件菜单→Tab有2px焦点轮廓→Enter收起且回焦入口，截图/几何ignored，自建两标签关闭，参考视口及连接器页恢复。不以公开壳E2E冒已登录业务证据；既存非统一格式基线不在此重排。
+
+另观察到正常reader会自行退回详情；静态链可证明同actor重核先撤准入/递增generation、父级pending清skill、详情identity reset清reader/path/folders，fresh目录又强制SKILL.md。周期120s与focus/visibility都可触发，但未取得两次实际回退的触发事件时间线，尚不锁定为其中某一种。该既存UX缺口不计入本片已修复：下一片拆展示意图与fresh事实，仍立即取消旧读、清私有正文并重验pin/目录，不放宽认证或停重核。后端、权限、数据、资金、模型及远端不变，完整目标仍未完成。
+
 ## 2026-10-16 Settings Skills Explore 冻结终验
 
 18路径同一停写基线：Node22 diff/scoped settings CSS format/contract/architecture/lint/typecheck exit0；contract280、architecture50，181files3288 PASS/0SKIP/182.11s。独立候选18文件同hash production build0；原Playwright自动管理development preview3325，桌面/移动现公共壳E2E6 PASS/8.4s，posttype0。只新增上述两项行为回归，不新增suite。类型阶段误用Testing Library的exact选项已移除（ByRole字符串本身精确匹配），关闭用例等待既有220ms动画的URL交接；原jsdom跨文档导航/颜色诊断未屏蔽。

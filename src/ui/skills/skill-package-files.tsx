@@ -1,10 +1,10 @@
-import { ChevronDown, ChevronRight, FileText, Folder } from "lucide-react"
+import { ChevronDown, ChevronRight, File, Folder } from "lucide-react"
 
 /** Pure directory presentation: only owner-inspected paths are supplied. */
-export function SkillPackageFiles({ files, selectedPath, collapsedFolders, onSelect, onToggle }: {
+export function SkillPackageFiles({ files, selectedPath, expandedFolders, onSelect, onToggle }: {
   files: readonly { path: string }[]
   selectedPath: string | null
-  collapsedFolders: ReadonlySet<string>
+  expandedFolders: ReadonlySet<string>
   onSelect: (path: string) => void
   onToggle: (path: string) => void
 }) {
@@ -16,9 +16,9 @@ export function SkillPackageFiles({ files, selectedPath, collapsedFolders, onSel
       entries.set(name, { path: `${prefix}${name}`, folder: remainder.includes("/") })
     }
     return [...entries].map(([name, entry]) => entry.folder ? <li key={entry.path}>
-      <button type="button" aria-expanded={!collapsedFolders.has(entry.path)} onClick={() => onToggle(entry.path)}>{collapsedFolders.has(entry.path) ? <ChevronRight aria-hidden="true" /> : <ChevronDown aria-hidden="true" />}<Folder aria-hidden="true" /><span>{name}</span></button>
-      {!collapsedFolders.has(entry.path) ? <ul>{render(`${entry.path}/`)}</ul> : null}
-    </li> : <li key={entry.path}><button type="button" aria-label={entry.path} aria-pressed={entry.path === selectedPath} onClick={() => onSelect(entry.path)}><FileText aria-hidden="true" /><span>{name}</span></button></li>)
+      <button type="button" aria-expanded={expandedFolders.has(entry.path)} onClick={() => onToggle(entry.path)}>{expandedFolders.has(entry.path) ? <ChevronDown aria-hidden="true" /> : <ChevronRight aria-hidden="true" />}<Folder aria-hidden="true" /><span>{name}</span></button>
+      {expandedFolders.has(entry.path) ? <ul>{render(`${entry.path}/`)}</ul> : null}
+    </li> : <li key={entry.path}><button type="button" aria-label={entry.path} aria-pressed={entry.path === selectedPath} onClick={() => onSelect(entry.path)}><File aria-hidden="true" /><span>{name}</span></button></li>)
   }
   return render("")
 }
