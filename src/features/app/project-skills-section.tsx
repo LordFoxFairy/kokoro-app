@@ -26,6 +26,8 @@ export function ProjectSkillsSection({
   const t = useT()
   const [open, setOpen] = useState(false)
   const opener = useRef<HTMLElement | null>(null)
+  const confirmationOpener = useRef<HTMLElement | null>(null)
+  const panel = useRef<HTMLDivElement | null>(null)
   const [query, setQuery] = useState("")
   const [source, setSource] = useState<"personal" | "official" | null>(null)
   const projectId = projectDetail?.status === "ready" ? projectDetail.data.id : null
@@ -79,6 +81,7 @@ export function ProjectSkillsSection({
       </section>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent
+          ref={panel}
           className={styles.dialog}
           closeLabel={t("shell.closeDialog")}
           onCloseAutoFocus={(event) => {
@@ -141,7 +144,10 @@ export function ProjectSkillsSection({
                   <Button
                     variant="ghost"
                     disabled={!model.allowed}
-                    onClick={() => setConfirmation({ facts: model.facts, item: null, command: "abandon" })}
+                    onClick={(event) => {
+                      confirmationOpener.current = event.currentTarget
+                      setConfirmation({ facts: model.facts, item: null, command: "abandon" })
+                    }}
                   >
                     {t("projectSkills.stopIntent")}
                   </Button>
@@ -213,14 +219,16 @@ export function ProjectSkillsSection({
                             onEnabled={(enabled) => {
                               void model.execute({ kind: "enabled", id: item.installation_id, enabled })
                             }}
-                            onRemove={() =>
+                            onRemove={(source) => {
+                              confirmationOpener.current = source
                               setConfirmation({
                                 facts: model.facts,
                                 item,
                                 command: { kind: "remove", id: item.installation_id },
                               })
-                            }
-                            onUpdate={() => {
+                            }}
+                            onUpdate={(source) => {
+                              confirmationOpener.current = source
                               if (item.available_update)
                                 setConfirmation({
                                   facts: model.facts,
@@ -275,7 +283,18 @@ export function ProjectSkillsSection({
           if (!value) setConfirmation(null)
         }}
       >
-        <DialogContent className={styles.confirm} closeLabel={t("shell.closeDialog")}>
+        <DialogContent
+          className={styles.confirm}
+          closeLabel={t("shell.closeDialog")}
+          onCloseAutoFocus={(event) => {
+            if (!open) return
+            const source = confirmationOpener.current
+            const target = source?.isConnected && !source.matches(":disabled") ? source : panel.current
+            if (!target?.isConnected) return
+            event.preventDefault()
+            target.focus({ preventScroll: true })
+          }}
+        >
           <DialogTitle>
             {confirm?.command === "abandon"
               ? t("projectSkills.stopIntent")

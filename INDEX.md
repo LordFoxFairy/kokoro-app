@@ -1,3 +1,7 @@
+## 项目技能确认框焦点（2026-10-17）
+
+确认框由 `project-skills-section.tsx` 持实际打开按钮与父面板引用；卡片只传当前操作按钮。取消/Escape返回原按钮，已提交导致按钮停用或移除时回仍打开的父面板；父面板关闭时不抢其焦点。无全局焦点服务、定时器或命令状态改动。
+
 ## 项目概览布局职责（2026-10-17）
 
 `src/features/app/project-conversations.tsx` 独立拥有最近会话的 loading/error/list/empty，workspace 只组合身份、上下文、会话与编辑区。`project-workspace-layout.module.css` 负责统一可滚动文档与文档外底部编辑区；卡片视觉仍在 `kokoro-project-workspace.module.css`。没有新增请求、权限或状态模型。 Toolbar与空态共用 `project-skill-add-menu.tsx`；真实空态不显示无效默认保存栏，有选择或未保存改动时仍可操作。

@@ -1,3 +1,13 @@
+## 项目版本更新正常验收与确认焦点（2026-10-17）
+
+沿2476928及正常BFF a804b0f/Platform408953a/Admin a428c09，通过原3310/manage后台给既有官方验收系列创建revision3(C)、revision4(D)，各自真实ZIP上传/完成/验证/发布，不改原A/B状态。项目从实际官方来源安装C后显式停用；发布D后安装行全部原字节保持C，更新确认→取消零更新请求；再次明确确认仅一次POST update200，保同installation ID、series、installed_at、enabled=false、acquisition=hub，包摘要严格为D。刷新后D/停用保持，原另一个安装与默认[]、6条原消息、3条历史user exact引用均不变。新测试安装保留停用，未永久删除、发送消息/模型或触发扣费，也未改权限/配置/Schema/正常服务。
+
+真实取消确认框后焦点原落BODY；只在Section持实际操作按钮与父面板引用，卡片传currentTarget，取消/Escape回可用原按钮，已提交退休/停用时回仍打开父面板，父面板关闭不抢焦点。无全局服务、定时器或请求/unknown状态变更。扩原生命周期case，取消零POST/Escape零DELETE、成功回退及原全部安装/选择/更新/移除断言保持，无新增case/suite；实际RED1 FAIL/26 PASS→27 PASS。正常浏览器同一移除确认只取消/Escape，焦点由BODY变回原按钮，第二次Escape回技能入口，零DELETE。
+
+主方892份源码停写同字节独立candidate全门exit0：contract281、architecture50、纯3103 PASS（167文件）、lint/typecheck、Next16 Webpack生产build/post-typecheck；前后892/892摘要匹配，独立只读复核无确定P0–P2。原jsdom导航提醒保留。自有candidate与克隆依赖已回收，正常开发输出未覆盖。首次测试编辑因相对路径错误未执行，原27项baseline通过；不当作RED，后续具名失败才是回归证据。最后仅追加本文验收记录。
+
+正常unknown/replay与CAS竞争、本次D特定Agent冻结执行、完整来源八类和MCP仍未验；旧历史引用保持不等于发送过C/D任务。整套system、自动浏览器E2E、默认Turbopack build本片未跑；不称完整Skills或Manus一比一。远端CI/push/PR/merge与Root index/gitlink继续暂停，既有窗口保留。
+
 ## 项目概览与技能空态双图对照（2026-10-17，局部验收）
 
 基线5db534a。使用已登录Manus同一项目与本地真实项目，中文/浅色，保存1280×800概览、真实空技能弹窗及761×764概览的成对原图，并实际查看未遮罩并排图；测量DOM/计算样式，不以旧截图或测试预期决定布局。宽屏右列320/gap44、窄屏左右24、独立底部编辑区120/底距32、默认侧栏300；滚动文档与编辑区分离，最近会话组件保原loading/error/retry。指令下方入口复用原编辑器；技能真实空态居中且不显示无效0/16保存栏，有安装/选择/待保存改动仍保默认操作。新增共享添加菜单组件，不新增传输/权限/依赖或业务写。使用实际已加载SVG，原字节来源摘要只留ignored。

@@ -25,8 +25,8 @@ export function ProjectSkillCard({
   limitReached: boolean
   onSelect: (selected: boolean) => void
   onEnabled: (enabled: boolean) => void
-  onRemove: () => void
-  onUpdate: () => void
+  onRemove: (source: HTMLElement) => void
+  onUpdate: (source: HTMLElement) => void
 }) {
   const t = useT()
   return (
@@ -58,11 +58,11 @@ export function ProjectSkillCard({
       </label>
       <div className={styles.cardActions}>
         {item.available_update ? (
-          <Button size="sm" variant="outline" disabled={locked} onClick={onUpdate}>
+          <Button size="sm" variant="outline" disabled={locked} onClick={(event) => onUpdate(event.currentTarget)}>
             {t("projectSkills.update")}
           </Button>
         ) : null}
-        <Button size="sm" variant="ghost" disabled={locked || protectedDefault} onClick={onRemove}>
+        <Button size="sm" variant="ghost" disabled={locked || protectedDefault} onClick={(event) => onRemove(event.currentTarget)}>
           {t("projectSkills.remove")}
         </Button>
       </div>
