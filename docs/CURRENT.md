@@ -1,3 +1,13 @@
+## 项目Skills安装：正常unknown、刷新及项目隔离（2026-10-17）
+
+基线App079f3ed / BFF a804b0f / Platform408953a，正常BFF27117/Platform27118未重启。通过正式侧栏创建一个专用且后续复用的“QA Skills recovery 20261017”项目（project_f80ada35-d900-4cef-98f5-95edff0ca305，POST200）；真实空安装/默认两GET200后，从正式官方来源选择既有E/5，不新增技能/发布者。新项目和一条停用安装保留供后续验收，不删除数据。
+
+安装POST在真实200响应阶段仅断开浏览器ACK；UI保原key/body、锁新增和默认选择。关/开后GET200已见真实安装b68d749f-25b3-45fc-89b9-6f2442a5bafd、enabled=true，但unknown仍保留；来源页产生的4个ListHubSkills/ListSkills POST是只读RPC，项目mutation为0，不把所有POST混称写。显式恢复仅一次完全同key/body安装POST200，receipt change=installed、replayed=true、同安装ID/installed_at/updated_at；首个响应体未留存，event_id只在重放回执中观察。
+
+随后显式停用PUT200，真实文档刷新后再打开面板，两GET200完整响应证明仅1条E/5安装、原ID/installed_at保持、enabled=false且default=[]，刷新无项目写。原QA项目独立GET200仍是原2条安装，其source/enabled/updated_at保持，未改原项目安装；个人安装池本片未核。本片共创建项目1次、安装2次（同key重放）、停用1次；无消息/模型/Tool/Billing或DELETE、配置/权限/Schema变更。Fetch patterns清空、Network关闭、原始headers/key清除、自有63回收，54保留；证据仅ignored。
+
+开始时旧QA页面曾瞬时显示不可用并自行恢复，重试按钮已消失、点击未发生；此前失败响应未捕获，不推测根因或声称该闪动修复。新建入口是hover/focus揭示，键盘Tab进入后可操作；此前按隐藏role查询未命中不算业务失败。仅真实验收/文档，无新增代码/测试，未跑单元/contract/E2E/build。unknown跨文档重载、换账号/撤权及全部来源/执行/MCP仍OPEN，不能以ACK后刷新冒unknown持久恢复。远端及Root index/gitlink继续暂停。
+
 ## 项目Skills更新：正常unknown与旧版本竞争（2026-10-17）
 
 正常3310 App7fe6b99（本轮另有纯颜色修复，后提交c49fb21）、Admin a428c09、BFF a804b0f、Platform408953a。沿既有QA系列通过正常Admin发布revision E/5，source_ref=skill:90e57896-3c16-49f5-903e-9b1d170879a9，catalog/official，正常publish POST200。复用已有D ZIP字节，本片验证精确版本选择与恢复，不验证包内容或Agent行为差异。发布前后没有改A/B/C/D状态或新建提供方、权限、积分、配置与服务进程。
