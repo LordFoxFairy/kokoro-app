@@ -1,3 +1,15 @@
+## 项目Skills更新：正常unknown与旧版本竞争（2026-10-17）
+
+正常3310 App7fe6b99（本轮另有纯颜色修复，后提交c49fb21）、Admin a428c09、BFF a804b0f、Platform408953a。沿既有QA系列通过正常Admin发布revision E/5，source_ref=skill:90e57896-3c16-49f5-903e-9b1d170879a9，catalog/official，正常publish POST200。复用已有D ZIP字节，本片验证精确版本选择与恢复，不验证包内容或Agent行为差异。发布前后没有改A/B/C/D状态或新建提供方、权限、积分、配置与服务进程。
+
+两个独立窗口均先真实读到原D/4及available_update E，并打开相同D→E确认。主窗口仅在精确update POST已返回200的Fetch非Document响应阶段断开接收，界面保原命令并锁后续写。关/开后真实GET200显示E/5但unknown仍保留，零自动写；显式重试只有1次完全同key/body POST200，receipt.replayed=true且带event_id，随后fresh read结清，updated_at未再次变化。首个丢失响应未留body，不声称直接比较过两次event_id。旧窗口以不同key发送仍基于D的同目标更新，正式412 skill_installation_precondition_failed/retryable=false，没有覆盖E或伪成功。
+
+412沿既定fresh-binding语义保留unknown，不据错误状态推断旧命令回滚；原已有测试明确保护该行为，本片未为消除提示放宽状态机。旧窗口显式结束前显示“不会撤销已提交操作”的确认，确认后只GET并显示E，零写。该次list的Network响应200但浏览器随后ERR_ABORTED，CDP未保留响应体，按证据缺口记录，不重发写；主窗口最终独立关/开取得完整两GET200，实际default=[]、两安装均停用、原installation ID/series/installed_at及另一安装updated_at保持，精确E/5生效。
+
+项目共3个update POST（2个不同key，含1次原意图重放）；另捕获1次正常/auth/session POST，不冒所有请求只含业务写。捕获无message/execute/run、DELETE或其它项目写，网络无丢页/截断。原始网络对象/key已清除，Fetch patterns清空、Network关闭；自有第二窗口和Admin窗口关闭，QA54保留。截图/去敏回执仅ignored，未发模型/Tool/收费请求，不升级正常执行或整体Skills完成状态。
+
+本轮Skills只做真实验收与文档，无新增生产实现/测试，未重跑其全量单元/契约/E2E/build。颜色修复c49fb21提交前另重跑Node22 css-quality/composer/shared-thread 86 PASS、tsc/lint/diffcheck0，这些不替代版本整链证据。后继仍有安装unknown、换主体/重载、全部来源caller、执行链和MCP等未验项；远端CI/push/PR/merge及Root index/gitlink继续暂停，goal active。
+
 ## 聊天中性文字色继承（2026-10-17，局部修复）
 
 基线7fe6b99。用户当前反馈优先，暂停项目版本E更新验收；3342临时组件预览已停止，未重新启动。改在3310原真实会话与已登录Manus完成任务只读对照，发现skin已定义foreground=#1a1a1a，但未声明color，正文继承body预先计算的#0f1729，和控件中性黑不一致。在原skin边界补一条color:var(--foreground)，不在各业务组件复制颜色；暗色继续消费本身的foreground，不改错误语义、布局、请求或消息。
