@@ -1,3 +1,9 @@
+## 2026-10-16 Skills 下载正常产品补验（无源码变化）
+
+App 源码21a1fc5、BFF b4292b6、正常 Platform 行为0581429。正常3310当前开发账号从“我的技能”打开已有active安装详情，点击下载：正式 installation download receipt200，再由现同源会话绑定流返回application/zip200，浏览器实际保存446字节ZIP；未保留opaque下载token URL。归档CRC检查通过，仅SKILL.md，其UTF-8字节与此前同源正式package读取的同一所选文本逐字节相等，不执行包内容。
+
+这只补真实单根文件下载旅程，不冒嵌套包/过期链接/未知下载错误或整个Skills能力验收；已安装状态保持，无新安装/启用/角色/积分/模型调用。截图/ZIP/脱敏摘要仅现ignored证据目录，临时tab50及Network已关闭。本文档变更只做diff/局部链接检查，不重复运行App业务门禁；最近业务代码全门仍绑定cd78cb9。MCP到期与刷新新设计待确认，八类来源/项目安装及完整goal保持OPEN，远端/Rootgitlink不动。
+
 ## 2026-10-16 分享页正常成功链与真实非零滚动（补验）
 
 业务源码cd78cb9、正常BFF c6bb5d3/Platform0581429。此前未找到可复用分享URL并非必须扩权：正式源证明Skill Share只存固定revision locator，resolve/summary/package仍逐次按当前调用者资格读，不授匿名/跨tenant或creator替代权限。本轮经原UI对已有测试资源显式获取链接，不导出登录凭据、改ACL或直写数据库；链接保留未执行不可恢复撤销。
