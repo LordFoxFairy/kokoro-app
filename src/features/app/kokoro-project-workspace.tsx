@@ -1,13 +1,12 @@
 "use client"
 
-import { Cable, ChevronDown, ChevronRight, ListFilter, MessageSquare, Plus, Upload } from "lucide-react"
+import { Cable, ChevronDown, ChevronRight, ListFilter, Plus, Upload } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import { useCallback, useRef, useState, type MouseEvent, type SetStateAction } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Skeleton } from "@/components/ui/skeleton"
 import type { EmptyStateProps } from "@/components/blocks/app-frame/app-frame"
 import { useLocale } from "@/i18n/context"
 import { cn } from "@/lib/utils"
@@ -15,7 +14,7 @@ import { ProjectResourceUploadError } from "./project-resource-upload"
 
 import { ProjectContextCard, ProjectContextSection } from "./project-context-card"
 import { ProjectIdentity } from "./project-identity"
-import { ProjectConversationEmpty } from "./project-conversation-empty"
+import { ProjectConversations } from "./project-conversations"
 import { KokoroProjectConversationWelcome } from "./kokoro-project-conversation-welcome"
 import { ProjectSkillsSection } from "./project-skills-section"
 import { ProjectWorkspaceDialogs } from "./project-workspace-dialogs"
@@ -233,6 +232,13 @@ export function KokoroProjectWorkspace({
     setLinkedScheduledId(created.id)
   }
 
+  const openInstructions = (event: MouseEvent<HTMLButtonElement>) => {
+    rememberContextOpener(event)
+    setInstructions(projectInstructions)
+    setInstructionsError(false)
+    setInstructionsOpen(true)
+  }
+
   if (projectConversation && !projectConversationsLoading && !projectConversationsError) {
     return <KokoroProjectConversationWelcome composer={composer} />
   }
@@ -244,183 +250,154 @@ export function KokoroProjectWorkspace({
       data-locale={locale}
       aria-label={t("firstSite.projects")}
     >
-      <div className={cn(styles.main, layoutStyles.main)}>
+      <div className={layoutStyles.document}>
         <ProjectIdentity preview={preview} {...(brandName === undefined ? {} : { brandName })} {...(projectDetail === undefined ? {} : { projectDetail })} {...(onRetryProjectRead === undefined ? {} : { onRetryProjectRead })} />
 
-        <div className={cn(styles.composer, layoutStyles.composer)}>{composer}</div>
-
-        {capabilities?.projectConversations ? (
-          <section className={cn(styles.conversations, layoutStyles.conversations)} aria-labelledby="project-conversation-heading">
-            <h2 id="project-conversation-heading">{t("firstSite.projectConversations")}</h2>
-            <p>{t("firstSite.projectConversationsPrivate")}</p>
-            {projectConversationsLoading ? (
-              <div className={styles.conversationState} data-testid="project-conversations-loading" aria-busy="true">
-                <div className={styles.conversationLoadingRows} aria-hidden="true">
-                  <Skeleton className={styles.conversationLoadingRow} />
-                  <Skeleton className={styles.conversationLoadingRow} />
-                  <Skeleton className={styles.conversationLoadingRowShort} />
-                </div>
-                <p className={styles.conversationLoadingMessage} role="status">{t("firstSite.conversationsLoading")}</p>
-              </div>
-            ) : projectConversationsError ? (
-              <div className={styles.conversationState} data-testid="project-conversations-error" role="alert" aria-labelledby="project-conversations-error-title">
-                <p id="project-conversations-error-title" className={styles.conversationErrorMessage}>{t("firstSite.conversationsError")}</p>
-                <Button type="button" variant="outline" onClick={onRetryProjectConversations} disabled={!onRetryProjectConversations}>
-                  {t("firstSite.retry")}
-                </Button>
-              </div>
-            ) : projectConversations.length > 0 ? (
-              <div className={styles.conversationList} role="list">
-                {projectConversations.map((conversation) => (
-                  <Button
-                    key={conversation.id}
-                    type="button"
-                    variant={conversation.id === activeProjectConversationId ? "secondary" : "ghost"}
-                    className={styles.conversationRow}
-                    onClick={() => onSelectProjectConversation?.(conversation.id)}
-                  >
-                    <MessageSquare data-icon="inline-start" aria-hidden="true" />
-                    <span>{conversation.title}</span>
+        <aside className={cn(styles.context, layoutStyles.context)} aria-label={t("firstSite.workspaceStatus")}>
+          {(capabilities?.instructions || capabilities?.connectors) ? (
+            <Card className={styles.contextCard} data-context-kind="instructions">
+              {capabilities?.instructions ? (
+                <CardHeader className={styles.cardHeader}>
+                  <CardTitle className={styles.cardTitle}>
+                    <Button type="button" variant="ghost" size="sm" disabled={!preview && projectDetail !== undefined && projectDetail.status !== "ready"} onClick={openInstructions}>
+                      {t("firstSite.instructions")}
+                      <ChevronRight data-icon="inline-end" aria-hidden="true" />
+                    </Button>
+                  </CardTitle>
+                </CardHeader>
+              ) : null}
+              {capabilities?.instructions ? (
+                <CardContent className={styles.cardDescription}>
+                  {t("firstSite.instructionsHint")}
+                  {!preview && projectHistoryStatus === "loading" ? <p role="status">{t("firstSite.projectsLoading")}</p> : null}
+                  {!preview && projectHistoryStatus === "error" ? <div role="alert">
+                    <p>{t("firstSite.projectsError")}</p>
+                    <Button type="button" variant="outline" disabled={!projectHistoryRetryable || !onRetryProjectRead} onClick={onRetryProjectRead}>{t("firstSite.retry")}</Button>
+                  </div> : null}
+                </CardContent>
+              ) : null}
+              {capabilities?.instructions ? (
+                <CardFooter className={styles.instructionAction}>
+                  <Button type="button" variant="outline" size="sm"
+                    aria-label={`${t("firstSite.add")}${t("firstSite.instructions")}`}
+                    disabled={!preview && projectDetail !== undefined && projectDetail.status !== "ready"}
+                    onClick={openInstructions}>
+                    <Plus aria-hidden="true" />{t("firstSite.add")}
                   </Button>
-                ))}
-              </div>
-            ) : (
-              <ProjectConversationEmpty />
-            )}
-          </section>
-        ) : null}
+                </CardFooter>
+              ) : null}
+              {capabilities?.connectors ? (
+                <div className={styles.connectorSection}><CardFooter className={styles.connectorRow}>
+                  <Cable aria-hidden="true" />
+                  <span>{t("firstSite.connectors")}</span>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => onOpenSettings?.("mcp")}>
+                    <Plus data-icon="inline-start" aria-hidden="true" />
+                    {t("firstSite.add")}
+                  </Button>
+                </CardFooter></div>
+              ) : null}
+            </Card>
+          ) : null}
+
+          {(capabilities?.resources || capabilities?.skills) ? (
+            <Card className={styles.contextCard} data-context-kind="resources-skills">
+              {capabilities.resources ? (
+                <section data-context-section="resources" aria-label={t("firstSite.filesAndResources")}><ProjectContextSection
+                  title={t("firstSite.filesAndResources")}
+                  description={t("firstSite.filesHint")}
+                  actions={[
+                    { id: "upload", label: t("firstSite.upload"), icon: Upload, trailingIcon: ChevronDown },
+                    { id: "search-web", label: t("firstSite.searchWeb"), icon: ListFilter },
+                  ]}
+                  showChevron
+                  onClick={(event) => {
+                    openResources(event)
+                  }}
+                  onAction={(id, event) => {
+                    if (id === "upload") {
+                      openResourceUpload(event)
+                      return
+                    }
+                    if (id === "search-web") {
+                      openResources(event, "web")
+                    }
+                  }}
+                /></section>
+              ) : null}
+              {capabilities.skills ? (
+                <ProjectSkillsSection key={JSON.stringify([projectReadBoundary?.subject ?? null, projectRef ?? null])}
+                  preview={preview} {...(projectDetail === undefined ? {} : { projectDetail })}
+                  {...(projectReadBoundary === undefined ? {} : { projectReadBoundary })}
+                  {...(onOpenSettings === undefined ? {} : { onOpenSettings })} />
+              ) : null}
+            </Card>
+          ) : null}
+          {capabilities?.websites ? (
+            <ProjectContextCard
+              kind="websites"
+              title={t("firstSite.websites")}
+              description={t("firstSite.websitesHint")}
+              emptyVisual={
+                <Image
+                  className={styles.projectEmptyArtwork}
+                  src="/site-assets/project-website.webp"
+                  width={75}
+                  height={64}
+                  loading="eager"
+                  alt=""
+                  aria-hidden="true"
+                />
+              }
+              footerAction={{ label: t("firstSite.add"), icon: Plus }}
+              onClick={(event) => {
+                rememberContextOpener(event)
+                setWebsiteQuery("")
+                setWebsitesOpen(true)
+              }}
+            />
+          ) : null}
+          {capabilities?.scheduledTasks && !preview ? (
+            <Card className={styles.contextCard} data-context-kind="scheduled"><CardHeader className={styles.cardHeader}><CardTitle className={styles.cardTitle}>{t("firstSite.scheduledTasks")}</CardTitle></CardHeader>
+              <CardContent className={styles.cardDescription}><p>{t("firstSite.independentScheduledTasks")}</p></CardContent>
+              <CardFooter className={styles.cardFooter}><Button asChild variant="outline"><Link href={projectRef
+                ? `/app/scheduled?project_id=${encodeURIComponent(projectRef)}#scheduled-tasks/new`
+                : "/app/scheduled"}>{t("firstSite.openScheduledTasks")}</Link></Button></CardFooter>
+            </Card>
+          ) : null}
+          {capabilities?.scheduledTasks && preview ? (
+            <ProjectContextCard
+              kind="scheduled"
+              title={t("firstSite.scheduledTasks")}
+              description={t("firstSite.scheduledTasksHint")}
+              emptyVisual={
+                <Image
+                  className={styles.projectEmptyArtwork}
+                  src="/site-assets/project-scheduled-tasks.svg"
+                  width={75}
+                  height={64}
+                  alt=""
+                  aria-hidden="true"
+                />
+              }
+              footerAction={{ label: t("firstSite.add"), icon: Plus }}
+              onClick={(event) => {
+                rememberContextOpener(event)
+                setScheduledQuery("")
+                setScheduledOpen(true)
+              }}
+            />
+          ) : null}
+        </aside>
+        {capabilities?.projectConversations ? <ProjectConversations
+          projectConversations={projectConversations}
+          projectConversationsLoading={projectConversationsLoading}
+          projectConversationsError={projectConversationsError}
+          {...(onRetryProjectConversations === undefined ? {} : { onRetryProjectConversations })}
+          {...(activeProjectConversationId === undefined ? {} : { activeProjectConversationId })}
+          {...(onSelectProjectConversation === undefined ? {} : { onSelectProjectConversation })}
+        /> : null}
       </div>
-
-      <aside className={cn(styles.context, layoutStyles.context)} aria-label={t("firstSite.workspaceStatus")}>
-        {(capabilities?.instructions || capabilities?.connectors) ? (
-          <Card className={styles.contextCard} data-context-kind="instructions">
-            {capabilities?.instructions ? (
-              <CardHeader className={styles.cardHeader}>
-                <CardTitle className={styles.cardTitle}>
-                  <Button type="button" variant="ghost" size="sm" disabled={!preview && projectDetail !== undefined && projectDetail.status !== "ready"} onClick={(event) => {
-                    rememberContextOpener(event)
-                    setInstructions(projectInstructions)
-                    setInstructionsError(false)
-                    setInstructionsOpen(true)
-                  }}>
-                    {t("firstSite.instructions")}
-                    <ChevronRight data-icon="inline-end" aria-hidden="true" />
-                  </Button>
-                </CardTitle>
-              </CardHeader>
-            ) : null}
-            {capabilities?.instructions ? (
-              <CardContent className={styles.cardDescription}>
-                {t("firstSite.instructionsHint")}
-                {!preview && projectHistoryStatus === "loading" ? <p role="status">{t("firstSite.projectsLoading")}</p> : null}
-                {!preview && projectHistoryStatus === "error" ? <div role="alert">
-                  <p>{t("firstSite.projectsError")}</p>
-                  <Button type="button" variant="outline" disabled={!projectHistoryRetryable || !onRetryProjectRead} onClick={onRetryProjectRead}>{t("firstSite.retry")}</Button>
-                </div> : null}
-              </CardContent>
-            ) : null}
-            {capabilities?.connectors ? (
-              <CardFooter className={styles.connectorRow}>
-                <Cable aria-hidden="true" />
-                <span>{t("firstSite.connectors")}</span>
-                <Button type="button" variant="ghost" size="sm" onClick={() => onOpenSettings?.("mcp")}>
-                  <Plus data-icon="inline-start" aria-hidden="true" />
-                  {t("firstSite.add")}
-                </Button>
-              </CardFooter>
-            ) : null}
-          </Card>
-        ) : null}
-
-        {(capabilities?.resources || capabilities?.skills) ? (
-          <Card className={styles.contextCard} data-context-kind="resources-skills">
-            {capabilities.resources ? (
-              <section data-context-section="resources" aria-label={t("firstSite.filesAndResources")}><ProjectContextSection
-                title={t("firstSite.filesAndResources")}
-                description={t("firstSite.filesHint")}
-                actions={[
-                  { id: "upload", label: t("firstSite.upload"), icon: Upload, trailingIcon: ChevronDown, statusDot: true },
-                  { id: "search-web", label: t("firstSite.searchWeb"), icon: ListFilter },
-                ]}
-                showChevron
-                onClick={(event) => {
-                  openResources(event)
-                }}
-                onAction={(id, event) => {
-                  if (id === "upload") {
-                    openResourceUpload(event)
-                    return
-                  }
-                  if (id === "search-web") {
-                    openResources(event, "web")
-                  }
-                }}
-              /></section>
-            ) : null}
-            {capabilities.skills ? (
-              <ProjectSkillsSection key={JSON.stringify([projectReadBoundary?.subject ?? null, projectRef ?? null])}
-                preview={preview} {...(projectDetail === undefined ? {} : { projectDetail })}
-                {...(projectReadBoundary === undefined ? {} : { projectReadBoundary })}
-                {...(onOpenSettings === undefined ? {} : { onOpenSettings })} />
-            ) : null}
-          </Card>
-        ) : null}
-        {capabilities?.websites ? (
-          <ProjectContextCard
-            kind="websites"
-            title={t("firstSite.websites")}
-            description={t("firstSite.websitesHint")}
-            emptyVisual={
-              <Image
-                className={styles.projectEmptyArtwork}
-                src="/site-assets/project-website.webp"
-                width={75}
-                height={64}
-                loading="eager"
-                alt=""
-                aria-hidden="true"
-              />
-            }
-            footerAction={{ label: t("firstSite.add"), icon: Plus }}
-            onClick={(event) => {
-              rememberContextOpener(event)
-              setWebsiteQuery("")
-              setWebsitesOpen(true)
-            }}
-          />
-        ) : null}
-        {capabilities?.scheduledTasks && !preview ? (
-          <Card data-context-kind="scheduled"><CardHeader><CardTitle>{t("firstSite.scheduledTasks")}</CardTitle></CardHeader>
-            <CardContent><p>{t("firstSite.independentScheduledTasks")}</p></CardContent>
-            <CardFooter><Button asChild variant="outline"><Link href={projectRef
-              ? `/app/scheduled?project_id=${encodeURIComponent(projectRef)}#scheduled-tasks/new`
-              : "/app/scheduled"}>{t("firstSite.openScheduledTasks")}</Link></Button></CardFooter>
-          </Card>
-        ) : null}
-        {capabilities?.scheduledTasks && preview ? (
-          <ProjectContextCard
-            kind="scheduled"
-            title={t("firstSite.scheduledTasks")}
-            description={t("firstSite.scheduledTasksHint")}
-            emptyVisual={
-              <Image
-                className={styles.projectEmptyArtwork}
-                src="/site-assets/project-scheduled-tasks.svg"
-                width={75}
-                height={64}
-                alt=""
-                aria-hidden="true"
-              />
-            }
-            footerAction={{ label: t("firstSite.add"), icon: Plus }}
-            onClick={(event) => {
-              rememberContextOpener(event)
-              setScheduledQuery("")
-              setScheduledOpen(true)
-            }}
-          />
-        ) : null}
-      </aside>
+      <div className={cn(styles.composer, layoutStyles.composer)}>{composer}</div>
 
       <ProjectWorkspaceDialogs
         preview={preview}

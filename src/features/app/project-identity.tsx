@@ -3,7 +3,7 @@
 import { Folder } from "lucide-react"
 
 import { DEFAULT_BRAND } from "@/config/brand"
-import { useT } from "@/i18n/context"
+import { useLocale } from "@/i18n/context"
 import { cn } from "@/lib/utils"
 
 import styles from "./kokoro-project-workspace.module.css"
@@ -18,7 +18,7 @@ export function ProjectIdentity({ brandName = DEFAULT_BRAND.name, preview = fals
   projectDetail?: ProjectReadState<Project>
   onRetryProjectRead?: () => void
 }) {
-  const t = useT()
+  const { locale, t } = useLocale()
 
   return (
     <header className={cn(styles.projectIdentity, layoutStyles.projectIdentity)}>
@@ -34,7 +34,7 @@ export function ProjectIdentity({ brandName = DEFAULT_BRAND.name, preview = fals
           <span aria-hidden="true"> · </span>
           <span>{t("firstSite.projectUpdatedToday")}</span>
         </p> : projectDetail?.status === "ready" ? (
-          <p className={styles.projectMeta}><time dateTime={projectDetail.data.updated_at}>{projectDetail.data.updated_at}</time></p>
+          <p className={styles.projectMeta}><time dateTime={projectDetail.data.updated_at}>{t("skills.updatedAt", { date: new Intl.DateTimeFormat(locale, { month: "long", day: "numeric", timeZone: "UTC" }).format(new Date(projectDetail.data.updated_at)) })}</time></p>
         ) : projectDetail?.status === "error" ? (
           <div role="alert" data-testid="project-detail-error">
             <p>{t("firstSite.projectsError")}</p>

@@ -7,6 +7,13 @@
   background: var(--background);
   padding-inline: 1.5rem;
 }
+/* Project overview alone shares the measured neutral surface and 48px header;
+ * direct chat, project conversations and other pages keep their own layout. */
+.main[data-desktop-web="true"]:has([data-slot="project-workspace"]) > [data-slot="workspace-header"][data-project-workspace] {
+  min-height: 3rem;
+  height: 3rem;
+  background: var(--settings-surface, var(--background));
+}
 .main > * { position: relative; }
 .contextMenu {
   width: 15rem;

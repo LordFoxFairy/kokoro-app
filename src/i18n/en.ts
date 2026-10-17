@@ -218,6 +218,7 @@ export const en: Partial<Record<MessageKey, string>> = {
   "firstSite.tasks": "Tasks",
   "firstSite.newProjectConversation": "New conversation",
   "firstSite.projectConversationsPrivate": "Conversations in this project are private by default.",
+  "projectSkills.emptyHint": "Create or import a skill to get started.",
   "firstSite.noProjectConversations": "No project conversations yet. Start one to begin.",
   "firstSite.tasksHint": "Create a task to get started. Tasks are private by default.",
   "firstSite.chatHeading": "What can I do for you?",

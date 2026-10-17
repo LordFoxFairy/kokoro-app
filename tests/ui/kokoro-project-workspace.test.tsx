@@ -50,6 +50,7 @@ it("项目右栏使用固定的 75×64 空态插图且不进入读屏名称", ()
 
   for (const src of [
     "/site-assets/project-website.webp",
+    "/site-assets/project-skills.svg",
     "/site-assets/project-scheduled-tasks.svg",
   ]) {
     const image = [...container.querySelectorAll("img")]
@@ -59,6 +60,20 @@ it("项目右栏使用固定的 75×64 空态插图且不进入读屏名称", ()
     expect(image).toHaveAttribute("alt", "")
     expect(image).toHaveAttribute("aria-hidden", "true")
   }
+})
+
+it("项目上下文和最近会话在编辑区之前，空指令保留独立添加入口", () => {
+  render(<LocaleProvider><KokoroProjectWorkspace preview
+    brandName="Kokoro" composer={<section aria-label="消息编辑区">composer</section>}
+    onPrompt={vi.fn()} workspaceCapabilities={capabilities}
+  /></LocaleProvider>)
+  const context = screen.getByRole("complementary", { name: "工作区状态" })
+  const conversations = screen.getByRole("region", { name: /最近|项目会话/ })
+  const composer = screen.getByRole("region", { name: "消息编辑区" })
+  expect(context.compareDocumentPosition(conversations) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  expect(conversations.compareDocumentPosition(composer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  fireEvent.click(within(context).getByRole("button", { name: "新增指令" }))
+  expect(screen.getByRole("textbox", { name: "项目指令" })).toBeInTheDocument()
 })
 
 it("项目任务列表区分加载态和错误态，并提供重试入口", () => {
@@ -387,7 +402,7 @@ it("资源筛选与技能搜索会实际过滤本地预览数据", () => {
   fireEvent.click(within(resourcesCard).getByRole("button", { name: /^技能$/ }))
   const skillsDialog = screen.getByRole("dialog", { name: "项目技能" })
   fireEvent.change(within(skillsDialog).getByRole("textbox", { name: "搜索技能" }), { target: { value: "不存在" } })
-  expect(skillsDialog).toHaveTextContent("暂无已添加的技能")
+  expect(skillsDialog).toHaveTextContent("暂无符合筛选条件的安装")
   expect(skillsDialog).not.toHaveTextContent("技能构建器")
 })
 
@@ -801,8 +816,9 @@ it("项目技能安装、启停、显式更新和移除使用真实 pin，安装
   vi.stubGlobal("fetch", fetchMock)
   const view = render(skillWorkspace()); openProjectSkills(view.container)
   const dialog = screen.getByRole("dialog", { name: "项目技能" })
-  await within(dialog).findByText("暂无已添加的技能")
-  fireEvent.pointerDown(within(dialog).getByRole("button", { name: "新增" }), { button: 0, ctrlKey: false })
+  await within(dialog).findByText("尚无技能")
+  expect(within(dialog).queryByRole("button", { name: "保存默认技能" })).toBeNull()
+  fireEvent.pointerDown(within(dialog).getByRole("button", { name: "添加" }), { button: 0, ctrlKey: false })
   fireEvent.click(await screen.findByRole("menuitem", { name: "从我的技能导入" }))
   const source = await within(dialog).findByRole("heading", { name: "Project Skill" })
   fireEvent.click(within(source.closest("article")!).getByRole("button", { name: "新增" }))
@@ -830,7 +846,7 @@ it("项目技能安装、启停、显式更新和移除使用真实 pin，安装
   await waitFor(() => expect(screen.getByRole("button", { name: "移除技能" })).toBeEnabled())
   fireEvent.click(screen.getByRole("button", { name: "移除技能" }))
   fireEvent.click(within(screen.getByRole("dialog", { name: "移除技能" })).getByRole("button", { name: "确认" }))
-  await within(dialog).findByText("暂无已添加的技能")
+  await within(dialog).findByText("尚无技能")
   expect(selected).toEqual([])
   const installs = fetchMock.mock.calls.filter(([url, init]) => url.endsWith("/skill-installations") && init?.method === "POST")
   expect(installs).toHaveLength(1)
@@ -879,7 +895,7 @@ it("官方来源选择复用正式目录，装入精确 version UID 而不把目
   vi.stubGlobal("fetch", fetchMock)
   const view = render(skillWorkspace()); openProjectSkills(view.container)
   const dialog = screen.getByRole("dialog", { name: "项目技能" })
-  await within(dialog).findByText("暂无已添加的技能")
+  await within(dialog).findByText("尚无技能")
   fireEvent.pointerDown(within(dialog).getByRole("button", { name: "新增" }), { button: 0, ctrlKey: false })
   fireEvent.click(await screen.findByRole("menuitem", { name: "从官方技能添加" }))
   const title = await within(dialog).findByRole("heading", { name: "Official Skill" })

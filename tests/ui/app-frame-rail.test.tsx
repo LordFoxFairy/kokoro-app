@@ -246,14 +246,14 @@ it("R255 StrictMode rail keeps mounted navigation state without rereading a chan
   expect(document.cookie).toContain("sidebar_state=false")
 })
 
-it("桌面 shell 发布唯一 280/52 轨道契约和 rail seam", () => {
+it("桌面 shell 发布唯一 300/52 轨道契约和 rail seam", () => {
   setDesktopViewport(1280)
   mountFrame({ desktopRailCollapsed: true })
 
   const shell = document.querySelector('[data-slot="sidebar-wrapper"]')
   expect(shell).not.toBeNull()
   expect(shell).toHaveStyle({
-    "--sidebar-width": "280px",
+    "--sidebar-width": "300px",
     "--sidebar-width-icon": "52px",
     "--rail-seam-width": "52px",
   })
@@ -315,7 +315,7 @@ it("768px 细指针桌面隐藏 Rail，展开后 seam 和焦点入口同步恢�
   await waitFor(() => {
     expect(shell).toHaveAttribute("data-rail-collapsed", "false")
     expect(shell).not.toHaveAttribute("data-rail-hidden")
-    expect(shell).toHaveStyle({ "--rail-seam-width": "280px" })
+    expect(shell).toHaveStyle({ "--rail-seam-width": "300px" })
     expect(shell?.querySelector('[data-seam="rail"]')).toBeNull()
     expect(screen.getByRole("dialog")).toContainElement(document.activeElement as HTMLElement)
   })

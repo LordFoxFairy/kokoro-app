@@ -1,20 +1,16 @@
 "use client"
 
 import { useRef, useState } from "react"
-import { ChevronDown, Plus, Search, Wrench } from "lucide-react"
+import Image from "next/image"
+import { Plus, Search, Puzzle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from "@/components/ui/dialog"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { useT } from "@/i18n/context"
 import type { EmptyStateProps } from "@/components/blocks/app-frame/app-frame.types"
 import type { PersonalInstallation } from "@/hub/schemas"
 import { ProjectContextSection } from "./project-context-card"
+import { ProjectSkillAddMenu } from "./project-skill-add-menu"
 import { ProjectSkillCard } from "./project-skill-card"
 import { ProjectSkillSourcePicker } from "./project-skill-source-picker"
 import { useProjectSkills, type ProjectSkillCommand } from "./use-project-skills"
@@ -55,16 +51,25 @@ export function ProjectSkillsSection({
     setOpen(false)
     onOpenSettings?.("skills", opener.current, { skillsScope: "personal" })
   }
+  const emptyContent = <div className={styles.emptyPanel}>
+    <div className={styles.emptyGroup}>
+      <Puzzle aria-hidden="true" />
+      <div className={styles.emptyCopy}>
+        <p className={styles.emptyTitle}>{t(query.trim() ? "skills.personal.empty" : "skills.personal.emptyState")}</p>
+        {!query.trim() ? <p>{t("projectSkills.emptyHint")}</p> : null}
+      </div>
+      {!query.trim() ? <ProjectSkillAddMenu primary disabled={!model.allowed || model.pending !== null}
+        onPick={setSource} {...(onOpenSettings ? { onManage: settings } : {})} /> : null}
+    </div>
+  </div>
   return (
     <>
       <section className={styles.section} data-context-section="skills" aria-label={t("firstSite.skills")}>
         <ProjectContextSection
           title={t("firstSite.skills")}
           description={t("projectSkills.description")}
-          action={t("firstSite.add")}
-          actionIcon={Plus}
-          actionIconOnly
-          icon={Wrench}
+          footerAction={{ label: t("firstSite.add"), icon: Plus }}
+          emptyVisual={<Image className={styles.artwork} src="/site-assets/project-skills.svg" width={75} height={64} alt="" aria-hidden="true" />}
           showChevron
           onClick={(event) => {
             opener.current = event.currentTarget
@@ -113,26 +118,8 @@ export function ProjectSkillsSection({
                   }}
                 />
               </label>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" disabled={!model.allowed || model.pending !== null}>
-                    <Plus aria-hidden="true" />
-                    {t("firstSite.add")}
-                    <ChevronDown aria-hidden="true" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onSelect={() => setSource("personal")}>
-                    {t("projectSkills.fromMine")}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => setSource("official")}>
-                    {t("projectSkills.fromOfficial")}
-                  </DropdownMenuItem>
-                  {onOpenSettings ? (
-                    <DropdownMenuItem onSelect={settings}>{t("firstSite.manageSkills")}</DropdownMenuItem>
-                  ) : null}
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <ProjectSkillAddMenu disabled={!model.allowed || model.pending !== null}
+                onPick={setSource} {...(onOpenSettings ? { onManage: settings } : {})} />
             </div>
           ) : null}
           <div className={styles.body}>
@@ -176,7 +163,7 @@ export function ProjectSkillsSection({
             ) : (
               <>
                 {preview ? (
-                  <p className={styles.empty}>{t("firstSite.noSkills")}</p>
+                  emptyContent
                 ) : model.status === "blocked" || model.status === "loading" ? (
                   <p className={styles.empty} role="status">
                     {model.status === "blocked" ? t("projectSkills.checking") : t("projectSkills.loading")}
@@ -202,7 +189,7 @@ export function ProjectSkillsSection({
                         </Button>
                       </div>
                     ) : model.facts?.items.length === 0 ? (
-                      <p className={styles.empty}>{t("firstSite.noSkills")}</p>
+                      emptyContent
                     ) : (
                       <div className={styles.grid}>
                         {model.facts?.items.map((item) => (
@@ -260,7 +247,7 @@ export function ProjectSkillsSection({
               </>
             )}
           </div>
-          {source === null ? (
+          {source === null && ((model.facts?.items.length ?? 0) > 0 || ids.length > 0 || changed) ? (
             <footer className={styles.footer}>
               <span className={styles.hint}>{t("projectSkills.selectedCount", { count: ids.length })}</span>
               <Button

@@ -1719,6 +1719,7 @@ export const zh = {
   "firstSite.addFromOneDrivePersonal": "从 OneDrive 文件添加（个人）",
   "firstSite.addFromOneDriveWork": "从 OneDrive 文件添加（工作/学校）",
   "projectSkills.title": "项目技能",
+  "projectSkills.emptyHint": "创建或导入一个技能以开始。",
   "projectSkills.description": "在相关情况下跨任务使用重复的工作流。",
   "projectSkills.defaultHint": "安装与默认选择相互独立；保存的默认技能用于此项目的新消息。",
   "projectSkills.viewMine": "查看我的技能",

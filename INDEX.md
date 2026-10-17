@@ -1,3 +1,7 @@
+## 项目概览布局职责（2026-10-17）
+
+`src/features/app/project-conversations.tsx` 独立拥有最近会话的 loading/error/list/empty，workspace 只组合身份、上下文、会话与编辑区。`project-workspace-layout.module.css` 负责统一可滚动文档与文档外底部编辑区；卡片视觉仍在 `kokoro-project-workspace.module.css`。没有新增请求、权限或状态模型。 Toolbar与空态共用 `project-skill-add-menu.tsx`；真实空态不显示无效默认保存栏，有选择或未保存改动时仍可操作。
+
 ### Project Skills 独立业务组件
 
 `src/features/app/project-skills-section.tsx` 只组合项目技能入口、Dialog、默认草稿和确认交互；`project-skill-card.tsx` 只展示真实安装；`project-skill-source-picker.tsx` 独立读取个人安装池和正式官方目录；`use-project-skills.ts` 管本项目 lease、分页、真实命令与 ACK 后回读。安装≠默认；未知原意图跨同主体重核保留，不跨账号/项目，不自动重试。旧 workspace/dialog 聚合的技能名称开关、假卡、callback 和相邻 CSS 已退休，旧名称路径在同源边界直接拒绝。资源/技能使用明确 section 正常排版，不再依赖子元素序号定位。正常服务/库配对与执行链另验，不把组件或空预览成功冒完整产品验收。
