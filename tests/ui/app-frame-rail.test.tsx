@@ -2029,6 +2029,9 @@ it("keeps Settings Explore intent and its detail shell across same-actor recheck
   let round = 1
   let failFreshRead = true
   const calls: Record<string, unknown>[] = []
+  const packageReads: string[] = []
+  const documents = { "SKILL.md": "# Verified reader root", "references/notes.md": "# Verified selected document\n\n" + "Reader paragraph.\n\n".repeat(40) }
+  const files = Object.entries(documents).map(([path, text]) => ({ path, size_bytes: String(new TextEncoder().encode(text).byteLength) }))
   const response = (body: unknown) => Response.json(body, { headers: { "cache-control": "private, no-store", "x-request-id": "settings-intent-recheck" } })
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
     const path = String(input)
@@ -2038,6 +2041,11 @@ it("keeps Settings Explore intent and its detail shell across same-actor recheck
       calls.push(JSON.parse(String(init?.body)))
       if (round === 2 && failFreshRead) { failFreshRead = false; throw Error("Temporary new-generation read failure") }
       return response({ skills: [{ skillId: "settings-intent-series", displayName: "Intent match", userDescription: round === 1 ? "Retired catalog facts" : "New catalog facts", currentVersion: { versionUid: "settings-intent-revision" } }], tagOptions: {} })
+    }
+    if (path.includes("/package")) {
+      packageReads.push(path)
+      const selected = new URL(path, "http://local.test").searchParams.get("file_path") as keyof typeof documents | null
+      return response({ data: { source_ref: "skill:settings-intent-revision", revision: "1", files, selected_file: selected === null ? null : { path: selected, text: documents[selected] } } })
     }
     if (path.endsWith("GetSkill")) return response({ skill: { id: "settings-intent-series", version: "settings-intent-revision", displayName: "Intent match", description: round === 1 ? "Retired detail facts" : "New detail facts" }, downloadInfo: { downloadUrl: "/api/skill-downloads/settings-intent", filename: "fixture.zip", expiresAt: "2028-01-01T00:00:00Z" } })
     throw Error("Unexpected settings recheck request")
@@ -2054,6 +2062,14 @@ it("keeps Settings Explore intent and its detail shell across same-actor recheck
   fireEvent.click(await screen.findByRole("button", { name: "查看详情 Intent match" }))
   const dialog = screen.getByRole("dialog")
   await within(dialog).findByText("Retired detail facts")
+  fireEvent.click(within(dialog).getByRole("button", { name: "查看详情" }))
+  await within(dialog).findByRole("heading", { name: "Verified reader root", level: 1 })
+  fireEvent.click(within(dialog).getByRole("button", { name: "references" }))
+  fireEvent.click(within(dialog).getByRole("button", { name: "references/notes.md" }))
+  await within(dialog).findByRole("heading", { name: "Verified selected document", level: 1 })
+  const readerPane = within(dialog).getByRole("heading", { name: "Verified selected document", level: 1 }).closest<HTMLElement>("[aria-busy]")!
+  fireEvent.scroll(readerPane, { target: { scrollTop: 240 } })
+  const readCount = packageReads.length
   const count = calls.length
   round = 2
   view.rerender(content(false, "settings-intent-actor", 2))
@@ -2062,12 +2078,23 @@ it("keeps Settings Explore intent and its detail shell across same-actor recheck
   expect(screen.getByRole("dialog")).toBe(dialog)
   expect(screen.queryByText("Retired detail facts")).toBeNull()
   expect(screen.queryByText("Retired catalog facts")).toBeNull()
+  expect(screen.queryByRole("heading", { name: "Verified selected document" })).toBeNull()
+  expect(within(dialog).getByRole("button", { name: "技能详情" })).toBeVisible()
+  expect(packageReads).toHaveLength(readCount)
   await act(async () => { await Promise.resolve() })
   expect(calls).toHaveLength(count)
   view.rerender(content(true, "settings-intent-actor", 2))
   await within(dialog).findByRole("alert")
   expect(screen.queryByText("Retired detail facts")).toBeNull()
   fireEvent.click(within(dialog).getByRole("button", { name: "重试" }))
+  await within(dialog).findByRole("heading", { name: "Verified selected document", level: 1 })
+  expect(within(dialog).getByRole("heading", { name: "Verified selected document", level: 1 }).closest("[aria-busy]")).toHaveProperty("scrollTop", 240)
+  expect(within(dialog).getByRole("button", { name: "references" })).toHaveAttribute("aria-expanded", "true")
+  expect(packageReads.slice(readCount)).toEqual([
+    "/api/hub/skills/settings-intent-revision/package",
+    "/api/hub/skills/settings-intent-revision/package?file_path=references%2Fnotes.md",
+  ])
+  fireEvent.click(within(dialog).getByRole("button", { name: "技能详情" }))
   await within(dialog).findByText("New detail facts")
   expect(calls.at(-1)).toMatchObject({ query: "needle", tag: "SKILL_HUB_TAG_CODING" })
   expect(screen.getByRole("dialog")).toBe(dialog)
@@ -4128,18 +4155,30 @@ it.each(["forbidden", "not-found", "network"])("installation detail keeps pin A 
   const text = "# Installed A"
   const fileTexts = { "SKILL.md": text, "references/notes.md": "# Reader notes", "scripts/nested/check.py": "print(\"reader-check\")" }
   const files = Object.entries(fileTexts).map(([path, value]) => ({ path, size_bytes: String(new TextEncoder().encode(value).byteLength) }))
-  vi.spyOn(globalThis, "fetch").mockImplementation(async input => {
+  let holdSelectedFile = false
+  let heldSignal: AbortSignal | null | undefined
+  let settleHeld: (() => void) | undefined
+  let heldResponse: Promise<Response> | undefined
+  const lateText = fileTexts["scripts/nested/check.py"].replace("reader-check", "retired-code")
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
     const path = String(input); requests.push(path)
     const headers = { "cache-control": "private, no-store", "x-request-id": "pin-detail" }
     if (path.endsWith("GetSkill")) return Response.json({ skill: { id: "pin-series", version: "pin-B", displayName: "Catalog B", description: "B summary" }, downloadInfo: { downloadUrl: "/api/skill-downloads/current-B", filename: "B.zip", expiresAt: "2028-01-01T00:00:00Z" } }, { headers })
     if (path.endsWith("/download")) { if (downloadFailure === "network") throw new TypeError("network interrupted"); return Response.json({ error: { code: downloadFailure === "not-found" ? "skill_not_found" : "skill_download_forbidden", message: "Download denied independently", retryable: false } }, { status: downloadFailure === "not-found" ? 404 : 403, headers }) }
     if (path.includes("/package")) {
       const selected = new URL(path, "http://local.test").searchParams.get("file_path") as keyof typeof fileTexts | null
+      if (holdSelectedFile && selected === "scripts/nested/check.py") {
+        holdSelectedFile = false
+        heldSignal = init?.signal
+        heldResponse = new Promise(resolve => { settleHeld = () => resolve(Response.json({ data: { source_ref: "skill:pin-A", revision: "1", files, selected_file: { path: selected, text: lateText } } }, { headers })) })
+        return heldResponse
+      }
       return Response.json({ data: { source_ref: "skill:pin-A", revision: "1", files, selected_file: selected === null ? null : { path: selected, text: fileTexts[selected] } } }, { headers })
     }
     return Response.json({ data: { installation_id: "pin-install", series_id: "pin-series", source_ref: "skill:pin-A", revision: "1", installed: true, enabled: false, display_name: "Installed A", summary: "A summary", source_status: "withdrawn", installed_at: "2026-10-15T00:00:00Z", updated_at: "2026-10-15T00:00:00Z", skill_updated_at: "2026-10-14T00:00:00Z", example_prompts: ["A example"], category_keys: [], tags: [], product: { publication_audience: "catalog", state_version: "1", source_kind: "personal" } } }, { headers })
   })
-  render(<LocaleProvider><ManusSkillDetailDialog detailSource="installation" readBoundary={{ admitted: true, subject: "pin-reader", generation: 1 }} skill={{ skill_id: "pin-series", revision_skill_id: "pin-A", source_ref: "skill:pin-A", installed_source_ref: "skill:pin-A", installation_id: "pin-install", name: "Installed A", description: "Card A", content_hash: "pin-series", scope: "personal", installed: true, enabled: false }} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={() => false} /></LocaleProvider>)
+  const content = (admitted = true, generation = 1, pending = false) => <LocaleProvider><ManusSkillDetailDialog detailSource="installation" readBoundary={{ admitted, subject: "pin-reader", generation }} skill={pending ? null : { skill_id: "pin-series", revision_skill_id: "pin-A", source_ref: "skill:pin-A", installed_source_ref: "skill:pin-A", installation_id: "pin-install", name: "Installed A", description: "Card A", content_hash: "pin-series", scope: "personal", installed: true, enabled: false }} pending={pending} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={() => false} /></LocaleProvider>
+  const view = render(content())
   await screen.findByText("A summary")
   expect(screen.getByRole("button", { name: "启用" })).toBeEnabled()
   expect(screen.queryByText("B summary")).toBeNull()
@@ -4174,10 +4213,26 @@ it.each(["forbidden", "not-found", "network"])("installation detail keeps pin A 
     fireEvent.click(screen.getByRole("button", { name: "scripts/nested/check.py" }))
     await screen.findByText(fileTexts["scripts/nested/check.py"])
     expect(requests).toContain("/api/hub/skill-installations/pin-install/package?file_path=scripts%2Fnested%2Fcheck.py")
+    holdSelectedFile = true
+    view.rerender(content(false, 2, true))
+    expect(screen.queryByText(fileTexts["scripts/nested/check.py"])).toBeNull()
+    expect(screen.queryByRole("button", { name: "下载技能" })).toBeNull()
+    view.rerender(content(true, 2))
+    await waitFor(() => expect(settleHeld).toBeTypeOf("function"))
+    expect(screen.queryByText(fileTexts["scripts/nested/check.py"])).toBeNull()
+    view.rerender(content(false, 3, true))
+    expect(heldSignal?.aborted).toBe(true)
+    view.rerender(content(true, 3))
+    await screen.findByText(fileTexts["scripts/nested/check.py"])
+    expect(screen.getByRole("button", { name: /^scripts$/ })).toHaveAttribute("aria-expanded", "true")
+    expect(screen.getByRole("button", { name: /^nested$/ })).toHaveAttribute("aria-expanded", "true")
+    await act(async () => { settleHeld!(); await heldResponse; await Promise.resolve() })
+    expect(screen.queryByText(lateText)).toBeNull()
+    expect(screen.getByText(fileTexts["scripts/nested/check.py"])).toBeVisible()
     fireEvent.click(screen.getByRole("button", { name: /^SKILL\.md$/ }))
     await screen.findByRole("heading", { name: "Installed A", level: 1 })
-    expect(scripts).toHaveAttribute("aria-expanded", "true")
-    expect(nested).toHaveAttribute("aria-expanded", "true")
+    expect(screen.getByRole("button", { name: /^scripts$/ })).toHaveAttribute("aria-expanded", "true")
+    expect(screen.getByRole("button", { name: /^nested$/ })).toHaveAttribute("aria-expanded", "true")
     fireEvent.click(screen.getByRole("button", { name: /^技能详情$/ }))
     fireEvent.click(await screen.findByRole("button", { name: /^查看详情$/ }))
     await screen.findByRole("heading", { name: "Installed A", level: 1 })

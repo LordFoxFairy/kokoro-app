@@ -1,3 +1,7 @@
+## Reader 展示意图与重核事实
+
+Settings 的详情实例按原 source＋精确 locator 绑定，actor 仍由外层清理。`ManusSkillDetailDialog` 的 viewTarget 仅保存同 actor/资源的 reader、文件路径、目录展开和文档 scroll 意图；每代 admission token 继续退休私有 metadata、installation、manifest、正文和旧请求。pending 展示通用 reader 框架，fresh pin/目录确认后才恢复有效路径和滚动；换 actor/目标、关闭清意图，显式重新进入重置，失败重试不强制 SKILL.md。没有修改 session 的周期、认证或任何网络契约。
+
 ## 2026-10-16 包文件导航展示
 
 `SkillPackageFiles` 是目录与本人管理 reader 共用的纯文件树：只渲染已检查的 owner 路径，展开集合初始为空，选择文件不清除展开，重新进入 reader 重置；展开不取文件字节。详情 reader 在紧凑文件菜单选择后收起并将焦点还给入口，同文件不重读。文件树字重、13px/19.5px、27.5px 行高、200px 桌面导航及紧凑内容尺寸菜单以 Manus 实测为准；不变更安装 pin、请求身份或正文解析协议。

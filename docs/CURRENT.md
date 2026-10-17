@@ -1,3 +1,13 @@
+## 2026-10-16 Skills Reader 同主体重核位置（局部验收完成）
+
+基线25da417。上一片观察的回退由正式重核输入可复现：同actor generation/admitted改变以及父级pending的skill=null触发同一identity reset，reader/path/folders一起被清；随后 fresh目录又强制SKILL.md。沿现Settings父级重核用例补真正非默认文件、旧事实退出、分页失败后显式重试恢复，实际RED为reader按钮消失。现在Settings以已有source＋精确locator固定Dialog实例；viewTarget和generation事实token分开，前者只保展示意图，后者仍同步清metadata/install/manifest/text/下载反馈并取消旧读。换主体、换资源或关闭仍清意图，A→B→A不复活；无新接口/Schema/凭据、认证降级或停周期。
+
+fresh目录中仍存在的原路径才恢复，失去路径回SKILL.md并清位置；原已检查包/精确安装pin与外部UID分流保持。readerCursor使用ref、按viewTarget的layout生命周期清理；不修改useMemo返回值。最初memo可变候选被ESLint immutability拒绝，改为ref后未关闭规则。文档scroll在fresh正文布局时还原，新增原用例240→0实际RED后恢复；这是受控DOM滚动状态证据，当前正常安装正文很短，非零真实浏览器滚动尚缺样本。
+
+原安装pin/下载forbidden分支复用两次重核：先挂起新代文件读，再退休/abort并由后一代读取，最后让无视取消的旧响应迟到，确认不能覆盖正文，展开和原文件保持。Settings原A→B→A、下载拒绝、同文件零重读、显式返回再开重置断言保留；pending reader仅通用标题/占位，无旧正文/下载动作，避免重复DialogDescription ID。现7定向通过、scoped lint/type通过，无新测试case/suite。最终五路径停写源门contract280/architecture50/lint/type/diff0，181files **3288 PASS / 0 SKIP / 198.18s**（runner198.62s）；独立同字节candidate production build0、现development public-shell E2E **6 PASS / 6.13s runner**、post-type0。正常3310 reader在同一文档自然经过两次120s重核：auth读取2→4、精确安装package读取2→6，reader仍打开且Dialog backend895不变；未关闭重核、注入session或保留可操作旧正文。真实短文无非零滚动范围，240px恢复与嵌套路径仍仅受控DOM证据，不冒全真机验收。只读复核未见新增确定P0–P2。
+
+分享页须独立后继：当前summary/installation仅按actor＋share ID匹配，不按generation/准入隔离，因此同主体重核通常仍留旧summary；fresh resolve/summary失败才转main提示并卸载详情。读effect缺generation依赖，不能泛称每次重核均卸载。后继应稳定actor/id展示、立即清各代事实并隔离旧ACK，原unknown安装key独立保留、只显式恢复。本片不冒已解决分享入口。测试自有Next及worker已正常退出，候选3324已释放，自建44已关闭，原App开发服务/其他正常owner保留，无额外常驻服务；原完整Skills/MCP/手册及远端交付目标仍OPEN。
+
 ## 2026-10-16 Skills 包文件导航对照（局部验证完成）
 
 基线 a74cb41，正常 Manus 技能包 reader 与本地当前安装 B 对照：桌面文件行原 16px/24px/41.59px，参考 13px/19.5px/27.5px；目录原全部展开，参考初始关闭，选文件保展开。现改为空展开集合，保 owner 目录/精确 revision 请求；本人管理 reader 删除重复树渲染，复用原纯 `SkillPackageFiles`。桌面同865×764下真实 SKILL.md 行 x47.5/y183/w171/h27.5、图标x73.5/文字x93.5，与参考一致。
