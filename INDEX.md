@@ -1,3 +1,7 @@
+### 2026-10-17 S3 BFF 来源契约消费
+
+唯一src/generated/bff-public-openapi.yaml固定BFF e60ff31/Public15；原Team与Agent-failure生成器同步精确digest，Team业务派生和failure tuples保持。公开八类只在owner快照，网站publisher与分享五类schema不改；本片没有新增公开list UI client。验收与正常配对后继见docs/CURRENT，不以pin更新冒功能执行完成。
+
 ### MCP 管理原请求与 Prepare 互锁
 
 `src/ui/mcp/mcp-management-commands.ts` 在现稳定shell构造typed MCP lifecycle，五项管理沿原key/body/CAS恢复，`mcp-preparation-commands`通过必需predicate承接互锁；API/JSON/OAuth不进入该管理index。`mcp-management-status.tsx`只为三个既有详情呈现非敏感状态。Hub五方法显式caller key并复用同源adapter的正式ACK matcher；缺行不结清命令。正常元数据编辑/断开与故障覆盖范围见CURRENT及现三suite，不另建UI测试中心。

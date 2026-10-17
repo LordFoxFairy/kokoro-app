@@ -1,3 +1,7 @@
+## 2026-10-17 S3 current BFF Public15 消费
+
+唯一快照固定 `e60ff311075b01f1d0ca58f1cebc47080dbc3ea1` /15.0.0/139 operations、SHA256 `e3f70ab1111295d1df10775853ff9c20bf85ea466da32996a73d37a8b16d54c0`，由owner Git blob复制；两个既有生成器固定相同digest，不维护第二份可编辑owner Schema。该版只改公开SpecificationPublicSkill.owner_type八值，不改变本仓已消费的website Skills、分享、管理/安装、项目、Team、AG-UI或错误协议。网站真实归属、publisher与获取来源仍不同轴；分享精确revision owner_type保持五值。没有新增同源路径、授权、请求字段或兼容fallback。正常Platform/BFF和项目/Agent链后继不由此pin关闭。
+
 ## 2026-10-16 SKILLS-UPDATE U4（本地实现，正常产品链待验）
 
 唯一来源 BFF 615b16a7f75917d30d334b66d5470d87339aacd1 / public14.8.0（139 operations），原 blob SHA256 a9729722383de5571821961357051499612d12c76aa835b8774828adea82a577。既有同源 POST /api/hub/self/skill-installations/{installation_id}/update 精确映射 /v1/skill-installations/{installation_id}/update；严格两字段 expected_source_ref/source_ref、原 Idempotency-Key、JSON≤65536/同源准入，无 identity body/alias/query。原有非更新操作语义保持。

@@ -1,3 +1,11 @@
+## 2026-10-17 来源 S3 固定消费（源码候选，正常配对待续）
+
+沿05d9504固定BFF `e60ff311075b01f1d0ca58f1cebc47080dbc3ea1` 的唯一Public15.0.0/139 operations，完整canonical SHA256 `e3f70ab1111295d1df10775853ff9c20bf85ea466da32996a73d37a8b16d54c0`。仅公开skill.list owner_type增加hub/device/unknown；本仓没有运行时调用该公开list，网站ListSkills/ListHubSkills/GetSkill、publisher分类和分享五类schema均保持原字节，不为配对凭空增加UI producer或扩大所有来源词表。
+
+唯一snapshot从owner committed blob原字节替换；既有Team/Agent-failure生成器正规write，Team15派生文件原字节不变，Agent-failure只变三provenance值，roles/12 tuples不变。八个whole-public测试更新同一pin，原Skills用例补公开八类与分享五类分开；没有新case/suite。实际RED为旧snapshot下2 FAIL/7 PASS；替换后同文件9 PASS。Admin按同一owner独立配对，不读取其源码或数据。停写12/12非文档冻结匹配，独立只读复核无确定P0–P2。主方在880份当时源码逐字节相等的独立candidate执行完整contract/architecture/lint/typecheck/default test/build/post-typecheck，全部exit0：contract280 PASS、architecture50 PASS、默认181files/3288 PASS/0 SKIP（180.83s），build28.82s；无新增case/suite。依赖使用本机APFS克隆、测试与Next构建均限2workers，未安装依赖或改lockfile；正常.next/登录/服务保持，candidate验证后源码仍相等并已回收。原jsdom navigation提示保留，不冒真实导航验收；既有测试文件未修改区域的格式差异不顺手扩散重排。
+
+本片无UI或网络行为变化，未重跑浏览器/E2E、正常产品会话或真实PG/Redis组合；前述门禁不冒正常owner新列/配对成功。正常新来源Schema启用和项目选择/精确安装/Run冻结另验，不能把治理快照当公开列表UI已实现。
+
 ## 2026-10-16 连接器 Settings 实测与卡片表面（局部验收完成）
 
 基线086c840。沿当前正常3310与Manus已登录参考，只读固定相同1600×900/733×764：宽屏dialog1280×810、内容768、标题24/30、搜索200×32，紧凑dialog380×580、搜索178×32，浏览/创建86/64×32及8px gap均已一致；不是按旧截图猜。插件主页管理/创建在同一右上x1418/1512、y8；两侧栏按用户批准宽度有20px差异，不借插件任务改回侧栏。真实目录此刻为空，不能拿参考有推广/提供方时的搜索y226与本地空目录y88直接当同态差异，更未补造目录/推广数据。

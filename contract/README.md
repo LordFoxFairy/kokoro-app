@@ -1,3 +1,7 @@
+## 2026-10-17 S3 唯一 current publication
+
+当前固定BFF `e60ff311075b01f1d0ca58f1cebc47080dbc3ea1` / Public15.0.0 /139 operations，原blob SHA256 `e3f70ab1111295d1df10775853ff9c20bf85ea466da32996a73d37a8b16d54c0`。对原14.8完整字节的唯一差异为version与公开skill.list的三新增枚举；不是Web私自扩网站/分享来源。Team窄图及15生成文件保持，Agent-failure三项provenance正规生成；原roles/12 tuples不变。既有whole-public测试承接新pin和八类/分享五类隔离，不新建套件。正常配对/项目安装/模型执行未验，实际门禁见docs/CURRENT；下方旧版本段落仅历史。
+
 ## 2026-10-16 U4 consumer pin（本地实现，运行验收待完成）
 
 固定 BFF `615b16a7f75917d30d334b66d5470d87339aacd1` 的 committed `contract/openapi/v1/openapi.yaml` 原字节，public **14.8.0 / 139 operations**，SHA256 `a9729722383de5571821961357051499612d12c76aa835b8774828adea82a577`。本片增加显式个人 installation update；承接该 owner 既有未发行 MCP 写入口退役，不能从历史 snapshot 恢复。两既有 generator 正规 write/check；Team 派生15文件原字节不变，Agent failure 仅三项 provenance 变化，原 roles/tuples 不变。
