@@ -1,3 +1,13 @@
+## 项目Skills未知回执：正常入口两旅程（2026-10-17）
+
+基线fbcc105，无生产源码或测试修改。正常3310既有QA项目/既有revision D安装，先真实启用，再保存默认[D]；只对该PUT的Fetch非Document响应在已见服务端200后断开浏览器接收，未伪造成功或跳过权限。UI明确unknown并锁住后续写；关闭/重开后真实GET200已显示默认[D]，仍保留原命令，不从新事实推断ACK。显式重试仅一次PUT200，key与body逐字相同，unknown结清；默认选用状态下停用/移除按钮均不可用（仅UI保护证据，不冒服务端并发保证）。
+
+真实清空默认保存200后，对停用PUT同样在200回执阶段丢包；重开真实列表200显示enabled=false，但unknown仍保留、零自动PUT。显式恢复一次原key/body PUT200后结清。最终再关/开，GET selection=[]、两项安装停用、D仍原installation ID/source_ref/revision4；初次停用后与重放后的updated_at相等。总6次项目PUT、4个不同逻辑command key，含2次显式同key重放；零DELETE，捕获网络无message/execute/run POST，未上传/创建/删除技能、未发送模型或收费请求。
+
+恢复目标状态不等于零写：启用/停用和默认保存实际修改过事实，并保留各自命令回执。scope仅同一actor/Project关闭重开和这两种unknown结果，未覆盖浏览器重载持久恢复、换主体、正常CAS竞争、安装/版本更新未知结果或真实Agent/IAM撤权/执行。网络观察无丢页/截断，原始截图与仅含key/body摘要的receipt留ignored；精确Fetch拦截已清空，Network关闭，QA窗口保留，用户窗口未改。
+
+未跑pnpm单元/契约/E2E/build：本轮仅已有生产实现的真实验收和文字记录，无新代码或mock。未重启正常服务、改配置/角色/积分，远端CI/push/PR/merge及Root index/gitlink继续暂停。正式计费用量上限保证仍未发布，System/Agent/Billing跨仓契约方案已询问设计确认，不用模型目录cap或假grant放行执行；完整目标保持OPEN。
+
 ## 项目与新建输入区贴边、长草稿挤压（2026-10-17，局部修复）
 
 基线131585f。沿已批准Manus/ChatGPT舒适、克制方向，在真实3310 QA项目及已登录Manus项目顶部对照。发现Frame仍将welcome（也含项目概览）的textarea左内边距强制为2px；项目容器另将form高度固定120，虽input内联125px仍被flex压为50，长草稿提前出现内部滚动。真实修前comfortableInset=false、fullyGrown=false。
