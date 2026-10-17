@@ -1,3 +1,13 @@
+## 正常双项 JSON 与未知结果恢复（2026-10-17）
+
+基线06d312d，本片没有App业务代码变更。正常Settings两项文档的第二项transport非法，一次POST400；硬刷新GET200只有既有16条revoked MCP、两条API，无候选名。400响应体随刷新退役，未冒已核错误码；源码完整解析在事务前，正常观察不替代PG中途回滚证明。
+
+合法双项一次POST201保存两条不同server/connector。持有成功响应导致客户端unknown：首读Fetch body为base64，工具解码错误延误，后续failRequest已是expired ID，故不称成功注入ConnectionClosed。独立正常窗口fresh GET200见18条/新增两pending disabled；原窗口仍unknown、没有自动重发。关开JSON窗口保RAM原文（界面不回显），显式同key/body字节重试单POST201保同两ID、无重复。
+
+真实发现owner恢复仍replayed=false，不算通过；Platform定向修复已有源码/真实PG证据，正常重载待许可，App不猜标记或放宽断言。随后两样本正常断开，硬刷新18条仅新增两revoked disabled，原16条各ID/名称/状态/版本和两API保持。配置保留，没有永久删除、Prepare、外部端点、模型/工具/积分操作。两个自有窗口回收，Fetch清空/Network关闭、原始headers/key清除；脱敏收据仅Root ignored。
+
+本轮文档检查通过，不机械重跑3k App测试，不冒32项全部边界、真实OAuth/过期刷新或完整MCP/Skills完成；远端及Root index/gitlink继续暂停。
+
 ## 项目Skills安装：正常unknown、刷新及项目隔离（2026-10-17）
 
 基线App079f3ed / BFF a804b0f / Platform408953a，正常BFF27117/Platform27118未重启。通过正式侧栏创建一个专用且后续复用的“QA Skills recovery 20261017”项目（project_f80ada35-d900-4cef-98f5-95edff0ca305，POST200）；真实空安装/默认两GET200后，从正式官方来源选择既有E/5，不新增技能/发布者。新项目和一条停用安装保留供后续验收，不删除数据。
