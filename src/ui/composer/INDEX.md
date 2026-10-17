@@ -5,7 +5,7 @@
 
 ## 公开件
 - `Composer`（`composer.tsx`）+ `MAX_INPUT_LENGTH`：受控输入区；draft/回调/候选全由 props 注入。`emptyWorkspace` 投影 workspace/conversation 的本地布局；项目内已有会话同样走 conversation，不从项目归属猜概览。
-- 输入增高同时响应 draft 与自身宽度；宽度 observer 不随 draft 重建、忽略纯高度通知、卸载清理。conversation 的列宽、内边距、焦点和 footer 由本组件维护，Frame 不覆盖 textarea/form 尺寸。
+- 输入增高同时响应 draft 与自身宽度；宽度 observer 不随 draft 重建、忽略纯高度通知、卸载清理。conversation 的列宽、内边距、焦点和 footer 由本组件维护，Frame 不覆盖 textarea/form 尺寸。项目/新建输入区同样由组件持有16px文字内边距和24px行高；项目只约束最小高度，不把长草稿锁死在120px。
 - mode 元数据（`mode-options.ts`）：模式 → 菜单文案、图标和合法值收窄。
 - `ComposerMenu`：通用 Composer 的附属子件；桌面 User Web 使用 Manus 式内联编辑器，不挂载独立放大对话框入口。
 - `environmentSelectorPlacement`：项目线程桌面态可将环境入口锚定到编辑器上方；默认仍位于工具行。

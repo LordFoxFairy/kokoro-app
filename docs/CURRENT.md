@@ -1,3 +1,11 @@
+## 项目与新建输入区贴边、长草稿挤压（2026-10-17，局部修复）
+
+基线131585f。沿已批准Manus/ChatGPT舒适、克制方向，在真实3310 QA项目及已登录Manus项目顶部对照。发现Frame仍将welcome（也含项目概览）的textarea左内边距强制为2px；项目容器另将form高度固定120，虽input内联125px仍被flex压为50，长草稿提前出现内部滚动。真实修前comfortableInset=false、fullyGrown=false。
+
+删除两处Frame textarea覆盖及其冗余form内边距；Composer维护16px文字内边距、桌面24px行高与216px增高上限，项目只保120px最小高度。原同宽编辑区、独立底部定位、权限/请求/草稿/发送状态不变，无新组件/依赖/契约。真实同段120字草稿在双方436.5px编辑区下均增至191px；本地输入121px=scrollHeight，原为50/125。正常QA九次1280→1068→1067→960→769→768→767→390→1280窗口检查均无横溢，草稿/焦点保持、文字内边距16且自然增高；已清空临时草稿、恢复视口。首页另实测768×120及16px文字内边距。没有发送消息或模型请求，参考临时草稿也已清空。
+
+只扩原项目会话E2E中的长草稿/内边距/自动增高断言，不新增case/suite；完整自动E2E与build本片未跑，不将真实只读窗口检查冒充完整提交旅程。最终定向 `vitest run tests/ui/composer.test.tsx tests/ui/kokoro-project-workspace.test.tsx tests/architecture` 133 PASS，`pnpm lint` 与 `pnpm typecheck` 均exit0；后端Agent未配置仍为独立未闭环问题，不以视觉隐藏错误。远端CI/push/PR/merge及Root index/gitlink继续暂停。
+
 ## 真实聊天舒适度与输入缩放（2026-10-17，局部）
 
 基线471a7e1。用户要求Manus/ChatGPT般舒服、克制的聊天界面，沿真实原会话及独立已登录Manus已完成任务只读对照，不再用组件测试页冒产品效果。参考2026-10-17 https://manus.im/app/xR2wFOL9238kc7A9Z4CFik ，中文/浅色；1280×720及1103×764 form768×120、input50、gap12、radius22，390×720 form358×120/input50、字号15（桌面16），line24。旧本地form约95高、中宽707宽；父壳层叠加gutter/压缩高度导致差异，真实DOM基线pass=false。

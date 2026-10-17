@@ -30,6 +30,8 @@ test.describe("项目会话", () => {
 
     if (!isMobile) {
       const viewport = page.viewportSize()
+      const layoutDraft = "验证编辑区缩放时保留草稿并自然换行。".repeat(8)
+      await page.getByRole("textbox").fill(layoutDraft)
       // Reference stays two-column at 768px of workspace, including when
       // the context track is narrower than its 320px maximum.
       for (const [width, twoColumns] of [
@@ -43,7 +45,13 @@ test.describe("项目会话", () => {
           const composer = await page.getByRole("textbox").evaluate((element) => {
             const form = element.closest("form")
             if (!form) throw new Error("Project composer form is missing")
-            return form.getBoundingClientRect().toJSON()
+            const style = getComputedStyle(element)
+            return {
+              ...form.getBoundingClientRect().toJSON(),
+              // Keep text off the rounded edge, including while resizing.
+              textInset: Number.parseFloat(style.paddingLeft) >= 16,
+              autosized: Math.abs(element.clientHeight - Math.min(element.scrollHeight, Number.parseFloat(style.maxHeight))) <= 1,
+            }
           })
           if (!context) throw new Error("Project context is missing")
           const history = await page.getByRole("heading", { name: /^(最近|Recent)$/ }).evaluate((element) => {
@@ -53,12 +61,15 @@ test.describe("项目会话", () => {
           return {
             twoColumns: context.x >= composer.right,
             composerAligned: !twoColumns || Math.abs(composer.right - history.right) < 1,
+            textInset: composer.textInset,
+            autosized: composer.autosized,
           }
-        }).toEqual({ twoColumns, composerAligned: true })
-        await expect(page.getByRole("textbox")).toHaveValue(prompt)
+        }).toEqual({ twoColumns, composerAligned: true, textInset: true, autosized: true })
+        await expect(page.getByRole("textbox")).toHaveValue(layoutDraft)
         await expect(page.getByRole("textbox")).toBeFocused()
       }
       if (viewport) await page.setViewportSize(viewport)
+      await page.getByRole("textbox").fill(prompt)
 
       await page.getByRole("button", { name: "技能", exact: true }).click()
       const skills = page.getByRole("dialog")
