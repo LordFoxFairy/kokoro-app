@@ -321,3 +321,111 @@ it.each([
     }
   },
 );
+
+it.each([
+  ["nickname", "昵称", 128],
+  ["occupation", "职业", 256],
+  ["about", "更多关于你的信息", 2000],
+  ["instructions", "自定义指令", 8000],
+] as const)(
+  "SET61 explains rejected %s input, counts code points, and saves only accepted edits",
+  async (field, label, limit) => {
+    vi.mocked(client.replacePersonalization).mockImplementation(
+      async (value, revision) => ({
+        personalization: value,
+        revision: revision + 1,
+      }),
+    );
+    mount();
+    await waitFor(() =>
+      expect(screen.getByRole("textbox", { name: "昵称" })).toHaveValue("server"),
+    );
+    const input = screen.getByRole("textbox", { name: label });
+    const acknowledged = field === "nickname" ? "server" : "";
+    fireEvent.change(input, { target: { value: "😀".repeat(limit + 1) } });
+    expect(input).toHaveValue(acknowledged);
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    expect(input).toHaveAccessibleDescription(
+      new RegExp(`${acknowledged.length}/${limit}.*最多 ${limit} 个字符.*本次输入未采用.*仍保留原内容`),
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent("本次输入未采用");
+    fireEvent.blur(input);
+    expect(client.replacePersonalization).not.toHaveBeenCalled();
+    expect(screen.queryByText("已保存")).not.toBeInTheDocument();
+
+    const legal = "😀".repeat(limit);
+    fireEvent.change(input, { target: { value: legal } });
+    expect(input).toHaveValue(legal);
+    expect(input).not.toHaveAttribute("maxlength");
+    expect(input).not.toHaveAttribute("aria-invalid", "true");
+    expect(input).toHaveAccessibleDescription(`${limit}/${limit}`);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    fireEvent.blur(input);
+    await screen.findByText("已保存");
+    expect(client.replacePersonalization).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(client.replacePersonalization).mock.calls[0]?.[0][field]).toBe(legal);
+
+    fireEvent.change(input, { target: { value: legal + "😀" } });
+    expect(screen.queryByText("已保存")).not.toBeInTheDocument();
+    fireEvent.blur(input);
+    expect(client.replacePersonalization).toHaveBeenCalledTimes(1);
+    fireEvent.change(input, { target: { value: "😀a" } });
+    expect(input).toHaveAccessibleDescription(`2/${limit}`);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    fireEvent.blur(input);
+    await waitFor(() => expect(client.replacePersonalization).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(client.replacePersonalization).mock.calls[1]?.[0][field]).toBe("😀a");
+  },
+);
+
+it("SET61 announces an in-flight save without claiming a rejected newer input was saved", async () => {
+  const write = deferred<ReturnType<typeof snapshot>>();
+  vi.mocked(client.replacePersonalization).mockReturnValueOnce(write.promise);
+  mount();
+  const nickname = screen.getByRole("textbox", { name: "昵称" });
+  await waitFor(() => expect(nickname).toHaveValue("server"));
+  fireEvent.change(nickname, { target: { value: "accepted" } });
+  fireEvent.blur(nickname);
+  expect(screen.getByRole("status")).toHaveTextContent("正在保存…");
+  expect(screen.queryByText("已保存")).not.toBeInTheDocument();
+  fireEvent.change(nickname, { target: { value: "a".repeat(129) } });
+  expect(nickname).toHaveValue("accepted");
+  await act(async () => write.resolve(snapshot("accepted", 2)));
+  expect(screen.queryByText("正在保存…")).not.toBeInTheDocument();
+  expect(screen.queryByText("已保存")).not.toBeInTheDocument();
+  expect(screen.getByRole("alert")).toHaveTextContent("本次输入未采用");
+  expect(client.replacePersonalization).toHaveBeenCalledTimes(1);
+  fireEvent.change(nickname, { target: { value: "accepted edit" } });
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+});
+
+it.each(["subject", "generation", "admission", "preview"] as const)(
+  "SET61 retires validation feedback across a %s change without reviving it on return",
+  async (change) => {
+    const renderCard = (changed: boolean) => (
+      <LocaleProvider>
+        <PersonalizationCard
+          preview={changed && change === "preview"}
+          readBoundary={{
+            admitted: !(changed && change === "admission"),
+            subject: changed && change === "subject" ? "bob" : "alice",
+            generation: changed && change === "generation" ? 2 : 1,
+          }}
+        />
+      </LocaleProvider>
+    );
+    const view = render(renderCard(false));
+    const nickname = screen.getByRole("textbox", { name: "昵称" });
+    await waitFor(() => expect(nickname).toHaveValue("server"));
+    fireEvent.change(nickname, { target: { value: "a".repeat(129) } });
+    expect(screen.getByRole("alert")).toHaveTextContent("本次输入未采用");
+    view.rerender(renderCard(true));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(nickname).not.toHaveAttribute("aria-invalid", "true");
+    view.rerender(renderCard(false));
+    await waitFor(() => expect(nickname).toHaveValue("server"));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(nickname).not.toHaveAttribute("aria-invalid", "true");
+    expect(client.replacePersonalization).not.toHaveBeenCalled();
+  },
+);

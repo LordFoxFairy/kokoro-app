@@ -1,3 +1,38 @@
+## 个人资料输入反馈（2026-10-16）
+
+现PersonalizationCard复用personalization-schema的四字段Unicode code point上限；局部呈现计数、拒绝过长尝试和保存中状态。错误只保存字段标志，按preview/admitted/subject/generation同步退休；过长尝试不截断、不进入原hook，仍保留已接受内容及原blur/CAS/recovery流程。已有合法草稿照常保存；存在被拒尝试时不显示“已保存”。样式与九语言沿现设置边界，不增加文件或请求。
+
+同轮实际浏览器发现登录设备弹窗沿默认英文 Close；仅在现 account-devices-dialog 传既有 shell.closeDialog 语言标签，不改变设备读取、移除确认、会话或安全行为。
+
+## 个性化内页与数据管理排版（2026-10-16；设计边界）
+
+依据本轮实际 Manus 界面：个性化含个人资料/知识页签、名称/使用时机/内容知识弹窗，以及复制提示词/粘贴内容的记忆导入弹窗。当前 BFF 只有四项资料字段，没有知识存取或记忆解析契约。本片只补浏览界面和本机复制；资料继续沿既有可信读取/CAS保存，不新增业务请求。知识和导入最终保存动作保持禁用并展示原因，绝不虚构空知识列表或成功导入。数据管理保留真实分享/归档读取、分页、确认和恢复，仅补三行管理用途及排版。
+
+Owner 为现 Web 设置模块：扩展 personalization-card 负责页签和既有资料；同级 personalization-knowledge-panel 负责知识浏览/草稿弹窗，memory-import-dialog 负责导入说明/复制/临时文本；沿现 sections CSS、九语言、现组件和浏览器测试。选择同级具名组件而非全塞资料卡（避免不同弹窗职责混合），不建新目录或全局状态层。弹窗复用原 Radix Dialog，支持键盘/焦点返回/窄屏；关闭即卸载文本草稿，不写 localStorage、API、账户资料或服务器。复制失败明确反馈，未完成复制不显示成功；不从其他网站自动采集用户记忆。
+
+验证：原资料字段保存与全部旧业务断言保留，明确迁移旧“入口禁用”断言为“可浏览但不可提交”；验证页签/两弹窗/复制失败与重开清空、嵌套 Escape 和手机布局，随后组件、lint/typecheck/build、contract及architecture。Skills/MCP/连接器、generated、依赖、owner协议及数据库均排除。
+
+## 设置页面内部排版（2026-10-16）
+
+六个服务页面的内部排版沿既有 sections 组件和设计 token 修正：邮箱/电话居中，钱包支付行加账单区，开发者页签下独立说明与内容区；Mail 设置采用紧凑配置行、保留收件箱页签，集成采用带用途说明的应用卡片。只调整已有组件/CSS、本地化文案和个人资料简体文案，不建新模块、数据副本、API或服务。共享样式只用具名页面类限定，手机宽度允许配置行换行、应用卡片改单列。静态供应商说明不代表已连接；所有无正式服务的操作保持禁用及可见原因。
+
+## SET53 资产及服务设置页面（2026-10-16；实施方案）
+
+实际对照 Manus 的 Mail、邮箱、电话、钱包、集成、开发者六页。Web 拥有展示、导航、搜索及本地页签；现固定 BFF public16 没有这些资产管理契约。邮箱资产与登录邮箱分开，钱包与用量积分分开。当前实现六个可进入的页面及明确不可用的服务动作，电脑仍禁用，Skills/MCP 由另一开发者负责。
+
+| 放置项 | 决定 |
+| --- | --- |
+| 入口与复用 | 现 settings-types/navigation-model/navigation/header/dispatcher，沿用原 Modal、Panel、URL、搜索和窄屏 More，不另建设置壳。 |
+| 新文件 | 现 sections 下六个具名组件：mail-settings-section、email-assets-section、phone-assets-section、wallet-settings-section、integration-settings-section、developer-settings-section。各自只拥有该页面展示及局部页签；共享现 sections CSS、Button、Tabs、设计 token。 |
+| 选择理由 | 六个能力独立演进，合为万能 unavailable 组件会混合业务语义；新顶层 assets 模块会脱离唯一设置入口。沿现 sections 是最小边界，无新服务/依赖。 |
+| 状态 | Mail 设置/收件箱及开发者 API 密钥/Webhooks 可切换；其余页面展示服务尚未接通。没有权威读取时不显示“无资产”“零账单”等业务结论。创建、授权、绑定、连接、文档动作如无正式支持则禁用并给可见说明；不造地址、密钥、支付方式或成功回执。 |
+| 本地化 | 九种现有 locale 增加实际调用文案；不改 Skills/MCP 文案。 |
+| 验证与删除 | 替换六个旧 placeholder，电脑保留；调整对应两项旧禁用断言，保留其余 oracle。验证导航/深链/搜索/More/页签/禁用零 IO、完整规定门及正常已登录 Computer Use。 |
+
+本地页签只属于组件生命周期，不持久化资产、不建立 fake client 或 API。既有 beta agent connection setup 尚无完整产品闭环，本次不调用；集成与 MCP 连接器不是同一能力。Root 管文档、任务卡、Git 和集成验证，同仓只允许一个源码 writer。
+
+SET53 窄屏验收补充：真实 320px 键盘测试证明 compact More 的 body portal 位于 Dialog 焦点范围外，菜单项 focus 被捕获，Enter 无法完成选择。仅扩展现 settings-compact-more-menu.tsx，将菜单 portal 放在其所属 settings-modal 内，保留固定定位、原选择/关闭/事件逻辑和原失败断言；不放宽 Dialog 焦点保护、不建第二菜单。writer 增至25，protected为974；Root文档仍7。
+
 ## SET49 主线与设置分支整合（2026-10-16）
 
 从既有设置分支合入主线，保留主线 SettingsPanel、navigation model/brand/rail、compact More、Skills scope及独立项目/任务侧栏。设置分支已有账户资料/设备、Team准入、个性化CAS/unknown恢复、搜索和归档生命周期迁入这些现有边界；不恢复主线已退休的项目内私有任务展开分支，不修改Skills/连接器业务。唯一writer与验证证据由Root整合维护，所有PR仍draft。
@@ -2817,3 +2852,8 @@ Web 不复制 BFF OpenAPI，也不把同源 contract 放进 Developer API。详�
 现`ui/billing/billing-panel.tsx`继续唯一拥有余额与流水编排；只在embedded已准入内容外层复用既有Tabs，tasks固定选中，网站与游戏/电脑/电话原生disabled并以aria-describedby关联可见的未接通说明。任务面板保留现summary/ledger原内容，不新增effect、选择状态、请求、fallback、财务事实、URL或持久化。独立BillingPanel直接返回原内容。现CSS负责分类换行与窄屏边界，九locale仅追加分类及说明，不改旧值。此处只投影当前能力，不构建计费新owner或假造可用余额；未来分类启用须先有各owner正式契约。
 
 SET46验收范围：既有契约/架构/lint/type/build及38项浏览器回归通过；完整4052PASS/8FAIL，新增登录503/采集超时未归因。原字节候选登录夹具未就绪，不与基线六例通过等价；私有串行诊断六例通过不替代完整门。仅可回退本地候选，正常认证CUA另验。
+## SET54 设置窄屏 More 完整键盘操作（2026-10-16）
+
+在 SET53 页面候选上，正常登录 Computer Use 证明320px的 More 按钮按 Enter 仍保持 collapsed；源只在 pointerdown 打开，click不处理键盘。归属现 settings-compact-more-menu.tsx，保持唯一菜单/所属Dialog portal/现定位，不创建文件或替代设置壳。补原生 Enter/Space 激活与 ArrowDown/ArrowUp 打开、首末 enabled 项定位、菜单方向键/Home/End 跳过禁用项、Escape 仅关闭菜单并回焦触发器；选择后也回焦，外点关闭不抢焦。保留指针路径且一次手势仅切换一次，不解除弹窗焦点保护、不修改 Skills/MCP 业务、无网络/持久化/依赖/公开类型改变。现 UI/E2E 文件追加真实键盘正控和 pointer 不双切/disabled 跳过/Escape 不关闭设置负控，先对旧实现 RED，保持已有断言，再修现组件并运行相关及规定门；Root 统一资源、独审、CUA、Git，writer只改这三个现文件。
+
+SET54布局测量后继：现E2E说明/文档几何分别经两次CDP调用取得，Dialog开场zoom期间可能不同帧。Root仅将此现测试的两rect读取合并进一个同步content.evaluate，仍保非空、y差≤1、文档在说明右边及所有原几何/文字/滚动断言；不改产品CSS或动画，不加sleep/延时/放宽阈值。实际英文desktop/mobile必须重新验证，未验证前不认定已关闭布局缺陷。

@@ -200,3 +200,302 @@ for(const width of [1280,390]) {
  });
 }
 // SET47-END
+
+// SET53-BEGIN: service-settings-navigation
+for (const width of [320, 1600]) {
+  test(`SET53 six service pages retain keyboard navigation and honest unavailable actions at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.addInitScript(() => window.localStorage.setItem("kokoro.locale", "en"));
+    await page.goto("/app#/account/settings/mail", { waitUntil: "domcontentloaded" });
+    const modal = page.getByTestId("settings-modal");
+    await expect(modal.getByRole("heading", { name: "Mail Kokoro", level: 1 })).toBeVisible();
+    const serviceRequests: string[] = [];
+    page.on("request", (request) => {
+      const path = new URL(request.url()).pathname;
+      if (path.startsWith("/api/")) serviceRequests.push(`${request.method()} ${path}`);
+    });
+
+    for (const [tab, title] of [
+      ["mail", "Mail Kokoro"], ["email", "Email"], ["phone", "Phone"],
+      ["wallet", "Wallet"], ["integration", "Integrations"], ["developer", "Developer"],
+    ] as const) {
+      if (width === 320) {
+        await modal.getByTestId("settings-more").click();
+        const item = page.getByTestId(`settings-more-${tab}`);
+        await expect(item).toBeEnabled();
+        await item.focus();
+        await page.keyboard.press("Enter");
+        await expect(page.locator("[data-settings-compact-more-menu]")).toHaveCount(0);
+      } else {
+        await modal.getByTestId(`settings-tab-${tab}`).focus();
+        await page.keyboard.press("Enter");
+      }
+      await expect(modal.getByRole("heading", { name: title, level: 1 })).toBeVisible();
+      await expect.poll(() => new URL(page.url()).hash).toBe(`#/account/settings/${tab}`);
+      const content = modal.getByTestId(`settings-service-${tab}`);
+      await expect(content).toBeVisible();
+      const actions = content.getByRole("button");
+      expect(await actions.count()).toBeGreaterThan(0);
+      for (const action of await actions.all()) {
+        await expect(action).toBeDisabled();
+        expect(await action.evaluate((element) => {
+          const reason = document.getElementById(element.getAttribute("aria-describedby") ?? "");
+          return Boolean(reason?.textContent?.trim() && reason.getBoundingClientRect().height > 0);
+        })).toBe(true);
+      }
+      expect(await content.locator("a, input, textarea").count()).toBe(0);
+      expect(await content.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+      const bounds = await content.boundingBox();
+      const modalBounds = await modal.boundingBox();
+      expect(bounds).not.toBeNull();
+      expect(modalBounds).not.toBeNull();
+      expect(bounds!.x).toBeGreaterThanOrEqual(modalBounds!.x);
+      expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(modalBounds!.x + modalBounds!.width);
+    }
+
+    const webhooks = modal.getByRole("tab", { name: "Webhooks", exact: true });
+    await modal.getByRole("tab", { name: "API keys", exact: true }).focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(webhooks).toBeFocused();
+    await expect(webhooks).toHaveAttribute("aria-selected", "true");
+    await expect(modal.getByRole("button", { name: "Create webhook", exact: true })).toBeDisabled();
+    const search = modal.getByRole("textbox", { name: "Search", exact: true });
+    await search.fill("Inbox");
+    const result = modal.getByRole("navigation").getByRole("button", { name: "Inbox", exact: true });
+    await result.focus();
+    await page.keyboard.press("Enter");
+    await expect(modal.getByRole("heading", { name: "Mail Kokoro", level: 1 })).toBeVisible();
+    await modal.getByRole("tab", { name: "Settings", exact: true }).focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(modal.getByRole("tab", { name: "Inbox", exact: true })).toHaveAttribute("aria-selected", "true");
+    for (const name of ["Sender", "Content", "Date"]) await expect(modal.getByRole("columnheader", { name, exact: true })).toBeVisible();
+    await expect(modal.getByRole("button", { name: "Refresh inbox", exact: true })).toBeDisabled();
+    await modal.getByRole("button", { name: "Clear search", exact: true }).click();
+    await expect(modal.getByTestId("settings-placeholder-computer")).toHaveAttribute("aria-disabled", "true");
+    expect(serviceRequests).toEqual([]);
+    expect(await modal.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath(`set53-services-${width}.png`), fullPage: true });
+    await modal.getByTestId("settings-close").click();
+    await expect(modal).toHaveCount(0);
+  });
+}
+// SET53-END: service-settings-navigation
+
+// SET53-BEGIN: service-text-layout
+test("SET53 service tabs keep complete words and documentation shares a roomy information row", async ({ page }) => {
+  await page.addInitScript(() => window.localStorage.setItem("kokoro.locale", "en"));
+  let checkedRoomyRow = false;
+  for (const width of [320, 856, 1600]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const [tab, labels] of [
+      ["mail", ["Settings", "Inbox"]],
+      ["developer", ["API keys", "Webhooks"]],
+    ] as const) {
+      await page.goto(`/app#/account/settings/${tab}`, { waitUntil: "domcontentloaded" });
+      const content = page.getByTestId(`settings-service-${tab}`);
+      await expect(content).toBeVisible();
+      for (const label of labels) {
+        const trigger = content.getByRole("tab", { name: label, exact: true });
+        await expect(trigger).toBeVisible();
+        const text = await trigger.evaluate((element) => {
+          const range = document.createRange();
+          range.selectNodeContents(element);
+          const lines = Array.from(range.getClientRects()).filter((rect) => rect.width > 0);
+          const bounds = element.getBoundingClientRect();
+          return {
+            lineCount: new Set(lines.map((rect) => Math.round(rect.top))).size,
+            fits: lines.every((rect) => rect.left >= bounds.left && rect.right <= bounds.right + 1),
+          };
+        });
+        expect(text.lineCount, `${label} at ${width}px`).toBe(1);
+        expect(text.fits, `${label} at ${width}px`).toBe(true);
+      }
+      const geometry = await content.evaluate((element) => {
+        const modal = element.closest('[data-testid="settings-modal"]')!;
+        return { width: element.clientWidth, scroll: element.scrollWidth, modalWidth: modal.clientWidth, modalScroll: modal.scrollWidth };
+      });
+      expect(geometry.scroll).toBeLessThanOrEqual(geometry.width);
+      expect(geometry.modalScroll).toBeLessThanOrEqual(geometry.modalWidth);
+      const tabList = await content.getByRole("tablist").evaluate((element) => ({
+        scrollHeight: element.scrollHeight,
+        clientHeight: element.clientHeight,
+      }));
+      expect(tabList.scrollHeight).toBeLessThanOrEqual(tabList.clientHeight);
+      if (tab === "developer" && geometry.width >= 400) {
+        checkedRoomyRow = true;
+        const { description, documentation } = await content.evaluate((element) => {
+          const description = Array.from(element.querySelectorAll("p")).find(
+            (paragraph) => paragraph.textContent === "Manage keys for applications to access the Kokoro API.",
+          );
+          const documentation = Array.from(description?.parentElement?.querySelectorAll("button") ?? []).find(
+            (button) => button.textContent === "Documentation",
+          );
+          // Both viewport coordinates must describe the same animation frame.
+          const descriptionRect = description?.getBoundingClientRect();
+          const documentationRect = documentation?.getBoundingClientRect();
+          return {
+            description: descriptionRect ? { x: descriptionRect.x, y: descriptionRect.y, width: descriptionRect.width } : null,
+            documentation: documentationRect ? { x: documentationRect.x, y: documentationRect.y, width: documentationRect.width } : null,
+          };
+        });
+        expect(description).not.toBeNull();
+        expect(documentation).not.toBeNull();
+        expect(Math.abs(description!.y - documentation!.y)).toBeLessThanOrEqual(1);
+        expect(documentation!.x).toBeGreaterThan(description!.x + description!.width);
+      }
+    }
+  }
+  expect(checkedRoomyRow).toBe(true);
+});
+// SET53-END: service-text-layout
+
+// SET54-BEGIN: compact-more-keyboard
+test("SET54 compact More opens and navigates with native keyboard without dismissing Settings", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 900 });
+  await page.addInitScript(() => window.localStorage.setItem("kokoro.locale", "en"));
+  await page.goto("/app#/account/settings/mail", { waitUntil: "domcontentloaded" });
+  const modal = page.getByTestId("settings-modal");
+  const trigger = modal.getByTestId("settings-more");
+  const first = page.getByTestId("settings-more-skills");
+  const last = page.getByTestId("settings-more-help");
+  const menu = modal.getByRole("menu");
+  await expect(trigger).toHaveAttribute("aria-expanded", "false");
+  await trigger.focus();
+  await page.keyboard.press("Enter");
+  await expect(trigger).toHaveAttribute("aria-expanded", "true");
+  await expect(first).toBeFocused();
+  await page.keyboard.press("End");
+  await expect(last).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(first).toBeFocused();
+  await page.keyboard.press("ArrowUp");
+  await expect(last).toBeFocused();
+  await page.keyboard.press("Home");
+  await expect(first).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("ArrowDown");
+  await expect(page.getByTestId("settings-more-mail")).toBeFocused();
+  await expect(page.getByTestId("settings-more-computer")).toBeDisabled();
+  await page.keyboard.press("ArrowDown");
+  await expect(page.getByTestId("settings-more-email")).toBeFocused();
+  await page.keyboard.press("ArrowUp");
+  await expect(page.getByTestId("settings-more-mail")).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(menu).toHaveCount(0);
+  await expect(modal).toBeVisible();
+  await expect(trigger).toBeFocused();
+
+  await page.keyboard.press("Space");
+  await expect(first).toBeFocused();
+  await trigger.focus();
+  await page.keyboard.press("Space");
+  await expect(menu).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+  await page.keyboard.press("ArrowUp");
+  await expect(last).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(trigger).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(first).toBeFocused();
+  for (let step = 0; step < 3; step++) await page.keyboard.press("ArrowDown");
+  await expect(page.getByTestId("settings-more-email")).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(modal.getByRole("heading", { name: "Email", level: 1 })).toBeVisible();
+  await expect.poll(() => new URL(page.url()).hash).toBe("#/account/settings/email");
+  await expect(menu).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+
+  await trigger.click();
+  await expect(menu).toBeVisible();
+  await trigger.click();
+  await expect(menu).toHaveCount(0);
+  await trigger.press("Enter");
+  await expect(first).toBeFocused();
+  const search = modal.getByRole("textbox", { name: "Search", exact: true });
+  await search.click();
+  await expect(menu).toHaveCount(0);
+  await expect(search).toBeFocused();
+  await expect(modal).toBeVisible();
+  await trigger.focus();
+  await page.keyboard.press("Escape");
+  await expect(modal).toHaveCount(0);
+});
+// SET54-END: compact-more-keyboard
+
+// SET59-BEGIN: local-personalization-interiors
+// Both configured projects exercise the actual nested Dialog focus/scroll behavior.
+test("SET59 knowledge and memory drafts keep Settings open and fit desktop or 320px", async ({ page, context }, testInfo) => {
+  const mobile = testInfo.project.name.startsWith("mobile");
+  await page.setViewportSize({ width: mobile ? 320 : 1280, height: 844 });
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.addInitScript(() => window.localStorage.setItem("kokoro.locale", "en"));
+  await page.goto("/app#settings/personalization", { waitUntil: "domcontentloaded" });
+  const settings = page.getByTestId("settings-modal");
+  await expect(settings).toBeVisible();
+  const businessRequests: string[] = [];
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname.startsWith("/api/session/")) businessRequests.push(request.method());
+  });
+  await settings.getByRole("tab", { name: "Knowledge", exact: true }).click();
+  await expect(settings.getByRole("textbox", { name: "Search knowledge" })).toBeDisabled();
+  await expect(settings.getByText("No knowledge yet", { exact: true })).toHaveCount(0);
+  const add = settings.getByRole("button", { name: "Add", exact: true });
+  await add.click();
+  let knowledge = page.getByRole("dialog", { name: "Add knowledge", exact: true });
+  await expect(knowledge).toBeVisible();
+  await knowledge.getByRole("textbox", { name: "Name", exact: true }).fill("Temporary knowledge");
+  await knowledge.getByRole("textbox", { name: "When to use" }).fill("Local preview only");
+  await knowledge.getByRole("textbox", { name: "Content", exact: true }).fill("Temporary content ".repeat(20));
+  await expect(knowledge.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+  await expect(knowledge.getByRole("button", { name: "Save", exact: true })).toHaveAccessibleDescription(/not connected/);
+  await expect.poll(() => knowledge.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0 && rect.bottom <= innerHeight && element.scrollWidth <= element.clientWidth;
+  })).toBe(true);
+  const knowledgeCancel = knowledge.getByRole("button", { name: "Cancel", exact: true });
+  await knowledgeCancel.scrollIntoViewIfNeeded();
+  await expect(knowledgeCancel).toBeInViewport();
+  await knowledgeCancel.click();
+  await expect(add).toBeFocused();
+  await add.click();
+  knowledge = page.getByRole("dialog", { name: "Add knowledge", exact: true });
+  await expect(knowledge.getByRole("textbox", { name: "Name", exact: true })).toHaveValue("");
+  await expect(knowledge.getByRole("textbox", { name: "Content", exact: true })).toHaveValue("");
+  await page.keyboard.press("Escape");
+  await expect(knowledge).toHaveCount(0);
+  await expect(settings).toBeVisible();
+  await expect(add).toBeFocused();
+  await settings.getByRole("tab", { name: "Profile", exact: true }).click();
+  const firstImport = settings.getByRole("button", { name: "Import", exact: true });
+  await firstImport.click();
+  let memory = page.getByRole("dialog", { name: "Import memory", exact: true });
+  await expect(memory).toBeVisible();
+  await memory.getByRole("textbox", { name: "Paste the response" }).fill("A private temporary response");
+  const prompt = await memory.locator("pre").textContent();
+  expect(prompt).toBeTruthy();
+  await memory.getByRole("button", { name: "Copy this prompt", exact: true }).click();
+  await expect(memory.getByRole("status")).toHaveText("Copied");
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(prompt);
+  const importAction = memory.getByRole("button", { name: "Import", exact: true });
+  await expect(importAction).toBeDisabled();
+  await expect(importAction).toHaveAccessibleDescription(/not connected/);
+  await importAction.scrollIntoViewIfNeeded();
+  await expect(importAction).toBeInViewport();
+  await expect.poll(() => memory.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0 && rect.bottom <= innerHeight && element.scrollWidth <= element.clientWidth;
+  })).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath("set59-memory-dialog.png"), fullPage: true });
+  await page.keyboard.press("Escape");
+  await expect(memory).toHaveCount(0);
+  await expect(settings).toBeVisible();
+  await expect(firstImport).toBeFocused();
+  await settings.getByRole("button", { name: "Import memory", exact: true }).click();
+  memory = page.getByRole("dialog", { name: "Import memory", exact: true });
+  await expect(memory.getByRole("textbox", { name: "Paste the response" })).toHaveValue("");
+  await expect(memory.getByRole("status")).toHaveCount(0);
+  await memory.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(settings).toBeVisible();
+  expect(businessRequests).toEqual([]);
+});
+// SET59-END: local-personalization-interiors

@@ -1,3 +1,23 @@
+## 个人资料输入反馈（2026-10-16）
+
+仍消费既有四字段资料GET/PUT及expected_revision；输入上限由现personalization-schema唯一常量提供，无wire、路径、请求、响应、错误码或generated变更。过长尝试仅反馈未采用，合法旧草稿保持原blur保存语义；未开户Web契约消费仍未实施。
+
+## 个性化内页与数据管理排版（2026-10-16；设计边界）
+
+依据本轮实际 Manus 界面：个性化含个人资料/知识页签、名称/使用时机/内容知识弹窗，以及复制提示词/粘贴内容的记忆导入弹窗。当前 BFF 只有四项资料字段，没有知识存取或记忆解析契约。本片只补浏览界面和本机复制；资料继续沿既有可信读取/CAS保存，不新增业务请求。知识和导入最终保存动作保持禁用并展示原因，绝不虚构空知识列表或成功导入。数据管理保留真实分享/归档读取、分页、确认和恢复，仅补三行管理用途及排版。
+
+Owner 为现 Web 设置模块：扩展 personalization-card 负责页签和既有资料；同级 personalization-knowledge-panel 负责知识浏览/草稿弹窗，memory-import-dialog 负责导入说明/复制/临时文本；沿现 sections CSS、九语言、现组件和浏览器测试。选择同级具名组件而非全塞资料卡（避免不同弹窗职责混合），不建新目录或全局状态层。弹窗复用原 Radix Dialog，支持键盘/焦点返回/窄屏；关闭即卸载文本草稿，不写 localStorage、API、账户资料或服务器。复制失败明确反馈，未完成复制不显示成功；不从其他网站自动采集用户记忆。
+
+验证：原资料字段保存与全部旧业务断言保留，明确迁移旧“入口禁用”断言为“可浏览但不可提交”；验证页签/两弹窗/复制失败与重开清空、嵌套 Escape 和手机布局，随后组件、lint/typecheck/build、contract及architecture。Skills/MCP/连接器、generated、依赖、owner协议及数据库均排除。
+
+## 设置页面内部排版（2026-10-16）
+
+本次内部排版不增加或改变 HTTP、generated、权限、存储及 API 契约。未接服务按钮继续 disabled 并由可见 aria-describedby 解释原因，不呈现虚构空账户或成功结果。
+
+## SET53 资产及服务页面边界（2026-10-16）
+
+六个菜单扩为页面，不增加 HTTP/API、scope、生成契约或 owner 能力。固定 BFF public16 没有 Mail/邮箱资产/电话/支付钱包/API 密钥/Webhooks 管理闭环；现 beta agent connection setup 不在本次调用范围。页面导航和局部页签可用，其余服务动作禁用且说明不可用，不发送业务请求、不伪造读取成功或空列表。既有登录邮箱、积分、Skills/MCP 不改作新资产事实源。
+
 ## SET49 主线与设置契约组合（2026-10-16）
 
 本次不增加浏览器API或授权能力。Web继续只消费BFF固定发行，承接主线已批准的MCP契约删除以及现设置账户/分享/归档增量；所有既有生成组必须从同一正式owner全文、commit、digest正规再生成，不混合pin或手改generated。当前已运行实例不因源码push自动切换。
@@ -1857,3 +1877,6 @@ id and does not resend POST.
 唯一新Web入口GET /api/account/profile，不是新的公开Product或IAM业务API；禁止query/body，canonical Web请求，GET以外不提供动作。调用现BFF /v1/me在线准入与/iam/oauth2/userinfo；不直接访问IAM。成功仅{data:{subject,name,email,email_verified}}，后3字段可为null，姓名/邮箱缺scope不是匿名或伪造默认值；userinfo sub与Product subject必须一致。其他IAM字段不透传，包含token、credential、cookie、Location或原始error body均不得回浏览器。
 
 所有响应private,no-store；无有效会话401、请求不合法400/403、依赖或登记未配置503、非法上游502，错误只用本片稳定安全类别，不显示原始异常。userinfo401/403失败关闭，429/5xx不得转成功空资料。单请求总5秒包含所有读取与body，上限16KiB，取消/迟到拒成功；身份校验与最终session复验同一原request，不由浏览器传subject/tenant。现IAM/BFF contract、generated pin和scope权限语义不变。
+## SET54 More 键盘行为（2026-10-16）
+
+仅现设置菜单浏览器交互；无新增或变更 API、请求资格、同源 adapter、生成物及 owner 契约。聚焦 Skills/连接器菜单项不调用其业务；禁用项始终不可选择。
