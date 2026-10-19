@@ -1,3 +1,7 @@
+## Admin同源本地失败（2026-10-19）
+
+既有`/api/admin/*`错误固定为完整`error.code/message/retryable`、同request-id与no-store；无Product Session为401 session_authentication_required且retryable=false，退休旧admin_session_required，无alias。本地503 admin_gateway_unavailable及502 admin_gateway_response_invalid均retryable=true，表示上层可保原命令处理，不自动刷新/登录/重发写。固定message不泄露内部异常，上游owner响应与严格头校验不变。不新增路径、权限、配置或认证方案；原测试与真实同源无cookie链验收，完整交付结果由Root原收尾计划绑定。
+
 ## 第一方Authorize导航失败的表示（2026-10-19）
 
 既有`GET /iam/oauth2/authorize`、OIDC参数、Issuer/Product Session与owner allowlist不变。全部既有入站校验通过后，只有`Sec-Fetch-Mode: navigate`、`Sec-Fetch-Dest: document`且Accept明确允许text/html、存在代理nonce的失败导航使用无脚本恢复页；status与request-id保留，no-store/no-referrer/CSP固定，唯一动作是用户显式进入`/login`。不自动重试、不转移旧query/state或owner失败body/cookies/Location。 最终Proxy在精确authorize路径使用同一nonce策略并固定no-referrer，避免框架全局头覆盖；其余路径不改变。

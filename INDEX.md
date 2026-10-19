@@ -1,3 +1,7 @@
+## Admin Product 错误边界（2026-10-19）
+
+`src/app/api/admin/[...path]/route.ts`返回完整错误envelope与既有401机器码；原`tests/app/admin-proxy.test.ts`保护准入失败零BFF请求与固定错误正文。不新增登录或刷新链。
+
 ## Skin文字继承（2026-10-17）
 
 `src/app/globals.css` 的 `[data-web-skin="kokoro"]` 同时声明语义变量与 `color:var(--foreground)`；仅覆盖变量不会重新计算从body继承的颜色。正文、图标等未显式设色的组件沿skin继承，不逐组件复制中性色。原项目会话E2E通过公开计算样式承接回归。

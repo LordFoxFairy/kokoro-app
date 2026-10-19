@@ -13,7 +13,11 @@ const ADMIN_SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u
 
 function failure(status: number, code: string, requestId: string): Response {
   return Response.json(
-    { error: { code } },
+    { error: {
+      code,
+      message: status === 401 ? "请先登录后再试。" : "后台请求未完成，请稍后重试。",
+      retryable: status >= 500,
+    } },
     { status, headers: { "cache-control": "no-store", "x-request-id": requestId } },
   )
 }
@@ -56,7 +60,7 @@ async function handle(request: Request, context: Context): Promise<Response> {
   } catch {
     return failure(503, "admin_gateway_unavailable", requestId)
   }
-  if (claims === null) return failure(401, "admin_session_required", requestId)
+  if (claims === null) return failure(401, "session_authentication_required", requestId)
 
   const mutation = request.method !== "GET"
   let body: ArrayBuffer | null = null
