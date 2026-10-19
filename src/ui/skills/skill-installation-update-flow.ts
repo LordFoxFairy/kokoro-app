@@ -285,6 +285,16 @@ export function createSkillInstallationUpdateFlow(options: {
     },
     readCurrent: (value: ProjectReadBoundary) => run(false, value),
     confirm: (value: ProjectReadBoundary) => run(true, value),
+    // Explicitly forget local recovery intent only. This is neither an ACK nor
+    // a rollback; a late response still belongs to the retired attempt.
+    abandon: (value: ProjectReadBoundary, expected: SkillUpdateState) => {
+      if (!matches(value) || !admitted() || active || expected !== state ||
+        state.kind !== "unknown" || !intent?.attempted || intent.acknowledged)
+        return false
+      intent = undefined
+      update({ kind: "idle", acknowledged: false })
+      return true
+    },
     reset: (value: ProjectReadBoundary) => {
       if (
         !matches(value) ||

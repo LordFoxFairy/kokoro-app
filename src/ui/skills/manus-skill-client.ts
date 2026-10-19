@@ -168,7 +168,7 @@ async function installedCards(lifetimeSignal: AbortSignal, assertCurrent: () => 
           source_ref: item.source_ref, installed_source_ref: item.source_ref, revision_skill_id: item.source_ref.slice(6),
           ...(item.available_update === undefined ? {} : { available_update: item.available_update }),
           name: item.display_name, description: item.summary, content_hash: item.series_id,
-          scope: item.product.source_kind ?? "unknown", enabled: item.enabled,
+          scope: item.product.source_kind ?? "unknown", enabled: item.enabled, source_status: item.source_status,
           updated_at: Math.floor(Date.parse(item.skill_updated_at) / 1000),
         })
       }

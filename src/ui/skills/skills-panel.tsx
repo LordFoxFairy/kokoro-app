@@ -201,12 +201,14 @@ function ActorSkillsContent(props: SkillsContentProps) {
   const updateFallbackFocus = useRef<HTMLInputElement | null>(null);
   useLayoutEffect(() => updateFlow.retain({ admitted, subject, generation }), [updateFlow, admitted, subject, generation]);
   const updateCurrent = props.readBoundary.admitted && subject !== null && updateFlow.matches(props.readBoundary);
-  useEffect(() => {
-    if (!updateCurrent || !updateState.acknowledged) return;
+  const invalidateUpdateViews = useCallback(() => {
     invalidate(skillResourceKey(SKILLS_KEY, props.client));
     invalidate(skillResourceKey(SKILLS_CATALOG_KEY, props.client));
     invalidate(SKILL_CATALOG_RESOURCE_KEY);
-  }, [updateCurrent, updateState.acknowledged, props.client]);
+  }, [props.client]);
+  useEffect(() => {
+    if (updateCurrent && updateState.acknowledged) invalidateUpdateViews();
+  }, [updateCurrent, updateState.acknowledged, invalidateUpdateViews]);
   const updateLocked = () => updateFlow.getSnapshot().kind !== "idle";
   const openUpdate = (skill: SkillCard, source: HTMLElement) => {
     if (!updateCurrent || !updateFlow.select(skill, props.readBoundary)) return false;
@@ -218,7 +220,7 @@ function ActorSkillsContent(props: SkillsContentProps) {
   return <>
     {updateCurrent && updateState.kind !== "idle" ? <div className={styles.updateNotice} role="status"><span>{t(updateState.acknowledged ? "skills.update.confirmedNotice" : "skills.update.pendingNotice")}</span><Button type="button" variant="outline" onClick={event => { updateReturnFocus.current = event.currentTarget; setUpdateOpen({ subject, open: true }); void updateFlow.readCurrent(props.readBoundary); }}>{t("skills.update.resume")}</Button></div> : null}
     <InstalledSkillsContent {...props} onUpdateSkill={openUpdate} updateFallbackFocus={updateFallbackFocus} updateLocked={updateLocked} updatePending={updateState.kind !== "idle"} />
-    <SkillInstallationUpdateDialog flow={updateFlow} boundary={props.readBoundary} state={updateState} admitted={updateCurrent} open={updateOpen.subject === subject && updateOpen.open} onOpenChange={open => { if (updateFlow.matches(props.readBoundary)) setUpdateOpen({ subject, open }); }} returnFocusRef={updateReturnFocus} fallbackFocusRef={updateFallbackFocus} />
+    <SkillInstallationUpdateDialog flow={updateFlow} boundary={props.readBoundary} state={updateState} admitted={updateCurrent} open={updateOpen.subject === subject && updateOpen.open} onOpenChange={open => { if (updateFlow.matches(props.readBoundary)) setUpdateOpen({ subject, open }); }} onAbandoned={invalidateUpdateViews} returnFocusRef={updateReturnFocus} fallbackFocusRef={updateFallbackFocus} />
   </>;
 }
 
@@ -257,6 +259,11 @@ function InstalledSkillsContent({
   // Only the exact locator and open intent survive a same-actor recheck.
   // Selected cards, installation projections and callbacks never do.
   const [detailIntent, setDetailIntent] = useState<{ key: string; source: "pool" | "catalog" } | null>(null);
+  const liveDetailWindow = useRef(detailIntent);
+  useLayoutEffect(() => {
+    liveDetailWindow.current = detailIntent;
+    return () => { liveDetailWindow.current = null; };
+  }, [detailIntent]);
   const [catalogDetail, setCatalogDetail] = useState<{ client: HubClient; value: CatalogDetailProjection } | null>(null);
   const [detailActionFact, setDetailActionFact] = useState<{ key: string; installed: boolean; enabled: boolean; source: string | undefined } | null>(null);
   const [githubImportNotice, setGithubImportNotice] =
@@ -338,11 +345,15 @@ function InstalledSkillsContent({
       skill: SkillCard,
       enabled: boolean,
       stateKey = skillStateKey(skill.scope, skill.name, skill.skill_id),
+      detailWindow?: NonNullable<typeof detailIntent>,
     ) => {
       // One mutation owns the shared hub action slot. State is for rendering;
       // the ref closes the same-frame double-click window before React commits
       // the busy state.
       if (liveOwner.current !== owner || (!preview && (!owner.admitted || owner.subject === null)) || mutationBusyRef.current || updateLocked()) return;
+      // A withdrawn/disabled/quarantined source may still have an installation.
+      // Keep disabling possible; enabling requires an available source.
+      if (enabled && skill.source_status !== undefined && skill.source_status !== "active") return;
       mutationBusyRef.current = true;
       const attempt = ++mutationAttemptRef.current;
       // 池内项恒为「已启用」：唯一动作是停用（停用后离池）。required 撞 409 → 锁定回滚。
@@ -358,8 +369,11 @@ function InstalledSkillsContent({
       if (liveOwner.current !== owner || attempt !== mutationAttemptRef.current) return;
       setBusy(null);
       if (outcome.ok) {
-        setDetailActionFact({ key: JSON.stringify([skill.skill_id, skill.revision_skill_id]), installed: true, enabled,
-          source: skill.installation_id === undefined ? skill.source_ref : skill.installed_source_ref });
+        // Pool ACKs and a retired detail window must not override a fresh read.
+        if (detailWindow !== undefined && liveDetailWindow.current === detailWindow) {
+          setDetailActionFact({ key: JSON.stringify([skill.skill_id, skill.revision_skill_id]), installed: true, enabled,
+            source: skill.installation_id === undefined ? skill.source_ref : skill.installed_source_ref });
+        }
         setEnabledOverrides((current) =>
           new Map(current).set(stateKey, enabled),
         );
@@ -461,6 +475,7 @@ function InstalledSkillsContent({
               detailReturnFocusRef.current = source;
               const selection = detailSelectionFor(skill);
               if (!selection) return;
+              setDetailActionFact(null);
               setDetailIntent({ key: JSON.stringify([selection.skill.skill_id, selection.skill.revision_skill_id]), source: "installed" in skill ? "catalog" : "pool" });
               if ("installed" in skill) setCatalogDetail({ client, value: { skill, failed: false, busy: false, retry: () => {
                 if (liveOwner.current === owner) invalidate(skillResourceKey(SKILLS_CATALOG_KEY, client));
@@ -507,9 +522,9 @@ function InstalledSkillsContent({
           publisherLabel={brandName ?? "Kokoro"}
           categoryLabels={detailSelection?.skill.categories ?? []}
           open
-          {...(detailSelection ? { installationState: detailSelection.installationState } : {})}
+          {...(detailSelection && (detailIntent.source !== "pool" || detailActionFact?.key === detailIntent.key) ? { installationState: detailSelection.installationState } : {})}
           onOpenChange={(open) => {
-            if (!open) setDetailIntent(null);
+            if (!open) { setDetailActionFact(null); setDetailIntent(null); }
           }}
           returnFocusRef={detailReturnFocusRef}
           onAdd={(skill) =>
@@ -517,12 +532,17 @@ function InstalledSkillsContent({
               toSkillActionCard(skill),
               true,
               skillStateKey(skill.scope, skill.name, skill.skill_id),
+              detailIntent,
             )
           }
-          onTry={(prompt) => {
+          onTry={(prompt, selection) => {
             if (!detailSelection || liveOwner.current !== owner || !admitted) return false;
-            const detailSkill = toSkillActionCard(detailSelection.skill);
-            if (onTrySkill?.(detailSkill, prompt)) { setDetailIntent(null); return true; }
+            const original = detailSelection.skill;
+            if (selection.skill_id !== original.skill_id || selection.revision_skill_id !== original.revision_skill_id
+              || selection.source_ref !== original.source_ref || selection.installed_source_ref !== original.installed_source_ref
+              || selection.installation_id !== original.installation_id) return false;
+            const detailSkill = toSkillActionCard(selection);
+            if (onTrySkill?.(detailSkill, prompt)) { setDetailActionFact(null); setDetailIntent(null); return true; }
             if (preview && !onTrySkill) { if (!pinned.includes(detailSkill.name)) onTogglePin(detailSkill.name); setDetailIntent(null); return true; }
             return false;
           }}

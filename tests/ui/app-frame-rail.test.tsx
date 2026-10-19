@@ -16,6 +16,7 @@ import { useCatalogSkillInstallation } from "@/features/app/use-catalog-skill-in
 import { GithubImportDialog } from "@/ui/skills/github-import-dialog"
 import { SkillUploadDialog } from "@/ui/skills/skill-upload-dialog"
 import { ManusSkillDetailDialog } from "@/ui/skills/manus-skill-detail-dialog"
+import { skillTrialSourceRef } from "@/ui/skills/skills-card-model"
 import { KokoroSkillsSurface } from "@/features/app/kokoro-skills-surface"
 import { SkillsSettingsSection } from "@/ui/settings/sections/skills-settings-section"
 import { createHubClient } from "@/hub/client"
@@ -4173,6 +4174,8 @@ it("a late provider toggle ACK does not close a successor provider window", asyn
 
 it.each(["forbidden", "not-found", "network"])("installation detail keeps pin A metadata and reader when the catalog current revision is B (%s download)", async downloadFailure => {
   const requests: string[] = []
+  let sourceStatus: "active" | "withdrawn" = "withdrawn"
+  const onAdd = vi.fn()
   const text = "# Installed A"
   const fileTexts = { "SKILL.md": text, "references/notes.md": "# Reader notes", "scripts/nested/check.py": "print(\"reader-check\")" }
   const files = Object.entries(fileTexts).map(([path, value]) => ({ path, size_bytes: String(new TextEncoder().encode(value).byteLength) }))
@@ -4196,12 +4199,13 @@ it.each(["forbidden", "not-found", "network"])("installation detail keeps pin A 
       }
       return Response.json({ data: { source_ref: "skill:pin-A", revision: "1", files, selected_file: selected === null ? null : { path: selected, text: fileTexts[selected] } } }, { headers })
     }
-    return Response.json({ data: { installation_id: "pin-install", series_id: "pin-series", source_ref: "skill:pin-A", revision: "1", installed: true, enabled: false, display_name: "Installed A", summary: "A summary", source_status: "withdrawn", installed_at: "2026-10-15T00:00:00Z", updated_at: "2026-10-15T00:00:00Z", skill_updated_at: "2026-10-14T00:00:00Z", example_prompts: ["A example"], category_keys: [], tags: [], product: { publication_audience: "catalog", state_version: "1", source_kind: "personal" } } }, { headers })
+    return Response.json({ data: { installation_id: "pin-install", series_id: "pin-series", source_ref: "skill:pin-A", revision: "1", installed: true, enabled: false, display_name: "Installed A", summary: "A summary", source_status: sourceStatus, installed_at: "2026-10-15T00:00:00Z", updated_at: "2026-10-15T00:00:00Z", skill_updated_at: "2026-10-14T00:00:00Z", example_prompts: ["A example"], category_keys: [], tags: [], product: { publication_audience: "catalog", state_version: "1", source_kind: "personal" } } }, { headers })
   })
-  const content = (admitted = true, generation = 1, pending = false) => <LocaleProvider><ManusSkillDetailDialog detailSource="installation" readBoundary={{ admitted, subject: "pin-reader", generation }} skill={pending ? null : { skill_id: "pin-series", revision_skill_id: "pin-A", source_ref: "skill:pin-A", installed_source_ref: "skill:pin-A", installation_id: "pin-install", name: "Installed A", description: "Card A", content_hash: "pin-series", scope: "personal", installed: true, enabled: false }} pending={pending} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={() => false} /></LocaleProvider>
+  const content = (admitted = true, generation = 1, pending = false) => <LocaleProvider><ManusSkillDetailDialog detailSource="installation" readBoundary={{ admitted, subject: "pin-reader", generation }} skill={pending ? null : { skill_id: "pin-series", revision_skill_id: "pin-A", source_ref: "skill:pin-A", installed_source_ref: "skill:pin-A", installation_id: "pin-install", name: "Installed A", description: "Card A", content_hash: "pin-series", scope: "personal", source_status: "disabled", installed: true, enabled: false }} pending={pending} open onOpenChange={vi.fn()} onAdd={onAdd} onTry={() => false} /></LocaleProvider>
   const view = render(content())
   await screen.findByText("A summary")
-  expect(screen.getByRole("button", { name: "启用" })).toBeEnabled()
+  expect(screen.getByRole("button", { name: "启用" })).toBeDisabled()
+  expect(screen.getByText("此技能版本当前不可用。")).toBeVisible()
   expect(screen.queryByText("B summary")).toBeNull()
   expect(screen.queryByRole("heading", { name: "Catalog B" })).toBeNull()
   const reader = screen.getByRole("button", { name: "查看详情" })
@@ -4265,8 +4269,96 @@ it.each(["forbidden", "not-found", "network"])("installation detail keeps pin A 
   expect(screen.getByText(downloadFailure === "network" ? "下载未完成，请重试。" : "此技能当前未开放下载。")).toBeVisible()
   expect(screen.queryByText("技能详情暂时不可用")).toBeNull()
   expect(screen.getByRole("heading", { name: "Installed A", level: 1 })).toBeVisible()
+  if (downloadFailure === "network") {
+    fireEvent.click(screen.getByRole("button", { name: /^技能详情$/ }))
+    sourceStatus = "active"
+    view.rerender(content(true, 2))
+    await waitFor(() => expect(screen.getByRole("button", { name: "启用" })).toBeEnabled())
+    fireEvent.click(screen.getByRole("button", { name: "启用" }))
+    expect(onAdd).toHaveBeenCalledWith(expect.objectContaining({ source_status: "active", source_ref: "skill:pin-A", installation_id: "pin-install" }))
+  }
 })
 
+
+it.each([
+  { poolEnabled: true, freshEnabled: false, priorAck: "none" },
+  { poolEnabled: false, freshEnabled: true, priorAck: "none" },
+  { poolEnabled: true, freshEnabled: true, priorAck: "none" },
+  { poolEnabled: false, freshEnabled: true, priorAck: "pool" },
+  { poolEnabled: false, freshEnabled: false, priorAck: "retired-detail" },
+])("installation trial hands off fresh availability and enabled state rather than the old pool %j", async ({ poolEnabled, freshEnabled, priorAck }) => {
+  let currentEnabled = freshEnabled
+  let listedEnabled = priorAck === "pool" ? true : poolEnabled
+  let releaseAck: (() => void) | undefined
+  const pendingAck = new Promise<void>(resolve => { releaseAck = resolve })
+  let writes = 0
+  let listReads = 0
+  const installed = {
+    installation_id: "trial-restore-install", series_id: "trial-restore-series", source_ref: "skill:trial-restore-version", revision: "1",
+    installed: true, enabled: freshEnabled, source_status: "active", display_name: "Recovered source", summary: "Fresh current availability",
+    installed_at: "2026-10-15T00:00:00Z", updated_at: "2026-10-16T00:00:00Z", skill_updated_at: "2026-10-15T00:00:00Z",
+    example_prompts: ["Use fresh availability"], category_keys: [], tags: [], product: { publication_audience: "owner", state_version: "2", source_kind: "personal" },
+  }
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    const path = String(input)
+    if (init?.method === "POST" && path === "/api/skill.v1.SkillOptionalService/SetSkillInstallationEnabled") {
+      writes += 1
+      const enabled = (JSON.parse(String(init.body)) as { enabled: boolean }).enabled
+      currentEnabled = enabled
+      listedEnabled = enabled
+      if (priorAck === "retired-detail" && writes === 1) await pendingAck
+      return Response.json({ data: { installation: { ...installed, enabled }, change: enabled ? "enabled" : "disabled", event_id: "enabled-current", replayed: false } }, { headers: { "cache-control": "no-store", "x-request-id": "fresh-trial" } })
+    }
+    if (path.includes("?installed=true")) listReads += 1
+    const data = path.includes("?installed=true") ? [{ ...installed, enabled: listedEnabled, source_status: "disabled" }]
+      : path.endsWith("/trial-restore-install") ? { ...installed, enabled: currentEnabled } : []
+    return Response.json({ data }, { headers: { "cache-control": "no-store", "x-request-id": "fresh-trial" } })
+  })
+  const onTrySkill = vi.fn((skill: import("@/hub/schemas").SkillCard) => skillTrialSourceRef(skill) !== null)
+  render(<LocaleProvider><SkillsSettingsSection readBoundary={{ admitted: true, subject: "fresh-trial-reader", generation: 1 }} hubClient={createHubClient()} preview={false} brandName="Kokoro" onTrySkill={onTrySkill} embeddedCatalogOpen={false} onEmbeddedCatalogOpenChange={vi.fn()} catalogTriggerRef={{ current: null }} /></LocaleProvider>)
+  if (priorAck === "pool") {
+    fireEvent.click(await screen.findByRole("switch", { name: "停用 Recovered source" }))
+    await waitFor(() => expect(screen.getByRole("switch", { name: "启用 Recovered source" })).toBeDisabled())
+    currentEnabled = freshEnabled // Another window changes the owner after the pool ACK.
+  }
+  fireEvent.click(await screen.findByRole("button", { name: "Recovered source" }))
+  if (priorAck === "retired-detail") {
+    await waitFor(() => expect(screen.getByRole("button", { name: /^启用$/ })).toBeEnabled())
+    fireEvent.click(screen.getByRole("button", { name: /^启用$/ }))
+    await waitFor(() => expect(writes).toBe(1))
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Close" }))
+    currentEnabled = false // Owner changes again before the old ACK reaches this window.
+    listedEnabled = false
+    fireEvent.click(screen.getByRole("button", { name: "Recovered source" }))
+    expect(await screen.findByRole("button", { name: "Use fresh availability" })).toBeDisabled()
+    const readsBeforeAck = listReads
+    await act(async () => { releaseAck!(); await pendingAck })
+    await waitFor(() => expect(listReads).toBeGreaterThan(readsBeforeAck))
+    expect(screen.getByRole("button", { name: "Use fresh availability" })).toBeDisabled()
+    expect(onTrySkill).not.toHaveBeenCalled()
+    return
+  }
+  const trial = await screen.findByRole("button", { name: "Use fresh availability" })
+  if (!freshEnabled) {
+    expect(trial).toBeDisabled()
+    const enable = screen.getByRole("button", { name: /^启用$/ })
+    expect(enable).toBeEnabled()
+    fireEvent.click(enable)
+    await waitFor(() => expect(screen.getByRole("button", { name: "Use fresh availability" })).toBeEnabled())
+    // A local ACK can supersede the earlier read, but not the next open's fresh GET.
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Close" }))
+    currentEnabled = false
+    fireEvent.click(screen.getByRole("button", { name: "Recovered source" }))
+    await waitFor(() => expect(screen.getByRole("button", { name: /^启用$/ })).toBeEnabled())
+    expect(screen.getByRole("button", { name: "Use fresh availability" })).toBeDisabled()
+    expect(onTrySkill).not.toHaveBeenCalled()
+  } else {
+    expect(trial).toBeEnabled()
+    fireEvent.click(trial)
+    expect(onTrySkill).toHaveBeenCalledWith(expect.objectContaining({ source_status: "active", enabled: true, source_ref: installed.source_ref, installed_source_ref: installed.source_ref }), "Use fresh availability")
+    expect(screen.queryByRole("dialog")).toBeNull()
+  }
+})
 
 it("catalog detail still reads current B even when its card also carries installation A", async () => {
   const requests: string[] = []

@@ -1,3 +1,13 @@
+## 更新未知结果的明确停止等待
+
+个人安装更新继续保留unknown、原key/body及普通reset保护；HTTP412不证明原操作未提交。`skill-installation-update-flow`的abandon仅接受当前admitted boundary、同一unknown snapshot、无active等待且尚无ACK，清本地恢复意图而非撤销owner更新。`skill-installation-update-dialog`二次确认后调用，取消返回原按钮；actor/generation/状态变化使旧确认失效。父SkillsContent失活原池/目录查询并关闭，不合成成功。正常页面的请求前故障验收与真实owner lost-ACK是不同证据，范围见CURRENT。
+
+## 当前安装来源可用性（2026-10-17）
+
+正式安装 wire 必需的 source_status 原样投影到卡片；它不等于 installed/enabled，也不是执行授权。已知非 active 来源禁止新启用/试用，既有 enabled 安装仍可停用，详情/历史包阅读与显式更新不受影响。不可用提示占原卡片 footer 的次要日期位置，不增卡片高度挤走更新；完整日期仍在详情。未提供该字段的目录/显示模型不据此制造 active 事实，实际命令仍由 owner 当前资格裁决。
+
+安装详情以已核 exact installation 的当前可用性组成 currentSkill；启用与试用同用这份事实，试用回父组件仍核原 owner/admitted 及 series/revision/source/installation locator，不因旧卡状态而静默失效，也不借新来源替换旧 pin。原安装 wire、命令、缓存退役、权限、目录 series-current 下载及分享 exact 语义不变。
+
 ## GitHub 导入结果未知
 
 `personal-skill-github-import-flow.ts` 将非preview阶段的正式HTTP5xx也归为unknown：已创建draft后的checkpoint/响应失败不证明未提交。保留原selector、各阶段body/key，仅显式恢复；preview仍是可重新输入的读取失败。404也没有证明可释放完整Import意图，因此不增加“换仓库/换key”旁路。

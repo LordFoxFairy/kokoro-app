@@ -120,10 +120,10 @@
 
 /* Package reader shares the compact detail-dialog geometry while retaining
  * a stable file tree and rendered-document split on desktop. */
-.readerDialog[data-slot="dialog-content"] { width:min(50rem,calc(100vw - 2rem)); max-width:calc(100vw - 2rem); height:min(37.5rem,calc(100dvh - 2rem)); max-height:calc(100dvh - 2rem); min-height:0; display:flex; flex-direction:column; overflow:hidden; }
-.readerHeader { display:flex; flex:0 0 auto; min-height:3.75rem; box-sizing:border-box; align-items:center; flex-direction:row; gap:.5rem; padding:.625rem 3.75rem .625rem 1.25rem; border-bottom:1px solid var(--border); text-align:left; }
+.readerDialog[data-slot="dialog-content"] { border-radius:.75rem; width:min(50rem,calc(100vw - 2rem)); max-width:calc(100vw - 2rem); height:min(37.5rem,calc(100dvh - 2rem)); max-height:calc(100dvh - 2rem); min-height:0; display:flex; flex-direction:column; overflow:hidden; }
+.readerHeader { display:flex; flex:0 0 auto; height:3.75rem; min-height:3.75rem; box-sizing:border-box; align-items:center; flex-direction:row; gap:.5rem; padding:1.25rem 3.75rem .75rem 1rem; border-bottom:1px solid var(--border); text-align:left; }
 .readerHeader h2 { margin:0; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:1rem; }
-.readerHeader > button { min-height:2rem; padding-inline:0; font-size:1.125rem; font-weight:600; letter-spacing:normal; line-height:1.5rem; }
+.readerHeader > button { height:1.75rem; min-height:1.75rem; padding-block:0; padding-inline:0; font-size:1.125rem; font-weight:600; letter-spacing:normal; line-height:1.5rem; }
 .backIcon { transform:rotate(180deg); }
 .readerDialog .reader { flex:1 1 auto; min-height:0; margin:0; border:0; border-radius:0; grid-template-columns:12.5rem minmax(0,1fr); }
 .readerDialog .fileList,.readerDialog .fileContent { min-height:0; max-height:none; overflow:auto; }

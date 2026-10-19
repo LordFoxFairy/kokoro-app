@@ -34,6 +34,7 @@ it.each([["personal", "personal"], ["official", "official"], ["third_party", "th
 
 it("installed pool consumes exact owner sources across every page, including disabled and unknown entries", async () => {
   const rows = [item("own", "personal"), item("builtin", "official"), item("github", "third_party"), item("unclassified")]
+  rows[1]!.source_status = "withdrawn"
   const calls: string[] = []
   vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input); calls.push(url)
@@ -47,6 +48,7 @@ it("installed pool consumes exact owner sources across every page, including dis
   expect(cards.map(card => card.scope)).toEqual(["personal", "official", "third_party", "unknown"])
   expect(cards.map(card => card.skill_id)).toEqual(rows.map(row => row.series_id))
   expect(cards[2]).toMatchObject({ installation_id: "installation-github", source_ref: "skill:version-github", revision_skill_id: "version-github", enabled: false })
+  expect(cards.map(card => card.source_status)).toEqual(["active", "withdrawn", "active", "active"])
   expect(cards).toHaveLength(4)
   expect(calls).toEqual([
     "/api/hub/self/skill-installations?installed=true&limit=100",

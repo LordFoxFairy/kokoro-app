@@ -35,6 +35,8 @@ export const installationKeySchema = z.string().regex(/^[\x21-\x2b\x2d-\x7e]{1,1
 const installationRevisionSchema = z.string().max(20).refine((value) => /^[1-9][0-9]{0,19}(?![\s\S])/u.test(value) && BigInt(value) <= BigInt("18446744073709551615"))
 const installationUpdateTargetSchema = z.object({ source_ref: installationSourceSchema, revision: installationRevisionSchema }).strict()
 
+const installationSourceStatusSchema = z.enum(["active", "disabled", "withdrawn", "quarantined"])
+
 // 池卡片：official 位（scope=OFFICIAL_SCOPE）与本 namespace 自有包（scope=namespace）合并视图。
 // 池只含「有效可用」项（official 上架∧用户未关 + 自有包）；required 官方技能恒在且拒关（disable→409）。
 const skillCardSchema = z
@@ -54,6 +56,7 @@ const skillCardSchema = z
       .regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u)
       .optional(),
     available_update: installationUpdateTargetSchema.optional(),
+    source_status: installationSourceStatusSchema.optional(),
     name: z.string().min(1),
     description: z.string(),
     content_hash: z.string().min(1),
@@ -78,6 +81,7 @@ const skillCatalogCardSchema = z
     source_ref: z.string().regex(/^skill:[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u).optional(),
     // Internal view binding from the exact installation, not Hub currentVersion.
     installed_source_ref: z.string().regex(/^skill:[A-Za-z0-9][A-Za-z0-9._:-]{0,190}(?![\s\S])/u).optional(),
+    source_status: installationSourceStatusSchema.optional(),
     revision_skill_id: z
       .string()
       .regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u)
@@ -605,7 +609,7 @@ export const personalInstallationSchema = z
     removed_at: installationInstant.optional(),
     display_name: managedPersonalSkillSchema.shape.name,
     summary: managedPersonalSkillSchema.shape.summary,
-    source_status: z.enum(["active", "disabled", "withdrawn", "quarantined"]),
+    source_status: installationSourceStatusSchema,
     skill_updated_at: installationInstant,
     example_prompts: managedPersonalSkillSchema.shape.example_prompts,
     category_keys: managedPersonalSkillSchema.shape.category_keys,

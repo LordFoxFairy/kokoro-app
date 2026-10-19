@@ -159,6 +159,7 @@ const firstSiteFallback: Partial<Record<MessageKey, string>> = {
 }
 
 const skillsFallback: Partial<Record<MessageKey, string>> = {
+  "skills.sourceUnavailable": "This skill version is currently unavailable.",
   "skills.update.available": "Update to v{revision}",
   "skills.update.title": "Update skill",
   "skills.update.description": "Update this installation only, preserving its enabled state. Existing conversations and running tasks keep their pinned versions.",
@@ -176,6 +177,9 @@ const skillsFallback: Partial<Record<MessageKey, string>> = {
   "skills.update.confirmedNotice": "The skill update was confirmed. Check the current state.",
   "skills.update.pendingNotice": "A skill update needs your attention.",
   "skills.update.resume": "View update",
+  "skills.update.stopWaiting": "Stop waiting",
+  "skills.update.stopWaitingTitle": "Stop waiting for this update?",
+  "skills.update.stopWaitingDescription": "This only ends local waiting. It does not undo a submitted update. The installation list will refresh, and later actions use its current state.",
   "skills.localImport.hint": "Choose one archive containing SKILL.md. Its owner reads the metadata and adds it to My skills.",
   "skills.localImport.session": "Confirm your current sign-in before uploading.",
   "skills.localImport.processing": "Importing skill…",

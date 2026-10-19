@@ -1,3 +1,11 @@
+## Skills 来源可用性与未知更新恢复交付（2026-10-18）
+
+安装source_status不等于installed/enabled：卡片保留owner实际值，不可用来源禁止新启用/试用，已启用安装仍可停用，详情/历史包阅读及显式更新保留。详情使用exact installation鲜读事实，向父组件交还相同series/revision/source/installation locator的当前选择；不以旧卡可用性或enabled覆盖鲜读；仅同一次详情打开内的显式启停ACK可临时覆盖该次读，池操作及关闭/重开后的迟到ACK不得写新详情。不成为执行授权。
+
+正常已登录页面对照实际800×600阅读器：Manus圆角12px、header高60px、起侧16px及上/下20/12px；本地原圆角16px、起侧20px及上/下10/10px。本片只修这些已测几何，保留既有操作预留、文件树与响应式；不同视口/包内容和动作差异仍不称整页1:1。
+
+未知更新仍保原key/body及ACK与GET之别；新增二次确认的“停止等待”只清当前actor、admitted边界和同一unknown快照的本地恢复意图，不撤销owner写、不合成ACK、不自动新请求。存在active等待或已知ACK时拒绝清除；确认后失活原列表并回读，后续仍由owner pin CAS决定。正常样本未改、未调用模型/工具/扣费；隔离组件证明与正常完整产品旅程分别记录，未把工作树其它模块或刷新改动并入。
+
 ## 首次匿名设置导航独立交付（2026-10-18）
 
 沿既有签名return_to/MAC/state、同源固定IAM OIDC，不改认证协议、cookie、权限、刷新或存储。SSR确认没有可用会话时，只返回独立无数据导航组件；浏览器捕获完整白名单设置hash并一次replace到/login，无脚本保留校验过的path/query链接。未知hash不成为开放重定向，已有AppGate/身份判定及故障关闭保留。

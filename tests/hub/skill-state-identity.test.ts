@@ -81,6 +81,9 @@ it.each([
   { installed_source_ref: "skill:older-revision" },
   { revision_skill_id: "different-revision" },
   { enabled: false },
+  { source_status: "withdrawn" as const },
+  { source_status: "disabled" as const },
+  { source_status: "quarantined" as const },
   { source_ref: "skill:revision-trial\n", installed_source_ref: "skill:revision-trial\n", revision_skill_id: "revision-trial\n" },
 ])("does not infer an executable trial from inconsistent or unavailable facts %j", (change) => {
   expect(skillTrialSourceRef({ ...trialCard, ...change })).toBeNull()

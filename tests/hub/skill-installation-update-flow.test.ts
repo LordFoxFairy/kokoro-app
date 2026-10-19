@@ -47,7 +47,7 @@ const receipt = {
   event_id: "event",
   replayed: false,
 }
-function fixture() {
+function fixture(key = () => "frozen") {
   const get = vi
     .fn<SkillInstallationClient["get"]>()
     .mockResolvedValueOnce(current)
@@ -58,7 +58,7 @@ function fixture() {
   const flow = createSkillInstallationUpdateFlow({
     client: { get, update },
     boundary,
-    key: () => "frozen",
+    key,
   })
   return { get, update, flow }
 }
@@ -110,6 +110,50 @@ it("unknown update retains the original command even if GET has moved to B and n
     update.mock.calls[0]?.slice(0, 3),
   )
   expect(flow.getSnapshot().kind).toBe("completed")
+})
+it("explicitly abandoning an unknown update only retires the local intent, without claiming an ACK or issuing I/O", async () => {
+  const key = vi.fn().mockReturnValueOnce("original-key").mockReturnValueOnce("new-key")
+  const { flow, get, update } = fixture(key)
+  get.mockReset().mockResolvedValue(current)
+  update.mockRejectedValueOnce(new HubClientError("network", "lost ACK", null, null))
+  flow.select(card, boundary)
+  await flow.readCurrent(boundary)
+  await flow.confirm(boundary)
+  const unknown = flow.getSnapshot()
+  expect(unknown.kind).toBe("unknown")
+  expect(flow.reset(boundary)).toBe(false)
+  expect(flow.abandon(boundary, unknown)).toBe(true)
+  expect(flow.getSnapshot()).toEqual({ kind: "idle", acknowledged: false })
+  await flow.confirm(boundary)
+  expect(get).toHaveBeenCalledTimes(1)
+  expect(update).toHaveBeenCalledTimes(1)
+  expect(flow.abandon(boundary, unknown)).toBe(false)
+  expect(flow.select(card, boundary)).toBe(true)
+  expect(key.mock.results.map(value => value.value)).toEqual(["original-key", "new-key"])
+  expect(update).toHaveBeenCalledTimes(1)
+})
+it("abandonment is bound to the current unknown snapshot and admission, and a retired late ACK cannot restore it", async () => {
+  const { flow, update } = fixture()
+  let finish!: (value: typeof receipt) => void
+  update.mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+  flow.select(card, boundary)
+  await flow.readCurrent(boundary)
+  const pending = flow.confirm(boundary)
+  expect(flow.abandon(boundary, flow.getSnapshot())).toBe(false)
+  flow.cancel(boundary)
+  const oldUnknown = flow.getSnapshot()
+  expect(oldUnknown.kind).toBe("unknown")
+  const rechecked = { ...boundary, generation: 2 }
+  flow.bind({ ...rechecked, admitted: false })
+  expect(flow.abandon({ ...rechecked, admitted: false }, flow.getSnapshot())).toBe(false)
+  flow.bind(rechecked)
+  expect(flow.abandon(boundary, oldUnknown)).toBe(false)
+  expect(flow.abandon(rechecked, oldUnknown)).toBe(false)
+  expect(flow.abandon(rechecked, flow.getSnapshot())).toBe(true)
+  finish(receipt)
+  await pending
+  expect(flow.getSnapshot()).toEqual({ kind: "idle", acknowledged: false })
+  expect(update).toHaveBeenCalledTimes(1)
 })
 it("an acknowledged update with failed read never sends the write again, including after same-actor recheck", async () => {
   const { flow, get, update } = fixture()

@@ -3,7 +3,7 @@ import type { SkillCard, SkillCatalogCard } from "@/hub/schemas";
 /** A catalog's series-level "added" flag must not silently upgrade its pin. */
 export function skillTrialSourceRef(skill: SkillCard | SkillCatalogCard): string | null {
   const ref = skill.source_ref;
-  return skill.enabled === true && skill.skill_id !== undefined
+  return skill.enabled === true && (skill.source_status === undefined || skill.source_status === "active") && skill.skill_id !== undefined
     && (!("installed" in skill) || skill.installed)
     && typeof ref === "string"
     && /^skill:(?!skill:)[A-Za-z0-9][A-Za-z0-9._:-]{0,190}(?![\s\S])/u.test(ref)
@@ -27,6 +27,7 @@ export function toInstalledCatalogCard(skill: SkillCard): SkillCatalogCard {
     description: skill.description,
     content_hash: skill.content_hash,
     scope: skill.scope,
+    ...(skill.source_status === undefined ? {} : { source_status: skill.source_status }),
     installed: true,
     enabled: skill.enabled === true,
     ...(skill.categories === undefined ? {} : { categories: skill.categories }),
@@ -49,6 +50,7 @@ export function toSkillActionCard(skill: SkillCatalogCard): SkillCard {
     description: skill.description,
     content_hash: skill.content_hash,
     scope: skill.scope,
+    ...(skill.source_status === undefined ? {} : { source_status: skill.source_status }),
     enabled: skill.enabled,
     ...(skill.updated_at === undefined ? {} : { updated_at: skill.updated_at }),
   };

@@ -124,7 +124,7 @@ type Props = {
   categoryLabels?: readonly string[]
   onOpenChange: (open: boolean) => void
   onAdd: (skill: SkillCatalogCard) => void
-  onTry: (prompt: string) => boolean
+  onTry: (prompt: string, selection: SkillCatalogCard) => boolean
   returnFocusRef?: RefObject<HTMLElement | null>
 }
 
@@ -458,9 +458,13 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
   const examples = sharedSummary?.skill.example_prompts ?? installation?.example_prompts ?? record?.exampleQuestions ?? skill?.example_questions ?? []
   const updated = displayDate(sharedSummary?.skill.updated_at ?? installation?.skill_updated_at ?? record?.updatedAt ?? (skill?.updated_at ? new Date(skill.updated_at * 1000).toISOString() : undefined), locale)
   const installationEnabled = installationState?.enabled ?? installation?.enabled ?? false
+  // The exact installation was rebound above; actions must not reuse a stale
+  // card's source availability after this fresh read.
+  const currentSkill = detailSource === "installation" && installation && skill ? { ...skill, source_status: installation.source_status, enabled: installationEnabled } : skill
+  const sourceUnavailable = detailSource === "installation" && installation !== null && installation.source_status !== "active"
   const enableInstallation = detailSource === "installation" && installation?.installed === true && !installationEnabled
   const installed = detailSource === "installation" ? installation !== null && installationEnabled : installationState === undefined ? record?.added ?? skill?.installed ?? false : installationState.installed && installationState.enabled
-  const trialReady = !sharedSummary && (preview || boundary.admitted && boundary.subject !== null && installed && boundRevision !== null && skill !== null && skillTrialSourceRef(skill) === `skill:${boundRevision}`)
+  const trialReady = !sharedSummary && !sourceUnavailable && (preview || boundary.admitted && boundary.subject !== null && installed && boundRevision !== null && currentSkill !== null && skillTrialSourceRef(currentSkill) === `skill:${boundRevision}`)
   const cover = sharedSummary?.skill.cover_image === undefined ? record?.coverImage ?? skill?.cover_image : ownerCoverPath(sharedSummary.skill.cover_image, sharedSummary.skill.skill_id)
   const canShare = Boolean(sharedSummary || skill?.revision_skill_id)
   const canDownload = Boolean(downloadInfo || sharedSummary || installation)
@@ -526,7 +530,7 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
             <DialogTitle>{title}</DialogTitle>
             <DialogDescription className={styles.meta}>{metadata.map((value, index) => <span key={index}>{index > 0 ? <span className={styles.separator} aria-hidden="true">|</span> : null}{value}</span>)}</DialogDescription>
             <div className={styles.actions}>
-              <Button type="button" onClick={() => sharedSummary ? onAddShared?.() : skill && onAdd(skill)} disabled={busy || installed || detailSource === "installation" && (installation === null || !boundary.admitted || boundary.subject === null)}>{enableInstallation ? t("skills.enable") : installed ? t("skills.addedToMine") : <><Plus aria-hidden="true" />{t("skills.addToMine")}</>}</Button>
+              <Button type="button" onClick={() => sharedSummary ? onAddShared?.() : currentSkill && onAdd(currentSkill)} disabled={busy || installed || detailSource === "installation" && (installation === null || sourceUnavailable || !boundary.admitted || boundary.subject === null)}>{enableInstallation ? t("skills.enable") : installed ? t("skills.addedToMine") : <><Plus aria-hidden="true" />{t("skills.addToMine")}</>}</Button>
               <Button type="button" variant="outline" disabled={boundRevision === null} onClick={() => restartReader(true)}><FileText aria-hidden="true" />{t("skills.packageViewDetails")}</Button>
             </div>
           </div>
@@ -539,10 +543,11 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
         {actionFailed ? <p className={styles.status} role="alert">{t("skills.addError")}</p> : null}
         {readerOpen ? null : <section className={styles.body}>
           <p className={styles.description}>{description}</p>
+          {sourceUnavailable ? <p className={styles.status} role="status">{t("skills.sourceUnavailable")}</p> : null}
           {loading ? <p className={styles.status}>{t("skills.detailLoading")}</p> : null}
           {failed ? <p className={styles.status}>{t("skills.detailUnavailable")}</p> : null}
           {record !== null && skill?.revision_skill_id !== undefined && record.version !== skill.revision_skill_id ? <p className={styles.status}>{t("skills.packageChanged")}</p> : null}
-          {examples.length > 0 ? <SkillTrialExamples key={JSON.stringify([boundary.subject, boundary.generation, skill?.skill_id, boundRevision, skill?.installed_source_ref, trialReady])} examples={examples} ready={trialReady} onTry={onTry} /> : null}
+          {examples.length > 0 ? <SkillTrialExamples key={JSON.stringify([boundary.subject, boundary.generation, skill?.skill_id, boundRevision, skill?.installed_source_ref, trialReady])} examples={examples} ready={trialReady} onTry={prompt => currentSkill !== null && onTry(prompt, currentSkill)} /> : null}
         </section>}
         {downloadFailure ? <p className={styles.status} role="alert">{t(downloadFailure === "unavailable" ? "skills.downloadUnavailable" : "skills.downloadIncomplete")}</p> : null}
         {readerOpen ? <section className={styles.reader} aria-label={t("skills.packageReader")}>

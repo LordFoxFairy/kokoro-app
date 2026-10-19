@@ -36,6 +36,7 @@ export function InstalledSkillCard({
   onUpdate,
 }: InstalledSkillCardProps) {
   const t = useT();
+  const sourceUnavailable = skill.source_status !== undefined && skill.source_status !== "active";
   return (
     <Card
       className={cn(
@@ -65,7 +66,7 @@ export function InstalledSkillCard({
           <Switch
             size="sm"
             checked={enabled}
-            disabled={locked || busy}
+            disabled={locked || busy || (!enabled && sourceUnavailable)}
             aria-busy={pending}
             aria-label={`${enabled ? t("skills.disable") : t("skills.enable")} ${skill.name}`}
             onCheckedChange={onEnabledChange}
@@ -73,7 +74,7 @@ export function InstalledSkillCard({
         </div>
         <p className={styles.installedCardDescription}>{skill.description}</p>
         <div className={styles.installedCardFooter}>
-        {skill.updated_at ? (
+        {sourceUnavailable ? <p className={styles.installedCardMeta} role="status">{t("skills.sourceUnavailable")}</p> : skill.updated_at ? (
           <p className={styles.installedCardMeta}>
             <ShieldCheck aria-hidden="true" />
             {t("skills.updatedAt", { date: formatSkillDate(skill.updated_at) })}
