@@ -18,6 +18,7 @@ import { LocaleProvider } from "@/i18n/context";
 import { ThemeProvider } from "@/ui/theme/theme-context";
 import { createSessionClient } from "@/engine/client";
 import * as pageClients from "@/ui/shell/page-clients";
+import { ConnectorCommandProvider } from "@/ui/mcp/connector-command-context";
 
 vi.mock("@/ui/auth/use-session-state", () => ({
   // Ordinary upload consumes an already verified session boundary. Session refresh
@@ -276,6 +277,8 @@ const NAV_TAB_KEYS = [
   "team",
 ];
 
+let restoreConnectorOwnerClient: (() => void) | undefined;
+
 function renderSettings(
   onClose: () => void = () => {},
   onTabChange?: (tab: SettingsTab) => void,
@@ -283,6 +286,7 @@ function renderSettings(
   _onStartDeployment?: (kind: "website" | "app") => void,
   initialTab: SettingsTab = "account",
   onCreateSkillWithAi?: () => void,
+  connectorOwner = false,
 ) {
   window.localStorage.setItem("kokoro.locale", "zh");
   const props: ComponentProps<typeof SettingsModal> = {
@@ -295,13 +299,13 @@ function renderSettings(
   if (onTabChange !== undefined) props.onTabChange = onTabChange;
   if (onCreateSkillWithAi !== undefined)
     props.onCreateSkillWithAi = onCreateSkillWithAi;
-  return render(
-    <ThemeProvider>
-      <LocaleProvider>
-        <SettingsModal {...props} />
-      </LocaleProvider>
-    </ThemeProvider>,
-  );
+  const client = connectorOwner ? pageClients.browserHubClient({ preview }) : null;
+  if (client !== null) {
+    const ownerClient = vi.spyOn(pageClients, "browserHubClient").mockReturnValue(client);
+    restoreConnectorOwnerClient = () => ownerClient.mockRestore();
+  }
+  const settings = <ThemeProvider><LocaleProvider><SettingsModal {...props} /></LocaleProvider></ThemeProvider>;
+  return render(client === null ? settings : <ConnectorCommandProvider client={client} boundary={preview ? { admitted: true, subject: "preview", generation: 0 } : props.readBoundary!}>{settings}</ConnectorCommandProvider>);
 }
 
 beforeEach(() => {
@@ -315,6 +319,8 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  restoreConnectorOwnerClient?.();
+  restoreConnectorOwnerClient = undefined;
   window.localStorage.clear();
   window.history.replaceState({}, "", "/");
   vi.unstubAllGlobals();
@@ -829,9 +835,9 @@ describe("SettingsModal 设置中心模态", () => {
     ).toBeNull();
   });
 
-  it("自定义 API 保存失败时保留表单和弹窗并显示错误", async () => {
+  it("自定义 API 未知结果保留原表单和弹窗且不自动重发", async () => {
     registerCustomApi.mockRejectedValueOnce(new Error("fixture rejection"));
-    renderSettings(() => {}, undefined, true);
+    renderSettings(() => {}, undefined, true, undefined, "account", undefined, true);
     fireEvent.keyDown(screen.getByTestId("settings-tab-mcp"), { key: "Enter" });
     fireEvent.click(await screen.findByRole("button", { name: "浏览连接器" }));
     const catalog = await screen.findByRole("dialog", { name: "连接器" });
@@ -856,7 +862,7 @@ describe("SettingsModal 设置中心模态", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "保存" }));
 
     expect(await within(dialog).findByRole("alert")).toHaveTextContent(
-      "操作未完成，请重新读取后再试。",
+      "CRM API — 添加结果尚未确认。重试会恢复原请求，不会重新创建。",
     );
     expect(
       dialog,
@@ -1198,7 +1204,7 @@ describe("R255 preset retirement: Settings model-only preferences", () => {
 
 it("R255 正式设置嵌入 MCP 投影使用 Manus 的已添加连接器工具栏", async () => {
   try {
-    renderSettings(() => {}, undefined, false, undefined, "mcp");
+    renderSettings(() => {}, undefined, false, undefined, "mcp", undefined, true);
     expect(await screen.findByText("Owner MCP")).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: "已添加的连接器", level: 1 }),
