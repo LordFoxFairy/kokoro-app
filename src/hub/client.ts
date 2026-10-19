@@ -837,6 +837,7 @@ export type HubClient = {
   getMcpConnectorProvider: (providerKey: string, signal?: AbortSignal) => Promise<McpConnectorProvider>;
   createMcpConnector: (
     input: McpConnectorCreateInput,
+    key: string,
     signal?: AbortSignal,
   ) => Promise<McpConnector>;
   /** Distinct owner aggregate; custom API secrets never enter any MCP route. */
@@ -1019,20 +1020,18 @@ export function createHubClient(): HubClient {
       if (result.provider.provider_key !== providerKey) throw new HubClientError("parse", "provider identity mismatch", null, null);
       return result.provider;
     },
-    createMcpConnector: async (input, signal) =>
-      (
-        await requestMcpConnector(
-          "create",
-          "/mcp/connectors",
-          z.object({ connector: mcpConnectorSchema }).strict(),
-          {
-            method: "POST",
-            headers: idempotencyHeaders("mcp-connector", { ...JSON_HEADERS }),
-            body: JSON.stringify(input),
-          },
-          signal,
-        )
-      ).connector,
+    createMcpConnector: async (input, key, signal) => {
+      const body = mcpConnectorCommandRequestSchemas.create.parse(input);
+      const result = await requestMcpConnector("create", "/mcp/connectors",
+        z.object({ connector: mcpConnectorSchema }).strict(), {
+          method: "POST",
+          headers: { ...JSON_HEADERS, "Idempotency-Key": connectorCreationKeySchema.parse(key) },
+          body: JSON.stringify(body),
+        }, signal);
+      if (!mcpConnectorMatches("create", { data: result }, undefined, new URLSearchParams(), body))
+        throw new HubClientError("parse", "MCP creation binding mismatch", null, null);
+      return result.connector;
+    },
     createCustomApi: async (input, key, signal) => {
       const body = customApiCreateInputSchema.parse(input);
       const profile = (

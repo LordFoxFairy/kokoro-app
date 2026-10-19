@@ -1,3 +1,9 @@
+## Provider Create 调用方幂等身份（2026-10-19）
+
+既有同源 `POST /api/hub/mcp/connectors` 与 BFF/Platform wire 不变。Hub client 的 `createMcpConnector(input, key, signal?)` 强制调用方传原 ASCII 幂等键，按既有 create schema 校验并发送；不再在每次调用内部生成新键。ACK 继续通过既有 `mcpConnectorMatches("create", ...)` 绑定 provider/type/名称/说明及初始状态。已确认的原回执不是当前事实；授权前另行双精确 GET 当前 connector/provider，现 CAS 与 OAuth server 仅用于本次授权，不持久复制到命令投影。
+
+App 内存恢复按主体/准入代际/窗口分离：未知仅允许显式同正文/键重放，关闭不声称撤销，成功创建后 Begin/GET 失败不生成第二个 Create。未新增 API、权限、浏览器持久化、Schema 或兼容回退，完整刷新后恢复不在本内存命令的保证内。
+
 ## MCP 目录与精确详情独立交付（2026-10-18）
 
 沿已有owner query/category/cursor与精确GET：目录搜索不再过滤首屏数组冒全量，筛选/续页与首屏seed分开；保留已确认行、显式重试、主体/准入代际退休旧请求。Custom API续页只属于当前head，详情按精确locator读取并订阅原聚合写失活。目录OAuth发出ticket仍保详情，关闭/换窗退休等待；active重连仅来自实际OAuth绑定，不从保存配置推断已连接。

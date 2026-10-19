@@ -42,6 +42,9 @@ export const LOCALE_NAMES: Record<Locale, string> = {
 
 // zh 是完整源（所有 key 必在此）。命名约定：<区域>.<用途>。{var} 为插值占位。
 export const zh = {
+  "mcp.continueProviderConnection": "继续连接",
+  "mcp.providerCreateConfirmed": "连接已创建。继续确认当前连接和授权状态。",
+
   "firstSite.renameProject": "重命名项目",
   "firstSite.projectName": "项目名称",
   "firstSite.projectRenameDescription":

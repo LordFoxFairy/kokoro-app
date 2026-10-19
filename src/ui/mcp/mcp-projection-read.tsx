@@ -11,7 +11,7 @@ import type {
 } from "@/hub/mcp-connector.schema";
 import { useT } from "@/i18n/context";
 
-import { useCustomApiManagementCommands, useMcpManagementCommands, useMcpPreparationCommands } from "./connector-command-context";
+import { useProviderCreationCommands, useCustomApiManagementCommands, useMcpManagementCommands, useMcpPreparationCommands } from "./connector-command-context";
 import { McpConnectionList } from "./mcp-connection-list";
 import { McpConnectorEditorDialog } from "./mcp-connector-editor-dialog";
 import { CustomMcpDetailDialog } from "./custom-mcp-detail-dialog";
@@ -83,6 +83,8 @@ export function McpProjectionRead({
   brandName?: string;
 }) {
   const t = useT();
+  const providerCreation = useProviderCreationCommands(client, identity);
+  const providerCreationStates = useSyncExternalStore(providerCreation.subscribe, providerCreation.getSnapshot, providerCreation.getSnapshot);
   const preparation = useMcpPreparationCommands(client, identity);
   const preparationStates = useSyncExternalStore(preparation.subscribe, preparation.getSnapshot, preparation.getSnapshot);
   const apiManagement = useCustomApiManagementCommands(client, identity);
@@ -125,6 +127,8 @@ export function McpProjectionRead({
     providerWindow.current = wait;
     return () => { if (providerWindow.current === wait) providerWindow.current = null; wait?.controller.abort(); };
   }, [providerWindowToken, selectedProviderKey, owner]);
+  const providerCreationState = providerCreationStates.find(item => item.providerKey === selectedProviderKey &&
+    (selectedProviderConnectionId === null || item.connectorId === selectedProviderConnectionId));
   const managementState = managementStates.find(item => item.connectorId === connectorIntent?.connectorId);
   const providerManagementState = managementStates.find(item => item.connectorId === selectedProviderConnectionId);
   const privateAuthorization = usePrivateMcpAuthorization({ client, identity, admitted, readGeneration,
@@ -229,7 +233,7 @@ export function McpProjectionRead({
   );
   const customApis = customApiState.data?.items ?? [];
   const providerConnectionDetail = useMcpProviderConnection({ client, identity, admitted, readGeneration,
-    connectorId: selectedProviderConnectionId, providerKey: selectedProviderKey,
+    connectorId: selectedProviderConnectionId ?? providerCreationState?.connectorId ?? null, providerKey: selectedProviderKey,
     known: view === "connections" && !connectorState.loading && !connectorState.error
       ? connectors.find(item => item.connector_id === selectedProviderConnectionId) : undefined, retry: detailRetry });
   const selectedProviderConnection = providerConnectionDetail.connection;
@@ -307,7 +311,11 @@ export function McpProjectionRead({
     const operation = input?.operation ?? management.getSnapshot().find(item => item.connectorId === connectorId)?.operation;
     const confirmed = input ? await management.submit(input, commandBoundary, wait.controller.signal) : await management.resume(connectorId, commandBoundary, wait.controller.signal);
     if (!confirmed || ownerRef.current !== owner || currentWindow() !== wait || !management.finish(connectorId, commandBoundary)) return;
-    if (operation === "disconnect" || operation === "delete_server") hideConfirmedRemovedConnector(connectorId);
+    if (operation === "disconnect" || operation === "delete_server") {
+      hideConfirmedRemovedConnector(connectorId);
+      const creation = providerCreation.getSnapshot().find(item => item.connectorId === connectorId);
+      if (creation) providerCreation.finish(creation.providerKey, commandBoundary);
+    }
     if (origin === "editor") resetEditor();
     else { setSelectedProviderKey(null); setSelectedProviderConnectionId(null); }
   };
@@ -364,61 +372,48 @@ export function McpProjectionRead({
     provider: McpConnectorProvider,
     onSuccess?: () => void,
   ) => {
-    void runAction(
-      `connect:${provider.provider_key}`,
-      async () => {
-        let connector: McpConnector | undefined;
-        if (provider.connection_server_id !== undefined) {
-          await startOAuthPopup(async (signal) => {
-            connector = await client.createMcpConnector({
-              provider_key: provider.provider_key,
-              connector_type: "mcp",
-              display_name: provider.display_name,
-              description: provider.description ?? "",
-            });
-            invalidateMcpConnectorProjection(client, identity);
-            if (signal.aborted || ownerRef.current !== owner) throw new Error("MCP command retired");
-            if (connector.status !== "pending")
-              throw new Error("connector does not require authorization");
-            const started = await client.beginMcpConnectorAuthorization(
-              connector.connector_id,
-              {
-                server_id: provider.connection_server_id!,
-                expected_state_version: connector.state_version,
-              },
-              signal,
-            );
-            return {
-              connectorId: connector.connector_id,
-              authorizationUrl: started.authorization.authorization_url,
-              expiresAt: started.authorization.expires_at,
-            };
-          });
-        } else {
-          connector = await client.createMcpConnector({
-            provider_key: provider.provider_key,
-            connector_type: "mcp",
-            display_name: provider.display_name,
-            description: provider.description ?? "",
-          });
-          if (!connector) {
-            throw new Error("connector authorization server is unavailable");
-          }
+    const wait = providerWindow.current;
+    if (!wait || ownerRef.current !== owner || !admitted) return;
+    const current = () => ownerRef.current === owner && providerWindow.current === wait && !wait.controller.signal.aborted;
+    // A retained hint only reserves a gesture window. The server binding and
+    // CAS are always reread below; this is not an authorization fact.
+    const reservePopup = Boolean(provider.connection_server_id || providerCreationState?.requiresOAuth);
+    let authorizationStarted = false;
+    void runAction(`connect:${provider.provider_key}`, async () => {
+      const prepare = async (signal: AbortSignal) => {
+        if (!client.getMcpConnector) throw new Error("MCP exact detail unavailable");
+        const connectorId = await providerCreation.run({
+          provider_key: provider.provider_key, connector_type: "mcp",
+          display_name: provider.display_name, description: provider.description ?? "",
+        }, commandBoundary, signal);
+        if (!connectorId || !current() || signal.aborted) throw new Error("MCP creation not confirmed in this window");
+        // A known locator is not current owner state. Read both aggregates
+        // after Create, including a changed OAuth server binding/CAS.
+        const connector = await client.getMcpConnector(connectorId, signal);
+        if (!current() || signal.aborted) throw new Error("MCP detail window retired");
+        const freshProvider = await client.getMcpConnectorProvider(provider.provider_key, signal);
+        if (!current() || signal.aborted || connector.connector_id !== connectorId ||
+          connector.provider_key !== provider.provider_key || connector.connector_type !== "mcp" ||
+          freshProvider.provider_key !== provider.provider_key || !freshProvider.enabled)
+          throw new Error("MCP creation binding retired");
+        setSelectedProviderConnectionId(connectorId);
+        if (connector.status === "active" || !freshProvider.connection_server_id) return null;
+        if (!reservePopup) {
+          providerCreation.requireOAuthPopup(provider.provider_key, commandBoundary);
+          throw new Error("MCP authorization now requires a new user gesture");
         }
-        if (!connector) {
-          throw new Error("connector creation did not return a connector");
-        }
-        return connector;
-      },
-      (result) => {
-        if (provider.connection_server_id !== undefined) {
-          // Keep the issuing detail alive while the external authorization
-          // window is active. Closing it (or opening another detail) retires
-          // that wait instead of allowing a stale popup to navigate later.
-          setSelectedProviderConnectionId((result as McpConnector).connector_id);
-        } else onSuccess?.();
-      },
-    );
+        if (connector.status === "revoked") throw new Error("connector was revoked");
+        const authorize = connector.status === "error" ? client.reconnectMcpConnectorAuthorization : client.beginMcpConnectorAuthorization;
+        const started = await authorize(connectorId, {
+          server_id: freshProvider.connection_server_id, expected_state_version: connector.state_version,
+        }, signal);
+        authorizationStarted = true;
+        return { connectorId, authorizationUrl: started.authorization.authorization_url, expiresAt: started.authorization.expires_at };
+      };
+      if (reservePopup) await startOAuthPopup(prepare);
+      else await prepare(wait.controller.signal);
+      if (!current() || !providerCreation.finish(provider.provider_key, commandBoundary)) throw new Error("MCP creation window retired");
+    }, () => { if (!authorizationStarted) onSuccess?.(); });
   };
   const restartAuthorization = (connector: McpConnector, serverId: string) => {
     void runAction(`reconnect:${connector.connector_id}`, async () => {
@@ -437,6 +432,9 @@ export function McpProjectionRead({
           expiresAt: started.authorization.expires_at,
         };
       });
+    }, () => {
+      const creation = providerCreation.getSnapshot().find(item => item.connectorId === connector.connector_id);
+      if (creation) providerCreation.finish(creation.providerKey, commandBoundary);
     });
   };
   const submitEdit = (
@@ -753,6 +751,8 @@ export function McpProjectionRead({
         pendingError={admitted && (providerDetail.error || providerConnectionDetail.error)}
         onRetry={() => { if (ownerRef.current !== owner || !admitted) return; setDetailRetry(value => value + 1); reload("providers"); reload("connectors"); }}
         admitted={admitted}
+        creationCommand={providerCreationState}
+        onResumeCreation={() => { if (selectedProvider) connectProvider(selectedProvider); }}
         managementCommand={providerManagementState}
         onResumeManagement={() => { if (selectedProviderConnectionId) void runManagement("provider", selectedProviderConnectionId); }}
         provider={selectedProvider}

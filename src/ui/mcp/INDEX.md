@@ -1,3 +1,9 @@
+## Provider 创建恢复职责（2026-10-19）
+
+`provider-creation-commands.ts` 属于现有 shell 命令上下文，按 actor/provider 保留原 Create 的不可变正文/键及确认 locator，复用单一 `connector-command`；不保存第二份 provider/connector/CAS 投影。`mcp-projection-read` 编排本窗口的双精确读取与授权，`mcp-provider-detail-dialog` 仅呈现未知/确认待续接和显式恢复控件。关闭/准入重核停止等待，换主体退休；创建已确认后授权失败不再 Create。动态 OAuth 提示只控制下次点击预开，不替代当前 exact owner 事实。既有连接器管理与创建恢复独立，只有消费连接/ticket 或确认移除该连接才释放原创建命令。
+
+原意图只在已挂载 App shell 内存中存续，不承诺浏览器刷新/进程重启后恢复；不添加 localStorage secret 或持久命令旁路。以下较早的“Create未知key恢复待做”描述为历史缺口，不覆盖本节；正常产品整链/真实 OAuth 与工具验收另列。
+
 ## JSON 导入短窗口收缩（2026-10-18）
 
 JSON textarea保留桌面308px首选高度，删除308px最小高度约束，由现有flex在短窗口收缩；仅JSON编辑区/操作按钮圆角分别对齐10px/8px。实测390×400编辑区230px、390×300为135px，导入按钮不再位于弹窗下方；390/768/1280宽度的正常高度保持。空值禁用、键盘Tab与Escape、原未知命令/授权语义不改，URL及Custom API样式不在本片写区。

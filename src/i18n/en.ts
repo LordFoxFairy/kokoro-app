@@ -4,6 +4,9 @@
 import type { MessageKey } from "./messages"
 
 export const en: Partial<Record<MessageKey, string>> = {
+  "mcp.continueProviderConnection": "Continue connection",
+  "mcp.providerCreateConfirmed": "Connection created. Continue checking its current connection and authorization state.",
+
   "firstSite.renameProject": "Rename project",
   "firstSite.projectName": "Project name",
   "firstSite.projectRenameDescription": "The current project is read again after confirmation. Conversations and drafts stay unchanged.",

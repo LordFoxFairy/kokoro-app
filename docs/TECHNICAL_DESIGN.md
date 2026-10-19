@@ -1,3 +1,11 @@
+## Provider Create 原命令与授权续接（2026-10-19）
+
+沿既有 App shell `ConnectorCommandProvider` 增加 feature-specific `provider-creation-commands`，按当前主体及 provider key 管一个原 Create，复用 `createConnectorCommand` 的冻结正文/幂等键、单飞、准入代际、未知结果与晚 ACK 围栏；不复用私有 Server Register/Prepare aggregate，不增 API、Schema、依赖或通用 registry。关闭详情仅停止本窗口等待，已挂载 shell 内的原意图/确认 locator 保留；换主体永久退休，不从名称或目录 metadata 重建未知命令。
+
+Create ACK 由既有 schema/matcher 绑定原正文，只保留 connector ID，不能把 ACK 的 CAS/status/server 当当前事实。继续时精确读取该 connector 与 provider，核绑定后用当前 server/CAS Begin；授权失败、精确读取失败或关闭窗口都不再创建。目录从无 OAuth 变为 OAuth 时只记录“下次点击需预开窗口”的 UI 提示，不保存 server/CAS 或授予能力；新点击同步预开，后续仍双精确读取。正常连接器管理保持自身 CAS/命令 owner，不被另一创建意图冻结。
+
+恢复只覆盖同一稳定 shell 的内存生命周期，不声称刷新浏览器/进程后持久恢复，也不将未知结果当撤销；现有 owner receipt/error policy 继续决定是否允许重放。只有当前窗口已消费精确连接/授权 ticket 或确认移除该连接后，才释放原创建意图。真实 OAuth/运行/工具执行仍由独立验收证明，模型、实际工具、扣费、CI 和远端操作继续暂停。
+
 ## MCP 目录与精确详情独立交付（2026-10-18）
 
 沿已有owner query/category/cursor与精确GET：目录搜索不再过滤首屏数组冒全量，筛选/续页与首屏seed分开；保留已确认行、显式重试、主体/准入代际退休旧请求。Custom API续页只属于当前head，详情按精确locator读取并订阅原聚合写失活。目录OAuth发出ticket仍保详情，关闭/换窗退休等待；active重连仅来自实际OAuth绑定，不从保存配置推断已连接。

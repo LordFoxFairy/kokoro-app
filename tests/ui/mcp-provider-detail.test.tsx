@@ -6,7 +6,7 @@ import { LocaleProvider } from "@/i18n/context"
 import { ConnectorCommandProvider } from "@/ui/mcp/connector-command-context"
 import { McpProjectionRead } from "@/ui/mcp/mcp-projection-read"
 
-afterEach(() => { cleanup(); window.sessionStorage.clear() })
+afterEach(() => { cleanup(); window.sessionStorage.clear(); vi.unstubAllGlobals() })
 it.each(["outside the first page", "when the directory fails"])("opens an installed provider by its exact key %s", async scenario => {
   window.localStorage.setItem("kokoro.locale", "zh")
   const provider = { provider_key: "outside", display_name: "Outside provider", directory_type: "app" as const, category_keys: [], example_prompts: [], enabled: true, state_version: "1" }
@@ -77,7 +77,7 @@ it("keeps a catalog OAuth detail readable after issuing a ticket without dependi
   const provider = { provider_key: "catalog-oauth", display_name: "Catalog OAuth", connection_server_id: "catalog-server", directory_type: "app" as const, category_keys: [], example_prompts: [], enabled: true, state_version: "1" }
   const connector = { connector_id: "catalog-created", connector_type: "mcp" as const, provider_key: provider.provider_key, display_name: "Catalog connection", status: "pending" as const, enabled: true, approved_scopes: [], state_version: "1" }
   const navigate = vi.fn(), get = vi.fn().mockResolvedValue(connector)
-  const client = { ...createHubClient(), createMcpConnector: vi.fn().mockResolvedValue(connector), getMcpConnector: get,
+  const client = { ...createHubClient(), createMcpConnector: vi.fn().mockResolvedValue(connector), getMcpConnector: get, getMcpConnectorProvider: vi.fn().mockResolvedValue(provider),
     beginMcpConnectorAuthorization: vi.fn().mockResolvedValue({ authorization: { authorization_url: "https://oauth.example.test/authorize", expires_at: "2030-01-01T00:00:00Z" } }),
     listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [provider], next_cursor: null }),
     listMcpConnectors: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
@@ -190,4 +190,118 @@ it.each(["api", "provider"])("revalidates a first-page %s detail without reusing
     expect(within(dialog).getByRole("button", { name: "停用" })).toBeEnabled()
     await act(async () => finishMcpList({ ...connectorPage, items: [{ ...connection, enabled: true, state_version: "2" }] }))
   }
+})
+
+it("explicitly recovers an unknown provider Create with its original body and idempotency key", async () => {
+  const { waitFor, within } = await import("@testing-library/react")
+  window.localStorage.setItem("kokoro.locale", "zh")
+  const provider = { provider_key: "recover-create", display_name: "Recover provider", description: "Original description", directory_type: "app", category_keys: [], example_prompts: [], enabled: true, state_version: "1" }
+  const connector = { connector_id: "created-once", connector_type: "mcp", provider_key: provider.provider_key, display_name: provider.display_name, description: provider.description, status: "pending", enabled: false, approved_scopes: [], state_version: "1" }
+  const writes: { body: string; key: string | null }[] = []
+  const reply = (data: unknown) => Response.json({ data }, { headers: { "cache-control": "no-store", "x-request-id": "fixture" } })
+  vi.stubGlobal("fetch", vi.fn(async (path: string, init?: RequestInit) => {
+    if (path.startsWith("/api/hub/mcp/providers")) return reply(path.includes("recover-create") ? { provider } : { items: [provider], next_cursor: null })
+    if (path === "/api/hub/mcp/connectors" && init?.method === "POST") {
+      writes.push({ body: String(init.body), key: new Headers(init.headers).get("idempotency-key") })
+      if (writes.length === 1) throw new TypeError("lost ACK after controlled owner commit")
+      return reply({ connector })
+    }
+    if (path === "/api/hub/mcp/connectors/created-once") return reply({ connector })
+    if (path.startsWith("/api/hub/mcp/connectors")) return reply({ items: [], next_cursor: null })
+    if (path.startsWith("/api/hub/connectors/custom-apis")) return reply({ items: [], page: { next_cursor: null } })
+    throw new Error("unexpected fixture request")
+  }))
+  const client = createHubClient()
+  render(<LocaleProvider><ConnectorCommandProvider client={client} boundary={{ subject: "recover-create", admitted: true, generation: 0 }}><McpProjectionRead client={client} identity="recover-create" initialView="catalog" /></ConnectorCommandProvider></LocaleProvider>)
+  fireEvent.click(await screen.findByRole("button", { name: provider.display_name }))
+  const dialog = await screen.findByRole("dialog")
+  fireEvent.click(within(dialog).getByRole("button", { name: "连接" }))
+  await within(dialog).findByRole("alert")
+  expect(writes).toHaveLength(1)
+  fireEvent.click(within(dialog).getByRole("button", { name: "取消" }))
+  provider.description = "Directory edited after original request"
+  fireEvent.click(screen.getByRole("button", { name: provider.display_name }))
+  const reopened = await screen.findByRole("dialog")
+  expect(writes).toHaveLength(1)
+  fireEvent.click(within(reopened).getByRole("button", { name: /^(连接|重试原请求)$/ }))
+  await waitFor(() => expect(writes).toHaveLength(2))
+  expect(writes[1]).toEqual(writes[0])
+})
+
+it("resumes a confirmed Provider Create after Begin failure using fresh connector and directory bindings", async () => {
+  const { waitFor, within } = await import("@testing-library/react")
+  const provider = { provider_key: "begin-recovery", display_name: "Begin recovery", directory_type: "app" as const, category_keys: [], example_prompts: [], enabled: true, state_version: "1", connection_server_id: "old-server" }
+  const connector = { connector_id: "single-created", connector_type: "mcp" as const, provider_key: provider.provider_key, display_name: provider.display_name, status: "pending" as const, enabled: false, approved_scopes: [], state_version: "1" }
+  let version = "4", server = "fresh-server"
+  const create = vi.fn().mockResolvedValue(connector)
+  const get = vi.fn(async () => ({ ...connector, state_version: version }))
+  const getProvider = vi.fn(async () => ({ ...provider, connection_server_id: server }))
+  const begin = vi.fn().mockRejectedValueOnce(new Error("Begin ACK lost")).mockResolvedValue({ authorization: { authorization_url: "https://oauth.example.test/current", expires_at: "2030-01-01T00:00:00Z" } })
+  const navigate = vi.fn()
+  const client = { ...createHubClient(), createMcpConnector: create, getMcpConnector: get, getMcpConnectorProvider: getProvider, beginMcpConnectorAuthorization: begin,
+    listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [provider], next_cursor: null }), listMcpConnectors: vi.fn().mockResolvedValue({ items: [], next_cursor: null }), listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }) }
+  render(<LocaleProvider><ConnectorCommandProvider client={client} boundary={{ subject: "begin-recovery", admitted: true, generation: 0 }}><McpProjectionRead client={client} identity="begin-recovery" onAuthorizationNavigate={navigate} /></ConnectorCommandProvider></LocaleProvider>)
+  fireEvent.click(await screen.findByRole("button", { name: provider.display_name }))
+  fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "连接" }))
+  await screen.findByRole("alert")
+  expect(begin).toHaveBeenLastCalledWith(connector.connector_id, { server_id: server, expected_state_version: version }, expect.any(AbortSignal))
+  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "取消" }))
+  version = "9"; server = "new-server"
+  fireEvent.click(screen.getByRole("button", { name: provider.display_name }))
+  const dialog = await screen.findByRole("dialog")
+  fireEvent.click(within(dialog).getByRole("button", { name: "继续连接" }))
+  await waitFor(() => expect(navigate).toHaveBeenCalledOnce())
+  expect(create).toHaveBeenCalledOnce()
+  expect(begin).toHaveBeenCalledTimes(2)
+  expect(begin).toHaveBeenLastCalledWith(connector.connector_id, { server_id: server, expected_state_version: version }, expect.any(AbortSignal))
+})
+
+it("reserves OAuth on the next explicit recovery when a catalog binding changes after Create", async () => {
+  window.localStorage.setItem("kokoro.locale", "zh")
+  const { waitFor, within } = await import("@testing-library/react")
+  const provider = { provider_key: "added-oauth", display_name: "Added OAuth", directory_type: "app" as const, category_keys: [], example_prompts: [], enabled: true, state_version: "1" }
+  const connector = { connector_id: "one-create", connector_type: "mcp" as const, provider_key: provider.provider_key, display_name: provider.display_name, status: "pending" as const, enabled: false, approved_scopes: [], state_version: "4" }
+  const create = vi.fn().mockResolvedValue({ ...connector, state_version: "1" })
+  const begin = vi.fn().mockResolvedValue({ authorization: { authorization_url: "https://oauth.example.test/new-binding", expires_at: "2030-01-01T00:00:00Z" } })
+  const navigate = vi.fn()
+  const client = { ...createHubClient(), createMcpConnector: create, getMcpConnector: vi.fn().mockResolvedValue(connector), getMcpConnectorProvider: vi.fn().mockResolvedValue({ ...provider, connection_server_id: "new-binding" }), beginMcpConnectorAuthorization: begin,
+    listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [provider], next_cursor: null }), listMcpConnectors: vi.fn().mockResolvedValue({ items: [], next_cursor: null }), listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }) }
+  render(<LocaleProvider><ConnectorCommandProvider client={client} boundary={{ subject: "added-oauth", admitted: true, generation: 0 }}><McpProjectionRead client={client} identity="added-oauth" onAuthorizationNavigate={navigate} /></ConnectorCommandProvider></LocaleProvider>)
+  fireEvent.click(await screen.findByRole("button", { name: provider.display_name }))
+  fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "连接" }))
+  await screen.findByRole("alert")
+  expect(begin).not.toHaveBeenCalled()
+  expect(navigate).not.toHaveBeenCalled()
+  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: /^(重试|继续连接)$/ }))
+  await waitFor(() => expect(navigate).toHaveBeenCalledOnce())
+  expect(create).toHaveBeenCalledOnce()
+  expect(begin).toHaveBeenCalledWith(connector.connector_id, { server_id: "new-binding", expected_state_version: "4" }, expect.any(AbortSignal))
+})
+
+it("keeps exact installed connector management independent of a provider Create recovery", async () => {
+  window.localStorage.setItem("kokoro.locale", "zh")
+  const { McpProviderDetailDialog } = await import("@/ui/mcp/mcp-provider-detail-dialog")
+  const provider = { provider_key: "installed", display_name: "Installed provider", directory_type: "app" as const, category_keys: [], example_prompts: [], enabled: true, state_version: "1", connection_server_id: "server" }
+  const connection = { connector_id: "existing", connector_type: "mcp" as const, provider_key: provider.provider_key, display_name: "Existing", status: "active" as const, enabled: true, approved_scopes: [], state_version: "4" }
+  render(<LocaleProvider><McpProviderDetailDialog provider={provider} connection={connection} creationCommand={{ providerKey: provider.provider_key, kind: "unknown" }} actionId={null} admitted managementCommand={undefined} onResumeManagement={vi.fn()} actionError={false} returnFocusRef={{ current: null }} onClose={vi.fn()} onConnect={vi.fn()} onReconnect={vi.fn()} onToggleEnabled={vi.fn()} onRemoveConnection={vi.fn()} /></LocaleProvider>)
+  expect(screen.getByRole("button", { name: "重新连接" })).toBeEnabled()
+  expect(screen.getByRole("button", { name: "停用" })).toBeEnabled()
+  expect(screen.getByRole("button", { name: "断开连接" })).toBeEnabled()
+})
+
+it.each(["binding removed", "already active"])("consumes a stale OAuth Create gesture as ordinary success when %s", async scenario => {
+  const { waitFor, within } = await import("@testing-library/react")
+  window.localStorage.setItem("kokoro.locale", "zh")
+  const provider = { provider_key: "stale-oauth", display_name: "Stale OAuth", directory_type: "app" as const, category_keys: [], example_prompts: [], enabled: true, state_version: "1", connection_server_id: "old-server" }
+  const connector = { connector_id: "stale-created", connector_type: "mcp" as const, provider_key: provider.provider_key, display_name: provider.display_name, status: scenario === "already active" ? "active" as const : "pending" as const, enabled: false, approved_scopes: [], state_version: "3" }
+  const begin = vi.fn(), navigate = vi.fn()
+  const client = { ...createHubClient(), createMcpConnector: vi.fn().mockResolvedValue({ ...connector, state_version: "1" }), getMcpConnector: vi.fn().mockResolvedValue(connector), getMcpConnectorProvider: vi.fn().mockResolvedValue({ ...provider, ...(scenario === "binding removed" ? { connection_server_id: undefined } : {}) }), beginMcpConnectorAuthorization: begin,
+    listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [provider], next_cursor: null }), listMcpConnectors: vi.fn().mockResolvedValue({ items: [connector], next_cursor: null }), listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }) }
+  render(<LocaleProvider><ConnectorCommandProvider client={client} boundary={{ subject: "stale-oauth", admitted: true, generation: 0 }}><McpProjectionRead client={client} identity="stale-oauth" onAuthorizationNavigate={navigate} /></ConnectorCommandProvider></LocaleProvider>)
+  fireEvent.click(await screen.findByRole("button", { name: provider.display_name }))
+  fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "连接" }))
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+  expect(begin).not.toHaveBeenCalled()
+  expect(navigate).not.toHaveBeenCalled()
+  expect(await screen.findByRole("button", { name: provider.display_name })).toBeVisible()
 })

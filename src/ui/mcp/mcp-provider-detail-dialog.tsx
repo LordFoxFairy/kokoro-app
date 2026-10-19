@@ -23,6 +23,8 @@ import {
   providerArtwork,
 } from "./mcp-projection-types";
 import type { McpManagementSummary } from "./mcp-management-commands";
+import type { ProviderCreationSummary } from "./provider-creation-commands";
+import { connectorCommandMayResume, connectorCommandFailureMessage } from "./connector-command-failure";
 import { McpManagementStatus } from "./mcp-management-status";
 import styles from "./mcp-projection-read.module.css";
 
@@ -31,6 +33,8 @@ export function McpProviderDetailDialog({
   connection,
   actionId,
   admitted,
+  creationCommand,
+  onResumeCreation,
   managementCommand,
   onResumeManagement,
   actionError,
@@ -53,6 +57,8 @@ export function McpProviderDetailDialog({
   connection?: McpConnector | null;
   actionId: string | null;
   admitted: boolean;
+  creationCommand?: ProviderCreationSummary | undefined;
+  onResumeCreation?: () => void;
   managementCommand: McpManagementSummary | undefined;
   onResumeManagement: () => void;
   actionError: boolean;
@@ -71,6 +77,7 @@ export function McpProviderDetailDialog({
   const categoryLabel = (category: keyof typeof MCP_CATEGORY_MESSAGES) =>
     t(MCP_CATEGORY_MESSAGES[category]);
   const managementLocked = managementCommand !== undefined && managementCommand.kind !== "rejected";
+  const creationLocked = creationCommand !== undefined && creationCommand.kind !== "rejected";
   const locked = managementLocked || !admitted || actionId !== null;
   const connected = connection !== null && connection !== undefined;
   return (
@@ -138,9 +145,9 @@ export function McpProviderDetailDialog({
                   </div>
                 ) : null}
                 <div className={styles.providerDetailActions}>
-                  {connected ? <span className={styles.connectionState} data-status={connection.status}>{t(`mcp.${connection.status}` as "mcp.pending")}</span> : <Button
+                  {!connected && creationLocked ? null : connected ? <span className={styles.connectionState} data-status={connection.status}>{t(`mcp.${connection.status}` as "mcp.pending")}</span> : <Button
                       type="button"
-                      disabled={locked}
+                      disabled={locked || creationLocked}
                       onClick={() => onConnect(provider)}
                     >
                       {actionId === `connect:${provider.provider_key}` ? <Spinner aria-hidden="true" /> : <Plus aria-hidden="true" />}
@@ -150,6 +157,13 @@ export function McpProviderDetailDialog({
               </div>
             </header>
             <section className={styles.providerDetailBody}>
+              {creationLocked ? <Alert role="status">
+                <AlertDescription>{t(creationCommand.kind === "completed" ? "mcp.providerCreateConfirmed" : creationCommand.kind === "running" ? "mcp.loading" : connectorCommandFailureMessage(creationCommand.failure, "mcp.recovery.outcome_unknown"))}</AlertDescription>
+                {creationCommand.kind === "unknown" || creationCommand.kind === "completed" ? <Button type="button" variant="outline"
+                  disabled={locked || !connectorCommandMayResume(creationCommand.failure)} onClick={onResumeCreation}>
+                  {t(creationCommand.kind === "completed" ? "mcp.continueProviderConnection" : connectorCommandMayResume(creationCommand.failure) ? "mcp.retryOriginal" : "mcp.recovery.inspectRequired")}
+                </Button> : null}
+              </Alert> : null}
               <McpManagementStatus command={managementCommand} admitted={admitted} onResume={onResumeManagement} />
               {actionError ? (
                 <Alert

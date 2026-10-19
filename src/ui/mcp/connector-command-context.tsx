@@ -18,7 +18,9 @@ import { createCustomApiManagementCommands, type CustomApiManagementCommands } f
 
 import { createMcpLifecycleCommands, type McpManagementCommands } from "./mcp-management-commands";
 
-const Commands = createContext<{ api: CustomApiCreateFlow; apiManagement: CustomApiManagementCommands; json: McpJsonImportFlow; server: McpServerCreationFlow; preparation: McpPreparationCommands; management: McpManagementCommands; client: HubClient; boundary: ProjectReadBoundary } | null>(null);
+import { createProviderCreationCommands, type ProviderCreationCommands } from "./provider-creation-commands";
+
+const Commands = createContext<{ providerCreation: ProviderCreationCommands; api: CustomApiCreateFlow; apiManagement: CustomApiManagementCommands; json: McpJsonImportFlow; server: McpServerCreationFlow; preparation: McpPreparationCommands; management: McpManagementCommands; client: HubClient; boundary: ProjectReadBoundary } | null>(null);
 
 /** The stable app shell owns the command; closing a modal does not abandon it. */
 export function ConnectorCommandProvider({ client, boundary, children }: {
@@ -30,6 +32,10 @@ export function ConnectorCommandProvider({ client, boundary, children }: {
     onConfirmed: () => { if (subject !== null) invalidateMcpConnectorProjection(client, subject); },
   }), [client, subject]);
   const { preparation, management } = mcp;
+  const providerCreation = useMemo(() => createProviderCreationCommands({
+    client, boundary: { subject, admitted: false, generation: 0 },
+    onConfirmed: () => { if (subject !== null) invalidateMcpConnectorProjection(client, subject); },
+  }), [client, subject]);
   const apiManagement = useMemo(() => createCustomApiManagementCommands({
     client, boundary: { subject, admitted: false, generation: 0 },
     onConfirmed: () => { if (subject !== null) invalidateCustomApiProjection(client, subject); },
@@ -47,15 +53,16 @@ export function ConnectorCommandProvider({ client, boundary, children }: {
     onChanged: () => { if (subject !== null) invalidateMcpConnectorProjection(client, subject); },
   }), [client, subject, preparation]);
   useLayoutEffect(() => {
+    const releaseProvider = providerCreation.retain({ subject, admitted, generation });
     const releaseManagement = management.retain({ subject, admitted, generation });
     const releasePreparation = preparation.retain({ subject, admitted, generation });
     const releaseApiManagement = apiManagement.retain({ subject, admitted, generation });
     const releaseApi = api.retain({ subject, admitted, generation });
     const releaseJson = json.retain({ subject, admitted, generation });
     const releaseServer = server.retain({ subject, admitted, generation });
-    return () => { releaseManagement(); releaseApiManagement(); releaseApi(); releaseJson(); releaseServer(); releasePreparation(); };
-  }, [api, apiManagement, json, server, preparation, management, subject, admitted, generation]);
-  const value = useMemo(() => ({ api, apiManagement, json, server, preparation, management, client, boundary: { subject, admitted, generation } }), [api, apiManagement, json, server, preparation, management, client, subject, admitted, generation]);
+    return () => { releaseProvider(); releaseManagement(); releaseApiManagement(); releaseApi(); releaseJson(); releaseServer(); releasePreparation(); };
+  }, [providerCreation, api, apiManagement, json, server, preparation, management, subject, admitted, generation]);
+  const value = useMemo(() => ({ providerCreation, api, apiManagement, json, server, preparation, management, client, boundary: { subject, admitted, generation } }), [providerCreation, api, apiManagement, json, server, preparation, management, client, subject, admitted, generation]);
   return <Commands.Provider value={value}>{children}</Commands.Provider>;
 }
 
@@ -97,4 +104,11 @@ export function useMcpManagementCommands(client: HubClient, identity: string) {
   if (value === null || value.client !== client || value.boundary.subject !== identity)
     throw new Error("MCP management requires the exact actor/client shell owner");
   return value.management;
+}
+
+export function useProviderCreationCommands(client: HubClient, identity: string) {
+  const value = useContext(Commands);
+  if (value === null || value.client !== client || value.boundary.subject !== identity)
+    throw new Error("Provider creation requires the exact actor/client shell owner");
+  return value.providerCreation;
 }

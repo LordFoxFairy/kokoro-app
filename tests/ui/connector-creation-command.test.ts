@@ -604,3 +604,58 @@ it("a pre-aborted creation window does not freeze a new command or dispatch it",
   expect(key).not.toHaveBeenCalled();
   expect(flow.getSnapshot().kind).toBe("idle");
 });
+
+describe("Provider actor-owned original Create", () => {
+  const input = { provider_key: "directory-app", connector_type: "mcp" as const, display_name: "Original provider", description: "Original" }
+  const connector = { connector_id: "created", provider_key: input.provider_key, connector_type: "mcp" as const, status: "pending" as const, enabled: false, approved_scopes: [], state_version: "1" }
+  it("keeps a confirmed locator across rechecks without replaying Create or old facts", async () => {
+    const { createProviderCreationCommands } = await import("@/ui/mcp/provider-creation-commands")
+    const create = vi.fn().mockResolvedValue(connector)
+    const commands = createProviderCreationCommands({ client: { createMcpConnector: create }, boundary: admitted, onConfirmed: vi.fn() })
+    const release = commands.retain(admitted)
+    expect(await commands.run(input, admitted, new AbortController().signal)).toBe("created")
+    const next = { ...admitted, generation: 2 }
+    const nextRelease = commands.retain(next); release()
+    expect(await commands.run({ ...input, display_name: "Changed directory" }, next, new AbortController().signal)).toBe("created")
+    expect(create).toHaveBeenCalledOnce()
+    expect(commands.getSnapshot()).toEqual([{ kind: "completed", name: input.display_name, providerKey: input.provider_key, connectorId: "created" }])
+    expect(commands.finish(input.provider_key, admitted)).toBe(false)
+    expect(commands.finish(input.provider_key, next)).toBe(true)
+    nextRelease()
+  })
+  it("pauses an unknown Create, preserves original body/key, and requires explicit recovery", async () => {
+    const { createProviderCreationCommands } = await import("@/ui/mcp/provider-creation-commands")
+    let finish!: (value: typeof connector) => void
+    const create = vi.fn().mockImplementationOnce(() => new Promise(resolve => { finish = resolve })).mockResolvedValue(connector)
+    const commands = createProviderCreationCommands({ client: { createMcpConnector: create }, boundary: admitted, onConfirmed: vi.fn() })
+    const release = commands.retain(admitted), window = new AbortController()
+    const old = commands.run(input, admitted, window.signal)
+    window.abort()
+    expect(commands.getSnapshot()[0]?.kind).toBe("unknown")
+    const next = { ...admitted, generation: 2 }
+    const nextRelease = commands.retain(next); release()
+    expect(create).toHaveBeenCalledOnce()
+    expect(await commands.run({ ...input, description: "Edited" }, next, new AbortController().signal)).toBe("created")
+    expect(create.mock.calls[1]?.slice(0, 2)).toEqual(create.mock.calls[0]?.slice(0, 2))
+    finish(connector); expect(await old).toBe(null)
+    expect(create).toHaveBeenCalledTimes(2)
+    nextRelease()
+  })
+  it("isolates provider keys and retires actor locators rather than reviving A after B", async () => {
+    const { createProviderCreationCommands } = await import("@/ui/mcp/provider-creation-commands")
+    let finish!: (value: typeof connector) => void
+    const create = vi.fn(() => new Promise<typeof connector>(resolve => { finish = resolve }))
+    const confirmed = vi.fn()
+    const commands = createProviderCreationCommands({ client: { createMcpConnector: create }, boundary: admitted, onConfirmed: confirmed })
+    commands.retain(admitted)
+    const old = commands.run(input, admitted, new AbortController().signal)
+    commands.retain({ ...admitted, subject: "other" })
+    commands.retain(admitted)
+    finish(connector)
+    expect(await old).toBe(null)
+    expect(commands.getSnapshot()).toEqual([])
+    expect(await commands.run(input, admitted, new AbortController().signal)).toBe(null)
+    expect(confirmed).toHaveBeenCalledOnce()
+    expect(create).toHaveBeenCalledOnce()
+  })
+})

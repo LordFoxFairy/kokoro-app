@@ -345,6 +345,8 @@ describe("hub client", () => {
               connector: {
                 ...connector,
                 connector_id: "connector-2",
+                display_name: "New connector",
+                description: "",
                 status: "pending",
                 enabled: false,
                 state_version: "1",
@@ -410,7 +412,7 @@ describe("hub client", () => {
         connector_type: "mcp",
         display_name: "New connector",
         description: "",
-      }),
+      }, "provider-create-original"),
     ).resolves.toMatchObject({ connector_id: "connector-2", enabled: false });
     await expect(
       client.updateMcpConnector("connector-1", {
@@ -457,7 +459,7 @@ describe("hub client", () => {
     });
     expect(
       (createInit.headers as Record<string, string>)["Idempotency-Key"],
-    ).toMatch(/^mcp-connector:/u);
+    ).toBe("provider-create-original");
     expect(JSON.parse(String(createInit.body))).toEqual({
       provider_key: "provider-one",
       connector_type: "mcp",
@@ -2055,4 +2057,14 @@ it("reads an exact provider outside the first catalog page and rejects a differe
   await expect(client.getMcpConnectorProvider("outside-page")).resolves.toEqual(provider);
   expect(fetchMock.mock.calls[0]![0]).toBe("/api/hub/mcp/providers/outside-page");
   await expect(client.getMcpConnectorProvider("outside-page")).rejects.toMatchObject({ reason: "parse" });
+});
+
+it.each(["provider_key", "display_name", "description"] as const)("rejects a Provider Create ACK with mismatched %s while preserving caller identity", async field => {
+  const input = { provider_key: "bound-provider", connector_type: "mcp" as const, display_name: "Original", description: "Original description" };
+  const connector = { ...input, connector_id: "bound-create", status: "pending", enabled: false, approved_scopes: [], state_version: "1", [field]: "other" };
+  const fetchMock = vi.fn().mockResolvedValue(publicResponse({ data: { connector } }, 201));
+  vi.stubGlobal("fetch", fetchMock);
+  await expect(createHubClient().createMcpConnector(input, "same-original-key")).rejects.toMatchObject({ reason: "parse" });
+  expect(new Headers(fetchMock.mock.calls[0]?.[1]?.headers).get("idempotency-key")).toBe("same-original-key");
+  expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual(input);
 });
