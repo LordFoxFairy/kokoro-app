@@ -1,3 +1,11 @@
+## 2026-10-19 MCP 既定可用性消费者配对（隔离候选）
+
+承接已确认的Platform只读五态方案与BFF本地850ffe1，不新增owner/API/Schema/刷新轮询。现严格browser decoder的Connector与PrivateServer必须消费availability五态，缺失/未知不回退status/enabled；历史header描述保完整，写入32项限额不动。原同源handler、身份/版本/CAS/原命令恢复不变。Public19和独立command-error发布物不变，本片不把MCP个人字段塞入不含它的Product OpenAPI。
+
+复用原卡片/详情结构，仅一个小状态组件由owner字段显示当前可用性，active但过期不再展示可用对勾；enabled/status仍分别控制原管理动作，显示字段不触发续期/重连/模型/工具。状态文字是Kokoro已批准事实说明，不冒称Manus已观察到相同后台模型。Admin只消费Provider目录/受管包与Skills，不消费本人Connector/PrivateServer，核验闭集后不为对齐创建无用Admin字段/组件。
+
+写区：现mcp-connector.schema、四处list/detail/picker状态、单状态组件、字典/原测试夹具/现文档。沿原测试补缺失/未知/五态独立与安全历史描述回归，相关交互/全本仓门后再交付；正常934输入保护，不改正常服务/数据库/登录/模型/工具/扣费，源码验证后按既有授权集中PR，不等CI但不冒CI通过。完整正常整链和Manus页面验收仍未完成。
+
 ## 2026-10-19 收尾集成候选：完整既有分支与固定 Public19
 
 只集成 main d42fe1d2、PR37 的原生浏览器登录回归、PR38 的六页设置与完整 local362a9b7；保真实 merge ancestry，不按功能片继续开 PR。知识/记忆等其余混合工作保持原位，不在本次顺手接通。唯一 BFF snapshot 固定已合 owner08a2120ea85b6cad5cf6e839ef14dbf83d908b92、Public19.0.0/165、SHA256955412b680bf7a2529c4c35f553ff272d7361769ea95bb441ba820b552ffc564；六个既有窄 generator 正规配对，connector-command-errors 独立 profile 不换 pin。

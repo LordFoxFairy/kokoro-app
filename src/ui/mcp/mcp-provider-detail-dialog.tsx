@@ -1,5 +1,7 @@
 "use client";
 
+import { McpAvailabilityStatus } from "./mcp-availability-status";
+
 import { useState, type RefObject } from "react";
 
 import Image from "next/image";
@@ -150,7 +152,7 @@ export function McpProviderDetailDialog({
                   </div>
                 ) : null}
                 <div className={styles.providerDetailActions}>
-                  {!connected && (creationLocked || (connectionLookup && (!connectionLookup.complete || connectionLookup.error || connectionLookup.connections.length > 0))) ? null : connected ? <span className={styles.connectionState} data-status={connection.status}>{t(`mcp.${connection.status}` as "mcp.pending")}</span> : <Button
+                  {!connected && (creationLocked || (connectionLookup && (!connectionLookup.complete || connectionLookup.error || connectionLookup.connections.length > 0))) ? null : connected ? <McpAvailabilityStatus availability={connection.availability} className={styles.connectionState} /> : <Button
                       type="button"
                       disabled={locked || creationLocked}
                       onClick={() => onConnect(provider)}

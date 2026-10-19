@@ -148,7 +148,7 @@ it("shares a live complete relation scan while retiring old actor reads and abor
   await waitFor(() => expect(result.current.every(read => read.complete)).toBe(true))
   expect(list).toHaveBeenCalledTimes(2)
   expect(oldSignal.aborted).toBe(true)
-  await act(async () => finishOld({ items: [{ connector_id: "retired-actor-row", connector_type: "mcp", provider_key: "retired", status: "active", enabled: true, approved_scopes: [], state_version: "1" }], next_cursor: null }))
+  await act(async () => finishOld({ items: [{ availability: "available" as const, connector_id: "retired-actor-row", connector_type: "mcp", provider_key: "retired", status: "active", enabled: true, approved_scopes: [], state_version: "1" }], next_cursor: null }))
   expect(result.current.every(read => read.complete && read.items.length === 0)).toBe(true)
   const { invalidateMcpConnectorProjection } = await import("@/ui/mcp/use-mcp-projection")
   let finishCurrent!: (value: McpConnectorPage) => void

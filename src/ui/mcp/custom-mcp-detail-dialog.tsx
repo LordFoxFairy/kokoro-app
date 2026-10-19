@@ -1,5 +1,7 @@
 "use client";
 
+import { McpAvailabilityStatus } from "./mcp-availability-status";
+
 import { connectorCommandMayResume, connectorCommandFailureMessage, type ConnectorCommandFailure } from "./connector-command-failure";
 
 import { type FormEvent, type RefObject, useState } from "react";
@@ -429,6 +431,7 @@ export function CustomMcpDetailDialog({
                 {server.display_name.slice(0, 1)}
               </span>
               <DialogTitle>{server.display_name}</DialogTitle>
+              <McpAvailabilityStatus availability={server.availability} />
               <div className={styles.detailActions}>
                 {primaryAction()}
                 <DropdownMenu open={managementOpen} onOpenChange={setManagementOpen}>

@@ -90,6 +90,7 @@ export function createPreviewHubClient(): HubClient {
     },
     createMcpConnector: (input) => {
       const connector: McpConnector = {
+        availability: "unavailable",
         connector_id: `preview-connector-${personalConnectors.length + 1}`,
         connector_type: input.connector_type,
         provider_key: input.provider_key,

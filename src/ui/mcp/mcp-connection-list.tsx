@@ -12,7 +12,8 @@ import type { CustomApiProfile } from "@/hub/custom-api.schema";
 import { useT } from "@/i18n/context";
 
 import { McpEmptyConnections } from "./mcp-empty-connections";
-import { connectorStatusKey, providerArtwork } from "./mcp-projection-types";
+import { providerArtwork } from "./mcp-projection-types";
+import { McpAvailabilityStatus } from "./mcp-availability-status";
 import styles from "./mcp-projection-read.module.css";
 
 export function McpConnectionList({
@@ -158,19 +159,7 @@ export function McpConnectionList({
                         ) : null}
                       </span>
                     </span>
-                    {connector.status === "active" ? (
-                      <Check
-                        className={styles.statusCheck}
-                        aria-label={t(connectorStatusKey(connector.status))}
-                      />
-                    ) : (
-                      <span
-                        className={styles.status}
-                        data-status={connector.status}
-                      >
-                        {t(connectorStatusKey(connector.status))}
-                      </span>
-                    )}
+                    <McpAvailabilityStatus availability={connector.availability} className={styles.status} availableIconClassName={styles.statusCheck} />
                   </button>
                 </li>
               );
