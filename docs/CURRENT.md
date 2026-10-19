@@ -7,6 +7,41 @@
 原字节基线四例 4 FAIL/145 CLI 名称过滤；适配后的窄门曾出现 IAM provider POST 503，闭集记录为 rp_unavailable、无 Location/Set-Cookie、signin catch marker。私有阶段诊断四例通过且未复现 503，最终完整门亦未复现，因此原因仍未查明，不能宣称已修复该 503。期间被拒绝的正文采集/导航暂持方案已从最终源码删除。
 
 各实际门的 PG/Redis 库存均恢复，冻结源码 hash 完全一致，993 个范围外 tracked 文件与基线 exact。最终只更新本段验证记录，测试及生产字节保持上述已验证版本；本地原服务与用户数据保留。完整项目门仍 FAILED，不等于完整产品或生产验收通过。
+## 设置页第一版（2026-10-17；功能分支快照）
+
+本版完善 Mail、邮箱、电话、钱包、集成、开发者六页内部布局，以及个性化知识/记忆导入弹窗、资料输入反馈和数据管理排版。保留既有资料读取与 CAS 保存；知识保存、记忆解析、资产创建、支付及 API 密钥等尚无正式服务的动作继续禁用并说明原因。技能和连接器业务未修改；部分非中文弹窗文案仍需补齐。
+
+Node 22.22.2 / pnpm 11.25.0 下，contract 284、architecture 50、lint、typecheck、production build 通过。完整 Playwright 35 通过、1 失败；设置回归桌面与手机共 32 项全部通过，剩余失败为手机端项目会话的当前项目链接点击超时。
+
+完整 Vitest 初次因 Redis 测试环境未配置而出现资源错误；复用现有 Redis 并明确测试地址后，第一版范围 3741 通过、11 失败（212 文件、3752 测试）。失败集中于本版未修改的 IAM relay 与 OIDC 原生登录/项目会话系统测试，本轮未定位全部根因，不能宣称全门通过。后续积分开户的未实现 RED 测试不属于此版，保留本地、未提交；没有删除测试、放宽断言或修改生产认证代码。
+
+独立只读审查未发现本版 UI 的确定 P1/P2。按用户要求推送当前第一版快照，现有 PR 保持 Draft，不合入 main、不作为完整产品验收。后续继续完成正式积分开户链路、知识/记忆持久化和其他可实现的设置业务，并关闭完整回归失败。
+
+## SET54-V1 同帧布局测量（2026-10-16；设置浏览器通过，完整门仍失败）
+
+仅把原SET53说明和文档两个boundingBox采样改成一次同步evaluate内真实DOMRect采样，保持非空、y差≤1px、文档在说明右方及全部其余断言；不改产品/CSS/动画/超时。此处是对0fe3980旧E2E精确单块例外，不能沿称旧E2E全文前缀exact。原trace两次采样跨数毫秒且窗口在开场动画中，不把相关性当唯一根因证明。
+
+最终完整E2E 33PASS/1FAIL，58.4s：SET53六项、SET54两项及其余设置全部通过；仍失败原mobile项目当前项目链接30秒超时。首次filtered repeat默认5workers有5项在工作区加载时找不到mail页、1PASS，保留原日志；同一冻结输入显式--workers 1重复desktop/mobile各三次共6PASS，21.4s，未扩大等待或改产品以掩盖失败。lint/typecheck exit0。Vitest明确排除tests/e2e，产品及Vitest输入相对0fe3980完全不变；不重复原3728PASS/10FAIL完整test，不宣新树重新跑全门。
+
+只读审查无确定P1/P2；1测试/2Root文档以外1003tracked逐文件保护、PG/Redis库存恢复。验收后仅本文记录结果，冻结manifest a7a1e6adffd079a3a2e59c722f544cc5eed75eb65e9090fe1ac92b81cf6e41d8 的产品与测试哈希不变。保留同一Draft PR，不合入main；后台功能及总体目标仍未完成。
+
+## SET54 More 原生键盘操作验收（2026-10-16；组件通过，完整门仍失败）
+
+在SET53候选facd846上修复原生Enter/Space打不开More：现同一组件处理detail0原生激活、箭头首末项/循环/Home/End与禁用跳过、Escape仅关本菜单并回焦、选择回焦及外点不抢焦；window capture只处理最近所属Dialog，不拦嵌套Dialog。无API/数据/依赖/Skills业务变化。旧源码新增回归真实5FAIL；最终组件97PASS，原UI/E2E全文前缀精确保留。
+
+Root最终冻结树验证：contract284PASS、architecture50PASS、lint/typecheck/build exit0；完整test3728PASS/10FAIL（3738全部执行，391.36秒），仍为两IAM及八RP登录/项目会话系统用例，未根因关闭。完整浏览器32PASS/2FAIL（约1分钟）；新增SET54两个project原生键盘旅程均通过，原SET53六项中五项通过，mobile说明/文档行测量得到y差3.7109375而门限1，另有原mobile项目链接超时。没有放宽布局断言，不能将该门描述为通过。正常已登录CUA稳定同帧中文宽屏测量y差0，只是额外诊断，不关闭英文mobile失败或证明根因。
+
+冻结manifest SHA-256 bb29e36bca6ef5637dcce62538b3a16fbd79e2db5ec110106f5550761f86e841，3writer/5Root/998保护匹配，各资源门PG/Redis库存恢复。独立只读审查无确定P1/P2。owned本地预览仅热更新此菜单，未重启/重置服务与数据；CUA实际Enter/Space开菜单、末项循环、跳过电脑、Escape保留设置并回焦、Enter选择邮箱关闭菜单均验过。请求320px覆盖下截图实际291×818（当前浏览器缩放），E2E实际320px另已通过；临时视口已恢复为859×885。该预览仍为验收夹具，不代表六项后台接通。验收后仅本文补结果，产品/测试冻结不变；继续同一draft PR，不merge main，完整设置目标仍active。
+
+## SET53 六个灰色入口补齐（2026-10-16；页面完成，完整门仍有失败）
+
+基线主线 d42fe1d29e984fccabd1d4916afb534ff0450cab，交付前核对远端未前移。Computer Use 实际查看 Manus 当前 Mail、邮箱、电话、钱包、集成、开发者六页；本轮已将六个灰色入口补为可进入页面，含导航/深链/搜索/compact More、Mail 设置/收件箱及开发者 API 密钥/Webhooks 局部页签。电脑仍禁用，Skills/MCP 业务排除。BFF public16 当前没有这些资产管理 API，未伪造邮箱地址、号码、密钥、余额、连接状态或无资产结论；创建/授权/绑定/连接/文档等无正式服务的动作明确说明并禁用。此处完成的是页面，不是六项后台服务。
+
+真实 E2E 先发现 320px More 的 body portal 位于 Dialog 焦点范围外，导致键盘选择无法关闭菜单；保持失败断言，仅将现菜单归入所属 Dialog 并转换定位坐标。CUA 又发现 Webhooks 换行及页签竖滚动，修正限于新服务页 CSS，实际文字行数/几何/无溢出断言保留。最终 25 writer/7 Root 文档/974 protected；只读审查三轮无确定 P1/P2。
+
+最终修正树：设置 UI 92 PASS；contract 284 PASS；architecture 50 PASS；lint/typecheck/build exit0。构建最初两次被本地复用依赖的软链接越过 Turbopack root 拒绝；仅将现锁定依赖克隆到本 worktree，并将三个 workspace 链接等价规范化为本地相对路径，随后正式 pnpm build 通过，未改依赖、lock 或 Next 配置。最终浏览器 29 PASS/3 FAIL；新增六个 SET53 desktop/mobile 用例全部通过（320/1600 导航键盘及 320/856/1600 文字布局）。失败为原 SET36 两项目在编辑快捷键按钮可见前的工作区加载超时，以及原 mobile project 链接超时，尚未归因，不宣称全门绿。修正前完整 test 为 3723 PASS/10 FAIL（411.28s，212 files，全部3733用例执行）；失败集中于 IAM/RP 登录跳转及项目会话系统用例。该完整结果对应修正前冻结树，未冒称最终键盘/CSS增量已重跑完整门。更早首轮 3649 PASS/3 FAIL/81 因 beforeAll 失败未运行的结果保留，不能当作81通过。
+
+最终冻结 manifest SHA-256 0e3bf8caeb675deed3de149891f25ba8c8fe786b542625a653d63a2df805d3a6；各资源门前后 PG/Redis 库存恢复、源码哈希匹配。验收后仅 CURRENT 更新结果；产品源及测试保持冻结。现有 owned 3313 隔离验收实例经 HMR 接入最终页面及菜单，无服务/数据库重置；正常已登录 Computer Use 实际打开六页、切换两组局部页签，并在320px用 Enter 从 More 打开邮箱且菜单关闭，随后恢复默认视口。该实例仍是本地验收夹具，不能冒称全部后台服务或生产可用；3311/3312未部署或重启。本分支交付 draft PR，不合入主干。
 
 ## SET49 最新主线整合验证与交付（2026-10-16）
 

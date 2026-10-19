@@ -44,14 +44,8 @@ export type SettingsNavigationTab = SettingsNavigationBase & {
 export type SettingsNavigationPlaceholder = SettingsNavigationBase & {
   kind: "placeholder";
   id:
-    | "mail"
     | "computer"
-    | "email"
-    | "phone"
-    | "wallet"
     | "data-management"
-    | "integration"
-    | "developer"
     | "help";
 };
 
@@ -120,8 +114,8 @@ export function createSettingsNavigation(
     { kind: "tab", key: "skills", label: t("rail.navSkills"), icon: Puzzle },
     { kind: "tab", key: "subscription", label: t("settings.subTitle"), icon: WalletCards },
     {
-      kind: "placeholder",
-      id: "mail",
+      kind: "tab",
+      key: "mail",
       label: t("settings.mailTitle"),
       icon: Mail,
     },
@@ -132,21 +126,21 @@ export function createSettingsNavigation(
       icon: Monitor,
     },
     {
-      kind: "placeholder",
-      id: "email",
+      kind: "tab",
+      key: "email",
       label: t("settings.email"),
       icon: Mail,
       group: "assets",
     },
     {
-      kind: "placeholder",
-      id: "phone",
+      kind: "tab",
+      key: "phone",
       label: t("settings.phoneTitle"),
       icon: Smartphone,
     },
     {
-      kind: "placeholder",
-      id: "wallet",
+      kind: "tab",
+      key: "wallet",
       label: t("settings.walletTitle"),
       icon: WalletCards,
     },
@@ -158,14 +152,14 @@ export function createSettingsNavigation(
       group: "data",
     },
     {
-      kind: "placeholder",
-      id: "integration",
+      kind: "tab",
+      key: "integration",
       label: t("settings.integrationTitle"),
       icon: Cable,
     },
     {
-      kind: "placeholder",
-      id: "developer",
+      kind: "tab",
+      key: "developer",
       label: t("settings.developerTitle"),
       icon: Code2,
     },

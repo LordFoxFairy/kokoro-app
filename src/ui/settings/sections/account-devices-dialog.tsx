@@ -14,7 +14,7 @@ export function AccountDevicesDialog({ open, onOpenChange, preview = false, read
   if (confirm !== null && confirm.scope !== scope) setConfirm(null)
   const date = (value: string) => new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value))
   const selected = confirm?.scope === scope && state.others.some((item) => item.session_id === confirm.id) ? confirm.id : null
-  return <Dialog open={open} onOpenChange={(value) => { setConfirm(null); onOpenChange(value) }}><DialogContent className={styles.devicesDialog}>
+  return <Dialog open={open} onOpenChange={(value) => { setConfirm(null); onOpenChange(value) }}><DialogContent className={styles.devicesDialog} closeLabel={t("shell.closeDialog")}>
     <DialogTitle>{t("settings.devices.title")}</DialogTitle><DialogDescription>{t("settings.devices.description")}</DialogDescription>
     {!state.admitted ? <p role="status">{t("settings.devices.unavailable")}</p> : <>
       {state.phase === "loading" ? <p role="status">{t("settings.devices.loading")}</p> : null}

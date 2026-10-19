@@ -12,3 +12,9 @@ export { DataManagementSection } from "./data-management-section"
 export { HelpSection } from "./help-section"
 export { SkillsSettingsSection } from "./skills-settings-section";
 export { ConnectorsSettingsSection } from "./connectors-settings-section";
+export { MailSettingsSection } from "./mail-settings-section";
+export { EmailAssetsSection } from "./email-assets-section";
+export { PhoneAssetsSection } from "./phone-assets-section";
+export { WalletSettingsSection } from "./wallet-settings-section";
+export { IntegrationSettingsSection } from "./integration-settings-section";
+export { DeveloperSettingsSection } from "./developer-settings-section";

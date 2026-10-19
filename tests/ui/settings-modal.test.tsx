@@ -2,6 +2,7 @@
 // 关闭出口(× / Esc / 背幕点击)均触发 onClose。会话态由 shell 保证,模态本身不再自持匿名闸。
 // page-clients 均注入 mock（不打网络）。
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -266,6 +267,12 @@ const NAV_TAB_KEYS = [
   "mcp",
   "skills",
   "subscription",
+  "mail",
+  "email",
+  "phone",
+  "wallet",
+  "integration",
+  "developer",
   "team",
 ];
 
@@ -406,17 +413,17 @@ describe("SettingsModal 设置中心模态", () => {
     );
   });
 
-  it("设置导航遵循 Manus 的分组顺序，并以置灰行呈现尚未接通的分区", () => {
+  it("设置导航遵循 Manus 的分组顺序，并将电脑保留为置灰分区", () => {
     renderSettings();
 
     expect(screen.getByTestId("settings-tab-team")).toBeInTheDocument();
-    for (const id of ["mail", "computer", "email", "phone", "wallet", "integration", "developer"]) {
+    for (const id of ["computer"]) {
       expect(screen.getByTestId(`settings-placeholder-${id}`)).toHaveAttribute("aria-disabled", "true");
     }
     expect(screen.queryByTestId("settings-tab-deployment")).toBeNull();
-    expect(screen.queryByTestId("settings-tab-integration")).toBeNull();
+    expect(screen.getByTestId("settings-tab-integration")).toBeInTheDocument();
     expect(screen.queryByTestId("settings-tab-library")).toBeNull();
-    expect(screen.queryByTestId("settings-tab-developer")).toBeNull();
+    expect(screen.getByTestId("settings-tab-developer")).toBeInTheDocument();
   });
 
   it("SET21 Data is selectable and exposes same-page sections with unavailable management disabled", () => {
@@ -560,9 +567,9 @@ describe("SettingsModal 设置中心模态", () => {
         window.localStorage.getItem("kokoro.personalization.preview") ?? "{}",
       ),
     ).toMatchObject({ nickname: "小可" });
-    expect(screen.getByRole("tab", { name: "知识" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "匯入记忆" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "导入" })).toBeDisabled();
+    expect(screen.getByRole("tab", { name: "知识" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "导入记忆" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "导入" })).toBeEnabled();
     expect(screen.getByText("知识与记忆导入暂未接通。")).toBeInTheDocument();
   });
 
@@ -1873,8 +1880,8 @@ describe("SET40 concrete settings search", () => {
   it("SET40 a disabled menu match remains unavailable and cannot change the selected panel", () => {
     const onTabChange = vi.fn();
     renderSettings(() => {}, onTabChange);
-    searchFor("钱包");
-    const matches = within(navigation()).getAllByText("钱包", { exact: true });
+    searchFor("电脑");
+    const matches = within(navigation()).getAllByText("电脑", { exact: true });
     for (const match of matches) {
       expect(match.closest('[aria-disabled="true"]')).not.toBeNull();
       fireEvent.click(match);
@@ -1918,3 +1925,309 @@ describe("SET40 concrete settings search", () => {
   });
 });
 // SET40-END: concrete-setting-search
+
+// SET53-BEGIN: service-settings-pages
+describe("SET53 service settings stay honest about unavailable owner services", () => {
+  it.each([
+    ["mail", "Mail Kokoro"],
+    ["email", "邮箱"],
+    ["phone", "电话"],
+    ["wallet", "钱包"],
+    ["integration", "集成"],
+    ["developer", "开发者"],
+  ] as const)("opens %s from a normalized deep link without service IO or actionable fake assets", async (tab, title) => {
+    const fetcher = vi.fn().mockRejectedValue(new Error("unexpected service request"));
+    vi.stubGlobal("fetch", fetcher);
+    expect(normalizeSettingsTab(tab)).toBe(tab);
+    renderSettings(() => {}, undefined, false, undefined, tab);
+    expect(screen.getByRole("heading", { name: title, level: 1 })).toBeVisible();
+    const page = screen.getByTestId(`settings-service-${tab}`);
+    expect(page).toHaveTextContent("尚未接通");
+    const actions = within(page).getAllByRole("button");
+    expect(actions.length).toBeGreaterThan(0);
+    for (const action of actions) {
+      expect(action).toBeDisabled();
+      const reason = document.getElementById(action.getAttribute("aria-describedby") ?? "");
+      expect(reason).not.toBeNull();
+      expect(reason).toBeVisible();
+      expect(reason?.textContent).toMatch(/尚未接通|暂未提供/u);
+      fireEvent.click(action);
+    }
+    expect(page.querySelector("a, input, textarea")).toBeNull();
+    await Promise.resolve();
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("keeps Mail and developer sub-tabs local and restores their initial view after leaving", async () => {
+    const fetcher = vi.fn().mockRejectedValue(new Error("unexpected service request"));
+    vi.stubGlobal("fetch", fetcher);
+    renderSettings(() => {}, undefined, false, undefined, "mail");
+    fireEvent.keyDown(screen.getByRole("tab", { name: "收件箱" }), { key: "Enter" });
+    expect(screen.getByRole("button", { name: "刷新收件箱" })).toBeDisabled();
+    expect(screen.getByText("收件箱服务尚未接通，暂时无法读取邮件。")).toBeVisible();
+    fireEvent.keyDown(screen.getByTestId("settings-tab-developer"), { key: "Enter" });
+    fireEvent.keyDown(screen.getByRole("tab", { name: "Webhooks" }), { key: "Enter" });
+    expect(screen.getByRole("button", { name: "创建 Webhook" })).toBeDisabled();
+    fireEvent.keyDown(screen.getByTestId("settings-tab-mail"), { key: "Enter" });
+    expect(screen.getByRole("tab", { name: "设置" })).toHaveAttribute("aria-selected", "true");
+    fireEvent.keyDown(screen.getByTestId("settings-tab-developer"), { key: "Enter" });
+    expect(screen.getByRole("tab", { name: "API 密钥" })).toHaveAttribute("aria-selected", "true");
+    await Promise.resolve();
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("finds visible service fields and selects the destination while computer stays unavailable", () => {
+    const onTabChange = vi.fn();
+    renderSettings(() => {}, onTabChange, true, undefined, "mail");
+    const search = screen.getByRole("textbox", { name: "搜索" });
+    fireEvent.change(search, { target: { value: "支付方式" } });
+    const result = within(screen.getByRole("navigation", { name: "设置" })).getByRole("button", { name: "支付方式" });
+    fireEvent.click(result);
+    expect(onTabChange).toHaveBeenLastCalledWith("wallet");
+    expect(screen.getByRole("heading", { name: "钱包", level: 1 })).toBeVisible();
+    expect(search).toHaveValue("支付方式");
+    expect(screen.getByRole("button", { name: "添加" })).toBeDisabled();
+    expect(screen.getByTestId("settings-placeholder-computer")).toHaveAttribute("aria-disabled", "true");
+  });
+});
+// SET53-END: service-settings-pages
+
+// SET54-BEGIN: compact-more-keyboard
+describe("SET54 compact More owns native keyboard activation and dismissal", () => {
+  it("opens on a native keyboard click, focuses the first enabled item and toggles closed", () => {
+    const onClose = vi.fn();
+    renderSettings(onClose, undefined, true, undefined, "mail");
+    const trigger = screen.getByTestId("settings-more");
+    trigger.focus();
+    // jsdom does not synthesize the browser's Enter/Space click default action.
+    // Real key events are covered in the appended browser journey.
+    fireEvent.click(trigger, { detail: 0 });
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByTestId("settings-more-skills")).toHaveFocus();
+    trigger.focus();
+    fireEvent.click(trigger, { detail: 0 });
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(trigger).toHaveFocus();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("opens with arrows, cycles enabled items, skips computer and isolates Escape from the parent dialog", async () => {
+    const onClose = vi.fn();
+    const onSelect = vi.fn();
+    renderSettings(onClose, onSelect, true, undefined, "mail");
+    const trigger = screen.getByTestId("settings-more");
+    trigger.focus();
+    fireEvent.keyDown(trigger, { key: "ArrowDown" });
+    const first = screen.getByTestId("settings-more-skills");
+    const last = screen.getByTestId("settings-more-help");
+    expect(first).toHaveFocus();
+    fireEvent.keyDown(first, { key: "End" });
+    expect(last).toHaveFocus();
+    fireEvent.keyDown(last, { key: "ArrowDown" });
+    expect(first).toHaveFocus();
+    fireEvent.keyDown(first, { key: "ArrowUp" });
+    expect(last).toHaveFocus();
+    fireEvent.keyDown(last, { key: "Home" });
+    expect(first).toHaveFocus();
+    fireEvent.keyDown(first, { key: "ArrowDown" });
+    fireEvent.keyDown(document.activeElement!, { key: "ArrowDown" });
+    expect(screen.getByTestId("settings-more-mail")).toHaveFocus();
+    fireEvent.keyDown(document.activeElement!, { key: "ArrowDown" });
+    expect(screen.getByTestId("settings-more-email")).toHaveFocus();
+    fireEvent.keyDown(document.activeElement!, { key: "ArrowUp" });
+    expect(screen.getByTestId("settings-more-mail")).toHaveFocus();
+    fireEvent.click(screen.getByTestId("settings-more-computer"));
+    expect(onSelect).not.toHaveBeenCalled();
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(trigger).toHaveFocus();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByTestId("settings-modal")).toBeVisible();
+    fireEvent.keyDown(trigger, { key: "ArrowUp" });
+    expect(screen.getByTestId("settings-more-help")).toHaveFocus();
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+    expect(trigger).toHaveFocus();
+    fireEvent.keyDown(trigger, { key: "Escape" });
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+  });
+
+  it("keeps one pointer gesture to one toggle and restores trigger focus after selecting", () => {
+    const onSelect = vi.fn();
+    renderSettings(() => {}, onSelect, true, undefined, "mail");
+    const trigger = screen.getByTestId("settings-more");
+    fireEvent.pointerDown(trigger, { button: 0 });
+    fireEvent.click(trigger, { detail: 1 });
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+    fireEvent.pointerDown(trigger, { button: 0 });
+    fireEvent.click(trigger, { detail: 1 });
+    expect(screen.queryByRole("menu")).toBeNull();
+    fireEvent.click(trigger, { detail: 0 });
+    const email = screen.getByTestId("settings-more-email");
+    email.focus();
+    fireEvent.click(email, { detail: 0 });
+    expect(onSelect).toHaveBeenLastCalledWith("email");
+    expect(screen.getByRole("heading", { name: "邮箱", level: 1 })).toBeVisible();
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(trigger).toHaveFocus();
+  });
+
+  it("does not steal outside focus or consume Escape from a nested dialog", async () => {
+    const { Dialog, DialogContent, DialogDescription, DialogTitle } =
+      await import("@/components/ui/dialog");
+    const { SettingsCompactMoreMenu } =
+      await import("@/ui/settings/settings-compact-more-menu");
+    const onParentChange = vi.fn();
+    function NestedDialogFixture() {
+      const [nestedOpen, setNestedOpen] = useState(false);
+      return (
+        <Dialog open onOpenChange={onParentChange}>
+          <DialogContent data-testid="settings-modal">
+            <DialogTitle>Settings</DialogTitle>
+            <DialogDescription>Parent settings dialog</DialogDescription>
+            <SettingsCompactMoreMenu
+              label="More"
+              items={[{ id: "email", label: "Email", tab: "email" }]}
+              onSelectTab={() => {}}
+              triggerClassName=""
+              menuClassName=""
+              itemClassName=""
+            />
+            <button type="button" onClick={() => setNestedOpen(true)}>
+              Open nested dialog
+            </button>
+            <input aria-label="Search" />
+            <Dialog open={nestedOpen} onOpenChange={setNestedOpen}>
+              <DialogContent data-testid="nested-dialog">
+                <DialogTitle>Nested dialog</DialogTitle>
+                <DialogDescription>Independent dialog scope</DialogDescription>
+                <button type="button">Nested action</button>
+              </DialogContent>
+            </Dialog>
+          </DialogContent>
+        </Dialog>
+      );
+    }
+    render(<ThemeProvider><NestedDialogFixture /></ThemeProvider>);
+    const trigger = screen.getByTestId("settings-more");
+    fireEvent.click(trigger, { detail: 0 });
+    expect(screen.getByRole("menu")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Open nested dialog" }));
+    const nestedAction = screen.getByRole("button", { name: "Nested action" });
+    nestedAction.focus();
+    fireEvent.keyDown(nestedAction, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByTestId("nested-dialog")).toBeNull());
+    expect(onParentChange).not.toHaveBeenCalled();
+    expect(screen.getByRole("menu")).toBeVisible();
+    const search = screen.getByRole("textbox", { name: "Search" });
+    search.focus();
+    fireEvent.pointerDown(search, { button: 0 });
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(search).toHaveFocus();
+  });
+
+  it("retires its Escape listener on unmount", () => {
+    const view = renderSettings(() => {}, undefined, true, undefined, "mail");
+    fireEvent.click(screen.getByTestId("settings-more"), { detail: 0 });
+    expect(screen.getByRole("menu")).toBeVisible();
+    view.unmount();
+    const escape = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+    window.dispatchEvent(escape);
+    expect(escape.defaultPrevented).toBe(false);
+  });
+});
+// SET54-END: compact-more-keyboard
+
+// SET59: local forms remain inspectable without inventing owner reads or writes.
+describe("SET59 personalization interior drafts", () => {
+  const originalClipboard = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+  afterEach(() => {
+    if (originalClipboard) Object.defineProperty(navigator, "clipboard", originalClipboard);
+    else Reflect.deleteProperty(navigator, "clipboard");
+  });
+
+  it("discards a knowledge draft on close and tab changes, with nested Escape preserving Settings and trigger focus", async () => {
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    const onClose = vi.fn();
+    renderSettings(onClose, undefined, true, undefined, "personalization");
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "知识" }), { button: 0, ctrlKey: false });
+    expect(screen.getByRole("textbox", { name: "搜索知识" })).toBeDisabled();
+    expect(screen.queryByText("尚无知识")).not.toBeInTheDocument();
+    const add = screen.getByRole("button", { name: "新增" });
+    fireEvent.click(add);
+    let dialog = screen.getByRole("dialog", { name: "添加知识" });
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "名称" }), { target: { value: "private draft" } });
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "使用时机" }), { target: { value: "only locally" } });
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "内容" }), { target: { value: "临时内容" } });
+    expect(within(dialog).getByText("4/2000")).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "保存" })).toBeDisabled();
+    expect(within(dialog).getByRole("button", { name: "保存" })).toHaveAccessibleDescription(/暂未接通/);
+    fireEvent.click(within(dialog).getByRole("button", { name: "取消" }));
+    await waitFor(() => expect(add).toHaveFocus());
+    fireEvent.click(add);
+    dialog = screen.getByRole("dialog", { name: "添加知识" });
+    for (const name of ["名称", "使用时机", "内容"]) expect(within(dialog).getByRole("textbox", { name })).toHaveValue("");
+    expect(within(dialog).getByText("0/2000")).toBeInTheDocument();
+    fireEvent.keyDown(within(dialog).getByRole("textbox", { name: "名称" }), { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "添加知识" })).not.toBeInTheDocument());
+    expect(screen.getByTestId("settings-modal")).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+    await waitFor(() => expect(add).toHaveFocus());
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "个人资料" }), { button: 0, ctrlKey: false });
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "知识" }), { button: 0, ctrlKey: false });
+    fireEvent.click(screen.getByRole("button", { name: "新增" }));
+    expect(within(screen.getByRole("dialog", { name: "添加知识" })).getByRole("textbox", { name: "名称" })).toHaveValue("");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("reports clipboard rejection without copied feedback and both import entries reopen an empty local draft", async () => {
+    const copy = vi.fn().mockRejectedValue(new Error("permission denied"));
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: copy } });
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    renderSettings(() => {}, undefined, true, undefined, "personalization");
+    fireEvent.click(screen.getByRole("button", { name: "导入" }));
+    let dialog = screen.getByRole("dialog", { name: "导入记忆" });
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "粘贴回应内容" }), { target: { value: "private memory draft" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "复制此提示词" }));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("复制失败");
+    expect(within(dialog).queryByText("已复制", { exact: true })).not.toBeInTheDocument();
+    expect(copy).toHaveBeenCalledTimes(1);
+    expect(copy.mock.calls[0]?.[0]).not.toContain("private memory draft");
+    expect(within(dialog).getByRole("button", { name: "导入" })).toBeDisabled();
+    expect(within(dialog).getByRole("button", { name: "导入" })).toHaveAccessibleDescription(/暂未接通/);
+    fireEvent.click(within(dialog).getByRole("button", { name: "取消" }));
+    fireEvent.click(screen.getByRole("button", { name: "导入记忆" }));
+    dialog = screen.getByRole("dialog", { name: "导入记忆" });
+    expect(within(dialog).getByRole("textbox", { name: "粘贴回应内容" })).toHaveValue("");
+    expect(within(dialog).queryByRole("alert")).not.toBeInTheDocument();
+    fireEvent.keyDown(within(dialog).getByRole("textbox", { name: "粘贴回应内容" }), { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "导入记忆" })).not.toBeInTheDocument());
+    expect(screen.getByTestId("settings-modal")).toBeInTheDocument();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it.each(["subject", "generation", "preview"] as const)("retires pasted data and a late clipboard completion when %s changes", async (change) => {
+    let finish!: () => void;
+    const copy = vi.fn(() => new Promise<void>((resolve) => { finish = resolve; }));
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: copy } });
+    const draw = (next: boolean) => <ThemeProvider><LocaleProvider><SettingsModal
+      onClose={() => {}} initialTab="personalization" preview={change === "preview" ? !next : true}
+      readBoundary={{ admitted: true, subject: next && change === "subject" ? "owner-B" : "owner-A", generation: next && change === "generation" ? 2 : 1 }}
+    /></LocaleProvider></ThemeProvider>;
+    const view = render(draw(false));
+    fireEvent.click(screen.getByRole("button", { name: "导入记忆" }));
+    const dialog = screen.getByRole("dialog", { name: "导入记忆" });
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "粘贴回应内容" }), { target: { value: "old identity memory" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "复制此提示词" }));
+    expect(copy).toHaveBeenCalledTimes(1);
+    expect(within(dialog).queryByText("已复制", { exact: true })).not.toBeInTheDocument();
+    view.rerender(draw(true));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "导入记忆" })).not.toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "导入记忆" }));
+    const reopened = screen.getByRole("dialog", { name: "导入记忆" });
+    expect(within(reopened).getByRole("textbox", { name: "粘贴回应内容" })).toHaveValue("");
+    await act(async () => { finish(); });
+    expect(within(reopened).queryByText("已复制", { exact: true })).not.toBeInTheDocument();
+  });
+});
