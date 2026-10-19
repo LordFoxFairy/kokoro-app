@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 import Image from "next/image";
 import { Check, Link2, Plus, Search } from "lucide-react";
 
@@ -25,7 +25,8 @@ export function McpProviderDirectory({
   showSearch = false,
   showCompactFilter = true,
   presentation = "dialog",
-  connectedProviderKeys,
+  addedProviderKeys,
+  relationsComplete = false,
   categoryFilter,
   onCategoryFilterChange,
   onSelectProvider,
@@ -45,7 +46,8 @@ export function McpProviderDirectory({
   showSearch?: boolean;
   showCompactFilter?: boolean;
   presentation?: "plaza" | "dialog";
-  connectedProviderKeys?: ReadonlySet<string>;
+  addedProviderKeys?: ReadonlySet<string>;
+  relationsComplete?: boolean;
   categoryFilter: "all" | Category;
   onCategoryFilterChange: (category: "all" | Category) => void;
   onSelectProvider: (
@@ -54,6 +56,7 @@ export function McpProviderDirectory({
   ) => void;
 }) {
   const t = useT();
+  const statusId = useId();
   const categoryLabel = (category: Category) =>
     t(MCP_CATEGORY_MESSAGES[category]);
 
@@ -106,7 +109,7 @@ export function McpProviderDirectory({
           </div>
         ) : (
           <ul className={styles.providerGrid}>
-            {providers.map((provider) => (
+            {providers.map((provider, index) => (
               <li
                 key={provider.provider_key}
                 className={styles.providerCard}
@@ -119,13 +122,14 @@ export function McpProviderDirectory({
                     onSelectProvider(provider, event.currentTarget)
                   }
                   aria-label={provider.display_name}
+                  aria-describedby={addedProviderKeys?.has(provider.provider_key) ? `${statusId}-${index}` : undefined}
                 >
                   <span className={styles.providerLogo} aria-hidden="true">
                     <Image
                       src={providerArtwork(provider)}
                       alt=""
-                      fill
-                      sizes="2.4rem"
+                      width={24}
+                      height={24}
                       unoptimized
                     />
                   </span>
@@ -138,16 +142,10 @@ export function McpProviderDirectory({
                         {provider.description}
                       </span>
                     ) : null}
-                    {provider.category_keys.length > 0 ? (
-                      <span className={styles.providerTags}>
-                        {provider.category_keys.map((category) => (
-                          <span key={category}>{categoryLabel(category)}</span>
-                        ))}
-                      </span>
-                    ) : null}
                   </span>
+                  {addedProviderKeys?.has(provider.provider_key) ? <span id={`${statusId}-${index}`} className="sr-only">{t("skills.added")}</span> : null}
                   <span className={styles.providerAction} aria-hidden="true">
-                    {connectedProviderKeys?.has(provider.provider_key) ? <Check /> : <Plus />}
+                    {addedProviderKeys?.has(provider.provider_key) ? <Check /> : relationsComplete ? <Plus /> : null}
                   </span>
                 </button>
               </li>

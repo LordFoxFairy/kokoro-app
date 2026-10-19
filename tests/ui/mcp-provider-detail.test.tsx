@@ -90,7 +90,7 @@ it("keeps a catalog OAuth detail readable after issuing a ticket without dependi
   expect(await screen.findByRole("dialog", { name: "Catalog OAuth" })).toBeVisible()
   await waitFor(() => expect(get).toHaveBeenCalledWith(connector.connector_id, expect.any(AbortSignal)))
   expect(within(screen.getByRole("dialog")).getByText(connector.connector_id)).toBeVisible()
-  expect(client.listMcpConnectors).not.toHaveBeenCalled()
+  expect(client.listMcpConnectors).toHaveBeenCalledWith({ limit: 100 }, expect.any(AbortSignal))
 })
 
 it("restores an off-page Custom API detail by exact locator after an admission generation retires its page", async () => {
@@ -301,8 +301,9 @@ it.each(["binding removed", "already active"])("consumes a stale OAuth Create ge
   const provider = { provider_key: "stale-oauth", display_name: "Stale OAuth", directory_type: "app" as const, category_keys: [], example_prompts: [], enabled: true, state_version: "1", connection_server_id: "old-server" }
   const connector = { connector_id: "stale-created", connector_type: "mcp" as const, provider_key: provider.provider_key, display_name: provider.display_name, status: scenario === "already active" ? "active" as const : "pending" as const, enabled: false, approved_scopes: [], state_version: "3" }
   const begin = vi.fn(), navigate = vi.fn()
-  const client = { ...createHubClient(), createMcpConnector: vi.fn().mockResolvedValue({ ...connector, state_version: "1" }), getMcpConnector: vi.fn().mockResolvedValue(connector), getMcpConnectorProvider: vi.fn().mockResolvedValue({ ...provider, ...(scenario === "binding removed" ? { connection_server_id: undefined } : {}) }), beginMcpConnectorAuthorization: begin,
-    listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [provider], next_cursor: null }), listMcpConnectors: vi.fn().mockResolvedValue({ items: [connector], next_cursor: null }), listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }) }
+  let created = false
+  const client = { ...createHubClient(), createMcpConnector: vi.fn(async () => { created = true; return { ...connector, state_version: "1" } }), getMcpConnector: vi.fn().mockResolvedValue(connector), getMcpConnectorProvider: vi.fn().mockResolvedValue({ ...provider, ...(scenario === "binding removed" ? { connection_server_id: undefined } : {}) }), beginMcpConnectorAuthorization: begin,
+    listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [provider], next_cursor: null }), listMcpConnectors: vi.fn(async () => ({ items: created ? [connector] : [], next_cursor: null })), listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }) }
   render(<LocaleProvider><ConnectorCommandProvider client={client} boundary={{ subject: "stale-oauth", admitted: true, generation: 0 }}><McpProjectionRead client={client} identity="stale-oauth" onAuthorizationNavigate={navigate} /></ConnectorCommandProvider></LocaleProvider>)
   fireEvent.click(await screen.findByRole("button", { name: provider.display_name }))
   fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "连接" }))
@@ -354,6 +355,139 @@ it.each(["partial", "multiple", "private", "revoked"] as const)("does not guess 
   fireEvent.click(screen.getByRole("button", { name: "浏览连接器" }))
   fireEvent.click(await within(screen.getByRole("dialog", { name: "连接器" })).findByRole("button", { name: provider.display_name }))
   const detail = await screen.findByRole("dialog", { name: provider.display_name })
-  expect(within(detail).queryByText(connection.connector_id)).not.toBeInTheDocument()
+  if (scenario !== "revoked") expect(within(detail).queryByRole("button", { name: "连接" })).not.toBeInTheDocument()
   expect(get).not.toHaveBeenCalled()
+})
+
+it("resolves an existing off-page provider connector from the standalone directory before offering Create", async () => {
+  window.localStorage.setItem("kokoro.locale", "zh")
+  const { within } = await import("@testing-library/react")
+  const provider = { provider_key: "paged-added", display_name: "Paged added", directory_type: "app" as const, category_keys: [], example_prompts: [], enabled: true, state_version: "1" }
+  const connector = { connector_id: "off-page-existing", connector_type: "mcp" as const, provider_key: provider.provider_key, display_name: "Existing account", status: "pending" as const, enabled: false, approved_scopes: [], state_version: "1" }
+  const list = vi.fn().mockResolvedValueOnce({ items: [], next_cursor: "opaque-next" }).mockResolvedValueOnce({ items: [connector], next_cursor: null })
+  const get = vi.fn().mockResolvedValue({ ...connector, state_version: "2" }), create = vi.fn(), runtime = vi.fn()
+  const client = { ...createHubClient(), listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [provider], next_cursor: null }), listMcpConnectors: list, getMcpConnector: get, createMcpConnector: create, listMcpConnections: runtime }
+  render(<LocaleProvider><ConnectorCommandProvider client={client} boundary={{ subject: "paged-catalog", admitted: true, generation: 0 }}><McpProjectionRead client={client} identity="paged-catalog" embedded /></ConnectorCommandProvider></LocaleProvider>)
+  const card = await screen.findByRole("button", { name: provider.display_name })
+  fireEvent.click(card)
+  const detail = await screen.findByRole("dialog", { name: provider.display_name })
+  expect(await within(detail).findByText(connector.connector_id)).toBeVisible()
+  expect(card).toHaveAccessibleDescription("已添加")
+  expect(within(detail).queryByRole("button", { name: "连接" })).not.toBeInTheDocument()
+  expect(list).toHaveBeenLastCalledWith({ limit: 100, cursor: "opaque-next" }, expect.any(AbortSignal))
+  expect(get).toHaveBeenCalledExactlyOnceWith(connector.connector_id, expect.any(AbortSignal))
+  expect(create).not.toHaveBeenCalled(); expect(runtime).not.toHaveBeenCalled()
+})
+
+it("keeps Create unavailable until every management page has confirmed no existing relation", async () => {
+  window.localStorage.setItem("kokoro.locale", "zh")
+  const { act, waitFor, within } = await import("@testing-library/react")
+  const provider = { provider_key: "not-yet-empty", display_name: "Not yet empty", directory_type: "app" as const, category_keys: [], example_prompts: [], enabled: true, state_version: "1" }
+  let finish!: (value: { items: []; next_cursor: null }) => void
+  const list = vi.fn().mockResolvedValueOnce({ items: [], next_cursor: "tail" }).mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+  const client = { ...createHubClient(), listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [provider], next_cursor: null }), listMcpConnectors: list }
+  render(<LocaleProvider><ConnectorCommandProvider client={client} boundary={{ subject: "pending-empty", admitted: true, generation: 0 }}><McpProjectionRead client={client} identity="pending-empty" embedded /></ConnectorCommandProvider></LocaleProvider>)
+  fireEvent.click(await screen.findByRole("button", { name: provider.display_name }))
+  const detail = await screen.findByRole("dialog", { name: provider.display_name })
+  await waitFor(() => expect(list).toHaveBeenCalledTimes(2))
+  expect(within(detail).queryByRole("button", { name: "连接" })).not.toBeInTheDocument()
+  await act(async () => finish({ items: [], next_cursor: null }))
+  expect(await within(detail).findByRole("button", { name: "连接" })).toBeEnabled()
+})
+
+it("requires explicit selection among several provider connections and reads only the chosen locator", async () => {
+  window.localStorage.setItem("kokoro.locale", "zh")
+  const { within } = await import("@testing-library/react")
+  const provider = { provider_key: "many-accounts", display_name: "Many accounts", directory_type: "app" as const, category_keys: [], example_prompts: [], enabled: true, state_version: "1" }
+  const first = { connector_id: "account-a", connector_type: "mcp" as const, provider_key: provider.provider_key, display_name: "Account A", status: "active" as const, enabled: true, approved_scopes: [], state_version: "1" }
+  const second = { ...first, connector_id: "account-b", connector_type: "byok" as const, display_name: "Account B", status: "error" as const, enabled: false }
+  const get = vi.fn().mockResolvedValue({ ...second, state_version: "8" })
+  const client = { ...createHubClient(), listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [provider], next_cursor: null }), listMcpConnectors: vi.fn().mockResolvedValue({ items: [first, second], next_cursor: null }), getMcpConnector: get }
+  render(<LocaleProvider><ConnectorCommandProvider client={client} boundary={{ subject: "many-catalog", admitted: true, generation: 0 }}><McpProjectionRead client={client} identity="many-catalog" embedded /></ConnectorCommandProvider></LocaleProvider>)
+  fireEvent.click(await screen.findByRole("button", { name: provider.display_name }))
+  const detail = await screen.findByRole("dialog", { name: provider.display_name })
+  fireEvent.click(await within(detail).findByRole("button", { name: /Account B/ }))
+  expect(await within(detail).findByText(second.connector_id)).toBeVisible()
+  expect(get).toHaveBeenCalledExactlyOnceWith(second.connector_id, expect.any(AbortSignal))
+  expect(within(detail).queryByRole("button", { name: "连接" })).not.toBeInTheDocument()
+})
+
+
+it.each(["revoked", "type", "server"] as const)("keeps a selected connection frozen and reports %s drift instead of offering Create", async drift => {
+  window.localStorage.setItem("kokoro.locale", "zh")
+  const { within } = await import("@testing-library/react")
+  const provider = { provider_key: `drift-${drift}`, display_name: `Drift ${drift}`, directory_type: "app" as const, category_keys: [], example_prompts: [], enabled: true, state_version: "1" }
+  const connection = { connector_id: "frozen-id", connector_type: "mcp" as const, provider_key: provider.provider_key, display_name: "Frozen", status: "active" as const, enabled: true, approved_scopes: [], state_version: "1" }
+  const get = vi.fn().mockResolvedValue({ ...connection, ...(drift === "revoked" ? { status: "revoked" } : drift === "type" ? { connector_type: "builtin" } : { server_id: "unexpected-private" }) })
+  const client = { ...createHubClient(), getMcpConnector: get,
+    listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [provider], next_cursor: null }),
+    listMcpConnectors: vi.fn().mockResolvedValue({ items: [connection], next_cursor: null }) }
+  render(<LocaleProvider><ConnectorCommandProvider client={client} boundary={{ subject: drift, admitted: true, generation: 0 }}><McpProjectionRead client={client} identity={drift} embedded /></ConnectorCommandProvider></LocaleProvider>)
+  fireEvent.click(await screen.findByRole("button", { name: provider.display_name }))
+  const dialog = await screen.findByRole("dialog")
+  expect(await within(dialog).findByRole("alert")).toBeVisible()
+  expect(within(dialog).queryByRole("button", { name: "连接" })).not.toBeInTheDocument()
+  expect(get).toHaveBeenCalledExactlyOnceWith(connection.connector_id, expect.any(AbortSignal))
+})
+
+it.each([false, true])("opens an off-page private connection only after exact connector and server reads (retry: %s)", async retry => {
+  window.localStorage.setItem("kokoro.locale", "zh")
+  const { within } = await import("@testing-library/react")
+  const provider = { provider_key: "private-off-page", display_name: "Private directory fixture", directory_type: "app" as const, category_keys: [], example_prompts: [], enabled: true, state_version: "1" }
+  const connection = { connector_id: "private-exact-id", connector_type: "mcp" as const, provider_key: provider.provider_key, server_id: "private-exact-server", display_name: "My private connection", status: "pending" as const, enabled: false, approved_scopes: [], state_version: "1" }
+  const server = { server_id: connection.server_id, display_name: "Exact private detail", server_url: "https://mcp.example.test/endpoint", status: "pending" as const, state_version: "2", headers: [], prepare_status: "pending_prepare" as const, declarations: [], declarations_available: false }
+  const get = vi.fn().mockResolvedValue({ ...connection, state_version: "3" }), getServer = vi.fn().mockResolvedValue(server)
+  if (retry) get.mockRejectedValueOnce(Error("exact read offline"))
+  const client = { ...createHubClient(), getMcpConnector: get, getPrivateMcpServer: getServer,
+    listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [provider], next_cursor: null }),
+    listMcpConnectors: vi.fn().mockResolvedValueOnce({ items: [], next_cursor: "private-tail" }).mockResolvedValueOnce({ items: [connection], next_cursor: null }) }
+  render(<LocaleProvider><ConnectorCommandProvider client={client} boundary={{ subject: "private-directory", admitted: true, generation: 0 }}><McpProjectionRead client={client} identity="private-directory" embedded /></ConnectorCommandProvider></LocaleProvider>)
+  fireEvent.click(await screen.findByRole("button", { name: provider.display_name }))
+  fireEvent.click(await within(await screen.findByRole("dialog")).findByRole("button", { name: /My private connection/ }))
+  if (retry) {
+    const error = await screen.findByRole("alert")
+    expect(getServer).not.toHaveBeenCalled()
+    fireEvent.click(within(error).getByRole("button", { name: "重试" }))
+  }
+  expect(await screen.findByRole("dialog", { name: server.display_name })).toBeVisible()
+  expect(get).toHaveBeenCalledTimes(retry ? 2 : 1)
+  expect(get).toHaveBeenLastCalledWith(connection.connector_id, expect.any(AbortSignal))
+  expect(getServer).toHaveBeenCalledExactlyOnceWith(server.server_id, expect.any(AbortSignal))
+})
+
+
+it.each(["revoked", "fresh-server"])("retires opened private detail through an exact recheck (%s)", async outcome => {
+  window.localStorage.setItem("kokoro.locale", "zh")
+  const { act, waitFor, within } = await import("@testing-library/react")
+  const { invalidateMcpConnectorProjection } = await import("@/ui/mcp/use-mcp-projection")
+  const provider = { provider_key: `retire-${outcome}`, display_name: "Private recheck", directory_type: "app" as const, category_keys: [], example_prompts: [], enabled: true, state_version: "1" }
+  const connection = { connector_id: "recheck-private", connector_type: "mcp" as const, provider_key: provider.provider_key, server_id: "recheck-server", display_name: "My rechecked connection", status: "pending" as const, enabled: false, approved_scopes: [], state_version: "1" }
+  const server = { server_id: connection.server_id, display_name: "Private ready detail", server_url: "https://mcp.example.test/recheck", status: "pending" as const, state_version: "2", headers: [], prepare_status: "pending_prepare" as const, declarations: [], declarations_available: false }
+  let finishConnection!: (value: typeof connection | Omit<typeof connection, "status"> & { status: "revoked" }) => void
+  let finishServer!: (value: typeof server) => void
+  const get = vi.fn().mockResolvedValueOnce(connection).mockImplementationOnce(() => new Promise(resolve => { finishConnection = resolve }))
+  const getServer = vi.fn().mockResolvedValueOnce(server).mockImplementationOnce(() => new Promise(resolve => { finishServer = resolve }))
+  const client = { ...createHubClient(), getMcpConnector: get, getPrivateMcpServer: getServer,
+    listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [provider], next_cursor: null }),
+    listMcpConnectors: vi.fn().mockResolvedValue({ items: [connection], next_cursor: null }) }
+  const subject = `private-recheck-${outcome}`
+  render(<LocaleProvider><ConnectorCommandProvider client={client} boundary={{ subject, admitted: true, generation: 0 }}><McpProjectionRead client={client} identity={subject} embedded /></ConnectorCommandProvider></LocaleProvider>)
+  fireEvent.click(await screen.findByRole("button", { name: provider.display_name }))
+  fireEvent.click(await within(await screen.findByRole("dialog")).findByRole("button", { name: /My rechecked connection/ }))
+  const dialog = await screen.findByRole("dialog", { name: server.display_name })
+  expect(within(dialog).getByRole("button", { name: "试用一下" })).toBeEnabled()
+  act(() => invalidateMcpConnectorProjection(client, subject))
+  await waitFor(() => expect(get).toHaveBeenCalledTimes(2))
+  expect(screen.queryByRole("button", { name: "试用一下" })).not.toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "管理" })).not.toBeInTheDocument()
+  await act(async () => finishConnection(outcome === "revoked" ? { ...connection, status: "revoked" } : connection))
+  if (outcome === "revoked") {
+    expect(await screen.findByRole("alert")).toBeVisible()
+    expect(getServer).toHaveBeenCalledTimes(1)
+  } else {
+    await waitFor(() => expect(getServer).toHaveBeenCalledTimes(2))
+    expect(screen.queryByRole("button", { name: "试用一下" })).not.toBeInTheDocument()
+    await act(async () => finishServer({ ...server, state_version: "3" }))
+    expect(await screen.findByRole("button", { name: "试用一下" })).toBeEnabled()
+  }
 })

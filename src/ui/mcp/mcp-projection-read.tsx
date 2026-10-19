@@ -32,7 +32,8 @@ import { usePrivateMcpAuthorization } from "./use-private-mcp-authorization";
 import { useMcpProviderDetail } from "./use-mcp-provider-detail";
 import { useMcpProviderDirectory } from "./use-mcp-provider-directory";
 import { useCustomApiDetail } from "./use-custom-api-detail";
-import { useMcpProviderConnection } from "./use-mcp-provider-connection";
+import { useMcpProviderConnection, type McpConnectorBinding } from "./use-mcp-provider-connection";
+import { useMcpProviderRelations } from "./use-mcp-provider-relations";
 import { useCustomApiProjection } from "./use-custom-api-projection";
 import { invalidateMcpConnectorProjection, useMcpProjection } from "./use-mcp-projection";
 
@@ -106,7 +107,7 @@ export function McpProjectionRead({
   const [actionError, setActionError] = useState(false);
   const [editor, setEditor] = useState<McpConnectorEditor | null>(null);
   // Only exact locators and typed input survive an admission recheck.
-  const [connectorIntent, setConnectorIntent] = useState<{ connectorId: string; serverId?: string; entered: boolean; window: object } | null>(null);
+  const [connectorIntent, setConnectorIntent] = useState<{ connectorId: string; providerKey?: string; serverId?: string; binding?: McpConnectorBinding; exact?: boolean; entered: boolean; window: object } | null>(null);
   const editorWindow = useRef<{ intent: object; controller: AbortController } | null>(null);
   useLayoutEffect(() => {
     const window = connectorIntent?.window;
@@ -118,13 +119,15 @@ export function McpProjectionRead({
     };
   }, [connectorIntent?.window, owner]);
   const preparationState = preparationStates.find(item => item.serverId === connectorIntent?.serverId && item.connectorId === connectorIntent?.connectorId);
-  const [providerWindowToken, setProviderWindowToken] = useState<object>({});
+  const [providerWindowToken, setProviderWindowToken] = useState<{ fromDirectory?: true }>({});
   const providerWindow = useRef<{ intent: object; controller: AbortController } | null>(null);
   const [selectedProviderKey, setSelectedProviderKey] = useState<string | null>(null);
-  const [providerConnectionIntent, setProviderConnectionIntent] = useState<{ connectorId: string; exact: boolean } | null>(null);
+  const [providerConnectionIntent, setProviderConnectionIntent] = useState<{ connectorId: string; exact: boolean; binding?: McpConnectorBinding } | null>(null);
   const selectedProviderConnectionId = providerConnectionIntent?.connectorId ?? null;
-  const setSelectedProviderConnectionId = (connectorId: string | null, exact = false) =>
-    setProviderConnectionIntent(connectorId === null ? null : { connectorId, exact });
+  const setSelectedProviderConnectionId = (connectorId: string | null, exact = false, binding?: McpConnectorBinding) =>
+    setProviderConnectionIntent(connectorId === null ? null : { connectorId, exact, ...(binding ? { binding } : {}) });
+  const bindingFor = (connection: McpConnector): McpConnectorBinding => ({ connectorType: connection.connector_type,
+    ...(connection.server_id ? { serverId: connection.server_id } : {}) });
   useLayoutEffect(() => {
     const wait = selectedProviderKey ? { intent: providerWindowToken, controller: new AbortController() } : null;
     providerWindow.current = wait;
@@ -169,6 +172,9 @@ export function McpProjectionRead({
   const [factsOwner, setFactsOwner] = useState(owner);
   if (factsOwner !== owner) {
     setFactsOwner(owner);
+    if (factsOwner.identity !== owner.identity || factsOwner.client !== owner.client) {
+      setSelectedProviderKey(null); setSelectedProviderConnectionId(null); setProviderWindowToken({});
+    }
     setEditor(null);
     setActionId(null);
     setActionError(false);
@@ -229,14 +235,19 @@ export function McpProjectionRead({
   const connectors = (connectorProjection?.items ?? []).filter(
     (connector) => !confirmedRemovedConnectorIds.has(connector.connector_id),
   );
-  const connectedProviderKeys = new Set(
-    connectors
-      .filter((connector) => connector.status === "active")
-      .map((connector) => connector.provider_key),
-  );
+  const relations = useMcpProviderRelations({ client, identity, admitted, readGeneration, refreshKey,
+    enabled: view === "catalog" || catalogOpen || (providerWindowToken.fromDirectory === true && selectedProviderKey !== null) });
+  const addedProviderKeys = new Set(relations.items.filter(item => item.status !== "revoked" && !confirmedRemovedConnectorIds.has(item.connector_id)).map(item => item.provider_key));
+  const directoryConnections = relations.items.filter(item => item.provider_key === selectedProviderKey && item.status !== "revoked" && !confirmedRemovedConnectorIds.has(item.connector_id));
+  const resolvingDirectory = providerWindowToken.fromDirectory === true && selectedProviderConnectionId === null && (!providerCreationState || providerCreationState.kind === "rejected");
+  // Freeze a unique locator only after the complete management observation.
+  // Private servers retain explicit selection and their own editor.
+  if (admitted && resolvingDirectory && relations.complete && !relations.error && directoryConnections.length === 1 && !directoryConnections[0]!.server_id)
+    setSelectedProviderConnectionId(directoryConnections[0]!.connector_id, true, bindingFor(directoryConnections[0]!));
   const customApis = customApiState.data?.items ?? [];
   const providerConnectionDetail = useMcpProviderConnection({ client, identity, admitted, readGeneration,
     connectorId: selectedProviderConnectionId ?? providerCreationState?.connectorId ?? null, providerKey: selectedProviderKey,
+    ...(providerConnectionIntent?.binding ? { binding: providerConnectionIntent.binding } : {}),
     known: !providerConnectionIntent?.exact && view === "connections" && !connectorState.loading && !connectorState.error
       ? connectors.find(item => item.connector_id === selectedProviderConnectionId) : undefined, retry: detailRetry });
   const selectedProviderConnection = providerConnectionDetail.connection;
@@ -322,25 +333,38 @@ export function McpProjectionRead({
     if (origin === "editor") resetEditor();
     else { setSelectedProviderKey(null); setSelectedProviderConnectionId(null); }
   };
-  const beginEdit = (connector: McpConnector, returnFocus: HTMLElement) => {
+  const beginEdit = (connector: McpConnector, returnFocus: HTMLElement, exact = false) => {
     if (!owner.admitted || ownerRef.current !== owner) return;
     editorReturnFocusRef.current = returnFocus;
     providerReturnFocusRef.current = returnFocus;
     setDeleteId(null);
     setActionError(false);
     setEditor(null);
-    if (!connector.server_id && connector.connector_type === "mcp") {
+    if (!connector.server_id && (connector.connector_type === "mcp" || exact)) {
       setProviderWindowToken({});
-      setSelectedProviderConnectionId(connector.connector_id);
+      setSelectedProviderConnectionId(connector.connector_id, exact, exact ? bindingFor(connector) : undefined);
       setSelectedProviderKey(connector.provider_key);
       setConnectorIntent(null);
       return;
     }
-    setConnectorIntent({ connectorId: connector.connector_id, ...(connector.server_id ? { serverId: connector.server_id } : {}), entered: false, window: {} });
+    setProviderWindowToken({});
+    setConnectorIntent({ connectorId: connector.connector_id, providerKey: connector.provider_key, exact, ...(exact ? { binding: bindingFor(connector) } : {}), ...(connector.server_id ? { serverId: connector.server_id } : {}), entered: false, window: {} });
   };
   const connectorId = connectorIntent?.connectorId;
   const serverId = connectorIntent?.serverId;
-  const selectedConnector = connectorProjection?.items.find(item => item.connector_id === connectorId);
+  const exactEditorConnection = useMcpProviderConnection({ client, identity, admitted, readGeneration,
+    connectorId: connectorIntent?.exact ? connectorId ?? null : null, providerKey: connectorIntent?.providerKey ?? null,
+    known: undefined, retry: detailRetry, ...(connectorIntent?.binding ? { binding: connectorIntent.binding } : {}) });
+  const [editorReadScope, setEditorReadScope] = useState<object | null>(null);
+  // A server read belongs to the exact connector observation that admitted it.
+  // Retire both facts before committing a new revision/retry, even if the next
+  // connector response reuses the same object. Never expose old CAS actions.
+  if (connectorIntent?.exact && editorReadScope !== exactEditorConnection.readScope) {
+    setEditorReadScope(exactEditorConnection.readScope);
+    setEditor(null);
+  }
+  const selectedConnector = connectorIntent?.exact ? exactEditorConnection.connection ?? undefined
+    : connectorProjection?.items.find(item => item.connector_id === connectorId);
   const providerReady = Boolean(serverId) || providerProjection !== undefined;
   const selectedConnectorProvider = serverId ? undefined : providers.find(item => item.provider_key === selectedConnector?.provider_key);
   useEffect(() => {
@@ -474,15 +498,8 @@ export function McpProjectionRead({
     if (ownerRef.current !== owner || !admitted) return;
     providerReturnFocusRef.current = trigger;
     setActionError(false);
-    setProviderWindowToken({});
-    // Only a complete, current management read proves a unique relationship.
-    // Preserve any original Create recovery before selecting another locator.
-    const complete = view === "connections" && cursor === null && connectorProjection?.next_cursor === null &&
-      !connectorState.loading && !connectorState.error && connectorState.requestIdentity === identity;
-    const matches = complete ? connectors.filter(connector => connector.provider_key === provider.provider_key &&
-      connector.connector_type === "mcp" && !connector.server_id && connector.status !== "revoked") : [];
-    const creation = providerCreationStates.some(item => item.providerKey === provider.provider_key);
-    setSelectedProviderConnectionId(!creation && matches.length === 1 ? matches[0]!.connector_id : null, true);
+    setProviderWindowToken({ fromDirectory: true });
+    setSelectedProviderConnectionId(null, true);
     setSelectedProviderKey(provider.provider_key);
   };
   return (
@@ -547,7 +564,7 @@ export function McpProjectionRead({
       (connectorIntent === null || !connectorIntent.entered) &&
       selectedProviderKey === null &&
       selectedCustomApiId === null ? (
-        <ActionError {...(connectorIntent ? { onRetry: () => { if (!admitted || ownerRef.current !== owner) return; setActionError(false); if (!selectedConnector || connectorState.error) reload("connectors"); else setDetailRetry(value => value + 1); } } : {})} />
+        <ActionError {...(connectorIntent ? { onRetry: () => { if (!admitted || ownerRef.current !== owner) return; setActionError(false); if (!connectorIntent.exact && (!selectedConnector || connectorState.error)) reload("connectors"); else setDetailRetry(value => value + 1); } } : {})} />
       ) : null}
 
       {view === "catalog" ? (
@@ -562,7 +579,8 @@ export function McpProjectionRead({
             onQueryChange={setProviderQuery}
             showSearch={embedded}
             presentation={embedded ? "plaza" : "dialog"}
-            connectedProviderKeys={connectedProviderKeys}
+            addedProviderKeys={addedProviderKeys}
+                relationsComplete={relations.complete && !relations.error}
             categoryFilter={categoryFilter}
             onCategoryFilterChange={setCategoryFilter}
             onSelectProvider={openProvider}
@@ -628,6 +646,8 @@ export function McpProjectionRead({
       </div>
       <McpProviderCatalogDialog
         open={catalogOpen}
+        addedProviderKeys={addedProviderKeys}
+        relationsComplete={relations.complete && !relations.error}
         {...(directory.items.length > 0 || !directory.loading ? { providers: directory.items } : {})}
         hasMore={directory.hasMore}
         onLoadMore={directory.loadMore}
@@ -643,13 +663,13 @@ export function McpProjectionRead({
         onSelectProvider={openProvider}
         {...(onCreateMcp ? { onCreate: (mode: McpCreateMode, target?: HTMLElement | null) => { if (ownerRef.current === owner && admitted) onCreateMcp(mode, target); } } : {})}
       />
-      {connectorIntent?.serverId && (connectorIntent.entered || editor?.server) ? (
+      {connectorIntent?.serverId && (connectorIntent.exact || connectorIntent.entered || editor?.server) ? (
         <CustomMcpDetailDialog
           key={connectorIntent.serverId}
           connector={editor?.server ? editor.connector : null}
           server={editor?.server ?? null}
-          pendingError={admitted && (actionError || connectorState.error || (connectorProjection !== undefined && !selectedConnector))}
-          onRetry={() => { if (ownerRef.current !== owner || !admitted) return; setActionError(false); if (!selectedConnector || connectorState.error) reload("connectors"); else setDetailRetry(value => value + 1); }}
+          pendingError={admitted && (actionError || (connectorIntent.exact ? exactEditorConnection.error : connectorState.error || (connectorProjection !== undefined && !selectedConnector)))}
+          onRetry={() => { if (ownerRef.current !== owner || !admitted) return; setActionError(false); if (!connectorIntent.exact && (!selectedConnector || connectorState.error)) reload("connectors"); else setDetailRetry(value => value + 1); }}
           admitted={admitted}
           managementCommand={managementState}
           onResumeManagement={() => { if (connectorIntent) void runManagement("editor", connectorIntent.connectorId); }}
@@ -767,6 +787,15 @@ export function McpProjectionRead({
         onResumeManagement={() => { if (selectedProviderConnectionId) void runManagement("provider", selectedProviderConnectionId); }}
         provider={selectedProvider}
         connection={selectedProviderConnection}
+        {...(resolvingDirectory ? { connectionLookup: { connections: directoryConnections, complete: relations.complete, error: relations.error, retry: relations.retry },
+          onSelectConnection: (connection: McpConnector) => {
+            if (!relations.complete || relations.error || ownerRef.current !== owner || !admitted ||
+              !directoryConnections.some(item => item.connector_id === connection.connector_id)) return;
+            const target = providerReturnFocusRef.current;
+            if (!target) return;
+            if (connection.server_id) { setSelectedProviderKey(null); setSelectedProviderConnectionId(null); }
+            beginEdit(connection, target, true);
+          } } : {})}
         actionId={actionId}
         actionError={actionError || providerManagementState?.kind === "rejected"}
         returnFocusRef={providerReturnFocusRef}

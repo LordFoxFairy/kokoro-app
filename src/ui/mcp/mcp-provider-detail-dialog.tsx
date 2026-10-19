@@ -27,10 +27,13 @@ import type { ProviderCreationSummary } from "./provider-creation-commands";
 import { connectorCommandMayResume, connectorCommandFailureMessage } from "./connector-command-failure";
 import { McpManagementStatus } from "./mcp-management-status";
 import styles from "./mcp-projection-read.module.css";
+import { McpProviderConnectionPicker, type McpProviderConnectionLookup } from "./mcp-provider-connection-picker";
 
 export function McpProviderDetailDialog({
   provider,
   connection,
+  connectionLookup,
+  onSelectConnection,
   actionId,
   admitted,
   creationCommand,
@@ -53,8 +56,10 @@ export function McpProviderDetailDialog({
   open?: boolean;
   pendingError?: boolean;
   onRetry?: () => void;
-  /** Defined only when this detail was entered from an installed provider row. */
+  /** An admitted installed row or an exact selected locator; never an inferred provider-key binding. */
   connection?: McpConnector | null;
+  connectionLookup?: McpProviderConnectionLookup;
+  onSelectConnection?: (connection: McpConnector) => void;
   actionId: string | null;
   admitted: boolean;
   creationCommand?: ProviderCreationSummary | undefined;
@@ -145,7 +150,7 @@ export function McpProviderDetailDialog({
                   </div>
                 ) : null}
                 <div className={styles.providerDetailActions}>
-                  {!connected && creationLocked ? null : connected ? <span className={styles.connectionState} data-status={connection.status}>{t(`mcp.${connection.status}` as "mcp.pending")}</span> : <Button
+                  {!connected && (creationLocked || (connectionLookup && (!connectionLookup.complete || connectionLookup.error || connectionLookup.connections.length > 0))) ? null : connected ? <span className={styles.connectionState} data-status={connection.status}>{t(`mcp.${connection.status}` as "mcp.pending")}</span> : <Button
                       type="button"
                       disabled={locked || creationLocked}
                       onClick={() => onConnect(provider)}
@@ -157,6 +162,7 @@ export function McpProviderDetailDialog({
               </div>
             </header>
             <section className={styles.providerDetailBody}>
+              {!connected && connectionLookup && onSelectConnection ? <McpProviderConnectionPicker lookup={connectionLookup} onSelect={onSelectConnection} /> : null}
               {creationLocked ? <Alert role="status">
                 <AlertDescription>{t(creationCommand.kind === "completed" ? "mcp.providerCreateConfirmed" : creationCommand.kind === "running" ? "mcp.loading" : connectorCommandFailureMessage(creationCommand.failure, "mcp.recovery.outcome_unknown"))}</AlertDescription>
                 {creationCommand.kind === "unknown" || creationCommand.kind === "completed" ? <Button type="button" variant="outline"

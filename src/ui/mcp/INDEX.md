@@ -1,10 +1,12 @@
-### 目录已有连接定位（2026-10-19）
+### 完整目录关系与明确选择（2026-10-19）
 
-Settings 管理页打开目录后，不丢弃已确认的唯一 provider 连接。仅当前主体准入、fresh 完整首页面（cursor/next 均空）证明唯一非 revoked、无 private server 的 mcp 连接时，携带 locator 进入既有详情；停用、pending/error 不等同未添加。目录入口强制 exact GET，不承接列表 CAS。原 Create 命令优先，未知/已确认意图不因另一关系出现而丢失或结束。定位读取方式归同一 connection intent，不增第二认证或网络协议。
+`use-mcp-provider-relations.ts` 只读现管理 connector 接口，按 opaque cursor 串行收完；不使用 runtime active-only 投影，也不将旧缓存/首分页当完整零关系。一个 live scan 由同 client/actor/准入代际/confirmed-write revision 的目录订阅者共享，最后订阅退休即取消；仅在飞共享，无跨打开的完整结果缓存。50页/10秒是读操作预算，不是业务上限；循环、超预算、失败、取消均保持未知，显式重试从首页开始。
+
+广场与设置目录显示已添加正向标记（非revoked，不混启用/可执行），完整零项才提供新建。唯一非private关系冻结ID、类型/私有server绑定并走exact GET；多项及private由独立 `mcp-provider-connection-picker.tsx` 明确选择，再读选中connector/server，不塞回当前分页。被选ID不随刷新换绑，撤销/类型或server改变进入错误，不退回Create。原Create运行/未知/已确认恢复优先，确定拒绝后重核关系；换actor清退目录选择，同actor重核只退役事实。原管理命令与主体/CAS/幂等围栏保留。private精确读取失败的Retry重发原ID GET；confirmed-write revision/重试立即退休旧connector/server操作资格，当前connector及server均重读后才恢复，重读漂移不保留旧管理/Prepare按钮。
+
+卡片使用一份紧凑排版：76px行、40px标框/24px图、14/20px标题与12/16px说明、32px状态框，不保留旧巨型封面及重复紧凑覆盖。保留目录网格/分类的独立响应式规则；视觉与正常环境验收以本轮实际证据为准，不以fixture声称真实账号完整旅程。模型、实际工具、扣费、CI及远端仍暂停。
 
 目录打开的延后 autofocus 仅在焦点仍停留原处且输入仍挂载时执行；已交给分类的用户焦点不被旧打开帧抢回。原分类交接用例用受控帧补强，不靠扩时或等待掩盖竞态。
-
-这是完整当前管理页的关系接线，不将分页单页当完整，也不任取多个连接。独立广场、跨分页关系、多连接选择及目录 Check 的完整语义仍待补齐；不以本片冒完整目录或正常环境整链验收。
 
 ## 连接器目录弹窗布局（2026-10-19）
 

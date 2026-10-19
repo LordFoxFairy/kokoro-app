@@ -1,11 +1,13 @@
+import { StrictMode } from "react"
 import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react"
 import { afterEach, expect, it, vi } from "vitest"
 
-import { createHubClient } from "@/hub/client"
-import type { McpConnectorProvider } from "@/hub/mcp-connector.schema"
+import { createHubClient, type HubClient } from "@/hub/client"
+import type { McpConnectorProvider, McpConnectorPage } from "@/hub/mcp-connector.schema"
 import { LocaleProvider } from "@/i18n/context"
 import { McpProviderCatalogDialog } from "@/ui/mcp/mcp-provider-catalog-dialog"
 import { McpProviderDirectory } from "@/ui/mcp/mcp-provider-directory"
+import { useMcpProviderRelations } from "@/ui/mcp/use-mcp-provider-relations"
 import { useMcpProviderDirectory } from "@/ui/mcp/use-mcp-provider-directory"
 
 const provider = (key: string): McpConnectorProvider => ({ provider_key: key, display_name: key, directory_type: "app", category_keys: [], example_prompts: [], enabled: true, state_version: "1" })
@@ -127,4 +129,70 @@ it("hands category focus between the rail and menu when the actual localized lab
     frame.mockRestore(); cancelFrame.mockRestore()
     width.mockRestore(); measured.mockRestore(); window.ResizeObserver = original
   }
+})
+
+
+it("shares a live complete relation scan while retiring old actor reads and aborting the last subscriber", async () => {
+  let finishOld!: (value: McpConnectorPage) => void
+  const list = vi.fn().mockImplementationOnce(() => new Promise(resolve => { finishOld = resolve }))
+    .mockResolvedValue({ items: [], next_cursor: null })
+  const client = { ...createHubClient(), listMcpConnectors: list }
+  const usePair = ({ identity, admitted }: { identity: string; admitted: boolean }) => {
+    const input = { client, identity, admitted, readGeneration: 0, enabled: true, refreshKey: 0 }
+    return [useMcpProviderRelations(input), useMcpProviderRelations(input)] as const
+  }
+  const { result, rerender } = renderHook(usePair, { initialProps: { identity: "first-actor", admitted: true }, wrapper: StrictMode })
+  expect(list).toHaveBeenCalledOnce()
+  const oldSignal = list.mock.calls[0]![1] as AbortSignal
+  rerender({ identity: "second-actor", admitted: true })
+  await waitFor(() => expect(result.current.every(read => read.complete)).toBe(true))
+  expect(list).toHaveBeenCalledTimes(2)
+  expect(oldSignal.aborted).toBe(true)
+  await act(async () => finishOld({ items: [{ connector_id: "retired-actor-row", connector_type: "mcp", provider_key: "retired", status: "active", enabled: true, approved_scopes: [], state_version: "1" }], next_cursor: null }))
+  expect(result.current.every(read => read.complete && read.items.length === 0)).toBe(true)
+  const { invalidateMcpConnectorProjection } = await import("@/ui/mcp/use-mcp-projection")
+  let finishCurrent!: (value: McpConnectorPage) => void
+  list.mockImplementationOnce(() => new Promise(resolve => { finishCurrent = resolve }))
+  act(() => invalidateMcpConnectorProjection(client, "second-actor"))
+  expect(result.current.every(read => !read.complete && read.items.length === 0)).toBe(true)
+  await waitFor(() => expect(list).toHaveBeenCalledTimes(3))
+  await act(async () => finishCurrent({ items: [], next_cursor: null }))
+  expect(result.current.every(read => read.complete)).toBe(true)
+  rerender({ identity: "second-actor", admitted: false })
+  expect(result.current.every(read => !read.complete && read.items.length === 0)).toBe(true)
+})
+
+it.each(["cycle", "budget", "failure"] as const)("keeps a %s relation scan unknown and requires an explicit fresh retry", async scenario => {
+  let calls = 0
+  const list = vi.fn<HubClient["listMcpConnectors"]>(async () => {
+    calls++
+    if (scenario === "failure") throw Error("offline")
+    return { items: [], next_cursor: scenario === "cycle" ? "same" : `page-${calls}` }
+  })
+  const client = { ...createHubClient(), listMcpConnectors: list }
+  const { result } = renderHook(() => useMcpProviderRelations({ client, identity: scenario, admitted: true, readGeneration: 0, enabled: true, refreshKey: 0 }))
+  await waitFor(() => expect(result.current.error).toBe(true))
+  expect(result.current.complete).toBe(false)
+  expect(result.current.items).toEqual([])
+  const failures = calls
+  expect(failures).toBe(scenario === "budget" ? 50 : scenario === "cycle" ? 2 : 1)
+  list.mockImplementation(async () => ({ items: [], next_cursor: null }))
+  act(() => result.current.retry())
+  await waitFor(() => expect(result.current.complete).toBe(true))
+  expect(list).toHaveBeenLastCalledWith({ limit: 100 }, expect.any(AbortSignal))
+  expect(list).toHaveBeenCalledTimes(failures + 1)
+})
+
+it("bounds a hanging relation read and releases its request instead of confirming an empty directory", async () => {
+  vi.useFakeTimers()
+  try {
+    const list = vi.fn<HubClient["listMcpConnectors"]>(() => new Promise<never>(() => {}))
+    const client = { ...createHubClient(), listMcpConnectors: list }
+    const { result } = renderHook(() => useMcpProviderRelations({ client, identity: "deadline", admitted: true, readGeneration: 0, enabled: true, refreshKey: 0 }))
+    expect(list).toHaveBeenCalledOnce()
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000) })
+    expect(result.current.error).toBe(true)
+    expect(result.current.complete).toBe(false)
+    expect((list.mock.calls[0]![1] as AbortSignal).aborted).toBe(true)
+  } finally { cleanup(); vi.useRealTimers() }
 })

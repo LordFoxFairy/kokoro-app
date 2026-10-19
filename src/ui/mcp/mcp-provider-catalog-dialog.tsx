@@ -18,6 +18,8 @@ import styles from "./mcp-projection-read.module.css";
 export function McpProviderCatalogDialog({
   open,
   providers,
+  addedProviderKeys,
+  relationsComplete = false,
   loading,
   hasMore,
   onLoadMore,
@@ -34,6 +36,8 @@ export function McpProviderCatalogDialog({
 }: {
   open: boolean;
   providers?: McpConnectorProvider[];
+  addedProviderKeys?: ReadonlySet<string>;
+  relationsComplete?: boolean;
   loading: boolean;
   hasMore: boolean;
   onLoadMore: () => void;
@@ -156,6 +160,8 @@ export function McpProviderCatalogDialog({
           ) : null}
             <McpProviderDirectory
               providers={providers ?? []}
+              {...(addedProviderKeys ? { addedProviderKeys } : {})}
+              relationsComplete={relationsComplete}
               showCompactFilter={false}
               hasMore={hasMore}
               loading={loading}
