@@ -231,7 +231,7 @@
 .embeddedFilterLayout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-rows: 2rem 2.25rem;
+  grid-template-rows: 2rem 2rem;
   column-gap: 0.75rem;
   row-gap: 0.75rem;
   align-items: center;
@@ -248,7 +248,7 @@
 .embeddedSearchField {
   grid-column: 1;
   grid-row: 1;
-  width: 12.5rem;
+  width: min(12.5rem, 100%);
   height: 2rem;
 }
 
@@ -310,15 +310,18 @@
 .embeddedCreate { gap: 0.25rem; }
 .embeddedCreate > svg { width: 1rem; height: 1rem; }
 
+.embeddedFilterLayout .embeddedCreate {
+  width: 5.25rem;
+}
+
 @media (pointer: fine) {
   .embeddedBrowse {
     width: 4.5rem;
     justify-content: center;
   }
   .embeddedCreate {
-    /* Manus uses an explicit plus, label and chevron in this control. Its
-       116px measured footprint keeps the browse action beside search rather
-       than leaving a misleading empty gulf in the toolbar. */
+    /* Preserve the standalone dialog's action footprint. The embedded
+       Settings toolbar uses the narrower context-specific rule above. */
     width: 7.25rem;
     justify-content: center;
   }
@@ -334,10 +337,11 @@
 }
 
 .embeddedFilterSeg[data-slot="toggle-group"] .filterBtn[data-slot="toggle-group-item"] {
-  height: 2.25rem;
-  min-height: 2.25rem;
-  padding-inline: 0.75rem;
-  border-radius: 999px;
+  height: 2rem;
+  min-height: 2rem;
+  min-width: 3rem;
+  padding: 0 0.625rem;
+  border-radius: 0.5rem;
   border: 0;
   background: transparent;
   box-shadow: none;
@@ -345,12 +349,6 @@
   font-size: 0.875rem;
   font-weight: 400;
   line-height: 1.25rem;
-}
-
-@media (pointer: fine) {
-  .embeddedFilterSeg[data-slot="toggle-group"] { gap: 0.25rem; }
-  .embeddedFilterSeg[data-slot="toggle-group"] .filterBtn[data-slot="toggle-group-item"] { width: 3.25rem; justify-content: center; }
-  .embeddedFilterSeg[data-slot="toggle-group"] .filterBtn[data-slot="toggle-group-item"]:nth-child(4) { width: 4.125rem; }
 }
 
 .embeddedFilterSeg[data-slot="toggle-group"] .filterBtn[data-slot="toggle-group-item"][data-state="on"] {
@@ -1260,7 +1258,6 @@
   .tabs.embeddedTabs { padding: 0; }
   .body { padding: 1.35rem 2rem 2rem; }
   .embeddedBody { padding-inline: 0; }
-  .embeddedSearchField { width: 20rem; }
   /* The desktop settings workbench uses the same two-column installed-card
    * grid as Manus. The compact sheet below retains one column, so a viewport
    * change changes density rather than card behavior. */
@@ -1553,6 +1550,7 @@
     min-height: 10.25rem;
   }
 
+  /* The standalone Skills dialog shares this action class too. */
   .embeddedCreate {
     width: 5.25rem;
   }
