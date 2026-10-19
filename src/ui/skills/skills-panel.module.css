@@ -353,7 +353,7 @@
   .embeddedFilterSeg[data-slot="toggle-group"] .filterBtn[data-slot="toggle-group-item"]:nth-child(4) { width: 4.125rem; }
 }
 
-.embeddedFilterSeg .filterBtn[data-state="on"] {
+.embeddedFilterSeg[data-slot="toggle-group"] .filterBtn[data-slot="toggle-group-item"][data-state="on"] {
   background: color-mix(in srgb, var(--foreground) 8%, transparent);
   color: var(--foreground);
   font-weight: 500;

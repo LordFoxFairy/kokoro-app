@@ -1,3 +1,7 @@
+## 设置范围筛选的选中反馈（2026-10-19）
+
+嵌入设置页的范围筛选复用 ToggleGroup 原有 data-state；选中规则使用与基础项相同的 slot 边界再限定 on，避免透明背景/常规字重覆盖已选反馈。不增加筛选状态、请求或全局样式；实际浏览器先复现选中项与未选项同为透明/400，再核个人、官方、第三方切换与键盘互斥反馈。
+
 ## 更新未知结果的明确停止等待
 
 个人安装更新继续保留unknown、原key/body及普通reset保护；HTTP412不证明原操作未提交。`skill-installation-update-flow`的abandon仅接受当前admitted boundary、同一unknown snapshot、无active等待且尚无ACK，清本地恢复意图而非撤销owner更新。`skill-installation-update-dialog`二次确认后调用，取消返回原按钮；actor/generation/状态变化使旧确认失效。父SkillsContent失活原池/目录查询并关闭，不合成成功。正常页面的请求前故障验收与真实owner lost-ACK是不同证据，范围见CURRENT。
