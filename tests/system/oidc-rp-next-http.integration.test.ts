@@ -2378,26 +2378,75 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     } finally { client.destroy() }
   }
 
-  function expectServerFirstAnonymousRedirect(response: HttpResult, expectedTarget = "/app"): void {
-    const loginLocation = `/login?${new URLSearchParams({ return_to: expectedTarget })}`
-    expect(response.body).not.toContain('data-testid="runtime-loading"')
-    if (response.status >= 300 && response.status < 400) {
-      expect(response.headers.location).toBe(loginLocation)
-      return
-    }
+  function expectDataFreeAnonymousDocument(response: HttpResult, expectedTarget = "/app"): void {
     expect(response.status).toBe(200)
-    const escapedLocation = loginLocation.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")
-    expect(response.body).toMatch(new RegExp(`(?:NEXT_REDIRECT[^<]{0,512}${escapedLocation}|<meta[^>]+url=${escapedLocation})(?=[;\\s"'<]|$)`, "u"))
+    expect(response.body).not.toContain('data-app-frame-main="true"')
+    expect(response.body).not.toContain('data-slot="composer-input"')
+    expect(response.body).not.toContain('data-testid="runtime-loading"')
+    // With scripts disabled, retain the bounded path/query login link. The
+    // browser-only fragment is preserved by the ordinary hydrated handoff.
+    expect(response.body).toContain(`/login?${new URLSearchParams({ return_to: expectedTarget })}`)
   }
 
-  it("R167 redirects an anonymous initial app document before rendering the client loading gate", async () => {
-    const response = await http(nextPort, "/app", "GET", "", {}, 10_000)
-    expectServerFirstAnonymousRedirect(response)
+  it("returns a signed known settings fragment after the complete OIDC callback", async () => {
+    const target = "/app#/account/settings/mcp"
+    const login = await http(nextPort, `/login?${new URLSearchParams({ return_to: target })}`)
+    expect(login.status).toBe(200)
+    const csrf = login.body.match(/name="csrfToken" value="([a-f0-9]{64})"/u)?.[1]
+    expect(csrf).toBeDefined()
+    const signin = await http(nextPort, "/api/auth/signin/kokoro-iam", "POST", `csrfToken=${csrf}`,
+      { origin: `http://localhost:${nextPort}`, cookie: cookieHeader(login) })
+    expect(signin.status).toBe(302)
+    const location = new URL(signin.headers.location as string)
+    issuedStates.add(location.searchParams.get("state") ?? "")
+    const authorize = await http(nextPort, location.pathname + location.search)
+    expect(authorize.status).toBe(302)
+    const callback = await http(nextPort, authorize.headers.location as string, "GET", "", { cookie: cookieHeader(login, signin) })
+    await recordProduct(callback)
+    expect(callback.status).toBe(303)
+    expect(callback.headers.location).toBe(target)
   })
 
-  it("R167 applies the same server-first anonymous redirect to a nested app document", async () => {
+  it("preserves an anonymous initial settings deep link through one browser login", async () => {
+    const browser = await chromium.launch({ headless: true })
+    try {
+      const context = await browser.newContext()
+      const page = await context.newPage()
+      const target = "/app/plugins#/account/settings/mcp"
+      let starts = 0
+      let callbackSeen = false
+      const prematureProductReads: string[] = []
+      page.on("request", (request) => {
+        const path = new URL(request.url()).pathname
+        if (path === "/api/auth/signin/kokoro-iam") starts++
+        if (path === "/api/auth/callback/kokoro-iam") callbackSeen = true
+        if (!callbackSeen && (path.startsWith("/api/hub/") || path.startsWith("/api/session/"))) prematureProductReads.push(path)
+      })
+      await page.goto(`http://localhost:${nextPort}${target}`, { waitUntil: "domcontentloaded", timeout: 20_000 })
+      await expect.poll(() => callbackSeen, { timeout: 20_000 }).toBe(true)
+      await expect.poll(() => {
+        const url = new URL(page.url())
+        return `${url.pathname}${url.search}${url.hash}`
+      }, { timeout: 20_000 }).toBe(target)
+      expect(starts).toBe(1)
+      expect(callbackSeen).toBe(true)
+      expect(prematureProductReads).toEqual([])
+      const session = await context.request.get(`http://localhost:${nextPort}/api/auth/session`)
+      expect(session.status()).toBe(200)
+      expect(await session.json()).toMatchObject({ authenticated: true })
+    } finally {
+      await browser.close()
+    }
+  })
+
+  it("R167 renders no private workbench for an anonymous initial app document", async () => {
+    const response = await http(nextPort, "/app", "GET", "", {}, 10_000)
+    expectDataFreeAnonymousDocument(response)
+  })
+
+  it("R167 retains a bounded no-script login link for a nested anonymous document", async () => {
     const response = await http(nextPort, "/app/skills", "GET", "", {}, 10_000)
-    expectServerFirstAnonymousRedirect(response, "/app/skills")
+    expectDataFreeAnonymousDocument(response, "/app/skills")
   })
 
   it("rejects undefined and non-root-relative fixture HTTP targets instead of requesting the app root", async () => {

@@ -1,3 +1,9 @@
+## 首次匿名设置导航独立交付（2026-10-18）
+
+沿既有签名return_to/MAC/state、同源固定IAM OIDC，不改认证协议、cookie、权限、刷新或存储。SSR确认没有可用会话时，只返回独立无数据导航组件；浏览器捕获完整白名单设置hash并一次replace到/login，无脚本保留校验过的path/query链接。未知hash不成为开放重定向，已有AppGate/身份判定及故障关闭保留。
+
+本提交只包含导航所需独立增量，不夹带工作树内的刷新状态、调度、资料库或设置业务改动；完整mixed组合与此HEAD-only交付分别验证。正常已有会话保留，不改变现有登录配置或主动登出。首次匿名回调的真实Next/Chromium/Redis与受控IAM/BFF证据只证明该边界，不冒正常真实账号全旅程或整个Skills/MCP已完成。
+
 ## 动态适配补验：窗口、容器与弹层各自负责（2026-10-17）
 
 正常参考在窗口768px仍保300px侧栏，内容468px为单列；767px隐藏侧栏，内容767px仍单列。旧代码在768px提前启用overlay，并使内容宽768误进项目双列；这是窗口导航门限错误，不在项目workspace写判断修补。现由既有shell constraints定义desktop minimum，移动/细指针订阅和snapshot以及SSR CSS同用 `width < 768px`，不使用遗漏767–768小数区间的max767查询，也不以取整innerWidth替代真实media matches。侧栏用户偏好、窄屏临时抽屉和项目内容网格仍分别维护。

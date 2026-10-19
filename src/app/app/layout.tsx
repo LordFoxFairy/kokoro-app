@@ -1,11 +1,11 @@
 import { headers } from "next/headers"
-import { redirect } from "next/navigation"
 
 import { parseProductReturnTarget } from "@/lib/product-return-target"
 
 import { oidcRpConfig } from "@/lib/server/oidc-provider"
 import { activeProductSession } from "@/lib/server/product-session"
 import { AppGate } from "@/ui/auth/app-gate"
+import { ProductSignInRedirect } from "@/ui/auth/product-sign-in-redirect"
 
 export const dynamic = "force-dynamic"
 
@@ -56,7 +56,8 @@ export default async function AppLayout({
   }
   if (session === null) {
     const target = parseProductReturnTarget(incoming.get("x-kokoro-product-return-target") ?? "")
-    redirect(target === null ? "/login" : `/login?${new URLSearchParams({ return_to: target })}`)
+    // The browser alone can preserve a fragment; this document mounts no private workbench.
+    return <ProductSignInRedirect fallbackTarget={target} />
   }
   return <AppGate serverAdmitted />
 }

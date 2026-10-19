@@ -5,7 +5,8 @@ import { parseProductReturnTarget } from "@/lib/product-return-target";
 export function openProductSignIn(
   navigate: (url: string) => void = (url) => window.location.replace(url),
 ): void {
-  const target = parseProductReturnTarget(`${window.location.pathname}${window.location.search}`);
+  const path = `${window.location.pathname}${window.location.search}`;
+  const target = parseProductReturnTarget(`${path}${window.location.hash}`) ?? parseProductReturnTarget(path);
   navigate(target === null ? "/login" : `/login?${new URLSearchParams({ return_to: target })}`);
 }
 

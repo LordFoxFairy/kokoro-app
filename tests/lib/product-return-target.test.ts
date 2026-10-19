@@ -38,3 +38,13 @@ it("retains only canonical Skill Share return targets", () => {
   expect(parseProductReturnTarget("/skills/shared/skill%3Arevision")).toBe("/skills/shared/skill%3Arevision")
   for (const path of ["/skills/shared/", "/skills/shared/%73hare", "/skills/shared/a/b", "/skills/shared/a?x=1", "/skills/shared/a#x", "/skills/shared/%252F", "/skills/shared/%00"]) expect(parseProductReturnTarget(path)).toBeNull()
 })
+
+it("retains only recognized same-app settings fragments, not arbitrary redirect fragments", () => {
+  expect(parseProductReturnTarget("/app#/account/settings/mcp")).toBe("/app#/account/settings/mcp")
+  for (const scope of ["all", "personal", "official", "thirdParty", "explore"]) {
+    const target = `/app#/account/settings/skills/${scope}`
+    expect(parseProductReturnTarget(target)).toBe(target)
+  }
+  expect(parseProductReturnTarget("/app/library?type=images#/account/settings/skills/personal")).toBe("/app/library?type=images#/account/settings/skills/personal")
+  for (const target of ["/app#//evil.test", "/app#/account/settings/mcp/../../other", "/app#/account/settings/%6dcp", "/app#/account/settings/mcp#other", "/skills/shared/share-1#/account/settings/mcp"]) expect(parseProductReturnTarget(target)).toBeNull()
+})
