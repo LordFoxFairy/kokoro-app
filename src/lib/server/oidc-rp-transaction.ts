@@ -113,10 +113,3 @@ export async function consumeOidcState(input: Readonly<{
   const mac = returnMac(input.authSecret, input.webOrigin, binding, target)
   return timingSafeEqual(Buffer.from(value[3]), Buffer.from(mac)) ? target : null
 }
-
-export function rpCleanupCookies(secure: boolean): string[] {
-  const prefix = secure ? "__Secure-" : ""
-  return [...RP_COOKIE_NAMES, "next-auth.callback-url", "next-auth.session-token"].map((name) =>
-    `${prefix}${name}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax${secure ? "; Secure" : ""}`,
-  )
-}

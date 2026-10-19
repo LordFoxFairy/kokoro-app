@@ -41,7 +41,9 @@ runtime token、内部服务地址、workload secret 或后端隔离键。
   header/body 限额；仅受控交互使用 POST，不复用会合并 cookie 的 Product transport。
 - `iam-relay-response.ts`：原生 status/header/body、Location 与 issuer `Set-Cookie` 的出站校验。
 - `oidc-provider.ts`：固定 provider/EdDSA、验证型 `client.callback` 与 server-only Basic/Bearer backchannel；Product Session 由 RP route 在身份准入后建立。
-- `oidc-rp-transaction.ts`：300 秒 Redis state 摘要、RP cookie 绑定、原子一次消费及回调清理。
+- `oidc-rp-transaction.ts`：300秒Redis state摘要、RP cookie绑定和原子一次消费；所有callback均不删除可能属于新登录的共享proof，成功只签发Product cookie，临时proof按原期限过期。
+- `oidc-csrf.ts`：严格读取唯一、两段格式及摘要有效的Auth.js CSRF cookie，登录复用与session/signout校验共用。
+- `oidc-login-recovery.ts`：GET/POST原生失败的手动HTML表示，保原status与API JSON；精确Proxy路径承接no-referrer及同nonce CSP，无自动重试。
 - `product-login-return.ts`：`/login` 到 provider POST 的 HttpOnly 签名回跳目标 cookie；仅接受严格 Product 内部路径，provider 启动后立即清除。
 - `oidc-bff-agent.ts`：token/userinfo/JWKS 每请求独立 5 秒绝对 deadline、响应头/正文 1 MiB 上限与浏览器 abort 连接取消。
 - `product-identity.ts`：callback 建 session 与 refresh finalize 前调用固定 BFF `/v1/me`，严格核对

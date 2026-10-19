@@ -1,3 +1,9 @@
+## 登录回调与失败恢复（2026-10-19）
+
+GET /login沿原固定provider表单POST，复用唯一、两段格式及SHA256摘要均有效的Auth.js CSRF cookie；无效或歧义cookie重新签发。state一次消费、cookie binding、PKCE、nonce、issuer和身份核验不变。所有callback均不发送共享RP事务cookie删除头（成功只发Product session cookie），避免先前请求迟到后删除新登录的proof。三事务cookie仍按锁定Auth.js默认15分钟签名有效期/Expires过期；Redis state仍300秒TTL及GETDEL，保留cookie不恢复重放权限。没有新cookie、状态表或latest-login登记；不保证后完成的旧成功回调不会覆盖已完成的Product会话。
+
+原错误status/code和非HTML客户端JSON保持。精确signin/callback路径的GET/POST失败仅在明确接受HTML且有有效Proxy nonce时提供无脚本手动登录链接，无自动重试、授权query回显或成功cookie。最终Proxy仅对authorize和这两个精确路径设置no-referrer与同nonce限制CSP；恢复页另有no-referrer meta，不向重新登录链接传播code/state。其他auth路径和相似前缀保持原策略。
+
 ## Product Session 过期与续期投影（2026-10-17）
 
 访问凭据过期不等于七天 Product Session 到期。现 `GET /api/auth/session` 在线核验同一 Redis generation 后：active 且 access 有效返回原 authenticated/subject/expiry；active 但 access 到期返回 `200 {authenticated:false,refresh_required:true,subject,expires_at}`；absent/tombstone/无有效cookie仅返回 `{authenticated:false}`。refreshing 或 stale generation 返回409 `product_session_refresh_conflict`，过期 reservation 返回503 `product_session_refresh_unconfirmed`，损坏记录/依赖故障503 unavailable。不返回凭据、generation或reservation，不在GET/RSC轮换cookie。

@@ -1,3 +1,7 @@
+## RP 临时proof保留（2026-10-19）
+
+不新增cookie、Redis key、格式或Schema。state/PKCE/nonce共享proof不由callback删除，沿锁定Auth.js签名及默认15分钟Expires；Web state记录仍300秒TTL和一次GETDEL。成功只签原HttpOnly Product cookie，proof保留不赋予身份或重放权。无浏览器latest-login索引，不承诺并发成功会话的最后启动优先。
+
 ## 2026-10-16 SKILLS-UPDATE U4（本地实现，正常产品链待验）
 
 本片没有 Web 数据表、owner Schema 或新的持久事实。复用现个人 installation 的 available_update 与 pin；Web 仅有 actor-scoped 冻结命令（installation ID、series ID、旧/新 source_ref、目标 revision、原 key）及 ACK 后的回读阶段。没有 localStorage 业务记录、自动重试、双写或移除重装。重核清私有读事实；unknown 保原命令，换 actor 丢弃，完整页面刷新后不凭 GET 冒认旧命令 receipt。

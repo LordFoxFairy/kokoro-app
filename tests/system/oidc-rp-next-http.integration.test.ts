@@ -1127,6 +1127,8 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
   let identityTenantId = "tenant-one"
   let identityStatus = 200
   let identityDelayMs = 0
+  let identityGate: Promise<void> | undefined
+  let onIdentityHeld: (() => void) | undefined
   let sessionListStatus = 200
   let deleteSessionStatus = 200
   let holdDeleteSession = false
@@ -1849,7 +1851,11 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
               ? { data: { user_id: identityUserId, tenant_id: identityTenantId, platform_admin: false, access_token: "must-not-pass" }, meta: { request_id: "req_fixture" } }
               : { data: { user_id: identityUserId, tenant_id: identityTenantId, platform_admin: false }, meta: { request_id: "req_fixture" } }
             : { error: { code: "identity_rejected", message: "rejected", retryable: false } })
-          if (slowIdentity || identityDelayMs > 0) {
+          const heldIdentity = identityGate
+          if (heldIdentity !== undefined) {
+            onIdentityHeld?.()
+            void heldIdentity.then(() => { if (!response.destroyed) response.end(payload) })
+          } else if (slowIdentity || identityDelayMs > 0) {
             const timer = setTimeout(() => response.end(payload), slowIdentity ? 6_000 : identityDelayMs)
             response.once("close", () => clearTimeout(timer))
           } else response.end(payload)
@@ -5803,6 +5809,87 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     expect(paths).toHaveLength(before)
   })
 
+  it.each(["expired callback", "refreshed signin"])("gives %s browser navigation explicit recovery without automatic retry", async scenario => {
+    const target = scenario === "refreshed signin" ? "/api/auth/signin/kokoro-iam"
+      : "/api/auth/callback/kokoro-iam?code=fixture-code&state=stale-state-123456&iss=" + encodeURIComponent(`http://localhost:${nextPort}/iam`)
+    const response = await http(nextPort, target, "GET", "", { accept: "text/html" })
+    expect(response.status).toBe(scenario === "refreshed signin" ? 405 : 403)
+    expect(response.headers["content-type"]).toContain("text/html")
+    expect(response.body).toContain('href="/login"')
+    expect(response.body).not.toContain("<script")
+    expect(response.headers["set-cookie"] ?? []).toEqual([])
+    expect(response.headers["cache-control"]).toContain("no-store")
+    expect(response.headers["referrer-policy"]).toBe("no-referrer")
+    expect(response.headers["content-security-policy"]).toContain("default-src 'none'")
+    expect(response.headers["content-security-policy"]).toMatch(/style-src 'nonce-[A-Za-z0-9_-]+'/u)
+    const styleNonce = response.body.match(/<style nonce="([A-Za-z0-9_-]+)">/u)?.[1]
+    expect(styleNonce).toBeDefined()
+    expect(response.headers["content-security-policy"]).toContain(`style-src 'nonce-${styleNonce}'`)
+    expect(response.body).toContain('<meta name="referrer" content="no-referrer">')
+  })
+
+  it("keeps a newer browser transaction intact when an older admitted callback succeeds", async () => {
+    const older = await start()
+    const authorize = await http(nextPort, new URL(older.location).pathname + new URL(older.location).search)
+    let release!: () => void
+    identityGate = new Promise<void>(resolve => { release = resolve })
+    const held = new Promise<void>(resolve => { onIdentityHeld = resolve })
+    const waiting = http(nextPort, authorize.headers.location as string, "GET", "", { cookie: older.jar })
+    try {
+      await held
+      const newer = await start()
+      identityGate = undefined
+      release()
+      const success = await waiting
+      expect(success.status).toBe(303)
+      await recordProduct(success)
+      const newerJar = cookieHeader(newer.csrf, newer.signin, success)
+      const currentAuthorize = await http(nextPort, new URL(newer.location).pathname + new URL(newer.location).search)
+      const current = await http(nextPort, currentAuthorize.headers.location as string, "GET", "", { cookie: newerJar })
+      expect(current.status, responseDiagnostic("newer_after_older_success", current, 0, 0)).toBe(303)
+      await recordProduct(current)
+    } finally { identityGate = undefined; onIdentityHeld = undefined; release(); await waiting }
+  })
+
+  it("preserves a newer login when an already admitted callback fails during token exchange", async () => {
+    const older = await start()
+    const authorize = await http(nextPort, new URL(older.location).pathname + new URL(older.location).search)
+    let started!: () => void
+    const tokenStarted = new Promise<void>(resolve => { started = resolve })
+    slowResponse = "token"
+    onTokenStarted = started
+    try {
+      const waiting = http(nextPort, authorize.headers.location as string, "GET", "", { cookie: older.jar })
+      await tokenStarted
+      const newer = await start()
+      slowResponse = "none"
+      const failed = await waiting
+      expect(failed.status).toBe(403)
+      expect(failed.headers["set-cookie"] ?? []).toEqual([])
+      const currentAuthorize = await http(nextPort, new URL(newer.location).pathname + new URL(newer.location).search)
+      const current = await http(nextPort, currentAuthorize.headers.location as string, "GET", "", { cookie: cookieHeader(newer.csrf, newer.signin, failed) })
+      expect(current.status).toBe(303)
+      await recordProduct(current)
+    } finally { slowResponse = "none"; onTokenStarted = undefined }
+  }, 12_000)
+
+  it("keeps a newer browser login intact when an older callback is rejected", async () => {
+    const older = await start()
+    const newer = await start()
+    const oldAuthorize = await http(nextPort, new URL(older.location).pathname + new URL(older.location).search)
+    const newAuthorize = await http(nextPort, new URL(newer.location).pathname + new URL(newer.location).search)
+    const before = paths.filter(item => item === "/iam/oauth2/token").length
+    const stale = await http(nextPort, oldAuthorize.headers.location as string, "GET", "", { cookie: newer.jar })
+    expect(stale.status).toBe(403)
+    expect(paths.filter(item => item === "/iam/oauth2/token")).toHaveLength(before)
+    // The browser applies response cookies even for a rejected navigation.
+    expect(stale.headers["set-cookie"] ?? []).toEqual([])
+    const current = await http(nextPort, newAuthorize.headers.location as string, "GET", "", { cookie: cookieHeader(newer.csrf, newer.signin, stale) })
+    expect(current.status).toBe(303)
+    await recordProduct(current)
+    expect(paths.filter(item => item === "/iam/oauth2/token")).toHaveLength(before + 1)
+  })
+
   it("binds state to the RP nonce/PKCE cookies and consumes concurrent callback only once", async () => {
     const { jar, location, state } = await start()
     const authorize = await http(nextPort, new URL(location).pathname + new URL(location).search)
@@ -5842,8 +5929,9 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       const callback = await http(nextPort, authorize.headers.location as string, "GET", "", { cookie: jar })
       expect(callback.status).toBe(403)
       expect(paths.filter((item) => item === "/iam/oauth2/userinfo")).toHaveLength(before)
-      expect((callback.headers["set-cookie"] as string[]).every((cookie) =>
-        !cookie.includes("session-token=") || cookie.includes("Max-Age=0"))).toBe(true)
+      // A rejected callback must neither create a session nor delete another
+      // login's transaction cookies while validation was in flight.
+      expect(callback.headers["set-cookie"] ?? []).toEqual([])
     } finally { invalidIdToken = "none" }
   })
 

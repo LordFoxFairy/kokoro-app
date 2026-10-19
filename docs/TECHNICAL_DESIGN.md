@@ -1,3 +1,9 @@
+## 登录并发与回调恢复（2026-10-19）
+
+旧回调在token/身份核验等待期间，新登录可能已覆盖共享Auth.js事务cookie；服务端无法从旧请求快照安全删除浏览器当前proof。因此成功和失败都不发送全局删除头，成功仅建立原Product会话，退休无调用rpCleanupCookies。沿原签名proof的15分钟期限与Redis state的300秒GETDEL承接过期和防重放，无新状态中心、权限、Schema、依赖或认证链。
+
+失败表示在GET/POST原出口统一处理，只替换明确HTML/有效nonce的错误文档，保原status及API JSON。Proxy精确三个原生登录路径承接最终no-referrer/CSP，页面meta防同源恢复链接带回授权参数；无自动重试。保证仅为不删除后来事务，不声明latest-start/latest-success胜出或旧偶发500已定因。
+
 ## Product 会话生命周期恢复（2026-10-19）
 
 Product继续唯一持有HttpOnly凭据和Redis generation/CAS。App壳只读取RP生命周期；active但access过期须现有CSRF POST续期后同主体确认，refreshing/stale/unconfirmed不当anonymous或业务准入。未知POST零自动重放；CSRF失败/派发前取消不锁死后续恢复。收到token时固定access deadline，身份核验耗时不延长它。AppGate可见/pageshow恢复只重用原有界RSC检查，无新OAuth、接口、Schema或依赖。
