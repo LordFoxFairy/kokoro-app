@@ -6,7 +6,11 @@
 
 主干 archive receipt/权限/账户/分享与本地单一 per-scope Reader registry、MCP command provider/受控 Skills scope/刷新及 callback 围栏按语义并集。archive revision/receipt 进入原 Reader host，不再启动第二读者；稳定现 archive retry callback，展示层只接实际使用的归档操作和 busy，不保无消费者字段。旧测试 fixture 接真实 keyed Reader hosts，保原退休/真实 GET/归档断言；未弱化浏览器 Origin:null/CSRF/nonce/CSP/第二次登录。无新 owner、API、DB/Redis schema、网关或认证旁路。
 
-所有验证尚待最终冻结全门；本段是当前集成范围，不声称已合并、页面已对齐或正常服务已重载。正常数据库/配置/服务与已有混合工作均保留，模型、实际工具与扣费仍暂停。
+最终冻结 f854962 的 Node22 正式门：contract 288 PASS、architecture 50 PASS、lint/typecheck/webpack build/构建后 types 全 exit0、完整 Vitest 225 files /4237 PASS /0 FAIL。原全部 Playwright 桌面与手机 38 PASS /0 FAIL /0 SKIP，0 retry、原超时；私有端口运行，正常服务不动。只读审查无确定 P0–P2。1080 输入停写校验无源码漂移，正常 App 原934输入保持原字节。
+
+首轮完整门的4197 PASS/40 FAIL保留：两处Settings旧fixture补入实际ConnectorCommandProvider后102 focused PASS；另外38项连接失败在原完整RP90序列、只读进程观测下确认两次Next16.2.6开发worker在私有2GiB堆预算超过80%时exit77并重启。仅将私有验证运行器预算设为4GiB后执行最终完整门，不改生产源码、断言、timeout、skip或retry，不推断历史其他故障同因。
+
+本轮是已交付功能和当前主线的源码集成验收，不代表Manus全站一比一或正常运行组合已激活。知识/记忆等未收到本切片的原mixed仍留原位，正常数据库/配置/服务保持不动，模型、实际工具与扣费仍暂停。
 
 ## SET51 登录表单真实 Next 回归已适配，完整门仍 FAILED（2026-10-16）
 
