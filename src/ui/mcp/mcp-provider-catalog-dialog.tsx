@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { useRef, type RefObject } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { useT } from "@/i18n/context";
 
 import type { McpCreateMode } from "./mcp-panel-model";
 import { McpCategoryDropdown } from "./mcp-category-dropdown";
+import { useMcpCategoryLayout } from "./use-mcp-category-layout";
 import { McpProviderDirectory } from "./mcp-provider-directory";
 import { McpSettingsToolbar } from "./mcp-settings-toolbar";
 import { MCP_CATEGORY_MESSAGES, MCP_CATEGORY_OPTIONS } from "./mcp-projection-types";
@@ -58,46 +59,9 @@ export function McpProviderCatalogDialog({
   onCreate?: (mode: McpCreateMode, returnTarget?: HTMLElement | null) => void;
 }) {
   const t = useT();
-  const [categoriesFit, setCategoriesFit] = useState(true);
   const dialogRef = useRef<HTMLDivElement | null>(null);
-  const [toolbarElement, setToolbarElement] = useState<HTMLDivElement | null>(null);
-  const measureRef = useRef<HTMLDivElement | null>(null);
-  const categoryMenuRef = useRef<HTMLButtonElement | null>(null);
-  const categoryMenuOpenRef = useRef(false);
-  const categoryFocusPendingRef = useRef(false);
-  useLayoutEffect(() => {
-    if (!open) return;
-    const toolbar = toolbarElement, measure = measureRef.current;
-    if (!toolbar || !measure) return;
-    let retired = false;
-    const update = () => {
-      if (retired) return;
-      const style = getComputedStyle(toolbar);
-      const available = toolbar.clientWidth - parseFloat(style.paddingInlineStart || "0") - parseFloat(style.paddingInlineEnd || "0");
-      const fits = measure.scrollWidth > 0 && measure.scrollWidth <= available;
-      const focused = document.activeElement;
-      if ((fits && (focused === categoryMenuRef.current || categoryMenuOpenRef.current)) ||
-        (!fits && dialogRef.current?.querySelector("nav")?.contains(focused))) {
-        categoryFocusPendingRef.current = true;
-      }
-      if (fits) categoryMenuOpenRef.current = false;
-      setCategoriesFit(fits);
-    };
-    const observer = new ResizeObserver(update);
-    observer.observe(toolbar);
-    observer.observe(measure);
-    const frame = window.requestAnimationFrame(update);
-    void document.fonts?.ready.then(update);
-    return () => { retired = true; observer.disconnect(); window.cancelAnimationFrame(frame); };
-  }, [open, t, toolbarElement]);
-  useLayoutEffect(() => {
-    if (!categoryFocusPendingRef.current) return;
-    categoryFocusPendingRef.current = false;
-    const target = categoriesFit
-      ? dialogRef.current?.querySelector<HTMLButtonElement>('nav [aria-pressed="true"]')
-      : categoryMenuRef.current;
-    target?.focus({ preventScroll: true });
-  }, [categoriesFit]);
+  const { categoriesFit, setContainerElement, measureRef, categoryMenuRef, categoryMenuOpenRef } =
+    useMcpCategoryLayout({ enabled: open, scopeRef: dialogRef, localeKey: t });
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
@@ -129,8 +93,8 @@ export function McpProviderCatalogDialog({
         <header className={styles.catalogHeader}>
           <DialogTitle>{t("connectorCatalog.title")}</DialogTitle>
         </header>
-        <div ref={setToolbarElement} className={styles.catalogToolbar}>
-          <div ref={measureRef} className={styles.catalogCategoryMeasure} aria-hidden="true" inert>
+        <div ref={setContainerElement} className={styles.catalogToolbar}>
+          <div ref={measureRef} className={styles.categoryMeasure} aria-hidden="true" inert>
             <span data-selected={categoryFilter === "all"}>{t("mcp.categoryAll")}</span>
             {MCP_CATEGORY_OPTIONS.map(category => <span key={category} data-selected={categoryFilter === category}>{t(MCP_CATEGORY_MESSAGES[category])}</span>)}
           </div>

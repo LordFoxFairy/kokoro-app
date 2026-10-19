@@ -208,3 +208,54 @@ test("技能探索的封面、文字和操作在当前视口互不重叠", async
   }))
   expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.clientWidth)
 })
+
+
+test("插件分类按可用列宽切换，保留搜索和键盘选择", async ({ page }) => {
+  await page.addInitScript(() => window.localStorage.setItem("kokoro.locale", "zh"))
+  await page.setViewportSize({ width: 1280, height: 844 })
+  await page.goto("/app/plugins", { waitUntil: "domcontentloaded" })
+  const search = page.getByRole("searchbox", { name: "搜索连接器" })
+  const rail = page.getByRole("navigation", { name: "连接器分类" })
+  await search.fill("保留搜索")
+  await rail.getByRole("button", { name: "开发", exact: true }).click()
+  for (const [width, compact] of [[390, true], [459, true], [460, false], [600, false], [768, false], [320, true], [1280, false]] as const) {
+    await page.setViewportSize({ width, height: 844 })
+    await expect(search).toHaveValue("保留搜索")
+    if (compact) {
+      const filter = page.getByRole("button", { name: "开发", exact: true, expanded: false })
+      await expect(filter).toBeVisible()
+      await expect(rail).toBeHidden()
+      await expect.poll(async () => {
+        const a = await search.boundingBox(), b = await filter.boundingBox()
+        return Boolean(a && b && Math.abs(a.y - b.y) < 1 && Math.abs(b.height - 36) < 1 && Math.abs(b.width - 94) < 1 && b.x >= a.x + a.width)
+      }).toBe(true)
+      await filter.press("ArrowDown")
+      await expect(page.getByRole("menuitem", { name: "健康", exact: true })).toBeVisible()
+      await page.keyboard.press("Escape")
+      await expect(filter).toBeFocused()
+    } else {
+      await expect(rail).toBeVisible()
+      await expect(rail.getByRole("button", { name: "开发", exact: true })).toHaveAttribute("aria-pressed", "true")
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  }
+  // An open menu must retire when its replacement becomes visible; focus
+  // follows the selected category instead of being lost to the page body.
+  await page.setViewportSize({ width: 390, height: 844 })
+  const filter = page.getByRole("button", { name: "开发", exact: true, expanded: false })
+  await filter.press("ArrowDown")
+  await expect(page.getByRole("menuitem", { name: "健康", exact: true })).toBeVisible()
+  await page.setViewportSize({ width: 1280, height: 844 })
+  await expect(page.getByRole("menu")).toHaveCount(0)
+  await expect(rail.getByRole("button", { name: "开发", exact: true })).toBeFocused()
+  await page.setViewportSize({ width: 390, height: 844 })
+  await expect(filter).toBeFocused()
+  await filter.press("ArrowDown")
+  await expect(page.getByRole("menuitem", { name: "全部", exact: true })).toBeFocused()
+  await page.keyboard.press("End")
+  await expect(page.getByRole("menuitem", { name: "健康", exact: true })).toBeFocused()
+  await page.keyboard.press("Enter")
+  await expect(page.getByRole("button", { name: "健康", exact: true, expanded: false })).toBeFocused()
+  await expect(search).toHaveValue("保留搜索")
+
+})

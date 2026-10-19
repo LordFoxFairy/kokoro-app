@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, type ReactNode } from "react";
+import { useId, useRef, type ReactNode } from "react";
 import Image from "next/image";
 import { Check, Link2, Plus, Search } from "lucide-react";
 
@@ -13,6 +13,7 @@ import {
   MCP_CATEGORY_OPTIONS,
   providerArtwork,
 } from "./mcp-projection-types";
+import { useMcpCategoryLayout } from "./use-mcp-category-layout";
 import { McpCategoryDropdown } from "./mcp-category-dropdown";
 import styles from "./mcp-projection-read.module.css";
 
@@ -57,12 +58,20 @@ export function McpProviderDirectory({
 }) {
   const t = useT();
   const statusId = useId();
+  const directoryRef = useRef<HTMLDivElement | null>(null);
+  const adaptive = presentation === "plaza" && showCompactFilter;
+  const { categoriesFit, setContainerElement, measureRef, categoryMenuRef, categoryMenuOpenRef } =
+    useMcpCategoryLayout({ enabled: adaptive, scopeRef: directoryRef, localeKey: t });
   const categoryLabel = (category: Category) =>
     t(MCP_CATEGORY_MESSAGES[category]);
 
   return (
-    <div className={styles.providerDirectory} data-presentation={presentation}>
-      <div className={styles.directoryControls}>
+    <div ref={directoryRef} className={styles.providerDirectory} data-presentation={presentation} data-categories-fit={categoriesFit}>
+      <div ref={setContainerElement} className={styles.directoryControls}>
+        {adaptive ? <div ref={measureRef} className={styles.categoryMeasure} aria-hidden="true" inert>
+          <span data-selected={categoryFilter === "all"}>{t("mcp.categoryAll")}</span>
+          {MCP_CATEGORY_OPTIONS.map(category => <span key={category} data-selected={categoryFilter === category}>{categoryLabel(category)}</span>)}
+        </div> : null}
         {showSearch ? (
           <label className={styles.directorySearch}>
             <Search aria-hidden="true" />
@@ -75,7 +84,7 @@ export function McpProviderDirectory({
             />
           </label>
         ) : null}
-        <nav className={styles.categoryRail} aria-label={t("mcp.categoryAria")}>
+        <nav className={styles.categoryRail} aria-label={t("mcp.categoryAria")} inert={adaptive && !categoriesFit}>
           <button
             type="button"
             aria-pressed={categoryFilter === "all"}
@@ -94,8 +103,9 @@ export function McpProviderDirectory({
             </button>
           ))}
         </nav>
-        {showCompactFilter ? <div className={styles.compactFilter}>
-          <McpCategoryDropdown value={categoryFilter} onChange={onCategoryFilterChange} />
+        {showCompactFilter && (!adaptive || !categoriesFit) ? <div className={styles.compactFilter}>
+          <McpCategoryDropdown value={categoryFilter} onChange={onCategoryFilterChange}
+            triggerRef={categoryMenuRef} onOpenChange={next => { categoryMenuOpenRef.current = next; }} />
         </div> : null}
       </div>
       <section
