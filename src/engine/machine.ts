@@ -145,7 +145,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   const unprojectedAdmissions = new Map<string, SessionMessage>()
   let notice: NoticeSpec | null = null
   // 当前会话 exact source refs：只在内存中保存，不从 browser store 恢复。
-  let selectedSkillSourceRefs: string[] = []
+  let selectedSkillSourceRefs: string[] | undefined = scope.kind === "project" ? undefined : []
   // 选中模型（MODEL-UX，shell 注入）：非 null 即随首条 messageCreate 上 wire 为 model（首条锁语义在 UI 层）。
   let selectedModel: string | null = null
 
@@ -699,7 +699,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     return {
       mode,
       model: selectedModel,
-      selectedSkillSourceRefs: [...selectedSkillSourceRefs],
+      selectedSkillSourceRefs: selectedSkillSourceRefs === undefined ? undefined : [...selectedSkillSourceRefs],
     }
   }
 
@@ -733,7 +733,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   function beginRun(args: PendingSubmission): void {
     const submission = {
       ...args,
-      options: { ...args.options, selectedSkillSourceRefs: [...args.options.selectedSkillSourceRefs] },
+      options: { ...args.options, selectedSkillSourceRefs: args.options.selectedSkillSourceRefs === undefined ? undefined : [...args.options.selectedSkillSourceRefs] },
     }
     pendingSubmission = submission
     recoveredSubmission = null
@@ -1023,7 +1023,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     recoveredSubmissionError = null
     deferredCreateReceipt = null
     if (previousSessionId !== next.activeId) {
-      selectedSkillSourceRefs = []
+      selectedSkillSourceRefs = scope.kind === "project" ? undefined : []
     }
     thread = createSessionStreamState()
     observedTerminalRuns.clear()
@@ -1101,7 +1101,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     recoveredSubmissionError = null
     deferredCreateReceipt = null
     connection = { status: "connected" }
-    selectedSkillSourceRefs = []
+    selectedSkillSourceRefs = scope.kind === "project" ? undefined : []
     thread = createSessionStreamState()
     observedTerminalRuns.clear()
     pendingSteerReceipts.clear()
@@ -1189,11 +1189,11 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     })
   }
 
-  function setSelectedSkillSourceRefs(sourceRefs: readonly string[]): void {
+  function setSelectedSkillSourceRefs(sourceRefs: readonly string[] | undefined): void {
     if (disposed) {
       return
     }
-    selectedSkillSourceRefs = [...sourceRefs]
+    selectedSkillSourceRefs = sourceRefs === undefined ? (scope.kind === "project" ? undefined : []) : [...sourceRefs]
   }
 
   function setModel(model: string | null): void {
@@ -1265,7 +1265,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     recoveredSubmission = null
     recoveredSubmissionError = null
     deferredCreateReceipt = null
-    selectedSkillSourceRefs = []
+    selectedSkillSourceRefs = scope.kind === "project" ? undefined : []
     thread = createSessionStreamState()
     observedTerminalRuns.clear()
     pendingSteerReceipts.clear()

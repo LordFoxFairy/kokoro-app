@@ -3,8 +3,6 @@ import { z } from "zod"
 import {
   mcpConnectorSchema,
   mcpConnectorConnectionSchema,
-  mcpConnectorErrorSchema,
-  mcpConnectorErrors,
   mcpConnectorIdSchema,
   mcpConnectorStateVersionSchema,
   type McpConnector,
@@ -84,13 +82,6 @@ const mcpConnectorAuthorizationEnvelopeSchemas = {
   completeAuthorization: z.object({ data: mcpConnectorAuthorizationDataSchemas.completeAuthorization }).strict(),
   createConnection: z.object({ data: mcpConnectorAuthorizationDataSchemas.createConnection }).strict(),
 } as const
-
-export function mcpConnectorAuthorizationErrorAllowed(httpStatus: number, value: unknown): boolean {
-  const parsed = mcpConnectorErrorSchema.safeParse(value)
-  if (!parsed.success) return false
-  return (mcpConnectorErrors[httpStatus]?.includes(parsed.data.error.code) ?? false)
-    && parsed.data.error.retryable === (httpStatus === 429 || httpStatus === 503 || httpStatus === 409 && parsed.data.error.code === "mcp_personal_command_in_progress")
-}
 
 export function mcpConnectorAuthorizationMatches(
   operation: McpConnectorAuthorizationOperation,

@@ -13,14 +13,16 @@ function exactHttpOrigin(value: string): string | null {
 const resolvedAdminInternalOrigin = exactHttpOrigin(adminInternalOrigin)
 
 const nextConfig: NextConfig = {
-  // Next dev logs the full incoming URL by default. Verification links carry
-  // signed tokens in the query, so omit only this exact browser-private path.
+  // Next dev logs full URLs. Exact browser-private paths carry verification
+  // tokens, signed continuations or authorization codes; ordinary logs stay on.
   logging: {
     incomingRequests: {
       ignore: [
         /^\/iam\/verify-email(?:\?.*)?$/u,
         /^\/iam\/interactions\/invitation(?:\?.*)?$/u,
         /^\/auth\/sign-in(?:\?.*)?$/u,
+        /^\/iam\/oauth2\/authorize(?:\?.*)?$/u,
+        /^\/api\/auth\/callback\/kokoro-iam(?:\?.*)?$/u,
       ],
     },
   },

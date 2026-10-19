@@ -78,6 +78,7 @@ export function useSessionList(
   const identity = readBoundary?.identity ?? ""
   const [state, setState] = useState<ListState>(INITIAL)
   const requestGenerationRef = useRef(0)
+  const paginationFlightRef = useRef<{ generation: number } | null>(null)
   const currentScopeKey = scopeKey(scope)
   const lifecycle = useMemo(() => ({ admitted, client, scopeKey: currentScopeKey, identity }), [admitted, client, currentScopeKey, identity])
   // useMemo survives StrictMode effect replay, not real unmount/re-admission.
@@ -135,33 +136,29 @@ export function useSessionList(
   }, [admitted, currentScopeKey, fetchFirst, onFirstPageSettled, refreshSignal])
 
   const loadMore = useCallback(() => {
-    if (!admitted || state.lifecycle !== lifecycle || state.identity !== identity || state.scopeKey !== currentScopeKey) return
+    if (!admitted || state.lifecycle !== lifecycle || state.identity !== identity || state.scopeKey !== currentScopeKey || state.cursor === undefined || state.loadingMore) return
     const generation = requestGenerationRef.current
-    const requestScopeKey = currentScopeKey
-    setState((prev) => {
-      if (prev.cursor === undefined || prev.loadingMore) {
-        return prev
-      }
-      const cursor = prev.cursor
-      void client
-        .listSessions(cursor, scope)
-        .then((page) => {
-          if (generation !== requestGenerationRef.current) return
-          setState((cur) => ({
-            ...cur,
-            scopeKey: requestScopeKey,
-            entries: [...cur.entries, ...page.sessions.map(toEntry)],
-            cursor: page.next_cursor === null ? undefined : page.next_cursor,
-            loadingMore: false,
-          }))
-        })
-        .catch(() => {
-          if (generation !== requestGenerationRef.current) return
-          setState((cur) => ({ ...cur, scopeKey: requestScopeKey, loadingMore: false }))
-        })
-      return { ...prev, loadingMore: true }
+    if (paginationFlightRef.current?.generation === generation) return
+    const flight = { generation }
+    paginationFlightRef.current = flight
+    // Never dispatch I/O from a state updater: React may replay it. The
+    // synchronous flight also fences repeated clicks before the next commit.
+    setState((previous) => ({ ...previous, loadingMore: true }))
+    void client.listSessions(state.cursor, scope).then((page) => {
+      if (generation !== requestGenerationRef.current) return
+      setState((current) => ({
+        ...current,
+        entries: [...current.entries, ...page.sessions.map(toEntry)],
+        cursor: page.next_cursor === null ? undefined : page.next_cursor,
+        loadingMore: false,
+      }))
+    }).catch(() => {
+      if (generation !== requestGenerationRef.current) return
+      setState((current) => ({ ...current, loadingMore: false }))
+    }).finally(() => {
+      if (paginationFlightRef.current === flight) paginationFlightRef.current = null
     })
-  }, [admitted, client, currentScopeKey, identity, lifecycle, scope, state.identity, state.lifecycle, state.scopeKey])
+  }, [admitted, client, currentScopeKey, identity, lifecycle, scope, state.cursor, state.identity, state.lifecycle, state.loadingMore, state.scopeKey])
 
   const visibleState = admitted && state.lifecycle === lifecycle && state.identity === identity && state.scopeKey === currentScopeKey ? state : { ...INITIAL, loading: admitted, error: !admitted }
 

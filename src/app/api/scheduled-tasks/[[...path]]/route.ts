@@ -48,7 +48,7 @@ async function projectBffError(upstream: Response, responseHeaders: Headers): Pr
   )
 }
 
-export async function proxyScheduledTaskRequest(
+async function proxyScheduledTaskRequest(
   request: Request,
   context: { params: Promise<{ path?: string[] }> },
 ): Promise<Response> {

@@ -1,6 +1,8 @@
 "use client";
 
-import { type FormEvent, useState } from "react";
+import { connectorCommandMayResume, connectorCommandFailureMessage } from "./connector-command-failure";
+
+import { type FormEvent, useCallback, useState } from "react";
 import { ImagePlus, Plus, Trash2 } from "lucide-react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -9,8 +11,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
-import type { HubClient } from "@/hub/client";
 import { useT } from "@/i18n/context";
+import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
+import type { CustomApiCreateFlow } from "./custom-api-create-flow";
+import { useConnectorCreationForm } from "./use-connector-creation-form";
 
 import styles from "./custom-api-form.module.css";
 
@@ -22,11 +26,13 @@ type EnvironmentDraft = { id: string; name: string; value: string };
  * MCP URL/transport creation.
  */
 export function CustomApiForm({
-  client,
+  flow,
+  boundary,
   onCancel,
   onDone,
 }: {
-  client: HubClient;
+  flow: CustomApiCreateFlow;
+  boundary: ProjectReadBoundary;
   onCancel: () => void;
   onDone: () => Promise<void>;
 }) {
@@ -39,8 +45,9 @@ export function CustomApiForm({
   const [environment, setEnvironment] = useState<EnvironmentDraft[]>(() => [
     { id: crypto.randomUUID(), name: "", value: "" },
   ]);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState(false);
+  const clearSecrets = useCallback(() => setEnvironment(items => items.map(item => ({ ...item, value: "" }))), []);
+  const { state, completion, admitted, submitting, locked, editable, maySubmit, waitForCommand, cancel, done } =
+    useConnectorCreationForm(flow, boundary, onDone, clearSecrets);
 
   const updateEnvironment = (id: string, patch: Partial<EnvironmentDraft>) =>
     setEnvironment((items) =>
@@ -61,24 +68,18 @@ export function CustomApiForm({
       configuredEnvironment.length;
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!valid || !client.createCustomApi) return;
-    setSubmitting(true);
-    setError(false);
-    try {
-      await client.createCustomApi({
+    if (!maySubmit()) return;
+    const confirmed = await waitForCommand(signal => state.kind === "unknown"
+      ? flow.retry(boundary, signal)
+      : editable() && valid ? flow.submit({
         name: name.trim(),
         ...(instructions.trim() ? { instructions: instructions.trim() } : {}),
         environment: configuredEnvironment.map((item) => ({
           name: item.name.trim(),
           value: item.value,
         })),
-      });
-      await onDone();
-    } catch {
-      setError(true);
-    } finally {
-      setSubmitting(false);
-    }
+      }, boundary, signal) : Promise.resolve(false));
+    if (confirmed) await done();
   };
 
   return (
@@ -90,11 +91,14 @@ export function CustomApiForm({
         </div>
       </header>
       <div className={styles.body}>
-        {error ? (
+        {!admitted ? <p role="status" className="sr-only">{t("mcp.creationSession")}</p> : null}
+        {state.kind === "unknown" || state.kind === "rejected" ? (
           <Alert variant="destructive" role="alert">
-            <AlertDescription>{t("mcp.actionFailed")}</AlertDescription>
+            <AlertDescription>{state.kind === "unknown" && state.name ? <><strong>{state.name}</strong>{" — "}</> : null}{t(state.kind === "unknown" ? connectorCommandFailureMessage(state.failure, "mcp.apiCreateUnknown") : "mcp.actionFailed")}</AlertDescription>
           </Alert>
         ) : null}
+        {state.kind === "completed" || completion !== "idle" ? <p role="status">{t("mcp.apiCreateConfirmed")}</p> : null}
+        {completion === "retry" ? <p role="alert">{t("mcp.actionFailed")}</p> : null}
         <div className={styles.field}>
           <Label htmlFor="custom-api-name">{t("connectorCatalog.name")}</Label>
           <Input
@@ -102,8 +106,9 @@ export function CustomApiForm({
             value={name}
             maxLength={400}
             required
+            readOnly={locked}
             placeholder={t("connectorCatalog.namePlaceholder")}
-            onChange={(event) => setName(event.target.value)}
+            onChange={(event) => { if (editable()) setName(event.target.value); }}
           />
         </div>
         <div className={styles.iconField} aria-label="图标">
@@ -127,9 +132,10 @@ export function CustomApiForm({
           <Textarea
             id="custom-api-instructions"
             value={instructions}
+            readOnly={locked}
             maxLength={4000}
             placeholder={t("connectorCatalog.notesPlaceholder")}
-            onChange={(event) => setInstructions(event.target.value)}
+            onChange={(event) => { if (editable()) setInstructions(event.target.value); }}
           />
         </div>
         <section
@@ -153,10 +159,11 @@ export function CustomApiForm({
                 <Input
                   id={`custom-api-secret-name-${item.id}`}
                   value={item.name}
+                  readOnly={locked}
                   maxLength={128}
                   placeholder={t("connectorCatalog.secretNamePlaceholder")}
                   onChange={(event) =>
-                    updateEnvironment(item.id, { name: event.target.value })
+                    editable() && updateEnvironment(item.id, { name: event.target.value })
                   }
                 />
               </div>
@@ -167,10 +174,11 @@ export function CustomApiForm({
                 <Textarea
                   id={`custom-api-secret-value-${item.id}`}
                   value={item.value}
+                  readOnly={locked}
                   maxLength={4096}
                   placeholder={t("connectorCatalog.secretValuePlaceholder")}
                   onChange={(event) =>
-                    updateEnvironment(item.id, { value: event.target.value })
+                    editable() && updateEnvironment(item.id, { value: event.target.value })
                   }
                 />
               </div>
@@ -178,9 +186,10 @@ export function CustomApiForm({
                 type="button"
                 size="icon"
                 variant="ghost"
+                disabled={locked}
                 aria-label={`${t("connectorCatalog.removeSecret")} ${index + 1}`}
                 onClick={() =>
-                  setEnvironment((items) =>
+                  editable() && setEnvironment((items) =>
                     items.filter(({ id }) => id !== item.id),
                   )
                 }
@@ -194,7 +203,8 @@ export function CustomApiForm({
             type="button"
             variant="outline"
             className={styles.addSecret}
-            onClick={addEnvironment}
+            disabled={locked}
+            onClick={() => { if (editable()) addEnvironment(); }}
           >
             <Plus aria-hidden="true" />
             {t("connectorCatalog.addSecret")}
@@ -205,18 +215,17 @@ export function CustomApiForm({
         <Button
           type="button"
           variant="outline"
-          disabled={submitting}
-          onClick={onCancel}
+          onClick={() => cancel(onCancel)}
         >
           {t("mcp.cancel")}
         </Button>
-        <Button
+        {state.kind === "completed" || completion !== "idle" ? <Button type="button" disabled={!admitted || completion === "closing"} onClick={() => void done()}>{t("mcp.creationDone")}</Button> : <Button
           type="submit"
-          disabled={submitting || !valid || !client.createCustomApi}
+          disabled={!connectorCommandMayResume(state.failure) || !admitted || submitting || !flow.available || (state.kind !== "unknown" && !valid)}
         >
           {submitting ? <Spinner aria-hidden="true" /> : null}
-          {t("mcp.save")}
-        </Button>
+          {t(state.kind === "unknown" ? connectorCommandMayResume(state.failure) ? "mcp.retryOriginal" : "mcp.recovery.inspectRequired" : "mcp.save")}
+        </Button>}
       </footer>
     </form>
   );

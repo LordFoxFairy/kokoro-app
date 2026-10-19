@@ -153,7 +153,6 @@ export type EmptyStateProps = {
     signal: AbortSignal,
   ) => Promise<ProjectResourceListPage>;
   projectRef?: string;
-  onSetProjectSkillEnabled?: (skill: string, enabled: boolean) => Promise<void>;
   /** Explicit preview fixture callback only; formal tasks use the independent live surface. */
   onCreateProjectScheduledTask?: (
     task: ProjectScheduledTaskInput,
@@ -175,7 +174,7 @@ export type EmptyStateProps = {
   ) => void;
   /** Skill catalog actions hand off to the shell-owned direct Chat session. */
   onCreateSkillWithAi?: (prompt?: string) => void;
-  onTrySkill?: (skill: SkillCard, prompt?: string) => void;
+  onTrySkill?: (skill: SkillCard, prompt?: string) => boolean;
   /** Optional live model catalog for site-owned empty surfaces. */
   models?: readonly ModelCandidate[];
   selectedModel?: string | null;

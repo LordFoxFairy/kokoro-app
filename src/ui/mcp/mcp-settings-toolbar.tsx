@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef } from "react"
+import { useRef, type ReactNode } from "react"
 import { Braces, ChevronDown, Globe2, KeyRound, Plus, Search, Server } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -20,9 +20,15 @@ export function McpSettingsToolbar({
   showBrowse = true,
   showSearch = true,
   settingsLayout = false,
+  plazaLayout = false,
+  disabled = false,
+  children,
 }: {
+  children?: ReactNode
+  disabled?: boolean
   view: "catalog" | "connections"
   settingsLayout?: boolean
+  plazaLayout?: boolean
   query: string
   onQueryChange: (value: string) => void
   onBrowse: (target: HTMLElement) => void
@@ -41,14 +47,15 @@ export function McpSettingsToolbar({
           <span className="sr-only">{t("plugins.search")}</span>
           <Input type="search" value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder={t("plugins.search")} />
         </label> : null}
+      {children}
       <div className={styles.toolbarActions}>
-        {showBrowse ? <Button type="button" variant="outline" className={styles.toolbarButton} data-settings-layout={settingsLayout || undefined} data-settings-control="browse" onClick={(event) => onBrowse(event.currentTarget)}>
+        {showBrowse ? <Button disabled={disabled} type="button" variant="outline" className={styles.toolbarButton} data-settings-layout={settingsLayout || undefined} data-settings-control="browse" onClick={(event) => onBrowse(event.currentTarget)}>
           {view === "connections" ? t("mcp.browse") : t("plugins.manageConnectors")}
         </Button> : null}
         {onCreate ? <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button ref={triggerRef} type="button" variant="outline" className={styles.toolbarButton} data-settings-layout={settingsLayout || undefined} data-settings-control="create">
-              {settingsLayout ? null : <Plus aria-hidden="true" />}{t("plugins.create")}<ChevronDown aria-hidden="true" />
+            <Button ref={triggerRef} disabled={disabled} type="button" variant="outline" className={styles.toolbarButton} data-settings-layout={settingsLayout || undefined} data-settings-control="create">
+              {settingsLayout || plazaLayout ? null : <Plus aria-hidden="true" />}{t("plugins.create")}<ChevronDown aria-hidden="true" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className={styles.createMenu}>

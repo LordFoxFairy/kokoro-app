@@ -1,3 +1,10 @@
+SET51：两现有 `tests/system/*next-http.integration.test.ts` 中的登录回归随当前 `/login` 的浏览器 CSRF 表单→provider POST→authorize 导航验证；生产源与项目/侧栏回归保持独立，结果见 CURRENT。
+个人资料输入反馈归现 `src/ui/settings/sections/personalization-card.tsx`：复用 `personalization-schema.ts` 的code point限制，呈现计数、拒绝输入与保存中；原hook与网络契约保持。
+
+个性化内页：`src/ui/settings/sections/personalization-card.tsx` 保留既有资料读取与保存；同级 `personalization-knowledge-panel.tsx` 和 `memory-import-dialog.tsx` 分别拥有知识草稿弹窗、导入说明/复制及临时粘贴内容。未接服务的最终操作禁用，临时文本不持久化。
+
+SET53：设置 sections 新增 Mail、邮箱资产、电话资产、钱包、集成、开发者六个独立页面，原导航/搜索/标题/内容分派复用唯一设置壳。服务动作仍按实际能力禁用，电脑及 Skills/MCP 不在本轮实施范围。设计和真实验收状态见 docs/TECHNICAL_DESIGN.md 与 docs/CURRENT.md。
+
 <!-- SET47 archive consumer: 2026-10-15 -->
 SET47：任务菜单与Data归档恢复通过现AppFrame接线；新schema/raw JSON、lib/server归档列表与状态adapter、四操作generated组、settings客户端/hooks及shell active-state/command hooks各有单一职责。BFF归档事实唯一owner，Web无archive数据库或全局缓存。完整验收与正常3312激活待Root，3311保留。
 
@@ -82,6 +89,75 @@ src/i18n/ja.ts仅新增十四个现设置调用key的日文；原values/其它lo
 <!-- SET18：账户已连接设备入口复用现AccountCard；account-sessions-client/use-account-sessions/account-devices-dialog分别负责I/O、身份代际状态和确认视图；/api/account/sessions两route→lib/server/account-sessions→正式BFF15.1；schema消费唯一artifact的正规bff-account-sessions窄生成。真实浏览器撤销验收见CURRENT，不伪造设备/位置。 -->
 <!-- SET16：engine/task-notification.ts 负责已锚typed live任务信号；notifications/communication-preferences.ts 按可信subject存浏览器偏好；task-browser-notification.ts/task-completion-sound.ts 分别拥有浏览器实例/手势音频；shell/use-task-notifications.ts 仅绑定已准入非preview页面；原awaiting只保badge/title。 -->
 <!-- SET-SHORTCUTS: 快捷键规则 src/lib/keyboard-shortcuts.ts；订阅 src/hooks/use-keyboard-shortcuts.ts；编辑 src/ui/settings/sections/shortcuts-card.tsx；回归 tests/lib/keyboard-shortcuts.test.ts 与 tests/ui/keyboard-shortcuts.test.tsx。 -->
+
+## Admin Product 错误边界（2026-10-19）
+
+`src/app/api/admin/[...path]/route.ts`返回完整错误envelope与既有401机器码；原`tests/app/admin-proxy.test.ts`保护准入失败零BFF请求与固定错误正文。不新增登录或刷新链。
+
+## Skin文字继承（2026-10-17）
+
+`src/app/globals.css` 的 `[data-web-skin="kokoro"]` 同时声明语义变量与 `color:var(--foreground)`；仅覆盖变量不会重新计算从body继承的颜色。正文、图标等未显式设色的组件沿skin继承，不逐组件复制中性色。原项目会话E2E通过公开计算样式承接回归。
+
+## 动态响应式职责（2026-10-17）
+
+`src/ui/shell/layout-constraints.ts` 提供桌面起点768px；`use-mobile`、细指针rail观察与shell首屏CSS统一使用 `<768px`，含小数CSS视口，不把项目内容的容器断点与窗口断点混为一谈。项目网格、编辑器和技能面板仍各守原职责，未给总组件增加响应式业务分支。
+
+共享 `DialogContent` 禁止几何过渡，保原进入/退出keyframes；业务面板继续只定义自己的尺寸/排版，不逐个补窗口缩放定时器。原项目会话E2E承接窗口往返、草稿/焦点与面板首帧边界检查，未新增套件。
+
+## 项目技能确认框焦点（2026-10-17）
+
+确认框由 `project-skills-section.tsx` 持实际打开按钮与父面板引用；卡片只传当前操作按钮。取消/Escape返回原按钮，已提交导致按钮停用或移除时回仍打开的父面板；父面板关闭时不抢其焦点。无全局焦点服务、定时器或命令状态改动。
+
+## 项目概览布局职责（2026-10-17）
+
+文档与文档外编辑区共用相同网格定义，实际 workspace 达768px才分双栏；中宽右栏未达320px时编辑区仍与左列严格同宽。断点与对齐保护并入原项目会话E2E，不另建像素快照套件。
+
+`src/features/app/project-conversations.tsx` 独立拥有最近会话的 loading/error/list/empty，workspace 只组合身份、上下文、会话与编辑区。`project-workspace-layout.module.css` 负责统一可滚动文档与文档外底部编辑区；卡片视觉仍在 `kokoro-project-workspace.module.css`。没有新增请求、权限或状态模型。 Toolbar与空态共用 `project-skill-add-menu.tsx`；真实空态不显示无效默认保存栏，有选择或未保存改动时仍可操作。
+
+### Project Skills 独立业务组件
+
+`src/features/app/project-skills-section.tsx` 只组合项目技能入口、Dialog、默认草稿和确认交互；`project-skill-card.tsx` 只展示真实安装；`project-skill-source-picker.tsx` 独立读取个人安装池和正式官方目录；`use-project-skills.ts` 管本项目 lease、分页、真实命令与 ACK 后回读。安装≠默认；未知原意图跨同主体重核保留，不跨账号/项目，不自动重试。旧 workspace/dialog 聚合的技能名称开关、假卡、callback 和相邻 CSS 已退休，旧名称路径在同源边界直接拒绝。资源/技能使用明确 section 正常排版，不再依赖子元素序号定位。正常服务/库配对与执行链另验，不把组件或空预览成功冒完整产品验收。
+
+### Project Skills 传输职责
+
+`src/lib/server/skill-installations.ts` 独立持有 personal/project 共用的安装生命周期 adapter，catch-all 只分派；`src/lib/server/project-skill-selection.ts` 仅处理项目默认 GET/PUT。`src/hub/project-skills.schema.ts` 与 `project-skill-selection-client.ts` 分别维护 wire 和浏览器请求。现安装 client 显式 Project target，个人默认不变；无新 owner/兼容路径。独立项目面板已接线、旧名称开关已删除；正常产品浏览器整链另验。
+
+### 2026-10-17 S3 BFF 来源契约消费
+
+唯一src/generated/bff-public-openapi.yaml固定BFF e60ff31/Public15；原Team与Agent-failure生成器同步精确digest，Team业务派生和failure tuples保持。公开八类只在owner快照，网站publisher与分享五类schema不改；本片没有新增公开list UI client。验收与正常配对后继见docs/CURRENT，不以pin更新冒功能执行完成。
+
+### MCP 管理原请求与 Prepare 互锁
+
+`src/ui/mcp/mcp-management-commands.ts` 在现稳定shell构造typed MCP lifecycle，五项管理沿原key/body/CAS恢复，`mcp-preparation-commands`通过必需predicate承接互锁；API/JSON/OAuth不进入该管理index。`mcp-management-status.tsx`只为三个既有详情呈现非敏感状态。Hub五方法显式caller key并复用同源adapter的正式ACK matcher；缺行不结清命令。正常元数据编辑/断开与故障覆盖范围见CURRENT及现三suite，不另建UI测试中心。
+
+### Custom API 管理原命令恢复
+
+`src/ui/mcp/custom-api-management-commands.ts` 由现稳定shell按actor/client持有每profile的typed update/remove意图，复用现单命令核；`custom-api-detail-dialog`承接只读未知态/原请求恢复/ACK清草稿。Hub update/remove显式要求caller key，核目标与已写安全字段。窗口/准入退休保原命令，actor退休清理，列表缺资源不充当ACK。纯命令、现rail与Hub三suite承接独有风险，不另建UI套件；实际正常编辑/回读与故障证据范围见CURRENT。
+
+### Custom API／JSON 创建命令恢复
+
+稳定 AppFrameRuntime 的 `ConnectorCommandProvider` 在窗口／Settings 之外按 actor/client 明确保留 API 和原子 JSON 两个内存命令槽，两个入口共用；同 actor 重核暂停并保原 key/body，unknown 只显式恢复，确认后清命令正文，换 actor 清草稿。Hub client 创建签名显式要求 caller key，并严格绑定安全 ACK；API绑定名称、备注及环境变量名，JSON复用原完整导入投影校验，不拆成单项注册。共享纯命令核和表单关闭hook承接真实重复的准入/未知结果/清secret/关闭恢复机制，输入与投影失活仍由各自typed flow拥有。失败不是未提交证明，关闭也不是回滚；不写浏览器存储、不改 owner wire，MCP 多阶段创建与共享 Prepare 见 `src/ui/mcp/INDEX.md`，不归 API/JSON 单步 flow 所有。纯 flow 单元和既有 rail/client 行为回归验证该边界，不新增 CSS/DOM 字符串套件。
+
+### 创建窗口的迟到完成
+
+`McpCreateDialog` 将关闭与排队聚焦限制在已提交的 client／mode／open 窗口生命周期内。旧窗口的已确认写仍执行原投影失活，但迟到完成不关闭后开的窗口；Settings 不再另行重复关闭。现 rail 回归覆盖两个入口、组件保留时的模式切换与关闭重开。此围栏不是创建表单的完整准入或未知命令恢复实现。
+
+### Custom API 创建投影刷新
+
+全局创建与 Settings 内部创建在确认成功后，共用 `invalidateCustomApiProjection` 精确失活原 client／subject 的 Custom API 投影；不重挂整个 Settings、不误刷新 MCP／Provider。既有 rail 行为测试覆盖打开前的旧预热、挂载共享读者及取消后迟到的旧页；创建准入和命令恢复另由上述独立 actor flow 承接，MCP 创建后继不混算。
+
+### 登录 URL 日志边界
+
+`next.config.ts` 对既有验证链接/登录交互及精确 OAuth authorize、产品 callback 路径关闭开发请求 URL 日志，避免记录授权参数；不关闭普通业务日志，不改变路由或认证。`tests/system/iam-relay-next-http.integration.test.ts` 通过隔离真实 Next 的 stdout 验证敏感 marker 不出现，普通及 callback 相似路径 marker 继续出现。
+
+### Skills 探索条目响应式布局
+
+`src/ui/skills/skills-panel.module.css` 的窄屏封面与其网格列同宽，覆盖 inline 样式的尺寸优先级，避免遮住标题/说明；桌面布局保持。既有 `tests/e2e/public-shell.spec.ts` 用实际渲染的封面、文字与操作几何关系验证互不重叠，不锁 CSS 字符串或固定像素基线；显式预览数据不代表正常 owner 链路验收。
+
+### Skills 导入窗口展示意图
+
+`src/ui/skills/skills-panel.tsx` 只保留同 actor 的本地上传/GitHub 窗口打开意图。两个 importer 仍独立按 admission/generation 退休私有事实与未决工作、阻止失准入操作；actor-keyed 父级负责换账号清除窗口。相邻 `tests/ui/skills-import-regression.test.tsx` 验证父级重核、暂停操作及 A→B→A 不复活，原 flow/回执退休回归继续保留。
+
 ### T-K03.13 本人 MCP 只读接线
 
 `src/app/api/hub/[...path]/route.ts` 精确保 self 映射四个已发行本人 reads；`src/hub/mcp-personal.schema.ts` 校验独立 wire/错误/资源绑定，原 active Connection projection 不变。相邻 `tests/app/hub-proxy.test.ts` 与 `tests/hub/mcp-personal-schema.test.ts` 覆盖闭集及网络生命周期；CRUD/授权 connection/Admin 是后继，不冒本片完成。
@@ -182,7 +258,9 @@ Web基线main `dc330a99332be28bb74a4fa2d2196ba8425f9dc5`；此新前缀覆盖下
 | `src/app/app/layout.tsx` | 登录后的桌面工作区布局 |
 | `src/i18n/context.tsx`、`src/ui/theme/theme-context.tsx` | 浏览器 locale/theme 偏好 Provider；存储拒绝时分别回到既有语言协商/系统主题，写失败只保留内存选择，不拥有认证事实 |
 | `src/features/app/kokoro-app-surface.tsx` | mounted surface 路由投影 |
-| `src/components/blocks/app-frame/app-frame.tsx` | 当前桌面 shell 组合；后续 UI 阶段处理 |
+| `src/features/app/kokoro-skills-surface.tsx` | 技能广场的搜索／分类由正式目录查询，资源与追加 cursor 绑定同一筛选和准入 client；默认目录保留共享预热 key |
+| `src/components/blocks/app-frame/app-frame.tsx`、`app-frame-main-surface.tsx` | 桌面 shell 组合；准入期间只呈现无数据占位，并遵守路由的独立页面／会话及标题标志，不挂私有 Runtime |
+| `src/components/blocks/workspace-header/workspace-header.tsx` | 工作区导航入口；移动端标签与展开状态只读取抽屉状态，开关不修改桌面侧栏偏好 |
 | `src/components/blocks/app-frame/use-app-frame-navigation.ts` | URL归属与水合派生状态；终态错误不被错路由loading遮蔽，重试保留原深链 |
 | `src/app/api/session/[...path]/route.ts` | Chat JSON/SSE/二进制的同源 BFF adapter；只转发显式 `Idempotency-Key` header，不从 JSON body 提升旧 key |
 | `src/app/api/system/runtime-manifest/route.ts` | 经 BFF 获取 runtime manifest |
@@ -301,4 +379,33 @@ python3 scripts/verify-ten-repository-standard.py --format json
 该命令会审计十仓；评估本仓时只提取 `repository == "kokoro"` 的诊断。它不替代本仓的真实
 lint、typecheck、test、build、浏览器 E2E 或 live BFF 验收。
 
-- Skill Share: `src/hub/skill-share.schema.ts` / `skill-share-client.ts` 严格消费正式六字段链接与精确 revision 摘要；`src/app/skills/shared/[id]/page.tsx` 复用真实摘要/包 reader，安装独立读取和 ACK。未知 Create 不自动重建；复制失败复用原 ACK。共享页消费既有 browser-private exact 下载句柄，严格绑定 source_ref/revision，流式下载原包，不借 series current 下载。
+- Skill Share: `src/hub/skill-share.schema.ts` / `skill-share-client.ts` 严格消费正式六字段链接与精确 revision 摘要；`src/app/skills/shared/[id]/page.tsx` 复用真实摘要/包 reader，安装独立读取和 ACK。未知 Create 不自动重建；复制失败复用原 ACK。共享页消费既有 browser-private exact 下载句柄，严格绑定 source_ref/revision，流式下载原包，不借 series current 下载。 分享入口按 actor＋share ID 保详情展示实例，summary/installation/动作 ACK 按 admission/generation/读重试 token 退休；pending/fresh 失败保通用详情或 reader 框架。unknown 安装仅保原意图/key、用户显式恢复，旧响应不更新后继代际。
+
+- 目录重核：外层保同 actor 的搜索/筛选/精确详情 locator；`use-catalog-skill-installation` 拥有本代安装动作与冻结未知命令。详情/包文件展示仍按代际退休，`SkillPackageFiles` 仅渲染 owner 文件树。分享未知墓碑与当代 ACK 分离，导入只读/已确认结果重核退役，未知恢复意图保留。
+- 技能广场和 Settings Explore：每页9条，只有默认首读传 `shuffle:true`，续页由 owner cursor 延续同一随机序列，查询/分类首读不传 shuffle。两种展示使用独立内存资源键，写后失活整个 client 目录 namespace。探索页的 query/category 同样由 owner 查询；本地筛选只用于 preview 或新读期间的上页临时投影，未确认页禁动作、失败显式重读。分页按已提交的 key/base/next-cursor/open 退休，迟到的旧 observer 也没有重新发读或占用当前 pending 的资格。
+- 插件广场：route wrapper铺满主区，MCP reader的plaza展示独立48px标题栏与内部滚动body，管理/创建锚定标题栏右端，目录限宽768px居中；Settings与非plaza保持原布局。管理入口仍交给同源Settings，创建只交付原命令选择；推荐区不使用静态实体或伪连接，仍需owner运营展示数据后继。
+
+- Settings技能重核：SkillsContent按actor/preview隔离纯展示意图，同actor换client保搜索/分类与精确series/revision详情窗口；池、目录追加页、开关投影、错误/忙态和命令闭包按当前owner退休。详情仅从新安装池或当前目录/游标页找回原版本，缺失保pending/error壳并可显式续页/重读；不缓存整张旧卡跨代替代新事实。关闭时原触发器失效则回当前搜索框。正文/文件读取仍沿原详情组件的代际清理，不承诺跨代保文件内容。显式preview只用fixture client，真实admission/updateFlow不放宽。
+
+
+## MCP 写后投影失效（2026-10-16）
+
+全局创建与 Settings 内部注册／JSON 导入成功后，按 client／subject 失活个人连接器缓存并重读；在途预热按 revision 退休，不覆盖写后新结果。个人已确认命令复用该投影失效入口，Provider 元数据不随之重读；内容不因写入重挂，原搜索保留。既有 AppFrame 行为文件覆盖全局导入后立即管理、迟到预热、另一主体隔离及读取失败重试；不新增 UI 套件或源码／样式字符串断言。
+
+
+## MCP 同 actor 重核（2026-10-16 候选）
+
+MCP Settings/Plugins 的纯展示意图按 actor 保持，事实/命令按 read generation 退休；精确详情、配置 dirty 字段和目录控件不因重核整面板重挂。`src/ui/mcp/INDEX.md` 记录事实重读、失败恢复、OAuth 退休与独立 Custom API 写后失活边界。行为回归复用既有 rail suite，不恢复已退役的 UI 套件；正常浏览器与完整门的当前证据归 Root 有效闭环计划，不由此索引宣称完成。
+
+
+MCP/Custom API配置的焦点后继：保留readonly配置控件而不是临时卸载；owner-only值仍立即退休，选择/内部滚动按纯metadata恢复且不抢用户新焦点。具体边界见`src/ui/mcp/INDEX.md`，不涉及auth/owner契约或数据库变更。
+
+
+### Connector browser-private恢复错误消费
+
+`src/generated/bff-connector-command-errors.{json,ts}` 是固定BFF profile的原字节/正规派生；`scripts/generate-bff-connector-command-errors.mjs` 只检查或生成此窄profile。`src/hub/connector-command-error.ts` 与现MCP/Custom API schema在Hub和同源adapter共享严格tuple规则，不增网络层、错误registry或UI自动重试；后继actor恢复提示单独接线。
+
+
+### Connector恢复原因与原请求重试边界
+
+现 `src/ui/mcp/connector-command-failure.ts` 消费已固定profile给出非敏感reason/消息key；单命令和Register持失败限制，Prepare创建/详情共享，终止原因不重试、不换key。九语言与原alert/button接线，原UI布局/HTTP/owner事实保持；人工核验与真正OAuth闭环不冒本片完成。

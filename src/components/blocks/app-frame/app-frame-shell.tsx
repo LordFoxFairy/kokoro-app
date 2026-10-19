@@ -93,6 +93,7 @@ export function AppFrameShell({
         data-desktop-web="true"
         data-web-skin={webSkin}
         data-compact-desktop={compactDesktopRail ? "true" : undefined}
+        data-narrow-web={narrowWeb ? "true" : undefined}
         data-rail-collapsed={resolvedRailCollapsed ? "true" : "false"}
         data-rail-hidden={railHidden ? "true" : undefined}
         data-canvas-open={canvas.canvasOpen ? "true" : undefined}
@@ -117,7 +118,7 @@ export function AppFrameShell({
         persistOpenState={!compactDesktopRail}
         onOpenChange={onRailOpenChange}
       >
-        {compactDesktopRail && hideWorkspaceHeader && railHidden ? (
+        {hideWorkspaceHeader && (narrowWeb || (compactDesktopRail && railHidden)) ? (
           <WorkspaceNavigationTrigger
             {...(styles.compactNavigationTrigger === undefined ? {} : { className: styles.compactNavigationTrigger })}
             onToggle={onNavigationToggle}

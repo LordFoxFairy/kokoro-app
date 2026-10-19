@@ -48,25 +48,17 @@ import type { HubClient } from "@/hub/client";
 import type { SkillCard, SkillCatalogCard } from "@/hub/schemas";
 import { useT } from "@/i18n/context";
 import { cn } from "@/lib/utils";
-import { SkillCatalogDialog } from "./skills-catalog-dialog";
+import { SkillCatalogDialog, type CatalogDetailProjection } from "./skills-catalog-dialog";
 import { formatBytes } from "./skills-format";
 import { InstalledSkillCard } from "./skills-installed-card";
 import { SkillRevisions } from "./skill-revisions";
-import { type SkillsPool, skillStateKey } from "./skills-pool-model";
+import { type SkillsPool, skillStateKey, skillSourceScope } from "./skills-pool-model";
 import type { SkillsScopeFilter } from "./skills-scope";
 import styles from "./skills-panel.module.css";
 
 const OFFICIAL_SCOPE = "official";
 
 type ScopeFilter = SkillsScopeFilter;
-
-type SkillScope = Exclude<ScopeFilter, "all">;
-
-function skillScope(scope: string): SkillScope {
-  if (scope === OFFICIAL_SCOPE) return "official";
-  if (scope === "third_party" || scope === "third-party") return "thirdParty";
-  return "personal";
-}
 
 type SkillCreateMenuItemsProps = {
   includeBrowse: boolean;
@@ -143,10 +135,17 @@ export function SkillsPoolTab({
   onCreateWithAi,
   brandName,
   onOpenDetail,
+  onUpdateSkill,
   embeddedCatalogOpen,
   onEmbeddedCatalogOpenChange,
   catalogTriggerRef: suppliedCatalogTriggerRef,
-  initialScope = "all",
+  searchInputRef,
+  selectedScope,
+  onScopeChange,
+  preview = false,
+  selectedDetailKey,
+  onDetailProjection,
+  detailReturnFocusRef,
 }: {
   pool: SkillsPool | null;
   loading: boolean;
@@ -157,6 +156,10 @@ export function SkillsPoolTab({
   busy: string | null;
   expanded: string | null;
   client: HubClient;
+  preview?: boolean;
+  selectedDetailKey?: string | null;
+  onDetailProjection?: (projection: CatalogDetailProjection) => void;
+  detailReturnFocusRef?: RefObject<HTMLElement | null>;
   onRetry: () => void;
   onDisable: (skill: SkillCard, stateKey: string) => void;
   onSetEnabled: (skill: SkillCard, enabled: boolean, stateKey?: string) => void;
@@ -175,19 +178,25 @@ export function SkillsPoolTab({
   onDismissGithubImportNotice: () => void;
   onCreateWithAi?: (prompt?: string) => void;
   onOpenDetail: (skill: SkillCard | SkillCatalogCard, source: HTMLElement) => void;
+  onUpdateSkill: (skill: SkillCard, source: HTMLElement) => void;
   /** Settings owns the embedded catalog route so its heading and content
    * transition from one state source. Standalone Skills keeps local state. */
   embeddedCatalogOpen?: boolean;
   onEmbeddedCatalogOpenChange?: (open: boolean) => void;
   /** The Settings panel owns this ref so its shared back header restores focus. */
   catalogTriggerRef?: RefObject<HTMLButtonElement | null>;
-  /** Initial intent supplied by the marketplace "我的技能" handoff. */
-  initialScope?: SkillsScopeFilter;
+  /** Stable keyboard return target when a completed update removes its trigger. */
+  searchInputRef?: RefObject<HTMLInputElement | null>;
+  /** Settings controls its shareable scope; standalone pools own local scope. */
+  selectedScope?: SkillsScopeFilter;
+  onScopeChange?: (scope: SkillsScopeFilter) => void;
 }) {
   const t = useT();
   // 视图态:搜索词 / 范围筛选 / 停用二次确认(停用是破坏性——离池,先确认)。
   const [query, setQuery] = useState("");
-  const [scope, setScope] = useState<ScopeFilter>(initialScope);
+  const [localScope, setLocalScope] = useState<ScopeFilter>("all");
+  const scope = selectedScope ?? localScope;
+  const setScope = onScopeChange ?? setLocalScope;
   const [confirming, setConfirming] = useState<string | null>(null);
   const [localCatalogOpen, setLocalCatalogOpen] = useState(false);
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
@@ -200,9 +209,19 @@ export function SkillsPoolTab({
   const confirmDisableRefs = useRef<Record<string, HTMLButtonElement | null>>(
     {},
   );
-  const searchRef = useRef<HTMLInputElement | null>(null);
+  const localSearchRef = useRef<HTMLInputElement | null>(null);
+  const searchRef = searchInputRef ?? localSearchRef;
   const localCatalogTriggerRef = useRef<HTMLButtonElement | null>(null);
   const catalogTriggerRef = suppliedCatalogTriggerRef ?? localCatalogTriggerRef;
+  const [commandClient, setCommandClient] = useState(client);
+  if (commandClient !== client) {
+    setCommandClient(client);
+    setConfirming(null);
+    setCreateMenuOpen(false);
+  }
+  useLayoutEffect(() => {
+    return () => { catalogHandoffRef.current = null; };
+  }, [client]);
 
   const selectCreateAction = (action: () => void, event?: Event) => {
     // Radix closes a controlled menu after onSelect. Run the destination
@@ -293,7 +312,7 @@ export function SkillsPoolTab({
 
   const q = query.trim().toLowerCase();
   const filtered = resolvedPool.skills.filter((skill) => {
-    if (scope !== "all" && skillScope(skill.scope) !== scope) return false;
+    if (scope !== "all" && skillSourceScope(skill.scope) !== scope) return false;
     if (
       q !== "" &&
       !(
@@ -310,9 +329,9 @@ export function SkillsPoolTab({
   if (recentSkillKey !== null) {
     filtered.sort((left, right) => {
       const leftRecent =
-        skillStateKey(left.scope, left.name) === recentSkillKey;
+        left.revision_skill_id === recentSkillKey;
       const rightRecent =
-        skillStateKey(right.scope, right.name) === recentSkillKey;
+        right.revision_skill_id === recentSkillKey;
       return Number(rightRecent) - Number(leftRecent);
     });
   }
@@ -333,6 +352,10 @@ export function SkillsPoolTab({
   if (embedded && catalogOpen) {
     return (
       <SkillCatalogDialog
+        {...(selectedDetailKey === undefined ? {} : { selectedDetailKey })}
+        {...(onDetailProjection === undefined ? {} : { onDetailProjection })}
+        {...(detailReturnFocusRef === undefined ? {} : { detailReturnFocusRef })}
+        preview={preview}
         inline
         open
         onOpenChange={(nextOpen) => {
@@ -566,14 +589,13 @@ export function SkillsPoolTab({
         <ul className={styles.list}>
           {filtered.map((skill) => {
             const isOfficial = skill.scope === OFFICIAL_SCOPE;
-            const isThirdParty = skillScope(skill.scope) === "thirdParty";
-            const stateKey = skillStateKey(skill.scope, skill.name);
+            const isThirdParty = skillSourceScope(skill.scope) === "thirdParty";
+            const stateKey = skillStateKey(skill.scope, skill.name, skill.skill_id);
             const isLocked = locked.has(stateKey);
             const isPinned = pinned.includes(skill.name);
             const isConfirming = confirming === stateKey;
-            // The scope/name pair is the view identity. Do not fall back to
-            // a bare name: an imported personal skill may share a name with
-            // an official card and must not inherit its toggle state.
+            // Keep local mutation state on the owner series: same-name cards
+            // in the same scope are still independent installed Skills.
             const isEnabled =
               enabledOverrides.get(stateKey) ?? skill.enabled !== false;
             const detailAvailable =
@@ -581,7 +603,7 @@ export function SkillsPoolTab({
               skill.revision_skill_id !== undefined;
             if (embedded) {
               return (
-                <li key={`${skill.scope}/${skill.name}`}>
+                <li key={stateKey}>
                   <InstalledSkillCard
                     skill={skill}
                     enabled={isEnabled}
@@ -594,6 +616,7 @@ export function SkillsPoolTab({
                         ? t("skills.disableError")
                         : null
                     }
+                    onUpdate={(source) => onUpdateSkill(skill, source)}
                     onEnabledChange={(enabled) =>
                       onSetEnabled(skill, enabled, stateKey)
                     }
@@ -603,7 +626,7 @@ export function SkillsPoolTab({
               );
             }
             return (
-              <li key={`${skill.scope}/${skill.name}`}>
+              <li key={stateKey}>
                 <Collapsible
                   className={styles.itemDisclosure}
                   open={expanded === stateKey}
@@ -633,7 +656,7 @@ export function SkillsPoolTab({
                           >
                             {skill.name}
                           </Button>
-                          <Badge
+                          {skillSourceScope(skill.scope) !== "unknown" ? <Badge
                             variant="outline"
                             className={styles.badge}
                             data-scope={
@@ -649,7 +672,7 @@ export function SkillsPoolTab({
                               : isThirdParty
                                 ? t("skills.thirdParty")
                                 : t("skills.own")}
-                          </Badge>
+                          </Badge> : null}
                           {isLocked ? (
                             <Badge
                               variant="outline"
@@ -669,6 +692,7 @@ export function SkillsPoolTab({
                           embedded && styles.embeddedItemActions,
                         )}
                       >
+                        {skill.available_update ? <Button type="button" variant="outline" disabled={busy !== null} onClick={event => onUpdateSkill(skill, event.currentTarget)}>{t("skills.update.available", { revision: skill.available_update.revision })}</Button> : null}
                         <Button
                           variant="outline"
                           type="button"
@@ -783,6 +807,10 @@ export function SkillsPoolTab({
         </ul>
       )}
       {!embedded ? <SkillCatalogDialog
+        {...(selectedDetailKey === undefined ? {} : { selectedDetailKey })}
+        {...(onDetailProjection === undefined ? {} : { onDetailProjection })}
+        {...(detailReturnFocusRef === undefined ? {} : { detailReturnFocusRef })}
+        preview={preview}
         open={catalogOpen}
         onOpenChange={(nextOpen) => {
           if (!nextOpen) setCatalogOpen(false);

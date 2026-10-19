@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { SkillsContent } from "@/ui/skills/skills-panel"
 import { GithubImportDialog } from "@/ui/skills/github-import-dialog"
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
@@ -31,6 +32,47 @@ function renderSurface(onPrompt = vi.fn()) {
   )
   return onPrompt
 }
+
+it("keeps explicit Settings preview usable without granting a live session or issuing owner requests", async () => {
+  const client = createPreviewHubClient()
+  const [skill] = await client.listSkillPool()
+  if (!skill) throw Error("preview fixture must contain a skill")
+  const fetch = vi.fn<typeof globalThis.fetch>()
+  vi.stubGlobal("fetch", fetch)
+  render(<LocaleProvider><SkillsContent readBoundary={{ admitted: false, subject: null, generation: 0 }} client={client} preview pinned={[]} onTogglePin={() => {}} embedded /></LocaleProvider>)
+  await screen.findByText(skill.name)
+  fireEvent.change(screen.getByRole("searchbox", { name: "搜索技能" }), { target: { value: skill.name } })
+  expect(screen.getByRole("searchbox", { name: "搜索技能" })).toHaveValue(skill.name)
+  expect(fetch).not.toHaveBeenCalled()
+})
+
+it.each(["local", "github"] as const)("keeps the %s import window across same-actor rechecks without admitting actions or carrying it to another actor", async (source) => {
+  const client = createPreviewHubClient()
+  const content = (admitted: boolean, subject: string, generation: number) => <LocaleProvider><SkillsContent readBoundary={{ admitted, subject, generation }} client={client} pinned={[]} onTogglePin={() => {}} embedded /></LocaleProvider>
+  const view = render(content(true, "upload-window-actor", 1))
+  await screen.findByRole("button", { name: "探索技能" })
+  fireEvent.keyDown(screen.getByRole("button", { name: "添加" }), { key: "ArrowDown" })
+  fireEvent.click(await screen.findByRole("menuitem", { name: source === "local" ? "上传技能" : "从 GitHub 导入技能" }))
+  const dialogId = source === "local" ? "skill-upload-dialog" : "github-import-dialog"
+  const dialog = await screen.findByTestId(dialogId)
+  const action = () => source === "local" ? within(dialog).getByRole("button", { name: "拖放或点击以上传" }) : within(dialog).getByTestId("github-import-submit")
+  if (source === "github") fireEvent.change(within(dialog).getByTestId("github-repository-input"), { target: { value: "acme/skills" } })
+  expect(action()).toBeEnabled()
+
+  view.rerender(content(false, "upload-window-actor", 2))
+  expect(screen.getByTestId(dialogId)).toBe(dialog)
+  expect(action()).toBeDisabled()
+  if (source === "local") expect(within(dialog).getByTestId("skill-upload-input")).toBeDisabled()
+  else expect(within(dialog).getByTestId("github-repository-input")).toHaveValue("acme/skills")
+  view.rerender(content(true, "upload-window-actor", 2))
+  expect(screen.getByTestId(dialogId)).toBe(dialog)
+  expect(action()).toBeEnabled()
+
+  view.rerender(content(true, "another-upload-actor", 3))
+  expect(screen.queryByTestId(dialogId)).toBeNull()
+  view.rerender(content(true, "upload-window-actor", 4))
+  expect(screen.queryByTestId(dialogId)).toBeNull()
+})
 
 it("hands AI skill creation to the shared composer instead of only writing an orphaned pending draft", async () => {
   const onPrompt = renderSurface()
@@ -94,3 +136,37 @@ it("uses the short Manus creation trigger and exposes the four supported creatio
   expect(within(menu).getByRole("menuitem", { name: /^上传技能$/ })).toBeInTheDocument()
   expect(within(menu).getByRole("menuitem", { name: /^从 GitHub 导入技能$/ })).toBeInTheDocument()
 })
+
+
+it("confirms an update from the first admitted mount and restores keyboard focus when the old update button disappears", async () => {
+  const installation = {
+    installation_id: "update-installation", series_id: "update-series", source_ref: "skill:update-a", revision: "1", installed: true, enabled: false,
+    installed_at: "2026-10-15T00:00:00Z", updated_at: "2026-10-15T00:00:00Z", skill_updated_at: "2026-10-15T00:00:00Z", display_name: "Update first mount", summary: "Pinned A", source_status: "active", tags: [], category_keys: [], example_prompts: [], product: { publication_audience: "owner", state_version: "1" }, available_update: { source_ref: "skill:update-b", revision: "2" },
+  };
+  let upgraded = false;
+  const latest = () => upgraded ? { ...installation, source_ref: "skill:update-b", revision: "2", summary: "Pinned B", available_update: undefined } : installation;
+  const client = { ...createPreviewHubClient(), listSkillPool: async () => {
+    const current = latest();
+    return [{ installation_id: current.installation_id, skill_id: current.series_id, source_ref: current.source_ref, installed_source_ref: current.source_ref, revision_skill_id: upgraded ? "update-b" : "update-a", name: current.display_name, description: current.summary, scope: "personal", content_hash: "update-series", enabled: current.enabled, available_update: current.available_update }];
+  } };
+  const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+    if (init?.method === "POST") upgraded = true;
+    const data = init?.method === "POST" ? { installation: latest(), change: "upgraded", event_id: "update-event", replayed: false } : latest();
+    return new Response(JSON.stringify({ data }), { headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "update-read" } });
+  }); vi.stubGlobal("fetch", fetchMock);
+  render(<LocaleProvider><SkillsContent readBoundary={session} client={client} pinned={[]} onTogglePin={() => {}} embedded /></LocaleProvider>);
+  fireEvent.click(await screen.findByRole("button", { name: "更新至 v2 Update first mount" }));
+  const dialog = await screen.findByRole("dialog", { name: "更新技能" });
+  await within(dialog).findByText("Update first mount");
+  expect(fetchMock).toHaveBeenCalledWith("/api/hub/self/skill-installations/update-installation", expect.objectContaining({ method: "GET" }));
+  const confirm = within(dialog).getByRole("button", { name: "确认更新" });
+  expect(confirm).toBeEnabled();
+  fireEvent.click(confirm);
+  await within(dialog).findByText("更新请求已确认，已读取当前安装状态。");
+  fireEvent.click(within(dialog).getByRole("button", { name: /^完成$/ }));
+  await waitFor(() => expect(screen.queryByRole("dialog", { name: "更新技能" })).toBeNull());
+  await waitFor(() => expect(screen.getByRole("searchbox", { name: "搜索技能" })).toHaveFocus());
+  expect(screen.queryByRole("button", { name: "更新至 v2 Update first mount" })).toBeNull();
+  expect(screen.getByRole("switch", { name: "启用 Update first mount" })).not.toBeChecked();
+  expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1);
+});

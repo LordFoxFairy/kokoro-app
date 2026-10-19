@@ -15,6 +15,14 @@ product-identity.error.ts只维护内部异常类型；不返回原始BFF错误�
 
 `session-share.ts` 只承接原 session catch-all 的精确分享 POST/DELETE，保持原 scope、project_ref、Idempotency-Key 和请求正文语义，校验 canonical Origin 与正式 share_id ACK；非分享及 SSE 原路径不变。`lib/shared-tasks-json.ts` 只负责本片 raw JSON 的 UTF-8、重复键和深度边界，`lib/shared-tasks.schema.ts` 由正式生成形状派生运行时校验，不建立另一份可编辑 contract。
 
+## Product Session 生命周期读取（2026-10-19）
+
+productSessionState/inspectSessionState只服务App壳和原生session端点，区分active/refreshing/stale/absent/unconfirmed；原业务activeProductSession仍要求有效access与当前generation。GET/RSC不刷新、不输出凭据，POST保原Origin/CSRF、双CAS和正式身份核验；过期reservation不被新请求抢占。
+
+## Authorize浏览器异常恢复（2026-10-19）
+
+`oidc-login-recovery.ts`是无脚本、无自动重试的手动恢复文档，不是认证或降级入口。IAM GET relay只在既有路径/host/origin/body/cookie/header校验完成后，对明确top-level document navigation且Accept允许HTML的authorize错误呈现该文档；保留失败status/request-id、不转发失败owner的Location/cookies/body。成功redirect及API/非顶层/缺nonce/HTML q=0响应保持原契约。Callback可复用相同helper；不恢复旧state、不新建会话、不删除其他登录cookie。正常开发环境与登录整链另验。 最终Proxy在精确authorize路径使用同一nonce策略并固定no-referrer，避免框架全局头覆盖；其余路径不改变。
+
 # lib/server — Web BFF 服务端边界
 
 ## 职责
@@ -52,7 +60,9 @@ runtime token、内部服务地址、workload secret 或后端隔离键。
   header/body 限额；仅受控交互使用 POST，不复用会合并 cookie 的 Product transport。
 - `iam-relay-response.ts`：原生 status/header/body、Location 与 issuer `Set-Cookie` 的出站校验。
 - `oidc-provider.ts`：固定 provider/EdDSA、验证型 `client.callback` 与 server-only Basic/Bearer backchannel；Product Session 由 RP route 在身份准入后建立。
-- `oidc-rp-transaction.ts`：300 秒 Redis state 摘要、RP cookie 绑定、原子一次消费及回调清理。
+- `oidc-rp-transaction.ts`：300秒Redis state摘要、RP cookie绑定和原子一次消费；所有callback均不删除可能属于新登录的共享proof，成功只签发Product cookie，临时proof按原期限过期。
+- `oidc-csrf.ts`：严格读取唯一、两段格式及摘要有效的Auth.js CSRF cookie，登录复用与session/signout校验共用。
+- `oidc-login-recovery.ts`：GET/POST原生失败的手动HTML表示，保原status与API JSON；精确Proxy路径承接no-referrer及同nonce CSP，无自动重试。
 - `product-login-return.ts`：`/login` 到 provider POST 的 HttpOnly 签名回跳目标 cookie；仅接受严格 Product 内部路径，provider 启动后立即清除。
 - `oidc-bff-agent.ts`：token/userinfo/JWKS 每请求独立 5 秒绝对 deadline、响应头/正文 1 MiB 上限与浏览器 abort 连接取消。
 - `product-identity.ts`：callback 建 session 与 refresh finalize 前调用固定 BFF `/v1/me`，严格核对

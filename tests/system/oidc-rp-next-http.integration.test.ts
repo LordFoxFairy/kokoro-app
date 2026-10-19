@@ -955,6 +955,102 @@ function cookieHeader(...responses: HttpResult[]): string {
   return [...cookies.values()].join("; ")
 }
 
+function loginStartCsrf(response: HttpResult, authSecret: string): string {
+  expect(response.status).toBe(200)
+  expect(response.headers.location).toBeUndefined()
+  expect(response.headers["content-type"]).toBe("text/html; charset=utf-8")
+  expect(response.headers["cache-control"]).toBe("no-store")
+  expect(response.headers["referrer-policy"]).toBe("strict-origin-when-cross-origin")
+  expect([...response.body.matchAll(/<form\b[^>]*>/giu)].map(([tag]) => tag)).toEqual([
+    '<form id="kokoro-login-start" method="post" action="/api/auth/signin/kokoro-iam">',
+  ])
+  const inputs = [...response.body.matchAll(/<input\b[^>]*>/giu)].map(([tag]) => tag)
+  expect(inputs).toEqual([expect.stringMatching(/^<input type="hidden" name="csrfToken" value="[a-f0-9]{64}">$/u)])
+  const token = inputs[0]?.match(/value="([a-f0-9]{64})"/u)?.[1]
+  if (token === undefined) throw new Error("login start did not issue its single CSRF field")
+  expect([...response.body.matchAll(/<meta\b[^>]*\bname="referrer"[^>]*>/giu)].map(([tag]) => tag))
+    .toEqual(['<meta name="referrer" content="no-referrer">'])
+  const scripts = [...response.body.matchAll(/<script\b[^>]*>[\s\S]*?<\/script>/giu)].map(([tag]) => tag)
+  expect(scripts).toEqual([expect.stringMatching(/^<script nonce="[A-Za-z0-9_-]{16,128}">document\.getElementById\("kokoro-login-start"\)\?\.submit\(\)<\/script>$/u)])
+  const nonce = scripts[0]?.match(/nonce="([A-Za-z0-9_-]{16,128})"/u)?.[1]
+  if (nonce === undefined) throw new Error("login start did not issue its nonce-bound script")
+  const csp = response.headers["content-security-policy"]
+  if (typeof csp !== "string") throw new Error("login start did not issue its response CSP")
+  const directives = csp.split(";").map((directive) => directive.trim().split(/\s+/u))
+  const policy = new Map(directives.map(([name, ...values]) => [name, values]))
+  expect(policy.size).toBe(directives.length)
+  expect(policy.get("script-src")).toEqual(["'self'", `'nonce-${nonce}'`, "'strict-dynamic'", "'unsafe-eval'"])
+  expect(policy.get("form-action")).toEqual(["'self'"])
+  expect(policy.get("base-uri")).toEqual(["'self'"])
+  expect(policy.get("frame-ancestors")).toEqual(["'none'"])
+  const csrfCookies = (response.headers["set-cookie"] as string[] | undefined ?? [])
+    .filter((cookie) => cookie.startsWith("next-auth.csrf-token="))
+  const digest = createHash("sha256").update(`${token}${authSecret}`).digest("hex")
+  expect(csrfCookies).toEqual([
+    `next-auth.csrf-token=${encodeURIComponent(`${token}|${digest}`)}; Path=/; HttpOnly; SameSite=Lax`,
+  ])
+  return token
+}
+
+function providerStartLocation(response: HttpResult, origin: string): URL {
+  expect(response.status).toBe(302)
+  const location = new URL(response.headers.location as string)
+  expect(location.origin).toBe(origin)
+  expect(location.pathname).toBe("/iam/oauth2/authorize")
+  expect(location.searchParams.get("state")).toMatch(/^[A-Za-z0-9_-]{16,1024}$/u)
+  expect((response.headers["set-cookie"] as string[] | undefined ?? [])
+    .some((cookie) => cookie.startsWith("next-auth.state="))).toBe(true)
+  return location
+}
+
+async function expectBrowserLoginStart(login: BrowserResponse, signin: BrowserResponse, authSecret: string): Promise<void> {
+  // The raw HTTP cases check the fixed document; bind this native POST to its issued cookie.
+  const issued = (await login.headersArray()).filter(({ name }) => name.toLowerCase() === "set-cookie")
+    .map(({ value }) => value)
+  const loginHeaders = await login.allHeaders()
+  expect(login.status()).toBe(200)
+  expect(loginHeaders.location).toBeUndefined()
+  expect(loginHeaders["content-type"]).toBe("text/html; charset=utf-8")
+  expect(loginHeaders["cache-control"]).toBe("no-store")
+  expect(loginHeaders["referrer-policy"]).toBe("strict-origin-when-cross-origin")
+  const csp = loginHeaders["content-security-policy"]
+  if (typeof csp !== "string") throw new Error("login start did not issue its response CSP")
+  const directives = csp.split(";").map((directive) => directive.trim().split(/\s+/u))
+  const policy = new Map(directives.map(([name, ...values]) => [name, values]))
+  expect(policy.size).toBe(directives.length)
+  const scriptSources = policy.get("script-src") ?? []
+  const nonces = scriptSources.filter((source) => /^'nonce-[A-Za-z0-9_-]{16,128}'$/u.test(source))
+  expect(nonces).toHaveLength(1)
+  expect(scriptSources).toEqual(["'self'", nonces[0], "'strict-dynamic'", "'unsafe-eval'"])
+  expect(policy.get("form-action")).toEqual(["'self'"])
+  expect(policy.get("base-uri")).toEqual(["'self'"])
+  expect(policy.get("frame-ancestors")).toEqual(["'none'"])
+  const request = signin.request()
+  const origin = new URL(login.url()).origin
+  expect(login.request().method()).toBe("GET")
+  expect(login.request().isNavigationRequest()).toBe(true)
+  expect(request.url()).toBe(`${origin}/api/auth/signin/kokoro-iam`)
+  expect(request.method()).toBe("POST")
+  expect(request.isNavigationRequest()).toBe(true)
+  const headers = await request.allHeaders()
+  expect(headers.origin).toBe("null")
+  expect(headers.referer).toBeUndefined()
+  expect(headers["content-type"]).toBe("application/x-www-form-urlencoded")
+  const fields = [...new URLSearchParams(request.postData() ?? "")]
+  expect(fields).toEqual([["csrfToken", expect.stringMatching(/^[a-f0-9]{64}$/u)]])
+  const token = fields[0]?.[1]
+  if (token === undefined) throw new Error("provider POST did not carry its single CSRF field")
+  const digest = createHash("sha256").update(`${token}${authSecret}`).digest("hex")
+  expect(issued.filter((cookie) => cookie.startsWith("next-auth.csrf-token="))).toEqual([
+    `next-auth.csrf-token=${encodeURIComponent(`${token}|${digest}`)}; Path=/; HttpOnly; SameSite=Lax`,
+  ])
+  const cookies = headers.cookie?.split(/;\s*/u) ?? []
+  for (const cookie of issued) expect(cookies).toContain(cookie.split(";", 1)[0])
+  providerStartLocation({ status: signin.status(), headers: { ...await signin.allHeaders(),
+    "set-cookie": (await signin.headersArray()).filter(({ name }) => name.toLowerCase() === "set-cookie")
+      .map(({ value }) => value) }, body: "" }, origin)
+}
+
 function jwt(privateKey: KeyObject, payload: Record<string, unknown>, algorithm: "EdDSA" | "RS256" = "EdDSA"): string {
   const header = Buffer.from(JSON.stringify({ alg: algorithm, typ: "JWT", kid: algorithm === "EdDSA" ? "fixture-key" : "rsa-key" })).toString("base64url")
   const claims = Buffer.from(JSON.stringify(payload)).toString("base64url")
@@ -1211,6 +1307,9 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
   let identityUserId = "user-one"
   let identityTenantId = "tenant-one"
   let identityStatus = 200
+  let identityDelayMs = 0
+  let identityGate: Promise<void> | undefined
+  let onIdentityHeld: (() => void) | undefined
   let sessionListStatus = 200
   let deleteSessionStatus = 200
   let holdDeleteSession = false
@@ -1731,6 +1830,29 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     await expect.poll(() => rail.getAttribute("data-collapsed"), { timeout: 10_000 }).toBe("false")
   }
 
+  async function openProjectWorkspace(page: Page, projectId: string): Promise<void> {
+    // The row discloses tasks; its one adjacent Link opens the workspace.
+    // Hover matches the real desktop affordance instead of clicking a hidden
+    // action or relying on the removed whole-row navigation.
+    const row = page.locator(`[data-project-id="${projectId}"]`)
+    await row.hover()
+    await row.getByRole("link").click()
+  }
+
+  async function expandProjectConversations(page: Page, projectId: string): Promise<void> {
+    // Address the owner project and its accessible disclosure, not a private
+    // generated id prefix that changes when the rail is reorganized.
+    const row = page.locator(`[data-project-id="${projectId}"]`)
+    const toggle = row.locator("button[aria-controls][aria-expanded]")
+    if (await toggle.getAttribute("aria-expanded") === "false") await toggle.click()
+    expect(await toggle.getAttribute("aria-expanded")).toBe("true")
+    const controlledId = await toggle.getAttribute("aria-controls")
+    expect(controlledId).not.toBeNull()
+    await page.locator(`[id="${controlledId}"] [data-conversation-list="project-conversation"]`)
+      .waitFor({ state: "visible", timeout: 10_000 })
+  }
+
+
   async function directAnonymousControlDiagnostic(): Promise<string> {
     let browser: Browser | undefined
     let context: Awaited<ReturnType<Browser["newContext"]>> | undefined
@@ -1947,8 +2069,12 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
               ? { data: { user_id: identityUserId, tenant_id: identityTenantId, platform_admin: false, access_token: "must-not-pass" }, meta: { request_id: "req_fixture" } }
               : { data: { user_id: identityUserId, tenant_id: identityTenantId, platform_admin: false }, meta: { request_id: "req_fixture" } }
             : { error: { code: "identity_rejected", message: "rejected", retryable: false } })
-          if (slowIdentity) {
-            const timer = setTimeout(() => response.end(payload), 6_000)
+          const heldIdentity = identityGate
+          if (heldIdentity !== undefined) {
+            onIdentityHeld?.()
+            void heldIdentity.then(() => { if (!response.destroyed) response.end(payload) })
+          } else if (slowIdentity || identityDelayMs > 0) {
+            const timer = setTimeout(() => response.end(payload), slowIdentity ? 6_000 : identityDelayMs)
             response.once("close", () => clearTimeout(timer))
           } else response.end(payload)
           return
@@ -2477,26 +2603,75 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     } finally { client.destroy() }
   }
 
-  function expectServerFirstAnonymousRedirect(response: HttpResult, expectedTarget = "/app"): void {
-    const loginLocation = `/login?${new URLSearchParams({ return_to: expectedTarget })}`
-    expect(response.body).not.toContain('data-testid="runtime-loading"')
-    if (response.status >= 300 && response.status < 400) {
-      expect(response.headers.location).toBe(loginLocation)
-      return
-    }
+  function expectDataFreeAnonymousDocument(response: HttpResult, expectedTarget = "/app"): void {
     expect(response.status).toBe(200)
-    const escapedLocation = loginLocation.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")
-    expect(response.body).toMatch(new RegExp(`(?:NEXT_REDIRECT[^<]{0,512}${escapedLocation}|<meta[^>]+url=${escapedLocation})(?=[;\\s"'<]|$)`, "u"))
+    expect(response.body).not.toContain('data-app-frame-main="true"')
+    expect(response.body).not.toContain('data-slot="composer-input"')
+    expect(response.body).not.toContain('data-testid="runtime-loading"')
+    // With scripts disabled, retain the bounded path/query login link. The
+    // browser-only fragment is preserved by the ordinary hydrated handoff.
+    expect(response.body).toContain(`/login?${new URLSearchParams({ return_to: expectedTarget })}`)
   }
 
-  it("R167 redirects an anonymous initial app document before rendering the client loading gate", async () => {
-    const response = await http(nextPort, "/app", "GET", "", {}, 10_000)
-    expectServerFirstAnonymousRedirect(response)
+  it("returns a signed known settings fragment after the complete OIDC callback", async () => {
+    const target = "/app#/account/settings/mcp"
+    const login = await http(nextPort, `/login?${new URLSearchParams({ return_to: target })}`)
+    expect(login.status).toBe(200)
+    const csrf = login.body.match(/name="csrfToken" value="([a-f0-9]{64})"/u)?.[1]
+    expect(csrf).toBeDefined()
+    const signin = await http(nextPort, "/api/auth/signin/kokoro-iam", "POST", `csrfToken=${csrf}`,
+      { origin: `http://localhost:${nextPort}`, cookie: cookieHeader(login) })
+    expect(signin.status).toBe(302)
+    const location = new URL(signin.headers.location as string)
+    issuedStates.add(location.searchParams.get("state") ?? "")
+    const authorize = await http(nextPort, location.pathname + location.search)
+    expect(authorize.status).toBe(302)
+    const callback = await http(nextPort, authorize.headers.location as string, "GET", "", { cookie: cookieHeader(login, signin) })
+    await recordProduct(callback)
+    expect(callback.status).toBe(303)
+    expect(callback.headers.location).toBe(target)
   })
 
-  it("R167 applies the same server-first anonymous redirect to a nested app document", async () => {
+  it("preserves an anonymous initial settings deep link through one browser login", async () => {
+    const browser = await chromium.launch({ headless: true })
+    try {
+      const context = await browser.newContext()
+      const page = await context.newPage()
+      const target = "/app/plugins#/account/settings/mcp"
+      let starts = 0
+      let callbackSeen = false
+      const prematureProductReads: string[] = []
+      page.on("request", (request) => {
+        const path = new URL(request.url()).pathname
+        if (path === "/api/auth/signin/kokoro-iam") starts++
+        if (path === "/api/auth/callback/kokoro-iam") callbackSeen = true
+        if (!callbackSeen && (path.startsWith("/api/hub/") || path.startsWith("/api/session/"))) prematureProductReads.push(path)
+      })
+      await page.goto(`http://localhost:${nextPort}${target}`, { waitUntil: "domcontentloaded", timeout: 20_000 })
+      await expect.poll(() => callbackSeen, { timeout: 20_000 }).toBe(true)
+      await expect.poll(() => {
+        const url = new URL(page.url())
+        return `${url.pathname}${url.search}${url.hash}`
+      }, { timeout: 20_000 }).toBe(target)
+      expect(starts).toBe(1)
+      expect(callbackSeen).toBe(true)
+      expect(prematureProductReads).toEqual([])
+      const session = await context.request.get(`http://localhost:${nextPort}/api/auth/session`)
+      expect(session.status()).toBe(200)
+      expect(await session.json()).toMatchObject({ authenticated: true })
+    } finally {
+      await browser.close()
+    }
+  })
+
+  it("R167 renders no private workbench for an anonymous initial app document", async () => {
+    const response = await http(nextPort, "/app", "GET", "", {}, 10_000)
+    expectDataFreeAnonymousDocument(response)
+  })
+
+  it("R167 retains a bounded no-script login link for a nested anonymous document", async () => {
     const response = await http(nextPort, "/app/skills", "GET", "", {}, 10_000)
-    expectServerFirstAnonymousRedirect(response, "/app/skills")
+    expectDataFreeAnonymousDocument(response, "/app/skills")
   })
 
   it("rejects undefined and non-root-relative fixture HTTP targets instead of requesting the app root", async () => {
@@ -3155,7 +3330,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     }
   }, 45_000)
 
-  it("R150 turns complete localStorage denial into a recoverable session alert instead of a private workspace", async () => {
+  it("R150 keeps a data-free shell on complete localStorage denial without a login diagnostic card", async () => {
     const { jar, location } = await start()
     const authorize = await http(nextPort, new URL(location).pathname + new URL(location).search)
     expect(authorize.status).toBe(302)
@@ -3187,9 +3362,13 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       const page = await context.newPage()
       observeBrowserDiagnostics(page)
       let sessionRequests = 0
+      let privateRequests = 0
       const sessionStatuses: number[] = []
       page.on("request", (request) => {
-        if (new URL(request.url()).pathname === "/api/auth/session") sessionRequests += 1
+        const pathname = new URL(request.url()).pathname
+        if (pathname === "/api/auth/session") sessionRequests += 1
+        if (pathname.startsWith("/api/session/") || pathname.startsWith("/api/hub/") ||
+          pathname === "/api/system/runtime-manifest") privateRequests += 1
       })
       page.on("response", (response) => {
         if (new URL(response.url()).pathname === "/api/auth/session") sessionStatuses.push(response.status())
@@ -3213,9 +3392,9 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       const response = await page.goto(`${origin}/app`, { waitUntil: "domcontentloaded", timeout: remaining() })
       if (response?.status() !== 200) throw new Error(await diagnostic("storage_denial_document"))
       const retry = page.getByRole("button", { name: /Retry|重试/u })
-      const alert = page.getByRole("alert").filter({ has: retry })
+      const reconnecting = page.getByRole("status").filter({ hasText: /Reconnecting|重连中/u })
       try {
-        await alert.waitFor({ state: "visible", timeout: remaining() })
+        await reconnecting.waitFor({ state: "attached", timeout: remaining() })
         await expect.poll(() => page.getByTestId("runtime-loading").count(), { timeout: remaining() }).toBe(0)
       } catch (error) {
         throw new Error(await diagnostic("storage_denial_alert"), { cause: error })
@@ -3223,15 +3402,18 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       expect(sessionRequests).toBeGreaterThanOrEqual(1)
       expect(sessionStatuses).toHaveLength(sessionRequests)
       expect(sessionStatuses.every((status) => status === 200)).toBe(true)
-      expect(await page.locator('[data-app-frame-main="true"]').count()).toBe(0)
-      expect(await page.locator('[data-slot="composer-input"]').count()).toBe(0)
+      expect(await page.locator('[data-server-admitted-shell="true"]').isVisible()).toBe(true)
+      expect(await page.locator('[data-slot="composer-input"]').isEnabled()).toBe(false)
+      expect(await page.locator('[data-slot="conversation-timeline"]').count()).toBe(0)
+      expect(await retry.count()).toBe(0)
+      expect(privateRequests).toBe(0)
     } finally {
       try { await context?.close() }
       finally { await browser?.close() }
     }
   }, 45_000)
 
-  it("R139 turns a pending browser session probe into a recoverable alert without request storms", async () => {
+  it("R139 silently recovers a timed-out browser session probe without request storms", async () => {
     const proxy = await sessionProbeProxy(nextPort)
     let browser: Browser | undefined
     const outputStart = output.length
@@ -3255,8 +3437,8 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
         window.dispatchEvent(new Event("focus"))
       })
       const retry = page.getByRole("button", { name: /Retry|重试/u })
-      const alert = page.getByRole("alert").filter({ has: retry })
-      try { await alert.waitFor({ timeout: 12_000 }) }
+      const reconnecting = page.getByRole("status").filter({ hasText: /Reconnecting|重连中/u })
+      try { await reconnecting.waitFor({ state: "attached", timeout: 12_000 }) }
       catch { throw new Error(await browserProbeDiagnostic("pending_alert", page, response, proxy, outputStart)) }
       expect(proxy.sessionRequests()).toBe(1)
       expect(new URL(page.url()).pathname).toBe("/app")
@@ -3264,14 +3446,14 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       proxy.setFault("pass")
       const recoveryDeadline = Date.now() + 18_000
       const recoveryBudget = (): number => Math.max(1, recoveryDeadline - Date.now())
-      await retry.click()
+      expect(await retry.count()).toBe(0)
       await expect.poll(() => proxy.sessionRequests(), { timeout: recoveryBudget() }).toBeGreaterThanOrEqual(2)
       expect(proxy.loginRequests()).toBe(0)
       proxy.releasePending()
       await requireStableAuthenticatedWorkspace(
         "pending_recovery", page, response, proxy, outputStart, recoveryDeadline,
       )
-      await expect.poll(() => alert.count(), { timeout: recoveryBudget() }).toBe(0)
+      await expect.poll(() => reconnecting.count(), { timeout: recoveryBudget() }).toBe(0)
       await context.close()
     } finally {
       proxy.releasePending()
@@ -3280,7 +3462,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     }
   }, 60_000)
 
-  it("R227 aborts an unfinished 200 session body and recovers on Retry without accepting its late anonymous tail", async () => {
+  it("R227 aborts an unfinished 200 session body and silently recovers without accepting its late anonymous tail", async () => {
     const proxy = await sessionProbeProxy(nextPort)
     let browser: Browser | undefined
     let context: BrowserContext | undefined
@@ -3325,8 +3507,8 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
         path === "/api/system/runtime-manifest")).toEqual([])
 
       const retry = page.getByRole("button", { name: /Retry|重试/u })
-      const alert = page.getByRole("alert").filter({ has: retry })
-      await alert.waitFor({ timeout: 12_000 })
+      const reconnecting = page.getByRole("status").filter({ hasText: /Reconnecting|重连中/u })
+      await reconnecting.waitFor({ state: "attached", timeout: 12_000 })
       await expect.poll(() => failedBodies).toBe(1)
       await expect.poll(() => proxy.sessionBodyDiagnostics()[0]?.closed).toBe(true)
       const aborted = proxy.sessionBodyDiagnostics()[0]
@@ -3337,17 +3519,20 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       expect(proxy.sessionRequests()).toBe(1)
       expect(proxy.loginRequests()).toBe(0)
       expect(new URL(page.url()).pathname).toBe("/app")
-      expect(await page.locator('[data-app-frame-main="true"]').count()).toBe(0)
+      expect(await page.locator('[data-server-admitted-shell="true"]').isVisible()).toBe(true)
+      expect(await page.locator('[data-slot="composer-input"]').isEnabled()).toBe(false)
+      expect(await page.locator('[data-slot="conversation-timeline"]').count()).toBe(0)
+      expect(await retry.count()).toBe(0)
 
       proxy.setFault("pass")
       const recoveryDeadline = Date.now() + 18_000
       const remaining = (): number => Math.max(1, recoveryDeadline - Date.now())
-      await retry.click()
+      expect(await retry.count()).toBe(0)
       await expect.poll(() => proxy.sessionRequests(), { timeout: remaining() }).toBe(2)
       await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: remaining() })
       const composer = page.locator('[data-slot="composer-input"]')
       await expect.poll(() => composer.isEnabled(), { timeout: remaining() }).toBe(true)
-      await expect.poll(() => alert.count(), { timeout: remaining() }).toBe(0)
+      await expect.poll(() => reconnecting.count(), { timeout: remaining() }).toBe(0)
       await composer.fill("r227-session-body-recovered")
       proxy.releaseSessionBodies()
       expect(proxy.sessionBodyDiagnostics()[0]).toMatchObject({
@@ -3360,7 +3545,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       }))
       expect(await composer.inputValue()).toBe("r227-session-body-recovered")
       expect(await composer.isEnabled()).toBe(true)
-      expect(await alert.count()).toBe(0)
+      expect(await reconnecting.count()).toBe(0)
       expect(proxy.sessionRequests()).toBe(2)
       expect(proxy.loginRequests()).toBe(0)
       expect(bodyResponses).toHaveLength(1)
@@ -3381,7 +3566,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     }
   }, 60_000)
 
-  it("R139 keeps a 503 session probe on an explicit retry surface instead of redirecting to login", async () => {
+  it("R139 silently recovers a 503 session probe without redirecting to login", async () => {
     const proxy = await sessionProbeProxy(nextPort)
     let browser: Browser | undefined
     const outputStart = output.length
@@ -3397,8 +3582,8 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       if (response?.status() !== 200) throw new Error(await browserProbeDiagnostic("unavailable_document", page, response, proxy, outputStart))
       await requireSessionProbe("unavailable_probe_barrier", 1, page, response, proxy, outputStart)
       const retry = page.getByRole("button", { name: /Retry|重试/u })
-      const alert = page.getByRole("alert").filter({ has: retry })
-      try { await alert.waitFor({ timeout: 12_000 }) }
+      const reconnecting = page.getByRole("status").filter({ hasText: /Reconnecting|重连中/u })
+      try { await reconnecting.waitFor({ state: "attached", timeout: 12_000 }) }
       catch { throw new Error(await browserProbeDiagnostic("unavailable_alert", page, response, proxy, outputStart)) }
       expect(new URL(page.url()).pathname).toBe("/app")
       expect(proxy.loginRequests()).toBe(0)
@@ -3407,7 +3592,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       proxy.setFault("pass")
       const recoveryDeadline = Date.now() + 15_000
       const recoveryBudget = (): number => Math.max(1, recoveryDeadline - Date.now())
-      await retry.click()
+      expect(await retry.count()).toBe(0)
       await expect.poll(() => proxy.sessionRequests(), { timeout: recoveryBudget() }).toBeGreaterThanOrEqual(2)
       expect(proxy.loginRequests()).toBe(0)
       await requireStableAuthenticatedWorkspace(
@@ -3630,13 +3815,25 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       expect(proxy.loginRequests()).toBe(1)
       expect(proxy.heldLoginDiagnostics()[0]).toMatchObject({ method: "GET", request_category: "document" })
 
+      const loginStarts: BrowserResponse[] = []
+      const providerStarts: BrowserResponse[] = []
+      page.on("response", (response) => {
+        const path = new URL(response.url()).pathname
+        if (path === "/login") loginStarts.push(response)
+        if (path === "/api/auth/signin/kokoro-iam") providerStarts.push(response)
+      })
       proxy.setFault("pass")
       proxy.forwardLoginRequests()
       const recoveryDeadline = Date.now() + 18_000
       await requireStableAuthenticatedWorkspace(
         "no_interstitial_recovery", page, response, proxy, outputStart, recoveryDeadline,
       )
-      expect(resource("/login")?.upstream_statuses).toContain(302)
+      expect(resource("/login")?.upstream_statuses).toContain(200)
+      expect(loginStarts).toHaveLength(1)
+      expect(providerStarts).toHaveLength(1)
+      await expectBrowserLoginStart(loginStarts[0]!, providerStarts[0]!, authSecret)
+      expect(resource("/api/auth/signin/kokoro-iam")?.methods).toEqual({ POST: 1 })
+      expect(resource("/api/auth/signin/kokoro-iam")?.upstream_statuses).toEqual([302])
       expect(resource("/iam/oauth2/authorize")?.upstream_statuses).toContain(302)
       expect(resource("/api/auth/callback/kokoro-iam")?.upstream_statuses).toContain(303)
       expect((resource("/app")?.request_categories.document ?? 0) - appDocumentsBeforeHandoff).toBeGreaterThanOrEqual(2)
@@ -3724,7 +3921,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       const firstMain = firstPage.locator('[data-app-frame-main="true"]')
       await firstMain.waitFor({ state: "visible", timeout: 15_000 })
 
-      const newChat = firstPage.getByRole("button", { name: /New chat|新对话/iu }).first()
+      const newChat = firstPage.getByTestId("rail-new-conversation")
       await newChat.click()
       const composer = firstPage.locator('[data-slot="composer-input"]')
       const draft = "same subject second document draft"
@@ -4011,6 +4208,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       await page.getByText("R192 binding survives the filtered view move", { exact: true })
         .waitFor({ state: "visible", timeout: 10_000 })
 
+      const directGetsBeforeMove = moveBindingScopeGets.filter((entry) => entry.scope === "direct").length
       await directRowA.getByRole("button", {
         name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u,
       }).click()
@@ -4026,17 +4224,25 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       await page.getByText("R192 binding survives the filtered view move", { exact: true })
         .waitFor({ state: "visible", timeout: 10_000 })
 
-      const directGetsAfterCommitBaseline = moveBindingScopeGets.filter((entry) => entry.scope === "direct").length
-      await page.locator('a[href="/app"]').first().click()
-      await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 }).toBe("/app")
+      // The permanent Direct reader reconciles on the Move ACK, not by
+      // remounting when Home is opened. Preserve the post-commit owner GET
+      // oracle without requiring a redundant navigation-triggered GET.
       await expect.poll(() => moveBindingScopeGets.filter((entry) => entry.scope === "direct").length, { timeout: 10_000 })
-        .toBeGreaterThan(directGetsAfterCommitBaseline)
-      const directReturnRead = moveBindingScopeGets.filter((entry) => entry.scope === "direct").at(-1)
-      expect(directReturnRead).toEqual({
+        .toBeGreaterThan(directGetsBeforeMove)
+      const directPostCommitRead = moveBindingScopeGets.filter((entry) => entry.scope === "direct").at(-1)
+      expect(directPostCommitRead).toEqual({
         scope: "direct",
         bindingAtRead: moveProjectA,
         sessionIds: [moveConversationB],
       })
+      await expect.poll(() => directList.locator(`[data-conversation-id="${moveConversationA}"]`).count(), {
+        timeout: 10_000,
+      }).toBe(0)
+      await page.locator('a[href="/app"]').first().click()
+      await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 }).toBe("/app")
+      expect(await directList.locator(`[data-conversation-id="${moveConversationA}"]`).count()).toBe(0)
+      await directList.locator(`[data-conversation-id="${moveConversationB}"]`)
+        .waitFor({ state: "visible", timeout: 10_000 })
       const directGetsBeforeReload = moveBindingScopeGets.filter((entry) => entry.scope === "direct").length
       await page.reload({ waitUntil: "domcontentloaded" })
       await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: 15_000 })
@@ -4056,12 +4262,10 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       expect(new URL(page.url()).searchParams.get("conversation")).toBeNull()
 
       const snapshotGetsBeforeProjectOpen = moveBindingSnapshotGets.length
-      await page.getByRole("link", { name: "Move target alpha", exact: true }).click()
+      await openProjectWorkspace(page, moveProjectA)
       await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 })
         .toBe(`/app/project/${moveProjectA}`)
-      const targetFolderToggle = page.locator(`button[aria-controls="project-children-${encodeURIComponent(moveProjectA)}"]`)
-      if (await targetFolderToggle.getAttribute("aria-expanded") === "false") await targetFolderToggle.click()
-      expect(await targetFolderToggle.getAttribute("aria-expanded")).toBe("true")
+      await expandProjectConversations(page, moveProjectA)
       const projectList = page.locator('[data-conversation-list="project-conversation"]')
       await expect.poll(() => moveBindingSnapshotGets.length, { timeout: 10_000 })
         .toBeGreaterThan(snapshotGetsBeforeProjectOpen)
@@ -4397,7 +4601,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
       await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: 15_000 })
       await expandDesktopRail(page)
-      await page.getByRole("link", { name: "Move target alpha", exact: true }).click()
+      await openProjectWorkspace(page, moveProjectA)
       await expect.poll(() => moveBindingScopeGets.filter((entry) => entry.scope === `project:${moveProjectA}`).length, {
         timeout: 10_000,
       }).toBeGreaterThan(0)
@@ -4415,13 +4619,14 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       await page.getByRole("menuitem", { name: "Move target alpha", exact: true }).click()
       await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(1)
 
-      await page.getByRole("link", { name: "Move target beta", exact: true }).click()
+      await openProjectWorkspace(page, moveProjectB)
       await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 })
         .toBe(`/app/project/${moveProjectB}`)
       await expect.poll(() => moveBindingScopeGets.filter((entry) => entry.scope === `project:${moveProjectB}`).length, {
         timeout: 10_000,
       }).toBeGreaterThan(0)
       const projectBReadsBeforeAck = moveBindingScopeGets.filter((entry) => entry.scope === `project:${moveProjectB}`).length
+      const projectBReadBeforeAck = moveBindingScopeGets.filter((entry) => entry.scope === `project:${moveProjectB}`).at(-1)
       const composer = page.locator('[data-slot="composer-input"]')
       const projectBDraft = "R195 keep the mounted Project B draft"
       await composer.fill(projectBDraft)
@@ -4445,30 +4650,27 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
         scope: "direct", bindingAtRead: moveProjectA, sessionIds: [moveConversationB],
       })
 
-      await page.getByRole("link", { name: "Move target alpha", exact: true }).click()
+      await openProjectWorkspace(page, moveProjectA)
       await expect.poll(() => moveBindingScopeGets.filter((entry) => entry.scope === `project:${moveProjectA}`).length, {
         timeout: 10_000,
       }).toBeGreaterThan(targetReadsBeforeAck)
       expect(moveBindingScopeGets.filter((entry) => entry.scope === `project:${moveProjectA}`).at(-1)).toEqual({
         scope: `project:${moveProjectA}`, bindingAtRead: moveProjectA, sessionIds: [moveConversationA],
       })
-      const targetFolderToggle = page.locator(`button[aria-controls="project-children-${encodeURIComponent(moveProjectA)}"]`)
-      if (await targetFolderToggle.getAttribute("aria-expanded") === "false") await targetFolderToggle.click()
-      expect(await targetFolderToggle.getAttribute("aria-expanded")).toBe("true")
+      await expandProjectConversations(page, moveProjectA)
       await page.locator('[data-conversation-list="project-conversation"]')
         .locator(`[data-conversation-id="${moveConversationA}"]`).waitFor({ state: "visible", timeout: 10_000 })
 
-      await page.getByRole("link", { name: "Move target beta", exact: true }).click()
+      await openProjectWorkspace(page, moveProjectB)
       await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 })
         .toBe(`/app/project/${moveProjectB}`)
       await expect.poll(() => page.locator('[data-slot="composer-input"]').inputValue(), { timeout: 10_000 })
         .toBe(projectBDraft)
-      await expect.poll(() => moveBindingScopeGets.filter((entry) => entry.scope === `project:${moveProjectB}`).length, {
-        timeout: 10_000,
-      }).toBe(projectBReadsBeforeAck + 1)
-      expect(moveBindingScopeGets.filter((entry) => entry.scope === `project:${moveProjectB}`).at(-1)).toEqual({
-        scope: `project:${moveProjectB}`, bindingAtRead: moveProjectA, sessionIds: [],
-      })
+      // Direct→A has already received distinct post-ACK reads above. B is
+      // neither source nor target: navigation must retain its reader/pages,
+      // not require a remount GET just to keep the unrelated draft intact.
+      expect(moveBindingScopeGets.filter((entry) => entry.scope === `project:${moveProjectB}`)).toHaveLength(projectBReadsBeforeAck)
+      expect(moveBindingScopeGets.filter((entry) => entry.scope === `project:${moveProjectB}`).at(-1)).toEqual(projectBReadBeforeAck)
       expect(moveBoundaryRequests).toHaveLength(1)
     } finally {
       moveBindingFixtureEnabled = false
@@ -4531,7 +4733,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(1)
       const frozenRequest = moveBoundaryRequests[0]
 
-      await page.getByRole("link", { name: "Move target beta", exact: true }).click()
+      await openProjectWorkspace(page, moveProjectB)
       await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 })
         .toBe(`/app/project/${moveProjectB}`)
       const projectBDraft = `R195 ${code} keeps Project B mounted`
@@ -4550,14 +4752,12 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
         await page.locator('a[href="/app"]').first().click()
         await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 }).toBe("/app")
       } else {
-        await page.getByRole("link", { name: "Move target alpha", exact: true }).click()
+        await openProjectWorkspace(page, moveProjectA)
         await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 })
           .toBe(`/app/project/${moveProjectA}`)
       }
       if (recoveryProject !== null) {
-        const targetFolderToggle = page.locator(`button[aria-controls="project-children-${encodeURIComponent(recoveryProject)}"]`)
-        if (await targetFolderToggle.getAttribute("aria-expanded") === "false") await targetFolderToggle.click()
-        expect(await targetFolderToggle.getAttribute("aria-expanded")).toBe("true")
+        await expandProjectConversations(page, recoveryProject)
       }
       const recoveryList = page.locator(`[data-conversation-list="${recoveryProject === null ? "direct" : "project-conversation"}"]`)
       const recoveryRow = recoveryList.locator(
@@ -5490,7 +5690,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     const winner = results.find((item) => item.status === 200)!
     expect(winner.headers["x-request-id"]).toMatch(/^[a-f0-9-]{36}$/u)
     await recordProduct(winner)
-    expect((await http(nextPort, "/api/auth/session", "GET", "", { cookie: oldJar })).body).toContain('"authenticated":false')
+    expect((await http(nextPort, "/api/auth/session", "GET", "", { cookie: oldJar })).status).toBe(409)
     const newJar = cookieHeader(csrf, signin, callback, winner)
     expect((await http(nextPort, "/api/auth/session", "GET", "", { cookie: newJar })).body).toContain('"authenticated":true')
     const revokesBeforeStaleSignout = paths.filter((item) => item === "/iam/oauth2/revoke").length
@@ -5508,6 +5708,59 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     expect(signout.body).toContain('"remote_revocation":"confirmed"')
     expect(paths).toContain("/iam/oauth2/revoke")
     expect((await http(nextPort, "/api/auth/session", "GET", "", { cookie: newJar })).body).toContain('"authenticated":false')
+  })
+
+  it("keeps an access-expired Product session in the data-free App shell until explicit CSRF renewal", async () => {
+    const { csrf, signin, jar, location } = await start()
+    const authorize = await http(nextPort, new URL(location).pathname + new URL(location).search)
+    const callback = await http(nextPort, authorize.headers.location as string, "GET", "", { cookie: jar })
+    expect(callback.status).toBe(303)
+    await recordProduct(callback)
+    const cookie = cookieHeader(csrf, signin, callback)
+    const form = `csrfToken=${(JSON.parse(csrf.body) as { csrfToken: string }).csrfToken}`
+    try {
+      refreshResponseOverride = { access_token: "access-rotated", refresh_token: "refresh-rotated", token_type: "Bearer", expires_in: 1 }
+      const short = await http(nextPort, "/api/auth/session", "POST", form,
+        { origin: `http://localhost:${nextPort}`, cookie })
+      expect(short.status).toBe(200)
+      const shortJar = cookieHeader(csrf, signin, callback, short)
+      refreshResponseOverride = undefined
+      await new Promise(resolve => setTimeout(resolve, 1_100))
+      const before = refreshRequests.length
+      const projection = await http(nextPort, "/api/auth/session", "GET", "", { cookie: shortJar })
+      expect(projection.status).toBe(200)
+      expect(JSON.parse(projection.body)).toMatchObject({ authenticated: false, refresh_required: true, subject: "user-one" })
+      expect(projection.headers["set-cookie"]).toBeUndefined()
+      const shell = await http(nextPort, "/app", "GET", "", { cookie: shortJar })
+      expect(shell.status).toBe(200)
+      expect(shell.headers.location).toBeUndefined()
+      expect(refreshRequests).toHaveLength(before)
+      const renewed = await http(nextPort, "/api/auth/session", "POST", form,
+        { origin: `http://localhost:${nextPort}`, cookie: shortJar })
+      expect(renewed.status).toBe(200)
+      expect(refreshRequests).toHaveLength(before + 1)
+      const currentJar = cookieHeader(csrf, signin, callback, short, renewed)
+      expect(JSON.parse((await http(nextPort, "/api/auth/session", "GET", "", { cookie: currentJar })).body)).toMatchObject({ authenticated: true, subject: "user-one" })
+    } finally { refreshResponseOverride = undefined }
+  }, 60_000)
+
+  it("rejects a short refreshed access credential that expires during identity verification", async () => {
+    const { csrf, signin, jar, location } = await start()
+    const authorize = await http(nextPort, new URL(location).pathname + new URL(location).search)
+    const callback = await http(nextPort, authorize.headers.location as string, "GET", "", { cookie: jar })
+    expect(callback.status).toBe(303)
+    await recordProduct(callback)
+    const cookie = cookieHeader(csrf, signin, callback)
+    try {
+      refreshResponseOverride = { access_token: "access-rotated", refresh_token: "refresh-rotated", token_type: "Bearer", expires_in: 1 }
+      identityDelayMs = 1_200
+      const refreshed = await http(nextPort, "/api/auth/session", "POST",
+        `csrfToken=${(JSON.parse(csrf.body) as { csrfToken: string }).csrfToken}`,
+        { origin: `http://localhost:${nextPort}`, cookie })
+      expect(refreshed.status).toBe(503)
+      expect(refreshed.headers["set-cookie"]).toBeUndefined()
+      expect((await http(nextPort, "/api/auth/session", "GET", "", { cookie })).body).toContain('"authenticated":false')
+    } finally { refreshResponseOverride = undefined; identityDelayMs = 0 }
   })
 
   it("revokes the old Product Session when refreshed identity no longer matches the fixed tenant", async () => {
@@ -5570,8 +5823,12 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     expect(confirmed.headers.location).toBe("/login")
     expect(confirmed.body).toBe("")
     const nextLogin = await http(nextPort, confirmed.headers.location as string, "GET", "")
-    expect(nextLogin.status).toBe(302)
-    expect(nextLogin.headers.location).toMatch(new RegExp(`^http://localhost:${nextPort}/iam/oauth2/authorize\\?`, "u"))
+    const nextToken = loginStartCsrf(nextLogin, authSecret)
+    const nextSignin = await http(nextPort, "/api/auth/signin/kokoro-iam", "POST",
+      new URLSearchParams({ csrfToken: nextToken }).toString(), { origin: "null", cookie: cookieHeader(nextLogin) })
+    const nextLocation = providerStartLocation(nextSignin, `http://localhost:${nextPort}`)
+    expect(nextLocation.href).toMatch(new RegExp(`^http://localhost:${nextPort}/iam/oauth2/authorize\\?`, "u"))
+    issuedStates.add(nextLocation.searchParams.get("state")!)
     const issuerAfter = cookieHeader(authorize, get, confirmed)
     expect((await http(nextPort, "/iam/get-session", "GET", "", { cookie: issuerAfter })).body)
       .toContain('"session":null')
@@ -5682,6 +5939,11 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
           next_error_categories: nextErrorCategories(output.slice(outputStart)),
         })}`)
       }
+      expect(paths.filter((item) => item === "/iam/oauth2/token")).toHaveLength(refreshesBefore + 1)
+      const pendingRead = await http(nextPort, "/api/auth/session", "GET", "", { cookie })
+      expect(pendingRead.status, responseDiagnostic("during_refresh_get", pendingRead, outputStart, pathStart)).toBe(409)
+      expect((await http(nextPort, "/api/auth/session", "POST", form,
+        { origin: `http://localhost:${nextPort}`, cookie })).status).toBe(409)
       expect(paths.filter((item) => item === "/iam/oauth2/token")).toHaveLength(refreshesBefore + 1)
       const revokesBefore = paths.filter((item) => item === "/iam/oauth2/revoke").length
       const manifestsBefore = await nextManifestMetadata().catch(() => [{ error_code: "metadata_unavailable" }])
@@ -5824,6 +6086,87 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     expect(paths).toHaveLength(before)
   })
 
+  it.each(["expired callback", "refreshed signin"])("gives %s browser navigation explicit recovery without automatic retry", async scenario => {
+    const target = scenario === "refreshed signin" ? "/api/auth/signin/kokoro-iam"
+      : "/api/auth/callback/kokoro-iam?code=fixture-code&state=stale-state-123456&iss=" + encodeURIComponent(`http://localhost:${nextPort}/iam`)
+    const response = await http(nextPort, target, "GET", "", { accept: "text/html" })
+    expect(response.status).toBe(scenario === "refreshed signin" ? 405 : 403)
+    expect(response.headers["content-type"]).toContain("text/html")
+    expect(response.body).toContain('href="/login"')
+    expect(response.body).not.toContain("<script")
+    expect(response.headers["set-cookie"] ?? []).toEqual([])
+    expect(response.headers["cache-control"]).toContain("no-store")
+    expect(response.headers["referrer-policy"]).toBe("no-referrer")
+    expect(response.headers["content-security-policy"]).toContain("default-src 'none'")
+    expect(response.headers["content-security-policy"]).toMatch(/style-src 'nonce-[A-Za-z0-9_-]+'/u)
+    const styleNonce = response.body.match(/<style nonce="([A-Za-z0-9_-]+)">/u)?.[1]
+    expect(styleNonce).toBeDefined()
+    expect(response.headers["content-security-policy"]).toContain(`style-src 'nonce-${styleNonce}'`)
+    expect(response.body).toContain('<meta name="referrer" content="no-referrer">')
+  })
+
+  it("keeps a newer browser transaction intact when an older admitted callback succeeds", async () => {
+    const older = await start()
+    const authorize = await http(nextPort, new URL(older.location).pathname + new URL(older.location).search)
+    let release!: () => void
+    identityGate = new Promise<void>(resolve => { release = resolve })
+    const held = new Promise<void>(resolve => { onIdentityHeld = resolve })
+    const waiting = http(nextPort, authorize.headers.location as string, "GET", "", { cookie: older.jar })
+    try {
+      await held
+      const newer = await start()
+      identityGate = undefined
+      release()
+      const success = await waiting
+      expect(success.status).toBe(303)
+      await recordProduct(success)
+      const newerJar = cookieHeader(newer.csrf, newer.signin, success)
+      const currentAuthorize = await http(nextPort, new URL(newer.location).pathname + new URL(newer.location).search)
+      const current = await http(nextPort, currentAuthorize.headers.location as string, "GET", "", { cookie: newerJar })
+      expect(current.status, responseDiagnostic("newer_after_older_success", current, 0, 0)).toBe(303)
+      await recordProduct(current)
+    } finally { identityGate = undefined; onIdentityHeld = undefined; release(); await waiting }
+  })
+
+  it("preserves a newer login when an already admitted callback fails during token exchange", async () => {
+    const older = await start()
+    const authorize = await http(nextPort, new URL(older.location).pathname + new URL(older.location).search)
+    let started!: () => void
+    const tokenStarted = new Promise<void>(resolve => { started = resolve })
+    slowResponse = "token"
+    onTokenStarted = started
+    try {
+      const waiting = http(nextPort, authorize.headers.location as string, "GET", "", { cookie: older.jar })
+      await tokenStarted
+      const newer = await start()
+      slowResponse = "none"
+      const failed = await waiting
+      expect(failed.status).toBe(403)
+      expect(failed.headers["set-cookie"] ?? []).toEqual([])
+      const currentAuthorize = await http(nextPort, new URL(newer.location).pathname + new URL(newer.location).search)
+      const current = await http(nextPort, currentAuthorize.headers.location as string, "GET", "", { cookie: cookieHeader(newer.csrf, newer.signin, failed) })
+      expect(current.status).toBe(303)
+      await recordProduct(current)
+    } finally { slowResponse = "none"; onTokenStarted = undefined }
+  }, 12_000)
+
+  it("keeps a newer browser login intact when an older callback is rejected", async () => {
+    const older = await start()
+    const newer = await start()
+    const oldAuthorize = await http(nextPort, new URL(older.location).pathname + new URL(older.location).search)
+    const newAuthorize = await http(nextPort, new URL(newer.location).pathname + new URL(newer.location).search)
+    const before = paths.filter(item => item === "/iam/oauth2/token").length
+    const stale = await http(nextPort, oldAuthorize.headers.location as string, "GET", "", { cookie: newer.jar })
+    expect(stale.status).toBe(403)
+    expect(paths.filter(item => item === "/iam/oauth2/token")).toHaveLength(before)
+    // The browser applies response cookies even for a rejected navigation.
+    expect(stale.headers["set-cookie"] ?? []).toEqual([])
+    const current = await http(nextPort, newAuthorize.headers.location as string, "GET", "", { cookie: cookieHeader(newer.csrf, newer.signin, stale) })
+    expect(current.status).toBe(303)
+    await recordProduct(current)
+    expect(paths.filter(item => item === "/iam/oauth2/token")).toHaveLength(before + 1)
+  })
+
   it("binds state to the RP nonce/PKCE cookies and consumes concurrent callback only once", async () => {
     const { jar, location, state } = await start()
     const authorize = await http(nextPort, new URL(location).pathname + new URL(location).search)
@@ -5863,8 +6206,9 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       const callback = await http(nextPort, authorize.headers.location as string, "GET", "", { cookie: jar })
       expect(callback.status).toBe(403)
       expect(paths.filter((item) => item === "/iam/oauth2/userinfo")).toHaveLength(before)
-      expect((callback.headers["set-cookie"] as string[]).every((cookie) =>
-        !cookie.includes("session-token=") || cookie.includes("Max-Age=0"))).toBe(true)
+      // A rejected callback must neither create a session nor delete another
+      // login's transaction cookies while validation was in flight.
+      expect(callback.headers["set-cookie"] ?? []).toEqual([])
     } finally { invalidIdToken = "none" }
   })
 

@@ -32,10 +32,8 @@ export type ConversationListController = {
   refresh: () => void
   hasMore: boolean
   loadMore: () => void
-  selectConversation: (id: string) => void
   deleteConversation: (id: string) => Promise<boolean>
   renameConversation: (id: string, title: string) => void
-  startNewChat: () => void
 }
 
 export function useConversationList(params: {
@@ -44,7 +42,8 @@ export function useConversationList(params: {
   activeId: string | null
   thread: Thread
   isStreaming: boolean
-  focusComposer: () => void
+  /** False while another scope owns the engine, or its lease/snapshot is not ready. */
+  observeRunStatus?: boolean
   scope?: SessionScope
   archiveRevision?: number
   archiveReceipt?: ArchiveState | null
@@ -53,7 +52,7 @@ export function useConversationList(params: {
   onDeleteConfirmed?: (scope: SessionScope, id: string) => void
 }): ConversationListController {
   const {
-    engine, preview = false, activeId, thread, isStreaming, focusComposer,
+    engine, preview = false, activeId, thread, isStreaming, observeRunStatus = true,
     scope = DIRECT_SESSION_SCOPE, scopeRevision = 0, archiveRevision = 0, archiveReceipt, readBoundary, onDeleteConfirmed,
   } = params
 
@@ -62,7 +61,7 @@ export function useConversationList(params: {
   const currentScopeKey = sessionScopeKey(scope)
   const observedScopeRevisionRef = useRef({ scopeKey: currentScopeKey, revision: scopeRevision, archiveRevision })
   const listClient = browserListClient({ preview })
-  const lifecycleIdentity = useMemo(() => ({ client: listClient, engine, scopeKey: currentScopeKey, identity: readBoundary?.identity, admitted: readBoundary?.admitted ?? true }), [currentScopeKey, listClient, engine, readBoundary?.identity, readBoundary?.admitted])
+  const lifecycleIdentity = useMemo(() => ({ client: listClient, scopeKey: currentScopeKey, identity: readBoundary?.identity, admitted: readBoundary?.admitted ?? true }), [currentScopeKey, listClient, readBoundary?.identity, readBoundary?.admitted])
   type LifecycleToken = { identity: typeof lifecycleIdentity; active: boolean; controllers: Set<AbortController> }
   const lifecycleRef = useRef<LifecycleToken | null>(null)
   type RenameOverlay = { title: string; sequence: number; reconcileAfter: number | null; lifecycle: LifecycleToken }
@@ -107,12 +106,6 @@ export function useConversationList(params: {
     }
   }, [lifecycleIdentity])
 
-  const withOverride = (id: string, title: string): string => {
-    const overlay = titleOverrides[id]
-    if (overlay === undefined || overlay.lifecycle.identity !== lifecycleIdentity) return title
-    return overlay.title
-  }
-
   const requestListRefresh = useCallback((): number => {
     const next = listRefreshRef.current + 1
     listRefreshRef.current = next
@@ -146,42 +139,38 @@ export function useConversationList(params: {
     setArchiveFence(currentArchiveFence)
   }
   const postReceiptPage=sessionList.settledFirstPage?.success===true && sessionList.settledFirstPage.refreshSignal>currentArchiveFence.beforeRefresh
-  const visibleEntries=sessionList.entries.filter(entry=>!(entry.id!==activeId && !postReceiptPage && archiveReceipt?.archived_at!=null && entry.id===archiveReceipt.session_id) && !(entry.id===activeId && archiveState.status==="archived"))
-  const conversations =
-    lifecycleIdentity.admitted && activeId !== null && !activeInList && activeHasContent && (preview || archiveState.synthetic || (readBoundary === undefined && archiveState.status === "unarchived"))
-      ? [
-          { id: activeId, title: withOverride(activeId, thread.meta?.title ?? conversationTitle(thread.messages)) },
-          ...visibleEntries.map((entry) => ({ id: entry.id, title: withOverride(entry.id, entry.title) })),
-        ]
-      : visibleEntries.map((entry) => ({ id: entry.id, title: withOverride(entry.id, entry.title) }))
+  const activeMessages = activeId === null ? null : thread.messages
+  const activeTitle = activeId === null ? undefined : thread.meta?.title
+  const unscopedBoundary = readBoundary === undefined
+  const conversations = useMemo(() => {
+    const withOverride = (id: string, title: string): string => {
+      const overlay = titleOverrides[id]
+      return overlay?.lifecycle.identity === lifecycleIdentity ? overlay.title : title
+    }
+    const visibleEntries = sessionList.entries.filter(entry => !(entry.id !== activeId && !postReceiptPage && archiveReceipt?.archived_at != null && entry.id === archiveReceipt.session_id) && !(entry.id === activeId && archiveState.status === "archived"))
+    const entries = visibleEntries.map(entry => ({ id: entry.id, title: withOverride(entry.id, entry.title) }))
+    return lifecycleIdentity.admitted && activeId !== null && !activeInList && activeHasContent && (preview || archiveState.synthetic || (unscopedBoundary && archiveState.status === "unarchived"))
+      ? [{ id: activeId, title: withOverride(activeId, activeTitle ?? conversationTitle(activeMessages ?? [])) }, ...entries]
+      : entries
+  }, [activeId, activeInList, activeHasContent, lifecycleIdentity, sessionList.entries, activeMessages, activeTitle, titleOverrides, postReceiptPage, archiveReceipt, archiveState.status, archiveState.synthetic, preview, unscopedBoundary])
 
   // run 收尾（streaming→idle 落沿）即刷新清单：首条消息落库后新会话进服务端列表，标题也随之更新。
-  const wasStreamingRef = useRef(false)
+  const observedRunRef = useRef<{ identity: typeof lifecycleIdentity; streaming: boolean } | null>(null)
   useEffect(() => {
-    if (wasStreamingRef.current && !isStreaming) {
+    // Navigation is not a run-completed event. Preserve the last observation
+    // until this exact scope's engine is available again, and never compare
+    // an old subject/scope's stream against another lifecycle's idle state.
+    if (!observeRunStatus) return
+    const previous = observedRunRef.current
+    if (previous?.identity === lifecycleIdentity && previous.streaming && !isStreaming) {
       requestListRefresh()
     }
-    wasStreamingRef.current = isStreaming
-  }, [isStreaming, requestListRefresh])
-
-  const startNewChat = useCallback(() => {
-    // 不清 draft：newConversation 换 activeId 后，草稿 controller 会加载新会话自己的草稿。
-    engine?.newConversation()
-    focusComposer()
-  }, [engine, focusComposer])
+    observedRunRef.current = { identity: lifecycleIdentity, streaming: isStreaming }
+  }, [isStreaming, lifecycleIdentity, observeRunStatus, requestListRefresh])
 
   const refresh = useCallback(() => {
     requestListRefresh()
   }, [requestListRefresh])
-
-  const selectConversation = useCallback(
-    (id: string) => {
-      // 不清 draft：切 activeId 后草稿 controller 加载目标会话草稿（切走的草稿已落盘保留）。
-      engine?.openConversation(id)
-      focusComposer()
-    },
-    [engine, focusComposer],
-  )
 
   const deleteFlight = useRef<{ id: string; lifecycle: LifecycleToken; promise: Promise<boolean> } | null>(null)
   const deleteConversation = useCallback((id: string): Promise<boolean> => {
@@ -278,7 +267,7 @@ export function useConversationList(params: {
     drainRenameQueue(id, queue)
   }, [drainRenameQueue])
 
-  return {
+  return useMemo(() => ({
     archiveStatus: archiveState.status, archiveStateError:archiveState.error, retryArchiveState:archiveState.retry,
     conversations,
     loading: sessionList.loading,
@@ -287,9 +276,8 @@ export function useConversationList(params: {
     refresh,
     hasMore: sessionList.hasMore,
     loadMore: sessionList.loadMore,
-    selectConversation,
     deleteConversation,
     renameConversation,
-    startNewChat,
-  }
+  }), [archiveState.status, archiveState.error, archiveState.retry, conversations, sessionList.loading, sessionList.loadingMore, sessionList.error, sessionList.hasMore,
+    sessionList.loadMore, refresh, deleteConversation, renameConversation])
 }

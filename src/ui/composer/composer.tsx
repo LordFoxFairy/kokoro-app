@@ -15,6 +15,8 @@ import { modeLabelText } from "./mode-options"
 import { useVoiceInput } from "./use-voice-input"
 import styles from "./composer.module.css"
 
+import { SelectedSkillPill, type SelectedSkill } from "./selected-skill-pill"
+
 export const MAX_INPUT_LENGTH = 4000
 
 function resizeComposer(node: HTMLTextAreaElement) {
@@ -43,6 +45,8 @@ export type ComposerProps = {
   modelLocked: boolean
   emptyWorkspace?: boolean
   placeholder?: string
+  selectedSkill?: SelectedSkill | null
+  onRemoveSelectedSkill?: () => void
   leadingActions?: ReactNode
   creationIntent?: CreationIntent
   onCreationIntentDismiss: () => void
@@ -61,7 +65,7 @@ function creationLabel(t: ReturnType<typeof useT>, intent: CreationIntent | unde
   return null
 }
 
-export function Composer({ draft, onDraftChange, onKeyDown, onSubmit, isStreaming, isAwaitingApproval = false, canSend, onStop, composerRef, mode, onModeChange, modeLocked, models, hideModelSelector = false, preferredModelSelector, selectedModel, onModelChange, modelLocked, emptyWorkspace = false, placeholder, leadingActions, creationIntent, onCreationIntentDismiss, environmentLabel = "Desktop", projectWorkspace = false, environmentSelectorPlacement = "controls", voicePreview = false }: ComposerProps) {
+export function Composer({ draft, onDraftChange, onKeyDown, onSubmit, isStreaming, isAwaitingApproval = false, canSend, onStop, composerRef, mode, onModeChange, modeLocked, models, hideModelSelector = false, preferredModelSelector, selectedModel, onModelChange, modelLocked, emptyWorkspace = false, placeholder, leadingActions, selectedSkill, onRemoveSelectedSkill, creationIntent, onCreationIntentDismiss, environmentLabel = "Desktop", projectWorkspace = false, environmentSelectorPlacement = "controls", voicePreview = false }: ComposerProps) {
   const t = useT()
   const showSend = !isStreaming || draft.trim().length > 0
   const modeLabel = modeLabelText(t, mode)
@@ -98,13 +102,28 @@ export function Composer({ draft, onDraftChange, onKeyDown, onSubmit, isStreamin
     if (composerRef.current) resizeComposer(composerRef.current)
   }, [composerRef, draft])
 
+  useEffect(() => {
+    const input = composerRef.current
+    if (!input) return
+    let width = input.clientWidth
+    const observer = new ResizeObserver(() => {
+      const nextWidth = input.clientWidth
+      if (nextWidth === width) return
+      width = nextWidth
+      resizeComposer(input)
+    })
+    observer.observe(input)
+    return () => observer.disconnect()
+  }, [composerRef])
+
   return (
-    <div className={styles.wrap} data-slot="composer-wrap" data-desktop-web="true" data-empty-workspace={emptyWorkspace ? "true" : undefined} data-project-workspace={projectWorkspace ? "true" : undefined} data-creation-intent={creationIntent}>
+    <div className={styles.wrap} data-slot="composer-wrap" data-layout={emptyWorkspace ? "workspace" : "conversation"} data-desktop-web="true" data-empty-workspace={emptyWorkspace ? "true" : undefined} data-project-workspace={projectWorkspace ? "true" : undefined} data-creation-intent={creationIntent}>
       <form className={styles.composer} aria-label={t("composer.editArea")} aria-busy={isStreaming} data-state={isStreaming ? "running" : "idle"} data-voice-state={voiceInput.state === "listening" || voiceInput.state === "transcribing" ? voiceInput.state : undefined} onSubmit={onSubmit}>
         {projectWorkspace && environmentSelectorPlacement === "floating" ? <ComposerEnvironment label={environmentLabel} floating /> : null}
         <Textarea ref={composerRef} className={styles.input} data-slot="composer-input" data-settings-return-target="composer" aria-label={t("composer.inputAria")} placeholder={placeholder ?? t("composer.placeholder")} rows={1} maxLength={MAX_INPUT_LENGTH} value={draft} onChange={(event: ChangeEvent<HTMLTextAreaElement>) => { onDraftChange(event.target.value); resizeComposer(event.currentTarget) }} onKeyDown={onKeyDown} />
         <div className={styles.controls} data-testid="composer-controls" data-slot="composer-controls">
           {leadingActions ? <div className={styles.leadingActions}>{leadingActions}</div> : null}
+          {selectedSkill && onRemoveSelectedSkill ? <SelectedSkillPill skill={selectedSkill} onRemove={onRemoveSelectedSkill} /> : null}
           {(emptyWorkspace || models.length === 0) && environmentSelectorPlacement === "controls" ? <ComposerEnvironment label={environmentLabel} /> : null}
           {creationIntent ? <CreationIntentPill intent={creationIntent} label={creationIntentLabel ?? ""} dismissLabel={t("composer.dismissCreationIntent", { label: creationIntentLabel ?? "" })} onDismiss={onCreationIntentDismiss} /> : null}
           <ComposerSelectors mode={mode} modeLabel={modeLabel} onModeChange={onModeChange} modeLocked={modeLocked} models={models} hideModelSelector={hideModelSelector} currentModel={currentModel} currentSelector={currentSelector} currentModelTriggerLabel={currentModelTriggerLabel} currentModelNewBadgeLabel={currentModelNewBadgeLabel} currentModelTriggerTitle={currentModelTriggerTitle} onModelChange={onModelChange} modelLocked={modelLocked} />

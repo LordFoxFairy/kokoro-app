@@ -58,7 +58,9 @@ export function createPersonalSkillGithubImportFlow(options: { github: ReturnTyp
       update({ kind: "completed", result: { name: name!, repository: repositoryUrl!, skill_id: draft.skill_id, source_ref: draft.source_ref, installation_id: installation.installation_id } })
     } catch (error) {
       if (active !== running) return
-      const uncertain = running.stage !== "preview" && (signal.aborted || !(error instanceof HubClientError) || ["network", "parse", "aborted"].includes(error.reason) || error.code === "skill_command_in_progress")
+      // A valid 5xx can follow a committed draft/checkpoint. HTTP failure is not
+      // evidence that the frozen import/publish/install intent did not commit.
+      const uncertain = running.stage !== "preview" && (signal.aborted || !(error instanceof HubClientError) || ["network", "parse", "aborted"].includes(error.reason) || error.code === "skill_command_in_progress" || (error.reason === "http" && error.status !== null && error.status >= 500))
       update({ kind: uncertain ? "unknown" : "failed", stage: running.stage, ...(draft ? { skillId: draft.skill_id } : {}), ...(error instanceof HubClientError && error.code ? { code: error.code } : {}) })
     } finally { if (active === running) active = undefined }
   }
@@ -66,6 +68,9 @@ export function createPersonalSkillGithubImportFlow(options: { github: ReturnTyp
   return {
     subscribe: (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener) } }, getSnapshot: () => state,
     setAdmitted: (value: boolean) => { admitted = value; if (!value) cancel() }, cancel,
+    // Rechecks retire read-only choices and acknowledged result presentation,
+    // not an unresolved write's immutable selector or command keys.
+    retireRead: () => { cancel(); if (["select", "ready", "completed"].includes(state.kind)) clearIntent() },
     retire: () => { admitted = false; cancel(); clearIntent() },
     finishCompleted: () => { if (state.kind === "completed") clearIntent() },
     preview: async (url: string) => { if (active || state.kind !== "idle" && !(state.kind === "failed" && state.stage === "preview")) return; repositoryUrl = url; await run("preview") },

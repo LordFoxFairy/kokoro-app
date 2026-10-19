@@ -4,12 +4,7 @@ import type {
   ScheduledTaskPatch,
   ScheduledTaskRecord,
 } from "../model/scheduled-task"
-import {
-  insertPreviewTask,
-  removePreviewTask,
-  replacePreviewTask,
-  setPreviewTaskStatus,
-} from "./preview-task-store"
+import { insertPreviewTask, removePreviewTask, replacePreviewTask, setPreviewTaskStatus } from "./preview-task-store"
 import type { ScheduledTaskRuntime } from "./scheduled-task-mode"
 
 export function missingScheduledClientError(): Error {
@@ -24,6 +19,9 @@ function createDraft(value: ScheduledTaskEditorValue, projectId?: string): Sched
     frequency: value.frequency,
     time: value.time,
     timezone: value.timezone,
+    ...(value.frequency === "weekly" ? { weekdays: value.weekdays } : {}),
+    ...(value.frequency === "monthly" ? { monthDays: value.monthDays } : {}),
+    ...(value.frequency === "once" ? { localDate: value.localDate } : {}),
     autoApprove: value.autoApprove,
     ...(typeof value.expiresAt === "string" ? { expiresAt: value.expiresAt } : {}),
   }
@@ -36,6 +34,9 @@ function updatePatch(value: ScheduledTaskEditorValue): ScheduledTaskPatch {
     frequency: value.frequency,
     time: value.time,
     timezone: value.timezone,
+    ...(value.frequency === "weekly" ? { weekdays: value.weekdays } : {}),
+    ...(value.frequency === "monthly" ? { monthDays: value.monthDays } : {}),
+    ...(value.frequency === "once" ? { localDate: value.localDate } : {}),
     ...(value.expiresAt === undefined ? {} : { expiresAt: value.expiresAt }),
     autoApprove: value.autoApprove,
   }
@@ -88,7 +89,7 @@ export async function updateScheduledTaskStatus(
   enabled: boolean,
   reload: () => Promise<void>,
 ): Promise<void> {
-  const patch = { enabled, status: enabled ? "active" as const : "paused" as const }
+  const patch = { enabled, status: enabled ? ("active" as const) : ("paused" as const) }
   if (runtime.mode === "preview") {
     await runtime.handlers.onUpdateTask?.(task.id, patch)
     await setPreviewTaskStatus(task.id, patch.status)

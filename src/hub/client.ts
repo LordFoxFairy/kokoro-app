@@ -1,16 +1,25 @@
+import { projectSkillIdSchema } from "./project-skills.schema";
 // hub self 面 HTTP 客户端：同源 `/api/hub/*` BFF 代理（注入 web-bff 凭据 + 信封 scope/user）。
 // 入站过 Zod，失败以类型化错误上抛；错误体尽力取 hub 错误码（如 hub.skill_required）供 UI 本地化。
 
 import { z, ZodError, type ZodTypeAny } from "zod";
+import { connectorCreationKeySchema } from "./connector-creation-key.schema";
 import { createSkillPublishClient } from "./skill-publish-client";
 import {
   mcpConnectorPageSchema,
   mcpConnectorSchema,
+  mcpConnectorIdSchema,
+  mcpPrivateServerMatches,
+  mcpConnectorMatches,
+  mcpConnectorCommandRequestSchemas,
   mcpConnectorErrorAllowed,
   mcpConnectorErrorSchema,
   mcpConnectorProviderPageSchema,
+  mcpConnectorProviderSchema,
+  type McpConnectorProvider,
   mcpPrivateServerRegistrationInputSchema,
   mcpPrivateServerRegistrationSchema,
+  mcpPrivateJsonImportMatches,
   mcpPrivateJsonImportInputSchema,
   mcpPrivateJsonImportSchema,
   mcpPrivateServerPrepareInputSchema,
@@ -39,7 +48,6 @@ import {
 } from "./mcp-connector.schema";
 import {
   mcpConnectorAuthorizationDataSchemas,
-  mcpConnectorAuthorizationErrorAllowed,
   type McpConnectorAuthorizationCallback,
   type McpConnectorAuthorizationCompleted,
   type McpConnectorAuthorizationInput,
@@ -49,9 +57,12 @@ import {
   type McpConnectorCreateConnectionInput,
 } from "./mcp-connector-authorization.schema";
 import {
+  customApiProfileSchema,
   customApiCreateInputSchema,
   customApiCreateSchema,
   customApiErrorSchema,
+  customApiErrorAllowed,
+  type CustomApiOperation,
   customApiGetSchema,
   customApiPageSchema,
   customApiRemoveInputSchema,
@@ -69,6 +80,8 @@ import {
   installationIdSchema,
   installationKeySchema,
   installationSourceSchema,
+  installationUpdateRequestSchema,
+  type InstallationUpdateRequest,
   installationListQuerySchema,
   installationReceiptMatches,
   installationResponseSchema,
@@ -514,7 +527,9 @@ async function requestMcpConnector<T extends ZodTypeAny>(
     | McpConnectorAuthorizationOperation
     | McpPrivateServerOperation
     | "connectors"
-    | "providers",
+    | "connector"
+    | "providers"
+    | "provider",
   path: string,
   schema: T,
   init?: RequestInit,
@@ -646,7 +661,7 @@ async function requestMcpConnector<T extends ZodTypeAny>(
           ? "connector"
           : operation;
     const errorAllowed = authorizationOperation
-      ? mcpConnectorAuthorizationErrorAllowed(response.status, parsed.data)
+      ? mcpConnectorErrorAllowed("authorization", response.status, parsed.data)
       : mcpConnectorErrorAllowed(
           connectorOperation as
             | McpConnectorCommandOperation
@@ -694,6 +709,7 @@ const JSON_HEADERS = { "content-type": "application/json" } as const;
 
 /** A separate BFF product boundary for the Custom API aggregate. */
 async function requestCustomApi<T extends ZodTypeAny>(
+  operation: CustomApiOperation,
   path: string,
   schema: T,
   init?: RequestInit,
@@ -734,7 +750,7 @@ async function requestCustomApi<T extends ZodTypeAny>(
         response.status,
       );
     const raw = (await response.json()) as unknown;
-    if (response.status === 201 || response.status === 200) {
+    if (response.status === (operation === "create" ? 201 : 200)) {
       const parsed = z.object({ data: schema }).strict().safeParse(raw);
       if (!parsed.success)
         throw new HubClientError(
@@ -746,7 +762,7 @@ async function requestCustomApi<T extends ZodTypeAny>(
       return parsed.data.data;
     }
     const parsed = customApiErrorSchema.safeParse(raw);
-    if (!parsed.success)
+    if (!parsed.success || !customApiErrorAllowed(operation, response.status, raw))
       throw new HubClientError(
         "parse",
         "invalid Custom API error",
@@ -818,13 +834,16 @@ export type HubClient = {
     },
     signal?: AbortSignal,
   ) => Promise<McpConnectorProviderPage>;
+  getMcpConnectorProvider: (providerKey: string, signal?: AbortSignal) => Promise<McpConnectorProvider>;
   createMcpConnector: (
     input: McpConnectorCreateInput,
+    key: string,
     signal?: AbortSignal,
   ) => Promise<McpConnector>;
   /** Distinct owner aggregate; custom API secrets never enter any MCP route. */
   createCustomApi?: (
     input: CustomApiCreateInput,
+    key: string,
     signal?: AbortSignal,
   ) => Promise<CustomApiProfile>;
   listCustomApis?: (
@@ -838,19 +857,24 @@ export type HubClient = {
   updateCustomApi?: (
     profileId: string,
     input: CustomApiUpdateInput,
+    key: string,
     signal?: AbortSignal,
   ) => Promise<CustomApiProfile>;
   removeCustomApi?: (
     profileId: string,
     input: CustomApiRemoveInput,
+    key: string,
     signal?: AbortSignal,
   ) => Promise<void>;
+  getMcpConnector?: (connectorId: string, signal?: AbortSignal) => Promise<McpConnector>;
   registerPrivateMcpServer?: (
     input: McpPrivateServerRegistrationInput,
+    key: string,
     signal?: AbortSignal,
   ) => Promise<McpPrivateServerRegistration>;
   importPrivateMcpJson?: (
     configJson: string,
+    key: string,
     signal?: AbortSignal,
   ) => Promise<McpPrivateJsonImport>;
   getPrivateMcpServer?: (
@@ -860,31 +884,37 @@ export type HubClient = {
   preparePrivateMcpServer?: (
     serverId: string,
     expectedStateVersion: string,
+    key: string,
     signal?: AbortSignal,
   ) => Promise<McpPrivateServerPrepare>;
   updatePrivateMcpServer?: (
     serverId: string,
     input: McpPrivateServerUpdateInput,
+    key: string,
     signal?: AbortSignal,
   ) => Promise<McpPrivateServerUpdate>;
   deletePrivateMcpServer?: (
     serverId: string,
     expectedStateVersion: string,
+    key: string,
     signal?: AbortSignal,
   ) => Promise<McpPrivateServerDeletion>;
   updateMcpConnector: (
     connectorId: string,
     input: McpConnectorUpdateInput,
+    key: string,
     signal?: AbortSignal,
   ) => Promise<McpConnector>;
   setMcpConnectorEnabled: (
     connectorId: string,
     input: McpConnectorEnabledInput,
+    key: string,
     signal?: AbortSignal,
   ) => Promise<McpConnector>;
   removeMcpConnector: (
     connectorId: string,
     input: McpConnectorRemoveInput,
+    key: string,
     signal?: AbortSignal,
   ) => Promise<McpConnector>;
   beginMcpConnectorAuthorization: (
@@ -983,38 +1013,54 @@ export function createHubClient(): HubClient {
         signal,
       );
     },
-    createMcpConnector: async (input, signal) =>
-      (
-        await requestMcpConnector(
-          "create",
-          "/mcp/connectors",
-          z.object({ connector: mcpConnectorSchema }).strict(),
-          {
-            method: "POST",
-            headers: idempotencyHeaders("mcp-connector", { ...JSON_HEADERS }),
-            body: JSON.stringify(input),
-          },
-          signal,
-        )
-      ).connector,
-    createCustomApi: async (input, signal) =>
-      (
+    getMcpConnectorProvider: async (providerKey, signal) => {
+      if (!/^[a-z0-9][a-z0-9._-]{0,63}$/u.test(providerKey)) throw new HubClientError("parse", "invalid provider key", null, null);
+      const result = await requestMcpConnector("provider", `/mcp/providers/${encodeURIComponent(providerKey)}`,
+        z.object({ provider: mcpConnectorProviderSchema }).strict(), undefined, signal);
+      if (result.provider.provider_key !== providerKey) throw new HubClientError("parse", "provider identity mismatch", null, null);
+      return result.provider;
+    },
+    createMcpConnector: async (input, key, signal) => {
+      const body = mcpConnectorCommandRequestSchemas.create.parse(input);
+      const result = await requestMcpConnector("create", "/mcp/connectors",
+        z.object({ connector: mcpConnectorSchema }).strict(), {
+          method: "POST",
+          headers: { ...JSON_HEADERS, "Idempotency-Key": connectorCreationKeySchema.parse(key) },
+          body: JSON.stringify(body),
+        }, signal);
+      if (!mcpConnectorMatches("create", { data: result }, undefined, new URLSearchParams(), body))
+        throw new HubClientError("parse", "MCP creation binding mismatch", null, null);
+      return result.connector;
+    },
+    createCustomApi: async (input, key, signal) => {
+      const body = customApiCreateInputSchema.parse(input);
+      const profile = (
         await requestCustomApi(
+          "create",
           "/connectors/custom-apis",
           customApiCreateSchema,
           {
             method: "POST",
-            headers: idempotencyHeaders("custom-api", { ...JSON_HEADERS }),
-            body: JSON.stringify(customApiCreateInputSchema.parse(input)),
+            headers: { ...JSON_HEADERS, "Idempotency-Key": connectorCreationKeySchema.parse(key) },
+            body: JSON.stringify(body),
           },
           signal,
         )
-      ).custom_api,
+      ).custom_api;
+      const names = body.environment.map(value => value.name).sort();
+      const received = profile.environment.map(value => value.name).sort();
+      if (profile.name !== body.name || profile.instructions !== body.instructions ||
+        names.length !== received.length || names.some((name, index) => name !== received[index]) ||
+        profile.environment.some(value => !value.configured))
+        throw new HubClientError("parse", "Custom API creation ACK binding mismatch", null, null);
+      return profile;
+    },
     listCustomApis: (query = {}, signal) => {
       const search = new URLSearchParams();
       if (query.limit !== undefined) search.set("limit", String(query.limit));
       if (query.cursor !== undefined) search.set("cursor", query.cursor);
       return requestCustomApi(
+        "list",
         `/connectors/custom-apis${search.size === 0 ? "" : `?${search}`}`,
         customApiPageSchema,
         undefined,
@@ -1024,69 +1070,81 @@ export function createHubClient(): HubClient {
     getCustomApi: async (profileId, signal) =>
       (
         await requestCustomApi(
+          "get",
           `/connectors/custom-apis/${encodeURIComponent(profileId)}`,
           customApiGetSchema,
           undefined,
           signal,
         )
       ).custom_api,
-    updateCustomApi: async (profileId, input, signal) =>
-      (
-        await requestCustomApi(
-          `/connectors/custom-apis/${encodeURIComponent(profileId)}`,
-          customApiUpdateSchema,
-          {
-            method: "PATCH",
-            headers: idempotencyHeaders("custom-api", { ...JSON_HEADERS }),
-            body: JSON.stringify(customApiUpdateInputSchema.parse(input)),
-          },
-          signal,
-        )
-      ).custom_api,
-    removeCustomApi: async (profileId, input, signal) => {
-      await requestCustomApi(
-        `/connectors/custom-apis/${encodeURIComponent(profileId)}`,
-        customApiRemoveSchema,
-        {
-          method: "DELETE",
-          headers: idempotencyHeaders("custom-api", { ...JSON_HEADERS }),
-          body: JSON.stringify(customApiRemoveInputSchema.parse(input)),
-        },
-        signal,
-      );
+    updateCustomApi: async (profileId, input, key, signal) => {
+      const id = customApiProfileSchema.shape.profile_id.parse(profileId);
+      const body = customApiUpdateInputSchema.parse(input);
+      const profile = (await requestCustomApi(
+        "update", `/connectors/custom-apis/${encodeURIComponent(id)}`, customApiUpdateSchema,
+        { method: "PATCH", headers: { ...JSON_HEADERS, "Idempotency-Key": connectorCreationKeySchema.parse(key) }, body: JSON.stringify(body) }, signal,
+      )).custom_api;
+      const environment = new Map(profile.environment.map(item => [item.name, item]));
+      if (profile.profile_id !== id || environment.size !== profile.environment.length ||
+        (body.name !== undefined && profile.name !== body.name) ||
+        (body.instructions !== undefined && profile.instructions !== body.instructions) ||
+        (body.clear_instructions === true && profile.instructions !== undefined) ||
+        (body.environment_upserts ?? []).some(item => environment.get(item.name)?.configured !== true) ||
+        (body.environment_removals ?? []).some(name => environment.has(name)))
+        throw new HubClientError("parse", "Custom API update ACK binding mismatch", null, null);
+      return profile;
     },
-    registerPrivateMcpServer: (input, signal) =>
+    removeCustomApi: async (profileId, input, key, signal) => {
+      const id = customApiProfileSchema.shape.profile_id.parse(profileId);
+      const result = await requestCustomApi(
+        "remove", `/connectors/custom-apis/${encodeURIComponent(id)}`, customApiRemoveSchema,
+        { method: "DELETE", headers: { ...JSON_HEADERS, "Idempotency-Key": connectorCreationKeySchema.parse(key) }, body: JSON.stringify(customApiRemoveInputSchema.parse(input)) }, signal,
+      );
+      if (result.profile_id !== id) throw new HubClientError("parse", "Custom API removal ACK binding mismatch", null, null);
+    },
+    getMcpConnector: async (connectorId, signal) => {
+      const id = mcpConnectorIdSchema.parse(connectorId);
+      const result = await requestMcpConnector("connector", `/mcp/connectors/${encodeURIComponent(id)}`,
+        z.object({ connector: mcpConnectorSchema }).strict(), undefined, signal);
+      if (result.connector.connector_id !== id) throw new HubClientError("parse", "MCP connector locator mismatch", null, null);
+      return result.connector;
+    },
+    registerPrivateMcpServer: async (input, key, signal) =>
       requestMcpConnector(
         "registerServer",
         "/mcp/servers",
         mcpPrivateServerRegistrationSchema,
         {
           method: "POST",
-          headers: idempotencyHeaders("mcp-private-server", {
-            ...JSON_HEADERS,
-          }),
+          headers: { ...JSON_HEADERS, "Idempotency-Key": connectorCreationKeySchema.parse(key) },
           body: JSON.stringify(
             mcpPrivateServerRegistrationInputSchema.parse(input),
           ),
         },
         signal,
-      ),
-    importPrivateMcpJson: (configJson, signal) =>
+      ).then(result => {
+        if (!mcpPrivateServerMatches("registerServer", { data: result }, undefined, input))
+          throw new HubClientError("parse", "MCP registration ACK binding mismatch", null, null);
+        return result;
+      }),
+    importPrivateMcpJson: async (configJson, key, signal) =>
       requestMcpConnector(
         "importJson",
         "/mcp/servers/import",
         mcpPrivateJsonImportSchema,
         {
           method: "POST",
-          headers: idempotencyHeaders("mcp-private-import", {
-            ...JSON_HEADERS,
-          }),
+          headers: { ...JSON_HEADERS, "Idempotency-Key": connectorCreationKeySchema.parse(key) },
           body: JSON.stringify(
             mcpPrivateJsonImportInputSchema.parse({ config_json: configJson }),
           ),
         },
         signal,
-      ),
+      ).then(result => {
+        if (!mcpPrivateJsonImportMatches({ data: result }, { config_json: configJson }))
+          throw new HubClientError("parse", "MCP JSON import ACK binding mismatch", null, null);
+        return result;
+      }),
     getPrivateMcpServer: async (serverId, signal) =>
       (
         await requestMcpConnector(
@@ -1097,16 +1155,14 @@ export function createHubClient(): HubClient {
           signal,
         )
       ).server,
-    preparePrivateMcpServer: (serverId, expectedStateVersion, signal) =>
+    preparePrivateMcpServer: async (serverId, expectedStateVersion, key, signal) =>
       requestMcpConnector(
         "prepareServer",
         `/mcp/servers/${encodeURIComponent(serverId)}/prepare`,
         mcpPrivateServerPrepareSchema,
         {
           method: "POST",
-          headers: idempotencyHeaders("mcp-private-server", {
-            ...JSON_HEADERS,
-          }),
+          headers: { ...JSON_HEADERS, "Idempotency-Key": connectorCreationKeySchema.parse(key) },
           body: JSON.stringify(
             mcpPrivateServerPrepareInputSchema.parse({
               expected_state_version: expectedStateVersion,
@@ -1114,81 +1170,51 @@ export function createHubClient(): HubClient {
           ),
         },
         signal,
-      ),
-    updatePrivateMcpServer: (serverId, input, signal) =>
-      requestMcpConnector(
-        "updateServer",
-        `/mcp/servers/${encodeURIComponent(serverId)}`,
-        mcpPrivateServerUpdateSchema,
-        {
-          method: "PATCH",
-          headers: idempotencyHeaders("mcp-private-server", {
-            ...JSON_HEADERS,
-          }),
-          body: JSON.stringify(mcpPrivateServerUpdateInputSchema.parse(input)),
-        },
-        signal,
-      ),
-    deletePrivateMcpServer: (serverId, expectedStateVersion, signal) =>
-      requestMcpConnector(
-        "deleteServer",
-        `/mcp/servers/${encodeURIComponent(serverId)}`,
-        mcpPrivateServerDeletionSchema,
-        {
-          method: "DELETE",
-          headers: idempotencyHeaders("mcp-private-server", {
-            ...JSON_HEADERS,
-          }),
-          body: JSON.stringify(
-            mcpPrivateServerPrepareInputSchema.parse({
-              expected_state_version: expectedStateVersion,
-            }),
-          ),
-        },
-        signal,
-      ),
-    updateMcpConnector: async (connectorId, input, signal) =>
-      (
-        await requestMcpConnector(
-          "update",
-          `/mcp/connectors/${encodeURIComponent(connectorId)}`,
-          z.object({ connector: mcpConnectorSchema }).strict(),
-          {
-            method: "PATCH",
-            headers: idempotencyHeaders("mcp-connector", { ...JSON_HEADERS }),
-            body: JSON.stringify(input),
-          },
-          signal,
-        )
-      ).connector,
-    setMcpConnectorEnabled: async (connectorId, input, signal) =>
-      (
-        await requestMcpConnector(
-          "enabled",
-          `/mcp/connectors/${encodeURIComponent(connectorId)}/enabled`,
-          z.object({ connector: mcpConnectorSchema }).strict(),
-          {
-            method: "PUT",
-            headers: idempotencyHeaders("mcp-connector", { ...JSON_HEADERS }),
-            body: JSON.stringify(input),
-          },
-          signal,
-        )
-      ).connector,
-    removeMcpConnector: async (connectorId, input, signal) =>
-      (
-        await requestMcpConnector(
-          "remove",
-          `/mcp/connectors/${encodeURIComponent(connectorId)}`,
-          z.object({ connector: mcpConnectorSchema }).strict(),
-          {
-            method: "DELETE",
-            headers: idempotencyHeaders("mcp-connector", { ...JSON_HEADERS }),
-            body: JSON.stringify(input),
-          },
-          signal,
-        )
-      ).connector,
+      ).then(result => {
+        if (!mcpPrivateServerMatches("prepareServer", { data: result }, serverId, { expected_state_version: expectedStateVersion }))
+          throw new HubClientError("parse", "MCP preparation ACK binding mismatch", null, null);
+        return result;
+      }),
+    updatePrivateMcpServer: async (serverId, input, key, signal) => {
+      const id = mcpConnectorIdSchema.parse(serverId), body = mcpPrivateServerUpdateInputSchema.parse(input);
+      const result = await requestMcpConnector("updateServer", `/mcp/servers/${encodeURIComponent(id)}`, mcpPrivateServerUpdateSchema,
+        { method: "PATCH", headers: { ...JSON_HEADERS, "Idempotency-Key": connectorCreationKeySchema.parse(key) }, body: JSON.stringify(body) }, signal);
+      if (!mcpPrivateServerMatches("updateServer", { data: result }, id, body))
+        throw new HubClientError("parse", "MCP update ACK binding mismatch", null, null);
+      return result;
+    },
+    deletePrivateMcpServer: async (serverId, expectedStateVersion, key, signal) => {
+      const id = mcpConnectorIdSchema.parse(serverId), body = mcpPrivateServerPrepareInputSchema.parse({ expected_state_version: expectedStateVersion });
+      const result = await requestMcpConnector("deleteServer", `/mcp/servers/${encodeURIComponent(id)}`, mcpPrivateServerDeletionSchema,
+        { method: "DELETE", headers: { ...JSON_HEADERS, "Idempotency-Key": connectorCreationKeySchema.parse(key) }, body: JSON.stringify(body) }, signal);
+      if (!mcpPrivateServerMatches("deleteServer", { data: result }, id, body))
+        throw new HubClientError("parse", "MCP deletion ACK binding mismatch", null, null);
+      return result;
+    },
+    updateMcpConnector: async (connectorId, input, key, signal) => {
+      const id = mcpConnectorIdSchema.parse(connectorId), body = mcpConnectorCommandRequestSchemas.update.parse(input);
+      const result = await requestMcpConnector("update", `/mcp/connectors/${encodeURIComponent(id)}`, z.object({ connector: mcpConnectorSchema }).strict(),
+        { method: "PATCH", headers: { ...JSON_HEADERS, "Idempotency-Key": connectorCreationKeySchema.parse(key) }, body: JSON.stringify(body) }, signal);
+      if (!mcpConnectorMatches("update", { data: result }, id, new URLSearchParams(), body))
+        throw new HubClientError("parse", "MCP update ACK binding mismatch", null, null);
+      return result.connector;
+    },
+    setMcpConnectorEnabled: async (connectorId, input, key, signal) => {
+      const id = mcpConnectorIdSchema.parse(connectorId), body = mcpConnectorCommandRequestSchemas.enabled.parse(input);
+      const result = await requestMcpConnector("enabled", `/mcp/connectors/${encodeURIComponent(id)}/enabled`, z.object({ connector: mcpConnectorSchema }).strict(),
+        { method: "PUT", headers: { ...JSON_HEADERS, "Idempotency-Key": connectorCreationKeySchema.parse(key) }, body: JSON.stringify(body) }, signal);
+      if (!mcpConnectorMatches("enabled", { data: result }, id, new URLSearchParams(), body))
+        throw new HubClientError("parse", "MCP enabled ACK binding mismatch", null, null);
+      return result.connector;
+    },
+    removeMcpConnector: async (connectorId, input, key, signal) => {
+      const id = mcpConnectorIdSchema.parse(connectorId), body = mcpConnectorCommandRequestSchemas.remove.parse(input);
+      const result = await requestMcpConnector("remove", `/mcp/connectors/${encodeURIComponent(id)}`, z.object({ connector: mcpConnectorSchema }).strict(),
+        { method: "DELETE", headers: { ...JSON_HEADERS, "Idempotency-Key": connectorCreationKeySchema.parse(key) }, body: JSON.stringify(body) }, signal);
+      if (!mcpConnectorMatches("remove", { data: result }, id, new URLSearchParams(), body))
+        throw new HubClientError("parse", "MCP remove ACK binding mismatch", null, null);
+      return result.connector;
+    },
     beginMcpConnectorAuthorization: (connectorId, input, signal) =>
       requestMcpConnector(
         "beginAuthorization",
@@ -1285,6 +1311,7 @@ export function createHubClient(): HubClient {
 }
 
 export type SkillInstallationClient = {
+  update: (id: string, input: InstallationUpdateRequest, key: string, signal?: AbortSignal) => Promise<InstallationReceipt>;
   list: (
     query?: InstallationListQuery,
     signal?: AbortSignal,
@@ -1308,8 +1335,9 @@ export type SkillInstallationClient = {
   ) => Promise<InstallationReceipt>;
 };
 
-export function createSkillInstallationClient(): SkillInstallationClient {
-  const base = "/api/hub/self/skill-installations";
+export function createSkillInstallationClient(target?: Readonly<{ projectId: string }>): SkillInstallationClient {
+  const base = target === undefined ? "/api/hub/self/skill-installations"
+    : `/api/hub/projects/${encodeURIComponent(projectSkillIdSchema.parse(target.projectId))}/skill-installations`;
   const idPath = (id: string) =>
     `${base}/${encodeURIComponent(installationIdSchema.parse(id))}`;
   const commandHeaders = (key: string, json: boolean) => ({
@@ -1518,6 +1546,13 @@ export function createSkillInstallationClient(): SkillInstallationClient {
     return value;
   };
   return {
+    update: async (id, input, key, signal) => {
+      const body = installationUpdateRequestSchema.parse(input);
+      const result = await request("update", `${idPath(id)}/update`, { method: "POST", headers: commandHeaders(key, true), body: JSON.stringify(body) }, signal);
+      if (!("installation" in result.data) || !installationReceiptMatches("update", result.data, id, undefined, body.source_ref))
+        throw new HubClientError("parse", "Installation update receipt mismatch", null, 200);
+      return result.data;
+    },
     list: async (query = {}, signal) => {
       const input = installationListQuerySchema.parse(query);
       const search = new URLSearchParams();

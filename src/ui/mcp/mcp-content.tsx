@@ -23,24 +23,17 @@ export type McpContentProps = {
 };
 
 export function McpContent(props: McpContentProps) {
-  // Preview uses the identical v1 projection with an injected client. Live
-  // product rendering still requires an admitted subject and has no fallback.
-  // A generation fences pending reads while admission is revalidated; it is
-  // not a new user identity. Re-keying a cached projection for every periodic
-  // session check remounts this surface and sends duplicate provider/connector
-  // reads even when the verified subject did not change. Admission=false still
-  // unmounts immediately, so a revocation never renders a cached projection.
-  const identity = props.preview
-    ? "preview"
-    : props.readBoundary?.admitted && props.readBoundary.subject !== null
-      ? props.readBoundary.subject
-      : null;
+  // Intent belongs to the last verified actor, not a temporary read admission.
+  // The reader separately retires facts and commands on each auth generation.
+  const identity = props.preview ? "preview" : props.readBoundary?.subject ?? null;
   if (identity === null) return null;
   return (
     <McpProjectionScope
       client={props.client}
       embedded={props.embedded ?? false}
       identity={identity}
+      admitted={props.preview === true || props.readBoundary?.admitted === true}
+      readGeneration={props.preview ? 0 : props.readBoundary?.generation ?? 0}
       initialView={props.initialView ?? "catalog"}
       settingsLayout={props.settingsLayout ?? false}
       refreshKey={props.refreshKey ?? 0}
@@ -56,6 +49,8 @@ function McpProjectionScope({
   client,
   embedded,
   identity,
+  admitted,
+  readGeneration,
   brandName,
   onCreateMcp,
   initialView,
@@ -65,6 +60,8 @@ function McpProjectionScope({
   client: HubClient;
   embedded: boolean;
   identity: string;
+  admitted: boolean;
+  readGeneration: number;
   brandName?: string;
   onCreateMcp?: (
     mode: McpCreateMode,
@@ -81,6 +78,8 @@ function McpProjectionScope({
   return (
     <McpProjectionRead
       key={identity}
+      admitted={admitted}
+      readGeneration={readGeneration}
       client={client}
       embedded={embedded}
       identity={identity}

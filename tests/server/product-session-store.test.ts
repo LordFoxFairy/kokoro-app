@@ -3,7 +3,7 @@ import { createHash } from "node:crypto"
 import { createClient } from "redis"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 
-import { createSession, finalizeRefresh, inspectSession, reserveRefresh, tombstoneSession } from "@/lib/server/product-session-store"
+import { createSession, finalizeRefresh, inspectSession, inspectSessionState, reserveRefresh, tombstoneSession } from "@/lib/server/product-session-store"
 
 const redisUrl = process.env.KOKORO_WEB_REDIS_URL ?? "redis://127.0.0.1:6379/9"
 const webOrigin = "http://product-session-store.fixture"
@@ -99,19 +99,42 @@ describe("Product Session Redis double-CAS", () => {
       expect(raw).not.toContain("refresh-secret-do-not-leak")
       expect(`${prefix}${id}`).not.toContain("refresh-secret-do-not-leak")
     } finally { client.destroy() }
+    expect(await inspectSessionState(config, id, 0)).toBe("active")
     const [one, two] = await Promise.all([reserveRefresh(config, id, 0), reserveRefresh(config, id, 0)])
     expect([one, two].filter((item) => item !== null)).toHaveLength(1)
     expect([one, two].find((item) => item !== null)?.refresh).toBe("refresh-secret-do-not-leak")
     expect(await inspectSession(config, id, 0)).toBe(false)
+    expect(await inspectSessionState(config, id, 0)).toBe("refreshing")
     const winner = one ?? two
     expect(winner).not.toBeNull()
     expect(await finalizeRefresh(config, id, 0, winner!.reservation, "rotated-refresh")).toBe(true)
     expect(await inspectSession(config, id, 0)).toBe(false)
     expect(await inspectSession(config, id, 1)).toBe(true)
+    expect(await inspectSessionState(config, id, 0)).toBe("stale")
+    expect(await inspectSessionState(config, id, 2)).toBe("stale")
     const taken = await tombstoneSession(config, id, 1)
     expect(taken).toEqual({ status: "active", refresh: "rotated-refresh" })
+    expect(await inspectSessionState(config, id, 1)).toBe("absent")
     expect(await inspectSession(config, id, 1)).toBe(false)
     expect(await tombstoneSession(config, id, 1)).toEqual({ status: "repeat" })
+  })
+
+  it("does not steal an expired refresh reservation and treats damaged records as unavailable", async () => {
+    const id = await newSession()
+    await reserveRefresh(config, id, 0)
+    const client = createClient({ url: redisUrl, socket: { connectTimeout: 500, reconnectStrategy: false } })
+    client.on("error", () => undefined)
+    try {
+      await client.connect()
+      const pending = JSON.parse((await client.get(`${prefix}${id}`))!) as Record<string, unknown>
+      await client.set(`${prefix}${id}`, JSON.stringify({ ...pending, deadline: Date.now() - 1 }), { KEEPTTL: true })
+      expect(await inspectSessionState(config, id, 0)).toBe("unconfirmed")
+      expect(await inspectSession(config, id, 0)).toBe(false)
+      expect(await reserveRefresh(config, id, 0)).toBeNull()
+      expect(await client.exists(`${prefix}${id}`)).toBe(1)
+      await client.set(`${prefix}${id}`, JSON.stringify({ ...pending, state: "unexpected" }), { KEEPTTL: true })
+      await expect(inspectSessionState(config, id, 0)).rejects.toThrow("invalid Product Session record")
+    } finally { client.destroy() }
   })
 
   it("tombstones pending without exposing or revoking its possibly stale refresh", async () => {

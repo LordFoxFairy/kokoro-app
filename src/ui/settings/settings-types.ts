@@ -6,6 +6,12 @@ export type SettingsTab =
   | "shortcuts"
   | "credits"
   | "subscription"
+  | "mail"
+  | "email"
+  | "phone"
+  | "wallet"
+  | "integration"
+  | "developer"
   | "skills"
   | "mcp"
   | "team"
@@ -20,6 +26,12 @@ export const SETTINGS_TABS: readonly SettingsTab[] = [
   "shortcuts",
   "credits",
   "subscription",
+  "mail",
+  "email",
+  "phone",
+  "wallet",
+  "integration",
+  "developer",
   "skills",
   "mcp",
   "team",

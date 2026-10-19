@@ -14,3 +14,9 @@
 ## 陷阱
 - 注册表是单活跃流下唯一的跨会话待批来源：切走后活跃会话变了但徽标保留。
 - 原 awaiting-notify.ts 系统投递已删除；badge/title 不授权系统提醒。真实任务投递由 engine/task-notification.ts 与 shell/use-task-notifications.ts 负责。
+
+- 系统通知仅在「新进入待批」时弹一次，重渲染不重复弹。
+
+## 枚举输入的值边界
+- `input-schema.ts` 对单选枚举保留 owner 原始选项，包括首尾空格；不将选项按普通文本裁剪。
+- `InputCard` 的 submit 与工具参数 edit 共用该转换；普通文本裁剪、数字解析和后端 JSON Schema 校验保持原行为。

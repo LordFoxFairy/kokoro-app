@@ -134,6 +134,12 @@ describe("checked-in HTTP request and response contracts", () => {
     expect(messageCreateParamsSchema.parse(input)).toEqual(input)
   })
 
+  it("keeps omitted selection distinct from explicit empty in the current message contract", () => {
+    const input={idempotency_key:"selection",content:"hello",project_ref:"project_a"}
+    expect(messageCreateParamsSchema.parse(input)).not.toHaveProperty("selected_skill_source_refs")
+    expect(messageCreateParamsSchema.parse({...input,selected_skill_source_refs:[]})).toHaveProperty("selected_skill_source_refs",[])
+  })
+
   it("accepts the canonical message request and rejects missing/unknown fields", () => {
     expect(
       messageCreateParamsSchema.parse({
@@ -680,6 +686,8 @@ async function r76PublicSpec() {
           required: string[]
           additionalProperties: boolean
           properties: Record<string, { type: string | string[]; format?: string; minLength?: number; pattern?: string }>
+          oneOf?: unknown[]
+          allOf?: unknown[]
         }
       >
       parameters: Record<
@@ -713,14 +721,26 @@ async function r76PublicSpec() {
   return { bytes, spec }
 }
 
-describe("R255 ScheduledTask owner recurrence graph under the public14.5 pin", () => {
-  it("consumes the exact locally accepted public14.5 canonical bytes", async () => {
+describe("R255 ScheduledTask owner recurrence graph under the current public pin", () => {
+  it("consumes the exact locally accepted current canonical bytes", async () => {
     const { bytes, spec } = await r76PublicSpec()
-    expect(r76Hash("sha256").update(bytes).digest("hex")).toBe("b4e91483e425fdcc9547eac8bcda554273cbee0863ccb0ddfb185fae18e4e267")
-    expect(spec.info.version).toBe("16.0.0")
+    expect(r76Hash("sha256").update(bytes).digest("hex")).toBe("955412b680bf7a2529c4c35f553ff272d7361769ea95bb441ba820b552ffc564")
+    expect(spec.info.version).toBe("19.0.0")
   })
 
-  it("requires a present nullable owner next run while create accepts only an optional recurrence anchor", async () => {
+  it("publishes current rule details separately from immutable command snapshots", async () => {
+    const schemas = (await r76PublicSpec()).spec.components.schemas
+    expect(schemas.ScheduledTaskDetails).toMatchObject({
+      allOf: [{ $ref: "#/components/schemas/ScheduledTask" }],
+      required: ["scheduling_state"],
+    })
+    expect(schemas.ScheduledTask!.properties.recurrence_anchor_at).toBeUndefined()
+    expect(schemas.ScheduledTaskListResponse).toMatchObject({ properties: { data: { properties: { tasks: { items: { $ref: "#/components/schemas/ScheduledTaskDetails" } } } } } })
+    expect(schemas.ScheduledTaskDetailResponse).toMatchObject({ properties: { data: { properties: { task: { $ref: "#/components/schemas/ScheduledTaskDetails" } } } } })
+    expect(schemas.ScheduledTaskResponse).toMatchObject({ properties: { data: { properties: { task: { $ref: "#/components/schemas/ScheduledTask" } } } } })
+  })
+
+  it("requires nullable owner next and explicit selected calendar rules on create", async () => {
     const schemas = (await r76PublicSpec()).spec.components.schemas
     const task = schemas.ScheduledTask!
     const create = schemas.CreateScheduledTaskRequest!
@@ -736,11 +756,14 @@ describe("R255 ScheduledTask owner recurrence graph under the public14.5 pin", (
       "frequency",
       "time",
       "timezone",
-      "recurrence_anchor_at",
+      "weekdays",
+      "month_days",
+      "local_date",
       "expires_at",
       "auto_approve",
     ])
-    expect(create.properties.recurrence_anchor_at).toEqual({ type: "string", format: "date-time" })
+    expect(create.properties.recurrence_anchor_at).toBeUndefined()
+    expect(create.oneOf).toHaveLength(4)
     expect(create.properties.next_run_at).toBeUndefined()
     expect(create.properties.enabled).toBeUndefined()
     expect(create.properties.status).toBeUndefined()
@@ -749,7 +772,7 @@ describe("R255 ScheduledTask owner recurrence graph under the public14.5 pin", (
     expect(create.required).not.toContain("recurrence_anchor_at")
   })
 
-  it("keeps PATCH closed with an optional recurrence anchor and no owner next-run input", async () => {
+  it("keeps PATCH closed with complete selected rules and no owner next-run input", async () => {
     const patch = (await r76PublicSpec()).spec.components.schemas.ScheduledTaskPatchRequest!
     expect(patch.type).toBe("object")
     expect(patch.additionalProperties).toBe(false)
@@ -760,13 +783,16 @@ describe("R255 ScheduledTask owner recurrence graph under the public14.5 pin", (
       "frequency",
       "time",
       "timezone",
-      "recurrence_anchor_at",
+      "weekdays",
+      "month_days",
+      "local_date",
       "expires_at",
       "auto_approve",
       "enabled",
       "status",
     ])
-    expect(patch.properties.recurrence_anchor_at).toEqual({ type: "string", format: "date-time" })
+    expect(patch.properties.recurrence_anchor_at).toBeUndefined()
+    expect(patch.allOf).toHaveLength(1)
     expect(patch.properties.next_run_at).toBeUndefined()
   })
 

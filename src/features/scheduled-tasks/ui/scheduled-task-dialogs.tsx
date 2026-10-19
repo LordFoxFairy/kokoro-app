@@ -15,6 +15,7 @@ import {
 import { useLocale } from "@/i18n/context";
 
 import type {
+  ScheduledTaskDraft,
   ScheduledTaskEditorValue,
   ScheduledTaskInitial,
   ScheduledTaskRecord,
@@ -27,6 +28,7 @@ type ScheduledTaskDialogsProps = {
   editorOpen: boolean;
   onEditorOpenChange: (open: boolean) => void;
   initialPrompt: string;
+  pendingCreate?: ScheduledTaskDraft;
   editingTask: ScheduledTaskInitial | null;
   canSave: boolean;
   onSave: (draft: ScheduledTaskEditorValue) => Promise<void>;
@@ -36,6 +38,7 @@ type ScheduledTaskDialogsProps = {
   deleteTarget: ScheduledTaskRecord | null;
   setDeleteTarget: Dispatch<SetStateAction<ScheduledTaskRecord | null>>;
   deleting: boolean;
+  canDelete: boolean;
   deleteError: boolean;
   onDelete: () => Promise<void>;
 };
@@ -45,6 +48,7 @@ export function ScheduledTaskDialogs({
   editorOpen,
   onEditorOpenChange,
   initialPrompt,
+  pendingCreate,
   editingTask,
   canSave,
   onSave,
@@ -54,6 +58,7 @@ export function ScheduledTaskDialogs({
   deleteTarget,
   setDeleteTarget,
   deleting,
+  canDelete,
   deleteError,
   onDelete,
 }: ScheduledTaskDialogsProps) {
@@ -68,6 +73,7 @@ export function ScheduledTaskDialogs({
         initialPrompt={initialPrompt}
         {...(canSave ? { onSave } : {})}
         initialTask={editingTask}
+        {...(pendingCreate ? { initialDraft: pendingCreate } : {})}
         contextKind={creationContext.kind}
         contextError={creationContext.kind === "invalid"}
         returnFocusRef={returnFocusRef}
@@ -91,7 +97,7 @@ export function ScheduledTaskDialogs({
           <AlertDialogFooter>
             <AlertDialogCancel>{t("firstSite.cancel")}</AlertDialogCancel>
             <AlertDialogAction
-              disabled={deleting}
+              disabled={deleting || !canDelete}
               aria-busy={deleting || undefined}
               onClick={(event) => {
                 event.preventDefault();

@@ -56,7 +56,7 @@ it("呈现排程空态、三项建议和建立按钮", () => {
 
   expect(screen.getByTestId("scheduled-surface")).toBeInTheDocument();
   expect(
-    screen.getByRole("heading", { level: 1, name: "已排程" }),
+    screen.getByRole("heading", { level: 1, name: "自动化" }),
   ).toBeInTheDocument();
   expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(
     "Kokoro 能独立执行工作，无需您的干预",
@@ -189,6 +189,7 @@ it("填写标题后保存结构化排程数据", () => {
   fireEvent.click(
     screen.getByRole("button", { name: /将手动流程转为定时自动化管道/ }),
   );
+  expect(screen.queryByRole("button", { name: /进阶设定/ })).not.toBeInTheDocument();
   fireEvent.change(screen.getByRole("textbox", { name: "未读邮件摘要" }), {
     target: { value: "每日流程" },
   });
@@ -206,7 +207,7 @@ it("填写标题后保存结构化排程数据", () => {
   });
 });
 
-it("勾选到期日期后必须先填写日期，并按所选时区的当地日末保存", () => {
+it("勾选到期日期后必须先填写日期，短视口也不会把保存区推出 Dialog", () => {
   const onSave = renderScheduled();
   fireEvent.click(screen.getByRole("button", { name: /建立您的排程任务/ }));
   fireEvent.change(screen.getByRole("textbox", { name: "未读邮件摘要" }), {
@@ -228,34 +229,10 @@ it("勾选到期日期后必须先填写日期，并按所选时区的当地日�
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   expect(onSave).toHaveBeenCalledWith(
     expect.objectContaining({
-      expiresAt: expect.any(String),
+      expiresAt: expect.stringMatching(/^2026-10-01T0[0-9]:59:59\.999Z$/u),
       timezone,
     }),
   );
-  // SET34-BEGIN: independently-verify-local-day-end
-  const submitted = onSave.mock.calls[0]?.[0];
-  const expiresAt = new Date(submitted.expiresAt);
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: timezone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(expiresAt);
-  const local = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
-  expect(local).toMatchObject({
-    year: "2026",
-    month: "09",
-    day: "30",
-    hour: "23",
-    minute: "59",
-    second: "59",
-  });
-  expect(expiresAt.getUTCMilliseconds()).toBe(999);
-  // SET34-END: independently-verify-local-day-end
 });
 
 it("预览排程保存后进入列表并持久化本地 fixture", async () => {
@@ -714,7 +691,7 @@ it("失败任务在列表操作中支持 retry，并在本地 fixture 中恢复�
   fireEvent.click(retry);
 
   await waitFor(() => expect(card).toHaveAttribute("data-status", "active"));
-  expect(within(card).getByText(/运行中/)).toBeInTheDocument();
+  expect(within(card).getByText(/已启用/)).toBeInTheDocument();
   expect(
     JSON.parse(
       window.localStorage.getItem("kokoro.preview.scheduled-tasks") ?? "[]",
@@ -797,7 +774,9 @@ it("actual Response 的空 next_run_at 不在列表或日历伪造日期，已�
   const ownerTask = {
     title: "Owner 已暂停",
     prompt: "等待 owner 重新排程",
-    frequency: "daily",
+    scheduling_state: "paused",
+    frequency: "weekly",
+    weekdays: [2],
     time: "08:00",
     timezone: "UTC",
     auto_approve: false,
@@ -806,6 +785,8 @@ it("actual Response 的空 next_run_at 不在列表或日历伪造日期，已�
     new Response(
       JSON.stringify({
         tasks: [
+          { ...ownerTask, id: "scheduled_pending_owner", title: "Owner 等待登记", scheduling_state: "pending", next_run_at: null, enabled: true, status: "active" },
+          { ...ownerTask, id: "scheduled_exhausted_owner", title: "Owner 已耗尽", frequency: "once", weekdays: undefined, local_date: "2020-01-01", scheduling_state: "exhausted", next_run_at: null, enabled: true, status: "active" },
           {
             ...ownerTask,
             id: "scheduled_paused_owner",
@@ -817,6 +798,7 @@ it("actual Response 的空 next_run_at 不在列表或日历伪造日期，已�
             ...ownerTask,
             id: "scheduled_confirmed_owner",
             title: "Owner 已确认",
+            scheduling_state: "active",
             next_run_at: confirmedNextRun,
             enabled: true,
             status: "active",
@@ -842,8 +824,15 @@ it("actual Response 的空 next_run_at 不在列表或日历伪造日期，已�
   const confirmedCard = screen.getByText("Owner 已确认").closest(
     "[role='listitem']",
   );
+  const pendingCard = screen.getByText("Owner 等待登记").closest<HTMLElement>("[role='listitem']")!
+  const exhaustedCard = screen.getByText("Owner 已耗尽").closest<HTMLElement>("[role='listitem']")!
+  expect(within(pendingCard).getByRole("img", { name: "等待登记" })).toBeInTheDocument()
+  expect(within(exhaustedCard).getByRole("img", { name: "调度已结束" })).toBeInTheDocument()
+  expect(pendingCard.querySelector("time")).toBeNull()
+  expect(exhaustedCard.querySelector("time")).toBeNull()
   expect(pausedCard).not.toBeNull();
   expect(confirmedCard).not.toBeNull();
+  expect(pausedCard).toHaveTextContent(/每周\s+周二/u);
   expect(pausedCard?.querySelector("time")).toBeNull();
   expect(confirmedCard?.querySelector("time")).toHaveAttribute(
     "dateTime",

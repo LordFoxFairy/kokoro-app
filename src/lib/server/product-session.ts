@@ -1,6 +1,6 @@
 import { decode, encode } from "next-auth/jwt"
 
-import { inspectSession, PRODUCT_SESSION_MAX_AGE_SECONDS, type StoreConfig } from "./product-session-store"
+import { inspectSession, inspectSessionState, PRODUCT_SESSION_MAX_AGE_SECONDS, type StoreConfig } from "./product-session-store"
 
 const COOKIE = "kokoro_product_session"
 export const MAX_ACCESS_CREDENTIAL_BYTES = 2048
@@ -36,6 +36,13 @@ export async function decodeProductSession(request: Request, secret: string): Pr
     const value = await decode({ token: raw, secret, salt: "kokoro-product-session-v1" })
     return validClaims(value) && value.expiresAt > Date.now() ? value : null
   } catch { return null }
+}
+
+/** Only the App shell/session adapter consumes this lifecycle; business reads remain active-only. */
+export async function productSessionState(request: Request, config: StoreConfig) {
+  const claims = await decodeProductSession(request, config.secret)
+  if (claims === null) return { state: "absent" as const, claims: null }
+  return { state: await inspectSessionState(config, claims.id, claims.generation), claims }
 }
 
 export async function currentProductSession(request: Request, config: StoreConfig): Promise<ProductClaims | null> {

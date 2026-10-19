@@ -55,6 +55,15 @@ describe("session execution adapter", () => {
     expect(client.createCalls[0]?.body).not.toHaveProperty("agent")
   })
 
+  it("preserves project inheritance instead of filling an omitted selection", async () => {
+    const client = createFakeClient()
+    const adapter = createExecutionAdapter({client,scope:{kind:"project",projectRef:"project_1"}})
+    await adapter.createMessage({sessionId:"session_1",content:"inherit",idempotencyKey:"inherit",options:{mode:"fast",model:null,selectedSkillSourceRefs:undefined}})
+    expect(client.createCalls[0]?.body).not.toHaveProperty("selected_skill_source_refs")
+    await adapter.createMessage({sessionId:"session_1",content:"none",idempotencyKey:"none",options:{mode:"fast",model:null,selectedSkillSourceRefs:[]}})
+    expect(client.createCalls[1]?.body.selected_skill_source_refs).toEqual([])
+  })
+
   it("关闭旧流后丢弃其迟到事件，只交付新流批次", async () => {
     const client = createFakeClient()
     const adapter = createExecutionAdapter({ client, scope: { kind: "direct" } })

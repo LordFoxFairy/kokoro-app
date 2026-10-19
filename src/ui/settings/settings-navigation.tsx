@@ -27,6 +27,9 @@ const settingLabels: Partial<Record<SettingsTab, readonly MessageKey[]>> = {
   team: ["team.membersTitle", "team.invitesTitle"],
   "data-management": ["data.sharedTasks", "data.sharedFiles", "data.archivedTasks", "data.authorizedApps", "data.cloudBrowser", "data.domains"],
   help: ["help.accountTitle", "help.shareTitle", "help.limitsTitle"],
+  mail: ["settingsServices.mailSettings", "settingsServices.mailInbox", "settingsServices.workflows", "settingsServices.triggers", "settingsServices.senders"],
+  wallet: ["settingsServices.paymentMethods", "settingsServices.invoices"],
+  developer: ["settingsServices.apiKeys", "settingsServices.webhooks"],
 };
 
 // Case folding can expand a code point. Only use folded offsets when they

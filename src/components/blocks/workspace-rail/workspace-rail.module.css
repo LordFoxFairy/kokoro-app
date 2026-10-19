@@ -11,6 +11,9 @@
 .provider { display: contents; }
 
 .rail {
+  --rail-font-size: 0.875rem;
+  --rail-caption-size: 0.8125rem;
+  --rail-row-height: 2.25rem;
   display: flex;
   height: 100%;
   min-width: 0;
@@ -178,11 +181,11 @@
 .rail[data-desktop-rail="true"] {
   --collapsed-track: var(--sidebar-width-icon, 52px);
   container: workspace-rail / inline-size;
-  padding: 1rem 0.75rem 0.5rem;
+  padding: 0.75rem 0.5rem 0.5rem;
 }
 .rail[data-desktop-rail="true"] .head {
-  height: 2.75rem;
-  min-height: 2.75rem;
+  height: 2.5rem;
+  min-height: 2.5rem;
   box-sizing: border-box;
   align-items: flex-start;
   padding: 0.15rem 0.35rem 0.5rem;

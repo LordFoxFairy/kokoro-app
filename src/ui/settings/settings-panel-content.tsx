@@ -25,6 +25,12 @@ import {
   PersonalizationCard,
   ShortcutsCard,
   SkillsSettingsSection,
+  MailSettingsSection,
+  EmailAssetsSection,
+  PhoneAssetsSection,
+  WalletSettingsSection,
+  IntegrationSettingsSection,
+  DeveloperSettingsSection,
 } from "./sections";
 import type { SettingsTab } from "./settings-types";
 
@@ -42,11 +48,12 @@ type SettingsPanelContentProps = {
   onOpenPricing: () => void;
   onSelectSetting: (tab: SettingsTab) => void;
   onCreateSkillWithAi?: (prompt?: string) => void;
-  onTrySkill?: (skill: SkillCard) => void;
+  onTrySkill?: (skill: SkillCard, prompt?: string) => boolean;
   skillsCatalogOpen: boolean;
   onSkillsCatalogOpenChange: (open: boolean) => void;
   skillsCatalogTriggerRef: RefObject<HTMLButtonElement | null>;
-  initialSkillsScope?: SkillsScopeFilter;
+  skillsScope: SkillsScopeFilter;
+  onSkillsScopeChange: (scope: SkillsScopeFilter) => void;
 };
 
 /**
@@ -72,9 +79,22 @@ export function SettingsPanelContent({
   skillsCatalogOpen,
   onSkillsCatalogOpenChange,
   skillsCatalogTriggerRef,
-  initialSkillsScope,
+  skillsScope,
+  onSkillsScopeChange,
 }: SettingsPanelContentProps) {
   switch (tab) {
+    case "mail":
+      return <MailSettingsSection brandName={brandName} />;
+    case "email":
+      return <EmailAssetsSection />;
+    case "phone":
+      return <PhoneAssetsSection />;
+    case "wallet":
+      return <WalletSettingsSection />;
+    case "integration":
+      return <IntegrationSettingsSection />;
+    case "developer":
+      return <DeveloperSettingsSection />;
     case "data-management":
       return <DataManagementSection {...(onArchiveChanged===undefined?{}:{onArchiveChanged})} preview={preview} {...(readBoundary === undefined ? {} : { readBoundary })} />;
     case "help":
@@ -128,7 +148,8 @@ export function SettingsPanelContent({
           embeddedCatalogOpen={skillsCatalogOpen}
           onEmbeddedCatalogOpenChange={onSkillsCatalogOpenChange}
           catalogTriggerRef={skillsCatalogTriggerRef}
-          {...(initialSkillsScope === undefined ? {} : { initialScope: initialSkillsScope })}
+          selectedScope={skillsScope}
+          onScopeChange={onSkillsScopeChange}
         />
       );
     case "mcp":

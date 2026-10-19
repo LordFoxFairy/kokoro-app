@@ -72,7 +72,8 @@ export type SessionCandidate = Readonly<{ id: string; expiresAt: number }>
 // A Settings open starts several independent BFF reads at once. Coalesce only
 // their concurrent Redis admission inspection; entries are removed as soon as
 // Redis answers, so revocation remains visible to every later request.
-const sessionInspectionFlights = new Map<string, Promise<boolean>>();
+export type SessionInspection = "active" | "refreshing" | "stale" | "absent" | "unconfirmed"
+const sessionInspectionFlights = new Map<string, Promise<SessionInspection>>();
 
 function sessionInspectionKey(
   config: StoreConfig,
@@ -101,6 +102,11 @@ export async function createSession(config: StoreConfig, refresh: string, candid
 }
 
 export async function inspectSession(config: StoreConfig, id: string, generation: number): Promise<boolean> {
+  return (await inspectSessionState(config, id, generation)) === "active"
+}
+
+/** Read-only RP lifecycle, distinct from permission to send a business bearer. */
+export async function inspectSessionState(config: StoreConfig, id: string, generation: number): Promise<SessionInspection> {
   const key = sessionInspectionKey(config, id, generation)
   const joined = sessionInspectionFlights.get(key)
   if (joined !== undefined) return joined
@@ -108,9 +114,19 @@ export async function inspectSession(config: StoreConfig, id: string, generation
     const [record, tombstone] = keys(config.webOrigin, id)
     const script = `if redis.call('EXISTS', KEYS[2]) == 1 then return 0 end
       local raw=redis.call('GET', KEYS[1]); if not raw then return 0 end
-      local v=cjson.decode(raw); if v.state ~= 'active' or v.generation ~= tonumber(ARGV[1]) or v.expiresAt <= tonumber(ARGV[2]) then return 0 end
-      return 1`
-    return (await withRedis(config.redisUrl, (client) => client.eval(script, { keys: [record, tombstone], arguments: [String(generation), String(Date.now())] }))) === 1
+      local ok,v=pcall(cjson.decode,raw)
+      if not ok or type(v) ~= 'table' or type(v.generation) ~= 'number' or v.generation < 0 or v.generation % 1 ~= 0 or type(v.expiresAt) ~= 'number' or type(v.refresh) ~= 'string' then return -1 end
+      if v.state ~= 'active' and v.state ~= 'refreshing' then return -1 end
+      if v.expiresAt <= tonumber(ARGV[2]) then return 0 end
+      if v.generation ~= tonumber(ARGV[1]) then return 3 end
+      if v.state == 'active' then return 1 end
+      if type(v.deadline) ~= 'number' or type(v.reservation) ~= 'string' then return -1 end
+      if v.deadline <= tonumber(ARGV[2]) then return 4 end
+      return 2`
+    const result = await withRedis(config.redisUrl, (client) => client.eval(script, { keys: [record, tombstone], arguments: [String(generation), String(Date.now())] }))
+    const states: Readonly<Record<number, SessionInspection>> = { 0: "absent", 1: "active", 2: "refreshing", 3: "stale", 4: "unconfirmed" }
+    if (typeof result !== "number" || states[result] === undefined) throw new Error("invalid Product Session record")
+    return states[result]!
   })()
   sessionInspectionFlights.set(key, inspection)
   const clear = () => {

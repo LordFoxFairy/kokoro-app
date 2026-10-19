@@ -8,6 +8,7 @@
 - `useAsyncAction(action)` → `{ run, submitting, error, reset }`：`run(...args)` 不抛，回 `{ok:true} | {ok:false,error}` 供 UI 分支；提交中忽略重复触发。
 - `invalidate(keyPrefix)`：前缀失活——有订阅者立即重取，无订阅者丢缓存下次挂载再取。
 - 内部：`resource-store.ts`（模块缓存 + pub/sub + 竞态序号；`__resetResourceStore` 为 test-only）。
+- 身份生命周期使用 `resource-store.retireResources(namespace)`：清除该精确 key 及 `/` 分隔的子 key，丢弃迟到结果并通知订阅者，不重发旧 fetcher。不同于保留 stale 数据的业务 `invalidate`，仅在准入退役时使用。
 
 ## 协作者
 下游：各域面板（skills/mcp/team/billing）+ shell controller。键约定：`<域>/<资源>`（如 `hub/skills`、`team/detail/<ns>`、`billing/summary`）。

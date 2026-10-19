@@ -14,7 +14,7 @@ export type { WorkspaceHeaderProps } from "./workspace-header.types"
 export function WorkspaceNavigationTrigger({ className, onToggle, expanded: expandedOverride }: { className?: string; onToggle?: () => void; expanded?: boolean } = {}) {
   const t = useT()
   const { isMobile, openMobile, state } = useSidebar()
-  const expanded = expandedOverride ?? (isMobile ? openMobile : state === "expanded")
+  const expanded = isMobile ? openMobile : expandedOverride ?? state === "expanded"
   const triggerRef = useRef<HTMLButtonElement>(null)
 
   const focusVisibleNavigationTarget = () => {

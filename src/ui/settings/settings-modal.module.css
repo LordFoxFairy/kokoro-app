@@ -379,18 +379,14 @@
   padding-top: 0;
 }
 
-.panelHeader[data-panel="skills"] {
-  /* The wide Manus settings workbench gives the installed collection its own
-   * title band. Keeping it mounted prevents the roomy two-pane dialog from
-   * rendering the compact-sheet composition with a toolbar flush to the top. */
-  height: 8rem;
-  justify-content: flex-end;
-  padding: 0 0 1.5rem;
-}
-
+.panelHeader[data-panel="skills"],
 .panelHeader[data-panel="mcp"] {
   height: auto;
   padding-top: 2.125rem;
+}
+
+.panelHeader[data-panel="skills"] .panelTitle:has(.panelBack) {
+  gap: 0.25rem;
 }
 
 .panelHeader[data-panel="account"]:has(.panelBack) {
@@ -644,8 +640,8 @@
   .dialogContent[data-slot="dialog-content"] {
     /* Measured directly against the current Manus compact Settings dialog:
      * 380 × 580 CSS px at a 448 × 764 CSS px viewport. A phone still uses
-     * the available width while preserving the 16px outer inset. */
-    width: min(23.75rem, calc(100vw - 2rem));
+     * the available width, capped by the shared 98vw envelope. */
+    width: min(23.75rem, 98vw);
     min-width: 0;
     height: min(36.25rem, calc(100vh - 2rem));
     max-height: calc(100vh - 2rem);
@@ -954,14 +950,10 @@
     display: none;
   }
 
-  /* The compact Manus sheet omits the installed-skills heading: its shared
-   * account rail already supplies context and the toolbar needs the space. */
-  .panelHeader[data-panel="skills"]:not([data-skills-catalog-open="true"]) {
+  /* The compact sheet omits both Skills headings; its shared settings rail
+   * supplies context without pushing the Explore toolbar down another band. */
+  .panelHeader[data-panel="skills"] {
     display: none;
-  }
-
-  .mcpBody :global([data-embedded="true"]) {
-    padding-top: 0.25rem;
   }
 
   .contentBody :global([data-slot="scroll-area-viewport"]) {
@@ -1029,6 +1021,27 @@
 .dataManagement button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+.dataManagement .dataManagementRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-block: 0.75rem;
+}
+.dataManagementRow > div {
+  display: grid;
+  flex: 1 1 14rem;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.dataManagementRow > button {
+  flex: 0 0 auto;
+}
+.dataManagementRow p {
+  font-size: 0.8125rem;
+  line-height: 1.5;
 }
 
 .unavailableNavigation {

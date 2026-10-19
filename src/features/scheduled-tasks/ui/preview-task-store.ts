@@ -99,7 +99,10 @@ function withPreviewTaskLock<T>(operation: () => Promise<T> | T): Promise<T> {
   } else {
     result = fallbackMutationQueue.then(operation, operation)
   }
-  const tail = result.then(() => undefined, () => undefined)
+  const tail = result.then(
+    () => undefined,
+    () => undefined,
+  )
   fallbackMutationQueue = tail
   void tail.finally(() => {
     if (fallbackMutationQueue === tail) fallbackMutationQueue = undefined
@@ -110,7 +113,8 @@ function withPreviewTaskLock<T>(operation: () => Promise<T> | T): Promise<T> {
 function previewTaskId(tasks: readonly ScheduledTaskRecord[]): string {
   let id: string
   do {
-    const entropy = globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+    const entropy =
+      globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
     id = `scheduled_preview_${entropy}`
   } while (tasks.some((task) => task.id === id))
   return id
@@ -119,6 +123,7 @@ function previewTaskId(tasks: readonly ScheduledTaskRecord[]): string {
 export function insertPreviewTask(draft: ScheduledTaskDraft): Promise<void> {
   return withPreviewTaskLock(() => {
     const current = readPreviewTasks()
+    const nextRun = nextPreviewRun(draft.time, draft.frequency, draft.timezone, new Date(), draft)
     const nextTask: ScheduledTaskRecord = {
       id: previewTaskId(current),
       title: draft.title,
@@ -126,7 +131,11 @@ export function insertPreviewTask(draft: ScheduledTaskDraft): Promise<void> {
       frequency: draft.frequency,
       time: draft.time,
       timezone: draft.timezone,
-      nextRun: nextPreviewRun(draft.time, draft.frequency, draft.timezone),
+      ...(draft.frequency === "weekly" ? { weekdays: draft.weekdays } : {}),
+      ...(draft.frequency === "monthly" ? { monthDays: draft.monthDays } : {}),
+      ...(draft.frequency === "once" ? { localDate: draft.localDate } : {}),
+      nextRun,
+      schedulingState: nextRun === null ? "exhausted" : "active",
       autoApprove: draft.autoApprove,
       enabled: true,
       ...(draft.expiresAt === undefined ? {} : { expiresAt: draft.expiresAt }),
@@ -139,6 +148,7 @@ export function replacePreviewTask(taskId: string, draft: ScheduledTaskEditorVal
   return withPreviewTaskLock(() => {
     const next = readPreviewTasks().map((task) => {
       if (task.id !== taskId) return task
+      const nextRun = nextPreviewRun(draft.time, draft.frequency, draft.timezone, new Date(), draft)
       const updated: ScheduledTaskRecord = {
         ...task,
         title: draft.title,
@@ -146,9 +156,16 @@ export function replacePreviewTask(taskId: string, draft: ScheduledTaskEditorVal
         frequency: draft.frequency,
         time: draft.time,
         timezone: draft.timezone,
-        nextRun: nextPreviewRun(draft.time, draft.frequency, draft.timezone),
+        ...(draft.frequency === "weekly" && draft.weekdays ? { weekdays: [...draft.weekdays] } : {}),
+        ...(draft.frequency === "monthly" && draft.monthDays ? { monthDays: [...draft.monthDays] } : {}),
+        ...(draft.frequency === "once" && draft.localDate ? { localDate: draft.localDate } : {}),
+        nextRun,
+        schedulingState: nextRun === null ? "exhausted" : task.enabled === false ? "paused" : "active",
         autoApprove: draft.autoApprove,
       }
+      if (draft.frequency !== "weekly") delete updated.weekdays
+      if (draft.frequency !== "monthly") delete updated.monthDays
+      if (draft.frequency !== "once") delete updated.localDate
       if (typeof draft.expiresAt === "string") updated.expiresAt = draft.expiresAt
       else delete updated.expiresAt
       return updated
@@ -157,11 +174,21 @@ export function replacePreviewTask(taskId: string, draft: ScheduledTaskEditorVal
   })
 }
 
-export function setPreviewTaskStatus(taskId: string, status: Extract<ScheduledTaskStatus, "active" | "paused">): Promise<void> {
+export function setPreviewTaskStatus(
+  taskId: string,
+  status: Extract<ScheduledTaskStatus, "active" | "paused">,
+): Promise<void> {
   return withPreviewTaskLock(() => {
-    const next = readPreviewTasks().map((task) => task.id === taskId
-      ? { ...task, enabled: status === "active", status }
-      : task)
+    const next = readPreviewTasks().map((task): ScheduledTaskRecord =>
+      task.id === taskId
+        ? {
+            ...task,
+            enabled: status === "active",
+            status,
+            schedulingState: task.frequency === "once" && task.nextRun === null ? "exhausted" : status,
+          }
+        : task,
+    )
     persistPreviewTasks(next)
   })
 }

@@ -1,13 +1,12 @@
 "use client"
 
-import { ChevronDown, Clock3, Cloud, Ellipsis, File, Globe2, Grid2X2, Paperclip, Plus, Search, ShieldCheck, SlidersHorizontal, SquareCode } from "lucide-react"
+import { ChevronDown, Clock3, Cloud, File, Globe2, Grid2X2, Paperclip, Plus, Search, SlidersHorizontal, SquareCode } from "lucide-react"
 import { useRef, type Dispatch, type SetStateAction } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
-import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import type { EmptyStateProps } from "@/components/blocks/app-frame/app-frame"
 import {
@@ -56,15 +55,6 @@ export type ProjectWorkspaceDialogsProps = {
   resourceUploads: readonly ResourceUploadIntent[]
   onRetryResourceUpload: (intent: ResourceUploadIntent) => void
   handleResourceFiles: (files: FileList) => Promise<void>
-  skillsOpen: boolean
-  setSkillsOpen: Dispatch<SetStateAction<boolean>>
-  skillQuery: string
-  setSkillQuery: Dispatch<SetStateAction<string>>
-  setSkillFilter: Dispatch<SetStateAction<"all" | "official">>
-  skillBuilderEnabled: boolean
-  setSkillBuilderEnabled: Dispatch<SetStateAction<boolean>>
-  skillVisible: boolean
-  onSetProjectSkillEnabled?: EmptyStateProps["onSetProjectSkillEnabled"]
   websitesOpen: boolean
   setWebsitesOpen: Dispatch<SetStateAction<boolean>>
   websiteQuery: string
@@ -95,8 +85,7 @@ export function ProjectWorkspaceDialogs({
   instructionsError, setInstructionsError, instructionsHistoryOpen, setInstructionsHistoryOpen, selectedInstructionRevision,
   setSelectedInstructionRevision, projectInstructionHistory, onSaveProjectInstructions, resourcesOpen, setResourcesOpen,
   resourceQuery, setResourceQuery, setResourceKind, resourceSearchRef, resourceInputRef, filteredResources, resourceListStatus, resourceListErrorCursor, resourceNextCursor, onRetryResourceList, onLoadMoreResources, resourceUploads, onRetryResourceUpload,
-  handleResourceFiles, skillsOpen, setSkillsOpen, skillQuery, setSkillQuery, setSkillFilter, skillBuilderEnabled,
-  setSkillBuilderEnabled, skillVisible, onSetProjectSkillEnabled, websitesOpen, setWebsitesOpen, websiteQuery, setWebsiteQuery,
+  handleResourceFiles, websitesOpen, setWebsitesOpen, websiteQuery, setWebsiteQuery,
   selectedWebsiteId, setSelectedWebsiteId, linkedWebsiteId, setLinkedWebsiteId, filteredWebsites, scheduledOpen, setScheduledOpen,
   scheduledQuery, setScheduledQuery, selectedScheduledId, setSelectedScheduledId, linkedScheduledId, setLinkedScheduledId,
   filteredScheduledTasks, scheduledEditorOpen, setScheduledEditorOpen, onCreateProjectScheduledTask, onOpenSettings,
@@ -142,14 +131,6 @@ export function ProjectWorkspaceDialogs({
           {intent.status === "failed" && intent.retryable ? <Button type="button" variant="outline" size="sm" onClick={() => onRetryResourceUpload(intent)} aria-label={t("firstSite.resourceRetryUpload", { name: intent.file.name })}>{t("firstSite.retry")}</Button> : null}
         </div>)}</div> : null}
         <div className={dialogStyles.resourcesAddGroup}><input ref={resourceInputRef} id="project-resource-upload" className={dialogStyles.resourcesFileInput} type="file" multiple onChange={(event) => { if (event.currentTarget.files) void handleResourceFiles(event.currentTarget.files); event.currentTarget.value = "" }} /><Button type="button" onClick={() => resourceInputRef.current?.click()}><Plus />{t("firstSite.add")}</Button><DropdownMenu><DropdownMenuTrigger asChild><Button type="button" size="icon-sm" aria-label={t("firstSite.addMenu")}><ChevronDown aria-hidden="true" /></Button></DropdownMenuTrigger><DropdownMenuContent className={dialogStyles.resourcesAddMenu} align="end" sideOffset={4}><DropdownMenuItem onSelect={() => resourceInputRef.current?.click()}><Paperclip />{t("firstSite.addLocalFile")}</DropdownMenuItem><DropdownMenuItem onSelect={() => { setResourceKind("web"); window.requestAnimationFrame(() => resourceSearchRef.current?.focus()) }}><Globe2 />{t("firstSite.searchWeb")}</DropdownMenuItem><DropdownMenuSub><DropdownMenuSubTrigger><Grid2X2 />{t("firstSite.more")}</DropdownMenuSubTrigger><DropdownMenuSubContent className={dialogStyles.resourcesMoreMenu} sideOffset={4}><DropdownMenuItem onSelect={() => onOpenSettings?.("mcp")}><Cloud />{t("firstSite.addFromGoogleDrive")}</DropdownMenuItem><DropdownMenuItem onSelect={() => onOpenSettings?.("mcp")}><Cloud />{t("firstSite.addFromOneDrivePersonal")}</DropdownMenuItem><DropdownMenuItem onSelect={() => onOpenSettings?.("mcp")}><Cloud />{t("firstSite.addFromOneDriveWork")}</DropdownMenuItem></DropdownMenuSubContent></DropdownMenuSub></DropdownMenuContent></DropdownMenu></div>
-      </DialogContent>
-    </Dialog>
-
-    <Dialog open={skillsOpen} onOpenChange={onContextDialogChange(setSkillsOpen)}>
-      <DialogContent className={dialogStyles.projectSkillsDialog} overlayClassName={dialogStyles.instructionsOverlay ?? ""} closeLabel={t("shell.closeDialog")}>
-        <DialogTitle className={dialogStyles.projectSkillsTitle}>{t("firstSite.projects")}{t("firstSite.skills")}</DialogTitle><p className={dialogStyles.projectSkillsHint}><span>{t("firstSite.projectSkillsHint")}</span><span aria-hidden="true"> · </span><Button type="button" variant="link" onClick={() => onOpenSettings?.("skills")}>{t("firstSite.viewMySkills")}</Button></p>
-        <div className={dialogStyles.projectSkillsToolbar}><DropdownMenu><DropdownMenuTrigger asChild><Button type="button" variant="outline" size="icon-sm" aria-label={t("firstSite.filter")}><SlidersHorizontal /></Button></DropdownMenuTrigger><DropdownMenuContent align="start" sideOffset={4}><DropdownMenuItem onSelect={() => setSkillFilter("all")}>{t("library.filterAll")}</DropdownMenuItem><DropdownMenuItem onSelect={() => setSkillFilter("official")}>{t("skills.official")}</DropdownMenuItem></DropdownMenuContent></DropdownMenu><label className={dialogStyles.projectSkillsSearch}><Search /><Input aria-label={t("skills.searchPlaceholder")} placeholder={t("skills.searchPlaceholder")} value={skillQuery} onChange={(event) => setSkillQuery(event.target.value)} /></label><Button type="button" variant="outline" onClick={() => onOpenSettings?.("skills")}><Plus />{t("firstSite.add")}<ChevronDown aria-hidden="true" /></Button><DropdownMenu><DropdownMenuTrigger asChild><Button type="button" variant="outline" size="icon-sm" aria-label={t("firstSite.more")}><Ellipsis /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" sideOffset={4}><DropdownMenuItem onSelect={() => onOpenSettings?.("skills")}>{t("firstSite.manageSkills")}</DropdownMenuItem><DropdownMenuItem onSelect={() => setSkillBuilderEnabled((enabled) => !enabled)}>{skillBuilderEnabled ? t("firstSite.disableSkill") : t("firstSite.enableSkill")}</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div>
-        {skillVisible ? <article className={dialogStyles.projectSkillCard}><div className={dialogStyles.projectSkillCardTop}><h3>{t("firstSite.skillBuilder")}</h3><Switch checked={skillBuilderEnabled} aria-label={t("firstSite.skillBuilder")} onCheckedChange={async (enabled) => { const previous = skillBuilderEnabled; setSkillBuilderEnabled(enabled); try { await onSetProjectSkillEnabled?.("skill-builder", enabled) } catch { setSkillBuilderEnabled(previous) } }} /></div><p className={dialogStyles.projectSkillDescription}>{t("firstSite.skillBuilderDescription", { brand: brandName ?? "Kokoro" })}</p><footer className={dialogStyles.projectSkillFooter}><ShieldCheck /><span>{t("skills.official")}</span><span aria-hidden="true">·</span><span>{t("skills.updatedAt", { date: t("firstSite.updatedToday") })}</span><DropdownMenu><DropdownMenuTrigger asChild><Button type="button" variant="ghost" size="icon-sm" aria-label={t("firstSite.more")}><Ellipsis /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" sideOffset={4}><DropdownMenuItem onSelect={() => onOpenSettings?.("skills")}>{t("firstSite.manageSkills")}</DropdownMenuItem></DropdownMenuContent></DropdownMenu></footer></article> : <div className={dialogStyles.projectSkillsEmpty}>{t("firstSite.noSkills")}</div>}
       </DialogContent>
     </Dialog>
 

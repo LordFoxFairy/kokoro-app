@@ -12,7 +12,6 @@ vi.mock("@/lib/server/oidc-bff-agent", () => ({ boundedOidcBffAgent: vi.fn() }))
 vi.mock("@/lib/server/oidc-rp-transaction", () => ({
   issueOidcState,
   consumeOidcState,
-  rpCleanupCookies: () => ["next-auth.state=; Max-Age=0", "next-auth.pkce.code_verifier=; Max-Age=0", "next-auth.nonce=; Max-Age=0"],
 }))
 
 vi.mock("@/lib/server/product-identity", () => ({ verifyProductIdentity }))
@@ -263,7 +262,8 @@ describe("transaction-bound Product login return", () => {
     expect(response.headers.get("location")).toBe(target)
     expect(response.headers.get("cache-control")).toBe("private, no-store")
     expect(response.headers.get("referrer-policy")).toBe("no-referrer")
-    expect(response.headers.getSetCookie()).toHaveLength(4)
+    expect(response.headers.getSetCookie()).toHaveLength(1)
+    expect(response.headers.getSetCookie()[0]).toMatch(/^kokoro_product_session=/u)
     expect(consumeOidcState).toHaveBeenCalledWith(expect.objectContaining({ authSecret: ENV.KOKORO_WEB_AUTH_SECRET }))
   })
   it("fails closed on replay/invalid transaction before Auth.js or Product session creation", async () => {
@@ -273,7 +273,8 @@ describe("transaction-bound Product login return", () => {
     expect(response.headers.get("location")).toBeNull()
     expect(nextAuth).not.toHaveBeenCalled()
     expect(createSession).not.toHaveBeenCalled()
-    expect(response.headers.getSetCookie()).toHaveLength(3)
+    // Rejected old callbacks must not delete a newer browser transaction.
+    expect(response.headers.getSetCookie()).toHaveLength(0)
   })
   it.each(["identity", "store", "unverified"])("never redirects on %s failure", async (stage) => {
     verifiedCallback()
@@ -289,4 +290,26 @@ describe("transaction-bound Product login return", () => {
     expect((await callback("&return_to=%2Fapp")).status).toBe(400)
     expect(consumeOidcState).not.toHaveBeenCalled()
   })
+})
+
+it.each(["native-start", "state-store"])("keeps HTML and JSON failure representations paired for %s", async dependency => {
+  if (dependency === "native-start") nextAuth.mockRejectedValue(new Error("fixture unavailable"))
+  else {
+    nextAuth.mockImplementation(() => authorizeResponse(EXPECTED_SCOPE))
+    issueOidcState.mockRejectedValue(new Error("fixture unavailable"))
+  }
+  for (const html of [true, false]) {
+    const response = await POST(new NextRequest(`${ENV.NEXTAUTH_URL}/signin/kokoro-iam`, {
+      method: "POST",
+      headers: { host: "web.example.test", origin: ENV.KOKORO_WEB_ORIGIN,
+        "content-type": "application/x-www-form-urlencoded", accept: html ? "text/html" : "application/json", "x-nonce": "n".repeat(48) },
+      body: "csrfToken=" + "a".repeat(64),
+    }), { params: Promise.resolve({ nextauth: ["signin", "kokoro-iam"] }) })
+    expect(response.status).toBe(503)
+    expect(response.headers.getSetCookie()).toEqual([])
+    if (html) {
+      expect(response.headers.get("content-type")).toContain("text/html")
+      expect(await response.text()).toContain('href="/login"')
+    } else expect(await response.json()).toMatchObject({ error: { code: "rp_unavailable" } })
+  }
 })
