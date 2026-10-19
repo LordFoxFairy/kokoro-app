@@ -4,6 +4,7 @@ import { afterEach, expect, it, vi } from "vitest"
 import { createHubClient } from "@/hub/client"
 import type { McpConnectorProvider } from "@/hub/mcp-connector.schema"
 import { LocaleProvider } from "@/i18n/context"
+import { McpProviderCatalogDialog } from "@/ui/mcp/mcp-provider-catalog-dialog"
 import { McpProviderDirectory } from "@/ui/mcp/mcp-provider-directory"
 import { useMcpProviderDirectory } from "@/ui/mcp/use-mcp-provider-directory"
 
@@ -53,10 +54,15 @@ it("retires old filter/actor responses and keeps loaded rows through a failed ex
   expect(result.current.items).toEqual([])
 })
 
-it("offers a keyboard-reachable continuation without replacing the search controls", () => {
+it("offers keyboard category selection and continuation without replacing the search controls", async () => {
   window.localStorage.setItem("kokoro.locale", "zh")
-  const loadMore = vi.fn()
-  render(<LocaleProvider><McpProviderDirectory providers={seed.items} query="" showSearch categoryFilter="all" onCategoryFilterChange={vi.fn()} onSelectProvider={vi.fn()} onLoadMore={loadMore} hasMore /></LocaleProvider>)
+  const loadMore = vi.fn(), selectCategory = vi.fn()
+  render(<LocaleProvider><McpProviderDirectory providers={seed.items} query="" showSearch categoryFilter="all" onCategoryFilterChange={selectCategory} onSelectProvider={vi.fn()} onLoadMore={loadMore} hasMore /></LocaleProvider>)
+  const search = screen.getByRole("searchbox")
+  fireEvent.keyDown(screen.getByRole("button", { name: "全部", expanded: false }), { key: "ArrowDown" })
+  fireEvent.click(await screen.findByRole("menuitem", { name: "开发" }))
+  expect(selectCategory).toHaveBeenCalledExactlyOnceWith("development")
+  expect(screen.getByRole("searchbox")).toBe(search)
   fireEvent.click(screen.getByRole("button", { name: "加载更多" }))
   expect(loadMore).toHaveBeenCalledOnce()
   expect(screen.getByRole("searchbox")).toBeInTheDocument()
@@ -81,4 +87,35 @@ it("stops a repeated provider cursor and explicitly restarts from the first page
   act(() => result.current.loadMore())
   await waitFor(() => expect(result.current.items.map(item => item.provider_key)).toEqual(["restarted", "last"]))
   expect(list).toHaveBeenCalledTimes(3)
+})
+
+
+it("hands category focus between the rail and menu when the actual localized labels stop fitting", async () => {
+  window.localStorage.setItem("kokoro.locale", "zh")
+  let available = 640
+  const resize = new Set<ResizeObserverCallback>()
+  const original = window.ResizeObserver
+  const width = vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(() => available)
+  const measured = vi.spyOn(HTMLElement.prototype, "scrollWidth", "get").mockReturnValue(412)
+  window.ResizeObserver = class {
+    constructor(private callback: ResizeObserverCallback) { resize.add(callback) }
+    observe() {}
+    unobserve() {}
+    disconnect() { resize.delete(this.callback) }
+  } as typeof ResizeObserver
+  try {
+    render(<LocaleProvider><McpProviderCatalogDialog open providers={seed.items} loading={false} hasMore={false}
+      onLoadMore={vi.fn()} error={false} query="" categoryFilter="all" returnFocusRef={{ current: null }}
+      onOpenChange={vi.fn()} onQueryChange={vi.fn()} onCategoryFilterChange={vi.fn()} onRetry={vi.fn()}
+      onSelectProvider={vi.fn()} /></LocaleProvider>)
+    const rail = screen.getByRole("button", { name: "开发", pressed: false })
+    act(() => rail.focus())
+    await act(async () => { available = 300; for (const callback of resize) callback([], {} as ResizeObserver) })
+    await waitFor(() => expect(screen.getByRole("button", { name: "全部", expanded: false })).toHaveFocus())
+    await act(async () => { available = 640; for (const callback of resize) callback([], {} as ResizeObserver) })
+    expect(screen.getByRole("button", { name: "全部", pressed: true })).toHaveFocus()
+  } finally {
+    cleanup()
+    width.mockRestore(); measured.mockRestore(); window.ResizeObserver = original
+  }
 })

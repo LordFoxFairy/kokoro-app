@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef } from "react"
+import { useRef, type ReactNode } from "react"
 import { Braces, ChevronDown, Globe2, KeyRound, Plus, Search, Server } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -22,7 +22,9 @@ export function McpSettingsToolbar({
   settingsLayout = false,
   plazaLayout = false,
   disabled = false,
+  children,
 }: {
+  children?: ReactNode
   disabled?: boolean
   view: "catalog" | "connections"
   settingsLayout?: boolean
@@ -45,6 +47,7 @@ export function McpSettingsToolbar({
           <span className="sr-only">{t("plugins.search")}</span>
           <Input type="search" value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder={t("plugins.search")} />
         </label> : null}
+      {children}
       <div className={styles.toolbarActions}>
         {showBrowse ? <Button disabled={disabled} type="button" variant="outline" className={styles.toolbarButton} data-settings-layout={settingsLayout || undefined} data-settings-control="browse" onClick={(event) => onBrowse(event.currentTarget)}>
           {view === "connections" ? t("mcp.browse") : t("plugins.manageConnectors")}

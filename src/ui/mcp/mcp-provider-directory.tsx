@@ -2,16 +2,9 @@
 
 import type { ReactNode } from "react";
 import Image from "next/image";
-import { Check, ChevronDown, Link2, ListFilter, Plus, Search } from "lucide-react";
+import { Check, Link2, Plus, Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import type { McpConnectorProvider } from "@/hub/mcp-connector.schema";
 import { useT } from "@/i18n/context";
 
@@ -20,6 +13,7 @@ import {
   MCP_CATEGORY_OPTIONS,
   providerArtwork,
 } from "./mcp-projection-types";
+import { McpCategoryDropdown } from "./mcp-category-dropdown";
 import styles from "./mcp-projection-read.module.css";
 
 type Category = keyof typeof MCP_CATEGORY_MESSAGES;
@@ -29,6 +23,7 @@ export function McpProviderDirectory({
   query,
   onQueryChange,
   showSearch = false,
+  showCompactFilter = true,
   presentation = "dialog",
   connectedProviderKeys,
   categoryFilter,
@@ -48,6 +43,7 @@ export function McpProviderDirectory({
   query: string;
   onQueryChange?: (value: string) => void;
   showSearch?: boolean;
+  showCompactFilter?: boolean;
   presentation?: "plaza" | "dialog";
   connectedProviderKeys?: ReadonlySet<string>;
   categoryFilter: "all" | Category;
@@ -95,40 +91,9 @@ export function McpProviderDirectory({
             </button>
           ))}
         </nav>
-        <div className={styles.compactFilter}>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                type="button"
-                variant="outline"
-                className={styles.filterTrigger}
-              >
-                <ListFilter aria-hidden="true" />
-                {categoryFilter === "all"
-                  ? t("mcp.categoryAll")
-                  : categoryLabel(categoryFilter)}
-                <ChevronDown aria-hidden="true" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className={styles.filterMenu}>
-              <DropdownMenuGroup>
-                <DropdownMenuItem
-                  onSelect={() => onCategoryFilterChange("all")}
-                >
-                  {t("mcp.categoryAll")}
-                </DropdownMenuItem>
-                {MCP_CATEGORY_OPTIONS.map((category) => (
-                  <DropdownMenuItem
-                    key={category}
-                    onSelect={() => onCategoryFilterChange(category)}
-                  >
-                    {categoryLabel(category)}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+        {showCompactFilter ? <div className={styles.compactFilter}>
+          <McpCategoryDropdown value={categoryFilter} onChange={onCategoryFilterChange} />
+        </div> : null}
       </div>
       <section
         className={styles.providerSection}
