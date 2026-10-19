@@ -121,7 +121,10 @@ export function McpProjectionRead({
   const [providerWindowToken, setProviderWindowToken] = useState<object>({});
   const providerWindow = useRef<{ intent: object; controller: AbortController } | null>(null);
   const [selectedProviderKey, setSelectedProviderKey] = useState<string | null>(null);
-  const [selectedProviderConnectionId, setSelectedProviderConnectionId] = useState<string | null>(null);
+  const [providerConnectionIntent, setProviderConnectionIntent] = useState<{ connectorId: string; exact: boolean } | null>(null);
+  const selectedProviderConnectionId = providerConnectionIntent?.connectorId ?? null;
+  const setSelectedProviderConnectionId = (connectorId: string | null, exact = false) =>
+    setProviderConnectionIntent(connectorId === null ? null : { connectorId, exact });
   useLayoutEffect(() => {
     const wait = selectedProviderKey ? { intent: providerWindowToken, controller: new AbortController() } : null;
     providerWindow.current = wait;
@@ -234,7 +237,7 @@ export function McpProjectionRead({
   const customApis = customApiState.data?.items ?? [];
   const providerConnectionDetail = useMcpProviderConnection({ client, identity, admitted, readGeneration,
     connectorId: selectedProviderConnectionId ?? providerCreationState?.connectorId ?? null, providerKey: selectedProviderKey,
-    known: view === "connections" && !connectorState.loading && !connectorState.error
+    known: !providerConnectionIntent?.exact && view === "connections" && !connectorState.loading && !connectorState.error
       ? connectors.find(item => item.connector_id === selectedProviderConnectionId) : undefined, retry: detailRetry });
   const selectedProviderConnection = providerConnectionDetail.connection;
   const providerDetail = useMcpProviderDetail({ client, identity, admitted, readGeneration,
@@ -472,7 +475,14 @@ export function McpProjectionRead({
     providerReturnFocusRef.current = trigger;
     setActionError(false);
     setProviderWindowToken({});
-    setSelectedProviderConnectionId(null);
+    // Only a complete, current management read proves a unique relationship.
+    // Preserve any original Create recovery before selecting another locator.
+    const complete = view === "connections" && cursor === null && connectorProjection?.next_cursor === null &&
+      !connectorState.loading && !connectorState.error && connectorState.requestIdentity === identity;
+    const matches = complete ? connectors.filter(connector => connector.provider_key === provider.provider_key &&
+      connector.connector_type === "mcp" && !connector.server_id && connector.status !== "revoked") : [];
+    const creation = providerCreationStates.some(item => item.providerKey === provider.provider_key);
+    setSelectedProviderConnectionId(!creation && matches.length === 1 ? matches[0]!.connector_id : null, true);
     setSelectedProviderKey(provider.provider_key);
   };
   return (

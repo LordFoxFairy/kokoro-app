@@ -95,6 +95,10 @@ it("hands category focus between the rail and menu when the actual localized lab
   let available = 640
   const resize = new Set<ResizeObserverCallback>()
   const original = window.ResizeObserver
+  const frames = new Map<number, FrameRequestCallback>()
+  let nextFrame = 0
+  const frame = vi.spyOn(window, "requestAnimationFrame").mockImplementation(callback => { frames.set(++nextFrame, callback); return nextFrame })
+  const cancelFrame = vi.spyOn(window, "cancelAnimationFrame").mockImplementation(id => { frames.delete(id) })
   const width = vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(() => available)
   const measured = vi.spyOn(HTMLElement.prototype, "scrollWidth", "get").mockReturnValue(412)
   window.ResizeObserver = class {
@@ -114,8 +118,13 @@ it("hands category focus between the rail and menu when the actual localized lab
     await waitFor(() => expect(screen.getByRole("button", { name: "全部", expanded: false })).toHaveFocus())
     await act(async () => { available = 640; for (const callback of resize) callback([], {} as ResizeObserver) })
     expect(screen.getByRole("button", { name: "全部", pressed: true })).toHaveFocus()
+    // Deliver the delayed opening frame after an actual category focus handoff.
+    // The opening autofocus must not override the user's newer focus intent.
+    act(() => { for (const callback of frames.values()) callback(0); frames.clear() })
+    expect(screen.getByRole("button", { name: "全部", pressed: true })).toHaveFocus()
   } finally {
     cleanup()
+    frame.mockRestore(); cancelFrame.mockRestore()
     width.mockRestore(); measured.mockRestore(); window.ResizeObserver = original
   }
 })

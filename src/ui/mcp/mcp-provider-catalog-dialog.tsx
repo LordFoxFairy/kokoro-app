@@ -107,9 +107,11 @@ export function McpProviderCatalogDialog({
           const search = (
             event.currentTarget as HTMLElement | null
           )?.querySelector<HTMLInputElement>('input[type="search"]');
-          window.requestAnimationFrame(() =>
-            search?.focus({ preventScroll: true }),
-          );
+          const initialFocus = document.activeElement;
+          window.requestAnimationFrame(() => {
+            if (search?.isConnected && document.activeElement === initialFocus)
+              search.focus({ preventScroll: true });
+          });
         }}
         onCloseAutoFocus={(event) => {
           const returnFocus = returnFocusRef.current;
