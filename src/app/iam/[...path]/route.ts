@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto"
 import { iamRelayConfig, matchesCanonicalWebRequest } from "@/lib/server/iam-relay-config"
 import { filterIssuerCookies, IAM_RELAY_POLICY, resolveBrowserIamGet } from "@/lib/server/iam-relay-policy"
 import { browserAuthorizeResponse, browserIamGetResponse, browserLogoutConfirmationResponse, nativeIamResponse } from "@/lib/server/iam-relay-response"
+import { oidcLoginRecovery } from "@/lib/server/oidc-login-recovery"
 import { requestIamRelay } from "@/lib/server/iam-relay-transport"
 
 export const runtime = "nodejs"
@@ -158,6 +159,21 @@ export async function GET(request: Request, context: RouteContext): Promise<Resp
   headers.set(INTERNAL_SECRET_HEADER, config.secret)
   headers.set("x-request-id", id)
 
+  // Only an already-admitted top-level authorize navigation gets an HTML
+  // failure document. API callers and rejected requests keep their contract;
+  // successful owner redirects still pass through unchanged.
+  const authorizeResult = (response: Response): Response => {
+    if (route.relativePath === "/oauth2/authorize" && response.status >= 400 &&
+      request.headers.get("sec-fetch-mode") === "navigate" && request.headers.get("sec-fetch-dest") === "document") {
+      const recovery = oidcLoginRecovery(request, response.status)
+      if (recovery) {
+        recovery.headers.set("x-request-id", response.headers.get("x-request-id") ?? id)
+        return browserResponse(recovery)
+      }
+    }
+    return browserResponse(response)
+  }
+
   try {
     const upstream = await requestIamRelay({
       url: `${config.bffOrigin}/iam${route.relativePath}${route.query}`,
@@ -180,10 +196,10 @@ export async function GET(request: Request, context: RouteContext): Promise<Resp
         ...authorizeLocationDiagnostics(upstream.headers.get("location"), config.webOrigin),
       })
     }
-    return browserResponse(response
+    return authorizeResult(response
       ?? errorResponse("iam_relay_response_invalid", 502, id))
   } catch {
-    return browserResponse(errorResponse("iam_relay_unavailable", 503, id))
+    return authorizeResult(errorResponse("iam_relay_unavailable", 503, id))
   }
 }
 

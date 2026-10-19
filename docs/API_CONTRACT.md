@@ -1,3 +1,9 @@
+## 第一方Authorize导航失败的表示（2026-10-19）
+
+既有`GET /iam/oauth2/authorize`、OIDC参数、Issuer/Product Session与owner allowlist不变。全部既有入站校验通过后，只有`Sec-Fetch-Mode: navigate`、`Sec-Fetch-Dest: document`且Accept明确允许text/html、存在代理nonce的失败导航使用无脚本恢复页；status与request-id保留，no-store/no-referrer/CSP固定，唯一动作是用户显式进入`/login`。不自动重试、不转移旧query/state或owner失败body/cookies/Location。 最终Proxy在精确authorize路径使用同一nonce策略并固定no-referrer，避免框架全局头覆盖；其余路径不改变。
+
+成功302/owner原生导航原样；接口调用、非顶层请求、拒绝HTML或缺nonce仍用原JSON/native错误契约。入站拒绝也不改成恢复导航。此处只是Web浏览器表示，不是新的IAM/BFF API、认证方案或登录成功证据；现有nonce由Proxy覆盖生成，不以fetch metadata作身份准入。
+
 ## Provider Create 调用方幂等身份（2026-10-19）
 
 既有同源 `POST /api/hub/mcp/connectors` 与 BFF/Platform wire 不变。Hub client 的 `createMcpConnector(input, key, signal?)` 强制调用方传原 ASCII 幂等键，按既有 create schema 校验并发送；不再在每次调用内部生成新键。ACK 继续通过既有 `mcpConnectorMatches("create", ...)` 绑定 provider/type/名称/说明及初始状态。已确认的原回执不是当前事实；授权前另行双精确 GET 当前 connector/provider，现 CAS 与 OAuth server 仅用于本次授权，不持久复制到命令投影。

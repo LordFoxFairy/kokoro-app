@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto"
 
 import { NextResponse, type NextRequest } from "next/server"
 
+import { oidcLoginDocumentPolicy } from "@/lib/server/oidc-login-recovery"
 import { parseProductReturnTarget } from "@/lib/product-return-target"
 
 import { securityHeaders, shouldDisableCaching } from "@/lib/server/security-headers"
@@ -116,6 +117,12 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   }
   for (const [name, value] of Object.entries(responseSecurityHeaders)) {
     response.headers.set(name, value)
+  }
+  // Route response headers alone are overridden by Next's Proxy merge. This
+  // exact native authorize path only returns redirects or inert error pages.
+  if (path === "/iam/oauth2/authorize") {
+    response.headers.set("Referrer-Policy", "no-referrer")
+    response.headers.set("Content-Security-Policy", oidcLoginDocumentPolicy(nonce))
   }
   if (internalSignInView) {
     response.headers.set("Cache-Control", "private, no-store, max-age=0")
