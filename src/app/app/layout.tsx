@@ -3,7 +3,7 @@ import { headers } from "next/headers"
 import { parseProductReturnTarget } from "@/lib/product-return-target"
 
 import { oidcRpConfig } from "@/lib/server/oidc-provider"
-import { activeProductSession } from "@/lib/server/product-session"
+import { productSessionState } from "@/lib/server/product-session"
 import { AppGate } from "@/ui/auth/app-gate"
 import { ProductSignInRedirect } from "@/ui/auth/product-sign-in-redirect"
 
@@ -38,12 +38,12 @@ export default async function AppLayout({
   }
   if (host !== trustedOrigin.host) return <AppGate serverUnavailable />
 
-  let session: Awaited<ReturnType<typeof activeProductSession>>
+  let session: Awaited<ReturnType<typeof productSessionState>>
   try {
     const requestHeaders = new Headers()
     const cookie = incoming.get("cookie")
     if (cookie !== null) requestHeaders.set("cookie", cookie)
-    session = await activeProductSession(
+    session = await productSessionState(
       new Request(`${trustedOrigin.origin}/app`, { headers: requestHeaders }),
       {
         redisUrl: config.redisUrl,
@@ -54,9 +54,11 @@ export default async function AppLayout({
   } catch {
     return <AppGate serverUnavailable />
   }
-  if (session === null) {
+  if (session.state === "refreshing" || session.state === "stale" || session.state === "unconfirmed") return <AppGate serverUnavailable />
+  if (session.state === "absent") {
     const target = parseProductReturnTarget(incoming.get("x-kokoro-product-return-target") ?? "")
-    // The browser alone can preserve a fragment; this document mounts no private workbench.
+    // Fragments never reach SSR. Hand off only navigation to the browser; do
+    // not mount the workbench or start private reads for an absent session.
     return <ProductSignInRedirect fallbackTarget={target} />
   }
   return <AppGate serverAdmitted />

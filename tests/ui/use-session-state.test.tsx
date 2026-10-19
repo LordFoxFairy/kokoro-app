@@ -566,3 +566,69 @@ it("bounds background outage retries and cancels them when the session probe unm
   await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
   expect(fetchMock).toHaveBeenCalledTimes(3);
 });
+
+const refreshRequired = () => Response.json({ authenticated: false, refresh_required: true, subject: "reader-a", expires_at: Date.now() + 3_600_000 })
+
+it.each(["cold", "warm"])("renews a %s expired access credential without treating the valid Product session as anonymous", async phase => {
+  let finish!: (response: Response) => void
+  const pending = new Promise<Response>(resolve => { finish = resolve })
+  const fetchMock = phase === "cold"
+    ? vi.fn().mockResolvedValueOnce(refreshRequired()).mockResolvedValueOnce(csrf()).mockReturnValueOnce(pending)
+    : vi.fn().mockResolvedValueOnce(session()).mockResolvedValueOnce(csrf()).mockResolvedValueOnce(renewed())
+      .mockResolvedValueOnce(refreshRequired()).mockResolvedValueOnce(csrf()).mockReturnValueOnce(pending)
+  vi.stubGlobal("fetch", fetchMock)
+  const view = renderHook(() => useSessionProbe())
+  try {
+    if (phase === "warm") {
+      await waitFor(() => expect(view.result.current.projectReadBoundary.admitted).toBe(true))
+      act(() => window.dispatchEvent(new Event("focus")))
+    }
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(phase === "cold" ? 3 : 6))
+    expect(view.result.current.projectReadBoundary.admitted).toBe(false)
+    expect(view.result.current.state).not.toBe("anonymous")
+    await act(async () => finish(renewed()))
+    await waitFor(() => expect(view.result.current.projectReadBoundary.admitted).toBe(true))
+  } finally { view.unmount() }
+})
+
+it("never repeats an uncertain refresh when readonly confirmation only says refresh_required", async () => {
+  const fetchMock = vi.fn().mockResolvedValueOnce(refreshRequired()).mockResolvedValueOnce(csrf())
+    .mockResolvedValueOnce(Response.json({}, { status: 503 })).mockImplementation(async () => refreshRequired())
+  vi.stubGlobal("fetch", fetchMock)
+  const view = renderHook(() => useSessionProbe())
+  try {
+    await waitFor(() => expect(view.result.current.unavailable).toBe(true))
+    act(() => window.dispatchEvent(new Event("focus")))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(5))
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1)
+    expect(view.result.current.projectReadBoundary.admitted).toBe(false)
+    expect(view.result.current.state).not.toBe("anonymous")
+  } finally { view.unmount() }
+})
+
+
+it.each(["pagehide", "csrf-failure"])("can renew expired access after %s before any refresh POST was sent", async failure => {
+  let settleCsrf!: (response: Response) => void
+  const pendingCsrf = new Promise<Response>(resolve => { settleCsrf = resolve })
+  const fetchMock = vi.fn().mockResolvedValueOnce(refreshRequired())
+    .mockImplementationOnce(() => failure === "pagehide" ? pendingCsrf : Promise.resolve(new Response(null, { status: 503 })))
+    .mockResolvedValueOnce(refreshRequired()).mockResolvedValueOnce(csrf()).mockResolvedValueOnce(renewed())
+  vi.stubGlobal("fetch", fetchMock)
+  const view = renderHook(() => useSessionProbe())
+  try {
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    if (failure === "pagehide") {
+      await act(async () => { window.dispatchEvent(new Event("pagehide")); settleCsrf(csrf()) })
+      expect(fetchMock.mock.calls[1]?.[1].signal.aborted).toBe(true)
+      expect(view.result.current.requestPending).toBe(false)
+    } else {
+      await waitFor(() => expect(view.result.current.unavailable).toBe(true))
+    }
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(0)
+    expect(view.result.current.projectReadBoundary.admitted).toBe(false)
+    act(() => window.dispatchEvent(new Event(failure === "pagehide" ? "pageshow" : "focus")))
+    await waitFor(() => expect(view.result.current.projectReadBoundary.admitted).toBe(true))
+    expect(view.result.current.projectReadBoundary.subject).toBe("reader-a")
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1)
+  } finally { view.unmount() }
+})

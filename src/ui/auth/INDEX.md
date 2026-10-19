@@ -1,3 +1,7 @@
+## Product Session 恢复（2026-10-19）
+
+有效RP与过期access分开：refresh_required只触发现有CSRF续期，不授予业务准入。真正POST派发前才标记未知；CSRF失败/取消可后续恢复，未知POST只读同主体确认。AppGate隐藏timer后沿visibilitychange/pageshow重启每轮1s/3s两次RSC核验；监听cleanup对称，无新登录或业务重放。
+
 # ui/auth — 登录与会话态门面
 
 ## 职责

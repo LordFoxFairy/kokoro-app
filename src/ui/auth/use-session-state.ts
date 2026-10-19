@@ -70,7 +70,8 @@ function requestSessionMode(): Promise<ResolvedSession> {
     try { subjectAtProbeStart = readBrowserAuthIndexSubject() }
     catch { subjectAtProbeStart = undefined }
     const recovering = refreshUnconfirmed
-    const read = async (): Promise<ResolvedSession> => {
+    type ReadSession = ResolvedSession | { mode: "refresh-required"; subject: string }
+    const read = async (): Promise<ReadSession> => {
       signal.throwIfAborted()
       const response = await fetch("/api/auth/session", { cache: "no-store", signal })
       signal.throwIfAborted()
@@ -79,8 +80,15 @@ function requestSessionMode(): Promise<ResolvedSession> {
       signal.throwIfAborted()
       if (typeof raw !== "object" || raw === null) return { mode: "unavailable", subject: null }
       const authenticated = (raw as { authenticated?: unknown }).authenticated
-      if (authenticated === false) return { mode: refreshUnconfirmed ? "unavailable" : "anonymous", subject: null }
       const subject = (raw as { subject?: unknown }).subject
+      if (authenticated === false) {
+        const value = raw as Record<string, unknown>
+        if (Object.keys(value).length === 1) return { mode: refreshUnconfirmed ? "unavailable" : "anonymous", subject: null }
+        if (Object.keys(value).length === 4 && value.refresh_required === true && typeof subject === "string" && subject.trim() !== "" &&
+          typeof value.expires_at === "number" && Number.isFinite(value.expires_at) && value.expires_at > Date.now())
+          return { mode: "refresh-required", subject }
+        return { mode: "unavailable", subject: null }
+      }
       if (authenticated !== true || typeof subject !== "string" || subject.trim() === "") {
         return { mode: "unavailable", subject: null }
       }
@@ -91,11 +99,14 @@ function requestSessionMode(): Promise<ResolvedSession> {
       document.visibilityState === "visible" && !recovering &&
       nextRefreshAt !== null && Date.now() >= nextRefreshAt
     let expectedSubject = admittedSubject
-    if (cold) {
-      // A cold document may inherit an access token with only seconds left.
-      // Read first, then renew within this same budget before mounting Runtime.
-      const initial = await read()
-      if (initial.mode !== "authenticated") return initial
+    let initial: ReadSession | undefined
+    if (!due) {
+      initial = await read()
+      if (recovering) return initial.mode === "authenticated" && initial.subject === refreshSubject
+        ? { ...initial, renewalConfirmed: true } : { mode: "unavailable", subject: null }
+      if (initial.mode !== "authenticated" && initial.mode !== "refresh-required") return initial
+      if (!cold && initial.mode === "authenticated") return initial
+      if (!cold && initial.subject !== admittedSubject) return { mode: "unavailable", subject: null }
       if (subjectAtProbeStart === undefined) return { mode: "unavailable", subject: null }
       const currentIndex = readBrowserAuthIndexSubject()
       if (currentIndex !== subjectAtProbeStart && currentIndex !== initial.subject) {
@@ -103,11 +114,12 @@ function requestSessionMode(): Promise<ResolvedSession> {
       }
       expectedSubject = initial.subject
     }
-    if (cold || due) {
+    if (cold || due || initial?.mode === "refresh-required") {
       nextRefreshAt = Date.now() + REFRESH_INTERVAL_MS
-      refreshUnconfirmed = true
-      refreshSubject = expectedSubject
-      const refreshed = await refreshProductSession(signal)
+      const refreshed = await refreshProductSession(signal, () => {
+        refreshUnconfirmed = true
+        refreshSubject = expectedSubject
+      })
       signal.throwIfAborted()
       if (refreshed.mode === "authenticated") {
         if (refreshed.subject !== expectedSubject) return { mode: "unavailable", subject: null }
@@ -119,11 +131,7 @@ function requestSessionMode(): Promise<ResolvedSession> {
         ? { ...confirmed, renewalConfirmed: true }
         : { mode: "unavailable", subject: null }
     }
-    const resolved = await read()
-    if (!recovering) return resolved
-    return resolved.mode === "authenticated" && resolved.subject === refreshSubject
-      ? { ...resolved, renewalConfirmed: true }
-      : { mode: "unavailable", subject: null }
+    return { mode: "unavailable", subject: null }
 
   })
   const request = Promise.race([work, aborted])

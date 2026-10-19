@@ -1,3 +1,7 @@
+## Product 会话生命周期恢复（2026-10-19）
+
+Product继续唯一持有HttpOnly凭据和Redis generation/CAS。App壳只读取RP生命周期；active但access过期须现有CSRF POST续期后同主体确认，refreshing/stale/unconfirmed不当anonymous或业务准入。未知POST零自动重放；CSRF失败/派发前取消不锁死后续恢复。收到token时固定access deadline，身份核验耗时不延长它。AppGate可见/pageshow恢复只重用原有界RSC检查，无新OAuth、接口、Schema或依赖。
+
 ## Provider Create 原命令与授权续接（2026-10-19）
 
 沿既有 App shell `ConnectorCommandProvider` 增加 feature-specific `provider-creation-commands`，按当前主体及 provider key 管一个原 Create，复用 `createConnectorCommand` 的冻结正文/幂等键、单飞、准入代际、未知结果与晚 ACK 围栏；不复用私有 Server Register/Prepare aggregate，不增 API、Schema、依赖或通用 registry。关闭详情仅停止本窗口等待，已挂载 shell 内的原意图/确认 locator 保留；换主体永久退休，不从名称或目录 metadata 重建未知命令。

@@ -1126,6 +1126,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
   let identityUserId = "user-one"
   let identityTenantId = "tenant-one"
   let identityStatus = 200
+  let identityDelayMs = 0
   let sessionListStatus = 200
   let deleteSessionStatus = 200
   let holdDeleteSession = false
@@ -1848,8 +1849,8 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
               ? { data: { user_id: identityUserId, tenant_id: identityTenantId, platform_admin: false, access_token: "must-not-pass" }, meta: { request_id: "req_fixture" } }
               : { data: { user_id: identityUserId, tenant_id: identityTenantId, platform_admin: false }, meta: { request_id: "req_fixture" } }
             : { error: { code: "identity_rejected", message: "rejected", retryable: false } })
-          if (slowIdentity) {
-            const timer = setTimeout(() => response.end(payload), 6_000)
+          if (slowIdentity || identityDelayMs > 0) {
+            const timer = setTimeout(() => response.end(payload), slowIdentity ? 6_000 : identityDelayMs)
             response.once("close", () => clearTimeout(timer))
           } else response.end(payload)
           return
@@ -5410,7 +5411,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     const winner = results.find((item) => item.status === 200)!
     expect(winner.headers["x-request-id"]).toMatch(/^[a-f0-9-]{36}$/u)
     await recordProduct(winner)
-    expect((await http(nextPort, "/api/auth/session", "GET", "", { cookie: oldJar })).body).toContain('"authenticated":false')
+    expect((await http(nextPort, "/api/auth/session", "GET", "", { cookie: oldJar })).status).toBe(409)
     const newJar = cookieHeader(csrf, signin, callback, winner)
     expect((await http(nextPort, "/api/auth/session", "GET", "", { cookie: newJar })).body).toContain('"authenticated":true')
     const revokesBeforeStaleSignout = paths.filter((item) => item === "/iam/oauth2/revoke").length
@@ -5428,6 +5429,59 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     expect(signout.body).toContain('"remote_revocation":"confirmed"')
     expect(paths).toContain("/iam/oauth2/revoke")
     expect((await http(nextPort, "/api/auth/session", "GET", "", { cookie: newJar })).body).toContain('"authenticated":false')
+  })
+
+  it("keeps an access-expired Product session in the data-free App shell until explicit CSRF renewal", async () => {
+    const { csrf, signin, jar, location } = await start()
+    const authorize = await http(nextPort, new URL(location).pathname + new URL(location).search)
+    const callback = await http(nextPort, authorize.headers.location as string, "GET", "", { cookie: jar })
+    expect(callback.status).toBe(303)
+    await recordProduct(callback)
+    const cookie = cookieHeader(csrf, signin, callback)
+    const form = `csrfToken=${(JSON.parse(csrf.body) as { csrfToken: string }).csrfToken}`
+    try {
+      refreshResponseOverride = { access_token: "access-rotated", refresh_token: "refresh-rotated", token_type: "Bearer", expires_in: 1 }
+      const short = await http(nextPort, "/api/auth/session", "POST", form,
+        { origin: `http://localhost:${nextPort}`, cookie })
+      expect(short.status).toBe(200)
+      const shortJar = cookieHeader(csrf, signin, callback, short)
+      refreshResponseOverride = undefined
+      await new Promise(resolve => setTimeout(resolve, 1_100))
+      const before = refreshRequests.length
+      const projection = await http(nextPort, "/api/auth/session", "GET", "", { cookie: shortJar })
+      expect(projection.status).toBe(200)
+      expect(JSON.parse(projection.body)).toMatchObject({ authenticated: false, refresh_required: true, subject: "user-one" })
+      expect(projection.headers["set-cookie"]).toBeUndefined()
+      const shell = await http(nextPort, "/app", "GET", "", { cookie: shortJar })
+      expect(shell.status).toBe(200)
+      expect(shell.headers.location).toBeUndefined()
+      expect(refreshRequests).toHaveLength(before)
+      const renewed = await http(nextPort, "/api/auth/session", "POST", form,
+        { origin: `http://localhost:${nextPort}`, cookie: shortJar })
+      expect(renewed.status).toBe(200)
+      expect(refreshRequests).toHaveLength(before + 1)
+      const currentJar = cookieHeader(csrf, signin, callback, short, renewed)
+      expect(JSON.parse((await http(nextPort, "/api/auth/session", "GET", "", { cookie: currentJar })).body)).toMatchObject({ authenticated: true, subject: "user-one" })
+    } finally { refreshResponseOverride = undefined }
+  }, 60_000)
+
+  it("rejects a short refreshed access credential that expires during identity verification", async () => {
+    const { csrf, signin, jar, location } = await start()
+    const authorize = await http(nextPort, new URL(location).pathname + new URL(location).search)
+    const callback = await http(nextPort, authorize.headers.location as string, "GET", "", { cookie: jar })
+    expect(callback.status).toBe(303)
+    await recordProduct(callback)
+    const cookie = cookieHeader(csrf, signin, callback)
+    try {
+      refreshResponseOverride = { access_token: "access-rotated", refresh_token: "refresh-rotated", token_type: "Bearer", expires_in: 1 }
+      identityDelayMs = 1_200
+      const refreshed = await http(nextPort, "/api/auth/session", "POST",
+        `csrfToken=${(JSON.parse(csrf.body) as { csrfToken: string }).csrfToken}`,
+        { origin: `http://localhost:${nextPort}`, cookie })
+      expect(refreshed.status).toBe(503)
+      expect(refreshed.headers["set-cookie"]).toBeUndefined()
+      expect((await http(nextPort, "/api/auth/session", "GET", "", { cookie })).body).toContain('"authenticated":false')
+    } finally { refreshResponseOverride = undefined; identityDelayMs = 0 }
   })
 
   it("revokes the old Product Session when refreshed identity no longer matches the fixed tenant", async () => {
@@ -5602,6 +5656,11 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
           next_error_categories: nextErrorCategories(output.slice(outputStart)),
         })}`)
       }
+      expect(paths.filter((item) => item === "/iam/oauth2/token")).toHaveLength(refreshesBefore + 1)
+      const pendingRead = await http(nextPort, "/api/auth/session", "GET", "", { cookie })
+      expect(pendingRead.status, responseDiagnostic("during_refresh_get", pendingRead, outputStart, pathStart)).toBe(409)
+      expect((await http(nextPort, "/api/auth/session", "POST", form,
+        { origin: `http://localhost:${nextPort}`, cookie })).status).toBe(409)
       expect(paths.filter((item) => item === "/iam/oauth2/token")).toHaveLength(refreshesBefore + 1)
       const revokesBefore = paths.filter((item) => item === "/iam/oauth2/revoke").length
       const manifestsBefore = await nextManifestMetadata().catch(() => [{ error_code: "metadata_unavailable" }])

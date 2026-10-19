@@ -225,3 +225,23 @@ it("keeps the verified presentation during an outage, but revokes owner access w
   expect(screen.queryByRole("alert")).toBeNull();
   expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
 });
+
+
+it.each(["visibilitychange", "pageshow"])("resumes bounded server admission checks on %s after a hidden timer", async event => {
+  vi.useFakeTimers()
+  let visibility: DocumentVisibilityState = "hidden"
+  const visible = vi.spyOn(document, "visibilityState", "get").mockImplementation(() => visibility)
+  try {
+    render(<LocaleProvider><AppGate serverUnavailable /></LocaleProvider>)
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(router.refresh).not.toHaveBeenCalled()
+    visibility = "visible"
+    if (event === "visibilitychange") document.dispatchEvent(new Event(event))
+    else window.dispatchEvent(new Event(event))
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(router.refresh).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(33_000)
+    expect(router.refresh).toHaveBeenCalledTimes(2)
+    expect(state.openProductSignIn).not.toHaveBeenCalled()
+  } finally { visible.mockRestore() }
+})

@@ -12,7 +12,7 @@ import { oidcAuthOptions, oidcRpConfig, OIDC_RESOURCE, OIDC_SCOPE, type Verified
 import { verifyProductIdentity } from "@/lib/server/product-identity"
 import { consumeOidcState, issueOidcState, rpCleanupCookies } from "@/lib/server/oidc-rp-transaction"
 import { clearProductLoginReturnCookie, productLoginReturnTarget } from "@/lib/server/product-login-return"
-import { clearProductSessionCookie, currentProductSession, decodeProductSession, productSessionCookie, type ProductClaims } from "@/lib/server/product-session"
+import { clearProductSessionCookie, productSessionState, decodeProductSession, productSessionCookie, type ProductClaims } from "@/lib/server/product-session"
 import { createSession, finalizeRefresh, invalidatePending, newSessionCandidate, reserveRefresh, tombstoneSession } from "@/lib/server/product-session-store"
 import { refreshOidcToken, revokeOidcToken } from "@/lib/server/oidc-token"
 
@@ -61,10 +61,14 @@ async function productAction(request: NextRequest, action: "session" | "signout"
   const requestId = randomUUID()
   if (request.method === "GET" && action === "session") {
     try {
-      const session = await currentProductSession(request, store)
-      return Response.json(session === null || session.accessExpiresAt <= Date.now()
-        ? { authenticated: false }
-        : { authenticated: true, subject: session.subject, expires_at: session.expiresAt },
+      const result = await productSessionState(request, store)
+      if (result.state === "refreshing" || result.state === "stale") return errorResponse(409, "product_session_refresh_conflict")
+      if (result.state === "unconfirmed") return errorResponse(503, "product_session_refresh_unconfirmed")
+      const session = result.state === "active" ? result.claims : null
+      return Response.json(session === null ? { authenticated: false }
+        : session.accessExpiresAt <= Date.now()
+          ? { authenticated: false, refresh_required: true, subject: session.subject, expires_at: session.expiresAt }
+          : { authenticated: true, subject: session.subject, expires_at: session.expiresAt },
       { headers: { "cache-control": "private, no-store", "x-request-id": requestId } })
     } catch { return errorResponse(503, "product_session_unavailable") }
   }
@@ -98,7 +102,12 @@ async function productAction(request: NextRequest, action: "session" | "signout"
     return Response.json({ status: "signed_out", remote_revocation: revoked ? "confirmed" : "unconfirmed", ...issuer }, { headers })
   }
   let claims: ProductClaims | null
-  try { claims = await currentProductSession(request, store) }
+  try {
+    const result = await productSessionState(request, store)
+    if (result.state === "refreshing" || result.state === "stale") return errorResponse(409, "product_session_refresh_conflict")
+    if (result.state === "unconfirmed") return errorResponse(503, "product_session_refresh_unconfirmed")
+    claims = result.state === "active" ? result.claims : null
+  }
   catch { return errorResponse(503, "product_session_unavailable") }
   if (claims === null) return errorResponse(401, "product_session_required")
   let reserved: Awaited<ReturnType<typeof reserveRefresh>>
@@ -107,9 +116,10 @@ async function productAction(request: NextRequest, action: "session" | "signout"
   if (reserved === null) return errorResponse(409, "product_session_refresh_conflict")
   try {
     const refreshed = await refreshOidcToken(config, reserved.refresh, request.signal)
+    const accessExpiresAt = Date.now() + refreshed.expiresIn * 1_000
     await verifyProductIdentity(config, refreshed.access, claims.subject, request.signal)
-    const next: ProductClaims = { ...claims, generation: claims.generation + 1, access: refreshed.access,
-      accessExpiresAt: Date.now() + refreshed.expiresIn * 1_000 }
+    if (accessExpiresAt <= Date.now()) throw new Error("refreshed access expired during verification")
+    const next: ProductClaims = { ...claims, generation: claims.generation + 1, access: refreshed.access, accessExpiresAt }
     const cookie = await productSessionCookie(next, config.authSecret, config.relay.webOrigin)
     if (!(await finalizeRefresh(store, claims.id, claims.generation, reserved.reservation, refreshed.refresh))) {
       return errorResponse(409, "product_session_refresh_conflict")

@@ -1,3 +1,7 @@
+## Product Session 生命周期读取（2026-10-19）
+
+productSessionState/inspectSessionState只服务App壳和原生session端点，区分active/refreshing/stale/absent/unconfirmed；原业务activeProductSession仍要求有效access与当前generation。GET/RSC不刷新、不输出凭据，POST保原Origin/CSRF、双CAS和正式身份核验；过期reservation不被新请求抢占。
+
 ## Authorize浏览器异常恢复（2026-10-19）
 
 `oidc-login-recovery.ts`是无脚本、无自动重试的手动恢复文档，不是认证或降级入口。IAM GET relay只在既有路径/host/origin/body/cookie/header校验完成后，对明确top-level document navigation且Accept允许HTML的authorize错误呈现该文档；保留失败status/request-id、不转发失败owner的Location/cookies/body。成功redirect及API/非顶层/缺nonce/HTML q=0响应保持原契约。Callback可复用相同helper；不恢复旧state、不新建会话、不删除其他登录cookie。正常开发环境与登录整链另验。 最终Proxy在精确authorize路径使用同一nonce策略并固定no-referrer，避免框架全局头覆盖；其余路径不改变。

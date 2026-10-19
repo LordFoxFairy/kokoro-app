@@ -55,9 +55,12 @@ export async function endProductSession(
 /** The caller owns the single budget for CSRF, refresh and optional read confirmation. */
 export async function refreshProductSession(
   signal: AbortSignal,
+  onRefreshDispatch?: () => void,
 ): Promise<{ mode: "authenticated"; subject: string } | { mode: "confirm" }> {
   const csrfToken = await currentCsrf(signal);
   signal.throwIfAborted();
+  // CSRF reads can fail or be cancelled without creating an uncertain mutation.
+  onRefreshDispatch?.();
   const response = await fetch("/api/auth/session", {
     method: "POST",
     cache: "no-store",

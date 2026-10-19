@@ -1,3 +1,12 @@
+## Product Session 过期与续期投影（2026-10-17）
+
+访问凭据过期不等于七天 Product Session 到期。现 `GET /api/auth/session` 在线核验同一 Redis generation 后：active 且 access 有效返回原 authenticated/subject/expiry；active 但 access 到期返回 `200 {authenticated:false,refresh_required:true,subject,expires_at}`；absent/tombstone/无有效cookie仅返回 `{authenticated:false}`。refreshing 或 stale generation 返回409 `product_session_refresh_conflict`，过期 reservation 返回503 `product_session_refresh_unconfirmed`，损坏记录/依赖故障503 unavailable。不返回凭据、generation或reservation，不在GET/RSC轮换cookie。
+
+App layout 仅凭有效RP生命周期挂 data-free AppGate；refreshing/stale/unconfirmed保故障壳，真正anonymous才走严格return_to登录。浏览器冷启动或未满120秒但收到refresh_required，沿现CSRF POST＋同主体确认续期，确认前不准入。unknown后只读确认，refresh_required不算成功，也不赋予重发权限。POST保Origin/CSRF、Redis双CAS、正式身份核验与tombstone；access deadline固定在收到token时，不把身份核验耗时加回有效期。业务adapter仍逐请求拒绝过期access，不把壳资格当业务Bearer资格。覆盖原文中“GET投影语义不变”的历史表述，IAM/BFF协议不变。
+
+
+CSRF获取失败或在POST派发前取消不产生未知写；仅在真正派发POST前标记，已派发未知只读确认、不自动重发。服务器故障壳在可见恢复/pageshow沿原1s/3s两次预算重核，不另启登录。
+
 ## Admin同源本地失败（2026-10-19）
 
 既有`/api/admin/*`错误固定为完整`error.code/message/retryable`、同request-id与no-store；无Product Session为401 session_authentication_required且retryable=false，退休旧admin_session_required，无alias。本地503 admin_gateway_unavailable及502 admin_gateway_response_invalid均retryable=true，表示上层可保原命令处理，不自动刷新/登录/重发写。固定message不泄露内部异常，上游owner响应与严格头校验不变。不新增路径、权限、配置或认证方案；原测试与真实同源无cookie链验收，完整交付结果由Root原收尾计划绑定。

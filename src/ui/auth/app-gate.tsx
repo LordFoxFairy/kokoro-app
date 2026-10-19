@@ -74,11 +74,15 @@ export function AppGate({ brandName, serverAdmitted = false, serverUnavailable =
     schedule()
     window.addEventListener("online", resume)
     window.addEventListener("focus", resume)
+    window.addEventListener("pageshow", resume)
+    document.addEventListener("visibilitychange", resume)
     return () => {
       live = false
       clearTimeout(timer)
       window.removeEventListener("online", resume)
       window.removeEventListener("focus", resume)
+      window.removeEventListener("pageshow", resume)
+      document.removeEventListener("visibilitychange", resume)
     }
   }, [serverUnavailable, router])
 
