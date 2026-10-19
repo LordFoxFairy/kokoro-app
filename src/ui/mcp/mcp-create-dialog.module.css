@@ -152,12 +152,12 @@
 .jsonImportForm > textarea {
   width: calc(100% - 2.5rem);
   height: 19.25rem;
-  min-height: 19.25rem;
+  min-height: 0;
   margin: 0.75rem 1.25rem 0;
   resize: none;
   padding: 0.5rem 0.75rem 0.5rem 1rem;
   border: 0;
-  border-radius: 0.5rem;
+  border-radius: 0.625rem;
   background: rgb(55 53 47 / 6%);
   box-shadow: none;
   font-size: 0.875rem;
@@ -180,6 +180,10 @@
   align-items: center;
   justify-content: flex-end;
   padding: 1.25rem;
+}
+
+.jsonImportActions > button {
+  border-radius: 0.5rem;
 }
 
 .jsonImportActions > button:last-child,
