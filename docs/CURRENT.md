@@ -1,3 +1,9 @@
+## MCP 目录与精确详情独立交付（2026-10-18）
+
+沿已有owner query/category/cursor与精确GET：目录搜索不再过滤首屏数组冒全量，筛选/续页与首屏seed分开；保留已确认行、显式重试、主体/准入代际退休旧请求。Custom API续页只属于当前head，详情按精确locator读取并订阅原聚合写失活。目录OAuth发出ticket仍保详情，关闭/换窗退休等待；active重连仅来自实际OAuth绑定，不从保存配置推断已连接。
+
+JSON导入仅提示当前owner支持的HTTP格式，不预填命令，窄短视口保留操作。既有API/权限/存储/命令owner不变，无新网关、Schema或依赖。Create未知原命令恢复和正常MCP配对仍另验，不将页面可见或fixture成功称真实工具执行、完整Manus一比一或整个目标完成。
+
 ## Skills 来源可用性与未知更新恢复交付（2026-10-18）
 
 安装source_status不等于installed/enabled：卡片保留owner实际值，不可用来源禁止新启用/试用，已启用安装仍可停用，详情/历史包阅读及显式更新保留。详情使用exact installation鲜读事实，向父组件交还相同series/revision/source/installation locator的当前选择；不以旧卡可用性或enabled覆盖鲜读；仅同一次详情打开内的显式启停ACK可临时覆盖该次读，池操作及关闭/重开后的迟到ACK不得写新详情。不成为执行授权。

@@ -35,8 +35,14 @@ export function McpProviderDirectory({
   onCategoryFilterChange,
   onSelectProvider,
   resultsPlaceholder,
+  hasMore = false,
+  loading = false,
+  onLoadMore,
 }: {
   providers: McpConnectorProvider[];
+  hasMore?: boolean;
+  loading?: boolean;
+  onLoadMore?: () => void;
   /** Keep pure controls mounted while the owner result retires/revalidates. */
   resultsPlaceholder?: ReactNode;
   query: string;
@@ -54,24 +60,6 @@ export function McpProviderDirectory({
   const t = useT();
   const categoryLabel = (category: Category) =>
     t(MCP_CATEGORY_MESSAGES[category]);
-  const normalizedQuery = query.trim().toLocaleLowerCase();
-  const displayedProviders = providers.filter((provider) => {
-    const matchesQuery =
-      normalizedQuery.length === 0 ||
-      [
-        provider.display_name,
-        provider.description,
-        provider.author,
-        ...provider.category_keys,
-      ]
-        .filter((value): value is string => Boolean(value))
-        .some((value) => value.toLocaleLowerCase().includes(normalizedQuery));
-    return (
-      matchesQuery &&
-      (categoryFilter === "all" ||
-        provider.category_keys.includes(categoryFilter))
-    );
-  });
 
   return (
     <div className={styles.providerDirectory} data-presentation={presentation}>
@@ -149,16 +137,11 @@ export function McpProviderDirectory({
         {resultsPlaceholder !== undefined ? resultsPlaceholder : providers.length === 0 ? (
           <div className={styles.emptyProvider}>
             <Link2 aria-hidden="true" />
-            <p>{t("mcp.noProviders")}</p>
-          </div>
-        ) : displayedProviders.length === 0 ? (
-          <div className={styles.emptyProvider}>
-            <Search aria-hidden="true" />
-            <p>{t("mcp.noMatch")}</p>
+            <p>{t(query.trim() || categoryFilter !== "all" ? "mcp.noMatch" : "mcp.noProviders")}</p>
           </div>
         ) : (
           <ul className={styles.providerGrid}>
-            {displayedProviders.map((provider) => (
+            {providers.map((provider) => (
               <li
                 key={provider.provider_key}
                 className={styles.providerCard}
@@ -206,6 +189,13 @@ export function McpProviderDirectory({
             ))}
           </ul>
         )}
+        {hasMore && onLoadMore ? (
+          <div className={styles.pagination}>
+            <Button type="button" variant="outline" onClick={onLoadMore} disabled={loading} aria-busy={loading}>
+              {t(loading ? "mcp.loading" : "rail.loadMore")}
+            </Button>
+          </div>
+        ) : null}
       </section>
     </div>
   );

@@ -3551,7 +3551,11 @@ it("Custom API same-actor recheck keeps its detail through a failed read and res
     listMcpConnectors: vi.fn().mockResolvedValue({ items: [], next_cursor: null }) }
   const content = (admitted: boolean, generation: number) => <LocaleProvider><McpContent client={hub} initialView="connections" readBoundary={{ admitted, generation, subject: "api-recheck-actor" }} /></LocaleProvider>
   const view = render(content(true, 1))
-  fireEvent.click(await screen.findByRole("button", { name: "API 1" }))
+  const savedApi = await screen.findByRole("button", { name: "API 1" })
+  // A persisted API profile has no connection-status fact.
+  expect(within(savedApi).queryByLabelText("已连接")).not.toBeInTheDocument()
+  expect(within(savedApi).getByLabelText("已添加")).toBeVisible()
+  fireEvent.click(savedApi)
   const dialog = screen.getByRole("dialog", { name: "API 1" })
   round = 2
   view.rerender(content(false, 2))

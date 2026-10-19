@@ -1,3 +1,23 @@
+## 已确认写入后的首屏详情与重复游标（2026-10-18）
+
+列表可保留已确认卡片避免闪空，但旧聚合revision的行不再作为详情known：MCP以既有loading/error准入，Custom API仅在dataRevision与当前revision一致且无读取错误时提供known。写失活后已打开的精确locator立即重读，等待期间不提供旧CAS操作；GET仍不是写入ACK。目录发现重复cursor后停止续页，保留原卡片与错误，显式重试从首屏重新开始；普通网络失败仍只重试原cursor。
+
+## Custom API 状态语义（2026-10-18）
+
+`mcp-connection-list.tsx` 的Custom API Check仅标记“已添加”：`CustomApiProfile`没有实际连接状态。真正MCP连接继续按owner返回的status投影，不从配置已保存、API名称或说明推断已连接。原AppFrame恢复用例承接此区分，无新状态模型或数据请求。
+
+## JSON 导入提示与视口边界（2026-10-18）
+
+`mcp-json-import-form.tsx` 用纯 JSON placeholder展示当前 owner 已支持的 Streamable HTTP格式，不把示例预填成命令；初值为空、导入禁用，输入后仍一次提交完整原文。参考界面还展示 STDIO/SSE 语法，本产品这些导入/执行能力未闭合，不借提示宣称支持。
+
+`mcp-create-dialog.module.css` 仅 JSON mode 的600×458框使用95vw/95dvh上限和纵向滚动，窄/短窗口不裁掉标题或动作；URL、Custom API、注册 mode 不变。原 JSON form 用例扩空值/提示/零调用保护，实际浏览器验390/768/1280动态宽度、390×400短窗口键盘Tab可达、清空禁用与Escape返回创建焦点。原授权/未知命令/原key与正文恢复不变。
+
+## 2026-10-17 精确详情与独立API续页
+
+`use-custom-api-projection`继续拥有共享首屏，只给当前head/admission附独立opaque续页；显式重试、ID去重、重复cursor停机，不缓存尾页到共享head。`use-custom-api-detail`与`use-mcp-provider-connection`分别读取已开窗口的精确locator，不依赖首屏/当前页；二者消费对应既有聚合revision，旧窗口确认写使当前窗口重读但不关闭。未接全量API搜索。
+
+Provider授权窗口生命周期包含窗口token；ticket成功后保留详情，主动关闭/换窗退休等待，迟到Create不得继续Begin/导航。`private-mcp-oauth-binding`只判断owner真实OAuth事实，UI/hook共用，ready+configured允许active显式重连。Create未知原key恢复仍待独立既有命令切片，不把abort当撤销提交。实际验证见App CURRENT。
+
 # ui/mcp — 连接面板
 
 ## Settings 卡片表面（2026-10-16）
@@ -74,3 +94,12 @@ API／JSON创建窗口的每次等待由use-connector-creation-form持有独立c
 
 
 私有详情/配置的needs_oauth且pending/error主操作使用连接，不再错误派发Prepare。`use-private-mcp-authorization.ts` 仅消费当前窗口exact server/connector/CAS，复用原popup与正式Reconnect；单窗口在途单飞，关闭/切目标/重核取消等待，旧ACK只失活原主体、不导航或关新窗。Begin成功仍保详情、不冒active，回调通知后重新读取owner事实；未结Prepare/management先沿原命令。Provider/generic授权、创建及owner协议保持，秘密不入hook状态或浏览器存储。
+
+
+## 目录完整读取与单项详情
+
+`use-mcp-provider-directory.ts` 使用现有 owner 的 query/category_key/cursor：未筛选首屏加入原 shell projection，不重复预热；筛选与续页独立读取，不过滤首批数组冒全量搜索。180ms 搜索防抖，筛选/actor/准入代际退休游标、取消并拒迟到；续页失败保已有卡片，显式原游标重试，拒循环cursor。页面和catalog dialog共享该目录意图，详情返回不重置搜索/分类/已读页；控件始终保持挂载。空目录与筛选无匹配区分。seed失败只影响依赖seed的未筛选面，不污染成功的独立筛选。
+
+`use-mcp-provider-detail.ts` 只在已打开的精确provider不在当前已读页时走Hub单项GET；ACK必须匹配provider_key，关闭/准入/actor退休旧响应。已安装且无private server的MCP可直接打开此详情，不等待目录成功，不扫描全部页。现有私有server、BYOK、授权和管理命令职责不变。
+
+证据：`tests/ui/mcp-provider-directory.test.tsx`、`mcp-provider-detail.test.tsx`、现Hub/rail回归。正常空目录已读，尚无真实非空提供方/真实第三方OAuth闭环，不把协议fixture当目录内容完成或推荐事实。

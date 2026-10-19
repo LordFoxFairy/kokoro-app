@@ -56,9 +56,13 @@
     0 24px 48px rgb(0 0 0 / 16%);
 }
 
-.jsonImportDialog {
+/* Manus keeps this editor at 600×458, bounded by 95% of either viewport axis. */
+.jsonImportDialog[data-slot="dialog-content"] {
   width: 37.5rem;
+  max-width: 95vw;
   height: 28.625rem;
+  max-height: 95dvh;
+  overflow-y: auto;
 }
 
 .urlMcpDialog {

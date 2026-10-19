@@ -2045,3 +2045,14 @@ describe("Project default Skill selection", () => {
     } finally { vi.useRealTimers(); }
   });
 });
+
+it("reads an exact provider outside the first catalog page and rejects a different identity", async () => {
+  const provider = { provider_key: "outside-page", display_name: "Outside", directory_type: "app", category_keys: [], example_prompts: [], enabled: true, state_version: "1" };
+  const fetchMock = vi.fn().mockResolvedValueOnce(publicResponse({ data: { provider } }))
+    .mockResolvedValueOnce(publicResponse({ data: { provider: { ...provider, provider_key: "different" } } }));
+  vi.stubGlobal("fetch", fetchMock);
+  const client = createHubClient();
+  await expect(client.getMcpConnectorProvider("outside-page")).resolves.toEqual(provider);
+  expect(fetchMock.mock.calls[0]![0]).toBe("/api/hub/mcp/providers/outside-page");
+  await expect(client.getMcpConnectorProvider("outside-page")).rejects.toMatchObject({ reason: "parse" });
+});

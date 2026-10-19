@@ -64,6 +64,16 @@ function connectorRevision(client: HubClient, identity: string): ConnectorRevisi
 }
 
 /** A confirmed write retires only this subject's connector pages, not provider metadata. */
+/** Exact details subscribe to the same confirmed-write revision as lists. */
+export function useMcpConnectorRevision(client: HubClient, identity: string): number {
+  const revision = connectorRevision(client, identity);
+  const subscribeRevision = useCallback((listener: () => void) => {
+    revision.listeners.add(listener);
+    return () => { revision.listeners.delete(listener); };
+  }, [revision]);
+  return useSyncExternalStore(subscribeRevision, () => revision.value, () => 0);
+}
+
 export function invalidateMcpConnectorProjection(client: HubClient, identity: string): void {
   const revision = connectorRevision(client, identity);
   revision.value += 1;
@@ -321,11 +331,7 @@ export function useMcpProjection({
   readGeneration?: number;
 }) {
   const revision = connectorRevision(client, identity);
-  const subscribeRevision = useCallback((listener: () => void) => {
-    revision.listeners.add(listener);
-    return () => { revision.listeners.delete(listener); };
-  }, [revision]);
-  const currentRevision = useSyncExternalStore(subscribeRevision, () => revision.value, () => 0);
+  const currentRevision = useMcpConnectorRevision(client, identity);
   const [providerGeneration, setProviderGeneration] = useState(0);
   const [connectorGeneration, setConnectorGeneration] =
     useState(connectorRefreshKey);

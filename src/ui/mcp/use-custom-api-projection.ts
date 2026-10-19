@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
 import type { HubClient } from "@/hub/client";
 import type {
@@ -11,6 +11,7 @@ type CustomApiState = Readonly<{
   data: CustomApiPage;
   identity: string;
   readGeneration: number;
+  dataRevision: number;
   loading: boolean;
   error: boolean;
 }>;
@@ -44,6 +45,16 @@ function revisionFor(client: HubClient, identity: string): Revision {
   let revision = entries.get(identity);
   if (!revision) { revision = { value: 0, listeners: new Set() }; entries.set(identity, revision); }
   return revision;
+}
+
+/** Shared exact-detail/list invalidation for this owner aggregate only. */
+export function useCustomApiRevision(client: HubClient, identity: string): number {
+  const revision = revisionFor(client, identity);
+  const subscribeRevision = useCallback((listener: () => void) => {
+    revision.listeners.add(listener);
+    return () => { revision.listeners.delete(listener); };
+  }, [revision]);
+  return useSyncExternalStore(subscribeRevision, () => revision.value, () => 0);
 }
 
 /** A confirmed API write invalidates only this aggregate and exact actor. */
@@ -169,16 +180,13 @@ export function useCustomApiProjection({
   readGeneration?: number;
 }) {
   const revision = revisionFor(client, identity);
-  const subscribeRevision = useCallback((listener: () => void) => {
-    revision.listeners.add(listener);
-    return () => { revision.listeners.delete(listener); };
-  }, [revision]);
-  const currentRevision = useSyncExternalStore(subscribeRevision, () => revision.value, () => 0);
+  const currentRevision = useCustomApiRevision(client, identity);
   const [manualRefreshKey, setManualRefreshKey] = useState(0);
   const [state, setState] = useState<CustomApiState>({
     data: cached(client, identity, readGeneration) ?? emptyPage,
     identity,
     readGeneration,
+    dataRevision: currentRevision,
     loading: cached(client, identity, readGeneration) === undefined,
     error: false,
   });
@@ -212,13 +220,13 @@ export function useCustomApiProjection({
       (data) => {
         if (!active || revision.value !== currentRevision) return;
         remember(client, identity, data, readGeneration);
-        setState({ data, identity, readGeneration, loading: false, error: false });
+        setState({ data, identity, readGeneration, dataRevision: currentRevision, loading: false, error: false });
       },
       () => {
         if (active && revision.value === currentRevision)
           setState((current) =>
             current.identity === identity
-              ? { data: current.readGeneration === readGeneration ? current.data : emptyPage, identity, readGeneration, loading: false, error: true }
+              ? { data: current.readGeneration === readGeneration ? current.data : emptyPage, identity, readGeneration, dataRevision: current.dataRevision, loading: false, error: true }
               : current,
           );
       },
@@ -238,10 +246,56 @@ export function useCustomApiProjection({
       ? cached(client, identity, readGeneration)
       : undefined;
   const visible =
-    !admitted ? { data: emptyPage, identity, readGeneration, loading: true, error: false } : initial === undefined
+    !admitted ? { data: emptyPage, identity, readGeneration, dataRevision: -1, loading: true, error: false } : initial === undefined
       ? state.identity === identity && state.readGeneration === readGeneration
         ? state
-        : { data: emptyPage, identity, readGeneration, loading: true, error: false }
-      : { data: initial, identity, readGeneration, loading: false, error: false };
-  return { ...visible, reload };
+        : { data: emptyPage, identity, readGeneration, dataRevision: -1, loading: true, error: false }
+      : { data: initial, identity, readGeneration, dataRevision: currentRevision, loading: false, error: false };
+  // Continuations belong to one confirmed head and admission generation. They
+  // never enter the shared head cache or survive a write invalidation.
+  const scope = useMemo(() => ({ client, identity, admitted, readGeneration, currentRevision,
+    refreshKey, manualRefreshKey, head: visible.data }),
+  [client, identity, admitted, readGeneration, currentRevision, refreshKey, manualRefreshKey, visible.data]);
+  const committed = useRef<typeof scope | null>(null);
+  const pending = useRef<AbortController | null>(null);
+  const [continuation, setContinuation] = useState<{
+    scope: typeof scope; data: CustomApiPage; cursors: ReadonlySet<string>; loading: boolean; error: boolean; stopped: boolean;
+  } | null>(null);
+  useLayoutEffect(() => {
+    committed.current = scope;
+    return () => {
+      if (committed.current === scope) committed.current = null;
+      pending.current?.abort();
+      pending.current = null;
+    };
+  }, [scope]);
+  const tail = continuation?.scope === scope ? continuation : null;
+  const data = tail?.data ?? visible.data;
+  const loadMore = async () => {
+    const cursor = data.page.next_cursor;
+    if (committed.current !== scope || !admitted || visible.loading || pending.current || tail?.stopped || !cursor || !client.listCustomApis) return;
+    const controller = new AbortController();
+    pending.current = controller;
+    const cursors = tail?.cursors ?? new Set<string>();
+    setContinuation({ scope, data, cursors, loading: true, error: false, stopped: false });
+    try {
+      const page = await client.listCustomApis({ limit: 100, cursor }, controller.signal);
+      if (committed.current !== scope || controller.signal.aborted || revision.value !== currentRevision) return;
+      if (cursors.has(cursor) || page.page.next_cursor === cursor || (page.page.next_cursor !== null && cursors.has(page.page.next_cursor))) {
+        setContinuation({ scope, data, cursors, loading: false, error: true, stopped: true });
+        return;
+      }
+      const items = [...new Map([...data.items, ...page.items].map(item => [item.profile_id, item])).values()];
+      setContinuation({ scope, data: { items, page: page.page }, cursors: new Set([...cursors, cursor]), loading: false, error: false, stopped: false });
+    } catch {
+      if (committed.current === scope && !controller.signal.aborted)
+        setContinuation({ scope, data, cursors, loading: false, error: true, stopped: false });
+    } finally { if (pending.current === controller) pending.current = null; }
+  };
+  // Rows may remain visible while refreshing, but cannot seed an exact detail
+  // after a confirmed write retired their aggregate revision.
+  return { ...visible, data, dataCurrent: admitted && !visible.loading && !visible.error && visible.dataRevision === currentRevision,
+    reload, loadMore, loadingMore: tail?.loading ?? false,
+    loadMoreError: tail?.error ?? false, hasMore: Boolean(data.page.next_cursor) && !tail?.stopped };
+
 }

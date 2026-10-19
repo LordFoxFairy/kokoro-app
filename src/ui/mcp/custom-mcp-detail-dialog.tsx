@@ -41,6 +41,7 @@ import { useT } from "@/i18n/context";
 import type { McpManagementSummary } from "./mcp-management-commands";
 import { McpManagementStatus } from "./mcp-management-status";
 import styles from "./custom-mcp-detail-dialog.module.css";
+import { canAuthorizePrivateMcp } from "./private-mcp-oauth-binding";
 import { useMcpEditorSelection } from "./use-mcp-editor-selection";
 import { isMcpCustomHeaderName } from "./mcp-header-validation";
 
@@ -129,14 +130,13 @@ export function CustomMcpDetailDialog({
   const managementStatus = <McpManagementStatus command={managementCommand} admitted={admitted} onResume={onResumeManagement} />;
   const locked = managementLocked || busy || !ready || preparationState === "unknown" || preparationState === "completed";
   const prepareLabel = preparationState === "unknown" ? t(connectorCommandMayResume(preparationFailure) ? "mcp.retryOriginal" : "mcp.recovery.inspectRequired") : preparationState === "completed" ? t("mcp.creationDone") : "试用一下";
-  const needsAuthorization = ready && server.prepare_status === "needs_oauth" && server.status !== "disabled" &&
-    (connector.status === "pending" || connector.status === "error") &&
+  const needsAuthorization = ready && canAuthorizePrivateMcp(connector, server) &&
     (preparationState === "idle" || preparationState === "rejected");
   const primaryAction = () => <Button type="button" variant={editing ? "outline" : "default"}
     disabled={managementLocked || busy || !ready || !connectorCommandMayResume(preparationFailure)}
     onClick={needsAuthorization ? onAuthorize : onPrepare}>
     {busy ? <Spinner aria-hidden="true" /> : needsAuthorization ? <Link2 aria-hidden="true" /> : <Send aria-hidden="true" />}
-    {needsAuthorization ? t("settings.connect") : prepareLabel}
+    {needsAuthorization ? t(connector?.status === "active" ? "thread.reconnect" : "settings.connect") : prepareLabel}
   </Button>;
   const selectionProps = useMcpEditorSelection(ready);
   const invalidHeaderName = headers.some(

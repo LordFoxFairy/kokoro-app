@@ -1,3 +1,9 @@
+## MCP 目录与精确详情独立交付（2026-10-18）
+
+沿已有owner query/category/cursor与精确GET：目录搜索不再过滤首屏数组冒全量，筛选/续页与首屏seed分开；保留已确认行、显式重试、主体/准入代际退休旧请求。Custom API续页只属于当前head，详情按精确locator读取并订阅原聚合写失活。目录OAuth发出ticket仍保详情，关闭/换窗退休等待；active重连仅来自实际OAuth绑定，不从保存配置推断已连接。
+
+JSON导入仅提示当前owner支持的HTTP格式，不预填命令，窄短视口保留操作。既有API/权限/存储/命令owner不变，无新网关、Schema或依赖。Create未知原命令恢复和正常MCP配对仍另验，不将页面可见或fixture成功称真实工具执行、完整Manus一比一或整个目标完成。
+
 ## Project Skills 面板职责（2026-10-17，既定模型内实施）
 
 保持 Browser→同源→BFF Public16，不改owner/契约/Schema。workspace只组合ProjectSkillsSection；独立面板/卡片与useProjectSkills维护展示和请求，来源选择器单独持个人/官方只读列表。使用ready canonical Project ID与当前subject/admission/generation；同actor重核与关闭退休私有事实/取消迟到工作但保未决原命令，换actor/project彻底清除。ACK后只回读，不凭GET推断未决命令成功；显式原key/body恢复，无自动升级、重装或默认勾选。启停/移除默认项前先显式取消并保存默认，避免隐式双写；update确认两pin后走原update。删除旧技能名称callback、聚合dialog状态/假卡及浏览器旧名称入口，不保alias。

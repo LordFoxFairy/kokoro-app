@@ -15,6 +15,8 @@ import {
   mcpConnectorErrorAllowed,
   mcpConnectorErrorSchema,
   mcpConnectorProviderPageSchema,
+  mcpConnectorProviderSchema,
+  type McpConnectorProvider,
   mcpPrivateServerRegistrationInputSchema,
   mcpPrivateServerRegistrationSchema,
   mcpPrivateJsonImportMatches,
@@ -526,7 +528,8 @@ async function requestMcpConnector<T extends ZodTypeAny>(
     | McpPrivateServerOperation
     | "connectors"
     | "connector"
-    | "providers",
+    | "providers"
+    | "provider",
   path: string,
   schema: T,
   init?: RequestInit,
@@ -831,6 +834,7 @@ export type HubClient = {
     },
     signal?: AbortSignal,
   ) => Promise<McpConnectorProviderPage>;
+  getMcpConnectorProvider: (providerKey: string, signal?: AbortSignal) => Promise<McpConnectorProvider>;
   createMcpConnector: (
     input: McpConnectorCreateInput,
     signal?: AbortSignal,
@@ -1007,6 +1011,13 @@ export function createHubClient(): HubClient {
         undefined,
         signal,
       );
+    },
+    getMcpConnectorProvider: async (providerKey, signal) => {
+      if (!/^[a-z0-9][a-z0-9._-]{0,63}$/u.test(providerKey)) throw new HubClientError("parse", "invalid provider key", null, null);
+      const result = await requestMcpConnector("provider", `/mcp/providers/${encodeURIComponent(providerKey)}`,
+        z.object({ provider: mcpConnectorProviderSchema }).strict(), undefined, signal);
+      if (result.provider.provider_key !== providerKey) throw new HubClientError("parse", "provider identity mismatch", null, null);
+      return result.provider;
     },
     createMcpConnector: async (input, signal) =>
       (

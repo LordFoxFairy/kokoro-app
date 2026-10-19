@@ -14,6 +14,13 @@ import { useT } from "@/i18n/context";
 
 import styles from "./mcp-create-dialog.module.css";
 
+// Describe only the current owner-supported import format; never prefill a command.
+const JSON_IMPORT_PLACEHOLDER = JSON.stringify({
+  mcpServers: {
+    SERVER_NAME: { type: "streamableHttp", url: "https://HOST/mcp" },
+  },
+}, null, 2);
+
 /**
  * Manus accepts one complete configuration document. The browser must not
  * enumerate servers, issue a registration loop, or show a per-item loading
@@ -61,6 +68,7 @@ export function JsonMcpImportForm({
       <Textarea
         autoFocus
         value={config}
+        placeholder={JSON_IMPORT_PLACEHOLDER}
         readOnly={locked}
         aria-label={t("mcp.jsonImportDescription")}
         aria-invalid={failed || undefined}

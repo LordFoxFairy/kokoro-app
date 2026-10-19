@@ -18,6 +18,8 @@ export function McpProviderCatalogDialog({
   open,
   providers,
   loading,
+  hasMore,
+  onLoadMore,
   error,
   query,
   categoryFilter,
@@ -32,6 +34,8 @@ export function McpProviderCatalogDialog({
   open: boolean;
   providers?: McpConnectorProvider[];
   loading: boolean;
+  hasMore: boolean;
+  onLoadMore: () => void;
   error: boolean;
   query: string;
   categoryFilter: "all" | keyof typeof MCP_CATEGORY_MESSAGES;
@@ -97,6 +101,9 @@ export function McpProviderCatalogDialog({
           ) : null}
             <McpProviderDirectory
               providers={providers ?? []}
+              hasMore={hasMore}
+              loading={loading}
+              onLoadMore={onLoadMore}
               {...(providers === undefined ? { resultsPlaceholder: loading ? <div className={styles.pendingCatalog} aria-busy="true"><span className="sr-only" role="status">{t("mcp.loading")}</span></div> : null } : {})}
               query={query}
               onQueryChange={onQueryChange}

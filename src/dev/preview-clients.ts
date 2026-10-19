@@ -80,7 +80,14 @@ export function createPreviewHubClient(): HubClient {
     },
     listMcpConnections: () => Promise.resolve({ connections: [] }),
     listMcpConnectors: () => Promise.resolve({ items: personalConnectors, next_cursor: null }),
-    listMcpConnectorProviders: () => Promise.resolve({ items: personalProviders, next_cursor: null }),
+    listMcpConnectorProviders: (query = {}) => Promise.resolve({ items: personalProviders.filter(provider =>
+      (!query.query || [provider.display_name, provider.description].some(value => value?.toLocaleLowerCase().includes(query.query!.toLocaleLowerCase()))) &&
+      (!query.category_key || provider.category_keys.some(key => key === query.category_key)) &&
+      (!query.directory_type || provider.directory_type === query.directory_type)), next_cursor: null }),
+    getMcpConnectorProvider: key => {
+      const provider = personalProviders.find(item => item.provider_key === key)
+      return provider ? Promise.resolve(provider) : Promise.reject(new Error("preview provider not found"))
+    },
     createMcpConnector: (input) => {
       const connector: McpConnector = {
         connector_id: `preview-connector-${personalConnectors.length + 1}`,

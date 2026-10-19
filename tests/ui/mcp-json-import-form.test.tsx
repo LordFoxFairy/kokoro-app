@@ -55,8 +55,17 @@ describe("JsonMcpImportForm", () => {
   it("submits one untouched document through the Hub client, then refreshes its owner projection", async () => {
     const importPrivateMcpJson = vi.fn().mockResolvedValue(undefined);
     const { onDone, onRegistered } = renderForm({ importPrivateMcpJson });
+    const editor = screen.getByRole("textbox") as HTMLTextAreaElement;
+    expect(JSON.parse(editor.placeholder)).toEqual({
+      mcpServers: {
+        SERVER_NAME: { type: "streamableHttp", url: "https://HOST/mcp" },
+      },
+    });
+    expect(editor).toHaveValue("");
+    expect(screen.getByRole("button", { name: /Import|导入/u })).toBeDisabled();
+    expect(importPrivateMcpJson).not.toHaveBeenCalled();
 
-    fireEvent.change(screen.getByRole("textbox"), {
+    fireEvent.change(editor, {
       target: { value: documentValue },
     });
     fireEvent.click(screen.getByRole("button", { name: /Import|导入/u }));

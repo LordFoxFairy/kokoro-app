@@ -3,6 +3,7 @@
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { HubClient } from "@/hub/client";
 import type { McpConnector, McpPrivateServer } from "@/hub/mcp-connector.schema";
+import { canAuthorizePrivateMcp } from "./private-mcp-oauth-binding";
 import { useMcpOAuthPopup } from "./use-mcp-oauth-popup";
 import { invalidateMcpConnectorProjection } from "./use-mcp-projection";
 
@@ -36,8 +37,7 @@ export function usePrivateMcpAuthorization({ client, identity, admitted, readGen
   const authorize = async (connector: McpConnector, server: McpPrivateServer) => {
     if (committed.current !== scope || !scope.admitted || waiting.current ||
       connector.connector_id !== scope.connectorId || server.server_id !== scope.serverId ||
-      connector.server_id !== server.server_id || server.status === "disabled" ||
-      server.prepare_status !== "needs_oauth" || (connector.status !== "pending" && connector.status !== "error")) return;
+      !canAuthorizePrivateMcp(connector, server)) return;
     const request = { scope };
     waiting.current = request;
     setStatus({ scope, busy: true, error: false });

@@ -29,6 +29,10 @@ import { CustomApiDetailDialog } from "./custom-api-detail-dialog";
 import { McpSettingsToolbar } from "./mcp-settings-toolbar";
 import { useMcpOAuthPopup } from "./use-mcp-oauth-popup";
 import { usePrivateMcpAuthorization } from "./use-private-mcp-authorization";
+import { useMcpProviderDetail } from "./use-mcp-provider-detail";
+import { useMcpProviderDirectory } from "./use-mcp-provider-directory";
+import { useCustomApiDetail } from "./use-custom-api-detail";
+import { useMcpProviderConnection } from "./use-mcp-provider-connection";
 import { useCustomApiProjection } from "./use-custom-api-projection";
 import { invalidateMcpConnectorProjection, useMcpProjection } from "./use-mcp-projection";
 
@@ -174,10 +178,12 @@ export function McpProjectionRead({
     if (selectedCustomApiId && !editorReturnFocusRef.current?.isConnected) editorReturnFocusRef.current = fallback;
     if (selectedProviderKey && !providerReturnFocusRef.current?.isConnected) providerReturnFocusRef.current = fallback;
   }, [owner, connectorIntent, selectedCustomApiId, selectedProviderKey]);
+  const authorizationWindow = useMemo(() => ({ ...owner, providerWindowToken, selectedProviderKey, editor: connectorIntent?.window }),
+    [owner, providerWindowToken, selectedProviderKey, connectorIntent?.window]);
   const startOAuthPopup = useMcpOAuthPopup({
     ...(onAuthorizationNavigate ? { onAuthorizationNavigate } : {}),
-    lifecycle: owner,
-    onReload: () => { if (ownerRef.current === owner && admitted) reload("connectors"); },
+    lifecycle: authorizationWindow,
+    onReload: () => { if (ownerRef.current === owner && admitted) { reload("connectors"); setDetailRetry(value => value + 1); } },
   });
   const {
     providerState,
@@ -204,7 +210,15 @@ export function McpProjectionRead({
 
   // Provider card artwork is rendered from owner-owned `cover_image_url` in
   // McpProviderDirectory; this coordinator never substitutes local assets.
-  const providers = providerProjection?.items ?? EMPTY_PROVIDERS;
+  const directory = useMcpProviderDirectory({ client, identity, admitted, readGeneration,
+    seed: providerProjection, query: providerQuery, category: categoryFilter });
+  const providers = [...new Map([...(providerProjection?.items ?? EMPTY_PROVIDERS), ...directory.items]
+    .map(provider => [provider.provider_key, provider])).values()];
+  const directoryError = directory.error || (providerQuery.trim() === "" && categoryFilter === "all" && providerState.error);
+  const retryDirectory = () => {
+    if (directory.error) directory.retry();
+    else reload("providers");
+  };
   const connectors = (connectorProjection?.items ?? []).filter(
     (connector) => !confirmedRemovedConnectorIds.has(connector.connector_id),
   );
@@ -214,19 +228,26 @@ export function McpProjectionRead({
       .map((connector) => connector.provider_key),
   );
   const customApis = customApiState.data?.items ?? [];
-  const selectedProviderConnection = selectedProviderConnectionId === null ? null : connectors.find(item => item.connector_id === selectedProviderConnectionId) ?? null;
+  const providerConnectionDetail = useMcpProviderConnection({ client, identity, admitted, readGeneration,
+    connectorId: selectedProviderConnectionId, providerKey: selectedProviderKey,
+    known: view === "connections" && !connectorState.loading && !connectorState.error
+      ? connectors.find(item => item.connector_id === selectedProviderConnectionId) : undefined, retry: detailRetry });
+  const selectedProviderConnection = providerConnectionDetail.connection;
+  const providerDetail = useMcpProviderDetail({ client, identity, admitted, readGeneration,
+    providerKey: selectedProviderKey, known: providers.find(item => item.provider_key === selectedProviderKey), retry: detailRetry });
   const selectedProvider = admitted && (selectedProviderConnectionId === null || selectedProviderConnection?.provider_key === selectedProviderKey)
-    ? providers.find(item => item.provider_key === selectedProviderKey) ?? null : null;
-  const selectedCustomApi = admitted ? customApis.find(item => item.profile_id === selectedCustomApiId) ?? null : null;
+    ? providerDetail.provider : null;
+  const apiDetail = useCustomApiDetail({ client, identity, admitted, readGeneration,
+    profileId: selectedCustomApiId, known: customApiState.dataCurrent
+      ? customApis.find(item => item.profile_id === selectedCustomApiId) : undefined, retry: detailRetry });
+  const selectedCustomApi = apiDetail.profile;
   const providersByKey = new Map(
     providers.map((provider) => [provider.provider_key, provider]),
   );
-  const providerRefreshing =
-    providerState.loading || providerState.requestIdentity !== identity;
   const connectorRefreshing =
     connectorState.loading || connectorState.requestIdentity !== identity;
   const refreshing =
-    view === "catalog" ? providerRefreshing : connectorRefreshing;
+    view === "catalog" ? directory.loading : connectorRefreshing;
   const plaza = embedded && !settingsLayout && initialView === "catalog";
 
   const hideConfirmedRemovedConnector = (connectorId: string) => {
@@ -248,7 +269,10 @@ export function McpProjectionRead({
     action: () => Promise<unknown>,
     onSuccess?: (result: unknown) => void,
   ) => {
-    if (!owner.admitted || ownerRef.current !== owner) return;
+    const wait = providerWindow.current ?? editorWindow.current;
+    const current = () => ownerRef.current === owner && wait !== null && !wait.controller.signal.aborted &&
+      (providerWindow.current === wait || editorWindow.current === wait);
+    if (!owner.admitted || !current()) return;
     setActionId(id);
     setActionError(false);
     try {
@@ -256,13 +280,13 @@ export function McpProjectionRead({
       // A confirmed old-generation write still retires this exact actor's
       // projection, but never publishes its private ACK or changes current UI.
       invalidateMcpConnectorProjection(client, identity);
-      if (ownerRef.current !== owner) return;
+      if (!current()) return;
       resetEditor();
       onSuccess?.(result);
     } catch {
-      if (ownerRef.current === owner) setActionError(true);
+      if (current()) setActionError(true);
     } finally {
-      if (ownerRef.current === owner) setActionId(null);
+      if (current()) setActionId(null);
     }
   };
   const runApiManagement = async (input?: CustomApiManagementIntent) => {
@@ -294,6 +318,13 @@ export function McpProjectionRead({
     setDeleteId(null);
     setActionError(false);
     setEditor(null);
+    if (!connector.server_id && connector.connector_type === "mcp") {
+      setProviderWindowToken({});
+      setSelectedProviderConnectionId(connector.connector_id);
+      setSelectedProviderKey(connector.provider_key);
+      setConnectorIntent(null);
+      return;
+    }
     setConnectorIntent({ connectorId: connector.connector_id, ...(connector.server_id ? { serverId: connector.server_id } : {}), entered: false, window: {} });
   };
   const connectorId = connectorIntent?.connectorId;
@@ -313,7 +344,7 @@ export function McpProjectionRead({
         const server = serverId && client.getPrivateMcpServer ? await client.getPrivateMcpServer(serverId, controller.signal) : undefined;
         if (!active || ownerRef.current !== owner) return;
         if (serverId && (!server || server.server_id !== serverId)) throw Error("MCP detail identity mismatch");
-        if (!server && selectedConnectorProvider) {
+        if (!server && (selectedConnectorProvider || selectedConnector.connector_type === "mcp")) {
           setProviderWindowToken({});
           setSelectedProviderConnectionId(selectedConnector.connector_id);
           setSelectedProviderKey(selectedConnector.provider_key);
@@ -346,7 +377,7 @@ export function McpProjectionRead({
               description: provider.description ?? "",
             });
             invalidateMcpConnectorProjection(client, identity);
-            if (ownerRef.current !== owner) throw new Error("MCP command retired");
+            if (signal.aborted || ownerRef.current !== owner) throw new Error("MCP command retired");
             if (connector.status !== "pending")
               throw new Error("connector does not require authorization");
             const started = await client.beginMcpConnectorAuthorization(
@@ -379,7 +410,14 @@ export function McpProjectionRead({
         }
         return connector;
       },
-      onSuccess,
+      (result) => {
+        if (provider.connection_server_id !== undefined) {
+          // Keep the issuing detail alive while the external authorization
+          // window is active. Closing it (or opening another detail) retires
+          // that wait instead of allowing a stale popup to navigate later.
+          setSelectedProviderConnectionId((result as McpConnector).connector_id);
+        } else onSuccess?.();
+      },
     );
   };
   const restartAuthorization = (connector: McpConnector, serverId: string) => {
@@ -481,8 +519,8 @@ export function McpProjectionRead({
         />
       </header>
       <div className={styles.body}>
-      {view === "catalog" && providerState.error ? (
-        <ProjectionError onRetry={() => reload("providers")} />
+      {view === "catalog" && directoryError ? (
+        <ProjectionError onRetry={retryDirectory} />
       ) : null}
       {view === "connections" &&
       connectorProjection === undefined &&
@@ -507,8 +545,11 @@ export function McpProjectionRead({
       {view === "catalog" ? (
         <div className={styles.content}>
           <McpProviderDirectory
-            providers={providers}
-            {...(providerProjection === undefined ? { resultsPlaceholder: providerRefreshing ? <ProjectionPending view="catalog" /> : null } : {})}
+            providers={directory.items}
+            hasMore={directory.hasMore}
+            loading={directory.loading}
+            onLoadMore={directory.loadMore}
+            {...(directory.items.length === 0 && (!admitted || directory.loading) ? { resultsPlaceholder: <ProjectionPending view="catalog" /> } : {})}
             query={providerQuery}
             onQueryChange={setProviderQuery}
             showSearch={embedded}
@@ -567,22 +608,30 @@ export function McpProjectionRead({
               setCursor(next);
             }}
           />
+          {customApiState.loadMoreError ? <Alert variant="destructive" role="alert"><AlertDescription>{t("mcp.loadError")}</AlertDescription></Alert> : null}
+          {customApiState.hasMore ? <Button type="button" variant="outline" disabled={customApiState.loadingMore}
+            aria-busy={customApiState.loadingMore} onClick={() => void customApiState.loadMore()}>
+            {customApiState.loadingMore ? t("mcp.loading") : t("rail.loadMore")} · API
+          </Button> : null}
+          {customApiState.loadMoreError && !customApiState.hasMore ? <Button type="button" variant="outline" onClick={customApiState.reload}>{t("mcp.retry")}</Button> : null}
         </div>
       ) : null}
 
       </div>
       <McpProviderCatalogDialog
         open={catalogOpen}
-        {...(providerProjection ? { providers: providerProjection.items } : {})}
-        loading={providerRefreshing}
-        error={providerState.error}
+        {...(directory.items.length > 0 || !directory.loading ? { providers: directory.items } : {})}
+        hasMore={directory.hasMore}
+        onLoadMore={directory.loadMore}
+        loading={directory.loading}
+        error={directoryError}
         query={providerQuery}
         categoryFilter={categoryFilter}
         returnFocusRef={catalogReturnFocusRef}
         onOpenChange={setCatalogOpen}
         onQueryChange={setProviderQuery}
         onCategoryFilterChange={setCategoryFilter}
-        onRetry={() => reload("providers")}
+        onRetry={retryDirectory}
         onSelectProvider={openProvider}
         {...(onCreateMcp ? { onCreate: (mode: McpCreateMode, target?: HTMLElement | null) => { if (ownerRef.current === owner && admitted) onCreateMcp(mode, target); } } : {})}
       />
@@ -701,8 +750,8 @@ export function McpProjectionRead({
       />
       <McpProviderDetailDialog
         open={selectedProviderKey !== null}
-        pendingError={admitted && (providerState.error || (providerProjection !== undefined && selectedProvider === null && (selectedProviderConnectionId === null || !connectorState.loading)))}
-        onRetry={() => { if (ownerRef.current !== owner || !admitted) return; reload("providers"); reload("connectors"); }}
+        pendingError={admitted && (providerDetail.error || providerConnectionDetail.error)}
+        onRetry={() => { if (ownerRef.current !== owner || !admitted) return; setDetailRetry(value => value + 1); reload("providers"); reload("connectors"); }}
         admitted={admitted}
         managementCommand={providerManagementState}
         onResumeManagement={() => { if (selectedProviderConnectionId) void runManagement("provider", selectedProviderConnectionId); }}
@@ -714,6 +763,7 @@ export function McpProjectionRead({
         onClose={() => {
           setSelectedProviderKey(null);
           setSelectedProviderConnectionId(null);
+          setActionId(null);
           setActionError(false);
         }}
         onConnect={(provider) =>
@@ -741,8 +791,8 @@ export function McpProjectionRead({
           canUpdate={apiManagement.canUpdate}
           canRemove={apiManagement.canRemove}
           onResume={() => { void runApiManagement(); }}
-          pendingError={admitted && (customApiState.error || (!customApiState.loading && !selectedCustomApi))}
-          onRetry={() => { if (ownerRef.current === owner && admitted) customApiState.reload(); }}
+          pendingError={admitted && apiDetail.error}
+          onRetry={() => { if (ownerRef.current === owner && admitted) customApiState.reload(); setDetailRetry(value => value + 1); }}
           actionError={apiCommandState?.kind === "rejected"}
           returnFocusRef={editorReturnFocusRef}
           onClose={() => setApiIntent(null)}
