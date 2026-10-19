@@ -66,9 +66,9 @@
 }
 
 .urlMcpDialog {
-  width: min(30rem, calc(100vw - 2rem));
-  height: min(25.5rem, calc(100dvh - 2rem));
-  transition: height var(--motion-base) var(--ease-standard);
+  width: 30rem;
+  /* Intrinsic content height grows with wrapped warnings; only the viewport caps it. */
+  height: auto;
 }
 
 /* Custom API is a secret-profile dialog, not a narrow MCP URL dialog. */
@@ -98,13 +98,9 @@
 }
 
 .urlMcpDialog[data-slot="dialog-content"] {
+  max-width: 95vw;
+  max-height: 95dvh;
   background: var(--settings-surface);
-}
-
-.urlMcpDialog:has(.advancedFields) {
-  /* The measured advanced reference is a 496px dialog: it contains both
-   * OAuth fields and the action row without introducing a blank lower half. */
-  height: min(31rem, calc(100dvh - 2rem));
 }
 
 .jsonImportDialog > :global([data-slot="dialog-close"]),
@@ -435,8 +431,48 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .urlMcpDialog,
   .advancedToggle > svg:last-child {
     transition: none;
   }
+}
+
+/* URL OAuth panel: preserve the compact 21px heading and the 12px field gap.
+ * Private MCP configuration with request headers has its own layout budget. */
+.urlMcpDialog .advancedToggle {
+  height: 2.9375rem;
+  min-height: 2.9375rem;
+  border-radius: 0.75rem;
+  line-height: 1.3125rem;
+}
+
+.urlMcpDialog .advancedToggle[aria-expanded="true"] {
+  height: 2.125rem;
+  min-height: 2.125rem;
+  padding-top: 0.75rem;
+  border-bottom: 0;
+  border-radius: 0.75rem 0.75rem 0 0;
+}
+
+.urlMcpDialog .advancedFields {
+  border-radius: 0 0 0.75rem 0.75rem;
+}
+
+.urlMcpDialog .advancedFields :global(input) {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.urlMcpDialog .urlWarning {
+  margin-top: 1rem;
+}
+
+.urlMcpDialog .urlMcpActions {
+  padding-top: 1.25rem;
+}
+
+/* The intrinsic dialog does not provide a definite percentage height. Cap
+ * its form as well so wheel/keyboard scrolling stays in the form, not a
+ * programmatically scrolled overflow-hidden outer frame. */
+.urlMcpDialog .urlMcpForm {
+  max-height: 95dvh;
 }

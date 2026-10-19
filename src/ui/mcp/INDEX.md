@@ -1,3 +1,9 @@
+## URL 表单自然高度与 OAuth 面板（2026-10-19）
+
+同日正常 IAB 对照 Manus：URL 外框以实际内容自然增高、95vw/95dvh 为上限；不用固定408/496高度。桌面收起/展开为480×408/500，390×720因警告换行自然变370.5×427.5/519.5；390×400与390×300分别限380/285。URL内部form另承接同一高度上限与overflow:auto，外框不因键盘聚焦被程序滚走；实际wheel/Tab均可到可见取消，外框始终保留。OAuth字段14px/20px、面板12px圆角与12px字段间隔对齐本次参考。
+
+所有新规则仅URL dialog作用域，不改JSON/API/私有headers、请求/凭据/原命令恢复。正常空输入与保存禁用，未填凭据、提交注册或授权；局部几何/键盘证据不代表真实OAuth或整站像素一致。高级设置的措辞、图标与透明URL内部input圆角仍有可见/结构差异，不靠遮盖或造数据称全部对齐。
+
 ## Provider 创建恢复职责（2026-10-19）
 
 `provider-creation-commands.ts` 属于现有 shell 命令上下文，按 actor/provider 保留原 Create 的不可变正文/键及确认 locator，复用单一 `connector-command`；不保存第二份 provider/connector/CAS 投影。`mcp-projection-read` 编排本窗口的双精确读取与授权，`mcp-provider-detail-dialog` 仅呈现未知/确认待续接和显式恢复控件。关闭/准入重核停止等待，换主体退休；创建已确认后授权失败不再 Create。动态 OAuth 提示只控制下次点击预开，不替代当前 exact owner 事实。既有连接器管理与创建恢复独立，只有消费连接/ticket 或确认移除该连接才释放原创建命令。
