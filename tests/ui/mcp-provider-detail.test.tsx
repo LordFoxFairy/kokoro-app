@@ -13,7 +13,7 @@ it.each(["outside the first page", "when the directory fails"])("opens an instal
   const get = vi.fn().mockResolvedValue(provider)
   const client = { ...createHubClient(), getMcpConnectorProvider: get,
     listMcpConnectorProviders: scenario === "when the directory fails" ? vi.fn().mockRejectedValue(Error("offline")) : vi.fn().mockResolvedValue({ items: [], next_cursor: "more" }),
-    listMcpConnectors: vi.fn().mockResolvedValue({ items: [{ connector_id: "owned-outside", connector_type: "mcp", provider_key: "outside", display_name: "Installed outside", status: "active", approved_scopes: [], enabled: true, state_version: "1" }], next_cursor: null }),
+    listMcpConnectors: vi.fn().mockResolvedValue({ items: [{ availability: "available" as const, connector_id: "owned-outside", connector_type: "mcp", provider_key: "outside", display_name: "Installed outside", status: "active", approved_scopes: [], enabled: true, state_version: "1" }], next_cursor: null }),
     listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }),
   }
   render(<LocaleProvider><ConnectorCommandProvider client={client} boundary={{ subject: "off-page", admitted: true, generation: 0 }}><McpProjectionRead client={client} identity="off-page" initialView="connections" /></ConnectorCommandProvider></LocaleProvider>)
@@ -35,7 +35,7 @@ it("does not report an unrelated seed failure after filtered owner results succe
 it("offers explicit reconnect for an active OAuth binding, never for a plain app connector", async () => {
   const { McpProviderDetailDialog } = await import("@/ui/mcp/mcp-provider-detail-dialog")
   const provider = { provider_key: "oauth", display_name: "OAuth app", connection_server_id: "server", directory_type: "app" as const, category_keys: [], example_prompts: [], enabled: true, state_version: "1" }
-  const connection = { connector_id: "active", connector_type: "mcp" as const, provider_key: "oauth", display_name: "Active", status: "active" as const, enabled: true, approved_scopes: [], state_version: "4" }
+  const connection = { availability: "unavailable" as const, connector_id: "active", connector_type: "mcp" as const, provider_key: "oauth", display_name: "Active", status: "active" as const, enabled: true, approved_scopes: [], state_version: "4" }
   const reconnect = vi.fn()
   const content = (oauth: boolean) => <LocaleProvider><McpProviderDetailDialog provider={oauth ? provider : { ...provider, connection_server_id: undefined }} connection={connection} actionId={null} admitted managementCommand={undefined} onResumeManagement={vi.fn()} actionError={false} returnFocusRef={{ current: null }} onClose={vi.fn()} onConnect={vi.fn()} onReconnect={reconnect} /></LocaleProvider>
   const view = render(content(true))
@@ -75,7 +75,7 @@ it("retires a pending provider creation when its detail closes before another pr
 it("keeps a catalog OAuth detail readable after issuing a ticket without depending on a connector list page", async () => {
   const { waitFor, within } = await import("@testing-library/react")
   const provider = { provider_key: "catalog-oauth", display_name: "Catalog OAuth", connection_server_id: "catalog-server", directory_type: "app" as const, category_keys: [], example_prompts: [], enabled: true, state_version: "1" }
-  const connector = { connector_id: "catalog-created", connector_type: "mcp" as const, provider_key: provider.provider_key, display_name: "Catalog connection", status: "pending" as const, enabled: true, approved_scopes: [], state_version: "1" }
+  const connector = { availability: "unavailable" as const, connector_id: "catalog-created", connector_type: "mcp" as const, provider_key: provider.provider_key, display_name: "Catalog connection", status: "pending" as const, enabled: true, approved_scopes: [], state_version: "1" }
   const navigate = vi.fn(), get = vi.fn().mockResolvedValue(connector)
   const client = { ...createHubClient(), createMcpConnector: vi.fn().mockResolvedValue(connector), getMcpConnector: get, getMcpConnectorProvider: vi.fn().mockResolvedValue(provider),
     beginMcpConnectorAuthorization: vi.fn().mockResolvedValue({ authorization: { authorization_url: "https://oauth.example.test/authorize", expires_at: "2030-01-01T00:00:00Z" } }),
@@ -116,8 +116,8 @@ it("restores an off-page Custom API detail by exact locator after an admission g
 it("allows manual reconnect for a ready active private OAuth binding but not a non-OAuth server", async () => {
   const { renderHook, act } = await import("@testing-library/react")
   const { usePrivateMcpAuthorization } = await import("@/ui/mcp/use-private-mcp-authorization")
-  const connector = { connector_id: "private-active", server_id: "private-server", connector_type: "mcp" as const, provider_key: "private", display_name: "Private", status: "active" as const, enabled: true, approved_scopes: [], state_version: "3" }
-  const server = { server_id: "private-server", display_name: "Private", server_url: "https://mcp.example.test", status: "registered" as const, state_version: "4", headers: [], prepare_status: "ready" as const, authorization_status: "approved" as const, declarations: [], declarations_available: true, declaration_digest: "a".repeat(64), oauth_client: { client_id: "public-id", configured: true, origin: "byo" as const, status: "configured" as const, state_version: "1" } }
+  const connector = { availability: "unavailable" as const, connector_id: "private-active", server_id: "private-server", connector_type: "mcp" as const, provider_key: "private", display_name: "Private", status: "active" as const, enabled: true, approved_scopes: [], state_version: "3" }
+  const server = { availability: "unavailable" as const, server_id: "private-server", display_name: "Private", server_url: "https://mcp.example.test", status: "registered" as const, state_version: "4", headers: [], prepare_status: "ready" as const, authorization_status: "approved" as const, declarations: [], declarations_available: true, declaration_digest: "a".repeat(64), oauth_client: { client_id: "public-id", configured: true, origin: "byo" as const, status: "configured" as const, state_version: "1" } }
   const reconnect = vi.fn().mockResolvedValue({ authorization: { authorization_url: "https://oauth.example.test/authorize", expires_at: "2030-01-01T00:00:00Z" } })
   const client = { ...createHubClient(), reconnectMcpConnectorAuthorization: reconnect }
   const intent = { connectorId: connector.connector_id, serverId: server.server_id, window: {} }
@@ -135,7 +135,7 @@ it.each(["api", "provider"])("retires and rereads an off-page %s detail when a c
   const { invalidateCustomApiProjection } = await import("@/ui/mcp/use-custom-api-projection")
   const { invalidateMcpConnectorProjection } = await import("@/ui/mcp/use-mcp-projection")
   const profile = { profile_id: "exact", name: "Exact", state_version: "1", created_at: "2026-10-17T12:00:00Z", updated_at: "2026-10-17T12:00:00Z", environment: [] }
-  const connector = { connector_id: "exact", provider_key: "provider", connector_type: "mcp" as const, display_name: "Exact", status: "active" as const, enabled: true, approved_scopes: [], state_version: "1" }
+  const connector = { availability: "unavailable" as const, connector_id: "exact", provider_key: "provider", connector_type: "mcp" as const, display_name: "Exact", status: "active" as const, enabled: true, approved_scopes: [], state_version: "1" }
   const getApi = vi.fn().mockResolvedValueOnce(profile).mockResolvedValue({ ...profile, state_version: "2" })
   const getMcp = vi.fn().mockResolvedValueOnce(connector).mockResolvedValue({ ...connector, state_version: "2" })
   const client = { ...createHubClient(), getCustomApi: getApi, getMcpConnector: getMcp }
@@ -158,7 +158,7 @@ it.each(["api", "provider"])("revalidates a first-page %s detail without reusing
   const { invalidateMcpConnectorProjection } = await import("@/ui/mcp/use-mcp-projection")
   const profile = { profile_id: "first-page-api", name: "Initial API", instructions: "Old instructions", state_version: "1", created_at: "2026-10-17T12:00:00Z", updated_at: "2026-10-17T12:00:00Z", environment: [] }
   const provider = { provider_key: "first-page-provider", display_name: "First-page provider", directory_type: "app" as const, category_keys: [], example_prompts: [], enabled: true, state_version: "1" }
-  const connection = { connector_id: "first-page-connection", provider_key: provider.provider_key, connector_type: "mcp" as const, display_name: "Initial connection", status: "active" as const, enabled: false, approved_scopes: [], state_version: "1" }
+  const connection = { availability: "unavailable" as const, connector_id: "first-page-connection", provider_key: provider.provider_key, connector_type: "mcp" as const, display_name: "Initial connection", status: "active" as const, enabled: false, approved_scopes: [], state_version: "1" }
   const apiPage = { items: kind === "api" ? [profile] : [], page: { next_cursor: null } }
   const connectorPage = { items: kind === "provider" ? [connection] : [], next_cursor: null }
   let finishApi!: (value: typeof profile) => void
@@ -196,7 +196,7 @@ it("explicitly recovers an unknown provider Create with its original body and id
   const { act, waitFor, within } = await import("@testing-library/react")
   window.localStorage.setItem("kokoro.locale", "zh")
   const provider = { provider_key: "recover-create", display_name: "Recover provider", description: "Original description", directory_type: "app", category_keys: [], example_prompts: [], enabled: true, state_version: "1" }
-  const connector = { connector_id: "created-once", connector_type: "mcp", provider_key: provider.provider_key, display_name: provider.display_name, description: provider.description, status: "pending", enabled: false, approved_scopes: [], state_version: "1" }
+  const connector = { availability: "unavailable" as const, connector_id: "created-once", connector_type: "mcp", provider_key: provider.provider_key, display_name: provider.display_name, description: provider.description, status: "pending", enabled: false, approved_scopes: [], state_version: "1" }
   const writes: { body: string; key: string | null }[] = []
   const reply = (data: unknown) => Response.json({ data }, { headers: { "cache-control": "no-store", "x-request-id": "fixture" } })
   vi.stubGlobal("fetch", vi.fn(async (path: string, init?: RequestInit) => {
@@ -237,7 +237,7 @@ it("explicitly recovers an unknown provider Create with its original body and id
 it("resumes a confirmed Provider Create after Begin failure using fresh connector and directory bindings", async () => {
   const { waitFor, within } = await import("@testing-library/react")
   const provider = { provider_key: "begin-recovery", display_name: "Begin recovery", directory_type: "app" as const, category_keys: [], example_prompts: [], enabled: true, state_version: "1", connection_server_id: "old-server" }
-  const connector = { connector_id: "single-created", connector_type: "mcp" as const, provider_key: provider.provider_key, display_name: provider.display_name, status: "pending" as const, enabled: false, approved_scopes: [], state_version: "1" }
+  const connector = { availability: "unavailable" as const, connector_id: "single-created", connector_type: "mcp" as const, provider_key: provider.provider_key, display_name: provider.display_name, status: "pending" as const, enabled: false, approved_scopes: [], state_version: "1" }
   let version = "4", server = "fresh-server"
   const create = vi.fn().mockResolvedValue(connector)
   const get = vi.fn(async () => ({ ...connector, state_version: version }))
@@ -266,7 +266,7 @@ it("reserves OAuth on the next explicit recovery when a catalog binding changes 
   window.localStorage.setItem("kokoro.locale", "zh")
   const { waitFor, within } = await import("@testing-library/react")
   const provider = { provider_key: "added-oauth", display_name: "Added OAuth", directory_type: "app" as const, category_keys: [], example_prompts: [], enabled: true, state_version: "1" }
-  const connector = { connector_id: "one-create", connector_type: "mcp" as const, provider_key: provider.provider_key, display_name: provider.display_name, status: "pending" as const, enabled: false, approved_scopes: [], state_version: "4" }
+  const connector = { availability: "unavailable" as const, connector_id: "one-create", connector_type: "mcp" as const, provider_key: provider.provider_key, display_name: provider.display_name, status: "pending" as const, enabled: false, approved_scopes: [], state_version: "4" }
   const create = vi.fn().mockResolvedValue({ ...connector, state_version: "1" })
   const begin = vi.fn().mockResolvedValue({ authorization: { authorization_url: "https://oauth.example.test/new-binding", expires_at: "2030-01-01T00:00:00Z" } })
   const navigate = vi.fn()
@@ -288,7 +288,7 @@ it("keeps exact installed connector management independent of a provider Create 
   window.localStorage.setItem("kokoro.locale", "zh")
   const { McpProviderDetailDialog } = await import("@/ui/mcp/mcp-provider-detail-dialog")
   const provider = { provider_key: "installed", display_name: "Installed provider", directory_type: "app" as const, category_keys: [], example_prompts: [], enabled: true, state_version: "1", connection_server_id: "server" }
-  const connection = { connector_id: "existing", connector_type: "mcp" as const, provider_key: provider.provider_key, display_name: "Existing", status: "active" as const, enabled: true, approved_scopes: [], state_version: "4" }
+  const connection = { availability: "unavailable" as const, connector_id: "existing", connector_type: "mcp" as const, provider_key: provider.provider_key, display_name: "Existing", status: "active" as const, enabled: true, approved_scopes: [], state_version: "4" }
   render(<LocaleProvider><McpProviderDetailDialog provider={provider} connection={connection} creationCommand={{ providerKey: provider.provider_key, kind: "unknown" }} actionId={null} admitted managementCommand={undefined} onResumeManagement={vi.fn()} actionError={false} returnFocusRef={{ current: null }} onClose={vi.fn()} onConnect={vi.fn()} onReconnect={vi.fn()} onToggleEnabled={vi.fn()} onRemoveConnection={vi.fn()} /></LocaleProvider>)
   expect(screen.getByRole("button", { name: "重新连接" })).toBeEnabled()
   expect(screen.getByRole("button", { name: "停用" })).toBeEnabled()
@@ -299,7 +299,7 @@ it.each(["binding removed", "already active"])("consumes a stale OAuth Create ge
   const { waitFor, within } = await import("@testing-library/react")
   window.localStorage.setItem("kokoro.locale", "zh")
   const provider = { provider_key: "stale-oauth", display_name: "Stale OAuth", directory_type: "app" as const, category_keys: [], example_prompts: [], enabled: true, state_version: "1", connection_server_id: "old-server" }
-  const connector = { connector_id: "stale-created", connector_type: "mcp" as const, provider_key: provider.provider_key, display_name: provider.display_name, status: scenario === "already active" ? "active" as const : "pending" as const, enabled: false, approved_scopes: [], state_version: "3" }
+  const connector = { availability: "unavailable" as const, connector_id: "stale-created", connector_type: "mcp" as const, provider_key: provider.provider_key, display_name: provider.display_name, status: scenario === "already active" ? "active" as const : "pending" as const, enabled: false, approved_scopes: [], state_version: "3" }
   const begin = vi.fn(), navigate = vi.fn()
   let created = false
   const client = { ...createHubClient(), createMcpConnector: vi.fn(async () => { created = true; return { ...connector, state_version: "1" } }), getMcpConnector: vi.fn().mockResolvedValue(connector), getMcpConnectorProvider: vi.fn().mockResolvedValue({ ...provider, ...(scenario === "binding removed" ? { connection_server_id: undefined } : {}) }), beginMcpConnectorAuthorization: begin,
@@ -317,7 +317,7 @@ it.each(["active", "pending", "error"] as const)("opens the existing %s connecto
   const { within } = await import("@testing-library/react")
   window.localStorage.setItem("kokoro.locale", "zh")
   const provider = { provider_key: `added-${status}`, display_name: `Added ${status}`, directory_type: "app" as const, category_keys: [], example_prompts: [], enabled: true, state_version: "1" }
-  const connection = { connector_id: `existing-${status}`, connector_type: "mcp" as const, provider_key: provider.provider_key, display_name: `Installed ${status}`, status, enabled: false, approved_scopes: [], state_version: "9" }
+  const connection = { availability: "unavailable" as const, connector_id: `existing-${status}`, connector_type: "mcp" as const, provider_key: provider.provider_key, display_name: `Installed ${status}`, status, enabled: false, approved_scopes: [], state_version: "9" }
   const create = vi.fn()
   const get = vi.fn().mockResolvedValue({ ...connection, state_version: "10" })
   const client = { ...createHubClient(), createMcpConnector: create, getMcpConnector: get,
@@ -341,7 +341,7 @@ it.each(["partial", "multiple", "private", "revoked"] as const)("does not guess 
   const { within, waitFor } = await import("@testing-library/react")
   window.localStorage.setItem("kokoro.locale", "zh")
   const provider = { provider_key: `ambiguous-${scenario}`, display_name: `Provider ${scenario}`, directory_type: "app" as const, category_keys: [], example_prompts: [], enabled: true, state_version: "1" }
-  const connection = { connector_id: "not-a-proven-locator", connector_type: "mcp" as const, provider_key: provider.provider_key, display_name: "Existing candidate", status: scenario === "revoked" ? "revoked" as const : "active" as const, ...(scenario === "private" ? { server_id: "private-server" } : {}), enabled: true, approved_scopes: [], state_version: "1" }
+  const connection = { availability: "unavailable" as const, connector_id: "not-a-proven-locator", connector_type: "mcp" as const, provider_key: provider.provider_key, display_name: "Existing candidate", status: scenario === "revoked" ? "revoked" as const : "active" as const, ...(scenario === "private" ? { server_id: "private-server" } : {}), enabled: true, approved_scopes: [], state_version: "1" }
   const get = vi.fn()
   const client = { ...createHubClient(), getMcpConnector: get,
     listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [provider], next_cursor: null }),
@@ -363,7 +363,7 @@ it("resolves an existing off-page provider connector from the standalone directo
   window.localStorage.setItem("kokoro.locale", "zh")
   const { within } = await import("@testing-library/react")
   const provider = { provider_key: "paged-added", display_name: "Paged added", directory_type: "app" as const, category_keys: [], example_prompts: [], enabled: true, state_version: "1" }
-  const connector = { connector_id: "off-page-existing", connector_type: "mcp" as const, provider_key: provider.provider_key, display_name: "Existing account", status: "pending" as const, enabled: false, approved_scopes: [], state_version: "1" }
+  const connector = { availability: "unavailable" as const, connector_id: "off-page-existing", connector_type: "mcp" as const, provider_key: provider.provider_key, display_name: "Existing account", status: "pending" as const, enabled: false, approved_scopes: [], state_version: "1" }
   const list = vi.fn().mockResolvedValueOnce({ items: [], next_cursor: "opaque-next" }).mockResolvedValueOnce({ items: [connector], next_cursor: null })
   const get = vi.fn().mockResolvedValue({ ...connector, state_version: "2" }), create = vi.fn(), runtime = vi.fn()
   const client = { ...createHubClient(), listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [provider], next_cursor: null }), listMcpConnectors: list, getMcpConnector: get, createMcpConnector: create, listMcpConnections: runtime }
@@ -399,7 +399,7 @@ it("requires explicit selection among several provider connections and reads onl
   window.localStorage.setItem("kokoro.locale", "zh")
   const { within } = await import("@testing-library/react")
   const provider = { provider_key: "many-accounts", display_name: "Many accounts", directory_type: "app" as const, category_keys: [], example_prompts: [], enabled: true, state_version: "1" }
-  const first = { connector_id: "account-a", connector_type: "mcp" as const, provider_key: provider.provider_key, display_name: "Account A", status: "active" as const, enabled: true, approved_scopes: [], state_version: "1" }
+  const first = { availability: "unavailable" as const, connector_id: "account-a", connector_type: "mcp" as const, provider_key: provider.provider_key, display_name: "Account A", status: "active" as const, enabled: true, approved_scopes: [], state_version: "1" }
   const second = { ...first, connector_id: "account-b", connector_type: "byok" as const, display_name: "Account B", status: "error" as const, enabled: false }
   const get = vi.fn().mockResolvedValue({ ...second, state_version: "8" })
   const client = { ...createHubClient(), listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [provider], next_cursor: null }), listMcpConnectors: vi.fn().mockResolvedValue({ items: [first, second], next_cursor: null }), getMcpConnector: get }
@@ -417,7 +417,7 @@ it.each(["revoked", "type", "server"] as const)("keeps a selected connection fro
   window.localStorage.setItem("kokoro.locale", "zh")
   const { within } = await import("@testing-library/react")
   const provider = { provider_key: `drift-${drift}`, display_name: `Drift ${drift}`, directory_type: "app" as const, category_keys: [], example_prompts: [], enabled: true, state_version: "1" }
-  const connection = { connector_id: "frozen-id", connector_type: "mcp" as const, provider_key: provider.provider_key, display_name: "Frozen", status: "active" as const, enabled: true, approved_scopes: [], state_version: "1" }
+  const connection = { availability: "unavailable" as const, connector_id: "frozen-id", connector_type: "mcp" as const, provider_key: provider.provider_key, display_name: "Frozen", status: "active" as const, enabled: true, approved_scopes: [], state_version: "1" }
   const get = vi.fn().mockResolvedValue({ ...connection, ...(drift === "revoked" ? { status: "revoked" } : drift === "type" ? { connector_type: "builtin" } : { server_id: "unexpected-private" }) })
   const client = { ...createHubClient(), getMcpConnector: get,
     listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [provider], next_cursor: null }),
@@ -434,8 +434,8 @@ it.each([false, true])("opens an off-page private connection only after exact co
   window.localStorage.setItem("kokoro.locale", "zh")
   const { within } = await import("@testing-library/react")
   const provider = { provider_key: "private-off-page", display_name: "Private directory fixture", directory_type: "app" as const, category_keys: [], example_prompts: [], enabled: true, state_version: "1" }
-  const connection = { connector_id: "private-exact-id", connector_type: "mcp" as const, provider_key: provider.provider_key, server_id: "private-exact-server", display_name: "My private connection", status: "pending" as const, enabled: false, approved_scopes: [], state_version: "1" }
-  const server = { server_id: connection.server_id, display_name: "Exact private detail", server_url: "https://mcp.example.test/endpoint", status: "pending" as const, state_version: "2", headers: [], prepare_status: "pending_prepare" as const, declarations: [], declarations_available: false }
+  const connection = { availability: "unavailable" as const, connector_id: "private-exact-id", connector_type: "mcp" as const, provider_key: provider.provider_key, server_id: "private-exact-server", display_name: "My private connection", status: "pending" as const, enabled: false, approved_scopes: [], state_version: "1" }
+  const server = { availability: "unavailable" as const, server_id: connection.server_id, display_name: "Exact private detail", server_url: "https://mcp.example.test/endpoint", status: "pending" as const, state_version: "2", headers: [], prepare_status: "pending_prepare" as const, declarations: [], declarations_available: false }
   const get = vi.fn().mockResolvedValue({ ...connection, state_version: "3" }), getServer = vi.fn().mockResolvedValue(server)
   if (retry) get.mockRejectedValueOnce(Error("exact read offline"))
   const client = { ...createHubClient(), getMcpConnector: get, getPrivateMcpServer: getServer,
@@ -461,8 +461,8 @@ it.each(["revoked", "fresh-server"])("retires opened private detail through an e
   const { act, waitFor, within } = await import("@testing-library/react")
   const { invalidateMcpConnectorProjection } = await import("@/ui/mcp/use-mcp-projection")
   const provider = { provider_key: `retire-${outcome}`, display_name: "Private recheck", directory_type: "app" as const, category_keys: [], example_prompts: [], enabled: true, state_version: "1" }
-  const connection = { connector_id: "recheck-private", connector_type: "mcp" as const, provider_key: provider.provider_key, server_id: "recheck-server", display_name: "My rechecked connection", status: "pending" as const, enabled: false, approved_scopes: [], state_version: "1" }
-  const server = { server_id: connection.server_id, display_name: "Private ready detail", server_url: "https://mcp.example.test/recheck", status: "pending" as const, state_version: "2", headers: [], prepare_status: "pending_prepare" as const, declarations: [], declarations_available: false }
+  const connection = { availability: "unavailable" as const, connector_id: "recheck-private", connector_type: "mcp" as const, provider_key: provider.provider_key, server_id: "recheck-server", display_name: "My rechecked connection", status: "pending" as const, enabled: false, approved_scopes: [], state_version: "1" }
+  const server = { availability: "unavailable" as const, server_id: connection.server_id, display_name: "Private ready detail", server_url: "https://mcp.example.test/recheck", status: "pending" as const, state_version: "2", headers: [], prepare_status: "pending_prepare" as const, declarations: [], declarations_available: false }
   let finishConnection!: (value: typeof connection | Omit<typeof connection, "status"> & { status: "revoked" }) => void
   let finishServer!: (value: typeof server) => void
   const get = vi.fn().mockResolvedValueOnce(connection).mockImplementationOnce(() => new Promise(resolve => { finishConnection = resolve }))
@@ -489,5 +489,24 @@ it.each(["revoked", "fresh-server"])("retires opened private detail through an e
     expect(screen.queryByRole("button", { name: "试用一下" })).not.toBeInTheDocument()
     await act(async () => finishServer({ ...server, state_version: "3" }))
     expect(await screen.findByRole("button", { name: "试用一下" })).toBeEnabled()
+  }
+})
+
+it("shows current availability instead of an active lifecycle success badge, without dispatching commands", async () => {
+  const { McpConnectionList } = await import("@/ui/mcp/mcp-connection-list")
+  const { McpProviderDetailDialog } = await import("@/ui/mcp/mcp-provider-detail-dialog")
+  const provider = { provider_key: "qualification", display_name: "Qualification", directory_type: "app" as const, category_keys: [], example_prompts: [], enabled: true, state_version: "1" }
+  const action = vi.fn()
+  const content = (availability: "available" | "refresh_required" | "refreshing" | "reauthorization_required" | "unavailable") => {
+    const connection = { availability, connector_id: "qualified", connector_type: "mcp" as const, provider_key: "qualification", display_name: "Owned qualification", status: "active" as const, approved_scopes: [], enabled: true, state_version: "1" }
+    return <LocaleProvider><McpConnectionList connectors={[connection]} customApis={[]} providers={[provider]} query="" brandName="Kokoro" onBrowse={action} onEdit={action} onSelectCustomApi={action} previousEnabled={false} nextEnabled={false} onPrevious={action} onNext={action} /><McpProviderDetailDialog provider={provider} connection={connection} actionId={null} admitted managementCommand={undefined} onResumeManagement={action} actionError={false} returnFocusRef={{ current: null }} onClose={action} onConnect={action} /></LocaleProvider>
+  }
+  window.localStorage.setItem("kokoro.locale", "zh")
+  const view = render(content("refresh_required"))
+  for (const [state, label] of [["refresh_required", "使用时续期"], ["refreshing", "正在续期"], ["reauthorization_required", "需要重新授权"], ["unavailable", "暂不可用"], ["available", "已连接"]] as const) {
+    view.rerender(content(state))
+    expect(await screen.findAllByLabelText(label)).toHaveLength(2)
+    if (state !== "available") expect(screen.queryByLabelText("已连接")).not.toBeInTheDocument()
+    expect(action).not.toHaveBeenCalled()
   }
 })

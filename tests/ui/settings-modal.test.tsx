@@ -152,7 +152,7 @@ vi.mock("@/ui/shell/page-clients", () => ({
     }),
     listMcpConnectors: vi.fn().mockResolvedValue({
       items: [
-        {
+        { availability: "available" as const,
           connector_id: "connector-1",
           connector_type: "mcp",
           provider_key: "owner-mcp",

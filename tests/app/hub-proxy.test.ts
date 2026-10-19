@@ -3696,7 +3696,7 @@ it.each(["versions", "withdraw"] as const)(
 );
 
 describe("personal MCP four canonical reads", () => {
-  const connector = {
+  const connector = { availability: "available" as const,
     connector_id: "connector-1",
     connector_type: "mcp",
     provider_key: "provider-one",
@@ -3749,7 +3749,7 @@ describe("personal MCP four canonical reads", () => {
 });
 
 describe("personal MCP closed adapter boundaries", () => {
-  const connector = {
+  const connector = { availability: "available" as const,
     connector_id: "connector-1",
     connector_type: "mcp",
     provider_key: "provider-one",
@@ -4062,7 +4062,7 @@ describe("personal MCP closed adapter boundaries", () => {
 });
 
 describe("current-user MCP OAuth lifecycle adapter", () => {
-  const pendingConnector = {
+  const pendingConnector = { availability: "unavailable" as const,
     connector_id: "connector-1",
     connector_type: "mcp",
     provider_key: "provider-one",
@@ -4218,7 +4218,7 @@ describe("current-user MCP OAuth lifecycle adapter", () => {
 });
 
 describe("private MCP server V1 lifecycle adapter", () => {
-  const privateServer = {
+  const privateServer = { availability: "available" as const,
     server_id: "server-private",
     display_name: "Private tools",
     server_url: "https://private.example/mcp",
@@ -4244,7 +4244,7 @@ describe("private MCP server V1 lifecycle adapter", () => {
     declaration_digest: "a".repeat(64),
     declarations_available: true,
   };
-  const connector = {
+  const connector = { availability: "available" as const,
     connector_id: "connector-private",
     connector_type: "mcp",
     provider_key: "private-tools",
@@ -4444,7 +4444,7 @@ it("personal MCP accepts only owner Retry-After seconds 1 through 86400", async 
 });
 
 describe("personal MCP 14.0 provider and command adapter", () => {
-  const connector = {
+  const connector = { availability: "unavailable" as const,
     connector_id: "connector-1",
     connector_type: "mcp",
     provider_key: "provider-one",

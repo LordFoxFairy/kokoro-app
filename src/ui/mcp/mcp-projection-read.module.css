@@ -804,14 +804,6 @@
   line-height: 1rem;
   white-space: nowrap;
 }
-.status[data-status="active"] {
-  background: rgb(28 135 82 / 12%);
-  color: rgb(23 103 63);
-}
-.status[data-status="error"] {
-  background: rgb(195 54 48 / 12%);
-  color: rgb(166 40 36);
-}
 .statusCheck {
   width: 1.2rem;
   height: 1.2rem;
@@ -1209,8 +1201,7 @@
   font-size: 0.8rem;
   font-weight: 600;
 }
-.connectionState[data-status="pending"],
-.connectionState[data-status="error"] {
+.connectionState[data-availability]:not([data-availability="available"]) {
   background: rgb(55 53 47 / 8%);
   color: var(--muted-foreground);
 }

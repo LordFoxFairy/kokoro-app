@@ -45,6 +45,8 @@ const scalar = (min: number, max: number) =>
         (min === 0 || Boolean(value.trim())),
     );
 const status = z.enum(["pending", "active", "error", "revoked"]);
+export const mcpAvailabilitySchema = z.enum(["available", "refresh_required", "refreshing", "reauthorization_required", "unavailable"]);
+export type McpAvailability = z.infer<typeof mcpAvailabilitySchema>;
 const unique = (values: string[]) => new Set(values).size === values.length;
 const safeUrl = z
   .string()
@@ -60,6 +62,7 @@ const safeUrl = z
 export const mcpConnectorSchema = z
   .object({
     connector_id: mcpConnectorIdSchema,
+    availability: mcpAvailabilitySchema,
     connector_type: z.enum(["builtin", "byok", "mcp"]),
     provider_key: providerKey,
     status,
@@ -234,6 +237,7 @@ const privateDeclarationSchema = z.discriminatedUnion("kind", [
 export const mcpPrivateServerSchema = z
   .object({
     server_id: mcpConnectorIdSchema,
+    availability: mcpAvailabilitySchema,
     display_name: privateText(1, 100),
     server_url: privateServerUrl,
     status: z.enum(["pending", "registered", "disabled"]),
@@ -241,7 +245,6 @@ export const mcpPrivateServerSchema = z
     notes: privateText(1, 4000, true).optional(),
     headers: z
       .array(privateHeaderDescriptorSchema)
-      .max(32)
       .refine(
         (values) =>
           new Set(values.map(({ name }) => name)).size === values.length,

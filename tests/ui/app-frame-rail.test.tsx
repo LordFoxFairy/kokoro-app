@@ -2817,7 +2817,7 @@ it.each([false, true])("a global MCP import invalidates Settings before it opens
   const pageClients = await import("@/ui/shell/page-clients")
   const { warmMcpProjection, useMcpProjection } = await import("@/ui/mcp/use-mcp-projection")
   const empty = { items: [], next_cursor: null }
-  const imported = { connector_id: "global-import-connector", connector_type: "mcp" as const,
+  const imported = { availability: "unavailable" as const, connector_id: "global-import-connector", connector_type: "mcp" as const,
     provider_key: "private-global-import", server_id: "global-import-server", display_name: "New global MCP",
     status: "pending" as const, approved_scopes: [], enabled: false, state_version: "1" }
   let resolveOld!: (value: typeof empty) => void
@@ -3055,8 +3055,8 @@ function apiCreationHub() {
 }
 
 function mcpCreationRegistration() {
-  return { server: { server_id: "creation-server", display_name: "Creation MCP", server_url: "https://mcp.example.test/creation", status: "pending" as const, state_version: "1", headers: [], prepare_status: "pending_prepare" as const, declarations: [], declarations_available: false },
-    connector: { connector_id: "creation-connector", connector_type: "mcp" as const, provider_key: "private-creation", server_id: "creation-server", display_name: "Creation MCP", status: "pending" as const, approved_scopes: [], enabled: false, state_version: "1" }, replayed: false }
+  return { server: { availability: "unavailable" as const, server_id: "creation-server", display_name: "Creation MCP", server_url: "https://mcp.example.test/creation", status: "pending" as const, state_version: "1", headers: [], prepare_status: "pending_prepare" as const, declarations: [], declarations_available: false },
+    connector: { availability: "unavailable" as const, connector_id: "creation-connector", connector_type: "mcp" as const, provider_key: "private-creation", server_id: "creation-server", display_name: "Creation MCP", status: "pending" as const, approved_scopes: [], enabled: false, state_version: "1" }, replayed: false }
 }
 
 it.each(["form", "url"] as const)("%s MCP creation pauses its retained inputs during admission recheck", async mode => {
@@ -3365,7 +3365,7 @@ it.each([false, true])("an acknowledged API secret stays cleared and Done can re
 
 it("connector invalidation preserves another actor and retries a failed mounted read without a remount", async () => {
   const { invalidateMcpConnectorProjection, useMcpProjection } = await import("@/ui/mcp/use-mcp-projection")
-  const page = (name: string) => ({ items: [{ connector_id: name, connector_type: "mcp" as const,
+  const page = (name: string) => ({ items: [{ availability: "unavailable" as const, connector_id: name, connector_type: "mcp" as const,
     provider_key: "private-check", status: "pending" as const, approved_scopes: [], enabled: false,
     state_version: "1", display_name: name }], next_cursor: null })
   const list = vi.fn().mockResolvedValueOnce(page("old-a")).mockResolvedValueOnce(page("other-b"))
@@ -3400,10 +3400,10 @@ it("Settings revalidates a registered MCP again after remote Prepare completes",
   let finish!: () => void
   const remote = new Promise<void>(resolve => { finish = resolve })
   let registered = false, ready = false
-  const connector = () => ({ connector_id: "prepared-connector", connector_type: "mcp" as const,
+  const connector = () => ({ availability: ready ? "available" as const : "unavailable" as const, connector_id: "prepared-connector", connector_type: "mcp" as const,
     provider_key: "private-prepared", server_id: "prepared-server", display_name: "Prepared MCP",
     status: ready ? "active" as const : "pending" as const, approved_scopes: [], enabled: ready, state_version: ready ? "2" : "1" })
-  const registration = () => ({ server: { server_id: "prepared-server", display_name: "Prepared MCP", server_url: "https://mcp.example.test/prepare",
+  const registration = () => ({ server: { availability: ready ? "available" as const : "unavailable" as const, server_id: "prepared-server", display_name: "Prepared MCP", server_url: "https://mcp.example.test/prepare",
     status: ready ? "registered" as const : "pending" as const, state_version: ready ? "2" : "1", headers: [],
     prepare_status: ready ? "ready" as const : "pending_prepare" as const, declarations: [], declarations_available: ready }, connector: connector(), replayed: false })
   const list = vi.fn(async () => ({ items: registered ? [connector()] : [], next_cursor: null }))
@@ -3439,10 +3439,10 @@ it("MCP same-actor recheck keeps search and the private detail shell but retires
   let round = 1
   let finish!: (value: unknown) => void
   const nextServer = new Promise(resolve => { finish = resolve })
-  const connector = () => ({ connector_id: "recheck-connector", connector_type: "mcp" as const,
+  const connector = () => ({ availability: "unavailable" as const, connector_id: "recheck-connector", connector_type: "mcp" as const,
     provider_key: "private-recheck", server_id: "recheck-server", display_name: "Private MCP",
     status: "pending" as const, approved_scopes: [], enabled: false, state_version: String(round) })
-  const server = () => ({ server_id: "recheck-server", display_name: round === 1 ? "Private MCP" : "Fresh MCP",
+  const server = () => ({ availability: "unavailable" as const, server_id: "recheck-server", display_name: round === 1 ? "Private MCP" : "Fresh MCP",
     server_url: "https://mcp.example.test/recheck", notes: "Private note", status: "pending" as const,
     state_version: String(round), headers: [], prepare_status: "pending_prepare" as const,
     declarations: [], declarations_available: false })
@@ -3486,15 +3486,15 @@ it("MCP recheck restores typed configuration against fresh facts/CAS and an old 
   let round = 1
   let acknowledge!: () => void
   const ack = new Promise<void>(resolve => { acknowledge = resolve })
-  const server = () => ({ server_id: "draft-server", display_name: `Server ${round}`, notes: `Owner note ${round}`,
+  const server = () => ({ availability: "unavailable" as const, server_id: "draft-server", display_name: `Server ${round}`, notes: `Owner note ${round}`,
     server_url: `https://mcp.example.test/v${round}`, status: "pending" as const, state_version: String(round),
     headers: [], prepare_status: "pending_prepare" as const, declarations: [], declarations_available: false })
   const read = vi.fn(async () => server())
-  const update = vi.fn(async () => { await ack; return { server: server(), connector: { connector_id: "draft-connector", connector_type: "mcp" as const,
+  const update = vi.fn(async () => { await ack; return { server: server(), connector: { availability: "unavailable" as const, connector_id: "draft-connector", connector_type: "mcp" as const,
     provider_key: "private-draft", server_id: "draft-server", display_name: `Server ${round}`, status: "pending" as const,
     approved_scopes: [], enabled: false, state_version: String(round) }, replayed: false } })
   const hub = { ...createHubClient(), getPrivateMcpServer: read, updatePrivateMcpServer: update,
-    listMcpConnectors: vi.fn(async () => ({ items: [{ connector_id: "draft-connector", connector_type: "mcp" as const,
+    listMcpConnectors: vi.fn(async () => ({ items: [{ availability: "unavailable" as const, connector_id: "draft-connector", connector_type: "mcp" as const,
       provider_key: "private-draft", server_id: "draft-server", display_name: `Server ${round}`, status: "pending" as const,
       approved_scopes: [], enabled: false, state_version: String(round) }], next_cursor: null })),
     listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
@@ -3532,10 +3532,10 @@ it.each(["failure", "missing"])("MCP recheck keeps a recoverable detail when the
   const { McpContent: Content } = await import("@/ui/mcp/mcp-content")
   const McpContent = withMcpCommandOwner(Content)
   let round = 1
-  const connector = { connector_id: "retry-connector", connector_type: "mcp" as const, provider_key: "private-retry",
+  const connector = { availability: "unavailable" as const, connector_id: "retry-connector", connector_type: "mcp" as const, provider_key: "private-retry",
     server_id: "retry-server", display_name: "Retry server", status: "pending" as const,
     approved_scopes: [], enabled: false, state_version: "1" }
-  const server = { server_id: "retry-server", display_name: "Retry server", server_url: "https://mcp.example.test/retry",
+  const server = { availability: "unavailable" as const, server_id: "retry-server", display_name: "Retry server", server_url: "https://mcp.example.test/retry",
     status: "pending" as const, state_version: "1", headers: [], prepare_status: "pending_prepare" as const,
     declarations: [], declarations_available: false }
   const read = vi.fn(async (serverId: string) => {
@@ -3566,9 +3566,9 @@ it.each(["failure", "missing"])("MCP recheck keeps a recoverable detail when the
 it("MCP initial private read failure remains visible and explicitly retryable on the list", async () => {
   const { McpContent: Content } = await import("@/ui/mcp/mcp-content")
   const McpContent = withMcpCommandOwner(Content)
-  const connector = { connector_id: "first-failure", connector_type: "mcp" as const, provider_key: "private-first",
+  const connector = { availability: "unavailable" as const, connector_id: "first-failure", connector_type: "mcp" as const, provider_key: "private-first",
     server_id: "first-server", display_name: "First read", status: "pending" as const, approved_scopes: [], enabled: false, state_version: "1" }
-  const read = vi.fn().mockRejectedValueOnce(Error("temporary first read")).mockResolvedValue({ server_id: "first-server",
+  const read = vi.fn().mockRejectedValueOnce(Error("temporary first read")).mockResolvedValue({ availability: "unavailable" as const, server_id: "first-server",
     display_name: "First read", server_url: "https://mcp.example.test/first", status: "pending", state_version: "1",
     headers: [], prepare_status: "pending_prepare", declarations: [], declarations_available: false })
   const hub = { ...createHubClient(), getPrivateMcpServer: read,
@@ -3636,7 +3636,7 @@ it("MCP retired OAuth Create still invalidates a confirmed new connector without
   const pending = new Promise<void>(resolve => { finish = resolve })
   const provider = { provider_key: "late-create", display_name: "Late create provider", directory_type: "app" as const,
     category_keys: [], example_prompts: [], enabled: true, state_version: "1", connection_server_id: "oauth-server" }
-  const connector = { connector_id: "late-created", connector_type: "mcp" as const, provider_key: provider.provider_key,
+  const connector = { availability: "unavailable" as const, connector_id: "late-created", connector_type: "mcp" as const, provider_key: provider.provider_key,
     status: "pending" as const, approved_scopes: [], enabled: false, state_version: "1" }
   const begin = vi.fn()
   const create = vi.fn(async () => { await pending; created = true; return connector })
@@ -3696,7 +3696,7 @@ it("MCP suspended prewarms cannot overwrite a fresh generation or be reused on r
   const oldApis = new Promise(resolve => { finishApis = resolve })
   const provider = (label: string) => ({ provider_key: "generation-provider", display_name: label, directory_type: "app" as const,
     category_keys: [], example_prompts: [], enabled: true, state_version: "1" })
-  const connector = (label: string) => ({ connector_id: label, connector_type: "mcp" as const, provider_key: "generation-provider",
+  const connector = (label: string) => ({ availability: "unavailable" as const, connector_id: label, connector_type: "mcp" as const, provider_key: "generation-provider",
     status: "pending" as const, approved_scopes: [], enabled: false, state_version: "1" })
   const providers = vi.fn().mockReturnValueOnce(oldProviders).mockResolvedValue({ items: [provider("Fresh provider")], next_cursor: null })
   const connectors = vi.fn().mockReturnValueOnce(oldConnectors).mockResolvedValue({ items: [connector("fresh-connector")], next_cursor: null })
@@ -3791,9 +3791,9 @@ it("MCP first-open locator can retry its missing row after recheck instead of re
   let round = 1
   let finish!: (value: unknown) => void
   const old = new Promise(resolve => { finish = resolve })
-  const connector = { connector_id: "initial-missing", connector_type: "mcp" as const, provider_key: "initial-missing",
+  const connector = { availability: "unavailable" as const, connector_id: "initial-missing", connector_type: "mcp" as const, provider_key: "initial-missing",
     server_id: "initial-missing-server", display_name: "Initial missing", status: "pending" as const, approved_scopes: [], enabled: false, state_version: "1" }
-  const server = { server_id: "initial-missing-server", display_name: "Initial missing", server_url: "https://mcp.example.test/initial-missing",
+  const server = { availability: "unavailable" as const, server_id: "initial-missing-server", display_name: "Initial missing", server_url: "https://mcp.example.test/initial-missing",
     status: "pending", state_version: "1", headers: [], prepare_status: "pending_prepare", declarations: [], declarations_available: false }
   const hub = { ...createHubClient(), getPrivateMcpServer: vi.fn().mockReturnValueOnce(old).mockResolvedValue(server),
     listMcpConnectors: vi.fn(async () => ({ items: round === 2 ? [] : [connector], next_cursor: null })),
@@ -3821,9 +3821,9 @@ it.each([
   const { CustomMcpDetailDialog } = await import("@/ui/mcp/custom-mcp-detail-dialog")
   const { CustomApiDetailDialog } = await import("@/ui/mcp/custom-api-detail-dialog")
   const close = vi.fn(), save = vi.fn(), prepare = vi.fn()
-  const connector = { connector_id: "selection-connector", connector_type: "mcp" as const, provider_key: "selection",
+  const connector = { availability: "unavailable" as const, connector_id: "selection-connector", connector_type: "mcp" as const, provider_key: "selection",
     server_id: "selection-server", display_name: "Original server", status: "pending" as const, approved_scopes: [], enabled: false, state_version: "1" }
-  const server = (fresh: boolean) => ({ server_id: "selection-server", display_name: fresh ? "Updated server" : "Original server",
+  const server = (fresh: boolean) => ({ availability: "unavailable" as const, server_id: "selection-server", display_name: fresh ? "Updated server" : "Original server",
     notes: fresh ? "Fresh owner note" : "Retired owner note", server_url: "https://mcp.example.test/selection",
     status: "pending" as const, state_version: fresh ? "2" : "1", headers: [{ name: "x-existing", configured: true, state_version: "1", status: "active" as const }],
     prepare_status: "pending_prepare" as const, declarations: [], declarations_available: false })
@@ -3878,9 +3878,9 @@ it.each([
 it.each(["mcp", "api"])("%s configuration restores a bounded range without stealing a focus choice made during recheck", async kind => {
   const { CustomMcpDetailDialog } = await import("@/ui/mcp/custom-mcp-detail-dialog")
   const { CustomApiDetailDialog } = await import("@/ui/mcp/custom-api-detail-dialog")
-  const connector = { connector_id: "focus-choice", connector_type: "mcp" as const, provider_key: "focus-choice",
+  const connector = { availability: "unavailable" as const, connector_id: "focus-choice", connector_type: "mcp" as const, provider_key: "focus-choice",
     server_id: "focus-choice-server", status: "pending" as const, approved_scopes: [], enabled: false, state_version: "1" }
-  const server = (name: string) => ({ server_id: "focus-choice-server", display_name: name, notes: "Fresh note paragraph", server_url: "https://mcp.example.test/focus-choice",
+  const server = (name: string) => ({ availability: "unavailable" as const, server_id: "focus-choice-server", display_name: name, notes: "Fresh note paragraph", server_url: "https://mcp.example.test/focus-choice",
     status: "pending" as const, state_version: "1", headers: [], prepare_status: "pending_prepare" as const, declarations: [], declarations_available: false })
   const profile = (name: string) => ({ profile_id: "focus-choice-api", name, instructions: "Fresh note paragraph", state_version: "1",
     created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-16T00:00:00Z", environment: [] })
@@ -4244,8 +4244,8 @@ it("a mounted API editor clears secret values on ACK and rejects submitted edits
 it("an unknown private MCP edit is read-only and offers the original management request instead of a new save", async () => {
   const { McpContent: Content } = await import("@/ui/mcp/mcp-content")
   const McpContent = withMcpCommandOwner(Content)
-  const connector = { connector_id: "managed-mcp", server_id: "managed-server", connector_type: "mcp" as const, provider_key: "fixture", display_name: "Managed MCP", status: "pending" as const, enabled: false, approved_scopes: [], state_version: "1" }
-  const server = { server_id: "managed-server", display_name: "Managed MCP", server_url: "https://mcp.example.test/", status: "pending", state_version: "1", headers: [], prepare_status: "pending_prepare", declarations: [], declarations_available: false }
+  const connector = { availability: "unavailable" as const, connector_id: "managed-mcp", server_id: "managed-server", connector_type: "mcp" as const, provider_key: "fixture", display_name: "Managed MCP", status: "pending" as const, enabled: false, approved_scopes: [], state_version: "1" }
+  const server = { availability: "unavailable" as const, server_id: "managed-server", display_name: "Managed MCP", server_url: "https://mcp.example.test/", status: "pending", state_version: "1", headers: [], prepare_status: "pending_prepare", declarations: [], declarations_available: false }
   const update = vi.fn().mockRejectedValue(new Error("lost edit ACK"))
   const hub = { ...createHubClient(), updatePrivateMcpServer: update, getPrivateMcpServer: vi.fn().mockResolvedValue(server), listMcpConnectors: vi.fn().mockResolvedValue({ items: [connector], next_cursor: null }), listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }), listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }) }
   render(<LocaleProvider><McpContent client={hub} initialView="connections" readBoundary={{ admitted: true, generation: 1, subject: "managed-mcp-actor" }} /></LocaleProvider>)
@@ -4265,7 +4265,7 @@ it.each(["toggle", "disconnect"] as const)("provider %s resumes its original com
   const McpContent = withMcpCommandOwner(Content)
   let version = "1"
   const provider = { provider_key: "managed-provider", display_name: "Managed provider", directory_type: "app" as const, category_keys: [], example_prompts: [], enabled: true, state_version: "1" }
-  const row = () => ({ connector_id: "provider-managed", connector_type: "mcp" as const, provider_key: provider.provider_key, display_name: "Provider row", status: "active" as const, enabled: true, approved_scopes: [], state_version: version })
+  const row = () => ({ availability: "unavailable" as const, connector_id: "provider-managed", connector_type: "mcp" as const, provider_key: provider.provider_key, display_name: "Provider row", status: "active" as const, enabled: true, approved_scopes: [], state_version: version })
   const command = vi.fn().mockRejectedValueOnce(new Error("lost ACK")).mockImplementation(async () => ({ ...row(), ...(operation === "disconnect" ? { status: "revoked" as const, enabled: false } : { enabled: false }) }))
   const hub = { ...createHubClient(), ...(operation === "toggle" ? { setMcpConnectorEnabled: command } : { removeMcpConnector: command }),
     listMcpConnectors: vi.fn(async () => ({ items: [row()], next_cursor: null })), listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [provider], next_cursor: null }), listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }) }
@@ -4288,8 +4288,8 @@ it.each(["toggle", "disconnect"] as const)("provider %s resumes its original com
 
 it("a mounted MCP editor clears header secrets on management ACK but preserves non-secret edits while waiting for Done", async () => {
   const { CustomMcpDetailDialog } = await import("@/ui/mcp/custom-mcp-detail-dialog")
-  const connector = { connector_id: "mounted-mcp", server_id: "mounted-server", connector_type: "mcp" as const, provider_key: "fixture", status: "pending" as const, enabled: false, approved_scopes: [], state_version: "1" }
-  const server = { server_id: "mounted-server", display_name: "Mounted MCP", server_url: "https://mcp.example.test/", status: "pending" as const, state_version: "1", headers: [], prepare_status: "pending_prepare" as const, declarations: [], declarations_available: false }
+  const connector = { availability: "unavailable" as const, connector_id: "mounted-mcp", server_id: "mounted-server", connector_type: "mcp" as const, provider_key: "fixture", status: "pending" as const, enabled: false, approved_scopes: [], state_version: "1" }
+  const server = { availability: "unavailable" as const, server_id: "mounted-server", display_name: "Mounted MCP", server_url: "https://mcp.example.test/", status: "pending" as const, state_version: "1", headers: [], prepare_status: "pending_prepare" as const, declarations: [], declarations_available: false }
   const save = vi.fn()
   const content = (kind?: "unknown" | "completed") => <LocaleProvider><CustomMcpDetailDialog connector={connector} server={server} admitted
     managementCommand={kind ? { connectorId: connector.connector_id, serverId: server.server_id, operation: "update_server", kind } : undefined}
@@ -4317,8 +4317,8 @@ it("a lost private MCP deletion ACK remains reachable after its row disappears a
   const { McpContent: Content } = await import("@/ui/mcp/mcp-content")
   const McpContent = withMcpCommandOwner(Content)
   let listed = true
-  const connector = { connector_id: "missing-managed-mcp", server_id: "missing-managed-server", connector_type: "mcp" as const, provider_key: "fixture", display_name: "Missing managed MCP", status: "pending" as const, enabled: false, approved_scopes: [], state_version: "1" }
-  const server = { server_id: "missing-managed-server", display_name: "Missing managed MCP", server_url: "https://mcp.example.test/", status: "pending", state_version: "1", headers: [], prepare_status: "pending_prepare", declarations: [], declarations_available: false }
+  const connector = { availability: "unavailable" as const, connector_id: "missing-managed-mcp", server_id: "missing-managed-server", connector_type: "mcp" as const, provider_key: "fixture", display_name: "Missing managed MCP", status: "pending" as const, enabled: false, approved_scopes: [], state_version: "1" }
+  const server = { availability: "unavailable" as const, server_id: "missing-managed-server", display_name: "Missing managed MCP", server_url: "https://mcp.example.test/", status: "pending", state_version: "1", headers: [], prepare_status: "pending_prepare", declarations: [], declarations_available: false }
   const remove = vi.fn().mockRejectedValueOnce(new Error("lost deletion ACK")).mockResolvedValue({ server_id: server.server_id, deleted: true, replayed: true })
   const hub = { ...createHubClient(), deletePrivateMcpServer: remove, getPrivateMcpServer: vi.fn().mockResolvedValue(server), listMcpConnectors: vi.fn(async () => ({ items: listed ? [connector] : [], next_cursor: null })), listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }), listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }) }
   const content = (generation: number) => <LocaleProvider><McpContent client={hub} initialView="connections" readBoundary={{ admitted: true, generation, subject: "missing-mcp-management-actor" }} /></LocaleProvider>
@@ -4343,7 +4343,7 @@ it("a late provider toggle ACK does not close a successor provider window", asyn
   const McpContent = withMcpCommandOwner(Content)
   const provider = { provider_key: "late-provider", display_name: "Late provider", directory_type: "app" as const, category_keys: [], example_prompts: [], enabled: true, state_version: "1" }
   const otherProvider = { ...provider, provider_key: "successor-provider", display_name: "Successor provider" }
-  const connector = { connector_id: "late-provider-connection", connector_type: "mcp" as const, provider_key: provider.provider_key, display_name: "Late provider row", status: "active" as const, enabled: true, approved_scopes: [], state_version: "1" }
+  const connector = { availability: "unavailable" as const, connector_id: "late-provider-connection", connector_type: "mcp" as const, provider_key: provider.provider_key, display_name: "Late provider row", status: "active" as const, enabled: true, approved_scopes: [], state_version: "1" }
   const other = { ...connector, connector_id: "successor-connection", provider_key: otherProvider.provider_key, display_name: "Successor row" }
   let acknowledge!: (value: typeof connector) => void
   const pending = new Promise<typeof connector>(resolve => { acknowledge = resolve })

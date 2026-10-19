@@ -154,8 +154,8 @@ describe("MCP JSON owner-atomic creation command", () => {
 describe("private MCP creation registration and preparation", () => {
   const boundary = { admitted: true, subject: "private-create-actor", generation: 1 }
   const input = { display_name: "Private MCP", server_url: "https://mcp.example.test/private", headers: [{ name: "x-check", value: "fixture-only" }] }
-  const server = (ready = false, version = ready ? "8" : "7") => ({ server_id: "private-server", display_name: "Private MCP", server_url: input.server_url, status: ready ? "registered" as const : "pending" as const, state_version: version, headers: [], prepare_status: ready ? "ready" as const : "pending_prepare" as const, declarations: [], declarations_available: ready })
-  const connector = (ready = false) => ({ connector_id: "private-connector", connector_type: "mcp" as const, provider_key: "private-command", server_id: "private-server", status: ready ? "active" as const : "pending" as const, approved_scopes: [], enabled: ready, state_version: ready ? "8" : "7" })
+  const server = (ready = false, version = ready ? "8" : "7") => ({ availability: "unavailable" as const, server_id: "private-server", display_name: "Private MCP", server_url: input.server_url, status: ready ? "registered" as const : "pending" as const, state_version: version, headers: [], prepare_status: ready ? "ready" as const : "pending_prepare" as const, declarations: [], declarations_available: ready })
+  const connector = (ready = false) => ({ availability: "unavailable" as const, connector_id: "private-connector", connector_type: "mcp" as const, provider_key: "private-command", server_id: "private-server", status: ready ? "active" as const : "pending" as const, approved_scopes: [], enabled: ready, state_version: ready ? "8" : "7" })
   const registration = () => ({ server: server(false, "1"), connector: connector(), replayed: false })
   async function setup() {
     const { createMcpServerCreationFlow } = await import("@/ui/mcp/mcp-server-creation-flow")
@@ -307,8 +307,8 @@ describe("private MCP creation registration and preparation", () => {
 describe("per-resource MCP preparation command owner", () => {
   const target = { serverId: "one-server", connectorId: "one-connector", version: "1" }
   const response = (serverId = target.serverId, connectorId = target.connectorId) => ({
-    server: { server_id: serverId, server_url: "https://mcp.example.test/prepare", display_name: "Prepared", status: "registered" as const, state_version: "2", headers: [], prepare_status: "ready" as const, declarations: [], declarations_available: true },
-    connector: { connector_id: connectorId, connector_type: "mcp" as const, provider_key: "private", server_id: serverId, status: "active" as const, approved_scopes: [], enabled: true, state_version: "2" },
+    server: { availability: "unavailable" as const, server_id: serverId, server_url: "https://mcp.example.test/prepare", display_name: "Prepared", status: "registered" as const, state_version: "2", headers: [], prepare_status: "ready" as const, declarations: [], declarations_available: true },
+    connector: { availability: "unavailable" as const, connector_id: connectorId, connector_type: "mcp" as const, provider_key: "private", server_id: serverId, status: "active" as const, approved_scopes: [], enabled: true, state_version: "2" },
     declarations: [], replayed: false,
   })
   it("independent resources do not block each other and unknown retries keep their own key/version", async () => {
@@ -512,8 +512,8 @@ it("an earlier management ACK settles an active explicit retry without letting t
 })
 
 describe("MCP typed management and Prepare interlock", () => {
-  const connector = { connector_id: "managed-connector", server_id: "managed-server", connector_type: "mcp" as const, provider_key: "fixture", status: "active" as const, enabled: true, state_version: "2", approved_scopes: [] }
-  const server = { server_id: "managed-server", display_name: "Edited", server_url: "https://mcp.example.test/", status: "pending" as const, state_version: "2", headers: [], prepare_status: "pending_prepare" as const, declarations: [], declarations_available: false }
+  const connector = { availability: "unavailable" as const, connector_id: "managed-connector", server_id: "managed-server", connector_type: "mcp" as const, provider_key: "fixture", status: "active" as const, enabled: true, state_version: "2", approved_scopes: [] }
+  const server = { availability: "unavailable" as const, server_id: "managed-server", display_name: "Edited", server_url: "https://mcp.example.test/", status: "pending" as const, state_version: "2", headers: [], prepare_status: "pending_prepare" as const, declarations: [], declarations_available: false }
   const client = () => ({ updatePrivateMcpServer: vi.fn().mockResolvedValue({ server, connector, replayed: false }), deletePrivateMcpServer: vi.fn().mockResolvedValue({ server_id: server.server_id, deleted: true, replayed: false }), updateMcpConnector: vi.fn().mockResolvedValue(connector), setMcpConnectorEnabled: vi.fn().mockResolvedValue(connector), removeMcpConnector: vi.fn().mockResolvedValue({ ...connector, status: "revoked", enabled: false }), preparePrivateMcpServer: vi.fn().mockRejectedValue(new Error("unknown prepare")) })
 
   it("freezes each of the five original operations and cannot replace it with another edit or new CAS", async () => {
@@ -607,7 +607,7 @@ it("a pre-aborted creation window does not freeze a new command or dispatch it",
 
 describe("Provider actor-owned original Create", () => {
   const input = { provider_key: "directory-app", connector_type: "mcp" as const, display_name: "Original provider", description: "Original" }
-  const connector = { connector_id: "created", provider_key: input.provider_key, connector_type: "mcp" as const, status: "pending" as const, enabled: false, approved_scopes: [], state_version: "1" }
+  const connector = { availability: "unavailable" as const, connector_id: "created", provider_key: input.provider_key, connector_type: "mcp" as const, status: "pending" as const, enabled: false, approved_scopes: [], state_version: "1" }
   it("keeps a confirmed locator across rechecks without replaying Create or old facts", async () => {
     const { createProviderCreationCommands } = await import("@/ui/mcp/provider-creation-commands")
     const create = vi.fn().mockResolvedValue(connector)

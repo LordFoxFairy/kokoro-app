@@ -1,3 +1,13 @@
+## 2026-10-19 MCP 当前可用性消费（本地验收完成）
+
+承接BFF850ffe1/Platform4a4e4c4的既定五态，不新增功能模块或协议。Connector/PrivateServer严格要求availability，拒缺失/未知/旧status冒充；安全header历史完整读出，原写入32限制与同源/身份/CAS/原命令恢复不变。一个只读小组件复用于卡片、提供方详情、私有详情和多账号选择器，不自动续期、重连或执行；原status/enabled管理语义保持。原dev预览fixture仅补必需字段，不新增live降级。
+
+1081输入冻结，正式contract288 PASS、architecture50 PASS、lint/typecheck/webpack build/构建后typecheck全0，默认225文件4240 PASS/0 SKIP；原全部Playwright桌面/手机38 PASS、零retry/原timeout。新增仅三条独有风险案例；八份既有测试经明确fixture字段和新case逆证原断言字节精确保持。首全量4239PASS/1FAIL来自Prepare成功fixture仍静态unavailable，按原两返回对象发布ready后的available修正，未放宽断言后全门重跑。
+
+实际App HubClient→BFF HTTP/Native SDK→受控Native owner五态逐一通过list/detail/private，含33安全header历史；零值、错资源、额外字段拒绝。IAM/同源桥/owner受控，非正常整链。实际Chromium四展示面1280/390、独立Server/Connector字段、键盘焦点及零自动动作已验；参考Manus原已登录tab仅本次AX可读、隐藏视口宽0未获新截图，不冒像素对齐。独审无确定P0–P2。Admin现25操作只有Skills/Provider/包，不消费个人对象，无新增Admin字段或提交。
+
+正常App934输入逐字保持，未改正常配置/服务/数据库/权限/积分；模型、实际工具与扣费暂停。源码验证后复用既有授权集中PR交付，CI不等待但不称绿；后续正常整链、Manus完整页面和手册仍未验收。原始失败/冻结/受控HTTP/组件浏览器/原完整E2E材料只存Root ignored var/dev/app-mcp-availability-20261019，不提交机器记录或截图。
+
 ## 2026-10-19 收尾集成候选：完整既有分支与固定 Public19
 
 只集成 main d42fe1d2、PR37 的原生浏览器登录回归、PR38 的六页设置与完整 local362a9b7；保真实 merge ancestry，不按功能片继续开 PR。知识/记忆等其余混合工作保持原位，不在本次顺手接通。唯一 BFF snapshot 固定已合 owner08a2120ea85b6cad5cf6e839ef14dbf83d908b92、Public19.0.0/165、SHA256955412b680bf7a2529c4c35f553ff272d7361769ea95bb441ba820b552ffc564；六个既有窄 generator 正规配对，connector-command-errors 独立 profile 不换 pin。

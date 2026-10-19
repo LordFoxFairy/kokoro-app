@@ -1,3 +1,7 @@
+## MCP 可用性消费（2026-10-19）
+
+严格消费owner五态，卡片/详情/选择器共用只读展示，不把active当作当前可用。原status/enabled、同源身份、CAS及原命令恢复不改。完整本仓门、4240测试及38原Playwright通过；正常运行与Manus像素级完整对照另验，见当前事实。
+
 # Kokoro User Web
 
 `kokoro`（发布仓库名 `kokoro-app`，package `@kokoro/app`）是 Kokoro 的正式 User Web。

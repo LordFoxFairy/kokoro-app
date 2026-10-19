@@ -1,3 +1,7 @@
+## MCP 当前可用性
+
+`mcp-availability-status.tsx` 在连接卡片、提供方详情/选择器、私有MCP详情统一显示owner五态，不从active/enabled猜测，也不执行任何续期/重连；原生命周期与enabled管理语义保持。严格wire由现hub schema拥有，历史安全header描述不按写入数量截断。
+
 ### 完整目录关系与明确选择（2026-10-19）
 
 `use-mcp-provider-relations.ts` 只读现管理 connector 接口，按 opaque cursor 串行收完；不使用 runtime active-only 投影，也不将旧缓存/首分页当完整零关系。一个 live scan 由同 client/actor/准入代际/confirmed-write revision 的目录订阅者共享，最后订阅退休即取消；仅在飞共享，无跨打开的完整结果缓存。50页/10秒是读操作预算，不是业务上限；循环、超预算、失败、取消均保持未知，显式重试从首页开始。
