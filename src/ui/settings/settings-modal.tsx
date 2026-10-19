@@ -7,7 +7,7 @@
 // 会话态由 AppFrame 保证（仅在信封有效时渲染），本组件不再自持匿名闸。
 // 壳层只编排导航与面板；每个设置能力在 sections/ 或独立产品面板中维护。
 
-import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 
 import { cn } from "@/lib/utils";
 import { useLocale } from "@/i18n/context";
@@ -18,7 +18,7 @@ import type { SkillCard } from "@/hub/schemas";
 import type { SkillsScopeFilter } from "@/ui/skills/skills-scope";
 import styles from "./settings-modal.module.css";
 import { useOverlayClose } from "@/ui/shell/use-overlay-close";
-import { settingsSkillsScopeFromLocation } from "./settings-location";
+import { settingsSkillsViewFromLocation, type SettingsSkillsView } from "./settings-location";
 import { useWarmMcpProjection } from "@/ui/mcp/use-mcp-projection";
 import { warmCustomApiProjection } from "@/ui/mcp/use-custom-api-projection";
 
@@ -79,9 +79,9 @@ type SettingsModalProps = {
   /** Optional shell scope for fallback focus recovery when multiple sites are embedded. */
   focusScopeRef?: RefObject<HTMLElement | null>;
   // 内部切 tab 时上抛,供 shell 同步 URL `?settings=`(刷新/深链/可分享)。
-  onTabChange?: (tab: SettingsTab) => void;
+  onTabChange?: (tab: SettingsTab, skillsView?: SettingsSkillsView) => void;
   onCreateSkillWithAi?: (prompt?: string) => void;
-  onTrySkill?: (skill: SkillCard) => void;
+  onTrySkill?: (skill: SkillCard, prompt?: string) => boolean;
 };
 
 export function SettingsModal({
@@ -102,7 +102,21 @@ export function SettingsModal({
   const resolvedBrandName = brandName ?? "Kokoro";
   // `/settings/skills/personal` is the marketplace handoff URL used by Manus.
   // A reload keeps the same one-panel intent; direct Settings opens keep All.
-  const resolvedInitialSkillsScope = initialSkillsScope ?? settingsSkillsScopeFromLocation();
+  const [skillsView, setSkillsView] = useState<SettingsSkillsView>(initialSkillsScope ?? "all");
+  useLayoutEffect(() => {
+    let retired = false;
+    const read = () => {
+      if (!retired) setSkillsView(settingsSkillsViewFromLocation() ?? initialSkillsScope ?? "all");
+    };
+    queueMicrotask(read);
+    window.addEventListener("popstate", read);
+    window.addEventListener("hashchange", read);
+    return () => {
+      retired = true;
+      window.removeEventListener("popstate", read);
+      window.removeEventListener("hashchange", read);
+    };
+  }, [initialSkillsScope]);
   // Keep the mounted shell immediately responsive to a rail click, then
   // reconcile it with a deep link or outer-shell change. The previous
   // render-only value made the modal depend on parent navigation to reflect
@@ -112,6 +126,9 @@ export function SettingsModal({
     source: SettingsTab;
     value: SettingsTab;
   }>(() => ({ source: initialTab, value: initialTab }));
+  if (localTab.source !== initialTab) {
+    setLocalTab({ source: initialTab, value: initialTab });
+  }
   const tab = localTab.source === initialTab ? localTab.value : initialTab;
   const { open, requestClose } = useOverlayClose(onClose);
   const activeTabRef = useRef<HTMLButtonElement | null>(null);
@@ -123,6 +140,7 @@ export function SettingsModal({
   const teamClient = useMemo(() => browserTeamClient({ preview }), [preview]);
   useWarmMcpProjection({
     client: hubClient,
+    readGeneration: preview ? 0 : readBoundary?.generation ?? 0,
     identity: preview
       ? "preview"
       : readBoundary?.admitted === true
@@ -142,10 +160,12 @@ export function SettingsModal({
     return warmCustomApiProjection({
       client: hubClient,
       identity: connectorIdentity,
+      readGeneration: preview ? 0 : readBoundary?.generation ?? 0,
     });
-  }, [connectorIdentity, hubClient]);
+  }, [connectorIdentity, hubClient, preview, readBoundary?.generation]);
   const selectTab = (next: SettingsTab): void => {
     setLocalTab({ source: initialTab, value: next });
+    setSkillsView("all");
     onTabChange?.(next);
   };
 
@@ -249,7 +269,17 @@ export function SettingsModal({
               <SettingsPanel
                 activeTab={tab}
                 {...(onArchiveChanged === undefined ? {} : { onArchiveChanged })}
-                {...(resolvedInitialSkillsScope === undefined ? {} : { initialSkillsScope: resolvedInitialSkillsScope })}
+                skillsScope={skillsView === "explore" ? "all" : skillsView}
+                onSkillsScopeChange={(scope) => {
+                  setSkillsView(scope);
+                  onTabChange?.("skills", scope);
+                }}
+                skillsCatalogOpen={skillsView === "explore"}
+                onSkillsCatalogOpenChange={(catalogOpen) => {
+                  const next = catalogOpen ? "explore" : "all";
+                  setSkillsView(next);
+                  onTabChange?.("skills", next);
+                }}
                 brandName={resolvedBrandName}
                 preview={preview}
                 {...(readBoundary === undefined ? {} : { readBoundary })}

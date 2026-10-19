@@ -10,11 +10,7 @@ import { formatDeliveryTime } from "@/ui/canvas/canvas-panel"
 import { taskStatus, type ScheduledTaskRecord } from "../model/scheduled-task"
 import type { ScheduledView } from "./scheduled-task-location"
 import { ScheduledTaskListActions } from "./scheduled-task-list-actions"
-import {
-  mutationMessageKey,
-  statusMessageKey,
-  type ScheduledMutation,
-} from "./scheduled-task-presentation"
+import { mutationMessageKey, statusMessageKey, type ScheduledMutation } from "./scheduled-task-presentation"
 import styles from "./scheduled-task-surface.module.css"
 
 type ScheduledTaskListProps = {
@@ -28,11 +24,7 @@ type ScheduledTaskListProps = {
   canUpdate: boolean
   canRetry: boolean
   canDelete: boolean
-  openEditor: (
-    prompt?: string,
-    target?: HTMLElement | null,
-    task?: ScheduledTaskRecord | null,
-  ) => void
+  openEditor: (prompt?: string, target?: HTMLElement | null, task?: ScheduledTaskRecord | null) => void
   switchView: (next: string) => void
   setDeleteTarget: (task: ScheduledTaskRecord) => void
   retryTask: (task: ScheduledTaskRecord) => Promise<void>
@@ -58,17 +50,11 @@ export function ScheduledTaskList({
 }: ScheduledTaskListProps) {
   const t = useT()
   return (
-    <section
-      className={styles.taskContent}
-      aria-labelledby="scheduled-list-title"
-      data-testid="scheduled-task-list"
-    >
+    <section className={styles.taskContent} aria-labelledby="scheduled-list-title" data-testid="scheduled-task-list">
       <div className={styles.taskHeading}>
         <div>
           <p className={styles.eyebrow}>{t("rail.navScheduled")}</p>
-          <h2 id="scheduled-list-title">
-            {t("scheduled.heroTitle", { brand: brandName })}
-          </h2>
+          <h2 id="scheduled-list-title">{t("scheduled.heroTitle", { brand: brandName })}</h2>
         </div>
         <Button
           type="button"
@@ -82,11 +68,7 @@ export function ScheduledTaskList({
         </Button>
       </div>
       <Tabs value={view} onValueChange={switchView} className={styles.views}>
-        <TabsList
-          variant="line"
-          className={styles.viewTabs}
-          aria-label={t("rail.navScheduled")}
-        >
+        <TabsList variant="line" className={styles.viewTabs} aria-label={t("rail.navScheduled")}>
           <TabsTrigger value="calendar" className={styles.viewTab}>
             {t("scheduled.tabCalendar")}
           </TabsTrigger>
@@ -96,11 +78,7 @@ export function ScheduledTaskList({
         </TabsList>
       </Tabs>
       {view === "calendar" ? null : (
-        <div
-          className={styles.taskList}
-          role="list"
-          aria-label={t("rail.navScheduled")}
-        >
+        <div className={styles.taskList} role="list" aria-label={t("rail.navScheduled")}>
           {tasks.map((task) => (
             <ScheduledTaskListItem
               key={task.id}
@@ -152,36 +130,41 @@ function ScheduledTaskListItem({
 }: ScheduledTaskListItemProps) {
   const { locale } = useLocale()
   const t = useT()
-  const status = taskStatus(task)
+  const weekdayFormat = new Intl.DateTimeFormat(locale, { weekday: "short", timeZone: "UTC" })
+  const ruleLabel =
+    task.frequency === "weekly"
+      ? (task.weekdays ?? []).map((day) => weekdayFormat.format(new Date(Date.UTC(2000, 0, 2 + day)))).join("、")
+      : task.frequency === "monthly"
+        ? (task.monthDays ?? []).map((day) => t("scheduled.dayOfMonth", { day })).join("、")
+        : (task.localDate ?? "")
+  const status = task.schedulingState ?? taskStatus(task)
   const enabled = status === "active"
   const isMutating = pendingMutation?.taskId === task.id
   const taskMutationError = mutationError?.taskId === task.id
   return (
-    <article
-      className={styles.taskCard}
-      role="listitem"
-      data-status={status}
-      aria-busy={isMutating || undefined}
-    >
+    <article className={styles.taskCard} role="listitem" data-status={status} aria-busy={isMutating || undefined}>
       <span
         className={styles.taskStatus}
         data-enabled={enabled ? "true" : "false"}
         role="img"
         aria-label={t(statusMessageKey(status))}
       >
-        {status === "active" ? (
-          <Check aria-hidden="true" />
-        ) : (
-          <span aria-hidden="true" />
-        )}
+        {status === "active" ? <Check aria-hidden="true" /> : <span aria-hidden="true" />}
       </span>
       <div className={styles.taskDetails}>
         <strong>{task.title}</strong>
         <span>
-          {task.frequency === "weekly"
-            ? t("firstSite.weekly")
-            : t("firstSite.daily")}{" "}
-          · {task.time} · {t(statusMessageKey(status))}
+          {t(
+            task.frequency === "weekly"
+              ? "firstSite.weekly"
+              : task.frequency === "monthly"
+                ? "scheduled.monthly"
+                : task.frequency === "once"
+                  ? "scheduled.once"
+                  : "firstSite.daily",
+          )}
+          {ruleLabel ? ` ${ruleLabel}` : ""} · {task.time}
+          {task.timezone ? ` (${task.timezone})` : ""} · {t(statusMessageKey(status))}
         </span>
         {isMutating && pendingMutation ? (
           <span className={styles.mutationStatus} role="status">

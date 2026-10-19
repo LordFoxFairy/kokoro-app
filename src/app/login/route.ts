@@ -5,6 +5,7 @@ import { NextRequest } from "next/server"
 import { DEFAULT_PRODUCT_RETURN_TARGET, parseProductReturnTarget } from "@/lib/product-return-target"
 import { escapeInteractionHtml } from "@/lib/server/iam-interaction-route"
 import { productLoginReturnCookie } from "@/lib/server/product-login-return"
+import { oidcCsrfToken } from "@/lib/server/oidc-csrf"
 import { oidcRpConfig } from "@/lib/server/oidc-provider"
 
 export const runtime = "nodejs"
@@ -47,7 +48,8 @@ export async function GET(request: NextRequest): Promise<Response> {
   // nested Route Handler call cannot move a newly issued cookie into that context,
   // so issue its compatible double-submit cookie and let the browser make the
   // one fixed provider POST.
-  const token = randomBytes(32).toString("hex")
+  // Match Auth.js: a valid existing cookie must not rotate on every tab/start.
+  const token = oidcCsrfToken(request.headers.get("cookie"), config.authSecret) ?? randomBytes(32).toString("hex")
   const nonce = request.headers.get("x-nonce")
   if (nonce === null || !/^[A-Za-z0-9_-]{16,128}$/u.test(nonce)) return unavailable("request_nonce")
   const csrfName = `${config.relay.secureCookies ? "__Host-" : ""}next-auth.csrf-token`

@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 vi.mock("@/lib/server/oidc-bff-agent", () => ({ boundedOidcBffAgent: vi.fn() }))
 
 import { GET } from "@/app/login/route"
+import { productLoginReturnTarget } from "@/lib/server/product-login-return"
 
 const ORIGIN = "https://web.example.test"
 const ENV = {
@@ -34,6 +35,7 @@ describe("GET /login", () => {
   it.each([
     "/app/project/project_00000000-0000-4000-8000-000000000301?conversation=conv_00000000-0000-4000-8000-000000000302",
     "/app?conversation=conv_00000000-0000-4000-8000-000000000302",
+    "/app#/account/settings/mcp",
   ])("issues a fixed browser-native OIDC start for a valid target: %s", async (target) => {
     const response = await GET(browserRequest(`/login?${new URLSearchParams({ return_to: target })}`))
     expect(response.status).toBe(200)
@@ -43,10 +45,34 @@ describe("GET /login", () => {
     expect(response.headers.getSetCookie()).toHaveLength(2)
     expect(response.headers.getSetCookie()[0]).toMatch(/^next-auth\.csrf-token=[A-Za-z0-9%|]+; Path=\/; HttpOnly; SameSite=Lax$/u)
     expect(response.headers.getSetCookie()[1]).toMatch(/^kokoro_product_login_return=[A-Za-z0-9%._~-]+\.[a-f0-9]{64}; Path=\/; HttpOnly; SameSite=Lax$/u)
+    expect(productLoginReturnTarget(response.headers.getSetCookie()[1]!.split(";", 1)[0]!, ENV.KOKORO_WEB_AUTH_SECRET)).toBe(target)
     const html = await response.text()
     expect(html).toContain('method="post" action="/api/auth/signin/kokoro-iam"')
     expect(html).toMatch(/name="csrfToken" value="[a-f0-9]{64}"/u)
     expect(html).not.toContain(target)
+  })
+
+  it("reuses the verified browser CSRF cookie across overlapping login starts", async () => {
+    const first = await GET(browserRequest())
+    const csrf = first.headers.getSetCookie()[0]!.split(";", 1)[0]!
+    const request = () => new NextRequest(`${ORIGIN}/login`, {
+      headers: { host: "web.example.test", "x-nonce": "a".repeat(48), cookie: csrf },
+    })
+    const [second, third] = await Promise.all([GET(request()), GET(request())])
+    const token = (await first.text()).match(/name="csrfToken" value="([a-f0-9]{64})"/u)![1]!
+    expect(await second.text()).toContain(`name="csrfToken" value="${token}"`)
+    expect(await third.text()).toContain(`name="csrfToken" value="${token}"`)
+  })
+
+  it.each(["tampered", "duplicate", "malformed"])("replaces an invalid %s CSRF cookie rather than trusting it", async (kind) => {
+    const first = await GET(browserRequest())
+    const csrf = first.headers.getSetCookie()[0]!.split(";", 1)[0]!
+    const token = (await first.text()).match(/name="csrfToken" value="([a-f0-9]{64})"/u)![1]!
+    const cookie = kind === "duplicate" ? `${csrf}; ${csrf}` : kind === "malformed" ? "next-auth.csrf-token=%ZZ" : csrf.slice(0, -1) + (csrf.endsWith("a") ? "b" : "a")
+    const response = await GET(new NextRequest(`${ORIGIN}/login`, {
+      headers: { host: "web.example.test", "x-nonce": "a".repeat(48), cookie },
+    }))
+    expect(await response.text()).not.toContain(`name="csrfToken" value="${token}"`)
   })
 
   it.each([

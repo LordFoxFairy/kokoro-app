@@ -176,6 +176,9 @@
   --sidebar-accent-foreground: #1a1a1a;
   --sidebar-border: #e4e4e4;
   --sidebar-ring: color-mix(in srgb, #1a1a1a 42%, transparent);
+  /* Re-resolve inherited text at the skin boundary; the body's already
+     computed color otherwise keeps the root palette despite these tokens. */
+  color: var(--foreground);
   font-family: -apple-system, "system-ui", "Segoe UI Variable Display", "Segoe UI", Helvetica, Arial, sans-serif;
 }
 

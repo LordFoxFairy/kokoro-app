@@ -7,11 +7,13 @@ Web专属thread viewport统一隐藏滚动条槽以匹配Composer阅读轴；共
 # ui/thread — 会话线渲染
 
 ## 职责
+阅读列上限768px，列内留16px，滚动区顶部40px/外侧16px，由本组件维护，不从 Frame 再扣一层宽度。
+
 渲染消息流：用户/助手轮次、markdown、工具调用、子智能体、运行态、产物卡与投递卡、失败/402 呈现、自动滚动。
 
 ## 公开件
 - `ConversationThread`（`conversation-thread.tsx`）：会话线主组件；产物/投递/工具打开回调由 shell 注入。
-- `useAutoScroll`：贴底跟随 / 回到最新信号。
+- 原生 `MessageScroller`：初始贴底；读者向上滚动后停止跟随，「回到最新」恢复。加载态与正文都留在同一消息列表；不把助手/脚手架设为顶部锚点，不额外创建清 spacer 的 observer。
 - `formatBytes`（`artifact-card.tsx`）：字节展示（被 library 等复用）。
 - 卡片子件：`ArtifactCard` / `DeliveryCard` / `ToolCallRow` / `SubagentRow` / `RunState` / `AssistantTurn` 等。
 

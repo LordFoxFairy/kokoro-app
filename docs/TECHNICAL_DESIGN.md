@@ -1,3 +1,13 @@
+## 2026-10-19 收尾集成候选：完整既有分支与固定 Public19
+
+只集成 main d42fe1d2、PR37 的原生浏览器登录回归、PR38 的六页设置与完整 local362a9b7；保真实 merge ancestry，不按功能片继续开 PR。知识/记忆等其余混合工作保持原位，不在本次顺手接通。唯一 BFF snapshot 固定已合 owner08a2120ea85b6cad5cf6e839ef14dbf83d908b92、Public19.0.0/165、SHA256955412b680bf7a2529c4c35f553ff272d7361769ea95bb441ba820b552ffc564；六个既有窄 generator 正规配对，connector-command-errors 独立 profile 不换 pin。
+
+复用原测试历史逆证，在原 Public16→15.4→15.3 前增加显式 Public19→两个完整 Public16 父版本的逆 delta，保原全文 hash/语义与退役 MCP 写入口负控，不在生产兼容旧协议。接入已经交付并在正常开发环境配对过的 calendar consumer：来源逐路径绑定既有 app-public18 冻结证据，使用每周多星期、每月多日期、一次性 local_date、IANA timezone 和 owner next_run_at；不再消费已退役 recurrence_anchor_at。仅接收该既有切片所需源码、字典及测试，不 wholesale 导入混合工作树。
+
+主干 archive receipt/权限/账户/分享与本地单一 per-scope Reader registry、MCP command provider/受控 Skills scope/刷新及 callback 围栏按语义并集。archive revision/receipt 进入原 Reader host，不再启动第二读者；稳定现 archive retry callback，展示层只接实际使用的归档操作和 busy，不保无消费者字段。旧测试 fixture 接真实 keyed Reader hosts，保原退休/真实 GET/归档断言；未弱化浏览器 Origin:null/CSRF/nonce/CSP/第二次登录。无新 owner、API、DB/Redis schema、网关或认证旁路。
+
+所有验证尚待最终冻结全门；本段是当前集成范围，不声称已合并、页面已对齐或正常服务已重载。正常数据库/配置/服务与已有混合工作均保留，模型、实际工具与扣费仍暂停。
+
 ## SET51 真实 Next 登录回归与当前浏览器表单对齐（2026-10-16）
 
 当前 main 的 `/login` 已在 b2f652e、cdcee3d 改为 200、no-store 的不可见浏览器启动表单：固定同源 provider POST、Auth.js double-submit CSRF cookie/hidden token、当前请求 CSP nonce；浏览器提交后才签发 OIDC state 并 302 到同源 authorize。旧“GET 直接 302”描述已被本段替代，不恢复嵌套 Route Handler 调用或可见重试中转页。SET51 仅在两现有真实 Next HTTP 集成测试验证该链和重新登录/退出确认，保留原 cookie、Origin、CSP、匿名零业务读取及 issuer 退出断言；不修改生产认证源码、超时、skip、owner API 或 Skills/MCP。Root 维护设计和资源门，Web owner 只写获准测试范围；原六个项目/侧栏失败保留为独立范围。
@@ -430,6 +440,90 @@ Web继续唯一拥有三动作的浏览器偏好；不新增服务或依赖。�
 Root本次仅批准自有开发15.0.0 breaking /v1同步候选，不切main/日常/生产；Admin消费者不可访问须后继核验。BFF14.7原正式95fbd894与Web旧413e3bbe完整snapshot已存在非Team差异（另一开发者已提交的安装identity browser-private契约），正常完整owner artifact将继承这些既有字节，不能把它们算本片Skills业务改动或手工裁掉；本片只扩Team窄图和校验，不实现Skills/MCP。
 
 Manus当前“创建团队”实际打开套餐选择；现KokoroTeam视图只管理部署固定团队成员/邀请/角色，无团队创建/切换契约，不能以此修复冒称创建团队完成。入口语义收敛作为后继UI切片，不在本次机器修复中引入虚拟团队或计划。
+
+## 登录并发与回调恢复（2026-10-19）
+
+旧回调在token/身份核验等待期间，新登录可能已覆盖共享Auth.js事务cookie；服务端无法从旧请求快照安全删除浏览器当前proof。因此成功和失败都不发送全局删除头，成功仅建立原Product会话，退休无调用rpCleanupCookies。沿原签名proof的15分钟期限与Redis state的300秒GETDEL承接过期和防重放，无新状态中心、权限、Schema、依赖或认证链。
+
+失败表示在GET/POST原出口统一处理，只替换明确HTML/有效nonce的错误文档，保原status及API JSON。Proxy精确三个原生登录路径承接最终no-referrer/CSP，页面meta防同源恢复链接带回授权参数；无自动重试。保证仅为不删除后来事务，不声明latest-start/latest-success胜出或旧偶发500已定因。
+
+## Product 会话生命周期恢复（2026-10-19）
+
+Product继续唯一持有HttpOnly凭据和Redis generation/CAS。App壳只读取RP生命周期；active但access过期须现有CSRF POST续期后同主体确认，refreshing/stale/unconfirmed不当anonymous或业务准入。未知POST零自动重放；CSRF失败/派发前取消不锁死后续恢复。收到token时固定access deadline，身份核验耗时不延长它。AppGate可见/pageshow恢复只重用原有界RSC检查，无新OAuth、接口、Schema或依赖。
+
+## Provider Create 原命令与授权续接（2026-10-19）
+
+沿既有 App shell `ConnectorCommandProvider` 增加 feature-specific `provider-creation-commands`，按当前主体及 provider key 管一个原 Create，复用 `createConnectorCommand` 的冻结正文/幂等键、单飞、准入代际、未知结果与晚 ACK 围栏；不复用私有 Server Register/Prepare aggregate，不增 API、Schema、依赖或通用 registry。关闭详情仅停止本窗口等待，已挂载 shell 内的原意图/确认 locator 保留；换主体永久退休，不从名称或目录 metadata 重建未知命令。
+
+Create ACK 由既有 schema/matcher 绑定原正文，只保留 connector ID，不能把 ACK 的 CAS/status/server 当当前事实。继续时精确读取该 connector 与 provider，核绑定后用当前 server/CAS Begin；授权失败、精确读取失败或关闭窗口都不再创建。目录从无 OAuth 变为 OAuth 时只记录“下次点击需预开窗口”的 UI 提示，不保存 server/CAS 或授予能力；新点击同步预开，后续仍双精确读取。正常连接器管理保持自身 CAS/命令 owner，不被另一创建意图冻结。
+
+恢复只覆盖同一稳定 shell 的内存生命周期，不声称刷新浏览器/进程后持久恢复，也不将未知结果当撤销；现有 owner receipt/error policy 继续决定是否允许重放。只有当前窗口已消费精确连接/授权 ticket 或确认移除该连接后，才释放原创建意图。真实 OAuth/运行/工具执行仍由独立验收证明，模型、实际工具、扣费、CI 和远端操作继续暂停。
+
+## MCP 目录与精确详情独立交付（2026-10-18）
+
+沿已有owner query/category/cursor与精确GET：目录搜索不再过滤首屏数组冒全量，筛选/续页与首屏seed分开；保留已确认行、显式重试、主体/准入代际退休旧请求。Custom API续页只属于当前head，详情按精确locator读取并订阅原聚合写失活。目录OAuth发出ticket仍保详情，关闭/换窗退休等待；active重连仅来自实际OAuth绑定，不从保存配置推断已连接。
+
+JSON导入仅提示当前owner支持的HTTP格式，不预填命令，窄短视口保留操作。既有API/权限/存储/命令owner不变，无新网关、Schema或依赖。Create未知原命令恢复和正常MCP配对仍另验，不将页面可见或fixture成功称真实工具执行、完整Manus一比一或整个目标完成。
+
+## Skills 来源可用性与未知更新恢复交付（2026-10-18）
+
+安装source_status不等于installed/enabled：卡片保留owner实际值，不可用来源禁止新启用/试用，已启用安装仍可停用，详情/历史包阅读及显式更新保留。详情使用exact installation鲜读事实，向父组件交还相同series/revision/source/installation locator的当前选择；不以旧卡可用性或enabled覆盖鲜读；仅同一次详情打开内的显式启停ACK可临时覆盖该次读，池操作及关闭/重开后的迟到ACK不得写新详情。不成为执行授权。
+
+正常已登录页面对照实际800×600阅读器：Manus圆角12px、header高60px、起侧16px及上/下20/12px；本地原圆角16px、起侧20px及上/下10/10px。本片只修这些已测几何，保留既有操作预留、文件树与响应式；不同视口/包内容和动作差异仍不称整页1:1。
+
+未知更新仍保原key/body及ACK与GET之别；新增二次确认的“停止等待”只清当前actor、admitted边界和同一unknown快照的本地恢复意图，不撤销owner写、不合成ACK、不自动新请求。存在active等待或已知ACK时拒绝清除；确认后失活原列表并回读，后续仍由owner pin CAS决定。正常样本未改、未调用模型/工具/扣费；隔离组件证明与正常完整产品旅程分别记录，未把工作树其它模块或刷新改动并入。
+
+## 首次匿名设置导航独立交付（2026-10-18）
+
+沿既有签名return_to/MAC/state、同源固定IAM OIDC，不改认证协议、cookie、权限、刷新或存储。SSR确认没有可用会话时，只返回独立无数据导航组件；浏览器捕获完整白名单设置hash并一次replace到/login，无脚本保留校验过的path/query链接。未知hash不成为开放重定向，已有AppGate/身份判定及故障关闭保留。
+
+本提交只包含导航所需独立增量，不夹带工作树内的刷新状态、调度、资料库或设置业务改动；完整mixed组合与此HEAD-only交付分别验证。正常已有会话保留，不改变现有登录配置或主动登出。首次匿名回调的真实Next/Chromium/Redis与受控IAM/BFF证据只证明该边界，不冒正常真实账号全旅程或整个Skills/MCP已完成。
+
+## 动态适配补验：窗口、容器与弹层各自负责（2026-10-17）
+
+正常参考在窗口768px仍保300px侧栏，内容468px为单列；767px隐藏侧栏，内容767px仍单列。旧代码在768px提前启用overlay，并使内容宽768误进项目双列；这是窗口导航门限错误，不在项目workspace写判断修补。现由既有shell constraints定义desktop minimum，移动/细指针订阅和snapshot以及SSR CSS同用 `width < 768px`，不使用遗漏767–768小数区间的max767查询，也不以取整innerWidth替代真实media matches。侧栏用户偏好、窄屏临时抽屉和项目内容网格仍分别维护。
+
+正常弹层从1280×800快速缩到375×500，旧共享Dialog的duration-200隐含transition all，实际宽565.94/top负12.5，参考立即356.25×475且在屏内。只在共享primitive加transition-none，保原keyframes和duration，不给各业务Dialog加resize监听、延迟、尺寸副本或局部样式补丁。布局及项目技能默认等业务状态不搬进primitive。连续窗口与短高往返用实际草稿/搜索/焦点和首次几何验证；不以等待尺寸过渡结束掩盖动态越界。
+
+## 项目概览布局：当前 Manus 对照（2026-10-17）
+
+中等宽度补验：实际参考 workspace 767px 单列、768px 双列；不是原实现的960px断点。1280/1103/1068px视口（侧栏300）分别为580+320、436.5+286.5、419+269px两列，gap44px。文档与编辑区共用同一网格/宽度/内边距定义，不再用固定减320推算编辑区宽度；编辑区整行不接收指针，仅实际编辑器子节点恢复交互，避免遮挡右栏。窄屏继续保自然顺序与固定底部编辑器，不新增布局组件或业务状态。参考中宽编辑器底部另有不可见免责声明折行占位，本片仍有16px竖向差异；云服务/模型等未接能力不伪造。
+
+参考为同一已登录 Manus 项目 `/app/project/5CM5jjZ8LW87fytDsdFUph`，中文/浅色，实际 DOM 与计算样式；原始图和几何仅 ignored。1280×800：参考侧栏300、内容980，标题/右侧上下文 y80，右列320、两列间44、指令卡189、资源与技能组合卡约257.5；761×764：主内容单列左右24，身份→上下文→最近，编辑区713×120、y612，固定底距32。双截图发现本地原默认280而参考300，并非已批准差异；统一默认已校正300，保留用户拖拽和收起状态，不把旧实现或旧测试当作规格。
+
+实施只调整概览布局：滚动文档持身份/上下文/最近，编辑区是其外部兄弟；宽屏两列、窄屏自然纵向流，拒绝旧 composer 在内容顶部和双重滚动轴。独立会话列表组件保留 loading/error/retry、空态及回调；指令标题与下方添加按钮复用同一有围栏 editor。概览头部单独48px/中性底色，不改变直接会话和项目会话。日期显示本地化月日，`time.datetime` 保留原 UTC instant；未补造创建者资料。
+
+项目技能保留已批准安装/默认选择差异，但真实无安装、无选择且无待保存改动时，不展示无效“0/16＋保存”底栏。成对截图固定1280×800/680高弹窗，两侧真实空技能状态：拼图图标→标题→说明→黑色添加菜单居中，组高132，标题y438、CTA598/494/84×32一致；搜索无结果不误显示导入指引。Toolbar与空态共用 `ProjectSkillAddMenu`，选择来源只复用现请求，不新增权限/传输。初始双图保存后才改空态，不用模拟数据填空；有安装/选择/未保存改动时仍保正式默认操作。
+
+当前没有实现参考筛选/更多菜单或云服务/模型选择器；参考实测筛选项为All type / Project / Official Essential / Official Pro，仅观察菜单，未猜测后台字段或伪造筛选按钮。定时任务仍是现真实独立产品深链，不伪造项目触发器能力。完整原图及未遮罩并排分析保ignored，项目名、用户/日期及真实业务能力差异逐项说明，不把截图“比较相似”称一比一完成；正常有数据全状态与执行仍另验。
+
+## Project Skills 面板职责（2026-10-17，既定模型内实施）
+
+保持 Browser→同源→BFF Public16，不改owner/契约/Schema。workspace只组合ProjectSkillsSection；独立面板/卡片与useProjectSkills维护展示和请求，来源选择器单独持个人/官方只读列表。使用ready canonical Project ID与当前subject/admission/generation；同actor重核与关闭退休私有事实/取消迟到工作但保未决原命令，换actor/project彻底清除。ACK后只回读，不凭GET推断未决命令成功；显式原key/body恢复，无自动升级、重装或默认勾选。启停/移除默认项前先显式取消并保存默认，避免隐式双写；update确认两pin后走原update。删除旧技能名称callback、聚合dialog状态/假卡及浏览器旧名称入口，不保alias。
+
+2026-10-17同已登录Manus参考项目只读实测：项目技能dialog800×680、圆角16，header左24/toolbar左右20、title18/24、search208×32，添加菜单含个人/官方/本地/GitHub，空态不造技能。沿该布局与现token实现，默认选择checkbox/保存是已批准Kokoro项目模型所需的明确业务差异；本地/GitHub仍从现个人管理正式流程取得后再显式装入项目，不伪造项目直导入。复用原UI用例验证真实HTTP意图、未知原key恢复、ACK后仅读、分页/取消/跨actor及键盘；正常配对/浏览器整链单独验收，不因源码测试冒一比一完成。
+
+## 项目 Skills 传输职责（2026-10-17，本地组件，面板待接）
+
+沿已批准项目模型与固定 BFF a804b0f/Public16，分离项目技能的 wire/client、同源 adapter 与面板状态。先将现安装 adapter 原样移出 catch-all，再让同一生命周期实现显式选择 personal/project 目标；项目路径只用已读取的 canonical Project ID，不借个人安装或名称开关。独立 selection client/adapter 消费正式 GET/PUT skill-selection，保有序 ≤16 个唯一 installation ID、[]清空、原 key/body 和项目 ACK 绑定。保存 ACK 不代表重读后的当前默认，精确重放不会恢复后续变更。
+
+后继面板从 workspace/dialog aggregator 拆出，安装不等于默认选择；权限重核/换主体撤销私有事实，未知写只显式原意图重放，不按列表推断成功。复用现样式/安装能力，不建新框架、服务、Schema 或兼容接口。旧名称入口随面板替换删除。验证扩现 client/proxy/项目 UI 用例；正常服务/Schema/浏览器与执行链另验，本片不冒全功能完成。
+
+## S4d Composer 选择意图（2026-10-17，本地实施切片）
+
+沿已批准项目模型，固定BFF a804b0fd91d3f089afea8b48722095dbe71fbc3e/Public16。只维护现engine、execution adapter与Skill试用hook各自职责：项目未作选择时保留省略，[]为明确不选，非空refs为本次显式覆盖；Direct仍发送[]。新建/切换会话和生命周期退休恢复作用域默认，用户点击清除保持显式[]；未知提交继续冻结首次完整意图，重试不套用当前选择。历史消息接收owner新增exact refs，不能因strict schema拒绝正常回读。
+
+本片不增加页面状态、安装事实或选择框架；后继项目Skills选择器独立组件承接真实项目安装与默认保存，替换原名称假卡片，不继续堆进project-workspace-dialogs。正常Schema/服务切换、项目选择器与浏览器整链仍未完成；不以本片消费pin/engine验证冒整个产品已闭环。
+
+## 2026-10-16 SKILLS-UPDATE U4（本地实现，正常产品链待验）
+
+目标沿已审 SKILLS-UPDATE U0/U3：既有安装池卡片展示 owner 的 available_update，显式确认旧 pin→目标 pin 后调用唯一 update，而不是 Remove/Install。Web 只持浏览器意图，BFF 准入/Platform 事务继续唯一写入；不新增模块、网关、数据库或依赖。
+
+写区：现 hub schema/client、catch-all adapter、安装池投影/卡片/面板、相邻普通 update flow/dialog 与 i18n；固定 BFF 615b16a public14.8 原字节并用现两生成器。意图由 actor-owned SkillsContent 持有，越过同 actor read generation但不越过 actor；关闭/重核取消请求，unknown 只显式重放原 installation/两 pin/key。ACK 已确认而回读失败只重读，不再发写；换 actor 退役全部。UI 私有事实与回调仍按准入代际退役。
+
+独立设计复核承接：holder 位于 generation-keyed 子树之外；ACK 核 series/目标 revision，enabled 仅取 owner 值。412 不证明未提交，不允许换意图或凭 GET 合成 ACK。ACK-known 跨重核只保只读阶段，不保私有 ACK；恢复按钮不依赖 available_update 卡片仍存在，旧回调/旧 finally 按 attempt token 永久失效。更新期间关闭现安装操作入口，重新选择前旧 override 退役、最终回读收敛。
+
+验收：strict request/only-upgraded ACK/安装身份、disabled false、无 Remove/Install、原 key/body 恢复、ACK后回读失败、失准入/同actor重核与异actor隔离；现 client/proxy/纯 flow 定向测试与相关完整门，浏览器桌面/窄屏/键盘关键旅程。保持已删除五套 UI suites 退役，不加源码/CSS字符串断言。用户已批准本地短暂重启，新 owner/BFF 源候选已加载并分别通过健康/就绪检查；这不证明业务更新已成功。App 的正常显式更新、桌面/窄屏/键盘旅程与刷新验收仍待完成，受控 fixture 不冒产品完成。
 
 <!-- BEGIN:T-K03.13-WEB-MCP-PERSONAL-READ-D0 -->
 
@@ -2862,3 +2956,101 @@ SET46验收范围：既有契约/架构/lint/type/build及38项浏览器回归�
 在 SET53 页面候选上，正常登录 Computer Use 证明320px的 More 按钮按 Enter 仍保持 collapsed；源只在 pointerdown 打开，click不处理键盘。归属现 settings-compact-more-menu.tsx，保持唯一菜单/所属Dialog portal/现定位，不创建文件或替代设置壳。补原生 Enter/Space 激活与 ArrowDown/ArrowUp 打开、首末 enabled 项定位、菜单方向键/Home/End 跳过禁用项、Escape 仅关闭菜单并回焦触发器；选择后也回焦，外点关闭不抢焦。保留指针路径且一次手势仅切换一次，不解除弹窗焦点保护、不修改 Skills/MCP 业务、无网络/持久化/依赖/公开类型改变。现 UI/E2E 文件追加真实键盘正控和 pointer 不双切/disabled 跳过/Escape 不关闭设置负控，先对旧实现 RED，保持已有断言，再修现组件并运行相关及规定门；Root 统一资源、独审、CUA、Git，writer只改这三个现文件。
 
 SET54布局测量后继：现E2E说明/文档几何分别经两次CDP调用取得，Dialog开场zoom期间可能不同帧。Root仅将此现测试的两rect读取合并进一个同步content.evaluate，仍保非空、y差≤1、文档在说明右边及所有原几何/文字/滚动断言；不改产品CSS或动画，不加sleep/延时/放宽阈值。实际英文desktop/mobile必须重新验证，未验证前不认定已关闭布局缺陷。
+
+
+## Skills 示例试用的会话选择（2026-10-16）
+
+试用仍使用既有 `selected_skill_source_refs` 和 AG-UI，不新增 owner、HTTP API、数据库或授权旁路。Project 设置中的试用保留当前项目并创建新会话，外部 Skills 目录使用同一 Direct engine 返回聊天；不另造跨 scope handoff 服务。
+
+`use-app-frame-skill-trial` 只持有浏览器选择与标签，将已确认的精确 source 绑定到 newConversation 后的实际 ID。engine/admission lifetime 与来源 route callback fence 分开：导航关闭设置不清同会话选择；首次 active ID 不匹配则同步永久退役，避免 A→B→A 标签复活。跨标签页身份 marker 必须匹配准入 subject；storage 或重渲染发现不匹配时永久退役旧 owner，marker 返回原值也不恢复。marker 不作为认证凭据。旧 cleanup 只能清自身 owner 的选择；新建、换身份、代际变化和卸载清 future refs，不改写已经冻结的未知提交。
+
+示例、详情版本和精确安装 source 必须一致且安装启用；catalog 系列级 added 不等于 latest revision 已安装。版本变化、未就绪或失败保留详情与原因，不静默升级/安装，不把预填文字作为正式试用成功。输入区显示真实技能名称并可移除。preview 仅预填文字，不能设置正式 source。下游 owner 仍 fresh 授权；浏览器回归或非空 wire 不是实际 Agent 运行证明。
+
+### Skills 目录重核的展示与请求寿命（2026-10-16）
+
+正常 session 重核不再用 admission/generation 卸载整个目录。外层仅按 preview/subject 分隔：保留 query、category 和精确 series/revision locator，目录基页、追加页、安装事实及详情/reader/share/download 仍按当前代际退休；不把旧卡片当 locator 的兜底。Dialog 的外壳保留，等待当前代读取时只显示通用加载/失败，不显示旧私有内容或动作。新第一页未找到可能是分页未覆盖，允许用当前 opaque cursor 继续加载，不无界自动翻页，也不自动换同系列的新 revision。
+
+安装命令捕获自己的代际 scope token 和 signal；重核退休旧 scope，旧 ACK/catch/finally/invalidate 均不得影响新代 busy 或事实。已派发但未知结果只保留本 actor 的原 source/key，用户显式恢复前不重放；同系列新 revision 不得绕过未知旧命令另建意图。切换 actor 销毁这些局部能力，A→B→A 不从全局缓存复活旧 token。
+
+分享的未知结果墓碑仅按 actor/source 保留，ACK/剪贴板展示按当前准入代际隔离。重核不把未知分享变成可直接重发；只有明确“创建新的分享”可发新命令。安装只有经严格校验的非 retryable、非 409 确定 4xx 拒绝才能释放冻结意图。GitHub 重核清只读选择和已确认结果，保留未知写入 selector/key；本地导入仅清已确认 completed 展示，不丢未知恢复 locator。详情追加页失败在模态内可见，并使用当前 cursor 显式重试。
+
+### Custom API 创建命令的 actor 生命周期（2026-10-16）
+
+AppFrameRuntime 在稳定 app segment 内持有唯一 ConnectorCommandProvider，覆盖主页面、全局和 Settings 入口；不把命令放在短命的 form/Dialog 或独立全局注册表中。actor/client 更换整体退休，临时 admission/generation 更换保原 key/body、取消旧等待并进入 unknown；不自动重放。只有当前准入的用户显式恢复才重发原命令。UI 草稿按 flow 实例分隔，失准入只读、换 actor 清空，纯输入不当作 owner 事实。
+
+命令仅内存持有冻结的合法创建请求（含 write-only secret）和 caller-issued key；idle/running/unknown/rejected/completed 显式区分。超时、取消、畸形 ACK、冲突／前置条件等不证明未提交；只有已验证的 invalid_custom_api_request 拒绝释放冻结意图。确认 ACK 后清掉命令正文，仅保非敏感完成状态；已退休窗口不关闭新窗口。确认投影失活由 flow 捕获的原 client/subject 负责，即使旧请求晚到也不把旧事实发布给新主体。关闭 Dialog 不取消或自动重新发送命令；provider 卸载清理等待与内存。原 MCP Register/Prepare/OAuth 不在本切片冒称完成。
+
+
+### MCP JSON 创建恢复与共享本地生命周期（2026-10-16）
+
+沿既有 App owner/命令协议扩展：JSON 原子导入与 Custom API 创建共用仅管理单个内存命令的纯生命周期函数（准入、冻结 key/body、显式恢复、StrictMode lease、退休和完成），不引入服务注册表/通用网络代理。各自保留 typed validator、client 调用和确认投影失活；Register/Prepare/OAuth 仍为独立后继，不塞进通用状态机。稳定 AppFrame 的唯一 ConnectorCommandProvider 明确持有 API 与 JSON 两个独立槽（MCP 共享 Prepare 见后文），窗口以上保留未知请求，actor/client 更换全退役；删除旧 API-only context 名称而不留兼容 alias。
+
+两表单共用本地完成/关闭生命周期 hook，UI 和输入校验各自独立。JSON 原文可含secret，只在当前actor RAM；发送前冻结完整文档和合法key，未知结果不得编辑后换key重试；ACK清原文及命令，关闭重开只恢复未知命令而非新事实。Hub client沿原schema及现mcpPrivateJsonImportMatches绑定ACK，owner继续原子导入全部项并持久receipt；无wire/Schema/权限/后端依赖变化。失败恢复仍显式，generic412不当成未提交。验证原API既有回归不退化，JSON准入/换actor/原key-body/关闭重开/迟到ACK，最后主路径浏览器与资源回收。
+
+
+### 私有 MCP Register→Prepare 创建恢复（2026-10-16）
+
+仍属既有 App MCP：独立 typed 工作流持有注册和准备两阶段原命令，不把多阶段/私有读塞进单步 API/JSON 纯核。稳定 actor/client provider 持一份私有 MCP 创建工作流，Custom/URL 两种独立表单共享命令意图；每个表单有独立 window scope。准入/窗口退休清 facts、取消旧等待，未知注册/准备保原key/body，换actor/真正卸载清理。Register ACK只留精确server/connector locator并清secret；每次新的Prepare先经现有两个精确GET取得本代CAS；未知Prepare只恢复原key/version，不凭GET推断ACK。旧ACK仍失活原主体，禁止旧窗口/代际自动继续Prepare/OAuth。
+
+本地Hub方法改显式caller key，已有connector GET补本地client入口但不新增wire；原owner原子注册、准备external-command/receipt、指纹与原生OAuth协议不改。表单之外的详情Prepare caller随签名显式提供key，不把其完整未知命令恢复冒成本创建切片已完成。OAuth沿原popup接本代window/admission lifecycle，只用fresh精确目标；授权回调/关闭仅重新核对owner，不凭popup事件伪造成功。尚无真实OAuth提供方闭环证据时保持未验。
+
+### URL 创建授权窗口的用户手势（2026-10-16）
+
+仍沿原 Custom/URL 两阶段 owner 流程，不新增发布或授权协议。“保存并发布”在点击同步栈中预开现有隔离 popup，再执行 Register→fresh GET→Prepare→必要时原生 Begin；被浏览器拦截时不先创建隐形资源。owner 判定无需 OAuth 时只关闭预留窗口并完成，不把空窗口当授权失败。popup 关闭、超时、窗口/准入退休取消当前等待并保留原 unknown 命令，不继续旧 Prepare/Begin；晚 ACK 只更新原主体投影。普通 Save 和已有明确 Connect 入口保持各自时序，第三方真实授权闭环不由组件测试冒充。
+
+### MCP 准备命令在创建与详情之间的唯一归属（2026-10-16）
+
+替换前的创建 flow 和详情 runAction 分别分配 Prepare key；详情失败/关闭/重核后换 key 或新 CAS，且两个入口可能重复准备同一 server。改为 AppFrameRuntime 这一既有稳定 owner 中的 ConnectorCommandProvider：沿用 API/JSON/Register 的显式 typed 槽，另持当前 actor/client 下按精确 server/connector 标识划分的 Prepare 命令集合。每个资源独立串行、不同资源不互相阻塞；创建与详情共用同一资源的原命令，不是任意命令注册表。Provider 上移覆盖主页面与 overlays，旧 overlay-only provider 删除，不留双 owner 或 fallback。
+
+Prepare 的正文/CAS/key 在派发前冻结；unknown 只显式恢复原命令，已确认后只完成当前窗口或 fresh 读取，不换 key 再写。通用纯核仅承接三个实际消费者共用的单命令准入/unknown/lease机制，重命名为 connector-command，领域资源索引只属于 typed MCP Prepare owner。窗口退休不丢未知命令，准入/actor/client 退休取消旧等待和旧 UI 续接；晚 ACK 只失活原主体。确认断开/删除可退役精确资源命令，旧 ACK 不恢复已撤销连接。快照只含 locator/状态，不含 owner 正文、header 或 OAuth secret；无 browser 持久存储、新 owner/wire/Schema。详情的配置草稿、选择与事实代际规则沿现实现，权限/事务/receipt继续归BFF/Platform。 详情每个已提交窗口/准入代际持自己的等待取消信号，关闭、切页或重核立即暂停该等待但保留未知原命令。旧 ACK 可以确认同一冻结命令，只有仍准入的显式重试可消费该完成结果；退休窗口不关闭后继窗口，已撤销条目也不复活。
+
+
+### Connector 恢复错误的固定浏览器消费者（2026-10-16，实施设计）
+
+承接 Root 已裁决 owner→BFF→App 顺序；本阶段仅闭环机器错误穿过同源 adapter/Hub 的严格消费，后继再把分类接入原 actor 命令和表单指引，不把 transport 接线冒成产品恢复完成。固定 BFF d176e3d0cbbc2eab903dae2b2d969906ba5808fe 的 browser-private `contract/connector-command-errors-v1.json` 原字节及 digest，独立正规生成只读常量/provenance；Public14.8 snapshot、两既有public generator和其pin保持。选择窄 Hub 错误 validator（MCP/Custom API 两实际消费者），不建通用错误注册表、网络代理或引用Platform代码/类。
+
+同源与Hub共用已生成profile核验status/code/retryable；receipt型错误仅写路径可用，response_invalid作为现有安全拒绝可用于读。原生MCP授权保独立协议及合法generic CAS，与普通/private MCP共享同一错误validator；原仅重复错误校验的authorization export删除，不留alias。Custom API同时收紧已有envelope-only消费者的合法状态/通用错误闭集与create/list的404约束，读请求拒绝receipt型写错误。保持当前真实身份、请求ID/no-store、有界上游、取消/原CAS/key和零自动重放；仅透传已验机器分类，不用message推断操作，也不换key。
+
+先在现schema/Hub/adapter suites复现新typed错误被判坏响应和Custom API错码错retryable被放行的RED；正规固定生成及篡改负控后，复用现suite验证六类receipt、三项typed前置原因、正确原请求一次、错误tuple/read marker/无效envelope拒绝。无UI样式/状态机/存储/依赖/后端写或正常服务切换；页面恢复UX及正常三仓配对仍为下一阶段，不虚构已解决。
+
+
+### Connector 恢复提示与原命令围栏（2026-10-16，实施设计）
+
+在既有actor RAM命令内保存固定BFF policy已严格验过的非敏感失败reason；不复制owner事实或保存message/secret。API、JSON、共享MCP Prepare和独立Register分别保原key/body。same_command仅用户显式恢复；inspect_owner及配置前置原因不走原命令重试，guard在状态层，表单disabled只是呈现。取消/重核不清除尚未解决的失败限制，换actor/真正卸载仍清理；确定ACK按原语义退休失败，读取不冒ACK，也不授权新key。
+
+复用原表单/详情alert区域与现按钮，不新增大错误页、弹窗层或布局。九语言区分六receipt及三MCP前置原因；需要核验时保留只读意图、允许关闭并明确指向现管理连接器，不伪造自动修复或授权。Register和Prepare由原多阶段flow传播同一窄reason；原生OAuth创建窗口只展示当前scope的typed原因，不增加幂等key/自动授权。其他详情生命周期编辑与完整OAuth闭环仍独立未验。inspect_owner的人工核验不等于本片已提供receipt查询/结清API；未知资源不凭GET推断完成，后续产品解结流程仍OPEN。
+
+先复用现纯命令/rail/JSON行为套件复现expired/conflict被继续派发，再验证可恢复同key、终止原因零重发/零新建、关闭/同actor重核限制保留、换actor清除和迟到ACK规则；最终定向UI及相关工程门。仅本仓本地状态/九语言/现展示接线，无wire/DB/权限/依赖或正常后端切换。
+
+
+### Custom API 编辑/删除的原请求归属（2026-10-16，实施设计）
+
+沿既有AppFrameRuntime唯一ConnectorCommandProvider增加仅Custom API management的typed每profile命令索引；每资源仅update/remove之一，单命令纯核继续拥有准入、原key/body、ACK/未知/失败reason与lease。它不是任意命令registry；MCP Prepare/创建保持原owner。未决管理动作在关闭/重核后从同一profile详情恢复，资源暂缺时提供仅含意图ID的恢复入口，不把GET404当删除ACK。不同profile独立，未知编辑不能悄悄转成删除或新CAS；可显式结束已确认动作，未知/期限错误仍保原限制。
+
+Hub update/remove签名显式caller key，删隐式随机key，不留旧签名fallback。update ACK核精确ID及本次明确写入/清除字段、env upserts已配置/removals缺失；remove ACK核精确ID/deleted。仅确认后失活原主体API投影。详情window/准入代际各有取消信号，关闭允许且保原意图；旧ACK只失活原主体，不关新窗口。原dirty输入在unknown时只读，确认清真实secret，即使重核/旧ACK也不复活；恢复请求不依赖现输入或新读版本。
+
+删除先沿原明确确认，再重放原已确认意图，不自动删除/新key；正常浏览器不执行未经当次确认的永久删除，先以行为/受控传输验该风险。原HTTP/Schema/鉴权/owner事务不改。写区为Hub管理签名/ACK、typed命令index、现provider/协调/详情、现纯command/rail/client测试与设计/INDEX；复用现失败reason与i18n，不加网络协议、存储或依赖。先错误ACK/unknown编辑RED，再核心及UI主路径，最后本仓相关门。
+
+
+### MCP 管理原命令（2026-10-16 实施设计）
+
+稳定shell构造一个MCP lifecycle set，将现typed Prepare与五项typed management（server update/delete、connector update/enabled/disconnect）用闭包的必需predicate接线；不建跨业务通用registry、不把API/OAuth并入。按connector及可选private server精确定位原意图，管理unknown阻止新Prepare和其他管理，Prepare未结时阻止非清理修改；断开/删除仍可执行，ACK才退休相应Prepare。更新/启停/断开不从新GET替换原body/CAS/key。三个详情和缺行意图入口显示同一管理状态；window/admission token限制完成和关闭，ACK清实际secret草稿。owner wire/数据不变。
+
+### 已安装技能详情的精确版本（2026-10-16，实施设计）
+
+安装池入口显式选择 installation 详情，目录入口仍选择 catalog current；不能仅凭 catalog 卡片也带 installation_id 推断入口。安装详情经既有 GET personal installation 重核 series/source/installed，展示该 pin 的名称、摘要、示例和日期，随后通过既有 installation package / browser download 读取同 source 与 decimal revision。目录 GetSkill 不参与安装详情，不降级到 series current；原安装更新仍只能经明确 update 操作。失去准入、换主体/代际、关闭或更换 installation/source 均退休请求和私有展示；禁用安装允许阅读，移除/隔离或 pin 变化显示失败而不换版本。读权限不代表下载授权，下载由 BFF 独立判定。无新 owner、依赖、数据模型或后端契约；只消费当前固定 BFF 已发布接口。
+
+### API／JSON 创建窗口停止等待（2026-10-16）
+
+现稳定shell拥有原命令，窗口关闭不等于撤销owner写；但两个创建表单未把窗口退休传给在途命令，关闭后仍等待ACK或超时。本切只在既有App命令核和表单生命周期增加caller AbortSignal：每次派发前冻结原key/body，调用窗口拥有本次等待的controller；取消、卸载或真实actor/admission代际退休立即停止该等待，原命令保留unknown。signal只退休其关联flight，不得用旧窗口清理取消后继窗口的重试；同逻辑boundary重建对象不退休。迟到ACK只按现规则确认/失活原主体，不自动关闭后继窗口；显式恢复仍原key/body，expired/conflict等terminal阻断不解除。无新HTTP/owner/Schema/权限/持久化，不添加人工结清假成功或自动新命令。
+
+写区限 connector-command、use-connector-creation-form、Custom API/JSON两表单与相邻INDEX、既有connector-creation-command／mcp-json-import-form回归及CURRENT。先复现取消与卸载signal未abort；补pre-aborted零派发与窗口/代际/晚ACK围栏，复用现套件。主方串行相关门禁、候选build/E2E，运行结束复核临时进程与共享服务。项目技能默认另有name-only无回读/消费的契约缺口，已询问项目级安装与手动选择语义，不在本片把名称或空数组冒默认安装。
+
+
+### 私有MCP详情的重新授权（2026-10-16）
+
+既有私有详情只有Prepare/管理，关闭创建窗口后needs_oauth资源没有授权入口；不把Prepare成功或重复声明读取当OAuth。沿现owner ReconnectPersonalMcpConnectorAuthorization，pending/error且fresh私有server needs_oauth的主操作显示连接，ready保原Prepare，unknown/completed Prepare或未结管理先恢复原操作。详情与配置复用同一动作，不新增wire/Schema或从opaque名称猜绑定。
+
+新增窄use-private-mcp-authorization窗口消费者：复用现useMcpOAuthPopup，只持等待/非敏感错误状态与actor/client/window/admission围栏，不持凭据、第二份owner事实或授权命令registry。一个窗口一次在途Reconnect，同点击栈预开popup，exact server/connector/CAS来自本代详情；关闭/切目标/准入退休取消等待与popup，晚ACK仅失活原actor投影，不导航、不关闭后开窗口。Begin/Reconnect成功只代表等待授权，不关闭详情或伪造active；callback通知沿现owner projection重新读取，真实ready后才回原主动作。失败不自动重发、不借GET认定提交；用户显式新授权仍由owner CAS与pending/exchange约束裁决。
+
+写区本hook、现projection coordinator/custom detail、既有rail回归及MCP INDEX/CURRENT。原Provider/generic OAuth、URL创建、receipt unknown语义不迁移。先实际缺按钮RED和迟到/关窗围栏，再正常关闭创建→详情重连→AS拒绝→显式重连→成功及断开；自有loopback仅声明读取，无工具/模型/资金调用，原popup presentation与外部服务差异如实保留。

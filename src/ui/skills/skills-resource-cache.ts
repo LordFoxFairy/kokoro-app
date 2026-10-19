@@ -9,6 +9,7 @@ let nextClientResourceId = 1;
 /**
  * Scope each shared resource by its actual Hub client. Preview, live, and
  * fixture clients may coexist in one tab and must never share owner data.
+ * Terminate the ID so prefix invalidation cannot confuse client 1 with 10.
  */
 export function skillResourceKey(
   prefix: string,
@@ -20,5 +21,5 @@ export function skillResourceKey(
     id = nextClientResourceId++;
     clientResourceIds.set(client, id);
   }
-  return `${prefix}/${id}${suffix ? `/${suffix}` : ""}`;
+  return `${prefix}/${id}:${suffix ? `/${suffix}` : ""}`;
 }

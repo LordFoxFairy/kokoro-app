@@ -14,7 +14,7 @@ export function ProjectConversationEmpty() {
     <Empty className={styles.emptyConversation}>
       <EmptyMedia><MessageSquareDashed aria-hidden="true" /></EmptyMedia>
       <EmptyHeader>
-        <EmptyTitle>{t("firstSite.noProjectConversations")}</EmptyTitle>
+        <EmptyTitle>{t("firstSite.noTasks")}</EmptyTitle>
       </EmptyHeader>
     </Empty>
   )

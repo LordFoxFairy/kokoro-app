@@ -684,3 +684,20 @@ describe("current-user MCP authorization lifecycle wire", () => {
     ).toBe(false);
   });
 });
+
+it("preserves published connector receipt tuples instead of treating every 503 as retryable", () => {
+  for (const [code, status, retryable] of [
+    ["mcp_personal_command_in_progress", 409, true],
+    ["mcp_personal_command_outcome_unknown", 503, false],
+    ["mcp_personal_command_replay_expired", 412, false],
+    ["mcp_personal_idempotency_conflict", 409, false],
+    ["mcp_personal_command_ownership_lost", 409, false],
+    ["mcp_personal_response_invalid", 502, false],
+  ] as const) {
+    const body = { error: { code, message: "Safe failure", retryable } };
+    expect(mcpConnectorErrorAllowed("create", status, body), code).toBe(true);
+    expect(mcpConnectorErrorAllowed("create", status === 503 ? 409 : 503, body), code).toBe(false);
+    expect(mcpConnectorErrorAllowed("create", status, { error: { ...body.error, retryable: !retryable } }), code).toBe(false);
+    expect(mcpConnectorErrorAllowed("connector", status, body), code).toBe(code === "mcp_personal_response_invalid");
+  }
+});

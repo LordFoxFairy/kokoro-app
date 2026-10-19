@@ -1436,11 +1436,38 @@ it("personal installation reads preserve strict owner headers and reject DELETE 
 });
 
 it.each([
+  ["personal", "财务报告"],
+  ["official", "report builder"],
+  ["third_party", "📄".repeat(1024)],
+])("forwards installation source %s and literal search to the formal BFF operation", async (sourceKind, query) => {
+  const { GET } = await import("@/app/api/hub/[...path]/route");
+  vi.mocked(requestWithDomain).mockResolvedValue(new Response(JSON.stringify({ data: [] }), {
+    headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "installation-filter" },
+  }));
+  const search = new URLSearchParams({ source_kind: sourceKind!, query: query!, enabled: "false", limit: "50" });
+  const response = await GET(new Request(`http://localhost/api/hub/self/skill-installations?${search}`), params(["self", "skill-installations"]));
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ data: [] });
+  expect(requestWithDomain).toHaveBeenCalledTimes(1);
+  const upstreamUrl = new URL(vi.mocked(requestWithDomain).mock.calls[0]![0]);
+  expect(upstreamUrl.pathname).toBe("/v1/skill-installations");
+  expect(upstreamUrl.searchParams.get("source_kind")).toBe(sourceKind);
+  expect(upstreamUrl.searchParams.get("query")).toBe(query);
+  expect(upstreamUrl.searchParams.get("enabled")).toBe("false");
+});
+
+it.each([
   ["GET", "?enabled=0", null, null],
   ["GET", "?installed=false&installed=true", null, null],
   ["GET", "?scope=personal", null, null],
   ["GET", "?limit=0", null, null],
   ["GET", "?cursor=", null, null],
+  ["GET", "?source_kind=hub", null, null],
+  ["GET", "?source_kind=personal&source_kind=official", null, null],
+  ["GET", "?query=", null, null],
+  ["GET", "?query=%20", null, null],
+  ["GET", "?query=one&query=two", null, null],
+  ["GET", `?query=${"a".repeat(1025)}`, null, null],
   ["GET", "", "key", null],
   ["POST", "?tenant=forged", "key", '{"source_ref":"skill:s1"}'],
   ["POST", "", "key,second", '{"source_ref":"skill:s1"}'],
@@ -1449,7 +1476,8 @@ it.each([
 ])(
   "rejects illegal installation input %s %s before upstream",
   async (method, search, key, body) => {
-    const { proxyHubRequest } = await import("@/app/api/hub/[...path]/route");
+    const route = await import("@/app/api/hub/[...path]/route");
+    const proxyHubRequest = method === "GET" ? route.GET : method === "PUT" ? route.PUT : route.POST;
     const response = await proxyHubRequest(
       new Request(
         `http://localhost/api/hub/self/skill-installations${search}`,
@@ -1524,7 +1552,9 @@ it("forwards only trusted installation headers, false body and safe retry respon
   });
   expect(options?.headers).not.toHaveProperty("x-kokoro-subject");
   expect(options?.headers).not.toHaveProperty("cookie");
-  expect(options?.signal).toBe(request.signal);
+  expect(options?.signal?.aborted).toBe(false);
+  controller.abort();
+  expect(options?.signal?.aborted).toBe(true);
   expect(new TextDecoder().decode(options?.body)).toBe('{"enabled":false}');
 });
 
@@ -1578,7 +1608,8 @@ it.each([
 ] as const)(
   "rejects invalid installation media/body %s %#",
   async (method, path, contentType, body) => {
-    const { proxyHubRequest } = await import("@/app/api/hub/[...path]/route");
+    const route = await import("@/app/api/hub/[...path]/route");
+    const proxyHubRequest = method === "PUT" ? route.PUT : route.POST;
     const response = await proxyHubRequest(
       new Request(`http://localhost/api/hub/${path.join("/")}`, {
         method,
@@ -1597,14 +1628,14 @@ it.each([
 );
 
 it("rejects installation aliases/unknown methods and foreign Origin before owner calls", async () => {
-  const { proxyHubRequest } = await import("@/app/api/hub/[...path]/route");
+  const { GET, PATCH, POST } = await import("@/app/api/hub/[...path]/route");
   for (const path of [
     ["skill-installations"],
     ["self", "skill-installations", "i1", "unknown"],
   ]) {
     expect(
       (
-        await proxyHubRequest(
+        await GET(
           new Request(`http://localhost/api/hub/${path.join("/")}`),
           params(path),
         )
@@ -1613,7 +1644,7 @@ it("rejects installation aliases/unknown methods and foreign Origin before owner
   }
   expect(
     (
-      await proxyHubRequest(
+      await PATCH(
         new Request("http://localhost/api/hub/self/skill-installations", {
           method: "PATCH",
         }),
@@ -1623,7 +1654,7 @@ it("rejects installation aliases/unknown methods and foreign Origin before owner
   ).toBe(404);
   expect(
     (
-      await proxyHubRequest(
+      await POST(
         new Request("http://localhost/api/hub/self/skill-installations", {
           method: "POST",
           headers: { origin: "https://evil.test" },
@@ -4571,4 +4602,277 @@ describe("personal MCP 14.0 provider and command adapter", () => {
     ).toBe(400);
     expect(vi.mocked(requestWithDomain)).not.toHaveBeenCalled();
   });
+});
+
+
+it("forwards the explicit installation update without promoting browser identity or enabling it", async () => {
+  const { POST } = await import("@/app/api/hub/[...path]/route");
+  vi.mocked(requestWithDomain).mockResolvedValue(new Response(JSON.stringify({ error: { code: "skill_installation_precondition_failed", message: "Changed pin", retryable: false } }), {
+    status: 412, headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "update-1" },
+  }));
+  const body = '{"expected_source_ref":"skill:revision-a","source_ref":"skill:revision-b"}';
+  const response = await POST(new Request("http://localhost/api/hub/self/skill-installations/i1/update", {
+    method: "POST", headers: { origin: "http://localhost", "content-type": "application/json", "idempotency-key": "frozen-update", authorization: "Bearer forged", "x-kokoro-subject": "forged" }, body,
+  }), params(["self", "skill-installations", "i1", "update"]));
+  expect(response.status).toBe(412);
+  expect(requestWithDomain).toHaveBeenCalledTimes(1);
+  const [url,,options] = vi.mocked(requestWithDomain).mock.calls[0]!;
+  expect(url).toBe("http://bff.test/v1/skill-installations/i1/update");
+  expect(options?.headers).toMatchObject({ authorization: "Bearer product-access", "idempotency-key": "frozen-update" });
+  expect(options?.headers).not.toHaveProperty("x-kokoro-subject");
+  expect(new TextDecoder().decode(options?.body)).toBe(body);
+});
+
+it.each([
+  { expected_source_ref: "skill:a", source_ref: "skill:b", enabled: true },
+  { expected_source_ref: "skill:a", source_ref: "skill:b", tenant_id: "forged" },
+  { source_ref: "skill:b" }, { expected_source_ref: "skill:a\n", source_ref: "skill:b" },
+])("rejects malformed update bodies before upstream %#", async body => {
+  const { POST } = await import("@/app/api/hub/[...path]/route");
+  const response = await POST(new Request("http://localhost/api/hub/self/skill-installations/i1/update", {
+    method: "POST", headers: { origin: "http://localhost", "content-type": "application/json", "idempotency-key": "frozen-update" }, body: JSON.stringify(body),
+  }), params(["self", "skill-installations", "i1", "update"]));
+  expect(response.status).toBe(400); expect(requestWithDomain).not.toHaveBeenCalled();
+});
+
+it("an update's single budget cancels a stalled input before any BFF dispatch", async () => {
+  vi.useFakeTimers()
+  try {
+    const { POST } = await import("@/app/api/hub/[...path]/route");
+    const cancel = vi.fn();
+    const body = new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(new TextEncoder().encode('{"expected_source_ref":')); }, cancel });
+    const pending = POST(new Request("http://localhost/api/hub/self/skill-installations/i1/update", {
+      method: "POST", headers: { origin: "http://localhost", "content-type": "application/json", "idempotency-key": "frozen-update" }, body, duplex: "half",
+    } as RequestInit), params(["self", "skill-installations", "i1", "update"]));
+    let settled = false; void pending.then(() => { settled = true });
+    await vi.advanceTimersByTimeAsync(10_001);
+    expect(settled).toBe(true);
+    const response = await pending;
+    expect(response.status).toBe(504); expect(cancel).toHaveBeenCalledTimes(1); expect(requestWithDomain).not.toHaveBeenCalled();
+  } finally { vi.useRealTimers() }
+});
+
+describe("connector private recovery errors", () => {
+  const reply = (code: string, status: number, retryable: boolean) => new Response(JSON.stringify({ error: { code, message: "Safe failure", retryable } }), {
+    status, headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "owner-recovery" },
+  });
+  const post = async (path: string[], body: unknown, key = true) => {
+    const { POST } = await import("@/app/api/hub/[...path]/route");
+    return POST(new Request(`http://localhost/api/hub/${path.join("/")}`, {
+      method: "POST", headers: { origin: "http://localhost", "content-type": "application/json", ...(key ? { "idempotency-key": "original-command-key" } : {}) },
+      body: JSON.stringify(body),
+    }), params(path));
+  };
+  it("relays the exact published MCP recovery tuple, trusted session and original command once", async () => {
+    for (const [code, status] of [
+      ["mcp_personal_command_outcome_unknown", 503], ["mcp_personal_command_replay_expired", 412], ["mcp_personal_command_ownership_lost", 409],
+    ] as const) {
+      vi.mocked(requestWithDomain).mockResolvedValueOnce(reply(code, status, false));
+      const before = vi.mocked(requestWithDomain).mock.calls.length;
+      const response = await post(["mcp", "servers", "server-one", "prepare"], { expected_state_version: "4" });
+      expect(response.status).toBe(status);
+      expect((await response.json()).error).toEqual({ code, message: "Safe failure", retryable: false });
+      expect(response.headers.get("x-request-id")).toBe("owner-recovery");
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      expect(requestWithDomain).toHaveBeenCalledTimes(before + 1);
+      expect(vi.mocked(requestWithDomain).mock.calls.at(-1)![2]?.headers).toMatchObject({ authorization: "Bearer product-access", "idempotency-key": "original-command-key" });
+    }
+    vi.mocked(requestWithDomain).mockResolvedValueOnce(reply("mcp_personal_needs_client", 412, false));
+    expect((await post(["mcp", "connectors", "connector-one", "authorization"], { server_id: "server-one", expected_state_version: "4" }, false)).status).toBe(412);
+    expect(vi.mocked(requestWithDomain).mock.calls.at(-1)![2]?.headers).not.toHaveProperty("idempotency-key");
+  });
+  it("rejects wrong Custom API recovery tuples rather than forwarding arbitrary status/code/retryable", async () => {
+    for (const [code, status, retryable] of [
+      ["custom_api_command_outcome_unknown", 503, true], ["custom_api_command_replay_expired", 409, false],
+      ["unpublished_custom_error", 503, true], ["custom_api_not_found", 404, false],
+    ] as const) {
+      vi.mocked(requestWithDomain).mockResolvedValueOnce(reply(code, status, retryable));
+      const response = await post(["connectors", "custom-apis"], { name: "Test", environment: [] });
+      expect(response.status).toBe(502);
+      expect((await response.json()).error.code).toBe("custom_api_response_invalid");
+    }
+    expect(requestWithDomain).toHaveBeenCalledTimes(4);
+  });
+});
+
+
+it("preserves valid Custom API recovery errors while rejecting those write receipts on a read", async () => {
+  const route = await import("@/app/api/hub/[...path]/route");
+  const path = ["connectors", "custom-apis"];
+  const reply = (code: string, status: number, retryable: boolean) => new Response(JSON.stringify({ error: { code, message: "Safe failure", retryable } }), {
+    status, headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "owner-api-recovery" },
+  });
+  for (const [code, status, retryable] of [
+    ["custom_api_command_in_progress", 409, true], ["custom_api_command_outcome_unknown", 503, false],
+    ["custom_api_command_replay_expired", 412, false], ["custom_api_conflict", 409, false],
+    ["custom_api_command_ownership_lost", 409, false], ["custom_api_response_invalid", 502, false],
+  ] as const) {
+    vi.mocked(requestWithDomain).mockResolvedValueOnce(reply(code, status, retryable));
+    const before = vi.mocked(requestWithDomain).mock.calls.length;
+    const response = await route.POST(new Request(`http://localhost/api/hub/${path.join("/")}`, {
+      method: "POST", headers: { origin: "http://localhost", "content-type": "application/json", "idempotency-key": "original-api-key" },
+      body: JSON.stringify({ name: "Test", environment: [] }),
+    }), params(path));
+    expect(response.status).toBe(status);
+    expect((await response.json()).error).toEqual({ code, message: "Safe failure", retryable });
+    expect(response.headers.get("x-request-id")).toBe("owner-api-recovery");
+    expect(requestWithDomain).toHaveBeenCalledTimes(before + 1);
+    vi.mocked(requestWithDomain).mockResolvedValueOnce(reply(code, status, retryable));
+    const read = await route.GET(new Request(`http://localhost/api/hub/${path.join("/")}`), params(path));
+    expect(read.status).toBe(502);
+    expect((await read.json()).error.code).toBe("custom_api_response_invalid");
+  }
+});
+
+it("routes installed package and download to exact installation BFF boundaries, not the series catalog", async () => {
+  const { GET, POST } = await import("@/app/api/hub/[...path]/route")
+  vi.mocked(requestWithDomain).mockResolvedValueOnce(Response.json(catalogPackage, { headers: catalogPackageHeaders }))
+  const read = await GET(new Request("http://localhost/api/hub/skill-installations/install-A/package"), params(["skill-installations", "install-A", "package"]))
+  expect(read.status).toBe(200)
+  expect(await read.json()).toEqual(catalogPackage)
+  expect(requestWithDomain).toHaveBeenLastCalledWith("http://bff.test/v1/skill-installations/install-A/package", ENV.KOKORO_DOMAIN, expect.objectContaining({ method: "GET" }))
+  const ack = { data: { source_ref: "skill:revision-exact", revision: "7", download_info: { download_url: `/skill-downloads/${"a".repeat(43)}`, filename: "A.zip", expires_at: "2999-01-01T00:00:00Z" } } }
+  vi.mocked(requestWithDomain).mockResolvedValueOnce(Response.json(ack, { headers: catalogPackageHeaders }))
+  const download = await POST(new Request("http://localhost/api/hub/skill-installations/install-A/download", { method: "POST", headers: { origin: ENV.KOKORO_WEB_ORIGIN } }), params(["skill-installations", "install-A", "download"]))
+  expect(download.status).toBe(200)
+  expect(await download.json()).toEqual(ack)
+  expect(requestWithDomain).toHaveBeenLastCalledWith("http://bff.test/browser/v1/skill-installations/install-A/download", ENV.KOKORO_DOMAIN, expect.objectContaining({ method: "POST" }))
+})
+
+it("installed content rejects malformed local requests before admission or BFF IO", async () => {
+  const { GET, POST } = await import("@/app/api/hub/[...path]/route")
+  currentProductSession.mockClear()
+  for (const [method, tail, query, headers, body] of [
+    ["GET", "package", "?file_path=SKILL.md&file_path=other", {}, undefined],
+    ["GET", "package", "?file_path=..%2Fsecret", {}, undefined],
+    ["GET", "package", "?file_path=%ZZ", {}, undefined],
+    ["GET", "package", "", { "idempotency-key": "forbidden" }, undefined],
+    ["POST", "download", "?file_path=SKILL.md", { origin: ENV.KOKORO_WEB_ORIGIN }, undefined],
+    ["POST", "download", "", { origin: ENV.KOKORO_WEB_ORIGIN, "idempotency-key": "forbidden" }, undefined],
+    ["POST", "download", "", { origin: ENV.KOKORO_WEB_ORIGIN }, "{}"],
+    ["POST", "download", "", { origin: "https://other.example" }, undefined],
+  ] as const) {
+    const request = new Request(`http://localhost/api/hub/skill-installations/install-A/${tail}${query}`, { method, headers, ...(body === undefined ? {} : { body }) })
+    const result = await (method === "GET" ? GET : POST)(request, params(["skill-installations", "install-A", tail]))
+    expect([400, 403]).toContain(result.status)
+  }
+  expect(currentProductSession).not.toHaveBeenCalled()
+  expect(requestWithDomain).not.toHaveBeenCalled()
+})
+
+it("installed inspection keeps its exact error contract separate from catalog and download errors", async () => {
+  const { GET } = await import("@/app/api/hub/[...path]/route")
+  for (const [status, code, retryable, valid] of [
+    [404, "skill_package_not_found", false, true],
+    [412, "skill_package_precondition_failed", false, true],
+    [429, "skill_package_limit_exceeded", false, true],
+    [503, "skill_package_dependency_unavailable", true, true],
+    [404, "skill_not_found", false, false],
+    [503, "skill_package_dependency_unavailable", false, false],
+  ] as const) {
+    vi.mocked(requestWithDomain).mockResolvedValueOnce(Response.json({ error: { code, message: "Bound error", retryable } }, { status, headers: catalogPackageHeaders }))
+    const result = await GET(new Request("http://localhost/api/hub/skill-installations/install-A/package"), params(["skill-installations", "install-A", "package"]))
+    expect(result.status).toBe(valid ? status : 502)
+    expect((await result.json()).error.code).toBe(valid ? code : "skill_package_response_invalid")
+  }
+})
+
+// Project lifecycle must not fall through the legacy generic Hub adapter.
+it.each(["GET", "POST"] as const)("routes Project installation %s through the strict installation boundary", async (method) => {
+  const { GET, POST } = await import("@/app/api/hub/[...path]/route");
+  const projectId = "project_11111111-1111-4111-8111-111111111111";
+  vi.mocked(requestWithDomain).mockResolvedValue(new Response(JSON.stringify({ data: [] }), {
+    headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "project-installation" },
+  }));
+  const response = await (method === "GET" ? GET : POST)(new Request(`http://localhost/api/hub/projects/${projectId}/skill-installations`, {
+    method, ...(method === "POST" ? { headers: { origin: "http://localhost", "content-type": "application/json", "idempotency-key": "project-install-key" }, body: '{"source_ref":"skill:mine"}' } : {}),
+  }), params(["projects", projectId, "skill-installations"]));
+  expect(response.status).toBe(method === "GET" ? 200 : 502); // a list is never an installation ACK
+  expect(requestWithDomain).toHaveBeenCalledTimes(1);
+  expect(vi.mocked(requestWithDomain).mock.calls[0]?.[0]).toBe(`http://bff.test/v1/projects/${projectId}/skill-installations`);
+});
+
+it("binds Project defaults ACK to exact project and ordered intent, and keeps the original key", async () => {
+  const { GET, PUT } = await import("@/app/api/hub/[...path]/route");
+  const projectId = "project_11111111-1111-4111-8111-111111111111";
+  const path = ["projects", projectId, "skill-selection"];
+  const url = `http://localhost/api/hub/${path.join("/")}`;
+  const owner = (data: object) => new Response(JSON.stringify({ data }), { headers: {
+    "content-type": "application/json", "cache-control": "no-store", "x-request-id": "selection-request",
+  } });
+  vi.mocked(requestWithDomain).mockResolvedValueOnce(owner({ project_id: "project_22222222-2222-4222-8222-222222222222", installation_ids: [] }));
+  expect((await GET(new Request(url), params(path))).status).toBe(502);
+  vi.mocked(requestWithDomain).mockResolvedValueOnce(owner({ project_id: projectId, installation_ids: ["i2", "i1"] }));
+  const request = () => new Request(url, { method: "PUT", headers: { origin: "http://localhost", "content-type": "application/json", "idempotency-key": "frozen-selection" }, body: '{"installation_ids":["i1","i2"]}' });
+  expect((await PUT(request(), params(path))).status).toBe(502);
+  vi.mocked(requestWithDomain).mockResolvedValueOnce(owner({ project_id: projectId, installation_ids: ["i1", "i2"] }));
+  const saved = await PUT(request(), params(path));
+  expect(saved.status).toBe(200);
+  expect(await saved.json()).toEqual({ data: { project_id: projectId, installation_ids: ["i1", "i2"] } });
+  expect(new Headers(vi.mocked(requestWithDomain).mock.calls[2]?.[2]?.headers).get("idempotency-key")).toBe("frozen-selection");
+  vi.mocked(requestWithDomain).mockClear();
+  const invalid = new Request(url, { method: "PUT", headers: { origin: "http://localhost", "content-type": "application/json", "idempotency-key": "new-key" }, body: '{"installation_ids":["i1","i1"]}' });
+  expect((await PUT(invalid, params(path))).status).toBe(400);
+  expect(requestWithDomain).not.toHaveBeenCalled();
+});
+
+it("rejects invalid UTF-8 in Project selection errors rather than normalizing owner bytes", async () => {
+  const { GET } = await import("@/app/api/hub/[...path]/route");
+  const projectId = "project_11111111-1111-4111-8111-111111111111";
+  const prefix = new TextEncoder().encode('{"error":{"code":"project_not_found","message":"');
+  const suffix = new TextEncoder().encode('","retryable":false}}');
+  const bytes = new Uint8Array([...prefix, 0xff, ...suffix]);
+  vi.mocked(requestWithDomain).mockResolvedValue(new Response(bytes, { status: 404, headers: {
+    "content-type": "application/json", "cache-control": "no-store", "x-request-id": "selection-error",
+  } }));
+  expect((await GET(new Request(`http://localhost/api/hub/projects/${projectId}/skill-selection`), params(["projects", projectId, "skill-selection"]))).status).toBe(502);
+});
+
+it("uses Project segment identities for Get, enabled, update and remove, never a personal target", async () => {
+  const route = await import("@/app/api/hub/[...path]/route");
+  const projectId = "project_11111111-1111-4111-8111-111111111111";
+  const installation = { installation_id: "i1", source_ref: "skill:revision-a", series_id: "series-1", revision: "1",
+    installed: true, enabled: false, installed_at: "2026-10-10T00:00:00Z", updated_at: "2026-10-10T00:00:00Z",
+    display_name: "Project skill", summary: "Pinned", source_status: "active", skill_updated_at: "2026-10-10T00:00:00Z",
+    example_prompts: [], category_keys: [], product: { publication_audience: "owner", state_version: "5" }, tags: [] };
+  const cases = [
+    { method: "GET", suffix: ["i1"], input: undefined, data: installation },
+    { method: "PUT", suffix: ["i1", "enabled"], input: { enabled: true }, data: { installation: { ...installation, enabled: true }, change: "enabled", event_id: "event-1", replayed: false } },
+    { method: "POST", suffix: ["i1", "update"], input: { expected_source_ref: "skill:revision-a", source_ref: "skill:revision-b" }, data: { installation: { ...installation, source_ref: "skill:revision-b", revision: "2" }, change: "upgraded", event_id: "event-2", replayed: true } },
+    { method: "DELETE", suffix: ["i1"], input: undefined, data: { installation: { ...installation, installed: false, removed_at: "2026-10-10T00:00:00Z" }, change: "removed", event_id: "event-3", replayed: false } },
+  ] as const;
+  for (const entry of cases) {
+    const path = ["projects", projectId, "skill-installations", ...entry.suffix];
+    vi.mocked(requestWithDomain).mockResolvedValueOnce(Response.json({ data: entry.data }, { headers: { "cache-control": "no-store", "x-request-id": "project-lifecycle" } }));
+    const response = await route[entry.method](new Request(`http://localhost/api/hub/${path.join("/")}`, { method: entry.method,
+      ...(entry.method === "GET" ? {} : { headers: { origin: "http://localhost", "idempotency-key": "original-key", ...(entry.input === undefined ? {} : { "content-type": "application/json" }) } }),
+      ...(entry.input === undefined ? {} : { body: JSON.stringify(entry.input) }),
+    }), params(path));
+    expect(response.status).toBe(200); expect(await response.json()).toEqual({ data: entry.data });
+    expect(vi.mocked(requestWithDomain).mock.calls.at(-1)?.[0]).toBe(`http://bff.test/v1/${path.join("/")}`);
+  }
+});
+it("rejects Project skill aliases and unadmitted mutation without dispatch", async () => {
+  const { GET, PUT } = await import("@/app/api/hub/[...path]/route");
+  const projectId = "project_11111111-1111-4111-8111-111111111111";
+  for (const last of ["skill-selection", "skill-installations"]) {
+    const path = ["self", "projects", projectId, last];
+    expect((await GET(new Request(`http://localhost/api/hub/${path.join("/")}`), params(path))).status).toBe(404);
+  }
+  const path = ["projects", projectId, "skill-selection"];
+  const url = `http://localhost/api/hub/${path.join("/")}`;
+  expect((await PUT(new Request(url, { method: "PUT", headers: { origin: "https://other.example", "idempotency-key": "key", "content-type": "application/json" }, body: '{"installation_ids":[]}' }), params(path))).status).toBe(403);
+  currentProductSession.mockResolvedValueOnce(null);
+  expect((await PUT(new Request(url, { method: "PUT", headers: { origin: "http://localhost", "idempotency-key": "key", "content-type": "application/json" }, body: '{"installation_ids":[]}' }), params(path))).status).toBe(401);
+  expect(requestWithDomain).not.toHaveBeenCalled();
+});
+
+it("retires the project skill-name switch before any legacy Hub dispatch", async () => {
+  const { PATCH } = await import("@/app/api/hub/[...path]/route");
+  vi.mocked(requestWithDomain).mockResolvedValue(Response.json({ data: { enabled: true } }));
+  for (const path of [["projects", "project_11111111-1111-4111-8111-111111111111", "skills", "skill-builder"], ["self", "projects", "project_11111111-1111-4111-8111-111111111111", "skills", "skill-builder"]]) {
+    const response = await PATCH(new Request(`http://localhost/api/hub/${path.join("/")}`, { method: "PATCH", headers: { origin: "http://localhost", "content-type": "application/json", "idempotency-key": "old-name-key" }, body: '{"enabled":true}' }), params(path));
+    expect(response.status).toBe(404);
+  }
+  expect(requestWithDomain).not.toHaveBeenCalled();
 });

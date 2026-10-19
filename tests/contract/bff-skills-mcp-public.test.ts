@@ -1,5 +1,8 @@
+import { execFileSync } from "node:child_process"
+import { tmpdir } from "node:os"
+import { pathToFileURL } from "node:url"
 import { createHash } from "node:crypto"
-import { readFile } from "node:fs/promises"
+import { readFile, mkdtemp, mkdir, copyFile, writeFile, rm } from "node:fs/promises"
 import { resolve } from "node:path"
 
 import { describe, expect, it } from "vitest"
@@ -22,9 +25,9 @@ import {
   type InstallationOperation,
 } from "@/hub/schemas"
 
-const OWNER_COMMIT = "30df0c428c592ed2710d62035ceb5855d20c7506"
-const OWNER_SHA256 = "b4e91483e425fdcc9547eac8bcda554273cbee0863ccb0ddfb185fae18e4e267"
-const OWNER_VERSION = "16.0.0"
+const OWNER_COMMIT = "08a2120ea85b6cad5cf6e839ef14dbf83d908b92"
+const OWNER_SHA256 = "955412b680bf7a2529c4c35f553ff272d7361769ea95bb441ba820b552ffc564"
+const OWNER_VERSION = "19.0.0"
 const SNAPSHOT = resolve(process.cwd(), "src/generated/bff-public-openapi.yaml")
 
 type Shape = {
@@ -35,6 +38,7 @@ type Shape = {
   items?: { $ref?: string }
   type?: string | string[]
   const?: string | boolean
+  enum?: string[]
   pattern?: string
 }
 type Response = {
@@ -197,10 +201,21 @@ function assertProjectionSemantics(spec: Spec): void {
 describe("pinned BFF Skills and MCP public consumer contract", () => {
   it("pins exact owner bytes and six current Skill draft/publish operations", async () => {
     const bytes = await readFile(SNAPSHOT)
-    expect(OWNER_COMMIT).toBe("30df0c428c592ed2710d62035ceb5855d20c7506")
+    expect(OWNER_COMMIT).toBe("08a2120ea85b6cad5cf6e839ef14dbf83d908b92")
     expect(createHash("sha256").update(bytes).digest("hex")).toBe(OWNER_SHA256)
     const spec = YAML.parse(bytes.toString()) as Spec
     expect(spec.info.version).toBe(OWNER_VERSION)
+    expect(field(shape(spec, "SpecificationPublicSkill"), "owner_type").enum).toEqual([
+      "personal",
+      "official",
+      "team",
+      "project",
+      "app",
+      "hub",
+      "device",
+      "unknown",
+    ])
+    expect(field(shape(spec, "SharedSkillRevisionSummary"), "owner_type").enum).toEqual(["personal", "official", "team", "project", "app"])
     for (const [method, path, id] of [
       ["post", "/v1/skills/drafts", "createSkillDraft"],
       ["get", "/v1/skills/{skill_id}/package-upload", "getSkillPackageUpload"],
@@ -269,9 +284,10 @@ describe("pinned BFF Skills and MCP public consumer contract", () => {
   })
 })
 
-it("pins the five Personal installation operations, safe projection and strict error-only headers", async () => {
+it("pins the six Personal installation operations, safe projection and strict error-only headers", async () => {
   const spec = YAML.parse(await readFile(SNAPSHOT, "utf8")) as Spec
   for (const [method, path, id, success, errors] of [
+    ["post", "/v1/skill-installations/{installation_id}/update", "updatePersonalSkillInstallation", "SkillInstallationUpdateSuccess", [400, 401, 403, 404, 409, 412, 413, 429, 502, 503, 504]],
     ["post", "/v1/skill-installations", "installPersonalSkill", "SkillInstallationMutationSuccess", [400, 401, 403, 404, 409, 412, 413, 429, 502, 503, 504]],
     ["get", "/v1/skill-installations", "listPersonalSkillInstallations", "SkillInstallationListSuccess", [400, 401, 403, 413, 429, 502, 503, 504]],
     [
@@ -391,6 +407,7 @@ it("compares every live publish/managed/installation component field matrix to t
 it("compares all five installation operation/status error families, including mutation-only skill authorization", async () => {
   const spec = YAML.parse(await readFile(SNAPSHOT, "utf8")) as Spec
   for (const [method, path, consumer] of [
+    ["post", "/v1/skill-installations/{installation_id}/update", "update"],
     ["post", "/v1/skill-installations", "install"],
     ["get", "/v1/skill-installations", "list"],
     ["get", "/v1/skill-installations/{installation_id}", "get"],
@@ -427,4 +444,37 @@ it("pins the current public revision's shared-skill operation without replacing 
     "expires_at",
     "revoked_at",
   ])
+})
+
+
+it("pins and derives the separate browser-private connector error profile without replacing public OpenAPI", async () => {
+  const { BFF_CONNECTOR_COMMAND_ERROR_PROVENANCE: provenance, BFF_CONNECTOR_COMMAND_ERROR_POLICY: policy } = await import("@/generated/bff-connector-command-errors")
+  const bytes = await readFile(resolve(process.cwd(), "src/generated/bff-connector-command-errors.json"))
+  expect(provenance).toEqual({ ownerCommit: "d176e3d0cbbc2eab903dae2b2d969906ba5808fe", sourceSha256: "24158f50a6f4dac1b34553797f0b1afcc8f99dbc79f36b916d03b56999a67a71", profileVersion: "1.0.0" })
+  expect(createHash("sha256").update(bytes).digest("hex")).toBe(provenance.sourceSha256)
+  expect(policy).toEqual(JSON.parse(bytes.toString("utf8")))
+  expect(policy.visibility).toBe("browser-private")
+  expect(policy.automatic_retries).toBe(false)
+  expect(policy.new_command_authorized).toBe(false)
+  const generator = await import(/* @vite-ignore */ pathToFileURL(resolve(process.cwd(), "scripts/generate-bff-connector-command-errors.mjs")).href) as { renderConnectorCommandErrors(bytes: Buffer): string }
+  expect(await readFile(resolve(process.cwd(), "src/generated/bff-connector-command-errors.ts"), "utf8")).toBe(generator.renderConnectorCommandErrors(bytes))
+  expect(() => generator.renderConnectorCommandErrors(Buffer.concat([bytes, Buffer.from("\n")]))).toThrow("digest drift")
+})
+
+it("executes private connector profile drift checks in an isolated fixture and cleans it up", async () => {
+  const fixture = await mkdtemp(resolve(tmpdir(), "kokoro-connector-profile-"))
+  const names = ["scripts/generate-bff-connector-command-errors.mjs", "src/generated/bff-connector-command-errors.json", "src/generated/bff-connector-command-errors.ts"]
+  try {
+    await mkdir(resolve(fixture, "scripts"), { recursive: true })
+    await mkdir(resolve(fixture, "src/generated"), { recursive: true })
+    for (const name of names) await copyFile(resolve(process.cwd(), name), resolve(fixture, name))
+    const check = () => execFileSync(process.execPath, [resolve(fixture, names[0]!), "--check"], { cwd: fixture, stdio: "pipe" })
+    expect(() => check()).not.toThrow()
+    const snapshot = await readFile(resolve(fixture, names[1]!))
+    await writeFile(resolve(fixture, names[1]!), Buffer.concat([snapshot, Buffer.from("\n")]))
+    expect(() => check()).toThrow()
+    await writeFile(resolve(fixture, names[1]!), snapshot)
+    await writeFile(resolve(fixture, names[2]!), "export const stale = true;\n")
+    expect(() => check()).toThrow()
+  } finally { await rm(fixture, { recursive: true, force: true }) }
 })

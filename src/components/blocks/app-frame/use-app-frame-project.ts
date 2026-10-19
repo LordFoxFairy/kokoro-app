@@ -348,16 +348,6 @@ export function useAppFrameProject({
     return listProjectResourcesRequest(projectRef, cursor, signal)
   }, [projectRef])
 
-  const setProjectSkillEnabled = useCallback(async (skill: string, enabled: boolean) => {
-    if (!projectRef) return
-    const response = await fetch(`/api/hub/projects/${encodeURIComponent(projectRef)}/skills/${encodeURIComponent(skill)}`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json", "Idempotency-Key": `project-skill:${projectRef}:${skill}:${crypto.randomUUID()}` },
-      body: JSON.stringify({ enabled }),
-    })
-    if (!response.ok) throw new Error(`project_skill_update_failed:${response.status}`)
-  }, [projectRef])
-
   const openProject = useCallback((nextProjectRef: string, handoffDraft?: string) => {
     const projectRefToOpen = nextProjectRef
     writePendingProjectDraft(projectRefToOpen, handoffDraft)
@@ -485,7 +475,6 @@ export function useAppFrameProject({
     saveProjectInstructions,
     uploadProjectResource,
     listProjectResources,
-    setProjectSkillEnabled,
     openProject,
     createProject,
     requestProjectRename,

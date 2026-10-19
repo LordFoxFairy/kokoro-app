@@ -10,6 +10,7 @@ vi.mock("@/lib/server/product-session", () => ({
 }))
 
 import { POST } from "@/app/api/session/[...path]/route"
+import { GET as hubGet, PUT as hubPut } from "@/app/api/hub/[...path]/route"
 
 type RunningServer = { server: Server; baseUrl: string }
 
@@ -24,7 +25,7 @@ async function listen(handler: RequestListener): Promise<RunningServer> {
   return { server, baseUrl: `http://127.0.0.1:${address.port}` }
 }
 
-describe("Chat BFF against a local BFF contract fixture", () => {
+describe("Product BFF adapters against a local HTTP contract fixture", () => {
   const original = { ...process.env }
   let bff: RunningServer
   let receivedDomain = ""
@@ -32,9 +33,12 @@ describe("Chat BFF against a local BFF contract fixture", () => {
   let receivedAuthorization = ""
   let receivedHeaders: IncomingHttpHeaders = {}
   let receivedBody = ""
+  let receivedPath = ""
+  const projectId = "project_11111111-1111-4111-8111-111111111111"
 
   beforeAll(async () => {
     bff = await listen((request, response) => {
+      receivedPath = request.url ?? ""
       receivedHeaders = request.headers
       receivedHost = request.headers.host?.toString() ?? ""
       receivedDomain = request.headers.forwarded?.toString() ?? ""
@@ -43,6 +47,12 @@ describe("Chat BFF against a local BFF contract fixture", () => {
       request.on("data", (chunk: Buffer) => chunks.push(chunk))
       request.on("end", () => {
         receivedBody = Buffer.concat(chunks).toString("utf8")
+        if (request.url === `/v1/projects/${projectId}/skill-selection`) {
+          const input = receivedBody ? JSON.parse(receivedBody) as { installation_ids: string[] } : { installation_ids: ["i1"] };
+          response.writeHead(200, { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "selection-http" });
+          response.end(JSON.stringify({ data: { project_id: projectId, installation_ids: input.installation_ids } }));
+          return;
+        }
         response.writeHead(200, {
           "content-type": "text/event-stream",
           "cache-control": "no-cache",
@@ -107,5 +117,38 @@ describe("Chat BFF against a local BFF contract fixture", () => {
     expect(receivedHeaders["x-kokoro-tenant-id"]).toBeUndefined()
     expect(receivedHeaders["x-kokoro-principal-id"]).toBeUndefined()
     expect(response.headers.get("cache-control")).toBe("private, no-store")
+    for (const selection of [[],["skill:revision_a"]]) {
+      const body={content:"hello",project_ref:"project_a",selected_skill_source_refs:selection}
+      const selected=await POST(new Request("https://first.example/api/session/sessions/ses_1/messages",{method:"POST",headers:{origin:"https://first.example","content-type":"application/json","idempotency-key":"explicit-selection"},body:JSON.stringify(body)}),{params:Promise.resolve({path:["sessions","ses_1","messages"]})})
+      expect(selected.status).toBe(200)
+      await selected.text()
+      expect(JSON.parse(receivedBody)).toEqual(body)
+    }
+
   })
+  it("sends Project defaults over real HTTP with exact ordered bytes and trusted session headers", async () => {
+    const path = ["projects", projectId, "skill-selection"];
+    const context = { params: Promise.resolve({ path }) };
+    const url = `https://first.example/api/hub/${path.join("/")}`;
+    const read = await hubGet(new Request(url), context);
+    expect(read.status).toBe(200);
+    expect(await read.json()).toEqual({ data: { project_id: projectId, installation_ids: ["i1"] } });
+    const response = await hubPut(new Request(url, { method: "PUT", headers: {
+      origin: "https://first.example", "content-type": "application/json", "idempotency-key": "original-project-defaults",
+      authorization: "Bearer forged", "x-kokoro-subject": "forged-user", "x-kokoro-tenant-id": "forged-tenant",
+    }, body: '{"installation_ids":["i2","i1"]}' }), context);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ data: { project_id: projectId, installation_ids: ["i2", "i1"] } });
+    expect(receivedPath).toBe(`/v1/projects/${projectId}/skill-selection`);
+    expect(receivedBody).toBe('{"installation_ids":["i2","i1"]}');
+    expect(receivedHeaders["idempotency-key"]).toBe("original-project-defaults");
+    expect(receivedAuthorization).toBe("Bearer product-access");
+    expect(receivedDomain).toBe("host=dev.kokoro.localhost");
+    expect(receivedHeaders["x-kokoro-service"]).toBe("web-bff");
+    expect(receivedHeaders["x-kokoro-subject"]).toBeUndefined();
+    expect(receivedHeaders["x-kokoro-tenant-id"]).toBeUndefined();
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(response.headers.get("x-request-id")).toBe("selection-http");
+  });
+
 })

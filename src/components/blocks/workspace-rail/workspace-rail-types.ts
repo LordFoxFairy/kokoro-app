@@ -5,31 +5,23 @@ import type { SettingsTab } from "@/ui/settings/settings-modal"
 import type { ConversationSummary } from "@/ui/rail/rail-search"
 import type { RuntimeFeatureFlag, RuntimeNavigationItem } from "@/system/runtime-navigation"
 import type { ConversationMoveIntent } from "@/engine/engine-types"
-import type { SessionEngine, EngineSnapshot } from "@/engine/machine"
 import type { SessionScope } from "@/engine/session-scope"
 import type { ConversationListController } from "@/ui/shell/use-conversation-list"
 
 export type RailConversationReads = {
-  engine: SessionEngine | null
   scope: SessionScope
-  /** AppFrame's canonical reader for the mounted scope; the rail must not open a duplicate flight for it. */
-  currentController: ConversationListController
+  /** Both the rail and main stage consume the shell's one reader per scope. */
+  read: (scope: SessionScope) => ConversationListController | undefined
+  ensureScope: (scope: SessionScope) => void
   activeId: string | null
-  thread: EngineSnapshot["thread"]
-  isStreaming: boolean
   identity: string
   admitted: boolean
-  scopeVersions: ReadonlyMap<string, number>
-  archiveReceipt?: import("@/lib/archived-tasks.schema").ArchiveState | null
-  archiveRevision?: number
   archiveBusy?: boolean
   onArchive?: (id:string)=>void
   failedMoveScopeKey: string | null
-  focusComposer: () => void
   onSelect: (scope: SessionScope, id: string) => void
   onNewChat: (scope: SessionScope) => void
   onMove: (scope: SessionScope, id: string, target: string | null) => void
-  onDeleteConfirmed: (scope: SessionScope, id: string) => void
 }
 
 /** Public inputs owned by the mounted desktop shell and standalone embeds. */
@@ -57,7 +49,7 @@ export type WorkspaceRailProps = {
   projectActive?: boolean
   /** Optional host action for the project-creation menu entry. */
   onCreateProject?: (input?: Readonly<{ name?: string; draft?: string }>) => void
-  /** Routes a project row's explicit rename affordance to the owner-backed editor. */
+  /** Routes the project options menu's rename action to the owner-backed editor. */
   onRequestProjectRename?: (projectId: string) => void
   /** Owner-confirmed project collection. A known projectHref alone is only a current-route shortcut. */
   projects?: readonly WorkspaceRailProject[]

@@ -110,7 +110,7 @@ export function McpConnectionList({
                   </span>
                   <Check
                     className={styles.statusCheck}
-                    aria-label={t(connectorStatusKey("active"))}
+                    aria-label={t("skills.added")}
                   />
                 </button>
               </li>

@@ -15,7 +15,6 @@ type ContextCardAction = {
   label: string
   icon: LucideIcon
   trailingIcon?: LucideIcon
-  statusDot?: boolean
 }
 
 export type ProjectContextSectionProps = {
@@ -87,10 +86,10 @@ export function ProjectContextSection({
       </CardHeader>
       {description ? <CardContent className={styles.cardDescription}>{description}</CardContent> : null}
       {emptyLabel ? <CardContent className={styles.cardEmpty}>{emptyLabel}</CardContent> : null}
-      {emptyVisual ? <div className={styles.emptyVisual}>{emptyVisual}</div> : null}
+      {emptyVisual ? <div className={styles.emptyVisual} data-slot="project-context-artwork">{emptyVisual}</div> : null}
       {actions ? (
         <CardFooter className={styles.cardActions}>
-          {actions.map(({ id, label, icon: ActionIcon, trailingIcon: TrailingIcon, statusDot }) => (
+          {actions.map(({ id, label, icon: ActionIcon, trailingIcon: TrailingIcon }) => (
             <Button
               key={id ?? label}
               type="button"
@@ -103,7 +102,6 @@ export function ProjectContextSection({
             >
               <ActionIcon data-icon="inline-start" aria-hidden="true" />
               {label}
-              {statusDot ? <span className={styles.actionStatusDot} aria-hidden="true" /> : null}
               {TrailingIcon ? <TrailingIcon data-icon="inline-end" aria-hidden="true" /> : null}
             </Button>
           ))}

@@ -10,7 +10,14 @@ const SURFACES = new Set(["/app", "/app/agents", "/app/plugins", "/app/scheduled
 
 /** Parse before URL normalization; reject encoded paths and ambiguous query input. */
 export function parseProductReturnTarget(raw: string): ProductReturnTarget | null {
-  if (raw.length === 0 || raw.length > 2048 || /[\\\u0000-\u001f\u007f#]/u.test(raw)) return null
+  if (raw.length === 0 || raw.length > 2048 || /[\\\u0000-\u001f\u007f]/u.test(raw)) return null
+  const fragment = raw.indexOf("#")
+  if (fragment !== -1) {
+    const base = parseProductReturnTarget(raw.slice(0, fragment))
+    const settings = raw.slice(fragment)
+    return base !== null && base.startsWith("/app") && /^#\/account\/settings\/(?:account|appearance|general|personalization|chat|shortcuts|credits|subscription|team|mcp|skills(?:\/(?:all|personal|official|thirdParty|explore))?)$/u.test(settings)
+      ? `${base}${settings}` as ProductReturnTarget : null
+  }
   const separator = raw.indexOf("?")
   const pathname = separator === -1 ? raw : raw.slice(0, separator)
   if (pathname.startsWith("/skills/shared/")) {

@@ -1,6 +1,30 @@
+## 2026-10-19 收尾集成候选：完整既有分支与固定 Public19
+
+只集成 main d42fe1d2、PR37 的原生浏览器登录回归、PR38 的六页设置与完整 local362a9b7；保真实 merge ancestry，不按功能片继续开 PR。知识/记忆等其余混合工作保持原位，不在本次顺手接通。唯一 BFF snapshot 固定已合 owner08a2120ea85b6cad5cf6e839ef14dbf83d908b92、Public19.0.0/165、SHA256955412b680bf7a2529c4c35f553ff272d7361769ea95bb441ba820b552ffc564；六个既有窄 generator 正规配对，connector-command-errors 独立 profile 不换 pin。
+
+复用原测试历史逆证，在原 Public16→15.4→15.3 前增加显式 Public19→两个完整 Public16 父版本的逆 delta，保原全文 hash/语义与退役 MCP 写入口负控，不在生产兼容旧协议。接入已经交付并在正常开发环境配对过的 calendar consumer：来源逐路径绑定既有 app-public18 冻结证据，使用每周多星期、每月多日期、一次性 local_date、IANA timezone 和 owner next_run_at；不再消费已退役 recurrence_anchor_at。仅接收该既有切片所需源码、字典及测试，不 wholesale 导入混合工作树。
+
+主干 archive receipt/权限/账户/分享与本地单一 per-scope Reader registry、MCP command provider/受控 Skills scope/刷新及 callback 围栏按语义并集。archive revision/receipt 进入原 Reader host，不再启动第二读者；稳定现 archive retry callback，展示层只接实际使用的归档操作和 busy，不保无消费者字段。旧测试 fixture 接真实 keyed Reader hosts，保原退休/真实 GET/归档断言；未弱化浏览器 Origin:null/CSRF/nonce/CSP/第二次登录。无新 owner、API、DB/Redis schema、网关或认证旁路。
+
+所有验证尚待最终冻结全门；本段是当前集成范围，不声称已合并、页面已对齐或正常服务已重载。正常数据库/配置/服务与已有混合工作均保留，模型、实际工具与扣费仍暂停。
+
 ## SET-13 Team public15开发消费目标（2026-10-13）
 
 等待BFF SET13不可变artifact后，完整snapshot正规单pin替换并生成既有Team/Agent-failure派生物，精确SHA/digest由验收记录补齐；此时未声称已接收或已运行。Team权限八域strict validation保持；public15.0.0是breaking，仅Root自有开发/v1配对，不作为minor、不泛用旧beta、日常/main/生产未激活。BFF基线95fbd894相对旧Web413e3bbe已有非Team机器差异会随完整artifact继承，不手工构造Web编辑契约。
+
+## 2026-10-17 S4d 当前消费候选
+
+唯一snapshot固定BFF `a804b0fd91d3f089afea8b48722095dbe71fbc3e`／Public16.0.0／146 operations，blob SHA256 `e15758fa80a62c4375e7d9b93784a1591b350f214f63c8483c2df27fc4800bd6`。Team原窄图与15生成文件保持；Agent-failure正规再生成，roles/12 tuples不变，ChatMessage fingerprint仅承接新增exact选择字段。Composer省略/[]语义见现engine与两设计前缀；项目选择器/正常配对未完成，旧版本段落仅历史。
+
+## 2026-10-17 S3 唯一 current publication
+
+当前固定BFF `e60ff311075b01f1d0ca58f1cebc47080dbc3ea1` / Public15.0.0 /139 operations，原blob SHA256 `e3f70ab1111295d1df10775853ff9c20bf85ea466da32996a73d37a8b16d54c0`。对原14.8完整字节的唯一差异为version与公开skill.list的三新增枚举；不是Web私自扩网站/分享来源。Team窄图及15生成文件保持，Agent-failure三项provenance正规生成；原roles/12 tuples不变。既有whole-public测试承接新pin和八类/分享五类隔离，不新建套件。正常配对/项目安装/模型执行未验，实际门禁见docs/CURRENT；下方旧版本段落仅历史。
+
+## 2026-10-16 U4 consumer pin（本地实现，运行验收待完成）
+
+固定 BFF `615b16a7f75917d30d334b66d5470d87339aacd1` 的 committed `contract/openapi/v1/openapi.yaml` 原字节，public **14.8.0 / 139 operations**，SHA256 `a9729722383de5571821961357051499612d12c76aa835b8774828adea82a577`。本片增加显式个人 installation update；承接该 owner 既有未发行 MCP 写入口退役，不能从历史 snapshot 恢复。两既有 generator 正规 write/check；Team 派生15文件原字节不变，Agent failure 仅三项 provenance 变化，原 roles/tuples 不变。
+
+同源路径和 unknown/ACK-known 状态机见三面 U4 前缀。契约门 278 PASS 不等于正常组合更新或付费 Agent 执行验收；现有运行 owner/BFF 尚未切换。
 
 ## R257 MCP Connection 当前本地 owner artifact
 
@@ -157,3 +181,8 @@ artifact 可发布到 Developer API 门户。
 
 完整策略见 [`../docs/API_CONTRACT.md`](../docs/API_CONTRACT.md) 和
 [`../docs/ADR/0002-repository-coupled-contract-provenance.md`](../docs/ADR/0002-repository-coupled-contract-provenance.md)。
+
+
+## Connector browser-private error profile（2026-10-16，消费者候选）
+
+独立固定BFF `d176e3d0cbbc2eab903dae2b2d969906ba5808fe` 的 `contract/connector-command-errors-v1.json` 原字节至 `src/generated/bff-connector-command-errors.json`，SHA256 `24158f50a6f4dac1b34553797f0b1afcc8f99dbc79f36b916d03b56999a67a71`。专用生成器正规 `--write/--check` 输出只读typed policy/provenance，check接入现contract入口；不更改独立public14.8 snapshot/pin，不从sibling源码生成或复制错误类。六项receipt及三项MCP typed原因由owner profile唯一决定，Hub/adapter消费同一窄validator；状态错配拒绝，不猜文案。当前只完成wire接线，页面恢复UX与正常组合启用尚待验收。

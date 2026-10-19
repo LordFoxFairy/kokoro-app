@@ -19,6 +19,7 @@ type InstalledSkillCardProps = {
   error: string | null;
   detailAvailable: boolean;
   onEnabledChange: (enabled: boolean) => void;
+  onUpdate: (source: HTMLElement) => void;
   onOpenDetail: (source: HTMLElement) => void;
 };
 
@@ -32,8 +33,10 @@ export function InstalledSkillCard({
   detailAvailable,
   onEnabledChange,
   onOpenDetail,
+  onUpdate,
 }: InstalledSkillCardProps) {
   const t = useT();
+  const sourceUnavailable = skill.source_status !== undefined && skill.source_status !== "active";
   return (
     <Card
       className={cn(
@@ -63,19 +66,22 @@ export function InstalledSkillCard({
           <Switch
             size="sm"
             checked={enabled}
-            disabled={locked || busy}
+            disabled={locked || busy || (!enabled && sourceUnavailable)}
             aria-busy={pending}
             aria-label={`${enabled ? t("skills.disable") : t("skills.enable")} ${skill.name}`}
             onCheckedChange={onEnabledChange}
           />
         </div>
         <p className={styles.installedCardDescription}>{skill.description}</p>
-        {skill.updated_at ? (
+        <div className={styles.installedCardFooter}>
+        {sourceUnavailable ? <p className={styles.installedCardMeta} role="status">{t("skills.sourceUnavailable")}</p> : skill.updated_at ? (
           <p className={styles.installedCardMeta}>
             <ShieldCheck aria-hidden="true" />
             {t("skills.updatedAt", { date: formatSkillDate(skill.updated_at) })}
           </p>
         ) : null}
+        {skill.available_update ? <Button type="button" variant="ghost" className={styles.installedCardUpdate} disabled={busy} aria-label={`${t("skills.update.available", { revision: skill.available_update.revision })} ${skill.name}`} onClick={event => onUpdate(event.currentTarget)}>{t("skills.update.available", { revision: skill.available_update.revision })}</Button> : null}
+        </div>
         {error ? (
           <Alert variant="destructive" className={styles.installedCardError}>
             <AlertDescription>{error}</AlertDescription>

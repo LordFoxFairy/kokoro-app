@@ -6,7 +6,9 @@ import type { MessageKey } from "./messages"
 export const de: Partial<Record<MessageKey, string>> = {
 
   // SET47-BEGIN: task-archive
-  "archive.action": "Aufgabe archivieren",
+  "scheduled.weekday": "Wochentag",
+"scheduled.selectWeekday": "Wochentag auswählen",
+"archive.action": "Aufgabe archivieren",
   "archive.restore": "Aufgabe wiederherstellen",
   "archive.empty": "Keine archivierten Aufgaben.",
   "archive.checking": "Archivstatus wird geprüft…",
@@ -99,6 +101,12 @@ export const de: Partial<Record<MessageKey, string>> = {
   "settings.devices.remove": "Entfernen",
   "settings.devices.more": "Mehr laden",
   "settings.devices.reload": "Erneut lesen",
+
+  "skills.downloadUnavailable": "Dieser Skill ist derzeit nicht zum Download freigegeben.",
+  "skills.downloadIncomplete": "Der Download wurde nicht abgeschlossen. Bitte erneut versuchen.",
+  "skills.tryRequiresEnabledVersion": "Diese genaue Version vor der Verwendung eines Beispiels hinzufügen und aktivieren. Versionswechsel erfordern ein ausdrückliches Update.",
+  "skills.tryUnavailable": "Der Test konnte nicht starten. Verbindung und Skill-Status prüfen und erneut versuchen.",
+  "composer.removeSelectedSkill": "Ausgewählten Skill {name} entfernen",
 
   "firstSite.renameProject": "Projekt umbenennen",
   "firstSite.projectName": "Projektname",
@@ -263,10 +271,9 @@ export const de: Partial<Record<MessageKey, string>> = {
   "rail.searchInputAria": "Durchsuchen Sie aktuelle Gespräche",
   "rail.searchClose": "Suche schließen",
   "rail.navAria": "Hauptnavigation",
-  "rail.expandProjectAria": "Projekt {name} aufklappen (Eintrag {position})",
-  "rail.collapseProjectAria": "Projekt {name} zuklappen (Eintrag {position})",
   "rail.expandAria": "Seitenleiste erweitern",
   "rail.collapseAria": "Seitenleiste einklappen",
+  "rail.noProjectTasks": "Keine Aufgaben",
   "rail.newChat": "neues Gespräch",
   "rail.newChatShortcut": "⇧⌘O",
   "rail.navChat": "Dialog",
@@ -645,6 +652,12 @@ export const de: Partial<Record<MessageKey, string>> = {
   "mcp.tabSecrets": "Anmeldeinformationen",
   "mcp.loading": "Laden…",
   "mcp.loadError": "Das Laden der Verbindungsliste ist fehlgeschlagen",
+  "mcp.serverCreateUnknown": "Erstellung oder Vorbereitung ist nicht bestätigt. Ein erneuter Versuch setzt die ursprüngliche Anfrage fort, ohne erneut zu erstellen.",
+  "mcp.creationSession": "Sitzung wird bestätigt…",
+  "mcp.apiCreateUnknown": "Die Erstellung ist nicht bestätigt. Erneut versuchen setzt die ursprüngliche Anfrage fort, ohne eine weitere API anzulegen.",
+  "mcp.retryOriginal": "Ursprüngliche Anfrage wiederholen",
+  "mcp.apiCreateConfirmed": "Benutzerdefinierte API hinzugefügt.",
+  "mcp.creationDone": "Fertig",
   "mcp.retry": "Versuchen Sie es erneut",
   "mcp.empty": "Derzeit sind keine aktiven Verbindungen verfügbar.",
   "mcp.emptyGuide": "Registrieren Sie den MCP-Server, um externe Tools anzuschließen. Offizielle Links sind auf der Plattform aufgeführt.",
@@ -1341,6 +1354,8 @@ export const de: Partial<Record<MessageKey, string>> = {
   "mcp.jsonImportTitle": "Über JSON importieren",
   "mcp.jsonImportDescription": "Konfigurations-JSON einfügen",
   "mcp.jsonImportAction": "Importieren",
+  "mcp.jsonImportUnknown": "Der Import ist nicht bestätigt. Ein erneuter Versuch setzt die vollständige ursprüngliche Anfrage fort, ohne erneut zu importieren.",
+  "mcp.jsonImportConfirmed": "MCP-Konfiguration importiert.",
   "mcp.jsonImportInvalid": "Das JSON ist ungültig oder enthält keine mcpServers-Konfiguration.",
   "mcp.urlTitle": "MCP über URL hinzufügen",
   "mcp.urlNamePlaceholder": "z. B. Mein eigener Server",
@@ -1436,4 +1451,15 @@ export const de: Partial<Record<MessageKey, string>> = {
   "settingsServices.dateColumn": "Datum",
   // SET53-END: service-settings-pages
 
+
+  "mcp.recovery.in_progress": "Die ursprüngliche Anfrage wird verarbeitet. Setze dieselbe Anfrage später fort.",
+  "mcp.recovery.outcome_unknown": "Das Ergebnis ist unbestätigt. Die Fortsetzung verwendet dieselbe ursprüngliche Anfrage.",
+  "mcp.recovery.replay_expired": "Der Wiederaufnahmezeitraum ist abgelaufen. Schließe dieses Fenster und prüfe zuerst die Verbindungsverwaltung.",
+  "mcp.recovery.identity_conflict": "Die Identität der ursprünglichen Anfrage steht im Konflikt. Prüfe zuerst die Verbindungsverwaltung.",
+  "mcp.recovery.ownership_lost": "Die Verarbeitung wurde unterbrochen. Setze dieselbe Anfrage ausdrücklich fort.",
+  "mcp.recovery.invalid": "Die Antwortprüfung ist fehlgeschlagen. Prüfe zuerst die Verbindungsverwaltung.",
+  "mcp.recovery.not_prepared": "Der Connector ist noch nicht vorbereitet. Prüfe Konfiguration und Status.",
+  "mcp.recovery.needs_client": "Die OAuth-Clientkonfiguration fehlt. Prüfe die Clientinformationen des Connectors.",
+  "mcp.recovery.auth_method_unsupported": "Diese Authentifizierungsmethode wird nicht unterstützt. Prüfe die Connectorkonfiguration.",
+  "mcp.recovery.inspectRequired": "Zuerst Status prüfen",
 }

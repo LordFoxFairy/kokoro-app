@@ -7,11 +7,9 @@ import {
   MessageScrollerItem,
   MessageScrollerProvider,
   MessageScrollerViewport,
-  useMessageScroller,
 } from "@/components/ui/message-scroller"
 import { ArrowDown } from "lucide-react"
 import { Spinner } from "@/components/ui/spinner"
-import { useEffect, useRef } from "react"
 
 import type { AgentFailureCode } from "@/contract/agent-failure"
 import type { AgentMode } from "@/core/conversations"
@@ -28,43 +26,6 @@ import { MessageBubble } from "./message-bubble"
 import styles from "./thread.module.css"
 
 const NO_DECISIONS: Record<string, ToolDecision> = {}
-const COMPACT_GEOMETRY_EPSILON = 0.5
-
-function pixelValue(value: string): number | null {
-  const parsed = Number.parseFloat(value)
-  return Number.isFinite(parsed) ? parsed : null
-}
-
-function blockPadding(element: HTMLElement): number | null {
-  const style = window.getComputedStyle(element)
-  const start = pixelValue(style.paddingBlockStart || style.paddingTop)
-  const end = pixelValue(style.paddingBlockEnd || style.paddingBottom)
-  if (start === null || end === null || start < 0 || end < 0) return null
-  return start + end
-}
-
-function actualContentSpan(items: readonly HTMLElement[]): number | null {
-  let start = Number.POSITIVE_INFINITY
-  let end = Number.NEGATIVE_INFINITY
-  for (const item of items) {
-    const itemRect = item.getBoundingClientRect()
-    if (!Number.isFinite(itemRect.top) || !Number.isFinite(itemRect.bottom) || itemRect.bottom < itemRect.top) {
-      return null
-    }
-    start = Math.min(start, itemRect.top)
-    end = Math.max(end, itemRect.bottom)
-  }
-  const span = end - start
-  return Number.isFinite(span) && span > 0 ? span : null
-}
-
-function spacerHeight(spacer: HTMLElement | null): number | null {
-  if (!spacer) return 0
-  const rectHeight = spacer.getBoundingClientRect().height
-  const styleHeight = pixelValue(window.getComputedStyle(spacer).height)
-  const heights = [rectHeight, styleHeight].filter((height): height is number => height !== null && Number.isFinite(height))
-  return heights.length > 0 ? Math.max(...heights) : null
-}
 
 export type ConversationThreadProps = {
   preview?: boolean
@@ -163,13 +124,11 @@ function TerminalFailureFeedback({ failure }: { failure: AttributedRunFailure })
 export function ConversationThread(props: ConversationThreadProps) {
   return (
     <MessageScrollerProvider
+      // Follow the actual message list, not the assistant placeholder. Anchoring
+      // that placeholder creates a viewport-sized spacer and hides the prompt.
       autoScroll
       defaultScrollPosition="end"
       scrollEdgeThreshold={64}
-      // The workspace starts with a single short turn; do not reserve the
-      // library's default previous-message peek or the first user bubble can
-      // begin above the viewport while the composer is still empty.
-      scrollPreviousItemPeek={0}
     >
       <ConversationThreadSurface {...props} />
     </MessageScrollerProvider>
@@ -205,8 +164,6 @@ function ConversationThreadSurface({
   showTaskTitle = true,
 }: ConversationThreadProps) {
   const t = useT()
-  const { scrollToStart } = useMessageScroller()
-  const threadRootRef = useRef<HTMLDivElement | null>(null)
   // 把扁平 messages + 有序 steps 折成线程项：用户气泡 / assistant 轮（一个 runId 一轮）。
   const items = buildThreadItems(thread)
 
@@ -218,9 +175,6 @@ function ConversationThreadSurface({
   // 绝不在提交与首 token 之间留空帧。一旦首个 step/text 到达，buildThreadItems 即接管，脚手架退场。
   const showScaffoldTurn = isStreaming && (
     liveRunId === undefined || !items.some((item) => item.kind === "assistant-turn" && item.runId === liveRunId)
-  )
-  const hasRenderableDeliveries = Boolean(
-    onOpenDelivery && sessionId !== null && (thread.deliveries.length > 0 || thread.deliveriesHasMore),
   )
   const failureMessageId = creditRejected ? "credit-error" : "run-error"
   const failureFeedback = !hasFailed ? null : (
@@ -282,71 +236,8 @@ function ConversationThreadSurface({
       )}
     </div>
   )
-  const geometryItemIdentity = [
-    ...items.map((item) => item.kind === "user" ? `user:${item.message.id}` : item.anchorId),
-    hasRenderableDeliveries ? "deliveries" : "",
-    failureFeedback ? failureMessageId : "",
-  ].join("\u0000")
-
-  // The native scroller uses a spacer to end-align compact content. Clear that
-  // artificial range only when every rendered item really fits. Active runs,
-  // reconnects and approvals retain their own scroll
-  // ownership; long settled content is never pushed to either edge here.
-  useEffect(() => {
-    if (isStreaming || isReconnecting || hitlRunId !== null) return
-    const root = threadRootRef.current
-    const viewport = root?.querySelector<HTMLElement>('[data-slot="message-scroller-viewport"]')
-    const content = root?.querySelector<HTMLElement>('[data-slot="message-scroller-content"]')
-    if (!viewport || !content) return
-    const messageItems = [...content.querySelectorAll<HTMLElement>('[data-slot="message-scroller-item"]')]
-    if (messageItems.length === 0) return
-
-    let frame: number | null = null
-    const alignCompactContent = () => {
-      frame = null
-      const viewportHeight = viewport.clientHeight
-      const itemSpan = actualContentSpan(messageItems)
-      const viewportPadding = blockPadding(viewport)
-      const contentPadding = blockPadding(content)
-      const currentSpacerHeight = spacerHeight(
-        content.querySelector<HTMLElement>("[data-message-scroller-spacer]"),
-      )
-      const currentScrollTop = viewport.scrollTop
-      if (
-        !Number.isFinite(viewportHeight)
-        || viewportHeight <= 0
-        || itemSpan === null
-        || viewportPadding === null
-        || contentPadding === null
-        || currentSpacerHeight === null
-        || !Number.isFinite(currentScrollTop)
-      ) return
-      const occupiedHeight = itemSpan + viewportPadding + contentPadding
-      if (occupiedHeight > viewportHeight + COMPACT_GEOMETRY_EPSILON) return
-      if (
-        currentSpacerHeight <= COMPACT_GEOMETRY_EPSILON
-        && currentScrollTop <= COMPACT_GEOMETRY_EPSILON
-      ) return
-      scrollToStart({ behavior: "auto" })
-    }
-    const scheduleAlignment = () => {
-      if (frame !== null) return
-      frame = window.requestAnimationFrame(alignCompactContent)
-    }
-    const observer = new ResizeObserver(scheduleAlignment)
-    observer.observe(viewport)
-    observer.observe(content)
-    messageItems.forEach((item) => observer.observe(item))
-    scheduleAlignment()
-    return () => {
-      observer.disconnect()
-      if (frame !== null) window.cancelAnimationFrame(frame)
-    }
-  }, [geometryItemIdentity, hitlRunId, isReconnecting, isStreaming, scrollToStart])
-
   return (
     <MessageScroller
-      ref={threadRootRef}
       className={styles.thread}
       data-state={isStreaming ? "streaming" : "settled"}
       data-desktop-web="true"
@@ -360,7 +251,6 @@ function ConversationThreadSurface({
           <MessageScrollerItem
             key={item.kind === "user" ? item.message.id : item.anchorId}
             messageId={item.kind === "user" ? item.message.id : item.anchorId}
-            scrollAnchor={item.kind === "assistant-turn" && item.runId === liveRunId}
           >
             {item.kind === "user" ? (
               <MessageBubble message={item.message} />
@@ -398,7 +288,6 @@ function ConversationThreadSurface({
         {showScaffoldTurn ? (
           <MessageScrollerItem
             messageId={liveRunId === undefined ? "assistant:pending-submission:live" : `assistant:${liveRunId}:live`}
-            scrollAnchor
           >
             <AssistantTurn
               {...(brandName === undefined ? {} : { brandName })}

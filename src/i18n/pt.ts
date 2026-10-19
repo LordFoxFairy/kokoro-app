@@ -6,7 +6,9 @@ import type { MessageKey } from "./messages"
 export const pt: Partial<Record<MessageKey, string>> = {
 
   // SET47-BEGIN: task-archive
-  "archive.action": "Arquivar tarefa",
+  "scheduled.weekday": "Dia da semana",
+"scheduled.selectWeekday": "Selecionar dia",
+"archive.action": "Arquivar tarefa",
   "archive.restore": "Restaurar tarefa",
   "archive.empty": "Nenhuma tarefa arquivada.",
   "archive.checking": "Verificando o estado de arquivamento…",
@@ -99,6 +101,12 @@ export const pt: Partial<Record<MessageKey, string>> = {
   "settings.devices.remove": "Remover",
   "settings.devices.more": "Carregar mais",
   "settings.devices.reload": "Ler novamente",
+
+  "skills.downloadUnavailable": "O download desta habilidade não está disponível no momento.",
+  "skills.downloadIncomplete": "O download não foi concluído. Tente novamente.",
+  "skills.tryRequiresEnabledVersion": "Adicione e ative esta versão exata antes de usar um exemplo. Mudar de versão exige uma atualização explícita.",
+  "skills.tryUnavailable": "Não foi possível iniciar o teste. Verifique a conexão da conversa e o estado da habilidade e tente novamente.",
+  "composer.removeSelectedSkill": "Remover habilidade selecionada {name}",
 
   "firstSite.renameProject": "Renomear projeto",
   "firstSite.projectName": "Nome do projeto",
@@ -263,10 +271,9 @@ export const pt: Partial<Record<MessageKey, string>> = {
   "rail.searchInputAria": "Pesquisar conversas recentes",
   "rail.searchClose": "Fechar pesquisa",
   "rail.navAria": "Navegação principal",
-  "rail.expandProjectAria": "Expandir projeto {name} (item {position})",
-  "rail.collapseProjectAria": "Recolher projeto {name} (item {position})",
   "rail.expandAria": "Expandir barra lateral",
   "rail.collapseAria": "Recolher barra lateral",
+  "rail.noProjectTasks": "Nenhuma tarefa",
   "rail.newChat": "nova conversa",
   "rail.newChatShortcut": "⇧⌘O",
   "rail.navChat": "diálogo",
@@ -645,6 +652,12 @@ export const pt: Partial<Record<MessageKey, string>> = {
   "mcp.tabSecrets": "Credenciais",
   "mcp.loading": "Carregando…",
   "mcp.loadError": "Falha no carregamento da lista de conexões",
+  "mcp.serverCreateUnknown": "A criação ou preparação não foi confirmada. Tentar novamente retoma o pedido original sem criar de novo.",
+  "mcp.creationSession": "Confirmando sua sessão…",
+  "mcp.apiCreateUnknown": "A criação não foi confirmada. Tentar novamente retoma a solicitação original sem criar outra API.",
+  "mcp.retryOriginal": "Repetir solicitação original",
+  "mcp.apiCreateConfirmed": "API personalizada adicionada.",
+  "mcp.creationDone": "Concluído",
   "mcp.retry": "Tente novamente",
   "mcp.empty": "Nenhuma conexão ativa disponível.",
   "mcp.emptyGuide": "Registre o servidor MCP para conectar ferramentas externas; links oficiais estão listados na plataforma.",
@@ -1341,6 +1354,8 @@ export const pt: Partial<Record<MessageKey, string>> = {
   "mcp.jsonImportTitle": "Importar via JSON",
   "mcp.jsonImportDescription": "Cole o JSON de configuração",
   "mcp.jsonImportAction": "Importar",
+  "mcp.jsonImportUnknown": "A importação não foi confirmada. Tentar novamente retoma o pedido original completo sem importar outra vez.",
+  "mcp.jsonImportConfirmed": "Configuração MCP importada.",
   "mcp.jsonImportInvalid": "O JSON é inválido ou não contém uma configuração mcpServers.",
   "mcp.urlTitle": "Adicionar MCP via URL",
   "mcp.urlNamePlaceholder": "ex.: Meu servidor personalizado",
@@ -1436,4 +1451,15 @@ export const pt: Partial<Record<MessageKey, string>> = {
   "settingsServices.dateColumn": "Data",
   // SET53-END: service-settings-pages
 
+
+  "mcp.recovery.in_progress": "A solicitação original está em processamento. Retome a mesma solicitação mais tarde.",
+  "mcp.recovery.outcome_unknown": "O resultado não foi confirmado. A retomada usa a mesma solicitação original.",
+  "mcp.recovery.replay_expired": "O prazo de recuperação expirou. Feche esta janela e verifique Gerenciar conectores antes de criar novamente.",
+  "mcp.recovery.identity_conflict": "A identidade da solicitação original está em conflito. Verifique Gerenciar conectores.",
+  "mcp.recovery.ownership_lost": "O processamento foi interrompido. Retome explicitamente a mesma solicitação.",
+  "mcp.recovery.invalid": "A resposta não passou na validação. Verifique Gerenciar conectores primeiro.",
+  "mcp.recovery.not_prepared": "O conector não está preparado. Verifique sua configuração e seu estado.",
+  "mcp.recovery.needs_client": "A configuração do cliente OAuth está ausente. Verifique os dados do cliente do conector.",
+  "mcp.recovery.auth_method_unsupported": "Este método de autenticação não é compatível. Verifique a configuração do conector.",
+  "mcp.recovery.inspectRequired": "Verificar estado primeiro",
 }

@@ -6,7 +6,9 @@ import type { MessageKey } from "./messages"
 export const ru: Partial<Record<MessageKey, string>> = {
 
   // SET47-BEGIN: task-archive
-  "archive.action": "Архивировать задачу",
+  "scheduled.weekday": "День недели",
+"scheduled.selectWeekday": "Выберите день",
+"archive.action": "Архивировать задачу",
   "archive.restore": "Восстановить задачу",
   "archive.empty": "Архивированных задач нет.",
   "archive.checking": "Проверка состояния архива…",
@@ -99,6 +101,12 @@ export const ru: Partial<Record<MessageKey, string>> = {
   "settings.devices.remove": "Удалить",
   "settings.devices.more": "Загрузить ещё",
   "settings.devices.reload": "Прочитать снова",
+
+  "skills.downloadUnavailable": "Этот навык сейчас недоступен для скачивания.",
+  "skills.downloadIncomplete": "Скачивание не завершено. Повторите попытку.",
+  "skills.tryRequiresEnabledVersion": "Перед использованием примера добавьте и включите именно эту версию. Для смены версии требуется явное обновление.",
+  "skills.tryUnavailable": "Не удалось начать пробу. Проверьте соединение беседы и состояние навыка и повторите попытку.",
+  "composer.removeSelectedSkill": "Убрать выбранный навык {name}",
 
   "firstSite.renameProject": "Переименовать проект",
   "firstSite.projectName": "Название проекта",
@@ -263,10 +271,9 @@ export const ru: Partial<Record<MessageKey, string>> = {
   "rail.searchInputAria": "Поиск недавних разговоров",
   "rail.searchClose": "Закрыть поиск",
   "rail.navAria": "Основная навигация",
-  "rail.expandProjectAria": "Развернуть проект {name} (элемент {position})",
-  "rail.collapseProjectAria": "Свернуть проект {name} (элемент {position})",
   "rail.expandAria": "Развернуть боковую панель",
   "rail.collapseAria": "Свернуть боковую панель",
+  "rail.noProjectTasks": "Нет задач",
   "rail.newChat": "новый разговор",
   "rail.newChatShortcut": "⇧⌘О",
   "rail.navChat": "диалог",
@@ -645,6 +652,12 @@ export const ru: Partial<Record<MessageKey, string>> = {
   "mcp.tabSecrets": "Реквизиты для входа",
   "mcp.loading": "Загрузка…",
   "mcp.loadError": "Не удалось загрузить список подключений",
+  "mcp.serverCreateUnknown": "Результат создания или подготовки не подтверждён. Повтор продолжит исходный запрос без повторного создания.",
+  "mcp.creationSession": "Проверяем сеанс…",
+  "mcp.apiCreateUnknown": "Создание не подтверждено. Повтор возобновит исходный запрос, не создавая ещё один API.",
+  "mcp.retryOriginal": "Повторить исходный запрос",
+  "mcp.apiCreateConfirmed": "Пользовательский API добавлен.",
+  "mcp.creationDone": "Готово",
   "mcp.retry": "Попробуйте еще раз",
   "mcp.empty": "Активные подключения сейчас недоступны.",
   "mcp.emptyGuide": "Зарегистрируйте MCP-сервер для подключения внешних инструментов; официальные ссылки указаны на платформе.",
@@ -1341,6 +1354,8 @@ export const ru: Partial<Record<MessageKey, string>> = {
   "mcp.jsonImportTitle": "Импорт через JSON",
   "mcp.jsonImportDescription": "Вставьте JSON конфигурации",
   "mcp.jsonImportAction": "Импортировать",
+  "mcp.jsonImportUnknown": "Результат импорта не подтверждён. Повтор продолжит исходный запрос целиком без повторного импорта.",
+  "mcp.jsonImportConfirmed": "Конфигурация MCP импортирована.",
   "mcp.jsonImportInvalid": "JSON недействителен или не содержит конфигурацию mcpServers.",
   "mcp.urlTitle": "Добавить MCP по URL",
   "mcp.urlNamePlaceholder": "например, Мой сервер",
@@ -1436,4 +1451,15 @@ export const ru: Partial<Record<MessageKey, string>> = {
   "settingsServices.dateColumn": "Дата",
   // SET53-END: service-settings-pages
 
+
+  "mcp.recovery.in_progress": "Исходный запрос обрабатывается. Позже возобновите тот же запрос.",
+  "mcp.recovery.outcome_unknown": "Результат не подтверждён. Возобновление использует тот же исходный запрос.",
+  "mcp.recovery.replay_expired": "Срок восстановления истёк. Закройте окно и проверьте состояние в управлении коннекторами перед новым созданием.",
+  "mcp.recovery.identity_conflict": "Конфликт идентификатора исходного запроса. Проверьте управление коннекторами.",
+  "mcp.recovery.ownership_lost": "Обработка прервана. Явно возобновите тот же запрос.",
+  "mcp.recovery.invalid": "Ответ не прошёл проверку. Сначала проверьте управление коннекторами.",
+  "mcp.recovery.not_prepared": "Коннектор не подготовлен. Проверьте настройки и состояние.",
+  "mcp.recovery.needs_client": "Отсутствуют настройки клиента OAuth. Проверьте данные клиента коннектора.",
+  "mcp.recovery.auth_method_unsupported": "Этот способ аутентификации не поддерживается. Проверьте настройки коннектора.",
+  "mcp.recovery.inspectRequired": "Сначала проверить состояние",
 }

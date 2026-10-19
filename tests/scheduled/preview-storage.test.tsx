@@ -140,3 +140,28 @@ it("contains localStorage remove failures and reports them inside delete confirm
   expect(removeSpy).toHaveBeenCalledWith(storageKey);
   expect(screen.getByText("Stored task")).toBeInTheDocument();
 });
+
+
+it("keeps the selected weekday through preview storage and a later prompt-only edit", async () => {
+  render(<LocaleProvider><ScheduledTaskSurface mode="preview" brandName="Kokoro" /></LocaleProvider>);
+  fireEvent.click(screen.getByRole("button", { name: /建立您的排程任务/ }));
+  fireEvent.change(screen.getByLabelText("未读邮件摘要"), { target: { value: "Weekly preview" } });
+  fireEvent.change(screen.getByLabelText("汇总未读邮件并突出显示重要邮件"), { target: { value: "Preview only" } });
+  fireEvent.keyDown(screen.getByRole("combobox", { name: "排程" }), { key: "ArrowDown" });
+  fireEvent.click(await screen.findByRole("option", { name: "每周" }));
+  fireEvent.keyDown(screen.getByRole("button", { name: "星期" }), { key: "ArrowDown" });
+  fireEvent.click(await screen.findByRole("menuitemcheckbox", { name: "周二" }));
+  fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
+  fireEvent.click(screen.getByRole("button", { name: "保存" }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  const first = JSON.parse(window.localStorage.getItem(storageKey)!)[0];
+  expect(first.weekdays).toEqual([2]);
+  expect(screen.getByRole("listitem")).toHaveTextContent(/每周\s+周二/u);
+  fireEvent.pointerDown(screen.getByRole("button", { name: "排程任务选项 Weekly preview" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: "编辑" }));
+  expect(screen.getByRole("button", { name: "星期" })).toHaveTextContent("周二");
+  fireEvent.change(screen.getByLabelText("汇总未读邮件并突出显示重要邮件"), { target: { value: "Changed preview only" } });
+  fireEvent.click(screen.getByRole("button", { name: "保存" }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  expect(JSON.parse(window.localStorage.getItem(storageKey)!)[0]).toMatchObject({ weekdays: first.weekdays, prompt: "Changed preview only" });
+});

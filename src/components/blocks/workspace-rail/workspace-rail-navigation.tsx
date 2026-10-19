@@ -1,14 +1,15 @@
 "use client"
 
-import { type Dispatch, type RefObject, type SetStateAction, useState } from "react"
+import { Fragment, type Dispatch, type RefObject, type SetStateAction, useState } from "react"
 import Link from "next/link"
-import { Bot, ChevronDown, ChevronRight, Ellipsis, Folder, Monitor, Plus, SquarePen, WandSparkles } from "lucide-react"
+import { Check, ChevronDown, ChevronRight, Ellipsis, Folder, Shapes, Monitor, Plus, SquareMousePointer, SquarePen, WandSparkles, Workflow } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
@@ -28,13 +29,14 @@ import { isRuntimeNavigationEnabled, navigationIcon, registeredNavigationRoute }
 import { interceptMountedSurfaceNavigation } from "@/ui/navigation/mounted-surface-navigation"
 
 import { type RailDragKind, type RailDragProps, type RailDragState, markPointerFocus } from "./workspace-rail-actions"
-import type { WorkbenchNavigationItem, WorkspaceRailProject } from "./workspace-rail-types"
+import type { RailConversationReads, WorkbenchNavigationItem, WorkspaceRailProject, WorkspaceRailProps } from "./workspace-rail-types"
 import { itemStyles, navigationStyles, railStyles } from "./workspace-rail-styles"
 import { WorkspaceRailLoadingPlaceholder } from "./workspace-rail-loading-placeholder"
 import { WorkspaceRailProjectCreateDialog } from "./workspace-rail-project-create-dialog"
+import { ScopedConversationGroup } from "./workspace-rail-session-list"
 export { WorkspaceRailHeader, type WorkspaceRailHeaderProps } from "./workspace-rail-header"
 
-export type WorkspaceRailNavigationProps = {
+export type WorkspaceRailNavigationProps = Pick<WorkspaceRailProps, "conversationMove" | "conversationMovePending" | "conversationMoveFailed" | "onRetryConversationMove"> & {
   navigation?: readonly RuntimeNavigationItem[]
   featureFlags?: readonly RuntimeFeatureFlag[]
   projectHref?: string
@@ -58,6 +60,9 @@ export type WorkspaceRailNavigationProps = {
   navigationExpanded: boolean
   navigationTransitionKey: string
   newSessionLabel: string
+  conversationReads?: RailConversationReads
+  onRequestDelete: NonNullable<WorkspaceRailProps["onRequestDelete"]>
+  awaitingIds: ReadonlySet<string>
   dragProps: (kind: RailDragKind, id: string) => RailDragProps
   dragState: RailDragState | null
   dragOverKey: string | null
@@ -87,6 +92,13 @@ export function WorkspaceRailNavigation({
   navigationExpanded,
   navigationTransitionKey,
   newSessionLabel,
+  conversationReads,
+  onRequestDelete,
+  awaitingIds,
+  conversationMove = null,
+  conversationMovePending = false,
+  conversationMoveFailed = false,
+  onRetryConversationMove,
   dragProps,
   dragState,
   dragOverKey,
@@ -97,7 +109,26 @@ export function WorkspaceRailNavigation({
   // the navigation composition boundary lets its contents collapse without
   // changing the owner-backed project collection or project-route selection.
   const [projectsExpanded, setProjectsExpanded] = useState(true)
+  // An expanded project owns exactly one scoped list.  A closed project is not
+  // mounted, so it cannot issue a background session read merely because it is
+  // visible in the project index.
+  const [projectConversationExpansion, setProjectConversationExpansion] = useState<ReadonlyMap<string, boolean>>(new Map())
+  // Opening a project seeds a presentation choice once; leaving its route
+  // must not collapse the same scoped tasks. A recorded false is an explicit
+  // user choice and must not be overwritten by later route activation.
+  const newlyActiveProjects = orderedProjects.filter((project) =>
+    ((projectActive && project.href === projectHref) || project.active === true)
+    && !projectConversationExpansion.has(project.id),
+  )
+  if (conversationReads?.admitted !== false
+    && (projectListStatus === undefined || projectListStatus === "ready")
+    && newlyActiveProjects.length > 0) {
+    const next = new Map(projectConversationExpansion)
+    for (const project of newlyActiveProjects) next.set(project.id, true)
+    setProjectConversationExpansion(next)
+  }
   const [projectCreateOpen, setProjectCreateOpen] = useState(false)
+  const [moreOpen, setMoreOpen] = useState(false)
   const keyboardShortcuts = useKeyboardShortcuts()
   const keyboardShortcutParts = useKeyboardShortcutParts()
   const enabledNavigation = navigation?.filter((item) => isRuntimeNavigationEnabled(item, featureFlags))
@@ -114,11 +145,26 @@ export function WorkspaceRailNavigation({
     .filter((item): item is WorkbenchNavigationItem => item !== undefined)
   const pluginsDestination = navigationByKey.get("mcp")
   const PluginsIcon = pluginsDestination?.icon
-  // Skills and scheduled work are intentionally tucked behind “更多”, matching
-  // the live Manus rail. They retain their typed route contracts; this is only
-  // a presentation grouping, not another navigation model.
-  const tuckedDestinations = workbenchNavigation.filter((item) => !primaryDestinations.includes(item) && item !== pluginsDestination)
+  const automationDestination = navigationByKey.get("scheduled")
+  const automationHref = automationDestination?.href
+  // Scheduled tasks already have the Automation destination. Do not duplicate
+  // them in More or leave the primary affordance disabled while it is enabled.
+  // Other manifest-provided Kokoro destinations retain their existing access.
+  const tuckedDestinations = workbenchNavigation.filter((item) => !primaryDestinations.includes(item) && item !== pluginsDestination && item !== automationDestination)
   const moreActive = tuckedDestinations.some((item) => item.key === activeNavigationKey)
+  const renderTuckedDestination = ({ key, label, icon: Icon, settingsTab, href }: WorkbenchNavigationItem) => href ? (
+    <DropdownMenuItem key={key} asChild>
+      <Link href={href} {...(mountedSurfacePrefetch === undefined ? {} : { prefetch: mountedSurfacePrefetch })} onClickCapture={(event) => interceptMountedSurfaceNavigation(event, href)} onClick={() => { setMoreOpen(false); closeNavigation() }} aria-current={activeNavigationKey === key ? "page" : undefined}>
+        <span className={navigationStyles.moreGlyph}><Icon aria-hidden="true" /></span>
+        <span>{label}</span>
+        {activeNavigationKey === key ? <Check className={navigationStyles.moreCheck} aria-hidden="true" /> : null}
+      </Link>
+    </DropdownMenuItem>
+  ) : settingsTab ? (
+    <DropdownMenuItem key={key} onSelect={() => { onOpenSettings(settingsTab); closeNavigation() }}>
+      <span className={navigationStyles.moreGlyph}><Icon aria-hidden="true" /></span><span>{label}</span>
+    </DropdownMenuItem>
+  ) : null
   const projectReadFeedback = projectListStatus === "loading" ? (
     <WorkspaceRailLoadingPlaceholder
       label={t("firstSite.projectsLoading")}
@@ -134,6 +180,14 @@ export function WorkspaceRailNavigation({
   ) : projectListStatus === "blocked" ? (
     <p role="status" data-testid="projects-blocked">{t("firstSite.projectsUnavailable")}</p>
   ) : null
+
+  const toggleProjectConversations = (projectId: string, currentlyExpanded: boolean) => {
+    setProjectConversationExpansion((current) => {
+      const next = new Map(current)
+      next.set(projectId, !currentlyExpanded)
+      return next
+    })
+  }
 
   return (
     <nav className={navigationStyles.nav} aria-label={t("rail.navAria")}>
@@ -230,7 +284,19 @@ export function WorkspaceRailNavigation({
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <SidebarMenuButton
+              {automationHref ? <SidebarMenuButton
+                asChild
+                tooltip={t("rail.automation")}
+                tooltipKey={navigationTransitionKey}
+                className={navigationStyles.navItem}
+                data-navigation-section="automation"
+                isActive={activeNavigationKey === "scheduled"}
+              >
+                <Link href={automationHref} {...(mountedSurfacePrefetch === undefined ? {} : { prefetch: mountedSurfacePrefetch })} aria-label={t("rail.automation")} aria-current={activeNavigationKey === "scheduled" ? "page" : undefined} onPointerDown={markPointerFocus} onClickCapture={(event) => interceptMountedSurfaceNavigation(event, automationHref)} onClick={closeNavigation}>
+                  <Workflow className={railStyles.icon} />
+                  {navigationExpanded ? <span className={railStyles.navLabel}>{t("rail.automation")}</span> : null}
+                </Link>
+              </SidebarMenuButton> : <SidebarMenuButton
                 type="button"
                 disabled
                 aria-disabled="true"
@@ -239,9 +305,9 @@ export function WorkspaceRailNavigation({
                 className={cn(navigationStyles.navItem, navigationStyles.unavailableItem)}
                 data-navigation-section="automation"
               >
-                <Bot className={railStyles.icon} />
+                <Workflow className={railStyles.icon} />
                 {navigationExpanded ? <span className={railStyles.navLabel}>{t("rail.automation")}</span> : null}
-              </SidebarMenuButton>
+              </SidebarMenuButton>}
             </SidebarMenuItem>
             {pluginsDestination?.href && PluginsIcon ? (() => {
               const pluginsHref = pluginsDestination.href;
@@ -259,7 +325,7 @@ export function WorkspaceRailNavigation({
             })() : null}
 
             {tuckedDestinations.length > 0 ? <SidebarMenuItem>
-              <DropdownMenu>
+              <DropdownMenu modal={false} open={moreOpen} onOpenChange={setMoreOpen}>
                 <DropdownMenuTrigger asChild>
                   <SidebarMenuButton
                     type="button"
@@ -275,20 +341,16 @@ export function WorkspaceRailNavigation({
                     {navigationExpanded ? <span className={railStyles.navLabel}>{t("rail.more")}</span> : null}
                   </SidebarMenuButton>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" side="right" sideOffset={8} className={navigationStyles.moreMenu}>
-                  {tuckedDestinations.map(({ key, label, icon: Icon, settingsTab, href }) => href ? (
-                    <DropdownMenuItem key={key} asChild>
-                      <Link href={href} {...(mountedSurfacePrefetch === undefined ? {} : { prefetch: mountedSurfacePrefetch })} onClickCapture={(event) => interceptMountedSurfaceNavigation(event, href)} onClick={closeNavigation} aria-current={activeNavigationKey === key ? "page" : undefined}>
-                        <Icon aria-hidden="true" />
-                        {label}
-                      </Link>
-                    </DropdownMenuItem>
-                  ) : settingsTab ? (
-                    <DropdownMenuItem key={key} onSelect={() => { onOpenSettings(settingsTab); closeNavigation() }}>
-                      <Icon aria-hidden="true" />
-                      {label}
-                    </DropdownMenuItem>
-                  ) : null)}
+                <DropdownMenuContent align="start" side="right" sideOffset={4} className={navigationStyles.moreMenu}>
+                  <DropdownMenuItem disabled aria-description={t("firstSite.unavailable")}>
+                    <span className={navigationStyles.moreGlyph}><SquareMousePointer aria-hidden="true" /></span><span>Computer Use</span>
+                  </DropdownMenuItem>
+                  {tuckedDestinations.filter((item) => item.key === "skills").map(renderTuckedDestination)}
+                  <DropdownMenuItem onSelect={() => { onOpenSettings("personalization"); closeNavigation() }}>
+                    <span className={navigationStyles.moreGlyph}><Shapes aria-hidden="true" /></span><span>{t("settings.personalizationTitle")}</span>
+                  </DropdownMenuItem>
+                  {tuckedDestinations.some((item) => item.key !== "skills") ? <DropdownMenuSeparator /> : null}
+                  {tuckedDestinations.filter((item) => item.key !== "skills").map(renderTuckedDestination)}
                 </DropdownMenuContent>
               </DropdownMenu>
             </SidebarMenuItem> : null}
@@ -380,42 +442,43 @@ export function WorkspaceRailNavigation({
               {projectReadFeedback ? <SidebarMenuItem>{projectReadFeedback}</SidebarMenuItem> : null}
               {orderedProjects.map((project) => {
                 const active = (projectActive && project.href === projectHref) || project.active === true
+                const conversationsExpanded = projectConversationExpansion.get(project.id) ?? active
                 const testId = active || orderedProjects.length === 1 ? "rail-project" : `rail-project-${project.id}`
                 const dragging = dragState?.kind === "project" && dragState.id === project.id
                 const dragOver = dragOverKey === `project:${project.id}`
                 return (
+                  <Fragment key={project.id}>
                   <SidebarMenuItem
-                    key={project.id}
-                    className={cn(itemStyles.item, dragging && itemStyles.itemDragging, dragOver && itemStyles.itemDragOver)}
+                    className={cn(itemStyles.item, navigationStyles.projectRow, dragging && itemStyles.itemDragging, dragOver && itemStyles.itemDragOver)}
                     data-project-id={project.id}
                     data-drag-kind="project"
                     data-project-active={active ? "true" : "false"}
                     data-dragging={dragging ? "true" : "false"}
                     data-drag-over={dragOver ? "true" : "false"}
                   >
-                    <SidebarMenuButton asChild type="button" className={itemStyles.itemSelect} isActive={active}>
-                      <Link
-                        href={project.href}
-                        {...(mountedSurfacePrefetch === undefined ? {} : { prefetch: mountedSurfacePrefetch })}
-                        {...dragProps("project", project.id)}
-                        onPointerDown={markPointerFocus}
-                        onClickCapture={(event) => interceptMountedSurfaceNavigation(event, project.href)}
-                        onClick={closeNavigation}
-                        aria-label={project.name}
-                        aria-current={active ? "page" : undefined}
-                        data-testid={testId}
-                        data-navigation-section="project"
-                      >
-                        <span className={itemStyles.projectGlyph} aria-hidden="true">
-                          <Folder className={cn(railStyles.icon, itemStyles.projectFolderIcon)} />
-                        </span>
-                        <span className={itemStyles.itemTitle}>{project.name}</span>
-                      </Link>
+                    <SidebarMenuButton
+                      type="button"
+                      className={itemStyles.itemSelect}
+                      isActive={active}
+                      {...dragProps("project", project.id)}
+                      onPointerDown={markPointerFocus}
+                      onClick={() => toggleProjectConversations(project.id, conversationsExpanded)}
+                      aria-label={project.name}
+                      aria-expanded={conversationsExpanded}
+                      aria-controls={`rail-project-conversations-${project.id}`}
+                      data-testid={testId}
+                      data-navigation-section="project"
+                    >
+                      <span className={itemStyles.projectGlyph} aria-hidden="true">
+                        <Folder className={cn(railStyles.icon, itemStyles.projectFolderIcon)} />
+                        <ChevronRight className={cn(railStyles.icon, itemStyles.projectChevron)} />
+                      </span>
+                      <span className={itemStyles.itemTitle}>{project.name}</span>
                     </SidebarMenuButton>
-                    {onRequestProjectRename ? <span className={itemStyles.projectActions}>
-                      <DropdownMenu>
+                    <span className={itemStyles.projectActions}>
+                      {onRequestProjectRename ? <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button type="button" variant="ghost" size="icon-xs" className={itemStyles.projectAction} aria-label={t("firstSite.projectOptions")}>
+                          <Button type="button" variant="ghost" size="icon-xs" className={cn(itemStyles.projectAction, itemStyles.projectOptions)} aria-label={t("firstSite.projectOptions")}>
                             <Ellipsis aria-hidden="true" />
                           </Button>
                         </DropdownMenuTrigger>
@@ -425,12 +488,45 @@ export function WorkspaceRailNavigation({
                             {t("firstSite.renameProject")}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
-                      </DropdownMenu>
-                      <Button type="button" variant="ghost" size="icon-xs" className={itemStyles.projectAction} aria-label={t("firstSite.renameProject")} onClick={() => onRequestProjectRename(project.id)}>
-                        <SquarePen aria-hidden="true" />
+                      </DropdownMenu> : null}
+                      <Button asChild variant="ghost" size="icon-xs" className={itemStyles.projectAction}>
+                        <Link href={project.href}
+                          {...(mountedSurfacePrefetch === undefined ? {} : { prefetch: mountedSurfacePrefetch })}
+                          onPointerDown={markPointerFocus}
+                          onClickCapture={(event) => interceptMountedSurfaceNavigation(event, project.href)}
+                          onClick={closeNavigation}
+                          aria-label={`${t("rail.newChat")} · ${project.name}`}
+                          aria-current={active ? "page" : undefined}
+                        >
+                          <SquarePen aria-hidden="true" />
+                        </Link>
                       </Button>
-                    </span> : null}
+                    </span>
                   </SidebarMenuItem>
+                  {conversationsExpanded ? <SidebarMenuItem
+                      id={`rail-project-conversations-${project.id}`}
+                      className={navigationStyles.projectConversationGroup}
+                    >
+                      {conversationReads ? <ScopedConversationGroup
+                        scope={{ kind: "project", projectRef: project.id }}
+                        reads={conversationReads}
+                        compactDesktop={false}
+                        query=""
+                        searchOpen={false}
+                        awaitingIds={awaitingIds}
+                        closeNavigation={closeNavigation}
+                        onNewChat={onNewChat}
+                        hideSectionHeader
+                        conversationMove={conversationMove}
+                        conversationMovePending={conversationMovePending}
+                        conversationMoveFailed={conversationMoveFailed}
+                        {...(onRetryConversationMove === undefined ? {} : { onRetryConversationMove })}
+                        projects={orderedProjects}
+                        projectListReady={projectListStatus === "ready"}
+                        onRequestDelete={onRequestDelete}
+                      /> : <p className={itemStyles.empty} role="status">{t("firstSite.unavailable")}</p>}
+                    </SidebarMenuItem> : null}
+                  </Fragment>
                 )
               })}
             </SidebarMenu>

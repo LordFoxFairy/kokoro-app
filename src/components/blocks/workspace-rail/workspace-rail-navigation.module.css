@@ -74,8 +74,8 @@
   height: 2rem;
   align-items: center;
   gap: 0.25rem;
-  margin: -0.2rem 0 0 -0.4rem;
-  padding-inline: 0.4rem;
+  margin: 0;
+  padding-inline: 0;
   color: inherit;
   font: inherit;
   font-size: inherit;
@@ -116,9 +116,7 @@
  * it gives the creative/automation/plugin area the same visual grouping as
  * the live Manus rail without inventing a second navigation model. */
 [data-desktop-rail="true"] .navGroup :global([data-sidebar="menu-item"]):first-child {
-  margin-bottom: 0.45rem;
-  padding-bottom: 0.45rem;
-  border-bottom: 1px solid color-mix(in srgb, var(--sidebar-border) 82%, transparent);
+  box-shadow: 0 1px color-mix(in srgb, var(--sidebar-border) 82%, transparent);
 }
 
 .navItem {
@@ -126,14 +124,15 @@
   width: 100%;
   min-height: 2.35rem;
   align-items: center;
-  gap: 0.7rem;
+  gap: 0.5rem;
   border-radius: var(--radius-md);
-  padding: 0.5rem 0.65rem;
-  font-size: 0.95rem;
+  padding: 0.5rem;
+  font-size: var(--rail-font-size);
+  line-height: 1.3125rem;
   text-align: left;
   text-decoration: none;
 }
-.navItem > svg { pointer-events: none; }
+.navItem > svg { width: 1.25rem; height: 1.25rem; pointer-events: none; }
 .navLabel { flex: 1; text-overflow: ellipsis; }
 .navShortcut { flex: 0 0 auto; color: var(--muted-foreground); font-size: 0.72rem; letter-spacing: 0.04em; }
 .agentLabel {
@@ -162,14 +161,45 @@
   opacity: 0.42;
   cursor: not-allowed;
 }
-.moreMenu { min-width: 11rem; padding: 0.25rem; }
-.moreMenu :global([data-slot="dropdown-menu-item"]) { min-height: 2.25rem; gap: 0.5rem; }
+.moreMenu { width: 11.875rem; min-width: 11.875rem; padding: 0.25rem; border: 0; border-radius: 0.75rem; background: color-mix(in srgb, var(--popover) 60%, var(--sidebar)); }
+.moreGlyph { display: inline-flex; width: 1.25rem; height: 1.25rem; flex: 0 0 1.25rem; align-items: center; justify-content: center; }
+.moreCheck { margin-left: auto; }
+.moreMenu :global([data-slot="dropdown-menu-item"]) { min-height: 2.25rem; gap: 0.5rem; padding: 0.5rem; border-radius: 0.5rem; font-size: 0.875rem; line-height: 1.25rem; }
 .moreMenu :global([data-slot="dropdown-menu-item"] svg) { width: 1rem; height: 1rem; color: var(--muted-foreground); }
 .projectMenu { min-width: 12.5rem; padding: 0.35rem; }
 .projectMenu :global([data-slot="dropdown-menu-item"]) { min-height: 2.25rem; gap: 0.55rem; font-size: 0.85rem; }
 .projectMenu :global([data-slot="dropdown-menu-item"] svg) { width: 1rem; height: 1rem; color: var(--muted-foreground); }
 .projectMenu :global([data-slot="dropdown-menu-item"][data-disabled]) { opacity: 0.46; }
-.projectMenu :global([data-slot="dropdown-menu-item"]) > svg:last-child { margin-left: auto; }
+.projectMenu :global([data-slot="dropdown-menu-item"]) > span + svg:last-child { margin-left: auto; }
+
+/* A project row is the scope boundary. Keep its disclosure compact and place
+ * only that project's owner-backed conversations beneath it; it must not look
+ * like another top-level task section. */
+.projectRow > :global([data-slot="sidebar-menu-button"]) { padding-inline-start: 0.5rem; }
+.projectConversationGroup { margin: 0; min-width: 0; }
+.projectConversationGroup :global([data-conversation-list="project-conversation"]) { margin: 0; padding-inline: 0; }
+[data-desktop-rail="true"] .projectConversationGroup :global([data-conversation-list="project-conversation"]) { margin-top: 0; }
+.projectConversationGroup > p,
+.projectConversationGroup :global([data-conversation-list="project-conversation"]) > p {
+  display: flex;
+  min-height: 2.75rem;
+  align-items: center;
+  margin: 0;
+  padding: 0 0.5rem 0 2.25rem;
+  font-size: var(--rail-font-size);
+  line-height: 1.25rem;
+}
+.projectConversationGroup :global([data-conversation-list="project-conversation"] [data-sidebar="menu-button"]) {
+  padding-inline-start: 2.25rem;
+  font-size: var(--rail-font-size);
+}
+[data-desktop-rail="true"] .projectConversationGroup > p,
+[data-desktop-rail="true"] .projectConversationGroup :global([data-conversation-list="project-conversation"]) > p,
+[data-desktop-rail="true"] .projectConversationGroup :global([data-conversation-list="project-conversation"] [data-sidebar="menu-button"]) { min-height: var(--rail-row-height); }
+
+.projectConversationGroup :global([data-conversation-list="project-conversation"]) > :global([role="status"]) {
+  padding-inline: 2.25rem 0.5rem;
+}
 
 /* SVG paths are decorative; the shadcn control remains the complete hit
  * target at every browser zoom level. */
@@ -186,14 +216,14 @@
   z-index: 1;
   min-height: 2.4rem;
   border-radius: 0.7rem;
-  padding-inline: 0.75rem;
-  color: color-mix(in srgb, var(--foreground) 82%, var(--muted-foreground));
+  padding-inline: 0.5rem;
+  color: var(--foreground);
   cursor: pointer;
   touch-action: manipulation;
 }
 [data-desktop-rail="true"] .navItem:hover { background: color-mix(in srgb, var(--accent) 70%, var(--card)); }
 [data-desktop-rail="true"] .navItem[data-active="true"],
-[data-desktop-rail="true"] .navItem[aria-current="page"] { background: var(--sidebar-accent); color: var(--foreground); }
+[data-desktop-rail="true"] .navItem[aria-current="page"] { background: var(--sidebar-accent); color: var(--foreground); font-weight: 400; }
 [data-desktop-rail="true"] .navItem[data-pointer-focus="true"]:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
@@ -203,21 +233,23 @@
 :global([data-desktop-rail="true"][data-collapsed="false"]) .nav :global([data-desktop-direct-chat="true"]) { display: none; }
 
 /* Expanded desktop rhythm. */
-[data-desktop-rail="true"] .navItem { height: 2.25rem; min-height: 2.25rem; }
+[data-desktop-rail="true"] .navItem { height: var(--rail-row-height); min-height: var(--rail-row-height); }
 [data-desktop-rail="true"] .nav { gap: 0.0625rem; }
 [data-desktop-rail="true"] .navGroup { margin-top: 0; }
 [data-desktop-rail="true"] .navGroupLabel {
-  padding-inline: 0.75rem;
-  font-size: 0.75rem;
+  padding-inline: 0.5rem;
+  font-size: var(--rail-caption-size);
+  font-weight: 500;
+  line-height: 1.125rem;
   text-transform: none;
-  letter-spacing: 0.02em;
+  letter-spacing: -0.007em;
 }
-[data-desktop-rail="true"] .projectGroup { margin-top: 0.6875rem; }
+[data-desktop-rail="true"] .projectGroup { margin-top: 0.75rem; }
 [data-desktop-rail="true"] .projectGroup .navGroupLabel {
   height: 2.25rem;
   min-height: 2.25rem;
   box-sizing: border-box;
-  padding-bottom: 0.5rem;
+  padding: 0.125rem 0.125rem 0.125rem 0.625rem;
 }
 
 /* One compact desktop track: the product mark is the header affordance and
@@ -269,5 +301,5 @@
 @media (max-width: 960px) {
   .headerControl,
   .searchClose { width: 2.75rem; height: 2.75rem; }
-  [data-desktop-web="true"]:not([data-desktop-rail="true"]) .navItem { min-height: 2.75rem; padding-inline: 0.75rem; font-size: 0.95rem; }
+  [data-desktop-rail="false"] .navItem { min-height: 2.75rem; padding-inline: 0.5rem; font-size: var(--rail-font-size); }
 }

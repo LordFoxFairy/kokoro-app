@@ -5,16 +5,16 @@ import { resolve } from "node:path"
 import { describe, expect, it } from "vitest"
 import YAML from "yaml"
 
-const BFF_OWNER_COMMIT = "30df0c428c592ed2710d62035ceb5855d20c7506"
-const BFF_PUBLIC_OPENAPI_SHA256 = "b4e91483e425fdcc9547eac8bcda554273cbee0863ccb0ddfb185fae18e4e267"
-const BFF_PUBLIC_OPENAPI_VERSION = "16.0.0"
+const BFF_OWNER_COMMIT = "08a2120ea85b6cad5cf6e839ef14dbf83d908b92"
+const BFF_PUBLIC_OPENAPI_SHA256 = "955412b680bf7a2529c4c35f553ff272d7361769ea95bb441ba820b552ffc564"
+const BFF_PUBLIC_OPENAPI_VERSION = "19.0.0"
 const SNAPSHOT = resolve(process.cwd(), "src/generated/bff-public-openapi.yaml")
 
 describe("pinned BFF project resource contract", () => {
   it("pins the exact BFF owner public OpenAPI blob", async () => {
     const bytes = await readFile(SNAPSHOT)
     const spec = YAML.parse(bytes.toString("utf8")) as { info?: { version?: string } }
-    expect(BFF_OWNER_COMMIT).toBe("30df0c428c592ed2710d62035ceb5855d20c7506")
+    expect(BFF_OWNER_COMMIT).toBe("08a2120ea85b6cad5cf6e839ef14dbf83d908b92")
     expect(createHash("sha256").update(bytes).digest("hex")).toBe(BFF_PUBLIC_OPENAPI_SHA256)
     expect(spec.info?.version).toBe(BFF_PUBLIC_OPENAPI_VERSION)
   })

@@ -1,3 +1,13 @@
+## 2026-10-19 收尾集成候选：完整既有分支与固定 Public19
+
+只集成 main d42fe1d2、PR37 的原生浏览器登录回归、PR38 的六页设置与完整 local362a9b7；保真实 merge ancestry，不按功能片继续开 PR。知识/记忆等其余混合工作保持原位，不在本次顺手接通。唯一 BFF snapshot 固定已合 owner08a2120ea85b6cad5cf6e839ef14dbf83d908b92、Public19.0.0/165、SHA256955412b680bf7a2529c4c35f553ff272d7361769ea95bb441ba820b552ffc564；六个既有窄 generator 正规配对，connector-command-errors 独立 profile 不换 pin。
+
+复用原测试历史逆证，在原 Public16→15.4→15.3 前增加显式 Public19→两个完整 Public16 父版本的逆 delta，保原全文 hash/语义与退役 MCP 写入口负控，不在生产兼容旧协议。接入已经交付并在正常开发环境配对过的 calendar consumer：来源逐路径绑定既有 app-public18 冻结证据，使用每周多星期、每月多日期、一次性 local_date、IANA timezone 和 owner next_run_at；不再消费已退役 recurrence_anchor_at。仅接收该既有切片所需源码、字典及测试，不 wholesale 导入混合工作树。
+
+主干 archive receipt/权限/账户/分享与本地单一 per-scope Reader registry、MCP command provider/受控 Skills scope/刷新及 callback 围栏按语义并集。archive revision/receipt 进入原 Reader host，不再启动第二读者；稳定现 archive retry callback，展示层只接实际使用的归档操作和 busy，不保无消费者字段。旧测试 fixture 接真实 keyed Reader hosts，保原退休/真实 GET/归档断言；未弱化浏览器 Origin:null/CSRF/nonce/CSP/第二次登录。无新 owner、API、DB/Redis schema、网关或认证旁路。
+
+所有验证尚待最终冻结全门；本段是当前集成范围，不声称已合并、页面已对齐或正常服务已重载。正常数据库/配置/服务与已有混合工作均保留，模型、实际工具与扣费仍暂停。
+
 ## SET51 登录回归范围（2026-10-16）
 
 仅验证现有 `/login` 浏览器表单和原 Product/OIDC/issuer 生命周期；GET 的 CSRF cookie 与后续 provider POST 的 state cookie 分阶段产生，测试保留该区分。无数据库、Redis schema、业务存储、cookie 格式或会话寿命变化；测试只清理自身 fixture 数据，原运行实例及用户事实保留。
@@ -234,6 +244,14 @@ V2实现补充（2026-10-14）：同subject临时失准入只更新layout投递�
 ## SET-13 Team权限视图不保存事实（2026-10-13）
 
 Role/Permission/Membership/Invitation与授权审计仍归IAM，public projection归BFF；Web没有业务数据库、权限缓存、团队/计划owner或新Redis/session事实。TeamRole八域仅用于完整可见目录及权限超集UI提示，当前mutation仍由IAM在线权威决定。唯一generated snapshot/provenance属于build-time固定依赖，不是业务持久化。原字节替换与正规生成遵守TECH/API的15.0.0开发配对裁决，旧pin不并存。
+
+## RP 临时proof保留（2026-10-19）
+
+不新增cookie、Redis key、格式或Schema。state/PKCE/nonce共享proof不由callback删除，沿锁定Auth.js签名及默认15分钟Expires；Web state记录仍300秒TTL和一次GETDEL。成功只签原HttpOnly Product cookie，proof保留不赋予身份或重放权。无浏览器latest-login索引，不承诺并发成功会话的最后启动优先。
+
+## 2026-10-16 SKILLS-UPDATE U4（本地实现，正常产品链待验）
+
+本片没有 Web 数据表、owner Schema 或新的持久事实。复用现个人 installation 的 available_update 与 pin；Web 仅有 actor-scoped 冻结命令（installation ID、series ID、旧/新 source_ref、目标 revision、原 key）及 ACK 后的回读阶段。没有 localStorage 业务记录、自动重试、双写或移除重装。重核清私有读事实；unknown 保原命令，换 actor 丢弃，完整页面刷新后不凭 GET 冒认旧命令 receipt。
 
 <!-- BEGIN:T-K03.13-WEB-MCP-PERSONAL-READ-D0 -->
 
@@ -1499,3 +1517,39 @@ Web 无新增持久业务数据/SQL/Redis；BFF personalization 唯一持久化 
 ## SET54 More 键盘行为（2026-10-16）
 
 无持久化 owner、schema或存储变更。打开/关闭及首末键盘焦点只属于既有菜单组件生命周期，不写浏览器偏好或服务端事实。
+
+
+## Skills 试用的临时显示绑定（2026-10-16）
+
+不新增 SQL/Redis/browser storage。Skill 卡片的内部 `installed_source_ref` 来自已验证安装投影的精确 source（目录 join 使用安装的 version UID），和目录 current source 分开；缺失时不合成。它不是新增 owner wire 字段，亦非可执行授权。
+
+试用选择仅在内存持有 name/sourceRef、engine、实际 conversation ID 与 admission owner；名称只用于标签，只有 exact source ref 进入既有消息数组。第一次离开该会话/身份即退役，不因返回相同 ID 复活，不从旧 pinned name 或持久草稿恢复隐含选择。原消息提交冻结集合及幂等重试保持。
+
+目录搜索/筛选/详情 locator 是 actor 所属的内存展示意图，不包含名称、描述、安装权限、包文本或执行能力；代际变化保留意图，不保留过期私有事实。分页 cursor 仍属于本代实际页，不随 locator 迁移。未知安装命令的 source/key 是冻结意图而非确认状态；跨 actor 整体退休，无新 browser storage 或 owner schema。
+
+Custom API 创建恢复状态只在稳定 actor/client 的 App 内存 holder 中存在：冻结请求及 key 不写 localStorage/sessionStorage/IndexedDB、URL、日志或数据库；环境变量原文仅为恢复原请求而暂存，确认后或 actor/provider 退休时清理。公开 snapshot 不包含请求正文、key 或 secret，只含状态及用户输入的名称。无新 owner Schema、缓存事实或业务记录；完成提示不是可执行授权。
+
+
+JSON创建与API创建在同一稳定actor/client provider拥有两个明确且互相隔离的内存槽；共享纯生命周期不维护额外profile/server投影。原始JSON可能含header secret，故只在当前actor RAM保存未知请求，ACK清原文及body，换actor/真正卸载清理；无browser持久存储、URL或日志，没有新owner Schema。
+
+
+Custom/URL 共用同一明确的私有 MCP actor/client 创建槽，独立于 API/JSON 单命令槽。未知 Register 原正文（可含 header/OAuth secret）与 Prepare 原 server/version/key 只在 RAM；确认后清注册正文/实际 secret 草稿，仅保精确 server/connector locator。准入或窗口退休立即清 owner facts，换 actor/真正卸载清全部意图；fresh GET 只形成当代显示事实，不覆盖未知原命令。无 browser 持久存储、日志、数据库或新 Schema。
+
+
+MCP Prepare 的临时意图现只有一个 typed actor/client owner：按精确 server/connector 保存原 CAS/key，创建 flow 不再复制 Prepare intent，详情读出的新 CAS 不替换 unknown 正文。内存快照仅资源 locator/命令状态；不同资源独立，确认完成或断开/删除清条目，actor/client/真正卸载清全部。Provider 上移至 AppFrameRuntime 覆盖页面和 overlays，无新 owner Schema、browser storage、SQL 或跨服务数据访问。
+
+
+Connector恢复错误固定消费仅新增只读generated机器profile与provenance，Hub/adapter不保存owner异常或receipt副本，不新增SQL/Redis/browser持久化、字段或写入边界。仅严格校验现安全错误体并交付既有HubClientError；actor命令RAM生命周期本阶段不改，错误不是资源事实或执行授权。
+
+
+Connector命令快照只增加可选非敏感失败reason，原正文/key仍仅actor RAM；不持久化、不新增owner receipt副本。准入退休保原失败限制且清私有投影，actor/client退休清意图；晚ACK继续仅原主体确认失活，不借错误或读取结清未知写。
+
+
+Custom API管理pending意图只在当前actor/client RAM，以profile ID索引一个typed update/remove命令。snapshot仅ID/operation/kind/failure，不含正文、key、owner事实或secret；原env写值仅为未决原请求短存，ACK或actor退休清除。没有browser持久化/SQL/Redis或额外receipt事实源，列表缺资源不证明命令完成。
+
+
+MCP管理按actor/client、connector locator保存五项typed原命令，仅未决body/key/CAS在RAM；summary仅operation/locator/kind/failure，无owner事实/header值。现Prepare仍独立typed槽并与管理互锁，清理ACK精确退休Prepare；关闭/重核保原命令、actor退休/ACK清正文，列表缺行不生成事实或本地完成。无SQL/Redis/browser持久化或owner schema变化。
+
+### Installation exact content（2026-10-16，实施设计）
+
+无 Web 持久模型。已安装详情只在当前 subject/admission generation/resource 生命周期持有权威 PersonalInstallation 与精确 package directory；不把 catalog current 元数据覆写安装 pin，不解析 SKILL.md 冒充 owner metadata。安装源变化只失效本次读取并请求用户刷新，不自动更新安装、不合成 download 权限。

@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, renderHook, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
-import { StrictMode } from "react"
+import { StrictMode, useRef, useState } from "react"
 
 const pathname = vi.hoisted(() => ({ value: "/app" }))
 
@@ -11,14 +11,44 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/engine/config", () => ({ sessionBaseUrl: () => "http://s.local" }))
 
 import { AppFrame } from "@/components/blocks/app-frame/app-frame"
+import { AppFrameOverlaySurfaces as RawAppFrameOverlaySurfaces } from "@/components/blocks/app-frame/app-frame-overlay-surfaces"
+import { useCatalogSkillInstallation } from "@/features/app/use-catalog-skill-installation"
+import { GithubImportDialog } from "@/ui/skills/github-import-dialog"
+import { SkillUploadDialog } from "@/ui/skills/skill-upload-dialog"
+import { ManusSkillDetailDialog } from "@/ui/skills/manus-skill-detail-dialog"
+import { skillTrialSourceRef } from "@/ui/skills/skills-card-model"
+import { KokoroSkillsSurface } from "@/features/app/kokoro-skills-surface"
+import { SkillsSettingsSection } from "@/ui/settings/sections/skills-settings-section"
+import { createHubClient } from "@/hub/client"
+import { McpProjectionRead as RawMcpProjectionRead } from "@/ui/mcp/mcp-projection-read"
+import { browserHubClient } from "@/ui/shell/page-clients"
+import { createMcpPreparationCommands } from "@/ui/mcp/mcp-preparation-commands"
+import { ConnectorCommandProvider } from "@/ui/mcp/connector-command-context"
+import { SkillCatalogDialog, type CatalogDetailProjection } from "@/ui/skills/skills-catalog-dialog"
+import { createManusSkillHubClient } from "@/ui/skills/manus-skill-client"
 import { useAppFrameActions } from "@/components/blocks/app-frame/use-app-frame-actions"
 import { LocaleProvider } from "@/i18n/context"
 import { ThemeProvider } from "@/ui/theme/theme-context"
 import { createSessionEngine, type SessionEngine } from "@/engine/machine"
-import { createSessionClient } from "@/engine/client"
+import { createSessionClient, SessionClientError } from "@/engine/client"
 import { addConversation, type ConversationStore } from "@/core/conversations"
 import { makeSnapshot } from "../core/fixtures"
 import { createFakeClient, createMemoryStorage, makeReceipt, settle, type FakeClient } from "../engine/fakes"
+
+// Isolated surfaces use the same explicit actor/client owner as AppFrameRuntime.
+function AppFrameOverlaySurfaces(props: React.ComponentProps<typeof RawAppFrameOverlaySurfaces>) {
+  const boundary = props.preview ? { admitted: true, subject: "preview", generation: 0 } : props.readBoundary ?? { admitted: false, subject: null, generation: 0 }
+  return <ConnectorCommandProvider client={browserHubClient({ preview: props.preview })} boundary={boundary}><RawAppFrameOverlaySurfaces {...props} /></ConnectorCommandProvider>
+}
+function McpProjectionRead(props: React.ComponentProps<typeof RawMcpProjectionRead>) {
+  return <ConnectorCommandProvider client={props.client} boundary={{ admitted: props.admitted ?? true, subject: props.identity, generation: props.readGeneration ?? 0 }}><RawMcpProjectionRead {...props} /></ConnectorCommandProvider>
+}
+function withMcpCommandOwner(Content: typeof import("@/ui/mcp/mcp-content").McpContent) {
+  return function ScopedContent(props: React.ComponentProps<typeof Content>) {
+    const boundary = props.preview ? { admitted: true, subject: "preview", generation: 0 } : props.readBoundary ?? { admitted: false, subject: null, generation: 0 }
+    return <ConnectorCommandProvider client={props.client} boundary={boundary}><Content {...props} /></ConnectorCommandProvider>
+  }
+}
 
 let client: FakeClient
 let engine: SessionEngine
@@ -37,20 +67,23 @@ function mountFrame(props: Partial<React.ComponentProps<typeof AppFrame>> = {}) 
   )
 }
 
-function setDesktopViewport(width: number) {
+function setDesktopViewport(width: number, pointer: "fine" | "coarse" = "fine") {
   desktopViewportWidth = width
   Object.defineProperty(window, "innerWidth", { configurable: true, value: width, writable: true })
   window.matchMedia = vi.fn().mockImplementation((query: string) => {
     const finePointer = query.includes("pointer: fine")
     const coarsePointer = query.includes("pointer: coarse")
-    const compactWidth = query.includes("max-width: 768px")
-    const mobileWidth = query.includes("max-width: 767px")
+    const maximumWidth = /max-width:\s*(\d+)px/u.exec(query)?.[1]
+    const desktopMinimum = /width\s*<\s*(\d+)px/u.exec(query)?.[1]
+    const withinWidth = desktopMinimum !== undefined
+      ? desktopViewportWidth < Number(desktopMinimum)
+      : maximumWidth !== undefined && desktopViewportWidth <= Number(maximumWidth)
     return {
       matches: finePointer
-        ? compactWidth && desktopViewportWidth <= 768
+        ? pointer === "fine" && withinWidth
         : coarsePointer
-          ? mobileWidth && desktopViewportWidth <= 767
-          : false,
+          ? pointer === "coarse" && withinWidth
+          : withinWidth,
       media: query,
       onchange: null,
       addEventListener: (_type: string, listener: () => void) => mediaListeners.add(listener),
@@ -107,6 +140,29 @@ afterEach(() => {
   Object.defineProperty(window, "innerWidth", { configurable: true, value: originalInnerWidth })
   Object.defineProperty(window, "matchMedia", { configurable: true, value: originalMatchMedia })
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
+})
+
+it.each([
+  { label: "direct chat", standaloneSurface: false, hideWorkspaceHeader: false, composer: true, header: true },
+  { label: "standalone catalog", standaloneSurface: true, hideWorkspaceHeader: true, composer: false, header: false },
+  { label: "standalone with header", standaloneSurface: true, hideWorkspaceHeader: false, composer: false, header: true },
+  { label: "chat without header", standaloneSurface: false, hideWorkspaceHeader: true, composer: true, header: false },
+])("cold admission shell respects $label presentation without mounting private content", async ({ standaloneSurface, hideWorkspaceHeader, composer, header }) => {
+  const privateSurface = vi.fn(() => <div>private catalog content</div>)
+  const fetch = vi.fn<typeof globalThis.fetch>()
+  vi.spyOn(globalThis, "fetch").mockImplementation(fetch)
+  mountFrame({ booting: true, standaloneSurface, hideWorkspaceHeader, emptyState: privateSurface })
+  await act(async () => { await Promise.resolve() })
+
+  const input = screen.queryByRole("textbox", { name: "对话输入" })
+  if (composer) expect(input).toBeDisabled()
+  else expect(input).not.toBeInTheDocument()
+  expect(document.querySelector("header") !== null).toBe(header)
+  expect(privateSurface).not.toHaveBeenCalled()
+  expect(fetch).not.toHaveBeenCalled()
+  expect(client.snapshotCalls).toEqual([])
+  expect(client.streams).toEqual([])
 })
 
 it.each([
@@ -138,6 +194,16 @@ it.each([
     expect(screen.getByRole("button", { name: expectedCollapsed ? "展开侧栏" : "收起侧栏" })).toBeInTheDocument()
   })
   expect(document.cookie).toBe(cookieBeforeMount)
+})
+
+it("catalog controls survive the background conversation engine changing identity", async () => {
+  window.history.replaceState(null, "", "/app/plugins")
+  const Catalog = () => <input aria-label="Catalog query" defaultValue="" />
+  render(<ThemeProvider><LocaleProvider><AppFrame engine={engine} chatHref="/app" standaloneSurface emptyState={Catalog} /></LocaleProvider></ThemeProvider>)
+  const query = await screen.findByRole("textbox", { name: "Catalog query" })
+  fireEvent.change(query, { target: { value: "retained query" } })
+  act(() => { engine.newConversation() })
+  expect(screen.getByRole("textbox", { name: "Catalog query" })).toHaveValue("retained query")
 })
 
 it("R255 StrictMode rail keeps mounted navigation state without rereading a changed cookie or route default", async () => {
@@ -184,14 +250,14 @@ it("R255 StrictMode rail keeps mounted navigation state without rereading a chan
   expect(document.cookie).toContain("sidebar_state=false")
 })
 
-it("桌面 shell 发布唯一 280/52 轨道契约和 rail seam", () => {
+it("桌面 shell 发布唯一 300/52 轨道契约和 rail seam", () => {
   setDesktopViewport(1280)
   mountFrame({ desktopRailCollapsed: true })
 
   const shell = document.querySelector('[data-slot="sidebar-wrapper"]')
   expect(shell).not.toBeNull()
   expect(shell).toHaveStyle({
-    "--sidebar-width": "280px",
+    "--sidebar-width": "300px",
     "--sidebar-width-icon": "52px",
     "--rail-seam-width": "52px",
   })
@@ -234,11 +300,17 @@ it("800px 仍是宽桌面收起轨道，展开收起的焦点都留在实际可�
   await waitFor(() => expect(screen.getByRole("button", { name: "收起侧栏" })).toHaveFocus())
 })
 
-it("768px 细指针桌面隐藏 Rail，展开后 seam 和焦点入口同步恢复", async () => {
+it("含767.5px缩放的768边界往返保持桌面偏好，不残留抽屉", async () => {
   setDesktopViewport(768)
   mountFrame({ desktopRailCollapsed: true })
 
   const shell = document.querySelector('[data-slot="sidebar-wrapper"]')
+  await waitFor(() => {
+    expect(shell).toHaveAttribute("data-rail-collapsed", "true")
+    expect(shell).not.toHaveAttribute("data-rail-hidden")
+  })
+
+  resizeDesktopViewport(767.5)
   await waitFor(() => {
     expect(shell).toHaveAttribute("data-rail-collapsed", "true")
     expect(shell).toHaveAttribute("data-rail-hidden", "true")
@@ -253,14 +325,40 @@ it("768px 细指针桌面隐藏 Rail，展开后 seam 和焦点入口同步恢�
   await waitFor(() => {
     expect(shell).toHaveAttribute("data-rail-collapsed", "false")
     expect(shell).not.toHaveAttribute("data-rail-hidden")
-    expect(shell).toHaveStyle({ "--rail-seam-width": "280px" })
+    expect(shell).toHaveStyle({ "--rail-seam-width": "300px" })
     expect(shell?.querySelector('[data-seam="rail"]')).toBeNull()
     expect(screen.getByRole("dialog")).toContainElement(document.activeElement as HTMLElement)
   })
+
+  resizeDesktopViewport(768)
+  await waitFor(() => {
+    expect(shell).not.toHaveAttribute("data-rail-hidden")
+    expect(shell).toHaveAttribute("data-rail-collapsed", "true")
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+  })
+  resizeDesktopViewport(767)
+  await waitFor(() => expect(shell).toHaveAttribute("data-rail-hidden", "true"))
+})
+
+it("触屏导航抽屉的打开和关闭不改变桌面侧栏偏好", async () => {
+  setDesktopViewport(412, "coarse")
+  mountFrame({ desktopRailCollapsed: false })
+
+  const shell = document.querySelector('[data-slot="sidebar-wrapper"]')
+  const trigger = await screen.findByRole("button", { name: "展开侧栏" })
+  expect(trigger).toHaveAttribute("aria-expanded", "false")
+  expect(shell).toHaveAttribute("data-rail-collapsed", "false")
+  fireEvent.click(trigger)
+  const drawer = await screen.findByRole("dialog")
+  expect(shell).toHaveAttribute("data-rail-collapsed", "false")
+  fireEvent.keyDown(drawer, { key: "Escape" })
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+  expect(trigger).toHaveAttribute("aria-expanded", "false")
+  expect(shell).toHaveAttribute("data-rail-collapsed", "false")
 })
 
 it("隐藏共享 Header 的独立 Web 页面仍保留唯一导航入口", async () => {
-  setDesktopViewport(768)
+  setDesktopViewport(767)
   mountFrame({ hideWorkspaceHeader: true, standaloneSurface: true })
 
   const shell = document.querySelector('[data-slot="sidebar-wrapper"]')
@@ -276,10 +374,21 @@ it("隐藏共享 Header 的独立 Web 页面仍保留唯一导航入口", async 
   expect(await screen.findByRole("dialog")).toBeInTheDocument()
 })
 
+it("触屏独立目录仍可打开和关闭导航抽屉", async () => {
+  setDesktopViewport(390, "coarse")
+  mountFrame({ hideWorkspaceHeader: true, standaloneSurface: true })
+  const trigger = await screen.findByRole("button", { name: "展开侧栏" })
+  fireEvent.click(trigger)
+  const drawer = await screen.findByRole("dialog")
+  fireEvent.keyDown(drawer, { key: "Escape" })
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+  expect(trigger).toHaveAttribute("aria-expanded", "false")
+})
+
 it("窄桌面临时展开不覆盖宽桌面的 Sidebar cookie 偏好", async () => {
   document.cookie = "sidebar_state=false; path=/"
   expect(document.cookie).toContain("sidebar_state=false")
-  setDesktopViewport(768)
+  setDesktopViewport(767)
   mountFrame({ desktopRailCollapsed: true })
 
   const shell = document.querySelector('[data-slot="sidebar-wrapper"]')
@@ -400,8 +509,8 @@ it("已登录正式壳从同源 Project 列表显示两个独立项目，而非�
   expect(engineFactory).toHaveBeenCalledWith(expect.objectContaining({ preview: false }))
   fireEvent.click(screen.getByRole("button", { name: "展开侧栏" }), { detail: 0 })
 
-  const alpha = await screen.findByRole("link", { name: "研究项目甲" })
-  const beta = screen.getByRole("link", { name: "研究项目乙" })
+  const alpha = await screen.findByRole("link", { name: "新对话 · 研究项目甲" })
+  const beta = screen.getByRole("link", { name: "新对话 · 研究项目乙" })
   expect(alpha).toHaveAttribute("href", "/app/project/project_read_alpha")
   expect(beta).toHaveAttribute("href", "/app/project/project_read_beta")
   expect(alpha.closest("[data-project-id]")).toHaveAttribute("data-project-id", "project_read_alpha")
@@ -459,13 +568,13 @@ it.each(["401", "bad-shape"])("正式列表先健康再刷新至 %s，清旧项�
       ? Response.json({ error: { code: "unauthenticated" } }, { status: 401 })
       : Response.json({ data: { projects: [{ id: "broken" }] }, meta: { request_id: "req_broken" } })
   })
-  await screen.findByRole("link", { name: "研究项目甲" })
+  await screen.findByRole("link", { name: "新对话 · 研究项目甲" })
   expect(calls).toBe(1)
   act(() => window.dispatchEvent(new Event("focus")))
   await screen.findByTestId("projects-error")
   expect(calls).toBe(2)
-  expect(screen.queryByRole("link", { name: "研究项目甲" })).not.toBeInTheDocument()
-  expect(screen.queryByRole("link", { name: "研究项目乙" })).not.toBeInTheDocument()
+  expect(screen.queryByRole("link", { name: "新对话 · 研究项目甲" })).not.toBeInTheDocument()
+  expect(screen.queryByRole("link", { name: "新对话 · 研究项目乙" })).not.toBeInTheDocument()
   expect(screen.queryByTestId("projects-empty")).not.toBeInTheDocument()
   expect(document.querySelectorAll("[data-project-list] [data-project-id]")).toHaveLength(0)
   const retry = screen.getByTestId("projects-error").querySelector("button")
@@ -499,21 +608,21 @@ it("同 subject 重核验开始就清空并取消旧读取，迟到响应不能�
     if (checks === 3) return new Promise<Response>((resolve) => { resolveSession = resolve })
     return Response.json({ authenticated: true, subject: "project-reader" })
   })
-  await screen.findByRole("link", { name: "研究项目甲" })
+  await screen.findByRole("link", { name: "新对话 · 研究项目甲" })
   const composer = screen.getByRole("textbox", { name: "对话输入" })
   act(() => window.dispatchEvent(new Event("focus")))
   await waitFor(() => expect(calls).toBe(2))
   act(() => window.dispatchEvent(new Event("focus")))
   await waitFor(() => expect(checks).toBe(3))
   expect(signals[1]?.aborted).toBe(true)
-  expect(screen.queryByRole("link", { name: "研究项目甲" })).not.toBeInTheDocument()
+  expect(screen.queryByRole("link", { name: "新对话 · 研究项目甲" })).not.toBeInTheDocument()
   expect(screen.queryByTestId("projects-empty")).not.toBeInTheDocument()
   await act(async () => { resolveOld(projectReadEnvelope()); await Promise.resolve() })
-  expect(screen.queryByRole("link", { name: "研究项目甲" })).not.toBeInTheDocument()
+  expect(screen.queryByRole("link", { name: "新对话 · 研究项目甲" })).not.toBeInTheDocument()
   await act(async () => { resolveSession(Response.json({ authenticated: true, subject: "project-reader" })) })
-  await screen.findByRole("link", { name: "研究项目乙" })
+  await screen.findByRole("link", { name: "新对话 · 研究项目乙" })
   expect(calls).toBe(3)
-  expect(screen.queryByRole("link", { name: "研究项目甲" })).not.toBeInTheDocument()
+  expect(screen.queryByRole("link", { name: "新对话 · 研究项目甲" })).not.toBeInTheDocument()
   expect(screen.getByRole("textbox", { name: "对话输入" })).toBe(composer)
   expect(disposal).not.toHaveBeenCalled()
 })
@@ -531,7 +640,7 @@ it("正式健康集合切入显式 preview 后取消旧代际，不请求正式�
   let boundary = { admitted: true, subject: "preview-isolation-reader", generation: 1 }
   const frame = (preview: boolean) => <ThemeProvider><LocaleProvider><AppFrame engine={engine} chatHref="/app" preview={preview} projectReadBoundary={boundary} /></LocaleProvider></ThemeProvider>
   const view = render(frame(false))
-  await screen.findByRole("link", { name: "研究项目甲" })
+  await screen.findByRole("link", { name: "新对话 · 研究项目甲" })
   const reads = () => fetchMock.mock.calls.filter(([input]) => String(input) === "/api/hub/projects")
   expect(reads()).toHaveLength(1)
   boundary = { ...boundary, generation: 2 }
@@ -543,9 +652,9 @@ it("正式健康集合切入显式 preview 后取消旧代际，不请求正式�
   expect(signal?.aborted).toBe(true)
   expect(reads()).toHaveLength(2)
   await act(async () => { resolvePending(projectReadEnvelope()); await Promise.resolve() })
-  expect(screen.queryByRole("link", { name: "研究项目甲" })).not.toBeInTheDocument()
+  expect(screen.queryByRole("link", { name: "新对话 · 研究项目甲" })).not.toBeInTheDocument()
   view.rerender(frame(false))
-  await screen.findByRole("link", { name: "研究项目甲" })
+  await screen.findByRole("link", { name: "新对话 · 研究项目甲" })
   expect(reads()).toHaveLength(3)
 })
 
@@ -572,12 +681,12 @@ it("创建成功只触发正式 GET 刷新，不把 ACK 当全集，原草稿仍
     fireEvent.click(within(dialog).getByRole("button", { name: "创建" }))
     await waitFor(() => expect(reads).toBe(2))
     expect(writes).toBe(1)
-    expect(screen.queryByRole("link", { name: "研究项目甲" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("link", { name: "新对话 · 研究项目甲" })).not.toBeInTheDocument()
     expect(screen.queryByTestId("projects-empty")).not.toBeInTheDocument()
     await waitFor(() => expect(window.location.pathname).toBe("/app/project/project_read_alpha"))
     await waitFor(() => expect(screen.getByRole("textbox", { name: "对话输入" })).toHaveValue("保持创建时的草稿"))
     await act(async () => { resolveRefresh(projectReadEnvelope()) })
-    await screen.findByRole("link", { name: "研究项目甲" })
+    await screen.findByRole("link", { name: "新对话 · 研究项目甲" })
     expect(screen.getByRole("heading", { name: "研究项目甲" })).toBeInTheDocument()
     expect(writes).toBe(1)
     expect(reads).toBe(2)
@@ -594,13 +703,14 @@ it("健康正式列表在 session 401 服务异常后撤销，但保留 Chat 且
     checks++
     return checks === 1 ? Response.json({ authenticated: true, subject: "project-reader" }) : Response.json({ authenticated: false }, { status: 401 })
   })
-  await screen.findByRole("link", { name: "研究项目甲" })
+  await screen.findByRole("link", { name: "新对话 · 研究项目甲" })
   act(() => window.dispatchEvent(new Event("focus")))
-  await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("暂时无法确认登录状态"))
+  await waitFor(() => expect(screen.getByText("重连中…")).toBeInTheDocument())
+  expect(screen.queryByText("暂时无法确认登录状态。请重试。")).not.toBeInTheDocument()
   expect(screen.getByRole("textbox", { name: "对话输入" })).toBeInTheDocument()
   expect(checks).toBe(2)
   expect(reads).toBe(1)
-  expect(screen.queryByRole("link", { name: "研究项目甲" })).not.toBeInTheDocument()
+  expect(screen.queryByRole("link", { name: "新对话 · 研究项目甲" })).not.toBeInTheDocument()
   expect(document.querySelector('a[href*="preview-project"]')).toBeNull()
 })
 
@@ -620,7 +730,7 @@ it.each([false, true])("创建项目的迟到合法 ACK 不抢回用户已切换
     return projectReadEnvelope()
   })
   try {
-    await screen.findByRole("link", { name: "研究项目乙" })
+    await screen.findByRole("link", { name: "新对话 · 研究项目乙" })
     fireEvent.change(screen.getByRole("textbox", { name: "对话输入" }), { target: { value: "创建时A的原草稿" } })
     fireEvent.click(screen.getByRole("button", { name: "新建项目" }))
     const dialog = await screen.findByRole("dialog", { name: "创建项目" })
@@ -628,7 +738,7 @@ it.each([false, true])("创建项目的迟到合法 ACK 不抢回用户已切换
     fireEvent.click(within(dialog).getByRole("button", { name: "创建" }))
     await waitFor(() => expect(writes).toBe(1))
     expect(acknowledge).toBeTypeOf("function")
-    fireEvent.click(await screen.findByRole("link", { name: "研究项目乙" }), { detail: 0 })
+    fireEvent.click(await screen.findByRole("link", { name: "新对话 · 研究项目乙" }), { detail: 0 })
     await waitFor(() => expect(window.location.pathname).toBe("/app/project/project_read_beta"))
     await screen.findByRole("heading", { name: "研究项目乙" })
     const composer = screen.getByRole("textbox", { name: "对话输入" })
@@ -924,6 +1034,143 @@ it("R251 legal ACK during same-subject suspension conservatively retains its key
 
 // Actual AppFrame + actual scoped engines: URL projection must not silently
 // adopt the scoped index's remembered activeId as the project-root draft.
+it.each(["idle", "streaming", "reattach-running", "reattach-completed"])("direct rail preserves loaded pages across project switches but retires them on identity change (%s)", async (runState) => {
+  const projectRef = "project_00000000-0000-4000-8000-000000000851"
+  const projectEngine = createSessionEngine({ client: createFakeClient(), storage: createMemoryStorage<ConversationStore>(null), scope: { kind: "project", projectRef } })
+  if (runState !== "idle") {
+    engine.submit("keep running across navigation")
+    await waitFor(() => expect(client.streams).toHaveLength(1))
+  }
+  let directEngine: SessionEngine | null = engine
+  let reattachedEngine: SessionEngine | null = null
+  let directReads = 0
+  const listSessions = vi.fn<typeof client.listSessions>(async (_cursor, scope) => {
+    if (scope?.kind === "project") return { sessions: [], next_cursor: null }
+    if (_cursor === "next-direct") return { sessions: [{ session_id: "conv-direct-page-two", title: "第二页直接会话", updated_at: "2026-10-15T00:00:00Z" }], next_cursor: null }
+    if (++directReads > 1) return new Promise(() => {})
+    return { sessions: [{ session_id: "conv-stable-direct", title: "稳定直接会话", updated_at: "2026-10-15T00:00:00Z" }], next_cursor: "next-direct" }
+  })
+  const pageClients = await import("@/ui/shell/page-clients")
+  vi.spyOn(pageClients, "browserListClient").mockReturnValue({ ...client, listSessions })
+  stubBusinessFetch(vi.fn<typeof fetch>().mockResolvedValue(Response.json({
+    data: { projects: [{ id: projectRef, name: "稳定项目", slug: "stable", description: "", created_at: "2026-10-15T00:00:00Z", updated_at: "2026-10-15T00:00:00Z" }] },
+    meta: { request_id: "req-stable-rail" },
+  })))
+  const frame = (project: boolean, subject = "stable-rail-reader") => <ThemeProvider><LocaleProvider><AppFrame
+    engine={project ? projectEngine : directEngine} chatHref="/app" desktopRailCollapsed={false}
+    projectWorkspace={project} {...(project ? { projectRef } : {})}
+    projectReadBoundary={{ admitted: true, subject, generation: 1 }}
+  /></LocaleProvider></ThemeProvider>
+  window.history.replaceState({}, "", "/app")
+  const view = render(frame(false))
+  try {
+    const direct = () => within(screen.getByRole("navigation", { name: "直接会话" }))
+    await direct().findByRole("button", { name: "稳定直接会话" })
+    fireEvent.click(direct().getByRole("button", { name: "加载更多" }))
+    await direct().findByRole("button", { name: "第二页直接会话" })
+    act(() => window.history.pushState({}, "", `/app/project/${projectRef}`))
+    view.rerender(frame(true))
+    expect(direct().getByRole("button", { name: "稳定直接会话" })).toBeVisible()
+    expect(direct().getByRole("button", { name: "第二页直接会话" })).toBeVisible()
+    expect(direct().queryByRole("status", { name: "正在加载会话…" })).toBeNull()
+    act(() => window.history.pushState({}, "", "/app"))
+    let settleSnapshot: (() => void) | undefined
+    if (runState.startsWith("reattach-")) {
+      directEngine = null
+      view.rerender(frame(false))
+      expect(directReads).toBe(1)
+      const retainedStore = engine.getSnapshot().store
+      if (retainedStore === null || retainedStore.activeId === null) throw new Error("streaming fixture has no retained conversation")
+      const restored = createFakeClient()
+      restored.nextSnapshot = () => new Promise((resolve) => {
+        settleSnapshot = () => resolve(makeSnapshot({
+          sessionId: retainedStore.activeId!,
+          ...(runState === "reattach-running" ? { activeRun: { run_id: "run_restored", status: "running" } } : {}),
+        }))
+      })
+      reattachedEngine = createSessionEngine({ client: restored, storage: createMemoryStorage<ConversationStore>(retainedStore) })
+      directEngine = reattachedEngine
+      expect(reattachedEngine.getSnapshot().hydrating).toBe(true)
+    }
+    view.rerender(frame(false))
+    expect(direct().getByRole("button", { name: "稳定直接会话" })).toBeVisible()
+    expect(directReads).toBe(1)
+    if (reattachedEngine !== null) {
+      await waitFor(() => expect(settleSnapshot).toBeTypeOf("function"))
+      await act(async () => { settleSnapshot!() })
+      await waitFor(() => expect(reattachedEngine?.getSnapshot().hydrating).toBe(false))
+    }
+    const settledReads = runState === "reattach-completed" ? 2 : 1
+    await waitFor(() => expect(directReads).toBe(settledReads))
+    view.rerender(frame(false, "different-rail-reader"))
+    expect(direct().queryByRole("button", { name: "稳定直接会话" })).toBeNull()
+    expect(direct().queryByRole("button", { name: "第二页直接会话" })).toBeNull()
+    await waitFor(() => expect(directReads).toBe(settledReads + 1))
+  } finally { view.unmount(); projectEngine.dispose(); reattachedEngine?.dispose(); window.history.replaceState({}, "", "/app") }
+})
+
+it.each(["pages", "pending rename"] as const)("a project keeps its own reader across folder and route transitions (%s)", async (scenario) => {
+  const projectRef = "project_00000000-0000-4000-8000-000000000852"
+  const projectScope = { kind: "project", projectRef } as const
+  const projectEngine = createSessionEngine({ client: createFakeClient(), storage: createMemoryStorage<ConversationStore>(null), scope: projectScope })
+  let ownerTitle = "项目原题"
+  let acknowledgeRename: (() => void) | undefined
+  const listSessions = vi.fn<typeof client.listSessions>(async (cursor, scope) => scope?.kind === "project" ? {
+    sessions: [{ session_id: cursor === "project-page-two" ? "conv-project-page-two" : "conv-project-first", title: cursor === "project-page-two" ? "项目第二页" : ownerTitle, updated_at: "2026-10-15T00:00:00Z" }],
+    next_cursor: cursor === "project-page-two" ? null : "project-page-two",
+  } : { sessions: [], next_cursor: null })
+  const renameSession = vi.fn<typeof client.renameSession>((_id, title) => new Promise((resolve) => {
+    acknowledgeRename = () => { ownerTitle = title; resolve({ ok: true }) }
+  }))
+  const pageClients = await import("@/ui/shell/page-clients")
+  vi.spyOn(pageClients, "browserListClient").mockReturnValue({ ...client, listSessions, renameSession })
+  stubBusinessFetch(vi.fn<typeof fetch>().mockImplementation(async () => Response.json({
+    data: { projects: [{ id: projectRef, name: "项目生命周期", slug: "reader", description: "", created_at: "2026-10-15T00:00:00Z", updated_at: "2026-10-15T00:00:00Z" }] },
+    meta: { request_id: "req-project-reader" },
+  })))
+  const frame = (project: boolean) => <StrictMode><ThemeProvider><LocaleProvider><AppFrame
+    engine={project ? projectEngine : engine} chatHref="/app" desktopRailCollapsed={false}
+    projectWorkspace={project} {...(project ? { projectRef } : {})}
+    projectReadBoundary={{ admitted: true, subject: "project-reader", generation: 1 }}
+  /></LocaleProvider></ThemeProvider></StrictMode>
+  const projectReads = () => listSessions.mock.calls.filter(([, scope]) => scope?.kind === "project")
+  const group = () => within(screen.getByRole("navigation", { name: "项目会话" }))
+  window.history.replaceState({}, "", "/app")
+  const view = render(frame(false))
+  try {
+    const expand = await screen.findByRole("button", { name: "项目生命周期" })
+    expect(projectReads()).toHaveLength(0) // unopened folders do not prefetch
+    fireEvent.click(expand)
+    await group().findByRole("button", { name: ownerTitle })
+    if (scenario === "pages") {
+      fireEvent.click(group().getByRole("button", { name: "加载更多" }))
+      await group().findByRole("button", { name: "项目第二页" })
+    } else {
+      fireEvent.click(group().getByRole("button", { name: "重命名会话 项目原题" }))
+      const input = group().getByRole("textbox")
+      fireEvent.change(input, { target: { value: "已确认的新题" } })
+      fireEvent.keyDown(input, { key: "Enter" })
+      await waitFor(() => expect(renameSession).toHaveBeenCalledOnce())
+    }
+    const readsBeforeNavigation = projectReads().length
+    act(() => window.history.pushState({}, "", `/app/project/${projectRef}`))
+    view.rerender(frame(true))
+    expect(group().getByRole("button", { name: scenario === "pages" ? "项目第二页" : "已确认的新题" })).toBeVisible()
+    expect(projectReads()).toHaveLength(readsBeforeNavigation)
+    act(() => window.history.pushState({}, "", "/app"))
+    view.rerender(frame(false))
+    fireEvent.click(screen.getByRole("button", { name: "项目生命周期" }))
+    expect(screen.queryByRole("navigation", { name: "项目会话" })).toBeNull()
+    if (scenario === "pending rename") {
+      await act(async () => { acknowledgeRename!() })
+      await waitFor(() => expect(projectReads()).toHaveLength(readsBeforeNavigation + 1))
+    }
+    fireEvent.click(screen.getByRole("button", { name: "项目生命周期" }))
+    expect(group().getByRole("button", { name: scenario === "pages" ? "项目第二页" : "已确认的新题" })).toBeVisible()
+    expect(projectReads()).toHaveLength(readsBeforeNavigation + (scenario === "pending rename" ? 1 : 0))
+  } finally { view.unmount(); projectEngine.dispose(); window.history.replaceState({}, "", "/app") }
+})
+
 it("project overview draft and explicit new-conversation draft remain distinct after Home and project entry", async () => {
   const projectRef = "project_00000000-0000-4000-8000-000000000801"
   const projectPath = `/app/project/${projectRef}`
@@ -1059,7 +1306,6 @@ function mountProjectSubmitBoundary(projectEngine: SessionEngine, projectRef: st
     standaloneSurface: false, chatHref: "/app", activeId: projectEngine.getSnapshot().store?.activeId ?? null,
     draft: "new root intent", clearDraft, updateDraft: vi.fn(), setDeploymentIntent: vi.fn(),
     syncConversationUrl, setConversationRouteId,
-    conversations: { conversations: [], loading: false, loadingMore: false, error: false, refresh: vi.fn(), hasMore: false, loadMore: vi.fn(), selectConversation: vi.fn(), deleteConversation: async () => true, renameConversation: vi.fn(), startNewChat: vi.fn() },
     focusComposer: vi.fn(), closeSettings: vi.fn(), brandName: "Kokoro", commandNewChatTimerRef: { current: null },
   }
   const view = renderHook(() => useAppFrameActions(options), { wrapper: LocaleProvider })
@@ -1282,7 +1528,7 @@ it.each(["unknown", "active"] as const)("project overview Send visibly disables 
   } finally { view.unmount(); projectEngine.dispose(); window.history.replaceState({}, "", "/app") }
 })
 
-it("R254 项目正文旁的直接会话区保持独立，选择直接会话只更新直接路由", async () => {
+it("R254 项目会话嵌套在项目行，直接会话仍独立并只更新直接路由", async () => {
   const alpha = projectReadFixtures[0]!
   const directId = "conv_flat_direct"
   const projectEngine = createSessionEngine({
@@ -1315,10 +1561,10 @@ it("R254 项目正文旁的直接会话区保持独立，选择直接会话只�
     projectReadBoundary={{ admitted: true, subject: "flat-rail-reader", generation: 1 }}
   /></LocaleProvider></ThemeProvider>)
   try {
-    const project = await screen.findByRole("link", { name: alpha.name })
+    const project = await screen.findByRole("link", { name: `新对话 · ${alpha.name}` })
     const projectRow = project.closest("[data-project-id]")
-    expect(projectRow?.querySelector('button[aria-label*="展开项目"], button[aria-label*="收起项目"]')).toBeNull()
-    expect(projectRow?.querySelector('[data-conversation-list]')).toBeNull()
+    expect(within(projectRow as HTMLElement).getByRole("button", { name: alpha.name })).toHaveAttribute("aria-expanded", "true")
+    expect(screen.getByRole("navigation", { name: "项目会话" })).toHaveAttribute("data-conversation-list", "project-conversation")
     const direct = screen.getByRole("navigation", { name: "直接会话" })
     const row = await within(direct).findByRole("button", { name: "外部普通持久会话" })
     fireEvent.click(row)
@@ -1369,7 +1615,7 @@ it.each(["library", "leave"] as const)("R254 Move %s只改owner绑定并刷新�
   const view = render(frame())
   try {
     await waitFor(() => expect(rememberedEngine.getSnapshot().hydrating).toBe(false))
-    await screen.findByRole("link", { name: "项目Q" })
+    await screen.findByRole("link", { name: "新对话 · 项目Q" })
     const row = await screen.findByRole("button", { name: "移动会话 记忆会话" })
     fireEvent.click(row)
     fireEvent.click(await screen.findByRole("menuitem", { name: target === p ? "项目P" : "项目Q" }))
@@ -1595,3 +1841,2815 @@ it("SET36 unmount retires a clipboard promise that ignores the view lifetime", a
   } finally { cleanup(); lists.mockRestore(); clipboard.restore(); }
 });
 // SET36-END: copy-current-persisted-task-link
+
+const executableTrial = {
+  skill_id: "trial-series", revision_skill_id: "trial-version", source_ref: "skill:trial-version",
+  installed_source_ref: "skill:trial-version", installation_id: "trial-installation",
+  name: "Owner trial", description: "Owner description", content_hash: "digest", scope: "personal", enabled: true,
+}
+
+function trialActions(trialEngine = engine, preview = false, projectRef?: string, strict = false) {
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "trial-actor")
+  const updateDraft = vi.fn()
+  const closeSettings = vi.fn()
+  const syncConversationUrl = vi.fn()
+  const view = renderHook(({ admitted, generation }) => useAppFrameActions({
+    engine: trialEngine, preview, readBoundary: { admitted, subject: "trial-actor", generation },
+    projectWorkspace: projectRef !== undefined, ...(projectRef === undefined ? {} : { projectRef }),
+    standaloneSurface: !projectRef && window.location.pathname === "/app/skills", chatHref: "/app",
+    activeId: trialEngine.getSnapshot().store?.activeId ?? null, draft: "", clearDraft: vi.fn(), updateDraft,
+    setDeploymentIntent: vi.fn(), syncConversationUrl, setConversationRouteId: vi.fn(), focusComposer: vi.fn(),
+    closeSettings, brandName: "Kokoro", commandNewChatTimerRef: { current: null },
+  }), { wrapper: strict ? ({ children }) => <StrictMode><LocaleProvider>{children}</LocaleProvider></StrictMode> : LocaleProvider, initialProps: { admitted: true, generation: 1 } })
+  return { ...view, updateDraft, closeSettings, syncConversationUrl }
+}
+
+it("skill trial stages an exact selected version on the new direct conversation and removes it explicitly", async () => {
+  window.history.replaceState({}, "", "/app/skills")
+  const view = trialActions()
+  let accepted: boolean | undefined
+  act(() => { accepted = view.result.current.startSkillUseFromSettings(executableTrial, "editable example") })
+  expect(accepted).toBe(true)
+  expect(window.location.pathname).toBe("/app")
+  expect(view.result.current.selectedSkill).toMatchObject({ name: "Owner trial", sourceRef: "skill:trial-version" })
+  await act(async () => { engine.submit("edited example") })
+  expect(client.createCalls[0]?.body.selected_skill_source_refs).toEqual(["skill:trial-version"])
+  act(() => view.result.current.clearSelectedSkill())
+  view.rerender({ admitted: true, generation: 1 })
+  expect(view.result.current.selectedSkill).toBeNull()
+})
+
+it("skill trial preserves the project workspace instead of reusing a direct engine", async () => {
+  const projectRef = "project_00000000-0000-4000-8000-000000000901"
+  window.history.replaceState({}, "", `/app/project/${projectRef}`)
+  const projectClient = createFakeClient()
+  const projectEngine = createSessionEngine({ client: projectClient, storage: createMemoryStorage<ConversationStore>(null), scope: { kind: "project", projectRef } })
+  const view = trialActions(projectEngine, false, projectRef)
+  try {
+    act(() => { view.result.current.startSkillUseFromSettings(executableTrial) })
+    expect(window.location.pathname).toBe(`/app/project/${projectRef}`)
+    await act(async () => { projectEngine.submit("project example") })
+    expect(projectClient.createCalls[0]?.body).toMatchObject({ project_ref: projectRef, selected_skill_source_refs: ["skill:trial-version"] })
+    expect(client.createCalls).toEqual([])
+  } finally { view.unmount(); projectEngine.dispose() }
+})
+
+it("skill trial blocks mismatched installation and revoked handlers before changing the conversation", () => {
+  const view = trialActions()
+  const create = vi.spyOn(engine, "newConversation")
+  act(() => { view.result.current.startSkillUseFromSettings({ ...executableTrial, installed_source_ref: "skill:older" }) })
+  expect(create).not.toHaveBeenCalled()
+  const old = view.result.current.startSkillUseFromSettings
+  view.rerender({ admitted: false, generation: 2 })
+  act(() => { old(executableTrial) })
+  expect(create).not.toHaveBeenCalled()
+  expect(view.closeSettings).not.toHaveBeenCalled()
+  expect(view.updateDraft).not.toHaveBeenCalled()
+})
+
+it("skill trial selection permanently retires on conversation A to B to A", () => {
+  const view = trialActions()
+  act(() => { view.result.current.startSkillUseFromSettings(executableTrial) })
+  const a = engine.getSnapshot().store!.activeId!
+  act(() => { engine.newConversation(); engine.selectConversation(a) })
+  view.rerender({ admitted: true, generation: 1 })
+  expect(view.result.current.selectedSkill).toBeNull()
+})
+
+it("preview skill trial remains editable text and never selects an execution source", async () => {
+  const view = trialActions(engine, true)
+  act(() => { view.result.current.startSkillUseFromSettings(executableTrial, "preview text") })
+  expect(view.result.current.selectedSkill).toBeNull()
+  await act(async () => { engine.submit("preview text") })
+  expect(client.createCalls[0]?.body.selected_skill_source_refs).toEqual([])
+})
+
+it("a departed route's skill handler stays retired after route A to B to A", () => {
+  const view = trialActions()
+  const old = view.result.current.startSkillUseFromSettings
+  const create = vi.spyOn(engine, "newConversation")
+  act(() => {
+    window.history.replaceState({}, "", "/app/library")
+    window.dispatchEvent(new PopStateEvent("popstate"))
+    window.history.replaceState({}, "", "/app")
+    window.dispatchEvent(new PopStateEvent("popstate"))
+    old(executableTrial)
+  })
+  expect(create).not.toHaveBeenCalled()
+  expect(view.closeSettings).not.toHaveBeenCalled()
+})
+
+it("Strict Mode and route cleanup preserve the new trial but an old remove action does not clear its replacement", () => {
+  const view = trialActions(engine, false, undefined, true)
+  act(() => { view.result.current.startSkillUseFromSettings(executableTrial) })
+  const oldRemove = view.result.current.clearSelectedSkill
+  act(() => { view.result.current.startSkillUseFromSettings({ ...executableTrial, name: "Replacement" }) })
+  act(() => oldRemove())
+  expect(view.result.current.selectedSkill?.name).toBe("Replacement")
+  view.rerender({ admitted: true, generation: 2 })
+  expect(view.result.current.selectedSkill).toBeNull()
+})
+
+it("removing a trial cannot rewrite the frozen unknown request on retry", async () => {
+  const view = trialActions()
+  act(() => { view.result.current.startSkillUseFromSettings(executableTrial) })
+  client.nextCreate = () => Promise.reject(new SessionClientError("network", "unknown commit"))
+  await act(async () => { engine.submit("frozen example") })
+  expect(engine.getSnapshot().canRetryPendingSubmission).toBe(true)
+  act(() => view.result.current.clearSelectedSkill())
+  client.nextCreate = () => Promise.resolve(makeReceipt("run_trial_retry"))
+  await act(async () => { engine.retry() })
+  expect(client.createCalls).toHaveLength(2)
+  expect(client.createCalls[1]).toEqual(client.createCalls[0])
+  expect(client.createCalls[1]?.body.selected_skill_source_refs).toEqual(["skill:trial-version"])
+  expect(view.result.current.selectedSkill).toBeNull()
+})
+
+it("trial cleanup clears only future selection and leaves no hidden source in a later conversation", async () => {
+  const view = trialActions()
+  act(() => { view.result.current.startSkillUseFromSettings(executableTrial) })
+  view.unmount()
+  await act(async () => { engine.submit("ordinary message") })
+  expect(client.createCalls[0]?.body.selected_skill_source_refs).toEqual([])
+})
+
+
+it("trial selection retires when another tab changes actor before an old admission rerenders", async () => {
+  const view = trialActions()
+  act(() => { view.result.current.startSkillUseFromSettings(executableTrial) })
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "other-actor")
+  view.rerender({ admitted: true, generation: 1 })
+  expect(view.result.current.selectedSkill).toBeNull()
+  const create = vi.spyOn(engine, "newConversation")
+  let accepted: boolean | undefined
+  act(() => { accepted = view.result.current.startSkillUseFromSettings(executableTrial) })
+  expect(accepted).toBe(false)
+  expect(create).not.toHaveBeenCalled()
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "trial-actor")
+  view.rerender({ admitted: true, generation: 1 })
+  expect(view.result.current.selectedSkill).toBeNull()
+  await act(async () => { engine.submit("ordinary message") })
+  expect(client.createCalls[0]?.body.selected_skill_source_refs).toEqual([])
+})
+
+it("a storage actor change retires trial sources before another render", async () => {
+  const view = trialActions()
+  act(() => { view.result.current.startSkillUseFromSettings(executableTrial) })
+  act(() => {
+    window.localStorage.setItem("kokoro.web.auth-index-subject", "other-actor")
+    window.dispatchEvent(new StorageEvent("storage", { key: "kokoro.web.auth-index-subject", newValue: "other-actor" }))
+  })
+  expect(view.result.current.selectedSkill).toBeNull()
+  await act(async () => { engine.submit("ordinary message") })
+  expect(client.createCalls[0]?.body.selected_skill_source_refs).toEqual([])
+})
+
+it("trial action requires the marker to match its admitted subject, not a new render snapshot", () => {
+  const view = trialActions()
+  const create = vi.spyOn(engine, "newConversation")
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "other-actor")
+  view.rerender({ admitted: true, generation: 1 })
+  let accepted: boolean | undefined
+  act(() => { accepted = view.result.current.startSkillUseFromSettings(executableTrial) })
+  expect(accepted).toBe(false)
+  expect(create).not.toHaveBeenCalled()
+  expect(view.updateDraft).not.toHaveBeenCalled()
+  expect(view.closeSettings).not.toHaveBeenCalled()
+})
+
+it("project trial survives the actual URL handoff and Composer submit action", async () => {
+  const projectRef = "project_00000000-0000-4000-8000-000000000902"
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "trial-actor")
+  window.history.replaceState({}, "", `/app/project/${projectRef}`)
+  const projectClient = createFakeClient()
+  const projectEngine = createSessionEngine({ client: projectClient, storage: createMemoryStorage<ConversationStore>(null), scope: { kind: "project", projectRef } })
+  const view = renderHook(() => {
+    const [routedConversationId, setConversationRouteId] = useState<string | null>(null)
+    return useAppFrameActions({
+      engine: projectEngine, preview: false, readBoundary: { admitted: true, subject: "trial-actor", generation: 1 },
+      projectWorkspace: true, projectRef, routedConversationId, standaloneSurface: false, chatHref: "/app",
+      activeId: projectEngine.getSnapshot().store?.activeId ?? null, draft: "edited project example", clearDraft: vi.fn(), updateDraft: vi.fn(),
+      setDeploymentIntent: vi.fn(), setConversationRouteId, focusComposer: vi.fn(), closeSettings: vi.fn(),
+      syncConversationUrl: id => window.history.replaceState({}, "", `/app/project/${projectRef}?conversation=${encodeURIComponent(id!)}`),
+      brandName: "Kokoro", commandNewChatTimerRef: { current: null },
+    })
+  }, { wrapper: LocaleProvider })
+  try {
+    act(() => { expect(view.result.current.startSkillUseFromSettings(executableTrial, "project example")).toBe(true) })
+    const conversationId = new URL(window.location.href).searchParams.get("conversation")
+    expect(conversationId).toBe(projectEngine.getSnapshot().store?.activeId)
+    await act(async () => { view.result.current.submitDraft() })
+    expect(projectClient.createCalls).toHaveLength(1)
+    expect(projectClient.createCalls[0]).toMatchObject({ sessionId: conversationId, body: { project_ref: projectRef, selected_skill_source_refs: ["skill:trial-version"] } })
+    expect(client.createCalls).toEqual([])
+    act(() => { projectEngine.newConversation() })
+    await act(async () => { projectEngine.submit("new project conversation") })
+    expect(projectClient.createCalls.at(-1)?.body).not.toHaveProperty("selected_skill_source_refs")
+  } finally { view.unmount(); projectEngine.dispose(); window.history.replaceState({}, "", "/app") }
+})
+
+
+it("keeps plugin page management in its page header and hands off to Settings without replacing the directory", async () => {
+  const onManage = vi.fn(), onCreate = vi.fn()
+  const hub = { ...createHubClient(),
+    listMcpConnectorProviders: vi.fn(async () => ({ items: [], next_cursor: null })),
+    listMcpConnectors: vi.fn(async () => ({ items: [], next_cursor: null })),
+    listCustomApis: vi.fn(async () => ({ items: [], page: { next_cursor: null } })),
+  }
+  render(<LocaleProvider><McpProjectionRead client={hub} identity="plugin-layout-reader" embedded initialView="catalog" onManageConnectors={onManage} onCreateMcp={onCreate} /></LocaleProvider>)
+  await screen.findByRole("heading", { name: "插件", level: 1 })
+  await screen.findByRole("searchbox", { name: "搜索连接器" })
+  const manage = screen.getByRole("button", { name: "管理连接器" })
+  fireEvent.click(manage)
+  expect(onManage).toHaveBeenCalledExactlyOnceWith(manage)
+  expect(screen.getByRole("heading", { name: "插件", level: 1 })).toBeInTheDocument()
+  fireEvent.keyDown(screen.getByRole("button", { name: "创建" }), { key: "ArrowDown" })
+  fireEvent.click(await screen.findByRole("menuitem", { name: "通过 JSON 导入 MCP" }))
+  expect(onCreate).toHaveBeenCalledExactlyOnceWith("json", expect.any(HTMLButtonElement))
+})
+
+function observeSettingsCatalogPages() {
+  const observers = new Set<IntersectionObserverCallback>()
+  vi.stubGlobal("IntersectionObserver", class {
+    constructor(private callback: IntersectionObserverCallback) {}
+    observe() { observers.add(this.callback) }
+    disconnect() { observers.delete(this.callback) }
+  })
+  return Object.assign(() => act(() => {
+    expect(observers.size).toBeGreaterThan(0)
+    for (const callback of observers) callback([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver)
+  }), { capture: () => [...observers] })
+}
+
+function mountSettingsCatalog() {
+  return render(<LocaleProvider><SkillsSettingsSection
+    readBoundary={{ admitted: true, subject: "settings-catalog-reader", generation: 1 }}
+    hubClient={createHubClient()} preview={false} brandName="Kokoro"
+    embeddedCatalogOpen onEmbeddedCatalogOpenChange={vi.fn()} catalogTriggerRef={{ current: null }}
+  /></LocaleProvider>)
+}
+
+it("restores Explore from its Settings hash and returns to All without replacing the dialog", async () => {
+  const originalLocation = window.location.pathname + window.location.search + window.location.hash
+  window.history.replaceState(null, "", "/app#/account/settings/skills/personal")
+  const frame = () => (
+    <ThemeProvider>
+      <LocaleProvider>
+        <AppFrame engine={engine} chatHref="/app" preview />
+      </LocaleProvider>
+    </ThemeProvider>
+  )
+  let view = render(frame())
+  try {
+    const historyLength = window.history.length
+    fireEvent.click(await screen.findByRole("button", { name: "探索技能" }))
+    expect(window.location.hash).toBe("#/account/settings/skills/explore")
+    expect(window.history.length).toBe(historyLength)
+    view.unmount()
+    view = render(frame())
+    await screen.findByRole("region", { name: "探索技能" })
+    const dialog = screen.getByRole("dialog")
+    fireEvent.click(screen.getByRole("button", { name: "已添加的技能" }))
+    expect(window.location.hash).toBe("#/account/settings/skills")
+    expect(screen.getByRole("radio", { name: "全部" })).toHaveAttribute("data-state", "on")
+    await waitFor(() => expect(screen.getByRole("button", { name: "探索技能" })).toHaveFocus())
+    expect(screen.getByRole("dialog")).toBe(dialog)
+    fireEvent.click(screen.getByRole("radio", { name: "个人" }))
+    expect(window.location.hash).toBe("#/account/settings/skills/personal")
+    fireEvent.click(screen.getByRole("button", { name: "探索技能" }))
+    fireEvent.click(screen.getByRole("button", { name: "已添加的技能" }))
+    expect(screen.getByRole("radio", { name: "全部" })).toHaveAttribute("data-state", "on")
+    expect(window.location.hash).toBe("#/account/settings/skills")
+    act(() => {
+      window.history.replaceState(null, "", "/app#/account/settings/skills/explore")
+      window.dispatchEvent(new PopStateEvent("popstate"))
+    })
+    await screen.findByRole("region", { name: "探索技能" })
+    fireEvent.click(screen.getByRole("tab", { name: "技能" }))
+    expect(screen.queryByRole("region", { name: "探索技能" })).toBeNull()
+    expect(window.location.hash).toBe("#/account/settings/skills")
+    expect(screen.getByRole("dialog")).toBe(dialog)
+    act(() => {
+      window.history.replaceState(null, "", "/app#/account/settings/mcp")
+      window.dispatchEvent(new HashChangeEvent("hashchange"))
+    })
+    await screen.findByRole("heading", { name: "已添加的连接器" })
+    act(() => {
+      window.history.replaceState(null, "", "/app#/account/settings/skills/explore")
+      window.dispatchEvent(new HashChangeEvent("hashchange"))
+    })
+    await screen.findByRole("region", { name: "探索技能" })
+    expect(screen.getByRole("dialog")).toBe(dialog)
+    fireEvent.click(screen.getByRole("button", { name: "关闭设置" }))
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull())
+    await waitFor(() => expect(window.location.hash).toBe(""))
+    expect(window.location.pathname).toBe("/app")
+  } finally {
+    view.unmount()
+    window.history.replaceState(null, "", originalLocation)
+  }
+})
+
+it("keeps the selected Explore category and keyboard focus when its measured controls change layout", async () => {
+  let availableWidth = 755
+  const observers = new Set<ResizeObserverCallback>()
+  vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(() => availableWidth)
+  vi.spyOn(HTMLElement.prototype, "scrollWidth", "get").mockReturnValue(520)
+  const originalObserver = window.ResizeObserver
+  window.ResizeObserver = class {
+    constructor(private callback: ResizeObserverCallback) {}
+    observe() {
+      observers.add(this.callback)
+    }
+    unobserve() {}
+    disconnect() {
+      observers.delete(this.callback)
+    }
+  }
+  try {
+    const calls: Record<string, unknown>[] = []
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      if (String(input).endsWith("ListSkills")) return Response.json({ userAddedSkills: [], officialSkills: [] })
+      if (String(input).endsWith("ListHubSkills")) {
+        calls.push(JSON.parse(String(init?.body)))
+        return Response.json({ skills: [], tagOptions: {} })
+      }
+      throw Error("Unexpected responsive catalog request")
+    })
+    mountSettingsCatalog()
+    const coding = await screen.findByRole("button", { name: "编程" })
+    fireEvent.click(coding)
+    coding.focus()
+    await waitFor(() => expect(calls.at(-1)).toMatchObject({ tag: "SKILL_HUB_TAG_CODING" }))
+    const count = calls.length
+    act(() => {
+      availableWidth = 351
+      for (const callback of observers) callback([], {} as ResizeObserver)
+    })
+    const menu = screen.getByRole("button", { name: "技能分类" })
+    expect(menu).toHaveTextContent("编程")
+    expect(menu).toHaveFocus()
+    expect(screen.queryByRole("button", { name: "编程" })).toBeNull()
+    fireEvent.keyDown(menu, { key: "ArrowDown" })
+    const codingItem = await screen.findByRole("menuitem", { name: "编程" })
+    codingItem.focus()
+    act(() => {
+      availableWidth = 755
+      for (const callback of observers) callback([], {} as ResizeObserver)
+    })
+    expect(screen.getByRole("button", { name: "编程" })).toHaveAttribute("aria-pressed", "true")
+    expect(screen.getByRole("button", { name: "编程" })).toHaveFocus()
+    expect(screen.queryByRole("menu")).toBeNull()
+    expect(calls).toHaveLength(count)
+  } finally {
+    window.ResizeObserver = originalObserver
+  }
+})
+
+it("retires a previously published Settings retry callback instead of borrowing the new client's fetcher", async () => {
+  let reads = 0
+  const response = (body: unknown) => Response.json(body, { headers: { "cache-control": "private, no-store", "x-request-id": "settings-retired-retry" } })
+  vi.spyOn(globalThis, "fetch").mockImplementation(async input => {
+    if (String(input).endsWith("ListSkills")) return response({ userAddedSkills: [], officialSkills: [] })
+    if (String(input).endsWith("ListHubSkills")) {
+      reads++
+      if (reads === 1) throw Error("Original read failed")
+      return response({ skills: [{ skillId: "retry-series", displayName: "Fresh retry item", currentVersion: { versionUid: "retry-revision" } }], tagOptions: {} })
+    }
+    throw Error("Unexpected retired retry request")
+  })
+  const hub = createHubClient()
+  const projections: CatalogDetailProjection[] = []
+  const onDetailProjection = (value: CatalogDetailProjection) => projections.push(value)
+  const content = (generation: number) => <LocaleProvider><SkillCatalogDialog inline open client={createManusSkillHubClient(hub, { admitted: true, subject: "retry-actor", generation })} enabledOverrides={new Map()} installedOverrides={new Map()} busy={null} errorName={null} onOpenChange={vi.fn()} onCloseAutoFocus={vi.fn()} onOpenUpload={vi.fn()} onOpenGithub={vi.fn()} onSetEnabled={vi.fn()} onOpenDetail={vi.fn()} selectedDetailKey={JSON.stringify(["retry-series", "retry-revision"])} onDetailProjection={onDetailProjection} /></LocaleProvider>
+  const view = render(content(1))
+  await screen.findByRole("button", { name: "重试" })
+  const retiredRetry = projections.at(-1)!.retry
+  view.rerender(content(2))
+  await screen.findByRole("button", { name: "查看详情 Fresh retry item" })
+  const confirmedReads = reads
+  await act(async () => { retiredRetry(); await Promise.resolve() })
+  expect(reads).toBe(confirmedReads)
+})
+
+it("keeps Settings Explore intent and its detail shell across same-actor rechecks without retaining private facts", async () => {
+  let round = 1
+  let failFreshRead = true
+  const calls: Record<string, unknown>[] = []
+  const packageReads: string[] = []
+  const documents = { "SKILL.md": "# Verified reader root", "references/notes.md": "# Verified selected document\n\n" + "Reader paragraph.\n\n".repeat(40) }
+  const files = Object.entries(documents).map(([path, text]) => ({ path, size_bytes: String(new TextEncoder().encode(text).byteLength) }))
+  const response = (body: unknown) => Response.json(body, { headers: { "cache-control": "private, no-store", "x-request-id": "settings-intent-recheck" } })
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    const path = String(input)
+    if (path.includes("/self/skill-installations")) return response({ data: [] })
+    if (path.endsWith("ListSkills")) return response({ userAddedSkills: [], officialSkills: [] })
+    if (path.endsWith("ListHubSkills")) {
+      calls.push(JSON.parse(String(init?.body)))
+      if (round === 2 && failFreshRead) { failFreshRead = false; throw Error("Temporary new-generation read failure") }
+      return response({ skills: [{ skillId: "settings-intent-series", displayName: "Intent match", userDescription: round === 1 ? "Retired catalog facts" : "New catalog facts", currentVersion: { versionUid: "settings-intent-revision" } }], tagOptions: {} })
+    }
+    if (path.includes("/package")) {
+      packageReads.push(path)
+      const selected = new URL(path, "http://local.test").searchParams.get("file_path") as keyof typeof documents | null
+      return response({ data: { source_ref: "skill:settings-intent-revision", revision: "1", files, selected_file: selected === null ? null : { path: selected, text: documents[selected] } } })
+    }
+    if (path.endsWith("GetSkill")) return response({ skill: { id: "settings-intent-series", version: "settings-intent-revision", displayName: "Intent match", description: round === 1 ? "Retired detail facts" : "New detail facts" }, downloadInfo: { downloadUrl: "/api/skill-downloads/settings-intent", filename: "fixture.zip", expiresAt: "2028-01-01T00:00:00Z" } })
+    throw Error("Unexpected settings recheck request")
+  })
+  const hubClient = createHubClient()
+  const content = (admitted: boolean, subject: string, generation: number) => <LocaleProvider><SkillsSettingsSection readBoundary={{ admitted, subject, generation }} hubClient={hubClient} preview={false} brandName="Kokoro" embeddedCatalogOpen onEmbeddedCatalogOpenChange={vi.fn()} catalogTriggerRef={{ current: null }} /></LocaleProvider>
+  const view = render(content(true, "settings-intent-actor", 1))
+  await screen.findByRole("button", { name: "查看详情 Intent match" })
+  const search = screen.getByRole("searchbox", { name: "搜索技能" })
+  fireEvent.change(search, { target: { value: "needle" } })
+  await waitFor(() => expect(calls.at(-1)).toMatchObject({ query: "needle" }))
+  fireEvent.keyDown(screen.getByRole("button", { name: "技能分类" }), { key: "ArrowDown" })
+  fireEvent.click(await screen.findByRole("menuitem", { name: "编程" }))
+  fireEvent.click(await screen.findByRole("button", { name: "查看详情 Intent match" }))
+  const dialog = screen.getByRole("dialog")
+  await within(dialog).findByText("Retired detail facts")
+  fireEvent.click(within(dialog).getByRole("button", { name: "查看详情" }))
+  await within(dialog).findByRole("heading", { name: "Verified reader root", level: 1 })
+  fireEvent.click(within(dialog).getByRole("button", { name: "references" }))
+  fireEvent.click(within(dialog).getByRole("button", { name: "references/notes.md" }))
+  await within(dialog).findByRole("heading", { name: "Verified selected document", level: 1 })
+  const readerPane = within(dialog).getByRole("heading", { name: "Verified selected document", level: 1 }).closest<HTMLElement>("[aria-busy]")!
+  fireEvent.scroll(readerPane, { target: { scrollTop: 240 } })
+  const readCount = packageReads.length
+  const count = calls.length
+  round = 2
+  view.rerender(content(false, "settings-intent-actor", 2))
+  expect(screen.getByRole("searchbox", { hidden: true, name: "搜索技能" })).toBe(search)
+  expect(search).toHaveValue("needle")
+  expect(screen.getByRole("dialog")).toBe(dialog)
+  expect(screen.queryByText("Retired detail facts")).toBeNull()
+  expect(screen.queryByText("Retired catalog facts")).toBeNull()
+  expect(screen.queryByRole("heading", { name: "Verified selected document" })).toBeNull()
+  expect(within(dialog).getByRole("button", { name: "技能详情" })).toBeVisible()
+  expect(packageReads).toHaveLength(readCount)
+  await act(async () => { await Promise.resolve() })
+  expect(calls).toHaveLength(count)
+  view.rerender(content(true, "settings-intent-actor", 2))
+  await within(dialog).findByRole("alert")
+  expect(screen.queryByText("Retired detail facts")).toBeNull()
+  fireEvent.click(within(dialog).getByRole("button", { name: "重试" }))
+  await within(dialog).findByRole("heading", { name: "Verified selected document", level: 1 })
+  expect(within(dialog).getByRole("heading", { name: "Verified selected document", level: 1 }).closest("[aria-busy]")).toHaveProperty("scrollTop", 240)
+  expect(within(dialog).getByRole("button", { name: "references" })).toHaveAttribute("aria-expanded", "true")
+  expect(packageReads.slice(readCount)).toEqual([
+    "/api/hub/skills/settings-intent-revision/package",
+    "/api/hub/skills/settings-intent-revision/package?file_path=references%2Fnotes.md",
+  ])
+  fireEvent.click(within(dialog).getByRole("button", { name: "技能详情" }))
+  await within(dialog).findByText("New detail facts")
+  expect(calls.at(-1)).toMatchObject({ query: "needle", tag: "SKILL_HUB_TAG_CODING" })
+  expect(screen.getByRole("dialog")).toBe(dialog)
+  fireEvent.click(within(dialog).getByRole("button", { name: "Close" }))
+  await waitFor(() => expect(search).toHaveFocus())
+  fireEvent.click(screen.getByRole("button", { name: "查看详情 Intent match" }))
+  await within(screen.getByRole("dialog")).findByText("New detail facts")
+  view.rerender(content(true, "settings-other-actor", 3))
+  expect(screen.queryByRole("dialog")).toBeNull()
+  expect(screen.getByRole("searchbox", { name: "搜索技能" })).toHaveValue("")
+  view.rerender(content(true, "settings-intent-actor", 4))
+  expect(screen.getByRole("searchbox", { name: "搜索技能" })).toHaveValue("")
+  expect(screen.queryByRole("dialog")).toBeNull()
+})
+
+it("re-establishes the exact Settings detail revision on new cursor pages rather than substituting the latest revision", async () => {
+  const intersect = observeSettingsCatalogPages()
+  let round = 1
+  const details: string[] = []
+  const response = (body: unknown) => Response.json(body, { headers: { "cache-control": "private, no-store", "x-request-id": "settings-exact-revision" } })
+  const card = (revision: string) => ({ skillId: "exact-settings-series", displayName: revision, currentVersion: { versionUid: revision } })
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    const path = String(input)
+    if (path.includes("/self/skill-installations")) return response({ data: [] })
+    if (path.endsWith("ListSkills")) return response({ userAddedSkills: [], officialSkills: [] })
+    if (path.endsWith("ListHubSkills")) {
+      const body = JSON.parse(String(init?.body))
+      return response(body.pageToken ? { skills: [card("chosen-revision")], tagOptions: {} } : { skills: [card(round === 1 ? "initial-revision" : "newest-revision")], tagOptions: {}, nextPageToken: `exact-next-${round}` })
+    }
+    if (path.endsWith("GetSkill")) {
+      details.push(String(init?.body))
+      return response({ skill: { id: "exact-settings-series", version: "chosen-revision", displayName: "chosen-revision", description: `Exact facts ${round}` }, downloadInfo: { downloadUrl: "/api/skill-downloads/settings-exact", filename: "fixture.zip", expiresAt: "2028-01-01T00:00:00Z" } })
+    }
+    throw Error("Unexpected exact revision request")
+  })
+  const hubClient = createHubClient()
+  const content = (admitted: boolean, generation: number) => <LocaleProvider><SkillsSettingsSection readBoundary={{ admitted, subject: "settings-exact-actor", generation }} hubClient={hubClient} preview={false} brandName="Kokoro" embeddedCatalogOpen onEmbeddedCatalogOpenChange={vi.fn()} catalogTriggerRef={{ current: null }} /></LocaleProvider>
+  const view = render(content(true, 1))
+  await screen.findByRole("button", { name: "查看详情 initial-revision" })
+  intersect()
+  fireEvent.click(await screen.findByRole("button", { name: "查看详情 chosen-revision" }))
+  const dialog = screen.getByRole("dialog")
+  await within(dialog).findByText("Exact facts 1")
+  round = 2
+  view.rerender(content(false, 2))
+  expect(screen.getByRole("dialog")).toBe(dialog)
+  expect(screen.queryByText("Exact facts 1")).toBeNull()
+  view.rerender(content(true, 2))
+  const more = await within(dialog).findByRole("button", { name: "加载更多" })
+  expect(within(dialog).queryByRole("heading", { name: "newest-revision" })).toBeNull()
+  expect(details).toHaveLength(1)
+  fireEvent.click(more)
+  await within(dialog).findByText("Exact facts 2")
+  expect(details).toHaveLength(2)
+  expect(screen.getByRole("dialog")).toBe(dialog)
+})
+
+it("retires Settings installation slots and stale actions without applying a late ACK to the new generation", async () => {
+  let releaseOld!: (reply: Response) => void
+  let writes = 0
+  const response = (body: unknown) => Response.json(body, { headers: { "cache-control": "private, no-store", "x-request-id": "settings-install-recheck" } })
+  const receipt = () => response({ data: { installation: {
+    installation_id: "settings-installation", source_ref: "skill:settings-install-revision", series_id: "settings-install-series", revision: "1", installed: true, enabled: true,
+    installed_at: "2026-10-16T00:00:00Z", updated_at: "2026-10-16T00:00:00Z", display_name: "Current install", summary: "Owner description", source_status: "active", skill_updated_at: "2026-10-16T00:00:00Z", example_prompts: [], category_keys: [], product: { publication_audience: "owner", state_version: "1" }, tags: [],
+  }, change: "installed", event_id: "settings-install-event", replayed: false } })
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    const path = String(input)
+    if (path.includes("/self/skill-installations")) {
+      if (init?.method !== "POST") return response({ data: [] })
+      writes++
+      return writes === 1 ? new Promise<Response>(resolve => { releaseOld = resolve }) : receipt()
+    }
+    if (path.endsWith("ListSkills")) return response({ userAddedSkills: [], officialSkills: [] })
+    if (path.endsWith("ListHubSkills")) return response({ skills: [{ skillId: "settings-install-series", displayName: "Current install", currentVersion: { versionUid: "settings-install-revision" } }], tagOptions: {} })
+    throw Error("Unexpected installation recheck request")
+  })
+  const hubClient = createHubClient()
+  const content = (admitted: boolean, generation: number) => <LocaleProvider><SkillsSettingsSection readBoundary={{ admitted, subject: "settings-install-actor", generation }} hubClient={hubClient} preview={false} brandName="Kokoro" embeddedCatalogOpen onEmbeddedCatalogOpenChange={vi.fn()} catalogTriggerRef={{ current: null }} /></LocaleProvider>
+  const view = render(content(true, 1))
+  const retired = await screen.findByRole("button", { name: "添加 Current install" })
+  fireEvent.click(retired)
+  await waitFor(() => expect(writes).toBe(1))
+  view.rerender(content(false, 2))
+  view.rerender(content(true, 2))
+  const current = await screen.findByRole("button", { name: "添加 Current install" })
+  expect(current).toBeEnabled()
+  fireEvent.click(retired)
+  expect(writes).toBe(1)
+  fireEvent.click(current)
+  await screen.findByRole("button", { name: "已添加 Current install" })
+  expect(writes).toBe(2)
+  await act(async () => { releaseOld(receipt()) })
+  expect(screen.getByRole("button", { name: "已添加 Current install" })).toBeDisabled()
+  expect(screen.queryByRole("alert")).toBeNull()
+})
+
+it("queries Settings Explore through the owner and preserves its nine-item filters on every cursor", async () => {
+  const intersect = observeSettingsCatalogPages()
+  const calls: Record<string, unknown>[] = []
+  const response = (data: unknown) => Response.json(data, { headers: { "cache-control": "private, no-store", "x-request-id": "req-settings-catalog" } })
+  const card = (id: string, name: string) => ({ skillId: id, displayName: name, userDescription: "Server indexed metadata", tags: { values: ["SKILL_HUB_TAG_CODING"] }, currentVersion: { versionUid: `${id}-revision` } })
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    const path = String(input)
+    if (path.includes("/self/skill-installations")) return response({ data: [] })
+    if (path.endsWith("ListSkills")) return response({ userAddedSkills: [], officialSkills: [] })
+    if (path.endsWith("ListHubSkills")) {
+      const body = JSON.parse(String(init?.body)); calls.push(body)
+      if (body.pageToken) return response({ skills: [card("remote-page", "Remote second result")], tagOptions: {} })
+      if (body.query) return response({ skills: [card("semantic-match", "Indexed document match")], tagOptions: {}, nextPageToken: "settings-query-next" })
+      if (body.tag) return response({ skills: [card("coding-match", "Remote coding result")], tagOptions: {} })
+      return response({ skills: [card("initial", "Initial settings item")], tagOptions: {}, nextPageToken: "settings-default-next" })
+    }
+    throw Error("Unexpected settings request")
+  })
+  mountSettingsCatalog()
+  await screen.findByRole("button", { name: "查看详情 Initial settings item" })
+  expect(calls.at(-1)).toEqual({ pageSize: 9, shuffle: true, includeOfficialSkills: true })
+  const completedPageObserver = intersect.capture()[0]!
+  intersect()
+  await screen.findByRole("button", { name: "查看详情 Remote second result" })
+  expect(calls.at(-1)).toEqual({ pageSize: 9, includeOfficialSkills: true, pageToken: "settings-default-next" })
+  await act(async () => { completedPageObserver([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver) })
+  expect(calls).toHaveLength(2)
+  fireEvent.keyDown(screen.getByRole("button", { name: "技能分类" }), { key: "ArrowDown" })
+  fireEvent.click(await screen.findByRole("menuitem", { name: "编程" }))
+  await screen.findByRole("button", { name: "查看详情 Remote coding result" })
+  expect(calls.at(-1)).toEqual({ pageSize: 9, includeOfficialSkills: true, tag: "SKILL_HUB_TAG_CODING" })
+  fireEvent.change(screen.getByRole("searchbox", { name: "搜索技能" }), { target: { value: "needle" } })
+  await screen.findByRole("button", { name: "查看详情 Indexed document match" })
+  expect(calls.at(-1)).toEqual({ pageSize: 9, includeOfficialSkills: true, query: "needle", tag: "SKILL_HUB_TAG_CODING" })
+  intersect()
+  await screen.findByRole("button", { name: "查看详情 Remote second result" })
+  expect(calls.at(-1)).toEqual({ pageSize: 9, includeOfficialSkills: true, query: "needle", tag: "SKILL_HUB_TAG_CODING", pageToken: "settings-query-next" })
+})
+
+it("retires Settings cursor reads on filter changes and can retry the current page without late results", async () => {
+  const intersect = observeSettingsCatalogPages()
+  let releaseOld!: (response: Response) => void
+  let oldSignal: AbortSignal | null | undefined
+  let codingAttempts = 0
+  let oldRequests = 0
+  const response = (data: unknown) => Response.json(data, { headers: { "cache-control": "private, no-store", "x-request-id": "req-settings-retirement" } })
+  const card = (id: string) => ({ skillId: id, displayName: id, currentVersion: { versionUid: `${id}-revision` }, tags: { values: ["SKILL_HUB_TAG_CODING"] } })
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    const path = String(input)
+    if (path.includes("/self/skill-installations")) return response({ data: [] })
+    if (path.endsWith("ListSkills")) return response({ userAddedSkills: [], officialSkills: [] })
+    if (path.endsWith("ListHubSkills")) {
+      const body = JSON.parse(String(init?.body))
+      if (body.pageToken === "old-next") {
+        oldRequests++
+        oldSignal = init?.signal
+        return new Promise<Response>(resolve => { releaseOld = resolve })
+      }
+      if (body.pageToken === "coding-next") {
+        if (++codingAttempts === 1) throw Error("Transient page read failure")
+        return response({ skills: [card("coding-second")], tagOptions: {} })
+      }
+      return response({ skills: [card(body.query ? "coding-first" : "old-first")], tagOptions: {}, nextPageToken: body.query ? "coding-next" : "old-next" })
+    }
+    throw Error("Unexpected settings request")
+  })
+  mountSettingsCatalog()
+  await screen.findByRole("button", { name: "查看详情 old-first" })
+  const queuedOldObserver = intersect.capture()[0]!
+  intersect()
+  await waitFor(() => expect(oldSignal).toBeDefined())
+  fireEvent.change(screen.getByRole("searchbox", { name: "搜索技能" }), { target: { value: "coding" } })
+  await waitFor(() => expect(oldSignal?.aborted).toBe(true))
+  await screen.findByRole("button", { name: "查看详情 coding-first" })
+  await act(async () => { queuedOldObserver([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver) })
+  expect(oldRequests).toBe(1)
+  intersect()
+  fireEvent.click(await screen.findByRole("button", { name: "重试" }))
+  await screen.findByRole("button", { name: "查看详情 coding-second" })
+  await act(async () => { releaseOld(response({ skills: [card("late-old-page")], tagOptions: {} })) })
+  expect(screen.queryByRole("button", { name: "查看详情 late-old-page" })).toBeNull()
+  expect(codingAttempts).toBe(2)
+})
+
+it("shows a failed Settings filter read and retries it instead of turning the previous page into a successful empty result", async () => {
+  observeSettingsCatalogPages()
+  let attempts = 0
+  const response = (data: unknown) => Response.json(data, { headers: { "cache-control": "private, no-store", "x-request-id": "req-settings-retry" } })
+  const card = (id: string) => ({ skillId: id, displayName: id, currentVersion: { versionUid: `${id}-revision` } })
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    const path = String(input)
+    if (path.includes("/self/skill-installations")) return response({ data: [] })
+    if (path.endsWith("ListSkills")) return response({ userAddedSkills: [], officialSkills: [] })
+    if (path.endsWith("ListHubSkills")) {
+      const body = JSON.parse(String(init?.body))
+      if (body.query === "offline" && ++attempts === 1) throw Error("Transient catalog read failure")
+      return response({ skills: [card(body.query ? "Recovered indexed match" : "Initial retained page")], tagOptions: {} })
+    }
+    throw Error("Unexpected settings request")
+  })
+  mountSettingsCatalog()
+  await screen.findByRole("button", { name: "查看详情 Initial retained page" })
+  fireEvent.change(screen.getByRole("searchbox", { name: "搜索技能" }), { target: { value: "offline" } })
+  await screen.findByRole("alert")
+  fireEvent.click(screen.getByRole("button", { name: "重试" }))
+  await screen.findByRole("button", { name: "查看详情 Recovered indexed match" })
+  expect(screen.queryByRole("alert")).toBeNull()
+  expect(attempts).toBe(2)
+})
+
+it("queries the complete owner catalog and keeps search/category bound to every cursor page", async () => {
+  const calls: Record<string, unknown>[] = []
+  const response = (body: unknown) => Response.json(body, { headers: { "cache-control": "private, no-store", "x-request-id": "req-catalog-search" } })
+  const card = (id: string, name: string) => ({ skillId: id, displayName: name, userDescription: "needle in the full directory", tags: { values: ["SKILL_HUB_TAG_CODING"] }, currentVersion: { versionUid: `${id}-revision` } })
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    if (String(input).endsWith("ListSkills")) return response({ userAddedSkills: [], officialSkills: [] })
+    if (String(input).endsWith("ListHubSkills")) {
+      const body = JSON.parse(String(init?.body)) as Record<string, unknown>
+      calls.push(body)
+      if (body.pageToken === "default-next") return response({ skills: [card("default-second", "Default second page")], tagOptions: {} })
+      if (body.query !== "needle") return response({ skills: [card("first", "Initial page")], tagOptions: {}, ...(body.tag ? {} : { nextPageToken: "default-next" }) })
+      if (body.tag !== "SKILL_HUB_TAG_CODING") return response({ skills: [card("search", "Previously unloaded result")], tagOptions: {}, nextPageToken: "query-next" })
+      if (body.pageToken) return response({ skills: [card("second", "Filtered second page")], tagOptions: {} })
+      return response({ skills: [card("coding", "Filtered first page")], tagOptions: {}, nextPageToken: "query-coding-next" })
+    }
+    throw Error("Unexpected catalog request")
+  })
+  render(<LocaleProvider><KokoroSkillsSurface preview={false} projectReadBoundary={{ admitted: true, subject: "catalog-search-reader", generation: 1 }} onPrompt={vi.fn()} /></LocaleProvider>)
+  await screen.findByRole("button", { name: "Initial page" })
+  expect(calls.at(-1)).toEqual({ pageSize: 9, shuffle: true, includeOfficialSkills: true })
+  fireEvent.click(screen.getByRole("button", { name: "加载更多" }))
+  await screen.findByRole("button", { name: "Default second page" })
+  await waitFor(() => expect(calls.at(-1)).toEqual({ pageSize: 9, includeOfficialSkills: true, pageToken: "default-next" }))
+  fireEvent.change(screen.getByRole("searchbox", { name: "搜索技能" }), { target: { value: "needle" } })
+  await screen.findByRole("button", { name: "Previously unloaded result" })
+  expect(calls.at(-1)).toEqual({ pageSize: 9, includeOfficialSkills: true, query: "needle" })
+  fireEvent.click(screen.getByRole("button", { name: "编程" }))
+  await screen.findByRole("button", { name: "Filtered first page" })
+  expect(calls.at(-1)).toEqual({ pageSize: 9, includeOfficialSkills: true, query: "needle", tag: "SKILL_HUB_TAG_CODING" })
+  expect(calls.at(-1)).not.toHaveProperty("pageToken")
+  fireEvent.click(screen.getByRole("button", { name: "加载更多" }))
+  await screen.findByRole("button", { name: "Filtered second page" })
+  expect(calls.at(-1)).toEqual({ pageSize: 9, includeOfficialSkills: true, query: "needle", tag: "SKILL_HUB_TAG_CODING", pageToken: "query-coding-next" })
+  fireEvent.click(screen.getByRole("button", { name: "清除搜索" }))
+  await waitFor(() => expect(calls.at(-1)).toMatchObject({ tag: "SKILL_HUB_TAG_CODING" }))
+  await waitFor(() => expect(calls.at(-1)).not.toHaveProperty("query"))
+  expect(calls.at(-1)).not.toHaveProperty("pageToken")
+  expect(screen.queryByRole("button", { name: "Filtered second page" })).toBeNull()
+})
+
+it("retires a pending cursor when the category changes without blocking the new category page", async () => {
+  let releaseOld!: (response: Response) => void
+  let oldSignal: AbortSignal | null | undefined
+  const cursors: string[] = []
+  const response = (body: unknown) => Response.json(body, { headers: { "cache-control": "private, no-store", "x-request-id": "req-catalog-filter-retirement" } })
+  const card = (id: string) => ({ skillId: id, displayName: id, currentVersion: { versionUid: `${id}-revision` }, tags: { values: ["SKILL_HUB_TAG_CODING"] } })
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    if (String(input).endsWith("ListSkills")) return response({ userAddedSkills: [], officialSkills: [] })
+    if (String(input).endsWith("ListHubSkills")) {
+      const body = JSON.parse(String(init?.body))
+      if (body.pageToken) {
+        cursors.push(body.pageToken)
+        if (body.pageToken === "old-filter-next") {
+          oldSignal = init?.signal
+          return new Promise<Response>((resolve) => { releaseOld = resolve })
+        }
+        return response({ skills: [card("current-filter-second")], tagOptions: {} })
+      }
+      return response({ skills: [card(body.tag ? "current-filter-first" : "old-filter-first")], nextPageToken: body.tag ? "current-filter-next" : "old-filter-next", tagOptions: {} })
+    }
+    throw Error("Unexpected catalog request")
+  })
+  render(<LocaleProvider><KokoroSkillsSurface preview={false} projectReadBoundary={{ admitted: true, subject: "catalog-filter-retirement-reader", generation: 1 }} onPrompt={vi.fn()} /></LocaleProvider>)
+  await screen.findByRole("button", { name: "old-filter-first" })
+  fireEvent.click(screen.getByRole("button", { name: "加载更多" }))
+  await waitFor(() => expect(cursors).toEqual(["old-filter-next"]))
+  fireEvent.click(screen.getByRole("button", { name: "编程" }))
+  await screen.findByRole("button", { name: "current-filter-first" })
+  expect(oldSignal?.aborted).toBe(true)
+  fireEvent.click(screen.getByRole("button", { name: "全部" }))
+  await screen.findByRole("button", { name: "old-filter-first" })
+  expect(screen.getByRole("button", { name: "加载更多" })).toBeEnabled()
+  fireEvent.click(screen.getByRole("button", { name: "编程" }))
+  await screen.findByRole("button", { name: "current-filter-first" })
+  fireEvent.click(screen.getByRole("button", { name: "加载更多" }))
+  await screen.findByRole("button", { name: "current-filter-second" })
+  await act(async () => { releaseOld(response({ skills: [card("late-old-filter")], tagOptions: {} })) })
+  expect(screen.queryByRole("button", { name: "late-old-filter" })).toBeNull()
+  expect(cursors).toEqual(["old-filter-next", "current-filter-next"])
+})
+
+it("refreshes all cached catalog filters after a confirmed installation", async () => {
+  let installed = false
+  const response = (body: unknown, status = 200) => Response.json(body, { status, headers: { "cache-control": "private, no-store", "x-request-id": "req-catalog-filter-install" } })
+  const card = { skillId: "filter-install-series", displayName: "Filter install", currentVersion: { versionUid: "filter-install-revision" }, tags: { values: ["SKILL_HUB_TAG_CODING"] } }
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+    const path = String(input)
+    if (path.endsWith("ListHubSkills")) return response({ skills: [card], tagOptions: {} })
+    if (path.endsWith("ListSkills")) return response({ userAddedSkills: installed ? [{ id: card.skillId, version: "filter-install-revision", installationId: "filter-installation", added: true, enabled: true }] : [], officialSkills: [] })
+    if (path === "/api/hub/self/skill-installations") {
+      installed = true
+      return response({ data: { installation: {
+        installation_id: "filter-installation", source_ref: "skill:filter-install-revision", series_id: card.skillId, revision: "1", installed: true, enabled: true,
+        installed_at: "2026-10-16T00:00:00Z", updated_at: "2026-10-16T00:00:00Z", display_name: card.displayName, summary: "Owner description", source_status: "active", skill_updated_at: "2026-10-16T00:00:00Z", example_prompts: [], category_keys: [], product: { publication_audience: "owner", state_version: "1" }, tags: [],
+      }, change: "installed", event_id: "filter-install-event", replayed: false } })
+    }
+    throw Error("Unexpected catalog request")
+  })
+  render(<LocaleProvider><KokoroSkillsSurface preview={false} projectReadBoundary={{ admitted: true, subject: "catalog-filter-install-reader", generation: 1 }} onPrompt={vi.fn()} /></LocaleProvider>)
+  await screen.findByRole("button", { name: "添加 Filter install" })
+  fireEvent.click(screen.getByRole("button", { name: "编程" }))
+  fireEvent.click(await screen.findByRole("button", { name: "添加 Filter install" }))
+  expect(await screen.findByRole("button", { name: "已添加 Filter install" })).toBeDisabled()
+  fireEvent.click(screen.getByRole("button", { name: "全部" }))
+  expect(await screen.findByRole("button", { name: "已添加 Filter install" })).toBeDisabled()
+  expect(screen.queryByRole("button", { name: "添加 Filter install" })).toBeNull()
+})
+
+it("same actor recheck preserves catalog search and detail chrome while retiring private facts", async () => {
+  let round = 1
+  const response = (body: unknown) => Response.json(body, { headers: { "cache-control": "private, no-store", "x-request-id": "req-catalog-recheck" } })
+  const card = { skillId: "series-recheck", displayName: "Private title", userDescription: "Private facts", currentVersion: { versionUid: "revision-recheck" } }
+  const reads = vi.spyOn(globalThis, "fetch").mockImplementation(async input => {
+    const path = String(input)
+    if (path.endsWith("ListHubSkills")) return response({ skills: [card], tagOptions: {} })
+    if (path.endsWith("ListSkills")) return response({ userAddedSkills: [], officialSkills: [] })
+    if (path.endsWith("GetSkill")) return response({ skill: { id: "series-recheck", version: "revision-recheck", displayName: "Private title", description: round === 1 ? "Private facts" : "Fresh facts" }, downloadInfo: { downloadUrl: "/api/skill-downloads/recheck", filename: "fixture.zip", expiresAt: "2028-01-01T00:00:00Z" } })
+    throw Error("Unexpected catalog request")
+  })
+  const view = render(<LocaleProvider><KokoroSkillsSurface preview={false} projectReadBoundary={{ admitted: true, subject: "catalog-recheck-actor", generation: 1 }} onPrompt={vi.fn()} /></LocaleProvider>)
+  await screen.findByRole("button", { name: "Private title" })
+  const search = screen.getByRole("searchbox", { name: "搜索技能" })
+  fireEvent.change(search, { target: { value: "Private" } })
+  fireEvent.click(screen.getByRole("button", { name: "Private title" }))
+  await screen.findByRole("button", { name: "查看详情" })
+  const dialog = screen.getByRole("dialog")
+  const beforeRecheck = reads.mock.calls.length
+  round = 2
+  view.rerender(<LocaleProvider><KokoroSkillsSurface preview={false} projectReadBoundary={{ admitted: false, subject: "catalog-recheck-actor", generation: 2 }} onPrompt={vi.fn()} /></LocaleProvider>)
+  expect(screen.getByRole("searchbox", { hidden: true, name: "搜索技能" })).toBe(search)
+  expect(search).toHaveValue("Private")
+  expect(screen.getByRole("dialog")).toBe(dialog)
+  expect(screen.queryByText("Private facts")).toBeNull()
+  await act(async () => { await Promise.resolve() })
+  expect(reads).toHaveBeenCalledTimes(beforeRecheck)
+  view.rerender(<LocaleProvider><KokoroSkillsSurface preview={false} projectReadBoundary={{ admitted: true, subject: "catalog-recheck-actor", generation: 2 }} onPrompt={vi.fn()} /></LocaleProvider>)
+  await screen.findByRole("heading", { name: "Private title" })
+  await within(dialog).findByText("Fresh facts")
+  expect(screen.getByRole("dialog")).toBe(dialog)
+  fireEvent.click(screen.getByRole("button", { name: "Close" }))
+  await waitFor(() => expect(screen.getByRole("button", { name: "Private title" })).toHaveFocus())
+  view.rerender(<LocaleProvider><KokoroSkillsSurface preview={false} projectReadBoundary={{ admitted: true, subject: "other-catalog-actor", generation: 3 }} onPrompt={vi.fn()} /></LocaleProvider>)
+  expect(screen.getByRole("searchbox", { name: "搜索技能" })).toHaveValue("")
+  view.rerender(<LocaleProvider><KokoroSkillsSurface preview={false} projectReadBoundary={{ admitted: true, subject: "catalog-recheck-actor", generation: 4 }} onPrompt={vi.fn()} /></LocaleProvider>)
+  expect(screen.getByRole("searchbox", { name: "搜索技能" })).toHaveValue("")
+  expect(screen.queryByRole("dialog")).toBeNull()
+})
+
+
+it("catalog installation recheck rejects old callbacks and retries only the frozen source and key", async () => {
+  const resolvers: Array<(response: Response) => void> = []
+  const calls: RequestInit[] = []
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
+    calls.push(init!)
+    return new Promise<Response>(resolve => resolvers.push(resolve))
+  })
+  const card = { ...executableTrial, installed: false, enabled: false }
+  const identify = (value: import("@/hub/schemas").SkillCatalogCard) => `${value.skill_id}:${value.revision_skill_id}`
+  const view = renderHook(({ generation }) => useCatalogSkillInstallation({ admitted: true, subject: "installation-reader", generation }, undefined, "test-catalog-scope", identify), { initialProps: { generation: 1 } })
+  let first!: Promise<void>, retry!: Promise<void>
+  act(() => { first = view.result.current.setEnabled(card) })
+  await waitFor(() => expect(calls).toHaveLength(1))
+  const old = view.result.current.setEnabled
+  view.rerender({ generation: 2 })
+  await act(async () => { await old(card) })
+  expect(calls).toHaveLength(1)
+  act(() => { void view.result.current.setEnabled({ ...card, revision_skill_id: "new-revision", source_ref: "skill:new-revision" }) })
+  expect(calls).toHaveLength(1)
+  act(() => { retry = view.result.current.setEnabled(card) })
+  await waitFor(() => expect(calls).toHaveLength(2))
+  expect(calls[1]?.body).toBe(calls[0]?.body)
+  expect(new Headers(calls[1]?.headers).get("idempotency-key")).toBe(new Headers(calls[0]?.headers).get("idempotency-key"))
+  const receipt = () => Response.json({ data: { installation: {
+    installation_id: "trial-installation", source_ref: "skill:trial-version", series_id: "trial-series", revision: "1", installed: true, enabled: true,
+    installed_at: "2026-10-16T00:00:00Z", updated_at: "2026-10-16T00:00:00Z", display_name: "Owner trial", summary: "Owner description", source_status: "active", skill_updated_at: "2026-10-16T00:00:00Z", example_prompts: [], category_keys: [], product: { publication_audience: "owner", state_version: "1" }, tags: [],
+  }, change: "installed", event_id: "trial-event", replayed: false } }, { headers: { "cache-control": "private, no-store", "x-request-id": "req-installation-recheck" } })
+  await act(async () => { resolvers[0]!(receipt()); await first })
+  expect(view.result.current.busy).toBe(identify(card))
+  expect(view.result.current.installationFacts).toEqual({})
+  await act(async () => { resolvers[1]!(receipt()); await retry })
+  expect(view.result.current.busy).toBeNull()
+  expect(view.result.current.installationFacts[card.skill_id]).toMatchObject({ installed_source_ref: "skill:trial-version", enabled: true })
+})
+
+
+it.each([false, true])("catalog detail recheck uses the current cursor and never substitutes a later revision (%s)", async (changed) => {
+  let round = 1
+  const cursorCalls: string[] = []
+  let failCurrentPage = true
+  const response = (body: unknown) => Response.json(body, { headers: { "cache-control": "private, no-store", "x-request-id": "req-catalog-paging" } })
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    const path = String(input)
+    if (path.endsWith("ListSkills")) return response({ userAddedSkills: [], officialSkills: [] })
+    if (path.endsWith("ListHubSkills")) {
+      const body = JSON.parse(String(init?.body))
+      if (!body.pageToken) return response({ skills: [{ skillId: "first-series", displayName: "First card", currentVersion: { versionUid: "first-revision" } }], nextPageToken: round === 1 ? "old-next" : "current-next", tagOptions: {} })
+      cursorCalls.push(body.pageToken)
+      if (round === 2 && failCurrentPage) { failCurrentPage = false; throw Error("current page failed") }
+      return response({ skills: [{ skillId: "paged-series", displayName: "Paged skill", currentVersion: { versionUid: round === 2 && changed ? "newer-revision" : "paged-revision" } }], tagOptions: {} })
+    }
+    if (path.endsWith("GetSkill")) return response({ skill: { id: "paged-series", version: "paged-revision", displayName: "Paged skill", description: "Private page-two detail" }, downloadInfo: { downloadUrl: "/api/skill-downloads/paged", filename: "paged.zip", expiresAt: "2028-01-01T00:00:00Z" } })
+    throw Error("Unexpected catalog request")
+  })
+  const surface = (admitted: boolean, generation: number) => <LocaleProvider><KokoroSkillsSurface preview={false} projectReadBoundary={{ admitted, subject: `paged-actor-${changed}`, generation }} onPrompt={vi.fn()} /></LocaleProvider>
+  const view = render(surface(true, 1))
+  fireEvent.click(await screen.findByRole("button", { name: "加载更多" }))
+  fireEvent.click(await screen.findByRole("button", { name: "Paged skill" }))
+  await screen.findByText("Private page-two detail")
+  const dialog = screen.getByRole("dialog")
+  round = 2
+  view.rerender(surface(false, 2))
+  expect(screen.getByRole("dialog")).toBe(dialog)
+  expect(within(dialog).queryByText("Private page-two detail")).toBeNull()
+  view.rerender(surface(true, 2))
+  fireEvent.click(await screen.findByRole("button", { name: "加载更多" }))
+  await within(dialog).findByRole("alert")
+  fireEvent.click(within(dialog).getByRole("button", { name: "加载更多" }))
+  await waitFor(() => expect(cursorCalls).toEqual(["old-next", "current-next", "current-next"]))
+  if (changed) {
+    await within(dialog).findByRole("alert")
+    expect(within(dialog).queryByRole("heading", { name: "Paged skill" })).toBeNull()
+    expect(within(dialog).queryByText("Private page-two detail")).toBeNull()
+  } else await within(dialog).findByRole("heading", { name: "Paged skill" })
+  expect(screen.getByRole("dialog")).toBe(dialog)
+})
+
+
+it.each(["network", "retired"])("unknown share survives same actor recheck without an implicit second command (%s)", async kind => {
+  const writes = vi.fn(async () => {
+    if (kind === "network") throw Error("unknown network result")
+    return new Promise<Response>(() => undefined)
+  })
+  vi.spyOn(globalThis, "fetch").mockImplementation(async input => {
+    if (String(input).endsWith("/skill-shares")) return writes()
+    return Response.json({ skill: { id: "trial-series", version: "trial-version", displayName: "Owner trial", description: "Owner facts" }, downloadInfo: { downloadUrl: "/api/skill-downloads/trial", filename: "fixture.zip", expiresAt: "2028-01-01T00:00:00Z" } })
+  })
+  const dialog = (admitted: boolean, generation: number) => <LocaleProvider><ManusSkillDetailDialog readBoundary={{ admitted, subject: `share-recheck-${kind}`, generation }} skill={{ ...executableTrial, installed: true }} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={() => false} /></LocaleProvider>
+  const view = render(dialog(true, 1))
+  fireEvent.click(await screen.findByRole("button", { name: "分享技能" }))
+  await waitFor(() => expect(writes).toHaveBeenCalledTimes(1))
+  if (kind === "network") await screen.findByRole("button", { name: "创建新的分享" })
+  view.rerender(dialog(false, 2))
+  view.rerender(dialog(true, 2))
+  const newShare = await screen.findByRole("button", { name: "创建新的分享" })
+  expect(screen.getByRole("button", { name: "分享技能" })).toBeDisabled()
+  expect(writes).toHaveBeenCalledTimes(1)
+  fireEvent.click(newShare)
+  await waitFor(() => expect(writes).toHaveBeenCalledTimes(2))
+})
+
+it.each([403, 412])("a confirmed installation rejection permits a new revision intent (%s)", async status => {
+  const writes = vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json({ error: { code: status === 403 ? "skill_forbidden" : "skill_installation_precondition_failed", message: "Rejected", retryable: false } }, { status, headers: { "cache-control": "private, no-store", "x-request-id": "req-known-rejection" } }))
+  const card = { ...executableTrial, installed: false, enabled: false }
+  const identify = (value: import("@/hub/schemas").SkillCatalogCard) => `${value.skill_id}:${value.revision_skill_id}`
+  const view = renderHook(({ generation }) => useCatalogSkillInstallation({ admitted: true, subject: `rejected-${status}`, generation }, undefined, "known-rejection", identify), { initialProps: { generation: 1 } })
+  await act(async () => { await view.result.current.setEnabled(card) })
+  expect(writes).toHaveBeenCalledTimes(1)
+  view.rerender({ generation: 2 })
+  await act(async () => { await view.result.current.setEnabled({ ...card, revision_skill_id: "replacement-revision" }) })
+  expect(writes).toHaveBeenCalledTimes(2)
+  expect(JSON.parse(String(writes.mock.calls[1]?.[1]?.body))).toEqual({ source_ref: "skill:replacement-revision" })
+})
+
+
+it("catalog GitHub recheck retires private preview choices without losing typed repository input", async () => {
+  const reads = vi.spyOn(globalThis, "fetch").mockImplementation(async () => Response.json({ data: { selection_required: true, repository_url: "https://github.com/acme/skills", commit: "a".repeat(40), paths: ["private-one", "private-two"] } }, { headers: { "cache-control": "private, no-store", "x-request-id": "req-github-recheck" } }))
+  const dialog = (admitted: boolean, generation: number) => <LocaleProvider><GithubImportDialog readBoundary={{ admitted, subject: "github-recheck", generation }} open onOpenChange={vi.fn()} /></LocaleProvider>
+  const view = render(dialog(true, 1))
+  fireEvent.change(screen.getByTestId("github-repository-input"), { target: { value: "acme/skills" } })
+  fireEvent.click(screen.getByTestId("github-import-submit"))
+  await screen.findByRole("button", { name: "private-one" })
+  view.rerender(dialog(false, 2))
+  expect(screen.queryByRole("button", { name: "private-one" })).toBeNull()
+  expect(screen.getByTestId("github-repository-input")).toHaveValue("acme/skills")
+  view.rerender(dialog(true, 2))
+  expect(screen.queryByRole("button", { name: "private-one" })).toBeNull()
+  expect(reads).toHaveBeenCalledTimes(1)
+  fireEvent.click(screen.getByTestId("github-import-submit"))
+  await screen.findByRole("button", { name: "private-one" })
+  expect(reads).toHaveBeenCalledTimes(2)
+})
+
+it("catalog local import recheck retires an acknowledged result rather than redisplaying private metadata", async () => {
+  const expiry = "2999-01-01T00:00:00Z"
+  window.sessionStorage.setItem("kokoro.skills.local-import.v1", JSON.stringify({ subject: "upload-recheck", intent_id: "own-intent", expires_at: expiry }))
+  const reads = vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json({ data: {
+    intent_id: "own-intent", skill_id: "own-series", phase: "completed", expires_at: expiry,
+    upload_proof: { upload_id: "own-upload", asset_id: "own-asset", source_version_id: "own-version", size_bytes: "3", content_sha256: "a".repeat(64) },
+    skill: { skill_id: "own-revision", source_ref: "skill:own-revision", series_id: "own-series", revision: "1", status: "active", name: "Private imported name", summary: "Owner description", tags: [], example_prompts: [], category_keys: [], skill_updated_at: "2026-10-10T00:00:00Z", product: { publication_audience: "owner", state_version: "4", source_kind: "personal" }, package_phase: "valid" },
+  } }, { headers: { "cache-control": "private, no-store", "x-request-id": "req-upload-recheck" } }))
+  const completed = vi.fn()
+  const dialog = (admitted: boolean, generation: number) => <LocaleProvider><SkillUploadDialog readBoundary={{ admitted, subject: "upload-recheck", generation }} open onOpenChange={vi.fn()} onPublished={completed} /></LocaleProvider>
+  const view = render(dialog(true, 1))
+  fireEvent.click(screen.getByRole("button", { name: "查询导入状态" }))
+  await screen.findByText("Private imported name")
+  expect(completed).toHaveBeenCalledTimes(1)
+  view.rerender(dialog(false, 2))
+  expect(screen.queryByText("Private imported name")).toBeNull()
+  view.rerender(dialog(true, 2))
+  expect(screen.queryByText("Private imported name")).toBeNull()
+  expect(reads).toHaveBeenCalledTimes(1)
+  expect(completed).toHaveBeenCalledTimes(1)
+})
+
+
+it.each([false, true])("a global MCP import invalidates Settings before it opens (old warm pending: %s)", async (pendingWarm) => {
+  const pageClients = await import("@/ui/shell/page-clients")
+  const { warmMcpProjection, useMcpProjection } = await import("@/ui/mcp/use-mcp-projection")
+  const empty = { items: [], next_cursor: null }
+  const imported = { connector_id: "global-import-connector", connector_type: "mcp" as const,
+    provider_key: "private-global-import", server_id: "global-import-server", display_name: "New global MCP",
+    status: "pending" as const, approved_scopes: [], enabled: false, state_version: "1" }
+  let resolveOld!: (value: typeof empty) => void
+  const oldWarm = new Promise<typeof empty>(resolve => { resolveOld = resolve })
+  const list = vi.fn().mockImplementationOnce(() => pendingWarm ? oldWarm : Promise.resolve(empty))
+    .mockResolvedValue({ items: [imported], next_cursor: null })
+  const hub = { ...createHubClient(), listMcpConnectors: list,
+    listMcpConnectorProviders: vi.fn().mockResolvedValue(empty),
+    listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }),
+    listSkills: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+    importPrivateMcpJson: vi.fn().mockResolvedValue({ imports: [], replayed: false }),
+  }
+  vi.spyOn(pageClients, "browserHubClient").mockReturnValue(hub)
+  // Another identity on an independent client must keep its own warmed facts.
+  const otherHub = { ...hub, listMcpConnectors: vi.fn().mockResolvedValue(empty) }
+  const otherRelease = warmMcpProjection({ client: otherHub, identity: "other-actor" })
+  const other = renderHook(() => useMcpProjection({ client: otherHub, identity: "other-actor", cursor: null, view: "connections" }))
+  const settingsClosed = vi.fn()
+  function Shell() {
+    const [mode, setMode] = useState<import("@/ui/mcp/mcp-panel-model").McpCreateMode | null>(null)
+    const [settings, setSettings] = useState<"mcp" | null>(null)
+    const shell = useRef<HTMLDivElement | null>(null), trigger = useRef<HTMLElement | null>(null)
+    return <div ref={shell}>
+      <button onClick={() => setMode("json")}>Global JSON import</button>
+      <button onClick={() => setSettings("mcp")}>Manage connectors</button>
+      <AppFrameOverlaySurfaces mounted settingsTab={settings} preview readBoundary={{ admitted: true, subject: "global-actor", generation: 1 }}
+        brandName="Kokoro" onCloseSettings={() => { setSettings(null); settingsClosed() }} onTabChange={tab => setSettings(tab === "mcp" ? "mcp" : null)}
+        onCreateSkillWithAi={vi.fn()} onTrySkill={() => false} settingsReturnFocusRef={trigger} shellRef={shell}
+        mcpCreateMode={mode} setMcpCreateMode={setMode} mcpCreateReturnFocusRef={trigger}
+        commandMenu={() => null} commandProps={{ onNewChat: vi.fn(), onOpenSettings: vi.fn() }}
+        commandOpen={false} onCommandOpenChange={vi.fn()} />
+    </div>
+  }
+  render(<StrictMode><LocaleProvider><Shell /></LocaleProvider></StrictMode>)
+  await waitFor(() => expect(list).toHaveBeenCalledTimes(1))
+  await act(async () => { await Promise.resolve() })
+  fireEvent.click(screen.getByRole("button", { name: "Global JSON import" }))
+  fireEvent.change(await screen.findByRole("textbox", { name: "请粘贴您的配置 JSON" }), { target: { value: '{"mcpServers":{"New global MCP":{"type":"streamableHttp","url":"https://mcp.example.test/import"}}}' } })
+  fireEvent.click(screen.getByRole("button", { name: "导入" }))
+  await waitFor(() => expect(screen.queryByRole("dialog", { name: "通过 JSON 导入" })).toBeNull())
+  fireEvent.click(screen.getByRole("button", { name: "Manage connectors" }))
+  await waitFor(() => expect(list).toHaveBeenCalledTimes(2))
+  await act(async () => { await Promise.resolve() })
+  expect(await screen.findByRole("button", { name: "New global MCP" })).toBeVisible()
+  if (pendingWarm) await act(async () => { resolveOld(empty); await oldWarm })
+  fireEvent.click(screen.getByRole("button", { name: "关闭设置" }))
+  await waitFor(() => expect(settingsClosed).toHaveBeenCalledOnce())
+  fireEvent.click(screen.getByRole("button", { name: "Manage connectors" }))
+  expect(await screen.findByRole("button", { name: "New global MCP" })).toBeVisible()
+  expect(list).toHaveBeenCalledTimes(2)
+  expect(other.result.current.connectorProjection?.items).toEqual([])
+  expect(otherHub.listMcpConnectors).toHaveBeenCalledTimes(1)
+  otherRelease(); other.unmount()
+})
+
+
+it.each([
+  { entry: "global", pendingWarm: false }, { entry: "global", pendingWarm: true },
+  { entry: "settings", pendingWarm: false }, { entry: "settings", pendingWarm: true },
+])("$entry API creation refreshes shared readers only after ACK (old warm pending: $pendingWarm)", async ({ entry, pendingWarm }) => {
+  const pageClients = await import("@/ui/shell/page-clients")
+  const { ConnectorsSettingsSection } = await import("@/ui/settings/sections/connectors-settings-section")
+  const { warmCustomApiProjection, useCustomApiProjection } = await import("@/ui/mcp/use-custom-api-projection")
+  const empty = { items: [], page: { next_cursor: null } }
+  const profile = { profile_id: "created-api", name: "New shared API", state_version: "1",
+    created_at: "2026-10-16T12:00:00Z", updated_at: "2026-10-16T12:00:00Z", environment: [] }
+  let resolveOld!: (value: typeof empty) => void, acknowledge!: () => void
+  const oldWarm = new Promise<typeof empty>(resolve => { resolveOld = resolve })
+  const acknowledgement = new Promise<void>(resolve => { acknowledge = resolve })
+  let created = false
+  const list = vi.fn().mockImplementationOnce(() => pendingWarm ? oldWarm : Promise.resolve(empty))
+    .mockImplementation(async () => ({ ...empty, items: created ? [profile] : [] }))
+  const hub = { ...createHubClient(), listCustomApis: list,
+    listMcpConnectors: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+    listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+    listSkills: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+    createCustomApi: vi.fn(async () => { await acknowledgement; created = true; return profile }),
+  }
+  vi.spyOn(pageClients, "browserHubClient").mockReturnValue(hub)
+  const release = warmCustomApiProjection({ client: hub, identity: "preview" })
+  const reader = entry === "settings"
+    ? renderHook(() => useCustomApiProjection({ client: hub, identity: "preview", refreshKey: 0 })) : null
+  // Both the same client's other actor and another client are outside this write.
+  const otherRelease = warmCustomApiProjection({ client: hub, identity: "preview-other" })
+  const other = renderHook(() => useCustomApiProjection({ client: hub, identity: "preview-other", refreshKey: 0 }))
+  const otherHub = { ...hub, listCustomApis: vi.fn().mockResolvedValue(empty) }
+  const independent = renderHook(() => useCustomApiProjection({ client: otherHub, identity: "preview", refreshKey: 0 }))
+  await waitFor(() => expect(other.result.current.loading).toBe(false))
+  await waitFor(() => expect(independent.result.current.loading).toBe(false))
+  function Shell() {
+    const [mode, setMode] = useState<import("@/ui/mcp/mcp-panel-model").McpCreateMode | null>(null)
+    const [settings, setSettings] = useState<"mcp" | null>(null)
+    const shell = useRef<HTMLDivElement | null>(null), trigger = useRef<HTMLElement | null>(null)
+    return <div ref={shell}>
+      <button onClick={() => setMode("custom-api")}>Global API create</button>
+      <button onClick={() => setSettings("mcp")}>Manage connectors</button>
+      <AppFrameOverlaySurfaces mounted settingsTab={settings} preview brandName="Kokoro"
+        onCloseSettings={() => setSettings(null)} onTabChange={tab => setSettings(tab === "mcp" ? "mcp" : null)}
+        onCreateSkillWithAi={vi.fn()} onTrySkill={() => false} settingsReturnFocusRef={trigger} shellRef={shell}
+        mcpCreateMode={mode} setMcpCreateMode={setMode} mcpCreateReturnFocusRef={trigger}
+        commandMenu={() => null} commandProps={{ onNewChat: vi.fn(), onOpenSettings: vi.fn() }}
+        commandOpen={false} onCommandOpenChange={vi.fn()} />
+    </div>
+  }
+  render(<StrictMode><LocaleProvider>{entry === "global" ? <Shell /> :
+    <ConnectorCommandProvider client={hub} boundary={{ admitted: true, subject: "preview", generation: 0 }}><ConnectorsSettingsSection client={hub} preview brandName="Kokoro" /></ConnectorCommandProvider>}</LocaleProvider></StrictMode>)
+  await act(async () => { await Promise.resolve() })
+  if (entry === "global") fireEvent.click(screen.getByRole("button", { name: "Global API create" }))
+  else {
+    fireEvent.keyDown(screen.getByRole("button", { name: "创建" }), { key: "ArrowDown" })
+    fireEvent.click(await screen.findByRole("menuitem", { name: "自定义 API" }))
+  }
+  const input = await screen.findByRole("textbox", { name: "名称" })
+  fireEvent.change(input, { target: { value: profile.name } })
+  fireEvent.click(screen.getByRole("button", { name: "保存" }))
+  await waitFor(() => expect(hub.createCustomApi).toHaveBeenCalledOnce())
+  expect(list).toHaveBeenCalledTimes(2)
+  const connectorReads = hub.listMcpConnectors.mock.calls.length
+  const providerReads = hub.listMcpConnectorProviders.mock.calls.length
+  await act(async () => { acknowledge(); await acknowledgement })
+  await waitFor(() => expect(input.isConnected).toBe(false))
+  if (entry === "global") fireEvent.click(screen.getByRole("button", { name: "Manage connectors" }))
+  if (reader) await waitFor(() => expect(reader.result.current.data.items).toEqual([profile]))
+  expect(await screen.findByRole("button", { name: "New shared API" })).toBeVisible()
+  expect(list).toHaveBeenCalledTimes(3)
+  expect(hub.listMcpConnectors).toHaveBeenCalledTimes(connectorReads)
+  expect(hub.listMcpConnectorProviders).toHaveBeenCalledTimes(providerReads)
+  if (pendingWarm) await act(async () => { resolveOld(empty); await oldWarm })
+  reader?.unmount()
+  const reopened = renderHook(() => useCustomApiProjection({ client: hub, identity: "preview", refreshKey: 0 }))
+  expect(reopened.result.current.data.items).toEqual([profile])
+  expect(list).toHaveBeenCalledTimes(3)
+  expect(other.result.current.data.items).toEqual([])
+  expect(independent.result.current.data.items).toEqual([])
+  expect(otherHub.listCustomApis).toHaveBeenCalledOnce()
+  release(); otherRelease(); reopened.unmount(); other.unmount(); independent.unmount()
+})
+
+it.each(["global", "settings"] as const)("%s creation ACK cannot close a newer creation window", async (entry) => {
+  const pageClients = await import("@/ui/shell/page-clients")
+  const { ConnectorsSettingsSection } = await import("@/ui/settings/sections/connectors-settings-section")
+  const { useCustomApiProjection } = await import("@/ui/mcp/use-custom-api-projection")
+  let acknowledge!: () => void
+  const pending = new Promise<void>(resolve => { acknowledge = resolve })
+  const profile = { profile_id: "closed-window-api", name: "Previously submitted API", state_version: "1",
+    created_at: "2026-10-16T12:00:00Z", updated_at: "2026-10-16T12:00:00Z", environment: [] }
+  let created = false
+  const hub = { ...createHubClient(),
+    listCustomApis: vi.fn(async () => ({ items: created ? [profile] : [], page: { next_cursor: null } })),
+    listMcpConnectors: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+    listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+    listSkills: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+    createCustomApi: vi.fn(async () => { await pending; created = true; return profile }),
+  }
+  vi.spyOn(pageClients, "browserHubClient").mockReturnValue(hub)
+  const shared = renderHook(() => useCustomApiProjection({ client: hub, identity: "preview", refreshKey: 0 }))
+  function Shell() {
+    const [mode, setMode] = useState<import("@/ui/mcp/mcp-panel-model").McpCreateMode | null>(null)
+    const shell = useRef<HTMLDivElement | null>(null), trigger = useRef<HTMLElement | null>(null)
+    return <div ref={shell}>
+      <button onClick={() => setMode("custom-api")}>Global API create</button>
+      <button onClick={() => setMode("json")}>Global JSON create</button>
+      <AppFrameOverlaySurfaces mounted settingsTab={null} preview brandName="Kokoro" onCloseSettings={vi.fn()} onTabChange={vi.fn()}
+        onCreateSkillWithAi={vi.fn()} onTrySkill={() => false} settingsReturnFocusRef={trigger} shellRef={shell}
+        mcpCreateMode={mode} setMcpCreateMode={setMode} mcpCreateReturnFocusRef={trigger}
+        commandMenu={() => null} commandProps={{ onNewChat: vi.fn(), onOpenSettings: vi.fn() }} commandOpen={false} onCommandOpenChange={vi.fn()} />
+    </div>
+  }
+  render(<StrictMode><LocaleProvider>{entry === "global" ? <Shell /> : <ConnectorCommandProvider client={hub} boundary={{ admitted: true, subject: "preview", generation: 0 }}><ConnectorsSettingsSection client={hub} preview brandName="Kokoro" /></ConnectorCommandProvider>}</LocaleProvider></StrictMode>)
+  const open = async (kind: "api" | "json") => {
+    if (entry === "global") fireEvent.click(screen.getByRole("button", { name: kind === "api" ? "Global API create" : "Global JSON create" }))
+    else {
+      fireEvent.keyDown(screen.getByRole("button", { name: "创建" }), { key: "ArrowDown" })
+      fireEvent.click(await screen.findByRole("menuitem", { name: kind === "api" ? "自定义 API" : "通过 JSON 导入 MCP" }))
+    }
+  }
+  await waitFor(() => expect(shared.result.current.loading).toBe(false))
+  await open("api")
+  fireEvent.change(await screen.findByRole("textbox", { name: "名称" }), { target: { value: profile.name } })
+  fireEvent.click(screen.getByRole("button", { name: "保存" }))
+  await waitFor(() => expect(hub.createCustomApi).toHaveBeenCalledOnce())
+  // The Dialog's close button remains available even while the footer is busy.
+  fireEvent.click(screen.getAllByRole("button", { name: "取消" }).at(-1)!)
+  await waitFor(() => expect(screen.queryByRole("textbox", { name: "名称" })).toBeNull())
+  await open("json")
+  const draft = await screen.findByRole("textbox", { name: "请粘贴您的配置 JSON" })
+  fireEvent.change(draft, { target: { value: "new window draft" } })
+  await act(async () => { acknowledge(); await pending })
+  await waitFor(() => expect(shared.result.current.data.items).toEqual([profile]))
+  expect(draft.isConnected).toBe(true)
+  expect(draft).toHaveValue("new window draft")
+  expect(screen.getByRole("dialog", { name: "通过 JSON 导入" })).toBeVisible()
+  expect(hub.createCustomApi).toHaveBeenCalledOnce()
+  shared.unmount()
+})
+
+it.each(["mode", "visibility"] as const)("a retained creation host fences old completion after its %s changes", async (transition) => {
+  const { McpCreateDialog } = await import("@/ui/mcp/mcp-create-dialog")
+  let acknowledge!: () => void
+  const pending = new Promise<void>(resolve => { acknowledge = resolve })
+  const hub = { ...createHubClient(), createCustomApi: vi.fn().mockResolvedValue({ profile_id: "retained-host-api", name: "Old API", state_version: "1", environment: [], created_at: "2026-10-16T12:00:00Z", updated_at: "2026-10-16T12:00:00Z" }) }
+  const close = vi.fn(), confirmed = vi.fn(async () => { await pending })
+  const dialog = (mode: "custom-api" | "json", open = true) => <StrictMode><LocaleProvider><ConnectorCommandProvider client={hub} boundary={{ admitted: true, subject: "preview", generation: 0 }}><McpCreateDialog client={hub} mode={mode} open={open} onOpenChange={close} onDone={confirmed} /></ConnectorCommandProvider></LocaleProvider></StrictMode>
+  const view = render(dialog("custom-api"))
+  fireEvent.change(screen.getByRole("textbox", { name: "名称" }), { target: { value: "Old API" } })
+  fireEvent.click(screen.getByRole("button", { name: "保存" }))
+  await waitFor(() => expect(hub.createCustomApi).toHaveBeenCalledOnce())
+  await waitFor(() => expect(confirmed).toHaveBeenCalledOnce())
+  if (transition === "visibility") view.rerender(dialog("custom-api", false))
+  view.rerender(dialog(transition === "mode" ? "json" : "custom-api"))
+  const draft = transition === "mode" ? screen.getByRole("textbox", { name: "请粘贴您的配置 JSON" }) : screen.getByRole("textbox", { name: "名称" })
+  fireEvent.change(draft, { target: { value: "new window draft" } })
+  await act(async () => { acknowledge(); await pending })
+  await waitFor(() => expect(confirmed).toHaveBeenCalledOnce())
+  expect(close).not.toHaveBeenCalled()
+  expect(draft).toHaveValue("new window draft")
+  expect(draft.isConnected).toBe(true)
+})
+
+function apiCreationOverlay(boundary: import("@/ui/auth/use-session-state").ProjectReadBoundary, mode: import("@/ui/mcp/mcp-panel-model").McpCreateMode | null = "custom-api", settingsTab: "mcp" | null = null) {
+  return <LocaleProvider><AppFrameOverlaySurfaces mounted settingsTab={settingsTab} preview={false} readBoundary={boundary}
+    brandName="Kokoro" onCloseSettings={vi.fn()} onTabChange={vi.fn()} onCreateSkillWithAi={vi.fn()} onTrySkill={() => false}
+    settingsReturnFocusRef={{ current: null }} shellRef={{ current: null }} mcpCreateMode={mode} setMcpCreateMode={vi.fn()}
+    mcpCreateReturnFocusRef={{ current: null }} commandMenu={() => null} commandProps={{ onNewChat: vi.fn(), onOpenSettings: vi.fn() }}
+    commandOpen={false} onCommandOpenChange={vi.fn()} /></LocaleProvider>
+}
+
+function apiCreationHub() {
+  return { ...createHubClient(),
+    listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }),
+    listMcpConnectors: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+    listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+    listSkills: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+  }
+}
+
+function mcpCreationRegistration() {
+  return { server: { server_id: "creation-server", display_name: "Creation MCP", server_url: "https://mcp.example.test/creation", status: "pending" as const, state_version: "1", headers: [], prepare_status: "pending_prepare" as const, declarations: [], declarations_available: false },
+    connector: { connector_id: "creation-connector", connector_type: "mcp" as const, provider_key: "private-creation", server_id: "creation-server", display_name: "Creation MCP", status: "pending" as const, approved_scopes: [], enabled: false, state_version: "1" }, replayed: false }
+}
+
+it.each(["form", "url"] as const)("%s MCP creation pauses its retained inputs during admission recheck", async mode => {
+  const pageClients = await import("@/ui/shell/page-clients")
+  const hub = { ...apiCreationHub(), registerPrivateMcpServer: vi.fn() }
+  vi.spyOn(pageClients, "browserHubClient").mockReturnValue(hub)
+  const boundary = { admitted: true, subject: "server-create-actor", generation: 1 }
+  const view = render(apiCreationOverlay(boundary, mode))
+  const name = screen.getByRole("textbox", { name: /^服务器名称\*?$/ })
+  const url = screen.getByRole("textbox", { name: /^服务器 URL\*?$/ })
+  await waitFor(() => expect(name).toHaveFocus())
+  fireEvent.change(name, { target: { value: "Retained draft" } })
+  fireEvent.change(url, { target: { value: "https://mcp.example.test/creation" } })
+  view.rerender(apiCreationOverlay({ ...boundary, admitted: false, generation: 2 }, mode))
+  expect(name.isConnected).toBe(true)
+  expect(name).toHaveAttribute("readonly")
+  expect(url).toHaveAttribute("readonly")
+  fireEvent.submit(name.closest("form")!)
+  expect(hub.registerPrivateMcpServer).not.toHaveBeenCalled()
+  view.rerender(apiCreationOverlay({ ...boundary, generation: 2 }, mode))
+  expect(name).toHaveValue("Retained draft")
+  expect(screen.getByRole("textbox", { name: /^服务器名称\*?$/ })).toBe(name)
+  view.rerender(apiCreationOverlay({ ...boundary, subject: "replacement-server-actor", generation: 3 }, mode))
+  expect(screen.getByRole("textbox", { name: /^服务器名称\*?$/ })).toHaveValue("")
+})
+
+it.each(["form", "url"] as const)("%s MCP registration ACK after recheck never starts remote Prepare with a retired continuation", async mode => {
+  const pageClients = await import("@/ui/shell/page-clients")
+  let acknowledge!: () => void
+  const pending = new Promise<void>(resolve => { acknowledge = resolve })
+  const hub = { ...apiCreationHub(), registerPrivateMcpServer: vi.fn(async () => { await pending; return mcpCreationRegistration() }),
+    preparePrivateMcpServer: vi.fn().mockResolvedValue({ ...mcpCreationRegistration(), declarations: [] }) }
+  vi.spyOn(pageClients, "browserHubClient").mockReturnValue(hub)
+  const boundary = { admitted: true, subject: "server-old-register", generation: 1 }
+  const view = render(apiCreationOverlay(boundary, mode))
+  fireEvent.change(screen.getByRole("textbox", { name: /^服务器名称\*?$/ }), { target: { value: "Creation MCP" } })
+  fireEvent.change(screen.getByRole("textbox", { name: /^服务器 URL\*?$/ }), { target: { value: "https://mcp.example.test/creation" } })
+  fireEvent.click(screen.getByRole("button", { name: "保存" }))
+  await waitFor(() => expect(hub.registerPrivateMcpServer).toHaveBeenCalledOnce())
+  view.rerender(apiCreationOverlay({ ...boundary, admitted: false, generation: 2 }, mode))
+  await act(async () => { acknowledge(); await pending })
+  expect(hub.preparePrivateMcpServer).not.toHaveBeenCalled()
+  expect(screen.getByRole("dialog")).toBeVisible()
+})
+
+it("an unknown private registration is recovered across Custom and URL windows using its original request", async () => {
+  const pageClients = await import("@/ui/shell/page-clients")
+  const register = vi.fn().mockRejectedValue(new Error("lost registration ACK"))
+  const hub = { ...apiCreationHub(), registerPrivateMcpServer: register }
+  vi.spyOn(pageClients, "browserHubClient").mockReturnValue(hub)
+  const boundary = { admitted: true, subject: "server-cross-mode", generation: 1 }
+  const view = render(apiCreationOverlay(boundary, "form"))
+  fireEvent.change(screen.getByRole("textbox", { name: "服务器名称" }), { target: { value: "Creation MCP" } })
+  fireEvent.change(screen.getByRole("textbox", { name: "服务器 URL" }), { target: { value: "https://mcp.example.test/creation" } })
+  fireEvent.click(screen.getByRole("button", { name: "保存" }))
+  await screen.findByRole("alert")
+  view.rerender(apiCreationOverlay(boundary, null))
+  view.rerender(apiCreationOverlay({ ...boundary, generation: 2 }, "url"))
+  expect(screen.getByRole("textbox", { name: /^服务器名称\*?$/ })).toHaveValue("")
+  expect(screen.getByRole("textbox", { name: /^服务器名称\*?$/ })).toHaveAttribute("readonly")
+  expect(register).toHaveBeenCalledOnce()
+  fireEvent.click(screen.getByRole("button", { name: "重试原请求" }))
+  await waitFor(() => expect(register).toHaveBeenCalledTimes(2))
+  expect(register.mock.calls[1]?.slice(0, 2)).toEqual(register.mock.calls[0]?.slice(0, 2))
+})
+
+it.each(["form", "url"] as const)("%s creation OAuth recheck closes its popup and rejects a late authorization URL", async mode => {
+  const pageClients = await import("@/ui/shell/page-clients")
+  const popup = { closed: false, opener: null, location: { replace: vi.fn() }, close: vi.fn(function () { popup.closed = true }) }
+  vi.spyOn(window, "open").mockReturnValue(popup as unknown as Window)
+  const registration = mcpCreationRegistration()
+  type Started = Awaited<ReturnType<import("@/hub/client").HubClient["beginMcpConnectorAuthorization"]>>
+  let acknowledge!: (value: Started) => void
+  const pending = new Promise<Started>(resolve => { acknowledge = resolve })
+  const begin = vi.fn<import("@/hub/client").HubClient["beginMcpConnectorAuthorization"]>(() => pending)
+  const list = vi.fn().mockResolvedValue({ items: [], next_cursor: null })
+  const hub = { ...apiCreationHub(), listMcpConnectors: list,
+    registerPrivateMcpServer: vi.fn().mockResolvedValue(registration),
+    getPrivateMcpServer: vi.fn().mockResolvedValue({ ...registration.server, prepare_status: "needs_oauth", state_version: "7" }),
+    getMcpConnector: vi.fn().mockResolvedValue({ ...registration.connector, state_version: "7" }), beginMcpConnectorAuthorization: begin }
+  vi.spyOn(pageClients, "browserHubClient").mockReturnValue(hub)
+  const boundary = { admitted: true, subject: `server-oauth-${mode}`, generation: 1 }
+  const view = render(apiCreationOverlay(boundary, mode))
+  fireEvent.change(screen.getByRole("textbox", { name: /^服务器名称\*?$/ }), { target: { value: "Creation MCP" } })
+  fireEvent.change(screen.getByRole("textbox", { name: /^服务器 URL\*?$/ }), { target: { value: "https://mcp.example.test/creation" } })
+  fireEvent.click(screen.getByRole("button", { name: "保存" }))
+  fireEvent.click(await screen.findByRole("button", { name: "连接" }))
+  await waitFor(() => expect(begin).toHaveBeenCalledOnce())
+  view.rerender(apiCreationOverlay({ ...boundary, admitted: false, generation: 2 }, mode))
+  expect(popup.close).toHaveBeenCalledOnce()
+  expect(begin.mock.calls[0]?.[2]?.aborted).toBe(true)
+  await act(async () => { acknowledge({ authorization: { authorization_id: "late-creation-auth", authorization_url: "https://oauth.example.test/late", expires_at: "2999-01-01T00:00:00Z" }, connector: registration.connector }); await pending })
+  expect(popup.location.replace).not.toHaveBeenCalled()
+  expect(screen.getByRole("dialog")).toBeVisible()
+  expect(begin).toHaveBeenCalledOnce()
+})
+
+const atomicMcpDocument = JSON.stringify({ mcpServers: { "Original import": { type: "streamableHttp", url: "https://mcp.example.test/original", headers: { "x-acceptance-check": "fixture-only" } } } })
+
+it("JSON creation pauses for the current actor recheck without losing the editor and clears another actor's draft", async () => {
+  const pageClients = await import("@/ui/shell/page-clients")
+  const hub = { ...apiCreationHub(), importPrivateMcpJson: vi.fn() }
+  vi.spyOn(pageClients, "browserHubClient").mockReturnValue(hub)
+  const boundary = { admitted: true, subject: "json-actor", generation: 1 }
+  const view = render(apiCreationOverlay(boundary, "json"))
+  const editor = screen.getByRole("textbox", { name: "请粘贴您的配置 JSON" })
+  fireEvent.change(editor, { target: { value: atomicMcpDocument } })
+  view.rerender(apiCreationOverlay({ ...boundary, admitted: false, generation: 2 }, "json"))
+  expect(editor.isConnected).toBe(true)
+  expect(editor).toHaveAttribute("readonly")
+  expect(screen.getByRole("button", { name: "导入" })).toBeDisabled()
+  fireEvent.submit(editor.closest("form")!)
+  expect(hub.importPrivateMcpJson).not.toHaveBeenCalled()
+  view.rerender(apiCreationOverlay({ ...boundary, generation: 2 }, "json"))
+  expect(screen.getByRole("textbox", { name: "请粘贴您的配置 JSON" })).toBe(editor)
+  expect(editor).toHaveValue(atomicMcpDocument)
+  expect(screen.getByRole("button", { name: "导入" })).toBeEnabled()
+  view.rerender(apiCreationOverlay({ ...boundary, subject: "other-actor", generation: 3 }, "json"))
+  expect(screen.getByRole("textbox", { name: "请粘贴您的配置 JSON" })).toHaveValue("")
+  view.rerender(apiCreationOverlay({ ...boundary, generation: 4 }, "json"))
+  expect(screen.getByRole("textbox", { name: "请粘贴您的配置 JSON" })).toHaveValue("")
+})
+
+it("JSON unknown creation survives closing and recheck and only retries its original key and complete document", async () => {
+  const pageClients = await import("@/ui/shell/page-clients")
+  const write = vi.fn().mockRejectedValue(new Error("lost ACK"))
+  const hub = { ...apiCreationHub(), importPrivateMcpJson: write }
+  vi.spyOn(pageClients, "browserHubClient").mockReturnValue(hub)
+  const boundary = { admitted: true, subject: "json-unknown", generation: 1 }
+  const view = render(apiCreationOverlay(boundary, "json"))
+  const editor = screen.getByRole("textbox", { name: "请粘贴您的配置 JSON" })
+  fireEvent.change(editor, { target: { value: atomicMcpDocument } })
+  fireEvent.click(screen.getByRole("button", { name: "导入" }))
+  await screen.findByRole("alert")
+  expect(editor).toHaveAttribute("readonly")
+  expect(write).toHaveBeenCalledOnce()
+  expect(write.mock.calls[0]?.[1]).toEqual(expect.any(String))
+  view.rerender(apiCreationOverlay(boundary, null))
+  view.rerender(apiCreationOverlay({ ...boundary, admitted: false, generation: 2 }, "json"))
+  expect(screen.getByRole("button", { name: "重试原请求" })).toBeDisabled()
+  view.rerender(apiCreationOverlay({ ...boundary, generation: 2 }, "json"))
+  expect(write).toHaveBeenCalledOnce()
+  fireEvent.click(screen.getByRole("button", { name: "重试原请求" }))
+  await waitFor(() => expect(write).toHaveBeenCalledTimes(2))
+  expect(write.mock.calls[1]?.slice(0, 2)).toEqual(write.mock.calls[0]?.slice(0, 2))
+  expect(write.mock.calls[1]?.[0]).toBe(atomicMcpDocument)
+})
+
+it("JSON unknown creation is shared between global and Settings windows without replay on navigation", async () => {
+  const pageClients = await import("@/ui/shell/page-clients")
+  const write = vi.fn().mockRejectedValue(new Error("lost ACK"))
+  const hub = { ...apiCreationHub(), importPrivateMcpJson: write }
+  vi.spyOn(pageClients, "browserHubClient").mockReturnValue(hub)
+  const boundary = { admitted: true, subject: "json-cross-entry", generation: 1 }
+  const view = render(apiCreationOverlay(boundary, "json"))
+  fireEvent.change(screen.getByRole("textbox", { name: "请粘贴您的配置 JSON" }), { target: { value: atomicMcpDocument } })
+  fireEvent.click(screen.getByRole("button", { name: "导入" }))
+  await screen.findByRole("alert")
+  view.rerender(apiCreationOverlay(boundary, null, "mcp"))
+  await screen.findByRole("heading", { name: "已添加的连接器" })
+  fireEvent.keyDown(screen.getByRole("button", { name: "创建" }), { key: "ArrowDown" })
+  fireEvent.click(await screen.findByRole("menuitem", { name: "通过 JSON 导入 MCP" }))
+  expect(screen.getByRole("textbox", { name: "请粘贴您的配置 JSON" })).toHaveValue("")
+  expect(screen.getByRole("textbox", { name: "请粘贴您的配置 JSON" })).toHaveAttribute("readonly")
+  expect(write).toHaveBeenCalledOnce()
+  fireEvent.click(screen.getByRole("button", { name: "重试原请求" }))
+  await waitFor(() => expect(write).toHaveBeenCalledTimes(2))
+  expect(write.mock.calls[1]?.slice(0, 2)).toEqual(write.mock.calls[0]?.slice(0, 2))
+})
+
+it("a late JSON creation ACK clears the raw document and requires current Done rather than closing through a retired boundary", async () => {
+  const pageClients = await import("@/ui/shell/page-clients")
+  let acknowledge!: () => void
+  const pending = new Promise<void>(resolve => { acknowledge = resolve })
+  const write = vi.fn<NonNullable<import("@/hub/client").HubClient["importPrivateMcpJson"]>>(async () => { await pending; return { imports: [], replayed: false } })
+  const hub = { ...apiCreationHub(), importPrivateMcpJson: write }
+  vi.spyOn(pageClients, "browserHubClient").mockReturnValue(hub)
+  const boundary = { admitted: true, subject: "json-late-ack", generation: 1 }
+  const view = render(apiCreationOverlay(boundary, "json"))
+  const editor = screen.getByRole("textbox", { name: "请粘贴您的配置 JSON" })
+  fireEvent.change(editor, { target: { value: atomicMcpDocument } })
+  fireEvent.click(screen.getByRole("button", { name: "导入" }))
+  await waitFor(() => expect(write).toHaveBeenCalledOnce())
+  const signal = write.mock.calls[0]?.[2] as AbortSignal | undefined
+  view.rerender(apiCreationOverlay({ ...boundary, admitted: false, generation: 2 }, "json"))
+  expect(signal?.aborted).toBe(true)
+  await act(async () => { acknowledge(); await pending })
+  expect(editor).toHaveValue("")
+  expect(editor).toHaveAttribute("readonly")
+  expect(screen.getByRole("button", { name: "完成" })).toBeDisabled()
+  view.rerender(apiCreationOverlay({ ...boundary, generation: 2 }, "json"))
+  expect(screen.getByRole("button", { name: "完成" })).toBeEnabled()
+  expect(screen.getByRole("dialog", { name: "通过 JSON 导入" })).toBeVisible()
+  fireEvent.click(screen.getByRole("button", { name: "完成" }))
+  expect(write).toHaveBeenCalledOnce()
+})
+
+it("API creation pauses during same-actor recheck and clears drafts on actor replacement", async () => {
+  const pageClients = await import("@/ui/shell/page-clients")
+  const hub = { ...apiCreationHub(), createCustomApi: vi.fn() }
+  vi.spyOn(pageClients, "browserHubClient").mockReturnValue(hub)
+  const view = render(apiCreationOverlay({ admitted: true, subject: "create-actor", generation: 1 }))
+  const name = screen.getByRole("textbox", { name: "名称" })
+  fireEvent.change(name, { target: { value: "Actor draft" } })
+  fireEvent.change(screen.getByRole("textbox", { name: "密钥名称" }), { target: { value: "DUMMY_SECRET" } })
+  fireEvent.change(screen.getByRole("textbox", { name: "值" }), { target: { value: "dummy-fixture-only" } })
+  view.rerender(apiCreationOverlay({ admitted: false, subject: "create-actor", generation: 2 }))
+  expect(name.isConnected).toBe(true)
+  expect(name).toHaveValue("Actor draft")
+  expect(name).toHaveAttribute("readonly")
+  expect(screen.getByRole("button", { name: "保存" })).toBeDisabled()
+  fireEvent.submit(name.closest("form")!)
+  expect(hub.createCustomApi).not.toHaveBeenCalled()
+  view.rerender(apiCreationOverlay({ admitted: true, subject: "create-actor", generation: 2 }))
+  expect(screen.getByRole("textbox", { name: "名称" })).toBe(name)
+  expect(screen.getByRole("button", { name: "保存" })).toBeEnabled()
+  view.rerender(apiCreationOverlay({ admitted: true, subject: "replacement-actor", generation: 3 }))
+  expect(screen.getByRole("textbox", { name: "名称" })).toHaveValue("")
+  expect(screen.getByRole("textbox", { name: "值" })).toHaveValue("")
+  view.rerender(apiCreationOverlay({ admitted: true, subject: "create-actor", generation: 4 }))
+  expect(screen.getByRole("textbox", { name: "名称" })).toHaveValue("")
+})
+
+it("API creation preserves one frozen command after a lost acknowledgement", async () => {
+  const pageClients = await import("@/ui/shell/page-clients")
+  const create = vi.fn().mockRejectedValueOnce(new Error("lost response"))
+  const hub = { ...apiCreationHub(), createCustomApi: create }
+  vi.spyOn(pageClients, "browserHubClient").mockReturnValue(hub)
+  render(apiCreationOverlay({ admitted: true, subject: "unknown-create-actor", generation: 1 }))
+  const name = screen.getByRole("textbox", { name: "名称" })
+  fireEvent.change(name, { target: { value: "Original API" } })
+  fireEvent.click(screen.getByRole("button", { name: "保存" }))
+  await screen.findByRole("alert")
+  expect(name).toHaveAttribute("readonly")
+  expect(screen.getByRole("button", { name: "重试原请求" })).toBeEnabled()
+  expect(create).toHaveBeenCalledOnce()
+  expect(create.mock.calls[0]?.[1]).toEqual(expect.any(String))
+})
+
+it("API creation resumes the original request after closing the window and rechecking its actor", async () => {
+  const pageClients = await import("@/ui/shell/page-clients")
+  const profile = { profile_id: "resumed-api", name: "Original API", state_version: "1", environment: [], created_at: "2026-10-16T12:00:00Z", updated_at: "2026-10-16T12:00:00Z" }
+  const create = vi.fn().mockRejectedValueOnce(new Error("lost ACK")).mockResolvedValue(profile)
+  const hub = { ...apiCreationHub(), createCustomApi: create }
+  vi.spyOn(pageClients, "browserHubClient").mockReturnValue(hub)
+  const boundary = { admitted: true, subject: "resuming-actor", generation: 1 }
+  const view = render(apiCreationOverlay(boundary))
+  fireEvent.change(screen.getByRole("textbox", { name: "名称" }), { target: { value: profile.name } })
+  fireEvent.click(screen.getByRole("button", { name: "保存" }))
+  await screen.findByRole("alert")
+  view.rerender(apiCreationOverlay(boundary, null))
+  expect(screen.queryByRole("textbox", { name: "名称" })).toBeNull()
+  view.rerender(apiCreationOverlay(boundary))
+  expect(screen.getByRole("textbox", { name: "名称" })).toHaveValue("")
+  view.rerender(apiCreationOverlay({ ...boundary, admitted: false, generation: 2 }))
+  expect(screen.getByRole("button", { name: "重试原请求" })).toBeDisabled()
+  view.rerender(apiCreationOverlay({ ...boundary, generation: 2 }))
+  expect(create).toHaveBeenCalledOnce()
+  fireEvent.click(screen.getByRole("button", { name: "重试原请求" }))
+  await waitFor(() => expect(create).toHaveBeenCalledTimes(2))
+  expect(create.mock.calls[1]?.slice(0, 2)).toEqual(create.mock.calls[0]?.slice(0, 2))
+  expect(create.mock.calls[1]?.[0]).toEqual({ name: profile.name, environment: [] })
+})
+
+it.each([false, true])("an acknowledged API secret stays cleared and Done can recover a close failure (recheck: %s)", async recheckClosing => {
+  const { CustomApiForm } = await import("@/ui/mcp/custom-api-form")
+  const { createCustomApiCreateFlow } = await import("@/ui/mcp/custom-api-create-flow")
+  let acknowledge!: () => void, rejectClosing!: (cause: Error) => void
+  const pending = new Promise<void>(resolve => { acknowledge = resolve })
+  const closing = new Promise<void>((_resolve, reject) => { rejectClosing = reject })
+  const create = vi.fn(async () => { await pending; return { profile_id: "secret-ack-api", name: "Secret API", state_version: "1", environment: [], created_at: "2026-10-16T12:00:00Z", updated_at: "2026-10-16T12:00:00Z" } })
+  const boundary = { admitted: true, subject: "secret-ack-actor", generation: 1 }
+  const flow = createCustomApiCreateFlow({ client: { createCustomApi: create }, boundary, onConfirmed: vi.fn() })
+  const onDone = vi.fn().mockImplementationOnce(async () => { await closing }).mockResolvedValue(undefined)
+  const form = (generation: number) => <LocaleProvider><CustomApiForm flow={flow} boundary={{ ...boundary, generation }} onCancel={vi.fn()} onDone={onDone} /></LocaleProvider>
+  const view = render(form(1))
+  fireEvent.change(screen.getByRole("textbox", { name: "名称" }), { target: { value: "Secret API" } })
+  fireEvent.change(screen.getByRole("textbox", { name: "密钥名称" }), { target: { value: "DUMMY_KEY" } })
+  const secret = screen.getByRole("textbox", { name: "值" })
+  fireEvent.change(secret, { target: { value: "fixture-only" } })
+  fireEvent.click(screen.getByRole("button", { name: "保存" }))
+  act(() => flow.bind({ ...boundary, generation: 2 }))
+  view.rerender(form(2))
+  await act(async () => { acknowledge(); await pending })
+  await screen.findByText("已添加自定义 API。")
+  expect(secret).toHaveValue("")
+  fireEvent.click(screen.getByRole("button", { name: "完成" }))
+  await waitFor(() => expect(onDone).toHaveBeenCalledOnce())
+  expect(secret).toHaveValue("")
+  expect(secret).toHaveAttribute("readonly")
+  expect(screen.getByRole("button", { name: "完成" })).toBeDisabled()
+  fireEvent.submit(secret.closest("form")!)
+  expect(create).toHaveBeenCalledOnce()
+  if (recheckClosing) {
+    act(() => flow.bind({ ...boundary, admitted: false, generation: 3 }))
+    view.rerender(form(3))
+    act(() => flow.bind({ ...boundary, generation: 3 }))
+  }
+  await act(async () => { rejectClosing(new Error("close failed")); await closing.catch(() => undefined) })
+  expect(screen.getByRole("button", { name: "完成" })).toBeEnabled()
+  expect(secret).toHaveValue("")
+  fireEvent.click(screen.getByRole("button", { name: "完成" }))
+  await waitFor(() => expect(onDone).toHaveBeenCalledTimes(2))
+  expect(create).toHaveBeenCalledOnce()
+})
+
+it("connector invalidation preserves another actor and retries a failed mounted read without a remount", async () => {
+  const { invalidateMcpConnectorProjection, useMcpProjection } = await import("@/ui/mcp/use-mcp-projection")
+  const page = (name: string) => ({ items: [{ connector_id: name, connector_type: "mcp" as const,
+    provider_key: "private-check", status: "pending" as const, approved_scopes: [], enabled: false,
+    state_version: "1", display_name: name }], next_cursor: null })
+  const list = vi.fn().mockResolvedValueOnce(page("old-a")).mockResolvedValueOnce(page("other-b"))
+    .mockRejectedValueOnce(new Error("temporary read failure")).mockResolvedValue(page("fresh-a"))
+  const providers = vi.fn().mockResolvedValue({ items: [], next_cursor: null })
+  const hub = { ...createHubClient(), listMcpConnectors: list, listMcpConnectorProviders: providers }
+  const a = renderHook(() => useMcpProjection({ client: hub, identity: "actor", cursor: null, view: "connections" }))
+  await waitFor(() => expect(a.result.current.connectorProjection?.items[0]?.display_name).toBe("old-a"))
+  const b = renderHook(() => useMcpProjection({ client: hub, identity: "actor-long", cursor: null, view: "connections" }))
+  await waitFor(() => expect(b.result.current.connectorProjection?.items[0]?.display_name).toBe("other-b"))
+  const providerReads = providers.mock.calls.length
+  act(() => invalidateMcpConnectorProjection(hub, "actor"))
+  await waitFor(() => expect(a.result.current.connectorState.error).toBe(true))
+  expect(a.result.current.connectorState.loading).toBe(false)
+  expect(b.result.current.connectorProjection?.items[0]?.display_name).toBe("other-b")
+  expect(list).toHaveBeenCalledTimes(3)
+  act(() => a.result.current.reload("connectors"))
+  await waitFor(() => expect(a.result.current.connectorProjection?.items[0]?.display_name).toBe("fresh-a"))
+  expect(a.result.current.connectorState.error).toBe(false)
+  expect(providers).toHaveBeenCalledTimes(providerReads)
+  expect(b.result.current.connectorProjection?.items[0]?.display_name).toBe("other-b")
+  a.unmount()
+  const reopened = renderHook(() => useMcpProjection({ client: hub, identity: "actor", cursor: null, view: "connections" }))
+  await waitFor(() => expect(reopened.result.current.connectorProjection?.items[0]?.display_name).toBe("fresh-a"))
+  expect(list).toHaveBeenCalledTimes(4)
+  reopened.unmount(); b.unmount()
+})
+
+
+it("Settings revalidates a registered MCP again after remote Prepare completes", async () => {
+  const { ConnectorsSettingsSection } = await import("@/ui/settings/sections/connectors-settings-section")
+  let finish!: () => void
+  const remote = new Promise<void>(resolve => { finish = resolve })
+  let registered = false, ready = false
+  const connector = () => ({ connector_id: "prepared-connector", connector_type: "mcp" as const,
+    provider_key: "private-prepared", server_id: "prepared-server", display_name: "Prepared MCP",
+    status: ready ? "active" as const : "pending" as const, approved_scopes: [], enabled: ready, state_version: ready ? "2" : "1" })
+  const registration = () => ({ server: { server_id: "prepared-server", display_name: "Prepared MCP", server_url: "https://mcp.example.test/prepare",
+    status: ready ? "registered" as const : "pending" as const, state_version: ready ? "2" : "1", headers: [],
+    prepare_status: ready ? "ready" as const : "pending_prepare" as const, declarations: [], declarations_available: ready }, connector: connector(), replayed: false })
+  const list = vi.fn(async () => ({ items: registered ? [connector()] : [], next_cursor: null }))
+  const hub = { ...createHubClient(), listMcpConnectors: list,
+    listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+    listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }),
+    getPrivateMcpServer: vi.fn(async () => registration().server),
+    getMcpConnector: vi.fn(async () => connector()),
+    registerPrivateMcpServer: vi.fn(async () => { registered = true; return registration() }),
+    preparePrivateMcpServer: vi.fn(async () => { await remote; ready = true; return { ...registration(), declarations: [] } }),
+  }
+  render(<LocaleProvider><ConnectorCommandProvider client={hub} boundary={{ admitted: true, subject: "preview", generation: 0 }}><ConnectorsSettingsSection client={hub} preview brandName="Kokoro" /></ConnectorCommandProvider></LocaleProvider>)
+  await waitFor(() => expect(list).toHaveBeenCalledOnce())
+  const query = screen.getByRole("searchbox", { name: "搜索连接器" })
+  fireEvent.change(query, { target: { value: "Prepared" } })
+  fireEvent.keyDown(screen.getByRole("button", { name: "创建" }), { key: "ArrowDown" })
+  fireEvent.click(await screen.findByRole("menuitem", { name: "自定义 MCP" }))
+  fireEvent.change(screen.getByRole("textbox", { name: "服务器名称" }), { target: { value: "Prepared MCP" } })
+  fireEvent.change(screen.getByRole("textbox", { name: "服务器 URL" }), { target: { value: "https://mcp.example.test/prepare" } })
+  fireEvent.click(screen.getByRole("button", { name: "保存" }))
+  await waitFor(() => expect(list).toHaveBeenCalledTimes(2))
+  await act(async () => { await Promise.resolve() })
+  await act(async () => { finish(); await remote })
+  await waitFor(() => expect(list).toHaveBeenCalledTimes(3))
+  expect(await screen.findByLabelText("已连接")).toBeVisible()
+  expect(screen.getByRole("searchbox", { name: "搜索连接器" })).toBe(query)
+  expect(query).toHaveValue("Prepared")
+})
+
+it("MCP same-actor recheck keeps search and the private detail shell but retires facts until a fresh read", async () => {
+  const { McpContent: Content } = await import("@/ui/mcp/mcp-content")
+  const McpContent = withMcpCommandOwner(Content)
+  let round = 1
+  let finish!: (value: unknown) => void
+  const nextServer = new Promise(resolve => { finish = resolve })
+  const connector = () => ({ connector_id: "recheck-connector", connector_type: "mcp" as const,
+    provider_key: "private-recheck", server_id: "recheck-server", display_name: "Private MCP",
+    status: "pending" as const, approved_scopes: [], enabled: false, state_version: String(round) })
+  const server = () => ({ server_id: "recheck-server", display_name: round === 1 ? "Private MCP" : "Fresh MCP",
+    server_url: "https://mcp.example.test/recheck", notes: "Private note", status: "pending" as const,
+    state_version: String(round), headers: [], prepare_status: "pending_prepare" as const,
+    declarations: [], declarations_available: false })
+  const list = vi.fn(async () => ({ items: [connector()], next_cursor: null }))
+  const read = vi.fn().mockImplementation(() => round === 1 ? Promise.resolve(server()) : nextServer)
+  const hub = { ...createHubClient(), listMcpConnectors: list, getPrivateMcpServer: read,
+    listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+    listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }) }
+  const content = (admitted: boolean, generation: number, subject = "mcp-recheck") =>
+    <LocaleProvider><McpContent client={hub} embedded settingsLayout initialView="connections" readBoundary={{ admitted, subject, generation }} /></LocaleProvider>
+  const view = render(content(true, 1))
+  const query = screen.getByRole("searchbox", { name: "搜索连接器" })
+  fireEvent.change(query, { target: { value: "Private" } })
+  fireEvent.click(await screen.findByRole("button", { name: "Private MCP" }))
+  const dialog = await screen.findByRole("dialog", { name: "Private MCP" })
+  round = 2
+  view.rerender(content(false, 2))
+  expect(query.isConnected).toBe(true)
+  expect(query).toHaveValue("Private")
+  expect(screen.getByRole("dialog")).toBe(dialog)
+  expect(screen.queryByText("recheck-server")).not.toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "试用一下" })).not.toBeInTheDocument()
+  expect(read).toHaveBeenCalledOnce()
+  view.rerender(content(true, 2))
+  await waitFor(() => expect(read).toHaveBeenCalledTimes(2))
+  expect(screen.getByRole("dialog")).toBe(dialog)
+  await act(async () => { finish(server()); await nextServer })
+  expect(await screen.findByRole("dialog", { name: "Fresh MCP" })).toBe(dialog)
+  expect(list).toHaveBeenCalledTimes(2)
+  view.rerender(content(true, 3, "other-mcp-actor"))
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+  expect(screen.getByRole("searchbox", { name: "搜索连接器" })).toHaveValue("")
+  view.rerender(content(true, 4))
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+  expect(screen.getByRole("searchbox", { name: "搜索连接器" })).toHaveValue("")
+})
+
+it("MCP recheck restores typed configuration against fresh facts/CAS and an old command cannot close the current detail", async () => {
+  const { McpContent: Content } = await import("@/ui/mcp/mcp-content")
+  const McpContent = withMcpCommandOwner(Content)
+  let round = 1
+  let acknowledge!: () => void
+  const ack = new Promise<void>(resolve => { acknowledge = resolve })
+  const server = () => ({ server_id: "draft-server", display_name: `Server ${round}`, notes: `Owner note ${round}`,
+    server_url: `https://mcp.example.test/v${round}`, status: "pending" as const, state_version: String(round),
+    headers: [], prepare_status: "pending_prepare" as const, declarations: [], declarations_available: false })
+  const read = vi.fn(async () => server())
+  const update = vi.fn(async () => { await ack; return { server: server(), connector: { connector_id: "draft-connector", connector_type: "mcp" as const,
+    provider_key: "private-draft", server_id: "draft-server", display_name: `Server ${round}`, status: "pending" as const,
+    approved_scopes: [], enabled: false, state_version: String(round) }, replayed: false } })
+  const hub = { ...createHubClient(), getPrivateMcpServer: read, updatePrivateMcpServer: update,
+    listMcpConnectors: vi.fn(async () => ({ items: [{ connector_id: "draft-connector", connector_type: "mcp" as const,
+      provider_key: "private-draft", server_id: "draft-server", display_name: `Server ${round}`, status: "pending" as const,
+      approved_scopes: [], enabled: false, state_version: String(round) }], next_cursor: null })),
+    listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+    listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }) }
+  const content = (admitted: boolean, generation: number) => <LocaleProvider><McpContent client={hub} embedded settingsLayout initialView="connections" readBoundary={{ admitted, subject: "draft-actor", generation }} /></LocaleProvider>
+  const view = render(content(true, 1))
+  fireEvent.click(await screen.findByRole("button", { name: "Server 1" }))
+  const dialog = await screen.findByRole("dialog", { name: "Server 1" })
+  fireEvent.keyDown(within(dialog).getByRole("button", { name: "管理" }), { key: "ArrowDown" })
+  fireEvent.click(await screen.findByRole("menuitem", { name: "编辑配置" }))
+  fireEvent.change(screen.getByRole("textbox", { name: "服务器名称" }), { target: { value: "My explicit edit" } })
+  round = 2
+  view.rerender(content(false, 2))
+  expect(screen.getByRole("dialog")).toBe(dialog)
+  expect(screen.getByRole("textbox", { name: "服务器 URL" })).toHaveValue("")
+  expect(screen.getByRole("textbox", { name: "服务器 URL" })).toHaveAttribute("readonly")
+  expect(screen.queryByText("Owner note 1")).not.toBeInTheDocument()
+  view.rerender(content(true, 2))
+  await waitFor(() => expect(screen.getByRole("textbox", { name: "服务器 URL" })).toHaveValue("https://mcp.example.test/v2"))
+  expect(screen.getByRole("textbox", { name: "服务器名称" })).toHaveValue("My explicit edit")
+  expect(screen.getByRole("textbox", { name: "备注 （可选）" })).toHaveValue("Owner note 2")
+  fireEvent.click(screen.getByRole("button", { name: "保存" }))
+  await waitFor(() => expect(update).toHaveBeenCalledWith("draft-server", { expected_state_version: "2", display_name: "My explicit edit" }, expect.any(String), expect.any(AbortSignal)))
+  round = 3
+  view.rerender(content(false, 3))
+  view.rerender(content(true, 3))
+  await waitFor(() => expect(screen.getByRole("textbox", { name: "服务器 URL" })).toHaveValue("https://mcp.example.test/v3"))
+  await act(async () => { acknowledge(); await ack })
+  expect(screen.getByRole("dialog")).toBe(dialog)
+  expect(screen.getByRole("textbox", { name: "服务器名称" })).toHaveValue("My explicit edit")
+  expect(update).toHaveBeenCalledOnce()
+})
+
+it.each(["failure", "missing"])("MCP recheck keeps a recoverable detail when the new exact resource is %s", async kind => {
+  const { McpContent: Content } = await import("@/ui/mcp/mcp-content")
+  const McpContent = withMcpCommandOwner(Content)
+  let round = 1
+  const connector = { connector_id: "retry-connector", connector_type: "mcp" as const, provider_key: "private-retry",
+    server_id: "retry-server", display_name: "Retry server", status: "pending" as const,
+    approved_scopes: [], enabled: false, state_version: "1" }
+  const server = { server_id: "retry-server", display_name: "Retry server", server_url: "https://mcp.example.test/retry",
+    status: "pending" as const, state_version: "1", headers: [], prepare_status: "pending_prepare" as const,
+    declarations: [], declarations_available: false }
+  const read = vi.fn(async (serverId: string) => {
+    if (serverId !== "retry-server") throw Error("wrong resource");
+    if (round === 2 && kind === "failure") throw Error("temporary detail read failure")
+    return server
+  })
+  const hub = { ...createHubClient(), getPrivateMcpServer: read,
+    listMcpConnectors: vi.fn(async () => ({ items: round === 2 && kind === "missing" ? [] : [connector], next_cursor: null })),
+    listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+    listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }) }
+  const content = (admitted: boolean, generation: number) => <LocaleProvider><McpContent client={hub} embedded settingsLayout initialView="connections" readBoundary={{ admitted, subject: `retry-actor-${kind}`, generation }} /></LocaleProvider>
+  const view = render(content(true, 1))
+  fireEvent.click(await screen.findByRole("button", { name: "Retry server" }))
+  const dialog = await screen.findByRole("dialog", { name: "Retry server" })
+  round = 2
+  view.rerender(content(false, 2))
+  view.rerender(content(true, 2))
+  fireEvent.click(await within(dialog).findByRole("button", { name: "重试" }))
+  // A retry while the dependency is still missing must remain recoverable.
+  await waitFor(() => expect(within(dialog).getByRole("button", { name: "重试" })).toBeVisible())
+  round = 3
+  fireEvent.click(within(dialog).getByRole("button", { name: "重试" }))
+  expect(await screen.findByRole("dialog", { name: "Retry server" })).toBe(dialog)
+  expect(read.mock.calls.every(args => args[0] === "retry-server")).toBe(true)
+})
+
+it("MCP initial private read failure remains visible and explicitly retryable on the list", async () => {
+  const { McpContent: Content } = await import("@/ui/mcp/mcp-content")
+  const McpContent = withMcpCommandOwner(Content)
+  const connector = { connector_id: "first-failure", connector_type: "mcp" as const, provider_key: "private-first",
+    server_id: "first-server", display_name: "First read", status: "pending" as const, approved_scopes: [], enabled: false, state_version: "1" }
+  const read = vi.fn().mockRejectedValueOnce(Error("temporary first read")).mockResolvedValue({ server_id: "first-server",
+    display_name: "First read", server_url: "https://mcp.example.test/first", status: "pending", state_version: "1",
+    headers: [], prepare_status: "pending_prepare", declarations: [], declarations_available: false })
+  const hub = { ...createHubClient(), getPrivateMcpServer: read,
+    listMcpConnectors: vi.fn().mockResolvedValue({ items: [connector], next_cursor: null }),
+    listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+    listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }) }
+  render(<LocaleProvider><McpContent client={hub} preview initialView="connections" /></LocaleProvider>)
+  fireEvent.click(await screen.findByRole("button", { name: "First read" }))
+  const alert = await screen.findByRole("alert")
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+  fireEvent.click(within(alert).getByRole("button", { name: "重试" }))
+  expect(await screen.findByRole("dialog", { name: "First read" })).toBeVisible()
+  expect(read).toHaveBeenCalledTimes(2)
+})
+
+it("MCP catalog recheck reports an absent exact provider without waiting for an unrelated connector read", async () => {
+  const { McpContent: Content } = await import("@/ui/mcp/mcp-content")
+  const McpContent = withMcpCommandOwner(Content)
+  let round = 1
+  const provider = { provider_key: "provider-recheck", display_name: "Provider detail", directory_type: "app" as const,
+    category_keys: [], example_prompts: [], enabled: true, state_version: "1" }
+  const list = vi.fn(async () => ({ items: round === 1 ? [provider] : [], next_cursor: null }))
+  const hub = { ...createHubClient(), listMcpConnectorProviders: list,
+    listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }) }
+  const content = (admitted: boolean, generation: number) => <LocaleProvider><McpContent client={hub} initialView="catalog" readBoundary={{ admitted, generation, subject: "absent-provider" }} /></LocaleProvider>
+  const view = render(content(true, 1))
+  fireEvent.click(await screen.findByRole("button", { name: /Provider detail/ }))
+  const dialog = await screen.findByRole("dialog", { name: "Provider detail" })
+  round = 2
+  view.rerender(content(false, 2)); view.rerender(content(true, 2))
+  expect(await within(dialog).findByRole("button", { name: "重试" })).toBeVisible()
+  round = 1
+  fireEvent.click(within(dialog).getByRole("button", { name: "重试" }))
+  expect(await screen.findByRole("dialog", { name: "Provider detail" })).toBe(dialog)
+})
+
+it("MCP OAuth admission retirement closes its popup and blocks a late old authorization URL", async () => {
+  const { useMcpOAuthPopup } = await import("@/ui/mcp/use-mcp-oauth-popup")
+  let finish!: () => void
+  const pending = new Promise<void>(resolve => { finish = resolve })
+  const navigate = vi.fn(), close = vi.fn()
+  const popup = { opener: null, closed: false, close, location: { replace: navigate } }
+  vi.spyOn(window, "open").mockReturnValue(popup as unknown as Window)
+  let signal!: AbortSignal
+  const onReload = vi.fn()
+  const initial = { admitted: true }
+  const view = renderHook(({ lifecycle }) => useMcpOAuthPopup({ lifecycle, onReload }), { initialProps: { lifecycle: initial } })
+  let result!: Promise<unknown>
+  act(() => { result = view.result.current(async value => { signal = value; await pending; return {
+    connectorId: "old-connector", authorizationUrl: "https://oauth.example.test/old", expiresAt: new Date(Date.now() + 60_000).toISOString(),
+  } }).catch(error => error) })
+  view.rerender({ lifecycle: { admitted: false } })
+  expect(signal.aborted).toBe(true)
+  expect(close).toHaveBeenCalledOnce()
+  view.rerender({ lifecycle: { admitted: true } })
+  await act(async () => { finish(); await result })
+  expect(navigate).not.toHaveBeenCalled()
+  expect(onReload).not.toHaveBeenCalled()
+})
+
+it("MCP retired OAuth Create still invalidates a confirmed new connector without continuing authorization", async () => {
+  const { useMcpProjection } = await import("@/ui/mcp/use-mcp-projection")
+  let finish!: () => void
+  let created = false
+  const pending = new Promise<void>(resolve => { finish = resolve })
+  const provider = { provider_key: "late-create", display_name: "Late create provider", directory_type: "app" as const,
+    category_keys: [], example_prompts: [], enabled: true, state_version: "1", connection_server_id: "oauth-server" }
+  const connector = { connector_id: "late-created", connector_type: "mcp" as const, provider_key: provider.provider_key,
+    status: "pending" as const, approved_scopes: [], enabled: false, state_version: "1" }
+  const begin = vi.fn()
+  const create = vi.fn(async () => { await pending; created = true; return connector })
+  const hub = { ...createHubClient(), createMcpConnector: create, beginMcpConnectorAuthorization: begin,
+    listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [provider], next_cursor: null }),
+    listMcpConnectors: vi.fn(async () => ({ items: created ? [connector] : [], next_cursor: null })),
+    listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }) }
+  const navigate = vi.fn()
+  const content = (admitted: boolean, readGeneration: number) => <LocaleProvider><McpProjectionRead client={hub} identity="late-create-actor" admitted={admitted} readGeneration={readGeneration} initialView="catalog" onAuthorizationNavigate={navigate} /></LocaleProvider>
+  const view = render(content(true, 1))
+  fireEvent.click(await screen.findByRole("button", { name: /Late create provider/ }))
+  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "连接" }))
+  await waitFor(() => expect(create).toHaveBeenCalledOnce())
+  view.rerender(content(false, 2)); view.rerender(content(true, 2))
+  const reader = renderHook(() => useMcpProjection({ client: hub, identity: "late-create-actor", cursor: null, view: "connections", readGeneration: 2 }))
+  await waitFor(() => expect(reader.result.current.connectorProjection?.items).toEqual([]))
+  await act(async () => { finish(); await pending })
+  await waitFor(() => expect(reader.result.current.connectorProjection?.items[0]?.connector_id).toBe("late-created"))
+  expect(begin).not.toHaveBeenCalled()
+  expect(navigate).not.toHaveBeenCalled()
+  reader.unmount()
+})
+
+it("MCP plaza recheck keeps the directory search and category controls mounted without retaining old cards", async () => {
+  const { McpContent: Content } = await import("@/ui/mcp/mcp-content")
+  const McpContent = withMcpCommandOwner(Content)
+  let round = 1
+  const provider = { provider_key: "stable-controls", display_name: "Stable directory provider", directory_type: "app" as const,
+    category_keys: ["finance" as const], example_prompts: [], enabled: true, state_version: "1" }
+  const hub = { ...createHubClient(), listMcpConnectorProviders: vi.fn(async () => ({ items: round === 1 ? [provider] : [], next_cursor: null })),
+    listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }) }
+  const content = (admitted: boolean, generation: number) => <LocaleProvider><McpContent client={hub} embedded initialView="catalog" readBoundary={{ admitted, generation, subject: "stable-directory" }} /></LocaleProvider>
+  const view = render(content(true, 1))
+  await screen.findByRole("button", { name: "Stable directory provider" })
+  const query = screen.getByRole("searchbox", { name: "搜索连接器" })
+  fireEvent.change(query, { target: { value: "Stable" } })
+  const category = screen.getByRole("button", { name: "财经" })
+  fireEvent.click(category)
+  round = 2
+  view.rerender(content(false, 2))
+  expect(query.isConnected).toBe(true)
+  expect(category.isConnected).toBe(true)
+  expect(category).toHaveAttribute("aria-pressed", "true")
+  expect(screen.queryByRole("button", { name: "Stable directory provider" })).not.toBeInTheDocument()
+  expect(screen.queryByText("当前没有可添加的连接器提供方。")).not.toBeInTheDocument()
+  view.rerender(content(true, 2))
+  await waitFor(() => expect(hub.listMcpConnectorProviders).toHaveBeenCalledTimes(2))
+  expect(query).toHaveValue("Stable")
+})
+
+it("MCP suspended prewarms cannot overwrite a fresh generation or be reused on reopening", async () => {
+  const { warmMcpProjection, useMcpProjection } = await import("@/ui/mcp/use-mcp-projection")
+  const { warmCustomApiProjection, useCustomApiProjection } = await import("@/ui/mcp/use-custom-api-projection")
+  let finishProviders!: (value: unknown) => void, finishConnectors!: (value: unknown) => void, finishApis!: (value: unknown) => void
+  const oldProviders = new Promise(resolve => { finishProviders = resolve })
+  const oldConnectors = new Promise(resolve => { finishConnectors = resolve })
+  const oldApis = new Promise(resolve => { finishApis = resolve })
+  const provider = (label: string) => ({ provider_key: "generation-provider", display_name: label, directory_type: "app" as const,
+    category_keys: [], example_prompts: [], enabled: true, state_version: "1" })
+  const connector = (label: string) => ({ connector_id: label, connector_type: "mcp" as const, provider_key: "generation-provider",
+    status: "pending" as const, approved_scopes: [], enabled: false, state_version: "1" })
+  const providers = vi.fn().mockReturnValueOnce(oldProviders).mockResolvedValue({ items: [provider("Fresh provider")], next_cursor: null })
+  const connectors = vi.fn().mockReturnValueOnce(oldConnectors).mockResolvedValue({ items: [connector("fresh-connector")], next_cursor: null })
+  const apis = vi.fn().mockReturnValueOnce(oldApis).mockResolvedValue({ items: [], page: { next_cursor: null } })
+  const hub = { ...createHubClient(), listMcpConnectorProviders: providers, listMcpConnectors: connectors, listCustomApis: apis }
+  const releaseMcp = warmMcpProjection({ client: hub, identity: "generation-actor", readGeneration: 1 })
+  const releaseApi = warmCustomApiProjection({ client: hub, identity: "generation-actor", readGeneration: 1 })
+  releaseMcp(); releaseApi()
+  const useReads = () => ({ mcp: useMcpProjection({ client: hub, identity: "generation-actor", cursor: null, view: "connections", readGeneration: 2 }),
+    api: useCustomApiProjection({ client: hub, identity: "generation-actor", refreshKey: 0, readGeneration: 2 }) })
+  const view = renderHook(useReads)
+  await waitFor(() => expect(view.result.current.mcp.providerProjection?.items[0]?.display_name).toBe("Fresh provider"))
+  await act(async () => {
+    finishProviders({ items: [provider("Retired provider")], next_cursor: null })
+    finishConnectors({ items: [connector("retired-connector")], next_cursor: null })
+    finishApis({ items: [{ profile_id: "retired-profile" }], page: { next_cursor: null } })
+    await Promise.all([oldProviders, oldConnectors, oldApis])
+  })
+  view.unmount()
+  const reopened = renderHook(useReads)
+  expect(reopened.result.current.mcp.providerProjection?.items[0]?.display_name).toBe("Fresh provider")
+  expect(reopened.result.current.mcp.connectorProjection?.items[0]?.connector_id).toBe("fresh-connector")
+  expect(reopened.result.current.api.data.items).toEqual([])
+  expect(providers).toHaveBeenCalledTimes(2); expect(connectors).toHaveBeenCalledTimes(2); expect(apis).toHaveBeenCalledTimes(2)
+  reopened.unmount()
+})
+
+it("Custom API same-actor recheck keeps its detail through a failed read and restores only current fields", async () => {
+  const { McpContent: Content } = await import("@/ui/mcp/mcp-content")
+  const McpContent = withMcpCommandOwner(Content)
+  let round = 1
+  const profile = () => ({ profile_id: "recheck-api", name: `API ${round}`, instructions: `Instructions ${round}`, state_version: String(round),
+    created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-16T00:00:00Z", environment: [] })
+  const apis = vi.fn(async () => { if (round === 2) throw Error("temporary API read failure"); return { items: [profile()], page: { next_cursor: null } } })
+  const hub = { ...createHubClient(), listCustomApis: apis,
+    listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+    listMcpConnectors: vi.fn().mockResolvedValue({ items: [], next_cursor: null }) }
+  const content = (admitted: boolean, generation: number) => <LocaleProvider><McpContent client={hub} initialView="connections" readBoundary={{ admitted, generation, subject: "api-recheck-actor" }} /></LocaleProvider>
+  const view = render(content(true, 1))
+  const savedApi = await screen.findByRole("button", { name: "API 1" })
+  // A persisted API profile has no connection-status fact.
+  expect(within(savedApi).queryByLabelText("已连接")).not.toBeInTheDocument()
+  expect(within(savedApi).getByLabelText("已添加")).toBeVisible()
+  fireEvent.click(savedApi)
+  const dialog = screen.getByRole("dialog", { name: "API 1" })
+  round = 2
+  view.rerender(content(false, 2))
+  expect(screen.getByRole("dialog")).toBe(dialog)
+  expect(screen.queryByText("Instructions 1")).not.toBeInTheDocument()
+  view.rerender(content(true, 2))
+  const retry = await within(dialog).findByRole("button", { name: "重试" })
+  round = 3
+  fireEvent.click(retry)
+  expect(await screen.findByRole("dialog", { name: "API 3" })).toBe(dialog)
+  expect(within(dialog).getByText("Instructions 3")).toBeVisible()
+})
+
+it("Custom API late confirmed update invalidates its own current projection without closing the rechecked detail", async () => {
+  const { McpContent: Content } = await import("@/ui/mcp/mcp-content")
+  const McpContent = withMcpCommandOwner(Content)
+  const { useCustomApiProjection } = await import("@/ui/mcp/use-custom-api-projection")
+  let finish!: () => void
+  let updated = false
+  const pending = new Promise<void>(resolve => { finish = resolve })
+  const profile = () => ({ profile_id: "late-api", name: updated ? "Confirmed API" : "Old API", instructions: "Owner instructions", state_version: updated ? "2" : "1",
+    created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-16T00:00:00Z", environment: [] })
+  const update = vi.fn(async () => { await pending; updated = true; return profile() })
+  const hub = { ...createHubClient(), updateCustomApi: update,
+    listCustomApis: vi.fn(async () => ({ items: [profile()], page: { next_cursor: null } })),
+    listMcpConnectors: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+    listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }) }
+  const content = (admitted: boolean, generation: number) => <LocaleProvider><McpContent client={hub} initialView="connections" readBoundary={{ admitted, generation, subject: "late-api-actor" }} /></LocaleProvider>
+  const view = render(content(true, 1))
+  fireEvent.click(await screen.findByRole("button", { name: "Old API" }))
+  const dialog = screen.getByRole("dialog", { name: "Old API" })
+  fireEvent.click(within(dialog).getByRole("button", { name: "编辑" }))
+  fireEvent.click(within(dialog).getByRole("button", { name: "保存修改" }))
+  await waitFor(() => expect(update).toHaveBeenCalledOnce())
+  view.rerender(content(false, 2)); view.rerender(content(true, 2))
+  const reader = renderHook(() => useCustomApiProjection({ client: hub, identity: "late-api-actor", refreshKey: 0, readGeneration: 2 }))
+  await waitFor(() => expect(reader.result.current.data.items[0]?.name).toBe("Old API"))
+  await act(async () => { finish(); await pending })
+  await waitFor(() => expect(reader.result.current.data.items[0]?.name).toBe("Confirmed API"))
+  expect(screen.getByRole("dialog")).toBe(dialog)
+  expect(update).toHaveBeenCalledOnce()
+  reader.unmount()
+})
+
+it("MCP first-open locator can retry its missing row after recheck instead of retrying only an absent detail", async () => {
+  const { McpContent: Content } = await import("@/ui/mcp/mcp-content")
+  const McpContent = withMcpCommandOwner(Content)
+  let round = 1
+  let finish!: (value: unknown) => void
+  const old = new Promise(resolve => { finish = resolve })
+  const connector = { connector_id: "initial-missing", connector_type: "mcp" as const, provider_key: "initial-missing",
+    server_id: "initial-missing-server", display_name: "Initial missing", status: "pending" as const, approved_scopes: [], enabled: false, state_version: "1" }
+  const server = { server_id: "initial-missing-server", display_name: "Initial missing", server_url: "https://mcp.example.test/initial-missing",
+    status: "pending", state_version: "1", headers: [], prepare_status: "pending_prepare", declarations: [], declarations_available: false }
+  const hub = { ...createHubClient(), getPrivateMcpServer: vi.fn().mockReturnValueOnce(old).mockResolvedValue(server),
+    listMcpConnectors: vi.fn(async () => ({ items: round === 2 ? [] : [connector], next_cursor: null })),
+    listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+    listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }) }
+  const content = (admitted: boolean, generation: number) => <LocaleProvider><McpContent client={hub} initialView="connections" readBoundary={{ admitted, generation, subject: "initial-missing-actor" }} /></LocaleProvider>
+  const view = render(content(true, 1))
+  fireEvent.click(await screen.findByRole("button", { name: "Initial missing" }))
+  await waitFor(() => expect(hub.getPrivateMcpServer).toHaveBeenCalledOnce())
+  round = 2
+  view.rerender(content(false, 2)); view.rerender(content(true, 2))
+  const retry = await within(await screen.findByRole("alert")).findByRole("button", { name: "重试" })
+  round = 3
+  fireEvent.click(retry)
+  expect(await screen.findByRole("dialog", { name: "Initial missing" })).toBeVisible()
+  await act(async () => { finish({ ...server, display_name: "Retired initial result" }); await old })
+  expect(screen.queryByText("Retired initial result")).not.toBeInTheDocument()
+})
+
+it.each([
+  { kind: "mcp", dirty: false, target: "name" }, { kind: "mcp", dirty: true, target: "name" },
+  { kind: "api", dirty: false, target: "name" }, { kind: "api", dirty: true, target: "name" },
+  { kind: "mcp", dirty: true, target: "secret" }, { kind: "api", dirty: true, target: "secret" },
+])("$kind configuration keeps its focused field and selection through admission recheck (dirty: $dirty; field: $target)", async ({ kind, dirty, target }) => {
+  const { CustomMcpDetailDialog } = await import("@/ui/mcp/custom-mcp-detail-dialog")
+  const { CustomApiDetailDialog } = await import("@/ui/mcp/custom-api-detail-dialog")
+  const close = vi.fn(), save = vi.fn(), prepare = vi.fn()
+  const connector = { connector_id: "selection-connector", connector_type: "mcp" as const, provider_key: "selection",
+    server_id: "selection-server", display_name: "Original server", status: "pending" as const, approved_scopes: [], enabled: false, state_version: "1" }
+  const server = (fresh: boolean) => ({ server_id: "selection-server", display_name: fresh ? "Updated server" : "Original server",
+    notes: fresh ? "Fresh owner note" : "Retired owner note", server_url: "https://mcp.example.test/selection",
+    status: "pending" as const, state_version: fresh ? "2" : "1", headers: [{ name: "x-existing", configured: true, state_version: "1", status: "active" as const }],
+    prepare_status: "pending_prepare" as const, declarations: [], declarations_available: false })
+  const profile = (fresh: boolean) => ({ profile_id: "selection-api", name: fresh ? "Updated server" : "Original server",
+    instructions: fresh ? "Fresh owner note" : "Retired owner note", state_version: fresh ? "2" : "1",
+    created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-16T00:00:00Z", environment: [] })
+  const content = (ready: boolean, fresh = false, partial = false) => <LocaleProvider>{kind === "mcp" ?
+    <CustomMcpDetailDialog admitted={ready} managementCommand={undefined} onResumeManagement={() => {}} connector={ready ? connector : null} server={ready || partial ? server(fresh) : null}
+      actionId={null} actionError={false} deleteId={null} returnFocusRef={{ current: null }} onClose={close}
+      onSaveConfiguration={save} onPrepare={prepare} onAuthorize={vi.fn()} onDisconnect={vi.fn()} onDeleteIntent={vi.fn()} onCancelDelete={vi.fn()} onDelete={vi.fn()} /> :
+    <CustomApiDetailDialog admitted={ready} command={undefined} canUpdate canRemove onResume={() => {}} profile={ready ? profile(fresh) : null} busy={false} actionError={false}
+      returnFocusRef={{ current: null }} onClose={close} onSave={save} onDelete={vi.fn()} />}</LocaleProvider>
+  const view = render(content(true))
+  if (kind === "mcp") {
+    fireEvent.keyDown(screen.getByRole("button", { name: "管理" }), { key: "ArrowDown" })
+    fireEvent.click(await screen.findByRole("menuitem", { name: "编辑配置" }))
+  } else fireEvent.click(screen.getByRole("button", { name: "编辑" }))
+  const label = kind === "mcp" ? "服务器名称" : "名称"
+  if (target === "secret") fireEvent.click(screen.getByRole("button", { name: kind === "mcp" ? "添加自定义 header" : "添加密钥" }))
+  const control = () => target === "secret" ? screen.getByLabelText(kind === "mcp" ? "Header value" : "密钥值") : screen.getByRole("textbox", { name: label })
+  const field = control() as HTMLInputElement
+  if (dirty) fireEvent.change(field, { target: { value: "Explicit user text" } })
+  act(() => { field.focus(); field.setSelectionRange(2, 6, "backward"); fireEvent.select(field) })
+  expect(field).toHaveFocus()
+  view.rerender(content(false))
+  expect(control()).toBe(field)
+  expect(field).toHaveFocus()
+  expect(field).toHaveAttribute("readonly")
+  expect(field).toHaveValue(dirty ? "Explicit user text" : "")
+  if (kind === "mcp") {
+    view.rerender(content(false, false, true))
+    expect(field).toHaveValue(dirty ? "Explicit user text" : "")
+    expect(screen.getByRole("textbox", { name: "备注 （可选）" })).toHaveValue("")
+  }
+  expect(screen.queryByText("Retired owner note")).not.toBeInTheDocument()
+  if (kind === "mcp") {
+    expect(screen.queryByText("x-existing")).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "试用一下" })).toBeDisabled()
+  }
+  expect(screen.getByRole("button", { name: kind === "mcp" ? "保存" : "保存修改" })).toBeDisabled()
+  if (dirty) act(() => { field.setSelectionRange(0, field.value.length, "forward"); fireEvent.select(field) })
+  else fireEvent.select(field)
+  view.rerender(content(true, true))
+  expect(control()).toBe(field)
+  expect(field).toHaveFocus()
+  expect(field).not.toHaveAttribute("readonly")
+  expect(field).toHaveValue(dirty ? "Explicit user text" : "Updated server")
+  expect([field.selectionStart, field.selectionEnd, field.selectionDirection]).toEqual(dirty ? [0, "Explicit user text".length, "forward"] : [2, 6, "backward"])
+  expect(save).not.toHaveBeenCalled(); expect(prepare).not.toHaveBeenCalled()
+})
+
+it.each(["mcp", "api"])("%s configuration restores a bounded range without stealing a focus choice made during recheck", async kind => {
+  const { CustomMcpDetailDialog } = await import("@/ui/mcp/custom-mcp-detail-dialog")
+  const { CustomApiDetailDialog } = await import("@/ui/mcp/custom-api-detail-dialog")
+  const connector = { connector_id: "focus-choice", connector_type: "mcp" as const, provider_key: "focus-choice",
+    server_id: "focus-choice-server", status: "pending" as const, approved_scopes: [], enabled: false, state_version: "1" }
+  const server = (name: string) => ({ server_id: "focus-choice-server", display_name: name, notes: "Fresh note paragraph", server_url: "https://mcp.example.test/focus-choice",
+    status: "pending" as const, state_version: "1", headers: [], prepare_status: "pending_prepare" as const, declarations: [], declarations_available: false })
+  const profile = (name: string) => ({ profile_id: "focus-choice-api", name, instructions: "Fresh note paragraph", state_version: "1",
+    created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-16T00:00:00Z", environment: [] })
+  const content = (name: string | null, pendingError = false) => <LocaleProvider>{kind === "mcp" ?
+    <CustomMcpDetailDialog admitted={name !== null} managementCommand={undefined} onResumeManagement={() => {}} connector={name === null ? null : connector} server={name === null ? null : server(name)}
+      actionId={null} actionError={false} deleteId={null} returnFocusRef={{ current: null }} onClose={vi.fn()} pendingError={pendingError} onRetry={vi.fn()}
+      onSaveConfiguration={vi.fn()} onPrepare={vi.fn()} onAuthorize={vi.fn()} onDisconnect={vi.fn()} onDeleteIntent={vi.fn()} onCancelDelete={vi.fn()} onDelete={vi.fn()} /> :
+    <CustomApiDetailDialog admitted={name !== null} command={undefined} canUpdate canRemove onResume={() => {}} profile={name === null ? null : profile(name)} busy={false} actionError={false}
+      returnFocusRef={{ current: null }} onClose={vi.fn()} onSave={vi.fn()} onDelete={vi.fn()} pendingError={pendingError} onRetry={vi.fn()} />}</LocaleProvider>
+  const view = render(content("Long original name"))
+  if (kind === "mcp") {
+    fireEvent.keyDown(screen.getByRole("button", { name: "管理" }), { key: "ArrowDown" })
+    fireEvent.click(await screen.findByRole("menuitem", { name: "编辑配置" }))
+  } else fireEvent.click(screen.getByRole("button", { name: "编辑" }))
+  const field = screen.getByRole("textbox", { name: kind === "mcp" ? "服务器名称" : "名称" }) as HTMLInputElement
+  act(() => { field.focus(); field.setSelectionRange(5, 9); fireEvent.select(field) })
+  view.rerender(content(null))
+  view.rerender(content("Hi"))
+  expect(field).toHaveFocus()
+  expect([field.selectionStart, field.selectionEnd]).toEqual([2, 2])
+  view.rerender(content(null))
+  view.rerender(content("Longer fresh name"))
+  expect([field.selectionStart, field.selectionEnd]).toEqual([2, 2])
+  view.rerender(content(null))
+  fireEvent.keyDown(field, { key: "a", ctrlKey: true })
+  fireEvent.select(field)
+  view.rerender(content("Owner returns after selection"))
+  expect(field).toHaveFocus()
+  expect([field.selectionStart, field.selectionEnd]).toEqual([0, 0])
+  view.rerender(content(null))
+  const note = screen.getByRole("textbox", { name: kind === "mcp" ? "备注 （可选）" : "备注（可选）" }) as HTMLTextAreaElement
+  act(() => { note.focus(); note.setSelectionRange(0, 0); fireEvent.select(note) })
+  view.rerender(content("Recovered paragraph"))
+  expect(note).toHaveFocus()
+  expect(note).toHaveValue("Fresh note paragraph")
+  expect([note.selectionStart, note.selectionEnd]).toEqual([0, 0])
+  act(() => { note.scrollTop = 8; note.scrollLeft = 4; fireEvent.scroll(note) })
+  view.rerender(content(null))
+  act(() => { note.scrollTop = 0; note.scrollLeft = 0; fireEvent.scroll(note) })
+  view.rerender(content("Restored field scroll"))
+  expect([note.scrollTop, note.scrollLeft]).toEqual([8, 4])
+  view.rerender(content(null, true))
+  const retry = screen.getByRole("button", { name: "重试" })
+  act(() => retry.focus())
+  // A focused Close button remains mounted even when Retry disappears.
+  const close = screen.getAllByRole("button", { name: "取消" }).find(button => !button.hasAttribute("disabled"))!
+  act(() => close.focus())
+  view.rerender(content("Recovered name"))
+  expect(close).toHaveFocus()
+  expect(field).not.toHaveFocus()
+})
+
+it.each(["form", "url"] as const)("%s MCP completion failure remains named and only retries closing after recheck", async mode => {
+  const { Dialog, DialogContent } = await import("@/components/ui/dialog")
+  const { CustomMcpForm } = await import("@/ui/mcp/mcp-custom-form")
+  const { UrlMcpForm } = await import("@/ui/mcp/mcp-url-form")
+  const { createMcpServerCreationFlow } = await import("@/ui/mcp/mcp-server-creation-flow")
+  const registration = mcpCreationRegistration()
+  let prepared = false
+  const hub = { registerPrivateMcpServer: vi.fn().mockResolvedValue(registration),
+    beginMcpConnectorAuthorization: vi.fn(),
+    getPrivateMcpServer: vi.fn(async () => ({ ...registration.server, state_version: prepared ? "3" : "2", prepare_status: prepared ? "ready" as const : "pending_prepare" as const })),
+    getMcpConnector: vi.fn(async () => ({ ...registration.connector, status: prepared ? "active" as const : "pending" as const, enabled: prepared })),
+    preparePrivateMcpServer: vi.fn(async () => { prepared = true; return { ...registration, declarations: [] } }) }
+  const boundary = { admitted: true, subject: `completion-${mode}`, generation: 1 }
+  const flow = createMcpServerCreationFlow({ client: hub, preparation: createMcpPreparationCommands({ canPrepare: () => true, client: hub, boundary, onConfirmed: vi.fn() }), boundary, onChanged: vi.fn() })
+  const onDone = vi.fn().mockRejectedValueOnce(new Error("close failed")).mockResolvedValue(undefined)
+  const Form = mode === "form" ? CustomMcpForm : UrlMcpForm
+  const form = (generation: number) => <LocaleProvider><Dialog open><DialogContent><Form flow={flow} boundary={{ ...boundary, generation }} onCancel={vi.fn()} onDone={onDone} /></DialogContent></Dialog></LocaleProvider>
+  const view = render(form(1))
+  fireEvent.change(screen.getByRole("textbox", { name: /^服务器名称\*?$/ }), { target: { value: "Creation MCP" } })
+  fireEvent.change(screen.getByRole("textbox", { name: /^服务器 URL\*?$/ }), { target: { value: registration.server.server_url } })
+  fireEvent.click(screen.getByRole("button", { name: "保存" }))
+  await waitFor(() => expect(onDone).toHaveBeenCalledOnce())
+  expect(await screen.findByRole("alert")).toBeVisible()
+  expect(screen.getByRole("heading", { name: "Creation MCP" })).toBeVisible()
+  act(() => flow.bind({ ...boundary, admitted: false, generation: 2 }))
+  view.rerender(form(2))
+  act(() => flow.bind({ ...boundary, generation: 2 }))
+  view.rerender(form(2))
+  fireEvent.click(screen.getByRole("button", { name: "完成" }))
+  await waitFor(() => expect(onDone).toHaveBeenCalledTimes(2))
+  expect(hub.registerPrivateMcpServer).toHaveBeenCalledOnce()
+  expect(hub.preparePrivateMcpServer).toHaveBeenCalledOnce()
+})
+
+it.each(["recheck", "popup-close"] as const)("URL Save-and-publish reserves its popup before registration and retires the continuation on %s", async retirement => {
+  const pageClients = await import("@/ui/shell/page-clients")
+  const popup = { closed: false, opener: {}, close: vi.fn(), location: { replace: vi.fn() } }
+  const open = vi.spyOn(window, "open").mockReturnValue(popup as unknown as Window)
+  let acknowledge!: () => void
+  const pending = new Promise<void>(resolve => { acknowledge = resolve })
+  const registration = mcpCreationRegistration()
+  const hub = { ...apiCreationHub(), registerPrivateMcpServer: vi.fn<NonNullable<import("@/hub/client").HubClient["registerPrivateMcpServer"]>>(async () => { await pending; return registration }),
+    getPrivateMcpServer: vi.fn().mockResolvedValue(registration.server), getMcpConnector: vi.fn().mockResolvedValue(registration.connector),
+    preparePrivateMcpServer: vi.fn(), beginMcpConnectorAuthorization: vi.fn() }
+  vi.spyOn(pageClients, "browserHubClient").mockReturnValue(hub)
+  const boundary = { admitted: true, subject: "publish-gesture-actor", generation: 1 }
+  const view = render(apiCreationOverlay(boundary, "url"))
+  fireEvent.change(screen.getByRole("textbox", { name: /^服务器名称\*?$/ }), { target: { value: "Creation MCP" } })
+  fireEvent.change(screen.getByRole("textbox", { name: /^服务器 URL\*?$/ }), { target: { value: registration.server.server_url } })
+  fireEvent.click(screen.getByRole("button", { name: "保存并发布" }))
+  expect(open).toHaveBeenCalledOnce()
+  expect(hub.registerPrivateMcpServer).toHaveBeenCalledOnce()
+  expect(popup.opener).toBeNull()
+  if (retirement === "recheck") view.rerender(apiCreationOverlay({ ...boundary, admitted: false, generation: 2 }, "url"))
+  else {
+    popup.closed = true
+    await waitFor(() => expect(hub.registerPrivateMcpServer.mock.calls[0]?.[2]?.aborted).toBe(true))
+  }
+  expect(popup.close).toHaveBeenCalledTimes(retirement === "recheck" ? 1 : 0)
+  await act(async () => { acknowledge(); await pending })
+  expect(hub.preparePrivateMcpServer).not.toHaveBeenCalled()
+  expect(hub.beginMcpConnectorAuthorization).not.toHaveBeenCalled()
+  expect(popup.location.replace).not.toHaveBeenCalled()
+})
+
+it("a blocked URL Save-and-publish popup does not register a server as a hidden side effect", async () => {
+  const pageClients = await import("@/ui/shell/page-clients")
+  vi.spyOn(window, "open").mockReturnValue(null)
+  const hub = { ...apiCreationHub(), registerPrivateMcpServer: vi.fn().mockResolvedValue(mcpCreationRegistration()) }
+  vi.spyOn(pageClients, "browserHubClient").mockReturnValue(hub)
+  render(apiCreationOverlay({ admitted: true, subject: "blocked-publish-actor", generation: 1 }, "url"))
+  fireEvent.change(screen.getByRole("textbox", { name: /^服务器名称\*?$/ }), { target: { value: "Creation MCP" } })
+  fireEvent.change(screen.getByRole("textbox", { name: /^服务器 URL\*?$/ }), { target: { value: "https://mcp.example.test/creation" } })
+  fireEvent.click(screen.getByRole("button", { name: "保存并发布" }))
+  expect(hub.registerPrivateMcpServer).not.toHaveBeenCalled()
+  expect(await screen.findByRole("alert")).toBeVisible()
+})
+
+it("URL Save-and-publish closes the reservation without an error when owner discovery needs no OAuth", async () => {
+  const { Dialog, DialogContent } = await import("@/components/ui/dialog")
+  const { UrlMcpForm } = await import("@/ui/mcp/mcp-url-form")
+  const { createMcpServerCreationFlow } = await import("@/ui/mcp/mcp-server-creation-flow")
+  const popup = { closed: false, opener: {}, close: vi.fn(), location: { replace: vi.fn() } }
+  vi.spyOn(window, "open").mockReturnValue(popup as unknown as Window)
+  const registration = mcpCreationRegistration()
+  let prepared = false
+  const hub = { registerPrivateMcpServer: vi.fn().mockResolvedValue(registration), beginMcpConnectorAuthorization: vi.fn(),
+    getPrivateMcpServer: vi.fn(async () => ({ ...registration.server, prepare_status: prepared ? "ready" as const : "pending_prepare" as const, state_version: prepared ? "3" : "2" })),
+    getMcpConnector: vi.fn(async () => ({ ...registration.connector, enabled: prepared, status: prepared ? "active" as const : "pending" as const })),
+    preparePrivateMcpServer: vi.fn(async () => { prepared = true; return { ...registration, declarations: [] } }) }
+  const boundary = { admitted: true, subject: "publish-no-oauth", generation: 1 }
+  const flow = createMcpServerCreationFlow({ client: hub, preparation: createMcpPreparationCommands({ canPrepare: () => true, client: hub, boundary, onConfirmed: vi.fn() }), boundary, onChanged: vi.fn() })
+  const onDone = vi.fn().mockResolvedValue(undefined)
+  render(<LocaleProvider><Dialog open><DialogContent><UrlMcpForm flow={flow} boundary={boundary} onCancel={vi.fn()} onDone={onDone} /></DialogContent></Dialog></LocaleProvider>)
+  fireEvent.change(screen.getByRole("textbox", { name: /^服务器名称\*?$/ }), { target: { value: "Creation MCP" } })
+  fireEvent.change(screen.getByRole("textbox", { name: /^服务器 URL\*?$/ }), { target: { value: registration.server.server_url } })
+  fireEvent.click(screen.getByRole("button", { name: "保存并发布" }))
+  await waitFor(() => expect(onDone).toHaveBeenCalledOnce())
+  expect(popup.close).toHaveBeenCalledOnce()
+  expect(popup.location.replace).not.toHaveBeenCalled()
+  expect(hub.preparePrivateMcpServer).toHaveBeenCalledOnce()
+  expect(hub.beginMcpConnectorAuthorization).not.toHaveBeenCalled()
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+})
+
+it.each([false, true])("private detail Prepare restores the same original command after reopening (recheck: %s)", async recheck => {
+  const { McpContent } = await import("@/ui/mcp/mcp-content")
+  const registration = mcpCreationRegistration()
+  let version = "1"
+  const prepare = vi.fn<NonNullable<import("@/hub/client").HubClient["preparePrivateMcpServer"]>>().mockRejectedValue(new Error("lost prepare ACK"))
+  const hub = { ...apiCreationHub(), preparePrivateMcpServer: prepare,
+    listMcpConnectors: vi.fn(async () => ({ items: [{ ...registration.connector, state_version: version }], next_cursor: null })),
+    getPrivateMcpServer: vi.fn(async () => ({ ...registration.server, state_version: version })) }
+  const boundary = { admitted: true, subject: "detail-original-prepare", generation: 1 }
+  const content = (admitted = true, generation = 1) => <LocaleProvider><ConnectorCommandProvider client={hub} boundary={{ ...boundary, admitted, generation }}><McpContent client={hub} initialView="connections" readBoundary={{ ...boundary, admitted, generation }} /></ConnectorCommandProvider></LocaleProvider>
+  const view = render(content())
+  fireEvent.click(await screen.findByRole("button", { name: "Creation MCP" }))
+  fireEvent.click(await screen.findByRole("button", { name: "试用一下" }))
+  await screen.findByRole("alert")
+  expect(prepare).toHaveBeenCalledOnce()
+  fireEvent.click(screen.getByRole("button", { name: "取消" }))
+  if (recheck) { view.rerender(content(false, 2)); version = "9"; view.rerender(content(true, 2)) }
+  fireEvent.click(await screen.findByRole("button", { name: "Creation MCP" }))
+  const button = await screen.findByRole("button", { name: /^(试用一下|重试原请求)$/ })
+  fireEvent.click(button)
+  await waitFor(() => expect(prepare).toHaveBeenCalledTimes(2))
+  expect(prepare.mock.calls[1]?.slice(0, 3)).toEqual(prepare.mock.calls[0]?.slice(0, 3))
+  expect(prepare.mock.calls[1]?.[1]).toBe("1")
+})
+
+it("global creation and Settings detail restore one Prepare, and confirmed disconnect releases the closed creation intent", async () => {
+  const { McpCreateDialog } = await import("@/ui/mcp/mcp-create-dialog")
+  const { McpContent } = await import("@/ui/mcp/mcp-content")
+  const registration = mcpCreationRegistration()
+  let version = "1", removed = false
+  const prepare = vi.fn<NonNullable<import("@/hub/client").HubClient["preparePrivateMcpServer"]>>().mockRejectedValue(new Error("lost Prepare ACK"))
+  const remove = vi.fn(async () => { removed = true; return { ...registration.connector, status: "revoked" as const } })
+  const hub = { ...apiCreationHub(), preparePrivateMcpServer: prepare, removeMcpConnector: remove,
+    registerPrivateMcpServer: vi.fn().mockResolvedValue(registration),
+    getPrivateMcpServer: vi.fn(async () => ({ ...registration.server, state_version: version })),
+    getMcpConnector: vi.fn(async () => registration.connector),
+    listMcpConnectors: vi.fn(async () => ({ items: removed ? [] : [registration.connector], next_cursor: null })) }
+  const boundary = { admitted: true, subject: "cross-entry-preparation", generation: 1 }
+  // One production owner spans both consumers; neither isolated-surface helper is used.
+  const content = (creation: boolean) => <LocaleProvider><ConnectorCommandProvider client={hub} boundary={boundary}>
+    {creation ? <McpCreateDialog client={hub} mode="form" open onOpenChange={vi.fn()} /> :
+      <McpContent client={hub} initialView="connections" settingsLayout readBoundary={boundary} />}
+  </ConnectorCommandProvider></LocaleProvider>
+  const view = render(content(true))
+  fireEvent.change(screen.getByRole("textbox", { name: "服务器名称" }), { target: { value: "Creation MCP" } })
+  fireEvent.change(screen.getByRole("textbox", { name: "服务器 URL" }), { target: { value: registration.server.server_url } })
+  fireEvent.click(screen.getByRole("button", { name: "保存" }))
+  await screen.findByRole("button", { name: "重试原请求" })
+  expect(prepare).toHaveBeenCalledOnce()
+  version = "9"
+  view.rerender(content(false))
+  fireEvent.click(await screen.findByRole("button", { name: "Creation MCP" }))
+  const retry = await screen.findByRole("button", { name: "重试原请求" })
+  expect(prepare).toHaveBeenCalledOnce()
+  fireEvent.click(retry)
+  await waitFor(() => expect(prepare).toHaveBeenCalledTimes(2))
+  expect(prepare.mock.calls[1]?.slice(0, 3)).toEqual(prepare.mock.calls[0]?.slice(0, 3))
+  expect(prepare.mock.calls[1]?.[1]).toBe("1")
+  fireEvent.keyDown(screen.getByRole("button", { name: "管理" }), { key: "ArrowDown" })
+  fireEvent.click(await screen.findByRole("menuitem", { name: "断开连接" }))
+  await waitFor(() => expect(remove).toHaveBeenCalledOnce())
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+  view.rerender(content(true))
+  expect(screen.getByRole("textbox", { name: "服务器名称" })).toHaveValue("")
+  expect(screen.getByRole("button", { name: "保存" })).toBeDisabled()
+  expect(hub.registerPrivateMcpServer).toHaveBeenCalledOnce()
+  expect(prepare).toHaveBeenCalledTimes(2)
+})
+
+it("closing a preparing detail aborts its wait; a late ACK cannot close the successor window", async () => {
+  const { McpContent } = await import("@/ui/mcp/mcp-content")
+  const registration = mcpCreationRegistration()
+  let acknowledge!: () => void
+  const pending = new Promise<void>(resolve => { acknowledge = resolve })
+  const prepare = vi.fn<NonNullable<import("@/hub/client").HubClient["preparePrivateMcpServer"]>>(async () => {
+    await pending; return { ...registration, declarations: [] }
+  })
+  const hub = { ...apiCreationHub(), preparePrivateMcpServer: prepare,
+    getPrivateMcpServer: vi.fn(async () => registration.server),
+    listMcpConnectors: vi.fn(async () => ({ items: [registration.connector], next_cursor: null })) }
+  const boundary = { admitted: true, subject: "detail-window-prepare", generation: 1 }
+  render(<LocaleProvider><ConnectorCommandProvider client={hub} boundary={boundary}>
+    <McpContent client={hub} initialView="connections" readBoundary={boundary} />
+  </ConnectorCommandProvider></LocaleProvider>)
+  fireEvent.click(await screen.findByRole("button", { name: "Creation MCP" }))
+  fireEvent.click(await screen.findByRole("button", { name: "试用一下" }))
+  await waitFor(() => expect(prepare).toHaveBeenCalledOnce())
+  fireEvent.click(screen.getByRole("button", { name: "取消" }))
+  expect(prepare.mock.calls[0]?.[3]?.aborted).toBe(true)
+  fireEvent.click(await screen.findByRole("button", { name: "Creation MCP" }))
+  await screen.findByRole("button", { name: "重试原请求" })
+  await act(async () => { acknowledge(); await pending })
+  expect(screen.getByRole("dialog", { name: "Creation MCP" })).toBeVisible()
+  fireEvent.click(await screen.findByRole("button", { name: "完成" }))
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+  expect(prepare).toHaveBeenCalledOnce()
+})
+
+it("an unconfirmed Custom API edit keeps its draft read-only and exposes original-request recovery", async () => {
+  const { McpContent: Content } = await import("@/ui/mcp/mcp-content")
+  const McpContent = withMcpCommandOwner(Content)
+  const profile = { profile_id: "unknown-api-edit", name: "Editable API", state_version: "1", created_at: "2026-10-16T12:00:00Z", updated_at: "2026-10-16T12:00:00Z", environment: [] }
+  const update = vi.fn().mockRejectedValue(new Error("lost management ACK"))
+  const hub = { ...createHubClient(), updateCustomApi: update,
+    listCustomApis: vi.fn().mockResolvedValue({ items: [profile], page: { next_cursor: null } }),
+    listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }), listMcpConnectors: vi.fn().mockResolvedValue({ items: [], next_cursor: null }) }
+  render(<LocaleProvider><McpContent client={hub} initialView="connections" readBoundary={{ admitted: true, generation: 1, subject: "api-management-actor" }} /></LocaleProvider>)
+  fireEvent.click(await screen.findByRole("button", { name: "Editable API" }))
+  fireEvent.click(screen.getByRole("button", { name: "编辑" }))
+  const name = screen.getByLabelText("名称")
+  fireEvent.change(name, { target: { value: "Original edit" } })
+  fireEvent.click(screen.getByRole("button", { name: "保存修改" }))
+  await waitFor(() => expect(update).toHaveBeenCalledOnce())
+  expect(await screen.findByRole("button", { name: "重试原请求" })).toBeEnabled()
+  expect(name).toHaveAttribute("readonly")
+});
+
+it("an API deletion remains recoverable when the row disappears, without treating the list as its ACK", async () => {
+  const { McpContent: Content } = await import("@/ui/mcp/mcp-content")
+  const McpContent = withMcpCommandOwner(Content)
+  const profile = { profile_id: "missing-api-command", name: "Delete API", state_version: "1", created_at: "2026-10-16T12:00:00Z", updated_at: "2026-10-16T12:00:00Z", environment: [] }
+  let listed = true
+  const remove = vi.fn().mockRejectedValueOnce(new Error("lost deletion ACK")).mockResolvedValue(undefined)
+  const hub = { ...createHubClient(), removeCustomApi: remove,
+    listCustomApis: vi.fn(async () => ({ items: listed ? [profile] : [], page: { next_cursor: null } })),
+    listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }), listMcpConnectors: vi.fn().mockResolvedValue({ items: [], next_cursor: null }) }
+  const content = (generation: number) => <LocaleProvider><McpContent client={hub} initialView="connections" readBoundary={{ admitted: true, generation, subject: "api-delete-actor" }} /></LocaleProvider>
+  const view = render(content(1))
+  fireEvent.click(await screen.findByRole("button", { name: "Delete API" }))
+  fireEvent.click(screen.getByRole("button", { name: "删除" }))
+  fireEvent.click(screen.getByRole("button", { name: "确认移除" }))
+  await screen.findByRole("button", { name: "重试原请求" })
+  fireEvent.click(within(screen.getByRole("dialog")).getAllByRole("button", { name: "取消" }).at(-1)!)
+  listed = false; view.rerender(content(2))
+  const recovery = await screen.findByRole("button", { name: "重试原请求 · missing-api-command" })
+  expect(remove).toHaveBeenCalledOnce()
+  fireEvent.click(recovery)
+  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "重试原请求" }))
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+  expect(remove).toHaveBeenCalledTimes(2)
+  expect(remove.mock.calls[0]?.slice(0, 3)).toEqual(remove.mock.calls[1]?.slice(0, 3))
+  expect(screen.queryByRole("button", { name: "重试原请求 · missing-api-command" })).not.toBeInTheDocument()
+})
+
+it("a late API edit ACK clears actual secret drafts without closing a successor window", async () => {
+  const { McpContent: Content } = await import("@/ui/mcp/mcp-content")
+  const McpContent = withMcpCommandOwner(Content)
+  const profile = { profile_id: "late-managed-api", name: "Late managed API", state_version: "1", created_at: "2026-10-16T12:00:00Z", updated_at: "2026-10-16T12:00:00Z", environment: [] }
+  const other = { ...profile, profile_id: "other-managed-api", name: "Other managed API" }
+  let acknowledge!: () => void
+  const pending = new Promise<void>(resolve => { acknowledge = resolve })
+  const update = vi.fn().mockReturnValue(pending)
+  const hub = { ...createHubClient(), updateCustomApi: update,
+    listCustomApis: vi.fn().mockResolvedValue({ items: [profile, other], page: { next_cursor: null } }),
+    listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }), listMcpConnectors: vi.fn().mockResolvedValue({ items: [], next_cursor: null }) }
+  render(<LocaleProvider><McpContent client={hub} initialView="connections" readBoundary={{ admitted: true, generation: 1, subject: "api-late-window-actor" }} /></LocaleProvider>)
+  fireEvent.click(await screen.findByRole("button", { name: "Late managed API" }))
+  fireEvent.click(screen.getByRole("button", { name: "编辑" }))
+  fireEvent.click(screen.getByRole("button", { name: "添加密钥" }))
+  fireEvent.change(screen.getByLabelText("密钥名称"), { target: { value: "SECRET" } })
+  fireEvent.change(screen.getByLabelText("密钥值"), { target: { value: "private-draft" } })
+  fireEvent.click(screen.getByRole("button", { name: "保存修改" }))
+  fireEvent.click(within(screen.getByRole("dialog")).getAllByRole("button", { name: "取消" }).at(-1)!)
+  expect(update.mock.calls[0]?.[3].aborted).toBe(true)
+  fireEvent.click(screen.getByRole("button", { name: "Other managed API" }))
+  const successor = screen.getByRole("dialog")
+  await act(async () => { acknowledge(); await pending })
+  expect(screen.getByRole("dialog")).toBe(successor)
+  fireEvent.click(within(successor).getByRole("button", { name: "取消" }))
+  fireEvent.click(await screen.findByRole("button", { name: "Late managed API" }))
+  fireEvent.click(screen.getByRole("button", { name: "完成" }))
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+  fireEvent.click(screen.getByRole("button", { name: "Late managed API" }))
+  fireEvent.click(screen.getByRole("button", { name: "编辑" }))
+  expect(screen.queryByLabelText("密钥值")).not.toBeInTheDocument()
+  expect(screen.getByLabelText("名称")).not.toHaveAttribute("readonly")
+  expect(update).toHaveBeenCalledOnce()
+})
+
+it("a mounted API editor clears secret values on ACK and rejects submitted edits while unknown", async () => {
+  const { CustomApiDetailDialog } = await import("@/ui/mcp/custom-api-detail-dialog")
+  const profile = { profile_id: "mounted-api", name: "Mounted API", state_version: "1", created_at: "2026-10-16T12:00:00Z", updated_at: "2026-10-16T12:00:00Z", environment: [] }
+  const save = vi.fn(), resume = vi.fn()
+  const content = (kind?: "unknown" | "completed") => <LocaleProvider><CustomApiDetailDialog profile={profile} admitted busy={false} actionError={false} canUpdate canRemove
+    command={kind ? { profileId: profile.profile_id, operation: "update", kind } : undefined}
+    onResume={resume} onSave={save} onDelete={vi.fn()} onClose={vi.fn()} returnFocusRef={{ current: null }} /></LocaleProvider>
+  const view = render(content())
+  fireEvent.click(screen.getByRole("button", { name: "编辑" }))
+  fireEvent.click(screen.getByRole("button", { name: "添加密钥" }))
+  fireEvent.change(screen.getByLabelText("密钥名称"), { target: { value: "SECRET" } })
+  fireEvent.change(screen.getByLabelText("密钥值"), { target: { value: "mounted-secret" } })
+  const name = screen.getByLabelText("名称") as HTMLInputElement
+  view.rerender(content("unknown"))
+  fireEvent.change(name, { target: { value: "Forbidden change" } })
+  expect(name.value).toBe("Mounted API")
+  fireEvent.submit(name.closest("form")!)
+  expect(save).not.toHaveBeenCalled()
+  expect(screen.getByLabelText("密钥值")).toHaveValue("mounted-secret")
+  view.rerender(content("completed"))
+  expect(screen.queryByLabelText("密钥值")).not.toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "完成" })).toBeEnabled()
+})
+
+it("an unknown private MCP edit is read-only and offers the original management request instead of a new save", async () => {
+  const { McpContent: Content } = await import("@/ui/mcp/mcp-content")
+  const McpContent = withMcpCommandOwner(Content)
+  const connector = { connector_id: "managed-mcp", server_id: "managed-server", connector_type: "mcp" as const, provider_key: "fixture", display_name: "Managed MCP", status: "pending" as const, enabled: false, approved_scopes: [], state_version: "1" }
+  const server = { server_id: "managed-server", display_name: "Managed MCP", server_url: "https://mcp.example.test/", status: "pending", state_version: "1", headers: [], prepare_status: "pending_prepare", declarations: [], declarations_available: false }
+  const update = vi.fn().mockRejectedValue(new Error("lost edit ACK"))
+  const hub = { ...createHubClient(), updatePrivateMcpServer: update, getPrivateMcpServer: vi.fn().mockResolvedValue(server), listMcpConnectors: vi.fn().mockResolvedValue({ items: [connector], next_cursor: null }), listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }), listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }) }
+  render(<LocaleProvider><McpContent client={hub} initialView="connections" readBoundary={{ admitted: true, generation: 1, subject: "managed-mcp-actor" }} /></LocaleProvider>)
+  fireEvent.click(await screen.findByRole("button", { name: "Managed MCP" }))
+  fireEvent.keyDown(await screen.findByRole("button", { name: "管理" }), { key: "ArrowDown" })
+  fireEvent.click(await screen.findByRole("menuitem", { name: "编辑配置" }))
+  const name = screen.getByLabelText("服务器名称")
+  fireEvent.change(name, { target: { value: "Original MCP edit" } })
+  fireEvent.click(screen.getByRole("button", { name: "保存" }))
+  await waitFor(() => expect(update).toHaveBeenCalledOnce())
+  expect(await screen.findByRole("button", { name: "重试原请求" })).toBeEnabled()
+  expect(name).toHaveAttribute("readonly")
+})
+
+it.each(["toggle", "disconnect"] as const)("provider %s resumes its original command after closing and re-reading a changed CAS", async (operation) => {
+  const { McpContent: Content } = await import("@/ui/mcp/mcp-content")
+  const McpContent = withMcpCommandOwner(Content)
+  let version = "1"
+  const provider = { provider_key: "managed-provider", display_name: "Managed provider", directory_type: "app" as const, category_keys: [], example_prompts: [], enabled: true, state_version: "1" }
+  const row = () => ({ connector_id: "provider-managed", connector_type: "mcp" as const, provider_key: provider.provider_key, display_name: "Provider row", status: "active" as const, enabled: true, approved_scopes: [], state_version: version })
+  const command = vi.fn().mockRejectedValueOnce(new Error("lost ACK")).mockImplementation(async () => ({ ...row(), ...(operation === "disconnect" ? { status: "revoked" as const, enabled: false } : { enabled: false }) }))
+  const hub = { ...createHubClient(), ...(operation === "toggle" ? { setMcpConnectorEnabled: command } : { removeMcpConnector: command }),
+    listMcpConnectors: vi.fn(async () => ({ items: [row()], next_cursor: null })), listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [provider], next_cursor: null }), listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }) }
+  const content = (generation: number) => <LocaleProvider><McpContent client={hub} initialView="connections" readBoundary={{ admitted: true, generation, subject: `provider-${operation}-actor` }} /></LocaleProvider>
+  const view = render(content(1))
+  fireEvent.click(await screen.findByRole("button", { name: "Provider row" }))
+  await screen.findByRole("dialog", { name: "Managed provider" })
+  fireEvent.click(screen.getByRole("button", { name: operation === "toggle" ? "停用" : "断开连接" }))
+  if (operation === "disconnect") fireEvent.click(screen.getByRole("button", { name: "确认断开" }))
+  await screen.findByRole("button", { name: "重试原请求" })
+  fireEvent.click(within(screen.getByRole("dialog")).getAllByRole("button", { name: "取消" }).at(-1)!)
+  version = "9"; view.rerender(content(2))
+  fireEvent.click(await screen.findByRole("button", { name: "Provider row" }))
+  fireEvent.click(await screen.findByRole("button", { name: "重试原请求" }))
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+  expect(command).toHaveBeenCalledTimes(2)
+  expect(command.mock.calls[0]?.slice(0, 3)).toEqual(command.mock.calls[1]?.slice(0, 3))
+  expect(command.mock.calls[1]?.[1].expected_state_version).toBe("1")
+})
+
+it("a mounted MCP editor clears header secrets on management ACK but preserves non-secret edits while waiting for Done", async () => {
+  const { CustomMcpDetailDialog } = await import("@/ui/mcp/custom-mcp-detail-dialog")
+  const connector = { connector_id: "mounted-mcp", server_id: "mounted-server", connector_type: "mcp" as const, provider_key: "fixture", status: "pending" as const, enabled: false, approved_scopes: [], state_version: "1" }
+  const server = { server_id: "mounted-server", display_name: "Mounted MCP", server_url: "https://mcp.example.test/", status: "pending" as const, state_version: "1", headers: [], prepare_status: "pending_prepare" as const, declarations: [], declarations_available: false }
+  const save = vi.fn()
+  const content = (kind?: "unknown" | "completed") => <LocaleProvider><CustomMcpDetailDialog connector={connector} server={server} admitted
+    managementCommand={kind ? { connectorId: connector.connector_id, serverId: server.server_id, operation: "update_server", kind } : undefined}
+    onResumeManagement={vi.fn()} actionId={null} actionError={false} deleteId={null} returnFocusRef={{ current: null }}
+    onClose={vi.fn()} onSaveConfiguration={save} onPrepare={vi.fn()} onAuthorize={vi.fn()} onDisconnect={vi.fn()} onDeleteIntent={vi.fn()} onCancelDelete={vi.fn()} onDelete={vi.fn()} /></LocaleProvider>
+  const view = render(content())
+  fireEvent.keyDown(screen.getByRole("button", { name: "管理" }), { key: "ArrowDown" })
+  fireEvent.click(await screen.findByRole("menuitem", { name: "编辑配置" }))
+  fireEvent.click(screen.getByRole("button", { name: "添加自定义 header" }))
+  fireEvent.change(screen.getByLabelText("Header name"), { target: { value: "x-test" } })
+  fireEvent.change(screen.getByLabelText("Header value"), { target: { value: "mounted-header" } })
+  const name = screen.getByLabelText("服务器名称") as HTMLInputElement
+  fireEvent.change(name, { target: { value: "My draft" } })
+  view.rerender(content("unknown"))
+  expect(name).toHaveAttribute("readonly")
+  expect(screen.getByRole("button", { name: "试用一下" })).toBeDisabled()
+  fireEvent.submit(name.closest("form")!); expect(save).not.toHaveBeenCalled()
+  view.rerender(content("completed"))
+  expect(screen.queryByLabelText("Header value")).not.toBeInTheDocument()
+  expect(name.value).toBe("My draft")
+  expect(screen.getByRole("button", { name: "完成" })).toBeEnabled()
+})
+
+it("a lost private MCP deletion ACK remains reachable after its row disappears and replays only the confirmed original intent", async () => {
+  const { McpContent: Content } = await import("@/ui/mcp/mcp-content")
+  const McpContent = withMcpCommandOwner(Content)
+  let listed = true
+  const connector = { connector_id: "missing-managed-mcp", server_id: "missing-managed-server", connector_type: "mcp" as const, provider_key: "fixture", display_name: "Missing managed MCP", status: "pending" as const, enabled: false, approved_scopes: [], state_version: "1" }
+  const server = { server_id: "missing-managed-server", display_name: "Missing managed MCP", server_url: "https://mcp.example.test/", status: "pending", state_version: "1", headers: [], prepare_status: "pending_prepare", declarations: [], declarations_available: false }
+  const remove = vi.fn().mockRejectedValueOnce(new Error("lost deletion ACK")).mockResolvedValue({ server_id: server.server_id, deleted: true, replayed: true })
+  const hub = { ...createHubClient(), deletePrivateMcpServer: remove, getPrivateMcpServer: vi.fn().mockResolvedValue(server), listMcpConnectors: vi.fn(async () => ({ items: listed ? [connector] : [], next_cursor: null })), listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }), listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }) }
+  const content = (generation: number) => <LocaleProvider><McpContent client={hub} initialView="connections" readBoundary={{ admitted: true, generation, subject: "missing-mcp-management-actor" }} /></LocaleProvider>
+  const view = render(content(1))
+  fireEvent.click(await screen.findByRole("button", { name: "Missing managed MCP" }))
+  fireEvent.keyDown(await screen.findByRole("button", { name: "管理" }), { key: "ArrowDown" })
+  fireEvent.click(await screen.findByRole("menuitem", { name: "删除" }))
+  fireEvent.click(screen.getByRole("button", { name: "确认移除" }))
+  await screen.findByRole("button", { name: "重试原请求" })
+  fireEvent.click(within(screen.getByRole("dialog")).getAllByRole("button", { name: "取消" }).at(-1)!)
+  listed = false; view.rerender(content(2))
+  fireEvent.click(await screen.findByRole("button", { name: "重试原请求 · missing-managed-mcp" }))
+  expect(remove).toHaveBeenCalledOnce()
+  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "重试原请求" }))
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+  expect(remove.mock.calls[0]?.slice(0, 3)).toEqual(remove.mock.calls[1]?.slice(0, 3))
+  expect(remove).toHaveBeenCalledTimes(2)
+})
+
+it("a late provider toggle ACK does not close a successor provider window", async () => {
+  const { McpContent: Content } = await import("@/ui/mcp/mcp-content")
+  const McpContent = withMcpCommandOwner(Content)
+  const provider = { provider_key: "late-provider", display_name: "Late provider", directory_type: "app" as const, category_keys: [], example_prompts: [], enabled: true, state_version: "1" }
+  const otherProvider = { ...provider, provider_key: "successor-provider", display_name: "Successor provider" }
+  const connector = { connector_id: "late-provider-connection", connector_type: "mcp" as const, provider_key: provider.provider_key, display_name: "Late provider row", status: "active" as const, enabled: true, approved_scopes: [], state_version: "1" }
+  const other = { ...connector, connector_id: "successor-connection", provider_key: otherProvider.provider_key, display_name: "Successor row" }
+  let acknowledge!: (value: typeof connector) => void
+  const pending = new Promise<typeof connector>(resolve => { acknowledge = resolve })
+  const toggle = vi.fn().mockReturnValue(pending)
+  const hub = { ...createHubClient(), setMcpConnectorEnabled: toggle, listMcpConnectors: vi.fn().mockResolvedValue({ items: [connector, other], next_cursor: null }), listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [provider, otherProvider], next_cursor: null }), listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }) }
+  render(<LocaleProvider><McpContent client={hub} initialView="connections" readBoundary={{ admitted: true, generation: 1, subject: "late-provider-management-actor" }} /></LocaleProvider>)
+  fireEvent.click(await screen.findByRole("button", { name: "Late provider row" }))
+  fireEvent.click(await screen.findByRole("button", { name: "停用" }))
+  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "取消" }))
+  expect(toggle.mock.calls[0]?.[3].aborted).toBe(true)
+  fireEvent.click(screen.getByRole("button", { name: "Successor row" }))
+  const successor = await screen.findByRole("dialog", { name: "Successor provider" })
+  await act(async () => { acknowledge({ ...connector, enabled: false }); await pending })
+  expect(screen.getByRole("dialog")).toBe(successor)
+  expect(toggle).toHaveBeenCalledOnce()
+})
+
+it.each(["forbidden", "not-found", "network"])("installation detail keeps pin A metadata and reader when the catalog current revision is B (%s download)", async downloadFailure => {
+  const requests: string[] = []
+  let sourceStatus: "active" | "withdrawn" = "withdrawn"
+  const onAdd = vi.fn()
+  const text = "# Installed A"
+  const fileTexts = { "SKILL.md": text, "references/notes.md": "# Reader notes", "scripts/nested/check.py": "print(\"reader-check\")" }
+  const files = Object.entries(fileTexts).map(([path, value]) => ({ path, size_bytes: String(new TextEncoder().encode(value).byteLength) }))
+  let holdSelectedFile = false
+  let heldSignal: AbortSignal | null | undefined
+  let settleHeld: (() => void) | undefined
+  let heldResponse: Promise<Response> | undefined
+  const lateText = fileTexts["scripts/nested/check.py"].replace("reader-check", "retired-code")
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    const path = String(input); requests.push(path)
+    const headers = { "cache-control": "private, no-store", "x-request-id": "pin-detail" }
+    if (path.endsWith("GetSkill")) return Response.json({ skill: { id: "pin-series", version: "pin-B", displayName: "Catalog B", description: "B summary" }, downloadInfo: { downloadUrl: "/api/skill-downloads/current-B", filename: "B.zip", expiresAt: "2028-01-01T00:00:00Z" } }, { headers })
+    if (path.endsWith("/download")) { if (downloadFailure === "network") throw new TypeError("network interrupted"); return Response.json({ error: { code: downloadFailure === "not-found" ? "skill_not_found" : "skill_download_forbidden", message: "Download denied independently", retryable: false } }, { status: downloadFailure === "not-found" ? 404 : 403, headers }) }
+    if (path.includes("/package")) {
+      const selected = new URL(path, "http://local.test").searchParams.get("file_path") as keyof typeof fileTexts | null
+      if (holdSelectedFile && selected === "scripts/nested/check.py") {
+        holdSelectedFile = false
+        heldSignal = init?.signal
+        heldResponse = new Promise(resolve => { settleHeld = () => resolve(Response.json({ data: { source_ref: "skill:pin-A", revision: "1", files, selected_file: { path: selected, text: lateText } } }, { headers })) })
+        return heldResponse
+      }
+      return Response.json({ data: { source_ref: "skill:pin-A", revision: "1", files, selected_file: selected === null ? null : { path: selected, text: fileTexts[selected] } } }, { headers })
+    }
+    return Response.json({ data: { installation_id: "pin-install", series_id: "pin-series", source_ref: "skill:pin-A", revision: "1", installed: true, enabled: false, display_name: "Installed A", summary: "A summary", source_status: sourceStatus, installed_at: "2026-10-15T00:00:00Z", updated_at: "2026-10-15T00:00:00Z", skill_updated_at: "2026-10-14T00:00:00Z", example_prompts: ["A example"], category_keys: [], tags: [], product: { publication_audience: "catalog", state_version: "1", source_kind: "personal" } } }, { headers })
+  })
+  const content = (admitted = true, generation = 1, pending = false) => <LocaleProvider><ManusSkillDetailDialog detailSource="installation" readBoundary={{ admitted, subject: "pin-reader", generation }} skill={pending ? null : { skill_id: "pin-series", revision_skill_id: "pin-A", source_ref: "skill:pin-A", installed_source_ref: "skill:pin-A", installation_id: "pin-install", name: "Installed A", description: "Card A", content_hash: "pin-series", scope: "personal", source_status: "disabled", installed: true, enabled: false }} pending={pending} open onOpenChange={vi.fn()} onAdd={onAdd} onTry={() => false} /></LocaleProvider>
+  const view = render(content())
+  await screen.findByText("A summary")
+  expect(screen.getByRole("button", { name: "启用" })).toBeDisabled()
+  expect(screen.getByText("此技能版本当前不可用。")).toBeVisible()
+  expect(screen.queryByText("B summary")).toBeNull()
+  expect(screen.queryByRole("heading", { name: "Catalog B" })).toBeNull()
+  const reader = screen.getByRole("button", { name: "查看详情" })
+  expect(reader).toBeEnabled()
+  fireEvent.click(reader)
+  await screen.findByRole("heading", { name: "Installed A", level: 1 })
+  expect(requests).toContain("/api/hub/skill-installations/pin-install/package?file_path=SKILL.md")
+  expect(requests.some(path => path.endsWith("GetSkill") || path.includes("/skills/pin-A/package"))).toBe(false)
+  if (downloadFailure === "forbidden") {
+    // Folder disclosure is presentation only. File bytes still use the exact
+    // admitted installation pin, and a new reader starts with closed folders.
+    const filesToggle = screen.getByRole("button", { name: /^文件$/ })
+    const beforeSameSelection = requests.length
+    fireEvent.click(filesToggle)
+    expect(filesToggle).toHaveAttribute("aria-expanded", "true")
+    fireEvent.click(screen.getByRole("button", { name: /^SKILL\.md$/ }))
+    expect(filesToggle).toHaveAttribute("aria-expanded", "false")
+    expect(filesToggle).toHaveFocus()
+    expect(requests).toHaveLength(beforeSameSelection)
+    const scripts = screen.getByRole("button", { name: /^scripts$/ })
+    expect(scripts).toHaveAttribute("aria-expanded", "false")
+    expect(screen.getByRole("button", { name: /^references$/ })).toHaveAttribute("aria-expanded", "false")
+    expect(screen.queryByRole("button", { name: "scripts/nested/check.py" })).not.toBeInTheDocument()
+    const reads = requests.filter(path => path.includes("/package")).length
+    fireEvent.click(scripts)
+    const nested = screen.getByRole("button", { name: /^nested$/ })
+    expect(nested).toHaveAttribute("aria-expanded", "false")
+    fireEvent.click(nested)
+    expect(requests.filter(path => path.includes("/package"))).toHaveLength(reads)
+    fireEvent.click(screen.getByRole("button", { name: "scripts/nested/check.py" }))
+    await screen.findByText(fileTexts["scripts/nested/check.py"])
+    expect(requests).toContain("/api/hub/skill-installations/pin-install/package?file_path=scripts%2Fnested%2Fcheck.py")
+    holdSelectedFile = true
+    view.rerender(content(false, 2, true))
+    expect(screen.queryByText(fileTexts["scripts/nested/check.py"])).toBeNull()
+    expect(screen.queryByRole("button", { name: "下载技能" })).toBeNull()
+    view.rerender(content(true, 2))
+    await waitFor(() => expect(settleHeld).toBeTypeOf("function"))
+    expect(screen.queryByText(fileTexts["scripts/nested/check.py"])).toBeNull()
+    view.rerender(content(false, 3, true))
+    expect(heldSignal?.aborted).toBe(true)
+    view.rerender(content(true, 3))
+    await screen.findByText(fileTexts["scripts/nested/check.py"])
+    expect(screen.getByRole("button", { name: /^scripts$/ })).toHaveAttribute("aria-expanded", "true")
+    expect(screen.getByRole("button", { name: /^nested$/ })).toHaveAttribute("aria-expanded", "true")
+    await act(async () => { settleHeld!(); await heldResponse; await Promise.resolve() })
+    expect(screen.queryByText(lateText)).toBeNull()
+    expect(screen.getByText(fileTexts["scripts/nested/check.py"])).toBeVisible()
+    fireEvent.click(screen.getByRole("button", { name: /^SKILL\.md$/ }))
+    await screen.findByRole("heading", { name: "Installed A", level: 1 })
+    expect(screen.getByRole("button", { name: /^scripts$/ })).toHaveAttribute("aria-expanded", "true")
+    expect(screen.getByRole("button", { name: /^nested$/ })).toHaveAttribute("aria-expanded", "true")
+    fireEvent.click(screen.getByRole("button", { name: /^技能详情$/ }))
+    fireEvent.click(await screen.findByRole("button", { name: /^查看详情$/ }))
+    await screen.findByRole("heading", { name: "Installed A", level: 1 })
+    expect(screen.getByRole("button", { name: /^scripts$/ })).toHaveAttribute("aria-expanded", "false")
+    expect(screen.queryByRole("button", { name: "scripts/nested/check.py" })).not.toBeInTheDocument()
+  }
+  fireEvent.click(screen.getByRole("button", { name: "下载技能" }))
+  await screen.findByRole("alert")
+  expect(screen.getByText(downloadFailure === "network" ? "下载未完成，请重试。" : "此技能当前未开放下载。")).toBeVisible()
+  expect(screen.queryByText("技能详情暂时不可用")).toBeNull()
+  expect(screen.getByRole("heading", { name: "Installed A", level: 1 })).toBeVisible()
+  if (downloadFailure === "network") {
+    fireEvent.click(screen.getByRole("button", { name: /^技能详情$/ }))
+    sourceStatus = "active"
+    view.rerender(content(true, 2))
+    await waitFor(() => expect(screen.getByRole("button", { name: "启用" })).toBeEnabled())
+    fireEvent.click(screen.getByRole("button", { name: "启用" }))
+    expect(onAdd).toHaveBeenCalledWith(expect.objectContaining({ source_status: "active", source_ref: "skill:pin-A", installation_id: "pin-install" }))
+  }
+})
+
+
+it.each([
+  { poolEnabled: true, freshEnabled: false, priorAck: "none" },
+  { poolEnabled: false, freshEnabled: true, priorAck: "none" },
+  { poolEnabled: true, freshEnabled: true, priorAck: "none" },
+  { poolEnabled: false, freshEnabled: true, priorAck: "pool" },
+  { poolEnabled: false, freshEnabled: false, priorAck: "retired-detail" },
+])("installation trial hands off fresh availability and enabled state rather than the old pool %j", async ({ poolEnabled, freshEnabled, priorAck }) => {
+  let currentEnabled = freshEnabled
+  let listedEnabled = priorAck === "pool" ? true : poolEnabled
+  let releaseAck: (() => void) | undefined
+  const pendingAck = new Promise<void>(resolve => { releaseAck = resolve })
+  let writes = 0
+  let listReads = 0
+  const installed = {
+    installation_id: "trial-restore-install", series_id: "trial-restore-series", source_ref: "skill:trial-restore-version", revision: "1",
+    installed: true, enabled: freshEnabled, source_status: "active", display_name: "Recovered source", summary: "Fresh current availability",
+    installed_at: "2026-10-15T00:00:00Z", updated_at: "2026-10-16T00:00:00Z", skill_updated_at: "2026-10-15T00:00:00Z",
+    example_prompts: ["Use fresh availability"], category_keys: [], tags: [], product: { publication_audience: "owner", state_version: "2", source_kind: "personal" },
+  }
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    const path = String(input)
+    if (init?.method === "POST" && path === "/api/skill.v1.SkillOptionalService/SetSkillInstallationEnabled") {
+      writes += 1
+      const enabled = (JSON.parse(String(init.body)) as { enabled: boolean }).enabled
+      currentEnabled = enabled
+      listedEnabled = enabled
+      if (priorAck === "retired-detail" && writes === 1) await pendingAck
+      return Response.json({ data: { installation: { ...installed, enabled }, change: enabled ? "enabled" : "disabled", event_id: "enabled-current", replayed: false } }, { headers: { "cache-control": "no-store", "x-request-id": "fresh-trial" } })
+    }
+    if (path.includes("?installed=true")) listReads += 1
+    const data = path.includes("?installed=true") ? [{ ...installed, enabled: listedEnabled, source_status: "disabled" }]
+      : path.endsWith("/trial-restore-install") ? { ...installed, enabled: currentEnabled } : []
+    return Response.json({ data }, { headers: { "cache-control": "no-store", "x-request-id": "fresh-trial" } })
+  })
+  const onTrySkill = vi.fn((skill: import("@/hub/schemas").SkillCard) => skillTrialSourceRef(skill) !== null)
+  render(<LocaleProvider><SkillsSettingsSection readBoundary={{ admitted: true, subject: "fresh-trial-reader", generation: 1 }} hubClient={createHubClient()} preview={false} brandName="Kokoro" onTrySkill={onTrySkill} embeddedCatalogOpen={false} onEmbeddedCatalogOpenChange={vi.fn()} catalogTriggerRef={{ current: null }} /></LocaleProvider>)
+  if (priorAck === "pool") {
+    fireEvent.click(await screen.findByRole("switch", { name: "停用 Recovered source" }))
+    await waitFor(() => expect(screen.getByRole("switch", { name: "启用 Recovered source" })).toBeDisabled())
+    currentEnabled = freshEnabled // Another window changes the owner after the pool ACK.
+  }
+  fireEvent.click(await screen.findByRole("button", { name: "Recovered source" }))
+  if (priorAck === "retired-detail") {
+    await waitFor(() => expect(screen.getByRole("button", { name: /^启用$/ })).toBeEnabled())
+    fireEvent.click(screen.getByRole("button", { name: /^启用$/ }))
+    await waitFor(() => expect(writes).toBe(1))
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Close" }))
+    currentEnabled = false // Owner changes again before the old ACK reaches this window.
+    listedEnabled = false
+    fireEvent.click(screen.getByRole("button", { name: "Recovered source" }))
+    expect(await screen.findByRole("button", { name: "Use fresh availability" })).toBeDisabled()
+    const readsBeforeAck = listReads
+    await act(async () => { releaseAck!(); await pendingAck })
+    await waitFor(() => expect(listReads).toBeGreaterThan(readsBeforeAck))
+    expect(screen.getByRole("button", { name: "Use fresh availability" })).toBeDisabled()
+    expect(onTrySkill).not.toHaveBeenCalled()
+    return
+  }
+  const trial = await screen.findByRole("button", { name: "Use fresh availability" })
+  if (!freshEnabled) {
+    expect(trial).toBeDisabled()
+    const enable = screen.getByRole("button", { name: /^启用$/ })
+    expect(enable).toBeEnabled()
+    fireEvent.click(enable)
+    await waitFor(() => expect(screen.getByRole("button", { name: "Use fresh availability" })).toBeEnabled())
+    // A local ACK can supersede the earlier read, but not the next open's fresh GET.
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Close" }))
+    currentEnabled = false
+    fireEvent.click(screen.getByRole("button", { name: "Recovered source" }))
+    await waitFor(() => expect(screen.getByRole("button", { name: /^启用$/ })).toBeEnabled())
+    expect(screen.getByRole("button", { name: "Use fresh availability" })).toBeDisabled()
+    expect(onTrySkill).not.toHaveBeenCalled()
+  } else {
+    expect(trial).toBeEnabled()
+    fireEvent.click(trial)
+    expect(onTrySkill).toHaveBeenCalledWith(expect.objectContaining({ source_status: "active", enabled: true, source_ref: installed.source_ref, installed_source_ref: installed.source_ref }), "Use fresh availability")
+    expect(screen.queryByRole("dialog")).toBeNull()
+  }
+})
+
+it("catalog detail still reads current B even when its card also carries installation A", async () => {
+  const requests: string[] = []
+  vi.spyOn(globalThis, "fetch").mockImplementation(async input => {
+    requests.push(String(input))
+    return Response.json({ skill: { id: "separate-series", version: "current-B", displayName: "Catalog current B", description: "Catalog B metadata" }, downloadInfo: { downloadUrl: "/api/skill-downloads/catalog-B", filename: "B.zip", expiresAt: "2028-01-01T00:00:00Z" } })
+  })
+  render(<LocaleProvider><ManusSkillDetailDialog readBoundary={{ admitted: true, subject: "catalog-pin-reader", generation: 1 }} skill={{ skill_id: "separate-series", revision_skill_id: "current-B", source_ref: "skill:current-B", installed_source_ref: "skill:installed-A", installation_id: "installed-A-id", name: "Catalog card", description: "Current card", content_hash: "series", scope: "official", installed: true, enabled: true }} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={() => false} /></LocaleProvider>)
+  await screen.findByText("Catalog B metadata")
+  expect(screen.getByRole("button", { name: "查看详情" })).toBeEnabled()
+  expect(requests).toHaveLength(1)
+  expect(requests[0]).toContain("GetSkill")
+})
+
+it.each(["pin-changed", "series-changed", "removed"])("installation detail rejects %s without using a catalog fallback", async scenario => {
+  const fetcher = vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json({ data: {
+    installation_id: "reject-install", series_id: scenario === "series-changed" ? "another-series" : "reject-series", source_ref: scenario === "pin-changed" ? "skill:new-B" : "skill:old-A", revision: "1", installed: scenario !== "removed", enabled: false,
+    ...(scenario === "removed" ? { removed_at: "2026-10-16T00:00:00Z" } : {}),
+    installed_at: "2026-10-15T00:00:00Z", updated_at: "2026-10-16T00:00:00Z", skill_updated_at: "2026-10-15T00:00:00Z", display_name: "Untrusted replacement", summary: "Never display replacement facts", source_status: "active", example_prompts: [], category_keys: [], tags: [], product: { publication_audience: "catalog", state_version: "1" },
+  } }, { headers: { "cache-control": "no-store", "x-request-id": "rejected-pin" } }))
+  render(<LocaleProvider><ManusSkillDetailDialog detailSource="installation" readBoundary={{ admitted: true, subject: `rejected-pin-${scenario}`, generation: 1 }} skill={{ installation_id: "reject-install", skill_id: "reject-series", revision_skill_id: "old-A", source_ref: "skill:old-A", installed_source_ref: "skill:old-A", name: "Selected A", description: "Selected A facts", content_hash: "series", scope: "personal", installed: true, enabled: false }} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={() => false} /></LocaleProvider>)
+  await screen.findByText("技能详情暂时不可用")
+  expect(screen.queryByText("Never display replacement facts")).toBeNull()
+  expect(screen.getByRole("button", { name: "查看详情" })).toBeDisabled()
+  expect(fetcher).toHaveBeenCalledTimes(1)
+  expect(fetcher.mock.calls[0]?.[0]).toBe("/api/hub/self/skill-installations/reject-install")
+})
+
+
+function privateOAuthDetailFixture() {
+  const base = mcpCreationRegistration()
+  const connector = { ...base.connector, state_version: "7" }
+  const server = { ...base.server, prepare_status: "needs_oauth" as const, authorization_status: "pending" as const }
+  const prepare = vi.fn()
+  const response = { connector, authorization: { authorization_id: "private-detail-attempt", authorization_url: "https://oauth.example.test/private-detail", expires_at: new Date(Date.now() + 60_000).toISOString() } }
+  const reconnect = vi.fn<(id: string, input: unknown, signal?: AbortSignal) => Promise<typeof response>>().mockResolvedValue(response)
+  const hub = { ...apiCreationHub(), getPrivateMcpServer: vi.fn().mockResolvedValue(server),
+    listMcpConnectors: vi.fn().mockResolvedValue({ items: [connector], next_cursor: null }),
+    preparePrivateMcpServer: prepare, reconnectMcpConnectorAuthorization: reconnect }
+  return { connector, server, hub, reconnect, prepare, response }
+}
+
+it.each(["detail", "configuration"] as const)("private OAuth %s reconnects after the creation window is gone without running Prepare", async mode => {
+  const f = privateOAuthDetailFixture(), navigate = vi.fn()
+  let acknowledge!: () => void
+  const gate = new Promise<void>(resolve => { acknowledge = resolve })
+  const response = f.response
+  f.reconnect.mockImplementation(async () => { await gate; return response })
+  render(<LocaleProvider><McpProjectionRead client={f.hub} identity={`private-detail-${mode}`} initialView="connections" onAuthorizationNavigate={navigate} /></LocaleProvider>)
+  fireEvent.click(await screen.findByRole("button", { name: /Creation MCP/ }))
+  const dialog = await screen.findByRole("dialog", { name: "Creation MCP" })
+  if (mode === "configuration") {
+    fireEvent.keyDown(within(dialog).getByRole("button", { name: "管理" }), { key: "ArrowDown" })
+    fireEvent.click(await screen.findByRole("menuitem", { name: "编辑配置" }))
+    await screen.findByRole("dialog", { name: "MCP 配置" })
+  }
+  const connect = within(dialog).getByRole("button", { name: "连接" })
+  fireEvent.click(connect); fireEvent.click(connect)
+  await waitFor(() => expect(f.reconnect).toHaveBeenCalledExactlyOnceWith(f.connector.connector_id,
+    { server_id: f.server.server_id, expected_state_version: "7" }, expect.any(AbortSignal)))
+  expect(connect).toBeDisabled()
+  await act(async () => { acknowledge(); await gate })
+  await waitFor(() => expect(navigate).toHaveBeenCalledExactlyOnceWith(response.authorization.authorization_url))
+  expect(dialog).toBeVisible()
+  expect(f.prepare).not.toHaveBeenCalled()
+})
+
+it.each(["close", "recheck"] as const)("private OAuth retires %s without blocking the next window or navigating a late ACK", async retirement => {
+  const f = privateOAuthDetailFixture(), navigate = vi.fn()
+  let acknowledge!: () => void, signal!: AbortSignal
+  const gate = new Promise<void>(resolve => { acknowledge = resolve })
+  let acknowledgeFresh!: () => void, attempt = 0
+  const freshGate = new Promise<void>(resolve => { acknowledgeFresh = resolve })
+  const response = f.response
+  f.reconnect.mockImplementation(async (_id, _input, requestSignal) => {
+    if (++attempt === 1) { signal = requestSignal!; await gate } else await freshGate
+    return response
+  })
+  const content = (admitted: boolean, readGeneration: number) => <LocaleProvider><McpProjectionRead client={f.hub} identity={`private-detail-${retirement}`} admitted={admitted} readGeneration={readGeneration} initialView="connections" onAuthorizationNavigate={navigate} /></LocaleProvider>
+  const view = render(content(true, 1))
+  fireEvent.click(await screen.findByRole("button", { name: /Creation MCP/ }))
+  const old = await screen.findByRole("dialog", { name: "Creation MCP" })
+  fireEvent.click(within(old).getByRole("button", { name: "连接" }))
+  await waitFor(() => expect(f.reconnect).toHaveBeenCalledOnce())
+  if (retirement === "close") {
+    fireEvent.click(within(old).getByRole("button", { name: "取消" }))
+    expect(signal.aborted).toBe(true)
+    fireEvent.click(await screen.findByRole("button", { name: /Creation MCP/ }))
+  } else {
+    view.rerender(content(false, 2))
+    expect(signal.aborted).toBe(true)
+    expect(f.reconnect).toHaveBeenCalledOnce()
+    view.rerender(content(true, 2))
+  }
+  const reopened = await screen.findByRole("dialog", { name: "Creation MCP" })
+  fireEvent.click(within(reopened).getByRole("button", { name: "连接" }))
+  await waitFor(() => expect(f.reconnect).toHaveBeenCalledTimes(2))
+  await act(async () => { acknowledge(); await gate })
+  await waitFor(() => expect(reopened).toBeVisible())
+  expect(navigate).not.toHaveBeenCalled()
+  expect(f.reconnect).toHaveBeenCalledTimes(2)
+  view.unmount()
+  await act(async () => { acknowledgeFresh(); await freshGate })
+  expect(navigate).not.toHaveBeenCalled()
+})

@@ -10,10 +10,15 @@ const state = vi.hoisted(() => ({
   pathname: "/app",
   openProductSignIn: vi.fn(),
   retry: vi.fn(),
+  unavailable: false,
+  pending: false,
 }))
+
+const router = vi.hoisted(() => ({ refresh: vi.fn() }))
 
 vi.mock("next/navigation", () => ({
   usePathname: () => state.pathname,
+  useRouter: () => router,
 }))
 vi.mock("@/ui/auth/product-auth-client", () => ({ openProductSignIn: state.openProductSignIn }))
 vi.mock("@/ui/auth/use-session-state", () => ({
@@ -21,7 +26,9 @@ vi.mock("@/ui/auth/use-session-state", () => ({
     state: state.probeState,
     mode: state.probeMode,
     retry: state.retry,
-    requestPending: false,
+    projectReadBoundary: { admitted: state.probeMode === "authenticated" && !state.unavailable, subject: state.probeMode === "authenticated" ? "reader" : null, generation: 1 },
+    unavailable: state.unavailable,
+    requestPending: state.pending,
   }),
 }))
 vi.mock("@/system/use-runtime-manifest", () => ({
@@ -35,7 +42,6 @@ vi.mock("@/system/use-runtime-manifest", () => ({
     retry: vi.fn(),
   }),
 }))
-vi.mock("@/ui/shell/page-clients", () => ({ browserScheduledTaskClient: () => ({}) }))
 vi.mock("@/features/app/kokoro-app-surface", () => ({
   KokoroAppSurface: (props: Record<string, unknown>) => (
     <div
@@ -43,6 +49,7 @@ vi.mock("@/features/app/kokoro-app-surface", () => ({
       data-brand={props.brandName}
       data-preview={String(props.preview)}
       data-booting={String(props.booting)}
+      data-admitted={String((props.projectReadBoundary as { admitted?: boolean } | undefined)?.admitted)}
       data-navigation={props.navigation === undefined ? "product" : "runtime"}
       data-feature-flags={props.featureFlags === undefined ? "product" : "runtime"}
     />
@@ -58,6 +65,9 @@ beforeEach(() => {
   state.pathname = "/app"
   state.openProductSignIn.mockClear()
   state.retry.mockClear()
+  router.refresh.mockClear()
+  state.unavailable = false
+  state.pending = false
 })
 afterEach(() => {
   cleanup()
@@ -92,13 +102,19 @@ it("uses verified System presentation when it is available", () => {
   expect(surface).toHaveAttribute("data-feature-flags", "runtime")
 })
 
-it("keeps a server admission failure on the fail-closed unavailable surface", () => {
-  render(<LocaleProvider><AppGate serverUnavailable /></LocaleProvider>)
-
-  expect(screen.getByRole("alert")).toHaveTextContent("We couldn't confirm your sign-in status. Try again.")
-  expect(screen.queryByTestId("app-surface")).toBeNull()
-  expect(state.openProductSignIn).not.toHaveBeenCalled()
-})
+it("silently rechecks a server admission failure without a diagnostic card or a login loop", async () => {
+  vi.useFakeTimers();
+  render(<LocaleProvider><AppGate serverUnavailable /></LocaleProvider>);
+  expect(screen.getByRole("status")).toHaveTextContent("Reconnecting");
+  expect(screen.getByTestId("app-surface")).toHaveAttribute("data-booting", "true");
+  expect(screen.getByTestId("app-surface")).toHaveAttribute("data-preview", "false");
+  expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+  expect(screen.queryByRole("alert")).toBeNull();
+  await vi.advanceTimersByTimeAsync(1_000); expect(router.refresh).toHaveBeenCalledTimes(1);
+  await vi.advanceTimersByTimeAsync(3_000); expect(router.refresh).toHaveBeenCalledTimes(2);
+  await vi.advanceTimersByTimeAsync(30_000); expect(router.refresh).toHaveBeenCalledTimes(2);
+  expect(state.openProductSignIn).not.toHaveBeenCalled();
+});
 
 it("renders only the concentrated booting composition while server admission awaits the browser probe", () => {
   state.probeMode = "checking"
@@ -109,13 +125,13 @@ it("renders only the concentrated booting composition while server admission awa
   expect(screen.queryByTestId("runtime-loading")).toBeNull()
 })
 
-it("removes the server-admitted shell when the first browser probe is unavailable", () => {
+it("retains the server-admitted shell without mounting private Runtime when the first probe is unavailable", () => {
   state.probeMode = "checking"
   state.probeState = "unavailable"
   render(<LocaleProvider><AppGate serverAdmitted /></LocaleProvider>)
 
-  expect(screen.queryByTestId("app-surface")).toBeNull()
-  expect(screen.getByRole("alert")).toHaveTextContent("We couldn't confirm your sign-in status. Try again.")
+  expect(screen.getByTestId("app-surface")).toHaveAttribute("data-booting", "true")
+  expect(screen.getByRole("status")).toHaveTextContent("Reconnecting")
 })
 
 it("starts native sign-in once for one anonymous generation without restoring private Runtime", () => {
@@ -174,4 +190,57 @@ it("does not start a login loop from an actual login document with stale RSC pro
   window.history.replaceState({}, "", "/login")
   render(<LocaleProvider><AppGate /></LocaleProvider>)
   expect(state.openProductSignIn).not.toHaveBeenCalled()
+})
+
+
+it("keeps the same public surface during silent recovery and verified admission", () => {
+  state.probeMode = "checking"; state.probeState = "checking";
+  const view = render(<LocaleProvider><AppGate /></LocaleProvider>);
+  const surface = screen.getByTestId("app-surface");
+  state.probeState = "unavailable"; state.unavailable = true;
+  view.rerender(<LocaleProvider><AppGate /></LocaleProvider>);
+  expect(screen.getByTestId("app-surface")).toBe(surface);
+  expect(surface).toHaveAttribute("data-booting", "true");
+  expect(screen.queryByRole("alert")).toBeNull();
+  expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+  state.probeState = "pass"; state.probeMode = "authenticated"; state.unavailable = false;
+  view.rerender(<LocaleProvider><AppGate /></LocaleProvider>);
+  expect(screen.getByTestId("app-surface")).toBe(surface);
+  expect(surface).toHaveAttribute("data-booting", "false");
+  expect(surface).toHaveAttribute("data-admitted", "true");
+  expect(screen.queryByRole("status")).toBeNull();
+});
+it("keeps the verified presentation during an outage, but revokes owner access without showing a diagnostic overlay", () => {
+  state.pending = true;
+  const view = render(<LocaleProvider><AppGate serverAdmitted /></LocaleProvider>);
+  const surface = screen.getByTestId("app-surface");
+  expect(surface).toHaveAttribute("data-booting", "false");
+  state.pending = false; state.unavailable = true;
+  view.rerender(<LocaleProvider><AppGate serverAdmitted /></LocaleProvider>);
+  expect(screen.getByTestId("app-surface")).toBe(surface);
+  expect(surface).toHaveAttribute("data-booting", "false");
+  expect(surface).toHaveAttribute("data-admitted", "false");
+  expect(surface).toHaveAttribute("data-preview", "false");
+  expect(screen.queryByRole("alert")).toBeNull();
+  expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+});
+
+
+it.each(["visibilitychange", "pageshow"])("resumes bounded server admission checks on %s after a hidden timer", async event => {
+  vi.useFakeTimers()
+  let visibility: DocumentVisibilityState = "hidden"
+  const visible = vi.spyOn(document, "visibilityState", "get").mockImplementation(() => visibility)
+  try {
+    render(<LocaleProvider><AppGate serverUnavailable /></LocaleProvider>)
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(router.refresh).not.toHaveBeenCalled()
+    visibility = "visible"
+    if (event === "visibilitychange") document.dispatchEvent(new Event(event))
+    else window.dispatchEvent(new Event(event))
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(router.refresh).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(33_000)
+    expect(router.refresh).toHaveBeenCalledTimes(2)
+    expect(state.openProductSignIn).not.toHaveBeenCalled()
+  } finally { visible.mockRestore() }
 })

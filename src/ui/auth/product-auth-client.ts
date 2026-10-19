@@ -5,7 +5,8 @@ import { parseProductReturnTarget } from "@/lib/product-return-target";
 export function openProductSignIn(
   navigate: (url: string) => void = (url) => window.location.replace(url),
 ): void {
-  const target = parseProductReturnTarget(`${window.location.pathname}${window.location.search}`);
+  const path = `${window.location.pathname}${window.location.search}`;
+  const target = parseProductReturnTarget(`${path}${window.location.hash}`) ?? parseProductReturnTarget(path);
   navigate(target === null ? "/login" : `/login?${new URLSearchParams({ return_to: target })}`);
 }
 
@@ -63,9 +64,12 @@ export async function endProductSession(
 /** The caller owns the single budget for CSRF, refresh and optional read confirmation. */
 export async function refreshProductSession(
   signal: AbortSignal,
+  onRefreshDispatch?: () => void,
 ): Promise<{ mode: "authenticated"; subject: string } | { mode: "confirm" }> {
   const csrfToken = await currentCsrf(signal);
   signal.throwIfAborted();
+  // CSRF reads can fail or be cancelled without creating an uncertain mutation.
+  onRefreshDispatch?.();
   const response = await fetch("/api/auth/session", {
     method: "POST",
     cache: "no-store",

@@ -28,10 +28,17 @@ import styles from "./scheduled-task-surface.module.css";
 export function ScheduledTaskSurface(
   props: ScheduledTaskSurfaceHostProps = {},
 ) {
+  const identity = props.preview || props.mode === "preview" ? "preview" : props.projectReadBoundary?.subject ?? null;
+  return <ScopedScheduledTaskSurface key={JSON.stringify([props.mode, identity])} {...props} />;
+}
+
+function ScopedScheduledTaskSurface(props: ScheduledTaskSurfaceHostProps) {
   const { t } = useLocale();
-  const runtime = resolveScheduledTaskRuntime(props);
+  const resolved = resolveScheduledTaskRuntime(props);
+  const boundary = resolved.mode === "live" ? props.projectReadBoundary : undefined;
+  const runtime = resolved.mode === "live" && boundary && !boundary.admitted ? { ...resolved, client: null } : resolved;
   const { displayedTasks, loading, loadError, loadTasks } =
-    useScheduledTaskSource(runtime);
+    useScheduledTaskSource(runtime, boundary);
   const { view, editorOpen, creationContext } = useScheduledLocation();
   const {
     calendarMonth,
@@ -71,7 +78,7 @@ export function ScheduledTaskSurface(
   return (
     <div className={styles.surface} data-testid="scheduled-surface">
       <header className={styles.header}>
-        <h1>{t("rail.navScheduled")}</h1>
+        <h1>{t("scheduled.title")}</h1>
       </header>
       <ScheduledTaskContent
         brandName={runtime.brandName}
@@ -105,6 +112,7 @@ export function ScheduledTaskSurface(
         editorOpen={editorOpen}
         onEditorOpenChange={editor.handleOpenChange}
         initialPrompt={editor.initialPrompt}
+        {...(editor.pendingCreate ? { pendingCreate: editor.pendingCreate } : {})}
         editingTask={editor.editingTask}
         canSave={editor.canSave && creationContext.kind !== "invalid"}
         onSave={editor.saveTask}
@@ -114,6 +122,7 @@ export function ScheduledTaskSurface(
         deleteTarget={deleteTarget}
         setDeleteTarget={setDeleteTarget}
         deleting={pendingMutation?.operation === "delete"}
+        canDelete={capabilities.canDelete}
         deleteError={mutationError?.operation === "delete"}
         onDelete={confirmDelete}
       />

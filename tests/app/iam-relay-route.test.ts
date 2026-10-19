@@ -170,6 +170,57 @@ describe("/iam/[...path] read-only relay", () => {
     expect(await response.text()).not.toContain("evil.example")
   })
 
+  it.each(["invalid-response", "transport-failure", "native-error"])("offers explicit browser recovery for authorize %s without retrying or copying issuer state", async failure => {
+    if (failure === "invalid-response") requestIamRelay.mockResolvedValue(upstream({
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ redirect: true, url: "https://untrusted.example/SECRET_STATE" }),
+      setCookies: ["kokoro-issuer.session_token=SECRET_COOKIE; Path=/iam; HttpOnly; SameSite=Lax"],
+    }))
+    else if (failure === "native-error") requestIamRelay.mockResolvedValue(upstream({ status: 401, headers: { "content-type": "application/json" }, body: JSON.stringify({ error: "SECRET_ERROR" }) }))
+    else requestIamRelay.mockRejectedValue(Error("SECRET_UPSTREAM"))
+    const { GET } = await import("@/app/iam/[...path]/route")
+    const response = await GET(browserRequest("https://web.example.test/iam/oauth2/authorize?state=SECRET_REQUEST", {
+      headers: { accept: "text/html,application/xhtml+xml", "sec-fetch-mode": "navigate", "sec-fetch-dest": "document", "x-nonce": "trusted_proxy_nonce_123", "x-request-id": "recovery-request" },
+    }), params(["oauth2", "authorize"]))
+    expect(response.status).toBe(failure === "invalid-response" ? 502 : failure === "native-error" ? 401 : 503)
+    expect(response.headers.get("content-type")).toContain("text/html")
+    expect(response.headers.get("x-request-id")).toBe("recovery-request")
+    expect(response.headers.get("cache-control")).toBe("no-store")
+    expect(response.headers.get("referrer-policy")).toBe("no-referrer")
+    expect(response.headers.get("content-security-policy")).toContain("default-src 'none'")
+    expect(response.headers.get("location")).toBeNull()
+    expect(response.headers.getSetCookie()).toEqual([])
+    const html = await response.text()
+    expect(html).toContain('href="/login"')
+    expect(html).not.toMatch(/SECRET_|<script|http-equiv|<form/u)
+    expect(requestIamRelay).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([
+    { accept: "text/html", "sec-fetch-mode": "cors", "sec-fetch-dest": "document", "x-nonce": "trusted_proxy_nonce_123" },
+    { accept: "text/html", "sec-fetch-mode": "navigate", "sec-fetch-dest": "iframe", "x-nonce": "trusted_proxy_nonce_123" },
+    { accept: "application/json", "sec-fetch-mode": "navigate", "sec-fetch-dest": "document", "x-nonce": "trusted_proxy_nonce_123" },
+    { accept: "text/html;q=0,application/json", "sec-fetch-mode": "navigate", "sec-fetch-dest": "document", "x-nonce": "trusted_proxy_nonce_123" },
+    { accept: "text/html", "sec-fetch-mode": "navigate", "sec-fetch-dest": "document" },
+  ])("keeps the authorize API error contract outside proven top-level HTML navigation (%j)", async headers => {
+    requestIamRelay.mockRejectedValue(Error("not exposed"))
+    const { GET } = await import("@/app/iam/[...path]/route")
+    const response = await GET(browserRequest("https://web.example.test/iam/oauth2/authorize", { headers }), params(["oauth2", "authorize"]))
+    expect(response.status).toBe(503)
+    expect(response.headers.get("content-type")).toContain("application/json")
+    expect(await response.json()).toMatchObject({ error: { code: "iam_relay_unavailable" } })
+  })
+
+  it("does not turn rejected browser credentials into a login-recovery navigation", async () => {
+    const { GET } = await import("@/app/iam/[...path]/route")
+    const response = await GET(browserRequest("https://web.example.test/iam/oauth2/authorize", { headers: {
+      accept: "text/html", "sec-fetch-mode": "navigate", "sec-fetch-dest": "document", "x-nonce": "trusted_proxy_nonce_123", authorization: "Bearer rejected",
+    } }), params(["oauth2", "authorize"]))
+    expect(response.status).toBe(403)
+    expect(response.headers.get("content-type")).toContain("application/json")
+    expect(requestIamRelay).not.toHaveBeenCalled()
+  })
+
   it("relays only the fixed issuer logout URL and strips confirmation cookie from GET", async () => {
     requestIamRelay.mockResolvedValue(upstream({ headers: { "content-type": "text/html; charset=utf-8" },
       setCookies: ["kokoro-issuer.session_token.oauth_logout_confirmation=signed; Path=/iam/oauth2/end-session/confirm; HttpOnly; SameSite=Lax"], body: "confirm" }))
@@ -327,7 +378,7 @@ describe("/iam/[...path] read-only relay", () => {
     for (const method of ["POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"] as const) {
       const handler = route[method]
       expect(handler, `${method} handler`).toBeTypeOf("function")
-      const response = await handler(browserRequest("https://web.example.test/iam/oauth2/authorize", { method }))
+      const response = await handler(browserRequest("https://web.example.test/iam/oauth2/authorize", { method }), params(["oauth2", "authorize"]))
       expect(response.status, method).toBe(405)
       expect(response.headers.get("allow"), method).toBe("GET")
     }

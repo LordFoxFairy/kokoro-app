@@ -174,13 +174,23 @@ describe("Web governance boundary", () => {
       scripts: z.object({
         contract: z.string().min(1),
         "test:architecture": z.string().min(1),
+        "contract:check:bff-connector-command-errors": z.string().min(1),
       }),
     })
     const packageJson: unknown = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"))
 
-    expect(packageSchema.parse(packageJson).scripts).toEqual({
-      contract: "pnpm contract:check:bff-archived-tasks && pnpm contract:check:bff-shared-tasks && pnpm contract:check:bff-account-profile && pnpm contract:check:bff-account-sessions && pnpm contract:check:bff-team && pnpm contract:check:bff-agent-failure && vitest run contract tests/contract",
-      "test:architecture": "vitest run tests/architecture",
-    })
+    const scripts = packageSchema.parse(packageJson).scripts
+    expect(scripts["test:architecture"]).toBe("vitest run tests/architecture")
+    expect(scripts["contract:check:bff-connector-command-errors"]).toBe("node scripts/generate-bff-connector-command-errors.mjs --check")
+    expect(scripts.contract.split(" && ").sort()).toEqual([
+      "pnpm contract:check:bff-archived-tasks",
+      "pnpm contract:check:bff-shared-tasks",
+      "pnpm contract:check:bff-account-profile",
+      "pnpm contract:check:bff-account-sessions",
+      "pnpm contract:check:bff-team",
+      "pnpm contract:check:bff-agent-failure",
+      "pnpm contract:check:bff-connector-command-errors",
+      "vitest run contract tests/contract",
+    ].sort())
   })
 })

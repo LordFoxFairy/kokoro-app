@@ -29,6 +29,14 @@ export type CatalogSkillCategory = (typeof CATALOG_SKILL_CATEGORIES)[number]
 const catalogCategoriesSchema = z.array(z.enum(CATALOG_SKILL_CATEGORIES)).max(CATALOG_SKILL_CATEGORIES.length)
 const skillCategoriesSchema = z.array(z.enum(SKILL_CATEGORIES)).min(1).max(SKILL_CATEGORIES.length)
 
+export const installationIdSchema = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}(?![\s\S])/u)
+export const installationSourceSchema = z.string().regex(/^skill:(?!skill:)[A-Za-z0-9][A-Za-z0-9._:-]{0,190}(?![\s\S])/u)
+export const installationKeySchema = z.string().regex(/^[\x21-\x2b\x2d-\x7e]{1,128}(?![\s\S])/u)
+const installationRevisionSchema = z.string().max(20).refine((value) => /^[1-9][0-9]{0,19}(?![\s\S])/u.test(value) && BigInt(value) <= BigInt("18446744073709551615"))
+const installationUpdateTargetSchema = z.object({ source_ref: installationSourceSchema, revision: installationRevisionSchema }).strict()
+
+const installationSourceStatusSchema = z.enum(["active", "disabled", "withdrawn", "quarantined"])
+
 // 池卡片：official 位（scope=OFFICIAL_SCOPE）与本 namespace 自有包（scope=namespace）合并视图。
 // 池只含「有效可用」项（official 上架∧用户未关 + 自有包）；required 官方技能恒在且拒关（disable→409）。
 const skillCardSchema = z
@@ -41,10 +49,14 @@ const skillCardSchema = z
     // derived from a visible skill title or from the catalog series identity.
     installation_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u).optional(),
     source_ref: z.string().regex(/^skill:[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u).optional(),
+    // Internal view binding from the exact installation, not Hub currentVersion.
+    installed_source_ref: z.string().regex(/^skill:[A-Za-z0-9][A-Za-z0-9._:-]{0,190}(?![\s\S])/u).optional(),
     revision_skill_id: z
       .string()
       .regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u)
       .optional(),
+    available_update: installationUpdateTargetSchema.optional(),
+    source_status: installationSourceStatusSchema.optional(),
     name: z.string().min(1),
     description: z.string(),
     content_hash: z.string().min(1),
@@ -67,6 +79,9 @@ const skillCatalogCardSchema = z
     skill_id: z.string().min(1).optional(),
     installation_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u).optional(),
     source_ref: z.string().regex(/^skill:[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u).optional(),
+    // Internal view binding from the exact installation, not Hub currentVersion.
+    installed_source_ref: z.string().regex(/^skill:[A-Za-z0-9][A-Za-z0-9._:-]{0,190}(?![\s\S])/u).optional(),
+    source_status: installationSourceStatusSchema.optional(),
     revision_skill_id: z
       .string()
       .regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u)
@@ -574,9 +589,6 @@ export function skillRevisionsPath(name: string, scope?: string): string {
 }
 
 // BFF personal installation projection; never an execution authorization cache.
-export const installationIdSchema = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}(?![\s\S])/u)
-export const installationSourceSchema = z.string().regex(/^skill:(?!skill:)[A-Za-z0-9][A-Za-z0-9._:-]{0,190}(?![\s\S])/u)
-export const installationKeySchema = z.string().regex(/^[\x21-\x2b\x2d-\x7e]{1,128}(?![\s\S])/u)
 const installationInstant = z
   .string()
   .datetime()
@@ -597,22 +609,13 @@ export const personalInstallationSchema = z
     removed_at: installationInstant.optional(),
     display_name: managedPersonalSkillSchema.shape.name,
     summary: managedPersonalSkillSchema.shape.summary,
-    source_status: z.enum(["active", "disabled", "withdrawn", "quarantined"]),
+    source_status: installationSourceStatusSchema,
     skill_updated_at: installationInstant,
     example_prompts: managedPersonalSkillSchema.shape.example_prompts,
     category_keys: managedPersonalSkillSchema.shape.category_keys,
     product: skillProductFactsSchema,
     publisher_profile: skillPublisherProfileSchema.optional(),
-    available_update: z
-      .object({
-        source_ref: installationSourceSchema,
-        revision: z
-          .string()
-          .max(20)
-          .regex(/^[1-9][0-9]*(?![\s\S])/u),
-      })
-      .strict()
-      .optional(),
+    available_update: installationUpdateTargetSchema.optional(),
     tags: z
       .array(
         z
@@ -658,12 +661,26 @@ export const installationListQuerySchema = z
   .object({
     installed: z.boolean().optional(),
     enabled: z.boolean().optional(),
+    // Keep the browser boundary aligned with the owner pagination contract.
+    // Applying either predicate after a 50-row page would make a matching
+    // installation disappear from the UI even though it exists in a later
+    // owner page.
+    source_kind: z.enum(["personal", "official", "third_party"]).optional(),
+    query: z
+      .string()
+      .trim()
+      .min(1)
+      .refine((value) => [...value].length <= 1024)
+      .refine((value) => !/[\uD800-\uDFFF]/u.test(value))
+      .optional(),
     limit: z.number().int().min(1).max(100).optional(),
     cursor: installationCursor.optional(),
   })
   .strict()
 export type InstallationListQuery = z.infer<typeof installationListQuerySchema>
 export const installationInstallRequestSchema = z.object({ source_ref: installationSourceSchema }).strict()
+export const installationUpdateRequestSchema = z.object({ expected_source_ref: installationSourceSchema, source_ref: installationSourceSchema }).strict()
+export type InstallationUpdateRequest = z.infer<typeof installationUpdateRequestSchema>
 export const installationEnabledRequestSchema = z.object({ enabled: z.boolean() }).strict()
 export const installationErrorSchema = z
   .object({
@@ -676,7 +693,7 @@ export const installationErrorSchema = z
       .strict(),
   })
   .strict()
-export type InstallationOperation = "install" | "list" | "get" | "setEnabled" | "remove"
+export type InstallationOperation = "install" | "list" | "get" | "setEnabled" | "remove" | "update"
 export const installationErrorCodes: Readonly<Record<number, readonly string[]>> = {
   400: ["invalid_skill_installation_request", "skill_installation_idempotency_key_required"],
   401: ["session_authentication_required", "session_invalid"],
@@ -703,24 +720,28 @@ export function installationResponseSchema(operation: InstallationOperation) {
     ? installationPageSchema
     : operation === "get"
       ? z.object({ data: personalInstallationSchema }).strict()
-      : z.object({ data: installationReceiptSchema }).strict()
+      : z.object({ data: operation === "update" ? installationReceiptSchema.refine(value => value.change === "upgraded" && value.installation.installed && value.installation.removed_at === undefined) : installationReceiptSchema }).strict()
 }
 
 export function installationReceiptMatches(
-  operation: "install" | "setEnabled" | "remove",
+  operation: "install" | "setEnabled" | "remove" | "update",
   value: InstallationReceipt,
   identity: string,
   enabled?: boolean,
+  targetSourceRef?: string,
 ): boolean {
   const changes =
     operation === "install"
       ? ["installed", "upgraded", "reinstalled", "unchanged"]
+      : operation === "update"
+        ? ["upgraded"]
       : operation === "remove"
         ? ["removed", "unchanged"]
         : [enabled ? "enabled" : "disabled", "unchanged"]
   return (
     (operation === "install" ? value.installation.installed && value.installation.source_ref === identity : value.installation.installation_id === identity) &&
     changes.includes(value.change) &&
+    (operation !== "update" || (value.installation.installed && value.installation.source_ref === targetSourceRef && value.event_id !== undefined)) &&
     (operation !== "remove" || !value.installation.installed) &&
     (operation !== "setEnabled" || (value.installation.installed && value.installation.enabled === enabled))
   )
@@ -929,6 +950,18 @@ export const CATALOG_PACKAGE_ERRORS: Readonly<Record<number, readonly string[]>>
   429: ["session_rate_limited", "skill_rate_limited"],
   502: ["skill_response_invalid"],
   503: ["product_tenant_not_configured", "iam_admission_unavailable", "skill_dependency_unavailable"],
+}
+// Existing BFF personal-installation inspection has a distinct error contract.
+export function installationPackageErrorAllowed(status: number, code: string, retryable: boolean, retryAfter: string | null): boolean {
+  const codes: Readonly<Record<number, readonly string[]>> = {
+    400: ["invalid_skill_package_request"], 401: ["session_authentication_required", "session_invalid"],
+    403: ["service_auth_failed", "session_forbidden", "product_tenant_forbidden"],
+    404: ["skill_package_not_found"], 412: ["skill_package_precondition_failed"],
+    429: ["session_rate_limited", "skill_package_limit_exceeded"], 502: ["skill_package_response_invalid"],
+    503: ["product_tenant_not_configured", "iam_admission_unavailable", "skill_package_dependency_unavailable"],
+  }
+  return (codes[status]?.includes(code) ?? false) && retryable === (status === 503 || code === "session_rate_limited")
+    && (retryAfter === null || code === "session_rate_limited" && /^[1-9][0-9]{0,4}(?![\s\S])/u.test(retryAfter) && Number(retryAfter) <= 86400)
 }
 export function catalogPackageMatches(value: CatalogPackageData, revisionSkillId: string, filePath?: string, expectedDirectory?: CatalogPackageData): boolean {
   return (

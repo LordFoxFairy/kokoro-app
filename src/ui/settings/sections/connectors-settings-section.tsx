@@ -24,7 +24,6 @@ export function ConnectorsSettingsSection({
   readBoundary,
 }: ConnectorsSettingsSectionProps) {
   const [mode, setMode] = useState<McpCreateMode | null>(null);
-  const [connectorRefreshKey, setConnectorRefreshKey] = useState(0);
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const openCreate = (
     nextMode: McpCreateMode,
@@ -37,13 +36,11 @@ export function ConnectorsSettingsSection({
   return (
     <>
       <McpContent
-        key={`connectors-${connectorRefreshKey}`}
         client={client}
         preview={preview}
         embedded
         initialView="connections"
         settingsLayout
-        refreshKey={connectorRefreshKey}
         brandName={brandName}
         {...(readBoundary === undefined ? {} : { readBoundary })}
         onCreateMcp={openCreate}
@@ -56,13 +53,6 @@ export function ConnectorsSettingsSection({
           onOpenChange={(open) => {
             if (!open) setMode(null);
           }}
-          onDone={async () => {
-            setConnectorRefreshKey((value) => value + 1);
-            setMode(null);
-          }}
-          onRegistered={() =>
-            setConnectorRefreshKey((value) => value + 1)
-          }
           returnFocusRef={returnFocusRef}
         />
       )}

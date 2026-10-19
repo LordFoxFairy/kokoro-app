@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type DragEvent, type RefObject } from "react"
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type DragEvent, type RefObject } from "react"
 import { ExternalLink, FileArchive } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -33,7 +33,7 @@ export function SkillUploadDialog({ readBoundary: boundary, open, onOpenChange, 
   const completed = useRef<unknown>(null)
   const onPublishedRef = useRef(onPublished)
   useEffect(() => { onPublishedRef.current = onPublished }, [onPublished])
-  useEffect(() => { flow.setAdmitted(boundary.admitted && boundary.subject !== null); return () => flow.cancel() }, [flow, boundary.admitted, boundary.subject, boundary.generation])
+  useLayoutEffect(() => { flow.setAdmitted(boundary.admitted && boundary.subject !== null); return () => { flow.cancel(); if (flow.getSnapshot().kind === "completed") flow.replace() } }, [flow, boundary.admitted, boundary.subject, boundary.generation])
   useEffect(() => () => flow.retire(false), [flow])
   useEffect(() => { if (!open) flow.cancel() }, [open, flow])
   useEffect(() => { if (state.kind === "completed" && state !== completed.current) { completed.current = state; onPublishedRef.current?.() } }, [state])
@@ -58,7 +58,7 @@ export function SkillUploadDialog({ readBoundary: boundary, open, onOpenChange, 
       </> : null}
       {busy ? <div className={styles.progress} role="status" aria-live="polite"><Spinner aria-hidden="true" /><span>{t("skills.localImport.processing")}</span></div> : null}
       {["unknown", "rejected", "recoverable", "reselect", "expired"].includes(state.kind) && !idle ? <Alert role="alert" className={styles.error}><AlertDescription>{t(state.kind === "unknown" ? state.code === "local_skill_import_dependency_unavailable" ? "skills.localImport.unavailable" : "skills.localImport.unknown" : state.kind === "recoverable" ? "skills.localImport.recoverable" : state.kind === "reselect" ? "skills.localImport.reselect" : state.kind === "expired" ? "skills.localImport.expired" : "skills.uploadError")}</AlertDescription>{state.code ? <p>{state.code}</p> : null}</Alert> : null}
-      {state.kind === "completed" ? <div className={styles.done} role="status"><FileArchive aria-hidden="true" /><strong>{state.skill?.name}</strong><p>{t(state.installed ? "skills.localImport.complete" : "skills.localImport.installationUnconfirmed")}</p></div> : null}
+      {boundary.admitted && boundary.subject && state.kind === "completed" ? <div className={styles.done} role="status"><FileArchive aria-hidden="true" /><strong>{state.skill?.name}</strong><p>{t(state.installed ? "skills.localImport.complete" : "skills.localImport.installationUnconfirmed")}</p></div> : null}
       <DialogFooter className={styles.footer}>
         {busy ? <Button variant="outline" onClick={() => flow.cancel()}>{t("skills.cancel")}</Button> : null}
         {state.kind === "unknown" || state.kind === "rejected" && state.stage !== "get" ? <Button disabled={!boundary.admitted} onClick={() => void flow.retry()}>{t("skills.retry")}</Button> : null}

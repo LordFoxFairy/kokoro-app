@@ -6,7 +6,9 @@ import type { MessageKey } from "./messages"
 export const ja: Partial<Record<MessageKey, string>> = {
 
   // SET47-BEGIN: task-archive
-  "archive.action": "タスクをアーカイブ",
+  "scheduled.weekday": "曜日",
+"scheduled.selectWeekday": "曜日を選択",
+"archive.action": "タスクをアーカイブ",
   "archive.restore": "タスクを復元",
   "archive.empty": "アーカイブ済みタスクはありません。",
   "archive.checking": "アーカイブ状態を確認中…",
@@ -117,6 +119,12 @@ export const ja: Partial<Record<MessageKey, string>> = {
   "settings.devices.remove": "削除",
   "settings.devices.more": "さらに読み込む",
   "settings.devices.reload": "再読み込み",
+
+  "skills.downloadUnavailable": "このスキルは現在ダウンロード対象外です。",
+  "skills.downloadIncomplete": "ダウンロードが完了しませんでした。もう一度お試しください。",
+  "skills.tryRequiresEnabledVersion": "このバージョンを追加して有効にしてから例を使用してください。別バージョンへの変更には明示的な更新が必要です。",
+  "skills.tryUnavailable": "試用を開始できません。会話の接続とスキルの状態を確認して再試行してください。",
+  "composer.removeSelectedSkill": "選択したスキル {name} を外す",
 
   "firstSite.renameProject": "プロジェクト名を変更",
   "firstSite.projectName": "プロジェクト名",
@@ -279,10 +287,9 @@ export const ja: Partial<Record<MessageKey, string>> = {
   "rail.searchInputAria": "最近の会話を検索",
   "rail.searchClose": "検索を閉じる",
   "rail.navAria": "メインナビゲーション",
-  "rail.expandProjectAria": "プロジェクト {name} を展開（項目 {position}）",
-  "rail.collapseProjectAria": "プロジェクト {name} を折りたたむ（項目 {position}）",
   "rail.expandAria": "サイドバーを展開する",
   "rail.collapseAria": "サイドバーを折りたたむ",
+  "rail.noProjectTasks": "タスクはありません",
   "rail.newChat": "新しい会話",
   "rail.newChatShortcut": "⇧⌘お",
   "rail.navChat": "対話",
@@ -722,6 +729,12 @@ export const ja: Partial<Record<MessageKey, string>> = {
   "mcp.tabSecrets": "資格",
   "mcp.loading": "読み込み中…",
   "mcp.loadError": "接続リストの読み込みに失敗しました",
+  "mcp.serverCreateUnknown": "作成または準備の結果は未確認です。再試行は元のリクエストを再開し、重複して作成しません。",
+  "mcp.creationSession": "ログイン状態を確認しています…",
+  "mcp.apiCreateUnknown": "追加結果は未確認です。再試行は元のリクエストを再開し、別の API は作成しません。",
+  "mcp.retryOriginal": "元のリクエストを再試行",
+  "mcp.apiCreateConfirmed": "カスタム API を追加しました。",
+  "mcp.creationDone": "完了",
   "mcp.retry": "もう一度やり直してください",
   "mcp.empty": "現在利用できる有効な接続はありません。",
   "mcp.emptyGuide": "外部ツールに接続するために MCP サーバーを登録します。公式リンクはプラットフォームにリストされています。",
@@ -1354,6 +1367,8 @@ export const ja: Partial<Record<MessageKey, string>> = {
   "mcp.jsonImportTitle": "JSON からインポート",
   "mcp.jsonImportDescription": "設定 JSON を貼り付けてください",
   "mcp.jsonImportAction": "インポート",
+  "mcp.jsonImportUnknown": "インポート結果は未確認です。再試行は元のリクエスト全体を再開し、重複してインポートしません。",
+  "mcp.jsonImportConfirmed": "MCP 設定をインポートしました。",
   "mcp.jsonImportInvalid": "JSON が無効か、mcpServers 設定がありません。",
   "mcp.urlTitle": "URL から MCP を追加",
   "mcp.urlNamePlaceholder": "例：カスタムサーバー",
@@ -1504,4 +1519,15 @@ export const ja: Partial<Record<MessageKey, string>> = {
   "settingsServices.dateColumn": "日付",
   // SET53-END: service-settings-pages
 
+
+  "mcp.recovery.in_progress": "元のリクエストを処理中です。後で同じリクエストを再開してください。",
+  "mcp.recovery.outcome_unknown": "結果は未確認です。再開時は同じ元のリクエストを使用します。",
+  "mcp.recovery.replay_expired": "復元期限を過ぎています。この画面を閉じ、コネクタ管理で状態を確認してから操作してください。",
+  "mcp.recovery.identity_conflict": "元のリクエストIDが競合しています。先にコネクタ管理で確認してください。",
+  "mcp.recovery.ownership_lost": "処理が中断されました。同じリクエストを明示的に再開できます。",
+  "mcp.recovery.invalid": "応答の検証に失敗しました。先にコネクタ管理で状態を確認してください。",
+  "mcp.recovery.not_prepared": "コネクタの準備が未完了です。設定と状態を確認してください。",
+  "mcp.recovery.needs_client": "OAuthクライアント設定がありません。コネクタのクライアント情報を確認してください。",
+  "mcp.recovery.auth_method_unsupported": "この認証方式はサポートされていません。コネクタ設定を確認してください。",
+  "mcp.recovery.inspectRequired": "先に状態を確認",
 }

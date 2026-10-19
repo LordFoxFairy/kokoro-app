@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState, type RefObject } from "react"
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react"
 import { ListFilter, Plus } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -23,8 +23,8 @@ import { itemStyles } from "./workspace-rail-styles"
 import { WorkspaceRailLoadingPlaceholder } from "./workspace-rail-loading-placeholder"
 import { WorkspaceRailSessionItem } from "./workspace-rail-session-item"
 import type { ConversationMoveIntent } from "@/engine/engine-types"
-import { DIRECT_SESSION_SCOPE, sessionScopeKey, type SessionScope } from "@/engine/session-scope"
-import { useConversationList } from "@/ui/shell/use-conversation-list"
+import { sessionScopeKey, type SessionScope } from "@/engine/session-scope"
+import type { ConversationListController } from "@/ui/shell/use-conversation-list"
 import type { RailConversationReads, WorkspaceRailProps } from "./workspace-rail-types"
 
 export type WorkspaceRailSessionListProps = {
@@ -251,7 +251,7 @@ export function WorkspaceRailSessionList({
             </>
           ) : projectActive ? (
             <p className={itemStyles.empty} role="status">
-              {t(query !== "" ? "rail.emptyResult" : "firstSite.noProjectConversations")}
+              {t(query !== "" ? "rail.emptyResult" : "rail.noProjectTasks")}
             </p>
           ) : (
             <p className={itemStyles.empty}>{t(searchOpen ? "rail.emptyResult" : "rail.emptyChats")}</p>
@@ -334,43 +334,23 @@ type ScopedGroupProps = Pick<WorkspaceRailSessionListProps,
 > & {
   scope: SessionScope
   reads: RailConversationReads
-  preview: boolean
   projects: NonNullable<WorkspaceRailProps["projects"]>
   projectListReady: boolean
   onRequestDelete: (conversation: ConversationSummary, remove?: (id: string) => Promise<boolean>) => void
 }
 
-/** A folder reads only its canonical list; it never creates an engine or SSE. */
-export function ScopedConversationGroup({ scope: desiredScope, reads, preview, projects, projectListReady, onRequestDelete, ...props }: ScopedGroupProps) {
-  const key = sessionScopeKey(desiredScope)
-  if (key === sessionScopeKey(reads.scope)) {
-    return <ScopedConversationGroupView {...props} scope={desiredScope} reads={reads} projects={projects}
-      projectListReady={projectListReady} onRequestDelete={onRequestDelete} controller={reads.currentController} />
-  }
-  return <IndependentScopedConversationGroup {...props} scope={desiredScope} reads={reads} preview={preview}
-    projects={projects} projectListReady={projectListReady} onRequestDelete={onRequestDelete} />
-}
-
-function IndependentScopedConversationGroup({ scope: desiredScope, reads, preview, projects, projectListReady, onRequestDelete, ...props }: ScopedGroupProps) {
-  const key = sessionScopeKey(desiredScope)
+/** A folder is a view, never a second owner of its list or commands. */
+export function ScopedConversationGroup({ scope: desiredScope, reads, projects, projectListReady, onRequestDelete, ...props }: ScopedGroupProps) {
   const projectRef = desiredScope.kind === "project" ? desiredScope.projectRef : null
-  const scope = useMemo<SessionScope>(() => projectRef === null ? DIRECT_SESSION_SCOPE : { kind: "project", projectRef }, [projectRef])
-  const controller = useConversationList({
-    engine: null, preview,
-    activeId: null, thread: reads.thread,
-    isStreaming: false, focusComposer: reads.focusComposer, scope,
-    scopeRevision: reads.scopeVersions.get(key) ?? 0,
-    archiveRevision: reads.archiveRevision ?? 0,
-    ...(reads.archiveReceipt===undefined?{}:{archiveReceipt:reads.archiveReceipt}),
-    readBoundary: { identity: reads.identity, admitted: reads.admitted },
-    onDeleteConfirmed: reads.onDeleteConfirmed,
-  })
+  const scope = useMemo<SessionScope>(() => projectRef === null ? { kind: "direct" } : { kind: "project", projectRef }, [projectRef])
+  const { ensureScope } = reads
+  useLayoutEffect(() => { ensureScope(scope) }, [ensureScope, scope])
   return <ScopedConversationGroupView {...props} scope={scope} reads={reads} projects={projects}
-    projectListReady={projectListReady} onRequestDelete={onRequestDelete} controller={controller} />
+    projectListReady={projectListReady} onRequestDelete={onRequestDelete} controller={reads.read(scope)} />
 }
 
 function ScopedConversationGroupView({ scope, reads, projects, projectListReady, onRequestDelete, controller, ...props }:
-  Omit<ScopedGroupProps, "preview"> & { controller: import("@/ui/shell/use-conversation-list").ConversationListController }) {
+  Omit<ScopedGroupProps, "preview"> & { controller: ConversationListController | undefined }) {
   const t = useT()
   const destinations = projectListReady ? [
     ...(scope.kind === "direct" ? [] : [{ id: null, name: t("rail.directChatsAria") }]),
@@ -378,16 +358,15 @@ function ScopedConversationGroupView({ scope, reads, projects, projectListReady,
   ] : []
   const key = sessionScopeKey(scope)
   const current = key === sessionScopeKey(reads.scope)
-  return <ConversationGroup {...props} conversationMoveFailed={props.conversationMoveFailed && reads.failedMoveScopeKey === key} scopeKey={key} onNewChat={() => { if (reads.admitted) reads.onNewChat(scope) }} blocked={!reads.admitted} projectActive={scope.kind === "project"}
-    conversations={controller.conversations} hasConversations={controller.conversations.length > 0}
+  return <ConversationGroup {...props} conversationMoveFailed={props.conversationMoveFailed && reads.failedMoveScopeKey === key} scopeKey={key} onNewChat={() => { if (reads.admitted && controller) reads.onNewChat(scope) }} blocked={!reads.admitted} projectActive={scope.kind === "project"}
+    conversations={controller?.conversations ?? []} hasConversations={(controller?.conversations.length ?? 0) > 0}
     activeId={current ? reads.activeId : null}
-    listLoading={controller.loading} listLoadingMore={controller.loadingMore} listError={controller.error}
-    {...(reads.admitted ? { onRetryList: controller.refresh } : {})} hasMore={controller.hasMore} onLoadMore={controller.loadMore}
+    listLoading={controller?.loading ?? reads.admitted} listLoadingMore={controller?.loadingMore ?? false} listError={controller?.error ?? !reads.admitted}
+    {...(reads.admitted && controller ? { onRetryList: controller.refresh } : {})} hasMore={controller?.hasMore ?? false} onLoadMore={() => controller?.loadMore()}
     onSelectConversation={(id) => { if (reads.admitted) reads.onSelect(scope, id) }}
-    {...(reads.onArchive===undefined?{}:{onArchiveConversation:reads.onArchive})}
-    {...(reads.archiveBusy===undefined?{}:{archiveBusy:reads.archiveBusy})}
-    onRequestDelete={(conversation) => onRequestDelete(conversation, controller.deleteConversation)}
-    onRenameConversation={controller.renameConversation}
+    {...(reads.onArchive ? {onArchiveConversation:reads.onArchive,archiveBusy:reads.archiveBusy??false}: {})}
+    onRequestDelete={(conversation) => controller && onRequestDelete(conversation, controller.deleteConversation)}
+    onRenameConversation={(id, title) => controller?.renameConversation(id, title)}
     moveDestinations={destinations}
     onMoveConversation={(id, target) => { if (reads.admitted) reads.onMove(scope, id, target) }}
   />

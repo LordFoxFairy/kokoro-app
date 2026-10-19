@@ -6,7 +6,9 @@ import type { MessageKey } from "./messages"
 export const ko: Partial<Record<MessageKey, string>> = {
 
   // SET47-BEGIN: task-archive
-  "archive.action": "작업 보관",
+  "scheduled.weekday": "요일",
+"scheduled.selectWeekday": "요일 선택",
+"archive.action": "작업 보관",
   "archive.restore": "작업 복원",
   "archive.empty": "보관된 작업이 없습니다.",
   "archive.checking": "보관 상태 확인 중…",
@@ -99,6 +101,12 @@ export const ko: Partial<Record<MessageKey, string>> = {
   "settings.devices.remove": "제거",
   "settings.devices.more": "더 읽기",
   "settings.devices.reload": "다시 읽기",
+
+  "skills.downloadUnavailable": "현재 이 스킬은 다운로드가 허용되지 않습니다.",
+  "skills.downloadIncomplete": "다운로드가 완료되지 않았습니다. 다시 시도해 주세요.",
+  "skills.tryRequiresEnabledVersion": "예제를 사용하기 전에 이 버전을 추가하고 활성화하세요. 버전 변경에는 명시적인 업데이트가 필요합니다.",
+  "skills.tryUnavailable": "시험을 시작하지 못했습니다. 대화 연결과 스킬 상태를 확인한 후 다시 시도하세요.",
+  "composer.removeSelectedSkill": "선택한 스킬 {name} 제거",
 
   "firstSite.renameProject": "프로젝트 이름 바꾸기",
   "firstSite.projectName": "프로젝트 이름",
@@ -263,10 +271,9 @@ export const ko: Partial<Record<MessageKey, string>> = {
   "rail.searchInputAria": "최근 대화 검색",
   "rail.searchClose": "검색 닫기",
   "rail.navAria": "메인 네비게이션",
-  "rail.expandProjectAria": "프로젝트 {name} 펼치기 (항목 {position})",
-  "rail.collapseProjectAria": "프로젝트 {name} 접기 (항목 {position})",
   "rail.expandAria": "사이드바 확장",
   "rail.collapseAria": "사이드바 접기",
+  "rail.noProjectTasks": "작업 없음",
   "rail.newChat": "새로운 대화",
   "rail.newChatShortcut": "⇧⌘O",
   "rail.navChat": "대화",
@@ -645,6 +652,12 @@ export const ko: Partial<Record<MessageKey, string>> = {
   "mcp.tabSecrets": "신임장",
   "mcp.loading": "로드 중…",
   "mcp.loadError": "연결 목록을 로드하지 못했습니다.",
+  "mcp.serverCreateUnknown": "생성 또는 준비 결과가 확인되지 않았습니다. 재시도는 중복 생성 없이 원래 요청을 재개합니다.",
+  "mcp.creationSession": "로그인 상태를 확인하는 중…",
+  "mcp.apiCreateUnknown": "추가 결과가 확인되지 않았습니다. 다시 시도하면 새 API를 만들지 않고 원래 요청을 복구합니다.",
+  "mcp.retryOriginal": "원래 요청 다시 시도",
+  "mcp.apiCreateConfirmed": "사용자 지정 API가 추가되었습니다.",
+  "mcp.creationDone": "완료",
   "mcp.retry": "다시 시도하세요",
   "mcp.empty": "현재 사용 가능한 활성 연결이 없습니다.",
   "mcp.emptyGuide": "외부 도구를 연결하려면 MCP 서버를 등록하세요. 공식 링크는 플랫폼에 나열되어 있습니다.",
@@ -1341,6 +1354,8 @@ export const ko: Partial<Record<MessageKey, string>> = {
   "mcp.jsonImportTitle": "JSON으로 가져오기",
   "mcp.jsonImportDescription": "설정 JSON을 붙여넣으세요",
   "mcp.jsonImportAction": "가져오기",
+  "mcp.jsonImportUnknown": "가져오기 결과가 확인되지 않았습니다. 재시도는 중복 가져오기 없이 원래 요청 전체를 재개합니다.",
+  "mcp.jsonImportConfirmed": "MCP 구성을 가져왔습니다.",
   "mcp.jsonImportInvalid": "JSON이 올바르지 않거나 mcpServers 설정이 없습니다.",
   "mcp.urlTitle": "URL로 MCP 추가",
   "mcp.urlNamePlaceholder": "예: 사용자 지정 서버",
@@ -1436,4 +1451,15 @@ export const ko: Partial<Record<MessageKey, string>> = {
   "settingsServices.dateColumn": "날짜",
   // SET53-END: service-settings-pages
 
+
+  "mcp.recovery.in_progress": "원래 요청을 처리 중입니다. 나중에 같은 요청을 재개하세요.",
+  "mcp.recovery.outcome_unknown": "결과가 확인되지 않았습니다. 재개 시 동일한 원래 요청을 사용합니다.",
+  "mcp.recovery.replay_expired": "복구 기간이 만료되었습니다. 이 창을 닫고 커넥터 관리에서 상태를 먼저 확인하세요.",
+  "mcp.recovery.identity_conflict": "원래 요청 식별자가 충돌합니다. 커넥터 관리에서 먼저 확인하세요.",
+  "mcp.recovery.ownership_lost": "처리가 중단되었습니다. 같은 요청을 직접 재개할 수 있습니다.",
+  "mcp.recovery.invalid": "응답 검증에 실패했습니다. 커넥터 관리에서 상태를 먼저 확인하세요.",
+  "mcp.recovery.not_prepared": "커넥터 준비가 끝나지 않았습니다. 설정과 상태를 확인하세요.",
+  "mcp.recovery.needs_client": "OAuth 클라이언트 설정이 없습니다. 커넥터의 클라이언트 정보를 확인하세요.",
+  "mcp.recovery.auth_method_unsupported": "지원되지 않는 인증 방식입니다. 커넥터 설정을 확인하세요.",
+  "mcp.recovery.inspectRequired": "먼저 상태 확인",
 }

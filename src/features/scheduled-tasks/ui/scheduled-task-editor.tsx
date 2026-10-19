@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { useT } from "@/i18n/context"
 
 import type {
+  ScheduledTaskDraft,
   ScheduledTaskEditorValue,
   ScheduledTaskInitial,
 } from "../model/scheduled-task"
@@ -19,6 +20,7 @@ type ScheduledTaskEditorDialogProps = {
   brandName: string
   initialPrompt?: string
   initialTask?: ScheduledTaskInitial | null
+  initialDraft?: ScheduledTaskDraft
   onSave?: (task: ScheduledTaskEditorValue) => Promise<void> | void
   returnFocusRef?: RefObject<HTMLElement | null>
   contextKind?: "personal" | "project" | "invalid"
@@ -31,6 +33,7 @@ export function ScheduledTaskEditorDialog({
   brandName,
   initialPrompt = "",
   initialTask = null,
+  initialDraft,
   onSave,
   returnFocusRef,
   contextKind = "personal",
@@ -43,6 +46,7 @@ export function ScheduledTaskEditorDialog({
           brandName={brandName}
           initialPrompt={initialPrompt}
           initialTask={initialTask}
+          {...(initialDraft ? { initialDraft } : {})}
           onClose={() => onOpenChange(false)}
           {...(onSave === undefined ? {} : { onSave })}
           {...(returnFocusRef === undefined ? {} : { returnFocusRef })}
@@ -60,9 +64,9 @@ type EditorContentProps = Omit<
 > & { onClose: () => void }
 
 function ScheduledTaskEditorContent({
-  brandName,
   initialPrompt = "",
   initialTask = null,
+  initialDraft,
   onClose,
   onSave,
   returnFocusRef,
@@ -73,6 +77,7 @@ function ScheduledTaskEditorContent({
   const titleRef = useRef<HTMLInputElement | null>(null)
   const submission = useScheduledTaskEditorSubmission({
     initialTask,
+    ...(initialDraft ? { initialDraft } : {}),
     initialPrompt,
     onSave,
     onClose,
@@ -99,7 +104,6 @@ function ScheduledTaskEditorContent({
             : null}
       </DialogTitle>
       <ScheduledTaskEditorForm
-        brandName={brandName}
         titleRef={titleRef}
         onSubmit={submission.submit}
         {...submission}

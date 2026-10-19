@@ -1,5 +1,5 @@
 "use client";
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { archiveIdAvailable, type ArchiveState } from "@/lib/archived-tasks.schema";
 import { readArchiveState } from "@/ui/settings/archived-tasks-client";
 
@@ -45,5 +45,6 @@ export function useActiveArchiveState(input:ActiveArchiveStateInput) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, input.admitted, input.listSettled, input.inList, input.revision, input.refresh, receiptKey, retry]);
   const status = freshReceipt ? receipt.archived_at === null ? "unarchived" : "archived" : value?.status ?? (input.inList ? "unarchived" : "unknown");
-  return { status, synthetic: input.admitted && (status === "unarchived" || (input.locallyCreated && (status === "unknown" || status === "missing"))), error: value?.error ?? false, retry: () => setRetry(n => n + 1) };
+  const retryRead = useCallback(() => setRetry(n => n + 1), []);
+  return { status, synthetic: input.admitted && (status === "unarchived" || (input.locallyCreated && (status === "unknown" || status === "missing"))), error: value?.error ?? false, retry: retryRead };
 }

@@ -7,6 +7,13 @@
   background: var(--background);
   padding-inline: 1.5rem;
 }
+/* Project overview alone shares the measured neutral surface and 48px header;
+ * direct chat, project conversations and other pages keep their own layout. */
+.main[data-desktop-web="true"]:has([data-slot="project-workspace"]) > [data-slot="workspace-header"][data-project-workspace] {
+  min-height: 3rem;
+  height: 3rem;
+  background: var(--settings-surface, var(--background));
+}
 .main > * { position: relative; }
 .contextMenu {
   width: 15rem;
@@ -104,83 +111,8 @@
   display: none;
 }
 
-/* Desktop task handoff: the welcome Composer is replaced by the live thread
- * Composer after the first submit. Mounting the new surfaces with one shared
- * entrance keeps that state change readable without animating the whole page
- * or making the rail move. Mobile remains on its existing frozen path. */
-@media (min-width: 768px) {
-  /* Manus' welcome editor is a compact 120px surface. Keep this adjustment
-     on the empty-state contract only; submitted conversations use the taller
-     thread editor below and must not shift when entering a task. */
-  .main[data-desktop-web="true"][data-web-view="welcome"] :global([data-slot="composer"] form) {
-    padding-top: 0.75rem;
-    padding-bottom: 0.75rem;
-  }
-
-  /* Manus widens the conversation composer after the first task starts. The
-   * empty project uses the site's 576px workbench column; thread mode gets a
-   * centered 768px conversation composer with a tighter two-row rhythm. */
-  .main[data-web-view="thread"] > [data-slot="composer"] > div > form[aria-label] {
-    width: min(48rem, calc(100% - 3rem));
-    padding: 0.65rem 0.85rem 0.4rem;
-    gap: 0.35rem;
-  }
-  .main[data-web-view="thread"] > [data-slot="composer"] {
-    /* Composer owns its own footer copy. Keeping an additional shell floor
-       lifted the active desktop editor about 16px above the Manus baseline. */
-    padding-bottom: 0;
-  }
-  .main[data-web-view="thread"] > [data-slot="composer"] > [data-slot="composer-wrap"] {
-    /* The thread footer is bottom-anchored by the shell. Four fewer pixels of
-       outer floor moves the progress line, editor, and disclaimer together,
-       preserving their internal rhythm while matching the reference baseline. */
-    padding-bottom: 0.75rem;
-  }
-  .main[data-web-view="thread"] > [data-slot="composer"] > div > form[aria-label] textarea {
-    min-height: 2.4rem;
-  }
-}
-
-/* Main-surface responsive geometry and desktop chrome. */
-@media (max-width: 960px) {
-  /* The shared Textarea primitive carries a 4rem minimum. Manus uses a
-     single compact editor row in the welcome Composer, so the explicit Web
-     skin overrides that primitive only inside the desktop Web contract. */
-  .main[data-desktop-web="true"] :global([data-slot="composer"] textarea) {
-    height: 1.5rem;
-    min-height: 1.5rem;
-  }
-
-  .main[data-desktop-web="true"][data-web-view="thread"] > [data-slot="composer"] {
-    padding-inline: 1rem;
-    padding-bottom: 0;
-  }
-  .main[data-desktop-web="true"][data-web-view="thread"] > [data-slot="composer"] > [data-slot="composer-wrap"] {
-    /* Keep the disclosure line inside the same 16px footer rhythm as Manus;
-       the previous 32px floor pushed the editor noticeably too high. */
-    padding: 0 0 0.85rem;
-  }
-  .main[data-desktop-web="true"][data-web-view="thread"] > [data-slot="composer"] > div > form[aria-label] {
-    width: min(48rem, 100%);
-    gap: 0.2rem;
-    /* Keep the narrow active editor on the same compact form rhythm as its
-       base surface instead of adding a second top inset at this breakpoint. */
-    padding: 0.7rem 0.85rem 0.6rem;
-  }
-  .main[data-desktop-web="true"] > [data-slot="composer"] > div > form[aria-label] textarea {
-    width: 100%;
-    /* Manus' compact Web editor keeps one quiet text row; the controls row
-       supplies the remaining height of the 98px composer surface. The shared
-       Textarea primitive defaults to 4rem, which made our narrow Web editor
-       40px taller than the reference and pushed the prompt starters down. */
-    height: 1.5rem;
-    min-height: 1.5rem;
-    /* The outer Composer already reserves the 16px document inset. Removing
-       the shared textarea's extra inner gutter aligns typed text and the
-       placeholder with the same 420px reading column as the conversation. */
-    padding-left: 0.125rem;
-  }
-}
+/* The shell positions the footer; Composer owns its internal layout. */
+.main[data-web-view="thread"] > [data-slot="composer"] { padding: 0; }
 
 @media (max-width: 768px) and (pointer: fine) {
   .main[data-desktop-web="true"] [data-web-navigation-trigger] { display: inline-flex; }
@@ -220,10 +152,6 @@
   }
 }
 
-.main[data-desktop-web="true"] :global([data-slot="composer"] textarea) {
-  padding-left: 0.125rem;
-}
-
 /* The current Kokoro Web product does not expose the desktop-app mode
  * selector. Keep the shared Composer wiring intact for future surfaces, but
  * remove both its inline and floating presentation from this site skin so the
@@ -244,48 +172,6 @@
   display: none;
 }
 
-/* Keep the conversation and Composer on one 48rem reading axis. Below the
- * cap, the viewport inset mirrors the Composer's composed outer gutter:
- * wrap + form above 960px, Composer shell from 641px through 960px, and the
- * existing thread shell plus two-pixel optical inset on phones. */
-@media (min-width: 961px) {
-  .main[data-desktop-web="true"][data-web-view="thread"] :global([data-slot="message-scroller-viewport"]) {
-    padding-inline: 3rem;
-    /* Manus uses a 4px breathing line below its 56px chrome before the first
-       user turn; the conversation owns all later vertical spacing. */
-    padding-top: 0.25rem;
-  }
-  .main[data-desktop-web="true"][data-web-view="thread"] > [data-slot="composer"] > [data-slot="composer-wrap"] {
-    /* Normalize the Web thread gutter across pointer types. The form adds
-       the matching 1.5rem inset, so the composed outer gutter is 3rem. */
-    padding-inline: 1.5rem;
-  }
-}
-@media (min-width: 641px) and (max-width: 960px) {
-  .main[data-desktop-web="true"][data-web-view="thread"] :global([data-slot="message-scroller-viewport"]) {
-    padding-inline: 1rem;
-  }
-}
-@media (min-width: 768px) and (max-width: 960px) {
-  .main[data-desktop-web="true"][data-web-view="thread"] :global([data-slot="message-scroller-viewport"]) {
-    padding-top: 0.25rem;
-  }
-}
-@media (max-width: 640px) {
-  .main[data-desktop-web="true"][data-web-view="thread"] :global([data-slot="message-scroller-viewport"]) {
-    /* The thread shell already supplies the phone gutter. Keep only the same
-       two-pixel optical inset as the Composer so their visible tracks align. */
-    padding-inline: 0.125rem;
-  }
-}
-.main[data-desktop-web="true"][data-web-view="thread"] :global([data-slot="message-scroller-content"]) {
-  /* One DOM node carries both content and conversation-inner markers. Keep
-     its single cap at the exact Composer width so desktop and narrow-window
-     reading tracks share one centered measure. */
-  width: min(48rem, 100%);
-  margin-inline: auto;
-  gap: 1.75rem;
-}
   /* Manus does not repeat the product identity inside every assistant turn.
      The workspace header already owns the brand; showing a second serif
      “K Kokoro” row makes the answer look like a branded card and creates a
@@ -321,8 +207,8 @@
     padding-inline: 0.5rem;
   }
   .main[data-desktop-web="true"][data-web-view="thread"] :global([data-slot="workspace-header"]) {
-    height: 3.5rem;
-    min-height: 3.5rem;
+    height: 3rem;
+    min-height: 3rem;
     padding-top: 0;
     padding-bottom: 0;
     /* The workbench chrome uses a 24px title inset, while the conversation

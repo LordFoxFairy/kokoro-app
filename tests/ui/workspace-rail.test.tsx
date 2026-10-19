@@ -1,4 +1,6 @@
-import type { ConversationListController } from "@/ui/shell/use-conversation-list"
+import { useConversationReaders } from "@/ui/shell/use-conversation-readers"
+import { DIRECT_SESSION_SCOPE, type SessionScope } from "@/engine/session-scope"
+import type { EngineSnapshot } from "@/engine/machine"
 import type { ConversationStore } from "@/core/conversations"
 import { createFakeClient, createMemoryStorage } from "../engine/fakes"
 import { createSessionEngine } from "@/engine/machine"
@@ -16,7 +18,7 @@ import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
 import type { ConversationSummary } from "@/ui/rail/rail-search"
 import * as pageClients from "@/ui/shell/page-clients"
 import { ThemeProvider } from "@/ui/theme/theme-context"
-import { act, useState } from "react"
+import { act, useLayoutEffect, useState } from "react"
 
 function renderRail(overrides?: Partial<Parameters<typeof WorkspaceRail>[0]>) {
   const onRenameConversation = vi.fn()
@@ -51,6 +53,15 @@ function renderRail(overrides?: Partial<Parameters<typeof WorkspaceRail>[0]>) {
   return { ...view, onRenameConversation, onOpenSettings, onOpenNotifications }
 }
 
+const EMPTY_SCOPE_VERSIONS = new Map<string,number>()
+/** Real keyed readers: fixture rerenders cannot bypass admission retirement. */
+function ScopedRailHarness({props,thread,scope,identity,admitted,onFolderNewChat}: {
+ props:Parameters<typeof WorkspaceRail>[0];thread:EngineSnapshot["thread"];scope:SessionScope;identity:string;admitted:boolean;onFolderNewChat?:()=>void;
+}) {
+ const readers=useConversationReaders({engine:null,preview:false,activeId:null,thread,isStreaming:false,observeRunStatus:false,scope,scopeVersions:EMPTY_SCOPE_VERSIONS,readBoundary:{identity,admitted}})
+ return <>{readers.hosts}<WorkspaceRail {...props} conversationReads={{scope,read:readers.read,ensureScope:readers.ensureScope,activeId:null,identity,admitted,failedMoveScopeKey:null,onSelect:()=>{},onNewChat:onFolderNewChat??(()=>{}),onMove:()=>{}}}/></>
+}
+
 // Owner-confirmed project folders with the real scoped list parser. Controlled
 // `conversations` in a standalone rail now represents the always-present inbox.
 function renderProjectFolderRail(overrides: Partial<Parameters<typeof WorkspaceRail>[0]> = {}) {
@@ -69,20 +80,15 @@ function renderProjectFolderRail(overrides: Partial<Parameters<typeof WorkspaceR
   // Import binding is the existing browser client; no extra engine is created
   // to read an expanded folder's durable rows.
   vi.spyOn(pageClients, "browserListClient").mockReturnValue(listClient)
-  const currentController: ConversationListController = {
-    conversations: [{ id: "task_a", title: "整理需求" }], loading: false, loadingMore: false, error: false,
-    refresh: vi.fn(), hasMore: false, loadMore: vi.fn(), selectConversation: vi.fn(),
-    deleteConversation: vi.fn().mockResolvedValue(true), renameConversation: vi.fn(), startNewChat: vi.fn(),
-  }
-  return {
-    ...renderRail({
+  const props = {
+      collapsed:false,onToggleCollapse:vi.fn(),conversations:[],activeId:null,awaitingIds:new Set<string>(),
+      onSelectConversation:vi.fn(),onDeleteConversation:vi.fn().mockResolvedValue(true),onRenameConversation:vi.fn(),onOpenSettings:vi.fn(),
+      listLoading:false,listError:false,hasMore:false,onLoadMore:vi.fn(),chatHref:"/app",
       projects: [{ id: projectRef, name: "产品规划", href: `/app/project/${projectRef}`, active: true }, { id: "project_b", name: "发布清单", href: "/app/project/project_b" }],
-      projectListStatus: "ready", projectHref: `/app/project/${projectRef}`, projectActive: true,
-      onNewChat,
-      conversationReads: { engine: null, scope: { kind: "project", projectRef }, currentController, activeId: null, thread, isStreaming: false, identity: "folder-fixture", admitted: true, scopeVersions: new Map(), failedMoveScopeKey: null, focusComposer: () => {}, onSelect: vi.fn(), onNewChat: onFolderNewChat, onMove: vi.fn(), onDeleteConfirmed: vi.fn() },
-      ...overrides,
-    }), onNewChat, onFolderNewChat, projectRef, fetchMock, currentController,
+      projectListStatus: "ready" as const, projectHref: `/app/project/${projectRef}`, projectActive: true,
+      onNewChat, ...overrides,
   }
+  return {...render(<ThemeProvider><LocaleProvider><ScopedRailHarness props={props} thread={thread} scope={{kind:"project",projectRef}} identity="folder-fixture" admitted onFolderNewChat={onFolderNewChat}/></LocaleProvider></ThemeProvider>),onNewChat,onFolderNewChat,projectRef,fetchMock}
 }
 
 
@@ -117,14 +123,10 @@ function retirementRailFixture() {
     collapsed: false, onToggleCollapse: vi.fn(), onNewChat: vi.fn(), chatHref: "/app", conversations: [], activeId: null,
     awaitingIds: new Set(), onSelectConversation: vi.fn(), onDeleteConversation: vi.fn().mockResolvedValue(true), onRenameConversation: vi.fn(), onOpenSettings: vi.fn(), listLoading: false, listError: false, hasMore: false, onLoadMore: vi.fn(),
     projects: [{ id: "P", name: "同名专案", href: "/app/project/P" }, { id: "Q", name: "同名专案", href: "/app/project/Q" }], projectListStatus: "ready",
-    conversationReads: { engine: null, scope: { kind: "direct" }, currentController: {
-      conversations: [], loading: false, loadingMore: false, error: false, refresh: vi.fn(), hasMore: false,
-      loadMore: vi.fn(), selectConversation: vi.fn(), deleteConversation: vi.fn().mockResolvedValue(true),
-      renameConversation: vi.fn(), startNewChat: vi.fn(),
-    }, activeId: null, thread, isStreaming: false, identity: "retire-actor", admitted: true, scopeVersions: new Map(), failedMoveScopeKey: null, focusComposer: vi.fn(), onSelect: vi.fn(), onNewChat: vi.fn(), onMove: vi.fn(), onDeleteConfirmed: vi.fn() },
+
   }
-  const frame = (admitted: boolean) => <ThemeProvider><LocaleProvider><WorkspaceRail {...props} conversationReads={{ ...props.conversationReads!, admitted }} /></LocaleProvider></ThemeProvider>
-  return { props, frame, fetchMock }
+  const frame = (admitted: boolean) => <ThemeProvider><LocaleProvider><ScopedRailHarness props={props} thread={thread} scope={DIRECT_SESSION_SCOPE} identity="retire-actor" admitted={admitted}/></LocaleProvider></ThemeProvider>
+  return { props, frame, fetchMock, thread }
 }
 
 
@@ -288,11 +290,13 @@ it("项目清单和任务清单分别支持键盘排序，不会互相移动", (
   })
 
   const project = screen.getByTestId("rail-project")
+  const expandedBeforeSort = project.getAttribute("aria-expanded")
   project.focus()
   fireEvent.keyDown(project, { key: " " })
   fireEvent.keyDown(project, { key: "ArrowDown" })
   fireEvent.keyDown(project, { key: " " })
   expect(onReorderProjects).toHaveBeenCalledWith(["project_b", "project_a"])
+  expect(project.getAttribute("aria-expanded")).toBe(expandedBeforeSort)
   expect(onReorderConversations).not.toHaveBeenCalled()
 
   const task = screen.getByRole("button", { name: "第一个任务" })
@@ -353,6 +357,93 @@ it("空的直接会话桌面页仍保留独立会话分区", () => {
   expect(within(chats).queryByText("项目会话")).toBeNull()
 })
 
+it("活动项目在侧栏展开其 own scope 的会话，不与直接任务混合", async () => {
+  const projectId = "project_22222222-2222-4222-8222-222222222222"
+  const selectProjectConversation = vi.fn()
+  const listSessions = vi.fn()
+  const directFetch = vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input)
+    if (url.includes("project_ref=")) listSessions(url)
+    return Response.json({ sessions: [], next_cursor: null })
+  })
+  vi.stubGlobal("fetch", directFetch)
+  renderRail({
+    projects: [{ id: projectId, name: "产品规划", href: `/app/project/${projectId}`, active: true }],
+    projectHref: `/app/project/${projectId}`,
+    projectActive: true,
+    conversations: [],
+    conversationReads: {
+      scope: { kind: "project", projectRef: projectId },
+      read: (scope) => ({
+        conversations: scope.kind === "project" ? [{ id: "conv_project_1", title: "项目内会话" }] : [],
+        loading: false, loadingMore: false, error: false, hasMore: false,
+        refresh: () => {}, loadMore: () => {},
+        deleteConversation: async () => true, renameConversation: () => {},
+      }),
+      ensureScope: () => {}, activeId: "conv_project_1",
+      identity: "reader-a", admitted: true, failedMoveScopeKey: null,
+      onSelect: selectProjectConversation, onNewChat: () => {}, onMove: () => {},
+    },
+  })
+
+  const projectConversations = await screen.findByRole("navigation", { name: "项目会话" })
+  expect(within(projectConversations).getByRole("button", { name: "项目内会话" })).toBeInTheDocument()
+  expect(within(screen.getByRole("navigation", { name: "直接会话" })).queryByText("项目内会话")).toBeNull()
+  expect(listSessions).not.toHaveBeenCalled()
+
+  fireEvent.click(within(projectConversations).getByRole("button", { name: "项目内会话" }))
+  expect(selectProjectConversation).toHaveBeenCalledWith({ kind: "project", projectRef: projectId }, "conv_project_1")
+})
+
+it.each([true, false])("项目展开独立于当前路由，主动收起后再次进入不反弹（初始活动=%s）", (initialActive) => {
+  const projectId = "project_22222222-2222-4222-8222-222222222222"
+  function RouteHarness() {
+    const [active, setActive] = useState(initialActive)
+    return <ThemeProvider><LocaleProvider>
+      <button onClick={() => setActive(false)}>前往资料库</button>
+      <button onClick={() => setActive(true)}>进入项目</button>
+      <WorkspaceRail collapsed={false} onToggleCollapse={() => {}} onNewChat={() => {}} chatHref="/app"
+        projectActive={active} projectHref={`/app/project/${projectId}`} projectListStatus="ready"
+        projects={[{ id: projectId, name: "产品规划", href: `/app/project/${projectId}`, active }]}
+        conversations={[]} activeId={null} awaitingIds={new Set()} onSelectConversation={() => {}}
+        onDeleteConversation={async () => true} onRenameConversation={() => {}} onOpenSettings={() => {}} onOpenNotifications={() => {}}
+        listLoading={false} listError={false} hasMore={false} onLoadMore={() => {}}
+        conversationReads={{
+          scope: active ? { kind: "project", projectRef: projectId } : { kind: "direct" }, identity: "same-admitted-reader", admitted: true,
+          read: (scope) => ({ conversations: scope.kind === "project" ? [{ id: "conv_project_1", title: "项目内会话" }] : [], loading: false, loadingMore: false, error: false, hasMore: false, refresh: () => {}, loadMore: () => {}, deleteConversation: async () => true, renameConversation: () => {} }),
+          ensureScope: () => {}, activeId: null, failedMoveScopeKey: null, onSelect: () => {}, onNewChat: () => {}, onMove: () => {},
+        }}
+      />
+    </LocaleProvider></ThemeProvider>
+  }
+  render(<RouteHarness />)
+  const project = () => screen.getByRole("button", { name: "产品规划" })
+  expect(project()).toHaveAttribute("aria-expanded", String(initialActive))
+  fireEvent.click(screen.getByRole("button", { name: "进入项目" }))
+  expect(project()).toHaveAttribute("aria-expanded", "true")
+  fireEvent.click(screen.getByRole("button", { name: "前往资料库" }))
+  expect(project()).toHaveAttribute("aria-expanded", "true")
+  expect(within(screen.getByRole("navigation", { name: "项目会话" })).getByRole("button", { name: "项目内会话" })).toBeInTheDocument()
+  expect(within(screen.getByRole("navigation", { name: "直接会话" })).queryByText("项目内会话")).toBeNull()
+  fireEvent.click(project())
+  fireEvent.click(screen.getByRole("button", { name: "进入项目" }))
+  expect(project()).toHaveAttribute("aria-expanded", "false")
+  expect(screen.queryByRole("navigation", { name: "项目会话" })).toBeNull()
+})
+
+it("已准入但 reader 尚未注册时显示加载态，不误报不可用", () => {
+  renderRail({
+    conversationReads: {
+      scope: { kind: "direct" }, identity: "pending-reader", admitted: true,
+      read: () => undefined, ensureScope: () => {}, activeId: null, failedMoveScopeKey: null,
+      onSelect: () => {}, onNewChat: () => {}, onMove: () => {},
+    },
+  })
+  const direct = within(screen.getByRole("navigation", { name: "直接会话" }))
+  expect(direct.getByRole("status", { name: "正在加载会话…" })).toBeVisible()
+  expect(direct.queryByText("不可用")).toBeNull()
+})
+
 it("收起态不复制直接会话或孤立项目会话 stop，并保留项目与底部账户锚点", () => {
   renderRail({
     collapsed: true,
@@ -377,6 +468,43 @@ it("展开态账户卡左对齐，通知动作保留在同一行", () => {
   expect(account).toHaveTextContent("Kokoro")
   expect(accountStatus?.querySelector('[data-testid="rail-utility-device"]')).toBeNull()
   expect(accountStatus?.querySelector('[data-testid="rail-utility-notifications"]')).toBeInTheDocument()
+})
+
+it("更多保留技能导航与个性化设置，明确电脑能力未开放", () => {
+  const { onOpenSettings } = renderRail({ navigation: [{ key: "skills", label: "技能" }] })
+  fireEvent.pointerDown(screen.getByTestId("rail-more"))
+  expect(screen.getByRole("menuitem", { name: /Computer Use/ })).toHaveAttribute("aria-disabled", "true")
+  expect(screen.getByRole("menuitem", { name: "技能" })).toHaveAttribute("href", "/app/skills")
+  fireEvent.click(screen.getByRole("menuitem", { name: "个性化" }))
+  expect(onOpenSettings).toHaveBeenCalledWith("personalization")
+})
+
+it("已接入排程从自动化主入口访问，不再挤入更多菜单", () => {
+  renderRail({ navigation: [{ key: "skills", label: "技能" }, { key: "scheduled", label: "已排程" }], activeNavigationKey: "scheduled" })
+  const automation = screen.getByRole("link", { name: "自动化" })
+  expect(automation).toHaveAttribute("href", "/app/scheduled?tab=calendar")
+  expect(automation).toHaveAttribute("aria-current", "page")
+  expect(screen.getByTestId("rail-more")).not.toHaveAttribute("aria-current")
+  fireEvent.pointerDown(screen.getByTestId("rail-more"))
+  expect(screen.getAllByRole("menuitem").map((item) => item.textContent)).toEqual(["Computer Use", "技能", "个性化"])
+  fireEvent.keyDown(screen.getByRole("menu", { name: "更多" }), { key: "Escape" })
+  fireEvent.click(automation)
+  expect(window.location.pathname + window.location.search).toBe("/app/scheduled?tab=calendar")
+})
+
+it("排程被运行配置关闭时自动化明确不可用，不暴露可点击替代入口", () => {
+  renderRail({ navigation: [{ key: "skills", label: "技能" }, { key: "scheduled", label: "已排程", featureFlag: "scheduler" }], featureFlags: [{ key: "scheduler", enabled: false }] })
+  expect(screen.getByRole("button", { name: "自动化" })).toBeDisabled()
+  expect(screen.queryByRole("link", { name: "自动化" })).toBeNull()
+  fireEvent.pointerDown(screen.getByTestId("rail-more"))
+  expect(screen.queryByRole("menuitem", { name: "已排程" })).toBeNull()
+})
+
+it("更多的站内导航提交后关闭菜单，不残留在目标页面上", () => {
+  renderRail({ navigation: [{ key: "skills", label: "技能" }] })
+  fireEvent.pointerDown(screen.getByTestId("rail-more"))
+  fireEvent.click(screen.getByRole("menuitem", { name: "技能" }))
+  expect(screen.queryByRole("menu", { name: "更多" })).toBeNull()
 })
 
 it("Manus 紧凑 rail 保留一级入口，并把次级页面收进更多菜单", () => {
@@ -557,7 +685,7 @@ it("compactDesktop 模式变化时关闭账户菜单", async () => {
 
   function ControlledRail() {
     const [collapsed, setCollapsedState] = useState(true)
-    setCollapsed = setCollapsedState
+    useLayoutEffect(() => { setCollapsed = setCollapsedState }, [setCollapsedState])
     return (
       <WorkspaceRail
         collapsed={collapsed}
@@ -914,13 +1042,59 @@ it("会话重命名只提交 conversation 身份，canonical Project 名称与 i
   fireEvent.change(input, { target: { value: "新会话标题" } })
   fireEvent.keyDown(input, { key: "Enter" })
   expect(onRenameConversation).toHaveBeenCalledWith("ses_1", "新会话标题")
-  const project = screen.getByRole("link", { name: "独立项目名称" })
+  const project = screen.getByRole("link", { name: "新对话 · 独立项目名称" })
   expect(project).toHaveAttribute("href", "/app/project/canonical-project")
   expect(project.closest("[data-project-id]")).toHaveAttribute("data-project-id", "canonical-project")
   expect(document.querySelector('[data-project-list] a[aria-label="新会话标题"]')).toBeNull()
 })
 
-it("项目行的显式重命名动作交给路由 owner，不制造本地副本", () => {
+it("项目整行只展开任务，快捷入口进项目，重命名独立在菜单", async () => {
+  const onRequestProjectRename = vi.fn()
+  const ensureScope = vi.fn()
+  let emptyProject = false
+  const oldLocation = `${window.location.pathname}${window.location.search}`
+  renderRail({
+    projects: [{ id: "project_a", name: "产品规划", href: "/app/project/project_a" }],
+    projectListStatus: "ready", onRequestProjectRename,
+    conversationReads: {
+      scope: { kind: "direct" }, identity: "project-controls", admitted: true,
+      ensureScope, activeId: null, failedMoveScopeKey: null,
+      read: (scope) => ({
+        conversations: scope.kind === "project" && !emptyProject ? [{ id: "conv-a", title: "项目内任务" }] : [],
+        loading: false, loadingMore: false, error: false, hasMore: false,
+        refresh: () => {}, loadMore: () => {}, deleteConversation: async () => true, renameConversation: () => {},
+      }),
+      onSelect: () => {}, onNewChat: () => {}, onMove: () => {},
+    },
+  })
+  const row = screen.getByRole("button", { name: "产品规划" })
+  expect(row).toHaveAttribute("aria-expanded", "false")
+  fireEvent.click(row)
+  expect(row).toHaveAttribute("aria-expanded", "true")
+  expect(await screen.findByRole("button", { name: "项目内任务" })).toBeVisible()
+  expect(`${window.location.pathname}${window.location.search}`).toBe(oldLocation)
+  expect(onRequestProjectRename).not.toHaveBeenCalled()
+  fireEvent.click(row)
+  expect(row).toHaveAttribute("aria-expanded", "false")
+  expect(screen.queryByRole("button", { name: "项目内任务" })).toBeNull()
+  emptyProject = true
+  fireEvent.click(row)
+  expect(within(screen.getByRole("navigation", { name: "项目会话" })).getByRole("status")).toHaveTextContent("暂无任务")
+  const compose = screen.getByRole("link", { name: "新对话 · 产品规划" })
+  expect(compose).toHaveAttribute("href", "/app/project/project_a")
+  try {
+    fireEvent.click(compose)
+    expect(window.location.pathname).toBe("/app/project/project_a")
+    expect(window.location.search).toBe("")
+    expect(onRequestProjectRename).not.toHaveBeenCalled()
+  } finally { window.history.replaceState({}, "", oldLocation) }
+  const controls = within(row.closest("[data-project-id]") as HTMLElement)
+  fireEvent.pointerDown(controls.getByRole("button", { name: "项目选项" }), { button: 0 })
+  fireEvent.click(await screen.findByRole("menuitem", { name: "重命名项目" }))
+  expect(onRequestProjectRename).toHaveBeenCalledExactlyOnceWith("project_a")
+})
+
+it("项目菜单的重命名动作交给路由 owner，不制造本地副本", async () => {
   const onRequestProjectRename = vi.fn()
   renderRail({
     projects: [{ id: "project_a", name: "独立项目名称", href: "/app/project/project_a" }],
@@ -928,11 +1102,13 @@ it("项目行的显式重命名动作交给路由 owner，不制造本地副本"
     onRequestProjectRename,
   })
 
-  fireEvent.click(screen.getByRole("button", { name: "重命名项目" }))
+  const projectRow = screen.getByRole("button", { name: "独立项目名称" }).closest("[data-project-id]") as HTMLElement
+  fireEvent.pointerDown(within(projectRow).getByRole("button", { name: "项目选项" }), { button: 0 })
+  fireEvent.click(await screen.findByRole("menuitem", { name: "重命名项目" }))
   expect(onRequestProjectRename).toHaveBeenCalledExactlyOnceWith("project_a")
 })
 
-it("项目保持单层概览入口，任务区仍然独立", () => {
+it("无 scoped reader 仍保持整行展开语义，只展示不可用而不借用直接任务", () => {
   renderRail({
     projects: [{ id: "project_a", name: "独立项目名称", href: "/app/project/project_a", active: true }],
     projectListStatus: "ready",
@@ -942,10 +1118,13 @@ it("项目保持单层概览入口，任务区仍然独立", () => {
     activeId: null,
   })
 
-  const project = screen.getByRole("link", { name: "独立项目名称" })
+  const project = screen.getByRole("link", { name: "新对话 · 独立项目名称" })
   const projectRow = project.closest("[data-project-id]")
-  expect(project.querySelectorAll("svg")).toHaveLength(1)
-  expect(projectRow?.querySelector('button[aria-label*="展开项目"], button[aria-label*="收起项目"]')).toBeNull()
+  const disclosure = within(projectRow as HTMLElement).getByRole("button", { name: "独立项目名称" })
+  expect(disclosure).toHaveAttribute("aria-expanded", "true")
+  expect(within(document.getElementById(disclosure.getAttribute("aria-controls")!)!).getByRole("status")).toHaveTextContent("不可用")
+  fireEvent.click(disclosure)
+  expect(disclosure).toHaveAttribute("aria-expanded", "false")
   expect(projectRow?.querySelector('[data-conversation-list]')).toBeNull()
   expect(screen.getByRole("navigation", { name: "直接会话" })).toBeInTheDocument()
 })
@@ -955,10 +1134,10 @@ it("正式 rail 只有当前路由而无集合时不造通用项目；显式 pre
   expect(document.querySelector('[data-project-list] [data-project-id]')).toBeNull()
   cleanup()
   renderRail({ projectHref: "/app/project/preview-project", preview: true })
-  expect(screen.getByRole("link", { name: "当前项目" })).toHaveAttribute("href", "/app/project/preview-project")
+  expect(screen.getByRole("link", { name: "新对话 · 当前项目" })).toHaveAttribute("href", "/app/project/preview-project")
 })
 
-it("R254 当前项目选择不替换普通持久会话分区，项目名称仍是概览Link", () => {
+it("R254 项目展开和快捷概览入口都不替换普通持久会话分区", () => {
   renderRail({
     projects: [{ id: "project_a", name: "产品规划", href: "/app/project/project_a", active: true }],
     projectHref: "/app/project/project_a",
@@ -969,7 +1148,7 @@ it("R254 当前项目选择不替换普通持久会话分区，项目名称仍�
   const direct = screen.getByRole("navigation", { name: "直接会话" })
   expect(direct).toHaveAttribute("data-conversation-list", "direct")
   expect(within(direct).getByRole("button", { name: "普通持久会话" })).toBeInTheDocument()
-  expect(screen.getByRole("link", { name: "产品规划" })).toHaveAttribute("href", "/app/project/project_a")
+  expect(screen.getByRole("link", { name: "新对话 · 产品规划" })).toHaveAttribute("href", "/app/project/project_a")
   expect(screen.queryByRole("navigation", { name: "项目会话" })).not.toBeInTheDocument()
 })
 
@@ -1060,19 +1239,18 @@ it("账户卸载真正abort且迟到completion不进入后续菜单", async () =
 })
 
 
-// SET49: main retired expandable project-task branches. Project links must
-// never start private folder reads during admission or identity transitions.
+// Integrated folder disclosure stays closed across admission and identity transitions.
+// Restoring the approved affordance never restores old private rows or starts a read.
 it.each(["same-subject", "actor-B", null])("R255 project links retain no private P/Q task branches across %s retirement", async (nextActor) => {
-  const { props, fetchMock } = retirementRailFixture()
+  const { props, fetchMock, thread } = retirementRailFixture()
   const frame = (actor: string | null, generation: number, admitted: boolean) => {
-    const conversationReads = { ...props.conversationReads!, identity: `${actor ?? "unknown"}:gen${generation}`, admitted, folderIntentIdentity: actor }
-    return <ThemeProvider><LocaleProvider><WorkspaceRail {...props} conversationReads={conversationReads} /></LocaleProvider></ThemeProvider>
+    return <ThemeProvider><LocaleProvider><ScopedRailHarness props={props} thread={thread} scope={DIRECT_SESSION_SCOPE} identity={`${actor ?? "unknown"}:gen${generation}`} admitted={admitted}/></LocaleProvider></ThemeProvider>
   }
   const view = render(frame("actor-A", 1, true))
   const assertNoBranches = () => {
     expect(document.querySelectorAll('[data-conversation-list="project-conversation"]')).toHaveLength(0)
     for (const id of ["P", "Q"]) {
-      expect(document.querySelector(`[data-project-id="${id}"] button[aria-expanded]`)).toBeNull()
+      expect(document.querySelector(`[data-project-id="${id}"] button[aria-expanded]`)).toHaveAttribute("aria-expanded", "false")
       expect(screen.queryByRole("button", { name: `会话${id}` })).toBeNull()
       expect(document.querySelector(`[data-project-id="${id}"] a`)).toHaveAttribute("href", `/app/project/${id}`)
     }
@@ -1244,3 +1422,25 @@ it("SET47 task archive is a keyboard-accessible menu action with its own caller"
  const item=await screen.findByRole("menuitem",{name:"归档任务"});fireEvent.click(item);expect(archive).toHaveBeenCalledWith("ses_1");expect(remove).not.toHaveBeenCalled();
 });
 // SET47-END
+
+it("an expired Custom API creation shows inspection guidance, keeps its frozen draft and leaves Close available", async () => {
+  const { createCustomApiCreateFlow } = await import("@/ui/mcp/custom-api-create-flow")
+  const { CustomApiForm } = await import("@/ui/mcp/custom-api-form")
+  const { HubClientError } = await import("@/hub/client")
+  const boundary = { admitted: true, subject: "expired-api-ui", generation: 1 }
+  const call = vi.fn().mockRejectedValue(new HubClientError("http", "private-error", "custom_api_command_replay_expired", 412, false))
+  const onCancel = vi.fn(), onDone = vi.fn().mockResolvedValue(undefined)
+  const flow = createCustomApiCreateFlow({ client: { createCustomApi: call }, boundary, onConfirmed: vi.fn() })
+  render(<LocaleProvider><CustomApiForm flow={flow} boundary={boundary} onCancel={onCancel} onDone={onDone} /></LocaleProvider>)
+  const name = screen.getByLabelText(/^(Name|名称)$/u)
+  fireEvent.change(name, { target: { value: "Original API" } })
+  fireEvent.click(screen.getByRole("button", { name: /^(Save|保存)$/u }))
+  expect(await screen.findByRole("alert")).toHaveTextContent(/期限|expired/iu)
+  expect(screen.getByRole("button", { name: /核验|Check status/iu })).toBeDisabled()
+  expect(name).toHaveValue("Original API")
+  expect(name).toHaveAttribute("readonly")
+  fireEvent.click(screen.getByRole("button", { name: /^(Cancel|取消)$/u }))
+  expect(onCancel).toHaveBeenCalledOnce()
+  expect(call).toHaveBeenCalledOnce()
+  expect(onDone).not.toHaveBeenCalled()
+})

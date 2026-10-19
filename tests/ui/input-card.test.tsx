@@ -102,6 +102,19 @@ describe("InputCard：提交", () => {
     })
   })
 
+  it.each(["submit", "edit"] as const)("keeps the selected owner enum unchanged in a %s decision", (decisionType) => {
+    const onDecision = vi.fn()
+    render(<InputCard decisionType={decisionType} tool={makeTool({
+      allowed_decisions: [decisionType],
+      display: { editable: true, input_schema: { type: "object", properties: { target: { enum: [" production "] } }, required: ["target"] } },
+    })} hitlActive controlError={null} onDecision={onDecision} />, { wrapper: LocaleProvider })
+    fireEvent.click(screen.getByRole("radio", { name: "production" }))
+    fireEvent.click(screen.getByRole("button", { name: "提交" }))
+    expect(onDecision).toHaveBeenCalledWith("tool_1", decisionType === "edit"
+      ? { type: "edit", args: { target: " production " } }
+      : { type: "submit", value: { target: " production " } })
+  })
+
   it("必填拦截：必填缺失点提交不发决策，亮错误行", () => {
     const { onDecision } = renderCard(makeTool())
     fireEvent.click(screen.getByRole("button", { name: "提交" }))

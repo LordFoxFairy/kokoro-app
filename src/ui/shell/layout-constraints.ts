@@ -7,3 +7,7 @@
  * positions and the seam appears to jump or briefly render as two edges.
  */
 export const WORKSPACE_MAIN_MIN = 420
+
+// The reference keeps desktop navigation at 768px; the overlay is below it.
+// Share the boundary between rail mode and the mobile Sidebar composition.
+export const WORKSPACE_DESKTOP_MIN_WIDTH = 768

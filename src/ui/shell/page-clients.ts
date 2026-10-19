@@ -22,7 +22,6 @@ import { createHubClient, type HubClient } from "@/hub/client"
 import { createTeamClient, type TeamClient } from "@/team/client"
 import { createAgentClient, type AgentClient } from "@/agents/client"
 import { createPreviewAgentClient } from "@/agents/preview-client"
-import { createScheduledTaskClient, type ScheduledTaskClient } from "@/features/scheduled-tasks"
 import {
   createPreviewBillingClient,
   createPreviewHubClient,
@@ -187,14 +186,6 @@ function browserSessionClient(options: { preview?: boolean } = {}): SessionClien
   if (options.preview === true) return browserPreviewClient()
   if (!pageListClient) pageListClient = createSessionClient({ baseUrl: sessionBaseUrl() })
   return pageListClient
-}
-
-let pageScheduledTaskClient: ScheduledTaskClient | null = null
-
-/** Live Scheduled transport is explicit at the AppGate boundary; preview never creates it. */
-export function browserScheduledTaskClient(): ScheduledTaskClient {
-  if (!pageScheduledTaskClient) pageScheduledTaskClient = createScheduledTaskClient()
-  return pageScheduledTaskClient
 }
 
 type BrowserEngineEntry = {

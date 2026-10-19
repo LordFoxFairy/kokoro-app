@@ -1,3 +1,5 @@
+import { proxyProjectSkillSelection } from "@/lib/server/project-skill-selection";
+import { proxyInstallation } from "@/lib/server/skill-installations";
 import {
   mcpConnectorIdSchema,
   mcpPrivateServerMatches,
@@ -15,7 +17,6 @@ import {
 } from "@/hub/mcp-connector.schema";
 import {
   mcpConnectorAuthorizationCallbackSchema,
-  mcpConnectorAuthorizationErrorAllowed,
   mcpConnectorAuthorizationMatches,
   mcpConnectorAuthorizationRequestSchema,
   mcpConnectorCreateConnectionSchema,
@@ -25,7 +26,7 @@ import { parseMcpConnectorJson } from "@/hub/mcp-connector-json";
 import {
   customApiCreateInputSchema,
   customApiCreateSchema,
-  customApiErrorSchema,
+  customApiErrorAllowed,
   customApiGetSchema,
   customApiPageSchema,
   customApiRemoveInputSchema,
@@ -102,14 +103,6 @@ import {
 
 import {
   installationIdSchema,
-  installationKeySchema,
-  installationInstallRequestSchema,
-  installationEnabledRequestSchema,
-  installationListQuerySchema,
-  installationReceiptMatches,
-  installationResponseSchema,
-  installationErrorSchema,
-  installationErrorAllowed,
   mcpConnectionPageSchema,
   mcpConnectionReadErrorSchema,
   mcpConnectionErrorAllowed,
@@ -118,11 +111,13 @@ import {
   catalogPackagePathSchema,
   CATALOG_PACKAGE_ERRORS,
   catalogPackageMatches,
+  installationPackageErrorAllowed,
   manuscriptCoverErrorSchema,
   MANUSCRIPT_COVER_ERRORS,
   skillPublishRequestSchema,
-  type InstallationOperation,
 } from "@/hub/schemas";
+
+import { skillDownloadSchema, skillDownloadErrorAllowed } from "@/hub/skill-download.schema";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -806,7 +801,7 @@ async function proxyMcpConnector(
                 input,
               )
         : authorization
-          ? mcpConnectorAuthorizationErrorAllowed(upstream.status, raw)
+          ? mcpConnectorErrorAllowed("authorization", upstream.status, raw)
           : mcpConnectorErrorAllowed(
               connectorOperation as McpConnectorOperation,
               upstream.status,
@@ -989,7 +984,7 @@ async function proxyCustomApi(
     const valid =
       upstream.status === successStatus
         ? schema.safeParse((raw as { data?: unknown })?.data).success
-        : customApiErrorSchema.safeParse(raw).success;
+        : customApiErrorAllowed(operation, upstream.status, raw);
     if (!valid) return fail(502, "custom_api_response_invalid");
     return NextResponse.json(raw, {
       status: upstream.status,
@@ -1004,205 +999,6 @@ async function proxyCustomApi(
     clearTimeout(timer);
     void upstream?.body?.cancel().catch(() => undefined);
   }
-}
-
-// Dedicated Product installation boundary; never the permissive legacy Hub branch.
-async function proxyInstallation(
-  request: Request,
-  path: string[],
-): Promise<Response> {
-  const supplied = request.headers.get("x-kokoro-request-id");
-  const requestId =
-    supplied !== null && PROJECTION_REQUEST_ID.test(supplied)
-      ? supplied
-      : crypto.randomUUID();
-  const fail = (status: number, code: string, retryable = false) =>
-    NextResponse.json(
-      { error: { code, message: code, retryable } },
-      {
-        status,
-        headers: { "cache-control": "no-store", "x-request-id": requestId },
-      },
-    );
-  if (path[0] !== "self") return fail(404, "skill_installation_not_found");
-  const operation: InstallationOperation | null =
-    path.length === 2
-      ? request.method === "POST"
-        ? "install"
-        : request.method === "GET"
-          ? "list"
-          : null
-      : path.length === 3
-        ? request.method === "GET"
-          ? "get"
-          : request.method === "DELETE"
-            ? "remove"
-            : null
-        : path.length === 4 && path[3] === "enabled" && request.method === "PUT"
-          ? "setEnabled"
-          : null;
-  if (operation === null) return fail(404, "skill_installation_not_found");
-  const mutation = ["install", "setEnabled", "remove"].includes(operation);
-  if (mutation && !sameOriginOk(request)) return fail(403, "session_forbidden");
-  const config = productBffConfig();
-  if (!config?.bffBaseUrl) return fail(503, "product_tenant_not_configured");
-  let claims;
-  try {
-    claims = await admittedProductSession(request, config);
-  } catch {
-    return fail(503, "iam_admission_unavailable", true);
-  }
-  if (claims === null) return fail(401, "session_authentication_required");
-  const query = new URL(request.url).searchParams;
-  if (path.length > 2 && !installationIdSchema.safeParse(path[2]).success)
-    return fail(400, "invalid_skill_installation_request");
-  if (operation === "list") {
-    if (
-      [...query.keys()].some(
-        (key) =>
-          !["installed", "enabled", "limit", "cursor"].includes(key) ||
-          query.getAll(key).length !== 1,
-      )
-    )
-      return fail(400, "invalid_skill_installation_request");
-    const values: Record<string, unknown> = {};
-    for (const [key, value] of query) {
-      if (key === "installed" || key === "enabled") {
-        if (value !== "true" && value !== "false")
-          return fail(400, "invalid_skill_installation_request");
-        values[key] = value === "true";
-      } else if (key === "limit") {
-        if (!/^[1-9][0-9]{0,2}(?![\s\S])/u.test(value))
-          return fail(400, "invalid_skill_installation_request");
-        values[key] = Number(value);
-      } else values[key] = value;
-    }
-    if (!installationListQuerySchema.safeParse(values).success)
-      return fail(400, "invalid_skill_installation_request");
-  } else if (query.size) return fail(400, "invalid_skill_installation_request");
-  const key = request.headers.get("idempotency-key");
-  if (mutation ? !installationKeySchema.safeParse(key).success : key !== null)
-    return fail(
-      400,
-      mutation
-        ? "skill_installation_idempotency_key_required"
-        : "invalid_skill_installation_request",
-    );
-  let expectedIdentity = path[2] ?? "";
-  let expectedEnabled: boolean | undefined;
-  let body: ArrayBuffer;
-  try {
-    body = await readBoundedRequestBody(request, 65_536);
-  } catch (error) {
-    return fail(
-      error instanceof UpstreamRequestTooLargeError ? 413 : 400,
-      error instanceof UpstreamRequestTooLargeError
-        ? "request_body_too_large"
-        : "invalid_skill_installation_request",
-    );
-  }
-  if (operation === "install" || operation === "setEnabled") {
-    if (!JSON_MEDIA_TYPE.test(request.headers.get("content-type") ?? ""))
-      return fail(400, "invalid_skill_installation_request");
-    try {
-      const value: unknown = JSON.parse(
-        new TextDecoder("utf-8", { fatal: true }).decode(body),
-      );
-      const parsed = (
-        operation === "install"
-          ? installationInstallRequestSchema
-          : installationEnabledRequestSchema
-      ).safeParse(value);
-      if (!parsed.success)
-        return fail(400, "invalid_skill_installation_request");
-      if ("source_ref" in parsed.data)
-        expectedIdentity = parsed.data.source_ref;
-      else expectedEnabled = parsed.data.enabled;
-    } catch {
-      return fail(400, "invalid_skill_installation_request");
-    }
-  } else if (body.byteLength !== 0)
-    return fail(400, "invalid_skill_installation_request");
-  const headers = productBffHeaders(config, claims, requestId);
-  if (mutation && key !== null) headers.set("idempotency-key", key);
-  if (operation === "install" || operation === "setEnabled")
-    headers.set("content-type", "application/json");
-  let upstream: Response;
-  try {
-    upstream = await requestWithDomain(
-      `${config.bffBaseUrl.replace(/\/+$/, "")}/v1/${path.slice(1).map(encodeURIComponent).join("/")}${query.size ? `?${query}` : ""}`,
-      config.domain,
-      {
-        method: request.method,
-        headers: Object.fromEntries(headers),
-        signal: request.signal,
-        ...(["install", "setEnabled"].includes(operation) ? { body } : {}),
-      },
-    );
-  } catch (error) {
-    return error instanceof UpstreamTimeoutError
-      ? fail(504, "skill_installation_dependency_timeout", true)
-      : fail(503, "skill_installation_dependency_unavailable", true);
-  }
-  const upstreamId = upstream.headers.get("x-request-id");
-  const retryAfter =
-    upstream.status === 429 ? upstream.headers.get("retry-after") : null;
-  if (
-    !JSON_MEDIA_TYPE.test(upstream.headers.get("content-type") ?? "") ||
-    upstream.headers.get("cache-control") !== "no-store" ||
-    upstreamId === null ||
-    !PROJECTION_REQUEST_ID.test(upstreamId) ||
-    (retryAfter !== null && !/^[1-9][0-9]{0,4}$/u.test(retryAfter))
-  ) {
-    await upstream.body?.cancel();
-    return fail(502, "skill_installation_response_invalid");
-  }
-  let raw: unknown;
-  try {
-    raw = await upstream.json();
-  } catch {
-    return fail(502, "skill_installation_response_invalid");
-  }
-  if (upstream.status === 200) {
-    const parsed = installationResponseSchema(operation).safeParse(raw);
-    if (!parsed.success)
-      return fail(502, "skill_installation_response_invalid");
-    const value = parsed.data.data;
-    if (
-      (operation === "get" &&
-        (!("installation_id" in value) ||
-          value.installation_id !== expectedIdentity)) ||
-      (operation !== "get" &&
-        operation !== "list" &&
-        (!("installation" in value) ||
-          !installationReceiptMatches(
-            operation,
-            value,
-            expectedIdentity,
-            expectedEnabled,
-          )))
-    )
-      return fail(502, "skill_installation_response_invalid");
-  } else {
-    const error = installationErrorSchema.safeParse(raw);
-    if (
-      !error.success ||
-      !installationErrorAllowed(
-        operation,
-        upstream.status,
-        error.data.error.code,
-      )
-    )
-      return fail(502, "skill_installation_response_invalid");
-  }
-  return NextResponse.json(raw, {
-    status: upstream.status,
-    headers: {
-      "cache-control": "no-store",
-      "x-request-id": upstreamId,
-      ...(retryAfter === null ? {} : { "retry-after": retryAfter }),
-    },
-  });
 }
 
 // A cover belongs to an owner revision, not a catalog series or a browser URL.
@@ -2084,31 +1880,43 @@ async function proxySkillShare(
   }
 }
 
-async function proxyCatalogPackage(
+async function proxySkillPackage(
   request: Request,
   path: string[],
 ): Promise<Response> {
   const requestId = crypto.randomUUID();
-  const fail = (fault: ProjectionFault) => projectionError(fault, requestId);
-  const revisionSkillId = path[1] ?? "";
+  const installation = path[0] === "skill-installations";
+  const download = installation && path[2] === "download";
+  const fail = (fault: ProjectionFault) => {
+    if (!installation || download) return projectionError(fault, requestId);
+    const base = PROJECTION_FAILURES[fault];
+    const code = fault === "invalidSkillRequest" ? "invalid_skill_package_request"
+      : fault === "invalidOwnerResponse" ? "skill_package_response_invalid"
+      : ["bffUnavailable", "bffNotConfigured"].includes(fault) ? "skill_package_dependency_unavailable" : base.code;
+    return NextResponse.json({ error: { code, message: code, retryable: base.status === 503 } }, { status: base.status, headers: { "cache-control": "no-store", "x-request-id": requestId } });
+  };
+  const targetId = path[1] ?? "";
   const url = new URL(request.url);
   if (
-    request.method !== "GET" ||
+    request.method !== (download ? "POST" : "GET") ||
     path.length !== 3 ||
-    path[0] !== "skills" ||
-    path[2] !== "package" ||
-    !MCP_CONNECTION_ID.test(revisionSkillId) ||
+    (!installation && path[0] !== "skills") ||
+    path[2] !== (download ? "download" : "package") ||
+    !(installation ? installationIdSchema.safeParse(targetId).success : MCP_CONNECTION_ID.test(targetId)) ||
     url.pathname !==
-      `/api/hub/skills/${encodeURIComponent(revisionSkillId)}/package` ||
-    request.body !== null ||
+      `/api/hub/${installation ? "skill-installations" : "skills"}/${encodeURIComponent(targetId)}/${download ? "download" : "package"}` ||
+    (!download && request.body !== null) ||
     url.hash ||
+    (download && url.search !== "") ||
+    (installation && /%(?![0-9A-Fa-f]{2})/u.test(url.search)) ||
     [...url.searchParams.keys()].some((key) => key !== "file_path") ||
     url.searchParams.getAll("file_path").length > 1 ||
-    ["content-length", "transfer-encoding", "idempotency-key"].some((header) =>
+    [...(download ? [] : ["content-length"]), "transfer-encoding", "idempotency-key"].some((header) =>
       request.headers.has(header),
     )
   )
     return fail("invalidSkillRequest");
+  if (download && request.headers.has("content-length") && request.headers.get("content-length") !== "0") return fail("invalidSkillRequest");
   const filePath = url.searchParams.get("file_path") ?? undefined;
   if (
     filePath !== undefined &&
@@ -2118,7 +1926,7 @@ async function proxyCatalogPackage(
   const config = productBffConfig();
   if (config === null) return fail("configuration");
   if (
-    request.headers.has("origin") &&
+    (download || request.headers.has("origin")) &&
     request.headers.get("origin") !== config.session.webOrigin
   )
     return fail("forbidden");
@@ -2138,6 +1946,14 @@ async function proxyCatalogPackage(
     });
   try {
     joined.throwIfAborted();
+    if (download && request.body !== null) {
+      const reader = request.body.getReader();
+      const cancel = () => { void reader.cancel().catch(() => undefined); };
+      joined.addEventListener("abort", cancel, { once: true });
+      try {
+        for (;;) { const part = await within(reader.read()); joined.throwIfAborted(); if (part.done) break; if (part.value.byteLength > 0) return fail("invalidSkillRequest"); }
+      } finally { joined.removeEventListener("abort", cancel); void reader.cancel().catch(() => undefined); reader.releaseLock(); }
+    }
     const claims = await within(admittedProductSession(request, config)).catch(
       () => undefined,
     );
@@ -2146,10 +1962,10 @@ async function proxyCatalogPackage(
     joined.throwIfAborted();
     const headers = productBffHeaders(config, claims, requestId);
     headers.set("accept", "application/json");
-    const target = `${config.bffBaseUrl.replace(/\/+$/u, "")}/v1/skills/${encodeURIComponent(revisionSkillId)}/package${filePath === undefined ? "" : `?file_path=${encodeURIComponent(filePath)}`}`;
+    const target = `${config.bffBaseUrl.replace(/\/+$/u, "")}/${download ? "browser/v1" : "v1"}/${installation ? "skill-installations" : "skills"}/${encodeURIComponent(targetId)}/${download ? "download" : "package"}${filePath === undefined ? "" : `?file_path=${encodeURIComponent(filePath)}`}`;
     upstream = await within(
       requestWithDomain(target, config.domain, {
-        method: "GET",
+        method: download ? "POST" : "GET",
         headers: Object.fromEntries(headers),
         signal: joined,
         timeoutMs: Math.max(1, expires - Date.now()),
@@ -2214,19 +2030,22 @@ async function proxyCatalogPackage(
     }
     joined.throwIfAborted();
     if (upstream.status === 200) {
-      const parsed = catalogPackageResponseSchema.safeParse(raw);
-      if (
-        !parsed.success ||
-        !catalogPackageMatches(parsed.data.data, revisionSkillId, filePath)
-      )
-        return fail("invalidOwnerResponse");
+      if (download) {
+        const parsed = z.object({ data: skillDownloadSchema }).strict().safeParse(raw);
+        if (!parsed.success || Date.parse(parsed.data.data.download_info.expires_at) <= Date.now()) return fail("invalidOwnerResponse");
+      } else {
+        const parsed = catalogPackageResponseSchema.safeParse(raw);
+        if (!parsed.success || !(installation
+          ? filePath === undefined ? parsed.data.data.selected_file === null : parsed.data.data.selected_file?.path === filePath
+          : catalogPackageMatches(parsed.data.data, targetId, filePath))) return fail("invalidOwnerResponse");
+      }
     } else {
       const parsed = catalogPackageErrorSchema.safeParse(raw);
       if (
         !parsed.success ||
-        !CATALOG_PACKAGE_ERRORS[upstream.status]?.includes(
-          parsed.data.error.code,
-        )
+        !(download ? skillDownloadErrorAllowed(upstream.status, parsed.data.error.code)
+          : installation ? installationPackageErrorAllowed(upstream.status, parsed.data.error.code, parsed.data.error.retryable, upstream.headers.get("retry-after"))
+          : CATALOG_PACKAGE_ERRORS[upstream.status]?.includes(parsed.data.error.code))
       )
         return fail("invalidOwnerResponse");
     }
@@ -2245,6 +2064,7 @@ async function proxyCatalogPackage(
       },
     });
   } catch {
+    if (download && deadline.signal.aborted) return NextResponse.json({ error: { code: "skill_deadline_exceeded", message: "Skill download deadline exceeded", retryable: true } }, { status: 504, headers: { "cache-control": "private, no-store", "x-request-id": requestId } });
     return fail("bffUnavailable");
   } finally {
     clearTimeout(timer);
@@ -2474,7 +2294,7 @@ async function proxyPersonalSkillLifecycle(
   }
 }
 
-export async function proxyHubRequest(
+async function proxyHubRequest(
   request: Request,
   context: { params: Promise<{ path: string[] }> },
 ): Promise<Response> {
@@ -2503,13 +2323,16 @@ export async function proxyHubRequest(
     ["versions", "withdraw"].includes(path[3] ?? "")
   )
     return proxyPersonalSkillLifecycle(request, path);
+  if ((path[0] === "projects" && path[2] === "skill-selection") || (path[0] === "self" && path[1] === "projects" && path[3] === "skill-selection")) return proxyProjectSkillSelection(request, path);
+  if ((path[0] === "projects" && path[2] === "skills") || (path[0] === "self" && path[1] === "projects" && path[3] === "skills"))
+    return NextResponse.json({ error: "not_found" }, { status: 404, headers: { "cache-control": "no-store" } });
   if (path[0] === "skill-shares") return proxySkillShare(request, path);
   if (path[0] === "skills" && path[1] === "github")
     return proxyGithubSkillImport(request, path);
   if (path[0] === "skills" && path[1] === "local-imports")
     return proxyLocalSkillImport(request, path);
-  if (path.at(-1) === "package" && path[0] !== "skill-installations")
-    return proxyCatalogPackage(request, path);
+  if (path.at(-1) === "package" || path[0] === "skill-installations" && path.at(-1) === "download")
+    return proxySkillPackage(request, path);
   if (path.at(-1) === "cover") return proxySkillCover(request, path);
   if (
     (path[0] === "projects" && path[2] === "name") ||
@@ -2517,6 +2340,8 @@ export async function proxyHubRequest(
   )
     return proxyProjectRename(request, path);
   if (
+    (path[0] === "projects" && path[2] === "skill-installations") ||
+    (path[0] === "self" && path[1] === "projects" && path[3] === "skill-installations") ||
     path[0] === "skill-installations" ||
     (path[0] === "self" && path[1] === "skill-installations")
   )

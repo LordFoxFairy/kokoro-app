@@ -3,7 +3,7 @@
 import type { GithubImported } from "@/ui/skills/personal-skill-github-import-flow"
 
 import Image from "next/image"
-import { useCallback, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { Check, CircleDot, ChevronDown, LoaderCircle, Plus, Search, SquarePen, Upload, X } from "lucide-react"
 
 import type { EmptyStateProps } from "@/components/blocks/app-frame/app-frame"
@@ -14,8 +14,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem,
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
-import { createSkillInstallationClient } from "@/hub/client"
-import type { SkillCatalog, SkillCatalogCard, CatalogSkillCategory, PersonalInstallation } from "@/hub/schemas"
+import type { SkillCatalog, SkillCatalogCard, CatalogSkillCategory } from "@/hub/schemas"
 import { browserHubClient } from "@/ui/shell/page-clients"
 import { invalidate, useResource } from "@/lib/query"
 import { useT } from "@/i18n/context"
@@ -23,13 +22,17 @@ import type { MessageKey } from "@/i18n/messages"
 import { cn } from "@/lib/utils"
 import { GithubImportDialog } from "@/ui/skills/github-import-dialog"
 import { SkillUploadDialog } from "@/ui/skills/skill-upload-dialog"
+import { mergeSkillCatalogPages } from "@/ui/skills/skills-pool-model"
 import { ManusSkillDetailDialog } from "@/ui/skills/manus-skill-detail-dialog"
 import { createManusSkillHubClient, SKILL_CATALOG_RESOURCE_KEY } from "@/ui/skills/manus-skill-client"
+import { skillResourceKey } from "@/ui/skills/skills-resource-cache"
 import { stashPendingDraft } from "@/ui/shell/use-draft"
+import { toSkillActionCard } from "@/ui/skills/skills-card-model"
 import { BrandFallback } from "@/components/blocks/brand-mark/brand-mark"
 import { navigateMountedSurface } from "@/ui/navigation/mounted-surface-navigation"
 
 import styles from "./kokoro-skills-surface.module.css"
+import { useCatalogSkillInstallation } from "./use-catalog-skill-installation"
 
 type SkillCategory = "all" | CatalogSkillCategory
 
@@ -49,19 +52,10 @@ const actionIdentity = (skill: Pick<SkillCatalogCard, "skill_id" | "revision_ski
   skill.skill_id ?? `${skill.scope}:${skill.name}`,
   skill.revision_skill_id ?? skill.content_hash,
 ])
-type InstallationIntent = Readonly<{ seriesId: string; sourceRef: string; key: string; installationId?: string }>
 
 
 function skillCategories(skill: Pick<SkillCatalogCard, "categories">): Exclude<SkillCategory, "all">[] {
   return [...new Set(skill.categories ?? [])]
-}
-
-function mergeCatalogPages(pages: readonly SkillCatalog[]): SkillCatalog {
-  const byKey = new Map<string, SkillCatalog["skills"][number]>()
-  for (const page of pages) {
-    for (const skill of page.skills) byKey.set(skill.skill_id ?? `${skill.scope}/${skill.name}`, skill)
-  }
-  return { skills: [...byKey.values()], next_cursor: pages.at(-1)?.next_cursor ?? null }
 }
 
 function formatUsage(value: string): string {
@@ -74,13 +68,14 @@ function formatUsage(value: string): string {
 type KokoroSkillsSurfaceProps = Pick<EmptyStateProps, "preview" | "onPrompt" | "brandName" | "onOpenSettings" | "onCreateSkillWithAi" | "onTrySkill" | "projectReadBoundary">
 
 export function KokoroSkillsSurface(props: KokoroSkillsSurfaceProps) {
-  return <PreviewKokoroSkillsSurface {...props} />
+  const boundary = props.projectReadBoundary
+  return <PreviewKokoroSkillsSurface key={JSON.stringify([props.preview ?? true, boundary?.subject ?? null])} {...props} />
 }
 
 function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kokoro", onOpenSettings, onCreateSkillWithAi, onTrySkill, projectReadBoundary }: KokoroSkillsSurfaceProps) {
   const t = useT()
-  const readBoundary = projectReadBoundary ?? { admitted: preview, subject: preview ? "preview" : null, generation: 0 }
-  const publisherLabel = (skill: Pick<SkillCatalogCard, "scope">) => skill.scope === "third_party" ? t("skills.community") : brandName
+  const readBoundary = useMemo(() => projectReadBoundary ?? { admitted: preview, subject: preview ? "preview" : null, generation: 0 }, [preview, projectReadBoundary])
+  const publisherLabel = (skill: Pick<SkillCatalogCard, "scope">) => skill.scope === "official" ? brandName : skill.scope === "third_party" ? t("skills.community") : undefined
   const categoryLabel = (value: CatalogSkillCategory) => t(CATEGORIES.find((item) => item.value === value)?.key ?? "skills.categoryCoding")
   // The standalone page and the embedded Settings page must consume the same
   // owner-backed Skills projection.  The generic Hub client still addresses
@@ -89,74 +84,102 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
   // appeared healthy.  Keep one typed read adapter for both entry points so
   // a tab switch never turns into a different data contract or an error card.
   const client = useMemo(
-    () => preview ? browserHubClient({ preview }) : createManusSkillHubClient(browserHubClient({ preview })),
-    [preview],
+    () => preview ? browserHubClient({ preview }) : createManusSkillHubClient(browserHubClient({ preview }), readBoundary),
+    [preview, readBoundary],
   )
-  const catalog = useResource<SkillCatalog>(
-    `${SKILL_CATALOG_RESOURCE_KEY}/${preview ? "preview" : "live"}`,
-    useCallback(() => client.listSkillCatalog(), [client]),
-    { revalidateOnSubscribe: false },
-  )
-  const [pageState, setPageState] = useState<Readonly<{ base: SkillCatalog | undefined; pages: readonly SkillCatalog[] }>>({ base: undefined, pages: [] })
-  const [loadingMoreFor, setLoadingMoreFor] = useState<SkillCatalog | undefined>()
-  const [loadMoreFailedFor, setLoadMoreFailedFor] = useState<SkillCatalog | undefined>()
-  const loadingMoreRef = useRef(false)
   const [query, setQuery] = useState("")
   const [category, setCategory] = useState<SkillCategory>("all")
+  const [committedQuery, setCommittedQuery] = useState("")
+  useEffect(() => {
+    const timer = setTimeout(() => setCommittedQuery(query.trim()), 250)
+    return () => clearTimeout(timer)
+  }, [query])
+  const catalogFilters = useMemo(() => ({
+    pageSize: 9,
+    ...(committedQuery ? { query: committedQuery } : {}),
+    ...(category === "all" ? {} : { category }),
+  }), [category, committedQuery])
+  // Paging policy belongs to this surface, not the shared client. Keep its
+  // nine-card random first page separate from other consumers' cached pages.
+  const catalogNamespace = skillResourceKey(SKILL_CATALOG_RESOURCE_KEY, client)
+  const catalogKey = skillResourceKey(SKILL_CATALOG_RESOURCE_KEY, client,
+    JSON.stringify(["marketplace", 9, committedQuery, category]))
+  const resource = useResource<SkillCatalog>(
+    catalogKey,
+    useCallback(() => client.listSkillCatalog({
+      ...catalogFilters,
+      ...(catalogFilters.query === undefined && catalogFilters.category === undefined ? { shuffle: true } : {}),
+    }), [catalogFilters, client]),
+    { revalidateOnSubscribe: false },
+  )
+  const catalog = readBoundary.admitted && readBoundary.subject !== null ? resource : { ...resource, data: undefined, error: undefined, loading: true }
+  const [pageState, setPageState] = useState<Readonly<{ base: SkillCatalog | undefined; pages: readonly SkillCatalog[] }>>({ base: undefined, pages: [] })
+  const [loadingMoreFor, setLoadingMoreFor] = useState<{ base: SkillCatalog; controller: AbortController }>()
+  const [loadMoreFailedFor, setLoadMoreFailedFor] = useState<SkillCatalog | undefined>()
+  const loadingMoreRef = useRef<{ controller: AbortController } | null>(null)
+  useEffect(() => () => {
+    loadingMoreRef.current?.controller.abort()
+    loadingMoreRef.current = null
+  }, [catalogKey, catalog.data])
   const [githubOpen, setGithubOpen] = useState(false)
   const [uploadOpen, setUploadOpen] = useState(false)
-  const [detailSkill, setDetailSkill] = useState<SkillCatalogCard | null>(null)
-  const [importNotice, setImportNotice] = useState<GithubImported | null>(null)
-  const [busy, setBusy] = useState<string | null>(null)
-  const [errorName, setErrorName] = useState<string | null>(null)
-  const [lastAddedSkill, setLastAddedSkill] = useState<string | null>(null)
-  const [installationFacts, setInstallationFacts] = useState<Readonly<Record<string, { catalog: SkillCatalog | undefined; installed: boolean; enabled: boolean }>>>({})
-  const installationIntents = useRef(new Map<string, InstallationIntent>())
-  const submittingInstallation = useRef(false)
+  const [detailKey, setDetailKey] = useState<string | null>(null)
+  const setDetailSkill = useCallback((skill: SkillCatalogCard | null) => setDetailKey(skill ? actionIdentity(skill) : null), [])
+  const [notice, setNotice] = useState<{ catalogKey: string; value: GithubImported } | null>(null)
+  const importNotice = notice?.catalogKey === catalogKey ? notice.value : null
+  const { busy, errorName, lastAddedSkill, installationFacts, setEnabled, isCurrent } = useCatalogSkillInstallation(readBoundary, catalog.data, catalogNamespace, actionIdentity)
   const createRef = useRef<HTMLButtonElement | null>(null)
   const githubRef = useRef<HTMLElement | null>(null)
   const uploadRef = useRef<HTMLElement | null>(null)
   const detailRef = useRef<HTMLElement | null>(null)
+  const searchRef = useRef<HTMLInputElement | null>(null)
+  useLayoutEffect(() => { if (detailKey && !detailRef.current?.isConnected) detailRef.current = searchRef.current }, [catalog.data, detailKey])
 
   // Manus lists a single cursor page on entry. Pages are tied to the exact
   // first-page snapshot, so a background refresh immediately ignores old
   // append state instead of flashing it while an effect resets local state.
   const additionalPages = useMemo(() => pageState.base === catalog.data ? pageState.pages : [], [catalog.data, pageState])
-  const displayedCatalog = useMemo(() => catalog.data === undefined ? undefined : mergeCatalogPages([catalog.data, ...additionalPages]), [additionalPages, catalog.data])
-  const loadingMore = loadingMoreFor === catalog.data
+  const displayedCatalog = useMemo(() => catalog.data === undefined ? undefined : mergeSkillCatalogPages([catalog.data, ...additionalPages]), [additionalPages, catalog.data])
+  const loadingMore = loadingMoreFor !== undefined && loadingMoreFor.base === catalog.data && !loadingMoreFor.controller.signal.aborted
   const loadMoreFailed = loadMoreFailedFor === catalog.data
   const loadMore = useCallback(async () => {
     const cursor = displayedCatalog?.next_cursor
     const base = catalog.data
-    if (!cursor || base === undefined || loadingMoreRef.current) return
-    loadingMoreRef.current = true
-    setLoadingMoreFor(base)
+    if (!cursor || base === undefined || loadingMoreRef.current !== null) return
+    const pending = { base, controller: new AbortController() }
+    loadingMoreRef.current = pending
+    setLoadingMoreFor(pending)
     setLoadMoreFailedFor(undefined)
     try {
-      const page = await client.listSkillCatalog({ cursor })
+      const page = await client.listSkillCatalog({ ...catalogFilters, cursor, signal: pending.controller.signal })
+      if (pending.controller.signal.aborted) return
       if (page.next_cursor === cursor) throw new Error("skill catalog cursor did not advance")
       setPageState((current) => ({ base, pages: current.base === base ? [...current.pages, page] : [page] }))
     } catch {
-      setLoadMoreFailedFor(base)
+      if (!pending.controller.signal.aborted) setLoadMoreFailedFor(base)
     } finally {
-      loadingMoreRef.current = false
-      setLoadingMoreFor(undefined)
+      if (loadingMoreRef.current === pending) {
+        loadingMoreRef.current = null
+        setLoadingMoreFor(undefined)
+      }
     }
-  }, [catalog.data, client, displayedCatalog?.next_cursor])
+  }, [catalog.data, catalogFilters, client, displayedCatalog?.next_cursor])
 
   const filtered = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase()
     return (displayedCatalog?.skills ?? []).map((skill) => {
       const facts = skill.skill_id === undefined ? undefined : installationFacts[skill.skill_id]
-      return facts === undefined || facts.catalog !== catalog.data ? skill : { ...skill, installed: facts.installed, enabled: facts.enabled }
+      return facts === undefined || facts.catalog !== catalog.data ? skill : { ...skill, installed: facts.installed, enabled: facts.enabled, installed_source_ref: facts.installed_source_ref }
     }).filter((skill) => {
       const matchesCategory = category === "all" || skillCategories(skill).includes(category)
       const matchesQuery = normalized === ""
         || skill.name.toLocaleLowerCase().includes(normalized)
         || skill.description.toLocaleLowerCase().includes(normalized)
-      return matchesCategory && matchesQuery
+      // Live matching is owned by the directory query, not by whichever
+      // cursor pages happen to be mounted. Preview still filters its fixture.
+      return !preview || matchesCategory && matchesQuery
     })
-  }, [catalog.data, category, displayedCatalog?.skills, installationFacts, query])
+  }, [catalog.data, category, displayedCatalog?.skills, installationFacts, preview, query])
 
   const startChat = useCallback((prompt: string) => {
     // When the catalog is mounted inside the app shell, hand the prompt to
@@ -179,79 +202,21 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
     }
   }, [onPrompt])
 
-  const setEnabled = useCallback(async (skill: SkillCatalogCard) => {
-    const stateKey = actionIdentity(skill)
-    if (submittingInstallation.current || skill.installed && skill.enabled) return
-    submittingInstallation.current = true
-    setBusy(stateKey)
-    setErrorName(null)
-    try {
-      if (!skill.skill_id) throw new Error("skill identity is unavailable")
-      const installationClient = createSkillInstallationClient()
-      let intent = installationIntents.current.get(stateKey)
-      if (intent === undefined) {
-        if (skill.installed) {
-          const matches: PersonalInstallation[] = []
-          const cursors = new Set<string>()
-          const ids = new Set<string>()
-          let cursor: string | undefined
-          for (let page = 0; ; page += 1) {
-            const result = await installationClient.list({ installed: true, limit: 100, ...(cursor === undefined ? {} : { cursor }) })
-            for (const installation of result.data) {
-              if (ids.has(installation.installation_id)) throw new Error("duplicate installation identity")
-              ids.add(installation.installation_id)
-              if (installation.installed && installation.series_id === skill.skill_id) matches.push(installation)
-            }
-            const next = result.meta?.next_cursor
-            if (next === undefined) break
-            if (page >= 99 || cursors.has(next)) throw new Error("installation pagination exceeded its boundary")
-            cursors.add(next); cursor = next
-          }
-          if (matches.length !== 1) throw new Error("installation identity is not unique")
-          const installation = matches[0]!
-          intent = Object.freeze({ seriesId: skill.skill_id, sourceRef: installation.source_ref, installationId: installation.installation_id, key: crypto.randomUUID() })
-        } else {
-          if (!skill.revision_skill_id) throw new Error("skill revision is unavailable")
-          intent = Object.freeze({ seriesId: skill.skill_id, sourceRef: `skill:${skill.revision_skill_id}`, key: crypto.randomUUID() })
-        }
-        // Retain the original command identity for an unknown ACK; retries
-        // never re-resolve another installation or replace its source/key.
-        installationIntents.current.set(stateKey, intent)
-      }
-      const receipt = intent.installationId === undefined
-        ? await installationClient.install(intent.sourceRef, intent.key)
-        : await installationClient.setEnabled(intent.installationId, true, intent.key)
-      const installation = receipt.installation
-      if (installation.source_ref !== intent.sourceRef || installation.series_id !== intent.seriesId
-        || !installation.installed || !installation.enabled) throw new Error("installation ACK does not match the command")
-      installationIntents.current.delete(stateKey)
-      const facts = { installed: installation.installed, enabled: installation.enabled }
-      setInstallationFacts((current) => ({ ...current, [intent.seriesId]: { catalog: catalog.data, ...facts } }))
-      setDetailSkill((current) => current !== null && actionIdentity(current) === stateKey ? { ...current, ...facts } : current)
-      setLastAddedSkill(skill.name)
-      invalidate(`${SKILL_CATALOG_RESOURCE_KEY}/${preview ? "preview" : "live"}`)
-    } catch {
-      setErrorName(stateKey)
-    } finally {
-      submittingInstallation.current = false
-      setBusy(null)
-    }
-  }, [preview, catalog.data])
-
   const handleImported = (result: GithubImported) => {
-    setImportNotice(result)
-    invalidate(`${SKILL_CATALOG_RESOURCE_KEY}/${preview ? "preview" : "live"}`)
+    if (!isCurrent()) return
+    setNotice({ catalogKey, value: result })
+    invalidate(catalogNamespace)
   }
 
 
   // Keep the selected revision/reader context, but use exactly the same
   // current installation facts for both presentation and action execution.
+  const detailSkill = displayedCatalog?.skills.find(skill => actionIdentity(skill) === detailKey) ?? null
   const currentDetailSkill = detailSkill === null ? null : (() => {
     const facts = detailSkill.skill_id === undefined ? undefined : installationFacts[detailSkill.skill_id]
-    const current = facts !== undefined && facts.catalog === catalog.data ? facts
-      : catalog.data?.skills.find((skill) => skill.skill_id === detailSkill.skill_id) ?? detailSkill
-    return { ...detailSkill, installed: current.installed === true, enabled: current.enabled === true }
+    return facts !== undefined && facts.catalog === catalog.data ? { ...detailSkill, installed: facts.installed, enabled: facts.enabled, installed_source_ref: facts.installed_source_ref } : detailSkill
   })()
+  const detailPublisher = currentDetailSkill === null ? undefined : publisherLabel(currentDetailSkill)
 
   return (
     <div className={styles.surface} data-testid="skills-surface" data-web-skin="kokoro">
@@ -260,7 +225,7 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
         <div className={styles.headerTools}>
           <label className={styles.searchField}>
             <Search aria-hidden="true" />
-            <Input type="search" value={query} aria-label={t("skills.searchPlaceholder")} placeholder={t("skills.searchPlaceholder")} onChange={(event) => setQuery(event.target.value)} />
+            <Input ref={searchRef} type="search" value={query} aria-label={t("skills.searchPlaceholder")} placeholder={t("skills.searchPlaceholder")} onChange={(event) => setQuery(event.target.value)} />
             {query ? <Button type="button" variant="ghost" size="icon-xs" aria-label={t("skills.clearSearch")} onClick={() => setQuery("")}><X aria-hidden="true" /></Button> : null}
           </label>
           <div className={styles.headerActions}>
@@ -312,7 +277,7 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
           {importNotice ? (
             <Alert className={styles.importNotice} role="status" aria-live="polite">
               <AlertDescription>{t("skills.githubImportNotice", { name: importNotice.name })}<span>{importNotice.repository}</span></AlertDescription>
-              <Button type="button" variant="ghost" size="icon-sm" aria-label={t("skills.dismissImportNotice")} onClick={() => setImportNotice(null)}><X aria-hidden="true" /></Button>
+              <Button type="button" variant="ghost" size="icon-sm" aria-label={t("skills.dismissImportNotice")} onClick={() => setNotice(null)}><X aria-hidden="true" /></Button>
             </Alert>
           ) : null}
 
@@ -344,6 +309,7 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
                 const installed = skill.installed
                 const actionPending = busy === stateKey
                 const categoryValues = skillCategories(skill)
+                const publisher = publisherLabel(skill)
                 return (
                   <Card
                     className={styles.card}
@@ -364,10 +330,10 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
                       </span>
                     </button>
                     <CardContent className={styles.cardBody}>
-                      <button type="button" className={styles.cardTitle} onClick={(event) => { detailRef.current = event.currentTarget; setDetailSkill(skill) }}>{skill.name}</button>
+                      <button ref={element => { if (stateKey === detailKey && element) detailRef.current = element }} type="button" className={styles.cardTitle} onClick={(event) => { detailRef.current = event.currentTarget; setDetailSkill(skill) }}>{skill.name}</button>
                       <p className={styles.cardDescription}>{skill.description}</p>
                       <div className={styles.cardMeta}>
-                        <span className={cn(styles.metaPill, styles.owner)}><BrandFallback aria-hidden="true" /><span>{publisherLabel(skill)}</span></span>
+                        {publisher === undefined ? null : <span className={cn(styles.metaPill, styles.owner)}><BrandFallback aria-hidden="true" /><span>{publisher}</span></span>}
                         {categoryValues.map((value) => <span className={styles.metaPill} key={value}>{categoryLabel(value)}</span>)}
                       </div>
                       <div className={styles.cardFooter}>
@@ -396,24 +362,29 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
       </main>
 
       <GithubImportDialog readBoundary={readBoundary} open={githubOpen} onOpenChange={setGithubOpen} returnFocusRef={githubRef} onImported={handleImported} />
-      <SkillUploadDialog readBoundary={readBoundary} open={uploadOpen} onOpenChange={setUploadOpen} returnFocusRef={uploadRef} onPublished={() => invalidate(`${SKILL_CATALOG_RESOURCE_KEY}/${preview ? "preview" : "live"}`)} />
+      <SkillUploadDialog readBoundary={readBoundary} open={uploadOpen} onOpenChange={setUploadOpen} returnFocusRef={uploadRef} onPublished={() => { if (isCurrent()) invalidate(catalogNamespace) }} />
       <ManusSkillDetailDialog
+        preview={preview}
         readBoundary={readBoundary}
-        key={detailSkill?.skill_id ?? "closed"}
+        key={detailKey ?? "closed"}
         skill={currentDetailSkill}
-        publisherLabel={detailSkill === null ? "" : publisherLabel(detailSkill)}
+        {...(detailPublisher === undefined ? {} : { publisherLabel: detailPublisher })}
         categoryLabels={detailSkill === null ? [] : skillCategories(detailSkill).map(categoryLabel)}
-        open={detailSkill !== null}
+        open={detailKey !== null}
+        pending={detailKey !== null && currentDetailSkill === null}
+        pendingFailed={loadMoreFailed || catalog.error !== undefined || catalog.data !== undefined && !displayedCatalog?.next_cursor}
+        pendingBusy={catalog.loading || loadingMore}
+        {...(displayedCatalog?.next_cursor ? { onLoadMore: () => void loadMore() } : {})}
         busy={detailSkill !== null && busy === actionIdentity(detailSkill)}
         {...(currentDetailSkill === null ? {} : { installationState: { installed: currentDetailSkill.installed, enabled: currentDetailSkill.enabled } })}
         actionFailed={detailSkill !== null && errorName === actionIdentity(detailSkill)}
-        onOpenChange={(open) => { if (!open) setDetailSkill(null) }}
+        onOpenChange={(open) => { if (!open) setDetailKey(current => current === detailKey ? null : current) }}
         returnFocusRef={detailRef}
         onAdd={(skill) => void setEnabled(skill)}
         onTry={(prompt) => {
-          setDetailSkill(null)
-          if (onTrySkill) onTrySkill({ name: detailSkill?.name ?? "", description: detailSkill?.description ?? "", content_hash: detailSkill?.content_hash ?? "", scope: detailSkill?.scope ?? "official", enabled: true }, prompt)
-          else startChat(prompt)
+          if (onTrySkill && currentDetailSkill && onTrySkill(toSkillActionCard(currentDetailSkill), prompt)) { setDetailSkill(null); return true }
+          if (preview && !onTrySkill) { startChat(prompt); setDetailSkill(null); return true }
+          return false
         }}
       />
     </div>

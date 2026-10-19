@@ -6,7 +6,9 @@ import type { MessageKey } from "./messages"
 export const es: Partial<Record<MessageKey, string>> = {
 
   // SET47-BEGIN: task-archive
-  "archive.action": "Archivar tarea",
+  "scheduled.weekday": "Día de la semana",
+"scheduled.selectWeekday": "Seleccionar día",
+"archive.action": "Archivar tarea",
   "archive.restore": "Restaurar tarea",
   "archive.empty": "No hay tareas archivadas.",
   "archive.checking": "Comprobando el estado de archivo…",
@@ -99,6 +101,12 @@ export const es: Partial<Record<MessageKey, string>> = {
   "settings.devices.remove": "Eliminar",
   "settings.devices.more": "Cargar más",
   "settings.devices.reload": "Volver a leer",
+
+  "skills.downloadUnavailable": "La descarga de esta habilidad no está disponible actualmente.",
+  "skills.downloadIncomplete": "La descarga no se completó. Inténtalo de nuevo.",
+  "skills.tryRequiresEnabledVersion": "Añade y activa esta versión exacta antes de usar un ejemplo. Cambiar de versión requiere una actualización explícita.",
+  "skills.tryUnavailable": "No se pudo iniciar la prueba. Revisa la conexión de la conversación y el estado de la habilidad e inténtalo de nuevo.",
+  "composer.removeSelectedSkill": "Quitar habilidad seleccionada {name}",
 
   "firstSite.renameProject": "Cambiar nombre del proyecto",
   "firstSite.projectName": "Nombre del proyecto",
@@ -263,10 +271,9 @@ export const es: Partial<Record<MessageKey, string>> = {
   "rail.searchInputAria": "Buscar conversaciones recientes",
   "rail.searchClose": "Cerrar búsqueda",
   "rail.navAria": "Navegación principal",
-  "rail.expandProjectAria": "Expandir proyecto {name} (elemento {position})",
-  "rail.collapseProjectAria": "Contraer proyecto {name} (elemento {position})",
   "rail.expandAria": "Expandir barra lateral",
   "rail.collapseAria": "Contraer barra lateral",
+  "rail.noProjectTasks": "No hay tareas",
   "rail.newChat": "nueva conversación",
   "rail.newChatShortcut": "⇧⌘O",
   "rail.navChat": "diálogo",
@@ -645,6 +652,12 @@ export const es: Partial<Record<MessageKey, string>> = {
   "mcp.tabSecrets": "Cartas credenciales",
   "mcp.loading": "Cargando…",
   "mcp.loadError": "Error al cargar la lista de conexiones",
+  "mcp.serverCreateUnknown": "La creación o preparación no está confirmada. Reintentar reanuda la solicitud original sin crear de nuevo.",
+  "mcp.creationSession": "Confirmando tu sesión…",
+  "mcp.apiCreateUnknown": "La creación no está confirmada. Reintentar recupera la solicitud original sin crear otra API.",
+  "mcp.retryOriginal": "Reintentar solicitud original",
+  "mcp.apiCreateConfirmed": "API personalizada añadida.",
+  "mcp.creationDone": "Listo",
   "mcp.retry": "Intentar otra vez",
   "mcp.empty": "No hay conexiones activas disponibles.",
   "mcp.emptyGuide": "Registre el servidor MCP para conectar herramientas externas; Los enlaces oficiales se enumeran en la plataforma.",
@@ -1341,6 +1354,8 @@ export const es: Partial<Record<MessageKey, string>> = {
   "mcp.jsonImportTitle": "Importar mediante JSON",
   "mcp.jsonImportDescription": "Pega el JSON de configuración",
   "mcp.jsonImportAction": "Importar",
+  "mcp.jsonImportUnknown": "La importación no está confirmada. Reintentar reanuda la solicitud original completa sin volver a importar.",
+  "mcp.jsonImportConfirmed": "Configuración MCP importada.",
   "mcp.jsonImportInvalid": "El JSON no es válido o no contiene una configuración mcpServers.",
   "mcp.urlTitle": "Añadir MCP mediante URL",
   "mcp.urlNamePlaceholder": "p. ej., Mi servidor personalizado",
@@ -1436,4 +1451,15 @@ export const es: Partial<Record<MessageKey, string>> = {
   "settingsServices.dateColumn": "Fecha",
   // SET53-END: service-settings-pages
 
+
+  "mcp.recovery.in_progress": "La solicitud original sigue en proceso. Retoma la misma solicitud más tarde.",
+  "mcp.recovery.outcome_unknown": "El resultado no está confirmado. Se retoma la misma solicitud original.",
+  "mcp.recovery.replay_expired": "El plazo de recuperación ha vencido. Cierra esta ventana y revisa Gestionar conectores antes de crear de nuevo.",
+  "mcp.recovery.identity_conflict": "Hay un conflicto de identidad en la solicitud original. Revisa Gestionar conectores.",
+  "mcp.recovery.ownership_lost": "El procesamiento se interrumpió. Retoma explícitamente la misma solicitud.",
+  "mcp.recovery.invalid": "La respuesta no superó la validación. Revisa Gestionar conectores primero.",
+  "mcp.recovery.not_prepared": "El conector no está preparado. Revisa su configuración y estado.",
+  "mcp.recovery.needs_client": "Falta la configuración del cliente OAuth. Revisa los datos del cliente del conector.",
+  "mcp.recovery.auth_method_unsupported": "Este método de autenticación no es compatible. Revisa la configuración del conector.",
+  "mcp.recovery.inspectRequired": "Revisar estado primero",
 }

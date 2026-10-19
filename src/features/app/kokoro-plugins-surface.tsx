@@ -35,18 +35,7 @@ export function KokoroPluginsSurface({
   // The full route is mounted by the workspace shell, so it must receive the
   // exact same verified admission boundary as Settings/MCP. A local browser
   // index is never authentication proof and must not trigger owner reads.
-  const identity = preview
-    ? "preview"
-    : boundary?.admitted === true && boundary.subject !== null
-      // Settings prewarms the subject-scoped projection.  The outer route
-      // describes the exact same owner-visible connector list, so adding the
-      // session generation here created a distinct cache namespace and forced
-      // a blank skeleton whenever a user moved from Settings to this page.
-      // Authentication admission is still checked above; a subject change
-      // produces a new key, while the projection's own owner mutations keep
-      // its data fresh.
-      ? boundary.subject
-      : null
+  const identity = preview ? "preview" : boundary?.subject ?? null
 
   return (
     <div className={styles.page} data-testid="plugins-page">
@@ -57,6 +46,8 @@ export function KokoroPluginsSurface({
             client={client}
             embedded
             identity={identity}
+            admitted={preview || boundary?.admitted === true}
+            readGeneration={preview ? 0 : boundary?.generation ?? 0}
             initialView="catalog"
             {...(onCreateMcp === undefined ? {} : { onCreateMcp })}
             {...(onOpenSettings === undefined

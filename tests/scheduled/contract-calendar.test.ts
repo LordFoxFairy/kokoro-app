@@ -4,6 +4,9 @@ import {
   scheduledTaskCreateRequestSchema,
   scheduledTaskPatchRequestSchema,
   scheduledTaskRecordSchema,
+  scheduledTaskListResponseSchema,
+  scheduledTaskDetailResponseSchema,
+  scheduledTaskMutationResponseSchema,
 } from "@/contract/scheduled"
 import {
   isScheduledTaskRecord,
@@ -35,6 +38,19 @@ const requiredCreate = {
 } as const
 
 describe("scheduled task UTC contract", () => {
+  it("separates strict current rules and lifecycle from immutable command snapshots", () => {
+    for (const rule of [{ frequency: "daily" }, { frequency: "weekly", weekdays: [1, 4] }, { frequency: "monthly", month_days: [1, 31] }, { frequency: "once", local_date: "2030-02-28" }]) {
+      const current = { ...requiredRecord, ...rule, scheduling_state: "exhausted" }
+      expect(scheduledTaskDetailResponseSchema.parse({ task: current })).toEqual({ task: current })
+      expect(scheduledTaskListResponseSchema.parse({ tasks: [current] })).toEqual({ tasks: [current] })
+      expect(scheduledTaskDetailResponseSchema.safeParse({ task: { ...current, recurrence_anchor_at: "2026-09-01T08:00:00Z" } }).success).toBe(false)
+    }
+    expect(scheduledTaskDetailResponseSchema.safeParse({ task: requiredRecord }).success).toBe(false)
+    expect(scheduledTaskMutationResponseSchema.parse({ task: requiredRecord })).toEqual({ task: requiredRecord })
+    for (const bad of [{ frequency: "weekly" }, { frequency: "monthly", month_days: [] }, { frequency: "once", local_date: "2030-02-29" }, { frequency: "daily", weekdays: [1] }, { frequency: "weekly", weekdays: [1, 1] }])
+      expect(scheduledTaskDetailResponseSchema.safeParse({ task: { ...requiredRecord, ...bad, scheduling_state: "active" } }).success).toBe(false)
+  })
+
   it("requires nullable next_run_at and accepts only owner UTC instants when present", () => {
     const completeRecord = {
       ...requiredRecord,
@@ -80,31 +96,19 @@ describe("scheduled task UTC contract", () => {
     expect(scheduledTaskRecordSchema.safeParse({ ...requiredRecord, expires_at: "2026-09-30T23:59:59.999+00:00" }).success).toBe(false)
   })
 
-  it("uses an optional UTC recurrence anchor for create and PATCH without accepting owner next_run_at", () => {
-    expect(scheduledTaskCreateRequestSchema.safeParse({
-      ...requiredCreate,
-      recurrence_anchor_at: "2026-09-15T08:00:00.000Z",
-      expires_at: "2026-09-30T23:59:59.999Z",
-    }).success).toBe(true)
-    expect(scheduledTaskPatchRequestSchema.safeParse({
-      recurrence_anchor_at: "2026-09-15T08:00:00.000Z",
-    }).success).toBe(true)
-    expect(scheduledTaskCreateRequestSchema.safeParse({ ...requiredCreate }).success).toBe(true)
-    expect(scheduledTaskPatchRequestSchema.safeParse({})).toMatchObject({ success: true })
-    expect(scheduledTaskCreateRequestSchema.safeParse({
-      ...requiredCreate,
-      next_run_at: "2026-09-15T08:00:00.000Z",
-    }).success).toBe(false)
-    expect(scheduledTaskPatchRequestSchema.safeParse({
-      next_run_at: "2026-09-15T08:00:00.000Z",
-    }).success).toBe(false)
-    expect(scheduledTaskCreateRequestSchema.safeParse({
-      ...requiredCreate,
-      recurrence_anchor_at: "2026-09-15T08:00:00.000+00:00",
-    }).success).toBe(false)
-    expect(scheduledTaskCreateRequestSchema.safeParse({ ...requiredCreate, expires_at: "2026-09-30" }).success).toBe(false)
-    expect(scheduledTaskCreateRequestSchema.safeParse({ ...requiredCreate, expires_at: null }).success).toBe(false)
-    expect(scheduledTaskPatchRequestSchema.parse({ expires_at: null })).toEqual({ expires_at: null })
+  it("requires complete selected rules for create and rule PATCH, without accepting retired anchors or next", () => {
+    for (const rule of [{ frequency: "daily" }, { frequency: "weekly", weekdays: [0, 3] }, { frequency: "monthly", month_days: [1, 31] }, { frequency: "once", local_date: "2030-02-28" }]) {
+      const body = { ...requiredCreate, ...rule, expires_at: "2030-03-01T23:59:59.999Z" }
+      expect(scheduledTaskCreateRequestSchema.parse(body)).toEqual(body)
+      expect(scheduledTaskPatchRequestSchema.parse(body)).toEqual(body)
+    }
+    for (const patch of [{ time: "09:00" }, { weekdays: [1] }, { frequency: "monthly" }, { frequency: "daily", time: "09:00", timezone: "UTC", weekdays: [1] }, { recurrence_anchor_at: "2030-01-01T00:00:00Z" }, { next_run_at: "2030-01-01T00:00:00Z" }])
+      expect(scheduledTaskPatchRequestSchema.safeParse(patch).success).toBe(false)
+    expect(scheduledTaskPatchRequestSchema.parse({ title: "Only content", enabled: false, expires_at: null })).toEqual({ title: "Only content", enabled: false, expires_at: null })
+    expect(scheduledTaskCreateRequestSchema.safeParse({ ...requiredCreate, recurrence_anchor_at: "2030-01-01T00:00:00Z" }).success).toBe(false)
+    expect(scheduledTaskCreateRequestSchema.safeParse({ ...requiredCreate, next_run_at: null }).success).toBe(false)
+    expect(scheduledTaskCreateRequestSchema.safeParse({ ...requiredCreate, expires_at: "2030-03-01" }).success).toBe(false)
+    expect(scheduledTaskPatchRequestSchema.parse({})).toEqual({})
   })
 
   it("requires a valid IANA timezone at every wire boundary", () => {
@@ -114,6 +118,20 @@ describe("scheduled task UTC contract", () => {
 })
 
 describe("scheduled task IANA calendar", () => {
+  it("previews explicit multiple weekdays without inferring a saved rule from next", () => {
+    const now = new Date("2026-03-07T14:00:00Z")
+    expect(nextPreviewRun("08:00", "weekly", "America/New_York", now, { weekdays: [0, 3] })).toBe("2026-03-08T12:00:00.000Z")
+    expect(nextPreviewRun("08:00", "weekly", "America/New_York", new Date("2026-03-08T13:00:00Z"), { weekdays: [0, 3] })).toBe("2026-03-11T12:00:00.000Z")
+    expect(() => nextPreviewRun("08:00", "weekly", "UTC", now)).toThrow(RangeError)
+  })
+
+  it("previews month dates by skipping missing days and never revives a past once", () => {
+    expect(nextPreviewRun("08:00", "monthly", "UTC", new Date("2030-02-01T00:00:00Z"), { monthDays: [31] })).toBe("2030-03-31T08:00:00.000Z")
+    expect(nextPreviewRun("08:00", "once", "Asia/Kathmandu", new Date("2029-01-01T00:00:00Z"), { localDate: "2030-01-01" })).toBe("2030-01-01T02:15:00.000Z")
+    expect(nextPreviewRun("08:00", "once", "UTC", new Date("2030-01-02T00:00:00Z"), { localDate: "2030-01-01" })).toBeNull()
+    expect(() => nextPreviewRun("02:30", "once", "America/New_York", new Date("2026-03-01T00:00:00Z"), { localDate: "2026-03-08" })).toThrow(RangeError)
+  })
+
   it("groups a UTC instant by the explicit display timezone across midnight", () => {
     expect(scheduledDateKey("2026-09-15T00:30:00.000Z", "America/Los_Angeles")).toBe("2026-09-14")
     expect(scheduledDateKey("2026-09-15T00:30:00.000Z", "Asia/Tokyo")).toBe("2026-09-15")
@@ -142,7 +160,7 @@ describe("scheduled task IANA calendar", () => {
   it("advances a weekly local date without freezing the old UTC offset", () => {
     const now = new Date("2026-03-04T15:00:00.000Z")
 
-    expect(nextPreviewRun("08:00", "weekly", "America/New_York", now)).toBe("2026-03-11T12:00:00.000Z")
+    expect(nextPreviewRun("08:00", "weekly", "America/New_York", now, { weekdays: [3] })).toBe("2026-03-11T12:00:00.000Z")
   })
 })
 
