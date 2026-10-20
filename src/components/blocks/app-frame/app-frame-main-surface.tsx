@@ -59,26 +59,33 @@ export type AppFrameMainSurfaceProps = {
 }
 
 /** Data-free server-admitted presentation; the Runtime component is not mounted. */
-export function AppFrameBootingMainSurface({ composer }: { composer: ReactNode }) {
+export function AppFrameBootingMainSurface({ composer, standaloneSurface, hideWorkspaceHeader }: {
+  composer: ReactNode
+  standaloneSurface: boolean
+  hideWorkspaceHeader: boolean
+}) {
   const t = useT()
   return (
     <section
       className={`${mainStyles.main} ${statusStyles.threadFrame}`}
       data-app-frame-main="true"
       data-server-admitted-shell="true"
+      data-standalone-surface={standaloneSurface ? "true" : undefined}
       data-desktop-web="true"
       data-web-view="welcome"
     >
       {/* The admitted document has no owner data yet. Reserve the stable
        * workspace landmarks so the eventual page replaces structure instead
-       * of appearing after a blank frame. All of this is presentation-only;
-       * the disabled Composer below remains the sole interactive state. */}
-      <header className={statusStyles.bootingHeader} aria-hidden="true">
-        <span className={statusStyles.bootingHeaderTitle} />
-        <span className={statusStyles.bootingHeaderTools} />
-      </header>
+       * of appearing after a blank frame. Respect the route presentation:
+       * catalogs must never briefly present a conversation Composer. */}
+      {!hideWorkspaceHeader ? (
+        <header className={statusStyles.bootingHeader} aria-hidden="true">
+          <span className={statusStyles.bootingHeaderTitle} />
+          <span className={statusStyles.bootingHeaderTools} />
+        </header>
+      ) : null}
       <div className={statusStyles.timelineStage} aria-hidden="true" />
-      <fieldset disabled aria-label={t("shell.loadingApp")}>{composer}</fieldset>
+      {!standaloneSurface ? <fieldset disabled aria-label={t("shell.loadingApp")}>{composer}</fieldset> : null}
     </section>
   )
 }
@@ -165,7 +172,7 @@ export function AppFrameMainSurface({
           ) : null}
         </div>
       ) : null}
-      {mounted && connection.status !== "connected" ? (
+      {mounted && !standaloneSurface && connection.status !== "connected" ? (
         <AppFrameConnectionStatus connection={connection} onReconnect={onReconnect} />
       ) : null}
       <div
@@ -174,9 +181,9 @@ export function AppFrameMainSurface({
       >
         {!mounted ? (
           <AppFrameLoadingSurface />
-        ) : conversationHydrating ? (
+        ) : !standaloneSurface && conversationHydrating ? (
           <AppFrameLoadingSurface />
-        ) : conversationHydrationFailed ? (
+        ) : !standaloneSurface && conversationHydrationFailed ? (
           <AppFrameConversationErrorSurface
             detail={machineError}
             onRetry={retryConversationHydration}
@@ -190,7 +197,9 @@ export function AppFrameMainSurface({
             // A new conversation is a fresh workbench, not a continuation of
             // the previous welcome surface. Project-local upload intents must
             // also remount when the project identity changes, even without a session.
-            key={projectWorkspace ? JSON.stringify(["project", projectRef ?? null, activeId, emptyStateProps.preview ?? false]) : activeId ?? "new-workspace"}
+            // Catalogs are not conversations: background engine restoration
+            // must not reset their controls or repeat their initial reads.
+            key={standaloneSurface ? "standalone" : projectWorkspace ? JSON.stringify(["project", projectRef ?? null, activeId, emptyStateProps.preview ?? false]) : activeId ?? "new-workspace"}
             {...emptyStateProps}
           />
         )}
@@ -204,7 +213,7 @@ export function AppFrameMainSurface({
       </div>
 
       {/* 计划条钉在输入框正上方，可收缩；思考/工具/子智能体在 ConversationThread 内联呈现。 */}
-      {mounted ? <TodoBar todos={thread.todos} /> : null}
+      {mounted && !standaloneSurface ? <TodoBar todos={thread.todos} /> : null}
 
       {/* Site-owned empty surfaces may move the same composer into their own
           welcome layout; active conversations always use the shell slot. */}

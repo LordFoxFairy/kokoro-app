@@ -39,10 +39,17 @@ function atRuleBlock(source, marker) {
 
 function sourceWithVisibleFocusContract(relativePath, source) {
   if (relativePath !== "src/ui/composer/composer.module.css") return source
-  // Match the entire, specific two-rule media contract, not a file whitelist.
-  // Remove only one input declaration; any other outline suppression stays banned.
-  const handoff = /@media\s*\(forced-colors:\s*active\)\s*\{\s*\.wrap\s+\.composer:has\(\.input:focus-visible\)\s*\{\s*outline:\s*2px\s+solid\s+Highlight;\s*outline-offset:\s*2px;\s*box-shadow:\s*none;\s*\}\s*\.input:focus-visible\s*\{\s*outline:\s*none;\s*\}\s*\}/u
-  return source.replace(handoff, (block) => block.replace(/outline:\s*none;/u, ""))
+  // The guarantee is the paired shell/input focus handoff in this media scope,
+  // not that the media block contains exactly two rules. Conversation variants
+  // may also suppress their decorative shadow without weakening the handoff.
+  const marker = "@media (forced-colors: active)"
+  const block = atRuleBlock(source, marker)
+  const shell = /\.wrap\s+\.composer:has\(\.input:focus-visible\)\s*\{\s*outline:\s*2px\s+solid\s+Highlight;\s*outline-offset:\s*2px;\s*box-shadow:\s*none;\s*\}/u
+  if (!shell.test(block)) return source
+  const input = /\.input:focus-visible\s*\{\s*outline:\s*none;\s*\}/u
+  const permitted = block.replace(input, (rule) => rule.replace(/outline:\s*none;/u, ""))
+  const start = source.indexOf("{", source.indexOf(marker)) + 1
+  return source.slice(0, start) + permitted + source.slice(start + block.length)
 }
 
 const hiddenOutline = /outline\s*:\s*(?:none|0(?:px)?)(?=\s*[;}])/iu

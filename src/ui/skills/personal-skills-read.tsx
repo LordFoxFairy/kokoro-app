@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useRef, useState, type ReactNode } from "react"
-import { ChevronDown, ChevronRight, FileText, Folder, MessageCircle } from "lucide-react"
+import { useEffect, useRef, useState } from "react"
+import { ChevronRight, FileText, MessageCircle } from "lucide-react"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
@@ -24,6 +24,7 @@ import { SkillUploadDialog } from "./skill-upload-dialog"
 import { PersonalSkillPublishDialog } from "./personal-skill-publish-dialog"
 import { getManusSkillPackage } from "./manus-skill-client"
 import { SkillPackageDocument } from "./skill-package-document"
+import { SkillPackageFiles } from "./skill-package-files"
 import styles from "./personal-skills-read.module.css"
 import readerStyles from "./manus-skill-detail-dialog.module.css"
 import type { CatalogPackageData } from "@/hub/schemas"
@@ -373,7 +374,7 @@ function PersonalSkillPackageReader({ skillId, title, onBack }: { skillId: strin
   const [loading, setLoading] = useState(true)
   const [failed, setFailed] = useState(false)
   const [attempt, setAttempt] = useState(0)
-  const [collapsedFolders, setCollapsedFolders] = useState<ReadonlySet<string>>(new Set())
+  const [expandedFolders, setExpandedFolders] = useState<ReadonlySet<string>>(new Set())
 
   useEffect(() => {
     const controller = new AbortController()
@@ -420,23 +421,6 @@ function PersonalSkillPackageReader({ skillId, title, onBack }: { skillId: strin
     setAttempt((value) => value + 1)
   }
 
-  const renderFiles = (prefix: string): ReactNode => {
-    const entries = new Map<string, { path: string; folder: boolean }>()
-    for (const file of directory?.files ?? []) {
-      if (!file.path.startsWith(prefix)) continue
-      const remainder = file.path.slice(prefix.length)
-      const name = remainder.split("/")[0]!
-      entries.set(name, { path: `${prefix}${name}`, folder: remainder.includes("/") })
-    }
-    return [...entries].map(([name, entry]) => {
-      if (!entry.folder) return <li key={entry.path}><button type="button" aria-label={entry.path} aria-pressed={entry.path === selectedPath} onClick={() => selectFile(entry.path)}><FileText aria-hidden="true" /><span>{name}</span></button></li>
-      const expanded = !collapsedFolders.has(entry.path)
-      return <li key={entry.path}>
-        <button type="button" aria-label={name} aria-expanded={expanded} onClick={() => setCollapsedFolders((current) => { const next = new Set(current); if (next.has(entry.path)) next.delete(entry.path); else next.add(entry.path); return next })}>{expanded ? <ChevronDown aria-hidden="true" /> : <ChevronRight aria-hidden="true" />}<Folder aria-hidden="true" /><span>{name}</span></button>
-        {expanded ? <ul>{renderFiles(`${entry.path}/`)}</ul> : null}
-      </li>
-    })
-  }
 
   return <>
     <header className={readerStyles.readerHeader}>
@@ -445,7 +429,12 @@ function PersonalSkillPackageReader({ skillId, title, onBack }: { skillId: strin
       <DialogDescription className="sr-only">{t("skills.packageReader")}</DialogDescription>
     </header>
     <section className={readerStyles.reader} aria-label={t("skills.packageReader")}>
-      <nav className={readerStyles.fileList} aria-label={t("skills.detailFiles")}><ul>{renderFiles("")}</ul></nav>
+      <nav className={readerStyles.fileList} aria-label={t("skills.detailFiles")}>
+        <p className={readerStyles.fileNavHeading}>{t("skills.detailFiles")}</p>
+        <ul><SkillPackageFiles files={directory?.files ?? []} selectedPath={selectedPath} expandedFolders={expandedFolders} onSelect={selectFile} onToggle={path => setExpandedFolders(current => {
+          const next = new Set(current); if (next.has(path)) next.delete(path); else next.add(path); return next
+        })} /></ul>
+      </nav>
       <div className={readerStyles.fileContent} aria-busy={loading}>
         {selectedPath !== null ? <div className={readerStyles.fileHeading}><FileText aria-hidden="true" /><span>{selectedPath}</span></div> : null}
         {loading ? <p role="status">{t("skills.packageLoading")}</p> : null}

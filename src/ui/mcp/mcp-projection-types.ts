@@ -44,16 +44,6 @@ export function providerArtwork(
   return provider.cover_image_url ?? DEFAULT_CONNECTOR_ARTWORK;
 }
 
-export function connectorStatusKey(
-  status: McpConnector["status"],
-): "mcp.pending" | "mcp.active" | "mcp.error" | "mcp.revoked" {
-  return `mcp.${status}` as
-    | "mcp.pending"
-    | "mcp.active"
-    | "mcp.error"
-    | "mcp.revoked";
-}
-
 export function formatProviderDate(value: string): string {
   return new Intl.DateTimeFormat(undefined, {
     year: "numeric",

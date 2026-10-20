@@ -1,3 +1,4 @@
+import { connectorCommandErrorAllowed } from "./connector-command-error";
 import { z } from "zod";
 
 const profileId = z
@@ -132,3 +133,47 @@ export type CustomApiProfile = z.infer<typeof customApiProfileSchema>;
 export type CustomApiPage = z.infer<typeof customApiPageSchema>;
 export type CustomApiUpdateInput = z.infer<typeof customApiUpdateInputSchema>;
 export type CustomApiRemoveInput = z.infer<typeof customApiRemoveInputSchema>;
+
+export type CustomApiOperation =
+  | "create"
+  | "list"
+  | "get"
+  | "update"
+  | "remove";
+const customApiErrors: Record<number, readonly string[]> = {
+  400: ["invalid_custom_api_request"],
+  401: ["session_authentication_required", "session_invalid"],
+  403: ["service_auth_failed", "session_forbidden", "product_tenant_forbidden"],
+  404: ["custom_api_not_found"],
+  412: ["custom_api_precondition_failed"],
+  413: ["custom_api_body_too_large", "invalid_custom_api_request"],
+  429: ["session_rate_limited"],
+  503: [
+    "product_tenant_not_configured",
+    "iam_admission_unavailable",
+    "custom_api_dependency_unavailable",
+  ],
+};
+export function customApiErrorAllowed(
+  operation: CustomApiOperation,
+  status: number,
+  value: unknown,
+): boolean {
+  const parsed = customApiErrorSchema.safeParse(value);
+  if (
+    !parsed.success ||
+    (status === 404 && (operation === "create" || operation === "list"))
+  )
+    return false;
+  const published = connectorCommandErrorAllowed(
+    "custom_api",
+    status,
+    parsed.data.error,
+    operation !== "list" && operation !== "get",
+  );
+  if (published !== undefined) return published;
+  return (
+    (customApiErrors[status]?.includes(parsed.data.error.code) ?? false) &&
+    parsed.data.error.retryable === (status === 429 || status === 503)
+  );
+}

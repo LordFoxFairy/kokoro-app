@@ -44,6 +44,35 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
+it("shows the selected exact skill as removable context without changing the editable prompt", () => {
+  const props = renderComposer({ draft: "editable prompt", selectedSkill: { name: "Exact skill", sourceRef: "skill:revision-one" }, onRemoveSelectedSkill: vi.fn() })
+  expect(screen.getByText("Exact skill")).toBeVisible()
+  fireEvent.click(screen.getByRole("button", { name: /Exact skill/ }))
+  expect(props.onRemoveSelectedSkill).toHaveBeenCalledOnce()
+  expect(screen.getByRole("textbox")).toHaveValue("editable prompt")
+  expect(props.onSubmit).not.toHaveBeenCalled()
+})
+
+it("preserves an over-limit restored draft, explains the limit and blocks submission until corrected", () => {
+  const draft = "a".repeat(4001)
+  const props = renderComposer({ draft, canSend: true })
+  const input = screen.getByRole("textbox", { name: "Chat input" })
+  expect(input).toHaveValue(draft)
+  expect(input).toHaveAttribute("aria-invalid", "true")
+  expect(input).toHaveAccessibleDescription("Messages can contain up to 4000 characters. Shorten your draft to send.")
+  expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled()
+  fireEvent.submit(screen.getByRole("form", { name: "Message editor" }))
+  expect(props.onSubmit).not.toHaveBeenCalled()
+
+  cleanup()
+  const corrected = renderComposer({ draft: "a".repeat(4000), canSend: true })
+  expect(screen.getByRole("textbox")).not.toHaveAttribute("aria-invalid", "true")
+  expect(screen.queryByText(/Shorten your draft/)).not.toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "Send message" })).toBeEnabled()
+  fireEvent.submit(screen.getByRole("form", { name: "Message editor" }))
+  expect(corrected.onSubmit).toHaveBeenCalledOnce()
+})
+
 describe("Composer model selector", () => {
   it("fast 输入使用中性提示，不作免费或扣点承诺", () => {
     renderComposer({ mode: "fast" })
@@ -608,6 +637,16 @@ describe("Composer 状态契约", () => {
       expect(screen.getByRole("form", { name: "Message editor" })).toBeInTheDocument()
     expect(screen.getByRole("textbox", { name: "Chat input" })).toHaveAttribute("data-slot", "composer-input")
     expect(screen.getByTestId("composer-controls")).toHaveAttribute("data-slot", "composer-controls")
+    expect(screen.getByRole("textbox").closest('[data-slot="composer-wrap"]')).toHaveAttribute("data-layout", "conversation")
+    cleanup()
+    renderComposer({ emptyWorkspace: true })
+    expect(screen.getByRole("textbox").closest('[data-slot="composer-wrap"]')).toHaveAttribute("data-layout", "workspace")
+    cleanup()
+    renderComposer({ projectWorkspace: true, emptyWorkspace: true })
+    expect(screen.getByRole("textbox").closest('[data-slot="composer-wrap"]')).toHaveAttribute("data-layout", "workspace")
+    cleanup()
+    renderComposer({ projectWorkspace: true })
+    expect(screen.getByRole("textbox").closest('[data-slot="composer-wrap"]')).toHaveAttribute("data-layout", "conversation")
     expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled()
     expect(screen.queryByRole("status")).toBeNull()
   })
@@ -711,15 +750,45 @@ it("编辑器把可见焦点环画在圆角 shell，textarea 不出现直角内�
   expect(css).toContain("@container composer (max-width: 24rem)")
 })
 
-it("原生 Textarea 多行增高并在删除内容后收缩", () => {
-  const props = renderComposer()
-  const input = screen.getByRole("textbox") as HTMLTextAreaElement
-  let height = 112
-  Object.defineProperty(input, "scrollHeight", { configurable: true, get: () => height })
-  fireEvent.change(input, { target: { value: "第一行\n第二行\n第三行" } })
-  expect(input.style.height).toBe("112px")
-  expect(props.onDraftChange).toHaveBeenCalledWith("第一行\n第二行\n第三行")
-  height = 32
-  fireEvent.change(input, { target: { value: "短句" } })
-  expect(input.style.height).toBe("32px")
+it("Textarea 在输入、删除和宽度改变时增高/收缩，忽略纯高度通知并在卸载断开观察", () => {
+  const callbacks: ResizeObserverCallback[] = []
+  const observe = vi.fn()
+  const disconnect = vi.fn()
+  const observer = vi.spyOn(globalThis, "ResizeObserver").mockImplementation(class implements ResizeObserver {
+    constructor(callback: ResizeObserverCallback) { callbacks.push(callback) }
+    observe = observe
+    disconnect = disconnect
+    unobserve() {}
+  })
+  try {
+    const props = renderComposer()
+    const input = screen.getByRole("textbox") as HTMLTextAreaElement
+    let height = 112
+    let width = 640
+    Object.defineProperty(input, "scrollHeight", { configurable: true, get: () => height })
+    Object.defineProperty(input, "clientWidth", { configurable: true, get: () => width })
+    fireEvent.change(input, { target: { value: "第一行\n第二行\n第三行" } })
+    expect(input.style.height).toBe("112px")
+    expect(props.onDraftChange).toHaveBeenCalledWith("第一行\n第二行\n第三行")
+    height = 32
+    fireEvent.change(input, { target: { value: "短句" } })
+    expect(input.style.height).toBe("32px")
+    expect(observe).toHaveBeenCalledWith(input)
+    const notify = () => act(() => callbacks[0]?.([], {} as ResizeObserver))
+    width = 320
+    height = 160
+    notify()
+    expect(input.style.height).toBe("160px")
+    height = 200
+    notify()
+    expect(input.style.height).toBe("160px")
+    width = 640
+    height = 48
+    notify()
+    expect(input.style.height).toBe("48px")
+    cleanup()
+    expect(disconnect).toHaveBeenCalledOnce()
+  } finally {
+    observer.mockRestore()
+  }
 })

@@ -93,9 +93,9 @@ export function WorkspaceRailShell({
   const { state, isMobile, setOpen, setOpenMobile } = useSidebar()
   const visualCollapsed = state === "collapsed"
   const compactDesktop = !isMobile && visualCollapsed
-  // Sidebar owns the physical 280px → 52px track transition. If the rail
+  // Sidebar owns the physical 300px → 52px track transition. If the rail
   // content switches to icon mode in the same React commit, its labels vanish
-  // while the old 280px gap is still shrinking, producing a blank gray slab.
+  // while the old 300px gap is still shrinking, producing a blank gray slab.
   // Keep the expanded content projected during the collapse transition; on
   // expansion it is available immediately and simply reveals with the rail.
   const [contentCollapsed, setContentCollapsed] = useState(visualCollapsed)
@@ -166,7 +166,7 @@ export function WorkspaceRailShell({
 
   const directConversationGroup = conversationReads ? <ScopedConversationGroup
     key={`direct:${conversationReads.identity}`}
-    scope={DIRECT_SESSION_SCOPE} reads={conversationReads} preview={preview}
+    scope={DIRECT_SESSION_SCOPE} reads={conversationReads}
     compactDesktop={contentCompactDesktop} query={query} searchOpen={searchOpen}
     awaitingIds={awaitingIds} closeNavigation={closeNavigation} onNewChat={onNewChat}
     onRequestDelete={onRequestDelete} projects={projectItems}
@@ -334,7 +334,7 @@ export function WorkspaceRailShell({
         data-collapsed={contentCollapsed}
         data-active-navigation-key={activeNavigationKey ?? "none"}
         data-desktop-web="true"
-        data-desktop-rail={!isMobile ? "true" : undefined}
+        data-desktop-rail={!isMobile ? "true" : "false"}
       >
         <WorkspaceRailHeader
           chatHref={chatHref}
@@ -387,6 +387,13 @@ export function WorkspaceRailShell({
             navigationExpanded={navigationExpanded}
             navigationTransitionKey={navigationTransitionKey}
             newSessionLabel={newSessionLabel}
+            onRequestDelete={onRequestDelete}
+            awaitingIds={awaitingIds}
+            {...(conversationMove === undefined ? {} : { conversationMove })}
+            conversationMovePending={conversationMovePending}
+            conversationMoveFailed={conversationMoveFailed}
+            {...(onRetryConversationMove === undefined ? {} : { onRetryConversationMove })}
+            {...(conversationReads === undefined ? {} : { conversationReads })}
             dragProps={dragProps}
             dragState={dragState}
             dragOverKey={dragOverKey}

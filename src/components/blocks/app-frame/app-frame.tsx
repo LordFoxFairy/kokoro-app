@@ -10,7 +10,7 @@ import { matchesSavedKeyboardShortcut } from "@/lib/keyboard-shortcuts"
 import { useIsMobile } from "@/hooks/use-mobile"
 import type { SessionClient } from "@/engine/client"
 import { useT } from "@/i18n/context"
-import { browserConversationMoveCoordinator, browserListClient, evictBrowserConversationIndex } from "@/ui/shell/page-clients"
+import { browserConversationMoveCoordinator, browserHubClient, browserListClient, evictBrowserConversationIndex } from "@/ui/shell/page-clients"
 import {
   createConversationMoveCoordinator,
   type ConversationMoveResult,
@@ -19,7 +19,7 @@ import { useTaskNotifications } from "@/ui/shell/use-task-notifications"
 import { useAwaitingNotify } from "@/ui/shell/use-awaiting-notify"
 import { useCanvasWorkspace } from "@/ui/shell/use-canvas-workspace"
 import { useComposerSelectors } from "@/ui/shell/use-composer-selectors"
-import { useConversationList } from "@/ui/shell/use-conversation-list"
+import { useConversationReaders } from "@/ui/shell/use-conversation-readers"
 import { useDraft } from "@/ui/shell/use-draft"
 import type { ConversationThreadProps } from "@/ui/thread/conversation-thread"
 import type { WorkspaceRailProps } from "@/components/blocks/workspace-rail/workspace-rail"
@@ -47,13 +47,19 @@ import { useProjectList } from "@/features/app/use-project-list"
 import { navigateMountedSurface } from "@/ui/navigation/mounted-surface-navigation"
 import { sessionScopeKey } from "@/engine/session-scope"
 import archiveStyles from "@/ui/settings/settings-modal.module.css"
+import { ConnectorCommandProvider } from "@/ui/mcp/connector-command-context"
 import shellStyles from "./app-frame.module.css"
 
 export type { AppCommandMenuProps }
 export type { AppFrameProps, EmptyStateProps, WorkspaceCapabilities } from "./app-frame.types"
 export { COMPACT_DESKTOP_RAIL_BREAKPOINT, settingsTabFromLocation }
 
-function AppFrameBootingSurface({ brandName, projectWorkspace = false }: Pick<AppFrameProps, "brandName" | "projectWorkspace">) {
+function AppFrameBootingSurface({
+  brandName,
+  projectWorkspace = false,
+  standaloneSurface = false,
+  hideWorkspaceHeader = false,
+}: Pick<AppFrameProps, "brandName" | "projectWorkspace" | "standaloneSurface" | "hideWorkspaceHeader">) {
   const composerRef = useRef<HTMLTextAreaElement | null>(null)
   const composer = (
     <AppFrameComposer
@@ -99,7 +105,11 @@ function AppFrameBootingSurface({ brandName, projectWorkspace = false }: Pick<Ap
         </aside>
         <div className={shellStyles.workspace}>
           <div className={`${shellStyles.mainPanel} flex-1`}>
-            <AppFrameBootingMainSurface composer={composer} />
+            <AppFrameBootingMainSurface
+              composer={composer}
+              standaloneSurface={standaloneSurface}
+              hideWorkspaceHeader={hideWorkspaceHeader}
+            />
           </div>
         </div>
       </div>
@@ -112,6 +122,8 @@ export function AppFrame(props: AppFrameProps) {
     ? <AppFrameBootingSurface
         {...(props.brandName === undefined ? {} : { brandName: props.brandName })}
         {...(props.projectWorkspace === undefined ? {} : { projectWorkspace: props.projectWorkspace })}
+        {...(props.standaloneSurface === undefined ? {} : { standaloneSurface: props.standaloneSurface })}
+        {...(props.hideWorkspaceHeader === undefined ? {} : { hideWorkspaceHeader: props.hideWorkspaceHeader })}
       />
     : <AppFrameRuntime {...props} />
 }
@@ -175,8 +187,11 @@ function AppFrameRuntime({
 
   const navigationState = useAppFrameNavigation({
     engine,
+    scope: sessionScope,
+    chatHref,
     projectRef,
     projectWorkspace,
+    standaloneSurface,
     mounted,
     activeId,
     threadMessageCount: thread.messages.length,
@@ -235,20 +250,18 @@ function AppFrameRuntime({
     if (engine === null || sessionScopeKey(scope) !== moveScopeKey) evictBrowserConversationIndex(sessionScopeKey(scope), id)
   }, [engine, moveScopeKey])
   const archive = useSessionArchive({preview,boundary:projectReadBoundary,engine,scope:moveScopeKey})
-  const conversationsCtl = useConversationList({
-    engine,
-    preview,
+  const conversationReaders = useConversationReaders({
+    engine, preview,
     activeId: projectWorkspace ? routedConversationId : activeId,
-    thread,
-    isStreaming,
-    focusComposer,
+    thread, isStreaming, observeRunStatus: engine !== null && !hydrating,
     scope: sessionScope,
     readBoundary: { identity: railReadIdentity, admitted: railReadAdmitted },
-    scopeRevision: moveSnapshot.scopeVersions.get(moveScopeKey) ?? 0,
+    scopeVersions: moveSnapshot.scopeVersions,
     archiveRevision: archive.revision,
     archiveReceipt: archive.event,
     onDeleteConfirmed: handleConversationDeleteConfirmed,
   })
+  const conversationsCtl = conversationReaders.read(sessionScope)
   const conversationMove = moveSnapshot.intent
   const moveRouteContext = typeof window === "undefined" ? null : (() => {
     const url = new URL(window.location.href)
@@ -411,6 +424,8 @@ function AppFrameRuntime({
   })
 
   const actions = useAppFrameActions({
+    preview,
+    ...(projectReadBoundary === undefined ? {} : { readBoundary: projectReadBoundary }),
     engine,
     projectWorkspace,
     ...(projectRef === undefined ? {} : { projectRef }),
@@ -424,7 +439,6 @@ function AppFrameRuntime({
     setDeploymentIntent: navigationState.setDeploymentIntent,
     syncConversationUrl: navigationState.syncConversationUrl,
     setConversationRouteId: navigationState.setConversationRouteId,
-    conversations: conversationsCtl,
     focusComposer,
     closeSettings: overlays.closeSettings,
     brandName,
@@ -621,7 +635,7 @@ function AppFrameRuntime({
       : activeId === routedConversationId)
   )
   const canSend = draft.trim().length > 0 && canSubmitMessage && projectSubmissionAdmitted
-  const conversations = conversationsCtl.conversations
+  const conversations = conversationsCtl?.conversations ?? []
   const projectConversationView = projectWorkspace && navigationState.resolvedConversationRouteId !== null && !narrowWeb
   const projectedCreationIntent = projectWorkspace ? null : navigationState.deploymentIntent
   const projectedWorkspaceCapabilities = projectWorkspaceCapabilities(
@@ -705,6 +719,8 @@ function AppFrameRuntime({
     onOpenSettings: overlays.openSettings,
     draft,
     onDraftChange: updateDraft,
+    selectedSkill: actions.selectedSkill,
+    onRemoveSelectedSkill: actions.clearSelectedSkill,
     onKeyDown: actions.handleKeyDown,
     onSubmit: actions.handleSubmit,
     isStreaming,
@@ -742,16 +758,15 @@ function AppFrameRuntime({
     activeProjectConversationId: activeId,
     onSelectProjectConversation: selectConversationWithMoveFence,
     onOpenSession: selectConversationWithMoveFence,
-    projectConversationsLoading: conversationsCtl.loading,
-    projectConversationsError: conversationsCtl.error,
-    onRetryProjectConversations: conversationsCtl.refresh,
+    projectConversationsLoading: conversationsCtl?.loading ?? railReadAdmitted,
+    projectConversationsError: conversationsCtl?.error ?? !railReadAdmitted,
+    onRetryProjectConversations: () => conversationsCtl?.refresh(),
     projectInstructions: project.projectInstructions,
     projectInstructionHistory: project.projectInstructionHistory,
     onSaveProjectInstructions: project.saveProjectInstructions,
     onUploadProjectResource: project.uploadProjectResource,
     onListProjectResources: project.listProjectResources,
     ...(projectRef === undefined ? {} : { projectRef }),
-    onSetProjectSkillEnabled: project.setProjectSkillEnabled,
     projectConversation: projectConversationView,
     onOpenSettings: overlays.openSettings,
     onOpenProject: project.openProject,
@@ -771,8 +786,8 @@ function AppFrameRuntime({
 
   const toggleNavigationRail = useCallback(() => {
     if (layout.compactDesktopRail) layout.setCompactRailOpen((open) => !open)
-    else layout.setRailCollapsed((collapsed) => !collapsed)
-  }, [layout])
+    else if (!narrowWeb) layout.setRailCollapsed((collapsed) => !collapsed)
+  }, [layout, narrowWeb])
 
   const mainSurface = (
     <AppFrameMainSurface
@@ -845,18 +860,18 @@ function AppFrameRuntime({
     activeId,
     awaitingIds,
     onSelectConversation: selectConversationWithMoveFence,
-    onDeleteConversation: conversationsCtl.deleteConversation,
+    onDeleteConversation: (id) => conversationsCtl?.deleteConversation(id) ?? Promise.resolve(false),
+    onRenameConversation: (id, title) => conversationsCtl?.renameConversation(id, title),
     ...(!preview && projectReadBoundary?.admitted && projectReadBoundary.subject ? {onArchiveConversation:(id:string)=>void archive.archive(id),archiveBusy:archive.busy||archive.blocked}:{}),
-    onRenameConversation: conversationsCtl.renameConversation,
     conversationScope: sessionScope,
     conversationMove,
     conversationMovePending: conversationMove?.status === "pending",
     conversationMoveFailed: moveFailureProjection?.identity === moveViewIdentity,
     onMoveConversation: (id, target) => moveConversation(sessionScope, id, target),
     conversationReads: {
-      engine, scope: sessionScope, currentController: conversationsCtl,
-      activeId: projectWorkspace ? routedConversationId : activeId, thread, isStreaming,
-      identity: railReadIdentity, admitted: railReadAdmitted, scopeVersions: moveSnapshot.scopeVersions, archiveRevision:archive.revision, archiveReceipt:archive.event, archiveBusy:archive.busy||archive.blocked, ...(!preview && projectReadBoundary?.admitted && projectReadBoundary.subject?{onArchive:(id:string)=>void archive.archive(id)}:{}), focusComposer,
+      scope: sessionScope, read: conversationReaders.read, ensureScope: conversationReaders.ensureScope,
+      activeId: projectWorkspace ? routedConversationId : activeId, identity: railReadIdentity, admitted: railReadAdmitted,
+      archiveBusy:archive.busy||archive.blocked, ...(!preview && projectReadBoundary?.admitted && projectReadBoundary.subject?{onArchive:(id:string)=>void archive.archive(id)}:{}),
       failedMoveScopeKey: moveFailureProjection?.identity === moveViewIdentity ? moveFailureProjection.scopeKey : null,
       onSelect: (scope, id) => {
         if (sessionScopeKey(scope) === moveScopeKey) selectConversationWithMoveFence(id)
@@ -869,17 +884,16 @@ function AppFrameRuntime({
         if (sessionScopeKey(scope) === moveScopeKey) startNewChatWithMoveFence()
       },
       onMove: moveConversation,
-      onDeleteConfirmed: handleConversationDeleteConfirmed,
     },
     onRetryConversationMove: retryConversationMove,
     onOpenSettings: overlays.openSettings,
     accountTriggerRef,
-    listLoading: conversationsCtl.loading,
-    listLoadingMore: conversationsCtl.loadingMore,
-    listError: conversationsCtl.error,
-    onRetryList: conversationsCtl.refresh,
-    hasMore: conversationsCtl.hasMore,
-    onLoadMore: conversationsCtl.loadMore,
+    listLoading: conversationsCtl?.loading ?? railReadAdmitted,
+    listLoadingMore: conversationsCtl?.loadingMore ?? false,
+    listError: conversationsCtl?.error ?? !railReadAdmitted,
+    onRetryList: () => conversationsCtl?.refresh(),
+    hasMore: conversationsCtl?.hasMore ?? false,
+    onLoadMore: () => conversationsCtl?.loadMore(),
   }
 
   const commandProps: Omit<AppCommandMenuProps, "open" | "onOpenChange"> = {
@@ -895,7 +909,7 @@ function AppFrameRuntime({
   const overlaySurfaces = (
     <>
     {!preview && projectReadBoundary?.admitted && archive.blocked ? <div className={archiveStyles.archiveFeedback} role="group" aria-label={t("data.unknown")}><p role="alert">{t("data.unknown")}</p><button type="button" disabled={archive.busy} onClick={()=>void archive.reconcile()}>{t("data.reload")}</button>{archive.review?<button type="button" disabled={archive.busy} onClick={archive.proceed}>{t("data.continue")}</button>:null}</div>:null}
-    {!preview && projectReadBoundary?.admitted && (projectWorkspace?routedConversationId:activeId) && conversationsCtl.archiveStatus!=="archived" && (conversationsCtl.archiveStatus==="unknown"||conversationsCtl.archiveStatus==="missing") ? <div className={archiveStyles.archiveFeedback} role="status">{conversationsCtl.archiveStateError?t("archive.stateFailed"):t("archive.checking")}{conversationsCtl.archiveStateError?<button type="button" onClick={conversationsCtl.retryArchiveState}>{t("data.reload")}</button>:null}</div>:null}
+    {!preview && projectReadBoundary?.admitted && (projectWorkspace?routedConversationId:activeId) && conversationsCtl && conversationsCtl.archiveStatus!=="archived" && (conversationsCtl.archiveStatus==="unknown"||conversationsCtl.archiveStatus==="missing") ? <div className={archiveStyles.archiveFeedback} role="status">{conversationsCtl.archiveStateError?t("archive.stateFailed"):t("archive.checking")}{conversationsCtl.archiveStateError?<button type="button" onClick={conversationsCtl.retryArchiveState}>{t("data.reload")}</button>:null}</div>:null}
     {copyFeedback !== null && copyFeedback.lifetime.view === copyView && copyFeedback.lifetime.live ? (
       <div className={shellStyles.taskLinkFeedback} role={copyFeedback.kind === "success" ? "status" : "alert"}>
         {t(copyFeedback.kind === "success" ? "shell.taskLinkCopied" : "shell.taskLinkCopyFailed")}
@@ -910,7 +924,7 @@ function AppFrameRuntime({
       onArchiveChanged={archive.confirmed}
       {...(projectReadBoundary === undefined ? {} : { readBoundary: projectReadBoundary })}
       onCloseSettings={overlays.closeSettings}
-      onTabChange={(tab) => navigationState.syncSettingsUrl(tab, "replace")}
+      onTabChange={(tab, skillsView) => navigationState.syncSettingsUrl(tab, "replace", skillsView)}
       onCreateSkillWithAi={actions.startSkillCreationFromSettings}
       onTrySkill={actions.startSkillUseFromSettings}
       settingsReturnFocusRef={overlays.settingsReturnFocusRef}
@@ -937,6 +951,9 @@ function AppFrameRuntime({
   }, [layoutCompactDesktopRail, setCompactRailOpen, setRailCollapsed])
 
   return (
+    <>
+    {conversationReaders.hosts}
+    <ConnectorCommandProvider client={browserHubClient({ preview })} boundary={preview ? { admitted: true, subject: "preview", generation: 0 } : projectReadBoundary ?? { admitted: false, subject: null, generation: 0 }}>
     <AppFrameShell
       preview={preview}
       webSkin={resolvedWebSkin}
@@ -963,5 +980,7 @@ function AppFrameRuntime({
       activeId={activeId}
       overlays={overlaySurfaces}
     />
+    </ConnectorCommandProvider>
+    </>
   )
 }

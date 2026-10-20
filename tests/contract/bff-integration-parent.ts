@@ -1,3 +1,4 @@
+import {restoreClosureParent} from "./bff-closure-parent";
 import { createHash } from "node:crypto";
 
 // Test-only inverse of the exact owner-published SET49 integration delta.
@@ -42,6 +43,7 @@ const approvedChanges = [
 ] as const;
 
 export function restorePublic154Integration(bytes: Uint8Array): Buffer {
+  bytes = restoreClosureParent(bytes, "main");
   if (hash(bytes) !== "b4e91483e425fdcc9547eac8bcda554273cbee0863ccb0ddfb185fae18e4e267") throw new Error("not fixed public16.0");
   const lines = Buffer.from(bytes).toString("utf8").match(/[^\n]*\n|[^\n]+$/gu) ?? [];
   for (const change of [...approvedChanges].reverse()) {

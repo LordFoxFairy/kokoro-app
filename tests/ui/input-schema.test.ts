@@ -89,6 +89,11 @@ describe("buildSubmitValue：提交值构造与拦截", () => {
     })
   })
 
+  it.each([" production ", "\t"])("preserves the exact selected enum value %j", (selected) => {
+    const choices = parseInputFields({ type: "object", properties: { target: { enum: [selected] } }, required: ["target"] })!
+    expect(buildSubmitValue(choices, { target: selected })).toEqual({ ok: true, value: { target: selected } })
+  })
+
   it("必填缺失全部收进 invalid（拦截提交）", () => {
     const built = buildSubmitValue(fields, {})
     expect(built).toEqual({ ok: false, invalid: ["name", "color"] })

@@ -213,3 +213,25 @@ describe("trusted actual product target projection", () => {
     expect((await proxy(request(target, { [header]: target }))).headers.get(`x-middleware-request-${header}`)).toBeNull()
   })
 })
+
+
+describe("authorize document privacy at the final Proxy boundary", () => {
+  it.each(["/iam/oauth2/authorize", "/api/auth/signin/kokoro-iam", "/api/auth/callback/kokoro-iam"])("uses a proxy-owned nonce and restrictive document policy for %s", async path => {
+    const { proxy } = await import("@/proxy")
+    const response = await proxy(request(`${path}?state=private`, {
+      "x-nonce": "browser_forged_nonce", "content-security-policy": "default-src *",
+    }))
+    expect(response.headers.get("referrer-policy")).toBe("no-referrer")
+    const nonce = response.headers.get("x-middleware-request-x-nonce")
+    expect(nonce).not.toBe("browser_forged_nonce")
+    expect(response.headers.get("content-security-policy")).toContain("default-src 'none'")
+    expect(response.headers.get("content-security-policy")).toContain(`style-src 'nonce-${nonce}'`)
+    expect(response.headers.get("content-security-policy")).not.toMatch(/unsafe-inline|unsafe-eval/u)
+  })
+  it.each(["/iam/oauth2/authorize-more", "/iam/oauth2/authorize/", "/api/auth/callback/kokoro-iam/", "/api/auth/session"])("does not change the generic policy for %s", async path => {
+    const { proxy } = await import("@/proxy")
+    const response = await proxy(request(path))
+    expect(response.headers.get("referrer-policy")).toBe("strict-origin-when-cross-origin")
+    expect(response.headers.get("content-security-policy")).toContain("default-src 'self'")
+  })
+})

@@ -95,3 +95,9 @@ SET47：可选EngineSnapshot.locallyCreatedSessionId仅证明当前engine尚未�
 
 - 新用户动作 = 引擎新方法 + 状态机新事件（先在 transition 补迁移，规格测试主战场）。
 - 浏览器 I/O 一律进 engine/client，不得散落进组件；组件只消费 EngineSnapshot。
+
+## 项目技能选择意图
+
+`setSelectedSkillSourceRefs(undefined)`恢复作用域默认（Project省略继承、Direct为[]），[]明确不选，非空refs显式覆盖。execution adapter只构造wire，machine负责新会话/切换退休与未知提交冻结；重试不重新读取当前偏好。
+
+- `EngineSnapshot.hasPendingSubmission` 只读投影原冻结 create 是否仍未获回执，供浏览器 scope 租约保护使用；不同于仅在合法 error 相位为真的 `canRetryPendingSubmission`。不作为服务端成功或授权证明，不落盘。

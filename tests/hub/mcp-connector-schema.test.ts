@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { parseMcpConnectorJson } from "@/hub/mcp-connector-json";
 import {
   mcpConnectorSchemas,
+  mcpConnectorSchema,
+  mcpPrivateServerSchema,
   mcpConnectorMatches,
   mcpConnectorErrorAllowed,
   mcpPrivateServerMatches,
@@ -11,7 +13,7 @@ import {
 } from "@/hub/mcp-connector.schema";
 import { isMcpCustomHeaderName } from "@/ui/mcp/mcp-header-validation";
 
-const connector = {
+const connector = { availability: "available" as const,
   connector_id: "connector-1",
   connector_type: "mcp",
   provider_key: "provider-one",
@@ -423,7 +425,7 @@ describe("private URL MCP registration wire", () => {
     display_name: "DeepWiki",
     server_url: "https://mcp.deepwiki.com/mcp",
   };
-  const server = {
+  const server = { availability: "unavailable" as const,
     server_id: "server-1",
     display_name: input.display_name,
     server_url: input.server_url,
@@ -683,4 +685,48 @@ describe("current-user MCP authorization lifecycle wire", () => {
       }).success,
     ).toBe(false);
   });
+});
+
+it("preserves published connector receipt tuples instead of treating every 503 as retryable", () => {
+  for (const [code, status, retryable] of [
+    ["mcp_personal_command_in_progress", 409, true],
+    ["mcp_personal_command_outcome_unknown", 503, false],
+    ["mcp_personal_command_replay_expired", 412, false],
+    ["mcp_personal_idempotency_conflict", 409, false],
+    ["mcp_personal_command_ownership_lost", 409, false],
+    ["mcp_personal_response_invalid", 502, false],
+  ] as const) {
+    const body = { error: { code, message: "Safe failure", retryable } };
+    expect(mcpConnectorErrorAllowed("create", status, body), code).toBe(true);
+    expect(mcpConnectorErrorAllowed("create", status === 503 ? 409 : 503, body), code).toBe(false);
+    expect(mcpConnectorErrorAllowed("create", status, { error: { ...body.error, retryable: !retryable } }), code).toBe(false);
+    expect(mcpConnectorErrorAllowed("connector", status, body), code).toBe(code === "mcp_personal_response_invalid");
+  }
+});
+
+// Live availability is independent of the saved lifecycle and enabled setting.
+it("requires the five exact availability values without lifecycle/default fallback", () => {
+  for (const availability of ["available", "refresh_required", "refreshing", "reauthorization_required", "unavailable"]) {
+    const value = mcpConnectorSchema.parse({ ...connector, availability });
+    expect(value.availability).toBe(availability);
+    expect(value.status).toBe("active");
+    expect(value.enabled).toBe(true);
+  }
+  for (const availability of [undefined, null, "active", "", 0, 1, "AVAILABLE"]) {
+    expect(mcpConnectorSchema.safeParse({ ...connector, availability }).success).toBe(false);
+  }
+});
+it("retains safe revoked header history while keeping write limits and strict descriptors", () => {
+  const server = {
+    server_id: "history", display_name: "History", server_url: "https://tools.example/mcp",
+    status: "pending", state_version: "1", prepare_status: "pending_prepare",
+    declarations: [], declarations_available: false, availability: "unavailable" as const,
+    headers: Array.from({ length: 33 }, (_, index) => ({ name: `x-fixture-${index}`, configured: index !== 0, status: index === 0 ? "revoked" : "active", state_version: "1" })),
+  };
+  expect(mcpPrivateServerSchema.parse(server).headers).toHaveLength(33);
+  expect(mcpPrivateServerSchema.safeParse({ ...server, availability: undefined }).success).toBe(false);
+  expect(mcpPrivateServerSchema.safeParse({ ...server, availability: "active" }).success).toBe(false);
+  expect(mcpPrivateServerSchema.safeParse({ ...server, headers: [...server.headers, server.headers[0]] }).success).toBe(false);
+  expect(mcpPrivateServerSchema.safeParse({ ...server, headers: [{ ...server.headers[0], value: "private" }] }).success).toBe(false);
+  expect(mcpPrivateServerRegistrationInputSchema.safeParse({ display_name: "History", server_url: server.server_url, headers: Array.from({ length: 33 }, (_, index) => ({ name: `x-header-${index}`, value: "fixture" })) }).success).toBe(false);
 });

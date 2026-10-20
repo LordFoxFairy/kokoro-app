@@ -48,11 +48,12 @@ type SettingsPanelContentProps = {
   onOpenPricing: () => void;
   onSelectSetting: (tab: SettingsTab) => void;
   onCreateSkillWithAi?: (prompt?: string) => void;
-  onTrySkill?: (skill: SkillCard) => void;
+  onTrySkill?: (skill: SkillCard, prompt?: string) => boolean;
   skillsCatalogOpen: boolean;
   onSkillsCatalogOpenChange: (open: boolean) => void;
   skillsCatalogTriggerRef: RefObject<HTMLButtonElement | null>;
-  initialSkillsScope?: SkillsScopeFilter;
+  skillsScope: SkillsScopeFilter;
+  onSkillsScopeChange: (scope: SkillsScopeFilter) => void;
 };
 
 /**
@@ -78,7 +79,8 @@ export function SettingsPanelContent({
   skillsCatalogOpen,
   onSkillsCatalogOpenChange,
   skillsCatalogTriggerRef,
-  initialSkillsScope,
+  skillsScope,
+  onSkillsScopeChange,
 }: SettingsPanelContentProps) {
   const serviceDraftScope = JSON.stringify([preview, readBoundary?.admitted, readBoundary?.subject, readBoundary?.generation]);
   const staticGuidanceScope = JSON.stringify([preview, readBoundary?.subject ?? null]);
@@ -148,7 +150,8 @@ export function SettingsPanelContent({
           embeddedCatalogOpen={skillsCatalogOpen}
           onEmbeddedCatalogOpenChange={onSkillsCatalogOpenChange}
           catalogTriggerRef={skillsCatalogTriggerRef}
-          {...(initialSkillsScope === undefined ? {} : { initialScope: initialSkillsScope })}
+          selectedScope={skillsScope}
+          onScopeChange={onSkillsScopeChange}
         />
       );
     case "mcp":

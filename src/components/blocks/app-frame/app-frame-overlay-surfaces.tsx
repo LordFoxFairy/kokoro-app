@@ -1,15 +1,17 @@
+import { PersonalKnowledgeProvider } from "@/ui/settings/knowledge/session-context";
 import { useEffect, type ComponentType, type RefObject } from "react";
 
 import { McpCreateDialog } from "@/ui/mcp/mcp-create-dialog";
 import type { McpCreateMode } from "@/ui/mcp/mcp-panel-model";
 import { SettingsModal, type SettingsTab } from "@/ui/settings/settings-modal";
 import type { SkillCard } from "@/hub/schemas";
+import type { SettingsSkillsView } from "@/ui/settings/settings-location";
 import type { SkillsScopeFilter } from "@/ui/skills/skills-scope";
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
 import { browserHubClient } from "@/ui/shell/page-clients";
 import { warmCustomApiProjection } from "@/ui/mcp/use-custom-api-projection";
 import { warmMcpProjection } from "@/ui/mcp/use-mcp-projection";
-import { createManusSkillHubClient } from "@/ui/skills/manus-skill-client";
+import { createManusSkillHubClient, retainManusSkillHubClient } from "@/ui/skills/manus-skill-client";
 import { warmSkillsPool } from "@/ui/skills/skills-panel";
 
 import type { AppCommandMenuProps } from "./app-command-menu";
@@ -23,9 +25,9 @@ export type AppFrameOverlaySurfacesProps = {
   preview: boolean;
   readBoundary?: ProjectReadBoundary;
   onCloseSettings: () => void;
-  onTabChange: (tab: SettingsTab) => void;
+  onTabChange: (tab: SettingsTab, skillsView?: SettingsSkillsView) => void;
   onCreateSkillWithAi: (prompt?: string) => void;
-  onTrySkill: (skill: SkillCard, prompt?: string) => void;
+  onTrySkill: (skill: SkillCard, prompt?: string) => boolean;
   settingsReturnFocusRef: RefObject<HTMLElement | null>;
   shellRef: RefObject<HTMLDivElement | null>;
   mcpCreateMode: McpCreateMode | null;
@@ -75,23 +77,35 @@ export function AppFrameOverlaySurfaces({
     const releaseMcp = warmMcpProjection({
       client,
       identity: connectorIdentity,
+      readGeneration: preview ? 0 : readBoundary?.generation ?? 0,
     });
     const releaseCustomApi = warmCustomApiProjection({
       client,
       identity: connectorIdentity,
+      readGeneration: preview ? 0 : readBoundary?.generation ?? 0,
     });
-    const releaseSkills = warmSkillsPool(
-      preview ? client : createManusSkillHubClient(client),
-    );
     return () => {
       releaseMcp();
       releaseCustomApi();
-      releaseSkills();
     };
-  }, [connectorIdentity, mounted, preview]);
+  }, [connectorIdentity, mounted, preview, readBoundary?.generation]);
+
+  useEffect(() => {
+    if (!mounted) return undefined;
+    const base = browserHubClient({ preview });
+    if (preview) return warmSkillsPool(base);
+    const boundary = readBoundary ?? { admitted: false, subject: null, generation: 0 };
+    // A blocked generation retires the previous actor's fetcher. Only an
+    // admitted lifetime warms data; its lease tolerates StrictMode replay.
+    const client = createManusSkillHubClient(base, boundary);
+    if (!boundary.admitted || boundary.subject === null) return undefined;
+    const releaseLifetime = retainManusSkillHubClient(client);
+    const releasePool = warmSkillsPool(client);
+    return () => { releasePool(); releaseLifetime(); };
+  }, [mounted, preview, readBoundary]);
 
   return (
-    <>
+    <PersonalKnowledgeProvider boundary={readBoundary ?? { subject: null, admitted: false, generation: 0 }} preview={preview}>
       {/* 设置中心：浮在工作区之上的模态卡片，语境原地保留。 */}
       {mounted && settingsTab !== null ? (
         <SettingsModal
@@ -127,6 +141,6 @@ export function AppFrameOverlaySurfaces({
         open={commandOpen}
         onOpenChange={onCommandOpenChange}
       />
-    </>
+    </PersonalKnowledgeProvider>
   );
 }

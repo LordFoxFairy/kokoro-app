@@ -13,47 +13,50 @@ import type { ScheduledTaskEditorState } from "./scheduled-task-editor-state"
 import styles from "./scheduled-task-editor.module.css"
 
 type ScheduledTaskEditorFormProps = {
-  brandName: string
   state: ScheduledTaskEditorState
   setState: React.Dispatch<React.SetStateAction<ScheduledTaskEditorState>>
   titleRef: RefObject<HTMLInputElement | null>
   saving: boolean
+  unconfirmed?: boolean
   saveError: boolean
   valid: boolean
   onSubmit: (event: FormEvent<HTMLFormElement>) => Promise<void>
 }
 
 export function ScheduledTaskEditorForm({
-  brandName,
   state,
   setState,
   titleRef,
   saving,
   saveError,
+  unconfirmed = false,
   valid,
   onSubmit,
 }: ScheduledTaskEditorFormProps) {
   const t = useT()
   return (
     <form className={styles.form} onSubmit={(event) => void onSubmit(event)}>
-      <div className={styles.body}>
+      <fieldset className={styles.body} disabled={saving || unconfirmed}>
         <ScheduledTaskEditorFields
           state={state}
           setState={setState}
           titleRef={titleRef}
         />
         <ScheduledTaskEditorOptions
-          brandName={brandName}
           state={state}
           setState={setState}
         />
-      </div>
+      </fieldset>
       {saveError ? (
         <p className={styles.saveError} role="alert">
-          {t("scheduled.updateFailed")}
+          {t(unconfirmed ? "scheduled.unconfirmed" : "scheduled.updateFailed")}
         </p>
       ) : null}
-      <ScheduledTaskEditorActions saving={saving} valid={valid} />
+      <ScheduledTaskEditorActions
+        saving={saving}
+        valid={valid}
+        unconfirmed={unconfirmed}
+      />
     </form>
   )
 }
@@ -61,7 +64,8 @@ export function ScheduledTaskEditorForm({
 function ScheduledTaskEditorActions({
   saving,
   valid,
-}: Pick<ScheduledTaskEditorFormProps, "saving" | "valid">) {
+  unconfirmed,
+}: Pick<ScheduledTaskEditorFormProps, "saving" | "valid" | "unconfirmed">) {
   const t = useT()
   return (
     <DialogFooter className={styles.footer}>
@@ -72,7 +76,7 @@ function ScheduledTaskEditorActions({
       </DialogClose>
       <Button type="submit" disabled={!valid || saving} aria-busy={saving}>
         {saving ? <Spinner aria-hidden="true" /> : null}
-        {t("firstSite.save")}
+        {t(unconfirmed ? "scheduled.retryOriginal" : "firstSite.save")}
       </Button>
     </DialogFooter>
   )

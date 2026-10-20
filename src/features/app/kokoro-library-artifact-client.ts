@@ -1,3 +1,4 @@
+import type { LibraryArtifactQuery } from "./kokoro-library-model"
 import { libraryArtifactDetailResponseSchema, libraryArtifactListResponseSchema, type LibraryArtifactWire } from "@/contract/library-artifact"
 
 export type LibraryArtifact = {
@@ -11,6 +12,8 @@ export type LibraryArtifact = {
   sizeBytes: string
   deliveredAt: string
 }
+
+export type LibraryArtifactClient = { getArtifact?: typeof getLibraryArtifact; listArtifacts: typeof listLibraryArtifacts }
 
 export type LibraryArtifactPage = { items: readonly LibraryArtifact[]; nextCursor: string | null }
 export type LibraryArtifactSelector = Pick<LibraryArtifact, "conversationId" | "artifactId">
@@ -50,9 +53,11 @@ async function parsedResponse(response: Response): Promise<unknown> {
 }
 
 /** A BFF page, not an alias for the old session/hash ArtifactRecord. */
-export async function listLibraryArtifacts(cursor: string | null, signal: AbortSignal): Promise<LibraryArtifactPage> {
+export async function listLibraryArtifacts(cursor: string | null, signal: AbortSignal, filter: LibraryArtifactQuery): Promise<LibraryArtifactPage> {
   const query = new URLSearchParams({ kind: "artifact", limit: "50" })
   if (cursor !== null) query.set("cursor", cursor)
+  if (filter.query !== "") query.set("q", filter.query)
+  if (filter.type !== "all") query.set("type", filter.type)
   const response = await fetch(`/api/hub/library?${query}`, { cache: "no-store", signal })
   const parsed = libraryArtifactListResponseSchema.safeParse(await parsedResponse(response))
   if (!parsed.success) throw new Error("library_artifacts_invalid_response")

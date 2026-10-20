@@ -90,7 +90,7 @@ export function SettingsPanelHeader({
       data-with-description={hasDescription || undefined}
       data-skills-catalog-open={showingSkillsCatalog || undefined}
     >
-      <h1 ref={accountHeading} tabIndex={showingAccountDetail ? -1 : undefined} className={styles.panelTitle}>
+      <h1 ref={accountHeading} tabIndex={showingAccountDetail ? -1 : undefined} className={styles.panelTitle} aria-label={title}>
         {showingAccountDetail || showingSkillsCatalog ? (
           <button
             type="button"

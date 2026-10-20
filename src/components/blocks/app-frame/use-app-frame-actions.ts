@@ -12,13 +12,16 @@ import { useT } from "@/i18n/context"
 import { MAX_INPUT_LENGTH } from "@/ui/composer/composer"
 import type { CreationIntent } from "@/ui/composer/creation-intent-pill"
 import { stashConversationDraft } from "@/ui/shell/use-draft"
-import type { ConversationListController } from "@/ui/shell/use-conversation-list"
 import { navigateMountedSurface } from "@/ui/navigation/mounted-surface-navigation"
 import { overlayHandoffDelay } from "@/ui/shell/overlay-handoff"
+import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
+import { useAppFrameSkillTrial } from "./use-app-frame-skill-trial"
 
 import { COMMAND_SETTINGS_HANDOFF_MS } from "./app-frame-helpers"
 
 export type AppFrameActionsOptions = {
+  preview?: boolean
+  readBoundary?: ProjectReadBoundary
   engine: SessionEngine | null
   projectWorkspace: boolean
   projectRef?: string
@@ -32,7 +35,6 @@ export type AppFrameActionsOptions = {
   setDeploymentIntent: (intent: CreationIntent | null) => void
   syncConversationUrl: (id: string | null, mode: "push" | "replace") => void
   setConversationRouteId: (id: string | null) => void
-  conversations: ConversationListController
   focusComposer: () => void
   closeSettings: (mode?: "close" | "handoff") => void
   brandName: string | undefined
@@ -41,6 +43,8 @@ export type AppFrameActionsOptions = {
 
 /** Owns user actions that bridge the shell state to session and Composer commands. */
 export function useAppFrameActions({
+  preview = false,
+  readBoundary,
   engine,
   projectWorkspace,
   projectRef,
@@ -54,14 +58,20 @@ export function useAppFrameActions({
   setDeploymentIntent,
   syncConversationUrl,
   setConversationRouteId,
-  conversations,
   focusComposer,
   closeSettings,
   brandName,
   commandNewChatTimerRef,
 }: AppFrameActionsOptions) {
   const t = useT()
-  const { startNewChat, selectConversation } = conversations
+  const startNewChat = useCallback(() => {
+    engine?.newConversation()
+    focusComposer()
+  }, [engine, focusComposer])
+  const selectConversation = useCallback((id: string) => {
+    engine?.openConversation(id)
+    focusComposer()
+  }, [engine, focusComposer])
 
   const routeAtRender = typeof window === "undefined" ? null : `${window.location.pathname}${window.location.search}`
   let actorAtRender: string | null | undefined
@@ -256,11 +266,11 @@ export function useAppFrameActions({
     handOffSkillPrompt(creationPrompt ?? t("skills.createPrompt"))
   }, [handOffSkillPrompt, t])
 
+  const { startTrial, selectedSkill, clearSelectedSkill } = useAppFrameSkillTrial({ engine, preview, boundary: readBoundary, handOffPrompt: handOffSkillPrompt })
+
   const startSkillUseFromSettings = useCallback((skill: SkillCard, prompt?: string) => {
-    // Preview's name-based Try action may seed editable text, but it must not
-    // mutate the formal engine's typed Skill source selection.
-    handOffSkillPrompt(prompt ?? t("skills.tryPrompt", { brand: brandName ?? "Kokoro", name: skill.name }))
-  }, [brandName, handOffSkillPrompt, t])
+    return startTrial(skill, prompt ?? t("skills.tryPrompt", { brand: brandName ?? "Kokoro", name: skill.name }))
+  }, [brandName, t, startTrial])
 
   const dismissCreationIntent = useCallback(() => {
     setDeploymentIntent(null)
@@ -282,6 +292,8 @@ export function useAppFrameActions({
     startNewChatAndFocus,
     startSkillCreationFromSettings,
     startSkillUseFromSettings,
+    selectedSkill,
+    clearSelectedSkill,
     dismissCreationIntent,
   }
 }

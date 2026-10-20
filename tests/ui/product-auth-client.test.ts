@@ -190,3 +190,10 @@ it("checks retirement between successful CSRF return and the signout continuatio
   expect(fetcher).toHaveBeenCalledOnce()
   expect(navigate).not.toHaveBeenCalled()
 })
+
+it("encodes the known settings return fragment inside the login query, not after it", () => {
+  window.history.replaceState({}, "", "/app#/account/settings/mcp")
+  const navigate = vi.fn()
+  openProductSignIn(navigate)
+  expect(navigate).toHaveBeenCalledExactlyOnceWith(`/login?${new URLSearchParams({ return_to: "/app#/account/settings/mcp" })}`)
+})

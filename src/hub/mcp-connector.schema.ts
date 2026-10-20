@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { connectorCommandErrorAllowed } from "./connector-command-error";
 
 export type McpConnectorReadOperation =
   | "connectors"
@@ -44,6 +45,8 @@ const scalar = (min: number, max: number) =>
         (min === 0 || Boolean(value.trim())),
     );
 const status = z.enum(["pending", "active", "error", "revoked"]);
+export const mcpAvailabilitySchema = z.enum(["available", "refresh_required", "refreshing", "reauthorization_required", "unavailable"]);
+export type McpAvailability = z.infer<typeof mcpAvailabilitySchema>;
 const unique = (values: string[]) => new Set(values).size === values.length;
 const safeUrl = z
   .string()
@@ -59,6 +62,7 @@ const safeUrl = z
 export const mcpConnectorSchema = z
   .object({
     connector_id: mcpConnectorIdSchema,
+    availability: mcpAvailabilitySchema,
     connector_type: z.enum(["builtin", "byok", "mcp"]),
     provider_key: providerKey,
     status,
@@ -233,6 +237,7 @@ const privateDeclarationSchema = z.discriminatedUnion("kind", [
 export const mcpPrivateServerSchema = z
   .object({
     server_id: mcpConnectorIdSchema,
+    availability: mcpAvailabilitySchema,
     display_name: privateText(1, 100),
     server_url: privateServerUrl,
     status: z.enum(["pending", "registered", "disabled"]),
@@ -240,7 +245,6 @@ export const mcpPrivateServerSchema = z
     notes: privateText(1, 4000, true).optional(),
     headers: z
       .array(privateHeaderDescriptorSchema)
-      .max(32)
       .refine(
         (values) =>
           new Set(values.map(({ name }) => name)).size === values.length,
@@ -562,23 +566,24 @@ export function mcpPrivateServerMatches(
       )
     );
   }
+  const parsed = mcpPrivateServerUpdateSchema.safeParse(
+    typeof value === "object" && value !== null && "data" in value ? value.data : undefined,
+  );
+  const request = mcpPrivateServerUpdateInputSchema.safeParse(input);
+  if (!parsed.success || !request.success) return false;
+  const server = parsed.data.server, update = request.data;
+  const headers = new Map(server.headers.map(header => [header.name, header]));
   return (
-    z.object({ data: mcpPrivateServerUpdateSchema }).strict().safeParse(value)
-      .success &&
-    body !== undefined &&
-    privateServerResponseMatches(
-      value,
-      serverId,
-      body,
-      body.server_url !== undefined ||
-        (Array.isArray(body.header_upserts) &&
-          body.header_upserts.length > 0) ||
-        (Array.isArray(body.header_removals) &&
-          body.header_removals.length > 0) ||
-        body.oauth_client !== undefined ||
-        body.revoke_oauth_client === true
-        ? false
-        : undefined,
+    (update.display_name === undefined || server.display_name === update.display_name) &&
+    (update.server_url === undefined || server.server_url === update.server_url) &&
+    (update.notes === undefined || server.notes === update.notes) &&
+    (update.clear_notes !== true || server.notes === undefined) &&
+    (update.header_upserts ?? []).every(header => headers.get(header.name)?.configured === true) &&
+    (update.header_removals ?? []).every(name => headers.get(name)?.configured !== true) &&
+    (update.oauth_client === undefined || (server.oauth_client?.configured === true && server.oauth_client.client_id === update.oauth_client.client_id && server.oauth_client.origin === "byo")) &&
+    (update.revoke_oauth_client !== true || server.oauth_client?.configured !== true) &&
+    privateServerResponseMatches(value, serverId, body,
+      update.server_url !== undefined || (update.header_upserts?.length ?? 0) > 0 || (update.header_removals?.length ?? 0) > 0 || update.oauth_client !== undefined || update.revoke_oauth_client === true ? false : undefined,
     )
   );
 }
@@ -718,20 +723,15 @@ export type McpConnectorEnabledInput = z.infer<
 export type McpConnectorRemoveInput = z.infer<
   typeof mcpConnectorCommandRequestSchemas.remove
 >;
-export const mcpConnectorErrors: Record<number, readonly string[]> = {
+const mcpConnectorErrors: Record<number, readonly string[]> = {
   400: ["invalid_mcp_personal_request"],
   401: ["session_authentication_required", "session_invalid"],
   403: ["service_auth_failed", "session_forbidden", "product_tenant_forbidden"],
   404: ["mcp_personal_not_found"],
-  409: [
-    "mcp_personal_idempotency_conflict",
-    "mcp_personal_server_url_conflict",
-    "mcp_personal_command_in_progress",
-  ],
+  409: ["mcp_personal_server_url_conflict"],
   412: ["mcp_personal_precondition_failed"],
   413: ["mcp_personal_body_too_large"],
   429: ["session_rate_limited"],
-  502: ["mcp_personal_response_invalid"],
   503: [
     "product_tenant_not_configured",
     "iam_admission_unavailable",
@@ -750,7 +750,7 @@ export const mcpConnectorErrorSchema = z
   })
   .strict();
 export function mcpConnectorErrorAllowed(
-  operation: McpConnectorOperation,
+  operation: McpConnectorOperation | McpPrivateServerOperation | "authorization",
   httpStatus: number,
   value: unknown,
 ): boolean {
@@ -761,14 +761,14 @@ export function mcpConnectorErrorAllowed(
       httpStatus === 404)
   )
     return false;
+  const published = connectorCommandErrorAllowed("mcp", httpStatus, parsed.data.error,
+    !["connectors", "connector", "connections", "connection", "providers", "provider", "server"].includes(operation));
+  if (published !== undefined) return published;
   return (
     (mcpConnectorErrors[httpStatus]?.includes(parsed.data.error.code) ??
       false) &&
     parsed.data.error.retryable ===
-      (httpStatus === 429 ||
-        httpStatus === 503 ||
-        (httpStatus === 409 &&
-          parsed.data.error.code === "mcp_personal_command_in_progress"))
+      (httpStatus === 429 || httpStatus === 503)
   );
 }
 export function mcpConnectorMatches(

@@ -124,6 +124,20 @@ export function invalidate(keyPrefix: string): void {
   }
 }
 
+/** Admission retirement is not revalidation: forget only this exact namespace,
+ * fence late completions and never invoke a stale actor's fetcher again. */
+export function retireResources(namespace: string): void {
+  for (const [key, entry] of entries) {
+    if (key !== namespace && !key.startsWith(`${namespace}/`)) continue
+    entry.activeSeq = ++seqCounter
+    entry.fetcher = null
+    entry.inflight = false
+    entry.snapshot = LOADING
+    entries.delete(key)
+    emit(entry)
+  }
+}
+
 // test-only：清空模块级缓存，隔离用例。
 export function __resetResourceStore(): void {
   entries.clear()

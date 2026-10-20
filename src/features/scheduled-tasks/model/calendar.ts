@@ -1,4 +1,4 @@
-import type { ScheduledTaskFrequency } from "./scheduled-task"
+import { type ScheduledTaskFrequency } from "./scheduled-task"
 
 export type ScheduledCalendarDay = {
   date: Date
@@ -38,7 +38,11 @@ function formatterFor(timeZone: string): Intl.DateTimeFormat {
 }
 
 function zonedParts(instant: Date, timeZone: string): ZonedDateTime {
-  const values = new Map(formatterFor(timeZone).formatToParts(instant).map((part) => [part.type, part.value]))
+  const values = new Map(
+    formatterFor(timeZone)
+      .formatToParts(instant)
+      .map((part) => [part.type, part.value]),
+  )
   return {
     year: Number(values.get("year")),
     month: Number(values.get("month")),
@@ -68,7 +72,11 @@ function parseLocalDateTime(date: string, time: string): ZonedDateTime {
     minute: Number(timeMatch[2]),
   }
   const normalized = utcCalendarDate(parts.year, parts.month, parts.day)
-  if (normalized.getUTCFullYear() !== parts.year || normalized.getUTCMonth() + 1 !== parts.month || normalized.getUTCDate() !== parts.day) {
+  if (
+    normalized.getUTCFullYear() !== parts.year ||
+    normalized.getUTCMonth() + 1 !== parts.month ||
+    normalized.getUTCDate() !== parts.day
+  ) {
     throw new RangeError("Invalid local scheduled date")
   }
   return parts
@@ -135,20 +143,45 @@ function addCalendarDays(date: string, days: number): string {
   return dateKeyFromParts({ year: next.getUTCFullYear(), month: next.getUTCMonth() + 1, day: next.getUTCDate() })
 }
 
+// Explicit preview only. Live schedules always use the owner's current next_run_at.
 export function nextPreviewRun(
   time: string,
   frequency: ScheduledTaskFrequency,
   timeZone = "UTC",
   now: Date = new Date(),
-): string {
+  rule: { weekdays?: number[]; monthDays?: number[]; localDate?: string } = {},
+): string | null {
+  if (frequency === "once") {
+    if (!rule.localDate) throw new RangeError("A one-time date is required")
+    const next = localDateTimeToUtc(rule.localDate, time, timeZone)
+    if (compareLocal(zonedParts(next, timeZone), parseLocalDateTime(rule.localDate, time)) !== 0)
+      throw new RangeError("One-time date falls in a timezone gap")
+    return next > now ? next.toISOString() : null
+  }
+  if (frequency === "weekly" && !rule.weekdays?.length) throw new RangeError("Weekdays are required")
+  if (frequency === "monthly" && !rule.monthDays?.length) throw new RangeError("Month days are required")
   const today = dateKeyFromParts(zonedParts(now, timeZone))
-  const firstDate = frequency === "weekly" ? addCalendarDays(today, 7) : today
-  let next = localDateTimeToUtc(firstDate, time, timeZone)
-  if (frequency === "daily" && next <= now) next = localDateTimeToUtc(addCalendarDays(today, 1), time, timeZone)
-  return next.toISOString()
+  // Even selecting only day 31 has a valid date within the next 62 days.
+  for (let offset = 0; offset <= 62; offset++) {
+    const date = addCalendarDays(today, offset)
+    const parts = parseLocalDateTime(date, time)
+    if (
+      frequency === "weekly" &&
+      !rule.weekdays?.includes(utcCalendarDate(parts.year, parts.month, parts.day).getUTCDay())
+    )
+      continue
+    if (frequency === "monthly" && !rule.monthDays?.includes(parts.day)) continue
+    const next = localDateTimeToUtc(date, time, timeZone)
+    if (next > now) return next.toISOString()
+  }
+  throw new RangeError("No valid preview occurrence")
 }
 
-export function buildCalendarDays(month: Date, displayTimeZone = "UTC", now: Date = new Date()): readonly ScheduledCalendarDay[] {
+export function buildCalendarDays(
+  month: Date,
+  displayTimeZone = "UTC",
+  now: Date = new Date(),
+): readonly ScheduledCalendarDay[] {
   const firstOfMonth = new Date(Date.UTC(month.getUTCFullYear(), month.getUTCMonth(), 1))
   const firstCell = new Date(firstOfMonth)
   firstCell.setUTCDate(firstCell.getUTCDate() - firstOfMonth.getUTCDay())
@@ -160,7 +193,8 @@ export function buildCalendarDays(month: Date, displayTimeZone = "UTC", now: Dat
     return {
       date,
       key,
-      currentMonth: date.getUTCFullYear() === firstOfMonth.getUTCFullYear() && date.getUTCMonth() === firstOfMonth.getUTCMonth(),
+      currentMonth:
+        date.getUTCFullYear() === firstOfMonth.getUTCFullYear() && date.getUTCMonth() === firstOfMonth.getUTCMonth(),
       today: key === todayKey,
     }
   })

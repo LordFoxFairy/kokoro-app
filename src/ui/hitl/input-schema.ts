@@ -109,7 +109,8 @@ export function buildSubmitValue(
     switch (field.kind) {
       case "text":
       case "enum": {
-        const text = typeof raw === "string" ? raw.trim() : ""
+        // Enum options are owner values, not free text: normalization changes the selected argument.
+        const text = typeof raw === "string" ? (field.kind === "enum" ? raw : raw.trim()) : ""
         if (text) {
           value[field.name] = text
         } else if (field.required) {

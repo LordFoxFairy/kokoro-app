@@ -36,6 +36,9 @@
 }
 
 .body {
+  border: 0;
+  margin: 0;
+  min-width: 0;
   min-height: 0;
   flex: 1;
   overflow-y: auto;
@@ -44,8 +47,12 @@
   padding: 1.1875rem 1.5rem 1.25rem;
 }
 
-.fields { gap: 1.125rem; }
-.fields [data-slot="field"] { gap: 0.5rem; }
+.fields {
+  gap: 1.125rem;
+}
+.fields [data-slot="field"] {
+  gap: 0.5rem;
+}
 
 .fields [data-slot="field-label"],
 .fieldset [data-slot="field-legend"] {
@@ -98,6 +105,10 @@
   gap: 0.5rem;
 }
 
+.weeklyRow {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .scheduleRow :global([data-slot="select-trigger"]),
 .scheduleRow input {
   width: 100%;
@@ -129,8 +140,12 @@
   pointer-events: none;
 }
 
-.timeControl input { padding-right: 2.25rem; }
-.timeControl input::-webkit-calendar-picker-indicator { opacity: 0; }
+.timeControl input {
+  padding-right: 2.25rem;
+}
+.timeControl input::-webkit-calendar-picker-indicator {
+  opacity: 0;
+}
 
 .expiryField {
   align-items: center;
@@ -149,8 +164,7 @@
   margin-left: 2.5rem;
 }
 
-.optionCard,
-.advanced {
+.optionCard {
   border: 1px solid var(--border);
   border-radius: 0.75rem;
   background: var(--background);
@@ -165,16 +179,14 @@
   padding: 0.75rem 1rem;
 }
 
-.optionCard strong,
-.advanced strong {
+.optionCard strong {
   display: block;
   font-size: 0.875rem;
   font-weight: 600;
   line-height: 1.25rem;
 }
 
-.optionCard p,
-.advanced small {
+.optionCard p {
   display: block;
   margin: 0;
   color: var(--muted-foreground);
@@ -182,32 +194,6 @@
   font-weight: 400;
   line-height: 1.125rem;
 }
-
-.advanced { margin-top: 1.15625rem; }
-
-.advanced > button {
-  width: 100%;
-  min-height: 4rem;
-  justify-content: space-between;
-  padding: 0.75rem 1rem;
-  text-align: left;
-  white-space: normal;
-}
-
-.advanced > button > span { min-width: 0; }
-.advanced > button > svg[data-open="true"] { transform: rotate(180deg); }
-
-.advancedContent {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 0.5rem;
-  border-top: 1px solid var(--border);
-  padding: 0.75rem 1rem;
-  color: var(--muted-foreground);
-  font-size: 0.8125rem;
-}
-
-.advancedContent > :last-child { grid-column: 1 / -1; }
 
 .saveError {
   margin: 0;
@@ -236,15 +222,63 @@
 }
 
 @media (max-height: 40rem) and (min-width: 40rem) {
-  .title { margin-top: 1rem; }
-  .body { padding-top: 0.875rem; padding-bottom: 0.875rem; }
-  .footer { height: 4.25rem; padding-bottom: 1rem; }
+  .title {
+    margin-top: 1rem;
+  }
+  .body {
+    padding-top: 0.875rem;
+    padding-bottom: 0.875rem;
+  }
+  .footer {
+    height: 4.25rem;
+    padding-bottom: 1rem;
+  }
 }
 
 @media (max-width: 40rem) {
-  .dialog { max-width: calc(100vw - 1rem); height: min(38.375rem, calc(100dvh - 1rem)); max-height: calc(100dvh - 1rem); }
-  .title { margin-left: 1rem; }
-  .body { padding-inline: 1rem; }
-  .scheduleRow { grid-template-columns: minmax(0, 1fr); }
-  .footer { padding-inline: 1rem; }
+  .dialog {
+    max-width: calc(100vw - 1rem);
+    height: min(38.375rem, calc(100dvh - 1rem));
+    max-height: calc(100dvh - 1rem);
+  }
+  .title {
+    margin-left: 1rem;
+  }
+  .body {
+    padding-inline: 1rem;
+  }
+  .scheduleRow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .footer {
+    padding-inline: 1rem;
+  }
+}
+
+.daysTrigger {
+  min-width: 0;
+  width: 100%;
+  justify-content: space-between;
+}
+.daysTrigger > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.daysMenu {
+  width: 209px;
+  max-height: 270px;
+  overflow-y: auto;
+}
+.daysMenu [role="menuitemcheckbox"] {
+  min-height: 36px;
+  padding: 8px;
+  border-radius: 6px;
+  font-size: 14px;
+  line-height: 20px;
+}
+.dayCheck {
+  margin-inline-start: auto;
+  width: 16px;
+  height: 16px;
 }

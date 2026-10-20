@@ -16,8 +16,18 @@ it("selects a real path using the original Preview commit without another floati
  expect(deps.publish.publishDraft).toHaveBeenCalledWith("revision",{audience:"owner",expected_state_version:"4"},"publish-key",expect.any(AbortSignal));expect(deps.installation.install).toHaveBeenCalledWith("skill:revision","install-key",expect.any(AbortSignal));expect(flow.getSnapshot().kind).toBe("completed")
 })
 it.each(["import","publish","install"] as const)("keeps original body/key for an unknown %s ACK",async stage=>{
- const {flow,deps}=setup();const fn=stage==="import"?deps.github.import:stage==="publish"?deps.publish.publishDraft:deps.installation.install
- fn.mockRejectedValueOnce(new HubClientError("network","unknown",null,null));await flow.preview(url);flow.select("one");await flow.confirm();expect(flow.getSnapshot()).toMatchObject({kind:"unknown",stage});expect(flow.getSnapshot().result).toBeUndefined();await flow.retry();expect(flow.getSnapshot().kind).toBe("completed");expect(fn.mock.calls[0]?.slice(0,-1)).toEqual(fn.mock.calls[1]?.slice(0,-1));expect(deps.github.preview).toHaveBeenCalledTimes(1)
+ for (const error of [
+  new HubClientError("network", "unknown", null, null),
+  new HubClientError("http", "Invalid owner acknowledgement", "skill_response_invalid", 502),
+  new HubClientError("http", "Checkpoint unavailable after a write", "skill_dependency_unavailable", 503),
+ ]) {
+  const {flow,deps}=setup();const fn=stage==="import"?deps.github.import:stage==="publish"?deps.publish.publishDraft:deps.installation.install
+  fn.mockRejectedValueOnce(error);await flow.preview(url);flow.select("one");await flow.confirm();expect(flow.getSnapshot()).toMatchObject({kind:"unknown",stage});expect(flow.getSnapshot().result).toBeUndefined()
+  // Closing or a same-actor recheck never releases an unresolved write selector/key.
+  flow.finishCompleted();flow.retireRead();expect(flow.getSnapshot()).toMatchObject({kind:"unknown",stage})
+  await flow.preview("https://github.com/acme/replacement");expect(deps.github.preview).toHaveBeenCalledTimes(1)
+  await flow.retry();expect(flow.getSnapshot().kind).toBe("completed");expect(fn.mock.calls[0]?.slice(0,-1)).toEqual(fn.mock.calls[1]?.slice(0,-1));expect(deps.github.preview).toHaveBeenCalledTimes(1)
+ }
 })
 it("does not treat the 201 draft as installed while Publish is unresolved",async()=>{
  const {flow,deps}=setup();let resolve!: (value:typeof published)=>void;deps.publish.publishDraft.mockImplementationOnce(()=>new Promise(accept=>{resolve=accept}));await flow.preview(url);flow.select("one");const work=flow.confirm();await vi.waitFor(()=>expect(deps.publish.publishDraft).toHaveBeenCalled());expect(flow.getSnapshot().kind).toBe("running");expect(deps.installation.install).not.toHaveBeenCalled();resolve(published);await work
@@ -32,9 +42,17 @@ it("rejects a wrong real installation identity without a success state",async()=
  const {flow,deps}=setup();deps.installation.install.mockResolvedValueOnce({...receipt,installation:{...receipt.installation,source_ref:"skill:other"}});await flow.preview(url);flow.select("one");await flow.confirm();expect(flow.getSnapshot()).toMatchObject({kind:"unknown",stage:"install"});expect(flow.getSnapshot().result).toBeUndefined()
 })
 it("preserves the Import CAS across an authoritative metadata read",async()=>{
- const {flow,deps}=setup();deps.publish.getManaged.mockResolvedValueOnce({...record,product:{...record.product,state_version:"999"}});await flow.preview(url);flow.select("one");await flow.confirm();expect(deps.publish.publishDraft.mock.calls[0]?.[1]).toEqual({audience:"owner",expected_state_version:"4"})
+ const {flow,deps}=setup();deps.publish.getManaged.mockRejectedValueOnce(new HubClientError("http", "Read unavailable after draft creation", "skill_dependency_unavailable", 503));deps.publish.getManaged.mockResolvedValueOnce({...record,product:{...record.product,state_version:"999"}});await flow.preview(url);flow.select("one");await flow.confirm();expect(flow.getSnapshot()).toMatchObject({kind:"unknown",stage:"read",skillId:"revision"});expect(deps.github.import).toHaveBeenCalledTimes(1);await flow.retry();expect(deps.github.import).toHaveBeenCalledTimes(1);expect(flow.getSnapshot().kind).toBe("completed");expect(deps.publish.publishDraft.mock.calls[0]?.[1]).toEqual({audience:"owner",expected_state_version:"4"})
 })
 
 it("only clears a completed intent and permits a second import with fresh command keys",async()=>{
+ // A 404 at the aggregate Import boundary can also follow draft creation;
+ // it is not proof that changing selector/key is safe.
+ const rejected=setup();rejected.deps.github.import.mockRejectedValueOnce(new HubClientError("http", "Not found", "skill_not_found", 404));await rejected.flow.preview(url);rejected.flow.select("one");await rejected.flow.confirm();expect(rejected.flow.getSnapshot()).toMatchObject({kind:"failed",stage:"import"});rejected.flow.finishCompleted();rejected.flow.retireRead();await rejected.flow.preview("https://github.com/acme/replacement");expect(rejected.deps.github.preview).toHaveBeenCalledTimes(1);expect(rejected.flow.getSnapshot()).toMatchObject({kind:"failed",stage:"import"});await rejected.flow.retry();expect(rejected.deps.github.import.mock.calls[0]?.slice(0,-1)).toEqual(rejected.deps.github.import.mock.calls[1]?.slice(0,-1))
  const {flow,deps}=setup();await flow.preview(url);flow.select("one");deps.github.import.mockRejectedValueOnce(new HubClientError("network","lost",null,null));await flow.confirm();flow.finishCompleted();expect(flow.getSnapshot().kind).toBe("unknown");await flow.retry();expect(flow.getSnapshot().kind).toBe("completed");flow.finishCompleted();expect(flow.getSnapshot().kind).toBe("idle");deps.key.mockReturnValue("fresh-key");await flow.preview(url);flow.select("two");await flow.confirm();expect(flow.getSnapshot().kind).toBe("completed");expect(deps.github.import.mock.calls.at(-1)?.[1]).toBe("fresh-key");expect(deps.github.import.mock.calls.at(-1)?.[0].path).toBe("two")
+})
+
+
+it("retires recheck preview facts but preserves unknown write selectors and keys", async () => {
+ const {flow,deps}=setup();deps.github.preview.mockRejectedValueOnce(new HubClientError("http", "Preview provider unavailable", "skill_response_invalid", 502));await flow.preview(url);expect(flow.getSnapshot()).toMatchObject({kind:"failed",stage:"preview"});await flow.preview(url);flow.retireRead();expect(flow.getSnapshot()).toEqual({kind:"idle"});await flow.preview(url);flow.select("one");deps.github.import.mockRejectedValueOnce(new HubClientError("network","unknown",null,null));await flow.confirm();flow.retireRead();expect(flow.getSnapshot()).toMatchObject({kind:"unknown",stage:"import"});await flow.retry();expect(deps.github.import.mock.calls[1]?.slice(0,-1)).toEqual(deps.github.import.mock.calls[0]?.slice(0,-1));expect(flow.getSnapshot().kind).toBe("completed");flow.retireRead();expect(flow.getSnapshot()).toEqual({kind:"idle"})
 })

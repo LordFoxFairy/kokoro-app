@@ -4,6 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest"
 import { LocaleProvider } from "@/i18n/context"
 import { KokoroProjectWorkspace } from "@/features/app/kokoro-project-workspace"
 import { ProjectResourceUploadError } from "@/features/app/project-resource-upload"
+import { useProjectSkills } from "@/features/app/use-project-skills"
 
 const capabilities = {
   instructions: true,
@@ -34,7 +35,7 @@ function contextCard(container: HTMLElement, kind: string): HTMLElement {
 }
 
 beforeEach(() => window.localStorage.setItem("kokoro.locale", "zh"))
-afterEach(cleanup)
+afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
 it("项目右栏使用固定的 75×64 空态插图且不进入读屏名称", () => {
   const { container } = render(
@@ -50,6 +51,7 @@ it("项目右栏使用固定的 75×64 空态插图且不进入读屏名称", ()
 
   for (const src of [
     "/site-assets/project-website.webp",
+    "/site-assets/project-skills.svg",
     "/site-assets/project-scheduled-tasks.svg",
   ]) {
     const image = [...container.querySelectorAll("img")]
@@ -59,6 +61,20 @@ it("项目右栏使用固定的 75×64 空态插图且不进入读屏名称", ()
     expect(image).toHaveAttribute("alt", "")
     expect(image).toHaveAttribute("aria-hidden", "true")
   }
+})
+
+it("项目上下文和最近会话在编辑区之前，空指令保留独立添加入口", () => {
+  render(<LocaleProvider><KokoroProjectWorkspace preview
+    brandName="Kokoro" composer={<section aria-label="消息编辑区">composer</section>}
+    onPrompt={vi.fn()} workspaceCapabilities={capabilities}
+  /></LocaleProvider>)
+  const context = screen.getByRole("complementary", { name: "工作区状态" })
+  const conversations = screen.getByRole("region", { name: /最近|项目会话/ })
+  const composer = screen.getByRole("region", { name: "消息编辑区" })
+  expect(context.compareDocumentPosition(conversations) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  expect(conversations.compareDocumentPosition(composer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  fireEvent.click(within(context).getByRole("button", { name: "新增指令" }))
+  expect(screen.getByRole("textbox", { name: "项目指令" })).toBeInTheDocument()
 })
 
 it("项目任务列表区分加载态和错误态，并提供重试入口", () => {
@@ -298,40 +314,107 @@ it("项目指令历史使用双栏版本 Dialog 并可切换正文", () => {
   expect(historyDialog).toHaveTextContent("上一版规则")
 })
 
-it("在项目页内打开独立技能 Dialog，并持久化技能启用状态", async () => {
-  const onOpenSettings = vi.fn()
-  const onSetProjectSkillEnabled = vi.fn().mockResolvedValue(undefined)
+const skillProjectId = "project_11111111-1111-4111-8111-111111111111"
+const skillProject = { id: skillProjectId, name: "Skills project", slug: "skills-project", description: "", created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-01T01:00:00Z" }
+const projectSkill = { installation_id: "project-install-1", source_ref: "skill:revision-1", series_id: "series-1", revision: "1", installed: true, enabled: true,
+  installed_at: "2026-10-10T00:00:00Z", updated_at: "2026-10-10T00:00:00Z", display_name: "Project Skill", summary: "Exact project installation", source_status: "active",
+  skill_updated_at: "2026-10-10T00:00:00Z", example_prompts: [], category_keys: [], product: { publication_audience: "owner", state_version: "5" }, tags: [] }
+const skillReply = (data: unknown, status = 200) => Response.json(data, { status, headers: { "cache-control": "no-store", "x-request-id": "project-skills-ui" } })
+const skillWorkspace = (boundary = { admitted: true, subject: "project-reader", generation: 1 }, loading = false) => <LocaleProvider><KokoroProjectWorkspace
+  composer={<div>composer</div>} onPrompt={vi.fn()} workspaceCapabilities={capabilities} preview={false} projectRef={skillProjectId}
+  projectDetail={loading ? { status: "loading" } : { status: "ready", data: skillProject }} projectReadBoundary={boundary} /></LocaleProvider>
+const openProjectSkills = (container: HTMLElement) => fireEvent.click(within(contextCard(container, "resources-skills")).getByRole("button", { name: /^技能$/ }))
 
-  const { container } = render(
-    <LocaleProvider>
-      <KokoroProjectWorkspace preview
-        brandName="Kokoro"
-        composer={<div>composer</div>}
-        onPrompt={vi.fn()}
-        onOpenSettings={onOpenSettings}
-        onSetProjectSkillEnabled={onSetProjectSkillEnabled}
-        workspaceCapabilities={capabilities}
-      />
-    </LocaleProvider>,
-  )
+it("项目不可用版本不能启用或新增默认，但仍可停用、移除及显式更新", async () => {
+  let item = { ...projectSkill, source_status: "withdrawn", enabled: false, available_update: { source_ref: "skill:revision-2", revision: "2" } }
+  const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    if (init?.method === "PUT") {
+      item = { ...item, enabled: false }
+      return skillReply({ data: { installation: item, change: "disabled", event_id: "disabled-withdrawn", replayed: false } })
+    }
+    if (url.endsWith("skill-selection")) return skillReply({ data: { project_id: skillProjectId, installation_ids: [] } })
+    return skillReply({ data: [item] })
+  })
+  vi.stubGlobal("fetch", fetchMock)
+  const view = render(skillWorkspace()); openProjectSkills(view.container)
+  const toggle = await screen.findByRole("switch", { name: "启用 Project Skill" })
+  expect(toggle).toBeDisabled()
+  expect(screen.getByRole("checkbox", { name: "默认使用 Project Skill" })).toBeDisabled()
+  expect(screen.getByText("此技能版本当前不可用")).toBeVisible()
+  expect(screen.getByRole("button", { name: "移除技能" })).toBeEnabled()
+  expect(screen.getByRole("button", { name: "更新技能" })).toBeEnabled()
+  fireEvent.click(toggle)
+  expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(0)
 
-  const resourcesCard = contextCard(container, "resources-skills")
-  fireEvent.click(at(
-    within(resourcesCard).getAllByRole("button", { name: /^技能$/ }),
-    0,
-    "skills trigger",
-  ))
+  item = { ...item, enabled: true }
+  view.rerender(skillWorkspace({ admitted: true, subject: "project-reader", generation: 2 }))
+  await waitFor(() => expect(screen.getByRole("switch", { name: "启用 Project Skill" })).toBeEnabled())
+  fireEvent.click(screen.getByRole("switch", { name: "启用 Project Skill" }))
+  await waitFor(() => expect(screen.getByRole("switch", { name: "启用 Project Skill" })).not.toBeChecked())
+  expect(screen.getByRole("switch", { name: "启用 Project Skill" })).toBeDisabled()
+  const writes = fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")
+  expect(writes).toHaveLength(1)
+  expect(JSON.parse(String(writes[0]?.[1]?.body))).toEqual({ enabled: false })
+})
 
-  const dialog = screen.getByRole("dialog")
-  expect(dialog).toHaveTextContent("项目技能")
-  expect(onOpenSettings).not.toHaveBeenCalled()
+it("项目旧启用回调按当前来源状态拒绝新命令，恢复active后可显式启用", async () => {
+  let item = { ...projectSkill, enabled: false }
+  const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    if (init?.method === "PUT") {
+      item = { ...item, enabled: true }
+      return skillReply({ data: { installation: item, change: "enabled", event_id: "enabled-active", replayed: false } })
+    }
+    if (url.endsWith("skill-selection")) return skillReply({ data: { project_id: skillProjectId, installation_ids: [] } })
+    return skillReply({ data: [item] })
+  })
+  vi.stubGlobal("fetch", fetchMock)
+  const view = renderHook(() => useProjectSkills(skillProjectId, { admitted: true, subject: "project-reader", generation: 1 }, true))
+  await waitFor(() => expect(view.result.current.status).toBe("ready"))
+  const previousEnable = view.result.current.execute
+  item = { ...item, source_status: "withdrawn" }
+  act(() => view.result.current.reload())
+  await waitFor(() => expect(view.result.current.facts?.items[0]?.source_status).toBe("withdrawn"))
+  let result: boolean | undefined
+  await act(async () => { result = await previousEnable({ kind: "enabled", id: item.installation_id, enabled: true }) })
+  expect(result).toBe(false)
+  expect(view.result.current.pending).toBeNull()
+  expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(0)
 
-  const skillSwitch = screen.getByRole("switch", { name: "技能构建器" })
-  expect(skillSwitch).toBeChecked()
-  fireEvent.click(skillSwitch)
+  item = { ...item, source_status: "active" }
+  act(() => view.result.current.reload())
+  await waitFor(() => expect(view.result.current.facts?.items[0]?.source_status).toBe("active"))
+  await act(async () => { result = await view.result.current.execute({ kind: "enabled", id: item.installation_id, enabled: true }) })
+  expect(result).toBe(true)
+  expect(view.result.current.facts?.items[0]?.enabled).toBe(true)
+  expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(1)
+})
 
-  await waitFor(() => expect(onSetProjectSkillEnabled).toHaveBeenCalledWith("skill-builder", false))
-  expect(skillSwitch).not.toBeChecked()
+it("在独立项目技能面板读取真实安装，显式保存默认安装 ID 而非名称", async () => {
+  let selected: string[] = []
+  const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    if (init?.method === "PUT") { selected = (JSON.parse(String(init.body)) as { installation_ids: string[] }).installation_ids; return skillReply({ data: { project_id: skillProjectId, installation_ids: selected } }) }
+    if (url.endsWith("skill-selection")) return skillReply({ data: { project_id: skillProjectId, installation_ids: selected } })
+    const next = new URL(url, "http://localhost").searchParams.get("cursor")
+    return skillReply(next ? { data: [{ ...projectSkill, installation_id: "project-install-2", display_name: "Page Two" }] } : { data: [projectSkill], meta: { next_cursor: "opaque +/=" } })
+  })
+  vi.stubGlobal("fetch", fetchMock)
+  const view = render(skillWorkspace()); openProjectSkills(view.container)
+  const checkbox = await screen.findByRole("checkbox", { name: "默认使用 Project Skill" })
+  expect(checkbox).not.toBeChecked(); fireEvent.click(checkbox)
+  fireEvent.change(screen.getByRole("textbox", { name: "搜索技能" }), { target: { value: "报表" } })
+  await screen.findByRole("checkbox", { name: "默认使用 Project Skill" })
+  expect(screen.getByRole("checkbox", { name: "默认使用 Project Skill" })).toBeChecked()
+  fireEvent.click(screen.getByRole("button", { name: "加载更多" }))
+  await screen.findByRole("checkbox", { name: "默认使用 Page Two" })
+  expect(fetchMock.mock.calls.some(([url]) => new URL(url, "http://localhost").searchParams.get("query") === "报表" && new URL(url, "http://localhost").searchParams.get("cursor") === "opaque +/=")).toBe(true)
+  fireEvent.click(screen.getByRole("button", { name: "保存默认技能" }))
+  await waitFor(() => expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(1))
+  await waitFor(() => expect(screen.getByRole("checkbox", { name: "默认使用 Project Skill" })).toBeChecked())
+  const [url, init] = fetchMock.mock.calls.find(([, init]) => init?.method === "PUT")!
+  expect(url).toBe(`/api/hub/projects/${skillProjectId}/skill-selection`)
+  expect(JSON.parse(String(init?.body))).toEqual({ installation_ids: [projectSkill.installation_id] })
+  expect(new Headers(init?.headers).get("idempotency-key")).toBeTruthy()
+  expect(fetchMock.mock.calls.every(([url]) => !url.includes("/skills/skill-builder"))).toBe(true)
 })
 
 it("资源卡的上传与搜索网络动作分别进入对应状态", async () => {
@@ -384,36 +467,46 @@ it("资源筛选与技能搜索会实际过滤本地预览数据", () => {
   fireEvent.click(within(resourcesCard).getByRole("button", { name: /^技能$/ }))
   const skillsDialog = screen.getByRole("dialog", { name: "项目技能" })
   fireEvent.change(within(skillsDialog).getByRole("textbox", { name: "搜索技能" }), { target: { value: "不存在" } })
-  expect(skillsDialog).toHaveTextContent("暂无已添加的技能")
+  expect(skillsDialog).toHaveTextContent("暂无符合筛选条件的安装")
   expect(skillsDialog).not.toHaveTextContent("技能构建器")
 })
 
-it("技能启用状态保存失败时回滚视觉状态", async () => {
-  const onSetProjectSkillEnabled = vi.fn().mockRejectedValue(new Error("network"))
-
-  const { container } = render(
-    <LocaleProvider>
-      <KokoroProjectWorkspace preview
-        brandName="Kokoro"
-        composer={<div>composer</div>}
-        onPrompt={vi.fn()}
-        onSetProjectSkillEnabled={onSetProjectSkillEnabled}
-        workspaceCapabilities={capabilities}
-      />
-    </LocaleProvider>,
-  )
-
-  const resourcesCard = contextCard(container, "resources-skills")
-  fireEvent.click(at(
-    within(resourcesCard).getAllByRole("button", { name: /^技能$/ }),
-    0,
-    "skills failure trigger",
-  ))
-  const skillSwitch = screen.getByRole("switch", { name: "技能构建器" })
-  fireEvent.click(skillSwitch)
-
-  await waitFor(() => expect(onSetProjectSkillEnabled).toHaveBeenCalledWith("skill-builder", false))
-  await waitFor(() => expect(skillSwitch).toBeChecked())
+it("未知默认命令跨重核只显式重放原 key/body，ACK 后回读失败不再写", async () => {
+  let writes = 0, failReads = false
+  const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    if (init?.method === "PUT") { writes++; if (writes === 1) throw new Error("response lost"); failReads = true; return skillReply({ data: { project_id: skillProjectId, installation_ids: [projectSkill.installation_id] } }) }
+    if (failReads) throw new Error("read unavailable")
+    if (url.endsWith("skill-selection")) return skillReply({ data: { project_id: skillProjectId, installation_ids: [] } })
+    return skillReply({ data: [projectSkill] })
+  })
+  vi.stubGlobal("fetch", fetchMock)
+  const view = render(skillWorkspace()); openProjectSkills(view.container)
+  fireEvent.click(await screen.findByRole("checkbox", { name: "默认使用 Project Skill" }))
+  fireEvent.click(screen.getByRole("button", { name: "保存默认技能" }))
+  await screen.findByText("操作结果尚未确认。重试会使用原操作，不会创建新的请求。")
+  const stableDialog = screen.getByRole("dialog", { name: "项目技能" })
+  view.rerender(skillWorkspace({ admitted: false, subject: "project-reader", generation: 2 }, true))
+  expect(screen.getByRole("dialog", { name: "项目技能" })).toBe(stableDialog)
+  expect(screen.queryByText("Exact project installation")).not.toBeInTheDocument()
+  view.rerender(skillWorkspace({ admitted: true, subject: "project-reader", generation: 3 }))
+  await screen.findByRole("checkbox", { name: "默认使用 Project Skill" })
+  expect(writes).toBe(1)
+  fireEvent.click(screen.getByRole("button", { name: "重试原操作" }))
+  await screen.findByText("操作已确认，但读取失败。请重新读取，不会重复操作。")
+  const commands = fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")
+  expect(commands).toHaveLength(2)
+  expect(commands[1]?.[1]?.body).toBe(commands[0]?.[1]?.body)
+  expect(new Headers(commands[1]?.[1]?.headers).get("idempotency-key")).toBe(new Headers(commands[0]?.[1]?.headers).get("idempotency-key"))
+  fireEvent.click(screen.getByRole("button", { name: "重新读取" }))
+  await screen.findByText("操作已确认，但读取失败。请重新读取，不会重复操作。")
+  expect(writes).toBe(2)
+  failReads = false
+  fireEvent.click(within(screen.getByRole("dialog", { name: "项目技能" })).getByRole("button", { name: "关闭对话框" }))
+  openProjectSkills(view.container)
+  await screen.findByRole("checkbox", { name: "默认使用 Project Skill" })
+  await waitFor(() => expect(screen.queryByText("操作已确认，但读取失败。请重新读取，不会重复操作。")).not.toBeInTheDocument())
+  expect(writes).toBe(2)
+  expect(screen.getByRole("checkbox", { name: "默认使用 Project Skill" })).not.toBeChecked() // fresh GET, not the old acknowledged selection
 })
 
 it("网站入口打开项目级选择弹窗而不是向 Composer 注入提示词", () => {
@@ -532,6 +625,8 @@ it("正式项目标题/时间只消费 canonical detail，切换 loading/error �
   expect(screen.queryByText("今天更新")).toBeNull()
   view.rerender(<LocaleProvider><KokoroProjectWorkspace {...props} projectRef="canonical-B" projectDetail={{ status: "loading" }} /></LocaleProvider>)
   expect(screen.queryByRole("heading", { name: "真正的项目名" })).toBeNull()
+  expect(screen.queryByText("项目不可用")).toBeNull()
+  expect(screen.getByTestId("project-title-loading")).toHaveAttribute("aria-hidden", "true")
   expect(screen.getByTestId("project-detail-loading")).toHaveTextContent("正在加载项目…")
   view.rerender(<LocaleProvider><KokoroProjectWorkspace {...props} projectDetail={{ status: "error", retryable: false }} /></LocaleProvider>)
   expect(screen.getByTestId("project-detail-error")).toBeInTheDocument()
@@ -766,4 +861,126 @@ it("Project rename revocation clears sensitive intent; a route change aborts lat
     expect(view.result.current.projectRename.name).toBe("")
     expect(options.updateDraft).not.toHaveBeenCalled()
   } finally { view.unmount(); fetchMock.mockRestore(); window.history.replaceState(null, "", originalUrl) }
+})
+
+it("项目技能安装、启停、显式更新和移除使用真实 pin，安装不自动设为默认", async () => {
+  let installed = false, selected: string[] = []
+  let item = { ...projectSkill, enabled: false, available_update: { source_ref: "skill:revision-2", revision: "2" } as { source_ref: string; revision: string } | undefined }
+  const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    if (url.startsWith("/api/hub/self/skill-installations")) return skillReply({ data: [{ ...projectSkill, installation_id: "personal-install-1" }] })
+    if (url.endsWith("skill-selection")) {
+      if (init?.method === "PUT") selected = (JSON.parse(String(init.body)) as { installation_ids: string[] }).installation_ids
+      return skillReply({ data: { project_id: skillProjectId, installation_ids: selected } })
+    }
+    if (init?.method === "POST" && url.endsWith("/update")) { item = { ...item, source_ref: "skill:revision-2", revision: "2", available_update: undefined }; return skillReply({ data: { installation: item, change: "upgraded", event_id: "event-updated", replayed: false } }) }
+    if (init?.method === "POST") { installed = true; return skillReply({ data: { installation: item, change: "installed", event_id: "event-installed", replayed: false } }) }
+    if (init?.method === "PUT") { item = { ...item, enabled: true }; return skillReply({ data: { installation: item, change: "enabled", event_id: "event-enabled", replayed: false } }) }
+    if (init?.method === "DELETE") { installed = false; return skillReply({ data: { installation: { ...item, installed: false, enabled: false, removed_at: "2026-10-11T00:00:00Z" }, change: "removed", event_id: "event-removed", replayed: false } }) }
+    return skillReply({ data: installed ? [item] : [] })
+  })
+  vi.stubGlobal("fetch", fetchMock)
+  const view = render(skillWorkspace()); openProjectSkills(view.container)
+  const dialog = screen.getByRole("dialog", { name: "项目技能" })
+  await within(dialog).findByText("尚无技能")
+  expect(within(dialog).queryByRole("button", { name: "保存默认技能" })).toBeNull()
+  fireEvent.pointerDown(within(dialog).getByRole("button", { name: "添加" }), { button: 0, ctrlKey: false })
+  fireEvent.click(await screen.findByRole("menuitem", { name: "从我的技能导入" }))
+  const source = await within(dialog).findByRole("heading", { name: "Project Skill" })
+  fireEvent.click(within(source.closest("article")!).getByRole("button", { name: "新增" }))
+  await within(dialog).findByRole("switch", { name: "启用 Project Skill" })
+  expect(screen.getByRole("switch", { name: "启用 Project Skill" })).not.toBeChecked()
+  expect(screen.getByRole("checkbox", { name: "默认使用 Project Skill" })).toBeDisabled()
+  expect(selected).toEqual([])
+  fireEvent.click(screen.getByRole("switch", { name: "启用 Project Skill" }))
+  await waitFor(() => expect(screen.getByRole("switch", { name: "启用 Project Skill" })).toBeChecked())
+  fireEvent.click(screen.getByRole("checkbox", { name: "默认使用 Project Skill" }))
+  fireEvent.click(screen.getByRole("button", { name: "保存默认技能" }))
+  await waitFor(() => expect(screen.getByRole("button", { name: "移除技能" })).toBeDisabled())
+  expect(selected).toEqual([projectSkill.installation_id])
+  const updateTrigger = screen.getByRole("button", { name: "更新技能" })
+  updateTrigger.focus()
+  fireEvent.click(updateTrigger)
+  fireEvent.click(within(screen.getByRole("dialog", { name: "更新技能" })).getByRole("button", { name: "取消" }))
+  await waitFor(() => expect(updateTrigger).toHaveFocus())
+  expect(fetchMock.mock.calls.filter(([url]) => url.endsWith("/update"))).toHaveLength(0)
+  fireEvent.click(updateTrigger)
+  const confirmation = screen.getByRole("dialog", { name: "更新技能" })
+  expect(confirmation).toHaveTextContent("skill:revision-1")
+  expect(confirmation).toHaveTextContent("skill:revision-2")
+  fireEvent.click(within(confirmation).getByRole("button", { name: "确认" }))
+  await within(dialog).findByText("版本 2")
+  await waitFor(() => expect(dialog).toHaveFocus())
+  const update = fetchMock.mock.calls.find(([url]) => url.endsWith("/update"))!
+  expect(update[0]).toBe(`/api/hub/projects/${skillProjectId}/skill-installations/${projectSkill.installation_id}/update`)
+  expect(JSON.parse(String(update[1]?.body))).toEqual({ expected_source_ref: "skill:revision-1", source_ref: "skill:revision-2" })
+  fireEvent.click(screen.getByRole("checkbox", { name: "默认使用 Project Skill" }))
+  fireEvent.click(screen.getByRole("button", { name: "保存默认技能" }))
+  await waitFor(() => expect(screen.getByRole("button", { name: "移除技能" })).toBeEnabled())
+  const removeTrigger = screen.getByRole("button", { name: "移除技能" })
+  removeTrigger.focus()
+  fireEvent.click(removeTrigger)
+  fireEvent.keyDown(screen.getByRole("dialog", { name: "移除技能" }), { key: "Escape", code: "Escape" })
+  await waitFor(() => expect(removeTrigger).toHaveFocus())
+  expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "DELETE")).toHaveLength(0)
+  fireEvent.click(removeTrigger)
+  fireEvent.click(within(screen.getByRole("dialog", { name: "移除技能" })).getByRole("button", { name: "确认" }))
+  await within(dialog).findByText("尚无技能")
+  expect(selected).toEqual([])
+  const installs = fetchMock.mock.calls.filter(([url, init]) => url.endsWith("/skill-installations") && init?.method === "POST")
+  expect(installs).toHaveLength(1)
+  expect(JSON.parse(String(installs[0]?.[1]?.body))).toEqual({ source_ref: "skill:revision-1" })
+  expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "DELETE")).toHaveLength(1)
+})
+
+it("项目技能跨账号退休旧写与正文，A→B→A 不复活命令或旧事实", async () => {
+  let actor = "A", finish: ((response: Response) => void) | undefined, commandSignal: AbortSignal | undefined
+  const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    if (init?.method === "PUT") { commandSignal = init.signal as AbortSignal; return new Promise<Response>(resolve => { finish = resolve }) }
+    if (url.endsWith("skill-selection")) return skillReply({ data: { project_id: skillProjectId, installation_ids: [] } })
+    return skillReply({ data: [{ ...projectSkill, display_name: `Private ${actor}` }] })
+  })
+  vi.stubGlobal("fetch", fetchMock)
+  const view = render(skillWorkspace()); openProjectSkills(view.container)
+  fireEvent.click(await screen.findByRole("checkbox", { name: "默认使用 Private A" }))
+  fireEvent.click(screen.getByRole("button", { name: "保存默认技能" }))
+  await waitFor(() => expect(finish).toBeTypeOf("function"))
+  actor = "B"; view.rerender(skillWorkspace({ admitted: true, subject: "reader-B", generation: 2 }))
+  expect(commandSignal?.aborted).toBe(true)
+  expect(screen.queryByText("Private A")).not.toBeInTheDocument()
+  openProjectSkills(view.container)
+  await screen.findByRole("checkbox", { name: "默认使用 Private B" })
+  await act(async () => { finish?.(skillReply({ data: { project_id: skillProjectId, installation_ids: [projectSkill.installation_id] } })); await Promise.resolve() })
+  expect(screen.getByRole("checkbox", { name: "默认使用 Private B" })).not.toBeChecked()
+  expect(screen.queryByText("操作结果尚未确认。重试会使用原操作，不会创建新的请求。")).not.toBeInTheDocument()
+  actor = "fresh A"; view.rerender(skillWorkspace({ admitted: true, subject: "project-reader", generation: 3 }))
+  openProjectSkills(view.container)
+  expect(screen.queryByText("Private B")).not.toBeInTheDocument()
+  await screen.findByRole("checkbox", { name: "默认使用 Private fresh A" })
+  expect(screen.queryByText("Private A")).not.toBeInTheDocument()
+  expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(1)
+})
+
+it("官方来源选择复用正式目录，装入精确 version UID 而不把目录名称或 series 当 pin", async () => {
+  let installed = false
+  const official = { ...projectSkill, display_name: "Official Skill", series_id: "official-series", source_ref: "skill:official-revision", revision: "7" }
+  const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    if (url.endsWith("ListHubSkills")) return skillReply({ skills: [{ skillId: "official-series", displayName: "Official Skill", publisherType: "SKILL_HUB_PUBLISHER_TYPE_MANUS_OFFICIAL", currentVersion: { versionUid: "official-revision" } }], tagOptions: {} })
+    if (url.endsWith("ListSkills")) return skillReply({ officialSkills: [], userAddedSkills: [] })
+    if (url.endsWith("skill-selection")) return skillReply({ data: { project_id: skillProjectId, installation_ids: [] } })
+    if (init?.method === "POST") { installed = true; return skillReply({ data: { installation: official, change: "installed", event_id: "official-install", replayed: false } }) }
+    return skillReply({ data: installed ? [official] : [] })
+  })
+  vi.stubGlobal("fetch", fetchMock)
+  const view = render(skillWorkspace()); openProjectSkills(view.container)
+  const dialog = screen.getByRole("dialog", { name: "项目技能" })
+  await within(dialog).findByText("尚无技能")
+  fireEvent.pointerDown(within(dialog).getByRole("button", { name: "新增" }), { button: 0, ctrlKey: false })
+  fireEvent.click(await screen.findByRole("menuitem", { name: "从官方技能添加" }))
+  const title = await within(dialog).findByRole("heading", { name: "Official Skill" })
+  fireEvent.click(within(title.closest("article")!).getByRole("button", { name: "新增" }))
+  const choice = await within(dialog).findByRole("checkbox", { name: "默认使用 Official Skill" })
+  expect(choice).not.toBeChecked()
+  const writes = fetchMock.mock.calls.filter(([url, init]) => url.endsWith("/skill-installations") && init?.method === "POST")
+  expect(writes).toHaveLength(1)
+  expect(JSON.parse(String(writes[0]?.[1]?.body))).toEqual({ source_ref: "skill:official-revision" })
 })

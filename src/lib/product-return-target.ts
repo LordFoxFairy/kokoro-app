@@ -5,12 +5,19 @@ export const DEFAULT_PRODUCT_RETURN_TARGET = "/app" as ProductReturnTarget
 const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
 const PROJECT = new RegExp(`^project_${UUID}$`, "u")
 const CONVERSATION = new RegExp(`^conv_${UUID}$`, "u")
-const LIBRARY_TYPES = new Set(["all", "slides", "websites", "documents", "spreadsheets", "images", "media", "other"])
+const LIBRARY_TYPES = new Set(["all", "documents", "slides", "spreadsheets", "images", "video", "audio", "other"])
 const SURFACES = new Set(["/app", "/app/agents", "/app/plugins", "/app/scheduled", "/app/library", "/app/skills"])
 
 /** Parse before URL normalization; reject encoded paths and ambiguous query input. */
 export function parseProductReturnTarget(raw: string): ProductReturnTarget | null {
-  if (raw.length === 0 || raw.length > 2048 || /[\\\u0000-\u001f\u007f#]/u.test(raw)) return null
+  if (raw.length === 0 || raw.length > 2048 || /[\\\u0000-\u001f\u007f]/u.test(raw)) return null
+  const fragment = raw.indexOf("#")
+  if (fragment !== -1) {
+    const base = parseProductReturnTarget(raw.slice(0, fragment))
+    const settings = raw.slice(fragment)
+    return base !== null && base.startsWith("/app") && /^#\/account\/settings\/(?:account|appearance|general|personalization|chat|shortcuts|credits|subscription|team|mcp|skills(?:\/(?:all|personal|official|thirdParty|explore))?)$/u.test(settings)
+      ? `${base}${settings}` as ProductReturnTarget : null
+  }
   const separator = raw.indexOf("?")
   const pathname = separator === -1 ? raw : raw.slice(0, separator)
   if (pathname.startsWith("/skills/shared/")) {
@@ -43,7 +50,7 @@ export function parseProductReturnTarget(raw: string): ProductReturnTarget | nul
       if (key === "tab") { if (value !== "calendar" && value !== "list") return null; if (value === "calendar") continue }
       else if (key !== "project_id" || !PROJECT.test(value)) return null
     } else if (pathname === "/app/library") {
-      if (key === "tab") { if (value !== "artifacts") return null }
+      if (key === "tab") { if (value !== "artifacts" && value !== "files") return null }
       else if (key === "type") { if (!LIBRARY_TYPES.has(value)) return null; if (value === "all") continue }
       else if (key === "view") { if (value !== "grid" && value !== "list") return null; if (value === "grid") continue }
       else if (key === "favorites") { if (value !== "1") return null }

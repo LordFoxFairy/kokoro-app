@@ -1,3 +1,4 @@
+import { createProjectSkillSelectionClient } from "@/hub/project-skill-selection-client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -309,7 +310,7 @@ describe("hub client", () => {
   });
 
   it("uses formal personal connector V1 routes, strict envelopes, idempotency, and CAS payloads", async () => {
-    const connector = {
+    const connector = { availability: "available" as const,
       connector_id: "connector-1",
       connector_type: "mcp",
       provider_key: "provider-one",
@@ -344,6 +345,8 @@ describe("hub client", () => {
               connector: {
                 ...connector,
                 connector_id: "connector-2",
+                display_name: "New connector",
+                description: "",
                 status: "pending",
                 enabled: false,
                 state_version: "1",
@@ -409,23 +412,23 @@ describe("hub client", () => {
         connector_type: "mcp",
         display_name: "New connector",
         description: "",
-      }),
+      }, "provider-create-original"),
     ).resolves.toMatchObject({ connector_id: "connector-2", enabled: false });
     await expect(
       client.updateMcpConnector("connector-1", {
         display_name: "Renamed",
         description: "Ready",
         expected_state_version: "2",
-      }),
+      }, "management-key"),
     ).resolves.toMatchObject({ display_name: "Renamed", state_version: "3" });
     await expect(
       client.setMcpConnectorEnabled("connector-1", {
         enabled: false,
         expected_state_version: "2",
-      }),
+      }, "management-key"),
     ).resolves.toMatchObject({ enabled: false });
     await expect(
-      client.removeMcpConnector("connector-1", { expected_state_version: "2" }),
+      client.removeMcpConnector("connector-1", { expected_state_version: "2" }, "management-key"),
     ).resolves.toMatchObject({ status: "revoked" });
 
     expect(
@@ -456,7 +459,7 @@ describe("hub client", () => {
     });
     expect(
       (createInit.headers as Record<string, string>)["Idempotency-Key"],
-    ).toMatch(/^mcp-connector:/u);
+    ).toBe("provider-create-original");
     expect(JSON.parse(String(createInit.body))).toEqual({
       provider_key: "provider-one",
       connector_type: "mcp",
@@ -479,7 +482,7 @@ describe("hub client", () => {
   });
 
   it("uses the exact self OAuth and Connection lifecycle routes and headers", async () => {
-    const connector = {
+    const connector = { availability: "unavailable" as const,
       connector_id: "connector-1",
       connector_type: "mcp",
       provider_key: "provider-one",
@@ -1005,7 +1008,7 @@ describe("hub client", () => {
   });
 
   it("uses the private-server V1 lifecycle and never receives supplied secret values", async () => {
-    const server = {
+    const server = { availability: "available" as const,
       server_id: "server-private",
       display_name: "Private tools",
       server_url: "https://private.example/mcp",
@@ -1031,7 +1034,7 @@ describe("hub client", () => {
       declaration_digest: "a".repeat(64),
       declarations_available: true,
     };
-    const connector = {
+    const connector = { availability: "available" as const,
       connector_id: "connector-private",
       connector_type: "mcp",
       provider_key: "private-tools",
@@ -1052,7 +1055,7 @@ describe("hub client", () => {
         publicResponse({
           data: {
             server: { ...server, state_version: "3" },
-            connector: { ...connector, state_version: "3" },
+            connector: { ...connector, enabled: true, state_version: "3" },
             declarations: [],
             replayed: false,
           },
@@ -1079,18 +1082,20 @@ describe("hub client", () => {
       server_url: "https://private.example/mcp",
       headers: [{ name: "x-api-key", value: "WRITE_ONLY" }],
       oauth_client: { client_id: "client-id", client_secret: "WRITE_ONLY" },
-    });
+    }, "register-command-key");
     const prepared = await client.preparePrivateMcpServer?.(
       "server-private",
       registered!.server.state_version,
+      "prepare-command-key",
     );
     const updated = await client.updatePrivateMcpServer?.("server-private", {
       expected_state_version: prepared!.server.state_version,
       display_name: "Renamed",
-    });
+    }, "update-command-key");
     await client.deletePrivateMcpServer?.(
       "server-private",
       updated!.server.state_version,
+      "delete-command-key",
     );
     expect(fetchMock.mock.calls.map(([path]) => path)).toEqual([
       "/api/hub/mcp/servers",
@@ -1110,10 +1115,12 @@ describe("hub client", () => {
     );
     expect(registered?.server).not.toHaveProperty("client_secret");
     expect(registered?.server.headers[0]).not.toHaveProperty("value");
-    for (const [, init] of fetchMock.mock.calls)
-      expect(
-        new Headers((init as RequestInit).headers).get("idempotency-key"),
-      ).toMatch(/^mcp-private-server:/);
+    expect(fetchMock.mock.calls.slice(0, 2).map(([, init]) =>
+      new Headers((init as RequestInit).headers).get("idempotency-key"),
+    )).toEqual(["register-command-key", "prepare-command-key"]);
+    expect(fetchMock.mock.calls.slice(2).map(([, init]) =>
+      new Headers((init as RequestInit).headers).get("idempotency-key"),
+    )).toEqual(["update-command-key", "delete-command-key"]);
   });
 
 });
@@ -1153,6 +1160,8 @@ describe("personal installation consumer", () => {
       await client.list({
         installed: false,
         enabled: false,
+        source_kind: "third_party",
+        query: "  report builder  ",
         limit: 50,
         cursor: "opaque +/=",
       }),
@@ -1161,9 +1170,24 @@ describe("personal installation consumer", () => {
       meta: { next_cursor: "opaque +/=" },
     });
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
-      "installed=false&enabled=false&limit=50&cursor=opaque+%2B%2F%3D",
+      "installed=false&enabled=false&source_kind=third_party&query=report+builder&limit=50&cursor=opaque+%2B%2F%3D",
     );
     expect(await client.get("install-1")).toEqual(installation);
+  });
+  it("routes project lifecycle to the project without changing personal defaults or exact receipts", async () => {
+    const projectId = "project_11111111-1111-4111-8111-111111111111";
+    const receipt = { installation, change: "installed", event_id: "event-1", replayed: false };
+    const fetchMock = vi.fn().mockResolvedValueOnce(publicResponse({ data: [installation] }))
+      .mockResolvedValueOnce(publicResponse({ data: receipt }));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createSkillInstallationClient({ projectId });
+    expect(await client.list({ installed: true })).toEqual({ data: [installation] });
+    expect(await client.install(installation.source_ref, "project-install-key")).toEqual(receipt);
+    expect(fetchMock.mock.calls.map(call => call[0])).toEqual([
+      `/api/hub/projects/${projectId}/skill-installations?installed=true`,
+      `/api/hub/projects/${projectId}/skill-installations`,
+    ]);
+    expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({ body: JSON.stringify({ source_ref: installation.source_ref }) });
   });
   it("keeps caller mutation key and parses real receipt instead of void", async () => {
     const receipt = {
@@ -1490,6 +1514,25 @@ it("accepts APPS only on current catalog cards and keeps unknown catalog categor
   ).toBe(false);
 });
 
+it("keeps per-read marketplace paging separate from other consumers sharing the admitted client", async () => {
+  const { createManusSkillHubClient } = await import("@/ui/skills/manus-skill-client");
+  const calls: unknown[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input).endsWith("ListHubSkills")) {
+      calls.push(JSON.parse(String(init?.body)));
+      return jsonResponse({ skills: [], tagOptions: {} });
+    }
+    return jsonResponse({ userAddedSkills: [], officialSkills: [] });
+  }));
+  const client = createManusSkillHubClient(createHubClient(), { admitted: true, subject: "shared-paging-reader", generation: 1 });
+  await client.listSkillCatalog({ pageSize: 3, shuffle: true });
+  await client.listSkillCatalog();
+  expect(calls).toEqual([
+    { pageSize: 3, shuffle: true, includeOfficialSkills: true },
+    { pageSize: 9, includeOfficialSkills: true },
+  ]);
+});
+
 it("preserves catalog revision Skill ID separately from series and checksum for package reads", async () => {
   const { createManusSkillHubClient } =
     await import("@/ui/skills/manus-skill-client");
@@ -1516,12 +1559,59 @@ it("preserves catalog revision Skill ID separately from series and checksum for 
     ),
   );
   const result =
-    await createManusSkillHubClient(createHubClient()).listSkillCatalog();
+    await createManusSkillHubClient(createHubClient(), { admitted: true, subject: "reader", generation: 1 }).listSkillCatalog();
   expect(result.skills[0]).toMatchObject({
     skill_id: "series-id",
     revision_skill_id: "revision-id",
     content_hash: "digest",
   });
+});
+
+it.each(["revision-a", "revision-b"])("keeps the installed %s distinct from the latest catalog revision", async (installedRevision) => {
+  const { createManusSkillHubClient } = await import("@/ui/skills/manus-skill-client");
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => jsonResponse(
+    String(input).endsWith("ListHubSkills")
+      ? { skills: [{ skillId: "trial-series", currentVersion: { versionUid: "revision-b" } }], tagOptions: {} }
+      : { userAddedSkills: [{ id: "trial-series", version: installedRevision, installationId: "trial-installation", added: true, enabled: true }], officialSkills: [] },
+  )));
+  const result = await createManusSkillHubClient(createHubClient(), { admitted: true, subject: "trial-reader", generation: 1 }).listSkillCatalog();
+  expect(result.skills[0]).toMatchObject({
+    skill_id: "trial-series", source_ref: "skill:revision-b", revision_skill_id: "revision-b",
+    installed_source_ref: `skill:${installedRevision}`, installation_id: "trial-installation", installed: true, enabled: true,
+  });
+});
+
+it.each([
+  [undefined, "unknown"],
+  ["SKILL_HUB_PUBLISHER_TYPE_FUTURE", "unknown"],
+  ["SKILL_HUB_PUBLISHER_TYPE_MANUS_OFFICIAL", "official"],
+  ["SKILL_HUB_PUBLISHER_TYPE_COMMUNITY", "third_party"],
+])("catalog publisher %s carries only proven source classification", async (publisherType, scope) => {
+  const { createManusSkillHubClient } = await import("@/ui/skills/manus-skill-client");
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => jsonResponse(
+    String(input).endsWith("ListHubSkills")
+      ? { skills: [{
+          skillId: "publisher-series",
+          displayName: "Published skill",
+          currentVersion: { versionUid: "publisher-revision" },
+          ...(publisherType === undefined ? {} : { publisherType }),
+        }], tagOptions: {} }
+      : { userAddedSkills: [{ id: "publisher-series", installationId: "installation-publisher", added: true, enabled: false }], officialSkills: [] },
+  )));
+  const client = createManusSkillHubClient(createHubClient(), { admitted: true, subject: "reader", generation: 1 });
+  const result = await client.listSkillCatalog();
+  expect(result.skills).toHaveLength(1);
+  expect(result.skills[0]).toMatchObject({
+    skill_id: "publisher-series", revision_skill_id: "publisher-revision",
+    source_ref: "skill:publisher-revision", installation_id: "installation-publisher",
+    installed: true, enabled: false, scope,
+  });
+  // Missing metadata is not a third-party fact. The card remains readable and
+  // bound to its real installation, but must not enter either known filter.
+  for (const filter of ["official", "third_party"] as const) {
+    const filtered = await client.listSkillCatalog({ scope: filter });
+    expect(filtered.skills).toHaveLength(scope === filter ? 1 : 0);
+  }
 });
 
 const inspected = {
@@ -1677,4 +1767,304 @@ describe("installation request total budget", () => {
     ).toMatchObject({ reason: "aborted" });
     expect(cancelled).toHaveBeenCalledOnce();
   });
+});
+
+
+describe("explicit installation update", () => {
+  const installation = {
+    installation_id: "installation-1", series_id: "series-1", source_ref: "skill:revision-b", revision: "2",
+    installed: true, enabled: false, installed_at: "2026-10-15T10:00:00Z", updated_at: "2026-10-16T10:00:00Z",
+    display_name: "Same installation", summary: "B", source_status: "active", skill_updated_at: "2026-10-16T09:00:00Z",
+    tags: [], example_prompts: [], category_keys: [], product: { publication_audience: "owner", state_version: "2" },
+  };
+  const body = { expected_source_ref: "skill:revision-a", source_ref: "skill:revision-b" };
+  const receipt = { installation, change: "upgraded", event_id: "event-update", replayed: false };
+  it("sends both frozen pins with the original key; a disabled installation stays disabled", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(publicResponse({ data: receipt })); vi.stubGlobal("fetch", fetchMock);
+    expect(await createSkillInstallationClient().update("installation-1", body, "update-key")).toEqual(receipt);
+    expect(fetchMock).toHaveBeenCalledWith("/api/hub/self/skill-installations/installation-1/update", expect.objectContaining({
+      method: "POST", headers: { "content-type": "application/json", "idempotency-key": "update-key" }, body: JSON.stringify(body), redirect: "error", cache: "no-store",
+    }));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+  it.each([
+    { ...receipt, change: "unchanged", event_id: undefined }, { ...receipt, change: "installed" },
+    { ...receipt, event_id: undefined }, { ...receipt, installation: { ...installation, installation_id: "other" } },
+    { ...receipt, installation: { ...installation, source_ref: "skill:revision-c" } },
+    { ...receipt, installation: { ...installation, installed: false, removed_at: installation.updated_at } },
+    { ...receipt, private_token: "hidden" },
+  ])("rejects an update ACK for a different command or phase %#", async wrong => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(publicResponse({ data: wrong })));
+    await expect(createSkillInstallationClient().update("installation-1", body, "update-key")).rejects.toMatchObject({ reason: "parse" });
+  });
+  it.each([
+    { ...body, expected_source_ref: "skill:revision-a\n" }, { ...body, source_ref: "skill:revision-b\n" },
+    { ...body, enabled: true }, { source_ref: body.source_ref }, { ...body, expected_source_ref: null },
+  ])("rejects invalid update input without dispatch %#", async input => {
+    const fetchMock = vi.fn(); vi.stubGlobal("fetch", fetchMock);
+    await expect(createSkillInstallationClient().update("installation-1", input as typeof body, "update-key")).rejects.toBeInstanceOf(Error);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+it("Custom API creation uses its caller command key and binds the safe ACK to the frozen input", async () => {
+  const body = { name: "Original API", environment: [{ name: "DUMMY_KEY", value: "fixture-only" }] }
+  const profile = { profile_id: "api-command-profile", name: body.name, state_version: "1", created_at: "2026-10-16T12:00:00Z", updated_at: "2026-10-16T12:00:00Z", environment: [{ name: "DUMMY_KEY", configured: true, state_version: "1", status: "active" }] }
+  const request = vi.spyOn(globalThis, "fetch").mockRejectedValueOnce(new Error("lost response"))
+    .mockImplementation(async () => publicResponse({ data: { custom_api: profile, replayed: true } }, 201))
+  const hub = createHubClient()
+  await expect(hub.createCustomApi!(body, "original-api-key")).rejects.toBeInstanceOf(HubClientError)
+  await expect(hub.createCustomApi!(body, "original-api-key")).resolves.toEqual(profile)
+  expect(request).toHaveBeenCalledTimes(2)
+  for (const [path, init] of request.mock.calls) {
+    expect(path).toBe("/api/hub/connectors/custom-apis")
+    expect(new Headers(init?.headers).get("idempotency-key")).toBe("original-api-key")
+    expect(JSON.parse(String(init?.body))).toEqual(body)
+  }
+  request.mockImplementation(async () => publicResponse({ data: { custom_api: { ...profile, name: "Another API" }, replayed: false } }, 201))
+  await expect(hub.createCustomApi!(body, "binding-check-key")).rejects.toMatchObject({ reason: "parse" })
+})
+
+it.each(["", "invalid\nkey", "k".repeat(192)])("Custom API rejects an invalid caller key before dispatch", async key => {
+  const request = vi.fn<typeof fetch>()
+  vi.stubGlobal("fetch", request)
+  await expect(createHubClient().createCustomApi!({ name: "Valid API", environment: [] }, key)).rejects.toBeInstanceOf(Error)
+  expect(request).not.toHaveBeenCalled()
+})
+
+
+it("MCP JSON import keeps its caller key and entire original document and rejects an unrelated ACK", async () => {
+  const document = ' {"mcpServers":{"Original import":{"type":"streamableHttp","url":"https://mcp.example.test/original"}}} '
+  const server = { availability: "unavailable" as const, server_id: "json-server", display_name: "Original import", server_url: "https://mcp.example.test/original", status: "pending", state_version: "1", headers: [], prepare_status: "pending_prepare", declarations: [], declarations_available: false }
+  const connector = { availability: "unavailable" as const, connector_id: "json-connector", connector_type: "mcp", provider_key: "private-json", server_id: server.server_id, status: "pending", approved_scopes: [], enabled: false, state_version: "1" }
+  const receipt = { imports: [{ server, connector }], replayed: true }
+  const request = vi.fn<typeof fetch>().mockRejectedValueOnce(new Error("lost response"))
+    .mockImplementation(async () => publicResponse({ data: receipt }, 201))
+  vi.stubGlobal("fetch", request)
+  const hub = createHubClient()
+  await expect(hub.importPrivateMcpJson!(document, "original-json-key")).rejects.toBeInstanceOf(HubClientError)
+  await expect(hub.importPrivateMcpJson!(document, "original-json-key")).resolves.toEqual(receipt)
+  for (const [path, init] of request.mock.calls) {
+    expect(path).toBe("/api/hub/mcp/servers/import")
+    expect(new Headers(init?.headers).get("idempotency-key")).toBe("original-json-key")
+    expect(JSON.parse(String(init?.body))).toEqual({ config_json: document })
+  }
+  request.mockImplementation(async () => publicResponse({ data: { ...receipt, imports: [{ server: { ...server, server_url: "https://mcp.example.test/unrelated" }, connector }] } }, 201))
+  await expect(hub.importPrivateMcpJson!(document, "mismatched-json-key")).rejects.toMatchObject({ reason: "parse" })
+})
+
+it.each(["", "invalid\nkey", "k".repeat(192)])("MCP JSON import rejects an invalid caller key before dispatch", async key => {
+  const request = vi.fn<typeof fetch>()
+  vi.stubGlobal("fetch", request)
+  await expect(createHubClient().importPrivateMcpJson!("{}", key)).rejects.toBeInstanceOf(Error)
+  expect(request).not.toHaveBeenCalled()
+})
+
+
+it("reads an exact MCP connector and rejects a mismatched owner locator", async () => {
+  const connector = { availability: "unavailable" as const, connector_id: "exact-connector", connector_type: "mcp", provider_key: "private-exact", server_id: "exact-server", status: "pending", approved_scopes: [], enabled: false, state_version: "7" }
+  const request = vi.fn<typeof fetch>().mockResolvedValueOnce(publicResponse({ data: { connector } }))
+    .mockResolvedValueOnce(publicResponse({ data: { connector: { ...connector, connector_id: "wrong-connector" } } }))
+  vi.stubGlobal("fetch", request)
+  const hub = createHubClient()
+  await expect(hub.getMcpConnector!("exact-connector")).resolves.toEqual(connector)
+  expect(request.mock.calls[0]?.[0]).toBe("/api/hub/mcp/connectors/exact-connector")
+  await expect(hub.getMcpConnector!("exact-connector")).rejects.toMatchObject({ reason: "parse" })
+})
+
+it.each(["", "invalid\nkey", "k".repeat(192)])("private MCP creation commands reject invalid caller keys without I/O", async key => {
+  const request = vi.fn<typeof fetch>(); vi.stubGlobal("fetch", request)
+  const hub = createHubClient()
+  await expect(hub.registerPrivateMcpServer!({ display_name: "Valid MCP", server_url: "https://mcp.example.test/valid" }, key)).rejects.toBeInstanceOf(Error)
+  await expect(hub.preparePrivateMcpServer!("valid-server", "1", key)).rejects.toBeInstanceOf(Error)
+  expect(request).not.toHaveBeenCalled()
+})
+
+it("carries published MCP recovery reasons through the Hub once without replacing its original command", async () => {
+  const fetchMock = vi.fn<typeof fetch>(); vi.stubGlobal("fetch", fetchMock);
+  const hub = createHubClient();
+  for (const [code, status, retryable] of [
+    ["mcp_personal_command_outcome_unknown", 503, false],
+    ["mcp_personal_command_replay_expired", 412, false],
+    ["mcp_personal_command_ownership_lost", 409, false],
+    ["mcp_personal_not_prepared", 412, false],
+    ["mcp_personal_needs_client", 412, false],
+    ["mcp_personal_auth_method_unsupported", 412, false],
+  ] as const) {
+    fetchMock.mockResolvedValueOnce(publicResponse({ error: { code, message: "Safe failure", retryable } }, status));
+    const before = fetchMock.mock.calls.length;
+    await expect(hub.preparePrivateMcpServer!("private-server", "4", "original-prepare-key")).rejects.toMatchObject({ reason: "http", status, code, retryable });
+    expect(fetchMock).toHaveBeenCalledTimes(before + 1);
+    const [, init] = fetchMock.mock.calls.at(-1)!;
+    expect(new Headers(init?.headers).get("idempotency-key")).toBe("original-prepare-key");
+    expect(JSON.parse(String(init?.body))).toEqual({ expected_state_version: "4" });
+  }
+  const code = "mcp_personal_needs_client";
+  fetchMock.mockResolvedValueOnce(publicResponse({ error: { code, message: "Safe failure", retryable: false } }, 412));
+  await expect(hub.beginMcpConnectorAuthorization!("connector-one", { server_id: "private-server", expected_state_version: "4" })).rejects.toMatchObject({ reason: "http", code });
+  expect(new Headers(fetchMock.mock.calls.at(-1)![1]?.headers).has("idempotency-key")).toBe(false);
+});
+
+it("rejects malformed Custom API error tuples and write receipt errors on reads", async () => {
+  const fetchMock = vi.fn<typeof fetch>(); vi.stubGlobal("fetch", fetchMock);
+  const hub = createHubClient();
+  for (const [code, status, retryable] of [
+    ["custom_api_command_outcome_unknown", 503, true],
+    ["custom_api_command_replay_expired", 409, false],
+    ["unpublished_custom_error", 503, true],
+    ["custom_api_not_found", 404, false],
+    ["custom_api_dependency_unavailable", 418, true],
+  ] as const) {
+    fetchMock.mockResolvedValueOnce(publicResponse({ error: { code, message: "Safe failure", retryable } }, status));
+    await expect(hub.createCustomApi!({ name: "Test", environment: [] }, "original-api-key")).rejects.toMatchObject({ reason: "parse" });
+  }
+  fetchMock.mockResolvedValueOnce(publicResponse({ error: { code: "custom_api_command_outcome_unknown", message: "Safe failure", retryable: false } }, 503));
+  await expect(hub.listCustomApis!()).rejects.toMatchObject({ reason: "parse" });
+  expect(fetchMock).toHaveBeenCalledTimes(6);
+});
+
+
+it("accepts all published Custom API recovery tuples and keeps ordinary dependency failures separate", async () => {
+  const fetchMock = vi.fn<typeof fetch>(); vi.stubGlobal("fetch", fetchMock);
+  const hub = createHubClient();
+  for (const [code, status, retryable] of [
+    ["custom_api_command_in_progress", 409, true], ["custom_api_command_outcome_unknown", 503, false],
+    ["custom_api_command_replay_expired", 412, false], ["custom_api_conflict", 409, false],
+    ["custom_api_command_ownership_lost", 409, false], ["custom_api_response_invalid", 502, false],
+    ["custom_api_dependency_unavailable", 503, true],
+  ] as const) {
+    fetchMock.mockResolvedValueOnce(publicResponse({ error: { code, message: "Safe failure", retryable } }, status));
+    await expect(hub.createCustomApi!({ name: "Test", environment: [] }, "original-api-key")).rejects.toMatchObject({ reason: "http", code, status, retryable });
+  }
+  expect(fetchMock).toHaveBeenCalledTimes(7);
+});
+
+it("does not acknowledge a Custom API management response for another profile", async () => {
+  const fetchMock = vi.fn<typeof fetch>(); vi.stubGlobal("fetch", fetchMock);
+  const wrong = { profile_id: "other-profile", name: "Edited", state_version: "2", created_at: "2026-10-16T12:00:00Z", updated_at: "2026-10-16T12:00:00Z", environment: [] };
+  fetchMock.mockResolvedValueOnce(publicResponse({ data: { custom_api: wrong, replayed: false } }));
+  await expect(createHubClient().updateCustomApi!("target-profile", { expected_state_version: "1", name: "Edited" }, "management-key")).rejects.toMatchObject({ reason: "parse" });
+  fetchMock.mockResolvedValueOnce(publicResponse({ data: { profile_id: "other-profile", deleted: true, replayed: false } }));
+  await expect(createHubClient().removeCustomApi!("target-profile", { expected_state_version: "1" }, "management-key")).rejects.toMatchObject({ reason: "parse" });
+});
+
+it("binds API edit ACK fields and descriptors and preserves the explicit management key", async () => {
+  const fetchMock = vi.fn<typeof fetch>(); vi.stubGlobal("fetch", fetchMock);
+  const profile = { profile_id: "managed-api", name: "Edited", instructions: "New note", state_version: "3", created_at: "2026-10-16T12:00:00Z", updated_at: "2026-10-16T12:00:00Z", environment: [{ name: "SECRET", configured: true, status: "active", state_version: "1" }] };
+  const input = { expected_state_version: "1", name: "Edited", instructions: "New note", environment_upserts: [{ name: "SECRET", value: "fixture-only" }], environment_removals: ["OLD_SECRET"] };
+  const hub = createHubClient();
+  for (const wrong of [ { ...profile, name: "Other" }, { ...profile, instructions: "Old note" }, { ...profile, environment: [] }, { ...profile, environment: [{ ...profile.environment[0], configured: false }] }, { ...profile, environment: [...profile.environment, { ...profile.environment[0], name: "OLD_SECRET" }] }, { ...profile, environment: [...profile.environment, ...profile.environment] } ]) {
+    fetchMock.mockResolvedValueOnce(publicResponse({ data: { custom_api: wrong, replayed: false } }));
+    await expect(hub.updateCustomApi!("managed-api", input, "management-key")).rejects.toMatchObject({ reason: "parse" });
+  }
+  fetchMock.mockResolvedValueOnce(publicResponse({ data: { custom_api: profile, replayed: true } }));
+  await expect(hub.updateCustomApi!("managed-api", input, "management-key")).resolves.toEqual(profile);
+  fetchMock.mockResolvedValueOnce(publicResponse({ data: { custom_api: profile, replayed: true } }));
+  await expect(hub.updateCustomApi!("managed-api", { expected_state_version: "1", clear_instructions: true }, "management-key")).rejects.toMatchObject({ reason: "parse" });
+  fetchMock.mockResolvedValueOnce(publicResponse({ data: { profile_id: "managed-api", deleted: true, replayed: true } }));
+  await expect(hub.removeCustomApi!("managed-api", { expected_state_version: "1" }, "management-key")).resolves.toBeUndefined();
+  for (const [, request] of fetchMock.mock.calls) expect(new Headers(request?.headers).get("Idempotency-Key")).toBe("management-key");
+});
+
+it("rejects MCP management ACKs bound to another target instead of acknowledging the requested write", async () => {
+  const fetchMock = vi.fn<typeof fetch>(); vi.stubGlobal("fetch", fetchMock);
+  const hub = createHubClient();
+  const connector = { availability: "available" as const, connector_id: "other-connector", connector_type: "mcp", provider_key: "fixture", display_name: "Edited", description: "Note", status: "active", enabled: false, approved_scopes: [], state_version: "2" };
+  for (const action of [() => hub.updateMcpConnector("target-connector", { display_name: "Edited", description: "Note", expected_state_version: "1" }, "management-key"), () => hub.setMcpConnectorEnabled("target-connector", { enabled: false, expected_state_version: "1" }, "management-key"), () => hub.removeMcpConnector("target-connector", { expected_state_version: "1" }, "management-key")]) {
+    fetchMock.mockResolvedValueOnce(publicResponse({ data: { connector } }));
+    await expect(action()).rejects.toMatchObject({ reason: "parse" });
+  }
+  const server = { availability: "unavailable" as const, server_id: "other-server", display_name: "Edited", server_url: "https://mcp.example.test/", status: "pending", state_version: "2", headers: [], prepare_status: "pending_prepare", declarations: [], declarations_available: false };
+  fetchMock.mockResolvedValueOnce(publicResponse({ data: { server, connector: { ...connector, server_id: server.server_id }, replayed: false } }));
+  await expect(hub.updatePrivateMcpServer!("target-server", { expected_state_version: "1", display_name: "Edited" }, "management-key")).rejects.toMatchObject({ reason: "parse" });
+  fetchMock.mockResolvedValueOnce(publicResponse({ data: { server_id: "other-server", deleted: true, replayed: false } }));
+  await expect(hub.deletePrivateMcpServer!("target-server", "1", "management-key")).rejects.toMatchObject({ reason: "parse" });
+});
+
+it("requires private MCP edit ACKs to reflect the explicitly written safe fields and header descriptors", async () => {
+  const fetchMock = vi.fn<typeof fetch>(); vi.stubGlobal("fetch", fetchMock);
+  const hub = createHubClient();
+  const connector = { availability: "unavailable" as const, connector_id: "edited-connector", server_id: "edited-server", connector_type: "mcp", provider_key: "fixture", display_name: "Edited", description: "Note", status: "pending", enabled: false, approved_scopes: [], state_version: "2" };
+  const server = { availability: "unavailable" as const, server_id: "edited-server", display_name: "Edited", server_url: "https://mcp.example.test/new", notes: "New note", status: "pending", state_version: "2", headers: [{ name: "x-test", configured: true, status: "active", state_version: "1" }], prepare_status: "pending_prepare", declarations: [], declarations_available: false };
+  const input = { expected_state_version: "1", display_name: "Edited", server_url: "https://mcp.example.test/new", notes: "New note", header_upserts: [{ name: "x-test", value: "fixture-only" }], header_removals: ["x-old"] };
+  for (const wrong of [{ ...server, display_name: "Other" }, { ...server, server_url: "https://mcp.example.test/old" }, { ...server, notes: "Old note" }, { ...server, headers: [] }, { ...server, headers: [...server.headers, { name: "x-old", configured: true, status: "active", state_version: "1" }] }]) {
+    fetchMock.mockResolvedValueOnce(publicResponse({ data: { server: wrong, connector, replayed: false } }));
+    await expect(hub.updatePrivateMcpServer!("edited-server", input, "management-key")).rejects.toMatchObject({ reason: "parse" });
+  }
+  fetchMock.mockResolvedValueOnce(publicResponse({ data: { server, connector, replayed: true } }));
+  await expect(hub.updatePrivateMcpServer!("edited-server", input, "management-key")).resolves.toMatchObject({ server });
+});
+
+describe("Project default Skill selection", () => {
+  const projectId = "project_11111111-1111-4111-8111-111111111111";
+  it("preserves ordered defaults and explicit clear without changing caller intent or replay key", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(publicResponse({ data: { project_id: projectId, installation_ids: ["i2", "i1"] } }))
+      .mockResolvedValueOnce(publicResponse({ data: { project_id: projectId, installation_ids: [] } }));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createProjectSkillSelectionClient(projectId);
+    expect((await client.get()).installation_ids).toEqual(["i2", "i1"]);
+    const ids: string[] = [];
+    const saved = client.replace(ids, "original-selection-key");
+    ids.push("changed-after-dispatch");
+    expect((await saved).installation_ids).toEqual([]);
+    expect(fetchMock).toHaveBeenNthCalledWith(2, `/api/hub/projects/${projectId}/skill-selection`, expect.objectContaining({
+      method: "PUT", body: '{"installation_ids":[]}', cache: "no-store", redirect: "error",
+      headers: expect.objectContaining({ "idempotency-key": "original-selection-key" }),
+    }));
+    expect(() => client.replace(["i1", "i1"], "key")).toThrow();
+    expect(() => client.replace(Array.from({ length: 17 }, (_, i) => `i${i}`), "key")).toThrow();
+    expect(() => createProjectSkillSelectionClient("slug")).toThrow();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+  it("rejects wrong project, reordered ACK and unexpected fields instead of claiming selection saved", async () => {
+    const fetchMock = vi.fn(); vi.stubGlobal("fetch", fetchMock);
+    const client = createProjectSkillSelectionClient(projectId);
+    for (const data of [
+      { project_id: "project_22222222-2222-4222-8222-222222222222", installation_ids: ["i1", "i2"] },
+      { project_id: projectId, installation_ids: ["i2", "i1"] },
+      { project_id: projectId, installation_ids: ["i1", "i2"], source_refs: ["skill:new-current"] },
+    ]) {
+      fetchMock.mockResolvedValueOnce(publicResponse({ data }));
+      await expect(client.replace(["i1", "i2"], "same-key")).rejects.toMatchObject({ reason: "parse" });
+    }
+    fetchMock.mockRejectedValueOnce(new Error("commit response lost"));
+    await expect(client.replace(["i1", "i2"], "same-key")).rejects.toMatchObject({ reason: "network" });
+    expect(fetchMock).toHaveBeenCalledTimes(4); // no automatic retry or new-key command
+  });
+  it("cancels stalled selection bytes within the original budget, without a second request", async () => {
+    vi.useFakeTimers();
+    try {
+      const cancel = vi.fn();
+      const fetchMock = vi.fn().mockResolvedValue(new Response(new ReadableStream({ start(controller) { controller.enqueue(new TextEncoder().encode('{"data":')); }, cancel }), {
+        headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "selection-body" },
+      }));
+      vi.stubGlobal("fetch", fetchMock);
+      const pending = createProjectSkillSelectionClient(projectId).get();
+      const rejected = expect(pending).rejects.toMatchObject({ reason: "network" });
+      await vi.advanceTimersByTimeAsync(10_001);
+      await rejected;
+      expect(cancel).toHaveBeenCalled(); expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally { vi.useRealTimers(); }
+  });
+});
+
+it("reads an exact provider outside the first catalog page and rejects a different identity", async () => {
+  const provider = { provider_key: "outside-page", display_name: "Outside", directory_type: "app", category_keys: [], example_prompts: [], enabled: true, state_version: "1" };
+  const fetchMock = vi.fn().mockResolvedValueOnce(publicResponse({ data: { provider } }))
+    .mockResolvedValueOnce(publicResponse({ data: { provider: { ...provider, provider_key: "different" } } }));
+  vi.stubGlobal("fetch", fetchMock);
+  const client = createHubClient();
+  await expect(client.getMcpConnectorProvider("outside-page")).resolves.toEqual(provider);
+  expect(fetchMock.mock.calls[0]![0]).toBe("/api/hub/mcp/providers/outside-page");
+  await expect(client.getMcpConnectorProvider("outside-page")).rejects.toMatchObject({ reason: "parse" });
+});
+
+it.each(["provider_key", "display_name", "description"] as const)("rejects a Provider Create ACK with mismatched %s while preserving caller identity", async field => {
+  const input = { provider_key: "bound-provider", connector_type: "mcp" as const, display_name: "Original", description: "Original description" };
+  const connector = { ...input, connector_id: "bound-create", status: "pending", enabled: false, approved_scopes: [], state_version: "1", [field]: "other" };
+  const fetchMock = vi.fn().mockResolvedValue(publicResponse({ data: { connector } }, 201));
+  vi.stubGlobal("fetch", fetchMock);
+  await expect(createHubClient().createMcpConnector(input, "same-original-key")).rejects.toMatchObject({ reason: "parse" });
+  expect(new Headers(fetchMock.mock.calls[0]?.[1]?.headers).get("idempotency-key")).toBe("same-original-key");
+  expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual(input);
 });

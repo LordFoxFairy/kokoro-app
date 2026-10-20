@@ -1,6 +1,6 @@
 "use client";
 
-import type { RefObject } from "react";
+import { useRef, type RefObject } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -9,15 +9,21 @@ import type { McpConnectorProvider } from "@/hub/mcp-connector.schema";
 import { useT } from "@/i18n/context";
 
 import type { McpCreateMode } from "./mcp-panel-model";
+import { McpCategoryDropdown } from "./mcp-category-dropdown";
+import { useMcpCategoryLayout } from "./use-mcp-category-layout";
 import { McpProviderDirectory } from "./mcp-provider-directory";
 import { McpSettingsToolbar } from "./mcp-settings-toolbar";
-import type { MCP_CATEGORY_MESSAGES } from "./mcp-projection-types";
+import { MCP_CATEGORY_MESSAGES, MCP_CATEGORY_OPTIONS } from "./mcp-projection-types";
 import styles from "./mcp-projection-read.module.css";
 
 export function McpProviderCatalogDialog({
   open,
   providers,
+  addedProviderKeys,
+  relationsComplete = false,
   loading,
+  hasMore,
+  onLoadMore,
   error,
   query,
   categoryFilter,
@@ -31,7 +37,11 @@ export function McpProviderCatalogDialog({
 }: {
   open: boolean;
   providers?: McpConnectorProvider[];
+  addedProviderKeys?: ReadonlySet<string>;
+  relationsComplete?: boolean;
   loading: boolean;
+  hasMore: boolean;
+  onLoadMore: () => void;
   error: boolean;
   query: string;
   categoryFilter: "all" | keyof typeof MCP_CATEGORY_MESSAGES;
@@ -49,10 +59,15 @@ export function McpProviderCatalogDialog({
   onCreate?: (mode: McpCreateMode, returnTarget?: HTMLElement | null) => void;
 }) {
   const t = useT();
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const { categoriesFit, setContainerElement, measureRef, categoryMenuRef, categoryMenuOpenRef } =
+    useMcpCategoryLayout({ enabled: open, scopeRef: dialogRef, localeKey: t });
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
+        ref={dialogRef}
         className={styles.catalogDialog}
+        data-categories-fit={categoriesFit}
         overlayClassName={styles.editorOverlay ?? ""}
         closeLabel={t("mcp.cancel")}
         onOpenAutoFocus={(event) => {
@@ -60,9 +75,11 @@ export function McpProviderCatalogDialog({
           const search = (
             event.currentTarget as HTMLElement | null
           )?.querySelector<HTMLInputElement>('input[type="search"]');
-          window.requestAnimationFrame(() =>
-            search?.focus({ preventScroll: true }),
-          );
+          const initialFocus = document.activeElement;
+          window.requestAnimationFrame(() => {
+            if (search?.isConnected && document.activeElement === initialFocus)
+              search.focus({ preventScroll: true });
+          });
         }}
         onCloseAutoFocus={(event) => {
           const returnFocus = returnFocusRef.current;
@@ -76,24 +93,27 @@ export function McpProviderCatalogDialog({
         <header className={styles.catalogHeader}>
           <DialogTitle>{t("connectorCatalog.title")}</DialogTitle>
         </header>
-        <div className={styles.catalogToolbar}>
+        <div ref={setContainerElement} className={styles.catalogToolbar}>
+          <div ref={measureRef} className={styles.categoryMeasure} aria-hidden="true" inert>
+            <span data-selected={categoryFilter === "all"}>{t("mcp.categoryAll")}</span>
+            {MCP_CATEGORY_OPTIONS.map(category => <span key={category} data-selected={categoryFilter === category}>{t(MCP_CATEGORY_MESSAGES[category])}</span>)}
+          </div>
           <McpSettingsToolbar
             view="catalog"
             query={query}
             onQueryChange={onQueryChange}
             onBrowse={() => undefined}
             showBrowse={false}
+            settingsLayout
             {...(onCreate ? { onCreate } : {})}
-          />
+          >
+            <div className={styles.catalogFilter}>
+              {!categoriesFit ? <McpCategoryDropdown value={categoryFilter} onChange={onCategoryFilterChange}
+                triggerRef={categoryMenuRef} onOpenChange={next => { categoryMenuOpenRef.current = next; }} /> : null}
+            </div>
+          </McpSettingsToolbar>
         </div>
         <div className={styles.catalogBody}>
-          {providers === undefined && loading ? (
-            <div className={styles.pendingCatalog} aria-busy="true">
-              <span className="sr-only" role="status">
-                {t("mcp.loading")}
-              </span>
-            </div>
-          ) : null}
           {error ? (
             <Alert variant="destructive" role="alert" className={styles.alert}>
               <AlertDescription>{t("mcp.loadError")}</AlertDescription>
@@ -102,16 +122,21 @@ export function McpProviderCatalogDialog({
               </Button>
             </Alert>
           ) : null}
-          {providers ? (
             <McpProviderDirectory
-              providers={providers}
+              providers={providers ?? []}
+              {...(addedProviderKeys ? { addedProviderKeys } : {})}
+              relationsComplete={relationsComplete}
+              showCompactFilter={false}
+              hasMore={hasMore}
+              loading={loading}
+              onLoadMore={onLoadMore}
+              {...(providers === undefined ? { resultsPlaceholder: loading ? <div className={styles.pendingCatalog} aria-busy="true"><span className="sr-only" role="status">{t("mcp.loading")}</span></div> : null } : {})}
               query={query}
               onQueryChange={onQueryChange}
               categoryFilter={categoryFilter}
               onCategoryFilterChange={onCategoryFilterChange}
               onSelectProvider={onSelectProvider}
             />
-          ) : null}
         </div>
       </DialogContent>
     </Dialog>

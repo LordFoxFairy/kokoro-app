@@ -82,6 +82,24 @@ describe("/api/admin/[...path] product-session adapter", () => {
     currentProductSession.mockResolvedValueOnce(null)
     const denied = await GET(new Request("http://localhost/api/admin/mcp/providers"), params(["mcp", "providers"]))
     expect(denied.status).toBe(401)
+    expect(await denied.json()).toEqual({ error: {
+      code: "session_authentication_required", message: expect.any(String), retryable: false,
+    } })
+    expect(fetchWithDomain).not.toHaveBeenCalled()
+  })
+
+  it("keeps local gateway failures in the complete error envelope without forwarding session failures", async () => {
+    const { GET } = await import("@/app/api/admin/[...path]/route")
+    currentProductSession.mockRejectedValueOnce(new Error("private auth implementation detail"))
+    const response = await GET(new Request("http://localhost/api/admin/skills", {
+      headers: { "x-kokoro-request-id": "gateway-failure-id" },
+    }), params(["skills"]))
+    expect(response.status).toBe(503)
+    expect(response.headers.get("x-request-id")).toBe("gateway-failure-id")
+    expect(response.headers.get("cache-control")).toContain("no-store")
+    expect(await response.json()).toEqual({ error: {
+      code: "admin_gateway_unavailable", message: expect.any(String), retryable: true,
+    } })
     expect(fetchWithDomain).not.toHaveBeenCalled()
   })
 })

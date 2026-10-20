@@ -1,5 +1,14 @@
-export { createScheduledTaskClient, ScheduledTaskClientError } from "./api/scheduled-task-client"
-export { expiryDateToUtcInstant, nextPreviewRun, scheduledDateKey, startOfMonth } from "./model/calendar"
+export {
+  createScheduledTaskClient,
+  pendingScheduledTaskCreate,
+  ScheduledTaskClientError,
+} from "./api/scheduled-task-client"
+export {
+  expiryDateToUtcInstant,
+  nextPreviewRun,
+  scheduledDateKey,
+  startOfMonth,
+} from "./model/calendar"
 export { isScheduledTaskRecord } from "./model/scheduled-task"
 export { ScheduledTaskEditorDialog } from "./ui/scheduled-task-editor"
 export { ScheduledTaskSurface } from "./ui/scheduled-task-surface"

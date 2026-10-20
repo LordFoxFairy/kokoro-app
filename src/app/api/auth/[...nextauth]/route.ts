@@ -1,4 +1,4 @@
-import { createHash, randomUUID, timingSafeEqual } from "node:crypto"
+import { randomUUID } from "node:crypto"
 
 import NextAuth from "next-auth"
 import { NextRequest } from "next/server"
@@ -8,11 +8,13 @@ import { DEFAULT_PRODUCT_RETURN_TARGET, parseProductReturnTarget, type ProductRe
 import { boundedInteractionForm } from "@/lib/server/iam-interaction-route"
 import { matchesCanonicalWebRequest } from "@/lib/server/iam-relay-config"
 import { IAM_RELAY_POLICY } from "@/lib/server/iam-relay-policy"
+import { oidcLoginRecovery } from "@/lib/server/oidc-login-recovery"
+import { oidcCsrfToken } from "@/lib/server/oidc-csrf"
 import { oidcAuthOptions, oidcRpConfig, OIDC_RESOURCE, OIDC_SCOPE, type VerifiedOidcTokens } from "@/lib/server/oidc-provider"
 import { verifyProductIdentity } from "@/lib/server/product-identity"
-import { consumeOidcState, issueOidcState, rpCleanupCookies } from "@/lib/server/oidc-rp-transaction"
+import { consumeOidcState, issueOidcState } from "@/lib/server/oidc-rp-transaction"
 import { clearProductLoginReturnCookie, productLoginReturnTarget } from "@/lib/server/product-login-return"
-import { clearProductSessionCookie, currentProductSession, decodeProductSession, productSessionCookie, type ProductClaims } from "@/lib/server/product-session"
+import { clearProductSessionCookie, productSessionState, decodeProductSession, productSessionCookie, type ProductClaims } from "@/lib/server/product-session"
 import { createSession, finalizeRefresh, invalidatePending, newSessionCandidate, reserveRefresh, tombstoneSession } from "@/lib/server/product-session-store"
 import { refreshOidcToken, revokeOidcToken } from "@/lib/server/oidc-token"
 
@@ -22,9 +24,8 @@ export const dynamic = "force-dynamic"
 type Context = { params: Promise<{ nextauth: string[] }>; productReturnTarget?: ProductReturnTarget }
 type Action = "csrf" | "signin" | "callback" | "session" | "signout"
 
-function errorResponse(status: number, code: string, clearCookies: readonly string[] = []): Response {
+function errorResponse(status: number, code: string): Response {
   const headers = new Headers({ "cache-control": "no-store", "content-type": "application/json; charset=utf-8", "referrer-policy": "no-referrer", "x-request-id": randomUUID() })
-  for (const cookie of clearCookies) headers.append("set-cookie", cookie)
   return new Response(JSON.stringify({ error: { code, message: "RP request was rejected" } }), { status, headers })
 }
 
@@ -44,16 +45,7 @@ async function validCsrf(request: Request, secret: string): Promise<boolean> {
   const form = await boundedInteractionForm(request, ["csrfToken"])
   const supplied = form?.get("csrfToken")
   if (typeof supplied !== "string" || !/^[a-f0-9]{64}$/u.test(supplied)) return false
-  const cookie = (request.headers.get("cookie") ?? "").split(";").map((part) => part.trim())
-    .filter((part) => /^(?:__Host-)?next-auth\.csrf-token=/u.test(part))
-  if (cookie.length !== 1) return false
-  let decoded: string
-  try { decoded = decodeURIComponent(cookie[0]!.slice(cookie[0]!.indexOf("=") + 1)) }
-  catch { return false }
-  const [token, digest] = decoded.split("|")
-  const expected = createHash("sha256").update(`${supplied}${secret}`).digest("hex")
-  return token === supplied && typeof digest === "string" && digest.length === expected.length &&
-    timingSafeEqual(Buffer.from(digest), Buffer.from(expected))
+  return oidcCsrfToken(request.headers.get("cookie"), secret) === supplied
 }
 
 async function productAction(request: NextRequest, action: "session" | "signout", config: NonNullable<ReturnType<typeof oidcRpConfig>>): Promise<Response> {
@@ -61,10 +53,14 @@ async function productAction(request: NextRequest, action: "session" | "signout"
   const requestId = randomUUID()
   if (request.method === "GET" && action === "session") {
     try {
-      const session = await currentProductSession(request, store)
-      return Response.json(session === null || session.accessExpiresAt <= Date.now()
-        ? { authenticated: false }
-        : { authenticated: true, subject: session.subject, expires_at: session.expiresAt },
+      const result = await productSessionState(request, store)
+      if (result.state === "refreshing" || result.state === "stale") return errorResponse(409, "product_session_refresh_conflict")
+      if (result.state === "unconfirmed") return errorResponse(503, "product_session_refresh_unconfirmed")
+      const session = result.state === "active" ? result.claims : null
+      return Response.json(session === null ? { authenticated: false }
+        : session.accessExpiresAt <= Date.now()
+          ? { authenticated: false, refresh_required: true, subject: session.subject, expires_at: session.expiresAt }
+          : { authenticated: true, subject: session.subject, expires_at: session.expiresAt },
       { headers: { "cache-control": "private, no-store", "x-request-id": requestId } })
     } catch { return errorResponse(503, "product_session_unavailable") }
   }
@@ -98,7 +94,12 @@ async function productAction(request: NextRequest, action: "session" | "signout"
     return Response.json({ status: "signed_out", remote_revocation: revoked ? "confirmed" : "unconfirmed", ...issuer }, { headers })
   }
   let claims: ProductClaims | null
-  try { claims = await currentProductSession(request, store) }
+  try {
+    const result = await productSessionState(request, store)
+    if (result.state === "refreshing" || result.state === "stale") return errorResponse(409, "product_session_refresh_conflict")
+    if (result.state === "unconfirmed") return errorResponse(503, "product_session_refresh_unconfirmed")
+    claims = result.state === "active" ? result.claims : null
+  }
   catch { return errorResponse(503, "product_session_unavailable") }
   if (claims === null) return errorResponse(401, "product_session_required")
   let reserved: Awaited<ReturnType<typeof reserveRefresh>>
@@ -107,9 +108,10 @@ async function productAction(request: NextRequest, action: "session" | "signout"
   if (reserved === null) return errorResponse(409, "product_session_refresh_conflict")
   try {
     const refreshed = await refreshOidcToken(config, reserved.refresh, request.signal)
+    const accessExpiresAt = Date.now() + refreshed.expiresIn * 1_000
     await verifyProductIdentity(config, refreshed.access, claims.subject, request.signal)
-    const next: ProductClaims = { ...claims, generation: claims.generation + 1, access: refreshed.access,
-      accessExpiresAt: Date.now() + refreshed.expiresIn * 1_000 }
+    if (accessExpiresAt <= Date.now()) throw new Error("refreshed access expired during verification")
+    const next: ProductClaims = { ...claims, generation: claims.generation + 1, access: refreshed.access, accessExpiresAt }
     const cookie = await productSessionCookie(next, config.authSecret, config.relay.webOrigin)
     if (!(await finalizeRefresh(store, claims.id, claims.generation, reserved.reservation, refreshed.refresh))) {
       return errorResponse(409, "product_session_refresh_conflict")
@@ -231,25 +233,28 @@ async function handle(request: NextRequest, context: Context, method: "GET" | "P
     } catch { console.error("Kokoro RP sign-in start threw"); return errorResponse(503, "rp_unavailable") }
   }
 
-  const cleanup = rpCleanupCookies(config.relay.secureCookies)
   const query = url.searchParams
   if ([...query.keys()].length !== 3 || parameterOnlyOnce(query, "code") === null ||
     parameterOnlyOnce(query, "state") === null ||
     parameterOnlyOnce(query, "iss") !== config.issuer ||
     !/^[A-Za-z0-9._~-]{1,2048}$/u.test(query.get("code") ?? "")) {
-    return errorResponse(400, "rp_callback_rejected", cleanup)
+    return errorResponse(400, "rp_callback_rejected")
   }
   let consumed: ProductReturnTarget | null
   try {
     consumed = await consumeOidcState({ redisUrl: config.redisUrl, webOrigin: config.relay.webOrigin,
       state: query.get("state") ?? "", cookieHeader: request.headers.get("cookie"), authSecret: config.authSecret })
-  } catch { return errorResponse(503, "rp_unavailable", cleanup) }
-  if (!consumed) return errorResponse(403, "rp_transaction_rejected", cleanup)
+  } catch { return errorResponse(503, "rp_unavailable") }
+  // A stale callback may carry a newer login's shared Auth.js cookies. Never
+  // clear that transaction when this callback has not proved ownership.
+  if (!consumed) return errorResponse(403, "rp_transaction_rejected")
+  // Any callback can finish after a newer start. Never delete shared transaction
+  // cookies, even on success: Redis state is one-use and proofs expire normally.
   let verified: VerifiedOidcTokens | null = null
   try {
     await NextAuth(request, context, oidcAuthOptions(config, (tokens) => { verified = tokens }, request.signal))
-  } catch { return errorResponse(503, "rp_unavailable", cleanup) }
-  if (verified === null) return errorResponse(403, "rp_callback_rejected", cleanup)
+  } catch { return errorResponse(503, "rp_unavailable") }
+  if (verified === null) return errorResponse(403, "rp_callback_rejected")
   try {
     const tokens: VerifiedOidcTokens = verified
     await verifyProductIdentity(config, tokens.access, tokens.subject, request.signal)
@@ -260,18 +265,24 @@ async function handle(request: NextRequest, context: Context, method: "GET" | "P
     await createSession({ redisUrl: config.redisUrl, webOrigin: config.relay.webOrigin,
       secret: config.authSecret }, tokens.refresh, candidate)
     const headers = new Headers({ location: consumed, "cache-control": "private, no-store", "referrer-policy": "no-referrer" })
-    for (const value of cleanup) headers.append("set-cookie", value)
     headers.append("set-cookie", cookie)
     return new Response(null, { status: 303, headers })
-  } catch { return errorResponse(503, "product_session_unavailable", cleanup) }
+  } catch { return errorResponse(503, "product_session_unavailable") }
+}
+
+function representLoginFailure(request: NextRequest, response: Response): Response {
+  const loginNavigation = request.nextUrl.pathname === "/api/auth/callback/kokoro-iam" ||
+    request.nextUrl.pathname === "/api/auth/signin/kokoro-iam"
+  return response.status >= 400 && loginNavigation
+    ? oidcLoginRecovery(request, response.status) ?? response : response
 }
 
 export async function GET(request: NextRequest, context: Context): Promise<Response> {
-  return handle(request, context, "GET")
+  return representLoginFailure(request, await handle(request, context, "GET"))
 }
 
 export async function POST(request: NextRequest, context: Context): Promise<Response> {
-  return handle(request, context, "POST")
+  return representLoginFailure(request, await handle(request, context, "POST"))
 }
 
 function methodNotAllowed(): Response {

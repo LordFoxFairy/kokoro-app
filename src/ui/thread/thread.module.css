@@ -9,10 +9,8 @@
 
 .viewport {
   min-height: 0;
-  /* Manus anchors the assistant identity just below the header. The previous
-     2rem desktop top gutter placed the first turn visibly too low while the
-     composer already matched its bottom baseline. */
-  padding: 1.5rem clamp(1rem, 5vw, 3rem) 1rem;
+  /* Measured conversation inset: 40px below the header, 16px outer gutter. */
+  padding: 2.5rem 1rem 1rem;
   /* 始终预留两侧滚动条槽：todo 条展开/收起改变线程高度、令滚动条出现或消失时，
      居中的对话内容不会左右漂移。 */
   scrollbar-gutter: stable both-edges;
@@ -41,6 +39,7 @@
   width: min(48rem, 100%);
   min-height: 0;
   margin: 0 auto;
+  padding-inline: 1rem;
   flex-direction: column;
   /* 扁平文档观感：轮间留宽呼吸，靠间距而非气泡边框分隔上下两轮。 */
   gap: 1.75rem;
@@ -75,18 +74,18 @@
 
 /* 用户胶囊的宽度属于站点皮肤；底色、圆角、焦点和内容间距由 shadcn Bubble 负责。 */
 .userBubble {
-  max-width: min(76%, 42rem);
+  max-width: min(90%, 42rem);
 }
 
 .userBubbleContent {
   border-radius: var(--radius-lg);
-  padding: 0.65rem 0.9rem;
+  padding: 0.75rem;
 }
 
 .userBody {
   margin: 0;
-  font-size: 0.925rem;
-  line-height: 1.55;
+  font-size: 1rem;
+  line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -1017,8 +1016,8 @@
 /* —— 助手 markdown 排版 —— */
 
 .md {
-  font-size: 0.9375rem;
-  line-height: 1.6;
+  font-size: 1rem;
+  line-height: 1.5;
   word-break: break-word;
 }
 .md > :first-child {

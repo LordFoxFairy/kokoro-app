@@ -23,11 +23,16 @@ export type ScheduledMutation = {
   operation: "update" | "retry" | "delete"
 }
 
-export function statusMessageKey(status: ScheduledTaskStatus): "scheduled.active" | "scheduled.paused" | "scheduled.failed" {
+export function statusMessageKey(
+  status: ScheduledTaskStatus | "pending" | "exhausted",
+): "scheduled.active" | "scheduled.paused" | "scheduled.failed" | "scheduled.pending" | "scheduled.exhausted" {
+  if (status === "pending" || status === "exhausted") return `scheduled.${status}`
   return status === "active" ? "scheduled.active" : status === "paused" ? "scheduled.paused" : "scheduled.failed"
 }
 
-export function mutationMessageKey(operation: ScheduledMutation["operation"]): "scheduled.updating" | "scheduled.deleting" {
+export function mutationMessageKey(
+  operation: ScheduledMutation["operation"],
+): "scheduled.updating" | "scheduled.deleting" {
   return operation === "delete" ? "scheduled.deleting" : "scheduled.updating"
 }
 

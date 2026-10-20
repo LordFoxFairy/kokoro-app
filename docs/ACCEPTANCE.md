@@ -10,6 +10,14 @@ formal IAM c64/internal0.13→BFF a88/public15.2/145；Web冻结64源/833原保�
 
 正常fresh16scope登录、真实改名→权威读回→刷新→退出重新登录仍待Root CUA；此项未完成前不将姓名页记为产品通过。技能和连接器功能排除，整个设置Goal不因本切片停止。
 
+## 2026-10-16 Skills 显式更新：正常产品旅程验收
+
+固定业务源码 App `d40c839`、BFF `615b16a`、Platform `11cb760`。用户批准本地短暂重启后，正常 Product Session→Web 同源→BFF→Platform→Storage/现有 PostgreSQL 完成自有 private 样本安装 v1→v2：确认前无 POST，确认后仅一次 strict 两 pin/原幂等 key 的 update，200 ACK→安装 GET 200→列表 GET 200；没有 Remove/Install。独立正常登录回读证明 installation ID、series、installed_at、enabled=true 均保持，目标严格等于原 `available_update`，余额仍 1,000 积分/held=0/流水1条且内容未变。没有直库写、凭据注入、模型发送或重复充值。
+
+键盘 Enter 完成后焦点返回搜索，更新按钮消失且正常开关恢复；硬刷新仍为新状态。详情使用既有 GetSkill 的 series 查询，返回版本必须与所选安装 B 的不可变 UID 一致才放行示例；不要把 series 查询 UID 冒称 B 的 UID。实际新版示例启用、旧例子未混入；390px 窄屏最终详情 x=9.75/width=370.5、页面 scrollWidth=clientWidth=390，新版示例可交给 Composer，名称和文本到位，但未发送任务。尺寸初次在 0.2s resize 过渡中大于视口，稳定后已回到上述范围；这不是整站逐帧/物理触屏或窄屏第二次更新写入的验收。自有草稿/视口/网络观察/临时标签均已清理。
+
+范围：本轮证明真实 happy path、原身份/启用态保留、刷新与新版示例交接；unknown/并发/disabled=false 的风险证据分别沿现 pure flow/client/真实隔离 PostgreSQL，不把它们冒成已做正常浏览器故障注入。机器 profile 的 `runtime_verified=false` 未重新发行，不扩大为全 operation runtime 认证。完整 Skills/Admin/MCP、正式 Agent/Billing 执行与远端 PR/gitlink 合并仍未完成。
+
 ## R256 会话标题与工具按钮独立命中（2026-10-06）
 
 Root冻结后明确Node22.22.2复跑lint/typecheck/3现UI文件167断言/build，原句柄37970实际exit0；首次wrapper漏打印句柄未作为exit证据，确认原build结束后独立重跑本次终态。未跑全量system/test:e2e/axe/视觉预算，不替代以上原页面用户证据。
@@ -233,3 +241,17 @@ python3 scripts/verify-ten-repository-standard.py --format json
 本验收不覆盖当前 IAB、真实 BFF/Agent owner、全部 actor/scope 矩阵或完整产品目标；工程门不得解释为全用户闭环。实际提交与发布状态以本仓 HEAD 和 Root gitlink 为准。
 
 ---
+
+## 2026-10-16 Skills 试用候选的验收边界
+
+- 当前自动回归覆盖精确安装与目录版本分离、同版本 handoff、Project URL→submitDraft wire、可移除标签及身份/会话退役；未知结果重试继续使用原冻结请求。仅扩展已有低层充分测试，不恢复已退役 UI 套件。
+- `34092c7` 正常产品 Session/正式 API 的本人隔离技能发布/安装/回读成功；真实浏览器 Direct 详情点击→提示词/实名标签、编辑后移除保留提示词、Project Settings 详情点击→同项目新会话 ID 已验证。实际 POST 的 source ref 与安装精确一致，返回 `503 agent_not_configured`；权威项目会话列表 200/空，积分仍 1,000、冻结 0、流水条数不变，不称 Agent 接纳或执行成功。
+- 发布第二版并保留第一版安装后，owner `available_update` 指向第二版；第二版详情加载完成，示例禁用且未改安装。已发现个人原子更新入口缺口及定时重核后搜索清空/详情关闭；当时均尚未修复；目录重核的后续验收见下节，个人原子更新仍待。390px 目录无水平溢出只证明该窄状态，不替代完整触屏/键盘、标签窄屏或视觉验收。
+- Agent 正式模型调用授权与相关 owner fresh authorization/真实运行仍是独立前置；preview E2E、构建、单元或非空 wire 均不替代。功能完成和远端 PR merge 分开记录，CI 暂停期间不冒已通过。
+
+
+### 目录重核回归验收（2026-10-16）
+
+新增风险覆盖搜索/详情 DOM 保留、私有事实退役及新代回读、actor A→B→A不复活、当前 cursor和失败重试/不替换新版、旧安装handler/ACK/finally隔离、冻结source/key、确定拒绝释放、未知分享显式新意图、GitHub只读选择退役与unknown命令保留、上传已确认结果退役。只扩展现有 AppFrame/纯 flow，不新增移除套件或锁定 CSS/源码字符串。
+
+Node22完整 `pnpm check`（278 contract / 50 architecture / 3074 tests / lint / typecheck / build）及隔离3324 preview E2E4项已通过；`a9f4e64` 实际浏览器正常session定时重核200/authenticated=true，目录/安装/GetSkill重新200；前后搜索/详情保留且800×380同位置，关闭后焦点回新卡片。只读观察、不注入focus/timer、不做业务写入；Network与viewport override已清，原本地页恢复。全页面视觉无闪、原子个人更新、实际Agent运行/扣费尚未验收。
