@@ -45,14 +45,20 @@ async function handle(request: Request, context: Context): Promise<Response> {
   const config = productBffConfig()
   if (config === null) return failure(503, "admin_gateway_unavailable", requestId)
   const { path } = await context.params
+  const modelRead = request.method === "GET" && path.length === 1 && ["model-routing", "model-labels", "model-revisions"].includes(path[0] ?? "")
+  const modelWrite = request.method === "PUT" && path.length === 2 && path[0] === "model-routing" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(path[1] ?? "")
   if (
     path.length === 0 ||
-    !["mcp", "skills"].includes(path[0] ?? "") ||
+    (!["mcp", "skills"].includes(path[0] ?? "") && !modelRead && !modelWrite) ||
     path.some((segment) => !ADMIN_SEGMENT.test(segment))
   )
     return failure(404, "admin_operation_not_found", requestId)
   if (!(["GET", "POST", "PUT", "PATCH", "DELETE"] as const).includes(request.method as "GET"))
     return failure(405, "admin_method_not_allowed", requestId)
+
+  if (modelRead && ["if-match", "if-none-match", "idempotency-key", "content-type"].some((name) => request.headers.has(name)))
+    return failure(400, "invalid_admin_request", requestId)
 
   let claims
   try {
@@ -79,6 +85,14 @@ async function handle(request: Request, context: Context): Promise<Response> {
     headers.set("content-type", "application/json")
     const idempotency = request.headers.get("idempotency-key")
     if (idempotency !== null) headers.set("idempotency-key", idempotency)
+    if (modelWrite) {
+      // Keep the exact owner's precondition, including invalid/combined values:
+      // only the BFF decides whether this is create, update or a 400/428 failure.
+      for (const name of ["if-match", "if-none-match"]) {
+        const value = request.headers.get(name)
+        if (value !== null) headers.set(name, value)
+      }
+    }
   }
   let upstream: Response
   try {

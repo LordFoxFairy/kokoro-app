@@ -1,3 +1,9 @@
+## 2026-10-20 后台模型 Product 桥与 Public20（本地候选）
+
+保留已合设置PR43全部成果，仅在既有Admin同源桥补齐三个模型目录GET和精确单标签路由PUT、原CAS头透传与读取拒绝命令头；Product同一会话、原request-id、幂等键／正文和正式owner错误保持，不建立模型执行入口或旧数据兼容层。System4的revision由BFF Public20正规固定artifact消费，其他公开操作完整不变；六个现有窄生成器全部正规write通过，旧Public19 parent proof原封不动保留，由新test-only Public20→19精确逆证承接历史检查，不是运行fallback。
+
+本次主会话 Node22：301 contract/adapter、50 architecture、完整232文件4438 PASS／0SKIP，lint/types、production webpack build及构建后types全部exit0。新桥路径回归真实4FAIL→GREEN，未知请求不会新增写重试。App无页面布局或自动化／Skills/MCP业务变更，新增正常Admin页面旅程与上游真实链分列；尚未以此声明Manus整站对齐或模型、工具、扣费启用。正常运行加载／远端PR另记。
+
 ## 设置内部页面
 
 `src/ui/settings/sections/` 中的账户、Mail、邮箱、电话、钱包、集成和开发者组件负责所属内页及创建前表单。`account-credit-summary` 复用既有 Billing summary；`src/ui/billing/billing-resource-content` 展示非任务用量分类，`pricing-plan-details-dialog` 只展示正式套餐目录的原始金额。

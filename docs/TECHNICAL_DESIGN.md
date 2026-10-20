@@ -1,3 +1,7 @@
+## 2026-10-20 后台模型四操作配对（实施设计）
+
+Product现有Admin同源adapter只增加三个模型目录GET和单标签路由PUT；模型页面仍由独立Admin维护，浏览器→Product→BFF→System既有方向不变。不新增OAuth、服务凭据、网关或直接System调用，不修改Skills/MCP/自动化。模型路径与method精确闭集；PUT将原If-Match/If-None-Match、幂等键、正文及request-id透传给BFF，版本规则和管理员权限仍由BFF当次核验。响应不造业务成功，未知结果不自动重发。新System4公开修订消费通过BFF正规固定Publication配对，不恢复旧transport/gateway字段。
+
 ## 设置视觉与主线能力的集成边界（2026-10-20）
 
 账户保留本版 AccountDetail 内页与标题聚焦/返回；Skills 目录状态继续由主线 Modal 的受控 explore 状态拥有，不在 Panel 重建第二份状态。共享 Header 同时保留主线可访问标题名和账户内页聚焦；Skills/MCP 标题样式沿主线。个性化正式知识继续使用主线稳定 subject key 的 KnowledgePanel 及原 Provider，准入复查不卸载草稿；仅 preview 继续本地禁写知识草稿。其余设置视觉变化不修改知识、连接器或 Skills 的契约和持久化。

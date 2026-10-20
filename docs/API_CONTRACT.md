@@ -1,3 +1,7 @@
+## 2026-10-20 Admin模型同源桥（实施设计）
+
+现有 `/api/admin/[...path]` 增加 GET `/api/admin/model-routing`、`/api/admin/model-labels`、`/api/admin/model-revisions` 与 PUT `/api/admin/model-routing/{label_id}`；上游为BFF相同 `/v1/admin/*`。只接受正式方法和路径，不放通任意model前缀；Product Session、可信request-id、no-store与原错误envelope保持。PUT透明传递原 `If-Match`／`If-None-Match`，非法前置条件由owner正式400/428决定；不替调用者构造版本或新幂等键。目录GET的命令/CAS头被拒绝，不借桥层丢弃头将非法读转为合法读。
+
 ## 设置与主线的契约组合（2026-10-20）
 
 本次视觉增量不定义新接口。正式知识 CRUD/usage、Public19、Skills/MCP 与连接器 availability 均保留最新主线实现和正式契约；旧分支的知识未接通说明仅适用于 preview 草稿与记忆导入。账户积分仅复用 summary 读取，其余无 owner 契约的资产动作仍禁用。

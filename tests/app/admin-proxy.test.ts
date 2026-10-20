@@ -102,4 +102,50 @@ describe("/api/admin/[...path] product-session adapter", () => {
     } })
     expect(fetchWithDomain).not.toHaveBeenCalled()
   })
+  it("admits the three formal model reads with the original query and request ID", async () => {
+    vi.mocked(fetchWithDomain).mockImplementation(async (_url, _domain, init) => Response.json({ data: [], meta: { next_cursor: null } }, {
+      headers: { "cache-control": "no-store", "x-request-id": new Headers(init?.headers).get("x-kokoro-request-id")! },
+    }))
+    const { GET } = await import("@/app/api/admin/[...path]/route")
+    for (const kind of ["model-labels", "model-revisions", "model-routing"]) {
+      const response = await GET(new Request(`http://localhost/api/admin/${kind}?limit=25&cursor=opaque`, {
+        headers: { "x-kokoro-request-id": "model-list-request" },
+      }), params([kind]))
+      expect(response.status).toBe(200)
+      expect(response.headers.get("x-request-id")).toBe("model-list-request")
+      expect(fetchWithDomain).toHaveBeenLastCalledWith(`http://bff.test/v1/admin/${kind}?limit=25&cursor=opaque`, "dev.kokoro.localhost", expect.objectContaining({ method: "GET" }))
+    }
+  })
+
+  it.each([{ "if-match": '\"7\"' }, { "if-none-match": "*" }])("preserves the frozen routing command and CAS: %j", async (precondition) => {
+    vi.mocked(fetchWithDomain).mockImplementation(async (_url, _domain, init) => Response.json({ error: { code: "admin_model_routing_version_conflict", message: "Conflict", retryable: false } }, {
+      status: 409, headers: { "cache-control": "no-store", "x-request-id": new Headers(init?.headers).get("x-kokoro-request-id")! },
+    }))
+    const { PUT } = await import("@/app/api/admin/[...path]/route")
+    const id = "6ea106a4-031f-460b-9ab3-a3c8cd5f4c92"
+    const body = JSON.stringify({ model_revision_id: null, visible: false, is_default: false, priority: 0 })
+    const response = await PUT(new Request(`http://localhost/api/admin/model-routing/${id}`, {
+      method: "PUT", headers: { ...precondition, "content-type": "application/json", "content-length": String(new TextEncoder().encode(body).length), "idempotency-key": "frozen-model-command", "x-kokoro-request-id": "model-write-request" }, body,
+    }), params(["model-routing", id]))
+    expect(response.status).toBe(409)
+    expect((await response.json()).error.code).toBe("admin_model_routing_version_conflict")
+    const init = vi.mocked(fetchWithDomain).mock.calls[0]![2]!
+    expect(new Headers(init.headers).get("if-match")).toBe(precondition["if-match"] ?? null)
+    expect(new Headers(init.headers).get("if-none-match")).toBe(precondition["if-none-match"] ?? null)
+    expect(new Headers(init.headers).get("idempotency-key")).toBe("frozen-model-command")
+    expect(new TextDecoder().decode(init.body as ArrayBuffer)).toBe(body)
+    expect(fetchWithDomain).toHaveBeenCalledTimes(1)
+  })
+
+  it("rejects model prefix expansion, unsupported methods and command headers on reads before BFF I/O", async () => {
+    const { GET, POST, PUT } = await import("@/app/api/admin/[...path]/route")
+    for (const [handler, method, path] of [[GET, "GET", ["model-providers"]], [GET, "GET", ["model-revisions", "publish"]], [POST, "POST", ["model-labels"]], [PUT, "PUT", ["model-routing", "not-a-label-id"]]] as const) {
+      const response = await handler(new Request(`http://localhost/api/admin/${path.join("/")}`, { method }), params([...path]))
+      expect(response.status).toBe(404)
+    }
+    const response = await GET(new Request("http://localhost/api/admin/model-routing", { headers: { "if-match": '\"1\"' } }), params(["model-routing"]))
+    expect(response.status).toBe(400)
+    expect(fetchWithDomain).not.toHaveBeenCalled()
+  })
+
 })
