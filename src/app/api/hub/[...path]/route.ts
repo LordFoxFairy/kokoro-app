@@ -1,3 +1,4 @@
+import { proxyPersonalKnowledge } from "@/lib/server/personal-knowledge";
 import { proxyProjectSkillSelection } from "@/lib/server/project-skill-selection";
 import { proxyInstallation } from "@/lib/server/skill-installations";
 import {
@@ -2299,6 +2300,8 @@ async function proxyHubRequest(
   context: { params: Promise<{ path: string[] }> },
 ): Promise<Response> {
   const { path } = await context.params;
+  if ((path[0] === "preferences" && path[1]?.startsWith("knowledge")) || (path[0] === "self" && path[1] === "preferences" && path[2]?.startsWith("knowledge")))
+    return proxyPersonalKnowledge(request, path);
   // Retire the old browser `/self/mcp` namespace. MCP is a first-class private adapter route.
   if (path[0] === "self" && path[1] === "mcp")
     return NextResponse.json(

@@ -9,7 +9,7 @@ test.describe("公开壳层", () => {
     const response = await page.goto("/", { waitUntil: "domcontentloaded" })
 
     expect(response?.status()).toBe(200)
-    await expect(page.getByRole("heading", { name: "把想法说给它，收回能用的成果" })).toBeVisible()
+    await expect(page.getByRole("heading", { name: "Tell it what you want, get back something you can use" })).toBeVisible()
     const dimensions = await page.evaluate(() => ({
       clientWidth: document.documentElement.clientWidth,
       scrollWidth: document.documentElement.scrollWidth,
@@ -109,6 +109,13 @@ test.describe("项目会话", () => {
     // not only controls that explicitly consume the token.
     await expect(page.getByRole("log")).toHaveCSS("color", "rgb(26, 26, 26)")
 
+    // The quiet conversation canvas must remain distinct from the white
+    // editor, without carrying the catalog/settings surface into chat.
+    const conversationSurface = page.locator('[data-app-frame-main="true"]')
+    await expect(conversationSurface).toHaveCSS("background-color", "rgb(248, 248, 247)")
+    await expect(conversationSurface.locator('[data-slot="workspace-header"]')).toHaveCSS("background-color", "rgb(248, 248, 247)")
+    await expect(page.locator("form").filter({ has: page.getByRole("textbox") })).toHaveCSS("background-color", "rgb(255, 255, 255)")
+
     // The submitted editor has its own measured layout, including inside a
     // project. Parent gutters must not subtract a second 48px from its width.
     const editor = await page.getByRole("textbox").evaluate((element) => {
@@ -119,6 +126,24 @@ test.describe("项目会话", () => {
     })
     expect(Math.abs(editor.form.width - Math.min(768, editor.mainWidth - 32))).toBeLessThan(1)
     expect(editor.form.height).toBeGreaterThanOrEqual(120)
+
+    // Text entry keeps a visible caret and a quiet rounded boundary, rather
+    // than turning the whole editor into a high-contrast dark rectangle.
+    await page.getByRole("textbox").focus()
+    const focusedEditor = await page.getByRole("textbox").evaluate((element) => {
+      const form = element.closest("form")
+      if (!form) throw new Error("Conversation editor is missing")
+      const sample = document.createElement("canvas").getContext("2d")
+      if (!sample) throw new Error("Color sampling is unavailable")
+      sample.fillStyle = "white"
+      sample.fillRect(0, 0, 1, 1)
+      sample.fillStyle = getComputedStyle(form).borderTopColor
+      sample.fillRect(0, 0, 1, 1)
+      return { borderLightness: sample.getImageData(0, 0, 1, 1).data[0], caret: getComputedStyle(element).caretColor }
+    })
+    expect(focusedEditor.borderLightness).toBeGreaterThanOrEqual(190)
+    expect(focusedEditor.borderLightness).toBeLessThanOrEqual(225)
+    expect(focusedEditor.caret).not.toBe("transparent")
 
     if (!isMobile) {
       const viewport = page.viewportSize()
@@ -145,6 +170,12 @@ test.describe("项目会话", () => {
       await expect(page.getByRole("dialog")).toBeVisible()
     }
     const project = page.getByRole("button", { name: /^(当前项目|Current project)$/ })
+    // A workbench divider must not leak onto the first project row.
+    await expect.poll(() => project.evaluate((element) => {
+      const row = element.closest("[data-project-id]")
+      if (!row) throw new Error("Project row is missing")
+      return getComputedStyle(row).boxShadow
+    })).toBe("none")
     const conversationUrl = page.url()
     const expanded = await project.getAttribute("aria-expanded")
     await project.click()

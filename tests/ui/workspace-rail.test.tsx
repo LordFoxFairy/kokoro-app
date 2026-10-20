@@ -1103,7 +1103,15 @@ it("项目菜单的重命名动作交给路由 owner，不制造本地副本", a
   })
 
   const projectRow = screen.getByRole("button", { name: "独立项目名称" }).closest("[data-project-id]") as HTMLElement
-  fireEvent.pointerDown(within(projectRow).getByRole("button", { name: "项目选项" }), { button: 0 })
+  const trigger = within(projectRow).getByRole("button", { name: "项目选项" })
+  fireEvent.pointerDown(trigger, { button: 0 })
+  const menu = await screen.findByRole("menu", { name: "项目选项" })
+  expect(menu).toHaveAttribute("data-side", "bottom")
+  expect(menu).toHaveAttribute("data-align", "end")
+  fireEvent.keyDown(menu, { key: "Escape" })
+  await waitFor(() => expect(trigger).toHaveFocus())
+  expect(onRequestProjectRename).not.toHaveBeenCalled()
+  fireEvent.keyDown(trigger, { key: "ArrowDown" })
   fireEvent.click(await screen.findByRole("menuitem", { name: "重命名项目" }))
   expect(onRequestProjectRename).toHaveBeenCalledExactlyOnceWith("project_a")
 })

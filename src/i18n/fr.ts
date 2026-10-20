@@ -1457,4 +1457,7 @@ export const fr: Partial<Record<MessageKey, string>> = {
   "mcp.recovery.needs_client": "La configuration du client OAuth manque. Vérifiez les informations client du connecteur.",
   "mcp.recovery.auth_method_unsupported": "Cette méthode d’authentification n’est pas prise en charge. Vérifiez la configuration du connecteur.",
   "mcp.recovery.inspectRequired": "Vérifier l’état d’abord",
+  "library.viewOptions": "Options d’affichage",
+  "library.filterVideo": "Vidéos",
+  "library.filterAudio": "Audio",
 }

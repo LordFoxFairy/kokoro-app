@@ -197,6 +197,11 @@ export function useProjectSkills(
   function execute(command: ProjectSkillCommand): Promise<boolean> {
     const lease = active()
     if (!lease?.ready || pending.current || scope.projectId === null) return Promise.resolve(false)
+    // A stale UI callback must use the current installation facts. This only
+    // gates a new enable intent, never disabling or replaying an unknown write.
+    if (command.kind === "enabled" && command.enabled &&
+      lease.facts?.items.find(item => item.installation_id === command.id)?.source_status !== "active")
+      return Promise.resolve(false)
     // Disabling/removing a default requires an explicit separate default selection first.
     if (
       (command.kind === "remove" || (command.kind === "enabled" && !command.enabled)) &&

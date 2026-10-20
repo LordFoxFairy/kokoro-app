@@ -1,3 +1,9 @@
+## 2026-10-20 保留切片的主线集成边界
+
+沿既有 Library／知识／rail 设计，恢复曾仅在本地 mixed 验证的增量。LibraryHeader、精确产物详情与独立 reader 分担导航／展示／取消分页；个人文件上传意图仍由页面父级持有。日期、q 原文与 owner type 投影按已发布 Public19，返回目标继续闭集，不额外增加协议、Schema、依赖或缓存中心。
+
+PersonalKnowledgeProvider 放在原稳定 overlay 壳，subject／admitted／generation 保留既有退休与未知写只读核验；KnowledgePanel 仅占 main 现有知识 tab。个人资料维持 main hook、字段校验和保存／review，不恢复旧 profile hook。窄列和菜单只改已复现样式与焦点，不为收尾改写消息引擎或开真实执行。
+
 ## 2026-10-19 聊天主路径与项目留白局部修复
 
 承接 Root 已确认的 A→B→C 顺序；本片只做 A 的已复现恢复/输入边界和 B 的两处局部问题。无 owner、网络契约、Schema、依赖或持久化模型变化，不新增全局 Chat store，不替换 AG-UI/MessageScroller。

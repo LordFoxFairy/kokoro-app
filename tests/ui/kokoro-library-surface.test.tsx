@@ -11,6 +11,7 @@ vi.mock("next/navigation", () => ({
 import { LocaleProvider } from "@/i18n/context"
 import { KokoroLibrarySurface } from "@/features/app/kokoro-library-surface"
 import styles from "@/features/app/kokoro-library-surface.module.css"
+import { artifactFilter } from "@/features/app/kokoro-library-model"
 import type { LibraryArtifact, LibraryArtifactPage } from "@/features/app/kokoro-library-artifact-client"
 
 const artifacts: LibraryArtifact[] = [
@@ -82,7 +83,7 @@ function installDownloadDomShim() {
   return { createObjectURL, click }
 }
 
-it("默认个人文件页签从同源 BFF 读取 Asset，且不借用作品下载", async () => {
+it("个人文件深链从同源 BFF 读取 Asset，且不借用作品下载", async () => {
   const fetchFiles = vi.fn(async () => new Response(JSON.stringify(filePage([fileOne])), {
     status: 200,
     headers: { "content-type": "application/json" },
@@ -90,7 +91,7 @@ it("默认个人文件页签从同源 BFF 读取 Asset，且不借用作品下�
   vi.stubGlobal("fetch", fetchFiles)
   render(<LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} /></LocaleProvider>)
 
-  expect(screen.getByRole("tab", { name: "个人文件" })).toHaveAttribute("data-state", "active")
+  expect(screen.getByRole("heading", { name: "个人文件" })).toBeInTheDocument()
   await screen.findByText("私人备忘.pdf")
   expect(fetchFiles).toHaveBeenCalledWith("/api/hub/library?kind=file&limit=50", expect.objectContaining({ cache: "no-store", signal: expect.any(AbortSignal) }))
   expect(screen.getByTestId("library-files")).toBeInTheDocument()
@@ -209,7 +210,7 @@ it("下载中禁重复点击，显式取消及切换作品页签均中止在途�
   fireEvent.click(button)
   const nextCalls = fetchFiles.mock.calls.filter(([input]) => requestUrl(input) === "/api/hub/library/files/asset-personal-1/content")
   const nextSignal = (nextCalls[1]?.[1] as { signal: AbortSignal }).signal
-  fireEvent.mouseDown(screen.getByRole("tab", { name: "Agent 作品" }), { button: 0, ctrlKey: false })
+  showArtifacts()
   expect(nextSignal.aborted).toBe(true)
 })
 
@@ -284,9 +285,9 @@ it("上传响应未知时切到作品再返回仍保留同一文件和键供显�
   fireEvent.click(screen.getByRole("button", { name: "上传个人文件" }))
   expect(await screen.findByRole("button", { name: "重试上传同一文件" })).toBeInTheDocument()
   const firstKey = (calls.mock.calls.find(([input]) => requestUrl(input) === "/api/hub/library/files")?.[0] as Request).headers.get("Idempotency-Key")
-  fireEvent.mouseDown(screen.getByRole("tab", { name: "Agent 作品" }), { button: 0, ctrlKey: false })
+  showArtifacts()
   await screen.findByText("季度汇报.pptx")
-  fireEvent.mouseDown(screen.getByRole("tab", { name: "个人文件" }), { button: 0, ctrlKey: false })
+  showFiles()
   expect(screen.getByRole("button", { name: "重试上传同一文件" })).toBeInTheDocument()
   fireEvent.click(screen.getByRole("button", { name: "重试上传同一文件" }))
   await waitFor(() => expect(screen.getByTestId("library-files")).toHaveTextContent("私人备忘.pdf"))
@@ -307,10 +308,10 @@ it("上传仍在途时切换作品页签，未知结果返回后保留原意图"
   fireEvent.change(screen.getByLabelText("选择个人文件"), { target: { files: [new File(["hello"], "私人备忘.pdf", { type: "application/pdf" })] } })
   fireEvent.click(screen.getByRole("button", { name: "上传个人文件" }))
   await waitFor(() => expect(calls.mock.calls.some(([input]) => requestUrl(input) === "/api/hub/library/files")).toBe(true))
-  fireEvent.mouseDown(screen.getByRole("tab", { name: "Agent 作品" }), { button: 0, ctrlKey: false })
+  showArtifacts()
   await screen.findByText("季度汇报.pptx")
   rejectUpload(new Error("connection lost"))
-  fireEvent.mouseDown(screen.getByRole("tab", { name: "个人文件" }), { button: 0, ctrlKey: false })
+  showFiles()
   expect(await screen.findByRole("button", { name: "重试上传同一文件" })).toBeInTheDocument()
   expect(screen.getByText("私人备忘.pdf")).toBeInTheDocument()
 })
@@ -481,18 +482,18 @@ it("切到 Agent 作品时取消个人文件在途 GET，返回时重新读取�
   render(<LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} fixtureArtifacts={artifacts} /></LocaleProvider>)
   await waitFor(() => expect(fetchFiles).toHaveBeenCalledTimes(1))
   const firstSignal = (fetchFiles.mock.calls[0]?.[1] as { signal: AbortSignal }).signal
-  fireEvent.mouseDown(screen.getByRole("tab", { name: "Agent 作品" }), { button: 0, ctrlKey: false })
+  showArtifacts()
   expect(firstSignal.aborted).toBe(true)
   expect(await screen.findByText("季度汇报.pptx")).toBeInTheDocument()
   resolveOld(new Response(JSON.stringify(filePage([fileOne])), { status: 200 }))
-  fireEvent.mouseDown(screen.getByRole("tab", { name: "个人文件" }), { button: 0, ctrlKey: false })
+  showFiles()
   expect(await screen.findByTestId("library-files-empty")).toBeInTheDocument()
   expect(screen.queryByText("私人备忘.pdf")).not.toBeInTheDocument()
 })
 
 beforeEach(() => {
   window.localStorage.setItem("kokoro.locale", "zh")
-  window.history.replaceState(null, "", "/app/library")
+  window.history.replaceState(null, "", "/app/library?tab=files")
   routerPush.mockReset()
 })
 
@@ -525,6 +526,21 @@ function listItemAt(index: number): HTMLElement {
   return item
 }
 
+function showArtifacts() {
+  const back = screen.queryByRole("button", { name: "Agent 作品" })
+  if (back) fireEvent.click(back)
+}
+
+function showFiles() {
+  fireEvent.keyDown(screen.getByRole("button", { name: "查看选项" }), { key: "ArrowDown" })
+  fireEvent.click(screen.getByRole("menuitem", { name: "个人文件" }))
+}
+
+function toggleFavorites() {
+  fireEvent.keyDown(screen.getByRole("button", { name: "查看选项" }), { key: "ArrowDown" })
+  fireEvent.click(screen.getByRole("menuitemcheckbox", { name: "仅显示收藏" }))
+}
+
 function renderLibrary(props: LibraryRenderProps = {}) {
   const { fixtureArtifacts, ...rest } = props
   const commonProps: Omit<LibraryProps, "fixtureArtifacts"> = { onPrompt: vi.fn(), ...rest }
@@ -533,15 +549,15 @@ function renderLibrary(props: LibraryRenderProps = {}) {
     ? fixtureArtifacts === undefined ? commonProps : { ...commonProps, fixtureArtifacts }
     : { ...commonProps, fixtureArtifacts: artifacts }
   render(<LocaleProvider><KokoroLibrarySurface {...completeProps} /></LocaleProvider>)
-  fireEvent.mouseDown(screen.getByRole("tab", { name: "Agent 作品" }), { button: 0, ctrlKey: false })
+  showArtifacts()
 }
 
-it("Chat 的查看全部作品深链直接选中作品页签，不先请求个人文件", async () => {
+it("Chat 的查看全部作品深链直接展示作品，不先请求个人文件", async () => {
   window.history.replaceState(null, "", "/app/library?tab=artifacts")
   const fetchMock = vi.fn()
   vi.stubGlobal("fetch", fetchMock)
   render(<LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} fixtureArtifacts={artifacts} /></LocaleProvider>)
-  await waitFor(() => expect(screen.getByRole("tab", { name: "Agent 作品" })).toHaveAttribute("data-state", "active"))
+  expect(screen.getByRole("heading", { name: "资料库" })).toBeInTheDocument()
   expect(screen.getByTestId("library-artifacts")).toBeInTheDocument()
   expect(fetchMock).not.toHaveBeenCalled()
 })
@@ -551,21 +567,21 @@ it("加载资料库后可筛选、搜索、收藏和切换列表视图，并同�
   await waitFor(() => expect(screen.getByTestId("library-artifacts")).toBeInTheDocument())
 
   expect(screen.getAllByRole("listitem")).toHaveLength(2)
-  fireEvent.click(screen.getByRole("radio", { name: "投影片" }))
+  fireEvent.click(screen.getByRole("radio", { name: "幻灯片" }))
   expect(screen.getAllByRole("listitem")).toHaveLength(1)
-  expect(window.location.search).toBe("?tab=artifacts&type=slides")
+  expect(window.location.search).toBe("?type=slides")
 
   fireEvent.click(screen.getByRole("radio", { name: "清单视图" }))
   expect(screen.getByTestId("library-artifacts")).toHaveAttribute("data-view", "list")
   expect(window.location.search).toContain("view=list")
 
-  fireEvent.click(screen.getByRole("button", { name: "仅显示收藏" }))
+  toggleFavorites()
   expect(screen.getByTestId("library-empty-state")).toBeInTheDocument()
   expect(window.location.search).toContain("favorites=1")
 
-  fireEvent.click(screen.getByRole("button", { name: "仅显示收藏" }))
+  toggleFavorites()
   fireEvent.click(screen.getByRole("radio", { name: "全部" }))
-  fireEvent.change(screen.getByRole("textbox", { name: "搜寻档案" }), { target: { value: "研究" } })
+  fireEvent.change(screen.getByRole("textbox", { name: "搜索文件" }), { target: { value: "研究" } })
   expect(screen.getByText("研究摘要.pdf")).toBeInTheDocument()
 })
 
@@ -579,8 +595,8 @@ it("已挂载时收到站内 surface 导航事件会重新读取资料库 URL �
 
   await waitFor(() => expect(screen.getByTestId("library-artifacts")).toHaveAttribute("data-view", "grid"))
   expect(screen.getByRole("radio", { name: "全部" })).toHaveAttribute("data-state", "on")
-  expect(screen.getByRole("textbox", { name: "搜寻档案" })).toHaveValue("")
-  expect(screen.getByRole("button", { name: "仅显示收藏" })).toHaveAttribute("aria-pressed", "false")
+  expect(screen.getByRole("textbox", { name: "搜索文件" })).toHaveValue("")
+  expect(screen.getByRole("button", { name: "查看选项" })).not.toHaveAttribute("data-active")
 })
 
 it("窄桌面分类条是明确的横向滚动区域，支持键盘滚动并显示边缘提示", () => {
@@ -616,7 +632,7 @@ it("进入 Agent 作品页签时注入的资料库 fixture 同步渲染", () => 
   expect(screen.getByTestId("library-artifacts")).toBeInTheDocument()
 })
 
-it("收藏作品跨个人文件页签切换保留，默认文件页签不预载作品", async () => {
+it("收藏作品跨个人文件切换保留，个人文件深链不预载作品", async () => {
   const listArtifacts = vi.fn(async () => ({ items: artifacts, nextCursor: null }))
   const fetchFiles = vi.fn(async () => new Response(JSON.stringify(filePage([])), { status: 200 }))
   vi.stubGlobal("fetch", fetchFiles)
@@ -625,14 +641,14 @@ it("收藏作品跨个人文件页签切换保留，默认文件页签不预载�
   await screen.findByTestId("library-files-empty")
   expect(listArtifacts).not.toHaveBeenCalled()
 
-  fireEvent.mouseDown(screen.getByRole("tab", { name: "Agent 作品" }), { button: 0, ctrlKey: false })
+  showArtifacts()
   await screen.findByText("季度汇报.pptx")
   fireEvent.click(screen.getByRole("button", { name: "仅显示收藏: 季度汇报.pptx" }))
   expect(screen.getByRole("button", { name: "仅显示收藏: 季度汇报.pptx" })).toHaveAttribute("aria-pressed", "true")
 
-  fireEvent.mouseDown(screen.getByRole("tab", { name: "个人文件" }), { button: 0, ctrlKey: false })
+  showFiles()
   expect(screen.queryByTestId("library-artifacts")).not.toBeInTheDocument()
-  fireEvent.mouseDown(screen.getByRole("tab", { name: "Agent 作品" }), { button: 0, ctrlKey: false })
+  showArtifacts()
   expect(await screen.findByText("季度汇报.pptx")).toBeInTheDocument()
   expect(screen.getByRole("button", { name: "仅显示收藏: 季度汇报.pptx" })).toHaveAttribute("aria-pressed", "true")
 })
@@ -646,7 +662,7 @@ it("资料库从异步加载切换为受控 fixture 时结束 loading 并忽略�
   const view = render(
     <LocaleProvider><KokoroLibrarySurface {...initialProps} /></LocaleProvider>,
   )
-  fireEvent.mouseDown(screen.getByRole("tab", { name: "Agent 作品" }), { button: 0, ctrlKey: false })
+  showArtifacts()
 
   expect(screen.getByRole("status", { name: "正在加载作品…" })).toBeInTheDocument()
 
@@ -670,7 +686,7 @@ it("受控 fixture 接管失败的首屏请求时清除错误态", async () => {
   const view = render(
     <LocaleProvider><KokoroLibrarySurface {...initialProps} /></LocaleProvider>,
   )
-  fireEvent.mouseDown(screen.getByRole("tab", { name: "Agent 作品" }), { button: 0, ctrlKey: false })
+  showArtifacts()
 
   await screen.findByText("作品加载失败")
 
@@ -692,7 +708,7 @@ it("受控 fixture 接管进行中的翻页时清除分页并忽略旧页面", a
   const view = render(
     <LocaleProvider><KokoroLibrarySurface {...initialProps} /></LocaleProvider>,
   )
-  fireEvent.mouseDown(screen.getByRole("tab", { name: "Agent 作品" }), { button: 0, ctrlKey: false })
+  showArtifacts()
 
   await screen.findByText("季度汇报.pptx")
   fireEvent.click(screen.getByRole("button", { name: "加载更多" }))
@@ -713,10 +729,10 @@ it("无匹配筛选时给出明确空态并可一键恢复", async () => {
   renderLibrary()
   await waitFor(() => expect(screen.getByTestId("library-artifacts")).toBeInTheDocument())
 
-  fireEvent.change(screen.getByRole("textbox", { name: "搜寻档案" }), { target: { value: "不存在的作品" } })
+  fireEvent.change(screen.getByRole("textbox", { name: "搜索文件" }), { target: { value: "不存在的作品" } })
   expect(screen.getByTestId("library-empty-state")).toHaveTextContent("没有匹配的作品")
   expect(screen.getByRole("button", { name: "清除筛选" })).toBeInTheDocument()
-  expect(screen.queryByText("资料库中没有内容")).toBeNull()
+  expect(screen.queryByText("文档中没有内容")).toBeNull()
 
   fireEvent.click(screen.getByRole("button", { name: "清除筛选" }))
   expect(screen.getByTestId("library-artifacts")).toBeInTheDocument()
@@ -812,21 +828,21 @@ it("加载中保持与目录相同的三列卡片骨架，不用低高度横线�
   await waitFor(() => expect(screen.getByTestId("library-empty-state")).toBeInTheDocument())
 })
 
-it("通过 next_cursor 加载下一页，并在服务端重复游标时停止重复请求", async () => {
-  const listArtifacts = vi
-    .fn<(cursor: string | null, _signal: AbortSignal) => Promise<LibraryArtifactPage>>()
-    .mockResolvedValueOnce({ items: [artifactAt(0)], nextCursor: "cursor-2" })
-    .mockResolvedValueOnce({ items: [artifactAt(1)], nextCursor: "cursor-2" })
-  renderLibrary({ fixtureArtifacts: undefined, artifactClient: { listArtifacts } })
-
+it("重复游标保留已确认页并允许显式重试，不把协议错误冒充穷尽", async () => {
+  const listArtifacts = vi.fn<(cursor: string | null, signal: AbortSignal) => Promise<LibraryArtifactPage>>()
+    .mockResolvedValueOnce({items:[artifactAt(0)],nextCursor:"cursor-2"})
+    .mockResolvedValueOnce({items:[artifactAt(1)],nextCursor:"cursor-2"})
+    .mockResolvedValueOnce({items:[artifactAt(1)],nextCursor:null})
+  renderLibrary({fixtureArtifacts:undefined,artifactClient:{listArtifacts}})
   await screen.findByText("季度汇报.pptx")
-  fireEvent.click(screen.getByRole("button", { name: "加载更多" }))
+  fireEvent.click(screen.getByRole("button",{name:"加载更多"}))
+  await screen.findByText("更多成果加载失败，请重试。")
+  expect(screen.getByText("季度汇报.pptx")).toBeInTheDocument()
+  expect(screen.queryByText("研究摘要.pdf")).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole("button",{name:"重试加载更多"}))
   await screen.findByText("研究摘要.pdf")
-
-  expect(listArtifacts).toHaveBeenNthCalledWith(1, null, expect.any(AbortSignal))
-  expect(listArtifacts).toHaveBeenNthCalledWith(2, "cursor-2", expect.any(AbortSignal))
-  expect(screen.getAllByRole("listitem")).toHaveLength(2)
-  expect(screen.queryByRole("button", { name: "加载更多" })).not.toBeInTheDocument()
+  expect(listArtifacts).toHaveBeenLastCalledWith("cursor-2",expect.any(AbortSignal),{query:"",type:"all"})
+  expect(screen.queryByTestId("library-pagination")).not.toBeInTheDocument()
 })
 
 it("翻页失败时保留当前成果并提供明确的重试入口", async () => {
@@ -845,7 +861,7 @@ it("翻页失败时保留当前成果并提供明确的重试入口", async () =
   fireEvent.click(screen.getByRole("button", { name: "重试加载更多" }))
   await screen.findByText("研究摘要.pdf")
   expect(screen.queryByText("更多成果加载失败，请重试。")).toBeNull()
-  expect(listArtifacts).toHaveBeenLastCalledWith("cursor-2", expect.any(AbortSignal))
+  expect(listArtifacts).toHaveBeenLastCalledWith("cursor-2", expect.any(AbortSignal), {query:"",type:"all"})
 })
 
 it("收藏筛选为空时 CTA 清除收藏筛选，不导航到新任务", async () => {
@@ -853,7 +869,7 @@ it("收藏筛选为空时 CTA 清除收藏筛选，不导航到新任务", async
   renderLibrary({ initialFavoriteIds: [], onPrompt })
   await waitFor(() => expect(screen.getByTestId("library-artifacts")).toBeInTheDocument())
 
-  fireEvent.click(screen.getByRole("button", { name: "仅显示收藏" }))
+  toggleFavorites()
   expect(screen.getByTestId("library-empty-state")).toHaveTextContent("尚无收藏作品")
 
   fireEvent.click(screen.getByRole("button", { name: "清除筛选" }))
@@ -882,4 +898,160 @@ it("正式作品页用二元 Product 列表，空页带 cursor 时继续加载�
   expect(await screen.findByText("正式报告")).toBeInTheDocument()
   expect(fetcher.mock.calls.some(([url]) => String(url).includes("/api/session/artifacts"))).toBe(false)
   expect(fetcher.mock.calls.some(([url]) => String(url).includes("kind=artifact&limit=50"))).toBe(true)
+})
+
+
+it("资料库默认展示任务产物且不预读个人文件，个人文件由次级入口保留", async () => {
+  window.history.replaceState(null, "", "/app/library")
+  const listArtifacts = vi.fn(async () => ({ items: artifacts, nextCursor: null }))
+  const fetchFiles = vi.fn(async () => new Response(JSON.stringify(filePage([])), { status: 200 }))
+  vi.stubGlobal("fetch", fetchFiles)
+  render(<LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} artifactClient={{ listArtifacts }} /></LocaleProvider>)
+  expect(await screen.findByText("季度汇报.pptx")).toBeInTheDocument()
+  expect(listArtifacts).toHaveBeenCalledTimes(1)
+  expect(fetchFiles).not.toHaveBeenCalled()
+  expect(screen.queryByRole("tablist")).not.toBeInTheDocument()
+  fireEvent.keyDown(screen.getByRole("button", { name: "查看选项" }), { key: "ArrowDown" })
+  fireEvent.click(await screen.findByRole("menuitem", { name: "个人文件" }))
+  await waitFor(() => expect(screen.getByRole("button", { name: "Agent 作品" })).toHaveFocus())
+  showArtifacts()
+  await waitFor(() => expect(screen.getByRole("button", { name: "查看选项" })).toHaveFocus())
+})
+
+it("资料库按音频和视频独立筛选，网页归入文本而不单设网站分类", async () => {
+  expect(artifactFilter("audio/mpeg", "录音.mp3")).toBe("audio")
+  expect(artifactFilter("video/mp4", "演示.mp4")).toBe("video")
+  expect(artifactFilter("text/html", "页面.html")).toBe("documents")
+  renderLibrary({ fixtureArtifacts: [
+    { ...artifactAt(0), artifactId: "audio", title: "录音.mp3", mimeType: "audio/mpeg" },
+    { ...artifactAt(1), artifactId: "video", title: "演示.mp4", mimeType: "video/mp4" },
+  ] })
+  fireEvent.keyDown(screen.getByRole("button", { name: "筛选作品类型" }), { key: "ArrowDown" })
+  fireEvent.click(await screen.findByRole("menuitemradio", { name: "音频" }))
+  expect(screen.getByText("录音.mp3")).toBeInTheDocument()
+  expect(screen.queryByText("演示.mp4")).not.toBeInTheDocument()
+  expect(window.location.search).toBe("?type=audio")
+})
+
+it("opens exact artifact metadata before download and returns keyboard focus to its original card", async () => {
+  window.history.replaceState(null, "", "/app/library")
+  const detail = { ...artifacts[0]!, title: "Owner-confirmed title", filename: "owner-file.pptx" }
+  const getArtifact = vi.fn().mockResolvedValue(detail)
+  const download = vi.fn().mockResolvedValue(undefined)
+  const source = vi.fn()
+  render(<LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} fixtureArtifacts={artifacts} artifactClient={{ listArtifacts: vi.fn(), getArtifact }} downloadArtifact={download} onOpenSession={source} /></LocaleProvider>)
+  const trigger = screen.getByRole("button", { name: "查看详情 季度汇报.pptx" })
+  fireEvent.click(trigger)
+  const dialog = await screen.findByRole("dialog")
+  expect(await within(dialog).findByText("Owner-confirmed title")).toBeVisible()
+  expect(getArtifact).toHaveBeenCalledWith("session-1", "artifact-slide", expect.any(AbortSignal))
+  expect(download).not.toHaveBeenCalled()
+  fireEvent.click(within(dialog).getByRole("button", { name: "查看来源会话" }))
+  expect(source).toHaveBeenCalledWith("session-1")
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+  await waitFor(() => expect(trigger).toHaveFocus())
+})
+
+it("retires a closed detail read, keeps a successor intact and retries only an explicit failed read", async () => {
+  window.history.replaceState(null, "", "/app/library")
+  const { act } = await import("@testing-library/react")
+  let finish!: (value: LibraryArtifact) => void
+  const getArtifact = vi.fn().mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+    .mockRejectedValueOnce(Error("library_artifact_not_found")).mockResolvedValue(artifacts[1])
+  render(<LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} fixtureArtifacts={artifacts} artifactClient={{ listArtifacts: vi.fn(), getArtifact }} /></LocaleProvider>)
+  fireEvent.click(screen.getByRole("button", { name: "查看详情 季度汇报.pptx" }))
+  await waitFor(() => expect(getArtifact).toHaveBeenCalledOnce())
+  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "关闭" }))
+  expect((getArtifact.mock.calls[0]![2] as AbortSignal).aborted).toBe(true)
+  fireEvent.click(screen.getByRole("button", { name: "查看详情 研究摘要.pdf" }))
+  const successor = await screen.findByRole("dialog")
+  expect(await within(successor).findByRole("alert")).toHaveTextContent("文件不可用或你无权访问。")
+  await act(async () => finish(artifacts[0]!))
+  expect(screen.getByRole("dialog")).toBe(successor)
+  expect(getArtifact).toHaveBeenCalledTimes(2)
+  fireEvent.click(within(successor).getByRole("button", { name: "重新加载作品" }))
+  await waitFor(() => expect(within(successor).queryByRole("alert")).not.toBeInTheDocument())
+  expect(getArtifact).toHaveBeenCalledTimes(3)
+})
+
+it("retires artifact detail facts and reads during admission recheck, then rereads its exact locator", async () => {
+  window.history.replaceState(null, "", "/app/library")
+  let finish!: (value: LibraryArtifact) => void
+  const getArtifact = vi.fn().mockImplementationOnce(() => new Promise(resolve => { finish = resolve })).mockResolvedValue(artifacts[0])
+  let finishDownload!: () => void
+  const download = vi.fn().mockImplementationOnce(() => new Promise<void>(resolve => { finishDownload = resolve })).mockResolvedValue(undefined)
+  const client = { listArtifacts: vi.fn(), getArtifact }
+  const content = (admitted: boolean, generation: number) => <LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} fixtureArtifacts={artifacts} artifactClient={client} downloadArtifact={download} projectReadBoundary={{ subject: "library-reader", admitted, generation }} /></LocaleProvider>
+  const view = render(content(true, 1))
+  fireEvent.click(screen.getByRole("button", { name: "查看详情 季度汇报.pptx" }))
+  await waitFor(() => expect(getArtifact).toHaveBeenCalledOnce())
+  view.rerender(content(false, 2))
+  expect((getArtifact.mock.calls[0]![2] as AbortSignal).aborted).toBe(true)
+  expect(within(screen.getByRole("dialog")).queryByRole("button", { name: "下载" })).not.toBeInTheDocument()
+  const { act } = await import("@testing-library/react")
+  await act(async () => finish({ ...artifacts[0]!, title: "Retired metadata" }))
+  expect(screen.queryByText("Retired metadata")).not.toBeInTheDocument()
+  view.rerender(content(true, 2))
+  await waitFor(() => expect(getArtifact).toHaveBeenCalledTimes(2))
+  const firstDownload = await within(screen.getByRole("dialog")).findByRole("button", { name: "下载" })
+  fireEvent.click(firstDownload)
+  await waitFor(() => expect(download).toHaveBeenCalledOnce())
+  view.rerender(content(false, 3))
+  expect((download.mock.calls[0]![1] as AbortSignal).aborted).toBe(true)
+  view.rerender(content(true, 3))
+  const resumedDownload = await within(screen.getByRole("dialog")).findByRole("button", { name: "下载" })
+  expect(resumedDownload).toBeEnabled()
+  fireEvent.click(resumedDownload)
+  await waitFor(() => expect(download).toHaveBeenCalledTimes(2))
+  await act(async () => finishDownload())
+  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "关闭" }))
+  await waitFor(() => expect(screen.getByRole("button", { name: "查看详情 季度汇报.pptx" })).toHaveFocus())
+})
+
+
+it("正式资料库把多词搜索交给服务端，保已确认页、取消旧查询并丢弃迟到响应", async () => {
+  let finishOld!: (page: LibraryArtifactPage) => void
+  const slow = new Promise<LibraryArtifactPage>(resolve => {finishOld=resolve})
+  const byFilename = {...artifactAt(1), title:"Owner title", filename:"budget final.pdf"}
+  const listArtifacts = vi.fn().mockResolvedValueOnce({items:[artifactAt(0)],nextCursor:"old-cursor"}).mockImplementationOnce(()=>slow).mockResolvedValueOnce({items:[byFilename],nextCursor:null})
+  renderLibrary({fixtureArtifacts:undefined,artifactClient:{listArtifacts}})
+  await screen.findByText("季度汇报.pptx")
+  const search=screen.getByRole("textbox",{name:"搜索文件"})
+  fireEvent.change(search,{target:{value:"budget "}})
+  expect(search).toHaveValue("budget ")
+  await waitFor(()=>expect(listArtifacts).toHaveBeenCalledTimes(2))
+  const oldSignal=listArtifacts.mock.calls[1]?.[1] as AbortSignal
+  expect(screen.getByText("季度汇报.pptx")).toBeInTheDocument()
+  expect(screen.queryByTestId("library-loading-group")).not.toBeInTheDocument()
+  expect(screen.queryByRole("button",{name:"加载更多"})).not.toBeInTheDocument()
+  fireEvent.change(search,{target:{value:"budget final"}})
+  await screen.findByText("Owner title")
+  expect(oldSignal.aborted).toBe(true)
+  expect(listArtifacts).toHaveBeenLastCalledWith(null,expect.any(AbortSignal),{query:"budget final",type:"all"})
+  finishOld({items:[artifactAt(0)],nextCursor:"late-cursor"})
+  await waitFor(()=>expect(screen.queryByText("季度汇报.pptx")).not.toBeInTheDocument())
+  expect(screen.getByText("Owner title")).toBeInTheDocument()
+  expect(listArtifacts).toHaveBeenCalledTimes(3)
+  // Public18 bounds raw code points before NFC/lowercase; casing may expand them.
+  const rawQuery = "İ".repeat(200)
+  listArtifacts.mockResolvedValue({items:[],nextCursor:null})
+  fireEvent.change(search,{target:{value:rawQuery}})
+  await waitFor(()=>expect(listArtifacts).toHaveBeenLastCalledWith(null,expect.any(AbortSignal),{query:rawQuery,type:"all"}))
+  expect(search).toHaveValue(rawQuery)
+})
+
+it("服务端空窗口但有游标时只显式继续，筛选变更从首窗口重读且不误报无匹配", async () => {
+  window.history.replaceState(null,"","/app/library?q=budget&type=documents")
+  const listArtifacts=vi.fn().mockResolvedValueOnce({items:[],nextCursor:"scan-2"}).mockResolvedValueOnce({items:[{...artifactAt(1),title:"Final result"}],nextCursor:null}).mockResolvedValueOnce({items:[],nextCursor:null})
+  renderLibrary({fixtureArtifacts:undefined,artifactClient:{listArtifacts}})
+  await screen.findByRole("button",{name:"加载更多"})
+  expect(screen.queryByTestId("library-empty-state")).not.toBeInTheDocument()
+  expect(listArtifacts).toHaveBeenCalledTimes(1)
+  fireEvent.click(screen.getByRole("button",{name:"加载更多"}))
+  await screen.findByText("Final result")
+  expect(listArtifacts).toHaveBeenLastCalledWith("scan-2",expect.any(AbortSignal),{query:"budget",type:"documents"})
+  fireEvent.click(screen.getByRole("radio",{name:"图片"}))
+  await screen.findByText("没有匹配的作品")
+  expect(listArtifacts).toHaveBeenLastCalledWith(null,expect.any(AbortSignal),{query:"budget",type:"images"})
+  expect(screen.queryByText("Final result")).not.toBeInTheDocument()
 })

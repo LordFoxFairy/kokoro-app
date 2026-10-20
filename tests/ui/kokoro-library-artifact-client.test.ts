@@ -14,15 +14,22 @@ afterEach(() => vi.unstubAllGlobals())
 it("reads an empty Artifact page with cursor and never calls the old session path", async () => {
   const fetcher = vi.fn(async (url: string) => { expect(url).toContain("/api/hub/library?"); return new Response(JSON.stringify(page([], "next-1")), { status: 200 }) })
   vi.stubGlobal("fetch", fetcher)
-  await expect(listLibraryArtifacts(null, new AbortController().signal)).resolves.toEqual({ items: [], nextCursor: "next-1" })
+  await expect(listLibraryArtifacts(null, new AbortController().signal, {query:"",type:"all"})).resolves.toEqual({ items: [], nextCursor: "next-1" })
   expect(fetcher).toHaveBeenCalledWith("/api/hub/library?kind=artifact&limit=50", expect.objectContaining({ cache: "no-store", signal: expect.any(AbortSignal) }))
-  await listLibraryArtifacts("next-1", new AbortController().signal)
+  await listLibraryArtifacts("next-1", new AbortController().signal, {query:"",type:"all"})
   expect(fetcher.mock.calls[1]?.[0]).toBe("/api/hub/library?kind=artifact&limit=50&cursor=next-1")
+  await listLibraryArtifacts(null, new AbortController().signal, {query:"report & final",type:"documents"})
+  expect(fetcher.mock.calls[2]?.[0]).toBe("/api/hub/library?kind=artifact&limit=50&q=report+%26+final&type=documents")
+  const rawQuery = "İ".repeat(200)
+  await listLibraryArtifacts(null,new AbortController().signal,{query:rawQuery,type:"all"})
+  const sentQuery = new URL(String(fetcher.mock.calls[3]?.[0]),"http://fixture.local").searchParams.get("q")
+  expect(sentQuery).toBe(rawQuery)
+  expect([...sentQuery!]).toHaveLength(200)
 })
 
 it("rejects a non-artifact/mixed page rather than displaying a false empty page", async () => {
   vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(page([item, { ...item, kind: "file" }])), { status: 200 })))
-  await expect(listLibraryArtifacts(null, new AbortController().signal)).rejects.toThrow("library_artifacts_invalid_response")
+  await expect(listLibraryArtifacts(null, new AbortController().signal, {query:"",type:"all"})).rejects.toThrow("library_artifacts_invalid_response")
 })
 
 it("checks two-part detail and preflights before native attachment, without a browser Blob", async () => {

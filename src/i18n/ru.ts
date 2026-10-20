@@ -1457,4 +1457,7 @@ export const ru: Partial<Record<MessageKey, string>> = {
   "mcp.recovery.needs_client": "Отсутствуют настройки клиента OAuth. Проверьте данные клиента коннектора.",
   "mcp.recovery.auth_method_unsupported": "Этот способ аутентификации не поддерживается. Проверьте настройки коннектора.",
   "mcp.recovery.inspectRequired": "Сначала проверить состояние",
+  "library.viewOptions": "Параметры отображения",
+  "library.filterVideo": "Видео",
+  "library.filterAudio": "Аудио",
 }

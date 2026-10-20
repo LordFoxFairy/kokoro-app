@@ -35,7 +35,7 @@ export function ProjectSkillCard({
         <h3>{item.display_name}</h3>
         <Switch
           checked={item.enabled}
-          disabled={locked || protectedDefault}
+          disabled={locked || protectedDefault || (!item.enabled && item.source_status !== "active")}
           aria-label={t("projectSkills.enable", { name: item.display_name })}
           onCheckedChange={onEnabled}
         />

@@ -5,7 +5,7 @@ export const DEFAULT_PRODUCT_RETURN_TARGET = "/app" as ProductReturnTarget
 const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
 const PROJECT = new RegExp(`^project_${UUID}$`, "u")
 const CONVERSATION = new RegExp(`^conv_${UUID}$`, "u")
-const LIBRARY_TYPES = new Set(["all", "slides", "websites", "documents", "spreadsheets", "images", "media", "other"])
+const LIBRARY_TYPES = new Set(["all", "documents", "slides", "spreadsheets", "images", "video", "audio", "other"])
 const SURFACES = new Set(["/app", "/app/agents", "/app/plugins", "/app/scheduled", "/app/library", "/app/skills"])
 
 /** Parse before URL normalization; reject encoded paths and ambiguous query input. */
@@ -50,7 +50,7 @@ export function parseProductReturnTarget(raw: string): ProductReturnTarget | nul
       if (key === "tab") { if (value !== "calendar" && value !== "list") return null; if (value === "calendar") continue }
       else if (key !== "project_id" || !PROJECT.test(value)) return null
     } else if (pathname === "/app/library") {
-      if (key === "tab") { if (value !== "artifacts") return null }
+      if (key === "tab") { if (value !== "artifacts" && value !== "files") return null }
       else if (key === "type") { if (!LIBRARY_TYPES.has(value)) return null; if (value === "all") continue }
       else if (key === "view") { if (value !== "grid" && value !== "list") return null; if (value === "grid") continue }
       else if (key === "favorites") { if (value !== "1") return null }

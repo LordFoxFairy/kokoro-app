@@ -10,10 +10,10 @@ import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
 import { PERSONALIZATION_FIELD_LIMITS, type PersonalizationFields } from "../personalization-schema";
 import { usePersonalization } from "../use-personalization";
 import { MemoryImportDialog } from "./memory-import-dialog";
-import { PersonalizationKnowledgePanel } from "./personalization-knowledge-panel";
+import { KnowledgePanel } from "../knowledge/knowledge-panel";
 import styles from "./settings-sections.module.css";
 
-/** Four BFF-owned fields; knowledge and import drafts have no server writes. */
+/** Profile editing retains its existing flow; knowledge has its own owner-backed session. */
 export function PersonalizationCard({
   preview = false,
   readBoundary,
@@ -207,7 +207,7 @@ export function PersonalizationCard({
           </div>
         </TabsContent>
         <TabsContent value="knowledge">
-          <PersonalizationKnowledgePanel key={draftScope} />
+          <KnowledgePanel key={draftScope} admitted={!preview && (readBoundary?.admitted ?? false)} generation={readBoundary?.generation ?? 0} />
         </TabsContent>
       </Tabs>
     </section>

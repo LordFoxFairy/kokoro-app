@@ -1,3 +1,9 @@
+## 2026-10-20 本地保留切片接收
+
+- `src/features/app/kokoro-library-header.tsx`：资料库来源与显示选项；`use-library-artifacts.ts`：真实筛选与分页退休；`kokoro-library-artifact-detail.tsx`：精确 metadata 读取及独立下载。
+- `src/ui/settings/knowledge/`：稳定会话、编辑／核验／反馈与展示；`src/lib/server/personal-knowledge.ts` 和 `src/contract/personal-knowledge.ts`：现有六操作的同源边界。
+- 项目行菜单和会话 canvas 修复继续由各自原组件/CSS拥有，不增加新全局状态层。交付状态与实际门见 CURRENT。
+
 聊天／项目局部修复（2026-10-19）：`page-clients` 仅为未回执 create 延长同文档 scope 租约，身份失效与回执确认后收束；Composer 对超长恢复草稿可见反馈。项目留白测量独立归 `features/app/use-project-composer-clearance.ts`，不另建滚动状态。项目链接弹层不宣称公开分享。验证与剩余范围见 docs/CURRENT.md。
 
 SET51：两现有 `tests/system/*next-http.integration.test.ts` 中的登录回归随当前 `/login` 的浏览器 CSRF 表单→provider POST→authorize 导航验证；生产源与项目/侧栏回归保持独立，结果见 CURRENT。

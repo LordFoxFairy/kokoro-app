@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import "tailwindcss" source("../");
 
 @custom-variant dark (&:is(.dark *));
 
@@ -144,12 +144,15 @@
    in their own CSS Modules. Keeping the skin here also makes light/dark mode
    a single cascade instead of a global palette plus an AppFrame override. */
 [data-web-skin="kokoro"] {
-  /* Manus' desktop workbench uses a true white canvas. Keeping this at the
-     skin boundary (rather than overriding individual surfaces) prevents the
-     rail, dialog portals, and route pages from drifting into separate whites. */
+  /* Controls and catalogs retain white; the measured conversation canvas is
+     a separate neutral surface, not a global recoloring of every route. */
   --background: #ffffff;
+  --conversation-canvas: #f8f8f7;
+  --library-canvas: #f8f8f7;
   --settings-surface: #f8f8f7;
   --settings-control-fill: rgb(55 53 47 / 8%);
+  --settings-subtle-control-fill: rgb(55 53 47 / 4%);
+  --settings-search-border: rgb(0 0 0 / 12%);
   --settings-control-border: rgb(0 0 0 / 14%);
   --settings-description-foreground: #4d4d4d;
   --foreground: #1a1a1a;
@@ -184,7 +187,11 @@
 
 .dark [data-web-skin="kokoro"] {
   --background: #171716;
+  --conversation-canvas: var(--background);
+  --library-canvas: var(--background);
   --settings-surface: var(--background);
+  --settings-subtle-control-fill: rgb(255 255 255 / 6%);
+  --settings-search-border: var(--border);
   --settings-control-fill: color-mix(in srgb, var(--foreground) 8%, transparent);
   --settings-control-border: color-mix(in srgb, var(--foreground) 14%, transparent);
   --settings-description-foreground: var(--muted-foreground);

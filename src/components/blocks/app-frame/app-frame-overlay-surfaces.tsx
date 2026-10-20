@@ -1,3 +1,4 @@
+import { PersonalKnowledgeProvider } from "@/ui/settings/knowledge/session-context";
 import { useEffect, type ComponentType, type RefObject } from "react";
 
 import { McpCreateDialog } from "@/ui/mcp/mcp-create-dialog";
@@ -104,7 +105,7 @@ export function AppFrameOverlaySurfaces({
   }, [mounted, preview, readBoundary]);
 
   return (
-    <>
+    <PersonalKnowledgeProvider boundary={readBoundary ?? { subject: null, admitted: false, generation: 0 }} preview={preview}>
       {/* 设置中心：浮在工作区之上的模态卡片，语境原地保留。 */}
       {mounted && settingsTab !== null ? (
         <SettingsModal
@@ -140,6 +141,6 @@ export function AppFrameOverlaySurfaces({
         open={commandOpen}
         onOpenChange={onCommandOpenChange}
       />
-    </>
+    </PersonalKnowledgeProvider>
   );
 }
