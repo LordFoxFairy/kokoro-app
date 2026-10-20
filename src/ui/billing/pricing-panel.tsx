@@ -1,17 +1,19 @@
 "use client"
 
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
+import { PackageOpen } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Empty, EmptyDescription } from "@/components/ui/empty"
+import { Empty, EmptyDescription, EmptyMedia } from "@/components/ui/empty"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Spinner } from "@/components/ui/spinner"
 
 // Read the canonical catalog; the paired BFF does not provide checkout.
 // Money and credits remain exact BigInt-based presentations.
 
-import { useCallback, useLayoutEffect, useState, useRef } from "react"
+import { useCallback, useLayoutEffect, useState, useRef, useId } from "react"
 
 import { formatMicros, formatMinor } from "@/billing/format"
 import { planIntervalKey } from "@/billing/rules"
@@ -21,6 +23,7 @@ import { useT } from "@/i18n/context"
 import { cn } from "@/lib/utils"
 
 import styles from "./pricing-panel.module.css"
+import { PricingPlanDetailsDialog } from "./pricing-plan-details-dialog"
 import { useOverlayClose } from "@/ui/shell/use-overlay-close"
 
 
@@ -81,6 +84,9 @@ export function PricingContent(props: PricingContentProps) {
 function PricingScopedContent({ client, embedded = false }: PricingContentProps) {
   const t = useT()
   const [catalog, setCatalog] = useState<CatalogState>({ kind: "loading" })
+  const [period, setPeriod] = useState<"all" | PlanCatalogEntry["billing_interval"]>("all")
+  const periodId = useId()
+  const unavailableId = useId()
   const attempt = useRef<{ controller: AbortController; settled: boolean; clear: () => void } | null>(null)
   const load = useCallback(() => {
     attempt.current?.controller.abort()
@@ -128,7 +134,7 @@ function PricingScopedContent({ client, embedded = false }: PricingContentProps)
     <div className={cn(styles.body, embedded && styles.embeddedBody)} data-embedded={embedded || undefined}>
           {catalog.kind === "ready" && catalog.plans.length > 0 ? (
             <Alert className={styles.unavailable}>
-              <AlertDescription>{t("pricing.unavailable")}</AlertDescription>
+              <AlertDescription id={unavailableId}>{t("pricing.unavailable")}</AlertDescription>
             </Alert>
           ) : null}
 
@@ -154,11 +160,28 @@ function PricingScopedContent({ client, embedded = false }: PricingContentProps)
             </Alert>
           ) : catalog.plans.length === 0 ? (
             <Empty className={styles.emptyState}>
+              <EmptyMedia variant="icon"><PackageOpen aria-hidden="true" /></EmptyMedia>
               <EmptyDescription>{t("pricing.empty")}</EmptyDescription>
+              <Button variant="outline" size="sm" type="button" onClick={retry}>{t("pricing.retry")}</Button>
             </Empty>
           ) : (
+            <>
+            <label className={styles.period} htmlFor={periodId}>{t("pricing.billingPeriod")}
+              <Select value={period} onValueChange={(value) => {
+                if (value === "all" || value === "month" || value === "year" || value === "once") setPeriod(value)
+              }}>
+                <SelectTrigger id={periodId} aria-label={t("pricing.billingPeriod")}><SelectValue /></SelectTrigger>
+                <SelectContent position="popper" className={styles.periodOptions}>
+                  <SelectItem value="all">{t("pricing.allPeriods")}</SelectItem>
+                  <SelectItem value="month">{t("pricing.intervalMonth")}</SelectItem>
+                  <SelectItem value="year">{t("pricing.intervalYear")}</SelectItem>
+                  <SelectItem value="once">{t("pricing.intervalOnce")}</SelectItem>
+                </SelectContent>
+              </Select>
+            </label>
+            {catalog.plans.some((plan) => period === "all" || plan.billing_interval === period) ? null : <p>{t("pricing.noMatchingPeriod")}</p>}
             <ul className={styles.grid}>
-              {catalog.plans.map((plan) => (
+              {catalog.plans.filter((plan) => period === "all" || plan.billing_interval === period).map((plan) => (
                 <li key={plan.id} className={styles.card} data-testid="pricing-card">
                   <span className={styles.cardName}>{plan.name}</span>
                   <div className={styles.price}>
@@ -175,13 +198,16 @@ function PricingScopedContent({ client, embedded = false }: PricingContentProps)
                   <Button variant="default"
                     type="button"
                     className={styles.buy}
+                    aria-describedby={unavailableId}
                     disabled
                   >
                     {t("pricing.buyUnavailable")}
                   </Button>
+                  <PricingPlanDetailsDialog plan={plan} />
                 </li>
               ))}
             </ul>
+            </>
           )}
     </div>
   )

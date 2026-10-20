@@ -22,7 +22,6 @@ export function PersonalizationCard({
   readBoundary?: ProjectReadBoundary;
 }) {
   const t = useT();
-  const unavailableId = useId();
   const fieldFeedbackId = useId();
   const draftScope = JSON.stringify([preview, readBoundary?.admitted, readBoundary?.subject, readBoundary?.generation]);
   const [validation, setValidation] = useState<{
@@ -49,20 +48,20 @@ export function PersonalizationCard({
   };
   const fieldDescription = (field: keyof PersonalizationFields) =>
     `${fieldFeedbackId}-${field}-count${fieldErrors[field] ? ` ${fieldFeedbackId}-${field}-error` : ""}`;
-  const fieldFeedback = (field: keyof PersonalizationFields) => (
-    <small className={styles.profileFieldFeedback}>
+  const fieldCount = (field: keyof PersonalizationFields) => (
       <span id={`${fieldFeedbackId}-${field}-count`} className={styles.profileFieldCount}>
         {t("settings.personalizationCharacterCount", {
           count: [...fields[field]].length,
           limit: PERSONALIZATION_FIELD_LIMITS[field],
         })}
       </span>
-      {fieldErrors[field] ? (
+  );
+  const fieldFeedback = (field: keyof PersonalizationFields) => (
+      fieldErrors[field] ? (
         <span id={`${fieldFeedbackId}-${field}-error`} role="alert" className={styles.profileFieldError}>
           {t("settings.personalizationTooLong", { limit: PERSONALIZATION_FIELD_LIMITS[field] })}
         </span>
-      ) : null}
-    </small>
+      ) : null
   );
   const message =
     phase === "load-error"
@@ -91,16 +90,7 @@ export function PersonalizationCard({
           </TabsTrigger>
         </TabsList>
         <TabsContent value="profile">
-          <p id={unavailableId} className={styles.personalizationUnavailable}>
-            {t("settings.personalizationMemoryUnavailable")}
-          </p>
-          <div className={styles.personalizationImport}>
-            <div>
-              <h3>{t("settings.importFromAi")}</h3>
-              <p>{t("settings.importFromAiHint")}</p>
-            </div>
-            <MemoryImportDialog key={`intro:${draftScope}`} triggerLabel={t("settings.importMemoryAction")} />
-          </div>
+          <MemoryImportDialog key={`intro:${draftScope}`} triggerLabel={t("settings.importMemoryAction")} card />
       <div className={styles.personalizationProfile}>
         {phase === "loading" ? (
           <p className={styles.profileStatus}>{t("settings.loading")}</p>
@@ -141,7 +131,7 @@ export function PersonalizationCard({
         ) : null}
         <div className={styles.profileColumns}>
           <label>
-            <span>{t("settings.nickname")}</span>
+            <span className={styles.profileFieldLabel}><span>{t("settings.nickname")}</span>{fieldCount("nickname")}</span>
             <Input
               aria-label={t("settings.nickname")}
               aria-describedby={fieldDescription("nickname")}
@@ -155,7 +145,7 @@ export function PersonalizationCard({
             {fieldFeedback("nickname")}
           </label>
           <label>
-            <span>{t("settings.occupation")}</span>
+            <span className={styles.profileFieldLabel}><span>{t("settings.occupation")}</span>{fieldCount("occupation")}</span>
             <Input
               aria-label={t("settings.occupation")}
               aria-describedby={fieldDescription("occupation")}
@@ -170,7 +160,7 @@ export function PersonalizationCard({
           </label>
         </div>
         <label className={styles.profileTextarea}>
-          <span>{t("settings.aboutYou")}</span>
+          <span className={styles.profileFieldLabel}><span>{t("settings.aboutYou")}</span>{fieldCount("about")}</span>
           <Textarea
             aria-label={t("settings.aboutYou")}
             aria-describedby={fieldDescription("about")}
@@ -185,7 +175,7 @@ export function PersonalizationCard({
         </label>
         <p className={styles.profileHint}>{t("settings.aboutYouHint")}</p>
         <label className={styles.profileTextarea}>
-          <span>{t("settings.customInstructions")}</span>
+          <span className={styles.profileFieldLabel}><span>{t("settings.customInstructions")}</span>{fieldCount("instructions")}</span>
           <Textarea
             aria-label={t("settings.customInstructions")}
             aria-describedby={fieldDescription("instructions")}
@@ -199,10 +189,7 @@ export function PersonalizationCard({
           {fieldFeedback("instructions")}
         </label>
       </div>
-          <div className={styles.personalizationImport}>
-            <div>
-              <h3>{t("settings.importMemory")}</h3>
-            </div>
+          <div className={styles.personalizationFooter}>
             <MemoryImportDialog key={`footer:${draftScope}`} triggerLabel={t("settings.importMemory")} />
           </div>
         </TabsContent>

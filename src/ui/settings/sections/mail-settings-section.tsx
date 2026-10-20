@@ -1,10 +1,11 @@
 "use client";
 
 import { useId } from "react";
-import { ArrowUpRight, Plus } from "lucide-react";
+import { ArrowUpRight, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useT } from "@/i18n/context";
+import { MailboxSettingsDialog, MailSenderEditor, MailWorkflowDialog } from "./mail-configuration-dialogs";
 import styles from "./settings-sections.module.css";
 
 export function MailSettingsSection({ brandName }: { brandName: string }) {
@@ -31,14 +32,14 @@ export function MailSettingsSection({ brandName }: { brandName: string }) {
               <h2>{t("settingsServices.mailbox", { brand: brandName })}</h2>
               <p>{t("settingsServices.mailAddressUnavailable")}</p>
             </div>
-            <Button variant="outline" disabled aria-describedby={unavailableId}>{t("settingsServices.mailSettings")}</Button>
+            <MailboxSettingsDialog />
           </section>
           <section className={styles.mailSettingRow}>
             <div>
               <h2>{t("settingsServices.workflows")}</h2>
               <p>{t("settingsServices.workflowsDescription")}</p>
             </div>
-            <Button variant="outline" disabled aria-describedby={unavailableId}><Plus aria-hidden="true" />{t("settingsServices.add")}</Button>
+            <MailWorkflowDialog />
           </section>
           <section className={styles.mailSettingRow}>
             <div>
@@ -52,23 +53,19 @@ export function MailSettingsSection({ brandName }: { brandName: string }) {
               <h2>{t("settingsServices.senders")}</h2>
               <p>{t("settingsServices.sendersDescription")}</p>
             </div>
-            <Button variant="outline" disabled aria-describedby={unavailableId}><Plus aria-hidden="true" />{t("settingsServices.add")}</Button>
+            <MailSenderEditor />
           </section>
         </TabsContent>
-        <TabsContent value="inbox" className={styles.serviceCard}>
-          <div className={styles.serviceCardHeader}>
-            <h2>{t("settingsServices.mailInbox")}</h2>
-            <Button variant="outline" disabled aria-describedby={inboxId}>{t("settingsServices.refreshInbox")}</Button>
-          </div>
-          <p id={inboxId}>{t("settingsServices.inboxUnavailable")}</p>
+        <TabsContent value="inbox" className={styles.mailInbox}>
           <table className={styles.serviceTable} aria-describedby={inboxId}>
             <thead><tr>
               <th scope="col">{t("settingsServices.senderColumn")}</th>
               <th scope="col">{t("settingsServices.contentColumn")}</th>
-              <th scope="col">{t("settingsServices.dateColumn")}</th>
+              <th scope="col" aria-label={t("settingsServices.dateColumn")}><div className={styles.mailInboxDate}><span>{t("settingsServices.dateColumn")}</span><Button variant="outline" size="icon" disabled aria-label={t("settingsServices.refreshInbox")} aria-describedby={inboxId}><RefreshCw aria-hidden="true" /></Button></div></th>
             </tr></thead>
             <tbody />
           </table>
+          <p id={inboxId} className={styles.serviceAvailability}>{t("settingsServices.inboxUnavailable")}</p>
         </TabsContent>
       </Tabs>
     </div>

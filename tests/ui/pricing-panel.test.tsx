@@ -1,5 +1,5 @@
 // Catalog read states stay functional; unsupported checkout is disabled before interaction.
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import type { PricingClient } from "@/billing/pricing"
@@ -219,4 +219,66 @@ it("SET26 unmount aborts its noncooperative catalog and ignores late completion"
   await act(async () => { finish({ plans: [PLAN] }); });
   expect(screen.queryByTestId("pricing-card")).toBeNull();
   expect(plans).toHaveBeenCalledOnce();
+});
+
+it("plan detail previews filter actual billing periods without inventing discounts or starting checkout", async () => {
+  const annual = { ...PLAN, id: "annual", name: "Annual offer", billing_interval: "year" as const, amount_minor: "39900" };
+  const once = { ...PLAN, id: "once", name: "One-time offer", billing_interval: "once" as const, amount_minor: "700" };
+  const plans = vi.fn().mockResolvedValue({ plans: [PLAN, annual, once] });
+  const checkout = vi.fn();
+  renderPanel(makeClient({ plans, checkout }));
+  await screen.findByText("Studio Bundle");
+  const period = screen.getByRole("combobox", { name: "Billing period" });
+  expect(period.tagName).toBe("BUTTON");
+  fireEvent.keyDown(period, { key: "ArrowDown" });
+  fireEvent.click(await screen.findByRole("option", { name: "per year" }));
+  expect(screen.queryByText("Studio Bundle")).not.toBeInTheDocument();
+  expect(screen.queryByText("One-time offer")).not.toBeInTheDocument();
+  expect(screen.getByText("399.00")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "View Annual offer details" }));
+  const dialog = screen.getByRole("dialog", { name: "Annual offer" });
+  expect(dialog).toHaveTextContent("399.00");
+  expect(dialog).toHaveTextContent("USD");
+  expect(dialog).toHaveTextContent("year");
+  expect(within(dialog).getByRole("button", { name: "Payments unavailable" })).toBeDisabled();
+  expect(within(dialog).getByRole("button", { name: "Payments unavailable" })).toHaveAccessibleDescription(/Payments aren't set up/);
+  fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+  fireEvent.keyDown(period, { key: "ArrowDown" });
+  fireEvent.click(await screen.findByRole("option", { name: "per month" }));
+  expect(screen.getByText("49.00")).toBeVisible();
+  fireEvent.keyDown(period, { key: "ArrowDown" });
+  fireEvent.click(await screen.findByRole("option", { name: "one-time" }));
+  expect(screen.getByText("One-time offer")).toBeVisible();
+  expect(plans).toHaveBeenCalledTimes(1);
+  expect(checkout).not.toHaveBeenCalled();
+});
+
+it("reloads an empty catalog once per explicit intent and displays only the newly returned offer", async () => {
+  let finish!: (value: { plans: typeof PLAN[] }) => void;
+  const plans = vi.fn().mockResolvedValueOnce({ plans: [] }).mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+  const checkout = vi.fn();
+  renderPanel(makeClient({ plans, checkout }));
+  await screen.findByText("No plans available to purchase");
+  expect(plans).toHaveBeenCalledOnce();
+  const reload = screen.getByRole("button", { name: "Reload plans" });
+  expect(reload).toBeEnabled();
+  expect(screen.queryByTestId("pricing-card")).not.toBeInTheDocument();
+
+  fireEvent.click(reload);
+  fireEvent.click(reload);
+  expect(screen.getByRole("status")).toBeVisible();
+  expect(screen.queryByRole("button", { name: "Reload plans" })).not.toBeInTheDocument();
+  expect(plans).toHaveBeenCalledTimes(2);
+  const { act } = await import("@testing-library/react");
+  await act(async () => { finish({ plans: [{ ...PLAN, name: "Fresh catalog offer", amount_minor: "7301" }] }); });
+  const card = screen.getByTestId("pricing-card");
+  expect(card).toHaveTextContent("Fresh catalog offer");
+  expect(card).toHaveTextContent("73.01");
+  expect(screen.queryByText("Studio Bundle")).not.toBeInTheDocument();
+  const buy = within(card).getByRole("button", { name: "Payments unavailable" });
+  expect(buy).toBeDisabled();
+  expect(buy).toHaveAccessibleDescription(/Payments aren't set up yet/);
+  fireEvent.click(buy);
+  expect(checkout).not.toHaveBeenCalled();
+  expect(plans).toHaveBeenCalledTimes(2);
 });

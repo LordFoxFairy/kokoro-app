@@ -4,6 +4,7 @@ import {
   fireEvent,
   waitFor,
   cleanup,
+  within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ read: vi.fn(), revoke: vi.fn() }));
@@ -28,7 +29,7 @@ beforeEach(() => {
   mocks.revoke.mockResolvedValue({ share_id: "share" });
 });
 afterEach(cleanup);
-it("preview displays unavailable regions rather than fabricated empty facts with zero API", () => {
+it("preview keeps unavailable data honest through dialogs and detail navigation with zero API", async () => {
   render(
     <LocaleProvider>
       <DataManagementSection preview />
@@ -37,12 +38,35 @@ it("preview displays unavailable regions rather than fabricated empty facts with
   expect(
     screen.getByRole("heading", { name: "已分享任务" }),
   ).toBeInTheDocument();
-  expect(screen.getAllByRole("button", { name: "管理" })).toHaveLength(3);
-  screen
-    .getAllByRole("button", { name: "管理" })
-    .forEach((b) => expect(b).toBeDisabled());
+  expect(screen.getAllByRole("button", { name: /^管理/ })).toHaveLength(4);
+  const filesTrigger = screen.getByRole("button", { name: "管理已分享文件" });
+  fireEvent.click(filesTrigger);
+  const filesDialog = screen.getByRole("dialog", { name: "已分享文件" });
+  expect(filesDialog).toHaveTextContent("暂时无法读取");
+  fireEvent.click(within(filesDialog).getByRole("button", { name: "取消" }));
+  await waitFor(() => expect(filesTrigger).toHaveFocus());
+
+  for (const title of ["授权应用", "云浏览器数据", "已购买域名"]) {
+    fireEvent.click(screen.getByRole("button", { name: `管理${title}` }));
+    const detail = screen.getByRole("region", { name: title });
+    expect(within(detail).getByRole("heading", { name: title })).toHaveFocus();
+    expect(detail).toHaveTextContent("暂时无法读取");
+    expect(screen.queryByRole("dialog")).toBeNull();
+    if (title === "云浏览器数据") {
+      expect(within(detail).getByRole("button", { name: "登录保持状态不可读取" })).toBeDisabled();
+      expect(within(detail).getByRole("heading", { name: "Cookies 和网站数据" })).toBeInTheDocument();
+    }
+    if (title === "已购买域名") {
+      expect(within(detail).getByRole("button", { name: "购买域名" })).toBeDisabled();
+    }
+    fireEvent.click(screen.getByRole("button", { name: "返回数据管理" }));
+    expect(screen.getByRole("button", { name: `管理${title}` })).toHaveFocus();
+  }
   expect(screen.queryByText("暂无已分享任务。")).toBeNull();
   expect(mocks.read).not.toHaveBeenCalled();
+  expect(mocks.revoke).not.toHaveBeenCalled();
+  expect(archiveMocks.readArchivedTasks).not.toHaveBeenCalled();
+  expect(archiveMocks.writeArchiveState).not.toHaveBeenCalled();
 });
 it("requires confirmation and clears the confirmation when identity retires", async () => {
   const view = render(

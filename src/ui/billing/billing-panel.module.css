@@ -7,12 +7,19 @@
   overflow: hidden;
 }
 .head { display: flex; align-items: center; justify-content: space-between; padding: 1.25rem 1.5rem 1rem; border-bottom: 1px solid var(--border); }
-.title { font-family: var(--font-serif); font-size: 1.25rem; color: var(--foreground); }
+.title { font-size: 1.5rem; font-weight: 600; color: var(--foreground); }
 .body { flex: 1; min-height: 0; overflow-y: auto; padding: 1.25rem 1.5rem 1.5rem; }
 .embeddedBody { padding: 1.5rem 0 1rem; flex: none; min-height: auto; overflow: visible; }
-.resourceTabs { min-width: 0; padding-top: 0.75rem; }
-.resourceList { width: 100%; height: auto; flex-wrap: wrap; justify-content: flex-start; gap: 0.25rem; padding: 0; }
-.resourceList > button { flex: 0 1 auto; min-width: 0; max-width: 100%; height: auto; padding: 0.5rem 0.625rem; white-space: normal; text-align: start; }
+/* Stretch only this resource owner's Settings viewport, so guidance can center
+   in the remaining panel while long task/content pages still grow and scroll. */
+:global([data-slot="scroll-area-viewport"]) > div:has(> :global([data-panel="credits"]) > .resourceTabs) { height: 100%; min-height: 100%; table-layout: fixed; }
+:global([data-panel="credits"]):has(> .resourceTabs) { display: flex; flex-direction: column; height: 100%; }
+.resourceTabs { min-width: 0; padding-top: 0.75rem; flex: 1; }
+.resourceTabs > :global([data-slot="tabs-content"][data-state="active"]) { display: flex; flex-direction: column; }
+.resourceList { width: 100%; height: auto; flex-wrap: nowrap; justify-content: flex-start; gap: 1rem; padding: 0 0 0.5rem; overflow-x: auto; overflow-y: hidden; border-bottom: 1px solid var(--border); border-radius: 0; }
+.resourceList > button { flex: 0 0 auto; min-width: 0; max-width: none; height: auto; min-height: 2.25rem; padding: 0.5rem 0.125rem; white-space: nowrap; text-align: start; font-size: 0.875rem; font-weight: 400; }
+.resourceList > button[data-state="active"] { font-weight: 600; }
+.resourceList > button::after { bottom: -0.5rem; height: 2px; }
 .resourceUnavailable { margin: 0.5rem 0 0; color: var(--muted-foreground); font-size: 0.75rem; line-height: 1.6; }
 .feedback { margin: 0; }
 .emptyState { min-height: 8rem; padding: 1.25rem; }
@@ -26,4 +33,32 @@
 }
 @media (max-width: 960px) {
   .panel :global(button), .panel :global(input), .panel :global(textarea), .panel :global(select), .panel :global([role="combobox"]) { min-height: 2.75rem; }
+}
+.resourceContent { display: grid; gap: 1rem; min-width: 0; padding-block: 1.5rem; }
+.resourceContent h2 { margin: 0; font-size: 1rem; font-weight: 600; }
+.resourceContent p { margin: 0; color: var(--muted-foreground); font-size: 0.875rem; line-height: 1.6; overflow-wrap: anywhere; }
+.resourceContent > button { justify-self: start; height: auto; min-height: 2.5rem; max-width: 100%; white-space: normal; }
+.resourceToolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem 1rem; }
+.resourceToolbar > button { flex: 0 0 auto; max-width: 100%; height: auto; min-height: 2.25rem; white-space: normal; }
+.resourceToolbar > p { flex: 1 1 15rem; font-size: 0.75rem; }
+.resourceUsageCards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem; min-width: 0; }
+.resourceDates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; min-width: 0; }
+.resourceDates label { display: grid; gap: 0.5rem; min-width: 0; font-size: 0.875rem; }
+.resourceDates input { min-width: 0; width: 100%; }
+.resourceUsageBlock { display: grid; align-content: start; gap: 0.75rem; min-width: 0; padding: 1rem; border: 1px solid var(--border); border-radius: 0.75rem; }
+.resourceUsageBlock h2 { font-size: 0.875rem; overflow-wrap: anywhere; }
+.resourceUsageBlock p { font-size: 0.8125rem; }
+.resourceGuidance { align-content: center; justify-items: center; flex: 1; gap: 0.875rem; text-align: center; }
+.resourceGuidance > p { max-width: 30rem; }
+.resourceGuidance > button { justify-self: center; }
+.resourceIcon { display: grid; place-items: center; width: 4rem; height: 4rem; border-radius: 1rem; background: var(--muted); color: var(--muted-foreground); }
+.resourceIcon svg { width: 2rem; height: 2rem; }
+@media (max-width: 640px) {
+  .resourceUsageCards { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 960px) {
+  .resourceToolbar > button, .resourceGuidance > button { min-height: 2.75rem; }
+}
+@media (max-width: 480px) {
+  .resourceDates { grid-template-columns: minmax(0, 1fr); }
 }

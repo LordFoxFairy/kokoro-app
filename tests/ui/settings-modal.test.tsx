@@ -426,7 +426,7 @@ describe("SettingsModal 设置中心模态", () => {
     expect(screen.getByTestId("settings-tab-developer")).toBeInTheDocument();
   });
 
-  it("SET21 Data is selectable and exposes same-page sections with unavailable management disabled", () => {
+  it("SET21 Data is selectable and exposes same-page sections with unavailable final management actions", () => {
     renderSettings();
     const tab = screen.getByTestId("settings-tab-data-management");
     expect(tab).not.toBeDisabled();
@@ -436,8 +436,8 @@ describe("SettingsModal 设置中心模态", () => {
       expect(screen.getByRole("heading", { name })).toBeInTheDocument();
     }
     expect(screen.getAllByRole("tablist")).toHaveLength(1);
-    expect(screen.getAllByRole("button", { name: "管理" })).toHaveLength(3);
-    for (const button of screen.getAllByRole("button", { name: "管理" })) expect(button).toBeDisabled();
+    expect(screen.getAllByRole("button", { name: /^管理/ })).toHaveLength(4);
+    for (const button of screen.getAllByRole("button", { name: /^管理/ })) expect(button).toBeEnabled();
   });
 
   it("SET22 Help is selectable and provides this product help without a fake support submission", () => {
@@ -446,11 +446,18 @@ describe("SettingsModal 设置中心模态", () => {
     expect(tab).not.toBeDisabled();
     fireEvent.keyDown(tab, { key: "Enter" });
     expect(screen.getByRole("heading", { name: "获取帮助", level: 1 })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "账户与设备" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "任务分享" })).toBeInTheDocument();
+    expect(within(screen.getByRole("group", { name: "帮助分类" })).getByRole("button", { name: "账户与设备" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "保存姓名" }));
+    expect(screen.getByText("在账户设置中修改姓名、查看登录设备并退出其他会话。")).toBeVisible();
+    fireEvent.click(within(screen.getByRole("region", { name: "保存姓名" })).getByRole("button", { name: "账户" }));
+    expect(screen.getByRole("heading", { name: "账户", level: 1 })).toBeInTheDocument();
+    fireEvent.keyDown(tab, { key: "Enter" });
+    fireEvent.click(screen.getByRole("button", { name: "创建与停止任务分享" }));
     expect(screen.getByText(/通过任务分享按钮/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /发送|提交反馈|联系客服/ })).toBeNull();
     expect(screen.queryByRole("link", { name: /Manus/ })).toBeNull();
+    fireEvent.click(within(screen.getByRole("region", { name: "创建与停止任务分享" })).getByRole("button", { name: "数据管理" }));
+    expect(screen.getByRole("heading", { name: "数据管理", level: 1 })).toBeInTheDocument();
   });
 
   it("关闭 GitHub 导入子弹窗时保留设置中心", async () => {
@@ -533,7 +540,7 @@ describe("SettingsModal 设置中心模态", () => {
     expect(
       screen.getByRole("heading", { name: "聊天偏好", level: 3 }),
     ).toBeInTheDocument();
-    expect(screen.getByTestId("settings-task-delivery")).toBeDisabled();
+    expect(screen.getByTestId("settings-task-delivery")).toBeEnabled();
     expect(screen.queryByTestId("settings-default-model")).not.toBeInTheDocument();
     expect(screen.queryByTestId("settings-account")).not.toBeInTheDocument();
   });
@@ -547,7 +554,7 @@ describe("SettingsModal 设置中心模态", () => {
     expect(screen.getByRole("radio", { name: "浅色" })).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: "深色" })).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: "自动" })).toBeChecked();
-    expect(screen.getByTestId("settings-task-delivery")).toBeDisabled();
+    expect(screen.getByTestId("settings-task-delivery")).toBeEnabled();
     for (const label of ["声音提醒", "浏览器通知", "接收产品更新", "关于 Kokoro 的广告"]) {
       expect(screen.getByRole("switch", { name: label })).toBeInTheDocument();
     }
@@ -657,12 +664,13 @@ describe("SettingsModal 设置中心模态", () => {
     expect(
       planBody?.querySelector('[data-slot="account-daily-credit-group"]'),
     ).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "管理" }));
+    fireEvent.click(screen.getByRole("button", { name: "管理登录方式" }));
     expect(screen.getByTestId("settings-login-methods")).toBeInTheDocument();
     const nestedHeading = screen.getByRole("heading", {
-      name: "管理登入方式",
+      name: "管理登录方式",
       level: 1,
     });
+    expect(nestedHeading).toHaveFocus();
     expect(nestedHeading.parentElement).toHaveAttribute(
       "data-panel",
       "account",
@@ -681,8 +689,9 @@ describe("SettingsModal 设置中心模态", () => {
     expect(
       screen.getByRole("button", { name: "中断连接" }),
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "管理登入方式" }));
+    fireEvent.click(screen.getByRole("button", { name: "返回账户" }));
     expect(screen.getByTestId("settings-account")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "管理登录方式" })).toHaveFocus();
   });
 
   it("账户邮箱和删除操作打开对应的验证弹窗", async () => {
@@ -1945,13 +1954,29 @@ describe("SET53 service settings stay honest about unavailable owner services", 
     expect(page).toHaveTextContent("尚未接通");
     const actions = within(page).getAllByRole("button");
     expect(actions.length).toBeGreaterThan(0);
-    for (const action of actions) {
-      expect(action).toBeDisabled();
-      const reason = document.getElementById(action.getAttribute("aria-describedby") ?? "");
-      expect(reason).not.toBeNull();
-      expect(reason).toBeVisible();
-      expect(reason?.textContent).toMatch(/尚未接通|暂未提供/u);
-      fireEvent.click(action);
+    for (const originalAction of actions) {
+      const action = tab === "integration" ? screen.getByRole("button", { name: originalAction.getAttribute("aria-label")! }) : originalAction;
+      if (action.hasAttribute("disabled")) {
+        expect(action).toBeDisabled();
+        const reason = document.getElementById(action.getAttribute("aria-describedby") ?? "");
+        expect(reason).not.toBeNull();
+        expect(reason).toBeVisible();
+        expect(reason?.textContent).toMatch(/尚未接通|暂未提供/u);
+        fireEvent.click(action);
+      } else {
+        const inlineSender = action.getAttribute("aria-label") === "添加授权发件人";
+        const integrationPage = tab === "integration";
+        if (inlineSender) expect(action).toHaveAttribute("aria-expanded", "false");
+        else if (!integrationPage) expect(action).toHaveAttribute("aria-haspopup", "dialog");
+        fireEvent.click(action);
+        const dialog = integrationPage ? page : inlineSender ? screen.getByRole("form", { name: "添加授权发件人" }) : screen.getAllByRole("dialog").at(-1)!;
+        expect(dialog).toHaveTextContent("尚未接通");
+        for (const finalAction of within(dialog).queryAllByRole("button").filter((button) => button.hasAttribute("disabled"))) {
+          expect(finalAction).toHaveAccessibleDescription(/尚未接通/);
+        }
+        fireEvent.click(within(dialog).getByRole("button", { name: integrationPage ? "返回集成" : "取消" }));
+        if (integrationPage) expect(screen.getByRole("button", { name: action.getAttribute("aria-label")! })).toHaveFocus();
+      }
     }
     expect(page.querySelector("a, input, textarea")).toBeNull();
     await Promise.resolve();
@@ -1967,7 +1992,7 @@ describe("SET53 service settings stay honest about unavailable owner services", 
     expect(screen.getByText("收件箱服务尚未接通，暂时无法读取邮件。")).toBeVisible();
     fireEvent.keyDown(screen.getByTestId("settings-tab-developer"), { key: "Enter" });
     fireEvent.keyDown(screen.getByRole("tab", { name: "Webhooks" }), { key: "Enter" });
-    expect(screen.getByRole("button", { name: "创建 Webhook" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "创建 Webhook" })).toBeEnabled();
     fireEvent.keyDown(screen.getByTestId("settings-tab-mail"), { key: "Enter" });
     expect(screen.getByRole("tab", { name: "设置" })).toHaveAttribute("aria-selected", "true");
     fireEvent.keyDown(screen.getByTestId("settings-tab-developer"), { key: "Enter" });
@@ -1986,7 +2011,7 @@ describe("SET53 service settings stay honest about unavailable owner services", 
     expect(onTabChange).toHaveBeenLastCalledWith("wallet");
     expect(screen.getByRole("heading", { name: "钱包", level: 1 })).toBeVisible();
     expect(search).toHaveValue("支付方式");
-    expect(screen.getByRole("button", { name: "添加" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "添加" })).toBeEnabled();
     expect(screen.getByTestId("settings-placeholder-computer")).toHaveAttribute("aria-disabled", "true");
   });
 });
@@ -2230,4 +2255,576 @@ describe("SET59 personalization interior drafts", () => {
     await act(async () => { finish(); });
     expect(within(reopened).queryByText("已复制", { exact: true })).not.toBeInTheDocument();
   });
+});
+
+// Service preflight forms contain only disposable local drafts.
+describe("service creation previews", () => {
+  it.each([
+    ["phone", "立即创建", "为您的座席分配一个虚拟电话"],
+    ["wallet", "添加", "添加支付方式"],
+  ] as const)("opens %s guidance without allocating an asset or requesting payment", async (tab, trigger, title) => {
+    const fetcher = vi.fn().mockRejectedValue(new Error("unexpected service IO"));
+    vi.stubGlobal("fetch", fetcher);
+    const onClose = vi.fn();
+    renderSettings(onClose, undefined, true, undefined, tab);
+    fireEvent.click(screen.getByRole("button", { name: trigger }));
+    const dialog = screen.getByRole("dialog", { name: title });
+    expect(within(dialog).getByRole("button", { name: "继续" })).toBeDisabled();
+    expect(within(dialog).getByRole("button", { name: "继续" })).toHaveAccessibleDescription(/尚未接通/);
+    expect(within(dialog).queryByRole("checkbox")).not.toBeInTheDocument();
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: title })).not.toBeInTheDocument());
+    expect(screen.getByTestId("settings-modal")).toBeVisible();
+    expect(onClose).not.toHaveBeenCalled();
+    await Promise.resolve();
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["email", "创建新项", "创建邮箱", "地址前缀", "保存"],
+    ["developer", "创建 API 密钥", "创建 API 密钥", "为您的密钥命名", "创建"],
+    ["developer", "创建 Webhook", "创建 Webhook", "URL", "保存"],
+    ["mail", "添加工作流邮箱", "添加工作流邮箱", "邮箱后缀", "创建"],
+    ["mail", "添加授权发件人", "添加授权发件人", "发件人邮箱", "保存"],
+  ] as const)("keeps %s / %s editable but unsubmitted and clears it when reopened", async (tab, trigger, title, label, action) => {
+    const fetcher = vi.fn().mockRejectedValue(new Error("unexpected service IO"));
+    vi.stubGlobal("fetch", fetcher);
+    renderSettings(() => {}, undefined, true, undefined, tab);
+    if (trigger === "创建 Webhook") fireEvent.keyDown(screen.getByRole("tab", { name: "Webhooks" }), { key: "Enter" });
+    fireEvent.click(screen.getByRole("button", { name: trigger }));
+    let dialog = screen.getByRole(trigger === "添加授权发件人" ? "form" : "dialog", { name: title });
+    const input = within(dialog).getByRole("textbox", { name: label });
+    fireEvent.change(input, { target: { value: "private local draft" } });
+    expect(input).toHaveValue("private local draft");
+    if (trigger === "创建 API 密钥") {
+      const expiry = within(dialog).getByRole("combobox", { name: "到期时间" });
+      expect(expiry.tagName).toBe("BUTTON");
+      fireEvent.keyDown(expiry, { key: "ArrowDown" });
+      await screen.findByRole("option", { name: "24 小时" });
+      expect(screen.getAllByRole("option").map((option) => option.textContent)).toEqual(["从不", "1 小时", "24 小时", "7 天", "180 天", "360 天"]);
+      fireEvent.click(screen.getByRole("option", { name: "24 小时" }));
+      expect(expiry).toHaveTextContent("24 小时");
+    }
+    if (trigger === "添加工作流邮箱") {
+      fireEvent.change(within(dialog).getByRole("textbox", { name: "处理指令" }), { target: { value: "private workflow instructions" } });
+    }
+    if (tab === "email" || trigger === "添加工作流邮箱") {
+      expect(dialog).toHaveTextContent("域名尚未配置");
+      expect(dialog.textContent).not.toContain("manus.bot");
+    }
+    expect(within(dialog).getByRole("button", { name: action })).toBeDisabled();
+    expect(within(dialog).getByRole("button", { name: action })).toHaveAccessibleDescription(/尚未接通/);
+    fireEvent.submit(input.closest("form")!);
+    expect(fetcher).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "取消" }));
+    fireEvent.click(screen.getByRole("button", { name: trigger }));
+    dialog = screen.getByRole(trigger === "添加授权发件人" ? "form" : "dialog", { name: title });
+    expect(within(dialog).getByRole("textbox", { name: label })).toHaveValue("");
+    if (trigger === "创建 API 密钥") expect(within(dialog).getByRole("combobox")).toHaveTextContent("从不");
+    if (trigger === "添加工作流邮箱") expect(within(dialog).getByRole("textbox", { name: "处理指令" })).toHaveValue("");
+    await Promise.resolve();
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("retires a credential draft when its developer tab is left", () => {
+    renderSettings(() => {}, undefined, true, undefined, "developer");
+    fireEvent.click(screen.getByRole("button", { name: "创建 API 密钥" }));
+    const dialog = screen.getByRole("dialog", { name: "创建 API 密钥" });
+    fireEvent.change(within(dialog).getByRole("textbox"), { target: { value: "private draft" } });
+    // Programmatic tab changes model owner navigation even while a modal is open.
+    fireEvent.keyDown(screen.getByRole("tab", { name: "Webhooks", hidden: true }), { key: "Enter" });
+    expect(screen.queryByRole("dialog", { name: "创建 API 密钥" })).not.toBeInTheDocument();
+    fireEvent.keyDown(screen.getByRole("tab", { name: "API 密钥" }), { key: "Enter" });
+    fireEvent.click(screen.getByRole("button", { name: "创建 API 密钥" }));
+    expect(within(screen.getByRole("dialog", { name: "创建 API 密钥" })).getByRole("textbox")).toHaveValue("");
+  });
+
+  it.each(["subject", "generation", "preview", "admission"] as const)("retires Mail drafts on %s change and never revives them", async (change) => {
+    const draw = (changed: boolean) => <ThemeProvider><LocaleProvider><SettingsModal
+      brandName="Acme" initialTab="mail" onClose={() => {}}
+      preview={changed && change === "preview"}
+      readBoundary={{ admitted: !(changed && change === "admission"), subject: changed && change === "subject" ? "bob" : "alice", generation: changed && change === "generation" ? 2 : 1 }}
+    /></LocaleProvider></ThemeProvider>;
+    window.localStorage.setItem("kokoro.locale", "zh");
+    const view = render(draw(false));
+    fireEvent.click(screen.getByRole("button", { name: "添加工作流邮箱" }));
+    fireEvent.change(within(screen.getByRole("dialog", { name: "添加工作流邮箱" })).getByRole("textbox", { name: "邮箱后缀" }), { target: { value: "private" } });
+    view.rerender(draw(true));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "添加工作流邮箱" })).not.toBeInTheDocument());
+    view.rerender(draw(false));
+    fireEvent.click(screen.getByRole("button", { name: "添加工作流邮箱" }));
+    expect(within(screen.getByRole("dialog", { name: "添加工作流邮箱" })).getByRole("textbox", { name: "邮箱后缀" })).toHaveValue("");
+  });
+});
+
+describe("service detail previews", () => {
+  it("keeps Zapier examples inert and resets integration details after leaving", () => {
+    const fetcher = vi.fn().mockRejectedValue(new Error("unexpected integration IO"));
+    vi.stubGlobal("fetch", fetcher);
+    renderSettings(() => {}, undefined, true, undefined, "integration");
+    fireEvent.click(screen.getByRole("button", { name: "查看 Zapier 详情" }));
+    const examples = screen.getByRole("region", { name: "工作流示例（尚未接通）" });
+    expect(within(examples).getAllByRole("listitem")).toHaveLength(8);
+    expect(within(examples).getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent)).toEqual(["Calendly", "Google Forms", "Microsoft Teams", "Outlook", "Salesforce", "Shopify", "Zendesk", "Zoom"]);
+    for (const action of within(examples).getAllByRole("button", { name: "试试看" })) {
+      expect(action).toBeDisabled();
+      expect(action).toHaveAccessibleDescription("以下为静态用途示例；工作流服务尚未接通，暂时不能尝试。");
+      fireEvent.click(action);
+    }
+    expect(examples.querySelector("a, input, iframe, canvas")).toBeNull();
+    fireEvent.keyDown(screen.getByTestId("settings-tab-personalization"), { key: "Enter" });
+    fireEvent.keyDown(screen.getByTestId("settings-tab-integration"), { key: "Enter" });
+    expect(screen.getByRole("heading", { name: "集成", level: 1 })).toBeVisible();
+    expect(screen.queryByRole("region", { name: "Zapier" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "查看 Zapier 详情" })).toBeVisible();
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it.each(["Zapier", "Apple Messages", "Slack", "Telegram", "LINE"])("shows %s information without authorizing an integration", async (provider) => {
+    const fetcher = vi.fn().mockRejectedValue(new Error("unexpected integration IO"));
+    vi.stubGlobal("fetch", fetcher);
+    renderSettings(() => {}, undefined, true, undefined, "integration");
+    fireEvent.click(screen.getByRole("button", { name: `查看 ${provider} 详情` }));
+    const dialog = screen.getByRole("region", { name: provider });
+    expect(screen.queryByRole("dialog", { name: provider })).not.toBeInTheDocument();
+    expect(within(dialog).getByRole("heading", { name: provider, level: 1 })).toHaveFocus();
+    const primary = within(dialog).getAllByRole("button", { name: provider === "Zapier" ? "试试看" : "连接" })[0]!;
+    expect(primary).toBeDisabled();
+    expect(primary).toHaveAccessibleDescription(/尚未接通/);
+    expect(dialog.querySelector("a, input, canvas")).toBeNull();
+    fireEvent.click(within(dialog).getByRole("button", { name: "返回集成" }));
+    await waitFor(() => expect(screen.queryByRole("region", { name: provider })).not.toBeInTheDocument());
+    expect(screen.getByRole("button", { name: `查看 ${provider} 详情` })).toHaveFocus();
+    expect(screen.getByTestId("settings-modal")).toBeVisible();
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["授权应用", "管理授权应用"],
+    ["云浏览器数据", "管理云浏览器数据"],
+    ["已购买域名", "管理已购买域名"],
+  ])("opens %s with unknown data instead of fabricated empty facts", async (title, trigger) => {
+    const fetcher = vi.fn().mockRejectedValue(new Error("unexpected management IO"));
+    vi.stubGlobal("fetch", fetcher);
+    renderSettings(() => {}, undefined, true, undefined, "data-management");
+    fireEvent.click(screen.getByRole("button", { name: trigger }));
+    const dialog = screen.getByRole("region", { name: title });
+    expect(screen.queryByRole("dialog", { name: title })).not.toBeInTheDocument();
+    expect(within(dialog).getByRole("heading", { name: title, level: 1 })).toHaveFocus();
+    expect(dialog).toHaveTextContent("暂时无法读取");
+    if (title === "云浏览器数据") {
+      const preference = within(dialog).getByRole("button", { name: "登录保持状态不可读取" });
+      expect(preference).toBeDisabled();
+      expect(preference).not.toHaveAttribute("aria-checked");
+      expect(preference).not.toHaveAttribute("aria-pressed");
+      expect(preference).toHaveAccessibleDescription(/无法读取/);
+      expect(dialog).toHaveTextContent("Cookies 和网站数据");
+    }
+    if (title === "已购买域名") {
+      expect(within(dialog).getByRole("button", { name: "购买域名" })).toBeDisabled();
+      expect(within(dialog).getByRole("button", { name: "购买域名" })).toHaveAccessibleDescription(/未接通/);
+    }
+    expect(within(dialog).queryByText(/暂无|没有已/)).not.toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "返回数据管理" }));
+    await waitFor(() => expect(screen.queryByRole("heading", { name: title, level: 1 })).not.toBeInTheDocument());
+    expect(screen.getByTestId("settings-modal")).toBeVisible();
+    expect(screen.getByRole("button", { name: trigger })).toHaveFocus();
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["developer", "创建 Webhook", "创建 Webhook", "URL", "https://example.test/hook", "请输入有效的 URL。"],
+    ["mail", "添加授权发件人", "添加授权发件人", "发件人邮箱", "sender@example.test", "请输入有效的邮箱地址。"],
+  ] as const)("validates %s %s locally on blur and clears feedback on correction", (tab, trigger, title, label, valid, error) => {
+    renderSettings(() => {}, undefined, true, undefined, tab);
+    if (tab === "developer") fireEvent.keyDown(screen.getByRole("tab", { name: "Webhooks" }), { key: "Enter" });
+    fireEvent.click(screen.getByRole("button", { name: trigger }));
+    const dialog = screen.getByRole(tab === "mail" ? "form" : "dialog", { name: title });
+    const input = within(dialog).getByRole("textbox", { name: label });
+    fireEvent.change(input, { target: { value: "not valid" } });
+    fireEvent.blur(input);
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    expect(input).toHaveAccessibleDescription(error);
+    expect(within(dialog).getByRole("alert")).toHaveTextContent(error);
+    fireEvent.change(input, { target: { value: valid } });
+    expect(input).not.toHaveAttribute("aria-invalid", "true");
+    expect(within(dialog).queryByRole("alert")).not.toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "保存" })).toBeDisabled();
+  });
+});
+
+it("task delivery options are inspectable while unsupported steering remains unavailable and queue stays unchanged", async () => {
+  renderSettings(() => {}, undefined, true, undefined, "appearance");
+  const trigger = screen.getByTestId("settings-task-delivery");
+  expect(trigger).toBeEnabled();
+  fireEvent.keyDown(trigger, { key: "ArrowDown" });
+  const list = await screen.findByRole("listbox");
+  for (const name of ["发送但不中断", "打断并发送"]) {
+    expect(within(list).getByRole("option", { name })).toHaveAttribute("aria-disabled", "true");
+  }
+  expect(list).toHaveTextContent("尚需服务支持");
+  fireEvent.keyDown(list, { key: "Escape" });
+  expect(trigger).toHaveTextContent("添加到队列");
+  expect(screen.getByTestId("settings-modal")).toBeInTheDocument();
+});
+
+it("shared file management shows unreadable authority rather than an invented empty file list", () => {
+  renderSettings(() => {}, undefined, true, undefined, "data-management");
+  fireEvent.click(screen.getByRole("button", { name: "管理已分享文件" }));
+  const dialog = screen.getByRole("dialog", { name: "已分享文件" });
+  expect(dialog).toHaveTextContent("暂时无法读取");
+  expect(dialog).not.toHaveTextContent("暂无共享文件");
+  fireEvent.click(within(dialog).getByRole("button", { name: "取消" }));
+  expect(screen.getByTestId("settings-modal")).toBeInTheDocument();
+});
+
+it("personalization keeps import availability attached to its entry and knowledge preference explicitly unknown", () => {
+  const fetcher = vi.fn();
+  vi.stubGlobal("fetch", fetcher);
+  renderSettings(() => {}, undefined, true, undefined, "personalization");
+  const entry = screen.getByRole("button", { name: "导入" });
+  expect(entry).toHaveAccessibleDescription("知识与记忆导入暂未接通。");
+  expect(entry).toHaveTextContent("知识与记忆导入暂未接通。");
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "知识" }), { button: 0, ctrlKey: false });
+  const preference = screen.getByRole("button", { name: "知识偏好状态不可读取" });
+  expect(preference).toBeDisabled();
+  expect(preference).not.toHaveAttribute("aria-checked");
+  expect(preference).not.toHaveAttribute("aria-pressed");
+  expect(preference).toHaveAccessibleDescription("服务尚未接通，无法读取或保存知识偏好。");
+  expect(screen.getByText("服务尚未接通，无法读取或保存知识偏好。")).toBeVisible();
+  expect(screen.getByRole("textbox", { name: "搜索知识" })).toBeDisabled();
+  expect(fetcher).not.toHaveBeenCalled();
+});
+
+it("Mail sender edits stay inline, cancel or owned Escape clear them, and Enter performs no IO", async () => {
+  const fetcher = vi.fn();
+  vi.stubGlobal("fetch", fetcher);
+  const onClose = vi.fn();
+  renderSettings(onClose, undefined, true, undefined, "mail");
+  const add = screen.getByRole("button", { name: "添加授权发件人" });
+  fireEvent.click(add);
+  expect(screen.queryByRole("dialog", { name: "添加授权发件人" })).not.toBeInTheDocument();
+  let form = screen.getByRole("form", { name: "添加授权发件人" });
+  let input = within(form).getByRole("textbox", { name: "发件人邮箱" });
+  expect(input).toHaveFocus();
+  fireEvent.change(input, { target: { value: "sender@example.test" } });
+  fireEvent.submit(form);
+  expect(within(form).getByRole("button", { name: "保存" })).toBeDisabled();
+  expect(within(form).getByRole("button", { name: "保存" })).toHaveAccessibleDescription(/尚未接通/);
+  fireEvent.click(within(form).getByRole("button", { name: "取消" }));
+  expect(screen.queryByRole("form", { name: "添加授权发件人" })).not.toBeInTheDocument();
+  expect(add).toHaveFocus();
+  fireEvent.click(add);
+  form = screen.getByRole("form", { name: "添加授权发件人" });
+  input = within(form).getByRole("textbox", { name: "发件人邮箱" });
+  expect(input).toHaveValue("");
+  fireEvent.change(input, { target: { value: "old@example.test" } });
+  fireEvent.keyDown(input, { key: "Escape" });
+  expect(screen.queryByRole("form", { name: "添加授权发件人" })).not.toBeInTheDocument();
+  expect(add).toHaveFocus();
+  expect(onClose).not.toHaveBeenCalled();
+  fireEvent.click(add);
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "收件箱" }), { button: 0, ctrlKey: false });
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "设置" }), { button: 0, ctrlKey: false });
+  fireEvent.click(screen.getByRole("button", { name: "添加授权发件人" }));
+  expect(within(screen.getByRole("form", { name: "添加授权发件人" })).getByRole("textbox")).toHaveValue("");
+  const search = screen.getByRole("textbox", { name: "搜索" });
+  search.focus();
+  fireEvent.keyDown(search, { key: "Escape" });
+  await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+  expect(fetcher).not.toHaveBeenCalled();
+});
+
+it.each(["subject", "generation", "preview", "admission"] as const)("retires the inline Mail sender on %s change without reviving its contents", async (change) => {
+  const draw = (changed: boolean) => <ThemeProvider><LocaleProvider><SettingsModal
+    brandName="Acme" initialTab="mail" onClose={() => {}}
+    preview={changed && change === "preview"}
+    readBoundary={{ admitted: !(changed && change === "admission"), subject: changed && change === "subject" ? "bob" : "alice", generation: changed && change === "generation" ? 2 : 1 }}
+  /></LocaleProvider></ThemeProvider>;
+  window.localStorage.setItem("kokoro.locale", "zh");
+  const view = render(draw(false));
+  fireEvent.click(screen.getByRole("button", { name: "添加授权发件人" }));
+  fireEvent.change(within(screen.getByRole("form", { name: "添加授权发件人" })).getByRole("textbox"), { target: { value: "private@example.test" } });
+  view.rerender(draw(true));
+  await waitFor(() => expect(screen.queryByRole("form", { name: "添加授权发件人" })).not.toBeInTheDocument());
+  view.rerender(draw(false));
+  fireEvent.click(screen.getByRole("button", { name: "添加授权发件人" }));
+  expect(within(screen.getByRole("form", { name: "添加授权发件人" })).getByRole("textbox")).toHaveValue("");
+});
+
+it("Mailbox prefix is only a temporary draft and is cleared after closing", () => {
+  const fetcher = vi.fn();
+  vi.stubGlobal("fetch", fetcher);
+  renderSettings(() => {}, undefined, true, undefined, "mail");
+  fireEvent.click(screen.getByRole("button", { name: "设置" }));
+  let dialog = screen.getByRole("dialog", { name: "邮箱设置" });
+  const prefix = within(dialog).getByRole("textbox", { name: "地址前缀" });
+  fireEvent.change(prefix, { target: { value: "private-prefix" } });
+  expect(prefix).toHaveValue("private-prefix");
+  expect(dialog).toHaveTextContent("域名待配置");
+  expect(dialog.textContent).not.toContain("manus.bot");
+  const save = within(dialog).getByRole("button", { name: "保存" });
+  expect(save).toBeDisabled();
+  expect(save).toHaveAccessibleDescription(/尚未接通/);
+  fireEvent.submit(prefix.closest("form")!);
+  fireEvent.click(within(dialog).getByRole("button", { name: "取消" }));
+  fireEvent.click(screen.getByRole("button", { name: "设置" }));
+  dialog = screen.getByRole("dialog", { name: "邮箱设置" });
+  expect(within(dialog).getByRole("textbox", { name: "地址前缀" })).toHaveValue("");
+  expect(fetcher).not.toHaveBeenCalled();
+});
+
+it("leaving Data retires its local management page and returning restores the overview", () => {
+  const fetcher = vi.fn();
+  vi.stubGlobal("fetch", fetcher);
+  renderSettings(() => {}, undefined, true, undefined, "data-management");
+  fireEvent.click(screen.getByRole("button", { name: "管理授权应用" }));
+  expect(screen.getByRole("region", { name: "授权应用" })).toBeVisible();
+  fireEvent.keyDown(screen.getByTestId("settings-tab-help"), { key: "Enter" });
+  fireEvent.keyDown(screen.getByTestId("settings-tab-data-management"), { key: "Enter" });
+  expect(screen.queryByRole("heading", { name: "授权应用", level: 1 })).not.toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "数据管理", level: 1 })).toBeVisible();
+  expect(screen.getByRole("heading", { name: "已归档任务" })).toBeVisible();
+  expect(fetcher).not.toHaveBeenCalled();
+});
+
+it.each(["subject", "generation", "preview", "admission"] as const)("retires the Data management subpage on %s change", (change) => {
+  const draw = (changed: boolean) => <ThemeProvider><LocaleProvider><SettingsModal
+    brandName="Acme" initialTab="data-management" onClose={() => {}}
+    preview={changed && change === "preview"}
+    readBoundary={{ admitted: !(changed && change === "admission"), subject: changed && change === "subject" ? "bob" : "alice", generation: changed && change === "generation" ? 2 : 1 }}
+  /></LocaleProvider></ThemeProvider>;
+  window.localStorage.setItem("kokoro.locale", "zh");
+  const view = render(draw(false));
+  fireEvent.click(screen.getByRole("button", { name: "管理授权应用" }));
+  expect(screen.getByRole("region", { name: "授权应用" })).toBeVisible();
+  view.rerender(draw(true));
+  expect(screen.queryByRole("heading", { name: "授权应用", level: 1 })).not.toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "数据管理", level: 1 })).toBeVisible();
+  view.rerender(draw(false));
+  expect(screen.getByRole("button", { name: "管理授权应用" })).toBeVisible();
+});
+
+it("formal account login navigation owns heading and return focus without starting authorization", async () => {
+  const fetcher = vi.fn().mockResolvedValue(Response.json({ data: { subject: "settings-reader", name: "Actual User", email: "actual@example.test", email_verified: true } }));
+  vi.stubGlobal("fetch", fetcher);
+  renderSettings(() => {}, undefined, false);
+  await waitFor(() => expect(screen.getByRole("textbox", { name: "全名" })).toHaveValue("Actual User"));
+  const reads = fetcher.mock.calls.length;
+  const entry = () => screen.getByRole("button", { name: "管理登录方式" });
+  fireEvent.click(entry());
+  const content = screen.getByRole("region", { name: "管理登录方式" });
+  expect(screen.queryByRole("dialog", { name: "管理登录方式" })).not.toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "管理登录方式", level: 1 })).toHaveFocus();
+  for (const provider of ["Google", "Microsoft", "Apple"]) expect(within(content).getByRole("group", { name: provider })).toHaveTextContent("连接状态暂时无法读取");
+  expect(content).not.toHaveTextContent("尚未新增通行密钥");
+  fireEvent.click(screen.getByRole("button", { name: "返回账户" }));
+  expect(entry()).toHaveFocus();
+  fireEvent.click(entry());
+  fireEvent.keyDown(screen.getByTestId("settings-tab-shortcuts"), { key: "Enter" });
+  expect(screen.getByRole("heading", { name: "键盘快捷键", level: 1 })).toBeVisible();
+  fireEvent.keyDown(screen.getByTestId("settings-tab-account"), { key: "Enter" });
+  expect(screen.getByTestId("settings-account")).toBeVisible();
+  expect(screen.queryByTestId("settings-login-methods")).not.toBeInTheDocument();
+  expect(fetcher).toHaveBeenCalledTimes(reads);
+});
+
+
+describe("static asset guidance session lifecycle", () => {
+  it.each([
+    ["phone", "立即创建", "为您的座席分配一个虚拟电话"],
+    ["wallet", "添加", "添加支付方式"],
+  ] as const)("keeps %s guidance through same-subject rechecks while cancel, Escape and leaving still close it", async (tab, triggerName, title) => {
+    const fetcher = vi.fn();
+    vi.stubGlobal("fetch", fetcher);
+    const onClose = vi.fn();
+    const draw = (admitted: boolean, generation: number) => <ThemeProvider><LocaleProvider><SettingsModal
+      brandName="Acme" initialTab={tab} onClose={onClose} preview={false}
+      readBoundary={{ admitted, subject: "owner-A", generation }}
+    /></LocaleProvider></ThemeProvider>;
+    const view = render(draw(true, 1));
+    fireEvent.click(screen.getByRole("button", { name: triggerName }));
+    const dialog = screen.getByRole("dialog", { name: title });
+    const next = within(dialog).getByRole("button", { name: "继续" });
+    expect(next).toBeDisabled();
+    expect(next).toHaveAccessibleDescription(/尚未接通/);
+
+    // The real probe revokes read admission and increments generation before a
+    // same-subject GET settles. These static descriptions own no read or draft.
+    view.rerender(draw(false, 2));
+    expect(screen.getByRole("dialog", { name: title })).toBe(dialog);
+    expect(next).toBeDisabled();
+    view.rerender(draw(true, 2));
+    expect(screen.getByRole("dialog", { name: title })).toBe(dialog);
+    expect(next).toBeDisabled();
+    expect(fetcher).not.toHaveBeenCalled();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "取消" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: title })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("button", { name: triggerName })).toHaveFocus());
+    fireEvent.click(screen.getByRole("button", { name: triggerName }));
+    fireEvent.keyDown(screen.getByRole("dialog", { name: title }), { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: title })).not.toBeInTheDocument());
+    expect(screen.getByTestId("settings-modal")).toBeVisible();
+    await waitFor(() => expect(screen.getByRole("button", { name: triggerName })).toHaveFocus());
+
+    fireEvent.click(screen.getByRole("button", { name: triggerName }));
+    fireEvent.keyDown(screen.getByTestId("settings-tab-help"), { key: "Enter" });
+    expect(screen.getByRole("heading", { name: "获取帮助", level: 1 })).toBeVisible();
+    expect(screen.queryByRole("dialog", { name: title })).not.toBeInTheDocument();
+    fireEvent.keyDown(screen.getByTestId(`settings-tab-${tab}`), { key: "Enter" });
+    expect(screen.queryByRole("dialog", { name: title })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: triggerName })).toBeVisible();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["phone", "立即创建", "为您的座席分配一个虚拟电话", "subject"],
+    ["phone", "立即创建", "为您的座席分配一个虚拟电话", "anonymous"],
+    ["phone", "立即创建", "为您的座席分配一个虚拟电话", "preview"],
+    ["wallet", "添加", "添加支付方式", "subject"],
+    ["wallet", "添加", "添加支付方式", "anonymous"],
+    ["wallet", "添加", "添加支付方式", "preview"],
+  ] as const)("retires %s guidance after %s / %s when %s changes and never revives it", async (tab, triggerName, title, change) => {
+    const fetcher = vi.fn();
+    vi.stubGlobal("fetch", fetcher);
+    const draw = (changed: boolean) => <ThemeProvider><LocaleProvider><SettingsModal
+      brandName="Acme" initialTab={tab} onClose={() => {}} preview={changed && change === "preview"}
+      readBoundary={{ admitted: !(changed && change === "anonymous"), subject: changed ? change === "subject" ? "owner-B" : change === "anonymous" ? null : "owner-A" : "owner-A", generation: changed ? 2 : 1 }}
+    /></LocaleProvider></ThemeProvider>;
+    const view = render(draw(false));
+    fireEvent.click(screen.getByRole("button", { name: triggerName }));
+    expect(screen.getByRole("dialog", { name: title })).toBeVisible();
+    view.rerender(draw(true));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: title })).not.toBeInTheDocument());
+    view.rerender(draw(false));
+    expect(screen.queryByRole("dialog", { name: title })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: triggerName }));
+    expect(within(screen.getByRole("dialog", { name: title })).getByRole("button", { name: "继续" })).toBeDisabled();
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+});
+
+describe("account devices in the same Settings layer", () => {
+  const current = { session_id: "device-current", created_at: "2026-10-14T00:00:00.000Z", expires_at: "2026-10-15T00:00:00.000Z" };
+  const sessionPage = () => Response.json({
+    data: { current_session: current, sessions: [{ ...current, session_id: "device-other" }] },
+    meta: { request_id: "devices-layout", next_cursor: null },
+  }, { headers: { "cache-control": "private, no-store", "x-request-id": "devices-layout" } });
+  const profile = (subject = "settings-reader") => Response.json({ data: { subject, name: "Actual User", email: "actual@example.test", email_verified: true } });
+
+  it("keeps a single dialog, focuses the device heading, cancels removal without DELETE and returns to its own trigger", async () => {
+    const fetcher = vi.fn<(input: string, init?: RequestInit) => Promise<Response>>((input) => {
+      if (input === "/api/account/profile") return Promise.resolve(profile());
+      if (input === "/api/account/sessions?limit=25") return Promise.resolve(sessionPage());
+      throw new Error("Unexpected account device request");
+    });
+    vi.stubGlobal("fetch", fetcher);
+    renderSettings();
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "全名" })).toHaveValue("Actual User"));
+    const entry = () => screen.getByRole("button", { name: "登录设备" });
+    fireEvent.click(entry());
+    const page = screen.getByRole("region", { name: "登录设备" });
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+    expect(screen.getByRole("heading", { name: "登录设备", level: 1 })).toHaveFocus();
+    expect(screen.queryByRole("dialog", { name: "登录设备" })).not.toBeInTheDocument();
+    await within(page).findByText("当前会话");
+    expect(within(page).getAllByText("设备信息未知")).toHaveLength(2);
+    expect(within(page).getByRole("region", { name: "当前会话" })).not.toContainElement(within(page).getByRole("button", { name: "移除" }));
+    expect(page).not.toHaveTextContent(/Chrome|London|online/i);
+    fireEvent.click(within(page).getByRole("button", { name: "移除" }));
+    expect(within(page).getByText("确定移除此登录会话？")).toBeVisible();
+    expect(within(page).getByRole("button", { name: "取消" })).toHaveFocus();
+    fireEvent.click(within(page).getByRole("button", { name: "取消" }));
+    expect(within(page).queryByRole("button", { name: "确认移除" })).not.toBeInTheDocument();
+    expect(within(page).getByRole("button", { name: "移除" })).toHaveFocus();
+    fireEvent.click(screen.getByRole("button", { name: "返回账户" }));
+    expect(entry()).toHaveFocus();
+    expect(screen.queryByRole("region", { name: "登录设备" })).not.toBeInTheDocument();
+
+    fireEvent.click(entry());
+    await screen.findByText("当前会话");
+    fireEvent.click(screen.getByRole("button", { name: "移除" }));
+    fireEvent.keyDown(screen.getByTestId("settings-tab-shortcuts"), { key: "Enter" });
+    expect(screen.getByRole("heading", { name: "键盘快捷键", level: 1 })).toBeVisible();
+    fireEvent.keyDown(screen.getByTestId("settings-tab-account"), { key: "Enter" });
+    expect(screen.getByRole("heading", { name: "账户", level: 1 })).toBeVisible();
+    expect(screen.queryByText("确定移除此登录会话？")).not.toBeInTheDocument();
+    expect(entry()).toBeVisible();
+    expect(fetcher.mock.calls.filter(([input]) => input.startsWith("/api/account/sessions"))).toHaveLength(2);
+    expect(fetcher.mock.calls.every(([input]) => input === "/api/account/profile" || input === "/api/account/sessions?limit=25")).toBe(true);
+    // Every request in this journey is a read; cancellation never reaches DELETE.
+    expect(fetcher.mock.calls.every(([, init]) => init?.method === "GET")).toBe(true);
+  });
+
+  it.each(["subject", "generation", "admission", "preview"] as const)("retires pending device reads on %s and never revives the subpage", async (change) => {
+    let finish!: (response: Response) => void;
+    const pending = new Promise<Response>((resolve) => { finish = resolve; });
+    const fetcher = vi.fn<(input: string, init?: RequestInit) => Promise<Response>>((input) => input === "/api/account/profile" ? Promise.resolve(profile("alice")) : pending);
+    vi.stubGlobal("fetch", fetcher);
+    const draw = (changed: boolean) => <ThemeProvider><LocaleProvider><SettingsModal
+      brandName="Acme" initialTab="account" onClose={() => {}} preview={changed && change === "preview"}
+      readBoundary={{ admitted: !(changed && change === "admission"), subject: changed && change === "subject" ? "bob" : "alice", generation: changed && change === "generation" ? 2 : 1 }}
+    /></LocaleProvider></ThemeProvider>;
+    const view = render(draw(false));
+    fireEvent.click(screen.getByRole("button", { name: "登录设备" }));
+    await waitFor(() => expect(fetcher.mock.calls.some(([input]) => input === "/api/account/sessions?limit=25")).toBe(true));
+    const signal = fetcher.mock.calls.find(([input]) => input === "/api/account/sessions?limit=25")![1]!.signal as AbortSignal;
+    expect(signal.aborted).toBe(false);
+    view.rerender(draw(true));
+    expect(signal.aborted).toBe(true);
+    expect(screen.queryByRole("region", { name: "登录设备" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "账户", level: 1 })).toBeVisible();
+    await act(async () => finish(sessionPage()));
+    expect(screen.queryByText("当前会话")).not.toBeInTheDocument();
+    view.rerender(draw(false));
+    expect(screen.queryByRole("region", { name: "登录设备" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "登录设备" })).toBeEnabled();
+    expect(fetcher.mock.calls.filter(([input]) => input === "/api/account/sessions?limit=25")).toHaveLength(1);
+    expect(fetcher.mock.calls.every(([, init]) => init?.method === "GET")).toBe(true);
+  });
+
+  it("keeps preview device management unavailable without issuing session requests", () => {
+    const fetcher = vi.fn();
+    vi.stubGlobal("fetch", fetcher);
+    renderSettings(() => {}, undefined, true);
+    const entry = screen.getByRole("button", { name: "登录设备" });
+    expect(entry).toBeDisabled();
+    fireEvent.click(entry);
+    expect(screen.queryByRole("region", { name: "登录设备" })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+});
+
+it("knowledge Save references one stable complete unavailable description and discards canceled drafts", async () => {
+  const fetcher = vi.fn();
+  vi.stubGlobal("fetch", fetcher);
+  renderSettings(() => {}, undefined, true, undefined, "personalization");
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "知识" }), { button: 0, ctrlKey: false });
+  const add = screen.getByRole("button", { name: "新增" });
+  fireEvent.click(add);
+  let dialog = screen.getByRole("dialog", { name: "添加知识" });
+  const reason = "知识保存服务暂未接通。此处仅供填写临时草稿，关闭后清空。";
+  expect(within(dialog).getAllByText(reason, { exact: true })).toHaveLength(1);
+  const description = within(dialog).getByText(reason, { exact: true });
+  expect(description.id).not.toBe("");
+  expect(dialog).toHaveAttribute("aria-describedby", description.id);
+  const save = within(dialog).getByRole("button", { name: "保存" });
+  expect(save).toBeDisabled();
+  expect(save).toHaveAttribute("aria-describedby", description.id);
+  expect(save).toHaveAccessibleDescription(reason);
+  fireEvent.change(within(dialog).getByRole("textbox", { name: "名称" }), { target: { value: "private knowledge draft" } });
+  fireEvent.change(within(dialog).getByRole("textbox", { name: "内容" }), { target: { value: "private content" } });
+  fireEvent.submit(save.closest("form")!);
+  fireEvent.click(within(dialog).getByRole("button", { name: "取消" }));
+  await waitFor(() => expect(add).toHaveFocus());
+  fireEvent.click(add);
+  dialog = screen.getByRole("dialog", { name: "添加知识" });
+  expect(within(dialog).getByRole("textbox", { name: "名称" })).toHaveValue("");
+  expect(within(dialog).getByRole("textbox", { name: "内容" })).toHaveValue("");
+  expect(within(dialog).getAllByText(reason, { exact: true })).toHaveLength(1);
+  expect(within(dialog).getByRole("button", { name: "保存" })).toHaveAttribute("aria-describedby", description.id);
+  expect(fetcher).not.toHaveBeenCalled();
 });

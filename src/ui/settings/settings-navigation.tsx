@@ -81,7 +81,7 @@ export function SettingsNavigation({ brandName, selectedTab, activeTabRef, onSel
         ) : null}
 
     </SettingsNavigationBrand>
-    <p id={unavailableId} className={styles.unavailableNavigation}>{t("settings.unavailableNavigation")}</p>
+    <p id={unavailableId} className="sr-only">{t("settings.unavailableNavigation")}</p>
     <SettingsNavigationRail entries={nav} selectedTab={selectedTab} activeTabRef={activeTabRef} onSelectTab={onSelectTab} moreLabel={t("settings.moreSections")} isFiltered={searching} unavailableId={unavailableId} groupLabel={(entry) => settingsGroupLabel(t, entry.group)} />
   </nav>;
 }

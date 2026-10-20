@@ -14,7 +14,7 @@ import type { SkillsScopeFilter } from "@/ui/skills/skills-scope";
 import styles from "./settings-modal.module.css";
 import { SettingsPanelContent } from "./settings-panel-content";
 import { SettingsPanelHeader } from "./settings-panel-header";
-import { SETTINGS_TABS, type SettingsTab } from "./settings-types";
+import { SETTINGS_TABS, type AccountDetail, type SettingsTab } from "./settings-types";
 
 type SettingsPanelProps = {
   activeTab: SettingsTab;
@@ -49,7 +49,7 @@ export function SettingsPanel({
   onCreateSkillWithAi,
   onTrySkill,
 }: SettingsPanelProps) {
-  const [accountLoginMethods, setAccountLoginMethods] = useState(false);
+  const [accountDetail, setAccountDetail] = useState<AccountDetail>(null);
   const [skillsCatalogOpen, setSkillsCatalogOpen] = useState(false);
   const skillsCatalogTriggerRef = useRef<HTMLButtonElement | null>(null);
 
@@ -87,8 +87,8 @@ export function SettingsPanel({
               <div className={styles.contentColumn} data-panel={panelTab}>
                 <SettingsPanelHeader
                   tab={panelTab}
-                  accountLoginMethods={accountLoginMethods}
-                  onBackFromLoginMethods={() => setAccountLoginMethods(false)}
+                  accountDetail={accountDetail}
+                  onBackFromAccountDetail={() => setAccountDetail(null)}
                   skillsCatalogOpen={panelTab === "skills" && skillsCatalogOpen}
                   onBackFromSkillsCatalog={() => {
                     setSkillsCatalogOpen(false);
@@ -106,8 +106,8 @@ export function SettingsPanel({
                   {...(readBoundary === undefined ? {} : { readBoundary })}
                   hubClient={hubClient}
                   teamClient={teamClient}
-                  accountLoginMethods={accountLoginMethods}
-                  onAccountLoginMethodsChange={setAccountLoginMethods}
+                  accountDetail={accountDetail}
+                  onAccountDetailChange={setAccountDetail}
                   onOpenSubscription={() => onSelectTab("subscription")}
                   onOpenPricing={() => onSelectTab("subscription")}
                   skillsCatalogOpen={skillsCatalogOpen}

@@ -1,3 +1,11 @@
+## 设置内部流程的契约边界
+
+本次沿用现有同源 BFF 边界，无新增 API、generated、scope、权限或 owner wire。账户积分概览仅复用 Billing summary 读取，可用和冻结 micros 以 BigInt 格式化；未开户、错误和真实零余额分开，summary 不用于推算套餐事实。
+
+邮箱验证、绑定、删除账户、邮箱与号码分配、钱包支付、知识保存、API key、Webhook 和外部应用授权没有本次可消费的完整写契约，最终动作禁用；浏览表单或说明不发送替代请求。正式套餐目录只读和手动重读保留原有取消、预算与身份边界，不触发 checkout。
+
+Team 表单复用现有邀请 request schema，局部格式错误不调用客户端；真正写入结果未知时的恢复守卫不变。分享恢复重读时清掉旧审阅资格，不新增请求或自动重试写入。Skills/MCP 契约不变。
+
 ## 个人资料输入反馈（2026-10-16）
 
 仍消费既有四字段资料GET/PUT及expected_revision；输入上限由现personalization-schema唯一常量提供，无wire、路径、请求、响应、错误码或generated变更。过长尝试仅反馈未采用，合法旧草稿保持原blur保存语义；未开户Web契约消费仍未实施。

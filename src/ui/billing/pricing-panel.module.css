@@ -38,8 +38,8 @@
 }
 
 .title {
-  font-family: var(--font-serif);
-  font-size: 1.25rem;
+  font-size: 1.5rem;
+  font-weight: 600;
   color: var(--foreground);
 }
 
@@ -62,8 +62,15 @@
 }
 
 .emptyState {
-  min-height: 8rem;
-  padding: 1.25rem;
+  min-height: 16rem;
+  gap: 1rem;
+  padding: 2rem 1.25rem;
+  overflow-wrap: anywhere;
+}
+
+.emptyState > button { max-width: 100%; height: auto; min-height: 2.25rem; white-space: normal; }
+@media (max-width: 960px) {
+  .emptyState > button { min-height: 2.75rem; }
 }
 
 .loadingState { display: flex; flex-direction: column; gap: 0.65rem; padding: 1.5rem 0; }
@@ -165,3 +172,12 @@
 
   .buy { min-height: 2.75rem; }
 }
+
+
+.period { display: flex; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem; font-size: 0.875rem; }
+.period [data-slot="select-trigger"] { min-height: 2.5rem; max-width: 100%; min-width: 10rem; border-radius: 0.5rem; background: var(--background); color: var(--foreground); }
+.periodOptions { max-width: calc(100vw - 2rem); }
+.periodOptions [role="option"] { white-space: normal; overflow-wrap: anywhere; }
+.detailsDialog { width: min(30rem, calc(100vw - 2rem)); max-width: calc(100vw - 2rem); max-height: 85dvh; overflow-y: auto; overflow-wrap: anywhere; padding: 1.25rem; }
+.detailsDialog .price { flex-wrap: wrap; }
+.detailsDialog button { min-height: 2.75rem; white-space: normal; }

@@ -1,3 +1,7 @@
+## 设置页内部流程
+
+`TECHNICAL_DESIGN.md` 说明页面、草稿、焦点与恢复状态的归属；`API_CONTRACT.md` 说明现有契约和未接通能力；`DATA_MODEL.md` 说明局部草稿及业务事实边界。当前验证与已知缺口见 `CURRENT.md`，创建前表单可打开不代表资产分配、授权或支付已经可用。
+
 个性化知识与记忆导入内页的当前边界见 TECHNICAL_DESIGN/API_CONTRACT/DATA_MODEL 顶部；真实业务完成与验证结果以 CURRENT 为准。浏览弹窗不等同知识存储或记忆解析已接通。
 
 SET53：TECHNICAL_DESIGN/API_CONTRACT/DATA_MODEL 顶部定义六个资产及服务设置页面的放置、可导航范围及未接通动作边界；CURRENT 记录实际验证。无新 API、持久化或依赖，不把页面可打开当作资产服务已经可用。

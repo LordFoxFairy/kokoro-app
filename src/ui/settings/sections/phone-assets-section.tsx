@@ -1,9 +1,9 @@
 "use client";
 
 import { useId } from "react";
-import { Smartphone, Plus } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Smartphone } from "lucide-react";
 import { useT } from "@/i18n/context";
+import { PhoneAssignmentDialog } from "./phone-assignment-dialog";
 import styles from "./settings-sections.module.css";
 
 export function PhoneAssetsSection() {
@@ -15,9 +15,7 @@ export function PhoneAssetsSection() {
         <div className={styles.assetIconTile} aria-hidden="true"><Smartphone /></div>
         <h2>{t("settings.phoneTitle")}</h2>
         <p>{t("settingsServices.phoneDescription")}</p>
-        <Button disabled aria-describedby={unavailableId}>
-          <Plus aria-hidden="true" />{t("settingsServices.createPhone")}
-        </Button>
+        <PhoneAssignmentDialog />
         <p id={unavailableId} className={styles.serviceAvailability}>{t("settingsServices.phoneUnavailable")}</p>
       </section>
     </div>

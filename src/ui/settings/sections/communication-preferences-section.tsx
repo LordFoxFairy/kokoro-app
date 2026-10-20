@@ -1,6 +1,7 @@
 "use client"
 import { useLayoutEffect, useRef, useState, useSyncExternalStore } from "react"
 import { Switch } from "@/components/ui/switch"
+import { Button } from "@/components/ui/button"
 import { useT } from "@/i18n/context"
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
 import { readCommunicationPreferences, serverCommunicationPreferences, subscribeCommunicationPreferences, writeCommunicationPreferences, type CommunicationPreference } from "@/ui/notifications/communication-preferences"
@@ -54,13 +55,13 @@ function IdentityPreferences({ subject, soundIdentity }: { subject: string | nul
   return <section className={styles.notificationSection} aria-labelledby="settings-notifications-heading">
     <h3 id="settings-notifications-heading">{t("settings.notificationsGroup")}</h3>
     {!subject && <p>{t("settings.communicationRequiresIdentity")}</p>}
-    {rows.map((row) => <div className={styles.notificationRow} key={row.id}>
+    {rows.map((row) => <div className={`${styles.notificationRow}${row.id === "brand_ads" ? ` ${styles.notificationAdvertising}` : ""}`} key={row.id}>
       <div><strong>{t(row.title)}</strong><span>{t(row.hint)}</span></div>
       <Switch id={`settings-${row.id}`} aria-label={t(row.title)} checked={preferences[row.id]} disabled={busy || row.disabled} onCheckedChange={(checked) => { void setPreference(row.id, checked) }} />
     </div>)}
     {subject && preferences.sound_notifications && soundState === "locked" && <div className={styles.communicationFeedback}>
       <p>{t("settings.communicationSoundLocked")}</p>
-      <button type="button" disabled={busy || !(capabilities & 2)} onClick={() => { void unlockSound() }}>{t("settings.communicationUnlockSound")}</button>
+      <Button type="button" variant="outline" size="sm" disabled={busy || !(capabilities & 2)} onClick={() => { void unlockSound() }}>{t("settings.communicationUnlockSound")}</Button>
     </div>}
     {feedback && <p className={styles.communicationFeedback} role={feedback === "saved" ? "status" : "alert"}>{t(`settings.communication.${feedback}`)}</p>}
   </section>

@@ -115,6 +115,7 @@ export function SettingsModal({
   const tab = localTab.source === initialTab ? localTab.value : initialTab;
   const { open, requestClose } = useOverlayClose(onClose);
   const activeTabRef = useRef<HTMLButtonElement | null>(null);
+  const settingsDialogRef = useRef<HTMLDivElement | null>(null);
   // Keep one injected Hub client for the lifetime of the settings surface.
   // Besides avoiding duplicate providers in one render, this makes the
   // resource cache's client scope stable when a test/site supplies a factory
@@ -158,11 +159,28 @@ export function SettingsModal({
         }}
       >
         <DialogContent
+          ref={settingsDialogRef}
           className={cn(styles.dialogContent, "p-0 box-border")}
           data-testid="settings-modal"
           closeLabel={t("settings.close")}
           closeButtonTestId="settings-close"
           overlayClassName={styles.settingsOverlay ?? ""}
+          onEscapeKeyDown={(event) => {
+            // A child can be visible before Radix registers its dismiss layer.
+            // Only an expanded trigger inside this Settings instance establishes
+            // ownership; an unrelated dialog must not block this close action.
+            const triggers = settingsDialogRef.current?.querySelectorAll(
+              '[data-slot="dialog-trigger"][aria-expanded="true"][aria-controls]',
+            );
+            const hasOwnedChild = Array.from(triggers ?? []).some((trigger) => {
+              const id = trigger.getAttribute("aria-controls");
+              const content = id ? trigger.ownerDocument.getElementById(id) : null;
+              return content !== settingsDialogRef.current && content?.matches(
+                '[data-slot="dialog-content"][data-state="open"]',
+              );
+            });
+            if (hasOwnedChild) event.preventDefault();
+          }}
           onPointerDownOutside={(event) => {
             // Skills, connector and import dialogs are portalled outside this
             // content. Treat their content/overlay as an owned nested surface;

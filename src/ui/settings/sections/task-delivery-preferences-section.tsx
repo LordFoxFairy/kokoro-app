@@ -1,5 +1,6 @@
 "use client";
 
+import { useId } from "react";
 import { useT } from "@/i18n/context";
 import {
   Select,
@@ -19,6 +20,7 @@ import styles from "./settings-sections.module.css";
  */
 export function TaskDeliveryPreferencesSection() {
   const t = useT();
+  const reasonId = useId();
 
   return (
     <section
@@ -33,7 +35,7 @@ export function TaskDeliveryPreferencesSection() {
           <span className={styles.rowLabel}>{t("settings.taskDelivery")}</span>
           <p className={styles.chatPreferenceHint}>{t("settings.taskDeliveryHint")}</p>
         </div>
-        <Select value="queue" disabled>
+        <Select value="queue">
           <SelectTrigger
             id="settings-task-delivery"
             className={styles.select}
@@ -42,8 +44,11 @@ export function TaskDeliveryPreferencesSection() {
           >
             <SelectValue />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className={styles.deliveryOptions}>
+            <p id={reasonId} className={styles.chatPreferenceHint}>{t("settingsServices.steeringUnavailable")}</p>
+            <SelectItem value="send" disabled aria-describedby={reasonId}>{t("settingsServices.sendWithoutInterrupt")}</SelectItem>
             <SelectItem value="queue">{t("settings.taskDeliveryQueue")}</SelectItem>
+            <SelectItem value="interrupt" disabled aria-describedby={reasonId}>{t("settingsServices.interruptAndSend")}</SelectItem>
           </SelectContent>
         </Select>
       </div>

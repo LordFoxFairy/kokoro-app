@@ -148,3 +148,67 @@ it("a successful authoritative removal shows only the new owner list", async () 
   expect(view.result.current.blocked).toBe(false);
   expect(mocks.revoke).toHaveBeenCalledTimes(1);
 });
+
+it.each(["network failure", "incomplete pagination"] as const)(
+  "a new blocked reread revokes prior review eligibility during and after %s",
+  async (failure) => {
+    const view = renderHook(() => useSharedTasks(false, boundary));
+    await waitFor(() => expect(view.result.current.items).toEqual([item]));
+    mocks.revoke.mockRejectedValueOnce(Error("unknown"));
+    await act(() => view.result.current.revoke(item.session_id));
+    await act(() => view.result.current.reload());
+    expect(view.result.current.review).toBe(true);
+    expect(view.result.current.blocked).toBe(true);
+    const oldProceed = view.result.current.proceed;
+
+    type ReadPage = { data: { items: typeof item[]; next_cursor: string | null } };
+    let finish!: (value: ReadPage) => void;
+    let fail!: (reason: Error) => void;
+    mocks.read.mockImplementationOnce(() => new Promise<ReadPage>((resolve, reject) => {
+      finish = resolve;
+      fail = reject;
+    }));
+    if (failure === "incomplete pagination") {
+      mocks.read.mockResolvedValueOnce({ data: { items: [], next_cursor: "repeated" } });
+    }
+    let reread!: Promise<void>;
+    act(() => { reread = view.result.current.reload(); });
+    expect(view.result.current.busy).toBe(true);
+    expect(view.result.current.review).toBe(false);
+    expect(view.result.current.blocked).toBe(true);
+    act(oldProceed);
+    await act(() => view.result.current.revoke(item.session_id));
+    expect(view.result.current.blocked).toBe(true);
+    expect(mocks.revoke).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      if (failure === "network failure") fail(Error("network failed"));
+      else finish({ data: { items: [item], next_cursor: "repeated" } });
+      await reread;
+    });
+    expect(view.result.current.busy).toBe(false);
+    expect(view.result.current.error).toBe(true);
+    expect(view.result.current.review).toBe(false);
+    expect(view.result.current.blocked).toBe(true);
+    expect(view.result.current.items).toEqual([item]);
+    act(oldProceed);
+    await act(() => view.result.current.revoke(item.session_id));
+    expect(view.result.current.blocked).toBe(true);
+    expect(mocks.revoke).toHaveBeenCalledTimes(1);
+
+    await act(() => view.result.current.reload());
+    expect(view.result.current.error).toBe(false);
+    expect(view.result.current.review).toBe(true);
+    expect(view.result.current.blocked).toBe(true);
+    await act(() => view.result.current.revoke(item.session_id));
+    expect(mocks.revoke).toHaveBeenCalledTimes(1);
+    act(() => view.result.current.proceed());
+    expect(view.result.current.review).toBe(false);
+    expect(view.result.current.blocked).toBe(false);
+    mocks.read.mockResolvedValueOnce({ data: { items: [], next_cursor: null } });
+    await act(() => view.result.current.revoke(item.session_id));
+    expect(mocks.revoke).toHaveBeenCalledTimes(2);
+    expect(view.result.current.items).toEqual([]);
+    expect(view.result.current.blocked).toBe(false);
+  },
+);

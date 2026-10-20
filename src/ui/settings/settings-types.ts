@@ -1,3 +1,5 @@
+export type AccountDetail = null | "login-methods" | "devices";
+
 export type SettingsTab =
   | "account"
   | "appearance"

@@ -5,15 +5,24 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { useState } from "react";
 import { LocaleProvider } from "@/i18n/context";
 import { AccountCard } from "@/ui/settings/sections/account-card";
+import type { AccountDetail } from "@/ui/settings/settings-types";
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 const fetcher = vi.fn();
+const billingFetcher = vi.fn();
 beforeEach(() => {
   localStorage.setItem("kokoro.locale", "en");
-  vi.stubGlobal("fetch", fetcher);
+  billingFetcher.mockReset().mockImplementation(async () => Response.json({
+    credit_account_id: "11111111-1111-4111-8111-111111111111", status: "active", available_micros: "12500000", held_micros: "500000",
+  }, { headers: { "cache-control": "private, no-store", "x-request-id": "account-credits" } }));
+  // Profile/CAS assertions keep their own request history; summary is a separate GET.
+  vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) =>
+    input === "/api/session/billing/summary" ? billingFetcher(input, init) : fetcher(input, init));
   fetcher.mockReset().mockResolvedValue(
     Response.json({
       data: {
@@ -36,8 +45,8 @@ it("loads real account data after admission without enabling preview writes", as
         {...{
           readBoundary: { admitted: true, subject: "alice", generation: 1 },
         }}
-        loginMethodsOpen={false}
-        onLoginMethodsChange={vi.fn()}
+        detail={null}
+        onDetailChange={vi.fn()}
         onOpenSubscription={vi.fn()}
       />
     </LocaleProvider>,
@@ -49,7 +58,7 @@ it("loads real account data after admission without enabling preview writes", as
   );
   expect(screen.getByText("alice@example.test")).toBeVisible();
   expect(screen.getByText("alice")).toBeVisible();
-  expect(screen.getByRole("button", { name: "Change" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Change" })).toBeEnabled();
   expect(screen.queryByText("1,000")).not.toBeInTheDocument();
   expect(screen.queryByText("preview@example.test")).not.toBeInTheDocument();
 });
@@ -64,8 +73,8 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 const props = {
-  loginMethodsOpen: false,
-  onLoginMethodsChange: vi.fn(),
+  detail: null,
+  onDetailChange: vi.fn(),
   onOpenSubscription: vi.fn(),
 };
 const boundary = (subject = "alice", generation = 1, admitted = true) => ({
@@ -282,4 +291,98 @@ it("saves live name only on explicit action then displays authority from GET", a
   expect(
     fetcher.mock.calls.filter((call) => call[1]?.method === "GET"),
   ).toHaveLength(2);
+});
+
+it.each([
+  ["Change", "Change email address", "Next"],
+  ["Delete account", "Delete account", "Delete account"],
+])("account service preview %s is readable but cannot verify, authorize or delete", async (trigger, title, finalAction) => {
+  const view = render(card());
+  await waitFor(() => expect(screen.getByRole("textbox", { name: "Full name" })).toHaveValue("Alice Actual"));
+  const reads = fetcher.mock.calls.length;
+  fireEvent.click(screen.getByRole("button", { name: trigger }));
+  let dialog = screen.getByRole("dialog", { name: title });
+  expect(dialog).toHaveTextContent(/unavailable|not connected/i);
+  if (trigger === "Delete account") expect(dialog).toHaveTextContent("permanently");
+  const final = within(dialog).getAllByRole("button", { name: finalAction });
+  for (const button of final) {
+    expect(button).toBeDisabled();
+    expect(button).toHaveAccessibleDescription(/unavailable|not connected/i);
+    fireEvent.click(button);
+  }
+  const code = within(dialog).queryByRole("textbox", { name: "Enter verification code" });
+  if (code) {
+    fireEvent.change(code, { target: { value: "not verified" } });
+    expect(within(dialog).getByRole("button", { name: /Send/ })).toBeDisabled();
+    expect(within(dialog).getByRole("button", { name: finalAction })).toBeDisabled();
+  } else {
+    expect(within(dialog).queryByRole("textbox")).not.toBeInTheDocument();
+    expect(dialog).toHaveTextContent("Alice Actual");
+    expect(dialog).toHaveTextContent("alice@example.test");
+    expect(dialog).toHaveTextContent("Kokoro");
+    expect(dialog).not.toHaveTextContent("30 days");
+  }
+  expect(fetcher).toHaveBeenCalledTimes(reads);
+  fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+  fireEvent.click(screen.getByRole("button", { name: trigger }));
+  dialog = screen.getByRole("dialog", { name: title });
+  if (code) expect(within(dialog).getByRole("textbox")).toHaveValue("");
+  view.rerender(card("alice", 2));
+  expect(screen.queryByRole("dialog", { name: title })).not.toBeInTheDocument();
+});
+
+function AccountLoginHarness({ subject = "alice", generation = 1 }: { subject?: string; generation?: number }) {
+  const [detail, setDetail] = useState<AccountDetail>(null);
+  return <LocaleProvider><AccountCard detail={detail} onDetailChange={setDetail} onOpenSubscription={vi.fn()} readBoundary={boundary(subject, generation)} /></LocaleProvider>;
+}
+
+it("opens live sign-in methods as unknown local content and retires it with the identity", async () => {
+  const view = render(<AccountLoginHarness />);
+  await waitFor(() => expect(screen.getByRole("textbox", { name: "Full name" })).toHaveValue("Alice Actual"));
+  const reads = fetcher.mock.calls.length;
+  fireEvent.click(screen.getByRole("button", { name: "Manage sign-in method" }));
+  const page = screen.getByRole("region", { name: "Manage sign-in method" });
+  expect(screen.queryByRole("dialog", { name: "Manage sign-in method" })).not.toBeInTheDocument();
+  for (const provider of ["Google", "Microsoft", "Apple"]) {
+    const row = within(page).getByRole("group", { name: provider });
+    expect(row).toHaveTextContent("Connection status cannot be read");
+    const connect = within(row).getByRole("button", { name: "Connect" });
+    expect(connect).toBeDisabled();
+    expect(connect).toHaveAccessibleDescription("Account verification and change services are not connected; these actions are unavailable.");
+    fireEvent.click(connect);
+  }
+  expect(within(page).getByRole("button", { name: "Add passkey" })).toBeDisabled();
+  expect(page).toHaveTextContent("Linked sign-in methods and passkeys cannot currently be read.");
+  expect(page).not.toHaveTextContent("No passkeys");
+  expect(page).not.toHaveTextContent("alice@example.test");
+  expect(page.querySelector("a, input, iframe, canvas")).toBeNull();
+  expect(fetcher).toHaveBeenCalledTimes(reads);
+  view.rerender(<AccountLoginHarness generation={2} />);
+  await waitFor(() => expect(screen.queryByRole("region", { name: "Manage sign-in method" })).not.toBeInTheDocument());
+  expect(screen.getByRole("button", { name: "Manage sign-in method" })).toBeEnabled();
+});
+
+it("does not call an unverified email a confirmed verification target", async () => {
+  fetcher.mockResolvedValueOnce(Response.json({ data: { subject: "alice", name: "Alice Actual", email: "unverified@example.test", email_verified: false } }));
+  render(card());
+  await waitFor(() => expect(screen.getByRole("textbox", { name: "Full name" })).toHaveValue("Alice Actual"));
+  const reads = fetcher.mock.calls.length;
+  fireEvent.click(screen.getByRole("button", { name: "Change" }));
+  const dialog = screen.getByRole("dialog", { name: "Change email address" });
+  expect(dialog).toHaveTextContent("Your current verified email cannot be confirmed yet.");
+  expect(dialog).not.toHaveTextContent("unverified@example.test");
+  expect(within(dialog).getByRole("button", { name: "Send" })).toBeDisabled();
+  expect(within(dialog).getByRole("button", { name: "Next" })).toBeDisabled();
+  expect(fetcher).toHaveBeenCalledTimes(reads);
+});
+
+it.each(["subject", "generation", "admission", "preview"])("retires the live verification draft on %s changes", async (change) => {
+  const view = render(card());
+  await waitFor(() => expect(screen.getByRole("textbox", { name: "Full name" })).toHaveValue("Alice Actual"));
+  fireEvent.click(screen.getByRole("button", { name: "Change" }));
+  const dialog = screen.getByRole("dialog", { name: "Change email address" });
+  fireEvent.change(within(dialog).getByRole("textbox", { name: "Enter verification code" }), { target: { value: "private draft" } });
+  view.rerender(card(change === "subject" ? "bob" : "alice", change === "generation" ? 2 : 1, change !== "admission", change === "preview"));
+  expect(screen.queryByRole("dialog", { name: "Change email address" })).not.toBeInTheDocument();
+  expect(screen.queryByDisplayValue("private draft")).not.toBeInTheDocument();
 });

@@ -5,6 +5,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -136,7 +137,7 @@ describe("fixed-tenant Team Product UI", () => {
       "invite@example.test",
     );
     expect(screen.getByTestId("member-row-member-me")).toHaveTextContent(
-      "owner",
+      "Owner",
     );
     expect(screen.queryByTestId("team-switcher")).toBeNull();
     expect(screen.queryByTestId("invite-accept")).toBeNull();
@@ -353,6 +354,61 @@ describe("fixed-tenant Team Product UI", () => {
     await waitFor(() => expect(endProductSession).toHaveBeenCalledOnce());
     expect(api.leave).toHaveBeenCalledOnce();
     expect(api.listMembers).toHaveBeenCalledOnce();
+  });
+});
+
+describe("Team localized presentation and explicit actions", () => {
+  it("labels known roles and pending invitations while preserving custom role names", async () => {
+    const api = client({
+      listMembers: vi.fn().mockResolvedValue({
+        items: [...members, { ...members[1]!, member_id: "member-custom", display_name: "Custom", roles: ["reviewer_custom"] }],
+        nextCursor: null,
+        requestId: "req-members",
+      }),
+    });
+    show(api);
+    const me = await screen.findByTestId("member-row-member-me");
+    expect(me).toHaveTextContent("Owner");
+    expect(me).toHaveTextContent("You");
+    expect(screen.getByTestId("member-row-member-custom")).toHaveTextContent("reviewer_custom");
+    expect(screen.getByTestId("invitation-row-inv-1")).toHaveTextContent("Awaiting acceptance");
+    expect(screen.getByTestId("invitation-row-inv-1")).not.toHaveTextContent("pending");
+    expect(api.createInvitation).not.toHaveBeenCalled();
+    expect(api.replaceMemberRoles).not.toHaveBeenCalled();
+  });
+
+  it("selects the invite role with a keyboard and submits its original wire value only on Invite", async () => {
+    const api = client();
+    show(api);
+    const trigger = await screen.findByRole("combobox", { name: "Invitee role" });
+    expect(trigger.tagName).toBe("BUTTON");
+    expect(trigger).toHaveTextContent("Member");
+    fireEvent.keyDown(trigger, { key: "ArrowDown" });
+    const admin = await screen.findByRole("option", { name: "Admin" });
+    expect(screen.queryByRole("option", { name: "Owner" })).toBeNull();
+    act(() => admin.focus());
+    fireEvent.keyDown(admin, { key: "Enter" });
+    await waitFor(() => expect(trigger).toHaveTextContent("Admin"));
+    expect(api.createInvitation).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByTestId("invite-email"), { target: { value: "admin@example.test" } });
+    fireEvent.click(screen.getByTestId("invite-submit"));
+    await waitFor(() => expect(api.createInvitation).toHaveBeenCalledWith("admin@example.test", ["admin"], expect.any(AbortSignal)));
+    expect(api.createInvitation).toHaveBeenCalledOnce();
+  });
+
+  it("explains leaving and cancels its confirmation without submitting", async () => {
+    const api = client();
+    show(api);
+    const leave = await screen.findByTestId("team-leave");
+    expect(leave).toHaveAccessibleDescription("After leaving, you will lose access to this team’s content. Confirmation is required.");
+    fireEvent.click(leave);
+    const confirmation = screen.getByRole("group", { name: "Leave this team?" });
+    expect(within(confirmation).getByTestId("team-leave-confirm")).toBeEnabled();
+    expect(api.leave).not.toHaveBeenCalled();
+    fireEvent.click(within(confirmation).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByTestId("team-leave-confirm")).toBeNull();
+    expect(screen.getByTestId("team-leave")).toBeEnabled();
+    expect(api.leave).not.toHaveBeenCalled();
   });
 });
 
@@ -629,5 +685,95 @@ describe("SET20 explicit authority recovery and admission", () => {
     fireEvent.click(screen.getByTestId("team-leave-confirm"));
     await waitFor(() => expect(api.leave).toHaveBeenCalledOnce());
     expect(endProductSession).not.toHaveBeenCalled();
+  });
+});
+
+describe("Team invitation validation and confirmation focus", () => {
+  it("rejects native-valid a@b before the client or unknown-write guard, then submits one corrected wire", async () => {
+    const { teamCreateInvitationRequestSchema } = await import("@/team/schema");
+    const createInvitation = vi.fn<TeamClient["createInvitation"]>(async (email, roles) => {
+      teamCreateInvitationRequestSchema.parse({ email, roles });
+    });
+    const api = client({ createInvitation });
+    show(api);
+    const input = await screen.findByTestId("invite-email") as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "a@b" } });
+    expect(input.checkValidity()).toBe(true);
+    expect(teamCreateInvitationRequestSchema.safeParse({ email: input.value, roles: ["member"] }).success).toBe(false);
+    await act(async () => fireEvent.click(screen.getByTestId("invite-submit")));
+    expect(createInvitation).not.toHaveBeenCalled();
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    expect(input).toHaveAccessibleDescription(expect.stringContaining("Enter a valid email address."));
+    expect(screen.getByRole("alert")).toHaveTextContent("Enter a valid email address.");
+    expect(screen.queryByTestId("team-notice")).toBeNull();
+    expect(screen.queryByTestId("team-continue")).toBeNull();
+    expect(screen.getByTestId("invite-submit")).toBeEnabled();
+    expect(screen.getByTestId("invitation-resend-inv-1")).toBeEnabled();
+
+    fireEvent.change(input, { target: { value: "new@example.test" } });
+    expect(input).not.toHaveAttribute("aria-invalid", "true");
+    expect(screen.queryByText("Enter a valid email address.")).toBeNull();
+    expect(input).toHaveAccessibleDescription("Choose a role and send a team invitation by email.");
+    fireEvent.click(screen.getByTestId("invite-submit"));
+    await waitFor(() => expect(createInvitation).toHaveBeenCalledOnce());
+    expect(createInvitation).toHaveBeenCalledWith("new@example.test", ["member"], expect.any(AbortSignal));
+    await waitFor(() => expect(screen.getByTestId("invite-submit")).toBeEnabled());
+    expect(screen.queryByTestId("team-notice")).toBeNull();
+    expect(api.resendInvitation).not.toHaveBeenCalled();
+  });
+
+  it.each(["leave", "remove"] as const)("focuses Cancel for %s and returns only an explicit cancellation to its original action", async (kind) => {
+    const api = client();
+    show(api);
+    const triggerId = kind === "leave" ? "team-leave" : "member-remove-member-bob";
+    const trigger = await screen.findByTestId(triggerId);
+    act(() => trigger.focus());
+    fireEvent.click(trigger);
+    const confirmation = kind === "leave"
+      ? screen.getByRole("group", { name: "Leave this team?" })
+      : screen.getByTestId("member-row-member-bob");
+    const cancel = within(confirmation).getByRole("button", { name: "Cancel" });
+    expect(cancel).toHaveFocus();
+    expect(api.leave).not.toHaveBeenCalled();
+    expect(api.removeMember).not.toHaveBeenCalled();
+    fireEvent.click(cancel);
+    expect(screen.getByTestId(triggerId)).toHaveFocus();
+    expect(screen.queryByTestId(kind === "leave" ? "team-leave-confirm" : "member-remove-confirm-member-bob")).toBeNull();
+    expect(api.leave).not.toHaveBeenCalled();
+    expect(api.removeMember).not.toHaveBeenCalled();
+  });
+
+  it.each(["client", "subject", "generation"] as const)("retires invalid input and confirmation on %s replacement without focusing old actions", async (change) => {
+    const api = client();
+    const view = show(api);
+    const input = await screen.findByTestId("invite-email");
+    fireEvent.change(input, { target: { value: "a@b" } });
+    fireEvent.click(screen.getByTestId("invite-submit"));
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    const oldTrigger = screen.getByTestId("member-remove-member-bob");
+    fireEvent.click(oldTrigger);
+    const cancel = within(screen.getByTestId("member-row-member-bob")).getByRole("button", { name: "Cancel" });
+    expect(cancel).toHaveFocus();
+    const oldTriggerFocus = vi.spyOn(oldTrigger, "focus");
+    const oldCancelFocus = vi.spyOn(cancel, "focus");
+    const subject = change === "subject" ? "user-next" : "user-me";
+    const nextApi = change === "generation" ? api : client({
+      currentUserId: vi.fn().mockResolvedValue(subject),
+      listMembers: vi.fn().mockResolvedValue({ items: members.map((member) => member.member_id === "member-me" ? { ...member, user_id: subject } : member), nextCursor: null, requestId: "next-members" }),
+    });
+    view.rerender(<TeamPanel client={nextApi} readBoundary={{ admitted: true, subject, generation: change === "generation" ? 2 : 1 }} onClose={vi.fn()} />);
+    const nextInput = await screen.findByTestId("invite-email");
+    expect(nextInput).toHaveValue("");
+    expect(nextInput).not.toHaveAttribute("aria-invalid", "true");
+    expect(screen.queryByText("Enter a valid email address.")).toBeNull();
+    expect(screen.queryByTestId("member-remove-confirm-member-bob")).toBeNull();
+    expect(oldTriggerFocus).not.toHaveBeenCalled();
+    expect(oldCancelFocus).not.toHaveBeenCalled();
+    expect(api.createInvitation).not.toHaveBeenCalled();
+    expect(api.removeMember).not.toHaveBeenCalled();
+    expect(nextApi.createInvitation).not.toHaveBeenCalled();
+    expect(nextApi.removeMember).not.toHaveBeenCalled();
+    oldTriggerFocus.mockRestore();
+    oldCancelFocus.mockRestore();
   });
 });

@@ -1,3 +1,9 @@
+## 设置内部页面
+
+`src/ui/settings/sections/` 中的账户、Mail、邮箱、电话、钱包、集成和开发者组件负责所属内页及创建前表单。`account-credit-summary` 复用既有 Billing summary；`src/ui/billing/billing-resource-content` 展示非任务用量分类，`pricing-plan-details-dialog` 只展示正式套餐目录的原始金额。
+
+设置导航和标题共用当前页面状态；数据管理和集成详情使用同层返回，创建前表单使用局部 Dialog。未接通服务的最终动作禁用，草稿不持久化。当前行为、验证及限制见 `docs/CURRENT.md`。
+
 个人资料输入反馈归现 `src/ui/settings/sections/personalization-card.tsx`：复用 `personalization-schema.ts` 的code point限制，呈现计数、拒绝输入与保存中；原hook与网络契约保持。
 
 个性化内页：`src/ui/settings/sections/personalization-card.tsx` 保留既有资料读取与保存；同级 `personalization-knowledge-panel.tsx` 和 `memory-import-dialog.tsx` 分别拥有知识草稿弹窗、导入说明/复制及临时粘贴内容。未接服务的最终操作禁用，临时文本不持久化。
