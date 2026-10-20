@@ -4,7 +4,9 @@
 
 Library 恢复默认产物、查看选项里的个人文件、音视频分类、真实 q/type 过滤与精确 metadata／取消读取；不承诺富预览、任务分组或收藏持久化。知识沿已发布 owner 六操作与现有可信会话提供真实 CRUD／usage，不放行 Agent 消费；接入 main 现有个人资料编辑器，保留其草稿／冲突／显式保存流程。旧新文案与测试 Props 只按当前公开组件配对，固定合同升级为已在 main 的 Public19，不回退 pin。
 
-当前定向覆盖已有缺口，完整本仓门、页面验收和独立审查进行中；此段不称已经交付或已重载正常服务。模型、真实工具执行与扣费保持暂停。
+最终 Node22：lint、typecheck、七生成检查、production build 均 exit0；完整 Vitest 231 files / 4316 PASS / 0 SKIP，原全部 Playwright 桌面／手机 42 PASS，未加 retry 或放宽 timeout。独立复核发现同主体重新准入会卸载知识草稿，已用真实 Card 的 RED→GREEN 修复；preview 保留原禁网络和草稿组件。最终产品／测试冻结输入无变化。
+
+首轮完整门的 Redis fixture 缺变量、OIDC 临时 Next manifest 读取失败及 preview 知识回归保留原日志；补齐既有测试 Redis 地址并修复 preview 组合后重跑完整默认清单全部通过，未删断言或改认证源码。参考沿用已记录的 Manus 实测规格与本地对照，当前浏览器回归不是 Manus 全站一比一验收。远端合并、Root 精确组合和正常服务加载分别另核，不用本段冒称已部署。模型、真实工具执行与扣费保持暂停。
 
 ## 2026-10-19 聊天主路径及项目局部布局已验收（本批交付记录）
 

@@ -11,6 +11,7 @@ import { PERSONALIZATION_FIELD_LIMITS, type PersonalizationFields } from "../per
 import { usePersonalization } from "../use-personalization";
 import { MemoryImportDialog } from "./memory-import-dialog";
 import { KnowledgePanel } from "../knowledge/knowledge-panel";
+import { PersonalizationKnowledgePanel } from "./personalization-knowledge-panel";
 import styles from "./settings-sections.module.css";
 
 /** Profile editing retains its existing flow; knowledge has its own owner-backed session. */
@@ -207,7 +208,7 @@ export function PersonalizationCard({
           </div>
         </TabsContent>
         <TabsContent value="knowledge">
-          <KnowledgePanel key={draftScope} admitted={!preview && (readBoundary?.admitted ?? false)} generation={readBoundary?.generation ?? 0} />
+          {preview ? <PersonalizationKnowledgePanel key={draftScope} /> : <KnowledgePanel key={JSON.stringify([preview, readBoundary?.subject ?? null])} admitted={readBoundary?.admitted ?? false} generation={readBoundary?.generation ?? 0} />}
         </TabsContent>
       </Tabs>
     </section>

@@ -218,6 +218,27 @@ describe("knowledge settings journey", () => {
       "local draft",
     );
   });
+  it("retains an unsent knowledge draft through same-actor admission rechecks in the real card", async () => {
+    const card = (b: typeof boundary) => <LocaleProvider>
+      <PersonalKnowledgeProvider boundary={b}>
+        <PersonalizationCard readBoundary={b} />
+      </PersonalKnowledgeProvider>
+    </LocaleProvider>;
+    const { rerender } = render(card(boundary));
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "昵称" })).toBeEnabled());
+    fireEvent.keyDown(screen.getByRole("tab", { name: "个人资料" }), { key: "ArrowRight" });
+    await screen.findByText("尚无知识");
+    fireEvent.click(screen.getByRole("button", { name: "新增" }));
+    fill();
+    rerender(card({ ...boundary, admitted: false, generation: 2 } as typeof boundary));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByLabelText("内容")).toHaveValue(row.content);
+    expect(screen.getByRole("button", { name: "保存" })).toBeDisabled();
+    rerender(card({ ...boundary, generation: 3 }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "保存" })).toBeEnabled());
+    expect(screen.getByLabelText("内容")).toHaveValue(row.content);
+    expect(fetcher.mock.calls.filter((c) => c[1]?.method === "PUT")).toHaveLength(0);
+  });
   it("updates usage separately and never deletes saved knowledge when disabled", async () => {
     items = [row];
     render(view());
