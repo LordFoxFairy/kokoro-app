@@ -1,3 +1,5 @@
+聊天／项目局部修复（2026-10-19）：`page-clients` 仅为未回执 create 延长同文档 scope 租约，身份失效与回执确认后收束；Composer 对超长恢复草稿可见反馈。项目留白测量独立归 `features/app/use-project-composer-clearance.ts`，不另建滚动状态。项目链接弹层不宣称公开分享。验证与剩余范围见 docs/CURRENT.md。
+
 SET51：两现有 `tests/system/*next-http.integration.test.ts` 中的登录回归随当前 `/login` 的浏览器 CSRF 表单→provider POST→authorize 导航验证；生产源与项目/侧栏回归保持独立，结果见 CURRENT。
 个人资料输入反馈归现 `src/ui/settings/sections/personalization-card.tsx`：复用 `personalization-schema.ts` 的code point限制，呈现计数、拒绝输入与保存中；原hook与网络契约保持。
 

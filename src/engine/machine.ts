@@ -199,6 +199,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       connection,
       canSubmitMessage: canSubmitMessage(),
       canRetryPendingSubmission: canRetryPendingSubmission(),
+      hasPendingSubmission: pendingSubmission !== null,
       canRetryResume: retryableResume() !== null,
     }
   }
@@ -742,6 +743,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     const { sessionId, idempotencyKey } = submission
     taskNotifications.select(sessionId)
     notificationAdmissions.set(submission, taskNotifications.generation())
+    notify()
     execution
       .createMessage(submission)
       .then((receipt) => {
@@ -881,7 +883,6 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     const optimisticUserId = createId("usr")
     thread = appendUserMessage(thread, { id: optimisticUserId, content: trimmed })
     syncActiveEntry()
-    notify()
     // 模式意图上 wire：thinking 档=true，fast=false 显式关。
     beginRun({
       sessionId: store.activeId,
@@ -910,7 +911,6 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     if (machine === before) {
       return
     }
-    notify()
     // 未获回执的恢复只复用原始冻结意图；不根据消息历史合成新 key/body。
     beginRun(pending)
   }

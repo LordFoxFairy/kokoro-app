@@ -53,6 +53,26 @@ it("shows the selected exact skill as removable context without changing the edi
   expect(props.onSubmit).not.toHaveBeenCalled()
 })
 
+it("preserves an over-limit restored draft, explains the limit and blocks submission until corrected", () => {
+  const draft = "a".repeat(4001)
+  const props = renderComposer({ draft, canSend: true })
+  const input = screen.getByRole("textbox", { name: "Chat input" })
+  expect(input).toHaveValue(draft)
+  expect(input).toHaveAttribute("aria-invalid", "true")
+  expect(input).toHaveAccessibleDescription("Messages can contain up to 4000 characters. Shorten your draft to send.")
+  expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled()
+  fireEvent.submit(screen.getByRole("form", { name: "Message editor" }))
+  expect(props.onSubmit).not.toHaveBeenCalled()
+
+  cleanup()
+  const corrected = renderComposer({ draft: "a".repeat(4000), canSend: true })
+  expect(screen.getByRole("textbox")).not.toHaveAttribute("aria-invalid", "true")
+  expect(screen.queryByText(/Shorten your draft/)).not.toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "Send message" })).toBeEnabled()
+  fireEvent.submit(screen.getByRole("form", { name: "Message editor" }))
+  expect(corrected.onSubmit).toHaveBeenCalledOnce()
+})
+
 describe("Composer model selector", () => {
   it("fast 输入使用中性提示，不作免费或扣点承诺", () => {
     renderComposer({ mode: "fast" })

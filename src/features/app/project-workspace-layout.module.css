@@ -44,7 +44,7 @@
   grid-column: 1;
   grid-row: 2;
   margin-top: 2rem;
-  padding-bottom: 13.75rem;
+  padding-bottom: max(13.75rem, calc(var(--project-composer-height, 0px) + 3rem));
 }
 .composer {
   position: absolute;

@@ -42,3 +42,5 @@ Web专属thread viewport统一隐藏滚动条槽以匹配Composer阅读轴；共
 - 鉴权由 httpOnly 信封 cookie 同源携带，前端不持 token。
 - 管理面板（技能/连接/作品/团队/账单/定价）统一到设置中心模态（`@/ui/settings` `SettingsModal`，浮在工作区之上）；`AppFrame` 持模态开关态 `settingsTab` 并同步 Manus 风格 URL `#/account/settings/X`（兼容旧 `?settings=X` 深链）（`window.location`+`history.replaceState`，**不用 `useSearchParams`**——免 Suspense 边界/不动测试 mock）。rail 各入口 + 错误恢复卡（余额/套餐）改调 `openSettings(tab)`，不再提供旧整页设置路由。
 - `useComposerSelectors` 的模型/agent 初值取 `@/ui/settings/chat-prefs` 缺省偏好——新对话首帧预填，开跑后 modeLocked 锁定，会话级锁语义不变。
+
+- scope 切换只在本页暂留未获 create receipt 的原 engine（包括 unknown），不新建持久化 store、不自动重发；回到原 scope 继续原 key/body。回执落定且无页面 owner 即释放，身份失效强制退休无 owner 的缓存；已确认运行保持原先离页释放行为。

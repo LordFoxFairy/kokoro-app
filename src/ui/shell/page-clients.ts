@@ -38,7 +38,11 @@ const AUTH_INDEX_SUBJECT_KEY = "kokoro.web.auth-index-subject"
 export function invalidateBrowserAuthSessionIndexes(): void {
   if (typeof window === "undefined") return
   for (const [key, entry] of pageEngines) {
-    if (key.startsWith("live:")) entry.engine.retireLocalCreationProvenance()
+    if (key.startsWith("live:")) {
+      entry.invalidated = true
+      entry.engine.retireLocalCreationProvenance()
+      if (entry.owners.size === 0 && entry.engine.getSnapshot().hasPendingSubmission) releaseBrowserEngine(entry.engine)
+    }
   }
   const prefix = `${STORAGE_KEY}.`
   const keys: string[] = []
@@ -192,6 +196,8 @@ type BrowserEngineEntry = {
   engine: SessionEngine
   owners: Set<symbol>
   pendingRelease: number | null
+  invalidated: boolean
+  releaseWhenSettled: (() => void) | null
 }
 
 // 整页按 scope 共享引擎实例（含流句柄与重连计时器）。production hook 只在
@@ -248,13 +254,15 @@ function browserEngineEntry(engine: SessionEngine): { key: string; entry: Browse
 }
 
 function cancelPendingBrowserEngineRelease(entry: BrowserEngineEntry): void {
+  entry.releaseWhenSettled?.()
+  entry.releaseWhenSettled = null
   if (entry.pendingRelease === null) return
   window.clearTimeout(entry.pendingRelease)
   entry.pendingRelease = null
 }
 
 function scheduleBrowserEngineRelease(key: string, entry: BrowserEngineEntry): void {
-  if (entry.pendingRelease !== null || entry.owners.size > 0) return
+  if (entry.pendingRelease !== null || entry.releaseWhenSettled !== null || entry.owners.size > 0) return
   const timer = window.setTimeout(() => {
     if (
       pageEngines.get(key) !== entry ||
@@ -262,6 +270,18 @@ function scheduleBrowserEngineRelease(key: string, entry: BrowserEngineEntry): v
       entry.owners.size > 0
     ) return
     entry.pendingRelease = null
+    // A scope switch is not a new intent or cancellation. Keep only the
+    // unresolved create's original key/body in this document; never replay it
+    // automatically. Settled runs still retire their view resources as before.
+    if (!entry.invalidated && entry.engine.getSnapshot().hasPendingSubmission) {
+      entry.releaseWhenSettled = entry.engine.subscribe(() => {
+        if (entry.engine.getSnapshot().hasPendingSubmission) return
+        entry.releaseWhenSettled?.()
+        entry.releaseWhenSettled = null
+        scheduleBrowserEngineRelease(key, entry)
+      })
+      return
+    }
     pageEngines.delete(key)
     entry.engine.dispose()
   }, 0)
@@ -326,7 +346,7 @@ export function browserEngine(options: { preview?: boolean; scope?: SessionScope
       storage: conversationStore(sessionScopeKey(scope)),
       scope,
     })
-    pageEngines.set(engineKey, { engine, owners: new Set(), pendingRelease: null })
+    pageEngines.set(engineKey, { engine, owners: new Set(), pendingRelease: null, releaseWhenSettled: null, invalidated: false })
     return engine
   }
 }
