@@ -1,16 +1,17 @@
 "use client";
 
 import { ChevronRight } from "lucide-react";
+import { useLayoutEffect, useRef } from "react";
 
 import { useLocale } from "@/i18n/context";
 
-import type { SettingsTab } from "./settings-types";
+import type { AccountDetail, SettingsTab } from "./settings-types";
 import styles from "./settings-modal.module.css";
 
 type SettingsPanelHeaderProps = {
   tab: SettingsTab;
-  accountLoginMethods: boolean;
-  onBackFromLoginMethods: () => void;
+  accountDetail: AccountDetail;
+  onBackFromAccountDetail: () => void;
   skillsCatalogOpen?: boolean;
   onBackFromSkillsCatalog?: () => void;
 };
@@ -62,16 +63,22 @@ function panelTitle(
 /** Shared heading for each navigable settings page. */
 export function SettingsPanelHeader({
   tab,
-  accountLoginMethods,
-  onBackFromLoginMethods,
+  accountDetail,
+  onBackFromAccountDetail,
   skillsCatalogOpen = false,
   onBackFromSkillsCatalog,
 }: SettingsPanelHeaderProps) {
   const { t } = useLocale();
+  const accountHeading = useRef<HTMLHeadingElement>(null);
+  const showingAccountDetail = tab === "account" && accountDetail !== null;
+  useLayoutEffect(() => {
+    if (showingAccountDetail) accountHeading.current?.focus();
+  }, [showingAccountDetail, accountDetail]);
+  if (tab === "data-management" || tab === "integration") return null;
   const hasDescription = tab === "shortcuts" || tab === "personalization";
   const showingSkillsCatalog = tab === "skills" && skillsCatalogOpen;
-  const title = accountLoginMethods
-    ? t("settings.loginMethod")
+  const title = showingAccountDetail
+    ? t(accountDetail === "devices" ? "settings.devices.title" : "settings.loginMethod")
     : showingSkillsCatalog
       ? t("skills.browse")
       : panelTitle(t, tab);
@@ -83,13 +90,13 @@ export function SettingsPanelHeader({
       data-with-description={hasDescription || undefined}
       data-skills-catalog-open={showingSkillsCatalog || undefined}
     >
-      <h1 className={styles.panelTitle} aria-label={title}>
-        {accountLoginMethods || showingSkillsCatalog ? (
+      <h1 ref={accountHeading} tabIndex={showingAccountDetail ? -1 : undefined} className={styles.panelTitle} aria-label={title}>
+        {showingAccountDetail || showingSkillsCatalog ? (
           <button
             type="button"
             className={styles.panelBack}
-            onClick={accountLoginMethods ? onBackFromLoginMethods : onBackFromSkillsCatalog}
-            aria-label={accountLoginMethods ? t("settings.loginMethod") : t("skills.addedTitle")}
+            onClick={showingAccountDetail ? onBackFromAccountDetail : onBackFromSkillsCatalog}
+            aria-label={showingAccountDetail ? t("settingsServices.backToAccount") : t("skills.addedTitle")}
           >
             <ChevronRight aria-hidden="true" />
           </button>

@@ -6,7 +6,7 @@ const sid = { session_id: "current", created_at: "2026-10-14T00:00:00.000Z", exp
 const fetcher = vi.fn()
 const reply = (data: unknown) => Response.json(data, { headers: { "content-type": "application/json", "cache-control": "private, no-store", "x-request-id": "id" } })
 const page = (others = ["other"]) => ({ data: { current_session: sid, sessions: others.map((session_id) => ({ ...sid, session_id })) }, meta: { request_id: "id", next_cursor: null } })
-const renderDialog = () => render(<LocaleProvider><AccountDevicesDialog open onOpenChange={vi.fn()} readBoundary={{ admitted: true, subject: "alice", generation: 1 }} /></LocaleProvider>)
+const renderDialog = () => render(<LocaleProvider><AccountDevicesDialog open readBoundary={{ admitted: true, subject: "alice", generation: 1 }} /></LocaleProvider>)
 beforeEach(() => { localStorage.setItem("kokoro.locale", "en"); vi.stubGlobal("fetch", fetcher); fetcher.mockReset().mockResolvedValue(reply(page())) })
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 it("shows only owner dates and unknown device facts; current has no remove", async () => {

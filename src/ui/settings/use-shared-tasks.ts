@@ -113,6 +113,10 @@ export function useSharedTasks(
   const reload = async () => {
     const x = begin();
     if (!x) return;
+    if (x.blocked) {
+      x.review = false;
+      publish(x, { ...x.snapshot, review: false });
+    }
     try {
       const page = await read(x, x.blocked);
       if (current() !== x) return;

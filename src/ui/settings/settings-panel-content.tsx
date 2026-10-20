@@ -32,7 +32,7 @@ import {
   IntegrationSettingsSection,
   DeveloperSettingsSection,
 } from "./sections";
-import type { SettingsTab } from "./settings-types";
+import type { AccountDetail, SettingsTab } from "./settings-types";
 
 type SettingsPanelContentProps = {
   tab: SettingsTab;
@@ -42,8 +42,8 @@ type SettingsPanelContentProps = {
   readBoundary?: ProjectReadBoundary;
   hubClient: HubClient;
   teamClient: TeamClient;
-  accountLoginMethods: boolean;
-  onAccountLoginMethodsChange: (open: boolean) => void;
+  accountDetail: AccountDetail;
+  onAccountDetailChange: (detail: AccountDetail) => void;
   onOpenSubscription: () => void;
   onOpenPricing: () => void;
   onSelectSetting: (tab: SettingsTab) => void;
@@ -69,8 +69,8 @@ export function SettingsPanelContent({
   onArchiveChanged,
   hubClient,
   teamClient,
-  accountLoginMethods,
-  onAccountLoginMethodsChange,
+  accountDetail,
+  onAccountDetailChange,
   onOpenSubscription,
   onOpenPricing,
   onSelectSetting,
@@ -82,19 +82,21 @@ export function SettingsPanelContent({
   skillsScope,
   onSkillsScopeChange,
 }: SettingsPanelContentProps) {
+  const serviceDraftScope = JSON.stringify([preview, readBoundary?.admitted, readBoundary?.subject, readBoundary?.generation]);
+  const staticGuidanceScope = JSON.stringify([preview, readBoundary?.subject ?? null]);
   switch (tab) {
     case "mail":
-      return <MailSettingsSection brandName={brandName} />;
+      return <MailSettingsSection key={serviceDraftScope} brandName={brandName} />;
     case "email":
-      return <EmailAssetsSection />;
+      return <EmailAssetsSection key={serviceDraftScope} />;
     case "phone":
-      return <PhoneAssetsSection />;
+      return <PhoneAssetsSection key={staticGuidanceScope} />;
     case "wallet":
-      return <WalletSettingsSection />;
+      return <WalletSettingsSection key={staticGuidanceScope} />;
     case "integration":
       return <IntegrationSettingsSection />;
     case "developer":
-      return <DeveloperSettingsSection />;
+      return <DeveloperSettingsSection key={serviceDraftScope} />;
     case "data-management":
       return <DataManagementSection {...(onArchiveChanged===undefined?{}:{onArchiveChanged})} preview={preview} {...(readBoundary === undefined ? {} : { readBoundary })} />;
     case "help":
@@ -105,8 +107,8 @@ export function SettingsPanelContent({
           brandName={brandName}
           preview={preview}
           {...(readBoundary === undefined ? {} : { readBoundary })}
-          loginMethodsOpen={accountLoginMethods}
-          onLoginMethodsChange={onAccountLoginMethodsChange}
+          detail={accountDetail}
+          onDetailChange={onAccountDetailChange}
           onOpenSubscription={onOpenSubscription}
         />
       );

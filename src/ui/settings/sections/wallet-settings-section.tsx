@@ -1,9 +1,10 @@
 "use client";
 
 import { useId } from "react";
-import { ArrowUpRight, CreditCard, Plus, ReceiptText } from "lucide-react";
+import { ArrowUpRight, CreditCard, ReceiptText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useT } from "@/i18n/context";
+import { WalletPaymentDialog } from "./wallet-payment-dialog";
 import styles from "./settings-sections.module.css";
 
 export function WalletSettingsSection() {
@@ -12,15 +13,15 @@ export function WalletSettingsSection() {
   const invoicesId = useId();
   return (
     <div className={`${styles.servicePage} ${styles.walletPage}`} data-testid="settings-service-wallet">
-      <section className={styles.walletPayment}>
+      <section>
+        <div className={styles.walletPayment}>
         <CreditCard className={styles.serviceIcon} aria-hidden="true" />
         <div className={styles.walletPaymentCopy}>
           <h2>{t("settingsServices.paymentMethods")}</h2>
-          <p id={paymentsId}>{t("settingsServices.paymentUnavailable")}</p>
         </div>
-        <Button variant="outline" disabled aria-describedby={paymentsId}>
-          <Plus aria-hidden="true" />{t("settingsServices.add")}
-        </Button>
+        <WalletPaymentDialog />
+        </div>
+        <p id={paymentsId} className={styles.serviceAvailability}>{t("settingsServices.paymentUnavailable")}</p>
       </section>
       <section>
         <div className={styles.serviceCardHeader}>

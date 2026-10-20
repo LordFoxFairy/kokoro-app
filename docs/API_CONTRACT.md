@@ -1,3 +1,15 @@
+## 设置与主线的契约组合（2026-10-20）
+
+本次视觉增量不定义新接口。正式知识 CRUD/usage、Public19、Skills/MCP 与连接器 availability 均保留最新主线实现和正式契约；旧分支的知识未接通说明仅适用于 preview 草稿与记忆导入。账户积分仅复用 summary 读取，其余无 owner 契约的资产动作仍禁用。
+
+## 设置内部流程的契约边界（视觉增量范围）
+
+本次沿用现有同源 BFF 边界，无新增 API、generated、scope、权限或 owner wire。账户积分概览仅复用 Billing summary 读取，可用和冻结 micros 以 BigInt 格式化；未开户、错误和真实零余额分开，summary 不用于推算套餐事实。
+
+邮箱验证、绑定、删除账户、邮箱与号码分配、钱包支付、知识保存、API key、Webhook 和外部应用授权没有本次可消费的完整写契约，最终动作禁用；浏览表单或说明不发送替代请求。正式套餐目录只读和手动重读保留原有取消、预算与身份边界，不触发 checkout。
+
+Team 表单复用现有邀请 request schema，局部格式错误不调用客户端；真正写入结果未知时的恢复守卫不变。分享恢复重读时清掉旧审阅资格，不新增请求或自动重试写入。Skills/MCP 契约不变。
+
 ## 2026-10-20 既有 Public19 的保留消费者接线
 
 唯一 snapshot 继续固定 08a2120／Public19.0.0／SHA-256 955412b680bf7a2529c4c35f553ff272d7361769ea95bb441ba820b552ffc564。Library 仅消费已有 q/type、精确 metadata／content；Web 本地分类与 return target 区分 audio/video，不恢复 websites/media 宽松值。

@@ -2,7 +2,7 @@
 
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
 
-import { useCallback, useId, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { BillingLedgerEntry } from "@/contract/http"
@@ -15,6 +15,7 @@ import { BillingLedger } from "./billing-ledger"
 import { type LedgerFilter, type LedgerState, type SummaryState } from "./billing-model"
 import { BillingSummary } from "./billing-summary"
 import { BillingUsage } from "./billing-usage"
+import { BillingComputerUsage, BillingPhoneUsage, BillingWebsiteUsage } from "./billing-resource-content"
 import styles from "./billing-panel.module.css"
 
 const EMPTY_LEDGER_ENTRIES: BillingLedgerEntry[] = []
@@ -58,7 +59,6 @@ export function BillingContent(props: BillingContentProps) {
 
 function BillingScopedContent({ client, onOpenPricing, embedded = false }: BillingContentProps) {
   const t = useT()
-  const unavailableId = useId()
   const actor = readActor()
   const [projection, setProjection] = useState<{ client: BillingClient; actor: string | null | undefined; summary: SummaryState; ledger: LedgerState }>({ client, actor, summary: { kind: "loading" }, ledger: { kind: "loading" } })
   const [filter, setFilter] = useState<LedgerFilter>("all")
@@ -136,15 +136,17 @@ function BillingScopedContent({ client, onOpenPricing, embedded = false }: Billi
   )
   if (!embedded) return content
   return (
-    <Tabs value="tasks" className={styles.resourceTabs}>
+    <Tabs defaultValue="tasks" className={styles.resourceTabs}>
       <TabsList variant="line" className={styles.resourceList} aria-label={t("billing.resourceCategories")}>
         <TabsTrigger value="tasks">{t("billing.tasksScope")}</TabsTrigger>
-        <TabsTrigger value="websites-games" disabled aria-describedby={unavailableId}>{t("billing.websitesGamesScope")}</TabsTrigger>
-        <TabsTrigger value="computer" disabled aria-describedby={unavailableId}>{t("billing.computerScope")}</TabsTrigger>
-        <TabsTrigger value="phone" disabled aria-describedby={unavailableId}>{t("billing.phoneScope")}</TabsTrigger>
+        <TabsTrigger value="websites-games">{t("billing.websitesGamesScope")}</TabsTrigger>
+        <TabsTrigger value="computer">{t("billing.computerScope")}</TabsTrigger>
+        <TabsTrigger value="phone">{t("billing.phoneScope")}</TabsTrigger>
       </TabsList>
-      <p id={unavailableId} className={styles.resourceUnavailable}>{t("billing.resourceUnavailable")}</p>
       <TabsContent value="tasks">{content}</TabsContent>
+      <TabsContent value="websites-games"><BillingWebsiteUsage /></TabsContent>
+      <TabsContent value="computer"><BillingComputerUsage /></TabsContent>
+      <TabsContent value="phone"><BillingPhoneUsage /></TabsContent>
     </Tabs>
   )
 }

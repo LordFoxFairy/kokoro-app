@@ -1,3 +1,9 @@
+## 设置内部页面
+
+`src/ui/settings/sections/` 中的账户、Mail、邮箱、电话、钱包、集成和开发者组件负责所属内页及创建前表单。`account-credit-summary` 复用既有 Billing summary；`src/ui/billing/billing-resource-content` 展示非任务用量分类，`pricing-plan-details-dialog` 只展示正式套餐目录的原始金额。
+
+设置导航和标题共用当前页面状态；数据管理和集成详情使用同层返回，创建前表单使用局部 Dialog。未接通服务的最终动作禁用，草稿不持久化。当前行为、验证及限制见 `docs/CURRENT.md`。
+
 ## 2026-10-20 本地保留切片接收
 
 - `src/features/app/kokoro-library-header.tsx`：资料库来源与显示选项；`use-library-artifacts.ts`：真实筛选与分页退休；`kokoro-library-artifact-detail.tsx`：精确 metadata 读取及独立下载。

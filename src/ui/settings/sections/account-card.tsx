@@ -16,8 +16,11 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
 import { useAccountProfileEditor } from "../use-account-profile-editor"
 import { useAccountProfile } from "../use-account-profile"
+import type { AccountDetail } from "../settings-types"
 
 import { AccountDevicesDialog } from "./account-devices-dialog"
+import { AccountCreditSummary } from "./account-credit-summary"
+import { AccountServiceDetailsDialog } from "./account-service-details-dialog"
 
 import styles from "./settings-sections.module.css"
 
@@ -51,19 +54,36 @@ function LoginProviderIcon({ provider }: { provider: "google" | "microsoft" | "a
   return <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M14.196 5.454c-.093.072-1.731.995-1.731 3.048 0 2.375 2.085 3.215 2.147 3.236-.01.051-.331 1.15-1.099 2.27-.685.986-1.4 1.97-2.489 1.97-1.088 0-1.368-.632-2.624-.632-1.224 0-1.66.653-2.654.653-.996 0-1.69-.912-2.489-2.032-.925-1.316-1.672-3.359-1.672-5.298 0-3.111 2.023-4.76 4.013-4.76 1.058 0 1.94.694 2.604.694.632 0 1.618-.737 2.821-.737.456 0 2.095.042 3.173 1.588ZM10.452 2.55c.497-.591.849-1.41.849-2.23 0-.113-.01-.228-.03-.321-.81.03-1.773.539-2.354 1.213-.456.518-.882 1.337-.882 2.168 0 .125.021.25.031.29.051.01.134.02.217.02.727 0 1.64-.486 2.169-1.14Z" fill="currentColor"/></svg>
 }
 
+function UnavailableLoginMethods() {
+  const t = useT()
+  const reason = useId()
+  return <>
+    <p id={reason} className={styles.accountServiceReason}>{t("settingsServices.accountServiceUnavailable")}</p>
+    <div className={styles.loginProviderList}>
+      {([{ id: "google", label: "Google" }, { id: "microsoft", label: "Microsoft" }, { id: "apple", label: "Apple" }] as const).map((provider) => <div className={styles.loginProvider} key={provider.id} role="group" aria-label={provider.label}>
+        <span className={styles.providerMark} data-provider={provider.id}><LoginProviderIcon provider={provider.id} /></span>
+        <div><strong>{provider.label}</strong><span>{t("settingsServices.loginConnectionUnknown")}</span></div>
+        <Button variant="outline" size="sm" type="button" disabled aria-describedby={reason}>{t("settingsServices.connect")}</Button>
+      </div>)}
+    </div>
+    <div className={styles.passkeyHead}><div><strong>{t("settings.passkey")}</strong><span>{t("settings.passkeyHint")}</span></div><Button variant="outline" size="sm" disabled aria-describedby={reason}>{t("settings.addPasskey")}</Button></div>
+    <div className={styles.passkeyUnknown}><KeyRound aria-hidden="true" /><p>{t("settingsServices.loginStatusUnknown")}</p></div>
+  </>
+}
+
 export function AccountCard({
   brandName,
   preview = false,
   readBoundary,
-  loginMethodsOpen,
-  onLoginMethodsChange,
+  detail,
+  onDetailChange,
   onOpenSubscription,
 }: {
   brandName?: string
   preview?: boolean
   readBoundary?: ProjectReadBoundary
-  loginMethodsOpen: boolean
-  onLoginMethodsChange: (open: boolean) => void
+  detail: AccountDetail
+  onDetailChange: (detail: AccountDetail) => void
   onOpenSubscription: () => void
 }) {
   const t = useT()
@@ -85,8 +105,17 @@ export function AccountCard({
           loginMethods: [],
         }
       : null;
-  const [devicesOpen, setDevicesOpen] = useState(false)
   const logoutScope = JSON.stringify([preview, readBoundary?.admitted ?? false, readBoundary?.subject ?? null, readBoundary?.generation ?? null])
+  const loginTrigger = useRef<HTMLButtonElement>(null)
+  const devicesTrigger = useRef<HTMLButtonElement>(null)
+  const previousDetail = useRef<AccountDetail>(null)
+  useLayoutEffect(() => {
+    if (detail === null && previousDetail.current !== null) {
+      (previousDetail.current === "devices" ? devicesTrigger : loginTrigger).current?.focus()
+    }
+    previousDetail.current = detail
+  }, [detail])
+  useLayoutEffect(() => () => onDetailChange(null), [logoutScope, onDetailChange])
   const [logoutState, setLogoutState] = useState({ scope: logoutScope, busy: false, failed: false })
   if (logoutState.scope !== logoutScope) {
     setLogoutState({ scope: logoutScope, busy: false, failed: false })
@@ -105,10 +134,12 @@ export function AccountCard({
     }
   }, [logoutScope])
   const [emailOpen, setEmailOpen] = useState(false)
+  const previewEmailTrigger = useRef<HTMLButtonElement>(null)
   const [emailStep, setEmailStep] = useState<"verify" | "replace">("verify")
   const [verificationCode, setVerificationCode] = useState("")
   const [newEmail, setNewEmail] = useState("")
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const previewDeleteTrigger = useRef<HTMLButtonElement>(null)
   const [deleteCode, setDeleteCode] = useState("")
   const [verificationBusy, setVerificationBusy] = useState<"email" | "delete" | null>(null)
   const [deletingAccount, setDeletingAccount] = useState(false)
@@ -283,11 +314,14 @@ export function AccountCard({
     }
   }
 
-  if (loginMethodsOpen && !preview) return <p role="status">{t("firstSite.unavailable")}</p>
+  if (detail === "devices") {
+    return <AccountDevicesDialog open preview={preview} {...(readBoundary === undefined ? {} : { readBoundary })} />
+  }
 
-  if (loginMethodsOpen) {
+  if (detail === "login-methods") {
     return (
-      <div className={styles.loginMethods} data-testid="settings-login-methods">
+      <div className={styles.loginMethods} data-testid="settings-login-methods" data-live={!preview || undefined} role="region" aria-label={t("settings.loginMethod")}>
+        {!preview ? <UnavailableLoginMethods /> : <>
         <div className={styles.loginProviderList}>
           {(preview ? account?.loginMethods ?? previewAccount.loginMethods : []).map((method) => (
             <div className={styles.loginProvider} key={method.id}>
@@ -308,13 +342,13 @@ export function AccountCard({
             <EmptyDescription>{t("settings.noPasskeysHint")}</EmptyDescription>
           </EmptyHeader>
         </Empty>
+        </>}
       </div>
     )
   }
 
   return (
     <div className={styles.accountSettings} data-settings-card data-testid="settings-account">
-      <AccountDevicesDialog open={devicesOpen} onOpenChange={setDevicesOpen} preview={preview} {...(readBoundary === undefined ? {} : { readBoundary })} />
       {!preview && live.scope && live.phase==="loading" ? <p role="status">{t("billing.loading")}</p> : null}
       {!preview && live.phase==="error" ? <div role="alert">{t("billing.loadError")}<Button variant="outline" size="sm" onClick={live.retry}>{t("billing.retry")}</Button></div> : null}
       {copyState?.scope===copyScope && copyState.status==="failed" ? <p role="alert">{t("share.projectCopyFailed")}</p> : null}
@@ -414,25 +448,23 @@ export function AccountCard({
       {logoutFailed ? <p role="alert">{t("settings.logoutUnconfirmed")}</p> : null}
 
       <div className={styles.planCard}>
-        <div className={styles.planHeader}><strong>{account?.planLabel ?? "—"}</strong><Button variant="default" size="sm" type="button" onClick={onOpenSubscription}>{t("firstSite.upgrade")}</Button></div>
+        <div className={styles.planHeader}><strong>{preview ? account?.planLabel ?? "—" : t("settings.creditsMenu")}</strong><Button variant="default" size="sm" type="button" onClick={onOpenSubscription}>{t("firstSite.upgrade")}</Button></div>
         <div className={styles.planBody} data-slot="account-plan-body">
           <div className={styles.creditGroup} data-slot="account-credit-group">
-            <div className={styles.creditTotal}><span><Sparkles />{t("settings.creditsMenu")}<CircleHelp /></span><strong>{account?.credits ?? "—"}</strong></div>
+            {preview ? <div className={styles.creditTotal}><span><Sparkles />{t("settings.creditsMenu")}<CircleHelp /></span><strong>{account?.credits ?? "—"}</strong></div> : <AccountCreditSummary readBoundary={readBoundary} />}
           </div>
         </div>
       </div>
 
-      {/* Keep the account sheet's information architecture intact without
-       * inventing identity data that the current Web contract does not
-       * provide. The unavailable values intentionally remain em dashes. */}
-      {!preview ? <FieldDescription id={unavailableActionsId}>{t("settings.accountActionsUnavailable")}</FieldDescription> : null}
+      {/* Credits come from their own summary read. Unknown plan details stay
+       * unknown; unsupported identity changes remain unavailable below. */}
       <div className={styles.accountDetailRows}>
         <div className={styles.accountDetailRow}>
           <div>
             <strong>{t("settings.email")}</strong>
             <span>{account?.email ?? "—"}</span>
           </div>
-          <Button variant="outline" size="sm" type="button" aria-describedby={!preview ? unavailableActionsId : undefined} disabled={!preview || !account?.email} onClick={() => setEmailOpen(true)}>{t("settings.changeEmail")}</Button>
+          {preview ? <Button ref={previewEmailTrigger} variant="outline" size="sm" type="button" aria-describedby={!preview ? unavailableActionsId : undefined} disabled={!preview || !account?.email} onClick={() => setEmailOpen(true)}>{t("settings.changeEmail")}</Button> : <AccountServiceDetailsDialog key={`email:${logoutScope}`} kind="email" confirmedEmail={live.profile?.email_verified ? live.profile.email : null} identity={live.profile} />}
         </div>
         <div className={styles.accountDetailRow}>
           <div>
@@ -446,26 +478,27 @@ export function AccountCard({
             <strong>{t("settings.loginMethod")}</strong>
             <span>{t("settings.loginMethodHint", { brand: brandName ?? "Kokoro" })}</span>
           </div>
-          <Button variant="outline" size="sm" type="button" aria-describedby={!preview ? unavailableActionsId : undefined} onClick={() => onLoginMethodsChange(true)} disabled={!preview}>{t("settings.manage")}</Button>
+          <Button ref={loginTrigger} variant="outline" size="sm" type="button" aria-label={t("settings.loginMethod")} onClick={() => onDetailChange("login-methods")}>{t("settings.manage")}</Button>
         </div>
         <div className={styles.accountDetailRow}>
           <div>
             <strong>{t("settings.devices.title")}</strong>
             <span>{t("settings.devices.description")}</span>
           </div>
-          <Button variant="outline" size="sm" type="button" aria-label={t("settings.devices.title")} disabled={preview || !readBoundary?.admitted || readBoundary.subject === null} onClick={() => setDevicesOpen(true)}>{t("settings.manage")}</Button>
+          <Button ref={devicesTrigger} variant="outline" size="sm" type="button" aria-label={t("settings.devices.title")} disabled={preview || !readBoundary?.admitted || readBoundary.subject === null} onClick={() => onDetailChange("devices")}>{t("settings.manage")}</Button>
         </div>
         <div className={`${styles.accountDetailRow} ${styles.dangerRow}`}>
           <div>
             <strong>{t("settings.deleteAccount")}</strong>
             <span>{t("settings.deleteAccountHint")}</span>
           </div>
-          <Button variant="outline" size="sm" type="button" aria-describedby={!preview ? unavailableActionsId : undefined} onClick={() => setDeleteOpen(true)} disabled={!preview}>{t("settings.deleteAccount")}</Button>
+          {preview ? <Button ref={previewDeleteTrigger} variant="outline" size="sm" type="button" aria-describedby={!preview ? unavailableActionsId : undefined} onClick={() => setDeleteOpen(true)} disabled={!preview}>{t("settings.deleteAccount")}</Button> : <AccountServiceDetailsDialog key={`delete:${logoutScope}`} kind="delete" confirmedEmail={live.profile?.email_verified ? live.profile.email : null} identity={live.profile} />}
         </div>
       </div>
+      {!preview ? <FieldDescription id={unavailableActionsId}>{t("settings.accountActionsUnavailable")}</FieldDescription> : null}
 
       <Dialog open={emailOpen} onOpenChange={setEmailOpen}>
-        <DialogContent className={styles.accountEmailDialog} closeLabel={t("shell.closeDialog")}>
+        <DialogContent className={styles.accountEmailDialog} closeLabel={t("shell.closeDialog")} onCloseAutoFocus={(event) => { event.preventDefault(); previewEmailTrigger.current?.focus() }}>
           <DialogTitle>{t("settings.changeEmailTitle")}</DialogTitle>
           <p className={styles.accountDialogHint}>{t("settings.changeEmailSecurity")}</p>
           {emailStep === "verify" ? <Field><FieldLabel>{t("settings.verifyIdentity")}</FieldLabel><FieldDescription>{t("settings.verifyIdentityHint", { email: account?.email ?? "" })}</FieldDescription><div className={styles.codeField}><Input aria-label={t("settings.verificationCode")} placeholder={t("settings.verificationCode")} value={verificationCode} onChange={(event) => setVerificationCode(event.target.value)} /><Button variant="ghost" disabled={verificationBusy !== null} onClick={() => void requestAccountVerification("email")}>{verificationBusy === "email" ? <Spinner aria-hidden="true" /> : null}{t("settings.send")}</Button></div></Field> : <Field><FieldLabel htmlFor="new-account-email">{t("settings.newEmail")}</FieldLabel><Input id="new-account-email" type="email" value={newEmail} onChange={(event) => setNewEmail(event.target.value)} /></Field>}
@@ -474,7 +507,7 @@ export function AccountCard({
       </Dialog>
 
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <DialogContent className={styles.deleteAccountDialog} closeLabel={t("shell.closeDialog")}>
+        <DialogContent className={styles.deleteAccountDialog} closeLabel={t("shell.closeDialog")} onCloseAutoFocus={(event) => { event.preventDefault(); previewDeleteTrigger.current?.focus() }}>
           <DialogTitle>{t("settings.confirmDeleteAccount")}</DialogTitle>
           <div className={styles.deleteWarnings}><p>{t("settings.deleteWarningPermanent")}</p><p>{t("settings.deleteWarningRetention")}</p><p>{t("settings.deleteWarningSubscription")}</p></div>
           <Field><FieldLabel>{t("settings.verifyEmail", { email: account?.email ?? "" })}</FieldLabel><div className={styles.codeField}><Input aria-label={t("settings.verificationCode")} placeholder={t("settings.verificationCode")} value={deleteCode} onChange={(event) => setDeleteCode(event.target.value)} /><Button variant="outline" disabled={verificationBusy !== null} onClick={() => void requestAccountVerification("delete")}>{verificationBusy === "delete" ? <Spinner aria-hidden="true" /> : null}{t("settings.sendCode")}</Button></div></Field>

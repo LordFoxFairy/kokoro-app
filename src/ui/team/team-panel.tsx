@@ -1,14 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useLayoutEffect, useRef, useState } from "react";
 
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useT } from "@/i18n/context";
 import { cn } from "@/lib/utils";
 import { TeamClientError, type TeamClient } from "@/team/client";
+import { teamCreateInvitationRequestSchema } from "@/team/schema";
 import {
   canInvite,
   canManageInvitations,
@@ -86,6 +89,9 @@ function TeamActiveContent({
 }) {
   const t = useT();
   const state = useTeamSettings(client, scope, subject, preview);
+  const inviteDescriptionId = useId();
+  const inviteErrorId = useId();
+  const leaveDescriptionId = useId();
   const { snapshot, loadError, busy, blocked: needsRefresh, leftTeam } = state;
   const notice = state.notice
     ? t(`team.${state.notice}`)
@@ -93,21 +99,42 @@ function TeamActiveContent({
       ? errorMessage(state.error, t)
       : null;
   const [email, setEmail] = useState("");
+  const [invalidEmail, setInvalidEmail] = useState(false);
   const [inviteRole, setInviteRole] = useState("member");
   const [selectedRoles, setSelectedRoles] = useState<Record<string, string[]>>(
     {},
   );
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
   const [confirmLeave, setConfirmLeave] = useState(false);
+  const removeCancel = useRef<HTMLButtonElement>(null);
+  const leaveCancel = useRef<HTMLButtonElement>(null);
+  const removeButtons = useRef(new Map<string, HTMLButtonElement>());
+  const leaveButton = useRef<HTMLButtonElement>(null);
+  const returnRemoveFocus = useRef<{ id: string; client: TeamClient } | null>(null);
+  const returnLeaveFocus = useRef<TeamClient | null>(null);
   const [formClient, setFormClient] = useState(client);
   if (formClient !== client) {
     setFormClient(client);
     setEmail("");
+    setInvalidEmail(false);
     setInviteRole("member");
     setSelectedRoles({});
     setConfirmRemove(null);
     setConfirmLeave(false);
   }
+  useLayoutEffect(() => {
+    const returning = returnRemoveFocus.current;
+    returnRemoveFocus.current = null;
+    if (confirmRemove !== null) removeCancel.current?.focus();
+    else if (returning?.client === client)
+      removeButtons.current.get(returning.id)?.focus();
+  }, [confirmRemove, client]);
+  useLayoutEffect(() => {
+    const returning = returnLeaveFocus.current;
+    returnLeaveFocus.current = null;
+    if (confirmLeave) leaveCancel.current?.focus();
+    else if (returning === client) leaveButton.current?.focus();
+  }, [confirmLeave, client]);
   const mutate = (
     key: string,
     action: (signal: AbortSignal) => Promise<void>,
@@ -127,6 +154,12 @@ function TeamActiveContent({
   const canCreateInvite = actor !== undefined && canInvite(actorRoles, roles);
   const canEditInvites =
     actor !== undefined && canManageInvitations(actorRoles, roles);
+  const roleLabel = (role: string) => {
+    if (role === "owner") return t("team.roleOwner");
+    if (role === "admin") return t("team.roleAdmin");
+    if (role === "member") return t("team.roleMember");
+    return role;
+  };
 
   return (
     <div className={cn(styles.body, embedded && styles.embeddedBody)}>
@@ -194,7 +227,10 @@ function TeamActiveContent({
             </div>
           )}
           <section className={styles.section} data-testid="team-members">
-            <h3 className={styles.sectionTitle}>{t("team.membersTitle")}</h3>
+            <div className={styles.sectionHeading}>
+              <h3 className={styles.sectionTitle}>{t("team.membersTitle")}</h3>
+              <p className={styles.description}>{t("team.membersDescription")}</p>
+            </div>
             <div className={styles.list}>
               {snapshot.members.map((member) => {
                 const self = member.user_id === snapshot.userId;
@@ -227,11 +263,20 @@ function TeamActiveContent({
                     key={member.member_id}
                     data-testid={`member-row-${member.member_id}`}
                   >
-                    <div className={styles.itemMain}>
-                      <span className={styles.name}>{member.display_name}</span>
-                      <span className={styles.subtle}>
-                        {member.roles.join(", ")}
-                      </span>
+                    <div className={styles.memberIdentity}>
+                      <Avatar className={styles.avatar} aria-hidden="true">
+                        {member.image_url ? <AvatarImage src={member.image_url} alt="" /> : null}
+                        <AvatarFallback>{Array.from(member.display_name.trim())[0]?.toLocaleUpperCase() ?? "?"}</AvatarFallback>
+                      </Avatar>
+                      <div className={styles.itemMain}>
+                        <div className={styles.nameRow}>
+                          <span className={styles.name}>{member.display_name}</span>
+                          {self ? <span className={styles.selfBadge}>{t("team.you")}</span> : null}
+                        </div>
+                        <div className={styles.roleBadges}>
+                          {member.roles.map((role) => <span key={role} className={styles.roleBadge} data-role={role}>{roleLabel(role)}</span>)}
+                        </div>
+                      </div>
                     </div>
                     {(mayChange || mayRemove) && (
                       <div className={styles.itemActions}>
@@ -268,7 +313,7 @@ function TeamActiveContent({
                                       });
                                     }}
                                   />
-                                  {role.name}
+                                  {roleLabel(role.name)}
                                 </label>
                               ))}
                             </div>
@@ -321,15 +366,23 @@ function TeamActiveContent({
                                 {t("team.confirmRemove")}
                               </Button>
                               <Button
+                                ref={removeCancel}
                                 variant="outline"
                                 className={styles.ghostBtn}
-                                onClick={() => setConfirmRemove(null)}
+                                onClick={() => {
+                                  returnRemoveFocus.current = { id: member.member_id, client };
+                                  setConfirmRemove(null);
+                                }}
                               >
                                 {t("team.cancel")}
                               </Button>
                             </span>
                           ) : (
                             <Button
+                              ref={(node) => {
+                                if (node) removeButtons.current.set(member.member_id, node);
+                                else removeButtons.current.delete(member.member_id);
+                              }}
                               variant="outline"
                               className={styles.dangerBtn}
                               disabled={busy !== null || needsRefresh}
@@ -358,51 +411,68 @@ function TeamActiveContent({
           </section>
 
           <section className={styles.section}>
-            <h3 className={styles.sectionTitle}>{t("team.invitesTitle")}</h3>
+            <div className={styles.sectionHeading}>
+              <h3 className={styles.sectionTitle}>{t("team.invitesTitle")}</h3>
+              <p id={inviteDescriptionId} className={styles.description}>{t("team.invitesDescription")}</p>
+            </div>
             {canCreateInvite && (
+              <>
               <form
                 className={styles.inviteForm}
                 onSubmit={(event) => {
                   event.preventDefault();
-                  const address = email.trim();
-                  if (!address) return;
+                  const request = teamCreateInvitationRequestSchema.safeParse({
+                    email: email.trim(),
+                    roles: [inviteRole],
+                  });
+                  setInvalidEmail(!request.success);
+                  if (!request.success) return;
                   void mutate("invite", (signal) =>
-                    client.createInvitation(address, [inviteRole], signal),
+                    client.createInvitation(request.data.email, request.data.roles, signal),
                   );
                 }}
               >
-                <Input
+                <label className={styles.inviteField}>
+                  <span>{t("team.inviteEmailAria")}</span>
+                  <Input
                   type="email"
                   required
-                  className={styles.inviteField}
                   value={email}
                   placeholder={t("team.invitePlaceholder")}
                   aria-label={t("team.inviteEmailAria")}
+                  aria-invalid={invalidEmail || undefined}
+                  aria-describedby={invalidEmail ? `${inviteDescriptionId} ${inviteErrorId}` : inviteDescriptionId}
                   data-testid="invite-email"
-                  onChange={(event) => setEmail(event.target.value)}
-                />
-                <select
-                  className={styles.roleSelect}
-                  aria-label={t("team.inviteRoleAria")}
-                  value={inviteRole}
-                  onChange={(event) => setInviteRole(event.target.value)}
-                >
+                  onChange={(event) => {
+                    setEmail(event.target.value);
+                    setInvalidEmail(false);
+                  }}
+                  />
+                </label>
+                <label className={styles.inviteFieldCompact}>
+                  <span>{t("team.inviteRoleAria")}</span>
+                  <Select value={inviteRole} onValueChange={setInviteRole}>
+                    <SelectTrigger className={styles.roleSelect} aria-label={t("team.inviteRoleAria")}><SelectValue /></SelectTrigger>
+                    <SelectContent className={styles.roleOptions} position="popper" align="start">
                   {roles
                     .filter((role) => role.name !== "owner")
                     .map((role) => (
-                      <option key={role.name} value={role.name}>
-                        {role.name}
-                      </option>
+                      <SelectItem key={role.name} value={role.name}>{roleLabel(role.name)}</SelectItem>
                     ))}
-                </select>
+                    </SelectContent>
+                  </Select>
+                </label>
                 <Button
                   type="submit"
                   disabled={busy !== null || needsRefresh}
                   data-testid="invite-submit"
+                  className={styles.inviteSubmit}
                 >
-                  {t("team.invite")}
+                  {busy === "invite" ? t("team.inviting") : t("team.invite")}
                 </Button>
               </form>
+              {invalidEmail && <p id={inviteErrorId} className={styles.notice} role="alert">{t("settingsServices.invalidEmail")}</p>}
+              </>
             )}
             <div className={styles.list}>
               {snapshot.invitations.map((invitation) => (
@@ -413,9 +483,10 @@ function TeamActiveContent({
                 >
                   <div className={styles.itemMain}>
                     <span className={styles.name}>{invitation.email}</span>
-                    <span className={styles.subtle}>
-                      {invitation.roles.join(", ")} · {invitation.status}
-                    </span>
+                    <div className={styles.roleBadges}>
+                      {invitation.roles.map((role) => <span key={role} className={styles.roleBadge} data-role={role}>{roleLabel(role)}</span>)}
+                      <span className={styles.invitationStatus}>{invitation.status === "pending" ? t("team.statusPending") : invitation.status}</span>
+                    </div>
                   </div>
                   {canEditInvites && invitation.status === "pending" && (
                     <div className={styles.itemActions}>
@@ -471,9 +542,15 @@ function TeamActiveContent({
           </section>
 
           {actor && (
-            <section className={styles.section}>
+            <section className={styles.leaveSection}>
+              <div className={styles.sectionHeading}>
+                <h3 className={styles.sectionTitle}>{t("team.leave")}</h3>
+                <p id={leaveDescriptionId} className={styles.description}>{t("team.leaveDescription")}</p>
+              </div>
               {confirmLeave ? (
-                <div className={styles.confirmRow}>
+                <div className={styles.leaveConfirmation} role="group" aria-label={t("team.confirmLeaveTitle")} aria-describedby={leaveDescriptionId}>
+                  <p className={styles.confirmTitle}>{t("team.confirmLeaveTitle")}</p>
+                  <div className={styles.confirmRow}>
                   <Button
                     variant="destructive"
                     disabled={busy !== null || needsRefresh}
@@ -486,18 +563,25 @@ function TeamActiveContent({
                     {t("team.confirmLeave")}
                   </Button>
                   <Button
+                    ref={leaveCancel}
                     variant="outline"
-                    onClick={() => setConfirmLeave(false)}
+                    onClick={() => {
+                      returnLeaveFocus.current = client;
+                      setConfirmLeave(false);
+                    }}
                   >
                     {t("team.cancel")}
                   </Button>
+                  </div>
                 </div>
               ) : (
                 <Button
+                  ref={leaveButton}
                   variant="outline"
                   className={styles.dangerBtn}
                   disabled={busy !== null || needsRefresh}
                   data-testid="team-leave"
+                  aria-describedby={leaveDescriptionId}
                   onClick={() => setConfirmLeave(true)}
                 >
                   {t("team.leave")}
@@ -526,7 +610,7 @@ export function TeamPanel({
         if (!nextOpen) requestClose();
       }}
     >
-      <DialogContent className={styles.panel}>
+      <DialogContent className={styles.panel} closeLabel={t("team.close")}>
         <div className={styles.head}>
           <div>
             <DialogTitle className={styles.title}>

@@ -835,3 +835,31 @@ describe("SET26 billing scope retirement", () => {
     expect(summary).toHaveBeenCalledOnce();
   });
 });
+
+it("resource category previews preserve real task data and perform no additional reads or transactions", async () => {
+  const client = makeClient();
+  render(<LocaleProvider><BillingContent client={client} preview embedded /></LocaleProvider>);
+  await waitFor(() => expect(screen.getByTestId("billing-balance")).toHaveTextContent("12.5"));
+  fireEvent.keyDown(screen.getByRole("tab", { name: "Websites & games" }), { key: "Enter" });
+  expect(screen.getByRole("heading", { name: "Cloud services" })).toBeVisible();
+  expect(screen.getByRole("heading", { name: "Artificial intelligence" })).toBeVisible();
+  expect(screen.getByRole("heading", { name: "Integrations" })).toBeVisible();
+  expect(screen.queryByTestId("billing-balance")).not.toBeInTheDocument();
+  expect(screen.queryByText(/\$0|No websites/)).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("Start date"), { target: { value: "2026-10-01" } });
+  fireEvent.change(screen.getByLabelText("End date"), { target: { value: "2026-10-17" } });
+  expect(screen.getByRole("button", { name: "Auto top-up" })).toBeDisabled();
+  fireEvent.keyDown(screen.getByRole("tab", { name: "Computer" }), { key: "Enter" });
+  expect(screen.getByRole("button", { name: "Create cloud computer" })).toBeDisabled();
+  fireEvent.keyDown(screen.getByRole("tab", { name: "Phone" }), { key: "Enter" });
+  fireEvent.click(screen.getByRole("button", { name: "Create now" }));
+  const phone = screen.getByRole("dialog", { name: "Assign a virtual phone to your agent" });
+  expect(within(phone).getByRole("button", { name: "Continue" })).toBeDisabled();
+  fireEvent.click(within(phone).getByRole("button", { name: "Cancel" }));
+  fireEvent.keyDown(screen.getByRole("tab", { name: "Websites & games" }), { key: "Enter" });
+  expect(screen.getByLabelText("Start date")).toHaveValue("");
+  fireEvent.keyDown(screen.getByRole("tab", { name: "Tasks" }), { key: "Enter" });
+  expect(screen.getByTestId("billing-balance")).toHaveTextContent("12.5");
+  expect(client.summary).toHaveBeenCalledTimes(1);
+  expect(client.ledger).toHaveBeenCalledTimes(1);
+});

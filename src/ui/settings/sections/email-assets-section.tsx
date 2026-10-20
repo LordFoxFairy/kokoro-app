@@ -1,9 +1,9 @@
 "use client";
 
 import { useId } from "react";
-import { Mail, Plus } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Mail } from "lucide-react";
 import { useT } from "@/i18n/context";
+import { EmailCreateDialog } from "./email-create-dialog";
 import styles from "./settings-sections.module.css";
 
 export function EmailAssetsSection() {
@@ -15,9 +15,7 @@ export function EmailAssetsSection() {
         <Mail className={styles.serviceEmptyIcon} aria-hidden="true" />
         <h2>{t("settings.email")}</h2>
         <p>{t("settingsServices.emailDescription")}</p>
-        <Button variant="outline" disabled aria-describedby={unavailableId}>
-          <Plus aria-hidden="true" />{t("settingsServices.create")}
-        </Button>
+        <EmailCreateDialog />
         <p id={unavailableId} className={styles.serviceAvailability}>{t("settingsServices.emailUnavailable")}</p>
       </section>
     </div>

@@ -1,10 +1,11 @@
 "use client";
 
 import { useId } from "react";
-import { ArrowUpRight, KeyRound, Plus, Webhook } from "lucide-react";
+import { ArrowUpRight, FileText, KeyRound, Webhook } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useT } from "@/i18n/context";
+import { ApiKeyCreateDialog, WebhookCreateDialog } from "./developer-credential-dialogs";
 import styles from "./settings-sections.module.css";
 
 export function DeveloperSettingsSection() {
@@ -21,7 +22,8 @@ export function DeveloperSettingsSection() {
           <TabsTrigger value="webhooks">{t("settingsServices.webhooks")}</TabsTrigger>
         </TabsList>
         <TabsContent value="keys" className={styles.serviceSections}>
-          <div className={styles.serviceInformation}>
+          <div className={`${styles.serviceInformation} ${styles.developerInformation}`}>
+            <FileText aria-hidden="true" />
             <p>{t("settingsServices.apiKeysDescription")}</p>
             <Button variant="link" disabled aria-describedby={keysDocsId}>{t("settingsServices.docs")}<ArrowUpRight aria-hidden="true" /></Button>
           </div>
@@ -29,12 +31,14 @@ export function DeveloperSettingsSection() {
           <div className={styles.serviceEmpty}>
             <KeyRound className={styles.serviceEmptyIcon} aria-hidden="true" />
             <h2>{t("settingsServices.apiKeys")}</h2>
+            <p>{t("settingsServices.apiKeysPurpose")}</p>
             <p id={keysId}>{t("settingsServices.apiKeysUnavailable")}</p>
-            <Button variant="outline" disabled aria-describedby={keysId}><Plus aria-hidden="true" />{t("settingsServices.createApiKey")}</Button>
+            <ApiKeyCreateDialog />
           </div>
         </TabsContent>
         <TabsContent value="webhooks" className={styles.serviceSections}>
-          <div className={styles.serviceInformation}>
+          <div className={`${styles.serviceInformation} ${styles.developerInformation}`}>
+            <FileText aria-hidden="true" />
             <p>{t("settingsServices.webhooksDescription")}</p>
             <Button variant="link" disabled aria-describedby={webhooksDocsId}>{t("settingsServices.docs")}<ArrowUpRight aria-hidden="true" /></Button>
           </div>
@@ -42,8 +46,9 @@ export function DeveloperSettingsSection() {
           <div className={styles.serviceEmpty}>
             <Webhook className={styles.serviceEmptyIcon} aria-hidden="true" />
             <h2>{t("settingsServices.webhooks")}</h2>
+            <p>{t("settingsServices.webhooksPurpose")}</p>
             <p id={webhooksId}>{t("settingsServices.webhooksUnavailable")}</p>
-            <Button variant="outline" disabled aria-describedby={webhooksId}><Plus aria-hidden="true" />{t("settingsServices.createWebhook")}</Button>
+            <WebhookCreateDialog />
           </div>
         </TabsContent>
       </Tabs>

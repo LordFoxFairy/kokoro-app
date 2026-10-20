@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { X } from "lucide-react";
 
 import {
@@ -102,7 +102,8 @@ export function ShortcutsCard() {
             const label = t(shortcutLabels[id]);
             const parts = keyboardShortcutParts(shortcuts[id]);
             return (
-              <div className={styles.shortcutRow} key={id}>
+              <Fragment key={id}>
+              <div className={styles.shortcutRow}>
                 <div className={styles.shortcutLabel}>{label}{id === "copyTaskLink" ? <p>{t("settings.shortcutCopyTaskLinkHint")}</p> : null}</div>
                 <div className={styles.shortcutActions} data-recording={recording === id || undefined}>
                   <Button
@@ -138,12 +139,13 @@ export function ShortcutsCard() {
                   )}
                 </div>
               </div>
+              {id === "newTask" ? <div className={styles.shortcutRow}>
+                <div className={styles.shortcutLabel}>{t("settings.shortcutVoice")}</div>
+                <Button variant="ghost" disabled title={t("settings.shortcutVoiceUnavailable")}>{t("settings.shortcutVoiceUnavailable")}</Button>
+              </div> : null}
+              </Fragment>
             );
           })}
-          <div className={styles.shortcutRow}>
-            <div className={styles.shortcutLabel}>{t("settings.shortcutVoice")}</div>
-            <Button variant="ghost" disabled title={t("settings.shortcutVoiceUnavailable")}>{t("settings.shortcutVoiceUnavailable")}</Button>
-          </div>
         </div>
         <p role={error ? "alert" : undefined}>{error ?? t("settings.shortcutHelp")}</p>
         <div className={styles.shortcutResetRow}>

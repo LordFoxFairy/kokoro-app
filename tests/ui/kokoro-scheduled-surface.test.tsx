@@ -229,7 +229,7 @@ it("勾选到期日期后必须先填写日期，短视口也不会把保存区�
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   expect(onSave).toHaveBeenCalledWith(
     expect.objectContaining({
-      expiresAt: expect.stringMatching(/^2026-10-01T0[0-9]:59:59\.999Z$/u),
+      expiresAt: new Date(2026, 8, 30, 23, 59, 59, 999).toISOString(),
       timezone,
     }),
   );

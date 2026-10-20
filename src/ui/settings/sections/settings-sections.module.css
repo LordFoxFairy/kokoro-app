@@ -16,14 +16,14 @@
 }
 
 .servicePage h2 {
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
   font-weight: 600;
   line-height: 1.5;
 }
 
 .servicePage p {
   color: var(--muted-foreground);
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   line-height: 1.6;
 }
 
@@ -81,7 +81,7 @@
 
 .servicePage button {
   max-width: 100%;
-  min-height: 2.75rem;
+  min-height: 2.25rem;
   height: auto;
   width: fit-content;
   white-space: normal;
@@ -94,6 +94,7 @@
 }
 
 .serviceTabs > [data-slot="tabs-list"] {
+  width: 100%;
   max-width: 100%;
   height: auto;
   min-height: 2.75rem;
@@ -103,6 +104,9 @@
   overflow-x: auto;
   overflow-y: hidden;
   padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  gap: 1.25rem;
 }
 
 .serviceTabs > [data-slot="tabs-list"] > [data-slot="tabs-trigger"] {
@@ -111,7 +115,13 @@
   white-space: nowrap;
   overflow-wrap: normal;
   word-break: normal;
+  padding-inline: 0.125rem;
+  font-size: 0.875rem;
+  font-weight: 400;
 }
+
+.serviceTabs > [data-slot="tabs-list"] > [data-slot="tabs-trigger"][data-state="active"] { font-weight: 600; }
+.serviceTabs > [data-slot="tabs-list"] > [data-slot="tabs-trigger"]::after { height: 2px; bottom: -0.5rem; inset-inline: 0.125rem; }
 
 .serviceTabs > [data-slot="tabs-content"][hidden] {
   display: none;
@@ -128,9 +138,9 @@
   align-items: start;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 0.75rem 1rem;
-  padding: 1rem;
-  border-radius: var(--radius-lg);
+  gap: 0.5rem 1rem;
+  padding: 0.625rem 0.75rem;
+  border-radius: 0.5rem;
   background: var(--muted);
 }
 
@@ -147,6 +157,7 @@
 
 .serviceDocumentation button {
   padding-inline: 0;
+  min-height: 2rem;
 }
 
 .serviceList {
@@ -183,9 +194,30 @@
   overflow-wrap: anywhere;
 }
 
+/* Only these service owners stretch their Radix inline-table viewport chain. */
+:global([data-slot="scroll-area-viewport"]) > div:has(> :global([data-panel="email"]) > .assetPage, > :global([data-panel="phone"]) > .assetPage, > :global([data-panel="developer"]) > .developerPage, > :global([data-panel="wallet"]) > .walletPage) {
+  height: 100%;
+  min-height: 100%;
+  table-layout: fixed;
+}
+
+:global([data-panel="email"]):has(> .assetPage),
+:global([data-panel="phone"]):has(> .assetPage),
+:global([data-panel="developer"]):has(> .developerPage),
+:global([data-panel="wallet"]):has(> .walletPage) {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
 .assetPage {
-  min-height: max(22rem, calc(90dvh - 5rem));
-  align-content: center;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.assetPage > .serviceEmpty {
+  flex: 1;
 }
 
 .assetPage .serviceEmpty,
@@ -223,7 +255,18 @@
 
 .walletPage,
 .developerPage {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
   padding-top: 1.5rem;
+}
+
+.walletPage > section:last-child,
+.developerPage > .serviceTabs,
+.developerPage .serviceSections[data-state="active"] {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
 }
 
 .walletPayment {
@@ -251,12 +294,12 @@
 }
 
 .walletInvoices {
-  min-height: max(16rem, calc(90dvh - 18rem));
+  flex: 1;
   align-content: center;
 }
 
 .developerPage .serviceEmpty {
-  min-height: max(18rem, calc(90dvh - 22rem));
+  flex: 1;
 }
 
 .developerPage .serviceInformation {
@@ -268,6 +311,16 @@
   padding: 0;
   line-height: 1.6;
 }
+.developerPage .developerInformation {
+  display: grid;
+  grid-template-columns: 1rem minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0.625rem;
+  padding: 0.75rem;
+}
+.developerInformation > svg { width: 1rem; height: 1rem; margin-top: 0.125rem; color: var(--muted-foreground); }
+.developerInformation > p { min-width: 0; }
+.developerPage .serviceEmpty > p + p { margin-top: 0.25rem; font-size: 0.75rem; }
 
 .mailPage .serviceInformation {
   align-items: baseline;
@@ -297,13 +350,13 @@
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 0.75rem 1.5rem;
-  padding-block: 0.5rem;
+  gap: 0.5rem 1rem;
+  padding-block: 0.375rem;
 }
 
 .mailSettingRow > div {
   min-width: 0;
-  flex: 1 1 15rem;
+  flex: 1 1 12rem;
 }
 
 .mailSettingRow p,
@@ -311,6 +364,26 @@
   margin-top: 0.25rem;
   font-size: 0.8125rem;
 }
+.mailPage .serviceSections { gap: 0.75rem; }
+.mailPage .serviceTabs { gap: 0.75rem; }
+.mailPage .mailSettingRow button { min-height: 2rem; padding-block: 0.25rem; font-size: 0.75rem; }
+.mailSettingRow h2 { font-size: 0.875rem; font-weight: 600; }
+.mailSettingRow p { font-size: 0.75rem; }
+.mailSettingRow > .mailSenderControl { display: contents; }
+.mailSenderForm { flex: 1 0 100%; width: 100%; padding: 0.875rem; border: 1px solid var(--border); border-radius: 10px; background: var(--muted); }
+.mailSenderActions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 0.5rem; }
+.mailInbox { min-width: 0; }
+.mailInbox .serviceTable th { vertical-align: middle; text-align: start; }
+.mailInboxDate { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; min-width: 0; }
+.mailInboxDate button { font-size: 0.75rem; }
+.mailInboxDate > button { width: 2rem; min-width: 2rem; height: 2rem; min-height: 2rem; padding: 0; }
+@media (max-width: 960px), (pointer: coarse) {
+  .mailInboxDate > button { width: 2.75rem; min-width: 2.75rem; height: 2.75rem; min-height: 2.75rem; }
+}
+.mailAddressDraft { display: flex; align-items: center; flex-wrap: wrap; gap: 0.25rem; min-width: 0; padding: 0.25rem 0.5rem; border: 1px solid var(--input); border-radius: 8px; background: var(--muted); }
+.mailAddressDraft > span { color: var(--muted-foreground); font-size: 0.75rem; font-weight: 400; line-height: 1.5; }
+.mailAddressDraft > input { flex: 1 1 7rem; width: auto; min-width: 0; border: 0; background: transparent; box-shadow: none; }
+.mailAddressDraft:focus-within { outline: 2px solid var(--ring); outline-offset: 2px; }
 
 .integrationGrid {
   display: grid;
@@ -321,23 +394,44 @@
   list-style: none;
 }
 
-.integrationCard {
-  display: grid;
+.integrationPage .integrationOverviewHeader { display: grid; align-content: end; min-height: 7rem; gap: 0.25rem; }
+.integrationPage .serviceUnavailable { padding: 0; border: 0; background: transparent; }
+.integrationPage > .integrationGrid > li { display: flex; min-width: 0; }
+
+.integrationPage .integrationCard {
+  display: flex;
+  width: 100%;
+  height: 100%;
   min-width: 0;
-  gap: 1rem;
-  align-content: space-between;
+  min-height: 6.5rem;
+  gap: 0.875rem;
+  justify-content: flex-start;
   padding: 1rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
+  text-align: start;
+  background: transparent;
 }
+.integrationPage .integrationCard:hover { background: var(--accent); }
 
-.integrationCard .serviceProvider > div {
-  min-width: 0;
-}
-
-.integrationCard > button {
-  justify-self: end;
-}
+.integrationCardCopy { display: grid; flex: 1; min-width: 0; gap: 0.375rem; }
+.integrationCardCopy strong { color: var(--foreground); font-size: 0.875rem; font-weight: 600; }
+.integrationCardCopy > span { color: var(--muted-foreground); font-size: 0.8125rem; font-weight: 400; line-height: 1.5; }
+.integrationCard > svg { flex: none; width: 1rem; height: 1rem; color: var(--muted-foreground); }
+.integrationDetails { display: grid; min-width: 0; gap: 1rem; }
+.integrationConnect { display: flex; align-items: center; gap: 0.875rem; min-width: 0; padding: 1rem; border: 1px solid var(--border); border-radius: var(--radius-lg); }
+.integrationConnect > div { flex: 1; min-width: 0; }
+.integrationConnect h2, .integrationOverview h2, .integrationExamples > h2 { margin: 0; color: var(--foreground); font-size: 0.875rem; font-weight: 600; }
+.integrationConnect p, .integrationOverview p, .integrationExample p { margin: 0; color: var(--muted-foreground); font-size: 0.8125rem; line-height: 1.6; overflow-wrap: anywhere; }
+.integrationConnect p { margin-top: 0.375rem; }
+.integrationConnect > button { flex: none; }
+.integrationOverview { display: grid; gap: 0.75rem; min-width: 0; padding: 1rem; border: 1px solid var(--border); border-radius: var(--radius-lg); }
+.integrationExamples { display: grid; min-width: 0; gap: 0.875rem; }
+.integrationExample { display: grid; grid-template-columns: auto minmax(0, 1fr); align-content: start; gap: 0.75rem; min-width: 0; padding: 1rem; border: 1px solid var(--border); border-radius: var(--radius-lg); }
+.integrationExample > svg { width: 1.25rem; height: 1.25rem; color: var(--muted-foreground); }
+.integrationExample h3 { margin: 0; color: var(--foreground); font-size: 0.875rem; font-weight: 600; line-height: 1.25rem; }
+.integrationExample > p { grid-column: 1 / -1; }
+.integrationExample > button { grid-column: 1 / -1; justify-self: start; margin-top: 0.25rem; }
 
 .integrationIcon {
   display: grid;
@@ -360,13 +454,12 @@
   .integrationGrid {
     grid-template-columns: minmax(0, 1fr);
   }
+  .integrationConnect { flex-wrap: wrap; }
+  .integrationConnect > div { flex-basis: calc(100% - 3.375rem); }
+  .integrationConnect > button { margin-inline-start: 3.375rem; }
 }
 
 @media (max-width: 480px) {
-  .assetPage {
-    min-height: max(20rem, calc(90dvh - 12rem));
-  }
-
   .walletPayment {
     flex-wrap: wrap;
   }
@@ -399,13 +492,13 @@
 
 .personalization {
   width: 100%;
-  padding-top: 1.5rem;
+  padding-top: 1rem;
 }
 .profileColumns {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1rem;
-  margin-top: 1.5rem;
+  margin-top: 1.25rem;
 }
 .profileColumns label,
 .profileTextarea {
@@ -438,22 +531,35 @@
   min-height: 8.1875rem;
   resize: none;
   border: 0;
-  border-radius: 0;
+  border-radius: 12px;
   background: var(--muted);
   padding: 0.75rem 1rem 1.25rem;
   font-size: 14px;
   line-height: 22px;
   box-shadow: none;
 }
+.profileColumns input::placeholder,
+.profileTextarea textarea::placeholder {
+  color: var(--muted-foreground);
+}
+.profileFieldLabel {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-width: 0;
+}
 .profileHint {
   display: block;
-  margin: 1rem 0 0;
+  margin: 0.625rem 0 0;
   color: var(--muted-foreground);
   font-size: 0.8125rem;
   line-height: 1.125rem;
 }
 .profileHint + .profileTextarea {
-  margin-top: 2.5625rem;
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border);
 }
 .profileFieldFeedback {
   display: grid;
@@ -464,11 +570,17 @@
   line-height: 1.125rem;
 }
 .profileFieldCount {
-  justify-self: end;
+  flex: 0 0 auto;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  font-weight: 400;
   font-variant-numeric: tabular-nums;
 }
 .profileFieldError {
   color: var(--destructive);
+  font-size: 0.75rem;
+  font-weight: 400;
+  line-height: 1.5;
   overflow-wrap: anywhere;
 }
 .generalSection {
@@ -500,8 +612,8 @@
    * section below the theme selector. */
   height: 2.25rem;
   min-height: 0;
-  border-color: rgb(255 255 255 / 20%);
-  background: rgb(55 53 47 / 4%);
+  border-color: var(--border);
+  background: var(--muted);
   box-shadow: none;
   color: var(--foreground);
   font-size: 1rem;
@@ -524,7 +636,8 @@
   max-height: 21.875rem;
   border: 0;
   border-radius: 0.75rem;
-  background: #fff;
+  background: var(--popover);
+  color: var(--popover-foreground);
   box-shadow:
     0 0 0 1px rgb(0 0 0 / 6%),
     0 24px 24px -12px rgb(0 0 0 / 4%),
@@ -589,8 +702,8 @@
   max-width: 100%;
   height: 2.25rem;
   min-height: 0;
-  border-color: rgb(255 255 255 / 20%);
-  background: rgb(55 53 47 / 4%);
+  border-color: var(--border);
+  background: var(--muted);
   box-shadow: none;
   color: var(--foreground);
   font-size: 0.875rem;
@@ -624,12 +737,11 @@
 
 .notificationRow {
   display: flex;
-  height: 3.875rem;
   min-height: 3.875rem;
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
-  border-bottom: 1px solid var(--border);
+  padding-block: 0.625rem;
 }
 
 .notificationRow > div {
@@ -645,19 +757,21 @@
   font-size: 0.875rem;
   font-weight: 500;
   line-height: 1.25rem;
+  overflow-wrap: anywhere;
 }
 
 .notificationRow span {
   color: var(--muted-foreground);
   font-size: 0.875rem;
   line-height: 1.125rem;
+  overflow-wrap: anywhere;
 }
 
 .notificationRow :global([data-slot="switch"]) {
   width: 1.625rem;
   height: 1rem;
   flex: 0 0 1.625rem;
-  margin-top: 0.6875rem;
+  margin-top: 0.125rem;
 }
 
 .notificationRow :global([data-slot="switch-thumb"]) {
@@ -665,15 +779,10 @@
   height: 0.875rem;
 }
 
-/* The advertising preference is a separate group in the reference surface:
- * three compact rows, a quiet divider, then a 25px measured beat before the
- * longer copy. Keeping this as a row rule avoids a second ad-hoc wrapper. */
-.notificationRow:last-child {
-  margin-top: 1.5625rem;
-}
-
-.notificationRow:last-child :global([data-slot="switch"]) {
-  margin-top: 1.25rem;
+.notificationAdvertising {
+  margin-top: 0.75rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
 }
 
 .generalRowStack {
@@ -704,9 +813,9 @@
   gap: 0;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgb(0 0 0 / 12%);
+  border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  color: #4d4d4d;
+  color: var(--muted-foreground);
   padding: 0.75rem 0.5rem 0.5rem;
   font-size: 1rem;
   font-weight: 400;
@@ -780,6 +889,8 @@
 .accountSettings[data-settings-card] {
   min-width: 0;
   width: 100%;
+  /* Keep localized account content from expanding Radix's intrinsic table. */
+  contain: inline-size;
   padding-top: 1.5rem;
 }
 
@@ -801,7 +912,7 @@
 }
 
 .planCard {
-  height: 11.9375rem;
+  height: auto;
   box-sizing: border-box;
   margin-top: 1rem;
   padding: 0 1rem;
@@ -843,7 +954,7 @@
 
 .planBody {
   display: flex;
-  height: 8.25rem;
+  height: auto;
   flex-direction: column;
   gap: 1rem;
   padding: 1rem 0;
@@ -851,7 +962,7 @@
 
 .creditGroup {
   display: flex;
-  height: 2.625rem;
+  height: auto;
   flex-direction: column;
   gap: 0.25rem;
 }
@@ -887,6 +998,250 @@
   font-size: 14px;
   font-weight: 500;
   line-height: 20px;
+}
+
+.accountCreditSummary {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.accountCreditSummary p {
+  margin: 0;
+  color: var(--muted-foreground);
+  overflow-wrap: anywhere;
+}
+.accountCreditNumbers {
+  display: grid;
+  gap: 0.375rem;
+  margin: 0;
+}
+.accountCreditNumbers > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: baseline;
+  gap: 0.75rem;
+}
+.accountCreditNumbers dt {
+  color: var(--muted-foreground);
+}
+.accountCreditNumbers dd {
+  margin: 0;
+  min-width: 0;
+  color: var(--foreground);
+  text-align: end;
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.accountCreditFeedback {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.accountCreditFeedback button {
+  flex-shrink: 0;
+}
+.accountCreditStatus {
+  font-size: 12px;
+}
+
+.helpCenter {
+  display: grid;
+  min-width: 0;
+  gap: 1.5rem;
+  padding-block: 1.5rem;
+  color: var(--foreground);
+  overflow-wrap: anywhere;
+}
+.helpHero {
+  display: grid;
+  justify-items: center;
+  gap: 0.75rem;
+  text-align: center;
+}
+.helpHeroIcon {
+  display: grid;
+  width: 2.75rem;
+  height: 2.75rem;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--accent);
+}
+.helpHero h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.helpHero p, .helpExisting p, .helpGuideContent p, .helpEmpty p {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.helpSearch {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  margin-top: 0.25rem;
+  gap: 0.25rem;
+  padding-inline: 0.75rem 0.25rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--background);
+}
+.helpSearch > svg {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+}
+.helpSearch input {
+  min-width: 0;
+  height: 2.75rem;
+  padding-inline: 0.25rem;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.helpSearch:focus-within {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.helpSearch button {
+  flex-shrink: 0;
+}
+.helpCategoryGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+button.helpCategory {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  height: auto;
+  min-width: 0;
+  min-height: 5.5rem;
+  padding: 1rem;
+  gap: 0.75rem;
+  border-color: var(--border);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--foreground);
+  text-align: start;
+  white-space: normal;
+}
+button.helpCategory:hover, button.helpCategory[aria-pressed="true"] {
+  background: var(--accent);
+}
+.helpCategory > svg {
+  flex-shrink: 0;
+  width: 1.125rem;
+  height: 1.125rem;
+}
+.helpCategory > svg:last-child {
+  margin-inline-start: auto;
+  color: var(--muted-foreground);
+}
+.helpCategory > span {
+  display: grid;
+  min-width: 0;
+  gap: 0.25rem;
+}
+.helpCategory strong {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.helpCategory > span > span, .helpResultCount {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.helpGuidesHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.375rem;
+}
+.helpGuidesHeader h2 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+.helpGuidesHeader h2 svg {
+  width: 1rem;
+  height: 1rem;
+}
+button.helpGuideTrigger {
+  min-width: 0;
+  min-height: 2.75rem;
+  font-weight: 500;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.helpGuideContent {
+  display: grid;
+  justify-items: start;
+  gap: 0.75rem;
+}
+.helpGuideContent button, .helpExisting button {
+  max-width: 100%;
+  height: auto;
+  min-height: 2.75rem;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.helpEmpty {
+  display: grid;
+  justify-items: center;
+  gap: 0.75rem;
+  padding-block: 2rem;
+  text-align: center;
+}
+.helpEmpty h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.helpEmpty > svg {
+  color: var(--muted-foreground);
+}
+.helpExisting {
+  display: grid;
+  justify-items: start;
+  gap: 0.625rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+.helpExisting h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+@media (max-width: 520px) {
+  .helpCategoryGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  button.helpCategory {
+    min-height: 4.5rem;
+  }
 }
 .creditBreakdown {
   height: 1.125rem;
@@ -970,11 +1325,9 @@
   min-width: 4rem;
   height: 2rem;
   min-height: 2rem;
-  border: 0;
+  border: 1px solid var(--border);
   border-radius: 8px;
   background: transparent;
-  outline: 1px solid rgb(0 0 0 / 12%);
-  outline-offset: -1px;
   box-shadow: none;
   font-size: 0.875rem;
   font-weight: 500;
@@ -1029,23 +1382,26 @@
 .identityText {
   min-width: 0;
   flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: 0.25rem 0.5rem;
 }
 
 .identityFieldLabel {
+  grid-column: 1 / -1;
   color: var(--muted-foreground);
   font-size: 0.8125rem;
   line-height: 1.125rem;
 }
 
 .identityInput {
-  width: min(17.5rem, 100%);
+  width: 100%;
+  max-width: 17.5rem;
   height: 2.25rem;
-  border: 0;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: rgb(55 53 47 / 4%);
+  background: var(--muted);
   box-shadow: none;
   font-size: 0.88rem;
 }
@@ -1064,6 +1420,45 @@
 .loginMethods {
   width: 100%;
   padding-top: 2rem;
+}
+.loginMethods[data-live] { padding-top: 1.5rem; }
+.loginMethods[data-live] .loginProvider { height: auto; min-height: 4.25rem; margin-bottom: 0; padding: 0.875rem 0; gap: 0.75rem; }
+.loginMethods[data-live] .providerMark { flex: none; background: transparent; }
+.loginMethods[data-live] .loginProvider > button,
+.loginMethods[data-live] .passkeyHead > button { flex: none; width: auto; min-width: 4rem; height: auto; min-height: 2rem; padding: 0.375rem 0.75rem; outline-color: var(--border); white-space: normal; }
+.loginMethods[data-live] .passkeyHead { top: 0; margin-top: 1.25rem; padding-inline: 0; }
+.passkeyUnknown { display: grid; justify-items: center; align-content: center; gap: 0.75rem; min-height: 12rem; padding: 2rem 1rem; color: var(--muted-foreground); text-align: center; }
+.passkeyUnknown > svg { width: 2rem; height: 2rem; }
+.passkeyUnknown > p { margin: 0; font-size: 0.8125rem; line-height: 1.6; }
+.accountServiceDialog { display: grid; gap: 1rem; width: 25rem; max-width: calc(100vw - 2rem); max-height: calc(100dvh - 2rem); overflow-y: auto; padding: 1.25rem; border-radius: 1rem; }
+.accountServiceDialog [data-slot="dialog-header"] { min-width: 0; padding-inline-end: 1.5rem; text-align: start; }
+.accountServiceDialog [data-slot="dialog-title"] { font-size: 1.125rem; line-height: 1.5rem; }
+.accountServiceDialog [data-slot="dialog-description"] { color: var(--muted-foreground); font-size: 0.8125rem; line-height: 1.6; overflow-wrap: anywhere; }
+.accountEmailVerification [data-slot="dialog-header"] { padding-bottom: 0.875rem; border-bottom: 1px solid var(--border); }
+.accountServiceBody { display: grid; gap: 1rem; min-width: 0; }
+.accountVerifySection { display: grid; gap: 0.5rem; min-width: 0; }
+.accountVerifySection > label { font-size: 0.875rem; font-weight: 600; }
+.accountVerifySection > p { margin: 0; color: var(--muted-foreground); font-size: 0.8125rem; line-height: 1.6; overflow-wrap: anywhere; }
+.accountVerifyCode { display: flex; align-items: center; min-width: 0; min-height: 2.25rem; border: 1px solid var(--input); border-radius: 8px; background: var(--muted); }
+.accountVerifyCode > input { flex: 1; width: 0; min-width: 0; height: 2.25rem; border: 0; background: transparent; box-shadow: none; }
+.accountVerifyCode > button { flex: none; height: 2rem; min-height: 2rem; margin-inline-end: 0.25rem; padding-inline: 0.75rem; border-inline-start: 1px solid var(--border); border-radius: 0; }
+.accountServiceReason { margin: 0; color: var(--muted-foreground); font-size: 0.75rem; line-height: 1.6; overflow-wrap: anywhere; }
+.accountServiceDialog [data-slot="dialog-footer"] { flex-direction: row; flex-wrap: wrap; justify-content: flex-end; gap: 0.5rem; padding-top: 0.25rem; }
+.accountServiceDialog [data-slot="dialog-footer"] > button { width: auto; min-height: 2.25rem; padding-inline: 1rem; }
+.accountDeleteIdentity { display: flex; align-items: center; gap: 0.75rem; min-width: 0; padding: 1rem; border-radius: 0.75rem; background: var(--muted); }
+.accountDeleteAvatar { display: grid; flex: none; place-items: center; width: 2.75rem; height: 2.75rem; border: 1px solid var(--border); border-radius: 50%; background: var(--background); font-size: 1.125rem; font-weight: 600; }
+.accountDeleteIdentity > div { display: grid; min-width: 0; gap: 0.125rem; }
+.accountDeleteIdentity strong { color: var(--foreground); font-size: 0.875rem; font-weight: 600; overflow-wrap: anywhere; }
+.accountDeleteIdentity > div > span { color: var(--muted-foreground); font-size: 0.75rem; line-height: 1.5; overflow-wrap: anywhere; }
+@media (max-width: 960px), (pointer: coarse) {
+  .loginMethods[data-live] .loginProvider > button, .loginMethods[data-live] .passkeyHead > button, .accountServiceDialog [data-slot="dialog-footer"] > button { min-height: 2.75rem; }
+  .accountVerifyCode, .accountVerifyCode > input, .accountVerifyCode > button { min-height: 2.75rem; height: auto; }
+}
+@media (max-width: 360px) {
+  .loginMethods[data-live] .loginProvider { flex-wrap: wrap; }
+  .loginMethods[data-live] .loginProvider > div { flex-basis: calc(100% - 3.25rem); }
+  .loginMethods[data-live] .loginProvider > button { margin-inline-start: 3.25rem; }
+  .loginMethods[data-live] .passkeyHead { flex-wrap: wrap; padding-block: 0.75rem; }
 }
 .loginProviderList {
   margin-top: 0;
@@ -1536,28 +1931,29 @@
   width: 100%;
 }
 .shortcutRow {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 14.375rem);
   min-height: 4.3125rem;
   align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
+  gap: 0.625rem 1rem;
+  padding-block: 0.75rem;
   border-bottom: 1px solid var(--border);
 }
 .shortcutLabel {
   min-width: 0;
-  flex: 0 0 auto;
   color: var(--foreground);
   font-size: 0.875rem;
   font-weight: 500;
   line-height: 1.25rem;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
+.shortcutLabel p { margin: 0.25rem 0 0; color: var(--muted-foreground); font-size: 0.8125rem; font-weight: 400; }
+.shortcutRow > button { max-width: 100%; height: auto; min-height: 2.25rem; white-space: normal; overflow-wrap: anywhere; }
 .shortcutActions {
   display: flex;
-  width: 14.375rem;
-  min-width: 10rem;
-  height: 2.25rem;
-  flex: 0 1 14.375rem;
+  width: 100%;
+  min-width: 0;
+  min-height: 2.25rem;
   align-items: center;
   gap: 0.25rem;
   padding: 0 0.25rem 0 0.375rem;
@@ -1571,18 +1967,19 @@
 .shortcutActions[data-recording="true"] {
   gap: 0;
   padding: 0;
-  border-color: #0081f2;
+  border-color: var(--ring);
   border-radius: 0.5rem;
   background: transparent;
 }
 .shortcutActions .shortcutKeys[data-slot="button"] {
   display: flex;
   min-width: 0;
-  min-height: 0;
-  height: 100%;
+  height: auto;
+  min-height: 2.125rem;
   flex: 1;
   justify-content: flex-start;
-  overflow: hidden;
+  white-space: normal;
+  overflow-wrap: anywhere;
   padding: 0;
   border-radius: 0;
   background: transparent;
@@ -1592,8 +1989,8 @@
   display: flex;
   min-width: 0;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.25rem;
-  overflow: hidden;
   color: var(--muted-foreground);
   font-size: 0.8125rem;
 }
@@ -1618,6 +2015,8 @@
   padding-left: 0.25rem;
   color: var(--muted-foreground);
   font-size: 0.8125rem;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .shortcutKeys:hover .shortcutKeySet:not([data-recording="true"]) {
   display: none;
@@ -1630,13 +2029,14 @@
 }
 .shortcutActions[data-recording="true"] .shortcutKeys {
   padding-left: 0.375rem;
-  color: #0081f2;
+  color: var(--primary);
 }
 .shortcutKeySet[data-recording="true"] {
   padding-left: 0.25rem;
-  color: #0081f2;
+  color: var(--primary);
 }
 .shortcutRemove {
+  flex: none;
   color: var(--muted-foreground);
 }
 .shortcutRemove svg {
@@ -1645,17 +2045,19 @@
 }
 .shortcutResetRow {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
   gap: 0.75rem;
   margin-top: 1.5rem;
 }
+.shortcutResetRow > button { min-width: 0; max-width: 100%; height: auto; white-space: normal; overflow-wrap: anywhere; }
 .shortcutReset {
   display: flex;
-  width: 6.25rem;
+  width: fit-content;
   min-height: 2rem;
-  height: 2rem;
-  padding: 0 0.5rem;
+  height: auto;
+  padding: 0.375rem 0.75rem;
   border-radius: 0.5rem;
   font-size: 0.875rem;
   font-weight: 500;
@@ -1678,36 +2080,95 @@
   outline-offset: 2px;
 }
 
-.devicesDialog { max-height: min(85dvh, 48rem); overflow-y: auto; }
-.deviceRow { display: grid; gap: var(--spacing-2, 0.5rem); border-block-end: 1px solid var(--border); padding-block: 1rem; overflow-wrap: anywhere; }
+.devicesPage { display: grid; width: 100%; min-width: 0; gap: 1.5rem; padding-block: 1.25rem 1.5rem; }
+.devicesDescription { margin: 0; color: var(--muted-foreground); font-size: 0.8125rem; line-height: 1.5; overflow-wrap: anywhere; }
+.deviceRow { display: grid; grid-template-columns: 2.5rem minmax(0, 1fr) auto; align-items: start; gap: 0.75rem; min-width: 0; padding: 0.875rem 1rem; overflow-wrap: anywhere; }
+.deviceCurrent, .deviceList { border: 1px solid var(--border); border-radius: 0.75rem; }
+.deviceList > div > .deviceRow + .deviceRow { border-top: 1px solid var(--border); }
+.deviceIcon { display: grid; place-items: center; width: 2.5rem; height: 2.5rem; border-radius: 0.625rem; background: var(--muted); color: var(--muted-foreground); }
+.deviceIcon svg { width: 1.375rem; height: 1.375rem; }
+.deviceDetails { display: grid; min-width: 0; gap: 0.375rem; }
+.deviceGroup > h2 { margin: 0; font-size: 0.875rem; font-weight: 600; line-height: 1.5; }
+.deviceDetails p, .deviceGroup > p { margin: 0; color: var(--muted-foreground); font-size: 0.8125rem; line-height: 1.5; }
+.deviceDetails > p { color: var(--foreground); font-size: 0.875rem; font-weight: 500; }
+.deviceDates { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; min-width: 0; color: var(--muted-foreground); font-size: 0.75rem; line-height: 1.5; }
+.deviceDates > span { min-width: 0; overflow-wrap: anywhere; }
+.deviceGroup { display: grid; min-width: 0; gap: 0.75rem; }
+.deviceGroup.deviceList { gap: 0; }
+.deviceList > h2 { padding: 1rem 1rem 0.5rem; }
+.deviceList > p { padding: 0 1rem 1rem; }
+.deviceConfirmation { display: flex; flex-wrap: wrap; grid-column: 2 / -1; gap: 0.5rem; min-width: 0; }
+.deviceConfirmation p { flex-basis: 100%; margin: 0; font-size: 0.8125rem; line-height: 1.5; }
+.deviceActions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.devicesPage button { max-width: 100%; height: auto; min-height: 2rem; white-space: normal; overflow-wrap: anywhere; }
+@media (max-width: 520px) {
+  .deviceRow { grid-template-columns: 2.5rem minmax(0, 1fr); padding: 0.875rem; }
+  .deviceRemove { grid-column: 2; justify-self: start; }
+  .devicesPage button { min-height: 2.75rem; }
+}
 
-.nameActions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
-.nameActions p { color: var(--muted-foreground); font-size: 0.875rem; }
+.nameActions { display: contents; }
+.nameActions > p, .nameActions > div { grid-column: 1 / -1; min-width: 0; }
+.nameActions > div { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.nameActions p { margin: 0; color: var(--muted-foreground); font-size: 0.875rem; overflow-wrap: anywhere; }
+.nameActions > div > p { flex-basis: 100%; }
+.nameActions button { max-width: 100%; height: auto; white-space: normal; overflow-wrap: anywhere; }
+@media (max-width: 520px) {
+  .identityText, .shortcutRow { grid-template-columns: minmax(0, 1fr); }
+  .identityInput { max-width: 100%; }
+  .nameActions > button { justify-self: start; }
+  .shortcutResetRow > button { width: 100%; }
+}
 
-.personalizationImport {
+button.personalizationImport {
   display: flex;
+  width: 100%;
+  height: auto;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 1rem;
-  margin: 1.5rem 0;
+  margin: 1rem 0 0;
   padding: 1rem;
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
+  border-radius: 12px;
+  background: var(--card);
+  text-align: start;
+  white-space: normal;
 }
-.personalizationImport h3 {
-  margin: 0 0 0.5rem;
+.personalizationImportIcon {
+  display: grid;
+  width: 2.5rem;
+  height: 2.5rem;
+  flex: 0 0 2.5rem;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--muted);
+}
+.personalizationImportIcon > svg { width: 1.25rem; height: 1.25rem; }
+.personalizationImportCopy { display: grid; gap: 0.25rem; min-width: 0; }
+.personalizationImportCopy strong {
   font-size: 0.875rem;
-  font-weight: 500;
+  font-weight: 600;
+  color: var(--foreground);
 }
-.personalizationImport p,
+.personalizationImportCopy > span,
 .personalizationUnavailable {
   color: var(--muted-foreground);
   font-size: 0.8125rem;
+  font-weight: 400;
   line-height: 1.25rem;
 }
-.personalizationImport p {
-  margin: 0;
+.personalizationImportArrow { flex: 0 0 1rem; margin-inline-start: auto; }
+.personalizationFooter {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  margin-top: 1.5rem;
+  padding-block: 1.5rem;
+  background: var(--background);
 }
+.personalizationFooter > button { max-width: 100%; height: auto; white-space: normal; overflow-wrap: anywhere; }
 
 /* Initial reads are silent and the cached snapshot keeps this section stable.
  * Mutation feedback still takes its natural space only when it exists. */
@@ -1719,31 +2180,50 @@
   min-width: 0;
 }
 .personalizationTabs > [data-slot="tabs-list"] {
+  width: 100%;
   max-width: 100%;
   height: auto;
   padding-bottom: 0.375rem;
   overflow-x: auto;
   overflow-y: hidden;
+  justify-content: flex-start;
+  gap: 1.5rem;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
 }
 .personalizationTabs > [data-slot="tabs-list"] > button {
   flex: 0 0 auto;
-  min-height: 2rem;
+  min-height: 2.25rem;
+  padding-inline: 0;
+  font-size: 0.875rem;
   white-space: nowrap;
 }
+.personalizationTabs > [data-slot="tabs-list"] > button[data-state="active"] { font-weight: 600; }
+.personalizationTabs > [data-slot="tabs-list"] > button::after { bottom: -0.375rem; height: 2px; }
 .knowledgePanel {
   min-width: 0;
   padding-top: 1.25rem;
 }
+.knowledgePreference { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; padding-bottom: 1.5rem; }
+.knowledgePreference > div { display: grid; gap: 0.375rem; min-width: 0; }
+.knowledgePreference h3 { margin: 0; font-size: 0.875rem; font-weight: 600; }
+.knowledgePreference p { margin: 0; color: var(--muted-foreground); font-size: 0.8125rem; line-height: 1.5; }
+.knowledgeUnknownToggle { position: relative; width: 2.5rem; height: 2.75rem; min-height: 2.75rem; flex: 0 0 2.5rem; padding: 0; border: 0; background: transparent; cursor: not-allowed; }
+.knowledgeUnknownToggle::before { position: absolute; top: calc(50% - 12px); left: 0; width: 2.5rem; height: 1.5rem; border: 1px dashed var(--muted-foreground); border-radius: 999px; background: var(--muted); content: ""; }
+.knowledgeUnknownToggle > span { position: absolute; top: calc(50% - 8px); left: calc(50% - 8px); width: 1rem; height: 1rem; border: 1px solid var(--border); border-radius: 50%; background: var(--muted-foreground); opacity: 0.5; }
 .knowledgeToolbar {
   display: flex;
   align-items: center;
   gap: 0.75rem;
   min-width: 0;
 }
-.knowledgeToolbar > input {
+.knowledgeSearch {
+  position: relative;
   flex: 1 1 12rem;
   min-width: 0;
 }
+.knowledgeSearch > svg { position: absolute; top: 50%; left: 0.75rem; width: 1rem; height: 1rem; transform: translateY(-50%); color: var(--muted-foreground); }
+.knowledgeSearch > input { width: 100%; padding-inline-start: 2.25rem; }
 .knowledgeToolbar > button {
   flex: 0 0 auto;
 }
@@ -1767,18 +2247,26 @@
   margin: 0;
 }
 .personalizationDialog[data-slot="dialog-content"] {
-  width: min(calc(100vw - 2rem), 36rem);
+  width: min(calc(100vw - 2rem), 35rem);
   max-width: calc(100vw - 2rem);
   max-height: min(85dvh, 52rem);
   overflow-y: auto;
   overflow-wrap: anywhere;
   overscroll-behavior: contain;
+  padding: 1.25rem;
+  gap: 1.25rem;
+  border-radius: 14px;
 }
+.knowledgeDialog[data-slot="dialog-content"] { width: min(calc(100vw - 2rem), 42.5rem); }
 .personalizationDialog [data-slot="dialog-header"] {
   min-width: 0;
   padding-right: 1.25rem;
   text-align: start;
 }
+.personalizationDialog [data-slot="dialog-title"] { font-size: 1.125rem; line-height: 1.5; }
+.personalizationDialog [data-slot="dialog-description"] { font-size: 0.8125rem; line-height: 1.5; }
+.personalizationDialog [data-slot="dialog-footer"] { gap: 0.5rem; }
+.personalizationDialog [data-slot="dialog-footer"] button { height: 2.25rem; min-height: 2.25rem; }
 .personalizationDraft {
   display: grid;
   gap: 1rem;
@@ -1796,6 +2284,7 @@
   width: 100%;
   min-width: 0;
 }
+.personalizationDraft input { height: 2.25rem; border-radius: 8px; }
 .personalizationDraft textarea {
   min-height: 8rem;
   max-height: 18rem;
@@ -1805,16 +2294,26 @@
   margin: 0;
 }
 .personalizationCount {
-  margin-top: -0.5rem;
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.625rem;
   color: var(--muted-foreground);
   text-align: end;
   font-size: 0.75rem;
+  pointer-events: none;
 }
+.knowledgeContent { position: relative; min-width: 0; }
+.knowledgeContent textarea { height: 13.375rem; min-height: 13.375rem; padding-bottom: 2.25rem; border-radius: 12px; }
 .memoryStep {
+  position: relative;
   display: grid;
-  gap: 0.75rem;
+  gap: 0.625rem;
   min-width: 0;
+  padding-inline-start: 2rem;
 }
+.memoryStep:first-child::before { position: absolute; top: 1.5rem; bottom: -1rem; left: 0.5625rem; border-left: 1px dashed var(--border); content: ""; }
+.memoryStepHeader { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; min-width: 0; }
+.memoryStepHeader > button { flex: 0 1 auto; height: auto; min-height: 2.25rem; padding: 0.375rem 0.625rem; white-space: normal; font-size: 0.75rem; }
 .memoryStep h3 {
   display: flex;
   align-items: baseline;
@@ -1823,6 +2322,9 @@
   font-size: 0.875rem;
   font-weight: 600;
 }
+.memoryStep h3 > span { position: absolute; top: 0.4375rem; left: 0; display: grid; width: 1.25rem; height: 1.25rem; place-items: center; border: 1px solid var(--border); border-radius: 50%; background: var(--card); color: var(--muted-foreground); font-size: 0.75rem; line-height: 1; }
+.memoryStep > h3 > span { top: 0; }
+.memoryStep textarea { height: 7.5rem; min-height: 7.5rem; border-radius: 10px; }
 .memoryStep p {
   color: var(--muted-foreground);
   font-size: 0.8125rem;
@@ -1835,7 +2337,8 @@
 }
 .memoryPrompt {
   min-width: 0;
-  max-height: 12rem;
+  height: 7.5rem;
+  max-height: 7.5rem;
   margin: 0;
   overflow: auto;
   padding: 0.875rem;
@@ -1850,14 +2353,200 @@
   line-height: 1.5;
 }
 @media (max-width: 480px) {
-  .personalizationImport {
-    flex-wrap: wrap;
+  button.personalizationImport {
+    gap: 0.75rem;
     padding: 0.875rem;
   }
-  .personalizationImport > div {
-    min-width: 0;
-  }
+  .profileColumns { grid-template-columns: minmax(0, 1fr); }
+  .personalizationFooter { padding-block: 1rem; }
+  .personalizationFooter > button { min-height: 2.75rem; }
+  .personalizationImportIcon { width: 2rem; height: 2rem; flex-basis: 2rem; }
+  .memoryStepHeader { align-items: flex-start; flex-wrap: wrap; }
   .personalizationDialog[data-slot="dialog-content"] {
     padding: 1rem;
   }
+}
+
+.serviceDialog[data-slot="dialog-content"] {
+  width: min(calc(100vw - 2rem), 26rem);
+  max-width: calc(100vw - 2rem);
+  max-height: min(85dvh, 48rem);
+  min-width: 0;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+  overscroll-behavior: contain;
+  padding: 1.25rem;
+  gap: 1.25rem;
+  border-radius: 0.875rem;
+}
+.developerDialog[data-slot="dialog-content"] { width: min(calc(100vw - 2rem), 25rem); }
+.mailWorkflowDialog[data-slot="dialog-content"] { width: min(calc(100vw - 2rem), 30rem); }
+.mailboxDialog[data-slot="dialog-content"] { width: min(calc(100vw - 2rem), 27.5rem); }
+.emailCreateDialog[data-slot="dialog-content"] { width: min(calc(100vw - 2rem), 30rem); }
+.serviceDialog [data-slot="dialog-header"] {
+  min-width: 0;
+  padding-inline-end: 1.25rem;
+  text-align: start;
+}
+.serviceDialog [data-slot="dialog-title"] { font-size: 1.125rem; line-height: 1.4; font-weight: 600; }
+.serviceDialog [data-slot="dialog-description"] { font-size: 0.8125rem; line-height: 1.6; }
+.serviceDialog > .serviceAvailability { margin: 0; color: var(--muted-foreground); font-size: 0.8125rem; line-height: 1.6; }
+.serviceDialog button {
+  height: auto;
+  min-height: 2.25rem;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.serviceDraft {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+.serviceDraft label {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.serviceDraft p {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+.serviceDraft input,
+.serviceDraft textarea,
+.serviceDraft select {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+.serviceDraft [data-slot="select-trigger"] { width: 100%; min-height: 2.5rem; font-weight: 400; border-radius: 0.5rem; }
+.serviceDraft input { min-height: 2.5rem; border-radius: 0.5rem; }
+.serviceSelectOptions { max-width: calc(100vw - 2rem); }
+.serviceSelectOptions [role="option"] { white-space: normal; overflow-wrap: anywhere; }
+.serviceHeroDialog[data-slot="dialog-content"] { width: min(calc(100vw - 2rem), 30rem); padding: 1.5rem; gap: 1.25rem; }
+.serviceHeroIcons { display: flex; align-items: center; justify-content: center; gap: 0.625rem; padding-top: 0.25rem; }
+.serviceHeroIcons span { display: grid; width: 4rem; height: 4rem; flex: none; place-items: center; background: var(--muted); border: 1px solid var(--border); border-radius: 1rem; color: var(--foreground); }
+.serviceHeroIcons svg { width: 1.75rem; height: 1.75rem; }
+.serviceHeroIcons i { width: 1.5rem; border-top: 1px dashed var(--border); }
+.serviceHeroDialog [data-slot="dialog-header"] { padding-inline: 0; text-align: center; gap: 0.5rem; }
+.serviceHeroDialog [data-slot="dialog-title"] { font-size: 1.25rem; }
+.serviceHeroGuidance { display: grid; margin: 0; padding: 0 1rem; list-style: none; border: 1px solid var(--border); border-radius: 0.75rem; }
+.serviceHeroGuidance li { display: flex; align-items: flex-start; gap: 0.75rem; padding-block: 1rem; min-width: 0; }
+.serviceHeroGuidance li + li { border-top: 1px solid var(--border); }
+.serviceHeroGuidance li > svg { width: 1.125rem; height: 1.125rem; flex: none; margin-top: 0.125rem; color: var(--muted-foreground); }
+.serviceHeroGuidance h3 { margin: 0 0 0.25rem; color: var(--foreground); font-size: 0.875rem; font-weight: 600; }
+.serviceHeroGuidance p { margin: 0; color: var(--muted-foreground); font-size: 0.8125rem; line-height: 1.6; }
+.serviceHeroNotice { min-width: 0; border: 1px solid var(--border); border-radius: 0.75rem; }
+.serviceHeroCaption { display: flex; align-items: center; gap: 0.5rem; margin: 0; padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); border-radius: 0.6875rem 0.6875rem 0 0; background: var(--muted); color: var(--foreground); font-size: 0.8125rem; font-weight: 600; line-height: 1.5; }
+.serviceHeroCaption > svg { width: 1rem; height: 1rem; flex: none; color: var(--muted-foreground); }
+.serviceHeroNotice .serviceHeroGuidance { border: 0; border-radius: 0; }
+.serviceHeroDialog [data-slot="dialog-footer"] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
+.serviceHeroDialog [data-slot="dialog-footer"] button { width: 100%; }
+.serviceHeroDialog .walletPaymentFooter[data-slot="dialog-footer"] { grid-template-columns: minmax(0, 1fr); gap: 0.5rem; }
+.serviceHeroDialog .walletPaymentFooter > p { margin: 0; color: var(--muted-foreground); font-size: 0.8125rem; line-height: 1.6; text-align: center; }
+.serviceHeroDialog .walletPaymentFooter button:last-child { width: fit-content; justify-self: center; }
+.serviceDraft textarea {
+  min-height: 7rem;
+  resize: vertical;
+}
+.serviceDraft select {
+  min-height: 2.5rem;
+  border: 1px solid var(--input);
+  border-radius: var(--radius-md);
+  background: var(--background);
+  color: var(--foreground);
+  padding: 0.5rem;
+  font: inherit;
+}
+.serviceDraft select:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.serviceGuidance {
+  display: grid;
+  gap: 1rem;
+  margin: 0;
+  padding-inline-start: 1.25rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+.serviceGuidance h3 {
+  margin: 0 0 0.25rem;
+  font-size: inherit;
+  font-weight: 600;
+}
+.serviceGuidance p {
+  margin: 0;
+  color: var(--muted-foreground);
+}
+@media (pointer: coarse) {
+  .mailPage .mailSettingRow button { min-height: 2.75rem; }
+  .serviceDialog button,
+  .serviceDraft input,
+  .serviceDraft select {
+    min-height: 2.75rem;
+  }
+}
+@media (max-width: 960px) {
+  .mailPage .mailSettingRow button { min-height: 2.75rem; }
+  .servicePage button, .serviceDialog button, .serviceDraft input { min-height: 2.75rem; }
+}
+@media (max-width: 480px) {
+  .serviceHeroDialog[data-slot="dialog-content"] { padding: 1.25rem; }
+  .serviceHeroIcons span { width: 3.25rem; height: 3.25rem; border-radius: 0.875rem; }
+  .serviceHeroIcons svg { width: 1.5rem; height: 1.5rem; }
+}
+.serviceDraft p[role="alert"] {
+  color: var(--destructive);
+}
+.servicePreference {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 2.75rem;
+}
+
+.deliveryOptions { max-width: calc(100vw - 2rem); overflow-wrap: anywhere; }
+.deliveryOptions [role="option"] { white-space: normal; }
+
+.dataManagement { display: grid; min-width: 0; padding-top: 0.25rem; }
+.dataManagement > section { display: grid; gap: 0.375rem; min-width: 0; padding-block: 1rem; border-bottom: 1px solid var(--border); }
+.dataManagement > section:last-child { border-bottom: 0; }
+.dataManagement h2 { margin: 0; font-size: 1rem; line-height: 1.5; font-weight: 600; color: var(--foreground); }
+.dataManagement p { margin: 0; font-size: 0.8125rem; line-height: 1.6; color: var(--muted-foreground); overflow-wrap: anywhere; }
+.dataManagement p:empty, .dataManagement ul:empty { display: none; }
+.dataSectionHeading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem 1rem; min-width: 0; }
+.dataManagement button { justify-self: start; width: fit-content; max-width: 100%; height: auto; min-height: 2rem; padding-block: 0.25rem; font-size: 0.75rem; white-space: normal; overflow-wrap: anywhere; }
+.serviceSubpageHeader { display: flex; align-items: flex-end; gap: 0.5rem; min-width: 0; min-height: 5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border); }
+.serviceSubpageHeader h1 { margin: 0; min-width: 0; color: var(--foreground); font-size: 1.5rem; font-weight: 500; line-height: 1.25; overflow-wrap: anywhere; }
+.serviceSubpageHeader > button { flex: none; padding: 0.25rem; min-width: 2rem; }
+.dataCenteredDetails { display: grid; justify-items: center; align-content: center; gap: 0.875rem; min-width: 0; min-height: max(0px, calc(90dvh - 5.25rem)); padding-block: 3rem; text-align: center; }
+.dataCenteredDetails > svg { width: 2rem; height: 2rem; color: var(--muted-foreground); }
+@media (max-width: 47.99rem) {
+  .dataCenteredDetails { min-height: max(0px, calc(min(36.25rem, 100dvh - 2rem) - 18.75rem)); padding-block: 1.5rem; }
+}
+.dataBrowserDetails { display: grid; gap: 1.5rem; min-width: 0; padding-block: 1.5rem; }
+.dataBrowserDetails h2 { font-size: 0.875rem; }
+.dataBrowserPreference { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem 1rem; flex-wrap: wrap; padding: 1rem; border: 1px solid var(--border); border-radius: 0.75rem; background: var(--muted); }
+.dataBrowserPreference > div { flex: 1 1 12rem; min-width: 0; }
+.dataBrowserPreference > p { flex-basis: 100%; font-size: 0.75rem; }
+.dataBrowserPreference > button { font-size: 0.75rem; }
+.dataBrowserDetails > section { display: grid; gap: 0.5rem; }
+.dataManagement ul { display: grid; gap: 0.5rem; padding: 0; margin: 0; list-style: none; }
+.dataManagement li { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem; padding: 0.75rem; border: 1px solid var(--border); border-radius: 0.5rem; font-size: 0.8125rem; overflow-wrap: anywhere; }
+.dataManagement li > span:first-child { flex: 1 1 10rem; font-weight: 500; }
+.dataManagement li time { color: var(--muted-foreground); }
+.dataManagement [role="group"] { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; padding: 0.875rem; background: var(--muted); border-radius: 0.5rem; }
+.dataManagement [role="group"] > p { flex-basis: 100%; }
+.dataManagement .dataManagementRow { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem 1rem; flex-wrap: wrap; padding-block: 0.875rem; border-bottom: 0; }
+.dataManagementRow > div { min-width: 0; flex: 1 1 12rem; }
+.dataManagementRow h2 { font-size: 0.875rem; }
+.dataManagementRow p { font-size: 0.75rem; }
+.dataManagementRow p + p { margin-top: 0.125rem; }
+@media (max-width: 960px), (pointer: coarse) {
+  .dataManagement button { min-height: 2.75rem; }
 }
