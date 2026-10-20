@@ -10,13 +10,13 @@ import { createPersistedStore } from "@/lib/persisted-store"
 
 const chatPrefsSchema = z
   .object({
-    // wire 选择子（"provider:name"）；null/缺省=跟随空间缺省。
+    // raw业务label key（允许冒号，不拆分）；null/缺省=跟随空间缺省。
     model: z.string().nullable().optional(),
   })
   .strict()
 
 const store = createPersistedStore({
-  key: "kokoro.web.chat-prefs",
+  key: "kokoro.web.chat-prefs.v2",
   schema: chatPrefsSchema,
 })
 
@@ -28,7 +28,7 @@ export function writeChatModel(value: string | null): boolean {
   const parsed = chatPrefsSchema.safeParse({ model: value })
   if (!parsed.success) return false
   try {
-    window.localStorage.setItem("kokoro.web.chat-prefs", JSON.stringify(parsed.data))
+    window.localStorage.setItem("kokoro.web.chat-prefs.v2", JSON.stringify(parsed.data))
     return true
   } catch {
     // The persisted store reparses only a successful changed raw value.

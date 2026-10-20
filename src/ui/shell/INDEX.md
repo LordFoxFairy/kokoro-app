@@ -1,3 +1,7 @@
+## MC-02A Chat模型消费（2026-10-20）
+
+模型请求固定feature_key=chat，selector使用raw candidate.name，display_name只作展示；共享现composer-model helper。对话默认偏好仅从 `kokoro.web.chat-prefs.v2` 读取，旧key保留但不读/迁移/清除，不改写未知提交的冻结body/key或恢复状态机。
+
 <!-- SET47 archive consumer: 2026-10-15 -->
 SET47：use-session-archive只持AppFrame当前身份/engine/scope的命令资格、unknown与独立archiveRevision；use-active-archive-state只持当前active的owner证据与有界重读，不作全局真源。useConversationList以ACK先后顺序保护旧读，post-ACK state/list可覆盖旧回执；不delete/reconcile engine。page-clients在真实身份切换/logout退休全部live engine本地创建证明。
 

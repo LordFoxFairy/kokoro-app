@@ -9,7 +9,7 @@ vi.mock("@/lib/server/product-session", () => ({
   })),
 }))
 
-import { POST } from "@/app/api/session/[...path]/route"
+import { GET, POST } from "@/app/api/session/[...path]/route"
 import { GET as hubGet, PUT as hubPut } from "@/app/api/hub/[...path]/route"
 
 type RunningServer = { server: Server; baseUrl: string }
@@ -47,6 +47,11 @@ describe("Product BFF adapters against a local HTTP contract fixture", () => {
       request.on("data", (chunk: Buffer) => chunks.push(chunk))
       request.on("end", () => {
         receivedBody = Buffer.concat(chunks).toString("utf8")
+        if (request.url === "/v1/models?feature_key=chat") {
+          response.writeHead(200, { "content-type": "application/json", "x-request-id": "models-chat-http" })
+          response.end(JSON.stringify({ data: { models: [], next_cursor: null }, meta: { request_id: "models-chat-http" } }))
+          return
+        }
         if (request.url === `/v1/projects/${projectId}/skill-selection`) {
           const input = receivedBody ? JSON.parse(receivedBody) as { installation_ids: string[] } : { installation_ids: ["i1"] };
           response.writeHead(200, { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "selection-http" });
@@ -73,6 +78,15 @@ describe("Product BFF adapters against a local HTTP contract fixture", () => {
       if (!(key in original)) delete process.env[key]
     }
     Object.assign(process.env, original)
+  })
+
+  it("preserves the chat business filter through the real same-origin HTTP adapter", async () => {
+    const response = await GET(new Request("https://first.example/api/session/models?feature_key=chat"), { params: Promise.resolve({ path: ["models"] }) })
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ models: [], next_cursor: null })
+    expect(receivedPath).toBe("/v1/models?feature_key=chat")
+    expect(receivedAuthorization).toBe("Bearer product-access")
+    expect(receivedHeaders["x-kokoro-tenant-id"]).toBeUndefined()
   })
 
   it("forwards RFC 7239 authority and the sealed access token while keeping browser Host out of tenant selection", async () => {

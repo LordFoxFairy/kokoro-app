@@ -166,17 +166,46 @@ describe("fetchSnapshot：兼容 Session runtime 的 feature_key 增量元数据
 describe("listModels（MODEL-UX）：GET /models 过契约 Zod", () => {
   afterEach(() => vi.unstubAllGlobals())
 
-  it("解析候选列表（provider/name/is_default）+ 命中 /models 路径", async () => {
+  it("解析Public21稳定业务key、显式provider、原模型显示名与精确引用", async () => {
+    const candidate = {
+      provider: "real-provider", name: "chat/fast", is_default: true, display_name: "vendor/model-fast",
+      model_id: "11111111-1111-4111-8111-111111111111", revision_id: "22222222-2222-4222-8222-222222222222",
+      provider_id: "33333333-3333-4333-8333-333333333333", feature_key: "chat", request_model: "vendor/model-fast",
+    }
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(
-        JSON.stringify({ models: [{ provider: "anthropic", name: "claude-sonnet-4-6", is_default: true }] }),
+        JSON.stringify({ models: [candidate], next_cursor: null }),
         { status: 200, headers: { "content-type": "application/json" } },
       ),
     )
     vi.stubGlobal("fetch", fetchMock)
     const list = await createSessionClient({ baseUrl: "/api/session" }).listModels()
-    expect(list.models).toEqual([{ provider: "anthropic", name: "claude-sonnet-4-6", is_default: true }])
-    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/session/models")
+    expect(list).toEqual({ models: [candidate], next_cursor: null })
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/session/models?feature_key=chat")
+  })
+
+  it("拒绝旧四字段、缺分页和额外连接数据，不把别名当身份", async () => {
+    const candidate = {
+      provider: "real-provider", name: "chat/fast", is_default: true, display_name: "Optional alias",
+      model_id: "11111111-1111-4111-8111-111111111111", revision_id: "22222222-2222-4222-8222-222222222222",
+      provider_id: "33333333-3333-4333-8333-333333333333", feature_key: "chat", request_model: "vendor/model-fast",
+    }
+    const missingDisplay = Object.fromEntries(Object.entries(candidate).filter(([field]) => field !== "display_name"))
+    for (const body of [
+      { models: [{ provider: "real-provider", name: "chat/fast", is_default: true, display_name: "Optional alias" }], next_cursor: null },
+      { models: [candidate] },
+      { models: [missingDisplay], next_cursor: null },
+      { models: [{ ...candidate, feature_key: "image" }], next_cursor: null },
+      { models: [{ ...candidate, provider_id: "not-a-uuid" }], next_cursor: null },
+      { models: [{ ...candidate, display_name: "x".repeat(256) }], next_cursor: null },
+      { models: [{ ...candidate, base_url: "https://private.invalid" }], next_cursor: null },
+      { models: [candidate], next_cursor: null, secret_handle_ref: "private-reference" },
+    ]) {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(body)))
+      await expect(createSessionClient({ baseUrl: "/api/session" }).listModels()).rejects.toMatchObject({ reason: "parse" })
+    }
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ models: [candidate], next_cursor: "page-2" })))
+    expect(await createSessionClient({ baseUrl: "/api/session" }).listModels()).toEqual({ models: [candidate], next_cursor: "page-2" })
   })
 
   it("非 ok 时 fail-loud 抛错（不静默降级）", async () => {

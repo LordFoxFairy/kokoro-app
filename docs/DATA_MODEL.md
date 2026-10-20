@@ -1,3 +1,11 @@
+## 2026-10-20 对话偏好版本退役
+
+仅现本地UI默认偏好改用 `kokoro.web.chat-prefs.v2` 保存 raw label key；旧key不读取、不删除、不拆分/迁移，不清其他localStorage。新key可保存合法含冒号label。已冻结未知请求的body/key及会话恢复记录原样保留，不自动重发；无owner持久事实变化。
+
+## 2026-10-20 MC-02A 模型消费不新增事实
+
+Web只保存当前已读候选及选中的稳定label name，不将显示别名、上游request_model或provider名字转成另一个身份。精确model/revision/provider引用来自BFF/System事实，本片无持久化、SQL、receipt、模型连接/Key存储或新缓存。现selector/engine生命周期保持；preview/test夹具仅配对新wire，不冒真实模型或执行成功。
+
 ## 2026-10-20 Admin模型桥不新增业务事实
 
 本片仅透传Product会话准入与BFF正式模型管理请求，无Web数据库、receipt、连接配置或额外token持久化；不读取System数据库，不保存secret值，不放行模型、工具或扣费。模型目录和路由事实仍归System；未知命令恢复由Admin页面冻结意图承担，而非Product桥自动重试。

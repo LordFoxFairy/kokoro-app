@@ -1,3 +1,15 @@
+## 2026-10-20 MC-02A 主路径纠正门
+
+BFF/Agent 将message.model原样作为System label_key，现两selector必须直接用candidate.name（稳定业务key），provider/alias仅展示。Composer既有纯helper由Settings复用，不新增状态平台；引擎列表显式请求feature_key=chat并拒非chat候选，原同源catchall已保留query，补真实HTTP证明。聊天默认偏好仅改为 `kokoro.web.chat-prefs.v2`，旧key留存但不读/不拆冒号迁移，合法label可含冒号。未知提交恢复的冻结body/key不属于偏好迁移，本片不改写或自动重发。
+
+原阶段selector provider:name判断已撤回，前轮门及失败只作阶段证据；重新TDD并冻结全门/E2E，保原Mode lock/auth/preview/未知写保护和布局。
+
+## 2026-10-20 MC-02A Public21 模型候选消费门
+
+仅配对BFF Public21共享模型读表示：现contract/catalog.ts严格接必需display_name、model/revision/provider精确ID、feature/request_model及required nullable next_cursor。provider来自owner显式值；selector继续使用稳定business name/key，别名只展示，不改UI布局或chat状态机。现engine、preview/test夹具按同一wire配对，无新helper平台、数据存储或直接System连接。最终BFF提交由Root提供后从Git blob固定snapshot，再运行原六个public窄生成器；第七connector-command-errors独立pin保持。旧非model历史proof原封不动承接新21→20 test-only逆证，不建runtime fallback。
+
+范围排除自动化、Skills/MCP、登录、资金及正常3310；仅本candidate构建和既有相关E2E。Key保存/领取未在本片实施，模型/工具/扣费继续暂停。
+
 ## 2026-10-20 后台模型四操作配对（实施设计）
 
 Product现有Admin同源adapter只增加三个模型目录GET和单标签路由PUT；模型页面仍由独立Admin维护，浏览器→Product→BFF→System既有方向不变。不新增OAuth、服务凭据、网关或直接System调用，不修改Skills/MCP/自动化。模型路径与method精确闭集；PUT将原If-Match/If-None-Match、幂等键、正文及request-id透传给BFF，版本规则和管理员权限仍由BFF当次核验。响应不造业务成功，未知结果不自动重发。新System4公开修订消费通过BFF正规固定Publication配对，不恢复旧transport/gateway字段。

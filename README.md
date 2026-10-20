@@ -1,3 +1,7 @@
+## 2026-10-20 MC-02A Public21 模型消费者候选
+
+当前BFF snapshot固定 `513b18e2942f94c5f2d4f48d9f9d3010b92db7e6` /Public21，业务模型严格接有效显示名、精确引用与nullable分页，选择使用raw稳定label key，不加provider前缀、不以别名替代身份。六public生成器正规配对，第七独立connector错误profile不换。当前验收与正常未激活边界见 `docs/CURRENT.md`；本片不改UI布局/聊天状态机，Key保存/领取和模型/工具/扣费未放行。下方历史版本按当时状态读取。
+
 ## MCP 可用性消费（2026-10-19）
 
 严格消费owner五态，卡片/详情/选择器共用只读展示，不把active当作当前可用。原status/enabled、同源身份、CAS及原命令恢复不改。完整本仓门、4240测试及38原Playwright通过；正常运行与Manus像素级完整对照另验，见当前事实。

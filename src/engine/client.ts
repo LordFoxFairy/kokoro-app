@@ -463,7 +463,7 @@ export function createSessionClient(options: { baseUrl: string }): SessionClient
     },
 
     listModels: async () => {
-      const target = url(modelCandidatesPath())
+      const target = url(`${modelCandidatesPath()}?feature_key=chat`)
       let response: Response
       try {
         response = await fetch(target, { cache: "no-store" })
@@ -473,7 +473,11 @@ export function createSessionClient(options: { baseUrl: string }): SessionClient
       if (!response.ok) {
         throw await httpError("GET", target, response)
       }
-      return parseJsonResponse(response, (raw) => modelCandidateListSchema.parse(raw))
+      const list = await parseJsonResponse(response, (raw) => modelCandidateListSchema.parse(raw))
+      if (list.models.some((candidate) => candidate.feature_key !== "chat")) {
+        throw new SessionClientError("parse", "Chat model catalog contains another business feature")
+      }
+      return list
     },
 
     fetchSnapshot: async (sessionId, options) => {

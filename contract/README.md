@@ -1,3 +1,7 @@
+## 2026-10-20 Public21 当前固定消费者
+
+正式BFF `513b18e2942f94c5f2d4f48d9f9d3010b92db7e6` 的 `/contract/openapi/v1/openapi.yaml` 原始Git blob SHA256 `a902a20ad95e46c01bfc8f5a80260c14565cfe557137759d5ecd42bc1a60f7c2`，Public21.0.0/165。仅共享模型消费表示变化，六现public generator沿固定完整snapshot正规生成，其他操作闭包不扩；connector-command-errors独立来源pin不变。test-only21→20逆证完整恢复原Public20，并保旧20→19及双父oracle字节；无runtime union/fallback。模型decoder新closed shape与稳定选择身份见API_CONTRACT，正常激活与执行另验。下面均属历史记录。
+
 ## 2026-10-19 收尾集成候选：完整既有分支与固定 Public19
 
 只集成 main d42fe1d2、PR37 的原生浏览器登录回归、PR38 的六页设置与完整 local362a9b7；保真实 merge ancestry，不按功能片继续开 PR。知识/记忆等其余混合工作保持原位，不在本次顺手接通。唯一 BFF snapshot 固定已合 owner08a2120ea85b6cad5cf6e839ef14dbf83d908b92、Public19.0.0/165、SHA256955412b680bf7a2529c4c35f553ff272d7361769ea95bb441ba820b552ffc564；六个既有窄 generator 正规配对，connector-command-errors 独立 profile 不换 pin。

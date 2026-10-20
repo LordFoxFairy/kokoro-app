@@ -17,15 +17,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+import { modelLabel, modelSelector } from "@/ui/composer/composer-model";
+
 import { readChatModel, writeChatModel } from "../chat-prefs";
 import styles from "./settings-sections.module.css";
 
 const FOLLOW_PROFILE = "";
 const FOLLOW_PROFILE_VALUE = "__follow_profile__";
 
-function modelSelector(model: ModelCandidate): string {
-  return `${model.provider}:${model.name}`;
-}
 
 // —— 卡三：对话偏好 —— 缺省模型（/models）；就地存 localStorage，
 // 工作台新对话首帧预填（会话级锁语义不变）。
@@ -165,7 +164,7 @@ export function ChatPreferencesSection({
                   key={modelSelector(candidate)}
                   value={modelSelector(candidate)}
                 >
-                  {candidate.name}
+                  {modelLabel(candidate)}
                 </SelectItem>
               ))}
             </SelectGroup>

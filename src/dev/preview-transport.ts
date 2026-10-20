@@ -134,8 +134,8 @@ function previewFailureProfile(content: string): AgentFailureProfile | null {
 // decides which workflow can show this list; the transport only owns the API
 // shape and fixture data.
 const PREVIEW_MODELS = [
-  { provider: "kokoro", name: "standard-new", is_default: true, display_name: "标准 新" },
-  { provider: "openai", name: "gpt-image-2", is_default: false, display_name: "GPT Image 2" },
+  { provider: "kokoro", name: "standard-new", is_default: true, display_name: "标准 新", model_id: "11111111-1111-4111-8111-111111111111", revision_id: "22222222-2222-4222-8222-222222222222", provider_id: "33333333-3333-4333-8333-333333333333", feature_key: "chat", request_model: "standard-new" },
+  { provider: "openai", name: "gpt-image-2", is_default: false, display_name: "GPT Image 2", model_id: "11111111-1111-4111-8111-111111111111", revision_id: "22222222-2222-4222-8222-222222222222", provider_id: "33333333-3333-4333-8333-333333333333", feature_key: "chat", request_model: "gpt-image-2" },
 ] as const
 
 export function createPreviewClient(options?: { stepMs?: number }): SessionClient {
@@ -430,7 +430,7 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
     // The preview catalog mirrors the two creation-specific model labels used
     // by the desktop reference. Neutral/Website/App states hide this control
     // at the shell boundary, so the catalogue never adds toolbar noise there.
-    listModels: () => Promise.resolve({ models: [...PREVIEW_MODELS] }),
+    listModels: () => Promise.resolve({ models: [...PREVIEW_MODELS], next_cursor: null }),
 
 
     // The live Manus baseline is an empty library for a new workspace. Keep

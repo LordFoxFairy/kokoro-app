@@ -1,17 +1,22 @@
-// Composer 模型选择器（MODEL-UX）：候选下拉渲染 + 选择回调（wire "provider:name"）+ 首条锁定态 + 空候选隐藏。
+// Composer 模型选择器（MODEL-UX）：候选下拉渲染 + 选择回调（raw business label key）+ 首条锁定态 + 空候选隐藏。
 import { readFileSync } from "node:fs"
 import { act, cleanup, createEvent, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { renderHook } from "@testing-library/react"
+import { createSessionEngine } from "@/engine/machine"
+import { createFakeClient, createMemoryStorage, settle } from "../engine/fakes"
+import { useComposerSelectors } from "@/ui/shell/use-composer-selectors"
 import { createRef, type FormEvent, useState } from "react"
 
+import type { ConversationStore } from "@/core/conversations"
 import type { ModelCandidate } from "@/contract/http"
 import { LocaleProvider } from "@/i18n/context"
 import { Composer } from "@/ui/composer/composer"
 import { CreationIntentPill, type CreationIntent } from "@/ui/composer/creation-intent-pill"
 
 const MODELS: ModelCandidate[] = [
-  { provider: "anthropic", name: "claude-sonnet-4-6", is_default: true },
-  { provider: "openai", name: "gpt-5", is_default: false },
+  { provider: "anthropic", name: "claude-sonnet-4-6", is_default: true, display_name: "claude-sonnet-4-6", model_id: "11111111-1111-4111-8111-111111111111", revision_id: "22222222-2222-4222-8222-222222222222", provider_id: "33333333-3333-4333-8333-333333333333", feature_key: "chat", request_model: "claude-sonnet-4-6" },
+  { provider: "openai", name: "gpt-5", is_default: false, display_name: "gpt-5", model_id: "11111111-1111-4111-8111-111111111111", revision_id: "22222222-2222-4222-8222-222222222222", provider_id: "33333333-3333-4333-8333-333333333333", feature_key: "chat", request_model: "gpt-5" },
 ]
 
 function renderComposer(overrides: Partial<Parameters<typeof Composer>[0]> = {}) {
@@ -86,15 +91,47 @@ describe("Composer model selector", () => {
     expect(screen.getByText("claude-sonnet-4-6")).toBeTruthy()
   })
 
-  it("展开下拉选非缺省项 → onModelChange 收到 provider:name 选择子", () => {
-    const props = renderComposer()
-    fireEvent.pointerDown(screen.getByRole("button", { name: /Switch model:/ }))
-    fireEvent.click(screen.getByRole("menuitemradio", { name: "gpt-5" }))
-    expect(props.onModelChange).toHaveBeenCalledWith("openai:gpt-5")
+  it("展示别名但真实UI提交给engine的model是raw业务label key", async () => {
+    const client = createFakeClient()
+    const engine = createSessionEngine({ client, storage: createMemoryStorage<ConversationStore>(null) })
+    try {
+      renderComposer({
+        models: [MODELS[0]!, { ...MODELS[1]!, provider: "real-provider", name: "chat/fast", display_name: "Optional alias", request_model: "vendor/model-fast" }],
+        onModelChange: value => engine.setModel(value),
+        draft: "stable label request", canSend: true,
+        onSubmit: event => { event.preventDefault(); engine.submit("stable label request") },
+      })
+      fireEvent.pointerDown(screen.getByRole("button", { name: /Switch model:/ }))
+      fireEvent.click(screen.getByRole("menuitemradio", { name: "Optional alias" }))
+      fireEvent.submit(screen.getByRole("form", { name: "Message editor" }))
+      await settle()
+      expect(client.createCalls[0]?.body.model).toBe("chat/fast")
+    } finally { engine.dispose() }
+  })
+
+  it("旧provider:name偏好不注入engine，旧key和其他存储保持原样", async () => {
+    const old = JSON.stringify({ model: "real-provider:chat/fast" })
+    window.localStorage.setItem("kokoro.web.chat-prefs", old)
+    window.localStorage.setItem("unrelated-test-entry", "preserve")
+    window.localStorage.removeItem("kokoro.web.chat-prefs.v2")
+    const client = createFakeClient()
+    const engine = createSessionEngine({ client, storage: createMemoryStorage<ConversationStore>(null) })
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ models: MODELS, next_cursor: null })))
+    const hook = renderHook(() => useComposerSelectors(engine))
+    try {
+      await act(async () => { await settle(); engine.submit("no legacy preference"); await settle() })
+      expect(client.createCalls[0]?.body).not.toHaveProperty("model")
+      expect(window.localStorage.getItem("kokoro.web.chat-prefs")).toBe(old)
+      expect(window.localStorage.getItem("unrelated-test-entry")).toBe("preserve")
+    } finally {
+      hook.unmount(); engine.dispose(); vi.unstubAllGlobals()
+      window.localStorage.removeItem("kokoro.web.chat-prefs")
+      window.localStorage.removeItem("unrelated-test-entry")
+    }
   })
 
   it("selectedModel 命中候选时显示该项为当前", () => {
-    renderComposer({ selectedModel: "openai:gpt-5" })
+    renderComposer({ selectedModel: "gpt-5" })
     // 触发器展示当前选择的名称。
     const trigger = screen.getByRole("button", { name: /Switch model:/ })
     expect(trigger.textContent).toContain("gpt-5")
@@ -112,7 +149,7 @@ describe("Composer model selector", () => {
   })
 
   it("modelLocked → 只读锁定态（不可展开切换）", () => {
-    renderComposer({ selectedModel: "openai:gpt-5", modelLocked: true })
+    renderComposer({ selectedModel: "gpt-5", modelLocked: true })
     expect(screen.queryByRole("button", { name: /Switch model:/ })).toBeNull()
     const locked = screen.getByRole("button", { name: /locked this turn/i })
     expect(locked.hasAttribute("disabled")).toBe(true)
@@ -204,10 +241,10 @@ describe("Composer model selector", () => {
     renderComposer({
       creationIntent: "design",
       models: [
-        { provider: "kokoro", name: "standard-new", is_default: true, display_name: "Standard New" },
-        { provider: "openai", name: "gpt-image-2", is_default: false, display_name: "GPT Image 2" },
+        { provider: "kokoro", name: "standard-new", is_default: true, display_name: "Standard New", model_id: "11111111-1111-4111-8111-111111111111", revision_id: "22222222-2222-4222-8222-222222222222", provider_id: "33333333-3333-4333-8333-333333333333", feature_key: "chat", request_model: "standard-new" },
+        { provider: "openai", name: "gpt-image-2", is_default: false, display_name: "GPT Image 2", model_id: "11111111-1111-4111-8111-111111111111", revision_id: "22222222-2222-4222-8222-222222222222", provider_id: "33333333-3333-4333-8333-333333333333", feature_key: "chat", request_model: "gpt-image-2" },
       ],
-      preferredModelSelector: "openai:gpt-image-2",
+      preferredModelSelector: "gpt-image-2",
       hideModelSelector: false,
     })
 
@@ -221,15 +258,15 @@ describe("Composer model selector", () => {
     const props = renderComposer({
       creationIntent: "design",
       models: [
-        { provider: "kokoro", name: "standard-new", is_default: true, display_name: "Standard New" },
-        { provider: "openai", name: "gpt-image-2", is_default: false, display_name: "GPT Image 2" },
+        { provider: "kokoro", name: "standard-new", is_default: true, display_name: "Standard New", model_id: "11111111-1111-4111-8111-111111111111", revision_id: "22222222-2222-4222-8222-222222222222", provider_id: "33333333-3333-4333-8333-333333333333", feature_key: "chat", request_model: "standard-new" },
+        { provider: "openai", name: "gpt-image-2", is_default: false, display_name: "GPT Image 2", model_id: "11111111-1111-4111-8111-111111111111", revision_id: "22222222-2222-4222-8222-222222222222", provider_id: "33333333-3333-4333-8333-333333333333", feature_key: "chat", request_model: "gpt-image-2" },
       ],
-      preferredModelSelector: "openai:gpt-image-2",
+      preferredModelSelector: "gpt-image-2",
       selectedModel: null,
       hideModelSelector: false,
     })
 
-    expect(props.onModelChange).toHaveBeenCalledWith("openai:gpt-image-2")
+    expect(props.onModelChange).toHaveBeenCalledWith("gpt-image-2")
   })
 
   it("简报创作态使用投影片胶囊文案而不是入口文案", () => {

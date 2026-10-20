@@ -1,3 +1,15 @@
+## 2026-10-20 MC-02A Public21 Chat模型消费完成源码验收（正常未切）
+
+正式从BFF `513b18e2942f94c5f2d4f48d9f9d3010b92db7e6` Git blob固定Public21.0.0/165，SHA256 `a902a20ad95e46c01bfc8f5a80260c14565cfe557137759d5ecd42bc1a60f7c2`。六现public generator正规write，七生成check全0；connector-command-errors独立source/pin不变。现catalog严格接必需有效display_name、model/revision/provider精确ID、feature/request_model及nullable next_cursor；未知/旧/extra字段拒绝。新test-only21→20全文逆回后委托原20→19及双父proof，旧oracle字节保持。
+
+初期仅配对decoder而保留provider:name的阶段判断已撤回：BFF/Agent实际把message.model当System label_key。新增4处真实RED证明旧UI把real-provider:chat/fast发给engine、旧偏好注入请求、缺chat query及非chat混入；现Composer菜单/Settings复用原helper直接使用raw candidate.name，展示仅必需display_name，不以provider/alias/request_model拼身份。Chat client固定feature_key=chat且拒非chat候选，真实same-origin HTTP验证query原样到BFF。默认偏好仅使用kokoro.web.chat-prefs.v2，旧key保留但不读/迁移/删除，合法label可含冒号；真实hook→engine回归证明旧值不进入message。原未知提交冻结body/key、Mode lock、auth、preview及状态机不改，无UI布局变化。
+
+最终Node22/pnpm11.25、Vitest最多2 workers：七生成check、contract26文件295PASS、architecture50PASS、lint、typegen/types、完整233文件4442PASS/0SKIP、own production webpack build、post-build types全部exit0。既有完整桌面/手机Playwright108PASS，candidate自有端口和子进程已自动退出并核验关闭；随后正规next typegen＋tsc再次exit0，Next dev产生的next-env路径已由官方typegen恢复，未手改generated。受管Redis只复用原fixture随机prefix，前后88keys/摘要相同，无flush或新实例。主方独立同源副本另验7生成、31文件735合同/受影响engine/UI/偏好/HTTP、architecture50及lint/types/build/posttypes全0，证据与本writer完整门分开记录。
+
+首轮合法Public21被旧strict decoder拒收的RED保留；新负控误用SessionClientError.kind、lint未使用解构变量及新HTTP夹具缺BFF meta均已最窄修正。前轮阶段默认4439PASS/1OIDC刷新fixture失败及1Radix跨realm unhandled保留，未改登录/Skills源或放宽门；最终完整清单自然通过，不将环境时序通过称作修复那些模块。模型、工具与扣费仍暂停，Key保存/领取不在本片，正常3310源码/输出/进程/配置未动，未push/commit/切分支或扩大其他owner写区。
+
+App基线 `3042ae753e9db2e2204562d8a070c0685bdb0306`。Root ignored `var/dev/system-management-20261020/app-mc02a-*` 保存全部阶段RED/首次失败、最终门、Redis与自有服务清理及完整path/hash冻结收据；完整正常owner链及部署由Root另验。下方为历史状态，不覆盖当前raw label/v2/chat filter结论。
+
 ## 2026-10-20 后台模型 Product 桥与 Public20（本地候选）
 
 保留已合设置PR43全部成果，仅在既有Admin同源桥补齐三个模型目录GET和精确单标签路由PUT、原CAS头透传与读取拒绝命令头；Product同一会话、原request-id、幂等键／正文和正式owner错误保持，不建立模型执行入口或旧数据兼容层。System4的revision由BFF Public20正规固定artifact消费，其他公开操作完整不变；六个现有窄生成器全部正规write通过，旧Public19 parent proof原封不动保留，由新test-only Public20→19精确逆证承接历史检查，不是运行fallback。

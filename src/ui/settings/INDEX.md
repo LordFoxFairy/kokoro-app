@@ -1,3 +1,7 @@
+## MC-02A Chat模型消费（2026-10-20）
+
+模型请求固定feature_key=chat，selector使用raw candidate.name，display_name只作展示；共享现composer-model helper。对话默认偏好仅从 `kokoro.web.chat-prefs.v2` 读取，旧key保留但不读/迁移/清除，不改写未知提交的冻结body/key或恢复状态机。
+
 账户积分：`sections/account-credit-summary.tsx` 仅复用稳定 BillingClient 的 summary 读取及严格错误分类、十秒预算和 BigInt 格式化，不读取账本或执行开户/支付；只在已准入且主体与代际有效时加载，切身份、撤准入、卸载或进入登录方式内页即退休。展示真实可用/冻结积分、账户状态与未开户/失败/重试，未知不合成零或套餐，preview 原值不变。
 
 帮助中心：`sections/help-section.tsx` 在当前语言的八篇静态指南标题与正文内搜索，四类数量从目录派生，筛选与单项展开只驻留当前页面。复用 Accordion 与原 onSelectSetting 跳转，不请求资料、发送客服消息或保存查询。原账户/分享正文整合入指南，能力范围常驻底部；离页重入清空筛选与展开。
@@ -101,7 +105,7 @@ Web基线91fb1aee87df9e6dc0acadcdda4db5375623a13a，939 tracked clean；runtime_
 - `account-sessions-client.ts` / `use-account-sessions.ts` / `sections/account-devices-dialog.tsx`：账户行的独立登录会话管理，分别负责严格有界同源 I/O、subject/admitted generation 内存状态和当前/其他会话及移除确认。未知写结果设独立写栅栏，只有成功首屏读取清除；分页不能恢复写资格，关闭或身份退役取消迟到结果。
 - `SettingsModal`（`settings-modal.tsx`）：props `brandName?` / `brandMark?` / `brandLogoUrl?` / `initialTab`(SettingsTab) / `onClose` / `onTabChange?`。客户端组件；tab 内部自持（`initialTab` 定初值、变化即重置，`onTabChange` 上抛供 AppFrame 同步 URL）。**不自持匿名闸**——只在 AppFrame（信封有效）内渲染，会话态由上游保证。
 - `SettingsTab` / `SETTINGS_TABS` / `normalizeSettingsTab`（`settings-modal.tsx`）：tab 键类型与 URL 值归一（shell/rail 复用）。
-- `chat-prefs.ts`：对话偏好本地 store（localStorage `kokoro.web.chat-prefs`）。`readChatModel`/`readChatAgent`/`writeChatModel`/`writeChatAgent`；null=跟随空间缺省（不上 wire）。
+- `chat-prefs.ts`：对话偏好本地 store（localStorage `kokoro.web.chat-prefs.v2`）。`readChatModel`/`readChatAgent`/`writeChatModel`/`writeChatAgent`；null=跟随空间缺省（不上 wire）。
 
 ## 协作者
 上游：`@/components/blocks/app-frame/app-frame`（第一个 site 工作区入口，持模态开关态 + `#/account/settings/` URL 同步（兼容旧 query 深链））。下游：shadcn Dialog/Tabs/Avatar primitives、`@/ui/theme`（主题）、`@/i18n`（语言 + settings.* 文案）、`@/ui/shell/page-clients`（team/billing 客户端）、`@/billing/format`。

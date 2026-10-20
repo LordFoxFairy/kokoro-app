@@ -7,7 +7,7 @@ import { useT } from "@/i18n/context"
 
 import { ComposerMenu } from "./composer-menu"
 import { isAgentMode, modeOptions } from "./mode-options"
-import { modelLabel } from "./composer-model"
+import { modelLabel, modelSelector } from "./composer-model"
 import styles from "./composer-controls.module.css"
 
 type ComposerSelectorsProps = {
@@ -36,7 +36,7 @@ export function ComposerSelectors({ mode, modeLabel, onModeChange, modeLocked, m
           <span>{modelLabel(currentModel)}</span><Lock className={styles.lock} data-icon="inline-end" />
         </Button>
       ) : (
-        <ComposerMenu triggerClassName={styles.mode ?? ""} dataComposerControl="model" triggerLabel={t("composer.modelSwitch")} triggerTitle={currentModelTriggerTitle} trigger={<><span data-slot={currentModelNewBadgeLabel ? "new-model-name" : undefined}>{currentModelTriggerLabel}</span>{currentModelNewBadgeLabel ? <span className={styles.newModelBadge} data-slot="new-model-badge" aria-hidden="true">{currentModelNewBadgeLabel}</span> : null}<ChevronDown className={styles.chevron} data-icon="inline-end" /></>} options={models.map((model) => ({ key: `${model.provider}:${model.name}`, label: modelLabel(model) }))} selectedKey={currentSelector ?? ""} onSelect={onModelChange} align="start" />
+        <ComposerMenu triggerClassName={styles.mode ?? ""} dataComposerControl="model" triggerLabel={t("composer.modelSwitch")} triggerTitle={currentModelTriggerTitle} trigger={<><span data-slot={currentModelNewBadgeLabel ? "new-model-name" : undefined}>{currentModelTriggerLabel}</span>{currentModelNewBadgeLabel ? <span className={styles.newModelBadge} data-slot="new-model-badge" aria-hidden="true">{currentModelNewBadgeLabel}</span> : null}<ChevronDown className={styles.chevron} data-icon="inline-end" /></>} options={models.map((model) => ({ key: modelSelector(model), label: modelLabel(model) }))} selectedKey={currentSelector ?? ""} onSelect={onModelChange} align="start" />
       )) : null}
       {modeLocked ? (
         <Button variant="ghost" type="button" className={`${styles.mode} ${styles.modeSelect} ${styles.modeLocked}`} data-composer-control="mode" disabled aria-label={t("composer.modeLocked", { mode: modeLabel })} title={`${modeLabel} — ${t("composer.modeLockedTitle")}`}>

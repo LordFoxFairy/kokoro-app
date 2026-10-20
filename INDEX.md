@@ -1,3 +1,7 @@
+## 2026-10-20 MC-02A Public21 模型消费
+
+现 `src/contract/catalog.ts` 严格消费display_name/精确三ID/feature/request_model/required nullable next_cursor；engine与selector路径不另造身份或状态机。直接preview/test夹具随新wire配对；engine验证合法chat/fast及拒绝旧/extra字段，Composer真实UI→engine用例保raw label key。固定BFF513b18e/Public21的正规snapshot和六生成入口不扩operation，第七独立profile保持；新test-only `bff-shared-model-parent.ts` 精确逆回20再委托原20/19证明。源码门与E2E收据见CURRENT。
+
 ## 2026-10-20 后台模型 Product 桥与 Public20（本地候选）
 
 保留已合设置PR43全部成果，仅在既有Admin同源桥补齐三个模型目录GET和精确单标签路由PUT、原CAS头透传与读取拒绝命令头；Product同一会话、原request-id、幂等键／正文和正式owner错误保持，不建立模型执行入口或旧数据兼容层。System4的revision由BFF Public20正规固定artifact消费，其他公开操作完整不变；六个现有窄生成器全部正规write通过，旧Public19 parent proof原封不动保留，由新test-only Public20→19精确逆证承接历史检查，不是运行fallback。

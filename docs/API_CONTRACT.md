@@ -1,3 +1,13 @@
+## 2026-10-20 MC-02A Chat模型请求与身份
+
+业务 `message.model` 必须为 raw candidate.name／System label_key，例如chat/fast，不加provider前缀、不用alias/request_model替代。Chat SessionClient固定 `/models?feature_key=chat`；同源query原样到BFF，响应只接受feature_key=chat，否则整体parse失败。候选显示仍用display_name；没有旧provider:name运行时兼容。
+
+## 2026-10-20 Public21 ModelCandidate 严格消费
+
+`GET /api/session/models`消费BFF既有 `/v1/models`：closed item required provider/name/is_default/display_name/model_id/revision_id/provider_id/feature_key/request_model；name为稳定label key，provider用owner明确值（均1..128），display_name为有效别名或原模型名（1..255），三ID为UUID，feature1..128、request_model1..255。closed data必需models及nullable next_cursor。拒旧四字段、缺字段及额外连接/密钥内容，不按别名/slash猜身份。
+
+Public21仍165 operations；正式snapshot/pin固定Root已交付513b18e的Git原字节并正规生成。六public generator及已有非model闭包不扩面，第七独立connector-command-errors来源不换。浏览器和同源桥仍只访问BFF，模型执行许可不变。
+
 ## 2026-10-20 Admin模型同源桥（实施设计）
 
 现有 `/api/admin/[...path]` 增加 GET `/api/admin/model-routing`、`/api/admin/model-labels`、`/api/admin/model-revisions` 与 PUT `/api/admin/model-routing/{label_id}`；上游为BFF相同 `/v1/admin/*`。只接受正式方法和路径，不放通任意model前缀；Product Session、可信request-id、no-store与原错误envelope保持。PUT透明传递原 `If-Match`／`If-None-Match`，非法前置条件由owner正式400/428决定；不替调用者构造版本或新幂等键。目录GET的命令/CAS头被拒绝，不借桥层丢弃头将非法读转为合法读。
