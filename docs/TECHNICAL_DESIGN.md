@@ -1,3 +1,9 @@
+## 2026-10-20 聊天执行未就绪局部修复
+
+已真实复现BFF执行关闭时pre-admission503/agent_not_configured，在Agent调度前返回；前端原本用通用destructive Alert并空说明列，造成整行红字＋孤立重试按钮。仅在当前无unattributed RunFailure时映射具名ExecutionUnavailableFeedback，role=status、短标题/说明、由原canRetryPendingSubmission与onRetry控制显式恢复。错误码同时涵盖停用或未配置，故不臆造paused状态；真正run.failed与402保持原告警/恢复与资金语义。
+
+不新增API/数据/依赖、读取探针、轮询或第二网络协议；不修改AgentEnabled、模型/工具/扣费开关，不改项目/自动化/连接器。现768px阅读轴、Composer和原生MessageScroller不重写。验证使用真实已关闭守卫的浏览器拒绝路径、现组件定向回归与原engine重试保障；正常页面截图和源码门分开记录。
+
 ## 2026-10-20 MC-02 Public21.1模型配置桥（本地候选）
 
 唯一BFF固定 `f3da7d5feb855b2b97c77a6ae9928cee96e1b8aa` /21.1.0/175，SHA256 `4db8bab6159a2f36061f8b292fba9074ea2614adab2a1489bf9d1b3b066b6fe3`。仅扩现Admin Product adapter的10具名模型配置路径，复用原Product session、服务身份和request-id，原body/key/CAS透传；发布严格证明实际EOF，不虚构JSON正文或丢幂等头。没有直连System/读取运行Key、模型执行、自动重试或新的OAuth。

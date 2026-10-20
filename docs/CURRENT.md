@@ -1,3 +1,11 @@
+## 2026-10-20 聊天执行未就绪反馈（局部修复）
+
+仅将明确 `agent_not_configured` 且无真实 run failure 的提交前依赖状态，拆为紧凑中性反馈组件；原402、真实运行失败、未知提交、恢复能力及原key/body流程不改。中英文完整、role=status、装饰图标隐藏，只有明确点击原恢复按钮才调用既有回调；没有自动发送、轮询、owner/API/Schema或新依赖。
+
+正常3310先复现红字/孤立重试，再验新卡片、历史、草稿编辑与键盘到达按钮（568×766）。BFF前置guard为disabled，测试请求止于该guard，无模型/工具/扣费；不据此称全尺寸或竞品一比一完成。原后台错误标签仍有工具准入阻塞，本段不冒MC-02后台写旅程或全目标闭环。
+
+业务停写的1119输入隔离副本：contract295、architecture50、lint/types、完整233文件4446PASS/0skip、webpack build/posttypes均exit0。全测后仅整理两个新增用例格式、将“无能力无按钮”断言加强为实际新标签；最终53项与lint重跑通过，其余1118输入hash不变，活动与隔离源码一致。只读复核Approved，新增只占原suite两用例；未增加skip/timeout、改engine/资金、其他开发者自动化/连接器或运行配置。实际截图及阶段/最终收据仅Root ignored chat-feedback-20261020。
+
 ## 2026-10-20 MC-02 Public21.1模型配置桥（本地候选）
 
 唯一BFF固定 `f3da7d5feb855b2b97c77a6ae9928cee96e1b8aa` /21.1.0/175，SHA256 `4db8bab6159a2f36061f8b292fba9074ea2614adab2a1489bf9d1b3b066b6fe3`。仅扩现Admin Product adapter的10具名模型配置路径，复用原Product session、服务身份和request-id，原body/key/CAS透传；发布严格证明实际EOF，不虚构JSON正文或丢幂等头。没有直连System/读取运行Key、模型执行、自动重试或新的OAuth。

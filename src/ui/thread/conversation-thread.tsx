@@ -20,6 +20,7 @@ import type { ToolDecision } from "@/engine/hitl-staging"
 import { useT } from "@/i18n/context"
 import type { MessageKey } from "@/i18n/messages"
 
+import { ExecutionUnavailableFeedback } from "./execution-unavailable-feedback"
 import { AssistantTurn } from "./assistant-turn"
 import { DeliverySection } from "./delivery-card"
 import { MessageBubble } from "./message-bubble"
@@ -209,6 +210,8 @@ function ConversationThreadSurface({
             </div>
           </AlertDescription>
         </Alert>
+      ) : thread.unattributedFailure === null && submissionFailureCode === "agent_not_configured" ? (
+        <ExecutionUnavailableFeedback canRetry={canRetryPendingSubmission} retrying={isStreaming} onRetry={onRetry} />
       ) : (
         <Alert variant="destructive" className={styles.error}>
           <AlertTitle>{t(failureCopyKey(thread.unattributedFailure, submissionFailureCode))}</AlertTitle>

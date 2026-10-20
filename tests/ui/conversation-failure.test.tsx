@@ -54,7 +54,7 @@ function failedThread(code: AgentFailureCode): SessionStreamState {
   return failedThreadWithProfile(failureProfile(code))
 }
 
-function renderFailure(thread: SessionStreamState, onRetry = vi.fn(), submissionFailureCode?: string | null) {
+function renderFailure(thread: SessionStreamState, onRetry = vi.fn(), submissionFailureCode?: string | null, canRetryPendingSubmission = false) {
   return render(
     <ConversationThread
       sessionId="ses_1"
@@ -63,7 +63,7 @@ function renderFailure(thread: SessionStreamState, onRetry = vi.fn(), submission
       isReconnecting={false}
       hasFailed={thread.unattributedFailure !== null || submissionFailureCode !== undefined}
       {...(submissionFailureCode === undefined ? {} : { submissionFailureCode })}
-      canRetryPendingSubmission={false}
+      canRetryPendingSubmission={canRetryPendingSubmission}
       creditRejected={false}
       onOpenBilling={vi.fn()}
       onOpenPricing={vi.fn()}
@@ -308,7 +308,29 @@ describe("failureCopyKey — generated 10-code safe profile localization", () =>
     const thread = createSessionStreamState()
     thread.messages = [{ id: "m_u", role: "user", content: "start", runId: "m_u" }]
     renderFailure(thread, vi.fn(), "agent_not_configured")
-    expect(screen.getByText(zh["fail.agentNotConfigured"])).toBeInTheDocument()
+    expect(screen.getByText(tr("fail.agentNotConfigured"))).toBeInTheDocument()
+  })
+
+  it("未就绪的执行依赖以中性状态说明呈现，历史内容保留且不冒充运行失败", () => {
+    const thread = createSessionStreamState()
+    thread.messages = [{ id: "paused_prompt", role: "user", content: "keep my original prompt", runId: "paused_prompt" }]
+    const retry = vi.fn()
+    renderFailure(thread, retry, "agent_not_configured")
+
+    expect(screen.getByRole("status")).toHaveTextContent(tr("fail.agentNotConfigured"))
+    expect(screen.queryByRole("alert")).toBeNull()
+    expect(screen.getByText("keep my original prompt")).toBeVisible()
+    expect(retry).not.toHaveBeenCalled()
+    expect(screen.queryByRole("button", { name: tr("thread.retryOriginal") })).toBeNull()
+  })
+
+  it("执行未就绪时只有明确点击才恢复原提交，不自动发送或隐藏合法恢复入口", () => {
+    const retry = vi.fn()
+    renderFailure(createSessionStreamState(), retry, "agent_not_configured", true)
+
+    expect(retry).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole("button", { name: tr("thread.retryOriginal") }))
+    expect(retry).toHaveBeenCalledTimes(1)
   })
 
   it("中文安全文案不承诺重发原消息或暴露错误详情", () => {
