@@ -2,6 +2,7 @@
 .wrap { container: composer / inline-size; display: flex; min-width: 0; flex-shrink: 0; flex-direction: column; align-items: center; gap: 0.35rem; padding: 0 1.25rem max(1rem, env(safe-area-inset-bottom)); background: var(--background); }
 .disclaimer { width: min(var(--content-width), 100%); margin: -0.05rem 0 0; color: var(--muted-foreground); font-size: 0.68rem; line-height: 1.25; text-align: center; }
 .composer { position: relative; display: flex; flex-direction: column; width: min(var(--content-width), 100%); gap: 0.45rem; border: 1px solid var(--border); border-radius: var(--radius-xl); background: var(--card); padding: 0.75rem 0.85rem 0.65rem; box-shadow: none; transition: border-color var(--motion-fast) var(--ease-standard), box-shadow var(--motion-fast) var(--ease-standard); }
+.inputError { margin: 0; padding-inline: 1rem; color: var(--destructive); font-size: 0.8125rem; line-height: 1.25rem; overflow-wrap: anywhere; }
 .controls { display: flex; min-width: 0; align-items: center; justify-content: flex-start; gap: 0.5rem; }
 .leadingActions { display: flex; min-width: 2rem; align-items: center; gap: 0.25rem; }
 .leadingActions button { border-radius: 999px; color: color-mix(in srgb, var(--foreground) 72%, var(--primary) 28%); }

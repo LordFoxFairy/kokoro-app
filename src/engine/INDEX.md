@@ -99,3 +99,5 @@ SET47：可选EngineSnapshot.locallyCreatedSessionId仅证明当前engine尚未�
 ## 项目技能选择意图
 
 `setSelectedSkillSourceRefs(undefined)`恢复作用域默认（Project省略继承、Direct为[]），[]明确不选，非空refs显式覆盖。execution adapter只构造wire，machine负责新会话/切换退休与未知提交冻结；重试不重新读取当前偏好。
+
+- `EngineSnapshot.hasPendingSubmission` 只读投影原冻结 create 是否仍未获回执，供浏览器 scope 租约保护使用；不同于仅在合法 error 相位为真的 `canRetryPendingSubmission`。不作为服务端成功或授权证明，不落盘。

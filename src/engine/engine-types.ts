@@ -51,6 +51,8 @@ export type EngineSnapshot = {
   // 当前失败是否仍有未获 create receipt 的同会话冻结意图可按原 key/body 恢复。
   canRetryResume: boolean
   canRetryPendingSubmission: boolean
+  // Same-document scope leases retain the exact create intent until its receipt settles.
+  hasPendingSubmission?: boolean
 }
 
 const EMPTY_THREAD: SessionStreamState = createSessionStreamState()
@@ -67,6 +69,7 @@ export const SERVER_ENGINE_SNAPSHOT: EngineSnapshot = {
   canSubmitMessage: false,
   canRetryResume: false,
   canRetryPendingSubmission: false,
+  hasPendingSubmission: false,
 }
 
 export type SessionEngine = {

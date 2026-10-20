@@ -1,3 +1,14 @@
+## 2026-10-19 聊天主路径与项目留白局部修复
+
+承接 Root 已确认的 A→B→C 顺序；本片只做 A 的已复现恢复/输入边界和 B 的两处局部问题。无 owner、网络契约、Schema、依赖或持久化模型变化，不新增全局 Chat store，不替换 AG-UI/MessageScroller。
+
+- `page-clients` 复用原 scope 引擎租约：仅未获消息 create 回执的意图在同文档离页时暂留，保留原 key/body；不自动 POST。回执确认且无页面 owner 后释放；身份失效标记阻止后续延长，兼顾先释放和先失效两种顺序。引擎只新增本地只读 pending 投影，首次发布在冻结意图建立之后。
+- Composer 保留恢复/语音追加得到的完整超长草稿，关联可访问提示、禁用 Send 并拦截表单；原 4000 字符上限、IME、Stop 与服务端提交规则不变。
+- 项目浮动编辑器不再用固定留白遮住最后历史行。独立 `use-project-composer-clearance` 只观察编辑器实际高度，CSS 在原最小留白上按高度预留；不参与会话滚动或业务状态，卸载断开观察。
+- 项目链接弹层只展示只读规范地址和复制入口，删除虚构邮箱、无效邀请表单及公开访问提示。复制不授予权限；九种语言同步。不实现项目协作 ACL。
+
+Manus 同态取证为 2026-10-19、中文亮色、1280×800，另实测 1068/1067/390 宽度；只读 DOM/样式与原始截图留本地 ignored。Vercel chatbot 只参考固定 `c2f8235` 的 shell/messages/scroll 职责，不照搬其 stop 语义。原正常源码工作区与运行入口未覆盖；正式结果见 CURRENT。本片不宣称完整 B/C 或暂停的真实执行验收完成。
+
 ## 2026-10-19 MCP 既定可用性消费者配对（隔离候选）
 
 承接已确认的Platform只读五态方案与BFF本地850ffe1，不新增owner/API/Schema/刷新轮询。现严格browser decoder的Connector与PrivateServer必须消费availability五态，缺失/未知不回退status/enabled；历史header描述保完整，写入32项限额不动。原同源handler、身份/版本/CAS/原命令恢复不变。Public19和独立command-error发布物不变，本片不把MCP个人字段塞入不含它的Product OpenAPI。

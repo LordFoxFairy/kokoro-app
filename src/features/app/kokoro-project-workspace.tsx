@@ -19,6 +19,7 @@ import { KokoroProjectConversationWelcome } from "./kokoro-project-conversation-
 import { ProjectSkillsSection } from "./project-skills-section"
 import { ProjectWorkspaceDialogs } from "./project-workspace-dialogs"
 import { previewScheduledTasks, previewWebsites, type ProjectScheduledPreview, type ResourceKind } from "./project-workspace-model"
+import { useProjectComposerClearance } from "./use-project-composer-clearance"
 import { useProjectResources } from "./use-project-resources"
 import styles from "./kokoro-project-workspace.module.css"
 import layoutStyles from "./project-workspace-layout.module.css"
@@ -80,6 +81,7 @@ export function KokoroProjectWorkspace({
   onCreateProjectScheduledTask,
 }: ProjectWorkspaceProps) {
   const { locale, t } = useLocale()
+  const { surfaceRef, composerRef } = useProjectComposerClearance(!(projectConversation && !projectConversationsLoading && !projectConversationsError))
   const capabilities = workspaceCapabilities
   const instructionContext = projectInstructionContext ?? `${preview}:${projectRef ?? ""}`
   const emptyInstructionEditor: InstructionEditorState = {
@@ -246,6 +248,7 @@ export function KokoroProjectWorkspace({
   return (
     <section
       className={cn(styles.surface, layoutStyles.surface)}
+      ref={surfaceRef}
       data-slot="project-workspace"
       data-locale={locale}
       aria-label={t("firstSite.projects")}
@@ -397,7 +400,7 @@ export function KokoroProjectWorkspace({
           {...(onSelectProjectConversation === undefined ? {} : { onSelectProjectConversation })}
         /> : null}
       </div>
-      <div className={cn(styles.composer, layoutStyles.composer)}>{composer}</div>
+      <div ref={composerRef} className={cn(styles.composer, layoutStyles.composer)}>{composer}</div>
 
       <ProjectWorkspaceDialogs
         preview={preview}

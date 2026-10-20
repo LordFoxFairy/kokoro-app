@@ -149,6 +149,20 @@ describe("ShareButton", () => {
     expect(screen.getByRole("button", { name: "More settings sections" })).toBeInTheDocument()
   })
 
+  it("presents a project link as private navigation without invented owners or editable invites", async () => {
+    window.history.replaceState(null, "", "/app/project/kokoro?conversation=private-task#settings")
+    const client = makeClient()
+    render(<WorkspaceHeader activeId="task_1" projectWorkspace shareClient={client} />, { wrapper: LocaleProvider })
+    fireEvent.click(screen.getByRole("button", { name: "Share" }))
+    const link = await screen.findByRole("textbox", { name: "Project link" })
+    expect(link).toHaveValue("http://localhost:3000/app/project/kokoro")
+    expect(link).toHaveAttribute("readonly")
+    expect(screen.getByText("Copying this link does not grant access. Project access still requires sign-in and permission.")).toBeVisible()
+    expect(screen.queryByText("owner@kokoro.local")).not.toBeInTheDocument()
+    expect(screen.queryByRole("textbox", { name: "Enter an email address" })).not.toBeInTheDocument()
+    expect(client.createShare).not.toHaveBeenCalled()
+  })
+
   it("copies a canonical project URL without task query or hash state", async () => {
     window.history.replaceState(null, "", "/app/project/kokoro?conversation=task_1#settings")
     const writeText = vi.fn().mockResolvedValue(undefined)

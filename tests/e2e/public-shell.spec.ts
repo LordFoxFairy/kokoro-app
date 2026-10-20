@@ -259,3 +259,32 @@ test("插件分类按可用列宽切换，保留搜索和键盘选择", async ({
   await expect(search).toHaveValue("保留搜索")
 
 })
+
+test("长草稿不会遮挡项目最近任务", async ({ page, isMobile }) => {
+  await page.addInitScript(() => window.localStorage.setItem("kokoro.locale", "zh"))
+  await page.goto("/app/project/preview-project", { waitUntil: "domcontentloaded" })
+  const prompt = "项目滚动留白验收"
+  await page.getByRole("textbox", { name: "对话输入" }).fill(prompt)
+  await page.getByRole("button", { name: "发送消息", exact: true }).click()
+  await expect(page).toHaveURL(/\?conversation=conv_/)
+  await page.goto("/app/project/preview-project", { waitUntil: "domcontentloaded" })
+  if (!isMobile) await page.setViewportSize({ width: 390, height: 650 })
+  const draft = "项目草稿仅用于缩放验收，不发送。".repeat(15)
+  const input = page.getByRole("textbox", { name: "对话输入" })
+  await input.fill(draft)
+  const history = page.getByRole("region", { name: "最近", exact: true })
+  const row = history.getByRole("button", { name: prompt, exact: true })
+  await expect(row).toBeVisible()
+  await history.evaluate((element) => {
+    let parent = element.parentElement
+    while (parent && getComputedStyle(parent).overflowY !== "auto") parent = parent.parentElement
+    if (!parent) throw new Error("Project scroll container is missing")
+    parent.scrollTop = parent.scrollHeight
+  })
+  await expect.poll(async () => {
+    const item = await row.boundingBox()
+    const editor = await input.evaluate(element => element.closest("form")!.getBoundingClientRect().toJSON())
+    return item !== null && item.y + item.height <= editor.top - 8
+  }).toBe(true)
+  await expect(input).toHaveValue(draft)
+})
