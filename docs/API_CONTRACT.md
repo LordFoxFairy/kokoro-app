@@ -1,3 +1,9 @@
+## 2026-10-20 既有 Public19 的保留消费者接线
+
+唯一 snapshot 继续固定 08a2120／Public19.0.0／SHA-256 955412b680bf7a2529c4c35f553ff272d7361769ea95bb441ba820b552ffc564。Library 仅消费已有 q/type、精确 metadata／content；Web 本地分类与 return target 区分 audio/video，不恢复 websites/media 宽松值。
+
+知识同源 adapter 仅路由已发布 preferences/knowledge 列表、单条 GET/PUT/DELETE、knowledge-usage GET/PUT；可信 subject 来源仍是 Product Session，严格输入／版本 CAS、未知写不自动重发、主体与 generation 变化退休旧读取。未接通的 Agent 知识应用仍明确标注，不把 usage 保存当执行验收。
+
 ## 2026-10-19 MCP 既定可用性消费者配对（隔离候选）
 
 承接已确认的Platform只读五态方案与BFF本地850ffe1，不新增owner/API/Schema/刷新轮询。现严格browser decoder的Connector与PrivateServer必须消费availability五态，缺失/未知不回退status/enabled；历史header描述保完整，写入32项限额不动。原同源handler、身份/版本/CAS/原命令恢复不变。Public19和独立command-error发布物不变，本片不把MCP个人字段塞入不含它的Product OpenAPI。

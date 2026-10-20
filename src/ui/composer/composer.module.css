@@ -76,6 +76,7 @@
 .wrap[data-layout="conversation"] {
   padding: 0 1rem max(0.5rem, env(safe-area-inset-bottom));
   gap: 0.5rem;
+  background: transparent;
 }
 .wrap[data-layout="conversation"] .composer {
   width: min(48rem, 100%);
@@ -98,7 +99,10 @@
   border-color: color-mix(in srgb, var(--foreground) 20%, transparent);
 }
 .wrap[data-layout="conversation"] .composer:has(.input:focus-visible) {
-  border-color: color-mix(in srgb, var(--foreground) 60%, var(--background));
+  /* The caret and strengthened shell identify the active editor. Keep the
+     measured quiet border for keyboard/programmatic focus as well; forced
+     colors below retain the system Highlight outline. */
+  border-color: color-mix(in srgb, var(--foreground) 20%, transparent);
   box-shadow: 0 0.75rem 2rem color-mix(in srgb, var(--foreground) 2%, transparent);
 }
 @media (max-width: 640px) {

@@ -115,7 +115,7 @@
 /* The Computer entry is a compact utility island. A restrained divider under
  * it gives the creative/automation/plugin area the same visual grouping as
  * the live Manus rail without inventing a second navigation model. */
-[data-desktop-rail="true"] .navGroup :global([data-sidebar="menu-item"]):first-child {
+[data-desktop-rail="true"] .navGroup[data-desktop-workbench-nav="true"] :global([data-sidebar="menu-item"]):first-child {
   box-shadow: 0 1px color-mix(in srgb, var(--sidebar-border) 82%, transparent);
 }
 
@@ -175,7 +175,19 @@
 /* A project row is the scope boundary. Keep its disclosure compact and place
  * only that project's owner-backed conversations beneath it; it must not look
  * like another top-level task section. */
-.projectRow > :global([data-slot="sidebar-menu-button"]) { padding-inline-start: 0.5rem; }
+/* Row paint includes its action column; a child button must not create a
+ * second rounded island or change the shared icon/text inset. */
+.projectRow { border-radius: 0.5rem; }
+.projectRow:hover,
+.projectRow:focus-within,
+.projectRow:has([data-state="open"]),
+.projectRow[data-project-active="true"] { background: var(--sidebar-accent); }
+.projectRow > :global([data-slot="sidebar-menu-button"]) { padding-inline-start: 0.5rem; gap: 0.5rem; background: transparent; }
+
+/* This row menu is not the wider project picker or section menu. */
+.projectRowMenu { width: max-content; min-width: 6.875rem; max-width: calc(100vw - 1rem); padding: 0.25rem; border: 0; border-radius: 0.75rem; }
+.projectRowMenu :global([data-slot="dropdown-menu-item"]) { min-height: 2.25rem; gap: 0.5rem; border-radius: 0.5rem; padding: 0.5rem; font-size: 0.875rem; line-height: 1.25rem; }
+.projectRowMenu :global([data-slot="dropdown-menu-item"] svg) { width: 1.125rem; height: 1.125rem; color: var(--muted-foreground); }
 .projectConversationGroup { margin: 0; min-width: 0; }
 .projectConversationGroup :global([data-conversation-list="project-conversation"]) { margin: 0; padding-inline: 0; }
 [data-desktop-rail="true"] .projectConversationGroup :global([data-conversation-list="project-conversation"]) { margin-top: 0; }

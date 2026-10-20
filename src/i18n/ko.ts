@@ -1457,4 +1457,7 @@ export const ko: Partial<Record<MessageKey, string>> = {
   "mcp.recovery.needs_client": "OAuth 클라이언트 설정이 없습니다. 커넥터의 클라이언트 정보를 확인하세요.",
   "mcp.recovery.auth_method_unsupported": "지원되지 않는 인증 방식입니다. 커넥터 설정을 확인하세요.",
   "mcp.recovery.inspectRequired": "먼저 상태 확인",
+  "library.viewOptions": "보기 옵션",
+  "library.filterVideo": "동영상",
+  "library.filterAudio": "오디오",
 }

@@ -4,6 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest"
 import { LocaleProvider } from "@/i18n/context"
 import { KokoroProjectWorkspace } from "@/features/app/kokoro-project-workspace"
 import { ProjectResourceUploadError } from "@/features/app/project-resource-upload"
+import { useProjectSkills } from "@/features/app/use-project-skills"
 
 const capabilities = {
   instructions: true,
@@ -323,6 +324,70 @@ const skillWorkspace = (boundary = { admitted: true, subject: "project-reader", 
   composer={<div>composer</div>} onPrompt={vi.fn()} workspaceCapabilities={capabilities} preview={false} projectRef={skillProjectId}
   projectDetail={loading ? { status: "loading" } : { status: "ready", data: skillProject }} projectReadBoundary={boundary} /></LocaleProvider>
 const openProjectSkills = (container: HTMLElement) => fireEvent.click(within(contextCard(container, "resources-skills")).getByRole("button", { name: /^技能$/ }))
+
+it("项目不可用版本不能启用或新增默认，但仍可停用、移除及显式更新", async () => {
+  let item = { ...projectSkill, source_status: "withdrawn", enabled: false, available_update: { source_ref: "skill:revision-2", revision: "2" } }
+  const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    if (init?.method === "PUT") {
+      item = { ...item, enabled: false }
+      return skillReply({ data: { installation: item, change: "disabled", event_id: "disabled-withdrawn", replayed: false } })
+    }
+    if (url.endsWith("skill-selection")) return skillReply({ data: { project_id: skillProjectId, installation_ids: [] } })
+    return skillReply({ data: [item] })
+  })
+  vi.stubGlobal("fetch", fetchMock)
+  const view = render(skillWorkspace()); openProjectSkills(view.container)
+  const toggle = await screen.findByRole("switch", { name: "启用 Project Skill" })
+  expect(toggle).toBeDisabled()
+  expect(screen.getByRole("checkbox", { name: "默认使用 Project Skill" })).toBeDisabled()
+  expect(screen.getByText("此技能版本当前不可用")).toBeVisible()
+  expect(screen.getByRole("button", { name: "移除技能" })).toBeEnabled()
+  expect(screen.getByRole("button", { name: "更新技能" })).toBeEnabled()
+  fireEvent.click(toggle)
+  expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(0)
+
+  item = { ...item, enabled: true }
+  view.rerender(skillWorkspace({ admitted: true, subject: "project-reader", generation: 2 }))
+  await waitFor(() => expect(screen.getByRole("switch", { name: "启用 Project Skill" })).toBeEnabled())
+  fireEvent.click(screen.getByRole("switch", { name: "启用 Project Skill" }))
+  await waitFor(() => expect(screen.getByRole("switch", { name: "启用 Project Skill" })).not.toBeChecked())
+  expect(screen.getByRole("switch", { name: "启用 Project Skill" })).toBeDisabled()
+  const writes = fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")
+  expect(writes).toHaveLength(1)
+  expect(JSON.parse(String(writes[0]?.[1]?.body))).toEqual({ enabled: false })
+})
+
+it("项目旧启用回调按当前来源状态拒绝新命令，恢复active后可显式启用", async () => {
+  let item = { ...projectSkill, enabled: false }
+  const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    if (init?.method === "PUT") {
+      item = { ...item, enabled: true }
+      return skillReply({ data: { installation: item, change: "enabled", event_id: "enabled-active", replayed: false } })
+    }
+    if (url.endsWith("skill-selection")) return skillReply({ data: { project_id: skillProjectId, installation_ids: [] } })
+    return skillReply({ data: [item] })
+  })
+  vi.stubGlobal("fetch", fetchMock)
+  const view = renderHook(() => useProjectSkills(skillProjectId, { admitted: true, subject: "project-reader", generation: 1 }, true))
+  await waitFor(() => expect(view.result.current.status).toBe("ready"))
+  const previousEnable = view.result.current.execute
+  item = { ...item, source_status: "withdrawn" }
+  act(() => view.result.current.reload())
+  await waitFor(() => expect(view.result.current.facts?.items[0]?.source_status).toBe("withdrawn"))
+  let result: boolean | undefined
+  await act(async () => { result = await previousEnable({ kind: "enabled", id: item.installation_id, enabled: true }) })
+  expect(result).toBe(false)
+  expect(view.result.current.pending).toBeNull()
+  expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(0)
+
+  item = { ...item, source_status: "active" }
+  act(() => view.result.current.reload())
+  await waitFor(() => expect(view.result.current.facts?.items[0]?.source_status).toBe("active"))
+  await act(async () => { result = await view.result.current.execute({ kind: "enabled", id: item.installation_id, enabled: true }) })
+  expect(result).toBe(true)
+  expect(view.result.current.facts?.items[0]?.enabled).toBe(true)
+  expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(1)
+})
 
 it("在独立项目技能面板读取真实安装，显式保存默认安装 ID 而非名称", async () => {
   let selected: string[] = []

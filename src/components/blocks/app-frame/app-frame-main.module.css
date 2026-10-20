@@ -7,6 +7,12 @@
   background: var(--background);
   padding-inline: 1.5rem;
 }
+/* Conversation owns a quiet canvas; catalogs and project overview keep their
+ * independent surfaces. The editor itself remains the card surface. */
+.main[data-desktop-web="true"][data-web-view="thread"],
+.main[data-desktop-web="true"][data-web-view="thread"] > [data-slot="workspace-header"] {
+  background: var(--conversation-canvas, var(--background));
+}
 /* Project overview alone shares the measured neutral surface and 48px header;
  * direct chat, project conversations and other pages keep their own layout. */
 .main[data-desktop-web="true"]:has([data-slot="project-workspace"]) > [data-slot="workspace-header"][data-project-workspace] {

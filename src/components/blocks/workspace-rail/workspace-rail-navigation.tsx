@@ -482,7 +482,7 @@ export function WorkspaceRailNavigation({
                             <Ellipsis aria-hidden="true" />
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" side="right" sideOffset={4} className={navigationStyles.projectMenu}>
+                        <DropdownMenuContent align="end" side="bottom" sideOffset={4} className={navigationStyles.projectRowMenu}>
                           <DropdownMenuItem onSelect={() => onRequestProjectRename(project.id)}>
                             <SquarePen aria-hidden="true" />
                             {t("firstSite.renameProject")}

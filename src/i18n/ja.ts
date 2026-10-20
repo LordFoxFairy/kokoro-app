@@ -1525,4 +1525,7 @@ export const ja: Partial<Record<MessageKey, string>> = {
   "mcp.recovery.needs_client": "OAuthクライアント設定がありません。コネクタのクライアント情報を確認してください。",
   "mcp.recovery.auth_method_unsupported": "この認証方式はサポートされていません。コネクタ設定を確認してください。",
   "mcp.recovery.inspectRequired": "先に状態を確認",
+  "library.viewOptions": "表示オプション",
+  "library.filterVideo": "動画",
+  "library.filterAudio": "音声",
 }

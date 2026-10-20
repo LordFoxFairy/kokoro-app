@@ -1,3 +1,13 @@
+## 2026-10-20 本地遗漏交付收尾候选（尚未合并）
+
+从旧 mixed 中按职责提取本方已实现但未提交的 Library、侧栏项目行、知识编辑和会话画布修复，基于最新 main e189954 集成，不复制旧工作树。Public19、认证／归档、MCP 五态与 #41 未回执提交保护保持；scheduled 已等效在 main，不重复交付。对方设置分支 ed92864 不在本 PR。
+
+Library 恢复默认产物、查看选项里的个人文件、音视频分类、真实 q/type 过滤与精确 metadata／取消读取；不承诺富预览、任务分组或收藏持久化。知识沿已发布 owner 六操作与现有可信会话提供真实 CRUD／usage，不放行 Agent 消费；接入 main 现有个人资料编辑器，保留其草稿／冲突／显式保存流程。旧新文案与测试 Props 只按当前公开组件配对，固定合同升级为已在 main 的 Public19，不回退 pin。
+
+最终 Node22：lint、typecheck、七生成检查、production build 均 exit0；完整 Vitest 231 files / 4316 PASS / 0 SKIP，原全部 Playwright 桌面／手机 42 PASS，未加 retry 或放宽 timeout。独立复核发现同主体重新准入会卸载知识草稿，已用真实 Card 的 RED→GREEN 修复；preview 保留原禁网络和草稿组件。最终产品／测试冻结输入无变化。
+
+首轮完整门的 Redis fixture 缺变量、OIDC 临时 Next manifest 读取失败及 preview 知识回归保留原日志；补齐既有测试 Redis 地址并修复 preview 组合后重跑完整默认清单全部通过，未删断言或改认证源码。参考沿用已记录的 Manus 实测规格与本地对照，当前浏览器回归不是 Manus 全站一比一验收。远端合并、Root 精确组合和正常服务加载分别另核，不用本段冒称已部署。模型、真实工具执行与扣费保持暂停。
+
 ## 2026-10-19 聊天主路径及项目局部布局已验收（本批交付记录）
 
 基线 main `76bb993`，独立 `fix/chat-mainpath` 工作树；原 App/BFF mixed 未覆盖。先复现再修四处：超长恢复/语音草稿亮 Send 却静默拒绝；Direct→Project→Direct 丢未回执 create 的原恢复意图；窄屏长草稿在滚到底后遮住项目最后历史行；私有项目链接弹层含虚构 owner 邮箱和公开访问暗示。
