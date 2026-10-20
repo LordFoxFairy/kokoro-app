@@ -1,3 +1,4 @@
+import {emptyModelPublishBody} from "@/lib/server/model-publish-body"
 import { requestIdForRequest } from "@/lib/server/bff-response"
 import { admittedProductSession, productBffConfig, productBffHeaders } from "@/lib/server/product-bff"
 import { fetchWithDomain } from "@/lib/server/upstream-http"
@@ -45,9 +46,10 @@ async function handle(request: Request, context: Context): Promise<Response> {
   const config = productBffConfig()
   if (config === null) return failure(503, "admin_gateway_unavailable", requestId)
   const { path } = await context.params
-  const modelRead = request.method === "GET" && path.length === 1 && ["model-routing", "model-labels", "model-revisions"].includes(path[0] ?? "")
-  const modelWrite = request.method === "PUT" && path.length === 2 && path[0] === "model-routing" &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(path[1] ?? "")
+  const modelRead = request.method === "GET" && path.length === 1 && ["model-routing", "model-labels", "model-revisions", "model-providers", "model-provider-creations", "model-definitions", "model-features"].includes(path[0] ?? "")
+  const uuid=/^(?:[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffffffffffff)$/iu
+  const modelPublish=request.method === "POST" && path.length===3 && path[0]==="model-revisions" && uuid.test(path[1]??"") && path[2]==="publish"
+  const modelWrite = modelPublish || (path.length===1 && request.method==="POST" && ["model-providers","model-definitions","model-revisions","model-labels"].includes(path[0]??"")) || (path.length===2 && uuid.test(path[1]??"") && ((request.method==="PUT" && path[0]==="model-routing") || (request.method==="PATCH" && path[0]==="model-labels")))
   if (
     path.length === 0 ||
     (!["mcp", "skills"].includes(path[0] ?? "") && !modelRead && !modelWrite) ||
@@ -71,18 +73,22 @@ async function handle(request: Request, context: Context): Promise<Response> {
   const mutation = request.method !== "GET"
   let body: ArrayBuffer | null = null
   if (mutation) {
+    if(modelPublish){
+      if(!(await emptyModelPublishBody(request)))return failure(400,"invalid_admin_request",requestId)
+    }else{
     if (!JSON_TYPE.test(request.headers.get("content-type") ?? ""))
       return failure(400, "invalid_admin_request", requestId)
     body = await readBody(request)
     if (body === null) return failure(400, "invalid_admin_request", requestId)
+    }
   } else if (request.body !== null) {
     return failure(400, "invalid_admin_request", requestId)
   }
 
   const headers = productBffHeaders(config, claims, requestId)
   headers.set("accept", "application/json")
-  if (body !== null) {
-    headers.set("content-type", "application/json")
+  if (body !== null) headers.set("content-type", "application/json")
+  if (mutation) {
     const idempotency = request.headers.get("idempotency-key")
     if (idempotency !== null) headers.set("idempotency-key", idempotency)
     if (modelWrite) {

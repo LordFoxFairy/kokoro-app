@@ -112,3 +112,5 @@ runtime token、内部服务地址、workload secret 或后端隔离键。
 新增 Product 上游服务时必须复用 `upstream-http.ts`；固定 policy 的 IAM 原生 relay 是唯一已批准例外，
 只能复用 `iam-relay-transport.ts`，不得扩成通用代理。route handler 禁止直接裸 `fetch`、手写 Host 或
 手写部署/租户 header；浏览器 client 只能调用同源 BFF path。
+
+- `model-publish-body.ts`：仅模型修订发布的有界EOF校验，证明Next空POST流，无正文生成或模型执行。

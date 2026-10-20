@@ -1,3 +1,9 @@
+## 2026-10-20 MC-02 Public21.1模型配置桥（本地候选）
+
+唯一BFF固定 `f3da7d5feb855b2b97c77a6ae9928cee96e1b8aa` /21.1.0/175，SHA256 `4db8bab6159a2f36061f8b292fba9074ea2614adab2a1489bf9d1b3b066b6fe3`。仅扩现Admin Product adapter的10具名模型配置路径，复用原Product session、服务身份和request-id，原body/key/CAS透传；发布严格证明实际EOF，不虚构JSON正文或丢幂等头。没有直连System/读取运行Key、模型执行、自动重试或新的OAuth。
+
+七现有生成器按固定artifact正规重出；test-only21.1→21精确全文逆回，再委托原21→20及历史oracle，不作runtime兼容。Skills/MCP、自动化、聊天与其他owner语义不变。主方完整相关门与正常页面分别验收，受控peer adapter测试不是owner整链证据；首次完整测试缺资源配置的失败保留，后续按既有受管Redis隔离prefix验证。Node22最终七生成check、contract295、architecture50、lint、typegen/types均通过；受管Redis独立prefix的完整233文件4444 PASS/0skip、官方webpack生产build及post-types通过。首次漏传既有Redis配置导致fixture beforeAll失败/2skip，原记录保留；补齐既有资源后完整重跑，不改timeout/skip或测试断言。当前不做目标浏览器的替代通道操作，未运行本轮浏览器E2E；源码/adapter和真实owner链分别有证据，不宣称正常页面完成。正常切换及集中PR尚待，模型/实际工具/扣费暂停。
+
 ## 2026-10-20 MC-02A Public21 Chat模型消费完成源码验收（正常未切）
 
 正式从BFF `513b18e2942f94c5f2d4f48d9f9d3010b92db7e6` Git blob固定Public21.0.0/165，SHA256 `a902a20ad95e46c01bfc8f5a80260c14565cfe557137759d5ecd42bc1a60f7c2`。六现public generator正规write，七生成check全0；connector-command-errors独立source/pin不变。现catalog严格接必需有效display_name、model/revision/provider精确ID、feature/request_model及nullable next_cursor；未知/旧/extra字段拒绝。新test-only21→20全文逆回后委托原20→19及双父proof，旧oracle字节保持。

@@ -1,3 +1,9 @@
+## 2026-10-20 MC-02 Public21.1模型配置桥（本地候选）
+
+唯一BFF固定 `f3da7d5feb855b2b97c77a6ae9928cee96e1b8aa` /21.1.0/175，SHA256 `4db8bab6159a2f36061f8b292fba9074ea2614adab2a1489bf9d1b3b066b6fe3`。仅扩现Admin Product adapter的10具名模型配置路径，复用原Product session、服务身份和request-id，原body/key/CAS透传；发布严格证明实际EOF，不虚构JSON正文或丢幂等头。没有直连System/读取运行Key、模型执行、自动重试或新的OAuth。
+
+七现有生成器按固定artifact正规重出；test-only21.1→21精确全文逆回，再委托原21→20及历史oracle，不作runtime兼容。Skills/MCP、自动化、聊天与其他owner语义不变。主方完整相关门与正常页面分别验收，受控peer adapter测试不是owner整链证据；首次完整测试缺资源配置的失败保留，后续按既有受管Redis隔离prefix验证。正常切换及集中PR尚待，模型/实际工具/扣费暂停。
+
 ## 2026-10-20 MC-02A Chat模型请求与身份
 
 业务 `message.model` 必须为 raw candidate.name／System label_key，例如chat/fast，不加provider前缀、不用alias/request_model替代。Chat SessionClient固定 `/models?feature_key=chat`；同源query原样到BFF，响应只接受feature_key=chat，否则整体parse失败。候选显示仍用display_name；没有旧provider:name运行时兼容。

@@ -139,7 +139,7 @@ describe("/api/admin/[...path] product-session adapter", () => {
 
   it("rejects model prefix expansion, unsupported methods and command headers on reads before BFF I/O", async () => {
     const { GET, POST, PUT } = await import("@/app/api/admin/[...path]/route")
-    for (const [handler, method, path] of [[GET, "GET", ["model-providers"]], [GET, "GET", ["model-revisions", "publish"]], [POST, "POST", ["model-labels"]], [PUT, "PUT", ["model-routing", "not-a-label-id"]]] as const) {
+    for (const [handler, method, path] of [[GET, "GET", ["model-provider-secrets"]], [GET, "GET", ["model-revisions", "publish"]], [POST, "POST", ["model-labels", "unexpected"]], [PUT, "PUT", ["model-routing", "not-a-label-id"]]] as const) {
       const response = await handler(new Request(`http://localhost/api/admin/${path.join("/")}`, { method }), params([...path]))
       expect(response.status).toBe(404)
     }
@@ -149,3 +149,16 @@ describe("/api/admin/[...path] product-session adapter", () => {
   })
 
 })
+
+
+it("forwards bodyless model publication with original key/CAS and no invented JSON",async()=>{
+ vi.mocked(fetchWithDomain).mockImplementation(async(_url,_domain,init)=>Response.json({data:{}},{headers:{"cache-control":"no-store","x-request-id":new Headers(init?.headers).get("x-kokoro-request-id")!}}));
+ const {POST}=await import("@/app/api/admin/[...path]/route");const id="11111111-1111-4111-8111-111111111111";
+ const response=await POST(new Request(`http://localhost/api/admin/model-revisions/${id}/publish`,{method:"POST",headers:{"idempotency-key":"original-publish","if-match":'"3"',"content-length":"0","x-kokoro-request-id":"publish-check"},body:new ReadableStream({start(controller){controller.close();}}),duplex:"half"} as RequestInit),params(["model-revisions",id,"publish"]));
+ expect(response.status).toBe(200);expect(fetchWithDomain).toHaveBeenCalledTimes(1);const init=vi.mocked(fetchWithDomain).mock.calls[0]![2]!;
+ expect(new Headers(init.headers).get("if-match")).toBe('"3"');expect(new Headers(init.headers).get("idempotency-key")).toBe("original-publish");expect(new Headers(init.headers).has("content-type")).toBe(false);expect(init.body).toBeUndefined();
+});
+it("rejects nonempty publish streams before BFF I/O",async()=>{
+ const {POST}=await import("@/app/api/admin/[...path]/route");const id="11111111-1111-4111-8111-111111111111";
+ const response=await POST(new Request(`http://localhost/api/admin/model-revisions/${id}/publish`,{method:"POST",headers:{"idempotency-key":"original-publish","if-match":'"3"',"content-length":"0"},body:new ReadableStream({start(controller){controller.enqueue(new TextEncoder().encode("x"));controller.close();}}),duplex:"half"} as RequestInit),params(["model-revisions",id,"publish"]));expect(response.status).toBe(400);expect(fetchWithDomain).not.toHaveBeenCalled();
+});

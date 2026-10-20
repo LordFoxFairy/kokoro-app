@@ -1,3 +1,4 @@
+import {restorePublic21} from "./bff-configuration-parent";
 // Test-only exact Public21 -> Public20 inverse; sealed Public20/Public19 proofs remain unchanged.
 import { createHash } from "node:crypto"
 const hash = (bytes: Uint8Array | string) => createHash("sha256").update(bytes).digest("hex")
@@ -64,6 +65,7 @@ const inverse = [
   }
 ] as const
 export function restorePublic20(bytes: Uint8Array): Buffer {
+  bytes=restorePublic21(bytes);
   if (hash(bytes) !== "a902a20ad95e46c01bfc8f5a80260c14565cfe557137759d5ecd42bc1a60f7c2") throw Error("not fixed Public21")
   const lines = Buffer.from(bytes).toString("utf8").match(/[^\n]*\n|[^\n]+$/gu) ?? []
   for (const change of [...inverse].reverse()) {
