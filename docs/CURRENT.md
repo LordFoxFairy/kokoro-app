@@ -1,3 +1,11 @@
+## 2026-10-21 后台空草稿：正常创建与刷新回读已验证
+
+沿正常 Admin d7403b1／BFF4a10f8b／Platform97b27b3，正式页面创建独立无包样本 `qa-admin-draft-discard-20261021`，整页刷新后重新打开同一草稿。Platform owner 只读事务核实同名仅一条、draft/revision1/state_version1/package_phase none、零publication／安装，未用数据库写入伪造产品结果。发布、撤回、隔离、恢复和修改可见范围均禁用；草稿删除窗口已填写明确样本原因，但未提交，等待不可恢复动作的当次确认。只新增该空草稿，不触动旧版本、安装、账号、权限、积分或执行开关；正常七监听PID保持。
+
+本轮13仓非递归fetch/prune全0，三个独立候选App／BFF／Admin分别ahead36／9／5、behind均0，Platform ahead5／behind0；Root仍4ahead/4behind及原WIP，不盲pull或提前更新gitlink。Agent现有MCP固定输入亦已只读比对：runtime proto、请求绑定、输入投影、五原始向量与当前owner逐字相同；profile1.1→1.2仅版本与descriptor完整import闭包摘要变化，不据此新增兼容代码或宣称runtime整链通过。没有新业务源码、Schema、依赖或服务重启，未push／PR／merge；本节仅补充证据，完整目标和待裁决边界保持。
+
+原始截图与脱敏owner回读留Root ignored `var/dev/skills-publisher-acceptance-20261021/admin-draft-discard-*`，使用边界同步[技能指南](guides/skills.md)。本轮没有为文档重跑全部业务门；模型、工具执行与扣费暂停。
+
 ## 2026-10-21 MCP 续期：当前源码隔离 HTTP 链已验证
 
 固定 App `c3a2dc4`／BFF `4a10f8b`／IAM `7cbe988`／Platform `97b27b3` 的全新源码副本，复用现有 fixture 和本机受管 PostgreSQL／Redis，不切正常环境。真实 Next/RP 登录携带原表单签名 `loginIntent`，再经 BFF／IAM／Platform 完成授权码＋PKCE、自然过期、一次受控刷新；GET 不刷新／发现，范围收缩先提交新资格再拒绝原Prepare CAS，正确返回412／mcp_personal_precondition_failed／false，不再误报502。显式新命令恢复，成功同键回执不重复 grant／发现。
