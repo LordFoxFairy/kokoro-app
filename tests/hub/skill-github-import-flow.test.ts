@@ -13,7 +13,7 @@ function setup() {
 it("selects a real path using the original Preview commit without another floating read", async()=>{
  const {flow,deps}=setup();await flow.preview(url);expect(flow.getSnapshot().kind).toBe("select");flow.select("invented");expect(flow.getSnapshot().kind).toBe("select");flow.select("two");await flow.confirm()
  expect(deps.github.preview).toHaveBeenCalledTimes(1);expect(deps.github.import).toHaveBeenCalledWith({owner:"acme",repository:"skills",commit,path:"two"},"import-key",expect.any(AbortSignal))
- expect(deps.publish.publishDraft).toHaveBeenCalledWith("revision",{audience:"owner",expected_state_version:"4"},"publish-key",expect.any(AbortSignal));expect(deps.installation.install).toHaveBeenCalledWith("skill:revision","install-key",expect.any(AbortSignal));expect(flow.getSnapshot().kind).toBe("completed")
+ expect(deps.publish.publishDraft).toHaveBeenCalledWith("revision",{audience:"owner",expected_state_version:"4",expected_publication:null},"publish-key",expect.any(AbortSignal));expect(deps.installation.install).toHaveBeenCalledWith("skill:revision","install-key",expect.any(AbortSignal));expect(flow.getSnapshot().kind).toBe("completed")
 })
 it.each(["import","publish","install"] as const)("keeps original body/key for an unknown %s ACK",async stage=>{
  for (const error of [
@@ -42,7 +42,7 @@ it("rejects a wrong real installation identity without a success state",async()=
  const {flow,deps}=setup();deps.installation.install.mockResolvedValueOnce({...receipt,installation:{...receipt.installation,source_ref:"skill:other"}});await flow.preview(url);flow.select("one");await flow.confirm();expect(flow.getSnapshot()).toMatchObject({kind:"unknown",stage:"install"});expect(flow.getSnapshot().result).toBeUndefined()
 })
 it("preserves the Import CAS across an authoritative metadata read",async()=>{
- const {flow,deps}=setup();deps.publish.getManaged.mockRejectedValueOnce(new HubClientError("http", "Read unavailable after draft creation", "skill_dependency_unavailable", 503));deps.publish.getManaged.mockResolvedValueOnce({...record,product:{...record.product,state_version:"999"}});await flow.preview(url);flow.select("one");await flow.confirm();expect(flow.getSnapshot()).toMatchObject({kind:"unknown",stage:"read",skillId:"revision"});expect(deps.github.import).toHaveBeenCalledTimes(1);await flow.retry();expect(deps.github.import).toHaveBeenCalledTimes(1);expect(flow.getSnapshot().kind).toBe("completed");expect(deps.publish.publishDraft.mock.calls[0]?.[1]).toEqual({audience:"owner",expected_state_version:"4"})
+ const {flow,deps}=setup();deps.publish.getManaged.mockRejectedValueOnce(new HubClientError("http", "Read unavailable after draft creation", "skill_dependency_unavailable", 503));deps.publish.getManaged.mockResolvedValueOnce({...record,product:{...record.product,state_version:"999"}});await flow.preview(url);flow.select("one");await flow.confirm();expect(flow.getSnapshot()).toMatchObject({kind:"unknown",stage:"read",skillId:"revision"});expect(deps.github.import).toHaveBeenCalledTimes(1);await flow.retry();expect(deps.github.import).toHaveBeenCalledTimes(1);expect(flow.getSnapshot().kind).toBe("completed");expect(deps.publish.publishDraft.mock.calls[0]?.[1]).toEqual({audience:"owner",expected_state_version:"4",expected_publication:null})
 })
 
 it("only clears a completed intent and permits a second import with fresh command keys",async()=>{

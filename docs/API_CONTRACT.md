@@ -1,3 +1,7 @@
+## 2026-10-21 发布确认消费者配对（实施中）
+
+固定BFF be5cc6f91145d46ea504420b29b16ff16c981f28 /Public22.0.0/176原始artifact，正式重出六窄消费者；独立connector错误profile不改。发布必填expected_publication，闭集null或{current_version_id,state_version}，版本为精确正十进制且上限9223372036854775806；缺字段拒绝，不把失败／404视为null。本人历史读取沿原GET；Admin详情meta由Admin后续配对，App透明桥保持。
+
 ## 2026-10-21 Skills 历史消费者候选
 
 固定BFF `d28f7db8b84deb7305fd4212c1469347c0e63e2f` /Public21.2.0/176，SHA256 `2c56fd63faa5ed7759133046dfda147bf1d360ddfb32f7570e55df38e487f786`；同一snapshot下六窄生成器配对，connector-command-errors独立profile不变。历史同源 GET /api/hub/self/skills/managed/{skill_id}/versions 仅接受唯一limit/cursor，映射正式GET /v1/self/skills/{skill_id}/versions；不转发主体、status或命令头，不新增写操作。闭集 data/meta、exact versions/publication、required nullable next_cursor 及错误status/no-store/request-id按固定BFF收边界。

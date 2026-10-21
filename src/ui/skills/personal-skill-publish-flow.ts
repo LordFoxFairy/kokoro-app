@@ -1,5 +1,5 @@
 import { HubClientError } from "@/hub/client"
-import { createPersonalSkillVersionRequestSchema, createPersonalSkillVersionSchema, createSkillDraftRequestSchema, skillZipFilenameSchema, skillDraftSchema, managedPersonalSkillSchema, skillUploadStateSchema, beginSkillUploadSchema, completeSkillUploadSchema, validateSkillDraftSchema, publishSkillDraftSchema, skillSourceVersionSchema, type ManagedPersonalSkill, type BeginSkillUploadRequest, type CompleteSkillUploadRequest, type ValidateSkillDraftRequest, type SkillPublishRequest } from "@/hub/schemas"
+import { skillPublicationPreconditionSchema, type SkillPublicationPrecondition, createPersonalSkillVersionRequestSchema, createPersonalSkillVersionSchema, createSkillDraftRequestSchema, skillZipFilenameSchema, skillDraftSchema, managedPersonalSkillSchema, skillUploadStateSchema, beginSkillUploadSchema, completeSkillUploadSchema, validateSkillDraftSchema, publishSkillDraftSchema, skillSourceVersionSchema, type ManagedPersonalSkill, type BeginSkillUploadRequest, type CompleteSkillUploadRequest, type ValidateSkillDraftRequest, type SkillPublishRequest } from "@/hub/schemas"
 import type { SkillPublishClient } from "@/hub/skill-publish-client"
 
 export type PublishStage = "hashing" | "draft" | "upload" | "scanning" | "validating" | "publishing" | "checking"
@@ -20,6 +20,7 @@ export class SkillPublishUncertain extends Error {
 
 export type PersonalSkillPublishSession = {
   readonly input: Readonly<Omit<PublishInput, "file"> & { file: File | null }>
+  readonly expectedPublication: Readonly<SkillPublicationPrecondition>
   readonly keys: Readonly<{ draft: string; begin: string; complete: string; validate: string; publish: string }>
   readonly versionBase?: ManagedPersonalSkill
   readonly resumed?: ManagedPersonalSkill
@@ -68,32 +69,34 @@ function checkFile(file: File): void {
     throw new HubClientError("parse", "Select one owner-valid ZIP package up to 32 MiB", "invalid_skill_request", 400)
   }
 }
-function newSession(input: PersonalSkillPublishSession["input"], resumed?: ManagedPersonalSkill): PersonalSkillPublishSession {
+function newSession(input: PersonalSkillPublishSession["input"], expectedPublication: SkillPublicationPrecondition, resumed?: ManagedPersonalSkill): PersonalSkillPublishSession {
   const parsed = createSkillDraftRequestSchema.parse({ display_name: input.display_name, summary: input.summary, tags: input.tags })
   if (!['owner', 'tenant', 'catalog'].includes(input.audience)) throw new HubClientError("parse", "Explicit publication audience required", "invalid_skill_request", 400)
   if (input.file) checkFile(input.file)
   if (new TextEncoder().encode(JSON.stringify(parsed)).byteLength > 65_536) throw new HubClientError("parse", "Skill draft metadata exceeds 65,536 bytes", "request_body_too_large", 413)
+  const publication = skillPublicationPreconditionSchema.parse(expectedPublication)
   const tags = Object.freeze([...parsed.tags]) as unknown as string[]
   return {
     input: Object.freeze({ ...parsed, tags, file: input.file, audience: input.audience }),
+    expectedPublication: publication === null ? null : Object.freeze(publication),
     draftBody: Object.freeze({ ...parsed, tags }),
     keys: Object.freeze({ draft: key(), begin: key(), complete: key(), validate: key(), publish: key() }),
     ...(resumed ? { resumed: managedPersonalSkillSchema.parse(resumed), draft: { skill_id: resumed.skill_id, series_id: resumed.series_id, revision: resumed.revision, state_version: resumed.product.state_version } } : {}),
     draftUncertain: false, uploadChecked: false, putAttempted: false, putDone: false, scanPaused: false, publishAttempted: false, running: false,
   }
 }
-export function createPersonalSkillPublishSession(input: PublishInput): PersonalSkillPublishSession { return newSession(input) }
-export function createResumedSkillPublishSession(base: ManagedPersonalSkill, audience: SkillPublishRequest["audience"], replacement?: File): PersonalSkillPublishSession {
+export function createPersonalSkillPublishSession(input: PublishInput): PersonalSkillPublishSession { return newSession(input, null) }
+export function createResumedSkillPublishSession(base: ManagedPersonalSkill, audience: SkillPublishRequest["audience"], expectedPublication: SkillPublicationPrecondition, replacement?: File): PersonalSkillPublishSession {
   const current = managedPersonalSkillSchema.parse(base)
   assertSame(current.status === "draft")
-  return newSession({ file: replacement ?? null, display_name: current.name, summary: current.summary, tags: current.tags, audience }, current)
+  return newSession({ file: replacement ?? null, display_name: current.name, summary: current.summary, tags: current.tags, audience }, expectedPublication, current)
 }
-export function createPersonalSkillVersionSession(base: ManagedPersonalSkill, input: PublishInput): PersonalSkillPublishSession {
+export function createPersonalSkillVersionSession(base: ManagedPersonalSkill, input: PublishInput, expectedPublication: SkillPublicationPrecondition): PersonalSkillPublishSession {
   const current = managedPersonalSkillSchema.parse(base)
-  assertSame(["active", "disabled"].includes(current.status) && current.product.source_kind === "personal" && input.audience === "owner")
+  assertSame(expectedPublication !== null && ["active", "disabled"].includes(current.status) && current.product.source_kind === "personal" && input.audience === "owner")
   if (!input.file) throw new SkillPublishRestartRequired()
   const metadata = createPersonalSkillVersionRequestSchema.parse({ display_name: input.display_name, summary: input.summary, tags: input.tags, example_prompts: input.example_prompts ?? current.example_prompts, category_keys: input.category_keys ?? current.category_keys })
-  const session = newSession({ ...input, audience: "owner" })
+  const session = newSession({ ...input, audience: "owner" }, expectedPublication)
   return { ...session, versionBase: current, draftBody: Object.freeze({ ...metadata, tags: Object.freeze([...metadata.tags]) as unknown as string[], example_prompts: Object.freeze([...metadata.example_prompts]), category_keys: Object.freeze([...metadata.category_keys]) }) }
 }
 async function recoverPublished(client: SkillPublishClient, draft: Draft, body: Readonly<SkillPublishRequest>, signal?: AbortSignal): Promise<PublishReceipt | null> {
@@ -230,7 +233,7 @@ export async function runPersonalSkillPublishSession(client: SkillPublishClient,
       assertCurrent(signal); assertSame(validated.skill_id === draft.skill_id && validated.series_id === draft.series_id && BigInt(validated.state_version) >= BigInt(session.validateBody.expected_state_version))
       session.validated = validated
     }
-    if (!session.publishBody) session.publishBody = Object.freeze({ audience: input.audience, expected_state_version: session.validated?.state_version ?? observed.state_version })
+    if (!session.publishBody) session.publishBody = Object.freeze({ audience: input.audience, expected_publication: session.expectedPublication, expected_state_version: session.validated?.state_version ?? observed.state_version })
     onStage?.("publishing"); session.publishAttempted = true
     try {
       const published = publishSkillDraftSchema.parse(await retryLostTransport(() => client.publishDraft(draft.skill_id, session.publishBody!, session.keys.publish, signal), signal, session.versionBase === undefined))

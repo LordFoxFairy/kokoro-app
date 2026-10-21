@@ -1239,6 +1239,7 @@ describe("/api/hub/[...path] proxy", () => {
         body: JSON.stringify({
           expected_state_version: "4",
           audience: "owner",
+          expected_publication: null,
         }),
       }),
       publishPath,
@@ -1254,6 +1255,7 @@ describe("/api/hub/[...path] proxy", () => {
     expect(JSON.parse(new TextDecoder().decode(init.body))).toEqual({
       expected_state_version: "4",
       audience: "owner",
+      expected_publication: null,
     });
     expect(init.headers["idempotency-key"]).toBe("publish-key");
     expect(init.headers["content-type"]).toBe("application/json");

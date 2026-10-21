@@ -27,9 +27,9 @@ import {
 
 import { restorePublic21 } from "./bff-configuration-parent"
 
-const OWNER_COMMIT = "d28f7db8b84deb7305fd4212c1469347c0e63e2f"
-const OWNER_SHA256 = "2c56fd63faa5ed7759133046dfda147bf1d360ddfb32f7570e55df38e487f786"
-const OWNER_VERSION = "21.2.0"
+const OWNER_COMMIT = "be5cc6f91145d46ea504420b29b16ff16c981f28"
+const OWNER_SHA256 = "65019688691a6d6933146be66d4e7a1293f0dc92418a6f259a983529031b5c27"
+const OWNER_VERSION = "22.0.0"
 const SNAPSHOT = resolve(process.cwd(), "src/generated/bff-public-openapi.yaml")
 
 type Shape = {
@@ -213,7 +213,7 @@ describe("pinned BFF Skills and MCP public consumer contract", () => {
       source.replace(addition, addition + addition),
       source.replace(addition, "") + addition + "\n",
       source.replace("complete exact project installation", "latest project installation"),
-      source.replace("  version: 21.2.0", "  version: 21.1.0"),
+      source.replace("  version: 22.0.0", "  version: 21.1.0"),
       source + "\n",
     ]
     for (const mutated of mutations) {
@@ -224,7 +224,7 @@ describe("pinned BFF Skills and MCP public consumer contract", () => {
 
   it("pins exact owner bytes and six current Skill draft/publish operations", async () => {
     const bytes = await readFile(SNAPSHOT)
-    expect(OWNER_COMMIT).toBe("d28f7db8b84deb7305fd4212c1469347c0e63e2f")
+    expect(OWNER_COMMIT).toBe("be5cc6f91145d46ea504420b29b16ff16c981f28")
     expect(createHash("sha256").update(bytes).digest("hex")).toBe(OWNER_SHA256)
     const spec = YAML.parse(bytes.toString()) as Spec
     expect(spec.info.version).toBe(OWNER_VERSION)
@@ -386,7 +386,7 @@ it("compares every live publish/managed/installation component field matrix to t
     ["SkillPackageCompleteResource", completeSkillUploadSchema.shape],
     ["ValidateSkillDraftRequest", validateSkillDraftRequestSchema.shape],
     ["SkillValidateResource", validateSkillDraftSchema.shape],
-    ["SkillAudienceRequest", skillPublishRequestSchema.shape],
+    ["SkillPublishRequest", skillPublishRequestSchema.shape],
     ["SkillPublishResource", publishSkillDraftSchema.shape],
     ["ManagedPersonalSkillResource", managedPersonalSkillSchema.shape],
     ["SkillInstallation", personalInstallationSchema.innerType().innerType().shape],

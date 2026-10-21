@@ -1,3 +1,7 @@
+## 2026-10-21 发布确认消费者配对（实施中）
+
+不新增Web持久化／表／缓存；现内存发布session增加确认publication的冻结副本，原draft/upload/receipt与幂等key保持。重试原body/key，不合并较新publication；关闭保留未决意图，身份退休沿既有宿主取消／卸载。新系列明确null，已有系列必须由正式历史读取证明；不按选中旧版本、revision或可用性猜当前。
+
 ## 2026-10-21 Skills 历史仅保存弹窗临时读状态
 
 无新业务表、持久化、localStorage或全局缓存。版本行、publication、游标和精确包文件均来自BFF/Platform；Web只保当代弹窗列表、选中版本及读取状态。相同当前指针不推出最大revision或执行可用性；不改原安装pin、旧消息引用、发布回执或未决写意图。关闭/身份退休清理读状态，写入恢复仍归原publish/withdraw宿主。

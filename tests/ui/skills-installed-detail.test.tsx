@@ -109,6 +109,7 @@ it("connects the live Skills surface to an exact self-managed revision before op
   const { installation, managed, response, content } = managementFixture()
   const fetcher = vi.fn(async (input: RequestInfo | URL) => {
     if (String(input) === "/api/hub/self/skill-installations/manage-installation") return response(installation)
+    if (String(input) === "/api/hub/self/skills/managed/manage-revision/versions") return response({series_id:managed.series_id,publication:{current_version_id:managed.skill_id,state_version:"8",withdrawn_at:null},versions:[],next_cursor:null},true)
     expect(String(input)).toBe("/api/hub/self/skills/managed/manage-revision")
     return response(managed, true)
   })
@@ -116,7 +117,8 @@ it("connects the live Skills surface to an exact self-managed revision before op
   render(content())
   await openManagement("更新技能")
   expect(await screen.findByLabelText("技能名称")).toHaveValue("Managed skill")
-  expect(fetcher.mock.calls.map(([url]) => String(url))).toEqual(["/api/hub/self/skill-installations/manage-installation", "/api/hub/self/skills/managed/manage-revision"])
+  expect(fetcher.mock.calls.map(([url]) => String(url))).toEqual(["/api/hub/self/skill-installations/manage-installation", "/api/hub/self/skills/managed/manage-revision", "/api/hub/self/skills/managed/manage-revision/versions"])
+  await waitFor(()=>expect(screen.getByTestId("personal-skill-publish-dialog").querySelector("form")).toHaveAttribute("aria-busy","false"))
   fireEvent.keyDown(screen.getByTestId("personal-skill-publish-dialog"), { key: "Escape" })
   await waitFor(() => expect(screen.queryByTestId("personal-skill-publish-dialog")).toBeNull())
   await openManagement("撤回技能")

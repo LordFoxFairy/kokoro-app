@@ -1,3 +1,11 @@
+## 2026-10-21 发布确认快照（App源码候选）
+
+固定BFF `be5cc6f91145d46ea504420b29b16ff16c981f28` /Public22.0.0/176，SHA256 `65019688691a6d6933146be66d4e7a1293f0dc92418a6f259a983529031b5c27`。沿既有发布session保存用户确认的系列状态；已有系列读取失败／404不会当成null，新系列明确null，重试沿原body/key。App/Admin正常配对和完整页面旅程仍待验收，不宣称整链完成。
+
+停写后完整七门exit0：contract297PASS／0SKIP、architecture50PASS、lint、typecheck、237文件4524PASS／0SKIP、webpack build及构建后types；1069非文档输入前后无漂移，既有受管Redis PONG／126→126。六SDK正规生成检查通过，原21.2历史proof字节保持。独审两项aria-busy问题均实际RED→GREEN后关闭，当前无确定阻断；初始3业务RED、首完整contract15处旧pin断言与后续2旧夹具FAIL均留日志，未放宽安全断言。一次中途门为审查修正主动终止，不当业务失败或通过。
+
+隔离真实Next＋CUA通过history503→显式重试、publish503未知→关闭重开→原body/key再次提交成功；首两次publication精确9007199254740993、请求及key相同，history仅原读取＋显式retry2次。612×766／390×844无横向溢出，Escape关闭。浏览器之后仅给同一aria-busy收紧open/admitted，否准入与pending→ready回归、最终七门证明；不改可见布局。自有preview进程／监听终止、源码副本清除；截图／HTTP夹具／回执仅ignored，不是正常IAM／Platform／Storage整链或Manus整页一比一证据。未单独运行整站Playwright，正常App/Admin配对和正式恢复旅程后继继续。13仓非递归fetch全部成功，Root保留4ahead/4behind与原WIP，不盲pull；App main仍为候选祖先。未push／PR／merge，模型／工具／扣费暂停。
+
 ## 2026-10-21 Skills 历史读链已正常配对并实测
 
 本轮增量：App `49ddf7f` 已在正常环境加载，当前指针与停用／撤回／隔离分开展示。实际原样本 current v2 显示“当前版本＋已撤回”，旧 v1 不继承该标记，正文切换与 Escape 回焦仍正常；612×766／390×844无横溢，完整动作网络窗仅GET、无截断，历史与 publication 与上轮完全一致。新增回归先3FAIL后19项通过，停写后完整七门均0（237文件4519PASS／0SKIP），1069非文档输入无漂移；受管Redis PONG／119→119，未单独重跑全站Playwright。仅重载App，其他六监听不变；没有业务命令、模型、工具或积分写入。Platform 已提交 `3fc971edbd99e0c0fe7d8a30a3ebf872f57f5b3c`：两 Publish 的明确 publication 条件进入原摘要与v2回执，成功重放优先，新执行同事务确认／CAS／回滚；无新服务／表／API。最终完整10阶段均0（168文件2573PASS、442资源SKIP不计通过），39冻结源码／artifact输入无漂移、正规再生成无drift；真实隔离PG发布／导入61PASS／0SKIP，临时库余量0。首次3业务RED、首全套15旧fixture／原HTTP负控次序FAIL保留，配对后重跑；原独立历史interpreter、raw向量和完整父图保护不放宽。独审无确定阻断；HTTP6.3与旧publication原字节保持，MCP只更新import闭包descriptor及bytes/hash，不动连接器业务。正常仍是旧owner，尚未push／PR／merge。BFF已提交`c707f5c7a5f7328f7b405967dd6d069df4166713`，Public22/176两发布显式确认快照进入原摘要／oneof；完整七门exit0、contract862PASS、default1514PASS／3原资源SKIP、719输入无漂移，独审无阻断。App／Admin未配对、正常未切换。Admin owner已提交`e95aba22d6ffc59a2c5979db39418b9a67f2822f`，现详情tag2复用原oneof明确空／真实指针版本，原current可用性过滤不动；真实PG9PASS／0SKIP、最终完整10阶段均0（2581PASS／451资源SKIP），取消／超时回归已补，独审无阻断，无新服务／表。下一步BFF固定该owner并投影Admin详情快照，再由App／Admin展示并冻结用户确认快照；复用既有发布／查询路由，不在提交时偷偷改期待值。恢复新UID旅程、删除、公开身份矩阵、后台和MCP等完整目标仍保留，模型／工具／扣费暂停。

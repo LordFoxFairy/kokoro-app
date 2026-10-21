@@ -1,3 +1,7 @@
+## 2026-10-21 发布确认消费者配对（实施中）
+
+App沿现发布弹窗读取既有历史接口的series publication；已有系列在用户提交前冻结明确null或指针／版本，新建系列明确null。创建、上传、扫描、校验、发布和未知结果恢复沿原session/key，不在提交或重试时改取最新；失效后仅显式重新开始。既有GitHub导入产生新系列，发布明确null；不增加API、服务、全局缓存或兼容入口。布局保持既有参考，本片不扩大恢复／删除能力。
+
 ## 2026-10-21 本人系列历史与精确预览
 
 复用现 PersonalSkillManagement 稳定宿主，新增只读 history 操作，按当代 fresh publisher admission 进入独立 PersonalSkillHistoryDialog；update/withdraw 的 active/disabled 写入门不套用历史读取。弹窗拥有版本页、选择、精确包目录/正文和各自失败重试，复用 SkillPackageFiles/SkillPackageDocument，不扩大现目录/安装详情状态机。历史当前标记仅来自 publication，选择不写入、不安装；本片不提供未完成的恢复或删除按钮。

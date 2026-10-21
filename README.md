@@ -1,3 +1,7 @@
+## 2026-10-21 发布确认快照（App源码候选）
+
+固定BFF `be5cc6f91145d46ea504420b29b16ff16c981f28` /Public22.0.0/176，SHA256 `65019688691a6d6933146be66d4e7a1293f0dc92418a6f259a983529031b5c27`。沿既有发布session保存用户确认的系列状态；已有系列读取失败／404不会当成null，新系列明确null，重试沿原body/key。App/Admin正常配对和完整页面旅程仍待验收，不宣称整链完成。
+
 ## 2026-10-20 MC-02A Public21 模型消费者候选
 
 当前BFF snapshot固定 `513b18e2942f94c5f2d4f48d9f9d3010b92db7e6` /Public21，业务模型严格接有效显示名、精确引用与nullable分页，选择使用raw稳定label key，不加provider前缀、不以别名替代身份。六public生成器正规配对，第七独立connector错误profile不换。当前验收与正常未激活边界见 `docs/CURRENT.md`；本片不改UI布局/聊天状态机，Key保存/领取和模型/工具/扣费未放行。下方历史版本按当时状态读取。

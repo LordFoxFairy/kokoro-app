@@ -1,3 +1,7 @@
+## 2026-10-21 发布确认快照（App源码候选）
+
+固定BFF `be5cc6f91145d46ea504420b29b16ff16c981f28` /Public22.0.0/176，SHA256 `65019688691a6d6933146be66d4e7a1293f0dc92418a6f259a983529031b5c27`。沿既有发布session保存用户确认的系列状态；已有系列读取失败／404不会当成null，新系列明确null，重试沿原body/key。App/Admin正常配对和完整页面旅程仍待验收，不宣称整链完成。
+
 ## 2026-10-20 MC-02A Public21 模型消费
 
 现 `src/contract/catalog.ts` 严格消费display_name/精确三ID/feature/request_model/required nullable next_cursor；engine与selector路径不另造身份或状态机。直接preview/test夹具随新wire配对；engine验证合法chat/fast及拒绝旧/extra字段，Composer真实UI→engine用例保raw label key。固定BFF513b18e/Public21的正规snapshot和六生成入口不扩operation，第七独立profile保持；新test-only `bff-shared-model-parent.ts` 精确逆回20再委托原20/19证明。源码门与E2E收据见CURRENT。

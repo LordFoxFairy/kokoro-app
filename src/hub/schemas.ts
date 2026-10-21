@@ -175,8 +175,13 @@ export const skillSourceVersionSchema = z
   .max(1024)
   .regex(/^[\x21-\x7e]+$/u)
   .refine((value) => value !== "null")
+export const skillPublicationPreconditionSchema = z.object({
+  current_version_id: skillCommandId,
+  state_version: skillStateVersionSchema.refine(value => BigInt(value) <= BigInt("9223372036854775806")),
+}).strict().nullable()
+export type SkillPublicationPrecondition = z.infer<typeof skillPublicationPreconditionSchema>
 export const skillPublishRequestSchema = z
-  .object({ expected_state_version: skillStateVersionSchema, audience: z.enum(["owner", "tenant", "catalog"]) })
+  .object({ expected_state_version: skillStateVersionSchema, audience: z.enum(["owner", "tenant", "catalog"]), expected_publication: skillPublicationPreconditionSchema })
   .strict()
 export type SkillPublishRequest = z.infer<typeof skillPublishRequestSchema>
 export const skillDraftSchema = z
