@@ -1,3 +1,7 @@
+## 2026-10-21 原生租户续接错误返回
+
+GET `/iam/interactions/select-tenant` 的合法成功导航不变；顶层HTML失败303到固定 `/auth/sign-in/failed`，不复制签名query或上游header/body，不自动登录或重发set-active。API、非导航和HTML q=0保原401/403/429/502/503语义。outer `/auth/select-tenant` 和inner路径最终使用no-referrer；失败页GET/刷新不发IAM请求。诊断只输出固定phase、数字status及已知native invalid_grant分类，无身份／密钥原文。该项只修产品返回与诊断，不声称owner并发已修。
+
 ## 2026-10-21 登录失败的产品返回边界
 
 登录交易消费先验证闭集记录、canonical target、MAC及三项浏览器proof绑定，再以原值比较后原子删除；错proof、错secret、未知或腐损记录拒绝但不删除，保原短TTL。验证与删除之间记录过期或变化也拒绝；并发合法callback最多一次进入exchange。NX及300秒期限保留。当前唯一 ledger 记录为 product-return-v2，MAC同时绑定state、handoff namespace、OIDC namespace和目标；旧记录不双读。/login 原生表单固定 csrfToken＋loginIntent；后者签名绑定 origin、期限、handoff namespace 和精确产品目标，不接受共享 return cookie 或请求头替代。各 POST 新建独立 OIDC namespace，由 Auth.js 原生 cookies options 校验，不重命名已生成 cookie、不投影 Request cookie。

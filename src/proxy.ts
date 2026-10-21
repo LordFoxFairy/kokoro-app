@@ -124,7 +124,8 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   // Route response headers alone are overridden by Next's Proxy merge. This
   // Exact native login paths only return redirects or inert error pages. Never
   // propagate a callback's code/state in the Referer of its recovery link.
-  if (path === "/iam/oauth2/authorize" || path === "/api/auth/signin/kokoro-iam" || path === "/api/auth/callback/kokoro-iam") {
+  if (path === "/iam/oauth2/authorize" || path === "/api/auth/signin/kokoro-iam" || path === "/api/auth/callback/kokoro-iam"
+    || path === "/auth/select-tenant" || path === "/iam/interactions/select-tenant") {
     response.headers.set("Referrer-Policy", "no-referrer")
     response.headers.set("Content-Security-Policy", oidcLoginDocumentPolicy(nonce))
   }

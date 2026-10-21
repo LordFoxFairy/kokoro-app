@@ -1,3 +1,11 @@
+## 2026-10-21 正常租户续接故障：具名诊断与产品失败恢复
+
+正常双密码中一笔select-tenant503仍未定根因。既存IAM整行session更新竞争可产生400 invalid_grant，App原映射也会将其他上游状态及transport异常归成503；不能仅凭页面503认定owner状态或改鉴权。当前沿现具名App route补固定phase/status及唯一已知native invalid_grant诊断，不记录原始body、签名query、cookie、凭据或任意错误文案，不新增服务／公开接口／DB／权限，不重发set-active。
+
+原生顶层HTML续接失败复用已有固定产品失败页；API、非导航及HTML q=0保原错误状态。成功分支、issuer cookies和导航校验不变；失败不透传上游body／Location／cookie，也不清其他登录交易。精确outer/inner select-tenant最终no-referrer；Next开发日志排除原生重写form与这两条签名路径，普通请求日志保留。Consent/invitation不改。
+
+本片先用于已授权正常诊断，不把产品失败页算登录成功。主方真实Next RED覆盖503裸JSON与签名query日志泄露；GREEN75 HTTP、lint/types通过。完整App最终门和正常根因修复仍待，正常加载前另核对源码／进程与停用开关。
+
 ## 2026-10-21 登录并发修复：沿用框架的交易隔离
 
 状态：已完成正常环境复现和本地锁定框架源码核查；用户已明确批准原生交易隔离方案，按本节边界实施。原生 namespace／签名 handoff／IAM 每渲染表单隔离均已在本地候选实施；真实 Next／Redis 回归和完整 App 七门已通过（236文件4497测试），正常App已加载7c70ab1，scope配对和原失败返回保持；双SSO成功，但双密码中的一笔tenant续接503及裸JSON仍未关闭。本节不把单标签成功当并发闭环。

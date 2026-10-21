@@ -803,7 +803,9 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
         const tenant = await page.goto(`http://localhost:${nextPort}/iam/interactions/select-tenant?sig=%2BAb`, {
           waitUntil: "domcontentloaded",
         })
-        expect(tenant?.status()).toBe(401)
+        expect(tenant?.status()).toBe(200)
+        expect(page.url()).toBe(`http://localhost:${nextPort}/auth/sign-in/failed`)
+        await page.getByRole("heading", { name: "登录暂未完成", exact: true }).waitFor({ state: "visible" })
         expect(await page.getByRole("combobox", { name: "Tenant" }).count()).toBe(0)
         expect(await page.getByRole("button", { name: "Continue" }).count()).toBe(0)
 
@@ -899,10 +901,16 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
     const code = `callback-log-${randomUUID()}`
     const callbackLookalike = `lookalike-log-${randomUUID()}`
     const marker = `ordinary-log-${randomUUID()}`
+    const formProof = `form-log-${randomUUID()}`
+    const tenantOuter = `tenant-outer-log-${randomUUID()}`
+    const tenantInner = `tenant-inner-log-${randomUUID()}`
     const verification = await rawHttp(nextPort, `/iam/verify-email?token=${token}`)
     await rawHttp(nextPort, `/iam/oauth2/authorize?client_id=${authorization}`)
     await rawHttp(nextPort, `/api/auth/callback/kokoro-iam?code=${code}`)
     await rawHttp(nextPort, `/api/auth/callback/kokoro-iam-extra?probe=${callbackLookalike}`)
+    await rawHttp(nextPort, `/auth/sign-in?sig=${formProof}`)
+    await rawHttp(nextPort, `/auth/select-tenant?sig=${tenantOuter}`)
+    await rawHttp(nextPort, `/iam/interactions/select-tenant?sig=${tenantInner}`)
     const ordinary = await rawHttp(nextPort, `/iam/jwks?probe=${marker}`)
     expect(verification.status).toBe(200)
     expect(ordinary.status).toBe(200)
@@ -919,6 +927,9 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
     expect(nextOutput).not.toContain(token)
     expect(nextOutput).not.toContain(authorization)
     expect(nextOutput).not.toContain(code)
+    expect(nextOutput).not.toContain(formProof)
+    expect(nextOutput).not.toContain(tenantOuter)
+    expect(nextOutput).not.toContain(tenantInner)
   })
 
   it("accepts only fixed-origin verification redirects and fails closed without leaking Location", async () => {
@@ -1610,6 +1621,35 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
     const direct = await rawPost(nextPort, "/iam/oauth2/consent", "accept=true", { origin: `http://localhost:${nextPort}` })
     expect(direct.status).toBe(405)
     expect(receivedPaths).toEqual([])
+  })
+
+  it.each([
+    ["text/html", "navigate", "document", 303],
+    ["text/html;q=0", "navigate", "document", 503],
+    ["application/json", "navigate", "document", 503],
+    ["text/html", "cors", "empty", 503],
+  ])("keeps failed tenant continuation bounded and native-only (%s/%s)", async (accept, mode, dest, expected) => {
+    setActiveStatus = 503
+    setActiveCookies = ["kokoro-issuer.session_data=must-not-leak; Path=/iam; HttpOnly; SameSite=Lax"]
+    const response = await rawHttp(nextPort, "/iam/interactions/select-tenant?sig=%2BAb", undefined, undefined, {
+      cookie: "kokoro-issuer.session_token=opaque", accept: String(accept),
+      "sec-fetch-mode": String(mode), "sec-fetch-dest": String(dest),
+    })
+    expect(response.status).toBe(expected)
+    expect(response.headers.location).toBe(expected === 303 ? "/auth/sign-in/failed" : undefined)
+    expect(response.headers["set-cookie"]).toBeUndefined()
+    expect(response.body).not.toContain("must-not-leak")
+    expect(receivedPaths.splice(0)).toEqual(["/iam/organization/set-active"])
+    if (expected === 303) {
+      expect(response.body).toBe("")
+      expect(response.headers["referrer-policy"]).toBe("no-referrer")
+      for (let i = 0; i < 2; i++) {
+        const page = await rawHttp(nextPort, "/auth/sign-in/failed")
+        expect(page.status).toBe(200)
+        expect(page.body).toContain("登录暂未完成")
+      }
+      expect(receivedPaths).toEqual([])
+    } else expect(JSON.parse(response.body)).toMatchObject({ error: { code: "iam_interaction_unavailable" } })
   })
 
   it.each([401, 403, 429, 503])("sanitizes fixed tenant continuation %i without upstream body or issuer cookies", async (status) => {

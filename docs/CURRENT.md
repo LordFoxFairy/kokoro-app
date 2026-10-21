@@ -1,3 +1,9 @@
+## 2026-10-21 租户续接失败恢复与诊断（局部候选）
+
+正常双密码续接503仍未定根因。本片沿具名route增加固定phase/status（仅识别已知native invalid_grant）诊断和原生HTML产品失败返回，不重试、不改鉴权、不清cookie；API/q=0/非导航状态、成功issuer cookies及导航校验保留。精确form rewrite和select-tenant签名路径不再进Next开发请求日志，普通日志保留，outer/inner最终no-referrer。
+
+主方先RED：native503裸JSON及旧config签名query泄露；后GREEN：真实Next75 PASS／0SKIP、定向lint和完整types通过，diff check通过。首次74PASS／1FAIL为旧Chromium401终态oracle，已按新合法303后精确failed URL/heading调整，API401负控保留。本片尚未跑完整App test/build，不作为本批PR交付；按既有授权正常诊断后再统一冻结最终门，不重复每个调试切片的4497全套。
+
 ## 2026-10-21 多标签原生交易隔离：已加载，正常密码续接仍有缺口
 
 已按批准设计完成每表单签名 handoff 与 CSRF、每次 POST 独立 Auth.js 原生 cookie options、唯一 v2 ledger 验证后 CAS，以及 IAM 每次渲染独立 proof。未证明的失败零清理；已消费终态仅清本交易，不清正式会话。旧记录与共享 return cookie 入口不保兼容。IAM 过期密码表单去固定产品失败页，刷新不自动登录；Consent／invitation 保原命名及消费语义。每请求可见 pending/header 预算拒绝新增，不驱逐有效交易。
