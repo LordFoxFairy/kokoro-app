@@ -56,6 +56,8 @@ export function PersonalSkillHistoryDialog({base,client,open,onOpenChange,return
     {page.data?.versions.length===0?<p>{t("skills.history.empty")}</p>:null}
     {page.data?.versions.map(version=><button type="button" key={version.skill_id} className={styles.version} aria-pressed={selected?.skill_id===version.skill_id} onClick={()=>setSelected(version)}>
      {version.is_current?<span className={styles.current}>{t("skills.history.current")}</span>:null}
+     {version.status!=="active"?<span className={styles.current}>{t(`skills.history.${version.status}`)}</span>:null}
+     {version.is_current&&page.data?.publication?.withdrawn_at&&version.status!=="withdrawn"?<span className={styles.current}>{t("skills.history.withdrawn")}</span>:null}
      <span>{new Intl.DateTimeFormat(locale,{hour:"numeric",minute:"2-digit"}).format(new Date(version.created_at))}</span><span className="sr-only">{t("skills.history.revision")} {version.revision}</span>
     </button>)}
     {more.error?<p role="alert">{t("skills.history.pageFailed")}<Button variant="ghost" onClick={refresh}>{t("skills.history.refresh")}</Button></p>:null}

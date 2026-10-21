@@ -55,3 +55,23 @@ it("keeps the displayed document when its already selected file is chosen again"
  fireEvent.click(screen.getByRole("button",{name:"SKILL.md"}))
  expect(screen.getByText("BODY")).toBeInTheDocument()
 })
+
+it.each([
+ {status:"active" as const,withdrawn:false,labels:[]},
+ {status:"disabled" as const,withdrawn:false,labels:["已停用"]},
+ {status:"withdrawn" as const,withdrawn:true,labels:["已撤回"]},
+ {status:"quarantined" as const,withdrawn:true,labels:["已隔离","已撤回"]},
+])("keeps the current pointer distinct from availability ($status, withdrawn=$withdrawn)",async({status,withdrawn,labels})=>{
+ const current={...row("old","2",true),status}, previous={...row("older","1"),status:"active" as const}
+ const history=page([current,previous])
+ history.publication!.withdrawn_at=withdrawn?"2026-10-21T01:00:00Z":null
+ const client={listHistory:vi.fn<SkillPublishClient["listHistory"]>().mockResolvedValue(history)}
+ vi.mocked(inspectManagedSkillPackage).mockResolvedValue({source_ref:"skill:old",revision:"2",files:[],selected_file:null})
+ show(client)
+ const selected=await screen.findByRole("button",{name:/版本 2/u})
+ expect(selected).toHaveTextContent("当前版本")
+ for(const label of labels)expect(selected).toHaveTextContent(label)
+ for(const label of ["已撤回","已停用","已隔离"])expect(screen.getByRole("button",{name:/版本 1/u})).not.toHaveTextContent(label)
+ expect(selected.textContent?.match(/已撤回/gu)??[]).toHaveLength(withdrawn?1:0)
+ expect(selected).toHaveAttribute("aria-pressed","true")
+})
