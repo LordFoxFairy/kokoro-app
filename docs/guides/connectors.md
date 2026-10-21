@@ -32,5 +32,7 @@ OAuth 在提供方授权窗口完成；Product 和管理后台沿用同一个产
 
 - App 只经同源 adapter 访问 BFF；Platform 拥有 MCP 控制面，IAM 拥有身份，Storage 拥有包字节与扫描，Agent 拥有实际运行。
 - Browser-private 请求、错误与当前固定生成物以 [API 契约](../API_CONTRACT.md) 和 [MCP 组件归属](../../src/ui/mcp/INDEX.md) 为准；它们不是新增的公开 Developer API，也不宣称复制了 Manus 私有后端。
-- 当前代码已用真实 Next／BFF HTTP、IAM PostgreSQL／Redis 和 Platform PostgreSQL 验证：正规登录、授权码／PKCE、自然过期、一次受控刷新、范围收缩后原 CAS 失败、显式新命令及回执重放。AS/MCP 服务是隔离夹具，仅发现声明，零 `tools/call`。
-- 这份 HTTP 验收不是浏览器水合、正常租户续期、无效 refresh token 的重新授权或 Agent runtime 执行证明。正常包上传／扫描／发布另有真实验收，不重复造样本。最新证据与未完成项统一见 [当前事实](../CURRENT.md)。
+- 当前代码已用真实 Next／BFF HTTP、IAM PostgreSQL／Redis 和 Platform PostgreSQL 验证：正规登录、授权码／PKCE、自然过期、一次受控刷新、范围收缩后原 CAS 失败、显式新命令及回执重放；另验证无效 refresh token 不盲目重发、显式 Reconnect 可恢复授权。AS/MCP 服务是隔离夹具，仅发现声明，零 `tools/call`。
+- 这份 HTTP 验收不是浏览器水合、正常租户续期、页面重授权入口可达或 Agent runtime 执行证明。正常包上传／扫描／发布另有真实验收，不重复造样本。最新证据与未完成项统一见 [当前事实](../CURRENT.md)。
+
+已知限制：私有 MCP 续期失败后的详情重连入口仍有缺口。后端显式重新授权的 HTTP 验证已通过，页面的待核实原命令仍会挡住该入口；修复与页面验收完成前，不以反复新建连接替代恢复。

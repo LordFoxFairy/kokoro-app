@@ -4,7 +4,9 @@
 
 最终1PASS／0SKIP／exit0；AS授权码交换1次、刷新1次，仅元数据发现、零tools/call，不配置模型／扣费。PG数据库目录94→94逐项相同、IAM fixture keys0→0逐项相同，独有Web Redis prefix清零；临时凭据已删除、无残留自有Node进程，正常七监听PID不变。第一次仅PATH缺pnpm导致fixture安装前失败，补现有工具路径后通过，未安装依赖或改产品代码；原失败不冒称产品RED。最后只修正测试标题为current candidate，再跑同一旅程通过，不称已合main。
 
-这是原生HTTP cookie jar／真实owner资源，不是浏览器水合或正常租户续期验收；无效refresh token／重新授权及Agent Resolve/Acquire/runtime仍未据此关闭。原包发布证据继续复用，`guides/connectors.md`同步使用／工程边界。原始脱敏收据留Root ignored `var/dev/mcp-current-expiry-20261021`；不新增API、Schema、服务或兼容层，完整Skills／MCP及PR合并目标仍active。
+补充无效refresh token独立HTTP负控亦为1PASS／0SKIP：AS返回invalid_grant后，原Prepare为503／mcp_personal_dependency_unavailable，保原access版本／过期时间和refresh claim，GET不重发；active连接误用Begin仍412，显式调用正式Reconnect后第二次code／PKCE恢复approved／ready，refresh总计仍1次。它不把unknown失败当作令牌已成功撤销，也不声称页面已显示reauthorization_required。正负最终收据资源均精确回原；四副本累计3321个tracked输入零漂移，临时源码副本已清理，只保脱敏harness与收据。
+
+这是原生HTTP cookie jar／真实owner资源，不是浏览器水合或正常租户续期验收。实际负控读回prepare_failed／OAuth已配置／active连接，现App私有详情资格函数返回false；独立只读复核已确认P1：Custom detail无其他可达重连入口，binding predicate、unknown主按钮、coordinator blocked与onAuthorize四处共同拦截。后继只修现组件内显式Reconnect分支，保原unknown Prepare／body／key，不自动重放或清除；当前连接器写区归属已提请协调，未先改同事业务代码。HTTP成功不冒充页面闭环。Agent Resolve/Acquire/runtime亦未据此关闭。原包发布证据继续复用，`guides/connectors.md`同步使用／工程边界。原始脱敏收据留Root ignored `var/dev/mcp-current-expiry-20261021`；不新增API、Schema、服务或兼容层，完整Skills／MCP及PR合并目标仍active。
 
 ## 2026-10-21 目录搜索连续点击：已正常加载并实测
 
