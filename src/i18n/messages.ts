@@ -658,6 +658,8 @@ export const zh = {
   "skills.publishDescription":
     "选择单个 ZIP 包。只有发布回执确认 ACTIVE 后才会显示成功。",
   "skills.publishFile": "ZIP 文件（最多 32 MiB）",
+  "skills.lifecycle.pending": "技能操作尚未结束。",
+  "skills.lifecycle.resume": "查看技能操作",
   "skills.lifecycle.update": "更新技能",
   "skills.lifecycle.examples": "示例问题（每行一项）",
   "skills.lifecycle.withdraw": "撤回技能",

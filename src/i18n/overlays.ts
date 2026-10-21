@@ -159,6 +159,8 @@ const firstSiteFallback: Partial<Record<MessageKey, string>> = {
 }
 
 const skillsFallback: Partial<Record<MessageKey, string>> = {
+  "skills.lifecycle.pending": "A skill operation is unfinished.",
+  "skills.lifecycle.resume": "View skill operation",
   "skills.sourceUnavailable": "This skill version is currently unavailable.",
   "skills.update.available": "Update to v{revision}",
   "skills.update.title": "Update skill",

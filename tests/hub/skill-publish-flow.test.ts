@@ -112,3 +112,19 @@ it("unknown new-version network result never automatically creates again",async(
  expect(client.createVersion).toHaveBeenCalledTimes(2)
  expect(client.createVersion.mock.calls[0]).toEqual(client.createVersion.mock.calls[1])
 })
+
+it("retains an unconfirmed creation when cancelled between the ACK and the next stage", async () => {
+ const session=createPersonalSkillVersionSession(lifecycleBase,{file:new File(["zip"],"update.zip"),display_name:"Updated",summary:"",tags:[],audience:"owner"})
+ const controller=new AbortController()
+ const client={
+  createVersion:vi.fn(async()=>{
+   queueMicrotask(()=>queueMicrotask(()=>controller.abort()))
+   return {skill_id:"new",series_id:"series",revision:"2",status:"draft",replayed:false,state_version:"1"}
+  }),
+  getUpload:vi.fn(),
+ }
+ await expect(runPersonalSkillPublishSession(client as unknown as SkillPublishClient,session,{signal:controller.signal,hash:async()=>"a".repeat(64)})).rejects.toMatchObject({reason:"aborted"})
+ expect(client.getUpload).not.toHaveBeenCalled()
+ expect(session.draft).toBeUndefined()
+ expect(session.draftUncertain).toBe(true)
+})

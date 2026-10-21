@@ -8,7 +8,7 @@ import { createSkillInstallationClient, type HubClient } from "@/hub/client";
 import { Button } from "@/components/ui/button";
 import { createSkillInstallationUpdateFlow } from "./skill-installation-update-flow";
 import { SkillInstallationUpdateDialog } from "./skill-installation-update-dialog";
-import type { SkillCard, SkillCatalogCard } from "@/hub/schemas";
+import type { PersonalInstallation, SkillCard, SkillCatalogCard } from "@/hub/schemas";
 import { isRequiredLockError } from "@/hub/rules";
 import { useT } from "@/i18n/context";
 import { cn } from "@/lib/utils";
@@ -20,6 +20,8 @@ import { useOverlayClose } from "@/ui/shell/use-overlay-close";
 import styles from "./skills-panel.module.css";
 import { toInstalledCatalogCard, toSkillActionCard } from "./skills-card-model";
 import { GithubImportDialog } from "./github-import-dialog";
+import { PersonalSkillManagement, type PersonalSkillSelection } from "./personal-skill-management";
+import type { PersonalSkillOperation } from "./personal-skill-actions";
 import { ManusSkillDetailDialog } from "./manus-skill-detail-dialog";
 import { type SkillsPool, skillStateKey } from "./skills-pool-model";
 import type { SkillsScopeFilter } from "./skills-scope";
@@ -197,6 +199,7 @@ function ActorSkillsContent(props: SkillsContentProps) {
   const updateFlow = useMemo(() => createSkillInstallationUpdateFlow({ client: createSkillInstallationClient(), boundary: { admitted: false, subject, generation: 0 } }), [subject]);
   const updateState = useSyncExternalStore(updateFlow.subscribe, updateFlow.getSnapshot, updateFlow.getSnapshot);
   const [updateOpen, setUpdateOpen] = useState<{ subject: string | null; open: boolean }>({ subject: null, open: false });
+  const [personalSelection, setPersonalSelection] = useState<PersonalSkillSelection | null>(null);
   const updateReturnFocus = useRef<HTMLElement | null>(null);
   const updateFallbackFocus = useRef<HTMLInputElement | null>(null);
   useLayoutEffect(() => updateFlow.retain({ admitted, subject, generation }), [updateFlow, admitted, subject, generation]);
@@ -209,17 +212,22 @@ function ActorSkillsContent(props: SkillsContentProps) {
   useEffect(() => {
     if (updateCurrent && updateState.acknowledged) invalidateUpdateViews();
   }, [updateCurrent, updateState.acknowledged, invalidateUpdateViews]);
-  const updateLocked = () => updateFlow.getSnapshot().kind !== "idle";
+  const updateLocked = () => personalSelection !== null || updateFlow.getSnapshot().kind !== "idle";
   const openUpdate = (skill: SkillCard, source: HTMLElement) => {
-    if (!updateCurrent || !updateFlow.select(skill, props.readBoundary)) return false;
+    if (personalSelection !== null || !updateCurrent || !updateFlow.select(skill, props.readBoundary)) return false;
     updateReturnFocus.current = source;
     setUpdateOpen({ subject, open: true });
     void updateFlow.readCurrent(props.readBoundary);
     return true;
   };
+  const managePersonal = (operation: PersonalSkillOperation, installation: PersonalInstallation) => {
+    if (props.preview || !updateCurrent || updateLocked()) return;
+    setPersonalSelection({ operation, source_ref: installation.source_ref, series_id: installation.series_id, revision: installation.revision });
+  };
   return <>
+    {personalSelection !== null ? <PersonalSkillManagement key={JSON.stringify(personalSelection)} selection={personalSelection} boundary={props.readBoundary} onReleased={() => setPersonalSelection(null)} onConfirmed={invalidateUpdateViews} onSelectPublished={selection => { if (updateCurrent) setPersonalSelection(selection); }} returnFocusRef={updateFallbackFocus} /> : null}
     {updateCurrent && updateState.kind !== "idle" ? <div className={styles.updateNotice} role="status"><span>{t(updateState.acknowledged ? "skills.update.confirmedNotice" : "skills.update.pendingNotice")}</span><Button type="button" variant="outline" onClick={event => { updateReturnFocus.current = event.currentTarget; setUpdateOpen({ subject, open: true }); void updateFlow.readCurrent(props.readBoundary); }}>{t("skills.update.resume")}</Button></div> : null}
-    <InstalledSkillsContent {...props} onUpdateSkill={openUpdate} updateFallbackFocus={updateFallbackFocus} updateLocked={updateLocked} updatePending={updateState.kind !== "idle"} />
+    <InstalledSkillsContent {...props} onUpdateSkill={openUpdate} updateFallbackFocus={updateFallbackFocus} updateLocked={updateLocked} updatePending={updateState.kind !== "idle"} onManagePersonal={managePersonal} personalManagementBusy={personalSelection !== null || updateState.kind !== "idle"} />
     <SkillInstallationUpdateDialog flow={updateFlow} boundary={props.readBoundary} state={updateState} admitted={updateCurrent} open={updateOpen.subject === subject && updateOpen.open} onOpenChange={open => { if (updateFlow.matches(props.readBoundary)) setUpdateOpen({ subject, open }); }} onAbandoned={invalidateUpdateViews} returnFocusRef={updateReturnFocus} fallbackFocusRef={updateFallbackFocus} />
   </>;
 }
@@ -248,7 +256,9 @@ function InstalledSkillsContent({
   updateFallbackFocus,
   updateLocked,
   updatePending,
-}: SkillsContentProps & { onUpdateSkill: (skill: SkillCard, source: HTMLElement) => boolean; updateFallbackFocus: RefObject<HTMLInputElement | null>; updateLocked: () => boolean; updatePending: boolean }) {
+  onManagePersonal,
+  personalManagementBusy,
+}: SkillsContentProps & { onManagePersonal: (operation: PersonalSkillOperation, installation: PersonalInstallation) => void; personalManagementBusy: boolean; onUpdateSkill: (skill: SkillCard, source: HTMLElement) => boolean; updateFallbackFocus: RefObject<HTMLInputElement | null>; updateLocked: () => boolean; updatePending: boolean }) {
   // Importers retire their own facts/work on every admission/generation change.
   // Keep only window intent here; the actor-keyed parent clears it on switch.
   const [githubOpen, setGithubOpen] = useState(false);
@@ -527,6 +537,12 @@ function InstalledSkillsContent({
             if (!open) { setDetailActionFact(null); setDetailIntent(null); }
           }}
           returnFocusRef={detailReturnFocusRef}
+          personalManagementBusy={personalManagementBusy}
+          onManagePersonal={(operation, installation) => {
+            if (liveOwner.current !== owner || !admitted || personalManagementBusy) return;
+            onManagePersonal(operation, installation);
+            setDetailActionFact(null); setDetailIntent(null);
+          }}
           onAdd={(skill) =>
             void onSetEnabled(
               toSkillActionCard(skill),

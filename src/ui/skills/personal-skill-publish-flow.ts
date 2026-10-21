@@ -26,6 +26,7 @@ export type PersonalSkillPublishSession = {
   readonly draftBody: Readonly<{ display_name: string; summary: string; tags: string[] }>
   hash?: string
   draft?: Draft
+  draftUncertain: boolean
   uploadChecked: boolean
   observed?: Upload
   beginBody?: Readonly<BeginSkillUploadRequest>
@@ -78,7 +79,7 @@ function newSession(input: PersonalSkillPublishSession["input"], resumed?: Manag
     draftBody: Object.freeze({ ...parsed, tags }),
     keys: Object.freeze({ draft: key(), begin: key(), complete: key(), validate: key(), publish: key() }),
     ...(resumed ? { resumed: managedPersonalSkillSchema.parse(resumed), draft: { skill_id: resumed.skill_id, series_id: resumed.series_id, revision: resumed.revision, state_version: resumed.product.state_version } } : {}),
-    uploadChecked: false, putAttempted: false, putDone: false, scanPaused: false, publishAttempted: false, running: false,
+    draftUncertain: false, uploadChecked: false, putAttempted: false, putDone: false, scanPaused: false, publishAttempted: false, running: false,
   }
 }
 export function createPersonalSkillPublishSession(input: PublishInput): PersonalSkillPublishSession { return newSession(input) }
@@ -129,12 +130,26 @@ export async function runPersonalSkillPublishSession(client: SkillPublishClient,
     }
     if (!session.draft) {
       onStage?.("draft")
-      const created = session.versionBase
-        ? createPersonalSkillVersionSchema.parse(await retryLostTransport(() => client.createVersion(session.versionBase!.skill_id, createPersonalSkillVersionRequestSchema.parse(session.draftBody), session.keys.draft, signal), signal, session.versionBase === undefined))
-        : skillDraftSchema.parse(await retryLostTransport(() => client.createDraft(session.draftBody, session.keys.draft, signal), signal, session.versionBase === undefined))
-      if (session.versionBase) assertSame(created.series_id === session.versionBase.series_id && created.skill_id !== session.versionBase.skill_id && BigInt(created.revision) > BigInt(session.versionBase.revision))
+      const created = await retryLostTransport(async () => {
+        const previouslyUncertain = session.draftUncertain
+        session.draftUncertain = true
+        try {
+          const created = session.versionBase
+            ? createPersonalSkillVersionSchema.parse(await client.createVersion(session.versionBase.skill_id, createPersonalSkillVersionRequestSchema.parse(session.draftBody), session.keys.draft, signal))
+            : skillDraftSchema.parse(await client.createDraft(session.draftBody, session.keys.draft, signal))
+          if (session.versionBase) assertSame(created.series_id === session.versionBase.series_id && created.skill_id !== session.versionBase.skill_id && BigInt(created.revision) > BigInt(session.versionBase.revision))
+          assertCurrent(signal)
+          return { ...created, revision: String(created.revision) }
+        } catch (error) {
+          // A later rejection cannot retire an earlier creation with a lost ACK.
+          const rejected = error instanceof HubClientError && error.reason === "http" && [400, 401, 403, 404, 409, 412, 413].includes(error.status ?? 0) && error.code !== "skill_command_in_progress"
+          session.draftUncertain = previouslyUncertain || !rejected
+          throw error
+        }
+      }, signal, session.versionBase === undefined)
       assertCurrent(signal)
-      session.draft = { ...created, revision: String(created.revision) }
+      session.draft = created
+      session.draftUncertain = false
     }
     const draft = session.draft
     if (session.publishAttempted) {
