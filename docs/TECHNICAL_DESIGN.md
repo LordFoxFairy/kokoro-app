@@ -1,3 +1,43 @@
+## 2026-10-21 登录并发修复设计提案：沿用框架的交易隔离
+
+状态：已完成正常环境复现和本地锁定框架源码核查，已提交用户选择，尚未实现／激活本提案。现有 `e62745c` 的 scope 配对和失败返回仍保持；本节不把单标签成功当并发闭环。
+
+### 基线与不变边界
+
+NextAuth 4.24.15、Next 16.2.6、openid-client 5.7.1；App 拥有 Product 会话与短期登录交易，IAM 继续拥有 issuer 登录／OAuth client／授权。保留原 provider、callback、issuer、PKCE/S256、state、nonce、原 token 验签与身份检查，保留网络 deadline、取消和未知 exchange 不重发。无新服务、数据库或公开业务 API，无 IAM 权限和 BFF 业务改变。
+
+### 已证实的单槽冲突
+
+1. IAM sign-in 每次 GET 都轮换同一路径 CSRF cookie，使另一已打开表单的 hidden proof 失效。
+2. Auth.js 默认三 cookie 名固定；第二次 start 覆盖第一交易。原 ledger 在校验 binding 前 GETDEL，错误 cookie 还会消耗合法交易。
+3. `/login` 用一个共享 return cookie 将 target 交给 provider POST；两个开始请求交错时可能串返回目标。
+4. 冷浏览器两个 `/login` 都未携带原 CSRF cookie 时，分别签发同名 Auth.js CSRF；后响应覆盖前表单。已有 cookie 的复用测试不覆盖此竞态。
+5. 同一 IAM query 的两个首次 GET 都没有 cookie，仍会分别签发同名 proof；按 query 命名并只复用已有 proof 也不足以解决。
+
+### 选择与数据流
+
+首选框架原生 cookies options。备选是把 Auth.js 加密证明存入 ledger，再由精确 callback Proxy 投影到框架 cookie 视图；后者增加敏感证明存储和鉴权投影，本次不选。浏览器全局 single-flight 也不选，避免租约／崩溃恢复与改变多标签行为。
+
+- `/login` 为每个原生启动表单分配随机 handoff namespace，签发包含版本、origin、有效期、handoff namespace 与精确 target 的 HMAC intent。该 handoff namespace 也用于原生 `cookies.csrfToken` 配置及表单 double-submit proof，两个首次 GET 不共享 CSRF cookie。provider POST 先验固定字段及 intent，再以该 namespace 创建独立 Auth.js options；仍由框架核原 double-submit，只把 csrfToken 交给框架。退役共享 return cookie 和依赖它的生产读取，不信任 body 自报 URL。
+- provider POST 验明 intent 后，沿 handoff namespace 配置原生 csrfToken；另为每次 POST 分配全新 OIDC namespace，经公共 `AuthOptions.cookies` 配置 state、pkceCodeVerifier、nonce 的名字及完整原安全属性。两种 namespace 不合并：Auth.js CSRF 仅比较、不一次消费，同一表单并发重复 POST 也必须生成互不覆盖的 OIDC 交易，不新增 start-claim 状态。callback 的原生 cookie 配置由已验 ledger 恢复；记录 MAC 绑定所需两 namespace，终态只清本交易 proof，已结束的 handoff CSRF 不在 callback 重新签发／泄漏。每请求创建 options，不改共享配置，不在生成后重命名 cookie。本版本从 `next/headers` 读取请求 cookie，不改写 Request Cookie 冒充 Next 运行上下文。
+- 现 ledger 采用单一新记录形状，MAC 绑定 provider、origin／callback、namespace、精确 target 和三项 proof 摘要。合法 state 只负责定位记录；先 GET 并严格验证记录形状和 MAC，再恢复 namespace、读取该交易精确 cookie 并验证浏览器 binding，最后比较原值原子消费；并发只允许一个进入 exchange。不接受 query 自报 namespace，不回退默认 cookie 名。错 cookie、错 namespace、错 MAC 不消耗别人的合法交易。部署后不接受旧记录，返回已有产品失败页，由用户显式重新发起；不双读、不重放，不清正式会话。
+- IAM sign-in 每次渲染分配独立 proof，cookie 名由精确 interaction query 与该随机 proof 的摘要共同推导；同 query 的并发首次 GET 也使用不同名，不依赖“先有 cookie”或复用旧 proof。POST 用唯一、格式合法的 hidden proof 定位该 cookie；issue／read／consume／clear 采用同一规则，原 ledger 继续绑定 issuer session、path、method、原始 query 字节及 form-cookie。选错或伪造 query／proof 不获取另一表单的资格，也不清其 cookie。真正 issuer session、签名 query 或 challenge 已变化时，旧表单明确失效，不静默换绑或重发凭据。表单 CSRF proof 不是验证码。Consent／invitation 本次不改命名或消费语义。
+- 成功、issuer error 和明确终态只清理本交易已证明所属的临时 proof，不删除其他交易或 Product cookie；未知 token exchange 保已消费，不重开或自动补发。
+- 请求可见 pending namespace 数量与既有 cookie/header 总预算在分配前检查，超额明确拒绝新 start，不驱逐有效交易。它是每请求可见预算，不冒称跨并发请求的全局配额；不为此新增浏览器 lease／协调服务。保留短 TTL，并清本交易终态 cookie，避免正常多标签累积。
+- 一个浏览器仍共用一个正式 Product 账号会话；namespace 不是按 tab 隔离账户。两个合法 callback 仍沿既有共享 session／主体切换语义，但各自 return target 独立；失效或错误 callback 不动较新正式会话。不另造多账号 session 架构。
+
+### 唯一写区与验证
+
+写区限 `src/lib/server/oidc-provider.ts`、`oidc-rp-transaction.ts`、原 auth route、原 `/login` 与 return handoff helper、`iam-interaction-csrf.ts`、精确 sign-in Proxy/handler，以及对应现有测试和本设计／API／登录指南。Consent／invitation 不重写，只保原回归；不触碰 Skills／模型／工具／扣费。
+
+最低独有回归：同一合法 intent／csrf 表单并发重复 POST 仍产生独立 OIDC proof；冷浏览器两个 `/login` 首次请求；同 IAM query 无 proof 的两个首次 GET；A 表单打开后 B start；两 provider 响应／callback 正反序；两个不同 return target 交错；同 query 刷新／复制标签；错配三 proof 后原交易仍成功；并发重复 callback 至多一次 exchange；A error／过期不破坏 B；未知 exchange 零重发；issuer session 变化旧表单拒绝；secure cookie、canonical Host／内部 localhost、API JSON／HTML q=0、预算与各自终态清理。随后用正常两个标签真实密码登录验收，既有单标签成功不冲销先前并发失败。
+
+### 本次失败复现（不是修复验收）
+
+在 `e62745c` 原生产输入上临时加入两个具名回归，运行锁定 Node 22／Vitest：`vitest run tests/server/login-route.test.ts tests/server/iam-interaction-csrf.test.ts --maxWorkers=1 --testNamePattern 'cold-start race reproduction'`。结果 2 FAIL／26 名称过滤：冷浏览器表单只有最后写 cookie 的一个仍匹配；同 query 两个首次 proof 实际消费 `[true, false]`，预期互不覆盖。前者为本地 route 调用，后者使用受管 Redis 的独立随机 origin 与自建 proof，不是浏览器或完整 IAM 链验收。
+
+测试执行后原两文件逐字还原，1060 份非文档输入无变化；可重放补丁与原始 RED 日志只留本地 ignored。正常服务／业务数据／执行开关未变。审查提出的两个风险已由实际失败确认，原先只给三 OIDC proof 分 namespace 的提案不足，按本节补齐后再实施及验收。
+
 ## 2026-10-21 登录失败的产品返回边界
 
 OAuth/OIDC 继续归 IAM，App 只拥有 Product 登录交互和会话。原生顶层 HTML 登录／回调／authorize 失败 303 返回固定 `/auth/sign-in/failed`，不复制 query、owner body、Location 或 cookie；新页复用 App 现有 UI 组件与语义 token，显示登录状态及显式返回入口。渲染／刷新页面不重新发起 OAuth，不创建或恢复 session。API／iframe／非导航和 HTML q=0 保留原错误 status／JSON，不变成成功。
