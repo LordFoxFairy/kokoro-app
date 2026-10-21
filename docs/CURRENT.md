@@ -1,8 +1,12 @@
-## 2026-10-21 租户续接失败恢复与诊断（局部候选）
+## 2026-10-21 租户续接根因已修，正常双密码回归通过
 
-正常双密码续接503仍未定根因。本片沿具名route增加固定phase/status（仅识别已知native invalid_grant）诊断和原生HTML产品失败返回，不重试、不改鉴权、不清cookie；API/q=0/非导航状态、成功issuer cookies及导航校验保留。精确form rewrite和select-tenant签名路径不再进Next开发请求日志，普通日志保留，outer/inner最终no-referrer。
+App76326e5已正常加载：原生HTML租户失败303到固定产品结果页，API/q=0/非导航保失败语义；签名form／tenant路径不进开发访问日志，no-referrer，不重发、不清其他交易。IAM1c4209b在独立源码目录正常加载，主目录main未改；同一Session普通tenant／updatedAt变更不再误作隐式整行CAS，原谓词、身份、到期／撤销及凭据rotation/delete保护保留。
 
-主方先RED：native503裸JSON及旧config签名query泄露；后GREEN：真实Next75 PASS／0SKIP、定向lint和完整types通过，diff check通过。首次74PASS／1FAIL为旧Chromium401终态oracle，已按新合法303后精确failed URL/heading调整，API401负控保留。本片尚未跑完整App test/build，不作为本批PR交付；按既有授权正常诊断后再统一冻结最终门，不重复每个调试切片的4497全套。
+本App最终完整七门均0：contract296／architecture50、lint／types、236文件4501 PASS／0SKIP、webpack构建及构建后types；1062非文档输入无漂移。IAM owner完整verify119文件1517 PASS，真实PG／Redis／HTTP三文件19 PASS；独立审查无确定阻断。原RED、测试装配错误和中间失败保留，不冒全部integration或独立preview E2E通过。
+
+正常已通过菜单正式退出、两标签密码表单并发提交，两笔均回产品：一个恢复历史会话正文，另一个打开技能设置并真实列出安装项。仅重载本方IAM，原配置字节相同、其他监听进程与执行开关不变；原隐藏用户标签只证回原路由，不冒正文通过。该轮CDP读取混入旧事件且一窗截断，不作为完整网络链证据；正常结果由UI、owner因果屏障与实际运行版本分别证明。
+
+未push／PR／merge。长协议query、英文原生退出确认及pending预算恢复体验仍OPEN，后继保issuer确认cookie／正式终止流程做产品化；不以清App会话或添加未经核实hint跳过确认。完整积分／Agent／首页／Skills／MCP目标保留，模型、工具与扣费暂停。下方为此前阶段记录，不覆盖本节当前态。
 
 ## 2026-10-21 多标签原生交易隔离：已加载，正常密码续接仍有缺口
 
