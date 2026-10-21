@@ -1,8 +1,12 @@
-## 2026-10-21 登录失败返回修复
+## 2026-10-21 登录阻断已修，完整登录体验仍有明确遗留
 
-基于 ee1d4a7 的本地候选完成：顶层原生登录失败离开回调／authorize 技术地址，固定返回产品结果页；API／非导航保持错误语义。issuer error 复用既有唯一本地校验器，严格绑定并消费原交易，配置错误不进入 token exchange，不改其他登录 cookie。Next 内部 localhost authority 与外部 canonical Host 区分保留；新页不自动登录。
+运行 App 已加载 acd28c69ff408ac088ba1e229bfbb224f1108060。正式 IAM scope 按 session pair → profile 顺序演进并回读 current：Product client 16／resource 27；用户已明确授权恢复本地失效 OAuth 管理资格，备份后仅重载 IAM，不改密码、平台角色或积分。
 
-最终冻结1060个非文档输入无变化，contract296／architecture50／lint／typecheck／235文件4482测试／webpack build／构建后types均通过。定向130及隔离真实Next/Redis新回调旅程通过；两次独审后的测试中断记录保留，不作为通过。正常环境仍须完成IAM正式scope配对及新登录自验，旧会话成功不替代该证据；本片不称Skills、后台或MCP全目标完成。相关说明：[登录与登录恢复](guides/login.md)。
+正常浏览器：原 invalid_scope 回调刷新后离开技术 URL；新 Product OAuth 交易按指定目标返回技能页，signin302→authorize302→callback303→页面与session200，窗口无截断。真实退出后密码表单也已303→租户选择302→callback303→工作区／session200；历史会话完整回读，未提交模型／工具／扣费。只在失效旧会话上操作不再算新登录验收。
+
+同时实际复现了未关闭问题：两个标签同时落入登录会导致共享登录交易／CSRF cookie 互扰，第一次密码提交重启登录；重新读取唯一有效表单后成功。清理验收重复标签只是恢复现场，不是修复该缺陷。并发登录隔离、登录地址的长协议 query、原生退出确认页未统一产品 UI，继续列为登录收口项，不能称登录整链全部完成。
+
+最终冻结1060个非文档输入无变化，contract296／architecture50／lint／typecheck／235文件4482测试／webpack build／构建后types均通过；定向130及隔离真实Next/Redis回调6项通过。独审发现的error_uri、真实/login入口与Next内部authority均已修。该证据只支持本片，不替代全部Skills／后台／MCP或并发登录验收。说明：[登录与登录恢复](guides/login.md)。
 
 ## 2026-10-21 Skills 与正常模型候选配对（隔离集成中）
 
