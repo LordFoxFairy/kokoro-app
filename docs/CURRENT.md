@@ -1,3 +1,9 @@
+## 2026-10-21 正常项目技能入口：站点清单尚未配对
+
+只读进入既有 QA Skills recovery 项目，正常页面未渲染技能入口；同源 runtime manifest 200、configVersion1，仅含 chat。现能力投影在显式清单缺 workspace.skills／project.skills 时关闭入口，正常与候选该文件字节相同。未将其误诊为旧分支或新增常开 fallback；已提请仅开放项目技能入口的站点配置边界，不启模型／工具／扣费、不接管自动化／连接器。未修改配置、数据或执行开关，未声称项目列表并集已正常验收。
+
+截图／AX／有界清单证据仅Root ignored `var/dev/skills-project-admission-20261021`；本轮仅导航和只读请求，没有完整网络采集，不据此宣称全部网络零写。四仓草稿PR已集中创建，详见Root当前事实；合并与完整目标仍未完成。
+
 ## 2026-10-21 MCP 当前运行发现链：隔离验证通过，执行仍暂停
 
 复用现有链路，未新增业务接口、服务、表或兼容层。固定 Agent `9a2679f`／IAM `7cbe988`／Platform `97b27b3`，当前 signer／transport 经真实 IAM HTTP、PostgreSQL／Redis 和 Platform HTTP／PostgreSQL，完成精确包下载及标准 MCP SDK stdio 发现；撤销 fixture 连接后，Agent 读到 revoked 即拒绝，不再领取凭据或下载。最终1 PASS／0 SKIP：9笔签名请求、1次下载、凭据仅 discovery、零调用授权事件，tools/call 防执行标记不存在。
