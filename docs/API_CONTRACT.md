@@ -1,6 +1,8 @@
 ## 2026-10-21 登录失败的产品返回边界
 
-登录交易消费先验证闭集记录、canonical target、MAC及三项浏览器proof绑定，再以原值比较后原子删除；错proof、错secret、未知或腐损记录拒绝但不删除，保原短TTL。验证与删除之间记录过期或变化也拒绝；并发合法callback最多一次进入exchange。外部方法、错误码、NX及300秒期限不变；本阶段不代表已完成多标签cookie命名隔离。
+登录交易消费先验证闭集记录、canonical target、MAC及三项浏览器proof绑定，再以原值比较后原子删除；错proof、错secret、未知或腐损记录拒绝但不删除，保原短TTL。验证与删除之间记录过期或变化也拒绝；并发合法callback最多一次进入exchange。NX及300秒期限保留。当前唯一 ledger 记录为 product-return-v2，MAC同时绑定state、handoff namespace、OIDC namespace和目标；旧记录不双读。/login 原生表单固定 csrfToken＋loginIntent；后者签名绑定 origin、期限、handoff namespace 和精确产品目标，不接受共享 return cookie 或请求头替代。各 POST 新建独立 OIDC namespace，由 Auth.js 原生 cookies options 校验，不重命名已生成 cookie、不投影 Request cookie。
+
+IAM sign-in 的原生表单仍为 csrf_token／email／password；每次 GET 独立随机 proof，cookie 名由精确签名 query 和 proof 的摘要共同派生。POST 原 issuer/path/method/query/form-cookie 绑定验证后才原值 CAS，一次消费；未证明失败零清理，已消费终态只清自己，Consent／invitation 不改。顶层 HTML 失效表单去固定失败页，不自动重发密码／OAuth；API 仍403。分配前检查每请求可见 proof 数及 cookie 分配预算（超额429），原 header 总字节预算仍为413；不驱逐别的有效表单；不是全局并发配额。
 
 OAuth/OIDC 继续归 IAM，App 只拥有 Product 登录交互和会话。原生顶层 HTML 登录／回调／authorize 失败 303 返回固定 `/auth/sign-in/failed`，不复制 query、owner body、Location 或 cookie；新页复用 App 现有 UI 组件与语义 token，显示登录状态及显式返回入口。渲染／刷新页面不重新发起 OAuth，不创建或恢复 session。API／iframe／非导航和 HTML q=0 保留原错误 status／JSON，不变成成功。
 

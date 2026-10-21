@@ -67,7 +67,7 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   let response: NextResponse
   if (path === "/auth/sign-in" && request.method === "GET") {
     const [{ iamRelayConfig, matchesCanonicalWebRequest }, { filterIssuerCookies, IAM_RELAY_POLICY },
-      { issueIamInteractionCsrf }, { readSignInFeedback, clearSignInFeedback }, { rawIamSignInQuery, isIamSignInExpired }] = await Promise.all([
+      { issueIamInteractionCsrf, iamSignInCsrfWithinBudget }, { readSignInFeedback, clearSignInFeedback }, { rawIamSignInQuery, isIamSignInExpired }] = await Promise.all([
       import("@/lib/server/iam-relay-config"), import("@/lib/server/iam-relay-policy"),
       import("@/lib/server/iam-interaction-csrf"), import("@/lib/server/iam-sign-in-feedback"),
       import("@/lib/server/iam-sign-in-target"),
@@ -90,6 +90,9 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     for (const [name, value] of request.headers) byteCount += Buffer.byteLength(name) + Buffer.byteLength(value) + 4
     if (byteCount > IAM_RELAY_POLICY.maxHeaderBytes || request.body !== null) {
       return new NextResponse(null, { status: 413, headers: { "cache-control": "no-store" } })
+    }
+    if (!iamSignInCsrfWithinBudget(request.headers.get("cookie"))) {
+      return new NextResponse(null, { status: 429, headers: { "cache-control": "no-store" } })
     }
     const issuerCookie = filterIssuerCookies(request.headers.get("cookie"), config.secureCookies)
     if (issuerCookie === null) return new NextResponse(null, { status: 400, headers: { "cache-control": "no-store" } })

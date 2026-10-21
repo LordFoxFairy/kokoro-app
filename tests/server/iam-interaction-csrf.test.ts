@@ -3,7 +3,7 @@ import { createHash, randomUUID } from "node:crypto"
 import { afterAll, describe, expect, it } from "vitest"
 import { createClient } from "redis"
 
-import { consumeIamInteractionCsrf, iamCsrfKeyPrefix, issueIamInteractionCsrf } from "@/lib/server/iam-interaction-csrf"
+import { consumeIamInteractionCsrf, iamCsrfKeyPrefix, iamSignInCsrfCookieName, iamSignInCsrfWithinBudget, issueIamInteractionCsrf } from "@/lib/server/iam-interaction-csrf"
 
 const redisUrl = process.env.KOKORO_WEB_REDIS_URL ?? "redis://127.0.0.1:6379"
 const webOrigin = `http://csrf-${randomUUID()}.localhost:3000`
@@ -51,7 +51,7 @@ describe("Web IAM interaction CSRF", () => {
     expect(issued.cookie).toContain("Path=/auth/sign-in")
     const input = { redisUrl, webOrigin, path: "/auth/sign-in" as const, method: "POST" as const, query: "?sig=%2BAb", issuerCookie, cookieToken: issued.token, formToken: issued.token }
     expect(await consumeIamInteractionCsrf({ ...input, query: "?sig=+Ab" })).toBe(false)
-    expect(await consumeIamInteractionCsrf(input)).toBe(false)
+    expect(await consumeIamInteractionCsrf(input)).toBe(true)
 
     const fresh = await issue({ redisUrl, webOrigin, path: "/auth/sign-in", method: "POST", query: "?sig=%2BAb", issuerCookie, secureCookies: false })
     const result = await Promise.all([0, 1].map(() => consumeIamInteractionCsrf({ ...input, cookieToken: fresh.token, formToken: fresh.token })))
@@ -64,7 +64,7 @@ describe("Web IAM interaction CSRF", () => {
     const input = { redisUrl, webOrigin, path: "/auth/sign-in" as const, method: "POST" as const, query: "?sig=one", issuerCookie, cookieToken: issued.token, formToken: issued.token }
     expect(await consumeIamInteractionCsrf({ ...input, formToken: "attacker" })).toBe(false)
     expect(await consumeIamInteractionCsrf({ ...input, issuerCookie: "" })).toBe(false)
-    expect(await consumeIamInteractionCsrf(input)).toBe(false)
+    expect(await consumeIamInteractionCsrf(input)).toBe(true)
   })
 
   it("fails closed when its Redis URL is unavailable", async () => {
@@ -82,7 +82,7 @@ describe("Web IAM interaction CSRF", () => {
     const base = { redisUrl, webOrigin, path: "/auth/sign-in" as const, query: "?sig=method", issuerCookie,
       cookieToken: issued.token, formToken: issued.token }
     expect(await consumeIamInteractionCsrf({ ...base, method: "GET" })).toBe(false)
-    expect(await consumeIamInteractionCsrf({ ...base, method: "POST" })).toBe(false)
+    expect(await consumeIamInteractionCsrf({ ...base, method: "POST" })).toBe(true)
   })
 
   it("binds consent evidence to its signed query and issuer session", async () => {
@@ -151,4 +151,34 @@ describe("Web IAM interaction CSRF", () => {
     await expect(cleanupIssuedTokens("redis://127.0.0.1:1", new Set(["a"]))).rejects.toThrow()
     expect(Date.now() - start).toBeLessThan(2_500)
   })
+})
+
+
+it("cold-start race reproduction: same-query first renders do not invalidate either form", async () => {
+  const binding = { redisUrl, webOrigin, path: "/auth/sign-in" as const, method: "POST" as const,
+    query: "?sig=same-query-first-render", issuerCookie, secureCookies: false }
+  const [a, b] = await Promise.all([issue(binding), issue(binding)])
+  const cookieJar = new Map<string, string>()
+  for (const proof of [b, a]) {
+    const pair = proof.cookie.split(";", 1)[0]!
+    cookieJar.set(pair.slice(0, pair.indexOf("=")), pair.slice(pair.indexOf("=") + 1))
+  }
+  const readCookie = (proof: typeof a) => cookieJar.get(proof.cookie.slice(0, proof.cookie.indexOf("="))) ?? null
+  const result = await Promise.all([a, b].map(proof => consumeIamInteractionCsrf({ ...binding,
+    cookieToken: readCookie(proof), formToken: proof.token })))
+  expect(result).toEqual([true, true])
+})
+
+
+it("derives sign-in proof names from exact query and random proof, and bounds visible pending forms", () => {
+  const token = "a".repeat(43)
+  const name = iamSignInCsrfCookieName("?sig=%2BAb", token)!
+  expect(name).not.toBe(iamSignInCsrfCookieName("?sig=+Ab", token))
+  expect(name).not.toBe(iamSignInCsrfCookieName("?sig=%2BAb", "b".repeat(43)))
+  expect(iamSignInCsrfCookieName("?sig=one", "bad")).toBeNull()
+  const names = ["a", "b", "c", "d"].map(letter => iamSignInCsrfCookieName("?sig=one", letter.repeat(43))!)
+  expect(iamSignInCsrfWithinBudget(names.slice(0, 3).map(name => `${name}=proof`).join("; "))).toBe(true)
+  expect(iamSignInCsrfWithinBudget(names.map(name => `${name}=proof`).join("; "))).toBe(false)
+  expect(iamSignInCsrfWithinBudget(`${name}=proof; ${name}=other`)).toBe(false)
+  expect(iamSignInCsrfWithinBudget("unrelated=" + "a".repeat(12288))).toBe(false)
 })

@@ -20,6 +20,25 @@ function sha256(value: string): string {
   return createHash("sha256").update(value).digest("hex")
 }
 
+/** Per-render proof: two cold renders of the same signed query never share a cookie. */
+export function iamSignInCsrfCookieName(query: string, token: string | null): string | null {
+  if (token === null || !TOKEN_PATTERN.test(token)) return null
+  return `${COOKIE_NAME}_signin_${sha256(query).slice(0, 16)}_${sha256(token).slice(0, 32)}`
+}
+
+export function iamSignInCsrfWithinBudget(raw: string | null): boolean {
+  if (raw === null) return true
+  if (Buffer.byteLength(raw) > 12_288) return false
+  const names = new Set<string>()
+  for (const pair of raw.split(";")) {
+    const name = pair.trim().split("=", 1)[0]!
+    if (!name.startsWith(`${COOKIE_NAME}_signin_`)) continue
+    if (names.has(name)) return false
+    names.add(name)
+  }
+  return names.size < 4
+}
+
 export function iamCsrfKeyPrefix(webOrigin: string): string {
   return `kokoro:web:iam-csrf:${sha256(webOrigin)}:`
 }
@@ -62,11 +81,13 @@ export async function issueIamInteractionCsrf(input: Binding & Readonly<{ secure
   token: string
   cookie: string
 }>> {
-  const cookieName = input.cookieName ?? COOKIE_NAME
-  if (!/^kokoro_iam_csrf(?:_invite_(?:signin|signup|accept|reject))?$/u.test(cookieName)) {
+  const token = randomBytes(32).toString("base64url")
+  const cookieName = input.path === "/auth/sign-in"
+    ? iamSignInCsrfCookieName(input.query, token)!
+    : input.cookieName ?? COOKIE_NAME
+  if (input.path !== "/auth/sign-in" && !/^kokoro_iam_csrf(?:_invite_(?:signin|signup|accept|reject))?$/u.test(cookieName)) {
     throw new Error("invalid IAM interaction CSRF cookie name")
   }
-  const token = randomBytes(32).toString("base64url")
   const key = `${iamCsrfKeyPrefix(input.webOrigin)}${sha256(token)}`
   const stored = await withRedis(input.redisUrl, (client) => client.set(key, bindingDigest(input), {
     EX: TOKEN_TTL_SECONDS,
@@ -89,9 +110,22 @@ export async function consumeIamInteractionCsrf(input: Binding & Readonly<{
     !timingSafeEqual(Buffer.from(input.cookieToken), Buffer.from(input.formToken))
   ) return false
   const key = `${iamCsrfKeyPrefix(input.webOrigin)}${sha256(input.cookieToken)}`
+  const expected = bindingDigest(input)
+  if (input.path === "/auth/sign-in") {
+    return withRedis(input.redisUrl, async (client) => {
+      const stored = await client.get(key)
+      if (stored === null || stored.length !== expected.length ||
+        !timingSafeEqual(Buffer.from(stored), Buffer.from(expected))) return false
+      const consumed = await client.eval(
+        "if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) else return 0 end",
+        { keys: [key], arguments: [stored] },
+      )
+      return consumed === 1
+    })
+  }
   const stored = await withRedis(input.redisUrl, (client) => client.getDel(key))
   if (stored === null) return false
-  return timingSafeEqual(Buffer.from(stored), Buffer.from(bindingDigest(input)))
+  return stored.length === expected.length && timingSafeEqual(Buffer.from(stored), Buffer.from(expected))
 }
 
 export function iamCsrfCookieName(): string {

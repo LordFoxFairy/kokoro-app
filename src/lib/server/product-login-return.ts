@@ -1,49 +1,32 @@
-
-import { createHmac, timingSafeEqual } from "node:crypto"
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto"
 
 import { parseProductReturnTarget, type ProductReturnTarget } from "@/lib/product-return-target"
+import { OIDC_TRANSACTION_TTL_SECONDS, validOidcNamespace } from "./oidc-transaction-cookies"
 
-const COOKIE_NAME = "kokoro_product_login_return"
+const VERSION = "product-login-intent-v1"
+export type ProductLoginIntent = Readonly<{ target: ProductReturnTarget; handoffNamespace: string }>
 
-function mac(encodedTarget: string, secret: string): string {
-  return createHmac("sha256", secret).update(`product-login-return-v1:${encodedTarget}`).digest("hex")
+function mac(value: string, secret: string): string {
+  return createHmac("sha256", secret).update(`${VERSION}:${value}`).digest("hex")
 }
 
-function cookieValue(source: string | null): string | null {
-  if (source === null) return null
-  let found: string | null = null
-  for (const part of source.split(";")) {
-    const pair = part.trim()
-    const separator = pair.indexOf("=")
-    if (separator < 1) return null
-    if (pair.slice(0, separator) !== COOKIE_NAME) continue
-    if (found !== null) return null
-    found = pair.slice(separator + 1)
-  }
-  return found
+export function issueProductLoginIntent(target: ProductReturnTarget, secret: string, origin: string): ProductLoginIntent & Readonly<{ intent: string }> {
+  if (secret.length < 32 || parseProductReturnTarget(target) !== target || new URL(origin).origin !== origin) throw new Error("invalid login intent")
+  const handoffNamespace = randomBytes(16).toString("base64url")
+  const value = Buffer.from(JSON.stringify([VERSION, origin, Date.now() + OIDC_TRANSACTION_TTL_SECONDS * 1000, handoffNamespace, target])).toString("base64url")
+  return { target, handoffNamespace, intent: `${value}.${mac(value, secret)}` }
 }
 
-export function productLoginReturnTarget(cookieHeader: string | null, secret: string): ProductReturnTarget | null {
-  const value = cookieValue(cookieHeader)
-  if (value === null || !/^[A-Za-z0-9%._~-]{1,4096}\.[a-f0-9]{64}$/u.test(value)) return null
-  const separator = value.lastIndexOf(".")
-  const encodedTarget = value.slice(0, separator)
-  const supplied = value.slice(separator + 1)
-  const expected = mac(encodedTarget, secret)
-  if (!timingSafeEqual(Buffer.from(supplied), Buffer.from(expected))) return null
-  try {
-    const target = decodeURIComponent(encodedTarget)
-    return parseProductReturnTarget(target) === target ? target as ProductReturnTarget : null
-  } catch {
-    return null
-  }
-}
-
-export function productLoginReturnCookie(target: ProductReturnTarget, secret: string, secure: boolean): string {
-  const encodedTarget = encodeURIComponent(target)
-  return `${COOKIE_NAME}=${encodedTarget}.${mac(encodedTarget, secret)}; Path=/; HttpOnly; SameSite=Lax${secure ? "; Secure" : ""}`
-}
-
-export function clearProductLoginReturnCookie(secure: boolean): string {
-  return `${COOKIE_NAME}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax${secure ? "; Secure" : ""}`
+export function readProductLoginIntent(raw: unknown, secret: string, origin: string): ProductLoginIntent | null {
+  if (typeof raw !== "string" || raw.length > 4096 || secret.length < 32 || !/^[A-Za-z0-9_-]+\.[a-f0-9]{64}$/u.test(raw)) return null
+  const separator = raw.indexOf(".")
+  const value = raw.slice(0, separator)
+  if (!timingSafeEqual(Buffer.from(raw.slice(separator + 1)), Buffer.from(mac(value, secret)))) return null
+  let record: unknown
+  try { record = JSON.parse(Buffer.from(value, "base64url").toString("utf8")) } catch { return null }
+  if (!Array.isArray(record) || record.length !== 5 || record[0] !== VERSION || record[1] !== origin
+    || !Number.isSafeInteger(record[2]) || record[2] <= Date.now() || record[2] > Date.now() + OIDC_TRANSACTION_TTL_SECONDS * 1000
+    || !validOidcNamespace(record[3]) || typeof record[4] !== "string") return null
+  const target = parseProductReturnTarget(record[4])
+  return target !== null && target === record[4] ? { target, handoffNamespace: record[3] } : null
 }

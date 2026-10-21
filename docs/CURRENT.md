@@ -1,3 +1,13 @@
+## 2026-10-21 多标签原生交易隔离：整片本地验证完成，正常加载待验
+
+已按批准设计完成每表单签名 handoff 与 CSRF、每次 POST 独立 Auth.js 原生 cookie options、唯一 v2 ledger 验证后 CAS，以及 IAM 每次渲染独立 proof。未证明的失败零清理；已消费终态仅清本交易，不清正式会话。旧记录与共享 return cookie 入口不保兼容。IAM 过期密码表单去固定产品失败页，刷新不自动登录；Consent／invitation 保原命名及消费语义。每请求可见 pending/header 预算拒绝新增，不驱逐有效交易。
+
+主方冻结完整七门均0：7份生成器检查／contract296、architecture50、全lint、Next typegen／tsc、236文件4497 PASS／0FAIL／0SKIP、webpack构建、构建后types；1062非文档输入无漂移。实际HTTP套件含IAM71、HTTPS反代5、RP93，覆盖冷表单同／异query、双目标正反callback、proof错配／重放、仅自身清理、错误与过期以及真实Chromium失败页刷新不重启认证。完整 pnpm test:e2e 的两份 preview surface 本次未单独运行；受影响登录浏览器旅程由上述真实HTTP中的Chromium验证，不将preview代替正式SSO。
+
+保留失败记录：same-query两冷表单RED `[true,false]`；首轮HTTP70PASS／1FAIL为新测试写错已有链接名，按实际“返回登录”改正；首次整门在proxy测试变量遮蔽处typecheck失败，修复测试变量后完整重跑通过。未删安全断言、加skip、放宽超时或变更生产配置。Redis前后PONG，全实例key数114→115包含共享并发活动，不冒称总量零变化；各fixture自有资源按原隔离清理保障验证。
+
+独立只读审查未见新增阻断。正常仍e62745c，尚未加载本批；Root与12子仓非递归fetch均成功、远端main无变化，无push／PR／merge。下一步仅按既有授权配对App并做正常多标签SSO／密码及返回目标验收；长协议query、原生退出确认产品化与原Skills／MCP／积分等遗留仍OPEN，不把本片验证称为全部登录体验或全目标完成。模型、工具与扣费继续暂停。
+
 ## 2026-10-21 登录交易原子消费：本地阶段实现，未激活
 
 用户已批准原生交易隔离设计。现 ledger 改为验证记录／MAC／浏览器 binding 后比较原值原子消费；错 proof 不烧掉合法 state，并发仍只有一个进入 exchange。现有单记录、NX、300 秒和公开方法不变；完整 namespace／handoff／IAM 表单隔离仍待完成，不称多标签整链已修。

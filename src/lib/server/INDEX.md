@@ -1,3 +1,7 @@
+## 登录交易隔离（2026-10-21，本地候选）
+
+`oidc-transaction-cookies.ts` 只配置每次请求的 Auth.js 原生 proof 名字、安全属性、精确终态清理与可见预算；`product-login-return.ts` 只签发／核验每启动表单的目标 intent。唯一 `oidc-rp-transaction.ts` v2 ledger 验 MAC 和浏览器绑定后 CAS；不兼容旧记录或共享 return cookie。`iam-interaction-csrf.ts` 为 sign-in 每次渲染独立 proof，原始 query 与 proof 共同定位 cookie，验证后 CAS；其他 interaction 保原语义。未知 exchange 不重发，Product session 和全局会话 CSRF 不纳入临时清理。完整设计及未激活状态见 docs/TECHNICAL_DESIGN.md 与 docs/CURRENT.md。
+
 <!-- SET47 archive consumer: 2026-10-15 -->
 SET47：archived-tasks.ts仅代理本人归档列表；session-archive.ts仅承接现session catch-all的GETarchive/POSTarchive|restore。固定BFF、server-only bearer、Origin/Host/scheme、严格raw闭集JSON与目标/action、1MiB、一次总10秒含params/body/会话/上游EOF/final六字段复验。POST允许identity/chunked的合法framing，拒冲突与不支持encoding，实际4096B+EOF；不改generic Chat/SSE代理。
 

@@ -205,10 +205,13 @@ describe("IAM and RP origin admission behind a real local HTTPS reverse proxy", 
       { origin: WEB_ORIGIN, cookie: cookies(signIn) })
     expect(accepted.status).toBe(303)
     expect(accepted.headers.location).toBe(`${WEB_ORIGIN}/auth/select-tenant${SIGNED_QUERY}`)
-    const csrf = await http(proxyPort, "/api/auth/csrf")
-    const rpToken = (JSON.parse(csrf.body) as { csrfToken: string }).csrfToken
-    const rpSignin = await http(proxyPort, "/api/auth/signin/kokoro-iam", "POST", `csrfToken=${encodeURIComponent(rpToken)}`,
-      { origin: WEB_ORIGIN, cookie: cookies(csrf) })
+    const login = await http(proxyPort, "/login")
+    expect(login.status).toBe(200)
+    const rpCsrfToken = login.body.match(/name="csrfToken" value="([a-f0-9]{64})"/u)![1]!
+    const loginIntent = login.body.match(/name="loginIntent" value="([A-Za-z0-9_.-]+)"/u)![1]!
+    const rpSignin = await http(proxyPort, "/api/auth/signin/kokoro-iam", "POST",
+      new URLSearchParams({ csrfToken: rpCsrfToken, loginIntent }).toString(),
+      { origin: WEB_ORIGIN, cookie: cookies(login) })
     expect(rpSignin.status).toBe(302)
     const location = new URL(rpSignin.headers.location as string)
     expect(location.origin).toBe(WEB_ORIGIN)
