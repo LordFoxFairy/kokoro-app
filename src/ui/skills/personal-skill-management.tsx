@@ -76,7 +76,7 @@ export function PersonalSkillManagement({ selection, boundary, onReleased, onCon
         <Button type="button" variant="outline" onClick={() => close(false)}>{t("skills.cancel")}</Button>
       </DialogContent>
     </Dialog>
-    {ready && current?.skill && selection.operation === "history" ? <PersonalSkillHistoryDialog key={`${generation}:${subject}`} base={current.skill} client={client} open={open} onOpenChange={close} returnFocusRef={returnFocusRef}/> : null}
+    {base !== null && selection.operation === "history" ? <PersonalSkillHistoryDialog key={subject} base={base} client={client} admitted={ready} open={open} onOpenChange={close} returnFocusRef={returnFocusRef} onIntentChanged={value => {pending.current=value}} onRestored={confirmed}/> : null}
     {base !== null && selection.operation === "update" ? <PersonalSkillPublishDialog
       base={base} client={client} admitted={ready} open={ready && open} onOpenChange={close}
       onIntentStarted={() => { pending.current = true }} onPublished={confirmed} returnFocusRef={returnFocusRef}

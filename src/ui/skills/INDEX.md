@@ -159,4 +159,4 @@ SettingsModal 拥有 Skills 的 installed scope / explore 展示意图，setting
 
 ## 2026-10-21 本人系列历史
 
-PersonalSkillManagement保留原发布者准入和写意图，仅按操作分开history只读门；PersonalSkillHistoryDialog拥有历史快照/分页/精确版本选择，内部HistoryPackage复用SkillPackageFiles/SkillPackageDocument。schema在hub/personal-skill-history.schema，listHistory复用SkillPublishClient读取边界，managed包沿skill-installation-content既有预算与精确pin检查；无目录current/安装替换、全局缓存或隐式恢复。恢复/删除未交付，不显示假成功动作。
+PersonalSkillManagement保留原发布者准入和写意图，仅按操作分开history只读门；PersonalSkillHistoryDialog拥有历史快照/分页/精确版本选择，内部HistoryPackage复用SkillPackageFiles/SkillPackageDocument。schema在hub/personal-skill-history.schema，listHistory复用SkillPublishClient读取边界，managed包沿skill-installation-content既有预算与精确pin检查；无目录current/安装替换、全局缓存或隐式恢复。PersonalSkillRestoreDialog仅承接明确确认的原包新版本发布，原ZIP由hub/personal-skill-archive有界读取；复用发布session及CAS。恢复组件放在历史DialogContent之外，关闭/同主体重核不卸载原session；同一时刻只展示历史或确认弹窗。永久删除仍未交付，不显示假成功动作。

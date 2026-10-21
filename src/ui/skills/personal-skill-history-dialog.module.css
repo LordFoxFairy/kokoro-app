@@ -20,3 +20,8 @@
 .files button:hover,.files button[aria-pressed="true"] {background:var(--muted);}
 .files svg {width:1rem;height:1rem;flex:none;}
 @media(max-width:30rem) {.dialog[data-slot="dialog-content"] {width:calc(100vw - 1rem);max-width:calc(100vw - 1rem);height:calc(100dvh - 1rem);max-height:calc(100dvh - 1rem);}.versions {flex-basis:12rem;}.heading {padding-left:1rem;}.preview {padding:1rem;}}
+
+.versionRow {display:flex;align-items:center;gap:.5rem;border-radius:.75rem;}
+.versionRow:has([aria-pressed="true"]) {background:var(--muted);}
+.versionRow .version {flex:1;min-width:0;}
+.restore {flex:none;height:1.75rem;margin-right:.75rem;font-size:.75rem;}

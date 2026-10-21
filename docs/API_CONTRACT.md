@@ -1,3 +1,9 @@
+## 2026-10-21 本人历史恢复（实施中）
+
+沿既有历史行提供恢复确认，使用当时明确 publication 指针/版本和所选精确 UID/revision；本人 managed 元数据读取后，POST /api/hub/self/skills/managed/{skill_id}/download 映射现 BFF private POST /browser/v1/skills/{version_id}/download，再经现 /api/skill-downloads/{handle} 读取原始 ZIP。该 adapter 不是新公开业务 API；来源、期限、请求标识、no-store、有限大小/时间和取消均严格验证，不重组预览文本、不持久化字节/句柄。
+
+独立恢复确认组件复用现发布 session：原 metadata/ZIP创建新 UID，独立上传/扫描/校验、原确认 publication 发布，不复制旧 Storage scope、不自动安装。确认前不发写命令；失败/关闭重开/同主体重新准入保留原 session/body/key，主体变化退休，冲突需显式刷新历史重新确认。普通更新仍只接active/disabled，恢复另明确接本人personal active/disabled/withdrawn；隔离不放行。界面沿已采参考的历史行右侧恢复按钮和既有确认组件，不引入新服务/状态框架/兼容层。正常四端和真实页面须在最终验收后再配对。
+
 ## 2026-10-21 发布确认消费者配对（实施中）
 
 固定BFF be5cc6f91145d46ea504420b29b16ff16c981f28 /Public22.0.0/176原始artifact，正式重出六窄消费者；独立connector错误profile不改。发布必填expected_publication，闭集null或{current_version_id,state_version}，版本为精确正十进制且上限9223372036854775806；缺字段拒绝，不把失败／404视为null。本人历史读取沿原GET；Admin详情meta由Admin后续配对，App透明桥保持。

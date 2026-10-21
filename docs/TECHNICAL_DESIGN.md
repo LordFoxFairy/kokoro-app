@@ -1,3 +1,9 @@
+## 2026-10-21 本人历史恢复（实施中）
+
+沿既有历史行提供恢复确认，使用当时明确 publication 指针/版本和所选精确 UID/revision；本人 managed 元数据读取后，POST /api/hub/self/skills/managed/{skill_id}/download 映射现 BFF private POST /browser/v1/skills/{version_id}/download，再经现 /api/skill-downloads/{handle} 读取原始 ZIP。该 adapter 不是新公开业务 API；来源、期限、请求标识、no-store、有限大小/时间和取消均严格验证，不重组预览文本、不持久化字节/句柄。
+
+独立恢复确认组件复用现发布 session：原 metadata/ZIP创建新 UID，独立上传/扫描/校验、原确认 publication 发布，不复制旧 Storage scope、不自动安装。确认前不发写命令；失败/关闭重开/同主体重新准入保留原 session/body/key，主体变化退休，冲突需显式刷新历史重新确认。普通更新仍只接active/disabled，恢复另明确接本人personal active/disabled/withdrawn；隔离不放行。界面沿已采参考的历史行右侧恢复按钮和既有确认组件，不引入新服务/状态框架/兼容层。正常四端和真实页面须在最终验收后再配对。
+
 ## 2026-10-21 发布确认消费者配对（实施中）
 
 App沿现发布弹窗读取既有历史接口的series publication；已有系列在用户提交前冻结明确null或指针／版本，新建系列明确null。创建、上传、扫描、校验、发布和未知结果恢复沿原session/key，不在提交或重试时改取最新；失效后仅显式重新开始。既有GitHub导入产生新系列，发布明确null；不增加API、服务、全局缓存或兼容入口。布局保持既有参考，本片不扩大恢复／删除能力。

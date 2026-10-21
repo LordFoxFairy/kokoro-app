@@ -131,3 +131,16 @@ it("retains an unconfirmed creation when cancelled between the ACK and the next 
  expect(session.draft).toBeUndefined()
  expect(session.draftUncertain).toBe(true)
 })
+it("restoration freezes original metadata in a new session and never admits quarantined or non-personal sources",async()=>{
+ const {createPersonalSkillRestoreSession}=await import("@/ui/skills/personal-skill-publish-flow")
+ const original={...lifecycleBase,status:"withdrawn" as const,tags:["saved"],example_prompts:["old example"]},file=new File(["original zip"],"skill-history.zip")
+ const publication={current_version_id:"current",state_version:"7"},session=createPersonalSkillRestoreSession(original,file,publication)
+ original.tags[0]="changed";original.example_prompts[0]="changed";publication.state_version="8"
+ expect(session.input.file).toBe(file)
+ expect(session.expectedPublication).toEqual({current_version_id:"current",state_version:"7"})
+ expect(session.draftBody).toMatchObject({display_name:"Original",tags:["saved"],example_prompts:["old example"]})
+ expect(session).not.toHaveProperty("draft");expect(session).not.toHaveProperty("validated")
+ expect(()=>createPersonalSkillRestoreSession({...original,status:"quarantined"},file,lifecyclePublication)).toThrow()
+ expect(()=>createPersonalSkillRestoreSession({...original,product:{...original.product,source_kind:"official"}},file,lifecyclePublication)).toThrow()
+ expect(()=>createPersonalSkillRestoreSession(original,file,null)).toThrow()
+})

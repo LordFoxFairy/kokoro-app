@@ -222,3 +222,33 @@ it("opens exact personal history from the installed surface without entering a w
  expect(screen.getByRole("dialog",{name:"技能版本历史"})).toBeInTheDocument()
  expect(screen.queryByLabelText("技能名称")).toBeNull()
 })
+
+it("keeps a confirmed restore through same-actor re-admission but retires it on an actual Skills actor replacement",async()=>{
+ window.localStorage.setItem("kokoro.locale","zh")
+ const {File}=await import("node:buffer"),{webcrypto}=await import("node:crypto")
+ vi.stubGlobal("File",File);vi.stubGlobal("crypto",webcrypto)
+ const {installation,managed,response,content}=managementFixture(),handle="a".repeat(43)
+ const old={...managed,skill_id:"old-version",source_ref:"skill:old-version",revision:"1",status:"withdrawn" as const}
+ const writes:RequestInit[]=[];let finish!:(value:Response)=>void
+ vi.stubGlobal("fetch",vi.fn(async(input:RequestInfo|URL,init?:RequestInit)=>{
+  const url=String(input)
+  if(url.endsWith("/skills/old-version/versions")&&init?.method==="POST"){writes.push(init);return new Promise(resolve=>{finish=resolve})}
+  if(url.includes("skill-installations"))return response(installation)
+  if(url.endsWith("/versions"))return response({series_id:managed.series_id,publication:{current_version_id:managed.skill_id,state_version:"8",withdrawn_at:null},versions:[{skill_id:managed.skill_id,revision:"3",name:managed.name,summary:managed.summary,status:"active",archive_size:"3",file_count:1,created_at:"2026-10-21T01:00:00Z",is_current:true},{skill_id:old.skill_id,revision:"1",name:old.name,summary:old.summary,status:"withdrawn",archive_size:"3",file_count:1,created_at:"2026-10-21T00:00:00Z",is_current:false}],next_cursor:null},true)
+  if(url.endsWith("/package"))return response({source_ref:managed.source_ref,revision:"3",files:[],selected_file:null})
+  if(url.endsWith("/download"))return response({source_ref:old.source_ref,revision:"1",download_info:{download_url:`/skill-downloads/${handle}`,filename:"original.zip",expires_at:"2999-01-01T00:00:00Z"}})
+  if(url.startsWith("/api/skill-downloads/"))return new Response(new Uint8Array([80,0,255]),{headers:{"content-type":"application/zip","content-length":"3","content-disposition":'attachment; filename="original.zip"',"cache-control":"no-store","x-request-id":"original-zip"}})
+  return response(url.endsWith("/old-version")?old:managed,true)
+ }))
+ const view=render(content());await openManagement("技能版本历史")
+ fireEvent.click(await screen.findByRole("button",{name:"恢复"}));await screen.findByRole("dialog",{name:"恢复此版本？"})
+ fireEvent.click(screen.getByRole("button",{name:"恢复"}));await waitFor(()=>expect(writes).toHaveLength(1))
+ view.rerender(content(false,2));expect((writes[0]!.signal as AbortSignal).aborted).toBe(true)
+ expect(screen.queryByRole("dialog",{name:"恢复此版本？"})).toBeNull()
+ view.rerender(content(true,2));await screen.findByRole("dialog",{name:"恢复此版本？"})
+ expect(writes).toHaveLength(1)
+ view.rerender(content(true,3,"different-manager"));expect(screen.queryByRole("dialog",{name:"恢复此版本？"})).toBeNull()
+ expect(screen.queryByRole("button",{name:"查看技能操作"})).toBeNull()
+ finish(Response.json({data:{skill_id:"restored",series_id:managed.series_id,revision:"4",status:"draft",state_version:"1",replayed:false}},{status:201,headers:{"cache-control":"no-store","content-type":"application/json","x-request-id":"late-create"}}))
+ await Promise.resolve();await Promise.resolve();expect(writes).toHaveLength(1)
+})

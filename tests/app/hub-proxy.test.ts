@@ -4914,3 +4914,28 @@ it("history body deadline remains dependency-unavailable instead of corrupt-resp
  expect(response.status).toBe(503)
  expect(await response.json()).toMatchObject({error:{code:"skill_dependency_unavailable"}})
 })
+
+
+it("routes publisher historical ZIP qualification to the existing exact managed download", async () => {
+  const { POST } = await import("@/app/api/hub/[...path]/route")
+  const path = ["self", "skills", "managed", "history-old", "download"]
+  const ack = { data: { source_ref: "skill:history-old", revision: "1", download_info: { download_url: `/skill-downloads/${"a".repeat(43)}`, filename: "original.zip", expires_at: "2999-01-01T00:00:00Z" } } }
+  vi.mocked(requestWithDomain).mockResolvedValueOnce(Response.json(ack, { headers: catalogPackageHeaders }))
+  const response = await POST(new Request(`http://localhost/api/hub/${path.join("/")}`, { method: "POST", headers: { origin: ENV.KOKORO_WEB_ORIGIN } }), params(path))
+  expect(response.status).toBe(200)
+  expect(await response.json()).toEqual(ack)
+  expect(requestWithDomain).toHaveBeenLastCalledWith("http://bff.test/browser/v1/skills/history-old/download", ENV.KOKORO_DOMAIN, expect.objectContaining({ method: "POST" }))
+})
+
+it("keeps exact publisher download empty-body/Origin guards and rejects another source ACK", async () => {
+ const {POST}=await import("@/app/api/hub/[...path]/route")
+ const path=["self","skills","managed","history-old","download"],url=`http://localhost/api/hub/${path.join("/")}`
+ for(const variant of ["origin","body","query","key"]){
+  const response=await POST(new Request(`${url}${variant==="query"?"?extra=1":""}`,{method:"POST",headers:{origin:variant==="origin"?"https://other.test":ENV.KOKORO_WEB_ORIGIN,...(variant==="key"?{"idempotency-key":"not-allowed"}:{})},...(variant==="body"?{body:"x"}:{})}),params(path))
+  expect(response.status).toBe(variant==="origin"?403:400)
+ }
+ expect(requestWithDomain).not.toHaveBeenCalled()
+ const ack={data:{source_ref:"skill:other",revision:"1",download_info:{download_url:`/skill-downloads/${"a".repeat(43)}`,filename:"original.zip",expires_at:"2999-01-01T00:00:00Z"}}}
+ vi.mocked(requestWithDomain).mockResolvedValueOnce(Response.json(ack,{headers:catalogPackageHeaders}))
+ expect((await POST(new Request(url,{method:"POST",headers:{origin:ENV.KOKORO_WEB_ORIGIN}}),params(path))).status).toBe(502)
+})

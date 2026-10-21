@@ -658,6 +658,9 @@ export const zh = {
   "skills.publishDescription":
     "选择单个 ZIP 包。只有发布回执确认 ACTIVE 后才会显示成功。",
   "skills.publishFile": "ZIP 文件（最多 32 MiB）",
+  "skills.history.restore": "恢复",
+  "skills.history.restoreTitle": "恢复此版本？",
+  "skills.history.restoreDescription": "这会将所选内容保存为一个新版本，现有安装不会自动更新。",
   "skills.history.more": "查看更多",
   "skills.history.title": "技能版本历史",
   "skills.history.current": "当前版本",

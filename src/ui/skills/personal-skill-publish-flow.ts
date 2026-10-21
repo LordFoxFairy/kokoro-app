@@ -91,13 +91,22 @@ export function createResumedSkillPublishSession(base: ManagedPersonalSkill, aud
   assertSame(current.status === "draft")
   return newSession({ file: replacement ?? null, display_name: current.name, summary: current.summary, tags: current.tags, audience }, expectedPublication, current)
 }
-export function createPersonalSkillVersionSession(base: ManagedPersonalSkill, input: PublishInput, expectedPublication: SkillPublicationPrecondition): PersonalSkillPublishSession {
-  const current = managedPersonalSkillSchema.parse(base)
-  assertSame(expectedPublication !== null && ["active", "disabled"].includes(current.status) && current.product.source_kind === "personal" && input.audience === "owner")
+function newPersonalVersionSession(current: ManagedPersonalSkill, input: PublishInput, expectedPublication: SkillPublicationPrecondition): PersonalSkillPublishSession {
+  assertSame(expectedPublication !== null && current.product.source_kind === "personal" && input.audience === "owner")
   if (!input.file) throw new SkillPublishRestartRequired()
   const metadata = createPersonalSkillVersionRequestSchema.parse({ display_name: input.display_name, summary: input.summary, tags: input.tags, example_prompts: input.example_prompts ?? current.example_prompts, category_keys: input.category_keys ?? current.category_keys })
   const session = newSession({ ...input, audience: "owner" }, expectedPublication)
   return { ...session, versionBase: current, draftBody: Object.freeze({ ...metadata, tags: Object.freeze([...metadata.tags]) as unknown as string[], example_prompts: Object.freeze([...metadata.example_prompts]), category_keys: Object.freeze([...metadata.category_keys]) }) }
+}
+export function createPersonalSkillVersionSession(base: ManagedPersonalSkill, input: PublishInput, expectedPublication: SkillPublicationPrecondition): PersonalSkillPublishSession {
+  const current = managedPersonalSkillSchema.parse(base)
+  assertSame(["active", "disabled"].includes(current.status))
+  return newPersonalVersionSession(current, input, expectedPublication)
+}
+export function createPersonalSkillRestoreSession(base: ManagedPersonalSkill, file: File, expectedPublication: SkillPublicationPrecondition): PersonalSkillPublishSession {
+  const current = managedPersonalSkillSchema.parse(base)
+  assertSame(["active", "disabled", "withdrawn"].includes(current.status))
+  return newPersonalVersionSession(current, {file, display_name: current.name, summary: current.summary, tags: current.tags, example_prompts: current.example_prompts, category_keys: current.category_keys, audience: "owner"}, expectedPublication)
 }
 async function recoverPublished(client: SkillPublishClient, draft: Draft, body: Readonly<SkillPublishRequest>, signal?: AbortSignal): Promise<PublishReceipt | null> {
   try {

@@ -1890,7 +1890,7 @@ async function proxySkillPackage(
   const installation = path[0] === "skill-installations";
   const managed = path[0] === "self" && path[1] === "skills" && path[2] === "managed";
   const prefix = managed ? "self/skills/managed" : installation ? "skill-installations" : "skills";
-  const download = installation && path[2] === "download";
+  const download = (installation || managed) && path.at(-1) === "download";
   const fail = (fault: ProjectionFault) => {
     if ((!installation && !managed) || download) return projectionError(fault, requestId);
     const base = PROJECTION_FAILURES[fault];
@@ -1966,7 +1966,7 @@ async function proxySkillPackage(
     joined.throwIfAborted();
     const headers = productBffHeaders(config, claims, requestId);
     headers.set("accept", "application/json");
-    const target = `${config.bffBaseUrl.replace(/\/+$/u, "")}/${download ? "browser/v1" : "v1"}/${managed ? "self/skills" : installation ? "skill-installations" : "skills"}/${encodeURIComponent(targetId)}/${download ? "download" : "package"}${filePath === undefined ? "" : `?file_path=${encodeURIComponent(filePath)}`}`;
+    const target = `${config.bffBaseUrl.replace(/\/+$/u, "")}/${download ? "browser/v1" : "v1"}/${managed && !download ? "self/skills" : installation ? "skill-installations" : "skills"}/${encodeURIComponent(targetId)}/${download ? "download" : "package"}${filePath === undefined ? "" : `?file_path=${encodeURIComponent(filePath)}`}`;
     upstream = await within(
       requestWithDomain(target, config.domain, {
         method: download ? "POST" : "GET",
@@ -2036,7 +2036,7 @@ async function proxySkillPackage(
     if (upstream.status === 200) {
       if (download) {
         const parsed = z.object({ data: skillDownloadSchema }).strict().safeParse(raw);
-        if (!parsed.success || Date.parse(parsed.data.data.download_info.expires_at) <= Date.now()) return fail("invalidOwnerResponse");
+        if (!parsed.success || managed && parsed.data.data.source_ref !== `skill:${targetId}` || Date.parse(parsed.data.data.download_info.expires_at) <= Date.now()) return fail("invalidOwnerResponse");
       } else {
         const parsed = catalogPackageResponseSchema.safeParse(raw);
         if (!parsed.success || !(installation
@@ -2338,7 +2338,7 @@ async function proxyHubRequest(
     return proxyGithubSkillImport(request, path);
   if (path[0] === "skills" && path[1] === "local-imports")
     return proxyLocalSkillImport(request, path);
-  if (path.at(-1) === "package" || path[0] === "skill-installations" && path.at(-1) === "download")
+  if (path.at(-1) === "package" || (path[0] === "skill-installations" || path[0] === "self" && path[1] === "skills" && path[2] === "managed") && path.at(-1) === "download")
     return proxySkillPackage(request, path);
   if (path.at(-1) === "cover") return proxySkillCover(request, path);
   if (
