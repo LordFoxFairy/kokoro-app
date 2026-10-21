@@ -2468,7 +2468,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
           expect(query.searchParams.get("post_logout_redirect_uri")).toBe(`http://localhost:${nextPort}/auth/sign-in`)
           expect(request.headers.cookie).toBe("kokoro-issuer.session_token=issuer-fixture")
           response.writeHead(200, { "content-type": "text/html; charset=utf-8", "set-cookie":
-            "kokoro-issuer.session_token.oauth_logout_confirmation=signed-fixture; Path=/iam/oauth2/end-session/confirm; HttpOnly; SameSite=Lax" })
+            "kokoro-issuer.session_token.oauth_logout_confirmation=signed-fixture; Path=/iam/oauth2/end-session/confirm; HttpOnly; SameSite=Lax; Max-Age=300" })
           response.end(`<form method="post" action="http://localhost:${nextPort}/iam/oauth2/end-session/confirm"><button name="action" value="confirm">Confirm</button></form>`)
           return
         }
@@ -5861,7 +5861,43 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       accept: "text/html" })
     expect(get.status).toBe(200)
     expect(get.body).toContain("/iam/oauth2/end-session/confirm")
-    const confirmationCookie = cookieHeader(get)
+    const nativeNavigation = { "sec-fetch-mode": "navigate", "sec-fetch-dest": "document", accept: "text/html" }
+    const browserGet = await http(nextPort, handoff.issuer_end_session_url, "GET", "", { ...nativeNavigation, cookie: issuerCookie })
+    expect(browserGet.status).toBe(303)
+    expect(browserGet.headers.location).toBe("/auth/sign-out")
+    expect(browserGet.body).toBe("")
+    expect(browserGet.headers["referrer-policy"]).toBe("no-referrer")
+    expect(browserGet.headers["cache-control"]).toContain("no-store")
+    const confirmationCookie = cookieHeader(browserGet)
+    expect(confirmationCookie).toBe(cookieHeader(get))
+    const confirmationPage = await http(nextPort, "/auth/sign-out")
+    expect(confirmationPage.status).toBe(200)
+    expect(confirmationPage.headers["referrer-policy"]).toBe("origin")
+    // Next 16.2.6 dev BaseServer deliberately replaces page cache headers;
+    // native protocol redirects above remain no-store. Production is probed after build.
+    expect(confirmationPage.headers["cache-control"]).toBe("no-cache, must-revalidate")
+    expect(confirmationPage.headers["content-security-policy"]).toContain("form-action 'self'")
+    expect(confirmationPage.body).toContain("退出账号登录")
+    expect(confirmationPage.body).toContain('action="/iam/oauth2/end-session/confirm"')
+    expect(confirmationPage.body).not.toContain("signed-fixture")
+    await http(nextPort, "/auth/sign-out")
+    expect(issuerSessionActive).toBe(true)
+    const browserRejected = await http(nextPort, "/iam/oauth2/end-session/confirm", "POST", "action=confirm",
+      { ...nativeNavigation, origin: `http://localhost:${nextPort}`, cookie: issuerCookie })
+    expect(browserRejected.status).toBe(303)
+    expect(browserRejected.headers.location).toBe("/auth/sign-out?failed=1")
+    const failurePage = await http(nextPort, browserRejected.headers.location as string)
+    expect(failurePage.status).toBe(200)
+    expect(failurePage.body).toContain("退出暂未完成")
+    expect(failurePage.body).not.toContain('action="/iam/oauth2/end-session/confirm"')
+    for (const query of ["failed=1&failed=1", "failed=invalid", "failed="]) {
+      const invalidFailure = await http(nextPort, `/auth/sign-out?${query}`)
+      expect(invalidFailure.status).toBe(200)
+      expect(invalidFailure.headers["referrer-policy"]).toBe("no-referrer")
+      expect(invalidFailure.body).toContain("退出暂未完成")
+      expect(invalidFailure.body).not.toContain('action="/iam/oauth2/end-session/confirm"')
+    }
+    expect(issuerSessionActive).toBe(true)
     const rejected = await http(nextPort, "/iam/oauth2/end-session/confirm", "POST", "action=confirm",
       { cookie: `${issuerCookie}; ${confirmationCookie}` })
     expect(rejected.status).toBe(403)

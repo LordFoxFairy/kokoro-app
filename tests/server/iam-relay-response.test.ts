@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { browserAuthorizeResponse, nativeIamResponse, validIamRpCallbackNavigation } from "@/lib/server/iam-relay-response"
+import { browserLogoutStartResponse, browserLogoutFailureResponse } from "@/lib/server/iam-logout-response"
 import type { IamRelayUpstream } from "@/lib/server/iam-relay-transport"
 
 const WEB_ORIGIN = "http://127.0.0.1:3310"
@@ -116,5 +117,52 @@ describe("closed Product IAM RP callback navigation", () => {
     ]) {
       expect(browserAuthorizeResponse(authorizeJson(value), WEB_ORIGIN, false, "request-json")).toBeNull()
     }
+  })
+})
+
+
+describe("native issuer logout view projection", () => {
+  const cookie = "kokoro-issuer.session_token.oauth_logout_confirmation=opaque-proof; Path=/iam/oauth2/end-session/confirm; HttpOnly; SameSite=Lax; Max-Age=300"
+  const input = (cookies: string[] = [cookie]): IamRelayUpstream => ({ status: 200,
+    headers: new Headers({ "content-type": "text/html; charset=utf-8" }), setCookies: cookies,
+    body: new TextEncoder().encode("<form>issuer-owned template</form>") })
+  const request = (headers: HeadersInit = {}) => new Request(WEB_ORIGIN + "/iam/oauth2/end-session", { headers: {
+    accept: "text/html", "sec-fetch-mode": "navigate", "sec-fetch-dest": "document", "x-nonce": "fixture-nonce-1234567890", ...headers,
+  } })
+
+  it("projects only a fresh validated issuer cookie and retains its exact native Path", async () => {
+    const response = browserLogoutStartResponse(request(), input(), WEB_ORIGIN, false, "logout-proof")
+    expect(response?.status).toBe(303)
+    expect(response?.headers.get("location")).toBe("/auth/sign-out")
+    expect(response?.headers.getSetCookie()).toEqual([cookie])
+    expect(await response?.text()).toBe("")
+    const secure = cookie.replace("kokoro-issuer", "__Secure-kokoro-issuer") + "; Secure"
+    expect(browserLogoutStartResponse(request(), input([secure]), WEB_ORIGIN, true, "secure-proof")?.status).toBe(303)
+  })
+
+  it("rejects missing, cleared, stale or wrong-scope confirmation without exposing upstream HTML", () => {
+    for (const cookies of [[], [cookie.replace("opaque-proof", "")], [cookie.replace("300", "0")],
+      [cookie.replace("300", "301")], [cookie.replace("Max-Age=300", "Expires=Wed, 01 Jan 2020 00:00:00 GMT")],
+      [cookie + "; Expires=Wed, 01 Jan 2020 00:00:00 GMT"], [cookie.replace("/iam/oauth2/end-session/confirm", "/")],
+      [cookie, cookie], [cookie.replace("SameSite=Lax", "SameSite=None")],
+    ]) expect(browserLogoutStartResponse(request(), input(cookies), WEB_ORIGIN, false, "bad-proof")).toBeNull()
+  })
+
+  it("keeps API/zero-quality HTML responses native and strips unverified failure material only for document navigation", async () => {
+    for (const headers of [{ accept: "application/json" }, { accept: "text/html;q=0" }, { "sec-fetch-dest": "empty" }]) {
+      const req = request(headers)
+      const response = browserLogoutStartResponse(req, input(), WEB_ORIGIN, false, "api-proof")
+      expect(response?.status).toBe(200)
+      expect(await response?.text()).toContain("issuer-owned template")
+      const error = new Response("private upstream error", { status: 403 })
+      expect(browserLogoutFailureResponse(req, error)).toBe(error)
+    }
+    const error = new Response("private upstream error", { status: 503, headers: { "set-cookie": cookie, location: "/private", "x-request-id": "fixed-request" } })
+    const failed = browserLogoutFailureResponse(request(), error)
+    expect(failed.status).toBe(303)
+    expect(failed.headers.get("location")).toBe("/auth/sign-out?failed=1")
+    expect(failed.headers.get("x-request-id")).toBe("fixed-request")
+    expect(failed.headers.getSetCookie()).toEqual([])
+    expect(await failed.text()).toBe("")
   })
 })

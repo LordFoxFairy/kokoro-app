@@ -129,6 +129,15 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     response.headers.set("Referrer-Policy", "no-referrer")
     response.headers.set("Content-Security-Policy", oidcLoginDocumentPolicy(nonce))
   }
+  if (path === "/auth/sign-out") {
+    response.headers.set("Cache-Control", "no-store")
+    // The fixed interactive page needs canonical Origin on its native form POST.
+    // Its query contains no protocol payload; the inert failure variant has no form.
+    response.headers.set("Referrer-Policy", request.nextUrl.searchParams.has("failed") ? "no-referrer" : "origin")
+  }
+  if (path === "/iam/oauth2/end-session" || path === "/iam/oauth2/end-session/confirm") {
+    response.headers.set("Referrer-Policy", "no-referrer")
+  }
   if (internalSignInView) {
     response.headers.set("Cache-Control", "private, no-store, max-age=0")
     response.headers.set("Referrer-Policy", "origin")

@@ -5,8 +5,8 @@ export function oidcLoginDocumentPolicy(nonce: string): string {
   return `default-src 'none'; style-src 'nonce-${nonce}'; form-action 'none'; base-uri 'none'; frame-ancestors 'none'`
 }
 
-/** Native navigation leaves technical URLs; API clients retain their error contract. */
-export function oidcLoginRecovery(request: Request): Response | null {
+/** Strict native HTML navigation policy shared by authentication result adapters. */
+export function oidcDocumentNonce(request: Request): string | null {
   if (request.headers.get("sec-fetch-mode") !== "navigate" || request.headers.get("sec-fetch-dest") !== "document") return null
   const acceptsHtml = request.headers.get("accept")?.split(",").some(value => {
     const [mediaType, ...parameters] = value.split(";").map(part => part.trim())
@@ -20,6 +20,13 @@ export function oidcLoginRecovery(request: Request): Response | null {
   if (!acceptsHtml) return null
   const nonce = request.headers.get("x-nonce")
   if (!nonce || !/^[A-Za-z0-9_-]{16,128}$/u.test(nonce)) return null
+  return nonce
+}
+
+/** Native navigation leaves technical URLs; API clients retain their error contract. */
+export function oidcLoginRecovery(request: Request): Response | null {
+  const nonce = oidcDocumentNonce(request)
+  if (nonce === null) return null
   return new Response(null, {
     status: 303,
     headers: {

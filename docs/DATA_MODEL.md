@@ -1,3 +1,7 @@
+## 2026-10-21 退出展示无新增持久状态
+
+本片仅App固定确认/失败展示与现native relay导航投影；不新增表、Redis交易、身份cookie或确认receipt。原issuer签名确认cookie仍由IAM拥有，原Path、期限、当前Session/client/redirect绑定及正式撤销原样；页面status只选择展示，不证明退出成功或恢复Product会话。见TECHNICAL_DESIGN本日窄修。
+
 ## 2026-10-20 对话偏好版本退役
 
 仅现本地UI默认偏好改用 `kokoro.web.chat-prefs.v2` 保存 raw label key；旧key不读取、不删除、不拆分/迁移，不清其他localStorage。新key可保存合法含冒号label。已冻结未知请求的body/key及会话恢复记录原样保留，不自动重发；无owner持久事实变化。

@@ -1,3 +1,11 @@
+## 2026-10-21 原生退出确认产品化（既有退出链局部修复）
+
+沿现 App 同源 IAM relay 与锁定 Better Auth 1.7.3；不改 IAM、权限、协议、Schema、退出范围或 Product tombstone。比较添加未持有的 id_token_hint 跳确认、替换/解析 vendor HTML、以及保留原生确认cookie的本地展示，采用第三种：只有已通过原relay校验的200 HTML、无Location及正向限时确认cookie签发，且为正常顶层HTML导航，才303至固定 `/auth/sign-out`。opaque cookie和原Path原样保留，App不验issuer签名、不把形状判断当最终授权。
+
+固定Server Component只展示中文确认及显式原生form POST `/iam/oauth2/end-session/confirm` 的 action=confirm；返回首页不恢复已经终止的Product会话，渲染/刷新不自动发确认、登录或业务请求。原生issuer继续核签名cookie/300秒期限/session/client/注册回跳并正式撤销Session及关联凭据。失败顶层导航回固定退出失败状态，API保持原status；不复制上游正文、Location或失败cookie，不自动重试、不清其他登录交易。成功回跳暂保既有 `/login`，不顺带重写退出协议。
+
+验证沿既有真实Next HTTP退出旅程补浏览器导航、无副作用展示/刷新与错误恢复；保原非导航/API、跨Origin、坏表单、过期/更换issuer会话和未登记redirect拒绝。展示使用既有Button/Card/token、无客户端状态或新依赖；协议跳转/错误保持no-store；最终Proxy核验nonce/CSP，固定无私有数据React页生产no-store、锁定Next开发模式按原生no-cache/must-revalidate（实际覆盖Proxy的缓存头），不改框架或放宽协议缓存断言；固定交互确认页用Referrer-Policy:origin及form-action self，保证原生POST带精确Origin，失败页/技术地址no-referrer。不新增Origin:null例外。 failure选择仅由failed字段是否存在决定，包含空值、非法值或重复数组；Page与Proxy一致，所有失败变体无确认form，不借显示参数授予退出。正常加载与正式issuer验收另记，不以参考模板或fixture成功称完整登录/Skills目标完成。
+
 ## 2026-10-21 正常租户续接故障：具名诊断与产品失败恢复
 
 正常双密码中一笔select-tenant503仍未定根因。既存IAM整行session更新竞争可产生400 invalid_grant，App原映射也会将其他上游状态及transport异常归成503；不能仅凭页面503认定owner状态或改鉴权。当前沿现具名App route补固定phase/status及唯一已知native invalid_grant诊断，不记录原始body、签名query、cookie、凭据或任意错误文案，不新增服务／公开接口／DB／权限，不重发set-active。

@@ -1,3 +1,11 @@
+## 2026-10-21 原生退出确认产品化：候选已验，正常待加载
+
+裸英文来源为锁定Better Auth原生模板，保留其确认cookie/300秒/session/client/注册回跳核验与正式撤销。App只在已验证native200HTML及正向确认cookie、正常顶层导航后去固定中文页；API仍原生，失败无cookie/正文/Location透传，无hint、HTML字符串替换、新服务/持久状态或自动确认。确认页origin referrer＋form-action self，不加Origin:null例外；失败字段存在即无form失败态，与Proxy一致。
+
+主方真实Next退出旅程先RED旧200模板vs303；修后通过。独审发现重复failed参数会让Page/Proxy分歧，实际RED保留，空值/非法值/重复均修复。首次完整门4503PASS/1FAIL为新React页开发缓存预期；核锁定Next BaseServer开发分支覆盖为no-cache,must-revalidate，文档测试按实际模式精确断言，原native no-store断言全保；构建后独立生产probe五个文档全部no-store、无cookie、正确form及referrer，测试进程已停，不改框架。
+
+最终非文档1064输入冻结无漂移；完整七门均0，236文件4504 PASS/0SKIP，contract296、architecture50、lint/typegen/types、webpack build及post-types通过。独立审查无确定阻断。受影响HTTP中Chromium覆盖与本次正常浏览器旅程分列；未单独重跑两份preview E2E，不称所有E2E通过。13仓重新非递归fetch/prune全部成功、main无新变化，现HEAD及他人改动保留；未push/PR/merge。正常仍76326e5，待仅App配对后主方验真实issuer退出/重登，其他服务、模型、工具与扣费不动。下方为此前阶段记录。
+
 ## 2026-10-21 租户续接根因已修，正常双密码回归通过
 
 App76326e5已正常加载：原生HTML租户失败303到固定产品结果页，API/q=0/非导航保失败语义；签名form／tenant路径不进开发访问日志，no-referrer，不重发、不清其他交易。IAM1c4209b在独立源码目录正常加载，主目录main未改；同一Session普通tenant／updatedAt变更不再误作隐式整行CAS，原谓词、身份、到期／撤销及凭据rotation/delete保护保留。
