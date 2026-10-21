@@ -1,10 +1,10 @@
-## 2026-10-21 原生退出确认产品化：候选已验，正常待加载
+## 2026-10-21 原生退出确认产品化：已正常加载并实测
 
 裸英文来源为锁定Better Auth原生模板，保留其确认cookie/300秒/session/client/注册回跳核验与正式撤销。App只在已验证native200HTML及正向确认cookie、正常顶层导航后去固定中文页；API仍原生，失败无cookie/正文/Location透传，无hint、HTML字符串替换、新服务/持久状态或自动确认。确认页origin referrer＋form-action self，不加Origin:null例外；失败字段存在即无form失败态，与Proxy一致。
 
 主方真实Next退出旅程先RED旧200模板vs303；修后通过。独审发现重复failed参数会让Page/Proxy分歧，实际RED保留，空值/非法值/重复均修复。首次完整门4503PASS/1FAIL为新React页开发缓存预期；核锁定Next BaseServer开发分支覆盖为no-cache,must-revalidate，文档测试按实际模式精确断言，原native no-store断言全保；构建后独立生产probe五个文档全部no-store、无cookie、正确form及referrer，测试进程已停，不改框架。
 
-最终非文档1064输入冻结无漂移；完整七门均0，236文件4504 PASS/0SKIP，contract296、architecture50、lint/typegen/types、webpack build及post-types通过。独立审查无确定阻断。受影响HTTP中Chromium覆盖与本次正常浏览器旅程分列；未单独重跑两份preview E2E，不称所有E2E通过。13仓重新非递归fetch/prune全部成功、main无新变化，现HEAD及他人改动保留；未push/PR/merge。正常仍76326e5，待仅App配对后主方验真实issuer退出/重登，其他服务、模型、工具与扣费不动。下方为此前阶段记录。
+最终非文档1064输入冻结无漂移；完整七门均0，236文件4504 PASS/0SKIP，contract296、architecture50、lint/typegen/types、webpack build及post-types通过。独立审查无确定阻断。受影响HTTP中Chromium覆盖与本次正常浏览器旅程分列；未单独重跑两份preview E2E，不称所有E2E通过。13仓重新非递归fetch/prune全部成功、main无新变化，现HEAD及他人改动保留；未push/PR/merge。正常已仅重载App加载43278e5，其他监听进程、配置、模型、工具与扣费不动。正式菜单→固定中文确认页→刷新不自动提交→Tab聚焦/Enter提交→原生确认303→密码登录→重登后历史正文可读均已验；短窗口确认POST恰1、精确canonical Origin、无截断。重复failed正常页无form。390×844实际DOM宽/scroll均390、按钮44px；原native截图缩放只作诊断，另取精确viewport截图核验，最后已还原视口。原用户隐藏标签不冒正文通过。下方为此前阶段记录。
 
 ## 2026-10-21 租户续接根因已修，正常双密码回归通过
 
