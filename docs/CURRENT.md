@@ -1,3 +1,13 @@
+## 2026-10-21 Skills 历史读链已正常配对并实测
+
+本轮正常源码已按 Platform `efe1ed1` → BFF `d28f7db` → App `e9bc2a3` 配对重载；各候选再次非递归 fetch，远端 main 均为候选祖先。保留旧 SHA、私有配置／进程快照及回滚源码；App 原 `next-env.d.ts` 字节保留，配置指纹和其余四个服务监听身份不变。没有 Schema、账号、权限或执行开关变更；BFF Agent 仍 disabled。预检最初将格式脚本路径变化误当依赖变化，确认仅 BFF format:check 增加两条已验路径后收窄精确校验；两次预检失败均发生在停止服务之前。
+
+真实浏览器已走本人管理菜单→历史 GET 200→current v2 精确目录／正文 200→旧 v1 两文件及附属文档 200→切回 v2→刷新重开。刷新前后历史／publication 完全相同，原 v1 安装仍停用；390×844 实际 history dialog 374×828、x8/y8，页面无横向溢出。这是正常 App/BFF/Platform/Storage 数据读链，不再只是 HTTP 夹具UI；不代表写生命周期、完整公开身份或后台旅程已完成。初次历史读取短窗无截断；整页刷新宽窗截断，保留其边界，不声称完整网络零写；可见额外 POST 为正常 auth/session，未发业务命令。
+
+本次发现并保留两项下一步：历史 current v2 的 publication 已撤回，UI 尚缺撤回状态标识；现发布仅锁新 draft 与提交时 publication，仍缺用户确认时的 current/version fence。沿现 PublishSkill 增补明确 publication precondition，纳入原摘要／幂等绑定，先回放成功 receipt 再核新执行前置条件；冲突不自动刷新期待值重发。复用新 UID→独立上传／扫描／校验／发布，不复用旧 Storage scope、不升级安装、不借恢复绕过 quarantine。不新增服务或表；正式契约设计与实现仍待交付。
+
+本地收据与截图仅留 ignored `var/dev/skills-publisher-acceptance-20261021/history-normal-*`，重载收据为 `personal-history-normal-activation.json`。模型、工具执行与扣费仍暂停；同事自动化／连接器不接管。尚未 push／PR／merge，Root 不提前 pin 未发布候选，完整目标 active。下方“正常未激活”等仅保留本次配对之前的阶段事实。
+
 ## 2026-10-21 Skills 历史读取与精确预览（候选，正常未激活）
 
 固定BFF d28f7db/Public21.2.0/176和原始artifact，六既有窄生成器正规重出，connector错误profile不变；test-only history增量inverse恢复完整21.1.1后委托原模型与双父证明，无runtime双读。现managed同源读取补history GET，现包reader补本人精确版本路径；保身份/预算/大小/错误与原POST新版本。历史schema闭集、严格原始键、publication current而非max、nullable末页cursor；跨snapshot或重复页拒绝。
