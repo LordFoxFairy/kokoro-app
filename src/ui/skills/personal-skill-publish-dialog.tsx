@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState, type FormEvent } from "react"
+import { useEffect, useRef, useState, type FormEvent, type RefObject } from "react"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -13,15 +13,19 @@ import type { SkillPublishClient } from "@/hub/skill-publish-client"
 import { HubClientError } from "@/hub/client"
 import { useT } from "@/i18n/context"
 
-import { createPersonalSkillVersionSession, createPersonalSkillPublishSession, createResumedSkillPublishSession, runPersonalSkillPublishSession, SkillPublishPending, SkillPublishRestartRequired, SkillPublishUncertain, type PersonalSkillPublishSession, type PublishStage } from "./personal-skill-publish-flow"
+import { createPersonalSkillVersionSession, createPersonalSkillPublishSession, createResumedSkillPublishSession, runPersonalSkillPublishSession, SkillPublishPending, SkillPublishRestartRequired, SkillPublishUncertain, type PersonalSkillPublishSession, type PublishStage, type PublishReceipt } from "./personal-skill-publish-flow"
+import { PersonalSkillActions, type PersonalSkillOperation } from "./personal-skill-actions"
 
 type Status = { kind: "idle" } | { kind: "running"; stage: PublishStage } | { kind: "pending" } | { kind: "error" } | { kind: "invalidFile" } | { kind: "tooLarge" } | { kind: "auth" } | { kind: "restart" } | { kind: "uncertain"; skillId: string } | { kind: "success"; sourceRef: string; revision: string }
 
-export function PersonalSkillPublishDialog({ open, onOpenChange, client, onPublished, hash, base, admitted = true }: {
+export function PersonalSkillPublishDialog({ open, onOpenChange, client, onPublished, onManagePublished, hash, base, admitted = true, returnFocusRef, onIntentStarted }: {
   open: boolean
-  onOpenChange: (open: boolean) => void
+  onOpenChange: (open: boolean, retainIntent?: boolean) => void
+  returnFocusRef?: RefObject<HTMLElement | null>
+  onIntentStarted?: () => void
   client: SkillPublishClient
   onPublished: () => void
+  onManagePublished?: (operation: PersonalSkillOperation, receipt: PublishReceipt) => void
   hash?: (file: File) => Promise<string>
   admitted?: boolean
   base?: ManagedPersonalSkill
@@ -53,7 +57,7 @@ export function PersonalSkillPublishDialog({ open, onOpenChange, client, onPubli
       setSummary("")
       setTags("")
     } else if (status.kind === "running") setStatus({ kind: "error" })
-    onOpenChange(false)
+    onOpenChange(false, session !== null && status.kind !== "success")
   }
   const submit = (event: FormEvent) => {
     event.preventDefault()
@@ -64,6 +68,7 @@ export function PersonalSkillPublishDialog({ open, onOpenChange, client, onPubli
       try {
         currentSession = updating ? createPersonalSkillVersionSession(base!, { file: file!, display_name: name, summary, tags: tags.split(",").map(item => item.trim()).filter(Boolean), example_prompts: examples === base!.example_prompts.join("\n") ? base!.example_prompts : examples === "" ? [] : examples.split("\n"), category_keys: base!.category_keys, audience: "owner" }) : base ? createResumedSkillPublishSession(base, audience, file ?? undefined) : createPersonalSkillPublishSession({ file: file!, display_name: name, summary, tags: tags.split(",").map((item) => item.trim()).filter(Boolean), audience })
         setSession(currentSession)
+        onIntentStarted?.()
       } catch (error) {
         if (error instanceof HubClientError && error.code === "request_body_too_large") setStatus({ kind: "tooLarge" })
         else if (error instanceof HubClientError && error.code === "invalid_skill_request") setStatus({ kind: "invalidFile" })
@@ -87,14 +92,14 @@ export function PersonalSkillPublishDialog({ open, onOpenChange, client, onPubli
         else if (error instanceof SkillPublishPending) setStatus({ kind: "pending" })
         else if (error instanceof SkillPublishRestartRequired) setStatus({ kind: "restart" })
         else if (error instanceof HubClientError && [401, 403].includes(error.status ?? 0)) setStatus({ kind: "auth" })
-        else if (error instanceof HubClientError && [409, 412].includes(error.status ?? 0) && error.code !== "skill_command_in_progress") setStatus({ kind: "restart" })
+        else if (error instanceof HubClientError && [409, 412].includes(error.status ?? 0) && error.code !== "skill_command_in_progress" && !currentSession.draftUncertain) setStatus({ kind: "restart" })
         else setStatus({ kind: "error" })
       },
     ).finally(() => { if (active.current === controller) active.current = null })
   }
 
   return <Dialog open={open} onOpenChange={(next) => { if (!next) close() }}>
-    <DialogContent data-testid="personal-skill-publish-dialog" closeLabel={t("skills.publishClose")}>
+    <DialogContent data-testid="personal-skill-publish-dialog" closeLabel={t("skills.publishClose")} onCloseAutoFocus={event => { if (returnFocusRef) { event.preventDefault(); if (admitted) returnFocusRef.current?.focus() } }}>
       <DialogTitle>{t(updating ? "skills.lifecycle.update" : "skills.publishTitle")}</DialogTitle>
       <DialogDescription>{t("skills.publishDescription")}</DialogDescription>
       <form className="space-y-4" onSubmit={submit}>
@@ -125,7 +130,10 @@ export function PersonalSkillPublishDialog({ open, onOpenChange, client, onPubli
         {visibleStatus.kind === "auth" ? <Alert variant="destructive" role="alert"><AlertDescription>{t("skills.publishAuth")}</AlertDescription></Alert> : null}
         {visibleStatus.kind === "restart" ? <Alert variant="destructive" role="alert"><AlertDescription>{t("skills.publishRestart")}</AlertDescription></Alert> : null}
         {visibleStatus.kind === "uncertain" ? <Alert role="alert"><AlertDescription>{t("skills.publishUnknown")} ({visibleStatus.skillId})</AlertDescription></Alert> : null}
-        {visibleStatus.kind === "success" ? <p role="status" className="text-sm text-foreground">{t("skills.publishSuccess")} · {visibleStatus.sourceRef} · {visibleStatus.revision}</p> : null}
+        {visibleStatus.kind === "success" ? <div className="flex items-center gap-2">
+          <p role="status" className="min-w-0 flex-1 break-words text-sm text-foreground">{t("skills.publishSuccess")} · {visibleStatus.sourceRef} · {visibleStatus.revision}</p>
+          {onManagePublished ? <PersonalSkillActions disabled={!admitted} onSelect={operation => onManagePublished(operation, { source_ref: visibleStatus.sourceRef, revision: visibleStatus.revision })} /> : null}
+        </div> : null}
         <div className="flex justify-end gap-2">
           <Button type="button" variant="outline" onClick={close}>{visibleStatus.kind === "running" ? t("skills.publishCancel") : t("skills.publishClose")}</Button>
           {visibleStatus.kind === "restart" ? <Button type="button" onClick={() => { setSession(null); setStatus({ kind: "idle" }); setFile(null); setName(base?.name ?? ""); setSummary(base?.summary ?? ""); setTags(base?.tags.join(",") ?? ""); setExamples(base?.example_prompts.join("\n") ?? "") }}>{t("skills.publishStartOver")}</Button>

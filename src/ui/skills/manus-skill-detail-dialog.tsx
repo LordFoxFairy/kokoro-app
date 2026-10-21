@@ -2,7 +2,7 @@
 
 import Image from "next/image"
 import { ChevronRight, Download, FileText, Menu, Plus, Share } from "lucide-react"
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react"
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -24,6 +24,7 @@ import { SkillTrialExamples } from "./skill-trial-examples"
 import styles from "./manus-skill-detail-dialog.module.css"
 import { SkillPackageDocument } from "./skill-package-document"
 import { SkillPackageFiles } from "./skill-package-files"
+import { PersonalSkillActions, type PersonalSkillOperation } from "./personal-skill-actions"
 
 type DetailFlight = {
   controller: AbortController
@@ -126,6 +127,8 @@ type Props = {
   onAdd: (skill: SkillCatalogCard) => void
   onTry: (prompt: string, selection: SkillCatalogCard) => boolean
   returnFocusRef?: RefObject<HTMLElement | null>
+  onManagePersonal?: (operation: PersonalSkillOperation, installation: PersonalInstallation) => void
+  personalManagementBusy?: boolean
 }
 
 type DetailToolbarProps = {
@@ -138,6 +141,7 @@ type DetailToolbarProps = {
   onDownload: () => void
   shareLabel: string
   downloadLabel: string
+  personalActions?: ReactNode
 }
 
 /**
@@ -145,12 +149,13 @@ type DetailToolbarProps = {
  * Keep their utility actions in one typed component so entering the reader
  * cannot make the real share/download capability disappear from the header.
  */
-function DetailToolbar({ readerOpen, canShare, canDownload, shareDisabled, downloadDisabled, onShare, onDownload, shareLabel, downloadLabel }: DetailToolbarProps) {
-  if (!canShare && !canDownload) return null
+function DetailToolbar({ readerOpen, canShare, canDownload, shareDisabled, downloadDisabled, onShare, onDownload, shareLabel, downloadLabel, personalActions }: DetailToolbarProps) {
+  if (!canShare && !canDownload && !personalActions) return null
   return (
     <div className={readerOpen ? styles.readerTopActions : styles.topActions}>
       {canShare ? <Button type="button" variant="ghost" size="icon-sm" aria-label={shareLabel} disabled={shareDisabled} onClick={onShare}><Share aria-hidden="true" /></Button> : null}
       {canDownload ? <Button type="button" variant="ghost" size="icon-sm" className={styles.iconLink} aria-label={downloadLabel} disabled={downloadDisabled} onClick={onDownload}><Download aria-hidden="true" /></Button> : null}
+      {personalActions}
     </div>
   )
 }
@@ -165,7 +170,7 @@ function displayDate(value: string | undefined, locale: string): string | null {
 /** A stable, server-backed catalog detail dialog. It never synthesizes prompts,
  * source state or package identifiers in the browser. Package text comes only
  * from the admitted published-revision inspection boundary. */
-export function ManusSkillDetailDialog({ detailSource = "catalog", preview = false, pending = false, pendingFailed = false, pendingBusy = false, onLoadMore, onRetryPending, readBoundary: boundary, skill, open, busy = false, installationState, actionFailed = false, publisherLabel, categoryLabels = [], onOpenChange, onAdd, onTry, returnFocusRef, sharedSummary, onAddShared, installationNotice, onRetryInstallation }: Props) {
+export function ManusSkillDetailDialog({ detailSource = "catalog", preview = false, pending = false, pendingFailed = false, pendingBusy = false, onLoadMore, onRetryPending, readBoundary: boundary, skill, open, busy = false, installationState, actionFailed = false, publisherLabel, categoryLabels = [], onOpenChange, onAdd, onTry, returnFocusRef, sharedSummary, onAddShared, installationNotice, onRetryInstallation, onManagePersonal, personalManagementBusy = false }: Props) {
   const { locale, t } = useLocale()
   const shareIntents = useRef(new Map<string, { identity: string; ack: ShareAck | null; unknown: boolean; pending: boolean; controller: AbortController | null }>())
   type ShareState = "pending" | "copied" | "copyFailed" | "failed" | "unknown"
@@ -469,8 +474,13 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
   const canShare = Boolean(sharedSummary || skill?.revision_skill_id)
   const canDownload = Boolean(downloadInfo || sharedSummary || installation)
 
+  // Installation attribution comes from its admitted, exact-version read.
+  // A caller's brand label is only valid for an owner-confirmed official source.
+  const installationPublisher = installation?.publisher_profile?.status === "found"
+    ? installation.publisher_profile.display_name
+    : installation?.product.source_kind === "official" ? publisherLabel : undefined
   const metadata = [
-    publisherLabel,
+    detailSource === "installation" ? installationPublisher : publisherLabel,
     updated ? t("skills.updatedAt", { date: updated }) : undefined,
     !sharedSummary && skill?.usage_count ? t("skills.usedCount", { count: Number(skill.usage_count).toLocaleString(locale) }) : undefined,
   ].filter((value): value is string => Boolean(value))
@@ -523,6 +533,8 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
           onDownload={() => void download()}
           shareLabel={t("skills.detailShare")}
           downloadLabel={t("skills.detailDownloadShort")}
+          personalActions={!preview && detailSource === "installation" && installation?.product.source_kind === "personal" && installation.installed && installation.source_status === "active" && boundary.admitted && boundary.subject !== null && onManagePersonal
+            ? <PersonalSkillActions disabled={personalManagementBusy} onSelect={operation => onManagePersonal(operation, installation)} /> : undefined}
         />
         {readerOpen ? readerHeader : <DialogHeader className={styles.hero} data-has-cover={Boolean(cover)}>
           <div className={styles.copy}>

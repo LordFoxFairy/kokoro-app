@@ -4,7 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest"
 
 import { LocaleProvider } from "@/i18n/context"
 import { PersonalSkillsRead } from "@/ui/skills/personal-skills-read"
-import type { HubClient } from "@/hub/client"
+import { HubClientError, type HubClient } from "@/hub/client"
 import type { SkillPublishClient } from "@/hub/skill-publish-client"
 import { PersonalSkillPublishDialog } from "@/ui/skills/personal-skill-publish-dialog"
 
@@ -30,9 +30,10 @@ it("keeps one pending scan attempt and its original ZIP across close/reopen, the
     getPublished: vi.fn(),
   }
   const onPublished = vi.fn()
+  const onManagePublished = vi.fn()
   function Harness() {
     const [open, setOpen] = useState(true)
-    return <LocaleProvider><button type="button" onClick={() => setOpen(true)}>重新打开</button><PersonalSkillPublishDialog open={open} onOpenChange={setOpen} client={client as unknown as SkillPublishClient} onPublished={onPublished} hash={async () => sha} /></LocaleProvider>
+    return <LocaleProvider><button type="button" onClick={() => setOpen(true)}>重新打开</button><PersonalSkillPublishDialog open={open} onOpenChange={setOpen} client={client as unknown as SkillPublishClient} onPublished={onPublished} onManagePublished={onManagePublished} hash={async () => sha} /></LocaleProvider>
   }
   render(<Harness />)
   const dialog = await screen.findByTestId("personal-skill-publish-dialog")
@@ -42,12 +43,17 @@ it("keeps one pending scan attempt and its original ZIP across close/reopen, the
   fireEvent.submit(dialog.querySelector("form")!)
   expect(await within(dialog).findByText(/上传正在扫描中/)).toBeInTheDocument()
   expect(onPublished).not.toHaveBeenCalled()
+  expect(within(dialog).queryByRole("button", { name: "更多技能操作" })).not.toBeInTheDocument()
   fireEvent.click(within(dialog).getAllByRole("button", { name: "关闭" }).at(-1)!)
   fireEvent.click(screen.getByRole("button", { name: "重新打开" }))
   const reopened = await screen.findByTestId("personal-skill-publish-dialog")
   expect(within(reopened).getByText("mine.zip")).toBeInTheDocument()
   fireEvent.submit(reopened.querySelector("form")!)
   await waitFor(() => expect(onPublished).toHaveBeenCalledTimes(1))
+  // Only the confirmed new publication, not its original installation, is a management target.
+  fireEvent.keyDown(within(reopened).getByRole("button", { name: "更多技能操作" }), { key: "ArrowDown" })
+  fireEvent.click(await screen.findByRole("menuitem", { name: "撤回技能" }))
+  expect(onManagePublished).toHaveBeenCalledExactlyOnceWith("withdraw", { source_ref: "skill:mine", revision: "1" })
   expect(client.createDraft).toHaveBeenCalledTimes(1)
   expect(client.beginUpload).toHaveBeenCalledTimes(1)
   expect(client.completeUpload).toHaveBeenCalledTimes(1)
@@ -107,7 +113,7 @@ it("does not reuse a draft-bound pagination cursor for the published managed vie
 
 it("owned active update requires a new package, permits clearing real examples, and offers owner visibility only",async()=>{
  const base={skill_id:"old",source_ref:"skill:old",series_id:"series",revision:"1",name:"Original",summary:"Summary",tags:[],status:"active" as const,skill_updated_at:"2026-10-10T00:00:00Z",example_prompts:["真实旧例子"],category_keys:[],product:{source_kind:"personal" as const,publication_audience:"owner" as const,state_version:"99"}}
- const createVersion=vi.fn().mockRejectedValue(new Error("unknown receipt"))
+ const createVersion=vi.fn().mockRejectedValueOnce(new Error("unknown receipt")).mockRejectedValue(new HubClientError("http", "Retry rejected", "skill_precondition_failed", 412))
  const client={createVersion} as unknown as SkillPublishClient
  render(<LocaleProvider><PersonalSkillPublishDialog base={base} open admitted client={client} onOpenChange={vi.fn()} onPublished={vi.fn()} hash={async()=>"a".repeat(64)}/></LocaleProvider>)
  const dialog=screen.getByTestId("personal-skill-publish-dialog")
@@ -123,5 +129,21 @@ it("owned active update requires a new package, permits clearing real examples, 
  expect(createVersion).toHaveBeenCalledWith("old",{display_name:"Original",summary:"Summary",tags:[],example_prompts:[],category_keys:[]},expect.any(String),expect.any(AbortSignal))
  fireEvent.submit(dialog.querySelector("form")!)
  await waitFor(()=>expect(createVersion).toHaveBeenCalledTimes(2))
+ await within(dialog).findByRole("alert")
+ expect(within(dialog).queryByRole("button", {name:"重新开始新尝试"})).toBeNull()
+ fireEvent.submit(dialog.querySelector("form")!)
+ await waitFor(()=>expect(createVersion).toHaveBeenCalledTimes(3))
  expect(createVersion.mock.calls[0]?.slice(0,3)).toEqual(createVersion.mock.calls[1]?.slice(0,3))
+ expect(createVersion.mock.calls[0]?.slice(0,3)).toEqual(createVersion.mock.calls[2]?.slice(0,3))
+})
+
+it("can restart after a definitive creation conflict without a previous unknown creation", async () => {
+ const base={skill_id:"old",source_ref:"skill:old",series_id:"series",revision:"1",name:"Original",summary:"",tags:[],status:"active" as const,skill_updated_at:"2026-10-10T00:00:00Z",example_prompts:[],category_keys:[],product:{source_kind:"personal" as const,publication_audience:"owner" as const,state_version:"9"}}
+ const createVersion=vi.fn().mockRejectedValue(new HubClientError("http", "Conflict", "skill_precondition_failed", 412))
+ render(<LocaleProvider><PersonalSkillPublishDialog base={base} open admitted client={{createVersion} as unknown as SkillPublishClient} onOpenChange={vi.fn()} onPublished={vi.fn()} hash={async()=>"a".repeat(64)}/></LocaleProvider>)
+ const dialog=screen.getByTestId("personal-skill-publish-dialog")
+ fireEvent.change(within(dialog).getByLabelText(/重新选择并上传/),{target:{files:[new File(["zip"],"update.zip",{type:"application/zip"})]}})
+ fireEvent.submit(dialog.querySelector("form")!)
+ fireEvent.click(await within(dialog).findByRole("button", {name:"重新开始新尝试"}))
+ expect(within(dialog).getByLabelText(/重新选择并上传/)).not.toBeDisabled()
 })
