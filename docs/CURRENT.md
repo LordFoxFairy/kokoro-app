@@ -1,3 +1,9 @@
+## 2026-10-21 Skills 与正常模型候选配对（隔离集成中）
+
+保留正常模型候选20e8b788，合入已交付main f9d45e5及其失败诊断；Skills生产组件／测试与main一致。仅升级BFF固定snapshot和既有生成器到192396d/Public21.1.1，保175操作、模型字段和原严格消费者；不新增运行时兼容入口。完整门已通过；正常加载及页面回读待验，未改正常服务或数据。
+
+本地最终七门均0：七生成检查、contract296、architecture50、lint／typegen／types、完整234文件4469 PASS／0FAIL／0SKIP、webpack构建及构建后types；1058非文档输入hash无漂移。初次隔离依赖混用两份物理React造成hook错误，确认后只替换本方依赖链接为正常候选同一锁定图（无安装／版本／lock变化），相关385 PASS；随后缺测试Redis配置的4467 PASS／2SKIP／suite FAIL单列保留，复用既有受管实例后真实Next7PASS及最终完整门通过。未删断言／加skip／放宽超时；过去Next开发态偶发JSON500仍未归因，不因本次通过称已修复。独立源码审查通过，contract README当前pin漏项已补。
+
 ## 2026-10-21 个人技能版本管理接线与正常旅程（待集中交付）
 
 沿基线1a13f2e恢复个人安装详情的更新／撤回入口，独立菜单只传操作，管理协调组件用既有self-managed GET核验精确source/series/revision；不根据个人标签或作者名推断发布权限。复用原上传／发布／撤回流程，同主体重核不改未知命令的原key/body/CAS；关闭可显式恢复，换主体卸载。确认发布后仅真实回执的新版本可继续管理，重新GET核验；原安装不自动升级，撤回表单明确显示名称和版本。无新接口、Schema、依赖或兼容分支。
@@ -2913,3 +2919,17 @@ App36dacf0基线私有详情/配置只有Prepare，创建窗关闭后needs_oauth
 
 
 最终候选同业务/测试字节：production build退出0。第一次误将只支持development显式preview的公共壳E2E指向production start，得到2FAIL/1中断/3未运行；确认use-session-state的production禁止preview及既有Playwright webServer设计后停止该自有错误模式测试，preview进程由原finally回收，未改产品分支/断言。随后沿原Playwright管理的显式preview development server、3325独立端口、1worker重跑，桌面/移动6 PASS/8.3s、posttype退出0。该公共壳E2E只证明既有预览旅程/几何，不冒本片真实OAuth故障；后者为上方正常AS拒绝→显式重连→callback→fresh owner证据。既有颜色warning保留。仅追加本结果段，另外六路径仍原冻结；临时端口/进程回收与最终SHA由Root集成记录，未push/PR/merge。
+
+## 已合主线阶段记录（不替代上述正常配对状态）
+
+## 2026-10-21 个人技能版本管理（main 集成验收中）
+
+从同步后的main `859f415` 集成个人技能版本管理及安装作者修复，原切片为 `20e8b78`；只移入本需求14份源码／测试，不携带模型配置、账户切换或聊天候选。正式self-managed读取核验发布者及精确source/series/revision，复用既有发布／撤回流程，详情按真实安装publisher_profile展示作者，不恢复旧设置布局。没有新接口、Schema、依赖或兼容入口。
+
+未知命令保留原key/body/CAS及同主体恢复；成功ACK清除pending，创建ACK取消窗口仍受最终检查。发布后仅真实回执的新版本可管理，原安装不自动升级，撤回表单展示明确版本，关闭回到原搜索焦点。新菜单并非Manus历史／替换／删除能力的替代；历史恢复、移除、Admin旅程及公开身份映射仍未完成。
+
+正常运行的原切片已获授权实测纯文档样本版本2：创建201→真实上传／扫描clean→校验200→发布active200→撤回withdrawn200，刷新原版本1仍安装且停用；不删数据、不执行技能／模型、不改积分。正常浏览器证据绑定原切片，main集成分支的源码门与预览另验，不假称已加载到正常运行环境。
+
+原切片同一冻结的相关108、lint/types/build、契约和架构已通过；正常授权版本旅程与 main 集成预览分别保留证据。此次 main 原有六套相关测试91 PASS；集成后定向7套108 PASS、七项生成检查、lint、typegen/types、webpack build/post-types通过，独立桌面／移动预览2 PASS并回收自有预览进程。
+
+完整门早先两轮均4450 PASS／1 FAIL／0SKIP，在 pending refresh GET 预期409处收到Next HTML500／JSON解析异常；空manifest观察没有捕获相应空读取，原因仍未查明。只新增5行失败分支元数据诊断，409成功路径无新增IO，不改断言、超时、重试或skip。随后同Node22／4GiB／2workers的无observer配对完整运行：原 main 232文件／4434 PASS，候选233文件／4451 PASS，均0FAIL／0SKIP。1051份冻结输入中只有上述诊断测试改变，生产输入无漂移；只读最终审查通过。独立 Skills UI 切片可以进入PR收尾，但这些通过不证明间歇500已修复，也不等于正常服务、历史／替换／删除、Admin和外部身份映射已闭环。

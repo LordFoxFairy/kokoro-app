@@ -5941,6 +5941,11 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       }
       expect(paths.filter((item) => item === "/iam/oauth2/token")).toHaveLength(refreshesBefore + 1)
       const pendingRead = await http(nextPort, "/api/auth/session", "GET", "", { cookie })
+      if (pendingRead.status !== 409) {
+        const after = await nextManifestMetadata().catch(() => [{ error_code: "metadata_unavailable" }])
+        throw new Error(nextFailureDiagnostic("during_refresh_get", pendingRead, outputStart, pathStart,
+          refreshManifestsBefore, after))
+      }
       expect(pendingRead.status, responseDiagnostic("during_refresh_get", pendingRead, outputStart, pathStart)).toBe(409)
       expect((await http(nextPort, "/api/auth/session", "POST", form,
         { origin: `http://localhost:${nextPort}`, cookie })).status).toBe(409)

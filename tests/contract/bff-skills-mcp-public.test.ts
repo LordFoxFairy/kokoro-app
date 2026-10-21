@@ -25,9 +25,11 @@ import {
   type InstallationOperation,
 } from "@/hub/schemas"
 
-const OWNER_COMMIT = "f3da7d5feb855b2b97c77a6ae9928cee96e1b8aa"
-const OWNER_SHA256 = "4db8bab6159a2f36061f8b292fba9074ea2614adab2a1489bf9d1b3b066b6fe3"
-const OWNER_VERSION = "21.1.0"
+import { restorePublic21 } from "./bff-configuration-parent"
+
+const OWNER_COMMIT = "192396d29678e7977fce9c4ab837b249aaf1af93"
+const OWNER_SHA256 = "eff6676131081b20ba36fd4be243075c568ebd27358662a9c09fe3216b097848"
+const OWNER_VERSION = "21.1.1"
 const SNAPSHOT = resolve(process.cwd(), "src/generated/bff-public-openapi.yaml")
 
 type Shape = {
@@ -199,9 +201,30 @@ function assertProjectionSemantics(spec: Spec): void {
 }
 
 describe("pinned BFF Skills and MCP public consumer contract", () => {
+  it("proves the exact project union patch without weakening the model parent oracle", async () => {
+    const source = await readFile(SNAPSHOT, "utf8")
+    const parent = restorePublic21(Buffer.from(source))
+    expect(createHash("sha256").update(parent).digest("hex")).toBe("a902a20ad95e46c01bfc8f5a80260c14565cfe557137759d5ecd42bc1a60f7c2")
+    const description = source.match(/^      description: .*Personal and project installations form a union.*$/mu)?.[0]
+    expect(description).toBeDefined()
+    const addition = description!.slice(description!.indexOf(" Personal and project installations form a union"))
+    const mutations = [
+      source.replace(addition, ""),
+      source.replace(addition, addition + addition),
+      source.replace(addition, "") + addition + "\n",
+      source.replace("complete exact project installation", "latest project installation"),
+      source.replace("  version: 21.1.1", "  version: 21.1.0"),
+      source + "\n",
+    ]
+    for (const mutated of mutations) {
+      expect(mutated).not.toBe(source)
+      expect(() => restorePublic21(Buffer.from(mutated))).toThrow()
+    }
+  })
+
   it("pins exact owner bytes and six current Skill draft/publish operations", async () => {
     const bytes = await readFile(SNAPSHOT)
-    expect(OWNER_COMMIT).toBe("f3da7d5feb855b2b97c77a6ae9928cee96e1b8aa")
+    expect(OWNER_COMMIT).toBe("192396d29678e7977fce9c4ab837b249aaf1af93")
     expect(createHash("sha256").update(bytes).digest("hex")).toBe(OWNER_SHA256)
     const spec = YAML.parse(bytes.toString()) as Spec
     expect(spec.info.version).toBe(OWNER_VERSION)

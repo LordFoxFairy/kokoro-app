@@ -1,3 +1,7 @@
+## 2026-10-21 Skills 与正常模型候选配对
+
+当前唯一BFF固定192396d29678e7977fce9c4ab837b249aaf1af93／Public21.1.1／175操作，SHA256 eff6676131081b20ba36fd4be243075c568ebd27358662a9c09fe3216b097848。六个既有窄生成器正规重出；connector-command-errors独立产物不变，历史模型／双父证明保持原件且仅用于测试。以下21.1.0及更早段落是先前阶段事实，不是当前pin；正常服务加载与真实旅程另验。
+
 ## 2026-10-20 MC-02 Public21.1模型配置桥（本地候选）
 
 唯一BFF固定 `f3da7d5feb855b2b97c77a6ae9928cee96e1b8aa` /21.1.0/175，SHA256 `4db8bab6159a2f36061f8b292fba9074ea2614adab2a1489bf9d1b3b066b6fe3`。仅扩现Admin Product adapter的10具名模型配置路径，复用原Product session、服务身份和request-id，原body/key/CAS透传；发布严格证明实际EOF，不虚构JSON正文或丢幂等头。没有直连System/读取运行Key、模型执行、自动重试或新的OAuth。

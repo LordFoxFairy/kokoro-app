@@ -1,3 +1,7 @@
+## 2026-10-21 Skills 正常配对：集成边界
+
+唯一BFF snapshot固定192396d29678e7977fce9c4ab837b249aaf1af93／Public21.1.1／175操作，SHA256 eff6676131081b20ba36fd4be243075c568ebd27358662a9c09fe3216b097848。只承接owner项目／个人Skills并集描述，保当前模型配置及全部既有消费者；六窄生成器正规重出，connector-command-errors独立发行物不变。测试专用逆证先严格还原原21.1.0全文，再保留既有模型与历史双父证明；不新增运行时旧版本兼容或改变执行授权。正常服务加载、页面回读和完整旅程仍待验证。
+
 ## 2026-10-20 聊天执行未就绪局部修复
 
 已真实复现BFF执行关闭时pre-admission503/agent_not_configured，在Agent调度前返回；前端原本用通用destructive Alert并空说明列，造成整行红字＋孤立重试按钮。仅在当前无unattributed RunFailure时映射具名ExecutionUnavailableFeedback，role=status、短标题/说明、由原canRetryPendingSubmission与onRetry控制显式恢复。错误码同时涵盖停用或未配置，故不臆造paused状态；真正run.failed与402保持原告警/恢复与资金语义。

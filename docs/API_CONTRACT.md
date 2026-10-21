@@ -1,3 +1,7 @@
+## 2026-10-21 Skills 正常配对：公开契约
+
+唯一BFF snapshot固定192396d29678e7977fce9c4ab837b249aaf1af93／Public21.1.1／175操作，SHA256 eff6676131081b20ba36fd4be243075c568ebd27358662a9c09fe3216b097848。只承接owner项目／个人Skills并集描述，保当前模型配置及全部既有消费者；六窄生成器正规重出，connector-command-errors独立发行物不变。测试专用逆证先严格还原原21.1.0全文，再保留既有模型与历史双父证明；不新增运行时旧版本兼容或改变执行授权。正常服务加载、页面回读和完整旅程仍待验证。
+
 ## 2026-10-20 MC-02 Public21.1模型配置桥（本地候选）
 
 唯一BFF固定 `f3da7d5feb855b2b97c77a6ae9928cee96e1b8aa` /21.1.0/175，SHA256 `4db8bab6159a2f36061f8b292fba9074ea2614adab2a1489bf9d1b3b066b6fe3`。仅扩现Admin Product adapter的10具名模型配置路径，复用原Product session、服务身份和request-id，原body/key/CAS透传；发布严格证明实际EOF，不虚构JSON正文或丢幂等头。没有直连System/读取运行Key、模型执行、自动重试或新的OAuth。

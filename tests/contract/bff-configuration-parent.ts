@@ -51,7 +51,21 @@ const proof={
   "parent_inventory_sha256": "463376c78cf549fc35ded0d27ec4fe322edda42109867818a740300b81f15452"
 } as const;
 const hash=(v:Uint8Array|string)=>createHash("sha256").update(v).digest("hex");
+const projectUnionAddition =
+  " Personal and project installations form a union when project_id is present; the complete exact project installation takes precedence for the same series, including disabled installations. Personal-only items remain; no latest substitution, automatic upgrade or execution authorization. Both scopes share the request deadline, the result remains limited to 1000 items, and current project access is rechecked before disclosure."
+function restoreProjectUnionPatch(bytes: Uint8Array): Buffer {
+  const source = Buffer.from(bytes).toString("utf8")
+  if (!/^  version: 21\.1\.1$/mu.test(source)) throw Error("Public21.1.1 fixed version drift")
+  const operation = source.match(/^  \/v1\/skill\.list:\n    get:\n(?:(?!^  \/)[\s\S])*/mu)?.[0]
+  const description = operation?.match(/^      description: (.+)$/mu)?.[1]
+  if (source.split(projectUnionAddition).length !== 2 || !description?.endsWith(projectUnionAddition))
+    throw Error("Public21.1.1 project list description drift")
+  const restored = source.replace(projectUnionAddition, "").replace(/^  version: 21\.1\.1$/mu, "  version: 21.1.0")
+  if (hash(restored) !== proof.current_sha256) throw Error("Public21.1.1 exact model parent drift")
+  return Buffer.from(restored)
+}
 export function restorePublic21(bytes:Uint8Array):Buffer {
+ bytes=restoreProjectUnionPatch(bytes);
  if(hash(bytes)!==proof.current_sha256)throw Error("Public21.1 fixed source drift");
  const lines=Buffer.from(bytes).toString("utf8").split(/(?<=\n)/u);
  for(const h of [...proof.inverse].reverse()){
