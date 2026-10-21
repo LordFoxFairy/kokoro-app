@@ -1,3 +1,11 @@
+## 2026-10-21 MCP 续期：当前源码隔离 HTTP 链已验证
+
+固定 App `c3a2dc4`／BFF `4a10f8b`／IAM `7cbe988`／Platform `97b27b3` 的全新源码副本，复用现有 fixture 和本机受管 PostgreSQL／Redis，不切正常环境。真实 Next/RP 登录携带原表单签名 `loginIntent`，再经 BFF／IAM／Platform 完成授权码＋PKCE、自然过期、一次受控刷新；GET 不刷新／发现，范围收缩先提交新资格再拒绝原Prepare CAS，正确返回412／mcp_personal_precondition_failed／false，不再误报502。显式新命令恢复，成功同键回执不重复 grant／发现。
+
+最终1PASS／0SKIP／exit0；AS授权码交换1次、刷新1次，仅元数据发现、零tools/call，不配置模型／扣费。PG数据库目录94→94逐项相同、IAM fixture keys0→0逐项相同，独有Web Redis prefix清零；临时凭据已删除、无残留自有Node进程，正常七监听PID不变。第一次仅PATH缺pnpm导致fixture安装前失败，补现有工具路径后通过，未安装依赖或改产品代码；原失败不冒称产品RED。最后只修正测试标题为current candidate，再跑同一旅程通过，不称已合main。
+
+这是原生HTTP cookie jar／真实owner资源，不是浏览器水合或正常租户续期验收；无效refresh token／重新授权及Agent Resolve/Acquire/runtime仍未据此关闭。原包发布证据继续复用，`guides/connectors.md`同步使用／工程边界。原始脱敏收据留Root ignored `var/dev/mcp-current-expiry-20261021`；不新增API、Schema、服务或兼容层，完整Skills／MCP及PR合并目标仍active。
+
 ## 2026-10-21 目录搜索连续点击：已正常加载并实测
 
 行为候选 `264225c77705d19484cdbcbc60858e1461121eed` 已通过完整七门：contract297、architecture50、239文件4547PASS/0SKIP，lint、Next typegen/tsc、webpack build、构建后types均exit0；1073非文档输入无漂移。受管Redis PONG／119→123，仅记录并发运行实际值，未重置资源，不据此声称共享库存不变。未单独重跑全站Playwright，真实CUA承接本片主路径。
