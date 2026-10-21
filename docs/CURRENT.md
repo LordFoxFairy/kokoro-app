@@ -1,10 +1,10 @@
-## 2026-10-21 历史恢复候选（验收中）
+## 2026-10-21 历史恢复已正常配对验收
 
 固定 BFF `4a10f8b043cb44b4bd2d8f8a689bde8191db10ce`，Public22/176 原件 digest 不变。恢复复用原包下载及既有新版本发布，不新增服务、业务 API、表、全局状态或兼容旁路。
 
 隔离 Next/CUA 已验证历史恢复生成新 current 3、保留旧1/2；503未知结果关闭重开仍是原尝试，重试只发布、不重复建版或上传。612/390窄屏无横向溢出。实际发现 DialogContent 卸载丢失session，新增容器级回归先失败再修复，三UI文件26 PASS。该浏览器验收是显式 HTTP/对象夹具，三字节二进制哨兵不是有效ZIP，不冒称正常owner/Storage整链；fixture独立回执路由不共享模块状态，未作为权威证据。
 
-停写后完整七门均exit0：contract297、architecture50、默认239文件4545PASS／0SKIP，lint/typecheck、webpack构建及构建后类型通过；1073个非文档输入前后无漂移。受管Redis PONG、DBSIZE121→119，未重置共享资源；未单独执行全站Playwright，主路径由CUA真实浏览器承接。独立只读审查未见确定P0–P2。正常原包整链仍待配对；尚未push／PR／merge。正常服务、模型／工具执行／积分保持不变；删除、公开身份、后台及MCP完整目标保留。
+停写后完整七门均exit0：contract297、architecture50、默认239文件4545PASS／0SKIP，lint/typecheck、webpack构建及构建后类型通过；1073个非文档输入前后无漂移。受管Redis PONG、DBSIZE121→119，未重置共享资源；未单独执行全站Playwright，主路径由CUA真实浏览器承接。独立只读审查未见确定P0–P2。正常 Platform97b27b3/BFF4a10f8b/App94d3687 已配对。纯文档样本真实原ZIP458字节摘要与新上传/扫描clean/校验digest完全相同；新UID修订3、原1/2逐字段保留，publication由撤回v2/CAS3变为新v3/CAS4。原v1安装ID/pin/enabled=false/时间均不变，刷新后新current和原附属文档仍可读，390×844无横溢。初始读/写网络窗完整，刷新窗口截断，不冒称完整网络零其他请求；未执行模型/工具/扣费。三个源码进程保原配置重载、无Schema变化，其余监听不变，有回滚副本。尚未push／PR／merge。删除、公开身份、后台及MCP完整目标保留。
 
 ## 2026-10-21 发布确认快照（App源码候选）
 
