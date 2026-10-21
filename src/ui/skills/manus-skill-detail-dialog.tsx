@@ -533,8 +533,8 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
           onDownload={() => void download()}
           shareLabel={t("skills.detailShare")}
           downloadLabel={t("skills.detailDownloadShort")}
-          personalActions={!preview && detailSource === "installation" && installation?.product.source_kind === "personal" && installation.installed && installation.source_status === "active" && boundary.admitted && boundary.subject !== null && onManagePersonal
-            ? <PersonalSkillActions disabled={personalManagementBusy} onSelect={operation => onManagePersonal(operation, installation)} /> : undefined}
+          personalActions={!preview && detailSource === "installation" && installation?.product.source_kind === "personal" && installation.installed && ["active", "disabled", "withdrawn", "quarantined"].includes(installation.source_status) && boundary.admitted && boundary.subject !== null && onManagePersonal
+            ? <PersonalSkillActions writable={["active", "disabled"].includes(installation.source_status)} disabled={personalManagementBusy} onSelect={operation => onManagePersonal(operation, installation)} /> : undefined}
         />
         {readerOpen ? readerHeader : <DialogHeader className={styles.hero} data-has-cover={Boolean(cover)}>
           <div className={styles.copy}>

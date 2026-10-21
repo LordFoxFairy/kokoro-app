@@ -1,3 +1,7 @@
+## 2026-10-21 Skills 历史仅保存弹窗临时读状态
+
+无新业务表、持久化、localStorage或全局缓存。版本行、publication、游标和精确包文件均来自BFF/Platform；Web只保当代弹窗列表、选中版本及读取状态。相同当前指针不推出最大revision或执行可用性；不改原安装pin、旧消息引用、发布回执或未决写意图。关闭/身份退休清理读状态，写入恢复仍归原publish/withdraw宿主。
+
 ## 2026-10-21 退出展示无新增持久状态
 
 本片仅App固定确认/失败展示与现native relay导航投影；不新增表、Redis交易、身份cookie或确认receipt。原issuer签名确认cookie仍由IAM拥有，原Path、期限、当前Session/client/redirect绑定及正式撤销原样；页面status只选择展示，不证明退出成功或恢复Product会话。见TECHNICAL_DESIGN本日窄修。

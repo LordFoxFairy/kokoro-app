@@ -643,3 +643,28 @@ it("personal lifecycle total deadline retires a stalled fetch and cancels a late
   expect(cancel).toHaveBeenCalledTimes(1)
  } finally {vi.useRealTimers()}
 })
+
+it("preserves exact history current instead of newest and rejects raw duplicate or extra private facts",async()=>{
+ const versions=[{skill_id:"new",revision:"3",name:"New",summary:"",status:"disabled",archive_size:"375",file_count:1,created_at:"2026-10-21T00:00:00Z",is_current:false},{skill_id:"old",revision:"1",name:"Old",summary:"",status:"active",archive_size:"374",file_count:1,created_at:"2026-10-20T00:00:00Z",is_current:true}]
+ const data={series_id:"series",publication:{current_version_id:"old",state_version:"7",withdrawn_at:null},versions,next_cursor:null}
+ const raw=JSON.stringify({data,meta:{request_id:"owner-1"}})
+ const fetcher=vi.fn().mockImplementation(()=>Promise.resolve(new Response(raw,{headers})))
+ vi.stubGlobal("fetch",fetcher)
+ await expect(createSkillPublishClient().listHistory("anchor","cursor/1")).resolves.toEqual(data)
+ expect(fetcher).toHaveBeenCalledWith("/api/hub/self/skills/managed/anchor/versions?cursor=cursor%2F1",expect.objectContaining({method:"GET",cache:"no-store"}))
+ for(const invalid of [raw.replace('"versions":[','"versions":[],"versions":['),raw.replace('"is_current":false','"is_current":true'),raw.replace('"publication":{','"publication":{"secret":"private",'),raw.replace('"request_id":"owner-1"','"request_id":"other"')]){
+  fetcher.mockResolvedValueOnce(new Response(invalid,{headers}));await expect(createSkillPublishClient().listHistory("anchor")).rejects.toMatchObject({reason:"parse"})
+ }
+})
+
+it("history cancellation finishes even when fetch ignores its signal",async()=>{
+ const controller=new AbortController()
+ let complete:((response:Response)=>void)|undefined
+ const cancel=vi.fn()
+ vi.stubGlobal("fetch",vi.fn(()=>new Promise<Response>(resolve=>{complete=resolve})))
+ const pending=createSkillPublishClient().listHistory("anchor",undefined,controller.signal)
+ const assertion=expect(pending).rejects.toMatchObject({reason:"aborted"})
+ controller.abort();await assertion
+ complete!(new Response(new ReadableStream({cancel})))
+ await vi.waitFor(()=>expect(cancel).toHaveBeenCalledTimes(1))
+})

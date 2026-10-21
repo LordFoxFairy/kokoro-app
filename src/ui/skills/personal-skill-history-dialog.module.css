@@ -1,0 +1,22 @@
+.dialog[data-slot="dialog-content"] {width:min(50rem,calc(100vw - 2.5rem));max-width:calc(100vw - 2.5rem);height:min(46rem,calc(100dvh - 3rem));max-height:calc(100dvh - 3rem);display:flex;flex-direction:column;gap:0;padding:0;overflow:hidden;border-radius:1.25rem;background:var(--background);}
+.heading {flex:none;padding:1.5rem 3.5rem 1rem 1.5rem;}
+.heading h2 {font-size:1rem;line-height:1.5rem;}
+.versions {flex:0 1 16rem;min-height:7rem;overflow:auto;padding:.5rem .75rem 1rem;}
+.version {display:flex;flex-direction:column;align-items:flex-start;gap:.25rem;width:100%;min-height:3.25rem;padding:.75rem;border:0;border-radius:.75rem;background:transparent;color:var(--foreground);font:inherit;font-size:.875rem;text-align:left;cursor:pointer;}
+.version:hover,.version[aria-pressed="true"] {background:var(--muted);}
+.version:focus-visible {outline:2px solid var(--ring);outline-offset:-2px;}
+.current {font-size:.6875rem;line-height:1rem;color:var(--muted-foreground);}
+.package {flex:1;min-height:0;display:flex;flex-direction:column;border-top:1px solid var(--border);}
+.packageHeader {display:flex;align-items:center;flex-wrap:wrap;gap:.5rem;flex:none;min-height:3.5rem;padding:.5rem 1rem;border-bottom:1px solid var(--border);font-size:.8125rem;}
+.packageHeader strong {overflow-wrap:anywhere;font-weight:500;}
+.packageHeader span {color:var(--muted-foreground);}
+.preview {overflow:auto;min-height:0;padding:1.25rem 1rem;overflow-wrap:anywhere;font-size:.875rem;line-height:1.6;}
+.preview pre {max-width:100%;overflow:auto;}
+.preview h1 {font-size:1.75rem;line-height:1.25;}
+.preview h2 {font-size:1.25rem;}
+.files {margin:0 0 1rem;padding:0;list-style:none;}
+.files ul {list-style:none;padding-left:1rem;}
+.files button {display:flex;align-items:center;gap:.5rem;width:100%;padding:.375rem;border:0;border-radius:.375rem;background:transparent;text-align:left;color:var(--foreground);font:inherit;}
+.files button:hover,.files button[aria-pressed="true"] {background:var(--muted);}
+.files svg {width:1rem;height:1rem;flex:none;}
+@media(max-width:30rem) {.dialog[data-slot="dialog-content"] {width:calc(100vw - 1rem);max-width:calc(100vw - 1rem);height:calc(100dvh - 1rem);max-height:calc(100dvh - 1rem);}.versions {flex-basis:12rem;}.heading {padding-left:1rem;}.preview {padding:1rem;}}

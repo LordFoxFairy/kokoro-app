@@ -1,3 +1,9 @@
+## 2026-10-21 本人系列历史与精确预览
+
+复用现 PersonalSkillManagement 稳定宿主，新增只读 history 操作，按当代 fresh publisher admission 进入独立 PersonalSkillHistoryDialog；update/withdraw 的 active/disabled 写入门不套用历史读取。弹窗拥有版本页、选择、精确包目录/正文和各自失败重试，复用 SkillPackageFiles/SkillPackageDocument，不扩大现目录/安装详情状态机。历史当前标记仅来自 publication，选择不写入、不安装；本片不提供未完成的恢复或删除按钮。
+
+身份代际/主体/锚点变更立即退休已读内容、取消旧请求，迟到结果不写入。分页失败保留同快照已读列表；publication/cursor失效显式刷新整个快照，不混页。版本选择取消旧预览；目录/正文分别绑定精确skill_id、revision与同一文件清单。关闭回原搜索焦点；窄屏弹窗内独立滚动，键盘及Escape可用，不挂第二套全局reader或缓存。
+
 ## 2026-10-21 原生退出确认产品化（既有退出链局部修复）
 
 沿现 App 同源 IAM relay 与锁定 Better Auth 1.7.3；不改 IAM、权限、协议、Schema、退出范围或 Product tombstone。比较添加未持有的 id_token_hint 跳确认、替换/解析 vendor HTML、以及保留原生确认cookie的本地展示，采用第三种：只有已通过原relay校验的200 HTML、无Location及正向限时确认cookie签发，且为正常顶层HTML导航，才303至固定 `/auth/sign-out`。opaque cookie和原Path原样保留，App不验issuer签名、不把形状判断当最终授权。

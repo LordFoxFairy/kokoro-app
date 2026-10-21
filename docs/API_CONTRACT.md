@@ -1,3 +1,9 @@
+## 2026-10-21 Skills 历史消费者候选
+
+固定BFF `d28f7db8b84deb7305fd4212c1469347c0e63e2f` /Public21.2.0/176，SHA256 `2c56fd63faa5ed7759133046dfda147bf1d360ddfb32f7570e55df38e487f786`；同一snapshot下六窄生成器配对，connector-command-errors独立profile不变。历史同源 GET /api/hub/self/skills/managed/{skill_id}/versions 仅接受唯一limit/cursor，映射正式GET /v1/self/skills/{skill_id}/versions；不转发主体、status或命令头，不新增写操作。闭集 data/meta、exact versions/publication、required nullable next_cursor 及错误status/no-store/request-id按固定BFF收边界。
+
+本人包预览同源GET /api/hub/self/skills/managed/{skill_id}/package映射既有GET /v1/self/skills/{skill_id}/package，复用现包读取预算、有限body、文件路径校验、身份、request-id和失败语义；不走已退役目录读取、不用安装替换。浏览器把返回source_ref/revision与所选历史行再绑定，文件正文必须匹配先读目录。测试专用精确inverse恢复原21.1.1，再委托原21/模型/双父证明；无runtime旧版回退。
+
 ## 2026-10-21 原生退出确认产品化（既有退出链局部修复）
 
 沿现 App 同源 IAM relay 与锁定 Better Auth 1.7.3；不改 IAM、权限、协议、Schema、退出范围或 Product tombstone。比较添加未持有的 id_token_hint 跳确认、替换/解析 vendor HTML、以及保留原生确认cookie的本地展示，采用第三种：只有已通过原relay校验的200 HTML、无Location及正向限时确认cookie签发，且为正常顶层HTML导航，才303至固定 `/auth/sign-out`。opaque cookie和原Path原样保留，App不验issuer签名、不把形状判断当最终授权。

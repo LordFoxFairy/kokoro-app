@@ -152,3 +152,7 @@ SettingsModal 拥有 Skills 的 installed scope / explore 展示意图，setting
 探索页 desktop 标题带 81px；紧凑设置隐藏面板标题，通过现 More → 技能返回。目录工具栏以 ResizeObserver 测量实际容器与九个本地化标签的宽度（字体 ready、语言变化同样重测）：放得下时搜索独占一行、分类行上下各 16px；否则搜索 + 分类菜单同一行，底距 16px。布局切换保留分类/键盘焦点，隐藏测量行 inert，不产生第二组可操作控件。
 
 列表为 60×80 封面、16px 图文间距、14/20 标题、两行 13/18 说明、真实更新时间、28px 操作；分隔线仅从文字轴开始，hover 伸出内容轴 16px。空图不伪造封面或作者，已安装与可添加仍来自真实 owner。既有 rail suite 仅加两项独有风险回归（hash/返回/受控 scope 和分类宽度/焦点），不恢复已退役 UI suites；真实浏览器与最终门禁边界见 CURRENT。
+
+## 2026-10-21 本人系列历史
+
+PersonalSkillManagement保留原发布者准入和写意图，仅按操作分开history只读门；PersonalSkillHistoryDialog拥有历史快照/分页/精确版本选择，内部HistoryPackage复用SkillPackageFiles/SkillPackageDocument。schema在hub/personal-skill-history.schema，listHistory复用SkillPublishClient读取边界，managed包沿skill-installation-content既有预算与精确pin检查；无目录current/安装替换、全局缓存或隐式恢复。恢复/删除未交付，不显示假成功动作。

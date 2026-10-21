@@ -1,3 +1,4 @@
+import { parsePersonalSkillHistoryJson, personalSkillHistoryResponseSchema, personalSkillHistoryErrorSchema, personalSkillHistoryErrorAllowed } from "@/hub/personal-skill-history.schema";
 import { proxyPersonalKnowledge } from "@/lib/server/personal-knowledge";
 import { proxyProjectSkillSelection } from "@/lib/server/project-skill-selection";
 import { proxyInstallation } from "@/lib/server/skill-installations";
@@ -1887,29 +1888,31 @@ async function proxySkillPackage(
 ): Promise<Response> {
   const requestId = crypto.randomUUID();
   const installation = path[0] === "skill-installations";
+  const managed = path[0] === "self" && path[1] === "skills" && path[2] === "managed";
+  const prefix = managed ? "self/skills/managed" : installation ? "skill-installations" : "skills";
   const download = installation && path[2] === "download";
   const fail = (fault: ProjectionFault) => {
-    if (!installation || download) return projectionError(fault, requestId);
+    if ((!installation && !managed) || download) return projectionError(fault, requestId);
     const base = PROJECTION_FAILURES[fault];
     const code = fault === "invalidSkillRequest" ? "invalid_skill_package_request"
       : fault === "invalidOwnerResponse" ? "skill_package_response_invalid"
       : ["bffUnavailable", "bffNotConfigured"].includes(fault) ? "skill_package_dependency_unavailable" : base.code;
     return NextResponse.json({ error: { code, message: code, retryable: base.status === 503 } }, { status: base.status, headers: { "cache-control": "no-store", "x-request-id": requestId } });
   };
-  const targetId = path[1] ?? "";
+  const targetId = path[managed ? 3 : 1] ?? "";
   const url = new URL(request.url);
   if (
     request.method !== (download ? "POST" : "GET") ||
-    path.length !== 3 ||
-    (!installation && path[0] !== "skills") ||
-    path[2] !== (download ? "download" : "package") ||
+    path.length !== (managed ? 5 : 3) ||
+    (!managed && !installation && path[0] !== "skills") ||
+    path.at(-1) !== (download ? "download" : "package") ||
     !(installation ? installationIdSchema.safeParse(targetId).success : MCP_CONNECTION_ID.test(targetId)) ||
     url.pathname !==
-      `/api/hub/${installation ? "skill-installations" : "skills"}/${encodeURIComponent(targetId)}/${download ? "download" : "package"}` ||
+      `/api/hub/${prefix}/${encodeURIComponent(targetId)}/${download ? "download" : "package"}` ||
     (!download && request.body !== null) ||
     url.hash ||
     (download && url.search !== "") ||
-    (installation && /%(?![0-9A-Fa-f]{2})/u.test(url.search)) ||
+    ((installation || managed) && /%(?![0-9A-Fa-f]{2})/u.test(url.search)) ||
     [...url.searchParams.keys()].some((key) => key !== "file_path") ||
     url.searchParams.getAll("file_path").length > 1 ||
     [...(download ? [] : ["content-length"]), "transfer-encoding", "idempotency-key"].some((header) =>
@@ -1963,7 +1966,7 @@ async function proxySkillPackage(
     joined.throwIfAborted();
     const headers = productBffHeaders(config, claims, requestId);
     headers.set("accept", "application/json");
-    const target = `${config.bffBaseUrl.replace(/\/+$/u, "")}/${download ? "browser/v1" : "v1"}/${installation ? "skill-installations" : "skills"}/${encodeURIComponent(targetId)}/${download ? "download" : "package"}${filePath === undefined ? "" : `?file_path=${encodeURIComponent(filePath)}`}`;
+    const target = `${config.bffBaseUrl.replace(/\/+$/u, "")}/${download ? "browser/v1" : "v1"}/${managed ? "self/skills" : installation ? "skill-installations" : "skills"}/${encodeURIComponent(targetId)}/${download ? "download" : "package"}${filePath === undefined ? "" : `?file_path=${encodeURIComponent(filePath)}`}`;
     upstream = await within(
       requestWithDomain(target, config.domain, {
         method: download ? "POST" : "GET",
@@ -2025,7 +2028,7 @@ async function proxySkillPackage(
     }
     let raw: unknown;
     try {
-      raw = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+      raw = managed ? parsePersonalSkillHistoryJson(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) : JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
     } catch {
       return fail("invalidOwnerResponse");
     }
@@ -2045,7 +2048,7 @@ async function proxySkillPackage(
       if (
         !parsed.success ||
         !(download ? skillDownloadErrorAllowed(upstream.status, parsed.data.error.code)
-          : installation ? installationPackageErrorAllowed(upstream.status, parsed.data.error.code, parsed.data.error.retryable, upstream.headers.get("retry-after"))
+          : installation || managed ? installationPackageErrorAllowed(upstream.status, parsed.data.error.code, parsed.data.error.retryable, upstream.headers.get("retry-after"))
           : CATALOG_PACKAGE_ERRORS[upstream.status]?.includes(parsed.data.error.code))
       )
         return fail("invalidOwnerResponse");
@@ -2323,6 +2326,7 @@ async function proxyHubRequest(
   if (
     path[0] === "self" &&
     path[1] === "skills" &&
+    path.length === 4 &&
     ["versions", "withdraw"].includes(path[3] ?? "")
   )
     return proxyPersonalSkillLifecycle(request, path);
@@ -2359,10 +2363,11 @@ async function proxyHubRequest(
   }
   const managedSkillPath =
     path[0] === "self" && path[1] === "skills" && path[2] === "managed";
+  const managedHistoryRead = managedSkillPath && path.length === 5 && path[4] === "versions";
   const managedSkillRead =
     managedSkillPath &&
     request.method === "GET" &&
-    (path.length === 3 || path.length === 4);
+    (path.length === 3 || path.length === 4 || managedHistoryRead);
   if (managedSkillPath && !managedSkillRead)
     return NextResponse.json(
       { error: "not_found" },
@@ -2502,10 +2507,11 @@ async function proxyHubRequest(
     );
   if (managedSkillRead) {
     const query = new URLSearchParams(search);
+    if (managedHistoryRead && ([...query.keys()].some(key => !["limit", "cursor"].includes(key) || query.getAll(key).length !== 1) || (query.has("limit") && !/^(?:[1-9][0-9]?|100)$/u.test(query.get("limit") ?? "")) || (query.has("cursor") && (!query.get("cursor") || query.get("cursor")!.length > 2048)))) return localSkillError("invalidQuery",requestId);
     if (
-      path.length === 4 &&
+      (path.length === 4 || managedHistoryRead) &&
       (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u.test(path[3] ?? "") ||
-        search !== "")
+        (!managedHistoryRead && search !== ""))
     )
       return localSkillError("invalidQuery", requestId);
     if (
@@ -2631,7 +2637,7 @@ async function proxyHubRequest(
   const encodedBusinessPath = businessPath
     .map((segment) => encodeURIComponent(segment))
     .join("/");
-  const target = `${config.bffBaseUrl.replace(/\/+$/, "")}/v1/${managedSkillRead ? `self/skills${path.length === 4 ? `/${encodeURIComponent(path[3]!)}` : ""}` : encodedBusinessPath}${search}`;
+  const target = `${config.bffBaseUrl.replace(/\/+$/, "")}/v1/${managedSkillRead ? `self/skills${path.length >= 4 ? `/${encodeURIComponent(path[3]!)}${managedHistoryRead ? "/versions" : ""}` : ""}` : encodedBusinessPath}${search}`;
 
   const headers = productBffHeaders(config, claims, requestId);
   for (const name of FORWARD_HEADERS) {
@@ -2870,6 +2876,13 @@ async function proxyHubRequest(
           "x-request-id": upstreamRequestId,
         },
       });
+    }
+    if (managedHistoryRead) {
+      let raw:unknown;
+      try { raw=parsePersonalSkillHistoryJson(new TextDecoder("utf-8",{fatal:true}).decode(await upstream.arrayBuffer())); } catch (error) {return localSkillError(error instanceof UpstreamTimeoutError ? "bffUnavailable" : "invalidOwnerResponse",requestId);}
+      const success=personalSkillHistoryResponseSchema.safeParse(raw), error=personalSkillHistoryErrorSchema.safeParse(raw);
+      if (upstream.status===200 ? !success.success || success.data.meta.request_id!==upstreamRequestId : !error.success || error.data.meta.request_id!==upstreamRequestId || !personalSkillHistoryErrorAllowed(upstream.status,error.data.error.code)) return localSkillError("invalidOwnerResponse",requestId);
+      return NextResponse.json(raw,{status:upstream.status,headers:{"cache-control":"no-store","x-request-id":upstreamRequestId}});
     }
     const projectionHeaders = new Headers({
       "cache-control": "no-store",

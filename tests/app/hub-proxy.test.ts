@@ -4876,3 +4876,39 @@ it("retires the project skill-name switch before any legacy Hub dispatch", async
   }
   expect(requestWithDomain).not.toHaveBeenCalled();
 });
+
+it("owned history reads the precise versions route and refuses caller filters without owner IO", async () => {
+  const data = { series_id: "history-series", publication: null, versions: [], next_cursor: null };
+  vi.mocked(requestWithDomain).mockResolvedValue(Response.json({data, meta:{request_id:"history-read"}}, {headers:{"cache-control":"no-store", "x-request-id":"history-read"}}));
+  const { GET } = await import("@/app/api/hub/[...path]/route");
+  const path=["self","skills","managed","history-anchor","versions"];
+  const response=await GET(new Request("http://localhost/api/hub/self/skills/managed/history-anchor/versions?limit=2&cursor=opaque"),params(path));
+  expect(response.status).toBe(200);
+  expect(requestWithDomain).toHaveBeenCalledWith("http://bff.test/v1/self/skills/history-anchor/versions?limit=2&cursor=opaque",ENV.KOKORO_DOMAIN, expect.objectContaining({method:"GET"}));
+  expect(await response.json()).toEqual({data,meta:{request_id:"history-read"}});
+  const before=vi.mocked(requestWithDomain).mock.calls.length;
+  for(const query of ["?subject=other", "?status=active", "?limit=0", "?limit=2&limit=2", "?cursor="]){
+    expect((await GET(new Request(`http://localhost/api/hub/self/skills/managed/history-anchor/versions${query}`),params(path))).status).toBe(400);
+  }
+  expect(requestWithDomain).toHaveBeenCalledTimes(before);
+});
+
+it("owned history package preview uses the exact managed revision rather than catalog or installation", async()=>{
+  const { GET }=await import("@/app/api/hub/[...path]/route");
+  const data={source_ref:"skill:history-old",revision:"2",files:[],selected_file:null};
+  vi.mocked(requestWithDomain).mockResolvedValue(Response.json({data},{headers:{"cache-control":"no-store","x-request-id":"history-package"}}));
+  const response=await GET(new Request("http://localhost/api/hub/self/skills/managed/history-old/package"),params(["self","skills","managed","history-old","package"]));
+  expect(response.status).toBe(200);
+  expect(requestWithDomain).toHaveBeenCalledWith("http://bff.test/v1/self/skills/history-old/package",ENV.KOKORO_DOMAIN,expect.objectContaining({method:"GET"}));
+  expect(await response.json()).toEqual({data});
+});
+
+it("history body deadline remains dependency-unavailable instead of corrupt-response",async()=>{
+ const {UpstreamTimeoutError}=await import("@/lib/server/upstream-http")
+ const {GET}=await import("@/app/api/hub/[...path]/route")
+ const body=new ReadableStream<Uint8Array>({start(controller){controller.error(new UpstreamTimeoutError())}})
+ vi.mocked(requestWithDomain).mockResolvedValue(new Response(body,{headers:{"content-type":"application/json","cache-control":"no-store","x-request-id":"timeout-history"}}))
+ const response=await GET(new Request("http://localhost/api/hub/self/skills/managed/anchor/versions"),params(["self","skills","managed","anchor","versions"]))
+ expect(response.status).toBe(503)
+ expect(await response.json()).toMatchObject({error:{code:"skill_dependency_unavailable"}})
+})

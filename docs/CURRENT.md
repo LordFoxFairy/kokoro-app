@@ -1,3 +1,15 @@
+## 2026-10-21 Skills 历史读取与精确预览（候选，正常未激活）
+
+固定BFF d28f7db/Public21.2.0/176和原始artifact，六既有窄生成器正规重出，connector错误profile不变；test-only history增量inverse恢复完整21.1.1后委托原模型与双父证明，无runtime双读。现managed同源读取补history GET，现包reader补本人精确版本路径；保身份/预算/大小/错误与原POST新版本。历史schema闭集、严格原始键、publication current而非max、nullable末页cursor；跨snapshot或重复页拒绝。
+
+PersonalSkillManagement按操作分只读history与写状态门；独立PersonalSkillHistoryDialog拥有临时历史/分页/选择，包复用原精确reader和文件/Markdown组件。代际变化卸载读内容、取消旧请求，选版不改安装/发布。对照已保留Manus实际历史图：上方时间列表、下方精确包预览；恢复/删除缺正式fence及生命周期，不加假按钮。真实菜单到history已有组件主路径，正常产品和完整链未验证。
+
+本片已复现adapter历史/包路径缺失两项RED和history菜单RED；修后定向通过。独审发现同文件重选清空正文、body超时误502，均补真实RED→GREEN；另补忽略信号后返回流取消的RED→GREEN。首契约检查仅1处current版本断言未配对，保留原失败后更新到唯一21.2，不改历史raworacle。停写后完整七门均exit0：contract297PASS、architecture50PASS、237文件4515PASS/0SKIP，lint/typegen/types、webpack build及构建后types通过，1069非文档输入初始前后无漂移。随后只按真实参考对照调整CSS两个布局值；其余1068输入不变，最终CSS再经15条相关组件回归、webpack完整构建与构建后types通过。缺省App无Prettier依赖/格式脚本，先前试用该不存在路径的命令仅为工具缺口，不作为代码失败或格式通过证据；未安装依赖。
+
+真实隔离Next/CUA验证精确v3→v2→v1、同文件重选不清正文、第二文件读取、Escape关闭和聚焦按钮Enter重新打开。612×766下dialog572×718、x20/y24；390×844下dialog374×828、x8/y8，document scrollWidth=390，无横向溢出。保留原Manus参考与新实现精确PNG；未用native缩放截图冒尺寸证明。参考恢复/下载动作与正式生命周期仍未补齐，故不声称一比一完整闭环。UI使用显式历史/包HTTP夹具，非正常租户/IAM/Platform/Storage整链；两次自有preview进程均退出、监听已清理。完整两份既有Playwright套件本次未单独重跑。
+
+独立只读复审无剩余确定阻断，原raw/双父证明保留。App远端main重新fetch成功且为本分支祖先，无同事新增提交待整合；尚未push/PR/merge、正常服务和数据库不动，模型/工具/扣费暂停。
+
 ## 2026-10-21 原生退出确认产品化：已正常加载并实测
 
 裸英文来源为锁定Better Auth原生模板，保留其确认cookie/300秒/session/client/注册回跳核验与正式撤销。App只在已验证native200HTML及正向确认cookie、正常顶层导航后去固定中文页；API仍原生，失败无cookie/正文/Location透传，无hint、HTML字符串替换、新服务/持久状态或自动确认。确认页origin referrer＋form-action self，不加Origin:null例外；失败字段存在即无form失败态，与Proxy一致。

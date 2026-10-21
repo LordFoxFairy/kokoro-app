@@ -97,7 +97,7 @@ function managementFixture() {
   return { installation, managed, response, content }
 }
 
-async function openManagement(operation: "更新技能" | "撤回技能") {
+async function openManagement(operation: "更新技能" | "撤回技能" | "技能版本历史") {
   fireEvent.click(await screen.findByRole("button", { name: "Managed skill" }))
   const more = await screen.findByRole("button", { name: "更多技能操作" })
   fireEvent.keyDown(more, { key: "ArrowDown" })
@@ -202,4 +202,21 @@ it.each(["confirmed", "unknown"] as const)("releases only a confirmed operation 
   fireEvent.click(screen.getByRole("button", { name: "取消" }))
   if (outcome === "unknown") expect(await screen.findByRole("button", { name: "查看技能操作" })).toBeVisible()
   else await waitFor(() => expect(screen.queryByRole("button", { name: "查看技能操作" })).toBeNull())
+})
+
+
+it("opens exact personal history from the installed surface without entering a write form", async()=>{
+ window.localStorage.setItem("kokoro.locale","zh")
+ const {installation,managed,response,content}=managementFixture()
+ vi.stubGlobal("fetch",vi.fn(async(input:RequestInfo|URL)=>{
+  const url=String(input)
+  if(url.includes("skill-installations"))return response(installation)
+  if(url.endsWith("/versions"))return response({series_id:managed.series_id,publication:{current_version_id:managed.skill_id,state_version:"8",withdrawn_at:null},versions:[{skill_id:managed.skill_id,revision:"3",name:managed.name,summary:"",status:"active",archive_size:"375",file_count:1,created_at:"2026-10-21T00:00:00Z",is_current:true}],next_cursor:null},true)
+  if(url.endsWith("/package"))return response({source_ref:managed.source_ref,revision:"3",files:[],selected_file:null})
+  return response(managed,true)
+ }))
+ render(content());await openManagement("技能版本历史")
+ expect(await screen.findByText("当前版本")).toBeInTheDocument()
+ expect(screen.getByRole("dialog",{name:"技能版本历史"})).toBeInTheDocument()
+ expect(screen.queryByLabelText("技能名称")).toBeNull()
 })

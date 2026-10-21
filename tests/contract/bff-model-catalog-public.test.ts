@@ -10,8 +10,8 @@ it("Public21 model decoder matches the closed publisher fields and preserves the
   const bytes = await readFile("src/generated/bff-public-openapi.yaml")
   const spec = YAML.parse(bytes.toString())
   const hash = (value: Uint8Array) => createHash("sha256").update(value).digest("hex")
-  expect(hash(bytes)).toBe("eff6676131081b20ba36fd4be243075c568ebd27358662a9c09fe3216b097848")
-  expect(spec.info.version).toBe("21.1.1")
+  expect(hash(bytes)).toBe("2c56fd63faa5ed7759133046dfda147bf1d360ddfb32f7570e55df38e487f786")
+  expect(spec.info.version).toBe("21.2.0")
   const candidate = spec.components.schemas.ModelCandidate
   expect(candidate.additionalProperties).toBe(false)
   expect(Object.keys(modelCandidateSchema.shape).sort()).toEqual([...candidate.required].sort())

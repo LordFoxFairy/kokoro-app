@@ -1,3 +1,4 @@
+import { restorePersonalHistory } from "./bff-personal-history-parent"
 // Test-only exact additive inverse. No runtime compatibility path.
 import {createHash} from "node:crypto";
 const proof={
@@ -65,7 +66,7 @@ function restoreProjectUnionPatch(bytes: Uint8Array): Buffer {
   return Buffer.from(restored)
 }
 export function restorePublic21(bytes:Uint8Array):Buffer {
- bytes=restoreProjectUnionPatch(bytes);
+ bytes=restoreProjectUnionPatch(restorePersonalHistory(bytes));
  if(hash(bytes)!==proof.current_sha256)throw Error("Public21.1 fixed source drift");
  const lines=Buffer.from(bytes).toString("utf8").split(/(?<=\n)/u);
  for(const h of [...proof.inverse].reverse()){

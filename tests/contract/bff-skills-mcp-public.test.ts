@@ -27,9 +27,9 @@ import {
 
 import { restorePublic21 } from "./bff-configuration-parent"
 
-const OWNER_COMMIT = "192396d29678e7977fce9c4ab837b249aaf1af93"
-const OWNER_SHA256 = "eff6676131081b20ba36fd4be243075c568ebd27358662a9c09fe3216b097848"
-const OWNER_VERSION = "21.1.1"
+const OWNER_COMMIT = "d28f7db8b84deb7305fd4212c1469347c0e63e2f"
+const OWNER_SHA256 = "2c56fd63faa5ed7759133046dfda147bf1d360ddfb32f7570e55df38e487f786"
+const OWNER_VERSION = "21.2.0"
 const SNAPSHOT = resolve(process.cwd(), "src/generated/bff-public-openapi.yaml")
 
 type Shape = {
@@ -213,7 +213,7 @@ describe("pinned BFF Skills and MCP public consumer contract", () => {
       source.replace(addition, addition + addition),
       source.replace(addition, "") + addition + "\n",
       source.replace("complete exact project installation", "latest project installation"),
-      source.replace("  version: 21.1.1", "  version: 21.1.0"),
+      source.replace("  version: 21.2.0", "  version: 21.1.0"),
       source + "\n",
     ]
     for (const mutated of mutations) {
@@ -224,7 +224,7 @@ describe("pinned BFF Skills and MCP public consumer contract", () => {
 
   it("pins exact owner bytes and six current Skill draft/publish operations", async () => {
     const bytes = await readFile(SNAPSHOT)
-    expect(OWNER_COMMIT).toBe("192396d29678e7977fce9c4ab837b249aaf1af93")
+    expect(OWNER_COMMIT).toBe("d28f7db8b84deb7305fd4212c1469347c0e63e2f")
     expect(createHash("sha256").update(bytes).digest("hex")).toBe(OWNER_SHA256)
     const spec = YAML.parse(bytes.toString()) as Spec
     expect(spec.info.version).toBe(OWNER_VERSION)
@@ -500,4 +500,16 @@ it("executes private connector profile drift checks in an isolated fixture and c
     await writeFile(resolve(fixture, names[2]!), "export const stale = true;\n")
     expect(() => check()).toThrow()
   } finally { await rm(fixture, { recursive: true, force: true }) }
+})
+
+it("history wire preserves the declared exact revision fields and nullable terminal cursor",async()=>{
+ const {personalSkillHistoryVersionSchema,personalSkillHistoryPageSchema}=await import("@/hub/personal-skill-history.schema")
+ const doc=YAML.parse(await readFile(SNAPSHOT,"utf8"))
+ const schemas=doc.components.schemas
+ expect(Object.keys(personalSkillHistoryVersionSchema.shape).sort()).toEqual([...schemas.PersonalSkillHistoryVersion.required].sort())
+ expect(Object.keys(personalSkillHistoryPageSchema.innerType().shape).sort()).toEqual([...schemas.PersonalSkillHistoryPage.required].sort())
+ expect(personalSkillHistoryPageSchema.safeParse({series_id:"series",publication:null,versions:[],next_cursor:null}).success).toBe(true)
+ expect(personalSkillHistoryPageSchema.safeParse({series_id:"series",publication:null,versions:[]}).success).toBe(false)
+ expect(doc.paths["/v1/self/skills/{skill_id}/versions"].get.operationId).toBe("listPersonalSkillVersions")
+ expect(doc.paths["/v1/self/skills/{skill_id}/versions"].post.operationId).toBe("createPersonalSkillVersion")
 })

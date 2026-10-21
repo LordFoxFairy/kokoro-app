@@ -4,6 +4,18 @@
 import type { MessageKey } from "./messages"
 
 export const en: Partial<Record<MessageKey, string>> = {
+  "skills.history.more": "Load more",
+  "skills.history.title": "Skill version history",
+  "skills.history.current": "Current version",
+  "skills.history.revision": "Version",
+  "skills.history.failed": "Could not read version content. Please retry.",
+  "skills.history.pageFailed": "History changed or is temporarily unavailable. Refresh to continue.",
+  "skills.history.refresh": "Refresh history",
+  "skills.history.empty": "No published versions",
+  "skills.history.emptyFiles": "No preview files for this version",
+  "skills.history.unavailable": "This version is not currently available for preview.",
+  "skills.history.files": "files",
+
 
   // SET47-BEGIN: task-archive
   "archive.action": "Archive task",
