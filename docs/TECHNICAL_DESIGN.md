@@ -3210,3 +3210,9 @@ Hub update/remove签名显式caller key，删隐式随机key，不留旧签名fa
 新增窄use-private-mcp-authorization窗口消费者：复用现useMcpOAuthPopup，只持等待/非敏感错误状态与actor/client/window/admission围栏，不持凭据、第二份owner事实或授权命令registry。一个窗口一次在途Reconnect，同点击栈预开popup，exact server/connector/CAS来自本代详情；关闭/切目标/准入退休取消等待与popup，晚ACK仅失活原actor投影，不导航、不关闭后开窗口。Begin/Reconnect成功只代表等待授权，不关闭详情或伪造active；callback通知沿现owner projection重新读取，真实ready后才回原主动作。失败不自动重发、不借GET认定提交；用户显式新授权仍由owner CAS与pending/exchange约束裁决。
 
 写区本hook、现projection coordinator/custom detail、既有rail回归及MCP INDEX/CURRENT。原Provider/generic OAuth、URL创建、receipt unknown语义不迁移。先实际缺按钮RED和迟到/关窗围栏，再正常关闭创建→详情重连→AS拒绝→显式重连→成功及断开；自有loopback仅声明读取，无工具/模型/资金调用，原popup presentation与外部服务差异如实保留。
+
+## 产品文档归属与迁移（2026-10-21）
+
+执行 Root 当前有效计划 Wave 5 和用户“文档放 App 仓库”的决定：沿用已合 Root `2e008595` 的 VitePress 门户，迁入本仓 `developer-docs/` 独立包，不在 Next 内增加 renderer、服务或文档 API。门户保持原 lockfile 与生成器，公开 Reference 只读固定 BFF commit/version/digest 的 canonical artifact；本次配对与 App 相同的 Public22 原件，不复制另一份可编辑 OpenAPI。
+
+独立包拥有自己的 lint/types/test/build；App 的 Next／Vitest／ESLint 不递归消费其构建输入。公开构建只读取 `developer-docs/docs/`，本仓 `docs/` 中的内部维护记录不进入静态资源或搜索索引；内部发布的访问控制仍是未完成项，不用隐藏链接冒充权限。先完成候选迁移与验收，随后在配对 Root PR 中删除旧门户并更新链接／精确 gitlink；过渡期间 Root 未删不代表保留旧入口 fallback。无业务契约、数据模型或用户权限变化。

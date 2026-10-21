@@ -93,3 +93,6 @@ preview fixture 替代。
 - 发布验收矩阵见 [`docs/ACCEPTANCE.md`](docs/ACCEPTANCE.md)。
 - 当前 Docker/CI 供应链与 health/ready 缺口记录在 [`docs/CURRENT.md`](docs/CURRENT.md)，历史报告
   不作为生产证据。
+## 产品文档维护
+
+公开文档与 API 参考位于独立包 [`developer-docs/`](developer-docs/README.md)，运行 `pnpm docs:dev`、`pnpm docs:build` 或 `pnpm docs:check`；内部工程说明仍在 [`docs/`](docs/INDEX.md)，不进入公开构建。门户迁移候选、Root 配对删除和未完成能力以 [`docs/CURRENT.md`](docs/CURRENT.md) 为准，不把文档生成成功等同业务验收。

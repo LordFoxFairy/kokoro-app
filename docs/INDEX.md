@@ -211,3 +211,7 @@ Web基线91fb1aee87df9e6dc0acadcdda4db5375623a13a，939 tracked clean；runtime_
 - `contract/README.md` 记录 owner、visibility、version、generation、breaking、provenance。
 - 只有 `kokoro-bff` 的 `public` Product API 可进入 Developer API；本仓 browser-private 契约不得发布。
 - 运行时行为变化必须同 commit 更新 source、contract test、相关治理文档和 acceptance 条目。
+
+## 产品与开发者文档门户
+
+[`developer-docs/`](../developer-docs/README.md) 为迁入本仓的独立公开文档包，Reference从固定BFF artifact生成；本目录的内部维护记录不进入公开站点或搜索索引。运行 `pnpm docs:check` 验证门户，正常 App 门禁继续独立执行；候选迁移及Root旧目录收口状态见CURRENT，不冒称已发布。

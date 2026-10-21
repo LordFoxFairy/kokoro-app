@@ -1,3 +1,13 @@
+## 2026-10-21 文档迁入 App：候选已验，Root 配对尚未完成
+
+执行既定 Wave 5，从远端 Root main `2e008595` 精确导出78个既有门户文件到 `developer-docs/`，不从本地分叉Root的旧Public1内容继续开发。保留原VitePress／lock／43项测试／generator／publication policy，仅修维护位置、App独立包门禁范围及说明，并固定同App Public22 `be5cc6f` 原始artifact：176项中生成170 public操作／359可达schema，6 browser-private仍排除，不新增依赖、业务API或内部服务。App的239个原测试文件完整保留，独立文档包不混入Next/Vitest；新增 `docs:dev/build/check` 入口。
+
+独立包完整check通过：lint/types、43PASS／0SKIP、provenance、两次确定性生成、5个loopback示例／9次fixture调用、architecture、生产build及53HTML／16802内部链接。App停写完整七门均0，239文件4547PASS／0SKIP，1118非文档输入无漂移，Redis PONG119→119；未另外运行整站Playwright。保留初始迁移路径失败、新增Markdown分隔失败及显式PATH误选Python3.9的42PASS／1FAIL；恢复现有Python3.13环境后通过，未改示例、断言或依赖。
+
+真实静态产物浏览器验证：1280搜索新增history operation并用回车打开精确锚点，API参数／响应及来源可读；expected_publication字段可搜索；390菜单进入技能指南且scrollWidth390。公开产物179文件未包含App内部维护文件名或三条具体内部正文标记；该有界检查不冒充全量敏感信息证明。超大Skills页native AX超帧，限定DOM读回正常；窄屏设置观察超时后DOM确认已390，未重复发送。Escape能关闭搜索，但焦点回到BODY，尚未宣称回焦通过，不为本次搬迁复制上游组件或加全局observer。保留既有大chunk警告，不扩大到打包架构重写。
+
+仅候选已迁入：Root旧门户删除／链接／gitlink配对、内部发布的真实访问控制和完整产品手册仍未完成，未push／PR／merge、不称完整文档站交付。正常七监听不重启，模型／工具执行／扣费仍暂停。取证仅Root ignored `var/dev/app-docs-migration-20261021`，正常后台空草稿删除及已有身份／生命周期边界仍待确认。
+
 ## 2026-10-21 后台空草稿：正常创建与刷新回读已验证
 
 沿正常 Admin d7403b1／BFF4a10f8b／Platform97b27b3，正式页面创建独立无包样本 `qa-admin-draft-discard-20261021`，整页刷新后重新打开同一草稿。Platform owner 只读事务核实同名仅一条、draft/revision1/state_version1/package_phase none、零publication／安装，未用数据库写入伪造产品结果。发布、撤回、隔离、恢复和修改可见范围均禁用；草稿删除窗口已填写明确样本原因，但未提交，等待不可恢复动作的当次确认。只新增该空草稿，不触动旧版本、安装、账号、权限、积分或执行开关；正常七监听PID保持。
