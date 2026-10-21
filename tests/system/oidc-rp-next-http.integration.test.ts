@@ -6208,6 +6208,11 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     const withoutNonce = jar.split("; ").filter((pair) => !pair.startsWith("next-auth.nonce=")).join("; ")
     const before = paths.filter((item) => item === "/iam/oauth2/token").length
     expect((await http(nextPort, callbackPath, "GET", "", { cookie: withoutNonce })).status).toBe(403)
+    const wrongNonce = jar.split("; ").map((pair) => pair.startsWith("next-auth.nonce=")
+      ? `next-auth.nonce=${"x".repeat(32)}` : pair).join("; ")
+    const rejected = await http(nextPort, callbackPath, "GET", "", { cookie: wrongNonce })
+    expect(rejected.status).toBe(403)
+    expect(rejected.headers["set-cookie"] ?? []).toEqual([])
     expect(paths.filter((item) => item === "/iam/oauth2/token")).toHaveLength(before)
     const [first, second] = await Promise.all([
       http(nextPort, callbackPath, "GET", "", { cookie: jar }),

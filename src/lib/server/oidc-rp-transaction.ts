@@ -101,15 +101,26 @@ export async function consumeOidcState(input: Readonly<{
   const redisKey = key(input.webOrigin, input.state)
   const binding = cookieBinding(input.cookieHeader ?? "", false)
   if (redisKey === null || binding === null || input.authSecret.length < 32) return null
-  const stored = await withRedis(input.redisUrl, (client) => client.getDel(redisKey))
-  if (stored === null || stored.length > 2400) return null
-  let value: unknown
-  try { value = JSON.parse(stored) } catch { return null }
-  if (!Array.isArray(value) || value.length !== 4 || value[0] !== RECORD_VERSION
-    || typeof value[1] !== "string" || typeof value[2] !== "string" || typeof value[3] !== "string"
-    || !HEX_DIGEST.test(value[2]) || !HEX_DIGEST.test(value[3])) return null
-  const target = parseProductReturnTarget(value[1])
-  if (target === null || target !== value[1] || !timingSafeEqual(Buffer.from(value[2]), Buffer.from(binding))) return null
-  const mac = returnMac(input.authSecret, input.webOrigin, binding, target)
-  return timingSafeEqual(Buffer.from(value[3]), Buffer.from(mac)) ? target : null
+  return withRedis(input.redisUrl, async (client) => {
+    const stored = await client.get(redisKey)
+    if (stored === null || stored.length > 2400) return null
+    let value: unknown
+    try { value = JSON.parse(stored) } catch { return null }
+    if (!Array.isArray(value) || value.length !== 4 || value[0] !== RECORD_VERSION
+      || typeof value[1] !== "string" || typeof value[2] !== "string" || typeof value[3] !== "string"
+      || !HEX_DIGEST.test(value[2]) || !HEX_DIGEST.test(value[3])) return null
+    const target = parseProductReturnTarget(value[1])
+    if (target === null || target !== value[1]) return null
+    const mac = returnMac(input.authSecret, input.webOrigin, value[2], target)
+    if (!timingSafeEqual(Buffer.from(value[3]), Buffer.from(mac))
+      || !timingSafeEqual(Buffer.from(value[2]), Buffer.from(binding))) return null
+    // Only the callback that proved this exact record may consume it. A stale
+    // tab must not burn the original state, and concurrent valid callbacks
+    // must still admit at most one exchange.
+    const consumed = await client.eval(
+      'if redis.call("GET", KEYS[1]) == ARGV[1] then return redis.call("DEL", KEYS[1]) end return 0',
+      { keys: [redisKey], arguments: [stored] },
+    )
+    return consumed === 1 ? target : null
+  })
 }

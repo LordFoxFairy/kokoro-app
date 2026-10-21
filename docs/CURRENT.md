@@ -1,3 +1,11 @@
+## 2026-10-21 登录交易原子消费：本地阶段实现，未激活
+
+用户已批准原生交易隔离设计。现 ledger 改为验证记录／MAC／浏览器 binding 后比较原值原子消费；错 proof 不烧掉合法 state，并发仍只有一个进入 exchange。现有单记录、NX、300 秒和公开方法不变；完整 namespace／handoff／IAM 表单隔离仍待完成，不称多标签整链已修。
+
+主方实际 RED：unit 1 FAIL、真实 Next／Redis HTTP 错 nonce 后合法并发均403；GREEN：两文件73 PASS、真实 Next／Redis HTTP3 PASS／88名称过滤、定向lint和完整types通过。验证后 replacement／expiry 两参数回归已补，最终源码与真实HTTP验证冻结相同，独立只读审查无新增阻断。完整 App test/build/E2E未重跑，待整个登录切片冻结后执行；正常 App 仍e62745c，不因本阶段源码自动激活，模型／工具／扣费保持暂停。
+
+Manus 纯文档参考样本经用户授权已真实替换并恢复：Upload200→历史2项→Restore200→历史3项，新 current 与两个旧 UID 均不同、旧版本保留；选当前回读原正文。没有执行、分享或删除。[Skills指南](guides/skills.md)区分参考私有RPC、已支持能力与待完成生命周期，不以文档冒充Kokoro恢复实现。
+
 ## 2026-10-21 登录阻断已修，完整登录体验仍有明确遗留
 
 运行 App 已加载 acd28c69ff408ac088ba1e229bfbb224f1108060。正式 IAM scope 按 session pair → profile 顺序演进并回读 current：Product client 16／resource 27；用户已明确授权恢复本地失效 OAuth 管理资格，备份后仅重载 IAM，不改密码、平台角色或积分。

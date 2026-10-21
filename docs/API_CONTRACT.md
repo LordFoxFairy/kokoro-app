@@ -1,5 +1,7 @@
 ## 2026-10-21 登录失败的产品返回边界
 
+登录交易消费先验证闭集记录、canonical target、MAC及三项浏览器proof绑定，再以原值比较后原子删除；错proof、错secret、未知或腐损记录拒绝但不删除，保原短TTL。验证与删除之间记录过期或变化也拒绝；并发合法callback最多一次进入exchange。外部方法、错误码、NX及300秒期限不变；本阶段不代表已完成多标签cookie命名隔离。
+
 OAuth/OIDC 继续归 IAM，App 只拥有 Product 登录交互和会话。原生顶层 HTML 登录／回调／authorize 失败 303 返回固定 `/auth/sign-in/failed`，不复制 query、owner body、Location 或 cookie；新页复用 App 现有 UI 组件与语义 token，显示登录状态及显式返回入口。渲染／刷新页面不重新发起 OAuth，不创建或恢复 session。API／iframe／非导航和 HTML q=0 保留原错误 status／JSON，不变成成功。
 
 合法 issuer error 必须先满足唯一 query、精确 issuer、state 与浏览器交易绑定并一次性消费；配置类失败仅记录固定分类，不记录 state、描述或凭据，不调用 token exchange。旧回调、错主体和重复回执不清除较新登录的 cookie。账户三 scope 是当前正式功能依赖，应通过 IAM 原有 Product Web client/resource 演进入口配对；不删除 scope、添加权限回退或把环境故障归咎于用户。

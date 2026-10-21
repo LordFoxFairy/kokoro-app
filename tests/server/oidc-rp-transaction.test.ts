@@ -30,7 +30,7 @@ const state = "a".repeat(32)
 const cookies = ["next-auth.state=" + "s".repeat(32), "next-auth.pkce.code_verifier=" + "p".repeat(32), "next-auth.nonce=" + "n".repeat(32)]
 const config = { redisUrl: "redis://fixture.invalid/9", webOrigin: origin, authSecret: secret, state }
 const rows = new Map<string, { value: string; expires: number }>()
-const redis = { on: vi.fn(), connect: vi.fn(), destroy: vi.fn(), set: vi.fn(), getDel: vi.fn() }
+const redis = { on: vi.fn(), connect: vi.fn(), destroy: vi.fn(), set: vi.fn(), get: vi.fn(), eval: vi.fn() }
 function storedRow() {
   const value = [...rows.values()][0]
   if (value === undefined) throw new Error("missing test transaction")
@@ -54,10 +54,18 @@ beforeEach(() => {
     rows.set(key, { value, expires: Date.now() + options.EX * 1000 })
     return "OK"
   })
-  redis.getDel.mockImplementation(async (key: string) => {
+  redis.get.mockImplementation(async (key: string) => {
     const row = rows.get(key)
-    rows.delete(key)
+    if (row && row.expires <= Date.now()) rows.delete(key)
     return row && row.expires > Date.now() ? row.value : null
+  })
+  redis.eval.mockImplementation(async (_script: string, input: { keys: string[]; arguments: string[] }) => {
+    const key = input.keys[0]!
+    const row = rows.get(key)
+    if (row && row.expires <= Date.now()) rows.delete(key)
+    if (!row || row.expires <= Date.now() || row.value !== input.arguments[0]) return 0
+    rows.delete(key)
+    return 1
   })
 })
 afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers() })
@@ -71,13 +79,28 @@ describe("unique RP return tuple and existing single-use transaction", () => {
     expect(storedRow().value).not.toContain(secret)
     await expect(consume()).resolves.toBe(target)
     await expect(consume()).resolves.toBeNull()
-    expect(redis.getDel).toHaveBeenCalledTimes(2)
     expect(redis.destroy).toHaveBeenCalledTimes(3)
   })
   it("admits at most one concurrent callback and refuses an NX state collision", async () => {
     const target = await issue()
     await expect(issue()).rejects.toThrow("RP state collision")
     expect(await Promise.all([consume(), consume()])).toEqual([target, null])
+  })
+  it.each(["replacement", "expiry"])("rejects a %s between verification and atomic consumption", async (kind) => {
+    const target = await issue()
+    const row = storedRow()
+    const replacement = row.value + " "
+    const evaluate = redis.eval.getMockImplementation()!
+    redis.eval.mockImplementationOnce(async (script: string, input: { keys: string[]; arguments: string[] }) => {
+      if (kind === "replacement") row.value = replacement
+      else row.expires = Date.now() - 1
+      return evaluate(script, input)
+    })
+    await expect(consume()).resolves.toBeNull()
+    if (kind === "replacement") {
+      expect(storedRow().value).toBe(replacement)
+      await expect(consume()).resolves.toBe(target)
+    } else expect(rows.size).toBe(0)
   })
   it.each(["target", "binding", "mac", "version", "extra", "legacy", "unsafe", "noncanonical"])("rejects corrupted %s without a legacy fallback", async (field) => {
     await issue()
@@ -91,7 +114,8 @@ describe("unique RP return tuple and existing single-use transaction", () => {
     if (field === "noncanonical") record[1] = "/app/library?type=all"
     row.value = field === "legacy" ? "a".repeat(64) : JSON.stringify(field === "extra" ? [...record, "extra"] : record)
     await expect(consume()).resolves.toBeNull()
-    expect(rows.size).toBe(0)
+    // Unauthenticated records are not ours to destroy; the original TTL bounds them.
+    expect(rows.size).toBe(1)
   })
   it.each(["state", "pkce", "nonce", "duplicate", "missing"])("rejects a %s cookie mismatch", async (kind) => {
     await issue()
@@ -101,12 +125,12 @@ describe("unique RP return tuple and existing single-use transaction", () => {
     else if (kind === "missing") values.pop()
     else values[index] = (values[index] ?? "").split("=", 1)[0] + "=" + "x".repeat(32)
     await expect(consume({ cookieHeader: values.join("; ") })).resolves.toBeNull()
+    await expect(consume()).resolves.toBe("/app?conversation=conv_00000000-0000-4000-8000-000000000302")
   })
   it("binds the auth secret and origin, and keeps the unchanged expiry at 300 seconds", async () => {
     vi.spyOn(Date, "now").mockReturnValue(1000)
     await issue()
     await expect(consume({ authSecret: "other".repeat(8) })).resolves.toBeNull()
-    await issue()
     await expect(consume({ webOrigin: "https://other.test" })).resolves.toBeNull()
     vi.spyOn(Date, "now").mockReturnValue(301000)
     await expect(consume()).resolves.toBeNull()
@@ -126,4 +150,11 @@ describe("unique RP return tuple and existing single-use transaction", () => {
     expect(redis.set).not.toHaveBeenCalled()
     expect(redis.destroy).toHaveBeenCalledOnce()
   })
+  it("keeps the original transaction usable after a different tab supplies mismatched proofs", async () => {
+    const target = await issue()
+    const differentTab = cookies.map(cookie => cookie.split("=", 1)[0] + "=" + "x".repeat(32)).join("; ")
+    await expect(consume({ cookieHeader: differentTab })).resolves.toBeNull()
+    await expect(consume()).resolves.toBe(target)
+  })
+
 })
