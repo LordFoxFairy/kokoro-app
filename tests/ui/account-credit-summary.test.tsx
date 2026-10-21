@@ -107,7 +107,8 @@ it("renders disabled accounts with their actual available and held amounts", asy
 it("recognizes only the strict missing-account envelope and never opens an account", async () => {
   fetcher.mockResolvedValueOnce(json({ error: { code: "billing_account_not_found", message: "Missing" }, meta: { request_id: "credits-read" } }, 404));
   render(credit());
-  expect(await screen.findByRole("status")).toHaveTextContent("Loading");
+  expect(screen.getByRole("status")).toHaveAccessibleName(/Loading/);
+  expect(screen.queryByText("Loading…")).not.toBeInTheDocument();
   await screen.findByText("No credit account yet");
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   expect(screen.queryByRole("button")).not.toBeInTheDocument();
@@ -141,7 +142,7 @@ it("waits for an explicit retry after a network failure and reads only summary a
   expect(fetcher).toHaveBeenCalledTimes(1);
   fireEvent.click(screen.getByRole("button", { name: "Reload" }));
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-  expect(screen.getByRole("status")).toHaveTextContent("Loading");
+  expect(screen.getByRole("status")).toHaveAccessibleName(/Loading/);
   await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
   await act(async () => retry.resolve(json({ ...summary, available_micros: "3750000" })));
   expect(await screen.findByText("3.75")).toBeVisible();
@@ -160,7 +161,7 @@ it.each(["subject", "generation"] as const)("synchronously clears loaded credits
   view.rerender(credit({ ...admitted, subject: change === "subject" ? "bob" : "alice", generation: change === "generation" ? 2 : 1 }));
   expect(firstSignal.aborted).toBe(true);
   expect(screen.queryByText("9007199254740993123.456789")).not.toBeInTheDocument();
-  expect(screen.getByRole("status")).toHaveTextContent("Loading");
+  expect(screen.getByRole("status")).toHaveAccessibleName(/Loading/);
   await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
   await act(async () => pending.resolve(json({ ...summary, available_micros: "7000000" })));
   expect(await screen.findByText("7")).toBeVisible();

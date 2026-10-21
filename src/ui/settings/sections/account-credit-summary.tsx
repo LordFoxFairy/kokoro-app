@@ -5,10 +5,12 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { BillingClientError } from "@/billing/client";
 import { formatCredits } from "@/billing/format";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import type { BillingSummary } from "@/contract/http";
 import { useT } from "@/i18n/context";
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
 import { browserBillingClient } from "@/ui/shell/page-clients";
+import { useAccountReadSnapshots } from "../account-read-snapshots";
 
 import styles from "./settings-sections.module.css";
 
@@ -30,8 +32,13 @@ export function AccountCreditSummary({ preview = false, readBoundary }: {
     typeof generation === "number" && Number.isSafeInteger(generation) && generation >= 0
     ? JSON.stringify([subject, generation]) : null;
   const [client] = useState(() => browserBillingClient());
+  const snapshots = useAccountReadSnapshots();
+  const rememberSummary = snapshots?.rememberSummary;
   const [attempt, setAttempt] = useState(0);
-  const [result, setResult] = useState<Result | null>(null);
+  const [result, setResult] = useState<Result | null>(() => {
+    const summary = scope !== null && snapshots?.summary?.scope === scope ? snapshots.summary.value : null;
+    return summary && scope !== null ? { scope, attempt: 0, phase: "ready", summary } : null;
+  });
   const current = useRef<AbortController | null>(null);
 
   // Retire before the next scope can paint, including unmount into sign-in methods.
@@ -50,7 +57,10 @@ export function AccountCreditSummary({ preview = false, readBoundary }: {
       if (!isCurrent()) return;
       try {
         const summary = await client.summary(controller.signal);
-        if (isCurrent()) setResult({ scope, attempt, phase: "ready", summary });
+        if (isCurrent()) {
+          rememberSummary?.(scope, summary);
+          setResult({ scope, attempt, phase: "ready", summary });
+        }
       } catch (error) {
         if (isCurrent()) setResult({ scope, attempt, phase:
           error instanceof BillingClientError && error.reason === "missing_account"
@@ -61,11 +71,11 @@ export function AccountCreditSummary({ preview = false, readBoundary }: {
       if (current.current === controller) current.current = null;
       controller.abort();
     };
-  }, [client, scope, attempt]);
+  }, [client, scope, attempt, rememberSummary]);
 
   const visible = result?.scope === scope && result.attempt === attempt ? result : null;
   return <section className={styles.accountCreditSummary} aria-label={t("settings.creditsMenu")} aria-busy={scope !== null && visible === null}>
-    {scope === null ? <p role="status">{t("settings.accountCreditsUnknown")}</p> : visible === null ? <p role="status">{t("billing.loading")}</p> : null}
+    {scope === null ? <p role="status">{t("settings.accountCreditsUnknown")}</p> : visible === null ? <div className={styles.accountCreditPlaceholder} role="status" aria-label={t("billing.loading")}><Skeleton /><Skeleton /><Skeleton /></div> : null}
     {visible?.phase === "error" ? <div role="alert" className={styles.accountCreditFeedback}>
       <p>{t("billing.loadError")}</p>
       <Button variant="outline" size="sm" type="button" onClick={() => setAttempt((value) => value + 1)}>{t("billing.retry")}</Button>

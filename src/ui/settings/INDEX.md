@@ -1,3 +1,7 @@
+## 账户页签切换（2026-10-20）
+
+`account-read-snapshots.tsx` 仅在本次打开的设置窗口中保留已确认的资料与积分摘要，按 preview/准入/主体/代次清空；离开页签仍卸载编辑器和子弹窗，返回时后台重读，不闪空姓名或可见“正在加载”文案。缓存不作为写权限：资料重核前禁编辑/保存，最终 hook 阻止旧闭包；重核后的新姓名只更新未编辑状态，原草稿、CAS、未知写入与显式恢复保持。首次积分读取使用可访问占位，不虚构零余额或自动重发写入；本片不负责积分初始化、充值或扣减。
+
 ## MC-02A Chat模型消费（2026-10-20）
 
 模型请求固定feature_key=chat，selector使用raw candidate.name，display_name只作展示；共享现composer-model helper。对话默认偏好仅从 `kokoro.web.chat-prefs.v2` 读取，旧key保留但不读/迁移/清除，不改写未知提交的冻结body/key或恢复状态机。

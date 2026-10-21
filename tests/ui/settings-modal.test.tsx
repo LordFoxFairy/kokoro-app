@@ -327,6 +327,46 @@ afterEach(() => {
 });
 
 describe("SettingsModal 设置中心模态", () => {
+  it("切回账户时保留本次设置会话已确认的身份，不先闪空字段再重新填充", async () => {
+    const profile = { subject: "settings-reader", name: "已确认姓名", email: "reader@example.test", email_verified: true };
+    let finishRevalidation!: (response: Response) => void;
+    const fetchProfile = vi.fn().mockResolvedValueOnce(Response.json({ data: profile }))
+      .mockImplementation(() => new Promise<Response>((resolve) => { finishRevalidation = resolve; }));
+    vi.stubGlobal("fetch", fetchProfile);
+    renderSettings();
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "全名" })).toHaveValue(profile.name));
+    fireEvent.keyDown(screen.getByTestId("settings-tab-appearance"), { key: "Enter" });
+    expect(screen.queryByTestId("settings-account")).not.toBeInTheDocument();
+    fireEvent.keyDown(screen.getByTestId("settings-tab-account"), { key: "Enter" });
+    expect(screen.getByRole("textbox", { name: "全名" })).toHaveValue(profile.name);
+    expect(screen.getByText(profile.email)).toBeVisible();
+    expect(screen.queryByText(/正在加载/)).not.toBeInTheDocument();
+    // Revalidation may run, but an unconfirmed read must not enable a name write.
+    expect(screen.getByRole("textbox", { name: "全名" })).toBeDisabled();
+    await waitFor(() => expect(fetchProfile).toHaveBeenCalledTimes(2));
+    await act(async () => finishRevalidation(Response.json({ data: { ...profile, name: "服务端更新姓名" } })));
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "全名" })).toHaveValue("服务端更新姓名"));
+    expect(screen.getByRole("textbox", { name: "全名" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "保存姓名" })).toBeDisabled();
+  });
+  it.each([
+    { admitted: true, subject: "another-reader", generation: 1 },
+    { admitted: true, subject: "settings-reader", generation: 2 },
+  ])("账户快照不跨主体或准入代次复用：$subject / $generation", async (nextBoundary) => {
+    const profile = { subject: "settings-reader", name: "旧主体姓名", email: "previous@example.test", email_verified: true };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(Response.json({ data: profile }))
+      .mockImplementation(() => new Promise(() => {})));
+    const content = (readBoundary: typeof nextBoundary) => <ThemeProvider><LocaleProvider><SettingsModal
+      initialTab="account" onClose={() => {}} readBoundary={readBoundary}
+    /></LocaleProvider></ThemeProvider>;
+    const view = render(content({ admitted: true, subject: "settings-reader", generation: 1 }));
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "全名" })).toHaveValue(profile.name));
+    fireEvent.keyDown(screen.getByTestId("settings-tab-appearance"), { key: "Enter" });
+    view.rerender(content(nextBoundary));
+    fireEvent.keyDown(screen.getByTestId("settings-tab-account"), { key: "Enter" });
+    expect(screen.getByRole("textbox", { name: "全名" })).not.toHaveValue(profile.name);
+    expect(screen.queryByText(profile.email)).not.toBeInTheDocument();
+  });
   it("正式 Skills 设置使用已添加技能的 Manus 信息架构", async () => {
     renderSettings(() => {}, undefined, true);
     fireEvent.keyDown(screen.getByTestId("settings-tab-skills"), {
