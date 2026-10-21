@@ -1,3 +1,11 @@
+## 2026-10-21 MCP 当前运行发现链：隔离验证通过，执行仍暂停
+
+复用现有链路，未新增业务接口、服务、表或兼容层。固定 Agent `9a2679f`／IAM `7cbe988`／Platform `97b27b3`，当前 signer／transport 经真实 IAM HTTP、PostgreSQL／Redis 和 Platform HTTP／PostgreSQL，完成精确包下载及标准 MCP SDK stdio 发现；撤销 fixture 连接后，Agent 读到 revoked 即拒绝，不再领取凭据或下载。最终1 PASS／0 SKIP：9笔签名请求、1次下载、凭据仅 discovery、零调用授权事件，tools/call 防执行标记不存在。
+
+Storage 上传／扫描／引用为受控 port、对象下载为 loopback fixture；Platform Redis／资源生命周期为替身。撤销由 fixture 修改 owner 自有连接，不是页面撤销旅程。未覆盖 Agent lease／journal、BFF 项目绑定、正常浏览器及实际工具执行，不将本片称为完整运行闭环。首次缺生成目录、第二次残留旧调用事件期望1的夹具失败均保留；改为核零调用授权事件后通过，未修改业务源码。
+
+1857份三仓源码输入零漂移；数据库目录94→94、IAM 测试键0→0精确一致，不以目录快照代替业务行审计。另独立核对正常七监听PID保持、无自有残留进程／临时密钥目录；清理本次源码副本及包，证据仅留Root ignored `var/dev/mcp-current-runtime-discovery-20261021`。页面重连入口、公开身份矩阵及删除语义等既有待办不因本片自动完成；不接管同事连接器写区，模型／工具执行／扣费仍暂停。
+
 ## 2026-10-21 文档迁入 App：候选已验，Root 配对尚未完成
 
 执行既定 Wave 5，从远端 Root main `2e008595` 精确导出78个既有门户文件到 `developer-docs/`，不从本地分叉Root的旧Public1内容继续开发。保留原VitePress／lock／43项测试／generator／publication policy，仅修维护位置、App独立包门禁范围及说明，并固定同App Public22 `be5cc6f` 原始artifact：176项中生成170 public操作／359可达schema，6 browser-private仍排除，不新增依赖、业务API或内部服务。App的239个原测试文件完整保留，独立文档包不混入Next/Vitest；新增 `docs:dev/build/check` 入口。
