@@ -302,14 +302,79 @@ it.each(["native-start", "state-store"])("keeps HTML and JSON failure representa
     const response = await POST(new NextRequest(`${ENV.NEXTAUTH_URL}/signin/kokoro-iam`, {
       method: "POST",
       headers: { host: "web.example.test", origin: ENV.KOKORO_WEB_ORIGIN,
-        "content-type": "application/x-www-form-urlencoded", accept: html ? "text/html" : "application/json", "x-nonce": "n".repeat(48) },
+        "content-type": "application/x-www-form-urlencoded", accept: html ? "text/html" : "application/json", "sec-fetch-mode": "navigate", "sec-fetch-dest": "document", "x-nonce": "n".repeat(48) },
       body: "csrfToken=" + "a".repeat(64),
     }), { params: Promise.resolve({ nextauth: ["signin", "kokoro-iam"] }) })
-    expect(response.status).toBe(503)
+    expect(response.status).toBe(html ? 303 : 503)
     expect(response.headers.getSetCookie()).toEqual([])
     if (html) {
-      expect(response.headers.get("content-type")).toContain("text/html")
-      expect(await response.text()).toContain('href="/login"')
+      expect(response.headers.get("location")).toBe("/auth/sign-in/failed")
+      expect(await response.text()).toBe("")
     } else expect(await response.json()).toMatchObject({ error: { code: "rp_unavailable" } })
   }
+})
+
+
+describe("native OAuth failure returns to the product, never retries authentication", () => {
+  function failureRequest(accept = "text/html", extra = "", mode = "navigate") {
+    return new NextRequest(`${ENV.NEXTAUTH_URL}/callback/kokoro-iam?${new URLSearchParams({
+      error: "invalid_scope", error_description: "PRIVATE_ISSUER_DETAIL", state: "s".repeat(32), iss: `${ENV.KOKORO_WEB_ORIGIN}/iam`,
+    })}${extra}`, { headers: { host: "web.example.test", cookie: "next-auth.state=bound",
+      accept, "sec-fetch-mode": mode, "sec-fetch-dest": "document", "x-nonce": "n".repeat(48) } })
+  }
+  const context = () => ({ params: Promise.resolve({ nextauth: ["callback", "kokoro-iam"] }) })
+  it("consumes a bound issuer error once and redirects without callback parameters, cookies or execution", async () => {
+    consumeOidcState.mockResolvedValueOnce("/app/skills").mockResolvedValue(null)
+    const response = await GET(failureRequest(), context())
+    expect(response.status).toBe(303)
+    expect(response.headers.get("location")).toBe("/auth/sign-in/failed")
+    expect(response.headers.get("referrer-policy")).toBe("no-referrer")
+    expect(response.headers.get("cache-control")).toBe("no-store")
+    expect(response.headers.getSetCookie()).toEqual([])
+    expect(await response.text()).toBe("")
+    expect(consumeOidcState).toHaveBeenCalledOnce()
+    const replay = await GET(failureRequest("application/json"), context())
+    expect(replay.status).toBe(403)
+    expect(await replay.json()).toMatchObject({ error: { code: "rp_transaction_rejected" } })
+    expect(nextAuth).not.toHaveBeenCalled()
+    expect(createSession).not.toHaveBeenCalled()
+    expect(productSessionCookie).not.toHaveBeenCalled()
+  })
+  it("uses admitted canonical Host rather than Next's internal localhost authority", async () => {
+    consumeOidcState.mockResolvedValueOnce("/app/skills")
+    const external = failureRequest("application/json")
+    const internal = new NextRequest(external.url.replace("https://web.example.test", "https://localhost:3310"), { headers: external.headers })
+    const response = await GET(internal, context())
+    expect(response.status).toBe(503)
+    expect(await response.json()).toMatchObject({ error: { code: "rp_login_configuration_invalid" } })
+    expect(consumeOidcState).toHaveBeenCalledOnce()
+  })
+  it("accepts but never forwards a bounded issuer error_uri", async () => {
+    consumeOidcState.mockResolvedValueOnce("/app/skills")
+    const response = await GET(failureRequest("application/json", "&error_uri=https%3A%2F%2Fissuer.invalid%2Fdetail"), context())
+    expect(response.status).toBe(503)
+    expect(consumeOidcState).toHaveBeenCalledOnce()
+    expect(await response.text()).not.toContain("issuer.invalid")
+    expect(nextAuth).not.toHaveBeenCalled()
+  })
+  it.each(["application/json", "text/html;q=0"])("retains native API status and sanitized errors for %s", async accept => {
+    consumeOidcState.mockResolvedValueOnce("/app/skills")
+    const response = await GET(failureRequest(accept), context())
+    expect(response.status).toBe(503)
+    expect(response.headers.get("location")).toBeNull()
+    expect(await response.json()).toMatchObject({ error: { code: "rp_login_configuration_invalid" } })
+  })
+  it.each(["&code=ambiguous", "&state=duplicate", "&iss=https%3A%2F%2Fother.invalid", "&extra=unrecognized"])("does not consume an ambiguous or foreign callback %s", async extra => {
+    const response = await GET(failureRequest("application/json", extra), context())
+    expect(response.status).toBe(400)
+    expect(consumeOidcState).not.toHaveBeenCalled()
+    expect(nextAuth).not.toHaveBeenCalled()
+  })
+  it("does not convert fetch HTML into a browser redirect or clear a newer transaction", async () => {
+    consumeOidcState.mockResolvedValue(null)
+    const response = await GET(failureRequest("text/html", "", "cors"), context())
+    expect(response.status).toBe(403)
+    expect(response.headers.get("location")).toBeNull()
+    expect(response.headers.getSetCookie()).toEqual([])
+  })
 })

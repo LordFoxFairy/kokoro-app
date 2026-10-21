@@ -5,15 +5,16 @@ import { NextRequest } from "next/server"
 import { DEFAULT_PRODUCT_RETURN_TARGET, parseProductReturnTarget } from "@/lib/product-return-target"
 import { escapeInteractionHtml } from "@/lib/server/iam-interaction-route"
 import { productLoginReturnCookie } from "@/lib/server/product-login-return"
+import { oidcLoginRecovery } from "@/lib/server/oidc-login-recovery"
 import { oidcCsrfToken } from "@/lib/server/oidc-csrf"
 import { oidcRpConfig } from "@/lib/server/oidc-provider"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-function unavailable(phase: string): Response {
+function unavailable(request: NextRequest, phase: string): Response {
   console.error("Kokoro Product login start unavailable:", phase)
-  return new Response(null, { status: 503, headers: {
+  return oidcLoginRecovery(request) ?? new Response(null, { status: 503, headers: {
     "cache-control": "no-store",
     "referrer-policy": "no-referrer",
     "x-request-id": randomUUID(),
@@ -34,15 +35,15 @@ export async function GET(request: NextRequest): Promise<Response> {
   const config = oidcRpConfig(process.env)
   if (config === null || request.nextUrl.pathname !== "/login" ||
     request.headers.get("host") !== config.relay.webHost ||
-    (request.headers.get("origin") !== null && request.headers.get("origin") !== config.relay.webOrigin)) return unavailable("configuration_or_origin")
+    (request.headers.get("origin") !== null && request.headers.get("origin") !== config.relay.webOrigin)) return unavailable(request, "configuration_or_origin")
 
   try { decodeURIComponent(request.nextUrl.search.slice(1).replace(/\+/g, " ")) }
-  catch { return unavailable("return_target") }
+  catch { return unavailable(request, "return_target") }
   const query = request.nextUrl.searchParams
   const target = request.nextUrl.search === "" ? DEFAULT_PRODUCT_RETURN_TARGET
     : [...query.keys()].length === 1 && query.getAll("return_to").length === 1
       ? parseProductReturnTarget(query.get("return_to") ?? "") : null
-  if (target === null) return unavailable("return_target")
+  if (target === null) return unavailable(request, "return_target")
 
   // Auth.js obtains cookies from the live browser request context. A server-side
   // nested Route Handler call cannot move a newly issued cookie into that context,
@@ -51,7 +52,7 @@ export async function GET(request: NextRequest): Promise<Response> {
   // Match Auth.js: a valid existing cookie must not rotate on every tab/start.
   const token = oidcCsrfToken(request.headers.get("cookie"), config.authSecret) ?? randomBytes(32).toString("hex")
   const nonce = request.headers.get("x-nonce")
-  if (nonce === null || !/^[A-Za-z0-9_-]{16,128}$/u.test(nonce)) return unavailable("request_nonce")
+  if (nonce === null || !/^[A-Za-z0-9_-]{16,128}$/u.test(nonce)) return unavailable(request, "request_nonce")
   const csrfName = `${config.relay.secureCookies ? "__Host-" : ""}next-auth.csrf-token`
   const headers = new Headers({
     "cache-control": "no-store",

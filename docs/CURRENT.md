@@ -1,3 +1,9 @@
+## 2026-10-21 登录失败返回修复
+
+基于 ee1d4a7 的本地候选完成：顶层原生登录失败离开回调／authorize 技术地址，固定返回产品结果页；API／非导航保持错误语义。issuer error 复用既有唯一本地校验器，严格绑定并消费原交易，配置错误不进入 token exchange，不改其他登录 cookie。Next 内部 localhost authority 与外部 canonical Host 区分保留；新页不自动登录。
+
+最终冻结1060个非文档输入无变化，contract296／architecture50／lint／typecheck／235文件4482测试／webpack build／构建后types均通过。定向130及隔离真实Next/Redis新回调旅程通过；两次独审后的测试中断记录保留，不作为通过。正常环境仍须完成IAM正式scope配对及新登录自验，旧会话成功不替代该证据；本片不称Skills、后台或MCP全目标完成。相关说明：[登录与登录恢复](guides/login.md)。
+
 ## 2026-10-21 Skills 与正常模型候选配对（隔离集成中）
 
 保留正常模型候选20e8b788，合入已交付main f9d45e5及其失败诊断；Skills生产组件／测试与main一致。仅升级BFF固定snapshot和既有生成器到192396d/Public21.1.1，保175操作、模型字段和原严格消费者；不新增运行时兼容入口。完整门已通过；正常加载及页面回读待验，未改正常服务或数据。

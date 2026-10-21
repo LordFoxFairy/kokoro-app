@@ -6091,23 +6091,52 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     expect(paths).toHaveLength(before)
   })
 
-  it.each(["expired callback", "refreshed signin"])("gives %s browser navigation explicit recovery without automatic retry", async scenario => {
+  it.each(["expired callback", "refreshed signin"])("takes %s browser navigation off the technical URL without automatic retry", async scenario => {
     const target = scenario === "refreshed signin" ? "/api/auth/signin/kokoro-iam"
       : "/api/auth/callback/kokoro-iam?code=fixture-code&state=stale-state-123456&iss=" + encodeURIComponent(`http://localhost:${nextPort}/iam`)
-    const response = await http(nextPort, target, "GET", "", { accept: "text/html" })
-    expect(response.status).toBe(scenario === "refreshed signin" ? 405 : 403)
-    expect(response.headers["content-type"]).toContain("text/html")
-    expect(response.body).toContain('href="/login"')
-    expect(response.body).not.toContain("<script")
+    const response = await http(nextPort, target, "GET", "", {
+      accept: "text/html", "sec-fetch-mode": "navigate", "sec-fetch-dest": "document",
+    })
+    expect(response.status).toBe(303)
+    expect(response.headers.location).toBe("/auth/sign-in/failed")
+    expect(response.body).toBe("")
     expect(response.headers["set-cookie"] ?? []).toEqual([])
     expect(response.headers["cache-control"]).toContain("no-store")
     expect(response.headers["referrer-policy"]).toBe("no-referrer")
     expect(response.headers["content-security-policy"]).toContain("default-src 'none'")
-    expect(response.headers["content-security-policy"]).toMatch(/style-src 'nonce-[A-Za-z0-9_-]+'/u)
-    const styleNonce = response.body.match(/<style nonce="([A-Za-z0-9_-]+)">/u)?.[1]
-    expect(styleNonce).toBeDefined()
-    expect(response.headers["content-security-policy"]).toContain(`style-src 'nonce-${styleNonce}'`)
-    expect(response.body).toContain('<meta name="referrer" content="no-referrer">')
+    const before = paths.length
+    const failurePage = await http(nextPort, response.headers.location as string)
+    expect(failurePage.status).toBe(200)
+    expect(failurePage.body).toContain("登录暂未完成")
+    expect(failurePage.body).not.toContain("stale-state-123456")
+    expect(failurePage.body).not.toContain("fixture-code")
+    expect(failurePage.headers.location).toBeUndefined()
+    expect(paths).toHaveLength(before)
+  })
+
+  it("consumes an issuer scope denial once without token exchange or damaging a newer transaction", async () => {
+    const denied = await start()
+    const newer = await start()
+    const path = `/api/auth/callback/kokoro-iam?${new URLSearchParams({
+      error: "invalid_scope", error_description: "PRIVATE_CONFIGURATION_DETAIL", state: denied.state,
+      iss: `http://localhost:${nextPort}/iam`,
+    })}`
+    const before = paths.length
+    const first = await http(nextPort, path, "GET", "", { cookie: denied.jar,
+      accept: "text/html", "sec-fetch-mode": "navigate", "sec-fetch-dest": "document" })
+    expect(first.status).toBe(303)
+    expect(first.headers.location).toBe("/auth/sign-in/failed")
+    expect(first.headers["set-cookie"] ?? []).toEqual([])
+    expect(first.body).toBe("")
+    expect(paths).toHaveLength(before)
+    const replay = await http(nextPort, path, "GET", "", { cookie: denied.jar })
+    expect(replay.status).toBe(403)
+    expect(JSON.parse(replay.body)).toMatchObject({ error: { code: "rp_transaction_rejected" } })
+    const authorize = await http(nextPort, new URL(newer.location).pathname + new URL(newer.location).search)
+    const success = await http(nextPort, authorize.headers.location as string, "GET", "", { cookie: newer.jar })
+    expect(success.status).toBe(303)
+    expect(success.headers.location).toBe("/app")
+    expect(success.headers["set-cookie"] ?? []).toEqual([expect.stringContaining("kokoro_product_session=")])
   })
 
   it("keeps a newer browser transaction intact when an older admitted callback succeeds", async () => {

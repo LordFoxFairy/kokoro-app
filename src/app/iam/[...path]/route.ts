@@ -159,13 +159,13 @@ export async function GET(request: Request, context: RouteContext): Promise<Resp
   headers.set(INTERNAL_SECRET_HEADER, config.secret)
   headers.set("x-request-id", id)
 
-  // Only an already-admitted top-level authorize navigation gets an HTML
-  // failure document. API callers and rejected requests keep their contract;
+  // Only an already-admitted top-level authorize navigation leaves the
+  // technical URL. API callers and rejected requests keep their contract;
   // successful owner redirects still pass through unchanged.
   const authorizeResult = (response: Response): Response => {
     if (route.relativePath === "/oauth2/authorize" && response.status >= 400 &&
       request.headers.get("sec-fetch-mode") === "navigate" && request.headers.get("sec-fetch-dest") === "document") {
-      const recovery = oidcLoginRecovery(request, response.status)
+      const recovery = oidcLoginRecovery(request)
       if (recovery) {
         recovery.headers.set("x-request-id", response.headers.get("x-request-id") ?? id)
         return browserResponse(recovery)

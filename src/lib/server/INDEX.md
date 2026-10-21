@@ -21,7 +21,7 @@ productSessionState/inspectSessionState只服务App壳和原生session端点，�
 
 ## Authorize浏览器异常恢复（2026-10-19）
 
-`oidc-login-recovery.ts`是无脚本、无自动重试的手动恢复文档，不是认证或降级入口。IAM GET relay只在既有路径/host/origin/body/cookie/header校验完成后，对明确top-level document navigation且Accept允许HTML的authorize错误呈现该文档；保留失败status/request-id、不转发失败owner的Location/cookies/body。成功redirect及API/非顶层/缺nonce/HTML q=0响应保持原契约。Callback可复用相同helper；不恢复旧state、不新建会话、不删除其他登录cookie。正常开发环境与登录整链另验。 最终Proxy在精确authorize路径使用同一nonce策略并固定no-referrer，避免框架全局头覆盖；其余路径不改变。
+`oidc-login-recovery.ts` 仅将已准入的顶层 HTML 登录失败重定向到固定产品结果页 `/auth/sign-in/failed`，不携回调 query、不自动重试、不更改现有 session；API 和非顶层导航保原错误契约。
 
 # lib/server — Web BFF 服务端边界
 
@@ -62,7 +62,7 @@ runtime token、内部服务地址、workload secret 或后端隔离键。
 - `oidc-provider.ts`：固定 provider/EdDSA、验证型 `client.callback` 与 server-only Basic/Bearer backchannel；Product Session 由 RP route 在身份准入后建立。
 - `oidc-rp-transaction.ts`：300秒Redis state摘要、RP cookie绑定和原子一次消费；所有callback均不删除可能属于新登录的共享proof，成功只签发Product cookie，临时proof按原期限过期。
 - `oidc-csrf.ts`：严格读取唯一、两段格式及摘要有效的Auth.js CSRF cookie，登录复用与session/signout校验共用。
-- `oidc-login-recovery.ts`：GET/POST原生失败的手动HTML表示，保原status与API JSON；精确Proxy路径承接no-referrer及同nonce CSP，无自动重试。
+- `oidc-login-recovery.ts`：GET/POST 顶层登录失败的固定产品返回，保 API JSON／status；精确 Proxy 路径承接 no-referrer 与 CSP，无自动重试。
 - `product-login-return.ts`：`/login` 到 provider POST 的 HttpOnly 签名回跳目标 cookie；仅接受严格 Product 内部路径，provider 启动后立即清除。
 - `oidc-bff-agent.ts`：token/userinfo/JWKS 每请求独立 5 秒绝对 deadline、响应头/正文 1 MiB 上限与浏览器 abort 连接取消。
 - `product-identity.ts`：callback 建 session 与 refresh finalize 前调用固定 BFF `/v1/me`，严格核对

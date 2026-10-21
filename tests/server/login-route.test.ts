@@ -109,3 +109,16 @@ describe("GET /login", () => {
     expect(response.headers.get("content-type")).toBeNull()
   })
 })
+
+
+it("returns a native login configuration failure to the inert product page, while API clients keep 503", async () => {
+  vi.stubEnv("KOKORO_OIDC_CLIENT_ID", "")
+  const browser = await GET(new NextRequest(`${ORIGIN}/login`, { headers: { host: "web.example.test",
+    accept: "text/html", "sec-fetch-mode": "navigate", "sec-fetch-dest": "document", "x-nonce": "a".repeat(48) } }))
+  expect(browser.status).toBe(303)
+  expect(browser.headers.get("location")).toBe("/auth/sign-in/failed")
+  expect(browser.headers.getSetCookie()).toEqual([])
+  const api = await GET(browserRequest())
+  expect(api.status).toBe(503)
+  expect(api.headers.get("location")).toBeNull()
+})

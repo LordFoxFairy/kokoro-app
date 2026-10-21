@@ -7,6 +7,7 @@ import { DEFAULT_PRODUCT_RETURN_TARGET, parseProductReturnTarget, type ProductRe
 
 import { boundedInteractionForm } from "@/lib/server/iam-interaction-route"
 import { matchesCanonicalWebRequest } from "@/lib/server/iam-relay-config"
+import { validIamRpCallbackNavigation } from "@/lib/server/iam-relay-response"
 import { IAM_RELAY_POLICY } from "@/lib/server/iam-relay-policy"
 import { oidcLoginRecovery } from "@/lib/server/oidc-login-recovery"
 import { oidcCsrfToken } from "@/lib/server/oidc-csrf"
@@ -125,11 +126,6 @@ async function productAction(request: NextRequest, action: "session" | "signout"
   }
 }
 
-function parameterOnlyOnce(query: URLSearchParams, name: string): string | null {
-  const values = query.getAll(name)
-  return values.length === 1 ? values[0] ?? null : null
-}
-
 function safeAuthorizeLocation(value: string, webOrigin: string, clientId: string, callbackUrl: string): string | null {
   if (value.length > 8192 || /[\\#\u0000-\u001f\u007f]/u.test(value)) return null
   try {
@@ -234,12 +230,12 @@ async function handle(request: NextRequest, context: Context, method: "GET" | "P
   }
 
   const query = url.searchParams
-  if ([...query.keys()].length !== 3 || parameterOnlyOnce(query, "code") === null ||
-    parameterOnlyOnce(query, "state") === null ||
-    parameterOnlyOnce(query, "iss") !== config.issuer ||
-    !/^[A-Za-z0-9._~-]{1,2048}$/u.test(query.get("code") ?? "")) {
+  // Share the native redirect validator: one closed code/error query contract,
+  // including bounded error_uri, exact issuer and syntactically valid state.
+  if (!validIamRpCallbackNavigation(`${url.pathname}${url.search}`, config.relay.webOrigin) || query.get("iss") !== config.issuer) {
     return errorResponse(400, "rp_callback_rejected")
   }
+  const issuerError = query.get("error")
   let consumed: ProductReturnTarget | null
   try {
     consumed = await consumeOidcState({ redisUrl: config.redisUrl, webOrigin: config.relay.webOrigin,
@@ -248,6 +244,14 @@ async function handle(request: NextRequest, context: Context, method: "GET" | "P
   // A stale callback may carry a newer login's shared Auth.js cookies. Never
   // clear that transaction when this callback has not proved ownership.
   if (!consumed) return errorResponse(403, "rp_transaction_rejected")
+  if (issuerError !== null) {
+    // Only a bound, single-use issuer response may be classified. Never log its
+    // description, state, cookies or arbitrary issuer-controlled values.
+    const configurationFailure = issuerError === "invalid_scope" || issuerError === "unauthorized_client"
+    console.error("Kokoro RP issuer rejected login:", configurationFailure ? "configuration" : "authorization")
+    return errorResponse(configurationFailure ? 503 : 401,
+      configurationFailure ? "rp_login_configuration_invalid" : "rp_login_not_completed")
+  }
   // Any callback can finish after a newer start. Never delete shared transaction
   // cookies, even on success: Redis state is one-use and proofs expire normally.
   let verified: VerifiedOidcTokens | null = null
@@ -274,7 +278,7 @@ function representLoginFailure(request: NextRequest, response: Response): Respon
   const loginNavigation = request.nextUrl.pathname === "/api/auth/callback/kokoro-iam" ||
     request.nextUrl.pathname === "/api/auth/signin/kokoro-iam"
   return response.status >= 400 && loginNavigation
-    ? oidcLoginRecovery(request, response.status) ?? response : response
+    ? oidcLoginRecovery(request) ?? response : response
 }
 
 export async function GET(request: NextRequest, context: Context): Promise<Response> {

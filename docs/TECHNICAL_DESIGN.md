@@ -1,3 +1,11 @@
+## 2026-10-21 登录失败的产品返回边界
+
+OAuth/OIDC 继续归 IAM，App 只拥有 Product 登录交互和会话。原生顶层 HTML 登录／回调／authorize 失败 303 返回固定 `/auth/sign-in/failed`，不复制 query、owner body、Location 或 cookie；新页复用 App 现有 UI 组件与语义 token，显示登录状态及显式返回入口。渲染／刷新页面不重新发起 OAuth，不创建或恢复 session。API／iframe／非导航和 HTML q=0 保留原错误 status／JSON，不变成成功。
+
+合法 issuer error 必须先满足唯一 query、精确 issuer、state 与浏览器交易绑定并一次性消费；配置类失败仅记录固定分类，不记录 state、描述或凭据，不调用 token exchange。旧回调、错主体和重复回执不清除较新登录的 cookie。账户三 scope 是当前正式功能依赖，应通过 IAM 原有 Product Web client/resource 演进入口配对；不删除 scope、添加权限回退或把环境故障归咎于用户。
+
+验收分开记录：定向回归、隔离真实 Next/Redis 交易、正常环境 scope 回读及新登录。旧会话能打开页面不等于新登录通过。正常配对与完整 Skills／后台／MCP 仍按既有计划收尾。
+
 ## 2026-10-21 Skills 正常配对：集成边界
 
 唯一BFF snapshot固定192396d29678e7977fce9c4ab837b249aaf1af93／Public21.1.1／175操作，SHA256 eff6676131081b20ba36fd4be243075c568ebd27358662a9c09fe3216b097848。只承接owner项目／个人Skills并集描述，保当前模型配置及全部既有消费者；六窄生成器正规重出，connector-command-errors独立发行物不变。测试专用逆证先严格还原原21.1.0全文，再保留既有模型与历史双父证明；不新增运行时旧版本兼容或改变执行授权。正常服务加载、页面回读和完整旅程仍待验证。
