@@ -1,7 +1,7 @@
 import {emptyModelPublishBody} from "@/lib/server/model-publish-body"
 import { requestIdForRequest } from "@/lib/server/bff-response"
 import { admittedProductSession, productBffConfig, productBffHeaders } from "@/lib/server/product-bff"
-import { fetchWithDomain } from "@/lib/server/upstream-http"
+import { fetchWithDomain, requestWithDomain } from "@/lib/server/upstream-http"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -32,6 +32,54 @@ async function readBody(request: Request): Promise<ArrayBuffer | null> {
   return body !== null && body.byteLength === Number(length) ? body : null
 }
 
+/** Only the discovery read uses a single bounded budget including session admission. */
+async function discoverModels(request: Request, config: NonNullable<ReturnType<typeof productBffConfig>>, path: string[], requestId: string, deadline: number): Promise<Response> {
+  if (new URL(request.url).search !== "" || request.body !== null ||
+      ["content-length", "transfer-encoding", "content-type", "if-match", "if-none-match", "idempotency-key"].some(name => request.headers.has(name)))
+    return failure(400, "invalid_admin_request", requestId)
+  const controller = new AbortController()
+  const abort = () => controller.abort()
+  request.signal.addEventListener("abort", abort, { once: true })
+  const timer = setTimeout(abort, Math.max(0, deadline - Date.now()))
+  if (request.signal.aborted || Date.now() >= deadline) abort()
+  const unavailable = () => failure(503, "admin_gateway_unavailable", requestId)
+  let onAbort: (() => void) | undefined
+  const cancelled = new Promise<Response>(resolve => {
+    onAbort = () => resolve(unavailable())
+    controller.signal.addEventListener("abort", onAbort, { once: true })
+    if (controller.signal.aborted) onAbort()
+  })
+  const work = async (): Promise<Response> => {
+    if (controller.signal.aborted) return unavailable()
+    const claims = await admittedProductSession(new Request(request, { signal: controller.signal }), config)
+    if (controller.signal.aborted || Date.now() >= deadline) return unavailable()
+    if (claims === null) return failure(401, "session_authentication_required", requestId)
+    const headers = productBffHeaders(config, claims, requestId)
+    headers.set("accept", "application/json")
+    const upstream = await requestWithDomain(
+      `${config.bffBaseUrl.replace(/\/+$/u, "")}/v1/admin/${path.map(encodeURIComponent).join("/")}`,
+      config.domain,
+      { method: "GET", headers, signal: controller.signal, timeoutMs: Math.max(1, deadline - Date.now()), maxResponseBytes: 1024 * 1024 },
+    )
+    const contentType = upstream.headers.get("content-type")
+    if (upstream.headers.get("x-request-id") !== requestId || !JSON_TYPE.test(contentType ?? "") ||
+        !upstream.headers.get("cache-control")?.toLowerCase().split(",").some(value => value.trim() === "no-store")) {
+      void upstream.body?.cancel().catch(() => undefined)
+      return failure(502, "admin_gateway_response_invalid", requestId)
+    }
+    const body = await upstream.arrayBuffer()
+    if (controller.signal.aborted || Date.now() >= deadline) return unavailable()
+    return new Response(body, { status: upstream.status, headers: { "content-type": contentType!, "cache-control": "no-store", "x-request-id": requestId } })
+  }
+  try {
+    return await Promise.race([work().catch(unavailable), cancelled])
+  } finally {
+    clearTimeout(timer)
+    request.signal.removeEventListener("abort", abort)
+    if (onAbort) controller.signal.removeEventListener("abort", onAbort)
+  }
+}
+
 /**
  * The product Web owns the browser session. Admin is an independent console
  * surface, not a second OAuth relying party: it forwards its same-origin
@@ -42,22 +90,26 @@ async function handle(request: Request, context: Context): Promise<Response> {
   // Admin uses this response correlation ID to prove that its same-origin
   // product adapter actually handled the command. Keep an upstream-supplied
   // value intact instead of minting a second ID at this hop.
+  const discoveryDeadline = Date.now() + 10_000
   const requestId = requestIdForRequest(request)
   const config = productBffConfig()
   if (config === null) return failure(503, "admin_gateway_unavailable", requestId)
   const { path } = await context.params
   const modelRead = request.method === "GET" && path.length === 1 && ["model-routing", "model-labels", "model-revisions", "model-providers", "model-provider-creations", "model-definitions", "model-features"].includes(path[0] ?? "")
   const uuid=/^(?:[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffffffffffff)$/iu
+  const modelDiscovery = request.method === "GET" && path.length === 3 && path[0] === "model-providers" && uuid.test(path[1] ?? "") && path[2] === "upstream-models"
   const modelPublish=request.method === "POST" && path.length===3 && path[0]==="model-revisions" && uuid.test(path[1]??"") && path[2]==="publish"
   const modelWrite = modelPublish || (path.length===1 && request.method==="POST" && ["model-providers","model-definitions","model-revisions","model-labels"].includes(path[0]??"")) || (path.length===2 && uuid.test(path[1]??"") && ((request.method==="PUT" && path[0]==="model-routing") || (request.method==="PATCH" && path[0]==="model-labels")))
   if (
     path.length === 0 ||
-    (!["mcp", "skills"].includes(path[0] ?? "") && !modelRead && !modelWrite) ||
+    (!["mcp", "skills"].includes(path[0] ?? "") && !modelRead && !modelWrite && !modelDiscovery) ||
     path.some((segment) => !ADMIN_SEGMENT.test(segment))
   )
     return failure(404, "admin_operation_not_found", requestId)
   if (!(["GET", "POST", "PUT", "PATCH", "DELETE"] as const).includes(request.method as "GET"))
     return failure(405, "admin_method_not_allowed", requestId)
+
+  if (modelDiscovery) return discoverModels(request, config, path, requestId, discoveryDeadline)
 
   if (modelRead && ["if-match", "if-none-match", "idempotency-key", "content-type"].some((name) => request.headers.has(name)))
     return failure(400, "invalid_admin_request", requestId)

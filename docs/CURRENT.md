@@ -1,3 +1,11 @@
+## MODEL-1 Admin上游发现同源桥候选（2026-10-22）
+
+现 `src/app/api/admin/[...path]/route.ts` 仅新增精确 provider UUID 的 `upstream-models` GET，沿Product Session/配置Domain/BFF管理权限与原request-id/no-store；拒query、body framing（含CL0）、Content-Type及命令头。准入至完整响应EOF共10秒/1MiB，取消不晚发请求，无Key、模型执行、自动发布或新持久事实。真实loopback薄adapter新增15项及原Admin9项均通过；正常浏览器/完整owner链由主方后续配对，不以此称UI已验收。
+
+定向最终验证：Node22.22.2，7个public generator正规write/check及独立connector profile check均exit0；完整contract28文件301 PASS/0SKIP，真实HTTP薄adapter/原Admin/新contract/架构合计7文件75 PASS/0SKIP，新增源码与测试focused ESLint、diff检查exit0。初次真实行为RED404→200已保留；pin后曾因旧当前计数181与新182不一致失败1项，精确更新当前总数后通过，原历史父hash/inverse未放宽。初次new contract权限fixture误猜已按正式合同校正。按主方分工未在此worker跑full test/build/typegen/E2E，冻结后由Root独立全门/浏览器验收；未改正常运行或Git/index。
+
+Public22.3.0/182固定BFF `e461d5178c6bf92558d7cd7dd288cb29cb008525`，canonical SHA256 `727159cea88e9f70ca3d1127306e8a6a6bcaa568398de8b0d8fec1cce6b3fae3`；唯一snapshot与既有7个public窄生成器正规更新，独立connector错误profile不变。下方记录按当时版本保留。
+
 ## 2026-10-22 主链消费者候选：完整本地门通过，正常旅程待配对
 
 固定 BFF `efe0ed8b3f791468608b61dd895208f0db709e50`／Public22.2.0／181 operations，canonical SHA256 `365d61aa5b3b4c01a178f077914e03b5fdbaeebc95fe740b9be46ca8fadc3205`。本候选承接公开Skill list薄入口、个人系列删除和MCP显式重连；补齐普通聊天首发模型选择、完整目录分页与失败恢复、当前作用域空草稿归档判定，以及严格缺账户404后无感幂等初始化。切换主体时每次续发核原作用域退休；未知初始化回执先读核实，不重复PUT、不伪造余额。

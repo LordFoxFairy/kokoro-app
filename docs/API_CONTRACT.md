@@ -1,3 +1,11 @@
+## MODEL-1 Admin上游模型发现薄桥（2026-10-22）
+
+`GET /api/admin/model-providers/{provider_id}/upstream-models`只接受canonical UUID路径（大小写形式沿现UUID规则）、无query/请求体/任何body framing（含Content-Length:0）/Content-Type/If-Match/If-None-Match/Idempotency-Key。映射正式BFF唯一 `GET /v1/admin/model-providers/{provider_id}/upstream-models`；不增加浏览器传入Key、地址或tenant/actor参数。
+
+成功与权威错误原字节透传，成功data为 `{provider_id,items:[{id}]}`，保原meta.request_id及响应x-request-id/no-store；BFF管理权限拒绝不降级。App对无session回401、非法请求400、未知path404、依赖/取消/预算/超限503、非法MIME/request-id/no-store502，统一原错误信封。准入至完整EOF单10秒/1MiB、无自动retry。新GET不得扩成通用owner proxy；旧Admin请求合同保持。
+
+发行固定BFF `e461d5178c6bf92558d7cd7dd288cb29cb008525`／Public22.3.0／182，canonical SHA256 `727159cea88e9f70ca3d1127306e8a6a6bcaa568398de8b0d8fec1cce6b3fae3`，唯一snapshot，无双pin；历史Public22.2/181完整基线经test-only精确逆证保持。
+
 <!-- 2026-10-22 continuation retirement correction -->
 积分客户端每次续发 PUT 或核实 GET 前复验调用方 `getCurrent`；真实账户/用量/rail传入现 controller/current 与发起时已准入subject的marker一致性检查。只更新storage、无rerender/focus仍会抑制旧续发；marker丢失、不匹配或读取异常一律退休。marker只抑制，不授予session权限；非UI调用可不传callback，初次GET契约保持，无新store/轮询/锁。
 

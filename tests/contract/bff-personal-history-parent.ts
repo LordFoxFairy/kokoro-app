@@ -1,3 +1,4 @@
+import { restoreModelDiscoveryParent } from "./bff-model-discovery-parent"
 // Test-only exact Public21.2 ->21.1.1 inverse from the fixed owner artifact.
 import {createHash} from "node:crypto"
 const proof = {
@@ -232,6 +233,7 @@ const creditInitializationProof = {
   ]
 } as const
 export function restoreCreditInitializationParent(bytes: Uint8Array): Buffer {
+  bytes = restoreModelDiscoveryParent(bytes)
   const source = Buffer.from(bytes).toString("utf8")
   if (hash(source) !== creditInitializationProof.current) throw Error("Credit initialization fixed source drift")
   const lines = source.split(/(?<=\n)/u)

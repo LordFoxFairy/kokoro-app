@@ -1,3 +1,7 @@
+## MODEL-1 上游发现不新增App事实（2026-10-22）
+
+App同源Admin桥只短暂转发已准入请求与有限响应，provider/credential/候选模型事实归System/BFF，选择候选的局部UI归独立Admin。无SQL、缓存、表、Key存储、持久化状态或自动发布/价格推测；response不能成为App可编辑模型目录。配置Domain与Product Session是既有可信边界，浏览器tenant/actor不建立事实。
+
 ## 2026-10-22 公开Skill list adapter候选
 
 固定GET公开入口仅读取BFF正式public投影，当前User API Key／普通或trusted OAuth App资格与项目授权全归IAM/BFF/Platform。App不新建身份事实、Session、缓存、数据库、Storage或应用绑定，不将外部Bearer换成Product access或把客户端service/tenant头当事实。生成validator仅是固定owner artifact消费者；数字时间戳按JSON number验证，响应原样返回，私有cookie与服务凭据不公开。

@@ -1,3 +1,9 @@
+## MODEL-1 Admin上游发现同源桥候选（2026-10-22）
+
+现 `src/app/api/admin/[...path]/route.ts` 仅新增精确 provider UUID 的 `upstream-models` GET，沿Product Session/配置Domain/BFF管理权限与原request-id/no-store；拒query、body framing（含CL0）、Content-Type及命令头。准入至完整响应EOF共10秒/1MiB，取消不晚发请求，无Key、模型执行、自动发布或新持久事实。真实loopback薄adapter新增15项及原Admin9项均通过；正常浏览器/完整owner链由主方后续配对，不以此称UI已验收。
+
+Public22.3.0/182固定BFF `e461d5178c6bf92558d7cd7dd288cb29cb008525`，canonical SHA256 `727159cea88e9f70ca3d1127306e8a6a6bcaa568398de8b0d8fec1cce6b3fae3`；唯一snapshot与既有7个public窄生成器正规更新，独立connector错误profile不变。下方记录按当时版本保留。
+
 ## 2026-10-21 Skills 与正常模型候选配对
 
 当前唯一BFF固定4a10f8b043cb44b4bd2d8f8a689bde8191db10ce／Public22.0.0／176操作，SHA256 65019688691a6d6933146be66d4e7a1293f0dc92418a6f259a983529031b5c27。六个既有窄生成器正规重出；connector-command-errors独立产物不变，历史模型／双父证明保持原件且仅用于测试。新增确认字段的完整逆证先还原原Public21.2全文，再委托原历史证明，不是runtime兼容。

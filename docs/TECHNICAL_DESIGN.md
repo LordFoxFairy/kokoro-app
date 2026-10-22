@@ -1,3 +1,11 @@
+## MODEL-1 Admin上游发现同源桥（2026-10-22）
+
+沿现 `src/app/api/admin/[...path]/route.ts` 增加唯一 GET `model-providers/{uuid}/upstream-models`，映射固定BFF同名 `/v1/admin` 路径。App只拥有Product Session准入及配置Domain/service上下文，不接Key、不选择owner地址、不执行模型。平台管理员权限仍由BFF fresh admission裁决，Admin消费者负责严格响应decode。
+
+本GET拒任何query、body、Content-Length（含0）、Transfer-Encoding、Content-Type与CAS/幂等命令头；只以已准入session access构造BFF头，不透传浏览器tenant/actor/service。复用既有requestWithDomain，准入及HTTP/EOF共享10秒绝对预算，1MiB有限响应，取消关闭socket，超限/依赖失败脱敏503；响应原字节、request-id与no-store保留，未完成EOF不先暴露200。旧Admin请求行为不变。
+
+唯一Public snapshot固定BFF `e461d5178c6bf92558d7cd7dd288cb29cb008525`／Public22.3.0／182／SHA256 `727159cea88e9f70ca3d1127306e8a6a6bcaa568398de8b0d8fec1cce6b3fae3`，原字节单pin替换，六窄生成器正规重生成，不为透明桥新增SDK。精确test-only22.3→22.2完整父逆证承接原181operation/schema，无运行fallback。无服务、缓存、数据库或正常进程变更；验证分为真实loopback薄adapter、原契约/架构与完整门，正常浏览器配对由主方完成。
+
 <!-- 2026-10-22 continuation retirement correction -->
 积分客户端每次续发 PUT 或核实 GET 前复验调用方 `getCurrent`；真实账户/用量/rail传入现 controller/current 与发起时已准入subject的marker一致性检查。只更新storage、无rerender/focus仍会抑制旧续发；marker丢失、不匹配或读取异常一律退休。marker只抑制，不授予session权限；非UI调用可不传callback，初次GET契约保持，无新store/轮询/锁。
 
