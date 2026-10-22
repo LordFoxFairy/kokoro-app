@@ -1,4 +1,12 @@
-## 2026-10-21 正常项目技能入口：站点清单尚未配对
+## 2026-10-21 正常项目技能入口：已按确认配对并验收
+
+用户明确确认仅开放项目技能入口。沿 System 现有 saveConfig／createFeature／putExposure，添加当前 tenant/site/user-web 的 surface 开关，并配对同产品能力定义及当前 web application 的暴露；没有前端常开兜底、新业务 API、Schema 或权限改动。能力定义为产品共享目录事实，暴露约束在当前 site application，不冒称该 exposure 本身按 surface 隔离。原配置三行、原 chat 暴露及其他 manifest flags 逐值保持；release binding 保持，正常七监听PID不变，BFF Agent仍false。
+
+正常刷新后已显示技能入口，正式面板读取原项目精确修订5、停用且默认0/16；“从我的技能导入”保留个人样本，另一不可用版本禁加。未新增安装、改版本／默认或执行技能；Escape回到技能按钮。仅证明当前入口与两条只读旅程，不等同公开 skill.list 三身份／项目并集完整验收。保存开关但未配 exposure 时返回false、首次 feature 创建误用write权限403均保留；确认未创建后沿原body/key使用该正式operation要求的publish权限完成，未修改IAM角色或凭据。不重跑未变化源码的全套业务测试。
+
+前后正式API快照、原意图、回滚方式、截图和有界回读仅Root ignored `var/dev/skills-project-admission-20261021`。现有四仓草稿PR仍未merge，系列删除／公开身份／连接器写区／样本丢弃等其他待确认项不因本次答复自动放行；模型、工具执行、扣费继续暂停。下节保留配对前事实。
+
+## 2026-10-21 正常项目技能入口：站点清单尚未配对（配对前记录）
 
 只读进入既有 QA Skills recovery 项目，正常页面未渲染技能入口；同源 runtime manifest 200、configVersion1，仅含 chat。现能力投影在显式清单缺 workspace.skills／project.skills 时关闭入口，正常与候选该文件字节相同。未将其误诊为旧分支或新增常开 fallback；已提请仅开放项目技能入口的站点配置边界，不启模型／工具／扣费、不接管自动化／连接器。未修改配置、数据或执行开关，未声称项目列表并集已正常验收。
 
