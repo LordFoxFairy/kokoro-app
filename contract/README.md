@@ -1,3 +1,23 @@
+## MODEL-1 Admin上游发现同源桥候选（2026-10-22）
+
+现 `src/app/api/admin/[...path]/route.ts` 仅新增精确 provider UUID 的 `upstream-models` GET，沿Product Session/配置Domain/BFF管理权限与原request-id/no-store；拒query、body framing（含CL0）、Content-Type及命令头。准入至完整响应EOF共10秒/1MiB，取消不晚发请求，无Key、模型执行、自动发布或新持久事实。真实loopback薄adapter新增15项及原Admin9项均通过；正常浏览器/完整owner链由主方后续配对，不以此称UI已验收。
+
+Public22.3.0/182固定BFF `e461d5178c6bf92558d7cd7dd288cb29cb008525`，canonical SHA256 `727159cea88e9f70ca3d1127306e8a6a6bcaa568398de8b0d8fec1cce6b3fae3`；唯一snapshot与既有7个public窄生成器正规更新，独立connector错误profile不变。下方记录按当时版本保留。
+
+## 2026-10-21 Skills 与正常模型候选配对
+
+当前唯一BFF固定4a10f8b043cb44b4bd2d8f8a689bde8191db10ce／Public22.0.0／176操作，SHA256 65019688691a6d6933146be66d4e7a1293f0dc92418a6f259a983529031b5c27。六个既有窄生成器正规重出；connector-command-errors独立产物不变，历史模型／双父证明保持原件且仅用于测试。新增确认字段的完整逆证先还原原Public21.2全文，再委托原历史证明，不是runtime兼容。
+
+## 2026-10-20 MC-02 Public21.1模型配置桥（本地候选）
+
+唯一BFF固定 `f3da7d5feb855b2b97c77a6ae9928cee96e1b8aa` /21.1.0/175，SHA256 `4db8bab6159a2f36061f8b292fba9074ea2614adab2a1489bf9d1b3b066b6fe3`。仅扩现Admin Product adapter的10具名模型配置路径，复用原Product session、服务身份和request-id，原body/key/CAS透传；发布严格证明实际EOF，不虚构JSON正文或丢幂等头。没有直连System/读取运行Key、模型执行、自动重试或新的OAuth。
+
+七现有生成器按固定artifact正规重出；test-only21.1→21精确全文逆回，再委托原21→20及历史oracle，不作runtime兼容。Skills/MCP、自动化、聊天与其他owner语义不变。主方完整相关门与正常页面分别验收，受控peer adapter测试不是owner整链证据；首次完整测试缺资源配置的失败保留，后续按既有受管Redis隔离prefix验证。正常切换及集中PR尚待，模型/实际工具/扣费暂停。
+
+## 2026-10-20 Public21 当前固定消费者
+
+正式BFF `513b18e2942f94c5f2d4f48d9f9d3010b92db7e6` 的 `/contract/openapi/v1/openapi.yaml` 原始Git blob SHA256 `a902a20ad95e46c01bfc8f5a80260c14565cfe557137759d5ecd42bc1a60f7c2`，Public21.0.0/165。仅共享模型消费表示变化，六现public generator沿固定完整snapshot正规生成，其他操作闭包不扩；connector-command-errors独立来源pin不变。test-only21→20逆证完整恢复原Public20，并保旧20→19及双父oracle字节；无runtime union/fallback。模型decoder新closed shape与稳定选择身份见API_CONTRACT，正常激活与执行另验。下面均属历史记录。
+
 ## 2026-10-19 收尾集成候选：完整既有分支与固定 Public19
 
 只集成 main d42fe1d2、PR37 的原生浏览器登录回归、PR38 的六页设置与完整 local362a9b7；保真实 merge ancestry，不按功能片继续开 PR。知识/记忆等其余混合工作保持原位，不在本次顺手接通。唯一 BFF snapshot 固定已合 owner08a2120ea85b6cad5cf6e839ef14dbf83d908b92、Public19.0.0/165、SHA256955412b680bf7a2529c4c35f553ff272d7361769ea95bb441ba820b552ffc564；六个既有窄 generator 正规配对，connector-command-errors 独立 profile 不换 pin。

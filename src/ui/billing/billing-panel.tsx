@@ -6,7 +6,7 @@ import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { BillingLedgerEntry } from "@/contract/http"
-import { BillingClientError, type BillingClient } from "@/billing/client"
+import type { BillingClient } from "@/billing/client"
 import { useT } from "@/i18n/context"
 import { cn } from "@/lib/utils"
 import { useOverlayClose } from "@/ui/shell/use-overlay-close"
@@ -57,9 +57,10 @@ export function BillingContent(props: BillingContentProps) {
   return <BillingScopedContent key={scope} {...props} />
 }
 
-function BillingScopedContent({ client, onOpenPricing, embedded = false }: BillingContentProps) {
+function BillingScopedContent({ client, readBoundary, onOpenPricing, embedded = false }: BillingContentProps) {
   const t = useT()
   const actor = readActor()
+  const subject = readBoundary?.subject
   const [projection, setProjection] = useState<{ client: BillingClient; actor: string | null | undefined; summary: SummaryState; ledger: LedgerState }>({ client, actor, summary: { kind: "loading" }, ledger: { kind: "loading" } })
   const [filter, setFilter] = useState<LedgerFilter>("all")
   const [retrying, setRetrying] = useState(false)
@@ -78,25 +79,25 @@ function BillingScopedContent({ client, onOpenPricing, embedded = false }: Billi
     const summaryRead = async () => {
       try {
         if (actor === undefined) throw new Error("billing_identity_unavailable")
-        const value = await client.summary(flight.controller.signal)
+        const value = await client.summary(flight.controller.signal, () => current() && typeof actor === "string" && actor.trim().length > 0 && actor === subject)
         if (current()) setProjection((previous) => ({ ...previous, summary: { kind: "ready", summary: value } }))
-      } catch (error) {
-        if (current()) setProjection((previous) => ({ ...previous, summary: { kind: error instanceof BillingClientError && error.reason === "missing_account" ? "missing_account" : "error" } }))
+      } catch {
+        if (current()) setProjection((previous) => ({ ...previous, summary: { kind: "error" } }))
       }
     }
     const ledgerRead = async () => {
       try {
         if (actor === undefined) throw new Error("billing_identity_unavailable")
-        const page = await client.ledger(undefined, flight.controller.signal)
+        const page = await client.ledger(undefined, flight.controller.signal, () => current() && typeof actor === "string" && actor.trim().length > 0 && actor === subject)
         if (page.page.next_cursor === "") throw new Error("billing_cursor_invalid")
         const entries = uniqueEntries(page.items)
         if (current()) setProjection((previous) => ({ ...previous, ledger: { kind: "ready", entries, cursor: page.page.next_cursor, loadingMore: false, pageError: false } }))
-      } catch (error) {
-        if (current()) setProjection((previous) => ({ ...previous, ledger: { kind: error instanceof BillingClientError && error.reason === "missing_account" ? "missing_account" : "error" } }))
+      } catch {
+        if (current()) setProjection((previous) => ({ ...previous, ledger: { kind: "error" } }))
       }
     }
     void Promise.all([summaryRead(), ledgerRead()]).finally(() => { if (current()) setRetrying(false) })
-  }, [actor, client])
+  }, [actor, client, subject])
 
   useLayoutEffect(() => {
     let live = true
@@ -112,7 +113,7 @@ function BillingScopedContent({ client, onOpenPricing, embedded = false }: Billi
     const current = () => attempt.current === flight && !flight.controller.signal.aborted && readActor() === flight.actor
     setProjection((previous) => ({ ...previous, ledger: { ...ledger, loadingMore: true, pageError: false } }))
     try {
-      const page = await client.ledger(cursor, flight.controller.signal)
+      const page = await client.ledger(cursor, flight.controller.signal, () => current() && typeof flight.actor === "string" && flight.actor.trim().length > 0 && flight.actor === subject)
       if (page.page.next_cursor === "" || page.page.next_cursor === cursor || (page.page.next_cursor !== null && flight.cursors.has(page.page.next_cursor))) throw new Error("billing_cursor_repeated")
       if (current()) {
         flight.cursors.add(cursor)
@@ -123,7 +124,7 @@ function BillingScopedContent({ client, onOpenPricing, embedded = false }: Billi
     } finally {
       flight.paging = false
     }
-  }, [client, ledger, retrying])
+  }, [client, ledger, retrying, subject])
   const retry = () => { if (!retrying && !(ledger.kind === "ready" && ledger.loadingMore)) refresh() }
 
   const entries = ledger.kind === "ready" ? ledger.entries : EMPTY_LEDGER_ENTRIES

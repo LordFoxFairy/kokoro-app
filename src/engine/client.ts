@@ -98,7 +98,7 @@ export type SessionClient = {
   renameSession: (sessionId: string, title: string) => Promise<RenameSessionReceipt>
   moveSession: (input: MoveSessionInput) => Promise<MoveSessionReceipt>
   // 模型候选（MODEL-UX）：本 namespace 声明可选 ∩ platform resolve 可用性；输入框下拉据此枚举。
-  listModels: () => Promise<ModelCandidateList>
+  listModels: (options?: { signal?: AbortSignal }) => Promise<ModelCandidateList>
   // 作品库（ARTIFACT-LIB）：属主 namespace 全部成果跨会话聚合、复合游标分页（cursor 缺省=首页）。
   // 分享（SHARE-1）：创建返 share_id（活跃分享幂等返同 id）；撤销置失效（公共读随即 404）。
   createShare: (sessionId: string, signal?: AbortSignal) => Promise<ShareReceipt>
@@ -462,18 +462,58 @@ export function createSessionClient(options: { baseUrl: string }): SessionClient
       return postJson(url(messagesPath(sessionId)), body, (raw) => messageCreateReceiptSchema.parse(raw), idempotency_key)
     },
 
-    listModels: async () => {
-      const target = url(modelCandidatesPath())
-      let response: Response
+    listModels: async (options) => {
+      const controller = new AbortController()
+      let rejectRead!: (error: unknown) => void
+      const cancelled = new Promise<never>((_, reject) => { rejectRead = reject })
+      const abort = () => {
+        controller.abort()
+        rejectRead(new SessionClientError("network", "Model catalog read cancelled or timed out"))
+      }
+      const timer = setTimeout(abort, 10_000)
+      options?.signal?.addEventListener("abort", abort, { once: true })
+      const read = async (): Promise<ModelCandidateList> => {
+        const models: ModelCandidateList["models"] = []
+        const cursors = new Set<string>()
+        const labels = new Set<string>()
+        let cursor: string | null = null
+        // A bounded complete read; never expose a partial catalog as success.
+        for (let page = 0; page < 100; page++) {
+          controller.signal.throwIfAborted()
+          const query = new URLSearchParams({ feature_key: "chat" })
+          if (cursor !== null) query.set("cursor", cursor)
+          const target = url(`${modelCandidatesPath()}?${query}`)
+          const response = await fetch(target, { cache: "no-store", signal: controller.signal })
+          controller.signal.throwIfAborted()
+          if (!response.ok) throw await httpError("GET", target, response)
+          const list = await parseJsonResponse(response, (raw) => modelCandidateListSchema.parse(raw))
+          controller.signal.throwIfAborted()
+          for (const candidate of list.models) {
+            if (candidate.feature_key !== "chat" || labels.has(candidate.name)) {
+              throw new SessionClientError("parse", "Invalid chat model catalog")
+            }
+            labels.add(candidate.name)
+            models.push(candidate)
+          }
+          if (list.next_cursor === null) return { models, next_cursor: null }
+          if (!list.next_cursor || cursors.has(list.next_cursor)) {
+            throw new SessionClientError("parse", "Invalid model catalog cursor")
+          }
+          cursor = list.next_cursor
+          cursors.add(cursor)
+        }
+        throw new SessionClientError("parse", "Model catalog page limit exceeded")
+      }
       try {
-        response = await fetch(target, { cache: "no-store" })
+        if (options?.signal?.aborted) abort()
+        return await Promise.race([cancelled, read()])
       } catch (error) {
-        throw new SessionClientError("network", describeUnknown(error))
+        if (error instanceof SessionClientError) throw error
+        throw new SessionClientError("network", "Model catalog read failed")
+      } finally {
+        clearTimeout(timer)
+        options?.signal?.removeEventListener("abort", abort)
       }
-      if (!response.ok) {
-        throw await httpError("GET", target, response)
-      }
-      return parseJsonResponse(response, (raw) => modelCandidateListSchema.parse(raw))
     },
 
     fetchSnapshot: async (sessionId, options) => {

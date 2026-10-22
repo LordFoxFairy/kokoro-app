@@ -35,6 +35,9 @@ export function controlReceiptPath(sessionId: string, runId: string, commandId: 
 export function sessionsPath(): string {
   return `/sessions`
 }
+export function billingCreditAccountPath(): string {
+  return `/billing/credit-account`
+}
 export function billingSummaryPath(): string {
   return `/billing/summary`
 }

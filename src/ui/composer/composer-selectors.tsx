@@ -7,7 +7,7 @@ import { useT } from "@/i18n/context"
 
 import { ComposerMenu } from "./composer-menu"
 import { isAgentMode, modeOptions } from "./mode-options"
-import { modelLabel } from "./composer-model"
+import { modelLabel, modelSelector } from "./composer-model"
 import styles from "./composer-controls.module.css"
 
 type ComposerSelectorsProps = {
@@ -16,6 +16,8 @@ type ComposerSelectorsProps = {
   onModeChange: (mode: AgentMode) => void
   modeLocked: boolean
   models: readonly ModelCandidate[]
+  modelCatalogStatus: "loading" | "ready" | "error"
+  onRetryModels: (() => void) | undefined
   hideModelSelector: boolean
   currentModel: ModelCandidate | undefined
   currentSelector: string | undefined
@@ -26,17 +28,18 @@ type ComposerSelectorsProps = {
   modelLocked: boolean
 }
 
-export function ComposerSelectors({ mode, modeLabel, onModeChange, modeLocked, models, hideModelSelector, currentModel, currentSelector, currentModelTriggerLabel, currentModelNewBadgeLabel, currentModelTriggerTitle, onModelChange, modelLocked }: ComposerSelectorsProps) {
+export function ComposerSelectors({ mode, modeLabel, onModeChange, modeLocked, models, modelCatalogStatus, onRetryModels, hideModelSelector, currentModel, currentSelector, currentModelTriggerLabel, currentModelNewBadgeLabel, currentModelTriggerTitle, onModelChange, modelLocked }: ComposerSelectorsProps) {
   const t = useT()
   const ModeIcon = mode === "thinking" ? Sparkles : Zap
   return (
-    <div className={styles.cluster} data-slot="composer-selector-cluster">
+    <div className={styles.cluster} data-slot="composer-selector-cluster" aria-busy={!hideModelSelector && modelCatalogStatus === "loading"}>
+      {!hideModelSelector && modelCatalogStatus === "error" ? <span role="alert">{t("settings.modelCatalogFailed")} <Button type="button" variant="ghost" onClick={onRetryModels}>{t("settings.modelCatalogRetry")}</Button></span> : null}
       {!hideModelSelector && models.length > 0 && currentModel ? (modelLocked ? (
         <Button type="button" variant="ghost" className={`${styles.mode} ${styles.modeLocked}`} data-composer-control="model" disabled aria-label={t("composer.modelLocked", { model: modelLabel(currentModel) })} title={`${modelLabel(currentModel)} — ${t("composer.modelLockedTitle")}`}>
           <span>{modelLabel(currentModel)}</span><Lock className={styles.lock} data-icon="inline-end" />
         </Button>
       ) : (
-        <ComposerMenu triggerClassName={styles.mode ?? ""} dataComposerControl="model" triggerLabel={t("composer.modelSwitch")} triggerTitle={currentModelTriggerTitle} trigger={<><span data-slot={currentModelNewBadgeLabel ? "new-model-name" : undefined}>{currentModelTriggerLabel}</span>{currentModelNewBadgeLabel ? <span className={styles.newModelBadge} data-slot="new-model-badge" aria-hidden="true">{currentModelNewBadgeLabel}</span> : null}<ChevronDown className={styles.chevron} data-icon="inline-end" /></>} options={models.map((model) => ({ key: `${model.provider}:${model.name}`, label: modelLabel(model) }))} selectedKey={currentSelector ?? ""} onSelect={onModelChange} align="start" />
+        <ComposerMenu triggerClassName={styles.mode ?? ""} dataComposerControl="model" triggerLabel={t("composer.modelSwitch")} triggerTitle={currentModelTriggerTitle} trigger={<><span data-slot={currentModelNewBadgeLabel ? "new-model-name" : undefined}>{currentModelTriggerLabel}</span>{currentModelNewBadgeLabel ? <span className={styles.newModelBadge} data-slot="new-model-badge" aria-hidden="true">{currentModelNewBadgeLabel}</span> : null}<ChevronDown className={styles.chevron} data-icon="inline-end" /></>} options={models.map((model) => ({ key: modelSelector(model), label: modelLabel(model) }))} selectedKey={currentSelector ?? ""} onSelect={onModelChange} align="start" />
       )) : null}
       {modeLocked ? (
         <Button variant="ghost" type="button" className={`${styles.mode} ${styles.modeSelect} ${styles.modeLocked}`} data-composer-control="mode" disabled aria-label={t("composer.modeLocked", { mode: modeLabel })} title={`${modeLabel} — ${t("composer.modeLockedTitle")}`}>

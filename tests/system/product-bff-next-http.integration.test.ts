@@ -1,3 +1,4 @@
+import { nextFixtureEnvironment } from "./fixtures/next-fixture-environment"
 import { spawn, type ChildProcess } from "node:child_process";
 import {
   cp,
@@ -124,6 +125,7 @@ describe("Product BFF real Next HTTP admission", () => {
   let nextPort = 0;
   let bff: Server;
   let bffCalls = 0;
+  const publicSkillCalls: Array<{ url: string; headers: Record<string, string | string[] | undefined> }> = [];
   const secret = "product-session-next-http-secret-32-bytes";
 
   beforeAll(async () => {
@@ -165,6 +167,13 @@ export async function GET(): Promise<Response> {
     await linkFixtureDependencies(project, root);
     bff = createServer((_request, response) => {
       bffCalls += 1;
+      if (_request.url?.startsWith("/v1/skill.list")) {
+        publicSkillCalls.push({url:_request.url,headers:_request.headers});
+        const id=String(_request.headers["x-kokoro-request-id"]);
+        const body=JSON.stringify({ok:true,request_id:id,data:[]});
+        response.writeHead(200,{"content-type":"application/json","cache-control":"no-store","x-request-id":id,"content-length":Buffer.byteLength(body)});
+        response.end(body);return;
+      }
       response.writeHead(500);
       response.end();
     });
@@ -184,15 +193,16 @@ export async function GET(): Promise<Response> {
       ],
       {
         cwd: root,
-        env: {
+        env: await nextFixtureEnvironment(root, {
           ...process.env,
           NODE_ENV: "test",
           KOKORO_BFF_BASE_URL: `http://127.0.0.1:${bffPort}`,
           KOKORO_DOMAIN: "localhost",
+          KOKORO_INTERNAL_SECRET_WEB_BFF: "public-skill-next-service-secret",
           KOKORO_WEB_ORIGIN: `http://localhost:${nextPort}`,
           KOKORO_WEB_AUTH_SECRET: secret,
           KOKORO_WEB_REDIS_URL: `redis://127.0.0.1:${deadRedisPort}/9`,
-        },
+        }),
         stdio: ["ignore", "pipe", "pipe"],
       },
     );
@@ -352,6 +362,31 @@ export async function GET(): Promise<Response> {
     expect(response.body).toContain("session_unavailable");
     expect(bffCalls).toBe(0);
   });
+  it("admits the external bearer only through the exact public Skill list Next HTTP entry, without a Product Session",async()=>{
+    const call=(target:string)=>new Promise<{status:number;body:string;headers:Record<string,string|string[]|undefined>}>((resolve,reject)=>{
+      const request=httpRequest({hostname:"127.0.0.1",port:nextPort,path:target,method:"GET",headers:{
+        host:`localhost:${nextPort}`,authorization:"Bearer external-native-token",cookie:"untrusted-cookie=value",
+        "x-kokoro-service":"forged-service","x-kokoro-internal-secret":"forged-secret","x-kokoro-tenant-id":"forged-tenant",forwarded:"host=foreign.invalid",
+      }},response=>{const chunks:Buffer[]=[];response.on("data",chunk=>chunks.push(Buffer.from(chunk)));response.on("end",()=>resolve({status:response.statusCode??0,body:Buffer.concat(chunks).toString("utf8"),headers:response.headers}))});request.on("error",reject);request.end()
+    })
+    const before=bffCalls
+    const hub=await call("/api/hub/skill.list")
+    expect(hub.status).toBe(401);expect(bffCalls).toBe(before)
+    const publicList=await call("/v1/skill.list?project_id=project-1")
+    expect(publicList.status).toBe(200)
+    expect(JSON.parse(publicList.body)).toMatchObject({ok:true,data:[]})
+    expect(publicList.headers["cache-control"]).toContain("no-store")
+    expect(publicList.headers["set-cookie"]).toBeUndefined()
+    const forwarded=publicSkillCalls.at(-1)!
+    expect(forwarded.url).toBe("/v1/skill.list?project_id=project-1")
+    expect(forwarded.headers.authorization).toBe("Bearer external-native-token")
+    expect(forwarded.headers["x-kokoro-service"]).toBe("web-bff")
+    expect(forwarded.headers["x-kokoro-internal-secret"]).toBe("public-skill-next-service-secret")
+    expect(forwarded.headers.forwarded).toBe("host=localhost")
+    expect(forwarded.headers["x-kokoro-tenant-id"]).toBeUndefined()
+    expect(forwarded.headers.cookie).toBeUndefined()
+  },30_000)
+
 });
 
 // Separate from the original dead-Redis failclosed fixture: Root alone runs this
@@ -448,7 +483,7 @@ export async function GET(){const config={redisUrl:process.env.KOKORO_WEB_REDIS_
       ],
       {
         cwd: root,
-        env: {
+        env: await nextFixtureEnvironment(root, {
           ...process.env,
           NODE_ENV: "test",
           KOKORO_BFF_BASE_URL: `http://127.0.0.1:${bffPort}`,
@@ -462,7 +497,7 @@ export async function GET(){const config={redisUrl:process.env.KOKORO_WEB_REDIS_
           KOKORO_OIDC_CLIENT_SECRET: "fixture-client-secret",
           KOKORO_TENANT_ID: "fixture-tenant",
           SET21_OWNED_SESSION_ID: sessionId,
-        },
+        }),
         stdio: ["ignore", "pipe", "pipe"],
       },
     );

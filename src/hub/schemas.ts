@@ -35,7 +35,7 @@ export const installationKeySchema = z.string().regex(/^[\x21-\x2b\x2d-\x7e]{1,1
 const installationRevisionSchema = z.string().max(20).refine((value) => /^[1-9][0-9]{0,19}(?![\s\S])/u.test(value) && BigInt(value) <= BigInt("18446744073709551615"))
 const installationUpdateTargetSchema = z.object({ source_ref: installationSourceSchema, revision: installationRevisionSchema }).strict()
 
-const installationSourceStatusSchema = z.enum(["active", "disabled", "withdrawn", "quarantined"])
+const installationSourceStatusSchema = z.enum(["active", "disabled", "withdrawn", "quarantined", "deleted"])
 
 // 池卡片：official 位（scope=OFFICIAL_SCOPE）与本 namespace 自有包（scope=namespace）合并视图。
 // 池只含「有效可用」项（official 上架∧用户未关 + 自有包）；required 官方技能恒在且拒关（disable→409）。
@@ -175,8 +175,13 @@ export const skillSourceVersionSchema = z
   .max(1024)
   .regex(/^[\x21-\x7e]+$/u)
   .refine((value) => value !== "null")
+export const skillPublicationPreconditionSchema = z.object({
+  current_version_id: skillCommandId,
+  state_version: skillStateVersionSchema.refine(value => BigInt(value) <= BigInt("9223372036854775806")),
+}).strict().nullable()
+export type SkillPublicationPrecondition = z.infer<typeof skillPublicationPreconditionSchema>
 export const skillPublishRequestSchema = z
-  .object({ expected_state_version: skillStateVersionSchema, audience: z.enum(["owner", "tenant", "catalog"]) })
+  .object({ expected_state_version: skillStateVersionSchema, audience: z.enum(["owner", "tenant", "catalog"]), expected_publication: skillPublicationPreconditionSchema })
   .strict()
 export type SkillPublishRequest = z.infer<typeof skillPublishRequestSchema>
 export const skillDraftSchema = z
@@ -996,3 +1001,13 @@ export const personalSkillLifecycleErrorSchema = z
     meta: z.object({ request_id: z.string().min(1).max(128) }).strict(),
   })
   .strict()
+
+export const deletePersonalSkillSeriesRequestSchema = z.object({
+ expected_state_version: skillStateVersionSchema.refine(value => BigInt(value) <= BigInt("9223372036854775806")),
+ expected_publication: skillPublicationPreconditionSchema,
+}).strict()
+export const deletePersonalSkillSeriesSchema = z.object({
+ series_id: skillCommandId, skill_id: skillCommandId, state_version: skillStateVersionSchema,
+ status: z.literal("deleted"), event_id: z.string().regex(/^evt:[a-f0-9]{64}$/u), replayed: z.boolean(),
+}).strict()
+export type DeletePersonalSkillSeriesRequest = z.infer<typeof deletePersonalSkillSeriesRequestSchema>

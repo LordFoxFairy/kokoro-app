@@ -1,5 +1,16 @@
 # Manus 工作台参考审计 v2
 
+## 2026-10-21 主链实测（替代本页旧日期对当前会话的推断）
+
+- 参考：Manus 已登录个人首页与新建任务；中文、浅色、1280×720。发送专用无敏感信息的 1+1 验收消息，收到 2；重新打开任务后消息与终态保留。该样本保留，不执行删除。
+- 首发后地址由 `/app` 进入 `/app/{sessionUid}`。模型菜单显示产品运行档位，不等同于供应商模型目录；实际 GET `/api/chat/listMainModelCandidates` 返回 200、`data.candidates=[]`。不据此推断没有配置模型。
+- 列表实际使用 `session.v1.SessionService/ListSessions`，含 noProject、pinnedSessionMode、includeEmptyTasks、groupFilter、cursorPage.limit；详情使用 GetSession。首发消息通过 Socket.IO message 发送，包含 sessionId、contents、taskMode、extData.mode、executionTarget、deliveryMode。观察到队列、运行状态、计划、思考中、文本增量、完成事件；未核实工具事件内部语义和计费算法。
+- Kokoro 保留已批准的 AG-UI 网络协议，对齐可观察交互语义，不引入第二套 Socket.IO。业务模型 label 和 provider 配置以 System 正式契约为准，别名只影响显示。
+- 本地实测：新建空任务误读 archive 404；聊天目录成功但为空；积分 summary 返回 billing_account_not_found。候选已补空草稿证明隔离和完整模型目录读取／首发选择，尚不代表正常环境生效或真实模型结算通过。
+- 正常管理页本次再次导航已成功进入，提供方和业务组合均为空。已有本地私有模型配置完整；下一步沿正式配置入口接入，不重复向用户索取 Key、不将私有配置写入文档。
+- 原始网络及截图仅本地 ignored；本节仅保存脱敏接口事实。
+
+
 日期：2026-08-25  
 范围：已登录 Manus Web 的桌面项目页；Kokoro 手机端继续冻结。
 

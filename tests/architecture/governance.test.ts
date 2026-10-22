@@ -175,6 +175,7 @@ describe("Web governance boundary", () => {
         contract: z.string().min(1),
         "test:architecture": z.string().min(1),
         "contract:check:bff-connector-command-errors": z.string().min(1),
+        "contract:check:bff-public-skill-list": z.string().min(1),
       }),
     })
     const packageJson: unknown = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"))
@@ -182,6 +183,7 @@ describe("Web governance boundary", () => {
     const scripts = packageSchema.parse(packageJson).scripts
     expect(scripts["test:architecture"]).toBe("vitest run tests/architecture")
     expect(scripts["contract:check:bff-connector-command-errors"]).toBe("node scripts/generate-bff-connector-command-errors.mjs --check")
+    expect(scripts["contract:check:bff-public-skill-list"]).toBe("node scripts/generate-bff-public-skill-list.mjs --check")
     expect(scripts.contract.split(" && ").sort()).toEqual([
       "pnpm contract:check:bff-archived-tasks",
       "pnpm contract:check:bff-shared-tasks",
@@ -190,6 +192,7 @@ describe("Web governance boundary", () => {
       "pnpm contract:check:bff-team",
       "pnpm contract:check:bff-agent-failure",
       "pnpm contract:check:bff-connector-command-errors",
+      "pnpm contract:check:bff-public-skill-list",
       "vitest run contract tests/contract",
     ].sort())
   })

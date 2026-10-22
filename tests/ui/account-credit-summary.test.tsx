@@ -41,7 +41,7 @@ beforeEach(() => {
   });
   vi.stubGlobal("fetch", fetcher);
 });
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+afterEach(() => { localStorage.removeItem("kokoro.web.auth-index-subject"); cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 it("reads only the admitted account summary and displays exact owner credits", async () => {
   render(<LocaleProvider><AccountCard readBoundary={{ admitted: true, subject: "alice", generation: 1 }} detail={null} onDetailChange={vi.fn()} onOpenSubscription={vi.fn()} /></LocaleProvider>);
@@ -104,17 +104,33 @@ it("renders disabled accounts with their actual available and held amounts", asy
   expect(screen.queryByRole("button")).not.toBeInTheDocument();
 });
 
-it("recognizes only the strict missing-account envelope and never opens an account", async () => {
-  fetcher.mockResolvedValueOnce(json({ error: { code: "billing_account_not_found", message: "Missing" }, meta: { request_id: "credits-read" } }, 404));
+it("silently initializes a strict missing account and only displays the authoritative reread", async () => {
+  localStorage.setItem("kokoro.web.auth-index-subject", admitted.subject);
+  const initialized = deferred<Response>();
+  fetcher.mockResolvedValueOnce(json({ error: { code: "billing_account_not_found", message: "Missing" }, meta: { request_id: "credits-read" } }, 404))
+    .mockReturnValueOnce(initialized.promise).mockResolvedValueOnce(json(summary));
   render(credit());
-  expect(await screen.findByRole("status")).toHaveTextContent("Loading");
-  await screen.findByText("No credit account yet");
-  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-  expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
+  expect(screen.queryByText("Loading…")).not.toBeInTheDocument();
+  expect(screen.queryByText("No credit account yet")).not.toBeInTheDocument();
+  expect(document.querySelector('[data-slot="skeleton"]')).toBeNull();
   expect(screen.queryByText("0")).not.toBeInTheDocument();
-  expect(fetcher).toHaveBeenCalledTimes(1);
-  expect(fetcher.mock.calls[0]![0]).toBe(summaryPath);
-  expect(fetcher.mock.calls[0]![1]?.method ?? "GET").toBe("GET");
+  expect(fetcher.mock.calls[1]![0]).toBe("/api/session/billing/credit-account");
+  expect(fetcher.mock.calls[1]![1]).toMatchObject({ method: "PUT", body: "{}" });
+  await act(async () => initialized.resolve(json({ ...summary, available_micros: "0" })));
+  expect(await screen.findByText("9007199254740993123.456789")).toBeVisible();
+  expect(fetcher.mock.calls.map(([url]) => url)).toEqual([summaryPath, "/api/session/billing/credit-account", summaryPath]);
+});
+
+it.each(["subject", "generation", "unmount"] as const)("does not initialize an old missing account after %s retirement", async (change) => {
+  const old = deferred<Response>();
+  fetcher.mockReturnValueOnce(old.promise);
+  const view = render(credit());
+  await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
+  if (change === "unmount") view.unmount();
+  else view.rerender(credit({ ...admitted, subject: change === "subject" ? "bob" : "alice", generation: 2 }));
+  await act(async () => old.resolve(json({ error: { code: "billing_account_not_found", message: "Missing" }, meta: { request_id: "credits-read" } }, 404)));
+  expect(fetcher.mock.calls.every(([, init]) => (init?.method ?? "GET") === "GET")).toBe(true);
 });
 
 it.each([
@@ -141,7 +157,7 @@ it("waits for an explicit retry after a network failure and reads only summary a
   expect(fetcher).toHaveBeenCalledTimes(1);
   fireEvent.click(screen.getByRole("button", { name: "Reload" }));
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-  expect(screen.getByRole("status")).toHaveTextContent("Loading");
+  expect(screen.getByRole("status")).toHaveAccessibleName(/Loading/);
   await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
   await act(async () => retry.resolve(json({ ...summary, available_micros: "3750000" })));
   expect(await screen.findByText("3.75")).toBeVisible();
@@ -160,7 +176,7 @@ it.each(["subject", "generation"] as const)("synchronously clears loaded credits
   view.rerender(credit({ ...admitted, subject: change === "subject" ? "bob" : "alice", generation: change === "generation" ? 2 : 1 }));
   expect(firstSignal.aborted).toBe(true);
   expect(screen.queryByText("9007199254740993123.456789")).not.toBeInTheDocument();
-  expect(screen.getByRole("status")).toHaveTextContent("Loading");
+  expect(screen.getByRole("status")).toHaveAccessibleName(/Loading/);
   await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
   await act(async () => pending.resolve(json({ ...summary, available_micros: "7000000" })));
   expect(await screen.findByText("7")).toBeVisible();

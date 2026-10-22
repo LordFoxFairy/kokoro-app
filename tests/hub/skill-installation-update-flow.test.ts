@@ -313,3 +313,11 @@ it("StrictMode reacquire retains the holder, but a previous generation callback 
   expect(update).toHaveBeenCalledTimes(1)
   releaseReplay()
 })
+
+it("blocks a deleted source both before selection and after the authoritative recheck",async()=>{
+ const blocked=fixture();expect(blocked.flow.select({...card,source_status:"deleted"},boundary)).toBe(false);expect(blocked.get).not.toHaveBeenCalled()
+ const {flow,get,update}=fixture();expect(flow.select(card,boundary)).toBe(true)
+ get.mockReset().mockResolvedValue({...current,source_status:"deleted"})
+ await flow.readCurrent(boundary);expect(flow.getSnapshot().kind).toBe("unavailable")
+ await flow.confirm(boundary);expect(update).not.toHaveBeenCalled()
+})

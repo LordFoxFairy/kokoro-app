@@ -5,10 +5,11 @@ import { createHash, createHmac, timingSafeEqual } from "node:crypto"
 import { createClient } from "redis"
 
 import { parseProductReturnTarget, type ProductReturnTarget } from "@/lib/product-return-target"
+import { oidcProofCookieNames, validOidcNamespace, type OidcCookieNamespaces } from "./oidc-transaction-cookies"
 
 const STATE_TTL_SECONDS = 300
 const STATE_PATTERN = /^[A-Za-z0-9_-]{16,256}$/u
-const RP_COOKIE_NAMES = ["next-auth.state", "next-auth.pkce.code_verifier", "next-auth.nonce"] as const
+export type OidcTransaction = OidcCookieNamespaces & Readonly<{ target: ProductReturnTarget }>
 
 function digest(value: string): string {
   return createHash("sha256").update(value).digest("hex")
@@ -18,22 +19,23 @@ export function oidcStateKeyPrefix(webOrigin: string): string {
   return `kokoro:web:oidc-state:${digest(webOrigin)}:`
 }
 
-function cookieBinding(source: string, setCookie: boolean): string | null {
+function cookieBinding(source: string, setCookie: boolean, secureCookies: boolean, namespace: string): string | null {
+  const names = oidcProofCookieNames(secureCookies, namespace)
   const found = new Map<string, string>()
   for (const raw of source.split(setCookie ? "\n" : ";")) {
     const pair = (setCookie ? raw.split(";", 1)[0] : raw)?.trim() ?? ""
     const separator = pair.indexOf("=")
     if (separator < 1) continue
     const name = pair.slice(0, separator)
-    const canonical = RP_COOKIE_NAMES.find((candidate) => name === candidate || name === `__Secure-${candidate}`)
+    const canonical = names.find((candidate) => name === candidate)
     if (canonical === undefined) continue
     if (found.has(canonical)) return null
     const value = pair.slice(separator + 1)
     if (value.length < 16 || value.length > 4096 || !/^[A-Za-z0-9._~%-]+$/u.test(value)) return null
     found.set(canonical, value)
   }
-  if (found.size !== RP_COOKIE_NAMES.length) return null
-  return digest(JSON.stringify(RP_COOKIE_NAMES.map((name) => found.get(name))))
+  if (found.size !== names.length) return null
+  return digest(JSON.stringify(names.map((name) => found.get(name))))
 }
 
 function key(webOrigin: string, state: string): string | null {
@@ -65,51 +67,70 @@ async function withRedis<T>(url: string, operation: (client: ReturnType<typeof c
   }
 }
 
-const RECORD_VERSION = "product-return-v1"
+const RECORD_VERSION = "product-return-v2"
 const HEX_DIGEST = /^[a-f0-9]{64}$/u
 
-function returnMac(secret: string, webOrigin: string, binding: string, target: ProductReturnTarget): string {
+function returnMac(secret: string, webOrigin: string, state: string, namespaces: OidcCookieNamespaces, binding: string, target: ProductReturnTarget): string {
   return createHmac("sha256", secret).update(JSON.stringify([
-    RECORD_VERSION, "kokoro-iam", `${webOrigin}/api/auth/callback/kokoro-iam`, binding, target,
+    RECORD_VERSION, "kokoro-iam", `${webOrigin}/api/auth/callback/kokoro-iam`, state,
+    namespaces.handoffNamespace, namespaces.oidcNamespace, binding, target,
   ])).digest("hex")
 }
 
 export async function issueOidcState(input: Readonly<{
   redisUrl: string
+  secureCookies: boolean
   webOrigin: string
   authSecret: string
   state: string
   setCookies: readonly string[]
   target: ProductReturnTarget
+  handoffNamespace: string
+  oidcNamespace: string
 }>): Promise<void> {
   const redisKey = key(input.webOrigin, input.state)
-  const binding = cookieBinding(input.setCookies.join("\n"), true)
+  if (!validOidcNamespace(input.handoffNamespace) || !validOidcNamespace(input.oidcNamespace)) throw new Error("invalid RP namespace")
+  const binding = cookieBinding(input.setCookies.join("\n"), true, input.secureCookies, input.oidcNamespace)
   const target = parseProductReturnTarget(input.target)
   if (redisKey === null || binding === null || input.authSecret.length < 32 || target === null || target !== input.target) throw new Error("invalid RP transaction")
-  const value = JSON.stringify([RECORD_VERSION, target, binding, returnMac(input.authSecret, input.webOrigin, binding, target)])
+  const value = JSON.stringify([RECORD_VERSION, target, input.handoffNamespace, input.oidcNamespace, binding, returnMac(input.authSecret, input.webOrigin, input.state, input, binding, target)])
   const stored = await withRedis(input.redisUrl, (client) => client.set(redisKey, value, { EX: STATE_TTL_SECONDS, NX: true }))
   if (stored !== "OK") throw new Error("RP state collision")
 }
 
 export async function consumeOidcState(input: Readonly<{
   redisUrl: string
+  secureCookies: boolean
   webOrigin: string
   authSecret: string
   state: string
   cookieHeader: string | null
-}>): Promise<ProductReturnTarget | null> {
+}>): Promise<OidcTransaction | null> {
   const redisKey = key(input.webOrigin, input.state)
-  const binding = cookieBinding(input.cookieHeader ?? "", false)
-  if (redisKey === null || binding === null || input.authSecret.length < 32) return null
-  const stored = await withRedis(input.redisUrl, (client) => client.getDel(redisKey))
-  if (stored === null || stored.length > 2400) return null
-  let value: unknown
-  try { value = JSON.parse(stored) } catch { return null }
-  if (!Array.isArray(value) || value.length !== 4 || value[0] !== RECORD_VERSION
-    || typeof value[1] !== "string" || typeof value[2] !== "string" || typeof value[3] !== "string"
-    || !HEX_DIGEST.test(value[2]) || !HEX_DIGEST.test(value[3])) return null
-  const target = parseProductReturnTarget(value[1])
-  if (target === null || target !== value[1] || !timingSafeEqual(Buffer.from(value[2]), Buffer.from(binding))) return null
-  const mac = returnMac(input.authSecret, input.webOrigin, binding, target)
-  return timingSafeEqual(Buffer.from(value[3]), Buffer.from(mac)) ? target : null
+  if (redisKey === null || input.authSecret.length < 32) return null
+  return withRedis(input.redisUrl, async (client) => {
+    const stored = await client.get(redisKey)
+    if (stored === null || stored.length > 2400) return null
+    let value: unknown
+    try { value = JSON.parse(stored) } catch { return null }
+    if (!Array.isArray(value) || value.length !== 6 || value[0] !== RECORD_VERSION
+      || typeof value[1] !== "string" || !validOidcNamespace(value[2]) || !validOidcNamespace(value[3])
+      || typeof value[4] !== "string" || typeof value[5] !== "string"
+      || !HEX_DIGEST.test(value[4]) || !HEX_DIGEST.test(value[5])) return null
+    const target = parseProductReturnTarget(value[1])
+    if (target === null || target !== value[1]) return null
+    const namespaces = { handoffNamespace: value[2], oidcNamespace: value[3] }
+    const mac = returnMac(input.authSecret, input.webOrigin, input.state, namespaces, value[4], target)
+    if (!timingSafeEqual(Buffer.from(value[5]), Buffer.from(mac))) return null
+    const binding = cookieBinding(input.cookieHeader ?? "", false, input.secureCookies, namespaces.oidcNamespace)
+    if (binding === null || !timingSafeEqual(Buffer.from(value[4]), Buffer.from(binding))) return null
+    // Only the callback that proved this exact record may consume it. A stale
+    // tab must not burn the original state, and concurrent valid callbacks
+    // must still admit at most one exchange.
+    const consumed = await client.eval(
+      'if redis.call("GET", KEYS[1]) == ARGV[1] then return redis.call("DEL", KEYS[1]) end return 0',
+      { keys: [redisKey], arguments: [stored] },
+    )
+    return consumed === 1 ? { ...namespaces, target } : null
+  })
 }

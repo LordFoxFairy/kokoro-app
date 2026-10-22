@@ -99,7 +99,7 @@ vi.mock("@/ui/shell/page-clients", () => ({
   }),
   browserListClient: () => ({
     listModels: vi.fn().mockResolvedValue({
-      models: [{ provider: "anthropic", name: "opus", is_default: true }],
+      models: [{ provider: "anthropic", name: "opus", is_default: true, display_name: "opus", model_id: "11111111-1111-4111-8111-111111111111", revision_id: "22222222-2222-4222-8222-222222222222", provider_id: "33333333-3333-4333-8333-333333333333", feature_key: "chat", request_model: "opus" }], next_cursor: null,
     }),
   }),
   // account/appearance/chat tab 不调用下列客户端；仅需存在 export 供模块 import。
@@ -327,6 +327,46 @@ afterEach(() => {
 });
 
 describe("SettingsModal 设置中心模态", () => {
+  it("切回账户时保留本次设置会话已确认的身份，不先闪空字段再重新填充", async () => {
+    const profile = { subject: "settings-reader", name: "已确认姓名", email: "reader@example.test", email_verified: true };
+    let finishRevalidation!: (response: Response) => void;
+    const fetchProfile = vi.fn().mockResolvedValueOnce(Response.json({ data: profile }))
+      .mockImplementation(() => new Promise<Response>((resolve) => { finishRevalidation = resolve; }));
+    vi.stubGlobal("fetch", fetchProfile);
+    renderSettings();
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "全名" })).toHaveValue(profile.name));
+    fireEvent.keyDown(screen.getByTestId("settings-tab-appearance"), { key: "Enter" });
+    expect(screen.queryByTestId("settings-account")).not.toBeInTheDocument();
+    fireEvent.keyDown(screen.getByTestId("settings-tab-account"), { key: "Enter" });
+    expect(screen.getByRole("textbox", { name: "全名" })).toHaveValue(profile.name);
+    expect(screen.getByText(profile.email)).toBeVisible();
+    expect(screen.queryByText(/正在加载/)).not.toBeInTheDocument();
+    // Revalidation may run, but an unconfirmed read must not enable a name write.
+    expect(screen.getByRole("textbox", { name: "全名" })).toBeDisabled();
+    await waitFor(() => expect(fetchProfile).toHaveBeenCalledTimes(2));
+    await act(async () => finishRevalidation(Response.json({ data: { ...profile, name: "服务端更新姓名" } })));
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "全名" })).toHaveValue("服务端更新姓名"));
+    expect(screen.getByRole("textbox", { name: "全名" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "保存姓名" })).toBeDisabled();
+  });
+  it.each([
+    { admitted: true, subject: "another-reader", generation: 1 },
+    { admitted: true, subject: "settings-reader", generation: 2 },
+  ])("账户快照不跨主体或准入代次复用：$subject / $generation", async (nextBoundary) => {
+    const profile = { subject: "settings-reader", name: "旧主体姓名", email: "previous@example.test", email_verified: true };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(Response.json({ data: profile }))
+      .mockImplementation(() => new Promise(() => {})));
+    const content = (readBoundary: typeof nextBoundary) => <ThemeProvider><LocaleProvider><SettingsModal
+      initialTab="account" onClose={() => {}} readBoundary={readBoundary}
+    /></LocaleProvider></ThemeProvider>;
+    const view = render(content({ admitted: true, subject: "settings-reader", generation: 1 }));
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "全名" })).toHaveValue(profile.name));
+    fireEvent.keyDown(screen.getByTestId("settings-tab-appearance"), { key: "Enter" });
+    view.rerender(content(nextBoundary));
+    fireEvent.keyDown(screen.getByTestId("settings-tab-account"), { key: "Enter" });
+    expect(screen.getByRole("textbox", { name: "全名" })).not.toHaveValue(profile.name);
+    expect(screen.queryByText(profile.email)).not.toBeInTheDocument();
+  });
   it("正式 Skills 设置使用已添加技能的 Manus 信息架构", async () => {
     renderSettings(() => {}, undefined, true);
     fireEvent.keyDown(screen.getByTestId("settings-tab-skills"), {
@@ -651,9 +691,9 @@ describe("SettingsModal 设置中心模态", () => {
     fireEvent.click(await screen.findByTestId("settings-default-model"));
     fireEvent.click(await screen.findByText("opus"));
     const prefs = JSON.parse(
-      window.localStorage.getItem("kokoro.web.chat-prefs") ?? "{}",
+      window.localStorage.getItem("kokoro.web.chat-prefs.v2") ?? "{}",
     );
-    expect(prefs.model).toBe("anthropic:opus");
+    expect(prefs.model).toBe("opus");
     expect(screen.getByTestId("settings-saved")).toBeInTheDocument();
   });
 
@@ -1120,7 +1160,7 @@ describe("R255 preset retirement: Settings model-only preferences", () => {
         requestedPaths.push(url.pathname);
         if (url.pathname === "/api/session/models")
           return Response.json({
-            models: [{ provider: "anthropic", name: "opus", is_default: true }],
+            models: [{ provider: "anthropic", name: "opus", is_default: true, display_name: "opus", model_id: "11111111-1111-4111-8111-111111111111", revision_id: "22222222-2222-4222-8222-222222222222", provider_id: "33333333-3333-4333-8333-333333333333", feature_key: "chat", request_model: "opus" }], next_cursor: null,
           });
         // Keep the old route successful: a real obsolete request, not a missing fixture, must cause RED.
         if (url.pathname === "/api/session/agents")
@@ -1141,9 +1181,9 @@ describe("R255 preset retirement: Settings model-only preferences", () => {
       expect(requestedPaths).toContain("/api/session/models");
       expect(
         JSON.parse(
-          window.localStorage.getItem("kokoro.web.chat-prefs") ?? "null",
+          window.localStorage.getItem("kokoro.web.chat-prefs.v2") ?? "null",
         ),
-      ).toEqual({ model: "anthropic:opus" });
+      ).toEqual({ model: "opus" });
       expect(requestedPaths).not.toContain("/api/session/agents");
       expect(screen.queryByTestId("settings-default-agent")).toBeNull();
     } finally {
@@ -1157,8 +1197,8 @@ describe("R255 preset retirement: Settings model-only preferences", () => {
     "含旧 agent=%s 的偏好整体失效，不迁移其中的 model",
     async (agent) => {
       window.localStorage.setItem(
-        "kokoro.web.chat-prefs",
-        JSON.stringify({ model: "anthropic:opus", agent }),
+        "kokoro.web.chat-prefs.v2",
+        JSON.stringify({ model: "opus", agent }),
       );
       renderSettings(() => {}, undefined, false, undefined, "chat");
       const model = await screen.findByTestId("settings-default-model");
@@ -1172,15 +1212,15 @@ describe("R255 preset retirement: Settings model-only preferences", () => {
       fireEvent.click(await screen.findByRole("option", { name: "opus" }));
       expect(
         JSON.parse(
-          window.localStorage.getItem("kokoro.web.chat-prefs") ?? "null",
+          window.localStorage.getItem("kokoro.web.chat-prefs.v2") ?? "null",
         ),
-      ).toEqual({ model: "anthropic:opus" });
+      ).toEqual({ model: "opus" });
     },
   );
 
   it("新的 model-only 偏好正常保存并在重新挂载后读回精确 shape", async () => {
     window.localStorage.setItem(
-      "kokoro.web.chat-prefs",
+      "kokoro.web.chat-prefs.v2",
       JSON.stringify({ model: null }),
     );
     const first = renderSettings(() => {}, undefined, false, undefined, "chat");
@@ -1192,9 +1232,9 @@ describe("R255 preset retirement: Settings model-only preferences", () => {
     expect(screen.getByTestId("settings-saved")).toBeInTheDocument();
     expect(
       JSON.parse(
-        window.localStorage.getItem("kokoro.web.chat-prefs") ?? "null",
+        window.localStorage.getItem("kokoro.web.chat-prefs.v2") ?? "null",
       ),
-    ).toEqual({ model: "anthropic:opus" });
+    ).toEqual({ model: "opus" });
     first.unmount();
 
     renderSettings(() => {}, undefined, false, undefined, "chat");
@@ -1205,9 +1245,9 @@ describe("R255 preset retirement: Settings model-only preferences", () => {
     );
     expect(
       JSON.parse(
-        window.localStorage.getItem("kokoro.web.chat-prefs") ?? "null",
+        window.localStorage.getItem("kokoro.web.chat-prefs.v2") ?? "null",
       ),
-    ).toEqual({ model: "anthropic:opus" });
+    ).toEqual({ model: "opus" });
   });
 });
 
@@ -1653,7 +1693,7 @@ describe("SET24 deadline and retirement followups", () => {
 // SET25 private executable draft. No source/test-tree admission or execution.
 describe("SET25 existing chat model preference reliability", () => {
   const oldRaw = JSON.stringify({ model: "prior:stable" });
-  const catalog = { models: [{ provider: "anthropic", name: "opus", is_default: true }] };
+  const catalog = { models: [{ provider: "anthropic", name: "opus", is_default: true, display_name: "opus", model_id: "11111111-1111-4111-8111-111111111111", revision_id: "22222222-2222-4222-8222-222222222222", provider_id: "33333333-3333-4333-8333-333333333333", feature_key: "chat", request_model: "opus" }], next_cursor: null };
   async function preferenceReader() {
     return (await import("@/ui/settings/chat-prefs")).readChatModel;
   }
@@ -1668,7 +1708,7 @@ describe("SET25 existing chat model preference reliability", () => {
     const native = Storage.prototype.setItem;
     let fail = true;
     const spy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(function(this: Storage, key, value) {
-      if (this === localStorage && key === "kokoro.web.chat-prefs" && fail)
+      if (this === localStorage && key === "kokoro.web.chat-prefs.v2" && fail)
         throw new DOMException("preference unavailable", "QuotaExceededError");
       native.call(this, key, value);
     });
@@ -1676,14 +1716,14 @@ describe("SET25 existing chat model preference reliability", () => {
   }
 
   it("failed model write preserves raw/cache and never claims saved", async () => {
-    localStorage.setItem("kokoro.web.chat-prefs", oldRaw);
+    localStorage.setItem("kokoro.web.chat-prefs.v2", oldRaw);
     const read = await preferenceReader();
     expect(read()).toBe("prior:stable");
     const failure = failChatWrite();
     try {
       renderSettings(() => {}, undefined, false, undefined, "chat");
       await chooseOpus();
-      expect(localStorage.getItem("kokoro.web.chat-prefs")).toBe(oldRaw);
+      expect(localStorage.getItem("kokoro.web.chat-prefs.v2")).toBe(oldRaw);
       expect(read()).toBe("prior:stable");
       expect(screen.queryByTestId("settings-saved")).toBeNull();
       expect(screen.getByRole("alert")).toHaveTextContent(/未保存/);
@@ -1692,7 +1732,7 @@ describe("SET25 existing chat model preference reliability", () => {
   });
 
   it("explicit persistence retry saves the draft; following-profile null remains a real write", async () => {
-    localStorage.setItem("kokoro.web.chat-prefs", oldRaw);
+    localStorage.setItem("kokoro.web.chat-prefs.v2", oldRaw);
     const read = await preferenceReader();
     read();
     const failure = failChatWrite();
@@ -1702,18 +1742,18 @@ describe("SET25 existing chat model preference reliability", () => {
       expect(read()).toBe("prior:stable");
       failure.succeed();
       fireEvent.click(within(screen.getByRole("alert")).getByRole("button", { name: "重试保存" }));
-      expect(read()).toBe("anthropic:opus");
-      expect(JSON.parse(localStorage.getItem("kokoro.web.chat-prefs")!)).toEqual({ model: "anthropic:opus" });
+      expect(read()).toBe("opus");
+      expect(JSON.parse(localStorage.getItem("kokoro.web.chat-prefs.v2")!)).toEqual({ model: "opus" });
       expect(screen.getByTestId("settings-saved")).toBeInTheDocument();
       fireEvent.click(screen.getByTestId("settings-default-model"));
       fireEvent.click(await screen.findByRole("option", { name: "跟随空间缺省" }));
-      expect(JSON.parse(localStorage.getItem("kokoro.web.chat-prefs")!)).toEqual({ model: null });
+      expect(JSON.parse(localStorage.getItem("kokoro.web.chat-prefs.v2")!)).toEqual({ model: null });
       expect(read()).toBeNull();
     } finally { failure.restore(); }
   });
 
   it("catalog rejection has an error and explicit read retry unlike true empty catalog", async () => {
-    const request = vi.fn().mockRejectedValueOnce(new Error("catalog unavailable")).mockResolvedValueOnce({ models: [] });
+    const request = vi.fn().mockRejectedValueOnce(new Error("catalog unavailable")).mockResolvedValueOnce({ models: [], next_cursor: null });
     const spy = modelCatalog(request);
     try {
       renderSettings(() => {}, undefined, false, undefined, "chat");
@@ -1726,13 +1766,13 @@ describe("SET25 existing chat model preference reliability", () => {
       fireEvent.click(screen.getByTestId("settings-default-model"));
       expect(await screen.findByRole("option", { name: "跟随空间缺省" })).toBeInTheDocument();
       expect(screen.getAllByRole("option")).toHaveLength(1);
-      expect(localStorage.getItem("kokoro.web.chat-prefs")).toBeNull();
+      expect(localStorage.getItem("kokoro.web.chat-prefs.v2")).toBeNull();
     } finally { spy.mockRestore(); }
   });
 
   it("catalog 10s caller timeout retires a noncooperative attempt and old completion cannot replace retry", async () => {
     let finishOld!: (value: typeof catalog) => void;
-    const request = vi.fn().mockImplementationOnce(() => new Promise((resolve) => { finishOld = resolve; })).mockResolvedValueOnce({ models: [] });
+    const request = vi.fn().mockImplementationOnce(() => new Promise((resolve) => { finishOld = resolve; })).mockResolvedValueOnce({ models: [], next_cursor: null });
     const spy = modelCatalog(request);
     try {
       vi.useFakeTimers();
@@ -1754,7 +1794,7 @@ describe("SET25 existing chat model preference reliability", () => {
 
   it("preview layout retirement rejects the older catalog result without claiming transport abort", async () => {
     let finishOld!: (value: typeof catalog) => void;
-    const request = vi.fn().mockImplementationOnce(() => new Promise((resolve) => { finishOld = resolve; })).mockResolvedValueOnce({ models: [] });
+    const request = vi.fn().mockImplementationOnce(() => new Promise((resolve) => { finishOld = resolve; })).mockResolvedValueOnce({ models: [], next_cursor: null });
     const spy = modelCatalog(request);
     const draw = (preview: boolean) => <ThemeProvider><LocaleProvider><SettingsModal
       initialTab="chat" preview={preview} brandName="Acme" onClose={() => {}} /></LocaleProvider></ThemeProvider>;
@@ -1773,7 +1813,7 @@ describe("SET25 existing chat model preference reliability", () => {
   });
 
   it("unmount retires catalog timer and late failure without touching persisted preference", async () => {
-    localStorage.setItem("kokoro.web.chat-prefs", oldRaw);
+    localStorage.setItem("kokoro.web.chat-prefs.v2", oldRaw);
     let rejectOld!: (error: Error) => void;
     const request = vi.fn().mockImplementation(() => new Promise((_resolve, reject) => { rejectOld = reject; }));
     const spy = modelCatalog(request);
@@ -1784,7 +1824,7 @@ describe("SET25 existing chat model preference reliability", () => {
       const { act } = await import("@testing-library/react");
       await act(async () => { rejectOld(new Error("late catalog error")); await vi.advanceTimersByTimeAsync(10_000); });
       expect(screen.queryByRole("alert")).toBeNull();
-      expect(localStorage.getItem("kokoro.web.chat-prefs")).toBe(oldRaw);
+      expect(localStorage.getItem("kokoro.web.chat-prefs.v2")).toBe(oldRaw);
       expect(request).toHaveBeenCalledOnce();
     } finally { vi.useRealTimers(); spy.mockRestore(); }
   });

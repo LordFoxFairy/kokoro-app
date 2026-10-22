@@ -30,7 +30,10 @@ export function useAccountProfileEditor(
   scope: string,
   profile: AccountProfile | null,
   reload: () => Promise<AccountProfile | null>,
+  readConfirmed: boolean,
 ) {
+  const confirmed = useRef(readConfirmed);
+  useLayoutEffect(() => { confirmed.current = readConfirmed; }, [readConfirmed]);
   const session = useRef<State | null>(null);
   const [view, setView] = useState({
     scope,
@@ -76,7 +79,7 @@ export function useAccountProfileEditor(
     if (
       s &&
       s.scope === scope &&
-      !s.initialized &&
+      (!s.initialized || (readConfirmed && s.phase === "ready" && s.draft === s.original)) &&
       typeof profile?.name === "string"
     ) {
       s.draft = profile.name;
@@ -86,7 +89,7 @@ export function useAccountProfileEditor(
         if (session.current === s && !s.retired) publish();
       });
     }
-  }, [scope, profile]);
+  }, [scope, profile, readConfirmed]);
   const active = (s: State) =>
     session.current === s &&
     !s.retired &&
@@ -121,6 +124,7 @@ export function useAccountProfileEditor(
           initialized: false,
         };
   const editable =
+    readConfirmed &&
     !!scope &&
     !!visible.initialized &&
     ![
@@ -146,6 +150,7 @@ export function useAccountProfileEditor(
       const s = session.current;
       if (
         !s ||
+        !confirmed.current ||
         !active(s) ||
         !editable ||
         [
@@ -170,6 +175,7 @@ export function useAccountProfileEditor(
       const s = session.current;
       if (
         !s ||
+        !confirmed.current ||
         !active(s) ||
         !editable ||
         [

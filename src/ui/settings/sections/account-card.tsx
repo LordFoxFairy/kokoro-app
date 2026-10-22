@@ -92,7 +92,7 @@ export function AccountCard({
   const previewAccount = makePreviewAccount(t)
   const [previewAccountEdits, setPreviewAccountEdits] = useState<Partial<AccountProjection>>({})
   const live = useAccountProfile(preview, readBoundary);
-  const nameEditor = useAccountProfileEditor(preview ? "" : live.scope, live.profile, live.reload);
+  const nameEditor = useAccountProfileEditor(preview ? "" : live.scope, live.profile, live.reload, live.phase === "ready");
   const account = preview
     ? { ...previewAccount, ...previewAccountEdits }
     : live.profile
@@ -349,7 +349,7 @@ export function AccountCard({
 
   return (
     <div className={styles.accountSettings} data-settings-card data-testid="settings-account">
-      {!preview && live.scope && live.phase==="loading" ? <p role="status">{t("billing.loading")}</p> : null}
+      {!preview && live.scope && live.phase==="loading" ? <span className="sr-only" role="status" aria-label={t("billing.loading")} /> : null}
       {!preview && live.phase==="error" ? <div role="alert">{t("billing.loadError")}<Button variant="outline" size="sm" onClick={live.retry}>{t("billing.retry")}</Button></div> : null}
       {copyState?.scope===copyScope && copyState.status==="failed" ? <p role="alert">{t("share.projectCopyFailed")}</p> : null}
       <div className={styles.accountIdentityRow}>
@@ -379,14 +379,14 @@ export function AccountCard({
               onBlur={(event) => {
                 if (preview) void saveName(event.currentTarget.value);
               }}
-              disabled={!preview && !nameEditor.editable}
+              disabled={!preview && (!nameEditor.editable || live.phase !== "ready")}
             />
             {!preview ? (
               <div className={styles.nameActions}>
                 <Button
                   size="sm"
                   type="button"
-                  disabled={!nameEditor.canSave}
+                  disabled={!nameEditor.canSave || live.phase !== "ready"}
                   onClick={() => void nameEditor.save()}
                 >
                   {t("settings.name.save")}

@@ -1,3 +1,39 @@
+## MODEL-1 上游发现不新增App事实（2026-10-22）
+
+App同源Admin桥只短暂转发已准入请求与有限响应，provider/credential/候选模型事实归System/BFF，选择候选的局部UI归独立Admin。无SQL、缓存、表、Key存储、持久化状态或自动发布/价格推测；response不能成为App可编辑模型目录。配置Domain与Product Session是既有可信边界，浏览器tenant/actor不建立事实。
+
+## 2026-10-22 公开Skill list adapter候选
+
+固定GET公开入口仅读取BFF正式public投影，当前User API Key／普通或trusted OAuth App资格与项目授权全归IAM/BFF/Platform。App不新建身份事实、Session、缓存、数据库、Storage或应用绑定，不将外部Bearer换成Product access或把客户端service/tenant头当事实。生成validator仅是固定owner artifact消费者；数字时间戳按JSON number验证，响应原样返回，私有cookie与服务凭据不公开。
+
+## 2026-10-21 个人系列删除消费者候选
+
+最终消费者配对Public22.1 / 180候选，尚未正常生效。Web不新增数据库、Redis、Storage写入或持久化命令。删除Dialog仅持本主体的确认锚点CAS、明确publication、深冻结body/key与未知状态；关闭保原意图，准入取消等待，主体切换整体退休。deleted是owner保留installation的来源状态，不代表物理字节删除、不合成uninstalled或空publication。全部修订终态、迟到发布防复活与durable receipt仍由Platform/BFF拥有；正常写旅程和物理保留期限不由App测试推断。
+
+## 2026-10-21 发布确认消费者配对（实施中）
+
+不新增Web持久化／表／缓存；现内存发布session增加确认publication的冻结副本，原draft/upload/receipt与幂等key保持。重试原body/key，不合并较新publication；关闭保留未决意图，身份退休沿既有宿主取消／卸载。新系列明确null，已有系列必须由正式历史读取证明；不按选中旧版本、revision或可用性猜当前。
+
+## 2026-10-21 Skills 历史仅保存弹窗临时读状态
+
+无新业务表、持久化、localStorage或全局缓存。版本行、publication、游标和精确包文件均来自BFF/Platform；Web只保当代弹窗列表、选中版本及读取状态。相同当前指针不推出最大revision或执行可用性；不改原安装pin、旧消息引用、发布回执或未决写意图。关闭/身份退休清理读状态，写入恢复仍归原publish/withdraw宿主。
+
+## 2026-10-21 退出展示无新增持久状态
+
+本片仅App固定确认/失败展示与现native relay导航投影；不新增表、Redis交易、身份cookie或确认receipt。原issuer签名确认cookie仍由IAM拥有，原Path、期限、当前Session/client/redirect绑定及正式撤销原样；页面status只选择展示，不证明退出成功或恢复Product会话。见TECHNICAL_DESIGN本日窄修。
+
+## 2026-10-20 对话偏好版本退役
+
+仅现本地UI默认偏好改用 `kokoro.web.chat-prefs.v2` 保存 raw label key；旧key不读取、不删除、不拆分/迁移，不清其他localStorage。新key可保存合法含冒号label。已冻结未知请求的body/key及会话恢复记录原样保留，不自动重发；无owner持久事实变化。
+
+## 2026-10-20 MC-02A 模型消费不新增事实
+
+Web只保存当前已读候选及选中的稳定label name，不将显示别名、上游request_model或provider名字转成另一个身份。精确model/revision/provider引用来自BFF/System事实，本片无持久化、SQL、receipt、模型连接/Key存储或新缓存。现selector/engine生命周期保持；preview/test夹具仅配对新wire，不冒真实模型或执行成功。
+
+## 2026-10-20 Admin模型桥不新增业务事实
+
+本片仅透传Product会话准入与BFF正式模型管理请求，无Web数据库、receipt、连接配置或额外token持久化；不读取System数据库，不保存secret值，不放行模型、工具或扣费。模型目录和路由事实仍归System；未知命令恢复由Admin页面冻结意图承担，而非Product桥自动重试。
+
 ## 设置视觉与主线状态组合（2026-10-20）
 
 保留主线知识 owner 数据及原 KnowledgeSession/Provider 的读取、写入、核实和准入退休语义；视觉增量不增加知识存储或第二份会话。账户详情和资产创建前表单仍为本地导航/临时草稿，知识 preview 草稿不冒充正式 owner 事实。

@@ -8,7 +8,8 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
-import type { ManagedPersonalSkill, SkillPublishRequest } from "@/hub/schemas"
+import { skillPublicationPreconditionSchema, type SkillPublicationPrecondition, type ManagedPersonalSkill, type SkillPublishRequest } from "@/hub/schemas"
+import { personalSkillHistoryPageSchema } from "@/hub/personal-skill-history.schema"
 import type { SkillPublishClient } from "@/hub/skill-publish-client"
 import { HubClientError } from "@/hub/client"
 import { useT } from "@/i18n/context"
@@ -42,6 +43,23 @@ export function PersonalSkillPublishDialog({ open, onOpenChange, client, onPubli
   const active = useRef<AbortController | null>(null)
   const [session, setSession] = useState<PersonalSkillPublishSession | null>(null)
   const [lastFlight, setLastFlight] = useState<AbortController | null>(null)
+  const [readGeneration, setReadGeneration] = useState(0)
+  const [publication, setPublication] = useState<{ skillId: string; seriesId: string; generation: number; signal: AbortSignal } & ({ kind: "ready"; value: SkillPublicationPrecondition } | { kind: "error" }) | null>(null)
+  const readCurrent = publication !== null && !publication.signal.aborted && publication.skillId === base?.skill_id && publication.seriesId === base?.series_id && publication.generation === readGeneration
+  const publicationReady = base === undefined || readCurrent && publication.kind === "ready"
+  useEffect(() => {
+    if (!open || !admitted || !base || session !== null) return
+    const controller = new AbortController()
+    const read = { skillId: base.skill_id, seriesId: base.series_id, generation: readGeneration, signal: controller.signal }
+    void Promise.resolve().then(() => client.listHistory(base.skill_id, undefined, controller.signal)).then(result => {
+      const page = personalSkillHistoryPageSchema.parse(result)
+      if (page.series_id !== base.series_id || base.status !== "draft" && page.publication === null) throw new HubClientError("parse", "Skill series publication mismatch", null, 200)
+      const value = skillPublicationPreconditionSchema.parse(page.publication === null ? null : {current_version_id: page.publication.current_version_id, state_version: page.publication.state_version})
+      if (!controller.signal.aborted) setPublication({ ...read, kind: "ready", value })
+    }).catch(() => { if (!controller.signal.aborted) setPublication({ ...read, kind: "error" }) })
+    return () => controller.abort()
+  }, [open, admitted, base, client, readGeneration, session])
+
   const visibleStatus: Status = status.kind === "running" && lastFlight?.signal.aborted ? { kind: "error" } : status
   useEffect(() => () => { active.current?.abort() }, [])
   useEffect(() => { if (!admitted || !open) active.current?.abort() }, [admitted, open])
@@ -64,9 +82,10 @@ export function PersonalSkillPublishDialog({ open, onOpenChange, client, onPubli
     if (!admitted || visibleStatus.kind === "running" || status.kind === "restart" || status.kind === "success") return
     let currentSession = session
     if (currentSession === null) {
-      if ((!file && (!base || updating)) || !audience) return
+      if ((!file && (!base || updating)) || !audience || !publicationReady) return
+      const expectedPublication = base && publication?.kind === "ready" ? publication.value : null
       try {
-        currentSession = updating ? createPersonalSkillVersionSession(base!, { file: file!, display_name: name, summary, tags: tags.split(",").map(item => item.trim()).filter(Boolean), example_prompts: examples === base!.example_prompts.join("\n") ? base!.example_prompts : examples === "" ? [] : examples.split("\n"), category_keys: base!.category_keys, audience: "owner" }) : base ? createResumedSkillPublishSession(base, audience, file ?? undefined) : createPersonalSkillPublishSession({ file: file!, display_name: name, summary, tags: tags.split(",").map((item) => item.trim()).filter(Boolean), audience })
+        currentSession = updating ? createPersonalSkillVersionSession(base!, { file: file!, display_name: name, summary, tags: tags.split(",").map(item => item.trim()).filter(Boolean), example_prompts: examples === base!.example_prompts.join("\n") ? base!.example_prompts : examples === "" ? [] : examples.split("\n"), category_keys: base!.category_keys, audience: "owner" }, expectedPublication) : base ? createResumedSkillPublishSession(base, audience, expectedPublication, file ?? undefined) : createPersonalSkillPublishSession({ file: file!, display_name: name, summary, tags: tags.split(",").map((item) => item.trim()).filter(Boolean), audience })
         setSession(currentSession)
         onIntentStarted?.()
       } catch (error) {
@@ -102,7 +121,7 @@ export function PersonalSkillPublishDialog({ open, onOpenChange, client, onPubli
     <DialogContent data-testid="personal-skill-publish-dialog" closeLabel={t("skills.publishClose")} onCloseAutoFocus={event => { if (returnFocusRef) { event.preventDefault(); if (admitted) returnFocusRef.current?.focus() } }}>
       <DialogTitle>{t(updating ? "skills.lifecycle.update" : "skills.publishTitle")}</DialogTitle>
       <DialogDescription>{t("skills.publishDescription")}</DialogDescription>
-      <form className="space-y-4" onSubmit={submit}>
+      <form className="space-y-4" onSubmit={submit} aria-busy={open && admitted && session === null && base !== undefined && !publicationReady && !(readCurrent && publication.kind === "error")}>
         <label className="block space-y-1 text-sm font-medium" htmlFor="personal-skill-zip">{t(base ? "skills.publishReplaceUpload" : "skills.publishFile")}</label>
         <Input id="personal-skill-zip" type="file" accept=".zip,application/zip" required={session === null && !base} disabled={session !== null || visibleStatus.kind === "running"} onChange={(event) => {
           setFile(event.target.files?.[0] ?? null)
@@ -122,6 +141,7 @@ export function PersonalSkillPublishDialog({ open, onOpenChange, client, onPubli
           {!updating ? <option value="tenant">{t("skills.publishAudienceTenant")}</option> : null}
           {!updating ? <option value="catalog">{t("skills.publishAudienceCatalog")}</option> : null}
         </select>
+        {session === null && readCurrent && publication.kind === "error" ? <Alert variant="destructive" role="alert"><AlertDescription>{t("skills.publishError")}</AlertDescription><Button type="button" variant="outline" onClick={() => setReadGeneration(value => value + 1)}>{t("skills.publishRetry")}</Button></Alert> : null}
         {visibleStatus.kind === "running" ? <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner aria-hidden="true" />{t(`skills.publishStage.${visibleStatus.stage}`)}</p> : null}
         {visibleStatus.kind === "pending" ? <Alert role="status"><AlertDescription>{t("skills.publishPending")}</AlertDescription></Alert> : null}
         {visibleStatus.kind === "error" ? <Alert variant="destructive" role="alert"><AlertDescription>{t("skills.publishError")}</AlertDescription></Alert> : null}
@@ -136,8 +156,8 @@ export function PersonalSkillPublishDialog({ open, onOpenChange, client, onPubli
         </div> : null}
         <div className="flex justify-end gap-2">
           <Button type="button" variant="outline" onClick={close}>{visibleStatus.kind === "running" ? t("skills.publishCancel") : t("skills.publishClose")}</Button>
-          {visibleStatus.kind === "restart" ? <Button type="button" onClick={() => { setSession(null); setStatus({ kind: "idle" }); setFile(null); setName(base?.name ?? ""); setSummary(base?.summary ?? ""); setTags(base?.tags.join(",") ?? ""); setExamples(base?.example_prompts.join("\n") ?? "") }}>{t("skills.publishStartOver")}</Button>
-            : <Button type="submit" disabled={!admitted || session === null && ((!file && (!base || updating)) || !name.trim() || !audience) || visibleStatus.kind === "running" || visibleStatus.kind === "success"}>{visibleStatus.kind === "pending" ? t("skills.publishCheckAgain") : visibleStatus.kind === "uncertain" ? t("skills.publishRecheck") : session ? t("skills.publishRetry") : t(updating ? "skills.lifecycle.update" : "skills.publishAction")}</Button>}
+          {visibleStatus.kind === "restart" ? <Button type="button" onClick={() => { setSession(null); setReadGeneration(value => value + 1); setStatus({ kind: "idle" }); setFile(null); setName(base?.name ?? ""); setSummary(base?.summary ?? ""); setTags(base?.tags.join(",") ?? ""); setExamples(base?.example_prompts.join("\n") ?? "") }}>{t("skills.publishStartOver")}</Button>
+            : <Button type="submit" disabled={!admitted || session === null && (!publicationReady || (!file && (!base || updating)) || !name.trim() || !audience) || visibleStatus.kind === "running" || visibleStatus.kind === "success"}>{visibleStatus.kind === "pending" ? t("skills.publishCheckAgain") : visibleStatus.kind === "uncertain" ? t("skills.publishRecheck") : session ? t("skills.publishRetry") : t(updating ? "skills.lifecycle.update" : "skills.publishAction")}</Button>}
         </div>
       </form>
     </DialogContent>

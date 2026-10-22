@@ -245,3 +245,14 @@ it.each(["package", "download"] as const)("installed %s independently enforces d
   finish(new Response(null)); await Promise.resolve()
   expect(vi.getTimerCount()).toBe(0)
 })
+
+it("history preview binds managed source and revision before disclosing a document",async()=>{
+ const {inspectManagedSkillPackage}=await import("@/hub/skill-installation-content")
+ const directory={source_ref:"skill:exact-old",revision:"2",files:[{path:"SKILL.md",size_bytes:"3"}],selected_file:null}
+ const fetcher=vi.fn().mockResolvedValueOnce(response({data:directory})).mockResolvedValueOnce(response({data:{...directory,revision:"3",selected_file:{path:"SKILL.md",text:"old"}}}))
+ vi.stubGlobal("fetch",fetcher)
+ const target={skill_id:"exact-old",revision:"2"}
+ expect(await inspectManagedSkillPackage(target)).toEqual(directory)
+ await expect(inspectManagedSkillPackage(target,"SKILL.md",undefined,directory)).rejects.toMatchObject({reason:"parse"})
+ expect(fetcher.mock.calls.map(call=>call[0])).toEqual(["/api/hub/self/skills/managed/exact-old/package","/api/hub/self/skills/managed/exact-old/package?file_path=SKILL.md"])
+})

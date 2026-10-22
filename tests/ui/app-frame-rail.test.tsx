@@ -2508,6 +2508,41 @@ it("shows a failed Settings filter read and retries it instead of turning the pr
   expect(attempts).toBe(2)
 })
 
+it.each([false, true])("keeps a confirmed matching card mounted while search revalidates and preserves its single-click detail intent (cursor page: %s)", async (cursorPage) => {
+  let releaseSearch!: (response: Response) => void
+  const response = (body: unknown) => Response.json(body, { headers: { "cache-control": "private, no-store", "x-request-id": "catalog-search-click" } })
+  const card = { skillId: "search-click-series", displayName: "Search click match", currentVersion: { versionUid: "search-click-revision" } }
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    const path = String(input)
+    if (path.endsWith("ListSkills")) return response({ userAddedSkills: [], officialSkills: [] })
+    if (path.endsWith("ListHubSkills")) {
+      if (JSON.parse(String(init?.body)).query) return new Promise<Response>(resolve => { releaseSearch = resolve })
+      if (JSON.parse(String(init?.body)).pageToken) return response({ skills: [card], tagOptions: {} })
+      return response({ skills: cursorPage ? [{ ...card, skillId: "initial-series", displayName: "Other initial card" }] : [card], tagOptions: {}, ...(cursorPage ? { nextPageToken: "search-click-next" } : {}) })
+    }
+    if (path.endsWith("GetSkill")) return response({ skill: { id: card.skillId, version: "search-click-revision", displayName: card.displayName, description: "Confirmed exact revision" }, downloadInfo: { downloadUrl: "/api/skill-downloads/fixture", filename: "fixture.zip", expiresAt: "2999-01-01T00:00:00Z" } })
+    throw Error("Unexpected search-click request")
+  })
+  const boundary = { admitted: true, subject: "search-click-actor", generation: 1 }
+  const view = render(<LocaleProvider><KokoroSkillsSurface preview={false} projectReadBoundary={boundary} onPrompt={vi.fn()} /></LocaleProvider>)
+  if (cursorPage) fireEvent.click(await screen.findByRole("button", { name: "加载更多" }))
+  const trigger = await screen.findByRole("button", { name: "Search click match" })
+  fireEvent.change(screen.getByRole("searchbox", { name: "搜索技能" }), { target: { value: "Search click" } })
+  await waitFor(() => expect(releaseSearch).toBeTypeOf("function"))
+  expect(screen.getByRole("button", { name: "Search click match" })).toBe(trigger)
+  expect(screen.queryByTestId("skills-loading")).toBeNull()
+  expect(screen.getByRole("button", { name: "添加 Search click match" })).toBeDisabled()
+  fireEvent.click(trigger)
+  const dialog = await screen.findByRole("dialog")
+  await act(async () => { releaseSearch(response({ skills: [card], tagOptions: {} })) })
+  expect(screen.getByRole("dialog")).toBe(dialog)
+  expect(await within(dialog).findByRole("heading", { name: card.displayName })).toBeVisible()
+  expect(await within(dialog).findByText("Confirmed exact revision")).toBeVisible()
+  view.rerender(<LocaleProvider><KokoroSkillsSurface preview={false} projectReadBoundary={{ ...boundary, admitted: false, generation: 2 }} onPrompt={vi.fn()} /></LocaleProvider>)
+  expect(screen.queryByRole("button", { name: "Search click match", hidden: true })).toBeNull()
+  expect(screen.queryByText("Confirmed exact revision")).toBeNull()
+})
+
 it("queries the complete owner catalog and keeps search/category bound to every cursor page", async () => {
   const calls: Record<string, unknown>[] = []
   const response = (body: unknown) => Response.json(body, { headers: { "cache-control": "private, no-store", "x-request-id": "req-catalog-search" } })

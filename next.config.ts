@@ -20,7 +20,9 @@ const nextConfig: NextConfig = {
       ignore: [
         /^\/iam\/verify-email(?:\?.*)?$/u,
         /^\/iam\/interactions\/invitation(?:\?.*)?$/u,
-        /^\/auth\/sign-in(?:\?.*)?$/u,
+        /^\/auth\/sign-in(?:\/form)?(?:\?.*)?$/u,
+        /^\/auth\/select-tenant(?:\?.*)?$/u,
+        /^\/iam\/interactions\/select-tenant(?:\?.*)?$/u,
         /^\/iam\/oauth2\/authorize(?:\?.*)?$/u,
         /^\/api\/auth\/callback\/kokoro-iam(?:\?.*)?$/u,
       ],

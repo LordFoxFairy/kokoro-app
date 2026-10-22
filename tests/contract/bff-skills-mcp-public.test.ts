@@ -25,9 +25,11 @@ import {
   type InstallationOperation,
 } from "@/hub/schemas"
 
-const OWNER_COMMIT = "08a2120ea85b6cad5cf6e839ef14dbf83d908b92"
-const OWNER_SHA256 = "955412b680bf7a2529c4c35f553ff272d7361769ea95bb441ba820b552ffc564"
-const OWNER_VERSION = "19.0.0"
+import { restorePublic21 } from "./bff-configuration-parent"
+
+const OWNER_COMMIT = "e461d5178c6bf92558d7cd7dd288cb29cb008525"
+const OWNER_SHA256 = "727159cea88e9f70ca3d1127306e8a6a6bcaa568398de8b0d8fec1cce6b3fae3"
+const OWNER_VERSION = "22.3.0"
 const SNAPSHOT = resolve(process.cwd(), "src/generated/bff-public-openapi.yaml")
 
 type Shape = {
@@ -199,9 +201,30 @@ function assertProjectionSemantics(spec: Spec): void {
 }
 
 describe("pinned BFF Skills and MCP public consumer contract", () => {
+  it("proves the exact project union patch without weakening the model parent oracle", async () => {
+    const source = await readFile(SNAPSHOT, "utf8")
+    const parent = restorePublic21(Buffer.from(source))
+    expect(createHash("sha256").update(parent).digest("hex")).toBe("a902a20ad95e46c01bfc8f5a80260c14565cfe557137759d5ecd42bc1a60f7c2")
+    const description = source.match(/^      description: .*Same-series precedence is the complete project row.*$/mu)?.[0]
+    expect(description).toBeDefined()
+    const addition = description!.slice(description!.indexOf(" Same-series precedence is the complete project row"))
+    const mutations = [
+      source.replace(addition, ""),
+      source.replace(addition, addition + addition),
+      source.replace(addition, "") + addition + "\n",
+      source.replace("complete project row", "latest project installation"),
+      source.replace("  version: 22.3.0", "  version: 21.1.0"),
+      source + "\n",
+    ]
+    for (const mutated of mutations) {
+      expect(mutated).not.toBe(source)
+      expect(() => restorePublic21(Buffer.from(mutated))).toThrow()
+    }
+  })
+
   it("pins exact owner bytes and six current Skill draft/publish operations", async () => {
     const bytes = await readFile(SNAPSHOT)
-    expect(OWNER_COMMIT).toBe("08a2120ea85b6cad5cf6e839ef14dbf83d908b92")
+    expect(OWNER_COMMIT).toBe("e461d5178c6bf92558d7cd7dd288cb29cb008525")
     expect(createHash("sha256").update(bytes).digest("hex")).toBe(OWNER_SHA256)
     const spec = YAML.parse(bytes.toString()) as Spec
     expect(spec.info.version).toBe(OWNER_VERSION)
@@ -363,7 +386,7 @@ it("compares every live publish/managed/installation component field matrix to t
     ["SkillPackageCompleteResource", completeSkillUploadSchema.shape],
     ["ValidateSkillDraftRequest", validateSkillDraftRequestSchema.shape],
     ["SkillValidateResource", validateSkillDraftSchema.shape],
-    ["SkillAudienceRequest", skillPublishRequestSchema.shape],
+    ["SkillPublishRequest", skillPublishRequestSchema.shape],
     ["SkillPublishResource", publishSkillDraftSchema.shape],
     ["ManagedPersonalSkillResource", managedPersonalSkillSchema.shape],
     ["SkillInstallation", personalInstallationSchema.innerType().innerType().shape],
@@ -477,4 +500,30 @@ it("executes private connector profile drift checks in an isolated fixture and c
     await writeFile(resolve(fixture, names[2]!), "export const stale = true;\n")
     expect(() => check()).toThrow()
   } finally { await rm(fixture, { recursive: true, force: true }) }
+})
+
+it("history wire preserves the declared exact revision fields and nullable terminal cursor",async()=>{
+ const {personalSkillHistoryVersionSchema,personalSkillHistoryPageSchema}=await import("@/hub/personal-skill-history.schema")
+ const doc=YAML.parse(await readFile(SNAPSHOT,"utf8"))
+ const schemas=doc.components.schemas
+ expect(Object.keys(personalSkillHistoryVersionSchema.shape).sort()).toEqual([...schemas.PersonalSkillHistoryVersion.required].sort())
+ expect(Object.keys(personalSkillHistoryPageSchema.innerType().shape).sort()).toEqual([...schemas.PersonalSkillHistoryPage.required].sort())
+ expect(personalSkillHistoryPageSchema.safeParse({series_id:"series",publication:null,versions:[],next_cursor:null}).success).toBe(true)
+ expect(personalSkillHistoryPageSchema.safeParse({series_id:"series",publication:null,versions:[]}).success).toBe(false)
+ expect(doc.paths["/v1/self/skills/{skill_id}/versions"].get.operationId).toBe("listPersonalSkillVersions")
+ expect(doc.paths["/v1/self/skills/{skill_id}/versions"].post.operationId).toBe("createPersonalSkillVersion")
+})
+
+it("consumes the formal terminal series deletion contract without replacing withdrawal or installation removal",async()=>{
+ const spec=YAML.parse(await readFile(SNAPSHOT,"utf8")) as Spec
+ const remove=operation(spec,"/v1/self/skills/{skill_id}","delete")
+ expect(remove.operationId).toBe("deletePersonalSkillSeries")
+ expect(remove["x-kokoro-idempotency"]).toBe("required")
+ exactShape(shape(spec,"DeletePersonalSkillSeriesRequest"),["expected_state_version","expected_publication"])
+ const {deletePersonalSkillSeriesRequestSchema,deletePersonalSkillSeriesSchema}=await import("@/hub/schemas")
+ expect(Object.keys(deletePersonalSkillSeriesRequestSchema.shape)).toEqual(shape(spec,"DeletePersonalSkillSeriesRequest").required)
+ expect(Object.keys(deletePersonalSkillSeriesSchema.shape)).toEqual(field(shape(spec,"DeletePersonalSkillSeriesResponse"),"data").required)
+ expect(deletePersonalSkillSeriesRequestSchema.safeParse({expected_state_version:"9223372036854775807",expected_publication:null}).success).toBe(false)
+ expect(deletePersonalSkillSeriesRequestSchema.safeParse({expected_state_version:"8",expected_publication:null}).success).toBe(true)
+ expect(field(shape(spec,"SkillInstallation"),"source_status").enum).toContain("deleted")
 })

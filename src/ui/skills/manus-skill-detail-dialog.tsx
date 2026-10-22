@@ -287,7 +287,7 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
       if (!installationId || !installationRevision || installationSource !== `skill:${installationRevision}`) throw new Error("skill_response_invalid")
       const value = await createSkillInstallationClient().get(installationId, controller.signal)
       if (controller.signal.aborted || !isLive()) return
-      if (!value.installed || value.series_id !== installationSeries || value.source_ref !== installationSource) throw new Error("skill_response_invalid")
+      if (value.source_status === "deleted" || !value.installed || value.series_id !== installationSeries || value.source_ref !== installationSource) throw new Error("skill_response_invalid")
       setInstallation(value)
     }
     void load().catch(() => { if (!controller.signal.aborted && isLive()) setFailed(true) })
@@ -533,8 +533,8 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
           onDownload={() => void download()}
           shareLabel={t("skills.detailShare")}
           downloadLabel={t("skills.detailDownloadShort")}
-          personalActions={!preview && detailSource === "installation" && installation?.product.source_kind === "personal" && installation.installed && installation.source_status === "active" && boundary.admitted && boundary.subject !== null && onManagePersonal
-            ? <PersonalSkillActions disabled={personalManagementBusy} onSelect={operation => onManagePersonal(operation, installation)} /> : undefined}
+          personalActions={!preview && detailSource === "installation" && installation?.product.source_kind === "personal" && installation.installed && ["active", "disabled", "withdrawn", "quarantined"].includes(installation.source_status) && boundary.admitted && boundary.subject !== null && onManagePersonal
+            ? <PersonalSkillActions writable={["active", "disabled"].includes(installation.source_status)} disabled={personalManagementBusy} onSelect={operation => onManagePersonal(operation, installation)} /> : undefined}
         />
         {readerOpen ? readerHeader : <DialogHeader className={styles.hero} data-has-cover={Boolean(cover)}>
           <div className={styles.copy}>

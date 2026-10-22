@@ -1,12 +1,16 @@
+import { parsePersonalSkillHistoryJson } from "./personal-skill-history.schema"
 import { HubClientError, hasHubNoStoreDirective } from "./client"
 import { catalogPackagePathSchema, catalogPackageResponseSchema, catalogPackageErrorSchema, catalogPackageMatches, installationIdSchema, installationSourceSchema, installationPackageErrorAllowed, type PersonalInstallation, type CatalogPackageData } from "./schemas"
 import { skillDownloadSchema, skillDownloadErrorAllowed, type SkillDownload } from "./skill-download.schema"
 
 type Target = Pick<PersonalInstallation, "installation_id" | "source_ref" | "revision">
+type ReadTarget = Pick<Target, "source_ref" | "revision"> & { installation_id?: string }
 
 /** Exact installation reads. No series fallback, token persistence, or implicit pin update. */
-async function read(operation: "package" | "download", target: Target, filePath?: string, expectedDirectory?: CatalogPackageData, signal?: AbortSignal): Promise<CatalogPackageData | SkillDownload> {
-  const id = installationIdSchema.parse(target.installation_id)
+async function read(operation: "package" | "download" | "managedPackage" | "managedDownload", target: ReadTarget, filePath?: string, expectedDirectory?: CatalogPackageData, signal?: AbortSignal): Promise<CatalogPackageData | SkillDownload> {
+  const managed = operation === "managedPackage" || operation === "managedDownload"
+  const download = operation === "download" || operation === "managedDownload"
+  const id = managed ? installationSourceSchema.parse(target.source_ref).slice(6) : installationIdSchema.parse(target.installation_id)
   const source = installationSourceSchema.parse(target.source_ref)
   const revision = skillDownloadSchema.shape.revision.parse(target.revision)
   if (filePath !== undefined) catalogPackagePathSchema.parse(filePath)
@@ -21,8 +25,8 @@ async function read(operation: "package" | "download", target: Target, filePath?
   })
   try {
     joined.throwIfAborted()
-    response = await within(fetch(`/api/hub/skill-installations/${encodeURIComponent(id)}/${operation}${filePath === undefined ? "" : `?file_path=${encodeURIComponent(filePath)}`}`, {
-      method: operation === "package" ? "GET" : "POST", credentials: "same-origin", cache: "no-store", redirect: "error", signal: joined, headers: { accept: "application/json" },
+    response = await within(fetch(`/api/hub/${managed ? "self/skills/managed" : "skill-installations"}/${encodeURIComponent(id)}/${download ? "download" : "package"}${filePath === undefined ? "" : `?file_path=${encodeURIComponent(filePath)}`}`, {
+      method: download ? "POST" : "GET", credentials: "same-origin", cache: "no-store", redirect: "error", signal: joined, headers: { accept: "application/json" },
     }).then(value => { if (joined.aborted) void value.body?.cancel().catch(() => undefined); return value }))
     joined.throwIfAborted()
     const invalid = () => new HubClientError("parse", "Invalid installed Skill content", null, response?.status ?? null)
@@ -40,16 +44,16 @@ async function read(operation: "package" | "download", target: Target, filePath?
     const bytes = new Uint8Array(count); let offset = 0
     for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength }
     let raw: unknown
-    try { raw = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) } catch { throw invalid() }
+    try { raw = managed ? parsePersonalSkillHistoryJson(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) : JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) } catch { throw invalid() }
     joined.throwIfAborted()
     const retryAfter = response.headers.get("retry-after")
     if (retryAfter !== null && (response.status !== 429 || !/^[1-9][0-9]{0,4}(?![\s\S])/u.test(retryAfter))) throw invalid()
     if (response.status !== 200) {
       const parsed = catalogPackageErrorSchema.safeParse(raw)
-      if (!parsed.success || !(operation === "package" ? installationPackageErrorAllowed(response.status, parsed.data.error.code, parsed.data.error.retryable, retryAfter) : skillDownloadErrorAllowed(response.status, parsed.data.error.code))) throw invalid()
+      if (!parsed.success || !(!download ? installationPackageErrorAllowed(response.status, parsed.data.error.code, parsed.data.error.retryable, retryAfter) : skillDownloadErrorAllowed(response.status, parsed.data.error.code))) throw invalid()
       throw new HubClientError("http", parsed.data.error.message, parsed.data.error.code, response.status, parsed.data.error.retryable, response.headers.get("x-request-id"), retryAfter)
     }
-    if (operation === "download") {
+    if (download) {
       const parsed = skillDownloadSchema.safeParse((raw as { data?: unknown } | null)?.data)
       if (!raw || typeof raw !== "object" || Object.keys(raw).length !== 1 || !parsed.success || parsed.data.source_ref !== source || parsed.data.revision !== revision || Date.parse(parsed.data.download_info.expires_at) <= Date.now()) throw invalid()
       return parsed.data
@@ -68,4 +72,12 @@ export async function inspectInstallationPackage(target: Target, filePath?: stri
 }
 export async function downloadInstallationPackage(target: Target, signal?: AbortSignal): Promise<SkillDownload> {
   return await read("download", target, undefined, undefined, signal) as SkillDownload
+}
+
+export async function inspectManagedSkillPackage(target:{skill_id:string;revision:string}, filePath?:string, signal?:AbortSignal, expectedDirectory?:CatalogPackageData):Promise<CatalogPackageData>{
+ return await read("managedPackage",{source_ref:`skill:${target.skill_id}`,revision:target.revision},filePath,expectedDirectory,signal) as CatalogPackageData
+}
+
+export async function downloadManagedSkillPackage(target: {skill_id: string; revision: string}, signal?: AbortSignal): Promise<SkillDownload> {
+  return await read("managedDownload", {source_ref: `skill:${target.skill_id}`, revision: target.revision}, undefined, undefined, signal) as SkillDownload
 }

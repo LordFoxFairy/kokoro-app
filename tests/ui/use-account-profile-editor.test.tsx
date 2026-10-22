@@ -18,7 +18,7 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 const editor = () =>
-  renderHook(({ scope }) => useAccountProfileEditor(scope, profile, reload), {
+  renderHook(({ scope }) => useAccountProfileEditor(scope, profile, reload, true), {
     initialProps: { scope: "alice:1" },
   });
 it("uses explicit save, exact original and authority rather than input after ACK", async () => {
@@ -33,6 +33,30 @@ it("uses explicit save, exact original and authority rather than input after ACK
   );
   expect(h.result.current.draft).toBe("Authority");
   expect(h.result.current.phase).toBe("saved");
+});
+it("a confirmed-read revocation blocks current and previously captured edit/save callbacks", async () => {
+  const h = renderHook(({ confirmed }) => useAccountProfileEditor("alice:1", profile, reload, confirmed), { initialProps: { confirmed: true } });
+  act(() => h.result.current.change("Draft"));
+  const earlier = h.result.current;
+  h.rerender({ confirmed: false });
+  expect(h.result.current.editable).toBe(false);
+  expect(h.result.current.canSave).toBe(false);
+  act(() => earlier.change("Unexpected"));
+  await act(() => earlier.save());
+  expect(h.result.current.draft).toBe("Draft");
+  expect(write).not.toHaveBeenCalled();
+  h.rerender({ confirmed: true });
+  await act(() => h.result.current.save());
+  expect(write).toHaveBeenCalledOnce();
+});
+it("preserves an edited name and its CAS baseline during a fresh profile read", async () => {
+  const h = renderHook(({ name, confirmed }) => useAccountProfileEditor("alice:1", { ...profile, name }, reload, confirmed), { initialProps: { name: "Old", confirmed: true } });
+  act(() => h.result.current.change("Draft"));
+  h.rerender({ name: "Old", confirmed: false });
+  h.rerender({ name: "Changed elsewhere", confirmed: true });
+  expect(h.result.current.draft).toBe("Draft");
+  await act(() => h.result.current.save());
+  expect(write).toHaveBeenCalledWith({ name: "Draft", expected_name: "Old" }, "alice", expect.any(AbortSignal));
 });
 it.each(["unknown", "conflict"])(
   "locks %s until successful read and explicit choice before another save",

@@ -1,3 +1,7 @@
+## 2026-10-21 原生退出确认产品页
+
+`src/app/auth/sign-out/page.tsx` 只拥有中文确认／失败展示，复用Button/Card/token；无客户端状态或自动认证请求。确认form只POST既有issuer端点，issuer opaque确认cookie、期限和当前Session/client/redirect授权仍由IAM验证。`iam-logout-response.ts`仅把已校验正向native确认发行投影为固定页面导航，API维持原生响应。固定交互页origin referrer＋form-action self，失败态无form且no-referrer；不放宽Origin:null、取消不恢复Product会话。
+
 ## SET33 两条原生withdraw测试的就绪前置（2026-10-15；D0，仅现测试）
 
 基线Web d7f5d5d41ce4740de219480ccd6d7bf7d9166d40，939 tracked clean；runtime_audit唯一writer仅现native测试，931保护/Root7。Root资源/Git/docs/独审/正常运行；全部product source及原计数/安全assert/timeout/mock/cleanup仍保护。

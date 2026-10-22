@@ -414,10 +414,10 @@ describe("提交链路", () => {
 
   it("MODEL-UX：setModel 后首条 POST 带 model 选择子（首条锁的 wire 值）", async () => {
     buildEngine()
-    engine.setModel("openai:gpt-5")
+    engine.setModel("chat/fast")
     engine.submit("hi")
     await settle()
-    expect(client.createCalls[0]!.body).toMatchObject({ content: "hi", model: "openai:gpt-5" })
+    expect(client.createCalls[0]!.body).toMatchObject({ content: "hi", model: "chat/fast" })
   })
 
   it("MODEL-UX：selectedModel=null（缺省）不带 model 字段（服务端用 profile 缺省）", async () => {

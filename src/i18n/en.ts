@@ -4,6 +4,24 @@
 import type { MessageKey } from "./messages"
 
 export const en: Partial<Record<MessageKey, string>> = {
+  "skills.history.more": "Load more",
+  "skills.delete.title": "Delete this skill?",
+  "skills.delete.warning": "You can add this skill again later by uploading it again.",
+  "skills.delete.action": "Delete",
+  "skills.history.title": "Skill version history",
+  "skills.history.current": "Current version",
+  "skills.history.disabled": "Disabled",
+  "skills.history.withdrawn": "Withdrawn",
+  "skills.history.quarantined": "Quarantined",
+  "skills.history.revision": "Version",
+  "skills.history.failed": "Could not read version content. Please retry.",
+  "skills.history.pageFailed": "History changed or is temporarily unavailable. Refresh to continue.",
+  "skills.history.refresh": "Refresh history",
+  "skills.history.empty": "No published versions",
+  "skills.history.emptyFiles": "No preview files for this version",
+  "skills.history.unavailable": "This version is not currently available for preview.",
+  "skills.history.files": "files",
+
 
   // SET47-BEGIN: task-archive
   "archive.action": "Archive task",
@@ -616,6 +634,9 @@ export const en: Partial<Record<MessageKey, string>> = {
   "fail.modelUnavailable": "The selected model is temporarily unavailable, so this turn stopped.",
   "fail.dependencyUnavailable": "A service needed for this turn is temporarily unavailable, so the turn stopped.",
   "fail.modelAccessDenied": "This account cannot use the selected model. Contact an administrator.",
+  "fail.agentNotConfigured": "Execution is not available yet",
+  "fail.executionUnavailableHint": "You can still read your history and edit a draft. Retry the original request when the service is ready.",
+  "thread.retryOriginal": "Retry original request",
   "fail.generic": "This turn didn't finish. Please try again.",
   "fail.internalHint": "If the problem continues, contact support and include the session time.",
   "mode.labelFast": "Fast",

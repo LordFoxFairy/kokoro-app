@@ -4,16 +4,17 @@ import { NextRequest } from "next/server"
 
 import { DEFAULT_PRODUCT_RETURN_TARGET, parseProductReturnTarget } from "@/lib/product-return-target"
 import { escapeInteractionHtml } from "@/lib/server/iam-interaction-route"
-import { productLoginReturnCookie } from "@/lib/server/product-login-return"
-import { oidcCsrfToken } from "@/lib/server/oidc-csrf"
+import { issueProductLoginIntent } from "@/lib/server/product-login-return"
+import { oidcLoginRecovery } from "@/lib/server/oidc-login-recovery"
+import { oidcHandoffCsrfName, oidcStartWithinCookieBudget, OIDC_TRANSACTION_TTL_SECONDS } from "@/lib/server/oidc-transaction-cookies"
 import { oidcRpConfig } from "@/lib/server/oidc-provider"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-function unavailable(phase: string): Response {
+function unavailable(request: NextRequest, phase: string): Response {
   console.error("Kokoro Product login start unavailable:", phase)
-  return new Response(null, { status: 503, headers: {
+  return oidcLoginRecovery(request) ?? new Response(null, { status: 503, headers: {
     "cache-control": "no-store",
     "referrer-policy": "no-referrer",
     "x-request-id": randomUUID(),
@@ -22,37 +23,34 @@ function unavailable(phase: string): Response {
 
 function csrfCookie(name: string, token: string, secret: string, secure: boolean): string {
   const digest = createHash("sha256").update(`${token}${secret}`).digest("hex")
-  return `${name}=${encodeURIComponent(`${token}|${digest}`)}; Path=/; HttpOnly; SameSite=Lax${secure ? "; Secure" : ""}`
+  return `${name}=${encodeURIComponent(`${token}|${digest}`)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${OIDC_TRANSACTION_TTL_SECONDS}${secure ? "; Secure" : ""}`
 }
 
-function loginStartDocument(token: string, nonce: string): string {
+function loginStartDocument(token: string, intent: string, nonce: string): string {
   const csrf = escapeInteractionHtml(token)
-  return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="referrer" content="no-referrer"><meta name="robots" content="noindex"><title>登录 Kokoro</title></head><body><form id="kokoro-login-start" method="post" action="/api/auth/signin/kokoro-iam"><input type="hidden" name="csrfToken" value="${csrf}"></form><script nonce="${nonce}">document.getElementById("kokoro-login-start")?.submit()</script></body></html>`
+  return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="referrer" content="no-referrer"><meta name="robots" content="noindex"><title>登录 Kokoro</title></head><body><form id="kokoro-login-start" method="post" action="/api/auth/signin/kokoro-iam"><input type="hidden" name="csrfToken" value="${csrf}"><input type="hidden" name="loginIntent" value="${escapeInteractionHtml(intent)}"></form><script nonce="${nonce}">document.getElementById("kokoro-login-start")?.submit()</script></body></html>`
 }
 
 export async function GET(request: NextRequest): Promise<Response> {
   const config = oidcRpConfig(process.env)
   if (config === null || request.nextUrl.pathname !== "/login" ||
     request.headers.get("host") !== config.relay.webHost ||
-    (request.headers.get("origin") !== null && request.headers.get("origin") !== config.relay.webOrigin)) return unavailable("configuration_or_origin")
+    (request.headers.get("origin") !== null && request.headers.get("origin") !== config.relay.webOrigin)) return unavailable(request, "configuration_or_origin")
 
   try { decodeURIComponent(request.nextUrl.search.slice(1).replace(/\+/g, " ")) }
-  catch { return unavailable("return_target") }
+  catch { return unavailable(request, "return_target") }
   const query = request.nextUrl.searchParams
   const target = request.nextUrl.search === "" ? DEFAULT_PRODUCT_RETURN_TARGET
     : [...query.keys()].length === 1 && query.getAll("return_to").length === 1
       ? parseProductReturnTarget(query.get("return_to") ?? "") : null
-  if (target === null) return unavailable("return_target")
+  if (target === null) return unavailable(request, "return_target")
 
-  // Auth.js obtains cookies from the live browser request context. A server-side
-  // nested Route Handler call cannot move a newly issued cookie into that context,
-  // so issue its compatible double-submit cookie and let the browser make the
-  // one fixed provider POST.
-  // Match Auth.js: a valid existing cookie must not rotate on every tab/start.
-  const token = oidcCsrfToken(request.headers.get("cookie"), config.authSecret) ?? randomBytes(32).toString("hex")
+  if (!oidcStartWithinCookieBudget(request.headers.get("cookie"))) return unavailable(request, "transaction_budget")
+  const intent = issueProductLoginIntent(target, config.authSecret, config.relay.webOrigin)
+  const token = randomBytes(32).toString("hex")
   const nonce = request.headers.get("x-nonce")
-  if (nonce === null || !/^[A-Za-z0-9_-]{16,128}$/u.test(nonce)) return unavailable("request_nonce")
-  const csrfName = `${config.relay.secureCookies ? "__Host-" : ""}next-auth.csrf-token`
+  if (nonce === null || !/^[A-Za-z0-9_-]{16,128}$/u.test(nonce)) return unavailable(request, "request_nonce")
+  const csrfName = oidcHandoffCsrfName(config.relay.secureCookies, intent.handoffNamespace)
   const headers = new Headers({
     "cache-control": "no-store",
     "content-security-policy": `default-src 'none'; script-src 'nonce-${nonce}'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'`,
@@ -61,8 +59,7 @@ export async function GET(request: NextRequest): Promise<Response> {
     "x-request-id": randomUUID(),
   })
   headers.append("set-cookie", csrfCookie(csrfName, token, config.authSecret, config.relay.secureCookies))
-  headers.append("set-cookie", productLoginReturnCookie(target, config.authSecret, config.relay.secureCookies))
-  return new Response(loginStartDocument(token, nonce), { status: 200, headers })
+  return new Response(loginStartDocument(token, intent.intent, nonce), { status: 200, headers })
 }
 
 export function HEAD(): Response {

@@ -121,7 +121,7 @@ export function WorkspaceRailAccount({
     const controller = new AbortController()
     creditAttempt.current = controller
     const current = () => creditAttempt.current === controller && !controller.signal.aborted && readCreditActor() === creditScope.actor
-    void browserBillingClient({ preview: creditScope.preview }).summary(controller.signal)
+    void browserBillingClient({ preview: creditScope.preview }).summary(controller.signal, current)
       .then((summary) => { if (current()) setCredit({ scope: creditScope, balance: formatCredits(summary.available_micros) }) })
       .catch(() => { if (current()) setCredit({ scope: creditScope, balance: "—" }) })
     return () => { controller.abort(); if (creditAttempt.current === controller) creditAttempt.current = null }

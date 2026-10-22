@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto"
 
-import { clearIamCsrfCookie, consumeIamInteractionCsrf, iamCsrfCookieName } from "@/lib/server/iam-interaction-csrf"
+import { clearIamCsrfCookie, consumeIamInteractionCsrf, iamSignInCsrfCookieName } from "@/lib/server/iam-interaction-csrf"
 import { iamRelayConfig, matchesCanonicalWebRequest } from "@/lib/server/iam-relay-config"
 import { filterIssuerCookies, IAM_RELAY_POLICY } from "@/lib/server/iam-relay-policy"
 import { nativeIamResponse, validIamInteractionNavigation } from "@/lib/server/iam-relay-response"
 import { requestIamRelay, type IamRelayUpstream } from "@/lib/server/iam-relay-transport"
 import { issueSignInFeedback } from "@/lib/server/iam-sign-in-feedback"
+import { oidcLoginRecovery } from "@/lib/server/oidc-login-recovery"
 import { IAM_SIGN_IN_PATH, isIamSignInExpired, rawIamSignInQuery } from "@/lib/server/iam-sign-in-target"
 
 export const runtime = "nodejs"
@@ -158,21 +159,20 @@ export async function POST(request: Request): Promise<Response> {
   if (issuerCookie === null) return errorResponse(400, "iam_interaction_cookie_invalid", id)
   const form = await boundedForm(request)
   if (form === null) return errorResponse(400, "iam_interaction_body_rejected", id)
-  const cookieToken = cookieValue(request.headers.get("cookie"), iamCsrfCookieName())
+  const formToken = form.get("csrf_token")
+  const cookieName = iamSignInCsrfCookieName(query, formToken)
+  if (cookieName === null) return oidcLoginRecovery(request) ?? errorResponse(403, "iam_interaction_csrf_rejected", id)
+  const cookieToken = cookieValue(request.headers.get("cookie"), cookieName)
+  const finish = (response: Response): Response => {
+    response.headers.append("set-cookie", clearIamCsrfCookie(PAGE_PATH, config.secureCookies, cookieName))
+    return response
+  }
   try {
-    const valid = await consumeIamInteractionCsrf({ redisUrl, webOrigin: config.webOrigin, path: PAGE_PATH, method: "POST", query, issuerCookie, cookieToken, formToken: form.get("csrf_token") })
-    if (!valid || isIamSignInExpired(query)) {
-      // A stale browser form must not strand the user on a raw JSON error or
-      // reuse an expired signed IAM interaction. Start a fresh fixed login;
-      // non-browser requests keep the explicit 403 contract.
-      if (request.headers.get("accept")?.includes("text/html")) {
-        return new Response(null, { status: 303, headers: {
-          location: "/login", "cache-control": "no-store", "referrer-policy": "no-referrer",
-          "x-request-id": id, "set-cookie": clearIamCsrfCookie(PAGE_PATH, config.secureCookies),
-        } })
-      }
-      return errorResponse(403, "iam_interaction_csrf_rejected", id)
-    }
+    const valid = await consumeIamInteractionCsrf({ redisUrl, webOrigin: config.webOrigin, path: PAGE_PATH, method: "POST", query, issuerCookie, cookieToken, formToken })
+    // Unproved requests neither consume nor clear another form. A proven but
+    // expired interaction ends here without automatically sending credentials again.
+    if (!valid) return oidcLoginRecovery(request) ?? errorResponse(403, "iam_interaction_csrf_rejected", id)
+    if (isIamSignInExpired(query)) return finish(oidcLoginRecovery(request) ?? errorResponse(403, "iam_interaction_csrf_rejected", id))
   } catch {
     return errorResponse(503, "iam_interaction_unavailable", id)
   }
@@ -194,18 +194,18 @@ export async function POST(request: Request): Promise<Response> {
       maxResponseBytes: IAM_RELAY_POLICY.maxResponseBytes, maxHeaderBytes: IAM_RELAY_POLICY.maxHeaderBytes,
     })
     const checkedSignIn = nativeIamResponse(signedIn, config.webOrigin, config.secureCookies, id)
-    if (checkedSignIn === null) return errorResponse(502, "iam_interaction_response_invalid", id)
+    if (checkedSignIn === null) return finish(errorResponse(502, "iam_interaction_response_invalid", id))
     if (signedIn.status !== 200) {
       const status = signedIn.status === 401 ? 401 : signedIn.status === 429 ? 429 : 503
       const code = status === 401 ? "iam_interaction_credentials_rejected" : status === 429 ? "iam_interaction_rate_limited" : "iam_interaction_unavailable"
       if (request.headers.get("accept")?.includes("text/html")) {
-        return signInFormFailure({ status, query, email: form.get("email") ?? "",
-          secret: config.secret, webOrigin: config.webOrigin, secureCookies: config.secureCookies, requestId: id })
+        return finish(signInFormFailure({ status, query, email: form.get("email") ?? "",
+          secret: config.secret, webOrigin: config.webOrigin, secureCookies: config.secureCookies, requestId: id }))
       }
-      return errorResponse(status, code, id)
+      return finish(errorResponse(status, code, id))
     }
     if (!signedIn.setCookies.some((value) => value.startsWith(config.secureCookies ? "__Secure-kokoro-issuer.session_token=" : "kokoro-issuer.session_token="))) {
-      return errorResponse(502, "iam_interaction_response_invalid", id)
+      return finish(errorResponse(502, "iam_interaction_response_invalid", id))
     }
     const continueHeaders = new Headers(baseHeaders)
     continueHeaders.set("cookie", issuerCookiesFromResponse(issuerCookie, signedIn))
@@ -217,19 +217,18 @@ export async function POST(request: Request): Promise<Response> {
       maxResponseBytes: IAM_RELAY_POLICY.maxResponseBytes, maxHeaderBytes: IAM_RELAY_POLICY.maxHeaderBytes,
     })
     if (continued.status !== 200 && continued.status !== 302) {
-      return errorResponse(503, "iam_interaction_unavailable", id)
+      return finish(errorResponse(503, "iam_interaction_unavailable", id))
     }
     const response = nativeIamResponse(finalCookies(signedIn, continued), config.webOrigin, config.secureCookies, id)
-    if (response === null) return errorResponse(502, "iam_interaction_response_invalid", id)
+    if (response === null) return finish(errorResponse(502, "iam_interaction_response_invalid", id))
     const location = continued.status === 302 ? response.headers.get("location") : safeContinueLocation(continued, config.webOrigin)
     if (
       location === null ||
       (continued.status === 302 && !validIamInteractionNavigation(new URL(location, config.webOrigin).href, config.webOrigin))
-    ) return errorResponse(502, "iam_interaction_response_invalid", id)
+    ) return finish(errorResponse(502, "iam_interaction_response_invalid", id))
     const navigation = safeNavigationResponse(response, continued.status === 302 ? 302 : 303, location)
-    navigation.headers.append("set-cookie", clearIamCsrfCookie(PAGE_PATH, config.secureCookies))
-    return navigation
+    return finish(navigation)
   } catch {
-    return errorResponse(503, "iam_interaction_unavailable", id)
+    return finish(errorResponse(503, "iam_interaction_unavailable", id))
   }
 }

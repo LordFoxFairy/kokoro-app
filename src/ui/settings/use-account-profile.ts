@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { AccountProfile } from "@/lib/account-profile.schema";
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
 import { readAccountProfile } from "./account-profile-client";
+import { useAccountReadSnapshots } from "./account-read-snapshots";
 
 type View = {
   scope: string;
@@ -21,13 +22,15 @@ export function useAccountProfile(
       ? JSON.stringify([boundary.generation, boundary.subject])
       : "";
   const subject = boundary?.subject;
+  const snapshots = useAccountReadSnapshots();
+  const rememberProfile = snapshots?.rememberProfile;
   const scopeRef = useRef(scope);
   const read = useRef<Read | null>(null);
-  const [view, setView] = useState<View>({
-    scope: "",
-    profile: null,
+  const [view, setView] = useState<View>(() => ({
+    scope,
+    profile: snapshots?.profile?.scope === scope ? snapshots.profile.value : null,
     phase: "loading",
-  });
+  }));
   useLayoutEffect(() => {
     scopeRef.current = scope;
     if (read.current?.scope !== scope) read.current?.controller.abort();
@@ -40,7 +43,9 @@ export function useAccountProfile(
     )
       return null;
     r.pending = true;
-    setView({ scope: r.scope, profile: null, phase: "loading" });
+    setView((previous) => ({ scope: r.scope,
+      profile: previous.scope === r.scope ? previous.profile : null,
+      phase: "loading" }));
     try {
       const profile = await readAccountProfile(r.controller.signal);
       if (profile.subject !== subject)
@@ -50,6 +55,7 @@ export function useAccountProfile(
         scopeRef.current === r.scope &&
         !r.controller.signal.aborted
       ) {
+        rememberProfile?.(r.scope, profile);
         setView({ scope: r.scope, profile, phase: "ready" });
         return profile;
       }

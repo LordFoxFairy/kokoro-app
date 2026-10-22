@@ -1,3 +1,10 @@
+<!-- 2026-10-22 continuation retirement correction -->
+积分客户端每次续发 PUT 或核实 GET 前复验调用方 `getCurrent`；真实账户/用量/rail传入现 controller/current 与发起时已准入subject的marker一致性检查。只更新storage、无rerender/focus仍会抑制旧续发；marker丢失、不匹配或读取异常一律退休。marker只抑制，不授予session权限；非UI调用可不传callback，初次GET契约保持，无新store/轮询/锁。
+
+## 当前租户积分无感初始化（2026-10-22）
+
+现 `BillingClient` 仅在严格匹配 request-id 的 missing-account GET 后发送一次天然幂等 PUT 空对象，再重读原 GET；summary/ledger 并发由 owner 幂等承接，无浏览器锁或新全局 store。未知 PUT ACK（含502/503）先 GET 核实且不自动重放；同一10秒预算、外部取消和原UI身份退休贯穿全程。UI不再显示“未开户”，失败可显式重试，不伪造0，首次读取只留稳定无文字/大骨架的可访问占位。充值、计量、扣费和支付未启用。下方旧“未开户”描述为历史。
+
 订阅周期使用现 Radix Select 浏览 all/month/year/once，资源分类沿现 Tabs 统一局部排版；控件、价格与详情仍消费原目录，无新增交易行为。
 
 订阅在 pricing-panel 内仅按正式目录的 month/year/once 字段过滤；pricing-plan-details-dialog 展示原金额、币种、周期及积分，不折算年费或推断优惠。周期切换不重读目录，购买仍禁用并说明支付未接通，身份退休沿现宿主 key。

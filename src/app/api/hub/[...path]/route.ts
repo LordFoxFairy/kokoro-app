@@ -1,3 +1,4 @@
+import { parsePersonalSkillHistoryJson, personalSkillHistoryResponseSchema, personalSkillHistoryErrorSchema, personalSkillHistoryErrorAllowed } from "@/hub/personal-skill-history.schema";
 import { proxyPersonalKnowledge } from "@/lib/server/personal-knowledge";
 import { proxyProjectSkillSelection } from "@/lib/server/project-skill-selection";
 import { proxyInstallation } from "@/lib/server/skill-installations";
@@ -38,6 +39,8 @@ import {
 import {
   createPersonalSkillVersionRequestSchema,
   createPersonalSkillVersionSchema,
+  deletePersonalSkillSeriesRequestSchema,
+  deletePersonalSkillSeriesSchema,
   withdrawPersonalSkillRequestSchema,
   withdrawPersonalSkillSchema,
   personalSkillLifecycleErrors,
@@ -1887,29 +1890,31 @@ async function proxySkillPackage(
 ): Promise<Response> {
   const requestId = crypto.randomUUID();
   const installation = path[0] === "skill-installations";
-  const download = installation && path[2] === "download";
+  const managed = path[0] === "self" && path[1] === "skills" && path[2] === "managed";
+  const prefix = managed ? "self/skills/managed" : installation ? "skill-installations" : "skills";
+  const download = (installation || managed) && path.at(-1) === "download";
   const fail = (fault: ProjectionFault) => {
-    if (!installation || download) return projectionError(fault, requestId);
+    if ((!installation && !managed) || download) return projectionError(fault, requestId);
     const base = PROJECTION_FAILURES[fault];
     const code = fault === "invalidSkillRequest" ? "invalid_skill_package_request"
       : fault === "invalidOwnerResponse" ? "skill_package_response_invalid"
       : ["bffUnavailable", "bffNotConfigured"].includes(fault) ? "skill_package_dependency_unavailable" : base.code;
     return NextResponse.json({ error: { code, message: code, retryable: base.status === 503 } }, { status: base.status, headers: { "cache-control": "no-store", "x-request-id": requestId } });
   };
-  const targetId = path[1] ?? "";
+  const targetId = path[managed ? 3 : 1] ?? "";
   const url = new URL(request.url);
   if (
     request.method !== (download ? "POST" : "GET") ||
-    path.length !== 3 ||
-    (!installation && path[0] !== "skills") ||
-    path[2] !== (download ? "download" : "package") ||
+    path.length !== (managed ? 5 : 3) ||
+    (!managed && !installation && path[0] !== "skills") ||
+    path.at(-1) !== (download ? "download" : "package") ||
     !(installation ? installationIdSchema.safeParse(targetId).success : MCP_CONNECTION_ID.test(targetId)) ||
     url.pathname !==
-      `/api/hub/${installation ? "skill-installations" : "skills"}/${encodeURIComponent(targetId)}/${download ? "download" : "package"}` ||
+      `/api/hub/${prefix}/${encodeURIComponent(targetId)}/${download ? "download" : "package"}` ||
     (!download && request.body !== null) ||
     url.hash ||
     (download && url.search !== "") ||
-    (installation && /%(?![0-9A-Fa-f]{2})/u.test(url.search)) ||
+    ((installation || managed) && /%(?![0-9A-Fa-f]{2})/u.test(url.search)) ||
     [...url.searchParams.keys()].some((key) => key !== "file_path") ||
     url.searchParams.getAll("file_path").length > 1 ||
     [...(download ? [] : ["content-length"]), "transfer-encoding", "idempotency-key"].some((header) =>
@@ -1963,7 +1968,7 @@ async function proxySkillPackage(
     joined.throwIfAborted();
     const headers = productBffHeaders(config, claims, requestId);
     headers.set("accept", "application/json");
-    const target = `${config.bffBaseUrl.replace(/\/+$/u, "")}/${download ? "browser/v1" : "v1"}/${installation ? "skill-installations" : "skills"}/${encodeURIComponent(targetId)}/${download ? "download" : "package"}${filePath === undefined ? "" : `?file_path=${encodeURIComponent(filePath)}`}`;
+    const target = `${config.bffBaseUrl.replace(/\/+$/u, "")}/${download ? "browser/v1" : "v1"}/${managed && !download ? "self/skills" : installation ? "skill-installations" : "skills"}/${encodeURIComponent(targetId)}/${download ? "download" : "package"}${filePath === undefined ? "" : `?file_path=${encodeURIComponent(filePath)}`}`;
     upstream = await within(
       requestWithDomain(target, config.domain, {
         method: download ? "POST" : "GET",
@@ -2025,7 +2030,7 @@ async function proxySkillPackage(
     }
     let raw: unknown;
     try {
-      raw = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+      raw = managed ? parsePersonalSkillHistoryJson(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) : JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
     } catch {
       return fail("invalidOwnerResponse");
     }
@@ -2033,7 +2038,7 @@ async function proxySkillPackage(
     if (upstream.status === 200) {
       if (download) {
         const parsed = z.object({ data: skillDownloadSchema }).strict().safeParse(raw);
-        if (!parsed.success || Date.parse(parsed.data.data.download_info.expires_at) <= Date.now()) return fail("invalidOwnerResponse");
+        if (!parsed.success || managed && parsed.data.data.source_ref !== `skill:${targetId}` || Date.parse(parsed.data.data.download_info.expires_at) <= Date.now()) return fail("invalidOwnerResponse");
       } else {
         const parsed = catalogPackageResponseSchema.safeParse(raw);
         if (!parsed.success || !(installation
@@ -2045,7 +2050,7 @@ async function proxySkillPackage(
       if (
         !parsed.success ||
         !(download ? skillDownloadErrorAllowed(upstream.status, parsed.data.error.code)
-          : installation ? installationPackageErrorAllowed(upstream.status, parsed.data.error.code, parsed.data.error.retryable, upstream.headers.get("retry-after"))
+          : installation || managed ? installationPackageErrorAllowed(upstream.status, parsed.data.error.code, parsed.data.error.retryable, upstream.headers.get("retry-after"))
           : CATALOG_PACKAGE_ERRORS[upstream.status]?.includes(parsed.data.error.code))
       )
         return fail("invalidOwnerResponse");
@@ -2088,13 +2093,14 @@ async function proxyPersonalSkillLifecycle(
     );
   const id = path[2] ?? "";
   const version = path[3] === "versions";
+  const deleting = request.method === "DELETE" && path.length === 3;
   if (
-    request.method !== "POST" ||
-    path.length !== 4 ||
+    (!deleting && request.method !== "POST") ||
+    (!deleting && path.length !== 4) ||
     !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u.test(id) ||
-    !["versions", "withdraw"].includes(path[3] ?? "") ||
+    (!deleting && !["versions", "withdraw"].includes(path[3] ?? "")) ||
     new URL(request.url).pathname !==
-      `/api/hub/self/skills/${encodeURIComponent(id)}/${path[3]}` ||
+      `/api/hub/self/skills/${encodeURIComponent(id)}${deleting ? "" : `/${path[3]}`}` ||
     new URL(request.url).search ||
     request.headers.has("transfer-encoding") ||
     !JSON_MEDIA_TYPE.test(request.headers.get("content-type") ?? "")
@@ -2161,7 +2167,7 @@ async function proxyPersonalSkillLifecycle(
     let bytes: Uint8Array;
     try {
       bytes = await read(request.body, MAX_SKILL_COMMAND_BYTES);
-      input = JSON.parse(
+      input = parsePersonalSkillHistoryJson(
         new TextDecoder("utf-8", { fatal: true }).decode(bytes),
       );
     } catch (error) {
@@ -2174,7 +2180,7 @@ async function proxyPersonalSkillLifecycle(
       );
     }
     const parsed = (
-      version
+      deleting ? deletePersonalSkillSeriesRequestSchema : version
         ? createPersonalSkillVersionRequestSchema
         : withdrawPersonalSkillRequestSchema
     ).safeParse(input);
@@ -2191,10 +2197,10 @@ async function proxyPersonalSkillLifecycle(
     joined.throwIfAborted();
     const response = await within(
       requestWithDomain(
-        `${config.bffBaseUrl.replace(/\/+$/u, "")}/v1/self/skills/${encodeURIComponent(id)}/${path[3]}`,
+        `${config.bffBaseUrl.replace(/\/+$/u, "")}/v1/self/skills/${encodeURIComponent(id)}${deleting ? "" : `/${path[3]}`}`,
         config.domain,
         {
-          method: "POST",
+          method: deleting ? "DELETE" : "POST",
           headers: Object.fromEntries(headers),
           body: bytes!.buffer as ArrayBuffer,
           signal: joined,
@@ -2221,7 +2227,7 @@ async function proxyPersonalSkillLifecycle(
       return fail(502, "skill_response_invalid");
     let raw: unknown;
     try {
-      raw = JSON.parse(
+      raw = parsePersonalSkillHistoryJson(
         new TextDecoder("utf-8", { fatal: true }).decode(
           await read(response.body, 1_048_576),
         ),
@@ -2238,7 +2244,7 @@ async function proxyPersonalSkillLifecycle(
     if (response.status === success) {
       const ack = z
         .object({
-          data: version
+          data: deleting ? deletePersonalSkillSeriesSchema : version
             ? createPersonalSkillVersionSchema
             : withdrawPersonalSkillSchema,
           meta: z.object({ request_id: z.literal(ownerId) }).strict(),
@@ -2247,7 +2253,9 @@ async function proxyPersonalSkillLifecycle(
         .safeParse(raw);
       if (!ack.success) return fail(502, "skill_response_invalid");
       if (
-        version
+        deleting
+          ? !("skill_id" in ack.data.data) || ack.data.data.skill_id !== id || BigInt(ack.data.data.state_version) !== BigInt(deletePersonalSkillSeriesRequestSchema.parse(input).expected_state_version) + BigInt(1)
+          : version
           ? !("skill_id" in ack.data.data) || ack.data.data.skill_id === id
           : !("source_ref" in ack.data.data) ||
             ack.data.data.source_ref !== `skill:${id}` ||
@@ -2323,7 +2331,7 @@ async function proxyHubRequest(
   if (
     path[0] === "self" &&
     path[1] === "skills" &&
-    ["versions", "withdraw"].includes(path[3] ?? "")
+    (request.method === "DELETE" && path.length === 3 || path.length === 4 && ["versions", "withdraw"].includes(path[3] ?? ""))
   )
     return proxyPersonalSkillLifecycle(request, path);
   if ((path[0] === "projects" && path[2] === "skill-selection") || (path[0] === "self" && path[1] === "projects" && path[3] === "skill-selection")) return proxyProjectSkillSelection(request, path);
@@ -2334,7 +2342,7 @@ async function proxyHubRequest(
     return proxyGithubSkillImport(request, path);
   if (path[0] === "skills" && path[1] === "local-imports")
     return proxyLocalSkillImport(request, path);
-  if (path.at(-1) === "package" || path[0] === "skill-installations" && path.at(-1) === "download")
+  if (path.at(-1) === "package" || (path[0] === "skill-installations" || path[0] === "self" && path[1] === "skills" && path[2] === "managed") && path.at(-1) === "download")
     return proxySkillPackage(request, path);
   if (path.at(-1) === "cover") return proxySkillCover(request, path);
   if (
@@ -2359,10 +2367,11 @@ async function proxyHubRequest(
   }
   const managedSkillPath =
     path[0] === "self" && path[1] === "skills" && path[2] === "managed";
+  const managedHistoryRead = managedSkillPath && path.length === 5 && path[4] === "versions";
   const managedSkillRead =
     managedSkillPath &&
     request.method === "GET" &&
-    (path.length === 3 || path.length === 4);
+    (path.length === 3 || path.length === 4 || managedHistoryRead);
   if (managedSkillPath && !managedSkillRead)
     return NextResponse.json(
       { error: "not_found" },
@@ -2502,10 +2511,11 @@ async function proxyHubRequest(
     );
   if (managedSkillRead) {
     const query = new URLSearchParams(search);
+    if (managedHistoryRead && ([...query.keys()].some(key => !["limit", "cursor"].includes(key) || query.getAll(key).length !== 1) || (query.has("limit") && !/^(?:[1-9][0-9]?|100)$/u.test(query.get("limit") ?? "")) || (query.has("cursor") && (!query.get("cursor") || query.get("cursor")!.length > 2048)))) return localSkillError("invalidQuery",requestId);
     if (
-      path.length === 4 &&
+      (path.length === 4 || managedHistoryRead) &&
       (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u.test(path[3] ?? "") ||
-        search !== "")
+        (!managedHistoryRead && search !== ""))
     )
       return localSkillError("invalidQuery", requestId);
     if (
@@ -2631,7 +2641,7 @@ async function proxyHubRequest(
   const encodedBusinessPath = businessPath
     .map((segment) => encodeURIComponent(segment))
     .join("/");
-  const target = `${config.bffBaseUrl.replace(/\/+$/, "")}/v1/${managedSkillRead ? `self/skills${path.length === 4 ? `/${encodeURIComponent(path[3]!)}` : ""}` : encodedBusinessPath}${search}`;
+  const target = `${config.bffBaseUrl.replace(/\/+$/, "")}/v1/${managedSkillRead ? `self/skills${path.length >= 4 ? `/${encodeURIComponent(path[3]!)}${managedHistoryRead ? "/versions" : ""}` : ""}` : encodedBusinessPath}${search}`;
 
   const headers = productBffHeaders(config, claims, requestId);
   for (const name of FORWARD_HEADERS) {
@@ -2870,6 +2880,13 @@ async function proxyHubRequest(
           "x-request-id": upstreamRequestId,
         },
       });
+    }
+    if (managedHistoryRead) {
+      let raw:unknown;
+      try { raw=parsePersonalSkillHistoryJson(new TextDecoder("utf-8",{fatal:true}).decode(await upstream.arrayBuffer())); } catch (error) {return localSkillError(error instanceof UpstreamTimeoutError ? "bffUnavailable" : "invalidOwnerResponse",requestId);}
+      const success=personalSkillHistoryResponseSchema.safeParse(raw), error=personalSkillHistoryErrorSchema.safeParse(raw);
+      if (upstream.status===200 ? !success.success || success.data.meta.request_id!==upstreamRequestId : !error.success || error.data.meta.request_id!==upstreamRequestId || !personalSkillHistoryErrorAllowed(upstream.status,error.data.error.code)) return localSkillError("invalidOwnerResponse",requestId);
+      return NextResponse.json(raw,{status:upstream.status,headers:{"cache-control":"no-store","x-request-id":upstreamRequestId}});
     }
     const projectionHeaders = new Headers({
       "cache-control": "no-store",

@@ -1,0 +1,56 @@
+schema_version: 1
+examples:
+  - id: curl-create-run
+    file: examples/curl/create-run.sh
+    runtime: bash
+    operations:
+      - operation_id: createMessage
+        content_type: application/json
+        request_body:
+          content: Review the public API contract.
+          model: default
+          project_ref: project_example
+  - id: curl-cancel-run
+    file: examples/curl/cancel-run.sh
+    runtime: bash
+    operations:
+      - operation_id: controlRun
+        content_type: application/json
+        request_body:
+          kind: run.cancel
+  - id: curl-upload-resource
+    file: examples/curl/upload-resource.sh
+    runtime: bash
+    operations:
+      - operation_id: uploadProjectResources
+        content_type: multipart/form-data
+        request_body:
+          files:
+            - fixture.txt
+  - id: typescript-run-lifecycle
+    file: examples/typescript/run-lifecycle.ts
+    runtime: tsx
+    operations:
+      - operation_id: createMessage
+        content_type: application/json
+        request_body:
+          content: Review the public API contract.
+          model: default
+          project_ref: project_example
+      - operation_id: streamSessionEvents
+      - operation_id: controlRun
+        content_type: application/json
+        request_body:
+          kind: run.resume
+          pause_ref: pause_example
+          expected_pause_revision: 1
+          decisions:
+            - type: approve
+              item_id: item_example
+      - operation_id: streamSessionEvents
+  - id: python-cursor-pagination
+    file: examples/python/cursor-pagination.py
+    runtime: python
+    operations:
+      - operation_id: listSessions
+      - operation_id: listSessions

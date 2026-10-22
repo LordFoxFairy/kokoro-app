@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto"
 import { iamRelayConfig, matchesCanonicalWebRequest } from "@/lib/server/iam-relay-config"
 import { filterIssuerCookies, IAM_RELAY_POLICY, resolveBrowserIamGet } from "@/lib/server/iam-relay-policy"
 import { browserAuthorizeResponse, browserIamGetResponse, browserLogoutConfirmationResponse, nativeIamResponse } from "@/lib/server/iam-relay-response"
+import { browserLogoutFailureResponse, browserLogoutStartResponse } from "@/lib/server/iam-logout-response"
 import { oidcLoginRecovery } from "@/lib/server/oidc-login-recovery"
 import { requestIamRelay } from "@/lib/server/iam-relay-transport"
 
@@ -116,7 +117,8 @@ export async function GET(request: Request, context: RouteContext): Promise<Resp
   if (rawPath !== expectedPath) return errorResponse("iam_relay_route_not_found", 404, id)
   const route = resolveBrowserIamGet(rawTarget, request.method)
   if (route === null) return errorResponse("iam_relay_route_not_found", 404, id)
-  const browserResponse = (response: Response): Response => browserIamGetResponse(response, route.relativePath)
+  const browserResponse = (response: Response): Response => browserIamGetResponse(
+    route.relativePath === "/oauth2/end-session" ? browserLogoutFailureResponse(request, response) : response, route.relativePath)
   if (incomingHeaderBytes(request.headers) > IAM_RELAY_POLICY.maxHeaderBytes) {
     return browserResponse(errorResponse("iam_relay_request_too_large", 413, id))
   }
@@ -159,13 +161,13 @@ export async function GET(request: Request, context: RouteContext): Promise<Resp
   headers.set(INTERNAL_SECRET_HEADER, config.secret)
   headers.set("x-request-id", id)
 
-  // Only an already-admitted top-level authorize navigation gets an HTML
-  // failure document. API callers and rejected requests keep their contract;
+  // Only an already-admitted top-level authorize navigation leaves the
+  // technical URL. API callers and rejected requests keep their contract;
   // successful owner redirects still pass through unchanged.
   const authorizeResult = (response: Response): Response => {
     if (route.relativePath === "/oauth2/authorize" && response.status >= 400 &&
       request.headers.get("sec-fetch-mode") === "navigate" && request.headers.get("sec-fetch-dest") === "document") {
-      const recovery = oidcLoginRecovery(request, response.status)
+      const recovery = oidcLoginRecovery(request)
       if (recovery) {
         recovery.headers.set("x-request-id", response.headers.get("x-request-id") ?? id)
         return browserResponse(recovery)
@@ -185,7 +187,9 @@ export async function GET(request: Request, context: RouteContext): Promise<Resp
     })
     const response = route.relativePath === "/oauth2/authorize"
       ? browserAuthorizeResponse(upstream, config.webOrigin, config.secureCookies, id)
-      : nativeIamResponse(upstream, config.webOrigin, config.secureCookies, id, route.relativePath)
+      : route.relativePath === "/oauth2/end-session"
+        ? browserLogoutStartResponse(request, upstream, config.webOrigin, config.secureCookies, id)
+        : nativeIamResponse(upstream, config.webOrigin, config.secureCookies, id, route.relativePath)
     if (response === null && route.relativePath === "/oauth2/authorize") {
       console.error("Kokoro IAM authorize relay rejected", {
         status: upstream.status,
@@ -203,7 +207,7 @@ export async function GET(request: Request, context: RouteContext): Promise<Resp
   }
 }
 
-export async function POST(request: Request, context: RouteContext): Promise<Response> {
+async function confirmLogout(request: Request, context: RouteContext): Promise<Response> {
   const id = requestId(request)
   const path = (await context.params).path
   const rawTarget = rawPathAndQuery(request.url)
@@ -239,6 +243,12 @@ export async function POST(request: Request, context: RouteContext): Promise<Res
     return browserLogoutConfirmationResponse(upstream, config.webOrigin, config.secureCookies, id)
       ?? errorResponse("iam_relay_response_invalid", 502, id)
   } catch { return errorResponse("iam_relay_unavailable", 503, id) }
+}
+
+export async function POST(request: Request, context: RouteContext): Promise<Response> {
+  const response = await confirmLogout(request, context)
+  return request.method === "POST" && rawPathAndQuery(request.url) === "/iam/oauth2/end-session/confirm"
+    ? browserLogoutFailureResponse(request, response) : response
 }
 
 function rejectMethod(request: Request): Response {

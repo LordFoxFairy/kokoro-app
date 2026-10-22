@@ -6,6 +6,7 @@ import { boundedOidcBffAgent } from "./oidc-bff-agent"
 import { configuredDomain } from "./domain-context"
 import { iamRelayConfig, type IamRelayConfig } from "./iam-relay-config"
 import { validAccessCredential } from "./product-session"
+import { oidcTransactionCookieOptions, type OidcCookieNamespaces } from "./oidc-transaction-cookies"
 import { validRefreshCredential } from "./product-session-store"
 
 export const OIDC_RESOURCE = "https://kokoro.dev/resources/iam-internal"
@@ -78,7 +79,7 @@ function allowBffEndpoint(client: Client, config: OidcRpConfig, endpoint: "token
   }
 }
 
-export function oidcAuthOptions(config: OidcRpConfig, onVerified: (tokens: VerifiedOidcTokens) => void, signal: AbortSignal): AuthOptions {
+export function oidcAuthOptions(config: OidcRpConfig, onVerified: (tokens: VerifiedOidcTokens) => void, signal: AbortSignal, namespaces?: OidcCookieNamespaces): AuthOptions {
   const provider: OAuthConfig<{ sub: string; name?: string; email?: string }> = {
     id: PROVIDER_ID,
     name: "Kokoro IAM",
@@ -121,6 +122,7 @@ export function oidcAuthOptions(config: OidcRpConfig, onVerified: (tokens: Verif
   }
   return {
     providers: [provider],
+    ...(namespaces === undefined ? {} : { cookies: oidcTransactionCookieOptions(config.relay.secureCookies, namespaces) }),
     secret: config.authSecret,
     useSecureCookies: config.relay.secureCookies,
     session: { strategy: "jwt" },

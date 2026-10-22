@@ -1,17 +1,22 @@
-// Composer 模型选择器（MODEL-UX）：候选下拉渲染 + 选择回调（wire "provider:name"）+ 首条锁定态 + 空候选隐藏。
+// Composer 模型选择器（MODEL-UX）：候选下拉渲染 + 选择回调（raw business label key）+ 首条锁定态 + 空候选隐藏。
 import { readFileSync } from "node:fs"
 import { act, cleanup, createEvent, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { renderHook } from "@testing-library/react"
+import { createSessionEngine } from "@/engine/machine"
+import { createFakeClient, createMemoryStorage, settle } from "../engine/fakes"
+import { useComposerSelectors } from "@/ui/shell/use-composer-selectors"
 import { createRef, type FormEvent, useState } from "react"
 
+import type { ConversationStore } from "@/core/conversations"
 import type { ModelCandidate } from "@/contract/http"
 import { LocaleProvider } from "@/i18n/context"
 import { Composer } from "@/ui/composer/composer"
 import { CreationIntentPill, type CreationIntent } from "@/ui/composer/creation-intent-pill"
 
 const MODELS: ModelCandidate[] = [
-  { provider: "anthropic", name: "claude-sonnet-4-6", is_default: true },
-  { provider: "openai", name: "gpt-5", is_default: false },
+  { provider: "anthropic", name: "claude-sonnet-4-6", is_default: true, display_name: "claude-sonnet-4-6", model_id: "11111111-1111-4111-8111-111111111111", revision_id: "22222222-2222-4222-8222-222222222222", provider_id: "33333333-3333-4333-8333-333333333333", feature_key: "chat", request_model: "claude-sonnet-4-6" },
+  { provider: "openai", name: "gpt-5", is_default: false, display_name: "gpt-5", model_id: "11111111-1111-4111-8111-111111111111", revision_id: "22222222-2222-4222-8222-222222222222", provider_id: "33333333-3333-4333-8333-333333333333", feature_key: "chat", request_model: "gpt-5" },
 ]
 
 function renderComposer(overrides: Partial<Parameters<typeof Composer>[0]> = {}) {
@@ -86,15 +91,47 @@ describe("Composer model selector", () => {
     expect(screen.getByText("claude-sonnet-4-6")).toBeTruthy()
   })
 
-  it("展开下拉选非缺省项 → onModelChange 收到 provider:name 选择子", () => {
-    const props = renderComposer()
-    fireEvent.pointerDown(screen.getByRole("button", { name: /Switch model:/ }))
-    fireEvent.click(screen.getByRole("menuitemradio", { name: "gpt-5" }))
-    expect(props.onModelChange).toHaveBeenCalledWith("openai:gpt-5")
+  it("展示别名但真实UI提交给engine的model是raw业务label key", async () => {
+    const client = createFakeClient()
+    const engine = createSessionEngine({ client, storage: createMemoryStorage<ConversationStore>(null) })
+    try {
+      renderComposer({
+        models: [MODELS[0]!, { ...MODELS[1]!, provider: "real-provider", name: "chat/fast", display_name: "Optional alias", request_model: "vendor/model-fast" }],
+        onModelChange: value => engine.setModel(value),
+        draft: "stable label request", canSend: true,
+        onSubmit: event => { event.preventDefault(); engine.submit("stable label request") },
+      })
+      fireEvent.pointerDown(screen.getByRole("button", { name: /Switch model:/ }))
+      fireEvent.click(screen.getByRole("menuitemradio", { name: "Optional alias" }))
+      fireEvent.submit(screen.getByRole("form", { name: "Message editor" }))
+      await settle()
+      expect(client.createCalls[0]?.body.model).toBe("chat/fast")
+    } finally { engine.dispose() }
+  })
+
+  it("旧provider:name偏好不注入engine，旧key和其他存储保持原样", async () => {
+    const old = JSON.stringify({ model: "real-provider:chat/fast" })
+    window.localStorage.setItem("kokoro.web.chat-prefs", old)
+    window.localStorage.setItem("unrelated-test-entry", "preserve")
+    window.localStorage.removeItem("kokoro.web.chat-prefs.v2")
+    const client = createFakeClient()
+    const engine = createSessionEngine({ client, storage: createMemoryStorage<ConversationStore>(null) })
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ models: MODELS, next_cursor: null })))
+    const hook = renderHook(() => useComposerSelectors(engine))
+    try {
+      await act(async () => { await settle(); engine.submit("no legacy preference"); await settle() })
+      expect(client.createCalls[0]?.body).not.toHaveProperty("model")
+      expect(window.localStorage.getItem("kokoro.web.chat-prefs")).toBe(old)
+      expect(window.localStorage.getItem("unrelated-test-entry")).toBe("preserve")
+    } finally {
+      hook.unmount(); engine.dispose(); vi.unstubAllGlobals()
+      window.localStorage.removeItem("kokoro.web.chat-prefs")
+      window.localStorage.removeItem("unrelated-test-entry")
+    }
   })
 
   it("selectedModel 命中候选时显示该项为当前", () => {
-    renderComposer({ selectedModel: "openai:gpt-5" })
+    renderComposer({ selectedModel: "gpt-5" })
     // 触发器展示当前选择的名称。
     const trigger = screen.getByRole("button", { name: /Switch model:/ })
     expect(trigger.textContent).toContain("gpt-5")
@@ -112,7 +149,7 @@ describe("Composer model selector", () => {
   })
 
   it("modelLocked → 只读锁定态（不可展开切换）", () => {
-    renderComposer({ selectedModel: "openai:gpt-5", modelLocked: true })
+    renderComposer({ selectedModel: "gpt-5", modelLocked: true })
     expect(screen.queryByRole("button", { name: /Switch model:/ })).toBeNull()
     const locked = screen.getByRole("button", { name: /locked this turn/i })
     expect(locked.hasAttribute("disabled")).toBe(true)
@@ -204,10 +241,10 @@ describe("Composer model selector", () => {
     renderComposer({
       creationIntent: "design",
       models: [
-        { provider: "kokoro", name: "standard-new", is_default: true, display_name: "Standard New" },
-        { provider: "openai", name: "gpt-image-2", is_default: false, display_name: "GPT Image 2" },
+        { provider: "kokoro", name: "standard-new", is_default: true, display_name: "Standard New", model_id: "11111111-1111-4111-8111-111111111111", revision_id: "22222222-2222-4222-8222-222222222222", provider_id: "33333333-3333-4333-8333-333333333333", feature_key: "chat", request_model: "standard-new" },
+        { provider: "openai", name: "gpt-image-2", is_default: false, display_name: "GPT Image 2", model_id: "11111111-1111-4111-8111-111111111111", revision_id: "22222222-2222-4222-8222-222222222222", provider_id: "33333333-3333-4333-8333-333333333333", feature_key: "chat", request_model: "gpt-image-2" },
       ],
-      preferredModelSelector: "openai:gpt-image-2",
+      preferredModelSelector: "gpt-image-2",
       hideModelSelector: false,
     })
 
@@ -221,15 +258,15 @@ describe("Composer model selector", () => {
     const props = renderComposer({
       creationIntent: "design",
       models: [
-        { provider: "kokoro", name: "standard-new", is_default: true, display_name: "Standard New" },
-        { provider: "openai", name: "gpt-image-2", is_default: false, display_name: "GPT Image 2" },
+        { provider: "kokoro", name: "standard-new", is_default: true, display_name: "Standard New", model_id: "11111111-1111-4111-8111-111111111111", revision_id: "22222222-2222-4222-8222-222222222222", provider_id: "33333333-3333-4333-8333-333333333333", feature_key: "chat", request_model: "standard-new" },
+        { provider: "openai", name: "gpt-image-2", is_default: false, display_name: "GPT Image 2", model_id: "11111111-1111-4111-8111-111111111111", revision_id: "22222222-2222-4222-8222-222222222222", provider_id: "33333333-3333-4333-8333-333333333333", feature_key: "chat", request_model: "gpt-image-2" },
       ],
-      preferredModelSelector: "openai:gpt-image-2",
+      preferredModelSelector: "gpt-image-2",
       selectedModel: null,
       hideModelSelector: false,
     })
 
-    expect(props.onModelChange).toHaveBeenCalledWith("openai:gpt-image-2")
+    expect(props.onModelChange).toHaveBeenCalledWith("gpt-image-2")
   })
 
   it("简报创作态使用投影片胶囊文案而不是入口文案", () => {
@@ -790,5 +827,96 @@ it("Textarea 在输入、删除和宽度改变时增高/收缩，忽略纯高度
     expect(disconnect).toHaveBeenCalledOnce()
   } finally {
     observer.mockRestore()
+  }
+})
+
+
+it("catalog failure is visible with explicit retry and no internal details", () => {
+  const onRetryModels = vi.fn()
+  renderComposer({ models: [], modelCatalogStatus: "error", onRetryModels })
+  expect(screen.getByRole("alert")).toHaveTextContent("Could not load the model catalog")
+  fireEvent.click(screen.getByRole("button", { name: "Retry loading" }))
+  expect(onRetryModels).toHaveBeenCalledOnce()
+})
+
+it("confirmed empty catalog clears an invalid selection but loading does not", () => {
+  const loading = renderComposer({ models: [], selectedModel: "retired", modelCatalogStatus: "loading" })
+  expect(loading.onModelChange).not.toHaveBeenCalled()
+  cleanup()
+  const empty = renderComposer({ models: [], selectedModel: "retired", modelCatalogStatus: "ready" })
+  expect(empty.onModelChange).toHaveBeenCalledWith(null)
+})
+
+it("selector retries a failed read and retires the previous engine's late catalog", async () => {
+  const engineA = createSessionEngine({ client: createFakeClient(), storage: createMemoryStorage<ConversationStore>(null) })
+  const engineB = createSessionEngine({ client: createFakeClient(), storage: createMemoryStorage<ConversationStore>(null) })
+  let finish!: (response: Response) => void
+  const fetchMock = vi.fn().mockRejectedValueOnce(new Error("private upstream detail"))
+    .mockImplementationOnce(() => new Promise<Response>(resolve => { finish = resolve }))
+    .mockResolvedValueOnce(Response.json({ models: [MODELS[1]], next_cursor: null }))
+  vi.stubGlobal("fetch", fetchMock)
+  const hook = renderHook(({ engine }) => useComposerSelectors(engine), { initialProps: { engine: engineA } })
+  try {
+    await act(async () => { await settle() })
+    expect(hook.result.current.modelCatalogStatus).toBe("error")
+    act(() => hook.result.current.retryModels())
+    await act(async () => { await settle() })
+    hook.rerender({ engine: engineB })
+    await act(async () => { await settle() })
+    expect(hook.result.current.models).toEqual([MODELS[1]])
+    await act(async () => { finish(Response.json({ models: [MODELS[0]], next_cursor: null })); await settle() })
+    expect(hook.result.current.models).toEqual([MODELS[1]])
+    expect(fetchMock.mock.calls[1]?.[1]?.signal.aborted).toBe(true)
+  } finally { hook.unmount(); engineA.dispose(); engineB.dispose(); vi.unstubAllGlobals() }
+})
+
+it("an engine change retires its explicit model choice before the new catalog arrives", async () => {
+  const engineA = createSessionEngine({ client: createFakeClient(), storage: createMemoryStorage<ConversationStore>(null) })
+  const engineB = createSessionEngine({ client: createFakeClient(), storage: createMemoryStorage<ConversationStore>(null) })
+  const setModelB = vi.spyOn(engineB, "setModel")
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(Response.json({ models: MODELS, next_cursor: null }))
+    .mockImplementation(() => new Promise<Response>(() => {})))
+  const hook = renderHook(({ engine }) => useComposerSelectors(engine), { initialProps: { engine: engineA } })
+  try {
+    await act(async () => { await settle() })
+    act(() => hook.result.current.setSelectedModel("gpt-5"))
+    hook.rerender({ engine: engineB })
+    expect(hook.result.current.models).toEqual([])
+    expect(hook.result.current.selectedModel).toBeNull()
+    expect(setModelB).not.toHaveBeenCalledWith("gpt-5")
+    hook.rerender({ engine: engineA })
+    expect(hook.result.current.models).toEqual([])
+    expect(hook.result.current.selectedModel).toBeNull()
+  } finally { hook.unmount(); engineA.dispose(); engineB.dispose(); vi.unstubAllGlobals() }
+})
+
+it("a failed refresh retains the confirmed candidates and explicit business label", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(Response.json({ models: MODELS, next_cursor: null }))
+    .mockRejectedValueOnce(new Error("internal upstream failure")))
+  const hook = renderHook(() => useComposerSelectors(null))
+  try {
+    await act(async () => { await settle() })
+    act(() => { hook.result.current.setSelectedModel("gpt-5"); hook.result.current.retryModels() })
+    expect(hook.result.current.modelCatalogStatus).toBe("loading")
+    expect(hook.result.current.models).toEqual(MODELS)
+    await act(async () => { await settle() })
+    expect(hook.result.current.modelCatalogStatus).toBe("error")
+    expect(hook.result.current.models).toEqual(MODELS)
+    expect(hook.result.current.selectedModel).toBe("gpt-5")
+  } finally { hook.unmount(); vi.unstubAllGlobals() }
+})
+
+it.each([{ models: [] }, { models: MODELS }])("catalog reads remain visually quiet and retain any confirmed model controls (%j)", ({ models }) => {
+  const props = renderComposer({ models, selectedModel: "gpt-5", modelCatalogStatus: "loading" })
+  expect(screen.queryByText("Loading model catalog…")).not.toBeInTheDocument()
+  const cluster = document.querySelector('[data-slot="composer-selector-cluster"]')
+  expect(cluster?.querySelector('[role="status"]')).toBeNull()
+  expect(cluster).toHaveAttribute("aria-busy", "true")
+  expect(props.onModelChange).not.toHaveBeenCalled()
+  if (models.length > 0) {
+    const trigger = screen.getByRole("button", { name: "Switch model: gpt-5" })
+    expect(trigger).toBeEnabled()
+    fireEvent.pointerDown(trigger)
+    expect(screen.getByRole("menuitemradio", { name: "gpt-5" })).toHaveAttribute("data-state", "checked")
   }
 })

@@ -111,7 +111,7 @@ const managedDraft = { skill_id: "mine", source_ref: "skill:mine", series_id: "s
 it.each(["uploaded", "validated"] as const)("refresh resumes the authoritative %s phase as a new explicit intention without synthetic old ACKs", async (phase) => {
   const { client } = fixture()
   const resumedClient = { ...client, getManaged: vi.fn().mockResolvedValue(managedDraft), getUpload: vi.fn().mockResolvedValue({ skill_id: "mine", state_version: "4", attempt_epoch: "1", phase, attempt_id: "attempt", upload_id: "upload", source_version_id: "object-version-1" }) }
-  const session = createResumedSkillPublishSession(managedDraft, "tenant")
+  const session = createResumedSkillPublishSession(managedDraft, "tenant", null)
   await expect(runPersonalSkillPublishSession(resumedClient as unknown as SkillPublishClient, session)).resolves.toEqual({ source_ref: "skill:mine", revision: "1" })
   expect(client.createDraft).not.toHaveBeenCalled()
   expect(client.beginUpload).not.toHaveBeenCalled()
@@ -119,13 +119,13 @@ it.each(["uploaded", "validated"] as const)("refresh resumes the authoritative %
   expect(client.completeUpload).not.toHaveBeenCalled()
   if (phase === "uploaded") expect(client.validateDraft).toHaveBeenCalledWith("mine", { attempt_id: "attempt", expected_state_version: "4" }, session.keys.validate, undefined)
   else { expect(client.validateDraft).not.toHaveBeenCalled(); expect(session.validated).toBeUndefined() }
-  expect(client.publishDraft).toHaveBeenCalledWith("mine", { audience: "tenant", expected_state_version: "4" }, session.keys.publish, undefined)
+  expect(client.publishDraft).toHaveBeenCalledWith("mine", { audience: "tenant", expected_state_version: "4", expected_publication: null }, session.keys.publish, undefined)
 })
 
 it.each(["intent", "upload_pending", "aborted"] as const)("refresh requires explicit replacement for %s and never invents a PUT version", async (phase) => {
   const { client } = fixture()
   const resumedClient = { ...client, getManaged: vi.fn().mockResolvedValue(managedDraft), getUpload: vi.fn().mockResolvedValue({ skill_id: "mine", state_version: "4", attempt_epoch: "1", phase, attempt_id: "attempt", ...(phase === "upload_pending" ? { upload_id: "upload" } : {}) }) }
-  const session = createResumedSkillPublishSession(managedDraft, "owner")
+  const session = createResumedSkillPublishSession(managedDraft, "owner", null)
   await expect(runPersonalSkillPublishSession(resumedClient as unknown as SkillPublishClient, session)).rejects.toMatchObject({ name: "SkillPublishRestartRequired" })
   expect(client.beginUpload).not.toHaveBeenCalled(); expect(client.putPackage).not.toHaveBeenCalled(); expect(client.publishDraft).not.toHaveBeenCalled()
 })
@@ -133,7 +133,7 @@ it.each(["intent", "upload_pending", "aborted"] as const)("refresh requires expl
 it("does not replace a refreshed attempt when the owner rejects its qualification with 412", async () => {
   const { client } = fixture()
   const resumedClient = { ...client, getManaged: vi.fn().mockResolvedValue(managedDraft), getUpload: vi.fn().mockRejectedValue(new HubClientError("http", "Pending", "skill_precondition_failed", 412)) }
-  await expect(runPersonalSkillPublishSession(resumedClient as unknown as SkillPublishClient, createResumedSkillPublishSession(managedDraft, "owner"))).rejects.toMatchObject({ status: 412 })
+  await expect(runPersonalSkillPublishSession(resumedClient as unknown as SkillPublishClient, createResumedSkillPublishSession(managedDraft, "owner", null))).rejects.toMatchObject({ status: 412 })
   expect(client.beginUpload).not.toHaveBeenCalled(); expect(client.publishDraft).not.toHaveBeenCalled()
 })
 
@@ -155,12 +155,12 @@ it("freezes replacement identity using only the observed old attempt and current
   client.completeUpload.mockResolvedValue({ skill_id: "mine", state_version: "6", attempt_epoch: "2", attempt_id: "attempt", upload_id: "upload", phase: "uploaded", scan_state: "clean", content_sha256: "a".repeat(64), replayed: false })
   client.validateDraft.mockResolvedValue({ skill_id: "mine", series_id: "series", state_version: "7", valid: true, content_digest: "a".repeat(64), manifest_identity: `skill-md-v1:sha256:${"a".repeat(64)}`, replayed: false })
   client.publishDraft.mockResolvedValue({ source_ref: "skill:mine", revision: "1", status: "active", state_version: "8", event_id: "550e8400-e29b-41d4-a716-446655440000", replayed: false })
-  const session = createResumedSkillPublishSession(managedDraft, "catalog", new File(["zip"], "replacement.zip"))
+  const session = createResumedSkillPublishSession(managedDraft, "catalog", null, new File(["zip"], "replacement.zip"))
   await expect(runPersonalSkillPublishSession(resumedClient as unknown as SkillPublishClient, session, { hash: async () => "a".repeat(64) })).resolves.toEqual({ source_ref: "skill:mine", revision: "1" })
   expect(client.createDraft).not.toHaveBeenCalled()
   expect(session.beginBody).toMatchObject({ expected_state_version: "4", replaces_attempt_id: "old", filename: "replacement.zip" })
   expect(session.completeBody).toMatchObject({ expected_state_version: "5", source_version_id: "object-version-1" })
-  expect(session.publishBody).toEqual({ expected_state_version: "7", audience: "catalog" })
+  expect(session.publishBody).toEqual({ expected_state_version: "7", audience: "catalog", expected_publication: null })
   for (const body of [session.beginBody, session.completeBody, session.validateBody, session.publishBody, session.input, session.keys]) expect(Object.isFrozen(body)).toBe(true)
 })
 
@@ -170,4 +170,22 @@ it("does not commit a late Create ACK after cancellation or issue the next comma
   client.createDraft.mockImplementation(async () => { controller.abort(); return { skill_id: "mine", series_id: "series", revision: 1, status: "draft", state_version: "1", replayed: false } })
   await expect(runPersonalSkillPublishSession(client as unknown as SkillPublishClient, session, { ...options, signal: controller.signal })).rejects.toMatchObject({ reason: "aborted" })
   expect(session.draft).toBeUndefined(); expect(client.getUpload).not.toHaveBeenCalled(); expect(client.publishDraft).not.toHaveBeenCalled()
+})
+
+
+it("keeps a resumed draft's confirmed publication through a lost ACK and a later explicit retry",async()=>{
+ const {client}=fixture()
+ const snapshot={current_version_id:"current-other-version",state_version:"9007199254740993"}
+ const session=createResumedSkillPublishSession(managedDraft,"owner",snapshot)
+ snapshot.current_version_id="changed-after-confirmation";snapshot.state_version="9007199254740994"
+ const resumed={...client,getManaged:vi.fn().mockResolvedValue(managedDraft),getUpload:vi.fn().mockResolvedValue({skill_id:"mine",state_version:"4",attempt_epoch:"1",phase:"validated",attempt_id:"attempt",upload_id:"upload",source_version_id:"object-version-1"}),listHistory:vi.fn()}
+ client.publishDraft.mockRejectedValueOnce(new Error("unknown publish"))
+ client.getPublished.mockResolvedValue(managedDraft)
+ await expect(runPersonalSkillPublishSession(resumed as unknown as SkillPublishClient,session)).rejects.toMatchObject({name:"SkillPublishUncertain"})
+ await expect(runPersonalSkillPublishSession(resumed as unknown as SkillPublishClient,session)).resolves.toEqual({source_ref:"skill:mine",revision:"1"})
+ expect(client.publishDraft).toHaveBeenCalledTimes(2)
+ expect(client.publishDraft.mock.calls[0]).toEqual(client.publishDraft.mock.calls[1])
+ expect(session.publishBody?.expected_publication).toEqual({current_version_id:"current-other-version",state_version:"9007199254740993"})
+ expect(Object.isFrozen(session.publishBody?.expected_publication)).toBe(true)
+ expect(resumed.listHistory).not.toHaveBeenCalled()
 })

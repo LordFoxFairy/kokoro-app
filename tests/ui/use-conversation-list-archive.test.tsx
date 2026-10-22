@@ -116,3 +116,44 @@ it("a bound archive ACK retires local draft eligibility without cancelling its p
  await act(async()=>{await result.current.archive("conv_local");});
  expect(local.getSnapshot()).not.toHaveProperty("locallyCreatedSessionId");expect(local.getSnapshot().machine.phase).toBe("submitting");expect(local.getSnapshot().thread.messages).toHaveLength(1);expect(pendingClient.controlCalls).toEqual([]);local.dispose();
 });
+it("an empty locally created workspace skips archive reads until its first message",async()=>{
+ const pendingClient=createFakeClient();pendingClient.nextCreate=()=>new Promise(()=>{});
+ const local=createSessionEngine({client:pendingClient,storage:createMemoryStorage<ConversationStore>(null),createId:p=>`${p}_empty`});local.newConversation();
+ api.readArchiveState.mockRejectedValue(Object.assign(Error("missing"),{status:404}));
+ const {result,rerender}=renderHook(()=>useConversationList({...base,engine:local,activeId:local.getSnapshot().store?.activeId??null,thread:local.getSnapshot().thread}));
+ await waitFor(()=>expect(result.current.loading).toBe(false));
+ expect(api.readArchiveState).not.toHaveBeenCalled();expect(result.current.archiveStatus).toBe("draft");expect(result.current.archiveStateError).toBe(false);expect(result.current.conversations).toEqual([]);
+ act(()=>result.current.refresh());await waitFor(()=>expect(api.list).toHaveBeenCalledTimes(2));
+ expect(api.readArchiveState).not.toHaveBeenCalled();
+ act(()=>{local.submit("first message");});rerender();
+ await waitFor(()=>expect(result.current.archiveStatus).toBe("missing"));expect(api.readArchiveState).toHaveBeenCalledTimes(1);expect(result.current.conversations.map(x=>x.id)).toEqual(["conv_empty"]);local.dispose();
+});
+it("an empty workspace with a matching owner receipt is no longer a draft",async()=>{
+ const local=createSessionEngine({client:createFakeClient(),storage:createMemoryStorage<ConversationStore>(null),createId:p=>`${p}_empty`});local.newConversation();
+ const {result,rerender}=renderHook(({receipt})=>useConversationList({...base,engine:local,activeId:local.getSnapshot().store?.activeId??null,thread:local.getSnapshot().thread,archiveReceipt:receipt}),{initialProps:{receipt:null as null|{session_id:string;archived_at:string}}});
+ await waitFor(()=>expect(result.current.loading).toBe(false));expect(api.readArchiveState).not.toHaveBeenCalled();
+ api.readArchiveState.mockResolvedValue({session_id:"conv_empty",archived_at:at});
+ rerender({receipt:{session_id:"conv_empty",archived_at:at}});
+ await waitFor(()=>expect(api.readArchiveState).toHaveBeenCalledTimes(1));expect(result.current.archiveStatus).toBe("archived");local.dispose();
+});
+it("retiring local creation on a subject switch restores missing-history reads even with an empty thread",async()=>{
+ const local=createSessionEngine({client:createFakeClient(),storage:createMemoryStorage<ConversationStore>(null),createId:p=>`${p}_empty`});local.newConversation();
+ api.readArchiveState.mockRejectedValue(Object.assign(Error("missing"),{status:404}));
+ const {result,rerender}=renderHook(({identity})=>useConversationList({...base,engine:local,activeId:local.getSnapshot().store?.activeId??null,thread:local.getSnapshot().thread,readBoundary:{identity,admitted:true}}),{initialProps:{identity:"alice:1"}});
+ await waitFor(()=>expect(result.current.loading).toBe(false));expect(api.readArchiveState).not.toHaveBeenCalled();
+ act(()=>local.retireLocalCreationProvenance());rerender({identity:"bob:2"});
+ await waitFor(()=>expect(result.current.archiveStatus).toBe("missing"));expect(result.current.archiveStateError).toBe(true);expect(result.current.conversations).toEqual([]);local.dispose();
+});
+it("an empty historical or reloaded thread without creation provenance still reports owner404",async()=>{
+ api.readArchiveState.mockRejectedValue(Object.assign(Error("missing"),{status:404}));
+ const {result}=renderHook(()=>useConversationList({...base,thread:engine.getSnapshot().thread}));
+ await waitFor(()=>expect(result.current.archiveStatus).toBe("missing"));expect(api.readArchiveState).toHaveBeenCalledTimes(1);expect(result.current.archiveStateError).toBe(true);expect(result.current.conversations).toEqual([]);
+});
+it("late historical archive evidence cannot replace a newly selected empty draft",async()=>{
+ let release!:(value:unknown)=>void;api.readArchiveState.mockReturnValueOnce(new Promise(yes=>{release=yes}));
+ const local=createSessionEngine({client:createFakeClient(),storage:createMemoryStorage<ConversationStore>(null),createId:p=>`${p}_empty`});local.newConversation();
+ const {result,rerender}=renderHook(({draft})=>useConversationList(draft?{...base,engine:local,activeId:"conv_empty",thread:local.getSnapshot().thread}:base),{initialProps:{draft:false}});
+ await waitFor(()=>expect(api.readArchiveState).toHaveBeenCalledTimes(1));rerender({draft:true});expect(result.current.archiveStatus).toBe("draft");
+ await act(async()=>{release({session_id:"active",archived_at:at});});
+ expect(result.current.archiveStatus).toBe("draft");expect(result.current.archiveStateError).toBe(false);expect(result.current.conversations).toEqual([]);expect(api.readArchiveState).toHaveBeenCalledTimes(1);local.dispose();
+});

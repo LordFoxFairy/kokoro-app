@@ -14,6 +14,8 @@ vi.mock("@/ui/auth/use-session-state", () => ({
   useSessionProbe: () => ({ state: "pass", projectReadBoundary: { admitted: true, subject: "fixture-user", generation: 1 } }),
 }))
 
+const publicationPage = {series_id:"series",publication:{current_version_id:"old",state_version:"1",withdrawn_at:null},versions:[],next_cursor:null}
+
 beforeEach(() => { window.localStorage.clear(); window.localStorage.setItem("kokoro.locale", "zh") })
 afterEach(cleanup)
 
@@ -79,7 +81,7 @@ it.each([
 
 it("requires explicit visibility for a refreshed validated draft and never fabricates a validation receipt", async () => {
   const base = { skill_id: "mine", source_ref: "skill:mine", series_id: "series", revision: "1", name: "Mine", summary: "", tags: [], status: "draft" as const, skill_updated_at: "2026-10-10T00:00:00Z", example_prompts: [], category_keys: [], product: { publication_audience: "owner" as const, state_version: "4" } }
-  const client = { getManaged: vi.fn().mockResolvedValue(base), getUpload: vi.fn().mockResolvedValue({ skill_id: "mine", state_version: "4", attempt_epoch: "1", attempt_id: "attempt", upload_id: "upload", phase: "validated", source_version_id: "object-version-1" }), validateDraft: vi.fn(), createDraft: vi.fn(), putPackage: vi.fn(), publishDraft: vi.fn().mockResolvedValue({ source_ref: "skill:mine", revision: "1", status: "active", state_version: "5", replayed: false, event_id: "550e8400-e29b-41d4-a716-446655440000" }) }
+  const client = { listHistory: vi.fn().mockResolvedValue({...publicationPage,publication:null}), getManaged: vi.fn().mockResolvedValue(base), getUpload: vi.fn().mockResolvedValue({ skill_id: "mine", state_version: "4", attempt_epoch: "1", attempt_id: "attempt", upload_id: "upload", phase: "validated", source_version_id: "object-version-1" }), validateDraft: vi.fn(), createDraft: vi.fn(), putPackage: vi.fn(), publishDraft: vi.fn().mockResolvedValue({ source_ref: "skill:mine", revision: "1", status: "active", state_version: "5", replayed: false, event_id: "550e8400-e29b-41d4-a716-446655440000" }) }
   const onPublished = vi.fn()
   render(<LocaleProvider><PersonalSkillPublishDialog base={base} open onOpenChange={vi.fn()} client={client as unknown as SkillPublishClient} onPublished={onPublished} /></LocaleProvider>)
   const dialog = screen.getByTestId("personal-skill-publish-dialog")
@@ -88,9 +90,10 @@ it("requires explicit visibility for a refreshed validated draft and never fabri
   fireEvent.submit(dialog.querySelector("form")!)
   expect(client.getManaged).not.toHaveBeenCalled()
   fireEvent.change(within(dialog).getByLabelText("可见范围"), { target: { value: "tenant" } })
+  await waitFor(()=>expect(within(dialog).getByRole("button", {name:"上传并发布"})).not.toBeDisabled())
   fireEvent.submit(dialog.querySelector("form")!)
   await waitFor(() => expect(onPublished).toHaveBeenCalledOnce())
-  expect(client.publishDraft).toHaveBeenCalledWith("mine", { expected_state_version: "4", audience: "tenant" }, expect.any(String), expect.any(AbortSignal))
+  expect(client.publishDraft).toHaveBeenCalledWith("mine", { expected_state_version: "4", audience: "tenant", expected_publication: null }, expect.any(String), expect.any(AbortSignal))
   expect(client.validateDraft).not.toHaveBeenCalled(); expect(client.createDraft).not.toHaveBeenCalled(); expect(client.putPackage).not.toHaveBeenCalled()
   expect(within(dialog).getByLabelText("可见范围")).toBeDisabled()
 })
@@ -114,7 +117,7 @@ it("does not reuse a draft-bound pagination cursor for the published managed vie
 it("owned active update requires a new package, permits clearing real examples, and offers owner visibility only",async()=>{
  const base={skill_id:"old",source_ref:"skill:old",series_id:"series",revision:"1",name:"Original",summary:"Summary",tags:[],status:"active" as const,skill_updated_at:"2026-10-10T00:00:00Z",example_prompts:["真实旧例子"],category_keys:[],product:{source_kind:"personal" as const,publication_audience:"owner" as const,state_version:"99"}}
  const createVersion=vi.fn().mockRejectedValueOnce(new Error("unknown receipt")).mockRejectedValue(new HubClientError("http", "Retry rejected", "skill_precondition_failed", 412))
- const client={createVersion} as unknown as SkillPublishClient
+ const client={listHistory:vi.fn().mockResolvedValue(publicationPage),createVersion} as unknown as SkillPublishClient
  render(<LocaleProvider><PersonalSkillPublishDialog base={base} open admitted client={client} onOpenChange={vi.fn()} onPublished={vi.fn()} hash={async()=>"a".repeat(64)}/></LocaleProvider>)
  const dialog=screen.getByTestId("personal-skill-publish-dialog")
  expect(within(dialog).getByLabelText("可见范围")).toHaveValue("owner")
@@ -124,6 +127,7 @@ it("owned active update requires a new package, permits clearing real examples, 
  expect(createVersion).not.toHaveBeenCalled()
  fireEvent.change(within(dialog).getByLabelText(/重新选择并上传/),{target:{files:[new File(["new zip"],"update.zip",{type:"application/zip"})]}})
  fireEvent.change(within(dialog).getByLabelText("示例问题（每行一项）"),{target:{value:""}})
+ await waitFor(()=>expect(within(dialog).getByRole("button",{name:"更新技能"})).not.toBeDisabled())
  fireEvent.submit(dialog.querySelector("form")!)
  await within(dialog).findByRole("alert")
  expect(createVersion).toHaveBeenCalledWith("old",{display_name:"Original",summary:"Summary",tags:[],example_prompts:[],category_keys:[]},expect.any(String),expect.any(AbortSignal))
@@ -140,10 +144,60 @@ it("owned active update requires a new package, permits clearing real examples, 
 it("can restart after a definitive creation conflict without a previous unknown creation", async () => {
  const base={skill_id:"old",source_ref:"skill:old",series_id:"series",revision:"1",name:"Original",summary:"",tags:[],status:"active" as const,skill_updated_at:"2026-10-10T00:00:00Z",example_prompts:[],category_keys:[],product:{source_kind:"personal" as const,publication_audience:"owner" as const,state_version:"9"}}
  const createVersion=vi.fn().mockRejectedValue(new HubClientError("http", "Conflict", "skill_precondition_failed", 412))
- render(<LocaleProvider><PersonalSkillPublishDialog base={base} open admitted client={{createVersion} as unknown as SkillPublishClient} onOpenChange={vi.fn()} onPublished={vi.fn()} hash={async()=>"a".repeat(64)}/></LocaleProvider>)
+ render(<LocaleProvider><PersonalSkillPublishDialog base={base} open admitted client={{listHistory:vi.fn().mockResolvedValue(publicationPage),createVersion} as unknown as SkillPublishClient} onOpenChange={vi.fn()} onPublished={vi.fn()} hash={async()=>"a".repeat(64)}/></LocaleProvider>)
  const dialog=screen.getByTestId("personal-skill-publish-dialog")
  fireEvent.change(within(dialog).getByLabelText(/重新选择并上传/),{target:{files:[new File(["zip"],"update.zip",{type:"application/zip"})]}})
+ await waitFor(()=>expect(within(dialog).getByRole("button", {name:"更新技能"})).not.toBeDisabled())
  fireEvent.submit(dialog.querySelector("form")!)
  fireEvent.click(await within(dialog).findByRole("button", {name:"重新开始新尝试"}))
  expect(within(dialog).getByLabelText(/重新选择并上传/)).not.toBeDisabled()
+})
+
+
+it("waits for the confirmed series publication before an update can create a new version", async () => {
+ const base={skill_id:"old",source_ref:"skill:old",series_id:"series",revision:"1",name:"Original",summary:"",tags:[],status:"active" as const,skill_updated_at:"2026-10-10T00:00:00Z",example_prompts:[],category_keys:[],product:{source_kind:"personal" as const,publication_audience:"owner" as const,state_version:"9"}}
+ let resolve!: (value: unknown) => void
+ const listHistory=vi.fn(()=>new Promise(done=>{resolve=done}))
+ const createVersion=vi.fn().mockRejectedValue(new HubClientError("http","Conflict","skill_precondition_failed",412))
+ render(<LocaleProvider><PersonalSkillPublishDialog base={base} open client={{listHistory,createVersion} as unknown as SkillPublishClient} onOpenChange={vi.fn()} onPublished={vi.fn()} hash={async()=>"a".repeat(64)}/></LocaleProvider>)
+ const dialog=screen.getByTestId("personal-skill-publish-dialog")
+ fireEvent.change(within(dialog).getByLabelText(/重新选择并上传/),{target:{files:[new File(["zip"],"update.zip",{type:"application/zip"})]}})
+ fireEvent.submit(dialog.querySelector("form")!)
+ await new Promise(done=>setTimeout(done,0))
+ expect(createVersion).not.toHaveBeenCalled()
+ expect(listHistory).toHaveBeenCalledExactlyOnceWith("old",undefined,expect.any(AbortSignal))
+ expect(dialog.querySelector("form")).toHaveAttribute("aria-busy","true")
+ resolve({series_id:"series",publication:{current_version_id:"different-current",state_version:"9007199254740993",withdrawn_at:"2026-10-21T00:00:00Z"},versions:[],next_cursor:null})
+ await waitFor(()=>expect(within(dialog).getByRole("button",{name:"更新技能"})).not.toBeDisabled())
+ expect(dialog.querySelector("form")).toHaveAttribute("aria-busy","false")
+ fireEvent.submit(dialog.querySelector("form")!)
+ await waitFor(()=>expect(createVersion).toHaveBeenCalledTimes(1))
+ expect(listHistory).toHaveBeenCalledTimes(1)
+})
+
+
+it("does not interpret an unavailable history read as first publication; an explicit retry rechecks the series",async()=>{
+ const base={skill_id:"mine",source_ref:"skill:mine",series_id:"series",revision:"1",name:"Mine",summary:"",tags:[],status:"draft" as const,skill_updated_at:"2026-10-10T00:00:00Z",example_prompts:[],category_keys:[],product:{publication_audience:"owner" as const,state_version:"4"}}
+ const listHistory=vi.fn().mockRejectedValueOnce(new HubClientError("http","missing","skill_not_found",404)).mockResolvedValue({...publicationPage,series_id:"wrong-series"})
+ const publishDraft=vi.fn(),getManaged=vi.fn()
+ render(<LocaleProvider><PersonalSkillPublishDialog base={base} open client={{listHistory,publishDraft,getManaged} as unknown as SkillPublishClient} onOpenChange={vi.fn()} onPublished={vi.fn()}/></LocaleProvider>)
+ const dialog=screen.getByTestId("personal-skill-publish-dialog")
+ fireEvent.change(within(dialog).getByLabelText("可见范围"),{target:{value:"owner"}})
+ await within(dialog).findByRole("alert")
+ expect(within(dialog).getByRole("button",{name:"上传并发布"})).toBeDisabled()
+ fireEvent.submit(dialog.querySelector("form")!)
+ expect(getManaged).not.toHaveBeenCalled();expect(publishDraft).not.toHaveBeenCalled()
+ fireEvent.click(within(dialog).getByRole("button",{name:"重试同一次尝试"}))
+ await waitFor(()=>expect(listHistory).toHaveBeenCalledTimes(2))
+ expect(await within(dialog).findByRole("alert")).toBeInTheDocument()
+ expect(within(dialog).getByRole("button",{name:"上传并发布"})).toBeDisabled()
+ expect(getManaged).not.toHaveBeenCalled();expect(publishDraft).not.toHaveBeenCalled()
+})
+
+it("does not announce an in-flight publication read when current admission denies it",()=>{
+ const base={skill_id:"old",source_ref:"skill:old",series_id:"series",revision:"1",name:"Original",summary:"",tags:[],status:"active" as const,skill_updated_at:"2026-10-10T00:00:00Z",example_prompts:[],category_keys:[],product:{source_kind:"personal" as const,publication_audience:"owner" as const,state_version:"9"}}
+ const listHistory=vi.fn(),createVersion=vi.fn()
+ render(<LocaleProvider><PersonalSkillPublishDialog base={base} open admitted={false} client={{listHistory,createVersion} as unknown as SkillPublishClient} onOpenChange={vi.fn()} onPublished={vi.fn()}/></LocaleProvider>)
+ expect(screen.getByTestId("personal-skill-publish-dialog").querySelector("form")).toHaveAttribute("aria-busy","false")
+ expect(listHistory).not.toHaveBeenCalled();expect(createVersion).not.toHaveBeenCalled()
 })

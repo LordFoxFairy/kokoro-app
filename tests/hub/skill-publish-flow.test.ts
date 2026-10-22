@@ -26,7 +26,7 @@ it("requires an ACTIVE receipt after the single-ZIP owner command chain", async 
   expect(client.beginUpload).toHaveBeenCalledWith("mine", expect.objectContaining({ expected_state_version: "1" }), expect.any(String), signal)
   expect(client.completeUpload).toHaveBeenCalledWith("mine", expect.objectContaining({ expected_state_version: "2", source_version_id: "object-version-1" }), expect.any(String), signal)
   expect(client.validateDraft).toHaveBeenCalledWith("mine", { attempt_id: "attempt", expected_state_version: "3" }, expect.any(String), signal)
-  expect(client.publishDraft).toHaveBeenCalledWith("mine", { audience: "owner", expected_state_version: "4" }, expect.any(String), signal)
+  expect(client.publishDraft).toHaveBeenCalledWith("mine", { audience: "owner", expected_state_version: "4", expected_publication: null }, expect.any(String), signal)
   expect(client.putPackage).toHaveBeenCalledTimes(1)
   expect(client.publishDraft).toHaveBeenCalledTimes(2)
   expect(client.publishDraft.mock.calls[0]).toEqual(client.publishDraft.mock.calls[1])
@@ -65,6 +65,7 @@ it("does not start a draft after cancellation or reuse any persisted upload refe
   expect(client.createDraft).not.toHaveBeenCalled()
 })
 
+const lifecyclePublication = { current_version_id: "old", state_version: "1" }
 const lifecycleBase = { skill_id: "old", source_ref: "skill:old", series_id: "series", revision: "1", name: "Original", summary: "Original summary", tags: [], status: "active" as const, skill_updated_at: "2026-10-10T00:00:00Z", example_prompts: ["真实旧例子"], category_keys: [], product: { source_kind: "personal" as const, publication_audience: "owner" as const, state_version: "99" } }
 it("updates as a new revision with explicit examples and entirely new ZIP proof/CAS, not inherited package or auto-install", async () => {
   const client = {
@@ -78,17 +79,19 @@ it("updates as a new revision with explicit examples and entirely new ZIP proof/
     publishDraft: vi.fn().mockResolvedValue({ source_ref: "skill:mine", revision: "2", status: "active", state_version: "5", event_id: "550e8400-e29b-41d4-a716-446655440000", replayed: true }),
     getPublished: vi.fn(),
   }
-  const session=createPersonalSkillVersionSession(lifecycleBase,{file:new File(["new zip"],"update.zip"),display_name:"Updated",summary:"New summary",tags:[],example_prompts:[],audience:"owner"})
+  const confirmed = { current_version_id: "different-current", state_version: "9007199254740993" }
+  const session=createPersonalSkillVersionSession(lifecycleBase,{file:new File(["new zip"],"update.zip"),display_name:"Updated",summary:"New summary",tags:[],example_prompts:[],audience:"owner"}, confirmed)
+  confirmed.current_version_id = "later-current"; confirmed.state_version = "9007199254740994"
   const receipt=await runPersonalSkillPublishSession(client as unknown as SkillPublishClient,session,{hash:async()=>"a".repeat(64)})
   expect(receipt).toEqual({source_ref:"skill:mine",revision:"2"})
   expect(client.createDraft).not.toHaveBeenCalled()
   expect(client.createVersion).toHaveBeenCalledWith("old",{display_name:"Updated",summary:"New summary",tags:[],example_prompts:[],category_keys:[]},session.keys.draft,undefined)
   expect(client.beginUpload).toHaveBeenCalledWith("mine",expect.objectContaining({expected_state_version:"1"}),session.keys.begin,undefined)
   expect(client.completeUpload).toHaveBeenCalledWith("mine",expect.objectContaining({source_version_id:"object-version-1",expected_state_version:"2"}),session.keys.complete,undefined)
-  expect(client.publishDraft).toHaveBeenCalledWith("mine",{audience:"owner",expected_state_version:"4"},session.keys.publish,undefined)
+  expect(client.publishDraft).toHaveBeenCalledWith("mine",{audience:"owner",expected_state_version:"4",expected_publication:{current_version_id:"different-current",state_version:"9007199254740993"}},session.keys.publish,undefined)
 })
 it("unknown new-version acknowledgement retries the exact original body/key and rejects an unrelated series before Begin", async()=>{
- const session=createPersonalSkillVersionSession(lifecycleBase,{file:new File(["zip"],"update.zip"),display_name:"Updated",summary:"",tags:[],audience:"owner"})
+ const session=createPersonalSkillVersionSession(lifecycleBase,{file:new File(["zip"],"update.zip"),display_name:"Updated",summary:"",tags:[],audience:"owner"},lifecyclePublication)
  const client={createVersion:vi.fn().mockRejectedValueOnce(new Error("lost ACK")).mockResolvedValueOnce({skill_id:"new",series_id:"unrelated",revision:"2",status:"draft",replayed:true,state_version:"1"}),beginUpload:vi.fn()}
  await expect(runPersonalSkillPublishSession(client as unknown as SkillPublishClient,session,{hash:async()=>"a".repeat(64)})).rejects.toThrow("lost ACK")
  await expect(runPersonalSkillPublishSession(client as unknown as SkillPublishClient,session)).rejects.toMatchObject({reason:"parse"})
@@ -98,13 +101,13 @@ it("unknown new-version acknowledgement retries the exact original body/key and 
 })
 it("ordinary personal update rejects official/withdrawn facts and any new catalog publication",()=>{
  const input={file:new File(["zip"],"update.zip"),display_name:"Update",summary:"",tags:[],audience:"owner" as const}
- expect(()=>createPersonalSkillVersionSession({...lifecycleBase,status:"withdrawn"},input)).toThrow()
- expect(()=>createPersonalSkillVersionSession({...lifecycleBase,product:{...lifecycleBase.product,source_kind:"official"}},input)).toThrow()
- expect(createPersonalSkillVersionSession(lifecycleBase,input).draftBody).toMatchObject({example_prompts:["真实旧例子"],category_keys:[]})
- expect(()=>createPersonalSkillVersionSession(lifecycleBase,{...input,audience:"catalog"})).toThrow()
+ expect(()=>createPersonalSkillVersionSession({...lifecycleBase,status:"withdrawn"},input,lifecyclePublication)).toThrow()
+ expect(()=>createPersonalSkillVersionSession({...lifecycleBase,product:{...lifecycleBase.product,source_kind:"official"}},input,lifecyclePublication)).toThrow()
+ expect(createPersonalSkillVersionSession(lifecycleBase,input,lifecyclePublication).draftBody).toMatchObject({example_prompts:["真实旧例子"],category_keys:[]})
+ expect(()=>createPersonalSkillVersionSession(lifecycleBase,{...input,audience:"catalog"},lifecyclePublication)).toThrow()
 })
 it("unknown new-version network result never automatically creates again",async()=>{
- const session=createPersonalSkillVersionSession(lifecycleBase,{file:new File(["zip"],"update.zip"),display_name:"Updated",summary:"",tags:[],audience:"owner"})
+ const session=createPersonalSkillVersionSession(lifecycleBase,{file:new File(["zip"],"update.zip"),display_name:"Updated",summary:"",tags:[],audience:"owner"},lifecyclePublication)
  const client={createVersion:vi.fn().mockRejectedValue(new HubClientError("network","unknown",null,null))}
  await expect(runPersonalSkillPublishSession(client as unknown as SkillPublishClient,session,{hash:async()=>"a".repeat(64)})).rejects.toMatchObject({reason:"network"})
  expect(client.createVersion).toHaveBeenCalledTimes(1)
@@ -114,7 +117,7 @@ it("unknown new-version network result never automatically creates again",async(
 })
 
 it("retains an unconfirmed creation when cancelled between the ACK and the next stage", async () => {
- const session=createPersonalSkillVersionSession(lifecycleBase,{file:new File(["zip"],"update.zip"),display_name:"Updated",summary:"",tags:[],audience:"owner"})
+ const session=createPersonalSkillVersionSession(lifecycleBase,{file:new File(["zip"],"update.zip"),display_name:"Updated",summary:"",tags:[],audience:"owner"},lifecyclePublication)
  const controller=new AbortController()
  const client={
   createVersion:vi.fn(async()=>{
@@ -127,4 +130,17 @@ it("retains an unconfirmed creation when cancelled between the ACK and the next 
  expect(client.getUpload).not.toHaveBeenCalled()
  expect(session.draft).toBeUndefined()
  expect(session.draftUncertain).toBe(true)
+})
+it("restoration freezes original metadata in a new session and never admits quarantined or non-personal sources",async()=>{
+ const {createPersonalSkillRestoreSession}=await import("@/ui/skills/personal-skill-publish-flow")
+ const original={...lifecycleBase,status:"withdrawn" as const,tags:["saved"],example_prompts:["old example"]},file=new File(["original zip"],"skill-history.zip")
+ const publication={current_version_id:"current",state_version:"7"},session=createPersonalSkillRestoreSession(original,file,publication)
+ original.tags[0]="changed";original.example_prompts[0]="changed";publication.state_version="8"
+ expect(session.input.file).toBe(file)
+ expect(session.expectedPublication).toEqual({current_version_id:"current",state_version:"7"})
+ expect(session.draftBody).toMatchObject({display_name:"Original",tags:["saved"],example_prompts:["old example"]})
+ expect(session).not.toHaveProperty("draft");expect(session).not.toHaveProperty("validated")
+ expect(()=>createPersonalSkillRestoreSession({...original,status:"quarantined"},file,lifecyclePublication)).toThrow()
+ expect(()=>createPersonalSkillRestoreSession({...original,product:{...original.product,source_kind:"official"}},file,lifecyclePublication)).toThrow()
+ expect(()=>createPersonalSkillRestoreSession(original,file,null)).toThrow()
 })

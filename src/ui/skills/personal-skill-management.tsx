@@ -1,5 +1,8 @@
 "use client"
 
+import { PersonalSkillDeleteDialog } from "./personal-skill-delete-dialog"
+import { PersonalSkillHistoryDialog } from "./personal-skill-history-dialog"
+
 import { useLayoutEffect, useRef, useState, type RefObject } from "react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
@@ -32,10 +35,11 @@ export function PersonalSkillManagement({ selection, boundary, onReleased, onCon
   // managed read gates access, never rewrites an uncertain command's payload.
   const [base, setBase] = useState<ManagedPersonalSkill | null>(null)
   const pending = useRef(false)
+  const [deleteStarted,setDeleteStarted]=useState(false)
   const admitted = boundary.admitted && boundary.subject !== null
   const { generation, subject } = boundary
   useLayoutEffect(() => {
-    if (!admitted) return
+    if (!admitted || selection.operation === "delete" && deleteStarted) return
     const controller = new AbortController()
     void client.getManaged(selection.source_ref.slice("skill:".length), controller.signal).then(skill => {
       if (controller.signal.aborted) return
@@ -49,10 +53,15 @@ export function PersonalSkillManagement({ selection, boundary, onReleased, onCon
       if (!controller.signal.aborted) setRead({ generation, attempt: readAttempt, error })
     })
     return () => controller.abort()
-  }, [admitted, subject, generation, selection, readAttempt, client])
+  }, [admitted, subject, generation, selection, readAttempt, client, deleteStarted])
 
   const current = admitted && read?.generation === generation && read.attempt === readAttempt ? read : null
-  const ready = current?.skill !== undefined && base !== null && ["active", "disabled"].includes(base.status)
+  const ready = base !== null && (
+    selection.operation === "delete" && deleteStarted || current?.skill !== undefined && (
+      selection.operation === "delete" ? current.skill.product.source_kind === "personal"
+        : selection.operation === "history" || ["active", "disabled"].includes(base.status)
+    )
+  )
   const close = (_open: boolean, retainIntent = pending.current) => {
     pending.current = retainIntent
     setOpen(false)
@@ -66,7 +75,7 @@ export function PersonalSkillManagement({ selection, boundary, onReleased, onCon
     </div> : null}
     <Dialog open={admitted && open && !ready} onOpenChange={close}>
       <DialogContent onCloseAutoFocus={restoreFocus}>
-        <DialogTitle>{t(selection.operation === "update" ? "skills.lifecycle.update" : "skills.lifecycle.withdraw")}</DialogTitle>
+        <DialogTitle>{t(selection.operation === "delete" ? "skills.delete.title" : selection.operation === "history" ? "skills.history.title" : selection.operation === "update" ? "skills.lifecycle.update" : "skills.lifecycle.withdraw")}</DialogTitle>
         <DialogDescription>{t("skills.personal.checkCurrent")}</DialogDescription>
         {current ? <><p role="alert">{t(current.error instanceof HubClientError && [401, 403].includes(current.error.status ?? 0) ? "skills.personal.forbidden" : "skills.personal.rejected")}</p>
           <Button type="button" onClick={() => setReadAttempt(value => value + 1)}>{t("skills.retry")}</Button></>
@@ -74,6 +83,8 @@ export function PersonalSkillManagement({ selection, boundary, onReleased, onCon
         <Button type="button" variant="outline" onClick={() => close(false)}>{t("skills.cancel")}</Button>
       </DialogContent>
     </Dialog>
+    {base !== null && selection.operation === "delete" ? <PersonalSkillDeleteDialog skill={deleteStarted ? base : current?.skill ?? base} client={client} admitted={admitted && ready} generation={generation} open={ready && open} onOpenChange={close} onIntentStarted={()=>{pending.current=true;setDeleteStarted(true)}} onConfirmed={confirmed} returnFocusRef={returnFocusRef}/> : null}
+    {base !== null && selection.operation === "history" ? <PersonalSkillHistoryDialog key={subject} base={base} client={client} admitted={ready} open={open} onOpenChange={close} returnFocusRef={returnFocusRef} onIntentChanged={value => {pending.current=value}} onRestored={confirmed}/> : null}
     {base !== null && selection.operation === "update" ? <PersonalSkillPublishDialog
       base={base} client={client} admitted={ready} open={ready && open} onOpenChange={close}
       onIntentStarted={() => { pending.current = true }} onPublished={confirmed} returnFocusRef={returnFocusRef}

@@ -23,7 +23,9 @@ vi.mock("@/lib/server/product-session-store", async (original) => ({
 }))
 
 import { parseProductReturnTarget } from "@/lib/product-return-target"
-import { productLoginReturnCookie } from "@/lib/server/product-login-return"
+import { issueProductLoginIntent } from "@/lib/server/product-login-return"
+import { createHash } from "node:crypto"
+import { oidcHandoffCsrfName } from "@/lib/server/oidc-transaction-cookies"
 import { GET, POST } from "@/app/api/auth/[...nextauth]/route"
 import { oidcAuthOptions, oidcRpConfig, OIDC_SCOPE } from "@/lib/server/oidc-provider"
 
@@ -68,16 +70,19 @@ function authorizeResponse(scope: string, duplicateScope = false): Response {
   })
 }
 
-async function signIn(accept?: string, body = new URLSearchParams({ csrfToken: "a".repeat(64) }).toString()): Promise<Response> {
-  return POST(new NextRequest(`${ENV.NEXTAUTH_URL}/signin/kokoro-iam`, {
-    method: "POST",
-    headers: {
-      host: "web.example.test",
-      origin: ENV.KOKORO_WEB_ORIGIN,
-      "content-type": "application/x-www-form-urlencoded",
-      ...(accept ? { accept } : {}),
-    },
-    body,
+function startForm(target = "/app") {
+  const signed = issueProductLoginIntent(parseProductReturnTarget(target)!, ENV.KOKORO_WEB_AUTH_SECRET, ENV.KOKORO_WEB_ORIGIN)
+  const token = "a".repeat(64)
+  const digest = createHash("sha256").update(token + ENV.KOKORO_WEB_AUTH_SECRET).digest("hex")
+  return { body: new URLSearchParams({ csrfToken: token, loginIntent: signed.intent }).toString(),
+    cookie: `${oidcHandoffCsrfName(false, signed.handoffNamespace)}=${encodeURIComponent(`${token}|${digest}`)}` }
+}
+const transaction = (target: string) => ({ target, handoffNamespace: "h".repeat(22), oidcNamespace: "o".repeat(22) })
+async function signIn(accept?: string, body?: string): Promise<Response> {
+  const form = startForm()
+  return POST(new NextRequest(`${ENV.NEXTAUTH_URL}/signin/kokoro-iam`, { method: "POST",
+    headers: { host: "web.example.test", origin: ENV.KOKORO_WEB_ORIGIN, cookie: form.cookie,
+      "content-type": "application/x-www-form-urlencoded", ...(accept ? { accept } : {}) }, body: body ?? form.body,
   }), { params: Promise.resolve({ nextauth: ["signin", "kokoro-iam"] }) })
 }
 
@@ -149,9 +154,10 @@ describe("Product OIDC fixed-tenant Team and Skill scopes", () => {
   })
   it("accepts the fixed no-referrer browser document navigation emitted by Chromium", async () => {
     nextAuth.mockResolvedValueOnce(authorizeResponse(EXPECTED_SCOPE))
+    const form = startForm()
     const response = await POST(new NextRequest(`${ENV.NEXTAUTH_URL}/signin/kokoro-iam`, {
-      method: "POST", headers: { host: "web.example.test", origin: "null", "content-type": "application/x-www-form-urlencoded" },
-      body: "csrfToken=Token123",
+      method: "POST", headers: { host: "web.example.test", origin: "null", "content-type": "application/x-www-form-urlencoded", cookie: form.cookie },
+      body: form.body,
     }), { params: Promise.resolve({ nextauth: ["signin", "kokoro-iam"] }) })
     expect(response.status).toBe(302)
     expect(issueOidcState).toHaveBeenCalledWith(expect.objectContaining({ target: "/app" }))
@@ -202,7 +208,7 @@ describe("transaction-bound Product login return", () => {
     }), { params: Promise.resolve({ nextauth: ["callback", "kokoro-iam"] }) })
   }
   function verifiedCallback() {
-    consumeOidcState.mockResolvedValue(target)
+    consumeOidcState.mockResolvedValue(transaction(target))
     verifyProductIdentity.mockResolvedValue(undefined)
     createSession.mockResolvedValue(undefined)
     productSessionCookie.mockResolvedValue("kokoro_product_session=fixture; HttpOnly")
@@ -212,36 +218,32 @@ describe("transaction-bound Product login return", () => {
       return new Response(null, { status: 302, headers: { location: "/app" } })
     })
   }
-  it("passes the finite target only via internal Context and keeps fixed issuer redirect_uri", async () => {
+  it("uses only the signed per-form intent, not a shared return cookie or public header", async () => {
     nextAuth.mockResolvedValue(authorizeResponse(EXPECTED_SCOPE))
+    const form = startForm(target)
     const response = await POST(new NextRequest(`${ENV.NEXTAUTH_URL}/signin/kokoro-iam`, {
-      method: "POST", headers: { host: "web.example.test", origin: ENV.KOKORO_WEB_ORIGIN, "content-type": "application/x-www-form-urlencoded" }, body: "csrfToken=Token123",
-    }), { params: Promise.resolve({ nextauth: ["signin", "kokoro-iam"] }), productReturnTarget: target })
+      method: "POST", headers: { host: "web.example.test", origin: ENV.KOKORO_WEB_ORIGIN,
+        "content-type": "application/x-www-form-urlencoded", cookie: form.cookie + "; kokoro_product_login_return=obsolete",
+        "x-kokoro-product-return-target": "/app" }, body: form.body,
+    }), { params: Promise.resolve({ nextauth: ["signin", "kokoro-iam"] }) })
     expect(response.status).toBe(302)
     expect(issueOidcState).toHaveBeenCalledWith(expect.objectContaining({ target, authSecret: ENV.KOKORO_WEB_AUTH_SECRET }))
     const authorize = new URL(response.headers.get("location")!)
     expect(authorize.searchParams.get("redirect_uri")).toBe(`${ENV.NEXTAUTH_URL}/callback/kokoro-iam`)
     expect(authorize.searchParams.has("return_to")).toBe(false)
     expect(response.headers.get("referrer-policy")).toBe("no-referrer")
+    expect(response.headers.getSetCookie()).toEqual([expect.stringMatching(/^next-auth\.csrf-token\.tx-[A-Za-z0-9_-]{22}=; Path=\/; Max-Age=0;/u)])
   })
-  it("does not let a public HTTP header supply the internal target", async () => {
-    nextAuth.mockResolvedValue(authorizeResponse(EXPECTED_SCOPE))
-    const response = await POST(new NextRequest(`${ENV.NEXTAUTH_URL}/signin/kokoro-iam`, {
-      method: "POST", headers: { host: "web.example.test", origin: ENV.KOKORO_WEB_ORIGIN, "content-type": "application/x-www-form-urlencoded", "x-kokoro-product-return-target": target }, body: "csrfToken=Token123",
+  it("allocates different OIDC namespaces for repeated POSTs of one legitimate form", async () => {
+    nextAuth.mockImplementation(async () => authorizeResponse(EXPECTED_SCOPE))
+    const form = startForm(target)
+    const send = () => POST(new NextRequest(`${ENV.NEXTAUTH_URL}/signin/kokoro-iam`, { method: "POST",
+      headers: { host: "web.example.test", origin: ENV.KOKORO_WEB_ORIGIN, "content-type": "application/x-www-form-urlencoded", cookie: form.cookie }, body: form.body,
     }), { params: Promise.resolve({ nextauth: ["signin", "kokoro-iam"] }) })
-    expect(response.status).toBe(302)
-    expect(issueOidcState).toHaveBeenCalledWith(expect.objectContaining({ target: "/app" }))
-  })
-  it("uses only the signed /login return cookie when browser-native provider POST starts", async () => {
-    nextAuth.mockResolvedValue(authorizeResponse(EXPECTED_SCOPE))
-    const cookie = productLoginReturnCookie(target, ENV.KOKORO_WEB_AUTH_SECRET, false).split(";", 1)[0]!
-    const response = await POST(new NextRequest(`${ENV.NEXTAUTH_URL}/signin/kokoro-iam`, {
-      method: "POST", headers: { host: "web.example.test", origin: ENV.KOKORO_WEB_ORIGIN,
-        "content-type": "application/x-www-form-urlencoded", cookie }, body: "csrfToken=Token123",
-    }), { params: Promise.resolve({ nextauth: ["signin", "kokoro-iam"] }) })
-    expect(response.status).toBe(302)
-    expect(issueOidcState).toHaveBeenCalledWith(expect.objectContaining({ target }))
-    expect(response.headers.getSetCookie()).toContain("kokoro_product_login_return=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax")
+    expect((await Promise.all([send(), send()])).map(response => response.status)).toEqual([302, 302])
+    const calls = issueOidcState.mock.calls.map(([input]) => input)
+    expect(new Set(calls.map(input => input.oidcNamespace)).size).toBe(2)
+    expect(new Set(calls.map(input => input.handoffNamespace)).size).toBe(1)
   })
   it("rejects public extra form target without issuing a transaction", async () => {
     expect((await signIn(undefined, `csrfToken=Token123&return_to=${encodeURIComponent(target)}`)).status).toBe(400)
@@ -262,7 +264,7 @@ describe("transaction-bound Product login return", () => {
     expect(response.headers.get("location")).toBe(target)
     expect(response.headers.get("cache-control")).toBe("private, no-store")
     expect(response.headers.get("referrer-policy")).toBe("no-referrer")
-    expect(response.headers.getSetCookie()).toHaveLength(1)
+    expect(response.headers.getSetCookie()).toHaveLength(5)
     expect(response.headers.getSetCookie()[0]).toMatch(/^kokoro_product_session=/u)
     expect(consumeOidcState).toHaveBeenCalledWith(expect.objectContaining({ authSecret: ENV.KOKORO_WEB_AUTH_SECRET }))
   })
@@ -299,17 +301,84 @@ it.each(["native-start", "state-store"])("keeps HTML and JSON failure representa
     issueOidcState.mockRejectedValue(new Error("fixture unavailable"))
   }
   for (const html of [true, false]) {
+    const form = startForm()
     const response = await POST(new NextRequest(`${ENV.NEXTAUTH_URL}/signin/kokoro-iam`, {
       method: "POST",
       headers: { host: "web.example.test", origin: ENV.KOKORO_WEB_ORIGIN,
-        "content-type": "application/x-www-form-urlencoded", accept: html ? "text/html" : "application/json", "x-nonce": "n".repeat(48) },
-      body: "csrfToken=" + "a".repeat(64),
+        "content-type": "application/x-www-form-urlencoded", cookie: form.cookie, accept: html ? "text/html" : "application/json", "sec-fetch-mode": "navigate", "sec-fetch-dest": "document", "x-nonce": "n".repeat(48) },
+      body: form.body,
     }), { params: Promise.resolve({ nextauth: ["signin", "kokoro-iam"] }) })
-    expect(response.status).toBe(503)
+    expect(response.status).toBe(html ? 303 : 503)
     expect(response.headers.getSetCookie()).toEqual([])
     if (html) {
-      expect(response.headers.get("content-type")).toContain("text/html")
-      expect(await response.text()).toContain('href="/login"')
+      expect(response.headers.get("location")).toBe("/auth/sign-in/failed")
+      expect(await response.text()).toBe("")
     } else expect(await response.json()).toMatchObject({ error: { code: "rp_unavailable" } })
   }
+})
+
+
+describe("native OAuth failure returns to the product, never retries authentication", () => {
+  function failureRequest(accept = "text/html", extra = "", mode = "navigate") {
+    return new NextRequest(`${ENV.NEXTAUTH_URL}/callback/kokoro-iam?${new URLSearchParams({
+      error: "invalid_scope", error_description: "PRIVATE_ISSUER_DETAIL", state: "s".repeat(32), iss: `${ENV.KOKORO_WEB_ORIGIN}/iam`,
+    })}${extra}`, { headers: { host: "web.example.test", cookie: "next-auth.state=bound",
+      accept, "sec-fetch-mode": mode, "sec-fetch-dest": "document", "x-nonce": "n".repeat(48) } })
+  }
+  const context = () => ({ params: Promise.resolve({ nextauth: ["callback", "kokoro-iam"] }) })
+  it("consumes a bound issuer error once and redirects without callback parameters, cookies or execution", async () => {
+    consumeOidcState.mockResolvedValueOnce(transaction("/app/skills")).mockResolvedValue(null)
+    const response = await GET(failureRequest(), context())
+    expect(response.status).toBe(303)
+    expect(response.headers.get("location")).toBe("/auth/sign-in/failed")
+    expect(response.headers.get("referrer-policy")).toBe("no-referrer")
+    expect(response.headers.get("cache-control")).toBe("no-store")
+    expect(response.headers.getSetCookie()).toHaveLength(4)
+    expect(response.headers.getSetCookie().every(cookie => cookie.includes("Max-Age=0") && cookie.includes(".tx-"))).toBe(true)
+    expect(await response.text()).toBe("")
+    expect(consumeOidcState).toHaveBeenCalledOnce()
+    const replay = await GET(failureRequest("application/json"), context())
+    expect(replay.status).toBe(403)
+    expect(await replay.json()).toMatchObject({ error: { code: "rp_transaction_rejected" } })
+    expect(nextAuth).not.toHaveBeenCalled()
+    expect(createSession).not.toHaveBeenCalled()
+    expect(productSessionCookie).not.toHaveBeenCalled()
+  })
+  it("uses admitted canonical Host rather than Next's internal localhost authority", async () => {
+    consumeOidcState.mockResolvedValueOnce(transaction("/app/skills"))
+    const external = failureRequest("application/json")
+    const internal = new NextRequest(external.url.replace("https://web.example.test", "https://localhost:3310"), { headers: external.headers })
+    const response = await GET(internal, context())
+    expect(response.status).toBe(503)
+    expect(await response.json()).toMatchObject({ error: { code: "rp_login_configuration_invalid" } })
+    expect(consumeOidcState).toHaveBeenCalledOnce()
+  })
+  it("accepts but never forwards a bounded issuer error_uri", async () => {
+    consumeOidcState.mockResolvedValueOnce(transaction("/app/skills"))
+    const response = await GET(failureRequest("application/json", "&error_uri=https%3A%2F%2Fissuer.invalid%2Fdetail"), context())
+    expect(response.status).toBe(503)
+    expect(consumeOidcState).toHaveBeenCalledOnce()
+    expect(await response.text()).not.toContain("issuer.invalid")
+    expect(nextAuth).not.toHaveBeenCalled()
+  })
+  it.each(["application/json", "text/html;q=0"])("retains native API status and sanitized errors for %s", async accept => {
+    consumeOidcState.mockResolvedValueOnce(transaction("/app/skills"))
+    const response = await GET(failureRequest(accept), context())
+    expect(response.status).toBe(503)
+    expect(response.headers.get("location")).toBeNull()
+    expect(await response.json()).toMatchObject({ error: { code: "rp_login_configuration_invalid" } })
+  })
+  it.each(["&code=ambiguous", "&state=duplicate", "&iss=https%3A%2F%2Fother.invalid", "&extra=unrecognized"])("does not consume an ambiguous or foreign callback %s", async extra => {
+    const response = await GET(failureRequest("application/json", extra), context())
+    expect(response.status).toBe(400)
+    expect(consumeOidcState).not.toHaveBeenCalled()
+    expect(nextAuth).not.toHaveBeenCalled()
+  })
+  it("does not convert fetch HTML into a browser redirect or clear a newer transaction", async () => {
+    consumeOidcState.mockResolvedValue(null)
+    const response = await GET(failureRequest("text/html", "", "cors"), context())
+    expect(response.status).toBe(403)
+    expect(response.headers.get("location")).toBeNull()
+    expect(response.headers.getSetCookie()).toEqual([])
+  })
 })

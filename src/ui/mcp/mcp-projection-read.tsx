@@ -139,7 +139,7 @@ export function McpProjectionRead({
   const providerManagementState = managementStates.find(item => item.connectorId === selectedProviderConnectionId);
   const privateAuthorization = usePrivateMcpAuthorization({ client, identity, admitted, readGeneration,
     intent: connectorIntent,
-    blocked: Boolean((managementState && managementState.kind !== "rejected") || (preparationState && preparationState.kind !== "rejected")),
+    blocked: Boolean((managementState && managementState.kind !== "rejected") || preparationState?.kind === "running" || preparationState?.kind === "completed"),
     ...(onAuthorizationNavigate ? { onAuthorizationNavigate } : {}),
   });
   const [apiIntent, setApiIntent] = useState<{ profileId: string; window: object } | null>(null);
@@ -682,7 +682,7 @@ export function McpProjectionRead({
             if (!editor?.server || !connectorIntent || ownerRef.current !== owner || !admitted ||
               editorWindow.current?.intent !== connectorIntent.window || management.isBlocked(editor.connector.connector_id)) return;
             const preparing = preparation.getSnapshot().find(item => item.serverId === editor.server!.server_id);
-            if (preparing && preparing.kind !== "rejected") return;
+            if (preparing?.kind === "running" || preparing?.kind === "completed") return;
             void privateAuthorization.authorize(editor.connector, editor.server);
           }}
           deleteId={deleteId}

@@ -1,3 +1,12 @@
+## 主链读取状态（2026-10-21）
+
+- 模型目录按当前 engine/preview 生命周期读取完整 chat 分页；失败保留同身份已知内容并允许重试，切换身份/engine 退休旧请求与选择。普通新会话首发前显示业务模型选择器；业务 label 上 wire，别名仅展示。
+- 空任务只有当前 engine 本地创建证明、无内容、无列表项且无 owner 回执时为 draft，不读取归档状态；首次内容或 owner 证据出现后恢复正式读取。历史 404 不推断为草稿，刷新后的证明缺失仍待正式恢复语义验收。
+
+## MC-02A Chat模型消费（2026-10-20）
+
+模型请求固定feature_key=chat，selector使用raw candidate.name，display_name只作展示；共享现composer-model helper。对话默认偏好仅从 `kokoro.web.chat-prefs.v2` 读取，旧key保留但不读/迁移/清除，不改写未知提交的冻结body/key或恢复状态机。
+
 <!-- SET47 archive consumer: 2026-10-15 -->
 SET47：use-session-archive只持AppFrame当前身份/engine/scope的命令资格、unknown与独立archiveRevision；use-active-archive-state只持当前active的owner证据与有界重读，不作全局真源。useConversationList以ACK先后顺序保护旧读，post-ACK state/list可覆盖旧回执；不delete/reconcile engine。page-clients在真实身份切换/logout退休全部live engine本地创建证明。
 

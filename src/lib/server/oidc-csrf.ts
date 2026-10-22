@@ -1,9 +1,9 @@
 import { createHash, timingSafeEqual } from "node:crypto"
 
 /** Read only an unambiguous, authenticated Auth.js double-submit cookie. */
-export function oidcCsrfToken(cookieHeader: string | null, secret: string): string | null {
+export function oidcCsrfToken(cookieHeader: string | null, secret: string, cookieName?: string): string | null {
   const cookies = (cookieHeader ?? "").split(";").map(part => part.trim())
-    .filter(part => /^(?:__Host-)?next-auth\.csrf-token=/u.test(part))
+    .filter(part => cookieName === undefined ? /^(?:__Host-)?next-auth\.csrf-token=/u.test(part) : part.startsWith(`${cookieName}=`))
   if (cookies.length !== 1) return null
   let value: string
   try { value = decodeURIComponent(cookies[0]!.slice(cookies[0]!.indexOf("=") + 1)) }

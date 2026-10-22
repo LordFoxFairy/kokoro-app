@@ -1,3 +1,11 @@
+## 公开Skill list的唯一原生Bearer入口（2026-10-22，候选）
+
+src/app/v1/skill.list/route.ts只透传固定public GET，复用iam-relay-config的部署Host／Origin与service secret、domain-context的部署Domain、upstream-http的有限传输。它不调用Product Session、不接其他/v1方法或任意URL；原Hub／网站RPC准入保持。单操作generated/bff-public-skill-list由固定canonical正规生成，不手维护第二份schema。正常生效与真实owner链另验。
+
+## 登录交易隔离（2026-10-21，本地候选）
+
+`oidc-transaction-cookies.ts` 只配置每次请求的 Auth.js 原生 proof 名字、安全属性、精确终态清理与可见预算；`product-login-return.ts` 只签发／核验每启动表单的目标 intent。唯一 `oidc-rp-transaction.ts` v2 ledger 验 MAC 和浏览器绑定后 CAS；不兼容旧记录或共享 return cookie。`iam-interaction-csrf.ts` 为 sign-in 每次渲染独立 proof，原始 query 与 proof 共同定位 cookie，验证后 CAS；其他 interaction 保原语义。未知 exchange 不重发，Product session 和全局会话 CSRF 不纳入临时清理。完整设计及未激活状态见 docs/TECHNICAL_DESIGN.md 与 docs/CURRENT.md。
+
 <!-- SET47 archive consumer: 2026-10-15 -->
 SET47：archived-tasks.ts仅代理本人归档列表；session-archive.ts仅承接现session catch-all的GETarchive/POSTarchive|restore。固定BFF、server-only bearer、Origin/Host/scheme、严格raw闭集JSON与目标/action、1MiB、一次总10秒含params/body/会话/上游EOF/final六字段复验。POST允许identity/chunked的合法framing，拒冲突与不支持encoding，实际4096B+EOF；不改generic Chat/SSE代理。
 
@@ -21,7 +29,7 @@ productSessionState/inspectSessionState只服务App壳和原生session端点，�
 
 ## Authorize浏览器异常恢复（2026-10-19）
 
-`oidc-login-recovery.ts`是无脚本、无自动重试的手动恢复文档，不是认证或降级入口。IAM GET relay只在既有路径/host/origin/body/cookie/header校验完成后，对明确top-level document navigation且Accept允许HTML的authorize错误呈现该文档；保留失败status/request-id、不转发失败owner的Location/cookies/body。成功redirect及API/非顶层/缺nonce/HTML q=0响应保持原契约。Callback可复用相同helper；不恢复旧state、不新建会话、不删除其他登录cookie。正常开发环境与登录整链另验。 最终Proxy在精确authorize路径使用同一nonce策略并固定no-referrer，避免框架全局头覆盖；其余路径不改变。
+`oidc-login-recovery.ts` 仅将已准入的顶层 HTML 登录失败重定向到固定产品结果页 `/auth/sign-in/failed`，不携回调 query、不自动重试、不更改现有 session；API 和非顶层导航保原错误契约。
 
 # lib/server — Web BFF 服务端边界
 
@@ -60,9 +68,9 @@ runtime token、内部服务地址、workload secret 或后端隔离键。
   header/body 限额；仅受控交互使用 POST，不复用会合并 cookie 的 Product transport。
 - `iam-relay-response.ts`：原生 status/header/body、Location 与 issuer `Set-Cookie` 的出站校验。
 - `oidc-provider.ts`：固定 provider/EdDSA、验证型 `client.callback` 与 server-only Basic/Bearer backchannel；Product Session 由 RP route 在身份准入后建立。
-- `oidc-rp-transaction.ts`：300秒Redis state摘要、RP cookie绑定和原子一次消费；所有callback均不删除可能属于新登录的共享proof，成功只签发Product cookie，临时proof按原期限过期。
+- `oidc-rp-transaction.ts`：300秒Redis state摘要、RP cookie绑定；先读取并验证完整MAC记录与浏览器binding，再Lua比较原值并原子消费，错proof不消耗原交易，只有一个并发回调入exchange；所有callback均不删除可能属于新登录的共享proof，成功只签发Product cookie，临时proof按原期限过期。
 - `oidc-csrf.ts`：严格读取唯一、两段格式及摘要有效的Auth.js CSRF cookie，登录复用与session/signout校验共用。
-- `oidc-login-recovery.ts`：GET/POST原生失败的手动HTML表示，保原status与API JSON；精确Proxy路径承接no-referrer及同nonce CSP，无自动重试。
+- `oidc-login-recovery.ts`：GET/POST 顶层登录失败的固定产品返回，保 API JSON／status；精确 Proxy 路径承接 no-referrer 与 CSP，无自动重试。
 - `product-login-return.ts`：`/login` 到 provider POST 的 HttpOnly 签名回跳目标 cookie；仅接受严格 Product 内部路径，provider 启动后立即清除。
 - `oidc-bff-agent.ts`：token/userinfo/JWKS 每请求独立 5 秒绝对 deadline、响应头/正文 1 MiB 上限与浏览器 abort 连接取消。
 - `product-identity.ts`：callback 建 session 与 refresh finalize 前调用固定 BFF `/v1/me`，严格核对
@@ -112,3 +120,5 @@ runtime token、内部服务地址、workload secret 或后端隔离键。
 新增 Product 上游服务时必须复用 `upstream-http.ts`；固定 policy 的 IAM 原生 relay 是唯一已批准例外，
 只能复用 `iam-relay-transport.ts`，不得扩成通用代理。route handler 禁止直接裸 `fetch`、手写 Host 或
 手写部署/租户 header；浏览器 client 只能调用同源 BFF path。
+
+- `model-publish-body.ts`：仅模型修订发布的有界EOF校验，证明Next空POST流，无正文生成或模型执行。

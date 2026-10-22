@@ -13,7 +13,7 @@ export function createPersonalSkillGithubImportFlow(options: { github: ReturnTyp
   let draft: z.infer<typeof githubDraftSchema> | undefined, name: string | undefined, series: string | undefined
   let importKey: string | undefined, publishKey: string | undefined, installKey: string | undefined
   let published: Awaited<ReturnType<typeof options.publish.publishDraft>> | undefined
-  let publishBody: { audience: "owner"; expected_state_version: string } | undefined
+  let publishBody: { audience: "owner"; expected_state_version: string; expected_publication: null } | undefined
   let active: { controller: AbortController; stage: Stage } | undefined
   const listeners = new Set<() => void>(), key = options.key ?? (() => crypto.randomUUID())
   const update = (next: GithubFlowState) => { state = Object.freeze(next); for (const listener of listeners) listener() }
@@ -46,7 +46,7 @@ export function createPersonalSkillGithubImportFlow(options: { github: ReturnTyp
         series = record.series_id; name = record.name
       }
       if (!published) {
-        stage("publish"); publishKey ??= key(); publishBody ??= Object.freeze({ audience: "owner", expected_state_version: draft.state_version })
+        stage("publish"); publishKey ??= key(); publishBody ??= Object.freeze({ audience: "owner", expected_state_version: draft.state_version, expected_publication: null })
         const value = await options.publish.publishDraft(draft.skill_id, publishBody, publishKey, signal); current()
         if (value.source_ref !== draft.source_ref || value.status !== "active") throw new HubClientError("parse", "GitHub publish identity mismatch", null, 200)
         published = value

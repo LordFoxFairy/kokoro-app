@@ -1,3 +1,144 @@
+## MODEL-1 Admin上游发现同源桥（2026-10-22）
+
+沿现 `src/app/api/admin/[...path]/route.ts` 增加唯一 GET `model-providers/{uuid}/upstream-models`，映射固定BFF同名 `/v1/admin` 路径。App只拥有Product Session准入及配置Domain/service上下文，不接Key、不选择owner地址、不执行模型。平台管理员权限仍由BFF fresh admission裁决，Admin消费者负责严格响应decode。
+
+本GET拒任何query、body、Content-Length（含0）、Transfer-Encoding、Content-Type与CAS/幂等命令头；只以已准入session access构造BFF头，不透传浏览器tenant/actor/service。复用既有requestWithDomain，准入及HTTP/EOF共享10秒绝对预算，1MiB有限响应，取消关闭socket，超限/依赖失败脱敏503；响应原字节、request-id与no-store保留，未完成EOF不先暴露200。旧Admin请求行为不变。
+
+唯一Public snapshot固定BFF `e461d5178c6bf92558d7cd7dd288cb29cb008525`／Public22.3.0／182／SHA256 `727159cea88e9f70ca3d1127306e8a6a6bcaa568398de8b0d8fec1cce6b3fae3`，原字节单pin替换，六窄生成器正规重生成，不为透明桥新增SDK。精确test-only22.3→22.2完整父逆证承接原181operation/schema，无运行fallback。无服务、缓存、数据库或正常进程变更；验证分为真实loopback薄adapter、原契约/架构与完整门，正常浏览器配对由主方完成。
+
+<!-- 2026-10-22 continuation retirement correction -->
+积分客户端每次续发 PUT 或核实 GET 前复验调用方 `getCurrent`；真实账户/用量/rail传入现 controller/current 与发起时已准入subject的marker一致性检查。只更新storage、无rerender/focus仍会抑制旧续发；marker丢失、不匹配或读取异常一律退休。marker只抑制，不授予session权限；非UI调用可不传callback，初次GET契约保持，无新store/轮询/锁。
+
+## 当前租户积分无感初始化（2026-10-22；消费者设计门）
+
+沿现 `createBillingClient` 与已准入的账户/用量 UI，summary 或 ledger 仅在严格闭集、request-id 匹配的 `404 billing_account_not_found` 后调用一次 `PUT /api/session/billing/credit-account`（严格 `{}` JSON，无 query），然后重读原 GET。GET 本身仍只读；tenant/subject 只取现可信同源 session。owner 天然幂等承接并发，不建浏览器锁、global store、缓存框架或账户事实。
+
+每次读取及初始化/核实共享原 10 秒绝对预算，外部取消/subject 退休即时取消且不晚发 PUT。PUT 网络/畸形回执及502/503结果未知先重读原 GET 核实，不在该流程重放 PUT；失败沿现显式重试且不显示假 0/未开户提示。仅保留现布局和无文字稳定占位，不加大骨架；正常已知数据不因初始化阶段伪装成功。本片不启用计量、扣费、充值或支付。契约固定 BFF `efe0ed8b3f791468608b61dd895208f0db709e50` / Public22.2.0 /181，正规生成沿原链，独立 connector profile 不换。
+
+## 2026-10-22 公开Skill list入口接线候选
+
+公开身份矩阵沿现Web→BFF边界仅增加固定GET /v1/skill.list薄adapter，不改/api/hub的Product Session准入，不降BFF serviceguard、不新增通用网关。原User API Key／OAuth Open App Bearer只送该路径；配置注入web-bff／service secret／新request-id，requestWithDomain固定KOKORO_DOMAIN Forwarded并丢弃用户authority／tenant／cookie。复用iamRelayConfig及matchesCanonicalWebRequest：Host精确配置webHost，GET无Origin或精确webOrigin；不依赖Session／Redis，也不创建用户权限或推断trusted。
+
+固定f74fb1a / Public22.1 / 180 canonical，仅该操作正规生成types／请求和响应Zod／provenance，类型在adapter终止。JSON数值时间戳保持number而不被生成器隐式coerce成BigInt；闭集完整deep-equality拒额外键、raw重复键拒绝。沿现transport十秒总deadline和16MiB响应上限，无自动重试／重定向；只发原public成功／错误envelope，不回cookie。真实Next HTTP先复现Hub拒绝外部Bearer和原public404，再单GET200；此为隔离传输证据，真实IAM/Platform/BFF身份整链及正常生效由主方另验。
+
+## 2026-10-21 个人系列删除消费者候选
+
+固定BFF `f74fb1a6796e1b5860044c889fc5ed1355cf2ec9` / Public22.1.0 / 180，原始 SHA256 `f726cac620362524f92474ca9d647229280db308d16105820c718f9bc32db1ae`。沿原个人管理菜单增加真正系列删除，不把撤回／卸载改名。PersonalSkillManagement先核本人managed精确锚点，独立确认Dialog读取正式history的series publication；确认时深冻结anchor CAS、明确null或真实publication及唯一key。使用已采“删除此技能？”／“您稍后可以通过重新上传再次添加此技能。”，取消不发命令。
+
+未知DELETE保留原body/key；关闭或同主体准入代际变化取消旧等待，但不再用已删除资源的GET404阻断原命令重放，也不把404当成功。主体变化由原actor键控宿主退休。只有严格匹配anchor／series／递增CAS的200回执清选择并失活原列表；无自动重发、新key或current猜测。保留installation事实，deleted来源禁详情／history／包／启用／更新；停用仍可用。无新服务、状态框架、持久化或物理Storage删除。正常环境和真实浏览器写旅程由主方统一验收，候选测试不冒正常闭环。
+
+## 2026-10-21 本人历史恢复（实施中）
+
+沿既有历史行提供恢复确认，使用当时明确 publication 指针/版本和所选精确 UID/revision；本人 managed 元数据读取后，POST /api/hub/self/skills/managed/{skill_id}/download 映射现 BFF private POST /browser/v1/skills/{version_id}/download，再经现 /api/skill-downloads/{handle} 读取原始 ZIP。该 adapter 不是新公开业务 API；来源、期限、请求标识、no-store、有限大小/时间和取消均严格验证，不重组预览文本、不持久化字节/句柄。
+
+独立恢复确认组件复用现发布 session：原 metadata/ZIP创建新 UID，独立上传/扫描/校验、原确认 publication 发布，不复制旧 Storage scope、不自动安装。确认前不发写命令；失败/关闭重开/同主体重新准入保留原 session/body/key，主体变化退休，冲突需显式刷新历史重新确认。普通更新仍只接active/disabled，恢复另明确接本人personal active/disabled/withdrawn；隔离不放行。界面沿已采参考的历史行右侧恢复按钮和既有确认组件，不引入新服务/状态框架/兼容层。正常四端和真实页面须在最终验收后再配对。
+
+## 2026-10-21 发布确认消费者配对（实施中）
+
+App沿现发布弹窗读取既有历史接口的series publication；已有系列在用户提交前冻结明确null或指针／版本，新建系列明确null。创建、上传、扫描、校验、发布和未知结果恢复沿原session/key，不在提交或重试时改取最新；失效后仅显式重新开始。既有GitHub导入产生新系列，发布明确null；不增加API、服务、全局缓存或兼容入口。布局保持既有参考，本片不扩大恢复／删除能力。
+
+## 2026-10-21 本人系列历史与精确预览
+
+复用现 PersonalSkillManagement 稳定宿主，新增只读 history 操作，按当代 fresh publisher admission 进入独立 PersonalSkillHistoryDialog；update/withdraw 的 active/disabled 写入门不套用历史读取。弹窗拥有版本页、选择、精确包目录/正文和各自失败重试，复用 SkillPackageFiles/SkillPackageDocument，不扩大现目录/安装详情状态机。历史当前标记仅来自 publication，选择不写入、不安装；本片不提供未完成的恢复或删除按钮。
+
+身份代际/主体/锚点变更立即退休已读内容、取消旧请求，迟到结果不写入。分页失败保留同快照已读列表；publication/cursor失效显式刷新整个快照，不混页。版本选择取消旧预览；目录/正文分别绑定精确skill_id、revision与同一文件清单。关闭回原搜索焦点；窄屏弹窗内独立滚动，键盘及Escape可用，不挂第二套全局reader或缓存。
+
+## 2026-10-21 原生退出确认产品化（既有退出链局部修复）
+
+沿现 App 同源 IAM relay 与锁定 Better Auth 1.7.3；不改 IAM、权限、协议、Schema、退出范围或 Product tombstone。比较添加未持有的 id_token_hint 跳确认、替换/解析 vendor HTML、以及保留原生确认cookie的本地展示，采用第三种：只有已通过原relay校验的200 HTML、无Location及正向限时确认cookie签发，且为正常顶层HTML导航，才303至固定 `/auth/sign-out`。opaque cookie和原Path原样保留，App不验issuer签名、不把形状判断当最终授权。
+
+固定Server Component只展示中文确认及显式原生form POST `/iam/oauth2/end-session/confirm` 的 action=confirm；返回首页不恢复已经终止的Product会话，渲染/刷新不自动发确认、登录或业务请求。原生issuer继续核签名cookie/300秒期限/session/client/注册回跳并正式撤销Session及关联凭据。失败顶层导航回固定退出失败状态，API保持原status；不复制上游正文、Location或失败cookie，不自动重试、不清其他登录交易。成功回跳暂保既有 `/login`，不顺带重写退出协议。
+
+验证沿既有真实Next HTTP退出旅程补浏览器导航、无副作用展示/刷新与错误恢复；保原非导航/API、跨Origin、坏表单、过期/更换issuer会话和未登记redirect拒绝。展示使用既有Button/Card/token、无客户端状态或新依赖；协议跳转/错误保持no-store；最终Proxy核验nonce/CSP，固定无私有数据React页生产no-store、锁定Next开发模式按原生no-cache/must-revalidate（实际覆盖Proxy的缓存头），不改框架或放宽协议缓存断言；固定交互确认页用Referrer-Policy:origin及form-action self，保证原生POST带精确Origin，失败页/技术地址no-referrer。不新增Origin:null例外。 failure选择仅由failed字段是否存在决定，包含空值、非法值或重复数组；Page与Proxy一致，所有失败变体无确认form，不借显示参数授予退出。正常加载与正式issuer验收另记，不以参考模板或fixture成功称完整登录/Skills目标完成。
+
+## 2026-10-21 正常租户续接故障：具名诊断与产品失败恢复
+
+正常双密码中一笔select-tenant503仍未定根因。既存IAM整行session更新竞争可产生400 invalid_grant，App原映射也会将其他上游状态及transport异常归成503；不能仅凭页面503认定owner状态或改鉴权。当前沿现具名App route补固定phase/status及唯一已知native invalid_grant诊断，不记录原始body、签名query、cookie、凭据或任意错误文案，不新增服务／公开接口／DB／权限，不重发set-active。
+
+原生顶层HTML续接失败复用已有固定产品失败页；API、非导航及HTML q=0保原错误状态。成功分支、issuer cookies和导航校验不变；失败不透传上游body／Location／cookie，也不清其他登录交易。精确outer/inner select-tenant最终no-referrer；Next开发日志排除原生重写form与这两条签名路径，普通请求日志保留。Consent/invitation不改。
+
+本片先用于已授权正常诊断，不把产品失败页算登录成功。主方真实Next RED覆盖503裸JSON与签名query日志泄露；GREEN75 HTTP、lint/types通过。完整App最终门和正常根因修复仍待，正常加载前另核对源码／进程与停用开关。
+
+## 2026-10-21 登录并发修复：沿用框架的交易隔离
+
+状态：已完成正常环境复现和本地锁定框架源码核查；用户已明确批准原生交易隔离方案，按本节边界实施。原生 namespace／签名 handoff／IAM 每渲染表单隔离均已在本地候选实施；真实 Next／Redis 回归和完整 App 七门已通过（236文件4497测试），正常App已加载7c70ab1，scope配对和原失败返回保持；双SSO成功，但双密码中的一笔tenant续接503及裸JSON仍未关闭。本节不把单标签成功当并发闭环。
+
+### 基线与不变边界
+
+NextAuth 4.24.15、Next 16.2.6、openid-client 5.7.1；App 拥有 Product 会话与短期登录交易，IAM 继续拥有 issuer 登录／OAuth client／授权。保留原 provider、callback、issuer、PKCE/S256、state、nonce、原 token 验签与身份检查，保留网络 deadline、取消和未知 exchange 不重发。无新服务、数据库或公开业务 API，无 IAM 权限和 BFF 业务改变。
+
+### 已证实的单槽冲突
+
+1. IAM sign-in 每次 GET 都轮换同一路径 CSRF cookie，使另一已打开表单的 hidden proof 失效。
+2. Auth.js 默认三 cookie 名固定；第二次 start 覆盖第一交易。原 ledger 在校验 binding 前 GETDEL，错误 cookie 还会消耗合法交易。
+3. `/login` 用一个共享 return cookie 将 target 交给 provider POST；两个开始请求交错时可能串返回目标。
+4. 冷浏览器两个 `/login` 都未携带原 CSRF cookie 时，分别签发同名 Auth.js CSRF；后响应覆盖前表单。已有 cookie 的复用测试不覆盖此竞态。
+5. 同一 IAM query 的两个首次 GET 都没有 cookie，仍会分别签发同名 proof；按 query 命名并只复用已有 proof 也不足以解决。
+
+### 选择与数据流
+
+首选框架原生 cookies options。备选是把 Auth.js 加密证明存入 ledger，再由精确 callback Proxy 投影到框架 cookie 视图；后者增加敏感证明存储和鉴权投影，本次不选。浏览器全局 single-flight 也不选，避免租约／崩溃恢复与改变多标签行为。
+
+- `/login` 为每个原生启动表单分配随机 handoff namespace，签发包含版本、origin、有效期、handoff namespace 与精确 target 的 HMAC intent。该 handoff namespace 也用于原生 `cookies.csrfToken` 配置及表单 double-submit proof，两个首次 GET 不共享 CSRF cookie。provider POST 先验固定字段及 intent，再以该 namespace 创建独立 Auth.js options；仍由框架核原 double-submit，只把 csrfToken 交给框架。退役共享 return cookie 和依赖它的生产读取，不信任 body 自报 URL。
+- provider POST 验明 intent 后，沿 handoff namespace 配置原生 csrfToken；另为每次 POST 分配全新 OIDC namespace，经公共 `AuthOptions.cookies` 配置 state、pkceCodeVerifier、nonce 的名字及完整原安全属性。两种 namespace 不合并：Auth.js CSRF 仅比较、不一次消费，同一表单并发重复 POST 也必须生成互不覆盖的 OIDC 交易，不新增 start-claim 状态。callback 的原生 cookie 配置由已验 ledger 恢复；记录 MAC 绑定所需两 namespace，终态只清本交易 proof，已结束的 handoff CSRF 不在 callback 重新签发／泄漏。每请求创建 options，不改共享配置，不在生成后重命名 cookie。本版本从 `next/headers` 读取请求 cookie，不改写 Request Cookie 冒充 Next 运行上下文。
+- 现 ledger 采用单一新记录形状，MAC 绑定 provider、origin／callback、namespace、精确 target 和三项 proof 摘要。合法 state 只负责定位记录；先 GET 并严格验证记录形状和 MAC，再恢复 namespace、读取该交易精确 cookie 并验证浏览器 binding，最后比较原值原子消费；并发只允许一个进入 exchange。不接受 query 自报 namespace，不回退默认 cookie 名。错 cookie、错 namespace、错 MAC 不消耗别人的合法交易。部署后不接受旧记录，返回已有产品失败页，由用户显式重新发起；不双读、不重放，不清正式会话。
+- IAM sign-in 每次渲染分配独立 proof，cookie 名由精确 interaction query 与该随机 proof 的摘要共同推导；同 query 的并发首次 GET 也使用不同名，不依赖“先有 cookie”或复用旧 proof。POST 用唯一、格式合法的 hidden proof 定位该 cookie；issue／read／consume／clear 采用同一规则，原 ledger 继续绑定 issuer session、path、method、原始 query 字节及 form-cookie。选错或伪造 query／proof 不获取另一表单的资格，也不清其 cookie。真正 issuer session、签名 query 或 challenge 已变化时，旧表单明确失效，不静默换绑或重发凭据。表单 CSRF proof 不是验证码。Consent／invitation 本次不改命名或消费语义。
+- 成功、issuer error 和明确终态只清理本交易已证明所属的临时 proof，不删除其他交易或 Product cookie；未知 token exchange 保已消费，不重开或自动补发。
+- 请求可见 pending namespace 数量与既有 cookie/header 总预算在分配前检查，超额明确拒绝新 start，不驱逐有效交易。它是每请求可见预算，不冒称跨并发请求的全局配额；不为此新增浏览器 lease／协调服务。保留短 TTL，并清本交易终态 cookie，避免正常多标签累积。
+- 一个浏览器仍共用一个正式 Product 账号会话；namespace 不是按 tab 隔离账户。两个合法 callback 仍沿既有共享 session／主体切换语义，但各自 return target 独立；失效或错误 callback 不动较新正式会话。不另造多账号 session 架构。
+
+### 唯一写区与验证
+
+写区限 `src/lib/server/oidc-provider.ts`、`oidc-rp-transaction.ts`、原 auth route、原 `/login` 与 return handoff helper、`iam-interaction-csrf.ts`、精确 sign-in Proxy/handler，以及对应现有测试和本设计／API／登录指南。Consent／invitation 不重写，只保原回归；不触碰 Skills／模型／工具／扣费。
+
+最低独有回归：同一合法 intent／csrf 表单并发重复 POST 仍产生独立 OIDC proof；冷浏览器两个 `/login` 首次请求；同 IAM query 无 proof 的两个首次 GET；A 表单打开后 B start；两 provider 响应／callback 正反序；两个不同 return target 交错；同 query 刷新／复制标签；错配三 proof 后原交易仍成功；并发重复 callback 至多一次 exchange；A error／过期不破坏 B；未知 exchange 零重发；issuer session 变化旧表单拒绝；secure cookie、canonical Host／内部 localhost、API JSON／HTML q=0、预算与各自终态清理。随后用正常两个标签真实密码登录验收，既有单标签成功不冲销先前并发失败。
+
+### 本次失败复现（不是修复验收）
+
+在 `e62745c` 原生产输入上临时加入两个具名回归，运行锁定 Node 22／Vitest：`vitest run tests/server/login-route.test.ts tests/server/iam-interaction-csrf.test.ts --maxWorkers=1 --testNamePattern 'cold-start race reproduction'`。结果 2 FAIL／26 名称过滤：冷浏览器表单只有最后写 cookie 的一个仍匹配；同 query 两个首次 proof 实际消费 `[true, false]`，预期互不覆盖。前者为本地 route 调用，后者使用受管 Redis 的独立随机 origin 与自建 proof，不是浏览器或完整 IAM 链验收。
+
+测试执行后原两文件逐字还原，1060 份非文档输入无变化；可重放补丁与原始 RED 日志只留本地 ignored。正常服务／业务数据／执行开关未变。审查提出的两个风险已由实际失败确认，原先只给三 OIDC proof 分 namespace 的提案不足，按本节补齐后再实施及验收。
+
+## 2026-10-21 登录失败的产品返回边界
+
+OAuth/OIDC 继续归 IAM，App 只拥有 Product 登录交互和会话。原生顶层 HTML 登录／回调／authorize 失败 303 返回固定 `/auth/sign-in/failed`，不复制 query、owner body、Location 或 cookie；新页复用 App 现有 UI 组件与语义 token，显示登录状态及显式返回入口。渲染／刷新页面不重新发起 OAuth，不创建或恢复 session。API／iframe／非导航和 HTML q=0 保留原错误 status／JSON，不变成成功。
+
+合法 issuer error 必须先满足唯一 query、精确 issuer、state 与浏览器交易绑定并一次性消费；配置类失败仅记录固定分类，不记录 state、描述或凭据，不调用 token exchange。旧回调、错主体和重复回执不清除较新登录的 cookie。账户三 scope 是当前正式功能依赖，应通过 IAM 原有 Product Web client/resource 演进入口配对；不删除 scope、添加权限回退或把环境故障归咎于用户。
+
+验收分开记录：定向回归、隔离真实 Next/Redis 交易、正常环境 scope 回读及新登录。旧会话能打开页面不等于新登录通过。正常配对与完整 Skills／后台／MCP 仍按既有计划收尾。
+
+## 2026-10-21 Skills 正常配对：集成边界
+
+唯一BFF snapshot固定192396d29678e7977fce9c4ab837b249aaf1af93／Public21.1.1／175操作，SHA256 eff6676131081b20ba36fd4be243075c568ebd27358662a9c09fe3216b097848。只承接owner项目／个人Skills并集描述，保当前模型配置及全部既有消费者；六窄生成器正规重出，connector-command-errors独立发行物不变。测试专用逆证先严格还原原21.1.0全文，再保留既有模型与历史双父证明；不新增运行时旧版本兼容或改变执行授权。正常服务加载、页面回读和完整旅程仍待验证。
+
+## 2026-10-20 聊天执行未就绪局部修复
+
+已真实复现BFF执行关闭时pre-admission503/agent_not_configured，在Agent调度前返回；前端原本用通用destructive Alert并空说明列，造成整行红字＋孤立重试按钮。仅在当前无unattributed RunFailure时映射具名ExecutionUnavailableFeedback，role=status、短标题/说明、由原canRetryPendingSubmission与onRetry控制显式恢复。错误码同时涵盖停用或未配置，故不臆造paused状态；真正run.failed与402保持原告警/恢复与资金语义。
+
+不新增API/数据/依赖、读取探针、轮询或第二网络协议；不修改AgentEnabled、模型/工具/扣费开关，不改项目/自动化/连接器。现768px阅读轴、Composer和原生MessageScroller不重写。验证使用真实已关闭守卫的浏览器拒绝路径、现组件定向回归与原engine重试保障；正常页面截图和源码门分开记录。
+
+## 2026-10-20 MC-02 Public21.1模型配置桥（本地候选）
+
+唯一BFF固定 `f3da7d5feb855b2b97c77a6ae9928cee96e1b8aa` /21.1.0/175，SHA256 `4db8bab6159a2f36061f8b292fba9074ea2614adab2a1489bf9d1b3b066b6fe3`。仅扩现Admin Product adapter的10具名模型配置路径，复用原Product session、服务身份和request-id，原body/key/CAS透传；发布严格证明实际EOF，不虚构JSON正文或丢幂等头。没有直连System/读取运行Key、模型执行、自动重试或新的OAuth。
+
+七现有生成器按固定artifact正规重出；test-only21.1→21精确全文逆回，再委托原21→20及历史oracle，不作runtime兼容。Skills/MCP、自动化、聊天与其他owner语义不变。主方完整相关门与正常页面分别验收，受控peer adapter测试不是owner整链证据；首次完整测试缺资源配置的失败保留，后续按既有受管Redis隔离prefix验证。正常切换及集中PR尚待，模型/实际工具/扣费暂停。
+
+## 2026-10-20 MC-02A 主路径纠正门
+
+BFF/Agent 将message.model原样作为System label_key，现两selector必须直接用candidate.name（稳定业务key），provider/alias仅展示。Composer既有纯helper由Settings复用，不新增状态平台；引擎列表显式请求feature_key=chat并拒非chat候选，原同源catchall已保留query，补真实HTTP证明。聊天默认偏好仅改为 `kokoro.web.chat-prefs.v2`，旧key留存但不读/不拆冒号迁移，合法label可含冒号。未知提交恢复的冻结body/key不属于偏好迁移，本片不改写或自动重发。
+
+原阶段selector provider:name判断已撤回，前轮门及失败只作阶段证据；重新TDD并冻结全门/E2E，保原Mode lock/auth/preview/未知写保护和布局。
+
+## 2026-10-20 MC-02A Public21 模型候选消费门
+
+仅配对BFF Public21共享模型读表示：现contract/catalog.ts严格接必需display_name、model/revision/provider精确ID、feature/request_model及required nullable next_cursor。provider来自owner显式值；selector继续使用稳定business name/key，别名只展示，不改UI布局或chat状态机。现engine、preview/test夹具按同一wire配对，无新helper平台、数据存储或直接System连接。最终BFF提交由Root提供后从Git blob固定snapshot，再运行原六个public窄生成器；第七connector-command-errors独立pin保持。旧非model历史proof原封不动承接新21→20 test-only逆证，不建runtime fallback。
+
+范围排除自动化、Skills/MCP、登录、资金及正常3310；仅本candidate构建和既有相关E2E。Key保存/领取未在本片实施，模型/工具/扣费继续暂停。
+
+## 2026-10-20 后台模型四操作配对（实施设计）
+
+Product现有Admin同源adapter只增加三个模型目录GET和单标签路由PUT；模型页面仍由独立Admin维护，浏览器→Product→BFF→System既有方向不变。不新增OAuth、服务凭据、网关或直接System调用，不修改Skills/MCP/自动化。模型路径与method精确闭集；PUT将原If-Match/If-None-Match、幂等键、正文及request-id透传给BFF，版本规则和管理员权限仍由BFF当次核验。响应不造业务成功，未知结果不自动重发。新System4公开修订消费通过BFF正规固定Publication配对，不恢复旧transport/gateway字段。
+
 ## 设置视觉与主线能力的集成边界（2026-10-20）
 
 账户保留本版 AccountDetail 内页与标题聚焦/返回；Skills 目录状态继续由主线 Modal 的受控 explore 状态拥有，不在 Panel 重建第二份状态。共享 Header 同时保留主线可访问标题名和账户内页聚焦；Skills/MCP 标题样式沿主线。个性化正式知识继续使用主线稳定 subject key 的 KnowledgePanel 及原 Provider，准入复查不卸载草稿；仅 preview 继续本地禁写知识草稿。其余设置视觉变化不修改知识、连接器或 Skills 的契约和持久化。
@@ -3098,3 +3239,9 @@ Hub update/remove签名显式caller key，删隐式随机key，不留旧签名fa
 新增窄use-private-mcp-authorization窗口消费者：复用现useMcpOAuthPopup，只持等待/非敏感错误状态与actor/client/window/admission围栏，不持凭据、第二份owner事实或授权命令registry。一个窗口一次在途Reconnect，同点击栈预开popup，exact server/connector/CAS来自本代详情；关闭/切目标/准入退休取消等待与popup，晚ACK仅失活原actor投影，不导航、不关闭后开窗口。Begin/Reconnect成功只代表等待授权，不关闭详情或伪造active；callback通知沿现owner projection重新读取，真实ready后才回原主动作。失败不自动重发、不借GET认定提交；用户显式新授权仍由owner CAS与pending/exchange约束裁决。
 
 写区本hook、现projection coordinator/custom detail、既有rail回归及MCP INDEX/CURRENT。原Provider/generic OAuth、URL创建、receipt unknown语义不迁移。先实际缺按钮RED和迟到/关窗围栏，再正常关闭创建→详情重连→AS拒绝→显式重连→成功及断开；自有loopback仅声明读取，无工具/模型/资金调用，原popup presentation与外部服务差异如实保留。
+
+## 产品文档归属与迁移（2026-10-21）
+
+执行 Root 当前有效计划 Wave 5 和用户“文档放 App 仓库”的决定：沿用已合 Root `2e008595` 的 VitePress 门户，迁入本仓 `developer-docs/` 独立包，不在 Next 内增加 renderer、服务或文档 API。门户保持原 lockfile 与生成器，公开 Reference 只读固定 BFF commit/version/digest 的 canonical artifact；本次配对与 App 相同的 Public22 原件，不复制另一份可编辑 OpenAPI。
+
+独立包拥有自己的 lint/types/test/build；App 的 Next／Vitest／ESLint 不递归消费其构建输入。公开构建只读取 `developer-docs/docs/`，本仓 `docs/` 中的内部维护记录不进入静态资源或搜索索引；内部发布的访问控制仍是未完成项，不用隐藏链接冒充权限。先完成候选迁移与验收，随后在配对 Root PR 中删除旧门户并更新链接／精确 gitlink；过渡期间 Root 未删不代表保留旧入口 fallback。无业务契约、数据模型或用户权限变化。

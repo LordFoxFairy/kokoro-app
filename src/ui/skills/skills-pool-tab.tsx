@@ -599,6 +599,7 @@ export function SkillsPoolTab({
             const isEnabled =
               enabledOverrides.get(stateKey) ?? skill.enabled !== false;
             const detailAvailable =
+              skill.source_status !== "deleted" &&
               skill.skill_id !== undefined &&
               skill.revision_skill_id !== undefined;
             if (embedded) {
@@ -692,7 +693,7 @@ export function SkillsPoolTab({
                           embedded && styles.embeddedItemActions,
                         )}
                       >
-                        {skill.available_update ? <Button type="button" variant="outline" disabled={busy !== null} onClick={event => onUpdateSkill(skill, event.currentTarget)}>{t("skills.update.available", { revision: skill.available_update.revision })}</Button> : null}
+                        {skill.available_update ? <Button type="button" variant="outline" disabled={busy !== null || skill.source_status === "deleted"} onClick={event => onUpdateSkill(skill, event.currentTarget)}>{t("skills.update.available", { revision: skill.available_update.revision })}</Button> : null}
                         <Button
                           variant="outline"
                           type="button"
@@ -710,6 +711,7 @@ export function SkillsPoolTab({
                             type="button"
                             className={styles.ver}
                             aria-label={`${t("skills.revisions")} ${skill.name}`}
+                            disabled={skill.source_status === "deleted"}
                           >
                             {t("skills.revisions")}
                           </Button>
@@ -791,13 +793,13 @@ export function SkillsPoolTab({
                           </AlertDescription>
                         </Alert>
                       ) : null}
-                      <CollapsibleContent className={styles.revisionContent}>
+                      {skill.source_status !== "deleted" ? <CollapsibleContent className={styles.revisionContent}>
                         <SkillRevisions
                           client={client}
                           scope={skill.scope}
                           name={skill.name}
                         />
-                      </CollapsibleContent>
+                      </CollapsibleContent> : null}
                     </CardContent>
                   </Card>
                 </Collapsible>

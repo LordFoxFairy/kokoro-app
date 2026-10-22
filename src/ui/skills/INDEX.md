@@ -1,3 +1,15 @@
+## 个人系列删除（2026-10-21，候选）
+
+personal-skill-actions新增真实delete，不替换withdraw；personal-skill-management仍是精确锚点／actor／恢复入口owner。personal-skill-delete-dialog只负责系列删除确认、正式history publication读取、冻结命令与显式原意图重放。确认后GET404不再锁死未知重试，只有匹配回执清选择并失活列表。deleted安装保留但禁详情、历史、包、启用和更新；停用仍可用。最终180项候选尚未正常生效；未操作正常环境，正常浏览器与最终配对由主方统一验收。Manus真实图标上传后的enabled与本地disabled仍是剩余差异，不在此片新增上传API／Storage或自动启用。
+
+## 目录搜索切换的连续点击（2026-10-21）
+
+外层 `KokoroSkillsSurface` 仅保留当前准入 client 已确认的目录及游标页，查询切换期间本地匹配并保持卡片触发器；新查询仍由 owner 决定。待确认时禁用安装／续页，详情只保精确选择意图，不读取旧私有事实；身份或准入代际变化立即退休旧投影。复用现有组件、资源键与详情窗口，不新增缓存层、API 或兼容路径。
+
+## 历史版本的可用性标识（2026-10-21）
+
+历史的当前项仅表示正式 publication 指针；版本停用／撤回／隔离与 publication 撤回分别展示，撤回不重复标识、不错误传给其他历史项。不改变选择、读取权限、发布或安装状态；沿原中性状态样式，无新组件层。
+
 ## 个人发布管理入口（2026-10-21）
 
 `personal-skill-actions`只提供操作菜单；`personal-skill-management`负责精确版本的正式本人核验、准入退休和窗口恢复，原publish/withdraw组件仍拥有命令意图。`SkillsContent`以主体隔离会话，以精确操作目标重建终态后的管理窗口；未知意图不会因关窗或同主体重核而替换key/body/CAS。发布成功菜单只使用确认回执的新source/revision，重新核验后进入操作，不伪造或升级installation。撤回确认显示名称与精确版本。没有历史恢复／删除按钮，不声称它们已实现。
@@ -80,21 +92,32 @@ browser-private 展示操作分开治理，均由 BFF 聚合实际 owner 事实�
 
 目录来源仅识别 owner 明确的 `MANUS_OFFICIAL` 与 `COMMUNITY` 发布者类型。缺失或未来值保留为 unknown，不猜为第三方、个人或品牌官方；卡片与详情省略无事实的发布者标签，series/revision 和安装状态不受影响，未知项只在“全部”中出现。这里的发布者来源不等同公开 `owner_type` 或 Hub/Device 安装来源。
 
-## W3 第二阶段 B 当前边界
-正式 `/app/skills` 与 Settings Skills 共用 `personal-skills-read.tsx` 的单 ZIP 发布入口；`personal-skill-publish-dialog.tsx` 管本地输入/阶段和关闭重开同意图，`personal-skill-publish-flow.ts` 管 CreateDraft→Get→Begin→PUT→Complete→Validate→Publish 的同键恢复。Draft raw body ≤65,536 字节、Begin filename 先本地预检，输入错误可编辑重选，不先创建 Draft。Complete pending/unknown 只显示 partial，复核当前 attempt 后可继续，旧 attempt 明确重新开始；首轮未知 Publish 只核 by-ID，后续显式复核仍 404 才原 key/零 body 重发。只有 ACTIVE Publish 回执或本人 by-ID 核回显示发布，401/403 原码失败且不重发。网络/签名 PUT 和严格 wire 在 `src/hub/skill-publish-client.ts`。旧 `SkillUploadDialog`/GitHub import/preview-confirm 仍仅显式 preview fixture；下文旧说明只适用于 preview，不是正式 API。六项 BFF 写候选 default-off，真浏览器 owner 验收另门。
+## 正式生产入口与旧组件边界
 
-## W3 第二阶段 A 当前边界
-正式 `/app/skills` 与 Settings Skills 经 `personal-skills-read.tsx` 只读 BFF 本人 `scope_kind=personal` 页、opaque cursor、source_ref/revision，并以 ACTIVE by-ID 七字段打开详情。旧 `skills-panel.tsx` 池/目录/启停、`SkillUploadDialog` preview/confirm 仅显式 preview fixture 可见；上传正式切换待下一片，旧 done 不是发布事实。以下旧职责、组件和陷阱均只描述 preview fixture，不是当前正式读协议。
+Settings 的正式入口是 `src/ui/settings/sections/skills-settings-section.tsx` →
+`SkillsContent`（`skills-panel.tsx`）。非 preview 会话由
+`createManusSkillHubClient` 读取精确 installation；preview 只替换 client，不换成另一套发布管理页面。
+`/app/skills/page.tsx` 本身返回 null，页面由既有 App shell 挂载，不能据该占位判断缺少正式技能页。
 
-## 职责
-hub self 面技能池（有效可用项）：列表/启停/配额/版本历史 + 上传 preview→confirm 两段发布。
-桌面 Settings 的 GitHub 导入使用独立、紧凑的单提交 Dialog：输入合法仓库后直接 import，失败可修复，
-成功后刷新技能池；不会把 GitHub 地址误送入 zip 上传流程。
+`personal-skills-read.tsx` 当前仅由 `tests/ui/personal-skill-publish-dialog.test.tsx` 引用，
+没有生产调用。其页内 `latestRevisionPerSeries` 不代表 current publication，也不是正式安装列表的版本选择规则；
+不要为修复该旧组件而改变 exact installation 或接回旧布局。清理组件及测试前须核对独有行为的承接，
+本次仅纠正维护索引，未删除源码或测试。
 
-## 公开件
-- `SkillsPanel`（`skills-panel.tsx`）：props `client: HubClient` / `readBoundary: ProjectReadBoundary` / `onClose` / `pinned` / `onTogglePin`；子 Dialog 只消费页面或 App shell 已确认的 boundary，不各自注册 Session probe。
-- `SkillUploadDialog`（`skill-upload-dialog.tsx`）：桌面独立上传入口，`.zip`/`.skill` dropzone + preview/candidate
-  selection/confirm 状态；通过 `returnFocusRef` 回到 Create/Browse 触发点，关闭/卸载会取消当前 multipart 请求。
+## 职责与公开件
+
+- `SkillsContent`：当前身份下的安装池、目录、详情意图、安装更新与个人发布管理入口；
+  未知命令的恢复入口不随卡片筛选或窗口关闭消失。
+- `SkillsPanel`：独立 Dialog 包装，持 `client`、`readBoundary`、关闭及试用回调；
+  Settings 嵌入由 `SkillsSettingsSection` 直接使用 `SkillsContent`。
+- `SkillUploadDialog`：正式 ZIP／`.skill` 拖放入口，消费 `personal-skill-import-flow` 与
+  `skill-local-import-client` 的真实导入操作，不是旧 preview→confirm API。
+- `PersonalSkillManagement`：对精确版本做正式 self-managed 发布者核验，再打开既有更新／撤回组件；
+  不以安装归属猜测发布权，不把撤回当删除。
+- `PersonalSkillPublishDialog`／`personal-skill-publish-flow`：既有 draft 的包更新、不可变修订发布及原命令恢复；
+  不负责普通新建导入，不在发布成功后自动升级安装。
+- `PersonalSkillWithdrawDialog`：精确版本的撤回确认与原 key／CAS 恢复；历史版本与当前发布的语义仍须按
+  owner 限制核验，不能静默改目标。正式系列历史、恢复、删除不因这些组件存在而视为已实现。
 
 ## 协作者
 - `@/hub/client`（纯请求）、`@/hub/rules`（`isRequiredLockError` / `isQuotaExhausted`）、`@/hub/schemas`。
@@ -105,12 +128,12 @@ hub self 面技能池（有效可用项）：列表/启停/配额/版本历史 +
 - `ManusSkillDetailDialog`（`manus-skill-detail-dialog.tsx`）：唯一的详情与文件阅读面；只在 owner
   返回 `skill_id` 与 `revision_skill_id` 时读取真实 package tree 和正文。缺少 binding 的旧投影保持详情入口禁用，
   不再由浏览器合成 YAML、文件树或示例正文。
-- `@/lib/query`：池+配额合并读走 `useResource("hub/skills")`；启停/发布成功后 `invalidate("hub/skills")`。版本历史键 `hub/skill-revisions/<name>`。
+- `@/lib/query` 与 `skills-resource-cache`：安装池使用 client-scoped `skillResourceKey(SKILLS_KEY, client)`；目录使用同样隔离的 `SKILLS_CATALOG_KEY`。正式 adapter 的 `skillQuota` 返回明确缺省，不请求旧 quota API；不存在可由旧 name-based cache 冒充的正式系列历史。
 
 ## 陷阱
-- 池只含「有效可用」项（official 上架∧未关 + 自有包）；池内项恒为已启用，唯一动作是停用。
+- 安装池包含 `installed=true` 的停用项；`installed`、`enabled` 与 `source_status` 是独立事实。读取和预览不自动启用，不从目录 current 推导安装 pin。
 - required 官方技能拒关：hub 409 `hub.skill_required` → 经 `isRequiredLockError` 反射为锁定态。
-- 上传是非缓存状态机（idle→preview→confirming→done），不走 query 层。
+- 正式导入／发布的未知结果保原 key、请求与主体，通过原状态机显式恢复；中间 draft、扫描或上传回执不等于已安装。成功后只失活真实读取，不合成卡片或成功状态。
 - GitHub 是 `Preview→select/ready→Import draft→Publish owner/CAS→Install`；关闭取消等待并保原命令意图，只有真实Install ACK
   结果成功后再失活 `hub/skills`。Hub 的稳定错误码会映射到可操作的本地化提示，重复提交在同一帧内被拦截。
 - 技能目录的 cursor pagination 在同一滚动 Dialog 内有界合并，并对重复 cursor 停止，避免用户看到空的
@@ -141,3 +164,7 @@ SettingsModal 拥有 Skills 的 installed scope / explore 展示意图，setting
 探索页 desktop 标题带 81px；紧凑设置隐藏面板标题，通过现 More → 技能返回。目录工具栏以 ResizeObserver 测量实际容器与九个本地化标签的宽度（字体 ready、语言变化同样重测）：放得下时搜索独占一行、分类行上下各 16px；否则搜索 + 分类菜单同一行，底距 16px。布局切换保留分类/键盘焦点，隐藏测量行 inert，不产生第二组可操作控件。
 
 列表为 60×80 封面、16px 图文间距、14/20 标题、两行 13/18 说明、真实更新时间、28px 操作；分隔线仅从文字轴开始，hover 伸出内容轴 16px。空图不伪造封面或作者，已安装与可添加仍来自真实 owner。既有 rail suite 仅加两项独有风险回归（hash/返回/受控 scope 和分类宽度/焦点），不恢复已退役 UI suites；真实浏览器与最终门禁边界见 CURRENT。
+
+## 2026-10-21 本人系列历史
+
+PersonalSkillManagement保留原发布者准入和写意图，仅按操作分开history只读门；PersonalSkillHistoryDialog拥有历史快照/分页/精确版本选择，内部HistoryPackage复用SkillPackageFiles/SkillPackageDocument。schema在hub/personal-skill-history.schema，listHistory复用SkillPublishClient读取边界，managed包沿skill-installation-content既有预算与精确pin检查；无目录current/安装替换、全局缓存或隐式恢复。PersonalSkillRestoreDialog仅承接明确确认的原包新版本发布，原ZIP由hub/personal-skill-archive有界读取；复用发布session及CAS。恢复组件放在历史DialogContent之外，关闭/同主体重核不卸载原session；同一时刻只展示历史或确认弹窗。永久删除仍未交付，不显示假成功动作。

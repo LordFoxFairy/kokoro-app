@@ -67,7 +67,7 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   let response: NextResponse
   if (path === "/auth/sign-in" && request.method === "GET") {
     const [{ iamRelayConfig, matchesCanonicalWebRequest }, { filterIssuerCookies, IAM_RELAY_POLICY },
-      { issueIamInteractionCsrf }, { readSignInFeedback, clearSignInFeedback }, { rawIamSignInQuery, isIamSignInExpired }] = await Promise.all([
+      { issueIamInteractionCsrf, iamSignInCsrfWithinBudget }, { readSignInFeedback, clearSignInFeedback }, { rawIamSignInQuery, isIamSignInExpired }] = await Promise.all([
       import("@/lib/server/iam-relay-config"), import("@/lib/server/iam-relay-policy"),
       import("@/lib/server/iam-interaction-csrf"), import("@/lib/server/iam-sign-in-feedback"),
       import("@/lib/server/iam-sign-in-target"),
@@ -90,6 +90,9 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     for (const [name, value] of request.headers) byteCount += Buffer.byteLength(name) + Buffer.byteLength(value) + 4
     if (byteCount > IAM_RELAY_POLICY.maxHeaderBytes || request.body !== null) {
       return new NextResponse(null, { status: 413, headers: { "cache-control": "no-store" } })
+    }
+    if (!iamSignInCsrfWithinBudget(request.headers.get("cookie"))) {
+      return new NextResponse(null, { status: 429, headers: { "cache-control": "no-store" } })
     }
     const issuerCookie = filterIssuerCookies(request.headers.get("cookie"), config.secureCookies)
     if (issuerCookie === null) return new NextResponse(null, { status: 400, headers: { "cache-control": "no-store" } })
@@ -121,9 +124,19 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   // Route response headers alone are overridden by Next's Proxy merge. This
   // Exact native login paths only return redirects or inert error pages. Never
   // propagate a callback's code/state in the Referer of its recovery link.
-  if (path === "/iam/oauth2/authorize" || path === "/api/auth/signin/kokoro-iam" || path === "/api/auth/callback/kokoro-iam") {
+  if (path === "/iam/oauth2/authorize" || path === "/api/auth/signin/kokoro-iam" || path === "/api/auth/callback/kokoro-iam"
+    || path === "/auth/select-tenant" || path === "/iam/interactions/select-tenant") {
     response.headers.set("Referrer-Policy", "no-referrer")
     response.headers.set("Content-Security-Policy", oidcLoginDocumentPolicy(nonce))
+  }
+  if (path === "/auth/sign-out") {
+    response.headers.set("Cache-Control", "no-store")
+    // The fixed interactive page needs canonical Origin on its native form POST.
+    // Its query contains no protocol payload; the inert failure variant has no form.
+    response.headers.set("Referrer-Policy", request.nextUrl.searchParams.has("failed") ? "no-referrer" : "origin")
+  }
+  if (path === "/iam/oauth2/end-session" || path === "/iam/oauth2/end-session/confirm") {
+    response.headers.set("Referrer-Policy", "no-referrer")
   }
   if (internalSignInView) {
     response.headers.set("Cache-Control", "private, no-store, max-age=0")

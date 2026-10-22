@@ -1,19 +1,19 @@
-import { randomUUID } from "node:crypto"
+import { randomBytes, randomUUID } from "node:crypto"
 
 import NextAuth from "next-auth"
 import { NextRequest } from "next/server"
 
-import { DEFAULT_PRODUCT_RETURN_TARGET, parseProductReturnTarget, type ProductReturnTarget } from "@/lib/product-return-target"
-
 import { boundedInteractionForm } from "@/lib/server/iam-interaction-route"
 import { matchesCanonicalWebRequest } from "@/lib/server/iam-relay-config"
+import { validIamRpCallbackNavigation } from "@/lib/server/iam-relay-response"
 import { IAM_RELAY_POLICY } from "@/lib/server/iam-relay-policy"
 import { oidcLoginRecovery } from "@/lib/server/oidc-login-recovery"
 import { oidcCsrfToken } from "@/lib/server/oidc-csrf"
+import { clearOidcTransactionCookies, oidcHandoffCsrfName, oidcStartWithinCookieBudget } from "@/lib/server/oidc-transaction-cookies"
 import { oidcAuthOptions, oidcRpConfig, OIDC_RESOURCE, OIDC_SCOPE, type VerifiedOidcTokens } from "@/lib/server/oidc-provider"
 import { verifyProductIdentity } from "@/lib/server/product-identity"
-import { consumeOidcState, issueOidcState } from "@/lib/server/oidc-rp-transaction"
-import { clearProductLoginReturnCookie, productLoginReturnTarget } from "@/lib/server/product-login-return"
+import { consumeOidcState, issueOidcState, type OidcTransaction } from "@/lib/server/oidc-rp-transaction"
+import { readProductLoginIntent } from "@/lib/server/product-login-return"
 import { clearProductSessionCookie, productSessionState, decodeProductSession, productSessionCookie, type ProductClaims } from "@/lib/server/product-session"
 import { createSession, finalizeRefresh, invalidatePending, newSessionCandidate, reserveRefresh, tombstoneSession } from "@/lib/server/product-session-store"
 import { refreshOidcToken, revokeOidcToken } from "@/lib/server/oidc-token"
@@ -21,7 +21,7 @@ import { refreshOidcToken, revokeOidcToken } from "@/lib/server/oidc-token"
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-type Context = { params: Promise<{ nextauth: string[] }>; productReturnTarget?: ProductReturnTarget }
+type Context = { params: Promise<{ nextauth: string[] }> }
 type Action = "csrf" | "signin" | "callback" | "session" | "signout"
 
 function errorResponse(status: number, code: string): Response {
@@ -125,11 +125,6 @@ async function productAction(request: NextRequest, action: "session" | "signout"
   }
 }
 
-function parameterOnlyOnce(query: URLSearchParams, name: string): string | null {
-  const values = query.getAll(name)
-  return values.length === 1 ? values[0] ?? null : null
-}
-
 function safeAuthorizeLocation(value: string, webOrigin: string, clientId: string, callbackUrl: string): string | null {
   if (value.length > 8192 || /[\\#\u0000-\u001f\u007f]/u.test(value)) return null
   try {
@@ -205,17 +200,23 @@ async function handle(request: NextRequest, context: Context, method: "GET" | "P
     if (url.search !== "" || request.headers.get("content-type") !== "application/x-www-form-urlencoded") {
       return errorResponse(400, "rp_signin_rejected")
     }
-    const target = productLoginReturnTarget(request.headers.get("cookie"), config.authSecret) ??
-      parseProductReturnTarget(context.productReturnTarget ?? DEFAULT_PRODUCT_RETURN_TARGET)
-    if (target === null) return errorResponse(400, "rp_signin_rejected")
-    const form = await boundedInteractionForm(request, ["csrfToken"])
-    if (form === null || !/^[A-Za-z0-9]+$/u.test(form.get("csrfToken") ?? "")) return errorResponse(400, "rp_signin_rejected")
+    const form = await boundedInteractionForm(request, ["csrfToken", "loginIntent"])
+    if (form === null || !/^[a-f0-9]{64}$/u.test(form.get("csrfToken") ?? "")) return errorResponse(400, "rp_signin_rejected")
+    const intent = readProductLoginIntent(form.get("loginIntent"), config.authSecret, config.relay.webOrigin)
+    if (intent === null) return errorResponse(400, "rp_signin_rejected")
+    const csrfName = oidcHandoffCsrfName(config.relay.secureCookies, intent.handoffNamespace)
+    if (oidcCsrfToken(request.headers.get("cookie"), config.authSecret, csrfName) !== form.get("csrfToken")) return errorResponse(403, "rp_csrf_rejected")
+    if (!oidcStartWithinCookieBudget(request.headers.get("cookie"), false)) return errorResponse(413, "rp_request_too_large")
+    // A repeated valid form POST gets a different OIDC namespace; Auth.js CSRF
+    // is a double-submit proof, not a single-use claim.
+    const namespaces = { handoffNamespace: intent.handoffNamespace, oidcNamespace: randomBytes(16).toString("base64url") }
     try {
       const headers = new Headers(request.headers)
       headers.delete("content-length")
       headers.delete("transfer-encoding")
-      const authRequest = new NextRequest(request.url, { method: "POST", headers, body: form.toString() })
-      const response = await NextAuth(authRequest, context, oidcAuthOptions(config, () => undefined, request.signal)) as Response
+      const authRequest = new NextRequest(request.url, { method: "POST", headers, signal: request.signal,
+        body: new URLSearchParams({ csrfToken: form.get("csrfToken")! }).toString() })
+      const response = await NextAuth(authRequest, context, oidcAuthOptions(config, () => undefined, request.signal, namespaces)) as Response
       const location = response.headers.get("location")
       const state = location === null ? null : safeAuthorizeLocation(location, config.relay.webOrigin, config.clientId, config.callbackUrl)
       const setCookies = response.headers.getSetCookie()
@@ -225,36 +226,48 @@ async function handle(request: NextRequest, context: Context, method: "GET" | "P
           state === null ? "no_state" : "state_ok")
         return errorResponse(403, "rp_signin_rejected")
       }
-      await issueOidcState({ redisUrl: config.redisUrl, webOrigin: config.relay.webOrigin, state, setCookies, target, authSecret: config.authSecret })
+      await issueOidcState({ redisUrl: config.redisUrl, secureCookies: config.relay.secureCookies, webOrigin: config.relay.webOrigin, state, setCookies, target: intent.target, ...namespaces, authSecret: config.authSecret })
       response.headers.set("cache-control", "no-store")
       response.headers.set("referrer-policy", "no-referrer")
-      response.headers.append("set-cookie", clearProductLoginReturnCookie(config.relay.secureCookies))
+      response.headers.append("set-cookie", clearOidcTransactionCookies(config.relay.secureCookies, namespaces)[0]!)
       return response
     } catch { console.error("Kokoro RP sign-in start threw"); return errorResponse(503, "rp_unavailable") }
   }
 
   const query = url.searchParams
-  if ([...query.keys()].length !== 3 || parameterOnlyOnce(query, "code") === null ||
-    parameterOnlyOnce(query, "state") === null ||
-    parameterOnlyOnce(query, "iss") !== config.issuer ||
-    !/^[A-Za-z0-9._~-]{1,2048}$/u.test(query.get("code") ?? "")) {
+  // Share the native redirect validator: one closed code/error query contract,
+  // including bounded error_uri, exact issuer and syntactically valid state.
+  if (!validIamRpCallbackNavigation(`${url.pathname}${url.search}`, config.relay.webOrigin) || query.get("iss") !== config.issuer) {
     return errorResponse(400, "rp_callback_rejected")
   }
-  let consumed: ProductReturnTarget | null
+  const issuerError = query.get("error")
+  let consumed: OidcTransaction | null
   try {
-    consumed = await consumeOidcState({ redisUrl: config.redisUrl, webOrigin: config.relay.webOrigin,
+    consumed = await consumeOidcState({ redisUrl: config.redisUrl, secureCookies: config.relay.secureCookies, webOrigin: config.relay.webOrigin,
       state: query.get("state") ?? "", cookieHeader: request.headers.get("cookie"), authSecret: config.authSecret })
   } catch { return errorResponse(503, "rp_unavailable") }
-  // A stale callback may carry a newer login's shared Auth.js cookies. Never
-  // clear that transaction when this callback has not proved ownership.
   if (!consumed) return errorResponse(403, "rp_transaction_rejected")
-  // Any callback can finish after a newer start. Never delete shared transaction
-  // cookies, even on success: Redis state is one-use and proofs expire normally.
+  const transaction = consumed
+  const finish = (response: Response): Response => {
+    const result = response.status >= 400 ? oidcLoginRecovery(request) ?? response : response
+    for (const cookie of clearOidcTransactionCookies(config.relay.secureCookies, transaction)) result.headers.append("set-cookie", cookie)
+    return result
+  }
+  if (issuerError !== null) {
+    // Only a bound, single-use issuer response may be classified. Never log its
+    // description, state, cookies or arbitrary issuer-controlled values.
+    const configurationFailure = issuerError === "invalid_scope" || issuerError === "unauthorized_client"
+    console.error("Kokoro RP issuer rejected login:", configurationFailure ? "configuration" : "authorization")
+    return finish(errorResponse(configurationFailure ? 503 : 401,
+      configurationFailure ? "rp_login_configuration_invalid" : "rp_login_not_completed"))
+  }
+  // Only these MAC-verified per-transaction names may be cleared. No shared
+  // Product session or another pending transaction is part of this cleanup.
   let verified: VerifiedOidcTokens | null = null
   try {
-    await NextAuth(request, context, oidcAuthOptions(config, (tokens) => { verified = tokens }, request.signal))
-  } catch { return errorResponse(503, "rp_unavailable") }
-  if (verified === null) return errorResponse(403, "rp_callback_rejected")
+    await NextAuth(request, context, oidcAuthOptions(config, (tokens) => { verified = tokens }, request.signal, transaction))
+  } catch { return finish(errorResponse(503, "rp_unavailable")) }
+  if (verified === null) return finish(errorResponse(403, "rp_callback_rejected"))
   try {
     const tokens: VerifiedOidcTokens = verified
     await verifyProductIdentity(config, tokens.access, tokens.subject, request.signal)
@@ -264,17 +277,17 @@ async function handle(request: NextRequest, context: Context, method: "GET" | "P
     config.authSecret, config.relay.webOrigin)
     await createSession({ redisUrl: config.redisUrl, webOrigin: config.relay.webOrigin,
       secret: config.authSecret }, tokens.refresh, candidate)
-    const headers = new Headers({ location: consumed, "cache-control": "private, no-store", "referrer-policy": "no-referrer" })
+    const headers = new Headers({ location: transaction.target, "cache-control": "private, no-store", "referrer-policy": "no-referrer" })
     headers.append("set-cookie", cookie)
-    return new Response(null, { status: 303, headers })
-  } catch { return errorResponse(503, "product_session_unavailable") }
+    return finish(new Response(null, { status: 303, headers }))
+  } catch { return finish(errorResponse(503, "product_session_unavailable")) }
 }
 
 function representLoginFailure(request: NextRequest, response: Response): Response {
   const loginNavigation = request.nextUrl.pathname === "/api/auth/callback/kokoro-iam" ||
     request.nextUrl.pathname === "/api/auth/signin/kokoro-iam"
   return response.status >= 400 && loginNavigation
-    ? oidcLoginRecovery(request, response.status) ?? response : response
+    ? oidcLoginRecovery(request) ?? response : response
 }
 
 export async function GET(request: NextRequest, context: Context): Promise<Response> {

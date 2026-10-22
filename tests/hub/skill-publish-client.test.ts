@@ -27,7 +27,7 @@ it("accepts final Proxy no-store directives for Draft and preserves authorizatio
     .mockResolvedValueOnce(new Response(JSON.stringify({ error: { code: "session_invalid", message: "revoked", retryable: false } }), { status: 401, headers: { ...headers, "cache-control": "private, no-store, max-age=0" } })))
   const client = createSkillPublishClient()
   await expect(client.createDraft({ display_name: "Mine", summary: "", tags: [] }, "create-key")).resolves.toEqual(draft)
-  await expect(client.publishDraft("mine", { audience: "owner", expected_state_version: "4" }, "publish-key")).rejects.toMatchObject({ reason: "http", status: 401, code: "session_invalid" })
+  await expect(client.publishDraft("mine", { audience: "owner", expected_state_version: "4", expected_publication: null }, "publish-key")).rejects.toMatchObject({ reason: "http", status: 401, code: "session_invalid" })
 })
 
 it("keeps no-store, media, request ID and receipt guards under final Proxy headers", async () => {
@@ -38,19 +38,19 @@ it("keeps no-store, media, request ID and receipt guards under final Proxy heade
     { "content-type": "text/plain" }, { "x-request-id": "invalid request id" },
   ]) {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ data }), { status: 200, headers: { ...headers, "cache-control": "private, no-store, max-age=0", ...overrides } })))
-    await expect(createSkillPublishClient().publishDraft("mine", { audience: "owner", expected_state_version: "4" }, "key")).rejects.toMatchObject({ reason: "parse", status: 200 })
+    await expect(createSkillPublishClient().publishDraft("mine", { audience: "owner", expected_state_version: "4", expected_publication: null }, "key")).rejects.toMatchObject({ reason: "parse", status: 200 })
   }
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: { ...data, unexpected: true } }), { status: 200, headers: { ...headers, "cache-control": "private, no-store, max-age=0" } })))
-  await expect(createSkillPublishClient().publishDraft("mine", { audience: "owner", expected_state_version: "4" }, "key")).rejects.toMatchObject({ reason: "parse", status: 200 })
+  await expect(createSkillPublishClient().publishDraft("mine", { audience: "owner", expected_state_version: "4", expected_publication: null }, "key")).rejects.toMatchObject({ reason: "parse", status: 200 })
 })
 
 it("sends the exact explicit JSON Publish command with one stable key and strict ACTIVE receipt", async () => {
   const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: { source_ref: "skill:mine", revision: "2", status: "active", event_id: "550e8400-e29b-41d4-a716-446655440000", replayed: false, state_version: "5" } }), { status: 200, headers }))
   vi.stubGlobal("fetch", fetchMock)
-  const receipt = await createSkillPublishClient().publishDraft("mine", { audience: "owner", expected_state_version: "4" }, "skill-web:key")
+  const receipt = await createSkillPublishClient().publishDraft("mine", { audience: "owner", expected_state_version: "4", expected_publication: null }, "skill-web:key")
   expect(receipt.source_ref).toBe("skill:mine")
   expect(fetchMock).toHaveBeenCalledWith("/api/hub/self/skills/mine/publish", expect.objectContaining({ method: "POST", cache: "no-store", redirect: "error", headers: { "content-type": "application/json", "idempotency-key": "skill-web:key" } }))
-  expect(JSON.parse(fetchMock.mock.calls[0]?.[1].body)).toEqual({ audience: "owner", expected_state_version: "4" })
+  expect(JSON.parse(fetchMock.mock.calls[0]?.[1].body)).toEqual({ audience: "owner", expected_state_version: "4", expected_publication: null })
 })
 
 it("maps Draft/Get/Begin/Complete/Validate to the pinned same-origin paths and statuses", async () => {
@@ -116,9 +116,9 @@ it("rejects text/plain JSON and malformed success/error envelopes", async () => 
     .mockResolvedValueOnce(new Response(JSON.stringify({ error: { code: "skill_dependency_unavailable", message: "No", retryable: true } }), { status: 500, headers }))
   vi.stubGlobal("fetch", fetchMock)
   const client = createSkillPublishClient()
-  await expect(client.publishDraft("mine", { audience: "owner", expected_state_version: "4" }, "key")).rejects.toMatchObject({ reason: "parse" })
-  await expect(client.publishDraft("mine", { audience: "owner", expected_state_version: "4" }, "key")).rejects.toMatchObject({ reason: "parse" })
-  await expect(client.publishDraft("mine", { audience: "owner", expected_state_version: "4" }, "key")).rejects.toMatchObject({ reason: "parse" })
+  await expect(client.publishDraft("mine", { audience: "owner", expected_state_version: "4", expected_publication: null }, "key")).rejects.toMatchObject({ reason: "parse" })
+  await expect(client.publishDraft("mine", { audience: "owner", expected_state_version: "4", expected_publication: null }, "key")).rejects.toMatchObject({ reason: "parse" })
+  await expect(client.publishDraft("mine", { audience: "owner", expected_state_version: "4", expected_publication: null }, "key")).rejects.toMatchObject({ reason: "parse" })
 })
 
 it("rejects infected/fake-complete or stale upload phase shapes before Publish", () => {
@@ -563,7 +563,7 @@ const errorCalls = {
   beginUpload: () => createSkillPublishClient().beginUpload("mine", { expected_state_version: "1", filename: "mine.zip", mime_type: "application/zip", size_bytes: 3, content_sha256: "a".repeat(64) }, "key"),
   completeUpload: () => createSkillPublishClient().completeUpload("mine", { expected_state_version: "2", source_version_id: "version", attempt_id: "attempt", upload_id: "upload", content_sha256: "a".repeat(64), size_bytes: 3 }, "key"),
   validateDraft: () => createSkillPublishClient().validateDraft("mine", { attempt_id: "attempt", expected_state_version: "3" }, "key"),
-  publishDraft: () => createSkillPublishClient().publishDraft("mine", { audience: "owner", expected_state_version: "4" }, "key"),
+  publishDraft: () => createSkillPublishClient().publishDraft("mine", { audience: "owner", expected_state_version: "4", expected_publication: null }, "key"),
   managedList: () => createSkillPublishClient().listDrafts(),
   managedDetail: () => createSkillPublishClient().getManaged("mine"),
   activeList: () => createSkillPublishClient().listPublished(),
@@ -642,4 +642,71 @@ it("personal lifecycle total deadline retires a stalled fetch and cancels a late
   await Promise.resolve()
   expect(cancel).toHaveBeenCalledTimes(1)
  } finally {vi.useRealTimers()}
+})
+
+it("preserves exact history current instead of newest and rejects raw duplicate or extra private facts",async()=>{
+ const versions=[{skill_id:"new",revision:"3",name:"New",summary:"",status:"disabled",archive_size:"375",file_count:1,created_at:"2026-10-21T00:00:00Z",is_current:false},{skill_id:"old",revision:"1",name:"Old",summary:"",status:"active",archive_size:"374",file_count:1,created_at:"2026-10-20T00:00:00Z",is_current:true}]
+ const data={series_id:"series",publication:{current_version_id:"old",state_version:"7",withdrawn_at:null},versions,next_cursor:null}
+ const raw=JSON.stringify({data,meta:{request_id:"owner-1"}})
+ const fetcher=vi.fn().mockImplementation(()=>Promise.resolve(new Response(raw,{headers})))
+ vi.stubGlobal("fetch",fetcher)
+ await expect(createSkillPublishClient().listHistory("anchor","cursor/1")).resolves.toEqual(data)
+ expect(fetcher).toHaveBeenCalledWith("/api/hub/self/skills/managed/anchor/versions?cursor=cursor%2F1",expect.objectContaining({method:"GET",cache:"no-store"}))
+ for(const invalid of [raw.replace('"versions":[','"versions":[],"versions":['),raw.replace('"is_current":false','"is_current":true'),raw.replace('"publication":{','"publication":{"secret":"private",'),raw.replace('"request_id":"owner-1"','"request_id":"other"')]){
+  fetcher.mockResolvedValueOnce(new Response(invalid,{headers}));await expect(createSkillPublishClient().listHistory("anchor")).rejects.toMatchObject({reason:"parse"})
+ }
+})
+
+it("history cancellation finishes even when fetch ignores its signal",async()=>{
+ const controller=new AbortController()
+ let complete:((response:Response)=>void)|undefined
+ const cancel=vi.fn()
+ vi.stubGlobal("fetch",vi.fn(()=>new Promise<Response>(resolve=>{complete=resolve})))
+ const pending=createSkillPublishClient().listHistory("anchor",undefined,controller.signal)
+ const assertion=expect(pending).rejects.toMatchObject({reason:"aborted"})
+ controller.abort();await assertion
+ complete!(new Response(new ReadableStream({cancel})))
+ await vi.waitFor(()=>expect(cancel).toHaveBeenCalledTimes(1))
+})
+
+
+it("requires an explicit publication snapshot and preserves integer precision", async () => {
+ const { skillPublishRequestSchema }=await import("@/hub/schemas")
+ const base={audience:"owner",expected_state_version:"4"}
+ expect(skillPublishRequestSchema.safeParse(base).success).toBe(false)
+ expect(skillPublishRequestSchema.parse({...base,expected_publication:null}).expected_publication).toBeNull()
+ const current={current_version_id:"old",state_version:"9007199254740993"}
+ expect(skillPublishRequestSchema.parse({...base,expected_publication:current}).expected_publication).toEqual(current)
+ for(const value of [{...current,state_version:"0"},{...current,state_version:"9223372036854775807"},{...current,state_version:1},{...current,extra:true}])expect(skillPublishRequestSchema.safeParse({...base,expected_publication:value}).success).toBe(false)
+})
+
+it("deletes only the confirmed anchor/publication and validates the strict series receipt",async()=>{
+ const body={expected_state_version:"8",expected_publication:{current_version_id:"current",state_version:"9007199254740993"}}
+ const data={series_id:"series",skill_id:"mine",state_version:"9",status:"deleted",event_id:`evt:${"a".repeat(64)}`,replayed:false}
+ const fetcher=vi.fn().mockResolvedValue(Response.json({data,meta:{request_id:"owner-1"}},{headers}))
+ vi.stubGlobal("fetch",fetcher)
+ await expect(createSkillPublishClient().deleteSeries("mine",body,"delete-original")).resolves.toEqual(data)
+ expect(fetcher).toHaveBeenCalledWith("/api/hub/self/skills/mine",expect.objectContaining({method:"DELETE",body:JSON.stringify(body),headers:{"content-type":"application/json","idempotency-key":"delete-original"}}))
+ fetcher.mockResolvedValue(Response.json({data:{...data,skill_id:"other"},meta:{request_id:"owner-1"}},{headers}))
+ await expect(createSkillPublishClient().deleteSeries("mine",body,"delete-original")).rejects.toMatchObject({reason:"parse"})
+})
+
+it("rejects duplicate deletion acknowledgement keys rather than accepting the last value",async()=>{
+ const data={series_id:"series",skill_id:"mine",state_version:"9",status:"deleted",event_id:`evt:${"a".repeat(64)}`,replayed:false}
+ const raw=JSON.stringify({data,meta:{request_id:"owner-1"}}).replace('"skill_id":"mine"','"skill_id":"other","skill_id":"mine"')
+ vi.stubGlobal("fetch",vi.fn().mockResolvedValue(new Response(raw,{headers})))
+ await expect(createSkillPublishClient().deleteSeries("mine",{expected_state_version:"8",expected_publication:null},"delete-key")).rejects.toMatchObject({reason:"parse"})
+})
+
+it.each([
+ { expected:"4", actual:"5", valid:true },
+ { expected:"4", actual:"6", valid:false },
+ { expected:"9007199254740993", actual:"9007199254740994", valid:true },
+ { expected:"9007199254740993", actual:"9007199254740995", valid:false },
+])("accepts only an exact one-step deletion ACK, rejecting a wrong jump $expected → $actual",async({expected,actual,valid})=>{
+ const data={series_id:"series",skill_id:"mine",state_version:actual,status:"deleted",event_id:`evt:${"a".repeat(64)}`,replayed:false}
+ vi.stubGlobal("fetch",vi.fn().mockResolvedValue(Response.json({data,meta:{request_id:"owner-1"}},{headers})))
+ const result=createSkillPublishClient().deleteSeries("mine",{expected_state_version:expected,expected_publication:null},"delete-exact-step")
+ if(valid)await expect(result).resolves.toEqual(data)
+ else await expect(result).rejects.toMatchObject({reason:"parse",status:200})
 })

@@ -1,3 +1,5 @@
+import { restorePublic20 } from "./bff-shared-model-parent";
+import { restorePublic19 } from "./bff-system-connection-parent";
 import {createHash} from "node:crypto";
 // Test-only explicit inverse of the merged publisher's current-to-parent deltas.
 // Full current and both historical parent bytes remain independently pinned.
@@ -338,6 +340,7 @@ const parents = [
   }
 ] as const;
 export function restoreClosureParent(bytes: Uint8Array, label: "main"|"local"): Buffer {
+ bytes=restorePublic19(restorePublic20(bytes));
  if(hash(bytes)!==CURRENT_DIGEST)throw Error("not fixed public19");
  const parent=parents.find(value=>value.label===label)!;
  const lines=Buffer.from(bytes).toString("utf8").match(/[^\n]*\n|[^\n]+$/gu)??[];

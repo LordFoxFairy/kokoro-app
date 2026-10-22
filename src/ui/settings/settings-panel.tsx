@@ -14,6 +14,7 @@ import type { SkillsScopeFilter } from "@/ui/skills/skills-scope";
 import styles from "./settings-modal.module.css";
 import { SettingsPanelContent } from "./settings-panel-content";
 import { SettingsPanelHeader } from "./settings-panel-header";
+import { AccountReadSnapshotBoundary } from "./account-read-snapshots";
 import { SETTINGS_TABS, type AccountDetail, type SettingsTab } from "./settings-types";
 
 type SettingsPanelProps = {
@@ -60,7 +61,7 @@ export function SettingsPanel({
 
 
   return (
-    <>
+    <AccountReadSnapshotBoundary preview={preview} readBoundary={readBoundary}>
       {SETTINGS_TABS.map((panelTab) => (
         <TabsContent
           key={panelTab}
@@ -117,6 +118,6 @@ export function SettingsPanel({
           ) : null}
         </TabsContent>
       ))}
-    </>
+    </AccountReadSnapshotBoundary>
   );
 }

@@ -1,14 +1,246 @@
-## 2026-10-21 个人技能版本管理（main 集成验收中）
+## MODEL-1 Admin上游发现同源桥候选（2026-10-22）
 
-从同步后的main `859f415` 集成个人技能版本管理及安装作者修复，原切片为 `20e8b78`；只移入本需求14份源码／测试，不携带模型配置、账户切换或聊天候选。正式self-managed读取核验发布者及精确source/series/revision，复用既有发布／撤回流程，详情按真实安装publisher_profile展示作者，不恢复旧设置布局。没有新接口、Schema、依赖或兼容入口。
+现 `src/app/api/admin/[...path]/route.ts` 仅新增精确 provider UUID 的 `upstream-models` GET，沿Product Session/配置Domain/BFF管理权限与原request-id/no-store；拒query、body framing（含CL0）、Content-Type及命令头。准入至完整响应EOF共10秒/1MiB，取消不晚发请求，无Key、模型执行、自动发布或新持久事实。真实loopback薄adapter新增15项及原Admin9项均通过；正常浏览器/完整owner链由主方后续配对，不以此称UI已验收。
 
-未知命令保留原key/body/CAS及同主体恢复；成功ACK清除pending，创建ACK取消窗口仍受最终检查。发布后仅真实回执的新版本可管理，原安装不自动升级，撤回表单展示明确版本，关闭回到原搜索焦点。新菜单并非Manus历史／替换／删除能力的替代；历史恢复、移除、Admin旅程及公开身份映射仍未完成。
+定向最终验证：Node22.22.2，7个public generator正规write/check及独立connector profile check均exit0；完整contract28文件301 PASS/0SKIP，真实HTTP薄adapter/原Admin/新contract/架构合计7文件75 PASS/0SKIP，新增源码与测试focused ESLint、diff检查exit0。初次真实行为RED404→200已保留；pin后曾因旧当前计数181与新182不一致失败1项，精确更新当前总数后通过，原历史父hash/inverse未放宽。初次new contract权限fixture误猜已按正式合同校正。按主方分工未在此worker跑full test/build/typegen/E2E，冻结后由Root独立全门/浏览器验收；未改正常运行或Git/index。
 
-正常运行的原切片已获授权实测纯文档样本版本2：创建201→真实上传／扫描clean→校验200→发布active200→撤回withdrawn200，刷新原版本1仍安装且停用；不删数据、不执行技能／模型、不改积分。正常浏览器证据绑定原切片，main集成分支的源码门与预览另验，不假称已加载到正常运行环境。
+Public22.3.0/182固定BFF `e461d5178c6bf92558d7cd7dd288cb29cb008525`，canonical SHA256 `727159cea88e9f70ca3d1127306e8a6a6bcaa568398de8b0d8fec1cce6b3fae3`；唯一snapshot与既有7个public窄生成器正规更新，独立connector错误profile不变。下方记录按当时版本保留。
 
-原切片同一冻结的相关108、lint/types/build、契约和架构已通过；正常授权版本旅程与 main 集成预览分别保留证据。此次 main 原有六套相关测试91 PASS；集成后定向7套108 PASS、七项生成检查、lint、typegen/types、webpack build/post-types通过，独立桌面／移动预览2 PASS并回收自有预览进程。
+## 2026-10-22 主链消费者候选：完整本地门通过，正常旅程待配对
 
-完整门早先两轮均4450 PASS／1 FAIL／0SKIP，在 pending refresh GET 预期409处收到Next HTML500／JSON解析异常；空manifest观察没有捕获相应空读取，原因仍未查明。只新增5行失败分支元数据诊断，409成功路径无新增IO，不改断言、超时、重试或skip。随后同Node22／4GiB／2workers的无observer配对完整运行：原 main 232文件／4434 PASS，候选233文件／4451 PASS，均0FAIL／0SKIP。1051份冻结输入中只有上述诊断测试改变，生产输入无漂移；只读最终审查通过。独立 Skills UI 切片可以进入PR收尾，但这些通过不证明间歇500已修复，也不等于正常服务、历史／替换／删除、Admin和外部身份映射已闭环。
+固定 BFF `efe0ed8b3f791468608b61dd895208f0db709e50`／Public22.2.0／181 operations，canonical SHA256 `365d61aa5b3b4c01a178f077914e03b5fdbaeebc95fe740b9be46ca8fadc3205`。本候选承接公开Skill list薄入口、个人系列删除和MCP显式重连；补齐普通聊天首发模型选择、完整目录分页与失败恢复、当前作用域空草稿归档判定，以及严格缺账户404后无感幂等初始化。切换主体时每次续发核原作用域退休；未知初始化回执先读核实，不重复PUT、不伪造余额。
+
+主方Node22在1237个冻结输入上复跑：`pnpm contract`、`pnpm test:architecture`、`pnpm lint`、`pnpm typecheck`、`pnpm test`、默认`pnpm build`、构建后`tsc --noEmit`全部exit0；246文件4693测试PASS／0SKIP。独立端口的桌面／移动Playwright108项PASS，零自动重试，属于preview／HTTP夹具交互，不冒正常owner链。E2E后Next自动把next-env切为dev路由类型，再执行原typegen／types恢复与冻结字节一致；未手改生成物或产品构建配置。
+
+保留此前真实失败：缺测试Redis配置、Next并发读取的一次HTML500／JSON EOF，及候选.pnpm外链越过Turbopack root。测试资源补齐、相同lock离线安装本地依赖后默认构建通过；原500本轮未复现，未称根因已修。已修Next原生fork折叠重复--require导致诊断未进入server的问题；专用probe限量、脱敏，不改变产品请求或放宽断言。额外完整OIDC93项与原生preload／probe14项定向PASS只作补充证据。
+
+仍未正常加载该App候选、未PR merge；外部公开身份、正常租户初始化和完整Agent／积分结算由主方继续配对实测。真实模型／低风险工具／整数积分验收已获最新目标授权，旧“全面暂停”不驱动本轮；本组工程／preview门未发送真实模型或业务工具请求、不改积分，真钱支付后置。提供方上游候选获取在System/BFF/Admin现模块推进，不把本地目录刷新称上游发现。
+
+## 2026-10-22 公开身份必要入口候选（未正常生效）
+
+原App只有网站Session Hub与RPC入口，外部Bearer在Hub被拒且/v1/skill.list为404，不能以BFF内部身份通过冒公开可达。现沿已批准身份矩阵补唯一GET薄adapter，固定f74fb1a的原生public合同并正规生成单操作validator；未改Hub Session、不降BFFserviceguard、不新增网关／数据库／Storage。真实隔离Next HTTP先RED404后GREEN200，原外部Bearer与配置service/Domain、无cookie证明仅是本方传输证据，真实IAM与owner链由主方独立验收。
+
+首次最终门尝试保留：contract297PASS／1旧description定位FAIL；architecture50PASS，lint／typecheck0；test4570PASS／1断言FAIL／7SKIP，另有原Next30秒setup timeout与缺KOKORO_TEST_REDIS_URL两suite失败。随后按主方要求停未开始build／E2E，不把首轮记通过。旧父hash／inverse未改，仅将mutation定位更新到正式新description。必要adapter完成并停写后再以单worker／禁止fileparallel及受管Redis自有namespace跑最终门；正常环境仍未切换，Manus图标上传enabled／本地disabled差异保持。
+
+## 2026-10-21 个人系列删除App候选（正常环境未切换）
+
+基线a3a78de，消费固定BFF `f74fb1a6796e1b5860044c889fc5ed1355cf2ec9` / Public22.1.0 / 180，原始 SHA256 `f726cac620362524f92474ca9d647229280db308d16105820c718f9bc32db1ae`。复用现个人management/dialog/client/same-origin边界；确认前本人anchor+正式history publication，确认后冻结原CAS/body/key，unknown关闭／同主体续期可显式重放，不先GET404锁死、不自动新命令。严格200后清选择刷新；retained installation source_status=deleted禁止详情／启用／历史包／更新，不做物理Storage删除。
+
+已观察新增客户端／deleted卡／菜单／重复ACK的RED→GREEN；具体聚合验证由主方停写后记录。本候选未启动正常服务、未写正常数据、未提交或push；完整App七门、隔离Next/CUA及真实正常写旅程尚待，不能把focused通过称整链闭环。模型／工具／扣费暂停保持，连接器独立writer不在本删除写区。
+
+最新候选已消费同Public22.1的180项正规artifact；六窄生成器与完整旧父证明配对，独立connector错误profile不换。当前尚未正常生效，正常配对、真实写旅程和页面对照另验。真实Manus图标上传后enabled，而本地对应项disabled，仍是明确剩余差异；本轮未擅加上传API、Storage写入或自动启用补偿，也不以删除候选测试覆盖该差异。
+
+## 2026-10-21 正常项目技能入口：已按确认配对并验收
+
+用户明确确认仅开放项目技能入口。沿 System 现有 saveConfig／createFeature／putExposure，添加当前 tenant/site/user-web 的 surface 开关，并配对同产品能力定义及当前 web application 的暴露；没有前端常开兜底、新业务 API、Schema 或权限改动。能力定义为产品共享目录事实，暴露约束在当前 site application，不冒称该 exposure 本身按 surface 隔离。原配置三行、原 chat 暴露及其他 manifest flags 逐值保持；release binding 保持，正常七监听PID不变，BFF Agent仍false。
+
+正常刷新后已显示技能入口，正式面板读取原项目精确修订5、停用且默认0/16；“从我的技能导入”保留个人样本，另一不可用版本禁加。未新增安装、改版本／默认或执行技能；Escape回到技能按钮。仅证明当前入口与两条只读旅程，不等同公开 skill.list 三身份／项目并集完整验收。保存开关但未配 exposure 时返回false、首次 feature 创建误用write权限403均保留；确认未创建后沿原body/key使用该正式operation要求的publish权限完成，未修改IAM角色或凭据。不重跑未变化源码的全套业务测试。
+
+前后正式API快照、原意图、回滚方式、截图和有界回读仅Root ignored `var/dev/skills-project-admission-20261021`。现有四仓草稿PR仍未merge，系列删除／公开身份／连接器写区／样本丢弃等其他待确认项不因本次答复自动放行；模型、工具执行、扣费继续暂停。下节保留配对前事实。
+
+## 2026-10-21 正常项目技能入口：站点清单尚未配对（配对前记录）
+
+只读进入既有 QA Skills recovery 项目，正常页面未渲染技能入口；同源 runtime manifest 200、configVersion1，仅含 chat。现能力投影在显式清单缺 workspace.skills／project.skills 时关闭入口，正常与候选该文件字节相同。未将其误诊为旧分支或新增常开 fallback；已提请仅开放项目技能入口的站点配置边界，不启模型／工具／扣费、不接管自动化／连接器。未修改配置、数据或执行开关，未声称项目列表并集已正常验收。
+
+截图／AX／有界清单证据仅Root ignored `var/dev/skills-project-admission-20261021`；本轮仅导航和只读请求，没有完整网络采集，不据此宣称全部网络零写。四仓草稿PR已集中创建，详见Root当前事实；合并与完整目标仍未完成。
+
+## 2026-10-21 MCP 当前运行发现链：隔离验证通过，执行仍暂停
+
+复用现有链路，未新增业务接口、服务、表或兼容层。固定 Agent `9a2679f`／IAM `7cbe988`／Platform `97b27b3`，当前 signer／transport 经真实 IAM HTTP、PostgreSQL／Redis 和 Platform HTTP／PostgreSQL，完成精确包下载及标准 MCP SDK stdio 发现；撤销 fixture 连接后，Agent 读到 revoked 即拒绝，不再领取凭据或下载。最终1 PASS／0 SKIP：9笔签名请求、1次下载、凭据仅 discovery、零调用授权事件，tools/call 防执行标记不存在。
+
+Storage 上传／扫描／引用为受控 port、对象下载为 loopback fixture；Platform Redis／资源生命周期为替身。撤销由 fixture 修改 owner 自有连接，不是页面撤销旅程。未覆盖 Agent lease／journal、BFF 项目绑定、正常浏览器及实际工具执行，不将本片称为完整运行闭环。首次缺生成目录、第二次残留旧调用事件期望1的夹具失败均保留；改为核零调用授权事件后通过，未修改业务源码。
+
+1857份三仓源码输入零漂移；数据库目录94→94、IAM 测试键0→0精确一致，不以目录快照代替业务行审计。另独立核对正常七监听PID保持、无自有残留进程／临时密钥目录；清理本次源码副本及包，证据仅留Root ignored `var/dev/mcp-current-runtime-discovery-20261021`。页面重连入口、公开身份矩阵及删除语义等既有待办不因本片自动完成；不接管同事连接器写区，模型／工具执行／扣费仍暂停。
+
+## 2026-10-21 文档迁入 App：候选已验，Root 配对尚未完成
+
+执行既定 Wave 5，从远端 Root main `2e008595` 精确导出78个既有门户文件到 `developer-docs/`，不从本地分叉Root的旧Public1内容继续开发。保留原VitePress／lock／43项测试／generator／publication policy，仅修维护位置、App独立包门禁范围及说明，并固定同App Public22 `be5cc6f` 原始artifact：176项中生成170 public操作／359可达schema，6 browser-private仍排除，不新增依赖、业务API或内部服务。App的239个原测试文件完整保留，独立文档包不混入Next/Vitest；新增 `docs:dev/build/check` 入口。
+
+独立包完整check通过：lint/types、43PASS／0SKIP、provenance、两次确定性生成、5个loopback示例／9次fixture调用、architecture、生产build及53HTML／16802内部链接。App停写完整七门均0，239文件4547PASS／0SKIP，1118非文档输入无漂移，Redis PONG119→119；未另外运行整站Playwright。保留初始迁移路径失败、新增Markdown分隔失败及显式PATH误选Python3.9的42PASS／1FAIL；恢复现有Python3.13环境后通过，未改示例、断言或依赖。
+
+真实静态产物浏览器验证：1280搜索新增history operation并用回车打开精确锚点，API参数／响应及来源可读；expected_publication字段可搜索；390菜单进入技能指南且scrollWidth390。公开产物179文件未包含App内部维护文件名或三条具体内部正文标记；该有界检查不冒充全量敏感信息证明。超大Skills页native AX超帧，限定DOM读回正常；窄屏设置观察超时后DOM确认已390，未重复发送。Escape能关闭搜索，但焦点回到BODY，尚未宣称回焦通过，不为本次搬迁复制上游组件或加全局observer。保留既有大chunk警告，不扩大到打包架构重写。
+
+仅候选已迁入：Root旧门户删除／链接／gitlink配对、内部发布的真实访问控制和完整产品手册仍未完成，未push／PR／merge、不称完整文档站交付。正常七监听不重启，模型／工具执行／扣费仍暂停。取证仅Root ignored `var/dev/app-docs-migration-20261021`，正常后台空草稿删除及已有身份／生命周期边界仍待确认。
+
+## 2026-10-21 后台空草稿：正常创建与刷新回读已验证
+
+沿正常 Admin d7403b1／BFF4a10f8b／Platform97b27b3，正式页面创建独立无包样本 `qa-admin-draft-discard-20261021`，整页刷新后重新打开同一草稿。Platform owner 只读事务核实同名仅一条、draft/revision1/state_version1/package_phase none、零publication／安装，未用数据库写入伪造产品结果。发布、撤回、隔离、恢复和修改可见范围均禁用；草稿删除窗口已填写明确样本原因，但未提交，等待不可恢复动作的当次确认。只新增该空草稿，不触动旧版本、安装、账号、权限、积分或执行开关；正常七监听PID保持。
+
+本轮13仓非递归fetch/prune全0，三个独立候选App／BFF／Admin分别ahead36／9／5、behind均0，Platform ahead5／behind0；Root仍4ahead/4behind及原WIP，不盲pull或提前更新gitlink。Agent现有MCP固定输入亦已只读比对：runtime proto、请求绑定、输入投影、五原始向量与当前owner逐字相同；profile1.1→1.2仅版本与descriptor完整import闭包摘要变化，不据此新增兼容代码或宣称runtime整链通过。没有新业务源码、Schema、依赖或服务重启，未push／PR／merge；本节仅补充证据，完整目标和待裁决边界保持。
+
+原始截图与脱敏owner回读留Root ignored `var/dev/skills-publisher-acceptance-20261021/admin-draft-discard-*`，使用边界同步[技能指南](guides/skills.md)。本轮没有为文档重跑全部业务门；模型、工具执行与扣费暂停。
+
+## 2026-10-21 MCP 续期：当前源码隔离 HTTP 链已验证
+
+固定 App `c3a2dc4`／BFF `4a10f8b`／IAM `7cbe988`／Platform `97b27b3` 的全新源码副本，复用现有 fixture 和本机受管 PostgreSQL／Redis，不切正常环境。真实 Next/RP 登录携带原表单签名 `loginIntent`，再经 BFF／IAM／Platform 完成授权码＋PKCE、自然过期、一次受控刷新；GET 不刷新／发现，范围收缩先提交新资格再拒绝原Prepare CAS，正确返回412／mcp_personal_precondition_failed／false，不再误报502。显式新命令恢复，成功同键回执不重复 grant／发现。
+
+最终1PASS／0SKIP／exit0；AS授权码交换1次、刷新1次，仅元数据发现、零tools/call，不配置模型／扣费。PG数据库目录94→94逐项相同、IAM fixture keys0→0逐项相同，独有Web Redis prefix清零；临时凭据已删除、无残留自有Node进程，正常七监听PID不变。第一次仅PATH缺pnpm导致fixture安装前失败，补现有工具路径后通过，未安装依赖或改产品代码；原失败不冒称产品RED。最后只修正测试标题为current candidate，再跑同一旅程通过，不称已合main。
+
+补充无效refresh token独立HTTP负控亦为1PASS／0SKIP：AS返回invalid_grant后，原Prepare为503／mcp_personal_dependency_unavailable，保原access版本／过期时间和refresh claim，GET不重发；active连接误用Begin仍412，显式调用正式Reconnect后第二次code／PKCE恢复approved／ready，refresh总计仍1次。它不把unknown失败当作令牌已成功撤销，也不声称页面已显示reauthorization_required。正负最终收据资源均精确回原；四副本累计3321个tracked输入零漂移，临时源码副本已清理，只保脱敏harness与收据。
+
+这是原生HTTP cookie jar／真实owner资源，不是浏览器水合或正常租户续期验收。实际负控读回prepare_failed／OAuth已配置／active连接，现App私有详情资格函数返回false；独立只读复核已确认P1：Custom detail无其他可达重连入口，binding predicate、unknown主按钮、coordinator blocked与onAuthorize四处共同拦截。后继只修现组件内显式Reconnect分支，保原unknown Prepare／body／key，不自动重放或清除；当前连接器写区归属已提请协调，未先改同事业务代码。HTTP成功不冒充页面闭环。Agent Resolve/Acquire/runtime亦未据此关闭。原包发布证据继续复用，`guides/connectors.md`同步使用／工程边界。原始脱敏收据留Root ignored `var/dev/mcp-current-expiry-20261021`；不新增API、Schema、服务或兼容层，完整Skills／MCP及PR合并目标仍active。
+
+## 2026-10-21 目录搜索连续点击：已正常加载并实测
+
+行为候选 `264225c77705d19484cdbcbc60858e1461121eed` 已通过完整七门：contract297、architecture50、239文件4547PASS/0SKIP，lint、Next typegen/tsc、webpack build、构建后types均exit0；1073非文档输入无漂移。受管Redis PONG／119→123，仅记录并发运行实际值，未重置资源，不据此声称共享库存不变。未单独重跑全站Playwright，真实CUA承接本片主路径。
+
+正常原App复现：同一已存在卡在新查询期间被骨架替换、触发器为0。仅App按已验证源码快进／短暂重载后，再次读取相同样本，卡保留／无骨架／命令禁用，单次点击后ListHub与GetSkill都绑定修订3的精确UID，原Storage包目录／SKILL.md／references/checklist.md均200，原标记可见；Escape关闭回原卡片焦点。网络短窗无截断，使用的临时浏览器网络延迟已恢复并关闭观察。原停用安装没有启用，不发模型、工具或积分命令。App配置指纹及其余六监听身份不变、BFF Agent仍disabled，正常源码行为HEAD为264225c。
+
+实现仍只在现 `KokoroSkillsSurface` 保留同准入client的确认首／游标页；旧代私有详情与命令不随之复用，无服务、API、Schema、全局缓存或兼容分支。隔离HTTP夹具与正常owner整链分开留证。纯文档更新不改变该行为基线；尚未push／PR／merge。完整目标仍包括系列删除、公开三身份、后台剩余负控／草稿旅程及MCP续期／runtime验收，当前片完成不等于全目标完成。
+
+## 2026-10-21 历史恢复已正常配对验收
+
+固定 BFF `4a10f8b043cb44b4bd2d8f8a689bde8191db10ce`，Public22/176 原件 digest 不变。恢复复用原包下载及既有新版本发布，不新增服务、业务 API、表、全局状态或兼容旁路。
+
+隔离 Next/CUA 已验证历史恢复生成新 current 3、保留旧1/2；503未知结果关闭重开仍是原尝试，重试只发布、不重复建版或上传。612/390窄屏无横向溢出。实际发现 DialogContent 卸载丢失session，新增容器级回归先失败再修复，三UI文件26 PASS。该浏览器验收是显式 HTTP/对象夹具，三字节二进制哨兵不是有效ZIP，不冒称正常owner/Storage整链；fixture独立回执路由不共享模块状态，未作为权威证据。
+
+停写后完整七门均exit0：contract297、architecture50、默认239文件4545PASS／0SKIP，lint/typecheck、webpack构建及构建后类型通过；1073个非文档输入前后无漂移。受管Redis PONG、DBSIZE121→119，未重置共享资源；未单独执行全站Playwright，主路径由CUA真实浏览器承接。独立只读审查未见确定P0–P2。正常 Platform97b27b3/BFF4a10f8b/App94d3687 已配对。纯文档样本真实原ZIP458字节摘要与新上传/扫描clean/校验digest完全相同；新UID修订3、原1/2逐字段保留，publication由撤回v2/CAS3变为新v3/CAS4。原v1安装ID/pin/enabled=false/时间均不变，刷新后新current和原附属文档仍可读，390×844无横溢。初始读/写网络窗完整，刷新窗口截断，不冒称完整网络零其他请求；未执行模型/工具/扣费。三个源码进程保原配置重载、无Schema变化，其余监听不变，有回滚副本。尚未push／PR／merge。删除、公开身份、后台及MCP完整目标保留。
+
+后台核心写旅程已用专用纯文档样本正常实测：正式创建官方draft→上传→Storage对象PUT→扫描clean→校验→仅本人发布→改catalog→隔离→用户目录不再返回→显式解除隔离→目录恢复→创建独立v2→独立上传校验→catalog发布→精确v2正文→撤回→刷新目录为空、不回落v1。两次发布请求的publication均与Admin详情meta中的原快照一致，旧v1与解除隔离后的快照完全相同。Admin十个操作网络窗均无截断；目录宽窗有截断、隔离响应正文过期，保留UI/200证据，不冒称全网络完整。两个ZIP的CRC、真实hash/扫描/校验已核对，无安装、模型、工具或积分执行；样本v2保留撤回，未永久删除。
+
+后台草稿丢弃的真实浏览器动作、公开三身份producer/对象范围、系列永久删除及MCP仍待闭环。另记录一次搜索请求完成时退休旧列表上的详情选择；稳定结果再次点击正常，尚未修复该交互边缘，不据本轮宣称所有交互完成。
+
+## 2026-10-21 发布确认快照（App源码候选）
+
+固定BFF `be5cc6f91145d46ea504420b29b16ff16c981f28` /Public22.0.0/176，SHA256 `65019688691a6d6933146be66d4e7a1293f0dc92418a6f259a983529031b5c27`。沿既有发布session保存用户确认的系列状态；已有系列读取失败／404不会当成null，新系列明确null，重试沿原body/key。App/Admin正常配对和完整页面旅程仍待验收，不宣称整链完成。
+
+停写后完整七门exit0：contract297PASS／0SKIP、architecture50PASS、lint、typecheck、237文件4524PASS／0SKIP、webpack build及构建后types；1069非文档输入前后无漂移，既有受管Redis PONG／126→126。六SDK正规生成检查通过，原21.2历史proof字节保持。独审两项aria-busy问题均实际RED→GREEN后关闭，当前无确定阻断；初始3业务RED、首完整contract15处旧pin断言与后续2旧夹具FAIL均留日志，未放宽安全断言。一次中途门为审查修正主动终止，不当业务失败或通过。
+
+隔离真实Next＋CUA通过history503→显式重试、publish503未知→关闭重开→原body/key再次提交成功；首两次publication精确9007199254740993、请求及key相同，history仅原读取＋显式retry2次。612×766／390×844无横向溢出，Escape关闭。浏览器之后仅给同一aria-busy收紧open/admitted，否准入与pending→ready回归、最终七门证明；不改可见布局。自有preview进程／监听终止、源码副本清除；截图／HTTP夹具／回执仅ignored，不是正常IAM／Platform／Storage整链或Manus整页一比一证据。未单独运行整站Playwright，正常App/Admin配对和正式恢复旅程后继继续。13仓非递归fetch全部成功，Root保留4ahead/4behind与原WIP，不盲pull；App main仍为候选祖先。未push／PR／merge，模型／工具／扣费暂停。
+
+## 2026-10-21 Skills 历史读链已正常配对并实测
+
+本轮增量：App `49ddf7f` 已在正常环境加载，当前指针与停用／撤回／隔离分开展示。实际原样本 current v2 显示“当前版本＋已撤回”，旧 v1 不继承该标记，正文切换与 Escape 回焦仍正常；612×766／390×844无横溢，完整动作网络窗仅GET、无截断，历史与 publication 与上轮完全一致。新增回归先3FAIL后19项通过，停写后完整七门均0（237文件4519PASS／0SKIP），1069非文档输入无漂移；受管Redis PONG／119→119，未单独重跑全站Playwright。仅重载App，其他六监听不变；没有业务命令、模型、工具或积分写入。Platform 已提交 `3fc971edbd99e0c0fe7d8a30a3ebf872f57f5b3c`：两 Publish 的明确 publication 条件进入原摘要与v2回执，成功重放优先，新执行同事务确认／CAS／回滚；无新服务／表／API。最终完整10阶段均0（168文件2573PASS、442资源SKIP不计通过），39冻结源码／artifact输入无漂移、正规再生成无drift；真实隔离PG发布／导入61PASS／0SKIP，临时库余量0。首次3业务RED、首全套15旧fixture／原HTTP负控次序FAIL保留，配对后重跑；原独立历史interpreter、raw向量和完整父图保护不放宽。独审无确定阻断；HTTP6.3与旧publication原字节保持，MCP只更新import闭包descriptor及bytes/hash，不动连接器业务。正常仍是旧owner，尚未push／PR／merge。BFF已提交`c707f5c7a5f7328f7b405967dd6d069df4166713`，Public22/176两发布显式确认快照进入原摘要／oneof；完整七门exit0、contract862PASS、default1514PASS／3原资源SKIP、719输入无漂移，独审无阻断。App／Admin未配对、正常未切换。Admin owner已提交`e95aba22d6ffc59a2c5979db39418b9a67f2822f`，现详情tag2复用原oneof明确空／真实指针版本，原current可用性过滤不动；真实PG9PASS／0SKIP、最终完整10阶段均0（2581PASS／451资源SKIP），取消／超时回归已补，独审无阻断，无新服务／表。下一步BFF固定该owner并投影Admin详情快照，再由App／Admin展示并冻结用户确认快照；复用既有发布／查询路由，不在提交时偷偷改期待值。恢复新UID旅程、删除、公开身份矩阵、后台和MCP等完整目标仍保留，模型／工具／扣费暂停。
+
+本轮正常源码已按 Platform `efe1ed1` → BFF `d28f7db` → App `e9bc2a3` 配对重载；各候选再次非递归 fetch，远端 main 均为候选祖先。保留旧 SHA、私有配置／进程快照及回滚源码；App 原 `next-env.d.ts` 字节保留，配置指纹和其余四个服务监听身份不变。没有 Schema、账号、权限或执行开关变更；BFF Agent 仍 disabled。预检最初将格式脚本路径变化误当依赖变化，确认仅 BFF format:check 增加两条已验路径后收窄精确校验；两次预检失败均发生在停止服务之前。
+
+真实浏览器已走本人管理菜单→历史 GET 200→current v2 精确目录／正文 200→旧 v1 两文件及附属文档 200→切回 v2→刷新重开。刷新前后历史／publication 完全相同，原 v1 安装仍停用；390×844 实际 history dialog 374×828、x8/y8，页面无横向溢出。这是正常 App/BFF/Platform/Storage 数据读链，不再只是 HTTP 夹具UI；不代表写生命周期、完整公开身份或后台旅程已完成。初次历史读取短窗无截断；整页刷新宽窗截断，保留其边界，不声称完整网络零写；可见额外 POST 为正常 auth/session，未发业务命令。
+
+本次发现并保留两项下一步：历史 current v2 的 publication 已撤回，UI 尚缺撤回状态标识；现发布仅锁新 draft 与提交时 publication，仍缺用户确认时的 current/version fence。沿现 PublishSkill 增补明确 publication precondition，纳入原摘要／幂等绑定，先回放成功 receipt 再核新执行前置条件；冲突不自动刷新期待值重发。复用新 UID→独立上传／扫描／校验／发布，不复用旧 Storage scope、不升级安装、不借恢复绕过 quarantine。不新增服务或表；正式契约设计与实现仍待交付。
+
+本地收据与截图仅留 ignored `var/dev/skills-publisher-acceptance-20261021/history-normal-*`，重载收据为 `personal-history-normal-activation.json`。模型、工具执行与扣费仍暂停；同事自动化／连接器不接管。尚未 push／PR／merge，Root 不提前 pin 未发布候选，完整目标 active。下方“正常未激活”等仅保留本次配对之前的阶段事实。
+
+## 2026-10-21 Skills 历史读取与精确预览（候选，正常未激活）
+
+固定BFF d28f7db/Public21.2.0/176和原始artifact，六既有窄生成器正规重出，connector错误profile不变；test-only history增量inverse恢复完整21.1.1后委托原模型与双父证明，无runtime双读。现managed同源读取补history GET，现包reader补本人精确版本路径；保身份/预算/大小/错误与原POST新版本。历史schema闭集、严格原始键、publication current而非max、nullable末页cursor；跨snapshot或重复页拒绝。
+
+PersonalSkillManagement按操作分只读history与写状态门；独立PersonalSkillHistoryDialog拥有临时历史/分页/选择，包复用原精确reader和文件/Markdown组件。代际变化卸载读内容、取消旧请求，选版不改安装/发布。对照已保留Manus实际历史图：上方时间列表、下方精确包预览；恢复/删除缺正式fence及生命周期，不加假按钮。真实菜单到history已有组件主路径，正常产品和完整链未验证。
+
+本片已复现adapter历史/包路径缺失两项RED和history菜单RED；修后定向通过。独审发现同文件重选清空正文、body超时误502，均补真实RED→GREEN；另补忽略信号后返回流取消的RED→GREEN。首契约检查仅1处current版本断言未配对，保留原失败后更新到唯一21.2，不改历史raworacle。停写后完整七门均exit0：contract297PASS、architecture50PASS、237文件4515PASS/0SKIP，lint/typegen/types、webpack build及构建后types通过，1069非文档输入初始前后无漂移。随后只按真实参考对照调整CSS两个布局值；其余1068输入不变，最终CSS再经15条相关组件回归、webpack完整构建与构建后types通过。缺省App无Prettier依赖/格式脚本，先前试用该不存在路径的命令仅为工具缺口，不作为代码失败或格式通过证据；未安装依赖。
+
+真实隔离Next/CUA验证精确v3→v2→v1、同文件重选不清正文、第二文件读取、Escape关闭和聚焦按钮Enter重新打开。612×766下dialog572×718、x20/y24；390×844下dialog374×828、x8/y8，document scrollWidth=390，无横向溢出。保留原Manus参考与新实现精确PNG；未用native缩放截图冒尺寸证明。参考恢复/下载动作与正式生命周期仍未补齐，故不声称一比一完整闭环。UI使用显式历史/包HTTP夹具，非正常租户/IAM/Platform/Storage整链；两次自有preview进程均退出、监听已清理。完整两份既有Playwright套件本次未单独重跑。
+
+独立只读复审无剩余确定阻断，原raw/双父证明保留。App远端main重新fetch成功且为本分支祖先，无同事新增提交待整合；尚未push/PR/merge、正常服务和数据库不动，模型/工具/扣费暂停。
+
+## 2026-10-21 原生退出确认产品化：已正常加载并实测
+
+裸英文来源为锁定Better Auth原生模板，保留其确认cookie/300秒/session/client/注册回跳核验与正式撤销。App只在已验证native200HTML及正向确认cookie、正常顶层导航后去固定中文页；API仍原生，失败无cookie/正文/Location透传，无hint、HTML字符串替换、新服务/持久状态或自动确认。确认页origin referrer＋form-action self，不加Origin:null例外；失败字段存在即无form失败态，与Proxy一致。
+
+主方真实Next退出旅程先RED旧200模板vs303；修后通过。独审发现重复failed参数会让Page/Proxy分歧，实际RED保留，空值/非法值/重复均修复。首次完整门4503PASS/1FAIL为新React页开发缓存预期；核锁定Next BaseServer开发分支覆盖为no-cache,must-revalidate，文档测试按实际模式精确断言，原native no-store断言全保；构建后独立生产probe五个文档全部no-store、无cookie、正确form及referrer，测试进程已停，不改框架。
+
+最终非文档1064输入冻结无漂移；完整七门均0，236文件4504 PASS/0SKIP，contract296、architecture50、lint/typegen/types、webpack build及post-types通过。独立审查无确定阻断。受影响HTTP中Chromium覆盖与本次正常浏览器旅程分列；未单独重跑两份preview E2E，不称所有E2E通过。13仓重新非递归fetch/prune全部成功、main无新变化，现HEAD及他人改动保留；未push/PR/merge。正常已仅重载App加载43278e5，其他监听进程、配置、模型、工具与扣费不动。正式菜单→固定中文确认页→刷新不自动提交→Tab聚焦/Enter提交→原生确认303→密码登录→重登后历史正文可读均已验；短窗口确认POST恰1、精确canonical Origin、无截断。重复failed正常页无form。390×844实际DOM宽/scroll均390、按钮44px；原native截图缩放只作诊断，另取精确viewport截图核验，最后已还原视口。原用户隐藏标签不冒正文通过。下方为此前阶段记录。
+
+## 2026-10-21 租户续接根因已修，正常双密码回归通过
+
+App76326e5已正常加载：原生HTML租户失败303到固定产品结果页，API/q=0/非导航保失败语义；签名form／tenant路径不进开发访问日志，no-referrer，不重发、不清其他交易。IAM1c4209b在独立源码目录正常加载，主目录main未改；同一Session普通tenant／updatedAt变更不再误作隐式整行CAS，原谓词、身份、到期／撤销及凭据rotation/delete保护保留。
+
+本App最终完整七门均0：contract296／architecture50、lint／types、236文件4501 PASS／0SKIP、webpack构建及构建后types；1062非文档输入无漂移。IAM owner完整verify119文件1517 PASS，真实PG／Redis／HTTP三文件19 PASS；独立审查无确定阻断。原RED、测试装配错误和中间失败保留，不冒全部integration或独立preview E2E通过。
+
+正常已通过菜单正式退出、两标签密码表单并发提交，两笔均回产品：一个恢复历史会话正文，另一个打开技能设置并真实列出安装项。仅重载本方IAM，原配置字节相同、其他监听进程与执行开关不变；原隐藏用户标签只证回原路由，不冒正文通过。该轮CDP读取混入旧事件且一窗截断，不作为完整网络链证据；正常结果由UI、owner因果屏障与实际运行版本分别证明。
+
+未push／PR／merge。长协议query、英文原生退出确认及pending预算恢复体验仍OPEN，后继保issuer确认cookie／正式终止流程做产品化；不以清App会话或添加未经核实hint跳过确认。完整积分／Agent／首页／Skills／MCP目标保留，模型、工具与扣费暂停。下方为此前阶段记录，不覆盖本节当前态。
+
+## 2026-10-21 多标签原生交易隔离：已加载，正常密码续接仍有缺口
+
+已按批准设计完成每表单签名 handoff 与 CSRF、每次 POST 独立 Auth.js 原生 cookie options、唯一 v2 ledger 验证后 CAS，以及 IAM 每次渲染独立 proof。未证明的失败零清理；已消费终态仅清本交易，不清正式会话。旧记录与共享 return cookie 入口不保兼容。IAM 过期密码表单去固定产品失败页，刷新不自动登录；Consent／invitation 保原命名及消费语义。每请求可见 pending/header 预算拒绝新增，不驱逐有效交易。
+
+主方冻结完整七门均0：7份生成器检查／contract296、architecture50、全lint、Next typegen／tsc、236文件4497 PASS／0FAIL／0SKIP、webpack构建、构建后types；1062非文档输入无漂移。实际HTTP套件含IAM71、HTTPS反代5、RP93，覆盖冷表单同／异query、双目标正反callback、proof错配／重放、仅自身清理、错误与过期以及真实Chromium失败页刷新不重启认证。完整 pnpm test:e2e 的两份 preview surface 本次未单独运行；受影响登录浏览器旅程由上述真实HTTP中的Chromium验证，不将preview代替正式SSO。
+
+保留失败记录：same-query两冷表单RED `[true,false]`；首轮HTTP70PASS／1FAIL为新测试写错已有链接名，按实际“返回登录”改正；首次整门在proxy测试变量遮蔽处typecheck失败，修复测试变量后完整重跑通过。未删安全断言、加skip、放宽超时或变更生产配置。Redis前后PONG，全实例key数114→115包含共享并发活动，不冒称总量零变化；各fixture自有资源按原隔离清理保障验证。
+
+独立只读审查未见新增阻断。正常已仅重载本方App加载7c70ab1，其他监听进程、配置及数据不变，BFF Agent仍disabled；Root与12子仓非递归fetch均成功、远端main无变化，无push／PR／merge。正常两个并行新SSO已各回资料库和技能设置；另一个完整短网络窗证明signin302→authorize302→callback303→App200，无截断。随后真实双密码提交，一边返回资料库，另一边在select-tenant续接503且露出JSON；后续一次新启动触发当前可见pending预算拒绝。没有驱逐别人的proof或重放旧set-active。该503根因未定，不归咎密码或据fixture称正常整链完成。短TTL后全新SSO再成功，原产品标签已返回原会话路由，但本轮未取得历史正文回读证据。下一步先定位该正常续接失败并补原生错误的产品恢复，再关闭并发登录项；长协议query、原生退出确认产品化与原Skills／MCP／积分等遗留仍OPEN，不把本片验证称为全部登录体验或全目标完成。模型、工具与扣费继续暂停。
+
+## 2026-10-21 登录交易原子消费：本地阶段实现，未激活
+
+用户已批准原生交易隔离设计。现 ledger 改为验证记录／MAC／浏览器 binding 后比较原值原子消费；错 proof 不烧掉合法 state，并发仍只有一个进入 exchange。现有单记录、NX、300 秒和公开方法不变；完整 namespace／handoff／IAM 表单隔离仍待完成，不称多标签整链已修。
+
+主方实际 RED：unit 1 FAIL、真实 Next／Redis HTTP 错 nonce 后合法并发均403；GREEN：两文件73 PASS、真实 Next／Redis HTTP3 PASS／88名称过滤、定向lint和完整types通过。验证后 replacement／expiry 两参数回归已补，最终源码与真实HTTP验证冻结相同，独立只读审查无新增阻断。完整 App test/build/E2E未重跑，待整个登录切片冻结后执行；正常 App 仍e62745c，不因本阶段源码自动激活，模型／工具／扣费保持暂停。
+
+Manus 纯文档参考样本经用户授权已真实替换并恢复：Upload200→历史2项→Restore200→历史3项，新 current 与两个旧 UID 均不同、旧版本保留；选当前回读原正文。没有执行、分享或删除。[Skills指南](guides/skills.md)区分参考私有RPC、已支持能力与待完成生命周期，不以文档冒充Kokoro恢复实现。
+
+## 2026-10-21 登录阻断已修，完整登录体验仍有明确遗留
+
+运行 App 已加载 acd28c69ff408ac088ba1e229bfbb224f1108060。正式 IAM scope 按 session pair → profile 顺序演进并回读 current：Product client 16／resource 27；用户已明确授权恢复本地失效 OAuth 管理资格，备份后仅重载 IAM，不改密码、平台角色或积分。
+
+正常浏览器：原 invalid_scope 回调刷新后离开技术 URL；新 Product OAuth 交易按指定目标返回技能页，signin302→authorize302→callback303→页面与session200，窗口无截断。真实退出后密码表单也已303→租户选择302→callback303→工作区／session200；历史会话完整回读，未提交模型／工具／扣费。只在失效旧会话上操作不再算新登录验收。
+
+同时实际复现了未关闭问题：两个标签同时落入登录会导致共享登录交易／CSRF cookie 互扰，第一次密码提交重启登录；重新读取唯一有效表单后成功。清理验收重复标签只是恢复现场，不是修复该缺陷。并发登录隔离、登录地址的长协议 query、原生退出确认页未统一产品 UI，继续列为登录收口项，不能称登录整链全部完成。
+
+最终冻结1060个非文档输入无变化，contract296／architecture50／lint／typecheck／235文件4482测试／webpack build／构建后types均通过；定向130及隔离真实Next/Redis回调6项通过。独审发现的error_uri、真实/login入口与Next内部authority均已修。该证据只支持本片，不替代全部Skills／后台／MCP或并发登录验收。说明：[登录与登录恢复](guides/login.md)。
+
+## 2026-10-21 Skills 与正常模型候选配对（隔离集成中）
+
+保留正常模型候选20e8b788，合入已交付main f9d45e5及其失败诊断；Skills生产组件／测试与main一致。仅升级BFF固定snapshot和既有生成器到192396d/Public21.1.1，保175操作、模型字段和原严格消费者；不新增运行时兼容入口。完整门已通过；正常加载及页面回读待验，未改正常服务或数据。
+
+本地最终七门均0：七生成检查、contract296、architecture50、lint／typegen／types、完整234文件4469 PASS／0FAIL／0SKIP、webpack构建及构建后types；1058非文档输入hash无漂移。初次隔离依赖混用两份物理React造成hook错误，确认后只替换本方依赖链接为正常候选同一锁定图（无安装／版本／lock变化），相关385 PASS；随后缺测试Redis配置的4467 PASS／2SKIP／suite FAIL单列保留，复用既有受管实例后真实Next7PASS及最终完整门通过。未删断言／加skip／放宽超时；过去Next开发态偶发JSON500仍未归因，不因本次通过称已修复。独立源码审查通过，contract README当前pin漏项已补。
+
+## 2026-10-21 个人技能版本管理接线与正常旅程（待集中交付）
+
+沿基线1a13f2e恢复个人安装详情的更新／撤回入口，独立菜单只传操作，管理协调组件用既有self-managed GET核验精确source/series/revision；不根据个人标签或作者名推断发布权限。复用原上传／发布／撤回流程，同主体重核不改未知命令的原key/body/CAS；关闭可显式恢复，换主体卸载。确认发布后仅真实回执的新版本可继续管理，重新GET核验；原安装不自动升级，撤回表单明确显示名称和版本。无新接口、Schema、依赖或兼容分支。
+
+用户明确授权的正常UI样本版本2：创建201、379字节纯文档ZIP真实上传、扫描clean、校验200、发布active200、撤回withdrawn200；刷新安装读取200后，原版本1仍installed=true/enabled=false/source_status=active。未删除数据、启用安装、执行技能／模型或变更积分；无服务重启、push或merge。参考Manus实际为编辑／历史／替换／删除，不能把本地更新／撤回视作同义齐全，历史恢复／移除和Admin旅程仍待验。
+
+收尾独审复现并修正三处恢复问题：撤回曾未知后再收到拒绝仍保留原key/body/CAS，成功ACK清父级pending以免重核失败锁死，创建修订曾未知后遇412不重新分配key。创建ACK在await后再次检查取消，严格确认后才保存draft；首次明确拒绝的释放／重新开始仍保留。修复均有RED→GREEN，独审最终55项通过；主方最终冻结后验证另列，不以子代理结果代替。
+
+App1a13f2e上冻结的14份变更源码／测试保持不变；此前同一冻结的定向7文件108 PASS／0SKIP、lint、typegen/types、webpack build、post-types、七项生成检查、contract295及architecture50通过。后续已捕获隔离验收2 GiB堆上限触发Next自动重启；调整验收进程到4 GiB后，独立OIDC套件90 PASS。完整App重测为233文件通过、1文件失败（4467 PASS／1 FAIL／0SKIP），没有重启；剩余pending refresh测试预期409却收到Next HTML500／JSON解析异常，根因仍未确认，相邻3项定向通过不替代完整门。原4460 PASS／8 FAIL及后续1FAIL证据保留，未改产品／断言、skip/retry、超时或引擎。再加只读诊断的完整重测234文件／4468 PASS／0FAIL／0SKIP；本次未捕获重启或manifest无效读，亦未复现JSON500，不宣称偶发问题已修。Next上游[同类开发态manifest竞态报告](https://github.com/vercel/next.js/issues/97594)只作线索，不替代本地根因证明。
+
+本次正常与隔离目录1077份非文档输入及原14份变更冻结均无漂移。既有Skills探索预览E2E桌面／移动端2 PASS，不冒充正常发布管理整链；自有预览已停止并移除。各轮受管Redis前后PONG且key数稳定（上一轮88→88，本轮92→92），正常服务未重启。正常UI已再次实测原版本详情→撤回表单（不提交）→Escape回搜索框，原安装仍停用；没有追加写样本。个人发布管理及下方安装作者修复作为同一切片保存，尚待集中PR交付；下方“未提交”仅保留当时状态。本次只读复核确认1077份输入及14份切片SHA一致；诊断预加载可能影响时序且只观察八种manifest，未覆盖next-font-manifest，故通过不等于已消除此前JSON500。
+
+## 2026-10-21 安装详情作者（局部修复，未提交／未远端交付）
+
+正常安装读取已返回真实个人publisher_profile，详情却使用调用方的站点品牌。现仅安装详情改为精确安装作者，资料缺失／尚未读回不显示猜测名称；owner确认official来源才可保留品牌。目录／分享展示、准入与身份代次退休保持；无新增API、数据模型、缓存或权限规则。既有个人版本／撤回组件缺生产入口是另一已确认遗留，未借此恢复旧布局或增加写操作。
+
+App基线 `1a13f2e42ce08f7720dd76147a7ed53e18bd6abc`。新增4项参数回归，修复前真实RED；最终相关3文件217 PASS／0SKIP、两变更文件eslint、typegen/types、webpack build及post-types全部exit0。正常源码与独立验证目录1122份冻结输入hash一致；本段文档在冻结验证后补记。未重跑完整App测试／全站E2E，不将此前完整门自动算到新变更上。
+
+正常页面612×766刷新后与390×766窄屏显示真实作者，窄屏无横向溢出；样本仍停用，未执行技能／模型或写积分。隔离验证时误改的3个共享workspace依赖链接已恢复，此后使用独立依赖链接目录及direct node，正常刷新成功，无服务重启；阶段夹具缺响应头／依赖配置失败均保留，不放宽decoder或计为通过。截图、source freeze及命令结果留Root ignored验证目录。本片待随既有候选集中交付，不代表Skills全旅程或目标完成。
+
+## 2026-10-20 账户切换闪动（局部修复，尚未远端交付）
+
+针对“点击切换有闪动”，不是失效按钮：设置窗口内保留当前准入范围已确认的姓名/邮箱/积分摘要，返回账户时重核但不先清空；换身份/代次、撤准入或关闭窗口清空。inactive panel仍卸载，不保活草稿和弹窗，不引入持久缓存或新增请求。初读积分用有无障碍标签的占位，资料读未确认前禁编辑/保存，旧回调也受最终门闩；新读仅同步未编辑姓名，保留草稿/CAS及未知写入恢复。
+
+真实缺陷 RED→GREEN，216 项相关回归通过；只读复核 Approved。正常3310鼠标“通用→账户”及键盘“账户→用量与计费→账户”实测返回保留Owner/邮箱、输入可用，无先空字段；当前612×766设置窗口可达。最终冻结1121输入隔离副本：contract295、architecture50、lint、types、完整233文件4451PASS/0SKIP、webpack生产build和post-types全部exit0；活动源码与验证副本逐文件hash一致。首次缺陷RED与阶段失败保留，未加skip/retry或放宽门。未运行本轮全站浏览器E2E，未据此称桌面全尺寸/Manus一比一或金融整链完成。尚未开通积分账户文案仍存在，隐藏初始化、当前租户充值和实际用量扣减属于独立未闭环工作；无模型/工具/积分写入、真钱支付、自动化/连接器修改。
+
+## 2026-10-20 聊天执行未就绪反馈（局部修复）
+
+仅将明确 `agent_not_configured` 且无真实 run failure 的提交前依赖状态，拆为紧凑中性反馈组件；原402、真实运行失败、未知提交、恢复能力及原key/body流程不改。中英文完整、role=status、装饰图标隐藏，只有明确点击原恢复按钮才调用既有回调；没有自动发送、轮询、owner/API/Schema或新依赖。
+
+正常3310先复现红字/孤立重试，再验新卡片、历史、草稿编辑与键盘到达按钮（568×766）。BFF前置guard为disabled，测试请求止于该guard，无模型/工具/扣费；不据此称全尺寸或竞品一比一完成。原后台错误标签仍有工具准入阻塞，本段不冒MC-02后台写旅程或全目标闭环。
+
+业务停写的1119输入隔离副本：contract295、architecture50、lint/types、完整233文件4446PASS/0skip、webpack build/posttypes均exit0。全测后仅整理两个新增用例格式、将“无能力无按钮”断言加强为实际新标签；最终53项与lint重跑通过，其余1118输入hash不变，活动与隔离源码一致。只读复核Approved，新增只占原suite两用例；未增加skip/timeout、改engine/资金、其他开发者自动化/连接器或运行配置。实际截图及阶段/最终收据仅Root ignored chat-feedback-20261020。
+
+## 2026-10-20 MC-02 Public21.1模型配置桥（本地候选）
+
+唯一BFF固定 `f3da7d5feb855b2b97c77a6ae9928cee96e1b8aa` /21.1.0/175，SHA256 `4db8bab6159a2f36061f8b292fba9074ea2614adab2a1489bf9d1b3b066b6fe3`。仅扩现Admin Product adapter的10具名模型配置路径，复用原Product session、服务身份和request-id，原body/key/CAS透传；发布严格证明实际EOF，不虚构JSON正文或丢幂等头。没有直连System/读取运行Key、模型执行、自动重试或新的OAuth。
+
+七现有生成器按固定artifact正规重出；test-only21.1→21精确全文逆回，再委托原21→20及历史oracle，不作runtime兼容。Skills/MCP、自动化、聊天与其他owner语义不变。主方完整相关门与正常页面分别验收，受控peer adapter测试不是owner整链证据；首次完整测试缺资源配置的失败保留，后续按既有受管Redis隔离prefix验证。Node22最终七生成check、contract295、architecture50、lint、typegen/types均通过；受管Redis独立prefix的完整233文件4444 PASS/0skip、官方webpack生产build及post-types通过。首次漏传既有Redis配置导致fixture beforeAll失败/2skip，原记录保留；补齐既有资源后完整重跑，不改timeout/skip或测试断言。当前不做目标浏览器的替代通道操作，未运行本轮浏览器E2E；源码/adapter和真实owner链分别有证据，不宣称正常页面完成。正常切换及集中PR尚待，模型/实际工具/扣费暂停。
+
+## 2026-10-20 MC-02A Public21 Chat模型消费完成源码验收（正常未切）
+
+正式从BFF `513b18e2942f94c5f2d4f48d9f9d3010b92db7e6` Git blob固定Public21.0.0/165，SHA256 `a902a20ad95e46c01bfc8f5a80260c14565cfe557137759d5ecd42bc1a60f7c2`。六现public generator正规write，七生成check全0；connector-command-errors独立source/pin不变。现catalog严格接必需有效display_name、model/revision/provider精确ID、feature/request_model及nullable next_cursor；未知/旧/extra字段拒绝。新test-only21→20全文逆回后委托原20→19及双父proof，旧oracle字节保持。
+
+初期仅配对decoder而保留provider:name的阶段判断已撤回：BFF/Agent实际把message.model当System label_key。新增4处真实RED证明旧UI把real-provider:chat/fast发给engine、旧偏好注入请求、缺chat query及非chat混入；现Composer菜单/Settings复用原helper直接使用raw candidate.name，展示仅必需display_name，不以provider/alias/request_model拼身份。Chat client固定feature_key=chat且拒非chat候选，真实same-origin HTTP验证query原样到BFF。默认偏好仅使用kokoro.web.chat-prefs.v2，旧key保留但不读/迁移/删除，合法label可含冒号；真实hook→engine回归证明旧值不进入message。原未知提交冻结body/key、Mode lock、auth、preview及状态机不改，无UI布局变化。
+
+最终Node22/pnpm11.25、Vitest最多2 workers：七生成check、contract26文件295PASS、architecture50PASS、lint、typegen/types、完整233文件4442PASS/0SKIP、own production webpack build、post-build types全部exit0。既有完整桌面/手机Playwright108PASS，candidate自有端口和子进程已自动退出并核验关闭；随后正规next typegen＋tsc再次exit0，Next dev产生的next-env路径已由官方typegen恢复，未手改generated。受管Redis只复用原fixture随机prefix，前后88keys/摘要相同，无flush或新实例。主方独立同源副本另验7生成、31文件735合同/受影响engine/UI/偏好/HTTP、architecture50及lint/types/build/posttypes全0，证据与本writer完整门分开记录。
+
+首轮合法Public21被旧strict decoder拒收的RED保留；新负控误用SessionClientError.kind、lint未使用解构变量及新HTTP夹具缺BFF meta均已最窄修正。前轮阶段默认4439PASS/1OIDC刷新fixture失败及1Radix跨realm unhandled保留，未改登录/Skills源或放宽门；最终完整清单自然通过，不将环境时序通过称作修复那些模块。模型、工具与扣费仍暂停，Key保存/领取不在本片，正常3310源码/输出/进程/配置未动，未push/commit/切分支或扩大其他owner写区。
+
+App基线 `3042ae753e9db2e2204562d8a070c0685bdb0306`。Root ignored `var/dev/system-management-20261020/app-mc02a-*` 保存全部阶段RED/首次失败、最终门、Redis与自有服务清理及完整path/hash冻结收据；完整正常owner链及部署由Root另验。下方为历史状态，不覆盖当前raw label/v2/chat filter结论。
+
+## 2026-10-20 后台模型 Product 桥与 Public20（本地候选）
+
+保留已合设置PR43全部成果，仅在既有Admin同源桥补齐三个模型目录GET和精确单标签路由PUT、原CAS头透传与读取拒绝命令头；Product同一会话、原request-id、幂等键／正文和正式owner错误保持，不建立模型执行入口或旧数据兼容层。System4的revision由BFF Public20正规固定artifact消费，其他公开操作完整不变；六个现有窄生成器全部正规write通过，旧Public19 parent proof原封不动保留，由新test-only Public20→19精确逆证承接历史检查，不是运行fallback。
+
+本次主会话 Node22：301 contract/adapter、50 architecture、完整232文件4438 PASS／0SKIP，lint/types、production webpack build及构建后types全部exit0。新桥路径回归真实4FAIL→GREEN，未知请求不会新增写重试。App无页面布局或自动化／Skills/MCP业务变更，新增正常Admin页面旅程与上游真实链分列；尚未以此声明Manus整站对齐或模型、工具、扣费启用。正常运行加载／远端PR另记。
 
 ## 设置视觉增量与最新主线集成（2026-10-20）
 
@@ -2867,3 +3099,17 @@ App36dacf0基线私有详情/配置只有Prepare，创建窗关闭后needs_oauth
 
 
 最终候选同业务/测试字节：production build退出0。第一次误将只支持development显式preview的公共壳E2E指向production start，得到2FAIL/1中断/3未运行；确认use-session-state的production禁止preview及既有Playwright webServer设计后停止该自有错误模式测试，preview进程由原finally回收，未改产品分支/断言。随后沿原Playwright管理的显式preview development server、3325独立端口、1worker重跑，桌面/移动6 PASS/8.3s、posttype退出0。该公共壳E2E只证明既有预览旅程/几何，不冒本片真实OAuth故障；后者为上方正常AS拒绝→显式重连→callback→fresh owner证据。既有颜色warning保留。仅追加本结果段，另外六路径仍原冻结；临时端口/进程回收与最终SHA由Root集成记录，未push/PR/merge。
+
+## 已合主线阶段记录（不替代上述正常配对状态）
+
+## 2026-10-21 个人技能版本管理（main 集成验收中）
+
+从同步后的main `859f415` 集成个人技能版本管理及安装作者修复，原切片为 `20e8b78`；只移入本需求14份源码／测试，不携带模型配置、账户切换或聊天候选。正式self-managed读取核验发布者及精确source/series/revision，复用既有发布／撤回流程，详情按真实安装publisher_profile展示作者，不恢复旧设置布局。没有新接口、Schema、依赖或兼容入口。
+
+未知命令保留原key/body/CAS及同主体恢复；成功ACK清除pending，创建ACK取消窗口仍受最终检查。发布后仅真实回执的新版本可管理，原安装不自动升级，撤回表单展示明确版本，关闭回到原搜索焦点。新菜单并非Manus历史／替换／删除能力的替代；历史恢复、移除、Admin旅程及公开身份映射仍未完成。
+
+正常运行的原切片已获授权实测纯文档样本版本2：创建201→真实上传／扫描clean→校验200→发布active200→撤回withdrawn200，刷新原版本1仍安装且停用；不删数据、不执行技能／模型、不改积分。正常浏览器证据绑定原切片，main集成分支的源码门与预览另验，不假称已加载到正常运行环境。
+
+原切片同一冻结的相关108、lint/types/build、契约和架构已通过；正常授权版本旅程与 main 集成预览分别保留证据。此次 main 原有六套相关测试91 PASS；集成后定向7套108 PASS、七项生成检查、lint、typegen/types、webpack build/post-types通过，独立桌面／移动预览2 PASS并回收自有预览进程。
+
+完整门早先两轮均4450 PASS／1 FAIL／0SKIP，在 pending refresh GET 预期409处收到Next HTML500／JSON解析异常；空manifest观察没有捕获相应空读取，原因仍未查明。只新增5行失败分支元数据诊断，409成功路径无新增IO，不改断言、超时、重试或skip。随后同Node22／4GiB／2workers的无observer配对完整运行：原 main 232文件／4434 PASS，候选233文件／4451 PASS，均0FAIL／0SKIP。1051份冻结输入中只有上述诊断测试改变，生产输入无漂移；只读最终审查通过。独立 Skills UI 切片可以进入PR收尾，但这些通过不证明间歇500已修复，也不等于正常服务、历史／替换／删除、Admin和外部身份映射已闭环。

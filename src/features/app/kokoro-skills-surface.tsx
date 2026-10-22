@@ -139,7 +139,13 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
   // first-page snapshot, so a background refresh immediately ignores old
   // append state instead of flashing it while an effect resets local state.
   const additionalPages = useMemo(() => pageState.base === catalog.data ? pageState.pages : [], [catalog.data, pageState])
-  const displayedCatalog = useMemo(() => catalog.data === undefined ? undefined : mergeSkillCatalogPages([catalog.data, ...additionalPages]), [additionalPages, catalog.data])
+  const freshCatalog = useMemo(() => catalog.data === undefined ? undefined : mergeSkillCatalogPages([catalog.data, ...additionalPages]), [additionalPages, catalog.data])
+  // Retain this admitted client's confirmed cursor pages during a filter
+  // read, keeping matching triggers mounted. Commands and detail facts
+  // still require the fresh catalog below.
+  const [confirmedCatalog, setConfirmedCatalog] = useState<{ client: typeof client; data: SkillCatalog } | null>(null)
+  if (freshCatalog !== undefined && (confirmedCatalog?.client !== client || confirmedCatalog.data !== freshCatalog)) setConfirmedCatalog({ client, data: freshCatalog })
+  const displayedCatalog = freshCatalog ?? (readBoundary.admitted && readBoundary.subject !== null && confirmedCatalog?.client === client ? confirmedCatalog.data : undefined)
   const loadingMore = loadingMoreFor !== undefined && loadingMoreFor.base === catalog.data && !loadingMoreFor.controller.signal.aborted
   const loadMoreFailed = loadMoreFailedFor === catalog.data
   const loadMore = useCallback(async () => {
@@ -175,9 +181,9 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
       const matchesQuery = normalized === ""
         || skill.name.toLocaleLowerCase().includes(normalized)
         || skill.description.toLocaleLowerCase().includes(normalized)
-      // Live matching is owned by the directory query, not by whichever
-      // cursor pages happen to be mounted. Preview still filters its fixture.
-      return !preview || matchesCategory && matchesQuery
+      // Confirmed live results come from the owner query. Only preview and
+      // retained cards awaiting the new query use local matching.
+      return (!preview && catalog.data !== undefined) || (matchesCategory && matchesQuery)
     })
   }, [catalog.data, category, displayedCatalog?.skills, installationFacts, preview, query])
 
@@ -211,7 +217,7 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
 
   // Keep the selected revision/reader context, but use exactly the same
   // current installation facts for both presentation and action execution.
-  const detailSkill = displayedCatalog?.skills.find(skill => actionIdentity(skill) === detailKey) ?? null
+  const detailSkill = catalog.data === undefined ? null : displayedCatalog?.skills.find(skill => actionIdentity(skill) === detailKey) ?? null
   const currentDetailSkill = detailSkill === null ? null : (() => {
     const facts = detailSkill.skill_id === undefined ? undefined : installationFacts[detailSkill.skill_id]
     return facts !== undefined && facts.catalog === catalog.data ? { ...detailSkill, installed: facts.installed, enabled: facts.enabled, installed_source_ref: facts.installed_source_ref } : detailSkill
@@ -281,12 +287,12 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
             </Alert>
           ) : null}
 
-          {catalog.data !== undefined && catalog.error !== undefined ? <div className={styles.errorState} role="alert"><p>{t("skills.loadError")}</p><Button type="button" variant="outline" onClick={catalog.refetch} disabled={catalog.loading}>{t("skills.retry")}</Button></div> : null}
-          {catalog.data === undefined && catalog.error === undefined ? (
+          {displayedCatalog !== undefined && catalog.error !== undefined ? <div className={styles.errorState} role="alert"><p>{t("skills.loadError")}</p><Button type="button" variant="outline" onClick={catalog.refetch} disabled={catalog.loading}>{t("skills.retry")}</Button></div> : null}
+          {displayedCatalog === undefined && catalog.error === undefined ? (
             <div className={styles.grid} data-testid="skills-loading">
               {Array.from({ length: 6 }, (_, index) => <Card key={index} className={styles.card}><Skeleton className={styles.artSkeleton} /><CardContent className={styles.cardBody}><Skeleton className={styles.titleSkeleton} /><Skeleton className={styles.lineSkeleton} /></CardContent></Card>)}
             </div>
-          ) : catalog.error !== undefined && catalog.data === undefined ? (
+          ) : catalog.error !== undefined && displayedCatalog === undefined ? (
             <div className={styles.errorState} role="alert"><p>{t("skills.loadError")}</p><Button type="button" variant="outline" onClick={catalog.refetch} disabled={catalog.loading}>{catalog.loading ? <Spinner aria-hidden="true" /> : null}{t("skills.retry")}</Button></div>
           ) : filtered.length === 0 ? (
             <div className={styles.emptyState} data-testid="skills-catalog-empty">
@@ -338,7 +344,7 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
                       </div>
                       <div className={styles.cardFooter}>
                         {skill.usage_count === undefined ? <span /> : <span>{t("skills.usedCount", { count: formatUsage(skill.usage_count) })}</span>}
-                        <Button type="button" variant="outline" size="icon-sm" aria-label={`${installed && enabled ? t("skills.added") : t("skills.add")} ${skill.name}`} data-installed={installed || undefined} disabled={actionPending || (installed && enabled)} aria-busy={actionPending} onClick={() => void setEnabled(skill)}>
+                        <Button type="button" variant="outline" size="icon-sm" aria-label={`${installed && enabled ? t("skills.added") : t("skills.add")} ${skill.name}`} data-installed={installed || undefined} disabled={catalog.data === undefined || actionPending || (installed && enabled)} aria-busy={actionPending} onClick={() => void setEnabled(skill)}>
                           {actionPending ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : installed && enabled ? <Check aria-hidden="true" /> : <Plus aria-hidden="true" />}
                         </Button>
                       </div>
@@ -351,7 +357,7 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
               {displayedCatalog?.next_cursor ? (
                 <div className={styles.loadMore}>
                   {loadMoreFailed ? <p role="alert">{t("skills.loadError")}</p> : null}
-                  <Button type="button" variant="outline" onClick={() => void loadMore()} disabled={loadingMore} aria-busy={loadingMore}>
+                  <Button type="button" variant="outline" onClick={() => void loadMore()} disabled={catalog.data === undefined || loadingMore} aria-busy={loadingMore}>
                     {loadingMore ? <Spinner aria-hidden="true" /> : null}{t("rail.loadMore")}
                   </Button>
                 </div>

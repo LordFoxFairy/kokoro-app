@@ -1239,6 +1239,7 @@ describe("/api/hub/[...path] proxy", () => {
         body: JSON.stringify({
           expected_state_version: "4",
           audience: "owner",
+          expected_publication: null,
         }),
       }),
       publishPath,
@@ -1254,6 +1255,7 @@ describe("/api/hub/[...path] proxy", () => {
     expect(JSON.parse(new TextDecoder().decode(init.body))).toEqual({
       expected_state_version: "4",
       audience: "owner",
+      expected_publication: null,
     });
     expect(init.headers["idempotency-key"]).toBe("publish-key");
     expect(init.headers["content-type"]).toBe("application/json");
@@ -4876,3 +4878,97 @@ it("retires the project skill-name switch before any legacy Hub dispatch", async
   }
   expect(requestWithDomain).not.toHaveBeenCalled();
 });
+
+it("owned history reads the precise versions route and refuses caller filters without owner IO", async () => {
+  const data = { series_id: "history-series", publication: null, versions: [], next_cursor: null };
+  vi.mocked(requestWithDomain).mockResolvedValue(Response.json({data, meta:{request_id:"history-read"}}, {headers:{"cache-control":"no-store", "x-request-id":"history-read"}}));
+  const { GET } = await import("@/app/api/hub/[...path]/route");
+  const path=["self","skills","managed","history-anchor","versions"];
+  const response=await GET(new Request("http://localhost/api/hub/self/skills/managed/history-anchor/versions?limit=2&cursor=opaque"),params(path));
+  expect(response.status).toBe(200);
+  expect(requestWithDomain).toHaveBeenCalledWith("http://bff.test/v1/self/skills/history-anchor/versions?limit=2&cursor=opaque",ENV.KOKORO_DOMAIN, expect.objectContaining({method:"GET"}));
+  expect(await response.json()).toEqual({data,meta:{request_id:"history-read"}});
+  const before=vi.mocked(requestWithDomain).mock.calls.length;
+  for(const query of ["?subject=other", "?status=active", "?limit=0", "?limit=2&limit=2", "?cursor="]){
+    expect((await GET(new Request(`http://localhost/api/hub/self/skills/managed/history-anchor/versions${query}`),params(path))).status).toBe(400);
+  }
+  expect(requestWithDomain).toHaveBeenCalledTimes(before);
+});
+
+it("owned history package preview uses the exact managed revision rather than catalog or installation", async()=>{
+  const { GET }=await import("@/app/api/hub/[...path]/route");
+  const data={source_ref:"skill:history-old",revision:"2",files:[],selected_file:null};
+  vi.mocked(requestWithDomain).mockResolvedValue(Response.json({data},{headers:{"cache-control":"no-store","x-request-id":"history-package"}}));
+  const response=await GET(new Request("http://localhost/api/hub/self/skills/managed/history-old/package"),params(["self","skills","managed","history-old","package"]));
+  expect(response.status).toBe(200);
+  expect(requestWithDomain).toHaveBeenCalledWith("http://bff.test/v1/self/skills/history-old/package",ENV.KOKORO_DOMAIN,expect.objectContaining({method:"GET"}));
+  expect(await response.json()).toEqual({data});
+});
+
+it("history body deadline remains dependency-unavailable instead of corrupt-response",async()=>{
+ const {UpstreamTimeoutError}=await import("@/lib/server/upstream-http")
+ const {GET}=await import("@/app/api/hub/[...path]/route")
+ const body=new ReadableStream<Uint8Array>({start(controller){controller.error(new UpstreamTimeoutError())}})
+ vi.mocked(requestWithDomain).mockResolvedValue(new Response(body,{headers:{"content-type":"application/json","cache-control":"no-store","x-request-id":"timeout-history"}}))
+ const response=await GET(new Request("http://localhost/api/hub/self/skills/managed/anchor/versions"),params(["self","skills","managed","anchor","versions"]))
+ expect(response.status).toBe(503)
+ expect(await response.json()).toMatchObject({error:{code:"skill_dependency_unavailable"}})
+})
+
+
+it("routes publisher historical ZIP qualification to the existing exact managed download", async () => {
+  const { POST } = await import("@/app/api/hub/[...path]/route")
+  const path = ["self", "skills", "managed", "history-old", "download"]
+  const ack = { data: { source_ref: "skill:history-old", revision: "1", download_info: { download_url: `/skill-downloads/${"a".repeat(43)}`, filename: "original.zip", expires_at: "2999-01-01T00:00:00Z" } } }
+  vi.mocked(requestWithDomain).mockResolvedValueOnce(Response.json(ack, { headers: catalogPackageHeaders }))
+  const response = await POST(new Request(`http://localhost/api/hub/${path.join("/")}`, { method: "POST", headers: { origin: ENV.KOKORO_WEB_ORIGIN } }), params(path))
+  expect(response.status).toBe(200)
+  expect(await response.json()).toEqual(ack)
+  expect(requestWithDomain).toHaveBeenLastCalledWith("http://bff.test/browser/v1/skills/history-old/download", ENV.KOKORO_DOMAIN, expect.objectContaining({ method: "POST" }))
+})
+
+it("keeps exact publisher download empty-body/Origin guards and rejects another source ACK", async () => {
+ const {POST}=await import("@/app/api/hub/[...path]/route")
+ const path=["self","skills","managed","history-old","download"],url=`http://localhost/api/hub/${path.join("/")}`
+ for(const variant of ["origin","body","query","key"]){
+  const response=await POST(new Request(`${url}${variant==="query"?"?extra=1":""}`,{method:"POST",headers:{origin:variant==="origin"?"https://other.test":ENV.KOKORO_WEB_ORIGIN,...(variant==="key"?{"idempotency-key":"not-allowed"}:{})},...(variant==="body"?{body:"x"}:{})}),params(path))
+  expect(response.status).toBe(variant==="origin"?403:400)
+ }
+ expect(requestWithDomain).not.toHaveBeenCalled()
+ const ack={data:{source_ref:"skill:other",revision:"1",download_info:{download_url:`/skill-downloads/${"a".repeat(43)}`,filename:"original.zip",expires_at:"2999-01-01T00:00:00Z"}}}
+ vi.mocked(requestWithDomain).mockResolvedValueOnce(Response.json(ack,{headers:catalogPackageHeaders}))
+ expect((await POST(new Request(url,{method:"POST",headers:{origin:ENV.KOKORO_WEB_ORIGIN}}),params(path))).status).toBe(502)
+})
+
+it("deletes the confirmed personal series through the sole formal route without changing command bytes",async()=>{
+ const {DELETE}=await import("@/app/api/hub/[...path]/route")
+ const data={series_id:"series",skill_id:"mine",state_version:"9",status:"deleted",event_id:`evt:${"a".repeat(64)}`,replayed:false}
+ vi.mocked(requestWithDomain).mockResolvedValue(Response.json({data,meta:{request_id:"owner-1"}},{headers:{"cache-control":"no-store","x-request-id":"owner-1"}}))
+ const body='{ "expected_state_version":"8", "expected_publication":{"current_version_id":"current","state_version":"9007199254740993"} }'
+ const response=await DELETE(new Request("http://localhost/api/hub/self/skills/mine",{method:"DELETE",headers:{origin:"http://localhost","content-type":"application/json","idempotency-key":"original-delete"},body}),params(["self","skills","mine"]))
+ expect(response.status).toBe(200);expect(await response.json()).toEqual({data,meta:{request_id:"owner-1"}})
+ expect(vi.mocked(requestWithDomain)).toHaveBeenCalledWith("http://bff.test/v1/self/skills/mine",expect.anything(),expect.objectContaining({method:"DELETE",headers:expect.objectContaining({"idempotency-key":"original-delete"})}))
+ expect(new TextDecoder().decode(vi.mocked(requestWithDomain).mock.calls[0]![2]!.body as ArrayBuffer)).toBe(body)
+})
+
+it.each(["missing-publication","extra-identity","duplicate-key"])("rejects invalid deletion %s before owner I/O",async(kind)=>{
+ const {DELETE}=await import("@/app/api/hub/[...path]/route")
+ const body=kind==="missing-publication"?'{"expected_state_version":"8"}':kind==="extra-identity"?'{"expected_state_version":"8","expected_publication":null,"actor":"self"}':'{"expected_state_version":"8","expected_publication":null,"expected_publication":null}'
+ const response=await DELETE(new Request("http://localhost/api/hub/self/skills/mine",{method:"DELETE",headers:{origin:"http://localhost","content-type":"application/json","idempotency-key":"delete-key"},body}),params(["self","skills","mine"]))
+ expect(response.status).toBe(400);expect(requestWithDomain).not.toHaveBeenCalled()
+})
+
+it.each([
+ { expected:"4", actual:"5", valid:true },
+ { expected:"4", actual:"6", valid:false },
+ { expected:"9007199254740993", actual:"9007199254740994", valid:true },
+ { expected:"9007199254740993", actual:"9007199254740995", valid:false },
+])("proxies only an exact one-step deletion ACK, rejecting a wrong jump $expected → $actual",async({expected,actual,valid})=>{
+ const {DELETE}=await import("@/app/api/hub/[...path]/route")
+ const data={series_id:"series",skill_id:"mine",state_version:actual,status:"deleted",event_id:`evt:${"a".repeat(64)}`,replayed:false}
+ vi.mocked(requestWithDomain).mockResolvedValue(Response.json({data,meta:{request_id:"owner-1"}},{headers:{"cache-control":"no-store","x-request-id":"owner-1"}}))
+ const response=await DELETE(new Request("http://localhost/api/hub/self/skills/mine",{method:"DELETE",headers:{origin:"http://localhost","content-type":"application/json","idempotency-key":"delete-exact-step"},body:JSON.stringify({expected_state_version:expected,expected_publication:null})}),params(["self","skills","mine"]))
+ expect(response.status).toBe(valid?200:502)
+ if(valid)expect(await response.json()).toEqual({data,meta:{request_id:"owner-1"}})
+ else expect(await response.json()).toMatchObject({error:{code:"skill_response_invalid"}})
+})

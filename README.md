@@ -1,3 +1,17 @@
+## MODEL-1 Admin上游发现同源桥候选（2026-10-22）
+
+现 `src/app/api/admin/[...path]/route.ts` 仅新增精确 provider UUID 的 `upstream-models` GET，沿Product Session/配置Domain/BFF管理权限与原request-id/no-store；拒query、body framing（含CL0）、Content-Type及命令头。准入至完整响应EOF共10秒/1MiB，取消不晚发请求，无Key、模型执行、自动发布或新持久事实。真实loopback薄adapter新增15项及原Admin9项均通过；正常浏览器/完整owner链由主方后续配对，不以此称UI已验收。
+
+Public22.3.0/182固定BFF `e461d5178c6bf92558d7cd7dd288cb29cb008525`，canonical SHA256 `727159cea88e9f70ca3d1127306e8a6a6bcaa568398de8b0d8fec1cce6b3fae3`；唯一snapshot与既有7个public窄生成器正规更新，独立connector错误profile不变。下方记录按当时版本保留。
+
+## 2026-10-22 当前消费者候选
+
+固定BFF `efe0ed8b3f791468608b61dd895208f0db709e50`／Public22.2.0／181项，canonical SHA256 `365d61aa5b3b4c01a178f077914e03b5fdbaeebc95fe740b9be46ca8fadc3205`。共享模型列表／首发选择、可信缺账户后的无感初始化、公开Skill list／个人删除与MCP重连沿既有组件和同源边界承接；没有第二套业务协议或假余额。完整本地门与108项preview浏览器回归已通过，正常owner整链与PR状态见 [`docs/CURRENT.md`](docs/CURRENT.md)，不把候选当正式生效。下方按当时版本保留历史。
+
+## 2026-10-20 MC-02A Public21 模型消费者候选
+
+当前BFF snapshot固定 `513b18e2942f94c5f2d4f48d9f9d3010b92db7e6` /Public21，业务模型严格接有效显示名、精确引用与nullable分页，选择使用raw稳定label key，不加provider前缀、不以别名替代身份。六public生成器正规配对，第七独立connector错误profile不换。当前验收与正常未激活边界见 `docs/CURRENT.md`；本片不改UI布局/聊天状态机，Key保存/领取和模型/工具/扣费未放行。下方历史版本按当时状态读取。
+
 ## MCP 可用性消费（2026-10-19）
 
 严格消费owner五态，卡片/详情/选择器共用只读展示，不把active当作当前可用。原status/enabled、同源身份、CAS及原命令恢复不改。完整本仓门、4240测试及38原Playwright通过；正常运行与Manus像素级完整对照另验，见当前事实。
@@ -85,3 +99,6 @@ preview fixture 替代。
 - 发布验收矩阵见 [`docs/ACCEPTANCE.md`](docs/ACCEPTANCE.md)。
 - 当前 Docker/CI 供应链与 health/ready 缺口记录在 [`docs/CURRENT.md`](docs/CURRENT.md)，历史报告
   不作为生产证据。
+## 产品文档维护
+
+公开文档与 API 参考位于独立包 [`developer-docs/`](developer-docs/README.md)，运行 `pnpm docs:dev`、`pnpm docs:build` 或 `pnpm docs:check`；内部工程说明仍在 [`docs/`](docs/INDEX.md)，不进入公开构建。门户迁移候选、Root 配对删除和未完成能力以 [`docs/CURRENT.md`](docs/CURRENT.md) 为准，不把文档生成成功等同业务验收。

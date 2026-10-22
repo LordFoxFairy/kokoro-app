@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
+import { iamSignInCsrfCookieName } from "@/lib/server/iam-interaction-csrf"
 import { contentSecurityPolicy } from "@/lib/server/security-headers"
 
 const { issueIamInteractionCsrf } = vi.hoisted(() => ({ issueIamInteractionCsrf: vi.fn() }))
@@ -28,7 +29,7 @@ describe("HTTPS issuer sign-in Proxy rewrite", () => {
     for (const [key, value] of Object.entries(ENV)) process.env[key] = value
     issueIamInteractionCsrf.mockReset().mockResolvedValue({
       token: TOKEN,
-      cookie: `kokoro_iam_csrf=${TOKEN}; Path=/auth/sign-in; HttpOnly; SameSite=Lax`,
+      cookie: `${iamSignInCsrfCookieName(QUERY, TOKEN)}=${TOKEN}; Path=/auth/sign-in; Max-Age=300; HttpOnly; SameSite=Lax`,
     })
   })
   afterEach(() => { for (const key of Object.keys(ENV)) delete process.env[key] })
@@ -54,6 +55,15 @@ describe("HTTPS issuer sign-in Proxy rewrite", () => {
 
     expect(response.status).toBe(200)
     expect(response.headers.get("x-middleware-rewrite")).toBe(`${ORIGIN}/auth/sign-in/form${QUERY}`)
+  })
+
+  it("rejects a new render at its visible proof budget without deleting existing forms", async () => {
+    const { proxy } = await import("@/proxy")
+    const cookie = ["a", "b", "c", "d"].map(letter => `${iamSignInCsrfCookieName(QUERY, letter.repeat(43))}=proof`).join("; ")
+    const response = await proxy(request(`/auth/sign-in${QUERY}`, { cookie }))
+    expect(response.status).toBe(429)
+    expect(response.headers.get("set-cookie")).toBeNull()
+    expect(issueIamInteractionCsrf).not.toHaveBeenCalled()
   })
 
   it("rejects direct form requests even when a browser forges internal headers", async () => {

@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 vi.mock("@/lib/server/oidc-bff-agent", () => ({ boundedOidcBffAgent: vi.fn() }))
 
 import { GET } from "@/app/login/route"
-import { productLoginReturnTarget } from "@/lib/server/product-login-return"
+import { readProductLoginIntent } from "@/lib/server/product-login-return"
 
 const ORIGIN = "https://web.example.test"
 const ENV = {
@@ -42,26 +42,23 @@ describe("GET /login", () => {
     expect(response.headers.get("cache-control")).toBe("no-store")
     expect(response.headers.get("referrer-policy")).toBe("no-referrer")
     expect(response.headers.get("content-security-policy")).toMatch(/^default-src 'none'; script-src 'nonce-[A-Za-z0-9_-]{48}'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'$/u)
-    expect(response.headers.getSetCookie()).toHaveLength(2)
-    expect(response.headers.getSetCookie()[0]).toMatch(/^next-auth\.csrf-token=[A-Za-z0-9%|]+; Path=\/; HttpOnly; SameSite=Lax$/u)
-    expect(response.headers.getSetCookie()[1]).toMatch(/^kokoro_product_login_return=[A-Za-z0-9%._~-]+\.[a-f0-9]{64}; Path=\/; HttpOnly; SameSite=Lax$/u)
-    expect(productLoginReturnTarget(response.headers.getSetCookie()[1]!.split(";", 1)[0]!, ENV.KOKORO_WEB_AUTH_SECRET)).toBe(target)
+    expect(response.headers.getSetCookie()).toHaveLength(1)
+    expect(response.headers.getSetCookie()[0]).toMatch(/^next-auth\.csrf-token\.tx-[A-Za-z0-9_-]{22}=[A-Za-z0-9%|]+; Path=\/; HttpOnly; SameSite=Lax; Max-Age=300$/u)
     const html = await response.text()
+    const intent = html.match(/name="loginIntent" value="([A-Za-z0-9_.-]+)"/u)![1]!
+    expect(readProductLoginIntent(intent, ENV.KOKORO_WEB_AUTH_SECRET, ORIGIN)?.target).toBe(target)
     expect(html).toContain('method="post" action="/api/auth/signin/kokoro-iam"')
     expect(html).toMatch(/name="csrfToken" value="[a-f0-9]{64}"/u)
     expect(html).not.toContain(target)
   })
 
-  it("reuses the verified browser CSRF cookie across overlapping login starts", async () => {
+  it("allocates independent handoff proofs even when the browser already has another form", async () => {
     const first = await GET(browserRequest())
     const csrf = first.headers.getSetCookie()[0]!.split(";", 1)[0]!
-    const request = () => new NextRequest(`${ORIGIN}/login`, {
-      headers: { host: "web.example.test", "x-nonce": "a".repeat(48), cookie: csrf },
-    })
+    const request = () => new NextRequest(`${ORIGIN}/login`, { headers: { host: "web.example.test", "x-nonce": "a".repeat(48), cookie: csrf } })
     const [second, third] = await Promise.all([GET(request()), GET(request())])
-    const token = (await first.text()).match(/name="csrfToken" value="([a-f0-9]{64})"/u)![1]!
-    expect(await second.text()).toContain(`name="csrfToken" value="${token}"`)
-    expect(await third.text()).toContain(`name="csrfToken" value="${token}"`)
+    const names = [first, second, third].map(response => response.headers.getSetCookie()[0]!.split("=", 1)[0])
+    expect(new Set(names).size).toBe(3)
   })
 
   it.each(["tampered", "duplicate", "malformed"])("replaces an invalid %s CSRF cookie rather than trusting it", async (kind) => {
@@ -95,9 +92,8 @@ describe("GET /login", () => {
       headers: { host: "web.example.test", "x-nonce": "a".repeat(48) },
     }))
     expect(response.status).toBe(200)
-    const [csrf, target] = response.headers.getSetCookie()
-    expect(csrf).toMatch(/^next-auth\.csrf-token=/u)
-    expect(target).toMatch(/^kokoro_product_login_return=/u)
+    const [csrf] = response.headers.getSetCookie()
+    expect(csrf).toMatch(/^next-auth\.csrf-token\.tx-/u)
     expect(await response.text()).toContain('id="kokoro-login-start"')
   })
 
@@ -108,4 +104,33 @@ describe("GET /login", () => {
     expect(await response.text()).toBe("")
     expect(response.headers.get("content-type")).toBeNull()
   })
+})
+
+
+it("returns a native login configuration failure to the inert product page, while API clients keep 503", async () => {
+  vi.stubEnv("KOKORO_OIDC_CLIENT_ID", "")
+  const browser = await GET(new NextRequest(`${ORIGIN}/login`, { headers: { host: "web.example.test",
+    accept: "text/html", "sec-fetch-mode": "navigate", "sec-fetch-dest": "document", "x-nonce": "a".repeat(48) } }))
+  expect(browser.status).toBe(303)
+  expect(browser.headers.get("location")).toBe("/auth/sign-in/failed")
+  expect(browser.headers.getSetCookie()).toEqual([])
+  const api = await GET(browserRequest())
+  expect(api.status).toBe(503)
+  expect(api.headers.get("location")).toBeNull()
+})
+
+
+it("keeps two cold login forms independent when their responses arrive in reverse order", async () => {
+  const responses = await Promise.all([GET(browserRequest("/login?return_to=%2Fapp")), GET(browserRequest("/login?return_to=%2Fapp%2Fskills"))])
+  const tokens = await Promise.all(responses.map(async response => (await response.text()).match(/name="csrfToken" value="([a-f0-9]{64})"/u)![1]!))
+  const proofCookies = responses.map((response, index) => response.headers.getSetCookie().find(cookie => decodeURIComponent(cookie.split(";", 1)[0]!).includes(tokens[index]!))!)
+  expect(proofCookies.every(Boolean)).toBe(true)
+  const names = proofCookies.map(cookie => cookie.slice(0, cookie.indexOf("=")))
+  expect(new Set(names).size).toBe(2)
+  const jar = new Map<string, string>()
+  for (const response of [...responses].reverse()) for (const cookie of response.headers.getSetCookie()) {
+    const pair = cookie.split(";", 1)[0]!
+    jar.set(pair.slice(0, pair.indexOf("=")), pair.slice(pair.indexOf("=") + 1))
+  }
+  expect(names.every((name, index) => decodeURIComponent(jar.get(name)!).startsWith(tokens[index]! + "|"))).toBe(true)
 })

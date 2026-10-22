@@ -84,6 +84,7 @@ export function createSkillInstallationUpdateFlow(options: {
       )
   }
   const canSelect = (current: PersonalInstallation, command: Intent) =>
+    current.source_status !== "deleted" &&
     current.installed &&
     current.installation_id === command.id &&
     current.series_id === command.series &&
@@ -255,6 +256,7 @@ export function createSkillInstallationUpdateFlow(options: {
         intent ||
         !installationIdSchema.safeParse(card.installation_id).success ||
         !installationIdSchema.safeParse(card.skill_id).success ||
+        card.source_status === "deleted" ||
         !card.available_update ||
         card.source_ref !== card.installed_source_ref
       )

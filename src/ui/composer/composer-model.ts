@@ -1,11 +1,11 @@
 import type { ModelCandidate } from "@/contract/http"
 
 export function modelSelector(model: ModelCandidate): string {
-  return `${model.provider}:${model.name}`
+  return model.name
 }
 
 export function modelLabel(model: ModelCandidate): string {
-  return model.display_name ?? model.name
+  return model.display_name
 }
 
 function isNewModel(model: ModelCandidate): boolean {

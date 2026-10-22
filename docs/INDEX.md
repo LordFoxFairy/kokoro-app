@@ -1,3 +1,19 @@
+## 当前租户 Credit 初始化（2026-10-22）
+
+设计与传输门见 `TECHNICAL_DESIGN.md`、`API_CONTRACT.md` 文首：固定 Public22.2.0，由既有 BillingClient 负责可信404后单次幂等初始化、原GET核实与同一预算/取消；现账户和用量只显示真实投影。源码候选的 focused 验证不代表正常浏览器/支付/扣费验收。
+
+## 登录维护
+
+[登录与登录恢复](guides/login.md)：用户路径、内部配对与验收；不包含机器凭据。
+
+## 技能使用与维护
+
+[技能：安装、版本与发布管理](guides/skills.md)：当前正式入口、精确安装版本、发布动作，以及 Manus 替换／历史恢复实测和未完成项。
+
+## 连接器使用与维护
+
+[连接器：连接、续期与托管包](guides/connectors.md)：远程 MCP 不强制 ZIP、五态可用性、显式恢复、可选后台托管包及真实验收边界。
+
 ## 设置页内部流程
 
 `TECHNICAL_DESIGN.md` 说明页面、草稿、焦点与恢复状态的归属；`API_CONTRACT.md` 说明现有契约和未接通能力；`DATA_MODEL.md` 说明局部草稿及业务事实边界。当前验证与已知缺口见 `CURRENT.md`，创建前表单可打开不代表资产分配、授权或支付已经可用。
@@ -199,3 +215,7 @@ Web基线91fb1aee87df9e6dc0acadcdda4db5375623a13a，939 tracked clean；runtime_
 - `contract/README.md` 记录 owner、visibility、version、generation、breaking、provenance。
 - 只有 `kokoro-bff` 的 `public` Product API 可进入 Developer API；本仓 browser-private 契约不得发布。
 - 运行时行为变化必须同 commit 更新 source、contract test、相关治理文档和 acceptance 条目。
+
+## 产品与开发者文档门户
+
+[`developer-docs/`](../developer-docs/README.md) 为迁入本仓的独立公开文档包，Reference从固定BFF artifact生成；本目录的内部维护记录不进入公开站点或搜索索引。运行 `pnpm docs:check` 验证门户，正常 App 门禁继续独立执行；候选迁移及Root旧目录收口状态见CURRENT，不冒称已发布。

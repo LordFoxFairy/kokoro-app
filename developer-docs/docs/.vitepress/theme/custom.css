@@ -1,0 +1,298 @@
+:root {
+  --kokoro-paper: #f7f4ed;
+  --kokoro-paper-raised: #fffdf8;
+  --kokoro-ink: #24231f;
+  --kokoro-muted: #67645d;
+  --kokoro-line: #ded8cc;
+  --kokoro-accent: #c54f32;
+  --kokoro-accent-soft: #f7ded4;
+  --kokoro-code: #1f2329;
+  --kokoro-radius-sm: 6px;
+  --kokoro-radius-md: 14px;
+  --kokoro-shadow: 0 14px 38px rgb(55 45 32 / 8%);
+  --kokoro-duration: 180ms;
+  --kokoro-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  --vp-c-bg: var(--kokoro-paper);
+  --vp-c-bg-alt: #eee9df;
+  --vp-c-bg-elv: var(--kokoro-paper-raised);
+  --vp-c-bg-soft: #f1ece2;
+  --vp-c-text-1: var(--kokoro-ink);
+  --vp-c-text-2: var(--kokoro-muted);
+  --vp-c-divider: var(--kokoro-line);
+  --vp-c-border: var(--kokoro-line);
+  --vp-c-brand-1: #a73d25;
+  --vp-c-brand-2: var(--kokoro-accent);
+  --vp-c-brand-3: #df7458;
+  --vp-c-brand-soft: var(--kokoro-accent-soft);
+  --vp-code-block-bg: var(--kokoro-code);
+  --vp-font-family-base: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --vp-font-family-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+.dark {
+  --kokoro-paper: #181815;
+  --kokoro-paper-raised: #211f1b;
+  --kokoro-ink: #f1ede4;
+  --kokoro-muted: #b8b1a5;
+  --kokoro-line: #3d3932;
+  --kokoro-accent: #ee8568;
+  --kokoro-accent-soft: #49281f;
+  --kokoro-code: #10110f;
+  --kokoro-shadow: 0 18px 42px rgb(0 0 0 / 24%);
+  --vp-c-brand-1: #f49a7f;
+  --vp-c-brand-2: var(--kokoro-accent);
+  --vp-c-brand-3: #c86147;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-image: linear-gradient(90deg, rgb(92 80 62 / 3%) 1px, transparent 1px),
+    linear-gradient(rgb(92 80 62 / 3%) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.VPNavBar {
+  border-bottom: 1px solid color-mix(in srgb, var(--kokoro-line) 78%, transparent);
+  background: color-mix(in srgb, var(--kokoro-paper) 88%, transparent);
+  backdrop-filter: blur(14px);
+}
+
+.VPNavBarTitle .title {
+  font-weight: 720;
+  letter-spacing: -0.02em;
+}
+
+.VPNavBarTitle .title::before {
+  width: 9px;
+  height: 9px;
+  margin-right: 10px;
+  border-radius: 50%;
+  background: var(--kokoro-accent);
+  box-shadow: 0 0 0 5px var(--kokoro-accent-soft);
+  content: "";
+}
+
+.VPHomeHero .container {
+  max-width: 1160px;
+}
+
+.VPHomeHero .main {
+  max-width: 780px;
+  text-align: left;
+}
+
+.VPHomeHero .name, .VPHomeHero .text {
+  max-width: 760px;
+  letter-spacing: -0.045em;
+}
+
+.VPHomeHero .name {
+  color: var(--kokoro-accent);
+  font-size: clamp(1rem, 1.8vw, 1.25rem);
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
+.VPHomeHero .tagline {
+  max-width: 660px;
+  color: var(--kokoro-muted);
+}
+
+.VPHomeHero .actions {
+  justify-content: flex-start;
+}
+
+.VPButton {
+  min-height: 44px;
+  border-radius: var(--kokoro-radius-sm);
+  transition: transform var(--kokoro-duration) var(--kokoro-ease), box-shadow var(--kokoro-duration) var(--kokoro-ease);
+}
+
+.VPButton:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--kokoro-shadow);
+}
+
+.VPButton:focus-visible,
+.VPLink:focus-visible,
+a:focus-visible, button:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--kokoro-accent) 70%, white);
+  outline-offset: 3px;
+}
+
+.vp-doc h1,
+.vp-doc h2,
+.vp-doc h3 {
+  letter-spacing: -0.028em;
+}
+
+.vp-doc h1 {
+  position: relative;
+  padding-left: 22px;
+}
+
+.vp-doc h1::before {
+  position: absolute;
+  top: 0.12em;
+  bottom: 0.1em;
+  left: 0;
+  width: 4px;
+  border-radius: 99px;
+  background: var(--kokoro-accent);
+  content: "";
+}
+
+.vp-doc p,
+.vp-doc li {
+  line-height: 1.78;
+}
+
+.vp-doc table {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  border-radius: var(--kokoro-radius-sm);
+  background: color-mix(in srgb, var(--kokoro-paper-raised) 88%, transparent);
+}
+
+.vp-doc tr:nth-child(2n) {
+  background: color-mix(in srgb, var(--vp-c-bg-soft) 74%, transparent);
+}
+
+.vp-doc div[class*="language-"] {
+  border: 1px solid color-mix(in srgb, var(--kokoro-line) 42%, transparent);
+  border-radius: var(--kokoro-radius-md);
+  box-shadow: 0 10px 28px rgb(25 23 19 / 9%);
+}
+
+.custom-block {
+  border-radius: var(--kokoro-radius-sm);
+}
+
+.api-method {
+  display: inline-flex;
+  min-width: 4.6rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0.22rem 0.48rem;
+  border: 1px solid currentcolor;
+  border-radius: 999px;
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.72rem;
+  font-weight: 760;
+  letter-spacing: 0.04em;
+  line-height: 1;
+}
+
+.api-method--get,
+.api-method--head {
+  color: #19706a;
+}
+
+.api-method--post {
+  color: #9b4c14;
+}
+
+.api-method--patch,
+.api-method--put {
+  color: #7654a6;
+}
+
+.api-method--delete {
+  color: #b43b3b;
+}
+
+.dark .api-method--get,
+.dark .api-method--head {
+  color: #70c9c0;
+}
+
+.dark .api-method--post {
+  color: #f1ad72;
+}
+
+.dark .api-method--patch,
+.dark .api-method--put {
+  color: #c6a6f0;
+}
+
+.dark .api-method--delete {
+  color: #f08d8d;
+}
+
+.protocol-strip {
+  display: grid;
+  margin: 1.75rem auto 4rem;
+  border: 1px solid var(--kokoro-line);
+  border-radius: var(--kokoro-radius-md);
+  background: color-mix(in srgb, var(--kokoro-paper-raised) 92%, transparent);
+  box-shadow: var(--kokoro-shadow);
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.protocol-step {
+  position: relative;
+  min-height: 168px;
+  padding: 1.5rem;
+}
+
+.protocol-step + .protocol-step {
+  border-left: 1px solid var(--kokoro-line);
+}
+
+.protocol-step span {
+  display: block;
+  margin-bottom: 1.6rem;
+  color: var(--kokoro-accent);
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.78rem;
+}
+
+.protocol-step h2 {
+  margin: 0 0 0.5rem;
+  border: 0;
+  font-size: 1.05rem;
+}
+
+.protocol-step p {
+  margin: 0;
+  color: var(--kokoro-muted);
+  line-height: 1.55;
+}
+
+@media (max-width: 720px) {
+  .protocol-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .protocol-step {
+    min-height: auto;
+  }
+
+  .protocol-step + .protocol-step {
+    border-top: 1px solid var(--kokoro-line);
+    border-left: 0;
+  }
+
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  /* Override VitePress component motion when the operating system opts out. */
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
