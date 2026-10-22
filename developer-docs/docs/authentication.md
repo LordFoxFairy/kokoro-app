@@ -2,7 +2,9 @@
 
 Kokoro API v1 由受信任的后端或 Web 同源服务端 adapter 调用。浏览器代码不持有服务凭据，也不直接连接内部 BFF。唯一字段事实源是已固定 owner artifact 的 securitySchemes 和各 operation.security；健康／就绪按其 `security: []` 匿名读取，不据此放开业务接口。
 
-当前默认认证是 service envelope 加 IAM 用户会话 Bearer：
+对外 App 的 `GET /v1/skill.list` 仅携带 User API Key 或已登记 OAuth App 的 Bearer；下表的 service envelope 由同源服务端 adapter 注入，外部调用方不持有或发送内部服务凭据。此入口不依赖浏览器 Product Session，也不把这种身份支持推及其他 operation。
+
+内部 BFF 默认认证是 service envelope 加 IAM 用户会话 Bearer：
 
 | Header | 含义与来源 |
 | --- | --- |

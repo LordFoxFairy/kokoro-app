@@ -14,6 +14,6 @@
 
 ## 当前完成边界
 
-本人历史使用[版本列表](/reference/v1/generated/skills#list-personal-skill-versions)按精确版本锚点读取。当前标记来自 publication，而非最大修订；选择旧版本只读原包，不改变安装。恢复通过既有创建新版本、原ZIP上传扫描校验及发布流程生成新UID，旧历史与安装保持；发布使用确认时冻结的 publication 与 draft 状态前置条件。它不是管理员解除隔离，也没有新增“恢复服务”。个人系列永久删除仍未实现，不用撤回或后台删除草稿替代。
+本人历史使用[版本列表](/reference/v1/generated/skills#list-personal-skill-versions)按精确版本锚点读取。当前标记来自 publication，而非最大修订；选择旧版本只读原包，不改变安装。恢复通过既有创建新版本、原ZIP上传扫描校验及发布流程生成新UID，旧历史与安装保持；发布使用确认时冻结的 publication 与 draft 状态前置条件。它不是管理员解除隔离，也没有新增“恢复服务”。本人可通过[系列删除操作](/reference/v1/generated/skills#delete-personal-skill-series)明确删除整个个人系列；这与撤回、移除安装或后台丢弃草稿不同。删除后不再允许新的读取或引用，既有精确引用与审计不被改写为新版本，也不宣称物理包已擦除。
 
-Product人类准入已有实现，外部API Key／Open App／trusted client映射仍待正式接线。源码、正常加载、真实页面验收分别记录；示例fixture或文档生成通过不等于Agent执行已验，也不触发模型、工具或积分扣减。
+外部 User API Key、普通 OAuth Open App 与 trusted App 已有明确读取路径，身份与项目范围见[认证与请求约定](/authentication)。普通 App 仅读自身精确绑定；trusted 资格、个人及项目安装按正式准入合并，重复系列保持完整精确表示。读取与绑定管理不授予 Agent 执行权限；示例fixture和文档生成也不触发模型、工具或积分扣减。
