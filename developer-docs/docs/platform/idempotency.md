@@ -1,8 +1,10 @@
 # 幂等性
 
-每个 operation 页都会从 canonical metadata 展示 `x-kokoro-idempotency`：`required` 的 mutation 需要 `Idempotency-Key`；`none` 的安全 read 和明确标记为 preview 的 operation 不需要。这个清单由 BFF artifact 生成，不由手写页面维护。
+每个 operation 页都会从 canonical metadata 展示 `x-kokoro-idempotency`：`required` 的 mutation 需要 `Idempotency-Key`；`none` 的 operation 不声明该key；`inherent` 表示owner明确声明的资源级自然幂等，也不声明该key，不由HTTP动词推断。这个清单由 BFF artifact 生成，不由手写页面维护。
 
-## Key 生命周期
+`inherent` 的当前例子是当前租户积分账户的显式 PUT 初始化：不等于任意 GET 可以写库，不改变实际余额或授予执行权限。未知回执先按operation约定读取核实，不因自然幂等就自动重发请求；retryable与重试策略仍受该operation契约和预算限制。
+
+## Key 生命周期（仅 required）
 
 1. 在第一次尝试前为一条逻辑 mutation 创建 key。
 2. 将 key 与完整请求语义一起持久保存到本地 command 状态。

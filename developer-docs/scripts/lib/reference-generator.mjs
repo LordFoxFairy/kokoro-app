@@ -33,7 +33,7 @@ const HTTP_METHODS = new Set([
   'trace',
 ]);
 const STABILITY_VALUES = new Set(['stable', 'beta', 'experimental']);
-const IDEMPOTENCY_VALUES = new Set(['none', 'required']);
+const IDEMPOTENCY_VALUES = new Set(['none', 'required', 'inherent']);
 const PERMISSION_PATTERN =
   /^(?:anonymous|[a-z][a-z0-9]*(?:[._:-][a-z0-9]+)*)$/u;
 
@@ -209,9 +209,9 @@ export function assertPublicContract(contractValue, catalogEntry) {
         `${operationId} Idempotency-Key must be required`,
       );
     }
-    if (idempotency === 'none' && idempotencyParameter !== undefined) {
+    if ((idempotency === 'none' || idempotency === 'inherent') && idempotencyParameter !== undefined) {
       throw new ReferenceGenerationError(
-        `${operationId} must not declare Idempotency-Key when idempotency is none`,
+        `${operationId} must not declare Idempotency-Key when idempotency is ${idempotency}`,
       );
     }
     if (

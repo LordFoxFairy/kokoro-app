@@ -473,3 +473,20 @@ test('replaces stale generated output atomically', () => {
     rmSync(directory, { force: true, recursive: true });
   }
 });
+
+test('renders declared inherent idempotency without inventing a request key and rejects key or unknown metadata', () => {
+  const contract = fixtureContract();
+  const operation = contract.paths['/v1/sessions/{id}/messages'].post;
+  operation['x-kokoro-idempotency'] = 'inherent';
+  operation.parameters = [];
+  const files = generateReferenceFiles(contract, catalogEntry);
+  const manifest = JSON.parse(files.get('manifest.json'));
+  assert.equal(manifest.operations[0].idempotency, 'inherent');
+  assert.match(files.get('chat.md'), /`inherent`/u);
+  assert.doesNotMatch(files.get('chat.md'), /Idempotency-Key/u);
+  operation.parameters = [{ $ref: '#/components/parameters/IdempotencyKey' }];
+  assert.throws(() => generateReferenceFiles(contract, catalogEntry), /must not declare Idempotency-Key when idempotency is inherent/u);
+  operation.parameters = [];
+  operation['x-kokoro-idempotency'] = 'invented';
+  assert.throws(() => generateReferenceFiles(contract, catalogEntry), /unsupported x-kokoro-idempotency invented/u);
+});

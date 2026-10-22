@@ -1,8 +1,8 @@
 # Developer API 门户地图
 
-## 2026-10-21 当前契约配对切片
+## 2026-10-22 当前契约配对切片
 
-沿既有目录、VitePress本地搜索与生成链，升级旧Public1.0.0到已合BFF Public19.0.1；不新增服务或依赖。catalog固定原始owner blob的commit/version/digest，发布视图只选明确public的operation及递归可达components/security；browser-private不进入Reference，未知visibility/owner及坏引用拒绝。筛选是只读生成步骤，不维护第二份OpenAPI，也不改变BFF准入或运行数据。
+沿既有目录、VitePress本地搜索与生成链，固定BFF `e461d5178c6bf92558d7cd7dd288cb29cb008525`／Public22.3.0；不新增服务或依赖。catalog固定原始owner blob的commit/version/digest，发布视图只选明确public的operation及递归可达components/security；browser-private不进入Reference，未知visibility/owner及坏引用拒绝。筛选是只读生成步骤，不维护第二份OpenAPI，也不改变BFF准入或运行数据。
 
 幂等性由owner显式metadata与header声明决定，不在门户按HTTP动词重建规则。同步正式Bearer准入、x-request-id、Skills指南与实际输入输出示例，现有旧协议/占位说法退休。写区仅本目录及Root精确gitlink/必要交付记录；验收包括发布边界负控、来源/确定性生成、全部门户门、可执行fixture示例和真实宽窄预览，不冒模型/工具执行或APIKey/OpenApp已接通。
 
@@ -60,4 +60,4 @@
 
 ## App 维护位置（2026-10-21）
 
-沿 Root `2e008595` 的既有门户迁入 App 独立包，生成器／依赖及 public 白名单不扩权。当前 catalog 与 App 同源 Public22 固定原始 `be5cc6f` artifact，完整176项只发布170 public项，6 browser-private继续排除；字段和schema由生成物展示，不再手写另一份清单。Root旧目录删除与精确gitlink留到配对集成；内部说明仍由 App `docs/` 维护，不被公开构建读取。此为候选，不能据文档宣称身份producer或完整产品已交付。
+沿 Root `2e008595` 的既有门户迁入 App 独立包，生成器／依赖及 public 白名单不扩权。当前 catalog 与 App 同源 Public22.3固定原始 `e461d517` artifact，完整182项只发布176 public项／367个可达schema，6 browser-private继续排除；字段和schema由生成物展示，不再手写另一份清单。Root旧目录删除与精确gitlink留到配对集成；内部说明仍由 App `docs/` 维护，不被公开构建读取。此为候选，不能据文档宣称身份producer或完整产品已交付。

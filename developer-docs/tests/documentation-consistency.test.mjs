@@ -77,7 +77,7 @@ test('the generated reference is the metadata inventory for the pinned BFF contr
     operation.owner === entry.owner
       && operation.visibility === entry.visibility
       && ['stable', 'beta', 'experimental'].includes(operation.stability)
-      && ['none', 'required'].includes(operation.idempotency),
+      && ['none', 'required', 'inherent'].includes(operation.idempotency),
   ));
 
   const referenceText = [...files.values()].join('\n');
