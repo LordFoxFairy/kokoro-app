@@ -19,10 +19,10 @@ function stable(value: unknown): unknown {
 it("pins formal15.3 bytes and restores complete15.2 canonical contract after only the new list is removed", async () => {
   const bytes = await readFile("src/generated/bff-public-openapi.yaml");
   expect(hash(bytes)).toBe(
-    "c77e4921ccce98cfd91d77fc6897cf327599f237ed13438117323b6a3f8555eb",
+    "34ea71e0aa56256ca00fc5b3c40abd4d142bea82e664a6871190b8547ec2b9e6",
   );
   let spec = YAML.parse(bytes.toString());
-  expect(spec.info.version).toBe("22.5.0");
+  expect(spec.info.version).toBe("23.0.0");
   expect(spec.paths["/v1/account/shared-tasks"].get.operationId).toBe(
     "listOwnedSharedTasks",
   );

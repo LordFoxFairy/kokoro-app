@@ -1,3 +1,7 @@
+## 2026-10-22 当前精确模型绑定发行
+
+唯一snapshot固定BFF `a77276b35b07eb65df8a0af2e41b461b393afb12`／Public23.0.0／186，SHA256 `34ea71e0aa56256ca00fc5b3c40abd4d142bea82e664a6871190b8547ec2b9e6`。MeteringRate必填model_revision闭集{id,content_digest}；七原生成器正规配对，完整22.5父件与186有序操作受test-only inverse保护，无运行兼容。当前本地验收见CURRENT，以下为历史。
+
 ## CREDIT-1 管理员积分同源通路（2026-10-22，本地候选）
 
 唯一canonical固定BFF `4d8a02828ea29fb933b29bc60670ada9761cadef`／Public22.5.0／183，SHA256 `c77e4921ccce98cfd91d77fc6897cf327599f237ed13438117323b6a3f8555eb`；七个既有public窄生成器正规重出／check，独立connector错误profile未改。新test-only精确逆回原22.3全文和182项顺序，再进入未改旧父hash证明，不是运行兼容。

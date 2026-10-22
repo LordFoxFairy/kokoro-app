@@ -1,3 +1,13 @@
+## AGENT-1／MODEL-1：精确模型绑定与在线Docs已本地验收（2026-10-22）
+
+唯一snapshot固定BFFa77276b35b07eb65df8a0af2e41b461b393afb12／Public23.0.0／186，SHA256 34ea71e0aa56256ca00fc5b3c40abd4d142bea82e664a6871190b8547ec2b9e6。仅MeteringRate必填model_revision闭集pair，七原窄生成器正式重出；test-only完整22.5逆证再承接原22.4／全部历史父件。生产透明桥、1MiB/12层／原充值16KiB／10秒／Product身份与原命令恢复逐字未改，无运行fallback；大配置fixture每个模型有独立精确pair，原负控保持。
+
+新required pair回归真实1 FAIL／1 PASS后GREEN；最终1142非文档输入停写零漂移，完整App contract／architecture／lint／types／test／build／post-types均0：contract304、architecture50、252文件4749 PASS／0SKIP；preview桌面／移动108 PASS、零重试，官方typegen恢复通过。原四MCP WIP按原四SHA完整恢复，未夹带提交。独审Approved，无确定新增P0–P2；首次完整contract唯一失败是contract/api-contract.test.ts遗漏当前pin的两个literal，精确配对后新冻结全门重跑，旧有序操作和风险断言未放宽，失败证据留ignored。
+
+App在线Docs同源catalog固定新23完整原件并补精确修订指南／版本记录；完整独立check通过：45测试、五例、确定性生成／来源／架构／build，54HTML／17941内部链接。公开投影仍180操作／380schema，原6私有操作不发布；原大chunk警告保留。文档说明具体id＋原digest绑定，名称／Key不推价，已有未知命令不改模型；不是真实资金效果或Manus私有后台实现证明。
+
+正常服务／Schema／1000余额未变，零模型／工具／实际结算；正常App/Admin配对及正式费率配置与Agent逐attempt预占／执行／真实usage结算仍待。App本片不新建网络协议或计价owner，未push／PR／merge，Root不提前pin；下方均各自阶段历史证据。
+
 ## AGENT-1／CREDIT-1：计价管理同源接线已验（2026-10-22，本地候选）
 
 唯一snapshot固定BFF `4d8a02828ea29fb933b29bc60670ada9761cadef`／Public22.5.0／186，SHA256 `c77e4921ccce98cfd91d77fc6897cf327599f237ed13438117323b6a3f8555eb`；原七public生成器正规更新，独立connector错误profile不变。新test-only精确逆回原22.4全文／183项，再进入未放宽的原funding／模型及历史证明链；无运行兼容层。

@@ -8,9 +8,9 @@ it("pins three formal pricing operations while preserving every preceding byte a
     parentRaw = restoreMeteringParent(raw),
     spec = YAML.parse(raw.toString()),
     parent = YAML.parse(parentRaw.toString())
-  expect(createHash("sha256").update(raw).digest("hex")).toBe("c77e4921ccce98cfd91d77fc6897cf327599f237ed13438117323b6a3f8555eb")
+  expect(createHash("sha256").update(raw).digest("hex")).toBe("34ea71e0aa56256ca00fc5b3c40abd4d142bea82e664a6871190b8547ec2b9e6")
   expect(createHash("sha256").update(parentRaw).digest("hex")).toBe("f6b8f3bd250c144a2d648af94c9fd5fe068db33991a4289b849a077eef009f32")
-  expect(spec.info.version).toBe("22.5.0")
+  expect(spec.info.version).toBe("23.0.0")
   expect(parent.info.version).toBe("22.4.0")
   const inventory = (doc: typeof spec) =>
     Object.entries(doc.paths).flatMap(([path, value]) =>
@@ -45,5 +45,29 @@ it("pins three formal pricing operations while preserving every preceding byte a
   ]) {
     expect(changed.equals(raw)).toBe(false)
     expect(() => restoreMeteringParent(changed)).toThrow()
+  }
+})
+
+it("requires exact System model revision identity in published and read-back rates rather than a display name", async () => {
+  const raw = await readFile("src/generated/bff-public-openapi.yaml"),
+    spec = YAML.parse(raw.toString())
+  const rate = spec.components.schemas.MeteringRate
+  expect(rate.required).toContain("model_revision")
+  expect(rate.properties.model_revision).toEqual({
+    type: "object",
+    additionalProperties: false,
+    required: ["id", "content_digest"],
+    properties: {
+      id: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$(?![\\s\\S])",
+      },
+      content_digest: { type: "string", pattern: "^[0-9a-f]{64}$(?![\\s\\S])" },
+    },
+  })
+  for (const changed of [raw.toString().replace("        - model_revision\n", ""), raw.toString().replace("        - content_digest\n", "")]) {
+    expect(changed).not.toBe(raw.toString())
+    expect(() => restoreMeteringParent(Buffer.from(changed))).toThrow()
   }
 })

@@ -1,10 +1,14 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
-const { currentProductSession } = vi.hoisted(() => ({ currentProductSession: vi.fn() }))
+const { currentProductSession } = vi.hoisted(() => ({
+  currentProductSession: vi.fn(),
+}))
 vi.mock("@/lib/server/product-session", () => ({ currentProductSession }))
 import { GET, POST, PUT } from "@/app/api/admin/[...path]/route"
 const prefix = "http://web.test/api/admin/billing/metering/"
-const context = (name: string) => ({ params: Promise.resolve({ path: ["billing", "metering", name] }) })
+const context = (name: string) => ({
+  params: Promise.resolve({ path: ["billing", "metering", name] }),
+})
 const id = "11111111-1111-4111-8111-111111111111"
 const configuration = {
   effective_from: "2026-10-22T00:00:00.000Z",
@@ -15,7 +19,34 @@ const configuration = {
   credit_micros_per_minor: { numerator: "1000000", denominator: "1" },
   max_attempt_credits: "10",
 }
-const command = JSON.stringify({ publication_id: id, reason: "original", configuration })
+const command = JSON.stringify({
+  publication_id: id,
+  reason: "original",
+  configuration,
+})
+const rateConfiguration = {
+  effective_from: configuration.effective_from,
+  source_ref: configuration.source_ref,
+  verified_at: configuration.verified_at,
+  rates: [
+    {
+      model_revision: {
+        id: "22222222-2222-4222-8222-222222222222",
+        content_digest: "b".repeat(64),
+      },
+      provider_ref: "provider",
+      environment: "test",
+      pricing_account_ref: "account",
+      model_ref: "model",
+      model_version: "1",
+      bucket: "input_total",
+      unit: "token",
+      applicability: { kind: "all" },
+      currency_code: "USD",
+      minor_per_unit: { numerator: "1", denominator: "1000" },
+    },
+  ],
+}
 let server: Server, calls: IncomingMessage[], payloads: string[], peer: (req: IncomingMessage, res: ServerResponse) => void
 function input(name = "policy-revisions", raw = command, headers: Record<string, string> = {}, signal?: AbortSignal) {
   return new Request(prefix + name, {
@@ -32,7 +63,11 @@ function input(name = "policy-revisions", raw = command, headers: Record<string,
   })
 }
 function reply(req: IncomingMessage, res: ServerResponse, status = req.method === "GET" ? 200 : 201, raw?: string) {
-  res.writeHead(status, { "content-type": "application/json", "cache-control": "no-store", "x-request-id": String(req.headers["x-kokoro-request-id"]) })
+  res.writeHead(status, {
+    "content-type": "application/json",
+    "cache-control": "no-store",
+    "x-request-id": String(req.headers["x-kokoro-request-id"]),
+  })
   res.end(
     raw ??
       JSON.stringify({
@@ -53,7 +88,10 @@ function reply(req: IncomingMessage, res: ServerResponse, status = req.method ==
 beforeEach(async () => {
   calls = []
   payloads = []
-  currentProductSession.mockReset().mockResolvedValue({ access: "admitted-product-token", accessExpiresAt: Date.now() + 60000 })
+  currentProductSession.mockReset().mockResolvedValue({
+    access: "admitted-product-token",
+    accessExpiresAt: Date.now() + 60000,
+  })
   peer = reply
   server = createServer((req, res) => {
     calls.push(req)
@@ -87,20 +125,41 @@ afterEach(async () => {
   await new Promise<void>((resolve, reject) => server.close((e) => (e ? reject(e) : resolve())))
 })
 it("reads honest nullable pricing through only the formal Product route", async () => {
-  const result = await GET(new Request(prefix + "pricing", { headers: { "x-kokoro-request-id": "metering-bridge-1" } }), context("pricing"))
+  const result = await GET(
+    new Request(prefix + "pricing", {
+      headers: { "x-kokoro-request-id": "metering-bridge-1" },
+    }),
+    context("pricing"),
+  )
   expect(result.status).toBe(200)
   expect(calls).toHaveLength(1)
   expect(calls[0]!.url).toBe("/v1/admin/billing/metering/pricing")
   expect(calls[0]!.headers["content-type"]).toBeUndefined()
-  expect((await result.json()).data).toEqual({ rate_revision: null, policy_revision: null })
+  expect((await result.json()).data).toEqual({
+    rate_revision: null,
+    policy_revision: null,
+  })
 })
 it.each(["rate-revisions", "policy-revisions"])("preserves exact %s command and trusted Product context", async (name) => {
+  const raw =
+    name === "rate-revisions"
+      ? JSON.stringify({
+          publication_id: id,
+          reason: "original",
+          configuration: rateConfiguration,
+        })
+      : command
   const result = await POST(
-    input(name, command, { authorization: "Bearer forged", "x-kokoro-tenant-id": "forged", "x-kokoro-actor-id": "forged", forwarded: "host=forged.invalid" }),
+    input(name, raw, {
+      authorization: "Bearer forged",
+      "x-kokoro-tenant-id": "forged",
+      "x-kokoro-actor-id": "forged",
+      forwarded: "host=forged.invalid",
+    }),
     context(name),
   )
   expect(result.status).toBe(201)
-  expect(payloads).toEqual([command])
+  expect(payloads).toEqual([raw])
   expect(calls[0]!.url).toBe("/v1/admin/billing/metering/" + name)
   expect(calls[0]!.headers.authorization).toBe("Bearer admitted-product-token")
   expect(calls[0]!.headers.forwarded).toBe("host=configured.product.test")
@@ -128,7 +187,14 @@ it("forwards a legitimate 64-row Unicode configuration larger than the former ge
       effective_from: configuration.effective_from,
       source_ref: "QA",
       verified_at: configuration.verified_at,
-      rates: Array.from({ length: 64 }, (_, n) => ({ ...row, model_ref: "model" + n })),
+      rates: Array.from({ length: 64 }, (_, n) => ({
+        ...row,
+        model_revision: {
+          id: `22222222-2222-4222-8222-${String(n).padStart(12, "0")}`,
+          content_digest: "b".repeat(64),
+        },
+        model_ref: "model" + n,
+      })),
     },
   })
   expect(new TextEncoder().encode(raw).length).toBeGreaterThan(65_536)
@@ -147,9 +213,16 @@ it("permits exactly 1MiB of command bytes but rejects overflow without touching 
 it("keeps the original funding cap while the metering command grows", async () => {
   const raw = " ".repeat(16_385),
     req = input("policy-revisions", raw)
-  const result = await POST(new Request("http://web.test/api/admin/billing/credit-grants", { method: "POST", headers: req.headers, body: raw }), {
-    params: Promise.resolve({ path: ["billing", "credit-grants"] }),
-  })
+  const result = await POST(
+    new Request("http://web.test/api/admin/billing/credit-grants", {
+      method: "POST",
+      headers: req.headers,
+      body: raw,
+    }),
+    {
+      params: Promise.resolve({ path: ["billing", "credit-grants"] }),
+    },
+  )
   expect(result.status).toBe(400)
   expect(currentProductSession).not.toHaveBeenCalled()
   expect(calls).toHaveLength(0)
@@ -159,7 +232,14 @@ it("rejects read query, framing, encoding and command headers before Product ins
     expect((await GET(new Request(prefix + "pricing" + suffix), context("pricing"))).status).toBe(400)
   for (const name of ["content-length", "transfer-encoding", "content-type", "content-encoding", "if-match", "if-none-match", "idempotency-key"])
     expect(
-      (await GET(new Request(prefix + "pricing", { headers: { [name]: name === "content-length" ? "0" : "arbitrary" } }), context("pricing"))).status,
+      (
+        await GET(
+          new Request(prefix + "pricing", {
+            headers: { [name]: name === "content-length" ? "0" : "arbitrary" },
+          }),
+          context("pricing"),
+        )
+      ).status,
     ).toBe(400)
   expect(currentProductSession).not.toHaveBeenCalled()
   expect(calls).toHaveLength(0)
@@ -179,8 +259,16 @@ it("rejects malformed publication framing, key and query without owner I/O", asy
     expect((await POST(input("policy-revisions", command, headers), context("policy-revisions"))).status).toBe(400)
   const req = input()
   expect(
-    (await POST(new Request(prefix + "policy-revisions?tenant=other", { method: "POST", headers: req.headers, body: command }), context("policy-revisions")))
-      .status,
+    (
+      await POST(
+        new Request(prefix + "policy-revisions?tenant=other", {
+          method: "POST",
+          headers: req.headers,
+          body: command,
+        }),
+        context("policy-revisions"),
+      )
+    ).status,
   ).toBe(400)
   req.headers.delete("content-length")
   expect((await POST(req, context("policy-revisions"))).status).toBe(400)
@@ -220,7 +308,9 @@ it("recovers only explicit original bytes and key after a lost response", async 
   expect(calls.map((req) => req.headers["idempotency-key"])).toEqual(["original-metering-key", "original-metering-key"])
 })
 it.each([400, 403, 409, 503])("preserves owner %s without rewriting or retrying a command", async (status) => {
-  const raw = JSON.stringify({ error: { code: "metering_error", message: "not confirmed" } })
+  const raw = JSON.stringify({
+    error: { code: "metering_error", message: "not confirmed" },
+  })
   peer = (req, res) => reply(req, res, status, raw)
   const result = await POST(input(), context("policy-revisions"))
   expect(result.status).toBe(status)
@@ -254,7 +344,11 @@ it("bounds a partial incoming publication before session admission", async () =>
   try {
     const req = new Request(prefix + "policy-revisions", {
       method: "POST",
-      headers: { "content-type": "application/json", "content-length": "2", "idempotency-key": "original-metering-key" },
+      headers: {
+        "content-type": "application/json",
+        "content-length": "2",
+        "idempotency-key": "original-metering-key",
+      },
       body: new ReadableStream({
         start(c) {
           c.enqueue(new TextEncoder().encode("{"))
@@ -281,7 +375,11 @@ it("cancels a partial ACK without returning a false publication", async () => {
     })
   peer = (req, res) => {
     res.once("close", closed)
-    res.writeHead(201, { "content-type": "application/json", "cache-control": "no-store", "x-request-id": String(req.headers["x-kokoro-request-id"]) })
+    res.writeHead(201, {
+      "content-type": "application/json",
+      "cache-control": "no-store",
+      "x-request-id": String(req.headers["x-kokoro-request-id"]),
+    })
     res.write('{"data":')
     start()
   }
@@ -294,13 +392,23 @@ it("cancels a partial ACK without returning a false publication", async () => {
   expect(calls).toHaveLength(1)
 })
 it("passes a complete large latest snapshot without copying Set-Cookie or Location", async () => {
-  const raw = JSON.stringify({ data: { rate_revision: { configuration: "x".repeat(100000) }, policy_revision: null } })
+  const raw = JSON.stringify({
+    data: {
+      rate_revision: { configuration: "x".repeat(100000) },
+      policy_revision: null,
+    },
+  })
   peer = (req, res) => {
     res.setHeader("set-cookie", "private=value")
     res.setHeader("location", "https://private.invalid")
     reply(req, res, 200, raw)
   }
-  const result = await GET(new Request(prefix + "pricing", { headers: { "x-kokoro-request-id": "metering-bridge-1" } }), context("pricing"))
+  const result = await GET(
+    new Request(prefix + "pricing", {
+      headers: { "x-kokoro-request-id": "metering-bridge-1" },
+    }),
+    context("pricing"),
+  )
   expect(result.status).toBe(200)
   expect(await result.text()).toBe(raw)
   expect(result.headers.has("set-cookie")).toBe(false)

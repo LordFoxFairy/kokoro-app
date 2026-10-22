@@ -7,9 +7,9 @@ import { billingCreditAccountPath, billingSummarySchema } from "@/contract/http"
 
 it("pins the current tenant's inherently idempotent initialization without changing the read projections", async () => {
   const bytes = await readFile("src/generated/bff-public-openapi.yaml")
-  expect(createHash("sha256").update(bytes).digest("hex")).toBe("c77e4921ccce98cfd91d77fc6897cf327599f237ed13438117323b6a3f8555eb")
+  expect(createHash("sha256").update(bytes).digest("hex")).toBe("34ea71e0aa56256ca00fc5b3c40abd4d142bea82e664a6871190b8547ec2b9e6")
   const spec = YAML.parse(bytes.toString())
-  expect(spec.info.version).toBe("22.5.0")
+  expect(spec.info.version).toBe("23.0.0")
   const path = spec.paths["/v1/billing/credit-account"]
   expect(Object.keys(path)).toEqual(["put"])
   expect(billingCreditAccountPath()).toBe("/billing/credit-account")
@@ -27,7 +27,7 @@ it("pins the current tenant's inherently idempotent initialization without chang
 it("restores the complete prior public artifact and rejects drift rather than weakening prior oracles", async () => {
   const bytes = await readFile("src/generated/bff-public-openapi.yaml")
   expect(createHash("sha256").update(restoreCreditInitializationParent(bytes)).digest("hex")).toBe("f726cac620362524f92474ca9d647229280db308d16105820c718f9bc32db1ae")
-  for (const source of [bytes.toString() + "\n", bytes.toString().replace("x-kokoro-idempotency: inherent", "x-kokoro-idempotency: none"), bytes.toString().replace("  version: 22.5.0", "  version: 22.1.0")]) {
+  for (const source of [bytes.toString() + "\n", bytes.toString().replace("x-kokoro-idempotency: inherent", "x-kokoro-idempotency: none"), bytes.toString().replace("  version: 23.0.0", "  version: 22.1.0")]) {
     expect(() => restoreCreditInitializationParent(Buffer.from(source))).toThrow()
   }
 })

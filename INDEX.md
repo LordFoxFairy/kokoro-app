@@ -1,3 +1,7 @@
+## 当前精确模型绑定（2026-10-22）
+
+固定BFFa77276b／Public23，七原public生成器、tests/contract/bff-metering-parent.ts完整父保护及在线Docs同步；生产桥无变更。主方停写工程／preview／Docs证据及未激活边界见[CURRENT](docs/CURRENT.md)，下方按历史读取。
+
 ## AGENT-1／CREDIT-1 计价管理同源接线（2026-10-22，本地候选）
 
 固定BFF4d8a028／Public22.5／186操作；三具名计价管理通路沿原Product Session，复用 `admin-billing-proxy.ts`，原充值16KiB不变，新计价1MiB／同绝对预算。七public生成器与App在线Docs同步；完整工程、108项preview回归及Docs45测试／链接检查已验，正常后台／Agent结算仍待，详见 [docs/CURRENT.md](docs/CURRENT.md)。原MCP WIP未夹带；以下版本段保留历史，不覆盖本节。

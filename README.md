@@ -1,3 +1,7 @@
+## 2026-10-22 精确模型选价绑定（本地已验）
+
+已固定BFF a77276b／Public23完整原件并同步七生成器和在线Docs；费率必填精确模型修订ID＋摘要，生产同源桥及原身份／预算／恢复规则不变。完整App门4749 PASS／0SKIP、preview108零重试和Docs检查通过，四MCP WIP原字节保留。正常后台与Agent真实结算仍待，详见 [docs/CURRENT.md](docs/CURRENT.md)；以下仅历史。
+
 ## AGENT-1／CREDIT-1 计价管理同源接线（2026-10-22，本地候选）
 
 固定BFF4d8a028／Public22.5／186操作；三具名计价管理通路沿原Product Session，复用 `admin-billing-proxy.ts`，原充值16KiB不变，新计价1MiB／同绝对预算。七public生成器与App在线Docs同步；完整工程、108项preview回归及Docs45测试／链接检查已验，正常后台／Agent结算仍待，详见 [docs/CURRENT.md](docs/CURRENT.md)。原MCP WIP未夹带；以下版本段保留历史，不覆盖本节。

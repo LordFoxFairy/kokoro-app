@@ -1,3 +1,11 @@
+## AGENT-1／MODEL-1：精确模型绑定同源消费者（2026-10-22，本地已验）
+
+最终1142输入无漂移，完整App七门／4749 PASS、preview108及独立Docs45测试／54HTML17941链接通过，四MCP SHA恢复，独审Approved。正常激活和实际Agent资金链仍待，详见CURRENT首节。
+
+沿Root唯一主链和Billing rate2已批决定，主方唯一writer，App基线bc0c8c3；固定BFFa77276b35b07eb65df8a0af2e41b461b393afb12／Public23.0.0／34ea71e0aa56256ca00fc5b3c40abd4d142bea82e664a6871190b8547ec2b9e6。唯一snapshot增加MeteringRate required model_revision{id,content_digest}，原七窄生成器正规重出；不为透明桥创建重复validator。原三具名计价通路、Product Session、1MiB/12层、原充值16KiB和10秒／原body-key-time恢复语义不变，无新路由／服务／表／运行fallback。
+
+写区为固定snapshot、七生成器和原派生／直接契约与薄桥fixture、App在线Docs catalog和指南／相邻当前文档；原四MCP WIP按既有精确保护，不覆盖或夹带提交。先原contract新required pair行为RED，再仅pair/version delta的test-only完整22.5逆证承接原历史门，业务网络协议不变。在线Docs同步解释精确修订而非模型显示名／Key推价；发布配置不是消费许可。完整App工程、preview和Docs门停写验收，正常配对／实际Agent资金链后继，不称一比一全站或正常结算已验。
+
 ## AGENT-1／CREDIT-1：计价管理同源映射（2026-10-22）
 
 固定Public22.5正式三操作，browser-private `/api/admin/billing/metering/{pricing,rate-revisions,policy-revisions}`逐一映射BFF对应`/v1/admin/...`，仅GET pricing与POST两publish；不接其他路径／方法。请求与错误／ACK正文保持原字节，单次上限1MiB；资金数字字符串不经Number。GET最新发布可独立null／未来生效，不是active quote或未知命令结果证明。POST仅转原publication_id/configuration/reason和key，不自动改日期或补预算；Admin后继持原命令恢复，App不建第二份receipt。
