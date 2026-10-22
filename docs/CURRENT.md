@@ -1,3 +1,9 @@
+## CREDIT-1 正常后台非现金充值与用户回读通过（2026-10-22）
+
+App源码 `9b9ec34b6a70b0f690ce7f1038a35d544469c05e` 已与 Admin c162f7e、BFF c48a9bc、Billing 90929ef 正常配对；复用当前 Product 管理员登录和当前租户真实成员，不改角色、Schema或凭据，不直接写余额。正常后台选择本人并确认一次1000非现金积分，经 App→BFF→Billing 得到201及三个正式回执ID；账户页显示可用1000／冻结0，用量与计费显示单笔 admin_credit +1000，后台和用户页刷新后仍为相同余额／单笔历史。源站运行日志仅一笔充值POST201；原始回执与截图仅本地ignored，不进入公开文档或Git。
+
+这次证明正常管理员发放和正常用户余额／流水读链，不证明Agent模型执行、实际用量扣分、取消结算或全站Manus对齐；Agent执行仍未启用。四文件既有MCP工作已原字节恢复，不在本片提交。下一步补正式逐attempt资金授权、唯一派发、真实usage封口与结算；真钱支付不做，不以手工扣分代替计量。
+
 ## CREDIT-1 管理员积分同源通路（2026-10-22，本地候选）
 
 唯一canonical固定BFF `c48a9bca07a2bb48fb5db46272ff71aab90e14ce`／Public22.4.0／183，SHA256 `f6b8f3bd250c144a2d648af94c9fd5fe068db33991a4289b849a077eef009f32`；七个既有public窄生成器正规重出／check，独立connector错误profile未改。新test-only精确逆回原22.3全文和182项顺序，再进入未改旧父hash证明，不是运行兼容。
