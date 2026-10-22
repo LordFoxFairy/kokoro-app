@@ -97,7 +97,7 @@ function managementFixture() {
   return { installation, managed, response, content }
 }
 
-async function openManagement(operation: "更新技能" | "撤回技能" | "技能版本历史") {
+async function openManagement(operation: "更新技能" | "撤回技能" | "技能版本历史" | "删除") {
   fireEvent.click(await screen.findByRole("button", { name: "Managed skill" }))
   const more = await screen.findByRole("button", { name: "更多技能操作" })
   fireEvent.keyDown(more, { key: "ArrowDown" })
@@ -251,4 +251,46 @@ it("keeps a confirmed restore through same-actor re-admission but retires it on 
  expect(screen.queryByRole("button",{name:"查看技能操作"})).toBeNull()
  finish(Response.json({data:{skill_id:"restored",series_id:managed.series_id,revision:"4",status:"draft",state_version:"1",replayed:false}},{status:201,headers:{"cache-control":"no-store","content-type":"application/json","x-request-id":"late-create"}}))
  await Promise.resolve();await Promise.resolve();expect(writes).toHaveLength(1)
+})
+
+it("confirms series deletion, retains its unknown original command across re-admission without GET404 gating, then clears selection on receipt",async()=>{
+ window.localStorage.setItem("kokoro.locale","zh")
+ const {installation,managed,response,content}=managementFixture()
+ const writes:RequestInit[]=[];let managedReads=0,historyReads=0,deleted=false
+ vi.stubGlobal("fetch",vi.fn(async(input:RequestInfo|URL,init?:RequestInit)=>{
+  if(init?.method==="DELETE"){
+   writes.push(init);deleted=true
+   if(writes.length===1)throw new Error("lost delete ACK")
+   return response({series_id:managed.series_id,skill_id:managed.skill_id,state_version:"9",status:"deleted",event_id:`evt:${"a".repeat(64)}`,replayed:true},true)
+  }
+  if(String(input).includes("skill-installations"))return response(installation)
+  if(deleted)throw new Error("Deleted resource reads must not gate receipt replay")
+  if(String(input).endsWith("/versions")){historyReads++;return response({series_id:managed.series_id,publication:{current_version_id:"formal-current",state_version:"9007199254740993",withdrawn_at:null},versions:[],next_cursor:null},true)}
+  managedReads++;return response(managed,true)
+ }))
+ const view=render(content());await openManagement("删除")
+ await screen.findByText("您稍后可以通过重新上传再次添加此技能。")
+ const confirm=screen.getByRole("button",{name:"删除"});await waitFor(()=>expect(confirm).toBeEnabled())
+ expect(writes).toHaveLength(0);fireEvent.click(confirm);await screen.findByRole("alert")
+ fireEvent.click(screen.getByRole("button",{name:"取消"}))
+ view.rerender(content(false,2));view.rerender(content(true,2))
+ fireEvent.click(await screen.findByRole("button",{name:"查看技能操作"}))
+ fireEvent.click(await screen.findByRole("button",{name:"重试"}))
+ await waitFor(()=>expect(screen.queryByRole("dialog",{name:"删除此技能？"})).toBeNull())
+ expect(writes).toHaveLength(2);expect(writes[0]?.body).toBe(writes[1]?.body);expect(writes[0]?.headers).toEqual(writes[1]?.headers)
+ expect(JSON.parse(String(writes[0]?.body))).toEqual({expected_state_version:"8",expected_publication:{current_version_id:"formal-current",state_version:"9007199254740993"}})
+ expect(managedReads).toBe(1);expect(historyReads).toBe(1)
+ expect(screen.queryByRole("button",{name:"查看技能操作"})).toBeNull()
+})
+
+it("does not render deleted-source private details, history or package actions from a retained installation deep link",async()=>{
+ window.localStorage.setItem("kokoro.locale","zh")
+ const {installation,response}=managementFixture()
+ vi.stubGlobal("fetch",vi.fn(async()=>response({...installation,source_status:"deleted"})))
+ render(<LocaleProvider><ManusSkillDetailDialog detailSource="installation" open readBoundary={{admitted:true,subject:"reader",generation:1}}
+ skill={{installation_id:installation.installation_id,skill_id:installation.series_id,revision_skill_id:"manage-revision",source_ref:installation.source_ref,installed_source_ref:installation.source_ref,name:"Retained",description:"",content_hash:"series",scope:"personal",installed:true,enabled:false}} onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={()=>false} onManagePersonal={vi.fn()}/></LocaleProvider>)
+ await screen.findByText("技能详情暂时不可用")
+ expect(screen.queryByText(installation.summary)).toBeNull()
+ expect(screen.queryByRole("button",{name:"更多技能操作"})).toBeNull()
+ expect(screen.getByRole("button",{name:"查看详情"})).toBeDisabled()
 })

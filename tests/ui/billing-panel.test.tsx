@@ -107,7 +107,7 @@ describe("BillingPanel", () => {
     await screen.findByText("Model call")
     fireEvent.click(screen.getByText("Load more"))
     await screen.findByText("Tool call")
-    await waitFor(() => expect(ledger).toHaveBeenCalledWith("cur_2", expect.any(AbortSignal)))
+    await waitFor(() => expect(ledger).toHaveBeenCalledWith("cur_2", expect.any(AbortSignal), expect.any(Function)))
   })
 
   // —— B1 用量透视 ——
@@ -471,7 +471,7 @@ describe("R255 bounded Credit read and mounted recovery", () => {
     const retry = screen.getByRole("button", { name: "Reload" })
     fireEvent.click(retry)
     await screen.findByText("r255-second")
-    expect(ledger.mock.calls[2]).toEqual(["same-opaque-page", expect.any(AbortSignal)])
+    expect(ledger.mock.calls[2]).toEqual(["same-opaque-page", expect.any(AbortSignal), expect.any(Function)])
     expect(screen.queryByRole("button", { name: "Load more" })).not.toBeInTheDocument()
   })
 
@@ -562,7 +562,7 @@ it("R255 preserves UTC wire instants but groups two midnight-crossing journals b
   expect(days[0]).toHaveTextContent("+0.000001")
 })
 
-// Real browser client + native Response fixtures; no owner service or account writes.
+// Real browser client + native Response fixtures; idempotent initialization stays at the BFF boundary.
 describe("R255 missing Credit account domain state", () => {
   afterEach(() => {
     vi.useRealTimers()
@@ -577,21 +577,28 @@ describe("R255 missing Credit account domain state", () => {
   }
   const responseHeaders = { "cache-control": "private, no-store", "x-request-id": requestId }
 
-  it("renders both exact account-not-found reads as not opened, without zero balance or retry", async () => {
-    const fetcher = vi.fn(async () => Response.json(missingBody, { status: 404, headers: responseHeaders }))
+  it("silently initializes concurrent missing reads and shows only authoritative owner values", async () => {
+    localStorage.setItem("kokoro.web.auth-index-subject", "billing-test-owner")
+    let initialized = false
+    const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "PUT") { initialized = true; return Response.json(r255ExistingSummary, { headers: responseHeaders }) }
+      if (!initialized) return Response.json(missingBody, { status: 404, headers: responseHeaders })
+      return Response.json(String(input).endsWith("/summary") ? r255ExistingSummary : { items: [], page: { next_cursor: null } }, { headers: responseHeaders })
+    })
     vi.stubGlobal("fetch", fetcher)
     render(<BillingContent {...{ preview: false, readBoundary: { admitted: true, subject: "billing-test-owner", generation: 1 } }} client={createBillingClient()} embedded />, { wrapper: LocaleProvider })
-
-    for (const sectionId of ["billing-balance", "billing-ledger"]) {
-      const section = screen.getByTestId(sectionId)
-      expect(await within(section).findByText("No credit account yet")).toBeInTheDocument()
-      expect(within(section).queryByRole("button", { name: "Reload" })).not.toBeInTheDocument()
-      expect(section).not.toHaveTextContent("Failed to load")
-      expect(within(section).queryByText("0", { exact: true })).not.toBeInTheDocument()
+    expect(await within(screen.getByTestId("billing-balance")).findByText("42")).toBeVisible()
+    expect(await screen.findByText("No transactions yet")).toBeVisible()
+    expect(screen.queryByText("No credit account yet")).not.toBeInTheDocument()
+    expect(screen.queryByText("Loading…")).not.toBeInTheDocument()
+    expect(document.querySelector('[data-slot="skeleton"]')).toBeNull()
+    const writes = fetcher.mock.calls.filter(([, init]) => init?.method === "PUT")
+    expect(writes).toHaveLength(2)
+    for (const [url, init] of writes) {
+      expect(url).toBe("/api/session/billing/credit-account")
+      expect(init?.body).toBe("{}")
     }
-    expect(screen.queryByText("No transactions yet")).not.toBeInTheDocument()
-    expect(screen.queryByRole("button", { name: "Load more" })).not.toBeInTheDocument()
-    expect(fetcher).toHaveBeenCalledTimes(2)
+    expect(fetcher).toHaveBeenCalledTimes(6)
   })
 
   it.each([
@@ -622,8 +629,8 @@ describe("R255 missing Credit account domain state", () => {
 
     const missingSection = screen.getByTestId(missingRead === "summary" ? "billing-balance" : "billing-ledger")
     const failedSection = screen.getByTestId(missingRead === "summary" ? "billing-ledger" : "billing-balance")
-    expect(await within(missingSection).findByText("No credit account yet")).toBeInTheDocument()
-    expect(within(missingSection).queryByRole("button", { name: "Reload" })).not.toBeInTheDocument()
+    expect(await within(missingSection).findByText(/^Failed to load/)).toBeInTheDocument()
+    expect(within(missingSection).getByRole("button", { name: "Reload" })).toBeInTheDocument()
     expect(await within(failedSection).findByText(/^Failed to load/)).toBeInTheDocument()
     expect(within(failedSection).getByRole("button", { name: "Reload" })).toBeInTheDocument()
     expect(within(failedSection).queryByText("No credit account yet")).not.toBeInTheDocument()
@@ -765,7 +772,7 @@ describe("R255 missing Credit account domain state", () => {
     await waitFor(() => expect(oldSignals).toHaveLength(2))
     window.localStorage.setItem("kokoro.web.auth-index-subject", "r255-missing-actor-B")
     mounted.rerender(<BillingContent {...{ preview: false, readBoundary: { admitted: true, subject: "billing-test-owner", generation: 1 } }} client={client} embedded />)
-    if (currentMissing) await screen.findAllByText("No credit account yet")
+    if (currentMissing) await screen.findAllByText(/^Failed to load/)
     else await screen.findByText("7", { exact: true })
     await act(async () => {
       lateSummary.resolve(Response.json(currentMissing ? r255ExistingSummary : missingBody, { status: currentMissing ? 200 : 404, headers: responseHeaders }))
@@ -774,7 +781,7 @@ describe("R255 missing Credit account domain state", () => {
     })
     expect(oldSignals.every((signal) => signal?.aborted)).toBe(true)
     if (currentMissing) {
-      expect(screen.getAllByText("No credit account yet")).toHaveLength(2)
+      expect(screen.getAllByText(/^Failed to load/)).toHaveLength(2)
       expect(screen.queryByText("7", { exact: true })).not.toBeInTheDocument()
     } else {
       expect(screen.getByText("7", { exact: true })).toBeInTheDocument()

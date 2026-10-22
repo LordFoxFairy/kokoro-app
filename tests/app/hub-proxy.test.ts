@@ -4939,3 +4939,36 @@ it("keeps exact publisher download empty-body/Origin guards and rejects another 
  vi.mocked(requestWithDomain).mockResolvedValueOnce(Response.json(ack,{headers:catalogPackageHeaders}))
  expect((await POST(new Request(url,{method:"POST",headers:{origin:ENV.KOKORO_WEB_ORIGIN}}),params(path))).status).toBe(502)
 })
+
+it("deletes the confirmed personal series through the sole formal route without changing command bytes",async()=>{
+ const {DELETE}=await import("@/app/api/hub/[...path]/route")
+ const data={series_id:"series",skill_id:"mine",state_version:"9",status:"deleted",event_id:`evt:${"a".repeat(64)}`,replayed:false}
+ vi.mocked(requestWithDomain).mockResolvedValue(Response.json({data,meta:{request_id:"owner-1"}},{headers:{"cache-control":"no-store","x-request-id":"owner-1"}}))
+ const body='{ "expected_state_version":"8", "expected_publication":{"current_version_id":"current","state_version":"9007199254740993"} }'
+ const response=await DELETE(new Request("http://localhost/api/hub/self/skills/mine",{method:"DELETE",headers:{origin:"http://localhost","content-type":"application/json","idempotency-key":"original-delete"},body}),params(["self","skills","mine"]))
+ expect(response.status).toBe(200);expect(await response.json()).toEqual({data,meta:{request_id:"owner-1"}})
+ expect(vi.mocked(requestWithDomain)).toHaveBeenCalledWith("http://bff.test/v1/self/skills/mine",expect.anything(),expect.objectContaining({method:"DELETE",headers:expect.objectContaining({"idempotency-key":"original-delete"})}))
+ expect(new TextDecoder().decode(vi.mocked(requestWithDomain).mock.calls[0]![2]!.body as ArrayBuffer)).toBe(body)
+})
+
+it.each(["missing-publication","extra-identity","duplicate-key"])("rejects invalid deletion %s before owner I/O",async(kind)=>{
+ const {DELETE}=await import("@/app/api/hub/[...path]/route")
+ const body=kind==="missing-publication"?'{"expected_state_version":"8"}':kind==="extra-identity"?'{"expected_state_version":"8","expected_publication":null,"actor":"self"}':'{"expected_state_version":"8","expected_publication":null,"expected_publication":null}'
+ const response=await DELETE(new Request("http://localhost/api/hub/self/skills/mine",{method:"DELETE",headers:{origin:"http://localhost","content-type":"application/json","idempotency-key":"delete-key"},body}),params(["self","skills","mine"]))
+ expect(response.status).toBe(400);expect(requestWithDomain).not.toHaveBeenCalled()
+})
+
+it.each([
+ { expected:"4", actual:"5", valid:true },
+ { expected:"4", actual:"6", valid:false },
+ { expected:"9007199254740993", actual:"9007199254740994", valid:true },
+ { expected:"9007199254740993", actual:"9007199254740995", valid:false },
+])("proxies only an exact one-step deletion ACK, rejecting a wrong jump $expected → $actual",async({expected,actual,valid})=>{
+ const {DELETE}=await import("@/app/api/hub/[...path]/route")
+ const data={series_id:"series",skill_id:"mine",state_version:actual,status:"deleted",event_id:`evt:${"a".repeat(64)}`,replayed:false}
+ vi.mocked(requestWithDomain).mockResolvedValue(Response.json({data,meta:{request_id:"owner-1"}},{headers:{"cache-control":"no-store","x-request-id":"owner-1"}}))
+ const response=await DELETE(new Request("http://localhost/api/hub/self/skills/mine",{method:"DELETE",headers:{origin:"http://localhost","content-type":"application/json","idempotency-key":"delete-exact-step"},body:JSON.stringify({expected_state_version:expected,expected_publication:null})}),params(["self","skills","mine"]))
+ expect(response.status).toBe(valid?200:502)
+ if(valid)expect(await response.json()).toEqual({data,meta:{request_id:"owner-1"}})
+ else expect(await response.json()).toMatchObject({error:{code:"skill_response_invalid"}})
+})

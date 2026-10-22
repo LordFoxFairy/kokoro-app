@@ -1,4 +1,4 @@
-// Narrow data projection of the pinned BFF public personal Credit reads.
+// Narrow data projection of the pinned BFF public personal Credit reads and initialization.
 import { z } from "zod"
 
 const nonnegativeDecimal = z.string().regex(/^(?:0|[1-9][0-9]*)$/)

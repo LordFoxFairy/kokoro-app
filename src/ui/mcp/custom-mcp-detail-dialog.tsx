@@ -133,13 +133,18 @@ export function CustomMcpDetailDialog({
   const locked = managementLocked || busy || !ready || preparationState === "unknown" || preparationState === "completed";
   const prepareLabel = preparationState === "unknown" ? t(connectorCommandMayResume(preparationFailure) ? "mcp.retryOriginal" : "mcp.recovery.inspectRequired") : preparationState === "completed" ? t("mcp.creationDone") : "试用一下";
   const needsAuthorization = ready && canAuthorizePrivateMcp(connector, server) &&
-    (preparationState === "idle" || preparationState === "rejected");
-  const primaryAction = () => <Button type="button" variant={editing ? "outline" : "default"}
-    disabled={managementLocked || busy || !ready || !connectorCommandMayResume(preparationFailure)}
+    preparationState !== "running" && preparationState !== "completed";
+  // Reauthorization is a distinct explicit owner operation, not an ACK or a
+  // replacement for an unknown Prepare. Keep its original recovery reachable.
+  const primaryAction = () => <><Button type="button" variant={editing ? "outline" : "default"}
+    disabled={managementLocked || busy || !ready || preparationState === "running" || (!needsAuthorization && !connectorCommandMayResume(preparationFailure))}
     onClick={needsAuthorization ? onAuthorize : onPrepare}>
     {busy ? <Spinner aria-hidden="true" /> : needsAuthorization ? <Link2 aria-hidden="true" /> : <Send aria-hidden="true" />}
     {needsAuthorization ? t(connector?.status === "active" ? "thread.reconnect" : "settings.connect") : prepareLabel}
-  </Button>;
+  </Button>{needsAuthorization && preparationState === "unknown" ? <Button type="button" variant="outline"
+    disabled={managementLocked || busy || !connectorCommandMayResume(preparationFailure)} onClick={onPrepare}>
+    {prepareLabel}
+  </Button> : null}</>;
   const selectionProps = useMcpEditorSelection(ready);
   const invalidHeaderName = headers.some(
     (item) => Boolean(item.name.trim()) && !isMcpCustomHeaderName(item.name),

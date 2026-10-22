@@ -1,3 +1,24 @@
+<!-- 2026-10-22 continuation retirement correction -->
+积分客户端每次续发 PUT 或核实 GET 前复验调用方 `getCurrent`；真实账户/用量/rail传入现 controller/current 与发起时已准入subject的marker一致性检查。只更新storage、无rerender/focus仍会抑制旧续发；marker丢失、不匹配或读取异常一律退休。marker只抑制，不授予session权限；非UI调用可不传callback，初次GET契约保持，无新store/轮询/锁。
+
+## 当前租户积分无感初始化（2026-10-22；消费者设计门）
+
+沿现 `createBillingClient` 与已准入的账户/用量 UI，summary 或 ledger 仅在严格闭集、request-id 匹配的 `404 billing_account_not_found` 后调用一次 `PUT /api/session/billing/credit-account`（严格 `{}` JSON，无 query），然后重读原 GET。GET 本身仍只读；tenant/subject 只取现可信同源 session。owner 天然幂等承接并发，不建浏览器锁、global store、缓存框架或账户事实。
+
+每次读取及初始化/核实共享原 10 秒绝对预算，外部取消/subject 退休即时取消且不晚发 PUT。PUT 网络/畸形回执及502/503结果未知先重读原 GET 核实，不在该流程重放 PUT；失败沿现显式重试且不显示假 0/未开户提示。仅保留现布局和无文字稳定占位，不加大骨架；正常已知数据不因初始化阶段伪装成功。本片不启用计量、扣费、充值或支付。契约固定 BFF `efe0ed8b3f791468608b61dd895208f0db709e50` / Public22.2.0 /181，正规生成沿原链，独立 connector profile 不换。
+
+## 2026-10-22 公开Skill list入口接线候选
+
+公开身份矩阵沿现Web→BFF边界仅增加固定GET /v1/skill.list薄adapter，不改/api/hub的Product Session准入，不降BFF serviceguard、不新增通用网关。原User API Key／OAuth Open App Bearer只送该路径；配置注入web-bff／service secret／新request-id，requestWithDomain固定KOKORO_DOMAIN Forwarded并丢弃用户authority／tenant／cookie。复用iamRelayConfig及matchesCanonicalWebRequest：Host精确配置webHost，GET无Origin或精确webOrigin；不依赖Session／Redis，也不创建用户权限或推断trusted。
+
+固定f74fb1a / Public22.1 / 180 canonical，仅该操作正规生成types／请求和响应Zod／provenance，类型在adapter终止。JSON数值时间戳保持number而不被生成器隐式coerce成BigInt；闭集完整deep-equality拒额外键、raw重复键拒绝。沿现transport十秒总deadline和16MiB响应上限，无自动重试／重定向；只发原public成功／错误envelope，不回cookie。真实Next HTTP先复现Hub拒绝外部Bearer和原public404，再单GET200；此为隔离传输证据，真实IAM/Platform/BFF身份整链及正常生效由主方另验。
+
+## 2026-10-21 个人系列删除消费者候选
+
+固定BFF `f74fb1a6796e1b5860044c889fc5ed1355cf2ec9` / Public22.1.0 / 180，原始 SHA256 `f726cac620362524f92474ca9d647229280db308d16105820c718f9bc32db1ae`。沿原个人管理菜单增加真正系列删除，不把撤回／卸载改名。PersonalSkillManagement先核本人managed精确锚点，独立确认Dialog读取正式history的series publication；确认时深冻结anchor CAS、明确null或真实publication及唯一key。使用已采“删除此技能？”／“您稍后可以通过重新上传再次添加此技能。”，取消不发命令。
+
+未知DELETE保留原body/key；关闭或同主体准入代际变化取消旧等待，但不再用已删除资源的GET404阻断原命令重放，也不把404当成功。主体变化由原actor键控宿主退休。只有严格匹配anchor／series／递增CAS的200回执清选择并失活原列表；无自动重发、新key或current猜测。保留installation事实，deleted来源禁详情／history／包／启用／更新；停用仍可用。无新服务、状态框架、持久化或物理Storage删除。正常环境和真实浏览器写旅程由主方统一验收，候选测试不冒正常闭环。
+
 ## 2026-10-21 本人历史恢复（实施中）
 
 沿既有历史行提供恢复确认，使用当时明确 publication 指针/版本和所选精确 UID/revision；本人 managed 元数据读取后，POST /api/hub/self/skills/managed/{skill_id}/download 映射现 BFF private POST /browser/v1/skills/{version_id}/download，再经现 /api/skill-downloads/{handle} 读取原始 ZIP。该 adapter 不是新公开业务 API；来源、期限、请求标识、no-store、有限大小/时间和取消均严格验证，不重组预览文本、不持久化字节/句柄。

@@ -1,3 +1,4 @@
+import { nextFixtureEnvironment } from "./fixtures/next-fixture-environment"
 import { execFileSync, spawn, type ChildProcess } from "node:child_process"
 import { createHash, randomBytes } from "node:crypto"
 import { readFileSync } from "node:fs"
@@ -154,12 +155,12 @@ describe("IAM and RP origin admission behind a real local HTTPS reverse proxy", 
       const nextBin = path.resolve(process.cwd(), "node_modules/next/dist/bin/next")
       next = spawn(process.execPath, [nextBin, "dev", "--webpack", "--hostname", "127.0.0.1", "--port", String(nextPort)], {
         cwd: root,
-        env: { ...process.env, NODE_EXTRA_CA_CERTS: certPath,
+        env: await nextFixtureEnvironment(root, { ...process.env, NODE_EXTRA_CA_CERTS: certPath,
           KOKORO_WEB_ORIGIN: WEB_ORIGIN, KOKORO_BFF_BASE_URL: `http://127.0.0.1:${bffPort}`,
           KOKORO_DOMAIN: "localhost",
           KOKORO_INTERNAL_SECRET_WEB_BFF: "proxy-fixture-secret", KOKORO_WEB_REDIS_URL: redisUrl,
           KOKORO_OIDC_CLIENT_ID: "proxy-rp", KOKORO_OIDC_CLIENT_SECRET: "proxy-rp-secret", KOKORO_TENANT_ID: "tenant-one",
-          KOKORO_WEB_AUTH_SECRET: randomBytes(32).toString("hex"), NEXTAUTH_URL: `${WEB_ORIGIN}/api/auth` },
+          KOKORO_WEB_AUTH_SECRET: randomBytes(32).toString("hex"), NEXTAUTH_URL: `${WEB_ORIGIN}/api/auth` }),
         stdio: ["ignore", "pipe", "pipe"],
       })
       next.stdout?.on("data", (chunk: Buffer) => { output += chunk.toString("utf8") })

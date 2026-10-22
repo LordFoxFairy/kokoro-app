@@ -1,10 +1,10 @@
-import { ArchiveX, Ellipsis, History, RefreshCw } from "lucide-react"
+import { ArchiveX, Trash2, Ellipsis, History, RefreshCw } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useT } from "@/i18n/context"
 
-export type PersonalSkillOperation = "update" | "withdraw" | "history"
+export type PersonalSkillOperation = "update" | "withdraw" | "history" | "delete"
 
 /** Opening an action only asks the self-managed API to verify the publisher. */
 export function PersonalSkillActions({ disabled, writable = true, onSelect }: {
@@ -19,6 +19,7 @@ export function PersonalSkillActions({ disabled, writable = true, onSelect }: {
       <DropdownMenuItem onSelect={() => onSelect("history")}><History aria-hidden="true" />{t("skills.history.title")}</DropdownMenuItem>
       {writable ? <DropdownMenuItem onSelect={() => onSelect("update")}><RefreshCw aria-hidden="true" />{t("skills.lifecycle.update")}</DropdownMenuItem> : null}
       {writable ? <DropdownMenuItem variant="destructive" onSelect={() => onSelect("withdraw")}><ArchiveX aria-hidden="true" />{t("skills.lifecycle.withdraw")}</DropdownMenuItem> : null}
+      <DropdownMenuItem variant="destructive" onSelect={() => onSelect("delete")}><Trash2 aria-hidden="true" />{t("skills.delete.action")}</DropdownMenuItem>
     </DropdownMenuContent>
   </DropdownMenu>
 }

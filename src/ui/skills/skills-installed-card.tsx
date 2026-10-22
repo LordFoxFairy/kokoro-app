@@ -52,7 +52,7 @@ export function InstalledSkillCard({
               type="button"
               className={styles.installedCardName}
               title={detailAvailable ? skill.name : t("skills.detailUnavailable")}
-              disabled={!detailAvailable}
+              disabled={!detailAvailable || skill.source_status === "deleted"}
               onClick={(event) => onOpenDetail(event.currentTarget)}
             >
               {skill.name}
@@ -80,7 +80,7 @@ export function InstalledSkillCard({
             {t("skills.updatedAt", { date: formatSkillDate(skill.updated_at) })}
           </p>
         ) : null}
-        {skill.available_update ? <Button type="button" variant="ghost" className={styles.installedCardUpdate} disabled={busy} aria-label={`${t("skills.update.available", { revision: skill.available_update.revision })} ${skill.name}`} onClick={event => onUpdate(event.currentTarget)}>{t("skills.update.available", { revision: skill.available_update.revision })}</Button> : null}
+        {skill.available_update ? <Button type="button" variant="ghost" className={styles.installedCardUpdate} disabled={busy || skill.source_status === "deleted"} aria-label={`${t("skills.update.available", { revision: skill.available_update.revision })} ${skill.name}`} onClick={event => onUpdate(event.currentTarget)}>{t("skills.update.available", { revision: skill.available_update.revision })}</Button> : null}
         </div>
         {error ? (
           <Alert variant="destructive" className={styles.installedCardError}>

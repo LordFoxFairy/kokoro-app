@@ -1,3 +1,7 @@
+## 当前租户 Credit 初始化（2026-10-22）
+
+设计与传输门见 `TECHNICAL_DESIGN.md`、`API_CONTRACT.md` 文首：固定 Public22.2.0，由既有 BillingClient 负责可信404后单次幂等初始化、原GET核实与同一预算/取消；现账户和用量只显示真实投影。源码候选的 focused 验证不代表正常浏览器/支付/扣费验收。
+
 ## 登录维护
 
 [登录与登录恢复](guides/login.md)：用户路径、内部配对与验收；不包含机器凭据。

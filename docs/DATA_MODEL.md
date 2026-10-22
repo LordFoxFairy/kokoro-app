@@ -1,3 +1,11 @@
+## 2026-10-22 公开Skill list adapter候选
+
+固定GET公开入口仅读取BFF正式public投影，当前User API Key／普通或trusted OAuth App资格与项目授权全归IAM/BFF/Platform。App不新建身份事实、Session、缓存、数据库、Storage或应用绑定，不将外部Bearer换成Product access或把客户端service/tenant头当事实。生成validator仅是固定owner artifact消费者；数字时间戳按JSON number验证，响应原样返回，私有cookie与服务凭据不公开。
+
+## 2026-10-21 个人系列删除消费者候选
+
+最终消费者配对Public22.1 / 180候选，尚未正常生效。Web不新增数据库、Redis、Storage写入或持久化命令。删除Dialog仅持本主体的确认锚点CAS、明确publication、深冻结body/key与未知状态；关闭保原意图，准入取消等待，主体切换整体退休。deleted是owner保留installation的来源状态，不代表物理字节删除、不合成uninstalled或空publication。全部修订终态、迟到发布防复活与durable receipt仍由Platform/BFF拥有；正常写旅程和物理保留期限不由App测试推断。
+
 ## 2026-10-21 发布确认消费者配对（实施中）
 
 不新增Web持久化／表／缓存；现内存发布session增加确认publication的冻结副本，原draft/upload/receipt与幂等key保持。重试原body/key，不合并较新publication；关闭保留未决意图，身份退休沿既有宿主取消／卸载。新系列明确null，已有系列必须由正式历史读取证明；不按选中旧版本、revision或可用性猜当前。

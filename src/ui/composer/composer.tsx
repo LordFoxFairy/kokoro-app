@@ -38,6 +38,8 @@ export type ComposerProps = {
   onModeChange: (mode: AgentMode) => void
   modeLocked: boolean
   models: readonly ModelCandidate[]
+  modelCatalogStatus?: "loading" | "ready" | "error"
+  onRetryModels?: () => void
   hideModelSelector?: boolean
   preferredModelSelector?: string
   selectedModel: string | null
@@ -65,7 +67,7 @@ function creationLabel(t: ReturnType<typeof useT>, intent: CreationIntent | unde
   return null
 }
 
-export function Composer({ draft, onDraftChange, onKeyDown, onSubmit, isStreaming, isAwaitingApproval = false, canSend, onStop, composerRef, mode, onModeChange, modeLocked, models, hideModelSelector = false, preferredModelSelector, selectedModel, onModelChange, modelLocked, emptyWorkspace = false, placeholder, leadingActions, selectedSkill, onRemoveSelectedSkill, creationIntent, onCreationIntentDismiss, environmentLabel = "Desktop", projectWorkspace = false, environmentSelectorPlacement = "controls", voicePreview = false }: ComposerProps) {
+export function Composer({ draft, onDraftChange, onKeyDown, onSubmit, isStreaming, isAwaitingApproval = false, canSend, onStop, composerRef, mode, onModeChange, modeLocked, models, modelCatalogStatus = "ready", onRetryModels, hideModelSelector = false, preferredModelSelector, selectedModel, onModelChange, modelLocked, emptyWorkspace = false, placeholder, leadingActions, selectedSkill, onRemoveSelectedSkill, creationIntent, onCreationIntentDismiss, environmentLabel = "Desktop", projectWorkspace = false, environmentSelectorPlacement = "controls", voicePreview = false }: ComposerProps) {
   const t = useT()
   const limitDescriptionId = useId()
   const exceedsLimit = draft.trim().length > MAX_INPUT_LENGTH
@@ -82,6 +84,7 @@ export function Composer({ draft, onDraftChange, onKeyDown, onSubmit, isStreamin
   const preferredModelAppliedRef = useRef<string | null>(null)
 
   useEffect(() => {
+    if (modelCatalogStatus !== "ready" || modelLocked) return
     const preferredAvailable = preferredModelSelector !== undefined && models.some((model) => modelSelector(model) === preferredModelSelector)
     const selectedAvailable = selectedModel !== null && models.some((model) => modelSelector(model) === selectedModel)
     if (preferredAvailable && selectedModel !== preferredModelSelector && (!selectedAvailable || selectedModel === preferredModelAppliedRef.current)) {
@@ -89,7 +92,7 @@ export function Composer({ draft, onDraftChange, onKeyDown, onSubmit, isStreamin
       onModelChange(preferredModelSelector)
       return
     }
-    if (models.length > 0 && selectedModel !== null && !selectedAvailable) {
+    if (selectedModel !== null && !selectedAvailable) {
       preferredModelAppliedRef.current = null
       onModelChange(null)
       return
@@ -98,7 +101,7 @@ export function Composer({ draft, onDraftChange, onKeyDown, onSubmit, isStreamin
       preferredModelAppliedRef.current = null
       onModelChange(null)
     }
-  }, [models, onModelChange, preferredModelSelector, selectedModel])
+  }, [models, modelCatalogStatus, modelLocked, onModelChange, preferredModelSelector, selectedModel])
 
   useEffect(() => {
     if (composerRef.current) resizeComposer(composerRef.current)
@@ -129,7 +132,7 @@ export function Composer({ draft, onDraftChange, onKeyDown, onSubmit, isStreamin
           {selectedSkill && onRemoveSelectedSkill ? <SelectedSkillPill skill={selectedSkill} onRemove={onRemoveSelectedSkill} /> : null}
           {(emptyWorkspace || models.length === 0) && environmentSelectorPlacement === "controls" ? <ComposerEnvironment label={environmentLabel} /> : null}
           {creationIntent ? <CreationIntentPill intent={creationIntent} label={creationIntentLabel ?? ""} dismissLabel={t("composer.dismissCreationIntent", { label: creationIntentLabel ?? "" })} onDismiss={onCreationIntentDismiss} /> : null}
-          <ComposerSelectors mode={mode} modeLabel={modeLabel} onModeChange={onModeChange} modeLocked={modeLocked} models={models} hideModelSelector={hideModelSelector} currentModel={currentModel} currentSelector={currentSelector} currentModelTriggerLabel={currentModelTriggerLabel} currentModelNewBadgeLabel={currentModelNewBadgeLabel} currentModelTriggerTitle={currentModelTriggerTitle} onModelChange={onModelChange} modelLocked={modelLocked} />
+          <ComposerSelectors modelCatalogStatus={modelCatalogStatus} onRetryModels={onRetryModels} mode={mode} modeLabel={modeLabel} onModeChange={onModeChange} modeLocked={modeLocked} models={models} hideModelSelector={hideModelSelector} currentModel={currentModel} currentSelector={currentSelector} currentModelTriggerLabel={currentModelTriggerLabel} currentModelNewBadgeLabel={currentModelNewBadgeLabel} currentModelTriggerTitle={currentModelTriggerTitle} onModelChange={onModelChange} modelLocked={modelLocked} />
           <ComposerVoiceActions emptyWorkspace={emptyWorkspace} projectWorkspace={projectWorkspace} creationIntent={creationIntent} state={voiceInput.state} onToggle={voiceInput.toggle} />
           <ComposerSubmitAction isStreaming={isStreaming} isAwaitingApproval={isAwaitingApproval} showSend={showSend} canSend={canSend && !exceedsLimit} onStop={onStop} />
         </div>

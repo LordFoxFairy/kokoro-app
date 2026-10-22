@@ -5,5 +5,6 @@ export function canAuthorizePrivateMcp(connector: McpConnector, server: McpPriva
   return connector.server_id === server.server_id && server.status !== "disabled" &&
     (connector.status === "active" || connector.status === "pending" || connector.status === "error") &&
     (server.prepare_status === "needs_oauth" ||
-      (server.prepare_status === "ready" && server.oauth_client?.configured === true && server.oauth_client.status === "configured"));
+      ((server.prepare_status === "ready" || server.prepare_status === "prepare_failed") &&
+        server.oauth_client?.configured === true && server.oauth_client.status === "configured"));
 }

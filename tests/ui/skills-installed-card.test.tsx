@@ -27,3 +27,11 @@ it("a withdrawn installed version can be inspected or updated, not enabled, whil
   fireEvent.click(screen.getByRole("switch"))
   expect(onEnabledChange).toHaveBeenCalledWith(false)
 })
+
+it("retains a deleted installation but blocks details, enabling and update", () => {
+ const onOpenDetail=vi.fn(),onEnabledChange=vi.fn(),onUpdate=vi.fn()
+ render(<LocaleProvider><InstalledSkillCard skill={{name:"Deleted",content_hash:"series",scope:"personal",description:"",source_status:"deleted",available_update:{source_ref:"skill:new",revision:"5"}}} enabled={false} busy={false} pending={false} locked={false} error={null} detailAvailable onOpenDetail={onOpenDetail} onEnabledChange={onEnabledChange} onUpdate={onUpdate}/></LocaleProvider>)
+ expect(screen.getByRole("button",{name:"Deleted"})).toBeDisabled()
+ expect(screen.getByRole("switch")).toBeDisabled()
+ expect(screen.getByRole("button",{name:/Update to v5/})).toBeDisabled()
+})

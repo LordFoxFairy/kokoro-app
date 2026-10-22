@@ -27,9 +27,9 @@ import {
 
 import { restorePublic21 } from "./bff-configuration-parent"
 
-const OWNER_COMMIT = "4a10f8b043cb44b4bd2d8f8a689bde8191db10ce"
-const OWNER_SHA256 = "65019688691a6d6933146be66d4e7a1293f0dc92418a6f259a983529031b5c27"
-const OWNER_VERSION = "22.0.0"
+const OWNER_COMMIT = "efe0ed8b3f791468608b61dd895208f0db709e50"
+const OWNER_SHA256 = "365d61aa5b3b4c01a178f077914e03b5fdbaeebc95fe740b9be46ca8fadc3205"
+const OWNER_VERSION = "22.2.0"
 const SNAPSHOT = resolve(process.cwd(), "src/generated/bff-public-openapi.yaml")
 
 type Shape = {
@@ -205,15 +205,15 @@ describe("pinned BFF Skills and MCP public consumer contract", () => {
     const source = await readFile(SNAPSHOT, "utf8")
     const parent = restorePublic21(Buffer.from(source))
     expect(createHash("sha256").update(parent).digest("hex")).toBe("a902a20ad95e46c01bfc8f5a80260c14565cfe557137759d5ecd42bc1a60f7c2")
-    const description = source.match(/^      description: .*Personal and project installations form a union.*$/mu)?.[0]
+    const description = source.match(/^      description: .*Same-series precedence is the complete project row.*$/mu)?.[0]
     expect(description).toBeDefined()
-    const addition = description!.slice(description!.indexOf(" Personal and project installations form a union"))
+    const addition = description!.slice(description!.indexOf(" Same-series precedence is the complete project row"))
     const mutations = [
       source.replace(addition, ""),
       source.replace(addition, addition + addition),
       source.replace(addition, "") + addition + "\n",
-      source.replace("complete exact project installation", "latest project installation"),
-      source.replace("  version: 22.0.0", "  version: 21.1.0"),
+      source.replace("complete project row", "latest project installation"),
+      source.replace("  version: 22.2.0", "  version: 21.1.0"),
       source + "\n",
     ]
     for (const mutated of mutations) {
@@ -224,7 +224,7 @@ describe("pinned BFF Skills and MCP public consumer contract", () => {
 
   it("pins exact owner bytes and six current Skill draft/publish operations", async () => {
     const bytes = await readFile(SNAPSHOT)
-    expect(OWNER_COMMIT).toBe("4a10f8b043cb44b4bd2d8f8a689bde8191db10ce")
+    expect(OWNER_COMMIT).toBe("efe0ed8b3f791468608b61dd895208f0db709e50")
     expect(createHash("sha256").update(bytes).digest("hex")).toBe(OWNER_SHA256)
     const spec = YAML.parse(bytes.toString()) as Spec
     expect(spec.info.version).toBe(OWNER_VERSION)
@@ -512,4 +512,18 @@ it("history wire preserves the declared exact revision fields and nullable termi
  expect(personalSkillHistoryPageSchema.safeParse({series_id:"series",publication:null,versions:[]}).success).toBe(false)
  expect(doc.paths["/v1/self/skills/{skill_id}/versions"].get.operationId).toBe("listPersonalSkillVersions")
  expect(doc.paths["/v1/self/skills/{skill_id}/versions"].post.operationId).toBe("createPersonalSkillVersion")
+})
+
+it("consumes the formal terminal series deletion contract without replacing withdrawal or installation removal",async()=>{
+ const spec=YAML.parse(await readFile(SNAPSHOT,"utf8")) as Spec
+ const remove=operation(spec,"/v1/self/skills/{skill_id}","delete")
+ expect(remove.operationId).toBe("deletePersonalSkillSeries")
+ expect(remove["x-kokoro-idempotency"]).toBe("required")
+ exactShape(shape(spec,"DeletePersonalSkillSeriesRequest"),["expected_state_version","expected_publication"])
+ const {deletePersonalSkillSeriesRequestSchema,deletePersonalSkillSeriesSchema}=await import("@/hub/schemas")
+ expect(Object.keys(deletePersonalSkillSeriesRequestSchema.shape)).toEqual(shape(spec,"DeletePersonalSkillSeriesRequest").required)
+ expect(Object.keys(deletePersonalSkillSeriesSchema.shape)).toEqual(field(shape(spec,"DeletePersonalSkillSeriesResponse"),"data").required)
+ expect(deletePersonalSkillSeriesRequestSchema.safeParse({expected_state_version:"9223372036854775807",expected_publication:null}).success).toBe(false)
+ expect(deletePersonalSkillSeriesRequestSchema.safeParse({expected_state_version:"8",expected_publication:null}).success).toBe(true)
+ expect(field(shape(spec,"SkillInstallation"),"source_status").enum).toContain("deleted")
 })

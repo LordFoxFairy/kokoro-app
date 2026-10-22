@@ -1,3 +1,4 @@
+import { nextFixtureEnvironment } from "./fixtures/next-fixture-environment"
 import { spawn, type ChildProcess } from "node:child_process"
 import { createHash, generateKeyPairSync, randomBytes, sign, type KeyObject } from "node:crypto"
 import { cp, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises"
@@ -2510,16 +2511,22 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       const nextArgs = engine === "programmatic"
         ? [path.join(root, "server.cjs"), String(nextPort), "127.0.0.1"]
         : [nextBin, "dev", "--webpack", "--hostname", "127.0.0.1", "--port", String(nextPort)]
+      const eofDiagnostic = process.env.KOKORO_TEST_JSON_EOF_TRACE_DIR
+        ? path.join(root, "next-json-eof-diagnostic.cjs") : undefined
+      if (eofDiagnostic !== undefined) {
+        await cp(path.join(process.cwd(), "tests/system/fixtures/next-json-eof-diagnostic.cjs"), eofDiagnostic)
+      }
       next = spawn(process.execPath, nextArgs, {
         cwd: root,
-        env: { ...process.env, NODE_OPTIONS: [process.env.NODE_OPTIONS, `--require=${path.join(root, "json-parse-diagnostic.cjs")}`]
+        env: await nextFixtureEnvironment(root, { ...process.env, NODE_OPTIONS: [process.env.NODE_OPTIONS, `--require=${path.join(root, "json-parse-diagnostic.cjs")}`,
+          eofDiagnostic === undefined ? undefined : `--require=${JSON.stringify(eofDiagnostic)}`]
           .filter((value): value is string => Boolean(value)).join(" "),
           NODE_ENV: "development", KOKORO_WEB_ORIGIN: `http://localhost:${nextPort}`,
           KOKORO_DOMAIN: "localhost", KOKORO_TENANT_ID: "tenant-one",
           KOKORO_BFF_BASE_URL: `http://127.0.0.1:${bffPort}`, KOKORO_INTERNAL_SECRET_WEB_BFF: "rp-bff-secret",
           KOKORO_WEB_REDIS_URL: redisUrl, KOKORO_OIDC_CLIENT_ID: clientId, KOKORO_OIDC_CLIENT_SECRET: clientSecret,
           KOKORO_WEB_AUTH_SECRET: authSecret, KOKORO_TEST_SYNTHETIC_SECRET: "syntheticsecret-marker",
-          NEXTAUTH_URL: `http://localhost:${nextPort}/api/auth` },
+          NEXTAUTH_URL: `http://localhost:${nextPort}/api/auth` }),
         stdio: ["ignore", "pipe", "pipe"],
       })
       next.stdout?.on("data", (chunk: Buffer) => { output += chunk.toString("utf8") })

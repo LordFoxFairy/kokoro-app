@@ -829,3 +829,94 @@ it("Textarea 在输入、删除和宽度改变时增高/收缩，忽略纯高度
     observer.mockRestore()
   }
 })
+
+
+it("catalog failure is visible with explicit retry and no internal details", () => {
+  const onRetryModels = vi.fn()
+  renderComposer({ models: [], modelCatalogStatus: "error", onRetryModels })
+  expect(screen.getByRole("alert")).toHaveTextContent("Could not load the model catalog")
+  fireEvent.click(screen.getByRole("button", { name: "Retry loading" }))
+  expect(onRetryModels).toHaveBeenCalledOnce()
+})
+
+it("confirmed empty catalog clears an invalid selection but loading does not", () => {
+  const loading = renderComposer({ models: [], selectedModel: "retired", modelCatalogStatus: "loading" })
+  expect(loading.onModelChange).not.toHaveBeenCalled()
+  cleanup()
+  const empty = renderComposer({ models: [], selectedModel: "retired", modelCatalogStatus: "ready" })
+  expect(empty.onModelChange).toHaveBeenCalledWith(null)
+})
+
+it("selector retries a failed read and retires the previous engine's late catalog", async () => {
+  const engineA = createSessionEngine({ client: createFakeClient(), storage: createMemoryStorage<ConversationStore>(null) })
+  const engineB = createSessionEngine({ client: createFakeClient(), storage: createMemoryStorage<ConversationStore>(null) })
+  let finish!: (response: Response) => void
+  const fetchMock = vi.fn().mockRejectedValueOnce(new Error("private upstream detail"))
+    .mockImplementationOnce(() => new Promise<Response>(resolve => { finish = resolve }))
+    .mockResolvedValueOnce(Response.json({ models: [MODELS[1]], next_cursor: null }))
+  vi.stubGlobal("fetch", fetchMock)
+  const hook = renderHook(({ engine }) => useComposerSelectors(engine), { initialProps: { engine: engineA } })
+  try {
+    await act(async () => { await settle() })
+    expect(hook.result.current.modelCatalogStatus).toBe("error")
+    act(() => hook.result.current.retryModels())
+    await act(async () => { await settle() })
+    hook.rerender({ engine: engineB })
+    await act(async () => { await settle() })
+    expect(hook.result.current.models).toEqual([MODELS[1]])
+    await act(async () => { finish(Response.json({ models: [MODELS[0]], next_cursor: null })); await settle() })
+    expect(hook.result.current.models).toEqual([MODELS[1]])
+    expect(fetchMock.mock.calls[1]?.[1]?.signal.aborted).toBe(true)
+  } finally { hook.unmount(); engineA.dispose(); engineB.dispose(); vi.unstubAllGlobals() }
+})
+
+it("an engine change retires its explicit model choice before the new catalog arrives", async () => {
+  const engineA = createSessionEngine({ client: createFakeClient(), storage: createMemoryStorage<ConversationStore>(null) })
+  const engineB = createSessionEngine({ client: createFakeClient(), storage: createMemoryStorage<ConversationStore>(null) })
+  const setModelB = vi.spyOn(engineB, "setModel")
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(Response.json({ models: MODELS, next_cursor: null }))
+    .mockImplementation(() => new Promise<Response>(() => {})))
+  const hook = renderHook(({ engine }) => useComposerSelectors(engine), { initialProps: { engine: engineA } })
+  try {
+    await act(async () => { await settle() })
+    act(() => hook.result.current.setSelectedModel("gpt-5"))
+    hook.rerender({ engine: engineB })
+    expect(hook.result.current.models).toEqual([])
+    expect(hook.result.current.selectedModel).toBeNull()
+    expect(setModelB).not.toHaveBeenCalledWith("gpt-5")
+    hook.rerender({ engine: engineA })
+    expect(hook.result.current.models).toEqual([])
+    expect(hook.result.current.selectedModel).toBeNull()
+  } finally { hook.unmount(); engineA.dispose(); engineB.dispose(); vi.unstubAllGlobals() }
+})
+
+it("a failed refresh retains the confirmed candidates and explicit business label", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(Response.json({ models: MODELS, next_cursor: null }))
+    .mockRejectedValueOnce(new Error("internal upstream failure")))
+  const hook = renderHook(() => useComposerSelectors(null))
+  try {
+    await act(async () => { await settle() })
+    act(() => { hook.result.current.setSelectedModel("gpt-5"); hook.result.current.retryModels() })
+    expect(hook.result.current.modelCatalogStatus).toBe("loading")
+    expect(hook.result.current.models).toEqual(MODELS)
+    await act(async () => { await settle() })
+    expect(hook.result.current.modelCatalogStatus).toBe("error")
+    expect(hook.result.current.models).toEqual(MODELS)
+    expect(hook.result.current.selectedModel).toBe("gpt-5")
+  } finally { hook.unmount(); vi.unstubAllGlobals() }
+})
+
+it.each([{ models: [] }, { models: MODELS }])("catalog reads remain visually quiet and retain any confirmed model controls (%j)", ({ models }) => {
+  const props = renderComposer({ models, selectedModel: "gpt-5", modelCatalogStatus: "loading" })
+  expect(screen.queryByText("Loading model catalog…")).not.toBeInTheDocument()
+  const cluster = document.querySelector('[data-slot="composer-selector-cluster"]')
+  expect(cluster?.querySelector('[role="status"]')).toBeNull()
+  expect(cluster).toHaveAttribute("aria-busy", "true")
+  expect(props.onModelChange).not.toHaveBeenCalled()
+  if (models.length > 0) {
+    const trigger = screen.getByRole("button", { name: "Switch model: gpt-5" })
+    expect(trigger).toBeEnabled()
+    fireEvent.pointerDown(trigger)
+    expect(screen.getByRole("menuitemradio", { name: "gpt-5" })).toHaveAttribute("data-state", "checked")
+  }
+})

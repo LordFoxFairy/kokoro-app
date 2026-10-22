@@ -5,6 +5,9 @@ import type { MessageKey } from "./messages"
 
 export const en: Partial<Record<MessageKey, string>> = {
   "skills.history.more": "Load more",
+  "skills.delete.title": "Delete this skill?",
+  "skills.delete.warning": "You can add this skill again later by uploading it again.",
+  "skills.delete.action": "Delete",
   "skills.history.title": "Skill version history",
   "skills.history.current": "Current version",
   "skills.history.disabled": "Disabled",

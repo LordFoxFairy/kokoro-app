@@ -4,6 +4,7 @@ import { putSkillPackage } from "./skill-package-transfer"
 
 import { HubClientError, hasHubNoStoreDirective } from "./client"
 import {
+  deletePersonalSkillSeriesRequestSchema, deletePersonalSkillSeriesSchema,
   createPersonalSkillVersionRequestSchema, createPersonalSkillVersionSchema, withdrawPersonalSkillRequestSchema, withdrawPersonalSkillSchema,
   beginSkillUploadRequestSchema, beginSkillUploadSchema, completeSkillUploadRequestSchema,
   completeSkillUploadSchema, createSkillDraftRequestSchema, skillDraftSchema,
@@ -20,10 +21,11 @@ const responseHeaders = (response: Response): boolean =>
 
 const errorSchema = z.object({ error: z.object({ code: z.string(), message: z.string().min(1), retryable: z.boolean() }).strict() }).strict()
 const managedErrorSchema = z.object({ error: z.object({ code: z.string(), message: z.string().min(1) }).strict(), meta: z.object({ request_id: z.string().min(1).max(256) }).strict() }).strict()
-type SkillOperation = "createDraft" | "getUpload" | "beginUpload" | "completeUpload" | "validateDraft" | "publishDraft" | "managedList" | "managedDetail" | "managedHistory" | "createVersion" | "withdraw"
+type SkillOperation = "createDraft" | "getUpload" | "beginUpload" | "completeUpload" | "validateDraft" | "publishDraft" | "managedList" | "managedDetail" | "managedHistory" | "createVersion" | "withdraw" | "deleteSeries"
 // Each operation is pinned independently; a known code is not valid at every status.
 const operationErrorPairs: Record<Exclude<SkillOperation, "managedHistory">, Readonly<Record<number, readonly string[]>>> = {
   createVersion: { 400: ["invalid_skill_request", "idempotency_key_required", "invalid_idempotency_key"], 401: ["session_authentication_required", "session_invalid"], 403: ["service_auth_failed", "session_forbidden", "product_tenant_forbidden", "skill_forbidden"], 404: ["skill_not_found"], 409: ["skill_idempotency_conflict", "skill_command_in_progress"], 412: ["skill_precondition_failed"], 413: ["request_body_too_large"], 429: ["session_rate_limited", "skill_rate_limited"], 502: ["skill_response_invalid"], 503: ["product_tenant_not_configured", "iam_admission_unavailable", "skill_dependency_unavailable"] },
+  deleteSeries: { 400: ["invalid_skill_request", "idempotency_key_required", "invalid_idempotency_key"], 401: ["session_authentication_required", "session_invalid"], 403: ["service_auth_failed", "session_forbidden", "product_tenant_forbidden", "skill_forbidden"], 404: ["skill_not_found"], 409: ["skill_idempotency_conflict", "skill_command_in_progress"], 412: ["skill_precondition_failed"], 413: ["request_body_too_large"], 429: ["session_rate_limited", "skill_rate_limited"], 502: ["skill_response_invalid"], 503: ["product_tenant_not_configured", "iam_admission_unavailable", "skill_dependency_unavailable"] },
   withdraw: { 400: ["invalid_skill_request", "idempotency_key_required", "invalid_idempotency_key"], 401: ["session_authentication_required", "session_invalid"], 403: ["service_auth_failed", "session_forbidden", "product_tenant_forbidden", "skill_forbidden"], 404: ["skill_not_found"], 409: ["skill_idempotency_conflict", "skill_command_in_progress"], 412: ["skill_precondition_failed"], 413: ["request_body_too_large"], 429: ["session_rate_limited", "skill_rate_limited"], 502: ["skill_response_invalid"], 503: ["product_tenant_not_configured", "iam_admission_unavailable", "skill_dependency_unavailable"] },
   "createDraft": {
     "400": [
@@ -319,9 +321,9 @@ const operationErrorPairs: Record<Exclude<SkillOperation, "managedHistory">, Rea
   }
 }
 
-async function publicCommand<T extends ZodTypeAny>(path: string, method: "GET" | "POST", status: 200 | 201, operation: SkillOperation, schema: T, body?: object, key?: string, signal?: AbortSignal): Promise<z.infer<T>> {
-  const managed = operation === "managedHistory" || operation === "managedList" || operation === "managedDetail" || operation === "createVersion" || operation === "withdraw"
-  const lifecycle = operation === "createVersion" || operation === "withdraw"
+async function publicCommand<T extends ZodTypeAny>(path: string, method: "GET" | "POST" | "DELETE", status: 200 | 201, operation: SkillOperation, schema: T, body?: object, key?: string, signal?: AbortSignal): Promise<z.infer<T>> {
+  const managed = operation === "managedHistory" || operation === "managedList" || operation === "managedDetail" || operation === "createVersion" || operation === "withdraw" || operation === "deleteSeries"
+  const lifecycle = operation === "createVersion" || operation === "withdraw" || operation === "deleteSeries"
   const deadline = new AbortController()
   const timer = setTimeout(() => deadline.abort(), 10_000)
   const joined = signal === undefined ? deadline.signal : AbortSignal.any([signal, deadline.signal])
@@ -377,7 +379,7 @@ async function publicCommand<T extends ZodTypeAny>(path: string, method: "GET" |
     const bytes = new Uint8Array(size)
     let offset = 0
     for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength }
-    try { raw = operation === "managedHistory" ? parsePersonalSkillHistoryJson(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) : JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) } catch { throw new HubClientError("parse", "invalid Skill JSON", null, response.status) }
+    try { raw = operation === "managedHistory" || operation === "deleteSeries" ? parsePersonalSkillHistoryJson(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) : JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) } catch { throw new HubClientError("parse", "invalid Skill JSON", null, response.status) }
     if (response.status !== status) {
       const parsed = (managed ? managedErrorSchema : errorSchema).safeParse(raw)
       if (!parsed.success || !operationErrorPairs[operation === "managedHistory" ? "managedDetail" : operation][response.status]?.includes(parsed.data.error.code)) {
@@ -400,6 +402,7 @@ async function publicCommand<T extends ZodTypeAny>(path: string, method: "GET" |
 function path(id: string, suffix = ""): string { return `${skillCommandPath(id)}${suffix}` }
 
 export type SkillPublishClient = {
+  deleteSeries: (id: string, body: z.infer<typeof deletePersonalSkillSeriesRequestSchema>, key: string, signal?: AbortSignal) => Promise<z.infer<typeof deletePersonalSkillSeriesSchema>>
   createVersion: (id: string, body: z.infer<typeof createPersonalSkillVersionRequestSchema>, key: string, signal?: AbortSignal) => Promise<z.infer<typeof createPersonalSkillVersionSchema>>
   withdraw: (id: string, body: z.infer<typeof withdrawPersonalSkillRequestSchema>, key: string, signal?: AbortSignal) => Promise<z.infer<typeof withdrawPersonalSkillSchema>>
   createDraft: (body: CreateSkillDraftRequest, key: string, signal?: AbortSignal) => Promise<z.infer<typeof skillDraftSchema>>
@@ -418,6 +421,12 @@ export type SkillPublishClient = {
 
 export function createSkillPublishClient(pageUrl = globalThis.location?.href ?? "https://localhost/"): SkillPublishClient {
   return {
+    deleteSeries: async (id, body, key, signal) => {
+      const input=deletePersonalSkillSeriesRequestSchema.parse(body)
+      const ack=await publicCommand(managedPersonalSkillPath(id).replace("/managed/", "/"), "DELETE", 200, "deleteSeries", deletePersonalSkillSeriesSchema, input, key, signal)
+      if(ack.skill_id!==id || BigInt(ack.state_version)!==BigInt(input.expected_state_version)+BigInt(1)) throw new HubClientError("parse","Deletion ACK anchor or CAS mismatch",null,200)
+      return ack
+    },
     createVersion: async (id, body, key, signal) => {
       const base = managedPersonalSkillPath(id).replace("/managed/", "/")
       const ack = await publicCommand(`${base}/versions`, "POST", 201, "createVersion", createPersonalSkillVersionSchema, createPersonalSkillVersionRequestSchema.parse(body), key, signal)

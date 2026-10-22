@@ -1,6 +1,6 @@
-// Personal Credit reads use the existing same-origin BFF adapter only.
+// Personal Credit reads and idempotent initialization use the existing same-origin BFF adapter only.
 import {
-  billingLedgerPath, billingLedgerSchema, billingSummaryPath, billingSummarySchema,
+  billingCreditAccountPath, billingLedgerPath, billingLedgerSchema, billingSummaryPath, billingSummarySchema,
   type BillingLedger, type BillingSummary,
 } from "@/contract/http"
 import { billingMissingAccountSchema } from "@/contract/billing"
@@ -16,18 +16,21 @@ export class BillingClientError extends Error {
   }
 }
 
-/** A single local deadline includes headers, body and validation; no retry. */
-async function getJson<T>(path: string, parse: (raw: unknown) => T, signal?: AbortSignal): Promise<T> {
+/** Headers, body and validation share the caller's absolute deadline; no transport retry. */
+async function getJson<T>(path: string, parse: (raw: unknown) => T, signal: AbortSignal | undefined, deadline: number, initialize = false, getCurrent?: () => boolean): Promise<T> {
   if (signal?.aborted) throw new BillingClientError("aborted")
   const controller = new AbortController()
-  const deadline = performance.now() + 10_000
   let timer: ReturnType<typeof setTimeout> | undefined
   let abort = () => {}
   let response: Response | undefined
   let reader: ReadableStreamDefaultReader<Uint8Array> | undefined
   const check = () => {
+    // The browser scope guard only retires stale continuations; the server session
+    // remains the sole authority. Storage failure is retirement, never admission.
+    let current = true
+    try { current = getCurrent === undefined || getCurrent() === true } catch { current = false }
     const reason = performance.now() >= deadline ? "timeout"
-      : controller.signal.aborted || signal?.aborted ? "aborted" : null
+      : !current || controller.signal.aborted || signal?.aborted ? "aborted" : null
     if (reason !== null) {
       if (response?.body && !response.body.locked) void response.body.cancel().catch(() => undefined)
       throw new BillingClientError(reason)
@@ -37,18 +40,18 @@ async function getJson<T>(path: string, parse: (raw: unknown) => T, signal?: Abo
     abort = () => { reject(new BillingClientError("aborted")); controller.abort() }
     signal?.addEventListener("abort", abort, { once: true })
     if (signal?.aborted) { abort(); return }
-    timer = setTimeout(() => { reject(new BillingClientError("timeout")); controller.abort() }, 10_000)
+    timer = setTimeout(() => { reject(new BillingClientError("timeout")); controller.abort() }, Math.max(0, deadline - performance.now()))
   })
   const read = async () => {
     check()
     try {
-      response = await fetch(`${SESSION_PROXY_BASE}${path}`, { cache: "no-store", signal: controller.signal, redirect: "error" })
+      response = await fetch(`${SESSION_PROXY_BASE}${path}`, { cache: "no-store", signal: controller.signal, redirect: "error", ...(initialize ? { method: "PUT", headers: { "content-type": "application/json" }, body: "{}" } : {}) })
     } catch {
       check()
       throw new BillingClientError("network")
     }
     check()
-    if (!response.ok && response.status !== 404) throw new BillingClientError("http", response.status)
+    if (!response.ok && (initialize || response.status !== 404)) throw new BillingClientError("http", response.status)
     const media = response.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase()
     const directives = response.headers.get("cache-control")?.split(",").map((value) => value.trim().toLowerCase()) ?? []
     const requestId = response.headers.get("x-request-id")
@@ -109,17 +112,37 @@ async function getJson<T>(path: string, parse: (raw: unknown) => T, signal?: Abo
   }
 }
 
+/** Only a verified missing-account GET permits one idempotent PUT; GETs remain read-only. */
+async function readWithInitialization<T>(path: string, parse: (raw: unknown) => T, signal?: AbortSignal, getCurrent?: () => boolean): Promise<T> {
+  const deadline = performance.now() + 10_000
+  try {
+    return await getJson(path, parse, signal, deadline)
+  } catch (error) {
+    if (!(error instanceof BillingClientError) || error.reason !== "missing_account") throw error
+  }
+  // Every continuation rechecks both caller retirement and the captured browser scope before fetch.
+  try {
+    await getJson(billingCreditAccountPath(), (raw) => billingSummarySchema.parse(raw), signal, deadline, true, getCurrent)
+  } catch (error) {
+    // An unknown command outcome must be verified by the original authoritative GET,
+    // never by replaying the PUT. Known rejections and retirement stop immediately.
+    if (!(error instanceof BillingClientError) ||
+      !(error.reason === "network" || error.reason === "parse" || (error.reason === "http" && (error.status === 502 || error.status === 503)))) throw error
+  }
+  return getJson(path, parse, signal, deadline, false, getCurrent)
+}
+
 export type BillingClient = {
-  summary: (signal?: AbortSignal) => Promise<BillingSummary>
-  ledger: (cursor?: string, signal?: AbortSignal) => Promise<BillingLedger>
+  summary: (signal?: AbortSignal, getCurrent?: () => boolean) => Promise<BillingSummary>
+  ledger: (cursor?: string, signal?: AbortSignal, getCurrent?: () => boolean) => Promise<BillingLedger>
 }
 export function createBillingClient(): BillingClient {
   return {
-    summary: (signal) => getJson(billingSummaryPath(), (raw) => billingSummarySchema.parse(raw), signal),
-    ledger: (cursor, signal) => {
+    summary: (signal, getCurrent) => readWithInitialization(billingSummaryPath(), (raw) => billingSummarySchema.parse(raw), signal, getCurrent),
+    ledger: (cursor, signal, getCurrent) => {
       if (cursor !== undefined && (cursor.length === 0 || cursor.length > 2048)) return Promise.reject(new BillingClientError("parse"))
       const query = cursor === undefined ? "" : `?cursor=${encodeURIComponent(cursor)}`
-      return getJson(`${billingLedgerPath()}${query}`, (raw) => billingLedgerSchema.parse(raw), signal)
+      return readWithInitialization(`${billingLedgerPath()}${query}`, (raw) => billingLedgerSchema.parse(raw), signal, getCurrent)
     },
   }
 }

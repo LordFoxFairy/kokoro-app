@@ -6,7 +6,6 @@ import { formatSignedCredits, microSign } from "@/billing/format"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyDescription } from "@/components/ui/empty"
-import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { useLocale, useT } from "@/i18n/context"
@@ -25,13 +24,9 @@ type BillingLedgerProps = {
   onLoadMore: () => void
 }
 
-function LoadingLedger({ label, embedded }: { label: string; embedded: boolean }) {
+function LoadingLedger({ label }: { label: string }) {
   return (
-    <div className={panelStyles.loadingState} role="status" aria-label={label}>
-      <Skeleton className={panelStyles.loadingLine} />
-      <Skeleton className={panelStyles.loadingLine} />
-      {!embedded ? <Skeleton className={panelStyles.loadingLineShort} /> : null}
-    </div>
+    <div className={panelStyles.loadingState} role="status" aria-label={label} />
   )
 }
 
@@ -120,9 +115,8 @@ export function BillingLedger({ ledger, filter, embedded, retrying, onFilterChan
           </ToggleGroup>
         ) : null}
       </div>
-      {ledger.kind === "loading" ? <LoadingLedger label={t("billing.loading")} embedded={embedded} /> : null}
+      {ledger.kind === "loading" ? <LoadingLedger label={t("billing.loading")} /> : null}
       {ledger.kind === "error" ? <LedgerError message={t("billing.loadError")} retryLabel={t("billing.retry")} retrying={retrying} embedded={embedded} onRetry={onRetry} /> : null}
-      {ledger.kind === "missing_account" ? <Empty role="status" className={panelStyles.emptyState}><EmptyDescription>{t("billing.missingAccount")}</EmptyDescription></Empty> : null}
       {ledger.kind === "ready" && ledger.pageError ? <LedgerError message={t("billing.loadError")} retryLabel={t("billing.retry")} retrying={ledger.loadingMore} embedded={embedded} onRetry={onLoadMore} /> : null}
       {ledger.kind === "ready" && ledger.entries.length === 0 ? <Empty className={panelStyles.emptyState}><EmptyDescription>{t("billing.ledgerEmpty")}</EmptyDescription></Empty> : null}
       {ledger.kind === "ready" && ledger.entries.length > 0 && days.length === 0 ? <Empty className={panelStyles.emptyState}><EmptyDescription>{t("billing.filterEmpty")}</EmptyDescription></Empty> : null}

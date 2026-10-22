@@ -39,6 +39,8 @@ import {
 import {
   createPersonalSkillVersionRequestSchema,
   createPersonalSkillVersionSchema,
+  deletePersonalSkillSeriesRequestSchema,
+  deletePersonalSkillSeriesSchema,
   withdrawPersonalSkillRequestSchema,
   withdrawPersonalSkillSchema,
   personalSkillLifecycleErrors,
@@ -2091,13 +2093,14 @@ async function proxyPersonalSkillLifecycle(
     );
   const id = path[2] ?? "";
   const version = path[3] === "versions";
+  const deleting = request.method === "DELETE" && path.length === 3;
   if (
-    request.method !== "POST" ||
-    path.length !== 4 ||
+    (!deleting && request.method !== "POST") ||
+    (!deleting && path.length !== 4) ||
     !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u.test(id) ||
-    !["versions", "withdraw"].includes(path[3] ?? "") ||
+    (!deleting && !["versions", "withdraw"].includes(path[3] ?? "")) ||
     new URL(request.url).pathname !==
-      `/api/hub/self/skills/${encodeURIComponent(id)}/${path[3]}` ||
+      `/api/hub/self/skills/${encodeURIComponent(id)}${deleting ? "" : `/${path[3]}`}` ||
     new URL(request.url).search ||
     request.headers.has("transfer-encoding") ||
     !JSON_MEDIA_TYPE.test(request.headers.get("content-type") ?? "")
@@ -2164,7 +2167,7 @@ async function proxyPersonalSkillLifecycle(
     let bytes: Uint8Array;
     try {
       bytes = await read(request.body, MAX_SKILL_COMMAND_BYTES);
-      input = JSON.parse(
+      input = parsePersonalSkillHistoryJson(
         new TextDecoder("utf-8", { fatal: true }).decode(bytes),
       );
     } catch (error) {
@@ -2177,7 +2180,7 @@ async function proxyPersonalSkillLifecycle(
       );
     }
     const parsed = (
-      version
+      deleting ? deletePersonalSkillSeriesRequestSchema : version
         ? createPersonalSkillVersionRequestSchema
         : withdrawPersonalSkillRequestSchema
     ).safeParse(input);
@@ -2194,10 +2197,10 @@ async function proxyPersonalSkillLifecycle(
     joined.throwIfAborted();
     const response = await within(
       requestWithDomain(
-        `${config.bffBaseUrl.replace(/\/+$/u, "")}/v1/self/skills/${encodeURIComponent(id)}/${path[3]}`,
+        `${config.bffBaseUrl.replace(/\/+$/u, "")}/v1/self/skills/${encodeURIComponent(id)}${deleting ? "" : `/${path[3]}`}`,
         config.domain,
         {
-          method: "POST",
+          method: deleting ? "DELETE" : "POST",
           headers: Object.fromEntries(headers),
           body: bytes!.buffer as ArrayBuffer,
           signal: joined,
@@ -2224,7 +2227,7 @@ async function proxyPersonalSkillLifecycle(
       return fail(502, "skill_response_invalid");
     let raw: unknown;
     try {
-      raw = JSON.parse(
+      raw = parsePersonalSkillHistoryJson(
         new TextDecoder("utf-8", { fatal: true }).decode(
           await read(response.body, 1_048_576),
         ),
@@ -2241,7 +2244,7 @@ async function proxyPersonalSkillLifecycle(
     if (response.status === success) {
       const ack = z
         .object({
-          data: version
+          data: deleting ? deletePersonalSkillSeriesSchema : version
             ? createPersonalSkillVersionSchema
             : withdrawPersonalSkillSchema,
           meta: z.object({ request_id: z.literal(ownerId) }).strict(),
@@ -2250,7 +2253,9 @@ async function proxyPersonalSkillLifecycle(
         .safeParse(raw);
       if (!ack.success) return fail(502, "skill_response_invalid");
       if (
-        version
+        deleting
+          ? !("skill_id" in ack.data.data) || ack.data.data.skill_id !== id || BigInt(ack.data.data.state_version) !== BigInt(deletePersonalSkillSeriesRequestSchema.parse(input).expected_state_version) + BigInt(1)
+          : version
           ? !("skill_id" in ack.data.data) || ack.data.data.skill_id === id
           : !("source_ref" in ack.data.data) ||
             ack.data.data.source_ref !== `skill:${id}` ||
@@ -2326,8 +2331,7 @@ async function proxyHubRequest(
   if (
     path[0] === "self" &&
     path[1] === "skills" &&
-    path.length === 4 &&
-    ["versions", "withdraw"].includes(path[3] ?? "")
+    (request.method === "DELETE" && path.length === 3 || path.length === 4 && ["versions", "withdraw"].includes(path[3] ?? ""))
   )
     return proxyPersonalSkillLifecycle(request, path);
   if ((path[0] === "projects" && path[2] === "skill-selection") || (path[0] === "self" && path[1] === "projects" && path[3] === "skill-selection")) return proxyProjectSkillSelection(request, path);

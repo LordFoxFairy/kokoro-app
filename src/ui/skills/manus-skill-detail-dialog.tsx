@@ -287,7 +287,7 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
       if (!installationId || !installationRevision || installationSource !== `skill:${installationRevision}`) throw new Error("skill_response_invalid")
       const value = await createSkillInstallationClient().get(installationId, controller.signal)
       if (controller.signal.aborted || !isLive()) return
-      if (!value.installed || value.series_id !== installationSeries || value.source_ref !== installationSource) throw new Error("skill_response_invalid")
+      if (value.source_status === "deleted" || !value.installed || value.series_id !== installationSeries || value.source_ref !== installationSource) throw new Error("skill_response_invalid")
       setInstallation(value)
     }
     void load().catch(() => { if (!controller.signal.aborted && isLive()) setFailed(true) })

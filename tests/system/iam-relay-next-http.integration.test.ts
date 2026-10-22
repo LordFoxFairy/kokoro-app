@@ -1,3 +1,4 @@
+import { nextFixtureEnvironment } from "./fixtures/next-fixture-environment"
 import { spawn, type ChildProcess } from "node:child_process"
 import { EventEmitter } from "node:events"
 import { createHash, randomUUID } from "node:crypto"
@@ -605,7 +606,7 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
         [nextBin, "dev", "--webpack", "--hostname", "127.0.0.1", "--port", String(nextPort)],
         {
           cwd: fixtureRoot,
-          env: {
+          env: await nextFixtureEnvironment(fixtureRoot, {
             ...process.env,
             KOKORO_WEB_ORIGIN: `http://localhost:${nextPort}`,
             KOKORO_DOMAIN: "localhost",
@@ -618,7 +619,7 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
             KOKORO_WEB_AUTH_SECRET: "a".repeat(32),
             NEXTAUTH_URL: `http://localhost:${nextPort}/api/auth`,
             NEXT_PUBLIC_SESSION_PREVIEW: "1",
-          },
+          }),
           stdio: ["ignore", "pipe", "pipe"],
         },
       )

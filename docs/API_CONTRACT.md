@@ -1,3 +1,24 @@
+<!-- 2026-10-22 continuation retirement correction -->
+积分客户端每次续发 PUT 或核实 GET 前复验调用方 `getCurrent`；真实账户/用量/rail传入现 controller/current 与发起时已准入subject的marker一致性检查。只更新storage、无rerender/focus仍会抑制旧续发；marker丢失、不匹配或读取异常一律退休。marker只抑制，不授予session权限；非UI调用可不传callback，初次GET契约保持，无新store/轮询/锁。
+
+## 当前租户 Credit 账户初始化消费（2026-10-22）
+
+唯一事实源固定 BFF `efe0ed8b3f791468608b61dd895208f0db709e50` / Public22.2.0 /181，原始 OpenAPI SHA256 `365d61aa5b3b4c01a178f077914e03b5fdbaeebc95fe740b9be46ca8fadc3205`。现同源 `/api/session/billing/credit-account` 以 PUT 严格空 JSON 对象、无 query，映射 `/v1/billing/credit-account`；成功投影与 summary 相同的真实账户/余额，disabled 为403，owner不可用503、非法响应502。GET summary/ledger保持只读。
+
+浏览器先 GET，仅严格 envelope/request-id 匹配的404 `billing_account_not_found` 允许 PUT 一次，再原 GET；generic404、403/503、解析失败、身份未准入均不触发初始化。PUT网络/畸形回执及502/503未知结果先GET核实，不自动重复PUT；全流程有界10秒及外部取消，取消后无晚发写入。失败沿原显示错误/显式重新读取，无假余额/开户入口，不增加支付或计量调用。所有 public 消费快照和生成器按同一owner全文正规更新，历史逆证保留为test-only。
+
+## 2026-10-22 固定公开Skill list adapter候选
+
+App GET /v1/skill.list映射同一固定BFF正式GET /v1/skill.list；仅项目query由该operation生成validator消费，重复／未知query或非空GET body、idempotency-key、transfer-encoding拒绝。User API Key／OAuth App的原生Authorization Bearer独立于网站Session，受信service／tenant context仍由部署与BFF owner生成；网站/api/hub和RPC准入不变。
+
+单操作生成源仍是f74fb1a / Public22.1 / 180、SHA f726cac620362524f92474ca9d647229280db308d16105820c718f9bc32db1ae。200使用SpecificationPublicSkillList，错误状态完全来自生成provenance的400／401／403／404／405／410／429／502／503与SpecificationPublicError；不增加managed data/meta信封、权限fallback或SDK自动重试。status／ok／request_id与owner header绑定；JSON media／no-store／有限EOF和合法429 Retry-After核验，Location／Set-Cookie不透传。Host／Origin采用现iam-relay规则，Forwarded只来自配置；不提供任意URL转发或其他/v1方法。
+
+## 2026-10-21 个人系列删除消费者候选
+
+固定BFF `f74fb1a6796e1b5860044c889fc5ed1355cf2ec9` / Public22.1.0 / 180，原始 SHA256 `f726cac620362524f92474ca9d647229280db308d16105820c718f9bc32db1ae`，六窄消费者正规生成，独立connector错误profile不换。浏览器DELETE /api/hub/self/skills/{skill_id}原字节映射正式DELETE /v1/self/skills/{skill_id}；精确Origin、在线准入、唯一Idempotency-Key、闭集JSON仅expected_state_version／expected_publication，十秒和有限body预算沿原生命周期adapter。双层拒重复JSON key及坏错误／request-id／no-store／retry-after；200闭集data/meta，data包含series_id、skill_id、state_version、status=deleted、event_id、replayed。anchor/CAS和UI预期series额外绑定；404不是成功，未知仅原命令显式恢复。
+
+source_status增加deleted，不扩大managed status枚举；撤回与安装移除原合同不变。旧完整parent证明先以精确公开身份矩阵增量inverse恢复原177项删除候选，再委托未改的22.1→22.0及既有oracle，不放宽历史事实。正常成对运行和浏览器验收另记。
+
 ## 2026-10-21 本人历史恢复（实施中）
 
 沿既有历史行提供恢复确认，使用当时明确 publication 指针/版本和所选精确 UID/revision；本人 managed 元数据读取后，POST /api/hub/self/skills/managed/{skill_id}/download 映射现 BFF private POST /browser/v1/skills/{version_id}/download，再经现 /api/skill-downloads/{handle} 读取原始 ZIP。该 adapter 不是新公开业务 API；来源、期限、请求标识、no-store、有限大小/时间和取消均严格验证，不重组预览文本、不持久化字节/句柄。

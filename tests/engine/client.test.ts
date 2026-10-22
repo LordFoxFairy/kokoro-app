@@ -204,8 +204,11 @@ describe("listModels（MODEL-UX）：GET /models 过契约 Zod", () => {
       vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(body)))
       await expect(createSessionClient({ baseUrl: "/api/session" }).listModels()).rejects.toMatchObject({ reason: "parse" })
     }
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ models: [candidate], next_cursor: "page-2" })))
-    expect(await createSessionClient({ baseUrl: "/api/session" }).listModels()).toEqual({ models: [candidate], next_cursor: "page-2" })
+    const pages = vi.fn().mockResolvedValueOnce(Response.json({ models: [candidate], next_cursor: "page/2+" }))
+      .mockResolvedValueOnce(Response.json({ models: [{ ...candidate, name: "chat/second" }], next_cursor: null }))
+    vi.stubGlobal("fetch", pages)
+    expect(await createSessionClient({ baseUrl: "/api/session" }).listModels()).toEqual({ models: [candidate, { ...candidate, name: "chat/second" }], next_cursor: null })
+    expect(pages.mock.calls[1]?.[0]).toBe("/api/session/models?feature_key=chat&cursor=page%2F2%2B")
   })
 
   it("非 ok 时 fail-loud 抛错（不静默降级）", async () => {
@@ -1117,3 +1120,48 @@ describe("R166 required Move SessionClient boundary", () => {
     }).toEqual(beforeCalls);
   });
 });
+
+
+describe("complete chat catalog read budget", () => {
+  afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers() })
+  it("rejects a repeated cursor instead of reporting a partial catalog", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(Response.json({ models: [], next_cursor: "again" }))))
+    await expect(createSessionClient({ baseUrl: "/api/session" }).listModels()).rejects.toMatchObject({ reason: "parse" })
+  })
+  it("bounds even a fetch that ignores abort and aborts its request", async () => {
+    vi.useFakeTimers()
+    const fetchMock = vi.fn(() => new Promise<Response>(() => {}))
+    vi.stubGlobal("fetch", fetchMock)
+    const pending = createSessionClient({ baseUrl: "/api/session" }).listModels()
+    const assertion = expect(pending).rejects.toMatchObject({ reason: "network" })
+    await vi.advanceTimersByTimeAsync(10_000)
+    await assertion
+    expect((fetchMock.mock.calls as unknown[][])[0]?.[1]).toMatchObject({ signal: expect.objectContaining({ aborted: true }) })
+  })
+})
+
+it("catalog cancellation covers a pending response body and prevents later pages", async () => {
+  const controller = new AbortController()
+  const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: () => new Promise(() => {}), headers: new Headers({ "content-type": "application/json" }) })
+  vi.stubGlobal("fetch", fetchMock)
+  try {
+    const pending = createSessionClient({ baseUrl: "/api/session" }).listModels({ signal: controller.signal })
+    const assertion = expect(pending).rejects.toMatchObject({ reason: "network" })
+    await Promise.resolve()
+    controller.abort()
+    await assertion
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock.mock.calls[0]?.[1]?.signal.aborted).toBe(true)
+  } finally { vi.unstubAllGlobals() }
+})
+
+it("a later page from another business cannot turn a partial chat list into success", async () => {
+  const candidate = { provider: "provider", name: "image", is_default: true, display_name: "Image",
+    model_id: "11111111-1111-4111-8111-111111111111", revision_id: "22222222-2222-4222-8222-222222222222",
+    provider_id: "33333333-3333-4333-8333-333333333333", feature_key: "image", request_model: "image" }
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(Response.json({ models: [], next_cursor: "second" }))
+    .mockResolvedValueOnce(Response.json({ models: [candidate], next_cursor: null })))
+  try {
+    await expect(createSessionClient({ baseUrl: "/api/session" }).listModels()).rejects.toMatchObject({ reason: "parse" })
+  } finally { vi.unstubAllGlobals() }
+})

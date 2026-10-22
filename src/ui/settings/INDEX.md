@@ -1,3 +1,10 @@
+<!-- 2026-10-22 continuation retirement correction -->
+积分客户端每次续发 PUT 或核实 GET 前复验调用方 `getCurrent`；真实账户/用量/rail传入现 controller/current 与发起时已准入subject的marker一致性检查。只更新storage、无rerender/focus仍会抑制旧续发；marker丢失、不匹配或读取异常一律退休。marker只抑制，不授予session权限；非UI调用可不传callback，初次GET契约保持，无新store/轮询/锁。
+
+## 当前账户积分初始化（2026-10-22）
+
+现账户摘要仍只调用稳定 `BillingClient.summary`，由该客户端在可信 missing-account 后执行一次幂等初始化并重读；不挂载账本、不新建store、页面无开户入口/未开户提示/大骨架/可见加载文字。按原 subject/generation、撤准入和卸载即时退休，保现设置窗口已确认摘要及失败显式重试。其他设置草稿、资料保存、Skills/MCP和支付均不扩展；下方旧“本片不负责积分初始化”描述仅属当时范围。
+
 ## 账户页签切换（2026-10-20）
 
 `account-read-snapshots.tsx` 仅在本次打开的设置窗口中保留已确认的资料与积分摘要，按 preview/准入/主体/代次清空；离开页签仍卸载编辑器和子弹窗，返回时后台重读，不闪空姓名或可见“正在加载”文案。缓存不作为写权限：资料重核前禁编辑/保存，最终 hook 阻止旧闭包；重核后的新姓名只更新未编辑状态，原草稿、CAS、未知写入与显式恢复保持。首次积分读取使用可访问占位，不虚构零余额或自动重发写入；本片不负责积分初始化、充值或扣减。

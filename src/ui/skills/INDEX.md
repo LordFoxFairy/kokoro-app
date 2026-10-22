@@ -1,3 +1,7 @@
+## 个人系列删除（2026-10-21，候选）
+
+personal-skill-actions新增真实delete，不替换withdraw；personal-skill-management仍是精确锚点／actor／恢复入口owner。personal-skill-delete-dialog只负责系列删除确认、正式history publication读取、冻结命令与显式原意图重放。确认后GET404不再锁死未知重试，只有匹配回执清选择并失活列表。deleted安装保留但禁详情、历史、包、启用和更新；停用仍可用。最终180项候选尚未正常生效；未操作正常环境，正常浏览器与最终配对由主方统一验收。Manus真实图标上传后的enabled与本地disabled仍是剩余差异，不在此片新增上传API／Storage或自动启用。
+
 ## 目录搜索切换的连续点击（2026-10-21）
 
 外层 `KokoroSkillsSurface` 仅保留当前准入 client 已确认的目录及游标页，查询切换期间本地匹配并保持卡片触发器；新查询仍由 owner 决定。待确认时禁用安装／续页，详情只保精确选择意图，不读取旧私有事实；身份或准入代际变化立即退休旧投影。复用现有组件、资源键与详情窗口，不新增缓存层、API 或兼容路径。

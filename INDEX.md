@@ -1,6 +1,6 @@
-## 2026-10-21 发布确认快照（App源码候选）
+## 2026-10-22 当前消费者候选
 
-固定BFF `be5cc6f91145d46ea504420b29b16ff16c981f28` /Public22.0.0/176，SHA256 `65019688691a6d6933146be66d4e7a1293f0dc92418a6f259a983529031b5c27`。沿既有发布session保存用户确认的系列状态；已有系列读取失败／404不会当成null，新系列明确null，重试沿原body/key。App/Admin正常配对和完整页面旅程仍待验收，不宣称整链完成。
+固定BFF `efe0ed8b3f791468608b61dd895208f0db709e50`／Public22.2.0／181项，canonical SHA256 `365d61aa5b3b4c01a178f077914e03b5fdbaeebc95fe740b9be46ca8fadc3205`。共享模型列表／首发选择、可信缺账户后的无感初始化、公开Skill list／个人删除与MCP重连沿既有组件和同源边界承接；没有第二套业务协议或假余额。完整本地门与108项preview浏览器回归已通过，正常owner整链与PR状态见 [`docs/CURRENT.md`](docs/CURRENT.md)，不把候选当正式生效。下方按当时版本保留历史。
 
 ## 2026-10-20 MC-02A Public21 模型消费
 

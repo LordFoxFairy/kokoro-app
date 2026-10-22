@@ -1,12 +1,120 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, expect, it, vi } from "vitest"
 
-import { createHubClient } from "@/hub/client"
+import { createHubClient, HubClientError } from "@/hub/client"
 import { LocaleProvider } from "@/i18n/context"
-import { ConnectorCommandProvider } from "@/ui/mcp/connector-command-context"
+import { ConnectorCommandProvider, useMcpPreparationCommands } from "@/ui/mcp/connector-command-context"
 import { McpProjectionRead } from "@/ui/mcp/mcp-projection-read"
+import type { McpConnector, McpPrivateServer } from "@/hub/mcp-connector.schema"
+import type { McpPreparationCommands } from "@/ui/mcp/mcp-preparation-commands"
 
 afterEach(() => { cleanup(); window.sessionStorage.clear(); vi.unstubAllGlobals() })
+
+function privateOAuthFixture() {
+  const connector = { availability: "reauthorization_required", connector_id: "recover-private", server_id: "recover-server", connector_type: "mcp", provider_key: "recover-provider", display_name: "Recover private OAuth", status: "active", enabled: true, approved_scopes: [], state_version: "3" } satisfies McpConnector
+  const server = { availability: "reauthorization_required", server_id: "recover-server", display_name: "Recover private server", server_url: "https://mcp.example.test/recover", status: "registered", state_version: "4", headers: [], prepare_status: "prepare_failed", authorization_status: "approved", declarations: [], declarations_available: false, oauth_client: { client_id: "public-client", configured: true, origin: "byo", status: "configured", state_version: "1" } } satisfies McpPrivateServer
+  return { connector, server }
+}
+
+it.each(["lost ACK", "replay expired"])("reconnects failed private OAuth alongside an unknown Prepare without replacing its original bytes, key or CAS (%s)", async outcome => {
+  const { act, waitFor, within } = await import("@testing-library/react")
+  window.localStorage.setItem("kokoro.locale", "zh")
+  const { connector, server } = privateOAuthFixture()
+  const resumable = outcome === "lost ACK"
+  const prepare = vi.fn().mockRejectedValue(resumable ? new Error("Prepare ACK lost")
+    : new HubClientError("http", "Inspect original command", "mcp_personal_command_replay_expired", 412, false))
+  const reconnect = vi.fn().mockRejectedValueOnce(new Error("AS denied"))
+    .mockResolvedValue({ authorization: { authorization_url: "https://oauth.example.test/explicit", expires_at: "2030-01-01T00:00:00Z" } })
+  const navigate = vi.fn()
+  const client = { ...createHubClient(), preparePrivateMcpServer: prepare, reconnectMcpConnectorAuthorization: reconnect,
+    getMcpConnector: vi.fn().mockResolvedValue(connector), getPrivateMcpServer: vi.fn().mockResolvedValue(server),
+    listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+    listMcpConnectors: vi.fn().mockResolvedValue({ items: [connector], next_cursor: null }),
+    listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }) }
+  const boundary = { subject: "private-reconnect-original", admitted: true, generation: 0 }
+  let commands!: McpPreparationCommands
+  function Probe() { commands = useMcpPreparationCommands(client, boundary.subject); return null }
+  render(<LocaleProvider><ConnectorCommandProvider client={client} boundary={boundary}><Probe /><McpProjectionRead client={client} identity={boundary.subject} initialView="connections" onAuthorizationNavigate={navigate} /></ConnectorCommandProvider></LocaleProvider>)
+  await act(async () => commands.prepare({ serverId: server.server_id, connectorId: connector.connector_id, version: server.state_version }, boundary))
+  expect(commands.getSnapshot()[0]?.kind).toBe("unknown")
+  const original = JSON.stringify(prepare.mock.calls[0]?.slice(0, 3))
+  const open = async () => {
+    fireEvent.click(await screen.findByRole("button", { name: connector.display_name }))
+    return screen.findByRole("dialog", { name: server.display_name })
+  }
+  let dialog = await open()
+  const recoveryLabel = resumable ? "重试原请求" : "需先核验状态"
+  const resume = within(dialog).getByRole("button", { name: recoveryLabel })
+  if (resumable) expect(resume).toBeEnabled()
+  else expect(resume).toBeDisabled()
+  fireEvent.click(within(dialog).getByRole("button", { name: "重新连接" }))
+  await waitFor(() => expect(reconnect).toHaveBeenCalledOnce())
+  await waitFor(() => expect(within(dialog).getByRole("button", { name: "重新连接" })).toBeEnabled())
+  expect(reconnect).toHaveBeenLastCalledWith(connector.connector_id, { server_id: server.server_id, expected_state_version: "3" }, expect.any(AbortSignal))
+  expect(prepare).toHaveBeenCalledOnce()
+  expect(commands.getSnapshot()[0]?.kind).toBe("unknown")
+  fireEvent.click(within(dialog).getByRole("button", { name: "取消" }))
+  dialog = await open()
+  fireEvent.click(within(dialog).getByRole("button", { name: recoveryLabel }))
+  await waitFor(() => expect(prepare).toHaveBeenCalledTimes(resumable ? 2 : 1))
+  if (resumable) expect(JSON.stringify(prepare.mock.calls[1]?.slice(0, 3))).toBe(original)
+  expect(commands.getSnapshot()[0]?.kind).toBe("unknown")
+  fireEvent.click(within(dialog).getByRole("button", { name: "重新连接" }))
+  await waitFor(() => expect(navigate).toHaveBeenCalledExactlyOnceWith("https://oauth.example.test/explicit"))
+  expect(prepare).toHaveBeenCalledTimes(resumable ? 2 : 1)
+  expect(commands.getSnapshot()[0]?.kind).toBe("unknown")
+  expect(JSON.stringify(prepare.mock.calls[0]?.slice(0, 3))).toBe(original)
+})
+
+it.each(["running Prepare", "unknown management"])("keeps private OAuth blocked during %s", async pending => {
+  const { CustomMcpDetailDialog } = await import("@/ui/mcp/custom-mcp-detail-dialog")
+  const { connector, server } = privateOAuthFixture()
+  const authorize = vi.fn()
+  render(<LocaleProvider><CustomMcpDetailDialog connector={connector} server={server} actionId={null} admitted
+    preparationState={pending === "running Prepare" ? "running" : "idle"}
+    managementCommand={pending === "unknown management" ? { connectorId: connector.connector_id, serverId: server.server_id, operation: "update_server", kind: "unknown" } : undefined}
+    onResumeManagement={vi.fn()} actionError={false} deleteId={null} returnFocusRef={{ current: null }} onClose={vi.fn()}
+    onSaveConfiguration={vi.fn()} onPrepare={vi.fn()} onAuthorize={authorize} onDisconnect={vi.fn()} onDeleteIntent={vi.fn()} onCancelDelete={vi.fn()} onDelete={vi.fn()} /></LocaleProvider>)
+  const button = screen.getByRole("button", { name: pending === "running Prepare" ? "试用一下" : "重新连接" })
+  expect(button).toBeDisabled()
+  fireEvent.click(button)
+  expect(authorize).not.toHaveBeenCalled()
+})
+
+it.each(["window", "actor", "admission"])("rejects private OAuth without the current admitted exact binding and ignores a retired %s's late ACK", async retired => {
+  const { renderHook, act } = await import("@testing-library/react")
+  const { usePrivateMcpAuthorization } = await import("@/ui/mcp/use-private-mcp-authorization")
+  const { connector, server } = privateOAuthFixture()
+  let finish!: (value: unknown) => void
+  const reconnect = vi.fn().mockImplementation(() => new Promise(resolve => { finish = resolve }))
+  const navigate = vi.fn()
+  const client = { ...createHubClient(), reconnectMcpConnectorAuthorization: reconnect }
+  const intent = { connectorId: connector.connector_id, serverId: server.server_id, window: {} }
+  const hook = renderHook(({ admitted, identity, window }) => usePrivateMcpAuthorization({ client, identity, admitted, readGeneration: 0,
+    intent: { ...intent, window }, blocked: false, onAuthorizationNavigate: navigate }), { initialProps: { admitted: true, identity: "original-actor", window: intent.window } })
+  for (const [currentConnector, currentServer] of [
+    [{ ...connector, status: "revoked" as const }, server],
+    [connector, { ...server, status: "disabled" as const }],
+    [connector, { ...server, server_id: "other-server" }],
+    [{ ...connector, server_id: "other-server" }, server],
+    [connector, { ...server, oauth_client: undefined }],
+    [connector, { ...server, oauth_client: { ...server.oauth_client, status: "revoked" as const, configured: false } }],
+  ] as const) await act(async () => hook.result.current.authorize(currentConnector, currentServer))
+  expect(reconnect).not.toHaveBeenCalled()
+  hook.rerender({ admitted: false, identity: "original-actor", window: intent.window })
+  await act(async () => hook.result.current.authorize(connector, server))
+  expect(reconnect).not.toHaveBeenCalled()
+  hook.rerender({ admitted: true, identity: "original-actor", window: intent.window })
+  let waiting!: Promise<void>
+  act(() => { waiting = hook.result.current.authorize(connector, server) })
+  expect(reconnect).toHaveBeenCalledOnce()
+  const signal = reconnect.mock.calls[0]?.[2] as AbortSignal
+  hook.rerender({ admitted: retired !== "admission", identity: retired === "actor" ? "successor-actor" : "original-actor", window: retired === "window" ? {} : intent.window })
+  expect(signal.aborted).toBe(true)
+  await act(async () => { finish({ authorization: { authorization_url: "https://oauth.example.test/late", expires_at: "2030-01-01T00:00:00Z" } }); await waiting })
+  expect(navigate).not.toHaveBeenCalled()
+  expect(hook.result.current.error).toBe(false)
+})
 it.each(["outside the first page", "when the directory fails"])("opens an installed provider by its exact key %s", async scenario => {
   window.localStorage.setItem("kokoro.locale", "zh")
   const provider = { provider_key: "outside", display_name: "Outside provider", directory_type: "app" as const, category_keys: [], example_prompts: [], enabled: true, state_version: "1" }

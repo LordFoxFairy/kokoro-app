@@ -1,3 +1,7 @@
+## 公开Skill list的唯一原生Bearer入口（2026-10-22，候选）
+
+src/app/v1/skill.list/route.ts只透传固定public GET，复用iam-relay-config的部署Host／Origin与service secret、domain-context的部署Domain、upstream-http的有限传输。它不调用Product Session、不接其他/v1方法或任意URL；原Hub／网站RPC准入保持。单操作generated/bff-public-skill-list由固定canonical正规生成，不手维护第二份schema。正常生效与真实owner链另验。
+
 ## 登录交易隔离（2026-10-21，本地候选）
 
 `oidc-transaction-cookies.ts` 只配置每次请求的 Auth.js 原生 proof 名字、安全属性、精确终态清理与可见预算；`product-login-return.ts` 只签发／核验每启动表单的目标 intent。唯一 `oidc-rp-transaction.ts` v2 ledger 验 MAC 和浏览器绑定后 CAS；不兼容旧记录或共享 return cookie。`iam-interaction-csrf.ts` 为 sign-in 每次渲染独立 proof，原始 query 与 proof 共同定位 cookie，验证后 CAS；其他 interaction 保原语义。未知 exchange 不重发，Product session 和全局会话 CSRF 不纳入临时清理。完整设计及未激活状态见 docs/TECHNICAL_DESIGN.md 与 docs/CURRENT.md。

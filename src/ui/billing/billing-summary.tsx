@@ -2,8 +2,6 @@ import { Sparkles } from "lucide-react"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
-import { Empty, EmptyDescription } from "@/components/ui/empty"
-import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 import { formatCredits } from "@/billing/format"
 import type { BillingSummary as ContractBillingSummary } from "@/contract/http"
@@ -24,10 +22,7 @@ type BillingSummaryProps = {
 
 function LoadingSummary({ label }: { label: string }) {
   return (
-    <div className={panelStyles.loadingState} role="status" aria-label={label}>
-      <Skeleton className={panelStyles.loadingLine} />
-      <Skeleton className={panelStyles.loadingLineShort} />
-    </div>
+    <div className={panelStyles.loadingState} role="status" aria-label={label} />
   )
 }
 
@@ -117,7 +112,6 @@ export function BillingSummary({ summary, embedded, retrying, ledgerLoadingMore,
       <section className={styles.balanceCard} data-testid="billing-balance" data-slot="billing-balance-card">
         {summary.kind === "loading" ? <LoadingSummary label={t("billing.loading")} /> : null}
         {summary.kind === "error" ? <SummaryError label={t("billing.loadError")} retryLabel={t("billing.retry")} retrying={retrying} onRetry={onRetry} embedded={embedded} ledgerLoadingMore={ledgerLoadingMore} /> : null}
-        {summary.kind === "missing_account" ? <Empty role="status" className={panelStyles.emptyState}><EmptyDescription>{t("billing.missingAccount")}</EmptyDescription></Empty> : null}
         {summary.kind === "ready" ? (embedded ? <EmbeddedSummary summary={summary.summary} onOpenPricing={onOpenPricing} /> : <NormalSummary summary={summary.summary} onOpenPricing={onOpenPricing} />) : null}
       </section>
     </>

@@ -679,3 +679,34 @@ it("requires an explicit publication snapshot and preserves integer precision", 
  expect(skillPublishRequestSchema.parse({...base,expected_publication:current}).expected_publication).toEqual(current)
  for(const value of [{...current,state_version:"0"},{...current,state_version:"9223372036854775807"},{...current,state_version:1},{...current,extra:true}])expect(skillPublishRequestSchema.safeParse({...base,expected_publication:value}).success).toBe(false)
 })
+
+it("deletes only the confirmed anchor/publication and validates the strict series receipt",async()=>{
+ const body={expected_state_version:"8",expected_publication:{current_version_id:"current",state_version:"9007199254740993"}}
+ const data={series_id:"series",skill_id:"mine",state_version:"9",status:"deleted",event_id:`evt:${"a".repeat(64)}`,replayed:false}
+ const fetcher=vi.fn().mockResolvedValue(Response.json({data,meta:{request_id:"owner-1"}},{headers}))
+ vi.stubGlobal("fetch",fetcher)
+ await expect(createSkillPublishClient().deleteSeries("mine",body,"delete-original")).resolves.toEqual(data)
+ expect(fetcher).toHaveBeenCalledWith("/api/hub/self/skills/mine",expect.objectContaining({method:"DELETE",body:JSON.stringify(body),headers:{"content-type":"application/json","idempotency-key":"delete-original"}}))
+ fetcher.mockResolvedValue(Response.json({data:{...data,skill_id:"other"},meta:{request_id:"owner-1"}},{headers}))
+ await expect(createSkillPublishClient().deleteSeries("mine",body,"delete-original")).rejects.toMatchObject({reason:"parse"})
+})
+
+it("rejects duplicate deletion acknowledgement keys rather than accepting the last value",async()=>{
+ const data={series_id:"series",skill_id:"mine",state_version:"9",status:"deleted",event_id:`evt:${"a".repeat(64)}`,replayed:false}
+ const raw=JSON.stringify({data,meta:{request_id:"owner-1"}}).replace('"skill_id":"mine"','"skill_id":"other","skill_id":"mine"')
+ vi.stubGlobal("fetch",vi.fn().mockResolvedValue(new Response(raw,{headers})))
+ await expect(createSkillPublishClient().deleteSeries("mine",{expected_state_version:"8",expected_publication:null},"delete-key")).rejects.toMatchObject({reason:"parse"})
+})
+
+it.each([
+ { expected:"4", actual:"5", valid:true },
+ { expected:"4", actual:"6", valid:false },
+ { expected:"9007199254740993", actual:"9007199254740994", valid:true },
+ { expected:"9007199254740993", actual:"9007199254740995", valid:false },
+])("accepts only an exact one-step deletion ACK, rejecting a wrong jump $expected → $actual",async({expected,actual,valid})=>{
+ const data={series_id:"series",skill_id:"mine",state_version:actual,status:"deleted",event_id:`evt:${"a".repeat(64)}`,replayed:false}
+ vi.stubGlobal("fetch",vi.fn().mockResolvedValue(Response.json({data,meta:{request_id:"owner-1"}},{headers})))
+ const result=createSkillPublishClient().deleteSeries("mine",{expected_state_version:expected,expected_publication:null},"delete-exact-step")
+ if(valid)await expect(result).resolves.toEqual(data)
+ else await expect(result).rejects.toMatchObject({reason:"parse",status:200})
+})

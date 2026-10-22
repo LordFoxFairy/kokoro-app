@@ -1,3 +1,27 @@
+## 2026-10-22 主链消费者候选：完整本地门通过，正常旅程待配对
+
+固定 BFF `efe0ed8b3f791468608b61dd895208f0db709e50`／Public22.2.0／181 operations，canonical SHA256 `365d61aa5b3b4c01a178f077914e03b5fdbaeebc95fe740b9be46ca8fadc3205`。本候选承接公开Skill list薄入口、个人系列删除和MCP显式重连；补齐普通聊天首发模型选择、完整目录分页与失败恢复、当前作用域空草稿归档判定，以及严格缺账户404后无感幂等初始化。切换主体时每次续发核原作用域退休；未知初始化回执先读核实，不重复PUT、不伪造余额。
+
+主方Node22在1237个冻结输入上复跑：`pnpm contract`、`pnpm test:architecture`、`pnpm lint`、`pnpm typecheck`、`pnpm test`、默认`pnpm build`、构建后`tsc --noEmit`全部exit0；246文件4693测试PASS／0SKIP。独立端口的桌面／移动Playwright108项PASS，零自动重试，属于preview／HTTP夹具交互，不冒正常owner链。E2E后Next自动把next-env切为dev路由类型，再执行原typegen／types恢复与冻结字节一致；未手改生成物或产品构建配置。
+
+保留此前真实失败：缺测试Redis配置、Next并发读取的一次HTML500／JSON EOF，及候选.pnpm外链越过Turbopack root。测试资源补齐、相同lock离线安装本地依赖后默认构建通过；原500本轮未复现，未称根因已修。已修Next原生fork折叠重复--require导致诊断未进入server的问题；专用probe限量、脱敏，不改变产品请求或放宽断言。额外完整OIDC93项与原生preload／probe14项定向PASS只作补充证据。
+
+仍未正常加载该App候选、未PR merge；外部公开身份、正常租户初始化和完整Agent／积分结算由主方继续配对实测。真实模型／低风险工具／整数积分验收已获最新目标授权，旧“全面暂停”不驱动本轮；本组工程／preview门未发送真实模型或业务工具请求、不改积分，真钱支付后置。提供方上游候选获取在System/BFF/Admin现模块推进，不把本地目录刷新称上游发现。
+
+## 2026-10-22 公开身份必要入口候选（未正常生效）
+
+原App只有网站Session Hub与RPC入口，外部Bearer在Hub被拒且/v1/skill.list为404，不能以BFF内部身份通过冒公开可达。现沿已批准身份矩阵补唯一GET薄adapter，固定f74fb1a的原生public合同并正规生成单操作validator；未改Hub Session、不降BFFserviceguard、不新增网关／数据库／Storage。真实隔离Next HTTP先RED404后GREEN200，原外部Bearer与配置service/Domain、无cookie证明仅是本方传输证据，真实IAM与owner链由主方独立验收。
+
+首次最终门尝试保留：contract297PASS／1旧description定位FAIL；architecture50PASS，lint／typecheck0；test4570PASS／1断言FAIL／7SKIP，另有原Next30秒setup timeout与缺KOKORO_TEST_REDIS_URL两suite失败。随后按主方要求停未开始build／E2E，不把首轮记通过。旧父hash／inverse未改，仅将mutation定位更新到正式新description。必要adapter完成并停写后再以单worker／禁止fileparallel及受管Redis自有namespace跑最终门；正常环境仍未切换，Manus图标上传enabled／本地disabled差异保持。
+
+## 2026-10-21 个人系列删除App候选（正常环境未切换）
+
+基线a3a78de，消费固定BFF `f74fb1a6796e1b5860044c889fc5ed1355cf2ec9` / Public22.1.0 / 180，原始 SHA256 `f726cac620362524f92474ca9d647229280db308d16105820c718f9bc32db1ae`。复用现个人management/dialog/client/same-origin边界；确认前本人anchor+正式history publication，确认后冻结原CAS/body/key，unknown关闭／同主体续期可显式重放，不先GET404锁死、不自动新命令。严格200后清选择刷新；retained installation source_status=deleted禁止详情／启用／历史包／更新，不做物理Storage删除。
+
+已观察新增客户端／deleted卡／菜单／重复ACK的RED→GREEN；具体聚合验证由主方停写后记录。本候选未启动正常服务、未写正常数据、未提交或push；完整App七门、隔离Next/CUA及真实正常写旅程尚待，不能把focused通过称整链闭环。模型／工具／扣费暂停保持，连接器独立writer不在本删除写区。
+
+最新候选已消费同Public22.1的180项正规artifact；六窄生成器与完整旧父证明配对，独立connector错误profile不换。当前尚未正常生效，正常配对、真实写旅程和页面对照另验。真实Manus图标上传后enabled，而本地对应项disabled，仍是明确剩余差异；本轮未擅加上传API、Storage写入或自动启用补偿，也不以删除候选测试覆盖该差异。
+
 ## 2026-10-21 正常项目技能入口：已按确认配对并验收
 
 用户明确确认仅开放项目技能入口。沿 System 现有 saveConfig／createFeature／putExposure，添加当前 tenant/site/user-web 的 surface 开关，并配对同产品能力定义及当前 web application 的暴露；没有前端常开兜底、新业务 API、Schema 或权限改动。能力定义为产品共享目录事实，暴露约束在当前 site application，不冒称该 exposure 本身按 surface 隔离。原配置三行、原 chat 暴露及其他 manifest flags 逐值保持；release binding 保持，正常七监听PID不变，BFF Agent仍false。
