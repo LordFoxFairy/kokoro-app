@@ -1,3 +1,15 @@
+## AGENT-1／CREDIT-1：计价管理同源接线已验（2026-10-22，本地候选）
+
+唯一snapshot固定BFF `4d8a02828ea29fb933b29bc60670ada9761cadef`／Public22.5.0／186，SHA256 `c77e4921ccce98cfd91d77fc6897cf327599f237ed13438117323b6a3f8555eb`；原七public生成器正规更新，独立connector错误profile不变。新test-only精确逆回原22.4全文／183项，再进入未放宽的原funding／模型及历史证明链；无运行兼容层。
+
+沿原Admin桥精确增加计价配置最新读取和两类发布。原积分薄桥具名改为 `admin-billing-proxy.ts`，无旧alias；同Product Session与配置Domain，原body/key不改写、不自动重试、不信浏览器tenant／actor／Bearer。新计价请求最多1MiB、原充值16KiB不变，响应1MiB，正文至准入及完整ACK EOF共享10秒预算。业务完整校验仍归BFF/Billing，App不存价格、意图或资金事实；GET latest不是有效报价或未知提交未发生的证明。
+
+App完整contract／architecture／lint／types／test／默认build／post-types均0：contract303 PASS、architecture50 PASS、252文件4748 PASS／0SKIP。108项桌面／移动preview回归通过，零重试，后续官方typegen恢复到原production路由类型。26新loopback用例及原积分／Admin共46通过，3个初始404 RED已实际复现；一个新测试signal可选字段类型错误按exactOptionalPropertyTypes修正，未放宽配置或协议。
+
+独立Docs包完整check通过：45测试、五示例、确定性生成／来源／架构／build，以及54 HTML／17940内部链接。公开投影180操作／380 schema，原6私有操作不发布；新两正式容量extension仅显式命名且正safe整数验证／展示，原未知extension、secret／HTML防线保留。首次Docs拒绝新extension留证，新独有回归先RED后20/20 GREEN；最后只改Docs三文件，App eslint／tsconfig／vitest明确排除该独立包，1097项App工程门输入仍与原七门冻结值一致，再在1142项新冻结输入上完成Docs／E2E／post-types，全部无漂移。原大chunk警告未隐藏，独审无确定新增P0–P2。
+
+四份既有MCP WIP仅按字节保全后隔离验收，并已逐SHA256恢复，不在本片提交；正常服务、Schema、积分均未改。Product Session／BFF peer在loopback中为明确夹具，preview不是正常登录／后台／资金整链，不以本片称实际模型或扣分完成。下一步接Admin计价表单及原命令恢复、正式模型修订与选价身份配对、Agent预算预占和真实用量结算。未push／PR／merge；下方各日期段仅为历史证据。
+
 ## CREDIT-1 正常后台非现金充值与用户回读通过（2026-10-22）
 
 App源码 `9b9ec34b6a70b0f690ce7f1038a35d544469c05e` 已与 Admin c162f7e、BFF c48a9bc、Billing 90929ef 正常配对；复用当前 Product 管理员登录和当前租户真实成员，不改角色、Schema或凭据，不直接写余额。正常后台选择本人并确认一次1000非现金积分，经 App→BFF→Billing 得到201及三个正式回执ID；账户页显示可用1000／冻结0，用量与计费显示单笔 admin_credit +1000，后台和用户页刷新后仍为相同余额／单笔历史。源站运行日志仅一笔充值POST201；原始回执与截图仅本地ignored，不进入公开文档或Git。

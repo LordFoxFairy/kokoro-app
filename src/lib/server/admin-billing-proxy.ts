@@ -4,26 +4,39 @@ const JSON_TYPE = /^application\/json(?:;\s*charset=utf-8)?$/iu
 const KEY = /^[\x21-\x2b\x2d-\x7e]{8,128}$(?![\s\S])/u
 function failure(status: number, code: string, requestId: string): Response {
   return Response.json(
-    { error: { code, message: status === 401 ? "请先登录后再试。" : "后台请求未完成，请保留原充值请求后重试。", retryable: status >= 500 } },
+    { error: { code, message: status === 401 ? "请先登录后再试。" : "后台请求未完成，请保留原管理请求后重试。", retryable: status >= 500 } },
     { status, headers: { "cache-control": "no-store", "x-request-id": requestId } },
   )
 }
-/** Only these two named management operations; no identity/billing prefix proxy or business retry. */
-export async function proxyAdminCredit(
+/** Named member/funding/pricing operations only; no prefix proxy or business retry. */
+export async function proxyAdminBilling(
   request: Request,
   config: ProductBffConfig,
-  kind: "members" | "grant",
+  kind: "members" | "grant" | "pricing" | "rate" | "policy",
   requestId: string,
   deadlineAt: number,
 ): Promise<Response> {
-  const query = new URL(request.url).searchParams
+  const metering = kind === "pricing" || kind === "rate" || kind === "policy"
+  const mutation = kind === "grant" || kind === "rate" || kind === "policy"
+  const maxRequestBytes = metering ? 1_048_576 : 16_384
+  const path =
+    kind === "grant"
+      ? "billing/credit-grants"
+      : kind === "members"
+        ? "identity/members"
+        : "billing/metering/" + (kind === "pricing" ? "pricing" : kind + "-revisions")
+  const url = new URL(request.url)
+  const query = url.searchParams
+  if (metering && url.pathname !== "/api/admin/" + path) return failure(400, "invalid_admin_request", requestId)
   const forbidden = [
     "if-match",
     "if-none-match",
-    ...(kind === "members" ? ["idempotency-key", "content-type", "content-length", "transfer-encoding"] : ["transfer-encoding"]),
+    ...(mutation ? ["transfer-encoding"] : ["idempotency-key", "content-type", "content-length", "transfer-encoding"]),
+    ...(metering ? ["content-encoding"] : []),
   ]
   if (forbidden.some((name) => request.headers.has(name))) return failure(400, "invalid_admin_request", requestId)
-  if (kind === "members") {
+  if (!mutation) {
+    if (kind === "pricing" && query.size !== 0) return failure(400, "invalid_admin_request", requestId)
     if (request.body !== null) return failure(400, "invalid_admin_request", requestId)
     for (const [key, value] of query) {
       if (
@@ -39,8 +52,8 @@ export async function proxyAdminCredit(
       !JSON_TYPE.test(request.headers.get("content-type") ?? "") ||
       !KEY.test(request.headers.get("idempotency-key") ?? "") ||
       length === null ||
-      !/^[1-9][0-9]{0,4}$(?![\s\S])/u.test(length) ||
-      Number(length) > 16384 ||
+      !/^[1-9][0-9]{0,6}$(?![\s\S])/u.test(length) ||
+      Number(length) > maxRequestBytes ||
       request.body === null
     )
       return failure(400, "invalid_admin_request", requestId)
@@ -64,9 +77,9 @@ export async function proxyAdminCredit(
   const work = async (): Promise<Response> => {
     check()
     let body: ArrayBuffer | undefined
-    if (kind === "grant") {
+    if (mutation) {
       try {
-        body = await readBoundedRequestBody(request, 16384, controller.signal)
+        body = await readBoundedRequestBody(request, maxRequestBytes, controller.signal)
       } catch {
         check()
         return failure(400, "invalid_admin_request", requestId)
@@ -80,21 +93,20 @@ export async function proxyAdminCredit(
     if (claims === null) return failure(401, "session_authentication_required", requestId)
     const headers = productBffHeaders(config, claims, requestId)
     headers.set("accept", "application/json")
-    if (kind === "grant") {
+    if (mutation) {
       headers.set("content-type", "application/json")
       headers.set("idempotency-key", request.headers.get("idempotency-key")!)
     }
-    const path = kind === "grant" ? "billing/credit-grants" : "identity/members"
     const upstream = await requestWithDomain(
       `${config.bffBaseUrl.replace(/\/+$/u, "")}/v1/admin/${path}${kind === "members" ? new URL(request.url).search : ""}`,
       config.domain,
       {
-        method: kind === "grant" ? "POST" : "GET",
+        method: mutation ? "POST" : "GET",
         headers,
         ...(body === undefined ? {} : { body }),
         signal: controller.signal,
         timeoutMs: Math.max(1, deadlineAt - Date.now()),
-        maxRequestBytes: 16384,
+        maxRequestBytes,
         maxResponseBytes: 1024 * 1024,
       },
     )

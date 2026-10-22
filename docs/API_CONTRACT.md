@@ -1,3 +1,9 @@
+## AGENT-1／CREDIT-1：计价管理同源映射（2026-10-22）
+
+固定Public22.5正式三操作，browser-private `/api/admin/billing/metering/{pricing,rate-revisions,policy-revisions}`逐一映射BFF对应`/v1/admin/...`，仅GET pricing与POST两publish；不接其他路径／方法。请求与错误／ACK正文保持原字节，单次上限1MiB；资金数字字符串不经Number。GET最新发布可独立null／未来生效，不是active quote或未知命令结果证明。POST仅转原publication_id/configuration/reason和key，不自动改日期或补预算；Admin后继持原命令恢复，App不建第二份receipt。
+
+当前Product会话与部署Domain来源不变，不信浏览器authorization／tenant／actor／forwarded。新操作准入至EOF共10秒，no-store与request-id绑定，禁止重定向／Set-Cookie／Location泄漏。原成员查询、充值16KiB与其他Admin桥限制保持；凭据、真实财务、正常激活均不因契约配对自动开启。
+
 ## CREDIT-1 具名管理薄adapter（2026-10-22）
 
 固定 Public22.4／183：Admin两条具名业务路由经既有Product会话代理，浏览器不自报tenant／操作者，BFF保持当前管理员与租户资格owner。App不扩公开执行入口、不解释积分换算；原 funding_id／body／Idempotency-Key／effective_at 原样保留，未知不自动重发。成员GET只允许limit和opaque cursor，POST不接受query／CAS或旧credit action路径。

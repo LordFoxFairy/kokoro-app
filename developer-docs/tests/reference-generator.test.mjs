@@ -490,3 +490,23 @@ test('renders declared inherent idempotency without inventing a request key and 
   operation['x-kokoro-idempotency'] = 'invented';
   assert.throws(() => generateReferenceFiles(contract, catalogEntry), /unsupported x-kokoro-idempotency invented/u);
 });
+
+test('publishes named numeric body/depth limits without admitting other extensions', () => {
+  const contract = fixtureContract();
+  const operation = contract.paths['/v1/sessions/{id}/messages'].post;
+  operation['x-kokoro-max-body-bytes'] = 1048576;
+  operation['x-kokoro-max-json-depth'] = 12;
+  const rendered = generateReferenceFiles(contract, catalogEntry).get('chat.md');
+  assert.match(rendered, /Body byte limit[^\n]*1048576/u);
+  assert.match(rendered, /JSON depth limit[^\n]*12/u);
+  for (const name of ['x-kokoro-max-body-bytes', 'x-kokoro-max-json-depth']) {
+    const original = operation[name];
+    for (const value of [0, -1, 1.5, '12', Number.MAX_SAFE_INTEGER + 1]) {
+      operation[name] = value;
+      assert.throws(() => assertPublicContract(contract, catalogEntry), /positive safe integer/u);
+    }
+    operation[name] = original;
+  }
+  operation['x-kokoro-unreviewed-limit'] = 100;
+  assert.throws(() => assertPublicContract(contract, catalogEntry), /unknown Kokoro extension/u);
+});

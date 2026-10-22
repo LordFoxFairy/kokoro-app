@@ -188,6 +188,12 @@ export function assertPublicContract(contractValue, catalogEntry) {
         `${operationId} has unsupported x-kokoro-idempotency ${idempotency}`,
       );
     }
+    for (const name of ['x-kokoro-max-body-bytes', 'x-kokoro-max-json-depth']) {
+      const value = operation[name];
+      if (value !== undefined && (!Number.isSafeInteger(value) || value <= 0)) {
+        throw new ReferenceGenerationError(`${operationId} ${name} must be a positive safe integer`);
+      }
+    }
     const permission = requireString(operation, 'x-kokoro-permission', label);
     if (!PERMISSION_PATTERN.test(permission)) {
       throw new ReferenceGenerationError(
@@ -427,6 +433,12 @@ function renderOperation(contract, collectedOperation) {
     `| Stability（稳定性） | \`${operation['x-kokoro-stability']}\` |`,
     `| Idempotency（幂等性） | \`${operation['x-kokoro-idempotency']}\` |`,
     `| Permission（权限） | \`${operation['x-kokoro-permission']}\` |`,
+    ...(operation['x-kokoro-max-body-bytes'] === undefined ? [] : [
+      `| Body byte limit（正文最大字节） | \`${operation['x-kokoro-max-body-bytes']}\` |`,
+    ]),
+    ...(operation['x-kokoro-max-json-depth'] === undefined ? [] : [
+      `| JSON depth limit（JSON最大层数） | \`${operation['x-kokoro-max-json-depth']}\` |`,
+    ]),
     ...(operation.deprecated === true
       ? ['| Deprecated（已弃用） | `true` |']
       : []),

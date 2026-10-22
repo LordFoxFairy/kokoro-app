@@ -3,6 +3,8 @@ import { ReferenceGenerationError } from './reference-errors.mjs';
 const PUBLIC_KOKORO_NAMES = new Set([
   'x-kokoro-idempotency',
   'x-kokoro-json-byte-limit',
+  'x-kokoro-max-body-bytes',
+  'x-kokoro-max-json-depth',
   'x-kokoro-custom-event-values',
   'x-kokoro-fixed-visibility',
   'x-kokoro-internal-secret',

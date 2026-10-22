@@ -1,3 +1,7 @@
+## AGENT-1／CREDIT-1 计价管理同源接线（2026-10-22，本地候选）
+
+固定BFF4d8a028／Public22.5／186操作；三具名计价管理通路沿原Product Session，复用 `admin-billing-proxy.ts`，原充值16KiB不变，新计价1MiB／同绝对预算。七public生成器与App在线Docs同步；完整工程、108项preview回归及Docs45测试／链接检查已验，正常后台／Agent结算仍待，详见 [docs/CURRENT.md](docs/CURRENT.md)。原MCP WIP未夹带；以下版本段保留历史，不覆盖本节。
+
 ## CREDIT-1 管理员积分同源通路（2026-10-22，本地候选）
 
 唯一canonical固定BFF `c48a9bca07a2bb48fb5db46272ff71aab90e14ce`／Public22.4.0／183，SHA256 `f6b8f3bd250c144a2d648af94c9fd5fe068db33991a4289b849a077eef009f32`；七个既有public窄生成器正规重出／check，独立connector错误profile未改。新test-only精确逆回原22.3全文和182项顺序，再进入未改旧父hash证明，不是运行兼容。

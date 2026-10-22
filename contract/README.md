@@ -1,6 +1,6 @@
 ## CREDIT-1 管理员积分同源通路（2026-10-22，本地候选）
 
-唯一canonical固定BFF `c48a9bca07a2bb48fb5db46272ff71aab90e14ce`／Public22.4.0／183，SHA256 `f6b8f3bd250c144a2d648af94c9fd5fe068db33991a4289b849a077eef009f32`；七个既有public窄生成器正规重出／check，独立connector错误profile未改。新test-only精确逆回原22.3全文和182项顺序，再进入未改旧父hash证明，不是运行兼容。
+唯一canonical固定BFF `4d8a02828ea29fb933b29bc60670ada9761cadef`／Public22.5.0／183，SHA256 `c77e4921ccce98cfd91d77fc6897cf327599f237ed13438117323b6a3f8555eb`；七个既有public窄生成器正规重出／check，独立connector错误profile未改。新test-only精确逆回原22.3全文和182项顺序，再进入未改旧父hash证明，不是运行兼容。
 
 `admin-credit-proxy.ts`仅为当前租户成员GET与非现金充值POST接原Product会话；不扩identity/billing前缀，不解析／换算资金DTO，不自报tenant/actor，不自动重试或修改原body/key/时间。复用原有限传输，16KiB请求、1MiB响应、body→session→ACK EOF同10秒绝对预算；取消／迟到／未知返回未确认，不造成功。源码位置与内部边界见 `src/lib/server/INDEX.md` 和三面设计。
 

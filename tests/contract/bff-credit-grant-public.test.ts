@@ -1,3 +1,4 @@
+import { restoreMeteringParent } from "./bff-metering-parent"
 import { readFile } from "node:fs/promises"
 import { createHash } from "node:crypto"
 import { expect, it } from "vitest"
@@ -5,7 +6,7 @@ import YAML from "yaml"
 import { restoreCreditGrantParent } from "./bff-credit-grant-parent"
 it("pins only the formal non-cash funding POST while preserving the complete prior 182-operation artifact", async () => {
   const raw = await readFile("src/generated/bff-public-openapi.yaml"),
-    spec = YAML.parse(raw.toString()),
+    spec = YAML.parse(restoreMeteringParent(raw).toString()),
     oldRaw = restoreCreditGrantParent(raw),
     old = YAML.parse(oldRaw.toString())
   expect(createHash("sha256").update(oldRaw).digest("hex")).toBe("727159cea88e9f70ca3d1127306e8a6a6bcaa568398de8b0d8fec1cce6b3fae3")

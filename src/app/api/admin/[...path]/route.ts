@@ -1,4 +1,4 @@
-import { proxyAdminCredit } from "@/lib/server/admin-credit-proxy"
+import { proxyAdminBilling } from "@/lib/server/admin-billing-proxy"
 import {emptyModelPublishBody} from "@/lib/server/model-publish-body"
 import { requestIdForRequest } from "@/lib/server/bff-response"
 import { admittedProductSession, productBffConfig, productBffHeaders } from "@/lib/server/product-bff"
@@ -97,7 +97,13 @@ async function handle(request: Request, context: Context): Promise<Response> {
   if (config === null) return failure(503, "admin_gateway_unavailable", requestId)
   const { path } = await context.params
   const creditKind = path.length === 2 && path[0] === "identity" && path[1] === "members" && request.method === "GET" ? "members" : path.length === 2 && path[0] === "billing" && path[1] === "credit-grants" && request.method === "POST" ? "grant" : null
-  if (creditKind !== null) return proxyAdminCredit(request, config, creditKind, requestId, discoveryDeadline)
+  if (creditKind !== null) return proxyAdminBilling(request, config, creditKind, requestId, discoveryDeadline)
+  const meteringKind = path.length === 3 && path[0] === "billing" && path[1] === "metering"
+    ? request.method === "GET" && path[2] === "pricing" ? "pricing"
+      : request.method === "POST" && path[2] === "rate-revisions" ? "rate"
+        : request.method === "POST" && path[2] === "policy-revisions" ? "policy" : null
+    : null
+  if (meteringKind !== null) return proxyAdminBilling(request, config, meteringKind, requestId, discoveryDeadline)
   const modelRead = request.method === "GET" && path.length === 1 && ["model-routing", "model-labels", "model-revisions", "model-providers", "model-provider-creations", "model-definitions", "model-features"].includes(path[0] ?? "")
   const uuid=/^(?:[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffffffffffff)$/iu
   const modelDiscovery = request.method === "GET" && path.length === 3 && path[0] === "model-providers" && uuid.test(path[1] ?? "") && path[2] === "upstream-models"

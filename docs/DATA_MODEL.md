@@ -1,3 +1,7 @@
+## AGENT-1／CREDIT-1：计价配置不属于App（2026-10-22）
+
+无App表、价格缓存、预算副本或提交receipt。Billing唯一持有不可变rate/policy、整积分预算及审计／幂等；BFF拥有可信租户和管理员准入。App只在现同源桥转一次已准入命令及有限回包，不猜有效价、不取整、不扣款，也不把GET latest/null作为未知提交未发生的依据。
+
 ## CREDIT-1 薄adapter不拥有资金数据（2026-10-22）
 
 无新增表、账户、充值意图或余额缓存。Product session仍按原Redis/cookie owner；当前tenant/actor来自受信会话及BFF。Admin持有同tab原命令，Billing拥有唯一账户／grant／journal／audit/幂等回执，App不持久化、换算或补偿余额，不把读取失败合成0。

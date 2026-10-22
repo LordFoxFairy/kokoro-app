@@ -1,3 +1,4 @@
+import { restoreMeteringParent } from "./bff-metering-parent"
 // Test-only exact Public22.4 ->22.3 full-artifact inverse; never imported by runtime.
 import { createHash } from "node:crypto"
 const proof = {
@@ -26,6 +27,7 @@ const proof = {
 } as const
 const hash = (v: string) => createHash("sha256").update(v).digest("hex")
 export function restoreCreditGrantParent(bytes: Uint8Array): Buffer {
+  bytes = restoreMeteringParent(bytes)
   const source = Buffer.from(bytes).toString("utf8")
   if (hash(source) !== proof.current) throw new Error("Credit grant fixed source drift")
   const lines = source.split(/(?<=\n)/u)

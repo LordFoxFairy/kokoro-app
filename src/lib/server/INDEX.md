@@ -1,6 +1,6 @@
 ## CREDIT-1 管理员积分薄通路（2026-10-22）
 
-`admin-credit-proxy.ts`仅处理具名当前成员GET／非现金充值POST，复用Product受信会话、requestWithDomain和有限body读取。权限/资金/整数换算owner仍BFF/Billing；原命令字节与key不变，10秒总预算覆盖body、会话与ACK EOF，响应1MiB。无业务重试、凭据/tenant回退或账本存储；正常完整旅程另验。下方为原模块说明。
+`admin-billing-proxy.ts`仅处理具名当前成员GET／非现金充值POST及三项计价配置读／发布，复用Product受信会话、requestWithDomain和有限body读取。权限/资金/整数换算owner仍BFF/Billing；原命令字节与key不变，10秒总预算覆盖body、会话与ACK EOF，响应1MiB；仅新计价POST请求1MiB，原充值16KiB。无业务重试、凭据/tenant回退或账本存储；正常完整旅程另验。下方为原模块说明。
 
 ## 公开Skill list的唯一原生Bearer入口（2026-10-22，候选）
 

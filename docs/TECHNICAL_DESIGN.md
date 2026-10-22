@@ -1,3 +1,11 @@
+## AGENT-1／CREDIT-1：计价管理 Product 同源通路（2026-10-22）
+
+主方唯一writer，基线7ad1edc；固定BFF4d8a02828ea29fb933b29bc60670ada9761cadef／Public22.5／c77e4921ccce98cfd91d77fc6897cf327599f237ed13438117323b6a3f8555eb。沿现Product Session与配置Domain，在既有Admin桥精确开放GET billing/metering/pricing及POST billing/metering/{rate-revisions,policy-revisions}，不代理任意billing前缀、不访问Billing／System或持有operator secret。复用原积分薄桥为具名admin-billing-proxy，原成员GET和充值POST不变，原模块名不留alias。
+
+新增计价请求／响应最多1MiB，原充值16KiB保持；正文读取→Product准入→BFF完整响应EOF同一10秒绝对预算，原命令bytes/key和request-id不改写、不重试。BFF拥有current-admin／tenant和完整业务validator，App不复制计价／预算算法或持久化。新GET禁止query/body/framing/命令头，新POST严格MIME/key/正CL／无CAS和content-encoding。仅新三路由具名接入；公开snapshot及七生成器按同一正式发行物更新，旧合同全文精确inverse只在tests中保留。
+
+写区为三设计、具名桥／路由、同源HTTP回归、唯一public snapshot／七生成器及派生／契约测试、App在线Docs。无SQL、依赖、模型／工具／积分写入、自动化或连接器改动；已有四文件MCP工作独立保护。先真实loopback行为RED→GREEN，再完整工程与相关preview验收；Product准入或BFF夹具不称正常owner旅程。
+
 ## CREDIT-1 管理后台积分同源通路（2026-10-22，实施门）
 
 沿 Product唯一会话 → 本仓 `/api/admin` → BFF → Billing，不新增充值owner、服务、浏览器密钥或账本。仅允许现 canonical 的当前租户成员 GET `/v1/admin/identity/members` 和非现金充值 POST `/v1/admin/billing/credit-grants`，不开放 identity/billing 前缀。权限、收款资格、严格正文、整数换算、审计／幂等与回执仍由 BFF/Billing及Admin正式消费者核实；App只转发原命令与响应字节，不产生成功或新 key／effective_at。
