@@ -1,3 +1,9 @@
+## CREDIT-1 具名管理薄adapter（2026-10-22）
+
+固定 Public22.4／183：Admin两条具名业务路由经既有Product会话代理，浏览器不自报tenant／操作者，BFF保持当前管理员与租户资格owner。App不扩公开执行入口、不解释积分换算；原 funding_id／body／Idempotency-Key／effective_at 原样保留，未知不自动重发。成员GET只允许limit和opaque cursor，POST不接受query／CAS或旧credit action路径。
+
+本仓canonical snapshot来自BFF c48a9bc committed blob；生成器与Docs固定同commit/digest，历史父证明由精确新增POST逆证承接，不改旧22.3父hash或运行兼容。字段事实仍在BFF；真钱支付及直接余额变更无入口。
+
 ## MODEL-1 Admin上游模型发现薄桥（2026-10-22）
 
 `GET /api/admin/model-providers/{provider_id}/upstream-models`只接受canonical UUID路径（大小写形式沿现UUID规则）、无query/请求体/任何body framing（含Content-Length:0）/Content-Type/If-Match/If-None-Match/Idempotency-Key。映射正式BFF唯一 `GET /v1/admin/model-providers/{provider_id}/upstream-models`；不增加浏览器传入Key、地址或tenant/actor参数。

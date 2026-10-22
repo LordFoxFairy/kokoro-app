@@ -1,3 +1,7 @@
+## CREDIT-1 薄adapter不拥有资金数据（2026-10-22）
+
+无新增表、账户、充值意图或余额缓存。Product session仍按原Redis/cookie owner；当前tenant/actor来自受信会话及BFF。Admin持有同tab原命令，Billing拥有唯一账户／grant／journal／audit/幂等回执，App不持久化、换算或补偿余额，不把读取失败合成0。
+
 ## MODEL-1 上游发现不新增App事实（2026-10-22）
 
 App同源Admin桥只短暂转发已准入请求与有限响应，provider/credential/候选模型事实归System/BFF，选择候选的局部UI归独立Admin。无SQL、缓存、表、Key存储、持久化状态或自动发布/价格推测；response不能成为App可编辑模型目录。配置Domain与Product Session是既有可信边界，浏览器tenant/actor不建立事实。

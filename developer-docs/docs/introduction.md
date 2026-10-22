@@ -6,9 +6,9 @@ Kokoro API v1 是由 `kokoro-bff` 拥有的 public Product API contract。它在
 
 ## 当前 contract 状态
 
-当前 artifact 版本为 `22.3.0`，业务路径前缀为 `/v1`。门户从源契约的 182 个 operation 中发布 176 个 `public` operation，排除 6 个 `browser-private` operation 及仅被它们引用的数据结构。稳定性按各 operation 的 metadata 展示，不统一推断。operation 出现在 contract 中只说明公开 wire shape，不自动证明每个 live adapter、持久化路径、上游依赖或 SLO 已经完成。
+当前 artifact 版本为 `22.4.0`，业务路径前缀为 `/v1`。门户从源契约的 183 个 operation 中发布 177 个 `public` operation，排除 6 个 `browser-private` operation 及仅被它们引用的数据结构。稳定性按各 operation 的 metadata 展示，不统一推断。operation 出现在 contract 中只说明公开 wire shape，不自动证明每个 live adapter、持久化路径、上游依赖或 SLO 已经完成。
 
-本门户位于 App 独立文档包，参考已固定的 BFF Public22.3 正式契约；原始 commit 与 SHA-256 见[来源说明](/provenance)。公开 `skill.list` 的 User API Key／OAuth Open App／trusted 资格由固定 operation 的身份与权限说明限定，不套用到其他业务接口，见[认证与请求约定](/authentication)。生成参考不改变这些能力状态。
+本门户位于 App 独立文档包，参考已固定的 BFF Public22.4 正式契约；原始 commit 与 SHA-256 见[来源说明](/provenance)。公开 `skill.list` 的 User API Key／OAuth Open App／trusted 资格由固定 operation 的身份与权限说明限定，不套用到其他业务接口，见[认证与请求约定](/authentication)。生成参考不改变这些能力状态。
 
 ## 异步请求模型
 

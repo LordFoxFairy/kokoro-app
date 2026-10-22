@@ -1,3 +1,7 @@
+## CREDIT-1 管理员积分薄通路（2026-10-22）
+
+`admin-credit-proxy.ts`仅处理具名当前成员GET／非现金充值POST，复用Product受信会话、requestWithDomain和有限body读取。权限/资金/整数换算owner仍BFF/Billing；原命令字节与key不变，10秒总预算覆盖body、会话与ACK EOF，响应1MiB。无业务重试、凭据/tenant回退或账本存储；正常完整旅程另验。下方为原模块说明。
+
 ## 公开Skill list的唯一原生Bearer入口（2026-10-22，候选）
 
 src/app/v1/skill.list/route.ts只透传固定public GET，复用iam-relay-config的部署Host／Origin与service secret、domain-context的部署Domain、upstream-http的有限传输。它不调用Product Session、不接其他/v1方法或任意URL；原Hub／网站RPC准入保持。单操作generated/bff-public-skill-list由固定canonical正规生成，不手维护第二份schema。正常生效与真实owner链另验。

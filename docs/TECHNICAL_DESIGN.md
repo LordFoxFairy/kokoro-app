@@ -1,3 +1,11 @@
+## CREDIT-1 管理后台积分同源通路（2026-10-22，实施门）
+
+沿 Product唯一会话 → 本仓 `/api/admin` → BFF → Billing，不新增充值owner、服务、浏览器密钥或账本。仅允许现 canonical 的当前租户成员 GET `/v1/admin/identity/members` 和非现金充值 POST `/v1/admin/billing/credit-grants`，不开放 identity/billing 前缀。权限、收款资格、严格正文、整数换算、审计／幂等与回执仍由 BFF/Billing及Admin正式消费者核实；App只转发原命令与响应字节，不产生成功或新 key／effective_at。
+
+在独立 server-only admin-credit-proxy 中承接有限传输与生命周期，原模型／Skills/MCP分支不重构。两路由拒不适用的查询／写头／CAS，POST显式JSON和正则单个8–128字符key及1–16KiB固定framing；成员GET仅limit/cursor。复用受管 Product 准入、既有 requestWithDomain/readBoundedRequestBody，整个body→准入→响应EOF共原10秒预算，signal/绝对截止每次await后复验；总响应1MiB，不跟随重定向或自动重试。超时／取消／畸形ACK只返回未确认错误，未知资金意图保留在Admin，不在此建恢复存储。
+
+固定BFF c48a9bca07a2bb48fb5db46272ff71aab90e14ce／Public22.4，唯一原始snapshot和七个既有public窄生成器正规配对，独立connector错误profile不变。App在线文档随固定契约更新；不声称Manus存在相同私有后台端点。先真实loopback桥负控，再接正常后台/owner资金旅程；组件或peer通过不等同正常链完成。原四文件MCP视觉WIP不属于本写区，不覆盖／暂存。
+
 ## MODEL-1 Admin上游发现同源桥（2026-10-22）
 
 沿现 `src/app/api/admin/[...path]/route.ts` 增加唯一 GET `model-providers/{uuid}/upstream-models`，映射固定BFF同名 `/v1/admin` 路径。App只拥有Product Session准入及配置Domain/service上下文，不接Key、不选择owner地址、不执行模型。平台管理员权限仍由BFF fresh admission裁决，Admin消费者负责严格响应decode。

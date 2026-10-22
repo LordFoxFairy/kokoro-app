@@ -1,3 +1,7 @@
+## 管理员积分充值通路（2026-10-22）
+
+当前固定Public22.4，具名成员读取及非现金充值经原Product同源链；设计见 `TECHNICAL_DESIGN.md`／`API_CONTRACT.md`，实际验证与未完成范围见 `CURRENT.md`。对外指南唯一维护在App `developer-docs/docs/guides/credits.md`，不复制为另一份公开事实源。
+
 ## 当前租户 Credit 初始化（2026-10-22）
 
 设计与传输门见 `TECHNICAL_DESIGN.md`、`API_CONTRACT.md` 文首：固定 Public22.2.0，由既有 BillingClient 负责可信404后单次幂等初始化、原GET核实与同一预算/取消；现账户和用量只显示真实投影。源码候选的 focused 验证不代表正常浏览器/支付/扣费验收。

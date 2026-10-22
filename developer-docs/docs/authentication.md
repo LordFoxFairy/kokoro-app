@@ -18,7 +18,7 @@ Kokoro API v1 由受信任的后端或 Web 同源服务端 adapter 调用。浏�
 
 固定 `skill.list` 契约声明在既有 service envelope 内使用 IAM User API Key 或已登记 OAuth Open App 身份。普通 App 仅读自身精确绑定并拒绝 `project_id`；User API Key 读取本人及已授权项目安装，trusted App 额外包含自身绑定。trust 与项目资格由 IAM/BFF 核验，不由客户端参数推断；网站 RPC 仍使用 Product Session。服务凭据不替代个人 API Key，读取资格也不授予模型或工具执行权。这里描述固定契约，不以生成页或示例证明正常部署、应用注册和完整业务旅程均已完成。
 
-管理 operation 即使标为 `public`，仍受其管理员权限约束。提供方上游候选 GET 只允许当前平台管理员显式读取已存提供方；不接收 Key 或地址，不自动发布、推测价格或执行模型。公开发布分类不是匿名或普通用户授权。
+管理 operation 即使标为 `public`，仍受其管理员权限约束。提供方上游候选 GET 只允许当前平台管理员显式读取已存提供方；不接收 Key 或地址，不自动发布、推测价格或执行模型。非现金充值还要求重新核验当前租户收款成员；`subject_id`是收款人而非操作者声明，tenant和管理员身份仍由会话产生。不要用User API Key或普通OAuth App身份调用此管理操作。公开发布分类不是匿名或普通用户授权。
 
 ## 安全与调用约定
 

@@ -11,9 +11,9 @@ import {
 it("pins formal15.2 and exactly one narrow name SDK operation", async () => {
   const bytes = await readFile("src/generated/bff-public-openapi.yaml");
   expect(createHash("sha256").update(bytes).digest("hex")).toBe(
-    "727159cea88e9f70ca3d1127306e8a6a6bcaa568398de8b0d8fec1cce6b3fae3",
+    "f6b8f3bd250c144a2d648af94c9fd5fe068db33991a4289b849a077eef009f32",
   );
-  expect(YAML.parse(bytes.toString()).info.version).toBe("22.3.0");
+  expect(YAML.parse(bytes.toString()).info.version).toBe("22.4.0");
   expect(Object.keys(sdk)).toEqual(["updateAccountProfile"]);
 });
 it("keeps UTF16/closed and escaped original rules exact", () => {
