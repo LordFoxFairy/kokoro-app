@@ -14,6 +14,12 @@ OAuth 回调或授权服务失败时，产品显示统一结果页。页面不�
 - 顶层 HTML 登录失败返回固定 `/auth/sign-in/failed`；API 继续返回失败 status 和脱敏 JSON。回调的 code、state、issuer 描述和 cookie 不转入结果页或文档。
 - 通过 issuer/state/PKCE/nonce 绑定后才创建正式会话。失败不伪造成功、不恢复旧 state、不清理其他并行登录的 cookie；未知 token 结果不自动重发。
 
+## 登录会话连续性（本地候选，正常配对待验）
+
+初始登录只从原生验签成功的 ID token 保存 issuer 的 `sid`，并绑定同次 Auth.js account 的原 ID token 和 subject。续期亦验证新 ID token 的签名、issuer、client、期限及原 subject／sid；相同用户不代表相同登录会话。整个 token 与 JWKS 读取共用5秒预算，失败不重复兑换旋转凭据，仍按原待定会话清理／CAS处理。
+
+`sid` 只在服务端加密 HttpOnly Product cookie 内，不进入公开 session JSON、URL或日志。旧缺失 sid 的 cookie 直接失效，不回填或兼容；正常激活需重新走正式登录，不清业务数据。此绑定只约束登录／续期，Agent Run不存用户token、不负责续期，也不据此新增 Billing OAuth 旅程。
+
 ## 验收要求
 
 新登录成功并回原目标；错误／过期／重复回调只显示产品结果；API 失败仍失败；较新登录和原会话不被旧回调破坏；刷新结果页不新增认证请求。环境配对和页面验收需要分别有证据，服务健康或旧会话成功不替代新登录验收。

@@ -1,3 +1,13 @@
+## AUTH-1：同一原生issuer Session绑定（2026-10-22，实施门）
+
+沿现Root唯一主链，App基线928de9f，主方唯一writer。当前App丢弃已验证ID token sid，续期仅查BFF本人身份，故闭合这处登录会话连续性；不新OAuth协议、服务／数据库／机器scope或UI入口。按用户最新澄清，Run无需用户token，执行授权不能以App额外resource grant／回程领token作为默认前置；该未实施提议已撤回，后继沿既有内部工作负载身份与可信Run上下文收敛。sid修复只服务登录／续期，不把浏览器登录生命周期强加给异步Run。
+
+初次provider仅从原生Client.callback成功验签后的TokenSet保留subject／sid，并在同一次Auth.js signIn核account原id_token与subject绑定；孤立account或无sid不创建Product会话。Product HttpOnly加密claims新增必填issuerSessionId，旧无绑定cookie按clean-slate失效，不双读／补猜。普通原用户/tenant在线核验和原Redis双CAS／tombstone／cookie提交顺序保持。
+
+续期保原有唯一显式BFF token HTTP调用（原resource／Basic身份、界限和零重试），先校验原响应数值／凭据界限；用现openid-client5.7.1 Client.refresh进行ID token原生验签／issuer／aud／算法／时间核验，再比原subject及sid。为避免再次提交已轮转refresh，Client的公开grant方法仅消费此次已界限解析的响应TokenSet，拒任何第二次调用；不调用私有验签API、不另写JWT验证器。JWKS仍只走已允许BFF精确路径／机器header／bounded agent。整个token＋JWKS用同一最多5秒取消预算；未知失败沿原invalidatePending闭锁，不尝试再次兑换或重用旧refresh。
+
+写区：现provider／token／Product cookie／原auth route、相关单元及真实Next RP fixture、三面与现CURRENT／INDEX；四MCP WIP逐字保护，不夹带。先可信sid捕获及跨sid refresh失败RED→实现，补真实签名token/JWKS、错误签名／issuer／aud／缺sid与期限、取消／零重试／未知CAS回归，再相关Next主旅程与完整App门。此片不申领Billing grant、不预占／扣积分，也不因此宣称异步Agent整链闭合。
+
 ## AGENT-1／MODEL-1：精确模型绑定同源消费者（2026-10-22，本地已验）
 
 最终1142输入无漂移，完整App七门／4749 PASS、preview108及独立Docs45测试／54HTML17941链接通过，四MCP SHA恢复，独审Approved。正常激活和实际Agent资金链仍待，详见CURRENT首节。

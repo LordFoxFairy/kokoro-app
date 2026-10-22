@@ -107,7 +107,9 @@ async function productAction(request: NextRequest, action: "session" | "signout"
   catch { return errorResponse(503, "product_session_unavailable") }
   if (reserved === null) return errorResponse(409, "product_session_refresh_conflict")
   try {
-    const refreshed = await refreshOidcToken(config, reserved.refresh, request.signal)
+    const refreshed = await refreshOidcToken(config, reserved.refresh, request.signal, {
+      subject: claims.subject, issuerSessionId: claims.issuerSessionId,
+    })
     const accessExpiresAt = Date.now() + refreshed.expiresIn * 1_000
     await verifyProductIdentity(config, refreshed.access, claims.subject, request.signal)
     if (accessExpiresAt <= Date.now()) throw new Error("refreshed access expired during verification")
@@ -273,7 +275,7 @@ async function handle(request: NextRequest, context: Context, method: "GET" | "P
     await verifyProductIdentity(config, tokens.access, tokens.subject, request.signal)
     const candidate = newSessionCandidate()
     const cookie = await productSessionCookie({ id: candidate.id, generation: 0, access: tokens.access,
-      accessExpiresAt: tokens.accessExpiresAt, expiresAt: candidate.expiresAt, subject: tokens.subject },
+      accessExpiresAt: tokens.accessExpiresAt, expiresAt: candidate.expiresAt, subject: tokens.subject, issuerSessionId: tokens.issuerSessionId },
     config.authSecret, config.relay.webOrigin)
     await createSession({ redisUrl: config.redisUrl, webOrigin: config.relay.webOrigin,
       secret: config.authSecret }, tokens.refresh, candidate)

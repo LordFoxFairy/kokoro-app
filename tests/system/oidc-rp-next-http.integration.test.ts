@@ -1308,7 +1308,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
   let next: ChildProcess | undefined
   let nextPort = 0
   const oauthCodes = new Map<string, { nonce: string; challenge: string }>()
-  let invalidIdToken: "none" | "nonce" | "issuer" | "audience" | "signature" | "algorithm" | "expired" = "none"
+  let invalidIdToken: "none" | "nonce" | "issuer" | "audience" | "signature" | "algorithm" | "expired" | "session" = "none"
   let invalidUserinfoSubject = false
   let oversizedRefreshCredential = false
   let oversizedAccessCredential = false
@@ -2031,8 +2031,9 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
               expect(["refresh-opaque", "refresh-rotated"]).toContain(refresh)
               refreshRequests.push(refresh!)
               expect(body.get("code_verifier")).toBeNull()
-              const send = (): void => sendJson(response, "token", refreshResponseOverride ??
-                { access_token: "access-rotated", refresh_token: "refresh-rotated", token_type: "Bearer", expires_in: 600 })
+              const now=Math.floor(Date.now()/1000)
+              const refreshedId=jwt(keys.privateKey,{iss:`http://localhost:${nextPort}/iam`,aud:clientId,sub:"user-one",sid:"issuer-session-one",iat:now,exp:now+600})
+              const send = (): void => sendJson(response, "token", {access_token:"access-rotated",refresh_token:"refresh-rotated",token_type:"Bearer",expires_in:600,id_token:refreshedId,...refreshResponseOverride})
               if (holdRefresh) { releaseRefresh = send; onRefreshStarted?.() }
               else send()
               return
@@ -2047,7 +2048,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
             const now = Math.floor(Date.now() / 1000)
             const idToken = jwt(invalidIdToken === "algorithm" ? rsaKeys.privateKey : invalidIdToken === "signature" ? wrongKeys.privateKey : keys.privateKey,
               { iss: invalidIdToken === "issuer" ? "https://evil.example/iam" : `http://localhost:${nextPort}/iam`,
-                aud: invalidIdToken === "audience" ? "wrong-client" : clientId, sub: oversizedSubject ? "s".repeat(257) : "user-one",
+                sid:invalidIdToken==="session"?undefined:"issuer-session-one",aud: invalidIdToken === "audience" ? "wrong-client" : clientId, sub: oversizedSubject ? "s".repeat(257) : "user-one",
                 nonce: invalidIdToken === "nonce" ? "wrong-nonce" : codeFacts!.nonce,
                 iat: invalidIdToken === "expired" ? now - 1_200 : now,
                 exp: invalidIdToken === "expired" ? now - 600 : now + 600 },
@@ -2595,6 +2596,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     const token = cookie.split(";")[0]?.slice("kokoro_product_session=".length)
     if (token === undefined) return
     const claims = await decode({ token, secret: authSecret, salt: "kokoro-product-session-v1" })
+    expect(claims?.issuerSessionId).toBe("issuer-session-one")
     if (typeof claims?.id === "string") productIds.add(claims.id)
   }
 
@@ -2784,6 +2786,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     expect(JSON.parse(projection.body)).toMatchObject({ authenticated: true, subject: "user-one" })
     expect(projection.body).not.toContain("access-opaque")
     expect(projection.body).not.toContain("refresh-opaque")
+    expect(projection.body).not.toMatch(/issuerSessionId|issuer-session-one/u)
     expect((callback.headers["set-cookie"] as string[]).every((cookie) =>
       !cookie.includes("kokoro_session="))).toBe(true)
     expect(paths).toContain("/iam/oauth2/token")
@@ -6329,7 +6332,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     expect(paths).toHaveLength(before)
   })
 
-  it.each(["nonce", "issuer", "audience", "signature", "algorithm", "expired"] as const)("rejects a wrong ID token %s before userinfo and session", async (variant) => {
+  it.each(["nonce", "issuer", "audience", "signature", "algorithm", "expired", "session"] as const)("rejects a wrong ID token %s before userinfo and session", async (variant) => {
     const { jar, location, signin } = await start()
     invalidIdToken = variant
     try {

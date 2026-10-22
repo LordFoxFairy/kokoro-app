@@ -1,3 +1,9 @@
+## AUTH-1：原生会话连续性（2026-10-22，实施门）
+
+不改公开BFF／同源业务API、OIDC scope／resource／callback path或session投影；issuerSessionId仅在服务端HttpOnly加密cookie，绝不输出到/api/auth/session、URL／浏览器JSON或日志。初始已验签TokenSet的sid必需，与最终account.id_token及sub同一证据；续期ID token亦必需并走原生openid-client验证，iss/client aud/EdDSA/exp及原sub/sid匹配，不能裸decode当证明。正常失败仍原rp_callback_rejected／rp_unavailable或refresh_unconfirmed状态与受控页面恢复，未知不二次提交refresh。旧无sid Product cookie不兼容。
+
+原token响应expires_in为原数值正整数1..3600、access≤2048B／refresh≤8192B及有界响应保持；refresh先原一次HTTP，再公开SDK grant仅接该TokenSet进入原生refresh验证，无第二网络grant。JWKS只读固定BFF路径且同5秒预算，不开任意URL／额外IAM接口。公开合同与App在线文档无需换pin。
+
 ## AGENT-1／MODEL-1：精确模型绑定同源消费者（2026-10-22，本地已验）
 
 最终1142输入无漂移，完整App七门／4749 PASS、preview108及独立Docs45测试／54HTML17941链接通过，四MCP SHA恢复，独审Approved。正常激活和实际Agent资金链仍待，详见CURRENT首节。

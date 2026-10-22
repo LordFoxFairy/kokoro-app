@@ -5,7 +5,7 @@ import type { OAuthConfig } from "next-auth/providers/oauth"
 import { boundedOidcBffAgent } from "./oidc-bff-agent"
 import { configuredDomain } from "./domain-context"
 import { iamRelayConfig, type IamRelayConfig } from "./iam-relay-config"
-import { validAccessCredential } from "./product-session"
+import { validAccessCredential, validIssuerSessionId } from "./product-session"
 import { oidcTransactionCookieOptions, type OidcCookieNamespaces } from "./oidc-transaction-cookies"
 import { validRefreshCredential } from "./product-session-store"
 
@@ -28,6 +28,7 @@ export type OidcRpConfig = Readonly<{
 
 export type VerifiedOidcTokens = Readonly<{
   subject: string
+  issuerSessionId: string
   access: string
   refresh: string
   accessExpiresAt: number
@@ -80,6 +81,7 @@ function allowBffEndpoint(client: Client, config: OidcRpConfig, endpoint: "token
 }
 
 export function oidcAuthOptions(config: OidcRpConfig, onVerified: (tokens: VerifiedOidcTokens) => void, signal: AbortSignal, namespaces?: OidcCookieNamespaces): AuthOptions {
+  let verifiedIdentity: Readonly<{ idToken: string; subject: string; issuerSessionId: string }> | undefined
   const provider: OAuthConfig<{ sub: string; name?: string; email?: string }> = {
     id: PROVIDER_ID,
     name: "Kokoro IAM",
@@ -103,6 +105,13 @@ export function oidcAuthOptions(config: OidcRpConfig, onVerified: (tokens: Verif
         const tokens = await client.callback(activeProvider.callbackUrl, params, checks, {
           exchangeBody: { resource: OIDC_RESOURCE },
         })
+        signal.throwIfAborted()
+        const claims = tokens.claims()
+        if (typeof tokens.id_token !== "string" || typeof claims.sub !== "string" || claims.sub.length === 0 ||
+            !validIssuerSessionId(claims.sid)) {
+          throw new Error("Invalid verified RP session binding")
+        }
+        verifiedIdentity = { idToken: tokens.id_token, subject: claims.sub, issuerSessionId: claims.sid }
         return { tokens }
       },
     },
@@ -128,12 +137,14 @@ export function oidcAuthOptions(config: OidcRpConfig, onVerified: (tokens: Verif
     session: { strategy: "jwt" },
     callbacks: {
       signIn({ account }) {
-        if (account?.provider !== PROVIDER_ID || typeof account.providerAccountId !== "string" ||
+        if (verifiedIdentity === undefined || account?.id_token !== verifiedIdentity.idToken ||
+          account.providerAccountId !== verifiedIdentity.subject || account.provider !== PROVIDER_ID ||
+          typeof account.providerAccountId !== "string" ||
           !validAccessCredential(account.access_token) || !validRefreshCredential(account.refresh_token) ||
           typeof account.expires_at !== "number" || !Number.isSafeInteger(account.expires_at) ||
           account.expires_at * 1_000 <= Date.now() ||
           account.expires_at * 1_000 > Date.now() + MAX_TOKEN_LIFETIME_SECONDS * 1_000) return false
-        onVerified({ subject: account.providerAccountId, access: account.access_token,
+        onVerified({ subject: account.providerAccountId, issuerSessionId: verifiedIdentity.issuerSessionId, access: account.access_token,
           refresh: account.refresh_token, accessExpiresAt: account.expires_at * 1_000 })
         return false
       },

@@ -6,7 +6,7 @@ import { clearProductSessionCookie, productSessionCookie } from "@/lib/server/pr
 
 const claims = { id: "00000000-0000-4000-8000-000000000000", generation: 0,
   access: "access-fixture", accessExpiresAt: Date.now() + 600_000,
-  expiresAt: Date.now() + 3_600_000, subject: "user-one" }
+  expiresAt: Date.now() + 3_600_000, subject: "user-one", issuerSessionId:"issuer-one" }
 
 describe("Product cookie secure transport boundary", () => {
   afterEach(() => vi.unstubAllEnvs())
@@ -42,4 +42,8 @@ describe("Product cookie secure transport boundary", () => {
     expect(clearProductSessionCookie("http://web.example.test"))
       .toContain("; Max-Age=0; HttpOnly; SameSite=Lax; Secure")
   })
+  it("rejects a legacy cookie without the verified issuer Session binding",async()=>{
+    const {issuerSessionId,...old}=claims;expect(issuerSessionId).toBe("issuer-one");await expect(productSessionCookie(old as never,"secret","https://web.example.test")).rejects.toThrow()
+  })
+
 })

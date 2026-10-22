@@ -1,3 +1,13 @@
+## AUTH-1：登录与续期的原生issuer Session绑定已本地验收（2026-10-22）
+
+基线928de9f，沿现Auth.js／openid-client5.7.1，不新增协议／服务／Redis字段／业务路由或依赖。初始从原生callback验签后的TokenSet保留sid并核最终account原IDtoken及subject；续期只兑换一次，再以本请求独享Client.refresh原生验证该响应，固定BFF JWKS与token共5秒预算，严格比较原sub/sid。旧无sid的Product cookie直接失效，无兼容回填；原Redis双CAS／tombstone、cookie-before-store、在线tenant身份与凭据界限保留，sid不输出公开session JSON／URL／日志。
+
+最终1143非文档输入停写零漂移，Node22.22.2完整十阶段exit0：contract304、architecture50、lint／typegen／types、全套253文件4773 PASS／0SKIP、默认build／post-types、Docs独立45测试／五例／54HTML17941链接、桌面／移动preview108 PASS且零重试、最终官方typegen恢复。全套test显式单worker／禁止fileparallel；四MCP WIP按原四SHA完整恢复并排除提交，独审Approved。78定向回归含真实loopback签名／JWKS及主动取消；实际Next／Redis RP全套94项纳入上述4773，包含并发刷新、旧代际／登出及缺sid拒绝。Next的BFF／IAM peer仍是命名夹具，不冒正常IAM新登录或真实资金验收。
+
+失败保留：首完整4772 PASS／1FAIL定位本次callback提前sub长度拒绝改变原cookie preflight503为403，删除该新增早拒，原ProductClaims≤256及旧503／零Redis／无cookie断言未改；随后真实Next8 PASS／86名称过滤。次完整4674 PASS／99SKIP因原两Next setup超时失败，根因未定位；未增timeout／删断言或称该波动修复，最终同输入以单worker完整全套通过。初期测试夹具默认import发射配置及类型修正亦留原日志，不将其视为业务RED。
+
+按用户最新澄清，本片仅登录连续性修复，不把issuer sid或用户token写入Agent Run，不新增App额外Billing grant／BFF回程取token。后继由Root同一主链沿内部身份、可信Run消费绑定、预算预占与真实结算继续；资金授权不因服务认证而省略。正常服务／配置／Schema／积分均未动，未调用实际模型／业务工具或结算；未push／PR／merge，不以本片称整链完成。操作及收据仅ignored `var/dev/consumption-session-20261022`。
+
 ## AGENT-1／MODEL-1：精确模型绑定与在线Docs已本地验收（2026-10-22）
 
 唯一snapshot固定BFFa77276b35b07eb65df8a0af2e41b461b393afb12／Public23.0.0／186，SHA256 34ea71e0aa56256ca00fc5b3c40abd4d142bea82e664a6871190b8547ec2b9e6。仅MeteringRate必填model_revision闭集pair，七原窄生成器正式重出；test-only完整22.5逆证再承接原22.4／全部历史父件。生产透明桥、1MiB/12层／原充值16KiB／10秒／Product身份与原命令恢复逐字未改，无运行fallback；大配置fixture每个模型有独立精确pair，原负控保持。

@@ -10,14 +10,22 @@ export function validAccessCredential(value: unknown): value is string {
     Buffer.byteLength(value, "utf8") <= MAX_ACCESS_CREDENTIAL_BYTES
 }
 
-type ProductClaims = Readonly<{ id: string; generation: number; access: string; accessExpiresAt: number; expiresAt: number; subject: string }>
+export function validIssuerSessionId(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0 && value.length <= 256 && [...value].every(character => {
+    const codePoint = character.codePointAt(0)!
+    return codePoint >= 32 && !(codePoint >= 127 && codePoint <= 159) &&
+      !(codePoint >= 0xd800 && codePoint <= 0xdfff)
+  })
+}
+
+type ProductClaims = Readonly<{ id: string; generation: number; access: string; accessExpiresAt: number; expiresAt: number; subject: string; issuerSessionId: string }>
 
 function validClaims(value: unknown): value is ProductClaims {
   if (typeof value !== "object" || value === null) return false
   const v = value as Record<string, unknown>
   return typeof v.id === "string" && /^[a-f0-9-]{36}$/u.test(v.id) &&
     typeof v.generation === "number" && Number.isSafeInteger(v.generation) && v.generation >= 0 &&
-    validAccessCredential(v.access) &&
+    validAccessCredential(v.access) && validIssuerSessionId(v.issuerSessionId) &&
     typeof v.accessExpiresAt === "number" && Number.isFinite(v.accessExpiresAt) &&
     typeof v.expiresAt === "number" && Number.isFinite(v.expiresAt) &&
     typeof v.subject === "string" && v.subject.length > 0 && v.subject.length <= 256

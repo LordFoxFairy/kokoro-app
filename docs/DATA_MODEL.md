@@ -1,3 +1,7 @@
+## AUTH-1：服务端cookie的issuer Session绑定（2026-10-22）
+
+ProductClaims在现id／generation／subject／access及期限旁新增必填issuerSessionId，值来自原生已验签ID token sid；有界合法Unicode、不含控制字符，不能从user ID／Product Session ID推导。仅加密HttpOnly cookie持有，不增加Redis记录字段／表／业务owner。现refresh-at-rest／AAD／双CAS／tombstone保持。refresh后原sid不变；缺失／错签名／异sid闭锁原待定会话，旧无sid cookie直接失效，无兼容填充。本片只约束浏览器登录／续期，不给Run增加用户token或额外Billing grant。
+
 ## AGENT-1／MODEL-1：精确模型绑定同源消费者（2026-10-22，本地已验）
 
 最终1142输入无漂移，完整App七门／4749 PASS、preview108及独立Docs45测试／54HTML17941链接通过，四MCP SHA恢复，独审Approved。正常激活和实际Agent资金链仍待，详见CURRENT首节。
