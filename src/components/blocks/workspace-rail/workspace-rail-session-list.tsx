@@ -171,7 +171,10 @@ export function WorkspaceRailSessionList({
             <div className={itemStyles.listNotice} role="alert">{t("rail.moveFailed")}</div>
           ) : null}
           {blocked ? (
-            <p className={itemStyles.empty} role="status">{t("firstSite.unavailable")}</p>
+            <WorkspaceRailLoadingPlaceholder
+              label={t("rail.listLoading")}
+              testId="conversations-loading"
+            />
           ) : listError && !hasConversations ? (
             <div className={itemStyles.listNotice} role="alert">
               <p className={itemStyles.empty}>{t("rail.listError")}</p>
@@ -361,7 +364,7 @@ function ScopedConversationGroupView({ scope, reads, projects, projectListReady,
   return <ConversationGroup {...props} conversationMoveFailed={props.conversationMoveFailed && reads.failedMoveScopeKey === key} scopeKey={key} onNewChat={() => { if (reads.admitted && controller) reads.onNewChat(scope) }} blocked={!reads.admitted} projectActive={scope.kind === "project"}
     conversations={controller?.conversations ?? []} hasConversations={(controller?.conversations.length ?? 0) > 0}
     activeId={current ? reads.activeId : null}
-    listLoading={controller?.loading ?? reads.admitted} listLoadingMore={controller?.loadingMore ?? false} listError={controller?.error ?? !reads.admitted}
+    listLoading={controller?.loading ?? true} listLoadingMore={controller?.loadingMore ?? false} listError={controller?.error ?? false}
     {...(reads.admitted && controller ? { onRetryList: controller.refresh } : {})} hasMore={controller?.hasMore ?? false} onLoadMore={() => controller?.loadMore()}
     onSelectConversation={(id) => { if (reads.admitted) reads.onSelect(scope, id) }}
     {...(reads.onArchive ? {onArchiveConversation:reads.onArchive,archiveBusy:reads.archiveBusy??false}: {})}

@@ -19,6 +19,33 @@ afterEach(() => {
 })
 
 describe("useSessionList", () => {
+  it("waits for renewed admission without reporting a read failure or accepting retired pagination", async () => {
+    let finishOldPage!: (page: { sessions: ReturnType<typeof item>[]; next_cursor: null }) => void
+    const listSessions = vi.fn()
+      .mockResolvedValueOnce({ sessions: [item("old", "t1")], next_cursor: "next" })
+      .mockImplementationOnce(() => new Promise((resolve) => { finishOldPage = resolve }))
+      .mockResolvedValueOnce({ sessions: [item("new", "t2")], next_cursor: null })
+    const client = { listSessions }
+    const view = renderHook(({ boundary }) => useSessionList(client, 0, DIRECT_SESSION_SCOPE, undefined, boundary), {
+      initialProps: { boundary: { admitted: false, identity: "reader:0" } },
+    })
+    expect(view.result.current).toMatchObject({ entries: [], loading: true, error: false, hasMore: false })
+    expect(listSessions).not.toHaveBeenCalled()
+    view.rerender({ boundary: { admitted: true, identity: "reader:1" } })
+    await waitFor(() => expect(view.result.current.entries.map(entry => entry.id)).toEqual(["old"]))
+    act(() => view.result.current.loadMore())
+    view.rerender({ boundary: { admitted: false, identity: "reader:2" } })
+    expect(view.result.current).toMatchObject({ entries: [], loading: true, error: false, hasMore: false, settledFirstPage: null })
+    act(() => view.result.current.loadMore())
+    expect(listSessions).toHaveBeenCalledTimes(2)
+    await act(async () => { finishOldPage({ sessions: [item("late", "t1")], next_cursor: null }) })
+    expect(view.result.current.entries).toEqual([])
+    view.rerender({ boundary: { admitted: true, identity: "other-reader:3" } })
+    await waitFor(() => expect(view.result.current.entries.map(entry => entry.id)).toEqual(["new"]))
+    expect(listSessions).toHaveBeenCalledTimes(3)
+    view.unmount()
+  })
+
   it("shares an in-flight first-page request across StrictMode effect replay of the same hook", async () => {
     let resolve!: (value: { sessions: ReturnType<typeof item>[], next_cursor: string | null }) => void
     const firstPage = new Promise<{ sessions: ReturnType<typeof item>[], next_cursor: string | null }>(done => { resolve = done })

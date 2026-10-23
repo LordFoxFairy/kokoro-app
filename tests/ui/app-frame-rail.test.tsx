@@ -591,6 +591,37 @@ it("只有成功读取 projects=[] 才呈现项目空态", async () => {
   expect(document.querySelectorAll("[data-project-list] [data-project-id]")).toHaveLength(0)
 })
 
+it("焦点返回等待会话核验时不闪不可用或空列表，核验后恢复且保留草稿", async () => {
+  let finishCheck!: (response: Response) => void
+  let checks = 0
+  let projectReads = 0
+  await mountAuthenticatedProjectRail(async () => { projectReads++; return projectReadEnvelope() }, async () => {
+    checks++
+    if (checks === 2) return new Promise<Response>((resolve) => { finishCheck = resolve })
+    return Response.json({ authenticated: true, subject: "project-reader" })
+  })
+  await screen.findByRole("link", { name: "新对话 · 研究项目甲" })
+  const composer = screen.getByRole("textbox", { name: "对话输入" })
+  fireEvent.change(composer, { target: { value: "核验期间保留的草稿" } })
+  act(() => window.dispatchEvent(new Event("focus")))
+  await waitFor(() => expect(checks).toBe(2))
+  expect(projectReads).toBe(1)
+  expect(screen.queryByText("项目不可用")).not.toBeInTheDocument()
+  expect(screen.queryByText("不可用", { exact: true })).not.toBeInTheDocument()
+  expect(screen.queryByTestId("projects-error")).not.toBeInTheDocument()
+  expect(screen.queryByTestId("projects-empty")).not.toBeInTheDocument()
+  expect(screen.queryByRole("link", { name: "新对话 · 研究项目甲" })).not.toBeInTheDocument()
+  expect(screen.getByTestId("projects-loading").textContent).toBe("")
+  expect(screen.getAllByTestId("conversations-loading").every(node => node.textContent === "")).toBe(true)
+  expect(screen.getByRole("textbox", { name: "对话输入" })).toBe(composer)
+  expect(composer).toHaveValue("核验期间保留的草稿")
+  await act(async () => { finishCheck(Response.json({ authenticated: true, subject: "project-reader" })) })
+  await screen.findByRole("link", { name: "新对话 · 研究项目甲" })
+  expect(projectReads).toBe(2)
+  expect(screen.getByRole("textbox", { name: "对话输入" })).toBe(composer)
+  expect(composer).toHaveValue("核验期间保留的草稿")
+})
+
 it("同 subject 重核验开始就清空并取消旧读取，迟到响应不能复活项目或重挂 Chat", async () => {
   let resolveOld: (response: Response) => void = () => { throw new Error("old read not pending") }
   let resolveSession: (response: Response) => void = () => { throw new Error("session not pending") }

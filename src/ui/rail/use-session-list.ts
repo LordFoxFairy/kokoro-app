@@ -160,7 +160,9 @@ export function useSessionList(
     })
   }, [admitted, client, currentScopeKey, identity, lifecycle, scope, state.cursor, state.identity, state.lifecycle, state.loadingMore, state.scopeKey])
 
-  const visibleState = admitted && state.lifecycle === lifecycle && state.identity === identity && state.scopeKey === currentScopeKey ? state : { ...INITIAL, loading: admitted, error: !admitted }
+  // Admission may be suspended while the Product session is rechecked. No
+  // list request has failed in that state; keep private rows retired and wait.
+  const visibleState = admitted && state.lifecycle === lifecycle && state.identity === identity && state.scopeKey === currentScopeKey ? state : INITIAL
 
   return {
     entries: visibleState.entries,

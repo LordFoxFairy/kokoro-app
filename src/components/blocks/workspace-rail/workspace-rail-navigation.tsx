@@ -165,7 +165,7 @@ export function WorkspaceRailNavigation({
       <span className={navigationStyles.moreGlyph}><Icon aria-hidden="true" /></span><span>{label}</span>
     </DropdownMenuItem>
   ) : null
-  const projectReadFeedback = projectListStatus === "loading" ? (
+  const projectReadFeedback = projectListStatus === "loading" || projectListStatus === "blocked" ? (
     <WorkspaceRailLoadingPlaceholder
       label={t("firstSite.projectsLoading")}
       testId="projects-loading"
@@ -177,8 +177,6 @@ export function WorkspaceRailNavigation({
     </div>
   ) : projectListStatus === "ready" && orderedProjects.length === 0 ? (
     <p role="status" data-testid="projects-empty">{t("firstSite.projectsEmpty")}</p>
-  ) : projectListStatus === "blocked" ? (
-    <p role="status" data-testid="projects-blocked">{t("firstSite.projectsUnavailable")}</p>
   ) : null
 
   const toggleProjectConversations = (projectId: string, currentlyExpanded: boolean) => {
