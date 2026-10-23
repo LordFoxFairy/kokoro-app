@@ -565,6 +565,8 @@ export const pt: Partial<Record<MessageKey, string>> = {
   "billing.reasonSubscription": "subscrição",
   "billing.reasonRefund": "Reembolso",
   "billing.reasonAdjustment": "Ajuste manual",
+  "billing.reasonCreditReceived": "Créditos recebidos",
+  "billing.reasonOther": "Movimentação de créditos",
   "billing.quotaLabel": "Limite de cota para este ciclo",
   "billing.quotaPeriodMonthly": "por mês",
   "billing.trendTitle": "Tendência de equilíbrio",

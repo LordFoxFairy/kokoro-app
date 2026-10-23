@@ -1,3 +1,7 @@
+## 积分流水的用户文案（2026-10-22）
+
+`billing-model.reasonKey`只负责只读展示映射：正式来源`admin_credit`在用户侧显示“积分到账”，不暴露管理员身份或声称现金支付；未识别来源统一为“积分变动”，不猜成充值／消费。九语言均维护独立词条，`billing-ledger`的嵌入／独立两种视图共用；API原source_kind、金额、符号、排序、过滤和分页不变。两视图九语言回归及实际正常页面已验，详见CURRENT本次局部修复。
+
 <!-- 2026-10-22 continuation retirement correction -->
 积分客户端每次续发 PUT 或核实 GET 前复验调用方 `getCurrent`；真实账户/用量/rail传入现 controller/current 与发起时已准入subject的marker一致性检查。只更新storage、无rerender/focus仍会抑制旧续发；marker丢失、不匹配或读取异常一律退休。marker只抑制，不授予session权限；非UI调用可不传callback，初次GET契约保持，无新store/轮询/锁。
 

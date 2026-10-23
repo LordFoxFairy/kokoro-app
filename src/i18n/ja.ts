@@ -642,6 +642,8 @@ export const ja: Partial<Record<MessageKey, string>> = {
   "billing.reasonSubscription": "サブスクリプション",
   "billing.reasonRefund": "返金",
   "billing.reasonAdjustment": "手動調整",
+  "billing.reasonCreditReceived": "クレジット付与",
+  "billing.reasonOther": "クレジットの変更",
   "billing.quotaLabel": "このサイクルのクォータ制限",
   "billing.quotaPeriodMonthly": "月あたり",
   "billing.trendTitle": "バランストレンド",

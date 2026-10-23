@@ -565,6 +565,8 @@ export const ru: Partial<Record<MessageKey, string>> = {
   "billing.reasonSubscription": "подписка",
   "billing.reasonRefund": "Возвращать деньги",
   "billing.reasonAdjustment": "Ручная регулировка",
+  "billing.reasonCreditReceived": "Кредиты начислены",
+  "billing.reasonOther": "Изменение кредитов",
   "billing.quotaLabel": "Ограничение квоты для этого цикла",
   "billing.quotaPeriodMonthly": "помесячно",
   "billing.trendTitle": "Балансовый тренд",

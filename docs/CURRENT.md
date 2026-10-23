@@ -1,3 +1,11 @@
+## UI-1：积分历史中性文案局部修复（2026-10-22）
+
+用户拒绝`admin_credit`及“管理员充值”等面向用户文案。原reason映射缺正式来源、未知值直接透出技术码；现`admin_credit`只读映射为“积分到账”，未知来源为“积分变动”，九语言覆盖。API／账本原source_kind与金额、原已识别模型／工具／退款等文案不变；两种流水视图共用，不新建配置／迁移或金融入口。
+
+定向4文件161 PASS／0SKIP，改动路径ESLint与App官方typegen＋tsc通过，独立只读审查Approved。36新用例覆盖九语言×嵌入／独立视图×到账／未知来源；原分页single-flight／重试原cursor／去重及旧主体退休断言承接为真实金额或已知业务标签，未删除这些保护。原完整36项失败、修订中文需求原mapper＋renderer的4项RED及首轮两项旧raw标签断言失败均保留；一次名称选择未命中与仅回退renderer但helper已修的通过不记RED证明。
+
+正常源码11文件与候选原基线逐字相同后，仅应用此展示补丁并核最终SHA；原next-env.d.ts与配置字节保留，进程未重启。真实原租户页面当前显示“积分到账 +1000”，余额1000／冻结0不变；截图与可逆补丁只留本地ignored。正常代码仅此局部热更新，不表示最新认证／Agent候选已激活。四MCP视觉WIP原四SHA保持并排除提交。本片未发送模型／工具或金融命令；未重跑整仓contract／build／完整E2E，集中PR前完整门仍按原统一计划，不以本片标整轮闭环。
+
 ## AUTH-1：登录与续期的原生issuer Session绑定已本地验收（2026-10-22）
 
 基线928de9f，沿现Auth.js／openid-client5.7.1，不新增协议／服务／Redis字段／业务路由或依赖。初始从原生callback验签后的TokenSet保留sid并核最终account原IDtoken及subject；续期只兑换一次，再以本请求独享Client.refresh原生验证该响应，固定BFF JWKS与token共5秒预算，严格比较原sub/sid。旧无sid的Product cookie直接失效，无兼容回填；原Redis双CAS／tombstone、cookie-before-store、在线tenant身份与凭据界限保留，sid不输出公开session JSON／URL／日志。

@@ -826,6 +826,8 @@ export const en: Partial<Record<MessageKey, string>> = {
   "billing.reasonSubscription": "Subscription",
   "billing.reasonRefund": "Refund",
   "billing.reasonAdjustment": "Manual adjustment",
+  "billing.reasonCreditReceived": "Credits received",
+  "billing.reasonOther": "Credit activity",
   "billing.quotaLabel": "Quota this cycle",
   "billing.quotaPeriodMonthly": "Monthly",
   "billing.trendTitle": "Balance trend",

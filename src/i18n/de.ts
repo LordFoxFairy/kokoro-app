@@ -565,6 +565,8 @@ export const de: Partial<Record<MessageKey, string>> = {
   "billing.reasonSubscription": "Abonnement",
   "billing.reasonRefund": "Erstattung",
   "billing.reasonAdjustment": "Manuelle Einstellung",
+  "billing.reasonCreditReceived": "Credits erhalten",
+  "billing.reasonOther": "Credit-Änderung",
   "billing.quotaLabel": "Kontingentlimit für diesen Zyklus",
   "billing.quotaPeriodMonthly": "pro Monat",
   "billing.trendTitle": "Balance-Trend",

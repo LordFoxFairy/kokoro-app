@@ -81,8 +81,9 @@ describe("BillingPanel", () => {
     expect(debit.getAttribute("data-sign")).toBe("negative")
     const credit = screen.getByText("+5")
     expect(credit.getAttribute("data-sign")).toBe("positive")
-    // 未知 reason 回退原文（不裸露 key）。
-    expect(screen.getByText("top_up_custom")).toBeTruthy()
+    // 未识别的来源不泄漏内部代码，也不猜成充值或消费。
+    expect(screen.getByText("Credit activity")).toBeTruthy()
+    expect(screen.queryByText("top_up_custom")).not.toBeInTheDocument()
   })
 
   it("shows an empty state when there are no transactions", async () => {
@@ -452,13 +453,13 @@ describe("R255 bounded Credit read and mounted recovery", () => {
     await act(async () => { oldLedger.resolve({ items: [r255ExistingEntry], page: { next_cursor: null } }); await Promise.resolve() })
     expect(await screen.findByText("7", { exact: true })).toBeInTheDocument()
     expect(screen.queryByText("42", { exact: true })).not.toBeInTheDocument()
-    expect(screen.queryByText("r255-entry")).not.toBeInTheDocument()
+    expect(screen.queryByText("-0.000001", { exact: true })).not.toBeInTheDocument()
   })
 
   it("keeps pagination single-flight and makes a failed page explicitly retry the same cursor", async () => {
     const page = r255Deferred<{ items: typeof r255ExistingEntry[]; page: { next_cursor: string | null } }>()
     const ledger = vi.fn().mockResolvedValueOnce({ items: [r255ExistingEntry], page: { next_cursor: "same-opaque-page" } })
-      .mockImplementationOnce(() => page.promise).mockResolvedValueOnce({ items: [{ ...r255ExistingEntry, journal_id: "33333333-3333-4333-8333-333333333333", source_kind: "r255-second" }], page: { next_cursor: null } })
+      .mockImplementationOnce(() => page.promise).mockResolvedValueOnce({ items: [{ ...r255ExistingEntry, journal_id: "33333333-3333-4333-8333-333333333333", source_kind: "tool_call" }], page: { next_cursor: null } })
     render(<BillingContent {...{ preview: false, readBoundary: { admitted: true, subject: "billing-test-owner", generation: 1 } }} client={makeClient({ ledger })} embedded />, { wrapper: LocaleProvider })
     const more = await screen.findByRole("button", { name: "Load more" })
     fireEvent.click(more)
@@ -470,7 +471,7 @@ describe("R255 bounded Credit read and mounted recovery", () => {
     expect(section).toHaveTextContent("Failed to load")
     const retry = screen.getByRole("button", { name: "Reload" })
     fireEvent.click(retry)
-    await screen.findByText("r255-second")
+    await screen.findByText("Tool call")
     expect(ledger.mock.calls[2]).toEqual(["same-opaque-page", expect.any(AbortSignal), expect.any(Function)])
     expect(screen.queryByRole("button", { name: "Load more" })).not.toBeInTheDocument()
   })
@@ -482,7 +483,7 @@ describe("R255 bounded Credit read and mounted recovery", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Load more" }))
     await waitFor(() => expect(ledger).toHaveBeenCalledTimes(2))
     await act(async () => { await Promise.resolve() })
-    expect(screen.getAllByText("r255-entry")).toHaveLength(1)
+    expect(screen.getAllByText("Credit activity")).toHaveLength(1)
     expect(screen.getByTestId("billing-ledger")).toHaveTextContent("Failed to load")
   })
 
@@ -789,7 +790,7 @@ describe("R255 missing Credit account domain state", () => {
       expect(screen.queryByText("No credit account yet")).not.toBeInTheDocument()
     }
     expect(screen.queryByText("42", { exact: true })).not.toBeInTheDocument()
-    expect(screen.queryByText("r255-entry")).not.toBeInTheDocument()
+    expect(screen.queryByText("-0.000001", { exact: true })).not.toBeInTheDocument()
   })
 })
 

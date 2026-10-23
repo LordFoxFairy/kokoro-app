@@ -15,8 +15,10 @@ export type LedgerFilter = "all" | "spend" | "credit"
 
 export type LedgerDay = { key: string; label: string; net: string; entries: BillingLedgerEntry[] }
 
-export function reasonKey(reason: string): MessageKey | null {
+export function reasonKey(reason: string): MessageKey {
   switch (reason) {
+    case "admin_credit":
+      return "billing.reasonCreditReceived"
     case "model_call":
       return "billing.reasonModelCall"
     case "tool_call":
@@ -28,7 +30,7 @@ export function reasonKey(reason: string): MessageKey | null {
     case "manual_adjustment":
       return "billing.reasonAdjustment"
     default:
-      return null
+      return "billing.reasonOther"
   }
 }
 

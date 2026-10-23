@@ -895,6 +895,8 @@ export const zh = {
   "billing.reasonSubscription": "订阅",
   "billing.reasonRefund": "退款",
   "billing.reasonAdjustment": "手动调整",
+  "billing.reasonCreditReceived": "积分到账",
+  "billing.reasonOther": "积分变动",
   // 用量透视（B1）：配额、余额走势、流水分组/筛选、运行标记、低余额预警
   "billing.quotaLabel": "本周期配额上限",
   "billing.quotaPeriodMonthly": "每月",

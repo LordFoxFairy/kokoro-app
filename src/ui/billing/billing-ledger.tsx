@@ -70,8 +70,7 @@ function LedgerEntries({ entries, embedded, localeTag }: { entries: BillingLedge
             </div>
             <ul className={styles.ledger}>
               {day.entries.map((entry) => {
-                const key = reasonKey(entry.source_kind)
-                const label = key ? t(key) : entry.source_kind
+                const label = t(reasonKey(entry.source_kind))
                 if (embedded) return <EmbeddedEntry key={entry.journal_id} entry={entry} label={label} />
                 return (
                   <li key={entry.journal_id} className={styles.entry}>

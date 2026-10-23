@@ -565,6 +565,8 @@ export const ko: Partial<Record<MessageKey, string>> = {
   "billing.reasonSubscription": "신청",
   "billing.reasonRefund": "환불하다",
   "billing.reasonAdjustment": "수동 조정",
+  "billing.reasonCreditReceived": "크레딧 지급",
+  "billing.reasonOther": "크레딧 변동",
   "billing.quotaLabel": "이 주기의 할당량 한도",
   "billing.quotaPeriodMonthly": "매월",
   "billing.trendTitle": "잔액 추세",
