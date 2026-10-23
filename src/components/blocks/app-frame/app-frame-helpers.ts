@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react"
+import { parseRailCollapsedCookie } from "@/lib/sidebar-preference"
 
 import { normalizeSettingsTab, type SettingsTab } from "@/ui/settings/settings-modal"
 import type { CreationIntent } from "@/ui/composer/creation-intent-pill"
@@ -67,13 +68,7 @@ export function takePendingProjectDraft(projectRef: string): string | null {
 
 export function readRailCollapsedCookie(): boolean | null {
   if (typeof document === "undefined") return null
-  const cookie = document.cookie
-    .split(";")
-    .map((part) => part.trim())
-    .find((part) => part.startsWith("sidebar_state="))
-  if (!cookie) return null
-  const value = cookie.slice("sidebar_state=".length)
-  return value === "true" ? false : value === "false" ? true : null
+  return parseRailCollapsedCookie(document.cookie)
 }
 
 const CREATION_INTENTS: readonly CreationIntent[] = ["presentation", "website", "design", "game", "app"]

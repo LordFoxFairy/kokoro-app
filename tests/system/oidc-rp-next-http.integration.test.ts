@@ -2995,6 +2995,10 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
         const separator = pair.indexOf("=")
         return separator > 0 ? [{ name: pair.slice(0, separator), value: pair.slice(separator + 1), url: origin }] : []
       })
+      // The first HTML must honor the same non-sensitive layout preference as
+      // the mounted workspace. Previously every cold rail was 52px, so a
+      // returning user with an expanded rail saw the entire page jump 248px.
+      cookies.push({ name: "sidebar_state", value: "true", url: origin })
       const noScriptContext = await browser.newContext({ javaScriptEnabled: false })
       try {
         await noScriptContext.addCookies(cookies)
@@ -3008,6 +3012,18 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
         expect(await noScriptPage.locator('[data-slot="composer-input"]').isDisabled()).toBe(true)
         expect(await noScriptPage.getByTestId("runtime-loading").count()).toBe(0)
         expect(await noScriptPage.getByTestId("app-frame-loading").count()).toBe(0)
+        expect((await noScriptPage.locator('[data-app-frame-main="true"]').boundingBox())?.x).toBe(300)
+        await noScriptPage.setViewportSize({ width: 390, height: 844 })
+        expect((await noScriptPage.locator('[data-app-frame-main="true"]').boundingBox())?.x).toBe(0)
+        await noScriptPage.setViewportSize({ width: 1280, height: 720 })
+        await noScriptContext.addCookies([{ name: "sidebar_state", value: "false", url: origin }])
+        await noScriptPage.reload({ waitUntil: "domcontentloaded" })
+        expect((await noScriptPage.locator('[data-app-frame-main="true"]').boundingBox())?.x).toBe(52)
+        await noScriptContext.addCookies([{ name: "sidebar_state", value: "invalid", url: origin }])
+        await noScriptPage.reload({ waitUntil: "domcontentloaded" })
+        expect((await noScriptPage.locator('[data-app-frame-main="true"]').boundingBox())?.x).toBe(52)
+        await noScriptPage.goto(`${origin}/app/project/project-layout`, { waitUntil: "domcontentloaded" })
+        expect((await noScriptPage.locator('[data-app-frame-main="true"]').boundingBox())?.x).toBe(300)
       } finally {
         await noScriptContext.close()
       }
@@ -3070,6 +3086,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
           await page.locator('[data-app-frame-main="true"]').waitFor({ state: "visible", timeout: remaining() })
           await page.locator('[data-slot="composer-input"]').waitFor({ state: "visible", timeout: remaining() })
           expect(await page.locator('[data-slot="composer-input"]').isEnabled()).toBe(true)
+          expect((await page.locator('[data-app-frame-main="true"]').boundingBox())?.x).toBe(300)
         } catch (error) {
           throw new AggregateError([error], await diagnostic(`${stage}_convergence`))
         }

@@ -12,8 +12,9 @@ import { useSessionProbe } from "./use-session-state"
 import { openProductSignIn } from "./product-auth-client"
 import { useScheduledTaskClient } from "./use-scheduled-task-client"
 
-export function AppGate({ brandName, serverAdmitted = false, serverUnavailable = false }: {
+export function AppGate({ brandName, desktopRailCollapsed, serverAdmitted = false, serverUnavailable = false }: {
   brandName?: string
+  desktopRailCollapsed?: boolean
   serverAdmitted?: boolean
   serverUnavailable?: boolean
 } = {}) {
@@ -93,6 +94,7 @@ export function AppGate({ brandName, serverAdmitted = false, serverUnavailable =
     {unavailable ? <p role="status" aria-live="polite" className="sr-only">{t("thread.reconnecting")}</p> : null}
     <KokoroAppSurface
       booting={booting}
+      {...(desktopRailCollapsed === undefined ? {} : { desktopRailCollapsed })}
       brandName={brandName ?? brand.name}
       brandMark={brand.mark}
       {...(brandLogoUrl === undefined ? {} : { brandLogoUrl })}

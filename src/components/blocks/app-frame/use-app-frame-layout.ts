@@ -30,8 +30,8 @@ export function useAppFrameLayout({
 }: AppFrameLayoutOptions) {
   const compactDesktopRail = useCompactDesktopRail()
 
-  // The server cannot read the sidebar cookie. Start from the server-provided
-  // default so hydration has an identical tree, then reconcile the persisted
+  // The server supplies the saved sidebar preference when available. Start
+  // from that value so hydration has an identical tree, then reconcile the
   // preference in a layout effect before the first painted frame. Reading
   // the cookie inside the state initializer made a returning user render a
   // different rail tree on the client, triggering a hydration rebuild and the

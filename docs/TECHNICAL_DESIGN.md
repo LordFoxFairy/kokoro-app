@@ -1,3 +1,11 @@
+## UI-1：首屏侧栏与正式工作区使用同一布局偏好（2026-10-23）
+
+真实冷刷新复现：等待 Product 会话探针的静态壳固定 52px，已保存展开偏好的正式侧栏为 300px，接管时正文横移 248px。首文档现在解析既有 `sidebar_state`，经 AppGate 传入 AppFrame，静态壳使用现有 RAIL_DEFAULT / RAIL_COLLAPSED_WIDTH；浏览器协调同一解析规则。非法/缺失偏好沿页面默认，手机不占侧栏空间。没有新 cookie、存储、认证入口或用户数据读取；偏好不授权，探针通过前仍不挂私有 Runtime。
+
+原 R147 真实 Next HTTP / Chromium 测试先复现 52≠300，再覆盖禁脚本首文档、完整接管、刷新、收起、手机、非法偏好及项目默认。该测试的身份/BFF peer 为明确夹具，正常环境单独验收；无障碍标签不等于可见加载文字，本片不声称顶部/背景/输入框占位或全部初始化闪动已消除。
+
+基线 `8a31af0` 的工作树验证：认证/侧栏/准入三文件323 PASS，完整256文件4833 PASS，contract304、architecture50、lint/typecheck/build/post-build types通过；隔离preview桌面/手机108 PASS，零重试。已有积分文案/MCP等未提交工作保留、不纳入本片提交；验证包含这些工作树输入，未冒称纯净main或全产品验收。源文件停写后1053项输入无漂移，正常页面与最终交付记录归Root当前事实。
+
 ## AUTH-1：登录表单短地址（2026-10-23，正常已加载）
 
 基线52baa59；仅App第一方登录交互，不改IAM、Auth.js协议、权限或Admin会话。当前Proxy只rewrite，浏览器地址、form action和失败303仍带签名query。选择复用Web Redis保存短期原query，以随机flow引用＋独立HttpOnly browser proof定位；不采用仅history.replaceState（刷新失效）或cookie保存最长8KiB query。无新服务，Product仍是唯一产品会话owner。

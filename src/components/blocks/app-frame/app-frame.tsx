@@ -1,11 +1,12 @@
 "use client"
 import { useSessionArchive } from "@/ui/shell/use-session-archive"
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
+import { type CSSProperties, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 
 import { activeMode } from "@/core/conversations"
 import { isCreditInsufficient } from "@/billing/rules"
 import { useHydrated } from "@/lib/use-hydrated"
+import { RAIL_COLLAPSED_WIDTH, RAIL_DEFAULT } from "@/ui/rail/use-rail-resize"
 import { matchesSavedKeyboardShortcut } from "@/lib/keyboard-shortcuts"
 import { useIsMobile } from "@/hooks/use-mobile"
 import type { SessionClient } from "@/engine/client"
@@ -56,10 +57,11 @@ export { COMPACT_DESKTOP_RAIL_BREAKPOINT, settingsTabFromLocation }
 
 function AppFrameBootingSurface({
   brandName,
+  desktopRailCollapsed = false,
   projectWorkspace = false,
   standaloneSurface = false,
   hideWorkspaceHeader = false,
-}: Pick<AppFrameProps, "brandName" | "projectWorkspace" | "standaloneSurface" | "hideWorkspaceHeader">) {
+}: Pick<AppFrameProps, "brandName" | "desktopRailCollapsed" | "projectWorkspace" | "standaloneSurface" | "hideWorkspaceHeader">) {
   const composerRef = useRef<HTMLTextAreaElement | null>(null)
   const composer = (
     <AppFrameComposer
@@ -90,7 +92,8 @@ function AppFrameBootingSurface({
     />
   )
   return (
-    <div className={shellStyles.shell} data-desktop-web="true" data-web-skin="kokoro">
+    <div className={shellStyles.shell} data-desktop-web="true" data-web-skin="kokoro"
+      style={{ "--rail-width": `${desktopRailCollapsed ? RAIL_COLLAPSED_WIDTH : RAIL_DEFAULT}px` } as CSSProperties}>
       <div className={`${shellStyles.inset} flex flex-1`} data-slot="sidebar-inset">
         {/* Keep the first admitted document spatially continuous with the
          * mounted workspace. This is intentionally a static shell, not a
@@ -121,6 +124,7 @@ export function AppFrame(props: AppFrameProps) {
   return props.booting
     ? <AppFrameBootingSurface
         {...(props.brandName === undefined ? {} : { brandName: props.brandName })}
+        {...(props.desktopRailCollapsed === undefined ? {} : { desktopRailCollapsed: props.desktopRailCollapsed })}
         {...(props.projectWorkspace === undefined ? {} : { projectWorkspace: props.projectWorkspace })}
         {...(props.standaloneSurface === undefined ? {} : { standaloneSurface: props.standaloneSurface })}
         {...(props.hideWorkspaceHeader === undefined ? {} : { hideWorkspaceHeader: props.hideWorkspaceHeader })}

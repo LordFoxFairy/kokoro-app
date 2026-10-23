@@ -9,6 +9,8 @@ AppFrame可信ProjectReadBoundary沿原rail props/shell进入account余额；同
 ## 职责
 会话清单（服务端水合、分页、待批徽标、重命名/删除、搜索）+ 品牌头 + 各面板入口 + 折叠/移动抽屉 + 拖拽改宽。
 
+首文档通过 `src/lib/sidebar-preference.ts` 解析既有 `sidebar_state`，App layout 将明确的布尔偏好传到 AppGate / AppFrame，等待会话探针的静态壳与正式侧栏共用 300px / 52px 尺寸。非法或缺失值使用当前页面默认；手机不预留侧栏。此 cookie 仅影响展示，不建立身份或准入。客户端仍可协调首文档之后改变的偏好；同页导航不重复恢复旧 cookie。
+
 ## 公开件
 - `WorkspaceRail`（`src/components/blocks/workspace-rail/workspace-rail.tsx`）：唯一侧栏组件；清单/回调/入口全由 props 注入。
 - `useSessionList`：服务端清单水合 + 复合游标翻页累加。
