@@ -1,4 +1,4 @@
-## AUTH-1：第一方登录短地址（2026-10-23，实施中）
+## AUTH-1：第一方登录短地址（2026-10-23，正常已加载）
 
 IAM原始GET `/auth/sign-in?<signed-query>`只作协议入口，同源/大小检查后303到`/auth/sign-in?flow=<随机引用>`。flow必须单独且规范编码，混合/重复拒绝，绝不转为IAM oauth_query。短GET/POST需要对应HttpOnly browser proof；原query仅服务端恢复后逐字透传。form action、失败303只用短地址，原query不放HTML/Referrer，内部HMAC覆盖flow和真实query，直达内部页仍404。
 

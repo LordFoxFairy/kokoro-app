@@ -1,4 +1,4 @@
-## AUTH-1：登录表单短地址（2026-10-23，实施中）
+## AUTH-1：登录表单短地址（2026-10-23，正常已加载）
 
 基线52baa59；仅App第一方登录交互，不改IAM、Auth.js协议、权限或Admin会话。当前Proxy只rewrite，浏览器地址、form action和失败303仍带签名query。选择复用Web Redis保存短期原query，以随机flow引用＋独立HttpOnly browser proof定位；不采用仅history.replaceState（刷新失效）或cookie保存最长8KiB query。无新服务，Product仍是唯一产品会话owner。
 
@@ -6,7 +6,7 @@
 
 每render保持独立CSRF cookie，名称和绑定包含flow；刷新先验证flow，再按原query／issuer／flow绑定CAS退休本请求实际携带的旧proof，只清这些精确匹配的cookie；已消费或删除回执丢失后的缺失nonce也回收其已观察名称，存活但绑定不符不删不清。并发GET未互相观察的两个新render均独立有效，旧POST只清自己的cookie，不取消已准入POST。证明期限不超过flow剩余时间。独立登录各有flow；预算是请求可见预算，不宣称全局并发上限。feedback按flow隔离，保原加密/query绑定。flow不绑定可轮换的issuer cookie，原CSRF仍绑定渲染时issuer cookie。现4个可见交易和header预算保持；读/刷新不续期、不驱逐其他flow。错误密码保flow供显式重试，成功才退休；退休故障不重发成功认证。缺失/过期走品牌恢复，Redis故障不调用IAM。
 
-短地址行为及两个刷新竞态均RED→修正。147项专项（含真实Next／Redis／Chromium）和HTTPS反代5项通过；完整256文件4833项／0跳过、contract／architecture／lint／types／build及构建后types、隔离桌面／移动108项E2E通过，1208输入无漂移。首完整跑因旧反代fixture仍直接期待长地址200及缺少测试Redis配置失败，均保留原证据并正规更新重跑，未放宽生产断言。独审两个P2已复核关闭。验收绑定本次停写工作树，原账户／MCP UI WIP仍保留但不夹带提交。以上是本地候选，不替代正常服务登录验收；IAM/BFF/Admin及正常配置未改。
+短地址行为及两个刷新竞态均RED→修正。147项专项（含真实Next／Redis／Chromium）和HTTPS反代5项通过；完整256文件4833项／0跳过、contract／architecture／lint／types／build及构建后types、隔离桌面／移动108项E2E通过，1208输入无漂移。首完整跑因旧反代fixture仍直接期待长地址200及缺少测试Redis配置失败，均保留原证据并正规更新重跑，未放宽生产断言。独审两个P2已复核关闭。验收绑定本次停写工作树，原账户／MCP UI WIP仍保留但不夹带提交。正常 App 已加载 `b2809f3`：共享退出、两个独立短地址、较早表单刷新及一次密码重登、后台策略／费率1读回与原会话历史恢复通过；保留11份WIP原字节、配置及其他8监听。IAM/BFF/Admin未改，不代表实际积分结算或全站无感加载已经完成。
 
 ## AUTH-1：同一原生issuer Session绑定（2026-10-22，实施门）
 

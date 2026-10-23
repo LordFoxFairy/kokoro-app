@@ -1,8 +1,8 @@
-## AUTH-1：Web登录表单短期引用（2026-10-23，实施中）
+## AUTH-1：Web登录表单短期引用（2026-10-23，正常已加载）
 
 复用受管Web Redis，新临时键`kokoro:web:iam-signin-flow:<origin-sha256>:<random-flow>`；闭集v1值只有原始签名query、独立browser proof SHA256及绝对expires_at。flow为18随机字节base64url，独立proof为32随机字节，后者仅HttpOnly、SameSite=Lax、Path=/auth/sign-in cookie持有；query、邮箱、密码、用户token不放flow cookie。SET NX，TTL取原exp剩余与300秒较小值；读/刷新不续期，丢失重新正式登录，不承载身份durable truth。
 
-读取/退休核精确flow、origin、唯一cookie、proof和闭集记录；退休原值CAS删除，错误proof不删。CSRF仍独立一次消费，signin cookie保持每render独立并绑定flow，刷新只CAS退休本请求已观察并验证归属的旧proof，缺失nonce只回收已观察且精确匹配flow/token的cookie名，不删除其他记录；consent/invitation不动；feedback保加密且按flow隔离。成功清本flow cookie，不清其他交易。无SQL、新服务、旧格式兼容读取或共享Redis清理；尚未正常激活。
+读取/退休核精确flow、origin、唯一cookie、proof和闭集记录；退休原值CAS删除，错误proof不删。CSRF仍独立一次消费，signin cookie保持每render独立并绑定flow，刷新只CAS退休本请求已观察并验证归属的旧proof，缺失nonce只回收已观察且精确匹配flow/token的cookie名，不删除其他记录；consent/invitation不动；feedback保加密且按flow隔离。成功清本flow cookie，不清其他交易。无SQL、新服务、旧格式兼容读取或共享Redis清理；正常App已加载；实际旅程证据见登录指南。
 
 ## AUTH-1：服务端cookie的issuer Session绑定（2026-10-22）
 
