@@ -67,7 +67,9 @@ runtime token、内部服务地址、workload secret 或后端隔离键。
 - `iam-relay-policy.ts`：固定 BFF policy provenance、只读 browser GET 子集与 issuer cookie 入站过滤。
 - `iam-relay-config.ts`：固定 Web origin、BFF origin 与 service identity 的共用 server-only 解析。
 - `iam-interaction-csrf.ts`：sign-in 表单的一次性 Redis CSRF 摘要/目标 POST method/原始 query/issuer-cookie 绑定，
-  原子 `GETDEL` 消费、短 TTL 与故障拒绝；Web 只写自己的前缀，不保存凭据。
+  sign-in 绑定 flow 并比较后原子消费，每 render 独立 cookie；刷新仅回收已观察的本 flow 证明，其他交互保原行为。短 TTL 与故障拒绝，Web 只写自己的前缀，不保存凭据。
+- `iam-sign-in-flow.ts`：原生签名 query 的短期表单引用，独立 HttpOnly 浏览器证明、原期限／300秒上界；读不续期，不是 Product session 或授权。
+- `iam-sign-in-feedback.ts`：按 flow 隔离的加密表单反馈，不保存密码。
 - `iam-relay-transport.ts`：IAM 原生 HTTP 专用 transport，保持多个 `Set-Cookie`，实施 deadline、取消和
   header/body 限额；仅受控交互使用 POST，不复用会合并 cookie 的 Product transport。
 - `iam-relay-response.ts`：原生 status/header/body、Location 与 issuer `Set-Cookie` 的出站校验。

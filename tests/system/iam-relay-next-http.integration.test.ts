@@ -12,7 +12,8 @@ import AxeBuilder from "@axe-core/playwright"
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 
-import { iamCsrfKeyPrefix, issueIamInteractionCsrf } from "@/lib/server/iam-interaction-csrf"
+import { iamCsrfKeyPrefix } from "@/lib/server/iam-interaction-csrf"
+import { iamSignInFlowKeyPrefix } from "@/lib/server/iam-sign-in-flow"
 import { issuerCookieAfter, prepareInteraction } from "@/lib/server/iam-interaction-route"
 
 type HttpResult = Readonly<{ status: number; headers: Readonly<Record<string, string | string[] | undefined>>; body: string }>
@@ -270,7 +271,7 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
   let verifyEmailContentType = "text/plain"
   let verifyEmailBody = "verified"
   const redisUrl = process.env.KOKORO_WEB_REDIS_URL ?? "redis://127.0.0.1:6379"
-  type ResourceKind = "csrf" | "oidc_state" | "product_session"
+  type ResourceKind = "csrf" | "oidc_state" | "product_session" | "sign_in_flow"
   let resourceBaseline: Readonly<Record<ResourceKind, ReadonlySet<string>>> | undefined
   let baselineSentinels: string[] = []
 
@@ -285,6 +286,7 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
   function resourcePrefixes(): Readonly<Record<ResourceKind, string>> {
     const origin = `http://localhost:${nextPort}`
     return {
+      sign_in_flow: iamSignInFlowKeyPrefix(origin),
       csrf: iamCsrfKeyPrefix(origin),
       oidc_state: oidcStateKeyPrefix(origin),
       product_session: productSessionKeyPrefix(origin),
@@ -301,7 +303,7 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
         (async () => {
           await client.connect()
           const found: Record<ResourceKind, Set<string>> = {
-            csrf: new Set(), oidc_state: new Set(), product_session: new Set(),
+            sign_in_flow: new Set(), csrf: new Set(), oidc_state: new Set(), product_session: new Set(),
           }
           for (const kind of Object.keys(prefixes) as ResourceKind[]) {
             for await (const batch of client.scanIterator({ MATCH: `${prefixes[kind]}*`, COUNT: 100 })) {
@@ -407,7 +409,7 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
   }
 
   function closedResourceDelta(error: unknown): string | null {
-    if (error instanceof Error && /^test Redis resource delta: kind=(csrf|oidc_state|product_session) count=\d+$/u.test(error.message)) {
+    if (error instanceof Error && /^test Redis resource delta: kind=(csrf|oidc_state|product_session|sign_in_flow) count=\d+$/u.test(error.message)) {
       return error.message
     }
     if (error instanceof AggregateError) {
@@ -729,7 +731,7 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
         waitUntil: "domcontentloaded",
       })
       expect((await authorizeResponse).status()).toBe(302)
-      expect(page.url()).toBe(`http://localhost:${nextPort}/auth/sign-in?sig=%2BAb`)
+      expect(new URL(page.url()).pathname + new URL(page.url()).search).toMatch(/^\/auth\/sign-in\?flow=[A-Za-z0-9_-]{24}$/u)
       expect(await page.locator("body").innerText()).not.toContain('"redirect":true')
       expect((await page.context().cookies()).some((cookie) =>
         cookie.name === "kokoro-issuer.session_token" && cookie.path === "/iam")).toBe(true)
@@ -786,7 +788,7 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
         expect((passwordBox?.y ?? 0)).toBeGreaterThan((emailBox?.y ?? 0) + (emailBox?.height ?? 0))
         expect((buttonBox?.y ?? 0)).toBeGreaterThan((passwordBox?.y ?? 0) + (passwordBox?.height ?? 0))
         expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewport.width)
-        expect(await page.locator("form").getAttribute("action")).toBe("/auth/sign-in?sig=%2BAb")
+        expect(await page.locator("form").getAttribute("action")).toBe(new URL(page.url()).pathname + new URL(page.url()).search)
         expect(await page.locator('input[name="csrf_token"]').count()).toBe(1)
         expect(response?.headers()["referrer-policy"]).toBe("origin")
         expect((await Promise.all(resourceHeaders)).every((headers) =>
@@ -827,17 +829,35 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
     }
   }, 30_000)
 
-  async function signInPage(): Promise<HttpResult> {
-    const page = await rawHttp(nextPort, "/auth/sign-in?sig=%2BAb")
-    return page
+  function signInAction(page: HttpResult): string {
+    const action = page.body.match(/action="(\/auth\/sign-in\?flow=[A-Za-z0-9_-]{24})"/u)?.[1]
+    if (!action) throw new Error(`missing short form action: ${page.status}`)
+    return action
+  }
+
+  function signInCookies(page: HttpResult): string {
+    return (page.headers["set-cookie"] as string[] | undefined ?? []).map(cookie => cookie.split(";", 1)[0]!).join("; ")
+  }
+
+  async function signInPage(target = "/auth/sign-in?sig=%2BAb"): Promise<HttpResult> {
+    const entry = await rawHttp(nextPort, target)
+    expect(entry.status).toBe(303)
+    const short = new URL(entry.headers.location as string, `http://localhost:${nextPort}`)
+    expect(short.pathname + short.search).toMatch(/^\/auth\/sign-in\?flow=[A-Za-z0-9_-]{24}$/u)
+    const page = await rawHttp(nextPort, short.pathname + short.search, undefined, undefined, { cookie: signInCookies(entry) })
+    expect(page.body).not.toContain("sig=%2BAb")
+    expect(page.body).not.toContain("sig=second")
+    return { ...page, headers: { ...page.headers, "set-cookie": [
+      ...(page.headers["set-cookie"] as string[] | undefined ?? []), ...(entry.headers["set-cookie"] as string[] | undefined ?? []),
+    ] } }
   }
 
   async function submitValidSignIn(): Promise<HttpResult> {
     const page = await signInPage()
     const token = page.body.match(/name="csrf_token" value="([A-Za-z0-9_-]+)"/u)?.[1]
-    const cookie = (page.headers["set-cookie"] as string[] | undefined)?.[0]?.split(";")[0]
+    const cookie = signInCookies(page)
     if (token === undefined || cookie === undefined) throw new Error("sign-in fixture CSRF proof missing")
-    return rawPost(nextPort, "/auth/sign-in?sig=%2BAb", `csrf_token=${token}&email=user%40example.test&password=secret`, {
+    return rawPost(nextPort, signInAction(page), `csrf_token=${token}&email=user%40example.test&password=secret`, {
       origin: `http://localhost:${nextPort}`, cookie,
     })
   }
@@ -1046,7 +1066,7 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
 
   it.each(["same", "different"])("keeps both cold IAM forms valid with %s queries and reverse response delivery", async variant => {
     const targets = ["/auth/sign-in?sig=%2BAb", variant === "same" ? "/auth/sign-in?sig=%2BAb" : "/auth/sign-in?sig=second"]
-    const pages = await Promise.all(targets.map(target => rawHttp(nextPort, target)))
+    const pages = await Promise.all(targets.map(target => signInPage(target)))
     const jar = pathCookieJar()
     for (const page of [...pages].reverse()) { expect(page.status).toBe(200); jar.absorb(page) }
     const tokens = pages.map(page => page.body.match(/name="csrf_token" value="([A-Za-z0-9_-]+)"/u)![1]!)
@@ -1054,18 +1074,20 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
     expect(new Set(names).size).toBe(2)
     const headers = { origin: `http://localhost:${nextPort}`, cookie: jar.headerFor("/auth/sign-in") }
     const body = (token: string) => new URLSearchParams({ csrf_token: token, email: "user@example.test", password: "secret" }).toString()
-    const wrongQuery = await rawPost(nextPort, "/auth/sign-in?sig=wrong", body(tokens[0]!), headers)
+    const wrongQuery = await rawPost(nextPort, "/auth/sign-in?flow=" + "x".repeat(24), body(tokens[0]!), headers)
     expect(wrongQuery.status).toBe(403)
     expect(wrongQuery.headers["set-cookie"]).toBeUndefined()
-    const results = await Promise.all(targets.map((target, i) => rawPost(nextPort, target, body(tokens[i]!), headers)))
+    const results = await Promise.all(pages.map((page, i) => rawPost(nextPort, signInAction(page), body(tokens[i]!), headers)))
     for (const [i, result] of results.entries()) {
       expect(result.status).toBe(303)
       const clears = (result.headers["set-cookie"] as string[]).filter(cookie => cookie.includes("Max-Age=0"))
-      expect(clears).toEqual([`${names[i]}=; Path=/auth/sign-in; Max-Age=0; HttpOnly; SameSite=Lax`])
+      expect(clears).toHaveLength(2)
+      expect(clears).toContain(`${names[i]}=; Path=/auth/sign-in; Max-Age=0; HttpOnly; SameSite=Lax`)
+      expect(clears).toContain(`kokoro_iam_signin_flow_${new URL(signInAction(pages[i]!), "http://test").searchParams.get("flow")}=; Path=/auth/sign-in; Max-Age=0; HttpOnly; SameSite=Lax`)
     }
     expect(receivedPaths.filter(path => path === "/iam/sign-in/email")).toHaveLength(2)
     expect(receivedPaths.filter(path => path === "/iam/oauth2/continue")).toHaveLength(2)
-    const replay = await rawPost(nextPort, targets[0]!, body(tokens[0]!), headers)
+    const replay = await rawPost(nextPort, signInAction(pages[0]!), body(tokens[0]!), headers)
     expect(replay.status).toBe(403)
     expect(replay.headers["set-cookie"]).toBeUndefined()
   })
@@ -1075,7 +1097,7 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
     const jar = pathCookieJar()
     for (const page of pages) jar.absorb(page)
     const token = (page: HttpResult) => page.body.match(/name="csrf_token" value="([A-Za-z0-9_-]+)"/u)![1]!
-    const submit = (page: HttpResult) => rawPost(nextPort, "/auth/sign-in?sig=%2BAb",
+    const submit = (page: HttpResult) => rawPost(nextPort, signInAction(page),
       new URLSearchParams({ csrf_token: token(page), email: "user@example.test", password: "secret" }).toString(),
       { origin: `http://localhost:${nextPort}`, cookie: jar.headerFor("/auth/sign-in"), accept: "text/html" })
     signInStatus = 401
@@ -1087,60 +1109,104 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
     expect(receivedPaths).toEqual(["/iam/sign-in/email", "/iam/sign-in/email", "/iam/oauth2/continue"])
   })
 
+  it("refreshes a short login repeatedly without growing the proof budget or invalidating another flow", async () => {
+    let current = await signInPage()
+    const other = await signInPage()
+    const action = signInAction(current)
+    const jar = pathCookieJar()
+    jar.absorb(current)
+    jar.absorb(other)
+    const oldToken = current.body.match(/name="csrf_token" value="([A-Za-z0-9_-]+)"/u)![1]!
+    for (let i = 0; i < 6; i++) {
+      current = await rawHttp(nextPort, action, undefined, undefined, { cookie: jar.headerFor(action) })
+      expect(current.status).toBe(200)
+      expect(signInAction(current)).toBe(action)
+      expect(current.body).not.toContain("sig=%2BAb")
+      jar.absorb(current)
+      expect(jar.headerFor(action).split(";").filter(cookie => cookie.trim().startsWith("kokoro_iam_csrf_signin_"))).toHaveLength(2)
+    }
+    const body = (token: string) => new URLSearchParams({ csrf_token: token, email: "user@example.test", password: "secret" }).toString()
+    const headers = { origin: `http://localhost:${nextPort}`, cookie: jar.headerFor(action) }
+    const stale = await rawPost(nextPort, action, body(oldToken), headers)
+    expect(stale.status).toBe(403)
+    expect(stale.headers["set-cookie"]).toBeUndefined()
+    expect(receivedPaths).toEqual([])
+    const otherToken = other.body.match(/name="csrf_token" value="([A-Za-z0-9_-]+)"/u)![1]!
+    expect((await rawPost(nextPort, signInAction(other), body(otherToken), headers)).status).toBe(303)
+  })
+
+  it("requires the browser proof for the short address and rejects mixed or legacy POST targets", async () => {
+    const page = await signInPage()
+    const action = signInAction(page)
+    const missing = await rawHttp(nextPort, action)
+    expect(missing.status).toBe(303)
+    expect(missing.headers.location).toBe("/login")
+    const mixed = await rawHttp(nextPort, `${action}&sig=one`, undefined, undefined, { cookie: signInCookies(page) })
+    expect(mixed.status).toBe(404)
+    const legacy = await rawPost(nextPort, "/auth/sign-in?sig=%2BAb", "email=user%40example.test&password=secret&csrf_token=x", {
+      origin: `http://localhost:${nextPort}`, cookie: signInCookies(page),
+    })
+    expect(legacy.status).toBe(404)
+    expect(receivedPaths).toEqual([])
+  })
+
   it("rejects forged POSTs before the BFF socket and consumes a valid one-time proof", async () => {
-    const signedQuery = "?sig=%2BAb"
     const page = await signInPage()
     expect(page.status).toBe(200)
     expect(receivedPaths).toEqual([])
     const csrf = page.body.match(/name="csrf_token" value="([A-Za-z0-9_-]+)"/u)?.[1]
     expect(csrf).toBeDefined()
-    const cookie = (page.headers["set-cookie"] as string[] | undefined)?.[0]?.split(";")[0]
+    const cookie = signInCookies(page)
     expect(cookie).toBeDefined()
     const form = `csrf_token=${csrf}&email=user%40example.test&password=secret`
     const validHeaders = { origin: `http://localhost:${nextPort}`, cookie: cookie ?? "" }
 
-    const evil = await rawPost(nextPort, `/auth/sign-in${signedQuery}`, form, { ...validHeaders, origin: "https://evil.example" })
+    const evil = await rawPost(nextPort, signInAction(page), form, { ...validHeaders, origin: "https://evil.example" })
     expect(evil.status).toBe(403)
-    const noOrigin = await rawPost(nextPort, `/auth/sign-in${signedQuery}`, form, { cookie: validHeaders.cookie })
+    const noOrigin = await rawPost(nextPort, signInAction(page), form, { cookie: validHeaders.cookie })
     expect(noOrigin.status).toBe(403)
-    const missing = await rawPost(nextPort, `/auth/sign-in${signedQuery}`, form, { origin: validHeaders.origin })
+    const missing = await rawPost(nextPort, signInAction(page), form, { origin: validHeaders.origin })
     expect(missing.status).toBe(403)
-    const wrongQuery = await rawPost(nextPort, "/auth/sign-in?sig=+Ab", form, validHeaders)
+    const wrongQuery = await rawPost(nextPort, "/auth/sign-in?flow=" + "x".repeat(24), form, validHeaders)
     expect(wrongQuery.status).toBe(403)
     const wrongPath = await rawPost(nextPort, "/iam/sign-in/email", form, validHeaders)
     expect(wrongPath.status).toBe(405)
-    const oversized = await rawPost(nextPort, `/auth/sign-in${signedQuery}`, `${form}&padding=${"x".repeat(65_536)}`, validHeaders)
+    const oversized = await rawPost(nextPort, signInAction(page), `${form}&padding=${"x".repeat(65_536)}`, validHeaders)
     expect(oversized.status).toBe(400)
     expect(receivedPaths).toEqual([])
 
     const freshPage = await signInPage()
     const freshCsrf = freshPage.body.match(/name="csrf_token" value="([A-Za-z0-9_-]+)"/u)?.[1]
-    const freshCookie = (freshPage.headers["set-cookie"] as string[] | undefined)?.[0]?.split(";")[0]
+    const freshCookie = signInCookies(freshPage)
     expect(freshCsrf).toBeDefined()
     expect(freshCookie).toBeDefined()
     const freshForm = `csrf_token=${freshCsrf}&email=user%40example.test&password=secret`
     const freshHeaders = { origin: validHeaders.origin, cookie: freshCookie ?? "" }
-    const accepted = await rawPost(nextPort, `/auth/sign-in${signedQuery}`, freshForm, freshHeaders)
+    const accepted = await rawPost(nextPort, signInAction(freshPage), freshForm, freshHeaders)
     expect(accepted.status).toBe(303)
     expect(accepted.headers.location).toBe(`http://localhost:${nextPort}/auth/select-tenant?sig=%2BAb`)
     expect(accepted.body).not.toContain("must-not-reach-browser")
-    expect((accepted.headers["set-cookie"] as string[] | undefined)?.length).toBe(3)
+    expect((accepted.headers["set-cookie"] as string[] | undefined)?.length).toBe(4)
     expect(receivedPaths.splice(0)).toEqual(["/iam/sign-in/email", "/iam/oauth2/continue"])
     expect(JSON.parse(receivedBodies[1] ?? "{}")).toEqual({ postLogin: true, oauth_query: "sig=%2BAb" })
-    const replay = await rawPost(nextPort, `/auth/sign-in${signedQuery}`, freshForm, freshHeaders)
+    const replay = await rawPost(nextPort, signInAction(freshPage), freshForm, freshHeaders)
     expect(replay.status).toBe(403)
     expect(receivedPaths).toEqual([])
   })
 
   it.each(["text/html", "application/json"])("rejects expired signed POST with valid CSRF before credentials (%s)", async (accept) => {
-    const query = "?exp=1&sig=%2BAb"
-    const proof = await issueIamInteractionCsrf({
-      redisUrl, webOrigin: `http://localhost:${nextPort}`, path: "/auth/sign-in",
-      method: "POST", query, issuerCookie: "", secureCookies: false,
-    })
-    const response = await rawPost(nextPort, `/auth/sign-in${query}`,
-      new URLSearchParams({ csrf_token: proof.token, email: "user@example.test", password: "secret" }).toString(), {
-        origin: `http://localhost:${nextPort}`, cookie: proof.cookie.split(";", 1)[0]!, accept,
+    const page = await signInPage()
+    const token = page.body.match(/name="csrf_token" value="([A-Za-z0-9_-]+)"/u)![1]!
+    const flowId = new URL(signInAction(page), "http://test").searchParams.get("flow")!
+    const client = createClient({ url: redisUrl })
+    try {
+      await client.connect()
+      await client.pExpire(`${iamSignInFlowKeyPrefix(`http://localhost:${nextPort}`)}${flowId}`, 1)
+    } finally { client.destroy() }
+    await new Promise(resolve => setTimeout(resolve, 10))
+    const response = await rawPost(nextPort, signInAction(page),
+      new URLSearchParams({ csrf_token: token, email: "user@example.test", password: "secret" }).toString(), {
+        origin: `http://localhost:${nextPort}`, cookie: signInCookies(page), accept,
         "sec-fetch-mode": "navigate", "sec-fetch-dest": "document",
       })
     expect(receivedPaths).toEqual([])
@@ -1174,8 +1240,8 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
 
   it("rejects an unproved browser form without clearing any transaction cookie", async () => {
     const page = await signInPage()
-    const cookie = (page.headers["set-cookie"] as string[])[0]!.split(";", 1)[0]!
-    const result = await rawPost(nextPort, "/auth/sign-in?sig=%2BAb",
+    const cookie = signInCookies(page)
+    const result = await rawPost(nextPort, signInAction(page),
       `csrf_token=${"x".repeat(43)}&email=user%40example.test&password=secret`, {
         origin: `http://localhost:${nextPort}`, cookie, accept: "text/html",
         "sec-fetch-mode": "navigate", "sec-fetch-dest": "document",
@@ -1190,8 +1256,8 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
     signInStatus = status
     const page = await signInPage()
     const token = page.body.match(/name="csrf_token" value="([A-Za-z0-9_-]+)"/u)?.[1]
-    const cookie = (page.headers["set-cookie"] as string[] | undefined)?.[0]?.split(";")[0]
-    const result = await rawPost(nextPort, "/auth/sign-in?sig=%2BAb", `csrf_token=${token}&email=user%40example.test&password=secret`, {
+    const cookie = signInCookies(page)
+    const result = await rawPost(nextPort, signInAction(page), `csrf_token=${token}&email=user%40example.test&password=secret`, {
       origin: `http://localhost:${nextPort}`, cookie: cookie ?? "",
     })
     expect(result.status).toBe(status === 503 ? 503 : status)
@@ -1205,16 +1271,16 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
     signInStatus = status
     const page = await signInPage()
     const token = page.body.match(/name="csrf_token" value="([A-Za-z0-9_-]+)"/u)?.[1]
-    const cookie = (page.headers["set-cookie"] as string[] | undefined)?.[0]?.split(";")[0]
-    const result = await rawPost(nextPort, "/auth/sign-in?sig=%2BAb", `csrf_token=${token}&email=user%40example.test&password=secret`, {
+    const cookie = signInCookies(page)
+    const result = await rawPost(nextPort, signInAction(page), `csrf_token=${token}&email=user%40example.test&password=secret`, {
       origin: `http://localhost:${nextPort}`, cookie: cookie ?? "", accept: "text/html",
     })
     expect(result.status).toBe(303)
-    expect(result.headers.location).toBe("/auth/sign-in?sig=%2BAb")
+    expect(result.headers.location).toBe(signInAction(page))
     expect((result.headers["set-cookie"] as string[] | undefined)?.length).toBe(2)
     const feedbackCookie = (result.headers["set-cookie"] as string[])[0]?.split(";", 1)[0]
-    const refreshed = await rawHttp(nextPort, "/auth/sign-in?sig=%2BAb", `localhost:${nextPort}`, undefined,
-      { cookie: feedbackCookie ?? "" })
+    const refreshed = await rawHttp(nextPort, signInAction(page), `localhost:${nextPort}`, undefined,
+      { cookie: `${signInCookies(page)}; ${feedbackCookie ?? ""}` })
     expect(refreshed.status).toBe(200)
     expect(refreshed.body).toContain('role="alert"')
     expect(refreshed.body).toContain(status === 401 ? "邮箱或密码不正确" : status === 429 ? "登录尝试次数过多" : "登录未完成")
@@ -1236,7 +1302,7 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
       await page.getByLabel("密码").fill("wrong-password")
       await page.getByRole("button", { name: "登录" }).click()
       await expect.poll(async () => page.getByRole("alert").textContent()).toBe("邮箱或密码不正确。")
-      expect(page.url()).toBe(`http://localhost:${nextPort}/auth/sign-in?sig=%2BAb`)
+      expect(new URL(page.url()).pathname + new URL(page.url()).search).toMatch(/^\/auth\/sign-in\?flow=[A-Za-z0-9_-]{24}$/u)
       expect(await page.getByLabel("邮箱").inputValue()).toBe("user@example.test")
       expect(await page.getByLabel("密码").inputValue()).toBe("")
       expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze()).violations).toEqual([])
@@ -1265,7 +1331,7 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
       expect.stringContaining("kokoro-issuer.session_data=updated;"),
       expect.stringContaining("kokoro-issuer.dont_remember=one;"),
     ]))
-    expect(cookies).toHaveLength(4)
+    expect(cookies).toHaveLength(5)
     expect(result.body).toBe("")
     expect(receivedPaths.splice(0)).toEqual(["/iam/sign-in/email", "/iam/oauth2/continue"])
   })
@@ -1318,7 +1384,7 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
     const signIn = await signInPage()
     jar.absorb(signIn)
     const signInToken = signIn.body.match(/name="csrf_token" value="([A-Za-z0-9_-]+)"/u)?.[1]
-    const signedIn = await rawPost(nextPort, "/auth/sign-in?sig=%2BAb", `csrf_token=${signInToken}&email=user%40example.test&password=secret`, {
+    const signedIn = await rawPost(nextPort, signInAction(signIn), `csrf_token=${signInToken}&email=user%40example.test&password=secret`, {
       origin: `http://localhost:${nextPort}`, cookie: jar.headerFor("/auth/sign-in"),
     })
     expect(signedIn.status).toBe(303)
@@ -1408,7 +1474,7 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
     const signIn = await signInPage()
     jar.absorb(signIn)
     const signInToken = signIn.body.match(/name="csrf_token" value="([A-Za-z0-9_-]+)"/u)?.[1]
-    const signedIn = await rawPost(nextPort, "/auth/sign-in?sig=%2BAb", `csrf_token=${signInToken}&email=user%40example.test&password=secret`, {
+    const signedIn = await rawPost(nextPort, signInAction(signIn), `csrf_token=${signInToken}&email=user%40example.test&password=secret`, {
       origin: `http://localhost:${nextPort}`, cookie: jar.headerFor("/auth/sign-in"),
     })
     expect(signedIn.status).toBe(303)
@@ -1682,8 +1748,8 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
     continuePayload = { ...payload, url: payload.url.replace("PORT", String(nextPort)) }
     const page = await signInPage()
     const token = page.body.match(/name="csrf_token" value="([A-Za-z0-9_-]+)"/u)?.[1]
-    const cookie = (page.headers["set-cookie"] as string[] | undefined)?.[0]?.split(";")[0]
-    const result = await rawPost(nextPort, "/auth/sign-in?sig=%2BAb", `csrf_token=${token}&email=user%40example.test&password=secret`, {
+    const cookie = signInCookies(page)
+    const result = await rawPost(nextPort, signInAction(page), `csrf_token=${token}&email=user%40example.test&password=secret`, {
       origin: `http://localhost:${nextPort}`, cookie: cookie ?? "",
     })
     expect(result.status).toBe(502)

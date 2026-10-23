@@ -1,3 +1,9 @@
+## AUTH-1：第一方登录短地址（2026-10-23，实施中）
+
+IAM原始GET `/auth/sign-in?<signed-query>`只作协议入口，同源/大小检查后303到`/auth/sign-in?flow=<随机引用>`。flow必须单独且规范编码，混合/重复拒绝，绝不转为IAM oauth_query。短GET/POST需要对应HttpOnly browser proof；原query仅服务端恢复后逐字透传。form action、失败303只用短地址，原query不放HTML/Referrer，内部HMAC覆盖flow和真实query，直达内部页仍404。
+
+原POST字段csrf_token/email/password和一次消费不变；刷新只CAS退休本请求携带且绑定验证通过的当前flow旧证明；每render独立cookie，未被该请求观察的并发render与其他交易不受影响，旧POST仅清自己的cookie。错误凭据保本flow，成功导航退休本flow；未知结果不自动重发密码。缺失/过期走固定恢复页，Redis故障503，不变成功。保no-store/CSP/同源form策略；此为Web私有表单引用，不是新公开业务API/身份/授权。
+
 ## AUTH-1：原生会话连续性（2026-10-22，实施门）
 
 不改公开BFF／同源业务API、OIDC scope／resource／callback path或session投影；issuerSessionId仅在服务端HttpOnly加密cookie，绝不输出到/api/auth/session、URL／浏览器JSON或日志。初始已验签TokenSet的sid必需，与最终account.id_token及sub同一证据；续期ID token亦必需并走原生openid-client验证，iss/client aud/EdDSA/exp及原sub/sid匹配，不能裸decode当证明。正常失败仍原rp_callback_rejected／rp_unavailable或refresh_unconfirmed状态与受控页面恢复，未知不二次提交refresh。旧无sid Product cookie不兼容。

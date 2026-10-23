@@ -1,6 +1,9 @@
 import { createCipheriv, createDecipheriv, hkdfSync, randomBytes } from "node:crypto"
 
-const NAME = "kokoro_iam_signin_feedback"
+export function signInFeedbackCookieName(flowId: string): string {
+  if (!/^[A-Za-z0-9_-]{24}$/u.test(flowId)) throw new Error("invalid sign-in feedback flow")
+  return `kokoro_iam_signin_feedback_${flowId}`
+}
 const MAX_AGE_SECONDS = 90
 
 export type SignInFeedback = Readonly<{ status: 401 | 429 | 503; email: string }>
@@ -9,8 +12,8 @@ function key(secret: string): Buffer {
   return Buffer.from(hkdfSync("sha256", Buffer.from(secret), Buffer.from("kokoro-iam-signin-feedback-v1"), Buffer.from("cookie"), 32))
 }
 
-function associatedData(origin: string, query: string): Buffer {
-  return Buffer.from(`${origin}\n${query}`)
+function associatedData(origin: string, query: string, flowId: string): Buffer {
+  return Buffer.from(`${origin}\n${query}\n${flowId}`)
 }
 
 function cookieAttributes(secure: boolean, age: number): string {
@@ -18,33 +21,34 @@ function cookieAttributes(secure: boolean, age: number): string {
 }
 
 export function issueSignInFeedback(input: Readonly<{
-  secret: string; origin: string; query: string; secure: boolean; status: SignInFeedback["status"]; email: string
+  secret: string; origin: string; query: string; flowId: string; secure: boolean; status: SignInFeedback["status"]; email: string
 }>): string {
   const iv = randomBytes(12)
   const cipher = createCipheriv("aes-256-gcm", key(input.secret), iv)
-  cipher.setAAD(associatedData(input.origin, input.query))
+  cipher.setAAD(associatedData(input.origin, input.query, input.flowId))
   const payload = Buffer.from(JSON.stringify({ status: input.status, email: input.email, expires: Date.now() + MAX_AGE_SECONDS * 1_000 }))
   const encrypted = Buffer.concat([cipher.update(payload), cipher.final()])
   const value = Buffer.concat([iv, cipher.getAuthTag(), encrypted]).toString("base64url")
-  return `${NAME}=${value}; ${cookieAttributes(input.secure, MAX_AGE_SECONDS)}`
+  return `${signInFeedbackCookieName(input.flowId)}=${value}; ${cookieAttributes(input.secure, MAX_AGE_SECONDS)}`
 }
 
 export function readSignInFeedback(input: Readonly<{
-  cookie: string | null; secret: string; origin: string; query: string
+  cookie: string | null; secret: string; origin: string; query: string; flowId: string
 }>): SignInFeedback | null {
+  const name = signInFeedbackCookieName(input.flowId)
   let value: string | null = null
   for (const part of input.cookie?.split(";") ?? []) {
     const trimmed = part.trim()
-    if (!trimmed.startsWith(`${NAME}=`)) continue
+    if (!trimmed.startsWith(`${name}=`)) continue
     if (value !== null) return null
-    value = trimmed.slice(NAME.length + 1)
+    value = trimmed.slice(name.length + 1)
   }
   if (value === null || !/^[A-Za-z0-9_-]{40,1024}$/u.test(value)) return null
   try {
     const bytes = Buffer.from(value, "base64url")
     if (bytes.length < 29) return null
     const decipher = createDecipheriv("aes-256-gcm", key(input.secret), bytes.subarray(0, 12))
-    decipher.setAAD(associatedData(input.origin, input.query))
+    decipher.setAAD(associatedData(input.origin, input.query, input.flowId))
     decipher.setAuthTag(bytes.subarray(12, 28))
     const payload: unknown = JSON.parse(Buffer.concat([decipher.update(bytes.subarray(28)), decipher.final()]).toString("utf8"))
     if (typeof payload !== "object" || payload === null || Array.isArray(payload)) return null
@@ -59,6 +63,6 @@ export function readSignInFeedback(input: Readonly<{
   }
 }
 
-export function clearSignInFeedback(secure: boolean): string {
-  return `${NAME}=; ${cookieAttributes(secure, 0)}`
+export function clearSignInFeedback(secure: boolean, flowId: string): string {
+  return `${signInFeedbackCookieName(flowId)}=; ${cookieAttributes(secure, 0)}`
 }

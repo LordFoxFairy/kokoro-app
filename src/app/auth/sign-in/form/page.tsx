@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import type { SignInFeedback } from "@/lib/server/iam-sign-in-feedback"
-import { IAM_SIGN_IN_PATH, rawIamSignInQuery } from "@/lib/server/iam-sign-in-target"
+import { IAM_SIGN_IN_PATH } from "@/lib/server/iam-sign-in-target"
 
 export const metadata: Metadata = { title: "登录 · Kokoro", robots: { index: false, follow: false } }
 export const dynamic = "force-dynamic"
@@ -30,9 +30,9 @@ function readFeedback(raw: string | null): SignInFeedback | null {
 
 export default async function IamSignInPage() {
   const incoming = await headers()
-  const query = incoming.get("x-kokoro-sign-in-query")
+  const flow = incoming.get("x-kokoro-sign-in-flow")
   const token = incoming.get("x-kokoro-sign-in-csrf")
-  if (query === null || rawIamSignInQuery(`https://internal.invalid${IAM_SIGN_IN_PATH}${query}`) !== query ||
+  if (flow === null || !/^[A-Za-z0-9_-]{24}$/u.test(flow) ||
     token === null || !/^[A-Za-z0-9_-]{43}$/u.test(token)) notFound()
 
   const feedback = readFeedback(incoming.get("x-kokoro-sign-in-feedback"))
@@ -64,7 +64,7 @@ export default async function IamSignInPage() {
               <p className="mt-2 text-base leading-relaxed text-foreground">使用你的 Kokoro 账号登录</p>
             </CardHeader>
             <CardContent className="px-0">
-              <form method="post" action={`${IAM_SIGN_IN_PATH}${query}`} className="grid gap-5">
+              <form method="post" action={`${IAM_SIGN_IN_PATH}?flow=${flow}`} className="grid gap-5">
                 <input type="hidden" name="csrf_token" value={token} />
                 {message !== null ? <Alert className="border-[var(--error-border)] text-[var(--error-strong)]" id="sign-in-error">
                   <p className="col-start-2 text-sm font-medium text-[var(--error-strong)]">{message}</p>

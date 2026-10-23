@@ -3,7 +3,7 @@ import { createHash, randomUUID } from "node:crypto"
 import { afterAll, describe, expect, it } from "vitest"
 import { createClient } from "redis"
 
-import { consumeIamInteractionCsrf, iamCsrfKeyPrefix, iamSignInCsrfCookieName, iamSignInCsrfWithinBudget, issueIamInteractionCsrf } from "@/lib/server/iam-interaction-csrf"
+import { consumeIamInteractionCsrf, iamCsrfKeyPrefix, iamSignInCsrfCookieName, iamSignInCsrfWithinBudget, issueIamInteractionCsrf, retireObservedSignInCsrf } from "@/lib/server/iam-interaction-csrf"
 
 const redisUrl = process.env.KOKORO_WEB_REDIS_URL ?? "redis://127.0.0.1:6379"
 const webOrigin = `http://csrf-${randomUUID()}.localhost:3000`
@@ -181,4 +181,46 @@ it("derives sign-in proof names from exact query and random proof, and bounds vi
   expect(iamSignInCsrfWithinBudget(names.map(name => `${name}=proof`).join("; "))).toBe(false)
   expect(iamSignInCsrfWithinBudget(`${name}=proof; ${name}=other`)).toBe(false)
   expect(iamSignInCsrfWithinBudget("unrelated=" + "a".repeat(12288))).toBe(false)
+})
+
+
+it("isolates same-query proofs by flow and caps their TTL at the flow deadline", async () => {
+  const base = { redisUrl, webOrigin, path: "/auth/sign-in" as const, method: "POST" as const, query: "?sig=flow", issuerCookie, secureCookies: false }
+  const a = await issue({ ...base, context: "a".repeat(24), expiresAt: Date.now() + 25_000 })
+  const b = await issue({ ...base, context: "b".repeat(24), expiresAt: Date.now() + 25_000 })
+  expect(a.cookie).toMatch(/Max-Age=2[0-5];/u)
+  expect(iamSignInCsrfCookieName(base.query, a.token, "a".repeat(24))).not.toBe(iamSignInCsrfCookieName(base.query, a.token, "b".repeat(24)))
+  expect(await consumeIamInteractionCsrf({ ...base, context: "b".repeat(24), cookieToken: a.token, formToken: a.token })).toBe(false)
+  expect(await consumeIamInteractionCsrf({ ...base, context: "a".repeat(24), cookieToken: a.token, formToken: a.token })).toBe(true)
+  expect(await consumeIamInteractionCsrf({ ...base, context: "b".repeat(24), cookieToken: b.token, formToken: b.token })).toBe(true)
+})
+
+
+it("refresh reclaims only observed same-flow cookies, including an already-consumed proof", async () => {
+  const base = { redisUrl, webOrigin, path: "/auth/sign-in" as const, method: "POST" as const, query: "?sig=refresh", issuerCookie, context: "a".repeat(24), secureCookies: false }
+  const old = await issue(base)
+  const other = await issue({ ...base, context: "b".repeat(24) })
+  const unseen = await issue(base)
+  const oldName = old.cookie.split("=", 1)[0]!
+  const cookie = [old, other].map(proof => proof.cookie.split(";", 1)[0]).join("; ")
+  const [a, b] = await Promise.all([retireObservedSignInCsrf({ ...base, cookie }), retireObservedSignInCsrf({ ...base, cookie })])
+  expect(a).toEqual([oldName])
+  expect(b).toEqual([oldName])
+  expect(await consumeIamInteractionCsrf({ ...base, cookieToken: old.token, formToken: old.token })).toBe(false)
+  expect(await consumeIamInteractionCsrf({ ...base, cookieToken: unseen.token, formToken: unseen.token })).toBe(true)
+  expect(await consumeIamInteractionCsrf({ ...base, context: "b".repeat(24), cookieToken: other.token, formToken: other.token })).toBe(true)
+})
+
+
+it("recovers when concurrent renders exceed the visible cookie budget without retiring other flows", async () => {
+  const base = { redisUrl, webOrigin, path: "/auth/sign-in" as const, method: "POST" as const, query: "?sig=budget-race", issuerCookie, context: "a".repeat(24), secureCookies: false }
+  const own = await Promise.all([issue(base), issue(base)])
+  const other = await Promise.all(["b", "c", "d"].map(context => issue({ ...base, context: context.repeat(24) })))
+  const cookie = [...own, ...other].map(proof => proof.cookie.split(";", 1)[0]).join("; ")
+  expect(iamSignInCsrfWithinBudget(cookie)).toBe(false)
+  const retired = await retireObservedSignInCsrf({ ...base, cookie })
+  expect(retired).toEqual(own.map(proof => proof.cookie.split("=", 1)[0]))
+  const remaining = other.map(proof => proof.cookie.split(";", 1)[0]).join("; ")
+  expect(iamSignInCsrfWithinBudget(remaining)).toBe(true)
+  for (const [i, proof] of other.entries()) expect(await consumeIamInteractionCsrf({ ...base, context: ["b", "c", "d"][i]!.repeat(24), cookieToken: proof.token, formToken: proof.token })).toBe(true)
 })

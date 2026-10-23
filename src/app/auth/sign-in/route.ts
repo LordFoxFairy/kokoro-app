@@ -7,7 +7,9 @@ import { nativeIamResponse, validIamInteractionNavigation } from "@/lib/server/i
 import { requestIamRelay, type IamRelayUpstream } from "@/lib/server/iam-relay-transport"
 import { issueSignInFeedback } from "@/lib/server/iam-sign-in-feedback"
 import { oidcLoginRecovery } from "@/lib/server/oidc-login-recovery"
-import { IAM_SIGN_IN_PATH, isIamSignInExpired, rawIamSignInQuery } from "@/lib/server/iam-sign-in-target"
+import { IAM_SIGN_IN_PATH, isIamSignInExpired, iamSignInFlowId } from "@/lib/server/iam-sign-in-target"
+
+import { readIamSignInFlow, retireIamSignInFlow, clearIamSignInFlowCookie } from "@/lib/server/iam-sign-in-flow"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -90,6 +92,7 @@ async function boundedForm(request: Request): Promise<URLSearchParams | null> {
 function signInFormFailure(input: Readonly<{
   status: 401 | 429 | 503
   query: string
+  flowId: string
   email: string
   secret: string
   webOrigin: string
@@ -98,10 +101,10 @@ function signInFormFailure(input: Readonly<{
 }>): Response {
   const feedback = issueSignInFeedback({
     status: input.status, email: input.email, secret: input.secret,
-    origin: input.webOrigin, query: input.query, secure: input.secureCookies,
+    origin: input.webOrigin, query: input.query, flowId: input.flowId, secure: input.secureCookies,
   })
   return new Response(null, { status: 303, headers: {
-    location: `${PAGE_PATH}${input.query}`, "cache-control": "no-store",
+    location: `${PAGE_PATH}?flow=${input.flowId}`, "cache-control": "no-store",
     "referrer-policy": "origin", "x-request-id": input.requestId, "set-cookie": feedback,
   } })
 }
@@ -148,19 +151,24 @@ function safeNavigationResponse(native: Response, status: 302 | 303, location: s
 export async function POST(request: Request): Promise<Response> {
   const id = requestId(request)
   const config = iamRelayConfig(process.env)
-  const query = rawIamSignInQuery(request.url)
+  const flowId = iamSignInFlowId(request.url)
   const redisUrl = process.env.KOKORO_WEB_REDIS_URL
   if (config === null || !redisUrl) return errorResponse(503, "iam_interaction_unavailable", id)
   if (!matchesCanonicalWebRequest(request, config, "POST")) return errorResponse(403, "iam_interaction_origin_rejected", id)
-  if (query === null) return errorResponse(404, "iam_interaction_not_found", id)
+  if (flowId === null) return errorResponse(404, "iam_interaction_not_found", id)
   if (request.headers.has("authorization")) return errorResponse(403, "iam_interaction_credential_rejected", id)
   if (headerBytes(request.headers) > IAM_RELAY_POLICY.maxHeaderBytes) return errorResponse(413, "iam_interaction_request_too_large", id)
   const issuerCookie = filterIssuerCookies(request.headers.get("cookie"), config.secureCookies)
   if (issuerCookie === null) return errorResponse(400, "iam_interaction_cookie_invalid", id)
+  const flowInput = { redisUrl, webOrigin: config.webOrigin, flowId, cookie: request.headers.get("cookie") }
+  let flow: Awaited<ReturnType<typeof readIamSignInFlow>>
+  try { flow = await readIamSignInFlow(flowInput) } catch { return errorResponse(503, "iam_interaction_unavailable", id) }
+  if (flow === null) return oidcLoginRecovery(request) ?? errorResponse(403, "iam_interaction_csrf_rejected", id)
+  const { query } = flow
   const form = await boundedForm(request)
   if (form === null) return errorResponse(400, "iam_interaction_body_rejected", id)
   const formToken = form.get("csrf_token")
-  const cookieName = iamSignInCsrfCookieName(query, formToken)
+  const cookieName = iamSignInCsrfCookieName(query, formToken, flowId)
   if (cookieName === null) return oidcLoginRecovery(request) ?? errorResponse(403, "iam_interaction_csrf_rejected", id)
   const cookieToken = cookieValue(request.headers.get("cookie"), cookieName)
   const finish = (response: Response): Response => {
@@ -168,7 +176,7 @@ export async function POST(request: Request): Promise<Response> {
     return response
   }
   try {
-    const valid = await consumeIamInteractionCsrf({ redisUrl, webOrigin: config.webOrigin, path: PAGE_PATH, method: "POST", query, issuerCookie, cookieToken, formToken })
+    const valid = await consumeIamInteractionCsrf({ redisUrl, webOrigin: config.webOrigin, path: PAGE_PATH, method: "POST", query, issuerCookie, context: flowId, cookieToken, formToken })
     // Unproved requests neither consume nor clear another form. A proven but
     // expired interaction ends here without automatically sending credentials again.
     if (!valid) return oidcLoginRecovery(request) ?? errorResponse(403, "iam_interaction_csrf_rejected", id)
@@ -199,7 +207,7 @@ export async function POST(request: Request): Promise<Response> {
       const status = signedIn.status === 401 ? 401 : signedIn.status === 429 ? 429 : 503
       const code = status === 401 ? "iam_interaction_credentials_rejected" : status === 429 ? "iam_interaction_rate_limited" : "iam_interaction_unavailable"
       if (request.headers.get("accept")?.includes("text/html")) {
-        return finish(signInFormFailure({ status, query, email: form.get("email") ?? "",
+        return finish(signInFormFailure({ status, query, flowId, email: form.get("email") ?? "",
           secret: config.secret, webOrigin: config.webOrigin, secureCookies: config.secureCookies, requestId: id }))
       }
       return finish(errorResponse(status, code, id))
@@ -227,6 +235,10 @@ export async function POST(request: Request): Promise<Response> {
       (continued.status === 302 && !validIamInteractionNavigation(new URL(location, config.webOrigin).href, config.webOrigin))
     ) return finish(errorResponse(502, "iam_interaction_response_invalid", id))
     const navigation = safeNavigationResponse(response, continued.status === 302 ? 302 : 303, location)
+    // Authentication already succeeded. Cleanup failure must not turn it into a
+    // retry that resends credentials; the flow also has a fixed short TTL.
+    await retireIamSignInFlow(flowInput).catch(() => false)
+    navigation.headers.append("set-cookie", clearIamSignInFlowCookie(flowId, config.secureCookies))
     return finish(navigation)
   } catch {
     return finish(errorResponse(503, "iam_interaction_unavailable", id))

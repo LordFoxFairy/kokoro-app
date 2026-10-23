@@ -1,3 +1,13 @@
+## AUTH-1：登录表单短地址（2026-10-23，实施中）
+
+基线52baa59；仅App第一方登录交互，不改IAM、Auth.js协议、权限或Admin会话。当前Proxy只rewrite，浏览器地址、form action和失败303仍带签名query。选择复用Web Redis保存短期原query，以随机flow引用＋独立HttpOnly browser proof定位；不采用仅history.replaceState（刷新失效）或cookie保存最长8KiB query。无新服务，Product仍是唯一产品会话owner。
+
+写区：现sign-in target／Proxy／form／POST／CSRF／feedback、单一iam-sign-in-flow模块、相关测试和相邻文档。原query字节不重编码；首GET仅303到短flow地址，短GET/POST先验browser proof再取原query。内部rewrite证明绑定flow、原query和CSRF，直达内部form仍拒绝。原state／PKCE／nonce、一次CSRF消费和issuer校验仍是认证边界，flow不是授权。
+
+每render保持独立CSRF cookie，名称和绑定包含flow；刷新先验证flow，再按原query／issuer／flow绑定CAS退休本请求实际携带的旧proof，只清这些精确匹配的cookie；已消费或删除回执丢失后的缺失nonce也回收其已观察名称，存活但绑定不符不删不清。并发GET未互相观察的两个新render均独立有效，旧POST只清自己的cookie，不取消已准入POST。证明期限不超过flow剩余时间。独立登录各有flow；预算是请求可见预算，不宣称全局并发上限。feedback按flow隔离，保原加密/query绑定。flow不绑定可轮换的issuer cookie，原CSRF仍绑定渲染时issuer cookie。现4个可见交易和header预算保持；读/刷新不续期、不驱逐其他flow。错误密码保flow供显式重试，成功才退休；退休故障不重发成功认证。缺失/过期走品牌恢复，Redis故障不调用IAM。
+
+短地址行为及两个刷新竞态均RED→修正。147项专项（含真实Next／Redis／Chromium）和HTTPS反代5项通过；完整256文件4833项／0跳过、contract／architecture／lint／types／build及构建后types、隔离桌面／移动108项E2E通过，1208输入无漂移。首完整跑因旧反代fixture仍直接期待长地址200及缺少测试Redis配置失败，均保留原证据并正规更新重跑，未放宽生产断言。独审两个P2已复核关闭。验收绑定本次停写工作树，原账户／MCP UI WIP仍保留但不夹带提交。以上是本地候选，不替代正常服务登录验收；IAM/BFF/Admin及正常配置未改。
+
 ## AUTH-1：同一原生issuer Session绑定（2026-10-22，实施门）
 
 沿现Root唯一主链，App基线928de9f，主方唯一writer。当前App丢弃已验证ID token sid，续期仅查BFF本人身份，故闭合这处登录会话连续性；不新OAuth协议、服务／数据库／机器scope或UI入口。按用户最新澄清，Run无需用户token，执行授权不能以App额外resource grant／回程领token作为默认前置；该未实施提议已撤回，后继沿既有内部工作负载身份与可信Run上下文收敛。sid修复只服务登录／续期，不把浏览器登录生命周期强加给异步Run。
