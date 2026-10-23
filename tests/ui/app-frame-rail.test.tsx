@@ -560,7 +560,7 @@ async function mountAuthenticatedProjectRail(
   return { ...view, fetchMock }
 }
 
-it.each(["401", "bad-shape"])("正式列表先健康再刷新至 %s，清旧项目且不伪装为空集合", async (failure) => {
+it.each(["401", "bad-shape"])("身份重新准入后列表返回 %s，清旧项目且不伪装为空集合", async (failure) => {
   let calls = 0
   await mountAuthenticatedProjectRail(async () => {
     calls++
@@ -570,6 +570,7 @@ it.each(["401", "bad-shape"])("正式列表先健康再刷新至 %s，清旧项�
   })
   await screen.findByRole("link", { name: "新对话 · 研究项目甲" })
   expect(calls).toBe(1)
+  window.localStorage.removeItem("kokoro.web.auth-index-subject")
   act(() => window.dispatchEvent(new Event("focus")))
   await screen.findByTestId("projects-error")
   expect(calls).toBe(2)
@@ -591,7 +592,10 @@ it("只有成功读取 projects=[] 才呈现项目空态", async () => {
   expect(document.querySelectorAll("[data-project-list] [data-project-id]")).toHaveLength(0)
 })
 
-it("焦点返回等待会话核验时不闪不可用或空列表，核验后恢复且保留草稿", async () => {
+it("同账号焦点核验保留项目、会话和草稿，不重新请求业务列表", async () => {
+  const sessionReads = vi.spyOn(client, "listSessions").mockResolvedValue({
+    sessions: [{ session_id: "conv_stable_rail", title: "保留的会话", updated_at: "2026-10-23T00:00:00Z" }], next_cursor: null,
+  })
   let finishCheck!: (response: Response) => void
   let checks = 0
   let projectReads = 0
@@ -600,7 +604,9 @@ it("焦点返回等待会话核验时不闪不可用或空列表，核验后恢�
     if (checks === 2) return new Promise<Response>((resolve) => { finishCheck = resolve })
     return Response.json({ authenticated: true, subject: "project-reader" })
   })
-  await screen.findByRole("link", { name: "新对话 · 研究项目甲" })
+  const projectLink = await screen.findByRole("link", { name: "新对话 · 研究项目甲" })
+  const conversation = await screen.findByRole("button", { name: "保留的会话" })
+  const sessionReadCount = sessionReads.mock.calls.length
   const composer = screen.getByRole("textbox", { name: "对话输入" })
   fireEvent.change(composer, { target: { value: "核验期间保留的草稿" } })
   act(() => window.dispatchEvent(new Event("focus")))
@@ -610,19 +616,22 @@ it("焦点返回等待会话核验时不闪不可用或空列表，核验后恢�
   expect(screen.queryByText("不可用", { exact: true })).not.toBeInTheDocument()
   expect(screen.queryByTestId("projects-error")).not.toBeInTheDocument()
   expect(screen.queryByTestId("projects-empty")).not.toBeInTheDocument()
-  expect(screen.queryByRole("link", { name: "新对话 · 研究项目甲" })).not.toBeInTheDocument()
-  expect(screen.getByTestId("projects-loading").textContent).toBe("")
-  expect(screen.getAllByTestId("conversations-loading").every(node => node.textContent === "")).toBe(true)
+  expect(screen.getByRole("link", { name: "新对话 · 研究项目甲" })).toBe(projectLink)
+  expect(screen.getByRole("button", { name: "保留的会话" })).toBe(conversation)
+  expect(screen.queryByTestId("projects-loading")).not.toBeInTheDocument()
+  expect(screen.queryByTestId("conversations-loading")).not.toBeInTheDocument()
   expect(screen.getByRole("textbox", { name: "对话输入" })).toBe(composer)
   expect(composer).toHaveValue("核验期间保留的草稿")
   await act(async () => { finishCheck(Response.json({ authenticated: true, subject: "project-reader" })) })
   await screen.findByRole("link", { name: "新对话 · 研究项目甲" })
-  expect(projectReads).toBe(2)
+  expect(projectReads).toBe(1)
+  expect(sessionReads).toHaveBeenCalledTimes(sessionReadCount)
+  expect(screen.getByRole("button", { name: "保留的会话" })).toBe(conversation)
   expect(screen.getByRole("textbox", { name: "对话输入" })).toBe(composer)
   expect(composer).toHaveValue("核验期间保留的草稿")
 })
 
-it("同 subject 重核验开始就清空并取消旧读取，迟到响应不能复活项目或重挂 Chat", async () => {
+it("身份标记退休后清空并取消旧读取，迟到响应不能复活项目或重挂 Chat", async () => {
   let resolveOld: (response: Response) => void = () => { throw new Error("old read not pending") }
   let resolveSession: (response: Response) => void = () => { throw new Error("session not pending") }
   let calls = 0
@@ -641,8 +650,10 @@ it("同 subject 重核验开始就清空并取消旧读取，迟到响应不能�
   })
   await screen.findByRole("link", { name: "新对话 · 研究项目甲" })
   const composer = screen.getByRole("textbox", { name: "对话输入" })
+  window.localStorage.removeItem("kokoro.web.auth-index-subject")
   act(() => window.dispatchEvent(new Event("focus")))
   await waitFor(() => expect(calls).toBe(2))
+  window.localStorage.removeItem("kokoro.web.auth-index-subject")
   act(() => window.dispatchEvent(new Event("focus")))
   await waitFor(() => expect(checks).toBe(3))
   expect(signals[1]?.aborted).toBe(true)

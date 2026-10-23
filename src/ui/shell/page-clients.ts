@@ -32,7 +32,7 @@ import {
 import { consumeLandingPrompt } from "./use-draft"
 
 const STORAGE_KEY = "kokoro.web.conversations"
-const AUTH_INDEX_SUBJECT_KEY = "kokoro.web.auth-index-subject"
+export const AUTH_INDEX_SUBJECT_KEY = "kokoro.web.auth-index-subject"
 
 /** Remove only browser-owned conversation indexes before admitting a live identity. */
 export function invalidateBrowserAuthSessionIndexes(): void {

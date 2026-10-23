@@ -39,7 +39,7 @@ Web专属thread viewport统一隐藏滚动条槽以匹配Composer阅读轴；共
 ## 公开件
 - `AppFrame`（`src/components/blocks/app-frame/app-frame.tsx`）：User Web 唯一工作区入口。props `engine?`（测试注入缝）/ `brandName?` / `brandMark?` / `brandLogoUrl?`。AppGate 统一消费 runtime manifest，确保第一个 site 的主题和品牌跨登录、工作台、设置一致。
 - `page-clients.ts`：页面级单例客户端/引擎（`browserEngine` / `browserListClient` / `browserHubClient` / `browserBillingClient` / `browserPricingClient` / `browserTeamClient`）。仅浏览器构造，SSR 为 null。
-- `readBrowserAuthIndexSubject` / `admitBrowserAuthSessionIndexes`：以独立 UI subject marker 比较可信探针前后身份；同 subject 新文档保留索引，不同 subject 只清 `kokoro.web.conversations.` 前缀后更新 marker。marker 不是认证或授权证明。
+- `AUTH_INDEX_SUBJECT_KEY` / `readBrowserAuthIndexSubject` / `admitBrowserAuthSessionIndexes`：唯一 UI subject marker key 同时供跨标签事件过滤和可信探针前后身份比较；同 subject 新文档保留索引，不同 subject 只清 `kokoro.web.conversations.` 前缀后更新 marker。marker 仅撤销旧读取，不是认证或授权证明。
 - 域 controller hooks（各自持查询/store/回调）：`useComposerSelectors` / `useDraft` / `useConversationList` / `useConversationReaders` / `useAwaitingNotify` / `useCanvasWorkspace`。Skill source 选择只在 engine 会话内存中，不使用 browser store。
 
 ## 协作者

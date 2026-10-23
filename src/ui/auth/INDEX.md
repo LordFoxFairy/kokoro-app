@@ -31,7 +31,7 @@
 
 ## 公开件
 - `useSessionState`（`use-session-state.ts`）：探正式 `GET /api/auth/session` → `"checking"|"pass"|"anonymous"|"unavailable"`；preview 仅由非生产显式开关放行，探针故障不降级为 anonymous，也不展示登录诊断卡片；可见页在 1s/3s 后至多自动重核两次，成功清理定时器，卸载取消，现有 focus/online/周期检查继续负责后续恢复。
-- `useSessionProbe`：在同一探针结果中保留 `preview|authenticated` 模式，供 `/app` 选择 Preview Transport 或真实 Session BFF；同一浏览器返回产生的 focus/visibility 事件共用一次未决检查和一次 read-boundary generation，pagehide 仍会退役该轮并允许 pageshow 建立新检查。
+- `useSessionProbe`：在同一探针结果中保留 `preview|authenticated` 模式，供 `/app` 选择 Preview Transport 或真实 Session BFF。focus/visibility/周期探针共用未决检查；同一已准入主体保留原数据代际和页面内容，不因核验重取全部业务列表。探针序号只隔离异步结果；真正失败、匿名、身份标记变化/不可读及pagehide才退休旧数据。跨标签storage只在身份标记变化时核验，隐藏页先退休、可见后再请求；核验期间标记切走又切回也令原响应失效。pagehide允许pageshow建立新检查，业务请求仍逐次经过服务端权限校验。
 - `/` 是固定 Kokoro 公开首页；`/login` 是固定 Product RP 登录；`/app` 是受保护工作台。`/auth/sign-in` 只承载 IAM issuer 交互，不是 Product 登录页。
 - `AppGate`（`app-gate.tsx`）：`/app` 的认证闸；首文档由 app layout 复用 Product Session owner 判定，anonymous 首文档只渲染无业务数据导航组件，由浏览器保留白名单设置 fragment 后转到固定 `/login`，配置或 Redis 故障保持数据空壳，最多两次 RSC refresh 重验服务端 admission，不整页 reload、不启动第二次登录；首次 authenticated 才挂载私有 Runtime。已核验 actor 的临时故障保留原有工作区展示与冻结意图，但立即撤销该边界保护的 Project/Skills 读写准入；恢复沿现有可信探针/续期链，不重放业务写入或未确认的会话续期。辅助技术收到“重连中”状态，不再显示悬浮错误/重试卡片。挂载后的 AppGate 继续真实探针、focus/revocation 与原生 document sign-in 恢复，System manifest 仅在已验证时覆盖品牌、导航与 feature flags。
 - 首次可信身份按 UI subject marker 决定是否清理 Web 自有会话索引；同 subject 新文档不清。身份切换先撤销 Project 读取、清理索引并硬刷新，旧引擎不承接新主体；marker 不参与认证或授权。

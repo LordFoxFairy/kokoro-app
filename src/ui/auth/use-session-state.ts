@@ -9,6 +9,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { refreshProductSession } from "@/ui/auth/product-auth-client"
 
 import {
+  AUTH_INDEX_SUBJECT_KEY,
   admitBrowserAuthSessionIndexes,
   browserConversationMoveCoordinator,
   readBrowserAuthIndexSubject,
@@ -39,7 +40,10 @@ type ResolvedSession =
   | { mode: "unavailable"; subject: null }
 
 const REFRESH_INTERVAL_MS = 120_000
-let sessionProbeInflight: Promise<ResolvedSession> | null = null
+type SessionObservation = { indexSubject: string | null | undefined; retired: boolean }
+type SharedSessionCheck = { observation: SessionObservation; result: Promise<ResolvedSession> }
+let sessionProbeInflight: SharedSessionCheck | null = null
+let lastIdentityStorageEvent: StorageEvent | null = null
 let sessionProbeController: AbortController | null = null
 let admittedSubject: string | null = null
 let nextRefreshAt: number | null = null
@@ -49,13 +53,18 @@ let refreshUnconfirmed = false
 let refreshSubject: string | null = null
 let documentSuspended = false
 
-function requestSessionMode(): Promise<ResolvedSession> {
+function requestSessionMode(indexSubject: string | null | undefined): SharedSessionCheck {
   if (sessionProbeInflight !== null) return sessionProbeInflight
-  if (documentSuspended) return Promise.resolve({ mode: "unavailable", subject: null })
+  const observation = { indexSubject, retired: false }
+  if (documentSuspended) return { observation, result: Promise.resolve({ mode: "unavailable", subject: null }) }
 
   const controller = new AbortController()
   sessionProbeController = controller
   const { signal } = controller
+  const assertCurrent = (): void => {
+    signal.throwIfAborted()
+    if (observation.retired) throw new Error("Product session probe retired")
+  }
   let abort!: () => void
   const aborted = new Promise<never>((_, reject) => {
     abort = () => reject(signal.reason ?? new Error("Product session probe aborted"))
@@ -65,19 +74,17 @@ function requestSessionMode(): Promise<ResolvedSession> {
   // Both abort-aware fetch and an uncooperative late body must settle within
   // the same budget. Every dispatch checks the signal; losing work cannot POST.
   const work = Promise.resolve().then(async (): Promise<ResolvedSession> => {
-    signal.throwIfAborted()
-    let subjectAtProbeStart: string | null | undefined
-    try { subjectAtProbeStart = readBrowserAuthIndexSubject() }
-    catch { subjectAtProbeStart = undefined }
+    assertCurrent()
+    const subjectAtProbeStart = observation.indexSubject
     const recovering = refreshUnconfirmed
     type ReadSession = ResolvedSession | { mode: "refresh-required"; subject: string }
     const read = async (): Promise<ReadSession> => {
-      signal.throwIfAborted()
+      assertCurrent()
       const response = await fetch("/api/auth/session", { cache: "no-store", signal })
-      signal.throwIfAborted()
+      assertCurrent()
       if (response.status !== 200) return { mode: "unavailable", subject: null }
       const raw: unknown = await response.json()
-      signal.throwIfAborted()
+      assertCurrent()
       if (typeof raw !== "object" || raw === null) return { mode: "unavailable", subject: null }
       const authenticated = (raw as { authenticated?: unknown }).authenticated
       const subject = (raw as { subject?: unknown }).subject
@@ -117,10 +124,11 @@ function requestSessionMode(): Promise<ResolvedSession> {
     if (cold || due || initial?.mode === "refresh-required") {
       nextRefreshAt = Date.now() + REFRESH_INTERVAL_MS
       const refreshed = await refreshProductSession(signal, () => {
+        assertCurrent()
         refreshUnconfirmed = true
         refreshSubject = expectedSubject
       })
-      signal.throwIfAborted()
+      assertCurrent()
       if (refreshed.mode === "authenticated") {
         if (refreshed.subject !== expectedSubject) return { mode: "unavailable", subject: null }
         return { ...refreshed, subjectAtProbeStart, renewalConfirmed: true }
@@ -141,12 +149,13 @@ function requestSessionMode(): Promise<ResolvedSession> {
       signal.removeEventListener("abort", abort)
       if (sessionProbeController === controller) sessionProbeController = null
     })
-  sessionProbeInflight = request
+  const shared = { observation, result: request }
+  sessionProbeInflight = shared
   const clear = (): void => {
-    if (sessionProbeInflight === request) sessionProbeInflight = null
+    if (sessionProbeInflight === shared) sessionProbeInflight = null
   }
   void request.then(clear, clear)
-  return request
+  return shared
 }
 
 export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean }> = {}): SessionProbe {
@@ -173,9 +182,8 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean 
     if (EXPLICIT_PREVIEW || serverUnavailable) return
     let live = true
     // A browser return commonly emits focus and visibilitychange in the same
-    // turn. They describe one admission check, so do not retire the same read
-    // boundary twice while that hook's check is still unsettled.
-    let checkPending = false
+    // turn. They describe one check, separate from the admitted data lifecycle.
+    let pendingCheck: SessionObservation | null = null
     let recoveryAttempt = 0
     let recoveryTimer: ReturnType<typeof setTimeout> | undefined
     const recoveryDelays = [1_000, 3_000]
@@ -186,21 +194,42 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean 
         if (document.visibilityState === "visible" && !documentSuspended) check()
       }, recoveryDelays[recoveryAttempt++])
     }
+    const retireChangedSubject = (): string | null | undefined => {
+      let indexSubject: string | null | undefined
+      try { indexSubject = readBrowserAuthIndexSubject() }
+      catch { indexSubject = undefined }
+      if (pendingCheck !== null && indexSubject !== pendingCheck.indexSubject) pendingCheck.retired = true
+      if (sessionProbeInflight !== null && indexSubject !== sessionProbeInflight.observation.indexSubject)
+        sessionProbeInflight.observation.retired = true
+      // A cross-tab identity change retires data even while a probe is pending.
+      // The browser marker can revoke existing admission, never establish it.
+      if (admittedSubject !== null && indexSubject !== admittedSubject) {
+        browserConversationMoveCoordinator().suspendVerifiedSubject(admittedSubject)
+        setProbe((current) => ({ ...current, projectReadBoundary: {
+          ...current.projectReadBoundary, admitted: false, generation: generationRef.current,
+        } }))
+      }
+      return indexSubject
+    }
     const check = (): void => {
-      if (checkPending) return
-      checkPending = true
+      const indexSubject = retireChangedSubject()
+      if (pendingCheck !== null) return
+      const request = requestSessionMode(indexSubject)
+      const checking = request.observation
+      pendingCheck = checking
       const currentGeneration = ++generationRef.current
-      // Preserve the mounted Chat while revoking Project reads, even when a
-      // recheck returns the same subject. This generation never goes on wire.
-      setProbe((current) => ({ ...current, requestPending: true, projectReadBoundary: {
-        admitted: false,
-        subject: current.projectReadBoundary.subject,
-        generation: currentGeneration,
-      } }))
-      void requestSessionMode().then((resolved) => {
+      // Probe epochs fence asynchronous results; data generations change only
+      // on actual admission/retirement. A routine check does not invalidate
+      // every business read. Each request still has server-side authorization.
+      setProbe((current) => ({ ...current, requestPending: true,
+        projectReadBoundary: current.projectReadBoundary.admitted && current.projectReadBoundary.subject === indexSubject
+          ? current.projectReadBoundary
+          : { admitted: false, subject: current.projectReadBoundary.subject, generation: currentGeneration },
+      }))
+      void request.result.then((resolved) => {
         if (!live || generationRef.current !== currentGeneration) return
-        checkPending = false
-        if (resolved.mode === "unavailable") {
+        pendingCheck = null
+        if (resolved.mode === "unavailable" || checking.retired) {
           scheduleRecovery()
           browserConversationMoveCoordinator().suspendVerifiedSubject(admittedSubject)
           setProbe((current) => current.mode === "authenticated"
@@ -225,6 +254,8 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean 
               admittedSubject = resolved.subject
             } else if (admittedSubject !== resolved.subject) {
               browserConversationMoveCoordinator().revokeSubject()
+              setProbe({ state: "checking", mode: "checking", unavailable: false, requestPending: false, retry,
+                projectReadBoundary: { admitted: false, subject: null, generation: currentGeneration } })
               window.location.reload()
               return
             }
@@ -253,14 +284,16 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean 
         clearTimeout(recoveryTimer)
         recoveryTimer = undefined
         recoveryAttempt = 0
-        setProbe({
+        setProbe((current) => ({
           state: resolved.mode === "authenticated" ? "pass" : "anonymous",
           mode: resolved.mode === "authenticated" ? "authenticated" : "checking",
-          projectReadBoundary: { admitted: resolved.mode === "authenticated", subject: resolved.subject, generation: currentGeneration },
+          projectReadBoundary: resolved.mode === "authenticated" && current.projectReadBoundary.admitted && current.projectReadBoundary.subject === resolved.subject
+            ? current.projectReadBoundary
+            : { admitted: resolved.mode === "authenticated", subject: resolved.subject, generation: currentGeneration },
           unavailable: false,
           requestPending: false,
           retry,
-        })
+        }))
       })
     }
     check()
@@ -269,9 +302,29 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean 
     const onVisible = (): void => {
       if (document.visibilityState === "visible") check()
     }
+    const onStorage = (event: StorageEvent): void => {
+      // Other tabs also save drafts and preferences; those are not auth events.
+      if (event.storageArea !== window.localStorage || (event.key !== null && event.key !== AUTH_INDEX_SUBJECT_KEY)) return
+      // Storage events are queued: current storage may already be A after A→B→A.
+      // Revoke the shared observation so late subscribers cannot accept it either.
+      const changed = event.key === null || event.oldValue !== event.newValue
+      if (changed) {
+        // Each hook receives the same event. Retire only the check preceding
+        // that event, not the fresh check already started by another listener.
+        if (lastIdentityStorageEvent !== event) {
+          lastIdentityStorageEvent = event
+          if (sessionProbeInflight !== null) sessionProbeInflight.observation.retired = true
+        }
+        browserConversationMoveCoordinator().suspendVerifiedSubject(admittedSubject)
+        setProbe((current) => ({ ...current, projectReadBoundary: {
+          ...current.projectReadBoundary, admitted: false, generation: generationRef.current,
+        } }))
+      }
+      if (retireChangedSubject() !== admittedSubject || changed) onVisible()
+    }
     const onPageHide = (): void => {
       documentSuspended = true
-      checkPending = false
+      pendingCheck = null
       ++generationRef.current
       sessionProbeController?.abort()
       // A persisted pageshow may run before the aborted promise settles. Its
@@ -290,6 +343,7 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean 
     document.addEventListener("visibilitychange", onVisible)
     window.addEventListener("pagehide", onPageHide)
     window.addEventListener("pageshow", onPageShow)
+    window.addEventListener("storage", onStorage)
     const timer = setInterval(onVisible, REFRESH_INTERVAL_MS)
     return () => {
       live = false
@@ -298,6 +352,7 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean 
       document.removeEventListener("visibilitychange", onVisible)
       window.removeEventListener("pagehide", onPageHide)
       window.removeEventListener("pageshow", onPageShow)
+      window.removeEventListener("storage", onStorage)
       clearInterval(timer)
       clearTimeout(recoveryTimer)
     }

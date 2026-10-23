@@ -43,7 +43,7 @@ describe("useSessionProbe", () => {
   })
 })
 
-it("preserves authenticated Chat during recheck, and treats a later non-200 as unavailable while Project reads stay revoked", async () => {
+it("preserves the admitted data lifecycle during same-subject recheck and retires it on a real failure", async () => {
   const { act } = await import("@testing-library/react")
   let settleRecheck: (response: Response) => void = () => { throw new Error("no pending recheck") }
   const fetchMock = vi.fn()
@@ -59,23 +59,23 @@ it("preserves authenticated Chat during recheck, and treats a later non-200 as u
     expect(first.subject).toBe("reader-a")
     act(() => window.dispatchEvent(new Event("focus")))
     expect(view.result.current.mode).toBe("authenticated")
-    expect(view.result.current.projectReadBoundary.admitted).toBe(false)
-    expect(view.result.current.projectReadBoundary.subject).toBe("reader-a")
-    expect(view.result.current.projectReadBoundary.generation).toBeGreaterThan(first.generation)
+    expect(view.result.current.projectReadBoundary).toBe(first)
+    expect(view.result.current.requestPending).toBe(true)
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4))
     await act(async () => { settleRecheck(Response.json({ authenticated: true, subject: "reader-a" })) })
-    await waitFor(() => expect(view.result.current.projectReadBoundary.admitted).toBe(true))
-    expect(view.result.current.projectReadBoundary.generation).toBeGreaterThan(first.generation)
+    await waitFor(() => expect(view.result.current.requestPending).toBe(false))
+    expect(view.result.current.projectReadBoundary).toBe(first)
     act(() => window.dispatchEvent(new Event("focus")))
     await waitFor(() => expect(view.result.current.unavailable).toBe(true))
     expect(view.result.current).toMatchObject({ state: "pass", mode: "authenticated" })
     expect(view.result.current.projectReadBoundary).toMatchObject({ admitted: false, subject: "reader-a" })
+    expect(view.result.current.projectReadBoundary.generation).toBeGreaterThan(first.generation)
   } finally {
     view.unmount()
   }
 })
 
-it("coalesces focus and visibility from one browser return into one boundary generation", async () => {
+it("coalesces focus and visibility without retiring the same subject's data generation", async () => {
   let settleRecheck: (response: Response) => void = () => { throw new Error("no pending recheck") }
   const fetchMock = vi.fn()
     .mockResolvedValueOnce(session()).mockResolvedValueOnce(csrf()).mockResolvedValueOnce(renewed())
@@ -89,11 +89,11 @@ it("coalesces focus and visibility from one browser return into one boundary gen
       window.dispatchEvent(new Event("focus"))
       document.dispatchEvent(new Event("visibilitychange"))
     })
-    expect(view.result.current.projectReadBoundary).toMatchObject({ admitted: false, generation: generation + 1 })
+    expect(view.result.current.projectReadBoundary).toMatchObject({ admitted: true, generation })
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4))
     await act(async () => { settleRecheck(session()) })
-    await waitFor(() => expect(view.result.current.projectReadBoundary.admitted).toBe(true))
-    expect(view.result.current.projectReadBoundary.generation).toBe(generation + 1)
+    await waitFor(() => expect(view.result.current.requestPending).toBe(false))
+    expect(view.result.current.projectReadBoundary.generation).toBe(generation)
   } finally { view.unmount() }
 })
 
@@ -107,6 +107,199 @@ it("boolean authentication without a trusted subject does not admit Project read
   } finally {
     view.unmount()
   }
+})
+
+it.each(["changed", "missing", "unreadable", "roundtrip"])("retires an admitted subject immediately when its browser marker is %s during a pending check", async (change) => {
+  let finishCheck!: (response: Response) => void
+  const fetchMock = vi.fn().mockResolvedValueOnce(session()).mockResolvedValueOnce(csrf()).mockResolvedValueOnce(renewed())
+    .mockImplementationOnce(() => new Promise<Response>(resolve => { finishCheck = resolve }))
+  vi.stubGlobal("fetch", fetchMock)
+  const view = renderHook(() => useSessionProbe())
+  try {
+    await waitFor(() => expect(view.result.current.projectReadBoundary.admitted).toBe(true))
+    act(() => window.dispatchEvent(new Event("focus")))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4))
+    expect(view.result.current.projectReadBoundary.admitted).toBe(true)
+    act(() => {
+      if (change === "changed" || change === "roundtrip") window.localStorage.setItem("kokoro.web.auth-index-subject", "reader-b")
+      else if (change === "missing") window.localStorage.removeItem("kokoro.web.auth-index-subject")
+      else vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => { throw new Error("storage denied") })
+      window.dispatchEvent(new StorageEvent("storage", { key: "kokoro.web.auth-index-subject", storageArea: window.localStorage }))
+      if (change === "roundtrip") {
+        window.localStorage.setItem("kokoro.web.auth-index-subject", "reader-a")
+        window.dispatchEvent(new StorageEvent("storage", { key: "kokoro.web.auth-index-subject", storageArea: window.localStorage }))
+      }
+    })
+    expect(view.result.current.projectReadBoundary.admitted).toBe(false)
+    expect(fetchMock).toHaveBeenCalledTimes(4)
+    await act(async () => { finishCheck(session()) })
+    expect(view.result.current.projectReadBoundary.admitted).toBe(false)
+    expect(view.result.current.unavailable).toBe(true)
+  } finally { view.unmount() }
+})
+
+it("retires queued cross-tab identity changes even when storage has already returned to the original subject", async () => {
+  let finishCheck!: (response: Response) => void
+  const fetchMock = vi.fn().mockResolvedValueOnce(session()).mockResolvedValueOnce(csrf()).mockResolvedValueOnce(renewed())
+    .mockImplementationOnce(() => new Promise<Response>(resolve => { finishCheck = resolve }))
+  vi.stubGlobal("fetch", fetchMock)
+  const view = renderHook(() => useSessionProbe())
+  try {
+    await waitFor(() => expect(view.result.current.projectReadBoundary.admitted).toBe(true))
+    act(() => window.dispatchEvent(new Event("focus")))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4))
+    act(() => {
+      // Another tab completes both writes before this tab handles either event.
+      window.localStorage.setItem("kokoro.web.auth-index-subject", "reader-b")
+      window.localStorage.setItem("kokoro.web.auth-index-subject", "reader-a")
+      for (const [oldValue, newValue] of [["reader-a", "reader-b"], ["reader-b", "reader-a"]] as const) {
+        window.dispatchEvent(new StorageEvent("storage", {
+          key: "kokoro.web.auth-index-subject", storageArea: window.localStorage, oldValue, newValue,
+        }))
+      }
+    })
+    expect(view.result.current.projectReadBoundary.admitted).toBe(false)
+    await act(async () => { finishCheck(session()) })
+    expect(view.result.current.projectReadBoundary.admitted).toBe(false)
+  } finally { view.unmount() }
+})
+
+it.each(["mount", "retry"])("does not readmit a retired shared response through a later %s", async (join) => {
+  let finishCheck!: (response: Response) => void
+  const fetchMock = vi.fn().mockResolvedValueOnce(session()).mockResolvedValueOnce(csrf()).mockResolvedValueOnce(renewed())
+    .mockImplementationOnce(() => new Promise<Response>(resolve => { finishCheck = resolve }))
+  vi.stubGlobal("fetch", fetchMock)
+  const view = renderHook(() => useSessionProbe())
+  let late: ReturnType<typeof renderHook<ReturnType<typeof useSessionProbe>, unknown>> | undefined
+  try {
+    await waitFor(() => expect(view.result.current.projectReadBoundary.admitted).toBe(true))
+    act(() => window.dispatchEvent(new Event("focus")))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4))
+    act(() => {
+      for (const [oldValue, newValue] of [["reader-a", "reader-b"], ["reader-b", "reader-a"]] as const) {
+        window.localStorage.setItem("kokoro.web.auth-index-subject", newValue)
+        window.dispatchEvent(new StorageEvent("storage", {
+          key: "kokoro.web.auth-index-subject", storageArea: window.localStorage, oldValue, newValue,
+        }))
+      }
+    })
+    expect(view.result.current.projectReadBoundary.admitted).toBe(false)
+    if (join === "mount") late = renderHook(() => useSessionProbe())
+    else act(() => view.result.current.retry())
+    await act(async () => { finishCheck(session()) })
+    expect(view.result.current.projectReadBoundary.admitted).toBe(false)
+    if (late) expect(late.result.current.projectReadBoundary.admitted).toBe(false)
+    expect(fetchMock).toHaveBeenCalledTimes(4)
+  } finally { late?.unmount(); view.unmount() }
+})
+
+it("shares one immediate check after an identity event across already mounted consumers", async () => {
+  let finishCheck!: (response: Response) => void
+  const fetchMock = vi.fn().mockResolvedValueOnce(session()).mockResolvedValueOnce(csrf()).mockResolvedValueOnce(renewed())
+    .mockImplementationOnce(() => new Promise<Response>(resolve => { finishCheck = resolve }))
+  vi.stubGlobal("fetch", fetchMock)
+  const first = renderHook(() => useSessionProbe())
+  const second = renderHook(() => useSessionProbe())
+  try {
+    await waitFor(() => expect(first.result.current.projectReadBoundary.admitted).toBe(true))
+    expect(second.result.current.projectReadBoundary.admitted).toBe(true)
+    await act(async () => {
+      window.localStorage.setItem("kokoro.web.auth-index-subject", "reader-b")
+      window.dispatchEvent(new StorageEvent("storage", {
+        key: "kokoro.web.auth-index-subject", storageArea: window.localStorage,
+        oldValue: "reader-a", newValue: "reader-b",
+      }))
+    })
+    expect(first.result.current.projectReadBoundary.admitted).toBe(false)
+    expect(second.result.current.projectReadBoundary.admitted).toBe(false)
+    expect(first.result.current.unavailable).toBe(false)
+    expect(second.result.current.unavailable).toBe(false)
+    expect(fetchMock).toHaveBeenCalledTimes(4)
+    await act(async () => { finishCheck(Response.json({ authenticated: false })) })
+    expect(first.result.current.state).toBe("anonymous")
+    expect(second.result.current.state).toBe("anonymous")
+  } finally { first.unmount(); second.unmount() }
+})
+
+it("retires a previously admitted page when the session becomes anonymous", async () => {
+  const fetchMock = vi.fn().mockResolvedValueOnce(session()).mockResolvedValueOnce(csrf()).mockResolvedValueOnce(renewed())
+    .mockResolvedValueOnce(Response.json({ authenticated: false }))
+  vi.stubGlobal("fetch", fetchMock)
+  const view = renderHook(() => useSessionProbe())
+  try {
+    await waitFor(() => expect(view.result.current.projectReadBoundary.admitted).toBe(true))
+    const generation = view.result.current.projectReadBoundary.generation
+    act(() => window.dispatchEvent(new Event("focus")))
+    await waitFor(() => expect(view.result.current.state).toBe("anonymous"))
+    expect(view.result.current.projectReadBoundary).toMatchObject({ admitted: false, subject: null })
+    expect(view.result.current.projectReadBoundary.generation).toBeGreaterThan(generation)
+  } finally { view.unmount() }
+})
+
+it.each(["draft", "sessionStorage"])("keeps unrelated %s writes outside the session probe", async (storage) => {
+  const fetchMock = vi.fn().mockResolvedValueOnce(session()).mockResolvedValueOnce(csrf()).mockResolvedValueOnce(renewed())
+  vi.stubGlobal("fetch", fetchMock)
+  const view = renderHook(() => useSessionProbe())
+  try {
+    await waitFor(() => expect(view.result.current.projectReadBoundary.admitted).toBe(true))
+    const boundary = view.result.current.projectReadBoundary
+    act(() => window.dispatchEvent(new StorageEvent("storage", {
+      key: storage === "draft" ? "kokoro.web.drafts" : "kokoro.web.auth-index-subject",
+      storageArea: storage === "draft" ? window.localStorage : window.sessionStorage,
+      oldValue: "reader-a", newValue: "reader-b",
+    })))
+    expect(view.result.current.projectReadBoundary).toBe(boundary)
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+  } finally { view.unmount() }
+})
+
+it("retires a pending check on a queued localStorage clear even if the marker was restored", async () => {
+  let finishCheck!: (response: Response) => void
+  const fetchMock = vi.fn().mockResolvedValueOnce(session()).mockResolvedValueOnce(csrf()).mockResolvedValueOnce(renewed())
+    .mockImplementationOnce(() => new Promise<Response>(resolve => { finishCheck = resolve }))
+  vi.stubGlobal("fetch", fetchMock)
+  const view = renderHook(() => useSessionProbe())
+  try {
+    await waitFor(() => expect(view.result.current.projectReadBoundary.admitted).toBe(true))
+    act(() => window.dispatchEvent(new Event("focus")))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4))
+    act(() => window.dispatchEvent(new StorageEvent("storage", { key: null, storageArea: window.localStorage })))
+    expect(view.result.current.projectReadBoundary.admitted).toBe(false)
+    await act(async () => { finishCheck(session()) })
+    expect(view.result.current.projectReadBoundary.admitted).toBe(false)
+  } finally { view.unmount() }
+})
+
+it("retires a hidden tab's changed identity without rotating credentials in the background", async () => {
+  let visible = "visible"
+  vi.spyOn(document, "visibilityState", "get").mockImplementation(() => visible as DocumentVisibilityState)
+  const fetchMock = vi.fn().mockResolvedValueOnce(session()).mockResolvedValueOnce(csrf()).mockResolvedValueOnce(renewed())
+  vi.stubGlobal("fetch", fetchMock)
+  const view = renderHook(() => useSessionProbe())
+  try {
+    await waitFor(() => expect(view.result.current.projectReadBoundary.admitted).toBe(true))
+    visible = "hidden"
+    act(() => {
+      window.localStorage.removeItem("kokoro.web.auth-index-subject")
+      window.dispatchEvent(new StorageEvent("storage", { key: "kokoro.web.auth-index-subject", storageArea: window.localStorage }))
+    })
+    expect(view.result.current.projectReadBoundary.admitted).toBe(false)
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+  } finally { view.unmount() }
+})
+
+it("clears the old subject before navigating to a newly verified account", async () => {
+  const fetchMock = vi.fn().mockResolvedValueOnce(session()).mockResolvedValueOnce(csrf()).mockResolvedValueOnce(renewed())
+    .mockResolvedValueOnce(Response.json({ authenticated: true, subject: "reader-b" }))
+  vi.stubGlobal("fetch", fetchMock)
+  const view = renderHook(() => useSessionProbe())
+  try {
+    await waitFor(() => expect(view.result.current.projectReadBoundary.admitted).toBe(true))
+    act(() => window.dispatchEvent(new Event("focus")))
+    await waitFor(() => expect(view.result.current.projectReadBoundary.subject).toBeNull())
+    expect(view.result.current).toMatchObject({ state: "checking", mode: "checking", requestPending: false })
+    expect(view.result.current.projectReadBoundary.admitted).toBe(false)
+  } finally { view.unmount() }
 })
 
 
@@ -584,7 +777,7 @@ it.each(["cold", "warm"])("renews a %s expired access credential without treatin
       act(() => window.dispatchEvent(new Event("focus")))
     }
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(phase === "cold" ? 3 : 6))
-    expect(view.result.current.projectReadBoundary.admitted).toBe(false)
+    expect(view.result.current.projectReadBoundary.admitted).toBe(phase === "warm")
     expect(view.result.current.state).not.toBe("anonymous")
     await act(async () => finish(renewed()))
     await waitFor(() => expect(view.result.current.projectReadBoundary.admitted).toBe(true))
