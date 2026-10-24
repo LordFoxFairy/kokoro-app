@@ -4,7 +4,7 @@ Agent4c46ec6、BFFf71a179、App0d19bfd已按原配置配到正常读者，正常
 
 本片仅把普通会话选择准入接回原运行导航MCP模块及其正式feature flag，不开启项目绑定或修改System配置；模块缺席/明确关闭时也停止列表读取。实际manifest形状先复现缺按钮RED，修复后相关六文件461项、两生产文件与原suite ESLint、官方typegen/tsc均exit0；独立只读审查未见确定P0–P2。尚未重跑完整owner/build/整站E2E，沿用0d19bfd完整基线但不冒本片全门已验。既存49行导航诊断WIP逐字保留并排除提交。
 
-下一动作是仅两文件精确HMR及正常浏览器QA Connection选择，不重启BFF/Agent、不改Schema或资金。正常冷载工作区占位和原pending结算仍存在；同次模型→MCP→产物→重开→实际用量积分未完成，不能以本片闭环冒整链完成。正常采集及回滚材料仅Root ignored normal-pair。
+正常已仅两文件精确HMR，766其它source和全部进程不变。浏览器已验原会话URL/正文→正式列表与metadata GET200→原QA选择为1→Esc焦点回收→重开保留→显式管理连接器tab→关闭保留→新建干净/app且清零；未提交消息或改变账号enabled。Agent/BFF/Billing原行与xmin、原usage保持；Platform只有transaction_admission_slot既有行发生读取准入更新，不能称全库零写。正常冷载工作区占位和原pending结算仍存在；同次模型→MCP→产物→重开→实际用量积分未完成，不能以本片闭环冒整链完成。正常采集及回滚材料仅Root ignored normal-pair。
 
 ## 2026-10-24 普通会话 MCP 选择纵向（本地已验，正常未配对）
 
