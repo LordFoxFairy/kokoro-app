@@ -91,6 +91,8 @@ function agentFailureCopyKey(code: AgentFailureCode): MessageKey {
       return "fail.dependencyUnavailable"
     case "model_access_denied":
       return "fail.modelAccessDenied"
+    case "model_settlement_pending":
+      return "fail.modelSettlementPending"
     default: {
       const exhaustive: never = code
       return exhaustive

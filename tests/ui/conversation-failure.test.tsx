@@ -282,7 +282,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe("failureCopyKey — generated 10-code safe profile localization", () => {
+describe("failureCopyKey — generated 11-code safe profile localization", () => {
   it("每个闭集码映射到一个存在的、非通用的文案键", () => {
     for (const code of CODES) {
       const key = failureCopyKey(failedThread(code).runFailuresById.run_1 ?? null)
@@ -291,7 +291,7 @@ describe("failureCopyKey — generated 10-code safe profile localization", () =>
     }
   })
 
-  it("十码映射两两不同（无碰撞）", () => {
+  it("闭集码映射两两不同（无碰撞）", () => {
     const keys = CODES.map((code) => failureCopyKey(failedThread(code).runFailuresById.run_1 ?? null))
     expect(new Set(keys).size).toBe(CODES.length)
   })
@@ -423,6 +423,16 @@ describe("ConversationThread 原生滚动行为", () => {
 })
 
 describe("ConversationThread 失败卡渲染", () => {
+  it("待核对状态保留正文且不声称已扣款或提供重发动作", () => {
+    const onRetry = vi.fn()
+    renderFailure(failedThread("model_settlement_pending"), onRetry)
+    expect(screen.getByText("working…")).toBeInTheDocument()
+    expect(screen.getByText(tr("fail.modelSettlementPending"))).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /retry|重试|重新发送/i })).not.toBeInTheDocument()
+    expect(onRetry).not.toHaveBeenCalled()
+    expect(zh["fail.modelSettlementPending"]).toBe("本轮已停止，已生成的内容已保留；结算仍待核对。")
+  })
+
   const delivery: SessionDelivery = {
     conversationId: "ses_1", artifactId: "artifact_1", assetId: "asset_1", artifactKind: "document",
     title: "Report", mime: "application/pdf", size: 2048, runId: "run_1", createdAt: "2026-09-30T00:00:00Z",

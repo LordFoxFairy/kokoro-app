@@ -74,3 +74,5 @@ Web UI 的多语言:**中文(zh)是唯一源字典**,其余语言是增量覆盖
 - 硬编码护栏 `tests/i18n/no-hardcoded-ui.test.ts` **只查中文字符**——英文硬编码不触发。已修的盲区:mode 的 `Fast`/`Thinking` 曾英文硬编码(`ui/composer/mode-options.ts`),现走 `mode.labelFast`/`mode.labelThinking` 键。新增英文硬编码仍可能漏网,评审留意。
 - overlay 完整性由 `tests/i18n/resolve.test.ts` 守:每 overlay 的 key ⊆ zh 源、各语言覆盖率 ≥95%、`LOCALE_NAMES` 覆盖全 `LOCALES`。
 - locale storage 不是认证或服务端事实；不要把其异常恢复扩展为 Product Session、认证索引或业务数据的 fallback。
+
+Agent 待核对终态使用 fail.modelSettlementPending，九语言仅描述停止、内容保留与结算待核对，不推断扣款／释放。

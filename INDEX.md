@@ -1,3 +1,7 @@
+## 2026-10-24 Agent 待核对终态（候选，未正常激活）
+
+固定BFF `b0f201e99c2ae3fa213942c5a909f47b06640a02`／Public23.1／raw `703dba47da8a5c659b4236bb0a72317588ad29a4ca444ff9e5c99cfbcd00634b`。原186操作不变；七public窄消费者正规生成，ChatMessage／RUN_ERROR只承接新增model_settlement_pending且retryable=false，未知／坏profile保持拒绝。既有ConversationThread与九语言保正文并说明结算待核对，不猜已扣款／释放、不给终态重发动作、不改历史generic。完整23.0父字节逆证及原证明链保持，在线Docs固定同一发行物。完整工程／正常激活状态见[CURRENT](docs/CURRENT.md)。
+
 PROJECT-1（2026-10-24）：显式会话深链接缺席由 engine 记录观察、现有导航／错误面投影，保持地址且不退成默认页；new 与 unknown create 保护、原 ID 重读及 deferred ACK 恢复见 `docs/TECHNICAL_DESIGN.md`。真实验收与完整项目剩余项见 `docs/CURRENT.md`。
 
 ## 当前精确模型绑定（2026-10-22）

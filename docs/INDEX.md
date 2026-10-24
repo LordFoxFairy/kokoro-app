@@ -1,3 +1,7 @@
+## 2026-10-24 Agent 待核对终态（候选，未正常激活）
+
+固定BFF `b0f201e99c2ae3fa213942c5a909f47b06640a02`／Public23.1／raw `703dba47da8a5c659b4236bb0a72317588ad29a4ca444ff9e5c99cfbcd00634b`。原186操作不变；七public窄消费者正规生成，ChatMessage／RUN_ERROR只承接新增model_settlement_pending且retryable=false，未知／坏profile保持拒绝。既有ConversationThread与九语言保正文并说明结算待核对，不猜已扣款／释放、不给终态重发动作、不改历史generic。完整23.0父字节逆证及原证明链保持，在线Docs固定同一发行物。完整工程／正常激活状态见[CURRENT](CURRENT.md)。
+
 ## 当前精确模型绑定（2026-10-22）
 
 已固定Public23；源契约、七生成器、精确22.5父保护和App在线Docs同步，完整本地验收见[CURRENT](CURRENT.md)。后台修订选择及实际Agent资金链仍在同一计划内，未宣称正常生效。

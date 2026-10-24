@@ -1,3 +1,7 @@
+## 2026-10-24 AGENT-1：待核对结算状态的同一视图链路（实施中）
+
+复用既有AG-UI及ConversationThread，消费BFF正式Public23.1固定原件；只在严格新码 model_settlement_pending / retryable=false 时显示“本轮已停止，已生成的内容已保留；结算仍待核对。”。未知／坏profile仍拒绝，历史dependency_unavailable不从正文或余额猜成待核对。正文、history hydration、唯一footer、无终态重发按钮及原同key未确认提交恢复区分保持；不新增API／状态机／价格／余额估算或CSS风格。先真实复现旧profile拒绝，再正规生成七public消费者及既有在线Docs；完整旧父证明逐字承接。正常切换必须同时具备BFF CHECK演进和Agent新码生产，不提前激活新producer。
+
 ## PROJECT-1：显式会话深链接的缺失状态（2026-10-24）
 
 保持 owner snapshot 为事实源：engine 仅在普通 snapshot 权威缺席、原 active/代际仍匹配、无本页新建证明／同 session pending 或 unknown create／已知正文时提供内存 missingSessionId。导航仅对显式 URL ID＝active＝missing 显示原错误面及重读，不把地址抹成首页，也不挂载可按旧 ID 提交的 Composer；残留 submit handler 复验当前事实。无 query 的项目概览／直接草稿不受全局禁发影响，newConversation 不新增 GET。

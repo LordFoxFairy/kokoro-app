@@ -12,9 +12,9 @@ import YAML from "yaml"
 import { messageRecordSchema } from "../../src/contract/chat"
 import { BFF_CHAT_MESSAGE_ROLES } from "../../src/generated/bff-agent-failure"
 
-const BFF_OWNER_COMMIT = "a77276b35b07eb65df8a0af2e41b461b393afb12"
-const BFF_PUBLIC_OPENAPI_SHA256 = "34ea71e0aa56256ca00fc5b3c40abd4d142bea82e664a6871190b8547ec2b9e6"
-const BFF_PUBLIC_OPENAPI_VERSION = "23.0.0"
+const BFF_OWNER_COMMIT = "b0f201e99c2ae3fa213942c5a909f47b06640a02"
+const BFF_PUBLIC_OPENAPI_SHA256 = "703dba47da8a5c659b4236bb0a72317588ad29a4ca444ff9e5c99cfbcd00634b"
+const BFF_PUBLIC_OPENAPI_VERSION = "23.1.0"
 const ROOT = process.cwd()
 const SNAPSHOT = resolve(ROOT, "src/generated/bff-public-openapi.yaml")
 const GENERATOR = resolve(ROOT, "scripts/generate-bff-agent-failure.mjs")
@@ -31,6 +31,7 @@ const CODES = [
   "model_unavailable",
   "dependency_unavailable",
   "model_access_denied",
+  "model_settlement_pending",
 ] as const
 const TRUE_CODES = ["model_unavailable", "dependency_unavailable"] as const
 const EXPECTED_TUPLES = [
@@ -206,7 +207,7 @@ describe("pinned BFF Agent failure public contract", () => {
     const bytes = await readFile(SNAPSHOT)
     const spec = YAML.parse(bytes.toString("utf8")) as { info?: { version?: string } }
 
-    expect(BFF_OWNER_COMMIT).toBe("a77276b35b07eb65df8a0af2e41b461b393afb12")
+    expect(BFF_OWNER_COMMIT).toBe("b0f201e99c2ae3fa213942c5a909f47b06640a02")
     expect(createHash("sha256").update(bytes).digest("hex")).toBe(BFF_PUBLIC_OPENAPI_SHA256)
     expect(spec.info?.version).toBe(BFF_PUBLIC_OPENAPI_VERSION)
   })
@@ -216,7 +217,7 @@ describe("pinned BFF Agent failure public contract", () => {
     const failure = chat.properties.failure
 
     expect(chat.properties.role.enum).toEqual(["user", "assistant"])
-    expect(failure, "public 7.2 ChatMessage.failure must be present").toBeDefined()
+    expect(failure, "public 23.1 ChatMessage.failure must be present").toBeDefined()
     expect(failure.required).toEqual(["source", "code", "retryable"])
     expect(failure.additionalProperties).toBe(false)
     expect(Object.keys(failure.properties)).toEqual(["source", "code", "retryable"])
@@ -240,7 +241,7 @@ describe("pinned BFF Agent failure public contract", () => {
     ])
   })
 
-  it("derives the exact 12 safe tuples with the owner two-role contract", async () => {
+  it("derives the exact 13 safe tuples with the owner two-role contract", async () => {
     const generator = await loadGenerator()
     const inspected = generator.inspectBffAgentFailureContract(await readSpec())
 

@@ -457,6 +457,7 @@ export const fr: Partial<Record<MessageKey, string>> = {
   "fail.modelUnavailable": "Le modèle sélectionné est temporairement indisponible et ce tour a été arrêté.",
   "fail.dependencyUnavailable": "Un service requis est temporairement indisponible et ce tour a été arrêté.",
   "fail.modelAccessDenied": "Ce compte ne peut pas utiliser le modèle sélectionné. Contactez un administrateur.",
+  "fail.modelSettlementPending": "Ce tour a été arrêté. Le contenu généré est conservé ; le règlement reste en attente de rapprochement.",
   "fail.generic": "Vous n'avez pas terminé ce tour, réessayez plus tard.",
   "fail.internalHint": "Si le problème persiste, contactez le support en indiquant l’heure de la session.",
   "mode.labelFast": "rapide",

@@ -13,6 +13,7 @@ const AGENT_FAILURE_CODES = [
   "model_unavailable",
   "dependency_unavailable",
   "model_access_denied",
+  "model_settlement_pending",
 ] as const
 
 const AGENT_FAILURE_TUPLES = [

@@ -1,3 +1,14 @@
+## 2026-10-24 AGENT-1：待核对结算的正式消费（本地候选，未正常激活）
+
+固定BFF `b0f201e99c2ae3fa213942c5a909f47b06640a02`／Public23.1，唯一原件及七public窄生成器、全部现行pin断言、在线Docs同源更新。只新增 model_settlement_pending / false，完整23.0父证明原字节保持；未知字段、未知码和该码true仍拒绝。既有ConversationThread唯一footer和九语言说明“本轮已停止，已生成的内容已保留；结算仍待核对。”，不猜capture／release，不改历史generic，不改提交／恢复／重派、布局或余额。
+
+- [x] 旧profile拒绝新RUN_ERROR先实际RED，再正规生成；相关3文件145 PASS。新UI回归保正文、不新增重发动作。只读独审无确定新增P0–P2，BFF原件与commit Git blob核等。
+- [x] 1152非MD输入停写：contract306、architecture50、默认256文件4877项全部通过；lint、官方typegen/types、build、post-types、Docs全门均0。Docs54 HTML／17943内部链接通过，既有大chunk警告保留。初lint扫描到旧git-ignored playwright-report的压缩JS而失败，报告整体归档到Root ignored后以同一pnpm lint重验0，未改忽略配置／断言／源码以放宽门。完整测试本次未重现既有auth JSON EOF，不宣称其根因已修。
+- [ ] 浏览器完整preview111 PASS／1 FAIL、零重试。剩余为既有mobile Settings compact navigation／resize后的焦点问题，本片没有改其组件或放宽断言；真实截图／trace保留。原有Skills几何失败本次未重现，也不冒称修复。owned preview已停止、随后官方typegen/types0，1152输入核同。
+- [ ] 正常源尚未接此新码；BFF原schema check实测update_required。已在Root完成实际正常BFF 32表263行完整备份、独占恢复／具名升级／回退演练，正文和xmin保持，库存94→94，实际正常库未apply／服务未重启。首演练误把旧canonical当成全部当前owner事实，data-only restore碰到历史deletion_member表缺席而停下；改为完整实际owner备份恢复，保留历史表，严格只验证新CHECK与fresh一致及其他约束不变，无删除／放宽保护。
+
+本片仍是同一Agent主链，不转回图标支线；实际供应商计价／原pending、正常配对／真实新Run、低风险工具／产物与整数积分回读仍未闭合。不以工程绿或具名fixture冒真实执行／资金完成，不merge、不升Root gitlink。完整原始证据在Root ignored `var/dev/agent-chain-focus-20261024`；原项目和MCP差异继续留在既有16项TODO，不改成全部完成。
+
 ## 2026-10-24 PROJECT-1：旧会话深链接与创建回执（正常已生效，整仓门仍有失败）
 
 正常浏览器独立打开原项目 query 复现：会话 snapshot GET 及 archive GET 均404，但仍显示可编辑项目概览。根因为普通 snapshot null 被当成所有场景的合法空会话；不是 URL 字体或项目能力旗标问题。现 engine 只投影有代际守卫的缺席观察，导航只对显式 query＝active＝missing 显示现有错误面、保地址、隐藏输入，残留提交回调亦复验；无 query 的项目概览／直接新草稿保持。九语言同步。同 ID 重读不先创建 fallback，不新增 POST。

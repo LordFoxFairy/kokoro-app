@@ -457,6 +457,7 @@ export const pt: Partial<Record<MessageKey, string>> = {
   "fail.modelUnavailable": "O modelo selecionado está temporariamente indisponível e esta rodada foi interrompida.",
   "fail.dependencyUnavailable": "Um serviço necessário está temporariamente indisponível e esta rodada foi interrompida.",
   "fail.modelAccessDenied": "Esta conta não pode usar o modelo selecionado. Entre em contato com um administrador.",
+  "fail.modelSettlementPending": "Esta rodada foi interrompida. O conteúdo gerado foi preservado; a liquidação ainda aguarda conciliação.",
   "fail.generic": "Não concluiu esta rodada. Tente novamente mais tarde.",
   "fail.internalHint": "Se o problema continuar, contate o suporte e informe o horário da sessão.",
   "mode.labelFast": "rápido",

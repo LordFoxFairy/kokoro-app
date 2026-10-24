@@ -27,6 +27,11 @@ const proof = {
 const hash = (value: string) => createHash("sha256").update(value).digest("hex")
 export function restoreMeteringParent(bytes: Uint8Array): Buffer {
   let source = Buffer.from(bytes).toString("utf8")
+  if (/^  version: 23\.1\.0$/mu.test(source)) {
+    if (hash(source) !== "703dba47da8a5c659b4236bb0a72317588ad29a4ca444ff9e5c99cfbcd00634b") throw Error("Settlement failure current source drift")
+    source = source.replace("                - model_settlement_pending\n", "").replace("  version: 23.1.0", "  version: 23.0.0")
+    if (hash(source) !== "34ea71e0aa56256ca00fc5b3c40abd4d142bea82e664a6871190b8547ec2b9e6") throw Error("Settlement failure complete parent drift")
+  }
   if (/^  version: 23\.0\.0$/mu.test(source)) {
     if (hash(source) !== "34ea71e0aa56256ca00fc5b3c40abd4d142bea82e664a6871190b8547ec2b9e6") throw Error("Exact model binding source drift")
     source = source

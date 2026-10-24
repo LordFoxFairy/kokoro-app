@@ -10,10 +10,10 @@ import YAML from "yaml"
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const sourcePath = join(root, "src/generated/bff-public-openapi.yaml")
 const outputPath = join(root, "src/generated/bff-agent-failure.ts")
-const ownerCommit = "a77276b35b07eb65df8a0af2e41b461b393afb12"
-const expectedDigest = "34ea71e0aa56256ca00fc5b3c40abd4d142bea82e664a6871190b8547ec2b9e6"
-const expectedVersion = "23.0.0"
-const expectedChatMessageFingerprint = "ff22b01388333e4e3acae67697ec14ecf02a54e397470bccecd853a011c471be"
+const ownerCommit = "b0f201e99c2ae3fa213942c5a909f47b06640a02"
+const expectedDigest = "703dba47da8a5c659b4236bb0a72317588ad29a4ca444ff9e5c99cfbcd00634b"
+const expectedVersion = "23.1.0"
+const expectedChatMessageFingerprint = "d69b983fd87600f5c180494b27989d5eb2b32c12284bf5c7530930e3099c0bf6"
 
 const digest = (value) => createHash("sha256").update(value).digest("hex")
 
@@ -43,9 +43,9 @@ export function inspectBffAgentFailureContract(spec) {
     ...retryableCodes.map((code) => ({ source: failure.properties.source.const, code, retryable: true })),
   ]
 
-  assert.equal(codes.length, 10, "BFF Agent failure code count drift")
+  assert.equal(codes.length, 11, "BFF Agent failure code count drift")
   assert.equal(retryableCodes.length, 2, "BFF retryable Agent failure code count drift")
-  assert.equal(tuples.length, 12, "BFF Agent failure tuple count drift")
+  assert.equal(tuples.length, 13, "BFF Agent failure tuple count drift")
   return { roles: [...roles], tuples }
 }
 

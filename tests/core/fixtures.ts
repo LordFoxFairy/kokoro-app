@@ -25,6 +25,7 @@ export const AGENT_FAILURE_MESSAGE_KEYS = {
   model_unavailable: "fail.modelUnavailable",
   dependency_unavailable: "fail.dependencyUnavailable",
   model_access_denied: "fail.modelAccessDenied",
+  model_settlement_pending: "fail.modelSettlementPending",
 } satisfies Record<AgentFailureCode, string>
 
 export function expectedZhCopy(key: string): string {

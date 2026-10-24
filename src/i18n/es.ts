@@ -457,6 +457,7 @@ export const es: Partial<Record<MessageKey, string>> = {
   "fail.modelUnavailable": "El modelo seleccionado no está disponible temporalmente y esta ronda se detuvo.",
   "fail.dependencyUnavailable": "Un servicio necesario no está disponible temporalmente y esta ronda se detuvo.",
   "fail.modelAccessDenied": "Esta cuenta no puede usar el modelo seleccionado. Contacte con un administrador.",
+  "fail.modelSettlementPending": "Este turno se ha detenido. El contenido generado se conserva; la liquidación sigue pendiente de conciliación.",
   "fail.generic": "No completé esta ronda, inténtalo de nuevo más tarde.",
   "fail.internalHint": "Si el problema continúa, contacte con soporte e indique la hora de la sesión.",
   "mode.labelFast": "rápido",

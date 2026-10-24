@@ -636,6 +636,7 @@ export const en: Partial<Record<MessageKey, string>> = {
   "fail.modelUnavailable": "The selected model is temporarily unavailable, so this turn stopped.",
   "fail.dependencyUnavailable": "A service needed for this turn is temporarily unavailable, so the turn stopped.",
   "fail.modelAccessDenied": "This account cannot use the selected model. Contact an administrator.",
+  "fail.modelSettlementPending": "This turn has stopped. Generated content is preserved; settlement is still pending reconciliation.",
   "fail.agentNotConfigured": "Execution is not available yet",
   "fail.executionUnavailableHint": "You can still read your history and edit a draft. Retry the original request when the service is ready.",
   "thread.retryOriginal": "Retry original request",

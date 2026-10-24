@@ -8,9 +8,9 @@ it("pins three formal pricing operations while preserving every preceding byte a
     parentRaw = restoreMeteringParent(raw),
     spec = YAML.parse(raw.toString()),
     parent = YAML.parse(parentRaw.toString())
-  expect(createHash("sha256").update(raw).digest("hex")).toBe("34ea71e0aa56256ca00fc5b3c40abd4d142bea82e664a6871190b8547ec2b9e6")
+  expect(createHash("sha256").update(raw).digest("hex")).toBe("703dba47da8a5c659b4236bb0a72317588ad29a4ca444ff9e5c99cfbcd00634b")
   expect(createHash("sha256").update(parentRaw).digest("hex")).toBe("f6b8f3bd250c144a2d648af94c9fd5fe068db33991a4289b849a077eef009f32")
-  expect(spec.info.version).toBe("23.0.0")
+  expect(spec.info.version).toBe("23.1.0")
   expect(parent.info.version).toBe("22.4.0")
   const inventory = (doc: typeof spec) =>
     Object.entries(doc.paths).flatMap(([path, value]) =>
