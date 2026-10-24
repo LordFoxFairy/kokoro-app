@@ -690,12 +690,17 @@ export function McpProjectionRead({
           onResumeManagement={() => { if (connectorIntent) void runManagement("editor", connectorIntent.connectorId); }}
           preparationState={preparationState?.kind ?? "idle"}
           preparationFailure={preparationState?.failure}
-          actionId={preparationState?.kind === "running" ? connectorIntent.connectorId : actionId}
+          preparationCanResume={connectorIntent.serverId ? preparation.canResume(connectorIntent.serverId, undefined, connectorIntent.window) : false}
+          preparationCanInspect={connectorIntent.serverId ? preparation.canInspect(connectorIntent.serverId) : false}
+          preparationRecoveryReady={preparation.recoveryReady()}
+          preparationRecoveryError={preparation.recoveryFailed()}
+          onRetryPreparationRecovery={() => { void preparation.restore({ subject: identity, admitted, generation: readGeneration }); }}
+          actionId={preparationState?.kind === "running" || preparationState?.inspection === "running" ? connectorIntent.connectorId : actionId}
           actionError={actionError || managementState?.kind === "rejected" || privateAuthorization.error}
           authorizationBusy={privateAuthorization.busy}
           onAuthorize={() => {
             if (!editor?.server || !connectorIntent || ownerRef.current !== owner || !admitted ||
-              editorWindow.current?.intent !== connectorIntent.window || management.isBlocked(editor.connector.connector_id)) return;
+              editorWindow.current?.intent !== connectorIntent.window || !preparation.recoveryReady() || management.isBlocked(editor.connector.connector_id)) return;
             const preparing = preparation.getSnapshot().find(item => item.serverId === editor.server!.server_id);
             if (preparing?.kind === "running" || preparing?.kind === "completed") return;
             void privateAuthorization.authorize(editor.connector, editor.server);
@@ -730,7 +735,8 @@ export function McpProjectionRead({
           }}
           {...(startTrial === null ? {} : { onTrial: () => {
             if (!editor?.server || !admitted || ownerRef.current !== owner || !connectorIntent ||
-              editorWindow.current?.intent !== connectorIntent.window || management.isBlocked(editor.connector.connector_id) ||
+              editorWindow.current?.intent !== connectorIntent.window || !preparation.recoveryReady() ||
+              preparation.getSnapshot().some(item => item.serverId === editor.server!.server_id && item.kind !== "rejected") || management.isBlocked(editor.connector.connector_id) ||
               editor.server.availability !== "available" || editor.connector.availability !== "available" ||
               editor.server.prepare_status !== "ready" || !editor.server.connection_id || !editor.connector.enabled || editor.connector.status !== "active") return false;
             if (!startTrial({ connectionId: editor.server.connection_id, name: editor.server.display_name })) return false;
@@ -746,6 +752,12 @@ export function McpProjectionRead({
             const boundary = { subject: identity, admitted, generation: readGeneration };
             const current = () => ownerRef.current === owner && editorWindow.current === window;
             setActionError(false);
+            if (preparation.canInspect(target.serverId) && !preparation.canResume(target.serverId, window.controller.signal)) {
+              void preparation.inspect(target.serverId, target.connectorId, boundary, window.controller.signal, window.intent).then(inspected => {
+                if (current() && !inspected) setActionError(true);
+              }).catch(() => { if (current()) setActionError(true); });
+              return;
+            }
             void preparation.prepare(target, boundary, window.controller.signal).then(confirmed => {
               if (!current()) return;
               if (confirmed) { preparation.finish(target.serverId, boundary); resetEditor(); }

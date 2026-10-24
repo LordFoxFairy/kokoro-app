@@ -93,3 +93,10 @@ it.each(["confirmed", "unknown-then-replayed", "read-failed"])("configuration Sa
   expect(update.mock.calls[confirmedCalls]?.[2]).not.toBe(update.mock.calls[0]?.[2])
   await act(async () => { releaseSecondRead(); await pendingSecondRead })
 })
+
+// Native storage is covered separately; these jsdom tests retain all original command/UI assertions.
+vi.mock("@/ui/mcp/mcp-preparation-recovery", async importOriginal => {
+  const actual = await importOriginal<typeof import("@/ui/mcp/mcp-preparation-recovery")>();
+  const { createTestPreparationJournal } = await import("./fixtures/mcp-preparation-journal");
+  return { ...actual, createBrowserMcpPreparationRecovery: () => createTestPreparationJournal(actual) };
+});

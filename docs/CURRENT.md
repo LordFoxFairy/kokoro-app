@@ -1,3 +1,15 @@
+## 2026-10-24 Prepare 持久恢复候选已验，本卡正常回执仍开放
+
+固定BFF a9a6918／browser-private profile1.1，Public24原件不变。Prepare非秘密IndexedDB日志先原子reserve再POST，重开仅恢复unknown；核验两条精确GET后由另一次明确点击重放原key/body/CAS。proof绑定主体/代际/窗口signal，关窗/取消退休；K已换K2时旧窗口锁定、不覆盖或清退K2。存储失败不降级RAM，首次never-uncertain确定400与unknown后的400分开；迟到exact ACK后的completed仅Done收口、不再POST。
+
+实际复现并修正：current读失败未暴露错误、未恢复时管理编辑未锁、首次确定拒绝日志残留、跨代际恢复悬空、关窗/另一窗口沿用proof、terminal错误仍授核验及迟到ACK卡completed。先失败基线后窄修；UI实点核验两GET/关窗重核验/原请求重试已验。三个原UI测试文件HEAD全文作为精确前缀保持，只追加显式jsdom存储port与新用例，生产无测试fallback。原49行导航诊断WIP保持SHA256 c5acd10650bd711aebe8d1461b70099396e12a5e8c38d0080df8a55fae3f4a6d、不纳本片提交。
+
+1172非MD输入停写：contract/architecture/全lint/types/默认5019 PASS／0SKIP/build/post-types全部exit0，无漂移。完整preview114 PASS、零重试；其后仅port测试函数类型声明修正，生产字节未变，绑定已保存。独审各P2修复及opaque render token复核Approved。首完整门lint三条未用参数warning、stored-session缺测试Redis导致suite失败均保留；已改test-only类型声明，并实测复用现有Redis、仅随机origin/session key且精确清理后完整重跑，不改规则/断言、不启动或清空实例。
+
+原生IAB隔离origin导入实际存储模块：两原生IDB连接并发reserve只一创建、同key，严格codec与失败只收紧；关48重开49读回原key/CAS，50清退K并reserve K2后49旧K两次写被拒。3条自有样本已回收，自有48/49/50及服务已关闭、原1/10保留。这是原生存储证据，不是正常MCP HTTP/历史原Prepare回执。初fixture误用非正式expired被正确拒绝，修fixture为replay_expired，未放松codec；早期fixture的business_api_posts为常量，不作为网络计数证据。
+
+正常只读预检：现源码src与App基线a833fc3一致，候选仅10份生产源；所有进程匹配最新私有manifest，dispatch仍false、无活跃Run/未准入outbox。本片尚未正常激活、未恢复历史原Prepare、不称JSON或四入口/Skills/五面完成；未push/PR/merge/提升Root gitlink。证据仅Root ignored normal/json-url/prepare-recovery（app-final-stable、e2e-binding、native-proof、原生截图/AX及失败日志）。下一步同卡正常精确配对与正式页面的关闭/重开、核验/原回执/详情CRUD验收；旧tab未保存的历史意图不由新日志追认。
+
 ## 2026-10-24 私有MCP发现长描述消费修正（正常读取已验，原Prepare恢复仍开放）
 
 正常只读验收收据：同一server/Connection与版本2保持；详情完整网络窗仅一次GET200，硬刷新GET200窗口已截断，不作完整零请求证明。四owner原行/xmin仅Platform读取准入slot变化，原usage保持，派发false；原49行App诊断WIP字节保护、未push/PR/merge。HMR期间曾出现local_recovery_unavailable与连接中断，硬刷新消失但根因未修，不当无感加载已完成。旧tab46本轮已不在清单，仅从既有观测保留原key/body私有证据、未重发；须补正式核验后显式原请求恢复与重开持久性。本次自有47已关闭、原1/10保留。脱敏业务证据与正常绑定由Root原执行板引用，原始材料仅ignored metadata-fix。

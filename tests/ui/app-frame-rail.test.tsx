@@ -4915,3 +4915,10 @@ it.each(["custom", "url"] as const)("a known duplicate private MCP URL explains 
   expect(hub.registerPrivateMcpServer).toHaveBeenCalledOnce()
   expect(hub.preparePrivateMcpServer).not.toHaveBeenCalled()
 })
+
+// Native storage is covered separately; these jsdom tests retain all original command/UI assertions.
+vi.mock("@/ui/mcp/mcp-preparation-recovery", async importOriginal => {
+  const actual = await importOriginal<typeof import("@/ui/mcp/mcp-preparation-recovery")>();
+  const { createTestPreparationJournal } = await import("./fixtures/mcp-preparation-journal");
+  return { ...actual, createBrowserMcpPreparationRecovery: () => createTestPreparationJournal(actual) };
+});

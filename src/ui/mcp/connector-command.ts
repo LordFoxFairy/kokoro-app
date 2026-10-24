@@ -22,6 +22,10 @@ export function createConnectorCommand<T>(options: {
   onConfirmed: () => void;
   /** Opt-in owner semantics for an initial, never-uncertain rejection only. */
   classifyRejection?: (error: HubClientError) => ConnectorCommandState["rejection"];
+  /** Only typed, non-secret callers opt into an unknown intent restored before any I/O. */
+  restored?: Readonly<{ body: T; key: string; failure?: ConnectorCommandFailure | undefined }>;
+  /** Operation-specific published recovery; defaults remain unchanged for all other commands. */
+  mayResume?: (failure: ConnectorCommandFailure | undefined) => boolean;
   key?: () => string;
 }) {
   const actor = options.boundary.subject;
@@ -30,6 +34,11 @@ export function createConnectorCommand<T>(options: {
   let command: Command<T> | undefined;
   let active: { controller: AbortController } | undefined;
   let state: ConnectorCommandState = { kind: "idle" };
+  if (options.restored && actor !== null) {
+    const body = options.freeze(options.restored.body);
+    command = { body, key: connectorCreationKeySchema.parse(options.restored.key), name: options.name?.(body), uncertain: true, failure: options.restored.failure };
+    state = { kind: "unknown", ...(command.name === undefined ? {} : { name: command.name }), ...(command.failure === undefined ? {} : { failure: command.failure }) };
+  }
   const listeners = new Set<() => void>();
   const update = (next: ConnectorCommandState) => {
     state = Object.freeze(next);
@@ -65,7 +74,7 @@ export function createConnectorCommand<T>(options: {
   const run = async (value: ProjectReadBoundary, signal?: AbortSignal): Promise<boolean> => {
     const intent = command;
     const execute = options.execute;
-    if (signal?.aborted || !matches(value) || !admitted() || active || !intent || !execute || !connectorCommandMayResume(intent.failure)) return false;
+    if (signal?.aborted || !matches(value) || !admitted() || active || !intent || !execute || !(options.mayResume ?? connectorCommandMayResume)(intent.failure)) return false;
     const running = { controller: new AbortController() };
     active = running;
     const pauseWindow = () => { if (active === running) cancel(); };

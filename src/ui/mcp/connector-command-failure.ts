@@ -37,6 +37,14 @@ export function connectorCommandMayResume(
   );
 }
 
+/** This exception belongs only to Prepare, never to other inspect_owner commands. */
+export function connectorPrepareMayInspect(failure: ConnectorCommandFailure | undefined): boolean {
+  const rule = policy.prepare_inspection_recovery;
+  return failure === rule.failure && rule.operation === "prepareServer" && rule.binding === "exact_server_connector" &&
+    rule.same_actor && rule.server_version === "not_older_than_original" && rule.replay === "same_command" &&
+    !rule.automatic_retries && !rule.new_command_authorized;
+}
+
 export function connectorCommandFailureMessage(
   failure: ConnectorCommandFailure | undefined,
   fallback: MessageKey,

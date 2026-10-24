@@ -1,3 +1,7 @@
+## Prepare 持久恢复与核验（2026-10-24，候选）
+
+`mcp-preparation-recovery.ts`只拥有非秘密IndexedDB原子事务/严格codec/compare-by-key退休；`mcp-preparation-commands.ts`协调当前主体、恢复、核验proof、原请求与ACK，不镜像owner状态。`connector-command`仅增加显式unknown bootstrap及可选恢复政策；其它命令默认语义保持。核验沿现详情两GET，proof绑定窗口并随关闭退休，明确重试才POST；迟到已确认completed仅Done收口。存储失败不降级RAM，管理变更互锁与原清理语义保留。设计与实际证据/未验范围见App三面设计及CURRENT，不据此声称正常MCP闭环。
+
 ## 私有MCP长发现文本（2026-10-24）
 
 现src/hub/mcp-connector.schema.ts承接owner无逐字段长度上限的发现显示文本；其它字段/控制字符/Unicode/strict校验与整体传输预算保持。tests/hub/mcp-connector-schema.test.ts覆盖三类长描述的GET和原Prepare receipt；原长CJK拒绝断言因合法owner语义改为正例，坏Unicode负控仍保留。旧502冻结请求仍inspect_owner，不因本片自动重放或置成功。

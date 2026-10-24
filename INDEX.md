@@ -1,3 +1,5 @@
+Prepare恢复（2026-10-24，候选）：`src/ui/mcp/mcp-preparation-recovery.ts`负责非秘密IndexedDB事务，既有preparation commands/详情负责主体及窗口核验、显式原命令恢复；正常激活和原回执仍待验，见CURRENT。
+
 MCP试用（2026-10-24）：`src/ui/mcp/mcp-trial-context.tsx`桥接详情和现AppFrame；`src/components/blocks/app-frame/use-app-frame-mcp-trial.ts`隔离主体/路由寿命及新草稿exact Connection交接，Try不再冒Prepare。真实证据/未验范围见 `docs/CURRENT.md`。
 
 CHAT-1（2026-10-24，正常局部已验）：`src/engine/submission-recovery.ts`与`src/ui/shell/browser-submission-recovery.ts`分离恢复意图和浏览器I/O；原engine/actions接纳/URL与失败恢复共同修复，首发失败刷新、归档误警和待确认侧栏正常已验；成功创建/Agent整链仍开放，详见CURRENT。

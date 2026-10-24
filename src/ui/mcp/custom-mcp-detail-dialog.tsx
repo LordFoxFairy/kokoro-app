@@ -77,6 +77,11 @@ export function CustomMcpDetailDialog({
   onDelete,
   preparationState = "idle",
   preparationFailure,
+  preparationCanResume,
+  preparationCanInspect = false,
+  preparationRecoveryReady = true,
+  preparationRecoveryError = false,
+  onRetryPreparationRecovery,
   pendingError = false,
   onRetry,
 }: {
@@ -84,6 +89,11 @@ export function CustomMcpDetailDialog({
   server: McpPrivateServer | null;
   preparationState?: "idle" | "running" | "unknown" | "rejected" | "completed";
   preparationFailure?: ConnectorCommandFailure | undefined;
+  preparationCanResume?: boolean;
+  preparationCanInspect?: boolean;
+  preparationRecoveryReady?: boolean;
+  preparationRecoveryError?: boolean;
+  onRetryPreparationRecovery?: () => void;
   pendingError?: boolean;
   onRetry?: () => void;
   actionId: string | null;
@@ -166,13 +176,14 @@ export function CustomMcpDetailDialog({
     if (managementCommand?.kind === "completed") { setHeaders([]); setRemovedHeaders([]); }
   }
   const managementStatus = <McpManagementStatus command={managementCommand} admitted={admitted} onResume={onResumeManagement} />;
-  const locked = managementLocked || busy || !ready || preparationState === "unknown" || preparationState === "completed";
-  const prepareLabel = preparationState === "unknown" ? t(connectorCommandMayResume(preparationFailure) ? "mcp.retryOriginal" : "mcp.recovery.inspectRequired") : preparationState === "completed" ? t("mcp.creationDone") : t("settings.connect");
+  const locked = managementLocked || busy || !ready || !preparationRecoveryReady || preparationState === "unknown" || preparationState === "completed";
+  const mayResumePreparation = preparationCanResume ?? connectorCommandMayResume(preparationFailure);
+  const prepareLabel = preparationState === "unknown" ? t(mayResumePreparation ? "mcp.retryOriginal" : "mcp.recovery.inspectRequired") : preparationState === "completed" ? t("mcp.creationDone") : t("settings.connect");
   const needsAuthorization = ready && canAuthorizePrivateMcp(connector, server) &&
     preparationState !== "running" && preparationState !== "completed";
   // Reauthorization is a distinct explicit owner operation, not an ACK or a
   // replacement for an unknown Prepare. Keep its original recovery reachable.
-  const trialAvailable = ready && server.availability === "available" && connector.availability === "available" &&
+  const trialAvailable = ready && preparationRecoveryReady && server.availability === "available" && connector.availability === "available" &&
     server.prepare_status === "ready" && Boolean(server.connection_id) && connector.enabled && connector.status === "active" &&
     (preparationState === "idle" || preparationState === "rejected");
   const configurationDirty = editing && (
@@ -183,14 +194,18 @@ export function CustomMcpDetailDialog({
     disabled={managementLocked || busy || configurationDirty || !onTrial} onClick={() => setTrialError(onTrial?.() !== true)}>
     <Send aria-hidden="true" />试用一下
   </Button> : <><Button type="button" variant={editing ? "outline" : "default"}
-    disabled={managementLocked || busy || !ready || preparationState === "running" || (!needsAuthorization && !connectorCommandMayResume(preparationFailure))}
+    disabled={managementLocked || busy || !ready || !preparationRecoveryReady || preparationState === "running" || (!needsAuthorization && !mayResumePreparation && !preparationCanInspect)}
     onClick={needsAuthorization ? onAuthorize : onPrepare}>
     {busy ? <Spinner aria-hidden="true" /> : needsAuthorization ? <Link2 aria-hidden="true" /> : <Send aria-hidden="true" />}
     {needsAuthorization ? t(connector?.status === "active" ? "thread.reconnect" : "settings.connect") : prepareLabel}
   </Button>{needsAuthorization && preparationState === "unknown" ? <Button type="button" variant="outline"
-    disabled={managementLocked || busy || !connectorCommandMayResume(preparationFailure)} onClick={onPrepare}>
+    disabled={managementLocked || busy || !preparationRecoveryReady || (!mayResumePreparation && !preparationCanInspect)} onClick={onPrepare}>
     {prepareLabel}
   </Button> : null}</>;
+  const recoveryStatus = !preparationRecoveryReady ? <Alert role="status">
+    <AlertDescription>{t(preparationRecoveryError ? "mcp.loadError" : "mcp.loading")}</AlertDescription>
+    {preparationRecoveryError ? <Button type="button" variant="outline" disabled={!admitted || !onRetryPreparationRecovery} onClick={onRetryPreparationRecovery}>{t("mcp.retry")}</Button> : null}
+  </Alert> : null;
   const selectionProps = useMcpEditorSelection(ready);
   const invalidHeaderName = headers.some(
     (item) => Boolean(item.name.trim()) && !isMcpCustomHeaderName(item.name),
@@ -272,6 +287,7 @@ export function CustomMcpDetailDialog({
                   </Button>
                 </Alert>
               ) : <span className="sr-only" role="status">{t("mcp.loading")}</span> : null}
+              {recoveryStatus}
               {actionError ? (
                 <Alert variant="destructive" role="alert">
                   <AlertDescription>{t("mcp.actionFailed")}</AlertDescription>
@@ -527,6 +543,7 @@ export function CustomMcpDetailDialog({
             </header>
             <div className={styles.detailBody}>
               {managementStatus}
+              {recoveryStatus}
               {actionError ? (
                 <Alert variant="destructive" role="alert">
                   <AlertDescription>{t("mcp.actionFailed")}</AlertDescription>

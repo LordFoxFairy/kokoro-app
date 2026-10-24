@@ -4,6 +4,7 @@ import { createContext, useContext, useLayoutEffect, useMemo, type ReactNode } f
 import type { HubClient } from "@/hub/client";
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
 import { type McpPreparationCommands } from "./mcp-preparation-commands";
+import { createBrowserMcpPreparationRecovery } from "./mcp-preparation-recovery";
 import { createCustomApiCreateFlow, type CustomApiCreateFlow } from "./custom-api-create-flow";
 import { createMcpJsonImportFlow, type McpJsonImportFlow } from "./mcp-json-import-flow";
 import { JsonMcpImportForm } from "./mcp-json-import-form";
@@ -28,7 +29,7 @@ export function ConnectorCommandProvider({ client, boundary, children }: {
 }) {
   const { subject, admitted, generation } = boundary;
   const mcp = useMemo(() => createMcpLifecycleCommands({
-    client, boundary: { subject, admitted: false, generation: 0 },
+    client, recovery: createBrowserMcpPreparationRecovery(), boundary: { subject, admitted: false, generation: 0 },
     onConfirmed: () => { if (subject !== null) invalidateMcpConnectorProjection(client, subject); },
   }), [client, subject]);
   const { preparation, management } = mcp;

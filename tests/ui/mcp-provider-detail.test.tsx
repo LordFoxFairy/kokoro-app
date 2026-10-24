@@ -622,3 +622,54 @@ it("shows current availability instead of an active lifecycle success badge, wit
     expect(action).not.toHaveBeenCalled()
   }
 })
+
+// Native storage is covered separately; these jsdom tests retain all original command/UI assertions.
+vi.mock("@/ui/mcp/mcp-preparation-recovery", async importOriginal => {
+  const actual = await importOriginal<typeof import("@/ui/mcp/mcp-preparation-recovery")>();
+  const { createTestPreparationJournal } = await import("./fixtures/mcp-preparation-journal");
+  return { ...actual, createBrowserMcpPreparationRecovery: () => createTestPreparationJournal(actual) };
+});
+
+it("unknown invalid Prepare uses read-only inspection, retires window proof on close, then explicitly replays the original command", async () => {
+  const { act, waitFor, within } = await import("@testing-library/react")
+  window.localStorage.setItem("kokoro.locale", "zh")
+  const base = privateOAuthFixture()
+  const connector = { ...base.connector, availability: "unavailable" as const }
+  const server = { ...base.server, oauth_client: undefined, availability: "unavailable" as const, state_version: "5" }
+  const prepare = vi.fn().mockRejectedValueOnce(new HubClientError("http", "invalid response", "mcp_personal_response_invalid", 502, false))
+    .mockResolvedValue({ server: { ...server, prepare_status: "ready", declarations_available: true }, connector, declarations: [], replayed: true })
+  const get = vi.fn().mockResolvedValue(connector), getServer = vi.fn().mockResolvedValue(server)
+  const client = { ...createHubClient(), preparePrivateMcpServer: prepare, getMcpConnector: get, getPrivateMcpServer: getServer,
+    listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+    listMcpConnectors: vi.fn().mockResolvedValue({ items: [connector], next_cursor: null }),
+    listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }) }
+  const boundary = { subject: "prepare-inspection-actor", admitted: true, generation: 0 }
+  let commands!: McpPreparationCommands
+  function Probe() { commands = useMcpPreparationCommands(client, boundary.subject); return null }
+  render(<LocaleProvider><ConnectorCommandProvider client={client} boundary={boundary}><Probe /><McpProjectionRead client={client} identity={boundary.subject} initialView="connections" /></ConnectorCommandProvider></LocaleProvider>)
+  await act(async () => commands.prepare({ serverId: server.server_id, connectorId: connector.connector_id, version: "4" }, boundary))
+  const original = prepare.mock.calls[0]?.slice(0, 3)
+  const open = async () => {
+    fireEvent.click(await screen.findByRole("button", { name: connector.display_name }))
+    return screen.findByRole("dialog", { name: server.display_name })
+  }
+  let dialog = await open()
+  const inspect = within(dialog).getByRole("button", { name: "需先核验状态" })
+  expect(inspect).toBeEnabled()
+  const before = [get.mock.calls.length, getServer.mock.calls.length]
+  fireEvent.click(inspect)
+  await waitFor(() => expect(within(dialog).getByRole("button", { name: "重试原请求" })).toBeEnabled())
+  expect(get).toHaveBeenCalledTimes(before[0]! + 1); expect(getServer).toHaveBeenCalledTimes(before[1]! + 1)
+  expect(prepare).toHaveBeenCalledOnce()
+  fireEvent.click(within(dialog).getByRole("button", { name: "取消" }))
+  dialog = await open()
+  const inspectAgain = within(dialog).getByRole("button", { name: "需先核验状态" })
+  expect(inspectAgain).toBeEnabled(); expect(prepare).toHaveBeenCalledOnce()
+  fireEvent.click(inspectAgain)
+  await waitFor(() => expect(within(dialog).getByRole("button", { name: "重试原请求" })).toBeEnabled())
+  fireEvent.click(within(dialog).getByRole("button", { name: "重试原请求" }))
+  await waitFor(() => expect(prepare).toHaveBeenCalledTimes(2))
+  expect(prepare.mock.calls[1]?.slice(0, 3)).toEqual(original)
+  expect(prepare.mock.calls[1]?.[1]).toBe("4")
+  await waitFor(() => expect(commands.getSnapshot()).toEqual([]))
+})

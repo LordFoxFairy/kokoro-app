@@ -473,7 +473,7 @@ it("pins the current public revision's shared-skill operation without replacing 
 it("pins and derives the separate browser-private connector error profile without replacing public OpenAPI", async () => {
   const { BFF_CONNECTOR_COMMAND_ERROR_PROVENANCE: provenance, BFF_CONNECTOR_COMMAND_ERROR_POLICY: policy } = await import("@/generated/bff-connector-command-errors")
   const bytes = await readFile(resolve(process.cwd(), "src/generated/bff-connector-command-errors.json"))
-  expect(provenance).toEqual({ ownerCommit: "d176e3d0cbbc2eab903dae2b2d969906ba5808fe", sourceSha256: "24158f50a6f4dac1b34553797f0b1afcc8f99dbc79f36b916d03b56999a67a71", profileVersion: "1.0.0" })
+  expect(provenance).toEqual({ ownerCommit: "a9a6918d47e1f2654edf8720c561ee06eb57a78c", sourceSha256: "5c12e237e03a6be446a564034ec5c18965e996be24ddeb40807ec4b9b074d83d", profileVersion: "1.1.0" })
   expect(createHash("sha256").update(bytes).digest("hex")).toBe(provenance.sourceSha256)
   expect(policy).toEqual(JSON.parse(bytes.toString("utf8")))
   expect(policy.visibility).toBe("browser-private")

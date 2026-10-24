@@ -6,6 +6,7 @@ import {
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
 import { createConnectorCommand, type ConnectorCommandState } from "./connector-command";
 import { createMcpPreparationCommands, type McpPreparationCommands } from "./mcp-preparation-commands";
+import type { McpPreparationRecovery } from "./mcp-preparation-recovery";
 
 type Locator = { connectorId: string; serverId?: string };
 export type McpManagementIntent =
@@ -18,7 +19,7 @@ export type McpManagementSummary = Readonly<Locator & {
   operation: McpManagementIntent["operation"]; kind: ConnectorCommandState["kind"]; failure?: ConnectorCommandState["failure"];
 }>;
 type Entry = { locator: Locator; operation: McpManagementIntent["operation"]; command: ReturnType<typeof createConnectorCommand<McpManagementIntent>>; release: () => void; unsubscribe: () => void };
-type Client = Pick<HubClient, "updatePrivateMcpServer" | "deletePrivateMcpServer" | "updateMcpConnector" | "setMcpConnectorEnabled" | "removeMcpConnector" | "preparePrivateMcpServer">;
+type Client = Pick<HubClient, "updatePrivateMcpServer" | "deletePrivateMcpServer" | "updateMcpConnector" | "setMcpConnectorEnabled" | "removeMcpConnector" | "preparePrivateMcpServer" | "getPrivateMcpServer" | "getMcpConnector">;
 const cleanup = (operation: McpManagementIntent["operation"]) => operation === "disconnect" || operation === "delete_server";
 
 function freezeIntent(intent: McpManagementIntent): McpManagementIntent {
@@ -64,7 +65,7 @@ function createManagement(options: { client: Client; preparation: McpPreparation
     if (value.subject !== actor) { retire(); return; }
     boundary = { ...value }; for (const entry of entries.values()) entry.command.bind(boundary); publish();
   };
-  const preparationBlocks = (entry: Pick<Entry, "operation" | "locator">) => !cleanup(entry.operation) && options.preparation.getSnapshot().some(item => item.connectorId === entry.locator.connectorId && item.kind !== "rejected");
+  const preparationBlocks = (entry: Pick<Entry, "operation" | "locator">) => !cleanup(entry.operation) && (!options.preparation.recoveryReady() || options.preparation.getSnapshot().some(item => item.connectorId === entry.locator.connectorId && item.kind !== "rejected"));
   const run = async (entry: Entry, value: ProjectReadBoundary, signal: AbortSignal | undefined, input?: McpManagementIntent) => {
     if (!matches(value) || signal?.aborted || entries.get(entry.locator.connectorId) !== entry || preparationBlocks(entry)) return false;
     const kind = entry.command.getSnapshot().kind;
@@ -133,7 +134,7 @@ function createManagement(options: { client: Client; preparation: McpPreparation
 }
 
 /** Fixed MCP lifecycle wiring: management and Prepare remain typed, separate intents. */
-export function createMcpLifecycleCommands(options: { client: Client; boundary: ProjectReadBoundary; onConfirmed: () => void }) {
+export function createMcpLifecycleCommands(options: { client: Client; boundary: ProjectReadBoundary; onConfirmed: () => void; recovery?: McpPreparationRecovery }) {
   const preparation = createMcpPreparationCommands({ ...options, canPrepare: target => !management.isBlocked(target.connectorId) });
   const management = createManagement({ ...options, preparation });
   return { preparation, management };
