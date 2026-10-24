@@ -143,3 +143,8 @@ API／JSON创建窗口的每次等待由use-connector-creation-form持有独立c
 `use-mcp-provider-detail.ts` 只在已打开的精确provider不在当前已读页时走Hub单项GET；ACK必须匹配provider_key，关闭/准入/actor退休旧响应。已安装且无private server的MCP可直接打开此详情，不等待目录成功，不扫描全部页。现有私有server、BYOK、授权和管理命令职责不变。
 
 证据：`tests/ui/mcp-provider-directory.test.tsx`、`mcp-provider-detail.test.tsx`、现Hub/rail回归。正常空目录已读，尚无真实非空提供方/真实第三方OAuth闭环，不把协议fixture当目录内容完成或推荐事实。
+
+
+## 自定义 MCP 表单视觉修正（2026-10-24）
+
+按已归档 Manus 实测修正表单 surface/阴影、普通 URL 输入、备注圆角与 headers 标签层级，尺寸和提交工作流不变。隔离 CSS/DOM 证据只证明本表单视觉；HTTP 只读和图标上传禁用仍是明确未闭环项，不称完整对齐。视觉夹具无论 Chromium 启动或关闭失败都释放 Vite 资源。

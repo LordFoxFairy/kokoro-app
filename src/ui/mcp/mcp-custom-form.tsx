@@ -3,7 +3,7 @@
 import { connectorCommandFailureMessage } from "./connector-command-failure";
 
 import { useCallback, useState, type FormEvent } from "react";
-import { ImagePlus, Link2, Plus, Trash2 } from "lucide-react";
+import { ImagePlus, Plus, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { DialogTitle } from "@/components/ui/dialog";
@@ -185,16 +185,13 @@ export function CustomMcpForm({
           <FieldLabel htmlFor="custom-mcp-url">
             {t("mcp.customServerUrl")}
           </FieldLabel>
-          <div className={styles.urlInput}>
-            <Link2 aria-hidden="true" />
-            <Input
-              id="custom-mcp-url"
-              value={url}
+          <Input
+            id="custom-mcp-url"
+            value={url}
             readOnly={locked}
-              placeholder="https://mcp.yourserver.com/mcp"
-              onChange={(event) => { if (editable()) setUrl(event.target.value); }}
-            />
-          </div>
+            placeholder="https://mcp.yourserver.com/mcp"
+            onChange={(event) => { if (editable()) setUrl(event.target.value); }}
+          />
           {invalidUrl ? (
             <p className={styles.customMcpUrlValidation} role="alert">
               {t("mcp.errInvalid")}

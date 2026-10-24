@@ -1,5 +1,15 @@
 /* Custom connector form responsibility. */
 
+/* The measured settings surface belongs only to this form's dialog shell. */
+:global([data-slot="dialog-content"]):has(> form.customMcpForm) {
+  background: var(--settings-surface, var(--background));
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 6%),
+    0 24px 24px -12px rgb(0 0 0 / 4%),
+    0 3px 3px -1.5px rgb(0 0 0 / 6%),
+    0 10px 20px 1px rgb(0 0 0 / 4%);
+}
+
 .customMcpForm {
   display: flex;
   min-height: 0;
@@ -28,7 +38,8 @@
   gap: 0.5rem;
 }
 
-.customMcpField > :global([data-slot="field-label"]) {
+.customMcpField > :global([data-slot="field-label"]),
+.customMcpField > legend {
   min-height: 1.25rem;
   color: var(--foreground);
   font-size: 0.875rem;
@@ -36,7 +47,8 @@
   line-height: 1.25rem;
 }
 
-.customMcpField > :global([data-slot="field-label"]) span {
+.customMcpField > :global([data-slot="field-label"]) span,
+.customMcpField > legend span {
   color: var(--muted-foreground);
   font-weight: 400;
 }
@@ -60,6 +72,7 @@
 }
 
 .customMcpField :global(textarea) {
+  border-radius: var(--radius-md);
   height: 6.25rem;
   min-height: 6.25rem;
   resize: none;
@@ -232,31 +245,6 @@
   font-size: 1.125rem;
   font-weight: 600;
   line-height: 1.5rem;
-}
-
-.urlInput {
-  display: flex;
-  height: 2.25rem;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0 0.75rem;
-  border-radius: 0.5rem;
-  background: rgb(55 53 47 / 6%);
-}
-
-.urlInput > svg {
-  width: 0.875rem;
-  height: 0.875rem;
-  flex: 0 0 auto;
-  color: var(--muted-foreground);
-}
-
-.urlInput :global(input) {
-  min-width: 0;
-  min-height: 1.25rem;
-  height: 1.25rem;
-  padding: 0;
-  background: transparent;
 }
 
 .customMcpResult {
