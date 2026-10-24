@@ -1,3 +1,7 @@
+## 未开放资源用量的用户呈现（2026-10-23）
+
+网站／电脑分类移除内部“服务未接通、费用额度记录不可读”的实现说明。每个面板只显示一处本地化“暂未开放”；网站三卡以 `—` 表示未知值，并通过 `aria-describedby` 关联原因，不伪造 0 或暂无记录。未接入筛选的日期控件禁用，删除无效本地日期状态。既有分类、任务真实 summary/ledger、身份隔离、分页、电话弹窗和禁用交易不变。九语言同步维护；此项只修正展示，不代表资源用量服务交付。
+
 ## 积分流水的用户文案（2026-10-22）
 
 `billing-model.reasonKey`只负责只读展示映射：正式来源`admin_credit`在用户侧显示“积分到账”，不暴露管理员身份或声称现金支付；未识别来源统一为“积分变动”，不猜成充值／消费。九语言均维护独立词条，`billing-ledger`的嵌入／独立两种视图共用；API原source_kind、金额、符号、排序、过滤和分页不变。两视图九语言回归及实际正常页面已验，详见CURRENT本次局部修复。
@@ -13,7 +17,7 @@
 
 订阅在 pricing-panel 内仅按正式目录的 month/year/once 字段过滤；pricing-plan-details-dialog 展示原金额、币种、周期及积分，不折算年费或推断优惠。周期切换不重读目录，购买仍禁用并说明支付未接通，身份退休沿现宿主 key。
 
-设置内用量分类现在可本地切换：现 billing-panel 的任务读取、分页与身份退休保持；billing-resource-content 负责网站与游戏的临时日期输入及三类不可读用量卡、居中的不可用云电脑引导和复用电话说明弹窗。三卡桌面同行、窄屏纵排，原因全文和日期草稿保持。缺少服务时不显示费用、额度或虚构空列表，自动充值/电脑创建仍禁用；无新客户端、业务请求或开户实现。订阅真实空目录使用中性图标、原空态文案和显式重新读取，复用原单飞 retry、预算和身份退休，不自动重试或触发支付。
+设置内用量分类现在可本地切换：现 billing-panel 的任务读取、分页与身份退休保持；billing-resource-content 负责网站与游戏的三类未知用量卡及禁用日期筛选、居中的不可用云电脑引导和复用电话说明弹窗。三卡桌面同行、窄屏纵排，未开放提示只显示一次，日期不提供未接通的交互。缺少服务时不显示费用、额度或虚构空列表，自动充值/电脑创建仍禁用；无新客户端、业务请求或开户实现。订阅真实空目录使用中性图标、原空态文案和显式重新读取，复用原单飞 retry、预算和身份退休，不自动重试或触发支付。
 
 SET26 review correction: formal plans owns the actual body reader; one absolute deadline and parent retirement cancel it and release its lock. Response.json plus locked body.cancel is rejected. Checkout and all wire behavior remain protected.
 

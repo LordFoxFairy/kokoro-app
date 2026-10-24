@@ -854,11 +854,20 @@ it("resource category previews preserve real task data and perform no additional
   expect(screen.getByRole("heading", { name: "Integrations" })).toBeVisible();
   expect(screen.queryByTestId("billing-balance")).not.toBeInTheDocument();
   expect(screen.queryByText(/\$0|No websites/)).not.toBeInTheDocument();
-  fireEvent.change(screen.getByLabelText("Start date"), { target: { value: "2026-10-01" } });
-  fireEvent.change(screen.getByLabelText("End date"), { target: { value: "2026-10-17" } });
+  expect(screen.getAllByText("Not available yet")).toHaveLength(1);
+  expect(screen.queryByText(/not connected|cannot be read/)).not.toBeInTheDocument();
+  for (const title of ["Cloud services", "Artificial intelligence", "Integrations"]) {
+    const card = screen.getByRole("heading", { name: title }).parentElement!;
+    expect(within(card).getByText("—")).toHaveAccessibleDescription("Not available yet");
+  }
+  expect(screen.getByLabelText("Start date")).toBeDisabled();
+  expect(screen.getByLabelText("End date")).toBeDisabled();
   expect(screen.getByRole("button", { name: "Auto top-up" })).toBeDisabled();
   fireEvent.keyDown(screen.getByRole("tab", { name: "Computer" }), { key: "Enter" });
   expect(screen.getByRole("button", { name: "Create cloud computer" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Create cloud computer" })).toHaveAccessibleDescription("Not available yet");
+  expect(screen.queryByText(/not connected|cannot be read/)).not.toBeInTheDocument();
+  expect(screen.getAllByText("Not available yet")).toHaveLength(1);
   fireEvent.keyDown(screen.getByRole("tab", { name: "Phone" }), { key: "Enter" });
   fireEvent.click(screen.getByRole("button", { name: "Create now" }));
   const phone = screen.getByRole("dialog", { name: "Assign a virtual phone to your agent" });

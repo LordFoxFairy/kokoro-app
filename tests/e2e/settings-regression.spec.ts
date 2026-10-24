@@ -270,9 +270,14 @@ for (const width of [320, 1600]) {
       if (width === 320) {
         await modal.getByTestId("settings-more").click();
         const item = page.getByTestId(`settings-more-${tab}`);
-        await expect(item).toBeEnabled();
-        await item.focus();
-        await page.keyboard.press("Enter");
+        if (await modal.getByTestId(`settings-tab-${tab}`).getAttribute("aria-selected") === "true") {
+          await expect(item).toHaveCount(0);
+          await page.keyboard.press("Escape");
+        } else {
+          await expect(item).toBeEnabled();
+          await item.focus();
+          await page.keyboard.press("Enter");
+        }
         await expect(page.locator("[data-settings-compact-more-menu]")).toHaveCount(0);
       } else {
         await modal.getByTestId(`settings-tab-${tab}`).focus();
@@ -590,7 +595,13 @@ test("service creation previews keep nested focus, discard drafts and fit 320px 
   const selectSection = async (tab: string) => {
     if (mobile) {
       await settings.getByTestId("settings-more").press("Enter");
-      await page.getByTestId(`settings-more-${tab}`).press("Enter");
+      const item = page.getByTestId(`settings-more-${tab}`);
+      if (await settings.getByTestId(`settings-tab-${tab}`).getAttribute("aria-selected") === "true") {
+        await expect(item).toHaveCount(0);
+        await page.keyboard.press("Escape");
+      } else {
+        await item.press("Enter");
+      }
     } else {
       await settings.getByTestId(`settings-tab-${tab}`).press("Enter");
     }
@@ -746,7 +757,7 @@ test("service detail previews and resource categories remain readable without fa
   await usageCategories.getByRole("tab", { name: "Websites & games", exact: true }).click();
   await expect(settings.getByRole("heading", { name: "Cloud services", exact: true })).toBeVisible();
   await expect(settings.getByRole("button", { name: "Auto top-up", exact: true })).toBeDisabled();
-  await settings.getByLabel("Start date", { exact: true }).fill("2026-10-01");
+  await expect(settings.getByLabel("Start date", { exact: true })).toBeDisabled();
   await usageCategories.getByRole("tab", { name: "Computer", exact: true }).click();
   await expect(settings.getByRole("button", { name: "Create cloud computer", exact: true })).toBeDisabled();
   await usageCategories.getByRole("tab", { name: "Phone", exact: true }).click();
@@ -1905,7 +1916,7 @@ for (const theme of ["light", "dark"]) {
     expect(searchTokens.border).toBe(searchTokens.expectedBorder);
     expect(searchTokens.icon).toBe(searchTokens.expectedIcon);
 
-    const resourceReason = "Usage for this category is not connected. Costs, allowances, and records cannot be read yet.";
+    const resourceReason = "Not available yet";
     for (const [tab, title, button] of [["Computer", "Cloud computer", "Create cloud computer"], ["Phone", "Phone", "Create now"]] as const) {
       await categories.getByRole("tab", { name: tab, exact: true }).click();
       const guidance = settings.getByRole("heading", { name: title, exact: true }).locator("..");
@@ -1940,7 +1951,8 @@ for (const theme of ["light", "dark"]) {
         await expect(action).toBeDisabled();
         await expect(action).toHaveAccessibleDescription(resourceReason);
         await expect(guidance.getByText(resourceReason, { exact: true })).toBeVisible();
-        await expect(guidance).toContainText("A workspace for ongoing cloud tasks. The service is not connected, so it cannot be created yet.");
+        await expect(guidance).toContainText("A workspace for ongoing cloud tasks.");
+        await expect(guidance).not.toContainText("not connected");
       } else {
         await expect(guidance.getByText(serviceAvailability.phone, { exact: true })).toBeVisible();
         await action.press("Enter");
@@ -1957,10 +1969,11 @@ for (const theme of ["light", "dark"]) {
     }
 
     await categories.getByRole("tab", { name: "Websites & games", exact: true }).click();
+    await expect(settings.getByText(resourceReason, { exact: true })).toHaveCount(1);
     const cards = ["Cloud services", "Artificial intelligence", "Integrations"].map((name) => settings.getByRole("heading", { name, exact: true }).locator(".."));
     for (const card of cards) {
       await card.scrollIntoViewIfNeeded();
-      await expect(card.getByText(resourceReason, { exact: true })).toBeVisible();
+      await expect(card.getByText("—", { exact: true })).toHaveAccessibleDescription(resourceReason);
       const box = await card.evaluate((element) => {
         const bounds = element.getBoundingClientRect();
         return { top: bounds.top, bottom: bounds.bottom, left: bounds.left, right: bounds.right, height: bounds.height,
@@ -1994,8 +2007,8 @@ for (const theme of ["light", "dark"]) {
     await start.scrollIntoViewIfNeeded();
     const lastCardBottom = await cards[2]!.evaluate((element) => element.getBoundingClientRect().bottom);
     expect((await start.boundingBox())!.y).toBeGreaterThan(lastCardBottom);
-    await start.fill("2026-10-01");
-    await settings.getByLabel("End date", { exact: true }).fill("2026-10-18");
+    await expect(start).toBeDisabled();
+    await expect(settings.getByLabel("End date", { exact: true })).toBeDisabled();
     expect(await settings.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath(`usage-websites-${theme}-${width}.png`), fullPage: true });
 
