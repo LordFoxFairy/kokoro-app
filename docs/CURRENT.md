@@ -1,3 +1,9 @@
+## 2026-10-24 CHAT-1 创建与刷新状态一致性（整项实施中）
+
+三个入口失败刷新保原文/原URL/项目归属已正常实测：全局New、首页网站、项目内New；刷新自动消息POST为0，全局和项目手动重试原key/body保持。正常20份源HMR、751其它源/进程保持，Agent/BFF/Billing行/xmin/原usage不变，Platform仅读取准入slot变化。证据Root ignored task-create-recovery-20261024；交付仅本创建恢复切片，未push/PR/merge，不提升Root gitlink。最新首次完整owner默认7项fixture缺正式主体准入而失败；保原7行为断言改为正式准入并加marker-only负控，聚焦8通过、独审Approved。完整preview114通过但输入期间漂移，最终停写全门尚未重新完成，原失败保留。
+
+当前继续修正常实际发现的两点：未接收首发的乐观正文触发archive404误警；项目刷新正文待确认而侧栏暂无任务。候选现以正向owner snapshot/ACK与keyed归档证据为界，不对未确认原意图查归档；侧栏显式标原请求未确认且不提供owner变更动作。4个新增hook行为中3项先RED，修复后全通过；旧列表/state GET正向证明退休风险亦承接。独审A→B→A证明丢失先RED后修；最终使用按identity保留的immutable state、不同ID选中不丢proof，主体/scope退休不继承，复核Approved。完整lint原memo Set mutation失败保留，改现state后相关26例和当前文件eslint0；原完整门默认4952与完整preview114已通过，但早先lint失败且冻结后1个源修正，不作最终整仓冻结绿证；最终增量的全lint/types/受影响行为停写验证单列final-delta.json。该增量已正常加载并实测：首发/刷新/点回同ID，观测archive请求0、刷新/选中消息POST0，待确认行无owner变更动作；正常25源匹配、764其它源/进程及Agent/BFF/Billing原事实保持。原生555×767侧栏实际滚动截图已视核，不用CDP拼贴/裁图或AX非零尺寸冒完整视觉证明。完整最终门与成功创建/Agent联合链仍开放；不称冷加载或整体对齐已完成。
+
 ## 2026-10-24 UI-1：跨断点侧栏焦点（正常及浏览器已验，完整工程门有旧认证失败）
 
 已保存的原133行浏览器失败进一步稳定复现，未改原断言/时限：临时只读观察确认旧移动导航按钮仍isConnected=true，但computed display:none，浏览器有时将activeElement退到BODY，原只认节点脱离DOM的交接守卫漏掉此状态；另一次active仍指向隐藏按钮则通过，解释间歇差异，不再归因整页重载。观察器已完整撤出产品源。

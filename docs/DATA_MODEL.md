@@ -1,3 +1,9 @@
+## CHAT-1：浏览器未决提交记录（2026-10-24，实施设计）
+
+新增仅App-owned同标签sessionStorage恢复数据；独立前缀按已验证subject、direct/project scope及conv分键。版本化严格记录保原session、optimistic ID、原idempotency key及唯一builder产出的冻结请求；pending可带公开失败码，ACK保存exact receipt，明确放弃保存退休态。主体由原Product Session准入授予、marker只核变更；无服务端身份/会话/Run/账本真源。单记录1MiB，超限/配额/读写拒绝不截断、不腾空他人数据、不发送。
+
+ACK/退休按原key比较更新，不擦后继意图；没有精确回执时不按正文或404判成功/未执行。主体切换清理当前tab恢复前缀，scope独立，普通dispose保留；tab关闭遵循sessionStorage寿命，无跨设备承诺。损坏记录闭锁而不是空记录；ACK持久化失败不能伪造恢复成功。原Conversation索引、localDraft退休键及BFF durable ledger保持唯一职责，无SQL/Schema/owner变化。
+
 ## CHAT-1：本地New来源与不可回退的来源退休（2026-10-24）
 
 ConversationEntry仅增可选localDraft:true，现严格Zod literal；缺省仍历史索引。另由现page-clients按scope写独立`kokoro.web.conversations.draft-retired.<scope>.<encoded session>`键，值为固定版本1；存在/异常即不授予草稿证明，不是会话存在或提交成功事实。主体准入/清理沿原索引前缀，不写secret或正文，无消息/Run/幂等请求副本。New/首次发送保同一ID，原模式/Skills/MCP/模型及composer键不变。首次POST先确证退休键写入，否则保输入与原key/body且零POST；刷新不补发。退休键不做自动过期，只在现主体索引清理或用户浏览器数据重置时清理；配额失败显式可重试，不删其它资料。

@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { useAppFrameEngine } from "@/components/blocks/app-frame/use-app-frame-engine"
 import type { SessionEngine } from "@/engine/machine"
-import { admitBrowserAuthSessionIndexes, releaseBrowserEngine } from "@/ui/shell/page-clients"
+import { admitBrowserAuthSessionIndexes, invalidateBrowserAuthSessionIndexes, releaseBrowserEngine } from "@/ui/shell/page-clients"
 import { makeSnapshot } from "../core/fixtures"
 
 type CreateRequest = { path: string; key: string | null; body: string }
@@ -50,7 +50,9 @@ async function settle() {
 beforeEach(() => {
   vi.useFakeTimers()
   window.localStorage.clear()
-  window.localStorage.setItem("kokoro.web.auth-index-subject", "scope-submission-actor")
+  window.sessionStorage.clear()
+  // The live Runtime mounts only after Product Session admission. A cached marker is not admission.
+  expect(admitBrowserAuthSessionIndexes("scope-submission-actor", null)).toBe(true)
 })
 
 afterEach(async () => {
@@ -66,6 +68,17 @@ afterEach(async () => {
 })
 
 describe("live browser scope leases and unacknowledged submissions", () => {
+  it("a cached subject marker alone never grants live submission or recovery admission", async () => {
+    invalidateBrowserAuthSessionIndexes()
+    window.localStorage.setItem("kokoro.web.auth-index-subject", "scope-submission-actor")
+    const owner = controlledOwner(() => Promise.reject(new Error("unexpected create")))
+    const view = mountScope()
+    act(() => { expect(view.result.current.engine!.submit("keep unadmitted input")).toBe(false) })
+    await settle()
+    expect(owner.creates).toEqual([])
+    expect(view.result.current.engine!.getSnapshot().hasPendingSubmission).toBe(true)
+  })
+
   it("does not retain an invalidated subject when its last mounted owner releases later", async () => {
     const owner = controlledOwner(() => Promise.reject(new Error("unknown create outcome")))
     const view = mountScope()

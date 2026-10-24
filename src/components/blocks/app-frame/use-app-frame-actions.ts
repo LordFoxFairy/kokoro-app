@@ -67,8 +67,12 @@ export function useAppFrameActions({
 }: AppFrameActionsOptions) {
   const t = useT()
   const startNewChat = useCallback(() => {
-    engine?.newConversation()
+    if (!engine) return false
+    const previousId = engine.getSnapshot().store?.activeId
+    engine.newConversation()
+    if (engine.getSnapshot().store?.activeId === previousId) return false
     focusComposer()
+    return true
   }, [engine, focusComposer])
   const selectConversation = useCallback((id: string) => {
     engine?.openConversation(id)
@@ -103,7 +107,7 @@ export function useAppFrameActions({
       } else {
         // A root composer must not RESET a hidden POST, unknown receipt, or run.
         if (!current.canSubmitMessage || current.hydrating || current.connection.status !== "connected" ||
-          current.machine.phase !== "idle" || current.canRetryPendingSubmission) return
+          current.machine.phase !== "idle" || current.hasPendingSubmission || current.canRetryPendingSubmission) return
         const mode = current.store ? activeMode(current.store) : current.pendingMode
         engine.newConversation()
         engine.setMode(mode)
@@ -180,21 +184,24 @@ export function useAppFrameActions({
       if (!preview) {
         try {
           if (!readBoundary?.admitted || !readBoundary.subject
-            || readBrowserAuthIndexSubject() !== readBoundary.subject) return
-        } catch { return }
+            || readBrowserAuthIndexSubject() !== readBoundary.subject) return false
+        } catch { return false }
       }
       const direct = browserEngine({ preview, scope: DIRECT_SESSION_SCOPE })
-      if (!direct) return
+      if (!direct) return false
       const release = retainBrowserEngine(direct)
       try {
         // Reset the target before navigation can publish its retained engine;
         // otherwise the previous direct thread would reclaim the clean URL.
+        const previousId = direct.getSnapshot().store?.activeId
         direct.newConversation()
+        if (direct.getSnapshot().store?.activeId === previousId) return false
         setDeploymentIntent(null)
         navigateMountedSurface(chatHref)
       } finally { release() }
-      return
+      return true
     }
+    if (!startNewChat()) return false
     setDeploymentIntent(null)
     // Catalog pages share this mounted shell with the direct inbox. Starting
     // a conversation from Agent/Skills/etc. must leave the catalog surface; merely
@@ -203,9 +210,9 @@ export function useAppFrameActions({
     if (standaloneSurface) {
       navigateMountedSurface(chatHref)
     }
-    startNewChat()
     syncConversationUrl(null, "push")
     setConversationRouteId(null)
+    return true
   }, [chatHref, preview, projectWorkspace, readBoundary, setConversationRouteId, setDeploymentIntent, standaloneSurface, startNewChat, syncConversationUrl])
 
   const selectConversationWithUrl = useCallback((id: string) => {
@@ -270,11 +277,11 @@ export function useAppFrameActions({
     if (projectWorkspace) {
       // An explicit project Skill trial is scoped work, unlike the global
       // rail's New task. Preserve its project binding and selected Skill.
-      startNewChat()
+      if (!startNewChat()) return
       const id = engine?.getSnapshot().store?.activeId ?? null
       syncConversationUrl(id, "push")
       setConversationRouteId(id)
-    } else startNewChatWithUrl()
+    } else if (!startNewChatWithUrl()) return
     const nextSessionId = engine?.getSnapshot().store?.activeId ?? null
     if (nextSessionId) stashConversationDraft(nextSessionId, prompt)
     else updateDraft(prompt)

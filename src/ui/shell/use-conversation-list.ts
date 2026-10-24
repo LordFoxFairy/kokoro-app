@@ -19,10 +19,10 @@ import { DIRECT_SESSION_SCOPE, sessionScopeKey, type SessionScope } from "@/engi
 
 type Thread = EngineSnapshot["thread"]
 
-type ConversationEntry = { id: string; title: string }
+type ConversationEntry = { id: string; title: string; submissionUnconfirmed?: boolean }
 
 export type ConversationListController = {
-  archiveStatus?: "draft" | "unarchived" | "archived" | "unknown" | "missing"
+  archiveStatus?: "draft" | "unconfirmed" | "unarchived" | "archived" | "unknown" | "missing"
   archiveStateError?: boolean
   retryArchiveState?: () => void
   conversations: ConversationEntry[]
@@ -128,7 +128,8 @@ export function useConversationList(params: {
   // 首屏看起来像已经有一条任务，也不符合 Manus/Codex 的空工作台语义。
   const activeInList = activeId !== null && sessionList.entries.some((entry) => entry.id === activeId)
   const activeHasContent = thread.messages.length > 0 || Boolean(thread.meta?.title?.trim())
-  const archiveState = useActiveArchiveState({identity:lifecycleIdentity,admitted:!preview && readBoundary?.admitted===true,id:activeId,inList:activeInList,listSettled:!sessionList.loading,hasContent:activeHasContent,locallyCreated:engine?.getSnapshot?.().locallyCreatedSessionId===activeId,revision:archiveRevision,refresh:listRefresh,onPersisted:()=>{if(engine?.getSnapshot?.().locallyCreatedSessionId===activeId)engine.retireLocalCreationProvenance()},...(archiveReceipt===undefined?{}:{receipt:archiveReceipt})})
+  const engineView = engine?.getSnapshot?.()
+  const archiveState = useActiveArchiveState({pendingSubmission:engineView?.store?.activeId===activeId && engineView.hasPendingSubmission===true,ownerConfirmed:engineView?.ownerConfirmedSessionId===activeId,identity:lifecycleIdentity,admitted:!preview && readBoundary?.admitted===true,id:activeId,inList:activeInList,listSettled:!sessionList.loading,hasContent:activeHasContent,locallyCreated:engine?.getSnapshot?.().locallyCreatedSessionId===activeId,revision:archiveRevision,refresh:listRefresh,onPersisted:()=>{if(engine?.getSnapshot?.().locallyCreatedSessionId===activeId)engine.retireLocalCreationProvenance()},...(archiveReceipt===undefined?{}:{receipt:archiveReceipt})})
   const receiptKey = archiveReceipt ? JSON.stringify(archiveReceipt) : null
   const [archiveFence, setArchiveFence] = useState(() => ({ identity: lifecycleIdentity, revision: archiveRevision, receiptKey, beforeRefresh: listRefresh - 1 }))
   let currentArchiveFence = archiveFence
@@ -150,7 +151,7 @@ export function useConversationList(params: {
     const visibleEntries = sessionList.entries.filter(entry => !(entry.id !== activeId && !postReceiptPage && archiveReceipt?.archived_at != null && entry.id === archiveReceipt.session_id) && !(entry.id === activeId && archiveState.status === "archived"))
     const entries = visibleEntries.map(entry => ({ id: entry.id, title: withOverride(entry.id, entry.title) }))
     return lifecycleIdentity.admitted && activeId !== null && !activeInList && activeHasContent && (preview || archiveState.synthetic || (unscopedBoundary && archiveState.status === "unarchived"))
-      ? [{ id: activeId, title: withOverride(activeId, activeTitle ?? conversationTitle(activeMessages ?? [])) }, ...entries]
+      ? [{ id: activeId, title: withOverride(activeId, activeTitle ?? conversationTitle(activeMessages ?? [])), ...(archiveState.status === "unconfirmed" ? { submissionUnconfirmed: true } : {}) }, ...entries]
       : entries
   }, [activeId, activeInList, activeHasContent, lifecycleIdentity, sessionList.entries, activeMessages, activeTitle, titleOverrides, postReceiptPage, archiveReceipt, archiveState.status, archiveState.synthetic, preview, unscopedBoundary])
 

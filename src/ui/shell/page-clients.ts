@@ -30,14 +30,19 @@ import {
   createPreviewTeamClient,
 } from "@/dev/preview-clients"
 
+import { createBrowserSubmissionRecovery, SUBMISSION_RECOVERY_PREFIX } from "./browser-submission-recovery"
+
 import { consumeLandingPrompt } from "./use-draft"
 
 const STORAGE_KEY = "kokoro.web.conversations"
 export const AUTH_INDEX_SUBJECT_KEY = "kokoro.web.auth-index-subject"
+// Set only by successful Product Session admission in this document, never restored from a marker.
+let admittedBrowserSubject: string | null = null
 
 /** Remove only browser-owned conversation indexes before admitting a live identity. */
 export function invalidateBrowserAuthSessionIndexes(): void {
   if (typeof window === "undefined") return
+  admittedBrowserSubject = null
   for (const [key, entry] of pageEngines) {
     if (key.startsWith("live:")) {
       entry.invalidated = true
@@ -45,6 +50,12 @@ export function invalidateBrowserAuthSessionIndexes(): void {
       if (entry.owners.size === 0 && entry.engine.getSnapshot().hasPendingSubmission) releaseBrowserEngine(entry.engine)
     }
   }
+  const recoveryKeys: string[] = []
+  for (let index = 0; index < window.sessionStorage.length; index++) {
+    const key = window.sessionStorage.key(index)
+    if (key?.startsWith(SUBMISSION_RECOVERY_PREFIX)) recoveryKeys.push(key)
+  }
+  for (const key of recoveryKeys) window.sessionStorage.removeItem(key)
   const prefix = `${STORAGE_KEY}.`
   const keys: string[] = []
   for (let index = 0; index < window.localStorage.length; index += 1) {
@@ -86,6 +97,7 @@ export function admitBrowserAuthSessionIndexes(subject: string, subjectAtProbeSt
     window.localStorage.setItem("kokoro.web.drafts", JSON.stringify({ ...drafts, __pending__: prompt }))
   }
   if (currentSubject !== subject) window.localStorage.setItem(AUTH_INDEX_SUBJECT_KEY, subject)
+  admittedBrowserSubject = subject
   return true
 }
 
@@ -360,8 +372,17 @@ export function browserEngine(options: { preview?: boolean; scope?: SessionScope
     const client = options.preview === true
       ? browserPreviewClient()
       : createSessionClient({ baseUrl: sessionBaseUrl() })
+    const recoverySubject = admittedBrowserSubject
     const engine = createSessionEngine({
       client,
+      ...(mode === "preview" ? {} : { submissionRecovery: createBrowserSubmissionRecovery({
+        subject: recoverySubject ?? "", scope,
+        isCurrent: () => {
+          try { return recoverySubject !== null && admittedBrowserSubject === recoverySubject && readBrowserAuthIndexSubject() === recoverySubject }
+          catch { return false }
+        },
+        storage: () => window.sessionStorage,
+      }) }),
       storage: conversationStore(sessionScopeKey(scope)),
       draftLifecycle: browserDraftLifecycle(sessionScopeKey(scope)),
       scope,

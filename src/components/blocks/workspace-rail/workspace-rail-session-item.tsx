@@ -74,6 +74,18 @@ export function WorkspaceRailSessionItem({
   const t = useT()
   const [moveOpen, setMoveOpen] = useState(false)
 
+  if (conversation.submissionUnconfirmed) {
+    // This is an exact local recovery destination, not an owner-backed task row.
+    // Do not expose rename/archive/move/delete or drag handlers before confirmation.
+    return <SidebarMenuItem data-active={active ? "true" : "false"}>
+      <SidebarMenuButton isActive={active} className={itemStyles.unconfirmedSelect} type="button"
+        data-conversation-id={conversation.id} onClick={() => onSelect(conversation.id)} aria-pressed={active}>
+        <span className={itemStyles.itemTitle}>{title}</span>
+        <span className={itemStyles.unconfirmedLabel}>{t("thread.submissionUnconfirmed")}</span>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
+  }
+
   return (
     <SidebarMenuItem
       className={cn(itemStyles.item, dragging && itemStyles.itemDragging, dragOver && itemStyles.itemDragOver)}

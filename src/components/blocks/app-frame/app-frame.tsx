@@ -734,6 +734,7 @@ function AppFrameRuntime({
     connections,
     connectionsEnabled: composerConnectionsEnabled,
     localDraftPersistenceFailed: engine?.getSnapshot().notice?.key === "chat.localDraftPersistenceFailed",
+    submissionRecoveryFailed: engine?.getSnapshot().notice?.key === "chat.submissionRecoveryFailed",
     preview,
     brandName,
     projectWorkspace,

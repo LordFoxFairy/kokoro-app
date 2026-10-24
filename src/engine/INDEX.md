@@ -1,3 +1,9 @@
+CHAT-1当前：`ownerConfirmedSessionId`只投影当前视图的正向snapshot/create ACK，内存保存，不由乐观正文或浏览器索引推断；供归档读取资格使用，不授权或改变原提交恢复。
+
+## CHAT-1 未决提交刷新恢复（2026-10-24，候选）
+
+`submission-recovery.ts`只定义浏览器恢复意图/adapter，`machine.ts`在首发前确认保存、snapshot-first恢复并保原key/options；明确New/取消须确认退休。精确ACK本地写失败保RAM receipt，下次只补本地写，不重发已接收命令。owner运行相位与未决admission分开，终态后可恢复exact receipt而不复活Run。浏览器I/O在ui/shell，网络协议不变；见三面设计及CURRENT。
+
 PROJECT-1（2026-10-24）：EngineSnapshot.missingSessionId 是本 active 的权威缺席观察，不是本地创建或持久状态。new／switch／hydrate／accepted create 清退；同 session pending/unknown、本页新建及非空正文不因 null 改缺失。openConversation 对当前 missing ID 允许原 ID 只读 Retry；null 与 exact deferred receipt 竞态采用 ACK、零重复 POST，GC 原驱逐保持。
 
 <!-- SET47 archive consumer: 2026-10-15 -->

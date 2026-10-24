@@ -1,3 +1,9 @@
+CHAT-1当前：`use-active-archive-state`区分原请求未确认与owner历史归档状态；正向snapshot/ACK/列表/receipt之前不因乐观正文查归档。`use-conversation-list`只为当前原意图提供显式未确认导航行，不作为已落库清单。
+
+## CHAT-1 同标签未决意图（2026-10-24，候选）
+
+`browser-submission-recovery.ts`按已验证subject、scope、conv持有有界sessionStorage记录，复用原请求builder/严格schema；ACK/明确放弃原key退休，晚ACK不删后继。page-clients的主体资格只由原Product Session成功准入授予，marker仅核变化；普通dispose保留，身份切换清前缀。读异常不是空记录；不存owner线程/凭据，不建立跨tab锁或自动POST。
+
 ## 项目与全局 New（2026-10-24）
 
 全局 New 从项目返回 direct `/app`：当前准入/subject marker 校验后，短暂 retain 目标 direct engine 并先 RESET 后 mounted 导航，finally 释放；不重置离开的项目。项目行快捷入口仍是项目根地址；项目 Skill handoff 保留自身作用域。空项目会话与概览共用项目工作区，不以 viewport 替换成默认欢迎页；真实消息由原 thread 渲染。实际证据与未完成项见 [CURRENT](../../../docs/CURRENT.md)。

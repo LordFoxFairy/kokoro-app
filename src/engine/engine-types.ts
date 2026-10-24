@@ -9,6 +9,7 @@ import type { PersistedStore } from "@/lib/persisted-store"
 
 import { IDLE_MACHINE, type MachineState } from "./machine-state"
 import type { SessionScope } from "./session-scope"
+import type { SubmissionRecovery } from "./submission-recovery"
 import type { TaskNotification } from "./task-notification"
 import type { ToolDecision } from "./hitl-staging"
 
@@ -34,6 +35,8 @@ export type EngineSnapshot = {
   selectedMcpConnectionIds?: readonly string[]
   // In-memory current-view creation provenance, never persisted or inferred from cache.
   locallyCreatedSessionId?: string
+  // Positive owner snapshot/create ACK for this view, never inferred from optimistic text.
+  ownerConfirmedSessionId?: string
   // Last authoritative absent snapshot for this active view; never persisted.
   missingSessionId?: string
   machine: MachineState
@@ -120,6 +123,7 @@ export type EngineDeps = {
   client: SessionClient
   storage: PersistedStore<ConversationStore>
   draftLifecycle?: DraftLifecycle
+  submissionRecovery?: SubmissionRecovery
   /** Direct inbox and project workbenches never share a persisted session index. */
   scope?: SessionScope
   now?: () => number

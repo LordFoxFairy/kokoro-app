@@ -576,6 +576,9 @@ export const zh = {
   "mode.hintFast": "更快回应",
   "mode.hintThink": "更深的思考",
   // 引擎瞬态通知（steer 投递失败）
+  "thread.submissionUnconfirmed": "原请求接收状态尚未确认",
+  "thread.submissionUnconfirmedHint": "原文和提交选项已保留。刷新不会自动重发；明确恢复时只核对或重试同一个原请求，不创建另一条任务。",
+  "chat.submissionRecoveryFailed": "浏览器未能保存或读取原请求的恢复状态。请恢复浏览器存储后重新读取；原请求不会自动重发。",
   "chat.localDraftPersistenceFailed": "浏览器未能保存本次发送状态，消息尚未发送。请恢复浏览器存储后重试，输入已保留。",
   "steer.sendFailed": "插话发送失败：{detail}，请重试",
   // todo

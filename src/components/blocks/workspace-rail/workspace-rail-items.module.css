@@ -204,3 +204,7 @@
 @media (prefers-reduced-motion: reduce) {
   .projectActions, .projectChevron { transition: none; }
 }
+
+/* Local recovery navigation is visibly distinct from an accepted owner task. */
+.unconfirmedSelect { height: auto; min-height: 2.75rem; flex-direction: column; align-items: stretch; gap: 0.125rem; }
+.unconfirmedLabel { min-width: 0; color: var(--muted-foreground); font-size: 0.6875rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

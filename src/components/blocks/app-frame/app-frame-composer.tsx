@@ -31,6 +31,7 @@ export type AppFrameComposerProps = ShellComposerProps & {
   connections?: ComposerConnectionsController
   connectionsEnabled?: boolean
   localDraftPersistenceFailed?: boolean
+  submissionRecoveryFailed?: boolean
   preview: boolean
   brandName: string | undefined
   projectWorkspace: boolean
@@ -77,6 +78,7 @@ export function AppFrameComposer({
   connections,
   connectionsEnabled = false,
   localDraftPersistenceFailed = false,
+  submissionRecoveryFailed = false,
   preview,
   brandName,
   projectWorkspace,
@@ -102,6 +104,7 @@ export function AppFrameComposer({
 
   return (
     <div data-slot="composer" className="shrink-0">
+      {submissionRecoveryFailed ? <p role="alert" className={styles.submissionError}>{translate("chat.submissionRecoveryFailed")}</p> : null}
       {localDraftPersistenceFailed ? <p role="alert" className={styles.submissionError}>{translate("chat.localDraftPersistenceFailed")}</p> : null}
       <Composer
         {...composerProps}

@@ -1500,3 +1500,15 @@ it("an expired Custom API creation shows inspection guidance, keeps its frozen d
   expect(call).toHaveBeenCalledOnce()
   expect(onDone).not.toHaveBeenCalled()
 })
+
+it("keeps an unconfirmed local submission navigable but does not offer owner mutations", async () => {
+  const select = vi.fn()
+  renderRail({ conversations: [{ id: "conv_unconfirmed", title: "原请求", submissionUnconfirmed: true }], activeId: "conv_unconfirmed", onSelectConversation: select })
+  const row = await screen.findByRole("button", { name: /^原请求/ })
+  expect(row).toHaveTextContent("原请求接收状态尚未确认")
+  fireEvent.doubleClick(row)
+  expect(screen.queryByRole("textbox")).not.toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: /重命名|删除|归档|移动/ })).not.toBeInTheDocument()
+  fireEvent.click(row)
+  expect(select).toHaveBeenCalledExactlyOnceWith("conv_unconfirmed")
+})

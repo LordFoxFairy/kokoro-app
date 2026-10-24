@@ -1,3 +1,5 @@
+CHAT-1（2026-10-24，正常局部已验）：`src/engine/submission-recovery.ts`与`src/ui/shell/browser-submission-recovery.ts`分离恢复意图和浏览器I/O；原engine/actions接纳/URL与失败恢复共同修复，首发失败刷新、归档误警和待确认侧栏正常已验；成功创建/Agent整链仍开放，详见CURRENT。
+
 UI-1（2026-10-24）：`src/components/blocks/workspace-rail/workspace-rail-shell.tsx`负责断点切换的导航焦点交接，包括CSS先隐藏但节点仍连接的旧入口；主动移焦/blur与移动抽屉自动焦点的返回归属分开。事实及未验范围见`docs/CURRENT.md`，不新增全局焦点框架。
 
 ## 2026-10-24 MCP 描述多行消费修复

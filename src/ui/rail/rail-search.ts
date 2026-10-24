@@ -3,6 +3,8 @@
 export type ConversationSummary = {
   id: string
   title: string
+  /** Local recovery navigation only; no owner acceptance or metadata mutation implied. */
+  submissionUnconfirmed?: boolean
 }
 
 // 最近会话的客户端过滤：按标题大小写不敏感子串匹配；空/纯空白查询返回全部。

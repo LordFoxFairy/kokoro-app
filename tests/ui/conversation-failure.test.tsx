@@ -1000,3 +1000,16 @@ describe("ConversationThread 失败卡渲染", () => {
     expect(onRetry).not.toHaveBeenCalled()
   })
 })
+
+it("an unconfirmed admission is not described as a failed execution, and only explicit original recovery is offered", () => {
+  const thread = createSessionStreamState()
+  thread.messages = [{ id: "local_unknown", role: "user", content: "preserve original intent", runId: "local_unknown" }]
+  const retry = vi.fn()
+  renderFailure(thread, retry, "submission_outcome_unknown", true)
+  expect(screen.getByRole("status")).toHaveTextContent(tr("thread.submissionUnconfirmed"))
+  expect(screen.queryByText(tr("fail.generic"))).toBeNull()
+  expect(screen.getByText("preserve original intent")).toBeVisible()
+  expect(retry).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole("button", { name: tr("thread.retryOriginal") }))
+  expect(retry).toHaveBeenCalledTimes(1)
+})

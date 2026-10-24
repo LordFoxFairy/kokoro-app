@@ -105,7 +105,7 @@ export function useAppFrameSkillTrial({ engine, preview, boundary, handOffPrompt
     const sourceRef = skillTrialSourceRef(skill)
     if (!admitted || marker !== subject || !owner?.active || owner.context !== lifetime || !sourceRef) return false
     const snapshot = owner.engine.getSnapshot()
-    if (!snapshot.canSubmitMessage || snapshot.hydrating || snapshot.canRetryPendingSubmission) return false
+    if (!snapshot.canSubmitMessage || snapshot.hydrating || snapshot.hasPendingSubmission || snapshot.canRetryPendingSubmission) return false
     handOffPrompt(prompt)
     const conversationId = owner.engine.getSnapshot().store?.activeId
     if (!conversationId || !owner.active || ownerRef.current !== owner) return false

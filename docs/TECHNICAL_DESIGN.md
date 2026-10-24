@@ -1,3 +1,23 @@
+## CHAT-1 未确认提交与归档读取（2026-10-24，当前切片）
+
+乐观正文不是owner会话存在证据。engine只在匹配当前视图的正向snapshot或create ACK后输出内存`ownerConfirmedSessionId`；不同ID或主体不继承。归档reader在原冻结意图尚未确认、且无上述证明/列表成员/archive receipt时暂停archive GET，输出`unconfirmed`而非`missing`或已归档；首次失败与刷新恢复均适用。reader按identity/id保留已经获得的正向存在证明，后续列表移出仍执行真正历史404/错误处理，不重新降为未确认草稿。
+
+当前待确认提交可在侧栏以明确状态回到原恢复视图，仅是本标签原意图的导航，不新增owner任务。该行不提供重命名、归档、移动、删除或拖拽；确认后由原owner列表/详情接管。复用现九语言的未确认文案及现rail组件，不造假成功、持久业务索引或第二套服务。此错误恢复表达是明确的Kokoro状态处理，不冒称已观察到Manus同失败状态。真实正常/最终门状态见CURRENT。
+
+## CHAT-1：未决首发的同标签刷新恢复（2026-10-24，实施设计）
+
+根因：PendingSubmission只有RAM；Composer接纳后清输入、URL已挂conv，但首次POST失败/未知时无owner会话，刷新只能404。复用App浏览器交互owner，不增BFF/Agent协议、SQL或会话真源。方案选择sessionStorage按已验证subject＋scope＋session隔离；不扩跨tab整表Conversation索引，不改conv身份，也不把503/404当未接收证明。
+
+独立submission-recovery adapter提供read/save/failure/acknowledged/acknowledge/abandon，engine不读DOM。page-clients只在原Product Session准入成功后授予本document主体，marker仅核变化、不授予权限。严格版本/字段/原message body builder校验，单记录1MiB字节预算；只存原意图、optimistic ID及精确ACK，不存token、完整线程、模型输出或费用。preview与注入engine无adapter时沿原行为。
+
+先写读核原冻结意图，再退休draft来源并POST；任一步失败零POST且submit返回false，Composer保输入。未决同会话不能被另一个key/body静默覆盖；明确原retry复用原body。构造/打开/重新选择先恢复意图、再owner GET，绝不挂载自动POST；null不擦意图，普通无记录404仍真实missing。200同内容或execution head不是原key回执，不能据此清退；原意图可显式恢复，不推断已成功。
+
+ACK按subject/scope/session/key核同后先写精确receipt，再在owner snapshot-first原流程消化；已落receipt不再提供POST重试。取消/New先退休恢复资格，晚ACK沿原cancelledSubmissions保护；退休写失败不假完成切换。普通dispose/离开scope保未决记录；身份切换清退当前tab原前缀。sessionStorage复制标签可能复制原记录，仍只允许同key/body人工恢复，不冒跨tab锁。关闭tab/browser清理属于sessionStorage生命周期，不承诺跨设备恢复。
+
+BFF现chat-turn-commit以tenant/subject/conversation/key和request_digest读取正式outbox精确回执，消息ID由原stable identity派生；本片不改保留/删除规则，也不设置超时后重置key。ACK持久化异常保exact RAM receipt，后继发送/原恢复先补本地ACK再GET，不重POST已知成功命令；切回同session/key/body的恢复对象可承接原晚ACK，已落盘ACK也可只读恢复。重复同key在途请求按attempt计数，失败单个请求不清其它attempt的取消意图；无run_id的failed assistant可由exact assistant message ID证明终态，不复活queued。不凭本地错误重做命令；记录损坏/读拒绝fail-closed。运行中pendingSteerReceipts队列的跨刷新持久化不在此首发修复，继续开放。
+
+实施先补503→engine重建→404、ACK前刷新、200不精确配对、scope/subject、quota、取消与晚ACK回归；再正常页面复现对比及owner受影响门。Manus该失败窗口未观察，不声称其内部持久化实现相同。独立只读接缝审查已完成；验收状态见CURRENT，不因设计存在勾完成。
+
 ## CHAT-1：空草稿刷新恢复与提交前来源退休（2026-10-24，既有App边界）
 
 现Conversation索引增加可选localDraft:true，只作本地New来源及提交前退休义务，不能仅因读取失败而擦除这项义务。保原conv ID，不引入draft→formal身份交接，以免破坏Skill试用/URL/跨tab原引用。所有恢复入口必须同时有正向标记和本scope独立退休键不存在的证据；旧无字段索引、退休键存在或读取异常均走原owner水合，404/空标题不生成来源。无生命周期adapter的注入engine不持久化这项证明。
