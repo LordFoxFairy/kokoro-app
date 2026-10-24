@@ -1,3 +1,7 @@
+## 2026-10-24 MCP首发URL重复拒绝
+
+`mcp-server-creation-flow.ts`仅对从未uncertain的首次精确HTTP409 / `mcp_personal_server_url_conflict` / retryable=false释放未注册意图，显示局部`registrationRejection=url_conflict`并保留可编辑输入；更正后显式Save生成新key。旧unknown遇到同一409仍可能是原创建的后果，保原body/key，不授权新请求。取消/准入退休标记uncertain的原规则不变；不泛化所有409/不可重试错误。自定义与URL表单共用此行为，无新业务owner或服务。
+
 ## 2026-10-24 私有MCP试用：草稿交接而非Prepare
 
 正常详情的“试用一下”与连接准备分开：`CustomMcpDetailDialog`只呈现可用性/动作，`McpProjectionRead`核当前connector/server、owner/window和管理锁，传入owner返回的exact `connection_id`；`McpTrialProvider`连接现AppFrame，独立`use-app-frame-mcp-trial.ts`拥有本次UI动作的主体/准入代际/路由寿命检查。准备未知结果仍沿原key/CAS恢复，不以Try取代重试。

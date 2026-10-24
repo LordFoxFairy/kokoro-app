@@ -1,3 +1,13 @@
+## 2026-10-24 自定义MCP真实CRUD续验：重复URL误判已修，整项仍开放
+
+正常首次注册返回正式409 `mcp_personal_server_url_conflict` / retryable=false，旧UI误作unknown并锁表单。已修为仅首个确定拒绝释放未注册意图，保名称/备注/URL可编辑，显示“此服务器URL已添加”；更正后显式Save使用新key。旧unknown之后再收到同一409不证明原命令未落库，仍保原body/key；错status/retryable/普通409不释放。自定义和URL表单同修，未改后端contract/schema或生成物。3个新增断言先RED，最终完整相关及正常回归均有收据，不删既有恢复断言。
+
+正常12生产源精确HMR，其它761源/进程保持。重复URL再现409后字段可改/原文保留，改用官方文档公开的Cloudflare Docs MCP后，一次注册201→精确读取→Prepare200，真实ready卡片/专属详情；编辑取消零业务写，改名与备注PATCH200→硬刷新→同ID GET200保新值、原Connection仍ready。未Send/模型执行/扣费，原Agent/BFF/Billing行/xmin/usage保持。新QA实体/Connection和命令回执是正式创建/编辑效果，不称Platform零写；原有实体保护核验见guard。永久删除只展示确认，已异步询问本次QA样本，不擅自提交。
+
+Manus原参考QA已实际改名UpdateConnector POST200→GetConnector200核新名，再保存恢复原名并权威核对；原名样本保留、自有42关闭。本次新确认两处尚未修的编辑差异：参考未保存改动时禁用Try、本地仍启用；参考保存后保持配置层、本地关闭回列表。它们是当前CRUD卡的下一修复点，不被API成功掩盖。原始前后AX/原生图/脱敏网络、错误与回读仅Root ignored `var/dev/mcp-four-flows-20261024/reference/`及`normal/custom-crud/`。自有41保留在删除确认，原1/10不接管。
+
+1167非Markdown输入冻结，contract/architecture/全lint/types/相关531/build/post-types均0且零漂移，独审Approved；未为本局部重跑全默认和整套preview，不冒全owner/产品验收。首个负向用例RED/名称过滤跳过、读取旧Network响应体跨reload失效、只读守护误用ORM id而非canonical server_id的诊断失败均保留；未因这些观测错误修改产品数据或放宽门禁。原49行导航诊断WIP保持且排除本片提交。更多传输/图标、其余创建模式/Skills、真实Agent/交付/结算及集中PR/Root组合继续开放。
+
 ## 2026-10-24 自定义MCP试用交接（正常局部已验）
 
 修正原“试用一下”实际执行Prepare的功能错位：ready私有详情现在调用独立的MCP trial hook/context，进入新草稿、预填本地化提示词、选中owner exact Connection并聚焦Composer，不自动发送、Prepare或授权。未知原提交、活动Run、主体/准入代际/route退休拒绝交接；原Prepare未知请求恢复保留。详情和配置内拒绝Try均有可见反馈，配置原字段保留；项目内保持既有scope，不冒Manus项目试用语义已观察。

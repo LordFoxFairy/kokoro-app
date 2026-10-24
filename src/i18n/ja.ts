@@ -541,6 +541,7 @@ export const ja: Partial<Record<MessageKey, string>> = {
   "mode.labelThinking": "深い考え",
   "mode.hintFast": "より速く応答する",
   "mode.hintThink": "より深い思考",
+  "mcp.serverUrlConflict": "このサーバーURLは追加済みです。既存のコネクターを使うか、URLを変更してから再保存してください。",
   "mcp.tryPrompt": "{name} コネクタをテストし、取得したデータを表示するなど、その機能を実演してください。できることを簡潔に説明してください。",
   "mcp.tryUnavailable": "コネクタのお試しを開始できませんでした。既存のタスクと下書きは保持されています。接続状態を確認して再試行してください。",
   "thread.submissionUnconfirmed": "元のリクエストの受付状態は未確認です",

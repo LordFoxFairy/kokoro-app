@@ -120,7 +120,7 @@ export function UrlMcpForm({
     return <section className={styles.urlMcpForm} aria-live="polite">
       {showTitle ? <DialogTitle className={styles.urlMcpTitle}>{state.facts?.server.display_name ?? (state.name || name)}</DialogTitle> : null}
       {!admitted ? <p className="sr-only" role="status">{t("mcp.creationSession")}</p> : <p className={styles.urlWarning}>{submitting ? t("mcp.submitting") : isReady ? t("mcp.active") : t("mcp.pending")}</p>}
-      {error || state.unknown ? <p className={styles.compactDialogError} role="alert">{t(connectorCommandFailureMessage(creation.failure, state.unknown ? "mcp.serverCreateUnknown" : "mcp.error"))}</p> : null}
+      {error || state.unknown ? <p className={styles.compactDialogError} role="alert">{t(state.registrationRejection === "url_conflict" ? "mcp.serverUrlConflict" : connectorCommandFailureMessage(creation.failure, state.unknown ? "mcp.serverCreateUnknown" : "mcp.error"))}</p> : null}
       <div className={styles.urlMcpActions}>
         <Button type="button" variant="outline" onClick={creation.cancel}>{t("mcp.cancel")}</Button><span />
         {requiresOAuth ? <Button type="button" disabled={!admitted || submitting || Boolean(state.unknown)} onClick={() => void creation.authorize()}>{t("settings.connect")}</Button> : null}
@@ -298,7 +298,7 @@ export function UrlMcpForm({
       ) : null}
       {error || state.unknown ? (
         <p className={styles.compactDialogError} role="alert">
-          {t(connectorCommandFailureMessage(creation.failure, state.unknown ? "mcp.serverCreateUnknown" : "mcp.error"))}
+          {t(state.registrationRejection === "url_conflict" ? "mcp.serverUrlConflict" : connectorCommandFailureMessage(creation.failure, state.unknown ? "mcp.serverCreateUnknown" : "mcp.error"))}
         </p>
       ) : null}
       <p className={styles.urlWarning}>{t("mcp.urlWarning")}</p>

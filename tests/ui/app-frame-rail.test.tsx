@@ -4885,3 +4885,33 @@ it("a failed draft retirement shows a send error and retains the composer input"
   expect(composer).toHaveValue("preserve this unsent draft")
   expect(client.createCalls).toEqual([])
 })
+
+it.each(["custom", "url"] as const)("a known duplicate private MCP URL explains the rejection and preserves editable fields without retrying automatically (%s)", async mode => {
+  window.localStorage.setItem("kokoro.locale", "zh")
+  const { Dialog, DialogContent } = await import("@/components/ui/dialog")
+  const { CustomMcpForm } = await import("@/ui/mcp/mcp-custom-form")
+  const { createMcpServerCreationFlow } = await import("@/ui/mcp/mcp-server-creation-flow")
+  const { HubClientError } = await import("@/hub/client")
+  const { UrlMcpForm } = await import("@/ui/mcp/mcp-url-form")
+  const boundary = { admitted: true, subject: "duplicate-url-ui", generation: 1 }
+  const registration = mcpCreationRegistration()
+  const hub = { registerPrivateMcpServer: vi.fn().mockRejectedValue(new HubClientError("http", "duplicate", "mcp_personal_server_url_conflict", 409, false)),
+    preparePrivateMcpServer: vi.fn(), getPrivateMcpServer: vi.fn(), getMcpConnector: vi.fn(), beginMcpConnectorAuthorization: vi.fn() }
+  const flow = createMcpServerCreationFlow({ client: hub, boundary, onChanged: vi.fn(), preparation: createMcpPreparationCommands({ client: hub, boundary, canPrepare: () => true, onConfirmed: vi.fn() }) })
+  const Form = mode === "custom" ? CustomMcpForm : UrlMcpForm
+  render(<LocaleProvider><Dialog open><DialogContent><Form flow={flow} boundary={boundary} onDone={async () => undefined} onCancel={vi.fn()} /></DialogContent></Dialog></LocaleProvider>)
+  const name = screen.getByRole("textbox", { name: /^服务器名称\*?$/ })
+  const url = screen.getByRole("textbox", { name: /^服务器 URL\*?$/ })
+  fireEvent.change(name, { target: { value: "Keep QA name" } })
+  fireEvent.change(url, { target: { value: registration.server.server_url } })
+  fireEvent.click(screen.getByRole("button", { name: "保存" }))
+  expect(await screen.findByRole("alert")).toHaveTextContent("此服务器 URL 已添加")
+  expect(name).toHaveValue("Keep QA name")
+  expect(url).toHaveValue(registration.server.server_url)
+  expect(name).not.toHaveAttribute("readonly")
+  expect(url).not.toHaveAttribute("readonly")
+  expect(screen.getByRole("button", { name: "保存" })).toBeEnabled()
+  expect(screen.queryByRole("button", { name: "重试原请求" })).not.toBeInTheDocument()
+  expect(hub.registerPrivateMcpServer).toHaveBeenCalledOnce()
+  expect(hub.preparePrivateMcpServer).not.toHaveBeenCalled()
+})

@@ -464,6 +464,7 @@ export const fr: Partial<Record<MessageKey, string>> = {
   "mode.labelThinking": "réflexion profonde",
   "mode.hintFast": "Répondez plus rapidement",
   "mode.hintThink": "une réflexion plus profonde",
+  "mcp.serverUrlConflict": "Cette URL de serveur a déjà été ajoutée. Utilisez le connecteur existant ou modifiez l’URL avant de réenregistrer.",
   "mcp.tryPrompt": "Teste le connecteur {name} et démontre ses fonctionnalités, par exemple avec des données récupérées. Explique brièvement ce qu’il peut faire.",
   "mcp.tryUnavailable": "L’essai du connecteur n’a pas démarré. Votre tâche et votre brouillon sont conservés. Vérifiez la connexion puis réessayez.",
   "thread.submissionUnconfirmed": "La réception de la requête initiale reste à confirmer",

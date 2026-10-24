@@ -1,3 +1,7 @@
+## 2026-10-24 MCP重复URL明确拒绝消费
+
+消费既有正式409 `mcp_personal_server_url_conflict` / retryable=false元组，不新增或修改API/生成物。只有首个确定响应且此前无未知提交才作为可修改表单的语义拒绝；错误tuple不一致、传输未知及旧unknown重放仍不确定。不能仅凭code文案或所有409释放命令。
+
 ## 2026-10-24 MCP详情试用与正式消息边界
 
 本地Try不新增API或改wire：私有server的exact `connection_id`经现engine选择进入新草稿，用户明确Send时才沿既有Public24 `selected_mcp_connection_ids`冻结到原消息请求；connector/server/provider ID及显示名不替代运行Connection。Try本身零消息/Prepare/授权请求，未知原请求不被新草稿覆盖。缺可用性、未ready或缺Connection不伪造试用；Prepare/重新授权保留各自正式操作与恢复语义。

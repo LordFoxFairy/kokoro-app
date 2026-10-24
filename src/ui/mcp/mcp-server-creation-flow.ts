@@ -11,6 +11,7 @@ export type McpCreationFacts = Readonly<{ server: McpPrivateServer; connector: M
 export type McpServerCreationState = Readonly<{
   registered: boolean; busy: boolean; unknown: "register" | "prepare" | null;
   facts: McpCreationFacts | null; name: string; error: boolean; failure?: ConnectorCommandFailure;
+  registrationRejection: "url_conflict" | null;
 }>;
 type Intent<T> = { body: T; key: string; uncertain: boolean; confirmed: boolean; failure: ConnectorCommandFailure | undefined };
 type Flight = { kind: "register" | "prepare" | "read"; controller: AbortController; scope: McpCreationScope; read?: Promise<McpCreationFacts | null> };
@@ -25,7 +26,7 @@ export function createMcpServerCreationFlow(options: { client: Client; preparati
   let releasePreparation: (() => void) | undefined;
   let locator: { serverId: string; connectorId: string } | undefined;
   let active: Flight | undefined;
-  let state: McpServerCreationState = { registered: false, busy: false, unknown: null, facts: null, name: "", error: false };
+  let state: McpServerCreationState = { registered: false, busy: false, unknown: null, facts: null, name: "", error: false, registrationRejection: null };
   const listeners = new Set<() => void>();
   const preparationState = () => {
     const target = locator;
@@ -54,7 +55,7 @@ export function createMcpServerCreationFlow(options: { client: Client; preparati
     if (retired) return;
     if (next.subject !== actor) {
       retired = true; cancel(); registration = undefined; locator = undefined;
-      publish({ facts: null, name: "", error: false }); return;
+      publish({ facts: null, name: "", error: false, registrationRejection: null }); return;
     }
     if (next.admitted === boundary.admitted && next.generation === boundary.generation) return;
     boundary = { ...next }; cancel();
@@ -132,7 +133,7 @@ export function createMcpServerCreationFlow(options: { client: Client; preparati
     const intent = registration;
     if (!intent || !matches(scope) || active || !client.registerPrivateMcpServer || !connectorCommandMayResume(intent.failure)) return false;
     const flight: Flight = { kind: "register", controller: new AbortController(), scope };
-    active = flight; intent.failure = undefined; publish({ error: false, name: intent.body.display_name });
+    active = flight; intent.failure = undefined; publish({ error: false, registrationRejection: null, name: intent.body.display_name });
     try {
       if (active !== flight || !matches(scope)) return false;
       const result = await client.registerPrivateMcpServer(intent.body, intent.key, flight.controller.signal);
@@ -147,10 +148,14 @@ export function createMcpServerCreationFlow(options: { client: Client; preparati
       return prepare(scope);
     } catch (error) {
       if (!retired && registration === intent && active === flight) {
-        if (!intent.uncertain && error instanceof HubClientError && error.reason === "http" &&
-          error.status === 400 && error.code === "invalid_mcp_personal_request" && !error.retryable) registration = undefined;
+        // A first verified semantic rejection is not an unknown commit. A
+        // later duplicate after a lost ACK can be our original creation, so
+        // it must keep the frozen original command just like all uncertainty.
+        const rejected = !intent.uncertain && error instanceof HubClientError && error.reason === "http" && !error.retryable;
+        const duplicateUrl = rejected && error.status === 409 && error.code === "mcp_personal_server_url_conflict";
+        if (duplicateUrl || rejected && error.status === 400 && error.code === "invalid_mcp_personal_request") registration = undefined;
         else { intent.uncertain = true; intent.failure = connectorCommandFailure("mcp", error); }
-        publish({ error: true });
+        publish({ error: true, registrationRejection: duplicateUrl ? "url_conflict" : null });
       }
       return false;
     } finally { if (active === flight) { active = undefined; publish(); } }
@@ -161,7 +166,7 @@ export function createMcpServerCreationFlow(options: { client: Client; preparati
       if (preparationKind() === "completed") preparation.finish(locator.serverId, scope.boundary);
       else if (preparationKind() === "rejected") preparation.retireTarget(locator.serverId, locator.connectorId);
     }
-    locator = undefined; publish({ name: "", facts: null, error: false }); return true;
+    locator = undefined; publish({ name: "", facts: null, error: false, registrationRejection: null }); return true;
   };
   return {
     instanceId: crypto.randomUUID(), client,
@@ -179,7 +184,7 @@ export function createMcpServerCreationFlow(options: { client: Client; preparati
           const kind = preparationKind();
           if (previousKind !== undefined && kind === undefined && !window && !active) {
             locator = undefined;
-            publish({ facts: null, name: "", error: false });
+            publish({ facts: null, name: "", error: false, registrationRejection: null });
           } else publish();
           previousKind = kind;
         });
@@ -190,7 +195,7 @@ export function createMcpServerCreationFlow(options: { client: Client; preparati
         if (--leases !== 0) return;
         releasePreparation?.(); releasePreparation = undefined;
         bind({ ...boundary, admitted: false });
-        queueMicrotask(() => { if (leases !== 0 || retired) return; retired = true; cancel(); registration = undefined; locator = undefined; publish({ facts: null, name: "", error: false }); });
+        queueMicrotask(() => { if (leases !== 0 || retired) return; retired = true; cancel(); registration = undefined; locator = undefined; publish({ facts: null, name: "", error: false, registrationRejection: null }); });
       };
     },
     attach: (value: object) => { if (window !== value) cancel(); window = value; publish(); return () => { if (window === value) { window = null; cancel(); } }; },

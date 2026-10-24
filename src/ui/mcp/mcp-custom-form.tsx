@@ -103,7 +103,7 @@ export function CustomMcpForm({
     return <section className={styles.customMcpResult} aria-live="polite">
       <DialogTitle className={styles.customMcpTitle}>{state.facts?.server.display_name ?? (state.name || name)}</DialogTitle>
       {!admitted ? <p className="sr-only" role="status">{t("mcp.creationSession")}</p> : <p>{submitting ? t("mcp.submitting") : ready ? t("mcp.active") : t("mcp.pending")}</p>}
-      {error || state.unknown ? <p role="alert">{t(connectorCommandFailureMessage(creation.failure, state.unknown ? "mcp.serverCreateUnknown" : "mcp.error"))}</p> : null}
+      {error || state.unknown ? <p role="alert">{t(state.registrationRejection === "url_conflict" ? "mcp.serverUrlConflict" : connectorCommandFailureMessage(creation.failure, state.unknown ? "mcp.serverCreateUnknown" : "mcp.error"))}</p> : null}
       <footer>
         <Button type="button" variant="outline" onClick={creation.cancel}>{t("mcp.cancel")}</Button>
         {needsOAuth ? <Button type="button" disabled={!admitted || submitting || Boolean(state.unknown)} onClick={() => void creation.authorize()}>{t("settings.connect")}</Button> : null}
@@ -278,7 +278,7 @@ export function CustomMcpForm({
           </Button>
         </fieldset>
       </div>
-      {error || state.unknown ? <p className={styles.customMcpError} role="alert">{t(connectorCommandFailureMessage(creation.failure, state.unknown ? "mcp.serverCreateUnknown" : "mcp.error"))}</p> : null}
+      {error || state.unknown ? <p className={styles.customMcpError} role="alert">{t(state.registrationRejection === "url_conflict" ? "mcp.serverUrlConflict" : connectorCommandFailureMessage(creation.failure, state.unknown ? "mcp.serverCreateUnknown" : "mcp.error"))}</p> : null}
       <footer className={styles.customMcpActions}>
         <Button type="submit" disabled={!admitted || submitting || !creation.mayResume || (!state.unknown && !canSubmit)}>
           {submitting ? t("mcp.submitting") : t(state.unknown ? creation.mayResume ? "mcp.retryOriginal" : "mcp.recovery.inspectRequired" : "mcp.save")}

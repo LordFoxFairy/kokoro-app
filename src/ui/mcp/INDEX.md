@@ -1,3 +1,7 @@
+## 2026-10-24 创建重复URL的确定拒绝
+
+`mcp-server-creation-flow.ts`区分首次确定的URL重复拒绝与未知提交；custom和URL表单使用具名提示并保字段可编辑。旧unknown重放依旧保原命令，status/code/retryable不符不释放。正常证据与未闭合CRUD见CURRENT，不以此称四入口已完成。
+
 ## 2026-10-24 私有详情试用交接
 
 `mcp-trial-context.tsx`只桥接挂载AppFrame的草稿动作，不拥有网络或连接状态；`mcp-projection-read.tsx`核当前精确私有server/connector和命令锁，`custom-mcp-detail-dialog.tsx`把ready Try与原Prepare/OAuth恢复分开。原配置字段/秘密只写/管理CAS不变。正常验收状态见App CURRENT；四创建和全Skills/MCP未据此完成。

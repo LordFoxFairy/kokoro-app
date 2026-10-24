@@ -174,6 +174,42 @@ describe("private MCP creation registration and preparation", () => {
     return { hub, flow, preparation, scope, changed, detach }
   }
 
+  it("a first exact duplicate-URL rejection leaves the form editable and a corrected submission gets a new command", async () => {
+    const { flow, hub, scope, changed } = await setup()
+    hub.registerPrivateMcpServer.mockRejectedValueOnce(new HubClientError("http", "duplicate", "mcp_personal_server_url_conflict", 409, false))
+    expect(await flow.submit(input, scope)).toBe(false)
+    expect(flow.getSnapshot()).toMatchObject({ unknown: null, registered: false, error: true, registrationRejection: "url_conflict" })
+    expect(hub.preparePrivateMcpServer).not.toHaveBeenCalled()
+    expect(changed).not.toHaveBeenCalled()
+    expect(await flow.submit({ ...input, server_url: "https://mcp.example.test/corrected" }, scope)).toBe(true)
+    expect(hub.registerPrivateMcpServer).toHaveBeenCalledTimes(2)
+    expect(hub.registerPrivateMcpServer.mock.calls[1]?.[1]).not.toBe(hub.registerPrivateMcpServer.mock.calls[0]?.[1])
+    expect(hub.registerPrivateMcpServer.mock.calls[1]?.[0].server_url).toBe("https://mcp.example.test/corrected")
+    expect(flow.getSnapshot().registrationRejection).toBeNull()
+  })
+
+  it("a duplicate URL after a lost ACK does not prove the original registration failed", async () => {
+    const { flow, hub, scope } = await setup()
+    hub.registerPrivateMcpServer.mockRejectedValueOnce(new Error("lost ACK"))
+      .mockRejectedValueOnce(new HubClientError("http", "duplicate", "mcp_personal_server_url_conflict", 409, false))
+    await flow.submit(input, scope)
+    const original = hub.registerPrivateMcpServer.mock.calls[0]?.slice(0, 2)
+    await flow.retry(scope)
+    expect(flow.getSnapshot()).toMatchObject({ unknown: "register", registrationRejection: null })
+    expect(hub.registerPrivateMcpServer.mock.calls[1]?.slice(0, 2)).toEqual(original)
+    expect(await flow.submit({ ...input, server_url: "https://mcp.example.test/replacement" }, scope)).toBe(false)
+    expect(hub.registerPrivateMcpServer).toHaveBeenCalledTimes(2)
+  })
+
+  it.each([[409, true], [503, false], [400, false]])("an inconsistent duplicate tuple remains uncertain (%s / %s)", async (status, retryable) => {
+    const { flow, hub, scope } = await setup()
+    hub.registerPrivateMcpServer.mockRejectedValueOnce(new HubClientError("http", "unverified", "mcp_personal_server_url_conflict", status, retryable))
+    await flow.submit(input, scope)
+    expect(flow.getSnapshot().unknown).toBe("register")
+    expect(await flow.submit(input, scope)).toBe(false)
+    expect(hub.registerPrivateMcpServer).toHaveBeenCalledOnce()
+  })
+
   it("registers once, then prepares only with a fresh exact server/connector pair and CAS", async () => {
     const { flow, hub, scope, changed } = await setup()
     expect(await flow.submit(input, scope)).toBe(true)

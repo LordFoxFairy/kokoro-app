@@ -576,6 +576,7 @@ export const zh = {
   "mode.hintFast": "更快回应",
   "mode.hintThink": "更深的思考",
   // 引擎瞬态通知（steer 投递失败）
+  "mcp.serverUrlConflict": "此服务器 URL 已添加。请使用现有连接器，或修改 URL 后重新保存。",
   "mcp.tryPrompt": "帮我测试 {name} 连接器，并演示如何使用它的功能（例如显示通过它获取的任何数据）。请简要说明它的功能。",
   "mcp.tryUnavailable": "当前暂不能开始连接器试用。原任务和草稿已保留，请确认连接状态后重试。",
   "thread.submissionUnconfirmed": "原请求接收状态尚未确认",

@@ -464,6 +464,7 @@ export const ko: Partial<Record<MessageKey, string>> = {
   "mode.labelThinking": "깊은 생각",
   "mode.hintFast": "더 빠르게 응답하세요",
   "mode.hintThink": "더 깊은 생각",
+  "mcp.serverUrlConflict": "이미 추가된 서버 URL입니다. 기존 커넥터를 사용하거나 URL을 변경한 후 다시 저장하세요.",
   "mcp.tryPrompt": "{name} 커넥터를 테스트하고 가져온 데이터를 보여주는 등 기능을 시연해 주세요. 가능한 작업을 간단히 설명해 주세요.",
   "mcp.tryUnavailable": "커넥터 체험을 시작하지 못했습니다. 기존 작업과 초안은 보존되었습니다. 연결 상태를 확인하고 다시 시도하세요.",
   "thread.submissionUnconfirmed": "원래 요청의 접수 상태가 확인되지 않았습니다",

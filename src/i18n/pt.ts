@@ -464,6 +464,7 @@ export const pt: Partial<Record<MessageKey, string>> = {
   "mode.labelThinking": "pensamento profundo",
   "mode.hintFast": "Responda mais rápido",
   "mode.hintThink": "pensamento mais profundo",
+  "mcp.serverUrlConflict": "Esta URL de servidor já foi adicionada. Use o conector existente ou altere a URL antes de salvar novamente.",
   "mcp.tryPrompt": "Teste o conector {name} e demonstre suas funções, por exemplo mostrando dados obtidos por ele. Explique brevemente o que ele pode fazer.",
   "mcp.tryUnavailable": "Não foi possível iniciar o teste do conector. A tarefa e o rascunho foram preservados. Verifique a conexão e tente novamente.",
   "thread.submissionUnconfirmed": "O recebimento da solicitação original não está confirmado",

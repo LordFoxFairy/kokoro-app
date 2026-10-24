@@ -646,6 +646,7 @@ export const en: Partial<Record<MessageKey, string>> = {
   "mode.labelThinking": "Thinking",
   "mode.hintFast": "Faster responses",
   "mode.hintThink": "Deeper thinking",
+  "mcp.serverUrlConflict": "This server URL has already been added. Use the existing connector or change the URL before saving again.",
   "mcp.tryPrompt": "Help me test the {name} connector and demonstrate its capabilities, for example by showing data retrieved through it. Briefly explain what it can do.",
   "mcp.tryUnavailable": "Connector trial could not be started. Your existing task and draft are preserved. Check the connection and try again.",
   "thread.submissionUnconfirmed": "The original request admission is unconfirmed",

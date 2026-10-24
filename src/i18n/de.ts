@@ -464,6 +464,7 @@ export const de: Partial<Record<MessageKey, string>> = {
   "mode.labelThinking": "tiefes Denken",
   "mode.hintFast": "Reagieren Sie schneller",
   "mode.hintThink": "tieferes Denken",
+  "mcp.serverUrlConflict": "Diese Server-URL wurde bereits hinzugefügt. Verwende den vorhandenen Konnektor oder ändere die URL vor dem erneuten Speichern.",
   "mcp.tryPrompt": "Teste den Konnektor {name} und demonstriere seine Funktionen, etwa anhand abgerufener Daten. Erkläre kurz, was er kann.",
   "mcp.tryUnavailable": "Der Konnektortest konnte nicht gestartet werden. Aufgabe und Entwurf bleiben erhalten. Prüfe die Verbindung und versuche es erneut.",
   "thread.submissionUnconfirmed": "Der Eingang der ursprünglichen Anfrage ist unbestätigt",

@@ -1,3 +1,7 @@
+## 2026-10-24 MCP注册拒绝的局部投影
+
+`registrationRejection`仅是当前MCP创建流程的可空UI拒绝分类，内容不包含URL或秘密，不进入业务表、浏览器持久化或传输契约。只在首个精确确定拒绝时标识URL重复；新显式提交/清退清空。原未知提交仍由不可变注册意图保留key/body，不因重放返回重复URL而替换。
+
 ## 2026-10-24 MCP试用局部状态
 
 不新增持久业务事实或Schema。Try只创建现浏览器草稿、写入现草稿提示词并设置engine瞬态exact Connection选择；不写账号enabled或替owner创建连接/授权。草稿文本沿既有持久策略，选择沿既有New/select/主体退休规则，不声称刷新后仍持久选中。route/subject/generation动作寿命只用于拒绝迟到回调，非第二套授权或任务状态机。
