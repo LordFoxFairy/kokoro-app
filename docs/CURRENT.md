@@ -1,3 +1,15 @@
+## 2026-10-24 UI-1：跨断点侧栏焦点（正常及浏览器已验，完整工程门有旧认证失败）
+
+已保存的原133行浏览器失败进一步稳定复现，未改原断言/时限：临时只读观察确认旧移动导航按钮仍isConnected=true，但computed display:none，浏览器有时将activeElement退到BODY，原只认节点脱离DOM的交接守卫漏掉此状态；另一次active仍指向隐藏按钮则通过，解释间歇差异，不再归因整页重载。观察器已完整撤出产品源。
+
+现只改workspace-rail-shell本职责：CSS隐藏或节点脱离都可交接；显式blur和其它控件新选择退休旧来源，Sidebar移动抽屉内部自动焦点保原返回归属。三个公开行为先1FAIL/2PASS后GREEN；第一候选过宽退休来源令原抽屉偏好/焦点回归失败，已修正并四suite331PASS。实际原浏览器旅程桌面/手机各3次共6PASS、零重试；正常已精确HMR单生产文件（768其它source/全部进程保持），最终1157非Markdown输入停写零漂移：contract307/architecture50/lint/官方typegen/types、production build/post-types均0，完整默认4917PASS/1FAIL；原续期refresh_before_token返回HTML500/JSON EOF再次复现。完整preview桌面/手机114PASS、零重试，原焦点断言未改。只读独审无新增确定P0–P2。完整工程门仍未全过，不merge、不提升gitlink、不冒全UI或整产品闭环；原49行WIP仍排除提交，门绑定含该WIP的冻结工作树。
+
+正常浏览器已实测首页、原kk项目、关闭连接器设置后三次600→1280的导航焦点交接；设置390宽选中tab完整可见且无横溢，More键盘展开→1280时菜单清退、焦点回原连接器tab。仅视口仿真，不冒真实触屏设备；原555×767/dpr2/fine已恢复，自有32/33标签关闭、用户原1/10保留。正常Agent/BFF/Billing全部行/xmin与原usage保持，Platform仅读取准入slot变化。首次IAB原生截图受面板裁切，不当1280像素证明；后用CDP原始截图实核PNG1280×720并检查，原裁图保留注明。
+
+旧认证失败另以原94项隔离Next HTTP fixture启用既有两探针重验，94PASS、原测试/认证源逐字未改，受管Redis14库存0→0；这不是认证修复，也不抹原完整失败。探针确实观察到开发态启动期间app-paths-manifest的3次空读取，但没有与JSON EOF配对的manifest读证据，也未复现原refresh阶段500，不能据此定根因。原本无handler事件的默认失败亦不证明handler没进入；诊断材料只留ignored auth-observed。后继继续CHAT-1及其AUTH依赖，不用持续重跑换绿。
+
+踩坑：首次类型检查再次误用RTL ByRole的exact选项，日志保留，改回默认字符串精确匹配（不改断言/类型配置）；Next preview会正规生成dev types引用，关闭本片独占preview后以官方typegen恢复，不手改生成物。原49行E2E诊断WIP SHA逐字保持，不纳本片提交。诊断/RED/前后截图与trace仅Root ignored rail-focus-20261024；本片无API/Schema/模型/资金命令。
+
 ## 2026-10-24 CHAT-1：空New刷新恢复（正常局部已验，整链未完）
 
 - [x] 原错误已真实复现：New只在RAM记来源，刷新后snapshot/archive404；新版本对明确New持久localDraft来源，并在首次发送前以独立scope退休键撤销，保原conv ID/模式/Skills/MCP/模型及composer键。无adapter不持久授来源；旧无标记的历史索引不猜draft、不自动迁移。

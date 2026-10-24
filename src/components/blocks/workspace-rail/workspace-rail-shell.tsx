@@ -35,6 +35,12 @@ import { itemStyles, railStyles } from "./workspace-rail-styles"
 
 const RAIL_WIDTH_TRANSITION_MS = 200
 
+function navigationControlUnavailable(control: HTMLElement): boolean {
+  if (!control.isConnected) return true
+  const style = window.getComputedStyle(control)
+  return style.display === "none" || style.visibility === "hidden"
+}
+
 export type WorkspaceRailShellProps = Omit<WorkspaceRailProps, "onRequestDelete" | "deleteDialogFallbackFocusRef"> & {
   onRequestDelete: (conversation: ConversationSummary, remove?: (id: string) => Promise<boolean>) => void
   deleteDialogFallbackFocusRef: RefObject<HTMLButtonElement | null>
@@ -226,10 +232,26 @@ export function WorkspaceRailShell({
         '[data-collapsed-brand="true"], [data-rail-anchor="rail-toggle"], [data-web-navigation-trigger="true"]',
       )) {
         lastNavigationControlRef.current = target
+      } else if (!(target instanceof HTMLElement && target.closest('[data-slot="sidebar"][data-mobile="true"]'))) {
+        // Drawer autofocus owns a return to navigation. An unrelated control
+        // is a new focus choice, not permission to restore the old opener.
+        lastNavigationControlRef.current = null
+      }
+    }
+    const onFocusOut = (event: FocusEvent) => {
+      const control = lastNavigationControlRef.current
+      // An explicit blur of a still-available control retires ownership. CSS
+      // breakpoint hiding may blur it before React removes the connected node.
+      if (control === event.target && event.relatedTarget === null && control !== null && !navigationControlUnavailable(control)) {
+        lastNavigationControlRef.current = null
       }
     }
     document.addEventListener("focusin", onFocusIn)
-    return () => document.removeEventListener("focusin", onFocusIn)
+    document.addEventListener("focusout", onFocusOut)
+    return () => {
+      document.removeEventListener("focusin", onFocusIn)
+      document.removeEventListener("focusout", onFocusOut)
+    }
   }, [])
 
   // Focus handoff follows the committed provider state rather than the click
@@ -267,7 +289,7 @@ export function WorkspaceRailShell({
     const trackedNavigationControl = lastNavigationControlRef.current
     const focusWasReplacedNavigationControl = trackedNavigationControl !== null
       && (active === trackedNavigationControl
-        || (active === document.body && !trackedNavigationControl.isConnected))
+        || (active === document.body && navigationControlUnavailable(trackedNavigationControl)))
     if (!navigationControl && !focusWasReplacedNavigationControl) {
       responsiveFocusPendingRef.current = false
       return

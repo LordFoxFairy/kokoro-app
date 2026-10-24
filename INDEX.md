@@ -1,3 +1,5 @@
+UI-1（2026-10-24）：`src/components/blocks/workspace-rail/workspace-rail-shell.tsx`负责断点切换的导航焦点交接，包括CSS先隐藏但节点仍连接的旧入口；主动移焦/blur与移动抽屉自动焦点的返回归属分开。事实及未验范围见`docs/CURRENT.md`，不新增全局焦点框架。
+
 ## 2026-10-24 MCP 描述多行消费修复
 
 真实发现的 tool/resource/prompt `display_name` 可包含换行；既有 schema 仅对返回声明接受合法多行，selectors、请求名称和凭据单行规则及UTF-8/控制字符保护不变。原创建/准备事实不重发，正常只读详情GET已恢复；实际MCP运行时部署面缺失及验证范围见 [CURRENT](docs/CURRENT.md)。

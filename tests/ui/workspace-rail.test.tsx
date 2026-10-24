@@ -11,6 +11,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 
 import { LocaleProvider } from "@/i18n/context"
+import { SidebarProvider } from "@/components/ui/sidebar"
 import { WorkspaceRailAccount } from "@/components/blocks/workspace-rail/workspace-rail-account"
 import { WorkspaceRail } from "@/components/blocks/workspace-rail/workspace-rail"
 import railStyles from "@/components/blocks/workspace-rail/workspace-rail.module.css"
@@ -140,6 +141,53 @@ afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
   window.history.replaceState(window.history.state, "", "/")
+})
+
+// CSS media rules may hide the opener before the independently subscribed
+// provider commits its desktop tree. Keep that opener connected to reproduce
+// the browser's body-focus branch, rather than assuming removal is immediate.
+function renderResponsiveFocusRail() {
+  vi.spyOn(window, "matchMedia").mockImplementation(query => ({
+    matches: query === "(width < 768px)", media: query, onchange: null,
+    addListener: vi.fn(), removeListener: vi.fn(), addEventListener: vi.fn(),
+    removeEventListener: vi.fn(), dispatchEvent: () => false,
+  }))
+  const frame = (desktop: boolean, hidden = false) => <ThemeProvider><LocaleProvider>
+    <SidebarProvider forceDesktop={desktop} open persistOpenState={false}>
+      <button data-web-navigation-trigger="true" aria-label="Compact opener" style={{ display: hidden ? "none" : undefined }}>Open</button>
+      <button aria-label="Other action">Other</button>
+      <WorkspaceRail withinProvider collapsed={false} onToggleCollapse={() => {}} onNewChat={() => {}}
+        chatHref="/app" conversations={[]} activeId={null} awaitingIds={new Set()}
+        onSelectConversation={() => {}} onDeleteConversation={async () => true}
+        onRenameConversation={async () => {}} onOpenSettings={() => {}}
+        listLoading={false} listError={false} hasMore={false} onLoadMore={() => {}} />
+    </SidebarProvider>
+  </LocaleProvider></ThemeProvider>
+  return { ...render(frame(false)), frame }
+}
+
+it("hands focus from a CSS-hidden but still connected compact opener to the desktop control", async () => {
+  const view = renderResponsiveFocusRail()
+  const opener = screen.getByRole("button", { name: "Compact opener" })
+  act(() => { opener.focus(); opener.style.display = "none"; opener.blur() })
+  expect(opener.isConnected).toBe(true)
+  expect(document.body).toHaveFocus()
+  view.rerender(view.frame(true, true))
+  await waitFor(() => expect(screen.getByRole("button", { name: "收起侧栏" })).toHaveFocus())
+})
+
+it.each(["blur", "other-control"] as const)("does not revive navigation ownership after an intentional %s", async choice => {
+  const view = renderResponsiveFocusRail()
+  const opener = screen.getByRole("button", { name: "Compact opener" })
+  act(() => {
+    opener.focus()
+    if (choice === "other-control") screen.getByRole("button", { name: "Other action" }).focus()
+    ;(document.activeElement as HTMLElement).blur()
+    opener.style.display = "none"
+  })
+  view.rerender(view.frame(true, true))
+  await waitFor(() => expect(screen.getByRole("button", { name: "收起侧栏" })).toBeVisible())
+  expect(document.body).toHaveFocus()
 })
 
 it("默认桌面导航不展示未接入能力的占位入口", () => {
