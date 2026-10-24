@@ -2074,7 +2074,8 @@ describe("SET54 compact More owns native keyboard activation and dismissal", () 
     // Real key events are covered in the appended browser journey.
     fireEvent.click(trigger, { detail: 0 });
     expect(trigger).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByTestId("settings-more-skills")).toHaveFocus();
+    expect(screen.getByRole("menuitem", { name: "账户" })).toHaveFocus();
+    expect(screen.queryByRole("menuitem", { name: "Mail Kokoro" })).toBeNull();
     trigger.focus();
     fireEvent.click(trigger, { detail: 0 });
     expect(screen.queryByRole("menu")).toBeNull();
@@ -2089,7 +2090,7 @@ describe("SET54 compact More owns native keyboard activation and dismissal", () 
     const trigger = screen.getByTestId("settings-more");
     trigger.focus();
     fireEvent.keyDown(trigger, { key: "ArrowDown" });
-    const first = screen.getByTestId("settings-more-skills");
+    const first = screen.getByRole("menuitem", { name: "账户" });
     const last = screen.getByTestId("settings-more-help");
     expect(first).toHaveFocus();
     fireEvent.keyDown(first, { key: "End" });
@@ -2100,13 +2101,12 @@ describe("SET54 compact More owns native keyboard activation and dismissal", () 
     expect(last).toHaveFocus();
     fireEvent.keyDown(last, { key: "Home" });
     expect(first).toHaveFocus();
-    fireEvent.keyDown(first, { key: "ArrowDown" });
-    fireEvent.keyDown(document.activeElement!, { key: "ArrowDown" });
-    expect(screen.getByTestId("settings-more-mail")).toHaveFocus();
+    const beforeUnavailable = screen.getByTestId("settings-more-subscription");
+    beforeUnavailable.focus();
     fireEvent.keyDown(document.activeElement!, { key: "ArrowDown" });
     expect(screen.getByTestId("settings-more-email")).toHaveFocus();
     fireEvent.keyDown(document.activeElement!, { key: "ArrowUp" });
-    expect(screen.getByTestId("settings-more-mail")).toHaveFocus();
+    expect(beforeUnavailable).toHaveFocus();
     fireEvent.click(screen.getByTestId("settings-more-computer"));
     expect(onSelect).not.toHaveBeenCalled();
     fireEvent.keyDown(document.activeElement!, { key: "Escape" });
