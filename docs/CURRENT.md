@@ -1,3 +1,21 @@
+## 2026-10-24 MCP 配置响应式／反馈滚动已正常修复（整MCP仍开放）
+
+本片只改私有MCP配置组件／局部CSS，连既有撤销Header显示修正一起交付：名称／传输持续两列，独立标题／滚动正文／页脚，实测token、14px控件、图标右侧说明与添加Header图标；键盘保显式2px focus。555×767、390×844、1280×900正常实测面板与名称几何对上参考，555备注／页脚等对上；390×400十二行未保存Header只滚正文、320×568底部操作换行可达。参考短屏自身714px越界不照抄，差异已明确记录。
+
+独审发现unknown／Try失败Alert在固定form之外挤走页脚；新增既有视觉回归真实组件DOM＋生产CSS／Chromium先两项save底边436>400，再移入正文后通过。它是隔离布局证据，不冒正常故障业务。正常两源精确HMR及单源反馈delta，无服务重启；硬刷新同JSON GET200、原v9／原Connection／available，取消草稿再直接重开零业务写。冷加载仍实见；一次HMR期间重开无详情，刷新后与新一轮直接重开成功，根因未证，不写“已修”。
+
+最终1172非文档输入停写：contract／architecture／全lint／types／默认5023 PASS／0SKIP／build／post-types全exit0、无漂移；独立53882 preview零重试114 PASS，官方post-typegen恢复next-env后无漂移、自有服务已关。初轮5021行为通过但额外Radix／jsdom跨realm异步Event异常导致exit1，保原日志、不删断言；最终未复现不冒根因已修。独审P2修复复核Approved，原49行导航诊断WIP／原测试断言保留且不纳提交。
+
+四owner原行/xmin仅Platform读admission变化，原usage、全部正常进程及dispatch=false保持；自有58／59关闭、原1／10保留。证据Root ignored `normal/json-url/parity-final/`（layout-red／reviewed-green、alerts-red／green、app-final-reviewed、e2e-binding、reviewed-read-proof、normal-guard与原始截图）。正常字节与工程资格独立绑定，不将runner旧模板normal_activated字段当部署证据。
+
+仍欠复制按钮宽4px／添加Header宽2px等逐项对照、图标正式暂存绑定／回收、HTTP外传输、四入口与外层广场完整CRUD、冷慢加载及Skills；本片不关闭整MCP、不转Skills半片。无push／PR／merge或Root gitlink提升，最新交付状态以Root原执行板为准。
+
+## 2026-10-24 已撤销 Header 的配置投影修复（正常已验）
+
+`custom-mcp-detail-dialog.tsx`仅将configured=true且status=active的Header列作当前配置；owner保留的revoked描述符不再显示“已配置”或提供重复移除。原保存、CAS、秘密只写及unknown恢复不变；新增用例实际2FAIL后修复，连配置保存／详情／wire共78行为通过，受影响ESLint、typecheck、build均exit0，独审Approved。未为本局部重跑全默认／整套E2E，不称完整owner或MCP通过。
+
+正常仅一份源HMR（其余773源保持），同JSON v6真实GET仍保留revoked历史、配置页不显示；刷新重开再次GET200、描述符不变、完整短窗零业务写。原生刷新宽窗truncated，不作零请求证明；冷工作区壳仍出现。四owner行/xmin仅Platform读取admission变化，原usage／进程及原49行导航诊断WIP保持，自有54关闭／原1与10保留。收据Root ignored normal/json-url/header-state。连接ready却unavailable另已由Platform125282b修复并窄配对正常：同JSON一次Prepare200至v7 available，后续编辑／取消／保存／硬刷新及恢复原值至v9均已验，始终原Connection；详细收据Root原执行板及binding-lifecycle/normal-qa，不在App伪造可用。当前源码未新增提交／push／PR／merge／升gitlink；本片只关闭撤销Header显示动作。
+
 ## 2026-10-24 Prepare 持久恢复已正常加载，原请求恢复旅程仍开放
 
 固定BFF a9a6918／browser-private profile1.1，Public24原件不变。Prepare非秘密IndexedDB日志先原子reserve再POST，重开仅恢复unknown；核验两条精确GET后由另一次明确点击重放原key/body/CAS。proof绑定主体/代际/窗口signal，关窗/取消退休；K已换K2时旧窗口锁定、不覆盖或清退K2。存储失败不降级RAM，首次never-uncertain确定400与unknown后的400分开；迟到exact ACK后的completed仅Done收口、不再POST。

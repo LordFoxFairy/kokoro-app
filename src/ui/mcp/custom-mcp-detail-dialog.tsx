@@ -12,6 +12,7 @@ import {
   Link2Off,
   Link2,
   Pencil,
+  Plus,
   Send,
   Trash2,
 } from "lucide-react";
@@ -239,6 +240,11 @@ export function CustomMcpDetailDialog({
     target.focus({ preventScroll: true });
   };
 
+  const operationStatus = <>
+    {preparationState === "unknown" ? <Alert role="alert"><AlertDescription>{t(connectorCommandFailureMessage(preparationFailure, "mcp.serverCreateUnknown"))}</AlertDescription></Alert> : null}
+    {trialError ? <Alert variant="destructive" role="alert"><AlertDescription>{t("mcp.tryUnavailable")}</AlertDescription></Alert> : null}
+  </>;
+
   return (
     <Dialog
       open
@@ -253,8 +259,7 @@ export function CustomMcpDetailDialog({
         closeLabel={t("mcp.cancel")}
         onCloseAutoFocus={closeFocus}
       >
-        {preparationState === "unknown" ? <Alert role="alert"><AlertDescription>{t(connectorCommandFailureMessage(preparationFailure, "mcp.serverCreateUnknown"))}</AlertDescription></Alert> : null}
-        {trialError ? <Alert variant="destructive" role="alert"><AlertDescription>{t("mcp.tryUnavailable")}</AlertDescription></Alert> : null}
+        {!editing ? operationStatus : null}
         {editing ? (
           <form
             {...selectionProps}
@@ -262,23 +267,24 @@ export function CustomMcpDetailDialog({
             onSubmit={save}
             aria-busy={!ready && !pendingError}
           >
+            <header className={styles.configurationHeader}>
+              <DialogTitle>MCP 配置</DialogTitle>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={locked}
+                onClick={() =>
+                  currentServer && void navigator.clipboard?.writeText(currentServer.server_id)
+                }
+              >
+                <Copy aria-hidden="true" />
+                复制 UUID
+              </Button>
+            </header>
             <div className={styles.configurationBody}>
+              {operationStatus}
               {managementStatus}
-              <header className={styles.configurationHeader}>
-                <DialogTitle>MCP 配置</DialogTitle>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={locked}
-                  onClick={() =>
-                    currentServer && void navigator.clipboard?.writeText(currentServer.server_id)
-                  }
-                >
-                  <Copy aria-hidden="true" />
-                  复制 UUID
-                </Button>
-              </header>
               {!ready ? pendingError ? (
                 <Alert variant="destructive" role="alert">
                   <AlertDescription>{t("mcp.loadError")}</AlertDescription>
@@ -319,8 +325,10 @@ export function CustomMcpDetailDialog({
                   <span className={styles.configurationIcon} aria-hidden="true">
                     {currentServer?.display_name.slice(0, 1) ?? ""}
                   </span>
-                  <span className={styles.uploadUnavailable}>上传</span>
-                  <small>PNG 或 JPG，最大 1 MB。推荐尺寸 256×256 像素。</small>
+                  <div className={styles.iconUploadDescription}>
+                    <span className={styles.uploadUnavailable}>上传</span>
+                    <small>PNG 或 JPG，最大 1 MB。推荐尺寸 256×256 像素。</small>
+                  </div>
                 </div>
               </div>
               <div className={styles.field}>
@@ -352,7 +360,7 @@ export function CustomMcpDetailDialog({
                   自定义 headers <span className={styles.optional}>（可选）</span>
                 </legend>
                 {(currentServer?.headers ?? [])
-                  .filter((header) => !removedHeaders.includes(header.name))
+                  .filter((header) => header.configured && header.status === "active" && !removedHeaders.includes(header.name))
                   .map((header) => (
                     <div className={styles.existingHeader} key={header.name}>
                       <span>{header.name}</span>
@@ -437,6 +445,7 @@ export function CustomMcpDetailDialog({
                     ])
                   }
                 >
+                  <Plus aria-hidden="true" />
                   添加自定义 header
                 </Button>
               </fieldset>

@@ -78,3 +78,41 @@ it("configuration Try protects newly added and removed headers", async () => {
   fireEvent.click(screen.getByRole("button", { name: "移除 x-existing" }))
   expect(action).toBeDisabled()
 })
+
+it("configuration lists only active configured headers, not retained revocation history", async () => {
+  const save = vi.fn()
+  show({ onSaveConfiguration: save, server: { ...server, headers: [
+    { name: "x-active", configured: true, status: "active", state_version: "1" },
+    { name: "x-revoked", configured: false, status: "revoked", state_version: "2" },
+  ] } })
+  fireEvent.keyDown(screen.getByRole("button", { name: "管理" }), { key: "Enter" })
+  fireEvent.click(await screen.findByRole("menuitem", { name: "编辑配置" }))
+  expect(screen.getByText("x-active")).toBeVisible()
+  expect(screen.getAllByText("已配置")).toHaveLength(1)
+  expect(screen.queryByText("x-revoked")).not.toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "移除 x-revoked" })).not.toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "试用一下" })).toBeEnabled()
+  expect(save).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole("button", { name: "移除 x-active" }))
+  expect(screen.getByRole("button", { name: "试用一下" })).toBeDisabled()
+  fireEvent.click(screen.getByRole("button", { name: "保存" }))
+  expect(save).toHaveBeenCalledExactlyOnceWith({ display_name: "QA MCP", notes: "", server_url: server.server_url,
+    header_upserts: [], header_removals: ["x-active"] })
+})
+
+it("a revoked header name can be explicitly configured again without a repeated removal", async () => {
+  const save = vi.fn()
+  show({ onSaveConfiguration: save, server: { ...server, headers: [
+    { name: "x-revoked", configured: false, status: "revoked", state_version: "2" },
+  ] } })
+  fireEvent.keyDown(screen.getByRole("button", { name: "管理" }), { key: "Enter" })
+  fireEvent.click(await screen.findByRole("menuitem", { name: "编辑配置" }))
+  expect(screen.queryByText("已配置")).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole("button", { name: "添加自定义 header" }))
+  fireEvent.change(screen.getByLabelText("Header name"), { target: { value: "x-revoked" } })
+  fireEvent.change(screen.getByLabelText("Header value"), { target: { value: "new-fixture-value" } })
+  expect(save).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole("button", { name: "保存" }))
+  expect(save).toHaveBeenCalledExactlyOnceWith({ display_name: "QA MCP", notes: "", server_url: server.server_url,
+    header_upserts: [{ name: "x-revoked", value: "new-fixture-value" }], header_removals: [] })
+})

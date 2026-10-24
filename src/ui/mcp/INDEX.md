@@ -1,3 +1,11 @@
+## 2026-10-24 私有 MCP 配置布局
+
+`custom-mcp-detail-dialog.tsx`沿独立配置header／滚动body／footer组织；同名CSS仅配置态采用实测95vw／600×714、持续两列、局部控件token与图标右侧说明，短屏body收缩而操作可达。详情态和管理／Prepare／试用／秘密／CAS语义保持；可见focus使用语义ring outline。参考规格与差异在`docs/manus-reference-audit-v2.md`，状态以CURRENT为准。
+
+## 2026-10-24 Header 配置与撤销历史分离
+
+`custom-mcp-detail-dialog.tsx`只显示正式描述符中active且configured的当前Header；revoked历史仍由owner／wire保留，不构造重复移除。现mcp-custom-trial回归保有效项、撤销同名重新配置与未保存Try行为；正常回读／刷新证据见CURRENT。
+
 ## Prepare 持久恢复与核验（2026-10-24，正常读取已验、恢复待验）
 
 `mcp-preparation-recovery.ts`只拥有非秘密IndexedDB原子事务/严格codec/compare-by-key退休；`mcp-preparation-commands.ts`协调当前主体、恢复、核验proof、原请求与ACK，不镜像owner状态。`connector-command`仅增加显式unknown bootstrap及可选恢复政策；其它命令默认语义保持。核验沿现详情两GET，proof绑定窗口并随关闭退休，明确重试才POST；迟到已确认completed仅Done收口。存储失败不降级RAM，管理变更互锁与原清理语义保留。设计与实际证据/未验范围见App三面设计及CURRENT，不据此声称正常MCP闭环。
