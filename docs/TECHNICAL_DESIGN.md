@@ -1,3 +1,7 @@
+## 2026-10-24 Custom API 直达编辑（既有组件内修复）
+
+Manus已实测：Custom API卡片直接编辑，Custom MCP才是只读详情→配置，二者不共用流程/布局。移除API额外overview，保留原actor/client命令槽、CAS/key/body、窗口取消/晚ACK/秘密清退和删除确认；仅UI变更，无wire/Schema/owner调整。API独立CSS模块，退役原MCP CSS内无其它消费者的API选择器。初始名称焦点由Radix onOpenAutoFocus归属，不依赖会被Dialog覆盖的原生autoFocus；pending保既有表单busy和保存按钮spinner，不插顶端加载横幅移位；unknown/completed原恢复保留。changed比较原始字段与owner原值，不以trim差异擅自启动保存。
+
 ## 2026-10-24 普通会话 MCP 精确选择（App 实施中，正常未激活）
 
 **BFF进度。** BFF候选f71a17901b4f0458d88521be2c37e94d0d863998／Public24已本地提交并验收，public原件SHA256 f4caf11f3cd9255d2cd9daf69b74ff9988505d640e31c686ce495e6d8a578b2c；App已固定原件正规生成并接入engine/独立编辑器选择器，正在验收；正常尚未激活，不称普通会话已接。

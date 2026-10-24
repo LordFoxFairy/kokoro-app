@@ -3917,17 +3917,18 @@ it("Custom API same-actor recheck keeps its detail through a failed read and res
   expect(within(savedApi).queryByLabelText("已连接")).not.toBeInTheDocument()
   expect(within(savedApi).getByLabelText("已添加")).toBeVisible()
   fireEvent.click(savedApi)
-  const dialog = screen.getByRole("dialog", { name: "API 1" })
+  const dialog = screen.getByRole("dialog", { name: "编辑自定义 API" })
   round = 2
   view.rerender(content(false, 2))
   expect(screen.getByRole("dialog")).toBe(dialog)
-  expect(screen.queryByText("Instructions 1")).not.toBeInTheDocument()
+  expect(within(dialog).getByLabelText("备注（可选）")).toHaveValue("")
   view.rerender(content(true, 2))
   const retry = await within(dialog).findByRole("button", { name: "重试" })
   round = 3
   fireEvent.click(retry)
-  expect(await screen.findByRole("dialog", { name: "API 3" })).toBe(dialog)
-  expect(within(dialog).getByText("Instructions 3")).toBeVisible()
+  await waitFor(() => expect(within(dialog).getByLabelText("名称")).toHaveValue("API 3"))
+  expect(screen.getByRole("dialog")).toBe(dialog)
+  expect(within(dialog).getByLabelText("备注（可选）")).toHaveValue("Instructions 3")
 })
 
 it("Custom API late confirmed update invalidates its own current projection without closing the rechecked detail", async () => {
@@ -3947,9 +3948,9 @@ it("Custom API late confirmed update invalidates its own current projection with
   const content = (admitted: boolean, generation: number) => <LocaleProvider><McpContent client={hub} initialView="connections" readBoundary={{ admitted, generation, subject: "late-api-actor" }} /></LocaleProvider>
   const view = render(content(true, 1))
   fireEvent.click(await screen.findByRole("button", { name: "Old API" }))
-  const dialog = screen.getByRole("dialog", { name: "Old API" })
-  fireEvent.click(within(dialog).getByRole("button", { name: "编辑" }))
-  fireEvent.click(within(dialog).getByRole("button", { name: "保存修改" }))
+  const dialog = screen.getByRole("dialog", { name: "编辑自定义 API" })
+  fireEvent.change(within(dialog).getByLabelText("名称"), { target: { value: "Confirmed API" } })
+  fireEvent.click(within(dialog).getByRole("button", { name: "保存" }))
   await waitFor(() => expect(update).toHaveBeenCalledOnce())
   view.rerender(content(false, 2)); view.rerender(content(true, 2))
   const reader = renderHook(() => useCustomApiProjection({ client: hub, identity: "late-api-actor", refreshKey: 0, readGeneration: 2 }))
@@ -4016,7 +4017,7 @@ it.each([
   if (kind === "mcp") {
     fireEvent.keyDown(screen.getByRole("button", { name: "管理" }), { key: "ArrowDown" })
     fireEvent.click(await screen.findByRole("menuitem", { name: "编辑配置" }))
-  } else fireEvent.click(screen.getByRole("button", { name: "编辑" }))
+  }
   const label = kind === "mcp" ? "服务器名称" : "名称"
   if (target === "secret") fireEvent.click(screen.getByRole("button", { name: kind === "mcp" ? "添加自定义 header" : "添加密钥" }))
   const control = () => target === "secret" ? screen.getByLabelText(kind === "mcp" ? "Header value" : "密钥值") : screen.getByRole("textbox", { name: label })
@@ -4039,7 +4040,7 @@ it.each([
     expect(screen.queryByText("x-existing")).not.toBeInTheDocument()
     expect(screen.getByRole("button", { name: "试用一下" })).toBeDisabled()
   }
-  expect(screen.getByRole("button", { name: kind === "mcp" ? "保存" : "保存修改" })).toBeDisabled()
+  expect(screen.getByRole("button", { name: "保存" })).toBeDisabled()
   if (dirty) act(() => { field.setSelectionRange(0, field.value.length, "forward"); fireEvent.select(field) })
   else fireEvent.select(field)
   view.rerender(content(true, true))
@@ -4070,7 +4071,7 @@ it.each(["mcp", "api"])("%s configuration restores a bounded range without steal
   if (kind === "mcp") {
     fireEvent.keyDown(screen.getByRole("button", { name: "管理" }), { key: "ArrowDown" })
     fireEvent.click(await screen.findByRole("menuitem", { name: "编辑配置" }))
-  } else fireEvent.click(screen.getByRole("button", { name: "编辑" }))
+  }
   const field = screen.getByRole("textbox", { name: kind === "mcp" ? "服务器名称" : "名称" }) as HTMLInputElement
   act(() => { field.focus(); field.setSelectionRange(5, 9); fireEvent.select(field) })
   view.rerender(content(null))
@@ -4322,10 +4323,9 @@ it("an unconfirmed Custom API edit keeps its draft read-only and exposes origina
     listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }), listMcpConnectors: vi.fn().mockResolvedValue({ items: [], next_cursor: null }) }
   render(<LocaleProvider><McpContent client={hub} initialView="connections" readBoundary={{ admitted: true, generation: 1, subject: "api-management-actor" }} /></LocaleProvider>)
   fireEvent.click(await screen.findByRole("button", { name: "Editable API" }))
-  fireEvent.click(screen.getByRole("button", { name: "编辑" }))
   const name = screen.getByLabelText("名称")
   fireEvent.change(name, { target: { value: "Original edit" } })
-  fireEvent.click(screen.getByRole("button", { name: "保存修改" }))
+  fireEvent.click(screen.getByRole("button", { name: "保存" }))
   await waitFor(() => expect(update).toHaveBeenCalledOnce())
   expect(await screen.findByRole("button", { name: "重试原请求" })).toBeEnabled()
   expect(name).toHaveAttribute("readonly")
@@ -4371,11 +4371,10 @@ it("a late API edit ACK clears actual secret drafts without closing a successor 
     listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }), listMcpConnectors: vi.fn().mockResolvedValue({ items: [], next_cursor: null }) }
   render(<LocaleProvider><McpContent client={hub} initialView="connections" readBoundary={{ admitted: true, generation: 1, subject: "api-late-window-actor" }} /></LocaleProvider>)
   fireEvent.click(await screen.findByRole("button", { name: "Late managed API" }))
-  fireEvent.click(screen.getByRole("button", { name: "编辑" }))
   fireEvent.click(screen.getByRole("button", { name: "添加密钥" }))
   fireEvent.change(screen.getByLabelText("密钥名称"), { target: { value: "SECRET" } })
   fireEvent.change(screen.getByLabelText("密钥值"), { target: { value: "private-draft" } })
-  fireEvent.click(screen.getByRole("button", { name: "保存修改" }))
+  fireEvent.click(screen.getByRole("button", { name: "保存" }))
   fireEvent.click(within(screen.getByRole("dialog")).getAllByRole("button", { name: "取消" }).at(-1)!)
   expect(update.mock.calls[0]?.[3].aborted).toBe(true)
   fireEvent.click(screen.getByRole("button", { name: "Other managed API" }))
@@ -4387,7 +4386,6 @@ it("a late API edit ACK clears actual secret drafts without closing a successor 
   fireEvent.click(screen.getByRole("button", { name: "完成" }))
   await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
   fireEvent.click(screen.getByRole("button", { name: "Late managed API" }))
-  fireEvent.click(screen.getByRole("button", { name: "编辑" }))
   expect(screen.queryByLabelText("密钥值")).not.toBeInTheDocument()
   expect(screen.getByLabelText("名称")).not.toHaveAttribute("readonly")
   expect(update).toHaveBeenCalledOnce()
@@ -4401,7 +4399,6 @@ it("a mounted API editor clears secret values on ACK and rejects submitted edits
     command={kind ? { profileId: profile.profile_id, operation: "update", kind } : undefined}
     onResume={resume} onSave={save} onDelete={vi.fn()} onClose={vi.fn()} returnFocusRef={{ current: null }} /></LocaleProvider>
   const view = render(content())
-  fireEvent.click(screen.getByRole("button", { name: "编辑" }))
   fireEvent.click(screen.getByRole("button", { name: "添加密钥" }))
   fireEvent.change(screen.getByLabelText("密钥名称"), { target: { value: "SECRET" } })
   fireEvent.change(screen.getByLabelText("密钥值"), { target: { value: "mounted-secret" } })
@@ -4828,4 +4825,49 @@ it.each(["close", "recheck"] as const)("private OAuth retires %s without blockin
   view.unmount()
   await act(async () => { acknowledgeFresh(); await freshGate })
   expect(navigate).not.toHaveBeenCalled()
+})
+
+it("Custom API card opens its editor directly, keeps unchanged save disabled and closes on cancel", async () => {
+  const { CustomApiDetailDialog } = await import("@/ui/mcp/custom-api-detail-dialog")
+  const close = vi.fn(), save = vi.fn(), remove = vi.fn()
+  const profile = { profile_id: "direct-api", name: "Direct API", instructions: "Original instruction", state_version: "1", created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-24T00:00:00Z", environment: [] }
+  render(<LocaleProvider><CustomApiDetailDialog profile={profile} admitted busy={false} actionError={false} command={undefined}
+    canUpdate canRemove onResume={vi.fn()} returnFocusRef={{ current: null }} onClose={close} onSave={save} onDelete={remove} /></LocaleProvider>)
+  const dialog = screen.getByRole("dialog", { name: "编辑自定义 API" })
+  expect(within(dialog).getByRole("textbox", { name: "名称" })).toHaveValue("Direct API")
+  expect(within(dialog).getByRole("textbox", { name: "名称" })).toHaveFocus()
+  expect(within(dialog).getByRole("button", { name: "复制 UUID" })).toBeEnabled()
+  expect(within(dialog).queryByRole("button", { name: "编辑" })).not.toBeInTheDocument()
+  const submit = within(dialog).getByRole("button", { name: "保存" })
+  expect(submit).toBeDisabled()
+  fireEvent.change(within(dialog).getByRole("textbox", { name: "名称" }), { target: { value: "Updated API" } })
+  expect(submit).toBeEnabled()
+  fireEvent.click(submit)
+  expect(save).toHaveBeenCalledWith({ expected_state_version: "1", name: "Updated API", instructions: "Original instruction" })
+  expect(remove).not.toHaveBeenCalled()
+  fireEvent.click(within(dialog).getByRole("button", { name: "取消" }))
+  expect(close).toHaveBeenCalledTimes(1)
+})
+
+it("opening a Custom API with legal owner whitespace does not enable or submit a normalized rewrite", async () => {
+  const { CustomApiDetailDialog } = await import("@/ui/mcp/custom-api-detail-dialog")
+  const save = vi.fn()
+  const profile = { profile_id: "whitespace-api", name: " API ", instructions: " note\n", state_version: "1", created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-24T00:00:00Z", environment: [] }
+  render(<LocaleProvider><CustomApiDetailDialog profile={profile} admitted busy={false} actionError={false} command={undefined}
+    canUpdate canRemove onResume={vi.fn()} returnFocusRef={{ current: null }} onClose={vi.fn()} onSave={save} onDelete={vi.fn()} /></LocaleProvider>)
+  const field = screen.getByRole("textbox", { name: "名称" })
+  expect(field).toHaveValue(" API ")
+  expect(screen.getByRole("button", { name: "保存" })).toBeDisabled()
+  fireEvent.submit(field.closest("form")!)
+  expect(save).not.toHaveBeenCalled()
+})
+
+it("a pending Custom API save reports form busy without inserting a loading banner above its fields", async () => {
+  const { CustomApiDetailDialog } = await import("@/ui/mcp/custom-api-detail-dialog")
+  const profile = { profile_id: "pending-api-layout", name: "Pending API", state_version: "1", created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-24T00:00:00Z", environment: [] }
+  render(<LocaleProvider><CustomApiDetailDialog profile={profile} admitted busy actionError={false} command={{ profileId: profile.profile_id, operation: "update", kind: "running" }}
+    canUpdate canRemove onResume={vi.fn()} returnFocusRef={{ current: null }} onClose={vi.fn()} onSave={vi.fn()} onDelete={vi.fn()} /></LocaleProvider>)
+  expect(screen.getByLabelText("名称").closest("form")).toHaveAttribute("aria-busy", "true")
+  expect(screen.queryByText("正在加载…")).not.toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "保存" })).toBeDisabled()
 })

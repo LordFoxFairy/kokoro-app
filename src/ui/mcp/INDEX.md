@@ -79,7 +79,7 @@ Settings 的 Browse 与空态添加入口打开独立目录弹窗，不替换已
 Provider 目录与个人连接列表分别读取、分别保留成功投影并独立显示失败/重试；任一 owner read 延迟或失败不阻塞另一侧已成功内容。每份投影绑定当前 read identity，身份变化时旧数据立即退出渲染，inflight 仍按订阅生命周期取消。
 OAuth 点击同步预开并隔离 popup，再使用 owner 返回的 HTTPS URL；callback Complete 在 StrictMode 下共享 inflight，只通过 BroadcastChannel 发送 connector_id 触发 owner projection 重读，不广播 code/state/token，也不以通知判定 active。popup 阻止时不发起 owner command，关闭、过期与卸载均清理句柄。
 
-创建入口严格按 Manus 已观察顺序拆分为 `custom-api`、`custom-mcp`、`json` 与 `url`；它们不得落入同一个泛化表单。Custom MCP 先显示详情层，再进入独立 `MCP 配置`；Custom API 使用独立 profile/环境变量详情。JSON 的来源格式含 STDIO、SSE、Streamable HTTP，必须只调用 Platform 原子 import contract：浏览器不得把 JSON 拆成多个 Register 请求或把非 HTTP 条目改写为 HTTP。现有固定 BFF/App artifact 已接原子 HTTP import，整份原文只提交一次。当前 owner 仅接受 `streamableHttp`；STDIO 和 SSE 返回明确 precondition，不改写传输格式、不冒称支持运行。URL 的 BYO OAuth 字段仅属于 URL 高级层，值只提交给 owner，不在投影或浏览器存储回显。
+创建入口严格按 Manus 已观察顺序拆分为 `custom-api`、`custom-mcp`、`json` 与 `url`；它们不得落入同一个泛化表单。Custom MCP 先显示详情层，再进入独立 `MCP 配置`；Custom API 点击卡片直接打开独立 profile/环境变量编辑器，不增加只读概览层。JSON 的来源格式含 STDIO、SSE、Streamable HTTP，必须只调用 Platform 原子 import contract：浏览器不得把 JSON 拆成多个 Register 请求或把非 HTTP 条目改写为 HTTP。现有固定 BFF/App artifact 已接原子 HTTP import，整份原文只提交一次。当前 owner 仅接受 `streamableHttp`；STDIO 和 SSE 返回明确 precondition，不改写传输格式、不冒称支持运行。URL 的 BYO OAuth 字段仅属于 URL 高级层，值只提交给 owner，不在投影或浏览器存储回显。
 
 ## 当前组件职责
 
@@ -88,7 +88,7 @@ OAuth 点击同步预开并隔离 popup，再使用 owner 返回的 HTTPS URL；
 - `mcp-provider-directory.tsx` / `mcp-connection-list.tsx`：仅负责真实 owner 投影的筛选与卡片呈现。
 - `mcp-provider-catalog-dialog.tsx`、`mcp-provider-detail-dialog.tsx`、`mcp-connector-editor-dialog.tsx`：分别拥有目录、Provider 详情、Provider 生命周期编辑的焦点/弹窗边界。
 - `custom-mcp-detail-dialog.tsx`：只拥有自定义 MCP 的详情、管理菜单与 `MCP 配置`；读取 owner-issued server ID 后才渲染，绝不按显示名猜类型。
-- `custom-api-detail-dialog.tsx` / `custom-api-form.tsx` / `use-custom-api-projection.ts`：只拥有 Custom API profile 的安全详情和编辑；环境变量值永不进入读取视图。
+- `custom-api-detail-dialog.tsx` / `custom-api-detail-dialog.module.css` / `custom-api-form.tsx` / `use-custom-api-projection.ts`：只拥有 Custom API profile 的直达编辑和独立样式；原命令恢复/删除确认保持，环境变量值永不进入读取视图，不变不提交。
 - `connector-command.ts` / `use-connector-creation-form.ts`：仅本地单命令的准入/lease/unknown及异步完成关闭机制，由 API/JSON 创建、MCP Prepare 与 typed Custom API 管理实际消费者共用，不是网络代理或命令注册表。
 - `custom-api-create-flow.ts` / `mcp-json-import-flow.ts` / `connector-command-context.tsx`：各自 typed 输入/创建命令与稳定 AppFrameRuntime 的 API/JSON actor/client 命令槽。冻结正文/key只在RAM，unknown显式同请求恢复；关闭窗口不丢命令，换actor/真正卸载退休。确认清实际secret/JSON原文，API和JSON分别失活捕获主体的独立投影，Form/Dialog只拥有当前窗口关闭。JSON仍一次原子HTTP导入，不循环Register。
 - `mcp-server-creation-flow.ts` / `use-mcp-server-creation.ts`：Custom/URL 多阶段创建的独立 actor/client 工作流和当前窗口消费者；原 Register/Prepare key、正文与 CAS 仅在 RAM 保留，未知结果显式恢复原命令。Register 确认只留精确 locator，新 Prepare 读取本代 server/connector，OAuth 不借旧准入，晚 ACK 仅刷新原主体。

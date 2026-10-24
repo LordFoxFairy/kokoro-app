@@ -214,11 +214,11 @@ it("restores an off-page Custom API detail by exact locator after an admission g
   const view = render(content(true, 0))
   fireEvent.click(await screen.findByRole("button", { name: "加载更多 · API" }))
   fireEvent.click(await screen.findByRole("button", { name: "Off-page API" }))
-  expect(await screen.findByRole("dialog", { name: "Off-page API" })).toBeVisible()
+  expect(await screen.findByRole("dialog", { name: "编辑自定义 API" })).toBeVisible()
   view.rerender(content(false, 1))
   view.rerender(content(true, 1))
   await waitFor(() => expect(get).toHaveBeenCalledWith(profile.profile_id, expect.any(AbortSignal)))
-  expect(await screen.findByRole("dialog", { name: "Off-page API" })).toBeVisible()
+  expect(await screen.findByRole("dialog", { name: "编辑自定义 API" })).toBeVisible()
 })
 
 it("allows manual reconnect for a ready active private OAuth binding but not a non-OAuth server", async () => {
@@ -284,14 +284,18 @@ it.each(["api", "provider"])("revalidates a first-page %s detail without reusing
   render(<LocaleProvider><ConnectorCommandProvider client={client} boundary={{ subject: identity, admitted: true, generation: 0 }}><McpProjectionRead client={client} identity={identity} initialView="connections" /></ConnectorCommandProvider></LocaleProvider>)
   fireEvent.click(await screen.findByRole("button", { name: kind === "api" ? profile.name : connection.display_name }))
   const dialog = await screen.findByRole("dialog")
-  expect(within(dialog).getByRole("button", { name: kind === "api" ? "编辑" : "启用" })).toBeEnabled()
+  if (kind === "api") expect(within(dialog).getByLabelText("名称")).not.toHaveAttribute("readonly")
+  else expect(within(dialog).getByRole("button", { name: "启用" })).toBeEnabled()
   expect(kind === "api" ? getApi : getMcp).not.toHaveBeenCalled()
   act(() => { if (kind === "api") invalidateCustomApiProjection(client, identity); else invalidateMcpConnectorProjection(client, identity) })
   await waitFor(() => expect(kind === "api" ? getApi : getMcp).toHaveBeenCalledOnce())
-  expect(within(dialog).queryByRole("button", { name: kind === "api" ? "编辑" : "启用" })).not.toBeInTheDocument()
+  if (kind === "api") {
+    expect(within(dialog).getByLabelText("名称")).toHaveAttribute("readonly")
+    expect(within(dialog).getByLabelText("备注（可选）")).toHaveValue("")
+  } else expect(within(dialog).queryByRole("button", { name: "启用" })).not.toBeInTheDocument()
   if (kind === "api") {
     await act(async () => finishApi({ ...profile, instructions: "Fresh instructions", state_version: "2" }))
-    expect(within(dialog).getByText("Fresh instructions")).toBeVisible()
+    expect(within(dialog).getByLabelText("备注（可选）")).toHaveValue("Fresh instructions")
     await act(async () => finishApiList({ ...apiPage, items: [{ ...profile, instructions: "Fresh instructions", state_version: "2" }] }))
   } else {
     await act(async () => finishMcp({ ...connection, enabled: true, state_version: "2" }))

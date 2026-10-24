@@ -1,3 +1,13 @@
+## 2026-10-24 自定义 API 卡片直达编辑（正常局部已验，工程门通过、浏览器仍一项失败）
+
+真实Manus读取确认已有API点击即编辑；本地原先多出的只读overview已删除。API TSX/独立CSS＋新增局部语义token，不与MCP详情套同一布局；原MCP CSS中128行无消费者API规则退役。原命令/权限/CAS/unknown恢复/秘密只写/删除确认保持，取消关闭，不改值保存禁用。原49行导航诊断WIP hash不变；本片未push/PR/merge。
+
+正常四生产路径精确前像备份/HMR，765其它source和全部进程保持；最终751份非Markdown生产source与候选逐字相同，无额外文件。最终Agent/BFF/Billing全部表行及xmin、原usage不变；Platform真实变化仅本人QA custom_api_profile、command_receipt及读取准入slot，不能称全库零写。本人零密钥QA记录实际改名PATCH200→硬刷新新名→原备注不变→恢复原名PATCH200→再刷新回读；请求字段仅expected_state_version/name/instructions，无环境变量写入、删除、模型或资金命令。12行临时秘密草稿在390×640实际布局中body408/scroll1466、footer84，44px按钮均在屏内、无横溢，取消零提交。IAB截图在CDP仿真下实际输出390×219缩放画面，不当390×640像素对照；独立DOM几何保留。恢复视口/触摸仿真后正常桌面截图另归档。
+
+本次真实RED包括直达编辑缺失、合法owner空白不应触发保存、名称初始焦点、pending busy反馈；独审P2空白比较已修并复核无确定阻断。已有恢复/晚ACK/跨准入/秘密清退测试改为直达编辑后的同风险语义，不删原保护。相关三文件最终428PASS、ESLint/typecheck0；本次停写1157非Markdown输入零漂移，完整owner contract/architecture/lint/types、257文件4898测试、生产build及post-types均exit0；受管Redis14自身key库存0→0。完整preview桌面/手机114条实际113通过/1失败，零重试：既有mobile跨断点侧栏焦点断言未通过（收起侧栏inactive），失败trace保留，不改原断言或称该风险已修；构建后类型再生通过。完整浏览器门未通过，不满足整轮合并条件。原第一次TestingLibrary误用exact选项的type错误和后续修正保留；原生autoFocus在fixture通过但正常Dialog覆盖到复制按钮，实际浏览器推动显式打开焦点钩子修正。图片暂存接线、试用、原秘密管理及四入口整体仍未完成。
+
+额外真实发现（继续CHAT-1，不转图标）：仅New但未提交的空本地会话，刷新/app后snapshot及archive均404并显示归档错误。本engine.newConversation只在RAM记locallyCreatedSessionId，索引不持久该来源，重建engine总hydrate；现有engine/内存client独立复现相同丢失provenance→missing。诊断零正常写入。不得将404直接当空草稿或隐藏错误；下一修复应保正向草稿来源、首发/未知提交及真实missing深链边界。当前仅定位，尚未修复。
+
 ## 2026-10-24 正常读者已配对；普通会话 MCP 入口误用项目开关
 
 Agent4c46ec6、BFFf71a179、App0d19bfd已按原配置配到正常读者，正常BFF实际入口是tsx源码而非dist；仅三读者重启，其他七监听不变，四owner数据及xmin、原usage hash核同，dispatch保持false。不能继续将正常态写成“未配对”。真实浏览器随后发现普通会话没有Connection按钮：AppFrameComposer错误复用workspace.connectors，而当前manifest仅开启MCP模块，没有开启项目默认绑定。
