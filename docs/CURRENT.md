@@ -1,4 +1,4 @@
-## 2026-10-24 Prepare 持久恢复候选已验，本卡正常回执仍开放
+## 2026-10-24 Prepare 持久恢复已正常加载，原请求恢复旅程仍开放
 
 固定BFF a9a6918／browser-private profile1.1，Public24原件不变。Prepare非秘密IndexedDB日志先原子reserve再POST，重开仅恢复unknown；核验两条精确GET后由另一次明确点击重放原key/body/CAS。proof绑定主体/代际/窗口signal，关窗/取消退休；K已换K2时旧窗口锁定、不覆盖或清退K2。存储失败不降级RAM，首次never-uncertain确定400与unknown后的400分开；迟到exact ACK后的completed仅Done收口、不再POST。
 
@@ -8,7 +8,9 @@
 
 原生IAB隔离origin导入实际存储模块：两原生IDB连接并发reserve只一创建、同key，严格codec与失败只收紧；关48重开49读回原key/CAS，50清退K并reserve K2后49旧K两次写被拒。3条自有样本已回收，自有48/49/50及服务已关闭、原1/10保留。这是原生存储证据，不是正常MCP HTTP/历史原Prepare回执。初fixture误用非正式expired被正确拒绝，修fixture为replay_expired，未放松codec；早期fixture的business_api_posts为常量，不作为网络计数证据。
 
-正常只读预检：现源码src与App基线a833fc3一致，候选仅10份生产源；所有进程匹配最新私有manifest，dispatch仍false、无活跃Run/未准入outbox。本片尚未正常激活、未恢复历史原Prepare、不称JSON或四入口/Skills/五面完成；未push/PR/merge/提升Root gitlink。证据仅Root ignored normal/json-url/prepare-recovery（app-final-stable、e2e-binding、native-proof、原生截图/AX及失败日志）。下一步同卡正常精确配对与正式页面的关闭/重开、核验/原回执/详情CRUD验收；旧tab未保存的历史意图不由新日志追认。
+本地代码提交App `164d9ebcd0720d4b671d1e11c808a5f175c46543`，正常已配对BFF a9a6918与App10份生产源，764其它源保持；仅BFF按原配置重启，派发仍false，其它进程不变、无活跃Run/未准入outbox。同JSON详情GET200、硬刷新重开GET200，恢复初始化未悬空、Try可用；完整非截断网络窗无业务写，原生auth/session POST续期200单列。四owner原行/xmin仅Platform读取准入slot变化，原usage保持；冷工作区加载壳仍实见，不称无感完成。自有51关闭，原1/10保留。
+
+这是源码正常加载与只读回归，不是未知Prepare恢复/原exact回执验收；旧tab未保存的历史意图不由新日志追认。不称JSON或四入口/Skills/五面完成，未push/PR/merge/提升Root gitlink。证据仅Root ignored normal/json-url/prepare-recovery（app-final-stable、e2e-binding、native-proof、activation、normal-guard及正常截图/网络）。下一步仍同卡正式页面的关闭/重开、可信核验、显式原请求及exact ACK验收，再详情CRUD参考对照；不换新key或据ready置成功。
 
 ## 2026-10-24 私有MCP发现长描述消费修正（正常读取已验，原Prepare恢复仍开放）
 
