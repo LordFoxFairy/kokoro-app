@@ -8,7 +8,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { HubClient } from "@/hub/client";
+import { HubClientError, type HubClient } from "@/hub/client";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { LocaleProvider } from "@/i18n/context";
 import { createMcpJsonImportFlow } from "@/ui/mcp/mcp-json-import-flow";
@@ -157,3 +157,30 @@ it.each(["api-cancel", "api-unmount", "json-cancel", "json-unmount"])("%s stops 
   await waitFor(() => expect(nextDone).toHaveBeenCalledOnce());
   release();
 });
+
+it("a definite URL conflict keeps the JSON editable with a specific explanation, then submits only the corrected full document", async () => {
+  localStorage.setItem("kokoro.locale", "zh");
+  const boundary = { admitted: true, generation: 1, subject: "json-form-actor" }
+  const create = vi.fn().mockRejectedValueOnce(new HubClientError("http", "duplicate", "mcp_personal_server_url_conflict", 409, false))
+    .mockResolvedValue({ imports: [], replayed: false })
+  const flow = createMcpJsonImportFlow({ client: { importPrivateMcpJson: create }, boundary, onConfirmed: vi.fn() })
+  const onDone = vi.fn(async () => {})
+  const view = render(<LocaleProvider><Dialog open><DialogContent aria-describedby={undefined}>
+    <JsonMcpImportForm flow={flow} boundary={boundary} onCancel={vi.fn()} onDone={onDone} />
+  </DialogContent></Dialog></LocaleProvider>)
+  const document = '{"mcpServers":{"One":{"type":"streamableHttp","url":"https://mcp.example.test/one"},"Two":{"type":"streamableHttp","url":"https://mcp.example.test/two"}}}'
+  const input = screen.getByRole("textbox", { name: "请粘贴您的配置 JSON" })
+  fireEvent.change(input, { target: { value: document } })
+  fireEvent.click(screen.getByRole("button", { name: "导入" }))
+  expect(await screen.findByRole("alert")).toHaveTextContent("此服务器 URL 已添加")
+  expect(input).not.toHaveAttribute("readonly")
+  expect(input).toHaveValue(document)
+  expect(onDone).not.toHaveBeenCalled()
+  const corrected = document.replace("/one", "/corrected")
+  fireEvent.change(input, { target: { value: corrected } })
+  fireEvent.click(screen.getByRole("button", { name: "导入" }))
+  await waitFor(() => expect(onDone).toHaveBeenCalledOnce())
+  expect(create.mock.calls.map(call => call[0])).toEqual([document, corrected])
+  expect(create.mock.calls[1]?.[1]).not.toBe(create.mock.calls[0]?.[1])
+  view.unmount()
+})

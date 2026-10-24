@@ -1,3 +1,7 @@
+## 2026-10-24 JSON导入明确拒绝消费
+
+既有`POST /api/hub/mcp/servers/import`及完整`config_json`原子语义不变。JSON flow现承接首个从未uncertain的精确HTTP409 / `mcp_personal_server_url_conflict` / retryable=false，作为本次整文档未创建的明确拒绝；保正文、更正后显式新key提交。旧unknown、错误tuple不符和传输未知仍保原命令，不自动重发。未新增/改动机器契约、生成物或后端API。长metadata引起Prepare响应502仍为后继契约消费缺口，不属于本片已修范围。
+
 ## 2026-10-24 MCP重复URL明确拒绝消费
 
 消费既有正式409 `mcp_personal_server_url_conflict` / retryable=false元组，不新增或修改API/生成物。只有首个确定响应且此前无未知提交才作为可修改表单的语义拒绝；错误tuple不一致、传输未知及旧unknown重放仍不确定。不能仅凭code文案或所有409释放命令。

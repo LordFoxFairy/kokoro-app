@@ -1,3 +1,9 @@
+## 2026-10-24 JSON原子导入首次明确拒绝
+
+真实JSON导入返回首次409 `mcp_personal_server_url_conflict` / retryable=false后，原通用命令仅识别400验证拒绝，误将可修正输入锁成unknown。通用机制增加可选拒绝分类，只由JSON flow按精确tuple启用、且只能作用于从未uncertain的初次HTTP失败；本地state的可选`rejection=url_conflict`只用于错误展示，不是新wire错误或owner事实。输入/全部JSON保留，更正后由明确动作生成新key、一次提交完整文档；旧unknown后同409仍保原body/key，错tuple不释放。其它API/管理构造者沿原行为。
+
+Owner导入为原事务/receipt中的整文档原子持久化，不拆成多个Register，也不将GET当写ACK。本片只修明确拒绝恢复；后续真实Prepare已暴露BFF/App长声明显示文本额外1000-byte限制，尚未修改此边界，不以注册201或owner ready代替浏览器接受与完整CRUD。
+
 ## 2026-10-24 私有MCP配置保存与回读
 
 现配置组件独占dirty字段和Header草稿，ready Try在有未保存变更时禁用；不改Prepare/OAuth原请求恢复。现投影协调器对本窗口确认的update_server不再关闭编辑器，而是退休旧server/CAS、切换既有精确connector/server双读。窗口绑定的本地保存receipt承接命令completed与finish同批通知，不是新的owner事实或网络协议；只有fresh事实后恢复保存/试用。断开、删除及Provider关闭语义不变。

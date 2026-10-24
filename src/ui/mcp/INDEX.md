@@ -1,3 +1,7 @@
+## 2026-10-24 JSON首次重复URL拒绝
+
+`mcp-json-import-flow.ts`仅为JSON整文档原子导入启用`connector-command.ts`的首次明确拒绝分类；精确409/url_conflict/retryable=false且此前无未知结果时释放未执行意图。表单复用具名URL重复消息并保全文可编辑，更正后新key一次提交完整文档。其它构造者不启用分类，旧unknown/CAS/主体/窗口退休不变。当前真实JSON201后Prepare502的长metadata消费缺口见CURRENT，未据此关闭JSON或MCP。
+
 ## 2026-10-24 私有MCP配置保存落点
 
 `custom-mcp-detail-dialog.tsx`以实际字段/Header草稿判断未保存变更并禁用Try；`mcp-projection-read.tsx`仅在当前主体/代际/窗口确认update_server后保留配置层、发出本地保存receipt并切换精确connector/server回读。旧CAS动作退休，秘密草稿在确认时清退；非秘密已提交值只在确认后作为临时草稿承接回读，fresh事实到达后rebase。未知命令仍恢复原key/body，失败读取只重读、不再次PATCH。未改API/owner；实际验证与未验范围见App CURRENT。

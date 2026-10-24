@@ -79,7 +79,7 @@ export function JsonMcpImportForm({
       />
       {failed ? (
         <p className={styles.compactDialogError} role="alert">
-          {t(state.kind === "unknown" ? connectorCommandFailureMessage(state.failure, "mcp.jsonImportUnknown") : "mcp.jsonImportInvalid")}
+          {t(state.kind === "unknown" ? connectorCommandFailureMessage(state.failure, "mcp.jsonImportUnknown") : state.rejection === "url_conflict" ? "mcp.serverUrlConflict" : "mcp.jsonImportInvalid")}
         </p>
       ) : null}
       {completed ? <p role="status">{t("mcp.jsonImportConfirmed")}</p> : null}

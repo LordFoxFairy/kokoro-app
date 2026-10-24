@@ -7,6 +7,7 @@ export type ConnectorCommandState = Readonly<{
   kind: "idle" | "running" | "unknown" | "rejected" | "completed";
   name?: string;
   failure?: ConnectorCommandFailure;
+  rejection?: "url_conflict";
 }>;
 type Command<T> = { readonly body: T; readonly key: string; readonly name: string | undefined; uncertain: boolean; failure: ConnectorCommandFailure | undefined };
 
@@ -19,6 +20,8 @@ export function createConnectorCommand<T>(options: {
   surface: ConnectorCommandSurface;
   boundary: ProjectReadBoundary;
   onConfirmed: () => void;
+  /** Opt-in owner semantics for an initial, never-uncertain rejection only. */
+  classifyRejection?: (error: HubClientError) => ConnectorCommandState["rejection"];
   key?: () => string;
 }) {
   const actor = options.boundary.subject;
@@ -32,8 +35,8 @@ export function createConnectorCommand<T>(options: {
     state = Object.freeze(next);
     listeners.forEach(listener => listener());
   };
-  const publish = (kind: ConnectorCommandState["kind"], name: string | undefined, failure?: ConnectorCommandFailure) =>
-    update({ kind, ...(name === undefined ? {} : { name }), ...(failure === undefined ? {} : { failure }) });
+  const publish = (kind: ConnectorCommandState["kind"], name: string | undefined, failure?: ConnectorCommandFailure, rejection?: ConnectorCommandState["rejection"]) =>
+    update({ kind, ...(name === undefined ? {} : { name }), ...(failure === undefined ? {} : { failure }), ...(rejection === undefined ? {} : { rejection }) });
   const admitted = () => !retired && actor !== null && boundary.subject === actor && boundary.admitted;
   const matches = (value: ProjectReadBoundary) => !retired && value.subject === boundary.subject &&
     value.admitted === boundary.admitted && value.generation === boundary.generation;
@@ -85,12 +88,13 @@ export function createConnectorCommand<T>(options: {
       return current;
     } catch (error) {
       if (retired || command !== intent || active !== running) return false;
-      const rejected = !intent.uncertain && error instanceof HubClientError &&
-        error.reason === "http" && error.status === 400 &&
-        error.code === options.invalidRequestCode && !error.retryable;
+      const initialHttpFailure = !intent.uncertain && error instanceof HubClientError && error.reason === "http";
+      const rejection = initialHttpFailure ? options.classifyRejection?.(error) : undefined;
+      const rejected = initialHttpFailure && (rejection !== undefined || error.status === 400 &&
+        error.code === options.invalidRequestCode && !error.retryable);
       if (rejected) command = undefined;
       else { intent.uncertain = true; intent.failure = connectorCommandFailure(options.surface, error); }
-      publish(rejected ? "rejected" : "unknown", intent.name, intent.failure);
+      publish(rejected ? "rejected" : "unknown", intent.name, intent.failure, rejection);
       return false;
     } finally {
       signal?.removeEventListener("abort", pauseWindow);

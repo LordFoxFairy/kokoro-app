@@ -1,3 +1,13 @@
+## 2026-10-24 JSON重复URL恢复已正常修复，Prepare长文本断点未闭合
+
+Manus JSON空态/非法输入、一次CreateConnector POST200、类型专属详情与HTTP配置、编辑保存/恢复已实际观察并归档；本地填写取消零请求、非法JSON400可改。随后真实首次重复DeepWiki URL返回409/url_conflict/retryable=false，旧表单误unknown锁住；现只有JSON显式启用初次确定拒绝分类，保完整原文可编辑/具名原因，更正后新key一次整文档导入201。旧unknown后409、错tuple、原key/body/CAS与主体/窗口退休保护不变，其它构造者不启用分类。
+
+正常三源精确HMR，770其它source和全部进程保持，未改派发/Schema/费率；修正JSON真实201，新增本人无密钥QA `QA JSON Context7 20261024`，server `5d645d2c-deb0-452a-98d3-d24bed66ee47`、connector `6b2e0e35-2547-4a5b-94a8-0a1ae0da701b`。但JSON列表先显示暂不可用，显式连接后Prepare浏览器502 `mcp_personal_response_invalid`；owner只读诊断已registered/ready/v2、active/enabled且两声明，一条displayName 2006字节。BFF及App额外1000-byte限制必拒该值；正式Platform proto/发现归一化未规定此上限，未凭猜测截断或改显示语义。下一片沿正式BFF发行物→App消费修正合法长metadata并处理原Prepare结果恢复，不能换key重建、改摘要或将owner ready称浏览器成功。整JSON/MCP仍开放，未继续URL或Skills半片。
+
+最终1168输入冻结：contract/architecture/全lint/types/相关551/build/post-types均0、零漂移，独审通过；未重跑全默认/整套preview，不作全owner或产品门。原49行导航WIP保持且排除提交。正常原Agent/BFF/Billing行/xmin/usage保持，Platform仅本人QA实体/Connection/具名回执及读取admission变化，原行/xmin保护有收据。原1/10保留；参考44已恢复QA原名/空备注后关闭，旧失败45已关闭，46保原Prepare恢复状态，未Trial/Send/永久删除。
+
+本片踩坑：误将既有JSON form测试当新文件覆盖，diff发现后恢复HEAD全部原正文/断言，只改同模块值/type import并追加用例；原取消/过期/unknown/迟到断言完整保留并重验。漂移中的首轮门保留且不作最终证据，另`owner-final-stable`停写核同。首次新增form缺Dialog上下文已修fixture再实证RED；错误不是产品修复。所有原始前后截图/AX/脱敏网络/守护/门仅Root ignored `mcp-four-flows-20261024/normal/json-url/`；真实Prepare502及长文本断点保留，不假报成功。Manus也实见“正在导入...”按钮态，不据旧印象声称它所有动作都没有中间态。
+
 ## 2026-10-24 自定义MCP编辑两处对齐已正常验证，整项开放
 
 未保存名称/备注/URL/Header草稿现在禁用Try，撤销变更恢复；确认update_server后保持配置层而非回列表，并先退休旧CAS，精确回读connector/server后恢复动作。窗口绑定receipt保证同批finish后秘密草稿仍清退；unknown仍重放原body/key/CAS，fresh读取失败只重读。正常又发现第二次保存时未改备注/URL闪空，3种延迟回读场景先RED后修：仅确认后短暂承接本次用户提交的非秘密值，fresh后rebase；普通准入重核的旧事实mask不变。

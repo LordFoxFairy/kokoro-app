@@ -113,6 +113,51 @@ describe("Custom API actor-owned creation command", () => {
 
 
 describe("MCP JSON owner-atomic creation command", () => {
+  it("releases only a first confirmed atomic URL conflict so a corrected whole document gets a new key", async () => {
+    const { createMcpJsonImportFlow } = await import("@/ui/mcp/mcp-json-import-flow")
+    const first = '{"mcpServers":{"Duplicate":{"type":"streamableHttp","url":"https://mcp.example.test/existing"}}}'
+    const corrected = first.replace("existing", "corrected")
+    const create = vi.fn().mockRejectedValueOnce(new HubClientError("http", "duplicate", "mcp_personal_server_url_conflict", 409, false))
+      .mockResolvedValue({ imports: [], replayed: false })
+    const key = vi.fn().mockReturnValueOnce("json-first-key").mockReturnValueOnce("json-corrected-key")
+    const confirmed = vi.fn()
+    const flow = createMcpJsonImportFlow({ client: { importPrivateMcpJson: create }, boundary: admitted, onConfirmed: confirmed, key })
+    expect(await flow.submit(first, admitted)).toBe(false)
+    expect(flow.getSnapshot()).toEqual({ kind: "rejected", rejection: "url_conflict" })
+    expect(confirmed).not.toHaveBeenCalled()
+    expect(await flow.submit(corrected, admitted)).toBe(true)
+    expect(create.mock.calls.map(call => call.slice(0, 2))).toEqual([[first, "json-first-key"], [corrected, "json-corrected-key"]])
+    expect(confirmed).toHaveBeenCalledOnce()
+  })
+
+  it.each([
+    new HubClientError("http", "wrong status", "mcp_personal_server_url_conflict", 400, false),
+    new HubClientError("http", "retryable", "mcp_personal_server_url_conflict", 409, true),
+    new HubClientError("http", "different code", "mcp_personal_idempotency_conflict", 409, false),
+  ])("does not release the original JSON command for a mismatched rejection tuple: %s", async error => {
+    const { createMcpJsonImportFlow } = await import("@/ui/mcp/mcp-json-import-flow")
+    const create = vi.fn().mockRejectedValue(error)
+    const flow = createMcpJsonImportFlow({ client: { importPrivateMcpJson: create }, boundary: admitted, onConfirmed: vi.fn() })
+    await flow.submit("original document", admitted)
+    expect(flow.getSnapshot().kind).toBe("unknown")
+    await flow.submit("changed document", admitted)
+    expect(create).toHaveBeenCalledOnce()
+  })
+
+  it("a duplicate after an uncertain JSON result still retains the original whole document and key", async () => {
+    const { createMcpJsonImportFlow } = await import("@/ui/mcp/mcp-json-import-flow")
+    const create = vi.fn().mockRejectedValueOnce(Error("lost original ACK"))
+      .mockRejectedValue(new HubClientError("http", "duplicate", "mcp_personal_server_url_conflict", 409, false))
+    const key = vi.fn(() => "json-uncertain-key")
+    const flow = createMcpJsonImportFlow({ client: { importPrivateMcpJson: create }, boundary: admitted, onConfirmed: vi.fn(), key })
+    await flow.submit("original document", admitted)
+    await flow.retry(admitted)
+    expect(flow.getSnapshot().kind).toBe("unknown")
+    await flow.submit("changed document", admitted)
+    expect(create.mock.calls.map(call => call.slice(0, 2))).toEqual([["original document", "json-uncertain-key"], ["original document", "json-uncertain-key"]])
+    expect(key).toHaveBeenCalledOnce()
+  })
+
   it("freezes one complete document and key across recheck and unknown outcomes", async () => {
     const { createMcpJsonImportFlow } = await import("@/ui/mcp/mcp-json-import-flow")
     const document = ' {"mcpServers":{"One":{"type":"streamableHttp","url":"https://mcp.example.test/one","headers":{"x-check":"fixture-only"}},"Two":{"type":"streamableHttp","url":"https://mcp.example.test/two"}}} '
