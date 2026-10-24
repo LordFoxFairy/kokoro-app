@@ -140,6 +140,17 @@ describe("checked-in HTTP request and response contracts", () => {
     expect(messageCreateParamsSchema.parse({...input,selected_skill_source_refs:[]})).toHaveProperty("selected_skill_source_refs",[])
   })
 
+  it("accepts only bounded exact Connection IDs, never the retired trace-only MCP alias", () => {
+    const base = { idempotency_key: "mcp-selection", content: "hello" }
+    for (const ids of [[], ["connection:first", "connection_second-2"]]) {
+      expect(messageCreateParamsSchema.parse({ ...base, selected_mcp_connection_ids: ids })).toHaveProperty("selected_mcp_connection_ids", ids)
+    }
+    for (const ids of [["same", "same"], ["bad\n"], ["not an id"], ["a".repeat(192)], Array.from({ length: 17 }, (_, i) => `connection_${i}`)]) {
+      expect(messageCreateParamsSchema.safeParse({ ...base, selected_mcp_connection_ids: ids }).success).toBe(false)
+    }
+    expect(messageCreateParamsSchema.safeParse({ ...base, mcp_servers: ["server_1"] }).success).toBe(false)
+  })
+
   it("accepts the canonical message request and rejects missing/unknown fields", () => {
     expect(
       messageCreateParamsSchema.parse({
@@ -149,7 +160,7 @@ describe("checked-in HTTP request and response contracts", () => {
         agent: "general",
         thinking: true,
         selected_skill_source_refs: ["skill:skill_1"],
-        mcp_servers: ["server_1"],
+        selected_mcp_connection_ids: ["connection_1"],
         project_ref: "project_1",
       }),
     ).toMatchObject({ idempotency_key: "request_1", content: "hello" })
@@ -724,8 +735,8 @@ async function r76PublicSpec() {
 describe("R255 ScheduledTask owner recurrence graph under the current public pin", () => {
   it("consumes the exact locally accepted current canonical bytes", async () => {
     const { bytes, spec } = await r76PublicSpec()
-    expect(r76Hash("sha256").update(bytes).digest("hex")).toBe("703dba47da8a5c659b4236bb0a72317588ad29a4ca444ff9e5c99cfbcd00634b")
-    expect(spec.info.version).toBe("23.1.0")
+    expect(r76Hash("sha256").update(bytes).digest("hex")).toBe("f4caf11f3cd9255d2cd9daf69b74ff9988505d640e31c686ce495e6d8a578b2c")
+    expect(spec.info.version).toBe("24.0.0")
   })
 
   it("publishes current rule details separately from immutable command snapshots", async () => {

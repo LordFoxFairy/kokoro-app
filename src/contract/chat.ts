@@ -115,6 +115,19 @@ export function parseSessionSnapshot(input: unknown): SessionSnapshot {
   return sessionSnapshotSchema.parse(input)
 }
 
+// Message intent only: owner checks current eligibility; never derive execution from trace names.
+export const selectedMcpConnectionIdsSchema = z
+  .array(z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}(?![\s\S])/u))
+  .max(16)
+  .superRefine((ids, context) => {
+    if (new Set(ids).size !== ids.length) {
+      context.addIssue({ code: z.ZodIssueCode.custom, message: "Connection IDs must be unique" })
+    }
+    if (JSON.stringify(ids).length > 4096) {
+      context.addIssue({ code: z.ZodIssueCode.custom, message: "Connection selection exceeds its JSON byte budget" })
+    }
+  })
+
 export const messageCreateParamsSchema = z
   .object({
     idempotency_key: z.string().min(1),
@@ -123,7 +136,7 @@ export const messageCreateParamsSchema = z
     agent: z.string().min(1).optional(),
     thinking: z.boolean().optional(),
     selected_skill_source_refs: selectedSkillSourceRefsSchema.optional(),
-    mcp_servers: z.array(z.string().min(1)).optional(),
+    selected_mcp_connection_ids: selectedMcpConnectionIdsSchema.optional(),
     // Opaque project ownership for a project's first task. Tenant/site
     // identity is resolved by the BFF and is deliberately not browser data.
     project_ref: z.string().min(1).optional(),

@@ -1,3 +1,17 @@
+## 2026-10-24 普通会话 MCP 精确选择（App 实施中，正常未激活）
+
+**BFF进度。** BFF候选f71a17901b4f0458d88521be2c37e94d0d863998／Public24已本地提交并验收，public原件SHA256 f4caf11f3cd9255d2cd9daf69b74ff9988505d640e31c686ce495e6d8a578b2c；App已固定原件正规生成并接入engine/独立编辑器选择器，正在验收；正常尚未激活，不称普通会话已接。
+
+**上游进度。** Agent候选4c46ec681ee569e42808acb9409248acddd8ae41／HTTP7.4已本地提交并验收；本仓consumer实施中，正常producer不切换。当前会话草稿按已说明的最小合理默认推进，无用户新答复不反复暂停。
+
+已在Manus真实/app观察编辑器单独的已连接来源按钮与switch菜单，另有添加/管理连接器入口；修复前本地只有文件和资源→技能管理，没有MCP选择；现用独立Popover组件替换原点击即进管理的Cable按钮。2026-10-24，1280×720，简中/浅色，参考截图与AX/计算样式仅存Root ignored agent-mcp-selection-20261024。只观察未切换参考账号开关，未证实Manus跨刷新或账号默认选择语义。
+
+目标在现composer能力栏增加独立Connection选择组件/hook，不塞进Settings coordinator。仅展示当前主体可读、active的精确Connection，名称等展示数据复用现owner projection；不从Server名称构造Connection ID，不把Custom API/广场推荐当可调用MCP。读取分页/空态/错误与当前缓存身份分开，失败可重读；主体/会话/准入代际退休清退选择，迟到响应不得跨主体覆盖。加载保稳定壳/已有同主体内容，不用整页“正在加载”替代。
+
+按已说明的最小合理默认采用当前会话草稿选择：与engine/subject/会话绑定，不修改账号全局开关；发送前复制到原pending options，未知提交或重试沿原冻结列表，切换新会话不沿用前一会话。此作用域曾异步询问，未获新答复；当前采用最小会话范围继续，不假定账号默认存储，也不反复询问暂停。组件状态不进URL，不存secret，不新增localStorage凭据或后台偏好模型。已发送Run恢复由owner原输入负责，不从当前菜单或trace改写。
+
+engine/execution-adapter使用正式selected_mcp_connection_ids；固定已交付BFF Public24原artifact，以原全部generator固定单一pin，去掉无实际语义mcp_servers旧输入，无新网络协议。正常源/未知提交/切任务/CAS与取消围栏沿现engine，不覆盖原settings-navigation-responsive诊断WIP。先验contract/原请求冻结/主体隔离，再实际浏览器选择→正式Run→native mcp tools，最后同次产物与扣费；菜单相似不冒全链完成。
+
 ## 2026-10-24 AGENT-1：待核对结算状态的同一视图链路（实施中）
 
 复用既有AG-UI及ConversationThread，消费BFF正式Public23.1固定原件；只在严格新码 model_settlement_pending / retryable=false 时显示“本轮已停止，已生成的内容已保留；结算仍待核对。”。未知／坏profile仍拒绝，历史dependency_unavailable不从正文或余额猜成待核对。正文、history hydration、唯一footer、无终态重发按钮及原同key未确认提交恢复区分保持；不新增API／状态机／价格／余额估算或CSS风格。先真实复现旧profile拒绝，再正规生成七public消费者及既有在线Docs；完整旧父证明逐字承接。正常切换必须同时具备BFF CHECK演进和Agent新码生产，不提前激活新producer。
@@ -3315,3 +3329,17 @@ Hub update/remove签名显式caller key，删隐式随机key，不留旧签名fa
 执行 Root 当前有效计划 Wave 5 和用户“文档放 App 仓库”的决定：沿用已合 Root `2e008595` 的 VitePress 门户，迁入本仓 `developer-docs/` 独立包，不在 Next 内增加 renderer、服务或文档 API。门户保持原 lockfile 与生成器，公开 Reference 只读固定 BFF commit/version/digest 的 canonical artifact；本次配对与 App 相同的 Public22 原件，不复制另一份可编辑 OpenAPI。
 
 独立包拥有自己的 lint/types/test/build；App 的 Next／Vitest／ESLint 不递归消费其构建输入。公开构建只读取 `developer-docs/docs/`，本仓 `docs/` 中的内部维护记录不进入静态资源或搜索索引；内部发布的访问控制仍是未完成项，不用隐藏链接冒充权限。先完成候选迁移与验收，随后在配对 Root PR 中删除旧门户并更新链接／精确 gitlink；过渡期间 Root 未删不代表保留旧入口 fallback。无业务契约、数据模型或用户权限变化。
+
+
+### MCP 选择实施补记（2026-10-24）
+
+App固定BFF f71a179 / Public24原Git blob，七public窄生成器正规重出；test-only完整24→23.1字节逆证承接原golden，不改变上游规则。engine保存有界不可变Connection IDs并发布只读快照，发送和unknown重试复制原列表；显式new/select/外部索引退休/disposing清空，首发本地ID建立不清空。未选请求仍省略字段，不把旧trace升级成执行选择。
+
+`useComposerConnections`为独立读控制器，使用已有same-origin Hub list分页与最多四并发的connector metadata读取，核connector/server/provider精确对应；不读Custom API或广场推荐。仅显示真实可见Connection；被撤销/不可用者不新选，原选可去除。scope由engine/subject/admission generation组成，abort和独立live fence拒迟到；真实subject marker仅用于撤销旧缓存，不授予身份。一次最多16，错误保同scope已知列表、显式重读/更多；菜单打开后台刷新，冷读用固定菜单内占位，不替换工作区。选择是intent，不代替owner当前资格。
+
+组件`ComposerConnections`只负责Popover/键盘焦点/原选glyph/行switch/添加和管理入口；管理是显式动作，选项不写账号enabled。普通toolbar方形button样式排除这个独立pill，避免全局CSS覆盖组件尺寸；原private CSS字符串测试仅移出对应ghost工具断言，由真实桌面/移动浏览器菜单旅程承担几何/边界/草稿/焦点，原环境及高对比断言保持。参考1280×720/简中/浅色最新截图、AX及计算样式归档Root ignored app-selection，未操作Manus账号开关。
+
+本片不改Schema、授权、资金、模型派发或正常进程；真实正常三方配对、同次模型→MCP→产物→重开→积分仍待，不以UI/夹具通过冒称完成。
+
+
+审查踩坑：localStorage读取也会抛SecurityError，主体marker读取统一捕获并按不匹配退休，render/事件/await后guard/catch均不崩工作区。global provider的connector正式省略server_id；不能把optional字段当必填而让混合页一起失败，已有server_id才核精确相等，Connection仍以owner正式投影的ID/资格为真。两项均先实际RED复现后修，private错配拒绝保持；只读独审复核无剩余确定P0–P2，不替正常验收。

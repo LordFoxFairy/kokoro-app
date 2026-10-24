@@ -21,6 +21,7 @@ export type MessageExecutionOptions = {
   mode: AgentMode
   model: string | null
   selectedSkillSourceRefs: readonly string[] | undefined
+  selectedMcpConnectionIds?: readonly string[]
 }
 
 export type CreateMessageArgs = {
@@ -82,6 +83,7 @@ export function buildMessageCreateParams(args: {
     thinking: options.mode === "thinking",
     ...(options.model !== null ? { model: options.model } : {}),
     ...(options.selectedSkillSourceRefs === undefined ? {} : { selected_skill_source_refs: [...options.selectedSkillSourceRefs] }),
+    ...(options.selectedMcpConnectionIds?.length ? { selected_mcp_connection_ids: [...options.selectedMcpConnectionIds] } : {}),
     ...(args.scope.kind === "project" ? { project_ref: args.scope.projectRef } : {}),
   }
 }

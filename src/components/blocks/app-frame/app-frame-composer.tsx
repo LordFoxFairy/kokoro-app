@@ -1,10 +1,12 @@
 import { useRef } from "react"
-import { Cable, Plus, Sparkles } from "lucide-react"
+import { Plus, Sparkles } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import type { ComposerProps } from "@/ui/composer/composer"
 import { Composer } from "@/ui/composer/composer"
+import { ComposerConnections } from "@/ui/composer/composer-connections"
+import type { ComposerConnectionsController } from "@/ui/shell/use-composer-connections"
 import type { CreationIntent } from "@/ui/composer/creation-intent-pill"
 import type { SettingsTab } from "@/ui/settings/settings-modal"
 import { useT } from "@/i18n/context"
@@ -26,6 +28,7 @@ type ShellComposerProps = Omit<
 >
 
 export type AppFrameComposerProps = ShellComposerProps & {
+  connections?: ComposerConnectionsController
   preview: boolean
   brandName: string | undefined
   projectWorkspace: boolean
@@ -69,6 +72,7 @@ function preferredCreationModel(projectWorkspace: boolean, hasMessages: boolean,
 
 /** Renders the one shell-owned Composer slot and its site-projected actions. */
 export function AppFrameComposer({
+  connections,
   preview,
   brandName,
   projectWorkspace,
@@ -128,17 +132,8 @@ export function AppFrameComposer({
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : null}
-            {workspaceCapabilities.connectors ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                aria-label={translate("firstSite.connectors")}
-                title={translate("firstSite.connectors")}
-                onClick={() => onOpenSettings("mcp")}
-              >
-                <Cable aria-hidden="true" />
-              </Button>
+            {workspaceCapabilities.connectors && connections ? (
+              <ComposerConnections controller={connections} onManage={(returnTarget) => onOpenSettings("mcp", returnTarget)} />
             ) : null}
           </>
         }

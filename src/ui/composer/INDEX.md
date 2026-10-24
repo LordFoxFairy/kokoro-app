@@ -27,3 +27,7 @@
 - 恢复或语音追加的草稿超过现有 4000 字符提交上限时，保留完整草稿，在输入区关联可访问提示并禁用 Send；表单提交也阻断，缩短后自动恢复。有效输入不额外占布局。
 
 - 模型目录通过受控 `modelCatalogStatus` / `onRetryModels` 区分加载、成功与失败；失败保留当前候选并显式重试，只显示已有通用目录提示，不展示内部错误。仅完整成功目录校正失效选择（含真正空目录），已锁定会话不改模型；产品模式与业务模型身份保持分离。
+
+## 当前消息的连接来源
+
+`ComposerConnections` 是独立受控Popover：精确Connection行选择、原选glyph、有限菜单内加载/失败/分页，Esc回触发器，显式添加/管理进原设置；不修改账号enabled或发模型。`composer-connections.module.css`持有测得的menu/pill/26×16switch几何与局部选中token，不受通用ghost按钮尺寸覆盖。

@@ -1,3 +1,7 @@
+## 2026-10-24 普通会话 MCP 精确选择（App 实施中，正常未激活）
+
+不新增数据库、后台账号偏好或另一份owner状态。本次最小合理默认只在原engine的当前会话草稿状态保存所选Connection ID，发送时复制进原pending submission，原key/body的未知恢复不受后来的勾选变化影响。切主体/新会话/准入退休清退；旧Run的重试/恢复从原冻结输入继承，不拿当前缓存重建。未观察的跨刷新草稿保留及账号默认开关语义不实现，不擅自新建全局设置或以未答复暂停当前切片。
+
 ## AUTH-1：Web登录表单短期引用（2026-10-23，正常已加载）
 
 复用受管Web Redis，新临时键`kokoro:web:iam-signin-flow:<origin-sha256>:<random-flow>`；闭集v1值只有原始签名query、独立browser proof SHA256及绝对expires_at。flow为18随机字节base64url，独立proof为32随机字节，后者仅HttpOnly、SameSite=Lax、Path=/auth/sign-in cookie持有；query、邮箱、密码、用户token不放flow cookie。SET NX，TTL取原exp剩余与300秒较小值；读/刷新不续期，丢失重新正式登录，不承载身份durable truth。
@@ -1627,3 +1631,6 @@ MCP管理按actor/client、connector locator保存五项typed原命令，仅未�
 ### Installation exact content（2026-10-16，实施设计）
 
 无 Web 持久模型。已安装详情只在当前 subject/admission generation/resource 生命周期持有权威 PersonalInstallation 与精确 package directory；不把 catalog current 元数据覆写安装 pin，不解析 SKILL.md 冒充 owner metadata。安装源变化只失效本次读取并请求用户刷新，不自动更新安装、不合成 download 权限。
+
+
+实施中：选择在engine只读内存快照与原pending options，composer控制器缓存仅归当前subject/准入generation/engine；URL、localStorage、数据库与后台enabled均不持有本选择。不得将菜单占位、读失败或历史trace合成可用Connection。正常未激活/联合旅程未验，不新增资金或恢复事实。

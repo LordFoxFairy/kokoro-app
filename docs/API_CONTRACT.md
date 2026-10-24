@@ -1,3 +1,9 @@
+## 2026-10-24 普通会话 MCP 精确选择（App 实施中，正常未激活）
+
+目标由BFF公共后继机器合同提供消息selected_mcp_connection_ids，Web只由原same-origin adapter运输、严格运行时校验，不自定tenant/actor或直连Platform/Agent。弃用的mcp_servers不作为alias继续输入。数组ID/唯一/数量/编码限制跟已发行固定owner source对齐，不自创执行字段。
+
+候选连接来自现MCP Connection当前主体read接口，active状态仅显示资格，不是执行授权；工具调用仍由Agent重新核当前owner。空列表、不读到数据和读取失败不得混淆。选择对象只带Connection ID，不发URL、headers、密钥、profile或工具声明。
+
 ## 2026-10-24 Agent 待核对终态（候选，未正常激活）
 
 固定BFF `b0f201e99c2ae3fa213942c5a909f47b06640a02`／Public23.1／raw `703dba47da8a5c659b4236bb0a72317588ad29a4ca444ff9e5c99cfbcd00634b`。原186操作不变；七public窄消费者正规生成，ChatMessage／RUN_ERROR只承接新增model_settlement_pending且retryable=false，未知／坏profile保持拒绝。既有ConversationThread与九语言保正文并说明结算待核对，不猜已扣款／释放、不给终态重发动作、不改历史generic。完整23.0父字节逆证及原证明链保持，在线Docs固定同一发行物。完整工程／正常激活状态见[CURRENT](CURRENT.md)。
@@ -2146,3 +2152,8 @@ MCP管理Hub五方法显式caller key（其后signal?），不保隐式随机key
 ### Installation exact content（2026-10-16，实施设计）
 
 新增 browser-private `/api/hub/skill-installations/{id}/package` GET 与 `/api/hub/skill-installations/{id}/download` POST，分别固定转发已发布 BFF `/v1/skill-installations/{id}/package` 与 `/browser/v1/skill-installations/{id}/download`。GET 仅可有单个 file_path；POST 无 query、key 或非空 body。两者复用正式 Product Session 准入、同源 Origin、十秒预算、1 MiB 严格 JSON 边界；installation inspection 使用其专属 skill_package_* 错误，download 使用独立 download 错误矩阵。成功 source/revision 必须匹配本次权威 installation；文件路径/清单绑定原目录，下载只消费未过期受控 /skill-downloads 句柄，不接受对象存储 URL。目录与分享现有接口语义不变。
+
+
+### 普通消息 MCP 消费发行物（实施中）
+
+唯一canonical snapshot固定BFF f71a17901b4f0458d88521be2c37e94d0d863998 / Public24.0，SHA256 f4caf11f3cd9255d2cd9daf69b74ff9988505d640e31c686ce495e6d8a578b2c。原七生成器与在线Docs消费同一原件。messageCreate仅接受可选`selected_mcp_connection_ids`：有序唯一≤16、每项ASCII ID ≤191、JSON≤4096；缺省或[]不增加连接。旧`mcp_servers`输入已删，不读trace充当授权。浏览器内部idempotency_key继续按原adapter映射，未知提交使用冻结原body/key，不重新读取勾选。选项读取仍为原Hub正式GET，无新代理前缀或owner直连。

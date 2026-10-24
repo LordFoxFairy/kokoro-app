@@ -748,16 +748,9 @@ it("编辑器基础输入表面去除阴影，不依赖 fine pointer 或聚焦�
   expect(baseInput).toMatch(/box-shadow:\s*none;/)
 })
 
-it("桌面前置 ghost 工具没有静态方框，并保留独立环境控件与可见焦点保障", () => {
+it("独立环境控件与高对比模式保留可见焦点保障", () => {
   const css = readFileSync(`${process.cwd()}/src/ui/composer/composer.module.css`, "utf8")
-  const leadingTools = css.match(/^\.wrap\[data-desktop-web="true"\] \.leadingActions button\s*\{([^}]*)\}/m)?.[1]
-  expect(leadingTools).toBeDefined()
-  expect(leadingTools).toMatch(/width:\s*2rem;/)
-  expect(leadingTools).toMatch(/height:\s*2rem;/)
-  expect(leadingTools).toMatch(/background:\s*transparent;/)
-  expect(leadingTools).not.toMatch(/(?:border|outline)(?:-[a-z]+)?:/)
-  expect(css).not.toMatch(/\.leadingActions button \+ button\s*\{[^}]*(?:border|outline)(?:-[a-z]+)?:/)
-
+  // Toolbar geometry/focus is exercised in the real browser journey, not a private CSS selector.
   const environmentControl = css.match(
     /^\.wrap\[data-desktop-web="true"\]\[data-empty-workspace="true"\] \[data-environment-state="static"\]\s*\{([^}]*)\}/m,
   )?.[1]

@@ -1,3 +1,15 @@
+## 2026-10-24 普通会话 MCP 选择纵向（本地已验，正常未配对）
+
+App以f0740f3为基线，固定BFF f71a179 / Public24原件及原七生成器，正式selected_mcp_connection_ids经当前会话engine→原消息adapter；原trace alias移除。选择/冻结/unknown原请求恢复、new/select/主体退休与首发保留由原engine单点拥有，独立Connection菜单已接普通AppFrame，不改后台enabled。真列表与metadata精确关联、global合法省server_id、可用性/分页/有限并发/失败保缓存、取消/迟到/Storage异常退休均已实际验证；独审两P2已修并复核。
+
+停写1156个非Markdown输入零漂移：contract307、architecture50、lint/types、默认完整4893测试、生产build及post-types通过；完整preview桌面/手机114浏览器旅程通过，包含保草稿/边界/Esc焦点/显式管理设置。Docs完整check及54HTML/17944链接通过，原大chunk warning保持。真实HTTP/Redis的stored Product Session两例单独通过，随后完整默认命令显式复用受管Redis14，以随机origin/Session keys隔离/精确清理，库存0→0；不建/清共享服务。
+
+原失败保留且不冒称根因消除：首次默认未传必需KOKORO_TEST_REDIS_URL导致stored fixture suite失败，补正式测试资源后消除；同次R147无JS冷SSR重载几何0≠52失败。原f0740f3隔离基线与候选各聚焦R147都通过，随后完整命令通过，断言/时限/产品布局均未改；此前并发/冷CSS时间关系尚未确证，不称此风险已修。新桌面菜单旅程首轮错误假定宽屏也有“设置”heading，改用正式dialog/选中tab语义，原几何焦点条件不放宽；Docs初次多空行lint已修。
+
+原ghost工具私有CSS selector断言删除，其几何/边界/草稿/焦点由实际浏览器承担，环境/高对比断言不动；settings-navigation-responsive 49行既存诊断WIP逐字保留、排除本片提交。参考/实现截图、AX、computed style、失败与门收据仅Root ignored agent-mcp-selection-20261024/app-selection。正常App目标生产文件均核到f0740f3精确前像，未回填；九监听/worker保持，正常BFF仍旧dist/dispatch false，Agent仍7.3，本轮模型/资金新命令0。
+
+**下一执行只有三方正常配对和同次真实旅程，不再回图标/导航。** App/Agent/BFF候选通过不等于普通会话已生效，更不等于模型→MCP→产物→重开→真实用量积分capture；旧10积分/报价快照不改，采购计价事实仍独立保留。尚未push/PR/merge，不宣称全产品/一比一/无感加载闭环。
+
 ## 2026-10-24 MCP：真实发现后的详情 502 已修复（局部正常生效）
 
 正常页面新建本人 QA Agent DeepWiki 20261024，Register201；Platform 实际 prepare 已为原 Server/Connector 创建 ready 的三个声明和 Connection，但 App 的 Prepare 与随后详情 GET 都返回 mcp_personal_response_invalid/502。只读正式 owner GET 和现 BFF projector均成功，核定差异为真实 MCP 工具描述包含 LF：App 将返回的 declaration.display_name 复用了单行字段规则。不是创建失败、上游不可达或授权失败；不重新创建或重发原 Prepare。

@@ -1,3 +1,4 @@
+import { selectedMcpConnectionIdsSchema } from "@/contract/chat"
 // 显式会话状态机 + 引擎：snapshot-first 水合 / 流句柄 / in-flight 守卫 / runId 锚定收束单点持有。
 
 import type { ChatProjectionEvent } from "@/core/chat-projection-event"
@@ -147,6 +148,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   // 当前会话 exact source refs：只在内存中保存，不从 browser store 恢复。
   let selectedSkillSourceRefs: string[] | undefined = scope.kind === "project" ? undefined : []
   // 选中模型（MODEL-UX，shell 注入）：非 null 即随首条 messageCreate 上 wire 为 model（首条锁语义在 UI 层）。
+  let selectedMcpConnectionIds: readonly string[] = Object.freeze([])
   let selectedModel: string | null = null
 
   // 水合代际守卫：切会话后迟到的 snapshot 一律丢弃。
@@ -196,6 +198,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       store,
       thread,
       pendingMode,
+      selectedMcpConnectionIds,
       staging: stagingView,
       hydrating,
       connection,
@@ -717,6 +720,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     return {
       mode,
       model: selectedModel,
+      selectedMcpConnectionIds: [...selectedMcpConnectionIds],
       selectedSkillSourceRefs: selectedSkillSourceRefs === undefined ? undefined : [...selectedSkillSourceRefs],
     }
   }
@@ -753,7 +757,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     missingSessionId = undefined
     const submission = {
       ...args,
-      options: { ...args.options, selectedSkillSourceRefs: args.options.selectedSkillSourceRefs === undefined ? undefined : [...args.options.selectedSkillSourceRefs] },
+      options: { ...args.options, selectedMcpConnectionIds: [...(args.options.selectedMcpConnectionIds ?? [])], selectedSkillSourceRefs: args.options.selectedSkillSourceRefs === undefined ? undefined : [...args.options.selectedSkillSourceRefs] },
     }
     pendingSubmission = submission
     recoveredSubmission = null
@@ -1044,6 +1048,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     deferredCreateReceipt = null
     if (previousSessionId !== next.activeId) {
       selectedSkillSourceRefs = scope.kind === "project" ? undefined : []
+      selectedMcpConnectionIds = Object.freeze([])
     }
     thread = createSessionStreamState()
     observedTerminalRuns.clear()
@@ -1124,6 +1129,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     deferredCreateReceipt = null
     connection = { status: "connected" }
     selectedSkillSourceRefs = scope.kind === "project" ? undefined : []
+    selectedMcpConnectionIds = Object.freeze([])
     thread = createSessionStreamState()
     observedTerminalRuns.clear()
     pendingSteerReceipts.clear()
@@ -1211,6 +1217,14 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     })
   }
 
+  function setSelectedMcpConnectionIds(connectionIds: readonly string[]): void {
+    if (disposed) return
+    const next = selectedMcpConnectionIdsSchema.parse(connectionIds)
+    if (next.length === selectedMcpConnectionIds.length && next.every((id, index) => id === selectedMcpConnectionIds[index])) return
+    selectedMcpConnectionIds = Object.freeze(next)
+    notify()
+  }
+
   function setSelectedSkillSourceRefs(sourceRefs: readonly string[] | undefined): void {
     if (disposed) {
       return
@@ -1232,6 +1246,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   }
 
   function dispose(): void {
+    selectedMcpConnectionIds = Object.freeze([])
     locallyCreatedSessionId = undefined
     taskNotifications.dispose()
     disposed = true
@@ -1288,6 +1303,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     recoveredSubmissionError = null
     deferredCreateReceipt = null
     selectedSkillSourceRefs = scope.kind === "project" ? undefined : []
+    selectedMcpConnectionIds = Object.freeze([])
     thread = createSessionStreamState()
     observedTerminalRuns.clear()
     pendingSteerReceipts.clear()
@@ -1330,6 +1346,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     reconcileConversationCache,
     setMode,
     setSelectedSkillSourceRefs,
+    setSelectedMcpConnectionIds,
     setModel,
     dispose,
   }

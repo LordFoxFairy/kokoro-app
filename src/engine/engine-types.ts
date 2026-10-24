@@ -30,6 +30,8 @@ export type ConversationMoveIntent = Readonly<{
 }>
 
 export type EngineSnapshot = {
+  // Transient current-conversation draft intent, absent only in injected view-only engines.
+  selectedMcpConnectionIds?: readonly string[]
   // In-memory current-view creation provenance, never persisted or inferred from cache.
   locallyCreatedSessionId?: string
   // Last authoritative absent snapshot for this active view; never persisted.
@@ -60,6 +62,7 @@ export type EngineSnapshot = {
 const EMPTY_THREAD: SessionStreamState = createSessionStreamState()
 
 export const SERVER_ENGINE_SNAPSHOT: EngineSnapshot = {
+  selectedMcpConnectionIds: Object.freeze([]),
   machine: IDLE_MACHINE,
   notice: null,
   store: null,
@@ -101,6 +104,7 @@ export type SessionEngine = {
   setMode: (mode: AgentMode) => void
   // 当前会话的 exact Skill source refs；只在内存中保存，提交时冻结进 typed wire。
   setSelectedSkillSourceRefs: (sourceRefs: readonly string[] | undefined) => void
+  setSelectedMcpConnectionIds: (connectionIds: readonly string[]) => void
   // 选中模型（MODEL-UX）：首条消息上 wire 为 messageCreate.model。
   setModel: (model: string | null) => void
   dispose: () => void

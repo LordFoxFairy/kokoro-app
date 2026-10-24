@@ -57,3 +57,5 @@ Web专属thread viewport统一隐藏滚动条槽以匹配Composer阅读轴；共
 - `useComposerSelectors` 的模型/agent 初值取 `@/ui/settings/chat-prefs` 缺省偏好——新对话首帧预填，开跑后 modeLocked 锁定，会话级锁语义不变。
 
 - scope 切换只在本页暂留未获 create receipt 的原 engine（包括 unknown），不新建持久化 store、不自动重发；回到原 scope 继续原 key/body。回执落定且无页面 owner 即释放，身份失效强制退休无 owner 的缓存；已确认运行保持原先离页释放行为。
+
+`useComposerConnections`仅持当前主体/准入代际/engine的Connection列表及metadata读缓存（四并发、显式分页、重复游标/身份错配拒绝）；selection真态在engine，打开菜单背景重读，同scope失败保已知列表。主体退休取消/忽略迟到，不持久化或授权；自有读取不挤入Settings coordinator。

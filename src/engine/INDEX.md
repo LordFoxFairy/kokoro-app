@@ -105,3 +105,5 @@ SET47：可选EngineSnapshot.locallyCreatedSessionId仅证明当前engine尚未�
 - `EngineSnapshot.hasPendingSubmission` 只读投影原冻结 create 是否仍未获回执，供浏览器 scope 租约保护使用；不同于仅在合法 error 相位为真的 `canRetryPendingSubmission`。不作为服务端成功或授权证明，不落盘。
 
 - `client.listModels` 只聚合正式 `feature_key=chat` 目录：逐页传递 opaque cursor，整次读取共用 10 秒预算和 caller 取消；重复 cursor/业务标签、非 chat 候选或超过 100 页均失败，不以部分列表冒完整成功。返回完整列表与 `next_cursor: null`，wire 本身不变。
+
+当前会话MCP：`setSelectedMcpConnectionIds`只接受正式有界唯一ID并复制/冻结，`selectedMcpConnectionIds`快照可供选择器订阅；new/select/外部退休/dispose清空，首次本地会话准入保留。adapter仅非空时发送`selected_mcp_connection_ids`；pending options复制首发数组，同key unknown/retry不随之后选择变化，未选原wire不变；无持久化或trace推导。

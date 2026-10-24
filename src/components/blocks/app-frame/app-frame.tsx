@@ -20,6 +20,7 @@ import { useTaskNotifications } from "@/ui/shell/use-task-notifications"
 import { useAwaitingNotify } from "@/ui/shell/use-awaiting-notify"
 import { useCanvasWorkspace } from "@/ui/shell/use-canvas-workspace"
 import { useComposerSelectors } from "@/ui/shell/use-composer-selectors"
+import { useComposerConnections } from "@/ui/shell/use-composer-connections"
 import { useConversationReaders } from "@/ui/shell/use-conversation-readers"
 import { useDraft } from "@/ui/shell/use-draft"
 import type { ConversationThreadProps } from "@/ui/thread/conversation-thread"
@@ -249,6 +250,12 @@ function AppFrameRuntime({
   const routedConversationId = navigationState.resolvedConversationRouteId
   const railReadIdentity = JSON.stringify([projectReadBoundary?.subject ?? "injected", projectReadBoundary?.generation ?? 0])
   const railReadAdmitted = preview || (projectReadBoundary === undefined ? injectedEngine !== undefined : projectReadBoundary.admitted && projectReadBoundary.subject !== null)
+  const connections = useComposerConnections({
+    engine,
+    client: browserHubClient({ preview }),
+    boundary: preview ? { admitted: true, subject: "preview", generation: 0 } : projectReadBoundary ?? { admitted: injectedEngine !== undefined, subject: "injected", generation: 0 },
+    enforceSubjectMarker: !preview && injectedEngine === undefined,
+  })
   const [moveSelectionGeneration, setMoveSelectionGeneration] = useState(0)
   const handleConversationDeleteConfirmed = useCallback((scope: typeof sessionScope, id: string) => {
     if (sessionScopeKey(scope) === moveScopeKey) setMoveSelectionGeneration((generation) => generation + 1)
@@ -718,6 +725,7 @@ function AppFrameRuntime({
   }))
 
   const composerProps: AppFrameComposerProps = {
+    connections,
     preview,
     brandName,
     projectWorkspace,
