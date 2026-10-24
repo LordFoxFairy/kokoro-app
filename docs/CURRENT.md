@@ -1,3 +1,11 @@
+## 2026-10-24 私有MCP发现长描述消费修正（候选，原Prepare恢复仍开放）
+
+本地停写1168非MD输入，contract/architecture/lint/types、受影响6套217行为、build/post-types均exit0，冻结无漂移；三类长文本反例先3失败，修后原schema21通过。原49行导航诊断WIP字节保持、不纳本片，未跑全默认或整套preview，不称完整owner门。独立只读审查Approved。正常未激活，真实详情GET502和旧命令恢复仍开放。
+
+正常JSON导入201后Prepare返回502，已定位owner合法2006字节工具显示文本被消费者额外1000字节界限拒绝。仅对发现declaration display_name移除逐字段长度上限，保留Unicode/既有内容校验、其它字段上限、strict结构、ID/CAS/声明一致性以及整个传输响应预算；不截断、不改写owner原文或declaration digest。读取与首次/重放Prepare receipt共用该投影。
+
+该面是现有browser-private管理投影；公开Public24原件、固定owner artifact、错误profile、SQL/权限与运行配置不变，不为局部实现伪造新的public发行。502 invalid仍为inspect_owner，旧冻结请求没有因本修正获得重试资格；后继须先正式定义可信核验后仅显式重放原key/body/CAS的Prepare恢复，合法exact receipt到达才完成。其它inspect_owner错误继续封锁。当前源码候选尚未正常激活或完成真实浏览器恢复，不称JSON CRUD已闭环。
+
 ## 2026-10-24 JSON重复URL恢复已正常修复，Prepare长文本断点未闭合
 
 Manus JSON空态/非法输入、一次CreateConnector POST200、类型专属详情与HTTP配置、编辑保存/恢复已实际观察并归档；本地填写取消零请求、非法JSON400可改。随后真实首次重复DeepWiki URL返回409/url_conflict/retryable=false，旧表单误unknown锁住；现只有JSON显式启用初次确定拒绝分类，保完整原文可编辑/具名原因，更正后新key一次整文档导入201。旧unknown后409、错tuple、原key/body/CAS与主体/窗口退休保护不变，其它构造者不启用分类。

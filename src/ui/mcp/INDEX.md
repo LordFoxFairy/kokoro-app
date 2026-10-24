@@ -1,3 +1,7 @@
+## 私有MCP长发现文本（2026-10-24）
+
+现src/hub/mcp-connector.schema.ts承接owner无逐字段长度上限的发现显示文本；其它字段/控制字符/Unicode/strict校验与整体传输预算保持。tests/hub/mcp-connector-schema.test.ts覆盖三类长描述的GET和原Prepare receipt；原长CJK拒绝断言因合法owner语义改为正例，坏Unicode负控仍保留。旧502冻结请求仍inspect_owner，不因本片自动重放或置成功。
+
 ## 2026-10-24 JSON首次重复URL拒绝
 
 `mcp-json-import-flow.ts`仅为JSON整文档原子导入启用`connector-command.ts`的首次明确拒绝分类；精确409/url_conflict/retryable=false且此前无未知结果时释放未执行意图。表单复用具名URL重复消息并保全文可编辑，更正后新key一次提交完整文档。其它构造者不启用分类，旧unknown/CAS/主体/窗口退休不变。当前真实JSON201后Prepare502的长metadata消费缺口见CURRENT，未据此关闭JSON或MCP。

@@ -115,14 +115,14 @@ const privateServerUrl = z
       return false;
     }
   });
-const privateText = (min: number, max: number, multiline = false) =>
+const privateText = (min: number, max: number | undefined, multiline = false) =>
   z.string().refine((value) => {
     if (
       /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/u.test(
         value,
       ) ||
       new TextEncoder().encode(value).byteLength < min ||
-      new TextEncoder().encode(value).byteLength > max
+      (max !== undefined && new TextEncoder().encode(value).byteLength > max)
     )
       return false;
     return multiline
@@ -206,13 +206,14 @@ const privateOauthClientDescriptorSchema = z
   .refine((value) => value.configured === (value.status === "configured"));
 const privateSelectorText = privateText(1, 256);
 // Discovered display text can contain paragraphs (for example MCP descriptions).
-// Keep identifiers and writable server/header fields on their single-line rules.
+// Owner discovery has no per-field length cap; the transport bounds the whole
+// response. Keep identifiers and writable fields on their existing length rules.
 const privateDeclarationSchema = z.discriminatedUnion("kind", [
   z
     .object({
       kind: z.literal("tool"),
       selector: privateSelectorText,
-      display_name: privateText(1, 1000, true),
+      display_name: privateText(1, undefined, true),
       input_schema_digest: z.string().regex(/^[a-f0-9]{64}(?![\s\S])/u),
       output_schema_digest: z
         .string()
@@ -225,14 +226,14 @@ const privateDeclarationSchema = z.discriminatedUnion("kind", [
     .object({
       kind: z.literal("resource"),
       selector: privateSelectorText,
-      display_name: privateText(1, 1000, true),
+      display_name: privateText(1, undefined, true),
     })
     .strict(),
   z
     .object({
       kind: z.literal("prompt"),
       selector: privateSelectorText,
-      display_name: privateText(1, 1000, true),
+      display_name: privateText(1, undefined, true),
     })
     .strict(),
 ]);

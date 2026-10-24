@@ -472,11 +472,30 @@ describe("private URL MCP registration wire", () => {
           replayed: false,
         },
       }, server.server_id, { expected_state_version: "1" })).toBe(true);
-      for (const display_name of ["invalid\0description", "invalid\x7fdescription", "界".repeat(334)]) {
+      for (const display_name of ["invalid\0description", "invalid\x7fdescription", "invalid\uD800description"]) {
         expect(mcpPrivateServerSchema.safeParse({ ...prepared, declarations: [{ ...declaration, display_name }] }).success).toBe(false);
       }
       expect(mcpPrivateServerSchema.safeParse({ ...prepared, declarations: [{ ...declaration, selector: "invalid\nselector" }] }).success).toBe(false);
       expect(mcpPrivateServerRegistrationInputSchema.safeParse({ ...input, display_name: "invalid\nname" }).success).toBe(false);
+    },
+  );
+
+  it.each(["tool", "resource", "prompt"] as const)(
+    "preserves long owner %s display text in reads and original prepare receipts",
+    (kind) => {
+      for (const display_name of ["x".repeat(2006), "界".repeat(334) + "\nSecond paragraph"]) {
+        const declaration = { kind, selector: "read_docs", display_name,
+          ...(kind === "tool" ? { input_schema_digest: "b".repeat(64), required_scopes: [] } : {}) };
+        const prepared = { ...server, state_version: "2", declarations: [declaration] };
+        expect(mcpPrivateServerSchema.parse(prepared).declarations[0]?.display_name).toBe(display_name);
+        expect(mcpPrivateServerMatches("server", { data: { server: prepared } }, server.server_id)).toBe(true);
+        for (const replayed of [false, true]) {
+          expect(mcpPrivateServerMatches("prepareServer", { data: {
+            server: prepared, connector: { ...privateConnector, enabled: true, state_version: "2" },
+            declarations: prepared.declarations, replayed,
+          } }, server.server_id, { expected_state_version: "1" })).toBe(true);
+        }
+      }
     },
   );
 

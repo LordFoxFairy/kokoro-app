@@ -1,3 +1,9 @@
+## 2026-10-24 私有MCP发现长描述消费修正（候选，原Prepare恢复仍开放）
+
+正常JSON导入201后Prepare返回502，已定位owner合法2006字节工具显示文本被消费者额外1000字节界限拒绝。仅对发现declaration display_name移除逐字段长度上限，保留Unicode/既有内容校验、其它字段上限、strict结构、ID/CAS/声明一致性以及整个传输响应预算；不截断、不改写owner原文或declaration digest。读取与首次/重放Prepare receipt共用该投影。
+
+该面是现有browser-private管理投影；公开Public24原件、固定owner artifact、错误profile、SQL/权限与运行配置不变，不为局部实现伪造新的public发行。502 invalid仍为inspect_owner，旧冻结请求没有因本修正获得重试资格；后继须先正式定义可信核验后仅显式重放原key/body/CAS的Prepare恢复，合法exact receipt到达才完成。其它inspect_owner错误继续封锁。当前源码候选尚未正常激活或完成真实浏览器恢复，不称JSON CRUD已闭环。
+
 ## 2026-10-24 JSON原子导入首次明确拒绝
 
 真实JSON导入返回首次409 `mcp_personal_server_url_conflict` / retryable=false后，原通用命令仅识别400验证拒绝，误将可修正输入锁成unknown。通用机制增加可选拒绝分类，只由JSON flow按精确tuple启用、且只能作用于从未uncertain的初次HTTP失败；本地state的可选`rejection=url_conflict`只用于错误展示，不是新wire错误或owner事实。输入/全部JSON保留，更正后由明确动作生成新key、一次提交完整文档；旧unknown后同409仍保原body/key，错tuple不释放。其它API/管理构造者沿原行为。
