@@ -40,6 +40,7 @@ export type AppFrameMainSurfaceProps = {
   showConversation: boolean
   conversationHydrating: boolean
   conversationHydrationFailed: boolean
+  conversationMissing?: boolean
   machineError: string | null
   connection: EngineSnapshot["connection"]
   onReconnect: () => void
@@ -108,6 +109,7 @@ export function AppFrameMainSurface({
   showConversation,
   conversationHydrating,
   conversationHydrationFailed,
+  conversationMissing = false,
   machineError,
   connection,
   onReconnect,
@@ -185,6 +187,7 @@ export function AppFrameMainSurface({
           <AppFrameConversationErrorSurface
             detail={machineError}
             onRetry={retryConversationHydration}
+            missing={conversationMissing}
           />
         ) : showConversation ? (
           <div data-slot="conversation-timeline" className="min-h-0 flex-1">
@@ -215,7 +218,7 @@ export function AppFrameMainSurface({
 
       {/* Site-owned empty surfaces may move the same composer into their own
           welcome layout; active conversations always use the shell slot. */}
-      {!standaloneSurface && (showConversation || !emptyStateOwnsComposer) ? composer : null}
+      {!standaloneSurface && !conversationMissing && (showConversation || !emptyStateOwnsComposer) ? composer : null}
     </section>
   )
 }

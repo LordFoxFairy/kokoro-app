@@ -4,6 +4,8 @@
 import type { MessageKey } from "./messages"
 
 export const en: Partial<Record<MessageKey, string>> = {
+  "thread.conversationMissing": "Conversation not found",
+  "thread.conversationMissingHint": "This conversation does not exist or has been deleted. Its address is preserved. Retry loading it or start a new task.",
   "skills.history.more": "Load more",
   "skills.delete.title": "Delete this skill?",
   "skills.delete.warning": "You can add this skill again later by uploading it again.",

@@ -74,9 +74,11 @@ export function AppFrameConnectionStatus({
 export function AppFrameConversationErrorSurface({
   detail,
   onRetry,
+  missing = false,
 }: {
   detail: string | null
   onRetry: () => void
+  missing?: boolean
 }) {
   const t = useT()
   return (
@@ -87,9 +89,9 @@ export function AppFrameConversationErrorSurface({
       aria-live="assertive"
     >
       <div className={styles.conversationErrorCard}>
-        <h2 className={styles.conversationErrorTitle}>{t("rail.listError")}</h2>
-        <p className={styles.conversationErrorMessage}>{t("fail.generic")}</p>
-        {detail ? <p className={styles.conversationErrorDetail}>{detail}</p> : null}
+        <h2 className={styles.conversationErrorTitle}>{t(missing ? "thread.conversationMissing" : "rail.listError")}</h2>
+        <p className={styles.conversationErrorMessage}>{t(missing ? "thread.conversationMissingHint" : "fail.generic")}</p>
+        {!missing && detail ? <p className={styles.conversationErrorDetail}>{detail}</p> : null}
         <Button type="button" variant="outline" onClick={onRetry}>
           {t("thread.retry")}
         </Button>

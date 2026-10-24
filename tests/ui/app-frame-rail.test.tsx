@@ -1309,6 +1309,29 @@ it("project overview draft and explicit new-conversation draft remain distinct a
   } finally { view.unmount(); projectEngine.dispose(); window.history.replaceState({}, "", "/app") }
 })
 
+it.each([false, true])("missing conversation deep link does not render an editable new task; retry reads only its ID (project=%s)", async (project) => {
+  const projectRef = "project_00000000-0000-4000-8000-000000000802"
+  const id = "conv_00000000-0000-4000-8000-000000000803"
+  const path = project ? `/app/project/${projectRef}` : "/app"
+  window.history.replaceState({}, "", `${path}?conversation=${id}`)
+  mountFrame({ ...(project ? { projectWorkspace: true, projectRef } : {}),
+    emptyState: () => <div>workspace overview</div>,
+  })
+  await waitFor(() => expect(screen.getByRole("heading", { name: "未找到该会话" })).toBeInTheDocument())
+  expect(screen.queryByText("workspace overview")).not.toBeInTheDocument()
+  expect(screen.queryByRole("textbox", { name: "对话输入" })).not.toBeInTheDocument()
+  expect(window.location.pathname + window.location.search).toBe(`${path}?conversation=${id}`)
+  const knownIds = engine.getSnapshot().store?.conversations.map(entry => entry.id)
+  client.nextSnapshot = sessionId => Promise.resolve(makeSnapshot({ sessionId }))
+  fireEvent.click(screen.getByRole("button", { name: /^重试$/ }))
+  await waitFor(() => expect(screen.queryByRole("heading", { name: "未找到该会话" })).not.toBeInTheDocument())
+  expect(client.snapshotCalls).toEqual([id, id])
+  expect(engine.getSnapshot().store?.conversations.map(entry => entry.id)).toEqual(knownIds)
+  expect(client.createCalls).toEqual([])
+  expect(window.location.pathname + window.location.search).toBe(`${path}?conversation=${id}`)
+  expect(screen.getByRole("textbox", { name: "对话输入" })).toBeInTheDocument()
+})
+
 it("explicit project conversation hydration owns only its requested draft, never the remembered task while pending", async () => {
   const projectRef = "project_00000000-0000-4000-8000-000000000802"
   const convA = "conv_00000000-0000-4000-8000-000000000803"
@@ -1396,12 +1419,12 @@ it("an explicit project overview submission creates a fresh target instead of po
 })
 
 
-function mountProjectSubmitBoundary(projectEngine: SessionEngine, projectRef: string, conversation: string | null = null) {
+function mountProjectSubmitBoundary(projectEngine: SessionEngine, projectRef: string, conversation: string | null = null, projectWorkspace = true) {
   const clearDraft = vi.fn()
   const syncConversationUrl = vi.fn()
   const setConversationRouteId = vi.fn()
   const options = {
-    engine: projectEngine, projectWorkspace: true, projectRef, routedConversationId: conversation,
+    engine: projectEngine, projectWorkspace, projectRef, routedConversationId: conversation,
     standaloneSurface: false, chatHref: "/app", activeId: projectEngine.getSnapshot().store?.activeId ?? null,
     draft: "new root intent", clearDraft, updateDraft: vi.fn(), setDeploymentIntent: vi.fn(),
     syncConversationUrl, setConversationRouteId,
@@ -1410,6 +1433,25 @@ function mountProjectSubmitBoundary(projectEngine: SessionEngine, projectRef: st
   const view = renderHook(() => useAppFrameActions(options), { wrapper: LocaleProvider })
   return { ...view, clearDraft, syncConversationUrl, setConversationRouteId }
 }
+
+it.each([false, true])("a retained submit handler cannot send a hydrating or missing explicit task (project=%s)", async projectWorkspace => {
+  const projectRef = "project_missing-submit"
+  const id = "conv_missing-submit"
+  window.history.replaceState({}, "", `${projectWorkspace ? `/app/project/${projectRef}` : "/app"}?conversation=${id}`)
+  let read!: (value: null) => void
+  client.nextSnapshot = () => new Promise(resolve => { read = resolve })
+  engine.openConversation(id)
+  const view = mountProjectSubmitBoundary(engine, projectRef, id, projectWorkspace)
+  const submit = () => view.result.current.handleSubmit({ preventDefault: vi.fn() } as unknown as React.FormEvent<HTMLFormElement>)
+  act(submit)
+  expect(client.createCalls).toEqual([])
+  await act(async () => { read(null); await settle() })
+  act(submit)
+  expect(client.createCalls).toEqual([])
+  expect(view.clearDraft).not.toHaveBeenCalled()
+  expect(engine.getSnapshot().store?.activeId).toBe(id)
+  view.unmount()
+})
 
 it.each(["pending", "unknown", "active", "reconnecting", "disposed"] as const)("project overview preserves hidden %s state instead of resetting it for a new submission", async (state) => {
   const projectRef = "project_00000000-0000-4000-8000-000000000811"

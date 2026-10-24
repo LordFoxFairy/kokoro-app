@@ -80,6 +80,59 @@ function activeEntry() {
   return entry
 }
 
+it("missing owner snapshot is explicit view evidence, not local creation provenance", async () => {
+  buildEngine()
+  engine.newConversation()
+  expect(engine.getSnapshot()).not.toHaveProperty("missingSessionId")
+  expect(client.snapshotCalls).toEqual([])
+  engine.openConversation("conv_missing_owner")
+  await settle()
+  expect(engine.getSnapshot()).toMatchObject({ missingSessionId: "conv_missing_owner", hydrating: false })
+  expect(engine.getSnapshot().thread.messages).toEqual([])
+  expect(storage.read()).not.toHaveProperty("missingSessionId")
+  engine.newConversation()
+  expect(engine.getSnapshot()).not.toHaveProperty("missingSessionId")
+  expect(client.createCalls).toEqual([])
+})
+
+it("a stale missing snapshot cannot mark the replacement conversation missing", async () => {
+  buildEngine()
+  let resolveMissing!: (value: null) => void
+  client.nextSnapshot = () => new Promise(resolve => { resolveMissing = resolve })
+  engine.openConversation("conv_missing_old")
+  engine.newConversation()
+  resolveMissing(null)
+  await settle()
+  expect(engine.getSnapshot()).not.toHaveProperty("missingSessionId")
+})
+
+it.each(["pending", "unknown", "receipt"] as const)("an absent read never loses the %s create outcome", async outcome => {
+  const seeded: ConversationStore = { activeId: "conv_race", conversations: [{ id: "conv_race", title: "", updatedAt: 1, mode: "fast" }] }
+  let read!: (value: null) => void
+  let accept!: (value: ReturnType<typeof makeReceipt>) => void
+  let reject!: (error: Error) => void
+  buildConfiguredEngine(seeded, fake => {
+    fake.nextSnapshot = () => new Promise(resolve => { read = resolve })
+    fake.nextCreate = () => new Promise((resolve, fail) => { accept = resolve; reject = fail })
+  })
+  expect(engine.submit("preserve exact original message")).toBe(true)
+  if (outcome === "unknown") reject(new SessionClientError("network", "unknown create result"))
+  if (outcome === "receipt") accept(makeReceipt("run_race"))
+  await settle()
+  read(null)
+  await settle()
+  expect(engine.getSnapshot()).not.toHaveProperty("missingSessionId")
+  expect(thread().messages).toMatchObject([{ role: "user", content: "preserve exact original message" }])
+  expect(engine.getSnapshot().store?.activeId).toBe(seeded.activeId)
+  expect(client.createCalls).toHaveLength(1)
+  if (outcome === "unknown") expect(engine.getSnapshot().canRetryPendingSubmission).toBe(true)
+  if (outcome === "receipt") {
+    expect(engine.getSnapshot().machine).toMatchObject({ phase: "queued", runId: "run_race" })
+    expect(client.streams).toHaveLength(1)
+    expect(client.lastStream().sessionId).toBe(seeded.activeId)
+  }
+})
+
 describe("提交链路", () => {
   it("首次提交：建会话、POST 契约体（idempotency_key）、回执锚定、事件折叠、终态收束", async () => {
     buildEngine()

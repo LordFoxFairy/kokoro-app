@@ -4,6 +4,8 @@
 import type { MessageKey } from "./messages"
 
 export const ko: Partial<Record<MessageKey, string>> = {
+  "thread.conversationMissing": "대화를 찾을 수 없습니다",
+  "thread.conversationMissingHint": "존재하지 않거나 삭제된 대화입니다. 원래 주소는 유지됩니다. 다시 불러오거나 새 작업을 시작하세요.",
 
   // SET47-BEGIN: task-archive
   "scheduled.weekday": "요일",

@@ -4,6 +4,8 @@
 import type { MessageKey } from "./messages"
 
 export const ru: Partial<Record<MessageKey, string>> = {
+  "thread.conversationMissing": "Беседа не найдена",
+  "thread.conversationMissingHint": "Эта беседа не существует или была удалена. Её адрес сохранён. Повторите загрузку или создайте новую задачу.",
 
   // SET47-BEGIN: task-archive
   "scheduled.weekday": "День недели",

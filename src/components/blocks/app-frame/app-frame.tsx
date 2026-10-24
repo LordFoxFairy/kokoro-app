@@ -201,6 +201,7 @@ function AppFrameRuntime({
     threadMessageCount: thread.messages.length,
     hydrating,
     machinePhase: machine.phase,
+    ...(engineState.missingSessionId === undefined ? {} : { missingSessionId: engineState.missingSessionId }),
   })
 
   const overlays = useAppFrameOverlays({
@@ -639,6 +640,7 @@ function AppFrameRuntime({
       : activeId === routedConversationId)
   )
   const canSend = draft.trim().length > 0 && canSubmitMessage && projectSubmissionAdmitted
+    && !navigationState.conversationHydrating && !navigationState.conversationHydrationFailed
   const conversations = conversationsCtl?.conversations ?? []
   const projectedCreationIntent = projectWorkspace ? null : navigationState.deploymentIntent
   const projectedWorkspaceCapabilities = projectWorkspaceCapabilities(
@@ -664,6 +666,10 @@ function AppFrameRuntime({
     const requestedConversationId = navigationState.resolvedConversationRouteId ?? activeId
     if (!engine || requestedConversationId === null) return
     const current = engine.getSnapshot()
+    if (current.missingSessionId === requestedConversationId) {
+      engine.openConversation(requestedConversationId)
+      return
+    }
     if (current.store?.activeId === requestedConversationId) {
       const fallback = current.store.conversations.find(({ id }) => id !== requestedConversationId)
       if (fallback) {
@@ -786,7 +792,7 @@ function AppFrameRuntime({
     shareClient,
   }
 
-  const composer = <AppFrameComposer {...composerProps} />
+  const composer = navigationState.conversationMissing ? null : <AppFrameComposer {...composerProps} />
 
   const toggleNavigationRail = useCallback(() => {
     if (layout.compactDesktopRail) layout.setCompactRailOpen((open) => !open)
@@ -811,6 +817,7 @@ function AppFrameRuntime({
       showConversation={showConversation}
       conversationHydrating={navigationState.conversationHydrating}
       conversationHydrationFailed={navigationState.conversationHydrationFailed || initialSnapshotFailed}
+      conversationMissing={navigationState.conversationMissing}
       machineError={machine.error}
       connection={connection}
       onReconnect={() => engine?.reconnect()}
@@ -912,7 +919,7 @@ function AppFrameRuntime({
   const overlaySurfaces = (
     <>
     {!preview && projectReadBoundary?.admitted && archive.blocked ? <div className={archiveStyles.archiveFeedback} role="group" aria-label={t("data.unknown")}><p role="alert">{t("data.unknown")}</p><button type="button" disabled={archive.busy} onClick={()=>void archive.reconcile()}>{t("data.reload")}</button>{archive.review?<button type="button" disabled={archive.busy} onClick={archive.proceed}>{t("data.continue")}</button>:null}</div>:null}
-    {!preview && projectReadBoundary?.admitted && (projectWorkspace?routedConversationId:activeId) && conversationsCtl && conversationsCtl.archiveStatus!=="archived" && (conversationsCtl.archiveStatus==="unknown"||conversationsCtl.archiveStatus==="missing") ? <div className={archiveStyles.archiveFeedback} role="status">{conversationsCtl.archiveStateError?t("archive.stateFailed"):t("archive.checking")}{conversationsCtl.archiveStateError?<button type="button" onClick={conversationsCtl.retryArchiveState}>{t("data.reload")}</button>:null}</div>:null}
+    {!preview && !navigationState.conversationMissing && projectReadBoundary?.admitted && (projectWorkspace?routedConversationId:activeId) && conversationsCtl && conversationsCtl.archiveStatus!=="archived" && (conversationsCtl.archiveStatus==="unknown"||conversationsCtl.archiveStatus==="missing") ? <div className={archiveStyles.archiveFeedback} role="status">{conversationsCtl.archiveStateError?t("archive.stateFailed"):t("archive.checking")}{conversationsCtl.archiveStateError?<button type="button" onClick={conversationsCtl.retryArchiveState}>{t("data.reload")}</button>:null}</div>:null}
     {copyFeedback !== null && copyFeedback.lifetime.view === copyView && copyFeedback.lifetime.live ? (
       <div className={shellStyles.taskLinkFeedback} role={copyFeedback.kind === "success" ? "status" : "alert"}>
         {t(copyFeedback.kind === "success" ? "shell.taskLinkCopied" : "shell.taskLinkCopyFailed")}

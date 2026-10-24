@@ -4,6 +4,8 @@
 import type { MessageKey } from "./messages"
 
 export const fr: Partial<Record<MessageKey, string>> = {
+  "thread.conversationMissing": "Conversation introuvable",
+  "thread.conversationMissingHint": "Cette conversation n’existe pas ou a été supprimée. Son adresse est conservée. Réessayez de la charger ou commencez une nouvelle tâche.",
 
   // SET47-BEGIN: task-archive
   "scheduled.weekday": "Jour de la semaine",

@@ -525,8 +525,8 @@ export function createSessionClient(options: { baseUrl: string }): SessionClient
         throw new SessionClientError("network", describeUnknown(error))
       }
       // 404=从无此会话；410 Gone=会话已软删。两者服务端都无内容可水合，
-      // 一律返 null（空线程即真态），不 fail-loud——与 machine 把 session_deleted
-      // 当 STALE 对账信号而非硬错的语义一致。
+      // null 只表示 owner snapshot 缺席；engine 的本页创建/在途提交事实和
+      // 显式路由决定草稿或缺失错误，不能把所有深链接都画成空会话。
       if (response.status === 404 || response.status === 410) {
         return null
       }

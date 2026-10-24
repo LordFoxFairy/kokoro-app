@@ -1,3 +1,21 @@
+## 2026-10-24 PROJECT-1：旧会话深链接与创建回执（正常已生效，整仓门仍有失败）
+
+正常浏览器独立打开原项目 query 复现：会话 snapshot GET 及 archive GET 均404，但仍显示可编辑项目概览。根因为普通 snapshot null 被当成所有场景的合法空会话；不是 URL 字体或项目能力旗标问题。现 engine 只投影有代际守卫的缺席观察，导航只对显式 query＝active＝missing 显示现有错误面、保地址、隐藏输入，残留提交回调亦复验；无 query 的项目概览／直接新草稿保持。九语言同步。同 ID 重读不先创建 fallback，不新增 POST。
+
+同分支还精确复现一处旧竞态：create ACK 先于缺席 snapshot 返回，原 deferred ACK 没被采用而停留 submitting。现只采用该原提交的 exact ACK/run 并开原 stream，既有 pending／unknown／GC及迟到代际保护保持。新增回归先真实失败后修；首次测试误用局部 SEEDED 名称及RTL exact类型错误已纠正，不作为业务RED。
+
+- [x] 相关完整三文件385行为测试、修改路径ESLint及官方typegen/types已通过；只读独审无确定新增P0–P2。
+- [x] 正常18份生产源HMR，1234份非目标tracked与配置保持；旧ID错误／同ID只读重试、New干净/app、返回项目能力、已存会话原URL刷新恢复正文均已实测，用户原标签亦已自动更新，无重启或项目/模型写入。独立build及post-types通过。
+- [ ] 完整owner合并门仍未通过：两次最终组合分别留下R147无JS几何与既有认证POST/session JSON EOF失败。最后开发preview全套110通过／2失败（Skills几何读取时execution context销毁、mobile回宽焦点失去，均记录到/app重导航），未放宽断言或归因已修。当前不merge、不升gitlink，不以局部正常修复冒称整产品闭环。
+- [ ] 项目菜单已再次实测参考：编辑项目（仅名称）／编辑指令／删除项目，本地账户／升级菜单仍不等价；固定BFF已有项目删除及删除回执读取，后继接现有API而非误报缺owner。分享参考为成员邀请／可编辑／所有者及私有链接，不是只有复制URL；只打开后取消，无参考数据/权限写入。
+- [ ] 项目连接器绑定、网站持久化、分享授权、删除及完整真实CRUD仍按既有PROJECT-1继续；这项修复不重建 owner 已无记录的旧会话正文。
+
+验证中的失败保持：首完整门4865通过后，补上Retry水合窗口守卫的新冻结组合4866通过／1个既有R147无JS项目SSR立即几何断言失败（x0而非300）；没有修改布局或放宽原断言，后续仅加2秒上限的非敏感CSS就绪诊断，原时间点断言仍保留，单项1通过／93名称过滤未再现、不称根因已修。全浏览器首轮111通过／1个mobile旧拖柄坐标失败，trace实证拿到动画中x205.656而逻辑宽300；测试补等待实际几何与公开宽值一致，原mousedown／440／正文空间／焦点保护不变，桌面手机各重复3次全部通过，后续新源全套110通过／2失败如下，旧坐标失败没有再次出现，不外推为全E2E通过。
+
+第二次停写全门再次4866通过／1失败，这次为旧认证POST /api/auth/session在refresh_before_token时HTML500／JSON EOF，R147通过。默认未开handler trace，因此空事件并不能证明handler未进入；解析分类总预算亦可能被早期预期错误耗尽。不改认证实现／断言，不称根因已修，完整合并门未通过；只读调查已确定下一次需预建0700 trace目录并同时启用既有EOF与handler探针。当前源码独立production build及构建后types通过，1152非Markdown冻结输入零漂移。
+
+截图、原日志、恢复备份与输入冻结只留 Root ignored project-restore-20261024。启动隔离preview误用pnpm exec触发临时目录安装、三个共享候选workspace链接被改，已停止自有安装并恢复三个精确本地包链接，保留未就绪导致的连接拒绝日志；后续用固定Node/Next二进制，先验证HTTP就绪再跑浏览器。正常3310和基础设施未重启；不以该失败指认业务回归。
+
 ## 2026-10-24 当前 App 累计组合：完整工程与浏览器门通过，产品缺口保持
 
 冻结于0bf78f1＋原单份OIDC fixture诊断WIP，主方 Node22 `KOKORO_TEST_REDIS_URL=redis://127.0.0.1:6379/0 KOKORO_TEST_JSON_EOF_TRACE_DIR=<ignored> pnpm check` exit0：contract304、architecture50、256文件4855测试、全lint/types与生产Turbopack build通过；构建后官方types亦0。独立源码preview完整桌面/手机112 E2E通过、零重试，之前More寻找当前Mail的三处旧断言失败已按实际导航语义修复后复验，正文/焦点/几何/零写入保护未删。src/public全部当前文件与preview逐字一致，最终非文档输入SHA留ignored；默认及资源fixture自清自身记录，没有重置共享Redis/数据库。

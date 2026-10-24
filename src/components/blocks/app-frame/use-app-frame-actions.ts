@@ -19,7 +19,7 @@ import { overlayHandoffDelay } from "@/ui/shell/overlay-handoff"
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
 import { useAppFrameSkillTrial } from "./use-app-frame-skill-trial"
 
-import { COMMAND_SETTINGS_HANDOFF_MS } from "./app-frame-helpers"
+import { COMMAND_SETTINGS_HANDOFF_MS, conversationIdFromLocation } from "./app-frame-helpers"
 
 export type AppFrameActionsOptions = {
   preview?: boolean
@@ -89,6 +89,10 @@ export function useAppFrameActions({
     try {
       if (actorAtRender === undefined || window.localStorage.getItem("kokoro.web.auth-index-subject") !== actorAtRender) return
     } catch { return }
+    const snapshot = engine.getSnapshot()
+    if (snapshot.hydrating && conversationIdFromLocation() !== null) return
+    if (snapshot.missingSessionId !== undefined && conversationIdFromLocation() === snapshot.missingSessionId
+      && snapshot.store?.activeId === snapshot.missingSessionId) return
     if (projectWorkspace) {
       const url = new URL(window.location.href)
       if (!projectRef || url.pathname !== `/app/project/${encodeURIComponent(projectRef)}` ||

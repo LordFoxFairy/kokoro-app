@@ -88,6 +88,7 @@ export function useAppFrameEngine({
     pendingMode,
     staging,
     hydrating,
+    ...(snapshot.missingSessionId === undefined ? {} : { missingSessionId: snapshot.missingSessionId }),
     connection,
     canSubmitMessage,
     activeId,

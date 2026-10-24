@@ -158,6 +158,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   let pendingTerminalRead: { generation: number; runs: Set<string> } | null = null
   let reattachTimer: ReturnType<typeof setTimeout> | null = null
   let locallyCreatedSessionId: string | undefined
+  let missingSessionId: string | undefined
   let disposed = false
   let deleteIntentGeneration = 0
   let deleteIntent: { targetId: string; generation: number; promise: Promise<boolean> } | null = null
@@ -190,6 +191,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     return {
       machine,
       ...(locallyCreatedSessionId !== undefined && locallyCreatedSessionId === store?.activeId ? {locallyCreatedSessionId} : {}),
+      ...(missingSessionId !== undefined && missingSessionId === store?.activeId ? { missingSessionId } : {}),
       notice,
       store,
       thread,
@@ -356,6 +358,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   ): void {
     const previous = thread
     const hydrated = stateFromSnapshot(sessionSnapshot)
+    missingSessionId = undefined
     if (locallyCreatedSessionId === sessionId) locallyCreatedSessionId = undefined
     // RR cannot regress an already known interaction baseline, even when the
     // snapshot and current cursor happen to be equal opaque values.
@@ -517,6 +520,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
 
   // snapshot-first 水合：GET /sessions/:sid → 当前读模型 + opaque AG-UI watermark 续流。
   function hydrate(sessionId: string, afterExpiredCursor = false): void {
+    missingSessionId = undefined
     taskNotifications.select(sessionId)
     const notificationGeneration = taskNotifications.generation()
     hydrateGeneration += 1
@@ -544,8 +548,21 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
             evictActiveConversation()
             return
           }
-          // 服务端无此会话（本地新建未开聊）：空线程即真态。
+          // Absence is not proof that a POST still awaiting its receipt failed.
+          // A deep link may show this evidence, but local creation/unknown
+          // submission keeps its original optimistic state and recovery key.
+          if (pendingSubmission?.sessionId !== sessionId && locallyCreatedSessionId !== sessionId && thread.messages.length === 0) {
+            missingSessionId = sessionId
+          }
           hydrating = false
+          const deferred = deferredCreateReceipt
+          if (deferred !== null && deferred.submission === pendingSubmission) {
+            // The read may have preceded the accepted POST. Its absence must
+            // not strand the exact receipt or trigger another create command.
+            machine = transition(machine, { type: "RESET" })
+            applyRecoveredReceipt(deferred.submission, deferred.receipt)
+            openStream(sessionId, thread.resumeCursor)
+          }
           notify()
           return
         }
@@ -713,6 +730,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       return
     }
     if (!ownerAlreadySettled) taskNotifications.anchorReceipt(submission.sessionId, receipt, notificationAdmissions.get(submission) ?? -1)
+    missingSessionId = undefined
     pendingSubmission = null
     recoveredSubmission = null
     recoveredSubmissionError = null
@@ -732,6 +750,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
 
   // POST messages 并处理回执/失败（submit 与 retry 共用的开跑尾段）。
   function beginRun(args: PendingSubmission): void {
+    missingSessionId = undefined
     const submission = {
       ...args,
       options: { ...args.options, selectedSkillSourceRefs: args.options.selectedSkillSourceRefs === undefined ? undefined : [...args.options.selectedSkillSourceRefs] },
@@ -1007,6 +1026,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   // 切换活跃会话的公共尾段：清流/清相位/清暂存，换空线程后按 snapshot 重新水合。
   function activateConversation(next: ConversationStore, shouldHydrate = true): void {
     locallyCreatedSessionId = undefined
+    missingSessionId = undefined
     taskNotifications.select(next.activeId)
     const previousSessionId = store?.activeId ?? null
     recoveringExpiredCursor = false
@@ -1065,6 +1085,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       return
     }
     if (store && store.activeId === id) {
+      if (missingSessionId === id && pendingSubmission === null) hydrate(id)
       return
     }
     if (store && store.conversations.some((entry) => entry.id === id)) {
@@ -1082,6 +1103,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     if (disposed) {
       return
     }
+    missingSessionId = undefined
     // Starting a fresh chat abandons a POST whose receipt has not arrived yet.
     // Preserve the idempotency key so a late receipt can cancel the server run.
     cancelPendingSubmission()

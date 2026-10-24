@@ -1,3 +1,5 @@
+PROJECT-1（2026-10-24）：EngineSnapshot.missingSessionId 是本 active 的权威缺席观察，不是本地创建或持久状态。new／switch／hydrate／accepted create 清退；同 session pending/unknown、本页新建及非空正文不因 null 改缺失。openConversation 对当前 missing ID 允许原 ID 只读 Retry；null 与 exact deferred receipt 竞态采用 ACK、零重复 POST，GC 原驱逐保持。
+
 <!-- SET47 archive consumer: 2026-10-15 -->
 SET47：可选EngineSnapshot.locallyCreatedSessionId仅证明当前engine尚未确认持久化的本地创建任务。首次submit/newConversation同步产生；历史打开、外部store、dispose、subject/logout、owner snapshot/message receipt与当前列表/状态/归档ACK证明后退休。retireLocalCreationProvenance只清证明并通知，不清线程或取消Run。归档请求由页面hook持有，engine不新增归档数据库/网络真源。
 

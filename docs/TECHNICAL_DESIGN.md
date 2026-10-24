@@ -1,3 +1,9 @@
+## PROJECT-1：显式会话深链接的缺失状态（2026-10-24）
+
+保持 owner snapshot 为事实源：engine 仅在普通 snapshot 权威缺席、原 active/代际仍匹配、无本页新建证明／同 session pending 或 unknown create／已知正文时提供内存 missingSessionId。导航仅对显式 URL ID＝active＝missing 显示原错误面及重读，不把地址抹成首页，也不挂载可按旧 ID 提交的 Composer；残留 submit handler 复验当前事实。无 query 的项目概览／直接草稿不受全局禁发影响，newConversation 不新增 GET。
+
+缺失状态 Retry 对同 ID 重读，不先 new／切 fallback，不新增 POST。null read 可能早于成功 create：若原 exact deferred ACK 已到，采用原 receipt/run 并开同 session stream，不能留在 submitting 或重发命令。原 GC recovery 驱逐、unknown key/body、取消和迟到代际守卫保持。该标记不持久化、不新增 wire／Schema／owner，也不承诺恢复 owner 已无记录的正文。
+
 ## UI-1：会话核验与页面数据生命周期分离（2026-10-23）
 
 App 现有 `useSessionProbe` 是唯一浏览器 Product 会话探针；本次不改认证协议、服务 owner 或业务契约。已准入同一主体的 focus/visibility/周期核验保留原读取边界，成功确认同主体不递增数据代际、不重挂页面或重取全部列表。探针请求序号仍独立递增，用于取消、去重和排除迟到结果；业务数据按已有命令 ACK、显式刷新和导航更新，不再把每次认证读取当成业务缓存失效。

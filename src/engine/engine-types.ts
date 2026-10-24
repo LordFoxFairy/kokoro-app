@@ -32,6 +32,8 @@ export type ConversationMoveIntent = Readonly<{
 export type EngineSnapshot = {
   // In-memory current-view creation provenance, never persisted or inferred from cache.
   locallyCreatedSessionId?: string
+  // Last authoritative absent snapshot for this active view; never persisted.
+  missingSessionId?: string
   machine: MachineState
   // 瞬态通知（如插话投递失败）：下一次提交时清空；与相位错误（machine.error）分离。
   notice: NoticeSpec | null

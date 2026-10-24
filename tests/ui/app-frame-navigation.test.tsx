@@ -46,6 +46,30 @@ it("direct chat still restores its shareable conversation URL", () => {
   expect(window.location.search).toBe("?conversation=conv-retained-direct")
 })
 
+it.each([false, true])("a missing explicit conversation stays an error on its own URL (project=%s)", async (project) => {
+  const path = project ? "/app/project/project-missing" : "/app"
+  window.history.replaceState(null, "", `${path}?conversation=${options.activeId}`)
+  const view = renderHook(() => useAppFrameNavigation({ ...options,
+    scope: project ? { kind: "project", projectRef: "project-missing" } : options.scope,
+    projectWorkspace: project, projectRef: project ? "project-missing" : undefined,
+    threadMessageCount: 0, ...{ missingSessionId: options.activeId },
+  }))
+  await act(async () => {})
+  expect(view.result.current.conversationHydrationFailed).toBe(true)
+  expect(view.result.current.conversationHydrating).toBe(false)
+  expect(window.location.pathname + window.location.search).toBe(`${path}?conversation=${options.activeId}`)
+})
+
+it("a missing cached session does not turn the project overview or a local new draft into a deep-link error", () => {
+  window.history.replaceState(null, "", "/app/project/project-missing")
+  const view = renderHook(() => useAppFrameNavigation({ ...options,
+    scope: { kind: "project", projectRef: "project-missing" }, projectWorkspace: true,
+    projectRef: "project-missing", threadMessageCount: 0, ...{ missingSessionId: options.activeId },
+  }))
+  expect(view.result.current.conversationHydrationFailed).toBe(false)
+  expect(view.result.current.conversationHydrating).toBe(false)
+})
+
 it.each([
   ["/app", "/app/project/project-next"],
   ["/app", "/app/project/project-next?conversation=conv-next"],

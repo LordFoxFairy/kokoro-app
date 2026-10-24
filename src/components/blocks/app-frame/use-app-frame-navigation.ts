@@ -24,6 +24,7 @@ export type AppFrameNavigationOptions = {
   activeId: string | null
   threadMessageCount: number
   hydrating: boolean
+  missingSessionId?: string
   machinePhase: MachineState["phase"]
 }
 
@@ -39,6 +40,7 @@ export function useAppFrameNavigation({
   activeId,
   threadMessageCount,
   hydrating,
+  missingSessionId,
   machinePhase,
 }: AppFrameNavigationOptions) {
   const scopePath = scope.kind === "project"
@@ -245,11 +247,13 @@ export function useAppFrameNavigation({
   // A settled error must also terminate a mismatched deep-link, even when the
   // fallback has messages. Never paint that other conversation's body; errors
   // on the matching route with existing messages retain their local UI.
-  const conversationHydrationFailed = mounted
+  const conversationMissing = mounted && !standaloneSurface && !hydrating
+    && routeOwnsConversation && resolvedConversationRouteId !== null && resolvedConversationRouteId === missingSessionId
+  const conversationHydrationFailed = conversationMissing || (mounted
     && resolvedConversationRouteId !== null
     && !hydrating
     && machinePhase === "error"
-    && (!routeOwnsConversation || threadMessageCount === 0)
+    && (!routeOwnsConversation || threadMessageCount === 0))
   // A deep-linked task must not fall through to the empty project welcome
   // while the scoped engine is still switching or fetching its snapshot. That
   // intermediate tree was perceived as a blank page (and could briefly show a
@@ -299,6 +303,7 @@ export function useAppFrameNavigation({
     routeOwnsConversation,
     conversationHydrating,
     conversationHydrationFailed,
+    conversationMissing,
     syncSettingsUrl,
     syncConversationUrl,
     settingsHistoryEntryRef,

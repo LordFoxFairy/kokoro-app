@@ -1,3 +1,5 @@
+PROJECT-1（2026-10-24）：显式会话深链接缺席由 engine 记录观察、现有导航／错误面投影，保持地址且不退成默认页；new 与 unknown create 保护、原 ID 重读及 deferred ACK 恢复见 `docs/TECHNICAL_DESIGN.md`。真实验收与完整项目剩余项见 `docs/CURRENT.md`。
+
 ## 当前精确模型绑定（2026-10-22）
 
 固定BFFa77276b／Public23，七原public生成器、tests/contract/bff-metering-parent.ts完整父保护及在线Docs同步；生产桥无变更。主方停写工程／preview／Docs证据及未激活边界见[CURRENT](docs/CURRENT.md)，下方按历史读取。
