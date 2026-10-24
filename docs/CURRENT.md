@@ -1,3 +1,13 @@
+## 2026-10-24 MCP：真实发现后的详情 502 已修复（局部正常生效）
+
+正常页面新建本人 QA Agent DeepWiki 20261024，Register201；Platform 实际 prepare 已为原 Server/Connector 创建 ready 的三个声明和 Connection，但 App 的 Prepare 与随后详情 GET 都返回 mcp_personal_response_invalid/502。只读正式 owner GET 和现 BFF projector均成功，核定差异为真实 MCP 工具描述包含 LF：App 将返回的 declaration.display_name 复用了单行字段规则。不是创建失败、上游不可达或授权失败；不重新创建或重发原 Prepare。
+
+仅在既有 mcp-connector.schema 的 tool/resource/prompt 返回 display_name 接受合法多行文本，沿现 UTF-8 字节限额、孤立代理字符和 C0/DEL 限制；selectors、Server 名称、Header/凭据和请求规则不变，不 trim/改写 owner 内容。三种声明的 read/prepare 回归先实际3FAIL，修复后受影响 schema/client/同源桥三个文件352PASS；显式 Node22 下 focused、受影响eslint与typecheck全部exit0。初轮Node24有engine警告及一个未匹配测试路径，证据保留，最终按实际client文件和Node22重新运行；未跑完整owner/build/整站E2E，不冒合并门已过。原移动导航诊断 WIP 保持，未夹带。
+
+正常仅 HMR 一份原基线逐字相同的schema文件，1251其它tracked保持；真实点击原卡片只发一次Server GET200，显示已连接的详情，未再Create/Prepare。备份、原502截图和修复后截图留Root ignored agent-delivery-normal-20261024；HMR期间有文档重载及query消失，不据此声称会话URL/无感加载已修。该 QA Connection 保留供主链调用验收，不代表Agent已经调用工具。
+
+本轮原生 write_file→deliver 已通过真实 StateBackend/ToolNode、journal、PG checkpoint新连接恢复、实际Storage/MinIO/ClamAV和原字节下载；同call重放无新Storage I/O。这是独立实际工具/产物子链，未用模型或Billing。进一步实际Agent→正常Platform的MCP检查在GetConnection成功后被GetConnector的PLATFORM_UNIMPLEMENTED拦住：正常部署面包含mcp-connection/mcp-runtime，却缺mcp-connector和后继所需mcp-authorization。未发送远端工具调用；两次自有Agent库已回收，94库存保持。后续先以实际已运行4c3853b配齐部署面，不能重启当前8ff图标候选误激活未交付Schema；不关授权/租约/strict egress保护。此问题有明确下一动作，不把它转交给采购价答复。完整Agent/Skills/MCP与集中交付仍未完成。
+
 ## 2026-10-24 AGENT-1：待核对结算的正式消费（正常已配对，整链仍未完成）
 
 固定BFF `b0f201e99c2ae3fa213942c5a909f47b06640a02`／Public23.1，唯一原件及七public窄生成器、全部现行pin断言、在线Docs同源更新。只新增 model_settlement_pending / false，完整23.0父证明原字节保持；未知字段、未知码和该码true仍拒绝。既有ConversationThread唯一footer和九语言说明“本轮已停止，已生成的内容已保留；结算仍待核对。”，不猜capture／release，不改历史generic，不改提交／恢复／重派、布局或余额。

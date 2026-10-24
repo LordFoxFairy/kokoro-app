@@ -205,12 +205,14 @@ const privateOauthClientDescriptorSchema = z
   .strict()
   .refine((value) => value.configured === (value.status === "configured"));
 const privateSelectorText = privateText(1, 256);
+// Discovered display text can contain paragraphs (for example MCP descriptions).
+// Keep identifiers and writable server/header fields on their single-line rules.
 const privateDeclarationSchema = z.discriminatedUnion("kind", [
   z
     .object({
       kind: z.literal("tool"),
       selector: privateSelectorText,
-      display_name: privateText(1, 1000),
+      display_name: privateText(1, 1000, true),
       input_schema_digest: z.string().regex(/^[a-f0-9]{64}(?![\s\S])/u),
       output_schema_digest: z
         .string()
@@ -223,14 +225,14 @@ const privateDeclarationSchema = z.discriminatedUnion("kind", [
     .object({
       kind: z.literal("resource"),
       selector: privateSelectorText,
-      display_name: privateText(1, 1000),
+      display_name: privateText(1, 1000, true),
     })
     .strict(),
   z
     .object({
       kind: z.literal("prompt"),
       selector: privateSelectorText,
-      display_name: privateText(1, 1000),
+      display_name: privateText(1, 1000, true),
     })
     .strict(),
 ]);

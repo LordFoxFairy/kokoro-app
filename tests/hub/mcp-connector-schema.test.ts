@@ -449,6 +449,37 @@ describe("private URL MCP registration wire", () => {
     status: "active" as const,
   };
 
+  it.each(["tool", "resource", "prompt"] as const)(
+    "accepts multiline public %s descriptions in prepared server reads and receipts",
+    (kind) => {
+      // Actual discovery may use the MCP description as display_name. A valid
+      // owner response must survive both the same-origin bridge and its client.
+      const declaration = {
+        kind,
+        selector: "read_documentation",
+        display_name: "Read public documentation\nSecond paragraph\r\n\tIndented context",
+        ...(kind === "tool"
+          ? { input_schema_digest: "b".repeat(64), required_scopes: [] }
+          : {}),
+      };
+      const prepared = { ...server, state_version: "2", declarations: [declaration] };
+      expect(mcpPrivateServerMatches("server", { data: { server: prepared } }, server.server_id)).toBe(true);
+      expect(mcpPrivateServerMatches("prepareServer", {
+        data: {
+          server: prepared,
+          connector: { ...privateConnector, enabled: true, state_version: "2" },
+          declarations: prepared.declarations,
+          replayed: false,
+        },
+      }, server.server_id, { expected_state_version: "1" })).toBe(true);
+      for (const display_name of ["invalid\0description", "invalid\x7fdescription", "界".repeat(334)]) {
+        expect(mcpPrivateServerSchema.safeParse({ ...prepared, declarations: [{ ...declaration, display_name }] }).success).toBe(false);
+      }
+      expect(mcpPrivateServerSchema.safeParse({ ...prepared, declarations: [{ ...declaration, selector: "invalid\nselector" }] }).success).toBe(false);
+      expect(mcpPrivateServerRegistrationInputSchema.safeParse({ ...input, display_name: "invalid\nname" }).success).toBe(false);
+    },
+  );
+
   it("accepts exact V1 registration and binds preparation/update/delete to the server CAS", () => {
     expect(
       mcpPrivateServerMatches(

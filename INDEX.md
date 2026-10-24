@@ -1,3 +1,7 @@
+## 2026-10-24 MCP 描述多行消费修复
+
+真实发现的 tool/resource/prompt `display_name` 可包含换行；既有 schema 仅对返回声明接受合法多行，selectors、请求名称和凭据单行规则及UTF-8/控制字符保护不变。原创建/准备事实不重发，正常只读详情GET已恢复；实际MCP运行时部署面缺失及验证范围见 [CURRENT](docs/CURRENT.md)。
+
 ## 2026-10-24 Agent 待核对终态（候选，未正常激活）
 
 固定BFF `b0f201e99c2ae3fa213942c5a909f47b06640a02`／Public23.1／raw `703dba47da8a5c659b4236bb0a72317588ad29a4ca444ff9e5c99cfbcd00634b`。原186操作不变；七public窄消费者正规生成，ChatMessage／RUN_ERROR只承接新增model_settlement_pending且retryable=false，未知／坏profile保持拒绝。既有ConversationThread与九语言保正文并说明结算待核对，不猜已扣款／释放、不给终态重发动作、不改历史generic。完整23.0父字节逆证及原证明链保持，在线Docs固定同一发行物。完整工程／正常激活状态见[CURRENT](docs/CURRENT.md)。
