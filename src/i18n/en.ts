@@ -646,6 +646,8 @@ export const en: Partial<Record<MessageKey, string>> = {
   "mode.labelThinking": "Thinking",
   "mode.hintFast": "Faster responses",
   "mode.hintThink": "Deeper thinking",
+  "mcp.tryPrompt": "Help me test the {name} connector and demonstrate its capabilities, for example by showing data retrieved through it. Briefly explain what it can do.",
+  "mcp.tryUnavailable": "Connector trial could not be started. Your existing task and draft are preserved. Check the connection and try again.",
   "thread.submissionUnconfirmed": "The original request admission is unconfirmed",
   "thread.submissionUnconfirmedHint": "Your original text and options are kept. Refreshing will not resend it. Explicit recovery reconciles or retries the same request, not a new task.",
   "chat.submissionRecoveryFailed": "Your browser could not save or read the original request recovery state. Restore browser storage and read it again. The original request will not be resent automatically.",

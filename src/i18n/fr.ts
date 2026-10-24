@@ -464,6 +464,8 @@ export const fr: Partial<Record<MessageKey, string>> = {
   "mode.labelThinking": "réflexion profonde",
   "mode.hintFast": "Répondez plus rapidement",
   "mode.hintThink": "une réflexion plus profonde",
+  "mcp.tryPrompt": "Teste le connecteur {name} et démontre ses fonctionnalités, par exemple avec des données récupérées. Explique brièvement ce qu’il peut faire.",
+  "mcp.tryUnavailable": "L’essai du connecteur n’a pas démarré. Votre tâche et votre brouillon sont conservés. Vérifiez la connexion puis réessayez.",
   "thread.submissionUnconfirmed": "La réception de la requête initiale reste à confirmer",
   "thread.submissionUnconfirmedHint": "Le texte et les options sont conservés. Actualiser ne renvoie rien. La récupération explicite vérifie ou réessaie la même requête, sans créer une nouvelle tâche.",
   "chat.submissionRecoveryFailed": "Le navigateur n’a pas pu enregistrer ou lire l’état de récupération de la requête initiale. Rétablissez le stockage puis relisez cet état. La requête ne sera pas renvoyée automatiquement.",

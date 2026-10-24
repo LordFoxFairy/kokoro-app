@@ -1,3 +1,7 @@
+## 2026-10-24 MCP详情试用与正式消息边界
+
+本地Try不新增API或改wire：私有server的exact `connection_id`经现engine选择进入新草稿，用户明确Send时才沿既有Public24 `selected_mcp_connection_ids`冻结到原消息请求；connector/server/provider ID及显示名不替代运行Connection。Try本身零消息/Prepare/授权请求，未知原请求不被新草稿覆盖。缺可用性、未ready或缺Connection不伪造试用；Prepare/重新授权保留各自正式操作与恢复语义。
+
 ## CHAT-1：首发刷新恢复不新增网络协议（2026-10-24）
 
 仅增加App同标签浏览器未决意图adapter，首发/原retry继续原MessageCreateParams与唯一builder；GET snapshot-first、exact MessageCreateReceipt及AG-UI保持。刷新无自动POST、无新key/body、无本地伪会话，503/404/同正文不作为命令未发生或已成功的证据。原控制、身份、project_ref及MCP/Skill有序选择不变；设计/本地记录见TECHNICAL_DESIGN/DATA_MODEL，实际验收见CURRENT。

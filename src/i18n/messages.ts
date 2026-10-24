@@ -576,6 +576,8 @@ export const zh = {
   "mode.hintFast": "更快回应",
   "mode.hintThink": "更深的思考",
   // 引擎瞬态通知（steer 投递失败）
+  "mcp.tryPrompt": "帮我测试 {name} 连接器，并演示如何使用它的功能（例如显示通过它获取的任何数据）。请简要说明它的功能。",
+  "mcp.tryUnavailable": "当前暂不能开始连接器试用。原任务和草稿已保留，请确认连接状态后重试。",
   "thread.submissionUnconfirmed": "原请求接收状态尚未确认",
   "thread.submissionUnconfirmedHint": "原文和提交选项已保留。刷新不会自动重发；明确恢复时只核对或重试同一个原请求，不创建另一条任务。",
   "chat.submissionRecoveryFailed": "浏览器未能保存或读取原请求的恢复状态。请恢复浏览器存储后重新读取；原请求不会自动重发。",

@@ -75,7 +75,7 @@ it.each(["running Prepare", "unknown management"])("keeps private OAuth blocked 
     managementCommand={pending === "unknown management" ? { connectorId: connector.connector_id, serverId: server.server_id, operation: "update_server", kind: "unknown" } : undefined}
     onResumeManagement={vi.fn()} actionError={false} deleteId={null} returnFocusRef={{ current: null }} onClose={vi.fn()}
     onSaveConfiguration={vi.fn()} onPrepare={vi.fn()} onAuthorize={authorize} onDisconnect={vi.fn()} onDeleteIntent={vi.fn()} onCancelDelete={vi.fn()} onDelete={vi.fn()} /></LocaleProvider>)
-  const button = screen.getByRole("button", { name: pending === "running Prepare" ? "试用一下" : "重新连接" })
+  const button = screen.getByRole("button", { name: pending === "running Prepare" ? "连接" : "重新连接" })
   expect(button).toBeDisabled()
   fireEvent.click(button)
   expect(authorize).not.toHaveBeenCalled()
@@ -587,10 +587,10 @@ it.each(["revoked", "fresh-server"])("retires opened private detail through an e
   fireEvent.click(await screen.findByRole("button", { name: provider.display_name }))
   fireEvent.click(await within(await screen.findByRole("dialog")).findByRole("button", { name: /My rechecked connection/ }))
   const dialog = await screen.findByRole("dialog", { name: server.display_name })
-  expect(within(dialog).getByRole("button", { name: "试用一下" })).toBeEnabled()
+  expect(within(dialog).getByRole("button", { name: "连接" })).toBeEnabled()
   act(() => invalidateMcpConnectorProjection(client, subject))
   await waitFor(() => expect(get).toHaveBeenCalledTimes(2))
-  expect(screen.queryByRole("button", { name: "试用一下" })).not.toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "连接" })).not.toBeInTheDocument()
   expect(screen.queryByRole("button", { name: "管理" })).not.toBeInTheDocument()
   await act(async () => finishConnection(outcome === "revoked" ? { ...connection, status: "revoked" } : connection))
   if (outcome === "revoked") {
@@ -598,9 +598,9 @@ it.each(["revoked", "fresh-server"])("retires opened private detail through an e
     expect(getServer).toHaveBeenCalledTimes(1)
   } else {
     await waitFor(() => expect(getServer).toHaveBeenCalledTimes(2))
-    expect(screen.queryByRole("button", { name: "试用一下" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "连接" })).not.toBeInTheDocument()
     await act(async () => finishServer({ ...server, state_version: "3" }))
-    expect(await screen.findByRole("button", { name: "试用一下" })).toBeEnabled()
+    expect(await screen.findByRole("button", { name: "连接" })).toBeEnabled()
   }
 })
 

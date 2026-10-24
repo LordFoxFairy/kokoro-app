@@ -14,6 +14,7 @@ import { useT } from "@/i18n/context";
 import { useProviderCreationCommands, useCustomApiManagementCommands, useMcpManagementCommands, useMcpPreparationCommands } from "./connector-command-context";
 import { McpConnectionList } from "./mcp-connection-list";
 import { McpConnectorEditorDialog } from "./mcp-connector-editor-dialog";
+import { useMcpTrial } from "./mcp-trial-context";
 import { CustomMcpDetailDialog } from "./custom-mcp-detail-dialog";
 import type { McpCreateMode } from "./mcp-panel-model";
 import { McpProviderCatalogDialog } from "./mcp-provider-catalog-dialog";
@@ -84,6 +85,7 @@ export function McpProjectionRead({
   brandName?: string;
 }) {
   const t = useT();
+  const startTrial = useMcpTrial();
   const providerCreation = useProviderCreationCommands(client, identity);
   const providerCreationStates = useSyncExternalStore(providerCreation.subscribe, providerCreation.getSnapshot, providerCreation.getSnapshot);
   const preparation = useMcpPreparationCommands(client, identity);
@@ -713,6 +715,15 @@ export function McpProjectionRead({
               ...(input.header_removals.length ? { header_removals: input.header_removals } : {}),
             } });
           }}
+          {...(startTrial === null ? {} : { onTrial: () => {
+            if (!editor?.server || !admitted || ownerRef.current !== owner || !connectorIntent ||
+              editorWindow.current?.intent !== connectorIntent.window || management.isBlocked(editor.connector.connector_id) ||
+              editor.server.availability !== "available" || editor.connector.availability !== "available" ||
+              editor.server.prepare_status !== "ready" || !editor.server.connection_id || !editor.connector.enabled || editor.connector.status !== "active") return false;
+            if (!startTrial({ connectionId: editor.server.connection_id, name: editor.server.display_name })) return false;
+            resetEditor();
+            return true;
+          } })}
           onPrepare={() => {
             if (!editor?.server || !admitted || ownerRef.current !== owner || !preparation.available) return;
             const target = { serverId: editor.server.server_id, connectorId: editor.connector.connector_id,

@@ -1,4 +1,6 @@
 "use client"
+
+import { McpTrialProvider } from "@/ui/mcp/mcp-trial-context"
 import { useSessionArchive } from "@/ui/shell/use-session-archive"
 
 import { type CSSProperties, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
@@ -980,6 +982,7 @@ function AppFrameRuntime({
   return (
     <>
     {conversationReaders.hosts}
+    <McpTrialProvider onTry={composerConnectionsEnabled ? actions.startMcpTrial : null}>
     <ConnectorCommandProvider client={browserHubClient({ preview })} boundary={preview ? { admitted: true, subject: "preview", generation: 0 } : projectReadBoundary ?? { admitted: false, subject: null, generation: 0 }}>
     <AppFrameShell
       preview={preview}
@@ -1008,6 +1011,7 @@ function AppFrameRuntime({
       overlays={overlaySurfaces}
     />
     </ConnectorCommandProvider>
+    </McpTrialProvider>
     </>
   )
 }

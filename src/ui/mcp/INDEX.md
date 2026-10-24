@@ -1,3 +1,7 @@
+## 2026-10-24 私有详情试用交接
+
+`mcp-trial-context.tsx`只桥接挂载AppFrame的草稿动作，不拥有网络或连接状态；`mcp-projection-read.tsx`核当前精确私有server/connector和命令锁，`custom-mcp-detail-dialog.tsx`把ready Try与原Prepare/OAuth恢复分开。原配置字段/秘密只写/管理CAS不变。正常验收状态见App CURRENT；四创建和全Skills/MCP未据此完成。
+
 ## 广场分类的可用列宽适配（2026-10-19）
 
 `use-mcp-category-layout.ts` 承接原目录弹窗的标签实测与焦点交接，广场复用同一机制；不再用视口42rem猜测分类是否容纳。按当前语言完整标签宽度与实际控件列宽比较，中文412px为本次参考实测临界值而非代码常量。窄列搜索与筛选同排，筛选36px、14/18px、8px圆角；设置目录保留32px。查询/分类不重建、不发额外命令；缩放隐藏中的分类控件不可聚焦，展开中的菜单切回标签时关闭并交还当前选项。无API、数据或owner变更。参考1280/390及459/460边界来自实际Manus，浏览器回归绑定真实布局，不断言CSS源码。

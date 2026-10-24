@@ -17,6 +17,7 @@ import { DIRECT_SESSION_SCOPE } from "@/engine/session-scope"
 import { navigateMountedSurface } from "@/ui/navigation/mounted-surface-navigation"
 import { overlayHandoffDelay } from "@/ui/shell/overlay-handoff"
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
+import { useAppFrameMcpTrial } from "./use-app-frame-mcp-trial"
 import { useAppFrameSkillTrial } from "./use-app-frame-skill-trial"
 
 import { COMMAND_SETTINGS_HANDOFF_MS, conversationIdFromLocation } from "./app-frame-helpers"
@@ -268,7 +269,7 @@ export function useAppFrameActions({
     }
   }, [focusComposer, projectWorkspace, standaloneSurface, startNewChatWithUrl])
 
-  const handOffSkillPrompt = useCallback((prompt: string) => {
+  const handOffChatPrompt = useCallback((prompt: string) => {
     // A workflow handoff replaces the Settings fragment rather than replaying
     // its history entry. This keeps the direct-chat navigation authoritative
     // and prevents a delayed browser back traversal from restoring the
@@ -277,11 +278,11 @@ export function useAppFrameActions({
     if (projectWorkspace) {
       // An explicit project Skill trial is scoped work, unlike the global
       // rail's New task. Preserve its project binding and selected Skill.
-      if (!startNewChat()) return
+      if (!startNewChat()) return false
       const id = engine?.getSnapshot().store?.activeId ?? null
       syncConversationUrl(id, "push")
       setConversationRouteId(id)
-    } else if (!startNewChatWithUrl()) return
+    } else if (!startNewChatWithUrl()) return false
     const nextSessionId = engine?.getSnapshot().store?.activeId ?? null
     if (nextSessionId) stashConversationDraft(nextSessionId, prompt)
     else updateDraft(prompt)
@@ -290,15 +291,18 @@ export function useAppFrameActions({
         focusComposer()
       })
     })
+    return true
   }, [closeSettings, engine, focusComposer, projectWorkspace, setConversationRouteId, startNewChat, startNewChatWithUrl, syncConversationUrl, updateDraft])
 
   const startSkillCreationFromSettings = useCallback((creationPrompt?: string) => {
     // Manus treats “create with AI” as a prompt starter, not an upload form:
     // return to a fresh direct Composer and seed the skill creator command.
-    handOffSkillPrompt(creationPrompt ?? t("skills.createPrompt"))
-  }, [handOffSkillPrompt, t])
+    handOffChatPrompt(creationPrompt ?? t("skills.createPrompt"))
+  }, [handOffChatPrompt, t])
 
-  const { startTrial, selectedSkill, clearSelectedSkill } = useAppFrameSkillTrial({ engine, preview, boundary: readBoundary, handOffPrompt: handOffSkillPrompt })
+  const startMcpTrial = useAppFrameMcpTrial({ engine, preview, boundary: readBoundary, handOffPrompt: handOffChatPrompt })
+
+  const { startTrial, selectedSkill, clearSelectedSkill } = useAppFrameSkillTrial({ engine, preview, boundary: readBoundary, handOffPrompt: handOffChatPrompt })
 
   const startSkillUseFromSettings = useCallback((skill: SkillCard, prompt?: string) => {
     return startTrial(skill, prompt ?? t("skills.tryPrompt", { brand: brandName ?? "Kokoro", name: skill.name }))
@@ -324,6 +328,7 @@ export function useAppFrameActions({
     startNewChatAndFocus,
     startSkillCreationFromSettings,
     startSkillUseFromSettings,
+    startMcpTrial,
     selectedSkill,
     clearSelectedSkill,
     dismissCreationIntent,

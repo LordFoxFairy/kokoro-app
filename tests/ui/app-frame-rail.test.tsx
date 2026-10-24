@@ -3640,7 +3640,7 @@ it("MCP same-actor recheck keeps search and the private detail shell but retires
   expect(query).toHaveValue("Private")
   expect(screen.getByRole("dialog")).toBe(dialog)
   expect(screen.queryByText("recheck-server")).not.toBeInTheDocument()
-  expect(screen.queryByRole("button", { name: "试用一下" })).not.toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "连接" })).not.toBeInTheDocument()
   expect(read).toHaveBeenCalledOnce()
   view.rerender(content(true, 2))
   await waitFor(() => expect(read).toHaveBeenCalledTimes(2))
@@ -4038,7 +4038,7 @@ it.each([
   expect(screen.queryByText("Retired owner note")).not.toBeInTheDocument()
   if (kind === "mcp") {
     expect(screen.queryByText("x-existing")).not.toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "试用一下" })).toBeDisabled()
+    expect(screen.getByRole("button", { name: "连接" })).toBeDisabled()
   }
   expect(screen.getByRole("button", { name: "保存" })).toBeDisabled()
   if (dirty) act(() => { field.setSelectionRange(0, field.value.length, "forward"); fireEvent.select(field) })
@@ -4227,13 +4227,13 @@ it.each([false, true])("private detail Prepare restores the same original comman
   const content = (admitted = true, generation = 1) => <LocaleProvider><ConnectorCommandProvider client={hub} boundary={{ ...boundary, admitted, generation }}><McpContent client={hub} initialView="connections" readBoundary={{ ...boundary, admitted, generation }} /></ConnectorCommandProvider></LocaleProvider>
   const view = render(content())
   fireEvent.click(await screen.findByRole("button", { name: "Creation MCP" }))
-  fireEvent.click(await screen.findByRole("button", { name: "试用一下" }))
+  fireEvent.click(await screen.findByRole("button", { name: "连接" }))
   await screen.findByRole("alert")
   expect(prepare).toHaveBeenCalledOnce()
   fireEvent.click(screen.getByRole("button", { name: "取消" }))
   if (recheck) { view.rerender(content(false, 2)); version = "9"; view.rerender(content(true, 2)) }
   fireEvent.click(await screen.findByRole("button", { name: "Creation MCP" }))
-  const button = await screen.findByRole("button", { name: /^(试用一下|重试原请求)$/ })
+  const button = await screen.findByRole("button", { name: /^(连接|重试原请求)$/ })
   fireEvent.click(button)
   await waitFor(() => expect(prepare).toHaveBeenCalledTimes(2))
   expect(prepare.mock.calls[1]?.slice(0, 3)).toEqual(prepare.mock.calls[0]?.slice(0, 3))
@@ -4300,7 +4300,7 @@ it("closing a preparing detail aborts its wait; a late ACK cannot close the succ
     <McpContent client={hub} initialView="connections" readBoundary={boundary} />
   </ConnectorCommandProvider></LocaleProvider>)
   fireEvent.click(await screen.findByRole("button", { name: "Creation MCP" }))
-  fireEvent.click(await screen.findByRole("button", { name: "试用一下" }))
+  fireEvent.click(await screen.findByRole("button", { name: "连接" }))
   await waitFor(() => expect(prepare).toHaveBeenCalledOnce())
   fireEvent.click(screen.getByRole("button", { name: "取消" }))
   expect(prepare.mock.calls[0]?.[3]?.aborted).toBe(true)
@@ -4478,7 +4478,7 @@ it("a mounted MCP editor clears header secrets on management ACK but preserves n
   fireEvent.change(name, { target: { value: "My draft" } })
   view.rerender(content("unknown"))
   expect(name).toHaveAttribute("readonly")
-  expect(screen.getByRole("button", { name: "试用一下" })).toBeDisabled()
+  expect(screen.getByRole("button", { name: "连接" })).toBeDisabled()
   fireEvent.submit(name.closest("form")!); expect(save).not.toHaveBeenCalled()
   view.rerender(content("completed"))
   expect(screen.queryByLabelText("Header value")).not.toBeInTheDocument()

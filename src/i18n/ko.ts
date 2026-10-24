@@ -464,6 +464,8 @@ export const ko: Partial<Record<MessageKey, string>> = {
   "mode.labelThinking": "깊은 생각",
   "mode.hintFast": "더 빠르게 응답하세요",
   "mode.hintThink": "더 깊은 생각",
+  "mcp.tryPrompt": "{name} 커넥터를 테스트하고 가져온 데이터를 보여주는 등 기능을 시연해 주세요. 가능한 작업을 간단히 설명해 주세요.",
+  "mcp.tryUnavailable": "커넥터 체험을 시작하지 못했습니다. 기존 작업과 초안은 보존되었습니다. 연결 상태를 확인하고 다시 시도하세요.",
   "thread.submissionUnconfirmed": "원래 요청의 접수 상태가 확인되지 않았습니다",
   "thread.submissionUnconfirmedHint": "원문과 전송 옵션이 보존되어 있습니다. 새로고침해도 자동 재전송하지 않습니다. 명시적 복구는 새 작업이 아닌 같은 원래 요청만 확인하거나 재시도합니다.",
   "chat.submissionRecoveryFailed": "원래 요청의 복구 상태를 저장하거나 읽지 못했습니다. 브라우저 저장소를 복구한 후 다시 읽어 주세요. 원래 요청은 자동으로 다시 전송되지 않습니다.",

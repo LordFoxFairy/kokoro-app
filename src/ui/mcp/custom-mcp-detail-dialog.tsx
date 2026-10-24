@@ -67,6 +67,7 @@ export function CustomMcpDetailDialog({
   onClose,
   onSaveConfiguration,
   onPrepare,
+  onTrial,
   onAuthorize,
   authorizationBusy = false,
   onDisconnect,
@@ -100,6 +101,7 @@ export function CustomMcpDetailDialog({
     header_removals: string[];
   }) => void;
   onPrepare: () => void;
+  onTrial?: () => boolean;
   onAuthorize: () => void;
   authorizationBusy?: boolean;
   onDisconnect: () => void;
@@ -111,6 +113,7 @@ export function CustomMcpDetailDialog({
   const ready = admitted && server !== null && connector !== null;
   const currentServer = ready ? server : null;
   const [editing, setEditing] = useState(false);
+  const [trialError, setTrialError] = useState(false);
   // Store only explicit user edits across a recheck, never the previous owner
   // projection. Untouched fields resolve from the newly admitted server.
   const [nameDraft, setName] = useState<string | null>(null);
@@ -131,12 +134,18 @@ export function CustomMcpDetailDialog({
   }
   const managementStatus = <McpManagementStatus command={managementCommand} admitted={admitted} onResume={onResumeManagement} />;
   const locked = managementLocked || busy || !ready || preparationState === "unknown" || preparationState === "completed";
-  const prepareLabel = preparationState === "unknown" ? t(connectorCommandMayResume(preparationFailure) ? "mcp.retryOriginal" : "mcp.recovery.inspectRequired") : preparationState === "completed" ? t("mcp.creationDone") : "试用一下";
+  const prepareLabel = preparationState === "unknown" ? t(connectorCommandMayResume(preparationFailure) ? "mcp.retryOriginal" : "mcp.recovery.inspectRequired") : preparationState === "completed" ? t("mcp.creationDone") : t("settings.connect");
   const needsAuthorization = ready && canAuthorizePrivateMcp(connector, server) &&
     preparationState !== "running" && preparationState !== "completed";
   // Reauthorization is a distinct explicit owner operation, not an ACK or a
   // replacement for an unknown Prepare. Keep its original recovery reachable.
-  const primaryAction = () => <><Button type="button" variant={editing ? "outline" : "default"}
+  const trialAvailable = ready && server.availability === "available" && connector.availability === "available" &&
+    server.prepare_status === "ready" && Boolean(server.connection_id) && connector.enabled && connector.status === "active" &&
+    (preparationState === "idle" || preparationState === "rejected");
+  const primaryAction = () => trialAvailable ? <Button type="button" variant={editing ? "outline" : "default"}
+    disabled={managementLocked || busy || !onTrial} onClick={() => setTrialError(onTrial?.() !== true)}>
+    <Send aria-hidden="true" />试用一下
+  </Button> : <><Button type="button" variant={editing ? "outline" : "default"}
     disabled={managementLocked || busy || !ready || preparationState === "running" || (!needsAuthorization && !connectorCommandMayResume(preparationFailure))}
     onClick={needsAuthorization ? onAuthorize : onPrepare}>
     {busy ? <Spinner aria-hidden="true" /> : needsAuthorization ? <Link2 aria-hidden="true" /> : <Send aria-hidden="true" />}
@@ -192,6 +201,7 @@ export function CustomMcpDetailDialog({
         onCloseAutoFocus={closeFocus}
       >
         {preparationState === "unknown" ? <Alert role="alert"><AlertDescription>{t(connectorCommandFailureMessage(preparationFailure, "mcp.serverCreateUnknown"))}</AlertDescription></Alert> : null}
+        {trialError ? <Alert variant="destructive" role="alert"><AlertDescription>{t("mcp.tryUnavailable")}</AlertDescription></Alert> : null}
         {editing ? (
           <form
             {...selectionProps}

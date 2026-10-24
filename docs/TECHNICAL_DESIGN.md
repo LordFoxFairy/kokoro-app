@@ -1,3 +1,9 @@
+## 2026-10-24 私有MCP试用：草稿交接而非Prepare
+
+正常详情的“试用一下”与连接准备分开：`CustomMcpDetailDialog`只呈现可用性/动作，`McpProjectionRead`核当前connector/server、owner/window和管理锁，传入owner返回的exact `connection_id`；`McpTrialProvider`连接现AppFrame，独立`use-app-frame-mcp-trial.ts`拥有本次UI动作的主体/准入代际/路由寿命检查。准备未知结果仍沿原key/CAS恢复，不以Try取代重试。
+
+一次明确Try调用既有新草稿交接，填入本地化提示词并只选该Connection；无Prepare、授权、消息或模型请求，不改账号enabled。未确认提交、活动Run、hydration、主体/路由退休拒绝交接并保留反馈。设置和外层广场共用同一挂载壳；项目内试用沿既有项目scope，非已观察到的Manus项目试用结论。选中不授执行权，后续用户明确Send仍由owner重新核资格。当前实测/未验范围见CURRENT。
+
 ## CHAT-1 未确认提交与归档读取（2026-10-24，当前切片）
 
 乐观正文不是owner会话存在证据。engine只在匹配当前视图的正向snapshot或create ACK后输出内存`ownerConfirmedSessionId`；不同ID或主体不继承。归档reader在原冻结意图尚未确认、且无上述证明/列表成员/archive receipt时暂停archive GET，输出`unconfirmed`而非`missing`或已归档；首次失败与刷新恢复均适用。reader按identity/id保留已经获得的正向存在证明，后续列表移出仍执行真正历史404/错误处理，不重新降为未确认草稿。

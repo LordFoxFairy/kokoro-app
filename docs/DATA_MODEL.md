@@ -1,3 +1,7 @@
+## 2026-10-24 MCP试用局部状态
+
+不新增持久业务事实或Schema。Try只创建现浏览器草稿、写入现草稿提示词并设置engine瞬态exact Connection选择；不写账号enabled或替owner创建连接/授权。草稿文本沿既有持久策略，选择沿既有New/select/主体退休规则，不声称刷新后仍持久选中。route/subject/generation动作寿命只用于拒绝迟到回调，非第二套授权或任务状态机。
+
 ## CHAT-1：浏览器未决提交记录（2026-10-24，实施设计）
 
 新增仅App-owned同标签sessionStorage恢复数据；独立前缀按已验证subject、direct/project scope及conv分键。版本化严格记录保原session、optimistic ID、原idempotency key及唯一builder产出的冻结请求；pending可带公开失败码，ACK保存exact receipt，明确放弃保存退休态。主体由原Product Session准入授予、marker只核变更；无服务端身份/会话/Run/账本真源。单记录1MiB，超限/配额/读写拒绝不截断、不腾空他人数据、不发送。

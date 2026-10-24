@@ -1,3 +1,13 @@
+## 2026-10-24 自定义MCP试用交接（正常局部已验）
+
+修正原“试用一下”实际执行Prepare的功能错位：ready私有详情现在调用独立的MCP trial hook/context，进入新草稿、预填本地化提示词、选中owner exact Connection并聚焦Composer，不自动发送、Prepare或授权。未知原提交、活动Run、主体/准入代际/route退休拒绝交接；原Prepare未知请求恢复保留。详情和配置内拒绝Try均有可见反馈，配置原字段保留；项目内保持既有scope，不冒Manus项目试用语义已观察。
+
+正常3310精确HMR15生产路径，其它758源和进程保持；设置及外层广场→管理→详情两条Try均实际回干净/app，真实QA Connection选中、提示词/焦点正确。两完整非截断网络窗请求为空，未Send；QA草稿/选择已清空并刷新、自有40标签关闭、原1/10保留。Agent/BFF/Billing原行/xmin及原usage保持，Platform仅读取准入slot改变。原始参考、前后原生截图/AX/脱敏网络及normal-guard仅Root ignored `var/dev/mcp-four-flows-20261024/`。
+
+当前1167非Markdown输入停写，contract/architecture/全lint/types/相关484行为/build/post-types均0且零漂移，独审Approved；完整默认测试/整套preview未为本局部重跑，不冒全owner/全产品门通过。首轮旧Prepare用例仍定位“试用一下”的3+7失败、编辑错误反馈真实RED、脚本计数写前中止均保留；仅更正过时动作名称，原禁用/CAS/重放/取消/秘密清退断言不删。原49行导航诊断WIP保持并排除本片提交。
+
+四创建入口尚未完整CRUD验收。当前正常表单仍仅HTTP只读、图标上传禁用，参考有HTTP/SSE/STDIO及上传；广场目录仍空、标题仍“插件”、冷加载占位仍存在。下一片按自定义MCP创建/详情/编辑/刷新/删除逐动作补齐，真实传输/图标owner契约缺口单列，不用装饰性控件伪造能力；MCP后再Skills。成功创建/同次Agent/产物/结算及集中PR/Root组合仍开放。
+
 ## 2026-10-24 CHAT-1 创建与刷新状态一致性（整项实施中）
 
 三个入口失败刷新保原文/原URL/项目归属已正常实测：全局New、首页网站、项目内New；刷新自动消息POST为0，全局和项目手动重试原key/body保持。正常20份源HMR、751其它源/进程保持，Agent/BFF/Billing行/xmin/原usage不变，Platform仅读取准入slot变化。证据Root ignored task-create-recovery-20261024；交付仅本创建恢复切片，未push/PR/merge，不提升Root gitlink。最新首次完整owner默认7项fixture缺正式主体准入而失败；保原7行为断言改为正式准入并加marker-only负控，聚焦8通过、独审Approved。完整preview114通过但输入期间漂移，最终停写全门尚未重新完成，原失败保留。

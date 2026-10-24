@@ -464,6 +464,8 @@ export const es: Partial<Record<MessageKey, string>> = {
   "mode.labelThinking": "pensamiento profundo",
   "mode.hintFast": "Responde más rápido",
   "mode.hintThink": "pensamiento más profundo",
+  "mcp.tryPrompt": "Prueba el conector {name} y demuestra sus funciones, por ejemplo mostrando datos obtenidos con él. Explica brevemente qué puede hacer.",
+  "mcp.tryUnavailable": "No se pudo iniciar la prueba del conector. Se conservan la tarea y el borrador. Comprueba la conexión y vuelve a intentarlo.",
   "thread.submissionUnconfirmed": "La recepción de la solicitud original no está confirmada",
   "thread.submissionUnconfirmedHint": "El texto y las opciones se conservan. Actualizar no la reenvía. La recuperación explícita verifica o reintenta la misma solicitud, sin crear otra tarea.",
   "chat.submissionRecoveryFailed": "El navegador no pudo guardar o leer el estado de recuperación de la solicitud original. Restablece el almacenamiento y vuelve a leerlo. La solicitud no se reenviará automáticamente.",

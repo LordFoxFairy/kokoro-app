@@ -464,6 +464,8 @@ export const de: Partial<Record<MessageKey, string>> = {
   "mode.labelThinking": "tiefes Denken",
   "mode.hintFast": "Reagieren Sie schneller",
   "mode.hintThink": "tieferes Denken",
+  "mcp.tryPrompt": "Teste den Konnektor {name} und demonstriere seine Funktionen, etwa anhand abgerufener Daten. Erkläre kurz, was er kann.",
+  "mcp.tryUnavailable": "Der Konnektortest konnte nicht gestartet werden. Aufgabe und Entwurf bleiben erhalten. Prüfe die Verbindung und versuche es erneut.",
   "thread.submissionUnconfirmed": "Der Eingang der ursprünglichen Anfrage ist unbestätigt",
   "thread.submissionUnconfirmedHint": "Text und Optionen bleiben erhalten. Neuladen sendet nichts erneut. Die ausdrückliche Wiederherstellung prüft oder wiederholt dieselbe Anfrage, statt eine neue Aufgabe anzulegen.",
   "chat.submissionRecoveryFailed": "Der Wiederherstellungsstatus der ursprünglichen Anfrage konnte nicht gespeichert oder gelesen werden. Aktivieren Sie den Browserspeicher und laden Sie ihn erneut. Die Anfrage wird nicht automatisch erneut gesendet.",

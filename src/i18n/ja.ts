@@ -541,6 +541,8 @@ export const ja: Partial<Record<MessageKey, string>> = {
   "mode.labelThinking": "深い考え",
   "mode.hintFast": "より速く応答する",
   "mode.hintThink": "より深い思考",
+  "mcp.tryPrompt": "{name} コネクタをテストし、取得したデータを表示するなど、その機能を実演してください。できることを簡潔に説明してください。",
+  "mcp.tryUnavailable": "コネクタのお試しを開始できませんでした。既存のタスクと下書きは保持されています。接続状態を確認して再試行してください。",
   "thread.submissionUnconfirmed": "元のリクエストの受付状態は未確認です",
   "thread.submissionUnconfirmedHint": "元の内容と送信オプションは保持されています。再読込では自動再送信されません。明示的な復元では同じリクエストだけを確認または再試行します。",
   "chat.submissionRecoveryFailed": "元のリクエストの復元状態を保存または読み込めませんでした。ブラウザーのストレージを復旧して再読込してください。自動では再送信されません。",
