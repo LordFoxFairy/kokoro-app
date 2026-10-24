@@ -63,13 +63,26 @@ export function SettingsCompactMoreMenu({
     }
   }, []);
 
+  const focusItem = useCallback((item: HTMLButtonElement | undefined): void => {
+    if (!item) return;
+    item.focus({ preventScroll: true });
+    const menu = menuRef.current;
+    if (!menu) return;
+    const viewport = menu.getBoundingClientRect();
+    const bounds = item.getBoundingClientRect();
+    // Reveal only within this menu; scrolling an ancestor would move Settings.
+    if (bounds.top < viewport.top) menu.scrollTop += bounds.top - viewport.top;
+    else if (bounds.bottom > viewport.bottom)
+      menu.scrollTop += bounds.bottom - viewport.bottom;
+  }, []);
+
   const focusEdge = useCallback((edge: "first" | "last"): void => {
     const enabled = menuRef.current?.querySelectorAll<HTMLButtonElement>(
       'button[role="menuitem"]:not(:disabled)',
     );
     const item = edge === "last" ? enabled?.[enabled.length - 1] : enabled?.[0];
-    item?.focus({ preventScroll: true });
-  }, []);
+    focusItem(item);
+  }, [focusItem]);
 
   const openMenu = (edge: "first" | "last"): void => {
     pendingFocus.current = edge;
@@ -239,7 +252,7 @@ export function SettingsCompactMoreMenu({
                           ? enabled.length - 1
                           : current - 1
                         : (current + 1) % enabled.length;
-                enabled[next]?.focus({ preventScroll: true });
+                focusItem(enabled[next]);
               }}
             >
               {items.map((item) => (

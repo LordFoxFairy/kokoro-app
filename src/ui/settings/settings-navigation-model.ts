@@ -55,19 +55,6 @@ export type SettingsNavigationEntry =
 
 type Translate = ReturnType<typeof useLocale>["t"];
 
-/** The compact rail contains only the six labels which fit the 380px Manus
- * sheet without clipping. Skills remains reachable from the same More menu as
- * the secondary destinations; it must not leave a dangling “技” before that
- * affordance when the sheet narrows. */
-export const COMPACT_PRIMARY_TABS = new Set<SettingsTab>([
-  "account",
-  "credits",
-  "appearance",
-  "shortcuts",
-  "personalization",
-  "mcp",
-]);
-
 export function createSettingsNavigation(
   t: Translate,
 ): readonly SettingsNavigationEntry[] {

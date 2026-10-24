@@ -429,7 +429,7 @@ test("SET54 compact More opens and navigates with native keyboard without dismis
   await page.goto("/app#/account/settings/mail", { waitUntil: "domcontentloaded" });
   const modal = page.getByTestId("settings-modal");
   const trigger = modal.getByTestId("settings-more");
-  const first = page.getByTestId("settings-more-skills");
+  const first = page.getByTestId("settings-more-account");
   const last = page.getByTestId("settings-more-help");
   const menu = modal.getByRole("menu");
   await expect(trigger).toHaveAttribute("aria-expanded", "false");
@@ -445,14 +445,13 @@ test("SET54 compact More opens and navigates with native keyboard without dismis
   await expect(last).toBeFocused();
   await page.keyboard.press("Home");
   await expect(first).toBeFocused();
-  await page.keyboard.press("ArrowDown");
-  await page.keyboard.press("ArrowDown");
-  await expect(page.getByTestId("settings-more-mail")).toBeFocused();
+  await expect(page.getByTestId("settings-more-mail")).toHaveCount(0);
+  await page.getByTestId("settings-more-subscription").focus();
   await expect(page.getByTestId("settings-more-computer")).toBeDisabled();
   await page.keyboard.press("ArrowDown");
   await expect(page.getByTestId("settings-more-email")).toBeFocused();
   await page.keyboard.press("ArrowUp");
-  await expect(page.getByTestId("settings-more-mail")).toBeFocused();
+  await expect(page.getByTestId("settings-more-subscription")).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(menu).toHaveCount(0);
   await expect(modal).toBeVisible();
@@ -470,7 +469,8 @@ test("SET54 compact More opens and navigates with native keyboard without dismis
   await expect(trigger).toBeFocused();
   await page.keyboard.press("ArrowDown");
   await expect(first).toBeFocused();
-  for (let step = 0; step < 3; step++) await page.keyboard.press("ArrowDown");
+  await page.getByTestId("settings-more-subscription").focus();
+  await page.keyboard.press("ArrowDown");
   await expect(page.getByTestId("settings-more-email")).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(modal.getByRole("heading", { name: "Email", level: 1 })).toBeVisible();
