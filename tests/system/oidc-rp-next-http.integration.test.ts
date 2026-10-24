@@ -3091,7 +3091,18 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
         await noScriptPage.reload({ waitUntil: "domcontentloaded" })
         expect((await noScriptPage.locator('[data-app-frame-main="true"]').boundingBox())?.x).toBe(52)
         await noScriptPage.goto(`${origin}/app/project/project-layout`, { waitUntil: "domcontentloaded" })
-        expect((await noScriptPage.locator('[data-app-frame-main="true"]').boundingBox())?.x).toBe(300)
+        const projectBootX = (await noScriptPage.locator('[data-app-frame-main="true"]').boundingBox())?.x
+        if (projectBootX !== 300) {
+          const styles = await noScriptPage.evaluate(() => ({
+            ready: document.readyState,
+            pendingStyles: Array.from(document.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]')).filter(link => link.sheet === null).length,
+          }))
+          // Diagnostic only: retain the original pre-load geometry assertion.
+          await noScriptPage.waitForLoadState("load", { timeout: 2_000 }).catch(() => undefined)
+          console.info("R147 project boot geometry", { beforeLoadX: projectBootX, ...styles,
+            afterLoadX: (await noScriptPage.locator('[data-app-frame-main="true"]').boundingBox())?.x })
+        }
+        expect(projectBootX).toBe(300)
       } finally {
         await noScriptContext.close()
       }

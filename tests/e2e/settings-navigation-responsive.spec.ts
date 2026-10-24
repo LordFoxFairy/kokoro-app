@@ -57,6 +57,13 @@ test("settings keeps Skills and later destinations visible through compact navig
   await expect(shell).toHaveAttribute("data-rail-collapsed", "false");
   const separator = page.getByRole("separator", { name: "调整侧栏宽度" });
   await separator.hover();
+  // Expanded state commits before the width transition ends. Hover can return
+  // during that transition; stale coordinates can hit a navigation row instead.
+  await expect.poll(() => separator.evaluate(element => {
+    const handle = element.getBoundingClientRect();
+    const shell = element.closest('[data-slot="sidebar-wrapper"]')!.getBoundingClientRect();
+    return Math.abs(handle.x + handle.width / 2 - shell.x - Number(element.getAttribute("aria-valuenow"))) < 1;
+  })).toBe(true);
   const handle = await separator.boundingBox();
   if (!handle) throw new Error("Rail resize handle is missing");
   await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
