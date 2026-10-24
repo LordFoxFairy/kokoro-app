@@ -1,3 +1,4 @@
+import { activeIsLocalDraft } from "@/core/conversations"
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react"
 
 import type { SessionEngine, MachineState } from "@/engine/machine"
@@ -169,7 +170,7 @@ export function useAppFrameNavigation({
       const currentSnapshot = engine?.getSnapshot()
       const currentId = currentSnapshot?.store?.activeId ?? null
       if (requestedConversation !== null) {
-        if (requestedConversation !== currentId) {
+        if (requestedConversation !== currentId || activeIsLocalDraft(currentSnapshot?.store ?? null)) {
           engine?.openConversation(requestedConversation)
         }
       } else if (!projectWorkspace && previousConversation !== null && currentId !== null) {
@@ -199,7 +200,7 @@ export function useAppFrameNavigation({
     // Route leaves are intentionally empty so AppFrame stays mounted. Apply a
     // newly entered conversation query to the newly selected scope here; the
     // initial deep-link effect only runs once per shell mount.
-    if (requestedConversation !== null && requestedConversation !== (engine?.getSnapshot().store?.activeId ?? null)) {
+    if (requestedConversation !== null && (requestedConversation !== (engine?.getSnapshot().store?.activeId ?? null) || activeIsLocalDraft(engine?.getSnapshot().store ?? null))) {
       engine?.openConversation(requestedConversation)
     }
     const frame = window.requestAnimationFrame(() => setConversationRouteId(requestedConversation))
@@ -216,7 +217,7 @@ export function useAppFrameNavigation({
     // The shell may have first mounted on a catalog and only now entered
     // chat. Only this location may supply a deep-link, not that catalog's URL.
     const requestedConversation = conversationIdFromLocation()
-    if (requestedConversation !== null && requestedConversation !== activeId) {
+    if (requestedConversation !== null && (requestedConversation !== activeId || activeIsLocalDraft(engine?.getSnapshot().store ?? null))) {
       engine?.openConversation(requestedConversation)
     }
   }, [activeId, engine, mounted, ownsLocation, standaloneSurface])

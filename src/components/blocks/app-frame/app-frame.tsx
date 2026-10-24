@@ -733,6 +733,7 @@ function AppFrameRuntime({
   const composerProps: AppFrameComposerProps = {
     connections,
     connectionsEnabled: composerConnectionsEnabled,
+    localDraftPersistenceFailed: engine?.getSnapshot().notice?.key === "chat.localDraftPersistenceFailed",
     preview,
     brandName,
     projectWorkspace,

@@ -55,3 +55,5 @@ web 的领域核心：会话线程状态、事件折叠 reducer、渲染投影�
 - message.user 三态吸收（id 命中更新 / 本地 echo 就地改 id / 新建）：SSE 常跑赢 HTTP 回执。
 - delivery.created 以 `(conversationId, artifactId)` 幂等（非 hash）；同 hash 的不同成果保留两件。
 - snapshot 最近 100 件与 `deliveriesHasMore` 一并水合；完整历史由 Library 分页读取。
+
+CHAT-1：ConversationEntry可选literal localDraft，activeIsLocalDraft/retireLocalDraft只操作UI来源，不表示owner存在；索引元数据不能撤销独立提交退休标记。

@@ -1,3 +1,7 @@
+## CHAT-1：本地New来源与不可回退的来源退休（2026-10-24）
+
+ConversationEntry仅增可选localDraft:true，现严格Zod literal；缺省仍历史索引。另由现page-clients按scope写独立`kokoro.web.conversations.draft-retired.<scope>.<encoded session>`键，值为固定版本1；存在/异常即不授予草稿证明，不是会话存在或提交成功事实。主体准入/清理沿原索引前缀，不写secret或正文，无消息/Run/幂等请求副本。New/首次发送保同一ID，原模式/Skills/MCP/模型及composer键不变。首次POST先确证退休键写入，否则保输入与原key/body且零POST；刷新不补发。退休键不做自动过期，只在现主体索引清理或用户浏览器数据重置时清理；配额失败显式可重试，不删其它资料。
+
 ## 2026-10-24 普通会话 MCP 精确选择（App 实施中，正常未激活）
 
 不新增数据库、后台账号偏好或另一份owner状态。本次最小合理默认只在原engine的当前会话草稿状态保存所选Connection ID，发送时复制进原pending submission，原key/body的未知恢复不受后来的勾选变化影响。切主体/新会话/准入退休清退；旧Run的重试/恢复从原冻结输入继承，不拿当前缓存重建。未观察的跨刷新草稿保留及账号默认开关语义不实现，不擅自新建全局设置或以未答复暂停当前切片。

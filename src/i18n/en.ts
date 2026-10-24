@@ -646,6 +646,7 @@ export const en: Partial<Record<MessageKey, string>> = {
   "mode.labelThinking": "Thinking",
   "mode.hintFast": "Faster responses",
   "mode.hintThink": "Deeper thinking",
+  "chat.localDraftPersistenceFailed": "Your browser could not save the send state. The message was not sent and your input is kept. Restore browser storage and retry.",
   "steer.sendFailed": "Failed to send interjection: {detail}. Please retry.",
   "todo.plan": "Plan",
   "lang.switchAria": "Interface language",

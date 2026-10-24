@@ -43,3 +43,11 @@ describe("ConversationStore 落盘往返（只存 UI 偏好与列表索引）", 
     expect(parseStoredConversationStore(raw)).toBeNull()
   })
 })
+
+it("round-trips positive local origin but rejects nonliteral draft markers", () => {
+  const raw = { activeId: "conv_draft", conversations: [{ id: "conv_draft", title: "", updatedAt: 1, mode: "fast", localDraft: true }] }
+  expect(parseStoredConversationStore(raw)).toEqual(raw)
+  for (const value of [false, "true", 1, null]) {
+    expect(parseStoredConversationStore({ ...raw, conversations: [{ ...raw.conversations[0], localDraft: value }] })).toBeNull()
+  }
+})

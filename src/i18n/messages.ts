@@ -576,6 +576,7 @@ export const zh = {
   "mode.hintFast": "更快回应",
   "mode.hintThink": "更深的思考",
   // 引擎瞬态通知（steer 投递失败）
+  "chat.localDraftPersistenceFailed": "浏览器未能保存本次发送状态，消息尚未发送。请恢复浏览器存储后重试，输入已保留。",
   "steer.sendFailed": "插话发送失败：{detail}，请重试",
   // todo
   "todo.plan": "计划",

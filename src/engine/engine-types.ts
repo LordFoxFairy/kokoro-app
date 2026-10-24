@@ -110,9 +110,16 @@ export type SessionEngine = {
   dispose: () => void
 }
 
+/** Browser UI provenance, not an owner receipt or a submission mutex. */
+export type DraftLifecycle = {
+  isUnsubmitted: (sessionId: string) => boolean
+  retire: (sessionId: string) => boolean
+}
+
 export type EngineDeps = {
   client: SessionClient
   storage: PersistedStore<ConversationStore>
+  draftLifecycle?: DraftLifecycle
   /** Direct inbox and project workbenches never share a persisted session index. */
   scope?: SessionScope
   now?: () => number

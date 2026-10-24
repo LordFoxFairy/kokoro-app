@@ -10,6 +10,8 @@ import type { MessageCreateReceipt, SessionSnapshot } from "@/contract/http"
 
 import {
   activeMode,
+  activeIsLocalDraft,
+  retireLocalDraft,
   addConversation,
   conversationTitle,
   removeConversation,
@@ -111,13 +113,21 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   const taskNotifications = createTaskNotifications()
   const notificationAdmissions = new WeakMap<PendingSubmission, number>()
 
+  function canRestoreDraft(candidate: ConversationStore | null): boolean {
+    if (!candidate || !activeIsLocalDraft(candidate)) return false
+    try { return deps.draftLifecycle?.isUnsubmitted(candidate.activeId) === true }
+    catch { return false }
+  }
+
   let machine: MachineState = IDLE_MACHINE
   let store: ConversationStore | null = deps.storage.read()
+  // One transition uses one external-storage observation; a later read may change.
+  const restoringInitialDraft = canRestoreDraft(store)
   let thread: SessionStreamState = createSessionStreamState()
   // An existing persisted session is hydrated as soon as the engine is made;
   // expose that work in the first snapshot instead of making the shell infer
   // it from an empty thread.
-  let hydrating = store !== null
+  let hydrating = store !== null && !restoringInitialDraft
   let connection: ConnectionAvailability = { status: "connected" }
   let pendingMode: AgentMode = "fast"
   const staging = new Map<string, StagedDecisions>()
@@ -159,7 +169,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   let filesSyncGeneration = 0
   let pendingTerminalRead: { generation: number; runs: Set<string> } | null = null
   let reattachTimer: ReturnType<typeof setTimeout> | null = null
-  let locallyCreatedSessionId: string | undefined
+  let locallyCreatedSessionId: string | undefined = restoringInitialDraft ? store?.activeId : undefined
   let missingSessionId: string | undefined
   let disposed = false
   let deleteIntentGeneration = 0
@@ -752,6 +762,20 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     }
   }
 
+  function retireDraftBeforePost(): boolean {
+    if (!store || !activeIsLocalDraft(store)) return true
+    let retired = false
+    try { retired = deps.draftLifecycle?.retire(store.activeId) === true }
+    catch { /* Storage failure must not dispatch a possibly untracked first POST. */ }
+    if (!retired) {
+      notice = { key: "chat.localDraftPersistenceFailed" }
+      notify()
+      return false
+    }
+    commitStore(retireLocalDraft(store, store.activeId))
+    return true
+  }
+
   // POST messages 并处理回执/失败（submit 与 retry 共用的开跑尾段）。
   function beginRun(args: PendingSubmission): void {
     missingSessionId = undefined
@@ -836,6 +860,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     if (!trimmed || !canSubmitMessage()) {
       return false
     }
+    if (!retireDraftBeforePost()) return false
     notice = null
     if (
       store !== null &&
@@ -928,7 +953,8 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       return
     }
     const pending = pendingSubmission
-    if (pending === null) return
+    if (pending === null || !retireDraftBeforePost()) return
+    notice = null
     const before = machine
     machine = transition(machine, { type: "SUBMIT" })
     if (machine === before) {
@@ -1028,8 +1054,10 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   }
 
   // 切换活跃会话的公共尾段：清流/清相位/清暂存，换空线程后按 snapshot 重新水合。
-  function activateConversation(next: ConversationStore, shouldHydrate = true): void {
-    locallyCreatedSessionId = undefined
+  function activateConversation(next: ConversationStore, shouldHydrate = true, forceOwnerRead = false): void {
+    notice = null
+    const restoringDraft = !forceOwnerRead && canRestoreDraft(next)
+    locallyCreatedSessionId = restoringDraft ? next.activeId : undefined
     missingSessionId = undefined
     taskNotifications.select(next.activeId)
     const previousSessionId = store?.activeId ?? null
@@ -1054,10 +1082,10 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     observedTerminalRuns.clear()
     pendingSteerReceipts.clear()
     unprojectedAdmissions.clear()
-    hydrating = shouldHydrate
+    hydrating = shouldHydrate && !restoringDraft
     commitStore(next)
     notify()
-    if (shouldHydrate) {
+    if (shouldHydrate && !restoringDraft) {
       hydrate(next.activeId)
     }
   }
@@ -1089,6 +1117,13 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     if (disposed) {
       return
     }
+    if (store?.activeId === id && (hydrating || pendingSubmission !== null || thread.messages.length > 0 || machine.runId !== null)) return
+    if (store?.conversations.some(entry => entry.id === id && entry.localDraft === true)) {
+      let retired = false
+      try { retired = deps.draftLifecycle?.retire(id) === true } catch { /* Explicit owner reads remain available. */ }
+      activateConversation(selectConversationOp(retired ? retireLocalDraft(store, id) : store, id), true, true)
+      return
+    }
     if (store && store.activeId === id) {
       if (missingSessionId === id && pendingSubmission === null) hydrate(id)
       return
@@ -1108,13 +1143,14 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     if (disposed) {
       return
     }
+    notice = null
     missingSessionId = undefined
     // Starting a fresh chat abandons a POST whose receipt has not arrived yet.
     // Preserve the idempotency key so a late receipt can cancel the server run.
     cancelPendingSubmission()
     abandonActiveRun()
     hydrateGeneration += 1
-    const next = addConversation(store, createId("conv"), now(), store ? "fast" : pendingMode)
+    const next = addConversation(store, createId("conv"), now(), store ? "fast" : pendingMode, deps.draftLifecycle !== undefined)
     locallyCreatedSessionId = next.activeId
     closeStream()
     clearReattachTimer()
@@ -1242,6 +1278,11 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   function retireLocalCreationProvenance(): void {
     if (locallyCreatedSessionId === undefined) return
     locallyCreatedSessionId = undefined
+    if (store && activeIsLocalDraft(store)) {
+      let retired = false
+      try { retired = deps.draftLifecycle?.retire(store.activeId) === true } catch { /* Owner/identity evidence still retires the live view. */ }
+      if (retired) commitStore(retireLocalDraft(store, store.activeId))
+    }
     notify()
   }
 
@@ -1279,6 +1320,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     ) {
       // 本 tab 激活会话仍在：只吸收列表，保留本 tab 激活视图与在途线程，不重水合、不打断流。
       store = { ...external, activeId: myActive }
+      if (canRestoreDraft(store) && thread.messages.length === 0 && pendingSubmission === null) locallyCreatedSessionId = myActive
       notify()
       return
     }
@@ -1309,8 +1351,11 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     pendingSteerReceipts.clear()
     unprojectedAdmissions.clear()
     store = external
+    notice = null
     taskNotifications.select(external?.activeId ?? null)
-    if (external?.activeId) {
+    const restoringExternalDraft = canRestoreDraft(external)
+    if (restoringExternalDraft) locallyCreatedSessionId = external?.activeId
+    if (external?.activeId && !restoringExternalDraft) {
       hydrate(external.activeId)
     }
     notify()
@@ -1318,7 +1363,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   unsubscribeStore = deps.storage.subscribe(onExternalStore)
 
   // 启动即水合：活跃会话从服务端 snapshot 恢复消息/在途 run/暂停点。
-  if (store) {
+  if (store && !restoringInitialDraft) {
     hydrate(store.activeId)
   }
 

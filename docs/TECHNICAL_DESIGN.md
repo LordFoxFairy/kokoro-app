@@ -1,3 +1,11 @@
+## CHAT-1：空草稿刷新恢复与提交前来源退休（2026-10-24，既有App边界）
+
+现Conversation索引增加可选localDraft:true，只作本地New来源及提交前退休义务，不能仅因读取失败而擦除这项义务。保原conv ID，不引入draft→formal身份交接，以免破坏Skill试用/URL/跨tab原引用。所有恢复入口必须同时有正向标记和本scope独立退休键不存在的证据；旧无字段索引、退休键存在或读取异常均走原owner水合，404/空标题不生成来源。无生命周期adapter的注入engine不持久化这项证明。
+
+现page-clients按既有主体准入和scope装配draftLifecycle I/O；独立键位于原conversation前缀下，首次POST前同步写入并读核退休标记，再清索引正向标记。旧tab覆盖整份索引也覆盖不到独立退休键。首发/retry复用同一闸门；失败零POST、保原输入/正文及pending key/body，显示可重试保存错误，不把unknown改成新提交。此记录仅表示来源不可再授予，不代表owner已接受、单发或已结算；跨tab幂等/队列仍归现owner。
+
+退休键不含正文/凭据/金额，不设TTL或投机GC以免重新授予旧草稿；只随现主体切换的本地索引清理或用户浏览器数据重置清理。存储配额/读取故障fail-closed，不自动清其它数据腾空间；数量增长是本地存储约束，不宣称无限容量。显式深链/owner打开仍强制GET（同ID已有pending/正文/run/水合时保持原槽），退休写读失败时保索引义务而非绕过POST闸门；状态/列表/ACK及subject退休仍清活跃证明。新建/切换清前一任务的发送错误。每次构造或外部激活切换只取一次生命周期读取观察，来源授予、hydrating与是否发GET共同使用同一决定，避免存储读取恢复/变化时无GET却永久加载；后续独立操作仍重新观察。无API/wire/SQL/owner服务变化。
+
 ## 2026-10-24 Custom API 直达编辑（既有组件内修复）
 
 Manus已实测：Custom API卡片直接编辑，Custom MCP才是只读详情→配置，二者不共用流程/布局。移除API额外overview，保留原actor/client命令槽、CAS/key/body、窗口取消/晚ACK/秘密清退和删除确认；仅UI变更，无wire/Schema/owner调整。API独立CSS模块，退役原MCP CSS内无其它消费者的API选择器。初始名称焦点由Radix onOpenAutoFocus归属，不依赖会被Dialog覆盖的原生autoFocus；pending保既有表单busy和保存按钮spinner，不插顶端加载横幅移位；unknown/completed原恢复保留。changed比较原始字段与owner原值，不以trim差异擅自启动保存。

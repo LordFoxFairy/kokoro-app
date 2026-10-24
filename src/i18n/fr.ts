@@ -464,6 +464,7 @@ export const fr: Partial<Record<MessageKey, string>> = {
   "mode.labelThinking": "réflexion profonde",
   "mode.hintFast": "Répondez plus rapidement",
   "mode.hintThink": "une réflexion plus profonde",
+  "chat.localDraftPersistenceFailed": "Le navigateur n’a pas pu enregistrer l’état de l’envoi. Le message n’a pas été envoyé et votre texte est conservé. Rétablissez le stockage du navigateur et réessayez.",
   "steer.sendFailed": "Échec de l'envoi de l'interruption : {detail}, veuillez réessayer",
   "todo.plan": "plan",
   "lang.switchAria": "langue de l'interface",

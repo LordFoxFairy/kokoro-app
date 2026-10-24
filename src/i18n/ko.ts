@@ -464,6 +464,7 @@ export const ko: Partial<Record<MessageKey, string>> = {
   "mode.labelThinking": "깊은 생각",
   "mode.hintFast": "더 빠르게 응답하세요",
   "mode.hintThink": "더 깊은 생각",
+  "chat.localDraftPersistenceFailed": "브라우저에 전송 상태를 저장하지 못했습니다. 메시지는 전송되지 않았으며 입력은 보존됩니다. 브라우저 저장소를 복구한 후 다시 시도하세요.",
   "steer.sendFailed": "인터럽트 전송 실패: {detail}, 다시 시도해 주세요.",
   "todo.plan": "계획",
   "lang.switchAria": "인터페이스 언어",

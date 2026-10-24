@@ -541,6 +541,7 @@ export const ja: Partial<Record<MessageKey, string>> = {
   "mode.labelThinking": "深い考え",
   "mode.hintFast": "より速く応答する",
   "mode.hintThink": "より深い思考",
+  "chat.localDraftPersistenceFailed": "ブラウザーに送信状態を保存できませんでした。メッセージは未送信で、入力は保持されています。ブラウザーのストレージを復旧して再試行してください。",
   "steer.sendFailed": "割り込みの送信に失敗しました: {detail}。もう一度お試しください。",
   "todo.plan": "プラン",
   "lang.switchAria": "インターフェース言語",

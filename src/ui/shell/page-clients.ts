@@ -5,6 +5,7 @@
 import { createPreviewClient, previewClientFromEnv } from "@/dev/preview-transport"
 import { createSessionClient, type SessionClient } from "@/engine/client"
 import { sessionBaseUrl } from "@/engine/config"
+import type { DraftLifecycle } from "@/engine/engine-types"
 import { createSessionEngine, type SessionEngine } from "@/engine/machine"
 import { removeConversation, type ConversationStore } from "@/core/conversations"
 import { storedConversationStoreSchema } from "@/core/persistence"
@@ -207,6 +208,24 @@ const pageConversationStores = new Map<string, PersistedStore<ConversationStore>
 let pageMoveCoordinator: ConversationMoveCoordinator | null = null
 let pageMovePagehideBound = false
 
+/** Append-only UI retirement keys cannot be undone by a stale whole-index write. */
+export function browserDraftLifecycle(scopeKey: string): DraftLifecycle {
+  const key = (id: string) => `${STORAGE_KEY}.draft-retired.${encodeURIComponent(scopeKey)}.${encodeURIComponent(id)}`
+  return {
+    isUnsubmitted: id => {
+      try { return window.localStorage.getItem(key(id)) === null }
+      catch { return false }
+    },
+    retire: id => {
+      try {
+        if (window.localStorage.getItem(key(id)) === "1") return true
+        window.localStorage.setItem(key(id), "1")
+        return window.localStorage.getItem(key(id)) === "1"
+      } catch { return false }
+    },
+  }
+}
+
 function conversationStore(scopeKey: string): PersistedStore<ConversationStore> {
   const existing = pageConversationStores.get(scopeKey)
   if (existing) return existing
@@ -344,6 +363,7 @@ export function browserEngine(options: { preview?: boolean; scope?: SessionScope
     const engine = createSessionEngine({
       client,
       storage: conversationStore(sessionScopeKey(scope)),
+      draftLifecycle: browserDraftLifecycle(sessionScopeKey(scope)),
       scope,
     })
     pageEngines.set(engineKey, { engine, owners: new Set(), pendingRelease: null, releaseWhenSettled: null, invalidated: false })

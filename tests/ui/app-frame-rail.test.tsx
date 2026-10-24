@@ -4871,3 +4871,17 @@ it("a pending Custom API save reports form busy without inserting a loading bann
   expect(screen.queryByText("正在加载…")).not.toBeInTheDocument()
   expect(screen.getByRole("button", { name: "保存" })).toBeDisabled()
 })
+
+it("a failed draft retirement shows a send error and retains the composer input", async () => {
+  engine.dispose()
+  client = createFakeClient()
+  engine = createSessionEngine({ client, storage: createMemoryStorage<ConversationStore>(null), draftLifecycle: { isUnsubmitted: () => true, retire: () => false } })
+  engine.newConversation()
+  mountFrame()
+  const composer = screen.getByRole("textbox", { name: "对话输入" })
+  fireEvent.change(composer, { target: { value: "preserve this unsent draft" } })
+  fireEvent.submit(composer.closest("form")!)
+  expect(await screen.findByRole("alert")).toHaveTextContent("消息尚未发送")
+  expect(composer).toHaveValue("preserve this unsent draft")
+  expect(client.createCalls).toEqual([])
+})

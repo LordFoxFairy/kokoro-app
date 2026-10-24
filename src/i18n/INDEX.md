@@ -76,3 +76,5 @@ Web UI 的多语言:**中文(zh)是唯一源字典**,其余语言是增量覆盖
 - locale storage 不是认证或服务端事实；不要把其异常恢复扩展为 Product Session、认证索引或业务数据的 fallback。
 
 Agent 待核对终态使用 fail.modelSettlementPending，九语言仅描述停止、内容保留与结算待核对，不推断扣款／释放。
+
+CHAT-1：chat.localDraftPersistenceFailed九语言说明未发送、保输入与恢复浏览器存储后重试，不伪造已提交。

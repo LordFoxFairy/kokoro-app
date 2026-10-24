@@ -464,6 +464,7 @@ export const de: Partial<Record<MessageKey, string>> = {
   "mode.labelThinking": "tiefes Denken",
   "mode.hintFast": "Reagieren Sie schneller",
   "mode.hintThink": "tieferes Denken",
+  "chat.localDraftPersistenceFailed": "Der Sendestatus konnte nicht im Browser gespeichert werden. Die Nachricht wurde nicht gesendet, Ihre Eingabe bleibt erhalten. Aktivieren Sie den Browserspeicher und versuchen Sie es erneut.",
   "steer.sendFailed": "Fehler beim Senden des Interrupts: {detail}, bitte versuchen Sie es erneut",
   "todo.plan": "planen",
   "lang.switchAria": "Schnittstellensprache",

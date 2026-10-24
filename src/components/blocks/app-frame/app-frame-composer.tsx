@@ -30,6 +30,7 @@ type ShellComposerProps = Omit<
 export type AppFrameComposerProps = ShellComposerProps & {
   connections?: ComposerConnectionsController
   connectionsEnabled?: boolean
+  localDraftPersistenceFailed?: boolean
   preview: boolean
   brandName: string | undefined
   projectWorkspace: boolean
@@ -75,6 +76,7 @@ function preferredCreationModel(projectWorkspace: boolean, hasMessages: boolean,
 export function AppFrameComposer({
   connections,
   connectionsEnabled = false,
+  localDraftPersistenceFailed = false,
   preview,
   brandName,
   projectWorkspace,
@@ -100,6 +102,7 @@ export function AppFrameComposer({
 
   return (
     <div data-slot="composer" className="shrink-0">
+      {localDraftPersistenceFailed ? <p role="alert" className={styles.submissionError}>{translate("chat.localDraftPersistenceFailed")}</p> : null}
       <Composer
         {...composerProps}
         {...(placeholder === undefined ? {} : { placeholder })}

@@ -59,3 +59,5 @@ Web专属thread viewport统一隐藏滚动条槽以匹配Composer阅读轴；共
 - scope 切换只在本页暂留未获 create receipt 的原 engine（包括 unknown），不新建持久化 store、不自动重发；回到原 scope 继续原 key/body。回执落定且无页面 owner 即释放，身份失效强制退休无 owner 的缓存；已确认运行保持原先离页释放行为。
 
 `useComposerConnections`仅持当前主体/准入代际/engine的Connection列表及metadata读缓存（四并发、显式分页、重复游标/身份错配拒绝）；selection真态在engine，打开菜单背景重读，同scope失败保已知列表。主体退休取消/忽略迟到，不持久化或授权；自有读取不挤入Settings coordinator。
+
+CHAT-1：page-clients将draftLifecycle按既有主体准入和scope装配；独立draft-retired键沿原conversation前缀清理，无正文/secret/TTL。保原ID和Skill试用引用，不在索引覆盖时恢复已退休来源。

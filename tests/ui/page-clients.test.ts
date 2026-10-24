@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-import { admitBrowserAuthSessionIndexes, browserConversationMoveCoordinator, browserListClient, readBrowserAuthIndexSubject } from "@/ui/shell/page-clients"
+import { admitBrowserAuthSessionIndexes, browserDraftLifecycle, browserConversationMoveCoordinator, browserListClient, readBrowserAuthIndexSubject } from "@/ui/shell/page-clients"
 
 describe("页面 Chat client transport selection", () => {
   afterEach(() => {
@@ -194,3 +194,83 @@ it("SET47 index invalidation retires live engine provenance without deleting a t
  engine.dispose();
 });
 // SET47-END
+
+describe("independent draft retirement persistence", () => {
+  afterEach(() => { vi.restoreAllMocks(); window.localStorage.clear() })
+  it("survives stale index writes, isolates scopes and follows verified-subject cleanup", async () => {
+    const drafts = browserDraftLifecycle("direct")
+    const project = browserDraftLifecycle("project:one")
+    expect(drafts.isUnsubmitted("conv_shared")).toBe(true)
+    expect(drafts.retire("conv_shared")).toBe(true)
+    window.localStorage.setItem(INDEX, JSON.stringify({ activeId: "conv_shared", conversations: [{ id: "conv_shared", title: "", updatedAt: 1, mode: "fast", localDraft: true }] }))
+    expect(browserDraftLifecycle("direct").isUnsubmitted("conv_shared")).toBe(false)
+    expect(project.isUnsubmitted("conv_shared")).toBe(true)
+    window.localStorage.setItem(UNRELATED, "keep")
+    window.localStorage.setItem(SUBJECT_MARKER, "actor-old")
+    expect(admitBrowserAuthSessionIndexes("actor-new", "actor-old")).toBe(true)
+    expect(drafts.isUnsubmitted("conv_shared")).toBe(true)
+    expect(window.localStorage.getItem(INDEX)).toBeNull()
+    expect(window.localStorage.getItem(UNRELATED)).toBe("keep")
+  })
+  it.each(["read", "write", "verify"])("fails closed when retirement %s is unavailable", stage => {
+    const drafts = browserDraftLifecycle("direct")
+    if (stage === "write") vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("quota") })
+    else if (stage === "verify") vi.spyOn(Storage.prototype, "getItem").mockReturnValueOnce(null).mockImplementation(() => { throw new Error("blocked") })
+    else vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => { throw new Error("blocked") })
+    if (stage === "read") expect(drafts.isUnsubmitted("conv_failed")).toBe(false)
+    else expect(drafts.retire("conv_failed")).toBe(false)
+  })
+})
+
+it("actual browser storage retirement defeats stale-index reload without replaying a message", async () => {
+  const {createSessionEngine} = await import("@/engine/machine")
+  const {createPersistedStore} = await import("@/lib/persisted-store")
+  const {storedConversationStoreSchema} = await import("@/core/persistence")
+  const {createFakeClient,settle} = await import("../engine/fakes")
+  const lifecycle = browserDraftLifecycle("direct")
+  const store = createPersistedStore({key: INDEX, schema: storedConversationStoreSchema})
+  const firstClient = createFakeClient()
+  let engine = createSessionEngine({client: firstClient, storage: store, draftLifecycle: lifecycle, createId: prefix => `${prefix}_storage_reconstruction`})
+  try {
+    engine.newConversation()
+    const id = engine.getSnapshot().store!.activeId
+    const stale = window.localStorage.getItem(INDEX)!
+    expect(JSON.parse(stale).conversations[0].localDraft).toBe(true)
+    engine.submit("browser storage fixture"); await settle()
+    expect(firstClient.createCalls[0]?.sessionId).toBe(id)
+    window.localStorage.setItem(INDEX, stale)
+    window.dispatchEvent(new StorageEvent("storage", {key: INDEX}))
+    engine.openConversation(id)
+    expect(engine.getSnapshot().thread.messages).not.toEqual([])
+    engine.dispose()
+    const nextClient = createFakeClient()
+    engine = createSessionEngine({client: nextClient, storage: createPersistedStore({key: INDEX,schema: storedConversationStoreSchema}), draftLifecycle: browserDraftLifecycle("direct")})
+    await settle()
+    expect(nextClient.snapshotCalls).toEqual([id])
+    expect(nextClient.createCalls).toEqual([])
+    expect(engine.getSnapshot()).not.toHaveProperty("locallyCreatedSessionId")
+  } finally { engine.dispose(); window.localStorage.clear() }
+})
+
+it("actual storage read/write failures cannot convert a positive draft into an unguarded POST", async () => {
+  const {createSessionEngine} = await import("@/engine/machine")
+  const {createPersistedStore} = await import("@/lib/persisted-store")
+  const {storedConversationStoreSchema} = await import("@/core/persistence")
+  const {createFakeClient,settle} = await import("../engine/fakes")
+  const id = "conv_real_storage_failure"
+  window.localStorage.setItem(INDEX, JSON.stringify({activeId:id,conversations:[{id,title:"",updatedAt:1,mode:"fast",localDraft:true}]}))
+  const get = Storage.prototype.getItem
+  vi.spyOn(Storage.prototype,"getItem").mockImplementation(function(this:Storage,key:string) {
+    if (key.includes(".draft-retired.")) throw new Error("read blocked")
+    return get.call(this,key)
+  })
+  vi.spyOn(Storage.prototype,"setItem").mockImplementation(() => {throw new Error("quota")})
+  const client = createFakeClient()
+  const engine = createSessionEngine({client,storage:createPersistedStore({key:INDEX,schema:storedConversationStoreSchema}),draftLifecycle:browserDraftLifecycle("direct")})
+  try {
+    await settle()
+    expect(client.snapshotCalls).toEqual([id])
+    expect(engine.submit("unsent on storage failure")).toBe(false)
+    expect(client.createCalls).toEqual([])
+  } finally {engine.dispose();vi.restoreAllMocks();window.localStorage.clear()}
+})

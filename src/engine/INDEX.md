@@ -107,3 +107,5 @@ SET47：可选EngineSnapshot.locallyCreatedSessionId仅证明当前engine尚未�
 - `client.listModels` 只聚合正式 `feature_key=chat` 目录：逐页传递 opaque cursor，整次读取共用 10 秒预算和 caller 取消；重复 cursor/业务标签、非 chat 候选或超过 100 页均失败，不以部分列表冒完整成功。返回完整列表与 `next_cursor: null`，wire 本身不变。
 
 当前会话MCP：`setSelectedMcpConnectionIds`只接受正式有界唯一ID并复制/冻结，`selectedMcpConnectionIds`快照可供选择器订阅；new/select/外部退休/dispose清空，首次本地会话准入保留。adapter仅非空时发送`selected_mcp_connection_ids`；pending options复制首发数组，同key unknown/retry不随之后选择变化，未选原wire不变；无持久化或trace推导。
+
+CHAT-1：可选draftLifecycle显式注入浏览器来源退休I/O；无adapter不持久恢复New证明。New保持原conv ID，首次POST/retry先确认独立退休标记，失败保输入和原pending key/body。正向localDraft仅在未退休时恢复，历史无字段/读取故障仍走owner，不按404猜draft。

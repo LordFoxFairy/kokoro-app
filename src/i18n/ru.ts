@@ -464,6 +464,7 @@ export const ru: Partial<Record<MessageKey, string>> = {
   "mode.labelThinking": "глубокое мышление",
   "mode.hintFast": "Отвечайте быстрее",
   "mode.hintThink": "более глубокое мышление",
+  "chat.localDraftPersistenceFailed": "Браузер не смог сохранить состояние отправки. Сообщение не отправлено, введённый текст сохранён. Восстановите хранилище браузера и повторите попытку.",
   "steer.sendFailed": "Не удалось отправить прерывание: {detail}, повторите попытку.",
   "todo.plan": "план",
   "lang.switchAria": "язык интерфейса",

@@ -1,3 +1,13 @@
+## 2026-10-24 CHAT-1：空New刷新恢复（正常局部已验，整链未完）
+
+- [x] 原错误已真实复现：New只在RAM记来源，刷新后snapshot/archive404；新版本对明确New持久localDraft来源，并在首次发送前以独立scope退休键撤销，保原conv ID/模式/Skills/MCP/模型及composer键。无adapter不持久授来源；旧无标记的历史索引不猜draft、不自动迁移。
+- [x] 独审发现的确定风险先真实RED后闭合：读取故障不能擦掉提交前退休义务；旧索引回写后same-ID open不能清原pending/unknown/key。真正空的显式同ID深链仍owner GET。新建/切换清前一任务错误，失败零POST/保输入、原key/body。第三次独审发现构造/外部切换重复读取可能令来源与水合决定矛盾，两个公开行为先RED后修为每次转换单一观察，复核无剩余确定P0–P2。实际LocalStorage+engine重构造/故障与mockHTTP证据分列，不冒正常执行。
+- [x] 正常18生产路径精确前像备份/HMR（读取一致性修复后单文件再次守前像HMR并正常重验），751其它source及全部进程保持。555×767正常页面显式New→两行输入→刷新原文仍在且URL干净/app；启用Network后48事件完整窗口，无snapshot/archive/message POST，原生auth/session续期POST200。输入已清并再次刷新确认，自有标签关闭；原用户两标签保留。正常Agent/BFF/Billing全部行/xmin、原usage不变，Platform仅既有读取准入slot变化。
+- [x] 最终相关8文件494PASS；1157非Markdown输入停写零漂移，完整contract307/architecture50/lint/官方typegen/types、257文件4915测试、production build/post-types均exit0，受管Redis14自身key库存0→0。只读独审无剩余确定P0–P2。完整preview零重试113PASS/1FAIL：既有mobile窄屏回宽侧栏焦点在原133行仍inactive，失败截图/trace保留，不放宽断言；浏览器门未全过。原49行导航诊断WIP SHA逐字保持、排除提交，所有完整门绑定本次冻结工作树（含该既存WIP），不冒提交纯树或合并已验。
+- [ ] 本片不解决冷启动“正在加载工作区”、既有mobile侧栏focus失败、全部MCP四入口/Skills/图标或真实模型→工具→产物→整数积分联合旅程。本轮E2E仍有前述失败，未push/PR/merge或提升gitlink，不以局部修复称全产品闭环。
+
+踩坑：最初D→F换ID候选被只读审查查出跨tab未知提交槽丢失及Skill试用退休风险，未上线即完整撤回，原diff/RED保留。改为同ID的独立退休记录，不加handoff层；读取失败只拒授来源，不删除退休义务。退休键不自动TTL/GC，随现主体索引清理/用户浏览器清理；配额故障显式反馈、不清其它数据。HMR增量首个脚本误用缺psycopg的系统Python，未进入写入即停止；复用现Agent虚拟环境后成功，未安装新依赖。第一次CDP未Network.enable窗口为空，不作零请求证据；启用后重做完整48事件窗口。冷加载壳仍出现，未靠隐藏错误冒无感。参考/实现、回滚、RED、输入冻结和正常收据仅Root ignored empty-draft-restore-20261024。
+
 ## 2026-10-24 自定义 API 卡片直达编辑（正常局部已验，工程门通过、浏览器仍一项失败）
 
 真实Manus读取确认已有API点击即编辑；本地原先多出的只读overview已删除。API TSX/独立CSS＋新增局部语义token，不与MCP详情套同一布局；原MCP CSS中128行无消费者API规则退役。原命令/权限/CAS/unknown恢复/秘密只写/删除确认保持，取消关闭，不改值保存禁用。原49行导航诊断WIP hash不变；本片未push/PR/merge。

@@ -116,3 +116,17 @@ it.each(["/app", "/app/project/project-new?conversation=conv-project-new"])(
     engine.dispose()
   },
 )
+
+ it("an explicit same-ID URL still asks the owner even when a local draft was restored", async () => {
+  const client = createFakeClient()
+  const storage = createMemoryStorage<ConversationStore>({ activeId: "conv_local_draft", conversations: [{ id: "conv_local_draft", title: "", updatedAt: 1, mode: "fast", localDraft: true }] })
+  const engine = createSessionEngine({ client, storage, draftLifecycle: { isUnsubmitted: () => true, retire: () => true } })
+  expect(client.snapshotCalls).toEqual([])
+  window.history.replaceState(null, "", "/app?conversation=conv_local_draft")
+  renderHook(() => useAppFrameNavigation({ ...options, engine, activeId: "conv_local_draft", threadMessageCount: 0 }))
+  await act(async () => {})
+  expect(client.snapshotCalls).toEqual(["conv_local_draft"])
+  expect(engine.getSnapshot().missingSessionId).toBe("conv_local_draft")
+  expect(client.createCalls).toEqual([])
+  engine.dispose()
+ })

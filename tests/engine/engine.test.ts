@@ -36,7 +36,7 @@ const CURSOR_12 = "agui_0000000000000000000000000000000c"
 const CURSOR_20 = "agui_00000000000000000000000000000014"
 const CURSOR_30 = "agui_0000000000000000000000000000001e"
 
-function buildEngine(initial: ConversationStore | null = null, reattachTimeoutMs?: number, scope?: SessionScope) {
+function buildEngine(initial: ConversationStore | null = null, reattachTimeoutMs?: number, scope?: SessionScope, draftLifecycle?: { isUnsubmitted: (id: string) => boolean; retire: (id: string) => boolean }) {
   client = createFakeClient()
   storage = createMemoryStorage<ConversationStore>(initial)
   let idCounter = 0
@@ -47,6 +47,7 @@ function buildEngine(initial: ConversationStore | null = null, reattachTimeoutMs
     createId: (prefix) => `${prefix}_${(idCounter += 1)}`,
     ...(reattachTimeoutMs !== undefined ? { reattachTimeoutMs } : {}),
     ...(scope !== undefined ? { scope } : {}),
+    ...(draftLifecycle ? { draftLifecycle } : {}),
   })
   return engine
 }
@@ -131,6 +132,110 @@ it.each(["pending", "unknown", "receipt"] as const)("an absent read never loses 
     expect(client.streams).toHaveLength(1)
     expect(client.lastStream().sessionId).toBe(seeded.activeId)
   }
+})
+
+describe("positive local draft reload and irreversible submission retirement", () => {
+  function lifecycle() {
+    const retired = new Set<string>()
+    return { retired, isUnsubmitted: (id: string) => !retired.has(id), retire: vi.fn((id: string) => { retired.add(id); return true }) }
+  }
+  it("restores a positive unsubmitted draft with the same ID and no owner reads", async () => {
+    const drafts = lifecycle()
+    buildEngine(null, undefined, undefined, drafts)
+    engine.newConversation()
+    const id = engine.getSnapshot().store!.activeId
+    const persisted = JSON.parse(JSON.stringify(storage.read())) as ConversationStore
+    engine.dispose(); buildEngine(persisted, undefined, undefined, drafts)
+    await settle()
+    expect(engine.getSnapshot()).toMatchObject({ locallyCreatedSessionId: id, hydrating: false })
+    expect(engine.getSnapshot()).not.toHaveProperty("missingSessionId")
+    expect(client.snapshotCalls).toEqual([])
+    expect(client.createCalls).toEqual([])
+  })
+  it("finishes initial hydration when draft eligibility changes between independent reads", async () => {
+    const initial: ConversationStore = { activeId: "conv_flapping_initial", conversations: [{ id: "conv_flapping_initial", title: "", updatedAt: 1, mode: "fast", localDraft: true }] }
+    const drafts = { isUnsubmitted: vi.fn(() => true).mockReturnValueOnce(false), retire: () => true }
+    buildEngine(initial, undefined, undefined, drafts)
+    await settle()
+    expect(client.snapshotCalls).toEqual([initial.activeId])
+    expect(engine.getSnapshot()).toMatchObject({ hydrating: false, missingSessionId: initial.activeId })
+    expect(engine.getSnapshot()).not.toHaveProperty("locallyCreatedSessionId")
+  })
+  it("follows an external draft with one coherent owner-read decision", async () => {
+    const drafts = { isUnsubmitted: vi.fn(() => true).mockReturnValueOnce(false), retire: () => true }
+    buildEngine(null, undefined, undefined, drafts)
+    const external: ConversationStore = { activeId: "conv_flapping_external", conversations: [{ id: "conv_flapping_external", title: "", updatedAt: 1, mode: "fast", localDraft: true }] }
+    storage.write(external)
+    await settle()
+    expect(client.snapshotCalls).toEqual([external.activeId])
+    expect(engine.getSnapshot()).toMatchObject({ hydrating: false, missingSessionId: external.activeId })
+    expect(engine.getSnapshot()).not.toHaveProperty("locallyCreatedSessionId")
+  })
+  it("retires before POST, keeps the original ID and selections, and rejects stale index proof on reload", async () => {
+    const drafts = lifecycle()
+    buildEngine(null, undefined, undefined, drafts); engine.newConversation()
+    const id = engine.getSnapshot().store!.activeId
+    const stale = JSON.parse(JSON.stringify(storage.read())) as ConversationStore
+    engine.setMode("thinking"); engine.setSelectedMcpConnectionIds(["connection-selected"])
+    engine.setSelectedSkillSourceRefs(["skill-selected"]); engine.setModel("selected-model")
+    client.nextCreate = () => { expect(drafts.retired.has(id)).toBe(true); return Promise.reject(new SessionClientError("network", "unknown original")) }
+    expect(engine.submit("exact original")).toBe(true); await settle()
+    const first = client.createCalls[0]!
+    expect(first).toMatchObject({ sessionId: id, body: { content: "exact original", thinking: true, selected_mcp_connection_ids: ["connection-selected"], selected_skill_source_refs: ["skill-selected"], model: "selected-model" } })
+    storage.write(stale); engine.retry(); await settle()
+    expect(client.createCalls).toEqual([first, first])
+    expect(engine.getSnapshot().canRetryPendingSubmission).toBe(true)
+    engine.dispose(); buildEngine(stale, undefined, undefined, drafts); await settle()
+    expect(client.snapshotCalls).toEqual([id])
+    expect(engine.getSnapshot()).not.toHaveProperty("locallyCreatedSessionId")
+    expect(engine.getSnapshot().missingSessionId).toBe(id)
+    expect(client.createCalls).toEqual([])
+  })
+  it("does not lose an unknown original when stale draft metadata is followed by same-ID open", async () => {
+    const drafts = lifecycle()
+    buildEngine(null, undefined, undefined, drafts); engine.newConversation()
+    const id = engine.getSnapshot().store!.activeId
+    const stale = JSON.parse(JSON.stringify(storage.read())) as ConversationStore
+    client.nextCreate = () => Promise.reject(new SessionClientError("network", "unknown original"))
+    engine.submit("preserve frozen original"); await settle()
+    const original = client.createCalls[0]!
+    storage.write(stale); engine.openConversation(id); await settle()
+    expect(engine.getSnapshot().canRetryPendingSubmission).toBe(true)
+    expect(engine.getSnapshot().thread.messages).toMatchObject([{content: "preserve frozen original"}])
+    engine.retry(); await settle()
+    expect(client.createCalls).toEqual([original, original])
+  })
+  it("a failed retirement read cannot erase the before-POST persistence obligation", async () => {
+    const initial = { activeId: "conv_read_failed", conversations: [{ id: "conv_read_failed", title: "", updatedAt: 1, mode: "fast" as const, localDraft: true as const }] }
+    const drafts = { isUnsubmitted: () => false, retire: vi.fn(() => false) }
+    buildEngine(initial, undefined, undefined, drafts); await settle()
+    expect(engine.getSnapshot()).not.toHaveProperty("locallyCreatedSessionId")
+    expect(engine.submit("hold this input")).toBe(false)
+    expect(drafts.retire).toHaveBeenCalledWith(initial.activeId)
+    expect(client.createCalls).toEqual([])
+  })
+  it("a new conversation does not inherit the previous unsent storage error", () => {
+    const drafts = lifecycle(); drafts.retire.mockReturnValue(false)
+    buildEngine(null, undefined, undefined, drafts); engine.newConversation()
+    engine.submit("blocked draft")
+    expect(engine.getSnapshot().notice?.key).toBe("chat.localDraftPersistenceFailed")
+    engine.newConversation()
+    expect(engine.getSnapshot().notice).toBeNull()
+    expect(client.createCalls).toEqual([])
+  })
+  it("keeps input unsent when retirement cannot persist and allows a later explicit send", async () => {
+    const drafts = lifecycle(); drafts.retire.mockReturnValue(false)
+    buildEngine(null, undefined, undefined, drafts); engine.newConversation()
+    const id = engine.getSnapshot().store!.activeId
+    expect(engine.submit("do not lose this input")).toBe(false)
+    expect(client.createCalls).toEqual([])
+    expect(engine.getSnapshot().thread.messages).toEqual([])
+    expect(engine.getSnapshot().notice?.key).toBe("chat.localDraftPersistenceFailed")
+    drafts.retire.mockImplementation(value => { drafts.retired.add(value); return true })
+    expect(engine.submit("do not lose this input")).toBe(true); await settle()
+    expect(client.createCalls).toHaveLength(1)
+    expect(client.createCalls[0]).toMatchObject({sessionId: id, body: { content: "do not lose this input" }})
+  })
 })
 
 describe("提交链路", () => {
