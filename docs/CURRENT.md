@@ -1,3 +1,9 @@
+## 2026-10-24 当前 App 累计组合：完整工程与浏览器门通过，产品缺口保持
+
+冻结于0bf78f1＋原单份OIDC fixture诊断WIP，主方 Node22 `KOKORO_TEST_REDIS_URL=redis://127.0.0.1:6379/0 KOKORO_TEST_JSON_EOF_TRACE_DIR=<ignored> pnpm check` exit0：contract304、architecture50、256文件4855测试、全lint/types与生产Turbopack build通过；构建后官方types亦0。独立源码preview完整桌面/手机112 E2E通过、零重试，之前More寻找当前Mail的三处旧断言失败已按实际导航语义修复后复验，正文/焦点/几何/零写入保护未删。src/public全部当前文件与preview逐字一致，最终非文档输入SHA留ignored；默认及资源fixture自清自身记录，没有重置共享Redis/数据库。
+
+诊断仅在一次性Next副本可选记录auth/session handler enter/return/throw的白名单字段并按pid+sequence配对，最多128请求；默认模式原16条JSON解析输出不变，不读取body/cookie/凭据、不改真实Response或异常值。完整可选模式与原pending refresh409握手已通过，原两轮HTML500/JSON EOF仍保留；这次没有复现，不声称已定位/修复根因，也不把观察器存在当生产修复。实际扫描、模型/工具调用、所有Skills/MCP/项目CRUD与Manus全站精确对齐不由本112 preview旅程代替；未push/PR/merge或更新gitlink。
+
 ## 2026-10-24 PROJECT-1：全局新建归属与项目工作区恢复（局部正常生效）
 
 - [x] 已实测 Manus 全局“新建任务”从项目回 `/app`；本地改为仅重置通过当前主体准入的 direct 目标引擎，再导航。原 project 草稿、未知提交和运行不重置；项目行快捷入口仍进入项目根工作区。显式项目 Skill 试用与全局 New 分离，保持项目归属和 Skill 来源保护。

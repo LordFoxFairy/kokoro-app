@@ -782,11 +782,48 @@ async function isolatedNext(projectRoot: string, engine: NextDevEngine): Promise
   try {
     await cp(path.join(projectRoot, "src"), path.join(root, "src"), { recursive: true })
     await cp(path.join(projectRoot, "public"), path.join(root, "public"), { recursive: true })
+    if (process.env.KOKORO_TEST_JSON_EOF_TRACE_DIR || process.env.KOKORO_TEST_SESSION_HANDLER_TRACE === "1") {
+      const authRoute = path.join(root, "src/app/api/auth/[...nextauth]/route.ts")
+      const source = await readFile(authRoute, "utf8")
+      const original = `export async function POST(request: NextRequest, context: Context): Promise<Response> {
+  return representLoginFailure(request, await handle(request, context, "POST"))
+}`
+      if (source.split(original).length !== 2) throw new Error("Session diagnostic fixture source drift")
+      // Only the disposable copy is observed. Never read the body, cookies or
+      // credentials, and preserve the native Response and thrown value.
+      const observed = `let sessionDiagnosticSequence = 0
+export async function POST(request: NextRequest, context: Context): Promise<Response> {
+  if (request.nextUrl.pathname !== "/api/auth/session") {
+    return representLoginFailure(request, await handle(request, context, "POST"))
+  }
+  const sequence = ++sessionDiagnosticSequence
+  const emit = (phase: string, status?: number): void => {
+    if (sequence > 128) return
+    try {
+      process.stdout.write("KOKORO_TEST_SESSION_HANDLER " + JSON.stringify({
+        phase, sequence, pid: process.pid, ...(status === undefined ? {} : { status }),
+      }) + "\\n")
+    } catch { /* diagnostics never replace the request outcome */ }
+  }
+  emit("handler_enter")
+  try {
+    const response = representLoginFailure(request, await handle(request, context, "POST"))
+    emit("handler_return", response.status)
+    return response
+  } catch (error) {
+    emit("handler_throw")
+    throw error
+  }
+}`
+      await writeFile(authRoute, source.replace(original, observed))
+    }
     await writeFile(path.join(root, "json-parse-diagnostic.cjs"), `const { createHash } = require("node:crypto")
 const originalParse = JSON.parse
 let emitted = 0
+const scoped = process.env.KOKORO_TEST_SESSION_HANDLER_TRACE === "1"
+const counts = new Map()
 function caller(stack) {
-  for (const raw of String(stack).split("\\n").slice(1, 9)) {
+  for (const raw of String(stack).split("\\n").slice(1, scoped ? 16 : 9)) {
     const frame = raw.replaceAll("\\\\", "/")
     const line = frame.match(/:(\\d+):\\d+\\)?$/)?.[1]
     if (frame.includes("/next/dist/server/load-manifest")) return { category: "next_manifest_loader", line }
@@ -801,7 +838,7 @@ function caller(stack) {
 JSON.parse = function parse(text, reviver) {
   try { return originalParse.call(this, text, reviver) }
   catch (error) {
-    if (emitted < 16) {
+    if (emitted < 16 || scoped) {
       emitted += 1
       try {
         const isString = typeof text === "string"
@@ -817,7 +854,11 @@ JSON.parse = function parse(text, reviver) {
           scanned_bytes: bounded === null ? 0 : bounded.byteLength, truncated,
           sha256: bounded === null ? null : createHash("sha256").update(bounded).digest("hex"),
           line: location.line === undefined ? null : Number(location.line) }
-        process.stderr.write("KOKORO_TEST_JSON_PARSE_FAILURE " + JSON.stringify(record).slice(0, 8191) + "\\n")
+        const count = counts.get(location.category) || 0
+        if (!scoped || count < 8) {
+          counts.set(location.category, count + 1)
+          process.stderr.write("KOKORO_TEST_JSON_PARSE_FAILURE " + JSON.stringify(record).slice(0, 8191) + "\\n")
+        }
       } catch {}
     }
     throw error
@@ -916,6 +957,7 @@ export const onRequestError: Instrumentation.onRequestError = (error, request, c
       error_code: error instanceof SyntaxError && error.message === "Unexpected end of JSON input" ? "json_unexpected_eof" : "other",
       method: request.method === "POST" || request.method === "GET" ? request.method : "other",
       route: request.path.split("?", 1)[0] === "/api/auth/signout" ? "auth_signout" :
+        request.path.split("?", 1)[0] === "/api/auth/session" ? "auth_session" :
         request.path.split("?", 1)[0] === "/api/rp-request-error-fixture" ? "fixture_synthetic" : "other",
       router_kind: context.routerKind === "App Router" ? "app" : context.routerKind === "Pages Router" ? "pages" : "other",
       route_type: ["route", "render", "action", "proxy"].includes(context.routeType) ? context.routeType : "other",
@@ -1235,7 +1277,7 @@ function requestErrorDiagnostics(value: string): RequestErrorDiagnostic[] {
         error_class: oneOf(item.error_class, ["syntax_error", "type_error", "other_error", "non_error"], "non_error"),
         error_code: oneOf(item.error_code, ["json_unexpected_eof", "other"], "other"),
         method: oneOf(item.method, ["POST", "GET", "other"], "other"),
-        route: oneOf(item.route, ["auth_signout", "fixture_synthetic", "other"], "other"),
+        route: oneOf(item.route, ["auth_signout", "auth_session", "fixture_synthetic", "other"], "other"),
         router_kind: oneOf(item.router_kind, ["app", "pages", "other"], "other"),
         route_type: oneOf(item.route_type, ["route", "render", "action", "proxy", "other"], "other"),
         frames,
@@ -1243,6 +1285,31 @@ function requestErrorDiagnostics(value: string): RequestErrorDiagnostic[] {
     } catch { /* malformed diagnostic output is ignored and asserted by its focused system test */ }
   }
   return records
+}
+
+function sessionHandlerDiagnostics(output: string): Readonly<Record<string, string | number>>[] {
+  const prefix = "KOKORO_TEST_SESSION_HANDLER "
+  const rows: Record<string, string | number>[] = []
+  for (const line of output.slice(-64 * 1024).split(/\r?\n/u)) {
+    if (line.length > 512) continue
+    const start = line.indexOf(prefix)
+    if (start < 0) continue
+    try {
+      const raw: unknown = JSON.parse(line.slice(start + prefix.length))
+      if (typeof raw !== "object" || raw === null) continue
+      const item = raw as Record<string, unknown>
+      if (typeof item.phase !== "string" || !["handler_enter", "handler_return", "handler_throw"].includes(item.phase) ||
+          typeof item.sequence !== "number" || !Number.isSafeInteger(item.sequence) || item.sequence < 1 || item.sequence > 128 ||
+          typeof item.pid !== "number" || !Number.isSafeInteger(item.pid) || item.pid < 1) continue
+      const row: Record<string, string | number> = { phase: item.phase, sequence: item.sequence, pid: item.pid }
+      if (item.phase === "handler_return") {
+        if (typeof item.status !== "number" || !Number.isSafeInteger(item.status) || item.status < 100 || item.status > 599) continue
+        row.status = item.status
+      }
+      rows.push(row)
+    } catch { /* Ignore incomplete lines; no arbitrary fields are returned. */ }
+  }
+  return rows.slice(-16)
 }
 
 async function diagnosticWithin<T>(promise: Promise<T>, fallback: T, timeoutMs = 500): Promise<T> {
@@ -1603,6 +1670,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       next_json_failure_sources: nextJsonFailureSources(nextOutput),
       json_parse_failure_diagnostics: jsonParseFailureDiagnostics(nextOutput),
       request_error_diagnostics: requestErrorDiagnostics(nextOutput),
+      session_handler_events: sessionHandlerDiagnostics(nextOutput),
       next_manifests_before: manifestsBefore,
       next_manifests_after: manifestsAfter,
       next_manifest_changes: nextManifestChanges(manifestsBefore, manifestsAfter),
@@ -6077,6 +6145,13 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       releaseRefresh = undefined
       expect((await refreshing).status).toBe(409)
       expect((await http(nextPort, "/api/auth/session", "GET", "", { cookie })).body).toContain('"authenticated":false')
+      if (process.env.KOKORO_TEST_JSON_EOF_TRACE_DIR || process.env.KOKORO_TEST_SESSION_HANDLER_TRACE === "1") {
+        await expect.poll(() => {
+          const events = sessionHandlerDiagnostics(output.slice(outputStart))
+          return events.some((entry) => entry.phase === "handler_enter" && events.some((exit) =>
+            exit.phase === "handler_return" && exit.status === 409 && exit.pid === entry.pid && exit.sequence === entry.sequence))
+        }).toBe(true)
+      }
     } finally { holdRefresh = false; releaseRefresh?.(); releaseRefresh = undefined; onRefreshStarted = undefined }
   })
 
