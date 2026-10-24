@@ -1,6 +1,6 @@
 ## 2026-10-24 私有 MCP 配置布局
 
-`custom-mcp-detail-dialog.tsx`沿独立配置header／滚动body／footer组织；同名CSS仅配置态采用实测95vw／600×714、持续两列、局部控件token与图标右侧说明，短屏body收缩而操作可达。详情态和管理／Prepare／试用／秘密／CAS语义保持；可见focus使用语义ring outline。参考规格与差异在`docs/manus-reference-audit-v2.md`，状态以CURRENT为准。
+`custom-mcp-detail-dialog.tsx`沿独立配置header／滚动body／footer组织；同名CSS仅配置态采用实测95vw／600×714、持续两列、局部控件token与图标右侧说明，短屏body收缩而操作可达。配置复制SVG16px，复制／添加Header文字以局部configurationButtonLabel承接2px逻辑尾距，宽度仍由内容决定；不改通用Button。详情态和管理／Prepare／试用／秘密／CAS语义保持；可见focus使用语义ring outline。参考规格与差异在`docs/manus-reference-audit-v2.md`，状态以CURRENT为准。
 
 ## 2026-10-24 Header 配置与撤销历史分离
 

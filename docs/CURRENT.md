@@ -1,3 +1,11 @@
+## 2026-10-24 MCP 配置按钮结构按实测修正（正常已验，整卡开放）
+
+同一Manus配置参考的复制SVG为16px、文字SPAN尾距2px；本地原14px／无文字容器，导致复制宽少4px、添加Header宽少2px。本片只将复制SVG改16px，两按钮文字用局部class保2px逻辑尾距；不设固定宽度，不改全局Button／handlers／CAS／恢复或网络。正常555×767原生测量两宽差归零；硬刷新、取消后直接重开同JSON GET200 v9／同Connection／available，完整短窗零业务写。
+
+两个既有真实组件／生产CSS Chromium布局场景先实际FAIL 14≠16后通过；同一1172非MD输入停写的contract／architecture／lint／types／默认5023／build／post-types均exit0、无漂移；53883独立preview零重试114通过、post-types恢复后无漂移、自有监听关闭。独审Approved。原49行导航诊断WIP保留且排除提交，正常其它772源／全部进程／原四owner行xmin（Platform读admission单列）／原usage保持。资格是本片，不冒正常产品完整CRUD。
+
+另一次双源HMR显示Next mini-css-extract-plugin热替换removeChild空父节点堆栈，原图与AX保留；显式冷刷新清除，但底层竞态未证实／未修，不把消失当根因闭合。冷加载仍开放，正式图标上传／原保存绑定／回收、HTTP外传输及四入口／外层广场与Skills仍待。证据Root ignored normal/json-url/button-detail（red／green、reference／before／after、after-reload、short-read-proof、normal-guard、app-final及e2e-binding）。未push／PR／merge或Root gitlink提升。
+
 ## 2026-10-24 MCP 配置响应式／反馈滚动已正常修复（整MCP仍开放）
 
 本片只改私有MCP配置组件／局部CSS，连既有撤销Header显示修正一起交付：名称／传输持续两列，独立标题／滚动正文／页脚，实测token、14px控件、图标右侧说明与添加Header图标；键盘保显式2px focus。555×767、390×844、1280×900正常实测面板与名称几何对上参考，555备注／页脚等对上；390×400十二行未保存Header只滚正文、320×568底部操作换行可达。参考短屏自身714px越界不照抄，差异已明确记录。
@@ -8,7 +16,7 @@
 
 四owner原行/xmin仅Platform读admission变化，原usage、全部正常进程及dispatch=false保持；自有58／59关闭、原1／10保留。证据Root ignored `normal/json-url/parity-final/`（layout-red／reviewed-green、alerts-red／green、app-final-reviewed、e2e-binding、reviewed-read-proof、normal-guard与原始截图）。正常字节与工程资格独立绑定，不将runner旧模板normal_activated字段当部署证据。
 
-仍欠复制按钮宽4px／添加Header宽2px等逐项对照、图标正式暂存绑定／回收、HTTP外传输、四入口与外层广场完整CRUD、冷慢加载及Skills；本片不关闭整MCP、不转Skills半片。无push／PR／merge或Root gitlink提升，最新交付状态以Root原执行板为准。
+本段提交时的复制宽4px／添加Header宽2px差异已由上方后继修正；仍欠图标正式暂存绑定／回收、HTTP外传输、四入口与外层广场完整CRUD、冷慢加载及Skills；本片不关闭整MCP、不转Skills半片。无push／PR／merge或Root gitlink提升，最新交付状态以Root原执行板为准。
 
 ## 2026-10-24 已撤销 Header 的配置投影修复（正常已验）
 

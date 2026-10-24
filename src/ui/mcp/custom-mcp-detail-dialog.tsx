@@ -279,7 +279,7 @@ export function CustomMcpDetailDialog({
                 }
               >
                 <Copy aria-hidden="true" />
-                复制 UUID
+                <span className={styles.configurationButtonLabel}>复制 UUID</span>
               </Button>
             </header>
             <div className={styles.configurationBody}>
@@ -446,7 +446,7 @@ export function CustomMcpDetailDialog({
                   }
                 >
                   <Plus aria-hidden="true" />
-                  添加自定义 header
+                  <span className={styles.configurationButtonLabel}>添加自定义 header</span>
                 </Button>
               </fieldset>
             </div>

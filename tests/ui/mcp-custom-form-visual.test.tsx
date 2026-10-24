@@ -101,6 +101,13 @@ it.each(["unknown", "trial"] as const)("configuration %s feedback keeps short-sc
     expect(bounds).not.toBeNull()
     expect(bounds!.y).toBeGreaterThanOrEqual(0)
     expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(400)
+    // Same measured reference at normal and short viewports: content-driven buttons,
+    // including their 16px icon and 2px trailing label inset, not fixed widths.
+    for (const [name, width] of [["复制 UUID", 99.7890625], ["添加自定义 header", 167.75]] as const) {
+      const button = page.getByRole("button", { name, exact: true })
+      expect((await button.locator("svg").boundingBox())?.width).toBe(16)
+      expect(Math.abs((await button.boundingBox())!.width - width)).toBeLessThan(1)
+    }
     const form = screen.getByRole("textbox", { name: "服务器名称" }).closest("form")
     for (const alert of screen.getAllByRole("alert")) expect(form).toContainElement(alert)
     const evidence = process.env.KOKORO_VISUAL_EVIDENCE_DIR
