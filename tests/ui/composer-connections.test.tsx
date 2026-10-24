@@ -119,7 +119,11 @@ it("ordinary AppFrame connects its independent menu to the first message, not an
   vi.spyOn(pageClients, "browserHubClient").mockReturnValue(hub)
   const engine = createSessionEngine({ client, storage: createMemoryStorage<ConversationStore>(null) })
   try {
-    render(<ThemeProvider><LocaleProvider><AppFrame engine={engine} chatHref="/app" /></LocaleProvider></ThemeProvider>)
+    render(<ThemeProvider><LocaleProvider><AppFrame engine={engine} chatHref="/app"
+      navigation={[{ key: "chat", label: "新对话", featureFlag: "chat" }, { key: "mcp", label: "连接器" }]}
+      featureFlags={[{ key: "chat", enabled: true }, { key: "workspace.resources", enabled: true }, { key: "workspace.skills", enabled: true }]}
+      workspaceCapabilities={{ instructions: true, connectors: false, resources: true, skills: true, projectConversations: true }}
+    /></LocaleProvider></ThemeProvider>)
     await act(async () => { await settle() })
     fireEvent.click(screen.getByRole("button", { name: "连接器 (0)" }))
     fireEvent.click(await screen.findByRole("switch", { name: "Docs connector:connection:a" }))
@@ -160,4 +164,22 @@ it("accepts a global provider Connection whose connector legitimately omits serv
   act(() => result.current.toggle("connection:a"))
   expect(engine.getSnapshot().selectedMcpConnectionIds).toEqual(["connection:a"])
   engine.dispose()
+})
+
+
+it.each([
+  { navigation: [{ key: "chat", label: "Chat" }], featureFlags: [{ key: "chat", enabled: true }] },
+  { navigation: [{ key: "mcp", label: "Connectors", featureFlag: "module.mcp" }], featureFlags: [{ key: "module.mcp", enabled: false }] },
+])("does not read or expose composer MCP when its actual module is absent or disabled: %j", async manifest => {
+  window.localStorage.setItem("kokoro.locale", "zh")
+  const client = createFakeClient(), reading = reader(), hub = { ...createPreviewHubClient(), ...reading }
+  vi.spyOn(pageClients, "browserListClient").mockReturnValue(client)
+  vi.spyOn(pageClients, "browserHubClient").mockReturnValue(hub)
+  const engine = createSessionEngine({ client, storage: createMemoryStorage<ConversationStore>(null) })
+  try {
+    render(<ThemeProvider><LocaleProvider><AppFrame engine={engine} chatHref="/app" {...manifest} /></LocaleProvider></ThemeProvider>)
+    await act(async () => { await settle() })
+    expect(screen.queryByRole("button", { name: "连接器 (0)" })).not.toBeInTheDocument()
+    expect(reading.listMcpConnections).not.toHaveBeenCalled()
+  } finally { engine.dispose() }
 })

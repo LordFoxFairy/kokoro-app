@@ -1,3 +1,11 @@
+## 2026-10-24 正常读者已配对；普通会话 MCP 入口误用项目开关
+
+Agent4c46ec6、BFFf71a179、App0d19bfd已按原配置配到正常读者，正常BFF实际入口是tsx源码而非dist；仅三读者重启，其他七监听不变，四owner数据及xmin、原usage hash核同，dispatch保持false。不能继续将正常态写成“未配对”。真实浏览器随后发现普通会话没有Connection按钮：AppFrameComposer错误复用workspace.connectors，而当前manifest仅开启MCP模块，没有开启项目默认绑定。
+
+本片仅把普通会话选择准入接回原运行导航MCP模块及其正式feature flag，不开启项目绑定或修改System配置；模块缺席/明确关闭时也停止列表读取。实际manifest形状先复现缺按钮RED，修复后相关六文件461项、两生产文件与原suite ESLint、官方typegen/tsc均exit0；独立只读审查未见确定P0–P2。尚未重跑完整owner/build/整站E2E，沿用0d19bfd完整基线但不冒本片全门已验。既存49行导航诊断WIP逐字保留并排除提交。
+
+下一动作是仅两文件精确HMR及正常浏览器QA Connection选择，不重启BFF/Agent、不改Schema或资金。正常冷载工作区占位和原pending结算仍存在；同次模型→MCP→产物→重开→实际用量积分未完成，不能以本片闭环冒整链完成。正常采集及回滚材料仅Root ignored normal-pair。
+
 ## 2026-10-24 普通会话 MCP 选择纵向（本地已验，正常未配对）
 
 App以f0740f3为基线，固定BFF f71a179 / Public24原件及原七生成器，正式selected_mcp_connection_ids经当前会话engine→原消息adapter；原trace alias移除。选择/冻结/unknown原请求恢复、new/select/主体退休与首发保留由原engine单点拥有，独立Connection菜单已接普通AppFrame，不改后台enabled。真列表与metadata精确关联、global合法省server_id、可用性/分页/有限并发/失败保缓存、取消/迟到/Storage异常退休均已实际验证；独审两P2已修并复核。

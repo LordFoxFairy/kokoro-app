@@ -29,6 +29,7 @@ type ShellComposerProps = Omit<
 
 export type AppFrameComposerProps = ShellComposerProps & {
   connections?: ComposerConnectionsController
+  connectionsEnabled?: boolean
   preview: boolean
   brandName: string | undefined
   projectWorkspace: boolean
@@ -73,6 +74,7 @@ function preferredCreationModel(projectWorkspace: boolean, hasMessages: boolean,
 /** Renders the one shell-owned Composer slot and its site-projected actions. */
 export function AppFrameComposer({
   connections,
+  connectionsEnabled = false,
   preview,
   brandName,
   projectWorkspace,
@@ -132,7 +134,7 @@ export function AppFrameComposer({
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : null}
-            {workspaceCapabilities.connectors && connections ? (
+            {connectionsEnabled && connections ? (
               <ComposerConnections controller={connections} onManage={(returnTarget) => onOpenSettings("mcp", returnTarget)} />
             ) : null}
           </>

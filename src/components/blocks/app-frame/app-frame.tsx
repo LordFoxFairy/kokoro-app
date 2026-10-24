@@ -21,6 +21,7 @@ import { useAwaitingNotify } from "@/ui/shell/use-awaiting-notify"
 import { useCanvasWorkspace } from "@/ui/shell/use-canvas-workspace"
 import { useComposerSelectors } from "@/ui/shell/use-composer-selectors"
 import { useComposerConnections } from "@/ui/shell/use-composer-connections"
+import { isRuntimeNavigationEnabled } from "@/ui/navigation/runtime-navigation-registry"
 import { useConversationReaders } from "@/ui/shell/use-conversation-readers"
 import { useDraft } from "@/ui/shell/use-draft"
 import type { ConversationThreadProps } from "@/ui/thread/conversation-thread"
@@ -250,10 +251,15 @@ function AppFrameRuntime({
   const routedConversationId = navigationState.resolvedConversationRouteId
   const railReadIdentity = JSON.stringify([projectReadBoundary?.subject ?? "injected", projectReadBoundary?.generation ?? 0])
   const railReadAdmitted = preview || (projectReadBoundary === undefined ? injectedEngine !== undefined : projectReadBoundary.admitted && projectReadBoundary.subject !== null)
+  // Account MCP selection follows the enabled connector module, not project default bindings.
+  const composerConnectionsEnabled = navigation === undefined
+    ? featureFlags === undefined && (workspaceCapabilities?.connectors ?? true)
+    : navigation.some(item => item.key === "mcp" && isRuntimeNavigationEnabled(item, featureFlags))
+  const connectionsBoundary = preview ? { admitted: true, subject: "preview", generation: 0 } : projectReadBoundary ?? { admitted: injectedEngine !== undefined, subject: "injected", generation: 0 }
   const connections = useComposerConnections({
     engine,
     client: browserHubClient({ preview }),
-    boundary: preview ? { admitted: true, subject: "preview", generation: 0 } : projectReadBoundary ?? { admitted: injectedEngine !== undefined, subject: "injected", generation: 0 },
+    boundary: { ...connectionsBoundary, admitted: connectionsBoundary.admitted && composerConnectionsEnabled },
     enforceSubjectMarker: !preview && injectedEngine === undefined,
   })
   const [moveSelectionGeneration, setMoveSelectionGeneration] = useState(0)
@@ -726,6 +732,7 @@ function AppFrameRuntime({
 
   const composerProps: AppFrameComposerProps = {
     connections,
+    connectionsEnabled: composerConnectionsEnabled,
     preview,
     brandName,
     projectWorkspace,
