@@ -215,7 +215,7 @@ export function WorkspaceRailShell({
   const railRootRef = useRef<HTMLDivElement | null>(null)
   const toggleFocusRef = useRef<{ mode: "collapsed" | "expanded"; pointer: boolean } | null>(null)
   const togglePointerRef = useRef(false)
-  const previousCompactDesktopRailRef = useRef<boolean | null>(null)
+  const previousOverlayNavigationRef = useRef<boolean | null>(null)
   const responsiveFocusPendingRef = useRef(false)
   const lastNavigationControlRef = useRef<HTMLElement | null>(null)
 
@@ -235,9 +235,10 @@ export function WorkspaceRailShell({
   // Focus handoff follows the committed provider state rather than the click
   // event's pre-toggle tree, so a replaced control never receives stale focus.
   useLayoutEffect(() => {
-    const previousCompactDesktopRail = previousCompactDesktopRailRef.current
-    previousCompactDesktopRailRef.current = compactDesktopRail
-    if (previousCompactDesktopRail !== null && previousCompactDesktopRail !== compactDesktopRail) {
+    const overlayNavigation = compactDesktopRail || isMobile
+    const previousOverlayNavigation = previousOverlayNavigationRef.current
+    previousOverlayNavigationRef.current = overlayNavigation
+    if (previousOverlayNavigation !== null && previousOverlayNavigation !== overlayNavigation) {
       responsiveFocusPendingRef.current = true
     }
     const targetMode = toggleFocusRef.current
@@ -271,15 +272,15 @@ export function WorkspaceRailShell({
       responsiveFocusPendingRef.current = false
       return
     }
-    const target = compactDesktopRail
+    const target = overlayNavigation
       ? document.querySelector<HTMLElement>('[data-web-navigation-trigger="true"]:not([aria-hidden="true"])')
       : visualCollapsed
         ? railRootRef.current?.querySelector<HTMLElement>('[data-collapsed-brand="true"]')
-        : null
+        : railRootRef.current?.querySelector<HTMLElement>('[data-rail-anchor="rail-toggle"]')
     if (!target || target === active || target.getAttribute("aria-hidden") === "true") return
     target.focus({ preventScroll: true })
     responsiveFocusPendingRef.current = false
-  }, [compactDesktopRail, contentCompactDesktop, visualCollapsed])
+  }, [compactDesktopRail, isMobile, contentCompactDesktop, visualCollapsed])
 
   useEffect(() => {
     if (!searchOpen) return

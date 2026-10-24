@@ -25,3 +25,5 @@ AppFrame可信ProjectReadBoundary沿原rail props/shell进入account余额；同
 - Owner wire 的 `next_cursor` 必填且末页为 `null`；`useSessionList` 只在 view 边界将其显式映射为无 continuation。
 - `useSessionList` 是分页 accumulator 惯用法，不走 `@/lib/query`（无限滚动累加自持游标）。
 - 同主体 Product 会话重核验保持读取边界和既有列表，不触发业务重读。真正退休后的未准入表示等待读取，不表示请求失败：项目和会话侧栏共用现有无文字占位，旧身份行及游标立即退休，重新准入后读取，实际列表错误保留反馈和重试。
+
+窗口变化只约束当前有效rail宽度，保留用户偏好供放宽后恢复；Canvas共同适配归AppFrame layout，不能把其临时reserve锁进被动宽度。

@@ -340,6 +340,17 @@ it("含767.5px缩放的768边界往返保持桌面偏好，不残留抽屉", asy
   await waitFor(() => expect(shell).toHaveAttribute("data-rail-hidden", "true"))
 })
 
+it.each(["fine", "coarse"] as const)("%s 窄屏导航焦点在恢复展开桌面侧栏后交给可见折叠按钮", async (pointer) => {
+  setDesktopViewport(800, pointer)
+  mountFrame({ desktopRailCollapsed: false })
+  await screen.findByRole("button", { name: "收起侧栏" })
+  resizeDesktopViewport(600)
+  const trigger = await screen.findByRole("button", { name: "展开侧栏" })
+  act(() => trigger.focus())
+  resizeDesktopViewport(800)
+  await waitFor(() => expect(screen.getByRole("button", { name: "收起侧栏" })).toHaveFocus())
+})
+
 it("触屏导航抽屉的打开和关闭不改变桌面侧栏偏好", async () => {
   setDesktopViewport(412, "coarse")
   mountFrame({ desktopRailCollapsed: false })

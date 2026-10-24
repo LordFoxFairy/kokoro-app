@@ -2122,6 +2122,20 @@ describe("SET54 compact More owns native keyboard activation and dismissal", () 
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
   });
 
+  it("retires the compact menu when its trigger disappears at the desktop boundary", () => {
+    renderSettings(() => {}, undefined, true, undefined, "mail");
+    const trigger = screen.getByTestId("settings-more");
+    fireEvent.keyDown(trigger, { key: "ArrowDown" });
+    expect(screen.getByRole("menuitem", { name: "账户" })).toHaveFocus();
+    trigger.style.display = "none";
+    fireEvent(window, new Event("resize"));
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(screen.getByRole("tab", { name: "Mail Kokoro" })).toHaveFocus();
+    trigger.style.display = "";
+    fireEvent(window, new Event("resize"));
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+  });
+
   it("keeps keyboard-focused overflow menu items inside the menu viewport", () => {
     renderSettings(() => {}, undefined, true, undefined, "mail");
     const trigger = screen.getByTestId("settings-more");
