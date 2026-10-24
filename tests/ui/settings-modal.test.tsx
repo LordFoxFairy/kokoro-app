@@ -2122,6 +2122,26 @@ describe("SET54 compact More owns native keyboard activation and dismissal", () 
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
   });
 
+  it("keeps keyboard-focused overflow menu items inside the menu viewport", () => {
+    renderSettings(() => {}, undefined, true, undefined, "mail");
+    const trigger = screen.getByTestId("settings-more");
+    fireEvent.keyDown(trigger, { key: "ArrowDown" });
+    const menu = screen.getByRole("menu");
+    const first = screen.getByTestId("settings-more-account");
+    const last = screen.getByTestId("settings-more-help");
+    const rect = (top: number, bottom: number) =>
+      ({ top, bottom, left: 0, right: 144, width: 144, height: bottom - top, x: 0, y: top, toJSON: () => ({}) }) as DOMRect;
+    vi.spyOn(menu, "getBoundingClientRect").mockImplementation(() => rect(100, 200));
+    vi.spyOn(first, "getBoundingClientRect").mockImplementation(() => rect(104 - menu.scrollTop, 140 - menu.scrollTop));
+    vi.spyOn(last, "getBoundingClientRect").mockImplementation(() => rect(500 - menu.scrollTop, 536 - menu.scrollTop));
+    fireEvent.keyDown(first, { key: "End" });
+    expect(last).toHaveFocus();
+    expect(last.getBoundingClientRect().bottom).toBeLessThanOrEqual(menu.getBoundingClientRect().bottom);
+    fireEvent.keyDown(last, { key: "Home" });
+    expect(first).toHaveFocus();
+    expect(first.getBoundingClientRect().top).toBeGreaterThanOrEqual(menu.getBoundingClientRect().top);
+  });
+
   it("keeps one pointer gesture to one toggle and restores trigger focus after selecting", () => {
     const onSelect = vi.fn();
     renderSettings(() => {}, onSelect, true, undefined, "mail");
