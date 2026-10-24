@@ -15,7 +15,6 @@ import { ProjectResourceUploadError } from "./project-resource-upload"
 import { ProjectContextCard, ProjectContextSection } from "./project-context-card"
 import { ProjectIdentity } from "./project-identity"
 import { ProjectConversations } from "./project-conversations"
-import { KokoroProjectConversationWelcome } from "./kokoro-project-conversation-welcome"
 import { ProjectSkillsSection } from "./project-skills-section"
 import { ProjectWorkspaceDialogs } from "./project-workspace-dialogs"
 import { previewScheduledTasks, previewWebsites, type ProjectScheduledPreview, type ResourceKind } from "./project-workspace-model"
@@ -27,7 +26,7 @@ import layoutStyles from "./project-workspace-layout.module.css"
 type ProjectWorkspaceProps = Pick<
   EmptyStateProps,
   "brandName" | "composer" | "onOpenSettings" | "onPrompt" | "projectConversations" | "projectConversationsLoading" | "projectConversationsError" | "onRetryProjectConversations" | "activeProjectConversationId" | "onSelectProjectConversation" | "workspaceCapabilities"
-  | "projectConversation" | "projectInstructions" | "projectInstructionHistory" | "onSaveProjectInstructions" | "onUploadProjectResource" | "onListProjectResources" | "projectRef" | "preview" | "onCreateProjectScheduledTask" | "projectDetail" | "onRetryProjectRead" | "projectInstructionContext" | "projectHistoryStatus" | "projectHistoryRetryable" | "projectReadBoundary"
+  | "projectInstructions" | "projectInstructionHistory" | "onSaveProjectInstructions" | "onUploadProjectResource" | "onListProjectResources" | "projectRef" | "preview" | "onCreateProjectScheduledTask" | "projectDetail" | "onRetryProjectRead" | "projectInstructionContext" | "projectHistoryStatus" | "projectHistoryRetryable" | "projectReadBoundary"
 >
 
 type InstructionEditorState = {
@@ -64,7 +63,6 @@ export function KokoroProjectWorkspace({
   activeProjectConversationId,
   onSelectProjectConversation,
   workspaceCapabilities,
-  projectConversation = false,
   projectInstructions = "",
   projectInstructionHistory = [],
   onSaveProjectInstructions,
@@ -81,7 +79,7 @@ export function KokoroProjectWorkspace({
   onCreateProjectScheduledTask,
 }: ProjectWorkspaceProps) {
   const { locale, t } = useLocale()
-  const { surfaceRef, composerRef } = useProjectComposerClearance(!(projectConversation && !projectConversationsLoading && !projectConversationsError))
+  const { surfaceRef, composerRef } = useProjectComposerClearance(true)
   const capabilities = workspaceCapabilities
   const instructionContext = projectInstructionContext ?? `${preview}:${projectRef ?? ""}`
   const emptyInstructionEditor: InstructionEditorState = {
@@ -239,10 +237,6 @@ export function KokoroProjectWorkspace({
     setInstructions(projectInstructions)
     setInstructionsError(false)
     setInstructionsOpen(true)
-  }
-
-  if (projectConversation && !projectConversationsLoading && !projectConversationsError) {
-    return <KokoroProjectConversationWelcome composer={composer} />
   }
 
   return (

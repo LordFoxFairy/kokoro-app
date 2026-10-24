@@ -640,7 +640,6 @@ function AppFrameRuntime({
   )
   const canSend = draft.trim().length > 0 && canSubmitMessage && projectSubmissionAdmitted
   const conversations = conversationsCtl?.conversations ?? []
-  const projectConversationView = projectWorkspace && navigationState.resolvedConversationRouteId !== null && !narrowWeb
   const projectedCreationIntent = projectWorkspace ? null : navigationState.deploymentIntent
   const projectedWorkspaceCapabilities = projectWorkspaceCapabilities(
     featureFlags,
@@ -773,7 +772,6 @@ function AppFrameRuntime({
     onUploadProjectResource: project.uploadProjectResource,
     onListProjectResources: project.listProjectResources,
     ...(projectRef === undefined ? {} : { projectRef }),
-    projectConversation: projectConversationView,
     onOpenSettings: overlays.openSettings,
     onOpenProject: project.openProject,
     onCreateProject: project.createProject,
@@ -804,7 +802,6 @@ function AppFrameRuntime({
       standaloneSurface={standaloneSurface}
       projectWorkspace={projectWorkspace}
       projectRef={projectRef}
-      projectConversationView={projectConversationView}
       resolvedRailCollapsed={layout.resolvedRailCollapsed}
       narrowWeb={narrowWeb}
       compactDesktopRail={layout.compactDesktopRail}

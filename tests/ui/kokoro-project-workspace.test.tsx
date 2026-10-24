@@ -123,7 +123,6 @@ it("项目会话路由优先显示清单错误而不是误报空会话", () => {
         composer={<div>composer</div>}
         onPrompt={vi.fn()}
         workspaceCapabilities={capabilities}
-        projectConversation
         projectConversationsError
         onRetryProjectConversations={onRetryProjectConversations}
       />
@@ -143,7 +142,6 @@ it("项目会话路由优先显示清单错误而不是误报空会话", () => {
         composer={<div>composer</div>}
         onPrompt={vi.fn()}
         workspaceCapabilities={capabilities}
-        projectConversation
         projectConversationsLoading
       />
     </LocaleProvider>,
@@ -594,12 +592,16 @@ it("正式项目任务入口到独立任务页，不提供样例选择或本地�
   expect(within(card).queryByRole("button")).not.toBeInTheDocument()
 })
 
-it("新的项目会话欢迎面使用 Conversation DOM 与标题关联", () => {
-  render(<LocaleProvider><KokoroProjectWorkspace projectConversation onPrompt={vi.fn()} composer={<textarea aria-label="测试输入" />} /></LocaleProvider>)
-  const surface = document.querySelector('[data-slot="project-conversation-welcome"]')
-  expect(surface).toBeInTheDocument()
-  expect(surface).toHaveAttribute("aria-labelledby", "kokoro-project-conversation-heading")
-  expect(screen.getByRole("heading", { name: "新对话" })).toHaveAttribute("id", "kokoro-project-conversation-heading")
+it("empty project conversations retain identity, context and real project history", () => {
+  const project = { id: "project-context", name: "项目上下文", slug: "context", description: "", created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-01T01:00:00Z" }
+  render(<LocaleProvider><KokoroProjectWorkspace preview={false}
+    projectRef={project.id} projectDetail={{ status: "ready", data: project }}
+    workspaceCapabilities={capabilities} projectConversations={[{ id: "existing-task", title: "已有项目任务" }]}
+    onPrompt={vi.fn()} composer={<textarea aria-label="测试输入" />} /></LocaleProvider>)
+  expect(screen.getByRole("heading", { name: "项目上下文" })).toBeVisible()
+  expect(screen.getByText("已有项目任务")).toBeVisible()
+  expect(screen.getByRole("textbox", { name: "测试输入" })).toBeVisible()
+  expect(screen.queryByText("还没有项目会话。新建一个会话以开始。")).toBeNull()
 })
 
 it("正式项目任务入口精确编码 opaque projectRef，缺少引用时不猜测关联", () => {

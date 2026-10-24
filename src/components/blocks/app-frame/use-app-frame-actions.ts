@@ -12,6 +12,8 @@ import { useT } from "@/i18n/context"
 import { MAX_INPUT_LENGTH } from "@/ui/composer/composer"
 import type { CreationIntent } from "@/ui/composer/creation-intent-pill"
 import { stashConversationDraft } from "@/ui/shell/use-draft"
+import { browserEngine, readBrowserAuthIndexSubject, retainBrowserEngine } from "@/ui/shell/page-clients"
+import { DIRECT_SESSION_SCOPE } from "@/engine/session-scope"
 import { navigateMountedSurface } from "@/ui/navigation/mounted-surface-navigation"
 import { overlayHandoffDelay } from "@/ui/shell/overlay-handoff"
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
@@ -168,6 +170,27 @@ export function useAppFrameActions({
   }, [focusComposer, setDeploymentIntent])
 
   const startNewChatWithUrl = useCallback(() => {
+    if (projectWorkspace) {
+      // The global New task action belongs to the direct inbox, not to the
+      // current project. Keep its draft, unknown POST and run untouched.
+      if (!preview) {
+        try {
+          if (!readBoundary?.admitted || !readBoundary.subject
+            || readBrowserAuthIndexSubject() !== readBoundary.subject) return
+        } catch { return }
+      }
+      const direct = browserEngine({ preview, scope: DIRECT_SESSION_SCOPE })
+      if (!direct) return
+      const release = retainBrowserEngine(direct)
+      try {
+        // Reset the target before navigation can publish its retained engine;
+        // otherwise the previous direct thread would reclaim the clean URL.
+        direct.newConversation()
+        setDeploymentIntent(null)
+        navigateMountedSurface(chatHref)
+      } finally { release() }
+      return
+    }
     setDeploymentIntent(null)
     // Catalog pages share this mounted shell with the direct inbox. Starting
     // a conversation from Agent/Skills/etc. must leave the catalog surface; merely
@@ -177,18 +200,9 @@ export function useAppFrameActions({
       navigateMountedSurface(chatHref)
     }
     startNewChat()
-    if (projectWorkspace) {
-      // The project overview stays at `/app/project/{ref}`. A fresh conversation gets
-      // its own opaque conversation route, which makes conversation creation and the
-      // persistent project surface independently addressable.
-      const nextProjectConversationId = engine?.getSnapshot().store?.activeId ?? null
-      syncConversationUrl(nextProjectConversationId, "push")
-      setConversationRouteId(nextProjectConversationId)
-      return
-    }
     syncConversationUrl(null, "push")
     setConversationRouteId(null)
-  }, [chatHref, engine, projectWorkspace, setConversationRouteId, setDeploymentIntent, standaloneSurface, startNewChat, syncConversationUrl])
+  }, [chatHref, preview, projectWorkspace, readBoundary, setConversationRouteId, setDeploymentIntent, standaloneSurface, startNewChat, syncConversationUrl])
 
   const selectConversationWithUrl = useCallback((id: string) => {
     // A creation mode is a pending action for the current direct-chat draft,
@@ -231,7 +245,7 @@ export function useAppFrameActions({
     // of leaving it on the document body or on a stale navigation action.
     startNewChatWithUrl()
     if (standaloneSurface || projectWorkspace) {
-      // Catalog navigation and project-conversation creation both replace the empty
+      // Catalog navigation and leaving a project both replace the empty
       // surface in the next React commit. Let the fresh Composer mount before
       // handing it focus; otherwise the click succeeds but focus stays on the
       // rail (or falls back to document.body).
@@ -249,7 +263,14 @@ export function useAppFrameActions({
     // and prevents a delayed browser back traversal from restoring the
     // catalogue after the prompt has already been staged.
     closeSettings("handoff")
-    startNewChatWithUrl()
+    if (projectWorkspace) {
+      // An explicit project Skill trial is scoped work, unlike the global
+      // rail's New task. Preserve its project binding and selected Skill.
+      startNewChat()
+      const id = engine?.getSnapshot().store?.activeId ?? null
+      syncConversationUrl(id, "push")
+      setConversationRouteId(id)
+    } else startNewChatWithUrl()
     const nextSessionId = engine?.getSnapshot().store?.activeId ?? null
     if (nextSessionId) stashConversationDraft(nextSessionId, prompt)
     else updateDraft(prompt)
@@ -258,7 +279,7 @@ export function useAppFrameActions({
         focusComposer()
       })
     })
-  }, [closeSettings, engine, focusComposer, startNewChatWithUrl, updateDraft])
+  }, [closeSettings, engine, focusComposer, projectWorkspace, setConversationRouteId, startNewChat, startNewChatWithUrl, syncConversationUrl, updateDraft])
 
   const startSkillCreationFromSettings = useCallback((creationPrompt?: string) => {
     // Manus treats “create with AI” as a prompt starter, not an upload form:

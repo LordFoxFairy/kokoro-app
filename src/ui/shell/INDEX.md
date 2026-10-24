@@ -1,3 +1,7 @@
+## 项目与全局 New（2026-10-24）
+
+全局 New 从项目返回 direct `/app`：当前准入/subject marker 校验后，短暂 retain 目标 direct engine 并先 RESET 后 mounted 导航，finally 释放；不重置离开的项目。项目行快捷入口仍是项目根地址；项目 Skill handoff 保留自身作用域。空项目会话与概览共用项目工作区，不以 viewport 替换成默认欢迎页；真实消息由原 thread 渲染。实际证据与未完成项见 [CURRENT](../../../docs/CURRENT.md)。
+
 ## 主链读取状态（2026-10-21）
 
 - 模型目录按当前 engine/preview 生命周期读取完整 chat 分页；失败保留同身份已知内容并允许重试，切换身份/engine 退休旧请求与选择。普通新会话首发前显示业务模型选择器；业务 label 上 wire，别名仅展示。

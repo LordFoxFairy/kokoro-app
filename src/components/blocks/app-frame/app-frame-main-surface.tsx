@@ -31,7 +31,6 @@ export type AppFrameMainSurfaceProps = {
   projectWorkspace: boolean
   projectRename?: ProjectRenameControl
   projectRef: string | undefined
-  projectConversationView: boolean
   resolvedRailCollapsed: boolean
   narrowWeb: boolean
   compactDesktopRail: boolean
@@ -100,7 +99,6 @@ export function AppFrameMainSurface({
   projectWorkspace,
   projectRename,
   projectRef,
-  projectConversationView,
   resolvedRailCollapsed,
   narrowWeb,
   compactDesktopRail,
@@ -137,7 +135,7 @@ export function AppFrameMainSurface({
       data-rail-collapsed={resolvedRailCollapsed ? "true" : "false"}
       // Empty direct chat and project workspaces share one document geometry
       // with active conversations.
-      data-web-view={showConversation ? "thread" : projectConversationView ? "project-conversation" : "welcome"}
+      data-web-view={showConversation ? "thread" : "welcome"}
     >
       {/* 会话头部（SHARE-1）：有活跃会话且已开聊时显分享入口——创建可撤销只读链接。 */}
       {mounted && !hideWorkspaceHeader ? (

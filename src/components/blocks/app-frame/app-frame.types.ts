@@ -183,8 +183,6 @@ export type EmptyStateProps = {
   workspaceCapabilities?: WorkspaceCapabilities;
   /** Project route renders the project workbench instead of the direct-chat home. */
   projectWorkspace?: boolean;
-  /** Desktop project conversation route keeps a fresh conversation distinct from the project overview. */
-  projectConversation?: boolean;
   /** Session share capability for project-style desktop headers. */
   shareClient?: Pick<SessionClient, "createShare" | "revokeShare">;
 };

@@ -1,3 +1,16 @@
+## 2026-10-24 PROJECT-1：全局新建归属与项目工作区恢复（局部正常生效）
+
+- [x] 已实测 Manus 全局“新建任务”从项目回 `/app`；本地改为仅重置通过当前主体准入的 direct 目标引擎，再导航。原 project 草稿、未知提交和运行不重置；项目行快捷入口仍进入项目根工作区。显式项目 Skill 试用与全局 New 分离，保持项目归属和 Skill 来源保护。
+- [x] 删除以宽度和空 conversation query 决定业务内容的旧 project-conversation-welcome 分支及样式。空项目会话地址仍展示项目身份、上下文和真实最近列表；已有消息继续由原 thread owner 渲染，不把窄屏/宽屏切成两种功能。
+- [x] 正式 System 配置恢复已有真实接线的 `workspace.instructions/resources/conversations` 三项。唯一现有站点/产品 web application 上共 3 次 feature 创建、3 次 exposure 开启；原 4 条 config、2 条 exposure、其他定义/flags、绑定不变。exposure 本身不按 surface 隔离；无改权限、Schema、模型/工具/计费、重启或 flush。原始意图、幂等键、ACK/CAS及禁用回滚方案只留本地 ignored。
+- [x] 正常源码仅七份生产文件定向 HMR，先逐字核对原基线并备份；所有非目标 tracked 文件 hash 保持。正常浏览器已验全局 New → 无 query 的 `/app` 且空输入，项目入口 → 正确项目，往返保留项目草稿且不污染 direct，测试草稿已清回原空值；指令表单/历史、资源详情真实读取成功空态，无写项目数据或发送模型请求。正常 manifest 回读五项 chat+四项 workspace flags。
+- [ ] 项目功能整体尚未闭环：项目连接器绑定无消费 API，网站仍 preview-only；分享仅复制 URL，删除未接 UI，定时任务仅上下文跳转。保持既有关闭边界，不用开启 flag 或演示数据伪造能力。项目指令保存/资源上传/最近会话等完整真实 CRUD 本片未复验。
+- [ ] 用户原会话 query 的归档 GET 实测返回正式 `404 session_not_found`，并非项目清单空读可代替的证据；不自动抹掉深链接、造记录或把历史 404 当 draft。本轮新建路由已不再制造该项目空 query；旧地址恢复语义仍待实施。返回项目时还观察到短暂局部“正在加载项目”，全站无感加载目标未完成。
+
+停写验证：两份相关 UI 文件 247 PASS；桌面/手机 preview 浏览器四条项目首发及全局 New、返回、390→1280、刷新/旧 direct 恢复保护旅程 PASS，零重试。改动路径 ESLint、官方 typegen/tsc、生产 Turbopack build、构建后 types 均 exit 0。原始两项 RED、首轮共享 New 引发两项项目 Skill trial 失败保留，分离明确作用域后完整相关文件重跑通过，未删 Skill/身份断言。正常 CUA 的 viewport override 未改变实测1280×720，已 reset；不将 preview 的390证据冒称正常窄屏实测。完整 contract/architecture/default test/全部 E2E 未重跑，既有 OIDC 间歇500仍未定位；不满足全需求合并门，未 push/PR/merge。原认证 EOF 诊断 WIP 未夹带。
+
+踩坑：全局入口与项目 Skill handoff 不共用作用域重置；目标 direct 在导航前 RESET，避免旧消息把干净 URL 改回旧 query，但冷引擎仍可能有随后代际废弃的 GET，不声称零额外请求。viewport 只决定布局，不决定项目能力。入口缺失先核正式 manifest 与真实接线；正常回读/截图与 fixture PASS 分列。参考、稳定态/旧加载态、本地前后图、意图和回滚材料归档在 Root ignored `var/dev/project-navigation-20261024/`，不入 Git。
+
 ## 2026-10-24 动态适配再次回归：菜单、侧栏宽度与焦点
 
 沿现 App `804998c` 仅修现有组件，不改断点、业务契约或数据。正常浏览器已复现：窄屏打开 More 后扩到800px，portal仍存活而窄屏样式失效，菜单文字覆盖正文；侧栏440px缩到768px仍为440px，正文仅328px；展开偏好下600→800导航按钮被替换后焦点掉body。

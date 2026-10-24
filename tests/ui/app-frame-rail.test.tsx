@@ -1224,6 +1224,47 @@ it.each(["pages", "pending rename"] as const)("a project keeps its own reader ac
   } finally { view.unmount(); projectEngine.dispose(); window.history.replaceState({}, "", "/app") }
 })
 
+it("global New task leaves the project untouched and resets only the admitted direct target", async () => {
+  const pageClients = await import("@/ui/shell/page-clients")
+  const direct = createSessionEngine({ client: createFakeClient(), storage: createMemoryStorage<ConversationStore>(null) })
+  const projectRef = "project_00000000-0000-4000-8000-000000000888"
+  const project = createSessionEngine({ client: createFakeClient(), storage: createMemoryStorage<ConversationStore>(null), scope: { kind: "project", projectRef } })
+  const projectReset = vi.spyOn(project, "newConversation")
+  const directReset = vi.spyOn(direct, "newConversation")
+  const factory = vi.spyOn(pageClients, "browserEngine").mockReturnValue(direct)
+  const release = vi.fn()
+  vi.spyOn(pageClients, "retainBrowserEngine").mockReturnValue(release)
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "global-new-reader")
+  window.history.replaceState({}, "", `/app/project/${projectRef}?conversation=old-project-task`)
+  const clearDraft = vi.fn()
+  const view = renderHook(() => useAppFrameActions({
+    engine: project, projectWorkspace: true, projectRef,
+    readBoundary: { admitted: true, subject: "global-new-reader", generation: 1 },
+    standaloneSurface: false, chatHref: "/app", activeId: null, draft: "project draft", clearDraft,
+    updateDraft: vi.fn(), setDeploymentIntent: vi.fn(), syncConversationUrl: vi.fn(),
+    setConversationRouteId: vi.fn(), focusComposer: vi.fn(), closeSettings: vi.fn(),
+    brandName: "Kokoro", commandNewChatTimerRef: { current: null },
+  }), { wrapper: LocaleProvider })
+  try {
+    act(() => view.result.current.startNewChatWithUrl())
+    expect(window.location.pathname + window.location.search).toBe("/app")
+    expect(directReset).toHaveBeenCalledTimes(1)
+    expect(projectReset).not.toHaveBeenCalled()
+    expect(clearDraft).not.toHaveBeenCalled()
+    expect(release).toHaveBeenCalledTimes(1)
+    factory.mockClear()
+    window.history.replaceState({}, "", `/app/project/${projectRef}`)
+    window.localStorage.setItem("kokoro.web.auth-index-subject", "another-reader")
+    act(() => view.result.current.startNewChatWithUrl())
+    expect(window.location.pathname).toBe(`/app/project/${projectRef}`)
+    expect(factory).not.toHaveBeenCalled()
+    expect(directReset).toHaveBeenCalledTimes(1)
+  } finally {
+    view.unmount(); direct.dispose(); project.dispose(); vi.restoreAllMocks()
+    window.history.replaceState({}, "", "/app")
+  }
+})
+
 it("project overview draft and explicit new-conversation draft remain distinct after Home and project entry", async () => {
   const projectRef = "project_00000000-0000-4000-8000-000000000801"
   const projectPath = `/app/project/${projectRef}`
@@ -1241,7 +1282,12 @@ it("project overview draft and explicit new-conversation draft remain distinct a
     const rootDraft = "root overview first\nroot overview second"
     fireEvent.change(composer(), { target: { value: rootDraft } })
     await waitFor(() => expect(JSON.parse(window.localStorage.getItem(draftsKey) ?? "{}")[rootKey]).toBe(rootDraft))
-    fireEvent.click(screen.getByTestId("rail-new-conversation"))
+    act(() => {
+      projectEngine.newConversation()
+      const id = projectEngine.getSnapshot().store?.activeId
+      window.history.pushState({}, "", `${projectPath}?conversation=${encodeURIComponent(id!)}`)
+      window.dispatchEvent(new PopStateEvent("popstate"))
+    })
     const convB = projectEngine.getSnapshot().store?.activeId
     expect(convB).toMatch(/^conv_/u)
     expect(new URL(window.location.href).searchParams.get("conversation")).toBe(convB)
