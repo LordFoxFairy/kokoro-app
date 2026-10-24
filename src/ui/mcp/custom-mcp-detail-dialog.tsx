@@ -60,6 +60,7 @@ export function CustomMcpDetailDialog({
   actionId,
   admitted,
   managementCommand,
+  configurationSaved,
   onResumeManagement,
   actionError,
   deleteId,
@@ -88,6 +89,8 @@ export function CustomMcpDetailDialog({
   actionId: string | null;
   admitted: boolean;
   managementCommand: McpManagementSummary | undefined;
+  /** A confirmed save in this exact editor window, not a projection refresh. */
+  configurationSaved?: object;
   onResumeManagement: () => void;
   actionError: boolean;
   deleteId: string | null;
@@ -125,6 +128,36 @@ export function CustomMcpDetailDialog({
   const [managementOpen, setManagementOpen] = useState(false);
   const [headers, setHeaders] = useState<HeaderDraft[]>([]);
   const [removedHeaders, setRemovedHeaders] = useState<string[]>([]);
+  const [submittedFields, setSubmittedFields] = useState<{ name: string; notes: string; serverUrl: string } | null>(null);
+  const [observedSave, setObservedSave] = useState(configurationSaved);
+  const [savedFactsPending, setSavedFactsPending] = useState(false);
+  if (observedSave !== configurationSaved) {
+    setObservedSave(configurationSaved);
+    if (configurationSaved) {
+      // The command's transient completed notification may be batched with
+      // finish(). This window-bound receipt still retires write-only drafts.
+      setHeaders([]);
+      setRemovedHeaders([]);
+      // These are values the user explicitly submitted, not owner facts/CAS.
+      // Retain them only as the confirmed command's draft while re-reading;
+      // an unrelated admission recheck still masks untouched owner fields.
+      if (submittedFields) {
+        setName(submittedFields.name);
+        setNotes(submittedFields.notes);
+        setServerUrl(submittedFields.serverUrl);
+        setSubmittedFields(null);
+      }
+      setSavedFactsPending(true);
+    }
+  }
+  if (savedFactsPending && ready) {
+    // Preserve explicit non-secret input while the post-save read is pending;
+    // only the newly admitted owner facts can rebase the editable fields.
+    setSavedFactsPending(false);
+    setName(null);
+    setNotes(null);
+    setServerUrl(null);
+  }
   const managementLocked = managementCommand !== undefined && managementCommand.kind !== "rejected";
   const busy = authorizationBusy || actionId === connector?.connector_id || managementCommand?.kind === "running";
   const [observedKind, setObservedKind] = useState(managementCommand?.kind);
@@ -142,8 +175,12 @@ export function CustomMcpDetailDialog({
   const trialAvailable = ready && server.availability === "available" && connector.availability === "available" &&
     server.prepare_status === "ready" && Boolean(server.connection_id) && connector.enabled && connector.status === "active" &&
     (preparationState === "idle" || preparationState === "rejected");
+  const configurationDirty = editing && (
+    name !== (currentServer?.display_name ?? "") || notes !== (currentServer?.notes ?? "") ||
+    serverUrl !== (currentServer?.server_url ?? "") || headers.length > 0 || removedHeaders.length > 0
+  );
   const primaryAction = () => trialAvailable ? <Button type="button" variant={editing ? "outline" : "default"}
-    disabled={managementLocked || busy || !onTrial} onClick={() => setTrialError(onTrial?.() !== true)}>
+    disabled={managementLocked || busy || configurationDirty || !onTrial} onClick={() => setTrialError(onTrial?.() !== true)}>
     <Send aria-hidden="true" />试用一下
   </Button> : <><Button type="button" variant={editing ? "outline" : "default"}
     disabled={managementLocked || busy || !ready || preparationState === "running" || (!needsAuthorization && !connectorCommandMayResume(preparationFailure))}
@@ -168,6 +205,7 @@ export function CustomMcpDetailDialog({
       headers.some((item) => !item.name.trim() || !item.value)
     )
       return;
+    setSubmittedFields({ name, notes, serverUrl });
     onSaveConfiguration({
       display_name: name.trim(),
       notes: notes.trim(),

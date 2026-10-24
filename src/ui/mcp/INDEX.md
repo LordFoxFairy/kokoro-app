@@ -1,3 +1,7 @@
+## 2026-10-24 私有MCP配置保存落点
+
+`custom-mcp-detail-dialog.tsx`以实际字段/Header草稿判断未保存变更并禁用Try；`mcp-projection-read.tsx`仅在当前主体/代际/窗口确认update_server后保留配置层、发出本地保存receipt并切换精确connector/server回读。旧CAS动作退休，秘密草稿在确认时清退；非秘密已提交值只在确认后作为临时草稿承接回读，fresh事实到达后rebase。未知命令仍恢复原key/body，失败读取只重读、不再次PATCH。未改API/owner；实际验证与未验范围见App CURRENT。
+
 ## 2026-10-24 创建重复URL的确定拒绝
 
 `mcp-server-creation-flow.ts`区分首次确定的URL重复拒绝与未知提交；custom和URL表单使用具名提示并保字段可编辑。旧unknown重放依旧保原命令，status/code/retryable不符不释放。正常证据与未闭合CRUD见CURRENT，不以此称四入口已完成。

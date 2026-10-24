@@ -109,7 +109,7 @@ export function McpProjectionRead({
   const [actionError, setActionError] = useState(false);
   const [editor, setEditor] = useState<McpConnectorEditor | null>(null);
   // Only exact locators and typed input survive an admission recheck.
-  const [connectorIntent, setConnectorIntent] = useState<{ connectorId: string; providerKey?: string; serverId?: string; binding?: McpConnectorBinding; exact?: boolean; entered: boolean; window: object } | null>(null);
+  const [connectorIntent, setConnectorIntent] = useState<{ connectorId: string; providerKey?: string; serverId?: string; binding?: McpConnectorBinding; exact?: boolean; entered: boolean; window: object; configurationSaved?: object } | null>(null);
   const editorWindow = useRef<{ intent: object; controller: AbortController } | null>(null);
   useLayoutEffect(() => {
     const window = connectorIntent?.window;
@@ -327,6 +327,18 @@ export function McpProjectionRead({
     const operation = input?.operation ?? management.getSnapshot().find(item => item.connectorId === connectorId)?.operation;
     const confirmed = input ? await management.submit(input, commandBoundary, wait.controller.signal) : await management.resume(connectorId, commandBoundary, wait.controller.signal);
     if (!confirmed || ownerRef.current !== owner || currentWindow() !== wait || !management.finish(connectorId, commandBoundary)) return;
+    if (origin === "editor" && operation === "update_server") {
+      // Keep the configuration mounted, but retire old CAS/actions before an
+      // exact post-save connector/server read. The page can retain its cards;
+      // those older list facts must not unlock another save or Try.
+      setEditor(null);
+      setConnectorIntent(current => current?.window === expectedWindow ? {
+        ...current, exact: true,
+        binding: { connectorType: "mcp", ...(current.serverId ? { serverId: current.serverId } : {}) },
+        configurationSaved: {},
+      } : current);
+      return;
+    }
     if (operation === "disconnect" || operation === "delete_server") {
       hideConfirmedRemovedConnector(connectorId);
       const creation = providerCreation.getSnapshot().find(item => item.connectorId === connectorId);
@@ -674,6 +686,7 @@ export function McpProjectionRead({
           onRetry={() => { if (ownerRef.current !== owner || !admitted) return; setActionError(false); if (!connectorIntent.exact && (!selectedConnector || connectorState.error)) reload("connectors"); else setDetailRetry(value => value + 1); }}
           admitted={admitted}
           managementCommand={managementState}
+          {...(connectorIntent.configurationSaved ? { configurationSaved: connectorIntent.configurationSaved } : {})}
           onResumeManagement={() => { if (connectorIntent) void runManagement("editor", connectorIntent.connectorId); }}
           preparationState={preparationState?.kind ?? "idle"}
           preparationFailure={preparationState?.failure}

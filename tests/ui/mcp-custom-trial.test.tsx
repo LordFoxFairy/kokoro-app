@@ -46,3 +46,35 @@ it("a refused trial from configuration keeps the editor with visible feedback", 
   expect(screen.getByRole("alert")).toHaveTextContent("试用")
   expect(screen.getByRole("textbox", { name: "服务器名称" })).toHaveValue("QA MCP")
 })
+
+it.each([
+  ["服务器名称", "Unsaved MCP", "QA MCP"],
+  ["备注 （可选）", "Unsaved note", ""],
+  ["服务器 URL", "https://other.example.test/mcp", server.server_url],
+])("configuration Try protects unsaved %s and re-enables after undo", async (label, edited, original) => {
+  const { trial } = show()
+  fireEvent.keyDown(screen.getByRole("button", { name: "管理" }), { key: "Enter" })
+  fireEvent.click(await screen.findByRole("menuitem", { name: "编辑配置" }))
+  const action = screen.getByRole("button", { name: "试用一下" })
+  expect(action).toBeEnabled()
+  fireEvent.change(screen.getByRole("textbox", { name: label }), { target: { value: edited } })
+  expect(action).toBeDisabled()
+  fireEvent.click(action)
+  expect(trial).not.toHaveBeenCalled()
+  expect(screen.getByRole("textbox", { name: label })).toHaveValue(edited)
+  fireEvent.change(screen.getByRole("textbox", { name: label }), { target: { value: original } })
+  expect(action).toBeEnabled()
+})
+
+it("configuration Try protects newly added and removed headers", async () => {
+  show({ server: { ...server, headers: [{ name: "x-existing", configured: true, status: "active", state_version: "1" }] } })
+  fireEvent.keyDown(screen.getByRole("button", { name: "管理" }), { key: "Enter" })
+  fireEvent.click(await screen.findByRole("menuitem", { name: "编辑配置" }))
+  const action = screen.getByRole("button", { name: "试用一下" })
+  fireEvent.click(screen.getByRole("button", { name: "添加自定义 header" }))
+  expect(action).toBeDisabled()
+  fireEvent.click(screen.getByRole("button", { name: "移除新增 Header" }))
+  expect(action).toBeEnabled()
+  fireEvent.click(screen.getByRole("button", { name: "移除 x-existing" }))
+  expect(action).toBeDisabled()
+})

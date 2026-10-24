@@ -1,3 +1,9 @@
+## 2026-10-24 私有MCP配置保存与回读
+
+现配置组件独占dirty字段和Header草稿，ready Try在有未保存变更时禁用；不改Prepare/OAuth原请求恢复。现投影协调器对本窗口确认的update_server不再关闭编辑器，而是退休旧server/CAS、切换既有精确connector/server双读。窗口绑定的本地保存receipt承接命令completed与finish同批通知，不是新的owner事实或网络协议；只有fresh事实后恢复保存/试用。断开、删除及Provider关闭语义不变。
+
+秘密Header在确认时清退，不回显或持久化。Save时的非秘密字段快照仅在该窗口收到确认receipt后转为临时草稿，fresh回读后丢弃并rebase，防止再次保存时未改字段闪空；普通准入重核不以此快照恢复未触碰的旧owner事实。unknown保原body/key/CAS，迟到旧窗口确认不关闭或改写新窗口，fresh读取失败沿精确读取重试、不另发写命令。本片无contract/schema/依赖变化。
+
 ## 2026-10-24 MCP首发URL重复拒绝
 
 `mcp-server-creation-flow.ts`仅对从未uncertain的首次精确HTTP409 / `mcp_personal_server_url_conflict` / retryable=false释放未注册意图，显示局部`registrationRejection=url_conflict`并保留可编辑输入；更正后显式Save生成新key。旧unknown遇到同一409仍可能是原创建的后果，保原body/key，不授权新请求。取消/准入退休标记uncertain的原规则不变；不泛化所有409/不可重试错误。自定义与URL表单共用此行为，无新业务owner或服务。

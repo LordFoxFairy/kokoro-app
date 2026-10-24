@@ -1,3 +1,13 @@
+## 2026-10-24 自定义MCP编辑两处对齐已正常验证，整项开放
+
+未保存名称/备注/URL/Header草稿现在禁用Try，撤销变更恢复；确认update_server后保持配置层而非回列表，并先退休旧CAS，精确回读connector/server后恢复动作。窗口绑定receipt保证同批finish后秘密草稿仍清退；unknown仍重放原body/key/CAS，fresh读取失败只重读。正常又发现第二次保存时未改备注/URL闪空，3种延迟回读场景先RED后修：仅确认后短暂承接本次用户提交的非秘密值，fresh后rebase；普通准入重核的旧事实mask不变。
+
+正常两源精确HMR及单文件后继delta，未重启或修改派发/Schema/计价。本人无密钥QA四次改名/恢复均PATCH200，版本3→4→5→6→7，后继保存使用新CAS；两轮均保持配置层，同一Connection仍ready；硬刷新后重新打开精确GET200仍版本7、原名称/备注/URL。名称/备注/URL逐项编辑/还原及新增Header草稿实测禁用/恢复，无试用或模型发送。自身QA与四条具名回执单列后，其它Platform原行/xmin及Agent/BFF/Billing原行/xmin/用量保持，全部进程及其它771源保持。自有43已关闭，原1/10不动；本轮已无原41标签，永久删除未提交、原确认答复仍待。
+
+最终1168非Markdown输入冻结：contract、architecture、全lint、types、相关538行为、build、post-types均0，零漂移；独立只读两次复核Approved。未为这两个局部动作重跑全默认及整套preview，不作全owner或整产品验收。原49行导航诊断WIP hash保持、不夹带提交。完整MCP/Skills及五面仍开放；保存等待仍有禁用/加载状态，冷工作区加载也实际再现，不称整体已无感。
+
+证据仅Root ignored `var/dev/mcp-four-flows-20261024/normal/custom-edit/`：前后截图/AX、最终两轮脱敏请求、硬刷新权威DTO摘要、normal-guard、owner-final冻结门。初次列表在启用Network前曾报读取失败，显式Retry后GET200，根因未确定；首次typecheck缺fixture Header status已按正式类型修正。第二次即时AX是diff，字符串缺少字段不证明字段为空；硬刷新网络窗truncated=true，只证明捕获到的GET/原生续期，不声明完整零请求窗口。永久删除、真实OAuth、更多传输/图标和集中PR/Root组合仍开放。
+
 ## 2026-10-24 自定义MCP真实CRUD续验：重复URL误判已修，整项仍开放
 
 正常首次注册返回正式409 `mcp_personal_server_url_conflict` / retryable=false，旧UI误作unknown并锁表单。已修为仅首个确定拒绝释放未注册意图，保名称/备注/URL可编辑，显示“此服务器URL已添加”；更正后显式Save使用新key。旧unknown之后再收到同一409不证明原命令未落库，仍保原body/key；错status/retryable/普通409不释放。自定义和URL表单同修，未改后端contract/schema或生成物。3个新增断言先RED，最终完整相关及正常回归均有收据，不删既有恢复断言。
