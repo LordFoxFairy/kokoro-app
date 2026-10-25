@@ -155,7 +155,7 @@ describe("development local upload CSP boundary", () => {
     const response = await proxy(new NextRequest(`${webOrigin}/app/skills`, { headers: { host: "127.0.0.1:3311" } }))
     const policy = response.headers.get("content-security-policy")!
     const nonce = /'nonce-([^']+)'/u.exec(policy)![1]!
-    expect(policy).toBe(contentSecurityPolicy(nonce, true).replace("connect-src 'self' https: wss:", `connect-src 'self' https: wss: ${uploadOrigin}`))
+    expect(policy).toBe(contentSecurityPolicy(nonce, true).replace("connect-src 'self' https: wss:", `connect-src 'self' https: wss: ${uploadOrigin}`).replace("img-src 'self' data: blob: https:", `img-src 'self' data: blob: https: ${uploadOrigin}`))
     expect(response.headers.get("x-middleware-request-content-security-policy")).toBe(policy)
     expect(response.headers.get("cache-control")).toBe("private, no-store, max-age=0")
     expect(response.headers.get("vary")).toBe("Cookie")

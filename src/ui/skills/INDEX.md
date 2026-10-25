@@ -127,7 +127,8 @@ Settings 的正式入口是 `src/ui/settings/sections/skills-settings-section.ts
 - 安装池详情显式选择 installation metadata/package/download；目录 current 和分享保持独立。`@/hub/skill-installation-content` 校验精确 source/revision/目录并在退休时取消，不回退到当前系列。
 - `ManusSkillDetailDialog`（`manus-skill-detail-dialog.tsx`）：唯一的详情与文件阅读面；只在 owner
   返回 `skill_id` 与 `revision_skill_id` 时读取真实 package tree 和正文。缺少 binding 的旧投影保持详情入口禁用，
-  不再由浏览器合成 YAML、文件树或示例正文。
+  不再由浏览器合成 YAML、文件树或示例正文。目录／安装 metadata 读取失败在概览和 reader 都显示显式重试，
+  reader 不维持假加载；重试只重读原 locator，保当前文件／滚动意图，不重放安装、分享或发布命令。
 - `@/lib/query` 与 `skills-resource-cache`：安装池使用 client-scoped `skillResourceKey(SKILLS_KEY, client)`；目录使用同样隔离的 `SKILLS_CATALOG_KEY`。正式 adapter 的 `skillQuota` 返回明确缺省，不请求旧 quota API；不存在可由旧 name-based cache 冒充的正式系列历史。
 
 ## 陷阱

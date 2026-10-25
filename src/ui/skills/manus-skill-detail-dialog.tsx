@@ -186,6 +186,7 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
   const [installation, setInstallation] = useState<PersonalInstallation | null>(null)
   const [detail, setDetail] = useState<ManusSkillDetail | null>(null)
   const [failed, setFailed] = useState(false)
+  const [detailAttempt, setDetailAttempt] = useState(0)
   const [downloading, setDownloading] = useState(false)
   const [downloadFailure, setDownloadFailure] = useState<"unavailable" | "incomplete" | null>(null)
   const downloadRequest = useRef<AbortController | null>(null)
@@ -274,7 +275,7 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
       active = false
       subscription.release()
     }
-  }, [open, detailSource, skill?.skill_id, skill?.revision_skill_id, sharedSummary, sharedDownloadAdmitted, sharedDownloadSubject, boundary.subject, boundary.admitted, boundary.generation, isLive])
+  }, [open, detailSource, skill?.skill_id, skill?.revision_skill_id, sharedSummary, sharedDownloadAdmitted, sharedDownloadSubject, boundary.subject, boundary.admitted, boundary.generation, detailAttempt, isLive])
 
   const installationId = skill?.installation_id
   const installationSeries = skill?.skill_id
@@ -292,7 +293,15 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
     }
     void load().catch(() => { if (!controller.signal.aborted && isLive()) setFailed(true) })
     return () => controller.abort()
-  }, [detailSource, sharedSummary, open, boundary.admitted, boundary.subject, installationId, installationSeries, installationSource, installationRevision, isLive])
+  }, [detailSource, sharedSummary, open, boundary.admitted, boundary.subject, installationId, installationSeries, installationSource, installationRevision, detailAttempt, isLive])
+
+  const retryDetail = () => {
+    if (!failed || !isLive()) return
+    // Retry only the selected metadata read. Reader location and any existing
+    // command intent stay separate; no install, share, or publication repeats.
+    setFailed(false)
+    setDetailAttempt(attempt => attempt + 1)
+  }
 
   const boundRevision = !open || !boundary.admitted || boundary.subject === null ? null
     : sharedSummary ? sharedSummary.skill.skill_id
@@ -473,6 +482,7 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
   const cover = sharedSummary?.skill.cover_image === undefined ? record?.coverImage ?? skill?.cover_image : ownerCoverPath(sharedSummary.skill.cover_image, sharedSummary.skill.skill_id)
   const canShare = Boolean(sharedSummary || skill?.revision_skill_id)
   const canDownload = Boolean(downloadInfo || sharedSummary || installation)
+  const detailFailure = failed ? <div className={styles.status} role="alert"><p>{t("skills.detailUnavailable")}</p><Button type="button" variant="outline" onClick={retryDetail}>{t("skills.retry")}</Button></div> : null
 
   // Installation attribution comes from its admitted, exact-version read.
   // A caller's brand label is only valid for an owner-confirmed official source.
@@ -557,7 +567,7 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
           <p className={styles.description}>{description}</p>
           {sourceUnavailable ? <p className={styles.status} role="status">{t("skills.sourceUnavailable")}</p> : null}
           {loading ? <p className={styles.status}>{t("skills.detailLoading")}</p> : null}
-          {failed ? <p className={styles.status}>{t("skills.detailUnavailable")}</p> : null}
+          {detailFailure}
           {record !== null && skill?.revision_skill_id !== undefined && record.version !== skill.revision_skill_id ? <p className={styles.status}>{t("skills.packageChanged")}</p> : null}
           {examples.length > 0 ? <SkillTrialExamples key={JSON.stringify([boundary.subject, boundary.generation, skill?.skill_id, boundRevision, skill?.installed_source_ref, trialReady])} examples={examples} ready={trialReady} onTry={prompt => currentSkill !== null && onTry(prompt, currentSkill)} /> : null}
         </section>}
@@ -578,11 +588,12 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
                 const next = new Set(current); if (next.has(path)) next.delete(path); else next.add(path); return next
               })} /></ul>
             </nav>
-            <div ref={readerContentRef} className={styles.fileContent} aria-busy={readerLoading} onScroll={event => {
+            <div ref={readerContentRef} className={styles.fileContent} aria-busy={readerLoading && !failed} onScroll={event => {
               if (isLive() && !readerLoading && readerFile !== null) readerCursor.current.scrollTop = event.currentTarget.scrollTop
             }}>
               {selectedPath !== null ? <div className={styles.fileHeading}><FileText aria-hidden="true" /><span>{selectedPath}</span></div> : null}
-              {readerLoading ? readerPlaceholder : null}
+              {detailFailure}
+              {readerLoading && !failed ? readerPlaceholder : null}
               {readerFailed ? <div role="alert"><p>{t("skills.packageUnavailable")}</p><Button type="button" variant="outline" onClick={() => restartReader(false)}>{t("skills.packageRetry")}</Button></div> : null}
               {!readerLoading && !readerFailed && directory?.files.length === 0 ? <p>{t("skills.packageEmpty")}</p> : null}
               {!readerLoading && !readerFailed && directory !== null && directory.files.length > 0 && selectedPath === null ? <p>{t("skills.packageNoMarkdown")}</p> : null}

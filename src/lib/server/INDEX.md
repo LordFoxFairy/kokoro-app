@@ -44,6 +44,8 @@ runtime token、内部服务地址、workload secret 或后端隔离键。
 
 ## 公开 API
 
+- `security-headers.ts`：请求 nonce 与 CSP；仅匹配可信本地开发 origin 的上传及图标预览加入同一精确 Storage origin，生产与其他指令不变。
+
 - `account-sessions.ts`：两条 `/api/account/sessions` route 的具名 BFF adapter；GET 可选 canonical Origin，DELETE 必需 canonical Origin，并在总预算内证明入站 stream 为 EOF，拒绝实际正文。严格正式生成合同、单 10 秒/1 MiB、主动取消及最终同一有效 Product Session 复核；禁止转发 issuer cookie、自动写重试或把未知结果视为成功。共用 `lib/account-sessions.schema.ts`，生成出处由正式 BFF artifact 唯一提供。
 
 - `same-origin.ts`：六条业务同源 adapter 的变更请求 Origin/Host 守卫；不读取 IAM、cookie、Redis 或 SQL。

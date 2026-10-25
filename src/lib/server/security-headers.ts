@@ -37,14 +37,15 @@ function localUploadSource(development: boolean, context: LocalUploadPolicyConte
 
 export function contentSecurityPolicy(nonce: string, development = false, localUpload?: LocalUploadPolicyContext): string {
   const developmentSources = development ? " 'unsafe-eval'" : ""
+  const localAssetSource = localUploadSource(development, localUpload)
   return [
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${developmentSources}`,
     "style-src 'self' 'unsafe-inline'",
     "style-src-attr 'unsafe-inline'",
-    "img-src 'self' data: blob: https:",
+    `img-src 'self' data: blob: https:${localAssetSource}`,
     "font-src 'self' data: https:",
-    `connect-src 'self' https: wss:${localUploadSource(development, localUpload)}`,
+    `connect-src 'self' https: wss:${localAssetSource}`,
     "media-src 'self' blob:",
     "worker-src 'self' blob:",
     "frame-src 'self' https:",

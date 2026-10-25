@@ -19,7 +19,7 @@ describe("security headers", () => {
     const policy = contentSecurityPolicy("nonce-token", true, {
       webOrigin: "http://127.0.0.1:3311", requestProtocol: "http:", requestHost: "127.0.0.1:3311", requestOrigin: null, localUploadOrigin,
     })
-    expect(policy).toBe(contentSecurityPolicy("nonce-token", true).replace("connect-src 'self' https: wss:", `connect-src 'self' https: wss: ${localUploadOrigin}`))
+    expect(policy).toBe(contentSecurityPolicy("nonce-token", true).replace("connect-src 'self' https: wss:", `connect-src 'self' https: wss: ${localUploadOrigin}`).replace("img-src 'self' data: blob: https:", `img-src 'self' data: blob: https: ${localUploadOrigin}`))
     expect(securityHeaders("nonce-token", true, {
       webOrigin: "http://127.0.0.1:3311", requestProtocol: "http:", requestHost: "127.0.0.1:3311", requestOrigin: null, localUploadOrigin,
     })["Content-Security-Policy"]).toBe(policy)
