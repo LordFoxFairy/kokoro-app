@@ -12,8 +12,11 @@ function show(overrides: Partial<Parameters<typeof CustomMcpDetailDialog>[0]> = 
     onResumeManagement: vi.fn(), actionError: false, deleteId: null, returnFocusRef: { current: null },
     onClose: vi.fn(), onSaveConfiguration: vi.fn(), onPrepare: prepare, onAuthorize: vi.fn(), onDisconnect: vi.fn(),
     onDeleteIntent: vi.fn(), onCancelDelete: vi.fn(), onDelete: vi.fn(), onTrial: trial, ...overrides }
-  render(<LocaleProvider><CustomMcpDetailDialog {...props} /></LocaleProvider>)
-  return { trial, prepare }
+  const view = render(<LocaleProvider><CustomMcpDetailDialog {...props} /></LocaleProvider>)
+  return { trial, prepare, view, update: (next: Partial<Parameters<typeof CustomMcpDetailDialog>[0]>) => {
+    Object.assign(props, next)
+    view.rerender(<LocaleProvider><CustomMcpDetailDialog {...props} /></LocaleProvider>)
+  } }
 }
 beforeEach(() => localStorage.setItem("kokoro.locale", "zh"))
 afterEach(cleanup)
@@ -124,3 +127,88 @@ it("shows the fresh SSE configuration label without an editable transport or fak
  const label = screen.getByLabelText("传输类型 SSE"); expect(label).toHaveTextContent("SSE"); expect(label.querySelector("svg")).toBeNull();
  expect(screen.queryByRole("combobox", { name: "传输类型" })).toBeNull();
 });
+
+const savedBoundary = { admitted: true, subject: "configuration-actor", generation: 7 }
+async function submitConfiguration(transport: McpPrivateServer["transport"] = "streamable_http") {
+  const save = vi.fn()
+  const shown = show({ iconBoundary: savedBoundary, onSaveConfiguration: save,
+    server: { ...server, transport, prepare_status: "pending_prepare", connection_id: undefined } })
+  fireEvent.keyDown(screen.getByRole("button", { name: "管理" }), { key: "Enter" })
+  fireEvent.click(await screen.findByRole("menuitem", { name: "编辑配置" }))
+  fireEvent.change(screen.getByRole("textbox", { name: "备注 （可选）" }), { target: { value: "Submitted note" } })
+  fireEvent.click(screen.getByRole("button", { name: "保存" }))
+  expect(save).toHaveBeenCalledOnce()
+  return { ...shown, save }
+}
+
+it.each([
+  ["streamable_http", "HTTP"], ["sse_compat", "SSE"],
+] as const)("confirmed Save keeps only the exact immutable %s label while fresh facts/actions remain pending", async (transport, label) => {
+  const shown = await submitConfiguration(transport)
+  const confirmation = {}
+  shown.update({ server: null, connector: null, configurationSaved: confirmation })
+  expect(screen.getByLabelText(`传输类型 ${label}`)).toHaveTextContent(label)
+  expect(screen.queryByText("正在加载…")).not.toBeInTheDocument()
+  expect(screen.getByRole("textbox", { name: "备注 （可选）" })).toHaveValue("Submitted note")
+  expect(screen.getByRole("textbox", { name: "备注 （可选）" })).toHaveAttribute("readonly")
+  expect(screen.getByRole("button", { name: "保存" })).toBeDisabled()
+  expect(screen.getByRole("button", { name: "连接" })).toBeDisabled()
+  expect(screen.getByRole("button", { name: "复制 UUID" })).toBeDisabled()
+  expect(screen.getByRole("textbox", { name: "服务器名称" }).closest("form")).toHaveAttribute("aria-busy", "true")
+  fireEvent.click(screen.getByRole("button", { name: "连接" }))
+  fireEvent.click(screen.getByRole("button", { name: "保存" }))
+  expect(shown.prepare).not.toHaveBeenCalled()
+  expect(shown.save).toHaveBeenCalledOnce()
+  shown.update({ server: { ...server, transport, state_version: "4" }, connector })
+  expect(screen.getByLabelText(`传输类型 ${label}`)).toBeInTheDocument()
+  shown.update({ server: null, connector: null })
+  expect(screen.getByLabelText("传输类型 —")).toBeInTheDocument()
+  expect(screen.getByText("正在加载…")).toBeInTheDocument()
+})
+
+it.each([
+  ["actor", { iconBoundary: { ...savedBoundary, subject: "other-actor" } }],
+  ["generation", { iconBoundary: { ...savedBoundary, generation: 8 } }],
+  ["admission", { admitted: false }],
+  ["read admission", { iconBoundary: { ...savedBoundary, admitted: false } }],
+  ["missing trusted boundary", { iconBoundary: undefined }],
+  ["server", { server: { ...server, server_id: "other-server" } }],
+  ["connector", { connector: { ...connector, connector_id: "other-connector" } }],
+  ["confirmation", { configurationSaved: {} }],
+  ["unknown Prepare", { preparationState: "unknown" }],
+] satisfies Array<[string, Partial<Parameters<typeof CustomMcpDetailDialog>[0]>]>)("confirmed transport display retires synchronously on %s and cannot revive", async (_reason, changed) => {
+  const shown = await submitConfiguration("sse_compat")
+  const confirmation = {}
+  shown.update({ server: null, connector: null, configurationSaved: confirmation })
+  expect(screen.getByLabelText("传输类型 SSE")).toBeInTheDocument()
+  shown.update(changed)
+  expect(screen.getByLabelText("传输类型 —")).toBeInTheDocument()
+  shown.update({ server: null, connector: null, admitted: true, iconBoundary: savedBoundary,
+    configurationSaved: confirmation, preparationState: "idle" })
+  expect(screen.getByLabelText("传输类型 —")).toBeInTheDocument()
+})
+
+it("unconfirmed Save and unrelated loading do not retain transport; a late confirmation after retirement cannot revive it", async () => {
+  const shown = await submitConfiguration("sse_compat")
+  shown.update({ server: null, connector: null })
+  expect(screen.getByLabelText("传输类型 —")).toBeInTheDocument()
+  expect(screen.getByText("正在加载…")).toBeInTheDocument()
+  shown.update({ iconBoundary: { ...savedBoundary, generation: 8 } })
+  shown.update({ iconBoundary: savedBoundary, configurationSaved: {} })
+  expect(screen.getByLabelText("传输类型 —")).toBeInTheDocument()
+  expect(screen.getByText("正在加载…")).toBeInTheDocument()
+})
+
+it("a new editor window cannot adopt another window's confirmed transport or hide its initial loading", async () => {
+  const shown = await submitConfiguration("sse_compat")
+  const confirmation = {}
+  shown.update({ server: null, connector: null, configurationSaved: confirmation })
+  expect(screen.getByLabelText("传输类型 SSE")).toBeInTheDocument()
+  shown.view.unmount()
+  const next = show({ iconBoundary: savedBoundary, configurationSaved: confirmation })
+  fireEvent.keyDown(screen.getByRole("button", { name: "管理" }), { key: "Enter" })
+  fireEvent.click(await screen.findByRole("menuitem", { name: "编辑配置" }))
+  next.update({ server: null, connector: null })
+  expect(screen.getByLabelText("传输类型 —")).toBeInTheDocument()
+  expect(screen.getByText("正在加载…")).toBeInTheDocument()
+})

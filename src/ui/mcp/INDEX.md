@@ -1,3 +1,7 @@
+## 2026-10-25 配置保存后的局部读回展示
+
+`custom-mcp-detail-dialog.tsx` 只在本窗口已确认保存、同主体/代际/exact对象且fresh读回挂起的短窗口保留不可变HTTP/SSE标签；不伪造Current/CAS或解锁动作，错误、unknown与退休仍显式处理。原Button outline恢复，配置按钮不再由局部CSS抹掉边框/背景/阴影。正常操作对照及未验范围归Root唯一执行板。
+
 ## 2026-10-25 当前业务只读401的有限再准入
 
 AppGate在整个KokoroAppSurface外提供单用途read-recheck context；只有既有MCP/API投影、精确connector详情、composer metadata及Project GET hook的当前typed HTTP401，携其原subject/generation/未abort signal，才可报告。403、parse、network、迟到、preview和所有写命令不触发。Probe同步撤旧数据代，合并一次原Session检查；既有POST/CAS/未知轮换不取消、不重派，真正同主体确认后才发布新代由原hook重读GET。

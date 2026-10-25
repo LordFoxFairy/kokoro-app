@@ -55,6 +55,13 @@ import { useMcpEditorSelection } from "./use-mcp-editor-selection";
 import { isMcpCustomHeaderName } from "./mcp-header-validation";
 
 type HeaderDraft = { id: string; name: string; value: string };
+type SavedTransportDisplay = {
+  transport: McpPrivateServer["transport"];
+  subject: string;
+  generation: number;
+  serverId: string;
+  connectorId: string;
+};
 
 /**
  * Observed Manus custom MCP flow: a read-only detail first, then a separate
@@ -157,11 +164,25 @@ export function CustomMcpDetailDialog({
   const [managementOpen, setManagementOpen] = useState(false);
   const [headers, setHeaders] = useState<HeaderDraft[]>([]);
   const [removedHeaders, setRemovedHeaders] = useState<string[]>([]);
-  const [submittedFields, setSubmittedFields] = useState<{ name: string; notes: string; serverUrl: string } | null>(null);
+  const [submittedFields, setSubmittedFields] = useState<{ name: string; notes: string; serverUrl: string; transport: SavedTransportDisplay | null } | null>(null);
   const [observedSave, setObservedSave] = useState(configurationSaved);
   const [savedFactsPending, setSavedFactsPending] = useState(false);
+  const [savedTransport, setSavedTransport] = useState<(SavedTransportDisplay & { confirmation: object }) | null>(null);
+  const sameTransportScope = (value: SavedTransportDisplay) => editing && admitted && iconBoundary?.admitted === true &&
+    iconBoundary.subject === value.subject && iconBoundary.generation === value.generation &&
+    (server === null || server.server_id === value.serverId) &&
+    (connector === null || (connector.connector_id === value.connectorId && connector.server_id === value.serverId));
+  const submittedTransport = submittedFields?.transport && sameTransportScope(submittedFields.transport) ? submittedFields.transport : null;
+  if (submittedFields?.transport && !submittedTransport) {
+    setSubmittedFields({ ...submittedFields, transport: null });
+  }
+  if (savedTransport && (ready || !sameTransportScope(savedTransport) || savedTransport.confirmation !== configurationSaved ||
+    preparationState === "unknown" || managementCommand?.kind === "unknown")) {
+    setSavedTransport(null);
+  }
   if (observedSave !== configurationSaved) {
     setObservedSave(configurationSaved);
+    setSavedTransport(configurationSaved && submittedTransport ? { ...submittedTransport, confirmation: configurationSaved } : null);
     if (configurationSaved) {
       // The command's transient completed notification may be batched with
       // finish(). This window-bound receipt still retires write-only drafts.
@@ -187,6 +208,13 @@ export function CustomMcpDetailDialog({
     setNotes(null);
     setServerUrl(null);
   }
+  // Only the immutable label survives this confirmed save's read gap. It is
+  // never an owner projection, a CAS source, or permission to enable actions.
+  const retainingTransport = savedFactsPending && !ready && !pendingError && savedTransport !== null &&
+    sameTransportScope(savedTransport) && savedTransport.confirmation === configurationSaved &&
+    preparationState !== "unknown" && managementCommand?.kind !== "unknown";
+  const displayedTransport = currentServer?.transport ?? (retainingTransport ? savedTransport.transport : undefined);
+  const transportLabel = displayedTransport === "streamable_http" ? "HTTP" : displayedTransport === "sse_compat" ? "SSE" : "—";
   const managementLocked = managementCommand !== undefined && managementCommand.kind !== "rejected";
   const busy = authorizationBusy || actionId === connector?.connector_id || managementCommand?.kind === "running";
   const [observedKind, setObservedKind] = useState(managementCommand?.kind);
@@ -240,7 +268,9 @@ export function CustomMcpDetailDialog({
       headers.some((item) => !item.name.trim() || !item.value)
     )
       return;
-    setSubmittedFields({ name, notes, serverUrl });
+    setSubmittedFields({ name, notes, serverUrl, transport: iconBoundary?.admitted && iconBoundary.subject !== null &&
+      connector.server_id === server.server_id ? { transport: server.transport, subject: iconBoundary.subject,
+        generation: iconBoundary.generation, serverId: server.server_id, connectorId: connector.connector_id } : null });
     icon.draft.protectForSave();
     onSaveConfiguration({
       ...icon.draft.change(),
@@ -313,7 +343,7 @@ export function CustomMcpDetailDialog({
                     {t("mcp.retry")}
                   </Button>
                 </Alert>
-              ) : <span className="sr-only" role="status">{t("mcp.loading")}</span> : null}
+              ) : !retainingTransport ? <span className="sr-only" role="status">{t("mcp.loading")}</span> : null : null}
               {recoveryStatus}
               {actionError ? (
                 <Alert variant="destructive" role="alert">
@@ -334,8 +364,8 @@ export function CustomMcpDetailDialog({
                 </div>
                 <div className={styles.field}>
                   <Label>传输类型</Label>
-                  <div className={styles.staticValue} aria-label={`传输类型 ${currentServer?.transport === "streamable_http" ? "HTTP" : currentServer?.transport === "sse_compat" ? "SSE" : "—"}`}>
-                    {currentServer?.transport === "streamable_http" ? "HTTP" : currentServer?.transport === "sse_compat" ? "SSE" : "—"}
+                  <div className={styles.staticValue} aria-label={`传输类型 ${transportLabel}`}>
+                    {transportLabel}
                   </div>
                 </div>
               </div>

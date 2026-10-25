@@ -67,6 +67,8 @@ it.each(["confirmed", "unknown-then-replayed", "read-failed"])("configuration Sa
     expect(update.mock.calls[1]?.slice(0, 3)).toEqual(update.mock.calls[0]?.slice(0, 3))
   }
   if (mode === "read-failed") {
+    await within(dialog).findByRole("button", { name: "重试" })
+    expect(screen.getByLabelText("传输类型 —")).toBeInTheDocument()
     fireEvent.click(await within(dialog).findByRole("button", { name: "重试" }))
   }
   await waitFor(() => expect(read).toHaveBeenCalledTimes(mode === "read-failed" ? 3 : 2))
@@ -75,6 +77,9 @@ it.each(["confirmed", "unknown-then-replayed", "read-failed"])("configuration Sa
   expect(screen.getByRole("textbox", { name: "服务器名称" })).toHaveValue("First saved name")
   expect(screen.getByRole("textbox", { name: "服务器名称" })).toHaveAttribute("readonly")
   expect(screen.getByRole("button", { name: "保存" })).toBeDisabled()
+  expect(screen.getByLabelText("传输类型 HTTP")).toHaveTextContent("HTTP")
+  expect(within(dialog).queryByText("正在加载…")).not.toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "连接" })).toBeDisabled()
   await act(async () => { releaseRead(); await pendingRead })
   await waitFor(() => expect(screen.getByRole("textbox", { name: "服务器名称" })).not.toHaveAttribute("readonly"))
   expect(screen.getByRole("dialog", { name: "MCP 配置" })).toBe(dialog)
@@ -86,6 +91,9 @@ it.each(["confirmed", "unknown-then-replayed", "read-failed"])("configuration Sa
   fireEvent.click(screen.getByRole("button", { name: "保存" }))
   await waitFor(() => expect(update).toHaveBeenCalledTimes(confirmedCalls + 1))
   await waitFor(() => expect(read).toHaveBeenCalledTimes(mode === "read-failed" ? 4 : 3))
+  expect(screen.getByLabelText("传输类型 HTTP")).toHaveTextContent("HTTP")
+  expect(within(dialog).queryByText("正在加载…")).not.toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "保存" })).toBeDisabled()
   expect(screen.getByRole("textbox", { name: "服务器 URL" })).toHaveValue("https://mcp.example.test/mcp")
   expect(screen.getByRole("textbox", { name: "备注 （可选）" })).toHaveValue("Saved note")
   expect(update.mock.calls[0]?.[1]).toEqual({ expected_state_version: "3", display_name: "First saved name", header_upserts: [{ name: "x-test-key", value: "fixture-secret" }] })
