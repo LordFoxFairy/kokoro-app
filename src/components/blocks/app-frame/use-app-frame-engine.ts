@@ -3,7 +3,7 @@ import { useEffect, useMemo, useSyncExternalStore } from "react"
 import { DIRECT_SESSION_SCOPE, sessionScopeKey, type SessionScope } from "@/engine/session-scope"
 import { type SessionEngine } from "@/engine/machine"
 import { useSessionEngine } from "@/engine/use-session-engine"
-import { browserEngine, retainBrowserEngine } from "@/ui/shell/page-clients"
+import { browserConversationMoveCoordinator, browserEngine, retainBrowserEngine } from "@/ui/shell/page-clients"
 
 export type AppFrameEngineOptions = {
   injectedEngine: SessionEngine | null | undefined
@@ -68,14 +68,27 @@ export function useAppFrameEngine({
   // SSE resources, and a scope change cannot expose the previous engine.
   useEffect(() => {
     if (injectedEngine !== undefined) return
-    const acquiredEngine = browserEngine({ preview, scope: sessionScope })
-    if (acquiredEngine === null) return
-    const release = retainBrowserEngine(acquiredEngine)
-    const lease = Symbol("app-frame-browser-engine-lease")
-    leaseStore.publish({ key: desiredBrowserEngineKey, engine: acquiredEngine, lease })
+    let active = true
+    let held: { release: () => void; lease: symbol } | null = null
+    const acquire = () => {
+      if (!active || held !== null) return
+      const acquiredEngine = browserEngine({ preview, scope: sessionScope })
+      if (acquiredEngine === null) return
+      const release = retainBrowserEngine(acquiredEngine)
+      const lease = Symbol("app-frame-browser-engine-lease")
+      held = { release, lease }
+      leaseStore.publish({ key: desiredBrowserEngineKey, engine: acquiredEngine, lease })
+    }
+    // Notification is only a wake-up: the factory rechecks true admission.
+    // Subscribe before the first attempt, never replace an already held lease.
+    const unsubscribe = preview ? () => undefined : browserConversationMoveCoordinator().subscribe(acquire)
+    acquire()
     return () => {
-      release()
-      leaseStore.clear(lease)
+      active = false
+      unsubscribe()
+      if (held === null) return
+      held.release()
+      leaseStore.clear(held.lease)
     }
   }, [desiredBrowserEngineKey, injectedEngine, leaseStore, preview, sessionScope])
 

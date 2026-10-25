@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-import { admitBrowserAuthSessionIndexes, browserDraftLifecycle, browserConversationMoveCoordinator, browserListClient, readBrowserAuthIndexSubject } from "@/ui/shell/page-clients"
+import { admitBrowserAuthSessionIndexes, browserEngine, invalidateBrowserAuthSessionIndexes, releaseBrowserEngine, retainBrowserEngine, browserDraftLifecycle, browserConversationMoveCoordinator, browserListClient, readBrowserAuthIndexSubject } from "@/ui/shell/page-clients"
 
 describe("页面 Chat client transport selection", () => {
   afterEach(() => {
@@ -188,10 +188,10 @@ describe("explicit prompt identity and fail-closed boundaries", () => {
 // SET47-BEGIN: cached engine creation proof must retire on true actor switch, not renewal.
 it("SET47 index invalidation retires live engine provenance without deleting a task or disposing its Run",async()=>{
  const {browserEngine,invalidateBrowserAuthSessionIndexes}=await import("@/ui/shell/page-clients");
- window.localStorage.setItem(SUBJECT_MARKER,"alice");const engine=browserEngine({preview:false})!;engine.newConversation();const id=engine.getSnapshot().store!.activeId;
+ window.localStorage.setItem(SUBJECT_MARKER,"alice");expect(admitBrowserAuthSessionIndexes("alice","alice")).toBe(true);const engine=browserEngine({preview:false})!;engine.newConversation();const id=engine.getSnapshot().store!.activeId;
  expect(engine.getSnapshot().locallyCreatedSessionId).toBe(id);expect(admitBrowserAuthSessionIndexes("alice","alice")).toBe(true);expect(engine.getSnapshot().locallyCreatedSessionId).toBe(id);
  invalidateBrowserAuthSessionIndexes();expect(engine.getSnapshot().locallyCreatedSessionId).toBeUndefined();expect(engine.getSnapshot().store?.activeId).toBe(id);expect(engine.getSnapshot().canSubmitMessage).toBe(true);
- engine.dispose();
+ engine.dispose();releaseBrowserEngine(engine);
 });
 // SET47-END
 
@@ -273,4 +273,97 @@ it("actual storage read/write failures cannot convert a positive draft into an u
     expect(engine.submit("unsent on storage failure")).toBe(false)
     expect(client.createCalls).toEqual([])
   } finally {engine.dispose();vi.restoreAllMocks();window.localStorage.clear()}
+})
+
+
+describe("live engine factory admission before browser recovery construction", () => {
+  const engines = new Set<NonNullable<ReturnType<typeof browserEngine>>>()
+  const subject = "factory-admission-actor"
+  function live(projectRef: string) {
+    const engine = browserEngine({ preview: false, scope: { kind: "project", projectRef } })
+    if (engine) engines.add(engine)
+    return engine
+  }
+  function seed(projectRef: string) {
+    const id = `conv_${projectRef}`
+    const key = `kokoro.web.conversations.project:${projectRef}`
+    const raw = JSON.stringify({ activeId: id, conversations: [{ id, title: "Fixture", updatedAt: 1, mode: "fast", localDraft: true }] })
+    window.localStorage.setItem(key, raw)
+    return { id, key, raw }
+  }
+  beforeEach(() => {
+    invalidateBrowserAuthSessionIndexes()
+    window.localStorage.clear()
+    window.sessionStorage.clear()
+    vi.stubGlobal("fetch", vi.fn())
+  })
+  afterEach(() => {
+    for (const engine of engines) releaseBrowserEngine(engine)
+    engines.clear()
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+    window.localStorage.clear()
+    window.sessionStorage.clear()
+  })
+  it("a cached marker and valid persisted index cannot create a null-subject recovery closure", () => {
+    window.localStorage.setItem(SUBJECT_MARKER, subject)
+    const stored = seed("before-verified-admission")
+    const reads = vi.spyOn(Storage.prototype, "getItem")
+    const writes = vi.spyOn(Storage.prototype, "setItem")
+    expect(live("before-verified-admission")).toBeNull()
+    expect(fetch).not.toHaveBeenCalled()
+    expect(reads.mock.calls.filter(([key]) => key.startsWith("kokoro.web.conversations.submission:"))).toEqual([])
+    expect(writes).not.toHaveBeenCalled()
+    expect(window.localStorage.getItem(stored.key)).toBe(stored.raw)
+  })
+  it.each(["missing", "mismatched", "blocked"])("rejects a %s marker even after true admission, without opening recovery", kind => {
+    expect(admitBrowserAuthSessionIndexes(subject, null)).toBe(true)
+    const stored = seed(`marker-${kind}`)
+    if (kind === "missing") window.localStorage.removeItem(SUBJECT_MARKER)
+    else if (kind === "mismatched") window.localStorage.setItem(SUBJECT_MARKER, "other-subject")
+    else {
+      const get = Storage.prototype.getItem
+      vi.spyOn(Storage.prototype, "getItem").mockImplementation(function (this: Storage, key: string) {
+        if (this === window.localStorage && key === SUBJECT_MARKER) throw new DOMException("blocked", "SecurityError")
+        return get.call(this, key)
+      })
+    }
+    expect(live(`marker-${kind}`)).toBeNull()
+    expect(fetch).not.toHaveBeenCalled()
+    expect(window.localStorage.getItem(stored.key)).toBe(stored.raw)
+  })
+  it("does not expose or dispose an already leased engine when its marker no longer matches", () => {
+    expect(admitBrowserAuthSessionIndexes(subject, null)).toBe(true)
+    const engine = live("leased-marker-fence")!
+    const release = retainBrowserEngine(engine)
+    const dispose = vi.spyOn(engine, "dispose")
+    try {
+      window.localStorage.setItem(SUBJECT_MARKER, "other-subject")
+      expect(live("leased-marker-fence")).toBeNull()
+      expect(dispose).not.toHaveBeenCalled()
+      expect(fetch).not.toHaveBeenCalled()
+    } finally { release() }
+  })
+  it("a truly admitted corrupt recovery remains an error, not null absence or ready", () => {
+    expect(admitBrowserAuthSessionIndexes(subject, null)).toBe(true)
+    const projectRef = "corrupt-admitted-recovery"
+    const stored = seed(projectRef)
+    const recoveryKey = `kokoro.web.conversations.submission:${encodeURIComponent(subject)}:${encodeURIComponent(`project:${projectRef}`)}:${encodeURIComponent(stored.id)}`
+    window.sessionStorage.setItem(recoveryKey, "{broken")
+    const engine = live(projectRef)!
+    expect(engine).not.toBeNull()
+    expect(engine.getSnapshot().machine).toMatchObject({ phase: "error", error: "local_recovery_unavailable" })
+    expect(engine.getSnapshot().canSubmitMessage).toBe(false)
+    expect(engine.submit("never send corrupt recovery")).toBe(false)
+    expect(fetch).not.toHaveBeenCalled()
+    expect(window.sessionStorage.getItem(recoveryKey)).toBe("{broken")
+  })
+  it("explicit preview construction does not depend on live admission or its marker", () => {
+    window.localStorage.setItem(SUBJECT_MARKER, "cached-only-preview")
+    const engine = browserEngine({ preview: true, scope: { kind: "project", projectRef: "preview-without-live-admission" } })!
+    engines.add(engine)
+    expect(engine).not.toBeNull()
+    expect(engine.getSnapshot().canSubmitMessage).toBe(true)
+    expect(fetch).not.toHaveBeenCalled()
+  })
 })

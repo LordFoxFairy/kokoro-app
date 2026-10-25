@@ -364,6 +364,13 @@ export function browserEngine(options: { preview?: boolean; scope?: SessionScope
     : options.preview ? "preview" : "live"
   const scope = options.scope ?? DIRECT_SESSION_SCOPE
   const engineKey = `${mode}:${sessionScopeKey(scope)}`
+  const recoverySubject = admittedBrowserSubject
+  if (mode === "live") {
+    try {
+      // A cached marker can retire a subject, never grant live admission.
+      if (recoverySubject === null || readBrowserAuthIndexSubject() !== recoverySubject || admittedBrowserSubject !== recoverySubject) return null
+    } catch { return null }
+  }
   const existing = pageEngines.get(engineKey)
   if (existing) return existing.engine
   {
@@ -372,7 +379,6 @@ export function browserEngine(options: { preview?: boolean; scope?: SessionScope
     const client = options.preview === true
       ? browserPreviewClient()
       : createSessionClient({ baseUrl: sessionBaseUrl() })
-    const recoverySubject = admittedBrowserSubject
     const engine = createSessionEngine({
       client,
       ...(mode === "preview" ? {} : { submissionRecovery: createBrowserSubmissionRecovery({

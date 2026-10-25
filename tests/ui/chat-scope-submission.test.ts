@@ -1,10 +1,10 @@
 import { act, cleanup, renderHook } from "@testing-library/react"
-import { useEffect } from "react"
+import { StrictMode, useEffect } from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { useAppFrameEngine } from "@/components/blocks/app-frame/use-app-frame-engine"
 import type { SessionEngine } from "@/engine/machine"
-import { admitBrowserAuthSessionIndexes, invalidateBrowserAuthSessionIndexes, releaseBrowserEngine } from "@/ui/shell/page-clients"
+import { admitBrowserAuthSessionIndexes, browserConversationMoveCoordinator, invalidateBrowserAuthSessionIndexes, releaseBrowserEngine } from "@/ui/shell/page-clients"
 import { makeSnapshot } from "../core/fixtures"
 
 type CreateRequest = { path: string; key: string | null; body: string }
@@ -33,14 +33,14 @@ function controlledOwner(create: () => Promise<Response>, snapshot?: () => Respo
   return { creates, reads, fetchMock }
 }
 
-function mountScope() {
+function mountScope(strict = false) {
   return renderHook(({ projectRef }: { projectRef: string | undefined }) => {
     const scope = useAppFrameEngine({ injectedEngine: undefined, preview: false, projectRef })
     useEffect(() => {
       if (scope.engine !== null) ownedEngines.add(scope.engine)
     }, [scope.engine])
     return scope
-  }, { initialProps: { projectRef: undefined as string | undefined } })
+  }, { initialProps: { projectRef: undefined as string | undefined }, ...(strict ? { wrapper: StrictMode } : {}) })
 }
 
 async function settle() {
@@ -73,10 +73,10 @@ describe("live browser scope leases and unacknowledged submissions", () => {
     window.localStorage.setItem("kokoro.web.auth-index-subject", "scope-submission-actor")
     const owner = controlledOwner(() => Promise.reject(new Error("unexpected create")))
     const view = mountScope()
-    act(() => { expect(view.result.current.engine!.submit("keep unadmitted input")).toBe(false) })
+    expect(view.result.current.engine).toBeNull()
+    expect(view.result.current.canSubmitMessage).toBe(false)
     await settle()
-    expect(owner.creates).toEqual([])
-    expect(view.result.current.engine!.getSnapshot().hasPendingSubmission).toBe(true)
+    expect(owner.fetchMock).not.toHaveBeenCalled()
   })
 
   it("does not retain an invalidated subject when its last mounted owner releases later", async () => {
@@ -246,4 +246,87 @@ describe("live browser scope leases and unacknowledged submissions", () => {
     await settle()
     expect(owner.creates).toHaveLength(1)
   })
+})
+
+
+function waitForTrustedAdmission() {
+  invalidateBrowserAuthSessionIndexes()
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "scope-submission-actor")
+  const coordinator = browserConversationMoveCoordinator()
+  coordinator.revokeSubject()
+  return coordinator
+}
+function admitAndWake() {
+  expect(admitBrowserAuthSessionIndexes("scope-submission-actor", "scope-submission-actor")).toBe(true)
+  browserConversationMoveCoordinator().admitVerifiedSubject("scope-submission-actor")
+}
+
+it("a coordinator wake-up rechecks true admission and acquires one healthy lease without a rerender", async () => {
+  const coordinator = waitForTrustedAdmission()
+  const owner = controlledOwner(() => Promise.reject(new Error("unexpected create")))
+  const view = mountScope()
+  expect(view.result.current.engine).toBeNull()
+  act(() => coordinator.admitVerifiedSubject("scope-submission-actor"))
+  expect(view.result.current.engine).toBeNull() // A Move publication is not Product Session proof.
+  act(admitAndWake)
+  const engine = view.result.current.engine!
+  expect(engine).not.toBeNull()
+  expect(view.result.current.canSubmitMessage).toBe(true)
+  const dispose = vi.spyOn(engine, "dispose")
+  act(() => { for (let index = 0; index < 3; index++) coordinator.admitVerifiedSubject("scope-submission-actor") })
+  expect(view.result.current.engine).toBe(engine)
+  expect(owner.fetchMock).not.toHaveBeenCalled()
+  view.unmount()
+  await settle()
+  expect(dispose).toHaveBeenCalledOnce()
+})
+
+it("waiting StrictMode consumers share the admitted engine and release only their own leases", async () => {
+  waitForTrustedAdmission()
+  const owner = controlledOwner(() => Promise.reject(new Error("unexpected create")))
+  const first = mountScope(true), second = mountScope(true)
+  expect(first.result.current.engine).toBeNull()
+  expect(second.result.current.engine).toBeNull()
+  act(admitAndWake)
+  const engine = first.result.current.engine!
+  expect(engine).not.toBeNull()
+  expect(second.result.current.engine).toBe(engine)
+  const dispose = vi.spyOn(engine, "dispose")
+  first.unmount()
+  await settle()
+  expect(dispose).not.toHaveBeenCalled()
+  expect(second.result.current.engine).toBe(engine)
+  second.unmount()
+  await settle()
+  expect(dispose).toHaveBeenCalledOnce()
+  expect(owner.fetchMock).not.toHaveBeenCalled()
+})
+
+it.each(["unmount", "scope change"])("a waiting lease's %s retires its old wake-up before true admission", async mode => {
+  waitForTrustedAdmission()
+  window.localStorage.setItem("kokoro.web.conversations.direct", JSON.stringify({ activeId: "conv_waiting_direct", conversations: [
+    { id: "conv_waiting_direct", title: "Existing task", updatedAt: 1, mode: "fast" },
+  ] }))
+  const owner = controlledOwner(() => Promise.reject(new Error("unexpected create")))
+  const view = mountScope()
+  expect(view.result.current.engine).toBeNull()
+  if (mode === "unmount") view.unmount()
+  else view.rerender({ projectRef: "waiting-successor-project" })
+  act(admitAndWake)
+  await settle()
+  expect(owner.fetchMock).not.toHaveBeenCalled()
+  if (mode === "scope change") {
+    expect(view.result.current.sessionScope).toEqual({ kind: "project", projectRef: "waiting-successor-project" })
+    expect(view.result.current.engine).not.toBeNull()
+    expect(view.result.current.canSubmitMessage).toBe(true)
+  }
+})
+
+it("an explicitly injected null engine never joins the live admission wake-up", () => {
+  waitForTrustedAdmission()
+  const owner = controlledOwner(() => Promise.reject(new Error("unexpected create")))
+  const view = renderHook(() => useAppFrameEngine({ injectedEngine: null, preview: false, projectRef: undefined }))
+  act(admitAndWake)
+  expect(view.result.current.engine).toBeNull()
+  expect(owner.fetchMock).not.toHaveBeenCalled()
 })
