@@ -228,7 +228,13 @@ export function CustomMcpDetailDialog({
     setObservedKind(managementCommand?.kind);
     if (managementCommand?.kind === "completed") { setHeaders([]); setRemovedHeaders([]); }
   }
-  const managementStatus = <McpManagementStatus command={managementCommand} admitted={admitted} onResume={onResumeManagement} />;
+  // The Save control already owns visible progress. Keep its exact in-flight
+  // update announcement out of the form's layout; unknown/recovery stays inline.
+  const savingThisConfiguration = editing && submittedTransport !== null && managementCommand?.kind === "running" &&
+    managementCommand.operation === "update_server" && managementCommand.serverId === submittedTransport.serverId &&
+    managementCommand.connectorId === submittedTransport.connectorId;
+  const managementStatus = savingThisConfiguration ? <span className="sr-only" role="status">{t("settings.name.saving")}</span>
+    : <McpManagementStatus command={managementCommand} admitted={admitted} onResume={onResumeManagement} />;
   const locked = managementLocked || busy || !ready || !preparationRecoveryReady || preparationState === "unknown" || preparationState === "completed";
   const icon = useMcpIconDraft(iconClient, iconBoundary ?? { subject: null, admitted: false, generation: 0 }, locked, configurationSaved, currentServer);
   const mayResumePreparation = preparationCanResume ?? connectorCommandMayResume(preparationFailure);

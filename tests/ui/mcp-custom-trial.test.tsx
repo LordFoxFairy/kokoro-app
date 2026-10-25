@@ -212,3 +212,18 @@ it("a new editor window cannot adopt another window's confirmed transport or hid
   expect(screen.getByLabelText("传输类型 —")).toBeInTheDocument()
   expect(screen.getByText("正在加载…")).toBeInTheDocument()
 })
+
+
+it("an exact in-flight configuration Save announces saving without inserting a loading panel; unknown remains explicit", async () => {
+  const shown = await submitConfiguration()
+  const command = { operation: "update_server" as const, connectorId: connector.connector_id, serverId: server.server_id }
+  shown.update({ managementCommand: { ...command, kind: "running" } })
+  expect(screen.getByRole("status")).toHaveTextContent("正在保存…")
+  expect(screen.queryByText("正在加载…")).not.toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "保存" })).toBeDisabled()
+  shown.update({ managementCommand: { ...command, kind: "unknown" } })
+  expect(screen.queryByText("正在保存…")).not.toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "重试原请求" })).toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "保存" })).toBeDisabled()
+  expect(shown.save).toHaveBeenCalledOnce()
+})

@@ -1,6 +1,6 @@
 ## 2026-10-25 配置保存后的局部读回展示
 
-`custom-mcp-detail-dialog.tsx` 只在本窗口已确认保存、同主体/代际/exact对象且fresh读回挂起的短窗口保留不可变HTTP/SSE标签及先前主动作展示；主动作仍以fresh资格禁用并在点击时再次检查；不伪造Current/CAS或解锁动作，错误、unknown与退休仍显式处理。原Button outline恢复，配置按钮不再由局部CSS抹掉边框/背景/阴影。正常操作对照及未验范围归Root唯一执行板。
+`custom-mcp-detail-dialog.tsx` 只在本窗口已确认保存、同主体/代际/exact对象且fresh读回挂起的短窗口保留不可变HTTP/SSE标签及先前主动作展示；主动作仍以fresh资格禁用并在点击时再次检查；不伪造Current/CAS或解锁动作，错误、unknown与退休仍显式处理。本窗口exact Update运行中只由保存控件提供可见进度并作屏幕阅读器播报，不再插入挤动表单的加载面板，unknown和真实读错保留。原Button outline恢复，配置按钮不再由局部CSS抹掉边框/背景/阴影。正常操作对照及未验范围归Root唯一执行板。
 
 ## 2026-10-25 当前业务只读401的有限再准入
 
