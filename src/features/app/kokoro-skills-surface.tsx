@@ -26,6 +26,7 @@ import { mergeSkillCatalogPages } from "@/ui/skills/skills-pool-model"
 import { ManusSkillDetailDialog } from "@/ui/skills/manus-skill-detail-dialog"
 import { createManusSkillHubClient, SKILL_CATALOG_RESOURCE_KEY } from "@/ui/skills/manus-skill-client"
 import { skillResourceKey } from "@/ui/skills/skills-resource-cache"
+import { SkillCoverMedia } from "@/ui/skills/skill-cover-media"
 import { stashPendingDraft } from "@/ui/shell/use-draft"
 import { toSkillActionCard } from "@/ui/skills/skills-card-model"
 import { BrandFallback } from "@/components/blocks/brand-mark/brand-mark"
@@ -332,7 +333,7 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
                   >
                     <button type="button" className={styles.cardArt} onClick={(event) => { detailRef.current = event.currentTarget; setDetailSkill(skill) }} aria-label={`${t("skills.viewDetails")} ${skill.name}`}>
                       <span className={styles.bookCover}>
-                        {skill.cover_image ? <Image src={skill.cover_image} alt="" fill sizes="(max-width: 42rem) 7.5rem, 7.5rem" unoptimized /> : <span className={styles.coverUnavailable} aria-hidden="true"><BrandFallback /></span>}
+                        <SkillCoverMedia src={skill.cover_image} identity={skillResourceKey("hub/skills/cover", client)} sizes="(max-width: 42rem) 7.5rem, 7.5rem" fallback={<span className={styles.coverUnavailable} aria-hidden="true"><BrandFallback /></span>} />
                       </span>
                     </button>
                     <CardContent className={styles.cardBody}>
