@@ -28,7 +28,6 @@
 .wrap[data-desktop-web="true"]:not([data-project-workspace="true"])[data-empty-workspace="true"] .controls > [data-composer-action="send"], .wrap[data-desktop-web="true"]:not([data-project-workspace="true"])[data-empty-workspace="true"] .controls > [data-composer-action="stop"] { margin-left: 0; width: 2rem; height: 2rem; }
 .wrap[data-desktop-web="true"][data-empty-workspace="true"] [data-composer-control="model"] { order: -1; }
 .wrap[data-desktop-web="true"][data-empty-workspace="true"] [data-composer-control="mode"] { display: none; }
-.wrap[data-desktop-web="true"]:not([data-project-workspace="true"])[data-empty-workspace="true"] [data-slot="composer-selector-cluster"] { display: none; }
 .wrap[data-desktop-web="true"][data-empty-workspace="true"][data-creation-intent="presentation"] [data-slot="composer-selector-cluster"],
 .wrap[data-desktop-web="true"][data-empty-workspace="true"][data-creation-intent="design"] [data-slot="composer-selector-cluster"],
 .wrap[data-desktop-web="true"][data-empty-workspace="true"][data-creation-intent="game"] [data-slot="composer-selector-cluster"] { display: flex; }
