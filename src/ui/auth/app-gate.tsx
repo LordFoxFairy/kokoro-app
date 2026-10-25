@@ -8,6 +8,9 @@ import { useRuntimeManifest } from "@/system/use-runtime-manifest"
 import { KokoroAppSurface } from "@/features/app/kokoro-app-surface"
 import { DEFAULT_BRAND } from "@/config/brand"
 
+import { Button } from "@/components/ui/button"
+import { ProductReadRecheckProvider } from "./product-read-recheck-context"
+
 import { useSessionProbe } from "./use-session-state"
 import { openProductSignIn } from "./product-auth-client"
 import { useScheduledTaskClient } from "./use-scheduled-task-client"
@@ -91,7 +94,19 @@ export function AppGate({ brandName, desktopRailCollapsed, serverAdmitted = fals
   // Product-owned defaults are not preview data. Only a verified live manifest
   // may override visual presentation or feature flags.
   return (<>
-    {unavailable ? <p role="status" aria-live="polite" className="sr-only">{t("thread.reconnecting")}</p> : null}
+    {unavailable && !probe.readRecoveryBlocked ? <p role="status" aria-live="polite" className="sr-only">{t("thread.reconnecting")}</p> : null}
+    {probe.readRecoveryBlocked ? (
+      <div
+        role="status"
+        aria-label={t("thread.connectionUnavailable")}
+        aria-live="polite"
+        className="fixed inset-x-3 top-3 z-50 mx-auto flex max-h-[calc(100dvh-1.5rem)] max-w-md flex-wrap items-center justify-between gap-3 overflow-y-auto rounded-xl border border-border bg-background p-3 text-sm text-foreground shadow-sm"
+      >
+        <span className="min-w-0 flex-1 break-words">{t("thread.connectionUnavailable")}</span>
+        <Button type="button" variant="outline" size="sm" onClick={probe.retry}>{t("firstSite.retry")}</Button>
+      </div>
+    ) : null}
+    <ProductReadRecheckProvider value={probe.reportReadUnauthorized ?? null}>
     <KokoroAppSurface
       booting={booting}
       {...(desktopRailCollapsed === undefined ? {} : { desktopRailCollapsed })}
@@ -103,5 +118,6 @@ export function AppGate({ brandName, desktopRailCollapsed, serverAdmitted = fals
       projectReadBoundary={probe.projectReadBoundary}
       {...(!booting && probe.mode === "authenticated" ? { scheduledTaskClient } : {})}
     />
+    </ProductReadRecheckProvider>
   </>)
 }

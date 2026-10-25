@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
-import type { HubClient } from "@/hub/client";
+import { HubClientError, type HubClient } from "@/hub/client";
+import { useProductReadRecheck } from "@/ui/auth/product-read-recheck-context";
 import type {
   CustomApiPage,
 } from "@/hub/custom-api.schema";
@@ -27,6 +28,7 @@ type CustomApiFlight = {
 
 type CustomApiSubscription = Readonly<{
   promise: Promise<CustomApiPage>;
+  signal: AbortSignal;
   release: () => void;
 }>;
 
@@ -124,6 +126,7 @@ function subscribe(
   let released = false;
   return {
     promise: flight.promise,
+    signal: flight.controller.signal,
     release: () => {
       if (released) return;
       released = true;
@@ -179,6 +182,7 @@ export function useCustomApiProjection({
   admitted?: boolean;
   readGeneration?: number;
 }) {
+  const reportRead401 = useProductReadRecheck();
   const revision = revisionFor(client, identity);
   const currentRevision = useCustomApiRevision(client, identity);
   const [manualRefreshKey, setManualRefreshKey] = useState(0);
@@ -222,20 +226,23 @@ export function useCustomApiProjection({
         remember(client, identity, data, readGeneration);
         setState({ data, identity, readGeneration, dataRevision: currentRevision, loading: false, error: false });
       },
-      () => {
-        if (active && revision.value === currentRevision)
+      (error: unknown) => {
+        if (active && revision.value === currentRevision) {
+          if (error instanceof HubClientError && error.reason === "http" && error.status === 401 && !subscription.signal.aborted)
+            reportRead401?.({ subject: identity, generation: readGeneration, signal: subscription.signal });
           setState((current) =>
             current.identity === identity
               ? { data: current.readGeneration === readGeneration ? current.data : emptyPage, identity, readGeneration, dataRevision: current.dataRevision, loading: false, error: true }
               : current,
           );
+        }
       },
     );
     return () => {
       active = false;
       subscription.release();
     };
-  }, [admitted, readGeneration, client, identity, manualRefreshKey, refreshKey, currentRevision, revision]);
+  }, [admitted, readGeneration, client, identity, manualRefreshKey, refreshKey, currentRevision, revision, reportRead401]);
 
   // A Settings remount for an already admitted identity should render the
   // shared projection directly. This avoids a synchronous effect setState

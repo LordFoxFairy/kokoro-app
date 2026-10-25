@@ -1,3 +1,9 @@
+## 2026-10-25 当前业务只读401的有限再准入
+
+AppGate在整个KokoroAppSurface外提供单用途read-recheck context；只有既有MCP/API投影、精确connector详情、composer metadata及Project GET hook的当前typed HTTP401，携其原subject/generation/未abort signal，才可报告。403、parse、network、迟到、preview和所有写命令不触发。Probe同步撤旧数据代，合并一次原Session检查；既有POST/CAS/未知轮换不取消、不重派，真正同主体确认后才发布新代由原hook重读GET。
+
+恢复自身的GET/POST成功不重置预算；恢复新代若再401，撤准入且不自动再探针，仅该分支显示既有Retry按钮，调用原probe.retry开始明确独立恢复。后续独立正常续期可重新授予一次恢复额度；原页隐藏/主体退休/ABA围栏保留。不改HTTP/Schema/权限、命令正文/key或费用，不把本片定向回归说成原plaza相邻200错误根因或ChatEngine/bootstrap全局修复；正常激活与主方验收另做。
+
 ## 2026-10-25 personal HTTP/SSE 消费者候选
 
 `mcp-custom-form.tsx` 复用原 Select 提供显式 HTTP/SSE；fresh 配置详情只显示真实且不可编辑的 transport。`hub/mcp-connector.schema.ts` 分开 required Current 与 operation-aware historical ACK，两层原 route/client 共同核 replayed／原请求，旧 absent body/key 不补值；JSON 保原整文档和单 key，HTTP/SSE 逐项原序绑定。URL 添加仍 absent HTTP，自定义 API 不变；项目发布 UI/action 两 guard 只接受 fresh HTTP。六个创建／恢复生命周期源文件原字节保持，creation flow 仅新增非秘密只读 transport getter；unknown 关窗重开显示原请求协议，旧 absent 显示“—”，原命令仍冻结／显式恢复；正式多 owner 正常验收由 Root 接手。

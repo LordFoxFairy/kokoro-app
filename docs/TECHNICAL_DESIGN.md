@@ -1,3 +1,9 @@
+## 2026-10-25 当前业务只读401的有限再准入
+
+AppGate在整个KokoroAppSurface外提供单用途read-recheck context；只有既有MCP/API投影、精确connector详情、composer metadata及Project GET hook的当前typed HTTP401，携其原subject/generation/未abort signal，才可报告。403、parse、network、迟到、preview和所有写命令不触发。Probe同步撤旧数据代，合并一次原Session检查；既有POST/CAS/未知轮换不取消、不重派，真正同主体确认后才发布新代由原hook重读GET。
+
+恢复自身的GET/POST成功不重置预算；恢复新代若再401，撤准入且不自动再探针，仅该分支以不占主surface文档流的有界status显示既有连接故障label与Retry按钮，取代重复sr-only播报，调用原probe.retry开始明确独立恢复。退休检查结算仅清其自身pending观察槽，epoch已过期的结果不授准入，也不阻塞后续focus/续期；不取消共享POST。后续独立正常续期可重新授予一次恢复额度；原页隐藏/主体退休/ABA围栏保留。不改HTTP/Schema/权限、命令正文/key或费用，不把本片定向回归说成原plaza相邻200错误根因或ChatEngine/bootstrap全局修复；正常激活与主方验收另做。
+
 ## 2026-10-25 personal HTTP/SSE 消费者（源码候选）
 
 Platform producer 固定 `8cfead647856ef54ec851a3bebe169a3ca14d212`；App 由既有七个 public 生成器统一消费正式 BFF `aa0bdeb4397d3a022edf9b3cfc53d5a6cfb281b1`／Public26，全文 SHA256 `20d26736cf23da32c242c2c7cf75c45affb62c5d27696dcecb0bc6193bc39a09`。Public26 只增加既有 Connection transport 闭集的 `sse_compat` 与版本；build/test-only 完整26→25逆证恢复原 Public25 SHA256 `7261ac9ce2140555ba97ebff2bf0359533cc49dda014b08dcd6a6054a8d38b1c`，再进入未放宽的25→24及历史链。独立 connector-error／project-publication pins 保持，不从 sibling 或候选工作树生成、不改旧 hash 冒历史发行。

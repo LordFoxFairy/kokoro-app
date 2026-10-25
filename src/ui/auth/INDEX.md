@@ -1,3 +1,9 @@
+## 2026-10-25 当前业务只读401的有限再准入
+
+AppGate在整个KokoroAppSurface外提供单用途read-recheck context；只有既有MCP/API投影、精确connector详情、composer metadata及Project GET hook的当前typed HTTP401，携其原subject/generation/未abort signal，才可报告。403、parse、network、迟到、preview和所有写命令不触发。Probe同步撤旧数据代，合并一次原Session检查；既有POST/CAS/未知轮换不取消、不重派，真正同主体确认后才发布新代由原hook重读GET。
+
+恢复自身的GET/POST成功不重置预算；恢复新代若再401，撤准入且不自动再探针，仅该分支以不占主surface文档流的有界status显示既有连接故障label与Retry按钮，取代重复sr-only播报，调用原probe.retry开始明确独立恢复。退休检查结算仅清其自身pending观察槽，epoch已过期的结果不授准入，也不阻塞后续focus/续期；不取消共享POST。后续独立正常续期可重新授予一次恢复额度；原页隐藏/主体退休/ABA围栏保留。不改HTTP/Schema/权限、命令正文/key或费用，不把本片定向回归说成原plaza相邻200错误根因或ChatEngine/bootstrap全局修复；正常激活与主方验收另做。
+
 ## 2026-10-21 原生退出确认产品页
 
 `src/app/auth/sign-out/page.tsx` 只拥有中文确认／失败展示，复用Button/Card/token；无客户端状态或自动认证请求。确认form只POST既有issuer端点，issuer opaque确认cookie、期限和当前Session/client/redirect授权仍由IAM验证。`iam-logout-response.ts`仅把已校验正向native确认发行投影为固定页面导航，API维持原生响应。固定交互页origin referrer＋form-action self，失败态无form且no-referrer；不放宽Origin:null、取消不恢复Product会话。

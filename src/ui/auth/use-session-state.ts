@@ -4,7 +4,9 @@
 // authenticated 或显式本地 preview → pass；anonymous → anonymous；探针未回前 checking。
 // preview 只由非生产环境的显式开关启用；网络、超时与畸形响应进入显式故障态，避免 fail-open 或误跳登录。
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react"
+
+import type { ProductReadRecheck } from "./product-read-recheck-context"
 
 import { currentCsrf, refreshProductSession } from "@/ui/auth/product-auth-client"
 
@@ -26,6 +28,8 @@ export type SessionProbe = {
   unavailable: boolean
   requestPending: boolean
   retry: () => void
+  reportReadUnauthorized: ProductReadRecheck
+  readRecoveryBlocked: boolean
 }
 
 // Preview mode is an explicit local-only opt-in. It is safe to start in the
@@ -177,7 +181,7 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean;
   const serverAdmitted = options.serverAdmitted === true
   const [retryGeneration, setRetryGeneration] = useState(0)
   const generationRef = useRef(0)
-  const [probe, setProbe] = useState<SessionProbe>(() => ({
+  const [probe, setProbe] = useState<Omit<SessionProbe, "reportReadUnauthorized" | "readRecoveryBlocked">>(() => ({
     state: EXPLICIT_PREVIEW ? "pass" : serverUnavailable ? "unavailable" : "checking",
     mode: EXPLICIT_PREVIEW ? "preview" : "checking",
     projectReadBoundary: { admitted: false, subject: null, generation: 0 },
@@ -185,12 +189,35 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean;
     requestPending: false,
     retry: () => undefined,
   }))
+  const admissionRef = useRef(probe.projectReadBoundary)
+  const readEpisode = useRef({ spent: false, recovering: false })
+  const [readRecoveryBlocked, setReadRecoveryBlocked] = useState(false)
+  useLayoutEffect(() => { admissionRef.current = probe.projectReadBoundary }, [probe.projectReadBoundary])
   const retry = useCallback(() => {
     if (serverUnavailable) return
+    readEpisode.current = { spent: false, recovering: false }
+    setReadRecoveryBlocked(false)
     setProbe((current) => current.mode === "authenticated"
       ? { ...current, requestPending: true }
       : { ...current, state: "checking", unavailable: false, requestPending: true })
     setRetryGeneration((current) => current + 1)
+  }, [serverUnavailable])
+  const reportReadUnauthorized = useCallback<ProductReadRecheck>((read) => {
+    const current = admissionRef.current
+    if (EXPLICIT_PREVIEW || serverUnavailable || documentSuspended || read.signal.aborted ||
+      !current.admitted || read.subject === null || current.subject !== read.subject ||
+      current.generation !== read.generation || admittedSubject !== read.subject) return
+    try { if (readBrowserAuthIndexSubject() !== read.subject) return } catch { return }
+    // Revoke synchronously: sibling/late g1 failures cannot interrupt its recovery.
+    const exhausted = readEpisode.current.spent
+    readEpisode.current = { spent: true, recovering: !exhausted }
+    const retired = { ...current, admitted: false, generation: ++generationRef.current }
+    admissionRef.current = retired
+    setReadRecoveryBlocked(exhausted)
+    setProbe(value => ({ ...value, projectReadBoundary: retired, requestPending: !exhausted, unavailable: exhausted }))
+    // Effect replacement retires the old subscriber, not the shared auth work.
+    // In particular an in-progress CAS/unknown POST must continue unchanged.
+    if (!exhausted) setRetryGeneration(value => value + 1)
   }, [serverUnavailable])
 
   useEffect(() => {
@@ -220,6 +247,7 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean;
       // The browser marker can revoke existing admission, never establish it.
       if (admittedSubject !== null && indexSubject !== admittedSubject) {
         browserConversationMoveCoordinator().suspendVerifiedSubject(admittedSubject)
+        admissionRef.current = { ...admissionRef.current, admitted: false }
         setProbe((current) => ({ ...current, projectReadBoundary: {
           ...current.projectReadBoundary, admitted: false, generation: generationRef.current,
         } }))
@@ -233,6 +261,7 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean;
       const checking = request.observation
       pendingCheck = checking
       const currentGeneration = ++generationRef.current
+      const readRecovery = readEpisode.current.recovering
       // Probe epochs fence asynchronous results; data generations change only
       // on actual admission/retirement. A routine check does not invalidate
       // every business read. Each request still has server-side authorization.
@@ -242,9 +271,12 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean;
           : { admitted: false, subject: current.projectReadBoundary.subject, generation: currentGeneration },
       }))
       void request.result.then((resolved) => {
+        // A retired result still releases its own scheduler slot. It cannot
+        // clear a newer observation or publish admission across the epoch fence.
+        if (pendingCheck === checking) pendingCheck = null
         if (!live || generationRef.current !== currentGeneration) return
-        pendingCheck = null
         if (resolved.mode === "unavailable" || checking.retired) {
+          admissionRef.current = { ...admissionRef.current, admitted: false }
           scheduleRecovery()
           browserConversationMoveCoordinator().suspendVerifiedSubject(admittedSubject)
           setProbe((current) => current.mode === "authenticated"
@@ -258,6 +290,7 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean;
           try {
             if (resolved.subjectAtProbeStart === undefined ||
               !admitBrowserAuthSessionIndexes(resolved.subject, resolved.subjectAtProbeStart)) {
+              admissionRef.current = { ...admissionRef.current, admitted: false }
               setProbe((current) => current.mode === "authenticated"
                 ? { ...current, unavailable: true, requestPending: false, retry,
                   projectReadBoundary: { admitted: false, subject: current.projectReadBoundary.subject, generation: currentGeneration } }
@@ -269,18 +302,24 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean;
               admittedSubject = resolved.subject
             } else if (admittedSubject !== resolved.subject) {
               browserConversationMoveCoordinator().revokeSubject()
+              admissionRef.current = { ...admissionRef.current, admitted: false }
               setProbe({ state: "checking", mode: "checking", unavailable: false, requestPending: false, retry,
                 projectReadBoundary: { admitted: false, subject: null, generation: currentGeneration } })
               window.location.reload()
               return
             }
             browserConversationMoveCoordinator().admitVerifiedSubject(resolved.subject)
+            setReadRecoveryBlocked(false)
+            // A recovery's own GET/POST success never buys another 401 retry.
+            if (resolved.renewalConfirmed && !readRecovery) readEpisode.current.spent = false
+            readEpisode.current.recovering = false
             if (nextRefreshAt === null || resolved.renewalConfirmed) {
               nextRefreshAt = Date.now() + REFRESH_INTERVAL_MS
               refreshUnconfirmed = false
               refreshSubject = null
             }
           } catch {
+            admissionRef.current = { ...admissionRef.current, admitted: false }
             setProbe((current) => current.mode === "authenticated"
               ? { ...current, unavailable: true, requestPending: false, retry,
                 projectReadBoundary: { admitted: false, subject: current.projectReadBoundary.subject, generation: currentGeneration } }
@@ -290,6 +329,9 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean;
           }
         }
         if (resolved.mode === "anonymous") {
+          admissionRef.current = { ...admissionRef.current, admitted: false }
+          readEpisode.current = { spent: false, recovering: false }
+          setReadRecoveryBlocked(false)
           browserConversationMoveCoordinator().revokeSubject()
           admittedSubject = null
           nextRefreshAt = null
@@ -331,6 +373,7 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean;
           if (sessionProbeInflight !== null) sessionProbeInflight.observation.retired = true
         }
         browserConversationMoveCoordinator().suspendVerifiedSubject(admittedSubject)
+        admissionRef.current = { ...admissionRef.current, admitted: false }
         setProbe((current) => ({ ...current, projectReadBoundary: {
           ...current.projectReadBoundary, admitted: false, generation: generationRef.current,
         } }))
@@ -339,6 +382,7 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean;
     }
     const onPageHide = (): void => {
       documentSuspended = true
+      admissionRef.current = { ...admissionRef.current, admitted: false }
       pendingCheck = null
       ++generationRef.current
       sessionProbeController?.abort()
@@ -373,7 +417,7 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean;
     }
   }, [retry, retryGeneration, serverUnavailable, serverAdmitted])
 
-  return probe
+  return { ...probe, reportReadUnauthorized, readRecoveryBlocked }
 }
 
 export function useSessionState(): SessionState {

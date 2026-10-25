@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
-import type { HubClient } from "@/hub/client";
+import { HubClientError, type HubClient } from "@/hub/client";
+import { useProductReadRecheck } from "@/ui/auth/product-read-recheck-context";
 import {
   mcpConnectorPageSchema,
   mcpConnectorProviderPageSchema,
@@ -30,6 +31,7 @@ type ProjectionFlight = {
 
 type ProjectionSubscription = {
   promise: ProjectionFlight["promise"];
+  signal: AbortSignal;
   release: () => void;
 };
 
@@ -234,6 +236,7 @@ function subscribe(
   let released = false;
   return {
     promise: flight.promise,
+    signal: flight.controller.signal,
     release: () => {
       if (released) return;
       released = true;
@@ -335,6 +338,7 @@ export function useMcpProjection({
   admitted?: boolean;
   readGeneration?: number;
 }) {
+  const reportRead401 = useProductReadRecheck();
   const revision = connectorRevision(client, identity);
   const currentRevision = useMcpConnectorRevision(client, identity);
   const [providerGeneration, setProviderGeneration] = useState(0);
@@ -500,9 +504,11 @@ export function useMcpProjection({
             });
           }
         },
-        () => {
+        (error: unknown) => {
           completed.current.delete(requestKey);
           if (!active || (resource === "connectors" && revision.value !== currentRevision)) return;
+          if (error instanceof HubClientError && error.reason === "http" && error.status === 401 && !subscription.signal.aborted)
+            reportRead401?.({ subject: identity, generation: readGeneration, signal: subscription.signal });
           if (resource === "providers") {
             setProviderState((current) => ({
               ...current,
@@ -527,7 +533,7 @@ export function useMcpProjection({
       active = false;
       subscriptions.forEach((subscription) => subscription.release());
     };
-  }, [admitted, readGeneration, client, connectorGeneration, currentRevision, cursor, identity, providerGeneration, revision, view]);
+  }, [admitted, readGeneration, client, connectorGeneration, currentRevision, cursor, identity, providerGeneration, revision, view, reportRead401]);
 
   const providerProjection =
     admitted && providerState.readGeneration === readGeneration && providerState.dataIdentity === identity ? providerState.data : undefined;

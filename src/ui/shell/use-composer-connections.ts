@@ -3,7 +3,8 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 import type { SessionEngine } from "@/engine/machine"
 import { SERVER_ENGINE_SNAPSHOT } from "@/engine/machine"
-import type { HubClient } from "@/hub/client"
+import { HubClientError, type HubClient } from "@/hub/client"
+import { useProductReadRecheck } from "@/ui/auth/product-read-recheck-context"
 import type { McpAvailability, McpConnector } from "@/hub/mcp-connector.schema"
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
 import { AUTH_INDEX_SUBJECT_KEY, readBrowserAuthIndexSubject } from "./page-clients"
@@ -36,6 +37,7 @@ export function useComposerConnections({ engine, client, boundary, enforceSubjec
   boundary: ProjectReadBoundary
   enforceSubjectMarker: boolean
 }): ComposerConnectionsController {
+  const reportRead401 = useProductReadRecheck()
   const { admitted, subject, generation } = boundary
   const scope = useMemo(() => ({ engine, client, admitted, subject, generation, enforceSubjectMarker }), [engine, client, admitted, subject, generation, enforceSubjectMarker])
   const [request, setRequest] = useState<{ scope: typeof scope; revision: number; cursor?: string | undefined }>({ scope, revision: 0 })
@@ -127,14 +129,16 @@ export function useComposerConnections({ engine, client, boundary, enforceSubjec
         if (next.some(item => prior.some(old => old.id === item.id))) return { scope, revision, items: prior, status: "error", nextCursor: cursor }
         return { scope, revision, items: [...prior, ...next], nextCursor: page.next_cursor, status: "ready" }
       })
-    })().catch(() => {
+    })().catch((error: unknown) => {
       if (current()) {
+        if (error instanceof HubClientError && error.reason === "http" && error.status === 401)
+          reportRead401?.({ subject, generation, signal: controller.signal })
         setCatalog(previous => ({ scope, revision, items: previous.scope === scope ? previous.items : [], nextCursor: cursor, status: "error" }))
         controller.abort()
       }
     })
     return () => { live = false; controller.abort() }
-  }, [scope, activeRequest.revision, activeRequest.cursor, admitted, subject, engine, client, enforceSubjectMarker, retiredScope])
+  }, [scope, activeRequest.revision, activeRequest.cursor, admitted, subject, engine, client, enforceSubjectMarker, retiredScope, reportRead401, generation])
 
   return {
     items, selectedIds, status, nextCursor: sameScope ? catalog.nextCursor : undefined,

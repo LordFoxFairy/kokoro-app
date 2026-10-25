@@ -584,15 +584,21 @@ it.each(["401", "bad-shape"])("身份重新准入后列表返回 %s，清旧项�
   expect(calls).toBe(1)
   window.localStorage.removeItem("kokoro.web.auth-index-subject")
   act(() => window.dispatchEvent(new Event("focus")))
-  await screen.findByTestId("projects-error")
-  expect(calls).toBe(2)
+  if (failure === "401") {
+    // One automatic re-admission/read is allowed; its second 401 withdraws
+    // admission and exposes the gate's explicit independent recovery action.
+    const status = await screen.findByRole("status", { name: "连接暂时中断" })
+    expect(status.querySelector("button")).toBeEnabled()
+    expect(calls).toBe(3)
+  } else {
+    await screen.findByTestId("projects-error")
+    expect(calls).toBe(2)
+    expect(screen.getByTestId("projects-error").querySelector("button")).toBeEnabled()
+  }
   expect(screen.queryByRole("link", { name: "新对话 · 研究项目甲" })).not.toBeInTheDocument()
   expect(screen.queryByRole("link", { name: "新对话 · 研究项目乙" })).not.toBeInTheDocument()
   expect(screen.queryByTestId("projects-empty")).not.toBeInTheDocument()
   expect(document.querySelectorAll("[data-project-list] [data-project-id]")).toHaveLength(0)
-  const retry = screen.getByTestId("projects-error").querySelector("button")
-  if (failure === "401") expect(retry).toBeDisabled()
-  else expect(retry).toBeEnabled()
 })
 
 it("只有成功读取 projects=[] 才呈现项目空态", async () => {
