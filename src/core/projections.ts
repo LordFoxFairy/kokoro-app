@@ -7,8 +7,20 @@ import type {
   SessionStreamState,
   SessionSubagent,
   SessionToolCall,
+  SessionTodo,
 } from "./state"
 import type { RunProcessActivity } from "@/contract/chat"
+
+// An active progress affordance belongs only to the exact current started Run.
+// Historical plans stay intact; a queued successor does not inherit their work.
+export function currentRunProgressTodos(
+  state: Pick<SessionStreamState, "executionHead" | "executionProcess">,
+): SessionTodo[] {
+  const head = state.executionHead
+  const process = state.executionProcess
+  if (head === null || head.state === "queued" || process === null || head.run_id !== process.runId) return []
+  return process.todos ?? []
+}
 
 // 线程渲染项：连续同 runId 的 assistant 消息归并为一个 turn；用户消息单独成项。
 export type ThreadItem =

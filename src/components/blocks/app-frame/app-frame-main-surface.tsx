@@ -1,3 +1,4 @@
+import { currentRunProgressTodos } from "@/core/projections"
 import type { ComponentType, ReactNode } from "react"
 
 import { Button } from "@/components/ui/button"
@@ -214,7 +215,7 @@ export function AppFrameMainSurface({
       </div>
 
       {/* 计划条钉在输入框正上方，可收缩；思考/工具/子智能体在 ConversationThread 内联呈现。 */}
-      {mounted && !standaloneSurface ? <TodoBar todos={thread.todos} /> : null}
+      {mounted && !standaloneSurface ? <TodoBar todos={currentRunProgressTodos(thread)} /> : null}
 
       {/* Site-owned empty surfaces may move the same composer into their own
           welcome layout; active conversations always use the shell slot. */}

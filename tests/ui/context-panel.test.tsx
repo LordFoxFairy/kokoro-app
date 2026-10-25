@@ -556,3 +556,19 @@ it("unrelated storage and unchanged auth-index events do not revoke the still-cu
   expect(view.container.querySelector("pre")?.textContent).toBe(artifactText)
   expect(fetcher).toHaveBeenCalledTimes(2)
 })
+
+
+it("current task progress footer retires with an empty active-plan projection without hiding preview content", () => {
+  const callbacks = { onSelectFile: vi.fn(), onSelectDelivery: vi.fn(), onToggleFullscreen: vi.fn(), onClose: vi.fn() }
+  const view = (todos: { content: string; status: "pending" | "in_progress" }[]) => (
+    <LocaleProvider><CanvasPanel sessionId="terminal-progress" content={{ kind: "node", title: "retained delivery", node: <p>retained delivered content</p> }}
+      files={[]} deliveries={[]} fullscreen={false} todos={todos} {...callbacks} /></LocaleProvider>
+  )
+  const rendered = render(view([{ content: "original pending plan", status: "pending" }, { content: "original active plan", status: "in_progress" }]))
+  expect(document.querySelector('[data-slot="canvas-task-footer"]')).toHaveTextContent("0 / 2")
+  rendered.rerender(view([]))
+  expect(document.querySelector('[data-slot="canvas-task-footer"]')).not.toBeInTheDocument()
+  expect(screen.getByText("retained delivered content")).toBeInTheDocument()
+  expect(screen.getByRole("radio", { name: /Files|文件/ })).toBeInTheDocument()
+  expect(screen.getByRole("button", { name: /Close preview|关闭预览/ })).toBeInTheDocument()
+})

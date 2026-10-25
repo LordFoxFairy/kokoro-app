@@ -1,3 +1,4 @@
+import { currentRunProgressTodos } from "@/core/projections"
 import type {
   CSSProperties,
   KeyboardEvent as ReactKeyboardEvent,
@@ -201,7 +202,7 @@ export function AppFrameShell({
                       files={thread.files}
                       deliveries={thread.deliveries}
                       deliveriesHasMore={thread.deliveriesHasMore}
-                      todos={thread.todos}
+                      todos={currentRunProgressTodos(thread)}
                       focusScopeRef={shellRef}
                       fullscreen={canvas.fullscreen}
                       onSelectFile={canvas.onSelectFile}

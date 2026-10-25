@@ -19,7 +19,8 @@ web 的领域核心：会话线程状态、事件折叠 reducer、渲染投影�
   - 本地命令（非事件折叠）：`appendUserMessage`（本地 echo，usr_ 前缀 id）、
     `markToolRejected`（拒绝乐观置位，防回流翻绿勾）、`markRunCancelled`（停止本地收口）。
 - `projections.ts`：`buildThreadItems`（连续同 runId assistant 归并为 turn；safe process 可在首 token 前建立 turn；纯派生，
-  渲染层唯一读取模型）、`groupSegments`/`Segment`（正文锚点与 public7 safe activity 按 opaque segment 聚合）。
+  渲染层唯一读取模型）、`groupSegments`/`Segment`（正文锚点与 public7 safe activity 按 opaque segment 聚合）、
+  `currentRunProgressTodos`（只派生 exact 当前非 queued head 对应 selected process 的计划；终态/历史计划不冒 active 进度，不改原 Todo 状态）。
 - `hydration.ts`：`stateFromSnapshot`——从 BFF 同一事务 snapshot 水合
   messages/pending pauses/meta/files/deliveries/activeRunId，并保存 `event_watermark` 为
   `resumeCursor`；尾部 settled failed assistant 在无 active/HITL 时按 Message.failure 恢复 agent 或 generic safe failure，

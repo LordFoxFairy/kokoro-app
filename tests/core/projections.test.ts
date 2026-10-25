@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it } from "vitest"
 
 import { stateFromSnapshot } from "@/core/hydration"
-import { buildThreadItems, groupSegments } from "@/core/projections"
+import { buildThreadItems, currentRunProgressTodos, groupSegments } from "@/core/projections"
+import { parseSessionSnapshot } from "@/contract/http"
 import { applyChatProjectionEvents, appendUserMessage } from "@/core/reducer"
 import { createSessionStreamState, type SessionStep } from "@/core/state"
 
-import { AGENT_FAILURE_PROFILES, makeEvent, makeSnapshot, resetFixtureSeq } from "./fixtures"
+import { AGENT_FAILURE_PROFILES, makeAgentFailureEvent, makeEvent, makePublic4Snapshot, makeSnapshot, resetFixtureSeq } from "./fixtures"
 
 beforeEach(resetFixtureSeq)
 
@@ -148,4 +149,67 @@ it("keeps snapshot text then post-watermark tool and new text segments in real o
   expect(segments.map((segment) => segment.segmentId)).toEqual(["durable", "tool_seg", "new_seg"])
   expect(segments.map((segment) => turn.messagesById[segment.segmentId]?.content ?? "")).toEqual(["earlier", "", "later"])
   expect(segments[1]?.tools[0]?.status).toBe("done")
+})
+
+
+describe("currentRunProgressTodos", () => {
+  const todos = [{ content: "original current plan", status: "in_progress" as const }, { content: "original remaining plan", status: "pending" as const }]
+  const started = (runId = "run_1") => applyChatProjectionEvents(createSessionStreamState(), [
+    makeEvent("run.created", { run_id: runId }, { run_id: runId }),
+    makeEvent("todo.updated", { todos }, { run_id: runId }),
+  ])
+
+  it.each(["active", "waiting", "resuming"] as const)("keeps exact %s process progress after snapshot hydration even with idle runStatus and no global todos", state => {
+    const snapshot = parseSessionSnapshot({ ...makePublic4Snapshot({ state, runId: "run_current" }),
+      execution_process: { run_id: "run_current", todos, activities: [], next_cursor: null } })
+    const thread = stateFromSnapshot(snapshot)
+    expect(thread.runStatus).toBe("idle")
+    expect(thread.todos).toEqual([])
+    expect(currentRunProgressTodos(thread)).toBe(thread.executionProcess?.todos)
+    expect(currentRunProgressTodos(thread)).toEqual(todos)
+  })
+
+  it.each(["completed", "failed", "cancelled"] as const)("retires exact %s progress without rewriting pending plan or selected process", terminal => {
+    const active = started()
+    const ended = applyChatProjectionEvents(active, [terminal === "failed"
+      ? makeAgentFailureEvent(AGENT_FAILURE_PROFILES[0]!)
+      : makeEvent("run.completed", { status: terminal, token_usage: null })])
+    expect(currentRunProgressTodos(ended)).toEqual([])
+    expect(ended.todos).toEqual(todos)
+    expect(ended.executionProcess?.todos).toEqual(todos)
+    expect(ended.executionProcess?.runId).toBe("run_1")
+  })
+
+  it("does not attribute a historical selected process to a queued successor or show a queued same-Run as active", () => {
+    const snapshot = parseSessionSnapshot({ ...makePublic4Snapshot({ state: "queued", runId: "run_b" }),
+      execution_process: { run_id: "run_a", todos, activities: [], next_cursor: null } })
+    const thread = stateFromSnapshot(snapshot)
+    expect(currentRunProgressTodos(thread)).toEqual([])
+    expect(currentRunProgressTodos({ ...thread, executionProcess: { runId: "run_b", todos, activities: [] } })).toEqual([])
+    expect(thread.executionProcess?.todos).toEqual(todos)
+  })
+
+  it("an old terminal cannot retire another exact current Run's progress", () => {
+    const current = started("run_b")
+    const afterOldTerminal = applyChatProjectionEvents(current, [makeEvent("run.completed", { status: "completed", token_usage: null }, { run_id: "run_a" })])
+    expect(currentRunProgressTodos(afterOldTerminal)).toEqual(todos)
+    expect(afterOldTerminal.executionHead?.run_id).toBe("run_b")
+  })
+
+  it("requires exact head/process identity and never falls back to global stale todos", () => {
+    const current = started("run_b")
+    expect(currentRunProgressTodos({ ...current, executionProcess: { runId: "run_b_old", todos, activities: [] } })).toEqual([])
+    expect(currentRunProgressTodos({ ...current, executionProcess: null })).toEqual([])
+    expect(currentRunProgressTodos({ ...current, executionProcess: { runId: "run_b", todos: null, activities: [] } })).toEqual([])
+    expect(currentRunProgressTodos({ ...current, executionHead: null })).toEqual([])
+    expect(current.todos).toEqual(todos)
+  })
+
+  it("does not infer Run terminal from a fully completed plan", () => {
+    const current = started()
+    const completedPlan = [{ content: "a finished planning item", status: "completed" as const }]
+    const updated = applyChatProjectionEvents(current, [makeEvent("todo.updated", { todos: completedPlan })])
+    expect(currentRunProgressTodos(updated)).toEqual(completedPlan)
+    expect(updated.executionHead?.state).toBe("active")
+  })
 })

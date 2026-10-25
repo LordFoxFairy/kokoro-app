@@ -32,7 +32,8 @@ import { ThemeProvider } from "@/ui/theme/theme-context"
 import { createSessionEngine, type SessionEngine } from "@/engine/machine"
 import { createSessionClient, SessionClientError } from "@/engine/client"
 import { addConversation, type ConversationStore } from "@/core/conversations"
-import { makeSnapshot } from "../core/fixtures"
+import { AGENT_FAILURE_PROFILES, makeAgentFailureEvent, makeEvent, makeSnapshot } from "../core/fixtures"
+import { closeCanvas, openCanvas } from "@/ui/canvas/canvas-store"
 import { createFakeClient, createMemoryStorage, makeReceipt, settle, type FakeClient } from "../engine/fakes"
 
 // Isolated surfaces use the same explicit actor/client owner as AppFrameRuntime.
@@ -5307,4 +5308,44 @@ it("composer skill selection admits a fresh callback after same-batch route A to
   expect(view.result.current.selectedSkill?.sourceRef).toBe("skill:trial-version")
   expect(engine.getSnapshot().store).toBeNull()
   expect(client.createCalls).toEqual([])
+})
+
+
+it.each(["completed", "failed", "cancelled"] as const)("current task progress retires both live hosts on exact %s terminal without completing the original todos", async terminal => {
+  const sessionId = `conv_progress_${terminal}`
+  const runId = `run_progress_${terminal}`
+  const todos = [{ content: "original plan one", status: "in_progress" as const }, { content: "original plan two", status: "pending" as const }]
+  window.history.replaceState({}, "", `/app?conversation=${sessionId}`)
+  let snapshot = makeSnapshot({ sessionId, activeRun: { run_id: runId, status: "running" } })
+  client.nextSnapshot = async () => snapshot
+  await act(async () => { engine.openConversation(sessionId); await settle() })
+  mountFrame({ preview: true })
+  await waitFor(() => expect(client.streams.length).toBeGreaterThan(0))
+  const stream = client.lastStream()
+  await act(async () => {
+    stream.emit([
+      makeEvent("run.created", { run_id: runId }, { run_id: runId, session_id: sessionId }),
+      makeEvent("todo.updated", { todos }, { run_id: runId, session_id: sessionId }),
+    ])
+    openCanvas(sessionId, { kind: "node", title: "retained result", node: <p>delivered result stays visible</p> })
+    await settle()
+  })
+  expect(screen.getByRole("progressbar", { name: "任务进度" })).toHaveAttribute("aria-valuenow", "0")
+  expect(document.querySelector('[data-slot="canvas-task-footer"]')).toHaveTextContent("0 / 2")
+  snapshot = makeSnapshot({ sessionId })
+  try {
+    await act(async () => {
+      stream.emit([terminal === "failed"
+        ? makeAgentFailureEvent(AGENT_FAILURE_PROFILES[0]!, { run_id: runId, session_id: sessionId })
+        : makeEvent("run.completed", { status: terminal, token_usage: null }, { run_id: runId, session_id: sessionId })])
+      await settle()
+    })
+    expect(screen.queryByRole("progressbar", { name: "任务进度" })).not.toBeInTheDocument()
+    expect(document.querySelector('[data-slot="canvas-task-footer"]')).not.toBeInTheDocument()
+    expect(screen.getByText("delivered result stays visible")).toBeInTheDocument()
+    expect(engine.getSnapshot().thread.todos).toEqual(todos)
+    expect(engine.getSnapshot().thread.executionProcess?.todos).toEqual(todos)
+    expect(engine.getSnapshot().thread.executionHead).toBeNull()
+    if (terminal === "failed") expect(engine.getSnapshot().thread.runFailuresById[runId]).toBeDefined()
+  } finally { closeCanvas(sessionId) }
 })

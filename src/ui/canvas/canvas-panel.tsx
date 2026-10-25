@@ -311,7 +311,7 @@ export function CanvasPanel({
           <ContentBody sessionId={sessionId} content={content} {...(closedPreviewKey === contentKey || readBoundary === undefined ? {} : { readBoundary })} />
         )}
       </div>
-      {
+      {todos.length > 0 ? (
         <footer className={styles.taskFooter} data-slot="canvas-task-footer">
           <div className={styles.timeline} aria-hidden="true">
             <span className={styles.timelineControls}>
@@ -332,7 +332,7 @@ export function CanvasPanel({
             {todos.length > 0 ? <span className={styles.taskCount}>{completedTodoCount} / {todos.length}</span> : null}
           </div>
         </footer>
-      }
+      ) : null}
     </aside>
   )
 }
