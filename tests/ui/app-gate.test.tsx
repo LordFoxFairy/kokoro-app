@@ -10,6 +10,7 @@ const state = vi.hoisted(() => ({
   pathname: "/app",
   openProductSignIn: vi.fn(),
   retry: vi.fn(),
+  probeOptions: vi.fn(),
   unavailable: false,
   pending: false,
 }))
@@ -22,14 +23,14 @@ vi.mock("next/navigation", () => ({
 }))
 vi.mock("@/ui/auth/product-auth-client", () => ({ openProductSignIn: state.openProductSignIn }))
 vi.mock("@/ui/auth/use-session-state", () => ({
-  useSessionProbe: () => ({
+  useSessionProbe: (options: unknown) => { state.probeOptions(options); return ({
     state: state.probeState,
     mode: state.probeMode,
     retry: state.retry,
     projectReadBoundary: { admitted: state.probeMode === "authenticated" && !state.unavailable, subject: state.probeMode === "authenticated" ? "reader" : null, generation: 1 },
     unavailable: state.unavailable,
     requestPending: state.pending,
-  }),
+  }) },
 }))
 vi.mock("@/system/use-runtime-manifest", () => ({
   useRuntimeManifest: () => ({
@@ -65,6 +66,7 @@ beforeEach(() => {
   state.pathname = "/app"
   state.openProductSignIn.mockClear()
   state.retry.mockClear()
+  state.probeOptions.mockClear()
   router.refresh.mockClear()
   state.unavailable = false
   state.pending = false
@@ -243,4 +245,14 @@ it.each(["visibilitychange", "pageshow"])("resumes bounded server admission chec
     expect(router.refresh).toHaveBeenCalledTimes(2)
     expect(state.openProductSignIn).not.toHaveBeenCalled()
   } finally { visible.mockRestore() }
+})
+
+
+it("uses the server-admitted boolean only as a cold CSRF-read hint while Runtime stays gated", () => {
+  state.probeMode = "checking"
+  state.probeState = "checking"
+  render(<LocaleProvider><AppGate serverAdmitted /></LocaleProvider>)
+  expect(state.probeOptions).toHaveBeenCalledWith({ serverUnavailable: false, serverAdmitted: true })
+  expect(screen.getByTestId("app-surface")).toHaveAttribute("data-booting", "true")
+  expect(screen.getByTestId("app-surface")).toHaveAttribute("data-admitted", "false")
 })

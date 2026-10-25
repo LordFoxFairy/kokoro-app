@@ -1,3 +1,9 @@
+## 2026-10-25 冷准入只读预取调度（源码候选）
+
+现 App layout 的 `serverAdmitted` 只证明当前 RP 生命周期，可作为 cold CSRF 预读提示，不代表 fresh IAM 或客户端 authenticated。仅在原共享 session flight/10秒 signal 内并行 session GET 与现 CSRF GET；仍须 GET 可信主体、原 auth-index/marker/generation fence 与 CSRF 成功后才唯一 POST rotate。GET 错误、anonymous、身份退休或超时不发 POST；未消费 CSRF 读在结果结算后取消，晚到 body 不准轮换或改写准入。现 POST 的 Origin/CSRF、双 CAS、fresh 身份验证、unknown 后只读确认及120秒生命周期不变。
+
+不扩 SSR 投影、layout、HTTP/schema、依赖或 auth cache，不改变 loading 呈现。关键路径只从串行两读变为并行两读；真实 token/BFF/IAM 等 POST 依赖仍存在，正常冷加载改善与剩余等待由 Root 实测，不以源码或定向测试关闭全局无感加载。
+
 ## 2026-10-25 URL 创建后项目发布（既定设计消费）
 
 遵循 Root five-surface-closure 中 URL immutable revision/project pin 设计，不新增owner。URL保存并发布先完成个人注册ACK，之后才打开已观察的Manus项目picker；取消不删除配置、不发OAuth。App仅持有显示和原命令状态，项目准入归BFF、定义/pin归Platform、执行绑定仍独立未接通。冻结原请求与回执类型独立于Prepare/OAuth；shared error policy与BFF专用1.1错误tuple共同决定恢复，不根据retryable单bit推测。

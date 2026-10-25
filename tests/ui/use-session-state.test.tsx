@@ -825,3 +825,111 @@ it.each(["pagehide", "csrf-failure"])("can renew expired access after %s before 
     expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1)
   } finally { view.unmount() }
 })
+
+
+it("preloads cold CSRF alongside the trusted session read without admitting or rotating early", async () => {
+  let finishSession!: (response: Response) => void
+  let finishCsrf!: (response: Response) => void
+  const fetchMock = vi.fn().mockImplementation((url: string, options?: RequestInit) => {
+    if (url === "/api/auth/csrf") return new Promise<Response>(resolve => { finishCsrf = resolve })
+    if (options?.method === "POST") return Promise.resolve(renewed())
+    return new Promise<Response>(resolve => { finishSession = resolve })
+  })
+  vi.stubGlobal("fetch", fetchMock)
+  const first = renderHook(() => useSessionProbe({ serverAdmitted: true }))
+  const second = renderHook(() => useSessionProbe({ serverAdmitted: true }))
+  try {
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    expect(fetchMock.mock.calls.map(call => call[0])).toEqual(["/api/auth/session", "/api/auth/csrf"])
+    expect(first.result.current.projectReadBoundary.admitted).toBe(false)
+    expect(fetchMock.mock.calls[1]![1].signal).toBe(fetchMock.mock.calls[0]![1].signal)
+    await act(async () => { finishSession(session()) })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(first.result.current.mode).toBe("checking")
+    await act(async () => { finishCsrf(csrf()) })
+    await waitFor(() => expect(first.result.current.projectReadBoundary.admitted).toBe(true))
+    expect(second.result.current.projectReadBoundary.admitted).toBe(true)
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+    expect(fetchMock.mock.calls[2]![1].method).toBe("POST")
+    expect(fetchMock.mock.calls[2]![1].signal).toBe(fetchMock.mock.calls[0]![1].signal)
+  } finally { first.unmount(); second.unmount() }
+})
+
+it.each(["anonymous", "error", "invalid"])("retires an unused cold CSRF read after a %s GET without any late POST", async (kind) => {
+  let finishCsrf!: (response: Response) => void
+  const response = kind === "anonymous" ? Response.json({ authenticated: false })
+    : kind === "error" ? new Response(null, { status: 503 }) : Response.json({ authenticated: true })
+  const fetchMock = vi.fn().mockImplementation((url: string) => url === "/api/auth/csrf"
+    ? new Promise<Response>(resolve => { finishCsrf = resolve }) : Promise.resolve(response))
+  vi.stubGlobal("fetch", fetchMock)
+  const view = renderHook(() => useSessionProbe({ serverAdmitted: true }))
+  try {
+    await waitFor(() => expect(view.result.current.state).toBe(kind === "anonymous" ? "anonymous" : "unavailable"))
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchMock.mock.calls[1]![1].signal.aborted).toBe(true)
+    await act(async () => { finishCsrf(csrf()) })
+    expect(fetchMock.mock.calls.some(call => call[1]?.method === "POST")).toBe(false)
+    expect(view.result.current.projectReadBoundary.admitted).toBe(false)
+  } finally { view.unmount() }
+})
+
+it("keeps a preloaded CSRF result behind the original cold browser account fence", async () => {
+  let finishSession!: (response: Response) => void
+  const fetchMock = vi.fn().mockImplementation((url: string) => url === "/api/auth/csrf"
+    ? Promise.resolve(csrf()) : new Promise<Response>(resolve => { finishSession = resolve }))
+  vi.stubGlobal("fetch", fetchMock)
+  const view = renderHook(() => useSessionProbe({ serverAdmitted: true }))
+  try {
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    act(() => {
+      window.localStorage.setItem("kokoro.web.auth-index-subject", "reader-b")
+      window.dispatchEvent(new StorageEvent("storage", { key: "kokoro.web.auth-index-subject", storageArea: window.localStorage, oldValue: null, newValue: "reader-b" }))
+    })
+    await act(async () => { finishSession(session()) })
+    await waitFor(() => expect(view.result.current.unavailable).toBe(true))
+    expect(fetchMock.mock.calls.some(call => call[1]?.method === "POST")).toBe(false)
+    expect(view.result.current.projectReadBoundary.admitted).toBe(false)
+  } finally { view.unmount() }
+})
+
+it("keeps concurrent cold reads within the original 10s deadline and never rotates after late bodies", async () => {
+  vi.useFakeTimers()
+  let finishSession!: (response: Response) => void
+  let finishCsrf!: (response: Response) => void
+  const fetchMock = vi.fn().mockImplementation((url: string) => new Promise<Response>(resolve => {
+    if (url === "/api/auth/csrf") finishCsrf = resolve
+    else finishSession = resolve
+  }))
+  vi.stubGlobal("fetch", fetchMock)
+  const view = renderHook(() => useSessionProbe({ serverAdmitted: true }))
+  try {
+    await act(async () => { await Promise.resolve() })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000) })
+    expect(view.result.current.unavailable).toBe(true)
+    expect(fetchMock.mock.calls.every(call => call[1].signal.aborted)).toBe(true)
+    await act(async () => { finishSession(session()); finishCsrf(csrf()) })
+    expect(fetchMock.mock.calls.some(call => call[1]?.method === "POST")).toBe(false)
+    expect(view.result.current.projectReadBoundary.admitted).toBe(false)
+  } finally { view.unmount() }
+})
+
+
+it("retires both prefetched cold reads on pagehide without a late rotating POST", async () => {
+  let finishSession!: (response: Response) => void
+  let finishCsrf!: (response: Response) => void
+  const fetchMock = vi.fn().mockImplementation((url: string) => new Promise<Response>(resolve => {
+    if (url === "/api/auth/csrf") finishCsrf = resolve
+    else finishSession = resolve
+  }))
+  vi.stubGlobal("fetch", fetchMock)
+  const view = renderHook(() => useSessionProbe({ serverAdmitted: true }))
+  try {
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    act(() => window.dispatchEvent(new Event("pagehide")))
+    expect(fetchMock.mock.calls.every(call => call[1].signal.aborted)).toBe(true)
+    await act(async () => { finishSession(session()); finishCsrf(csrf()) })
+    expect(fetchMock.mock.calls.some(call => call[1]?.method === "POST")).toBe(false)
+    expect(view.result.current.projectReadBoundary.admitted).toBe(false)
+  } finally { view.unmount() }
+})

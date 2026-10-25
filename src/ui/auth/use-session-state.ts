@@ -6,7 +6,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 
-import { refreshProductSession } from "@/ui/auth/product-auth-client"
+import { currentCsrf, refreshProductSession } from "@/ui/auth/product-auth-client"
 
 import {
   AUTH_INDEX_SUBJECT_KEY,
@@ -53,7 +53,7 @@ let refreshUnconfirmed = false
 let refreshSubject: string | null = null
 let documentSuspended = false
 
-function requestSessionMode(indexSubject: string | null | undefined): SharedSessionCheck {
+function requestSessionMode(indexSubject: string | null | undefined, prefetchCsrf: boolean): SharedSessionCheck {
   if (sessionProbeInflight !== null) return sessionProbeInflight
   const observation = { indexSubject, retired: false }
   if (documentSuspended) return { observation, result: Promise.resolve({ mode: "unavailable", subject: null }) }
@@ -70,6 +70,8 @@ function requestSessionMode(indexSubject: string | null | undefined): SharedSess
     abort = () => reject(signal.reason ?? new Error("Product session probe aborted"))
     signal.addEventListener("abort", abort, { once: true })
   })
+  let prefetchedCsrf: Promise<string> | undefined
+  let csrfConsumed = false
   const timer = window.setTimeout(() => controller.abort(), 10_000)
   // Both abort-aware fetch and an uncooperative late body must settle within
   // the same budget. Every dispatch checks the signal; losing work cannot POST.
@@ -108,7 +110,15 @@ function requestSessionMode(indexSubject: string | null | undefined): SharedSess
     let expectedSubject = admittedSubject
     let initial: ReadSession | undefined
     if (!due) {
-      initial = await read()
+      const reading = read()
+      // The SSR RP-presence hint allows only this independent CSRF read.
+      // Admission and the single rotating POST still await the current GET/fences.
+      if (cold && prefetchCsrf) {
+        prefetchedCsrf = currentCsrf(signal)
+        // A failed/anonymous GET may never consume this promise.
+        void prefetchedCsrf.catch(() => undefined)
+      }
+      initial = await reading
       if (recovering) return initial.mode === "authenticated" && initial.subject === refreshSubject
         ? { ...initial, renewalConfirmed: true } : { mode: "unavailable", subject: null }
       if (initial.mode !== "authenticated" && initial.mode !== "refresh-required") return initial
@@ -123,11 +133,12 @@ function requestSessionMode(indexSubject: string | null | undefined): SharedSess
     }
     if (cold || due || initial?.mode === "refresh-required") {
       nextRefreshAt = Date.now() + REFRESH_INTERVAL_MS
+      csrfConsumed = prefetchedCsrf !== undefined
       const refreshed = await refreshProductSession(signal, () => {
         assertCurrent()
         refreshUnconfirmed = true
         refreshSubject = expectedSubject
-      })
+      }, prefetchedCsrf)
       assertCurrent()
       if (refreshed.mode === "authenticated") {
         if (refreshed.subject !== expectedSubject) return { mode: "unavailable", subject: null }
@@ -147,6 +158,9 @@ function requestSessionMode(indexSubject: string | null | undefined): SharedSess
     .finally(() => {
       window.clearTimeout(timer)
       signal.removeEventListener("abort", abort)
+      // Cancel only unused speculative work after the result has settled. Its
+      // late body can neither rotate credentials nor alter the resolved mode.
+      if (prefetchedCsrf !== undefined && !csrfConsumed) controller.abort()
       if (sessionProbeController === controller) sessionProbeController = null
     })
   const shared = { observation, result: request }
@@ -158,8 +172,9 @@ function requestSessionMode(indexSubject: string | null | undefined): SharedSess
   return shared
 }
 
-export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean }> = {}): SessionProbe {
+export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean; serverAdmitted?: boolean }> = {}): SessionProbe {
   const serverUnavailable = options.serverUnavailable === true
+  const serverAdmitted = options.serverAdmitted === true
   const [retryGeneration, setRetryGeneration] = useState(0)
   const generationRef = useRef(0)
   const [probe, setProbe] = useState<SessionProbe>(() => ({
@@ -214,7 +229,7 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean 
     const check = (): void => {
       const indexSubject = retireChangedSubject()
       if (pendingCheck !== null) return
-      const request = requestSessionMode(indexSubject)
+      const request = requestSessionMode(indexSubject, serverAdmitted)
       const checking = request.observation
       pendingCheck = checking
       const currentGeneration = ++generationRef.current
@@ -356,7 +371,7 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean 
       clearInterval(timer)
       clearTimeout(recoveryTimer)
     }
-  }, [retry, retryGeneration, serverUnavailable])
+  }, [retry, retryGeneration, serverUnavailable, serverAdmitted])
 
   return probe
 }

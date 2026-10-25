@@ -21,7 +21,7 @@ export function AppGate({ brandName, desktopRailCollapsed, serverAdmitted = fals
   const pathname = usePathname()
   const router = useRouter()
   const t = useT()
-  const probe = useSessionProbe({ serverUnavailable })
+  const probe = useSessionProbe({ serverUnavailable, serverAdmitted })
   const scheduledTaskClient = useScheduledTaskClient(probe.projectReadBoundary)
   const anonymousNavigationStarted = useRef(false)
   // Identity is decided only by the Product Session. System supplies optional

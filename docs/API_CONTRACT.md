@@ -1,3 +1,7 @@
+## 2026-10-25 cold session/CSRF 读并发（源码候选）
+
+原 `GET /api/auth/session` 仍仅为在线 RP lifecycle/access-expiry 投影，不升级为 fresh IAM 准入。`serverAdmitted` 布尔只允许在原10秒总 signal 内提前并发读取现 CSRF；GET 可信 subject 和原 browser fence、CSRF 全部成立后才唯一 POST refresh。错误/anonymous/退休/timeout 零 POST，未消费或晚到 CSRF 不授权轮换；原 Origin、主体绑定、POST 后 fresh 验证、CAS、unknown 禁止自动重放与120秒规则保持。无新 endpoint、wire/公开 contract、cookie、SSR claims 或 auth cache；不以此调度调整宣称正常等待已消失。
+
 ## 2026-10-25 URL MCP 项目定义发布消费者（候选）
 
 固定 BFF `c124705f5ab7f8aa8dac4a648f7e8e952661926f` browser-private profile1.1.0，原件 SHA256 `b743f452bf28c6c349d8d9fdf587dbcf42d9bbd8c97788a34615d603a497ae67`，精确来源见 `contract/bff-mcp-project-publication-source.json`；已逐字比对生产者 Git 对象。Public24 不变。新窄生成器从该原件生成 Zod请求/响应/闭合错误；客户端与同源桥均核status+code+retryable，原ACK须绑定server/connector/source CAS及每project/pin CAS，execution_ready仅false。
