@@ -2395,7 +2395,7 @@ it("keeps Settings Explore intent and its detail shell across same-actor recheck
       const selected = new URL(path, "http://local.test").searchParams.get("file_path") as keyof typeof documents | null
       return response({ data: { source_ref: "skill:settings-intent-revision", revision: "1", files, selected_file: selected === null ? null : { path: selected, text: documents[selected] } } })
     }
-    if (path.endsWith("GetSkill")) return response({ skill: { id: "settings-intent-series", version: "settings-intent-revision", displayName: "Intent match", description: round === 1 ? "Retired detail facts" : "New detail facts" }, downloadInfo: { downloadUrl: "/api/skill-downloads/settings-intent", filename: "fixture.zip", expiresAt: "2028-01-01T00:00:00Z" } })
+    if (path.endsWith("GetSkill")) return response({ skill: { id: "settings-intent-series", version: "settings-intent-revision", displayName: "Intent match", description: round === 1 ? "Retired detail facts" : "New detail facts" } })
     throw Error("Unexpected settings recheck request")
   })
   const hubClient = createHubClient()
@@ -2474,7 +2474,7 @@ it("re-establishes the exact Settings detail revision on new cursor pages rather
     }
     if (path.endsWith("GetSkill")) {
       details.push(String(init?.body))
-      return response({ skill: { id: "exact-settings-series", version: "chosen-revision", displayName: "chosen-revision", description: `Exact facts ${round}` }, downloadInfo: { downloadUrl: "/api/skill-downloads/settings-exact", filename: "fixture.zip", expiresAt: "2028-01-01T00:00:00Z" } })
+      return response({ skill: { id: "exact-settings-series", version: "chosen-revision", displayName: "chosen-revision", description: `Exact facts ${round}` } })
     }
     throw Error("Unexpected exact revision request")
   })
@@ -2661,7 +2661,7 @@ it.each([false, true])("keeps a confirmed matching card mounted while search rev
       if (JSON.parse(String(init?.body)).pageToken) return response({ skills: [card], tagOptions: {} })
       return response({ skills: cursorPage ? [{ ...card, skillId: "initial-series", displayName: "Other initial card" }] : [card], tagOptions: {}, ...(cursorPage ? { nextPageToken: "search-click-next" } : {}) })
     }
-    if (path.endsWith("GetSkill")) return response({ skill: { id: card.skillId, version: "search-click-revision", displayName: card.displayName, description: "Confirmed exact revision" }, downloadInfo: { downloadUrl: "/api/skill-downloads/fixture", filename: "fixture.zip", expiresAt: "2999-01-01T00:00:00Z" } })
+    if (path.endsWith("GetSkill")) return response({ skill: { id: card.skillId, version: "search-click-revision", displayName: card.displayName, description: "Confirmed exact revision" } })
     throw Error("Unexpected search-click request")
   })
   const boundary = { admitted: true, subject: "search-click-actor", generation: 1 }
@@ -2800,7 +2800,7 @@ it("same actor recheck preserves catalog search and detail chrome while retiring
     const path = String(input)
     if (path.endsWith("ListHubSkills")) return response({ skills: [card], tagOptions: {} })
     if (path.endsWith("ListSkills")) return response({ userAddedSkills: [], officialSkills: [] })
-    if (path.endsWith("GetSkill")) return response({ skill: { id: "series-recheck", version: "revision-recheck", displayName: "Private title", description: round === 1 ? "Private facts" : "Fresh facts" }, downloadInfo: { downloadUrl: "/api/skill-downloads/recheck", filename: "fixture.zip", expiresAt: "2028-01-01T00:00:00Z" } })
+    if (path.endsWith("GetSkill")) return response({ skill: { id: "series-recheck", version: "revision-recheck", displayName: "Private title", description: round === 1 ? "Private facts" : "Fresh facts" } })
     throw Error("Unexpected catalog request")
   })
   const view = render(<LocaleProvider><KokoroSkillsSurface preview={false} projectReadBoundary={{ admitted: true, subject: "catalog-recheck-actor", generation: 1 }} onPrompt={vi.fn()} /></LocaleProvider>)
@@ -2884,7 +2884,7 @@ it.each([false, true])("catalog detail recheck uses the current cursor and never
       if (round === 2 && failCurrentPage) { failCurrentPage = false; throw Error("current page failed") }
       return response({ skills: [{ skillId: "paged-series", displayName: "Paged skill", currentVersion: { versionUid: round === 2 && changed ? "newer-revision" : "paged-revision" } }], tagOptions: {} })
     }
-    if (path.endsWith("GetSkill")) return response({ skill: { id: "paged-series", version: "paged-revision", displayName: "Paged skill", description: "Private page-two detail" }, downloadInfo: { downloadUrl: "/api/skill-downloads/paged", filename: "paged.zip", expiresAt: "2028-01-01T00:00:00Z" } })
+    if (path.endsWith("GetSkill")) return response({ skill: { id: "paged-series", version: "paged-revision", displayName: "Paged skill", description: "Private page-two detail" } })
     throw Error("Unexpected catalog request")
   })
   const surface = (admitted: boolean, generation: number) => <LocaleProvider><KokoroSkillsSurface preview={false} projectReadBoundary={{ admitted, subject: `paged-actor-${changed}`, generation }} onPrompt={vi.fn()} /></LocaleProvider>
@@ -2918,7 +2918,7 @@ it.each(["network", "retired"])("unknown share survives same actor recheck witho
   })
   vi.spyOn(globalThis, "fetch").mockImplementation(async input => {
     if (String(input).endsWith("/skill-shares")) return writes()
-    return Response.json({ skill: { id: "trial-series", version: "trial-version", displayName: "Owner trial", description: "Owner facts" }, downloadInfo: { downloadUrl: "/api/skill-downloads/trial", filename: "fixture.zip", expiresAt: "2028-01-01T00:00:00Z" } })
+    return Response.json({ skill: { id: "trial-series", version: "trial-version", displayName: "Owner trial", description: "Owner facts" } })
   })
   const dialog = (admitted: boolean, generation: number) => <LocaleProvider><ManusSkillDetailDialog readBoundary={{ admitted, subject: `share-recheck-${kind}`, generation }} skill={{ ...executableTrial, installed: true }} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={() => false} /></LocaleProvider>
   const view = render(dialog(true, 1))
@@ -4559,7 +4559,7 @@ it.each(["forbidden", "not-found", "network"])("installation detail keeps pin A 
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
     const path = String(input); requests.push(path)
     const headers = { "cache-control": "private, no-store", "x-request-id": "pin-detail" }
-    if (path.endsWith("GetSkill")) return Response.json({ skill: { id: "pin-series", version: "pin-B", displayName: "Catalog B", description: "B summary" }, downloadInfo: { downloadUrl: "/api/skill-downloads/current-B", filename: "B.zip", expiresAt: "2028-01-01T00:00:00Z" } }, { headers })
+    if (path.endsWith("GetSkill")) return Response.json({ skill: { id: "pin-series", version: "pin-B", displayName: "Catalog B", description: "B summary" } }, { headers })
     if (path.endsWith("/download")) { if (downloadFailure === "network") throw new TypeError("network interrupted"); return Response.json({ error: { code: downloadFailure === "not-found" ? "skill_not_found" : "skill_download_forbidden", message: "Download denied independently", retryable: false } }, { status: downloadFailure === "not-found" ? 404 : 403, headers }) }
     if (path.includes("/package")) {
       const selected = new URL(path, "http://local.test").searchParams.get("file_path") as keyof typeof fileTexts | null
@@ -4736,7 +4736,7 @@ it("catalog detail still reads current B even when its card also carries install
   const requests: string[] = []
   vi.spyOn(globalThis, "fetch").mockImplementation(async input => {
     requests.push(String(input))
-    return Response.json({ skill: { id: "separate-series", version: "current-B", displayName: "Catalog current B", description: "Catalog B metadata" }, downloadInfo: { downloadUrl: "/api/skill-downloads/catalog-B", filename: "B.zip", expiresAt: "2028-01-01T00:00:00Z" } })
+    return Response.json({ skill: { id: "separate-series", version: "current-B", displayName: "Catalog current B", description: "Catalog B metadata" } })
   })
   render(<LocaleProvider><ManusSkillDetailDialog readBoundary={{ admitted: true, subject: "catalog-pin-reader", generation: 1 }} skill={{ skill_id: "separate-series", revision_skill_id: "current-B", source_ref: "skill:current-B", installed_source_ref: "skill:installed-A", installation_id: "installed-A-id", name: "Catalog card", description: "Current card", content_hash: "series", scope: "official", installed: true, enabled: true }} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={() => false} /></LocaleProvider>)
   await screen.findByText("Catalog B metadata")

@@ -7,6 +7,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest"
 import { LocaleProvider } from "@/i18n/context"
 import { createPreviewHubClient } from "@/dev/preview-clients"
 import { KokoroSkillsSurface } from "@/features/app/kokoro-skills-surface"
+import { SkillCatalogDialog } from "@/ui/skills/skills-catalog-dialog"
 
 const { session } = vi.hoisted(() => ({ session: { admitted: true, subject: "test-user", generation: 1 } }))
 vi.mock("@/ui/auth/use-session-state", () => ({ useSessionProbe: () => ({ state: "pass", projectReadBoundary: session }) }))
@@ -32,6 +33,32 @@ function renderSurface(onPrompt = vi.fn()) {
   )
   return onPrompt
 }
+
+it("loads the Settings catalog cover directly with the session and keeps failed media out of the card", async () => {
+  const base = createPreviewHubClient()
+  const catalog = await base.listSkillCatalog()
+  const first = catalog.skills[0]
+  if (!first) throw Error("catalog fixture required")
+  const client = { ...base, listSkillCatalog: async () => ({ ...catalog, skills: [{ ...first, cover_image: "/api/hub/skills/settings-artwork/cover" }] }) }
+  const view = render(<LocaleProvider><SkillCatalogDialog open inline client={client}
+    enabledOverrides={new Map()} installedOverrides={new Map()} busy={null} errorName={null}
+    onOpenChange={vi.fn()} onCloseAutoFocus={vi.fn()} onOpenUpload={vi.fn()} onOpenGithub={vi.fn()} onSetEnabled={vi.fn()} onOpenDetail={vi.fn()}
+  /></LocaleProvider>)
+  const image = await waitFor(() => {
+    const node = view.container.querySelector<HTMLImageElement>('img[src$="/api/hub/skills/settings-artwork/cover"]')
+    expect(node).not.toBeNull()
+    return node!
+  })
+  expect(image).not.toBeVisible()
+  Object.defineProperty(image, "naturalWidth", { configurable: true, value: 120 })
+  image.parentElement!.style.position = "relative"
+  image.width = 120
+  image.height = 120
+  fireEvent.load(image)
+  await waitFor(() => expect(image).toBeVisible())
+  fireEvent.error(image)
+  expect(image).not.toBeVisible()
+})
 
 it("keeps explicit Settings preview usable without granting a live session or issuing owner requests", async () => {
   const client = createPreviewHubClient()

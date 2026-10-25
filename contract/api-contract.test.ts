@@ -732,11 +732,31 @@ async function r76PublicSpec() {
   return { bytes, spec }
 }
 
+describe("Skill metadata and download contract separation", () => {
+  it("requires metadata only for GetSkill while DownloadSkill retains real download fields", async () => {
+    const { spec } = await r76PublicSpec()
+    expect(spec.paths["/skill.v1.SkillOptionalService/GetSkill"]!.post.responses["200"]).toMatchObject({
+      content: { "application/json": { schema: { $ref: "#/components/schemas/SpecificationDetailResponse" } } },
+    })
+    expect(spec.components.schemas.SpecificationDetailResponse).toEqual({
+      type: "object", additionalProperties: false, required: ["skill"],
+      properties: { skill: { $ref: "#/components/schemas/SpecificationSkill" } },
+    })
+    expect(spec.paths["/skill.v1.SkillService/DownloadSkill"]!.post.responses["200"]).toMatchObject({
+      content: { "application/json": { schema: { $ref: "#/components/schemas/SpecificationDownloadInfo" } } },
+    })
+    expect(spec.components.schemas.SpecificationDownloadInfo).toMatchObject({
+      additionalProperties: false, required: ["skill", "downloadInfo"],
+      properties: { downloadInfo: { additionalProperties: false, required: ["downloadUrl", "filename", "expiresAt"] } },
+    })
+  })
+})
+
 describe("R255 ScheduledTask owner recurrence graph under the current public pin", () => {
   it("consumes the exact locally accepted current canonical bytes", async () => {
     const { bytes, spec } = await r76PublicSpec()
-    expect(r76Hash("sha256").update(bytes).digest("hex")).toBe("f4caf11f3cd9255d2cd9daf69b74ff9988505d640e31c686ce495e6d8a578b2c")
-    expect(spec.info.version).toBe("24.0.0")
+    expect(r76Hash("sha256").update(bytes).digest("hex")).toBe("7261ac9ce2140555ba97ebff2bf0359533cc49dda014b08dcd6a6054a8d38b1c")
+    expect(spec.info.version).toBe("25.0.0")
   })
 
   it("publishes current rule details separately from immutable command snapshots", async () => {

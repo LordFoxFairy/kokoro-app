@@ -27,9 +27,9 @@ import {
 
 import { restorePublic21 } from "./bff-configuration-parent"
 
-const OWNER_COMMIT = "f71a17901b4f0458d88521be2c37e94d0d863998"
-const OWNER_SHA256 = "f4caf11f3cd9255d2cd9daf69b74ff9988505d640e31c686ce495e6d8a578b2c"
-const OWNER_VERSION = "24.0.0"
+const OWNER_COMMIT = "21c85b5a6b3059ecb8924703a0065c966f480467"
+const OWNER_SHA256 = "7261ac9ce2140555ba97ebff2bf0359533cc49dda014b08dcd6a6054a8d38b1c"
+const OWNER_VERSION = "25.0.0"
 const SNAPSHOT = resolve(process.cwd(), "src/generated/bff-public-openapi.yaml")
 
 type Shape = {
@@ -213,7 +213,7 @@ describe("pinned BFF Skills and MCP public consumer contract", () => {
       source.replace(addition, addition + addition),
       source.replace(addition, "") + addition + "\n",
       source.replace("complete project row", "latest project installation"),
-      source.replace("  version: 24.0.0", "  version: 21.1.0"),
+      source.replace("  version: 25.0.0", "  version: 21.1.0"),
       source + "\n",
     ]
     for (const mutated of mutations) {
@@ -224,7 +224,7 @@ describe("pinned BFF Skills and MCP public consumer contract", () => {
 
   it("pins exact owner bytes and six current Skill draft/publish operations", async () => {
     const bytes = await readFile(SNAPSHOT)
-    expect(OWNER_COMMIT).toBe("f71a17901b4f0458d88521be2c37e94d0d863998")
+    expect(OWNER_COMMIT).toBe("21c85b5a6b3059ecb8924703a0065c966f480467")
     expect(createHash("sha256").update(bytes).digest("hex")).toBe(OWNER_SHA256)
     const spec = YAML.parse(bytes.toString()) as Spec
     expect(spec.info.version).toBe(OWNER_VERSION)

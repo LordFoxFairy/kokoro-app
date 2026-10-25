@@ -4,7 +4,7 @@ import { createSkillInstallationClient, hasHubNoStoreDirective, type HubClient }
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
 import { retireResources } from "@/lib/query/resource-store"
 import { skillResourceKey, SKILLS_KEY, SKILLS_CATALOG_KEY } from "./skills-resource-cache"
-import { catalogPackageResponseSchema, catalogPackageErrorSchema, CATALOG_PACKAGE_ERRORS, catalogPackageMatches, catalogPackagePrivatePath, type CatalogPackageData, manuscriptReadErrorSchema, MANUSCRIPT_READ_ERRORS, manuscriptHubSkillSchema, manuscriptHubPageSchema, manuscriptListSchema, manuscriptDetailSchema, type CatalogSkillCategory, type SkillCard, type SkillCatalog, type SkillCatalogCard } from "@/hub/schemas"
+import { catalogPackageResponseSchema, catalogPackageErrorSchema, CATALOG_PACKAGE_ERRORS, catalogPackageMatches, catalogPackagePrivatePath, type CatalogPackageData, manuscriptReadErrorSchema, MANUSCRIPT_READ_ERRORS, manuscriptHubSkillSchema, manuscriptHubPageSchema, manuscriptListSchema, manuscriptDetailSchema, manuscriptDownloadSchema, type CatalogSkillCategory, type SkillCard, type SkillCatalog, type SkillCatalogCard } from "@/hub/schemas"
 
 // Catalog consumers share the v1 resource namespace. Callers can append their
 // own view parameters, while an owner mutation invalidates this prefix once.
@@ -270,13 +270,14 @@ export function createManusSkillHubClient(base: HubClient, boundary: ProjectRead
 
 
 export type ManusSkillDetail = z.infer<typeof manuscriptDetailSchema>
+export type ManusSkillDownload = z.infer<typeof manuscriptDownloadSchema>
 
 export function ownerCoverPath(cover: string, revision: string | undefined): string {
   if (!revision || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u.test(revision)
     || cover !== `/api/v1/skills/${encodeURIComponent(revision)}/cover`) throw new Error("skill_response_invalid")
   return `/api/hub/skills/${encodeURIComponent(revision)}/cover`
 }
-function detailForSeries(raw: ManusSkillDetail, skillId: string): ManusSkillDetail {
+function detailForSeries<T extends ManusSkillDetail>(raw: T, skillId: string): T {
   if (raw.skill.id !== skillId) throw new Error("skill_response_invalid")
   return raw.skill.coverImage === undefined ? raw : { ...raw, skill: { ...raw.skill, coverImage: ownerCoverPath(raw.skill.coverImage, raw.skill.version) } }
 }
@@ -286,8 +287,10 @@ export async function getManusSkillDetail(skillId: string, signal?: AbortSignal)
 
 /** Uses the distinct Manus service operation instead of treating a GetSkill
  * response as a permanent download authority. */
-export async function downloadManusSkill(skillId: string, signal?: AbortSignal): Promise<ManusSkillDetail> {
-  return detailForSeries(await post("DownloadSkill", { skillId }, manuscriptDetailSchema, signal), skillId)
+export async function downloadManusSkill(skillId: string, expectedRevisionSkillId: string, signal?: AbortSignal): Promise<ManusSkillDownload> {
+  const result = detailForSeries(await post("DownloadSkill", { skillId }, manuscriptDownloadSchema, signal), skillId)
+  if (result.skill.version !== expectedRevisionSkillId) throw new Error("skill_response_invalid")
+  return result
 }
 
 function throwReadError(operation: "ListSkills" | "ListHubSkills" | "GetSkill" | "DownloadSkill", status: number, raw: unknown): never {

@@ -856,9 +856,9 @@ export const manuscriptHubPageSchema = z
   })
   .strict()
 export const manuscriptListSchema = z.object({ userAddedSkills: z.array(websiteInstalledSchema), officialSkills: z.array(websiteOfficialSchema) }).strict()
-export const manuscriptDetailSchema = z
-  .object({
-    skill: websiteDetailSchema,
+export const manuscriptDetailSchema = z.object({ skill: websiteDetailSchema }).strict()
+export const manuscriptDownloadSchema = manuscriptDetailSchema
+  .extend({
     downloadInfo: z
       .object({
         downloadUrl: websiteString.regex(/^\/api\/skill-downloads\/[A-Za-z0-9_-]+$/u),

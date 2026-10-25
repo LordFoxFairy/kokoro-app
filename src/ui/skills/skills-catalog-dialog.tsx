@@ -38,6 +38,7 @@ import { formatSkillDate } from "./skills-format";
 import { toSkillActionCard } from "./skills-card-model";
 import { mergeSkillCatalogPages, skillStateKey, skillSourceScope } from "./skills-pool-model";
 import { SKILLS_CATALOG_KEY, skillResourceKey } from "./skills-resource-cache";
+import { SkillCoverMedia } from "./skill-cover-media";
 import styles from "./skills-panel.module.css";
 
 type CatalogCategory = "all" | CatalogSkillCategory;
@@ -587,14 +588,11 @@ export function SkillCatalogDialog({
                 <CardContent className={styles.catalogCardContent}>
                   <div className={styles.catalogCardRow}>
                     <div className={styles.catalogCover} aria-hidden="true">
-                      {skill.cover_image ? (
-                        <Image
-                          src={skill.cover_image}
-                          alt=""
-                          fill
-                          sizes="112px"
-                        />
-                      ) : null}
+                      <SkillCoverMedia
+                        src={skill.cover_image}
+                        identity={skillResourceKey("hub/skills/cover", client)}
+                        sizes="112px"
+                      />
                     </div>
                     <button
                       type="button"

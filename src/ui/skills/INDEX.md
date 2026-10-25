@@ -1,3 +1,7 @@
+## 2026-10-25 独立封面媒体消费
+
+`skill-cover-media.tsx` 由外层目录、Settings目录与详情共同使用。合法 exact revision URL 只是同源媒体定位，不代表有图；按原client/actor与URL换代，只有当前图片成功加载后展示，未加载／失败保留原fallback。详情仅按实际loaded预留封面宽度，统一unoptimized以保同源身份；不改变列表、安装、包读取或当前准入。
+
 ## 个人系列删除（2026-10-21，候选）
 
 personal-skill-actions新增真实delete，不替换withdraw；personal-skill-management仍是精确锚点／actor／恢复入口owner。personal-skill-delete-dialog只负责系列删除确认、正式history publication读取、冻结命令与显式原意图重放。确认后GET404不再锁死未知重试，只有匹配回执清选择并失活列表。deleted安装保留但禁详情、历史、包、启用和更新；停用仍可用。最终180项候选尚未正常生效；未操作正常环境，正常浏览器与最终配对由主方统一验收。Manus真实图标上传后的enabled与本地disabled仍是剩余差异，不在此片新增上传API／Storage或自动启用。
@@ -124,6 +128,7 @@ Settings 的正式入口是 `src/ui/settings/sections/skills-settings-section.ts
 - `GithubImportDialog`（`github-import-dialog.tsx`）：`parseGithubRepository` 负责 HTTPS GitHub owner/repo
   边界校验；focused GitHub client 为正式 Preview/immutable Import 入口，后续由flow消费原Publish/Install；旧optional注入已删除，不把Preview或draft响应伪装成已安装。
 - 下载反馈独立于详情/reader：已校验且不可重试的下载拒绝或隐藏缺失仅提示当前未开放下载；网络/协议失败提示下载未完成，不清正文、不冒整个详情失效，不按message文本判断原因。
+- `manus-skill-client`：GetSkill 只读严格 `{skill}` metadata，详情 flight/cache 不缓存下载句柄；DownloadSkill 使用独立 required-downloadInfo schema。普通下载入口要求本代详情精确匹配已选 revision，点击后独立准入并复核返回 version；生命周期退休后不导航，不把卡片或旧详情缓存当下载授权。
 - 安装池详情显式选择 installation metadata/package/download；目录 current 和分享保持独立。`@/hub/skill-installation-content` 校验精确 source/revision/目录并在退休时取消，不回退到当前系列。
 - `ManusSkillDetailDialog`（`manus-skill-detail-dialog.tsx`）：唯一的详情与文件阅读面；只在 owner
   返回 `skill_id` 与 `revision_skill_id` 时读取真实 package tree 和正文。缺少 binding 的旧投影保持详情入口禁用，

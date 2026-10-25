@@ -1,6 +1,5 @@
 "use client"
 
-import Image from "next/image"
 import { ChevronRight, Download, FileText, Menu, Plus, Share } from "lucide-react"
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react"
 
@@ -20,6 +19,7 @@ import { ownerCoverPath } from "@/ui/skills/manus-skill-client"
 
 import { skillTrialSourceRef } from "./skills-card-model"
 import { SkillTrialExamples } from "./skill-trial-examples"
+import { SkillCoverMedia } from "./skill-cover-media"
 
 import styles from "./manus-skill-detail-dialog.module.css"
 import { SkillPackageDocument } from "./skill-package-document"
@@ -373,7 +373,7 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
   }
 
   const download = async () => {
-    if (!isLive() || (!skill?.skill_id && !sharedSummary) || downloading) return
+    if (!isLive() || boundRevision === null || (!skill?.skill_id && !sharedSummary) || downloading) return
     const controller = new AbortController()
     downloadRequest.current?.abort()
     downloadRequest.current = controller
@@ -388,7 +388,7 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
         const result = await downloadInstallationPackage(installation, controller.signal)
         if (!controller.signal.aborted && isLive()) window.location.assign(`/api${result.download_info.download_url}`)
       } else if (skill?.skill_id) {
-        const result = await downloadManusSkill(skill.skill_id, controller.signal)
+        const result = await downloadManusSkill(skill.skill_id, boundRevision, controller.signal)
         if (!controller.signal.aborted && isLive()) window.location.assign(result.downloadInfo.downloadUrl)
       }
     } catch (error) {
@@ -465,7 +465,6 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
 
   if (!skill && !sharedSummary && !pending) return null
   const record = detailSource !== "installation" && detail !== null && detail.skill.id === skill?.skill_id ? detail.skill : null
-  const downloadInfo = detail !== null && detail.skill.id === skill?.skill_id && !sharedSummary ? detail.downloadInfo : null
   const loading = !sharedSummary && open && skill?.skill_id !== undefined && record === null && installation === null && !failed
   const title = sharedSummary?.skill.display_name ?? installation?.display_name ?? record?.displayName ?? record?.name ?? skill?.name ?? t("skills.title")
   const description = sharedSummary?.skill.description ?? installation?.summary ?? record?.userDescription ?? record?.description ?? skill?.description ?? ""
@@ -481,7 +480,7 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
   const trialReady = !sharedSummary && !sourceUnavailable && (preview || boundary.admitted && boundary.subject !== null && installed && boundRevision !== null && currentSkill !== null && skillTrialSourceRef(currentSkill) === `skill:${boundRevision}`)
   const cover = sharedSummary?.skill.cover_image === undefined ? record?.coverImage ?? skill?.cover_image : ownerCoverPath(sharedSummary.skill.cover_image, sharedSummary.skill.skill_id)
   const canShare = Boolean(sharedSummary || skill?.revision_skill_id)
-  const canDownload = Boolean(downloadInfo || sharedSummary || installation)
+  const canDownload = Boolean(boundRevision !== null || sharedSummary || installation)
   const detailFailure = failed ? <div className={styles.status} role="alert"><p>{t("skills.detailUnavailable")}</p><Button type="button" variant="outline" onClick={retryDetail}>{t("skills.retry")}</Button></div> : null
 
   // Installation attribution comes from its admitted, exact-version read.
@@ -546,7 +545,7 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
           personalActions={!preview && detailSource === "installation" && installation?.product.source_kind === "personal" && installation.installed && ["active", "disabled", "withdrawn", "quarantined"].includes(installation.source_status) && boundary.admitted && boundary.subject !== null && onManagePersonal
             ? <PersonalSkillActions writable={["active", "disabled"].includes(installation.source_status)} disabled={personalManagementBusy} onSelect={operation => onManagePersonal(operation, installation)} /> : undefined}
         />
-        {readerOpen ? readerHeader : <DialogHeader className={styles.hero} data-has-cover={Boolean(cover)}>
+        {readerOpen ? readerHeader : <SkillCoverMedia src={open && boundary.admitted && boundary.subject !== null ? cover : undefined} identity={identity ?? "closed"} sizes="180px">{(media, loaded) => <DialogHeader className={styles.hero} data-has-cover={loaded}>
           <div className={styles.copy}>
             {categoryLabels.length > 0 ? <div className={styles.categories}>{categoryLabels.slice(0, 2).map((label) => <Badge key={label} variant="secondary">{label}</Badge>)}</div> : null}
             <DialogTitle>{title}</DialogTitle>
@@ -556,8 +555,8 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
               <Button type="button" variant="outline" disabled={boundRevision === null} onClick={() => restartReader(true)}><FileText aria-hidden="true" />{t("skills.packageViewDetails")}</Button>
             </div>
           </div>
-          {cover ? <div className={styles.cover}><Image src={cover} alt="" fill sizes="180px" unoptimized /></div> : null}
-        </DialogHeader>}
+          {cover ? <div className={styles.cover} style={{ opacity: loaded ? 1 : 0 }}>{media}</div> : null}
+        </DialogHeader>}</SkillCoverMedia>}
         {shareStatus === "unknown" ? <div className={styles.status} role="alert"><p>{t("skills.shareUnknown")}</p><Button type="button" variant="outline" onClick={() => void share(true)}>{t("skills.shareNew")}</Button></div> : null}
         {shareStatus === "copied" ? <p className={styles.status} role="status">{t("skills.detailLinkCopied")}</p> : null}
         {shareStatus === "copyFailed" || shareStatus === "failed" ? <p className={styles.status} role="alert">{t(shareStatus === "copyFailed" ? "skills.shareCopyFailed" : "skills.shareFailed")}</p> : null}

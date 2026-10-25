@@ -2,15 +2,39 @@ import { createHash } from "node:crypto"
 import { readFile } from "node:fs/promises"
 import { expect, it } from "vitest"
 import YAML from "yaml"
-import { restoreMeteringParent } from "./bff-metering-parent"
+import { restoreMcpSelectionContract, restoreMeteringParent, restorePublic24SkillDetailContract } from "./bff-metering-parent"
+
+it("restores metadata-only Public25 through the complete immutable Public24 parent", async () => {
+  const source = await readFile("src/generated/bff-public-openapi.yaml", "utf8")
+  const parent = restorePublic24SkillDetailContract(source)
+  expect(createHash("sha256").update(parent).digest("hex")).toBe("f4caf11f3cd9255d2cd9daf69b74ff9988505d640e31c686ce495e6d8a578b2c")
+  expect(restorePublic24SkillDetailContract(parent)).toBe(parent)
+  expect(createHash("sha256").update(restoreMcpSelectionContract(source)).digest("hex")).toBe("703dba47da8a5c659b4236bb0a72317588ad29a4ca444ff9e5c99cfbcd00634b")
+})
+
+it("rejects metadata-only Public25 reference, schema and unrelated byte drift before historical restoration", async () => {
+  const source = await readFile("src/generated/bff-public-openapi.yaml", "utf8")
+  const metadataSchema = "    SpecificationDetailResponse:\n      type: object\n      additionalProperties: false\n      required: [skill]\n      properties:\n        skill: { $ref: \"#/components/schemas/SpecificationSkill\" }\n"
+  for (const changed of [
+    source.replace('$ref: "#/components/schemas/SpecificationDetailResponse"', '$ref: "#/components/schemas/SpecificationDownloadInfo"'),
+    source.replace(metadataSchema, metadataSchema.replace("required: [skill]", "required: [skill, downloadInfo]")),
+    source.replace("listTeamMembers", "changedUnrelatedOperation"),
+    source + "\n",
+  ]) {
+    expect(changed).not.toBe(source)
+    expect(() => restorePublic24SkillDetailContract(changed)).toThrow()
+    expect(() => restoreMcpSelectionContract(changed)).toThrow()
+  }
+})
+
 it("pins three formal pricing operations while preserving every preceding byte and operation", async () => {
   const raw = await readFile("src/generated/bff-public-openapi.yaml"),
     parentRaw = restoreMeteringParent(raw),
     spec = YAML.parse(raw.toString()),
     parent = YAML.parse(parentRaw.toString())
-  expect(createHash("sha256").update(raw).digest("hex")).toBe("f4caf11f3cd9255d2cd9daf69b74ff9988505d640e31c686ce495e6d8a578b2c")
+  expect(createHash("sha256").update(raw).digest("hex")).toBe("7261ac9ce2140555ba97ebff2bf0359533cc49dda014b08dcd6a6054a8d38b1c")
   expect(createHash("sha256").update(parentRaw).digest("hex")).toBe("f6b8f3bd250c144a2d648af94c9fd5fe068db33991a4289b849a077eef009f32")
-  expect(spec.info.version).toBe("24.0.0")
+  expect(spec.info.version).toBe("25.0.0")
   expect(parent.info.version).toBe("22.4.0")
   const inventory = (doc: typeof spec) =>
     Object.entries(doc.paths).flatMap(([path, value]) =>

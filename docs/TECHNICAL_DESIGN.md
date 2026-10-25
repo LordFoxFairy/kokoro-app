@@ -1061,6 +1061,7 @@ Get权威phase恢复：upload_pending没有upload_id/transfer，只有原Begin b
 ### 放置与具体流程
 - Web owner 扩现 `src/ui/skills/manus-skill-client.ts` 请求编排、`src/hub/schemas.ts` 消费校验、`src/app/api/hub/[...path]/route.ts` 具名闭集；现 `manus-skill-detail-dialog.tsx`/相邻CSS承接摘要→reader。比另建 wire/目录或恢复 `skill-detail-dialog.tsx` 的合成文件树，选择现模块，避免第二协议与假数据。后继精确授权现client/schema/route/dialog/CSS及相邻 UI/proxy/client 测试，必要 i18n 仅本片词条，由Root另行放行；本D0只三文档。
 - 目录 `skillId` 是 series，`currentVersion.versionUid` 是包的 revision Skill ID；保留后者在现内部 card projection。GetSkill仍以series请求且校验返回id，其version若与选定目录revision Skill ID不一致则提示刷新，不用series或checksum替代，不静默换包。包 `data.revision` 是另一项owner十进制revision，不当作URL标识。
+- 普通 GetSkill 仅消费严格 `{skill}` metadata；详情 flight/cache/state 不保存或请求下载材料。DownloadSkill 保持独立严格 `{skill,downloadInfo}`，不把下载信息 optional 化以兼容旧响应。普通下载入口只在本代受准详情 `id/version` 与已选 series/revision UID 匹配后提供，不以列表卡片作为新资格；点击再单独下载并核返回 version，关闭/换源/主体或准入退休后迟到句柄不导航。下载失败仅更新独立反馈，保真实 metadata/reader。两形状的正式 BFF 固定 artifact 由 Root 独占配对，本地业务候选不冒运行发行已切换。
 - 摘要新增可见“查看详情”动作，选择已核验revision Skill ID；请求 `/api/hub/skills/{revision_skill_id}/package` 获取真实文本目录，再请求同路径唯一 `file_path=SKILL.md`。存在真实根SKILL.md时默认显示；不存在时呈现真实不可读/空态，不生成说明。用户选择其它已返回UTF8文件，再请求其精确路径。读取期间保留摘要/reader壳，呈现loading/error/empty，不整页跳转或刷新。
 - 只参考现Manus布局壳，不复制旧合成 scripts/references/YAML/下载内容。Markdown展示使用已有解析能力，不执行HTML/脚本；不自动请求包Markdown引用的外部图片或资源，其它文本按惰性文本展示。下载仍走既有真实资格，不将reader文本冒充完整ZIP或二进制资源。
 - 每次目录/文件请求共用单次10秒总预算（含admission/fetch/body），累计JSON上限1MiB；关闭、资源切换、文件切换取消原请求，finally清计时器/取消reader，迟到响应不覆盖当前selection。目录与所选文件保持同source_ref与owner decimal revision；不重试为其它资源、不缓存权限。
@@ -1084,7 +1085,7 @@ Web 唯一负责现 Manus 目录/安装读投影、详情/下载严格解析、�
 
 现缺口包括 Hub 根 tagOptions、item publishStatus、完整 currentVersion 被 strict 拒绝，apps 标签缺失；ListSkills 的 passthrough 未封闭字段且 enabled 被当作 installed；GetSkill/DownloadSkill 合法 version/createdAt/ownerType 被拒绝；详情在缺封面事实时仍合成 series 封面地址。目标完整消费正式 owner 的四个读取响应闭集，保持各嵌套对象的类型/可选性及身份绑定，拒绝未知字段/坏类型/跨资源 ACK，不为了显示卡片删 owner 字段或转空数组成功。
 
-分类 apps 仅扩目录分类投影及现筛选项；其它 mutation/request 分类闭集不得借此拓宽。installed 与 enabled 分开保存；本人 ListSkills 安装事实优先，不由 official added 标记覆盖禁用态。封面只来自 owner coverImage，并绑定 Hub currentVersion.versionUid 或详情 version；不存在封面时不生成请求。仅规范 owner `/api/v1/skills/{revision}/cover` 精确重写到 browser-private `/api/hub/skills/{revision}/cover`，GET 同源 adapter 调正式 `/v1/skills/{revision}/cover`；不猜 series、不接受外链、查询/fragment/编码路径变体。代理保留 session/Origin/时间/取消/有界 body 与合法图片媒体边界，错误不当作图片成功。
+分类 apps 仅扩目录分类投影及现筛选项；其它 mutation/request 分类闭集不得借此拓宽。installed 与 enabled 分开保存；本人 ListSkills 安装事实优先，不由 official added 标记覆盖禁用态。封面媒体资源 URL 只来自 BFF coverImage，并绑定 Hub currentVersion.versionUid 或详情 version；URL 不承诺封面存在或当前 CLEAN，metadata 省略内联 cover 只表示本次未加载媒体事实。浏览器保留既有占位/艺术 fallback，图片 onLoad 后才显示；404、依赖失败、取消与加载中不解释成源无封面，URL/主体/准入代际变化退役旧图。详情仅在图片真正加载后预留封面正文宽度。仅规范 owner `/api/v1/skills/{revision}/cover` 精确重写到 browser-private `/api/hub/skills/{revision}/cover`，GET 同源 adapter 调正式 `/v1/skills/{revision}/cover`；不猜 series、不接受外链、查询/fragment/编码路径变体。代理保留 session/Origin/时间/取消/有界 body 与合法图片媒体边界，错误不当作图片成功。
 
 ### 验证与排除
 13 个现路径范围以 Root 任务卡为准：四响应完整正控及未知字段/嵌套坏类型/资源错配负控、安装禁用事实、八类 apps、封面同源/revision/无字段/恶意路径；先真实函数 RED，再 focused/type/lint 与 Root 全纯门及正常浏览器。系统 OIDC mixed、其它生产行为、服务/数据/index 均排除；暂不宣称整产品闭环。

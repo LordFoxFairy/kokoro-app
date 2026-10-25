@@ -7,10 +7,147 @@ import { createPreviewHubClient } from "@/dev/preview-clients"
 import { SkillsContent } from "@/ui/skills/skills-panel"
 import { ManusSkillDetailDialog } from "@/ui/skills/manus-skill-detail-dialog"
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
+import { downloadManusSkill, getManusSkillDetail } from "@/ui/skills/manus-skill-client"
 
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
+})
+
+it("keeps metadata-only GetSkill and exact DownloadSkill responses as separate strict contracts", async () => {
+  const skill = { id: "split-series", version: "split-revision", displayName: "Split detail", description: "Authoritative metadata" }
+  const downloadInfo = { downloadUrl: "/api/skill-downloads/split-handle", filename: "real.zip", expiresAt: "2999-01-01T00:00:00Z" }
+  let body: unknown = { skill }
+  const fetcher = vi.fn(async () => Response.json(body))
+  vi.stubGlobal("fetch", fetcher)
+  await expect(getManusSkillDetail(skill.id)).resolves.toEqual({ skill })
+  body = { skill, downloadInfo }
+  await expect(getManusSkillDetail(skill.id)).rejects.toThrow()
+  await expect(downloadManusSkill(skill.id, skill.version)).resolves.toEqual({ skill, downloadInfo })
+  body = { skill }
+  await expect(downloadManusSkill(skill.id, skill.version)).rejects.toThrow()
+  body = { skill: { ...skill, version: "different-revision" }, downloadInfo }
+  await expect(downloadManusSkill(skill.id, skill.version)).rejects.toThrow("skill_response_invalid")
+  body = { skill: { ...skill, id: "different-series" }, downloadInfo }
+  await expect(downloadManusSkill(skill.id, skill.version)).rejects.toThrow("skill_response_invalid")
+  expect(fetcher.mock.calls).toHaveLength(6)
+})
+
+function ordinaryMetadataFixture() {
+  window.localStorage.setItem("kokoro.locale", "zh")
+  const actualWindow = window
+  const navigate = vi.fn()
+  // Observe only the browser navigation boundary; preserve the real jsdom
+  // Window for rendering, events, storage and the existing session machinery.
+  const location = { ...actualWindow.location, assign: navigate }
+  vi.stubGlobal("window", new Proxy(actualWindow, { get: (target, key) => key === "location" ? location : Reflect.get(target, key, target) }))
+  const card: SkillCatalogCard = { skill_id: "ordinary-series", revision_skill_id: "ordinary-revision", source_ref: "skill:ordinary-revision", name: "Ordinary detail", description: "Unconfirmed card copy", content_hash: "ordinary-series", scope: "official", installed: false, enabled: false }
+  const response = (body: unknown, status = 200) => Response.json(body, { status, headers: { "cache-control": "private, no-store", "x-request-id": "ordinary-detail" } })
+  const metadata = (revision = card.revision_skill_id) => response({ skill: { id: card.skill_id, version: revision, displayName: card.name, description: "Confirmed metadata without download material", exampleQuestions: ["A real owner example"] } })
+  const download = (revision = card.revision_skill_id) => response({ skill: { id: card.skill_id, version: revision }, downloadInfo: { downloadUrl: "/api/skill-downloads/ordinary-handle", filename: "owner.zip", expiresAt: "2999-01-01T00:00:00Z" } })
+  const content = (boundary: ProjectReadBoundary = { admitted: true, subject: "ordinary-reader", generation: 1 }, selected = card, open = true) => <LocaleProvider><ManusSkillDetailDialog open={open} skill={selected} readBoundary={boundary} onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={() => false} /></LocaleProvider>
+  return { card, response, metadata, download, content, navigate }
+}
+
+it.each(["confirmed", "unavailable", "different-version"] as const)("opens metadata independently and retains it after explicit download %s", async outcome => {
+  const { card, response, metadata, download, content, navigate } = ordinaryMetadataFixture()
+  let resolveMetadata!: (response: Response) => void
+  const requests: { path: string; body: unknown }[] = []
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input)
+    requests.push({ path, body: JSON.parse(String(init?.body)) })
+    if (path.endsWith("GetSkill")) return new Promise<Response>(resolve => { resolveMetadata = resolve })
+    expect(path).toBe("/api/skill.v1.SkillService/DownloadSkill")
+    return outcome === "unavailable" ? response({ error: { code: "skill_dependency_unavailable", message: "Unavailable" } }, 503) : download(outcome === "different-version" ? "different-revision" : card.revision_skill_id)
+  }))
+  render(content())
+  expect(screen.queryByRole("button", { name: "下载技能" })).toBeNull()
+  expect(screen.getByRole("button", { name: "查看详情" })).toBeDisabled()
+  await act(async () => { resolveMetadata(metadata()) })
+  expect(await screen.findByText("Confirmed metadata without download material")).toBeVisible()
+  expect(screen.getByText("A real owner example")).toBeVisible()
+  expect(requests.map(request => request.path)).toEqual(["/api/skill.v1.SkillOptionalService/GetSkill"])
+  fireEvent.click(screen.getByRole("button", { name: "下载技能" }))
+  if (outcome === "confirmed") await waitFor(() => expect(navigate).toHaveBeenCalledExactlyOnceWith("/api/skill-downloads/ordinary-handle"))
+  else await screen.findByText("下载未完成，请重试。")
+  expect(screen.getByText("Confirmed metadata without download material")).toBeVisible()
+  expect(screen.queryByText("技能详情暂时不可用")).toBeNull()
+  expect(requests.at(-1)?.body).toEqual({ skillId: card.skill_id })
+  expect(requests).toHaveLength(2)
+  if (outcome !== "confirmed") expect(navigate).not.toHaveBeenCalled()
+})
+
+it("keeps download unavailable when fresh metadata no longer matches the selected card revision", async () => {
+  const { metadata, content } = ordinaryMetadataFixture()
+  const fetcher = vi.fn(async () => metadata("new-current-revision"))
+  vi.stubGlobal("fetch", fetcher)
+  render(content())
+  await screen.findByText("Confirmed metadata without download material")
+  expect(screen.queryByRole("button", { name: "下载技能" })).toBeNull()
+  expect(screen.getByRole("button", { name: "查看详情" })).toBeDisabled()
+  expect(fetcher).toHaveBeenCalledTimes(1)
+})
+
+it.each(["close", "admission", "actor", "source"] as const)("retires an explicit download on %s without navigating to its late handle", async retirement => {
+  const { card, metadata, download, content, navigate } = ordinaryMetadataFixture()
+  let resolveDownload!: (response: Response) => void
+  let downloadSignal: AbortSignal | undefined
+  let revision = card.revision_skill_id
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input).endsWith("GetSkill")) return metadata(revision)
+    expect(String(input)).toBe("/api/skill.v1.SkillService/DownloadSkill")
+    downloadSignal = init?.signal as AbortSignal
+    return new Promise<Response>(resolve => { resolveDownload = resolve })
+  }))
+  const view = render(content())
+  fireEvent.click(await screen.findByRole("button", { name: "下载技能" }))
+  await waitFor(() => expect(downloadSignal).toBeDefined())
+  if (retirement === "source") revision = "replacement-revision"
+  view.rerender(content({ admitted: retirement !== "admission", subject: retirement === "actor" ? "replacement-reader" : "ordinary-reader", generation: retirement === "admission" ? 2 : 1 }, retirement === "source" ? { ...card, revision_skill_id: revision!, source_ref: `skill:${revision}` } : card, retirement !== "close"))
+  await waitFor(() => expect(downloadSignal?.aborted).toBe(true))
+  await act(async () => { resolveDownload(download()) })
+  expect(navigate).not.toHaveBeenCalled()
+  expect(screen.queryByText("下载未完成，请重试。")).toBeNull()
+})
+
+it("reserves detail cover layout only for loaded current media, not its optional resource URL", async () => {
+  const response = (body: unknown) => Response.json(body, { headers: { "cache-control": "private, no-store", "x-request-id": "detail-artwork" } })
+  vi.stubGlobal("fetch", vi.fn(async () => response({ skill: { id: "art-detail-series", version: "art-detail-a", displayName: "Artwork detail" } })))
+  const card: SkillCatalogCard = { skill_id: "art-detail-series", revision_skill_id: "art-detail-a", source_ref: "skill:art-detail-a", name: "Artwork detail", description: "", content_hash: "art-detail-series", scope: "official", installed: false, enabled: false, cover_image: "/api/hub/skills/art-detail-a/cover" }
+  const content = (skill: SkillCatalogCard, subject = "detail-art-reader", admitted = true) => <LocaleProvider><ManusSkillDetailDialog
+    open readBoundary={{ admitted, subject, generation: 1 }} skill={skill}
+    onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={() => false}
+  /></LocaleProvider>
+  const view = render(content(card))
+  const image = document.querySelector<HTMLImageElement>('img[src$="/api/hub/skills/art-detail-a/cover"]')!
+  const hero = image.closest("[data-has-cover]")!
+  expect(hero).toHaveAttribute("data-has-cover", "false")
+  expect(image).not.toBeVisible()
+  Object.defineProperty(image, "naturalWidth", { configurable: true, value: 120 })
+  image.parentElement!.style.position = "absolute"
+  image.width = 120
+  image.height = 120
+  fireEvent.load(image)
+  await waitFor(() => expect(hero).toHaveAttribute("data-has-cover", "true"))
+  expect(image).toBeVisible()
+  fireEvent.error(image)
+  expect(hero).toHaveAttribute("data-has-cover", "false")
+  expect(image).not.toBeVisible()
+
+  const nextCard = { ...card, cover_image: "/api/hub/skills/art-detail-b/cover" }
+  view.rerender(content(nextCard))
+  const next = document.querySelector<HTMLImageElement>('img[src$="/api/hub/skills/art-detail-b/cover"]')!
+  expect(next).not.toBeNull()
+  fireEvent.load(image)
+  expect(next.closest("[data-has-cover]")).toHaveAttribute("data-has-cover", "false")
+  expect(next).not.toBeVisible()
+  view.rerender(content(nextCard, "different-detail-reader"))
+  fireEvent.load(next)
+  const actorImage = document.querySelector<HTMLImageElement>('img[src$="/api/hub/skills/art-detail-b/cover"]')!
+  expect(actorImage).not.toBe(next)
+  expect(actorImage).not.toBeVisible()
+  view.rerender(content(nextCard, "different-detail-reader", false))
+  expect(document.querySelector('img[src$="/api/hub/skills/art-detail-b/cover"]')).toBeNull()
 })
 
 const cases: ReadonlyArray<{
@@ -312,7 +449,6 @@ function detailRetryFixture(source: "catalog" | "installation") {
     ? response({ ...installation, summary })
     : Response.json({
       skill: { id: skill.skill_id, version: skill.revision_skill_id, displayName: skill.name, description: summary },
-      downloadInfo: { downloadUrl: "/api/skill-downloads/detail-retry", filename: "fixture.zip", expiresAt: "2999-01-01T00:00:00Z" },
     })
   const onAdd = vi.fn(), onTry = vi.fn(() => false)
   const content = (boundary: ProjectReadBoundary = { admitted: true, subject: "reader", generation: 1 }, open = true) =>

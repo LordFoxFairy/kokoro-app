@@ -36,7 +36,6 @@ it("retries a failed marketplace search from its open pending detail without los
     }
     if (path.endsWith("GetSkill")) return response({
       skill: { id: card.skillId, version: card.currentVersion.versionUid, displayName: card.displayName, description: "Confirmed selected revision" },
-      downloadInfo: { downloadUrl: "/api/skill-downloads/fixture", filename: "fixture.zip", expiresAt: "2999-01-01T00:00:00Z" },
     })
     throw Error(`Unexpected request: ${path}`)
   })
@@ -93,7 +92,6 @@ it("offers pending-detail recovery only after admission and retires a late retry
       metadataReads.push(JSON.parse(String(init?.body)))
       return response({
         skill: { id: card.skillId, version: card.currentVersion.versionUid, displayName: card.displayName, description: "Current metadata" },
-        downloadInfo: { downloadUrl: "/api/skill-downloads/fixture", filename: "fixture.zip", expiresAt: "2999-01-01T00:00:00Z" },
       })
     }
     throw Error(`Unexpected request: ${path}`)
@@ -118,4 +116,61 @@ it("offers pending-detail recovery only after admission and retires a late retry
   expect(screen.queryByRole("dialog")).toBeNull()
   expect(screen.queryByText("Current metadata")).toBeNull()
   expect(metadataReads).toEqual([{ skillId: card.skillId }])
+})
+
+it("keeps marketplace artwork until authenticated media loads and retires it across actor changes", async () => {
+  const revision = "artwork-revision"
+  const response = (body: unknown) => Response.json(body, { headers: { "cache-control": "private, no-store", "x-request-id": "artwork-read" } })
+  vi.spyOn(globalThis, "fetch").mockImplementation(async input => {
+    if (String(input).endsWith("ListSkills")) return response({ userAddedSkills: [], officialSkills: [] })
+    return response({ skills: [{ skillId: "artwork-series", displayName: "Artwork skill", currentVersion: { versionUid: revision }, coverImage: `/api/v1/skills/${revision}/cover` }], tagOptions: {} })
+  })
+  const content = (subject: string, generation = 1) => <LocaleProvider><KokoroSkillsSurface onPrompt={vi.fn()} preview={false} projectReadBoundary={{ admitted: true, subject, generation }} /></LocaleProvider>
+  const view = render(content("artwork-reader"))
+  const image = await waitFor(() => {
+    const node = view.container.querySelector<HTMLImageElement>(`img[src$="/api/hub/skills/${revision}/cover"]`)
+    expect(node).not.toBeNull()
+    return node!
+  })
+  const art = image.parentElement!
+  // A resource URL is not proof that an image exists. Keep the original
+  // decorative fallback for pending, 404, unavailable and aborted loads.
+  expect(image).not.toBeVisible()
+  expect(art.querySelector("svg")).not.toBeNull()
+  fireEvent.error(image)
+  expect(image).not.toBeVisible()
+  expect(art.querySelector("svg")).not.toBeNull()
+  expect(screen.getByRole("button", { name: "Artwork skill" })).toBeEnabled()
+
+  view.rerender(content("artwork-reader", 2))
+  const next = await waitFor(() => {
+    const node = view.container.querySelector<HTMLImageElement>(`img[src$="/api/hub/skills/${revision}/cover"]`)
+    expect(node).not.toBe(image)
+    expect(node).not.toBeNull()
+    return node!
+  })
+  Object.defineProperty(next, "naturalWidth", { configurable: true, value: 120 })
+  // jsdom does not apply the CSS module's positioned, fixed-size artwork.
+  next.parentElement!.style.position = "relative"
+  next.width = 120
+  next.height = 160
+  const resourceRestarts: MutationRecord[] = []
+  const observer = new MutationObserver(records => resourceRestarts.push(...records))
+  observer.observe(next, { attributes: true, attributeFilter: ["src"] })
+  fireEvent.load(next)
+  await waitFor(() => expect(next).toBeVisible())
+  expect(resourceRestarts).toHaveLength(0)
+  observer.disconnect()
+  expect(next.parentElement!.querySelector("svg")).toBeNull()
+
+  view.rerender(content("different-artwork-reader"))
+  const replacement = await waitFor(() => {
+    const node = view.container.querySelector<HTMLImageElement>(`img[src$="/api/hub/skills/${revision}/cover"]`)
+    expect(node).not.toBe(next)
+    expect(node).not.toBeNull()
+    return node!
+  })
+  fireEvent.load(next)
+  expect(replacement).not.toBeVisible()
+  expect(replacement.parentElement!.querySelector("svg")).not.toBeNull()
 })

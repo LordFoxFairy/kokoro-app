@@ -663,9 +663,11 @@ D0后先Root精确授权现文件，再以真实函数/同源route RED→GREEN�
 ### 唯一事实源与可见性
 完整读响应的唯一 owner schema 为上述 BFF commit 的 `src/http/skill-specification-schema.ts`（websiteHubResponseSchema、websiteListResponseSchema、websiteSkillSchema）；运行投影为 `src/application/skill-specification.ts`，HTTP envelope/下载 handle 由 `src/http/routes/platform-projection.ts` 发出。Web 现 `/api/skill.v1.SkillOptionalService/{ListHubSkills,ListSkills,GetSkill}` 与 `/api/skill.v1.SkillService/DownloadSkill` 仍是既有 browser-private adapter，不新建 public operation，不把消费 validator 当可编辑 owner 契约。
 
-Web 严格承接完整 Hub item/icon/source/currentVersion/tags/tagOptions、完整 installed/official 嵌套对象和完整 detail/download 三字段资格响应；按照 owner schema 的字段类型与可选性解析，identity 为读取必要条件且 Get/Download 必须与请求 skillId 匹配。各操作成功/envelope保持原 owner 形状，不用泛化 passthrough、不静默 strip owner 字段。未知字段、坏类型或资源错配失败闭合；错误形状与状态按当前操作和同源 adapter区分，坏响应不得变空目录或可下载成功。
+GetSkill metadata 切片（2026-10-25，已消费 BFF `21c85b5a6b3059ecb8924703a0065c966f480467` 的 Public25；canonical SHA256 `7261ac9ce2140555ba97ebff2bf0359533cc49dda014b08dcd6a6054a8d38b1c`）：现路径/series 请求不变，成功严格 `{skill}`，不带 `downloadInfo` 或读取包字节。独立 DownloadSkill 成功仍严格 `{skill,downloadInfo}`；两者复用相同 skill shape，但分别解析，未知字段和下载缺字段拒绝，不做旧协议 fallback。普通详情仅在受准 metadata 的 series/exact revision 与已选记录匹配后开放下载入口；点击独立请求真实句柄，并再次核其 series/version 和当前请求生命期后导航。下载失败、取消或错误版本不清 metadata，不生成 URL/文件名/到期时间，也不从列表快照推导下载权。
 
-Hub/tagOptions 支持正式第八类 SKILL_HUB_TAG_APPS，分类投影为 apps；不扩其它公开请求 schema。安装 membership/added 与 enabled 是不同事实，已安装但禁用仍 installed=true、enabled=false，official added 不覆盖本人 enabled。GET 封面 private exact `/api/hub/skills/{revision}/cover` 唯一映射正式 `/v1/skills/{revision}/cover`；revision 来自已绑定 owner coverImage/current version，不建立 series alias 或外部 URL 代理。未知路径/非GET/body/query/身份失败按闭集拒绝。
+Web 严格承接完整 Hub item/icon/source/currentVersion/tags/tagOptions、完整 installed/official 嵌套对象和独立的 detail metadata／download 资格响应；按照 owner schema 的字段类型与可选性解析，identity 为读取必要条件且 Get/Download 必须与请求 skillId 匹配。各操作成功/envelope保持原 owner 形状，不用泛化 passthrough、不静默 strip owner 字段。未知字段、坏类型或资源错配失败闭合；错误形状与状态按当前操作和同源 adapter区分，坏响应不得变空目录或可下载成功。
+
+Hub/tagOptions 支持正式第八类 SKILL_HUB_TAG_APPS，分类投影为 apps；不扩其它公开请求 schema。安装 membership/added 与 enabled 是不同事实，已安装但禁用仍 installed=true、enabled=false，official added 不覆盖本人 enabled。GET 封面 private exact `/api/hub/skills/{revision}/cover` 唯一映射正式 `/v1/skills/{revision}/cover`；revision 来自 BFF coverImage/current version 的精确 UID，不建立 series alias 或外部 URL 代理。coverImage 是可尝试的媒体资源定位而非存在性/CLEAN 保证；metadata absent cover 表示未内联媒体，图片成功加载才展示，加载/404/503/取消保原 fallback，不伪造源封面状态；媒体 GET 的完整事实与权限检查保持。未知路径/非GET/body/query/身份失败按闭集拒绝。
 
 ### 门禁
 具名真实四响应、嵌套完整字段、unknown/type/identity负控、apps、图片字节/媒体/Origin/session/revision绑定测试；Root pin/artifact不变，五 mixed 仅新增此前缀之外原正文保留。Root 真实浏览器目录/详情/安装/下载/封面仍待后继验收，不以 HTTP200 或 unit fixture 称完成。

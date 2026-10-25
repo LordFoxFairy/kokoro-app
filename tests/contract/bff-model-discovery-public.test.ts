@@ -6,9 +6,9 @@ import { restoreModelDiscoveryParent } from "./bff-model-discovery-parent"
 const digest = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex")
 it("pins only the formal provider discovery GET and preserves the complete Public22.2 parent", async () => {
   const bytes = await readFile("src/generated/bff-public-openapi.yaml")
-  expect(digest(bytes)).toBe("f4caf11f3cd9255d2cd9daf69b74ff9988505d640e31c686ce495e6d8a578b2c")
+  expect(digest(bytes)).toBe("7261ac9ce2140555ba97ebff2bf0359533cc49dda014b08dcd6a6054a8d38b1c")
   const spec = YAML.parse(bytes.toString())
-  expect(spec.info.version).toBe("24.0.0")
+  expect(spec.info.version).toBe("25.0.0")
   const path = spec.paths["/v1/admin/model-providers/{provider_id}/upstream-models"]
   expect(Object.keys(path)).toEqual(["get"])
   expect(path.get.operationId).toBe("listAdminModelProviderUpstreamModels")
@@ -23,5 +23,8 @@ it("pins only the formal provider discovery GET and preserves the complete Publi
   expect(count(spec)).toBe(186)
   expect(count(old)).toBe(181)
   expect(old.paths["/v1/admin/model-providers/{provider_id}/upstream-models"]).toBeUndefined()
-  for (const changed of [Buffer.concat([bytes, Buffer.from("\n")]), Buffer.from(bytes.toString().replace("listAdminModelProviderUpstreamModels", "arbitraryProxy")), Buffer.from(bytes.toString().replace("  version: 24.0.0", "  version: 22.2.0"))]) expect(() => restoreModelDiscoveryParent(changed)).toThrow()
+  for (const changed of [Buffer.concat([bytes, Buffer.from("\n")]), Buffer.from(bytes.toString().replace("listAdminModelProviderUpstreamModels", "arbitraryProxy")), Buffer.from(bytes.toString().replace("  version: 25.0.0", "  version: 22.2.0"))]) {
+    expect(changed.equals(bytes)).toBe(false)
+    expect(() => restoreModelDiscoveryParent(changed)).toThrow()
+  }
 })
