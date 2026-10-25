@@ -57,6 +57,7 @@ import { isMcpCustomHeaderName } from "./mcp-header-validation";
 type HeaderDraft = { id: string; name: string; value: string };
 type SavedTransportDisplay = {
   transport: McpPrivateServer["transport"];
+  primaryIntent: "trial" | "connect" | null;
   subject: string;
   generation: number;
   serverId: string;
@@ -172,17 +173,22 @@ export function CustomMcpDetailDialog({
     iconBoundary.subject === value.subject && iconBoundary.generation === value.generation &&
     (server === null || server.server_id === value.serverId) &&
     (connector === null || (connector.connector_id === value.connectorId && connector.server_id === value.serverId));
+  const primaryIntentRetired = pendingError || preparationState === "unknown" || managementCommand?.kind === "unknown";
   const submittedTransport = submittedFields?.transport && sameTransportScope(submittedFields.transport) ? submittedFields.transport : null;
   if (submittedFields?.transport && !submittedTransport) {
     setSubmittedFields({ ...submittedFields, transport: null });
+  } else if (submittedFields?.transport?.primaryIntent && primaryIntentRetired) {
+    setSubmittedFields({ ...submittedFields, transport: { ...submittedFields.transport, primaryIntent: null } });
   }
   if (savedTransport && (ready || !sameTransportScope(savedTransport) || savedTransport.confirmation !== configurationSaved ||
     preparationState === "unknown" || managementCommand?.kind === "unknown")) {
     setSavedTransport(null);
+  } else if (savedTransport?.primaryIntent && primaryIntentRetired) {
+    setSavedTransport({ ...savedTransport, primaryIntent: null });
   }
   if (observedSave !== configurationSaved) {
     setObservedSave(configurationSaved);
-    setSavedTransport(configurationSaved && submittedTransport ? { ...submittedTransport, confirmation: configurationSaved } : null);
+    setSavedTransport(configurationSaved && submittedTransport ? { ...submittedTransport, primaryIntent: primaryIntentRetired ? null : submittedTransport.primaryIntent, confirmation: configurationSaved } : null);
     if (configurationSaved) {
       // The command's transient completed notification may be batched with
       // finish(). This window-bound receipt still retires write-only drafts.
@@ -208,8 +214,8 @@ export function CustomMcpDetailDialog({
     setNotes(null);
     setServerUrl(null);
   }
-  // Only the immutable label survives this confirmed save's read gap. It is
-  // never an owner projection, a CAS source, or permission to enable actions.
+  // Only the immutable label and prior primary presentation survive this
+  // confirmed save's read gap, never owner facts/CAS or action permission.
   const retainingTransport = savedFactsPending && !ready && !pendingError && savedTransport !== null &&
     sameTransportScope(savedTransport) && savedTransport.confirmation === configurationSaved &&
     preparationState !== "unknown" && managementCommand?.kind !== "unknown";
@@ -238,8 +244,10 @@ export function CustomMcpDetailDialog({
     name !== (currentServer?.display_name ?? "") || notes !== (currentServer?.notes ?? "") ||
     serverUrl !== (currentServer?.server_url ?? "") || headers.length > 0 || removedHeaders.length > 0 || icon.state.dirty || icon.state.kind === "running" || icon.state.kind === "unknown"
   );
-  const primaryAction = () => trialAvailable ? <Button type="button" variant={editing ? "outline" : "default"}
-    disabled={managementLocked || busy || configurationDirty || !onTrial} onClick={() => setTrialError(onTrial?.() !== true)}>
+  const showingTrial = trialAvailable || (retainingTransport && savedTransport.primaryIntent === "trial");
+  const trialLocked = !trialAvailable || managementLocked || busy || configurationDirty || !onTrial;
+  const primaryAction = () => showingTrial ? <Button type="button" variant={editing ? "outline" : "default"}
+    disabled={trialLocked} onClick={() => { if (!trialLocked) setTrialError(onTrial?.() !== true); }}>
     <Send aria-hidden="true" />试用一下
   </Button> : <><Button type="button" variant={editing ? "outline" : "default"}
     disabled={managementLocked || busy || !ready || !preparationRecoveryReady || preparationState === "running" || (!needsAuthorization && !mayResumePreparation && !preparationCanInspect)}
@@ -269,7 +277,7 @@ export function CustomMcpDetailDialog({
     )
       return;
     setSubmittedFields({ name, notes, serverUrl, transport: iconBoundary?.admitted && iconBoundary.subject !== null &&
-      connector.server_id === server.server_id ? { transport: server.transport, subject: iconBoundary.subject,
+      connector.server_id === server.server_id ? { transport: server.transport, primaryIntent: trialAvailable ? "trial" : "connect", subject: iconBoundary.subject,
         generation: iconBoundary.generation, serverId: server.server_id, connectorId: connector.connector_id } : null });
     icon.draft.protectForSave();
     onSaveConfiguration({
