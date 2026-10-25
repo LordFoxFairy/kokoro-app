@@ -2881,11 +2881,18 @@ async function proxyHubRequest(
             mcpConnectionErrorAllowed(upstream.status, error.data.error.code);
       if (!valid)
         return connectionProjectionError("invalidOwnerResponse", requestId);
+      const retryAfter =
+        upstream.status === 429 ? upstream.headers.get("retry-after") : null;
+      const validRetryAfter =
+        retryAfter !== null &&
+        /^[1-9][0-9]{0,4}(?![\s\S])/u.test(retryAfter) &&
+        Number(retryAfter) <= 86400;
       return NextResponse.json(raw, {
         status: upstream.status,
         headers: {
           "cache-control": "no-store",
           "x-request-id": upstreamRequestId,
+          ...(validRetryAfter ? { "retry-after": retryAfter } : {}),
         },
       });
     }

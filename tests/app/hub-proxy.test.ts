@@ -5029,3 +5029,28 @@ it("SSE same-origin adapter reuses strict operation context for new versus histo
  expect((await route.GET(new Request("http://localhost/api/hub/mcp/servers/sse-server"), params(["mcp", "servers", "sse-server"]))).status).toBe(502);
  expect(requestWithDomain).toHaveBeenCalledTimes(6);
 });
+
+describe("MCP Connection 429 cooldown metadata", () => {
+  it.each(["1", "86400", null, "0", "01", "+1", "1.0", "86401", "Wed, 21 Oct 2026 07:28:00 GMT"])("forwards only bounded delta-seconds %s without changing the typed 429", async (retryAfter) => {
+    const { GET } = await import("@/app/api/hub/[...path]/route");
+    const body = { error: { code: "session_rate_limited", message: "limited", retryable: true } };
+    const headers = new Headers({ "content-type": "application/json", "cache-control": "no-store", "x-request-id": "owner-rate-limit" });
+    if (retryAfter !== null) headers.set("retry-after", retryAfter);
+    vi.mocked(requestWithDomain).mockResolvedValueOnce(new Response(JSON.stringify(body), { status: 429, headers }));
+    const response = await GET(new Request("http://localhost/api/hub/mcp/connections"), params(["mcp", "connections"]));
+    expect(response.status).toBe(429);
+    expect(await response.json()).toEqual(body);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(response.headers.get("x-request-id")).toBe("owner-rate-limit");
+    expect(response.headers.get("retry-after")).toBe(retryAfter === "1" || retryAfter === "86400" ? retryAfter : null);
+    expect(requestWithDomain).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not attach cooldown metadata to a non-429 response", async () => {
+    const { GET } = await import("@/app/api/hub/[...path]/route");
+    vi.mocked(requestWithDomain).mockResolvedValueOnce(new Response(JSON.stringify({ data: { connections: [] } }), { headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "owner-success", "retry-after": "1" } }));
+    const response = await GET(new Request("http://localhost/api/hub/mcp/connections"), params(["mcp", "connections"]));
+    expect(response.status).toBe(200);
+    expect(response.headers.get("retry-after")).toBeNull();
+  });
+});

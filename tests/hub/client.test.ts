@@ -2113,3 +2113,163 @@ it("SSE Hub keeps fresh Current separate from exact historical ACK and never fal
  fetch.mockResolvedValueOnce(publicResponse({ data: { server: legacy } })); await expect(hub.getPrivateMcpServer!(server.server_id)).rejects.toMatchObject({ reason: "parse" });
  expect(fetch).toHaveBeenCalledTimes(5); expect(JSON.parse(String(fetch.mock.calls[3]?.[1]?.body))).toEqual(oldBody);
 });
+
+describe("bounded MCP GET rate-limit cooldown", () => {
+  function limited(retryAfter: string | null = "1", retryable = true): Response {
+    const response = publicResponse({ error: { code: "session_rate_limited", message: "limited", retryable } }, 429);
+    if (retryAfter !== null) response.headers.set("retry-after", retryAfter);
+    return response;
+  }
+  const reads = [
+    { name: "connections", read: (signal?: AbortSignal) => createHubClient().listMcpConnections({}, signal), success: { data: { connections: [] } } },
+    { name: "connectors", read: (signal?: AbortSignal) => createHubClient().listMcpConnectors!({}, signal), success: { data: { items: [], next_cursor: null } } },
+    { name: "providers", read: (signal?: AbortSignal) => createHubClient().listMcpConnectorProviders!({}, signal), success: { data: { items: [], next_cursor: null } } },
+  ];
+
+  for (const { name, read, success } of reads) {
+    it(`${name}: preserves validated 429 metadata and recovers after exactly one indicated second`, async () => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+      try {
+        const fetchMock = vi.fn().mockResolvedValueOnce(limited()).mockResolvedValueOnce(publicResponse(success));
+        vi.stubGlobal("fetch", fetchMock);
+        const outcome = read().then((value) => ({ value }), (error: unknown) => ({ error }));
+        await vi.advanceTimersByTimeAsync(999);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        expect(await outcome).toHaveProperty("value");
+        expect(fetchMock.mock.calls[1]?.[0]).toBe(fetchMock.mock.calls[0]?.[0]);
+        expect(fetchMock.mock.calls[1]?.[1]).toEqual(fetchMock.mock.calls[0]?.[1]);
+      } finally { vi.useRealTimers(); }
+    });
+
+    it(`${name}: aborting the cooldown retires the second dispatch`, async () => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+      try {
+        const controller = new AbortController();
+        const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(limited()));
+        vi.stubGlobal("fetch", fetchMock);
+        const outcome = read(controller.signal).catch((error: unknown) => error);
+        await vi.advanceTimersByTimeAsync(500);
+        controller.abort();
+        await vi.advanceTimersByTimeAsync(1000);
+        expect(await outcome).toMatchObject({ reason: "aborted" });
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+      } finally { vi.useRealTimers(); }
+    });
+
+    it(`${name}: a second 429 stays terminal without a third GET`, async () => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+      try {
+        const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(limited()));
+        vi.stubGlobal("fetch", fetchMock);
+        const outcome = read().catch((error: unknown) => error);
+        await vi.advanceTimersByTimeAsync(9000);
+        expect(await outcome).toMatchObject({ reason: "http", status: 429, retryable: true, retryAfter: "1" });
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+      } finally { vi.useRealTimers(); }
+    });
+
+    it(`${name}: both response bodies share the original absolute ten-second budget`, async () => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+      const controller = new AbortController();
+      const cancel = vi.fn();
+      try {
+        const fetchMock = vi.fn()
+          .mockImplementationOnce(() => new Promise<Response>((resolve) => setTimeout(() => resolve(limited()), 8000)))
+          .mockResolvedValueOnce(new Response(new ReadableStream<Uint8Array>({
+            start(stream) { stream.enqueue(new TextEncoder().encode(JSON.stringify(success))); }, cancel,
+          }), { headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "second-read" } }));
+        vi.stubGlobal("fetch", fetchMock);
+        let result: unknown;
+        void read(controller.signal).then((value) => { result = value; }, (error: unknown) => { result = error; });
+        await vi.advanceTimersByTimeAsync(9999);
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        expect(result).toBeUndefined();
+        await vi.advanceTimersByTimeAsync(1);
+        expect(result).toMatchObject({ reason: "aborted", status: 200 });
+        expect(cancel).toHaveBeenCalledTimes(1);
+      } finally { controller.abort(); vi.useRealTimers(); }
+    });
+  }
+
+  it.each([null, "0", "01", "+1", "1.0", "-1", "99999", "86400", "Wed, 21 Oct 2026 07:28:00 GMT"])("connections: missing, invalid or over-budget delay %s never invents a retry", async (retryAfter) => {
+    const fetchMock = vi.fn().mockResolvedValue(limited(retryAfter));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(createHubClient().listMcpConnections()).rejects.toMatchObject({ reason: "http", status: 429, retryAfter });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("nonretryable and malformed 429 responses never trigger a cooldown", async () => {
+    const malformed = publicResponse({ error: { code: "session_rate_limited", message: "limited", retryable: true }, extra: true }, 429);
+    malformed.headers.set("retry-after", "1");
+    const fetchMock = vi.fn().mockResolvedValueOnce(limited("1", false)).mockResolvedValueOnce(malformed);
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(createHubClient().listMcpConnections()).rejects.toMatchObject({ reason: "http", retryable: false });
+    await expect(createHubClient().listMcpConnections()).rejects.toMatchObject({ reason: "parse" });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("a registration POST retains its original body and key and is never resent", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+    try {
+      const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(limited()));
+      vi.stubGlobal("fetch", fetchMock);
+      const body = { display_name: "Private tools", server_url: "https://fixture.invalid/mcp" };
+      const outcome = createHubClient().registerPrivateMcpServer!(body, "original-register-key").catch((error: unknown) => error);
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(await outcome).toMatchObject({ reason: "http", status: 429 });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ method: "POST", body: JSON.stringify(body), headers: expect.objectContaining({ "Idempotency-Key": "original-register-key" }) });
+    } finally { vi.useRealTimers(); }
+  });
+  it.each([
+    { name: "provider", read: () => createHubClient().getMcpConnectorProvider("fixture-provider") },
+    { name: "connector", read: () => createHubClient().getMcpConnector!("fixture-connector") },
+    { name: "server", read: () => createHubClient().getPrivateMcpServer!("fixture-server") },
+  ])("$name exact metadata GET is eligible, but still stops after a second 429", async ({ read }) => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+    try {
+      const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(limited()));
+      vi.stubGlobal("fetch", fetchMock);
+      const outcome = read().catch((error: unknown) => error);
+      await vi.advanceTimersByTimeAsync(9000);
+      expect(await outcome).toMatchObject({ reason: "http", status: 429 });
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(fetchMock.mock.calls[1]?.[0]).toBe(fetchMock.mock.calls[0]?.[0]);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("a valid delay that cannot fit after the first response fails immediately as the original 429", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+    try {
+      const fetchMock = vi.fn().mockImplementation(() => new Promise<Response>((resolve) => setTimeout(() => resolve(limited("2")), 8500)));
+      vi.stubGlobal("fetch", fetchMock);
+      let result: unknown;
+      void createHubClient().listMcpConnections().catch((error: unknown) => { result = error; });
+      await vi.advanceTimersByTimeAsync(8500);
+      expect(result).toMatchObject({ reason: "http", status: 429, retryAfter: "2" });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("cancels a second response arriving after the original deadline rather than accepting it", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+    try {
+      const cancel = vi.fn();
+      let resolveLate: ((response: Response) => void) | undefined;
+      const fetchMock = vi.fn().mockResolvedValueOnce(limited()).mockImplementationOnce(() => new Promise<Response>((resolve) => { resolveLate = resolve; }));
+      vi.stubGlobal("fetch", fetchMock);
+      let result: unknown;
+      void createHubClient().listMcpConnections().then((value) => { result = value; }, (error: unknown) => { result = error; });
+      await vi.advanceTimersByTimeAsync(10000);
+      expect(result).toMatchObject({ reason: "aborted" });
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      resolveLate!(new Response(new ReadableStream({ cancel }), { headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "late-response" } }));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(cancel).toHaveBeenCalledTimes(1);
+      expect(result).toMatchObject({ reason: "aborted" });
+    } finally { vi.useRealTimers(); }
+  });
+
+});
