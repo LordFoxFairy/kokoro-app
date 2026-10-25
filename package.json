@@ -16,7 +16,7 @@
     "cf:typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "next typegen && tsc --noEmit",
-    "contract": "pnpm contract:check:bff-public-skill-list && pnpm contract:check:bff-connector-command-errors && pnpm contract:check:bff-archived-tasks && pnpm contract:check:bff-shared-tasks && pnpm contract:check:bff-account-profile && pnpm contract:check:bff-account-sessions && pnpm contract:check:bff-team && pnpm contract:check:bff-agent-failure && vitest run contract tests/contract",
+    "contract": "pnpm contract:check:bff-mcp-project-publication && pnpm contract:check:bff-public-skill-list && pnpm contract:check:bff-connector-command-errors && pnpm contract:check:bff-archived-tasks && pnpm contract:check:bff-shared-tasks && pnpm contract:check:bff-account-profile && pnpm contract:check:bff-account-sessions && pnpm contract:check:bff-team && pnpm contract:check:bff-agent-failure && vitest run contract tests/contract",
     "contract:generate:bff-agent-failure": "node scripts/generate-bff-agent-failure.mjs --write",
     "contract:generate:bff-team": "node scripts/generate-bff-team-client.mjs --write",
     "contract:check:bff-agent-failure": "node scripts/generate-bff-agent-failure.mjs --check",
@@ -40,7 +40,9 @@
     "contract:generate:bff-connector-command-errors": "node scripts/generate-bff-connector-command-errors.mjs --write",
     "contract:check:bff-connector-command-errors": "node scripts/generate-bff-connector-command-errors.mjs --check",
     "contract:generate:bff-public-skill-list": "node scripts/generate-bff-public-skill-list.mjs --write",
-    "contract:check:bff-public-skill-list": "node scripts/generate-bff-public-skill-list.mjs --check"
+    "contract:check:bff-public-skill-list": "node scripts/generate-bff-public-skill-list.mjs --check",
+    "contract:generate:bff-mcp-project-publication": "node scripts/generate-bff-mcp-project-publication.mjs --write",
+    "contract:check:bff-mcp-project-publication": "node scripts/generate-bff-mcp-project-publication.mjs --check"
   },
   "dependencies": {
     "@ag-ui/core": "0.0.59",

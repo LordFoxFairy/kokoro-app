@@ -147,7 +147,7 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
   if (freshCatalog !== undefined && (confirmedCatalog?.client !== client || confirmedCatalog.data !== freshCatalog)) setConfirmedCatalog({ client, data: freshCatalog })
   const displayedCatalog = freshCatalog ?? (readBoundary.admitted && readBoundary.subject !== null && confirmedCatalog?.client === client ? confirmedCatalog.data : undefined)
   const loadingMore = loadingMoreFor !== undefined && loadingMoreFor.base === catalog.data && !loadingMoreFor.controller.signal.aborted
-  const loadMoreFailed = loadMoreFailedFor === catalog.data
+  const loadMoreFailed = loadMoreFailedFor !== undefined && loadMoreFailedFor === catalog.data
   const loadMore = useCallback(async () => {
     const cursor = displayedCatalog?.next_cursor
     const base = catalog.data
@@ -380,6 +380,7 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
         pending={detailKey !== null && currentDetailSkill === null}
         pendingFailed={loadMoreFailed || catalog.error !== undefined || catalog.data !== undefined && !displayedCatalog?.next_cursor}
         pendingBusy={catalog.loading || loadingMore}
+        onRetryPending={readBoundary.admitted && readBoundary.subject !== null ? catalog.refetch : undefined}
         {...(displayedCatalog?.next_cursor ? { onLoadMore: () => void loadMore() } : {})}
         busy={detailSkill !== null && busy === actionIdentity(detailSkill)}
         {...(currentDetailSkill === null ? {} : { installationState: { installed: currentDetailSkill.installed, enabled: currentDetailSkill.enabled } })}

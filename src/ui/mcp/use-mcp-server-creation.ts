@@ -11,7 +11,8 @@ import { useMcpOAuthPopup } from "./use-mcp-oauth-popup";
 /** One mounted window consumes the actor-owned workflow; it owns no command key. */
 export function useMcpServerCreation(flow: McpServerCreationFlow, boundary: ProjectReadBoundary,
   onCancel: () => void, onDone: (result: McpServerCreationCompletion, current: () => boolean) => Promise<void>, clearSecrets: () => void,
-  onAuthorizationNavigate?: (url: string) => void) {
+  onAuthorizationNavigate?: (url: string) => void,
+  onPublish?: (result: McpServerCreationCompletion, current: () => boolean) => Promise<void>) {
   const token = useMemo(() => ({ flow }), [flow]);
   const scope = useMemo(() => ({ window: token, boundary: { ...boundary } }), [token, boundary]);
   const committed = useRef<typeof scope | null>(null);
@@ -24,22 +25,24 @@ export function useMcpServerCreation(flow: McpServerCreationFlow, boundary: Proj
   const [completion, setCompletion] = useState<"idle" | "closing" | "retry">("idle");
   const completionTarget = useRef<McpServerCreationCompletion | null>(null);
   const completing = useRef(false);
+  const publishing = useRef(false);
   const [popupError, setPopupError] = useState<{ scope: typeof scope; failure: ConnectorCommandFailure | undefined } | null>(null);
   const admitted = boundary.admitted && flow.matches(scope);
   const current = () => committed.current === scope && flow.matches(scope);
   useEffect(() => { if (admitted && state.registered) void flow.refresh(scope); }, [admitted, flow, scope, state.registered]);
-  const done = async () => {
+  const done = async (publish = publishing.current) => {
     if (!current() || completing.current || completion === "closing") return;
     if (completionTarget.current === null) {
       const facts = flow.getSnapshot().facts;
       if (!facts) return;
       const target = Object.freeze({ serverId: facts.server.server_id, connectorId: facts.connector.connector_id, providerKey: facts.connector.provider_key });
-      if (!flow.finish(scope)) return;
+      if (!(publish ? flow.finishRegistration(scope) : flow.finish(scope))) return;
+      publishing.current = publish;
       completionTarget.current = target;
     }
     completing.current = true;
     setCompletion("closing");
-    try { await onDone(completionTarget.current, current); }
+    try { await (publishing.current ? onPublish! : onDone)(completionTarget.current, current); }
     catch { if (committed.current?.window === token) setCompletion("retry"); }
     finally { completing.current = false; }
   };
@@ -98,9 +101,17 @@ export function useMcpServerCreation(flow: McpServerCreationFlow, boundary: Proj
       if (connected && current()) await done();
     } catch (error) { if (current()) setPopupError({ scope, failure: connectorCommandFailure("mcp", error) }); }
   };
+  const saveForPublication = async (input?: McpPrivateServerRegistrationInput) => {
+    if (!onPublish || !current() || state.busy || completion !== "idle" || !connectorCommandMayResume(state.failure)) return;
+    setPopupError(null);
+    const confirmed = state.unknown ? await flow.retry(scope)
+      : state.registered ? Boolean(await flow.refresh(scope, true))
+      : input ? await flow.submit(input, scope, false) : false;
+    if (confirmed && current()) await done(true);
+  };
   const locked = !admitted || state.busy || state.unknown !== null || state.registered || completion !== "idle";
   return { state, completion, admitted, submitting: state.busy || completion === "closing", locked,
-    editable: () => !locked && current(), save, authorize, done,
+    editable: () => !locked && current(), save, saveForPublication, authorize, done,
     cancel: () => { if (committed.current === scope) { flow.dismiss(scope); committed.current = null; onCancel(); } },
     error: state.error || popupError?.scope === scope || completion === "retry",
     failure: state.failure ?? (popupError?.scope === scope ? popupError.failure : undefined),

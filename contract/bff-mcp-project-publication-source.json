@@ -1,0 +1,10 @@
+{
+  "owner": "kokoro-bff",
+  "owner_base_commit": "400fab6e89c2fde77eb9f4917271e3e09a0c62da",
+  "candidate": false,
+  "owner_commit": "c124705f5ab7f8aa8dac4a648f7e8e952661926f",
+  "profile": "mcp-project-publication-browser",
+  "profile_version": "1.1.0",
+  "source_path": "contract/openapi/browser/v1/mcp-project-publication.json",
+  "source_sha256": "b743f452bf28c6c349d8d9fdf587dbcf42d9bbd8c97788a34615d603a497ae67"
+}

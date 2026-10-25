@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 
 import type { ProjectResourceListPage } from "@/contract/project-resource"
@@ -88,4 +88,104 @@ it("切换 A→B 取消旧 GET，迟到 A 页不能覆盖 B 的私有列表", as
   expect(signals[0]?.aborted).toBe(true)
   a.resolve(page([item("a-secret")]))
   await waitFor(() => expect(within(dialog).queryByText("a-secret.txt")).not.toBeInTheDocument())
+})
+
+
+// AppGate keeps the authenticated workbench mounted when a session probe pauses
+// admission. Its project key stays unchanged until the actual route changes.
+const admissionUi = (admitted: boolean, generation: number, list: Parameters<typeof ui>[1], upload?: Parameters<typeof ui>[2]) => <LocaleProvider><KokoroProjectWorkspace
+  key='["project","private-project",null,false]'
+  projectRef="private-project" preview={false} brandName="Kokoro" composer={<div>composer</div>} onPrompt={vi.fn()}
+  projectReadBoundary={{ admitted, subject: "owner-a", generation }}
+  workspaceCapabilities={capabilities} onListProjectResources={list}
+  {...(upload ? { onUploadProjectResource: upload } : {})}
+/></LocaleProvider>
+
+it("同项目准入暂停后立即退休私有列表，开放弹窗中的读写动作不继续请求", async () => {
+  const list = vi.fn().mockResolvedValue(page([item("private-before-pause")]))
+  const upload = vi.fn().mockRejectedValue(new Error("offline"))
+  const view = render(admissionUi(true, 1, list, upload))
+  const dialog = openResources(view.container)
+  await waitFor(() => expect(within(dialog).getByText("private-before-pause.txt")).toBeInTheDocument())
+  view.rerender(admissionUi(false, 2, list, upload))
+  expect(within(dialog).queryByText("private-before-pause.txt")).not.toBeInTheDocument()
+  fireEvent.change(document.getElementById("project-resource-upload") as HTMLInputElement, { target: { files: [new File(["abc"], "paused.txt", { type: "text/plain" })] } })
+  const retry = within(dialog).queryByRole("button", { name: "重试" })
+  expect(within(dialog).getByRole("button", { name: "新增" })).toBeDisabled()
+  expect(retry).toBeDisabled()
+  if (retry) fireEvent.click(retry)
+  await act(async () => {})
+  expect(list).toHaveBeenCalledTimes(1)
+  expect(upload).not.toHaveBeenCalled()
+})
+
+it("准入暂停退休上传回调与剩余批次，恢复只读并由用户用原文件和原 key 重试", async () => {
+  const pending = deferred<{ assetId: string; filename: string; mimeType: string; sizeBytes: string }>()
+  const list = vi.fn().mockResolvedValue(page([]))
+  const upload = vi.fn().mockReturnValueOnce(pending.promise).mockRejectedValue(new Error("offline"))
+  const view = render(admissionUi(true, 1, list, upload))
+  const dialog = openResources(view.container)
+  await waitFor(() => expect(within(dialog).getByText("暂无文件和资源。")).toBeInTheDocument())
+  const file = new File(["abc"], "original.txt", { type: "text/plain" })
+  const queued = new File(["def"], "queued.txt", { type: "text/plain" })
+  fireEvent.change(document.getElementById("project-resource-upload") as HTMLInputElement, { target: { files: [file, queued] } })
+  await waitFor(() => expect(upload).toHaveBeenCalledTimes(1))
+  const originalCall = upload.mock.calls[0]
+  view.rerender(admissionUi(false, 2, list, upload))
+  await act(async () => pending.resolve({ assetId: "late", filename: file.name, mimeType: file.type, sizeBytes: "3" }))
+  expect(upload).toHaveBeenCalledTimes(1)
+  expect(list).toHaveBeenCalledTimes(1)
+  view.rerender(admissionUi(true, 3, list, upload))
+  await waitFor(() => expect(list).toHaveBeenCalledTimes(2))
+  expect(upload).toHaveBeenCalledTimes(1)
+  fireEvent.click(within(dialog).getByRole("button", { name: "重试上传 original.txt" }))
+  await waitFor(() => expect(upload).toHaveBeenCalledTimes(2))
+  expect(upload.mock.calls[1]).toEqual(originalCall)
+})
+
+it("真实项目离开会卸载工作台，迟到上传不再发旧列表 GET 或提交剩余文件", async () => {
+  const pending = deferred<{ assetId: string; filename: string; mimeType: string; sizeBytes: string }>()
+  const list = vi.fn().mockResolvedValue(page([]))
+  const upload = vi.fn().mockReturnValueOnce(pending.promise).mockRejectedValue(new Error("offline"))
+  const view = render(admissionUi(true, 1, list, upload))
+  openResources(view.container)
+  await waitFor(() => expect(list).toHaveBeenCalledTimes(1))
+  const file = new File(["abc"], "original.txt", { type: "text/plain" })
+  fireEvent.change(document.getElementById("project-resource-upload") as HTMLInputElement, { target: { files: [file, new File(["def"], "queued.txt")] } })
+  await waitFor(() => expect(upload).toHaveBeenCalledTimes(1))
+  view.unmount()
+  await act(async () => pending.resolve({ assetId: "late", filename: file.name, mimeType: file.type, sizeBytes: "3" }))
+  expect(list).toHaveBeenCalledTimes(1)
+  expect(upload).toHaveBeenCalledTimes(1)
+})
+
+
+it("暂停后的新准入只采纳新 GET，旧上传 ACK 和旧 GET 都不恢复前代投影", async () => {
+  const firstRead = deferred<ProjectResourceListPage>()
+  const pending = deferred<{ assetId: string; filename: string; mimeType: string; sizeBytes: string }>()
+  const signals: AbortSignal[] = []
+  const list = vi.fn((_cursor: string | null, signal: AbortSignal) => {
+    signals.push(signal)
+    return signals.length === 1 ? firstRead.promise : Promise.resolve(page([item("current-generation")]))
+  })
+  const upload = vi.fn().mockReturnValue(pending.promise)
+  const view = render(admissionUi(true, 1, list, upload))
+  const dialog = openResources(view.container)
+  await waitFor(() => expect(list).toHaveBeenCalledTimes(1))
+  const file = new File(["abc"], "original.txt", { type: "text/plain" })
+  fireEvent.change(document.getElementById("project-resource-upload") as HTMLInputElement, { target: { files: [file] } })
+  await waitFor(() => expect(upload).toHaveBeenCalledTimes(1))
+  view.rerender(admissionUi(false, 2, list, upload))
+  expect(signals[0]?.aborted).toBe(true)
+  view.rerender(admissionUi(true, 3, list, upload))
+  await waitFor(() => expect(within(dialog).getByText("current-generation.txt")).toBeInTheDocument())
+  await act(async () => {
+    firstRead.resolve(page([item("retired-generation")]))
+    pending.resolve({ assetId: "late", filename: file.name, mimeType: file.type, sizeBytes: "3" })
+  })
+  expect(list).toHaveBeenCalledTimes(2)
+  expect(upload).toHaveBeenCalledTimes(1)
+  expect(within(dialog).getByText("current-generation.txt")).toBeInTheDocument()
+  expect(within(dialog).queryByText("retired-generation.txt")).not.toBeInTheDocument()
+  expect(within(dialog).getByRole("button", { name: "重试上传 original.txt" })).toBeEnabled()
 })

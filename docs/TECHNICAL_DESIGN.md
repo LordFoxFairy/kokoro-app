@@ -1,3 +1,12 @@
+## 2026-10-25 URL 创建后项目发布（既定设计消费）
+
+遵循 Root five-surface-closure 中 URL immutable revision/project pin 设计，不新增owner。URL保存并发布先完成个人注册ACK，之后才打开已观察的Manus项目picker；取消不删除配置、不发OAuth。App仅持有显示和原命令状态，项目准入归BFF、定义/pin归Platform、执行绑定仍独立未接通。冻结原请求与回执类型独立于Prepare/OAuth；shared error policy与BFF专用1.1错误tuple共同决定恢复，不根据retryable单bit推测。
+
+
+**恢复与并发：** 独立 `mcp-project-publication-recovery` IndexedDB journal 在首次 POST 前事务提交原 key/body/CAS，actor 单 pending；刷新仅恢复 unknown。reserve 返回既存命令则采用原命令且零 POST，跨 actor 不恢复。ACK 清退精确原意图；首次明确拒绝的 revise 使用事务内 firstRejectionOnly 条件，历史 unknown/晚到错误不能授新 key。存储不可用、坏记录及清退失败不降级 RAM、不冒成功。菜单/详情复用同 commands 与 picker，不把发布状态揉入通用投影 owner。
+
+**读取预算：** picker 先展示本人项目列表而非串行扫描所有项目；确认仅读取 1–32 个所选项目的 pin CAS，最多 4 个读 lane、128 总页和 10 秒总预算，取消/准入退休中断，失败不猜 absent。未读行不显示虚构“未发布”；真实 pin 状态在读取后显示。尚无正常浏览器像素/真实发布证据，不把组件测试或参考截图当一比一验收。
+
 ## 2026-10-24 图标暂存 App 接线（实施中）
 
 沿已批准方案，固定 BFF400fab6／Platform7d8115a。现 Hub 同源有限传输复用原session／body限额／总预算／取消；新增独立mcp-icon schema/client和draft控制器／选择组件，现MCP与API创建／配置复用，不把状态放AppFrame。浏览器只向同源Hub发命令；字节仅使用owner短PUT capability，凭据omit、redirect error、SHA／size固定。选图不创建连接器；ready selector进入原保存，unknown保原key/body/CAS；取消／替换只回收未绑定intent，已保存图由owner原事务处理，缺图省略保留。无签名引用持久化，关闭／reload遗留由owner到期清理兜底；Get只读不推进恢复。

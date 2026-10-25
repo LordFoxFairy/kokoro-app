@@ -1,3 +1,13 @@
+### 2026-10-25 并行集成与真实项目定义发布
+
+MCP发布39文件已在b710基础三方集成，保留已有CSP/Skills读恢复、API独立呈现、旧发送路由围栏和原49行诊断WIP。正式固定Platform dd8d536/BFF c124705，Register ACK后选项目、取消保留配置、已有详情管理发布、原命令持久恢复；发布不混同Prepare/OAuth，明确execution_ready=false。另接入外层Skills详情内Retry（原背景Retry被modal遮挡）及项目资源准入暂停/卸载的迟到ACK/后续批次退休，同主体保原File/key显式重试。
+
+Root正常配对仅更新Platform/BFF，备份与隔离恢复、精确两表扩展/noop、旧源在扩展库启动通过；App25源精确HMR，767其它原源保持。本人新无凭据URL QA实际注册201→picker取消回原详情→已有管理发布200→硬刷新→第二发布响应持有超时进入unknown→真实IndexedDB保原命令→原回执只读POST200恢复，pin 1→2且同revision，未Prepare/OAuth/模型执行。刷新宽网络窗truncated不作零自动写证明；最终原回执短窗完整，仅receipt读操作。非本人QA原Platform行/xmin及Agent/BFF/Billing原行/usage、其它进程核同；新增仅本人配置/connector/revision/pin与三条receipt，原Manus QA保持。
+
+1206非MD输入完整contract/lint/types/build/post-types通过；初完整默认5241通过/1治理脚本清单遗漏，现只补新generator强制检查、保原断言，最终architecture及全默认5242通过、输入零漂移。完整独立preview E2E零重试114通过、post-types0、原输入无漂移且自有监听已关闭；相关395/Skills38/项目43通过与独审仅是对应证据，正常Skills新动作及项目准入实际浏览器仍待验。另实际观察取消picker后短暂“编辑/正在加载”，加载无感未完成，继续查正确数据复用，不隐去状态冒丝滑。
+
+原始收据仅Root ignored mcp-project-publication-20261025、mcp-publication-ui-20261025、skills-marketplace-recovery-20261025。当前未push/PR/merge或提升Root gitlink；完整MCP、Skills、成功任务/Agent/首页/项目仍开放。
+
 ## 2026-10-25 独立 MCP/API 呈现与普通提交路由围栏
 
 修复MCP初次pending/error连带隐藏成功API卡片：保API入口、详情及MCP真实错误与独立重试，不伪报全空。普通发送回调绑定渲染时路径/当前选择，旧回调在项目、资料库、其它会话或新草稿已切换后零提交、不清原文；同草稿canonical URL补写、空engine首发、owner恢复与unknown原请求重试保持。

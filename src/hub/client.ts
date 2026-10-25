@@ -1,3 +1,4 @@
+import { createMcpProjectPublicationClient, type McpProjectPublicationClient } from "./mcp-project-publication-client";
 import { createMcpIconClient, type McpIconClient } from "./mcp-icon-client";
 import { type McpIconOperation, mcpIconSaveMatches } from "./mcp-icon.schema";
 import { projectSkillIdSchema } from "./project-skills.schema";
@@ -803,6 +804,7 @@ function idempotencyHeaders(
 
 export type HubClient = {
   mcpIcons?: McpIconClient;
+  mcpProjectPublication?: McpProjectPublicationClient;
   listPersonalSkills: (
     cursor?: string,
     signal?: AbortSignal,
@@ -958,6 +960,7 @@ export type HubClient = {
 export function createHubClient(): HubClient {
   return {
     mcpIcons: createMcpIconClient(requestMcpConnector),
+    mcpProjectPublication: createMcpProjectPublicationClient(),
     listPersonalSkills: (cursor, signal) =>
       createSkillPublishClient().listPublished(cursor, signal),
     getPublishedPersonalSkill: async (id, signal) => {

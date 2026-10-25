@@ -11,11 +11,12 @@ import type {
 } from "@/hub/mcp-connector.schema";
 import { useT } from "@/i18n/context";
 
-import { useProviderCreationCommands, useCustomApiManagementCommands, useMcpManagementCommands, useMcpPreparationCommands } from "./connector-command-context";
+import { useProviderCreationCommands, useCustomApiManagementCommands, useMcpManagementCommands, useMcpPreparationCommands, useMcpProjectPublicationCommands } from "./connector-command-context";
 import { McpConnectionList } from "./mcp-connection-list";
 import { McpConnectorEditorDialog } from "./mcp-connector-editor-dialog";
 import { useMcpTrial } from "./mcp-trial-context";
 import { CustomMcpDetailDialog } from "./custom-mcp-detail-dialog";
+import { McpProjectPublicationDialog } from "./mcp-project-publication-dialog";
 import type { McpCreateMode } from "./mcp-panel-model";
 import { McpProviderCatalogDialog } from "./mcp-provider-catalog-dialog";
 import { McpProviderDetailDialog } from "./mcp-provider-detail-dialog";
@@ -98,6 +99,8 @@ export function McpProjectionRead({
   const apiManagementStates = useSyncExternalStore(apiManagement.subscribe, apiManagement.getSnapshot, apiManagement.getSnapshot);
   const management = useMcpManagementCommands(client, identity);
   const managementStates = useSyncExternalStore(management.subscribe, management.getSnapshot, management.getSnapshot);
+  const publication = useMcpProjectPublicationCommands(client);
+  const publicationState = useSyncExternalStore(publication.subscribe, publication.getSnapshot, publication.getSnapshot);
   const commandBoundary = { subject: identity, admitted, generation: readGeneration };
   const owner = useMemo(() => ({ client, identity, admitted, readGeneration }), [client, identity, admitted, readGeneration]);
   const ownerRef = useRef<typeof owner | null>(owner);
@@ -117,6 +120,12 @@ export function McpProjectionRead({
     ...createdDetail.target, exact: true, entered: false, window: {},
     binding: { connectorType: "mcp", serverId: createdDetail.target.serverId },
   } : null);
+  const [publicationIntent, setPublicationIntent] = useState<{ target: McpServerCreationCompletion; window: object; owner: typeof owner } | null>(null);
+  const activePublication = publicationIntent?.owner === owner && publicationIntent.window === connectorIntent?.window ? publicationIntent : null;
+  useEffect(() => {
+    if (!activePublication) return;
+    return () => publication.pause();
+  }, [activePublication, publication]);
   const editorWindow = useRef<{ intent: object; controller: AbortController } | null>(null);
   useLayoutEffect(() => {
     const window = connectorIntent?.window;
@@ -687,7 +696,9 @@ export function McpProjectionRead({
         {...(onCreateMcp ? { onCreate: (mode: McpCreateMode, target?: HTMLElement | null) => { if (ownerRef.current === owner && admitted) onCreateMcp(mode, target); } } : {})}
       />
       </>}
-      {connectorIntent?.serverId && (connectorIntent.exact || connectorIntent.entered || editor?.server) ? (
+      {activePublication ? <McpProjectPublicationDialog client={client} commands={publication} boundary={commandBoundary}
+        target={activePublication.target} onClose={() => setPublicationIntent(null)} /> : null}
+      {!activePublication && connectorIntent?.serverId && (connectorIntent.exact || connectorIntent.entered || editor?.server) ? (
         <CustomMcpDetailDialog
           iconClient={client.mcpIcons} iconBoundary={commandBoundary}
           key={connectorIntent.serverId}
@@ -696,6 +707,27 @@ export function McpProjectionRead({
           pendingError={admitted && (actionError || (connectorIntent.exact ? exactEditorConnection.error : connectorState.error || (connectorProjection !== undefined && !selectedConnector)))}
           onRetry={() => { if (ownerRef.current !== owner || !admitted) return; setActionError(false); if (!connectorIntent.exact && (!selectedConnector || connectorState.error)) reload("connectors"); else setDetailRetry(value => value + 1); }}
           admitted={admitted}
+          publicationAvailable={publication.available && publicationState.recovery === "ready" && publicationState.phase !== "busy" &&
+            editor?.connector.connector_type === "mcp" && editor.server?.status !== "disabled" && editor.connector.status !== "revoked" &&
+            (publicationState.phase === "idle" || publicationState.target?.serverId === editor.server?.server_id &&
+              publicationState.target?.connectorId === editor.connector.connector_id && publicationState.target?.providerKey === editor.connector.provider_key)}
+          publicationRecoveryError={publication.available && publicationState.recovery === "error"}
+          onRetryPublicationRecovery={() => {
+            if (!connectorIntent || !admitted || ownerRef.current !== owner ||
+              editorWindow.current?.intent !== connectorIntent.window || publication.getSnapshot().recovery !== "error") return;
+            void publication.restore(commandBoundary);
+          }}
+          onPublish={() => {
+            if (!editor?.server || !connectorIntent || !admitted || ownerRef.current !== owner ||
+              editorWindow.current?.intent !== connectorIntent.window || !preparation.recoveryReady() ||
+              management.isBlocked(editor.connector.connector_id) || privateAuthorization.busy || actionId !== null ||
+              preparation.getSnapshot().some(item => item.serverId === editor.server!.server_id && item.kind !== "rejected") ||
+              editor.connector.connector_type !== "mcp" || editor.connector.status === "revoked" || editor.server.status === "disabled" ||
+              editor.server.server_id !== connectorIntent.serverId || editor.connector.server_id !== editor.server.server_id ||
+              editor.connector.connector_id !== connectorIntent.connectorId || editor.connector.provider_key !== connectorIntent.providerKey) return;
+            const target = { serverId: editor.server.server_id, connectorId: editor.connector.connector_id, providerKey: editor.connector.provider_key };
+            if (publication.open(target, commandBoundary)) setPublicationIntent({ target, window: connectorIntent.window, owner });
+          }}
           managementCommand={managementState}
           {...(connectorIntent.configurationSaved ? { configurationSaved: connectorIntent.configurationSaved } : {})}
           onResumeManagement={() => { if (connectorIntent) void runManagement("editor", connectorIntent.connectorId); }}

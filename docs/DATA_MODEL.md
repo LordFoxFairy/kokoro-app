@@ -1,3 +1,9 @@
+## 2026-10-25 项目定义发布的浏览器原意图日志（候选）
+
+本地 IndexedDB `kokoro-mcp-project-publication` version 1 / `intents`，key=`JSON.stringify([verifiedSubject])`，每 actor 一个未决发布命令；不是 Platform revision/pin 的事实副本。闭合 versioned envelope 保存 subject、target(serverId/connectorId/providerKey)、完整 original(server/connector/source CAS/有序项目与 pin CAS)、key、已发布闭合 failure tuple 及是否已记录失败。没有 URL、密钥、Headers、OAuth 数据或工具内容。首次写必须 commit 后才发送；刷新仅恢复 unknown，显式动作经当前 session/generation 重新准入，无自动 POST。
+
+reserve 原子保旧，failure 只单调收紧、晚到400/412不清掉 unknown 历史；原 typed ACK compareClear按exact原命令，首次明确拒绝改意图另用firstRejectionOnly原子条件并核当前精确tuple。取消/退出不删除未决日志，不以 TTL 丢未知请求。损坏/存储拒绝失败闭合；真实 IndexedDB 与跨tab刷新浏览器验收由最终集成执行。无新增后端表、owner或公共协议。
+
 ## 2026-10-24 图标选择草稿
 
 无新增业务数据库／本地持久事实。组件草稿只保存当前actor/window的原命令key/body/CAS、未绑定intent与瞬时preview；引用不入日志／IndexedDB／localStorage。保存提交即锁住所选intent，确认后移交owner绑定；结果未知保持原选择／原命令，关闭不误取消可能已绑定的intent。已知未绑定遗留可显式cancel，关页中断和未知Begin无ID由Platform到期清理，不以Get冒取消完成。

@@ -4152,10 +4152,12 @@ it.each(["form", "url"] as const)("%s MCP completion failure remains named and o
   expect(hub.preparePrivateMcpServer).toHaveBeenCalledOnce()
 })
 
-it.each(["recheck", "popup-close"] as const)("URL Save-and-publish reserves its popup before registration and retires the continuation on %s", async retirement => {
+it.each(["recheck", "dialog-close"] as const)("URL Save-and-publish registers without an OAuth popup and retires picker handoff on %s", async retirement => {
+  const publicationRecovery = await import("@/ui/mcp/mcp-project-publication-recovery")
+  const { createTestPublicationJournal } = await import("./mcp-publication-journal-fixture")
+  vi.spyOn(publicationRecovery, "createBrowserMcpProjectPublicationRecovery").mockImplementation(createTestPublicationJournal)
   const pageClients = await import("@/ui/shell/page-clients")
-  const popup = { closed: false, opener: {}, close: vi.fn(), location: { replace: vi.fn() } }
-  const open = vi.spyOn(window, "open").mockReturnValue(popup as unknown as Window)
+  const open = vi.spyOn(window, "open").mockReturnValue(null)
   let acknowledge!: () => void
   const pending = new Promise<void>(resolve => { acknowledge = resolve })
   const registration = mcpCreationRegistration()
@@ -4167,60 +4169,60 @@ it.each(["recheck", "popup-close"] as const)("URL Save-and-publish reserves its 
   const view = render(apiCreationOverlay(boundary, "url"))
   fireEvent.change(screen.getByRole("textbox", { name: /^服务器名称\*?$/ }), { target: { value: "Creation MCP" } })
   fireEvent.change(screen.getByRole("textbox", { name: /^服务器 URL\*?$/ }), { target: { value: registration.server.server_url } })
+  await waitFor(() => expect(screen.getByRole("button", { name: "保存并发布" })).toBeEnabled())
   fireEvent.click(screen.getByRole("button", { name: "保存并发布" }))
-  expect(open).toHaveBeenCalledOnce()
+  expect(open).not.toHaveBeenCalled()
   expect(hub.registerPrivateMcpServer).toHaveBeenCalledOnce()
-  expect(popup.opener).toBeNull()
   if (retirement === "recheck") view.rerender(apiCreationOverlay({ ...boundary, admitted: false, generation: 2 }, "url"))
-  else {
-    popup.closed = true
-    await waitFor(() => expect(hub.registerPrivateMcpServer.mock.calls[0]?.[2]?.aborted).toBe(true))
-  }
-  expect(popup.close).toHaveBeenCalledTimes(retirement === "recheck" ? 1 : 0)
+  else view.rerender(apiCreationOverlay(boundary, null))
+  await waitFor(() => expect(hub.registerPrivateMcpServer.mock.calls[0]?.[2]?.aborted).toBe(true))
   await act(async () => { acknowledge(); await pending })
   expect(hub.preparePrivateMcpServer).not.toHaveBeenCalled()
   expect(hub.beginMcpConnectorAuthorization).not.toHaveBeenCalled()
-  expect(popup.location.replace).not.toHaveBeenCalled()
+  expect(screen.queryByRole("dialog", { name: "发布到项目" })).not.toBeInTheDocument()
 })
 
-it("a blocked URL Save-and-publish popup does not register a server as a hidden side effect", async () => {
+it("a blocked browser popup cannot prevent URL registration and project selection", async () => {
+  const publicationRecovery = await import("@/ui/mcp/mcp-project-publication-recovery")
+  const { createTestPublicationJournal } = await import("./mcp-publication-journal-fixture")
+  vi.spyOn(publicationRecovery, "createBrowserMcpProjectPublicationRecovery").mockImplementation(createTestPublicationJournal)
   const pageClients = await import("@/ui/shell/page-clients")
-  vi.spyOn(window, "open").mockReturnValue(null)
-  const hub = { ...apiCreationHub(), registerPrivateMcpServer: vi.fn().mockResolvedValue(mcpCreationRegistration()) }
+  const open = vi.spyOn(window, "open").mockReturnValue(null)
+  const registration = mcpCreationRegistration()
+  const hub = { ...apiCreationHub(), registerPrivateMcpServer: vi.fn().mockResolvedValue(registration),
+    getPrivateMcpServer: vi.fn().mockResolvedValue(registration.server), getMcpConnector: vi.fn().mockResolvedValue(registration.connector) }
   vi.spyOn(pageClients, "browserHubClient").mockReturnValue(hub)
   render(apiCreationOverlay({ admitted: true, subject: "blocked-publish-actor", generation: 1 }, "url"))
   fireEvent.change(screen.getByRole("textbox", { name: /^服务器名称\*?$/ }), { target: { value: "Creation MCP" } })
   fireEvent.change(screen.getByRole("textbox", { name: /^服务器 URL\*?$/ }), { target: { value: "https://mcp.example.test/creation" } })
+  await waitFor(() => expect(screen.getByRole("button", { name: "保存并发布" })).toBeEnabled())
   fireEvent.click(screen.getByRole("button", { name: "保存并发布" }))
-  expect(hub.registerPrivateMcpServer).not.toHaveBeenCalled()
-  expect(await screen.findByRole("alert")).toBeVisible()
+  expect(await screen.findByRole("dialog", { name: "发布到项目" })).toBeVisible()
+  expect(hub.registerPrivateMcpServer).toHaveBeenCalledOnce()
+  expect(open).not.toHaveBeenCalled()
 })
 
-it("URL Save-and-publish closes the reservation without an error when owner discovery needs no OAuth", async () => {
+it("URL definition publication does not run discovery or OAuth before handing off its registered entity", async () => {
   const { Dialog, DialogContent } = await import("@/components/ui/dialog")
   const { UrlMcpForm } = await import("@/ui/mcp/mcp-url-form")
   const { createMcpServerCreationFlow } = await import("@/ui/mcp/mcp-server-creation-flow")
-  const popup = { closed: false, opener: {}, close: vi.fn(), location: { replace: vi.fn() } }
-  vi.spyOn(window, "open").mockReturnValue(popup as unknown as Window)
+  const open = vi.spyOn(window, "open").mockReturnValue(null)
   const registration = mcpCreationRegistration()
-  let prepared = false
   const hub = { registerPrivateMcpServer: vi.fn().mockResolvedValue(registration), beginMcpConnectorAuthorization: vi.fn(),
-    getPrivateMcpServer: vi.fn(async () => ({ ...registration.server, prepare_status: prepared ? "ready" as const : "pending_prepare" as const, state_version: prepared ? "3" : "2" })),
-    getMcpConnector: vi.fn(async () => ({ ...registration.connector, enabled: prepared, status: prepared ? "active" as const : "pending" as const })),
-    preparePrivateMcpServer: vi.fn(async () => { prepared = true; return { ...registration, declarations: [] } }) }
+    getPrivateMcpServer: vi.fn().mockResolvedValue(registration.server), getMcpConnector: vi.fn().mockResolvedValue(registration.connector), preparePrivateMcpServer: vi.fn() }
   const boundary = { admitted: true, subject: "publish-no-oauth", generation: 1 }
   const flow = createMcpServerCreationFlow({ client: hub, preparation: createMcpPreparationCommands({ canPrepare: () => true, client: hub, boundary, onConfirmed: vi.fn() }), boundary, onChanged: vi.fn() })
-  const onDone = vi.fn().mockResolvedValue(undefined)
-  render(<LocaleProvider><Dialog open><DialogContent><UrlMcpForm flow={flow} boundary={boundary} onCancel={vi.fn()} onDone={onDone} /></DialogContent></Dialog></LocaleProvider>)
+  const onDone = vi.fn().mockResolvedValue(undefined), onPublish = vi.fn().mockResolvedValue(undefined)
+  render(<LocaleProvider><Dialog open><DialogContent><UrlMcpForm flow={flow} boundary={boundary} onCancel={vi.fn()} onDone={onDone} onPublish={onPublish} /></DialogContent></Dialog></LocaleProvider>)
   fireEvent.change(screen.getByRole("textbox", { name: /^服务器名称\*?$/ }), { target: { value: "Creation MCP" } })
   fireEvent.change(screen.getByRole("textbox", { name: /^服务器 URL\*?$/ }), { target: { value: registration.server.server_url } })
+  await waitFor(() => expect(screen.getByRole("button", { name: "保存并发布" })).toBeEnabled())
   fireEvent.click(screen.getByRole("button", { name: "保存并发布" }))
-  await waitFor(() => expect(onDone).toHaveBeenCalledOnce())
-  expect(popup.close).toHaveBeenCalledOnce()
-  expect(popup.location.replace).not.toHaveBeenCalled()
-  expect(hub.preparePrivateMcpServer).toHaveBeenCalledOnce()
+  await waitFor(() => expect(onPublish).toHaveBeenCalledOnce())
+  expect(onDone).not.toHaveBeenCalled()
+  expect(open).not.toHaveBeenCalled()
+  expect(hub.preparePrivateMcpServer).not.toHaveBeenCalled()
   expect(hub.beginMcpConnectorAuthorization).not.toHaveBeenCalled()
-  expect(screen.queryByRole("alert")).not.toBeInTheDocument()
 })
 
 it.each([false, true])("private detail Prepare restores the same original command after reopening (recheck: %s)", async recheck => {

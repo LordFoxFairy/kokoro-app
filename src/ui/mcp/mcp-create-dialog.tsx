@@ -1,6 +1,9 @@
 "use client";
 
-import { useCallback, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { Button } from "@/components/ui/button";
+import { McpProjectPublicationDialog } from "./mcp-project-publication-dialog";
+
+import { useCallback, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type RefObject } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { useT } from "@/i18n/context";
 import { cn } from "@/lib/utils";
@@ -9,7 +12,7 @@ import type { HubClient } from "@/hub/client";
 import styles from "./mcp-create-dialog.module.css";
 import type { McpCreateMode } from "./mcp-panel-model";
 import { McpCreateDismissContext } from "./mcp-create-dismiss-context";
-import { CustomApiCreationForm, JsonMcpCreationForm, PrivateMcpCreationForm, useConnectorCommandBoundary } from "./connector-command-context";
+import { useMcpProjectPublicationCommands, CustomApiCreationForm, JsonMcpCreationForm, PrivateMcpCreationForm, useConnectorCommandBoundary } from "./connector-command-context";
 import type { McpServerCreationCompletion } from "./mcp-server-creation-flow";
 import { McpProjectionRead } from "./mcp-projection-read";
 
@@ -30,12 +33,16 @@ export function McpCreateDialog({
 }) {
   const t = useT();
   const boundary = useConnectorCommandBoundary(client);
+  const publication = useMcpProjectPublicationCommands(client);
+  const publicationState = useSyncExternalStore(publication.subscribe, publication.getSnapshot, publication.getSnapshot);
   const lifetime = useMemo(() => ({ client, mode, open, subject: boundary.subject }), [client, mode, open, boundary.subject]);
   const committed = useRef<typeof lifetime | null>(null);
   const currentBoundary = useRef(boundary);
   useLayoutEffect(() => { currentBoundary.current = boundary; }, [boundary]);
   const [completed, setCompleted] = useState<{ lifetime: typeof lifetime; target: McpServerCreationCompletion } | null>(null);
   if (completed && completed.lifetime !== lifetime) setCompleted(null);
+  const [publishing, setPublishing] = useState(false);
+  const [publicationClosedFor, setPublicationClosedFor] = useState<typeof lifetime | null>(null);
   const handingOff = useRef(false);
   const focusFrame = useRef<number | null>(null);
   const dismissals = useRef(new Set<() => void>());
@@ -57,6 +64,7 @@ export function McpCreateDialog({
       if (!value) {
         committed.current = null;
         dismissals.current.forEach(dismiss => dismiss());
+        publication.dismiss();
       }
       onOpenChange(value);
     }
@@ -76,10 +84,20 @@ export function McpCreateDialog({
     } else close();
   };
 
-  if (completed?.lifetime === lifetime && open && boundary.subject !== null) {
+  const publishCreated = async (target: McpServerCreationCompletion, current: () => boolean) => {
+    if (!publication.available || !current() || !publication.open(target, boundary)) throw new Error("MCP publication handoff retired");
+    setPublishing(true);
+    await complete(target, current);
+  };
+  const resumed = mode === "url" && (publicationState.phase === "unknown" || publicationState.phase === "rejected") ? publicationState.target : null;
+  const detail = completed?.lifetime === lifetime ? completed.target : resumed;
+  if (detail && open && boundary.subject !== null) {
+    if ((publishing || resumed !== null && publicationClosedFor !== lifetime) && publicationState.target) {
+      return <McpProjectPublicationDialog client={client} commands={publication} boundary={boundary} target={publicationState.target} onClose={() => { setPublishing(false); setPublicationClosedFor(lifetime); if (!completed) setCompleted({ lifetime, target: detail }); }} />;
+    }
     return <McpProjectionRead client={client} identity={boundary.subject} admitted={boundary.admitted}
       readGeneration={boundary.generation} initialView="connections"
-      createdDetail={{ target: completed.target, onClose: close, ...(returnFocusRef ? { returnFocusRef } : {}) }} />;
+      createdDetail={{ target: detail, onClose: close, ...(returnFocusRef ? { returnFocusRef } : {}) }} />;
   }
 
   return (
@@ -121,7 +139,7 @@ export function McpCreateDialog({
         ) : mode === "json" ? (
           <JsonMcpCreationForm onCancel={close} onDone={complete} />
         ) : (
-          <PrivateMcpCreationForm mode={mode} onCancel={close} onDone={complete} />
+          <><PrivateMcpCreationForm mode={mode} onCancel={close} onDone={complete} {...(mode === "url" && publication.available && publicationState.recovery === "ready" ? { onPublish: publishCreated } : {})} />{mode === "url" && publicationState.recovery === "error" ? <div role="alert"><p>{t("mcp.publishRecoveryError")}</p><Button variant="outline" onClick={() => void publication.restore(boundary)}>{t("mcp.publishRetryRead")}</Button></div> : null}</>
         )}</McpCreateDismissContext.Provider>
       </DialogContent>
     </Dialog>

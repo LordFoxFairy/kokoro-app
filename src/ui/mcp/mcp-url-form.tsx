@@ -53,6 +53,7 @@ export function UrlMcpForm({
   boundary,
   onCancel,
   onDone,
+  onPublish,
   onAuthorizationNavigate,
   showTitle = true,
   title,
@@ -64,6 +65,7 @@ export function UrlMcpForm({
   boundary: ProjectReadBoundary;
   onCancel: () => void;
   onDone: (result: McpServerCreationCompletion, current: () => boolean) => Promise<void>;
+  onPublish?: (result: McpServerCreationCompletion, current: () => boolean) => Promise<void>;
   onAuthorizationNavigate?: (url: string) => void;
   showTitle?: boolean;
   title?: string;
@@ -82,7 +84,7 @@ export function UrlMcpForm({
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
   const clearSecrets = useCallback(() => { setHeaders(current => current.map(header => ({ ...header, value: "" }))); setClientSecret(""); }, []);
-  const creation = useMcpServerCreation(flow, boundary, onCancel, onDone, clearSecrets, onAuthorizationNavigate);
+  const creation = useMcpServerCreation(flow, boundary, onCancel, onDone, clearSecrets, onAuthorizationNavigate, onPublish);
   const { state, completion, admitted, submitting, locked, editable, error, ready: isReady, needsOAuth: requiresOAuth } = creation;
   const configuredHeaders = headers.filter((header) => header.name.trim());
   const headerIsPartial =
@@ -107,12 +109,13 @@ export function UrlMcpForm({
     !duplicateHeader &&
     !oauthIsPartial &&
     !submitting && !locked && flow.available;
-  const registerAndPrepare = async (openOAuth: boolean): Promise<void> => {
+  const registerAndPrepare = async (publish: boolean): Promise<void> => {
     if (!canSubmit && !state.unknown && !state.registered) return;
-    await creation.save({ display_name: name.trim(), server_url: url.trim(),
+    const save = publish || state.publishRequested ? creation.saveForPublication : creation.save;
+    await save({ display_name: name.trim(), server_url: url.trim(),
       ...(showHeaders && configuredHeaders.length ? { headers: configuredHeaders.map(header => ({ name: header.name.trim().toLowerCase(), value: header.value })) } : {}),
       ...(showOAuth && clientId.trim() ? { oauth_client: { client_id: clientId.trim(), client_secret: clientSecret } } : {}),
-    }, openOAuth);
+    });
   };
   const submitLabel = t(submitting ? "mcp.submitting" : state.unknown ? creation.mayResume ? "mcp.retryOriginal" : "mcp.recovery.inspectRequired" : "mcp.save");
 
@@ -312,7 +315,7 @@ export function UrlMcpForm({
         </Button>
         <Button
           type="button"
-          disabled={!admitted || submitting || !creation.mayResume || (!state.unknown && !canSubmit)}
+          disabled={!onPublish || !admitted || submitting || !creation.mayResume || (!state.unknown && !canSubmit)}
           onClick={() => void registerAndPrepare(true)}
         >
           {t("mcp.saveAndPublish")}

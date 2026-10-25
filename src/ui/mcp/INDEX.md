@@ -194,3 +194,9 @@ API／JSON创建窗口的每次等待由use-connector-creation-form持有独立c
 ## 自定义 MCP 表单视觉修正（2026-10-24）
 
 按已归档 Manus 实测修正表单 surface/阴影、普通 URL 输入、备注圆角与 headers 标签层级，尺寸和提交工作流不变。隔离 CSS/DOM 证据只证明本表单视觉；HTTP 只读和图标上传禁用仍是明确未闭环项，不称完整对齐。视觉夹具无论 Chromium 启动或关闭失败都释放 Vite 资源。
+
+## URL MCP 项目定义发布（2026-10-25 候选）
+
+`mcp-url-form` 的保存并发布走 Register ACK → 独立 `mcp-project-publication-dialog`，不预开 OAuth、不暗跑 Prepare。`mcp-project-publication-commands` 由原 actor shell 持有精确原命令；取消 picker 保留已创建实体与精确详情。项目由既有本人 project reader 读取，pin 读包括墓碑 CAS；ACK 只显示定义发布、明确 execution_ready=false。异常仅 typed receipt/已发布 same_command 策略显式恢复；首次明确拒绝的修改须新输入，receipt 404不证明未提交。
+
+发布恢复 journal 与 commands 分离：日志只存非秘密原命令，首次 POST 前持久化、原 ACK 后精确清退；重载只恢复未知状态。原子 first-rejection 清退保护跨 tab 竞争。项目列表首屏独立于 pin 扫描，确认只读已选 CAS（4 lanes、128 总页、10秒），关闭中断且不隐式发写。

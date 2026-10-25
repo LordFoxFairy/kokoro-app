@@ -157,6 +157,7 @@ Settings 的正式入口是 `src/ui/settings/sections/skills-settings-section.ts
 详情只允许同版本、已安装启用的示例进入正式 handoff；内部 installed_source_ref 保存原安装 pin，不能由系列 added 或 current source 推导。外部目录和 Settings 都保留真实 action card 身份，失败不关闭详情或回落纯文本；preview 单独保持文字预填。实际执行仍由 owner 判定。
 
 - 目录重核：外层保同 actor 的搜索/筛选/精确详情 locator；`use-catalog-skill-installation` 拥有本代安装动作与冻结未知命令。详情/包文件展示仍按代际退休，`SkillPackageFiles` 仅渲染 owner 文件树。分享未知墓碑与当代 ACK 分离，导入只读/已确认结果重核退役，未知恢复意图保留。
+- 外层目录在搜索／重核期间打开的 pending 详情，目录读取失败后可在当前弹窗内显式重试；沿当前筛选重读并保留原精确 locator，不要求关闭弹窗，也不重放安装／发布命令。未准入期间不提供重试。
 
 ## 2026-10-16 Settings Explore 展示与地址恢复
 

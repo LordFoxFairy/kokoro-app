@@ -77,6 +77,10 @@ export function CustomMcpDetailDialog({
   onSaveConfiguration,
   onPrepare,
   onTrial,
+  onPublish,
+  publicationAvailable = false,
+  publicationRecoveryError = false,
+  onRetryPublicationRecovery,
   onAuthorize,
   authorizationBusy = false,
   onDisconnect,
@@ -125,6 +129,11 @@ export function CustomMcpDetailDialog({
   }) => void;
   onPrepare: () => void;
   onTrial?: () => boolean;
+  /** Publishes the admitted saved definition, never the configuration draft. */
+  onPublish?: () => void;
+  publicationAvailable?: boolean;
+  publicationRecoveryError?: boolean;
+  onRetryPublicationRecovery?: () => void;
   onAuthorize: () => void;
   authorizationBusy?: boolean;
   onDisconnect: () => void;
@@ -529,7 +538,7 @@ export function CustomMcpDetailDialog({
                       断开连接
                     </DropdownMenuItem>
                     <DropdownMenuSeparator className={styles.managementDivider} />
-                    <DropdownMenuItem disabled>
+                    <DropdownMenuItem disabled={locked || preparationState === "running" || !publicationAvailable || !onPublish} onSelect={() => onPublish?.()}>
                       <FolderOpen aria-hidden="true" />
                       发布到项目
                     </DropdownMenuItem>
@@ -554,6 +563,12 @@ export function CustomMcpDetailDialog({
             <div className={styles.detailBody}>
               {managementStatus}
               {recoveryStatus}
+              {publicationRecoveryError ? <Alert variant="destructive" role="alert">
+                <AlertDescription>{t("mcp.publishRecoveryError")}</AlertDescription>
+                <Button type="button" variant="outline" disabled={!ready || !onRetryPublicationRecovery} onClick={() => onRetryPublicationRecovery?.()}>
+                  {t("mcp.publishRetryRead")}
+                </Button>
+              </Alert> : null}
               {actionError ? (
                 <Alert variant="destructive" role="alert">
                   <AlertDescription>{t("mcp.actionFailed")}</AlertDescription>

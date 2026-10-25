@@ -1,0 +1,30 @@
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { LocaleProvider } from "@/i18n/context";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { UrlMcpForm } from "@/ui/mcp/mcp-url-form";
+import { createMcpServerCreationFlow } from "@/ui/mcp/mcp-server-creation-flow";
+import { createMcpPreparationCommands } from "@/ui/mcp/mcp-preparation-commands";
+import type { McpConnector, McpPrivateServer } from "@/hub/mcp-connector.schema";
+beforeEach(() => localStorage.setItem("kokoro.locale", "zh"));
+afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+
+it("URL Save and publish confirms only registration, then hands the exact entity to the project picker without Prepare or OAuth", async () => {
+  const server: McpPrivateServer = { availability: "unavailable", server_id: "server-publish", display_name: "Publication", server_url: "https://mcp.example.test/mcp", notes: "", status: "registered", state_version: "1", headers: [], prepare_status: "pending_prepare", declarations: [], declarations_available: false };
+  const connector: McpConnector = { availability: "unavailable", connector_id: "connector-publish", server_id: server.server_id, provider_key: "provider-publish", connector_type: "mcp", display_name: "Publication", status: "pending", enabled: false, approved_scopes: [], state_version: "1" };
+  const client = { registerPrivateMcpServer: vi.fn().mockResolvedValue({ server, connector, replayed: false }), getPrivateMcpServer: vi.fn().mockResolvedValue(server), getMcpConnector: vi.fn().mockResolvedValue(connector), preparePrivateMcpServer: vi.fn(), beginMcpConnectorAuthorization: vi.fn() };
+  const boundary = { subject: "actor", generation: 1, admitted: true };
+  const flow = createMcpServerCreationFlow({ client, preparation: createMcpPreparationCommands({ client, boundary, onConfirmed: vi.fn(), canPrepare: () => true }), boundary, onChanged: vi.fn() });
+  const onPublish = vi.fn().mockResolvedValue(undefined), onDone = vi.fn();
+  const popup = vi.spyOn(window, "open").mockReturnValue(null);
+  render(<LocaleProvider><Dialog open><DialogContent><UrlMcpForm flow={flow} boundary={boundary} onCancel={vi.fn()} onDone={onDone} onPublish={onPublish} /></DialogContent></Dialog></LocaleProvider>);
+  fireEvent.change(screen.getByRole("textbox", { name: /^服务器名称/ }), { target: { value: "Publication" } });
+  fireEvent.change(screen.getByRole("textbox", { name: /^服务器 URL/ }), { target: { value: server.server_url } });
+  fireEvent.click(screen.getByRole("button", { name: "保存并发布" }));
+  await waitFor(() => expect(onPublish).toHaveBeenCalledWith({ serverId: server.server_id, connectorId: connector.connector_id, providerKey: connector.provider_key }, expect.any(Function)));
+  expect(popup).not.toHaveBeenCalled();
+  expect(client.registerPrivateMcpServer).toHaveBeenCalledOnce();
+  expect(client.preparePrivateMcpServer).not.toHaveBeenCalled();
+  expect(client.beginMcpConnectorAuthorization).not.toHaveBeenCalled();
+  expect(onDone).not.toHaveBeenCalled();
+});

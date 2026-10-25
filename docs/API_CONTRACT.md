@@ -1,3 +1,9 @@
+## 2026-10-25 URL MCP 项目定义发布消费者（候选）
+
+固定 BFF `c124705f5ab7f8aa8dac4a648f7e8e952661926f` browser-private profile1.1.0，原件 SHA256 `b743f452bf28c6c349d8d9fdf587dbcf42d9bbd8c97788a34615d603a497ae67`，精确来源见 `contract/bff-mcp-project-publication-source.json`；已逐字比对生产者 Git 对象。Public24 不变。新窄生成器从该原件生成 Zod请求/响应/闭合错误；客户端与同源桥均核status+code+retryable，原ACK须绑定server/connector/source CAS及每project/pin CAS，execution_ready仅false。
+
+三条同源入口：POST `/api/hub/mcp/servers/{server_id}/project-publications`；GET `/api/hub/projects/{project_id}/mcp-pins`；POST `/api/hub/mcp/project-publication-receipts`。映射BFF同尾路径 `/browser/v1`，仅定义发布/原回执，不发送授权/执行请求。项目多选1–32、canonicalID、每pin absent/current，原失败不换body/key。首次自有明确400/412且无unknown历史才允许用户重新读取并修改意图；已未知、receipt任何失败或不匹配tuple均保留原命令。
+
 ## 2026-10-24 MCP 图标五私有操作消费（实施中）
 
 固定 BFF400fab6e89c2fde77eb9f4917271e3e09a0c62da：/api/hub/mcp/icons/uploads POST、import POST、{intent_id} GET、{intent_id}/complete POST、{intent_id}/cancel POST，各映射原/browser/v1路径。四写保Idempotency-Key、原body与十进制CAS；主体来自Product session。请求/成功运行时schema在hub/mcp-icon.schema.ts，错误沿既有mcp profile1.1，不改Public24或错误artifact；GET不携body/key、不自动恢复。原Server／CustomAPI create/update承接icon selector，update可clear_icon=true互斥；响应icon metadata及短preview_reference独立，失败不猜保存成功。

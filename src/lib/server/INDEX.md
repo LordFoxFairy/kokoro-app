@@ -133,3 +133,5 @@ runtime token、内部服务地址、workload secret 或后端隔离键。
 手写部署/租户 header；浏览器 client 只能调用同源 BFF path。
 
 - `model-publish-body.ts`：仅模型修订发布的有界EOF校验，证明Next空POST流，无正文生成或模型执行。
+
+- `mcp-project-publication.ts`：三条 URL MCP 定义发布 browser-private 薄桥（发布、项目 pin 读取、原请求回执）；当前 Session/同源写、body/key 原封保留、10s 总预算、65KiB 请求/256KiB 响应、完整EOF及原实体/CAS绑定。无 owner 直连、SQL、重试或公开 API 扩展。移除 pin 接口本片不开放。

@@ -3,7 +3,7 @@
 import { Cable, ChevronDown, ChevronRight, ListFilter, Plus, Upload } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
-import { useCallback, useRef, useState, type MouseEvent, type SetStateAction } from "react"
+import { useCallback, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type SetStateAction } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -110,9 +110,33 @@ export function KokoroProjectWorkspace({
   const [resourcesOpen, setResourcesOpen] = useState(false)
   const [resourceQuery, setResourceQuery] = useState("")
   const [resourceKind, setResourceKind] = useState<ResourceKind>("all")
-  const resources = useProjectResources(projectRef, preview, onListProjectResources)
-  const [resourceUploads, setResourceUploads] = useState<readonly ResourceUploadIntent[]>([])
-  const activeResourceUploads = useRef(new Set<string>())
+  const resourcesAvailable = preview || projectReadBoundary === undefined
+    || projectReadBoundary.admitted && projectReadBoundary.subject !== null
+  const resourceSubject = projectReadBoundary?.subject
+  const resourceGeneration = projectReadBoundary?.generation
+  const resourceContext = useMemo(() => ({ projectRef, preview, resourceSubject, resourceGeneration, resourcesAvailable }),
+    [projectRef, preview, resourceSubject, resourceGeneration, resourcesAvailable])
+  const resourceIdentity = JSON.stringify([projectRef, preview, resourceSubject])
+  const resources = useProjectResources(projectRef, preview, onListProjectResources, resourceContext, resourcesAvailable)
+  const [uploadState, setUploadState] = useState<{ identity: string; context: object; items: readonly ResourceUploadIntent[] }>(
+    { identity: resourceIdentity, context: resourceContext, items: [] })
+  if (uploadState.context !== resourceContext) {
+    // A paused attempt may have committed. Retain its original file/key for
+    // explicit same-owner recovery, but never resume the batch automatically.
+    setUploadState({ identity: resourceIdentity, context: resourceContext,
+      items: uploadState.identity !== resourceIdentity ? [] : uploadState.items.map((intent) => intent.status === "uploading"
+        ? { ...intent, status: "failed", error: "upload_network_error", retryable: true } : intent) })
+  }
+  const resourceUploads = resourcesAvailable && uploadState.context === resourceContext ? uploadState.items : []
+  const setResourceUploads = (update: (items: readonly ResourceUploadIntent[]) => readonly ResourceUploadIntent[]) => {
+    setUploadState((current) => current.context === resourceContext ? { ...current, items: update(current.items) } : current)
+  }
+  const resourceScope = useRef<{ context: object; active: boolean; uploads: Set<string> } | null>(null)
+  useLayoutEffect(() => {
+    const scope = { context: resourceContext, active: true, uploads: new Set<string>() }
+    resourceScope.current = scope
+    return () => { scope.active = false }
+  }, [resourceContext])
   const resourceInputRef = useRef<HTMLInputElement | null>(null)
   const resourceSearchRef = useRef<HTMLInputElement | null>(null)
   const [websitesOpen, setWebsitesOpen] = useState(false)
@@ -176,15 +200,20 @@ export function KokoroProjectWorkspace({
   })
 
   const submitResourceUpload = async (intent: ResourceUploadIntent) => {
-    if (activeResourceUploads.current.has(intent.id)) return
-    activeResourceUploads.current.add(intent.id)
+    const scope = resourceScope.current
+    if (!resourcesAvailable || !scope?.active || scope.context !== resourceContext || scope.uploads.has(intent.id)) return
+    const current = () => scope.active && resourceScope.current === scope
+    scope.uploads.add(intent.id)
     setResourceUploads((current) => current.map((item) => item.id === intent.id ? { ...item, status: "uploading", error: undefined } : item))
     try {
       if (!onUploadProjectResource) throw new ProjectResourceUploadError("upload_not_configured", false)
       const receipt = await onUploadProjectResource(intent.file, intent.key)
+      if (!current()) return
       await resources.confirmUpload(receipt)
+      if (!current()) return
       setResourceUploads((current) => current.filter((item) => item.id !== intent.id))
     } catch (error) {
+      if (!current()) return
       const uploadError = error instanceof ProjectResourceUploadError ? error : null
       setResourceUploads((current) => current.map((item) => item.id === intent.id ? {
         ...item,
@@ -193,18 +222,23 @@ export function KokoroProjectWorkspace({
         retryable: uploadError?.retryable ?? true,
       } : item))
     } finally {
-      activeResourceUploads.current.delete(intent.id)
+      scope.uploads.delete(intent.id)
     }
   }
 
   const handleResourceFiles = async (files: FileList) => {
+    const scope = resourceScope.current
+    if (!resourcesAvailable || !scope?.active || scope.context !== resourceContext) return
     const intents = Array.from(files).map((file): ResourceUploadIntent => {
       const identity = crypto.randomUUID()
       return { id: identity, file, key: `project-resource:${identity}`, status: "uploading", error: undefined, retryable: true }
     })
     if (intents.length === 0) return
     setResourceUploads((current) => [...current, ...intents])
-    for (const intent of intents) await submitResourceUpload(intent)
+    for (const intent of intents) {
+      if (!scope.active || resourceScope.current !== scope) break
+      await submitResourceUpload(intent)
+    }
   }
 
   const handleScheduledTaskSave = async (task: {
@@ -413,6 +447,7 @@ export function KokoroProjectWorkspace({
         setSelectedInstructionRevision={setSelectedInstructionRevision}
         projectInstructionHistory={projectInstructionHistory}
         {...(onSaveProjectInstructions === undefined ? {} : { onSaveProjectInstructions })}
+        resourcesAvailable={resourcesAvailable}
         resourcesOpen={resourcesOpen}
         setResourcesOpen={setResourcesOpen}
         resourceQuery={resourceQuery}

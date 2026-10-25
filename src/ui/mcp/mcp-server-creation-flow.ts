@@ -11,11 +11,11 @@ export type McpCreationFacts = Readonly<{ server: McpPrivateServer; connector: M
 /** Navigation carries only the acknowledged binding, never configuration or secrets. */
 export type McpServerCreationCompletion = Readonly<{ serverId: string; connectorId: string; providerKey: string }>;
 export type McpServerCreationState = Readonly<{
-  registered: boolean; busy: boolean; unknown: "register" | "prepare" | null;
+  registered: boolean; publishRequested: boolean; busy: boolean; unknown: "register" | "prepare" | null;
   facts: McpCreationFacts | null; name: string; error: boolean; failure?: ConnectorCommandFailure;
   registrationRejection: "url_conflict" | null;
 }>;
-type Intent<T> = { body: T; key: string; uncertain: boolean; confirmed: boolean; failure: ConnectorCommandFailure | undefined };
+type Intent<T> = { body: T; key: string; uncertain: boolean; confirmed: boolean; prepareAfterRegistration: boolean; failure: ConnectorCommandFailure | undefined };
 type Flight = { kind: "register" | "prepare" | "read"; controller: AbortController; scope: McpCreationScope; read?: Promise<McpCreationFacts | null> };
 type Client = Pick<HubClient, "registerPrivateMcpServer" | "preparePrivateMcpServer" | "getPrivateMcpServer" | "getMcpConnector" | "beginMcpConnectorAuthorization">;
 
@@ -28,7 +28,7 @@ export function createMcpServerCreationFlow(options: { client: Client; preparati
   let releasePreparation: (() => void) | undefined;
   let locator: { serverId: string; connectorId: string } | undefined;
   let active: Flight | undefined;
-  let state: McpServerCreationState = { registered: false, busy: false, unknown: null, facts: null, name: "", error: false, registrationRejection: null };
+  let state: McpServerCreationState = { registered: false, publishRequested: false, busy: false, unknown: null, facts: null, name: "", error: false, registrationRejection: null };
   const listeners = new Set<() => void>();
   const preparationState = () => {
     const target = locator;
@@ -147,7 +147,7 @@ export function createMcpServerCreationFlow(options: { client: Client; preparati
       if (active === flight) active = undefined;
       publish({ facts: null });
       if (!current) { reconcileLate(); return false; }
-      return prepare(scope);
+      return intent.prepareAfterRegistration ? prepare(scope) : Boolean(await read(scope, true));
     } catch (error) {
       if (!retired && registration === intent && active === flight) {
         // A first verified semantic rejection is not an unknown commit. A
@@ -168,7 +168,7 @@ export function createMcpServerCreationFlow(options: { client: Client; preparati
       if (preparationKind() === "completed") preparation.finish(locator.serverId, scope.boundary);
       else if (preparationKind() === "rejected") preparation.retireTarget(locator.serverId, locator.connectorId);
     }
-    locator = undefined; publish({ name: "", facts: null, error: false, registrationRejection: null }); return true;
+    locator = undefined; publish({ name: "", facts: null, error: false, registrationRejection: null, publishRequested: false }); return true;
   };
   return {
     instanceId: crypto.randomUUID(), client,
@@ -204,17 +204,19 @@ export function createMcpServerCreationFlow(options: { client: Client; preparati
     refresh: read,
     pause: (scope: McpCreationScope) => { if (matches(scope)) cancel(); },
     prepare,
-    submit: (input: McpPrivateServerRegistrationInput, scope: McpCreationScope) => {
+    submit: (input: McpPrivateServerRegistrationInput, scope: McpCreationScope, prepareAfterRegistration = true) => {
       if (!matches(scope) || active || locator || registration) return Promise.resolve(false);
       const parsed = mcpPrivateServerRegistrationInputSchema.safeParse(input);
       if (!parsed.success) { publish({ error: true }); return Promise.resolve(false); }
       const body = parsed.data;
       body.headers?.forEach(item => Object.freeze(item)); if (body.headers) Object.freeze(body.headers);
       if (body.oauth_client) Object.freeze(body.oauth_client); Object.freeze(body);
-      registration = { body, key: connectorCreationKeySchema.parse(crypto.randomUUID()), uncertain: false, confirmed: false, failure: undefined };
+      registration = { body, key: connectorCreationKeySchema.parse(crypto.randomUUID()), uncertain: false, confirmed: false, prepareAfterRegistration, failure: undefined };
+      publish({ publishRequested: !prepareAfterRegistration });
       return runRegistration(scope);
     },
     retry: (scope: McpCreationScope) => registration ? runRegistration(scope) : prepare(scope),
+    finishRegistration: (scope: McpCreationScope) => state.publishRequested && state.facts !== null && !state.unknown ? resetKnown(scope) : false,
     finish: (scope: McpCreationScope) => ready(state.facts) && !state.unknown ? resetKnown(scope) : false,
     dismiss: resetKnown,
     reconcile: async (scope: McpCreationScope) => { if (!matches(scope)) return false; options.onChanged(); return ready(await read(scope, true)); },
