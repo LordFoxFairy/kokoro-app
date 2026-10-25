@@ -12,6 +12,7 @@ import { CustomMcpForm } from "@/ui/mcp/mcp-custom-form"
 import { createMcpServerCreationFlow } from "@/ui/mcp/mcp-server-creation-flow"
 import { createMcpPreparationCommands } from "@/ui/mcp/mcp-preparation-commands"
 import formStyles from "@/ui/mcp/mcp-custom-form.module.css"
+import iconStyles from "@/ui/mcp/mcp-icon-picker.module.css"
 import frameStyles from "@/ui/mcp/mcp-create-dialog.module.css"
 import settingsStyles from "@/ui/settings/settings-modal.module.css"
 
@@ -26,12 +27,12 @@ it("matches measured custom MCP surface, plain URL input, label hierarchy and no
   render(<LocaleProvider><Dialog open><DialogContent className={frameStyles.registerDialog}><CustomMcpForm flow={flow} boundary={boundary} onCancel={vi.fn()} onDone={async () => undefined} /></DialogContent></Dialog></LocaleProvider>)
   const dialog = document.querySelector('[data-slot="dialog-content"]')
   if (!dialog) throw Error("fixture dialog missing")
-  const modules: Record<string, Record<string, string>> = { "mcp-custom-form.module.css": formStyles, "mcp-create-dialog.module.css": frameStyles, "settings-modal.module.css": settingsStyles }
+  const modules: Record<string, Record<string, string>> = { "mcp-icon-picker.module.css": iconStyles, "mcp-custom-form.module.css": formStyles, "mcp-create-dialog.module.css": frameStyles, "settings-modal.module.css": settingsStyles }
   const vite = await createServer({ configFile: false, root: process.cwd(), server: { middlewareMode: true, hmr: false, watch: null }, css: { modules: { generateScopedName: (name, filename) => modules[basename(filename.replace(/\?.*$/u, ""))]?.[name] ?? name } } })
   let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
   try {
     browser = await chromium.launch({ headless: true })
-    const css = await Promise.all(["/src/app/globals.css", "/src/ui/mcp/mcp-custom-form.module.css", "/src/ui/mcp/mcp-create-dialog.module.css", "/src/ui/settings/settings-modal.module.css"].map(async path => {
+    const css = await Promise.all(["/src/app/globals.css", "/src/ui/mcp/mcp-icon-picker.module.css", "/src/ui/mcp/mcp-custom-form.module.css", "/src/ui/mcp/mcp-create-dialog.module.css", "/src/ui/settings/settings-modal.module.css"].map(async path => {
       const result = await vite.transformRequest(`${path}?inline`)
       const json = result?.code.match(/export default ([\s\S]*?);?\s*$/u)?.[1]
       if (!json) throw Error("CSS compilation missing inline output")
@@ -83,10 +84,10 @@ it.each(["unknown", "trial"] as const)("configuration %s feedback keeps short-sc
   if (scenario === "trial") fireEvent.click(screen.getByRole("button", { name: "试用一下" }))
   const dialog = screen.getByRole("dialog", { name: "MCP 配置" })
   expect(screen.getAllByRole("alert").length).toBeGreaterThan(0)
-  const vite = await createServer({ configFile: false, root: process.cwd(), server: { middlewareMode: true, hmr: false, watch: null }, css: { modules: { generateScopedName: (name, filename) => basename(filename.replace(/\?.*$/u, "")) === "custom-mcp-detail-dialog.module.css" ? detailStyles[name] ?? name : name } } })
+  const vite = await createServer({ configFile: false, root: process.cwd(), server: { middlewareMode: true, hmr: false, watch: null }, css: { modules: { generateScopedName: (name, filename) => basename(filename.replace(/\?.*$/u, "")) === "custom-mcp-detail-dialog.module.css" ? detailStyles[name] ?? name : basename(filename.replace(/\?.*$/u, "")) === "mcp-icon-picker.module.css" ? iconStyles[name] ?? name : name } } })
   let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
   try {
-    const css = await Promise.all(["/src/app/globals.css", "/src/ui/mcp/custom-mcp-detail-dialog.module.css"].map(async path => {
+    const css = await Promise.all(["/src/app/globals.css", "/src/ui/mcp/mcp-icon-picker.module.css", "/src/ui/mcp/custom-mcp-detail-dialog.module.css"].map(async path => {
       const result = await vite.transformRequest(`${path}?inline`)
       const json = result?.code.match(/export default ([\s\S]*?);?\s*$/u)?.[1]
       if (!json) throw Error("CSS compilation missing inline output")

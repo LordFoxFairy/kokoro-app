@@ -1,3 +1,4 @@
+import { mcpIconBindingSchema, mcpIconSelectionSchema, mcpIconSaveMatches, type McpIconOperation } from "./mcp-icon.schema";
 import { z } from "zod";
 import { connectorCommandErrorAllowed } from "./connector-command-error";
 
@@ -239,6 +240,7 @@ const privateDeclarationSchema = z.discriminatedUnion("kind", [
 ]);
 export const mcpPrivateServerSchema = z
   .object({
+    icon: mcpIconBindingSchema.optional(),
     server_id: mcpConnectorIdSchema,
     availability: mcpAvailabilitySchema,
     display_name: privateText(1, 100),
@@ -294,6 +296,7 @@ export const mcpPrivateServerSchema = z
   });
 export const mcpPrivateServerRegistrationInputSchema = z
   .object({
+    icon: mcpIconSelectionSchema.optional(),
     display_name: privateText(1, 100),
     server_url: privateServerUrl,
     notes: privateText(1, 4000, true).optional(),
@@ -306,6 +309,8 @@ export const mcpPrivateServerPrepareInputSchema = z
   .strict();
 export const mcpPrivateServerUpdateInputSchema = z
   .object({
+    icon: mcpIconSelectionSchema.optional(),
+    clear_icon: z.literal(true).optional(),
     expected_state_version: mcpConnectorStateVersionSchema,
     display_name: privateText(1, 100).optional(),
     notes: privateText(1, 4000, true).optional(),
@@ -319,6 +324,7 @@ export const mcpPrivateServerUpdateInputSchema = z
   .strict()
   .superRefine((value, context) => {
     if (
+      (value.icon !== undefined && value.clear_icon === true) ||
       (value.notes !== undefined && value.clear_notes === true) ||
       (value.oauth_client !== undefined &&
         value.revoke_oauth_client === true) ||
@@ -338,7 +344,7 @@ export const mcpPrivateServerUpdateInputSchema = z
       (value.header_upserts?.length ?? 0) === 0 &&
       (value.header_removals?.length ?? 0) === 0 &&
       value.oauth_client === undefined &&
-      value.revoke_oauth_client !== true
+      value.revoke_oauth_client !== true && value.icon === undefined && value.clear_icon !== true
     )
       context.addIssue({
         code: "custom",
@@ -548,6 +554,7 @@ export function mcpPrivateServerMatches(
       body !== undefined &&
       parsed.data.data.server.display_name === body.display_name &&
       parsed.data.data.server.server_url === body.server_url &&
+      mcpIconSaveMatches(parsed.data.data.server.icon, body) &&
       privateServerResponseMatches(value, undefined, body, false)
     );
   }
@@ -573,6 +580,7 @@ export function mcpPrivateServerMatches(
     typeof value === "object" && value !== null && "data" in value ? value.data : undefined,
   );
   const request = mcpPrivateServerUpdateInputSchema.safeParse(input);
+  if (parsed.success && request.success && !mcpIconSaveMatches(parsed.data.server.icon, request.data)) return false;
   if (!parsed.success || !request.success) return false;
   const server = parsed.data.server, update = request.data;
   const headers = new Map(server.headers.map(header => [header.name, header]));
@@ -753,7 +761,7 @@ export const mcpConnectorErrorSchema = z
   })
   .strict();
 export function mcpConnectorErrorAllowed(
-  operation: McpConnectorOperation | McpPrivateServerOperation | "authorization",
+  operation: McpConnectorOperation | McpPrivateServerOperation | McpIconOperation | "authorization",
   httpStatus: number,
   value: unknown,
 ): boolean {
@@ -765,7 +773,7 @@ export function mcpConnectorErrorAllowed(
   )
     return false;
   const published = connectorCommandErrorAllowed("mcp", httpStatus, parsed.data.error,
-    !["connectors", "connector", "connections", "connection", "providers", "provider", "server"].includes(operation));
+    !["connectors", "connector", "connections", "connection", "providers", "provider", "server", "getIcon"].includes(operation));
   if (published !== undefined) return published;
   return (
     (mcpConnectorErrors[httpStatus]?.includes(parsed.data.error.code) ??

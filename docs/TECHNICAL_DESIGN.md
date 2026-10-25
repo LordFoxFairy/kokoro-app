@@ -1,3 +1,7 @@
+## 2026-10-24 图标暂存 App 接线（实施中）
+
+沿已批准方案，固定 BFF400fab6／Platform7d8115a。现 Hub 同源有限传输复用原session／body限额／总预算／取消；新增独立mcp-icon schema/client和draft控制器／选择组件，现MCP与API创建／配置复用，不把状态放AppFrame。浏览器只向同源Hub发命令；字节仅使用owner短PUT capability，凭据omit、redirect error、SHA／size固定。选图不创建连接器；ready selector进入原保存，unknown保原key/body/CAS；取消／替换只回收未绑定intent，已保存图由owner原事务处理，缺图省略保留。无签名引用持久化，关闭／reload遗留由owner到期清理兜底；Get只读不推进恢复。
+
 ## 2026-10-24 Prepare 原请求恢复（既有JSON卡，设计门）
 
 **实现收敛（仍待正常验收）：** 恢复list跨generation的旧结果只退休旧读取，并启动当前准入的恢复，不留永久loading。核验proof绑定本次外部AbortSignal及UI已有window token；取消/关窗/代际变化/一次重放均退休proof，render只读state中的token，POST仍重核实际signal与原日志。迟到exact ACK已清退日志后的completed允许新窗口显式Done消费，不重复POST。只有通用命令已证明never-uncertain的首次400拒绝才compare-by-key清退未执行意图；unknown后400不清退。恢复日志未ready时配置变更锁定，既有显式清理语义保留。

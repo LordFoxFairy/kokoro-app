@@ -14,6 +14,7 @@ import { useT } from "@/i18n/context";
 import { McpEmptyConnections } from "./mcp-empty-connections";
 import { providerArtwork } from "./mcp-projection-types";
 import { McpAvailabilityStatus } from "./mcp-availability-status";
+import { McpBoundIcon } from "./mcp-bound-icon";
 import styles from "./mcp-projection-read.module.css";
 
 export function McpConnectionList({
@@ -101,7 +102,7 @@ export function McpConnectionList({
                   aria-label={profile.name}
                 >
                   <span className={styles.connectorMark} aria-hidden="true">
-                    <KeyRound />
+                    <McpBoundIcon icon={profile.icon} alt="" fallback={<KeyRound />} />
                   </span>
                   <span className={styles.connectorIdentity}>
                     <span>
@@ -167,7 +168,7 @@ export function McpConnectionList({
           </ul>
         </>
       )}
-      {visibleConnectors.length > 0 && (previousEnabled || nextEnabled) ? (
+      {previousEnabled || nextEnabled ? (
         <nav className={styles.pagination} aria-label="MCP pages">
           <Button
             type="button"

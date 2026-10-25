@@ -4972,3 +4972,43 @@ it.each([
  if(valid)expect(await response.json()).toEqual({data,meta:{request_id:"owner-1"}})
  else expect(await response.json()).toMatchObject({error:{code:"skill_response_invalid"}})
 })
+
+// Icons remain on the same admitted, bounded private MCP adapter, not an asset proxy.
+describe("MCP icon staging adapter", () => {
+  const id = "12345678-1234-1234-1234-123456789abc";
+  const at = "2099-01-01T00:00:00Z";
+  const intent = { intent_id: id, state: "ready", state_version: "3", filename: "icon.png", mime_type: "image/png", content_sha256: "a".repeat(64), size_bytes: "8", expires_at: at, expired: false, width: 24, height: 24, created_at: at, updated_at: at };
+  const reply = (data: unknown) => new Response(JSON.stringify({ data }), { headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "icon-owner" } });
+  const cases = [
+    { suffix: "uploads", body: { filename: "icon.png", mime_type: "image/png", content_sha256: "a".repeat(64), size_bytes: "8" }, data: { intent: { ...intent, state: "staged", state_version: "1", width: undefined, height: undefined }, replayed: false } },
+    { suffix: "import", body: { image_url: "https://images.example/icon.png" }, data: { intent, replayed: false } },
+    { suffix: `${id}/complete`, body: { expected_state_version: "1", source_version_id: "exact-version" }, data: { intent, replayed: false } },
+    { suffix: `${id}/cancel`, body: { expected_state_version: "3" }, data: { intent: { ...intent, state: "released", state_version: "5" }, replayed: false } },
+  ];
+  it.each(cases)("relays $suffix once with original body/key and trusted session", async ({ suffix, body, data }) => {
+    const { POST } = await import("@/app/api/hub/[...path]/route");
+    vi.mocked(requestWithDomain).mockResolvedValue(reply(data));
+    const response = await POST(new Request(`http://localhost/api/hub/mcp/icons/${suffix}`, { method: "POST", headers: { origin: "http://localhost", "content-type": "application/json", "idempotency-key": "icon-original", authorization: "Bearer untrusted" }, body: JSON.stringify(body) }), params(["mcp", "icons", ...suffix.split("/")]));
+    expect(response.status).toBe(200); expect(response.headers.get("cache-control")).toContain("no-store"); expect(await response.json()).toEqual({ data });
+    expect(requestWithDomain).toHaveBeenCalledTimes(1);
+    const [url, , options] = vi.mocked(requestWithDomain).mock.calls[0]!;
+    expect(String(url)).toBe(`http://bff.test/browser/v1/mcp/icons/${suffix}`);
+    expect(options?.headers).toMatchObject({ authorization: "Bearer product-access", "idempotency-key": "icon-original" });
+    expect(JSON.parse(new TextDecoder().decode(options?.body as ArrayBuffer))).toEqual(body);
+  });
+  it("GET is read-only; mismatched ACK and attempted keyless mutation do not become success", async () => {
+    const { GET, POST } = await import("@/app/api/hub/[...path]/route");
+    vi.mocked(requestWithDomain).mockResolvedValue(reply({ intent }));
+    const read = await GET(new Request(`http://localhost/api/hub/mcp/icons/${id}`), params(["mcp", "icons", id]));
+    expect(read.status).toBe(200);
+    expect(vi.mocked(requestWithDomain).mock.calls[0]?.[2]?.headers).not.toHaveProperty("idempotency-key");
+    vi.mocked(requestWithDomain).mockReset();
+    const path = ["mcp", "icons", id, "cancel"], url = `http://localhost/api/hub/${path.join("/")}`;
+    const headers = { origin: "http://localhost", "content-type": "application/json" }, body = JSON.stringify({ expected_state_version: "1" });
+    expect((await POST(new Request(url, { method: "POST", headers, body }), params(path))).status).toBe(400);
+    expect(requestWithDomain).not.toHaveBeenCalled();
+    vi.mocked(requestWithDomain).mockResolvedValue(reply({ intent, replayed: false }));
+    expect((await POST(new Request(url, { method: "POST", headers: { ...headers, "idempotency-key": "icon-original" }, body }), params(path))).status).toBe(502);
+    expect(requestWithDomain).toHaveBeenCalledTimes(1);
+  });
+});

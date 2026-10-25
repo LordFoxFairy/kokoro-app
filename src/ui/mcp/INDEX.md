@@ -1,3 +1,13 @@
+## 2026-10-25 图标暂存与密钥编辑候选
+
+`mcp-icon-draft.ts` 拥有窗口内暂存命令状态与原key/body/CAS恢复，`use-mcp-icon-draft.ts`绑定主体／准入／窗口，`mcp-icon-picker.tsx`和局部CSS复用在原API/MCP创建及编辑表单。选图仅创建暂存记录，原实体保存才携带selector／clear；关闭由`mcp-create-dismiss-context.ts`显式回收已知未绑定图标，未知保存不取消可能已绑定资源。`mcp-bound-icon.tsx`只展示已准入安全引用，失败／到期回退，不新增GET或刷新签名。
+
+API详情复用原更新契约支持同名轮换、移除／撤销及未保存取消；已有密钥值不回读、不把placeholder当秘密提交，ACK清退草稿。列表即使当前页均已撤销仍保留合法游标的翻页入口。上述为候选实现，正常浏览器收据与余项以CURRENT／Root唯一执行板为准。
+
+### 创建完成后的精确详情交接
+
+`mcp-server-creation-flow.ts`只导出已确认绑定的非秘密locator；`use-mcp-server-creation.ts`在finish清退前固定server/connector/provider，完成回调失败重试同locator、不重新注册。`mcp-create-dialog.tsx`在原actor/generation/window仍有效时交给现`mcp-projection-read.tsx`的detail-only入口，后者重新读取并验证精确绑定，避免复制广场或从名称/首张卡猜详情。API与独立JSON导入保持原完成分支。正常四入口验收与URL项目发布后继分开记录，不把完成跳转当项目发布。
+
 ## 2026-10-24 私有 MCP 配置布局
 
 `custom-mcp-detail-dialog.tsx`沿独立配置header／滚动body／footer组织；同名CSS仅配置态采用实测95vw／600×714、持续两列、局部控件token与图标右侧说明，短屏body收缩而操作可达。配置复制SVG16px，复制／添加Header文字以局部configurationButtonLabel承接2px逻辑尾距，宽度仍由内容决定；不改通用Button。详情态和管理／Prepare／试用／秘密／CAS语义保持；可见focus使用语义ring outline。参考规格与差异在`docs/manus-reference-audit-v2.md`，状态以CURRENT为准。

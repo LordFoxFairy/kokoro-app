@@ -1,3 +1,7 @@
+## 2026-10-24 MCP 图标五私有操作消费（实施中）
+
+固定 BFF400fab6e89c2fde77eb9f4917271e3e09a0c62da：/api/hub/mcp/icons/uploads POST、import POST、{intent_id} GET、{intent_id}/complete POST、{intent_id}/cancel POST，各映射原/browser/v1路径。四写保Idempotency-Key、原body与十进制CAS；主体来自Product session。请求/成功运行时schema在hub/mcp-icon.schema.ts，错误沿既有mcp profile1.1，不改Public24或错误artifact；GET不携body/key、不自动恢复。原Server／CustomAPI create/update承接icon selector，update可clear_icon=true互斥；响应icon metadata及短preview_reference独立，失败不猜保存成功。
+
 ## 2026-10-24 Prepare 原请求恢复（既有JSON卡，设计门）
 
 **固定消费与UI恢复：** browser-private错误profile固定BFF `a9a6918d47e1f2654edf8720c561ee06eb57a78c`／1.1.0，原JSON SHA256 `5c12e237e03a6be446a564034ec5c18965e996be24ddeb40807ec4b9b074d83d`，由既有窄生成器更新；Public24发行物不变。核验按钮仅调用两条既有精确GET，随后另一次明确点击才重放原Prepare。窗口token只是浏览器显示资格，实际POST还核当前signal/主体/代际/exact日志；关窗清退proof不删除未知请求。completed只显式收口、不发POST。

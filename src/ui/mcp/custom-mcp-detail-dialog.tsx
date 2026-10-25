@@ -1,5 +1,11 @@
 "use client";
 
+import type { McpIconClient } from "@/hub/mcp-icon-client";
+import type { McpIconSaveChange } from "@/hub/mcp-icon.schema";
+import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
+import { useMcpIconDraft } from "./use-mcp-icon-draft";
+import { McpIconPicker } from "./mcp-icon-picker";
+import { McpBoundIcon } from "./mcp-bound-icon";
 import { McpAvailabilityStatus } from "./mcp-availability-status";
 
 import { connectorCommandMayResume, connectorCommandFailureMessage, type ConnectorCommandFailure } from "./connector-command-failure";
@@ -56,6 +62,7 @@ type HeaderDraft = { id: string; name: string; value: string };
  * OAuth provider cards.
  */
 export function CustomMcpDetailDialog({
+  iconClient, iconBoundary,
   connector,
   server,
   actionId,
@@ -86,6 +93,8 @@ export function CustomMcpDetailDialog({
   pendingError = false,
   onRetry,
 }: {
+  iconClient?: McpIconClient | undefined;
+  iconBoundary?: ProjectReadBoundary | undefined;
   connector: McpConnector | null;
   server: McpPrivateServer | null;
   preparationState?: "idle" | "running" | "unknown" | "rejected" | "completed";
@@ -107,7 +116,7 @@ export function CustomMcpDetailDialog({
   deleteId: string | null;
   returnFocusRef: RefObject<HTMLElement | null>;
   onClose: () => void;
-  onSaveConfiguration: (input: {
+  onSaveConfiguration: (input: McpIconSaveChange & {
     display_name: string;
     notes: string;
     server_url: string;
@@ -178,6 +187,7 @@ export function CustomMcpDetailDialog({
   }
   const managementStatus = <McpManagementStatus command={managementCommand} admitted={admitted} onResume={onResumeManagement} />;
   const locked = managementLocked || busy || !ready || !preparationRecoveryReady || preparationState === "unknown" || preparationState === "completed";
+  const icon = useMcpIconDraft(iconClient, iconBoundary ?? { subject: null, admitted: false, generation: 0 }, locked, configurationSaved, currentServer);
   const mayResumePreparation = preparationCanResume ?? connectorCommandMayResume(preparationFailure);
   const prepareLabel = preparationState === "unknown" ? t(mayResumePreparation ? "mcp.retryOriginal" : "mcp.recovery.inspectRequired") : preparationState === "completed" ? t("mcp.creationDone") : t("settings.connect");
   const needsAuthorization = ready && canAuthorizePrivateMcp(connector, server) &&
@@ -189,7 +199,7 @@ export function CustomMcpDetailDialog({
     (preparationState === "idle" || preparationState === "rejected");
   const configurationDirty = editing && (
     name !== (currentServer?.display_name ?? "") || notes !== (currentServer?.notes ?? "") ||
-    serverUrl !== (currentServer?.server_url ?? "") || headers.length > 0 || removedHeaders.length > 0
+    serverUrl !== (currentServer?.server_url ?? "") || headers.length > 0 || removedHeaders.length > 0 || icon.state.dirty || icon.state.kind === "running" || icon.state.kind === "unknown"
   );
   const primaryAction = () => trialAvailable ? <Button type="button" variant={editing ? "outline" : "default"}
     disabled={managementLocked || busy || configurationDirty || !onTrial} onClick={() => setTrialError(onTrial?.() !== true)}>
@@ -214,7 +224,7 @@ export function CustomMcpDetailDialog({
   const save = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (
-      locked || !server || !connector ||
+      locked || !icon.draft.canSave() || !server || !connector ||
       !name.trim() ||
       !serverUrl.trim() ||
       invalidHeaderName ||
@@ -222,7 +232,9 @@ export function CustomMcpDetailDialog({
     )
       return;
     setSubmittedFields({ name, notes, serverUrl });
+    icon.draft.protectForSave();
     onSaveConfiguration({
+      ...icon.draft.change(),
       display_name: name.trim(),
       notes: notes.trim(),
       server_url: serverUrl.trim(),
@@ -249,7 +261,7 @@ export function CustomMcpDetailDialog({
     <Dialog
       open
       onOpenChange={(next) => {
-        if (!next && (managementLocked || actionId === null || preparationState === "running")) onClose();
+        if (!next && (managementLocked || actionId === null || preparationState === "running")) { icon.draft.cancel(); onClose(); }
       }}
     >
       <DialogContent
@@ -319,18 +331,7 @@ export function CustomMcpDetailDialog({
                   </div>
                 </div>
               </div>
-              <div className={styles.iconField}>
-                <Label>图标</Label>
-                <div className={styles.iconUploadRow}>
-                  <span className={styles.configurationIcon} aria-hidden="true">
-                    {currentServer?.display_name.slice(0, 1) ?? ""}
-                  </span>
-                  <div className={styles.iconUploadDescription}>
-                    <span className={styles.uploadUnavailable}>上传</span>
-                    <small>PNG 或 JPG，最大 1 MB。推荐尺寸 256×256 像素。</small>
-                  </div>
-                </div>
-              </div>
+              <McpIconPicker draft={icon.draft} state={icon.state} current={currentServer?.icon} disabled={locked} />
               <div className={styles.field}>
                 <Label htmlFor="custom-mcp-notes">
                   备注 <span className={styles.optional}>（可选）</span>
@@ -476,7 +477,7 @@ export function CustomMcpDetailDialog({
               <div className={styles.configurationActions}>
                 {primaryAction()}
                 <span className={styles.saveSplit}>
-                  <Button type="submit" disabled={locked || invalidHeaderName}>
+                  <Button type="submit" disabled={locked || invalidHeaderName || !icon.draft.canSave()}>
                     {busy ? <Spinner aria-hidden="true" /> : null}
                     保存
                   </Button>
@@ -506,7 +507,7 @@ export function CustomMcpDetailDialog({
           <section className={styles.detail}>
             <header className={styles.detailHero}>
               <span className={styles.icon} aria-hidden="true">
-                {server.display_name.slice(0, 1)}
+                <McpBoundIcon icon={currentServer?.icon} alt="" fallback={server.display_name.slice(0, 1)} />
               </span>
               <DialogTitle>{server.display_name}</DialogTitle>
               <McpAvailabilityStatus availability={server.availability} />

@@ -3604,6 +3604,10 @@ it("Settings revalidates a registered MCP again after remote Prepare completes",
   await act(async () => { await Promise.resolve() })
   await act(async () => { finish(); await remote })
   await waitFor(() => expect(list).toHaveBeenCalledTimes(3))
+  const createdDetail = await screen.findByRole("dialog", { name: "Prepared MCP" })
+  expect(await within(createdDetail).findByLabelText("已连接")).toBeVisible()
+  fireEvent.keyDown(createdDetail, { key: "Escape" })
+  await waitFor(() => expect(screen.queryByRole("dialog", { name: "Prepared MCP" })).not.toBeInTheDocument())
   expect(await screen.findByLabelText("已连接")).toBeVisible()
   expect(screen.getByRole("searchbox", { name: "搜索连接器" })).toBe(query)
   expect(query).toHaveValue("Prepared")
@@ -4132,6 +4136,8 @@ it.each(["form", "url"] as const)("%s MCP completion failure remains named and o
   fireEvent.change(screen.getByRole("textbox", { name: /^服务器 URL\*?$/ }), { target: { value: registration.server.server_url } })
   fireEvent.click(screen.getByRole("button", { name: "保存" }))
   await waitFor(() => expect(onDone).toHaveBeenCalledOnce())
+  const completion = { serverId: registration.server.server_id, connectorId: registration.connector.connector_id, providerKey: registration.connector.provider_key }
+  expect(onDone).toHaveBeenLastCalledWith(completion, expect.any(Function))
   expect(await screen.findByRole("alert")).toBeVisible()
   expect(screen.getByRole("heading", { name: "Creation MCP" })).toBeVisible()
   act(() => flow.bind({ ...boundary, admitted: false, generation: 2 }))
@@ -4140,6 +4146,8 @@ it.each(["form", "url"] as const)("%s MCP completion failure remains named and o
   view.rerender(form(2))
   fireEvent.click(screen.getByRole("button", { name: "完成" }))
   await waitFor(() => expect(onDone).toHaveBeenCalledTimes(2))
+  expect(onDone).toHaveBeenLastCalledWith(completion, expect.any(Function))
+  expect(onDone.mock.calls[1]?.[0]).toBe(onDone.mock.calls[0]?.[0])
   expect(hub.registerPrivateMcpServer).toHaveBeenCalledOnce()
   expect(hub.preparePrivateMcpServer).toHaveBeenCalledOnce()
 })
@@ -4922,3 +4930,141 @@ vi.mock("@/ui/mcp/mcp-preparation-recovery", async importOriginal => {
   const { createTestPreparationJournal } = await import("./fixtures/mcp-preparation-journal");
   return { ...actual, createBrowserMcpPreparationRecovery: () => createTestPreparationJournal(actual) };
 });
+
+
+function exactCreationHub() {
+  const registered = mcpCreationRegistration()
+  const server = { ...registered.server, availability: "available" as const, status: "registered" as const, prepare_status: "ready" as const, declarations_available: true }
+  const connector = { ...registered.connector, availability: "available" as const, status: "active" as const, enabled: true }
+  // Same display name intentionally points to a different row; ACK identity wins.
+  const other = { ...connector, connector_id: "different-connector", server_id: "different-server", provider_key: "different-provider" }
+  return { ...apiCreationHub(),
+    listMcpConnectors: vi.fn(async () => ({ items: [other], next_cursor: null })),
+    registerPrivateMcpServer: vi.fn(async () => ({ server, connector, replayed: false })),
+    getPrivateMcpServer: vi.fn<NonNullable<import("@/hub/client").HubClient["getPrivateMcpServer"]>>(async () => server), getMcpConnector: vi.fn<NonNullable<import("@/hub/client").HubClient["getMcpConnector"]>>(async () => connector),
+    preparePrivateMcpServer: vi.fn(),
+  }
+}
+
+it.each([ ["global", "form"], ["global", "url"], ["settings", "form"], ["settings", "url"] ] as const)(
+  "%s %s creation opens the exact acknowledged detail without a matching list row", async (entry, mode) => {
+    const { ConnectorsSettingsSection } = await import("@/ui/settings/sections/connectors-settings-section")
+    const pageClients = await import("@/ui/shell/page-clients")
+    const hub = exactCreationHub()
+    vi.spyOn(pageClients, "browserHubClient").mockReturnValue(hub)
+    const boundary = { admitted: true, subject: `exact-${entry}-${mode}`, generation: 1 }
+    render(entry === "global" ? apiCreationOverlay(boundary, mode) :
+      <LocaleProvider><ConnectorCommandProvider client={hub} boundary={boundary}><ConnectorsSettingsSection client={hub} preview={false} brandName="Kokoro" readBoundary={boundary} /></ConnectorCommandProvider></LocaleProvider>)
+    if (entry === "settings") {
+      fireEvent.keyDown(await screen.findByRole("button", { name: "创建" }), { key: "ArrowDown" })
+      fireEvent.click(await screen.findByRole("menuitem", { name: mode === "form" ? "自定义 MCP" : /通过 URL 添加 MCP/u }))
+    }
+    fireEvent.change(screen.getByRole("textbox", { name: /^服务器名称\*?$/u }), { target: { value: "Creation MCP" } })
+    fireEvent.change(screen.getByRole("textbox", { name: /^服务器 URL\*?$/u }), { target: { value: "https://mcp.example.test/creation" } })
+    fireEvent.click(screen.getByRole("button", { name: "保存" }))
+    expect(await screen.findByRole("button", { name: "管理" })).toBeVisible()
+    expect(screen.getByRole("dialog", { name: "Creation MCP" })).toBeVisible()
+    expect(hub.registerPrivateMcpServer).toHaveBeenCalledOnce()
+    expect(hub.preparePrivateMcpServer).not.toHaveBeenCalled()
+    expect(hub.getMcpConnector.mock.calls.every(([id]) => id === "creation-connector")).toBe(true)
+    expect(hub.getPrivateMcpServer.mock.calls.every(([id]) => id === "creation-server")).toBe(true)
+    // Creation read + fresh detail read; no list scan is accepted as detail facts.
+    expect(hub.getMcpConnector.mock.calls.length).toBeGreaterThanOrEqual(2)
+    expect(hub.getPrivateMcpServer.mock.calls.length).toBeGreaterThanOrEqual(2)
+  },
+)
+
+it.each(["window", "subject"] as const)("a successful completion callback after %s retirement never opens the old ACK detail", async retirement => {
+  const { McpCreateDialog } = await import("@/ui/mcp/mcp-create-dialog")
+  const hub = exactCreationHub()
+  let release!: () => void
+  const pending = new Promise<void>(resolve => { release = resolve })
+  const onDone = vi.fn(async () => pending)
+  const dialog = (subject: string, open = true) => <LocaleProvider><ConnectorCommandProvider client={hub} boundary={{ admitted: true, subject, generation: 1 }}>
+    <McpCreateDialog client={hub} mode="form" open={open} onOpenChange={vi.fn()} onDone={onDone} />
+  </ConnectorCommandProvider></LocaleProvider>
+  const view = render(dialog("original-actor"))
+  fireEvent.change(screen.getByRole("textbox", { name: "服务器名称" }), { target: { value: "Creation MCP" } })
+  fireEvent.change(screen.getByRole("textbox", { name: "服务器 URL" }), { target: { value: "https://mcp.example.test/creation" } })
+  fireEvent.click(screen.getByRole("button", { name: "保存" }))
+  await waitFor(() => expect(onDone).toHaveBeenCalledOnce())
+  if (retirement === "window") view.rerender(dialog("original-actor", false))
+  view.rerender(dialog(retirement === "subject" ? "next-actor" : "original-actor"))
+  const name = await screen.findByRole("textbox", { name: "服务器名称" })
+  fireEvent.change(name, { target: { value: "New window draft" } })
+  await act(async () => { release(); await pending })
+  expect(screen.queryByRole("button", { name: "管理" })).not.toBeInTheDocument()
+  expect(name).toHaveValue("New window draft")
+  expect(hub.registerPrivateMcpServer).toHaveBeenCalledOnce()
+})
+
+it("an admitted completion retry keeps its exact locator after a pending callback loses its generation", async () => {
+  const { McpCreateDialog } = await import("@/ui/mcp/mcp-create-dialog")
+  const hub = exactCreationHub()
+  let release!: () => void
+  const pending = new Promise<void>(resolve => { release = resolve })
+  const onDone = vi.fn().mockImplementationOnce(async () => pending).mockResolvedValue(undefined)
+  const dialog = (admitted: boolean, generation: number) => <LocaleProvider><ConnectorCommandProvider client={hub} boundary={{ admitted, subject: "completion-recheck", generation }}>
+    <McpCreateDialog client={hub} mode="form" open onOpenChange={vi.fn()} onDone={onDone} />
+  </ConnectorCommandProvider></LocaleProvider>
+  const view = render(dialog(true, 1))
+  fireEvent.change(screen.getByRole("textbox", { name: "服务器名称" }), { target: { value: "Creation MCP" } })
+  fireEvent.change(screen.getByRole("textbox", { name: "服务器 URL" }), { target: { value: "https://mcp.example.test/creation" } })
+  fireEvent.click(screen.getByRole("button", { name: "保存" }))
+  await waitFor(() => expect(onDone).toHaveBeenCalledOnce())
+  view.rerender(dialog(false, 2))
+  await act(async () => { release(); await pending })
+  expect(screen.queryByRole("button", { name: "管理" })).not.toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "完成" })).toBeDisabled()
+  view.rerender(dialog(true, 2))
+  fireEvent.click(screen.getByRole("button", { name: "完成" }))
+  expect(await screen.findByRole("button", { name: "管理" })).toBeVisible()
+  expect(onDone).toHaveBeenCalledTimes(2)
+  expect(onDone.mock.calls[1]?.[0]).toBe(onDone.mock.calls[0]?.[0])
+  expect(hub.registerPrivateMcpServer).toHaveBeenCalledOnce()
+})
+
+it("created detail rejects a mismatched fresh server and retries only the acknowledged entity", async () => {
+  const { McpCreateDialog } = await import("@/ui/mcp/mcp-create-dialog")
+  const hub = exactCreationHub()
+  const server = { ...mcpCreationRegistration().server, availability: "available" as const, status: "registered" as const, prepare_status: "ready" as const, declarations_available: true }
+  let mismatched = false
+  hub.getPrivateMcpServer.mockImplementation(async () => mismatched ? { ...server, server_id: "different-server", display_name: "Wrong private server" } : server)
+  render(<LocaleProvider><ConnectorCommandProvider client={hub} boundary={{ admitted: true, subject: "exact-binding-check", generation: 1 }}>
+    <McpCreateDialog client={hub} mode="form" open onOpenChange={vi.fn()} onDone={async () => { mismatched = true }} />
+  </ConnectorCommandProvider></LocaleProvider>)
+  fireEvent.change(screen.getByRole("textbox", { name: "服务器名称" }), { target: { value: "Creation MCP" } })
+  fireEvent.change(screen.getByRole("textbox", { name: "服务器 URL" }), { target: { value: server.server_url } })
+  fireEvent.click(screen.getByRole("button", { name: "保存" }))
+  expect(await screen.findByRole("alert")).toBeVisible()
+  expect(screen.queryByText("Wrong private server")).not.toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "管理" })).not.toBeInTheDocument()
+  mismatched = false
+  fireEvent.click(screen.getByRole("button", { name: "重试" }))
+  expect(await screen.findByRole("button", { name: "管理" })).toBeVisible()
+  expect(hub.registerPrivateMcpServer).toHaveBeenCalledOnce()
+  expect(hub.getPrivateMcpServer.mock.calls.every(([id]) => id === "creation-server")).toBe(true)
+  expect(hub.getMcpConnector.mock.calls.every(([id]) => id === "creation-connector")).toBe(true)
+})
+
+it("a newer creation window retires the older pending exact-detail handoff", async () => {
+  const { McpCreateDialog } = await import("@/ui/mcp/mcp-create-dialog")
+  const hub = exactCreationHub()
+  let release!: () => void
+  const pending = new Promise<void>(resolve => { release = resolve })
+  const onDone = vi.fn(async () => pending)
+  const windows = (newer: boolean) => <LocaleProvider><ConnectorCommandProvider client={hub} boundary={{ admitted: true, subject: "two-window-actor", generation: 1 }}>
+    <McpCreateDialog key="older" client={hub} mode="form" open onOpenChange={vi.fn()} onDone={onDone} />
+    {newer ? <McpCreateDialog key="newer" client={hub} mode="url" open onOpenChange={vi.fn()} /> : null}
+  </ConnectorCommandProvider></LocaleProvider>
+  const view = render(windows(false))
+  fireEvent.change(screen.getByRole("textbox", { name: "服务器名称" }), { target: { value: "Creation MCP" } })
+  fireEvent.change(screen.getByRole("textbox", { name: "服务器 URL" }), { target: { value: "https://mcp.example.test/creation" } })
+  fireEvent.click(screen.getByRole("button", { name: "保存" }))
+  await waitFor(() => expect(onDone).toHaveBeenCalledOnce())
+  view.rerender(windows(true))
+  await act(async () => { release(); await pending })
+  expect(screen.queryByRole("button", { name: "管理", hidden: true })).not.toBeInTheDocument()
+  expect(screen.getByRole("textbox", { name: /^服务器名称\*?$/u })).toHaveValue("")
+  expect(hub.registerPrivateMcpServer).toHaveBeenCalledOnce()
+})

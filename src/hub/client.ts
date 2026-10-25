@@ -1,3 +1,5 @@
+import { createMcpIconClient, type McpIconClient } from "./mcp-icon-client";
+import { type McpIconOperation, mcpIconSaveMatches } from "./mcp-icon.schema";
 import { projectSkillIdSchema } from "./project-skills.schema";
 // hub self 面 HTTP 客户端：同源 `/api/hub/*` BFF 代理（注入 web-bff 凭据 + 信封 scope/user）。
 // 入站过 Zod，失败以类型化错误上抛；错误体尽力取 hub 错误码（如 hub.skill_required）供 UI 本地化。
@@ -526,6 +528,7 @@ async function requestMcpConnector<T extends ZodTypeAny>(
     | McpConnectorCommandOperation
     | McpConnectorAuthorizationOperation
     | McpPrivateServerOperation
+    | McpIconOperation
     | "connectors"
     | "connector"
     | "providers"
@@ -799,6 +802,7 @@ function idempotencyHeaders(
 }
 
 export type HubClient = {
+  mcpIcons?: McpIconClient;
   listPersonalSkills: (
     cursor?: string,
     signal?: AbortSignal,
@@ -953,6 +957,7 @@ export type HubClient = {
 
 export function createHubClient(): HubClient {
   return {
+    mcpIcons: createMcpIconClient(requestMcpConnector),
     listPersonalSkills: (cursor, signal) =>
       createSkillPublishClient().listPublished(cursor, signal),
     getPublishedPersonalSkill: async (id, signal) => {
@@ -1049,7 +1054,7 @@ export function createHubClient(): HubClient {
       ).custom_api;
       const names = body.environment.map(value => value.name).sort();
       const received = profile.environment.map(value => value.name).sort();
-      if (profile.name !== body.name || profile.instructions !== body.instructions ||
+      if (!mcpIconSaveMatches(profile.icon, body) || profile.name !== body.name || profile.instructions !== body.instructions ||
         names.length !== received.length || names.some((name, index) => name !== received[index]) ||
         profile.environment.some(value => !value.configured))
         throw new HubClientError("parse", "Custom API creation ACK binding mismatch", null, null);
@@ -1085,7 +1090,7 @@ export function createHubClient(): HubClient {
         { method: "PATCH", headers: { ...JSON_HEADERS, "Idempotency-Key": connectorCreationKeySchema.parse(key) }, body: JSON.stringify(body) }, signal,
       )).custom_api;
       const environment = new Map(profile.environment.map(item => [item.name, item]));
-      if (profile.profile_id !== id || environment.size !== profile.environment.length ||
+      if (!mcpIconSaveMatches(profile.icon, body) || profile.profile_id !== id || environment.size !== profile.environment.length ||
         (body.name !== undefined && profile.name !== body.name) ||
         (body.instructions !== undefined && profile.instructions !== body.instructions) ||
         (body.clear_instructions === true && profile.instructions !== undefined) ||

@@ -1,3 +1,4 @@
+import { mcpIconOperation, mcpIconInputs, mcpIconMatches, type McpIconOperation } from "@/hub/mcp-icon.schema";
 import { parsePersonalSkillHistoryJson, personalSkillHistoryResponseSchema, personalSkillHistoryErrorSchema, personalSkillHistoryErrorAllowed } from "@/hub/personal-skill-history.schema";
 import { proxyPersonalKnowledge } from "@/lib/server/personal-knowledge";
 import { proxyProjectSkillSelection } from "@/lib/server/project-skill-selection";
@@ -421,11 +422,13 @@ async function proxyMcpConnector(
       },
     );
   const url = new URL(request.url);
+  const iconOperation = mcpIconOperation(path, request.method);
   const operation:
     | McpConnectorOperation
     | McpConnectorAuthorizationOperation
     | McpPrivateServerOperation
-    | undefined =
+    | McpIconOperation
+    | undefined = iconOperation ?? (
     path.length === 3 &&
       path[1] === "servers" &&
       path[2] === "import" &&
@@ -510,7 +513,7 @@ async function proxyMcpConnector(
                                             path[1] === "providers" &&
                                             request.method === "GET"
                                           ? "provider"
-                                          : undefined;
+                                          : undefined);
   if (operation === undefined) return fail(400, "invalid_mcp_personal_request");
   const authorization = [
     "beginAuthorization",
@@ -534,6 +537,7 @@ async function proxyMcpConnector(
     "providers",
     "provider",
     "server",
+    "getIcon",
   ].includes(operation);
   const requiresIdempotency = [
     "create",
@@ -546,6 +550,7 @@ async function proxyMcpConnector(
     "prepareServer",
     "updateServer",
     "deleteServer",
+    "beginIcon", "completeIcon", "cancelIcon", "importIcon",
   ].includes(operation);
   const id =
     [
@@ -560,7 +565,7 @@ async function proxyMcpConnector(
       "beginAuthorization",
       "reconnectAuthorization",
     ].includes(operation) ||
-    ["prepareServer", "updateServer", "deleteServer"].includes(operation)
+    ["prepareServer", "updateServer", "deleteServer", "getIcon", "completeIcon", "cancelIcon"].includes(operation)
       ? path[2]
       : undefined;
   const query = url.searchParams;
@@ -660,7 +665,7 @@ async function proxyMcpConnector(
             : "invalid_mcp_personal_request",
         );
       }
-      const accepted = authorization
+      const accepted = iconOperation && iconOperation !== "getIcon" ? mcpIconInputs[iconOperation].safeParse(input).success : authorization
         ? operation === "beginAuthorization" ||
           operation === "reconnectAuthorization"
           ? mcpConnectorAuthorizationRequestSchema.safeParse(input).success
@@ -781,7 +786,7 @@ async function proxyMcpConnector(
           : operation;
     const valid =
       upstream.status === expected
-        ? authorization
+        ? iconOperation ? mcpIconMatches(iconOperation, raw, id, input) : authorization
           ? mcpConnectorAuthorizationMatches(
               operation as McpConnectorAuthorizationOperation,
               raw,
@@ -2320,7 +2325,7 @@ async function proxyHubRequest(
     return proxyCustomApi(request, path);
   if (
     path[0] === "mcp" &&
-    (path[1] === "servers" ||
+    (path[1] === "icons" || path[1] === "servers" ||
       path[1] === "connectors" ||
       path[1] === "providers" ||
       path[1] === "authorization" ||

@@ -1,3 +1,7 @@
+## 2026-10-24 图标选择草稿
+
+无新增业务数据库／本地持久事实。组件草稿只保存当前actor/window的原命令key/body/CAS、未绑定intent与瞬时preview；引用不入日志／IndexedDB／localStorage。保存提交即锁住所选intent，确认后移交owner绑定；结果未知保持原选择／原命令，关闭不误取消可能已绑定的intent。已知未绑定遗留可显式cancel，关页中断和未知Begin无ID由Platform到期清理，不以Get冒取消完成。
+
 ## 2026-10-24 Prepare 原请求恢复（既有JSON卡，设计门）
 
 **存储验证边界：** failure codec只接受正式profile的分类（例如`replay_expired`而非虚构`expired`）；同key标记只收紧，不被乱序回调降级。首次确定未执行的400拒绝与exact ACK分别compare-by-key退休，不清理unknown后的400。核验proof/window token不持久化，不保存owner ready/成功facts；旧浏览器从未持久化的意图不由新日志追认。

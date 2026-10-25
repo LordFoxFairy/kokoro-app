@@ -7,6 +7,8 @@ import { ConnectorCommandProvider, useMcpPreparationCommands } from "@/ui/mcp/co
 import { McpProjectionRead } from "@/ui/mcp/mcp-projection-read"
 import type { McpConnector, McpPrivateServer } from "@/hub/mcp-connector.schema"
 import type { McpPreparationCommands } from "@/ui/mcp/mcp-preparation-commands"
+import type { CustomApiProfile, CustomApiUpdateInput } from "@/hub/custom-api.schema"
+import { CustomApiDetailDialog } from "@/ui/mcp/custom-api-detail-dialog"
 
 afterEach(() => { cleanup(); window.sessionStorage.clear(); vi.unstubAllGlobals() })
 
@@ -621,6 +623,144 @@ it("shows current availability instead of an active lifecycle success badge, wit
     if (state !== "available") expect(screen.queryByLabelText("已连接")).not.toBeInTheDocument()
     expect(action).not.toHaveBeenCalled()
   }
+})
+
+it("keeps the owner next-page action reachable when every connector on this page is revoked", async () => {
+  const { McpConnectionList } = await import("@/ui/mcp/mcp-connection-list")
+  window.localStorage.setItem("kokoro.locale", "zh")
+  const connector = { ...privateOAuthFixture().connector, status: "revoked" as const }
+  const onNext = vi.fn(), onPrevious = vi.fn(), action = vi.fn()
+  render(<LocaleProvider><McpConnectionList connectors={[connector]} customApis={[]} providers={[]} query="" brandName="Kokoro" onBrowse={action} onEdit={action} onSelectCustomApi={action} previousEnabled={false} nextEnabled onPrevious={onPrevious} onNext={onNext} /></LocaleProvider>)
+
+  expect(screen.queryByRole("button", { name: connector.display_name })).not.toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "上一页" })).toBeDisabled()
+  expect(screen.getByRole("button", { name: "下一页" })).toBeEnabled()
+  fireEvent.click(screen.getByRole("button", { name: "下一页" }))
+  expect(onNext).toHaveBeenCalledOnce()
+  expect(onPrevious).not.toHaveBeenCalled()
+  expect(action).not.toHaveBeenCalled()
+})
+
+it("keeps owner pagination after the last visible connector is removed and clears it only at cursor boundaries", async () => {
+  const { McpConnectionList } = await import("@/ui/mcp/mcp-connection-list")
+  window.localStorage.setItem("kokoro.locale", "zh")
+  const connector = privateOAuthFixture().connector
+  const onNext = vi.fn(), onPrevious = vi.fn(), action = vi.fn()
+  const content = (connectors: McpConnector[], previousEnabled: boolean, nextEnabled: boolean) =>
+    <LocaleProvider><McpConnectionList connectors={connectors} customApis={[]} providers={[]} query="" brandName="Kokoro" onBrowse={action} onEdit={action} onSelectCustomApi={action} previousEnabled={previousEnabled} nextEnabled={nextEnabled} onPrevious={onPrevious} onNext={onNext} /></LocaleProvider>
+  const view = render(content([connector], true, true))
+  expect(screen.getByRole("button", { name: connector.display_name })).toBeInTheDocument()
+  view.rerender(content([], true, true))
+
+  expect(screen.queryByRole("button", { name: connector.display_name })).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole("button", { name: "上一页" }))
+  fireEvent.click(screen.getByRole("button", { name: "下一页" }))
+  expect(onPrevious).toHaveBeenCalledOnce()
+  expect(onNext).toHaveBeenCalledOnce()
+  view.rerender(content([], true, false))
+  expect(screen.getByRole("button", { name: "上一页" })).toBeEnabled()
+  expect(screen.getByRole("button", { name: "下一页" })).toBeDisabled()
+  view.rerender(content([], false, false))
+  expect(screen.queryByRole("navigation", { name: "MCP pages" })).not.toBeInTheDocument()
+  expect(action).not.toHaveBeenCalled()
+})
+
+function customApiSecretFixture(): CustomApiProfile {
+  return { profile_id: "secret-edit-profile", name: "Secret editing API", instructions: "Keep instructions", state_version: "7",
+    created_at: "2026-10-17T12:00:00Z", updated_at: "2026-10-17T12:00:00Z",
+    environment: ["API_TOKEN", "UNUSED_TOKEN"].map(name => ({ name, configured: true, state_version: "2", status: "active" })) }
+}
+
+function customApiSecretEditor(onSave: (input: CustomApiUpdateInput) => void, onClose: () => void = vi.fn()) {
+  return <LocaleProvider><CustomApiDetailDialog profile={customApiSecretFixture()} actionError={false} busy={false} admitted command={undefined}
+    canUpdate canRemove onResume={vi.fn()} returnFocusRef={{ current: null }} onClose={onClose} onSave={onSave} onDelete={vi.fn()} /></LocaleProvider>
+}
+
+it("rotates stored Custom API secrets and adds new keys without submitting configured placeholders", () => {
+  window.localStorage.setItem("kokoro.locale", "zh")
+  const save = vi.fn()
+  render(customApiSecretEditor(save))
+  const replacement = screen.getByRole("textbox", { name: "API_TOKEN 密钥值" })
+  expect(replacement).toHaveValue("")
+  expect(screen.getByRole("textbox", { name: "API_TOKEN 密钥名称" })).toHaveAttribute("readonly")
+  expect(screen.getByRole("textbox", { name: "UNUSED_TOKEN 密钥值" })).toHaveValue("")
+  expect(screen.getByRole("button", { name: "保存" })).toBeDisabled()
+  fireEvent.change(replacement, { target: { value: "replacement-fixture" } })
+  fireEvent.click(screen.getByRole("button", { name: "添加密钥" }))
+  fireEvent.change(screen.getByRole("textbox", { name: "密钥名称" }), { target: { value: "NEW_TOKEN" } })
+  fireEvent.change(screen.getByRole("textbox", { name: "密钥值" }), { target: { value: "new-fixture" } })
+  expect(save).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole("button", { name: "保存" }))
+  expect(save).toHaveBeenCalledExactlyOnceWith({ expected_state_version: "7", name: "Secret editing API", instructions: "Keep instructions",
+    environment_upserts: [{ name: "API_TOKEN", value: "replacement-fixture" }, { name: "NEW_TOKEN", value: "new-fixture" }] })
+})
+
+it("stages Custom API secret removal, supports undo, and never combines a removed key with an upsert", () => {
+  window.localStorage.setItem("kokoro.locale", "zh")
+  const save = vi.fn()
+  render(customApiSecretEditor(save))
+  fireEvent.change(screen.getByRole("textbox", { name: "API_TOKEN 密钥值" }), { target: { value: "discarded-replacement" } })
+  fireEvent.click(screen.getByRole("button", { name: "移除密钥 API_TOKEN" }))
+  expect(save).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole("button", { name: "撤销移除 API_TOKEN" }))
+  expect(screen.getByRole("textbox", { name: "API_TOKEN 密钥值" })).toHaveValue("")
+  expect(screen.getByRole("button", { name: "保存" })).toBeDisabled()
+  fireEvent.click(screen.getByRole("button", { name: "移除密钥 API_TOKEN" }))
+  fireEvent.click(screen.getByRole("button", { name: "保存" }))
+  expect(save).toHaveBeenCalledExactlyOnceWith({ expected_state_version: "7", name: "Secret editing API", instructions: "Keep instructions", environment_removals: ["API_TOKEN"] })
+})
+
+it("drops unsaved Custom API replacement and removal drafts on cancel and reopening", () => {
+  window.localStorage.setItem("kokoro.locale", "zh")
+  const save = vi.fn(), close = vi.fn()
+  const view = render(customApiSecretEditor(save, close))
+  fireEvent.change(screen.getByRole("textbox", { name: "API_TOKEN 密钥值" }), { target: { value: "cancelled-fixture" } })
+  fireEvent.click(screen.getByRole("button", { name: "移除密钥 UNUSED_TOKEN" }))
+  fireEvent.click(screen.getByRole("button", { name: "取消" }))
+  expect(close).toHaveBeenCalledOnce()
+  expect(save).not.toHaveBeenCalled()
+  view.unmount()
+  render(customApiSecretEditor(save, close))
+  expect(screen.getByRole("textbox", { name: "API_TOKEN 密钥值" })).toHaveValue("")
+  expect(screen.getByRole("button", { name: "移除密钥 UNUSED_TOKEN" })).toBeEnabled()
+  expect(screen.getByRole("button", { name: "保存" })).toBeDisabled()
+})
+
+it("locks unknown Custom API secret edits and replays the original values, removals, CAS and key after reopening", async () => {
+  const { waitFor, within } = await import("@testing-library/react")
+  window.localStorage.setItem("kokoro.locale", "zh")
+  const profile = customApiSecretFixture()
+  const update = vi.fn().mockRejectedValueOnce(Error("ACK lost")).mockResolvedValue({ ...profile, state_version: "8", environment: [profile.environment[0]!] })
+  const client = { ...createHubClient(), updateCustomApi: update,
+    getCustomApi: vi.fn().mockResolvedValue(profile),
+    listMcpConnectors: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+    listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+    listCustomApis: vi.fn().mockResolvedValue({ items: [profile], page: { next_cursor: null } }) }
+  const boundary = { subject: "custom-api-secret-unknown", admitted: true, generation: 0 }
+  render(<LocaleProvider><ConnectorCommandProvider client={client} boundary={boundary}><McpProjectionRead client={client} identity={boundary.subject} initialView="connections" /></ConnectorCommandProvider></LocaleProvider>)
+  fireEvent.click(await screen.findByRole("button", { name: profile.name }))
+  let dialog = await screen.findByRole("dialog", { name: "编辑自定义 API" })
+  fireEvent.change(within(dialog).getByRole("textbox", { name: "API_TOKEN 密钥值" }), { target: { value: "original-replacement" } })
+  fireEvent.click(within(dialog).getByRole("button", { name: "移除密钥 UNUSED_TOKEN" }))
+  fireEvent.click(within(dialog).getByRole("button", { name: "保存" }))
+  await within(dialog).findByRole("button", { name: "重试原请求" })
+  const original = update.mock.calls[0]!.slice(0, 3)
+  expect(original[1]).toEqual({ expected_state_version: "7", name: profile.name, instructions: profile.instructions,
+    environment_upserts: [{ name: "API_TOKEN", value: "original-replacement" }], environment_removals: ["UNUSED_TOKEN"] })
+  expect(within(dialog).getByRole("textbox", { name: "API_TOKEN 密钥值" })).toHaveAttribute("readonly")
+  expect(within(dialog).getByRole("button", { name: "撤销移除 UNUSED_TOKEN" })).toBeDisabled()
+  expect(within(dialog).getByRole("button", { name: "添加密钥" })).toBeDisabled()
+  expect(within(dialog).getByRole("button", { name: "保存" })).toBeDisabled()
+  fireEvent.change(within(dialog).getByRole("textbox", { name: "API_TOKEN 密钥值" }), { target: { value: "late-change" } })
+  expect(within(dialog).getByRole("textbox", { name: "API_TOKEN 密钥值" })).toHaveValue("original-replacement")
+  fireEvent.click(within(dialog).getByRole("button", { name: "取消" }))
+  fireEvent.click(await screen.findByRole("button", { name: profile.name }))
+  dialog = await screen.findByRole("dialog", { name: "编辑自定义 API" })
+  expect(within(dialog).getByRole("textbox", { name: "API_TOKEN 密钥值" })).toHaveValue("")
+  expect(update).toHaveBeenCalledOnce()
+  fireEvent.click(within(dialog).getByRole("button", { name: "重试原请求" }))
+  await waitFor(() => expect(update).toHaveBeenCalledTimes(2))
+  expect(update.mock.calls[1]!.slice(0, 3)).toEqual(original)
 })
 
 // Native storage is covered separately; these jsdom tests retain all original command/UI assertions.

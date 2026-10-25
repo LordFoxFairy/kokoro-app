@@ -1,9 +1,12 @@
 "use client";
 
+import type { McpIconClient } from "@/hub/mcp-icon-client";
+import { useMcpIconDraft } from "./use-mcp-icon-draft";
+import { McpIconPicker } from "./mcp-icon-picker";
 import { connectorCommandMayResume, connectorCommandFailureMessage } from "./connector-command-failure";
 
 import { type FormEvent, useCallback, useState } from "react";
-import { ImagePlus, Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -27,11 +30,13 @@ type EnvironmentDraft = { id: string; name: string; value: string };
  */
 export function CustomApiForm({
   flow,
+  iconClient,
   boundary,
   onCancel,
   onDone,
 }: {
   flow: CustomApiCreateFlow;
+  iconClient?: McpIconClient | undefined;
   boundary: ProjectReadBoundary;
   onCancel: () => void;
   onDone: () => Promise<void>;
@@ -48,6 +53,8 @@ export function CustomApiForm({
   const clearSecrets = useCallback(() => setEnvironment(items => items.map(item => ({ ...item, value: "" }))), []);
   const { state, completion, admitted, submitting, locked, editable, maySubmit, waitForCommand, cancel, done } =
     useConnectorCreationForm(flow, boundary, onDone, clearSecrets);
+
+  const icon = useMcpIconDraft(iconClient, boundary, locked, state.kind === "completed");
 
   const updateEnvironment = (id: string, patch: Partial<EnvironmentDraft>) =>
     setEnvironment((items) =>
@@ -71,14 +78,15 @@ export function CustomApiForm({
     if (!maySubmit()) return;
     const confirmed = await waitForCommand(signal => state.kind === "unknown"
       ? flow.retry(boundary, signal)
-      : editable() && valid ? flow.submit({
+      : editable() && valid && icon.draft.canSave() ? (icon.draft.protectForSave(), flow.submit({
+        ...icon.draft.change(),
         name: name.trim(),
         ...(instructions.trim() ? { instructions: instructions.trim() } : {}),
         environment: configuredEnvironment.map((item) => ({
           name: item.name.trim(),
           value: item.value,
         })),
-      }, boundary, signal) : Promise.resolve(false));
+      }, boundary, signal)) : Promise.resolve(false));
     if (confirmed) await done();
   };
 
@@ -111,20 +119,7 @@ export function CustomApiForm({
             onChange={(event) => { if (editable()) setName(event.target.value); }}
           />
         </div>
-        <div className={styles.iconField} aria-label="图标">
-          <Label>图标</Label>
-          <div className={styles.iconUploadRow}>
-            <span className={styles.iconPreview} aria-hidden="true">
-              <ImagePlus />
-            </span>
-            <div className={styles.iconUploadCopy}>
-              <Button type="button" variant="outline" size="sm" disabled>
-                上传
-              </Button>
-              <small>PNG 或 JPG，最大 1 MB。推荐尺寸 256×256 像素。</small>
-            </div>
-          </div>
-        </div>
+        <McpIconPicker draft={icon.draft} state={icon.state} disabled={locked} />
         <div className={styles.field}>
           <Label htmlFor="custom-api-instructions">
             {t("connectorCatalog.notes")} {t("connectorCatalog.optional")}
@@ -215,13 +210,13 @@ export function CustomApiForm({
         <Button
           type="button"
           variant="outline"
-          onClick={() => cancel(onCancel)}
+          onClick={() => { icon.draft.cancel(); cancel(onCancel); }}
         >
           {t("mcp.cancel")}
         </Button>
         {state.kind === "completed" || completion !== "idle" ? <Button type="button" disabled={!admitted || completion === "closing"} onClick={() => void done()}>{t("mcp.creationDone")}</Button> : <Button
           type="submit"
-          disabled={!connectorCommandMayResume(state.failure) || !admitted || submitting || !flow.available || (state.kind !== "unknown" && !valid)}
+          disabled={!connectorCommandMayResume(state.failure) || !admitted || submitting || !flow.available || (state.kind !== "unknown" && (!valid || !icon.draft.canSave()))}
         >
           {submitting ? <Spinner aria-hidden="true" /> : null}
           {t(state.kind === "unknown" ? connectorCommandMayResume(state.failure) ? "mcp.retryOriginal" : "mcp.recovery.inspectRequired" : "mcp.save")}

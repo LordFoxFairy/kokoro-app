@@ -9,7 +9,7 @@ import { createCustomApiCreateFlow, type CustomApiCreateFlow } from "./custom-ap
 import { createMcpJsonImportFlow, type McpJsonImportFlow } from "./mcp-json-import-flow";
 import { JsonMcpImportForm } from "./mcp-json-import-form";
 import { invalidateMcpConnectorProjection } from "./use-mcp-projection";
-import { createMcpServerCreationFlow, type McpServerCreationFlow } from "./mcp-server-creation-flow";
+import { createMcpServerCreationFlow, type McpServerCreationFlow, type McpServerCreationCompletion } from "./mcp-server-creation-flow";
 import { CustomMcpForm } from "./mcp-custom-form";
 import { UrlMcpForm } from "./mcp-url-form";
 import { CustomApiForm } from "./custom-api-form";
@@ -70,7 +70,7 @@ export function ConnectorCommandProvider({ client, boundary, children }: {
 export function CustomApiCreationForm({ onCancel, onDone }: { onCancel: () => void; onDone: () => Promise<void> }) {
   const value = useContext(Commands);
   if (value === null) throw new Error("Custom API creation requires its actor-owned shell provider");
-  return <CustomApiForm key={value.api.instanceId} flow={value.api} boundary={value.boundary} onCancel={onCancel} onDone={onDone} />;
+  return <CustomApiForm key={value.api.instanceId} flow={value.api} iconClient={value.client.mcpIcons} boundary={value.boundary} onCancel={onCancel} onDone={onDone} />;
 }
 
 export function JsonMcpCreationForm({ onCancel, onDone }: { onCancel: () => void; onDone: () => Promise<void> }) {
@@ -79,11 +79,18 @@ export function JsonMcpCreationForm({ onCancel, onDone }: { onCancel: () => void
   return <JsonMcpImportForm key={value.json.instanceId} flow={value.json} boundary={value.boundary} onCancel={onCancel} onDone={onDone} />;
 }
 
-export function PrivateMcpCreationForm({ mode, onCancel, onDone }: { mode: "form" | "url"; onCancel: () => void; onDone: () => Promise<void> }) {
+export function PrivateMcpCreationForm({ mode, onCancel, onDone }: { mode: "form" | "url"; onCancel: () => void; onDone: (result: McpServerCreationCompletion, current: () => boolean) => Promise<void> }) {
   const value = useContext(Commands);
   if (value === null) throw new Error("Private MCP creation requires its actor-owned shell provider");
-  const props = { flow: value.server, boundary: value.boundary, onCancel, onDone };
+  const props = { flow: value.server, iconClient: value.client.mcpIcons, boundary: value.boundary, onCancel, onDone };
   return mode === "form" ? <CustomMcpForm key={value.server.instanceId} {...props} /> : <UrlMcpForm key={value.server.instanceId} {...props} />;
+}
+
+export function useConnectorCommandBoundary(client: HubClient) {
+  const value = useContext(Commands);
+  if (value === null || value.client !== client)
+    throw new Error("Connector creation requires the exact client shell owner");
+  return value.boundary;
 }
 
 export function useMcpPreparationCommands(client: HubClient, identity: string) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { type FormEvent, type RefObject, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -41,6 +41,7 @@ import { invalidateMcpConnectorProjection, useMcpProjection } from "./use-mcp-pr
 import type { CustomApiManagementIntent } from "./custom-api-management-commands";
 
 import type { McpManagementIntent } from "./mcp-management-commands";
+import type { McpServerCreationCompletion } from "./mcp-server-creation-flow";
 
 const EMPTY_PROVIDERS: McpConnectorProvider[] = [];
 
@@ -63,6 +64,7 @@ export function McpProjectionRead({
   initialView = "catalog",
   settingsLayout = false,
   refreshKey = 0,
+  createdDetail,
 }: {
   client: HubClient;
   embedded?: boolean;
@@ -83,6 +85,8 @@ export function McpProjectionRead({
   ) => void;
   onPrompt?: (prompt: string) => void;
   brandName?: string;
+  /** A creation window hands off its exact ACK; it does not mount another plaza. */
+  createdDetail?: { target: McpServerCreationCompletion; onClose: () => void; returnFocusRef?: RefObject<HTMLElement | null> };
 }) {
   const t = useT();
   const startTrial = useMcpTrial();
@@ -109,7 +113,10 @@ export function McpProjectionRead({
   const [actionError, setActionError] = useState(false);
   const [editor, setEditor] = useState<McpConnectorEditor | null>(null);
   // Only exact locators and typed input survive an admission recheck.
-  const [connectorIntent, setConnectorIntent] = useState<{ connectorId: string; providerKey?: string; serverId?: string; binding?: McpConnectorBinding; exact?: boolean; entered: boolean; window: object; configurationSaved?: object } | null>(null);
+  const [connectorIntent, setConnectorIntent] = useState<{ connectorId: string; providerKey?: string; serverId?: string; binding?: McpConnectorBinding; exact?: boolean; entered: boolean; window: object; configurationSaved?: object } | null>(() => createdDetail ? {
+    ...createdDetail.target, exact: true, entered: false, window: {},
+    binding: { connectorType: "mcp", serverId: createdDetail.target.serverId },
+  } : null);
   const editorWindow = useRef<{ intent: object; controller: AbortController } | null>(null);
   useLayoutEffect(() => {
     const window = connectorIntent?.window;
@@ -184,7 +191,7 @@ export function McpProjectionRead({
     setConfirmedRemovedConnectorIds(new Set());
   }
   const surfaceRef = useRef<HTMLElement | null>(null);
-  const editorReturnFocusRef = useRef<HTMLElement | null>(null);
+  const editorReturnFocusRef = useRef<HTMLElement | null>(createdDetail?.returnFocusRef?.current ?? null);
   const catalogReturnFocusRef = useRef<HTMLElement | null>(null);
   const providerReturnFocusRef = useRef<HTMLElement | null>(null);
   useLayoutEffect(() => {
@@ -209,7 +216,7 @@ export function McpProjectionRead({
   } = useMcpProjection({
     client,
     identity,
-    admitted,
+    admitted: admitted && !createdDetail,
     readGeneration,
     cursor,
     view,
@@ -218,14 +225,14 @@ export function McpProjectionRead({
   const customApiState = useCustomApiProjection({
     client,
     identity,
-    admitted,
+    admitted: admitted && !createdDetail,
     readGeneration,
     refreshKey,
   });
 
   // Provider card artwork is rendered from owner-owned `cover_image_url` in
   // McpProviderDirectory; this coordinator never substitutes local assets.
-  const directory = useMcpProviderDirectory({ client, identity, admitted, readGeneration,
+  const directory = useMcpProviderDirectory({ client, identity, admitted: admitted && !createdDetail, readGeneration,
     seed: providerProjection, query: providerQuery, category: categoryFilter });
   const providers = [...new Map([...(providerProjection?.items ?? EMPTY_PROVIDERS), ...directory.items]
     .map(provider => [provider.provider_key, provider])).values()];
@@ -237,7 +244,7 @@ export function McpProjectionRead({
   const connectors = (connectorProjection?.items ?? []).filter(
     (connector) => !confirmedRemovedConnectorIds.has(connector.connector_id),
   );
-  const relations = useMcpProviderRelations({ client, identity, admitted, readGeneration, refreshKey,
+  const relations = useMcpProviderRelations({ client, identity, admitted: admitted && !createdDetail, readGeneration, refreshKey,
     enabled: view === "catalog" || catalogOpen || (providerWindowToken.fromDirectory === true && selectedProviderKey !== null) });
   const addedProviderKeys = new Set(relations.items.filter(item => item.status !== "revoked" && !confirmedRemovedConnectorIds.has(item.connector_id)).map(item => item.provider_key));
   const directoryConnections = relations.items.filter(item => item.provider_key === selectedProviderKey && item.status !== "revoked" && !confirmedRemovedConnectorIds.has(item.connector_id));
@@ -283,6 +290,7 @@ export function McpProjectionRead({
     setDeleteId(null);
     setDisplayName(null);
     setDescription(null);
+    createdDetail?.onClose();
   };
   const runAction = async (
     id: string,
@@ -524,8 +532,9 @@ export function McpProjectionRead({
       data-embedded={embedded || undefined}
       data-settings-layout={settingsLayout || undefined}
       data-presentation={plaza ? "plaza" : undefined}
-      aria-busy={refreshing || undefined}
+      aria-busy={(!createdDetail && refreshing) || undefined}
     >
+      {createdDetail ? null : <>
       <header className={styles.header}>
         {plaza ? <h1>{t("rail.plugins")}</h1> : settingsLayout ? null : <h2>{t("rail.navPlugins")}</h2>}
         <McpSettingsToolbar
@@ -677,8 +686,10 @@ export function McpProjectionRead({
         onSelectProvider={openProvider}
         {...(onCreateMcp ? { onCreate: (mode: McpCreateMode, target?: HTMLElement | null) => { if (ownerRef.current === owner && admitted) onCreateMcp(mode, target); } } : {})}
       />
+      </>}
       {connectorIntent?.serverId && (connectorIntent.exact || connectorIntent.entered || editor?.server) ? (
         <CustomMcpDetailDialog
+          iconClient={client.mcpIcons} iconBoundary={commandBoundary}
           key={connectorIntent.serverId}
           connector={editor?.server ? editor.connector : null}
           server={editor?.server ?? null}
@@ -722,9 +733,11 @@ export function McpProjectionRead({
             // resend those values while saving a label or note: doing so made
             // a harmless metadata edit look like a transport change and
             // disconnected a prepared connector.
-            if (!notesChanged && !nameChanged && !urlChanged && !headersChanged)
+            if (!notesChanged && !nameChanged && !urlChanged && !headersChanged && input.icon === undefined && input.clear_icon !== true)
               return;
             void runManagement("editor", editor.connector.connector_id, { operation: "update_server", connectorId: editor.connector.connector_id, serverId: server.server_id, input: {
+              ...(input.icon === undefined ? {} : { icon: input.icon }),
+              ...(input.clear_icon === true ? { clear_icon: true as const } : {}),
               expected_state_version: server.state_version,
               ...(nameChanged ? { display_name: input.display_name } : {}),
               ...(urlChanged ? { server_url: input.server_url } : {}),
@@ -858,6 +871,7 @@ export function McpProjectionRead({
       />
       {selectedCustomApiId ? (
         <CustomApiDetailDialog
+          iconClient={client.mcpIcons} iconBoundary={commandBoundary}
           key={selectedCustomApiId}
           profile={selectedCustomApi}
           busy={apiCommandState?.kind === "running"}

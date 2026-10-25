@@ -8,6 +8,7 @@ import {
   mcpConnectorErrorAllowed,
   mcpPrivateServerMatches,
   mcpPrivateServerRegistrationInputSchema,
+  mcpPrivateServerUpdateInputSchema,
   mcpPrivateJsonImportInputSchema,
   mcpPrivateJsonImportSchema,
 } from "@/hub/mcp-connector.schema";
@@ -779,4 +780,13 @@ it("retains safe revoked header history while keeping write limits and strict de
   expect(mcpPrivateServerSchema.safeParse({ ...server, headers: [...server.headers, server.headers[0]] }).success).toBe(false);
   expect(mcpPrivateServerSchema.safeParse({ ...server, headers: [{ ...server.headers[0], value: "private" }] }).success).toBe(false);
   expect(mcpPrivateServerRegistrationInputSchema.safeParse({ display_name: "History", server_url: server.server_url, headers: Array.from({ length: 33 }, (_, index) => ({ name: `x-header-${index}`, value: "fixture" })) }).success).toBe(false);
+});
+
+it("staged icon selectors are accepted by original server saves, clear is explicit and icon-only updates are valid", () => {
+  const icon = { intent_id: "12345678-1234-1234-1234-123456789abc", expected_state_version: "2" };
+  expect(mcpPrivateServerRegistrationInputSchema.safeParse({ display_name: "Icon", server_url: "https://tools.example/mcp", icon }).success).toBe(true);
+  expect(mcpPrivateServerUpdateInputSchema.safeParse({ expected_state_version: "7", icon }).success).toBe(true);
+  expect(mcpPrivateServerUpdateInputSchema.safeParse({ expected_state_version: "7", clear_icon: true }).success).toBe(true);
+  for (const bad of [{ icon, clear_icon: true }, { clear_icon: false }, { icon: { ...icon, expected_state_version: 2 } }, { icon: { ...icon, expected_state_version: "2147483647" } }])
+    expect(mcpPrivateServerUpdateInputSchema.safeParse({ expected_state_version: "7", ...bad }).success).toBe(false);
 });

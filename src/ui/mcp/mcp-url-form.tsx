@@ -4,7 +4,7 @@ import { connectorCommandFailureMessage } from "./connector-command-failure";
 
 import { useCallback, useState } from "react";
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
-import type { McpServerCreationFlow } from "./mcp-server-creation-flow";
+import type { McpServerCreationFlow, McpServerCreationCompletion } from "./mcp-server-creation-flow";
 import { useMcpServerCreation } from "./use-mcp-server-creation";
 import { Button } from "@/components/ui/button";
 import { DialogTitle } from "@/components/ui/dialog";
@@ -63,7 +63,7 @@ export function UrlMcpForm({
   flow: McpServerCreationFlow;
   boundary: ProjectReadBoundary;
   onCancel: () => void;
-  onDone: () => Promise<void>;
+  onDone: (result: McpServerCreationCompletion, current: () => boolean) => Promise<void>;
   onAuthorizationNavigate?: (url: string) => void;
   showTitle?: boolean;
   title?: string;

@@ -2068,3 +2068,28 @@ it.each(["provider_key", "display_name", "description"] as const)("rejects a Pro
   expect(new Headers(fetchMock.mock.calls[0]?.[1]?.headers).get("idempotency-key")).toBe("same-original-key");
   expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual(input);
 });
+
+it("MCP icons use all five same-origin operations and reject a mismatched command ACK", async () => {
+  const id = "12345678-1234-1234-1234-123456789abc", at = "2099-01-01T00:00:00Z";
+  const intent = { intent_id: id, state: "ready", state_version: "3", filename: "icon.png", mime_type: "image/png", content_sha256: "a".repeat(64), size_bytes: "8", expires_at: at, expired: false, width: 24, height: 24, created_at: at, updated_at: at };
+  const fetch = vi.fn<typeof globalThis.fetch>(); vi.stubGlobal("fetch", fetch);
+  const client = createHubClient().mcpIcons!;
+  const operations = [
+    { path: "uploads", action: () => client.begin({ filename: "icon.png", mime_type: "image/png", content_sha256: "a".repeat(64), size_bytes: "8" }, "icon-original"), data: { intent: { ...intent, state: "staged", state_version: "1", width: undefined, height: undefined }, replayed: false } },
+    { path: "import", action: () => client.importUrl({ image_url: "https://images.example/icon.png" }, "icon-original"), data: { intent, replayed: false } },
+    { path: `${id}/complete`, action: () => client.complete(id, { expected_state_version: "1", source_version_id: "exact-version" }, "icon-original"), data: { intent, replayed: false } },
+    { path: `${id}/cancel`, action: () => client.cancel(id, { expected_state_version: "3" }, "icon-original"), data: { intent: { ...intent, state: "released", state_version: "5" }, replayed: false } },
+    { path: id, action: () => client.get(id), data: { intent } },
+  ];
+  for (const operation of operations) {
+    fetch.mockResolvedValueOnce(publicResponse({ data: operation.data }));
+    await expect(operation.action()).resolves.toEqual(operation.data);
+    const [url, options] = fetch.mock.calls.at(-1)!;
+    expect(url).toBe(`/api/hub/mcp/icons/${operation.path}`);
+    expect(options?.method ?? "GET").toBe(operation.path === id ? "GET" : "POST");
+    expect(new Headers(options?.headers).get("idempotency-key")).toBe(operation.path === id ? null : "icon-original");
+  }
+  fetch.mockResolvedValueOnce(publicResponse({ data: { intent, replayed: false } }));
+  await expect(client.cancel(id, { expected_state_version: "1" }, "icon-original")).rejects.toMatchObject({ reason: "parse" });
+  expect(fetch).toHaveBeenCalledTimes(6);
+});

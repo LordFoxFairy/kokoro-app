@@ -8,6 +8,8 @@ import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
 
 export type McpCreationScope = Readonly<{ boundary: ProjectReadBoundary; window: object }>;
 export type McpCreationFacts = Readonly<{ server: McpPrivateServer; connector: McpConnector }>;
+/** Navigation carries only the acknowledged binding, never configuration or secrets. */
+export type McpServerCreationCompletion = Readonly<{ serverId: string; connectorId: string; providerKey: string }>;
 export type McpServerCreationState = Readonly<{
   registered: boolean; busy: boolean; unknown: "register" | "prepare" | null;
   facts: McpCreationFacts | null; name: string; error: boolean; failure?: ConnectorCommandFailure;
