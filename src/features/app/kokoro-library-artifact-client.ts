@@ -64,13 +64,88 @@ export async function listLibraryArtifacts(cursor: string | null, signal: AbortS
   return { items: parsed.data.data.items.map(mapArtifact), nextCursor: parsed.data.data.next_cursor }
 }
 
-export async function getLibraryArtifact(conversationId: string, artifactId: string, signal: AbortSignal): Promise<LibraryArtifact> {
-  const response = await fetch(artifactPath({ conversationId, artifactId }), { cache: "no-store", signal })
+async function readArtifactWire(selector: LibraryArtifactSelector, signal: AbortSignal): Promise<LibraryArtifactWire> {
+  signal.throwIfAborted()
+  const response = await fetch(artifactPath(selector), { cache: "no-store", signal })
+  if (signal.aborted) void response.body?.cancel().catch(() => undefined)
+  signal.throwIfAborted()
   const parsed = libraryArtifactDetailResponseSchema.safeParse(await parsedResponse(response))
-  if (!parsed.success || parsed.data.data.conversation_id !== conversationId || parsed.data.data.artifact_id !== artifactId) {
+  if (!parsed.success || parsed.data.data.conversation_id !== selector.conversationId || parsed.data.data.artifact_id !== selector.artifactId) {
     throw new Error("library_artifacts_invalid_response")
   }
-  return mapArtifact(parsed.data.data)
+  return parsed.data.data
+}
+
+export async function getLibraryArtifact(conversationId: string, artifactId: string, signal: AbortSignal): Promise<LibraryArtifact> {
+  return mapArtifact(await readArtifactWire({ conversationId, artifactId }, signal))
+}
+
+export const ARTIFACT_TEXT_PREVIEW_MAX_BYTES = 65_536
+export type ArtifactTextPreview = { kind: "text"; text: string; mimeType: string; sizeBytes: string } | { kind: "unsupported" }
+
+async function readTextBytes(selector: LibraryArtifactSelector, signal: AbortSignal): Promise<ArtifactTextPreview> {
+  const detail = await readArtifactWire(selector, signal)
+  signal.throwIfAborted()
+  if ((detail.mime_type !== "text/plain" && detail.mime_type !== "text/markdown") || Number(detail.size_bytes) > ARTIFACT_TEXT_PREVIEW_MAX_BYTES) return { kind: "unsupported" }
+  const response = await fetch(`${artifactPath(selector)}/content`, { cache: "no-store", redirect: "error", signal })
+  if (signal.aborted) void response.body?.cancel().catch(() => undefined)
+  signal.throwIfAborted()
+  if (response.status !== 200 || response.headers.get("content-length") !== detail.size_bytes || response.headers.get("content-type")?.toLowerCase() !== detail.mime_type || response.body === null) {
+    void response.body?.cancel().catch(() => undefined)
+    throw new Error("library_artifact_preview_invalid_response")
+  }
+  const reader = response.body.getReader()
+  const cancel = () => { void reader.cancel().catch(() => undefined) }
+  signal.addEventListener("abort", cancel, { once: true })
+  const chunks: Uint8Array[] = []
+  let total = 0
+  let ended = false
+  try {
+    for (;;) {
+      signal.throwIfAborted()
+      const { done, value } = await reader.read()
+      signal.throwIfAborted()
+      if (done) { ended = true; break }
+      total += value.byteLength
+      if (total > ARTIFACT_TEXT_PREVIEW_MAX_BYTES || total > Number(detail.size_bytes)) throw new Error("library_artifact_preview_too_large")
+      chunks.push(value)
+    }
+    if (total !== Number(detail.size_bytes)) throw new Error("library_artifact_preview_incomplete")
+    const bytes = new Uint8Array(total)
+    let offset = 0
+    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength }
+    const digest = await crypto.subtle.digest("SHA-256", bytes)
+    signal.throwIfAborted()
+    const sha256 = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("")
+    if (sha256 !== detail.content_sha256) throw new Error("library_artifact_preview_digest_mismatch")
+    return { kind: "text", text: new TextDecoder("utf-8", { fatal: true }).decode(bytes), mimeType: detail.mime_type, sizeBytes: detail.size_bytes }
+  } finally {
+    signal.removeEventListener("abort", cancel)
+    if (!ended) cancel()
+    reader.releaseLock()
+  }
+}
+
+/** Small text only. One deadline includes detail, content EOF and verification;
+ * the separate native attachment flow never enters this bounded reader. */
+export async function readLibraryArtifactTextPreview(selector: LibraryArtifactSelector, signal: AbortSignal): Promise<ArtifactTextPreview> {
+  signal.throwIfAborted()
+  const controller = new AbortController()
+  const relay = () => controller.abort(signal.reason)
+  signal.addEventListener("abort", relay, { once: true })
+  let rejectAbort!: () => void
+  const aborted = new Promise<never>((_, reject) => {
+    rejectAbort = () => reject(controller.signal.reason)
+    controller.signal.addEventListener("abort", rejectAbort, { once: true })
+  })
+  const timer = setTimeout(() => controller.abort(new DOMException("Preview deadline exceeded", "TimeoutError")), 10_000)
+  try {
+    return await Promise.race([readTextBytes(selector, controller.signal), aborted])
+  } finally {
+    clearTimeout(timer)
+    signal.removeEventListener("abort", relay)
+    controller.signal.removeEventListener("abort", rejectAbort)
+  }
 }
 
 /** Native same-origin attachment: launch only; browser download completion is not observable here. */

@@ -13,6 +13,7 @@ import { ContextPanel } from "@/components/blocks/context-panel/context-panel"
 import { WorkspaceNavigationTrigger } from "@/components/blocks/workspace-header/workspace-header"
 import { WorkspaceRail, type WorkspaceRailProps } from "@/components/blocks/workspace-rail/workspace-rail"
 import type { EngineSnapshot } from "@/engine/machine"
+import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
 import type { CanvasWorkspace } from "@/ui/shell/use-canvas-workspace"
 import { CANVAS_MAX, CANVAS_MIN } from "@/ui/canvas/use-canvas-resize"
 import { RAIL_COLLAPSED_WIDTH, RAIL_MAX, RAIL_MIN } from "@/ui/rail/use-rail-resize"
@@ -27,6 +28,7 @@ type RailProps = Omit<WorkspaceRailProps, "withinProvider">
 
 export type AppFrameShellProps = {
   preview?: boolean
+  readBoundary?: ProjectReadBoundary
   webSkin: NonNullable<AppFrameProps["webSkin"]>
   narrowWeb: boolean
   compactDesktopRail: boolean
@@ -55,6 +57,7 @@ export type AppFrameShellProps = {
 /** Owns the shadcn shell geometry: rail, main panel, optional Canvas, and overlays. */
 export function AppFrameShell({
   preview = false,
+  readBoundary,
   webSkin,
   narrowWeb,
   compactDesktopRail,
@@ -192,6 +195,7 @@ export function AppFrameShell({
                   >
                     <ContextPanel
                       preview={preview}
+                      {...(readBoundary === undefined ? {} : { readBoundary })}
                       sessionId={activeId}
                       content={canvas.resolvedCanvas}
                       files={thread.files}

@@ -996,6 +996,7 @@ function AppFrameRuntime({
     <McpTrialProvider onTry={composerConnectionsEnabled ? actions.startMcpTrial : null}>
     <ConnectorCommandProvider client={browserHubClient({ preview })} boundary={preview ? { admitted: true, subject: "preview", generation: 0 } : projectReadBoundary ?? { admitted: false, subject: null, generation: 0 }}>
     <AppFrameShell
+      {...(projectReadBoundary === undefined ? {} : { readBoundary: projectReadBoundary })}
       preview={preview}
       webSkin={resolvedWebSkin}
       narrowWeb={narrowWeb}

@@ -1,3 +1,9 @@
+## 2026-10-25 有界小文本成果预览
+
+在现 Chat→Canvas 成果入口补足首片 metadata-only 的用户预览；既有 native attachment 下载、二元 Conversation/Artifact 授权和 ≤1 GiB 同源流不变。仅当前可信 subject/admission/generation 下、metadata 为 `text/plain` 或 `text/markdown` 且大小 ≤65,536 bytes 的成果可读预览；先复用唯一严格二元详情取得权威 MIME/大小/SHA，再经原 `/content` 路径读取有硬上限的流。详情、正文、EOF、长度与 SHA-256 校验、fatal UTF-8 解码共用一次10秒总期限；关闭、切成果/会话、退休、取消均 abort 且拒迟到。缺边界、大文件和其他格式保下载并明确无预览，不嗅探 HTML、不全量 Blob、不用 path/hash/Asset 当授权。
+
+沿现 AppFrame→Shell→Canvas 传递已验证的 read boundary，不新增认证缓存或协议。浏览器 marker 仅撤销旧主体视图、不授准入。排队 auth-index 事件按 old/new 变化及 clear 退休原 actor/generation，当前 marker 已 A→B→A 复原也不复活；新的可信 generation 才可重读。现 Markdown renderer 默认图片可加载外链，故本片以不可执行的纯文本 `pre` 显示 Markdown 源文，不运行来源 HTML/脚本或自动加载外链。Workspace files 与 Storage 成果仍是独立列表；卡片或元数据不代表已核原字节，实际下载完成须由浏览器独立验收。
+
 ## 2026-10-25 冷准入只读预取调度（源码候选）
 
 现 App layout 的 `serverAdmitted` 只证明当前 RP 生命周期，可作为 cold CSRF 预读提示，不代表 fresh IAM 或客户端 authenticated。仅在原共享 session flight/10秒 signal 内并行 session GET 与现 CSRF GET；仍须 GET 可信主体、原 auth-index/marker/generation fence 与 CSRF 成功后才唯一 POST rotate。GET 错误、anonymous、身份退休或超时不发 POST；未消费 CSRF 读在结果结算后取消，晚到 body 不准轮换或改写准入。现 POST 的 Origin/CSRF、双 CAS、fresh 身份验证、unknown 后只读确认及120秒生命周期不变。

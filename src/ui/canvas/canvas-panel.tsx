@@ -10,16 +10,18 @@ import { Download, FileCheck2, Maximize2, Minimize2, Play, SkipBack, X } from "l
 // 内容体按来源分派：file=可变直读（重开即最新）、delivery=BFF 二元元数据、
 // node=通用 ReactNode 插槽；文本预览复用格式矩阵。
 
-import { type RefObject, useEffect, useRef, useState } from "react"
+import { type RefObject, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import { filePath } from "@/contract/http"
 import { sessionBaseUrl } from "@/engine/config"
 import { downloadFetchedFile, fileFetch } from "@/engine/file-fetch"
-import { beginLibraryArtifactDownload } from "@/features/app/kokoro-library-artifact-client"
+import { ARTIFACT_TEXT_PREVIEW_MAX_BYTES, beginLibraryArtifactDownload, readLibraryArtifactTextPreview } from "@/features/app/kokoro-library-artifact-client"
 import type { SessionDelivery, SessionTodo, WorkspaceFileEntry } from "@/core/state"
 import { useLocale } from "@/i18n/context"
 import { PreviewBody, formatBytes } from "@/ui/thread/artifact-card"
 import { cn } from "@/lib/utils"
+import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
+import { AUTH_INDEX_SUBJECT_KEY, readBrowserAuthIndexSubject } from "@/ui/shell/page-clients"
 
 import type { ResolvedCanvasContent } from "./canvas-store"
 import styles from "./canvas-panel.module.css"
@@ -59,6 +61,7 @@ function contentTitle(content: ResolvedCanvasContent): string {
 
 export type CanvasPanelProps = {
   sessionId: string
+  readBoundary?: ProjectReadBoundary
   preview?: boolean
   deliveriesHasMore?: boolean
   content: ResolvedCanvasContent
@@ -77,6 +80,7 @@ export type CanvasPanelProps = {
 
 export function CanvasPanel({
   sessionId,
+  readBoundary,
   preview = false,
   deliveriesHasMore = false,
   content,
@@ -91,6 +95,7 @@ export function CanvasPanel({
 }: CanvasPanelProps) {
   const { t, locale } = useLocale()
   const [view, setView] = useState<"preview" | "list">("preview")
+  const [closedPreviewKey, setClosedPreviewKey] = useState<string | null>(null)
   const [downloadState, setDownloadState] = useState<{ key: string; status: "idle" | "loading" | "error" }>({
     key: "",
     status: "idle",
@@ -271,7 +276,7 @@ export function CanvasPanel({
           <Button variant="ghost" size="icon-sm"
               type="button"
               className={cn(styles.action, styles.closeAction)}
-              onClick={onClose}
+              onClick={() => { setClosedPreviewKey(contentKey); onClose() }}
               aria-label={t("canvas.closePreview")}
               title={t("canvas.closePreview")}
             >
@@ -303,7 +308,7 @@ export function CanvasPanel({
             }}
           />
         ) : (
-          <ContentBody sessionId={sessionId} content={content} />
+          <ContentBody sessionId={sessionId} content={content} {...(closedPreviewKey === contentKey || readBoundary === undefined ? {} : { readBoundary })} />
         )}
       </div>
       {
@@ -417,12 +422,77 @@ function WorkspaceList({
   )
 }
 
+function DeliveryTextPreview({ delivery, sessionId, boundary }: { delivery: SessionDelivery; sessionId: string; boundary: ProjectReadBoundary | undefined }) {
+  const { t } = useLocale()
+  const [attempt, setAttempt] = useState(0)
+  const subject = boundary?.subject ?? null
+  const admitted = boundary?.admitted === true
+  const generation = boundary?.generation
+  const eligible = sessionId === delivery.conversationId && Number.isSafeInteger(delivery.size) && delivery.size >= 0 && delivery.size <= ARTIFACT_TEXT_PREVIEW_MAX_BYTES && (delivery.mime === "text/plain" || delivery.mime === "text/markdown")
+  const scope = useMemo(() => ({ subject, admitted, generation, conversationId: delivery.conversationId, artifactId: delivery.artifactId, mime: delivery.mime, size: delivery.size, eligible, attempt }), [subject, admitted, generation, delivery.conversationId, delivery.artifactId, delivery.mime, delivery.size, eligible, attempt])
+  const [result, setResult] = useState<{ scope: typeof scope; kind: "text"; text: string } | { scope: typeof scope; kind: "failed" | "unsupported" } | null>(null)
+  const live = useRef<typeof scope | null>(null)
+  const controllerRef = useRef<AbortController | null>(null)
+  const retiredActor = useRef<string | null>(null)
+  const actor = JSON.stringify([subject, generation])
+  useLayoutEffect(() => {
+    live.current = scope
+    return () => { if (live.current === scope) live.current = null }
+  }, [scope])
+  useEffect(() => {
+    if (!eligible || !admitted || subject === null) return
+    const controller = new AbortController()
+    controllerRef.current = controller
+    const current = () => live.current === scope && !controller.signal.aborted
+    const markerMatches = () => {
+      try { return readBrowserAuthIndexSubject() === subject }
+      catch { return false }
+    }
+    const retire = () => {
+      retiredActor.current = actor
+      controller.abort()
+      if (live.current === scope) setResult({ scope, kind: "failed" })
+    }
+    const storage = (event: StorageEvent) => {
+      if (event.key !== null && event.key !== AUTH_INDEX_SUBJECT_KEY) return
+      // Events are queued: A→B→A must retire A even when storage is already A.
+      if (event.key === null || event.oldValue !== event.newValue || !markerMatches()) retire()
+    }
+    window.addEventListener("storage", storage)
+    window.addEventListener("pagehide", retire)
+    void Promise.resolve().then(async () => {
+      if (!current()) return
+      if (retiredActor.current === actor || !markerMatches()) { retire(); return }
+      const preview = await readLibraryArtifactTextPreview(scope, controller.signal)
+      if (!current()) return
+      if (!markerMatches()) { retire(); return }
+      if (preview.kind === "text") {
+        if (preview.mimeType !== scope.mime || Number(preview.sizeBytes) !== scope.size) throw new Error("library_artifact_preview_metadata_changed")
+        setResult({ scope, kind: "text", text: preview.text })
+      } else setResult({ scope, kind: "unsupported" })
+    }).catch(() => { if (current()) setResult({ scope, kind: "failed" }) })
+    return () => {
+      controller.abort()
+      if (controllerRef.current === controller) controllerRef.current = null
+      window.removeEventListener("storage", storage)
+      window.removeEventListener("pagehide", retire)
+    }
+  }, [scope, eligible, admitted, subject, actor])
+  const visible = result?.scope === scope ? result : null
+  if (!eligible || !admitted || subject === null || visible?.kind === "unsupported") return <p>{t("artifact.cannotPreview")}</p>
+  if (visible?.kind === "text") return <pre className="whitespace-pre-wrap break-words" aria-label={t("canvas.previewTab")}>{visible.text}</pre>
+  if (visible?.kind === "failed") return <div role="alert"><p>{t("artifact.cannotPreview")}</p><Button type="button" variant="outline" onClick={() => setAttempt(value => value + 1)}>{t("artifact.retryPreview")}</Button></div>
+  return <div role="status"><p>{t("artifact.loadingPreview")}</p><Button type="button" variant="outline" onClick={() => { controllerRef.current?.abort(); setResult({ scope, kind: "failed" }) }}>{t("data.cancel")}</Button></div>
+}
+
 function ContentBody({
   sessionId,
   content,
+  readBoundary,
 }: {
   sessionId: string
   content: ResolvedCanvasContent
+  readBoundary?: ProjectReadBoundary
 }) {
   switch (content.kind) {
     case "file": {
@@ -437,13 +507,14 @@ function ContentBody({
     }
     case "delivery": {
       const { delivery } = content
-      // The first formal slice exposes owner metadata only; no 1 GiB Blob/iframe/media preview.
+      // Small text is separately verified; native 1 GiB downloads remain unbuffered.
       return (
         <div className={styles.deliveryBody}>
           {delivery.note !== undefined && delivery.note !== "" ? (
             <p className={styles.deliveryNote}>{delivery.note}</p>
           ) : null}
           <p>{delivery.artifactKind} · {delivery.mime} · {formatBytes(delivery.size)}</p>
+          <DeliveryTextPreview delivery={delivery} sessionId={sessionId} boundary={readBoundary} />
         </div>
       )
     }

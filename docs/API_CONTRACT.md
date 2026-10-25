@@ -1,3 +1,9 @@
+## 2026-10-25 Canvas 小文本成果读取边界
+
+不新增 wire/Schema/endpoint。Canvas 只对用户打开的 `text/plain` / `text/markdown`、已知大小 ≤65,536 bytes 成果启用只读预览；当前可信 subject/admission/generation 必须存在，先严格读取原二元详情，再 GET 原同源二元 `/content`。内容 GET 仍由 BFF 独立授权，不把详情成功当许可；流硬限、EOF、头与 metadata 大小/MIME、metadata SHA-256、fatal UTF-8 全部通过才显示纯文本。一次10秒总预算覆盖详情至解码，不因分阶段重置；取消/退休/切项/晚到不显示旧正文或再发请求。缺边界、超界及不支持类型明确保原生下载；失败可显式重试，不造空正文成功。
+
+原 ≤1 GiB native attachment 下载、同源安全头、当前身份准入及二元选择器不变；预览不修改 Workspace file 清单，不加载 Markdown 外链图片/HTML/脚本，不持久化正文或新增浏览器认证事实。
+
 ## 2026-10-25 cold session/CSRF 读并发（源码候选）
 
 原 `GET /api/auth/session` 仍仅为在线 RP lifecycle/access-expiry 投影，不升级为 fresh IAM 准入。`serverAdmitted` 布尔只允许在原10秒总 signal 内提前并发读取现 CSRF；GET 可信 subject 和原 browser fence、CSRF 全部成立后才唯一 POST refresh。错误/anonymous/退休/timeout 零 POST，未消费或晚到 CSRF 不授权轮换；原 Origin、主体绑定、POST 后 fresh 验证、CAS、unknown 禁止自动重放与120秒规则保持。无新 endpoint、wire/公开 contract、cookie、SSR claims 或 auth cache；不以此调度调整宣称正常等待已消失。
