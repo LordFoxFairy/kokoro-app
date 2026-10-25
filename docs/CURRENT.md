@@ -1,3 +1,13 @@
+## 2026-10-25 独立 MCP/API 呈现与普通提交路由围栏
+
+修复MCP初次pending/error连带隐藏成功API卡片：保API入口、详情及MCP真实错误与独立重试，不伪报全空。普通发送回调绑定渲染时路径/当前选择，旧回调在项目、资料库、其它会话或新草稿已切换后零提交、不清原文；同草稿canonical URL补写、空engine首发、owner恢复与unknown原请求重试保持。
+
+正常精确两源HMR已验：自有tab注入单次connectors GET失败，API卡仍可见并打开正确编辑；解除拦截后retry GET200恢复MCP。项目→全局New→/app→硬刷新仍/app及输入框保持，未Send，不代替真实成功创建。原非QA行/xmin/usage及进程保持；初次自然网络失败原因与冷加载中间态仍开放。
+
+Root停写1184输入：contract/architecture/lint/types/build/post-types通过。完整默认5100通过、2旧fixture因mock/app与真实location/不符失败；仅两fixture补真实/app前置并恢复URL、保原MCP IDs/model payload断言，相关21通过。其它生产输入不变，不把拆分补验说成原单次全绿。完整独立preview零重试114通过，post-types0且进程清理/输入无漂移；它不代替正常owner旅程。三workspace依赖链接曾被隔离pnpm exec改向候选，三包逐字核同、最终均指回原owner包，原package/lock不变；原49行responsive诊断WIP保持、排除本片提交。
+
+证据Root ignored stage12/app-navigation-read-reviewed、stage12/normal-qa及project-navigation-parallel-20261025。项目发布App候选在隔离目录并行，尚未整合本提交；MCP/Skills/成功任务/Agent/项目整体仍开放。本片仅本地提交，无push/PR/merge/Root gitlink提升。
+
 ### 2026-10-25 本片最终候选资格
 
 图标暂存/API秘密编辑/翻页及创建详情交接已停写独审。1183非Markdown输入完整contract/architecture/lint/types/default/build/post-types与独立preview（零重试）均通过、最终输入零漂移，原49行导航诊断WIP保持且排除交付。此前认证fixture的JSON EOF失败日志保留，本轮未复现不等于根因已修。正常Platform/BFF/App配对及实际页面上传/取消/保存/刷新尚待，不据工程门关闭MCP或全产品。

@@ -80,6 +80,8 @@ export function useAppFrameActions({
     focusComposer()
   }, [engine, focusComposer])
 
+  const directSelectionAtRender = engine?.getSnapshot().store?.activeId ?? null
+  const conversationAtRender = conversationIdFromLocation()
   const routeAtRender = typeof window === "undefined" ? null : `${window.location.pathname}${window.location.search}`
   let actorAtRender: string | null | undefined
   try { actorAtRender = typeof window === "undefined" ? undefined : window.localStorage.getItem("kokoro.web.auth-index-subject") }
@@ -95,6 +97,22 @@ export function useAppFrameActions({
       if (actorAtRender === undefined || window.localStorage.getItem("kokoro.web.auth-index-subject") !== actorAtRender) return
     } catch { return }
     const snapshot = engine.getSnapshot()
+    if (!projectWorkspace) {
+      // History can change before the mounted shell commits its next render.
+      // A retained direct Send must not create an inbox task on a project or
+      // publish the previous draft into another selected conversation.
+      const direct = new URL(chatHref, window.location.href)
+      const requested = conversationIdFromLocation()
+      const currentId = snapshot.store?.activeId ?? null
+      if (direct.origin !== window.location.origin ||
+        window.location.pathname.replace(/\/$/u, "") !== direct.pathname.replace(/\/$/u, "") ||
+        currentId !== directSelectionAtRender ||
+        (requested !== null && requested !== currentId)) return
+      // The navigation hook may canonically publish this same draft's ID
+      // without a new render. That is not a user selection change.
+      if (requested !== conversationAtRender &&
+        !(conversationAtRender === null && requested === directSelectionAtRender)) return
+    }
     if (snapshot.hydrating && conversationIdFromLocation() !== null) return
     if (snapshot.missingSessionId !== undefined && conversationIdFromLocation() === snapshot.missingSessionId
       && snapshot.store?.activeId === snapshot.missingSessionId) return
@@ -141,7 +159,7 @@ export function useAppFrameActions({
     // blank conversation cannot inherit a stale Website/App capsule.
     setDeploymentIntent(null)
     focusComposer()
-  }, [actorAtRender, routeAtRender, clearDraft, draft, engine, focusComposer, projectWorkspace, projectRef, routedConversationId, setConversationRouteId, setDeploymentIntent, syncConversationUrl])
+  }, [actorAtRender, chatHref, conversationAtRender, directSelectionAtRender, routeAtRender, clearDraft, draft, engine, focusComposer, projectWorkspace, projectRef, routedConversationId, setConversationRouteId, setDeploymentIntent, syncConversationUrl])
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()

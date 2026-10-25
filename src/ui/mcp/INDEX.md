@@ -1,3 +1,7 @@
+## 已确认 API 与独立 MCP 读取分离（2026-10-25）
+
+`mcp-projection-read.tsx`在当前 API 列表已返回非空卡片时允许展示与打开原详情，即使独立初始 MCP 列表仍加载或失败；MCP 原 loading/error/读重试保持，不把失败当空成功，不触发新创建/重发。MCP 翻页仍只按已读回游标。`app-frame-rail`行为回归保 partial-read 的已确认卡片与详情、原错误、显式读重试恢复、真正全空态和未知 MCP 游标不启用翻页；未把偶发正常初始网络失败归因于共享flight。
+
 ## 2026-10-25 图标暂存与密钥编辑候选
 
 `mcp-icon-draft.ts` 拥有窗口内暂存命令状态与原key/body/CAS恢复，`use-mcp-icon-draft.ts`绑定主体／准入／窗口，`mcp-icon-picker.tsx`和局部CSS复用在原API/MCP创建及编辑表单。选图仅创建暂存记录，原实体保存才携带selector／clear；关闭由`mcp-create-dismiss-context.ts`显式回收已知未绑定图标，未知保存不取消可能已绑定资源。`mcp-bound-icon.tsx`只展示已准入安全引用，失败／到期回退，不新增GET或刷新签名。

@@ -5068,3 +5068,55 @@ it("a newer creation window retires the older pending exact-detail handoff", asy
   expect(screen.getByRole("textbox", { name: /^服务器名称\*?$/u })).toHaveValue("")
   expect(hub.registerPrivateMcpServer).toHaveBeenCalledOnce()
 })
+
+it.each(["pending", "failed"] as const)("independent confirmed API cards stay usable when the initial MCP list is %s", async mode => {
+  const profile = { profile_id: `independent-api-${mode}`, name: `Independent API ${mode}`, state_version: "1", environment: [], created_at: "2026-10-25T00:00:00Z", updated_at: "2026-10-25T00:00:00Z" }
+  const hub = { ...createHubClient(), listMcpConnectors: vi.fn().mockImplementationOnce(async () => { if (mode === "failed") throw new Error("temporary MCP read failure"); return new Promise<never>(() => {}) }).mockResolvedValue({ items: [{ availability: "unavailable", connector_id: "recovered-mcp", connector_type: "mcp", provider_key: "private-recovered", status: "pending", approved_scopes: [], enabled: false, state_version: "1", display_name: "Recovered MCP" }], next_cursor: "recovered-owner-cursor" }),
+    listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+    listCustomApis: vi.fn().mockResolvedValue({ items: [profile], page: { next_cursor: null } }), getCustomApi: vi.fn().mockResolvedValue(profile),
+  }
+  const identity = `independent-api-reader-${mode}`
+  render(<LocaleProvider><ConnectorCommandProvider client={hub} boundary={{ admitted: true, subject: identity, generation: 1 }}><RawMcpProjectionRead client={hub} identity={identity} admitted readGeneration={1} initialView="connections" /></ConnectorCommandProvider></LocaleProvider>)
+  await waitFor(() => expect(hub.listCustomApis).toHaveBeenCalledOnce())
+  const card = await screen.findByRole("button", { name: profile.name })
+  expect(card).toBeVisible()
+  if (mode === "failed") expect(screen.getByText("连接列表加载失败")).toBeVisible()
+  expect(screen.queryByRole("navigation", { name: "MCP pages" })).toBeNull()
+  fireEvent.click(card)
+  const dialog = await screen.findByRole("dialog", { name: "编辑自定义 API" })
+  expect(within(dialog).getByRole("textbox", { name: "名称" })).toHaveValue(profile.name)
+  expect(hub.listMcpConnectors).toHaveBeenCalledOnce()
+  fireEvent.click(within(dialog).getByRole("button", { name: "关闭连接面板" }))
+  expect(screen.queryByText("还没有连接器。")).not.toBeInTheDocument()
+  if (mode === "failed") {
+    fireEvent.click(screen.getByRole("button", { name: "重试" }))
+    expect(await screen.findByRole("button", { name: "Recovered MCP" })).toBeVisible()
+    expect(screen.getByRole("button", { name: profile.name })).toBeVisible()
+    expect(screen.queryByText("连接列表加载失败")).not.toBeInTheDocument()
+    expect(within(screen.getByRole("navigation", { name: "MCP pages" })).getByRole("button", { name: "下一页" })).toBeEnabled()
+    expect(hub.listMcpConnectors).toHaveBeenCalledTimes(2)
+    expect(hub.listCustomApis).toHaveBeenCalledOnce()
+  }
+})
+
+it("empty API data does not turn a pending or failed MCP read into an all-empty success", async () => {
+  let reject!: (reason: Error) => void
+  const pending = new Promise<never>((_, fail) => { reject = fail })
+  const hub = { ...createHubClient(), listMcpConnectors: vi.fn().mockReturnValueOnce(pending).mockResolvedValue({ items: [], next_cursor: null }),
+    listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+    listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }),
+  }
+  const identity = "independent-confirmed-empty-reader"
+  render(<LocaleProvider><ConnectorCommandProvider client={hub} boundary={{ admitted: true, subject: identity, generation: 1 }}><RawMcpProjectionRead client={hub} identity={identity} admitted readGeneration={1} initialView="connections" /></ConnectorCommandProvider></LocaleProvider>)
+  await waitFor(() => expect(hub.listCustomApis).toHaveBeenCalledOnce())
+  expect(screen.queryByText("还没有连接器。")).not.toBeInTheDocument()
+  await act(async () => { reject(new Error("temporary MCP read failure")) })
+  expect(await screen.findByText("连接列表加载失败")).toBeVisible()
+  expect(screen.queryByText("还没有连接器。")).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole("button", { name: "重试" }))
+  expect(await screen.findByText("还没有连接器。")).toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "添加连接器" })).toBeVisible()
+  expect(screen.queryByText("连接列表加载失败")).not.toBeInTheDocument()
+  expect(screen.queryByRole("navigation", { name: "MCP pages" })).not.toBeInTheDocument()
+  expect(hub.listMcpConnectors).toHaveBeenCalledTimes(2)
+})

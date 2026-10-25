@@ -621,7 +621,7 @@ export function McpProjectionRead({
         editorReturnFocusRef.current = event.currentTarget;
         setApiIntent({ profileId: item.profileId, window: {} });
       }}><span className="truncate">{t(item.kind === "completed" ? "mcp.creationDone" : "mcp.retryOriginal")} · {item.profileId}</span></Button>) : null}
-      {view === "connections" && connectorProjection ? (
+      {view === "connections" && (connectorProjection !== undefined || customApis.length > 0) ? (
         <div className={styles.content}>
           <McpConnectionList
             connectors={connectors}
@@ -640,7 +640,7 @@ export function McpProjectionRead({
             }}
             previousEnabled={history.length > 0 && actionId === null}
             nextEnabled={
-              Boolean(connectorProjection.next_cursor) && actionId === null
+              Boolean(connectorProjection?.next_cursor) && actionId === null
             }
             onPrevious={() => {
               const previous = history.at(-1) ?? null;
@@ -649,7 +649,7 @@ export function McpProjectionRead({
               setCursor(previous);
             }}
             onNext={() => {
-              const next = connectorProjection.next_cursor;
+              const next = connectorProjection?.next_cursor;
               if (!next || next === cursor || history.includes(next))
                 return setRefreshError(true);
               setRefreshError(false);

@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, render, renderHook, screen } from "@testing-library/react"
-import { afterEach, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, expect, it, vi } from "vitest"
 import { useSyncExternalStore } from "react"
 import type { ConversationStore } from "@/core/conversations"
 import { createSessionEngine } from "@/engine/machine"
@@ -25,7 +25,13 @@ function reader() {
 }
 const boundary = { admitted: true, subject: "actor:a", generation: 1 }
 function makeEngine() { return createSessionEngine({ client: createFakeClient(), storage: createMemoryStorage<ConversationStore>(null) }) }
-afterEach(() => { cleanup(); vi.restoreAllMocks(); window.localStorage.clear() })
+let originalUrl: string
+beforeEach(() => {
+  originalUrl = window.location.href
+  // The real shell reads history as well as Next's pathname.
+  window.history.replaceState(null, "", "/app")
+})
+afterEach(() => { cleanup(); vi.restoreAllMocks(); window.localStorage.clear(); window.history.replaceState(null, "", originalUrl) })
 
 it("reads exact eligible connections, pages explicitly, and joins only matching connector metadata", async () => {
   window.localStorage.setItem("kokoro.web.auth-index-subject", "actor:a")

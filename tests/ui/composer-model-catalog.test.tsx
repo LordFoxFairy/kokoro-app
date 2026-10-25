@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
-import { afterEach, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, expect, it, vi } from "vitest"
 
 vi.mock("next/navigation", () => ({ usePathname: () => "/app", useRouter: () => ({ push: vi.fn(), replace: vi.fn() }) }))
 
@@ -11,7 +11,13 @@ import * as pageClients from "@/ui/shell/page-clients"
 import { createFakeClient, createMemoryStorage, settle } from "../engine/fakes"
 import type { ConversationStore } from "@/core/conversations"
 
-afterEach(() => { cleanup(); vi.restoreAllMocks(); window.localStorage.clear() })
+let originalUrl: string
+beforeEach(() => {
+  originalUrl = window.location.href
+  // The real shell reads history as well as Next's pathname.
+  window.history.replaceState(null, "", "/app")
+})
+afterEach(() => { cleanup(); vi.restoreAllMocks(); window.localStorage.clear(); window.history.replaceState(null, "", originalUrl) })
 
 it("ordinary new chat exposes the business catalog before the first submission", async () => {
   window.localStorage.setItem("kokoro.locale", "en")
