@@ -1,3 +1,7 @@
+## 2026-10-25 personal SSE 固定 Public26 消费者候选
+
+唯一 public snapshot 来自正式 BFF Git 对象 `aa0bdeb4397d3a022edf9b3cfc53d5a6cfb281b1`／Public26，全文 SHA256 `20d26736cf23da32c242c2c7cf75c45affb62c5d27696dcecb0bc6193bc39a09`；七个原 public 生成器正规重出。Connection transport 只接受 HTTP/SSE；test-only 完整26→25逆恢复原 SHA256 `7261ac9ce2140555ba97ebff2bf0359533cc49dda014b08dcd6a6054a8d38b1c` 后进入未变25→24与历史证明，不是运行 fallback。独立 connector-error／project-publication 原件、固定 pin 与生成链不变；候选完整门／正常成套由 Root 串行接手，下方按原发行保留历史。
+
 ## 2026-10-22 当前精确模型绑定发行
 
 唯一snapshot固定BFF `a77276b35b07eb65df8a0af2e41b461b393afb12`／Public23.0.0／186，SHA256 `34ea71e0aa56256ca00fc5b3c40abd4d142bea82e664a6871190b8547ec2b9e6`。MeteringRate必填model_revision闭集{id,content_digest}；七原生成器正规配对，完整22.5父件与186有序操作受test-only inverse保护，无运行兼容。当前本地验收见CURRENT，以下为历史。

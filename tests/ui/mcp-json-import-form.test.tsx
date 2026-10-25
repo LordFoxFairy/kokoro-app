@@ -59,6 +59,7 @@ describe("JsonMcpImportForm", () => {
     expect(JSON.parse(editor.placeholder)).toEqual({
       mcpServers: {
         SERVER_NAME: { type: "streamableHttp", url: "https://HOST/mcp" },
+        SSE_SERVER_NAME: { type: "sse", url: "https://HOST/sse" },
       },
     });
     expect(editor).toHaveValue("");
@@ -184,3 +185,13 @@ it("a definite URL conflict keeps the JSON editable with a specific explanation,
   expect(create.mock.calls[1]?.[1]).not.toBe(create.mock.calls[0]?.[1])
   view.unmount()
 })
+
+it("preserves a mixed HTTP/SSE whole document and original key across an unknown reply", async () => {
+ const send = vi.fn().mockRejectedValueOnce(new Error("unknown original import")).mockResolvedValue(undefined);
+ renderForm({ importPrivateMcpJson: send });
+ const original = ' {"mcpServers":{"HTTP":{"type":"streamableHttp","url":"https://HOST/mcp"},"SSE":{"type":"sse","url":"https://HOST/sse"}}} ';
+ fireEvent.change(screen.getByRole("textbox"), { target: { value: original } }); fireEvent.click(screen.getByRole("button", { name: /Import|导入/u }));
+ await screen.findByRole("alert"); expect(screen.getByRole("textbox")).toHaveValue(original); expect(screen.getByRole("textbox")).toHaveAttribute("readonly");
+ fireEvent.click(screen.getByRole("button", { name: /Retry original|重试原请求/u })); await waitFor(() => expect(send).toHaveBeenCalledTimes(2));
+ expect(send.mock.calls[0]?.slice(0, 2)).toEqual(send.mock.calls[1]?.slice(0, 2)); expect(send.mock.calls[1]?.[0]).toBe(original);
+});

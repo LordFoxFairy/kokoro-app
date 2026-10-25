@@ -14,6 +14,7 @@ import type { McpCreateMode } from "./mcp-panel-model";
 import { McpCreateDismissContext } from "./mcp-create-dismiss-context";
 import { useMcpProjectPublicationCommands, CustomApiCreationForm, JsonMcpCreationForm, PrivateMcpCreationForm, useConnectorCommandBoundary } from "./connector-command-context";
 import type { McpServerCreationCompletion } from "./mcp-server-creation-flow";
+import { retireCreatedMcpDetail } from "./mcp-created-detail-handoff";
 import { McpProjectionRead } from "./mcp-projection-read";
 
 export function McpCreateDialog({
@@ -40,7 +41,8 @@ export function McpCreateDialog({
   const currentBoundary = useRef(boundary);
   useLayoutEffect(() => { currentBoundary.current = boundary; }, [boundary]);
   const [completed, setCompleted] = useState<{ lifetime: typeof lifetime; target: McpServerCreationCompletion } | null>(null);
-  if (completed && completed.lifetime !== lifetime) setCompleted(null);
+  if (completed && completed.lifetime !== lifetime) { retireCreatedMcpDetail(completed.target); setCompleted(null); }
+  useLayoutEffect(() => () => { if (completed) retireCreatedMcpDetail(completed.target); }, [completed]);
   const [publishing, setPublishing] = useState(false);
   const [publicationClosedFor, setPublicationClosedFor] = useState<typeof lifetime | null>(null);
   const handingOff = useRef(false);
@@ -62,6 +64,7 @@ export function McpCreateDialog({
   const changeOpen = (value: boolean): void => {
     if (lifetime.open && committed.current === lifetime) {
       if (!value) {
+        if (completed) retireCreatedMcpDetail(completed.target);
         committed.current = null;
         dismissals.current.forEach(dismiss => dismiss());
         publication.dismiss();
@@ -93,7 +96,7 @@ export function McpCreateDialog({
   const detail = completed?.lifetime === lifetime ? completed.target : resumed;
   if (detail && open && boundary.subject !== null) {
     if ((publishing || resumed !== null && publicationClosedFor !== lifetime) && publicationState.target) {
-      return <McpProjectPublicationDialog client={client} commands={publication} boundary={boundary} target={publicationState.target} onClose={() => { setPublishing(false); setPublicationClosedFor(lifetime); if (!completed) setCompleted({ lifetime, target: detail }); }} />;
+      return <McpProjectPublicationDialog client={client} commands={publication} boundary={boundary} target={publicationState.target} onSourceRead={() => retireCreatedMcpDetail(detail)} onClose={() => { setPublishing(false); setPublicationClosedFor(lifetime); if (!completed) setCompleted({ lifetime, target: detail }); }} />;
     }
     return <McpProjectionRead client={client} identity={boundary.subject} admitted={boundary.admitted}
       readGeneration={boundary.generation} initialView="connections"

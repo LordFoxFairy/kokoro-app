@@ -1,3 +1,14 @@
+## 2026-10-25 personal HTTP/SSE 与 Public26 消费（源码候选）
+
+现 Browser→App `/api/hub`→BFF browser-private unary 路径不变，外部 SSE 由 Platform/Agent 执行。唯一 `src/generated/bff-public-openapi.yaml` 固定正式 BFF `aa0bdeb4397d3a022edf9b3cfc53d5a6cfb281b1`／Public26，全文 SHA256 `20d26736cf23da32c242c2c7cf75c45affb62c5d27696dcecb0bc6193bc39a09`；七个既有 public 生成链正规消费。Public26 Connection 的 `transport` 严格闭集为 `streamable_http|sse_compat`，unknown／STDIO／extra 拒绝；完整26→25→24逆证保旧全文 SHA、操作与权限断言，不改独立 connector-error／project-publication artifact。
+
+- Register `/api/hub/mcp/servers` 的 optional `transport` 只接受 `streamable_http|sse_compat`；absent 保旧 HTTP body／摘要语义，显式值随原命令冻结。数字、Proto token、null、别名及 STDIO 拒绝；Update 不接受 transport，创建后不可变、同 URL 唯一规则不变。URL 添加继续 absent HTTP，自定义 MCP 才显式选择，不猜协议。
+- import `/api/hub/mcp/servers/import` 保原 `config_json` 全文、顺序、key 与 owner 原子性；逐项按 `type:streamableHttp|sse` 绑定真实传输及原名称／URL／ID等字段。旧 HTTP 规范摘要不追加 transport2；SSE 加3由既有上游绑定负责。混合/SSE 批不能借某个 HTTP 项降成历史整批豁免，不拆成多个 Register 或重写秘密原文。
+- fresh Get 的 Current 必须 present 真实 transport；新 Register/import ACK 同样须 present 且匹配请求 effective transport。历史 absent ACK 只在 owner `replayed=true` 与原 operation/key/请求及全部原绑定成立时承接：Register 须原请求 absent，JSON 须原整批旧 HTTP；显式 HTTP/SSE、混合/SSE 批均不得借 replayed 放过缺值。Prepare/Update 的历史 exact completed ACK 也须合法 replay 上下文，新 non-replayed ACK 缺值拒绝；旧 App 已确认成功不追溯改未执行。中央 ACK／Current schema 与 matcher 由 route/client 复用，保外层 replayed 和原 JSON 上下文，不设浏览器自报历史 flag、不泛 optional/fallback。
+- ACK 证明原命令完成，不证明 fresh 展示／选择／执行资格。缺字段不补 HTTP、不填入 payloadGet、不换 body/key/CAS 重派；fresh 双 GET 失败保持原确认／unknown／草稿，只显式重读。创建后的独立 Prepare／Done 与 receipt 恢复分层保持。详情只展示 fresh immutable HTTP/SSE，未知／撤权不假 ready；Connection 的真 ID、availability、分页与原关联校验保持，选择不是工具执行授权。项目发布仅 fresh HTTP，两处 UI/action guard 同时核 transport，SSE 不冒项目执行 ready。
+
+保原 Product Session、可信主体／tenant、MCP action、request ID/no-store、有界响应、10秒总预算、AbortSignal/late fence、secret-safe 错误与原 unknown 恢复，不新增 endpoint/权限/Schema/依赖或自动重试。本片为固定发行的消费者源码候选；定向行为／生成检查与停写输入另有绑定，纯 MCP 候选完整门及正常多 owner 配对由 Root 接手，未以混合工作树测试冒全部验收。
+
 ## 2026-10-25 Canvas 小文本成果读取边界
 
 不新增 wire/Schema/endpoint。Canvas 只对用户打开的 `text/plain` / `text/markdown`、已知大小 ≤65,536 bytes 成果启用只读预览；当前可信 subject/admission/generation 必须存在，先严格读取原二元详情，再 GET 原同源二元 `/content`。内容 GET 仍由 BFF 独立授权，不把详情成功当许可；流硬限、EOF、头与 metadata 大小/MIME、metadata SHA-256、fatal UTF-8 全部通过才显示纯文本。一次10秒总预算覆盖详情至解码，不因分阶段重置；取消/退休/切项/晚到不显示旧正文或再发请求。缺边界、超界及不支持类型明确保原生下载；失败可显式重试，不造空正文成功。

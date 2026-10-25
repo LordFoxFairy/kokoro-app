@@ -238,8 +238,9 @@ const privateDeclarationSchema = z.discriminatedUnion("kind", [
     })
     .strict(),
 ]);
-export const mcpPrivateServerSchema = z
+const mcpPrivateServerShape = z
   .object({
+    transport: z.enum(["streamable_http", "sse_compat"]).optional(),
     icon: mcpIconBindingSchema.optional(),
     server_id: mcpConnectorIdSchema,
     availability: mcpAvailabilitySchema,
@@ -279,8 +280,8 @@ export const mcpPrivateServerSchema = z
     connection_id: mcpConnectorIdSchema.optional(),
     declarations_available: z.boolean(),
   })
-  .strict()
-  .superRefine((value, context) => {
+  .strict();
+const validateMcpServerDeclarations = (value: z.infer<typeof mcpPrivateServerShape>, context: z.RefinementCtx) => {
     if (
       (!value.declarations_available &&
         (value.declarations.length > 0 ||
@@ -293,12 +294,15 @@ export const mcpPrivateServerSchema = z
         code: "custom",
         message: "private server declaration state is inconsistent",
       });
-  });
+  };
+const mcpPrivateAcknowledgementServerSchema = mcpPrivateServerShape.superRefine(validateMcpServerDeclarations);
+export const mcpPrivateServerSchema = mcpPrivateServerShape.extend({ transport: z.enum(["streamable_http", "sse_compat"]) }).superRefine(validateMcpServerDeclarations);
 export const mcpPrivateServerRegistrationInputSchema = z
   .object({
     icon: mcpIconSelectionSchema.optional(),
     display_name: privateText(1, 100),
     server_url: privateServerUrl,
+    transport: z.enum(["streamable_http", "sse_compat"]).optional(),
     notes: privateText(1, 4000, true).optional(),
     headers: privateHeaderWritesSchema.optional(),
     oauth_client: privateOauthClientWriteSchema.optional(),
@@ -353,7 +357,7 @@ export const mcpPrivateServerUpdateInputSchema = z
   });
 export const mcpPrivateServerRegistrationSchema = z
   .object({
-    server: mcpPrivateServerSchema,
+    server: mcpPrivateAcknowledgementServerSchema,
     connector: mcpConnectorSchema,
     replayed: z.boolean(),
   })
@@ -375,7 +379,7 @@ export const mcpPrivateJsonImportSchema = z
       .array(
         z
           .object({
-            server: mcpPrivateServerSchema,
+            server: mcpPrivateAcknowledgementServerSchema,
             connector: mcpConnectorSchema,
           })
           .strict(),
@@ -392,7 +396,7 @@ export const mcpPrivateJsonImportSchema = z
   .strict();
 export const mcpPrivateServerPrepareSchema = z
   .object({
-    server: mcpPrivateServerSchema,
+    server: mcpPrivateAcknowledgementServerSchema,
     connector: mcpConnectorSchema,
     declarations: z.array(privateDeclarationSchema).max(2000),
     replayed: z.boolean(),
@@ -400,7 +404,7 @@ export const mcpPrivateServerPrepareSchema = z
   .strict();
 export const mcpPrivateServerUpdateSchema = z
   .object({
-    server: mcpPrivateServerSchema,
+    server: mcpPrivateAcknowledgementServerSchema,
     connector: mcpConnectorSchema,
     replayed: z.boolean(),
   })
@@ -438,6 +442,7 @@ export function mcpPrivateJsonImportMatches(value: unknown, input?: unknown): bo
     typeof document !== "object" ||
     document === null ||
     Array.isArray(document) ||
+    Object.keys(document).some((key) => key !== "mcpServers") ||
     typeof (document as Record<string, unknown>).mcpServers !== "object" ||
     (document as Record<string, unknown>).mcpServers === null ||
     Array.isArray((document as Record<string, unknown>).mcpServers)
@@ -446,15 +451,32 @@ export function mcpPrivateJsonImportMatches(value: unknown, input?: unknown): bo
   const expected = Object.entries(
     (document as { mcpServers: Record<string, unknown> }).mcpServers,
   ).map(([displayName, raw]) => {
+    if (typeof raw !== "object" || raw === null || Array.isArray(raw))
+      return undefined;
+    const item = raw as Record<string, unknown>;
     if (
-      typeof raw !== "object" ||
-      raw === null ||
-      Array.isArray(raw) ||
-      (raw as Record<string, unknown>).type !== "streamableHttp" ||
-      typeof (raw as Record<string, unknown>).url !== "string"
+      Object.keys(item).some((key) => !["type", "url", "headers"].includes(key)) ||
+      (item.type !== "streamableHttp" && item.type !== "sse") ||
+      (item.headers !== undefined &&
+        (typeof item.headers !== "object" || item.headers === null || Array.isArray(item.headers)))
     )
       return undefined;
-    return { displayName, serverUrl: (raw as { url: string }).url };
+    const request = mcpPrivateServerRegistrationInputSchema.safeParse({
+      display_name: displayName,
+      server_url: item.url,
+      transport: item.type === "sse" ? "sse_compat" : "streamable_http",
+      headers: Object.entries(item.headers ?? {}).map(([name, value]) => ({
+        name: name.toLowerCase(),
+        value,
+      })),
+    });
+    if (!request.success) return undefined;
+    return {
+      displayName,
+      serverUrl: request.data.server_url,
+      transport: request.data.transport,
+      headerNames: new Set(request.data.headers?.map(({ name }) => name) ?? []),
+    };
   });
   if (expected.some((entry) => entry === undefined)) return false;
   const parsed = z
@@ -468,8 +490,15 @@ export function mcpPrivateJsonImportMatches(value: unknown, input?: unknown): bo
       const match = expected[index];
       return (
         match !== undefined &&
+        (entry.server.transport === undefined
+          ? parsed.data.data.replayed && expected.every(item => item?.transport === "streamable_http")
+          : entry.server.transport === match.transport) &&
         entry.server.display_name === match.displayName &&
         entry.server.server_url === match.serverUrl &&
+        entry.server.headers.length === match.headerNames.size &&
+        entry.server.headers.every((header) =>
+          header.configured && header.status === "active" && match.headerNames.has(header.name),
+        ) &&
         entry.connector.server_id === entry.server.server_id &&
         entry.connector.enabled === false &&
         entry.connector.status === "pending"
@@ -496,7 +525,7 @@ function privateServerResponseMatches(
     .object({
       data: z
         .object({
-          server: mcpPrivateServerSchema,
+          server: mcpPrivateAcknowledgementServerSchema,
           connector: mcpConnectorSchema,
           replayed: z.boolean(),
           declarations: z.array(privateDeclarationSchema).max(2000).optional(),
@@ -506,7 +535,8 @@ function privateServerResponseMatches(
     .strict()
     .safeParse(value);
   if (!parsed.success) return false;
-  const { server, connector } = parsed.data.data;
+  const { server, connector, replayed } = parsed.data.data;
+  if (server.transport === undefined && !replayed) return false;
   if (
     (serverId !== undefined && server.server_id !== serverId) ||
     connector.server_id !== server.server_id ||
@@ -545,12 +575,17 @@ export function mcpPrivateServerMatches(
       ? (input as Record<string, unknown>)
       : undefined;
   if (operation === "registerServer") {
+    const request = mcpPrivateServerRegistrationInputSchema.safeParse(input);
     const parsed = z
       .object({ data: mcpPrivateServerRegistrationSchema })
       .strict()
       .safeParse(value);
     return (
       parsed.success &&
+      request.success &&
+      (parsed.data.data.server.transport === undefined
+        ? parsed.data.data.replayed && request.data.transport === undefined
+        : parsed.data.data.server.transport === (request.data.transport ?? "streamable_http")) &&
       body !== undefined &&
       parsed.data.data.server.display_name === body.display_name &&
       parsed.data.data.server.server_url === body.server_url &&

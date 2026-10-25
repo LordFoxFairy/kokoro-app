@@ -18,6 +18,7 @@ import styles from "./mcp-create-dialog.module.css";
 const JSON_IMPORT_PLACEHOLDER = JSON.stringify({
   mcpServers: {
     SERVER_NAME: { type: "streamableHttp", url: "https://HOST/mcp" },
+    SSE_SERVER_NAME: { type: "sse", url: "https://HOST/sse" },
   },
 }, null, 2);
 

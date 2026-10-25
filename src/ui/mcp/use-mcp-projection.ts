@@ -48,8 +48,8 @@ const resolved = new WeakMap<
 const sessionCachePrefix = "kokoro:mcp-projection:v1:";
 
 type ConnectorRevision = { value: number; listeners: Set<() => void> };
-const connectorRevisions = new WeakMap<HubClient, Map<string, ConnectorRevision>>();
-function connectorRevision(client: HubClient, identity: string): ConnectorRevision {
+const connectorRevisions = new WeakMap<object, Map<string, ConnectorRevision>>();
+function connectorRevision(client: object, identity: string): ConnectorRevision {
   let entries = connectorRevisions.get(client);
   if (!entries) {
     entries = new Map();
@@ -61,6 +61,11 @@ function connectorRevision(client: HubClient, identity: string): ConnectorRevisi
     entries.set(identity, revision);
   }
   return revision;
+}
+
+/** Synchronous observation token for a same-window creation/detail handoff. */
+export function getMcpConnectorRevisionSnapshot(client: object, identity: string): number {
+  return connectorRevision(client, identity).value;
 }
 
 /** A confirmed write retires only this subject's connector pages, not provider metadata. */

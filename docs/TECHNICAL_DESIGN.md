@@ -1,3 +1,13 @@
+## 2026-10-25 personal HTTP/SSE 消费者（源码候选）
+
+Platform producer 固定 `8cfead647856ef54ec851a3bebe169a3ca14d212`；App 由既有七个 public 生成器统一消费正式 BFF `aa0bdeb4397d3a022edf9b3cfc53d5a6cfb281b1`／Public26，全文 SHA256 `20d26736cf23da32c242c2c7cf75c45affb62c5d27696dcecb0bc6193bc39a09`。Public26 只增加既有 Connection transport 闭集的 `sse_compat` 与版本；build/test-only 完整26→25逆证恢复原 Public25 SHA256 `7261ac9ce2140555ba97ebff2bf0359533cc49dda014b08dcd6a6054a8d38b1c`，再进入未放宽的25→24及历史链。独立 connector-error／project-publication pins 保持，不从 sibling 或候选工作树生成、不改旧 hash 冒历史发行。
+
+在原 `hub/mcp-connector.schema.ts` 分开 fresh Current 与操作专属 ACK，供同源 route／client 两层复用：fresh Get 必有真实 HTTP/SSE；历史 ACK 只在受信 replayed 与原 operation／key／exact 请求及原绑定成立时允许缺 transport，不补 HTTP、不把 fresh Get 混进 ACK。原 absent Register／整批旧 HTTP JSON 可承接历史缺字段，显式 HTTP/SSE 或混合/SSE JSON 不享该豁免。旧 Prepare／Update completed receipt 仍确认原命令，已确认事实不追溯改成未执行；fresh 失败保确认／unknown／草稿，原 body/key 与旧 absent 不变，不自动重派。优先保创建 ACK→exact connector/server 双 GET→独立 Prepare／Done 的现正确生命周期和秘密清退。
+
+复用归档 Manus 自定义 SSE 表单、原 metrics 与现 UI：只有自定义 MCP 创建提供真实 HTTP/SSE 选择，创建后仅显示 fresh 真实且不可修改的标签；URL 添加保持 absent HTTP，无新下拉、无 URL 猜测，JSON 仍整文档原字节/一 key/原子提交并逐项绑定 `type:sse`，自定义 API 原样保留。沿现几何、键盘、焦点、窄屏及 unknown 锁定，不开放个人 STDIO、不建浏览器远端 SSE 客户端。composer Connection 独立接 Public26 闭集，选择／Try 不是执行授权。SSE 项目发布执行未支持；`mcp-projection-read.tsx` 的 publicationAvailable 与 onPublish 仅各加 fresh HTTP 条件，保原 WIP／围栏／恢复。
+
+无新 owner、endpoint、Schema、依赖或恢复框架；原 Session／主体与代际、CAS、取消／迟到、10秒预算和秘密只写保持。本片增量保护现12项 MCP WIP、Root 已交付进度片和六个创建／恢复生命周期源文件原字节；creation flow 仅新增只读非秘密 transport getter，使同 flow 关窗重开仍显示原冻结传输，旧 absent 显示未声明占位、不猜 HTTP，原 body/key/状态与重试不变。同源 route／client 复用原 matcher 签名。定向行为与契约／生成检查绑定停写输入，纯 MCP 候选完整门、正常 Platform/BFF/App/Agent 成套及四入口／同 Run 实测由 Root 接手，不以混合工作树或本地 SDK 互通冒整链闭环。
+
 ## 2026-10-25 有界小文本成果预览
 
 在现 Chat→Canvas 成果入口补足首片 metadata-only 的用户预览；既有 native attachment 下载、二元 Conversation/Artifact 授权和 ≤1 GiB 同源流不变。仅当前可信 subject/admission/generation 下、metadata 为 `text/plain` 或 `text/markdown` 且大小 ≤65,536 bytes 的成果可读预览；先复用唯一严格二元详情取得权威 MIME/大小/SHA，再经原 `/content` 路径读取有硬上限的流。详情、正文、EOF、长度与 SHA-256 校验、fatal UTF-8 解码共用一次10秒总期限；关闭、切成果/会话、退休、取消均 abort 且拒迟到。缺边界、大文件和其他格式保下载并明确无预览，不嗅探 HTML、不全量 Blob、不用 path/hash/Asset 当授权。

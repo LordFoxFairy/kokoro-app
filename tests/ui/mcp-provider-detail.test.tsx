@@ -14,7 +14,7 @@ afterEach(() => { cleanup(); window.sessionStorage.clear(); vi.unstubAllGlobals(
 
 function privateOAuthFixture() {
   const connector = { availability: "reauthorization_required", connector_id: "recover-private", server_id: "recover-server", connector_type: "mcp", provider_key: "recover-provider", display_name: "Recover private OAuth", status: "active", enabled: true, approved_scopes: [], state_version: "3" } satisfies McpConnector
-  const server = { availability: "reauthorization_required", server_id: "recover-server", display_name: "Recover private server", server_url: "https://mcp.example.test/recover", status: "registered", state_version: "4", headers: [], prepare_status: "prepare_failed", authorization_status: "approved", declarations: [], declarations_available: false, oauth_client: { client_id: "public-client", configured: true, origin: "byo", status: "configured", state_version: "1" } } satisfies McpPrivateServer
+  const server = { availability: "reauthorization_required", server_id: "recover-server", display_name: "Recover private server", server_url: "https://mcp.example.test/recover", status: "registered", state_version: "4", headers: [], transport: "streamable_http" as const, prepare_status: "prepare_failed", authorization_status: "approved", declarations: [], declarations_available: false, oauth_client: { client_id: "public-client", configured: true, origin: "byo", status: "configured", state_version: "1" } } satisfies McpPrivateServer
   return { connector, server }
 }
 
@@ -134,7 +134,10 @@ it.each(["outside the first page", "when the directory fails"])("opens an instal
 
 it("does not report an unrelated seed failure after filtered owner results succeed", async () => {
   const provider = { provider_key: "match", display_name: "Owner match", directory_type: "app" as const, category_keys: [], example_prompts: [], enabled: true, state_version: "1" }
-  const client = { ...createHubClient(), listMcpConnectorProviders: vi.fn().mockRejectedValueOnce(Error("seed failed")).mockResolvedValue({ items: [provider], next_cursor: null }) }
+  const client = { ...createHubClient(), listMcpConnectorProviders: vi.fn().mockRejectedValueOnce(Error("seed failed")).mockResolvedValue({ items: [provider], next_cursor: null }),
+    // This case isolates provider seed recovery; API is an independently successful owner read.
+    listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }),
+  }
   render(<LocaleProvider><ConnectorCommandProvider client={client} boundary={{ subject: "filter-recovery", admitted: true, generation: 0 }}><McpProjectionRead client={client} identity="filter-recovery" embedded initialView="catalog" /></ConnectorCommandProvider></LocaleProvider>)
   await screen.findByRole("alert")
   fireEvent.change(screen.getByRole("searchbox"), { target: { value: "matching" } })
@@ -227,7 +230,7 @@ it("allows manual reconnect for a ready active private OAuth binding but not a n
   const { renderHook, act } = await import("@testing-library/react")
   const { usePrivateMcpAuthorization } = await import("@/ui/mcp/use-private-mcp-authorization")
   const connector = { availability: "unavailable" as const, connector_id: "private-active", server_id: "private-server", connector_type: "mcp" as const, provider_key: "private", display_name: "Private", status: "active" as const, enabled: true, approved_scopes: [], state_version: "3" }
-  const server = { availability: "unavailable" as const, server_id: "private-server", display_name: "Private", server_url: "https://mcp.example.test", status: "registered" as const, state_version: "4", headers: [], prepare_status: "ready" as const, authorization_status: "approved" as const, declarations: [], declarations_available: true, declaration_digest: "a".repeat(64), oauth_client: { client_id: "public-id", configured: true, origin: "byo" as const, status: "configured" as const, state_version: "1" } }
+  const server = { availability: "unavailable" as const, server_id: "private-server", display_name: "Private", server_url: "https://mcp.example.test", status: "registered" as const, state_version: "4", headers: [], transport: "streamable_http" as const, prepare_status: "ready" as const, authorization_status: "approved" as const, declarations: [], declarations_available: true, declaration_digest: "a".repeat(64), oauth_client: { client_id: "public-id", configured: true, origin: "byo" as const, status: "configured" as const, state_version: "1" } }
   const reconnect = vi.fn().mockResolvedValue({ authorization: { authorization_url: "https://oauth.example.test/authorize", expires_at: "2030-01-01T00:00:00Z" } })
   const client = { ...createHubClient(), reconnectMcpConnectorAuthorization: reconnect }
   const intent = { connectorId: connector.connector_id, serverId: server.server_id, window: {} }
@@ -549,7 +552,7 @@ it.each([false, true])("opens an off-page private connection only after exact co
   const { within } = await import("@testing-library/react")
   const provider = { provider_key: "private-off-page", display_name: "Private directory fixture", directory_type: "app" as const, category_keys: [], example_prompts: [], enabled: true, state_version: "1" }
   const connection = { availability: "unavailable" as const, connector_id: "private-exact-id", connector_type: "mcp" as const, provider_key: provider.provider_key, server_id: "private-exact-server", display_name: "My private connection", status: "pending" as const, enabled: false, approved_scopes: [], state_version: "1" }
-  const server = { availability: "unavailable" as const, server_id: connection.server_id, display_name: "Exact private detail", server_url: "https://mcp.example.test/endpoint", status: "pending" as const, state_version: "2", headers: [], prepare_status: "pending_prepare" as const, declarations: [], declarations_available: false }
+  const server = { availability: "unavailable" as const, server_id: connection.server_id, display_name: "Exact private detail", server_url: "https://mcp.example.test/endpoint", status: "pending" as const, state_version: "2", headers: [], transport: "streamable_http" as const, prepare_status: "pending_prepare" as const, declarations: [], declarations_available: false }
   const get = vi.fn().mockResolvedValue({ ...connection, state_version: "3" }), getServer = vi.fn().mockResolvedValue(server)
   if (retry) get.mockRejectedValueOnce(Error("exact read offline"))
   const client = { ...createHubClient(), getMcpConnector: get, getPrivateMcpServer: getServer,
@@ -576,7 +579,7 @@ it.each(["revoked", "fresh-server"])("retires opened private detail through an e
   const { invalidateMcpConnectorProjection } = await import("@/ui/mcp/use-mcp-projection")
   const provider = { provider_key: `retire-${outcome}`, display_name: "Private recheck", directory_type: "app" as const, category_keys: [], example_prompts: [], enabled: true, state_version: "1" }
   const connection = { availability: "unavailable" as const, connector_id: "recheck-private", connector_type: "mcp" as const, provider_key: provider.provider_key, server_id: "recheck-server", display_name: "My rechecked connection", status: "pending" as const, enabled: false, approved_scopes: [], state_version: "1" }
-  const server = { availability: "unavailable" as const, server_id: connection.server_id, display_name: "Private ready detail", server_url: "https://mcp.example.test/recheck", status: "pending" as const, state_version: "2", headers: [], prepare_status: "pending_prepare" as const, declarations: [], declarations_available: false }
+  const server = { availability: "unavailable" as const, server_id: connection.server_id, display_name: "Private ready detail", server_url: "https://mcp.example.test/recheck", status: "pending" as const, state_version: "2", headers: [], transport: "streamable_http" as const, prepare_status: "pending_prepare" as const, declarations: [], declarations_available: false }
   let finishConnection!: (value: typeof connection | Omit<typeof connection, "status"> & { status: "revoked" }) => void
   let finishServer!: (value: typeof server) => void
   const get = vi.fn().mockResolvedValueOnce(connection).mockImplementationOnce(() => new Promise(resolve => { finishConnection = resolve }))
@@ -777,7 +780,7 @@ it("unknown invalid Prepare uses read-only inspection, retires window proof on c
   const connector = { ...base.connector, availability: "unavailable" as const }
   const server = { ...base.server, oauth_client: undefined, availability: "unavailable" as const, state_version: "5" }
   const prepare = vi.fn().mockRejectedValueOnce(new HubClientError("http", "invalid response", "mcp_personal_response_invalid", 502, false))
-    .mockResolvedValue({ server: { ...server, prepare_status: "ready", declarations_available: true }, connector, declarations: [], replayed: true })
+    .mockResolvedValue({ server: { ...server, transport: "streamable_http" as const, prepare_status: "ready", declarations_available: true }, connector, declarations: [], replayed: true })
   const get = vi.fn().mockResolvedValue(connector), getServer = vi.fn().mockResolvedValue(server)
   const client = { ...createHubClient(), preparePrivateMcpServer: prepare, getMcpConnector: get, getPrivateMcpServer: getServer,
     listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),

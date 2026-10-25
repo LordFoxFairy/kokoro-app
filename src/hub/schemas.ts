@@ -530,7 +530,7 @@ export const mcpConnectionSchema = z
     connector_id: mcpConnectionIdSchema,
     server_id: mcpConnectionIdSchema,
     provider_key: codePointBounded(191),
-    transport: z.literal("streamable_http"),
+    transport: z.enum(["streamable_http", "sse_compat"]),
     status: z.literal("active"),
   })
   .strict()

@@ -1,3 +1,11 @@
+## 2026-10-25 personal HTTP/SSE 消费者候选
+
+`mcp-custom-form.tsx` 复用原 Select 提供显式 HTTP/SSE；fresh 配置详情只显示真实且不可编辑的 transport。`hub/mcp-connector.schema.ts` 分开 required Current 与 operation-aware historical ACK，两层原 route/client 共同核 replayed／原请求，旧 absent body/key 不补值；JSON 保原整文档和单 key，HTTP/SSE 逐项原序绑定。URL 添加仍 absent HTTP，自定义 API 不变；项目发布 UI/action 两 guard 只接受 fresh HTTP。六个创建／恢复生命周期源文件原字节保持，creation flow 仅新增非秘密只读 transport getter；unknown 关窗重开显示原请求协议，旧 absent 显示“—”，原命令仍冻结／显式恢复；正式多 owner 正常验收由 Root 接手。
+
+## 外层广场个人 API 与管理共卡（2026-10-25）
+
+`mcp-custom-api-card.tsx`由管理列表和外层`mcp-custom-api-gallery.tsx`共用；广场仅呈现当前主体已准入且确认过的真实 Custom API profile，不由缺失 Provider 猜私有 MCP、不伪造目录。尚无正式 API 分类，故只在“全部”展示，名称/备注搜索只过滤已读取页，原 opaque 续页与独立读取失败/重试保留；有已确认 API 时不再展示整个目录为空的误导文案。点击继续按精确 profile_id 打开原编辑器，未触发新创建或 Prepare。
+
 ## 已确认 API 与独立 MCP 读取分离（2026-10-25）
 
 `mcp-projection-read.tsx`在当前 API 列表已返回非空卡片时允许展示与打开原详情，即使独立初始 MCP 列表仍加载或失败；MCP 原 loading/error/读重试保持，不把失败当空成功，不触发新创建/重发。MCP 翻页仍只按已读回游标。`app-frame-rail`行为回归保 partial-read 的已确认卡片与详情、原错误、显式读重试恢复、真正全空态和未知 MCP 游标不启用翻页；未把偶发正常初始网络失败归因于共享flight。
@@ -137,7 +145,7 @@ OAuth 点击同步预开并隔离 popup，再使用 owner 返回的 HTTPS URL；
 - `custom-api-detail-dialog.tsx` / `custom-api-detail-dialog.module.css` / `custom-api-form.tsx` / `use-custom-api-projection.ts`：只拥有 Custom API profile 的直达编辑和独立样式；原命令恢复/删除确认保持，环境变量值永不进入读取视图，不变不提交。
 - `connector-command.ts` / `use-connector-creation-form.ts`：仅本地单命令的准入/lease/unknown及异步完成关闭机制，由 API/JSON 创建、MCP Prepare 与 typed Custom API 管理实际消费者共用，不是网络代理或命令注册表。
 - `custom-api-create-flow.ts` / `mcp-json-import-flow.ts` / `connector-command-context.tsx`：各自 typed 输入/创建命令与稳定 AppFrameRuntime 的 API/JSON actor/client 命令槽。冻结正文/key只在RAM，unknown显式同请求恢复；关闭窗口不丢命令，换actor/真正卸载退休。确认清实际secret/JSON原文，API和JSON分别失活捕获主体的独立投影，Form/Dialog只拥有当前窗口关闭。JSON仍一次原子HTTP导入，不循环Register。
-- `mcp-server-creation-flow.ts` / `use-mcp-server-creation.ts`：Custom/URL 多阶段创建的独立 actor/client 工作流和当前窗口消费者；原 Register/Prepare key、正文与 CAS 仅在 RAM 保留，未知结果显式恢复原命令。Register 确认只留精确 locator，新 Prepare 读取本代 server/connector，OAuth 不借旧准入，晚 ACK 仅刷新原主体。
+- `mcp-server-creation-flow.ts` / `use-mcp-server-creation.ts`：Custom/URL 多阶段创建的独立 actor/client 工作流和当前窗口消费者；原 Register/Prepare key、正文与 CAS 仅在 RAM 保留，未知结果显式恢复原命令。Register completion 对外只含精确 locator；同一次创建已确认的安全只读视图可由 opaque 内存 handoff 在同 client/actor/准入代际/revision 内交给详情，免去取消 picker 后的重复读取与空白闪跳。新观察、确认开始或任一绑定失效即退休，不落 IDB/路由，错误不复活旧 facts；普通冷开与新 Prepare 仍读取本代 server/connector，OAuth 不借旧准入，晚 ACK 仅刷新原主体。
 - `mcp-projection-types.ts`：共享的投影视图类型、分类词汇和 owner artwork/status 映射；不含请求或模拟数据。
 
 

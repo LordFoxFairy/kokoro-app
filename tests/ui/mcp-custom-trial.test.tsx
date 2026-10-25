@@ -5,7 +5,7 @@ import { CustomMcpDetailDialog } from "@/ui/mcp/custom-mcp-detail-dialog"
 import type { McpConnector, McpPrivateServer } from "@/hub/mcp-connector.schema"
 
 const connector = { availability: "available", connector_id: "owned-connector", server_id: "owned-server", provider_key: "owned-provider", connector_type: "mcp", display_name: "QA MCP", status: "active", enabled: true, approved_scopes: [], state_version: "2" } satisfies McpConnector
-const server = { availability: "available", server_id: "owned-server", display_name: "QA MCP", server_url: "https://mcp.example.test/mcp", status: "registered", state_version: "3", headers: [], prepare_status: "ready", declarations: [], declarations_available: true, connection_id: "exact-runtime-connection" } satisfies McpPrivateServer
+const server = { availability: "available", server_id: "owned-server", display_name: "QA MCP", server_url: "https://mcp.example.test/mcp", status: "registered", state_version: "3", headers: [], transport: "streamable_http" as const, prepare_status: "ready", declarations: [], declarations_available: true, connection_id: "exact-runtime-connection" } satisfies McpPrivateServer
 function show(overrides: Partial<Parameters<typeof CustomMcpDetailDialog>[0]> = {}) {
   const trial = vi.fn(() => true), prepare = vi.fn()
   const props = { connector, server, actionId: null, admitted: true, managementCommand: undefined,
@@ -116,3 +116,11 @@ it("a revoked header name can be explicitly configured again without a repeated 
   expect(save).toHaveBeenCalledExactlyOnceWith({ display_name: "QA MCP", notes: "", server_url: server.server_url,
     header_upserts: [{ name: "x-revoked", value: "new-fixture-value" }], header_removals: [] })
 })
+
+it("shows the fresh SSE configuration label without an editable transport or fake chevron", async () => {
+ show({ server: { ...server, transport: "sse_compat" } });
+ fireEvent.keyDown(screen.getByRole("button", { name: "管理" }), { key: "Enter" });
+ fireEvent.click(await screen.findByRole("menuitem", { name: "编辑配置" }));
+ const label = screen.getByLabelText("传输类型 SSE"); expect(label).toHaveTextContent("SSE"); expect(label.querySelector("svg")).toBeNull();
+ expect(screen.queryByRole("combobox", { name: "传输类型" })).toBeNull();
+});

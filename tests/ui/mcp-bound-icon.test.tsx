@@ -103,7 +103,7 @@ it("the original non-edit MCP detail shows only its admitted server binding and 
   const icon = binding();
   const props: Parameters<typeof CustomMcpDetailDialog>[0] = {
     connector: { availability: "available", connector_id: "bound-connector", server_id: "bound-server", provider_key: "bound-provider", connector_type: "mcp", status: "active", enabled: true, approved_scopes: [], state_version: "2" },
-    server: { availability: "available", server_id: "bound-server", display_name: "Bound MCP", server_url: "https://mcp.example.test/mcp", status: "registered", state_version: "3", headers: [], prepare_status: "ready", declarations: [], declarations_available: true, icon },
+    server: { availability: "available", server_id: "bound-server", display_name: "Bound MCP", server_url: "https://mcp.example.test/mcp", status: "registered", state_version: "3", headers: [], transport: "streamable_http" as const, prepare_status: "ready", declarations: [], declarations_available: true, icon },
     actionId: null, admitted: true, managementCommand: undefined, onResumeManagement: vi.fn(),
     actionError: false, deleteId: null, returnFocusRef: { current: null }, onClose: vi.fn(),
     onSaveConfiguration: vi.fn(), onPrepare: vi.fn(), onAuthorize: vi.fn(), onDisconnect: vi.fn(),

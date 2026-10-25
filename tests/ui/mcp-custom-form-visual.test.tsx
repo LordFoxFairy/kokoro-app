@@ -55,7 +55,7 @@ it("matches measured custom MCP surface, plain URL input, label hierarchy and no
     expect(await legend.locator("span").evaluate(element => getComputedStyle(element).fontWeight)).toBe("400")
     expect(await editor.locator("textarea").evaluate(element => getComputedStyle(element).borderRadius)).toBe("10px")
     expect(await editor.getByRole("button", { name: "上传", exact: true }).isDisabled()).toBe(true)
-    expect(await editor.getByRole("textbox", { name: "传输类型" }).inputValue()).toBe("HTTP")
+    expect(await editor.getByRole("combobox", { name: "传输类型" }).textContent()).toContain("HTTP")
     const evidence = process.env.KOKORO_VISUAL_EVIDENCE_DIR
     if (evidence) { await mkdir(evidence, { recursive: true }); await editor.screenshot({ path: join(evidence, "custom-mcp-form-isolated-desktop.png") }) }
     await page.evaluate(() => document.body.style.setProperty("--settings-surface", "#242424"))
@@ -72,7 +72,7 @@ it.each(["unknown", "trial"] as const)("configuration %s feedback keeps short-sc
   window.localStorage.setItem("kokoro.locale", "zh")
   const props: Parameters<typeof CustomMcpDetailDialog>[0] = {
     connector: { availability: "available", connector_id: "owned-connector", server_id: "owned-server", provider_key: "owned-provider", connector_type: "mcp", display_name: "QA MCP", status: "active", enabled: true, approved_scopes: [], state_version: "2" },
-    server: { availability: "available", server_id: "owned-server", display_name: "QA MCP", server_url: "https://mcp.example.test/mcp", status: "registered", state_version: "3", headers: [], prepare_status: "ready", declarations: [], declarations_available: true, connection_id: "exact-runtime-connection" },
+    server: { availability: "available", server_id: "owned-server", display_name: "QA MCP", server_url: "https://mcp.example.test/mcp", status: "registered", state_version: "3", headers: [], transport: "streamable_http" as const, prepare_status: "ready", declarations: [], declarations_available: true, connection_id: "exact-runtime-connection" },
     actionId: null, admitted: true, managementCommand: undefined, preparationState: scenario === "unknown" ? "unknown" : "idle",
     onResumeManagement: vi.fn(), actionError: false, deleteId: null, returnFocusRef: { current: null },
     onClose: vi.fn(), onSaveConfiguration: vi.fn(), onPrepare: vi.fn(), onAuthorize: vi.fn(), onDisconnect: vi.fn(),
@@ -119,3 +119,21 @@ it.each(["unknown", "trial"] as const)("configuration %s feedback keeps short-sc
     try { await browser?.close() } finally { await vite.close() }
   }
 }, 20_000)
+
+
+it("offers a real HTTP/SSE choice and freezes it in the creation command", async () => {
+ localStorage.setItem("kokoro.locale", "zh");
+ const boundary = { admitted: true, subject: "sse-choice-actor", generation: 1 };
+ const register = vi.fn().mockRejectedValue(new Error("unknown original command"));
+ const client = { registerPrivateMcpServer: register, preparePrivateMcpServer: vi.fn(), getPrivateMcpServer: vi.fn(), getMcpConnector: vi.fn(), beginMcpConnectorAuthorization: vi.fn() };
+ const flow = createMcpServerCreationFlow({ client, boundary, onChanged: vi.fn(), preparation: createMcpPreparationCommands({ client, boundary, canPrepare: () => true, onConfirmed: vi.fn() }) });
+ render(<LocaleProvider><Dialog open><DialogContent><CustomMcpForm flow={flow} boundary={boundary} onCancel={vi.fn()} onDone={async () => undefined} /></DialogContent></Dialog></LocaleProvider>);
+ const choice = screen.getByRole("combobox", { name: "传输类型" }); expect(choice).toHaveTextContent("HTTP");
+ fireEvent.keyDown(choice, { key: "ArrowDown" }); fireEvent.click(await screen.findByRole("option", { name: /^SSE$/u })); expect(choice).toHaveTextContent("SSE");
+ fireEvent.change(screen.getByRole("textbox", { name: "服务器名称" }), { target: { value: "SSE tools" } });
+ fireEvent.change(screen.getByRole("textbox", { name: "服务器 URL" }), { target: { value: "https://example.test/sse" } });
+ fireEvent.click(screen.getByRole("button", { name: /^保存$/u }));
+ await vi.waitFor(() => expect(register).toHaveBeenCalledOnce()); expect(register.mock.calls[0]?.[0]).toMatchObject({ display_name: "SSE tools", transport: "sse_compat" });
+ expect(flow.getSnapshot().unknown).toBe("register"); expect(choice).toBeDisabled(); expect(choice).toHaveTextContent("SSE");
+ fireEvent.keyDown(choice, { key: "ArrowDown" }); expect(screen.queryByRole("option", { name: /^HTTP$/u })).toBeNull(); expect(register).toHaveBeenCalledOnce();
+});

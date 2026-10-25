@@ -29,7 +29,7 @@ vi.mock("@/ui/mcp/mcp-preparation-recovery", async importOriginal => {
 });
 
 const boundary = { subject: "existing-publication-actor", admitted: true, generation: 1 };
-const server: McpPrivateServer = { server_id: "existing-server", display_name: "Existing remote MCP", server_url: "https://mcp.example.test/mcp", availability: "unavailable", status: "registered", state_version: "7", headers: [], prepare_status: "pending_prepare", declarations: [], declarations_available: false };
+const server: McpPrivateServer = { server_id: "existing-server", display_name: "Existing remote MCP", server_url: "https://mcp.example.test/mcp", availability: "unavailable", status: "registered", state_version: "7", headers: [], transport: "streamable_http" as const, prepare_status: "pending_prepare", declarations: [], declarations_available: false };
 const connector: McpConnector = { connector_id: "existing-connector", server_id: server.server_id, provider_key: "existing-provider", connector_type: "mcp", display_name: server.display_name, availability: "unavailable", status: "pending", enabled: false, state_version: "3", approved_scopes: [] };
 const project = { id: "canonical-project", slug: "not-the-project-id", name: "Existing project", description: "", created_at: "2026-10-25T00:00:00Z", updated_at: "2026-10-25T00:00:00Z" };
 const revision = { revision_id: "existing-revision", server_id: server.server_id, connector_id: connector.connector_id, content_digest: "a".repeat(64), source_state_version: server.state_version, display_name: server.display_name, created_at: "2026-10-25T00:00:00Z" };
@@ -181,4 +181,19 @@ it("an admission change retires the open picker and its pending confirmation wit
   await act(async () => { resolve(server); await read; });
   expect(publication.publish).not.toHaveBeenCalled(); expect(publication.list).not.toHaveBeenCalled();
   expect(client.registerPrivateMcpServer).not.toHaveBeenCalled();
+});
+
+it("fresh SSE keeps personal details but cannot offer or dispatch HTTP-only project publication", async () => {
+  const { client, publication, detail, publicationMenu } = setup();
+  client.getPrivateMcpServer.mockResolvedValue({ ...server, transport: "sse_compat" });
+  const dialog = await detail();
+  const item = await publicationMenu();
+  expect(item).toHaveAttribute("data-disabled");
+  fireEvent.click(item);
+  expect(screen.queryByRole("dialog", { name: "发布到项目" })).not.toBeInTheDocument();
+  expect(dialog).toBeVisible();
+  expect(publication.list).not.toHaveBeenCalled();
+  expect(publication.publish).not.toHaveBeenCalled();
+  expect(client.registerPrivateMcpServer).not.toHaveBeenCalled();
+  expect(client.preparePrivateMcpServer).not.toHaveBeenCalled();
 });

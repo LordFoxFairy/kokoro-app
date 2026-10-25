@@ -23,7 +23,7 @@ it.each(["confirmed", "unknown-then-replayed", "read-failed"])("configuration Sa
   const server = (): McpPrivateServer => ({ availability: "available", server_id: "saved-server", display_name: name,
     server_url: "https://mcp.example.test/mcp", notes: "Saved note", status: "registered", state_version: String(version),
     headers: version > 3 ? [{ name: "x-test-key", configured: true, status: "active", state_version: "4" }] : [],
-    prepare_status: "ready", declarations: [], declarations_available: true, declaration_digest: "a".repeat(64), connection_id: "saved-connection" })
+    transport: "streamable_http" as const, prepare_status: "ready", declarations: [], declarations_available: true, declaration_digest: "a".repeat(64), connection_id: "saved-connection" })
   const read = vi.fn(async () => {
     if (version === 4) {
       if (mode === "read-failed" && !failedRead) { failedRead = true; throw Error("fresh read failed") }

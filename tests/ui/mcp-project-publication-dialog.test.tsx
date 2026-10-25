@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { LocaleProvider } from "@/i18n/context";
 import { createHubClient } from "@/hub/client";
@@ -8,10 +8,11 @@ import { McpTrialProvider } from "@/ui/mcp/mcp-trial-context";
 import type { McpPrivateServer, McpConnector } from "@/hub/mcp-connector.schema";
 import type { McpProjectPin } from "@/hub/mcp-project-publication.schema";
 import * as projectReader from "@/features/app/project-list";
+import { invalidateMcpConnectorProjection } from "@/ui/mcp/use-mcp-projection";
 import { createTestPublicationJournal } from "./mcp-publication-journal-fixture";
 vi.mock("@/ui/mcp/mcp-project-publication-recovery", () => ({ createBrowserMcpProjectPublicationRecovery: () => createTestPublicationJournal() }));
 const boundary = { subject: "publish-actor", admitted: true, generation: 1 };
-const server: McpPrivateServer = { availability: "unavailable", server_id: "source-server", display_name: "Saved source", server_url: "https://mcp.example.test/mcp", notes: "", status: "registered", state_version: "2", headers: [], prepare_status: "pending_prepare", declarations: [], declarations_available: false };
+const server: McpPrivateServer = { availability: "unavailable", server_id: "source-server", display_name: "Saved source", server_url: "https://mcp.example.test/mcp", status: "registered", state_version: "2", headers: [], transport: "streamable_http" as const, prepare_status: "pending_prepare", declarations: [], declarations_available: false };
 const connector: McpConnector = { availability: "unavailable", connector_id: "source-connector", server_id: server.server_id, provider_key: "source-provider", display_name: server.display_name, connector_type: "mcp", status: "pending", enabled: false, state_version: "2", approved_scopes: [] };
 const project = { id: "project-canonical", slug: "not-a-canonical-id", name: "My project", description: "", created_at: "2026-10-25T00:00:00Z", updated_at: "2026-10-25T00:00:00Z" };
 beforeEach(() => { localStorage.setItem("kokoro.locale", "zh"); vi.spyOn(projectReader, "listProjects").mockResolvedValue([project]); });
@@ -40,6 +41,20 @@ it("create ACK opens observed project picker; cancel preserves the exact newly s
  await waitFor(() => expect(screen.queryByRole("dialog", { name: "发布到项目" })).not.toBeInTheDocument());
  expect(await screen.findByRole("dialog", { name: server.display_name })).toBeVisible();
  expect(client.registerPrivateMcpServer).toHaveBeenCalledOnce(); expect(client.preparePrivateMcpServer).not.toHaveBeenCalled(); expect(client.beginMcpConnectorAuthorization).not.toHaveBeenCalled(); expect(publication.publish).not.toHaveBeenCalled(); expect(popup).not.toHaveBeenCalled();
+});
+it("cancel renders the already confirmed detail immediately even when every duplicate GET is delayed", async () => {
+ const { create, client } = setup(); const picker = await create();
+ await within(picker).findByRole("checkbox", { name: project.name });
+ const connectorReads = client.getMcpConnector.mock.calls.length;
+ const serverReads = client.getPrivateMcpServer.mock.calls.length;
+ client.getMcpConnector.mockImplementation(() => new Promise(() => {}));
+ client.getPrivateMcpServer.mockImplementation(() => new Promise(() => {}));
+ fireEvent.click(within(picker).getByRole("button", { name: "取消" }));
+ const detail = screen.getByRole("dialog", { name: server.display_name });
+ expect(within(detail).getByRole("button", { name: server.server_id })).toBeVisible();
+ expect(within(detail).queryByText("正在加载…")).toBeNull();
+ expect(client.getMcpConnector).toHaveBeenCalledTimes(connectorReads);
+ expect(client.getPrivateMcpServer).toHaveBeenCalledTimes(serverReads);
 });
 it("confirm freezes canonical project and source CAS; acknowledgement says definition only, not connection success", async () => {
  const { create, publication } = setup(); const picker = await create();
@@ -81,4 +96,58 @@ it("a repeated cursor cannot be treated as an absent pin or cause a publish", as
  const { create, publication } = setup(); publication.list.mockResolvedValue({ pins: [], next_cursor: "repeated" }); const picker = await create();
  fireEvent.click(await within(picker).findByRole("checkbox", { name: project.name })); fireEvent.click(within(picker).getByRole("button", { name: "确认" }));
  expect(await within(picker).findByRole("alert")).toHaveTextContent("读取失败"); expect(publication.list).toHaveBeenCalledTimes(2); expect(publication.publish).not.toHaveBeenCalled();
+});
+
+it("a confirmed mutation retires the creation observation before cancel; failed fresh reads do not revive it", async () => {
+ const { create, client } = setup(); const picker = await create();
+ await within(picker).findByRole("checkbox", { name: project.name });
+ const reads = client.getMcpConnector.mock.calls.length;
+ client.getMcpConnector.mockRejectedValue(Error("fresh owner read rejected"));
+ act(() => invalidateMcpConnectorProjection(client, boundary.subject));
+ fireEvent.click(within(picker).getByRole("button", { name: "取消" }));
+ expect(screen.queryByRole("dialog", { name: server.display_name })).toBeNull();
+ const detail = screen.getByRole("dialog", { name: "编辑" });
+ await waitFor(() => expect(within(detail).getByRole("button", { name: "重试" })).toBeVisible());
+ expect(client.getMcpConnector).toHaveBeenCalledTimes(reads + 1);
+ expect(within(detail).queryByRole("button", { name: server.server_id })).toBeNull();
+});
+it("starting a new source observation retires the handoff even when confirmation fails and is cancelled", async () => {
+ const { create, client, publication } = setup(); const picker = await create();
+ fireEvent.click(await within(picker).findByRole("checkbox", { name: project.name }));
+ client.getPrivateMcpServer.mockRejectedValue(Error("source denied"));
+ client.getMcpConnector.mockRejectedValue(Error("source denied"));
+ fireEvent.click(within(picker).getByRole("button", { name: "确认" }));
+ expect(await within(picker).findByRole("alert")).toHaveTextContent("读取失败");
+ const reads = client.getMcpConnector.mock.calls.length;
+ fireEvent.click(within(picker).getByRole("button", { name: "取消" }));
+ expect(screen.queryByRole("dialog", { name: server.display_name })).toBeNull();
+ const detail = screen.getByRole("dialog", { name: "编辑" });
+ await waitFor(() => expect(within(detail).getByRole("button", { name: "重试" })).toBeVisible());
+ expect(client.getMcpConnector).toHaveBeenCalledTimes(reads + 1);
+ expect(publication.publish).not.toHaveBeenCalled();
+});
+it("an already displayed handoff retires synchronously when its mutation revision changes", async () => {
+ const { create, client } = setup(); const picker = await create();
+ await within(picker).findByRole("checkbox", { name: project.name });
+ fireEvent.click(within(picker).getByRole("button", { name: "取消" }));
+ expect(screen.getByRole("dialog", { name: server.display_name })).toBeVisible();
+ client.getMcpConnector.mockRejectedValue(Error("source retired"));
+ act(() => invalidateMcpConnectorProjection(client, boundary.subject));
+ expect(screen.queryByRole("dialog", { name: server.display_name })).toBeNull();
+ await waitFor(() => expect(within(screen.getByRole("dialog", { name: "编辑" })).getByRole("button", { name: "重试" })).toBeVisible());
+});
+
+it("a newer source version observed during confirmation never falls back to the creation version on cancel", async () => {
+ const { create, client, publication } = setup(); const picker = await create();
+ fireEvent.click(await within(picker).findByRole("checkbox", { name: project.name }));
+ const freshServer = { ...server, state_version: "4", display_name: "Changed owner title" };
+ const freshConnector = { ...connector, state_version: "5", display_name: freshServer.display_name };
+ client.getPrivateMcpServer.mockResolvedValue(freshServer); client.getMcpConnector.mockResolvedValue(freshConnector);
+ publication.list.mockImplementation(() => new Promise(() => {}));
+ fireEvent.click(within(picker).getByRole("button", { name: "确认" }));
+ await waitFor(() => expect(publication.list).toHaveBeenCalledOnce());
+ fireEvent.click(within(picker).getByRole("button", { name: "取消" }));
+ expect(screen.queryByRole("dialog", { name: server.display_name })).toBeNull();
+ expect(await screen.findByRole("dialog", { name: freshServer.display_name })).toBeVisible();
+ expect(publication.publish).not.toHaveBeenCalled();
 });

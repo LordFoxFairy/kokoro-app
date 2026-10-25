@@ -1,0 +1,50 @@
+.section {
+  min-width: 0;
+}
+
+/* Reuse the measured provider plaza card tokens; only the section/grid is new. */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.copy {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.copy > span {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.initial {
+  display: inline-flex;
+  width: 1.5rem;
+  height: 1.5rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.25rem;
+  background: var(--muted);
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.5rem;
+}
+
+.trigger:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+
+@media (max-width: 47.999rem) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

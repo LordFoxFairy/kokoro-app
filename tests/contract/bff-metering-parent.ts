@@ -25,6 +25,17 @@ const proof = {
   ],
 } as const
 const hash = (value: string) => createHash("sha256").update(value).digest("hex")
+// Test-only exact Public26 ->25 complete-artifact inverse; old parent proofs remain sealed.
+export function restorePublic25PersonalSseContract(source: string) {
+  if (!/^  version: 26\.0\.0$/mu.test(source)) return source
+  if (hash(source) !== "20d26736cf23da32c242c2c7cf75c45affb62c5d27696dcecb0bc6193bc39a09") throw Error("Personal SSE fixed current contract drift")
+  const field = "        transport: { type: string, enum: [streamable_http, sse_compat] }\n"
+  const block = source.match(/^    McpConnectionProjection:\n[\s\S]*?(?=^    [A-Za-z])/mu)?.[0]
+  if (!block || block.split(field).length !== 2 || source.split(field).length !== 2) throw Error("Personal SSE exact transport delta drift")
+  const parent = source.replace(block, () => block.replace(field, "        transport: { type: string, enum: [streamable_http] }\n")).replace(/^  version: 26\.0\.0$/mu, "  version: 25.0.0")
+  if (hash(parent) !== "7261ac9ce2140555ba97ebff2bf0359533cc49dda014b08dcd6a6054a8d38b1c") throw Error("Personal SSE complete Public25 parent drift")
+  return parent
+}
 // Test-only Public25 ->24 inverse; the complete Public24 and earlier oracles stay sealed.
 export function restorePublic24SkillDetailContract(source: string) {
   if (!/^  version: 25\.0\.0$/mu.test(source)) return source
@@ -48,7 +59,7 @@ export function restorePublic24SkillDetailContract(source: string) {
 }
 
 export function restoreMcpSelectionContract(source: string) {
-  source = restorePublic24SkillDetailContract(source)
+  source = restorePublic24SkillDetailContract(restorePublic25PersonalSseContract(source))
   if (/^  version: 24\.0\.0$/mu.test(source)) {
     if (hash(source) !== "f4caf11f3cd9255d2cd9daf69b74ff9988505d640e31c686ce495e6d8a578b2c") throw Error("Exact MCP selection current contract drift")
     source = source

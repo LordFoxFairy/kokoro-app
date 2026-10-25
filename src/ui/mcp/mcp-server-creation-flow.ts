@@ -175,6 +175,7 @@ export function createMcpServerCreationFlow(options: { client: Client; preparati
     authorizationAcknowledged: options.onChanged,
     available: Boolean(client.registerPrivateMcpServer && client.preparePrivateMcpServer && client.getPrivateMcpServer && client.getMcpConnector),
     getSnapshot: () => state,
+    getRegistrationTransport: () => registration?.body.transport,
     subscribe: (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; },
     matches,
     bind,

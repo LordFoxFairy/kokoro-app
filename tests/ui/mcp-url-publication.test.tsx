@@ -10,7 +10,7 @@ beforeEach(() => localStorage.setItem("kokoro.locale", "zh"));
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 it("URL Save and publish confirms only registration, then hands the exact entity to the project picker without Prepare or OAuth", async () => {
-  const server: McpPrivateServer = { availability: "unavailable", server_id: "server-publish", display_name: "Publication", server_url: "https://mcp.example.test/mcp", notes: "", status: "registered", state_version: "1", headers: [], prepare_status: "pending_prepare", declarations: [], declarations_available: false };
+  const server: McpPrivateServer = { availability: "unavailable", server_id: "server-publish", display_name: "Publication", server_url: "https://mcp.example.test/mcp", notes: "", status: "registered", state_version: "1", headers: [], transport: "streamable_http" as const, prepare_status: "pending_prepare", declarations: [], declarations_available: false };
   const connector: McpConnector = { availability: "unavailable", connector_id: "connector-publish", server_id: server.server_id, provider_key: "provider-publish", connector_type: "mcp", display_name: "Publication", status: "pending", enabled: false, approved_scopes: [], state_version: "1" };
   const client = { registerPrivateMcpServer: vi.fn().mockResolvedValue({ server, connector, replayed: false }), getPrivateMcpServer: vi.fn().mockResolvedValue(server), getMcpConnector: vi.fn().mockResolvedValue(connector), preparePrivateMcpServer: vi.fn(), beginMcpConnectorAuthorization: vi.fn() };
   const boundary = { subject: "actor", generation: 1, admitted: true };

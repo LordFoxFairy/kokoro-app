@@ -104,7 +104,7 @@ it("Custom API URL staging never creates a connector until original Save carries
 
 it("Custom MCP URL staging never registers a server until its original Save carries the ready selector", async () => {
   const icon = iconFixture();
-  const server: McpPrivateServer = { availability: "available", server_id: "icon-form-server", display_name: "Original MCP", server_url: "https://mcp.example.test/mcp", status: "registered", state_version: "4", headers: [], prepare_status: "ready", declarations: [], declarations_available: true };
+  const server: McpPrivateServer = { availability: "available", server_id: "icon-form-server", display_name: "Original MCP", server_url: "https://mcp.example.test/mcp", status: "registered", state_version: "4", headers: [], transport: "streamable_http" as const, prepare_status: "ready", declarations: [], declarations_available: true };
   const connector: McpConnector = { availability: "available", connector_id: "icon-form-connector", server_id: server.server_id, provider_key: "icon-form-provider", connector_type: "mcp", status: "active", enabled: true, approved_scopes: [], state_version: "4" };
   const register = vi.fn<NonNullable<HubClient["registerPrivateMcpServer"]>>(async () => ({ server, connector, replayed: false }));
   const client = { registerPrivateMcpServer: register, preparePrivateMcpServer: vi.fn<NonNullable<HubClient["preparePrivateMcpServer"]>>(), getPrivateMcpServer: vi.fn(async () => server), getMcpConnector: vi.fn(async () => connector), beginMcpConnectorAuthorization: vi.fn<NonNullable<HubClient["beginMcpConnectorAuthorization"]>>() };
@@ -119,7 +119,7 @@ it("Custom MCP URL staging never registers a server until its original Save carr
   expect(register).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: /^保存$/u }));
   await waitFor(() => expect(register).toHaveBeenCalledOnce());
-  expect(register.mock.calls[0]?.[0]).toEqual({ display_name: server.display_name, server_url: server.server_url, icon: selector });
+  expect(register.mock.calls[0]?.[0]).toEqual({ transport: "streamable_http", display_name: server.display_name, server_url: server.server_url, icon: selector });
   expect(register.mock.calls[0]?.[1]).toMatch(/^[a-f0-9-]{36}$/u);
   view.unmount();
   expect(icon.client.cancel).not.toHaveBeenCalled();
@@ -206,4 +206,56 @@ vi.mock("@/ui/mcp/mcp-preparation-recovery", async importOriginal => {
   const actual = await importOriginal<typeof import("@/ui/mcp/mcp-preparation-recovery")>();
   const { createTestPreparationJournal } = await import("./fixtures/mcp-preparation-journal");
   return { ...actual, createBrowserMcpPreparationRecovery: () => createTestPreparationJournal(actual) };
+});
+
+it.each([
+  ["streamable_http", "HTTP"],
+  ["sse_compat", "SSE"],
+  [undefined, "—"],
+] as const)("reopening the same unknown %s registration displays its frozen transport and retries only the original command", async (transport, label) => {
+  const register = vi.fn<NonNullable<HubClient["registerPrivateMcpServer"]>>().mockRejectedValue(new Error("fixture lost ACK"));
+  const client = { registerPrivateMcpServer: register, preparePrivateMcpServer: vi.fn(), getPrivateMcpServer: vi.fn(), getMcpConnector: vi.fn(), beginMcpConnectorAuthorization: vi.fn() };
+  const preparation = createMcpPreparationCommands({ client, boundary, canPrepare: () => true, onConfirmed: vi.fn() });
+  const flow = createMcpServerCreationFlow({ client, boundary, onChanged: vi.fn(), preparation });
+  const release = flow.retain(boundary);
+  const show = () => render(<LocaleProvider><Dialog open><DialogContent><CustomMcpForm flow={flow} boundary={boundary} onCancel={vi.fn()} onDone={async () => undefined} /></DialogContent></Dialog></LocaleProvider>);
+  try {
+    if (transport === undefined) {
+      // An already-frozen pre-transport request, not a rewritten new HTTP command.
+      const window = {}, scope = { window, boundary };
+      const detach = flow.attach(window);
+      await act(async () => { await flow.submit({ display_name: "Original MCP", server_url: "https://mcp.example.test/mcp" }, scope); });
+      detach();
+    }
+    const first = show();
+    if (transport !== undefined) {
+      if (transport === "sse_compat") {
+        fireEvent.keyDown(screen.getByRole("combobox", { name: "传输类型" }), { key: "ArrowDown" });
+        fireEvent.click(await screen.findByRole("option", { name: /^SSE$/u }));
+      }
+      fireEvent.change(screen.getByRole("textbox", { name: "服务器名称" }), { target: { value: "Original MCP" } });
+      fireEvent.change(screen.getByRole("textbox", { name: "服务器 URL" }), { target: { value: "https://mcp.example.test/mcp" } });
+      fireEvent.click(screen.getByRole("button", { name: /^保存$/u }));
+      await waitFor(() => expect(register).toHaveBeenCalledOnce());
+      await waitFor(() => expect(flow.getSnapshot().unknown).toBe("register"));
+    }
+    expect(register).toHaveBeenCalledOnce();
+    const [originalBody, originalKey] = register.mock.calls[0]!;
+    expect(Object.hasOwn(originalBody, "transport")).toBe(transport !== undefined);
+    expect(originalBody.transport).toBe(transport);
+    first.unmount();
+    const reopened = show();
+    const choice = screen.getByRole("combobox", { name: "传输类型" });
+    expect(choice).toBeDisabled();
+    expect(choice).toHaveTextContent(label);
+    if (transport === undefined) expect(choice).not.toHaveTextContent("HTTP");
+    expect(register).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole("button", { name: "重试原请求" }));
+    await waitFor(() => expect(register).toHaveBeenCalledTimes(2));
+    expect(register.mock.calls[1]?.[0]).toBe(originalBody);
+    expect(register.mock.calls[1]?.[1]).toBe(originalKey);
+    expect(Object.hasOwn(register.mock.calls[1]![0], "transport")).toBe(transport !== undefined);
+    expect(client.preparePrivateMcpServer).not.toHaveBeenCalled();
+    reopened.unmount();
+  } finally { release(); }
 });

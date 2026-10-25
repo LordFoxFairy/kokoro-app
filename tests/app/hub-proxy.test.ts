@@ -4241,7 +4241,7 @@ describe("private MCP server V1 lifecycle adapter", () => {
       status: "configured",
       state_version: "1",
     },
-    prepare_status: "ready",
+    transport: "streamable_http" as const, prepare_status: "ready",
     declarations: [],
     declaration_digest: "a".repeat(64),
     declarations_available: true,
@@ -5011,4 +5011,21 @@ describe("MCP icon staging adapter", () => {
     expect((await POST(new Request(url, { method: "POST", headers: { ...headers, "idempotency-key": "icon-original" }, body }), params(path))).status).toBe(502);
     expect(requestWithDomain).toHaveBeenCalledTimes(1);
   });
+});
+
+it("SSE same-origin adapter reuses strict operation context for new versus historical ACK and Current", async () => {
+ const server = { availability: "unavailable", server_id: "sse-server", display_name: "SSE", server_url: "https://example.test/sse", transport: "sse_compat", status: "pending", state_version: "1", headers: [], prepare_status: "pending_prepare", declarations: [], declarations_available: false };
+ const connector = { availability: "unavailable", connector_id: "sse-connector", server_id: server.server_id, provider_key: "private-sse", connector_type: "mcp", status: "pending", enabled: false, state_version: "1", approved_scopes: [] };
+ const legacy = Object.fromEntries(Object.entries(server).filter(([key]) => key !== "transport"));
+ const route = await import("@/app/api/hub/[...path]/route");
+ const owner = (data: unknown, status: number) => new Response(JSON.stringify({ data }), { status, headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "owner-sse" } });
+ for (const [transport, reply, replayed, expected] of [["sse_compat", server, false, 201], ["sse_compat", legacy, true, 502], ["streamable_http", legacy, true, 502], [undefined, legacy, true, 201], [undefined, legacy, false, 502]] as const) {
+  vi.mocked(requestWithDomain).mockResolvedValueOnce(owner({ server: reply, connector, replayed }, 201));
+  const body = { display_name: server.display_name, server_url: server.server_url, ...(transport === undefined ? {} : { transport }) };
+  const response = await route.POST(new Request("http://localhost/api/hub/mcp/servers", { method: "POST", headers: { origin: "http://localhost", "content-type": "application/json", "idempotency-key": "sse-original" }, body: JSON.stringify(body) }), params(["mcp", "servers"]));
+  expect(response.status).toBe(expected);
+ }
+ vi.mocked(requestWithDomain).mockResolvedValueOnce(owner({ server: legacy }, 200));
+ expect((await route.GET(new Request("http://localhost/api/hub/mcp/servers/sse-server"), params(["mcp", "servers", "sse-server"]))).status).toBe(502);
+ expect(requestWithDomain).toHaveBeenCalledTimes(6);
 });

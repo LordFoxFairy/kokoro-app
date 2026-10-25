@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { Cable, Check, KeyRound, Search } from "lucide-react";
+import { Cable, Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import type {
@@ -14,7 +14,7 @@ import { useT } from "@/i18n/context";
 import { McpEmptyConnections } from "./mcp-empty-connections";
 import { providerArtwork } from "./mcp-projection-types";
 import { McpAvailabilityStatus } from "./mcp-availability-status";
-import { McpBoundIcon } from "./mcp-bound-icon";
+import { McpCustomApiCard } from "./mcp-custom-api-card";
 import styles from "./mcp-projection-read.module.css";
 
 export function McpConnectionList({
@@ -88,34 +88,7 @@ export function McpConnectionList({
           <p className={styles.connectionLabel}>{t("skills.added")}</p>
           <ul className={styles.connectorGrid}>
             {displayedCustomApis.map((profile) => (
-              <li
-                key={`custom-api:${profile.profile_id}`}
-                className={styles.connectorCard}
-                data-testid="custom-api-projection"
-              >
-                <button
-                  type="button"
-                  className={styles.connectorTrigger}
-                  onClick={(event) =>
-                    onSelectCustomApi(profile, event.currentTarget)
-                  }
-                  aria-label={profile.name}
-                >
-                  <span className={styles.connectorMark} aria-hidden="true">
-                    <McpBoundIcon icon={profile.icon} alt="" fallback={<KeyRound />} />
-                  </span>
-                  <span className={styles.connectorIdentity}>
-                    <span>
-                      <strong>{profile.name}</strong>
-                      <small>{profile.instructions ?? "自定义 API"}</small>
-                    </span>
-                  </span>
-                  <Check
-                    className={styles.statusCheck}
-                    aria-label={t("skills.added")}
-                  />
-                </button>
-              </li>
+              <McpCustomApiCard key={`custom-api:${profile.profile_id}`} profile={profile} onSelect={onSelectCustomApi} />
             ))}
             {displayedConnectors.map((connector) => {
               const provider = providersByKey.get(connector.provider_key);

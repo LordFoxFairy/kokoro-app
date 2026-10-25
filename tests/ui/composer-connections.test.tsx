@@ -33,9 +33,10 @@ beforeEach(() => {
 })
 afterEach(() => { cleanup(); vi.restoreAllMocks(); window.localStorage.clear(); window.history.replaceState(null, "", originalUrl) })
 
-it("reads exact eligible connections, pages explicitly, and joins only matching connector metadata", async () => {
+it.each(["streamable_http", "sse_compat"] as const)("reads exact eligible %s connections, pages explicitly, and joins only matching connector metadata", async transport => {
   window.localStorage.setItem("kokoro.web.auth-index-subject", "actor:a")
   const engine = makeEngine(), client = reader()
+  client.listMcpConnections.mockResolvedValueOnce({ connections: [{ ...connection("connection:a"), transport }], next_cursor: "page2" })
   const { result } = renderHook(() => useComposerConnections({ engine, client, boundary, enforceSubjectMarker: true }))
   await act(async () => { await settle() })
   expect(result.current.items.map(item => item.id)).toEqual(["connection:a"])

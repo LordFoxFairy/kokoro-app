@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { DialogTitle } from "@/components/ui/dialog";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
 import type { McpServerCreationFlow, McpServerCreationCompletion } from "./mcp-server-creation-flow";
@@ -69,12 +70,14 @@ export function CustomMcpForm({
 }) {
   const t = useT();
   const [name, setName] = useState("");
+  const [transport, setTransport] = useState<"streamable_http" | "sse_compat">("streamable_http");
   const [notes, setNotes] = useState("");
   const [url, setUrl] = useState("");
   const [headers, setHeaders] = useState<HeaderDraft[]>([]);
   const clearSecrets = useCallback(() => setHeaders(current => current.map(header => ({ ...header, value: "" }))), []);
   const creation = useMcpServerCreation(flow, boundary, onCancel, onDone, clearSecrets);
   const { state, completion, admitted, submitting, locked, editable, error, ready, needsOAuth } = creation;
+  const displayedTransport = state.unknown === "register" ? flow.getRegistrationTransport() : transport;
 
   const icon = useMcpIconDraft(iconClient, boundary, locked, state.registered);
 
@@ -101,7 +104,7 @@ export function CustomMcpForm({
     event?.preventDefault();
     if (!canSubmit && !state.unknown && !state.registered) return;
     icon.draft.protectForSave();
-    void creation.save({ ...icon.draft.change(), display_name: name.trim(), server_url: url.trim(),
+    void creation.save({ ...icon.draft.change(), display_name: name.trim(), server_url: url.trim(), transport,
       ...(notes.trim() ? { notes: notes.trim() } : {}),
       ...(configuredHeaders.length ? { headers: configuredHeaders.map(header => ({ name: header.name.trim().toLowerCase(), value: header.value })) } : {}),
     });
@@ -149,12 +152,10 @@ export function CustomMcpForm({
           <FieldLabel htmlFor="custom-mcp-transport">
             {t("mcp.customTransport")}
           </FieldLabel>
-          <Input
-            id="custom-mcp-transport"
-            aria-label={t("mcp.customTransport")}
-            value="HTTP"
-            readOnly
-          />
+          <Select value={displayedTransport ?? ""} disabled={locked} onValueChange={value => { if (editable() && (value === "streamable_http" || value === "sse_compat")) setTransport(value); }}>
+            <SelectTrigger id="custom-mcp-transport" aria-label={t("mcp.customTransport")}><SelectValue placeholder="—" /></SelectTrigger>
+            <SelectContent><SelectItem value="streamable_http">HTTP</SelectItem><SelectItem value="sse_compat">SSE</SelectItem></SelectContent>
+          </Select>
         </Field>
         <Field className={`${styles.customMcpField} ${styles.customMcpWide}`}>
           <McpIconPicker draft={icon.draft} state={icon.state} disabled={locked} />

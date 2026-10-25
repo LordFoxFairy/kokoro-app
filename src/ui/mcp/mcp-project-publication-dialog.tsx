@@ -15,7 +15,7 @@ import styles from "./mcp-project-publication-dialog.module.css";
 type Row = { project: Project; pin?: McpProjectPin | null };
 const READ_BUDGET_MS = 10_000;
 /** Observed Manus picker; unobserved owner failure/recovery states remain explicit Kokoro states. */
-export function McpProjectPublicationDialog({ client, commands, boundary, target, onClose }: { client: HubClient; commands: McpProjectPublicationCommands; boundary: ProjectReadBoundary; target: McpServerCreationCompletion; onClose: () => void }) {
+export function McpProjectPublicationDialog({ client, commands, boundary, target, onClose, onSourceRead }: { client: HubClient; commands: McpProjectPublicationCommands; boundary: ProjectReadBoundary; target: McpServerCreationCompletion; onClose: () => void; onSourceRead?: () => void }) {
   const t = useT();
   const command = useSyncExternalStore(commands.subscribe, commands.getSnapshot, commands.getSnapshot);
   const [attempt, setAttempt] = useState(0), [selected, setSelected] = useState<string[]>([]);
@@ -44,6 +44,7 @@ export function McpProjectPublicationDialog({ client, commands, boundary, target
     if (committed.current !== key || !boundary.admitted || !reading?.rows || locked || confirmation.current || selected.length < 1 || selected.length > 32) return;
     const selectedRows = reading.rows.filter(row => selected.includes(row.project.id));
     if (selectedRows.length !== selected.length) return;
+    onSourceRead?.();
     const controller = new AbortController(); confirmation.current = controller; setValidating(true); setValidationError(false);
     const timeout = setTimeout(() => controller.abort(), READ_BUDGET_MS);
     const current = () => committed.current === key && confirmation.current === controller && !controller.signal.aborted;

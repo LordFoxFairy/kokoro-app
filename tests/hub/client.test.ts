@@ -1029,7 +1029,7 @@ describe("hub client", () => {
         status: "configured",
         state_version: "1",
       },
-      prepare_status: "ready",
+      transport: "streamable_http" as const, prepare_status: "ready",
       declarations: [],
       declaration_digest: "a".repeat(64),
       declarations_available: true,
@@ -1835,7 +1835,7 @@ it.each(["", "invalid\nkey", "k".repeat(192)])("Custom API rejects an invalid ca
 
 it("MCP JSON import keeps its caller key and entire original document and rejects an unrelated ACK", async () => {
   const document = ' {"mcpServers":{"Original import":{"type":"streamableHttp","url":"https://mcp.example.test/original"}}} '
-  const server = { availability: "unavailable" as const, server_id: "json-server", display_name: "Original import", server_url: "https://mcp.example.test/original", status: "pending", state_version: "1", headers: [], prepare_status: "pending_prepare", declarations: [], declarations_available: false }
+  const server = { availability: "unavailable" as const, server_id: "json-server", display_name: "Original import", server_url: "https://mcp.example.test/original", status: "pending", state_version: "1", headers: [], transport: "streamable_http" as const, prepare_status: "pending_prepare", declarations: [], declarations_available: false }
   const connector = { availability: "unavailable" as const, connector_id: "json-connector", connector_type: "mcp", provider_key: "private-json", server_id: server.server_id, status: "pending", approved_scopes: [], enabled: false, state_version: "1" }
   const receipt = { imports: [{ server, connector }], replayed: true }
   const request = vi.fn<typeof fetch>().mockRejectedValueOnce(new Error("lost response"))
@@ -1974,7 +1974,7 @@ it("rejects MCP management ACKs bound to another target instead of acknowledging
     fetchMock.mockResolvedValueOnce(publicResponse({ data: { connector } }));
     await expect(action()).rejects.toMatchObject({ reason: "parse" });
   }
-  const server = { availability: "unavailable" as const, server_id: "other-server", display_name: "Edited", server_url: "https://mcp.example.test/", status: "pending", state_version: "2", headers: [], prepare_status: "pending_prepare", declarations: [], declarations_available: false };
+  const server = { availability: "unavailable" as const, server_id: "other-server", display_name: "Edited", server_url: "https://mcp.example.test/", status: "pending", state_version: "2", headers: [], transport: "streamable_http" as const, prepare_status: "pending_prepare", declarations: [], declarations_available: false };
   fetchMock.mockResolvedValueOnce(publicResponse({ data: { server, connector: { ...connector, server_id: server.server_id }, replayed: false } }));
   await expect(hub.updatePrivateMcpServer!("target-server", { expected_state_version: "1", display_name: "Edited" }, "management-key")).rejects.toMatchObject({ reason: "parse" });
   fetchMock.mockResolvedValueOnce(publicResponse({ data: { server_id: "other-server", deleted: true, replayed: false } }));
@@ -1985,7 +1985,7 @@ it("requires private MCP edit ACKs to reflect the explicitly written safe fields
   const fetchMock = vi.fn<typeof fetch>(); vi.stubGlobal("fetch", fetchMock);
   const hub = createHubClient();
   const connector = { availability: "unavailable" as const, connector_id: "edited-connector", server_id: "edited-server", connector_type: "mcp", provider_key: "fixture", display_name: "Edited", description: "Note", status: "pending", enabled: false, approved_scopes: [], state_version: "2" };
-  const server = { availability: "unavailable" as const, server_id: "edited-server", display_name: "Edited", server_url: "https://mcp.example.test/new", notes: "New note", status: "pending", state_version: "2", headers: [{ name: "x-test", configured: true, status: "active", state_version: "1" }], prepare_status: "pending_prepare", declarations: [], declarations_available: false };
+  const server = { availability: "unavailable" as const, server_id: "edited-server", display_name: "Edited", server_url: "https://mcp.example.test/new", notes: "New note", status: "pending", state_version: "2", headers: [{ name: "x-test", configured: true, status: "active", state_version: "1" }], transport: "streamable_http" as const, prepare_status: "pending_prepare", declarations: [], declarations_available: false };
   const input = { expected_state_version: "1", display_name: "Edited", server_url: "https://mcp.example.test/new", notes: "New note", header_upserts: [{ name: "x-test", value: "fixture-only" }], header_removals: ["x-old"] };
   for (const wrong of [{ ...server, display_name: "Other" }, { ...server, server_url: "https://mcp.example.test/old" }, { ...server, notes: "Old note" }, { ...server, headers: [] }, { ...server, headers: [...server.headers, { name: "x-old", configured: true, status: "active", state_version: "1" }] }]) {
     fetchMock.mockResolvedValueOnce(publicResponse({ data: { server: wrong, connector, replayed: false } }));
@@ -2092,4 +2092,24 @@ it("MCP icons use all five same-origin operations and reject a mismatched comman
   fetch.mockResolvedValueOnce(publicResponse({ data: { intent, replayed: false } }));
   await expect(client.cancel(id, { expected_state_version: "1" }, "icon-original")).rejects.toMatchObject({ reason: "parse" });
   expect(fetch).toHaveBeenCalledTimes(6);
+});
+
+it("SSE Hub keeps fresh Current separate from exact historical ACK and never falls back to HTTP", async () => {
+ const server = { availability: "unavailable", server_id: "sse-server", display_name: "SSE", server_url: "https://example.test/sse", transport: "sse_compat", status: "pending", state_version: "1", headers: [], prepare_status: "pending_prepare", declarations: [], declarations_available: false };
+ const connector = { availability: "unavailable", connector_id: "sse-connector", server_id: server.server_id, provider_key: "private-sse", connector_type: "mcp", status: "pending", enabled: false, state_version: "1", approved_scopes: [] };
+ const legacy = Object.fromEntries(Object.entries(server).filter(([key]) => key !== "transport"));
+ const fetch = vi.fn<typeof globalThis.fetch>(); vi.stubGlobal("fetch", fetch); const hub = createHubClient();
+ const input = { display_name: server.display_name, server_url: server.server_url, transport: "sse_compat" as const };
+ fetch.mockResolvedValueOnce(publicResponse({ data: { server, connector, replayed: false } }, 201));
+ await expect(hub.registerPrivateMcpServer!(input, "sse-key")).resolves.toMatchObject({ server });
+ expect(JSON.parse(String(fetch.mock.calls[0]?.[1]?.body))).toEqual(input);
+ for (const transport of ["streamable_http", "sse_compat"] as const) {
+  fetch.mockResolvedValueOnce(publicResponse({ data: { server: legacy, connector, replayed: true } }, 201));
+  await expect(hub.registerPrivateMcpServer!({ ...input, transport }, "explicit-key")).rejects.toMatchObject({ reason: "parse" });
+ }
+ const oldBody = { display_name: input.display_name, server_url: input.server_url };
+ fetch.mockResolvedValueOnce(publicResponse({ data: { server: legacy, connector, replayed: true } }, 201));
+ const result = await hub.registerPrivateMcpServer!(oldBody, "old-key"); expect(Object.hasOwn(result.server, "transport")).toBe(false);
+ fetch.mockResolvedValueOnce(publicResponse({ data: { server: legacy } })); await expect(hub.getPrivateMcpServer!(server.server_id)).rejects.toMatchObject({ reason: "parse" });
+ expect(fetch).toHaveBeenCalledTimes(5); expect(JSON.parse(String(fetch.mock.calls[3]?.[1]?.body))).toEqual(oldBody);
 });

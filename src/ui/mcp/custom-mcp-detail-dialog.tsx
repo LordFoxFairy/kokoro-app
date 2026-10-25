@@ -334,9 +334,8 @@ export function CustomMcpDetailDialog({
                 </div>
                 <div className={styles.field}>
                   <Label>传输类型</Label>
-                  <div className={styles.staticValue} aria-label="传输类型 HTTP">
-                    HTTP
-                    <ChevronDown aria-hidden="true" />
+                  <div className={styles.staticValue} aria-label={`传输类型 ${currentServer?.transport === "streamable_http" ? "HTTP" : currentServer?.transport === "sse_compat" ? "SSE" : "—"}`}>
+                    {currentServer?.transport === "streamable_http" ? "HTTP" : currentServer?.transport === "sse_compat" ? "SSE" : "—"}
                   </div>
                 </div>
               </div>

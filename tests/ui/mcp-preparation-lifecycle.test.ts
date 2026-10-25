@@ -9,7 +9,7 @@ const boundary = { subject: "verified-subject", admitted: true, generation: 1 };
 const target = { serverId: "server-one", connectorId: "connector-one", version: "1" };
 const saved = (failure: ConnectorCommandFailure | undefined = "invalid"): McpPreparationRecord => ({ subject: boundary.subject, target, key: "original-key", failure });
 const response = () => ({
-  server: { availability: "unavailable" as const, server_id: target.serverId, server_url: "https://example.test/mcp", display_name: "Prepared", status: "registered" as const, state_version: "2", headers: [], prepare_status: "ready" as const, declarations: [], declarations_available: true },
+  server: { availability: "unavailable" as const, server_id: target.serverId, server_url: "https://example.test/mcp", display_name: "Prepared", status: "registered" as const, state_version: "2", headers: [], transport: "streamable_http" as const, prepare_status: "ready" as const, declarations: [], declarations_available: true },
   connector: { availability: "unavailable" as const, connector_id: target.connectorId, connector_type: "mcp" as const, provider_key: "private", server_id: target.serverId, status: "active" as const, approved_scopes: [], enabled: true, state_version: "2" },
   declarations: [], replayed: true,
 });

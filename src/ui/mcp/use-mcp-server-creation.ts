@@ -6,6 +6,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, use
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
 import type { McpPrivateServerRegistrationInput } from "@/hub/mcp-connector.schema";
 import type { McpServerCreationFlow, McpServerCreationCompletion } from "./mcp-server-creation-flow";
+import { rememberCreatedMcpDetail, retireCreatedMcpDetail } from "./mcp-created-detail-handoff";
 import { useMcpOAuthPopup } from "./use-mcp-oauth-popup";
 
 /** One mounted window consumes the actor-owned workflow; it owns no command key. */
@@ -36,7 +37,8 @@ export function useMcpServerCreation(flow: McpServerCreationFlow, boundary: Proj
       const facts = flow.getSnapshot().facts;
       if (!facts) return;
       const target = Object.freeze({ serverId: facts.server.server_id, connectorId: facts.connector.connector_id, providerKey: facts.connector.provider_key });
-      if (!(publish ? flow.finishRegistration(scope) : flow.finish(scope))) return;
+      rememberCreatedMcpDetail(target, flow.client, boundary, facts);
+      if (!(publish ? flow.finishRegistration(scope) : flow.finish(scope))) { retireCreatedMcpDetail(target); return; }
       publishing.current = publish;
       completionTarget.current = target;
     }
