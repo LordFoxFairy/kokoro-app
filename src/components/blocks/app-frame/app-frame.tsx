@@ -23,6 +23,7 @@ import { useAwaitingNotify } from "@/ui/shell/use-awaiting-notify"
 import { useCanvasWorkspace } from "@/ui/shell/use-canvas-workspace"
 import { useComposerSelectors } from "@/ui/shell/use-composer-selectors"
 import { useComposerConnections } from "@/ui/shell/use-composer-connections"
+import { createManusSkillHubClient, retainManusSkillHubClient } from "@/ui/skills/manus-skill-client"
 import { isRuntimeNavigationEnabled } from "@/ui/navigation/runtime-navigation-registry"
 import { useConversationReaders } from "@/ui/shell/use-conversation-readers"
 import { useDraft } from "@/ui/shell/use-draft"
@@ -732,7 +733,17 @@ function AppFrameRuntime({
     title: conversation.title,
   }))
 
+  const composerSkillBoundary = useMemo(() => projectReadBoundary ?? { admitted: false, subject: null, generation: 0 }, [projectReadBoundary])
+  const composerSkillClient = useMemo(() => createManusSkillHubClient(browserHubClient({ preview }), composerSkillBoundary), [preview, composerSkillBoundary])
+  useLayoutEffect(() => {
+    if (preview || !composerSkillBoundary.admitted || composerSkillBoundary.subject === null) return
+    return retainManusSkillHubClient(composerSkillClient)
+  }, [preview, composerSkillBoundary, composerSkillClient])
+  const composerSkillScope = useMemo(() => ({ engine, scope: moveScopeKey, conversationId: projectWorkspace ? routedConversationId : activeId }), [engine, moveScopeKey, projectWorkspace, routedConversationId, activeId])
+  const skillSelectionSnapshot = engine?.getSnapshot()
+
   const composerProps: AppFrameComposerProps = {
+    skills: { client: composerSkillClient, boundary: composerSkillBoundary, scopeKey: composerSkillScope, selectable: canSubmitMessage && !hydrating && !skillSelectionSnapshot?.hasPendingSubmission && !skillSelectionSnapshot?.canRetryPendingSubmission, onSelect: actions.selectSkillForCurrentDraft },
     connections,
     connectionsEnabled: composerConnectionsEnabled,
     localDraftPersistenceFailed: engine?.getSnapshot().notice?.key === "chat.localDraftPersistenceFailed",

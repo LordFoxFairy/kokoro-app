@@ -913,3 +913,29 @@ it.each([{ models: [] }, { models: MODELS }])("catalog reads remain visually qui
     expect(screen.getByRole("menuitemradio", { name: "gpt-5" })).toHaveAttribute("data-state", "checked")
   }
 })
+
+it("requests the resource menu for one typed slash at the caret without replacing the surrounding text", () => {
+  const onResourceMenuRequest = vi.fn()
+  const props = renderComposer({ draft: "before after", onResourceMenuRequest })
+  const input = screen.getByRole("textbox", { name: "Chat input" })
+  fireEvent.change(input, { target: { value: "before /after", selectionStart: 8, selectionEnd: 8 } })
+  expect(props.onDraftChange).toHaveBeenCalledWith("before /after")
+  expect(onResourceMenuRequest).toHaveBeenCalledWith({ draft: "before /after", start: 7, end: 8 })
+  expect(props.onSubmit).not.toHaveBeenCalled()
+})
+
+it("does not open slash commands from IME, pasted content, a URL, or replacement of selected text", () => {
+  const onResourceMenuRequest = vi.fn()
+  renderComposer({ onResourceMenuRequest })
+  const input = screen.getByRole("textbox", { name: "Chat input" })
+  fireEvent.compositionStart(input)
+  fireEvent.change(input, { target: { value: "/" } })
+  fireEvent.compositionEnd(input)
+  fireEvent.input(input, { inputType: "insertFromPaste", target: { value: "/" } })
+  fireEvent.change(input, { target: { value: "https://example.test/a" } })
+  expect(onResourceMenuRequest).not.toHaveBeenCalled()
+  cleanup()
+  renderComposer({ draft: "selected text", onResourceMenuRequest })
+  fireEvent.change(screen.getByRole("textbox", { name: "Chat input" }), { target: { value: "/" } })
+  expect(onResourceMenuRequest).not.toHaveBeenCalled()
+})

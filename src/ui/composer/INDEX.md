@@ -11,7 +11,7 @@
 - `environmentSelectorPlacement`：项目线程桌面态可将环境入口锚定到编辑器上方；默认仍位于工具行。
 
 ## 协作者
-上游：`@/ui/shell`（draft、submit/keydown、selectors）；typed Skill source 选择尚无正式 UI 入口。
+上游：`@/ui/shell`（draft、submit/keydown、selectors）；已安装 Skill picker 通过 AppFrame 的同一试用生命周期提交当前草稿选择。
 
 ## 陷阱
 - Enter 发送 / Shift+Enter 换行；IME 合成期 Enter 只确认候选词不发送。
@@ -31,3 +31,9 @@
 ## 当前消息的连接来源
 
 `ComposerConnections` 是独立受控Popover：精确Connection行选择、原选glyph、有限菜单内加载/失败/分页，Esc回触发器，显式添加/管理进原设置；不修改账号enabled或发模型。`composer-connections.module.css`持有测得的menu/pill/26×16switch几何与局部选中token，不受通用ghost按钮尺寸覆盖。
+
+## 当前草稿的 Skill picker
+
+`composer-skills-menu.tsx` 用现 Popover/Command 组合资源根菜单、已安装搜索及显式添加/管理；`+` 与单个手输 `/` 共用，仅读 actor-scoped 现 Skills pool，不创建或启用安装。加载/失败/无结果分开，enabled/active/exact pin 校验复用现规则。候选行沿 Manus 2026-10-25 实测50px、6px 8px padding、14px/20px标题与单行描述；独立局部 CSS 负责窄屏逐级面板和滚动。
+
+Composer 仅报告新输入的 slash 范围；成功选择仅移除该范围，保留原文、原会话和光标，不自动 Send。IME、paste、URL/path 与选区替换不打开命令；菜单键盘/Esc 不落入原 Enter-submit。真正 source 选择与首次 Send 承接仍由 `useAppFrameSkillTrial` 单一生命周期持有，旧 actor/scope/route 的结果和迟到 focus 不复活。`SelectedSkillPill` 原样复用，当前仍为 textarea＋controls pill，不冒称行内不可编辑 token 已一比一。

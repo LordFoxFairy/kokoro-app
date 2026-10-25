@@ -6,7 +6,6 @@ import {
 } from "react"
 
 import type { SessionEngine } from "@/engine/machine"
-import { activeMode } from "@/core/conversations"
 import type { SkillCard } from "@/hub/schemas"
 import { useT } from "@/i18n/context"
 import { MAX_INPUT_LENGTH } from "@/ui/composer/composer"
@@ -79,6 +78,7 @@ export function useAppFrameActions({
     engine?.openConversation(id)
     focusComposer()
   }, [engine, focusComposer])
+  const { startTrial, selectCurrentDraft: selectSkillForCurrentDraft, submitCurrentDraft, selectedSkill, clearSelectedSkill } = useAppFrameSkillTrial({ engine, preview, boundary: readBoundary })
 
   const directSelectionAtRender = engine?.getSnapshot().store?.activeId ?? null
   const conversationAtRender = conversationIdFromLocation()
@@ -127,14 +127,11 @@ export function useAppFrameActions({
         // A root composer must not RESET a hidden POST, unknown receipt, or run.
         if (!current.canSubmitMessage || current.hydrating || current.connection.status !== "connected" ||
           current.machine.phase !== "idle" || current.hasPendingSubmission || current.canRetryPendingSubmission) return
-        const mode = current.store ? activeMode(current.store) : current.pendingMode
-        engine.newConversation()
-        engine.setMode(mode)
       }
     }
     // 流式中提交继续沿现有 create-message 路径；queued/steer 的正式
     // owner 语义尚未发布，本层只消费 engine 的同步接纳结果。
-    const accepted = engine.submit(content)
+    const accepted = submitCurrentDraft(content, projectWorkspace && routedConversationId == null)
     if (!accepted) {
       // A synchronous guard (for example, a create receipt still in flight)
       // leaves the user's draft and creation/route intent untouched.
@@ -159,7 +156,7 @@ export function useAppFrameActions({
     // blank conversation cannot inherit a stale Website/App capsule.
     setDeploymentIntent(null)
     focusComposer()
-  }, [actorAtRender, chatHref, conversationAtRender, directSelectionAtRender, routeAtRender, clearDraft, draft, engine, focusComposer, projectWorkspace, projectRef, routedConversationId, setConversationRouteId, setDeploymentIntent, syncConversationUrl])
+  }, [actorAtRender, chatHref, conversationAtRender, directSelectionAtRender, routeAtRender, clearDraft, draft, engine, focusComposer, projectWorkspace, projectRef, routedConversationId, setConversationRouteId, setDeploymentIntent, submitCurrentDraft, syncConversationUrl])
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -226,7 +223,8 @@ export function useAppFrameActions({
     // a conversation from Agent/Skills/etc. must leave the catalog surface; merely
     // clearing `conversation` keeps the catalog mounted and looks like a
     // dead button because its landing content has no Composer.
-    if (standaloneSurface) {
+    // A retained callback can outlive that render's standalone projection.
+    if (standaloneSurface || (typeof window !== "undefined" && window.location.pathname !== new URL(chatHref, window.location.href).pathname)) {
       navigateMountedSurface(chatHref)
     }
     syncConversationUrl(null, "push")
@@ -273,8 +271,10 @@ export function useAppFrameActions({
     // Rail buttons and the keyboard shortcut do not have a closing Dialog to
     // hand off from; focus the fresh Composer in the same interaction instead
     // of leaving it on the document body or on a stale navigation action.
-    startNewChatWithUrl()
-    if (standaloneSurface || projectWorkspace) {
+    const surfaceHandoff = standaloneSurface || projectWorkspace
+      || (typeof window !== "undefined" && window.location.pathname !== new URL(chatHref, window.location.href).pathname)
+    if (!startNewChatWithUrl()) return
+    if (surfaceHandoff) {
       // Catalog navigation and leaving a project both replace the empty
       // surface in the next React commit. Let the fresh Composer mount before
       // handing it focus; otherwise the click succeeds but focus stays on the
@@ -285,7 +285,7 @@ export function useAppFrameActions({
     } else {
       focusComposer()
     }
-  }, [focusComposer, projectWorkspace, standaloneSurface, startNewChatWithUrl])
+  }, [chatHref, focusComposer, projectWorkspace, standaloneSurface, startNewChatWithUrl])
 
   const handOffChatPrompt = useCallback((prompt: string) => {
     // A workflow handoff replaces the Settings fragment rather than replaying
@@ -320,11 +320,9 @@ export function useAppFrameActions({
 
   const startMcpTrial = useAppFrameMcpTrial({ engine, preview, boundary: readBoundary, handOffPrompt: handOffChatPrompt })
 
-  const { startTrial, selectedSkill, clearSelectedSkill } = useAppFrameSkillTrial({ engine, preview, boundary: readBoundary, handOffPrompt: handOffChatPrompt })
-
   const startSkillUseFromSettings = useCallback((skill: SkillCard, prompt?: string) => {
-    return startTrial(skill, prompt ?? t("skills.tryPrompt", { brand: brandName ?? "Kokoro", name: skill.name }))
-  }, [brandName, t, startTrial])
+    return startTrial(skill, prompt ?? t("skills.tryPrompt", { brand: brandName ?? "Kokoro", name: skill.name }), handOffChatPrompt)
+  }, [brandName, handOffChatPrompt, t, startTrial])
 
   const dismissCreationIntent = useCallback(() => {
     setDeploymentIntent(null)
@@ -346,6 +344,7 @@ export function useAppFrameActions({
     startNewChatAndFocus,
     startSkillCreationFromSettings,
     startSkillUseFromSettings,
+    selectSkillForCurrentDraft,
     startMcpTrial,
     selectedSkill,
     clearSelectedSkill,

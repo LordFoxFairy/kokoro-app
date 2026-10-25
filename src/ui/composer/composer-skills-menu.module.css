@@ -1,0 +1,27 @@
+.panel { display: flex; width: max-content; max-width: calc(100vw - 24px); max-height: min(28rem, var(--radix-popover-content-available-height)); overflow: hidden; padding: 4px; border-radius: 12px; background: var(--popover); color: var(--popover-foreground); }
+.root { width: 232px; min-width: 0; flex: 0 0 auto; }
+.row { display: flex; width: 100%; min-height: 36px; min-width: 0; align-items: center; gap: 8px; border: 0; border-radius: 8px; padding: 8px; background: transparent; color: inherit; text-align: start; font-size: 14px; line-height: 20px; cursor: pointer; }
+.row:hover, .row[aria-expanded="true"] { background: var(--accent); }
+.row:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+.row > svg { width: 1rem; height: 1rem; flex: 0 0 auto; }
+.row > .chevron { margin-inline-start: auto; }
+.picker { display: flex; width: 320px; min-width: 0; flex-direction: column; overflow: hidden; border-inline-start: 1px solid var(--border); }
+.command { min-height: 0; flex: 1 1 auto; background: transparent; }
+.list { min-height: 5rem; max-height: min(19rem, calc(100dvh - 15rem)); overflow-y: auto; overscroll-behavior: contain; }
+.option { height: 50px; min-height: 50px; margin: 4px; padding: 6px 8px; align-items: flex-start; }
+.option > svg { margin-block-start: 3px; }
+.copy { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+.name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; line-height: 20px; }
+.summary { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted-foreground); font-size: 12px; line-height: 16px; }
+.feedback { margin: 0; padding: 12px; color: var(--muted-foreground); font-size: 13px; line-height: 20px; }
+.feedback p { margin: 0; }
+.footer { flex: 0 0 auto; border-block-start: 1px solid var(--border); padding: 4px; }
+.back { display: none; }
+@media (max-width: 600px) {
+  .panel { max-width: calc(100vw - 24px); }
+  .panel[data-skills-page="skills"] .root { display: none; }
+  .picker { width: min(320px, calc(100vw - 32px)); border: 0; }
+  .root { width: min(232px, calc(100vw - 32px)); }
+  .back { display: flex; }
+}
+@media (pointer: coarse) { .row { min-height: 44px; } }

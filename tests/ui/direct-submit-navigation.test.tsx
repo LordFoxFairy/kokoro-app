@@ -142,3 +142,82 @@ it("an owner-restored direct conversation retains its exact ID on the next Send"
     expect(clearDraft).toHaveBeenCalledTimes(1)
   } finally { engine.dispose() }
 })
+
+function actionTimeNewTask(standaloneSurface: boolean) {
+  const client = createFakeClient()
+  client.nextCreate = () => new Promise(() => {})
+  const engine = createSessionEngine({ client, storage: createMemoryStorage<ConversationStore>(null) })
+  engine.newConversation()
+  const previous = engine.getSnapshot().store!.activeId
+  const clearDraft = vi.fn(), updateDraft = vi.fn(), setDeploymentIntent = vi.fn(), focusComposer = vi.fn()
+  const view = renderHook(() => useAppFrameActions({
+    engine, activeId: engine.getSnapshot().store?.activeId ?? null, projectWorkspace: false, standaloneSurface, chatHref: "/app",
+    readBoundary: { admitted: true, subject: "navigation-reader", generation: 1 },
+    draft: "preserved unsent text", clearDraft, updateDraft, setDeploymentIntent,
+    syncConversationUrl: vi.fn(), setConversationRouteId: vi.fn(), focusComposer,
+    closeSettings: vi.fn(), brandName: "Kokoro", commandNewChatTimerRef: { current: null },
+  }), { wrapper: LocaleProvider })
+  return { client, engine, previous, view, clearDraft, updateDraft, setDeploymentIntent, focusComposer }
+}
+
+it.each([false, true])("action-time New task leaves a later catalog pathname and sends only its new active draft (standalone=%s)", standalone => {
+  const context = actionTimeNewTask(standalone)
+  const { client, engine, previous, view } = context
+  const newTask = view.result.current.startNewChatWithUrl
+  const navigation = vi.fn()
+  window.addEventListener("kokoro:surface-navigation", navigation)
+  try {
+    window.history.pushState(null, "", "/app/skills")
+    let accepted: boolean | undefined
+    act(() => { accepted = newTask() })
+    expect(accepted).toBe(true)
+    expect(window.location.pathname).toBe("/app")
+    expect(navigation).toHaveBeenCalledOnce()
+    const next = engine.getSnapshot().store!.activeId
+    expect(next).not.toBe(previous)
+    expect(client.createCalls).toEqual([])
+    expect(context.clearDraft).not.toHaveBeenCalled()
+    expect(context.updateDraft).not.toHaveBeenCalled()
+    view.rerender()
+    act(() => view.result.current.submitDraft())
+    expect(client.createCalls).toHaveLength(1)
+    expect(client.createCalls[0]?.sessionId).toBe(next)
+  } finally { window.removeEventListener("kokoro:surface-navigation", navigation); view.unmount(); engine.dispose() }
+})
+
+it.each([false, true])("action-time New task leaves the URL, draft and intent alone when allocation fails (standalone=%s)", standalone => {
+  const context = actionTimeNewTask(standalone)
+  const { client, engine, previous, view } = context
+  const newTask = view.result.current.startNewChatWithUrl
+  const allocate = vi.spyOn(engine, "newConversation").mockImplementation(() => {})
+  try {
+    window.history.pushState(null, "", "/app/skills")
+    let accepted: boolean | undefined
+    act(() => { accepted = newTask() })
+    expect(accepted).toBe(false)
+    expect(window.location.pathname).toBe("/app/skills")
+    expect(engine.getSnapshot().store?.activeId).toBe(previous)
+    expect(context.clearDraft).not.toHaveBeenCalled()
+    expect(context.updateDraft).not.toHaveBeenCalled()
+    expect(context.setDeploymentIntent).not.toHaveBeenCalled()
+    expect(client.createCalls).toEqual([])
+  } finally { allocate.mockRestore(); view.unmount(); engine.dispose() }
+})
+
+it("action-time New task focus waits two animation frames for a later catalog surface", () => {
+  const context = actionTimeNewTask(false)
+  const frames: FrameRequestCallback[] = []
+  const raf = vi.spyOn(window, "requestAnimationFrame").mockImplementation(callback => { frames.push(callback); return frames.length })
+  try {
+    const action = context.view.result.current.startNewChatAndFocus
+    window.history.pushState(null, "", "/app/skills")
+    act(() => action())
+    expect(frames).toHaveLength(1)
+    const immediate = context.focusComposer.mock.calls.length
+    act(() => { frames[0]!(0) })
+    expect(frames).toHaveLength(2)
+    expect(context.focusComposer).toHaveBeenCalledTimes(immediate)
+    act(() => { frames[1]!(0) })
+    expect(context.focusComposer).toHaveBeenCalledTimes(immediate + 1)
+  } finally { raf.mockRestore(); context.view.unmount(); context.engine.dispose() }
+})

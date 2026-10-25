@@ -18,6 +18,7 @@ import styles from "./composer.module.css"
 import { SelectedSkillPill, type SelectedSkill } from "./selected-skill-pill"
 
 export const MAX_INPUT_LENGTH = 4000
+export type ComposerSlashCommand = Readonly<{ draft: string; start: number; end: number }>
 
 function resizeComposer(node: HTMLTextAreaElement) {
   node.style.height = "auto"
@@ -49,6 +50,7 @@ export type ComposerProps = {
   placeholder?: string
   selectedSkill?: SelectedSkill | null
   onRemoveSelectedSkill?: () => void
+  onResourceMenuRequest?: (command: ComposerSlashCommand) => void
   leadingActions?: ReactNode
   creationIntent?: CreationIntent
   onCreationIntentDismiss: () => void
@@ -67,7 +69,7 @@ function creationLabel(t: ReturnType<typeof useT>, intent: CreationIntent | unde
   return null
 }
 
-export function Composer({ draft, onDraftChange, onKeyDown, onSubmit, isStreaming, isAwaitingApproval = false, canSend, onStop, composerRef, mode, onModeChange, modeLocked, models, modelCatalogStatus = "ready", onRetryModels, hideModelSelector = false, preferredModelSelector, selectedModel, onModelChange, modelLocked, emptyWorkspace = false, placeholder, leadingActions, selectedSkill, onRemoveSelectedSkill, creationIntent, onCreationIntentDismiss, environmentLabel = "Desktop", projectWorkspace = false, environmentSelectorPlacement = "controls", voicePreview = false }: ComposerProps) {
+export function Composer({ draft, onDraftChange, onKeyDown, onSubmit, isStreaming, isAwaitingApproval = false, canSend, onStop, composerRef, mode, onModeChange, modeLocked, models, modelCatalogStatus = "ready", onRetryModels, hideModelSelector = false, preferredModelSelector, selectedModel, onModelChange, modelLocked, emptyWorkspace = false, placeholder, leadingActions, selectedSkill, onRemoveSelectedSkill, onResourceMenuRequest, creationIntent, onCreationIntentDismiss, environmentLabel = "Desktop", projectWorkspace = false, environmentSelectorPlacement = "controls", voicePreview = false }: ComposerProps) {
   const t = useT()
   const limitDescriptionId = useId()
   const exceedsLimit = draft.trim().length > MAX_INPUT_LENGTH
@@ -82,6 +84,26 @@ export function Composer({ draft, onDraftChange, onKeyDown, onSubmit, isStreamin
   const currentModelNewBadgeLabel = currentModel ? modelNewBadgeLabel(currentModel) : null
   const currentModelTriggerTitle = currentModelNewBadgeLabel ? `${currentModelTriggerLabel} ${currentModelNewBadgeLabel}` : currentModel ? modelLabel(currentModel) : ""
   const preferredModelAppliedRef = useRef<string | null>(null)
+  const composing = useRef(false)
+
+  const changeDraft = (event: ChangeEvent<HTMLTextAreaElement>) => {
+    const node = event.currentTarget
+    const value = node.value
+    onDraftChange(value)
+    resizeComposer(node)
+    const input = event.nativeEvent as InputEvent
+    const end = node.selectionStart
+    const start = end - 1
+    // A single newly typed token, never URL/path text, paste, replacement or
+    // an IME candidate. Keep '/' in the draft until the user actually chooses.
+    if (onResourceMenuRequest && !composing.current && !input.isComposing
+      && (input.inputType === undefined || input.inputType === "insertText")
+      && node.selectionEnd === end && start >= 0 && value.length === draft.length + 1
+      && value[start] === "/" && (start === 0 || /\s/u.test(value[start - 1]!))
+      && value.slice(0, start) + value.slice(end) === draft) {
+      onResourceMenuRequest({ draft: value, start, end })
+    }
+  }
 
   useEffect(() => {
     if (modelCatalogStatus !== "ready" || modelLocked) return
@@ -125,7 +147,7 @@ export function Composer({ draft, onDraftChange, onKeyDown, onSubmit, isStreamin
     <div className={styles.wrap} data-slot="composer-wrap" data-layout={emptyWorkspace ? "workspace" : "conversation"} data-desktop-web="true" data-empty-workspace={emptyWorkspace ? "true" : undefined} data-project-workspace={projectWorkspace ? "true" : undefined} data-creation-intent={creationIntent}>
       <form className={styles.composer} aria-label={t("composer.editArea")} aria-busy={isStreaming} data-state={isStreaming ? "running" : "idle"} data-voice-state={voiceInput.state === "listening" || voiceInput.state === "transcribing" ? voiceInput.state : undefined} onSubmit={(event) => { if (exceedsLimit) event.preventDefault(); else onSubmit(event) }}>
         {projectWorkspace && environmentSelectorPlacement === "floating" ? <ComposerEnvironment label={environmentLabel} floating /> : null}
-        <Textarea ref={composerRef} className={styles.input} data-slot="composer-input" data-settings-return-target="composer" aria-label={t("composer.inputAria")} aria-invalid={exceedsLimit || undefined} aria-describedby={exceedsLimit ? limitDescriptionId : undefined} placeholder={placeholder ?? t("composer.placeholder")} rows={1} maxLength={MAX_INPUT_LENGTH} value={draft} onChange={(event: ChangeEvent<HTMLTextAreaElement>) => { onDraftChange(event.target.value); resizeComposer(event.currentTarget) }} onKeyDown={onKeyDown} />
+        <Textarea ref={composerRef} className={styles.input} data-slot="composer-input" data-settings-return-target="composer" aria-label={t("composer.inputAria")} aria-invalid={exceedsLimit || undefined} aria-describedby={exceedsLimit ? limitDescriptionId : undefined} placeholder={placeholder ?? t("composer.placeholder")} rows={1} maxLength={MAX_INPUT_LENGTH} value={draft} onChange={changeDraft} onKeyDown={onKeyDown} onCompositionStart={() => { composing.current = true }} onCompositionEnd={() => { composing.current = false }} />
         {exceedsLimit ? <p id={limitDescriptionId} className={styles.inputError} role="status">{t("composer.inputTooLong", { limit: MAX_INPUT_LENGTH })}</p> : null}
         <div className={styles.controls} data-testid="composer-controls" data-slot="composer-controls">
           {leadingActions ? <div className={styles.leadingActions}>{leadingActions}</div> : null}

@@ -5122,3 +5122,189 @@ it("empty API data does not turn a pending or failed MCP read into an all-empty 
   expect(screen.queryByRole("navigation", { name: "MCP pages" })).not.toBeInTheDocument()
   expect(hub.listMcpConnectors).toHaveBeenCalledTimes(2)
 })
+
+// Current-draft selection is deliberately separate from Settings' prompt/new-chat trial.
+function currentSkillDraftActions(draft = "original editable text", trialEngine = engine, projectRef?: string) {
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "draft-actor")
+  const updateDraft = vi.fn(), clearDraft = vi.fn(), closeSettings = vi.fn()
+  const view = renderHook(({ currentEngine, admitted, subject, generation }) => useAppFrameActions({
+    engine: currentEngine, readBoundary: { admitted, subject, generation },
+    projectWorkspace: projectRef !== undefined, ...(projectRef === undefined ? {} : { projectRef }),
+    routedConversationId: null, standaloneSurface: false, chatHref: "/app",
+    activeId: currentEngine.getSnapshot().store?.activeId ?? null, draft, clearDraft, updateDraft,
+    setDeploymentIntent: vi.fn(), syncConversationUrl: vi.fn(), setConversationRouteId: vi.fn(), focusComposer: vi.fn(),
+    closeSettings, brandName: "Kokoro", commandNewChatTimerRef: { current: null },
+  }), { wrapper: LocaleProvider, initialProps: { currentEngine: trialEngine, admitted: true, subject: "draft-actor", generation: 1 } })
+  return { ...view, updateDraft, clearDraft, closeSettings }
+}
+
+it("composer skill selection keeps a no-example current Direct null draft and sends its exact ref only on Send", async () => {
+  window.history.replaceState({}, "", "/app")
+  const view = currentSkillDraftActions()
+  const create = vi.spyOn(engine, "newConversation")
+  let accepted: boolean | undefined
+  act(() => { accepted = view.result.current.selectSkillForCurrentDraft(executableTrial) })
+  expect(accepted).toBe(true)
+  expect(engine.getSnapshot().store).toBeNull()
+  expect(create).not.toHaveBeenCalled()
+  expect(view.result.current.selectedSkill).toEqual({ name: "Owner trial", sourceRef: "skill:trial-version" })
+  expect(view.updateDraft).not.toHaveBeenCalled()
+  expect(view.clearDraft).not.toHaveBeenCalled()
+  expect(view.closeSettings).not.toHaveBeenCalled()
+  expect(client.createCalls).toEqual([])
+  await act(async () => { view.result.current.submitDraft(); await settle() })
+  expect(client.createCalls).toHaveLength(1)
+  expect(client.createCalls[0]?.body).toMatchObject({ content: "original editable text", selected_skill_source_refs: ["skill:trial-version"] })
+  expect(view.result.current.selectedSkill?.sourceRef).toBe("skill:trial-version")
+  expect(view.clearDraft).toHaveBeenCalledOnce()
+})
+
+it("composer skill selection preserves an existing task and ordinary draft text without reset or send", async () => {
+  window.history.replaceState({}, "", "/app")
+  engine.newConversation()
+  const id = engine.getSnapshot().store!.activeId
+  const view = currentSkillDraftActions("text before / and after")
+  const create = vi.spyOn(engine, "newConversation")
+  act(() => { view.result.current.selectSkillForCurrentDraft(executableTrial) })
+  expect(engine.getSnapshot().store?.activeId).toBe(id)
+  expect(create).not.toHaveBeenCalled()
+  expect(client.createCalls).toEqual([])
+  expect(view.updateDraft).not.toHaveBeenCalled()
+  act(() => view.result.current.clearSelectedSkill())
+  await act(async () => { view.result.current.submitDraft(); await settle() })
+  expect(client.createCalls[0]?.body.selected_skill_source_refs).toEqual([])
+})
+
+it.each([false, true])("composer skill selection transfers the Project overview draft only inside its explicit first Send (remembered=%s)", async remembered => {
+  const projectRef = "project_00000000-0000-4000-8000-000000000901"
+  window.history.replaceState({}, "", `/app/project/${projectRef}`)
+  const projectClient = createFakeClient()
+  const projectEngine = createSessionEngine({ client: projectClient, storage: createMemoryStorage<ConversationStore>(null), scope: { kind: "project", projectRef } })
+  if (remembered) projectEngine.newConversation()
+  const originalId = projectEngine.getSnapshot().store?.activeId ?? null
+  const view = currentSkillDraftActions("project original", projectEngine, projectRef)
+  try {
+    act(() => { view.result.current.selectSkillForCurrentDraft(executableTrial) })
+    expect(projectEngine.getSnapshot().store?.activeId ?? null).toBe(originalId)
+    expect(projectClient.createCalls).toEqual([])
+    await act(async () => { view.result.current.submitDraft(); await settle() })
+    expect(projectClient.createCalls[0]?.body).toMatchObject({ project_ref: projectRef, content: "project original", selected_skill_source_refs: ["skill:trial-version"] })
+    expect(view.result.current.selectedSkill?.sourceRef).toBe("skill:trial-version")
+    expect(client.createCalls).toEqual([])
+  } finally { view.unmount(); projectEngine.dispose() }
+})
+
+it.each([
+  { enabled: false }, { source_status: "withdrawn" as const }, { installed_source_ref: "skill:another" }, { revision_skill_id: "another" },
+])("composer skill selection rejects a non-executable or mismatched pin %j", patch => {
+  window.history.replaceState({}, "", "/app")
+  const view = currentSkillDraftActions()
+  let accepted: boolean | undefined
+  act(() => { accepted = view.result.current.selectSkillForCurrentDraft({ ...executableTrial, ...patch }) })
+  expect(accepted).toBe(false)
+  expect(view.result.current.selectedSkill).toBeNull()
+  expect(engine.getSnapshot().store).toBeNull()
+  expect(client.createCalls).toEqual([])
+})
+
+it("composer skill selection retires both current and retained callbacks across a departed route A to B to A", async () => {
+  window.history.replaceState({}, "", "/app")
+  const view = currentSkillDraftActions()
+  const oldSelect = view.result.current.selectSkillForCurrentDraft
+  act(() => { oldSelect(executableTrial) })
+  act(() => {
+    window.history.replaceState({}, "", "/app/library")
+    window.dispatchEvent(new PopStateEvent("popstate"))
+    window.history.replaceState({}, "", "/app")
+    window.dispatchEvent(new PopStateEvent("popstate"))
+  })
+  expect(view.result.current.selectedSkill).toBeNull()
+  let accepted: boolean | undefined
+  act(() => { accepted = oldSelect(executableTrial) })
+  expect(accepted).toBe(false)
+  await act(async () => { engine.submit("ordinary message"); await settle() })
+  expect(client.createCalls[0]?.body.selected_skill_source_refs).toEqual([])
+})
+
+it("composer skill selection retires on actor admission and engine/scope replacement without old remove clearing a replacement", async () => {
+  window.history.replaceState({}, "", "/app")
+  const view = currentSkillDraftActions()
+  act(() => { view.result.current.selectSkillForCurrentDraft(executableTrial) })
+  const oldSelect = view.result.current.selectSkillForCurrentDraft, oldRemove = view.result.current.clearSelectedSkill
+  view.rerender({ currentEngine: engine, admitted: false, subject: "draft-actor", generation: 2 })
+  expect(view.result.current.selectedSkill).toBeNull()
+  act(() => { expect(oldSelect(executableTrial)).toBe(false) })
+  const replacementClient = createFakeClient()
+  const replacement = createSessionEngine({ client: replacementClient, storage: createMemoryStorage<ConversationStore>(null), scope: { kind: "project", projectRef: "project:replacement" } })
+  try {
+    view.rerender({ currentEngine: replacement, admitted: true, subject: "draft-actor", generation: 3 })
+    act(() => { view.result.current.selectSkillForCurrentDraft({ ...executableTrial, name: "Replacement" }); oldRemove() })
+    expect(view.result.current.selectedSkill?.name).toBe("Replacement")
+    act(() => {
+      window.localStorage.setItem("kokoro.web.auth-index-subject", "other-actor")
+      window.dispatchEvent(new StorageEvent("storage", { key: "kokoro.web.auth-index-subject", newValue: "other-actor" }))
+    })
+    expect(view.result.current.selectedSkill).toBeNull()
+    await act(async () => { replacement.submit("ordinary"); await settle() })
+    expect(replacementClient.createCalls[0]?.body.selected_skill_source_refs).toBeUndefined()
+  } finally { view.unmount(); replacement.dispose() }
+})
+
+it("composer skill selection preserves frozen unknown submission after clear and rejects a new source until resolved", async () => {
+  window.history.replaceState({}, "", "/app")
+  const view = currentSkillDraftActions()
+  act(() => { view.result.current.selectSkillForCurrentDraft(executableTrial) })
+  client.nextCreate = () => Promise.reject(new SessionClientError("network", "unknown commit"))
+  await act(async () => { view.result.current.submitDraft(); await settle() })
+  const first = client.createCalls[0]
+  expect(engine.getSnapshot().canRetryPendingSubmission).toBe(true)
+  act(() => {
+    view.result.current.clearSelectedSkill()
+    expect(view.result.current.selectSkillForCurrentDraft(executableTrial)).toBe(false)
+  })
+  client.nextCreate = () => Promise.resolve(makeReceipt("run_current_draft_retry"))
+  await act(async () => { engine.retry(); await settle() })
+  expect(client.createCalls).toEqual([first, first])
+  expect(first?.body.selected_skill_source_refs).toEqual(["skill:trial-version"])
+})
+
+it("composer skill selection survives only its own first-Send canonical URL publication, not a later route change", async () => {
+  window.history.replaceState({}, "", "/app")
+  const view = currentSkillDraftActions()
+  act(() => { view.result.current.selectSkillForCurrentDraft(executableTrial) })
+  await act(async () => { view.result.current.submitDraft(); await settle() })
+  const id = engine.getSnapshot().store!.activeId
+  act(() => {
+    window.history.replaceState({}, "", `/app?conversation=${id}`)
+    window.dispatchEvent(new PopStateEvent("popstate"))
+  })
+  expect(view.result.current.selectedSkill?.sourceRef).toBe("skill:trial-version")
+})
+
+it("composer skill selection retires a draft on a rendered route change even without a browser history event", () => {
+  window.history.replaceState({}, "", "/app")
+  const view = currentSkillDraftActions()
+  act(() => { view.result.current.selectSkillForCurrentDraft(executableTrial) })
+  window.history.replaceState({}, "", "/app/library")
+  view.rerender({ currentEngine: engine, admitted: true, subject: "draft-actor", generation: 1 })
+  expect(view.result.current.selectedSkill).toBeNull()
+})
+
+it("composer skill selection admits a fresh callback after same-batch route A to B to A without reviving a retained callback", () => {
+  window.history.replaceState({}, "", "/app")
+  const view = currentSkillDraftActions()
+  const retiredSelect = view.result.current.selectSkillForCurrentDraft
+  act(() => { retiredSelect(executableTrial) })
+  act(() => {
+    window.history.pushState({}, "", "/app?settings=skills")
+    window.dispatchEvent(new PopStateEvent("popstate"))
+    window.history.replaceState({}, "", "/app")
+    window.dispatchEvent(new PopStateEvent("popstate"))
+  })
+  expect(view.result.current.selectedSkill).toBeNull()
+  act(() => { expect(retiredSelect(executableTrial)).toBe(false) })
+  act(() => { expect(view.result.current.selectSkillForCurrentDraft(executableTrial)).toBe(true) })
+  expect(view.result.current.selectedSkill?.sourceRef).toBe("skill:trial-version")
+  expect(engine.getSnapshot().store).toBeNull()
+  expect(client.createCalls).toEqual([])
+})

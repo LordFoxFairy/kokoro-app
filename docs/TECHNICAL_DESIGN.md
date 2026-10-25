@@ -3437,3 +3437,13 @@ App固定BFF f71a179 / Public24原Git blob，七public窄生成器正规重出�
 
 
 审查踩坑：localStorage读取也会抛SecurityError，主体marker读取统一捕获并按不匹配退休，render/事件/await后guard/catch均不崩工作区。global provider的connector正式省略server_id；不能把optional字段当必填而让混合页一起失败，已有server_id才核精确相等，Connection仍以owner正式投影的ID/资格为真。两项均先实际RED复现后修，private错配拒绝保持；只读独审复核无剩余确定P0–P2，不替正常验收。
+
+## 当前草稿的显式 Skill 选择（2026-10-25）
+
+沿现 AppFrame→Composer 与 `useAppFrameSkillTrial`：资源 `+` 和单个手输 `/` 共用专用已安装 Skill picker，复用 actor-scoped Manus client、现 Skills pool cache 和 exact installation/source 校验。选择不依赖 exampleQuestions，不新建会话、不替换 prompt、不自动发送；成功只移除本次 slash，保留其余原文和光标。Settings 原试用仍新建会话并注入原示例，互不代替。
+
+同 hook 持有唯一选择生命周期；空 Direct 草稿及 Project overview 只在显式 Send 的同步分配边界承接到新 activeId，普通导航不得重绑。actor/admission/engine/scope/草稿路由退休、旧回调及迟到焦点均有围栏；清除只影响未来选择，未知提交重试仍冻结原 key/body。加载、失败、搜索无结果分别展示，未知提交/水合期间禁用选择。
+
+保留原生 textarea 与现 SelectedSkillPill，不声称已复刻 Manus 的行内 contenteditable skillTag。专用菜单使用现 UI primitives/语义 token，无新依赖/通用选择框架；无业务协议、owner 或数据模型变化。Manus 2026-10-25 已观察的候选行高50px、padding6px 8px、标题14px/20px、描述单行省略沿专用 CSS 落位；窄屏单面板、触控及独立滚动保留，正常同视口对照由 Root 验证。
+
+同日独立路由修补：New task 在成功分配后按动作时 actual pathname 判断是否回 canonical chatHref，不依赖已过时的 standaloneSurface；focus wrapper 同步决定跨 surface 双 RAF。保留原 Send 严格路径/会话 guard、Project 分支和导航 owner，不用 picker 绕过旧路径。

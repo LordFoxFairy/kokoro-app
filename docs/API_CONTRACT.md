@@ -2211,3 +2211,9 @@ MCP管理Hub五方法显式caller key（其后signal?），不保隐式随机key
 ### 普通消息 MCP 消费发行物（实施中）
 
 唯一canonical snapshot固定BFF f71a17901b4f0458d88521be2c37e94d0d863998 / Public24.0，SHA256 f4caf11f3cd9255d2cd9daf69b74ff9988505d640e31c686ce495e6d8a578b2c。原七生成器与在线Docs消费同一原件。messageCreate仅接受可选`selected_mcp_connection_ids`：有序唯一≤16、每项ASCII ID ≤191、JSON≤4096；缺省或[]不增加连接。旧`mcp_servers`输入已删，不读trace充当授权。浏览器内部idempotency_key继续按原adapter映射，未知提交使用冻结原body/key，不重新读取勾选。选项读取仍为原Hub正式GET，无新代理前缀或owner直连。
+
+## Composer 当前草稿 Skill picker（2026-10-25）
+
+本片没有新 wire/API/schema。已安装候选复用现 `listSkillPool`→Personal Skill installation 同源读及严格 actor lifetime；名称/summary 只作真实元数据展示，不读取包或下载句柄。enabled/active 且安装 pin、revision、source_ref 相符才可选择；无示例仍可使用。列表不是执行授权，发送继续由既有 message-create、BFF/owner guard 验证 exact refs。
+
+选择只改变同 hook 管理的未来意图，不发送模型、不改变 installation enabled，不制造提示词或默认全选。Project 未选择仍省略、显式移除仍[]；Direct 默认[]；首次 Send 的同步草稿承接不扩展导航资格，未知提交继续复用原冻结请求。新增资源菜单及 action-time New task 校正均不放宽原 Send 的 canonical chatHref/actor/activeId 检查。
