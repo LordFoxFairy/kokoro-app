@@ -153,7 +153,7 @@ export function AppFrameComposer({
           <>
             {workspaceCapabilities.resources || workspaceCapabilities.skills ? (
               <ComposerSkillsMenu skills={skills} enabled={resourcesEnabled} open={resourceMenu?.scope === resourceScope}
-                onOpenChange={changeResourceMenu} triggerRef={composerResourcesTriggerRef}
+                openFromSlash={resourceMenu?.slash != null} onOpenChange={changeResourceMenu} triggerRef={composerResourcesTriggerRef}
                 onSelect={skill => {
                   const command = resourceMenu?.slash
                   if (!resourceMenu || resourceMenu.scope !== resourceScope || !skills || command && command.draft !== composerProps.draft || !skills.onSelect(skill)) return false
@@ -169,9 +169,11 @@ export function AppFrameComposer({
                   if (target === null) return
                   event.preventDefault()
                   if (target.scope !== resourceScope) return
+                  const node = composerProps.composerRef.current
+                  // Continued typing or Escape already owns the current caret.
+                  if (document.activeElement === node) return
                   const attempt = {}
                   focusAttempt.current = attempt
-                  const node = composerProps.composerRef.current
                   window.requestAnimationFrame(() => {
                     if (node?.isConnected && liveScope.current === target.scope && focusAttempt.current === attempt) {
                       focusAttempt.current = null

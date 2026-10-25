@@ -63,10 +63,11 @@ function InstalledSkills({ client, canAct, onSelect, onManage, onAdd }: {
 
 /** A single picker for both the resources button and a typed slash. It reads
  * existing installed metadata; the shell owns the exact draft selection. */
-export function ComposerSkillsMenu({ skills, enabled, open, onOpenChange, onSelect, onManage, onAdd, triggerRef, onCloseAutoFocus }: {
+export function ComposerSkillsMenu({ skills, enabled, open, openFromSlash, onOpenChange, onSelect, onManage, onAdd, triggerRef, onCloseAutoFocus }: {
   skills: ComposerSkills | undefined
   enabled: boolean
   open: boolean
+  openFromSlash: boolean
   onOpenChange: (open: boolean) => void
   onSelect: (skill: SkillCard) => boolean
   onManage: () => void
@@ -122,7 +123,11 @@ export function ComposerSkillsMenu({ skills, enabled, open, onOpenChange, onSele
     <PopoverTrigger asChild>
       <Button ref={triggerRef} type="button" variant="ghost" size="icon-sm" disabled={!available} aria-label={t("firstSite.filesAndResources")} title={t("firstSite.filesAndResources")}><Plus aria-hidden="true" /></Button>
     </PopoverTrigger>
-    <PopoverContent className={styles.panel} data-skills-page={page} side="top" sideOffset={8} align="start" collisionPadding={12} aria-label={t("firstSite.filesAndResources")} onCloseAutoFocus={event => {
+    <PopoverContent className={styles.panel} data-skills-page={page} side="top" sideOffset={8} align="start" collisionPadding={12} aria-label={t("firstSite.filesAndResources")} onOpenAutoFocus={event => {
+      // A slash is a suggestion while the user is still typing, unlike the
+      // explicit + action. Only an explicit submenu choice moves editor focus.
+      if (openFromSlash) event.preventDefault()
+    }} onCloseAutoFocus={event => {
       if (managing.current) { event.preventDefault(); managing.current = false }
       else if (open || live.current?.scope !== scope || live.current.epoch !== routeEpoch || !live.current.active) event.preventDefault()
       else onCloseAutoFocus(event)

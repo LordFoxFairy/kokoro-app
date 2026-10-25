@@ -222,3 +222,97 @@ it("route epochs never revive an actor-retired picker without a new admitted gen
   await skillsPage()
   expect(screen.getByRole("option", { name: /No example/ })).toBeVisible()
 })
+
+it("typed inline slash never steals focus or truncates a literal Chinese request, paths and URLs with an already selected Skill", async () => {
+  const client = reader(), onSelect = vi.fn(() => true), onSubmit = vi.fn()
+  const prefix = "请核对技能目录 "
+  render(<Harness client={client} initialDraft={prefix} onSelect={onSelect} onSubmit={onSubmit} />, { wrapper: LocaleProvider })
+  fireEvent.click(screen.getByRole("button", { name: "Files and resources" }))
+  await skillsPage()
+  fireEvent.click(screen.getByRole("option", { name: /No example/ }))
+  const field = input() as HTMLTextAreaElement
+  await waitFor(() => expect(field).toHaveFocus())
+  field.setSelectionRange(prefix.length, prefix.length)
+  const continuation = "/Users/example/skills/SKILL.md，再检查 https://example.test/a/b；下一步 / 普通正文，完整保留。"
+  let expected = prefix
+  for (const character of continuation) {
+    // Send native insertText to the actual focused editor, never a retained
+    // input target that would conceal the Popover's focus theft.
+    expect(document.activeElement).toBe(field)
+    const caret = field.selectionStart
+    expected = expected.slice(0, caret) + character + expected.slice(field.selectionEnd)
+    fireEvent.input(document.activeElement!, { inputType: "insertText", data: character, target: { value: expected, selectionStart: caret + character.length, selectionEnd: caret + character.length } })
+    await act(async () => { await settle() })
+    expect(field).toHaveFocus()
+    expect(field).toHaveValue(expected)
+    expect(field.selectionStart).toBe(caret + character.length)
+    expect(field.selectionEnd).toBe(caret + character.length)
+  }
+  await act(async () => { await new Promise(resolve => window.requestAnimationFrame(resolve)) })
+  expect(field).toHaveFocus()
+  expect(field).toHaveValue(prefix + continuation)
+  expect(field.selectionStart).toBe((prefix + continuation).length)
+  expect(screen.queryByRole("button", { name: "Skills" })).toBeNull()
+  expect(screen.getByText("No example")).toBeVisible()
+  expect(onSelect).toHaveBeenCalledOnce()
+  expect(client.listSkillPool).toHaveBeenCalledOnce()
+  expect(onSubmit).not.toHaveBeenCalled()
+})
+
+it("closing a typed slash hint does not restore its old caret over text that has continued", async () => {
+  const onSelect = vi.fn(() => true), onSubmit = vi.fn()
+  render(<Harness client={reader()} onSelect={onSelect} onSubmit={onSubmit} />, { wrapper: LocaleProvider })
+  const field = input() as HTMLTextAreaElement
+  field.focus()
+  slash()
+  expect(screen.getByRole("button", { name: "Skills" })).toBeVisible()
+  // This also covers a user who explicitly returns to the editor before
+  // continuing: queued close-auto-focus must not rewrite the newer caret.
+  act(() => { field.focus() })
+  fireEvent.input(field, { inputType: "insertText", data: "路", target: { value: "before /路after", selectionStart: 9, selectionEnd: 9 } })
+  await act(async () => { await settle(); await new Promise(resolve => window.requestAnimationFrame(resolve)) })
+  expect(field).toHaveFocus()
+  expect(field).toHaveValue("before /路after")
+  expect(field.selectionStart).toBe(9)
+  expect(field.selectionEnd).toBe(9)
+  expect(screen.queryByRole("button", { name: "Skills" })).toBeNull()
+  expect(onSelect).not.toHaveBeenCalled()
+  expect(onSubmit).not.toHaveBeenCalled()
+})
+
+it("a typed slash on an empty draft keeps the editor caret and Escape dismisses without selecting or submitting", async () => {
+  const client = reader(), onSelect = vi.fn(() => true), onSubmit = vi.fn()
+  render(<Harness client={client} initialDraft="" onSelect={onSelect} onSubmit={onSubmit} />, { wrapper: LocaleProvider })
+  const field = input() as HTMLTextAreaElement
+  field.focus()
+  fireEvent.input(field, { inputType: "insertText", data: "/", target: { value: "/", selectionStart: 1, selectionEnd: 1 } })
+  expect(screen.getByRole("button", { name: "Skills" })).toBeVisible()
+  expect(field).toHaveFocus()
+  fireEvent.keyDown(field, { key: "Escape" })
+  await act(async () => { await settle(); await new Promise(resolve => window.requestAnimationFrame(resolve)) })
+  expect(screen.queryByRole("button", { name: "Skills" })).toBeNull()
+  expect(field).toHaveFocus()
+  expect(field).toHaveValue("/")
+  expect(field.selectionStart).toBe(1)
+  expect(field.selectionEnd).toBe(1)
+  expect(client.listSkillPool).not.toHaveBeenCalled()
+  expect(onSelect).not.toHaveBeenCalled()
+  expect(onSubmit).not.toHaveBeenCalled()
+})
+
+it("the explicit plus entry still autofocuses its keyboard menu and the installed search", async () => {
+  const onSubmit = vi.fn()
+  render(<Harness client={reader()} onSubmit={onSubmit} />, { wrapper: LocaleProvider })
+  const trigger = screen.getByRole("button", { name: "Files and resources" })
+  trigger.focus()
+  fireEvent.click(trigger)
+  const entry = screen.getByRole("button", { name: "Skills" })
+  expect(entry).toHaveFocus()
+  fireEvent.keyDown(entry, { key: "ArrowRight" })
+  const search = await screen.findByRole("combobox", { name: "Search skills" })
+  expect(search).toHaveFocus()
+  fireEvent.keyDown(search, { key: "Escape" })
+  await waitFor(() => expect(trigger).toHaveFocus())
+  expect(input()).toHaveValue("before after")
+  expect(onSubmit).not.toHaveBeenCalled()
+})
