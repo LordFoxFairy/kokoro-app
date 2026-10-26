@@ -76,3 +76,30 @@ it("unknown DELETE survives failed first-page reconciliation and only successful
   expect(result.current.reconciliationRequired).toBe(false)
   await act(async () => { await result.current.remove("other") }); expect(revoke).toHaveBeenCalledTimes(2)
 })
+
+
+it("keeps confirmed same-scope devices during and after a passive refresh failure", async () => {
+  const { result } = renderHook(() => useAccountSessions(true, false, boundary));
+  await waitFor(() => expect(result.current.phase).toBe("ready"));
+  let fail!: (error: Error) => void;
+  list.mockReturnValueOnce(new Promise((_, reject) => { fail = reject }));
+  act(() => result.current.reload());
+  expect(result.current.phase).toBe("loading");
+  expect(result.current.current).toEqual(sid);
+  expect(result.current.others.map(item => item.session_id)).toEqual(["other"]);
+  await act(async () => fail(new Error("offline")));
+  expect(result.current.phase).toBe("error");
+  expect(result.current.others.map(item => item.session_id)).toEqual(["other"]);
+  expect(revoke).not.toHaveBeenCalled();
+});
+
+it("does not retain a revoked device when its post-ACK reread fails", async () => {
+  const { result } = renderHook(() => useAccountSessions(true, false, boundary));
+  await waitFor(() => expect(result.current.phase).toBe("ready"));
+  list.mockRejectedValueOnce(new Error("offline"));
+  await act(async () => { await result.current.remove("other") });
+  expect(result.current.phase).toBe("error");
+  expect(result.current.notice).toBe("removed");
+  expect(result.current.others).toEqual([]);
+  expect(revoke).toHaveBeenCalledOnce();
+});

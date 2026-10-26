@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, expect, it, vi } from "vitest"
 
 import { createHubClient, type HubClient } from "@/hub/client"
@@ -9,6 +9,7 @@ import { McpProjectionRead } from "@/ui/mcp/mcp-projection-read"
 import { McpCustomApiGallery, visibleCustomApiGalleryProfiles } from "@/ui/mcp/mcp-custom-api-gallery"
 import { McpConnectionList } from "@/ui/mcp/mcp-connection-list"
 import { McpCustomApiCard } from "@/ui/mcp/mcp-custom-api-card"
+import { invalidateCustomApiProjection } from "@/ui/mcp/use-custom-api-projection"
 
 const profile = {
   profile_id: "my-api-exact", name: "My actual API", instructions: "Saved API instructions",
@@ -93,14 +94,16 @@ function renderProjection(list: NonNullable<HubClient["listCustomApis"]>, subjec
   return client
 }
 
-it("recovers an initial API read failure from the plaza retry without creating or preparing anything", async () => {
+it("keeps an initial API read failure quiet and recovers on the existing projection invalidation without creating or preparing anything", async () => {
   const list = vi.fn().mockRejectedValueOnce(new Error("API read unavailable"))
     .mockResolvedValue({ items: [profile], page: { next_cursor: null } })
   const client = renderProjection(list, "gallery-head-retry")
-  const retry = await screen.findByRole("button", { name: "重试" })
+  expect(await screen.findByText("连接列表加载失败")).toHaveClass("sr-only")
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
   expect(screen.queryByRole("button", { name: profile.name })).not.toBeInTheDocument()
   expect(screen.queryByText("当前没有可添加的连接器提供方。")).not.toBeInTheDocument()
-  fireEvent.click(retry)
+  act(() => invalidateCustomApiProjection(client, "gallery-head-retry"))
   fireEvent.click(await screen.findByRole("button", { name: profile.name }))
   const detail = await screen.findByRole("dialog", { name: "编辑自定义 API" })
   expect(within(detail).getByDisplayValue(profile.instructions)).toBeInTheDocument()
@@ -109,6 +112,45 @@ it("recovers an initial API read failure from the plaza retry without creating o
   expect(client.createCustomApi).not.toHaveBeenCalled()
   expect(client.createMcpConnector).not.toHaveBeenCalled()
   expect(client.preparePrivateMcpServer).not.toHaveBeenCalled()
+})
+
+it("keeps a confirmed API card readable through a failed refresh without granting stale detail admission", async () => {
+  const list = vi.fn().mockResolvedValueOnce({ items: [profile], page: { next_cursor: null } })
+    .mockRejectedValue(Error("refresh unavailable"))
+  const client = renderProjection(list, "gallery-quiet-refresh")
+  const card = await screen.findByRole("button", { name: profile.name })
+  act(() => invalidateCustomApiProjection(client, "gallery-quiet-refresh"))
+  await waitFor(() => expect(list).toHaveBeenCalledTimes(2))
+  expect(await screen.findByText("连接列表加载失败")).toHaveClass("sr-only")
+  expect(screen.getByRole("button", { name: profile.name })).toBe(card)
+  fireEvent.click(card)
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+  expect(client.createCustomApi).not.toHaveBeenCalled()
+  expect(client.createMcpConnector).not.toHaveBeenCalled()
+  expect(client.preparePrivateMcpServer).not.toHaveBeenCalled()
+})
+
+it("does not carry the confirmed API display across admission retirement or another subject", async () => {
+  const list = vi.fn().mockResolvedValueOnce({ items: [profile], page: { next_cursor: null } })
+    .mockImplementation(() => new Promise(() => {}))
+  const client = { ...createHubClient(), listCustomApis: list,
+    listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+    listMcpConnectors: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+  }
+  const content = (subject: string, admitted: boolean, generation: number) => <LocaleProvider>
+    <ConnectorCommandProvider client={client} boundary={{ subject, admitted, generation }}>
+      <McpProjectionRead client={client} identity={subject} admitted={admitted} readGeneration={generation} embedded />
+    </ConnectorCommandProvider>
+  </LocaleProvider>
+  const { rerender } = render(content("original-display-owner", true, 0))
+  expect(await screen.findByRole("button", { name: profile.name })).toBeVisible()
+  rerender(content("original-display-owner", false, 1))
+  expect(screen.queryByRole("button", { name: profile.name })).not.toBeInTheDocument()
+  rerender(content("new-display-owner", true, 2))
+  await waitFor(() => expect(list).toHaveBeenCalledTimes(2))
+  expect(screen.queryByRole("button", { name: profile.name })).not.toBeInTheDocument()
+  expect(screen.queryByText("当前没有可添加的连接器提供方。")).not.toBeInTheDocument()
 })
 
 it("exposes opaque continuation retry and distinct same-name API details, then stops a repeated cursor in the plaza", async () => {
@@ -120,7 +162,8 @@ it("exposes opaque continuation retry and distinct same-name API details, then s
     .mockResolvedValueOnce({ items: [{ ...profile, profile_id: "repeated-page-not-confirmed", name: "Must not append" }], page: { next_cursor: "opaque_tail_Z7" } })
   const client = renderProjection(list, "gallery-continuation-retry")
   fireEvent.click(await screen.findByRole("button", { name: "加载更多 · API" }))
-  expect(await screen.findByRole("alert")).toHaveTextContent("连接列表加载失败")
+  await waitFor(() => expect(screen.getByRole("button", { name: "加载更多 · API" })).toBeEnabled())
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument()
   expect(screen.getAllByRole("button", { name: profile.name })).toHaveLength(1)
   expect(list).toHaveBeenCalledTimes(2)
   fireEvent.click(screen.getByRole("button", { name: "加载更多 · API" }))
@@ -135,7 +178,8 @@ it("exposes opaque continuation retry and distinct same-name API details, then s
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
   }
   fireEvent.click(screen.getByRole("button", { name: "加载更多 · API" }))
-  expect(await screen.findByRole("button", { name: "重试" })).toBeEnabled()
+  await waitFor(() => expect(list).toHaveBeenCalledTimes(4))
+  expect(screen.queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
   expect(screen.queryByRole("button", { name: "加载更多 · API" })).not.toBeInTheDocument()
   expect(screen.queryByRole("button", { name: "Must not append" })).not.toBeInTheDocument()
   expect(screen.getAllByRole("button", { name: profile.name })).toHaveLength(2)
@@ -150,7 +194,7 @@ it.each(["failed", "pending"] as const)("keeps a confirmed empty provider catego
   const list = state === "failed" ? vi.fn().mockRejectedValue(new Error("API head unavailable"))
     : vi.fn().mockImplementation(() => new Promise(() => {}))
   const client = renderProjection(list, `gallery-category-${state}`)
-  if (state === "failed") expect(await screen.findByRole("alert")).toHaveTextContent("连接列表加载失败")
+  if (state === "failed") expect(await screen.findByText("连接列表加载失败")).toHaveClass("sr-only")
   else await waitFor(() => expect(list).toHaveBeenCalledOnce())
   fireEvent.keyDown(await screen.findByRole("button", { name: "全部", expanded: false }), { key: "ArrowDown" })
   fireEvent.click(await screen.findByRole("menuitem", { name: "效率" }))
@@ -163,14 +207,17 @@ it.each(["failed", "pending"] as const)("keeps a confirmed empty provider catego
   expect(list).toHaveBeenCalledOnce()
 })
 
-it("offers the API head retry inside management even when the MCP head succeeded", async () => {
+it("keeps an unknown API head from claiming empty management and recovers through the existing read invalidation", async () => {
   const list = vi.fn().mockRejectedValueOnce(new Error("API management head unavailable"))
     .mockResolvedValue({ items: [profile], page: { next_cursor: null } })
   const client = renderProjection(list, "management-api-head-retry", "connections")
-  const retry = await screen.findByRole("button", { name: "重试" })
+  expect(await screen.findByText("连接列表加载失败")).toHaveClass("sr-only")
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
   expect(client.listMcpConnectors).toHaveBeenCalledOnce()
   expect(screen.queryByRole("button", { name: profile.name })).not.toBeInTheDocument()
-  fireEvent.click(retry)
+  expect(screen.queryByText("将 Kokoro 与你的日常应用程序、API 和 MCP 连接起来")).not.toBeInTheDocument()
+  act(() => invalidateCustomApiProjection(client, "management-api-head-retry"))
   fireEvent.click(await screen.findByRole("button", { name: profile.name }))
   const detail = await screen.findByRole("dialog", { name: "编辑自定义 API" })
   expect(within(detail).getByDisplayValue(profile.instructions)).toBeInTheDocument()

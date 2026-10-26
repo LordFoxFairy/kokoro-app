@@ -75,14 +75,16 @@ function BillingScopedContent({ client, readBoundary, onOpenPricing, embedded = 
     attempt.current = flight
     const current = () => attempt.current === flight && !flight.controller.signal.aborted && readActor() === actor
     setRetrying(true)
-    setProjection({ client, actor, summary: { kind: "loading" }, ledger: { kind: "loading" } })
+    setProjection(previous => previous.client === client && previous.actor === actor
+      ? { ...previous, summary: previous.summary.kind === "ready" ? previous.summary : { kind: "loading" }, ledger: previous.ledger.kind === "ready" ? { ...previous.ledger, loadingMore: false, pageError: false } : { kind: "loading" } }
+      : { client, actor, summary: { kind: "loading" }, ledger: { kind: "loading" } })
     const summaryRead = async () => {
       try {
         if (actor === undefined) throw new Error("billing_identity_unavailable")
         const value = await client.summary(flight.controller.signal, () => current() && typeof actor === "string" && actor.trim().length > 0 && actor === subject)
         if (current()) setProjection((previous) => ({ ...previous, summary: { kind: "ready", summary: value } }))
       } catch {
-        if (current()) setProjection((previous) => ({ ...previous, summary: { kind: "error" } }))
+        if (current()) setProjection((previous) => ({ ...previous, summary: previous.summary.kind === "ready" ? previous.summary : { kind: "error" } }))
       }
     }
     const ledgerRead = async () => {
@@ -93,7 +95,7 @@ function BillingScopedContent({ client, readBoundary, onOpenPricing, embedded = 
         const entries = uniqueEntries(page.items)
         if (current()) setProjection((previous) => ({ ...previous, ledger: { kind: "ready", entries, cursor: page.page.next_cursor, loadingMore: false, pageError: false } }))
       } catch {
-        if (current()) setProjection((previous) => ({ ...previous, ledger: { kind: "error" } }))
+        if (current()) setProjection((previous) => ({ ...previous, ledger: previous.ledger.kind === "ready" ? previous.ledger : { kind: "error" } }))
       }
     }
     void Promise.all([summaryRead(), ledgerRead()]).finally(() => { if (current()) setRetrying(false) })
@@ -125,14 +127,13 @@ function BillingScopedContent({ client, readBoundary, onOpenPricing, embedded = 
       flight.paging = false
     }
   }, [client, ledger, retrying, subject])
-  const retry = () => { if (!retrying && !(ledger.kind === "ready" && ledger.loadingMore)) refresh() }
 
   const entries = ledger.kind === "ready" ? ledger.entries : EMPTY_LEDGER_ENTRIES
   const content = (
     <div className={cn(styles.body, embedded ? styles.embeddedBody : undefined)} data-embedded={embedded ? "billing" : undefined}>
-      <BillingSummary summary={summary} embedded={embedded} retrying={retrying} ledgerLoadingMore={ledger.kind === "ready" && ledger.loadingMore} onRetry={() => void retry()} onOpenPricing={onOpenPricing} />
+      <BillingSummary summary={summary} embedded={embedded} retrying={retrying} onOpenPricing={onOpenPricing} />
       {!embedded ? <BillingUsage entries={entries} onOpenPricing={onOpenPricing} /> : null}
-      <BillingLedger ledger={ledger} filter={filter} embedded={embedded} retrying={retrying} onFilterChange={setFilter} onRetry={() => void retry()} onLoadMore={() => void loadMore()} />
+      <BillingLedger ledger={ledger} filter={filter} embedded={embedded} retrying={retrying} onFilterChange={setFilter} onLoadMore={() => void loadMore()} />
     </div>
   )
   if (!embedded) return content

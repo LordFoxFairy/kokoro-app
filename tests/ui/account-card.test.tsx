@@ -9,6 +9,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { useState } from "react";
+import { AccountReadSnapshotBoundary } from "@/ui/settings/account-read-snapshots";
 import { LocaleProvider } from "@/i18n/context";
 import { AccountCard } from "@/ui/settings/sections/account-card";
 import type { AccountDetail } from "@/ui/settings/settings-types";
@@ -96,14 +97,19 @@ const card = (
     />
   </LocaleProvider>
 );
-it("waits for admission, retries read failure and never substitutes preview", async () => {
+it("keeps unknown account fields quiet after a read failure and reads again on reentry", async () => {
   const view = render(card("alice", 1, false));
   expect(fetcher).not.toHaveBeenCalled();
   fetcher.mockRejectedValueOnce(new Error("offline"));
   view.rerender(card());
-  expect(await screen.findByRole("alert")).toHaveTextContent("Failed to load");
+  await act(async () => {});
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Reload" })).not.toBeInTheDocument();
   expect(screen.getByRole("textbox", { name: "Full name" })).toHaveValue("—");
-  fireEvent.click(screen.getByRole("button", { name: "Reload" }));
+  expect(screen.getByRole("textbox", { name: "Full name" })).toBeDisabled();
+  view.unmount();
+  render(card());
   await waitFor(() =>
     expect(screen.getByRole("textbox", { name: "Full name" })).toHaveValue(
       "Alice Actual",
@@ -148,7 +154,9 @@ it("rejects a successful response for another subject", async () => {
     }),
   );
   render(card());
-  await screen.findByRole("alert");
+  await act(async () => {});
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  expect(screen.queryByText("Bob")).not.toBeInTheDocument();
   expect(screen.getByRole("textbox", { name: "Full name" })).toHaveValue("—");
 });
 it("clears a loaded profile on same-subject generation retirement", async () => {
@@ -385,4 +393,23 @@ it.each(["subject", "generation", "admission", "preview"])("retires the live ver
   view.rerender(card(change === "subject" ? "bob" : "alice", change === "generation" ? 2 : 1, change !== "admission", change === "preview"));
   expect(screen.queryByRole("dialog", { name: "Change email address" })).not.toBeInTheDocument();
   expect(screen.queryByDisplayValue("private draft")).not.toBeInTheDocument();
+});
+
+
+it("preserves confirmed account information when a same-scope reentry read fails without enabling writes", async () => {
+  const pane = (open: boolean) => <LocaleProvider><AccountReadSnapshotBoundary preview={false} readBoundary={boundary()}>
+    {open ? <AccountCard {...props} readBoundary={boundary()} /> : null}
+  </AccountReadSnapshotBoundary></LocaleProvider>;
+  const view = render(pane(true));
+  await screen.findByText("alice@example.test");
+  view.rerender(pane(false));
+  fetcher.mockRejectedValueOnce(new Error("offline"));
+  view.rerender(pane(true));
+  await act(async () => {});
+  expect(screen.getByText("alice@example.test")).toBeVisible();
+  expect(screen.getByRole("textbox", { name: "Full name" })).toHaveValue("Alice Actual");
+  expect(screen.getByRole("textbox", { name: "Full name" })).toBeDisabled();
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Reload" })).not.toBeInTheDocument();
+  expect(fetcher.mock.calls.every(([, options]) => !options?.method || options.method === "GET")).toBe(true);
 });

@@ -39,7 +39,7 @@ it.each(cases)("localizes $source in $locale (embedded=$embedded) without changi
   render(<BillingLedger
     ledger={{ kind: "ready", entries: [entry], cursor: null, loadingMore: false, pageError: false }}
     filter="all" embedded={embedded} retrying={false}
-    onFilterChange={vi.fn()} onRetry={vi.fn()} onLoadMore={vi.fn()}
+    onFilterChange={vi.fn()} onLoadMore={vi.fn()}
   />, { wrapper: LocaleProvider })
   expect(await screen.findByText(label)).toBeVisible()
   expect(screen.queryByText(source)).not.toBeInTheDocument()

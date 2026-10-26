@@ -4,7 +4,6 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject }
 import { ListFilter, Plus } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import { Spinner } from "@/components/ui/spinner"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -87,7 +86,6 @@ export function WorkspaceRailSessionList({
   listLoading,
   listLoadingMore = false,
   listError,
-  onRetryList,
   hasMore,
   onLoadMore,
   onNewChat,
@@ -176,15 +174,7 @@ export function WorkspaceRailSessionList({
               testId="conversations-loading"
             />
           ) : listError && !hasConversations ? (
-            <div className={itemStyles.listNotice} role="alert">
-              <p className={itemStyles.empty}>{t("rail.listError")}</p>
-              {onRetryList ? (
-                <Button variant="outline" size="sm" type="button" disabled={listLoading} aria-busy={listLoading} onClick={onRetryList}>
-                  {listLoading ? <Spinner aria-hidden="true" /> : null}
-                  {listLoading ? t("rail.listLoading") : t("rail.retryList")}
-                </Button>
-              ) : null}
-            </div>
+            <span className="sr-only" role="status">{t("rail.listError")}</span>
           ) : listLoading && !hasConversations ? (
             <WorkspaceRailLoadingPlaceholder
               label={t("rail.listLoading")}
@@ -192,15 +182,6 @@ export function WorkspaceRailSessionList({
             />
           ) : ordered.length > 0 ? (
             <>
-              {listError && onRetryList ? (
-                <div className={itemStyles.listNotice} role="alert">
-                  <p className={itemStyles.empty}>{t("rail.listError")}</p>
-                  <Button variant="outline" size="sm" type="button" disabled={listLoading} aria-busy={listLoading} onClick={onRetryList}>
-                    {listLoading ? <Spinner aria-hidden="true" /> : null}
-                    {listLoading ? t("rail.listLoading") : t("rail.retryList")}
-                  </Button>
-                </div>
-              ) : null}
               <SidebarMenu>
                 {ordered.map((conversation) => {
                   const title = conversation.title || t("rail.newChat")
@@ -247,7 +228,6 @@ export function WorkspaceRailSessionList({
                   aria-busy={listLoadingMore}
                   onClick={onLoadMore}
                 >
-                  {listLoadingMore ? <Spinner aria-hidden="true" /> : null}
                   {t("rail.loadMore")}
                 </Button>
               ) : null}

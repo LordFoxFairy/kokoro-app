@@ -247,6 +247,9 @@ export function McpProjectionRead({
     readGeneration,
     refreshKey,
   });
+  const [confirmedApiOwner, setConfirmedApiOwner] = useState<typeof owner | null>(null);
+  if (customApiState.dataCurrent && confirmedApiOwner !== owner) setConfirmedApiOwner(owner);
+  const hasConfirmedApiRead = customApiState.dataCurrent || confirmedApiOwner === owner;
 
   // Provider card artwork is rendered from owner-owned `cover_image_url` in
   // McpProviderDirectory; this coordinator never substitutes local assets.
@@ -255,10 +258,6 @@ export function McpProjectionRead({
   const providers = [...new Map([...(providerProjection?.items ?? EMPTY_PROVIDERS), ...directory.items]
     .map(provider => [provider.provider_key, provider])).values()];
   const directoryError = directory.error || (providerQuery.trim() === "" && categoryFilter === "all" && providerState.error);
-  const retryDirectory = () => {
-    if (directory.error) directory.retry();
-    else reload("providers");
-  };
   const connectors = (connectorProjection?.items ?? []).filter(
     (connector) => !confirmedRemovedConnectorIds.has(connector.connector_id),
   );
@@ -294,7 +293,7 @@ export function McpProjectionRead({
   const refreshing =
     view === "catalog" ? directory.loading : connectorRefreshing;
   const plaza = embedded && !settingsLayout && initialView === "catalog";
-  const galleryProps = { profiles: customApis, admitted, confirmed: customApiState.dataCurrent,
+  const galleryProps = { profiles: customApis, admitted, confirmed: hasConfirmedApiRead,
     query: providerQuery, category: categoryFilter };
   const hasVisibleCustomApis = plaza && visibleCustomApiGalleryProfiles(galleryProps).length > 0;
   const selectCustomApi = (profile: (typeof customApis)[number], trigger: HTMLElement) => {
@@ -304,13 +303,23 @@ export function McpProjectionRead({
     setApiIntent({ profileId: profile.profile_id, window: {} });
   };
   const customApiContinuation = <>
-    {customApiState.loadMoreError ? <Alert variant="destructive" role="alert"><AlertDescription>{t("mcp.loadError")}</AlertDescription></Alert> : null}
+    {customApiState.loadMoreError ? <span className="sr-only" role="status">{t("mcp.loadError")}</span> : null}
     {customApiState.hasMore ? <Button type="button" variant="outline" disabled={customApiState.loadingMore}
       aria-busy={customApiState.loadingMore} onClick={() => void customApiState.loadMore()}>
-      {customApiState.loadingMore ? t("mcp.loading") : t("rail.loadMore")} · API
+      {t("rail.loadMore")} · API
     </Button> : null}
-    {customApiState.loadMoreError && !customApiState.hasMore ? <Button type="button" variant="outline" onClick={customApiState.reload}>{t("mcp.retry")}</Button> : null}
   </>;
+
+  const connectionQuery = connectorQuery.trim().toLocaleLowerCase();
+  const hasVisibleConnection = connectors.some(connector => connector.status !== "revoked" &&
+    (!connectionQuery || [connector.display_name, connector.description, providersByKey.get(connector.provider_key)?.display_name]
+      .some(value => value?.toLocaleLowerCase().includes(connectionQuery)))) || customApis.some(profile =>
+    !connectionQuery || [profile.name, profile.instructions].some(value => value?.toLocaleLowerCase().includes(connectionQuery)));
+  // An unresolved head is not an empty combined directory. Retained same-scope
+  // cards remain readable; existing detail/command freshness gates are unchanged.
+  const connectionResultsKnown = connectorProjection !== undefined && hasConfirmedApiRead;
+  const passiveReadFailed = view === "catalog" ? directoryError || (plaza && categoryFilter === "all" && customApiState.error)
+    : connectorState.error || refreshError || customApiState.error;
 
   const hideConfirmedRemovedConnector = (connectorId: string) => {
     setConfirmedRemovedConnectorIds((current) => {
@@ -608,27 +617,8 @@ export function McpProjectionRead({
         />
       </header>
       <div className={styles.body}>
-      {view === "catalog" && directoryError ? (
-        <ProjectionError onRetry={retryDirectory} />
-      ) : null}
-      {view === "connections" &&
-      connectorProjection === undefined &&
-      connectorRefreshing ? (
-        <ProjectionPending view="connections" />
-      ) : null}
-      {view === "connections" && admitted && customApiState.error ? (
-        <ProjectionError onRetry={() => {
-          if (ownerRef.current === owner && admitted) customApiState.reload();
-        }} />
-      ) : null}
-      {view === "connections" && (connectorState.error || refreshError) ? (
-        <ProjectionError
-          onRetry={() => {
-            setRefreshError(false);
-            reload("connectors");
-          }}
-        />
-      ) : null}
+      {passiveReadFailed ? <span className="sr-only" role="status">{t("mcp.loadError")}</span>
+        : refreshing || customApiState.loading ? <span className="sr-only" role="status">{t("mcp.loading")}</span> : null}
       {(actionError || (admitted && connectorIntent !== null && connectorProjection !== undefined && !selectedConnector)) &&
       (connectorIntent === null || !connectorIntent.entered) &&
       selectedProviderKey === null &&
@@ -643,10 +633,10 @@ export function McpProjectionRead({
             hasMore={directory.hasMore}
             loading={directory.loading}
             onLoadMore={directory.loadMore}
-            {...(directory.items.length === 0 ? hasVisibleCustomApis || (plaza && categoryFilter === "all" && customApiState.error)
+            {...(directory.items.length === 0 ? hasVisibleCustomApis || directoryError || !admitted || directory.loading ||
+              (plaza && categoryFilter === "all" && (customApiState.error || customApiState.loading))
               ? { resultsPlaceholder: null }
-              : !admitted || directory.loading || (plaza && categoryFilter === "all" && customApiState.loading)
-                ? { resultsPlaceholder: <ProjectionPending view="catalog" /> } : {} : {})}
+              : {} : {})}
             query={providerQuery}
             onQueryChange={setProviderQuery}
             showSearch={embedded}
@@ -659,9 +649,6 @@ export function McpProjectionRead({
           />
           {plaza ? <McpCustomApiGallery {...galleryProps} onSelect={selectCustomApi} /> : null}
           {plaza && admitted && categoryFilter === "all" ? <>
-            {customApiState.error ? <ProjectionError onRetry={() => {
-              if (ownerRef.current === owner && admitted) customApiState.reload();
-            }} /> : null}
             {customApiContinuation}
           </> : null}
         </div>
@@ -677,9 +664,9 @@ export function McpProjectionRead({
         editorReturnFocusRef.current = event.currentTarget;
         setApiIntent({ profileId: item.profileId, window: {} });
       }}><span className="truncate">{t(item.kind === "completed" ? "mcp.creationDone" : "mcp.retryOriginal")} · {item.profileId}</span></Button>) : null}
-      {view === "connections" && (connectorProjection !== undefined || customApis.length > 0) ? (
+      {view === "connections" ? (
         <div className={styles.content}>
-          <McpConnectionList
+          {hasVisibleConnection || connectionResultsKnown ? <McpConnectionList
             connectors={connectors}
             customApis={customApis}
             providers={providers}
@@ -708,7 +695,7 @@ export function McpProjectionRead({
               setHistory((items) => [...items, cursor]);
               setCursor(next);
             }}
-          />
+          /> : <section className={styles.connectionSection} aria-label={t("mcp.title")} />}
           {customApiContinuation}
         </div>
       ) : null}
@@ -729,7 +716,6 @@ export function McpProjectionRead({
         onOpenChange={setCatalogOpen}
         onQueryChange={setProviderQuery}
         onCategoryFilterChange={setCategoryFilter}
-        onRetry={retryDirectory}
         onSelectProvider={openProvider}
         {...(onCreateMcp ? { onCreate: (mode: McpCreateMode, target?: HTMLElement | null) => { if (ownerRef.current === owner && admitted) onCreateMcp(mode, target); } } : {})}
       />
@@ -966,41 +952,6 @@ export function McpProjectionRead({
         />
       ) : null}
     </section>
-  );
-}
-
-function ProjectionPending({ view }: { view: McpProjectionView }) {
-  const t = useT();
-  return (
-    <div
-      className={
-        view === "connections"
-          ? styles.pendingConnections
-          : styles.pendingCatalog
-      }
-      aria-busy="true"
-    >
-      <span className="sr-only" role="status">
-        {t("mcp.loading")}
-      </span>
-      <div className={styles.projectionSkeleton} aria-hidden="true">
-        <span />
-        <span />
-        <span />
-      </div>
-    </div>
-  );
-}
-
-function ProjectionError({ onRetry }: { onRetry: () => void }) {
-  const t = useT();
-  return (
-    <Alert variant="destructive" role="alert" className={styles.alert}>
-      <AlertDescription>{t("mcp.loadError")}</AlertDescription>
-      <Button type="button" variant="outline" onClick={onRetry}>
-        {t("mcp.retry")}
-      </Button>
-    </Alert>
   );
 }
 

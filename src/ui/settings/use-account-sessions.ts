@@ -19,7 +19,9 @@ export function useAccountSessions(open: boolean, preview: boolean, boundary?: P
     if (!active(r) || r.busy) return
     r.busy = true
     const loadingNotice = r.reconciliationRequired ? "unknown" : notice
-    setView((v) => cursor ? { ...v, pending: true, notice: loadingNotice, reconciliationRequired: r.reconciliationRequired } : { ...empty, scope: r.scope, notice: loadingNotice, reconciliationRequired: r.reconciliationRequired })
+    setView((v) => cursor
+      ? { ...v, pending: true, notice: loadingNotice, reconciliationRequired: r.reconciliationRequired }
+      : { ...(v.scope === r.scope && notice !== "removed" ? v : empty), scope: r.scope, phase: "loading", pending: true, notice: loadingNotice, reconciliationRequired: r.reconciliationRequired })
     try {
       const page = await listAccountSessions(r.controller.signal, cursor)
       if (cursor && (view.current?.session_id !== page.data.current_session.session_id || page.data.sessions.some((item) => view.others.some((old) => old.session_id === item.session_id)))) throw new Error("Invalid page identity")

@@ -112,7 +112,9 @@ export function McpProviderDirectory({
         className={styles.providerSection}
         aria-label={t("mcp.provider")}
       >
-        {resultsPlaceholder !== undefined ? resultsPlaceholder : providers.length === 0 ? (
+        {resultsPlaceholder !== undefined ? resultsPlaceholder : providers.length === 0 && loading ? (
+          <span className="sr-only" role="status">{t("mcp.loading")}</span>
+        ) : providers.length === 0 ? (
           <div className={styles.emptyProvider}>
             <Link2 aria-hidden="true" />
             <p>{t(query.trim() || categoryFilter !== "all" ? "mcp.noMatch" : "mcp.noProviders")}</p>
@@ -165,7 +167,7 @@ export function McpProviderDirectory({
         {hasMore && onLoadMore ? (
           <div className={styles.pagination}>
             <Button type="button" variant="outline" onClick={onLoadMore} disabled={loading} aria-busy={loading}>
-              {t(loading ? "mcp.loading" : "rail.loadMore")}
+              {t("rail.loadMore")}
             </Button>
           </div>
         ) : null}

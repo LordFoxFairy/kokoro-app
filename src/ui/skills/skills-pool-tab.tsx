@@ -41,7 +41,6 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { HubClient } from "@/hub/client";
@@ -117,7 +116,6 @@ export function SkillsPoolTab({
   busy,
   expanded,
   client,
-  onRetry,
   onDisable,
   onSetEnabled,
   enabledOverrides,
@@ -306,8 +304,6 @@ export function SkillsPoolTab({
   // flight. Returning a standalone loading card made the dialog jump from a
   // blank body to a different layout between tabs. The controls and their
   // eventual list now keep one geometry; only card content reserves space.
-  const initialLoad = pool === null && !failed;
-  const initialFailure = pool === null && failed;
   const resolvedPool: SkillsPool = pool ?? { skills: [], quota: null };
 
   const q = query.trim().toLowerCase();
@@ -519,58 +515,12 @@ export function SkillsPoolTab({
         </ToggleGroup>
       </div>
 
-      {refreshFailed ? (
-        <Alert
-          variant="destructive"
-          className={styles.refreshFeedback}
-          data-testid="skills-refresh-error"
-        >
-          <AlertDescription>
-            <span>{t("skills.refreshError")}</span>
-            <Button
-              variant="outline"
-              type="button"
-              disabled={loading}
-              aria-busy={loading}
-              onClick={onRetry}
-            >
-              {loading ? <Spinner aria-hidden="true" /> : null}
-              {loading ? t("skills.loading") : t("skills.retry")}
-            </Button>
-          </AlertDescription>
-        </Alert>
-      ) : null}
+      {refreshFailed ? <span className="sr-only" role="status">{t("skills.refreshError")}</span> : null}
 
-      {initialFailure ? (
-        <Alert
-          variant="destructive"
-          className={styles.refreshFeedback}
-          data-testid="skills-load-error"
-        >
-          <AlertDescription>
-            <span>{t("skills.loadError")}</span>
-            <Button
-              variant="outline"
-              type="button"
-              disabled={loading}
-              aria-busy={loading}
-              onClick={onRetry}
-            >
-              {loading ? <Spinner aria-hidden="true" /> : null}
-              {t("skills.retry")}
-            </Button>
-          </AlertDescription>
-        </Alert>
-      ) : initialLoad ? (
-        <div
-          className={styles.loadingState}
-          aria-busy="true"
-          aria-label={t("skills.title")}
-        >
-          <Skeleton className={styles.loadingLine} aria-hidden="true" />
-          <Skeleton className={styles.loadingLine} aria-hidden="true" />
-          <Skeleton className={styles.loadingLineShort} aria-hidden="true" />
-        </div>
+      {pool === null ? (
+        <ul className={styles.list} data-testid="skills-pool-list" aria-busy={loading || undefined} aria-label={t("skills.title")}>
+          <li className="sr-only" role="status">{t(failed ? "skills.loadError" : "skills.loading")}</li>
+        </ul>
       ) : !hasSkills ? (
         <Empty
           className={styles.emptyState}

@@ -568,7 +568,7 @@ async function mountAuthenticatedProjectRail(
   })
   const view = render(<ThemeProvider><LocaleProvider><AppGate brandName="站点品牌" /></LocaleProvider></ThemeProvider>)
   await screen.findByRole("textbox", { name: "对话输入" })
-  fireEvent.click(screen.getByRole("button", { name: "展开侧栏" }), { detail: 0 })
+  fireEvent.click(await screen.findByRole("button", { name: "展开侧栏" }), { detail: 0 })
   return { ...view, fetchMock }
 }
 
@@ -591,9 +591,9 @@ it.each(["401", "bad-shape"])("身份重新准入后列表返回 %s，清旧项�
     expect(status.querySelector("button")).toBeEnabled()
     expect(calls).toBe(3)
   } else {
-    await screen.findByTestId("projects-error")
-    expect(calls).toBe(2)
-    expect(screen.getByTestId("projects-error").querySelector("button")).toBeEnabled()
+    await waitFor(() => expect(calls).toBe(2))
+    await act(async () => {})
+    expect(screen.queryByTestId("projects-error")).not.toBeInTheDocument()
   }
   expect(screen.queryByRole("link", { name: "新对话 · 研究项目甲" })).not.toBeInTheDocument()
   expect(screen.queryByRole("link", { name: "新对话 · 研究项目乙" })).not.toBeInTheDocument()

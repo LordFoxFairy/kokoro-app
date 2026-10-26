@@ -1039,16 +1039,16 @@ it("待批徽标：id 未命中则不渲染", () => {
   expect(screen.queryByLabelText("等待批准")).toBeNull()
 })
 
-it("会话清单失败时提供重试入口，并保留已加载会话", () => {
+it("会话清单刷新失败保留已加载会话，不追加异常重试卡", () => {
   const onRetryList = vi.fn()
   renderRail({ listError: true, onRetryList })
-  expect(screen.getByText("会话列表加载失败")).toBeInTheDocument()
-  fireEvent.click(screen.getByRole("button", { name: "重试加载" }))
-  expect(onRetryList).toHaveBeenCalledTimes(1)
+  expect(screen.queryByText("会话列表加载失败")).not.toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "重试加载" })).not.toBeInTheDocument()
+  expect(onRetryList).not.toHaveBeenCalled()
   expect(screen.getByText("旧标题")).toBeInTheDocument()
 })
 
-it("侧栏初始读取保留无文字骨架，并向辅助技术暴露状态", () => {
+it("侧栏初始读取保留静态空间，并向辅助技术暴露状态", () => {
   renderRail({
     conversations: [],
     listLoading: true,
@@ -1060,12 +1060,14 @@ it("侧栏初始读取保留无文字骨架，并向辅助技术暴露状态", (
   const projectsLoading = screen.getByRole("status", { name: "正在加载项目…" })
   expect(conversationsLoading).not.toHaveTextContent("正在加载会话…")
   expect(projectsLoading).not.toHaveTextContent("正在加载项目…")
-  expect(conversationsLoading.querySelectorAll('[aria-hidden="true"]')).toHaveLength(2)
-  expect(projectsLoading.querySelectorAll('[aria-hidden="true"]')).toHaveLength(2)
+  expect(conversationsLoading).toBeEmptyDOMElement()
+  expect(projectsLoading).toBeEmptyDOMElement()
 
   cleanup()
   renderRail({ conversations: [], listError: true, onRetryList: vi.fn() })
-  expect(screen.getByRole("alert")).toHaveTextContent("会话列表加载失败")
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+  expect(screen.queryByText("还没有直接会话")).not.toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "重试加载" })).not.toBeInTheDocument()
 })
 
 it("收起侧栏的新建项目只打开创建表单，不把菜单事件当草稿", async () => {

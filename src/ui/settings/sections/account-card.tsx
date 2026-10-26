@@ -350,7 +350,6 @@ export function AccountCard({
   return (
     <div className={styles.accountSettings} data-settings-card data-testid="settings-account">
       {!preview && live.scope && live.phase==="loading" ? <span className="sr-only" role="status" aria-label={t("billing.loading")} /> : null}
-      {!preview && live.phase==="error" ? <div role="alert">{t("billing.loadError")}<Button variant="outline" size="sm" onClick={live.retry}>{t("billing.retry")}</Button></div> : null}
       {copyState?.scope===copyScope && copyState.status==="failed" ? <p role="alert">{t("share.projectCopyFailed")}</p> : null}
       <div className={styles.accountIdentityRow}>
         <div className={styles.identity}>

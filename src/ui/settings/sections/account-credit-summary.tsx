@@ -3,7 +3,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { formatCredits } from "@/billing/format";
-import { Button } from "@/components/ui/button";
 import type { BillingSummary } from "@/contract/http";
 import { useT } from "@/i18n/context";
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
@@ -12,7 +11,7 @@ import { useAccountReadSnapshots } from "../account-read-snapshots";
 
 import styles from "./settings-sections.module.css";
 
-type Result = { scope: string; attempt: number } & (
+type Result = { scope: string } & (
   | { phase: "ready"; summary: BillingSummary }
   | { phase: "error" }
 );
@@ -32,10 +31,9 @@ export function AccountCreditSummary({ preview = false, readBoundary }: {
   const [client] = useState(() => browserBillingClient());
   const snapshots = useAccountReadSnapshots();
   const rememberSummary = snapshots?.rememberSummary;
-  const [attempt, setAttempt] = useState(0);
   const [result, setResult] = useState<Result | null>(() => {
     const summary = scope !== null && snapshots?.summary?.scope === scope ? snapshots.summary.value : null;
-    return summary && scope !== null ? { scope, attempt: 0, phase: "ready", summary } : null;
+    return summary && scope !== null ? { scope, phase: "ready", summary } : null;
   });
   const current = useRef<AbortController | null>(null);
 
@@ -57,31 +55,26 @@ export function AccountCreditSummary({ preview = false, readBoundary }: {
         const summary = await client.summary(controller.signal, () => isCurrent() && readBrowserAuthIndexSubject() === subject);
         if (isCurrent()) {
           rememberSummary?.(scope, summary);
-          setResult({ scope, attempt, phase: "ready", summary });
+          setResult({ scope, phase: "ready", summary });
         }
       } catch {
-        if (isCurrent()) setResult({ scope, attempt, phase: "error" });
+        if (isCurrent()) setResult(previous => previous?.scope === scope && previous.phase === "ready" ? previous : { scope, phase: "error" });
       }
     });
     return () => {
       if (current.current === controller) current.current = null;
       controller.abort();
     };
-  }, [client, scope, attempt, rememberSummary, subject]);
+  }, [client, scope, rememberSummary, subject]);
 
-  const visible = result?.scope === scope && result.attempt === attempt ? result : null;
-  return <section className={styles.accountCreditSummary} aria-label={t("settings.creditsMenu")} aria-busy={scope !== null && visible === null}>
-    {scope === null ? <p role="status">{t("settings.accountCreditsUnknown")}</p> : visible === null ? <div className={styles.accountCreditPlaceholder} role="status" aria-label={t("billing.loading")}></div> : null}
-    {visible?.phase === "error" ? <div role="alert" className={styles.accountCreditFeedback}>
-      <p>{t("billing.loadError")}</p>
-      <Button variant="outline" size="sm" type="button" onClick={() => setAttempt((value) => value + 1)}>{t("billing.retry")}</Button>
-    </div> : null}
-    {visible?.phase === "ready" ? <>
-      <dl className={styles.accountCreditNumbers}>
-        <div><dt>{t("billing.balance")}</dt><dd>{formatCredits(visible.summary.available_micros)}</dd></div>
-        <div><dt>{t("billing.held")}</dt><dd>{formatCredits(visible.summary.held_micros)}</dd></div>
-      </dl>
-      <p className={styles.accountCreditStatus} role="status" data-account-status={visible.summary.status}>{t(visible.summary.status === "disabled" ? "settings.accountCreditsDisabled" : "settings.accountCreditsActive")}</p>
-    </> : null}
+  const visible = result?.scope === scope && result.phase === "ready" ? result.summary : null;
+  const pending = scope !== null && result?.scope !== scope;
+  return <section className={styles.accountCreditSummary} aria-label={t("settings.creditsMenu")} aria-busy={pending}>
+    {scope === null ? <span className="sr-only" role="status">{t("settings.accountCreditsUnknown")}</span> : pending ? <span className="sr-only" role="status" aria-label={t("billing.loading")} /> : null}
+    <dl className={styles.accountCreditNumbers}>
+      <div><dt>{t("billing.balance")}</dt><dd>{visible === null ? "—" : formatCredits(visible.available_micros)}</dd></div>
+      <div><dt>{t("billing.held")}</dt><dd>{visible === null ? "—" : formatCredits(visible.held_micros)}</dd></div>
+    </dl>
+    {visible === null ? null : <p className={styles.accountCreditStatus} role="status" data-account-status={visible.status}>{t(visible.status === "disabled" ? "settings.accountCreditsDisabled" : "settings.accountCreditsActive")}</p>}
   </section>;
 }

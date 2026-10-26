@@ -12,8 +12,6 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
-import { Skeleton } from "@/components/ui/skeleton"
-import { Spinner } from "@/components/ui/spinner"
 import type { SkillCatalog, SkillCatalogCard, CatalogSkillCategory } from "@/hub/schemas"
 import { browserHubClient } from "@/ui/shell/page-clients"
 import { invalidate, useResource } from "@/lib/query"
@@ -288,13 +286,11 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
             </Alert>
           ) : null}
 
-          {displayedCatalog !== undefined && catalog.error !== undefined ? <div className={styles.errorState} role="alert"><p>{t("skills.loadError")}</p><Button type="button" variant="outline" onClick={catalog.refetch} disabled={catalog.loading}>{t("skills.retry")}</Button></div> : null}
-          {displayedCatalog === undefined && catalog.error === undefined ? (
-            <div className={styles.grid} data-testid="skills-loading">
-              {Array.from({ length: 6 }, (_, index) => <Card key={index} className={styles.card}><Skeleton className={styles.artSkeleton} /><CardContent className={styles.cardBody}><Skeleton className={styles.titleSkeleton} /><Skeleton className={styles.lineSkeleton} /></CardContent></Card>)}
+          {displayedCatalog !== undefined && catalog.error !== undefined ? <span className="sr-only" role="status">{t("skills.loadError")}</span> : null}
+          {displayedCatalog === undefined || catalog.data === undefined && filtered.length === 0 ? (
+            <div className={styles.grid} data-testid="skills-catalog-grid" aria-busy={catalog.loading || undefined}>
+              <span className="sr-only" role="status">{t(catalog.error === undefined ? "skills.loading" : "skills.loadError")}</span>
             </div>
-          ) : catalog.error !== undefined && displayedCatalog === undefined ? (
-            <div className={styles.errorState} role="alert"><p>{t("skills.loadError")}</p><Button type="button" variant="outline" onClick={catalog.refetch} disabled={catalog.loading}>{catalog.loading ? <Spinner aria-hidden="true" /> : null}{t("skills.retry")}</Button></div>
           ) : filtered.length === 0 ? (
             <div className={styles.emptyState} data-testid="skills-catalog-empty">
               <Search aria-hidden="true" />
@@ -357,9 +353,9 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
               </div>
               {displayedCatalog?.next_cursor ? (
                 <div className={styles.loadMore}>
-                  {loadMoreFailed ? <p role="alert">{t("skills.loadError")}</p> : null}
+                  {loadMoreFailed ? <span className="sr-only" role="status">{t("skills.loadError")}</span> : null}
                   <Button type="button" variant="outline" onClick={() => void loadMore()} disabled={catalog.data === undefined || loadingMore} aria-busy={loadingMore}>
-                    {loadingMore ? <Spinner aria-hidden="true" /> : null}{t("rail.loadMore")}
+                    {t("rail.loadMore")}
                   </Button>
                 </div>
               ) : null}

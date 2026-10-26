@@ -950,7 +950,6 @@ function AppFrameRuntime({
   const overlaySurfaces = (
     <>
     {!preview && projectReadBoundary?.admitted && archive.blocked ? <div className={archiveStyles.archiveFeedback} role="group" aria-label={t("data.unknown")}><p role="alert">{t("data.unknown")}</p><button type="button" disabled={archive.busy} onClick={()=>void archive.reconcile()}>{t("data.reload")}</button>{archive.review?<button type="button" disabled={archive.busy} onClick={archive.proceed}>{t("data.continue")}</button>:null}</div>:null}
-    {!preview && !navigationState.conversationMissing && projectReadBoundary?.admitted && (projectWorkspace?routedConversationId:activeId) && conversationsCtl && conversationsCtl.archiveStatus!=="archived" && (conversationsCtl.archiveStatus==="unknown"||conversationsCtl.archiveStatus==="missing") ? <div className={archiveStyles.archiveFeedback} role="status">{conversationsCtl.archiveStateError?t("archive.stateFailed"):t("archive.checking")}{conversationsCtl.archiveStateError?<button type="button" onClick={conversationsCtl.retryArchiveState}>{t("data.reload")}</button>:null}</div>:null}
     {copyFeedback !== null && copyFeedback.lifetime.view === copyView && copyFeedback.lifetime.live ? (
       <div className={shellStyles.taskLinkFeedback} role={copyFeedback.kind === "success" ? "status" : "alert"}>
         {t(copyFeedback.kind === "success" ? "shell.taskLinkCopied" : "shell.taskLinkCopyFailed")}

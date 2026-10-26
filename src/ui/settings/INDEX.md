@@ -1,3 +1,5 @@
+账户被动读取反馈：`use-account-profile`在同准入scope刷新失败时保留最后确认资料，但phase仍为error、编辑禁用；`account-card`不追加读取失败/重试卡。初次未知显示原字段占位，切主体/代际立即清退；明确保存、复制、退出失败继续在对应动作处反馈。设备页保当前/已读列表、正常刷新和写入核对动作，被动读取状态仅无障碍播报，不冒成功空列表。
+
 <!-- 2026-10-22 continuation retirement correction -->
 积分客户端每次续发 PUT 或核实 GET 前复验调用方 `getCurrent`；真实账户/用量/rail传入现 controller/current 与发起时已准入subject的marker一致性检查。只更新storage、无rerender/focus仍会抑制旧续发；marker丢失、不匹配或读取异常一律退休。marker只抑制，不授予session权限；非UI调用可不传callback，初次GET契约保持，无新store/轮询/锁。
 

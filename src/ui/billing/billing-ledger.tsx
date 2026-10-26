@@ -3,10 +3,8 @@ import { useMemo } from "react"
 
 import type { BillingLedgerEntry } from "@/contract/http"
 import { formatSignedCredits, microSign } from "@/billing/format"
-import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyDescription } from "@/components/ui/empty"
-import { Spinner } from "@/components/ui/spinner"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { useLocale, useT } from "@/i18n/context"
 
@@ -20,28 +18,7 @@ type BillingLedgerProps = {
   embedded: boolean
   retrying: boolean
   onFilterChange: (filter: LedgerFilter) => void
-  onRetry: () => void
   onLoadMore: () => void
-}
-
-function LoadingLedger({ label }: { label: string }) {
-  return (
-    <div className={panelStyles.loadingState} role="status" aria-label={label} />
-  )
-}
-
-function LedgerError({ message, retryLabel, retrying, embedded, onRetry }: { message: string; retryLabel: string; retrying: boolean; embedded: boolean; onRetry: () => void }) {
-  return (
-    <Alert variant="destructive" className={panelStyles.feedback}>
-      <AlertDescription>
-        <p>{message}</p>
-        <Button variant="outline" size="sm" type="button" disabled={retrying} aria-busy={embedded ? undefined : retrying} onClick={() => void onRetry()}>
-          {!embedded && retrying ? <Spinner aria-hidden="true" /> : null}
-          {!embedded && retrying ? message : retryLabel}
-        </Button>
-      </AlertDescription>
-    </Alert>
-  )
 }
 
 function EmbeddedEntry({ entry, label }: { entry: BillingLedgerEntry; label: string }) {
@@ -92,7 +69,7 @@ function LedgerEntries({ entries, embedded, localeTag }: { entries: BillingLedge
   )
 }
 
-export function BillingLedger({ ledger, filter, embedded, retrying, onFilterChange, onRetry, onLoadMore }: BillingLedgerProps) {
+export function BillingLedger({ ledger, filter, embedded, retrying, onFilterChange, onLoadMore }: BillingLedgerProps) {
   const t = useT()
   const { locale } = useLocale()
   const localeTag = locale === "zh" ? "zh-CN" : locale
@@ -105,7 +82,7 @@ export function BillingLedger({ ledger, filter, embedded, retrying, onFilterChan
   const days = useMemo(() => groupByDay(filteredEntries, localeTag), [filteredEntries, localeTag])
 
   return (
-    <section data-testid="billing-ledger" data-slot="billing-ledger">
+    <section data-testid="billing-ledger" data-slot="billing-ledger" aria-busy={ledger.kind === "loading" || retrying || ledger.kind === "ready" && ledger.loadingMore}>
       <div className={styles.ledgerHeadRow}>
         <h3 className={styles.ledgerHead}>{t("billing.ledgerTitle")}{embedded ? <CircleHelp aria-hidden="true" /> : null}</h3>
         {!embedded && ledger.kind === "ready" && ledger.entries.length > 0 ? (
@@ -114,15 +91,13 @@ export function BillingLedger({ ledger, filter, embedded, retrying, onFilterChan
           </ToggleGroup>
         ) : null}
       </div>
-      {ledger.kind === "loading" ? <LoadingLedger label={t("billing.loading")} /> : null}
-      {ledger.kind === "error" ? <LedgerError message={t("billing.loadError")} retryLabel={t("billing.retry")} retrying={retrying} embedded={embedded} onRetry={onRetry} /> : null}
-      {ledger.kind === "ready" && ledger.pageError ? <LedgerError message={t("billing.loadError")} retryLabel={t("billing.retry")} retrying={ledger.loadingMore} embedded={embedded} onRetry={onLoadMore} /> : null}
+      {ledger.kind !== "ready" ? <p aria-label={t("billing.ledgerTitle")}>—</p> : null}
       {ledger.kind === "ready" && ledger.entries.length === 0 ? <Empty className={panelStyles.emptyState}><EmptyDescription>{t("billing.ledgerEmpty")}</EmptyDescription></Empty> : null}
       {ledger.kind === "ready" && ledger.entries.length > 0 && days.length === 0 ? <Empty className={panelStyles.emptyState}><EmptyDescription>{t("billing.filterEmpty")}</EmptyDescription></Empty> : null}
       {ledger.kind === "ready" && ledger.entries.length > 0 && days.length > 0 ? (
         <>
           <LedgerEntries entries={filteredEntries} embedded={embedded} localeTag={localeTag} />
-          {ledger.cursor !== null ? <Button variant="outline" type="button" className={styles.more} disabled={ledger.loadingMore || retrying} aria-busy={embedded ? undefined : ledger.loadingMore} onClick={onLoadMore}>{!embedded && ledger.loadingMore ? <Spinner aria-hidden="true" /> : null}{ledger.loadingMore ? t("billing.loading") : t("billing.loadMore")}</Button> : null}
+          {ledger.cursor !== null ? <Button variant="outline" type="button" className={styles.more} disabled={ledger.loadingMore || retrying} aria-busy={ledger.loadingMore} onClick={onLoadMore}>{t("billing.loadMore")}</Button> : null}
         </>
       ) : null}
     </section>

@@ -132,17 +132,76 @@ it.each(["outside the first page", "when the directory fails"])("opens an instal
   expect(get).toHaveBeenCalledWith("outside", expect.any(AbortSignal))
 })
 
-it("does not report an unrelated seed failure after filtered owner results succeed", async () => {
+it("keeps a failed seed unknown without a passive error panel and renders later filtered owner results", async () => {
   const provider = { provider_key: "match", display_name: "Owner match", directory_type: "app" as const, category_keys: [], example_prompts: [], enabled: true, state_version: "1" }
   const client = { ...createHubClient(), listMcpConnectorProviders: vi.fn().mockRejectedValueOnce(Error("seed failed")).mockResolvedValue({ items: [provider], next_cursor: null }),
     // This case isolates provider seed recovery; API is an independently successful owner read.
     listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }),
   }
   render(<LocaleProvider><ConnectorCommandProvider client={client} boundary={{ subject: "filter-recovery", admitted: true, generation: 0 }}><McpProjectionRead client={client} identity="filter-recovery" embedded initialView="catalog" /></ConnectorCommandProvider></LocaleProvider>)
-  await screen.findByRole("alert")
+  expect(await screen.findByText("连接列表加载失败")).toHaveClass("sr-only")
+  expect(screen.queryByText("当前没有可添加的连接器提供方。")).not.toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
   fireEvent.change(screen.getByRole("searchbox"), { target: { value: "matching" } })
   expect(await screen.findByRole("button", { name: "Owner match" })).toBeVisible()
   expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+})
+
+it.each(["catalog", "connections"] as const)("keeps the %s controls mounted without passive error/retry/loading panels or an invented empty result", async view => {
+  window.localStorage.setItem("kokoro.locale", "zh")
+  const client = { ...createHubClient(),
+    listMcpConnectorProviders: vi.fn().mockRejectedValue(Error("provider unavailable")),
+    listMcpConnectors: vi.fn().mockRejectedValue(Error("connector unavailable")),
+    listCustomApis: vi.fn().mockRejectedValue(Error("API unavailable")),
+    createMcpConnector: vi.fn(), createCustomApi: vi.fn(), preparePrivateMcpServer: vi.fn(),
+  }
+  const boundary = { subject: `quiet-${view}`, admitted: true, generation: 0 }
+  render(<LocaleProvider><ConnectorCommandProvider client={client} boundary={boundary}><McpProjectionRead client={client} identity={boundary.subject} embedded settingsLayout initialView={view} /></ConnectorCommandProvider></LocaleProvider>)
+  const searches = screen.getAllByRole("searchbox")
+  expect(await screen.findByText("连接列表加载失败")).toHaveClass("sr-only")
+  expect(screen.getAllByRole("searchbox")).toEqual(searches)
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
+  expect(screen.queryByText("当前没有可添加的连接器提供方。")).not.toBeInTheDocument()
+  expect(screen.queryByText("没有匹配的连接")).not.toBeInTheDocument()
+  expect(screen.queryByText("将 Kokoro 与你的日常应用程序、API 和 MCP 连接起来")).not.toBeInTheDocument()
+  expect(client.listCustomApis).toHaveBeenCalledOnce()
+  expect(client.createMcpConnector).not.toHaveBeenCalled()
+  expect(client.createCustomApi).not.toHaveBeenCalled()
+  expect(client.preparePrivateMcpServer).not.toHaveBeenCalled()
+})
+
+it.each(["catalog", "connections"] as const)("still renders a genuinely confirmed empty %s instead of treating it as unknown", async view => {
+  window.localStorage.setItem("kokoro.locale", "zh")
+  const client = { ...createHubClient(), listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+    listMcpConnectors: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+    listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }),
+  }
+  const boundary = { subject: `confirmed-empty-${view}`, admitted: true, generation: 0 }
+  render(<LocaleProvider><ConnectorCommandProvider client={client} boundary={boundary}><McpProjectionRead client={client} identity={boundary.subject} embedded settingsLayout initialView={view} /></ConnectorCommandProvider></LocaleProvider>)
+  expect(await screen.findByText(view === "catalog" ? "当前没有可添加的连接器提供方。" : "将 Kokoro 与你的日常应用程序、API 和 MCP 连接起来")).toBeVisible()
+  expect(screen.queryByText("连接列表加载失败")).not.toBeInTheDocument()
+})
+
+it("retains confirmed connector cards when a same-scope refresh fails without adding a passive alert or retry", async () => {
+  window.localStorage.setItem("kokoro.locale", "zh")
+  const { act, waitFor } = await import("@testing-library/react")
+  const { invalidateMcpConnectorProjection } = await import("@/ui/mcp/use-mcp-projection")
+  const connector = privateOAuthFixture().connector
+  const list = vi.fn().mockResolvedValueOnce({ items: [connector], next_cursor: null }).mockRejectedValue(Error("refresh unavailable"))
+  const client = { ...createHubClient(), listMcpConnectors: list,
+    listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+    listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }),
+  }
+  const boundary = { subject: "quiet-refresh", admitted: true, generation: 0 }
+  render(<LocaleProvider><ConnectorCommandProvider client={client} boundary={boundary}><McpProjectionRead client={client} identity={boundary.subject} initialView="connections" /></ConnectorCommandProvider></LocaleProvider>)
+  const card = await screen.findByRole("button", { name: connector.display_name })
+  act(() => invalidateMcpConnectorProjection(client, boundary.subject))
+  await waitFor(() => expect(list).toHaveBeenCalledTimes(2))
+  expect(await screen.findByText("连接列表加载失败")).toHaveClass("sr-only")
+  expect(screen.getByRole("button", { name: connector.display_name })).toBe(card)
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
 })
 
 it("offers explicit reconnect for an active OAuth binding, never for a plain app connector", async () => {

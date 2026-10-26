@@ -77,8 +77,6 @@ export function WorkspaceRailNavigation({
   projects,
   orderedProjects,
   projectListStatus,
-  projectListRetryable = false,
-  onRetryProjects,
   projectPickerOpen,
   setProjectPickerOpen,
   onCreateProject,
@@ -171,10 +169,7 @@ export function WorkspaceRailNavigation({
       testId="projects-loading"
     />
   ) : projectListStatus === "error" ? (
-    <div role="alert" data-testid="projects-error">
-      <p>{t("firstSite.projectsError")}</p>
-      <Button type="button" variant="ghost" size="sm" onClick={onRetryProjects} disabled={!onRetryProjects || !projectListRetryable}>{t("firstSite.retry")}</Button>
-    </div>
+    <span className="sr-only" role="status">{t("firstSite.projectsError")}</span>
   ) : projectListStatus === "ready" && orderedProjects.length === 0 ? (
     <p role="status" data-testid="projects-empty">{t("firstSite.projectsEmpty")}</p>
   ) : null

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 import { LocaleProvider } from "@/i18n/context"
 import { AccountDevicesDialog } from "@/ui/settings/sections/account-devices-dialog"
@@ -33,7 +33,7 @@ it("unknown result forbids another removal until explicit read", async () => {
 })
 it("empty and failed initial reads remain distinct and retry reads only", async () => {
   fetcher.mockResolvedValueOnce(reply(page([]))); const view = renderDialog(); await screen.findByText("No other sign-in sessions."); view.unmount()
-  fetcher.mockRejectedValueOnce(new Error("offline")); renderDialog(); await screen.findByRole("alert"); expect(screen.queryByText("No other sign-in sessions.")).not.toBeInTheDocument()
+  fetcher.mockRejectedValueOnce(new Error("offline")); renderDialog(); await act(async () => {}); expect(screen.queryByRole("alert")).not.toBeInTheDocument(); expect(screen.queryByText("No other sign-in sessions.")).not.toBeInTheDocument()
   fireEvent.click(screen.getByRole("button", { name: "Read again" })); await screen.findByText("Current session")
 })
 it.each(["success", "failure"])("unknown removal keeps every remove control disabled after More %s", async (outcome) => {

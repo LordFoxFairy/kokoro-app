@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { SkillsContent } from "@/ui/skills/skills-panel"
 import { GithubImportDialog } from "@/ui/skills/github-import-dialog"
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 
 import { LocaleProvider } from "@/i18n/context"
@@ -197,3 +197,92 @@ it("confirms an update from the first admitted mount and restores keyboard focus
   expect(screen.getByRole("switch", { name: "启用 Update first mount" })).not.toBeChecked();
   expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1);
 });
+
+
+import { invalidate } from "@/lib/query"
+import { __resetResourceStore } from "@/lib/query/resource-store"
+import { SKILLS_KEY, SKILLS_CATALOG_KEY, skillResourceKey } from "@/ui/skills/skills-resource-cache"
+
+it("keeps an unknown installed pool scaffold distinct from confirmed empty without passive loaders or retry cards", async () => {
+  __resetResourceStore()
+  const base = createPreviewHubClient()
+  let reject!: (error: Error) => void
+  const listSkillPool = vi.fn(() => new Promise<Awaited<ReturnType<typeof base.listSkillPool>>>((_, fail) => { reject = fail }))
+  const setSkillEnabled = vi.fn(base.setSkillEnabled)
+  const client = { ...base, listSkillPool, setSkillEnabled }
+  const view = render(<LocaleProvider><SkillsContent client={client} readBoundary={{ admitted: true, subject: "quiet-pool", generation: 1 }} pinned={[]} onTogglePin={vi.fn()} embedded /></LocaleProvider>)
+  await waitFor(() => expect(listSkillPool).toHaveBeenCalledOnce())
+  expect(screen.getByRole("searchbox", { name: "搜索技能" })).toBeVisible()
+  expect(screen.getByRole("button", { name: "探索技能" })).toBeVisible()
+  expect(view.container.querySelector('[data-slot="skeleton"]')).toBeNull()
+  const list = screen.getByTestId("skills-pool-list")
+  expect(screen.queryByTestId("skills-empty")).toBeNull()
+  await act(async () => { reject(Error("controlled first pool read failure")) })
+  expect(screen.getByTestId("skills-pool-list")).toBe(list)
+  expect(screen.queryByTestId("skills-empty")).toBeNull()
+  expect(screen.queryByRole("button", { name: "重试" })).toBeNull()
+  expect(screen.queryByTestId("skills-load-error")).toBeNull()
+  expect(listSkillPool).toHaveBeenCalledOnce()
+  expect(setSkillEnabled).not.toHaveBeenCalled()
+})
+
+it("keeps confirmed installed cards on same-scope refresh failure and retires them with the owner client", async () => {
+  __resetResourceStore()
+  const base = createPreviewHubClient(), skills = await base.listSkillPool()
+  const first = { ...skills[0]!, name: "Retained pool card" }
+  let reject!: (error: Error) => void
+  const listSkillPool = vi.fn().mockResolvedValueOnce([first]).mockImplementationOnce(() => new Promise((_, fail) => { reject = fail }))
+  const client = { ...base, listSkillPool }
+  const content = (owner = client, subject = "quiet-pool-a", admitted = true) => <LocaleProvider><SkillsContent client={owner} readBoundary={{ admitted, subject, generation: 1 }} pinned={[]} onTogglePin={vi.fn()} embedded /></LocaleProvider>
+  const view = render(content())
+  const card = await screen.findByText(first.name)
+  act(() => invalidate(skillResourceKey(SKILLS_KEY, client)))
+  await waitFor(() => expect(reject).toBeTypeOf("function"))
+  expect(screen.getByText(first.name)).toBe(card)
+  await act(async () => { reject(Error("controlled refresh failure")) })
+  expect(screen.getByText(first.name)).toBe(card)
+  expect(screen.queryByTestId("skills-refresh-error")).toBeNull()
+  expect(screen.queryByRole("button", { name: "重试" })).toBeNull()
+  view.rerender(content(client, "quiet-pool-a", false))
+  expect(screen.queryByText(first.name)).toBeNull()
+  expect(screen.queryByTestId("skills-empty")).toBeNull()
+  const nextClient = { ...base, listSkillPool: vi.fn(() => new Promise<Awaited<ReturnType<typeof base.listSkillPool>>>(() => undefined)) }
+  view.rerender(content(nextClient, "quiet-pool-b"))
+  expect(screen.queryByText(first.name)).toBeNull()
+  expect(screen.queryByTestId("skills-empty")).toBeNull()
+  expect(screen.getByRole("searchbox", { name: "搜索技能" })).toBeVisible()
+})
+
+it("keeps the catalog read container unknown on failure, and confirmed cursor cards survive paging errors with ordinary Load more", async () => {
+  __resetResourceStore()
+  vi.stubGlobal("IntersectionObserver", class { observe() {} unobserve() {} disconnect() {} takeRecords() { return [] } })
+  const base = createPreviewHubClient(), catalog = await base.listSkillCatalog()
+  const first = { ...catalog.skills[0]!, name: "Retained cursor card" }
+  let rejectInitial!: (error: Error) => void
+  const initialClient = { ...base, listSkillCatalog: vi.fn(() => new Promise<typeof catalog>((_, reject) => { rejectInitial = reject })) }
+  const content = (client: typeof base) => <LocaleProvider><SkillCatalogDialog open inline client={client} enabledOverrides={new Map()} installedOverrides={new Map()} busy={null} errorName={null} onOpenChange={vi.fn()} onCloseAutoFocus={vi.fn()} onOpenUpload={vi.fn()} onOpenGithub={vi.fn()} onSetEnabled={vi.fn()} onOpenDetail={vi.fn()} /></LocaleProvider>
+  const view = render(content(initialClient))
+  const list = screen.getByTestId("skills-catalog-scroll")
+  expect(view.container.querySelector('[data-slot="skeleton"]')).toBeNull()
+  await waitFor(() => expect(rejectInitial).toBeTypeOf("function"))
+  await act(async () => { rejectInitial(Error("controlled unknown catalog")) })
+  expect(screen.getByTestId("skills-catalog-scroll")).toBe(list)
+  expect(screen.queryByTestId("skills-catalog-empty")).toBeNull()
+  expect(screen.queryByRole("button", { name: "重试" })).toBeNull()
+  const listSkillCatalog = vi.fn().mockResolvedValueOnce({ ...catalog, skills: [first], next_cursor: "next-owned-page" }).mockRejectedValueOnce(Error("controlled next page failure"))
+  const confirmed = { ...base, listSkillCatalog }
+  view.rerender(content(confirmed))
+  const card = await screen.findByRole("button", { name: `查看详情 ${first.name}` })
+  fireEvent.click(screen.getByRole("button", { name: "加载更多" }))
+  await waitFor(() => expect(listSkillCatalog).toHaveBeenCalledTimes(2))
+  expect(screen.getByRole("button", { name: `查看详情 ${first.name}` })).toBe(card)
+  expect(screen.getByRole("button", { name: "加载更多" })).toBeEnabled()
+  expect(screen.queryByRole("button", { name: "重试" })).toBeNull()
+  listSkillCatalog.mockRejectedValueOnce(Error("controlled same-owner refresh"))
+  act(() => invalidate(skillResourceKey(SKILLS_CATALOG_KEY, confirmed)))
+  await waitFor(() => expect(listSkillCatalog).toHaveBeenCalledTimes(3))
+  expect(screen.getByRole("button", { name: `查看详情 ${first.name}` })).toBe(card)
+  view.rerender(content({ ...base, listSkillCatalog: vi.fn(() => new Promise<typeof catalog>(() => undefined)) }))
+  expect(screen.queryByRole("button", { name: `查看详情 ${first.name}` })).toBeNull()
+  expect(screen.queryByTestId("skills-catalog-empty")).toBeNull()
+})

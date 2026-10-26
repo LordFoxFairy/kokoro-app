@@ -174,3 +174,47 @@ it("keeps marketplace artwork until authenticated media loads and retires it acr
   expect(replacement).not.toBeVisible()
   expect(replacement.parentElement!.querySelector("svg")).not.toBeNull()
 })
+
+
+import { invalidate } from "@/lib/query"
+import { __resetResourceStore } from "@/lib/query/resource-store"
+import { SKILL_CATALOG_RESOURCE_KEY } from "@/ui/skills/manus-skill-client"
+
+it("keeps the marketplace scaffold quiet for unknown reads, retains confirmed cards on refresh failure and fences a retired actor's late result", async () => {
+  __resetResourceStore()
+  const response = (body: unknown) => Response.json(body, { headers: { "cache-control": "private, no-store", "x-request-id": "quiet-marketplace" } })
+  const card = { skillId: "quiet-market-series", displayName: "Confirmed marketplace card", currentVersion: { versionUid: "quiet-market-revision" } }
+  let finish!: (value: Response) => void, finishRetired!: (value: Response) => void, reject!: (error: Error) => void, calls = 0
+  vi.spyOn(globalThis, "fetch").mockImplementation(async input => {
+    if (String(input).endsWith("ListSkills")) return response({ userAddedSkills: [], officialSkills: [] })
+    calls++
+    if (calls === 1) return new Promise<Response>(resolve => { finish = resolve })
+    if (calls === 3) return new Promise<Response>(resolve => { finishRetired = resolve })
+    if (calls === 2) return new Promise<Response>((_, fail) => { reject = fail })
+    return new Promise<Response>(() => undefined)
+  })
+  const content = (subject = "quiet-market-a") => <LocaleProvider><KokoroSkillsSurface onPrompt={vi.fn()} preview={false} projectReadBoundary={{ admitted: true, subject, generation: 1 }} /></LocaleProvider>
+  const view = render(content())
+  await waitFor(() => expect(finish).toBeTypeOf("function"))
+  expect(screen.getByRole("searchbox", { name: "搜索技能" })).toBeVisible()
+  expect(view.container.querySelector('[data-slot="skeleton"]')).toBeNull()
+  expect(screen.queryByTestId("skills-catalog-empty")).toBeNull()
+  await act(async () => { finish(response({ skills: [card], tagOptions: {} })) })
+  const trigger = await screen.findByRole("button", { name: card.displayName })
+  act(() => invalidate(SKILL_CATALOG_RESOURCE_KEY))
+  await waitFor(() => expect(reject).toBeTypeOf("function"))
+  expect(screen.getByRole("button", { name: card.displayName })).toBe(trigger)
+  await act(async () => { reject(Error("controlled passive refresh failure")) })
+  expect(screen.getByRole("button", { name: card.displayName })).toBe(trigger)
+  expect(screen.queryByRole("button", { name: "重试" })).toBeNull()
+  expect(screen.queryByRole("alert")).toBeNull()
+  act(() => invalidate(SKILL_CATALOG_RESOURCE_KEY))
+  await waitFor(() => expect(calls).toBe(3))
+  view.rerender(content("quiet-market-b"))
+  await waitFor(() => expect(calls).toBe(4))
+  await act(async () => { finishRetired(response({ skills: [{ ...card, displayName: "Retired actor late card" }], tagOptions: {} })) })
+  expect(screen.queryByRole("button", { name: "Retired actor late card" })).toBeNull()
+  expect(screen.queryByRole("button", { name: card.displayName })).toBeNull()
+  expect(screen.queryByTestId("skills-catalog-empty")).toBeNull()
+  expect(screen.getByRole("searchbox", { name: "搜索技能" })).toBeVisible()
+})
