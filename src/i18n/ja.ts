@@ -156,6 +156,7 @@ export const ja: Partial<Record<MessageKey, string>> = {
   "skills.personal.enabled": "有効",
   "skills.personal.disabled": "無効",
   "skills.personal.remove": "インストールを削除",
+  "skills.personal.removeDescription": "このアカウントのインストールのみを削除します。元のスキルとバージョン履歴は削除されません。再追加するには、そのバージョンが引き続き利用可能である必要があります。",
   "skills.personal.empty": "条件に一致するインストールはありません",
   "skills.personal.unknown": "結果は不明です。再試行では新しい操作を作らず、元のリクエストを再利用します。",
   "skills.personal.confirmed": "コマンドは確認済みです。現在の状態を確認してください。",

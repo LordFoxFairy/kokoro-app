@@ -138,6 +138,7 @@ export const fr: Partial<Record<MessageKey, string>> = {
   "skills.personal.enabled": "Activé",
   "skills.personal.disabled": "Désactivé",
   "skills.personal.remove": "Supprimer l’installation",
+  "skills.personal.removeDescription": "Seule cette installation sera retirée de votre compte. La compétence source et son historique ne seront pas supprimés. Pour la rajouter, cette version doit rester disponible.",
   "skills.personal.empty": "Aucune installation ne correspond aux filtres",
   "skills.personal.unknown": "Résultat inconnu. Réessayer réutilise la demande initiale sans créer une nouvelle opération.",
   "skills.personal.confirmed": "Commande confirmée ; l’état actuel reste à vérifier.",

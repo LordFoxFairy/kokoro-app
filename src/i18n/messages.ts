@@ -160,6 +160,7 @@ export const zh = {
   "skills.personal.enabled": "已启用",
   "skills.personal.disabled": "已停用",
   "skills.personal.remove": "移除安装",
+  "skills.personal.removeDescription": "仅移除此账号的安装，不会删除源技能及历史版本。重新添加时需要当前版本仍可获取。",
   "skills.personal.empty": "暂无符合筛选条件的安装",
   "skills.personal.emptyState": "尚无技能",
   "skills.personal.unknown": "结果未知。重试将复用原请求，不会创建新操作。",

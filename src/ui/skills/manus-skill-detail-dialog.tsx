@@ -128,6 +128,7 @@ type Props = {
   onTry: (prompt: string, selection: SkillCatalogCard) => boolean
   returnFocusRef?: RefObject<HTMLElement | null>
   onManagePersonal?: (operation: PersonalSkillOperation, installation: PersonalInstallation) => void
+  onRemoveInstallation?: (installation: PersonalInstallation) => void
   personalManagementBusy?: boolean
 }
 
@@ -170,7 +171,7 @@ function displayDate(value: string | undefined, locale: string): string | null {
 /** A stable, server-backed catalog detail dialog. It never synthesizes prompts,
  * source state or package identifiers in the browser. Package text comes only
  * from the admitted published-revision inspection boundary. */
-export function ManusSkillDetailDialog({ detailSource = "catalog", preview = false, pending = false, pendingFailed = false, pendingBusy = false, onLoadMore, onRetryPending, readBoundary: boundary, skill, open, busy = false, installationState, actionFailed = false, publisherLabel, categoryLabels = [], onOpenChange, onAdd, onTry, returnFocusRef, sharedSummary, onAddShared, installationNotice, onRetryInstallation, onManagePersonal, personalManagementBusy = false }: Props) {
+export function ManusSkillDetailDialog({ detailSource = "catalog", preview = false, pending = false, pendingFailed = false, pendingBusy = false, onLoadMore, onRetryPending, readBoundary: boundary, skill, open, busy = false, installationState, actionFailed = false, publisherLabel, categoryLabels = [], onOpenChange, onAdd, onTry, returnFocusRef, sharedSummary, onAddShared, installationNotice, onRetryInstallation, onManagePersonal, onRemoveInstallation, personalManagementBusy = false }: Props) {
   const { locale, t } = useLocale()
   const shareIntents = useRef(new Map<string, { identity: string; ack: ShareAck | null; unknown: boolean; pending: boolean; controller: AbortController | null }>())
   type ShareState = "pending" | "copied" | "copyFailed" | "failed" | "unknown"
@@ -558,8 +559,10 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
           onDownload={() => void download()}
           shareLabel={t("skills.detailShare")}
           downloadLabel={t("skills.detailDownloadShort")}
-          personalActions={!preview && detailSource === "installation" && installation?.product.source_kind === "personal" && installation.installed && ["active", "disabled", "withdrawn", "quarantined"].includes(installation.source_status) && boundary.admitted && boundary.subject !== null && onManagePersonal
-            ? <PersonalSkillActions writable={["active", "disabled"].includes(installation.source_status)} disabled={personalManagementBusy} onSelect={operation => onManagePersonal(operation, installation)} /> : undefined}
+          personalActions={!preview && detailSource === "installation" && installation?.installed && ["active", "disabled", "withdrawn", "quarantined"].includes(installation.source_status) && boundary.admitted && boundary.subject !== null && (onRemoveInstallation || installation.product.source_kind === "personal" && onManagePersonal)
+            ? <PersonalSkillActions writable={["active", "disabled"].includes(installation.source_status)} disabled={personalManagementBusy}
+              {...(installation.product.source_kind === "personal" && onManagePersonal ? { onSelect: (operation: PersonalSkillOperation) => onManagePersonal(operation, installation) } : {})}
+              {...(onRemoveInstallation ? { onRemoveInstallation: () => onRemoveInstallation(installation) } : {})} /> : undefined}
         />
         {readerOpen ? readerHeader : <SkillCoverMedia src={open && boundary.admitted && boundary.subject !== null ? cover : undefined} identity={identity ?? "closed"} sizes="180px">{(media, loaded) => <DialogHeader className={styles.hero} data-has-cover={loaded}>
           <div className={styles.copy}>

@@ -8,6 +8,8 @@ import { createSkillInstallationClient, type HubClient } from "@/hub/client";
 import { Button } from "@/components/ui/button";
 import { createSkillInstallationUpdateFlow } from "./skill-installation-update-flow";
 import { SkillInstallationUpdateDialog } from "./skill-installation-update-dialog";
+import { createSkillInstallationRemoveFlow } from "./skill-installation-remove-flow";
+import { SkillInstallationRemoveDialog } from "./skill-installation-remove-dialog";
 import type { PersonalInstallation, SkillCard, SkillCatalogCard } from "@/hub/schemas";
 import { isRequiredLockError } from "@/hub/rules";
 import { useT } from "@/i18n/context";
@@ -198,12 +200,18 @@ function ActorSkillsContent(props: SkillsContentProps) {
   // or current installation here; the flow retires those on every recheck.
   const updateFlow = useMemo(() => createSkillInstallationUpdateFlow({ client: createSkillInstallationClient(), boundary: { admitted: false, subject, generation: 0 } }), [subject]);
   const updateState = useSyncExternalStore(updateFlow.subscribe, updateFlow.getSnapshot, updateFlow.getSnapshot);
+  const removeFlow = useMemo(() => createSkillInstallationRemoveFlow({ client: createSkillInstallationClient(), boundary: { admitted: false, subject, generation: 0 } }), [subject]);
+  const removeState = useSyncExternalStore(removeFlow.subscribe, removeFlow.getSnapshot, removeFlow.getSnapshot);
+  const [removeOpen, setRemoveOpen] = useState<{ subject: string | null; open: boolean }>({ subject: null, open: false });
+  const removeReturnFocus = useRef<HTMLElement | null>(null);
   const [updateOpen, setUpdateOpen] = useState<{ subject: string | null; open: boolean }>({ subject: null, open: false });
   const [personalSelection, setPersonalSelection] = useState<PersonalSkillSelection | null>(null);
   const updateReturnFocus = useRef<HTMLElement | null>(null);
   const updateFallbackFocus = useRef<HTMLInputElement | null>(null);
   useLayoutEffect(() => updateFlow.retain({ admitted, subject, generation }), [updateFlow, admitted, subject, generation]);
+  useLayoutEffect(() => removeFlow.retain({ admitted, subject, generation }), [removeFlow, admitted, subject, generation]);
   const updateCurrent = props.readBoundary.admitted && subject !== null && updateFlow.matches(props.readBoundary);
+  const removeCurrent = props.readBoundary.admitted && subject !== null && removeFlow.matches(props.readBoundary);
   const invalidateUpdateViews = useCallback(() => {
     invalidate(skillResourceKey(SKILLS_KEY, props.client));
     invalidate(skillResourceKey(SKILLS_CATALOG_KEY, props.client));
@@ -212,9 +220,12 @@ function ActorSkillsContent(props: SkillsContentProps) {
   useEffect(() => {
     if (updateCurrent && updateState.acknowledged) invalidateUpdateViews();
   }, [updateCurrent, updateState.acknowledged, invalidateUpdateViews]);
-  const updateLocked = () => personalSelection !== null || updateFlow.getSnapshot().kind !== "idle";
+  useEffect(() => {
+    if (removeCurrent && removeState.acknowledged) invalidateUpdateViews();
+  }, [removeCurrent, removeState.acknowledged, invalidateUpdateViews]);
+  const updateLocked = () => personalSelection !== null || updateFlow.getSnapshot().kind !== "idle" || removeFlow.getSnapshot().kind !== "idle";
   const openUpdate = (skill: SkillCard, source: HTMLElement) => {
-    if (personalSelection !== null || !updateCurrent || !updateFlow.select(skill, props.readBoundary)) return false;
+    if (updateLocked() || !updateCurrent || !updateFlow.select(skill, props.readBoundary)) return false;
     updateReturnFocus.current = source;
     setUpdateOpen({ subject, open: true });
     void updateFlow.readCurrent(props.readBoundary);
@@ -224,11 +235,20 @@ function ActorSkillsContent(props: SkillsContentProps) {
     if (props.preview || !updateCurrent || updateLocked()) return;
     setPersonalSelection({ operation, source_ref: installation.source_ref, series_id: installation.series_id, revision: installation.revision });
   };
+  const openRemove = (installation: PersonalInstallation, source: HTMLElement | null) => {
+    if (props.preview || !removeCurrent || updateLocked() || !removeFlow.select(installation, props.readBoundary)) return false;
+    removeReturnFocus.current = source;
+    setRemoveOpen({ subject, open: true });
+    return true;
+  };
   return <>
     {personalSelection !== null ? <PersonalSkillManagement key={JSON.stringify(personalSelection)} selection={personalSelection} boundary={props.readBoundary} onReleased={() => setPersonalSelection(null)} onConfirmed={() => { if(personalSelection.operation === "delete")setPersonalSelection(null); invalidateUpdateViews(); }} onSelectPublished={selection => { if (updateCurrent) setPersonalSelection(selection); }} returnFocusRef={updateFallbackFocus} /> : null}
     {updateCurrent && updateState.kind !== "idle" ? <div className={styles.updateNotice} role="status"><span>{t(updateState.acknowledged ? "skills.update.confirmedNotice" : "skills.update.pendingNotice")}</span><Button type="button" variant="outline" onClick={event => { updateReturnFocus.current = event.currentTarget; setUpdateOpen({ subject, open: true }); void updateFlow.readCurrent(props.readBoundary); }}>{t("skills.update.resume")}</Button></div> : null}
-    <InstalledSkillsContent {...props} onUpdateSkill={openUpdate} updateFallbackFocus={updateFallbackFocus} updateLocked={updateLocked} updatePending={updateState.kind !== "idle"} onManagePersonal={managePersonal} personalManagementBusy={personalSelection !== null || updateState.kind !== "idle"} />
+    {removeCurrent && removeState.kind !== "idle" ? <div className={styles.updateNotice} role="status"><span>{t("skills.lifecycle.pending")}</span><Button type="button" variant="outline" onClick={() => setRemoveOpen({ subject, open: true })}>{t("skills.lifecycle.resume")}</Button></div> : null}
+    <InstalledSkillsContent {...props} onUpdateSkill={openUpdate} onRemoveSkill={openRemove} updateFallbackFocus={updateFallbackFocus} updateLocked={updateLocked} updatePending={updateState.kind !== "idle" || removeState.kind !== "idle"} onManagePersonal={managePersonal} personalManagementBusy={updateLocked()} />
     <SkillInstallationUpdateDialog flow={updateFlow} boundary={props.readBoundary} state={updateState} admitted={updateCurrent} open={updateOpen.subject === subject && updateOpen.open} onOpenChange={open => { if (updateFlow.matches(props.readBoundary)) setUpdateOpen({ subject, open }); }} onAbandoned={invalidateUpdateViews} returnFocusRef={updateReturnFocus} fallbackFocusRef={updateFallbackFocus} />
+    <SkillInstallationRemoveDialog flow={removeFlow} boundary={props.readBoundary} state={removeState} open={removeOpen.subject === subject && removeOpen.open}
+      onOpenChange={open => { if (removeFlow.matches(props.readBoundary)) setRemoveOpen({ subject, open }); }} returnFocusRef={removeReturnFocus} fallbackFocusRef={updateFallbackFocus} />
   </>;
 }
 
@@ -258,7 +278,8 @@ function InstalledSkillsContent({
   updatePending,
   onManagePersonal,
   personalManagementBusy,
-}: SkillsContentProps & { onManagePersonal: (operation: PersonalSkillOperation, installation: PersonalInstallation) => void; personalManagementBusy: boolean; onUpdateSkill: (skill: SkillCard, source: HTMLElement) => boolean; updateFallbackFocus: RefObject<HTMLInputElement | null>; updateLocked: () => boolean; updatePending: boolean }) {
+  onRemoveSkill,
+}: SkillsContentProps & { onManagePersonal: (operation: PersonalSkillOperation, installation: PersonalInstallation) => void; personalManagementBusy: boolean; onUpdateSkill: (skill: SkillCard, source: HTMLElement) => boolean; onRemoveSkill: (installation: PersonalInstallation, source: HTMLElement | null) => boolean; updateFallbackFocus: RefObject<HTMLInputElement | null>; updateLocked: () => boolean; updatePending: boolean }) {
   // Importers retire their own facts/work on every admission/generation change.
   // Keep only window intent here; the actor-keyed parent clears it on switch.
   const [githubOpen, setGithubOpen] = useState(false);
@@ -542,6 +563,10 @@ function InstalledSkillsContent({
             if (liveOwner.current !== owner || !admitted || personalManagementBusy) return;
             onManagePersonal(operation, installation);
             setDetailActionFact(null); setDetailIntent(null);
+          }}
+          onRemoveInstallation={installation => {
+            if (liveOwner.current !== owner || !admitted || mutationBusyRef.current || !onRemoveSkill(installation, detailReturnFocusRef.current)) return;
+            setEnabledOverrides(new Map()); setInstalledOverrides(new Map()); setDetailIntent(null);
           }}
           onAdd={(skill) =>
             void onSetEnabled(

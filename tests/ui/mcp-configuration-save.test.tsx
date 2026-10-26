@@ -16,6 +16,338 @@ import { ProductReadRecheckProvider, type ProductRead401 } from "@/ui/auth/produ
 beforeEach(() => localStorage.setItem("kokoro.locale", "zh"))
 afterEach(() => { cleanup(); vi.useRealTimers() })
 
+async function jsonConfigurationFixture(unknown = false, icons?: McpIconClient, transport: McpPrivateServer["transport"] = "streamable_http") {
+  let version = 3, name = "JSON editor MCP", url = "https://mcp.example.test/mcp", lostAck = false
+  const server = (): McpPrivateServer => ({ availability: "available", server_id: "json-editor-server", display_name: name,
+    server_url: url, notes: "Keep original note", status: "registered", state_version: String(version),
+    headers: [{ name: "x-saved-key", configured: true, status: "active", state_version: "2" }], transport,
+    prepare_status: "ready", declarations: [], declarations_available: true, declaration_digest: "a".repeat(64), connection_id: "json-editor-connection" })
+  const connector = (): McpConnector => ({ availability: "available", connector_id: "json-editor-connector", server_id: "json-editor-server",
+    provider_key: "json-editor-provider", connector_type: "mcp", display_name: name, status: "active", enabled: true, approved_scopes: [], state_version: String(version) })
+  const update = vi.fn<NonNullable<ReturnType<typeof createHubClient>["updatePrivateMcpServer"]>>(async (_id, input) => {
+    if (unknown && lostAck) return { server: server(), connector: connector(), replayed: true }
+    version++; name = input.display_name ?? name; url = input.server_url ?? url
+    if (unknown) { lostAck = true; throw Error("lost JSON update ACK") }
+    return { server: server(), connector: connector(), replayed: false }
+  })
+  const prepare = vi.fn(), register = vi.fn(), importJson = vi.fn()
+  const hub = { ...createHubClient(), ...(icons ? { mcpIcons: icons } : {}), updatePrivateMcpServer: update, preparePrivateMcpServer: prepare,
+    registerPrivateMcpServer: register, importPrivateMcpJson: importJson,
+    getPrivateMcpServer: vi.fn(async () => server()), getMcpConnector: vi.fn(async () => connector()),
+    listMcpConnectors: vi.fn(async () => ({ items: [connector()], next_cursor: null })),
+    listMcpConnectorProviders: vi.fn(async () => ({ items: [], next_cursor: null })),
+    listCustomApis: vi.fn(async () => ({ items: [], page: { next_cursor: null } })) }
+  let boundary = { admitted: true, generation: 1, subject: "json-editor-actor" }
+  const content = () => <LocaleProvider><ConnectorCommandProvider client={hub} boundary={boundary}>
+    <McpContent client={hub} initialView="connections" readBoundary={boundary} />
+  </ConnectorCommandProvider></LocaleProvider>
+  const view = render(content())
+  fireEvent.click(await screen.findByRole("button", { name }))
+  const detail = await screen.findByRole("dialog", { name })
+  fireEvent.keyDown(within(detail).getByRole("button", { name: "管理" }), { key: "Enter" })
+  fireEvent.click(await screen.findByRole("menuitem", { name: "编辑配置" }))
+  const openJson = async () => {
+    fireEvent.keyDown(screen.getByRole("button", { name: "管理" }), { key: "Enter" })
+    const entry = await screen.findByRole("menuitem", { name: "编辑 JSON" })
+    expect(entry).not.toHaveAttribute("aria-disabled", "true")
+    fireEvent.click(entry)
+    return screen.findByRole("dialog", { name: "编辑配置 JSON" })
+  }
+  return { update, prepare, register, importJson, openJson, change: (value: Partial<typeof boundary>) => {
+    boundary = { ...boundary, ...value }; view.rerender(content())
+  } }
+}
+
+it.each(["cancel", "escape"] as const)("opens the real JSON editor without saved secrets and %s preserves the outer draft with zero writes", async close => {
+  const state = await jsonConfigurationFixture()
+  fireEvent.change(screen.getByRole("textbox", { name: "备注 （可选）" }), { target: { value: "Keep unsaved note" } })
+  const dialog = await state.openJson()
+  const text = within(dialog).getByRole("textbox")
+  expect(JSON.parse((text as HTMLTextAreaElement).value)).toEqual({ mcpServers: { "JSON editor MCP": { type: "streamableHttp", url: "https://mcp.example.test/mcp" } } })
+  expect((text as HTMLTextAreaElement).value).not.toContain("x-saved-key")
+  fireEvent.change(text, { target: { value: '{"mcpServers":{}}' } })
+  if (close === "cancel") fireEvent.click(within(dialog).getByRole("button", { name: "取消" }))
+  else fireEvent.keyDown(dialog, { key: "Escape" })
+  await waitFor(() => expect(screen.queryByRole("dialog", { name: "编辑配置 JSON" })).toBeNull())
+  expect(screen.getByRole("textbox", { name: "备注 （可选）" })).toHaveValue("Keep unsaved note")
+  expect(state.update).not.toHaveBeenCalled(); expect(state.prepare).not.toHaveBeenCalled()
+  expect(state.register).not.toHaveBeenCalled(); expect(state.importJson).not.toHaveBeenCalled()
+})
+
+it("copies the exact current JSON input without saving, importing or connecting, and clears copy feedback when edited", async () => {
+  const previous = Object.getOwnPropertyDescriptor(navigator, "clipboard")
+  const writeText = vi.fn(async () => {})
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } })
+  try {
+    const state = await jsonConfigurationFixture()
+    const dialog = await state.openJson()
+    const original = (within(dialog).getByRole("textbox") as HTMLTextAreaElement).value
+    expect(original).not.toContain("x-saved-key")
+    const input = '  { "mcpServers": { "User input": { "headers": {"x-explicit": "user-entered-value"} } } }\n'
+    fireEvent.change(within(dialog).getByRole("textbox"), { target: { value: input } })
+    fireEvent.click(within(dialog).getByRole("button", { name: "复制到剪贴板" }))
+    await within(dialog).findByText("已复制到剪贴板")
+    expect(writeText).toHaveBeenCalledExactlyOnceWith(input)
+    expect(within(dialog).getByRole("textbox")).toHaveValue(input)
+    expect(screen.getByRole("dialog", { name: "编辑配置 JSON" })).toBeVisible()
+    expect(state.update).not.toHaveBeenCalled(); expect(state.prepare).not.toHaveBeenCalled()
+    expect(state.register).not.toHaveBeenCalled(); expect(state.importJson).not.toHaveBeenCalled()
+    fireEvent.change(within(dialog).getByRole("textbox"), { target: { value: original } })
+    expect(within(dialog).queryByText("已复制到剪贴板")).toBeNull()
+  } finally {
+    if (previous) Object.defineProperty(navigator, "clipboard", previous)
+    else Reflect.deleteProperty(navigator, "clipboard")
+  }
+})
+
+it("keeps a pending JSON copy live across a same-scope parent render without treating it as save", async () => {
+  const previous = Object.getOwnPropertyDescriptor(navigator, "clipboard")
+  let finish!: () => void
+  const writeText = vi.fn(() => new Promise<void>(resolve => { finish = resolve }))
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } })
+  try {
+    const state = await jsonConfigurationFixture()
+    const dialog = await state.openJson()
+    fireEvent.click(within(dialog).getByRole("button", { name: "复制到剪贴板" }))
+    state.change({})
+    await act(async () => { finish() })
+    expect(await within(dialog).findByText("已复制到剪贴板")).toBeVisible()
+    expect(within(dialog).getByRole("button", { name: "复制到剪贴板" })).toBeEnabled()
+    expect(state.update).not.toHaveBeenCalled()
+  } finally {
+    if (previous) Object.defineProperty(navigator, "clipboard", previous)
+    else Reflect.deleteProperty(navigator, "clipboard")
+  }
+})
+
+it("does not label newer JSON as copied when the user edits during an outstanding clipboard write", async () => {
+  const previous = Object.getOwnPropertyDescriptor(navigator, "clipboard")
+  let finish!: () => void
+  const writeText = vi.fn(() => new Promise<void>(resolve => { finish = resolve }))
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } })
+  try {
+    const state = await jsonConfigurationFixture()
+    const dialog = await state.openJson()
+    const original = (within(dialog).getByRole("textbox") as HTMLTextAreaElement).value
+    fireEvent.click(within(dialog).getByRole("button", { name: "复制到剪贴板" }))
+    fireEvent.change(within(dialog).getByRole("textbox"), { target: { value: "newer user input" } })
+    expect(within(dialog).getByRole("button", { name: "复制到剪贴板" })).toBeDisabled()
+    await act(async () => { finish() })
+    expect(writeText).toHaveBeenCalledExactlyOnceWith(original)
+    expect(within(dialog).getByRole("textbox")).toHaveValue("newer user input")
+    expect(within(dialog).queryByText("已复制到剪贴板")).toBeNull()
+    expect(within(dialog).getByRole("button", { name: "复制到剪贴板" })).toBeEnabled()
+    expect(state.update).not.toHaveBeenCalled()
+  } finally {
+    if (previous) Object.defineProperty(navigator, "clipboard", previous)
+    else Reflect.deleteProperty(navigator, "clipboard")
+  }
+})
+
+it.each(["missing", "rejected"] as const)("keeps clipboard %s failure local without changing JSON or saving it", async failure => {
+  const previous = Object.getOwnPropertyDescriptor(navigator, "clipboard")
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: failure === "missing" ? undefined : { writeText: vi.fn(async () => { throw Error("clipboard denied") }) } })
+  try {
+    const state = await jsonConfigurationFixture()
+    const dialog = await state.openJson()
+    const input = (within(dialog).getByRole("textbox") as HTMLTextAreaElement).value
+    fireEvent.click(within(dialog).getByRole("button", { name: "复制到剪贴板" }))
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("复制失败，请重试。")
+    expect(within(dialog).getByRole("textbox")).toHaveValue(input)
+    expect(within(dialog).getByRole("button", { name: "保存" })).toBeEnabled()
+    expect(state.update).not.toHaveBeenCalled(); expect(state.prepare).not.toHaveBeenCalled()
+    expect(state.register).not.toHaveBeenCalled(); expect(state.importJson).not.toHaveBeenCalled()
+  } finally {
+    if (previous) Object.defineProperty(navigator, "clipboard", previous)
+    else Reflect.deleteProperty(navigator, "clipboard")
+  }
+})
+
+it("disables JSON copying while its original save is unknown without treating copying as save recovery", async () => {
+  const previous = Object.getOwnPropertyDescriptor(navigator, "clipboard")
+  const writeText = vi.fn(async () => {})
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } })
+  try {
+    const state = await jsonConfigurationFixture(true)
+    const dialog = await state.openJson()
+    fireEvent.change(within(dialog).getByRole("textbox"), { target: { value: '{"mcpServers":{"Changed":{"type":"streamableHttp","url":"https://mcp.example.test/changed"}}}' } })
+    fireEvent.click(within(dialog).getByRole("button", { name: "保存" }))
+    await within(dialog).findByRole("button", { name: "重试原请求" })
+    expect(within(dialog).getByRole("button", { name: "复制到剪贴板" })).toBeDisabled()
+    fireEvent.click(within(dialog).getByRole("button", { name: "复制到剪贴板" }))
+    expect(writeText).not.toHaveBeenCalled()
+    expect(state.update).toHaveBeenCalledOnce()
+  } finally {
+    if (previous) Object.defineProperty(navigator, "clipboard", previous)
+    else Reflect.deleteProperty(navigator, "clipboard")
+  }
+})
+
+it.each(["close", "actor", "generation", "admission"] as const)("retires pending JSON clipboard feedback on %s and never writes a business command", async retirement => {
+  const previous = Object.getOwnPropertyDescriptor(navigator, "clipboard")
+  let finish!: () => void
+  const writeText = vi.fn(() => new Promise<void>(resolve => { finish = resolve }))
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } })
+  try {
+    const state = await jsonConfigurationFixture()
+    const dialog = await state.openJson()
+    fireEvent.click(within(dialog).getByRole("button", { name: "复制到剪贴板" }))
+    expect(writeText).toHaveBeenCalledOnce()
+    expect(within(dialog).getByRole("button", { name: "复制到剪贴板" })).toBeDisabled()
+    if (retirement === "close") fireEvent.keyDown(dialog, { key: "Escape" })
+    else state.change(retirement === "actor" ? { subject: "next-copy-actor" } : retirement === "generation" ? { generation: 2 } : { admitted: false })
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "编辑配置 JSON" })).toBeNull())
+    if (retirement === "close") await state.openJson()
+    await act(async () => { finish() })
+    expect(screen.queryByText("已复制到剪贴板")).toBeNull()
+    expect(state.update).not.toHaveBeenCalled(); expect(state.prepare).not.toHaveBeenCalled()
+    expect(state.register).not.toHaveBeenCalled(); expect(state.importJson).not.toHaveBeenCalled()
+  } finally {
+    if (previous) Object.defineProperty(navigator, "clipboard", previous)
+    else Reflect.deleteProperty(navigator, "clipboard")
+  }
+})
+
+it.each([false, true])("JSON Save uses one existing Update identity and preserves omitted secrets/notes without Import or Prepare (unknown=%s)", async unknown => {
+  const state = await jsonConfigurationFixture(unknown)
+  const dialog = await state.openJson()
+  fireEvent.change(within(dialog).getByRole("textbox"), { target: { value: JSON.stringify({ mcpServers: { "JSON renamed": { type: "streamableHttp", url: "https://mcp.example.test/changed" } } }) } })
+  fireEvent.click(within(dialog).getByRole("button", { name: "保存" }))
+  await waitFor(() => expect(state.update).toHaveBeenCalledOnce())
+  expect(state.update.mock.calls[0]?.[1]).toEqual({ expected_state_version: "3", display_name: "JSON renamed", server_url: "https://mcp.example.test/changed" })
+  if (unknown) {
+    expect(within(dialog).getByRole("textbox")).toHaveAttribute("readonly")
+    fireEvent.click(await within(dialog).findByRole("button", { name: "重试原请求" }))
+    await waitFor(() => expect(state.update).toHaveBeenCalledTimes(2))
+    expect(state.update.mock.calls[1]?.slice(0, 3)).toEqual(state.update.mock.calls[0]?.slice(0, 3))
+  }
+  await waitFor(() => expect(screen.queryByRole("dialog", { name: "编辑配置 JSON" })).toBeNull())
+  expect(screen.getByRole("textbox", { name: "备注 （可选）" })).toHaveValue("Keep original note")
+  expect(state.prepare).not.toHaveBeenCalled(); expect(state.register).not.toHaveBeenCalled(); expect(state.importJson).not.toHaveBeenCalled()
+})
+
+it.each([{}, { "x-saved-key": "explicit-new-value" }])("JSON headers are explicit upserts, never omission-based removal (%j)", async headers => {
+  const state = await jsonConfigurationFixture()
+  const dialog = await state.openJson()
+  fireEvent.change(within(dialog).getByRole("textbox"), { target: { value: JSON.stringify({ mcpServers: { "JSON renamed": { type: "streamableHttp", url: "https://mcp.example.test/mcp", headers } } }) } })
+  fireEvent.click(within(dialog).getByRole("button", { name: "保存" }))
+  await waitFor(() => expect(state.update).toHaveBeenCalledOnce())
+  expect(state.update.mock.calls[0]?.[1]).toEqual({ expected_state_version: "3", display_name: "JSON renamed",
+    ...(Object.keys(headers).length ? { header_upserts: [{ name: "x-saved-key", value: "explicit-new-value" }] } : {}) })
+  expect(state.prepare).not.toHaveBeenCalled()
+})
+
+it.each(["cancel", "escape"] as const)("leaving configuration by %s returns to the same detail before closing its list entry", async close => {
+  const state = await jsonConfigurationFixture()
+  fireEvent.change(screen.getByRole("textbox", { name: "备注 （可选）" }), { target: { value: "discard local draft" } })
+  fireEvent.click(screen.getByRole("button", { name: "添加自定义 header" }))
+  fireEvent.change(screen.getByLabelText("Header name"), { target: { value: "x-unsaved" } })
+  fireEvent.change(screen.getByLabelText("Header value"), { target: { value: "discard-local-value" } })
+  const configuration = screen.getByRole("dialog", { name: "MCP 配置" })
+  if (close === "cancel") fireEvent.click(within(configuration).getByRole("button", { name: "取消" }))
+  else fireEvent.keyDown(configuration, { key: "Escape" })
+  const detail = await screen.findByRole("dialog", { name: "JSON editor MCP" })
+  expect(within(detail).getByRole("button", { name: "json-editor-server" })).toBeVisible()
+  await waitFor(() => expect(within(detail).getByRole("button", { name: "管理" })).toHaveFocus())
+  fireEvent.keyDown(within(detail).getByRole("button", { name: "管理" }), { key: "Enter" })
+  fireEvent.click(await screen.findByRole("menuitem", { name: "编辑配置" }))
+  expect(screen.getByRole("textbox", { name: "备注 （可选）" })).toHaveValue("Keep original note")
+  expect(screen.queryByLabelText("Header value")).toBeNull()
+  fireEvent.keyDown(screen.getByRole("dialog", { name: "MCP 配置" }), { key: "Escape" })
+  fireEvent.keyDown(screen.getByRole("dialog", { name: "JSON editor MCP" }), { key: "Escape" })
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull())
+  expect(await screen.findByRole("button", { name: "JSON editor MCP" })).toBeVisible()
+  expect(state.update).not.toHaveBeenCalled(); expect(state.prepare).not.toHaveBeenCalled()
+})
+
+it.each(["actor", "generation", "admission"] as const)("an open JSON editor retires on %s without reusing its raw secret draft", async retirement => {
+  const state = await jsonConfigurationFixture()
+  const dialog = await state.openJson()
+  fireEvent.change(within(dialog).getByRole("textbox"), { target: { value: '{"mcpServers":{"A":{"type":"streamableHttp","url":"https://mcp.example.test/mcp","headers":{"x-new":"retired-private-input"}}}}' } })
+  state.change(retirement === "actor" ? { subject: "other-json-actor" } : retirement === "generation" ? { generation: 2 } : { admitted: false })
+  await waitFor(() => expect(screen.queryByRole("dialog", { name: "编辑配置 JSON" })).toBeNull())
+  expect(screen.queryByDisplayValue(/retired-private-input/)).toBeNull()
+  expect(state.update).not.toHaveBeenCalled(); expect(state.prepare).not.toHaveBeenCalled()
+})
+
+it("JSON cancellation preserves a staged icon; leaving configuration releases it once without leaving the object's detail", async () => {
+  const icons = readyIconClient(configuredIcon(Date.now() + 60_000, "replacement"))
+  icons.cancel.mockImplementation(async () => ({ intent: { ...(await icons.get.mock.results[0]!.value).intent, state: "released", state_version: "4" }, replayed: false }))
+  const state = await jsonConfigurationFixture(false, icons)
+  await chooseReplacementIcon()
+  const dialog = await state.openJson()
+  fireEvent.click(within(dialog).getByRole("button", { name: "取消" }))
+  expect(screen.getByRole("img", { name: "连接器图标" })).toHaveAttribute("src", "https://storage.example.test/icon-replacement")
+  expect(icons.cancel).not.toHaveBeenCalled()
+  fireEvent.keyDown(screen.getByRole("dialog", { name: "MCP 配置" }), { key: "Escape" })
+  expect(await screen.findByRole("dialog", { name: "JSON editor MCP" })).toBeVisible()
+  await waitFor(() => expect(icons.cancel).toHaveBeenCalledOnce())
+  expect(icons.cancel.mock.calls[0]?.slice(0, 2)).toEqual(["22345678-1234-1234-1234-123456789abc", { expected_state_version: "3" }])
+  expect(state.update).not.toHaveBeenCalled(); expect(state.prepare).not.toHaveBeenCalled()
+})
+
+it("closing JSON and configuration preserves the unknown original update for explicit same-key recovery from detail", async () => {
+  const state = await jsonConfigurationFixture(true)
+  const dialog = await state.openJson()
+  fireEvent.change(within(dialog).getByRole("textbox"), { target: { value: JSON.stringify({ mcpServers: { "JSON renamed": { type: "streamableHttp", url: "https://mcp.example.test/mcp" } } }) } })
+  fireEvent.click(within(dialog).getByRole("button", { name: "保存" }))
+  await within(dialog).findByRole("button", { name: "重试原请求" })
+  fireEvent.click(within(dialog).getByRole("button", { name: "取消" }))
+  fireEvent.keyDown(screen.getByRole("dialog", { name: "MCP 配置" }), { key: "Escape" })
+  const detail = screen.getByRole("dialog", { name: "JSON editor MCP" })
+  expect(state.update).toHaveBeenCalledOnce()
+  fireEvent.click(within(detail).getByRole("button", { name: "重试原请求" }))
+  await waitFor(() => expect(state.update).toHaveBeenCalledTimes(2))
+  expect(state.update.mock.calls[1]?.slice(0, 3)).toEqual(state.update.mock.calls[0]?.slice(0, 3))
+  expect(state.prepare).not.toHaveBeenCalled()
+})
+
+it.each([
+  '{',
+  '{"mcpServers":{}}',
+  '{"mcpServers":{"A":{"type":"streamableHttp","url":"https://mcp.example.test/mcp","command":"unsupported"}}}',
+  '{"mcpServers":{"A":{"type":"sse","url":"https://mcp.example.test/sse"}}}',
+  '{"mcpServers":{"A":{"type":"streamableHttp","url":"https://mcp.example.test/mcp","headers":{"Authorization":"secret"}}}}',
+  '{"mcpServers":{"A":{"type":"streamableHttp","url":"https://mcp.example.test/mcp","headers":{"X-Test":"a","x-test":"b"}}}}',
+  '{"mcpServers":{"A":{"type":"streamableHttp","url":"https://mcp.example.test/mcp"},"A":{"type":"streamableHttp","url":"https://mcp.example.test/mcp"}}}',
+  '{"mcpServers":{"A":{"type":"streamableHttp","url":"https://mcp.example.test/mcp"},"B":{"type":"streamableHttp","url":"https://mcp.example.test/mcp"}}}',
+] as const)("JSON editing rejects unsupported or ambiguous fields without updating: %s", async json => {
+  const state = await jsonConfigurationFixture()
+  const dialog = await state.openJson()
+  fireEvent.change(within(dialog).getByRole("textbox"), { target: { value: json } })
+  fireEvent.click(within(dialog).getByRole("button", { name: "保存" }))
+  expect(within(dialog).getByRole("alert")).toBeVisible()
+  expect(state.update).not.toHaveBeenCalled(); expect(state.prepare).not.toHaveBeenCalled()
+  expect(state.register).not.toHaveBeenCalled(); expect(state.importJson).not.toHaveBeenCalled()
+})
+
+it("an existing SSE JSON edit preserves SSE and never routes through HTTP import", async () => {
+  const state = await jsonConfigurationFixture(false, undefined, "sse_compat")
+  const dialog = await state.openJson()
+  expect(JSON.parse((within(dialog).getByRole("textbox") as HTMLTextAreaElement).value).mcpServers["JSON editor MCP"].type).toBe("sse")
+  fireEvent.change(within(dialog).getByRole("textbox"), { target: { value: JSON.stringify({ mcpServers: { "SSE renamed": { type: "sse", url: "https://mcp.example.test/sse" } } }) } })
+  fireEvent.click(within(dialog).getByRole("button", { name: "保存" }))
+  await waitFor(() => expect(state.update).toHaveBeenCalledOnce())
+  expect(state.update.mock.calls[0]?.[1]).toEqual({ expected_state_version: "3", display_name: "SSE renamed", server_url: "https://mcp.example.test/sse" })
+  expect(state.importJson).not.toHaveBeenCalled(); expect(state.prepare).not.toHaveBeenCalled()
+})
+
+it("copying the configuration UUID writes only the clipboard, not a management command", async () => {
+  const previous = Object.getOwnPropertyDescriptor(navigator, "clipboard")
+  const writeText = vi.fn(async () => undefined)
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } })
+  try {
+    const state = await jsonConfigurationFixture()
+    fireEvent.click(screen.getByRole("button", { name: "复制 UUID" }))
+    expect(writeText).toHaveBeenCalledWith("json-editor-server")
+    expect(state.update).not.toHaveBeenCalled(); expect(state.prepare).not.toHaveBeenCalled()
+    expect(state.register).not.toHaveBeenCalled(); expect(state.importJson).not.toHaveBeenCalled()
+  } finally {
+    if (previous) Object.defineProperty(navigator, "clipboard", previous)
+    else Reflect.deleteProperty(navigator, "clipboard")
+  }
+})
+
 it.each(["confirmed", "unknown-then-replayed", "read-failed"])("configuration Save keeps its dialog, secrets/CAS recovery, and fresh second save: %s", async mode => {
   let version = 3, name = "Saved MCP"
   let lostAck = false, failedRead = false
@@ -319,6 +651,10 @@ it.each(["actor", "generation", "close", "unmount"] as const)("a late private-se
   if (retirement === "actor") state.change({ subject: "different-reader" })
   else if (retirement === "generation") state.change({ generation: 8 })
   else if (retirement === "close") {
+    fireEvent.keyDown(state.dialog, { key: "Escape" })
+    // Configuration closes back to its retained detail; only the next Escape
+    // leaves the target window and retires its still-pending exact read.
+    expect(state.dialog).toHaveAttribute("data-variant", "detail")
     fireEvent.keyDown(state.dialog, { key: "Escape" })
     await waitFor(() => expect(state.dialog).not.toBeInTheDocument())
   } else state.view.unmount()

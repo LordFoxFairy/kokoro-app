@@ -6,6 +6,8 @@ import type { McpProjectPin } from "@/hub/mcp-project-publication.schema";
 import { LocaleProvider } from "@/i18n/context";
 import { ConnectorCommandProvider } from "@/ui/mcp/connector-command-context";
 import { McpProjectionRead } from "@/ui/mcp/mcp-projection-read";
+import { CustomMcpDetailDialog } from "@/ui/mcp/custom-mcp-detail-dialog";
+import { StrictMode } from "react";
 import * as projectReader from "@/features/app/project-list";
 
 const storage = vi.hoisted(() => ({ pending: null as Promise<void> | null, failed: false }));
@@ -130,14 +132,79 @@ it.each(["loading", "error"])("existing publication is disabled until the shared
   }
 });
 
-it("uncommitted configuration does not borrow the detail publication action or save implicitly", async () => {
-  const { detail, publication } = setup(); const dialog = await detail();
+it("configuration publication explicitly saves first, waits for the matching fresh source and only opens a picker", async () => {
+  const { client, detail, publication } = setup();
+  let saved = false, release!: () => void;
+  const fresh = new Promise<void>(resolve => { release = resolve; });
+  const updated = { ...server, display_name: "Saved publication label", state_version: "8" };
+  client.getPrivateMcpServer.mockImplementation(async () => { if (saved) { await fresh; return updated; } return server; });
+  const update = vi.fn<NonNullable<typeof client.updatePrivateMcpServer>>(async () => {
+    saved = true; return { server: updated, connector, replayed: false };
+  });
+  client.updatePrivateMcpServer = update;
+  const dialog = await detail();
   fireEvent.keyDown(within(dialog).getByRole("button", { name: "管理" }), { key: "Enter" });
   fireEvent.click(await screen.findByRole("menuitem", { name: "编辑配置" }));
-  fireEvent.change(screen.getByRole("textbox", { name: "服务器名称" }), { target: { value: "Unsaved label" } });
+  fireEvent.change(screen.getByRole("textbox", { name: "服务器名称" }), { target: { value: updated.display_name } });
   fireEvent.keyDown(screen.getByRole("button", { name: "保存选项" }), { key: "Enter" });
-  expect(await screen.findByRole("menuitem", { name: "发布到项目" })).toHaveAttribute("data-disabled");
+  const entry = await screen.findByRole("menuitem", { name: "发布到项目" });
+  await waitFor(() => expect(entry).not.toHaveAttribute("data-disabled"));
+  expect(update).not.toHaveBeenCalled();
+  fireEvent.click(entry);
+  await waitFor(() => expect(update).toHaveBeenCalledOnce());
+  expect(update.mock.calls[0]?.[1]).toEqual({ expected_state_version: "7", display_name: updated.display_name });
+  expect(screen.queryByRole("dialog", { name: "发布到项目" })).toBeNull();
   expect(publication.list).not.toHaveBeenCalled(); expect(publication.publish).not.toHaveBeenCalled();
+  await act(async () => { release(); await fresh; });
+  const picker = await screen.findByRole("dialog", { name: "发布到项目" });
+  await within(picker).findByRole("checkbox", { name: project.name });
+  expect(publication.publish).not.toHaveBeenCalled(); expect(client.preparePrivateMcpServer).not.toHaveBeenCalled();
+  fireEvent.click(within(picker).getByRole("button", { name: "取消" }));
+  expect(await screen.findByRole("dialog", { name: updated.display_name })).toBeVisible();
+  expect(update).toHaveBeenCalledOnce(); expect(publication.publish).not.toHaveBeenCalled();
+});
+
+async function configurationContinuation() {
+  const save = vi.fn(), publish = vi.fn();
+  let props: Parameters<typeof CustomMcpDetailDialog>[0] = { admitted: true, iconBoundary: boundary, connector, server,
+    actionId: null, managementCommand: undefined, onResumeManagement: vi.fn(), actionError: false, deleteId: null,
+    returnFocusRef: { current: null }, onClose: vi.fn(), onSaveConfiguration: save, onPrepare: vi.fn(),
+    publicationAvailable: true, onPublish: publish, onAuthorize: vi.fn(), onDisconnect: vi.fn(), onDeleteIntent: vi.fn(), onCancelDelete: vi.fn(), onDelete: vi.fn() };
+  const content = () => <StrictMode><LocaleProvider><CustomMcpDetailDialog {...props} /></LocaleProvider></StrictMode>;
+  const view = render(content());
+  fireEvent.keyDown(screen.getByRole("button", { name: "管理" }), { key: "Enter" });
+  fireEvent.click(await screen.findByRole("menuitem", { name: "编辑配置" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "服务器名称" }), { target: { value: "Publication draft" } });
+  fireEvent.keyDown(screen.getByRole("button", { name: "保存选项" }), { key: "Enter" });
+  const entry = await screen.findByRole("menuitem", { name: "发布到项目" });
+  expect(entry).not.toHaveAttribute("data-disabled"); fireEvent.click(entry);
+  expect(save).toHaveBeenCalledOnce(); expect(publish).not.toHaveBeenCalled();
+  return { publish, save, change: (next: Partial<typeof props>) => { props = { ...props, ...next }; view.rerender(content()); } };
+}
+
+it("StrictMode Save→unknown→matching ACK waits for fresh paired facts and opens its picker exactly once", async () => {
+  const state = await configurationContinuation();
+  state.change({ managementCommand: { operation: "update_server", kind: "unknown", serverId: server.server_id, connectorId: connector.connector_id } });
+  expect(state.publish).not.toHaveBeenCalled();
+  const confirmation = {};
+  state.change({ server: null, connector: null, managementCommand: undefined, configurationSaved: confirmation });
+  expect(state.publish).not.toHaveBeenCalled();
+  state.change({ server: { ...server, display_name: "Publication draft", state_version: "8" }, connector });
+  await waitFor(() => expect(state.publish).toHaveBeenCalledOnce());
+  state.change({ configurationSaved: confirmation });
+  expect(state.publish).toHaveBeenCalledOnce(); expect(state.save).toHaveBeenCalledOnce();
+});
+
+it.each(["close", "actor", "generation", "admission", "target", "rejected"] as const)("a configuration publication continuation retires on %s; a late ACK never opens its picker", async retirement => {
+  const state = await configurationContinuation();
+  if (retirement === "close") fireEvent.keyDown(screen.getByRole("dialog", { name: "MCP 配置" }), { key: "Escape" });
+  else state.change(retirement === "actor" ? { iconBoundary: { ...boundary, subject: "other-publisher" } }
+    : retirement === "generation" ? { iconBoundary: { ...boundary, generation: 2 } }
+    : retirement === "admission" ? { admitted: false }
+    : retirement === "target" ? { server: { ...server, server_id: "other-server" } }
+    : { managementCommand: { operation: "update_server", kind: "rejected", serverId: server.server_id, connectorId: connector.connector_id } });
+  state.change({ admitted: true, iconBoundary: boundary, server: { ...server, display_name: "Publication draft", state_version: "8" }, connector, managementCommand: undefined, configurationSaved: {} });
+  expect(state.publish).not.toHaveBeenCalled(); expect(state.save).toHaveBeenCalledOnce();
 });
 
 it("a failed recovery read stays visible and explicit retry unlocks publication without changing the saved source or sending a write", async () => {

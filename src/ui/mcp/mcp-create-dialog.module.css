@@ -125,6 +125,32 @@
   overflow-y: auto;
 }
 
+/* Only the editable creation form separates its scrolling fields from the
+ * title/actions. The retained-command recovery section keeps its old layout. */
+form.urlMcpForm {
+  min-height: 0;
+  max-height: 95dvh;
+  overflow: hidden;
+}
+
+form.urlMcpForm > .urlMcpTitle,
+form.urlMcpForm > .urlMcpActions {
+  flex: 0 0 auto;
+}
+
+.urlMcpBody {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 0 1 auto;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.urlMcpBody > * {
+  flex-shrink: 0;
+}
+
 .compactDialogTitle,
 .urlMcpTitle {
   width: calc(100% - 5.5rem);
@@ -428,6 +454,26 @@
 .urlMcpActions button:first-child,
 .urlMcpActions button:nth-child(3) {
   width: 4.5rem;
+}
+
+@media (max-width: 24rem) {
+  form.urlMcpForm > .urlMcpActions {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.6fr);
+    gap: 0.5rem;
+    padding-inline: 0.75rem;
+  }
+
+  form.urlMcpForm > .urlMcpActions > span {
+    display: none;
+  }
+
+  form.urlMcpForm > .urlMcpActions > button {
+    width: 100%;
+    min-width: 0;
+    height: auto;
+    padding-inline: 0.5rem;
+    white-space: normal;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

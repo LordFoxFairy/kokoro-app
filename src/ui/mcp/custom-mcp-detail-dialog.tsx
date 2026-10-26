@@ -10,7 +10,7 @@ import { McpAvailabilityStatus } from "./mcp-availability-status";
 
 import { connectorCommandMayResume, connectorCommandFailureMessage, type ConnectorCommandFailure } from "./connector-command-failure";
 
-import { type FormEvent, type RefObject, useState } from "react";
+import { type FormEvent, type RefObject, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   ChevronDown,
   Copy,
@@ -53,6 +53,8 @@ import styles from "./custom-mcp-detail-dialog.module.css";
 import { canAuthorizePrivateMcp } from "./private-mcp-oauth-binding";
 import { useMcpEditorSelection } from "./use-mcp-editor-selection";
 import { isMcpCustomHeaderName } from "./mcp-header-validation";
+import { configurationJson, mergeConfigurationJsonHeaders, type McpConfigurationJsonFields } from "./mcp-configuration-json";
+import { McpConfigurationJsonDialog } from "./mcp-configuration-json-dialog";
 
 type HeaderDraft = { id: string; name: string; value: string };
 type SavedConfigurationDisplay = {
@@ -153,6 +155,15 @@ export function CustomMcpDetailDialog({
   const ready = admitted && server !== null && connector !== null;
   const currentServer = ready ? server : null;
   const [editing, setEditing] = useState(false);
+  const configurationMenuRef = useRef<HTMLButtonElement | null>(null);
+  const detailMenuRef = useRef<HTMLButtonElement | null>(null);
+  const jsonScope = JSON.stringify([admitted, iconBoundary?.subject, iconBoundary?.generation, connector?.connector_id, server?.server_id, server?.state_version]);
+  const liveJsonScope = useRef<string | null>(null);
+  useLayoutEffect(() => { liveJsonScope.current = jsonScope; return () => { liveJsonScope.current = null; }; }, [jsonScope]);
+  const [jsonEditor, setJsonEditor] = useState<{ scope: string; initialJson: string } | null>(null);
+  if (jsonEditor && jsonEditor.scope !== jsonScope) setJsonEditor(null);
+  const publicationAfterSave = useRef<{ subject: string; generation: number; serverId: string; connectorId: string;
+    before: object | undefined; acknowledged: object | null } | null>(null);
   const [trialError, setTrialError] = useState(false);
   // Store only explicit user edits across a recheck, never the previous owner
   // projection. Untouched fields resolve from the newly admitted server.
@@ -195,6 +206,7 @@ export function CustomMcpDetailDialog({
     setSavedTransport(configurationSaved && submittedTransport ? { ...submittedTransport, primaryIntent: primaryIntentRetired ? null : submittedTransport.primaryIntent,
       headerNames: primaryIntentRetired ? [] : submittedTransport.headerNames, iconPreview: primaryIntentRetired ? null : submittedTransport.iconPreview, confirmation: configurationSaved } : null);
     if (configurationSaved) {
+      setJsonEditor(null);
       // The command's transient completed notification may be batched with
       // finish(). This window-bound receipt still retires write-only drafts.
       setHeaders([]);
@@ -282,16 +294,16 @@ export function CustomMcpDetailDialog({
   const invalidHeaderName = headers.some(
     (item) => Boolean(item.name.trim()) && !isMcpCustomHeaderName(item.name),
   );
-  const save = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const submitConfiguration = (fields: { name: string; notes: string; serverUrl: string; headers: HeaderDraft[]; removedHeaders: string[] }) => {
+    const { name, notes, serverUrl, headers, removedHeaders } = fields;
     if (
       locked || !icon.draft.canSave() || !server || !connector ||
       !name.trim() ||
       !serverUrl.trim() ||
-      invalidHeaderName ||
+      headers.some(item => Boolean(item.name.trim()) && !isMcpCustomHeaderName(item.name)) ||
       headers.some((item) => !item.name.trim() || !item.value)
     )
-      return;
+      return false;
     const iconReference = icon.state.clear ? undefined : icon.state.dirty
       ? icon.state.kind === "ready" ? icon.state.preview : undefined : currentServer?.icon?.preview_reference;
     const iconPreview = loadedIcon && sameConfigurationScope(loadedIcon) && iconReference?.method === "GET" &&
@@ -314,6 +326,59 @@ export function CustomMcpDetailDialog({
       })),
       header_removals: removedHeaders,
     });
+    return true;
+  };
+  const save = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    submitConfiguration({ name, notes, serverUrl, headers, removedHeaders });
+  };
+  const saveAndPublish = () => {
+    if (locked || !publicationAvailable || !onPublish || !currentServer || currentServer.transport !== "streamable_http" ||
+      !connector || !iconBoundary?.admitted || iconBoundary.subject === null) return;
+    const changed = name.trim() !== currentServer.display_name || notes.trim() !== (currentServer.notes ?? "") ||
+      serverUrl.trim() !== currentServer.server_url || headers.length > 0 || removedHeaders.length > 0 || icon.state.dirty;
+    if (!changed) { onPublish(); return; }
+    publicationAfterSave.current = { subject: iconBoundary.subject, generation: iconBoundary.generation,
+      serverId: currentServer.server_id, connectorId: connector.connector_id, before: configurationSaved, acknowledged: null };
+    if (!submitConfiguration({ name, notes, serverUrl, headers, removedHeaders })) publicationAfterSave.current = null;
+  };
+  useEffect(() => {
+    const intent = publicationAfterSave.current;
+    if (!intent) return;
+    if (!editing || !admitted || !iconBoundary?.admitted || iconBoundary.subject !== intent.subject || iconBoundary.generation !== intent.generation ||
+      server !== null && server.server_id !== intent.serverId || connector !== null && (connector.connector_id !== intent.connectorId || connector.server_id !== intent.serverId) ||
+      managementCommand?.kind === "rejected") { publicationAfterSave.current = null; return; }
+    // This prop only changes after the original matching management command's
+    // ACK. Neither an updated list nor a fresh-looking server is an ACK.
+    if (configurationSaved !== undefined && configurationSaved !== intent.before) intent.acknowledged = configurationSaved;
+    if (!intent.acknowledged || intent.acknowledged !== configurationSaved || !ready || locked || !publicationAvailable || !onPublish ||
+      server?.transport !== "streamable_http" || connector?.connector_type !== "mcp") return;
+    // Consume before invoking the parent: StrictMode replay and re-renders may
+    // not reopen a picker. Actual publication still requires its confirmation.
+    publicationAfterSave.current = null;
+    onPublish();
+  }, [editing, admitted, iconBoundary?.admitted, iconBoundary?.subject, iconBoundary?.generation, server, connector,
+    managementCommand?.kind, configurationSaved, ready, locked, publicationAvailable, onPublish]);
+  useEffect(() => () => { publicationAfterSave.current = null; }, []);
+  const saveJson = (fields: McpConfigurationJsonFields) => {
+    if (!jsonEditor || jsonEditor.scope !== jsonScope || liveJsonScope.current !== jsonScope || locked || !currentServer) return;
+    const mergedHeaders = mergeConfigurationJsonHeaders(headers, fields.headers).map(item => ({ ...item, id: crypto.randomUUID() }));
+    const mergedRemovals = removedHeaders.filter(name => !fields.headers.some(item => item.name === name));
+    // Keep the visible form paired with the exact fields passed to the existing
+    // command boundary; React state updates are not a submission transport.
+    if (submitConfiguration({ name: fields.name, notes, serverUrl: fields.serverUrl, headers: mergedHeaders, removedHeaders: mergedRemovals })) {
+      setName(fields.name); setServerUrl(fields.serverUrl); setHeaders(mergedHeaders); setRemovedHeaders(mergedRemovals);
+      if (fields.name === currentServer.display_name && fields.serverUrl === currentServer.server_url && notes === (currentServer.notes ?? "") &&
+        mergedHeaders.length === 0 && mergedRemovals.length === 0 && !icon.state.dirty) setJsonEditor(null);
+    }
+  };
+  const leaveConfiguration = () => {
+    publicationAfterSave.current = null;
+    icon.draft.cancel();
+    setJsonEditor(null); setEditing(false); setManagementOpen(false);
+    setName(null); setNotes(null); setServerUrl(null); setHeaders([]); setRemovedHeaders([]);
+    setSubmittedFields(null); setSavedTransport(null); setSavedFactsPending(false); setLoadedIcon(null);
+    window.requestAnimationFrame(() => { const target = detailMenuRef.current; if (target?.isConnected && !target.disabled) target.focus({ preventScroll: true }); });
   };
   const closeFocus = (event: Event) => {
     const target = returnFocusRef.current;
@@ -331,7 +396,10 @@ export function CustomMcpDetailDialog({
     <Dialog
       open
       onOpenChange={(next) => {
-        if (!next && (managementLocked || actionId === null || preparationState === "running")) { icon.draft.cancel(); onClose(); }
+        if (!next && (managementLocked || actionId === null || preparationState === "running")) {
+          if (editing) leaveConfiguration();
+          else { icon.draft.cancel(); onClose(); }
+        }
       }}
     >
       <DialogContent
@@ -526,13 +594,17 @@ export function CustomMcpDetailDialog({
             <footer className={styles.configurationFooter}>
               <DropdownMenu open={managementOpen} onOpenChange={setManagementOpen}>
                 <DropdownMenuTrigger asChild>
-                  <Button type="button" variant="outline" size="sm" disabled={locked}>
+                  <Button ref={configurationMenuRef} type="button" variant="outline" size="sm" disabled={locked}>
                     管理
                     <ChevronDown aria-hidden="true" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className={styles.configurationMenu}>
-                  <DropdownMenuItem disabled>编辑 JSON</DropdownMenuItem>
+                  <DropdownMenuItem disabled={locked} onSelect={() => {
+                    if (locked || !currentServer) return;
+                    setManagementOpen(false);
+                    setJsonEditor({ scope: jsonScope, initialJson: configurationJson(name, serverUrl, currentServer.transport) });
+                  }}>编辑 JSON</DropdownMenuItem>
                   <DropdownMenuSeparator className={styles.managementDivider} />
                   <DropdownMenuItem
                     className={styles.dangerMenuItem}
@@ -560,7 +632,8 @@ export function CustomMcpDetailDialog({
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className={styles.configurationMenu}>
-                      <DropdownMenuItem disabled>发布到项目</DropdownMenuItem>
+                      <DropdownMenuItem disabled={locked || !publicationAvailable || !icon.draft.canSave() || !onPublish}
+                        onSelect={saveAndPublish}>发布到项目</DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </span>
@@ -587,7 +660,7 @@ export function CustomMcpDetailDialog({
                 {primaryAction()}
                 <DropdownMenu open={managementOpen} onOpenChange={setManagementOpen}>
                   <DropdownMenuTrigger asChild>
-                    <Button type="button" variant="outline" disabled={managementLocked}>
+                    <Button ref={detailMenuRef} type="button" variant="outline" disabled={managementLocked}>
                       管理
                       <ChevronDown aria-hidden="true" />
                     </Button>
@@ -690,6 +763,11 @@ export function CustomMcpDetailDialog({
           </section>
         )}
       </DialogContent>
+      {editing && jsonEditor?.scope === jsonScope && currentServer ? <McpConfigurationJsonDialog
+        initialJson={jsonEditor.initialJson} transport={currentServer.transport} locked={locked || !icon.draft.canSave()}
+        isCurrent={() => liveJsonScope.current === jsonScope && !locked && icon.draft.canSave()}
+        status={<>{managementStatus}{actionError ? <Alert variant="destructive" role="alert"><AlertDescription>{t("mcp.actionFailed")}</AlertDescription></Alert> : null}</>}
+        onSave={saveJson} onClose={() => setJsonEditor(null)} returnFocusRef={configurationMenuRef} /> : null}
     </Dialog>
   );
 }

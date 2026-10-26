@@ -138,6 +138,7 @@ export const ru: Partial<Record<MessageKey, string>> = {
   "skills.personal.enabled": "Включён",
   "skills.personal.disabled": "Отключён",
   "skills.personal.remove": "Удалить установку",
+  "skills.personal.removeDescription": "Удаляется только эта установка из вашей учётной записи. Исходный навык и история его версий сохраняются. Для повторного добавления эта версия должна оставаться доступной.",
   "skills.personal.empty": "Нет установок, соответствующих фильтрам",
   "skills.personal.unknown": "Результат неизвестен. Повтор использует исходный запрос, не создавая новую операцию.",
   "skills.personal.confirmed": "Команда подтверждена; текущее состояние ещё нужно проверить.",

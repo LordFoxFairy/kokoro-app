@@ -138,6 +138,7 @@ export const ko: Partial<Record<MessageKey, string>> = {
   "skills.personal.enabled": "활성화됨",
   "skills.personal.disabled": "비활성화됨",
   "skills.personal.remove": "설치 제거",
+  "skills.personal.removeDescription": "이 계정의 설치만 제거합니다. 원본 스킬과 버전 기록은 삭제되지 않습니다. 다시 추가하려면 해당 버전을 계속 사용할 수 있어야 합니다.",
   "skills.personal.empty": "필터에 맞는 설치가 없습니다",
   "skills.personal.unknown": "결과를 알 수 없습니다. 재시도는 새 작업을 만들지 않고 원래 요청을 재사용합니다.",
   "skills.personal.confirmed": "명령이 확인되었습니다. 현재 상태를 확인해야 합니다.",

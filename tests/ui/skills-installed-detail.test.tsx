@@ -213,6 +213,33 @@ it("opens personal revision management from the installed detail without writing
   expect(fetcher).toHaveBeenCalledTimes(1)
 })
 
+it.each(["official", "personal"] as const)("offers installation removal independently of %s publisher management", async sourceKind => {
+  window.localStorage.setItem("kokoro.locale", "zh")
+  const { installation: original, response } = managementFixture()
+  const installation = { ...original, product: { ...original.product, source_kind: sourceKind } }
+  const fetcher = vi.fn(async () => response(installation))
+  vi.stubGlobal("fetch", fetcher)
+  const remove = vi.fn(), manage = vi.fn()
+  render(<LocaleProvider><ManusSkillDetailDialog detailSource="installation" open
+    readBoundary={{ admitted: true, subject: "installation-removal-reader", generation: 1 }}
+    skill={{ installation_id: installation.installation_id, skill_id: installation.series_id,
+      revision_skill_id: "manage-revision", source_ref: installation.source_ref, installed_source_ref: installation.source_ref,
+      name: installation.display_name, description: "", content_hash: installation.series_id, scope: sourceKind === "official" ? "official" : "personal", installed: true, enabled: false }}
+    onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={() => false} onRemoveInstallation={remove} onManagePersonal={manage} /></LocaleProvider>)
+  await screen.findByText(installation.summary)
+  fireEvent.keyDown(screen.getByRole("button", { name: "更多技能操作" }), { key: "ArrowDown" })
+  const item = await screen.findByRole("menuitem", { name: "移除安装" })
+  if (sourceKind === "official") expect(screen.getAllByRole("menuitem")).toHaveLength(1)
+  else {
+    expect(screen.getByRole("menuitem", { name: "删除" })).toBeVisible()
+    expect(screen.getByRole("menuitem", { name: "技能版本历史" })).toBeVisible()
+  }
+  fireEvent.click(item)
+  expect(remove).toHaveBeenCalledExactlyOnceWith(installation)
+  expect(manage).not.toHaveBeenCalled()
+  expect(fetcher).toHaveBeenCalledOnce()
+})
+
 
 function managementFixture() {
   const installation: PersonalInstallation = {

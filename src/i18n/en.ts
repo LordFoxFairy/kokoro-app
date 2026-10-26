@@ -150,6 +150,7 @@ export const en: Partial<Record<MessageKey, string>> = {
   "skills.personal.enabled": "Enabled",
   "skills.personal.disabled": "Disabled",
   "skills.personal.remove": "Remove installation",
+  "skills.personal.removeDescription": "Only remove this installation from your account. The source skill and its version history are not deleted. Adding it again requires that version to remain available.",
   "skills.personal.empty": "No installations match these filters",
   "skills.personal.unknown": "Outcome unknown. Retry reuses the original request, without creating a new operation.",
   "skills.personal.confirmed": "Command acknowledged; current state still needs verification.",

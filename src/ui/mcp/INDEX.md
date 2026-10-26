@@ -1,3 +1,11 @@
+## 配置 JSON 与返回层级（2026-10-26）
+
+JSON 窗口按参考保留短粘贴说明、左侧“复制到剪贴板”及右侧“保存”；取消由顶部关闭／Escape 承接。复制仅写当前用户输入到浏览器剪贴板，不解析改写、不保存、不导入／连接；锁定与本 scope 退休阻断新复制，迟到结果不进入新窗口，失败局部反馈，不冒保存成功。Header 安全说明独立 SR 描述不挤动 600×458／560×308 正常几何。
+
+现配置管理的 JSON 编辑器只映射当前一个服务器，复用拒重复键 parser 和既有字段 schema，经原 Update/CAS/命令冻结链保存，不走 Import/Register 或自动 Prepare。不可变 transport 的改变、额外字段及非法 Header 明确校验；已保存秘密从不回显或生成占位值，省略／空 headers 不撤原绑定，仅提供的值显式 upsert。JSON 子层关闭回配置，配置关闭清退 write-only／Header 草稿并取消未提交图标，再回原对象详情；详情再关闭才回列表。原未知管理命令独立保留，只由原 key/body/CAS 恢复，身份／代际／对象退休清 JSON 呈现，不借层级切换重放。
+
+配置“发布到项目”是明确的 Save→匹配 Update ACK→exact fresh Server/Connector→picker 继续动作，不借旧列表充当保存回执；HTTP与原发布准入全部满足后只打开一次 picker，选项目并确认才正式发布。窗口／主体／代际／对象退休只清此 UI continuation，不丢管理 unknown。StrictMode effect 重放不重复打开，未改变内容时直接使用当前已保存定义；不自动 Prepare、不授项目执行资格。
+
 ## MCP 已保存 Server 的独立媒体（2026-10-26）
 
 `mcp-server-icon.tsx` 只请求当前已准入列表的固定同源 Server 媒体；IntersectionObserver 延迟 cache:no-store 的受控二进制 fetch，完整EOF/10秒/1MiB/PNG-JPEG验证后以本寿命唯一blobURL展示（避免同URI decoded cache），解码成功才切换真实名称首字母，lazy/async、失败无重试/常驻错误卡，退休 abort/revoke。Provider artwork/API绑定来源和40px壳/24px首字母不变。主体/准入代、server_id/Connector CAS及既有 confirmed-write revision 控制图片寿命；已确认替换/clear立即退休旧图，列表刷新失败不保旧绑定，普通被动读取保本代已加载图。catchall新增具名薄代理见 `src/lib/server/INDEX.md`；无逐卡JSON、签名URL列表或新owner字段。正常配对/浏览器验收另列。

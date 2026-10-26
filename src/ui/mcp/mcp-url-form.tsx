@@ -153,6 +153,7 @@ export function UrlMcpForm({
           {showBeta ? <span>{t("connectorCatalog.beta")}</span> : null}
         </DialogTitle>
       ) : null}
+      <div className={styles.urlMcpBody}>
       <Field className={styles.urlMcpField}>
         <FieldLabel htmlFor="url-mcp-name">
           {t("mcp.customName")}
@@ -312,6 +313,7 @@ export function UrlMcpForm({
         </p>
       ) : null}
       <p className={styles.urlWarning}>{t("mcp.urlWarning")}</p>
+      </div>
       <div className={styles.urlMcpActions}>
         <Button type="button" variant="outline" onClick={creation.cancel}>
           {t("mcp.cancel")}
