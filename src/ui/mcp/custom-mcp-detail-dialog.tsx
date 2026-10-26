@@ -58,6 +58,7 @@ type HeaderDraft = { id: string; name: string; value: string };
 type SavedTransportDisplay = {
   transport: McpPrivateServer["transport"];
   primaryIntent: "trial" | "connect" | null;
+  headerNames: string[];
   subject: string;
   generation: number;
   serverId: string;
@@ -177,18 +178,21 @@ export function CustomMcpDetailDialog({
   const submittedTransport = submittedFields?.transport && sameTransportScope(submittedFields.transport) ? submittedFields.transport : null;
   if (submittedFields?.transport && !submittedTransport) {
     setSubmittedFields({ ...submittedFields, transport: null });
-  } else if (submittedFields?.transport?.primaryIntent && primaryIntentRetired) {
-    setSubmittedFields({ ...submittedFields, transport: { ...submittedFields.transport, primaryIntent: null } });
+  } else if (submittedFields?.transport && primaryIntentRetired &&
+    (submittedFields.transport.primaryIntent !== null || submittedFields.transport.headerNames.length > 0)) {
+    setSubmittedFields({ ...submittedFields, transport: { ...submittedFields.transport, primaryIntent: null, headerNames: [] } });
   }
   if (savedTransport && (ready || !sameTransportScope(savedTransport) || savedTransport.confirmation !== configurationSaved ||
     preparationState === "unknown" || managementCommand?.kind === "unknown")) {
     setSavedTransport(null);
-  } else if (savedTransport?.primaryIntent && primaryIntentRetired) {
-    setSavedTransport({ ...savedTransport, primaryIntent: null });
+  } else if (savedTransport && primaryIntentRetired &&
+    (savedTransport.primaryIntent !== null || savedTransport.headerNames.length > 0)) {
+    setSavedTransport({ ...savedTransport, primaryIntent: null, headerNames: [] });
   }
   if (observedSave !== configurationSaved) {
     setObservedSave(configurationSaved);
-    setSavedTransport(configurationSaved && submittedTransport ? { ...submittedTransport, primaryIntent: primaryIntentRetired ? null : submittedTransport.primaryIntent, confirmation: configurationSaved } : null);
+    setSavedTransport(configurationSaved && submittedTransport ? { ...submittedTransport, primaryIntent: primaryIntentRetired ? null : submittedTransport.primaryIntent,
+      headerNames: primaryIntentRetired ? [] : submittedTransport.headerNames, confirmation: configurationSaved } : null);
     if (configurationSaved) {
       // The command's transient completed notification may be batched with
       // finish(). This window-bound receipt still retires write-only drafts.
@@ -214,12 +218,16 @@ export function CustomMcpDetailDialog({
     setNotes(null);
     setServerUrl(null);
   }
-  // Only the immutable label and prior primary presentation survive this
-  // confirmed save's read gap, never owner facts/CAS or action permission.
+  // Only the immutable label, prior primary presentation and previously visible
+  // Header names survive this confirmed save's read gap, never values/current
+  // facts/CAS or action permission. Newly submitted names require a fresh read.
   const retainingTransport = savedFactsPending && !ready && !pendingError && savedTransport !== null &&
     sameTransportScope(savedTransport) && savedTransport.confirmation === configurationSaved &&
     preparationState !== "unknown" && managementCommand?.kind !== "unknown";
   const displayedTransport = currentServer?.transport ?? (retainingTransport ? savedTransport.transport : undefined);
+  const displayedHeaderNames = currentServer ? currentServer.headers
+    .filter(header => header.configured && header.status === "active" && !removedHeaders.includes(header.name))
+    .map(header => header.name) : retainingTransport ? savedTransport.headerNames : [];
   const transportLabel = displayedTransport === "streamable_http" ? "HTTP" : displayedTransport === "sse_compat" ? "SSE" : "—";
   const managementLocked = managementCommand !== undefined && managementCommand.kind !== "rejected";
   const busy = authorizationBusy || actionId === connector?.connector_id || managementCommand?.kind === "running";
@@ -283,7 +291,8 @@ export function CustomMcpDetailDialog({
     )
       return;
     setSubmittedFields({ name, notes, serverUrl, transport: iconBoundary?.admitted && iconBoundary.subject !== null &&
-      connector.server_id === server.server_id ? { transport: server.transport, primaryIntent: trialAvailable ? "trial" : "connect", subject: iconBoundary.subject,
+      connector.server_id === server.server_id ? { transport: server.transport, primaryIntent: trialAvailable ? "trial" : "connect",
+        headerNames: server.headers.filter(header => header.configured && header.status === "active" && !removedHeaders.includes(header.name)).map(header => header.name), subject: iconBoundary.subject,
         generation: iconBoundary.generation, serverId: server.server_id, connectorId: connector.connector_id } : null });
     icon.draft.protectForSave();
     onSaveConfiguration({
@@ -412,20 +421,18 @@ export function CustomMcpDetailDialog({
                 <legend>
                   自定义 headers <span className={styles.optional}>（可选）</span>
                 </legend>
-                {(currentServer?.headers ?? [])
-                  .filter((header) => header.configured && header.status === "active" && !removedHeaders.includes(header.name))
-                  .map((header) => (
-                    <div className={styles.existingHeader} key={header.name}>
-                      <span>{header.name}</span>
+                {displayedHeaderNames.map((headerName) => (
+                    <div className={styles.existingHeader} key={headerName}>
+                      <span>{headerName}</span>
                       <small>已配置</small>
                       <Button
                         type="button"
                         size="icon"
                         variant="ghost"
                         disabled={locked}
-                        aria-label={`移除 ${header.name}`}
+                        aria-label={`移除 ${headerName}`}
                         onClick={() =>
-                          setRemovedHeaders((items) => [...items, header.name])
+                          setRemovedHeaders((items) => [...items, headerName])
                         }
                       >
                         <Trash2 aria-hidden="true" />
