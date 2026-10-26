@@ -1,3 +1,5 @@
+工具类别（2026-10-26，源码候选）：`ToolCallRow` 只按正式 Public28 的安全 `display_code` 穷尽映射本地标签；旧 generic、状态行及稳定节点不变，不读取 raw名称/参数或猜 Skill/网页标题、phase、时长。唯一activity schema与生成来源见技术设计，正常组合由Root另验。
+
 <!-- Ordered private histories keep all public text visible, fold only consecutive activities, use stable run/turn keys and expose a per-Message read-only partial reload. Shared threads use only the original inline public parser and never request private parts. -->
 过程行顺序（2026-10-25，局部候选）：`SegmentProcess`在单个折叠块内按传入`activities`首次顺序逐项渲染Tool／Subagent／Skill，不按类型重排；同`activity_id`状态更新保原节点及手动开合，安全摘要、失败计数和独立HITL不变。本片不修正文／过程的跨段timeline或折叠块数量，正常组合由Root另验。
 

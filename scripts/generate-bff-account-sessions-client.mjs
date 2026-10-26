@@ -12,7 +12,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const sourcePath = join(root, "src/generated/bff-public-openapi.yaml")
 const outputPath = join(root, "src/generated/bff-account-sessions")
 const configPath = join(root, "openapi-ts.bff-account-sessions.config.ts")
-const expectedDigest = "d2b3d546164cadc9655616fc44daf1511a6f7d4a2e5d172f1415552af8942ed1"
+const expectedDigest = "34ca44c01ebc73f7ff76a4a06be33696b96ba1636e8818f02c38d57b1f539809"
 const operations = [
   ["GET", "/v1/account/sessions"],
   ["DELETE", "/v1/account/sessions/{session_id}"],

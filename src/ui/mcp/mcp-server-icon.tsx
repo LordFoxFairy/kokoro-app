@@ -3,12 +3,12 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 /** Independent private media read; load/error is never a Connector or icon-binding fact. */
-export function McpServerIcon({ serverId, stateVersion, fallback }: {
+export function McpServerIcon({ serverId, mediaRevision, fallback }: {
   serverId: string;
-  stateVersion: string;
+  mediaRevision: number;
   fallback: ReactNode;
 }) {
-  return <ServerImage key={JSON.stringify([serverId, stateVersion])} serverId={serverId} fallback={fallback} />;
+  return <ServerImage key={JSON.stringify([serverId, mediaRevision])} serverId={serverId} fallback={fallback} />;
 }
 
 type ImageState = { kind: "pending" | "failed" } | { kind: "decoding" | "loaded"; src: string };

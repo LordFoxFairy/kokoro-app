@@ -4,6 +4,14 @@ import { McpConnectionList } from "@/ui/mcp/mcp-connection-list";
 import { LocaleProvider } from "@/i18n/context";
 import type { McpConnector } from "@/hub/mcp-connector.schema";
 
+
+// Browser IndexedDB mechanics have their own suite; retain actual command admission here.
+vi.mock("@/ui/mcp/mcp-preparation-recovery", async importOriginal => {
+  const actual = await importOriginal<typeof import("@/ui/mcp/mcp-preparation-recovery")>();
+  const { createTestPreparationJournal } = await import("./fixtures/mcp-preparation-journal");
+  return { ...actual, createBrowserMcpPreparationRecovery: () => createTestPreparationJournal(actual) };
+});
+
 const connector: McpConnector = { connector_id: "saved-connector", server_id: "saved-server", provider_key: "private-mcp", connector_type: "mcp", display_name: "Saved MCP", status: "active", enabled: true, availability: "available", approved_scopes: [], state_version: "1" };
 const noop = () => undefined;
 const fetchMedia = vi.fn();
@@ -12,7 +20,7 @@ function response(headers: Record<string, string> = {}, bytes = new Uint8Array([
   return new Response(bytes, { headers: { "content-type": "image/png", "content-length": String(bytes.length), ...headers } });
 }
 function list(value: McpConnector, revision = 0) {
-  return <LocaleProvider><McpConnectionList connectors={[value]} mediaRevision={revision} customApis={[]} providers={[]} query="" brandName="Kokoro" onBrowse={noop} onEdit={noop} onSelectCustomApi={noop} previousEnabled={false} nextEnabled={false} onPrevious={noop} onNext={noop} /></LocaleProvider>;
+  return <LocaleProvider><McpConnectionList connectors={[value]} serverMediaRevisions={new Map(value.server_id ? [[value.server_id, revision]] : [])} customApis={[]} providers={[]} query="" brandName="Kokoro" onBrowse={noop} onEdit={noop} onSelectCustomApi={noop} previousEnabled={false} nextEnabled={false} onPrevious={noop} onNext={noop} /></LocaleProvider>;
 }
 function image(container: HTMLElement) { return container.querySelector("img"); }
 async function loadedImage(container: HTMLElement) { await waitFor(() => expect(image(container)).not.toBeNull()); return image(container)!; }
@@ -44,16 +52,16 @@ it("keeps failure on the initial without retry; fresh saved/replaced/cleared rev
   await waitFor(() => expect(fetchMedia).toHaveBeenCalledOnce());
   expect(image(view.container)).toBeNull(); expect(screen.getByText("S", { exact: true })).toBeVisible();
   view.rerender(list({ ...connector })); expect(fetchMedia).toHaveBeenCalledOnce();
-  view.rerender(list({ ...connector, state_version: "2" }));
+  view.rerender(list({ ...connector, state_version: "2" }, 1));
   const first = await loadedImage(view.container); fireEvent.load(first);
-  view.rerender(list({ ...connector, state_version: "3" }));
+  view.rerender(list({ ...connector, state_version: "3" }, 2));
   const next = await loadedImage(view.container);
   expect(next).not.toBe(first); expect(next.getAttribute("src")).not.toBe(first.getAttribute("src"));
   expect(revokeUrl).toHaveBeenCalledWith(first.getAttribute("src"));
   fireEvent.load(first); expect(screen.getByText("S", { exact: true })).toBeVisible();
   fireEvent.load(next);
   fetchMedia.mockResolvedValueOnce(new Response(null, { status: 404 }));
-  view.rerender(list({ ...connector, state_version: "4" }));
+  view.rerender(list({ ...connector, state_version: "4" }, 3));
   await waitFor(() => expect(fetchMedia).toHaveBeenCalledTimes(4));
   expect(image(view.container)).toBeNull(); expect(screen.getByText("S", { exact: true })).toBeVisible();
   expect(screen.getByText("Saved MCP")).toBeVisible();
@@ -123,7 +131,7 @@ it("the admitted coordinator retires confirmed-clear media despite failed list r
   let reject!: (reason: Error) => void;
   reads.mockImplementationOnce(() => new Promise((_done, fail) => { reject = fail; }));
   fetchMedia.mockResolvedValueOnce(new Response(null, { status: 404 }));
-  act(() => invalidateMcpConnectorProjection(client, "media-subject-a"));
+  act(() => invalidateMcpConnectorProjection(client, "media-subject-a", connector.server_id));
   await waitFor(() => expect(reads).toHaveBeenCalledTimes(2));
   expect(image(view.container)).toBeNull(); expect(revokeUrl).toHaveBeenCalledWith(first.getAttribute("src"));
   await act(async () => reject(new Error("list refresh failed")));
@@ -149,4 +157,56 @@ it("accepts exactly 1 MiB JPEG bytes without introducing another URL or metadata
   const view = render(list(connector)); await loadedImage(view.container);
   const blob = createUrl.mock.calls[0]![0] as Blob;
   expect(blob.size).toBe(1_048_576); expect(blob.type).toBe("image/jpeg"); expect(fetchMedia).toHaveBeenCalledOnce();
+});
+
+// Real shell command provider -> coordinator -> list; one server has bytes, one has no binding.
+async function mediaEditJourney() {
+  const { createHubClient } = await import("@/hub/client");
+  const { ConnectorCommandProvider, useMcpManagementCommands } = await import("@/ui/mcp/connector-command-context");
+  const { McpProjectionRead } = await import("@/ui/mcp/mcp-projection-read");
+  const other = { ...connector, connector_id: "absent-connector", server_id: "absent-server", display_name: "Absent MCP" };
+  fetchMedia.mockImplementation(async (path: string) => path.includes("absent-server") ? new Response(null, { status: 404 }) : response());
+  const reads = vi.fn().mockResolvedValue({ items: [{ ...connector, state_version: "2" }, other], next_cursor: null })
+    .mockResolvedValueOnce({ items: [connector, other], next_cursor: null });
+  const client = { ...createHubClient(), listMcpConnectors: reads,
+    listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+    listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }),
+    updatePrivateMcpServer: vi.fn().mockResolvedValue({ connector, server: { server_id: connector.server_id }, replayed: false }),
+  };
+  const subject = "media-edit-actor", boundary = { subject, admitted: true, generation: 0 };
+  let management!: ReturnType<typeof useMcpManagementCommands>;
+  function Commands() { management = useMcpManagementCommands(client, subject); return null; }
+  const view = render(<LocaleProvider><ConnectorCommandProvider client={client} boundary={boundary}><Commands /><McpProjectionRead client={client} identity={subject} readGeneration={0} initialView="connections" /></ConnectorCommandProvider></LocaleProvider>);
+  const original = await loadedImage(view.container); fireEvent.load(original);
+  await waitFor(() => expect(fetchMedia).toHaveBeenCalledTimes(2));
+  return { ...view, original, reads, client, management, boundary };
+}
+
+it.each(["name", "notes"] as const)("a confirmed ordinary server %s edit keeps unrelated loaded and absent media without another icon GET", async field => {
+  const journey = await mediaEditJourney();
+  await act(async () => {
+    expect(await journey.management.submit({ operation: "update_server", connectorId: connector.connector_id, serverId: connector.server_id!, input: { expected_state_version: "1", ...(field === "name" ? { display_name: "Changed" } : { notes: "Changed note" }) } }, journey.boundary)).toBe(true);
+  });
+  expect(journey.client.updatePrivateMcpServer).toHaveBeenCalledOnce();
+  await waitFor(() => expect(journey.reads).toHaveBeenCalledTimes(2));
+  expect(fetchMedia).toHaveBeenCalledTimes(2);
+  expect(image(journey.container)).toBe(journey.original);
+  expect(screen.getByText("A", { exact: true })).toBeVisible();
+});
+
+it.each(["replace", "clear"] as const)("a confirmed icon %s reloads only the exact server, retaining the other server fallback and card focus", async operation => {
+  const journey = await mediaEditJourney();
+  const card = screen.getByRole("button", { name: "Saved MCP" }); card.focus();
+  fetchMedia.mockResolvedValueOnce(operation === "clear" ? new Response(null, { status: 404 }) : response());
+  await act(async () => {
+    expect(await journey.management.submit({ operation: "update_server", connectorId: connector.connector_id, serverId: connector.server_id!, input: { expected_state_version: "1", ...(operation === "clear" ? { clear_icon: true as const } : { icon: { intent_id: "11111111-1111-4111-8111-111111111111", expected_state_version: "1" } }) } }, journey.boundary)).toBe(true);
+  });
+  await waitFor(() => expect(journey.reads).toHaveBeenCalledTimes(2));
+  expect(fetchMedia).toHaveBeenCalledTimes(3);
+  expect(fetchMedia).toHaveBeenLastCalledWith("/api/hub/mcp/servers/saved-server/icon", expect.any(Object));
+  expect(revokeUrl).toHaveBeenCalledWith(journey.original.getAttribute("src"));
+  expect(journey.container.contains(journey.original)).toBe(false);
+  expect(screen.getByText("A", { exact: true })).toBeVisible(); expect(card).toHaveFocus();
+  if (operation === "clear") expect(image(journey.container)).toBeNull();
+  else expect(await loadedImage(journey.container)).not.toBe(journey.original);
 });

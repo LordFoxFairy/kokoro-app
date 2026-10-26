@@ -1,4 +1,4 @@
-import { restorePublic26MessagePartsContract } from "./bff-message-parts-parent"
+import { restorePublic26MessagePartsContract } from "./bff-tool-display-parent"
 import { createHash } from "node:crypto"
 import { readFile } from "node:fs/promises"
 import { resolve } from "node:path"
@@ -6,13 +6,13 @@ import { resolve } from "node:path"
 import { expect, it } from "vitest"
 import YAML from "yaml"
 
-const OWNER_COMMIT = "5ee7b500cf0990e19702e2f26764dcb835af3b40"
-const OWNER_SHA256 = "d2b3d546164cadc9655616fc44daf1511a6f7d4a2e5d172f1415552af8942ed1"
-const OWNER_VERSION = "27.0.0"
+const OWNER_COMMIT = "5dfce099c7ce448e18b8ce5b1e26bb01692c9033"
+const OWNER_SHA256 = "34ca44c01ebc73f7ff76a4a06be33696b96ba1636e8818f02c38d57b1f539809"
+const OWNER_VERSION = "28.0.0"
 
 it("pins BFF project creation to the owner request, idempotency and canonical response", async () => {
   const bytes = await readFile(resolve(process.cwd(), "src/generated/bff-public-openapi.yaml"))
-  expect(OWNER_COMMIT).toBe("5ee7b500cf0990e19702e2f26764dcb835af3b40")
+  expect(OWNER_COMMIT).toBe("5dfce099c7ce448e18b8ce5b1e26bb01692c9033")
   expect(createHash("sha256").update(bytes).digest("hex")).toBe(OWNER_SHA256)
   const spec = YAML.parse(bytes.toString()) as {
     info: { version: string }

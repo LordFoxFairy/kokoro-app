@@ -1,4 +1,4 @@
-import { restorePublic26MessagePartsContract } from "./bff-message-parts-parent"
+import { restorePublic26MessagePartsContract } from "./bff-tool-display-parent"
 import {restoreClosureParent} from "./bff-closure-parent";
 import {readFile} from "node:fs/promises";
 import {createHash} from "node:crypto";

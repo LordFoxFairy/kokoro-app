@@ -1,4 +1,4 @@
-import { restorePublic26MessagePartsContract } from "./bff-message-parts-parent"
+import { restorePublic26MessagePartsContract } from "./bff-tool-display-parent"
 import { createHash } from "node:crypto"
 import { readFile } from "node:fs/promises"
 import { expect, it } from "vitest"
@@ -34,9 +34,9 @@ it("pins three formal pricing operations while preserving every preceding byte a
     current = YAML.parse(raw.toString()),
     spec = YAML.parse(restorePublic26MessagePartsContract(raw.toString())),
     parent = YAML.parse(parentRaw.toString())
-  expect(createHash("sha256").update(raw).digest("hex")).toBe("d2b3d546164cadc9655616fc44daf1511a6f7d4a2e5d172f1415552af8942ed1")
+  expect(createHash("sha256").update(raw).digest("hex")).toBe("34ca44c01ebc73f7ff76a4a06be33696b96ba1636e8818f02c38d57b1f539809")
   expect(createHash("sha256").update(parentRaw).digest("hex")).toBe("f6b8f3bd250c144a2d648af94c9fd5fe068db33991a4289b849a077eef009f32")
-  expect(current.info.version).toBe("27.0.0")
+  expect(current.info.version).toBe("28.0.0")
   expect(spec.info.version).toBe("26.0.0")
   expect(parent.info.version).toBe("22.4.0")
   const inventory = (doc: typeof spec) =>

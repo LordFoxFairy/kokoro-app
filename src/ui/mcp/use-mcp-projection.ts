@@ -49,7 +49,7 @@ const resolved = new WeakMap<
 // session-restored value is immediately revalidated against the owner.
 const sessionCachePrefix = "kokoro:mcp-projection:v1:";
 
-type ConnectorRevision = { value: number; listeners: Set<() => void> };
+type ConnectorRevision = { value: number; media: ReadonlyMap<string, number>; listeners: Set<() => void> };
 const connectorRevisions = new WeakMap<object, Map<string, ConnectorRevision>>();
 function connectorRevision(client: object, identity: string): ConnectorRevision {
   let entries = connectorRevisions.get(client);
@@ -59,7 +59,7 @@ function connectorRevision(client: object, identity: string): ConnectorRevision 
   }
   let revision = entries.get(identity);
   if (!revision) {
-    revision = { value: 0, listeners: new Set() };
+    revision = { value: 0, media: new Map(), listeners: new Set() };
     entries.set(identity, revision);
   }
   return revision;
@@ -68,6 +68,11 @@ function connectorRevision(client: object, identity: string): ConnectorRevision 
 /** Synchronous observation token for a same-window creation/detail handoff. */
 export function getMcpConnectorRevisionSnapshot(client: object, identity: string): number {
   return connectorRevision(client, identity).value;
+}
+
+/** Only explicit, confirmed icon changes retire this subject's exact server media. */
+export function getMcpServerMediaRevisions(client: object, identity: string): ReadonlyMap<string, number> {
+  return connectorRevision(client, identity).media;
 }
 
 /** A confirmed write retires only this subject's connector pages, not provider metadata. */
@@ -81,8 +86,10 @@ export function useMcpConnectorRevision(client: HubClient, identity: string): nu
   return useSyncExternalStore(subscribeRevision, () => revision.value, () => 0);
 }
 
-export function invalidateMcpConnectorProjection(client: HubClient, identity: string): void {
+export function invalidateMcpConnectorProjection(client: HubClient, identity: string, mediaServerId?: string): void {
   const revision = connectorRevision(client, identity);
+  if (mediaServerId !== undefined)
+    revision.media = new Map(revision.media).set(mediaServerId, (revision.media.get(mediaServerId) ?? 0) + 1);
   revision.value += 1;
   for (const key of resolved.get(client)?.keys() ?? []) {
     const [resource, subject] = JSON.parse(key) as [McpProjectionResource, string];

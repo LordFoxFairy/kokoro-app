@@ -175,3 +175,20 @@ describe("无 owner 事实时不承诺收费方式", () => {
     }
   })
 })
+
+
+const public28Keys = ["thread.toolCall", "thread.toolFileRead", "thread.toolMcpDiscover", "thread.toolMcpDescribe", "thread.toolMcpCall", "thread.toolWebSearch", "thread.toolWebFetch"] as const
+it("Public28 safe tool labels have explicit native copy in every supported locale", () => {
+  expect(LOCALES).toHaveLength(9)
+  for (const locale of LOCALES) {
+    const dictionary = locale === "zh" ? zh : OVERLAYS[locale]
+    for (const key of public28Keys) {
+      expect(Object.hasOwn(dictionary, key), `${locale}/${key}`).toBe(true)
+      const value = dictionary[key]
+      expect(typeof value, `${locale}/${key}`).toBe("string")
+      expect(value?.trim().length).toBeGreaterThan(0)
+      expect(resolveMessage(locale, key)).toBe(value)
+      expect(value).not.toMatch(/tool\.(?:execution|file|mcp|web)/u)
+    }
+  }
+})

@@ -1,4 +1,4 @@
-import { restorePublic26MessagePartsContract } from "./bff-message-parts-parent"
+import { restorePublic26MessagePartsContract } from "./bff-tool-display-parent"
 import { restorePublic153 } from "./bff-archived-tasks-parent";
 import { readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
@@ -20,7 +20,7 @@ function stable(value: unknown): unknown {
 it("pins formal15.3 bytes and restores complete15.2 canonical contract after only the new list is removed", async () => {
   const bytes = await readFile("src/generated/bff-public-openapi.yaml");
   expect(hash(bytes)).toBe(
-    "d2b3d546164cadc9655616fc44daf1511a6f7d4a2e5d172f1415552af8942ed1",
+    "34ca44c01ebc73f7ff76a4a06be33696b96ba1636e8818f02c38d57b1f539809",
   );
   let spec = YAML.parse(restorePublic26MessagePartsContract(bytes.toString()));
   expect(spec.info.version).toBe("26.0.0");

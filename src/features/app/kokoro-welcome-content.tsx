@@ -27,6 +27,7 @@ type DirectWelcomeContentProps = {
   referenceStatus: string | null
   setReferenceStatus: Dispatch<SetStateAction<string | null>>
   onPrompt?: EmptyStateProps["onPrompt"]
+  onCreationIntentSelect?: EmptyStateProps["onCreationIntentSelect"]
   onOpenSettings?: EmptyStateProps["onOpenSettings"]
   onCreateProject?: EmptyStateProps["onCreateProject"]
   preview: boolean
@@ -41,7 +42,7 @@ type DirectWelcomeContentProps = {
   referenceInputRef: React.RefObject<HTMLInputElement | null>
 }
 
-export function DirectWelcomeContent({ brandName, composer, draft, selectedCreationType, setSelectedCreationType, creationTypesScrolled, setCreationTypesScrolled, referenceStatus, setReferenceStatus, onPrompt, onOpenSettings, onCreateProject, preview, websiteCreation, appCreation, showDraftProjectContext, showDirectPrompts, showStarterCards, creativeIntent, promptSelectedRef, creationTypesRef, referenceInputRef }: DirectWelcomeContentProps) {
+export function DirectWelcomeContent({ brandName, composer, draft, selectedCreationType, setSelectedCreationType, creationTypesScrolled, setCreationTypesScrolled, referenceStatus, setReferenceStatus, onPrompt, onCreationIntentSelect, onOpenSettings, onCreateProject, preview, websiteCreation, appCreation, showDraftProjectContext, showDirectPrompts, showStarterCards, creativeIntent, promptSelectedRef, creationTypesRef, referenceInputRef }: DirectWelcomeContentProps) {
   const t = useT()
   return (
       <div className={cn(coreStyles.directContent, responsiveStyles.directContent)}>
@@ -110,7 +111,12 @@ export function DirectWelcomeContent({ brandName, composer, draft, selectedCreat
               size="sm"
               className={cn(coreStyles.directPrompt, responsiveStyles.directPrompt)}
               aria-label={`${t(title)} ${t(description)}`}
-              onClick={() => onPrompt?.(t(prompt), intent)}
+              onClick={() => {
+                // A website mode switch keeps the user's draft; only explicit
+                // ideas below are prompt starters, never the placeholder copy.
+                if (intent === "website") onCreationIntentSelect?.(intent)
+                else onPrompt?.(t(prompt), intent)
+              }}
             >
               <PromptIcon aria-hidden="true" />
               <span>{t(title)}</span>

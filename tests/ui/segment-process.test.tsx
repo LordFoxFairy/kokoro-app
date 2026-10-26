@@ -155,3 +155,24 @@ it("renders one real same-run user across partial pages, EOF and late snapshots 
     }
   } finally { errors.mockRestore() }
 })
+
+
+import { ToolCallRow } from "@/ui/thread/tool-call-row"
+const public28Labels = [
+  ["tool.execution", "Tool call"], ["tool.file.read", "Read file"],
+  ["tool.mcp.discover", "Discover MCP tools"], ["tool.mcp.describe", "Describe MCP tool"],
+  ["tool.mcp.call", "Call MCP tool"], ["tool.web.search", "Search the web"], ["tool.web.fetch", "Read webpage"],
+] as const
+for (const [display_code, label] of public28Labels) {
+  it(`Public28 renders ${display_code} without changing the lifecycle row identity`, () => {
+    const activity = { activity: "tool" as const, activity_id: `act_${"a".repeat(64)}`, segment_id: `seg_${"b".repeat(64)}`, status: "running" as const, display_code }
+    const { rerender } = render(<LocaleProvider><ToolCallRow activity={activity} /></LocaleProvider>)
+    const original = screen.getByText(label)
+    expect(screen.getByText("Running")).toBeInTheDocument()
+    for (const [status, text] of [["completed", "Completed"], ["failed", "Failed"]] as const) {
+      rerender(<LocaleProvider><ToolCallRow activity={{ ...activity, status }} /></LocaleProvider>)
+      expect(screen.getByText(label)).toBe(original)
+      expect(screen.getByText(text)).toBeInTheDocument()
+    }
+  })
+}

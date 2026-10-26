@@ -1,3 +1,15 @@
+## 2026-10-26 Public28 安全工具类别消费者（实施候选，尚未正常激活）
+
+**唯一 wire 来源。** `src/generated/bff-public-openapi.yaml` 从正式 BFF `5dfce099c7ce448e18b8ce5b1e26bb01692c9033` Git blob取得，固定28.0.0／全文 SHA256 `34ca44c01ebc73f7ff76a4a06be33696b96ba1636e8818f02c38d57b1f539809`；App26 正式本地 `5b651f40d6e16e8afa92c5149a97a86e684aadad` 前置已满足，Root 已授权既定写区。`generate-bff-tool-display.mjs` 仅提取 owner `RunToolActivity.display_code.enum` 到只读 generated tuple/type/provenance，无另一份可编辑字段事实；七个既有 public 生成器随同一完整正式原件正规更新，MCP 独立私有 artifact及其恢复政策原样保持。正常生效仍待 Root 配对，不从候选/Agent原件猜 wire。
+
+目标 tool `display_code` 闭集为 `tool.execution`、`tool.file.read`、`tool.mcp.discover`、`tool.mcp.describe`、`tool.mcp.call`、`tool.web.search`、`tool.web.fetch`，其精确值与闭集性由固定 BFF28 原件验证，不手抄成运行时 wire 常量。其余 tool 字段仍 required `activity/activity_id/segment_id/status`、原 opaque ID与 `running/completed/failed`，不接受额外字段。unknown code拒绝；旧 generic仍合法并保持通用标签，不因没有具体类别而推测名称/行为。file.read不声明“读取技能”；MCP三类不暴露远端 server/tool 名、参数或说明，不把发现/说明/调用标签当成执行资格或成功证明。既有 Skill/Subagent/HITL/Delivery/错误语义不变。
+
+现唯一 `runProcessActivitySchema` 同时校验 AG-UI `CUSTOM kokoro.activity.updated`、内部活动事件、snapshot过程与 Message parts活动；本片仅令其 tool分支引用正规生成 tuple，仍 strict，不新增 JSON envelope、事件名或第二 schema。ToolCallRow只把受信 code穷尽映射本地 MessageKey，九语提供六个新类别标签并保留 `thread.toolCall` 通用语义，状态文字沿原键；不存在 name/args/result/URL→code的客户端推理。公开 payload不新增名称、参数、结果、错误原文、路径、任意标题、phase、时长或推理字段，没有新网络请求或 endpoint。
+
+完整 snapshot/live/parts保同一值：opaque activity identity、public ledger坐标/cursor、顺序/连续活动分组、真实状态、parts revision及原 scope/主体/代际/取消/退休/迟到围栏均不变。无浏览器业务持久化、Schema或新权限；不改旧正文/历史活动或重跑 R6来恢复未发布语义。mapper/reducer与现读取状态机只通过原共享 schema接新枚举，不借本片重构。
+
+**正规生成与历史保护。** 本片按正式 BFF28 Git对象取得完整原件，更新当前来源断言，逐条运行既有 `contract:generate:bff-<surface>`（surface 为 agent-failure、team、account-sessions、account-profile、shared-tasks、archived-tasks、public-skill-list），再运行本片新增 `contract:generate:bff-tool-display`；生成文件只由命令更新，对应 `--check` 纳入 `pnpm contract`。test-only 完整28→27逆恢复旧 Public27 全文 SHA256 `d2b3d546164cadc9655616fc44daf1511a6f7d4a2e5d172f1415552af8942ed1` 后，继续现27→26与历史证明，保全部旧 raw parent hash和固定 helper身份；不把兼容转换带入客户端或默默忽略新值。精确源码/生成/locale/测试候选写区见本技术设计首节，正常配对、浏览器验收及恢复由 Root另行授权；本源码候选不代表正常链路已生效。
+
 ## 2026-10-26 MCP 列表 icon 媒体同源面（实施设计）
 
 新增仅浏览器私有 `GET /api/hub/mcp/servers/{server_id}/icon`，映射 BFF `GET /browser/v1/mcp/servers/{server_id}/icon`。请求只允许精确 ID 路径、无 query/body/Content-Type/framing/命令头；身份只取现 Product Session。200 为完整 `image/png` 或 `image/jpeg`，严格非零 Content-Length ≤ 1,048,576，no-store/nosniff/no-referrer；不透传 redirect、cookie、owner location 或任意依赖头。完整 admission/响应 EOF 同一 10 秒预算，未知错误拒绝，不污染列表读取。私有 profile 固定 BFF `7a94139b607ca4e51feb1f5480b35f46c4afa53c` / `mcp-server-icon-browser/1.0.0` / SHA256 `26569264ab799b753e9e57621167a34b2b5530f9e0d8d65cf9dc333d3aada766`，`contract/bff-mcp-server-icon-source.json` 记录来源，原件与 status/code/retryable 闭集经 `generate-bff-mcp-server-icon.mjs` 正规生成；Public27、Connector JSON 与原命令错误 profile 均不扩。浏览器始终 fetch 固定同源路径且禁止缓存/redirect，只有完整校验后的当前寿命 blob URL 进入 img src，避免浏览器复用同 URI 的旧解码图像；没有额外 query、Storage URL 或第二条 JSON 读取。

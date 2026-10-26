@@ -1,3 +1,7 @@
+## 2026-10-26 Public28 安全工具类别（源码候选）
+
+唯一 full snapshot 从正式 BFF `5dfce099c7ce448e18b8ce5b1e26bb01692c9033` Git blob取得，28.0.0／187操作／SHA256 `34ca44c01ebc73f7ff76a4a06be33696b96ba1636e8818f02c38d57b1f539809`。七个原 public 窄生成器正规重出；新增 `generate-bff-tool-display.mjs` 从同一 full 原件生成安全七类 tuple/type/provenance，`pnpm contract` 严格检查。唯一共享 activity schema承接 live/snapshot/ordered parts；test-only28→27完整回原 SHA256 `d2b3d546164cadc9655616fc44daf1511a6f7d4a2e5d172f1415552af8942ed1` 后进入未改固定27 helper与旧父链。独立MCP私有原件/pin不变，无新网络/Schema/phase；正常组合由Root另验。
+
 ## 2026-10-25 personal SSE 固定 Public26 消费者候选
 
 唯一 public snapshot 来自正式 BFF Git 对象 `aa0bdeb4397d3a022edf9b3cfc53d5a6cfb281b1`／Public26，全文 SHA256 `20d26736cf23da32c242c2c7cf75c45affb62c5d27696dcecb0bc6193bc39a09`；七个原 public 生成器正规重出。Connection transport 只接受 HTTP/SSE；test-only 完整26→25逆恢复原 SHA256 `7261ac9ce2140555ba97ebff2bf0359533cc49dda014b08dcd6a6054a8d38b1c` 后进入未变25→24与历史证明，不是运行 fallback。独立 connector-error／project-publication 原件、固定 pin 与生成链不变；候选完整门／正常成套由 Root 串行接手，下方按原发行保留历史。

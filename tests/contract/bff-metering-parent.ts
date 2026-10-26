@@ -1,4 +1,4 @@
-import { restorePublic26MessagePartsContract } from "./bff-message-parts-parent"
+import { restorePublic26MessagePartsContract } from "./bff-tool-display-parent"
 // Test-only exact Public22.5 ->22.4 complete-artifact inverse; no runtime import.
 import { createHash } from "node:crypto"
 const proof = {

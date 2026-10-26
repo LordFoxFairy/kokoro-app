@@ -39,7 +39,7 @@ import { useCustomApiDetail } from "./use-custom-api-detail";
 import { useMcpProviderConnection, type McpConnectorBinding } from "./use-mcp-provider-connection";
 import { useMcpProviderRelations } from "./use-mcp-provider-relations";
 import { useCustomApiProjection } from "./use-custom-api-projection";
-import { invalidateMcpConnectorProjection, useMcpConnectorRevision, useMcpProjection } from "./use-mcp-projection";
+import { getMcpServerMediaRevisions, invalidateMcpConnectorProjection, useMcpConnectorRevision, useMcpProjection } from "./use-mcp-projection";
 
 import type { CustomApiManagementIntent } from "./custom-api-management-commands";
 
@@ -121,7 +121,7 @@ export function McpProjectionRead({
   const [detailRetry, setDetailRetry] = useState(0);
   // Subscribe to the existing mutation revision; a known creation read is not
   // permission to retain stale CAS after admission, mutation, or explicit retry.
-  const connectorRevision = useMcpConnectorRevision(client, identity);
+  useMcpConnectorRevision(client, identity);
   if (createdDetail && detailRetry > 0) retireCreatedMcpDetail(createdDetail.target);
   const createdFacts = createdDetail ? readCreatedMcpDetail(createdDetail.target, client, commandBoundary) : null;
   const [editor, setEditor] = useState<McpConnectorEditor | null>(() => createdFacts ? { kind: "edit", ...createdFacts } : null);
@@ -679,7 +679,7 @@ export function McpProjectionRead({
         <div className={styles.content}>
           {hasVisibleConnection || connectionResultsKnown ? <McpConnectionList
             key={JSON.stringify([identity, readGeneration])}
-            mediaRevision={connectorRevision}
+            serverMediaRevisions={getMcpServerMediaRevisions(client, identity)}
             connectors={connectors}
             customApis={customApis}
             providers={providers}

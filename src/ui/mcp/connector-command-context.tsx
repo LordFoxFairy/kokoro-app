@@ -35,7 +35,7 @@ export function ConnectorCommandProvider({ client, boundary, children }: {
   useLayoutEffect(() => { publication.bind({ subject, admitted, generation }); return () => { publication.pause(); }; }, [publication, subject, admitted, generation]);
   const mcp = useMemo(() => createMcpLifecycleCommands({
     client, recovery: createBrowserMcpPreparationRecovery(), boundary: { subject, admitted: false, generation: 0 },
-    onConfirmed: () => { if (subject !== null) invalidateMcpConnectorProjection(client, subject); },
+    onConfirmed: (mediaServerId) => { if (subject !== null) invalidateMcpConnectorProjection(client, subject, mediaServerId); },
   }), [client, subject]);
   const { preparation, management } = mcp;
   const providerCreation = useMemo(() => createProviderCreationCommands({

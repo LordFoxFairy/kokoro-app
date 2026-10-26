@@ -73,3 +73,12 @@ describe("R135 public7 snapshot process contract", () => {
     }))).toThrow()
   })
 })
+
+for (const display_code of ["tool.execution", "tool.file.read", "tool.mcp.discover", "tool.mcp.describe", "tool.mcp.call", "tool.web.search", "tool.web.fetch"]) {
+  it(`Public28 snapshot keeps ${display_code} without synthesizing names or phases`, () => {
+    const safe = { activity: "tool", activity_id: activityId, segment_id: segmentId, status: "completed", display_code }
+    const process = { run_id: "run_a", todos: null, activities: [safe], next_cursor: null }
+    expect(sessionSnapshotSchema.parse(public7Snapshot(process))).toMatchObject({ execution_process: process })
+    expect(() => sessionSnapshotSchema.parse(public7Snapshot({ ...process, activities: [{ ...safe, name: "private" }] }))).toThrow()
+  })
+}

@@ -449,3 +449,12 @@ describe("R66 public4 queued/START/full-state mapper", () => {
     expect(terminal.terminal).toBe(false)
   })
 })
+
+for (const display_code of ["tool.execution", "tool.file.read", "tool.mcp.discover", "tool.mcp.describe", "tool.mcp.call", "tool.web.search", "tool.web.fetch"]) {
+  it(`Public28 mapper preserves ${display_code} as process only`, () => {
+    const value = { activity: "tool", activity_id: `act_${"a".repeat(64)}`, segment_id: `seg_${"b".repeat(64)}`, status: "running", display_code }
+    const mapped = new AgUiEventMapper().map(CURSORS.start, { type: "CUSTOM", timestamp: 1, name: "kokoro.activity.updated", value, metadata: metadata("public28", 1) })
+    expect(mapped.projectionEvent).toMatchObject({ kind: "activity.updated", payload: value })
+    expect(mapped.uiMessageChunks).not.toEqual(expect.arrayContaining([expect.objectContaining({ type: expect.stringMatching(/^(text|reasoning|tool)/u) })]))
+  })
+}

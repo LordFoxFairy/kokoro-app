@@ -110,3 +110,16 @@ it("keeps the original user exactly once when real user and assistant rows share
     expect(state.messages.some((message) => message.role === "assistant" && message.content === "authoritative assistant body")).toBe(true)
   }
 })
+
+for (const display_code of ["tool.execution", "tool.file.read", "tool.mcp.discover", "tool.mcp.describe", "tool.mcp.call", "tool.web.search", "tool.web.fetch"] as const) {
+  it(`Public28 ${display_code} stays in its owner slot without disturbing surrounding text`, () => {
+    if (activity.kind !== "activity" || activity.activity.activity !== "tool") throw new Error("tool fixture")
+    const safe = { ...activity, activity: { ...activity.activity, display_code } }
+    const state = mergeMessageParts(stateFromSnapshot(snapshot()), { message_id: "owner", run_id: "r", revision: "9007199254740993", items: [text("a", "before", "9007199254740991"), safe, text("b", "after", "9007199254740993")] }, [], true)
+    const groups = groupSegments(state.stepsByRun.r ?? [])
+    expect(groups.map((segment) => segment.activities.length ? "process" : segment.segmentId)).toEqual(["a", "process", "b"])
+    expect(groups.flatMap((segment) => segment.activities)).toEqual([safe.activity])
+    expect(state.messages.filter((item) => !item.orderedContainer).map((item) => item.content)).toEqual(["before", "after"])
+    expect(mergeMessageParts(state, { message_id: "owner", run_id: "r", revision: "9007199254740992", items: [] }, [], true)).toBe(state)
+  })
+}

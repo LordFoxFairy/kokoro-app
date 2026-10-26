@@ -21,7 +21,7 @@ import galleryStyles from "./mcp-custom-api-gallery.module.css";
 
 export function McpConnectionList({
   connectors,
-  mediaRevision = 0,
+  serverMediaRevisions,
   customApis,
   providers,
   query,
@@ -35,8 +35,8 @@ export function McpConnectionList({
   onNext,
 }: {
   connectors: McpConnector[];
-  /** Retires media immediately after a confirmed write, including server-only icon changes. */
-  mediaRevision?: number;
+  /** Exact confirmed icon changes; ordinary connector refreshes retain private media. */
+  serverMediaRevisions?: ReadonlyMap<string, number>;
   customApis: CustomApiProfile[];
   providers: McpConnectorProvider[];
   query: string;
@@ -127,7 +127,7 @@ export function McpConnectionList({
                           unoptimized
                         />
                       ) : connector.server_id ? (
-                        <McpServerIcon key={mediaRevision} serverId={connector.server_id} stateVersion={connector.state_version}
+                        <McpServerIcon serverId={connector.server_id} mediaRevision={serverMediaRevisions?.get(connector.server_id) ?? 0}
                           fallback={<span className={galleryStyles.initial}>{Array.from(connectorName.trim())[0] ?? ""}</span>} />
                       ) : (
                         <span className={galleryStyles.initial}>{Array.from(connectorName.trim())[0] ?? ""}</span>

@@ -42,7 +42,7 @@ function freezeIntent(intent: McpManagementIntent): McpManagementIntent {
   }
 }
 
-function createManagement(options: { client: Client; preparation: McpPreparationCommands; boundary: ProjectReadBoundary; onConfirmed: () => void }) {
+function createManagement(options: { client: Client; preparation: McpPreparationCommands; boundary: ProjectReadBoundary; onConfirmed: (mediaServerId?: string) => void }) {
   const actor = options.boundary.subject;
   let boundary = { ...options.boundary }, leases = 0, retired = false;
   const entries = new Map<string, Entry>(), listeners = new Set<() => void>();
@@ -96,6 +96,8 @@ function createManagement(options: { client: Client; preparation: McpPreparation
       let entry = entries.get(input.connectorId);
       if (entry?.command.getSnapshot().kind === "rejected") { remove(entry); entry = undefined; }
       if (entry) return Promise.resolve(false);
+      // Set only from the frozen input after its exact target ACK is validated.
+      let confirmedMediaServerId: string | undefined;
       const execute = async (body: McpManagementIntent, key: string, requestSignal: AbortSignal) => {
         const client = options.client;
         const bound = (connector: McpConnector) => {
@@ -107,7 +109,9 @@ function createManagement(options: { client: Client; preparation: McpPreparation
           case "delete_server": return client.deletePrivateMcpServer!(body.serverId, body.input.expected_state_version, key, requestSignal);
           case "update_server": {
             const result = await client.updatePrivateMcpServer!(body.serverId, body.input, key, requestSignal);
-            bound(result.connector); return result;
+            bound(result.connector);
+            if (body.input.icon !== undefined || body.input.clear_icon === true) confirmedMediaServerId = body.serverId;
+            return result;
           }
           case "update_connector": return bound(await client.updateMcpConnector(body.connectorId, body.input, key, requestSignal));
           case "set_enabled": return bound(await client.setMcpConnectorEnabled(body.connectorId, body.input, key, requestSignal));
@@ -118,7 +122,7 @@ function createManagement(options: { client: Client; preparation: McpPreparation
       if (!available) return Promise.resolve(false);
       const operation = input.operation;
       const command = createConnectorCommand<McpManagementIntent>({ boundary, surface: "mcp", invalidRequestCode: "invalid_mcp_personal_request", freeze: freezeIntent, execute,
-        onConfirmed: () => { if (cleanup(operation) && locator.serverId) options.preparation.retireTarget(locator.serverId, locator.connectorId); options.onConfirmed(); },
+        onConfirmed: () => { if (cleanup(operation) && locator.serverId) options.preparation.retireTarget(locator.serverId, locator.connectorId); options.onConfirmed(confirmedMediaServerId); },
       });
       entry = { locator, operation: input.operation, command, release: command.retain(boundary), unsubscribe: command.subscribe(publish) };
       entries.set(input.connectorId, entry);
@@ -134,7 +138,7 @@ function createManagement(options: { client: Client; preparation: McpPreparation
 }
 
 /** Fixed MCP lifecycle wiring: management and Prepare remain typed, separate intents. */
-export function createMcpLifecycleCommands(options: { client: Client; boundary: ProjectReadBoundary; onConfirmed: () => void; recovery?: McpPreparationRecovery }) {
+export function createMcpLifecycleCommands(options: { client: Client; boundary: ProjectReadBoundary; onConfirmed: (mediaServerId?: string) => void; recovery?: McpPreparationRecovery }) {
   const preparation = createMcpPreparationCommands({ ...options, canPrepare: target => !management.isBlocked(target.connectorId) });
   const management = createManagement({ ...options, preparation });
   return { preparation, management };

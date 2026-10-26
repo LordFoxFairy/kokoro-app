@@ -1,3 +1,33 @@
+## 2026-10-26 BFF28 工具展示类别消费（实施候选，尚未正常激活）
+
+**前置/写入边界。** App26 正式本地基线 `5b651f40d6e16e8afa92c5149a97a86e684aadad` 与 BFF28 正式本地 commit `5dfce099c7ce448e18b8ce5b1e26bb01692c9033` 已由 Root 交付；从该 BFF Git blob 获取唯一 full Public28，SHA256 `34ca44c01ebc73f7ff76a4a06be33696b96ba1636e8818f02c38d57b1f539809`，按批准写区消费，不消费未提交原件。旧 Public27 全文 SHA256 `d2b3d546164cadc9655616fc44daf1511a6f7d4a2e5d172f1415552af8942ed1` 继续作为不可变父证明。Agent 拥有受信工具定义与安全类别，BFF 拥有公开 wire/durable AG-UI，App 仅严格解析和本地化，不连接 Agent/内部 owner。源码候选与正常激活分开；Root 的原22项混合 WIP、媒体8路径均保独立写区。
+
+**单一来源与最小方案。** 七个现有 public 窄生成器均读取 `src/generated/bff-public-openapi.yaml`，其输出当前不包含工具类别。采用一个专用有限提取器 `scripts/generate-bff-tool-display.mjs`：只从固定 BFF28 的 `RunToolActivity.properties.display_code.enum` 正规生成 `src/generated/bff-tool-display.ts` 的只读 tuple、派生类型和 commit/version/SHA provenance。禁止手写第二份运行时 wire 值表、把工具类别塞入 Skills/failure 生成器，或新增通用模板/客户端框架。现有七生成链只随正式完整 artifact 更新来源 pins并正规重出，独立 MCP 私有原件/版本/摘要与命令恢复语义不变。
+
+| 正式 code | 本地标签语义 |
+| --- | --- |
+| `tool.execution` | 沿既有 `thread.toolCall` 的通用工具调用。 |
+| `tool.file.read` | 读取文件；不推断 Skill 文件或展示路径。 |
+| `tool.mcp.discover` | MCP 工具发现。 |
+| `tool.mcp.describe` | MCP 工具说明。 |
+| `tool.mcp.call` | MCP 工具调用。 |
+| `tool.web.search` | 联网检索。 |
+| `tool.web.fetch` | 网页读取。 |
+
+**唯一解析/呈现路径。** `src/contract/agui-events.ts` 的 tool 分支以生成 tuple构造 validator；现 `runProcessActivitySchema` 已同时服务 `CUSTOM kokoro.activity.updated`、内部 projection event、snapshot `execution_process` 和 `messageActivityPart`，不再加另一份 snapshot/parts schema。`ToolCallRow` 仅使用对生成 code 类型穷尽的 `Record<code, MessageKey>`；六个新标签与既有 generic 在九语言完整落地，运行/完成/失败仍沿原状态键。未知 code/额外 raw 字段继续拒绝，不降成 generic；旧 `tool.execution` 是正式合法值，不猜其真实工具。禁止从名称、参数、结果、URL、Skill 选择或 opaque ID推类别，不造标题、phase、时长或成功事实；Skill/Subagent/HITL/Delivery 保持独立原语义。
+
+**原生命周期保持。** 只替换已验证类别的静态标签，不改 activity ID、public_sequence、cursor、parts revision、分组规则、文字/活动顺序、真实状态、展开偏好、节点 key/焦点、当前主体/准入代际、取消/退休和迟到响应围栏。现 mapper/reducer/hydration/parts reader 保全值传递且共用 schema，没有本次需重写的丢字段证据。无新网络请求、endpoint、权限、协议、依赖、持久存储或数据模型变化，不建空数据模型文档；不回填 R6/旧正文，不重跑模型或工具来制造标签。
+
+**Root 已批准的精确实施写区。** 以下相对本仓：
+
+- 核心仅 `scripts/generate-bff-tool-display.mjs`、`src/generated/bff-tool-display.ts`、`src/contract/agui-events.ts`、`src/ui/thread/tool-call-row.tsx`、`package.json` 与 `tests/architecture/governance.test.ts`；新增 generate/check 纳入现 contract 严格门，不放宽原 script 清单断言。
+- 完整 artifact 为 `src/generated/bff-public-openapi.yaml`；现 `scripts/generate-bff-agent-failure.mjs`、`generate-bff-team-client.mjs`、`generate-bff-account-sessions-client.mjs`、`generate-bff-account-profile-client.mjs`、`generate-bff-shared-tasks-client.mjs`、`generate-bff-archived-tasks-client.mjs`、`generate-bff-public-skill-list.mjs` 只更新正式 public pin及各自既有 generated 输出，不夹带其它功能 wire 改动。
+- locale 仅 `src/i18n/messages.ts`、`en.ts`、`ja.ts`、`ko.ts`、`es.ts`、`fr.ts`、`de.ts`、`pt.ts`、`ru.ts` 的六个新类别键，（当前九语已有 generic 键原值保持）；不改全局 fallback/overlays 或其它业务文案。与 Root 当前 locale writer串行，不做全文件机械格式化。
+- 定向测试沿 `tests/contract/agui-events.test.ts`、`chat.test.ts`、`message-parts-read.test.ts`，新增 `tests/contract/bff-tool-display-public.test.ts`、`bff-tool-display-parent.ts`；复用 `tests/engine/agui-event-mapper.test.ts`、`tests/core/message-parts.test.ts`、`tests/ui/segment-process.test.tsx`、`tests/i18n/resolve.test.ts` 检验保值、七类/三状态、原分组/节点顺序和九语。完整 public pin断言的既有测试精确限于 `tests/contract/bff-project-create-public.test.ts`、`bff-library-file-public.test.ts`、`bff-agent-failure-public.test.ts`、`bff-shared-tasks-public.test.ts`、`bff-billing-credit-account-public.test.ts`、`bff-project-resource-public.test.ts`、`bff-library-artifact-public.test.ts`、`bff-metering-public.test.ts`、`bff-account-profile-public.test.ts`、`bff-account-sessions-public.test.ts`、`bff-skills-mcp-public.test.ts`、`bff-team-public.test.ts`、`bff-model-catalog-public.test.ts`、`bff-model-discovery-public.test.ts`、`mcp-server-icon.test.ts`、`mcp-project-publication.test.ts` 与 `contract/api-contract.test.ts`，及 Root 补批 `tests/contract/personal-knowledge.test.ts` 一处 current full SHA，只更新正式 current pin，不修改旧父 hash或私有原件。现 test-only `tests/contract/bff-metering-parent.ts`、`bff-archived-tasks-public.test.ts` 及上述已引用旧 helper的测试，只可接入新父前置 wrapper；固定 `bff-message-parts-parent.ts` 原字节保持。
+- 说明只更新本两设计、`contract/README.md` 与相邻 `src/ui/thread/INDEX.md`、`src/i18n/INDEX.md` 必要事实；`src/contract/chat.ts`、core/engine 的状态机与其它 UI 默认原字节保持。
+
+**历史证明/验收。** 从正式 BFF28 完整字节精确逆回完整 Public27 的上述原 SHA，再进入现 27→26及更早父证明。新增 test-only helper先恢复27，不重签或改写现 `bff-message-parts-parent.ts` 的固定父 helper/历史 hash；需要接线的既有测试/helper只加新父的前置调用，不把历史转换放入运行时。源码实施先 focused RED/GREEN，再正规生成与 `pnpm contract`、`pnpm test:architecture`、`pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm build`、post-build typecheck；Root 另行安排真实浏览器与定向 E2E，不由文档任务启动服务/模型。正常激活须先有正式 BFF28与 App配对；若产生新 code，不回退到只认 generic 的旧 reader或改写事件来回滚，恢复遵循 Root 固定组合决策。
+
 ## 2026-10-26 MCP 列表私有媒体读取（实施边界）
 
 MCP 列表继续只消费原 Connector 元数据；有 `server_id` 的自定义卡独立请求同源 icon 媒体，不逐卡请求 JSON 详情，不把 Storage 短引用放入列表。Provider artwork 与 API 图标沿原路径。新 `mcp-server-icon` 只拥有当前主体/准入代、server ID 与 connector state_version 的图片加载状态；成功后显示，未知/失败保真实名称首字母，无 spinner、自动重试或无图事实断言。保存/替换/清除的 confirmed-write projection revision 立即退休旧图并独立重新读取；仅改图标不保证 Connector CAS 增加，列表刷新失败也不保已确认清除的旧图。普通无已确认写入的被动 pending/failure 保当前图片。

@@ -657,6 +657,39 @@ describe("MCP typed management and Prepare interlock", () => {
     }
   })
 
+  it.each(["replace", "clear"] as const)("only the frozen exact icon %s target is invalidated after its ACK, never while unknown", async operation => {
+    const { createMcpLifecycleCommands } = await import("@/ui/mcp/mcp-management-commands")
+    const hub = client(), changed = vi.fn(), flow = createMcpLifecycleCommands({ client: hub, boundary: admitted, onConfirmed: changed })
+    hub.updatePrivateMcpServer.mockRejectedValueOnce(new Error("lost ACK"))
+    const intent: import("@/ui/mcp/mcp-management-commands").McpManagementIntent = { operation: "update_server", connectorId: connector.connector_id, serverId: server.server_id, input: { expected_state_version: "1", ...(operation === "clear" ? { clear_icon: true as const } : { icon: { intent_id: "11111111-1111-4111-8111-111111111111", expected_state_version: "1" } }) } }
+    expect(await flow.management.submit(intent, admitted)).toBe(false)
+    expect(changed).not.toHaveBeenCalled()
+    intent.serverId = "not-the-frozen-target"
+    if (operation === "clear") delete intent.input.clear_icon
+    else intent.input.icon!.intent_id = "22222222-2222-4222-8222-222222222222"
+    expect(await flow.management.resume(connector.connector_id, admitted)).toBe(true)
+    expect(changed).toHaveBeenCalledExactlyOnceWith(server.server_id)
+    expect(hub.updatePrivateMcpServer.mock.calls[0]?.slice(0, 3)).toEqual(hub.updatePrivateMcpServer.mock.calls[1]?.slice(0, 3))
+  })
+
+  it("a late icon ACK invalidates only its original actor/server, never the replacement actor or another client", async () => {
+    const { createMcpLifecycleCommands } = await import("@/ui/mcp/mcp-management-commands")
+    const { invalidateMcpConnectorProjection, getMcpServerMediaRevisions, getMcpConnectorRevisionSnapshot } = await import("@/ui/mcp/use-mcp-projection")
+    const hub = client(), otherClient = client(), subject = admitted.subject
+    let acknowledge!: (value: { server: typeof server; connector: typeof connector; replayed: boolean }) => void
+    hub.updatePrivateMcpServer.mockReturnValue(new Promise(resolve => { acknowledge = resolve }))
+    const flow = createMcpLifecycleCommands({ client: hub, boundary: admitted, onConfirmed: serverId => invalidateMcpConnectorProjection(hub as unknown as HubClient, subject, serverId) })
+    const wait = flow.management.submit({ operation: "update_server", connectorId: connector.connector_id, serverId: server.server_id, input: { expected_state_version: "1", clear_icon: true } }, admitted)
+    flow.management.bind({ ...admitted, subject: "replacement-actor" })
+    expect(getMcpServerMediaRevisions(hub, subject).size).toBe(0)
+    acknowledge({ server, connector, replayed: false }); expect(await wait).toBe(false)
+    expect(getMcpServerMediaRevisions(hub, subject).get(server.server_id)).toBe(1)
+    expect(getMcpConnectorRevisionSnapshot(hub, subject)).toBe(1)
+    expect(getMcpServerMediaRevisions(hub, "replacement-actor").size).toBe(0)
+    expect(getMcpConnectorRevisionSnapshot(hub, "replacement-actor")).toBe(0)
+    expect(getMcpServerMediaRevisions(otherClient, subject).size).toBe(0)
+  })
+
   it("blocks configuration changes during unknown Prepare but still permits explicit cleanup and only retires Prepare at its ACK", async () => {
     const { createMcpLifecycleCommands } = await import("@/ui/mcp/mcp-management-commands")
     const hub = client(), flow = createMcpLifecycleCommands({ client: hub, boundary: admitted, onConfirmed: vi.fn() })
