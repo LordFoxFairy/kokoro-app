@@ -1163,7 +1163,7 @@ it("R254 项目展开和快捷概览入口都不替换普通持久会话分区",
 
 it.each([false, true])("账户菜单精确显示 available 且不虚构免费套餐（读取失败=%s）", async (failed) => {
   vi.spyOn(pageClients, "browserBillingClient").mockReturnValue({
-    summary: failed ? vi.fn().mockRejectedValue(new Error("billing_unavailable")) : vi.fn().mockResolvedValue({ credit_account_id: "11111111-1111-4111-8111-111111111111", status: "active", available_micros: "9007199254740993", held_micros: "500000" }),
+    initializeCreditAccount: vi.fn().mockRejectedValue(new Error("unexpected_initialization")),    summary: failed ? vi.fn().mockRejectedValue(new Error("billing_unavailable")) : vi.fn().mockResolvedValue({ credit_account_id: "11111111-1111-4111-8111-111111111111", status: "active", available_micros: "9007199254740993", held_micros: "500000" }),
     ledger: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }),
   })
   window.localStorage.setItem("kokoro.web.auth-index-subject", "r255-credit-owner")
@@ -1197,7 +1197,7 @@ it("账户余额主体切换先撤旧值，旧读取迟到不覆盖B且取消原
   const fresh = r255DeferredAccount()
   const signals: (AbortSignal | undefined)[] = []
   const summary = vi.fn((signal?: AbortSignal) => { signals.push(signal); return signals.length === 1 ? late.promise : fresh.promise })
-  vi.spyOn(pageClients, "browserBillingClient").mockReturnValue({ summary, ledger: vi.fn() })
+  vi.spyOn(pageClients, "browserBillingClient").mockReturnValue({ summary, ledger: vi.fn(), initializeCreditAccount: vi.fn().mockRejectedValue(new Error("unexpected_initialization")) })
   window.localStorage.setItem("kokoro.web.auth-index-subject", "r255-A")
   const view = render(r255AccountElement({ admitted: true, subject: "r255-A", generation: 1 }))
   const menu = await r255OpenAccountMenu()
@@ -1214,7 +1214,7 @@ it("账户余额主体切换先撤旧值，旧读取迟到不覆盖B且取消原
 it("账户准入marker撤回时立即隐藏旧余额而不读取未知主体", async () => {
   const readmit = r255DeferredAccount()
   const summary = vi.fn().mockResolvedValueOnce(r255AccountValue).mockImplementationOnce(() => readmit.promise)
-  vi.spyOn(pageClients, "browserBillingClient").mockReturnValue({ summary, ledger: vi.fn() })
+  vi.spyOn(pageClients, "browserBillingClient").mockReturnValue({ summary, ledger: vi.fn(), initializeCreditAccount: vi.fn().mockRejectedValue(new Error("unexpected_initialization")) })
   window.localStorage.setItem("kokoro.web.auth-index-subject", "r255-A")
   const view = render(r255AccountElement({ admitted: true, subject: "r255-A", generation: 1 }))
   const menu = await r255OpenAccountMenu()
@@ -1236,7 +1236,7 @@ it("账户卸载真正abort且迟到completion不进入后续菜单", async () =
   const late = r255DeferredAccount()
   let signal: AbortSignal | undefined
   const summary = vi.fn((value?: AbortSignal) => { signal = value; return late.promise })
-  vi.spyOn(pageClients, "browserBillingClient").mockReturnValue({ summary, ledger: vi.fn() })
+  vi.spyOn(pageClients, "browserBillingClient").mockReturnValue({ summary, ledger: vi.fn(), initializeCreditAccount: vi.fn().mockRejectedValue(new Error("unexpected_initialization")) })
   window.localStorage.setItem("kokoro.web.auth-index-subject", "r255-A")
   const view = render(r255AccountElement({ admitted: true, subject: "r255-A", generation: 1 }))
   await waitFor(() => expect(summary).toHaveBeenCalledTimes(1))
@@ -1298,7 +1298,7 @@ function set29Account(readBoundary?: ProjectReadBoundary, preview = false) {
 }
 function set29Summary() {
   const summary = vi.fn().mockResolvedValue(r255AccountValue)
-  const client = vi.spyOn(pageClients, "browserBillingClient").mockReturnValue({ summary, ledger: vi.fn() })
+  const client = vi.spyOn(pageClients, "browserBillingClient").mockReturnValue({ summary, ledger: vi.fn(), initializeCreditAccount: vi.fn().mockRejectedValue(new Error("unexpected_initialization")) })
   return { summary, client }
 }
 const set29A = { admitted: true, subject: "set29-A", generation: 1 }
@@ -1324,7 +1324,7 @@ it("SET29 pending same-subject generation retires signal and ignores late result
   const fresh = r255DeferredAccount()
   const signals: (AbortSignal | undefined)[] = []
   const summary = vi.fn((signal?: AbortSignal) => { signals.push(signal); return signals.length === 1 ? late.promise : fresh.promise })
-  vi.spyOn(pageClients, "browserBillingClient").mockReturnValue({ summary, ledger: vi.fn() })
+  vi.spyOn(pageClients, "browserBillingClient").mockReturnValue({ summary, ledger: vi.fn(), initializeCreditAccount: vi.fn().mockRejectedValue(new Error("unexpected_initialization")) })
   window.localStorage.setItem("kokoro.web.auth-index-subject", "set29-A")
   const view = render(set29Account(set29A))
   const menu = await r255OpenAccountMenu()
@@ -1343,7 +1343,7 @@ it("SET29 A-B-A does not revive the original ready tuple or B late completion", 
   const pendingB = r255DeferredAccount()
   const newA = r255DeferredAccount()
   const summary = vi.fn().mockResolvedValueOnce(r255AccountValue).mockImplementationOnce(() => pendingB.promise).mockImplementationOnce(() => newA.promise)
-  vi.spyOn(pageClients, "browserBillingClient").mockReturnValue({ summary, ledger: vi.fn() })
+  vi.spyOn(pageClients, "browserBillingClient").mockReturnValue({ summary, ledger: vi.fn(), initializeCreditAccount: vi.fn().mockRejectedValue(new Error("unexpected_initialization")) })
   window.localStorage.setItem("kokoro.web.auth-index-subject", "set29-A")
   const view = render(set29Account(set29A))
   const menu = await r255OpenAccountMenu()

@@ -199,3 +199,7 @@ Web基线91fb1aee87df9e6dc0acadcdda4db5375623a13a，939 tracked clean；runtime_
 - `contract/README.md` 记录 owner、visibility、version、generation、breaking、provenance。
 - 只有 `kokoro-bff` 的 `public` Product API 可进入 Developer API；本仓 browser-private 契约不得发布。
 - 运行时行为变化必须同 commit 更新 source、contract test、相关治理文档和 acceptance 条目。
+
+
+### Scheduled run updates
+The automation management surface shares Calendar, Tasks and Updates navigation. Updates consumes the committed BFF public19.2 read-only run-history contract through `/api/scheduled-task-runs`; it preserves owner ordering and timestamp text, supports explicit task filtering and replacement pagination, and cancels retired reads. Project scope requires an eligible selected task. Preview and clients without the read capability report unavailable history. This adds no execution command or persistent Web state.

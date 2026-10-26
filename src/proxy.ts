@@ -141,7 +141,8 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   // boundary. Do not accept arbitrary percent escapes or double decoding here.
   if (request.method === "GET" && request.nextUrl.search === ""
     && (/^\/api\/hub\/library\/files\/(?:[A-Za-z0-9][A-Za-z0-9._:-]{0,190}|asset%3A[a-f0-9]{64})\/content$/u.test(path)
-      || /^\/api\/hub\/library\/artifacts\/[A-Za-z0-9](?:[A-Za-z0-9._:-]|%3A){0,190}\/[A-Za-z0-9](?:[A-Za-z0-9._:-]|%3A){0,190}\/content$/u.test(path))) {
+      || /^\/api\/hub\/library\/artifacts\/[A-Za-z0-9](?:[A-Za-z0-9._:-]|%3A){0,190}\/[A-Za-z0-9](?:[A-Za-z0-9._:-]|%3A){0,190}\/content$/u.test(path)
+      || !request.url.includes("?") && /^\/api\/hub\/projects\/[A-Za-z0-9](?:[A-Za-z0-9._-]|%3A){0,190}\/resources\/[A-Za-z0-9](?:[A-Za-z0-9._-]|%3A){0,190}\/content$/u.test(path))) {
     response.headers.set("Referrer-Policy", "no-referrer")
   }
   if (shouldDisableCaching(path)) {

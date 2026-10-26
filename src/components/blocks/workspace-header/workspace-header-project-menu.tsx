@@ -7,16 +7,26 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useT } from "@/i18n/context"
 import { MoreHorizontal } from "lucide-react"
-import type { ProjectRenameControl } from "./workspace-header.types"
+import type { ProjectRenameControl, ProjectDeletionControl } from "./workspace-header.types"
+import { WorkspaceHeaderProjectDeletion } from "./workspace-header-project-deletion"
 
 type WorkspaceHeaderProjectMenuProps = {
   onOpenSettings?: (tab: "account" | "subscription") => void
   projectRename?: ProjectRenameControl
+  projectDeletion?: ProjectDeletionControl
 }
 
-export function WorkspaceHeaderProjectMenu({ onOpenSettings, projectRename }: WorkspaceHeaderProjectMenuProps) {
+export function WorkspaceHeaderProjectMenu({ onOpenSettings, projectRename, projectDeletion }: WorkspaceHeaderProjectMenuProps) {
   const t = useT()
   const inputId = useId()
+  const deletionReasonId = useId()
+  const deletionFocusRef = useRef<{ node: HTMLButtonElement; route: string; scope: object } | null>(null)
+  const deletionScopeRef = useRef<object | null>(null)
+  const deletionScope = projectDeletion?.focusScopeToken ?? null
+  useLayoutEffect(() => {
+    deletionScopeRef.current = deletionScope
+    return () => { if (deletionScopeRef.current === deletionScope) deletionScopeRef.current = null }
+  }, [deletionScope])
   const moreTriggerRef = useRef<HTMLButtonElement | null>(null)
   const renameReturnFocusRef = useRef<HTMLButtonElement | null>(null)
   const renameReturnFocusRouteRef = useRef<string | null>(null)
@@ -55,10 +65,27 @@ export function WorkspaceHeaderProjectMenu({ onOpenSettings, projectRename }: Wo
               projectRename.onOpen()
             }}>{t("firstSite.renameProject")}</DropdownMenuItem>
           ) : null}
+          {projectDeletion ? <>
+            <DropdownMenuItem disabled={!projectDeletion.available && projectDeletion.status === "idle"}
+              aria-describedby={!projectDeletion.available && projectDeletion.status === "idle" ? deletionReasonId : undefined}
+              onSelect={() => {
+                const node = moreTriggerRef.current
+                deletionFocusRef.current = node?.isConnected ? { node, route: `${window.location.pathname}${window.location.search}${window.location.hash}`, scope: projectDeletion.focusScopeToken } : null
+                projectDeletion.onOpen()
+              }}>{t("firstSite.deleteProject")}</DropdownMenuItem>
+            {!projectDeletion.available && projectDeletion.status === "idle" ? <p id={deletionReasonId} className="max-w-64 px-2 py-1 text-xs text-muted-foreground">{t("firstSite.projectDeletionUnavailable")}</p> : null}
+          </> : null}
           <DropdownMenuItem onSelect={() => onOpenSettings?.("account")}>{t("settings.accountTitle")}</DropdownMenuItem>
           <DropdownMenuItem onSelect={() => onOpenSettings?.("subscription")}>{t("firstSite.upgrade")}</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      {projectDeletion ? <WorkspaceHeaderProjectDeletion control={projectDeletion} onCloseAutoFocus={(event) => {
+        event.preventDefault()
+        const target = deletionFocusRef.current
+        deletionFocusRef.current = null
+        if (target && target.scope === deletionScopeRef.current && target.node === moreTriggerRef.current && target.node.isConnected
+          && target.route === `${window.location.pathname}${window.location.search}${window.location.hash}`) target.node.focus()
+      }} /> : null}
       {projectRename ? (
         <Dialog open={projectRename.open} onOpenChange={(open) => { if (!open && !busy) projectRename.onClose() }}>
           <DialogContent showCloseButton={false}

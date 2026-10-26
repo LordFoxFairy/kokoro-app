@@ -1,3 +1,7 @@
+## I3 项目资源下载消费者（2026-10-21）
+
+已消费已提交BFF Public19.1.0/166固定原文，现项目文件支持单次校验下载、取消和显式重试。元数据、身份与项目删除屏障保持；预览无真实下载。局部验证及正常浏览器待验见docs/CURRENT.md，不据此称全目标完成。
+
 ## MCP 可用性消费（2026-10-19）
 
 严格消费owner五态，卡片/详情/选择器共用只读展示，不把active当作当前可用。原status/enabled、同源身份、CAS及原命令恢复不改。完整本仓门、4240测试及38原Playwright通过；正常运行与Manus像素级完整对照另验，见当前事实。
@@ -85,3 +89,7 @@ preview fixture 替代。
 - 发布验收矩阵见 [`docs/ACCEPTANCE.md`](docs/ACCEPTANCE.md)。
 - 当前 Docker/CI 供应链与 health/ready 缺口记录在 [`docs/CURRENT.md`](docs/CURRENT.md)，历史报告
   不作为生产证据。
+
+
+### Scheduled run updates
+The automation management surface shares Calendar, Tasks and Updates navigation. Updates consumes the committed BFF public19.2 read-only run-history contract through `/api/scheduled-task-runs`; it preserves owner ordering and timestamp text, supports explicit task filtering and replacement pagination, and cancels retired reads. Project scope requires an eligible selected task. Preview and clients without the read capability report unavailable history. This adds no execution command or persistent Web state.

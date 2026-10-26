@@ -154,7 +154,7 @@ describe("IAM and RP origin admission behind a real local HTTPS reverse proxy", 
       const nextBin = path.resolve(process.cwd(), "node_modules/next/dist/bin/next")
       next = spawn(process.execPath, [nextBin, "dev", "--webpack", "--hostname", "127.0.0.1", "--port", String(nextPort)], {
         cwd: root,
-        env: { ...process.env, NODE_EXTRA_CA_CERTS: certPath,
+        env: { ...process.env, NODE_ENV: "development", NODE_EXTRA_CA_CERTS: certPath,
           KOKORO_WEB_ORIGIN: WEB_ORIGIN, KOKORO_BFF_BASE_URL: `http://127.0.0.1:${bffPort}`,
           KOKORO_DOMAIN: "localhost",
           KOKORO_INTERNAL_SECRET_WEB_BFF: "proxy-fixture-secret", KOKORO_WEB_REDIS_URL: redisUrl,

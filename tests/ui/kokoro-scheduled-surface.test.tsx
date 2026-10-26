@@ -62,7 +62,7 @@ it("呈现排程空态、三项建议和建立按钮", () => {
     "Kokoro 能独立执行工作，无需您的干预",
   );
   expect(screen.getByRole("img", { name: "排程日历" })).toBeInTheDocument();
-  expect(screen.getAllByRole("button")).toHaveLength(4);
+  expect(screen.getAllByRole("button")).toHaveLength(6);
   expect(
     screen.getByRole("button", { name: /建立您的排程任务/ }),
   ).toBeInTheDocument();
@@ -113,7 +113,7 @@ it("通过浏览器历史关闭编辑器时清除旧任务上下文", async () =
       <ScheduledTaskSurface
         brandName="Kokoro"
         tasks={[
-          {
+          { triggerKind: "calendar" as const,
             id: "scheduled_history_1",
             title: "旧任务",
             prompt: "旧提示",
@@ -159,7 +159,7 @@ it("已挂载时收到站内 surface 导航事件会重新读取日历/任务视
         brandName="Kokoro"
         preview
         tasks={[
-          {
+          { triggerKind: "calendar" as const,
             id: "scheduled_navigation_1",
             title: "导航测试",
             frequency: "daily",
@@ -193,17 +193,17 @@ it("填写标题后保存结构化排程数据", () => {
   fireEvent.change(screen.getByRole("textbox", { name: "未读邮件摘要" }), {
     target: { value: "每日流程" },
   });
-  fireEvent.click(screen.getByRole("switch", { name: "自动核准" }));
+  expect(screen.getByRole("switch", { name: "自动核准" })).toBeDisabled();
   fireEvent.click(screen.getByRole("button", { name: "保存" }));
 
-  expect(onSave).toHaveBeenCalledWith({
+  expect(onSave).toHaveBeenCalledWith({ triggerKind: "calendar" as const,
     title: "每日流程",
     prompt: "将手动流程转为定时自动化管道。",
     frequency: "daily",
     time: "08:00",
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     expiresAt: undefined,
-    autoApprove: true,
+    autoApprove: false,
   });
 });
 
@@ -261,7 +261,7 @@ it("预览排程保存后进入列表并持久化本地 fixture", async () => {
       window.localStorage.getItem("kokoro.preview.scheduled-tasks") ?? "[]",
     ),
   ).toEqual([
-    expect.objectContaining({
+    expect.objectContaining({ triggerKind: "calendar" as const,
       title: "每日流程",
       frequency: "daily",
       time: "08:00",
@@ -320,7 +320,7 @@ it("live 模式缺少注入的 client 时显示错误，不把缺失 BFF 误当�
 });
 
 it("live 模式先呈现 loading，GET 列表失败可用原请求重试并保留注入边界", async () => {
-  const task = {
+  const task = { triggerKind: "calendar" as const,
     id: "scheduled_live_1",
     title: "Live digest",
     frequency: "daily" as const,
@@ -352,7 +352,7 @@ it("live 模式先呈现 loading，GET 列表失败可用原请求重试并保�
 });
 
 it("live client mutation 成功后重新 GET 投影，不靠 optimistic 状态伪造成功", async () => {
-  const activeTask = {
+  const activeTask = { triggerKind: "calendar" as const,
     id: "scheduled_live_1",
     title: "Live digest",
     frequency: "daily" as const,
@@ -403,7 +403,7 @@ it("任务状态指示器向辅助技术暴露本地化状态名称", async () =
       <ScheduledTaskSurface
         brandName="Kokoro"
         tasks={[
-          {
+          { triggerKind: "calendar" as const,
             id: "scheduled_status_1",
             title: "状态任务",
             frequency: "daily",
@@ -426,7 +426,7 @@ it("受控任务缺少 mutation handler 时禁用变更入口", async () => {
       <ScheduledTaskSurface
         brandName="Kokoro"
         tasks={[
-          {
+          { triggerKind: "calendar" as const,
             id: "scheduled_controlled_1",
             title: "Controlled",
             frequency: "daily",
@@ -464,7 +464,7 @@ it("编辑 draft 保留隐式时区，不在编辑器中增加额外的时区控
       <ScheduledTaskSurface
         brandName="Kokoro"
         tasks={[
-          {
+          { triggerKind: "calendar" as const,
             id: "scheduled_controlled_1",
             title: "Controlled",
             prompt: "Run it",
@@ -502,7 +502,7 @@ it("列表视图支持暂停、编辑和删除，并把视图写回 URL", async 
   window.localStorage.setItem(
     "kokoro.preview.scheduled-tasks",
     JSON.stringify([
-      {
+      { triggerKind: "calendar" as const,
         id: "scheduled_preview_1",
         title: "每日摘要",
         prompt: "整理今天的重要事项",
@@ -587,7 +587,7 @@ it("删除失败时保留确认框，显示错误并允许再次提交", async (
       <ScheduledTaskSurface
         brandName="Kokoro"
         tasks={[
-          {
+          { triggerKind: "calendar" as const,
             id: "scheduled_delete_1",
             title: "待删除任务",
             frequency: "daily",
@@ -626,7 +626,7 @@ it("日历月份切换时按实际日期显示任务", () => {
       <ScheduledTaskSurface
         brandName="Kokoro"
         tasks={[
-          {
+          { triggerKind: "calendar" as const,
             id: "scheduled_failed_1",
             title: "失败任务",
             prompt: "检查失败任务",
@@ -664,7 +664,7 @@ it("失败任务在列表操作中支持 retry，并在本地 fixture 中恢复�
   window.localStorage.setItem(
     "kokoro.preview.scheduled-tasks",
     JSON.stringify([
-      {
+      { triggerKind: "calendar" as const,
         id: "scheduled_failed_1",
         title: "失败任务",
         prompt: "检查失败任务",
@@ -713,7 +713,7 @@ it("失败任务 retry 交给宿主 mutation，外部任务源未更新前不伪
       <ScheduledTaskSurface
         brandName="Kokoro"
         tasks={[
-          {
+          { triggerKind: "calendar" as const,
             id: "scheduled_failed_1",
             title: "失败任务",
             frequency: "daily",
@@ -745,7 +745,7 @@ it("列表使用可读的本地化下一次运行时间，而不是把 ISO 字�
       <ScheduledTaskSurface
         brandName="Kokoro"
         tasks={[
-          {
+          { triggerKind: "calendar" as const,
             id: "scheduled_1",
             title: "每日摘要",
             frequency: "daily",
@@ -771,7 +771,7 @@ it("actual Response 的空 next_run_at 不在列表或日历伪造日期，已�
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 15, 8),
   ).toISOString();
   const confirmedDateKey = confirmedNextRun.slice(0, 10);
-  const ownerTask = {
+  const ownerTask = { trigger_kind: "calendar" as const,
     title: "Owner 已暂停",
     prompt: "等待 owner 重新排程",
     scheduling_state: "paused",
@@ -863,7 +863,7 @@ it("排程 mutation 期间锁住操作入口，失败后保留可恢复的错误
       <ScheduledTaskSurface
         brandName="Kokoro"
         tasks={[
-          {
+          { triggerKind: "calendar" as const,
             id: "scheduled_1",
             title: "每日摘要",
             frequency: "daily",
@@ -900,7 +900,7 @@ it("排程 mutation 期间锁住操作入口，失败后保留可恢复的错误
       <ScheduledTaskSurface
         brandName="Kokoro"
         tasks={[
-          {
+          { triggerKind: "calendar" as const,
             id: "scheduled_1",
             title: "每日摘要",
             frequency: "daily",
@@ -933,7 +933,7 @@ it("日历星期标题跟随当前界面语言", async () => {
       <ScheduledTaskSurface
         brandName="Kokoro"
         tasks={[
-          {
+          { triggerKind: "calendar" as const,
             id: "scheduled_1",
             title: "Daily digest",
             frequency: "daily",
@@ -951,7 +951,7 @@ it("日历星期标题跟随当前界面语言", async () => {
 });
 
 it("项目深链只把精确关联交给 create，成功后才重新读取 owner 列表", async () => {
-  const created = {
+  const created = { triggerKind: "calendar" as const,
     id: "scheduled_project_1",
     projectId: "project/真实",
     title: "项目摘要",
@@ -996,7 +996,7 @@ it("个人创建不继承项目关联，project 404 保留草稿且不 reload �
   expect(screen.queryByText("保留草稿", { selector: "strong" })).not.toBeInTheDocument();
 
   view.unmount();
-  const personalCreate = vi.fn().mockResolvedValue({
+  const personalCreate = vi.fn().mockResolvedValue({ triggerKind: "calendar" as const,
     id: "scheduled_personal",
     title: "个人摘要",
     frequency: "daily",
@@ -1024,14 +1024,14 @@ it("无效项目上下文不 fallback 为个人创建", async () => {
 });
 
 it("旧项目的迟到 create receipt 不关闭或 reload 新项目编辑器", async () => {
-  let resolveProjectA: ((value: {
+  let resolveProjectA: ((value: { triggerKind: "calendar";
     id: string;
     projectId: string;
     title: string;
     frequency: "daily";
     time: string;
   }) => void) | undefined;
-  const projectAReceipt = new Promise<{
+  const projectAReceipt = new Promise<{ triggerKind: "calendar";
     id: string;
     projectId: string;
     title: string;
@@ -1089,8 +1089,9 @@ it("旧项目的迟到 create receipt 不关闭或 reload 新项目编辑器", a
   });
   await waitFor(() => expect(projectBTitle).toHaveValue(""));
   fireEvent.change(projectBTitle, { target: { value: "项目 B 草稿" } });
+  await waitFor(() => expect(listScheduledTasks).toHaveBeenCalledTimes(2));
 
-  resolveProjectA?.({
+  resolveProjectA?.({ triggerKind: "calendar" as const,
     id: "scheduled_project_a",
     projectId: "project-a",
     title: "项目 A",
@@ -1102,11 +1103,11 @@ it("旧项目的迟到 create receipt 不关闭或 reload 新项目编辑器", a
   expect(screen.getByRole("dialog")).toBeInTheDocument();
   expect(window.location.search).toBe("?project_id=project-b");
   expect(window.location.hash).toBe("#scheduled-tasks/new");
-  expect(listScheduledTasks).toHaveBeenCalledTimes(1);
+  expect(listScheduledTasks).toHaveBeenCalledTimes(2);
 });
 
 it("编辑 owner 任务时忽略 URL 项目创建上下文且不改变归属", async () => {
-  const ownerTask = {
+  const ownerTask = { trigger_kind: "calendar" as const,
     id: "scheduled_existing",
     projectId: "owner-project",
     title: "既有项目任务",
@@ -1128,7 +1129,7 @@ it("编辑 owner 任务时忽略 URL 项目创建上下文且不改变归属", a
   window.history.replaceState(
     null,
     "",
-    "/app/scheduled?tab=list&project_id=other-project",
+    "/app/scheduled?tab=list&project_id=owner-project",
   );
   render(
     <LocaleProvider>
@@ -1153,6 +1154,9 @@ it("编辑 owner 任务时忽略 URL 项目创建上下文且不改变归属", a
     within(dialog).getByRole("textbox", { name: "未读邮件摘要" }),
     { target: { value: "更新后的任务" } },
   );
+  const historyClosed = new Promise<PopStateEvent>((resolve) =>
+    window.addEventListener("popstate", resolve, { once: true }),
+  );
   fireEvent.click(within(dialog).getByRole("button", { name: "保存" }));
 
   await waitFor(() =>
@@ -1163,12 +1167,14 @@ it("编辑 owner 任务时忽略 URL 项目创建上下文且不改变归属", a
   );
   expect(createScheduledTask).not.toHaveBeenCalled();
   await waitFor(() => expect(listScheduledTasks).toHaveBeenCalledTimes(2));
+  await historyClosed;
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 });
 
 it.each(["resolve", "reject"] as const)(
   "整个 surface 卸载后迟到 create %s 不 reload 旧 client 或污染新编辑器",
   async (outcome) => {
-    const oldReceipt = deferredScheduledOperation<{
+    const oldReceipt = deferredScheduledOperation<{ triggerKind: "calendar";
       id: string;
       projectId: string;
       title: string;
@@ -1237,7 +1243,7 @@ it.each(["resolve", "reject"] as const)(
     fireEvent.change(newTitle, { target: { value: "新项目草稿" } });
 
     if (outcome === "resolve") {
-      oldReceipt.resolve({
+      oldReceipt.resolve({ triggerKind: "calendar" as const,
         id: "scheduled_old",
         projectId: "project-old",
         title: "旧项目任务",
@@ -1261,7 +1267,7 @@ it.each(["resolve", "reject"] as const)(
 it.each(["resolve", "reject"] as const)(
   "整个 surface 卸载后迟到 update %s 不 reload 旧 client 或污染新编辑器",
   async (outcome) => {
-    const ownerTask = {
+    const ownerTask = { trigger_kind: "calendar" as const,
       id: "scheduled_old_update",
       projectId: "project-old",
       title: "旧任务",
@@ -1344,7 +1350,7 @@ it.each(["resolve", "reject"] as const)(
 );
 
 it("surface 仍挂载时 create 成功继续执行一次正常 owner reload", async () => {
-  const receipt = deferredScheduledOperation<{
+  const receipt = deferredScheduledOperation<{ triggerKind: "calendar";
     id: string;
     title: string;
     frequency: "daily";
@@ -1385,7 +1391,7 @@ it("surface 仍挂载时 create 成功继续执行一次正常 owner reload", as
   fireEvent.click(within(dialog).getByRole("button", { name: "保存" }));
   await waitFor(() => expect(createScheduledTask).toHaveBeenCalledTimes(1));
 
-  receipt.resolve({
+  receipt.resolve({ triggerKind: "calendar" as const,
     id: "scheduled_connected",
     title: "正常 reload",
     frequency: "daily",
@@ -1410,3 +1416,363 @@ async function flushScheduledOperation() {
   await Promise.resolve();
   await new Promise((resolve) => window.setTimeout(resolve, 0));
 }
+
+// Exercise the existing product adapter rather than importing a future workflow component.
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/app",
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+}));
+vi.mock("@/engine/config", () => ({ sessionBaseUrl: () => "http://s.local" }));
+
+async function mountI1AppSurface(address: string) {
+  const [{ KokoroAppSurface }, { createSessionEngine }, { createFakeClient, createMemoryStorage }, { ThemeProvider }] = await Promise.all([
+    import("@/features/app/kokoro-app-surface"),
+    import("@/engine/machine"),
+    import("../engine/fakes"),
+    import("@/ui/theme/theme-context"),
+  ]);
+  window.localStorage.setItem("kokoro.locale", "en");
+  window.history.replaceState(null, "", address);
+  const chatClient = createFakeClient();
+  const engine = createSessionEngine({ client: chatClient, storage: createMemoryStorage<import("@/core/conversations").ConversationStore>(null), now: () => 1_000 });
+  const businessRequests: string[] = [];
+  const fetcher = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    const path = new URL(input instanceof Request ? input.url : String(input), window.location.origin).pathname;
+    if (path === "/api/admin-access" && (!init?.method || init.method === "GET")) {
+      return Response.json({ platform_admin: false }, { headers: { "cache-control": "private, no-store", "x-request-id": "req-i1-shell" } });
+    }
+    businessRequests.push(path);
+    throw new Error("Unexpected business request in preview workflow");
+  });
+  const rendered = render(<ThemeProvider><LocaleProvider><KokoroAppSurface engine={engine} preview /></LocaleProvider></ThemeProvider>);
+  return {
+    chatClient, businessRequests,
+    dispose: () => { rendered.unmount(); engine.dispose(); fetcher.mockRestore(); },
+  };
+}
+
+it("I1 routes a direct home workflow query to inline scheduling without a chat composer or message command", async () => {
+  const app = await mountI1AppSurface("/app?workflow=automation&project_id=project-home");
+  try {
+    expect(screen.getByRole("heading", { name: "Automation workflow", level: 1 })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Scheduled tasks" }));
+    const form = screen.getByRole("form", { name: "Create scheduled automation" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(within(form).getByLabelText("Select time")).toHaveValue("10:00");
+    expect(document.querySelector('[data-slot="composer-input"]')).toBeNull();
+    const prompt = within(form).getByRole("textbox", { name: "Summarize unread email and highlight important messages" });
+    fireEvent.change(prompt, { target: { value: "A scheduled prompt, not a chat message" } });
+    fireEvent.keyDown(prompt, { key: "Enter", code: "Enter" });
+    expect(within(form).getByRole("button", { name: "Create automation" })).toBeDisabled();
+    expect(app.chatClient.createCalls).toEqual([]);
+    expect(app.chatClient.controlCalls).toEqual([]);
+    expect(app.businessRequests).toEqual([]);
+  } finally { app.dispose(); }
+});
+
+it("I1 follows same-path query navigation and popstate, retires old inline drafts, and returns to ordinary home", async () => {
+  const app = await mountI1AppSurface("/app");
+  try {
+    expect(screen.queryByRole("heading", { name: "Automation workflow" })).toBeNull();
+    window.history.pushState(null, "", "/app?workflow=automation&project_id=project-A");
+    fireEvent(window, new Event("kokoro:surface-navigation"));
+    expect(screen.getByRole("heading", { name: "Automation workflow", level: 1 })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Scheduled tasks" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Unread email summary" }), { target: { value: "Old project A draft" } });
+    window.history.pushState(null, "", "/app?workflow=automation&project_id=project-B");
+    fireEvent(window, new PopStateEvent("popstate"));
+    expect(screen.queryByDisplayValue("Old project A draft")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Scheduled tasks" }));
+    expect(screen.getByRole("textbox", { name: "Unread email summary" })).toHaveValue("");
+    window.history.pushState(null, "", "/app");
+    fireEvent(window, new PopStateEvent("popstate"));
+    expect(screen.queryByRole("heading", { name: "Automation workflow" })).toBeNull();
+    expect(screen.queryByRole("form", { name: "Create scheduled automation" })).toBeNull();
+    expect(app.chatClient.createCalls).toEqual([]);
+    expect(app.businessRequests).toEqual([]);
+  } finally { app.dispose(); }
+});
+
+// I4: busy calendar days retain the owner's actual next-run instants and editor path.
+type I4CalendarTask = import("@/features/scheduled-tasks").ScheduledTaskRecord;
+
+function i4CalendarTasks(): I4CalendarTask[] {
+  const base = { triggerKind: "calendar" as const, frequency: "daily" as const, time: "23:59", timezone: "Pacific/Honolulu" };
+  return [
+    { ...base, id: "i4-late", title: "较晚任务", nextRun: "2026-10-21T12:00:00Z" },
+    { ...base, id: "i4-first", title: "最早任务", nextRun: "2026-10-21T01:00:00Z", status: "active", schedulingState: "pending" },
+    { ...base, id: "i4-tie-a", title: "同刻任务甲", nextRun: "2026-10-21T03:00:00Z", status: "active", schedulingState: "failed" },
+    { ...base, id: "i4-tie-b", title: "同刻任务乙", nextRun: "2026-10-21T03:00:00Z", schedulingState: "paused" },
+    { ...base, id: "i4-last", title: "最后一个完整长名称任务", nextRun: "2026-10-21T15:00:00Z", schedulingState: "exhausted" },
+  ];
+}
+
+function i4CalendarHarness(tasks = i4CalendarTasks()) {
+  vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-10-21T12:00:00Z") });
+  const initial = {
+    mode: "controlled" as const,
+    tasks,
+    displayTimezone: "Asia/Shanghai",
+    projectReadBoundary: { admitted: true, subject: "i4-A", generation: 1 },
+  };
+  const view = (props = initial) => <LocaleProvider><ScheduledTaskSurface {...props} /></LocaleProvider>;
+  const rendered = render(view());
+  return { ...rendered, initial, view };
+}
+
+it("I4 caps a busy day at three sorted actual runs, preserves ties/input, and uses authoritative scheduling status", async () => {
+  const tasks = i4CalendarTasks();
+  const before = JSON.stringify(tasks);
+  await i4CalendarHarness(tasks);
+  const day = screen.getByTestId("scheduled-calendar-day-2026-10-21");
+  const buttons = within(day).getAllByRole("button");
+  expect(buttons).toHaveLength(4);
+  expect(buttons.slice(0, 3).map((button) => button.textContent)).toEqual([
+    expect.stringContaining("最早任务"), expect.stringContaining("同刻任务甲"), expect.stringContaining("同刻任务乙"),
+  ]);
+  expect(within(day).getByRole("button", { name: "还有 2 项" })).toBeInTheDocument();
+  expect(buttons[0]).toHaveTextContent("09:00");
+  expect(buttons[0]).toHaveTextContent("Asia/Shanghai");
+  expect(buttons[0]).toHaveTextContent("等待登记");
+  expect(buttons[1]).toHaveTextContent("调度失败");
+  expect(day).not.toHaveTextContent("23:59");
+  expect(JSON.stringify(tasks)).toBe(before);
+});
+
+it("I4 leaves three direct entries editable with their unchanged original task data", async () => {
+  const tasks = i4CalendarTasks().slice(0, 3);
+  await i4CalendarHarness(tasks);
+  const day = screen.getByTestId("scheduled-calendar-day-2026-10-21");
+  expect(within(day).getAllByRole("button")).toHaveLength(3);
+  expect(within(day).queryByRole("button", { name: /还有/ })).toBeNull();
+  const first = within(day).getByRole("button", { name: /最早任务/ });
+  fireEvent.click(first);
+  const editor = screen.getByRole("dialog");
+  expect(within(editor).getByRole("textbox", { name: "未读邮件摘要" })).toHaveValue(tasks[1]?.title);
+  expect(within(editor).getByLabelText("选择时间")).toHaveValue("23:59");
+  expect(tasks[1]).toMatchObject({ id: "i4-first", nextRun: "2026-10-21T01:00:00Z", time: "23:59" });
+  expect(first.isConnected).toBe(true);
+});
+
+it("I4 opens all ordered runs with a localized date, full titles/time/status, and Escape returns to More", async () => {
+  await i4CalendarHarness();
+  const more = screen.getByRole("button", { name: "还有 2 项" });
+  fireEvent.click(more);
+  const popup = screen.getByRole("dialog", { name: /2026年10月21日/ });
+  const entries = within(popup).getAllByRole("button");
+  expect(entries).toHaveLength(5);
+  expect(entries.map((entry) => entry.textContent)).toEqual([
+    expect.stringContaining("最早任务"), expect.stringContaining("同刻任务甲"), expect.stringContaining("同刻任务乙"),
+    expect.stringContaining("较晚任务"), expect.stringContaining("最后一个完整长名称任务"),
+  ]);
+  expect(within(popup).getByRole("button", { name: /最后一个完整长名称任务.*23:00.*Asia\/Shanghai.*调度已结束/ })).toBeInTheDocument();
+  fireEvent.keyDown(popup, { key: "Escape" });
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  await waitFor(() => expect(more).toHaveFocus());
+});
+
+it("I4 opens the real editor with unchanged overflow task data and closes back to persistent More", async () => {
+  const tasks = i4CalendarTasks();
+  const before = JSON.stringify(tasks);
+  await i4CalendarHarness(tasks);
+  const more = screen.getByRole("button", { name: "还有 2 项" });
+  fireEvent.click(more);
+  const popup = screen.getByRole("dialog", { name: /2026年10月21日/ });
+  const entry = within(popup).getByRole("button", { name: /最后一个完整长名称任务/ });
+  fireEvent.click(entry);
+  const editor = screen.getByRole("dialog");
+  expect(within(editor).getByRole("textbox", { name: "未读邮件摘要" })).toHaveValue(tasks[4]?.title);
+  expect(within(editor).getByLabelText("选择时间")).toHaveValue("23:59");
+  expect(more.isConnected).toBe(true);
+  expect(entry.isConnected).toBe(false);
+  fireEvent.keyDown(editor, { key: "Escape" });
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  await waitFor(() => expect(more).toHaveFocus());
+  expect(JSON.stringify(tasks)).toBe(before);
+});
+
+it.each(["month", "timezone", "source", "count"] as const)("I4 retires an expanded day when %s changes without resurrecting it on return", async (change) => {
+  const app = await i4CalendarHarness();
+  fireEvent.click(screen.getByRole("button", { name: "还有 2 项" }));
+  expect(screen.getByRole("dialog", { name: /2026年10月21日/ })).toBeInTheDocument();
+  if (change === "month") {
+    fireEvent.click(screen.getByRole("button", { name: "下个月" }));
+  } else {
+    app.rerender(app.view({
+      ...app.initial,
+      ...(change === "timezone" ? { displayTimezone: "UTC" } : {}),
+      ...(change === "source" ? { tasks: i4CalendarTasks() } : {}),
+      ...(change === "count" ? { tasks: i4CalendarTasks().slice(0, 3) } : {}),
+    }));
+  }
+  const previousMonth = screen.getByRole("button", { name: "上个月" });
+  previousMonth.focus();
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  await flushScheduledOperation();
+  expect(previousMonth).toHaveFocus();
+  if (change === "month") fireEvent.click(screen.getByRole("button", { name: "上个月" }));
+  app.rerender(app.view(app.initial));
+  expect(screen.queryByRole("dialog")).toBeNull();
+});
+
+it("I4 retires expanded content across subject and project scopes without resurrection or IO", async () => {
+  const fetcher = vi.spyOn(globalThis, "fetch");
+  const tasks = i4CalendarTasks().map((task) => ({ ...task, projectId: "project-i4-A" }));
+  window.history.replaceState(null, "", "/app/scheduled?tab=calendar&project_id=project-i4-A");
+  const app = await i4CalendarHarness(tasks);
+  fireEvent.click(screen.getByRole("button", { name: "还有 2 项" }));
+  expect(screen.getByRole("dialog", { name: /2026年10月21日/ })).toBeInTheDocument();
+  app.rerender(app.view({ ...app.initial, projectReadBoundary: { admitted: true, subject: "i4-B", generation: 2 } }));
+  expect(screen.queryByRole("dialog")).toBeNull();
+  app.rerender(app.view(app.initial));
+  expect(screen.queryByRole("dialog")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "还有 2 项" }));
+  window.history.replaceState(null, "", "/app/scheduled?tab=calendar&project_id=project-i4-B");
+  fireEvent(window, new PopStateEvent("popstate"));
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(screen.queryByText("最早任务")).toBeNull();
+  window.history.replaceState(null, "", "/app/scheduled?tab=calendar&project_id=project-i4-A");
+  fireEvent(window, new PopStateEvent("popstate"));
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(screen.getByRole("button", { name: "还有 2 项" })).toBeInTheDocument();
+  expect(fetcher).not.toHaveBeenCalled();
+  fetcher.mockRestore();
+});
+
+it("I4 keeps the existing UTC interpretation of controlled legacy nextRun without a zone", async () => {
+  const task: I4CalendarTask = { triggerKind: "calendar" as const, id: "i4-legacy-utc", title: "兼容旧受控时间", frequency: "daily", time: "23:59", nextRun: "2026-10-21T08:00:00", schedulingState: "pending" };
+  await i4CalendarHarness([task]);
+  const day = screen.getByTestId("scheduled-calendar-day-2026-10-21");
+  const entry = within(day).getByRole("button", { name: /兼容旧受控时间/ });
+  expect(entry).toHaveTextContent("16:00 (Asia/Shanghai)");
+  expect(entry.querySelector("time")).toHaveAttribute("datetime", "2026-10-21T08:00:00.000Z");
+  expect(task.nextRun).toBe("2026-10-21T08:00:00");
+  expect(entry).not.toHaveTextContent("23:59");
+});
+
+it("I4 approval keeps live new-task approval unavailable with its accurate accessible reason and no mutation", async () => {
+  const listScheduledTasks = vi.fn().mockResolvedValue([]);
+  const createScheduledTask = vi.fn();
+  const updateScheduledTask = vi.fn();
+  render(<LocaleProvider><ScheduledTaskSurface mode="live" scheduledTaskClient={scheduledTaskClient({ listScheduledTasks, createScheduledTask, updateScheduledTask })} projectReadBoundary={{ admitted: true, subject: "approval-A", generation: 1 }} /></LocaleProvider>);
+  await waitFor(() => expect(listScheduledTasks).toHaveBeenCalledTimes(1));
+  fireEvent.click(screen.getByRole("button", { name: "建立您的排程任务" }));
+  const approval = within(screen.getByRole("dialog")).getByRole("switch", { name: "自动核准" });
+  expect(approval).toBeDisabled();
+  expect(approval).not.toBeChecked();
+  expect(approval).toHaveAccessibleDescription("自动核准暂不可用；执行时仍使用现有审批规则。");
+  const reasonId = approval.getAttribute("aria-describedby");
+  expect(reasonId).toBeTruthy();
+  expect(document.getElementById(reasonId ?? "")).toBeVisible();
+  fireEvent.click(approval);
+  expect(approval).not.toBeChecked();
+  expect(createScheduledTask).not.toHaveBeenCalled();
+  expect(updateScheduledTask).not.toHaveBeenCalled();
+});
+
+it("I4 approval preserves an existing true value while disabling its control and saving other live edits", async () => {
+  const owner = { triggerKind: "calendar" as const, id: "scheduled-old-approval", title: "旧审批配置", prompt: "保留旧正文", frequency: "daily" as const, time: "08:00", timezone: "UTC", autoApprove: true };
+  const listScheduledTasks = vi.fn().mockResolvedValueOnce([owner]).mockResolvedValueOnce([{ ...owner, title: "改名但保留原审批字段" }]);
+  const updateScheduledTask = vi.fn().mockResolvedValue({ ...owner, title: "改名但保留原审批字段" });
+  const createScheduledTask = vi.fn();
+  window.history.replaceState(null, "", "/app/scheduled?tab=list");
+  render(<LocaleProvider><ScheduledTaskSurface mode="live" scheduledTaskClient={scheduledTaskClient({ listScheduledTasks, updateScheduledTask, createScheduledTask })} projectReadBoundary={{ admitted: true, subject: "approval-A", generation: 1 }} /></LocaleProvider>);
+  const row = await screen.findByRole("listitem");
+  fireEvent.pointerDown(within(row).getByRole("button", { name: "排程任务选项 旧审批配置" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: "编辑" }));
+  const editor = screen.getByRole("dialog");
+  const approval = within(editor).getByRole("switch", { name: "自动核准" });
+  expect(approval).toBeChecked();
+  expect(approval).toBeDisabled();
+  expect(approval).toHaveAccessibleDescription("自动核准暂不可用；执行时仍使用现有审批规则。");
+  fireEvent.click(approval);
+  expect(approval).toBeChecked();
+  fireEvent.change(within(editor).getByRole("textbox", { name: "未读邮件摘要" }), { target: { value: "改名但保留原审批字段" } });
+  const closed = new Promise<PopStateEvent>((resolve) => window.addEventListener("popstate", resolve, { once: true }));
+  fireEvent.click(within(editor).getByRole("button", { name: "保存" }));
+  await waitFor(() => expect(updateScheduledTask).toHaveBeenCalledExactlyOnceWith("scheduled-old-approval", { triggerKind: "calendar" as const,
+    title: "改名但保留原审批字段", prompt: "保留旧正文", frequency: "daily", time: "08:00", timezone: "UTC", expiresAt: undefined, autoApprove: true,
+  }));
+  expect(createScheduledTask).not.toHaveBeenCalled();
+  await waitFor(() => expect(listScheduledTasks).toHaveBeenCalledTimes(2));
+  await closed;
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+});
+
+it("I4 approval exposes only disabled existing runtime rules in workflow settings and creates with the unchanged false default", async () => {
+  window.history.replaceState(null, "", "/app?workflow=automation&project_id=approval-project");
+  const listScheduledTasks = vi.fn().mockResolvedValue([]);
+  const createScheduledTask = vi.fn().mockImplementation(async (draft: import("@/features/scheduled-tasks").ScheduledTaskDraft) => ({ ...draft, id: "scheduled-approval-default" }));
+  render(<LocaleProvider><ScheduledTaskSurface mode="live" scheduledTaskClient={scheduledTaskClient({ listScheduledTasks, createScheduledTask })} projectReadBoundary={{ admitted: true, subject: "approval-A", generation: 1 }} /></LocaleProvider>);
+  await waitFor(() => expect(listScheduledTasks).toHaveBeenCalledTimes(1));
+  fireEvent.click(screen.getByRole("button", { name: "定时任务" }));
+  const form = screen.getByRole("form", { name: "创建定时自动化" });
+  const settings = within(form).getByRole("button", { name: "自动化设置" });
+  fireEvent.click(settings);
+  const rules = screen.getByRole("button", { name: "使用现有审批规则" });
+  expect(rules).toBeDisabled();
+  expect(rules).toHaveAccessibleDescription("自动核准暂不可用；执行时仍使用现有审批规则。");
+  expect(screen.queryByRole("combobox", { name: "审批" })).toBeNull();
+  fireEvent.click(rules);
+  expect(screen.queryByRole("option", { name: "无需批准" })).toBeNull();
+  expect(screen.queryByRole("option", { name: "需要批准" })).toBeNull();
+  expect(createScheduledTask).not.toHaveBeenCalled();
+  fireEvent.click(settings);
+  fireEvent.change(within(form).getByRole("textbox", { name: "未读邮件摘要" }), { target: { value: "仍沿现有审批规则" } });
+  fireEvent.change(within(form).getByRole("textbox", { name: "汇总未读邮件并突出显示重要邮件" }), { target: { value: "只保存已有调度字段" } });
+  fireEvent.click(within(form).getByRole("button", { name: "创建自动化" }));
+  await waitFor(() => expect(createScheduledTask).toHaveBeenCalledExactlyOnceWith({ triggerKind: "calendar" as const, title: "仍沿现有审批规则", prompt: "只保存已有调度字段", frequency: "daily", time: "10:00", timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, expiresAt: undefined, autoApprove: false, projectId: "approval-project" }));
+  await waitFor(() => expect(listScheduledTasks).toHaveBeenCalledTimes(2));
+});
+
+it.each([
+  ["pending", "等待登记"],
+  ["paused", "已暂停"],
+  ["exhausted", "调度已结束"],
+  ["failed", "调度失败"],
+  [undefined, "已暂停"],
+] as const)("I6 RSS inactive task %s retains poll history without promising another check", async (state, label) => {
+  window.history.replaceState(null, "", "/app/scheduled?tab=list");
+  render(<LocaleProvider><ScheduledTaskSurface brandName="Kokoro" tasks={[{
+    triggerKind: "rss",
+    id: "rss-inactive-history",
+    title: "暂停的订阅任务",
+    feedUrl: "https://go.dev/blog/feed.atom",
+    conditions: [],
+    nextRun: null,
+    ...(state ? { schedulingState: state, status: "active" as const, enabled: true } : { enabled: false }),
+    feedState: "active",
+    lastCheckedAt: "2026-10-23T07:07:00.000Z",
+    nextCheckAt: "2026-10-23T07:08:00.000Z",
+    errorCode: "rss_feed_timeout",
+  }]} /></LocaleProvider>);
+
+  const card = await screen.findByRole("listitem");
+  expect(within(card).getByRole("img", { name: label })).toBeInTheDocument();
+  expect(within(card).getByText(label, { exact: true })).toBeVisible();
+  expect(within(card).getByText("https://go.dev/blog/feed.atom")).toBeVisible();
+  expect(within(card).getByText(/上次检查/)).toBeVisible();
+  expect(within(card).getByText(/rss_feed_timeout/)).toBeVisible();
+  expect(within(card).queryByText("正在检查订阅源")).toBeNull();
+  expect(within(card).queryByText(/下次检查/)).toBeNull();
+});
+
+it("I6 RSS active task displays the current feed state and next check", async () => {
+  window.history.replaceState(null, "", "/app/scheduled?tab=list");
+  render(<LocaleProvider><ScheduledTaskSurface brandName="Kokoro" tasks={[{
+    triggerKind: "rss",
+    id: "rss-active-history",
+    title: "启用的订阅任务",
+    feedUrl: "https://go.dev/blog/feed.atom",
+    conditions: [],
+    nextRun: null,
+    schedulingState: "active",
+    feedState: "active",
+    lastCheckedAt: "2026-10-23T07:07:00.000Z",
+    nextCheckAt: "2026-10-23T07:08:00.000Z",
+  }]} /></LocaleProvider>);
+
+  const card = await screen.findByRole("listitem");
+  expect(within(card).getByText("正在检查订阅源")).toBeVisible();
+  expect(within(card).getByText(/下次检查/)).toBeVisible();
+});

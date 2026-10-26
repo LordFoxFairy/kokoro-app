@@ -43,6 +43,7 @@ import { useAppFrameLayout } from "./use-app-frame-layout"
 import { useAppFrameNavigation } from "./use-app-frame-navigation"
 import { useAppFrameOverlays } from "./use-app-frame-overlays"
 import { useAppFrameProject } from "./use-app-frame-project"
+import { useAppFrameProjectDeletion } from "./use-app-frame-project-deletion"
 import { useProjectList } from "@/features/app/use-project-list"
 import { navigateMountedSurface } from "@/ui/navigation/mounted-surface-navigation"
 import { sessionScopeKey } from "@/engine/session-scope"
@@ -397,6 +398,14 @@ function AppFrameRuntime({
     if (draftRouteIsCurrent()) clearScopedDraft()
   }, [clearScopedDraft, draftRouteIsCurrent])
   const projectReads = useProjectList(preview, projectReadBoundary, projectRef, projectWorkspace)
+  const projectRouteKey = JSON.stringify([projectRef ?? null, activeId, navigationState.settingsTab])
+  const projectDeletion = useAppFrameProjectDeletion({ projectRef, projectWorkspace, preview, mounted,
+    boundary: projectReadBoundary, routeKey: projectRouteKey, current: projectReads.current,
+    onAccepted: projectReads.acceptProjectDeletion })
+  const deletionCanWrite = projectDeletion.canWriteProject
+  const projectReadContext = projectReads.context
+  const canWriteProject = useCallback(() => !projectWorkspace
+    || (projectReadContext.isCurrent() && deletionCanWrite()), [projectWorkspace, projectReadContext, deletionCanWrite])
   const refreshProjects = projectReads.refresh
   const handleProjectOpen = useCallback((id: string, handoffDraft?: string) => {
     // Navigation is independently fenced; creation ACK refreshes through
@@ -417,13 +426,15 @@ function AppFrameRuntime({
     projectDetail: projectReads.current,
     instructionHistory: projectReads.instructionHistory,
     instructionContext: projectReads.context,
+    canWriteProject,
     refreshProject: refreshProjects,
     refreshRenamedProject: projectReads.refreshRenamedProject,
     ...(projectReadBoundary === undefined ? {} : { renameBoundary: projectReadBoundary }),
-    renameRouteKey: JSON.stringify([projectRef ?? null, activeId, navigationState.settingsTab]),
+    renameRouteKey: projectRouteKey,
   })
 
   const actions = useAppFrameActions({
+    canWriteProject,
     preview,
     ...(projectReadBoundary === undefined ? {} : { readBoundary: projectReadBoundary }),
     engine,
@@ -624,6 +635,8 @@ function AppFrameRuntime({
   const mode = store ? activeMode(store) : pendingMode
   const modeLocked = hasMessages
   const projectSubmissionAdmitted = !projectWorkspace || (
+    canWriteProject()
+    &&
     typeof window !== "undefined"
     && projectRef !== undefined
     && window.location.pathname === `/app/project/${encodeURIComponent(projectRef)}`
@@ -648,14 +661,15 @@ function AppFrameRuntime({
     const wasEmpty = !previousHasMessagesRef.current
     previousHasMessagesRef.current = hasMessages
     if (!wasEmpty || !hasMessages) return
-    const frame = window.requestAnimationFrame(() => focusComposer())
+    const frame = window.requestAnimationFrame(() => { if (canWriteProject()) focusComposer() })
     return () => window.cancelAnimationFrame(frame)
-  }, [focusComposer, hasMessages])
+  }, [canWriteProject, focusComposer, hasMessages])
 
   const retryAndFocusComposer = useCallback(() => {
+    if (!canWriteProject()) return
     engine?.retry()
-    window.requestAnimationFrame(() => focusComposer())
-  }, [engine, focusComposer])
+    window.requestAnimationFrame(() => { if (canWriteProject()) focusComposer() })
+  }, [canWriteProject, engine, focusComposer])
 
   const retryConversationHydration = useCallback(() => {
     const requestedConversationId = navigationState.resolvedConversationRouteId ?? activeId
@@ -688,7 +702,7 @@ function AppFrameRuntime({
     submissionFailureCode: machine.error,
     canRetryPendingSubmission,
     canRetryResume: engine?.getSnapshot().canRetryResume ?? false,
-    onRetryResume: () => engine?.retryResume(),
+    onRetryResume: () => { if (canWriteProject()) engine?.retryResume() },
     creditRejected,
     onOpenBilling: () => overlays.openSettings("credits"),
     onOpenPricing: () => overlays.openSettings("subscription"),
@@ -697,7 +711,7 @@ function AppFrameRuntime({
     stagingByRun: staging,
     hitlRunId: (machine.phase === "waiting" || machine.phase === "resuming") ? machine.runId : null,
     controlError: (machine.phase === "waiting" || machine.phase === "resuming") ? machine.error : null,
-    onToolDecision: (runId, toolId, decision) => engine?.stageToolDecision(runId, toolId, decision),
+    onToolDecision: (runId, toolId, decision) => { if (canWriteProject()) engine?.stageToolDecision(runId, toolId, decision) },
     onCancelRun: () => engine?.cancelRun(),
     onOpenFile: canvas.openFile,
     onOpenDelivery: canvas.openDelivery,
@@ -742,6 +756,7 @@ function AppFrameRuntime({
   const emptyStateProps: EmptyStateProps = {
     ...(projectReadBoundary === undefined ? {} : { projectReadBoundary }),
     projectInstructionContext: projectReads.context,
+    canWriteProject,
     projectHistoryStatus: projectReads.instructionHistory.status,
     projectHistoryRetryable: projectReads.instructionHistory.status === "error" && projectReads.instructionHistory.retryable,
     projectDetail: projectReads.current,
@@ -813,6 +828,7 @@ function AppFrameRuntime({
       onReconnect={() => engine?.reconnect()}
       projectCreation={project.projectCreation}
       projectRename={project.projectRename}
+      projectDeletion={projectDeletion}
       onRetryProjectCreation={project.retryProjectCreation}
       retryConversationHydration={retryConversationHydration}
       onOpenSettings={overlays.openSettings}

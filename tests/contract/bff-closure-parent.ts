@@ -1,8 +1,9 @@
+import { restoreRunHistoryParent } from "./bff-run-history-parent";
 import {createHash} from "node:crypto";
 // Test-only explicit inverse of the merged publisher's current-to-parent deltas.
 // Full current and both historical parent bytes remain independently pinned.
 const hash = (bytes:Uint8Array|string) => createHash("sha256").update(bytes).digest("hex");
-const CURRENT_DIGEST = "955412b680bf7a2529c4c35f553ff272d7361769ea95bb441ba820b552ffc564";
+const CURRENT_DIGEST = "ac649109f7b394ab894d17352c5f9f106e24e1cbf94e74672569333190adfab5";
 const parents = [
   {
     "label": "main",
@@ -338,9 +339,12 @@ const parents = [
   }
 ] as const;
 export function restoreClosureParent(bytes: Uint8Array, label: "main"|"local"): Buffer {
+ bytes = restoreRunHistoryParent(bytes);
  if(hash(bytes)!==CURRENT_DIGEST)throw Error("not fixed public19");
  const parent=parents.find(value=>value.label===label)!;
- const lines=Buffer.from(bytes).toString("utf8").match(/[^\n]*\n|[^\n]+$/gu)??[];
+ const prior=Buffer.from(bytes).toString("utf8").replace(/^  \/v1\/projects\/\{projectId\}\/resources\/\{asset_id\}\/content:\n[\s\S]*?(?=^  \/|^components:)/mu, "").replace("  version: 19.1.0\n", "  version: 19.0.0\n");
+ if(hash(prior)!=="955412b680bf7a2529c4c35f553ff272d7361769ea95bb441ba820b552ffc564")throw Error("project download inverse drift");
+ const lines=prior.match(/[^\n]*\n|[^\n]+$/gu)??[];
  for(const change of [...parent.changes].reverse()){
   const count=(change.current.match(/\n/gu)?.length??0);
   if(lines.slice(change.at,change.at+count).join("")!==change.current)throw Error("closure parent delta drift");

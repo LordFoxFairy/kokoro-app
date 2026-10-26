@@ -1,3 +1,7 @@
+## I3 项目下载固定消费（2026-10-21）
+
+BFF f59d4ab1dc263e554365f4bf028f66c8c3cbdc3e，Public19.1.0/166，canonical SHA256 ac649109f7b394ab894d17352c5f9f106e24e1cbf94e74672569333190adfab5。新增project-resource-download消费测试只逆移新增GET及版本，恢复旧19.0完整SHA；原历史parent和业务断言继续。owner no-store与Web/browser三指令缓存分别严格，actual Hub/Proxy/browser及EOF/SHA/超时用行为测试验证。
+
 ## 2026-10-19 收尾集成候选：完整既有分支与固定 Public19
 
 只集成 main d42fe1d2、PR37 的原生浏览器登录回归、PR38 的六页设置与完整 local362a9b7；保真实 merge ancestry，不按功能片继续开 PR。知识/记忆等其余混合工作保持原位，不在本次顺手接通。唯一 BFF snapshot 固定已合 owner08a2120ea85b6cad5cf6e839ef14dbf83d908b92、Public19.0.0/165、SHA256955412b680bf7a2529c4c35f553ff272d7361769ea95bb441ba820b552ffc564；六个既有窄 generator 正规配对，connector-command-errors 独立 profile 不换 pin。
@@ -186,3 +190,7 @@ artifact 可发布到 Developer API 门户。
 ## Connector browser-private error profile（2026-10-16，消费者候选）
 
 独立固定BFF `d176e3d0cbbc2eab903dae2b2d969906ba5808fe` 的 `contract/connector-command-errors-v1.json` 原字节至 `src/generated/bff-connector-command-errors.json`，SHA256 `24158f50a6f4dac1b34553797f0b1afcc8f99dbc79f36b916d03b56999a67a71`。专用生成器正规 `--write/--check` 输出只读typed policy/provenance，check接入现contract入口；不更改独立public14.8 snapshot/pin，不从sibling源码生成或复制错误类。六项receipt及三项MCP typed原因由owner profile唯一决定，Hub/adapter消费同一窄validator；状态错配拒绝，不猜文案。当前只完成wire接线，页面恢复UX与正常组合启用尚待验收。
+
+
+### Scheduled run updates
+The automation management surface shares Calendar, Tasks and Updates navigation. Updates consumes the committed BFF public19.2 read-only run-history contract through `/api/scheduled-task-runs`; it preserves owner ordering and timestamp text, supports explicit task filtering and replacement pagination, and cancels retired reads. Project scope requires an eligible selected task. Preview and clients without the read capability report unavailable history. This adds no execution command or persistent Web state.

@@ -204,6 +204,7 @@ export function createPreviewBillingClient(): BillingClient {
     page: { next_cursor: null },
   }
   return {
+    initializeCreditAccount: () => Promise.reject(new Error("preview_credit_initialization_unavailable")),
     summary: () => Promise.resolve({ credit_account_id: "74ea5371-b5cf-4df7-b49a-582e45d959ce", status: "active", available_micros: "10000000", held_micros: "0" }),
     ledger: () => Promise.resolve(ledger),
   }

@@ -1,3 +1,5 @@
+I5：billing-credit-account.ts只承接精确同源PUT本人积分初始化，复用productBffConfig/admittedProductSession/productBffHeaders。单15秒包含params、4096B空对象实际EOF、首末session六字段和1MiB上游完整EOF；输出闭集错误及精确Content-Length/cache。catch-all仅具名候选分流，原generic/GET不变；该资源OPTIONS走相同405，其他OPTIONS保留原Next204/Allow且零鉴权/转发；命令正文以两字节ArrayBuffer进入既有HTTP工具。
+
 <!-- SET47 archive consumer: 2026-10-15 -->
 SET47：archived-tasks.ts仅代理本人归档列表；session-archive.ts仅承接现session catch-all的GETarchive/POSTarchive|restore。固定BFF、server-only bearer、Origin/Host/scheme、严格raw闭集JSON与目标/action、1MiB、一次总10秒含params/body/会话/上游EOF/final六字段复验。POST允许identity/chunked的合法framing，拒冲突与不支持encoding，实际4096B+EOF；不改generic Chat/SSE代理。
 

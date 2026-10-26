@@ -3,7 +3,7 @@
 import { Cable, ChevronDown, ChevronRight, ListFilter, Plus, Upload } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
-import { useCallback, useRef, useState, type MouseEvent, type SetStateAction } from "react"
+import { useCallback, useId, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type SetStateAction } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -27,7 +27,7 @@ import layoutStyles from "./project-workspace-layout.module.css"
 type ProjectWorkspaceProps = Pick<
   EmptyStateProps,
   "brandName" | "composer" | "onOpenSettings" | "onPrompt" | "projectConversations" | "projectConversationsLoading" | "projectConversationsError" | "onRetryProjectConversations" | "activeProjectConversationId" | "onSelectProjectConversation" | "workspaceCapabilities"
-  | "projectConversation" | "projectInstructions" | "projectInstructionHistory" | "onSaveProjectInstructions" | "onUploadProjectResource" | "onListProjectResources" | "projectRef" | "preview" | "onCreateProjectScheduledTask" | "projectDetail" | "onRetryProjectRead" | "projectInstructionContext" | "projectHistoryStatus" | "projectHistoryRetryable" | "projectReadBoundary"
+  | "projectConversation" | "projectInstructions" | "projectInstructionHistory" | "onSaveProjectInstructions" | "onUploadProjectResource" | "onListProjectResources" | "projectRef" | "preview" | "onCreateProjectScheduledTask" | "projectDetail" | "onRetryProjectRead" | "projectInstructionContext" | "projectHistoryStatus" | "projectHistoryRetryable" | "projectReadBoundary" | "canWriteProject"
 >
 
 type InstructionEditorState = {
@@ -37,6 +37,13 @@ type InstructionEditorState = {
   instructionsError: boolean
   instructionsHistoryOpen: boolean
   selectedInstructionRevision: string | null
+}
+
+type WebsitePickerState = {
+  websitesOpen: boolean
+  websiteQuery: string
+  selectedWebsiteId: string | null
+  linkedWebsiteId: string | null
 }
 
 export type ResourceUploadIntent = {
@@ -78,6 +85,7 @@ export function KokoroProjectWorkspace({
   projectHistoryRetryable,
   onRetryProjectRead,
   projectReadBoundary,
+  canWriteProject,
   onCreateProjectScheduledTask,
 }: ProjectWorkspaceProps) {
   const { locale, t } = useLocale()
@@ -112,15 +120,80 @@ export function KokoroProjectWorkspace({
   const [resourcesOpen, setResourcesOpen] = useState(false)
   const [resourceQuery, setResourceQuery] = useState("")
   const [resourceKind, setResourceKind] = useState<ResourceKind>("all")
-  const resources = useProjectResources(projectRef, preview, onListProjectResources)
-  const [resourceUploads, setResourceUploads] = useState<readonly ResourceUploadIntent[]>([])
+  const resourceContext = useMemo(() => ({ isCurrent: () => {
+    const context = projectInstructionContext
+    return (!context || !("isCurrent" in context) || typeof context.isCurrent !== "function" || context.isCurrent() === true)
+      && (canWriteProject?.() ?? true)
+  } }), [projectInstructionContext, canWriteProject])
+  const resourceLifetime = useMemo(() => ({ projectRef, preview, resourceContext }), [projectRef, preview, resourceContext])
+  const resourceLifetimeRef = useRef<{ scope: object; active: boolean } | null>(null)
+  useLayoutEffect(() => {
+    const lifetime = { scope: resourceLifetime, active: true }
+    resourceLifetimeRef.current = lifetime
+    return () => { lifetime.active = false }
+  }, [resourceLifetime])
+  const resourceIsCurrent = useCallback(() => resourceLifetimeRef.current?.scope === resourceLifetime
+    && resourceLifetimeRef.current.active && resourceContext.isCurrent(), [resourceContext, resourceLifetime])
+  const resources = useProjectResources(projectRef, preview, onListProjectResources, resourceContext)
+  const [uploadProjection, setUploadProjection] = useState<{ scope: object; items: readonly ResourceUploadIntent[] } | null>(null)
+  const resourceUploads = uploadProjection?.scope === resourceLifetime && resourceContext.isCurrent() ? uploadProjection.items : []
+  const setResourceUploads = (update: (previous: readonly ResourceUploadIntent[]) => readonly ResourceUploadIntent[]) => {
+    if (!resourceIsCurrent()) return
+    setUploadProjection(previous => ({ scope: resourceLifetime,
+      items: update(previous?.scope === resourceLifetime ? previous.items : []) }))
+  }
   const activeResourceUploads = useRef(new Set<string>())
   const resourceInputRef = useRef<HTMLInputElement | null>(null)
   const resourceSearchRef = useRef<HTMLInputElement | null>(null)
-  const [websitesOpen, setWebsitesOpen] = useState(false)
-  const [websiteQuery, setWebsiteQuery] = useState("")
-  const [selectedWebsiteId, setSelectedWebsiteId] = useState<string | null>(null)
-  const [linkedWebsiteId, setLinkedWebsiteId] = useState<string | null>(null)
+  const websiteContext = JSON.stringify([preview, projectRef ?? null])
+  const emptyWebsiteState: WebsitePickerState = {
+    websitesOpen: false, websiteQuery: "", selectedWebsiteId: null, linkedWebsiteId: null,
+  }
+  const emptyWebsitePicker = {
+    context: websiteContext,
+    owner: {},
+    state: emptyWebsiteState,
+  }
+  const [websitePicker, setWebsitePicker] = useState(emptyWebsitePicker)
+  if (websitePicker.context !== websiteContext) setWebsitePicker(emptyWebsitePicker)
+  const currentWebsitePicker = websitePicker.context === websiteContext ? websitePicker : emptyWebsitePicker
+  const { websitesOpen, websiteQuery, selectedWebsiteId, linkedWebsiteId } = currentWebsitePicker.state
+  const websiteOwner = currentWebsitePicker.owner
+  const activeWebsiteOwner = useRef<object | null>(null)
+  const websiteOpenerRef = useRef<HTMLButtonElement | null>(null)
+  useLayoutEffect(() => {
+    activeWebsiteOwner.current = websiteOwner
+    return () => {
+      activeWebsiteOwner.current = null
+      websiteOpenerRef.current = null
+    }
+  }, [websiteOwner])
+  // The owner survives edits, but never a mode/project change, including A→B→A.
+  const websiteSetter = <K extends keyof WebsitePickerState>(field: K) => (value: SetStateAction<WebsitePickerState[K]>) => {
+    if (!preview || activeWebsiteOwner.current !== websiteOwner) return
+    setWebsitePicker((current) => {
+      if (current.owner !== websiteOwner) return current
+      const next = typeof value === "function" ? (value as (previous: WebsitePickerState[K]) => WebsitePickerState[K])(current.state[field]) : value
+      return { ...current, state: { ...current.state, [field]: next } }
+    })
+  }
+  const setWebsiteQuery = websiteSetter("websiteQuery")
+  const setSelectedWebsiteId = websiteSetter("selectedWebsiteId")
+  const setLinkedWebsiteId = websiteSetter("linkedWebsiteId")
+  const setWebsitesOpen = (open: boolean) => {
+    if (!preview || activeWebsiteOwner.current !== websiteOwner) return
+    websiteSetter("websitesOpen")(open)
+    if (!open) {
+      const target = websiteOpenerRef.current
+      window.requestAnimationFrame(() => {
+        if (activeWebsiteOwner.current !== websiteOwner || !target?.isConnected || target.disabled) return
+        target.focus({ preventScroll: true })
+      })
+    }
+  }
+  const websiteDescriptionId = useId()
+  const webSearchDescriptionId = useId()
+  const webSearchDescription = t(preview ? "firstSite.searchWebPreviewHint" : "firstSite.searchWebUnavailable")
   const [scheduledOpen, setScheduledOpen] = useState(false)
   const [scheduledQuery, setScheduledQuery] = useState("")
   const [scheduledItems, setScheduledItems] = useState<readonly ProjectScheduledPreview[]>(preview ? previewScheduledTasks : [])
@@ -135,11 +208,12 @@ export function KokoroProjectWorkspace({
 
   const restoreContextOpener = useCallback(() => {
     window.requestAnimationFrame(() => {
+      if (!resourceIsCurrent()) return
       const target = contextOpenerRef.current
       if (!target?.isConnected || target.disabled) return
       target.focus({ preventScroll: true })
     })
-  }, [])
+  }, [resourceIsCurrent])
 
   const onContextDialogChange = useCallback((setOpen: (open: boolean) => void) => (open: boolean) => {
     setOpen(open)
@@ -157,8 +231,9 @@ export function KokoroProjectWorkspace({
   }
 
   const openResourceUpload = (event: MouseEvent<HTMLButtonElement>) => {
+    if (!resourceIsCurrent()) return
     openResources(event)
-    window.requestAnimationFrame(() => resourceInputRef.current?.click())
+    window.requestAnimationFrame(() => { if (resourceIsCurrent()) resourceInputRef.current?.click() })
   }
 
   const filteredResources = resources.items.filter((resource) => {
@@ -167,10 +242,10 @@ export function KokoroProjectWorkspace({
     return queryMatches && (resourceKind === "all" || resource.kind === resourceKind)
   })
 
-  const filteredWebsites = previewWebsites.filter((website) => {
+  const filteredWebsites = preview ? previewWebsites.filter((website) => {
     const query = websiteQuery.trim().toLocaleLowerCase()
     return query.length === 0 || `${website.name} ${website.detail}`.toLocaleLowerCase().includes(query)
-  })
+  }) : []
 
   const filteredScheduledTasks = scheduledItems.filter((task) => {
     const query = scheduledQuery.trim().toLocaleLowerCase()
@@ -178,15 +253,19 @@ export function KokoroProjectWorkspace({
   })
 
   const submitResourceUpload = async (intent: ResourceUploadIntent) => {
+    if (!resourceIsCurrent()) return
     if (activeResourceUploads.current.has(intent.id)) return
     activeResourceUploads.current.add(intent.id)
     setResourceUploads((current) => current.map((item) => item.id === intent.id ? { ...item, status: "uploading", error: undefined } : item))
     try {
       if (!onUploadProjectResource) throw new ProjectResourceUploadError("upload_not_configured", false)
       const receipt = await onUploadProjectResource(intent.file, intent.key)
+      if (!resourceIsCurrent()) return
       await resources.confirmUpload(receipt)
+      if (!resourceIsCurrent()) return
       setResourceUploads((current) => current.filter((item) => item.id !== intent.id))
     } catch (error) {
+      if (!resourceIsCurrent()) return
       const uploadError = error instanceof ProjectResourceUploadError ? error : null
       setResourceUploads((current) => current.map((item) => item.id === intent.id ? {
         ...item,
@@ -200,18 +279,23 @@ export function KokoroProjectWorkspace({
   }
 
   const handleResourceFiles = async (files: FileList) => {
+    if (!resourceIsCurrent()) return
     const intents = Array.from(files).map((file): ResourceUploadIntent => {
       const identity = crypto.randomUUID()
       return { id: identity, file, key: `project-resource:${identity}`, status: "uploading", error: undefined, retryable: true }
     })
     if (intents.length === 0) return
     setResourceUploads((current) => [...current, ...intents])
-    for (const intent of intents) await submitResourceUpload(intent)
+    for (const intent of intents) {
+      if (!resourceIsCurrent()) break
+      await submitResourceUpload(intent)
+    }
   }
 
   const handleScheduledTaskSave = async (task: {
     title: string
     prompt: string
+    triggerKind: "calendar"
     frequency: string
     time: string
     timezone?: string
@@ -224,6 +308,7 @@ export function KokoroProjectWorkspace({
       id: `scheduled-${task.title}-${task.time}`,
       title: task.title,
       prompt: task.prompt,
+      triggerKind: "calendar",
       frequency: task.frequency === "weekly" ? "weekly" : "daily",
       time: task.time,
       timezone: task.timezone ?? "UTC",
@@ -307,10 +392,10 @@ export function KokoroProjectWorkspace({
               {capabilities.resources ? (
                 <section data-context-section="resources" aria-label={t("firstSite.filesAndResources")}><ProjectContextSection
                   title={t("firstSite.filesAndResources")}
-                  description={t("firstSite.filesHint")}
+                  description={<>{t("firstSite.filesHint")}<span className="block" id={webSearchDescriptionId}>{webSearchDescription}</span></>}
                   actions={[
                     { id: "upload", label: t("firstSite.upload"), icon: Upload, trailingIcon: ChevronDown },
-                    { id: "search-web", label: t("firstSite.searchWeb"), icon: ListFilter },
+                    { id: "search-web", label: t("firstSite.searchWeb"), icon: ListFilter, disabled: !preview, "aria-describedby": webSearchDescriptionId },
                   ]}
                   showChevron
                   onClick={(event) => {
@@ -321,7 +406,7 @@ export function KokoroProjectWorkspace({
                       openResourceUpload(event)
                       return
                     }
-                    if (id === "search-web") {
+                    if (id === "search-web" && preview) {
                       openResources(event, "web")
                     }
                   }}
@@ -339,7 +424,7 @@ export function KokoroProjectWorkspace({
             <ProjectContextCard
               kind="websites"
               title={t("firstSite.websites")}
-              description={t("firstSite.websitesHint")}
+              description={<span id={websiteDescriptionId}>{t(preview ? "firstSite.websitesPreviewHint" : "firstSite.websitesUnavailable")}</span>}
               emptyVisual={
                 <Image
                   className={styles.projectEmptyArtwork}
@@ -351,9 +436,10 @@ export function KokoroProjectWorkspace({
                   aria-hidden="true"
                 />
               }
-              footerAction={{ label: t("firstSite.add"), icon: Plus }}
+              footerAction={{ label: t("firstSite.add"), icon: Plus, disabled: !preview, "aria-describedby": websiteDescriptionId }}
               onClick={(event) => {
-                rememberContextOpener(event)
+                if (!preview) return
+                websiteOpenerRef.current = event.currentTarget
                 setWebsiteQuery("")
                 setWebsitesOpen(true)
               }}
@@ -427,6 +513,7 @@ export function KokoroProjectWorkspace({
         resourceSearchRef={resourceSearchRef}
         resourceInputRef={resourceInputRef}
         filteredResources={filteredResources}
+        resourceDownloadScope={{ projectRef, preview, open: resourcesOpen, boundary: projectReadBoundary, isCurrent: resourceIsCurrent }}
         resourceListStatus={resources.status}
         resourceListErrorCursor={resources.errorCursor}
         resourceNextCursor={resources.nextCursor}

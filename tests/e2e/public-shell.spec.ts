@@ -319,3 +319,645 @@ test("长草稿不会遮挡项目最近任务", async ({ page, isMobile }) => {
   }).toBe(true)
   await expect(input).toHaveValue(draft)
 })
+
+test("project scheduled scope keeps list, calendar and drafts isolated in the preview", async ({ page, isMobile }) => {
+  const projectA = "project_11111111-1111-1111-1111-111111111111"
+  const projectB = "project_22222222-2222-2222-2222-222222222222"
+  const size = isMobile ? { width: 320, height: 568 } : { width: 1280, height: 800 }
+  await page.setViewportSize(size)
+  await page.addInitScript(({ projectA, projectB }) => {
+    window.localStorage.setItem("kokoro.locale", "en")
+    const base = { triggerKind: "calendar" as const,
+      prompt: "Preview scope check",
+      frequency: "daily",
+      time: "08:00",
+      timezone: "UTC",
+      enabled: true,
+      status: "active",
+      nextRun: `${new Date().toISOString().slice(0, 7)}-15T08:00:00.000Z`,
+    }
+    window.localStorage.setItem("kokoro.preview.scheduled-tasks", JSON.stringify([
+      { ...base, id: "scheduled_scope_a", projectId: projectA, title: "Project A task" },
+      { ...base, id: "scheduled_scope_b", projectId: projectB, title: "Project B task" },
+      { ...base, id: "scheduled_scope_personal", title: "Personal scheduled task" },
+    ]))
+  }, { projectA, projectB })
+  const businessRequests: string[] = []
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname.includes("/scheduled-tasks")) businessRequests.push(request.method())
+  })
+  await page.goto(`/app/scheduled?project_id=${projectA}&tab=list`, { waitUntil: "domcontentloaded" })
+  expect(await page.evaluate(() => ({ width: innerWidth, height: innerHeight }))).toEqual(size)
+  const surface = page.getByTestId("scheduled-surface")
+  await expect(surface.getByRole("listitem")).toHaveCount(1)
+  await expect(surface.getByText("Project A task", { exact: true })).toBeVisible()
+  await expect(surface.getByText("Project B task", { exact: true })).toHaveCount(0)
+  await expect(surface.getByText("Personal scheduled task", { exact: true })).toHaveCount(0)
+  await expect(surface.getByRole("link", { name: "Back to project", exact: true })).toHaveAttribute("href", `/app/project/${projectA}`)
+  await expect(surface.getByText("Only scheduled tasks linked to this project are shown.", { exact: true })).toBeVisible()
+  const scopeGeometry = await surface.getByRole("link", { name: "Back to project", exact: true }).evaluate((link) => {
+    const container = link.parentElement
+    if (!container) throw new Error("Project scope notice is missing")
+    const box = container.getBoundingClientRect()
+    return {
+      contained: [...container.children].every((child) => {
+        const rect = child.getBoundingClientRect()
+        return rect.left >= box.left && rect.right <= box.right && rect.top >= box.top && rect.bottom <= box.bottom
+      }),
+      overflow: document.documentElement.scrollWidth > innerWidth,
+    }
+  })
+  expect(scopeGeometry).toEqual({ contained: true, overflow: false })
+  await surface.getByRole("button", { name: "Actions for scheduled task Project A task", exact: true }).click()
+  await page.getByRole("menuitem", { name: "Edit", exact: true }).click()
+  await page.getByRole("dialog").getByRole("textbox", { name: "Unread email summary", exact: true }).fill("Private A draft")
+  await page.evaluate((projectB) => {
+    history.pushState(null, "", `/app/scheduled?project_id=${projectB}&tab=list#scheduled-tasks/new`)
+    dispatchEvent(new Event("kokoro:surface-navigation"))
+  }, projectB)
+  await expect(page.getByRole("dialog").getByRole("textbox", { name: "Unread email summary", exact: true })).toHaveValue("")
+  await page.getByRole("dialog").getByRole("button", { name: "Cancel", exact: true }).click()
+  await expect(page.getByRole("dialog")).toHaveCount(0)
+  await expect(surface.getByRole("listitem")).toHaveCount(1)
+  await expect(surface.getByText("Project B task", { exact: true })).toBeVisible()
+  await surface.getByRole("tab", { name: "Calendar", exact: true }).click()
+  const calendar = surface.getByTestId("scheduled-calendar-view")
+  await expect(calendar.getByRole("button", { name: /Project B task/ })).toBeVisible()
+  await expect(calendar.getByRole("button", { name: /Project A task|Personal scheduled task/ })).toHaveCount(0)
+  await page.evaluate(() => {
+    history.pushState(null, "", "/app/scheduled?project_id=&tab=list")
+    dispatchEvent(new Event("kokoro:surface-navigation"))
+  })
+  await expect(surface.getByRole("alert")).toHaveText("This project scope address is invalid. Reopen automation from the project, or return to the all-tasks page.")
+  await expect(surface.getByRole("button", { name: "Create your scheduled task", exact: true })).toBeDisabled()
+  await expect(surface.getByRole("listitem")).toHaveCount(0)
+  await page.evaluate(() => {
+    history.pushState(null, "", "/app/scheduled?tab=list")
+    dispatchEvent(new Event("kokoro:surface-navigation"))
+  })
+  await expect(surface.getByRole("listitem")).toHaveCount(3)
+  await expect(surface.getByText("Personal scheduled task", { exact: true })).toBeVisible()
+  await expect(surface.getByRole("link", { name: "Back to project", exact: true })).toHaveCount(0)
+  expect(businessRequests).toEqual([])
+})
+
+test("project scheduled preview creation remains visible in its project and all-tasks views", async ({ page, isMobile }) => {
+  const projectId = "project_33333333-3333-3333-3333-333333333333"
+  const otherProjectId = "project_44444444-4444-4444-4444-444444444444"
+  const size = isMobile ? { width: 320, height: 568 } : { width: 1280, height: 800 }
+  await page.setViewportSize(size)
+  await page.addInitScript(() => {
+    window.localStorage.setItem("kokoro.locale", "en")
+    window.localStorage.removeItem("kokoro.preview.scheduled-tasks")
+  })
+  const businessRequests: string[] = []
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname.includes("/scheduled-tasks")) businessRequests.push(request.method())
+  })
+  await page.goto(`/app/scheduled?project_id=${projectId}&tab=list#scheduled-tasks/new`, { waitUntil: "domcontentloaded" })
+  expect(await page.evaluate(() => ({ width: innerWidth, height: innerHeight }))).toEqual(size)
+  const dialog = page.getByRole("dialog")
+  await dialog.getByRole("textbox", { name: "Unread email summary", exact: true }).fill("Preview project creation")
+  await dialog.getByRole("textbox", { name: "Summarize unread email and highlight important messages", exact: true }).fill("Keep this local preview task in its selected project.")
+  await dialog.getByRole("button", { name: "Save", exact: true }).click()
+  await expect(dialog).toHaveCount(0)
+  const surface = page.getByTestId("scheduled-surface")
+  await expect(surface.getByRole("listitem")).toHaveCount(1)
+  await expect(surface.getByText("Preview project creation", { exact: true })).toBeVisible()
+  const saved = await page.evaluate(() => {
+    const stored: unknown = JSON.parse(localStorage.getItem("kokoro.preview.scheduled-tasks") ?? "null")
+    if (!Array.isArray(stored) || stored.length !== 1) throw new Error("Expected one local preview task")
+    const task: unknown = stored[0]
+    if (typeof task !== "object" || task === null || !("projectId" in task) || typeof task.projectId !== "string" || !("nextRun" in task) || typeof task.nextRun !== "string") {
+      throw new Error("Preview project association and next run are missing")
+    }
+    const next = new Date(task.nextRun)
+    const now = new Date()
+    return { projectId: task.projectId, nextMonth: next.getUTCMonth() !== now.getUTCMonth() || next.getUTCFullYear() !== now.getUTCFullYear() }
+  })
+  expect(saved.projectId).toBe(projectId)
+  await surface.getByRole("tab", { name: "Calendar", exact: true }).click()
+  const calendar = surface.getByTestId("scheduled-calendar-view")
+  if (saved.nextMonth) await calendar.getByRole("button", { name: "Next month", exact: true }).click()
+  await expect(calendar.getByRole("button", { name: /Preview project creation/ })).toBeVisible()
+  await page.evaluate((otherProjectId) => {
+    history.pushState(null, "", `/app/scheduled?project_id=${otherProjectId}&tab=list`)
+    dispatchEvent(new Event("kokoro:surface-navigation"))
+  }, otherProjectId)
+  await expect(surface.getByTestId("scheduled-task-list").getByRole("listitem")).toHaveCount(0)
+  await expect(surface.getByRole("list", { name: "Automation types", exact: true }).getByRole("listitem")).toHaveCount(3)
+  await expect(surface.getByText("Preview project creation", { exact: true })).toHaveCount(0)
+  await page.evaluate(() => {
+    history.pushState(null, "", "/app/scheduled?tab=list")
+    dispatchEvent(new Event("kokoro:surface-navigation"))
+  })
+  await expect(surface.getByRole("listitem")).toHaveCount(1)
+  await expect(surface.getByText("Preview project creation", { exact: true })).toBeVisible()
+  expect(businessRequests).toEqual([])
+})
+
+for (const theme of ["light", "dark"] as const) {
+  test(`automation overview preserves keyboard creation and honest unavailable types in ${theme}`, async ({ page, isMobile }) => {
+    const projectId = "project_55555555-5555-5555-5555-555555555555"
+    const size = isMobile ? { width: 320, height: 568 } : { width: 1280, height: 800 }
+    await page.setViewportSize(size)
+    await page.addInitScript((theme) => {
+      localStorage.setItem("kokoro.locale", "en")
+      localStorage.setItem("kokoro.theme", theme)
+      localStorage.removeItem("kokoro.preview.scheduled-tasks")
+    }, theme)
+    const businessRequests: string[] = []
+    page.on("request", (request) => {
+      if (new URL(request.url()).pathname.includes("/scheduled-tasks")) businessRequests.push(request.method())
+    })
+    await page.goto(`/app/scheduled?project_id=${projectId}&tab=list`, { waitUntil: "domcontentloaded" })
+    expect(await page.evaluate(() => ({ width: innerWidth, height: innerHeight }))).toEqual(size)
+    await expect.poll(() => page.locator("html").evaluate((element) => element.classList.contains("dark"))).toBe(theme === "dark")
+    const surface = page.getByTestId("scheduled-surface")
+    const types = surface.getByRole("list", { name: "Automation types", exact: true })
+    await expect(types.getByRole("listitem")).toHaveCount(3)
+    for (const heading of ["Scheduled tasks", "Triggers", "Advanced automation"]) {
+      await expect(types.getByRole("heading", { level: 3, name: heading, exact: true })).toBeVisible()
+    }
+    await expect(types.getByText("Beta", { exact: true })).toBeVisible()
+    const unavailableActions: readonly (readonly [name: string, reason: string])[] = [
+      ["Describe automation", "Advanced automation is not connected yet. Creating or running it is unavailable."],
+    ]
+    for (const [name, reason] of unavailableActions) {
+      const action = types.getByRole("button", { name, exact: true })
+      await expect(action).toBeDisabled()
+      await expect(action).toHaveAccessibleDescription(reason)
+      await expect(types.getByText(reason, { exact: true })).toBeVisible()
+    }
+    const trigger = types.getByRole("button", { name: "Create trigger", exact: true })
+    await expect(trigger).toBeEnabled()
+    await expect(types.getByText("Run when a public RSS feed has new entries matching your conditions.", { exact: true })).toBeVisible()
+    const geometry = await types.evaluate((list) => {
+      const cards = [...list.children].map((card) => {
+        const box = card.getBoundingClientRect()
+        return {
+          left: box.left, right: box.right, top: box.top, bottom: box.bottom,
+          contained: [...card.children].every((child) => {
+            const rect = child.getBoundingClientRect()
+            return rect.left >= box.left && rect.right <= box.right && rect.top >= box.top && rect.bottom <= box.bottom
+          }),
+          noOverflow: card.scrollWidth <= card.clientWidth,
+        }
+      })
+      return {
+        cards,
+        noPageOverflow: document.documentElement.scrollWidth <= innerWidth,
+      }
+    })
+    expect(geometry.noPageOverflow).toBe(true)
+    expect(geometry.cards).toHaveLength(3)
+    for (const card of geometry.cards) {
+      expect(card.contained).toBe(true)
+      expect(card.noOverflow).toBe(true)
+      expect(card.left).toBeGreaterThanOrEqual(0)
+      expect(card.right).toBeLessThanOrEqual(size.width)
+    }
+    for (let index = 1; index < geometry.cards.length; index += 1) {
+      const previous = geometry.cards[index - 1]
+      const current = geometry.cards[index]
+      if (!previous || !current) throw new Error("Automation type geometry is missing")
+      if (isMobile) {
+        expect(current.top).toBeGreaterThanOrEqual(previous.bottom)
+        expect(Math.abs(current.left - previous.left)).toBeLessThanOrEqual(1)
+      } else {
+        expect(current.left).toBeGreaterThanOrEqual(previous.right)
+        expect(Math.abs(current.top - previous.top)).toBeLessThanOrEqual(1)
+      }
+    }
+    const timer = types.getByRole("button", { name: "Create your scheduled task", exact: true })
+    const suggestion = surface.getByRole("button", { name: "Set up automated monitoring for any topic, competitor, or keyword.", exact: true })
+    await trigger.focus()
+    await page.keyboard.press("Enter")
+    await expect(page).toHaveURL((url) => url.pathname === "/app" && url.searchParams.get("workflow") === "automation" && url.searchParams.get("project_id") === projectId)
+    const rssChoice = page.getByRole("button", { name: "Triggers", exact: true })
+    await expect(rssChoice).toBeEnabled()
+    await rssChoice.focus()
+    await page.keyboard.press("Enter")
+    const rssForm = page.getByRole("form", { name: "Create scheduled automation", exact: true })
+    await expect(rssForm.getByRole("textbox", { name: "RSS feed URL", exact: true })).toHaveValue("")
+    await expect(rssForm.getByLabel("Select time", { exact: true })).toHaveCount(0)
+    await expect(page.getByRole("dialog")).toHaveCount(0)
+    await rssForm.getByRole("textbox", { name: "RSS feed URL", exact: true }).fill("https://news.example.com/feed")
+    await rssForm.getByRole("button", { name: "Back to start options", exact: true }).click()
+    await expect(rssChoice).toBeFocused()
+    await rssChoice.press("Enter")
+    await expect(rssForm.getByRole("textbox", { name: "RSS feed URL", exact: true })).toHaveValue("")
+    await rssForm.getByRole("button", { name: "Back to start options", exact: true }).click()
+    await expect(rssChoice).toBeFocused()
+    await page.getByRole("link", { name: "Back to automations", exact: true }).click()
+    await expect(types).toBeVisible()
+    expect(new URL(page.url()).searchParams.get("project_id")).toBe(projectId)
+    await timer.focus()
+    await expect(timer).toBeFocused()
+    await page.keyboard.press("Tab")
+    await expect(trigger).toBeFocused()
+    await page.keyboard.press("Tab")
+    await expect(suggestion).toBeFocused()
+    await page.keyboard.press("Shift+Tab")
+    await expect(trigger).toBeFocused()
+    await page.keyboard.press("Shift+Tab")
+    await expect(timer).toBeFocused()
+    await page.keyboard.press("Enter")
+    let dialog = page.getByRole("dialog")
+    await expect(dialog.getByRole("textbox", { name: "Unread email summary", exact: true })).toHaveValue("")
+    await expect(dialog.getByRole("textbox", { name: "Summarize unread email and highlight important messages", exact: true })).toHaveValue("")
+    await dialog.getByRole("button", { name: "Cancel", exact: true }).click()
+    await expect(dialog).toHaveCount(0)
+    await expect(timer).toBeFocused()
+    await suggestion.focus()
+    await page.keyboard.press("Enter")
+    dialog = page.getByRole("dialog")
+    await expect(dialog.getByRole("textbox", { name: "Summarize unread email and highlight important messages", exact: true })).toHaveValue("Set up automated monitoring for any topic, competitor, or keyword.")
+    await dialog.getByRole("textbox", { name: "Unread email summary", exact: true }).fill("Overview keyboard preview task")
+    await dialog.getByRole("button", { name: "Save", exact: true }).click()
+    await expect(dialog).toHaveCount(0)
+    await expect(surface.getByRole("listitem")).toHaveCount(1)
+    await expect(surface.getByText("Overview keyboard preview task", { exact: true })).toBeVisible()
+    expect(new URL(page.url()).searchParams.get("project_id")).toBe(projectId)
+    const stored: unknown = await page.evaluate(() => JSON.parse(localStorage.getItem("kokoro.preview.scheduled-tasks") ?? "null"))
+    expect(stored).toEqual([expect.objectContaining({ title: "Overview keyboard preview task", projectId })])
+    expect(businessRequests).toEqual([])
+  })
+}
+
+for (const scenario of [
+  { width: 320, height: 568, theme: "light" },
+  { width: 320, height: 400, theme: "dark" },
+  { width: 1280, height: 800, theme: "light" },
+] as const) {
+  test(`H2 website picker viewport ${scenario.width}x${scenario.height} preserves reachable local selection`, async ({ page }) => {
+    const size = { width: scenario.width, height: scenario.height }
+    await page.setViewportSize(size)
+    await page.addInitScript((theme) => {
+      localStorage.setItem("kokoro.locale", "en")
+      localStorage.setItem("kokoro.theme", theme)
+    }, scenario.theme)
+    const businessRequests: string[] = []
+    const admissionReads: string[] = []
+    page.on("request", (request) => {
+      const path = new URL(request.url()).pathname
+      if (request.method() === "GET" && path === "/api/admin-access") {
+        admissionReads.push(`${request.method()} ${path}`)
+        return
+      }
+      if (path.startsWith("/api/") && !path.startsWith("/api/auth/")) businessRequests.push(`${request.method()} ${path}`)
+    })
+    await page.goto("/app/project/preview-project", { waitUntil: "domcontentloaded" })
+    expect(await page.evaluate(() => ({ width: innerWidth, height: innerHeight }))).toEqual(size)
+    await expect.poll(() => page.locator("html").evaluate((element) => element.classList.contains("dark"))).toBe(scenario.theme === "dark")
+    const add = page.locator('[data-context-kind="websites"]').getByRole("button", { name: "Add", exact: true })
+    await add.focus()
+    await expect(add).toBeFocused()
+    await page.keyboard.press("Enter")
+    const dialog = page.getByRole("dialog", { name: "Add website to current project", exact: true })
+    const search = dialog.getByRole("textbox", { name: "Search websites", exact: true })
+    await expect(search).toBeFocused()
+    await expect(dialog.getByText("Local demo only: searching, selecting, and saving will not link real websites.", { exact: true })).toBeVisible()
+    await expect(dialog.getByRole("button", { name: "Save", exact: true })).toBeDisabled()
+    const geometry = await dialog.evaluate((root) => {
+      const title = root.querySelector('[data-slot="dialog-title"]')
+      const close = root.querySelector('[data-slot="dialog-close"][aria-label="Close dialog"]')
+      const elements = [
+        ["dialog", root], ["title", title], ["close", close],
+        ["description", root.querySelector('[data-slot="dialog-description"]')],
+        ["search", root.querySelector('input[aria-label="Search websites"]')],
+        ["candidates", root.querySelector('[role="list"]')],
+        ["footer", root.querySelector('[data-slot="dialog-footer"]')],
+      ] as const
+      const boxes = elements.map(([name, element]) => {
+        if (!element) throw new Error(`Missing website picker ${name}`)
+        const rect = element.getBoundingClientRect()
+        return { name, left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, width: rect.width, height: rect.height }
+      })
+      if (!title || !close) throw new Error("Missing website picker title or close control")
+      const text = document.createRange()
+      text.selectNodeContents(title)
+      const closeRect = close.getBoundingClientRect()
+      return {
+        boxes,
+        titleClearOfClose: [...text.getClientRects()].every((line) => line.right <= closeRect.left || line.left >= closeRect.right || line.bottom <= closeRect.top || line.top >= closeRect.bottom),
+        noPageOverflow: document.documentElement.scrollWidth <= innerWidth,
+        noDialogOverflow: root.scrollWidth <= root.clientWidth,
+      }
+    })
+    console.log(JSON.stringify({ scenario, geometry, admissionReads, businessRequests }))
+    expect(geometry.noPageOverflow).toBe(true)
+    expect(geometry.noDialogOverflow).toBe(true)
+    for (const box of geometry.boxes) {
+      expect(box.width, `${box.name} has usable width`).toBeGreaterThan(0)
+      expect(box.height, `${box.name} has usable height`).toBeGreaterThan(0)
+      expect(box.left, `${box.name} left`).toBeGreaterThanOrEqual(0)
+      expect(box.top, `${box.name} top`).toBeGreaterThanOrEqual(0)
+      expect(box.right, `${box.name} right`).toBeLessThanOrEqual(size.width)
+      expect(box.bottom, `${box.name} bottom`).toBeLessThanOrEqual(size.height)
+    }
+    expect(geometry.titleClearOfClose).toBe(true)
+    const listBox = geometry.boxes.find((box) => box.name === "candidates")
+    const footerBox = geometry.boxes.find((box) => box.name === "footer")
+    if (!listBox || !footerBox) throw new Error("Missing website candidate/footer geometry")
+    expect(listBox.bottom).toBeLessThanOrEqual(footerBox.top)
+    const list = dialog.getByRole("list", { name: "Search websites", exact: true })
+    await expect(list.getByRole("button")).toHaveCount(2)
+    for (const domain of [/kokoro\.miaokit\.cloud/, /launch\.example\.test/]) {
+      const candidate = list.getByRole("button", { name: domain })
+      await candidate.scrollIntoViewIfNeeded()
+      const bounds = await candidate.evaluate((element) => {
+        const region = element.closest('[role="list"]')
+        if (!region) throw new Error("Website candidate list is missing")
+        const row = element.getBoundingClientRect()
+        const area = region.getBoundingClientRect()
+        return { row: row.toJSON(), area: area.toJSON(), width: innerWidth, height: innerHeight }
+      })
+      expect(bounds.row.left).toBeGreaterThanOrEqual(Math.max(0, bounds.area.left) - 1)
+      expect(bounds.row.right).toBeLessThanOrEqual(Math.min(bounds.width, bounds.area.right) + 1)
+      expect(bounds.row.top).toBeGreaterThanOrEqual(Math.max(0, bounds.area.top) - 1)
+      expect(bounds.row.bottom).toBeLessThanOrEqual(Math.min(bounds.height, bounds.area.bottom) + 1)
+    }
+    for (const name of ["Cancel", "Save"]) {
+      const button = dialog.getByRole("button", { name, exact: true })
+      const bounds = await button.boundingBox()
+      if (!bounds) throw new Error(`Website picker ${name} is not rendered`)
+      expect(bounds.y).toBeGreaterThanOrEqual(0)
+      expect(bounds.y + bounds.height).toBeLessThanOrEqual(size.height)
+    }
+    await search.fill(" launch.example.test ")
+    await expect(list.getByRole("button")).toHaveCount(1)
+    const candidate = list.getByRole("button", { name: /launch\.example\.test/ })
+    await candidate.click()
+    await expect(candidate).toHaveAttribute("aria-pressed", "true")
+    await expect(dialog.getByRole("button", { name: "Save", exact: true })).toBeEnabled()
+    await dialog.getByRole("button", { name: "Save", exact: true }).click()
+    await expect(dialog).toHaveCount(0)
+    await expect(add).toBeFocused()
+    await page.keyboard.press("Enter")
+    await expect(search).toHaveValue("")
+    await expect(list.getByRole("button", { name: /launch\.example\.test/ })).toHaveAttribute("aria-pressed", "true")
+    await expect(search).toBeFocused()
+    await page.keyboard.press("Escape")
+    await expect(dialog).toHaveCount(0)
+    await expect(add).toBeFocused()
+    await page.keyboard.press("Enter")
+    await dialog.getByRole("button", { name: "Cancel", exact: true }).click()
+    await expect(dialog).toHaveCount(0)
+    await expect(add).toBeFocused()
+    expect(businessRequests).toEqual([])
+  })
+}
+
+for (const theme of ["light", "dark"] as const) {
+  test(`I1 inline automation journey ${theme}`, async ({ page, isMobile }) => {
+      const size = isMobile ? { width: 320, height: 568 } : { width: 1280, height: 800 }
+      const projectId = "project_55555555-5555-5555-5555-555555555555"
+      await page.setViewportSize(size)
+      await page.addInitScript(({ theme }) => {
+        localStorage.setItem("kokoro.locale", "en")
+        localStorage.setItem("kokoro.theme", theme)
+        localStorage.removeItem("kokoro.preview.scheduled-tasks")
+      }, { theme })
+      const businessRequests: string[] = []
+      const shellAdmissionReads: string[] = []
+      page.on("request", (request) => {
+        const url = new URL(request.url())
+        if (!url.pathname.startsWith("/api/")) return
+        if (request.method() === "GET" && url.pathname === "/api/admin-access" && !url.search) shellAdmissionReads.push(request.method())
+        else businessRequests.push(`${request.method()} ${url.pathname}`)
+      })
+      await page.goto(`/app/scheduled?project_id=${projectId}&tab=list`, { waitUntil: "domcontentloaded" })
+      expect(await page.evaluate(() => ({ width: innerWidth, height: innerHeight }))).toEqual(size)
+      await expect(page.locator("html")).toHaveClass(theme === "dark" ? /dark/ : /^(?!.*\bdark\b)/)
+      const start = page.getByRole("link", { name: "Get started", exact: true })
+      await start.focus()
+      await page.keyboard.press("Enter")
+      await expect(page).toHaveURL((url) => url.pathname === "/app" && url.searchParams.get("workflow") === "automation" && url.searchParams.get("project_id") === projectId)
+      await expect(page.getByRole("heading", { name: "Automation workflow", level: 1 })).toBeVisible()
+      await expect(page.getByRole("heading", { name: "Choose how to start" })).toBeVisible()
+      for (const [name, reason] of [
+        ["Advanced automation", "Advanced automation is not connected yet. Creating or running it is unavailable."],
+      ] as const) {
+        const action = page.getByRole("button", { name, exact: true })
+        await expect(action).toBeDisabled()
+        await expect(action).toHaveAccessibleDescription(reason)
+        await expect(page.getByText(reason, { exact: true })).toBeVisible()
+      }
+      const trigger = page.getByRole("button", { name: "Triggers", exact: true })
+      await expect(trigger).toBeEnabled()
+      await trigger.focus()
+      await page.keyboard.press("Enter")
+      const rssForm = page.getByRole("form", { name: "Create scheduled automation", exact: true })
+      await expect(rssForm.getByRole("textbox", { name: "RSS feed URL", exact: true })).toHaveValue("")
+      await expect(rssForm.getByLabel("Select time", { exact: true })).toHaveCount(0)
+      await expect(page.getByRole("dialog")).toHaveCount(0)
+      await rssForm.getByRole("textbox", { name: "RSS feed URL", exact: true }).fill("https://news.example.com/discarded")
+      await rssForm.getByRole("button", { name: "Back to start options", exact: true }).click()
+      await expect(trigger).toBeFocused()
+      await trigger.press("Enter")
+      await expect(rssForm.getByRole("textbox", { name: "RSS feed URL", exact: true })).toHaveValue("")
+      await rssForm.getByRole("button", { name: "Back to start options", exact: true }).click()
+      await expect(trigger).toBeFocused()
+      expect(new URL(page.url()).searchParams.get("project_id")).toBe(projectId)
+      expect(businessRequests).toEqual([])
+      const scheduled = page.getByRole("button", { name: "Scheduled tasks", exact: true })
+      await scheduled.focus()
+      await page.keyboard.press("Enter")
+      const form = page.getByRole("form", { name: "Create scheduled automation" })
+      await expect(form).toBeVisible()
+      await expect(page.getByRole("dialog")).toHaveCount(0)
+      await expect(form.getByLabel("Select time", { exact: true })).toHaveValue("10:00")
+      await expect(form.getByRole("button", { name: "Create automation", exact: true })).toBeDisabled()
+      await form.getByRole("textbox", { name: "Unread email summary", exact: true }).fill(`Inline preview ${size.width} ${theme}`)
+      const prompt = form.getByRole("textbox", { name: "Summarize unread email and highlight important messages", exact: true })
+      await prompt.fill("Keep this in the selected project, without sending a chat message.")
+      await prompt.press("Enter")
+      const settings = form.getByRole("button", { name: "Automation settings", exact: true })
+      await settings.click()
+      for (const name of ["Agent", "Connectors", "Independent task", "Cloud computer", "Local folder"]) {
+        const action = page.getByRole("button", { name, exact: true })
+        await action.scrollIntoViewIfNeeded()
+        await expect(action).toBeDisabled()
+        await expect(action).toHaveAccessibleDescription(/not available|not connected/i)
+      }
+      const expiry = page.getByRole("checkbox", { name: "Set expiry date", exact: true })
+      await expiry.scrollIntoViewIfNeeded()
+      const last = await expiry.boundingBox()
+      if (!last) throw new Error("The final supported automation setting is missing")
+      expect(last.y).toBeGreaterThanOrEqual(0)
+      expect(last.y + last.height).toBeLessThanOrEqual(size.height)
+      await page.keyboard.press("Escape")
+      await expect(settings).toBeFocused()
+      const geometry = await form.evaluate((element) => {
+        const area = element.getBoundingClientRect()
+        const controls = [...element.querySelectorAll("input,textarea,button")]
+          .filter((control) => control.getClientRects().length > 0 && getComputedStyle(control).visibility !== "hidden" && getComputedStyle(control).opacity !== "0")
+          .map((control) => control.getBoundingClientRect().toJSON())
+        return { area: area.toJSON(), controls, pageWidth: document.documentElement.clientWidth, pageScrollWidth: document.documentElement.scrollWidth }
+      })
+      expect(geometry.pageScrollWidth).toBeLessThanOrEqual(geometry.pageWidth)
+      for (const rect of geometry.controls) {
+        expect(rect.left).toBeGreaterThanOrEqual(geometry.area.left - 1)
+        expect(rect.right).toBeLessThanOrEqual(geometry.area.right + 1)
+      }
+      const create = form.getByRole("button", { name: "Create automation", exact: true })
+      await create.scrollIntoViewIfNeeded()
+      await expect(create).toBeEnabled()
+      await create.click()
+      const surface = page.getByTestId("scheduled-surface")
+      await expect(surface.getByText(`Inline preview ${size.width} ${theme}`, { exact: true })).toBeVisible()
+      await expect(page).toHaveURL((url) => url.pathname === "/app/scheduled" && url.searchParams.get("project_id") === projectId)
+      const localTask = await page.evaluate(() => {
+        const tasks: unknown = JSON.parse(localStorage.getItem("kokoro.preview.scheduled-tasks") ?? "null")
+        if (!Array.isArray(tasks) || tasks.length !== 1) throw new Error("Expected one local preview automation")
+        const task: unknown = tasks[0]
+        if (task === null || typeof task !== "object" || !("projectId" in task) || !("time" in task)) throw new Error("Preview task lost its scope or time")
+        return { projectId: task.projectId, time: task.time }
+      })
+      expect(localTask).toEqual({ projectId, time: "10:00" })
+      expect(businessRequests).toEqual([])
+      expect(shellAdmissionReads.every((method) => method === "GET")).toBe(true)
+  })
+}
+
+for (const theme of ["light", "dark"] as const) {
+  test(`I6 RSS preview creates, edits conditions, pauses and resumes in ${theme}`, async ({ page, isMobile }) => {
+    const projectId = "project_55555555-5555-5555-5555-555555555555"
+    const title = `RSS preview ${isMobile ? "mobile" : "desktop"} ${theme}`
+    const feedUrl = "https://news.example.com/feed"
+    const size = isMobile ? { width: 320, height: 568 } : { width: 1280, height: 800 }
+    await page.setViewportSize(size)
+    await page.addInitScript((theme) => {
+      localStorage.setItem("kokoro.locale", "en")
+      localStorage.setItem("kokoro.theme", theme)
+      localStorage.removeItem("kokoro.preview.scheduled-tasks")
+    }, theme)
+    const businessRequests: string[] = []
+    const shellAdmissionReads: string[] = []
+    const feedRequests: string[] = []
+    page.on("request", (request) => {
+      const url = new URL(request.url())
+      if (url.href === feedUrl) feedRequests.push(request.method())
+      if (!url.pathname.startsWith("/api/")) return
+      if (request.method() === "GET" && url.pathname === "/api/admin-access" && !url.search) shellAdmissionReads.push(request.method())
+      else businessRequests.push(`${request.method()} ${url.pathname}`)
+    })
+    await page.goto(`/app?workflow=automation&project_id=${projectId}`, { waitUntil: "domcontentloaded" })
+    expect(await page.evaluate(() => ({ width: innerWidth, height: innerHeight }))).toEqual(size)
+    await expect(page.locator("html")).toHaveClass(theme === "dark" ? /dark/ : /^(?!.*\bdark\b)/)
+    const trigger = page.getByRole("button", { name: "Triggers", exact: true })
+    await expect(trigger).toBeEnabled()
+    await trigger.focus()
+    await page.keyboard.press("Enter")
+    const form = page.getByRole("form", { name: "Create scheduled automation", exact: true })
+    await expect(form).toBeVisible()
+    await expect(page.getByRole("dialog")).toHaveCount(0)
+    await expect(form.getByLabel("Select time", { exact: true })).toHaveCount(0)
+    await form.getByRole("textbox", { name: "Unread email summary", exact: true }).fill(title)
+    await form.getByRole("textbox", { name: "RSS feed URL", exact: true }).fill(feedUrl)
+    await form.getByRole("textbox", { name: "Summarize unread email and highlight important messages", exact: true }).fill("Summarize matching entries in this project.")
+    await form.getByRole("button", { name: "Add OR group", exact: true }).click()
+    const first = form.getByRole("group", { name: "Condition group 1", exact: true })
+    await first.getByRole("textbox", { name: "Match value", exact: true }).fill("release")
+    await first.getByRole("button", { name: "Add condition", exact: true }).click()
+    await first.getByRole("textbox", { name: "Match value", exact: true }).nth(1).fill("Go")
+    await first.getByRole("combobox", { name: "Field", exact: true }).nth(1).click()
+    await page.getByRole("option", { name: "Summary", exact: true }).click()
+    await expect(first.getByText("AND", { exact: true })).toBeVisible()
+    await form.getByRole("button", { name: "Add OR group", exact: true }).click()
+    const second = form.getByRole("group", { name: "Condition group 2", exact: true })
+    await second.getByRole("combobox", { name: "Field", exact: true }).click()
+    await page.getByRole("option", { name: "Domain", exact: true }).click()
+    await second.getByRole("combobox", { name: "Operator", exact: true }).click()
+    await page.getByRole("option", { name: "Equals", exact: true }).click()
+    await second.getByRole("textbox", { name: "Match value", exact: true }).fill("go.dev")
+    await expect(form.getByText("OR", { exact: true })).toBeVisible()
+    expect(await form.evaluate((element) => {
+      const rect = element.getBoundingClientRect()
+      return { contained: [...element.querySelectorAll("input,textarea,button")].filter(control => control.getClientRects().length > 0).every(control => {
+        const box = control.getBoundingClientRect()
+        return box.left >= rect.left - 1 && box.right <= rect.right + 1
+      }), noPageOverflow: document.documentElement.scrollWidth <= innerWidth }
+    })).toEqual({ contained: true, noPageOverflow: true })
+    const create = form.getByRole("button", { name: "Create automation", exact: true })
+    await create.scrollIntoViewIfNeeded()
+    await expect(create).toBeEnabled()
+    await create.click()
+    await expect(page).toHaveURL((url) => url.pathname === "/app/scheduled" && url.searchParams.get("project_id") === projectId)
+    const surface = page.getByTestId("scheduled-surface")
+    const row = surface.getByRole("listitem").filter({ hasText: title })
+    await expect(row).toBeVisible()
+    await expect(row.getByText(feedUrl, { exact: true })).toBeVisible()
+    await expect(row.getByText("Local preview does not check feeds. Current feed status is unavailable.", { exact: true })).toBeVisible()
+    const localTasks = () => page.evaluate((): unknown => JSON.parse(localStorage.getItem("kokoro.preview.scheduled-tasks") ?? "null"))
+    const originalConditions = [
+      [{ field: "title", operator: "contains", value: "release" }, { field: "summary", operator: "contains", value: "Go" }],
+      [{ field: "domain", operator: "equals", value: "go.dev" }],
+    ]
+    const created = await localTasks()
+    expect(created).toEqual([expect.objectContaining({ title, projectId, triggerKind: "rss", feedUrl, conditions: originalConditions, nextRun: null, enabled: true })])
+    if (!Array.isArray(created) || created.length !== 1) throw new Error("Expected one locally stored RSS definition")
+    for (const key of ["feedState", "lastCheckedAt", "nextCheckAt", "errorCode", "frequency", "time", "timezone"]) expect(created[0]).not.toHaveProperty(key)
+    const actions = row.getByRole("button", { name: `Actions for scheduled task ${title}`, exact: true })
+    await actions.click()
+    await page.getByRole("menuitem", { name: "Edit", exact: true }).click()
+    const dialog = page.getByRole("dialog")
+    await expect(dialog.getByRole("textbox", { name: "RSS feed URL", exact: true })).toHaveValue(feedUrl)
+    await expect(dialog.getByLabel("Select time", { exact: true })).toHaveCount(0)
+    const editedFirst = dialog.getByRole("group", { name: "Condition group 1", exact: true })
+    await expect(editedFirst.getByRole("textbox", { name: "Match value", exact: true }).nth(0)).toHaveValue("release")
+    await expect(editedFirst.getByRole("textbox", { name: "Match value", exact: true }).nth(1)).toHaveValue("Go")
+    await editedFirst.getByRole("textbox", { name: "Match value", exact: true }).nth(0).fill("security")
+    await editedFirst.getByRole("button", { name: "Remove condition 2", exact: true }).click()
+    const editedSecond = dialog.getByRole("group", { name: "Condition group 2", exact: true })
+    await editedSecond.getByRole("combobox", { name: "Operator", exact: true }).click()
+    await page.getByRole("option", { name: "Is not empty", exact: true }).click()
+    await expect(editedSecond.getByRole("textbox", { name: "Match value", exact: true })).toHaveCount(0)
+    await expect.poll(() => dialog.evaluate(element => {
+      const footer = element.querySelector('[data-slot="dialog-footer"]')
+      if (!(footer instanceof HTMLElement)) throw new Error("Scheduled task editor footer missing")
+      const dialogRect = element.getBoundingClientRect()
+      const footerRect = footer.getBoundingClientRect()
+      const buttons = [...footer.querySelectorAll("button")]
+      const contained = (inner: DOMRect, outer: DOMRect) => inner.width > 0 && inner.height > 0
+        && inner.left >= outer.left - 0.5 && inner.right <= outer.right + 0.5
+        && inner.top >= outer.top - 0.5 && inner.bottom <= outer.bottom + 0.5
+      return {
+        actions: buttons.map(button => button.textContent?.trim()),
+        insideFooter: buttons.every(button => contained(button.getBoundingClientRect(), footerRect)),
+        insideDialog: buttons.every(button => contained(button.getBoundingClientRect(), dialogRect)),
+      }
+    })).toEqual({ actions: ["Cancel", "Save"], insideFooter: true, insideDialog: true })
+    await dialog.getByRole("button", { name: "Save", exact: true }).click()
+    await expect(dialog).toHaveCount(0)
+    await expect.poll(localTasks).toEqual([expect.objectContaining({ projectId, triggerKind: "rss", feedUrl, conditions: [[{ field: "title", operator: "contains", value: "security" }], [{ field: "domain", operator: "is_not_empty" }]], nextRun: null })])
+    await actions.click()
+    await page.getByRole("menuitem", { name: "Edit", exact: true }).click()
+    await expect(editedFirst.getByRole("textbox", { name: "Match value", exact: true }).nth(0)).toHaveValue("security")
+    await expect(editedSecond.getByRole("textbox", { name: "Match value", exact: true })).toHaveCount(0)
+    await editedFirst.getByRole("textbox", { name: "Match value", exact: true }).nth(0).fill("discarded change")
+    await dialog.getByRole("button", { name: "Cancel", exact: true }).click()
+    await expect(dialog).toHaveCount(0)
+    await expect.poll(localTasks).toEqual([expect.objectContaining({ projectId, triggerKind: "rss", feedUrl, conditions: [[{ field: "title", operator: "contains", value: "security" }], [{ field: "domain", operator: "is_not_empty" }]], nextRun: null })])
+    await actions.click()
+    await page.getByRole("menuitem", { name: "Edit", exact: true }).click()
+    await expect(dialog.getByRole("textbox", { name: "RSS feed URL", exact: true })).toHaveValue(feedUrl)
+    await expect(editedFirst.getByRole("textbox", { name: "Match value", exact: true }).nth(0)).toHaveValue("security")
+    await expect(editedSecond.getByRole("combobox", { name: "Operator", exact: true })).toHaveText("Is not empty")
+    await expect(editedSecond.getByRole("textbox", { name: "Match value", exact: true })).toHaveCount(0)
+    await dialog.getByRole("button", { name: "Cancel", exact: true }).click()
+    await expect(dialog).toHaveCount(0)
+    await actions.click()
+    await page.getByRole("menuitem", { name: "Pause", exact: true }).click()
+    await expect(row).toHaveAttribute("data-status", "paused")
+    await expect.poll(localTasks).toEqual([expect.objectContaining({ enabled: false, status: "paused", projectId })])
+    await actions.click()
+    await page.getByRole("menuitem", { name: "Resume", exact: true }).click()
+    await expect(row).toHaveAttribute("data-status", "active")
+    await expect.poll(localTasks).toEqual([expect.objectContaining({ enabled: true, status: "active", projectId })])
+    expect(businessRequests).toEqual([])
+    expect(feedRequests).toEqual([])
+    expect(shellAdmissionReads.every(method => method === "GET")).toBe(true)
+  })
+}

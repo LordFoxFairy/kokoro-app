@@ -278,3 +278,63 @@
 }
 
 .calendarTask[data-status="failed"] small { color: var(--destructive); }
+
+.calendarTask time {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 0.625rem;
+  line-height: 0.875rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calendarMore {
+  min-width: 0;
+  border: 0;
+  border-radius: 0.25rem;
+  background: transparent;
+  padding: 0.25rem;
+  color: var(--muted-foreground);
+  font: inherit;
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.calendarMore:hover { background: var(--accent); color: var(--accent-foreground); }
+.calendarMore:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+
+.calendarPopover {
+  display: flex;
+  width: min(22rem, calc(100vw - 2rem));
+  max-width: calc(100vw - 2rem);
+  max-height: var(--radix-popover-content-available-height);
+  flex-direction: column;
+  gap: 0.75rem;
+  overflow: auto;
+  color: var(--popover-foreground);
+}
+
+.calendarPopover h3 {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.25rem;
+  overflow-wrap: anywhere;
+}
+
+.calendarPopoverEntries { display: grid; min-width: 0; gap: 0.5rem; }
+.calendarTask[data-expanded="true"] { gap: 0.25rem; padding: 0.625rem; }
+.calendarTask[data-expanded="true"] > span { font-size: 0.875rem; line-height: 1.25rem; white-space: normal; overflow-wrap: anywhere; }
+.calendarTask[data-expanded="true"] time,
+.calendarTask[data-expanded="true"] small { font-size: 0.75rem; line-height: 1rem; white-space: normal; overflow-wrap: anywhere; }
+
+@media (max-width: 480px) {
+  .calendarToolbar { gap: 0.25rem; padding: 0.5rem; }
+  .calendarToolbar strong { min-width: 0; flex: 1; font-size: 0.8125rem; }
+  .calendarCell { padding: 0.25rem; }
+  .calendarWeek span { padding-inline: 0.25rem; }
+}

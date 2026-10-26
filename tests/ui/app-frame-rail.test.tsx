@@ -4653,3 +4653,182 @@ it.each(["close", "recheck"] as const)("private OAuth retires %s without blockin
   await act(async () => { acknowledgeFresh(); await freshGate })
   expect(navigate).not.toHaveBeenCalled()
 })
+
+// F2 behavior tests use the real AppFrame/menus/actions and real scoped engine.
+// No replacement deletion hook or fabricated UI control is injected here.
+const f2ProjectId = "project_00000000-0000-4000-8000-000000000f21"
+const f2OwnerProject = { id: f2ProjectId, name: "F2 owner project", slug: "f2-owner", description: "", instruction: "owner instruction", created_at: "2026-10-20T00:00:00Z", updated_at: "2026-10-20T00:00:00Z" }
+function f2DeletionReply(status: 200 | 202 = 202) {
+  return Response.json({ data: { project_id: f2ProjectId, logical_release_state: "pending", physical_cleanup_state: "pending" } }, {
+    status, headers: { "cache-control": "private, no-store, max-age=0", "x-request-id": "req-f2-app-frame", ...(status === 202 ? { location: `/v1/projects/${f2ProjectId}/deletion` } : {}) },
+  })
+}
+async function mountF2ProjectFrame(preview = false, admitted = true) {
+  window.localStorage.setItem("kokoro.locale", "en")
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "f2-frame-reader")
+  window.history.replaceState({}, "", `/app/project/${f2ProjectId}`)
+  const projectClient = createFakeClient()
+  const projectEngine = createSessionEngine({ client: projectClient, storage: createMemoryStorage<ConversationStore>(null), scope: { kind: "project", projectRef: f2ProjectId } })
+  const surfaces = await import("@/components/blocks/app-frame/app-frame-main-surface")
+  const OriginalSurface = surfaces.AppFrameMainSurface
+  let latest: React.ComponentProps<typeof OriginalSurface> | undefined
+  vi.spyOn(surfaces, "AppFrameMainSurface").mockImplementation(props => { latest = props; return <OriginalSurface {...props} /> })
+  let accepted = false
+  const business = stubBusinessFetch(vi.fn<typeof fetch>(async (input, init) => {
+    const path = new URL(input instanceof Request ? input.url : String(input), window.location.origin).pathname
+    const method = init?.method ?? "GET"
+    if (path === `/api/hub/projects/${f2ProjectId}` && method === "DELETE") { accepted = true; return f2DeletionReply() }
+    if (path === `/api/hub/projects/${f2ProjectId}/deletion`) return f2DeletionReply(200)
+    if (path === "/api/hub/projects") return projectReadEnvelope(accepted ? [] : [f2OwnerProject])
+    if (path === `/api/hub/projects/${f2ProjectId}/instruction-revisions`) return Response.json({ data: { items: [] }, meta: { request_id: "req-f2-history" } })
+    if (path === `/api/hub/projects/${f2ProjectId}`) return accepted ? Response.json({ error: { code: "project_not_found" } }, { status: 404 }) : Response.json({ data: { project: f2OwnerProject }, meta: { request_id: "req-f2-detail" } })
+    throw new Error(`Unexpected F2 business request: ${method} ${path}`)
+  }))
+  vi.spyOn(await import("@/ui/shell/page-clients"), "browserListClient").mockReturnValue(projectClient)
+  const frame = () => <ThemeProvider><LocaleProvider><AppFrame engine={projectEngine} chatHref="/app" projectWorkspace projectRef={f2ProjectId}
+    preview={preview} projectReadBoundary={{ admitted, subject: admitted ? "f2-frame-reader" : null, generation: 1 }} /></LocaleProvider></ThemeProvider>
+  const view = render(frame())
+  await waitFor(() => expect(latest?.mounted).toBe(true))
+  if (!preview && admitted) await waitFor(() => expect(latest?.projectRename?.available).toBe(true))
+  return { ...view, projectEngine, projectClient, business, latest: () => {
+    if (!latest) throw new Error("AppFrame main surface did not render")
+    return latest
+  } }
+}
+function openF2ProjectMenu() {
+  const header = document.querySelector('[data-slot="workspace-header"]') as HTMLElement
+  const trigger = within(header).getByRole("button", { name: "More settings sections" })
+  fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: "mouse" })
+  return trigger
+}
+
+it("F2 actual AppFrame menu opens confirmation and Cancel is zero DELETE with focus returned to the project menu", async () => {
+  const view = await mountF2ProjectFrame()
+  try {
+    const trigger = openF2ProjectMenu()
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete project" }))
+    const dialog = screen.getByRole("dialog", { name: "Delete project" })
+    expect(within(dialog).getByText(f2OwnerProject.name)).toBeVisible()
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }))
+    await waitFor(() => expect(trigger).toHaveFocus())
+    expect(view.business.mock.calls.filter(call => call[1]?.method === "DELETE")).toHaveLength(0)
+  } finally { view.unmount(); view.projectEngine.dispose(); window.history.replaceState({}, "", "/app") }
+})
+
+it.each(["preview", "unadmitted"] as const)("F2 actual %s project menu exposes a disabled deletion reason and has zero DELETE", async (kind) => {
+  const view = await mountF2ProjectFrame(kind === "preview", kind !== "unadmitted")
+  try {
+    openF2ProjectMenu()
+    const item = screen.getByRole("menuitem", { name: "Delete project" })
+    expect(item).toHaveAttribute("aria-disabled", "true")
+    expect(item).toHaveAccessibleDescription()
+    fireEvent.click(item)
+    expect(screen.queryByRole("dialog", { name: "Delete project" })).not.toBeInTheDocument()
+    expect(view.business.mock.calls.filter(call => call[1]?.method === "DELETE")).toHaveLength(0)
+  } finally { view.unmount(); view.projectEngine.dispose(); window.history.replaceState({}, "", "/app") }
+})
+
+it("F2 actual AppFrame accepted deletion keeps recovery in stable Header and retires captured engine callbacks without disabling cancelRun", async () => {
+  const view = await mountF2ProjectFrame()
+  try {
+    const oldThread = view.latest().conversationProps
+    const retry = vi.spyOn(view.projectEngine, "retry")
+    const resume = vi.spyOn(view.projectEngine, "retryResume")
+    const decision = vi.spyOn(view.projectEngine, "stageToolDecision")
+    const cancel = vi.spyOn(view.projectEngine, "cancelRun")
+    let queuedFocus: FrameRequestCallback | undefined
+    const animation = vi.spyOn(window, "requestAnimationFrame").mockImplementationOnce(callback => { queuedFocus = callback; return 1 })
+    act(() => oldThread.onRetry?.())
+    animation.mockRestore()
+    expect(queuedFocus).toEqual(expect.any(Function))
+    retry.mockClear()
+    openF2ProjectMenu()
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete project" }))
+    const dialog = screen.getByRole("dialog", { name: "Delete project" })
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete project" }))
+    await waitFor(() => expect(view.business.mock.calls.filter(call => call[1]?.method === "DELETE")).toHaveLength(1))
+    await waitFor(() => expect(document.querySelector(`[data-project-id="${f2ProjectId}"]`)).not.toBeInTheDocument())
+    const headingBefore = document.querySelector('[data-slot="workspace-header"]')
+    act(() => { oldThread.onRetry?.(); oldThread.onRetryResume?.(); oldThread.onToolDecision?.("run-retired", "tool-retired", { type: "approve" }) })
+    expect(retry).not.toHaveBeenCalled()
+    expect(resume).not.toHaveBeenCalled()
+    expect(decision).not.toHaveBeenCalled()
+    const lateFocus = vi.spyOn(HTMLTextAreaElement.prototype, "focus")
+    act(() => queuedFocus?.(performance.now()))
+    expect(lateFocus).not.toHaveBeenCalled()
+    act(() => oldThread.onCancelRun?.())
+    expect(cancel).toHaveBeenCalledTimes(1)
+    expect(document.querySelector('[data-slot="workspace-header"]')).toBe(headingBefore)
+    // No row and a real 404 cannot remove the accepted-status recovery owner.
+    expect(screen.getByRole("dialog", { name: "Delete project" })).toBeVisible()
+    expect(screen.getByRole("dialog")).toHaveTextContent(/physical|cleanup/i)
+    expect(view.business.mock.calls.filter(call => call[1]?.method === "DELETE")).toHaveLength(1)
+  } finally { view.unmount(); view.projectEngine.dispose(); window.history.replaceState({}, "", "/app") }
+})
+
+it.each(["submitDraft", "Enter", "form submit"] as const)("F2 real captured %s rechecks synchronous project write eligibility before reset/submit/navigation/draft clear/focus", async (operation) => {
+  window.history.replaceState({}, "", `/app/project/${f2ProjectId}`)
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "f2-action-reader")
+  const scopedClient = createFakeClient()
+  const scopedEngine = createSessionEngine({ client: scopedClient, storage: createMemoryStorage<ConversationStore>(null), scope: { kind: "project", projectRef: f2ProjectId } })
+  const reset = vi.spyOn(scopedEngine, "newConversation")
+  const submit = vi.spyOn(scopedEngine, "submit")
+  const clearDraft = vi.fn(); const focusComposer = vi.fn(); const navigate = vi.fn(); const setIntent = vi.fn()
+  let writable = true
+  const view = renderHook(() => useAppFrameActions({
+    engine: scopedEngine, preview: false, readBoundary: { admitted: true, subject: "f2-action-reader", generation: 1 },
+    projectWorkspace: true, projectRef: f2ProjectId, routedConversationId: null, standaloneSurface: false, chatHref: "/app", activeId: null,
+    draft: "keep this draft", clearDraft, updateDraft: vi.fn(), setDeploymentIntent: setIntent,
+    syncConversationUrl: navigate, setConversationRouteId: navigate, focusComposer, closeSettings: vi.fn(), brandName: "Kokoro", commandNewChatTimerRef: { current: null },
+    ...{ canWriteProject: () => writable },
+  }), { wrapper: LocaleProvider })
+  try {
+    const old = view.result.current
+    writable = false // the synchronous 202 fence, before any React rerender
+    if (operation === "submitDraft") act(() => old.submitDraft())
+    else {
+      const form = render(<form onSubmit={old.handleSubmit}><textarea aria-label="F2 old composer" onKeyDown={old.handleKeyDown} /><button type="submit">F2 send</button></form>)
+      if (operation === "Enter") fireEvent.keyDown(screen.getByRole("textbox", { name: "F2 old composer" }), { key: "Enter" })
+      else fireEvent.submit(form.container.querySelector("form")!)
+      form.unmount()
+    }
+    expect(reset).not.toHaveBeenCalled()
+    expect(submit).not.toHaveBeenCalled()
+    expect(scopedClient.createCalls).toHaveLength(0)
+    expect(clearDraft).not.toHaveBeenCalled()
+    expect(navigate).not.toHaveBeenCalled()
+    expect(setIntent).not.toHaveBeenCalled()
+    expect(focusComposer).not.toHaveBeenCalled()
+  } finally { view.unmount(); scopedEngine.dispose(); window.history.replaceState({}, "", "/app") }
+})
+
+it.each(["rename", "instructions", "upload"] as const)("F2 real project %s captured callback cannot start IO after accepted guard changes", async (operation) => {
+  const { useAppFrameProject } = await import("@/components/blocks/app-frame/use-app-frame-project")
+  window.history.replaceState({}, "", `/app/project/${f2ProjectId}`)
+  let writable = true
+  const context = { isCurrent: () => writable }
+  const request = vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json({ error: { code: "business_store_unavailable" } }, { status: 503 }))
+  const refresh = vi.fn(); const clear = vi.fn()
+  const view = renderHook(() => useAppFrameProject({ projectRef: f2ProjectId, projectWorkspace: true, preview: false, mounted: true,
+    draft: "preserved", updateDraft: vi.fn(), clearDraft: clear, projectDetail: { status: "ready", data: f2OwnerProject },
+    instructionHistory: { status: "blocked" }, instructionContext: context, refreshProject: refresh,
+    refreshRenamedProject: vi.fn().mockResolvedValue(f2OwnerProject), renameBoundary: { admitted: true, subject: "f2-reader", generation: 1 }, renameRouteKey: "f2-root",
+    ...{ canWriteProject: () => writable },
+  }), { wrapper: LocaleProvider })
+  try {
+    if (operation === "rename") {
+      act(() => view.result.current.projectRename.onOpen())
+      act(() => view.result.current.projectRename.onChange("Should not be sent"))
+    }
+    const old = view.result.current
+    writable = false
+    await act(async () => {
+      if (operation === "rename") old.projectRename.onSave()
+      else if (operation === "instructions") await old.saveProjectInstructions("must not save").catch(() => {})
+      else await old.uploadProjectResource(new File(["private"], "private.txt"), "retired-upload-key").catch(() => {})
+    })
+    expect(request).not.toHaveBeenCalled()
+    expect(refresh).not.toHaveBeenCalled()
+    expect(clear).not.toHaveBeenCalled()
+  } finally { view.unmount(); window.history.replaceState({}, "", "/app") }
+})

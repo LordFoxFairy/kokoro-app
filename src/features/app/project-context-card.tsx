@@ -15,11 +15,13 @@ type ContextCardAction = {
   label: string
   icon: LucideIcon
   trailingIcon?: LucideIcon
+  disabled?: boolean
+  "aria-describedby"?: string
 }
 
 export type ProjectContextSectionProps = {
   title: string
-  description?: string
+  description?: ReactNode
   emptyLabel?: string
   action?: string
   actionIcon?: LucideIcon
@@ -89,12 +91,14 @@ export function ProjectContextSection({
       {emptyVisual ? <div className={styles.emptyVisual} data-slot="project-context-artwork">{emptyVisual}</div> : null}
       {actions ? (
         <CardFooter className={styles.cardActions}>
-          {actions.map(({ id, label, icon: ActionIcon, trailingIcon: TrailingIcon }) => (
+          {actions.map(({ id, label, icon: ActionIcon, trailingIcon: TrailingIcon, disabled, "aria-describedby": describedBy }) => (
             <Button
               key={id ?? label}
               type="button"
               variant="outline"
               size="sm"
+              disabled={disabled}
+              aria-describedby={describedBy}
               onClick={(event) => {
                 if (onAction) onAction(id ?? label, event)
                 else onClick(event)
@@ -109,7 +113,7 @@ export function ProjectContextSection({
       ) : null}
       {footerAction ? (
         <CardFooter className={styles.cardFooter}>
-          <Button type="button" variant="outline" size="sm" onClick={onClick}>
+          <Button type="button" variant="outline" size="sm" disabled={footerAction.disabled} aria-describedby={footerAction["aria-describedby"]} onClick={onClick}>
             {FooterIcon ? <FooterIcon data-icon="inline-start" aria-hidden="true" /> : null}
             {footerAction.label}
           </Button>

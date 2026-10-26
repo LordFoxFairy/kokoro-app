@@ -1,5 +1,22 @@
 import type { SessionClient } from "@/engine/client"
 import type { SettingsTab } from "@/ui/settings/settings-modal"
+import type { ProjectDeletionSnapshot } from "@/contract/project-deletion"
+
+export type ProjectDeletionControl = {
+  available: boolean
+  open: boolean
+  name: string
+  status: "idle" | "pending" | "unknown" | "accepted" | "reading" | "status" | "error" | "read-error"
+  problem: "permission" | "conflict" | "read" | "unknown" | "rate-limited" | "unavailable" | "in-progress" | "rejected" | null
+  snapshot: ProjectDeletionSnapshot | null
+  focusScopeToken: object
+  canWriteProject: () => boolean
+  onOpen: () => void
+  onClose: () => void
+  onConfirm: () => void
+  onRetry: () => void
+  onRead: () => void
+}
 
 export type ProjectRenameControl = {
   focusScopeToken: object
@@ -20,6 +37,7 @@ export type ProjectRenameControl = {
 export type WorkspaceHeaderProps = {
   activeId: string | null
   projectRename?: ProjectRenameControl
+  projectDeletion?: ProjectDeletionControl
   shareClient: Pick<SessionClient, "createShare" | "revokeShare">
   onOpenSettings?: (tab: SettingsTab) => void
   brandName?: string
@@ -37,5 +55,5 @@ export type WorkspaceHeaderIdentityProps = Pick<
 
 export type WorkspaceHeaderActionProps = Pick<
   WorkspaceHeaderProps,
-  "activeId" | "projectRename" | "emptyWorkspace" | "onOpenSettings" | "projectWorkspace" | "shareClient"
+  "activeId" | "projectRename" | "projectDeletion" | "emptyWorkspace" | "onOpenSettings" | "projectWorkspace" | "shareClient"
 >

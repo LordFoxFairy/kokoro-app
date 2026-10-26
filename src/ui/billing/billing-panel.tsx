@@ -16,6 +16,8 @@ import { type LedgerFilter, type LedgerState, type SummaryState } from "./billin
 import { BillingSummary } from "./billing-summary"
 import { BillingUsage } from "./billing-usage"
 import { BillingComputerUsage, BillingPhoneUsage, BillingWebsiteUsage } from "./billing-resource-content"
+import { Button } from "@/components/ui/button"
+import { useCreditAccountInitialization } from "./use-credit-account-initialization"
 import styles from "./billing-panel.module.css"
 
 const EMPTY_LEDGER_ENTRIES: BillingLedgerEntry[] = []
@@ -57,7 +59,7 @@ export function BillingContent(props: BillingContentProps) {
   return <BillingScopedContent key={scope} {...props} />
 }
 
-function BillingScopedContent({ client, onOpenPricing, embedded = false }: BillingContentProps) {
+function BillingScopedContent({ client, onOpenPricing, embedded = false, preview = false, readBoundary }: BillingContentProps) {
   const t = useT()
   const actor = readActor()
   const [projection, setProjection] = useState<{ client: BillingClient; actor: string | null | undefined; summary: SummaryState; ledger: LedgerState }>({ client, actor, summary: { kind: "loading" }, ledger: { kind: "loading" } })
@@ -104,6 +106,16 @@ function BillingScopedContent({ client, onOpenPricing, embedded = false }: Billi
     return () => { live = false; attempt.current?.controller.abort(); attempt.current = null }
   }, [refresh])
 
+  const bothMissing = summary.kind === "missing_account" && ledger.kind === "missing_account"
+  const initialization = useCreditAccountInitialization({ client, preview, readBoundary, missing: bothMissing, onReconcile: refresh })
+  const preparation = !preview && bothMissing && initialization === "idle" || initialization === "preparing"
+  const settledReady = summary.kind === "ready" && ledger.kind === "ready"
+  const uncertain = !settledReady && (initialization === "unknown" || initialization === "confirmed")
+  const disabled = !settledReady && initialization === "disabled"
+  const maskMissing = preparation || uncertain || disabled
+  const shownSummary: SummaryState = maskMissing && summary.kind === "missing_account" ? { kind: "loading" } : summary
+  const shownLedger: LedgerState = maskMissing && ledger.kind === "missing_account" ? { kind: "loading" } : ledger
+
   const loadMore = useCallback(async () => {
     const flight = attempt.current
     if (!flight || flight.controller.signal.aborted || flight.paging || retrying || ledger.kind !== "ready" || ledger.cursor === null || readActor() !== flight.actor) return
@@ -129,9 +141,13 @@ function BillingScopedContent({ client, onOpenPricing, embedded = false }: Billi
   const entries = ledger.kind === "ready" ? ledger.entries : EMPTY_LEDGER_ENTRIES
   const content = (
     <div className={cn(styles.body, embedded ? styles.embeddedBody : undefined)} data-embedded={embedded ? "billing" : undefined}>
-      <BillingSummary summary={summary} embedded={embedded} retrying={retrying} ledgerLoadingMore={ledger.kind === "ready" && ledger.loadingMore} onRetry={() => void retry()} onOpenPricing={onOpenPricing} />
+      {preparation || uncertain || disabled ? <div role="status">
+        <p>{t(disabled ? "billing.initializationDisabled" : preparation ? "billing.preparingAccount" : "billing.initializationUnknown")}</p>
+        {(uncertain || disabled) && summary.kind !== "error" && ledger.kind !== "error" ? <Button type="button" variant="outline" size="sm" disabled={retrying} onClick={retry}>{t("billing.retry")}</Button> : null}
+      </div> : null}
+      <BillingSummary summary={shownSummary} embedded={embedded} retrying={retrying} ledgerLoadingMore={ledger.kind === "ready" && ledger.loadingMore} onRetry={() => void retry()} onOpenPricing={onOpenPricing} />
       {!embedded ? <BillingUsage entries={entries} onOpenPricing={onOpenPricing} /> : null}
-      <BillingLedger ledger={ledger} filter={filter} embedded={embedded} retrying={retrying} onFilterChange={setFilter} onRetry={() => void retry()} onLoadMore={() => void loadMore()} />
+      <BillingLedger ledger={shownLedger} filter={filter} embedded={embedded} retrying={retrying} onFilterChange={setFilter} onRetry={() => void retry()} onLoadMore={() => void loadMore()} />
     </div>
   )
   if (!embedded) return content

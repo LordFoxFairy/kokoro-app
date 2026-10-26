@@ -24,6 +24,7 @@ export type AppFrameActionsOptions = {
   readBoundary?: ProjectReadBoundary
   engine: SessionEngine | null
   projectWorkspace: boolean
+  canWriteProject?: () => boolean
   projectRef?: string
   routedConversationId?: string | null
   standaloneSurface: boolean
@@ -47,6 +48,7 @@ export function useAppFrameActions({
   readBoundary,
   engine,
   projectWorkspace,
+  canWriteProject,
   projectRef,
   routedConversationId,
   standaloneSurface,
@@ -79,6 +81,7 @@ export function useAppFrameActions({
   catch { actorAtRender = undefined }
 
   const submitDraft = useCallback(() => {
+    if (projectWorkspace && canWriteProject?.() === false) return
     const content = draft.trim()
     if (!engine || !content || content.length > MAX_INPUT_LENGTH) {
       return
@@ -130,7 +133,7 @@ export function useAppFrameActions({
     // blank conversation cannot inherit a stale Website/App capsule.
     setDeploymentIntent(null)
     focusComposer()
-  }, [actorAtRender, routeAtRender, clearDraft, draft, engine, focusComposer, projectWorkspace, projectRef, routedConversationId, setConversationRouteId, setDeploymentIntent, syncConversationUrl])
+  }, [canWriteProject, actorAtRender, routeAtRender, clearDraft, draft, engine, focusComposer, projectWorkspace, projectRef, routedConversationId, setConversationRouteId, setDeploymentIntent, syncConversationUrl])
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()

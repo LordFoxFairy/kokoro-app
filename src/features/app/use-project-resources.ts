@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import type { ProjectResourceListPage, ProjectResourceUploadResult } from "@/contract/project-resource"
 
@@ -21,16 +21,35 @@ function resourceRow(item: ProjectResourceListPage["items"][number]): ProjectRes
     name: item.filename,
     kind: "file",
     detail: `${item.mimeType} · ${Math.max(1, Math.ceil(Number(item.sizeBytes) / 1024))} KB`,
+    mimeType: item.mimeType,
+    sizeBytes: item.sizeBytes,
+    contentSha256: item.contentSha256,
   }
 }
 
 /** Project-local read projection; BFF remains the sole persisted resource owner. */
-export function useProjectResources(projectRef: string | undefined, preview: boolean, listResources: ListResources | undefined) {
-  const [state, setState] = useState<ResourceListState>(preview ? initialPreviewState : initialLiveState)
+export function useProjectResources(projectRef: string | undefined, preview: boolean, listResources: ListResources | undefined, context?: { isCurrent: () => boolean }) {
   const requestId = useRef(0)
   const controllerRef = useRef<AbortController | null>(null)
+  const scope = useMemo(() => ({ projectRef, preview, listResources, context }), [projectRef, preview, listResources, context])
+  const lifetimeRef = useRef<{ scope: object; active: boolean } | null>(null)
+  useLayoutEffect(() => {
+    const lifetime = { scope, active: true }
+    lifetimeRef.current = lifetime
+    return () => { lifetime.active = false; requestId.current += 1; controllerRef.current?.abort() }
+  }, [scope])
+  const isCurrent = useCallback(() => lifetimeRef.current?.scope === scope && lifetimeRef.current.active && (context?.isCurrent() ?? true), [scope, context])
+  const [projection, setProjection] = useState<{ scope: object; state: ResourceListState } | null>(null)
+  const state = projection?.scope === scope && (context?.isCurrent() ?? true) ? projection.state
+    : preview && (context?.isCurrent() ?? true) ? initialPreviewState : initialLiveState
+  const setState = useCallback((update: (previous: ResourceListState) => ResourceListState) => {
+    if (!isCurrent()) return
+    setProjection(previous => ({ scope, state: update(previous?.scope === scope ? previous.state
+      : preview ? initialPreviewState : initialLiveState) }))
+  }, [isCurrent, preview, scope])
 
   const load = useCallback(async (cursor: string | null): Promise<void> => {
+    if (!isCurrent()) return
     const id = ++requestId.current
     controllerRef.current?.abort()
     const controller = new AbortController()
@@ -44,7 +63,7 @@ export function useProjectResources(projectRef: string | undefined, preview: boo
     try {
       if (!projectRef || !listResources) throw new Error("project_resources_not_configured")
       const page = await listResources(cursor, controller.signal)
-      if (controller.signal.aborted || id !== requestId.current) return
+      if (!isCurrent() || controller.signal.aborted || id !== requestId.current) return
       if (cursor !== null && page.nextCursor === cursor) throw new Error("project_resources_cursor_loop")
       setState((current) => {
         const rows = page.items.map(resourceRow)
@@ -52,10 +71,10 @@ export function useProjectResources(projectRef: string | undefined, preview: boo
         return { items, nextCursor: page.nextCursor, status: "ready", errorCursor: null }
       })
     } catch {
-      if (controller.signal.aborted || id !== requestId.current) return
+      if (!isCurrent() || controller.signal.aborted || id !== requestId.current) return
       setState((current) => ({ ...current, status: "error", errorCursor: cursor }))
     }
-  }, [listResources, projectRef])
+  }, [isCurrent, listResources, projectRef, setState])
 
   useEffect(() => {
     if (preview) {
@@ -79,6 +98,7 @@ export function useProjectResources(projectRef: string | undefined, preview: boo
   }, [load, state.nextCursor, state.status])
   const retry = useCallback(() => load(state.errorCursor), [load, state.errorCursor])
   const confirmUpload = useCallback(async (receipt: ProjectResourceUploadResult) => {
+    if (!isCurrent()) return
     if (preview) {
       setState((current) => ({ ...current, items: [{
         id: receipt.assetId,
@@ -91,7 +111,7 @@ export function useProjectResources(projectRef: string | undefined, preview: boo
     // The POST receipt proves mutation success, but only a fresh owner GET
     // can make it a listed resource. A GET error remains visible separately.
     await refresh()
-  }, [preview, refresh])
+  }, [isCurrent, preview, refresh, setState])
 
   return { ...state, refresh, loadMore, retry, confirmUpload }
 }

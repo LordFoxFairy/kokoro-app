@@ -104,17 +104,19 @@ it("renders disabled accounts with their actual available and held amounts", asy
   expect(screen.queryByRole("button")).not.toBeInTheDocument();
 });
 
-it("recognizes only the strict missing-account envelope and never opens an account", async () => {
-  fetcher.mockResolvedValueOnce(json({ error: { code: "billing_account_not_found", message: "Missing" }, meta: { request_id: "credits-read" } }, 404));
-  render(credit());
+it("recognizes only the strict missing-account envelope and prepares without an opening CTA or invented balance", async () => {
+  fetcher.mockResolvedValueOnce(json({ error: { code: "billing_account_not_found", message: "Missing" }, meta: { request_id: "credits-read" } }, 404)).mockReturnValueOnce(new Promise<Response>(() => {}));
+  render(credit({ ...admitted, subject: "i5-migrated-missing-owner" }));
   expect(await screen.findByRole("status")).toHaveTextContent("Loading");
-  await screen.findByText("No credit account yet");
+  await screen.findByText("Preparing your credit account…");
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   expect(screen.queryByRole("button")).not.toBeInTheDocument();
   expect(screen.queryByText("0")).not.toBeInTheDocument();
-  expect(fetcher).toHaveBeenCalledTimes(1);
+  expect(fetcher).toHaveBeenCalledTimes(2);
   expect(fetcher.mock.calls[0]![0]).toBe(summaryPath);
   expect(fetcher.mock.calls[0]![1]?.method ?? "GET").toBe("GET");
+  expect(fetcher.mock.calls[1]![0]).toBe("/api/session/billing/credit-account");
+  expect(fetcher.mock.calls[1]![1]).toMatchObject({ method: "PUT", body: "{}" });
 });
 
 it.each([
@@ -217,4 +219,132 @@ it("unmounts the summary on the account sign-in subpage and rereads when returni
   expect(screen.queryByText("9007199254740993123.456789")).not.toBeInTheDocument();
   expect(reads).toBe(2);
   expect(fetcher.mock.calls.every(([input]) => input === summaryPath || input === "/api/account/profile")).toBe(true);
+});
+
+// I5 exercises the existing entry and real browser client, not a future hook mock.
+import { StrictMode } from "react";
+import { BillingContent } from "@/ui/billing/billing-panel";
+
+const i5AccountOpenPath = "/api/session/billing/credit-account";
+const i5AccountLedgerPath = "/api/session/billing/ledger";
+const i5AccountMissing = {
+  error: { code: "billing_account_not_found", message: "Missing" },
+  meta: { request_id: "credits-read" },
+};
+const i5AccountAck: BillingSummary = {
+  credit_account_id: "11111111-1111-4111-8111-111111111111",
+  status: "active", available_micros: "0", held_micros: "0",
+};
+const i5AccountBoundary = { admitted: true, subject: "i5-account-owner", generation: 1 };
+const i5AccountAcknowledgement = (body: BillingSummary = i5AccountAck) => Response.json(body, {
+  headers: { "cache-control": "private, no-store, max-age=0", "x-request-id": "credits-read" },
+});
+
+it("I5 account strict missing initializes invisibly and displays only authoritative big integer and held reads", async () => {
+  const acknowledgement = deferred<Response>();
+  const freshSummary = deferred<Response>();
+  const freshLedger = deferred<Response>();
+  let summaryReads = 0;
+  fetcher.mockImplementation(async (input: string, init?: RequestInit) => {
+    if ((init?.method ?? "GET") === "PUT" && input === i5AccountOpenPath) return acknowledgement.promise;
+    if (input === summaryPath) return ++summaryReads === 1 ? json(i5AccountMissing, 404) : freshSummary.promise;
+    if (input === i5AccountLedgerPath) return freshLedger.promise;
+    throw new Error("Unexpected I5 account request");
+  });
+  render(credit(i5AccountBoundary));
+  await waitFor(() => expect(fetcher.mock.calls.filter(([input, init]) => input === i5AccountOpenPath && init?.method === "PUT")).toHaveLength(1));
+  const write = fetcher.mock.calls.find(([input]) => input === i5AccountOpenPath)!;
+  expect(write[1]?.body).toBe("{}");
+  expect(new Headers(write[1]?.headers).get("content-type")).toBe("application/json");
+  expect(new Headers(write[1]?.headers).has("idempotency-key")).toBe(false);
+  expect(screen.queryByRole("button", { name: /Open credit account/ })).not.toBeInTheDocument();
+  expect(screen.queryByText("0", { exact: true })).not.toBeInTheDocument();
+  await act(async () => acknowledgement.resolve(i5AccountAcknowledgement()));
+  await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(4));
+  expect(screen.queryByText("0", { exact: true })).not.toBeInTheDocument();
+  expect(screen.queryByText("9007199254740993123.456789")).not.toBeInTheDocument();
+  await act(async () => {
+    freshSummary.resolve(json({ ...summary, held_micros: "1234567" }));
+    freshLedger.resolve(json({ items: [], page: { next_cursor: null } }));
+  });
+  expect(await screen.findByText("9007199254740993123.456789")).toBeVisible();
+  expect(screen.getByText("1.234567")).toBeVisible();
+  expect(fetcher.mock.calls.map(([input, init]) => `${init?.method ?? "GET"} ${input}`)).toEqual([
+    `GET ${summaryPath}`, `PUT ${i5AccountOpenPath}`, `GET ${summaryPath}`, `GET ${i5AccountLedgerPath}`,
+  ]);
+});
+
+it("I5 account and usage share one hidden command under StrictMode without an opening CTA", async () => {
+  const acknowledgement = deferred<Response>();
+  fetcher.mockImplementation(async (input: string, init?: RequestInit) => {
+    if ((init?.method ?? "GET") === "PUT" && input === i5AccountOpenPath) return acknowledgement.promise;
+    if (input === summaryPath || input === i5AccountLedgerPath) return json(i5AccountMissing, 404);
+    throw new Error("Unexpected concurrent I5 request");
+  });
+  const view = render(<StrictMode><LocaleProvider>
+    <AccountCreditSummary readBoundary={{ ...i5AccountBoundary, subject: "i5-concurrent-owner" }} />
+    <BillingContent client={browserBillingClient()} readBoundary={{ ...i5AccountBoundary, subject: "i5-concurrent-owner" }} embedded />
+  </LocaleProvider></StrictMode>);
+  await waitFor(() => expect(fetcher.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(1));
+  await act(async () => {});
+  expect(fetcher.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(1);
+  expect(screen.queryByRole("button", { name: /Open credit account/ })).not.toBeInTheDocument();
+  view.unmount();
+  await act(async () => acknowledgement.resolve(i5AccountAcknowledgement()));
+  expect(fetcher.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(1);
+});
+
+it.each(["subject", "generation", "admission", "preview", "unmount"] as const)("I5 account pending initialization retires on %s and its late ACK cannot add reads or publish credits", async (change) => {
+  const acknowledgement = deferred<Response>();
+  let retiring = false;
+  fetcher.mockImplementation(async (input: string, init?: RequestInit) => {
+    if ((init?.method ?? "GET") === "PUT" && input === i5AccountOpenPath) return acknowledgement.promise;
+    if (input === summaryPath) return retiring ? json({ ...summary, available_micros: "7000000" }) : json(i5AccountMissing, 404);
+    if (input === i5AccountLedgerPath) return json({ items: [], page: { next_cursor: null } });
+    throw new Error("Unexpected retired I5 request");
+  });
+  const boundary = { ...i5AccountBoundary, subject: `i5-retire-${change}` };
+  const view = render(credit(boundary));
+  await waitFor(() => expect(fetcher.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(1));
+  const writeSignal = fetcher.mock.calls.find(([, init]) => init?.method === "PUT")![1]?.signal;
+  retiring = true;
+  if (change === "unmount") view.unmount();
+  else view.rerender(credit({ ...boundary, subject: change === "subject" ? "i5-next-owner" : boundary.subject,
+    admitted: change !== "admission", generation: change === "generation" ? 2 : 1 }, change === "preview"));
+  expect(writeSignal?.aborted).toBe(true);
+  await act(async () => {});
+  const afterRetirement = fetcher.mock.calls.length;
+  await act(async () => acknowledgement.resolve(i5AccountAcknowledgement({ ...i5AccountAck, available_micros: "777000000" })));
+  expect(fetcher).toHaveBeenCalledTimes(afterRetirement);
+  expect(screen.queryByText("777")).not.toBeInTheDocument();
+  expect(fetcher.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(1);
+  if (change === "subject" || change === "generation") expect(await screen.findByText("7")).toBeVisible();
+});
+
+it("I5 one participant can leave a shared command without aborting the remaining usage view", async () => {
+  const acknowledgement = deferred<Response>();
+  const boundary = { ...i5AccountBoundary, subject: "i5-shared-participant-owner" };
+  let acknowledged = false;
+  fetcher.mockImplementation(async (input: string, init?: RequestInit) => {
+    if (init?.method === "PUT") return acknowledgement.promise;
+    if (!acknowledged) return json(i5AccountMissing, 404);
+    if (input === summaryPath) return json({ ...summary, available_micros: "73456789", held_micros: "1234567" });
+    if (input === i5AccountLedgerPath) return json({ items: [], page: { next_cursor: null } });
+    throw new Error("Unexpected shared participant request");
+  });
+  const client = browserBillingClient();
+  const view = render(<LocaleProvider><div>
+    <AccountCreditSummary key="account" readBoundary={boundary} />
+    <BillingContent key="usage" client={client} readBoundary={boundary} embedded />
+  </div></LocaleProvider>);
+  await waitFor(() => expect(fetcher.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(1));
+  const signal = fetcher.mock.calls.find(([, init]) => init?.method === "PUT")![1]?.signal;
+  view.rerender(<LocaleProvider><div><BillingContent key="usage" client={client} readBoundary={boundary} embedded /></div></LocaleProvider>);
+  expect(signal?.aborted).toBe(false);
+  acknowledged = true;
+  await act(async () => acknowledgement.resolve(i5AccountAcknowledgement()));
+  expect(await screen.findByText("73.456789")).toBeVisible();
+  expect(screen.getByText("1.234567")).toBeVisible();
+  expect(fetcher.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(1);
+  expect(fetcher).toHaveBeenCalledTimes(6);
 });

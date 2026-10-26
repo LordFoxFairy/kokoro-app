@@ -5,6 +5,9 @@ import {
 } from "@/contract/http"
 import { billingMissingAccountSchema } from "@/contract/billing"
 import { SESSION_PROXY_BASE } from "@/engine/config"
+import { creditAccountBrowserAck, creditAccountError, creditAccountErrorAllowed, creditAccountHeaderBytes,
+  creditAccountHeadersValid, creditAccountMaxBytes, creditAccountPath } from "@/contract/billing-credit-account"
+import { parseProjectRenameJson } from "@/contract/project-rename"
 
 export const CREDIT_INSUFFICIENT = "credit_insufficient"
 
@@ -14,6 +17,72 @@ export class BillingClientError extends Error {
     super(`billing_${reason}`)
     this.name = "BillingClientError"
   }
+}
+
+export class CreditAccountInitializationError extends BillingClientError {
+  constructor(readonly code: string, status: number | null = null, readonly retryable = true) {
+    super(code === "request_timeout" ? "timeout" : code === "request_aborted" ? "aborted" : code === "network_error" ? "network" : "http", status)
+    this.name = "CreditAccountInitializationError"
+  }
+}
+
+/** Command-only transport: one 20 second budget through actual EOF, without replay. */
+async function initializeCreditAccount(signal?: AbortSignal): Promise<BillingSummary> {
+  const controller = new AbortController(), deadline = performance.now() + 20_000
+  let retired = false, response: Response | undefined, reader: ReadableStreamDefaultReader<Uint8Array> | undefined
+  let fault = "network_error", interrupt: (error: Error) => void = () => {}
+  const interrupted = new Promise<never>((_, reject) => { interrupt = reject })
+  const stop = () => {
+    controller.abort()
+    if (reader) { void reader.cancel().catch(() => undefined); try { reader.releaseLock() } catch {} reader = undefined }
+    if (response?.body && !response.body.locked) void response.body.cancel().catch(() => undefined)
+  }
+  const abort = () => { fault = "request_aborted"; stop(); interrupt(new CreditAccountInitializationError(fault)) }
+  const timer = setTimeout(() => { fault = "request_timeout"; stop(); interrupt(new CreditAccountInitializationError(fault)) }, 20_000)
+  signal?.addEventListener("abort", abort, { once: true })
+  if (signal?.aborted) abort()
+  const check = () => {
+    if (signal?.aborted) fault = "request_aborted"
+    else if (performance.now() >= deadline) fault = "request_timeout"
+    if (retired || controller.signal.aborted || signal?.aborted || performance.now() >= deadline) { stop(); throw new CreditAccountInitializationError(fault) }
+  }
+  const operation = async () => {
+    check()
+    try {
+      response = await fetch(creditAccountPath, { method: "PUT", headers: { "content-type": "application/json" }, body: "{}",
+        cache: "no-store", redirect: "error", credentials: "same-origin", signal: controller.signal })
+    } catch { check(); throw new CreditAccountInitializationError("network_error") }
+    check()
+    if (!creditAccountHeadersValid(response.headers, response.status, "browser")) throw new CreditAccountInitializationError("invalid_response")
+    let text = "", bytes = 0
+    const decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true })
+    try {
+      if (response.body) {
+        reader = response.body.getReader()
+        for (;;) {
+          check(); const part = await reader.read(); check(); if (part.done) break
+          bytes += part.value.byteLength
+          if (bytes + creditAccountHeaderBytes(response.headers) > creditAccountMaxBytes) throw new Error("too_large")
+          text += decoder.decode(part.value, { stream: true })
+        }
+        reader.releaseLock(); reader = undefined
+      }
+      text += decoder.decode()
+      const length = response.headers.get("content-length")
+      if (length !== null && Number(length) !== bytes) throw new Error("invalid_length")
+      const raw = parseProjectRenameJson(text)
+      if (response.status === 200) { const value = creditAccountBrowserAck.parse(raw); check(); return value }
+      const value = creditAccountError.parse(raw)
+      if (!creditAccountErrorAllowed(response.status, value.error.code, value.error.retryable, true)) throw new Error("invalid_error")
+      throw new CreditAccountInitializationError(value.error.code, response.status, value.error.retryable)
+    } catch (error) {
+      check()
+      if (error instanceof CreditAccountInitializationError) throw error
+      throw new CreditAccountInitializationError("invalid_response")
+    }
+  }
+  try { return await Promise.race([interrupted, operation()]) }
+  finally { retired = true; clearTimeout(timer); signal?.removeEventListener("abort", abort); stop() }
 }
 
 /** A single local deadline includes headers, body and validation; no retry. */
@@ -110,11 +179,13 @@ async function getJson<T>(path: string, parse: (raw: unknown) => T, signal?: Abo
 }
 
 export type BillingClient = {
+  initializeCreditAccount: (signal?: AbortSignal) => Promise<BillingSummary>
   summary: (signal?: AbortSignal) => Promise<BillingSummary>
   ledger: (cursor?: string, signal?: AbortSignal) => Promise<BillingLedger>
 }
 export function createBillingClient(): BillingClient {
   return {
+    initializeCreditAccount,
     summary: (signal) => getJson(billingSummaryPath(), (raw) => billingSummarySchema.parse(raw), signal),
     ledger: (cursor, signal) => {
       if (cursor !== undefined && (cursor.length === 0 || cursor.length > 2048)) return Promise.reject(new BillingClientError("parse"))

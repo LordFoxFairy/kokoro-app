@@ -6,6 +6,7 @@
 import { z } from "zod"
 import { sessionArchive } from "@/lib/server/session-archive"
 import { sessionShare } from "@/lib/server/session-share"
+import { billingCreditAccount, isBillingCreditAccountRequest } from "@/lib/server/billing-credit-account"
 
 import { canonicalConversationIdSchema } from "@/contract/conversation-move"
 import { sameOriginOk } from "@/lib/server/same-origin"
@@ -33,6 +34,7 @@ const AGUI_STREAM_IDLE_TIMEOUT_MS = 60_000
 const FORWARD_HEADERS = ["accept", "content-type", "last-event-id", "idempotency-key"] as const
 
 async function proxy(request: Request, context: { params: Promise<{ path: string[] }> }): Promise<Response> {
+  if (isBillingCreditAccountRequest(request)) return billingCreditAccount(request, context.params)
   if (/^\/api\/session\/sessions\/[^/]+\/(?:archive|restore)$/u.test(new URL(request.url).pathname)) return sessionArchive(request, context.params)
   if (["POST", "DELETE"].includes(request.method) && /^\/api\/session\/sessions\/[^/]+\/share$/u.test(new URL(request.url).pathname)) return sessionShare(request, context.params)
   const requestId = requestIdForRequest(request)
@@ -165,3 +167,8 @@ export const PUT = proxy
 export const PATCH = proxy
 export const DELETE = proxy
 export const HEAD = proxy
+
+export function OPTIONS(request: Request, context: { params: Promise<{ path: string[] }> }) {
+  if (isBillingCreditAccountRequest(request)) return billingCreditAccount(request, context.params)
+  return new Response(null, { status: 204, headers: { Allow: "DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT" } })
+}

@@ -1,3 +1,141 @@
+## 首页项目与自动化验收（2026-10-27）
+
+本版固定 BFF 8395b44 / Public20.0.0，补齐项目范围、删除确认与状态恢复、资源下载、自动化内联创建、RSS 条件与运行记录展示，以及两个积分入口的缺失账户初始化。连接器仍从首页“插件”中的“管理连接器”进入设置；技能和连接器业务实现未改动。以下旧日期小节保留各阶段的原始验证事实，不代表本版当前仍处于对应待验阶段。
+
+本版工程门：合同 393 项、架构 50 项通过，lint、typecheck、production build 通过。最终原完整 `pnpm run test --maxWorkers=2` 为 245 文件、4,979 项通过；该次移除了新增 manifest 诊断观察器，保留已有的自有临时目录回收保护。原完整 `pnpm run test:e2e --workers=2 --reporter=list` 为 130 项通过，无过滤、额外重试或断言放宽。最后一行 fixture 配置增量只将 proxy 测试的 Next 子进程明确设为 development，生产与其他输入保持不变；静态门沿精确保护关系承接。
+
+正常 OAuth 环境已验证项目下载、RSS 保存与重读及暂停展示，另验证首页插件到管理连接器和设置的只读路径。连接器列表与 provider 读取通过，自定义 API 读取仍返回 503，未把预览测试当作外部业务已接通的证据。
+
+历史 R177 冷启动、proxy request_scope 和 Next dev manifest 空文件失败全部保留。最终通过不证明这些间歇问题的唯一根因已修复；诊断观察器的 Promise/导出对象扰动与 canonical 路径覆盖缺口也已记录。高级自动化、尚无正式执行契约的选项及完整授权、实际模型执行、资金结算链仍未启用；普通 Agent 保持关闭。此记录只说明本版功能分支的验收范围，不代表 main 已合入、生产已部署或全部产品能力完成。
+
+## I6 RSS 自动化消费者：本地实现冻结（2026-10-23）
+
+已固定正式 BFF 8395b44 的完整 Public20.0.0 / 168，原文 SHA256 6574930b3a893a208596e6f27c2f9e09122e759d111a7fdbf2d54c294efc0e8f；六个原 generator 正规 write/check，20→19.3 全文 inverse 及原历史链通过，独立 connector profile 只 check、字节不变。现 feature 已接 RSS 内联创建/编辑、7 字段/10 运算符 OR-of-AND 条件、权威 feed 状态及 RSS 运行发现时间；日历排除 RSS，unknown 深复制条件并保持原 key/body，未改日期保原到期 instant。高级自动化和没有正式字段的设置继续不可用，浏览器不读取外部 feed。
+
+真实 UI 与契约 RED 原日志保留。固定 Node22 最终相关 13 文件 320 PASS（13.03 秒）、contract 29 文件 393 PASS（13.39 秒，含六 generator 和独立 profile 检查）、architecture 4 文件 50 PASS（3.60 秒），直接 tsc --noEmit --incremental false exit0。证据前缀 i6-web-rss-worker-v1，相关、合同、架构与类型最终日志分别为 .focused-final.log、.contract-second.log、.architecture-final.log、.types-final.log。旧 calendar fixture 显式 kind，原业务断言除批准的 Triggers 入口迁移外保持；旧无 kind preview 缓存不采用但不主动清除，保留这项 cutover 限制。
+
+本片未运行全量 pnpm test、Next typegen/build、E2E 或正常服务/资源操作；完整工程门、正常同源 RSS 保存/读取与 1280/320 键盘几何由 Root 在冻结后验收。原 full auth 失败、Billing 历史记录及未完成能力仍保留，不称全仓 GREEN、可合并或整个目标完成。I1–I5 以下记录为各阶段历史事实。
+
+## I5 本人积分账户隐藏初始化：实现候选（2026-10-22）
+
+Web已固定正式BFF9fac77d / Public19.3.0 / 168，并完成六窄generator write/check及19.3→19.2全文inverse。新具名server/browser transport保15秒/20秒总预算、完整EOF、首末session和严格结果投影；原getJson及summary/ledger读取实现不变。两个正式积分入口仅在可信scope的严格missing初读后共享一次隐藏意图，没有开户按钮、ACK余额展示或乐观零余额。待确认只允许显式重新读取，已派发事实跨视图与代际保留，preview零写。
+
+Root已独立复现行为RED14FAIL/114PASS；worker传输与pin相关18文件259PASS，三文件界面132PASS，相关七文件回归413PASS。原失败与旧草稿全文均归档；仅批准的三处旧时机断言及required测试替身迁移，资金、流水、取消和退休断言保留。传输独审指出的server正文类型与自动OPTIONS边界已窄修，修后传输三文件67PASS，原失败保留；正常账户初始化与完整lint/type/build/full/E2E尚未由本片运行，不称全仓绿色或可合并，既有历史失败及hix-code-review缺口继续保留。
+
+## I3 Root 验收与 I4-M2 准入（2026-10-21）
+
+项目下载正常3314已实际点击并取得91字节文件，SHA与原上传receipt相同；单次675ms含工具往返，不作SLO。重开3秒/刷新6秒未自动下载，刷新后文件和按钮仍可见。Root完整lint、正规typecheck和build均exit0，next-env仅本次正规生成差异已精确恢复；1130冻结输入不变。全量suite4742PASS/1FAIL/0SKIP，唯一原Billing开户草稿失败仍保留；Redis16379/DB14前后原2key不变。I3独审及单行测试等待补验无剩余确定P1/P2，下载功能验收不代表全仓全绿或可合并。自动化后端已本地提交ef2ddca/Public19.2/167，未推送；当前Web仍19.1，现只批准三设计/I4行为RED，未有运行记录UI实现。Billing缺正式BFF发行和前端接线，不能称无效测试。
+
+## I3 项目资源下载消费者（2026-10-21，本地实现待Root正常下载验收）
+
+正式消费已提交BFF f59d4ab1dc263e554365f4bf028f66c8c3cbdc3e 的 Public19.1.0/166，canonical SHA256 ac649109f7b394ab894d17352c5f9f106e24e1cbf94e74672569333190adfab5。逐字vendor、六现窄generator正规write/check；只agent-failure provenance三字段变化，其余SDK与独立connector-command-errors profile不变。逆移唯一新增GET及version精确恢复19.0完整SHA，原历史parent及全部业务断言继续。
+
+四具名源码承接strict消费规则、server30秒、browser40秒与Dialog意图。真实Workspace显示下载/取消/显式重试和失败/已发起状态，完整EOF、1MiB、声明长度、列出的文件名/MIME/SHA通过后才创建URL，触发后回收。关闭、项目/主体/准入/代际、删除资格、卸载及A→B→A退休旧attempt；预览与未准入禁用并解释。不新增请求字段/业务写、自动重试、持久化或文件落盘成功事实，原列表/上传/删除流程保持。
+
+实际Hub新增回归先12FAIL、原Workspace缺入口1FAIL；完整首轮另记录Proxy覆写no-referrer和删除资格退休状态问题，修正后保留所有原始失败。Root批准仅现Proxy binary GET分支追加精确标准组件编码的项目content路径，个人/Artifact predicate原样。真实NextRequest已归一裸问号，新增无效Proxy裸问号oracle移除且原失败保留；有值query/POST/邻近/结构与编码别名负控、标准Request裸问号拒绝仍验证。
+
+固定Node22最终相关8文件639PASS（32.15秒）；pnpm contract包含独立profile与六generator检查、27文件346PASS（15.02秒）；architecture4文件50PASS（3.45秒）。具名ESLint与直接tsc --noEmit --incremental false均exit0，未运行Next typegen。证据i3-web-download-worker-v1.server-red.log、.workspace-red.log、.download-green-1.log、.download-green-3.log、.related-final.log、.contract-final.log、.architecture-final.log、.lint-final.log、.tsc-final.log。原15条I3业务断言原字节保留，现UI仅末尾新增重复点击行为；旧pin测试仅授权元数据及历史逆证接线改变。
+
+未运行全量pnpm test、Next build或E2E/浏览器；正常3314/3313与next-env原字节未动，不启动或重启服务，不操作数据库/Redis/Git。Root后续独审、完整工程门及正常OAuth真实91字节下载仍待完成。本片不代表事件/高级自动化、运行历史或整个目标完成，原无关Billing草稿及整仓既有失败未关闭，不能据此声称全仓GREEN或可合并。
+
+## I4 审批入口准确可用状态（2026-10-21，本地修复，Root 待验）
+
+固定执行链尚无逐 Run 审批输入，保存 autoApprove 布尔不代表运行时能够兑现该偏好。普通编辑器开关现禁用并关联原因，旧 true 仍按原值显示；workflow 改为禁用的“使用现有审批规则”按钮及同一说明，移除失效选项/handler/props。原 state/submission/client 未变，新任务仍默认 false，旧 true 保存与未知创建的冻结 body/key 恢复保持。九语言只修提示原键及新增一个运行规则标签，不改 wire、policy、CSS 或 owner。
+
+新增公共 Surface 三例真实 RED 后 3 PASS；最终固定 Node22 相关调度/UI/i18n 11 文件 419 PASS（32.04 秒），架构及适用合同边界 5 文件 53 PASS（5.14 秒），具名 ESLint、直接 tsc --noEmit --incremental false exit0。证据 i4-approval-unavailable-worker-v1.red.log、.green.log、.related.log、.architecture-contract.log、.eslint.log、.tsc.log。旧 UI 仅批准的开关操作/false 预期及四频率两行审批操作迁移，其余原全文、已验日历和 1107 非任务输入精确保护。
+
+未运行全仓测试、Next build/typegen、浏览器、服务或真实资源。Root 接续独立审查和正常界面验证；禁用入口属于如实呈现限制，审批策略能力及正式下载、运行历史、事件和高级自动化等目标仍未完成，原下载 13 条 RED 保留。
+
+## I4 日历同日任务展开（2026-10-21，本地验证完成，Root 实景待验）
+
+同日超过三项显示前三项和准确剩余数量，现 Popover 展示全部真实 nextRun，按瞬时升序、同刻稳定，并显示当前时区和 schedulingState 优先的调度状态。calendar.ts 的同域 scheduledRunInstant 复用原受控无时区 ISO 的 UTC 解释，日期分组、排序、格式化共用，不从规则 time 推算。选择沿原编辑器，Escape 与编辑器关闭回焦持久 More；月份、时区、来源/数量及现主体和项目切换退休旧展开且不抢焦点。九语言只增剩余数量文案，无新增协议、请求或持久化。
+
+最终 16 路径固定 Node22、TZ=Asia/Shanghai 相关调度/UI/i18n 11 文件 416 PASS（29.79 秒）；架构及适用合同边界 5 文件 53 PASS（4.15 秒），scheduled contract-calendar 包含在相关组。具名 ESLint 与直接 tsc --noEmit --incremental false exit0，未触发 Next typegen。最终证据 i4-calendar-overflow-worker-v1.final-related.log、.final-architecture-contract.log、.final-eslint.log、.final-tsc.log；原缺入口 RED、非 UTC 兼容 RED 和修正前结果完整保留。旧 UI 全文前缀、九语言旧值及其余 1108 输入保护。
+
+未运行全仓测试、Next build/typegen、E2E、浏览器、服务或真实资源；Root 接续独立审查及正常/窄屏实景。原 13 条下载缺入口 RED、正式下载及运行历史/审批/事件/高级自动化等未完事项保留，不据本片称整个目标或全仓通过。
+
+## 调度状态文案纠正（2026-10-21）
+
+现有调度管理的 failed 来自任务登记/outbox 或 Scheduler 当前调度状态，不能据此推定 Agent 已执行并失败。九语言的 scheduled.failed 现明确表述调度失败，沿原状态键/渲染与列表/日历，不改变请求、重试、权限、任务状态或消费者契约。固定 Node22 执行现有 i18n resolve 与调度 Surface 两文件共 62 PASS、0 FAIL、0 SKIP（Vitest 6.96 秒，外层 8.132 秒）；九语言文件 ESLint exit0，diff 检查通过。后台 Computer Use 正常登录页面已显示原两个失败任务为调度失败，原暂停、调度已结束、已启用状态保持。未触发运行、创建、重试、暂停或删除。
+
+项目下载正式消费者、执行历史、审批接线及外部事件/高级自动化仍未完成；原验收记录及真实下载缺入口 RED 保留。
+
+## I3 已发行列表元数据保留（2026-10-21，本地窄片）
+
+仅消费现已发行 Public19.0 列表已有的 SHA/大小/MIME，不新增 endpoint、wire 字段、下载按钮或消费者 pin。ProjectResourceListPage 的 contentSha256 为必需；真实 mapper 与资源行保留原始 metadata。preview/web 展示类型字段可选且不填造数据，confirmUpload 仍按原流程重读权威列表。
+
+固定 Node22 最终两条 metadata I3 回归 2 PASS / 27 名称过滤（2.05 秒）；三现文件非 I3 旧行为 52 PASS / 15 名称过滤（9.01 秒）。七文件具名 ESLint exit0；直接 tsc --noEmit --incremental false 最终 exit0（20.026 秒），未触发 Next typegen。首轮类型门两处 TS4114 原 FAIL 日志保留，Root 仅授权 I3 URL helper 两个 static 声明补 override，业务值/函数体/全部断言不变；三个测试除批准 SHA fixture/expected 与这两类型词外逆向恢复为改前完整字节。最终日志为 project-resource-metadata-metadata-final.log、project-resource-metadata-old-behavior-final.log、project-resource-metadata-tsc-final.log；首轮定向测试、ESLint 与类型失败日志亦保留。
+
+其余 13 条下载入口测试未重跑，保留前阶段真实缺按钮 RED；取消、重试、二进制/SHA核验与 scope 退休等下游断言仍未到达，不据两条 metadata 转绿声称整个下载或 Web 验收完成。未运行 Next typegen/build、浏览器、服务/真实资源、生成器或 Git；正式下载消费者仍待已发行新 owner artifact 与独立放行。以下为前阶段原始事实。
+
+## I3 项目下载：文档与真实行为测试阶段（2026-10-21）
+
+当前 1124 个冻结输入已逐项核对一致并保存完整改前归档。本阶段仅五文档与两份现测试追加 I3；生产、locale、vendor/generated、Public19.0 固定发布物及 Billing 草稿不变。已确认列表 wire 含 SHA/大小/MIME，mapper/row 丢弃可信元数据，真实资源 Dialog 尚无下载操作。Public19.1 未正式发行，不 repin 或提前实现消费者。
+
+固定 Node22 定向 `-t I3` 实际 15 FAIL / 14 名称过滤（2.31 秒），无收集或导入错误；原两文件旧测试单独 14 PASS / 15 名称过滤（2.01 秒）。两条分别直接证明真实 list mapper 丢 SHA、资源 hook 行丢大小/MIME/SHA；其余 13 条从合法 wire 经真实 reader 到达 Dialog 后缺少具名下载按钮。已到达正常列表显示与零自动下载检查；点击后的单次 GET、字节/SHA/objectURL、取消/重试、身份/代际/项目/删除/关闭退休及 preview 禁用原因均尚未到达，不能称这些后续安全行为已验收。原始证据为 `project-resource-download-web-red-final.log`、`project-resource-download-web-old-tests-final.log` 及对应收据；首轮日志亦保留；CLI 名称过滤不是新增 skip。
+
+后继需要独立有界同源二进制 adapter/browser/intent 生命周期，严格 owner no-store 与最终三指令缓存及真实 Proxy 投影。当前不据候选或缺入口声称真实下载已实现；未运行生产工程门、浏览器、服务或真实资源操作。现 I1 等历史证据完整保留。
+
+## I1 首页自动化内联创建（2026-10-20，本切片验收通过）
+
+Root 独立阶段一 RED 为 15 FAIL / 1 PASS。当前已实现“开始体验”进入 `/app?workflow=automation`，选择启动方式与内联定时表单；名称必填、默认 10:00、四频率/时区/到期/审批与精确项目范围沿原提交链。未知结果离开重开仍显式重试原 key/body；主体、准入、代际、项目及 transport/handler 变化退休旧 UI 结果和回焦。原管理列表/日历、08:00 编辑 Dialog 与三建议保留。触发器/高级及没有正式字段的 Agent、连接器、独立任务、云电脑、本地文件夹继续禁用且原因可读，没有新增 API、客户端或持久化。
+
+Root 最终独立验证：architecture 50 PASS、相关 scheduled/AppSurface/rail 10 文件 380 PASS、完整 lint 通过；未变合同保留 26 文件 310 PASS 的依据。admission mock 单行类型修正经逐字逆向核验，Root 全文件 9 PASS；typecheck-v2 exit0（3.55 秒），production build exit0（23.56 秒）。见 `i1-root-v2-architecture-receipt.json`、`i1-root-v2-related-receipt.json`、`i1-root-v2-lint-receipt.json`、`i1-root-contract-receipt.json`、`i1-root-mock-type-admission-receipt.json`、`i1-root-typecheck-v2-receipt.json` 与 `i1-root-build-receipt.json`。
+
+浏览器预览实际 1280 桌面与 320 手机、明暗共 4 PASS（7.44 秒），没有跳过或重试；CUA 实看启动选择器、内联表单和设置不可用说明，Escape 回焦设置按钮，截图 `i1-cua-inline-form.jpg`。正常空 context/OAuth 唯一已登记旅程通过（7.96 秒，含登录）：同一自有项目恰好一次定时任务 POST、ACK200 且 next_run_at=null；当前权威 GET 为 active，next_run_at 精确 `2026-11-19T02:00:00.000Z`，刷新后列表仍可见，零 Chat 业务写。正常任务与 run 已登记，不重复创建。预览与正常 owner 事实分别见 `i1-root-preview-e2e-receipt.json`、`i1-root-normal-ui-receipt.json`。
+
+阶段一真实 RED、首轮 architecture 48 PASS / 2 FAIL、mock TS2345、首轮 ESLint 路径误写均保留原日志；未改请求、业务断言或旧测试前缀。F3、Billing 草稿及其他来源保持保护。本切片验收不等于全仓 GREEN、整个首页目标完成或可合并：原整仓 Billing/钱包等失败仍保留，事件/高级自动化和没有正式字段的设置仍不可用，项目下载仍待后继；指定 hix-code-review 门缺失也未据此关闭。
+
+## F3 删除缓存投影最小修正（2026-10-20，本地候选待 Root 验收）
+
+Root 独立真实 Proxy → browser 两例均 invalid_headers RED 后，仅将删除 contract 的浏览器缓存常量对齐既有 Proxy/rename 的精确 `private, no-store, max-age=0`。owner 仍精确 no-store，Proxy、JSON/ID/key/Location/request-id/无 Cookie/10 秒及 F2 恢复语义不变。四处合法 fixture/预期同步；浏览器旧两指令、裸 no-store、缺失及其他缓存值均拒绝，owner 原两指令负例保留并补三指令拒绝。
+
+实际定向六文件 366 PASS，session28872 exit0、24.00 秒，日志 project-deletion-f3-production-focused.log；五文件定向 ESLint session97235 exit0。此前两条新增 RED 与全部原日志保留。未运行类型/构建、浏览器、服务、资源或 Git 操作，未重发旧 G2 DELETE。Root 后续独立工程门、源码审查与新具名自有空项目正常 UI 验收仍待完成，不据本地测试宣称真实删除或物理清理完成。
+
+## T1 类型门最小修正（2026-10-20，本地候选）
+
+Root `pnpm typecheck` session9661 exit2、12.73 秒：F1 server catch 读取异步闭包更新的 fault 被错误窄化，D 两测试循环数组使 name/reason 被推断为可 undefined。原日志 home-root-full-typecheck.log 保留，未将类型门失败记为通过。本次仅将 server 故障值读取放入具名 union 返回函数，保留所有 fault 赋值、10 秒预算、abort 和状态映射；两测试数组明确为 readonly tuple，值与断言不变。
+
+F1 两固定测试及 scheduled 三相关文件 139 PASS（session50837 exit0，4.57 秒，home-t1-type-fix-focused.log），三文件定向 ESLint session14943 exit0。未运行 Next typegen/build、浏览器、服务或数据操作；Root 后续独立复跑类型/构建并核保护输入。其余 F2/F1 与 Billing 草稿保持冻结。
+
+## 项目删除 F2：本地生产候选冻结前结果（2026-10-20）
+
+Root 独立 18 项真实语义 RED 后，仅实现授权的 14 源码与九语言；五现文档同步实施事实，四 F2 测试、四 F1 源码/两测试以及 E/D/H/H2、Billing 草稿保持原字节。正式菜单已接确认和 DELETE202 后的固定 GET/稳定 Header 恢复。unknown 保原 key，429/503/in_progress/冲突分别说明；scope 退休、同步旧读写屏障、资源晚请求和真实 engine 回调守卫均已接线，不新增自动轮询或写重试。
+
+实际验证：四冻结 UI 文件首轮 12 FAIL/257 PASS，旧日志保留；修复后 269 PASS。扩大原项目回归首轮 629 PASS/1 FAIL，暴露原详情/历史并行读取契约；保留原断言修复后，12 文件 630 PASS（session36291 exit0，24.87 秒，project-deletion-f2-production-final-regression.log）。最终区分错误文案后，四冻结文件再次 269 PASS（session95680 exit0，24.38 秒，project-deletion-f2-production-frozen-ui.log）；23 生产定向 ESLint session90768 exit0，日志 project-deletion-f2-production-frozen-eslint.log。早期 refs/immutability lint 失败保留，改为 ref 生命周期且未关闭规则。
+
+未运行 Next build/typegen、浏览器、服务/数据库或真实 owner DELETE；没有 Git 写入。Root 最终独审、整候选工程门及正常 Web 仍待验，不能据本地候选声称可提交或整个首页目标完成。以下测试先行/F1 内容为阶段记录。
+
+## 项目删除 F2：文档与行为测试先行（2026-10-20，阶段记录）
+
+Root 已核 F1 最终 9 writer/1109 protected，并同输入 5 文件 311 PASS（2.30 秒）；独立四源只读审查未发现可证实 P1/P2。当前只允许五文档与四个 UI 测试路径，未授权 F2 生产。现有项目菜单无删除消费者、history 未接读 epoch、资源晚上传能再 GET、retry/resume/toolDecision 绕过 submit guard，均为待修复缺口；不能宣称删除界面或整个首页目标完成。
+
+本阶段保存 1119 文件 baseline 与完整 archive，仅追加既有 AppFrame/Workspace 的行为测试。最终定向真实语义 RED：两文件 18 FAIL / 216 CLI 过滤，4.28 秒（session58147 exit1）。4 例缺实际删除入口，3 例 submit/Enter/form 仍调用 newConversation，3 例 rename/instructions/upload 仍发 fetch，8 例资源旧 GET 发布、晚 upload/多文件/分页/重试/确认读及 A→B→A/卸载后新增 IO。初轮 16 FAIL 的原日志保留，不覆盖为最终结果。
+
+两个新文件单列实施缺口：未来意图模块未创建 25 FAIL，真实 useProjectList 未提供 accepted 屏障 10 FAIL，共 35 FAIL / 1.55 秒（session29973 exit1）；这些不作为 Root 生产放行的行为 RED。四测试定向 ESLint session93221 exit0。F1、E/D/H/H2、所有旧断言与 Billing 草稿保护，next-env 仅 Root 生成例外。未运行完整工程门或浏览器，不启停任何服务/数据库、未发真实 owner DELETE，无 Git 写入。Root 后续审测试、独立复跑并决定 F2 生产授权。
+
+## 项目删除 F1 传输本地候选（2026-10-20）
+
+Root 核 tests-only manifest ad3a3643、7 writer/1108 protected 与 before archive 全部一致，独立实际 Hub RED session87641 exit1：77 FAIL / 3 PASS、80 例、1.00 秒。放行后只新增 contract/server/browser 三个 project-deletion.ts，并在 Hub await params 前增加具名候选分流；未改两份冻结测试、原 Hub 其他路由、E/D/H/H2、locale 或 Billing 草稿。固定 Public19.0.0 / BFF08a2120 / digest955412b6 保持。
+
+writer F1 两文件 92 PASS（session90433 exit0，1.23 秒）；原 project-create（含 rename）、固定发布物和 Hub 三文件 219 PASS（session35307 exit0，1.72 秒）；四源和两冻结测试定向 ESLint session94216 exit0。强 raw 输入/零字节 EOF、方法错误矩阵、202/GET 闭集、头/request-id/Location、fatal UTF-8/BOM/重复键、有界真实 EOF、绝对 10 秒与六 session 字段复查均由冻结测试覆盖。首轮 writer Hub 77 FAIL / 3 PASS 和 wire/browser 1 PASS/11 缺模块 FAIL 分别保留；中文 Header 构造错误首日志未删除，最终使用可构造 Latin-1 é 的真实语义 RED。
+
+F2 意图/确认恢复/列表旧读屏障/实际提交守卫仍未实施，界面没有正式删除入口。本轮未发真实 owner DELETE、未启停 Next/浏览器/数据库/资源或 Git 写入；完整工程门、最终独审及正常 Web 验收由 Root 后续执行。H/H2 局部接收不等于整候选可提交或整个首页目标完成。
+
+## 2026-10-20 首页自动化概览（切片 D；本地候选）
+
+Root 已独立复验 E：scheduled 定向 133 PASS，两条桌面/移动预览旅程 4 PASS；复审无剩余 P1/P2。D 新增 5 条 UI 回归在旧源码真实 RED：writer 5 FAIL / 27 名称过滤、2.86 秒，Root 同输入 5 FAIL、3.01 秒，均因缺少三卡 list/heading；非导入或编译错误。放行后扩展原空态及邻 CSS、九语言，呈现定时任务、触发器和高级自动化 Beta 三卡及不同示意图。scheduled unit/UI 与 feature 架构共 9 文件 / 138 PASS、7.48 秒；定向 ESLint、diff-check 均 exit0。
+
+原三建议、创建、项目范围和业务生命周期保持。旧 UI 只迁移四到六按钮计数；旧浏览器 B 空项目 listitem 仅 scope 到真正 task-list，另验证三张介绍卡，原任务缺席及全部隔离/零 IO 断言保留。追加明暗两旅程（桌面/手机共四实例）尚未运行，writer 未启动服务；完整类型、构建和浏览器门由 Root 统一执行。后两类服务无正式契约，当前最终入口禁用且原因可见，不能称整个自动化目标完成，项目删除仍未实施。
+
+## 2026-10-20 首页项目定时任务范围（切片 E；本地定向验证）
+
+独立复审后补修两处已复现问题：旧作用域 mutation 回执不再经已卸载 source 发起读取；预览创建保留项目归属，预览更新保持原归属，controlled 回调仍沿原约定。source 在请求前核对挂载、准入、代际和 client，兼容 Strict Mode 重放及撤准入后恢复。新增七例由 writer 与 Root 分别复跑均为 7 FAIL；最小修复及两个正控后，scheduled unit/UI 与 feature 架构共 9 文件 / 133 PASS（7.21 秒）。新增预览项目创建、日历及全部视图浏览器旅程已写入现有文件，尚未运行；原失败记录保留，完整工程门、浏览器和运行验收仍待 Root 执行。
+
+项目入口的列表、日历和编辑目标现按已解析的精确 `project_id` 筛选；无项目参数时仍显示全部任务。无效范围明确报错且禁止创建，同路由切换项目、无效范围或全部视图会退休旧编辑、确认和读取，迟到创建回执不会重读、关闭或覆盖当前编辑器。任意历史精确引用仍按既有创建契约处理，只有可验证的既有项目路由提供返回链接。项目参数不授予权限；客户端、原 pending create 和幂等身份、PATCH 归属及生成合同均未改。
+
+测试先行：初始八例为 8 FAIL，补晚到创建后为 10 FAIL / 1 PASS；原失败记录保留。最终 scheduled unit/UI 加该 feature 边界共 9 文件 / 124 PASS；定向 ESLint、`tsc --noEmit` 和 `git diff --check` 均 exit0。两处旧用例仅迁移合法项目范围和新范围初读次数；PATCH 用例另等待真实浏览器历史返回，保留原卸载后零额外读取断言，未放宽 timeout/skip。现有 Playwright 文件只追加预览的项目 A/B/全部/invalid、草稿退休及窄屏检查，尚未运行；没有启动服务或数据库。完整合同、全量测试、production build、浏览器与正常运行验收由 Root 后续执行。本段不宣称完整发布门通过，三类自动化概览 D 和项目删除仍未实施。
+
 ## 设置视觉增量与最新主线集成（2026-10-20）
 
 在最新主线基础上整合账户积分概览、账户/设备内页、资产创建前流程、帮助、套餐详情、团队与响应式样式。保留主线 Public19、聊天恢复、真实知识 CRUD/usage、稳定知识会话、受控 Skills 浏览和连接器五态；不回退到旧知识占位页或修改技能/连接器实现。知识预览仍只展示本地草稿，记忆导入和无正式服务的资产最终操作继续禁用。最终 Node22 验证：契约 294 项、架构 50 项、lint、类型检查及 production build 通过；完整 Vitest 232 文件/4,434 项全部通过，完整 Playwright 桌面/手机 108 项全部通过。完整 Vitest 在两个 worker 下执行，未增加 skip/retry 或放宽超时；前轮时区断言失败、临时 Next 编译就绪超时和加载壳超时记录保留。时区断言改为独立本地日历精确 UTC 期待，业务代码不变。独立静态复查未发现确定 P1/P2。GitHub CI 因账号付款/额度问题未启动，不能称云端检查通过；本段为本地集成验证，实际合并与部署分别核实。
@@ -2855,3 +2993,21 @@ App36dacf0基线私有详情/配置只有Prepare，创建窗关闭后needs_oauth
 
 
 最终候选同业务/测试字节：production build退出0。第一次误将只支持development显式preview的公共壳E2E指向production start，得到2FAIL/1中断/3未运行；确认use-session-state的production禁止preview及既有Playwright webServer设计后停止该自有错误模式测试，preview进程由原finally回收，未改产品分支/断言。随后沿原Playwright管理的显式preview development server、3325独立端口、1worker重跑，桌面/移动6 PASS/8.3s、posttype退出0。该公共壳E2E只证明既有预览旅程/几何，不冒本片真实OAuth故障；后者为上方正常AS拒绝→显式重连→callback→fresh owner证据。既有颜色warning保留。仅追加本结果段，另外六路径仍原冻结；临时端口/进程回收与最终SHA由Root集成记录，未push/PR/merge。
+
+## 2026-10-20 项目网站与搜索入口真实性（切片 H；本地候选）
+
+D 已由 Root 独立验收定向 138 PASS、桌面/移动及明暗浏览器 8 PASS，独立审查无 P1/P2；不代表事件/高级自动化或整个首页目标完成。H 新增 9 例在未改生产上真实 9 FAIL / 29 名称过滤、2.30 秒，Root 同 SHA 独立复跑 9 FAIL、2.13 秒，均为缺失行为的断言失败，非编译错误。最小修复后，正式网站入口与直挂 Dialog 均拒绝演示关联；两个搜索网络入口禁用并说明，preview 保留本地演示闭环，模式/项目变化退休旧意图与排队回焦。仅改现三个组件和九语言，没有新模块、CSS、API 或持久化。
+
+完整 workspace 38 PASS（5.80 秒）；最终相关 workspace、正式文件资源、项目 rail 与核心投影四文件 140 PASS（7.73 秒，exit0），定向 ESLint 与 diff-check 均 exit0。原 UI 测试 62053 字节完整前缀及 Root 审阅的 9 条新断言全保持；E/D 生产、测试与独立 Billing 草稿保护。日志为 project-web-boundary-{red,regression,lint}.log；12 生产已冻结，待 Root 独审及集成。writer 未运行 H 浏览器、完整类型/构建/全量门，也未操作 Next 或资源；网站关联与网络搜索仍没有正式 owner 能力，F 项目删除尚未实施。
+
+H2 后续真实后台 CUA 发现网站 Dialog 在 320×568 top=-22、标题与取消越界，H 暂未验收。追加三视口浏览器测试在旧 CSS 上 writer 2 FAIL / 1 PASS（5.6 秒）、Root 同输入 2 FAIL / 1 PASS（5.2 秒）。放行后仅给网站 Dialog 增加专用 class 与局部限高/候选滚动/自然页脚规则，共享资源/定时 CSS、H 生命周期、locale 与全部测试断言未改；同三例 3 PASS（4.6 秒），320×568 和 320×400 的 Dialog 分别为 y16–552、y16–384，桌面完整演示闭环与零业务请求保持。旧 31668B E2E 前缀完整，首轮几何及准入 GET 分类失败日志保留。只使用 Root 已运行的 3378，未启停服务；最终独审、后台 CUA 与工程门待 Root 集成。
+
+
+### Scheduled run updates
+The automation management surface shares Calendar, Tasks and Updates navigation. Updates consumes the committed BFF public19.2 read-only run-history contract through `/api/scheduled-task-runs`; it preserves owner ordering and timestamp text, supports explicit task filtering and replacement pagination, and cancels retired reads. Project scope requires an eligible selected task. Preview and clients without the read capability report unavailable history. This adds no execution command or persistent Web state.
+
+## I6 RSS 任务状态显示修复（2026-10-23，Root 本地窄片）
+
+正常后台浏览器已复现任务暂停而历史 feedState 仍为 active，卡片因此显示正在检查及过去的下次检查时间。现有列表已正确解析 schedulingState，RSS 子展示现直接消费同一状态：只有 active 展示当前 feed 状态与下次检查；pending/paused/exhausted/failed 显示既有准确文案，保留 URL、上次检查和历史错误。不新增请求、字段、存储或调度行为；技能和连接器不涉及。
+
+固定 Node22 新回归先得到5 FAIL/1 PASS（其余49名称过滤），原生产文件不变；最小修复后完整现 Surface 文件55 PASS（5.94秒）。新增五非启用例含权威状态覆盖遗留 active 和 legacy enabled=false；启用正控保持当前 feed/next check。原测试全文前缀逐字保护。证据 i6-web-paused-label-red-v1.json/log、i6-web-paused-label-green-v1.json/log；后继工程、独立审查和正常 CUA 结果由需求测试验收目录的最终 Root 收据记录。此前全量默认 R177 间歇失败仍开放，不据本片宣称全仓或完整执行链通过。

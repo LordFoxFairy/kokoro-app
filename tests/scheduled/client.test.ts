@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { createScheduledTaskClient, pendingScheduledTaskCreate } from "@/features/scheduled-tasks"
 
-const wireTask = {
+const wireTask = { trigger_kind: "calendar" as const,
   id: "scheduled_1",
   title: "Daily digest",
   prompt: "Run the digest",
@@ -24,9 +24,9 @@ describe("scheduled task HTTP client", () => {
     const client = createScheduledTaskClient(fetcher)
     const rules = [{ frequency: "weekly" as const, weekdays: [1, 4] }, { frequency: "monthly" as const, monthDays: [1, 31] }, { frequency: "once" as const, localDate: "2030-02-28" }]
     for (const rule of rules) {
-      const draft = { title: "Rule", prompt: "Run", time: "09:00", timezone: "Asia/Tokyo", autoApprove: false, ...rule }
+      const draft = { triggerKind: "calendar" as const, title: "Rule", prompt: "Run", time: "09:00", timezone: "Asia/Tokyo", autoApprove: false, ...rule }
       await client.createScheduledTask(draft)
-      await client.updateScheduledTask("scheduled_1", { time: draft.time, timezone: draft.timezone, ...rule })
+      await client.updateScheduledTask("scheduled_1", { triggerKind: "calendar", time: draft.time, timezone: draft.timezone, ...rule })
     }
     expect(fetcher.mock.calls.map(([, init]) => JSON.parse(init.body))).toMatchObject([
       { weekdays: [1, 4] }, { weekdays: [1, 4] }, { month_days: [1, 31] }, { month_days: [1, 31] }, { local_date: "2030-02-28" }, { local_date: "2030-02-28" },
@@ -56,7 +56,7 @@ describe("scheduled task HTTP client", () => {
     })
     const fetcher = vi.fn().mockReturnValue(pending)
     const client = createScheduledTaskClient(fetcher)
-    const draft = {
+    const draft = { triggerKind: "calendar" as const,
       title: "Digest",
       prompt: "Run it",
       frequency: "daily" as const,
@@ -106,7 +106,7 @@ describe("scheduled task HTTP client", () => {
         new Response(JSON.stringify({ task: wireTask }), { status: 200 }),
       )
     const client = createScheduledTaskClient(fetcher)
-    const draft = {
+    const draft = { triggerKind: "calendar" as const,
       title: "Weekly digest",
       prompt: "Run the digest",
       frequency: "weekly" as const,
@@ -181,7 +181,7 @@ describe("scheduled task HTTP client", () => {
     const tasks = await createScheduledTaskClient(fetcher).listScheduledTasks()
 
     expect(fetcher).toHaveBeenCalledWith("/api/scheduled-tasks", { cache: "no-store" })
-    expect(tasks).toEqual([{
+    expect(tasks).toEqual([{ triggerKind: "calendar" as const,
       id: "scheduled_1",
       title: "Daily digest",
       prompt: "Run the digest",
@@ -219,7 +219,7 @@ describe("scheduled task HTTP client", () => {
       .mockResolvedValueOnce(new Response(JSON.stringify({ task: { ...wireTask, enabled: false, status: "paused" } }), { status: 200 }))
     const client = createScheduledTaskClient(fetcher)
 
-    await client.createScheduledTask({
+    await client.createScheduledTask({ triggerKind: "calendar" as const,
       title: "Daily digest",
       prompt: "Run the digest",
       frequency: "daily",
@@ -233,7 +233,7 @@ describe("scheduled task HTTP client", () => {
     expect(fetcher).toHaveBeenNthCalledWith(1, "/api/scheduled-tasks", expect.objectContaining({
       method: "POST",
       headers: expect.objectContaining({ "content-type": "application/json", "Idempotency-Key": expect.any(String) }),
-      body: JSON.stringify({
+      body: JSON.stringify({ trigger_kind: "calendar" as const,
         title: "Daily digest",
         prompt: "Run the digest",
         frequency: "daily",
@@ -277,7 +277,7 @@ describe("scheduled task HTTP client", () => {
   it("reports invalid mutation input as a typed parse error before making a request", async () => {
     const fetcher = vi.fn()
 
-    await expect(createScheduledTaskClient(fetcher).createScheduledTask({
+    await expect(createScheduledTaskClient(fetcher).createScheduledTask({ triggerKind: "calendar" as const,
       title: "",
       prompt: "Run the digest",
       frequency: "daily",
@@ -403,7 +403,7 @@ describe("R80 scheduled task project association client", () => {
         ),
       )
     const client = createScheduledTaskClient(fetcher)
-    const task = await client.createScheduledTask({
+    const task = await client.createScheduledTask({ triggerKind: "calendar" as const,
       projectId: "my-project",
       title: "Digest",
       prompt: "Run it",
@@ -420,7 +420,7 @@ describe("R80 scheduled task project association client", () => {
     const projectTask = { ...wireTask, project_id: "project/真实" }
     const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ task: projectTask }), { status: 201 }))
 
-    const task = await createScheduledTaskClient(fetcher).createScheduledTask({
+    const task = await createScheduledTaskClient(fetcher).createScheduledTask({ triggerKind: "calendar" as const,
       projectId: "project/真实",
       title: "Project digest",
       prompt: "Run it",
@@ -432,7 +432,7 @@ describe("R80 scheduled task project association client", () => {
 
     expect(fetcher).toHaveBeenCalledWith("/api/scheduled-tasks", expect.objectContaining({
       method: "POST",
-      body: JSON.stringify({
+      body: JSON.stringify({ trigger_kind: "calendar" as const,
         project_id: "project/真实",
         title: "Project digest",
         prompt: "Run it",
@@ -451,7 +451,7 @@ describe("R80 scheduled task project association client", () => {
       .mockResolvedValueOnce(new Response(JSON.stringify({ task: wireTask }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ error: "Project was not found", code: "project_not_found" }), { status: 404 }))
     const client = createScheduledTaskClient(fetcher)
-    const personal = {
+    const personal = { triggerKind: "calendar" as const,
       title: "Personal digest",
       prompt: "Run it",
       frequency: "daily" as const,
@@ -482,7 +482,7 @@ describe("R80 scheduled task project association client", () => {
       .mockResolvedValueOnce(new Response(JSON.stringify({ task: projectB }), { status: 201 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ task: projectA }), { status: 201 }))
     const client = createScheduledTaskClient(fetcher)
-    const draft = {
+    const draft = { triggerKind: "calendar" as const,
       title: "Project digest",
       prompt: "Run it",
       frequency: "daily" as const,
@@ -502,4 +502,28 @@ describe("R80 scheduled task project association client", () => {
     expect(projectBKey).not.toBe(projectAKey)
     expect(projectARetryKey).toBe(projectAKey)
   })
+})
+
+it("I6 freezes every RSS condition clause and reuses the exact unknown body and key after reopening", async () => {
+  const ack = { id: "rss-1", title: "Feed", prompt: "Summarize", trigger_kind: "rss", feed_url: "https://news.example.com/feed", conditions: [[{ field: "title", operator: "contains", value: "release" }]], next_run_at: null, auto_approve: false, enabled: true, status: "active" }
+  const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(new Response("unavailable", { status: 503 })).mockResolvedValueOnce(Response.json({ task: ack }))
+  const client = createScheduledTaskClient(fetcher)
+  const draft = { triggerKind: "rss" as const, title: "Feed", prompt: "Summarize", feedUrl: ack.feed_url, conditions: [[{ field: "title" as const, operator: "contains" as const, value: "release" }]], autoApprove: false }
+  const original = structuredClone(draft)
+  await expect(client.createScheduledTask(draft)).rejects.toMatchObject({ status: 503 })
+  draft.conditions[0]![0]!.value = "mutated caller"
+  const exposed = pendingScheduledTaskCreate(client)!
+  if (exposed.triggerKind !== "rss") throw new Error("Expected RSS intent")
+  exposed.conditions[0]![0]!.value = "mutated recovered clone"
+  expect(pendingScheduledTaskCreate(client)).toEqual(original)
+  await expect(client.createScheduledTask(draft)).rejects.toThrow("Recover the original")
+  expect(fetcher).toHaveBeenCalledTimes(1)
+  const result = await client.createScheduledTask(original)
+  expect(result).toMatchObject({ triggerKind: "rss", feedUrl: ack.feed_url, conditions: original.conditions, nextRun: null })
+  expect(result).not.toHaveProperty("feedState")
+  const first = fetcher.mock.calls[0]![1]!, second = fetcher.mock.calls[1]![1]!
+  expect(second.body).toBe(first.body)
+  expect(new Headers(second.headers).get("Idempotency-Key")).toBe(new Headers(first.headers).get("Idempotency-Key"))
+  expect(JSON.parse(String(second.body))).toEqual({ trigger_kind: "rss", title: "Feed", prompt: "Summarize", feed_url: ack.feed_url, conditions: original.conditions, auto_approve: false })
+  expect(pendingScheduledTaskCreate(client)).toBeUndefined()
 })

@@ -4,7 +4,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-import { createBillingClient, type BillingClient } from "@/billing/client"
+import { createBillingClient, CreditAccountInitializationError, type BillingClient } from "@/billing/client"
 import { LocaleProvider } from "@/i18n/context"
 import { BillingContent, BillingPanel } from "@/ui/billing/billing-panel"
 
@@ -14,6 +14,7 @@ const DAY_B = Date.UTC(2026, 0, 11, 5, 0, 0) // 2026-01-11
 
 function makeClient(overrides: Partial<BillingClient> = {}): BillingClient {
   return {
+    initializeCreditAccount: vi.fn().mockRejectedValue(new Error("unexpected_initialization")),
     summary: vi
       .fn()
       .mockResolvedValue({ credit_account_id: "11111111-1111-4111-8111-111111111111", status: "active", available_micros: "12500000", held_micros: "500000"}),
@@ -577,21 +578,23 @@ describe("R255 missing Credit account domain state", () => {
   }
   const responseHeaders = { "cache-control": "private, no-store", "x-request-id": requestId }
 
-  it("renders both exact account-not-found reads as not opened, without zero balance or retry", async () => {
-    const fetcher = vi.fn(async () => Response.json(missingBody, { status: 404, headers: responseHeaders }))
+  it("prepares after both exact account-not-found reads, without zero balance or an opening CTA", async () => {
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => init?.method === "PUT" ? new Promise<Response>(() => {}) : Response.json(missingBody, { status: 404, headers: responseHeaders }))
     vi.stubGlobal("fetch", fetcher)
     render(<BillingContent {...{ preview: false, readBoundary: { admitted: true, subject: "billing-test-owner", generation: 1 } }} client={createBillingClient()} embedded />, { wrapper: LocaleProvider })
 
+    await screen.findByText("Preparing your credit account…")
     for (const sectionId of ["billing-balance", "billing-ledger"]) {
       const section = screen.getByTestId(sectionId)
-      expect(await within(section).findByText("No credit account yet")).toBeInTheDocument()
+      expect(within(section).queryByText("No credit account yet")).not.toBeInTheDocument()
       expect(within(section).queryByRole("button", { name: "Reload" })).not.toBeInTheDocument()
       expect(section).not.toHaveTextContent("Failed to load")
       expect(within(section).queryByText("0", { exact: true })).not.toBeInTheDocument()
     }
     expect(screen.queryByText("No transactions yet")).not.toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "Load more" })).not.toBeInTheDocument()
-    expect(fetcher).toHaveBeenCalledTimes(2)
+    expect(fetcher).toHaveBeenCalledTimes(3)
+    expect(fetcher.mock.calls[2]?.[1]).toMatchObject({ method: "PUT", body: "{}" })
   })
 
   it.each([
@@ -747,6 +750,7 @@ describe("R255 missing Credit account domain state", () => {
     const oldSignals: (AbortSignal | null | undefined)[] = []
     let requests = 0
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "PUT") return new Promise<Response>(() => {})
       requests += 1
       const summary = String(input).endsWith("/summary")
       if (requests <= 2) {
@@ -765,7 +769,7 @@ describe("R255 missing Credit account domain state", () => {
     await waitFor(() => expect(oldSignals).toHaveLength(2))
     window.localStorage.setItem("kokoro.web.auth-index-subject", "r255-missing-actor-B")
     mounted.rerender(<BillingContent {...{ preview: false, readBoundary: { admitted: true, subject: "billing-test-owner", generation: 1 } }} client={client} embedded />)
-    if (currentMissing) await screen.findAllByText("No credit account yet")
+    if (currentMissing) await screen.findByText("Preparing your credit account…")
     else await screen.findByText("7", { exact: true })
     await act(async () => {
       lateSummary.resolve(Response.json(currentMissing ? r255ExistingSummary : missingBody, { status: currentMissing ? 200 : 404, headers: responseHeaders }))
@@ -774,7 +778,8 @@ describe("R255 missing Credit account domain state", () => {
     })
     expect(oldSignals.every((signal) => signal?.aborted)).toBe(true)
     if (currentMissing) {
-      expect(screen.getAllByText("No credit account yet")).toHaveLength(2)
+      expect(screen.queryByText("No credit account yet")).not.toBeInTheDocument()
+      expect(screen.getByText("Preparing your credit account…")).toBeVisible()
       expect(screen.queryByText("7", { exact: true })).not.toBeInTheDocument()
     } else {
       expect(screen.getByText("7", { exact: true })).toBeInTheDocument()
@@ -863,3 +868,216 @@ it("resource category previews preserve real task data and perform no additional
   expect(client.summary).toHaveBeenCalledTimes(1);
   expect(client.ledger).toHaveBeenCalledTimes(1);
 });
+
+// I5: extend the actual client surface only in this test; no future hook is mocked.
+import { BillingClientError } from "@/billing/client"
+import type { BillingLedger as I5Ledger, BillingSummary as I5Summary } from "@/contract/http"
+
+type I5InitializationClient = BillingClient & {
+  initializeCreditAccount: (signal?: AbortSignal) => Promise<I5Summary>
+}
+const i5UsageBoundary = { admitted: true, subject: "i5-usage-owner", generation: 1 }
+const i5UsageAck: I5Summary = {
+  credit_account_id: "11111111-1111-4111-8111-111111111111", status: "active",
+  available_micros: "0", held_micros: "0",
+}
+const i5UsageSummary: I5Summary = { ...i5UsageAck, available_micros: "73456789", held_micros: "1234567" }
+const i5UsageLedger: I5Ledger = { items: [{
+  journal_id: "66666666-6666-4666-8666-666666666666", sequence: "9",
+  source_ref: "i5-owner-journal", source_kind: "i5-owner-journal",
+  delta_micros: "-125001", balance_after_micros: "73456789", created_at: "2026-10-16T03:00:00.000Z",
+}], page: { next_cursor: null } }
+function i5Pending<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (error: Error) => void
+  const promise = new Promise<T>((done, fail) => { resolve = done; reject = fail })
+  return { promise, resolve, reject }
+}
+function i5InitializationClient(overrides: Partial<I5InitializationClient> = {}): I5InitializationClient {
+  return {
+    summary: vi.fn().mockRejectedValue(new BillingClientError("missing_account", 404)),
+    ledger: vi.fn().mockRejectedValue(new BillingClientError("missing_account", 404)),
+    initializeCreditAccount: vi.fn().mockResolvedValue(i5UsageAck),
+    ...overrides,
+  }
+}
+function i5Usage(client: I5InitializationClient, readBoundary = i5UsageBoundary, preview = false) {
+  return <LocaleProvider><BillingContent client={client} readBoundary={readBoundary} preview={preview} embedded /></LocaleProvider>
+}
+
+describe("I5 hidden usage initialization", () => {
+  afterEach(() => { window.localStorage.removeItem("kokoro.web.auth-index-subject") })
+
+  it("waits for both initial reads to settle as strict missing before its one hidden initialization", async () => {
+    const ledger = i5Pending<I5Ledger>()
+    const acknowledgement = i5Pending<I5Summary>()
+    const client = i5InitializationClient({ ledger: vi.fn().mockReturnValueOnce(ledger.promise), initializeCreditAccount: vi.fn().mockReturnValue(acknowledgement.promise) })
+    render(i5Usage(client))
+    await waitFor(() => expect(client.summary).toHaveBeenCalledOnce())
+    await waitFor(() => expect(client.ledger).toHaveBeenCalledOnce())
+    expect(client.initializeCreditAccount).not.toHaveBeenCalled()
+    expect(screen.queryByRole("button", { name: /Open credit account/ })).not.toBeInTheDocument()
+    await act(async () => ledger.reject(new BillingClientError("missing_account", 404)))
+    await waitFor(() => expect(client.initializeCreditAccount).toHaveBeenCalledOnce())
+    expect(vi.mocked(client.initializeCreditAccount).mock.calls[0]).toEqual([expect.any(AbortSignal)])
+    expect(within(screen.getByTestId("billing-balance")).queryByText("0", { exact: true })).not.toBeInTheDocument()
+    cleanup()
+    await act(async () => acknowledgement.resolve(i5UsageAck))
+    expect(client.summary).toHaveBeenCalledOnce()
+    expect(client.ledger).toHaveBeenCalledOnce()
+  })
+
+  it.each(["summary failure", "ledger failure", "summary ready", "ledger ready", "disabled summary"] as const)("does not initialize when strict missing is mixed with %s", async (other) => {
+    const client = i5InitializationClient()
+    if (other === "summary failure") vi.mocked(client.summary).mockRejectedValue(new BillingClientError("http", 503))
+    if (other === "ledger failure") vi.mocked(client.ledger).mockRejectedValue(new BillingClientError("network"))
+    if (other === "summary ready" || other === "disabled summary") vi.mocked(client.summary).mockResolvedValue({ ...i5UsageSummary, status: other === "disabled summary" ? "disabled" : "active" })
+    if (other === "ledger ready") vi.mocked(client.ledger).mockResolvedValue(i5UsageLedger)
+    render(i5Usage(client))
+    await waitFor(() => expect(client.summary).toHaveBeenCalledOnce())
+    await waitFor(() => expect(client.ledger).toHaveBeenCalledOnce())
+    await act(async () => {})
+    expect(client.initializeCreditAccount).not.toHaveBeenCalled()
+    if (other.endsWith("failure")) expect(screen.getByText(/^Failed to load/)).toBeVisible()
+    if (other.endsWith("summary") || other === "summary ready") expect(screen.getByTestId("billing-balance")).toHaveTextContent("73.456789")
+    if (other === "ledger ready") expect(screen.getByText("i5-owner-journal")).toBeVisible()
+  })
+
+  it("keeps an existing ready account read-only and preserves its real held amount and ledger", async () => {
+    const client = i5InitializationClient({ summary: vi.fn().mockResolvedValue(i5UsageSummary), ledger: vi.fn().mockResolvedValue(i5UsageLedger) })
+    render(i5Usage(client))
+    expect(await screen.findByText("i5-owner-journal")).toBeVisible()
+    expect(screen.getByTestId("billing-balance")).toHaveTextContent("73.456789")
+    expect(screen.getByTestId("billing-balance")).toHaveTextContent("1.234567")
+    expect(client.initializeCreditAccount).not.toHaveBeenCalled()
+    expect(client.summary).toHaveBeenCalledOnce()
+    expect(client.ledger).toHaveBeenCalledOnce()
+  })
+
+  it("never initializes strict missing in explicit preview", async () => {
+    const client = i5InitializationClient()
+    render(i5Usage(client, i5UsageBoundary, true))
+    await screen.findAllByText("No credit account yet")
+    expect(client.initializeCreditAccount).not.toHaveBeenCalled()
+    expect(screen.queryByRole("button", { name: /Open credit account/ })).not.toBeInTheDocument()
+  })
+
+  it.each([
+    { name: "not admitted", admitted: false, subject: "i5-owner", generation: 1 },
+    { name: "blank subject", admitted: true, subject: "  ", generation: 1 },
+    { name: "negative generation", admitted: true, subject: "i5-owner", generation: -1 },
+    { name: "fractional generation", admitted: true, subject: "i5-owner", generation: 1.5 },
+    { name: "unsafe generation", admitted: true, subject: "i5-owner", generation: Number.MAX_SAFE_INTEGER + 1 },
+  ])("does no read or initialization for $name even with a local cached identity", async (boundary) => {
+    window.localStorage.setItem("kokoro.web.auth-index-subject", "cached-identity-is-not-admission")
+    const client = i5InitializationClient()
+    render(i5Usage(client, boundary))
+    await act(async () => {})
+    expect(client.summary).not.toHaveBeenCalled()
+    expect(client.ledger).not.toHaveBeenCalled()
+    expect(client.initializeCreditAccount).not.toHaveBeenCalled()
+  })
+
+  it.each(["network", "503"] as const)("after an unknown %s write, explicit recovery only rereads both owners and never repeats PUT even while still missing", async (failure) => {
+    const client = i5InitializationClient({ initializeCreditAccount: vi.fn().mockRejectedValue(new BillingClientError(failure === "network" ? "network" : "http", failure === "503" ? 503 : null)) })
+    render(i5Usage(client))
+    await waitFor(() => expect(client.initializeCreditAccount).toHaveBeenCalledOnce())
+    const reload = await screen.findByRole("button", { name: "Reload" })
+    expect(client.summary).toHaveBeenCalledOnce()
+    expect(client.ledger).toHaveBeenCalledOnce()
+    fireEvent.click(reload)
+    await waitFor(() => expect(client.summary).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(client.ledger).toHaveBeenCalledTimes(2))
+    await act(async () => {})
+    expect(client.initializeCreditAccount).toHaveBeenCalledOnce()
+    expect(screen.queryByText("0", { exact: true })).not.toBeInTheDocument()
+    vi.mocked(client.summary).mockResolvedValue(i5UsageSummary)
+    vi.mocked(client.ledger).mockResolvedValue(i5UsageLedger)
+    fireEvent.click(screen.getByRole("button", { name: "Reload" }))
+    expect(await screen.findByText("i5-owner-journal")).toBeVisible()
+    expect(screen.getByTestId("billing-balance")).toHaveTextContent("73.456789")
+    expect(client.initializeCreditAccount).toHaveBeenCalledOnce()
+    expect(client.summary).toHaveBeenCalledTimes(3)
+    expect(client.ledger).toHaveBeenCalledTimes(3)
+  })
+
+  it.each(["success", "failure"] as const)("a retired generation's late initialization %s adds no reads and cannot reset its subject's unknown write marker", async (completion) => {
+    const acknowledgement = i5Pending<I5Summary>()
+    const client = i5InitializationClient({ initializeCreditAccount: vi.fn().mockReturnValue(acknowledgement.promise) })
+    const view = render(i5Usage(client))
+    await waitFor(() => expect(client.initializeCreditAccount).toHaveBeenCalledOnce())
+    const signal = vi.mocked(client.initializeCreditAccount).mock.calls[0]![0]
+    view.rerender(i5Usage(client, { ...i5UsageBoundary, admitted: false, generation: 2 }))
+    expect(signal?.aborted).toBe(true)
+    view.rerender(i5Usage(client, { ...i5UsageBoundary, generation: 2 }))
+    await waitFor(() => expect(client.summary).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(client.ledger).toHaveBeenCalledTimes(2))
+    expect(client.initializeCreditAccount).toHaveBeenCalledOnce()
+    await act(async () => { if (completion === "success") acknowledgement.resolve(i5UsageAck); else acknowledgement.reject(new BillingClientError("network")) })
+    expect(client.summary).toHaveBeenCalledTimes(2)
+    expect(client.ledger).toHaveBeenCalledTimes(2)
+    expect(client.initializeCreditAccount).toHaveBeenCalledOnce()
+    expect(screen.getByRole("button", { name: "Reload" })).toBeEnabled()
+    expect(screen.queryByText("0", { exact: true })).not.toBeInTheDocument()
+  })
+
+  it("unmount and remount preserve the dispatched intent without using a late ACK to start GETs", async () => {
+    const acknowledgement = i5Pending<I5Summary>()
+    const client = i5InitializationClient({ initializeCreditAccount: vi.fn().mockReturnValue(acknowledgement.promise) })
+    const first = render(i5Usage(client))
+    await waitFor(() => expect(client.initializeCreditAccount).toHaveBeenCalledOnce())
+    const signal = vi.mocked(client.initializeCreditAccount).mock.calls[0]![0]
+    first.unmount()
+    expect(signal?.aborted).toBe(true)
+    render(i5Usage(client))
+    await waitFor(() => expect(client.summary).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(client.ledger).toHaveBeenCalledTimes(2))
+    await act(async () => acknowledgement.resolve(i5UsageAck))
+    expect(client.initializeCreditAccount).toHaveBeenCalledOnce()
+    expect(client.summary).toHaveBeenCalledTimes(2)
+    expect(client.ledger).toHaveBeenCalledTimes(2)
+    expect(screen.getByRole("button", { name: "Reload" })).toBeEnabled()
+  })
+})
+
+it("I5 never presents an old missing-account verdict during dispatch or unknown recovery", async () => {
+  const acknowledgement = i5Pending<I5Summary>()
+  const client = i5InitializationClient({ initializeCreditAccount: vi.fn().mockReturnValue(acknowledgement.promise) })
+  render(i5Usage(client))
+  await waitFor(() => expect(client.initializeCreditAccount).toHaveBeenCalledOnce())
+  expect(screen.getByText("Preparing your credit account…")).toBeVisible()
+  expect(screen.queryByText("No credit account yet")).not.toBeInTheDocument()
+  await act(async () => acknowledgement.reject(new BillingClientError("network")))
+  expect(screen.getByText("The result is not confirmed yet. Reload to check.")).toBeVisible()
+  expect(screen.queryByText("No credit account yet")).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole("button", { name: "Reload" }))
+  await waitFor(() => expect(client.summary).toHaveBeenCalledTimes(2))
+  expect(screen.queryByText("No credit account yet")).not.toBeInTheDocument()
+  expect(client.initializeCreditAccount).toHaveBeenCalledOnce()
+})
+
+it("I5 preserves a real nonzero post-ACK summary when the independent ledger read fails and never reinitializes", async () => {
+  const client = i5InitializationClient({
+    summary: vi.fn().mockRejectedValueOnce(new BillingClientError("missing_account", 404)).mockResolvedValue(i5UsageSummary),
+    ledger: vi.fn().mockRejectedValueOnce(new BillingClientError("missing_account", 404)).mockRejectedValue(new BillingClientError("network")),
+  })
+  render(i5Usage(client))
+  expect(await screen.findByText("73.456789")).toBeVisible()
+  expect(screen.getByText("1.234567")).toBeVisible()
+  expect(within(screen.getByTestId("billing-ledger")).getByText(/^Failed to load/)).toBeVisible()
+  expect(screen.queryByText("No transactions yet")).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole("button", { name: "Reload" }))
+  await waitFor(() => expect(client.summary).toHaveBeenCalledTimes(3))
+  expect(client.initializeCreditAccount).toHaveBeenCalledOnce()
+})
+
+it("I5 preserves a typed disabled rejection and subsequent explicit reads cannot loop initialization", async () => {
+  const client = i5InitializationClient({ initializeCreditAccount: vi.fn().mockRejectedValue(new CreditAccountInitializationError("billing_account_disabled", 403, false)) })
+  render(i5Usage(client))
+  expect(await screen.findByText("The credit account is disabled and cannot be prepared.")).toBeVisible()
+  expect(screen.queryByText("No credit account yet")).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole("button", { name: "Reload" }))
+  await waitFor(() => expect(client.ledger).toHaveBeenCalledTimes(2))
+  expect(client.initializeCreditAccount).toHaveBeenCalledOnce()
+  expect(screen.queryByText("0", { exact: true })).not.toBeInTheDocument()
+})

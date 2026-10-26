@@ -154,7 +154,10 @@
   padding: 0.625rem 0.75rem;
 }
 .resourceRow > svg { width: 1.125rem; height: 1.125rem; color: var(--muted-foreground); stroke-width: 1.75; }
-.resourceRow > span { display: grid; min-width: 0; gap: 0.125rem; }
+.resourceRow > span { display: grid; flex: 1; min-width: 0; gap: 0.125rem; }
+.resourceRow > button { flex-shrink: 0; }
+.resourceRow small[role] { white-space: normal; overflow-wrap: anywhere; }
+.resourceRow [role="alert"] { color: var(--destructive); }
 .resourceRow strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 500; line-height: 18px; }
 .resourceRow small { overflow: hidden; color: var(--muted-foreground); text-overflow: ellipsis; white-space: nowrap; font-size: 12px; line-height: 16px; }
 .resourceUploadList { display: grid; gap: 0.5rem; margin-top: 1rem; }
@@ -280,6 +283,32 @@
   gap: 0.5rem;
 }
 .projectPickerFooter button { width: 4.5rem; height: 2.25rem; min-height: 2.25rem; border-radius: 8px; }
+.websitePickerDialog {
+  display: grid;
+  height: min(38.25rem, calc(100dvh - 2rem));
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  gap: 0.75rem;
+}
+.websitePickerDialog .projectPickerTitle { padding-inline-end: 2rem; }
+.websitePickerDialog .projectPickerSearch { margin-top: 0; }
+.websitePickerDialog .projectPickerList {
+  min-height: 0;
+  margin-top: 0;
+  overflow-y: auto;
+  align-content: start;
+  overscroll-behavior: contain;
+}
+.websitePickerDialog .projectPickerEmpty {
+  position: static;
+  min-height: 0;
+  overflow-y: auto;
+  justify-content: center;
+}
+.websitePickerDialog .projectPickerFooter {
+  position: static;
+  flex-direction: row;
+  justify-self: end;
+}
 .scheduledPickerToolbar { display: flex; align-items: flex-start; gap: 0.5rem; margin-top: 0.75rem; }
 .scheduledPickerToolbar .projectPickerSearch { width: 12.5rem; margin-top: 0; }
 .scheduledPickerToolbar > button { width: 6.625rem; height: 2rem; min-height: 2rem; margin-left: auto; border-radius: 8px; padding-inline: 0.5rem; font-size: 14px; }

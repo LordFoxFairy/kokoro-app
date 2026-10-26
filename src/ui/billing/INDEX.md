@@ -1,8 +1,10 @@
+I5：use-credit-account-initialization.ts只保存稳定BillingClient与可信subject下已派发的内存意图，两个入口共享一次隐藏初始化、独立退休参与者。用量初读summary/ledger均严格missing才派发，ACK不展示而重读；unknown仅显式只读恢复，ready/error保持独立，preview不调用。原summary/ledger transport与分页不变，无开户CTA、赠款或支付。
+
 订阅周期使用现 Radix Select 浏览 all/month/year/once，资源分类沿现 Tabs 统一局部排版；控件、价格与详情仍消费原目录，无新增交易行为。
 
 订阅在 pricing-panel 内仅按正式目录的 month/year/once 字段过滤；pricing-plan-details-dialog 展示原金额、币种、周期及积分，不折算年费或推断优惠。周期切换不重读目录，购买仍禁用并说明支付未接通，身份退休沿现宿主 key。
 
-设置内用量分类现在可本地切换：现 billing-panel 的任务读取、分页与身份退休保持；billing-resource-content 负责网站与游戏的临时日期输入及三类不可读用量卡、居中的不可用云电脑引导和复用电话说明弹窗。三卡桌面同行、窄屏纵排，原因全文和日期草稿保持。缺少服务时不显示费用、额度或虚构空列表，自动充值/电脑创建仍禁用；无新客户端、业务请求或开户实现。订阅真实空目录使用中性图标、原空态文案和显式重新读取，复用原单飞 retry、预算和身份退休，不自动重试或触发支付。
+设置内用量分类现在可本地切换：现 billing-panel 的任务读取、分页与身份退休保持；billing-resource-content 负责网站与游戏的临时日期输入及三类不可读用量卡、居中的不可用云电脑引导和复用电话说明弹窗。三卡桌面同行、窄屏纵排，原因全文和日期草稿保持。缺少服务时不显示费用、额度或虚构空列表，自动充值/电脑创建仍禁用；这些资源分类不新增业务请求或开户实现。订阅真实空目录使用中性图标、原空态文案和显式重新读取，复用原单飞 retry、预算和身份退休，不自动重试或触发支付。
 
 SET26 review correction: formal plans owns the actual body reader; one absolute deadline and parent retirement cancel it and release its lock. Response.json plus locked body.cancel is rejected. Checkout and all wire behavior remain protected.
 

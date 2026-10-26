@@ -71,3 +71,13 @@ describe("R255 explicit Credit preview boundary", () => {
 })
 
 it("does not simulate a GitHub write in the preview factory", () => { expect(createPreviewHubClient()).not.toHaveProperty("importGithub"); expect(createPreviewHubClient()).not.toHaveProperty("previewGithub") })
+
+
+it("I5 preview initializer explicitly rejects without dispatching a business request", async () => {
+  const fetcher = vi.fn()
+  vi.stubGlobal("fetch", fetcher)
+  try {
+    await expect(createPreviewBillingClient().initializeCreditAccount()).rejects.toThrow("preview_credit_initialization_unavailable")
+    expect(fetcher).not.toHaveBeenCalled()
+  } finally { vi.unstubAllGlobals() }
+})

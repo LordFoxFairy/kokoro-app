@@ -87,6 +87,7 @@ vi.mock("@/ui/shell/page-clients", () => ({
     }),
   }),
   browserBillingClient: () => ({
+    initializeCreditAccount: vi.fn().mockRejectedValue(new Error("unexpected_initialization")),
     ledger: vi
       .fn()
       .mockResolvedValue({ items: [], page: { next_cursor: null } }),

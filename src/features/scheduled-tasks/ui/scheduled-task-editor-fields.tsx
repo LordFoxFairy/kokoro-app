@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { Textarea } from "@/components/ui/textarea"
 import { useT } from "@/i18n/context"
 
+import { ScheduledTaskRssFields } from "./scheduled-task-rss-fields"
 import { ScheduledTaskDaysField } from "./scheduled-task-days-field"
 import { ScheduledTaskTimezoneField } from "./scheduled-task-timezone-field"
 import type { ScheduledTaskEditorState } from "./scheduled-task-editor-state"
@@ -32,7 +33,7 @@ export function ScheduledTaskEditorFields({ state, setState, titleRef }: Schedul
   )
 }
 
-function ScheduledTaskTitleField({ state, setState, titleRef }: ScheduledTaskEditorFieldsProps) {
+export function ScheduledTaskTitleField({ state, setState, titleRef }: ScheduledTaskEditorFieldsProps) {
   const t = useT()
   return (
     <Field>
@@ -54,7 +55,16 @@ function ScheduledTaskTimingFields({ state, setState }: Pick<ScheduledTaskEditor
   return (
     <FieldSet className={styles.fieldset}>
       <FieldLegend variant="label">{t("firstSite.schedule")}</FieldLegend>
-      <div className={`${styles.scheduleRow} ${state.frequency !== "daily" ? styles.weeklyRow : ""}`}>
+      <ScheduledTaskScheduleFields state={state} setState={setState} />
+      <ScheduledTaskSettingsFields state={state} setState={setState} />
+    </FieldSet>
+  )
+}
+
+export function ScheduledTaskScheduleFields({ state, setState }: Pick<ScheduledTaskEditorFieldsProps, "state" | "setState">) {
+  const t = useT()
+  if (state.triggerKind === "rss") return <ScheduledTaskRssFields state={state} setState={setState} />
+  return <div className={`${styles.scheduleRow} ${state.frequency !== "daily" ? styles.weeklyRow : ""}`}>
         <Select
           value={state.frequency}
           onValueChange={(value) =>
@@ -105,10 +115,15 @@ function ScheduledTaskTimingFields({ state, setState }: Pick<ScheduledTaskEditor
           <ChevronDown aria-hidden="true" />
         </label>
       </div>
-      <ScheduledTaskTimezoneField
+}
+
+export function ScheduledTaskSettingsFields({ state, setState }: Pick<ScheduledTaskEditorFieldsProps, "state" | "setState">) {
+  const t = useT()
+  return <>
+      {state.triggerKind === "rss" ? <p className={styles.rssHint}>{t("scheduled.rssExpiryTimezone", { timezone: state.expiryTimezone })}</p> : <ScheduledTaskTimezoneField
         value={state.timezone}
         onChange={(timezone) => setState((current) => ({ ...current, timezone }))}
-      />
+      />}
       <Field orientation="horizontal" className={styles.expiryField}>
         <Checkbox
           id="scheduled-task-expiry"
@@ -126,11 +141,10 @@ function ScheduledTaskTimingFields({ state, setState }: Pick<ScheduledTaskEditor
           onChange={(event) => setState((current) => ({ ...current, expiryDate: event.target.value }))}
         />
       ) : null}
-    </FieldSet>
-  )
+    </>
 }
 
-function ScheduledTaskPromptField({ state, setState }: Pick<ScheduledTaskEditorFieldsProps, "state" | "setState">) {
+export function ScheduledTaskPromptField({ state, setState }: Pick<ScheduledTaskEditorFieldsProps, "state" | "setState">) {
   const t = useT()
   return (
     <Field>

@@ -570,7 +570,7 @@ it("定时任务入口打开选择弹窗和编辑器，并提交项目级任务"
   fireEvent.change(within(editor).getByRole("textbox", { name: "汇总未读邮件并突出显示重要邮件" }), { target: { value: "汇总今天的重要消息" } })
   fireEvent.click(within(editor).getByRole("button", { name: "保存" }))
 
-  await waitFor(() => expect(onCreateProjectScheduledTask).toHaveBeenCalledWith({
+  await waitFor(() => expect(onCreateProjectScheduledTask).toHaveBeenCalledWith({ triggerKind: "calendar" as const,
     title: "每日简报",
     prompt: "汇总今天的重要消息",
     frequency: "daily",
@@ -983,4 +983,247 @@ it("官方来源选择复用正式目录，装入精确 version UID 而不把目
   const writes = fetchMock.mock.calls.filter(([url, init]) => url.endsWith("/skill-installations") && init?.method === "POST")
   expect(writes).toHaveLength(1)
   expect(JSON.parse(String(writes[0]?.[1]?.body))).toEqual({ source_ref: "skill:official-revision" })
+})
+
+function projectWebBoundaryView(
+  preview: boolean,
+  projectRef = "website-project-a",
+  overrides: Partial<Parameters<typeof KokoroProjectWorkspace>[0]> = {},
+) {
+  return <LocaleProvider><KokoroProjectWorkspace
+    brandName="Kokoro" composer={<button type="button">当前项目编辑区</button>}
+    onPrompt={vi.fn()} preview={preview} projectRef={projectRef}
+    workspaceCapabilities={{ ...capabilities, instructions: false, resources: false, skills: false, scheduledTasks: false }}
+    {...overrides}
+  /></LocaleProvider>
+}
+
+function projectWebsiteAdd(container: HTMLElement) {
+  return within(contextCard(container, "websites")).getByRole("button", { name: "新增" })
+}
+
+it("project website boundary: live capability cannot expose or save preview websites", () => {
+  const fetchMock = vi.fn()
+  const onPrompt = vi.fn()
+  vi.stubGlobal("fetch", fetchMock)
+  const view = render(projectWebBoundaryView(false, "website-project-a", { onPrompt }))
+  const card = contextCard(view.container, "websites")
+  const add = projectWebsiteAdd(view.container)
+  const reason = "网站关联服务尚未接通，暂时无法添加网站。"
+  expect(add).toBeDisabled()
+  expect(within(card).getByText(reason)).toBeVisible()
+  expect(add).toHaveAccessibleDescription(reason)
+  fireEvent.click(add)
+  expect(screen.queryByRole("dialog", { name: "新增网站至当前项目" })).not.toBeInTheDocument()
+  expect(screen.queryByText("kokoro.miaokit.cloud")).not.toBeInTheDocument()
+  expect(screen.queryByText("launch.example.test")).not.toBeInTheDocument()
+  expect(onPrompt).not.toHaveBeenCalled()
+  expect(fetchMock).not.toHaveBeenCalled()
+})
+
+it("project website boundary: directly mounted live dialog rejects forced open and mock candidates", async () => {
+  const { ProjectWorkspaceDialogs } = await import("@/features/app/project-workspace-dialogs")
+  const { previewWebsites } = await import("@/features/app/project-workspace-model")
+  const setter = vi.fn()
+  const handleResourceFiles = vi.fn(async () => {})
+  const fetchMock = vi.fn()
+  vi.stubGlobal("fetch", fetchMock)
+  const props: import("@/features/app/project-workspace-dialogs").ProjectWorkspaceDialogsProps = {
+    preview: false,
+    instructionsOpen: false, setInstructionsOpen: setter, instructions: "", setInstructions: setter,
+    instructionsSaving: false, setInstructionsSaving: setter, instructionsError: false, setInstructionsError: setter,
+    instructionsHistoryOpen: false, setInstructionsHistoryOpen: setter, selectedInstructionRevision: null,
+    setSelectedInstructionRevision: setter, projectInstructionHistory: [],
+    resourcesOpen: false, setResourcesOpen: setter, resourceQuery: "", setResourceQuery: setter,
+    setResourceKind: setter, resourceSearchRef: { current: null }, resourceInputRef: { current: null },
+    filteredResources: [], resourceListStatus: "ready", resourceListErrorCursor: null, resourceNextCursor: null,
+    onRetryResourceList: vi.fn(), onLoadMoreResources: vi.fn(), resourceUploads: [], onRetryResourceUpload: vi.fn(),
+    handleResourceFiles,
+    websitesOpen: true, setWebsitesOpen: setter, websiteQuery: "", setWebsiteQuery: setter,
+    selectedWebsiteId: "kokoro-product-site", setSelectedWebsiteId: setter,
+    linkedWebsiteId: null, setLinkedWebsiteId: setter, filteredWebsites: previewWebsites,
+    scheduledOpen: false, setScheduledOpen: setter, scheduledQuery: "", setScheduledQuery: setter,
+    selectedScheduledId: null, setSelectedScheduledId: setter, linkedScheduledId: null, setLinkedScheduledId: setter,
+    filteredScheduledTasks: [], scheduledEditorOpen: false, setScheduledEditorOpen: setter,
+    onContextDialogChange: (setOpen) => (open) => setOpen(open),
+  }
+  render(<LocaleProvider><ProjectWorkspaceDialogs {...props} /></LocaleProvider>)
+  expect(screen.queryByRole("dialog", { name: "新增网站至当前项目" })).not.toBeInTheDocument()
+  expect(screen.queryByText("kokoro.miaokit.cloud")).not.toBeInTheDocument()
+  expect(screen.queryByText("launch.example.test")).not.toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "保存" })).not.toBeInTheDocument()
+  expect(setter).not.toHaveBeenCalled()
+  expect(handleResourceFiles).not.toHaveBeenCalled()
+  expect(fetchMock).not.toHaveBeenCalled()
+})
+
+it("project website boundary: preview discloses local demonstration while search selection and save still work", async () => {
+  const fetchMock = vi.fn()
+  vi.stubGlobal("fetch", fetchMock)
+  const view = render(projectWebBoundaryView(true))
+  fireEvent.click(projectWebsiteAdd(view.container))
+  const dialog = screen.getByRole("dialog", { name: "新增网站至当前项目" })
+  expect(within(dialog).getByText("仅本地演示：搜索、选择和保存不会关联真实网站。")).toBeVisible()
+  const search = within(dialog).getByRole("textbox", { name: "搜索网站" })
+  fireEvent.change(search, { target: { value: " launch.example.test " } })
+  expect(within(dialog).queryByText("kokoro.miaokit.cloud")).not.toBeInTheDocument()
+  const candidate = within(dialog).getByRole("button", { name: /产品发布页/ })
+  fireEvent.click(candidate)
+  expect(candidate).toHaveAttribute("aria-pressed", "true")
+  fireEvent.click(within(dialog).getByRole("button", { name: "保存" }))
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+  await waitFor(() => expect(projectWebsiteAdd(view.container)).toHaveFocus())
+  fireEvent.click(projectWebsiteAdd(view.container))
+  expect(screen.getByRole("textbox", { name: "搜索网站" })).toHaveValue("")
+  expect(screen.getByRole("button", { name: /产品发布页/ })).toHaveAttribute("aria-pressed", "true")
+  expect(fetchMock).not.toHaveBeenCalled()
+})
+
+it.each(["project", "mode"] as const)("project website boundary: %s change retires open query selection and prior saved demonstration", async (boundary) => {
+  const fetchMock = vi.fn()
+  vi.stubGlobal("fetch", fetchMock)
+  const view = render(projectWebBoundaryView(true))
+  fireEvent.click(projectWebsiteAdd(view.container))
+  fireEvent.click(screen.getByRole("button", { name: /Kokoro 产品网站/ }))
+  fireEvent.click(screen.getByRole("button", { name: "保存" }))
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+  fireEvent.click(projectWebsiteAdd(view.container))
+  fireEvent.change(screen.getByRole("textbox", { name: "搜索网站" }), { target: { value: "launch" } })
+  fireEvent.click(screen.getByRole("button", { name: /产品发布页/ }))
+  view.rerender(projectWebBoundaryView(boundary === "project", boundary === "project" ? "website-project-b" : "website-project-a"))
+  expect(screen.queryByRole("dialog", { name: "新增网站至当前项目" })).not.toBeInTheDocument()
+  view.rerender(projectWebBoundaryView(true))
+  expect(screen.queryByRole("dialog", { name: "新增网站至当前项目" })).not.toBeInTheDocument()
+  fireEvent.click(projectWebsiteAdd(view.container))
+  const dialog = screen.getByRole("dialog", { name: "新增网站至当前项目" })
+  expect(within(dialog).getByRole("textbox", { name: "搜索网站" })).toHaveValue("")
+  for (const name of [/Kokoro 产品网站/, /产品发布页/]) {
+    expect(within(dialog).getByRole("button", { name })).toHaveAttribute("aria-pressed", "false")
+  }
+  expect(within(dialog).getByRole("button", { name: "保存" })).toBeDisabled()
+  expect(fetchMock).not.toHaveBeenCalled()
+})
+
+it("project website boundary: queued close autofocus cannot refocus the next project", async () => {
+  const frames: FrameRequestCallback[] = []
+  const originalFrame = window.requestAnimationFrame
+  vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+    frames.push(callback)
+    return frames.length
+  })
+  const view = render(projectWebBoundaryView(true))
+  const opener = projectWebsiteAdd(view.container)
+  fireEvent.click(opener)
+  fireEvent.click(screen.getByRole("button", { name: "取消" }))
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+  expect(frames.length).toBeGreaterThan(0)
+  view.rerender(projectWebBoundaryView(true, "website-project-b"))
+  const editor = screen.getByRole("button", { name: "当前项目编辑区" })
+  editor.focus()
+  const openerFocus = vi.spyOn(opener, "focus")
+  try {
+    await act(async () => {
+      for (const callback of frames.splice(0)) callback(performance.now())
+    })
+    expect(editor).toHaveFocus()
+    expect(openerFocus).not.toHaveBeenCalled()
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+  } finally {
+    openerFocus.mockRestore()
+    vi.stubGlobal("requestAnimationFrame", originalFrame)
+  }
+})
+
+it("project website boundary: live card search is disabled without changing real file search and upload", async () => {
+  const fetchMock = vi.fn()
+  vi.stubGlobal("fetch", fetchMock)
+  let uploaded = false
+  const file = new File(["owner file"], "uploaded.txt", { type: "text/plain" })
+  const onListProjectResources = vi.fn(async () => ({
+    items: [{ assetId: "existing-file", filename: "owner-notes.txt", mimeType: "text/plain", sizeBytes: "12", contentSha256: "a".repeat(64), createdAt: "2026-10-20T00:00:00Z" },
+      ...(uploaded ? [{ assetId: "uploaded-file", filename: file.name, mimeType: file.type, sizeBytes: String(file.size), contentSha256: "a".repeat(64), createdAt: "2026-10-20T00:00:00Z" }] : [])],
+    nextCursor: null,
+  }))
+  const onUploadProjectResource = vi.fn(async (selected: File, key: string) => {
+    expect(selected).toBe(file)
+    expect(key).toMatch(/^project-resource:/)
+    uploaded = true
+    return { assetId: "uploaded-file", filename: file.name, mimeType: file.type, sizeBytes: String(file.size) }
+  })
+  const view = render(projectWebBoundaryView(false, "website-project-a", {
+    workspaceCapabilities: { ...capabilities, skills: false }, onListProjectResources, onUploadProjectResource,
+  }))
+  const card = contextCard(view.container, "resources-skills")
+  const searchWeb = within(card).getByRole("button", { name: "搜索网络" })
+  const reason = "网络搜索服务尚未接通，暂时无法搜索网络。"
+  expect(searchWeb).toBeDisabled()
+  expect(searchWeb).toHaveAccessibleDescription(reason)
+  expect(within(card).getByText(reason)).toBeVisible()
+  fireEvent.click(searchWeb)
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+  fireEvent.click(within(card).getByRole("button", { name: /文件和资源/ }))
+  const dialog = screen.getByRole("dialog", { name: "文件和资源" })
+  await within(dialog).findByText("owner-notes.txt")
+  const query = within(dialog).getByRole("textbox", { name: "搜索文件和资源" })
+  fireEvent.change(query, { target: { value: "no-match" } })
+  expect(within(dialog).queryByText("owner-notes.txt")).not.toBeInTheDocument()
+  fireEvent.change(query, { target: { value: "" } })
+  fireEvent.change(document.getElementById("project-resource-upload") as HTMLInputElement, { target: { files: [file] } })
+  await within(dialog).findByText(file.name)
+  expect(onListProjectResources).toHaveBeenCalledTimes(2)
+  expect(onUploadProjectResource).toHaveBeenCalledTimes(1)
+  expect(fetchMock).not.toHaveBeenCalled()
+})
+
+it("project website boundary: live menu search is disabled but the web type filter remains usable", async () => {
+  const fetchMock = vi.fn()
+  vi.stubGlobal("fetch", fetchMock)
+  const onListProjectResources = vi.fn(async () => ({
+    items: [{ assetId: "owner-file", filename: "real-file.txt", mimeType: "text/plain", sizeBytes: "8", contentSha256: "a".repeat(64), createdAt: "2026-10-20T00:00:00Z" }],
+    nextCursor: null,
+  }))
+  const view = render(projectWebBoundaryView(false, "website-project-a", {
+    workspaceCapabilities: { ...capabilities, skills: false }, onListProjectResources,
+  }))
+  fireEvent.click(within(contextCard(view.container, "resources-skills")).getByRole("button", { name: /文件和资源/ }))
+  const dialog = screen.getByRole("dialog", { name: "文件和资源" })
+  await within(dialog).findByText("real-file.txt")
+  fireEvent.pointerDown(within(dialog).getByRole("button", { name: "打开新增菜单" }))
+  const searchWeb = screen.getByRole("menuitem", { name: "搜索网络" })
+  expect(searchWeb).toHaveAttribute("aria-disabled", "true")
+  expect(searchWeb).toHaveAccessibleDescription("网络搜索服务尚未接通，暂时无法搜索网络。")
+  const reasonNodes = (searchWeb.getAttribute("aria-describedby") ?? "").split(/\s+/).map((id) => document.getElementById(id))
+  expect(reasonNodes.find((node) => node?.textContent === "网络搜索服务尚未接通，暂时无法搜索网络。")).toBeVisible()
+  fireEvent.keyDown(searchWeb, { key: "Escape" })
+  await waitFor(() => expect(screen.queryByRole("menu")).not.toBeInTheDocument())
+  fireEvent.pointerDown(within(dialog).getByRole("button", { name: "筛选" }))
+  fireEvent.click(screen.getByRole("menuitem", { name: "网页" }))
+  expect(within(dialog).queryByText("real-file.txt")).not.toBeInTheDocument()
+  expect(onListProjectResources).toHaveBeenCalledTimes(1)
+  expect(fetchMock).not.toHaveBeenCalled()
+})
+
+it("project website boundary: preview search entries disclose local filtering and do not search the network", async () => {
+  const fetchMock = vi.fn()
+  vi.stubGlobal("fetch", fetchMock)
+  const view = render(projectWebBoundaryView(true, "website-project-a", {
+    workspaceCapabilities: { ...capabilities, skills: false },
+  }))
+  const card = contextCard(view.container, "resources-skills")
+  const searchWeb = within(card).getByRole("button", { name: "搜索网络" })
+  const reason = "仅筛选本地演示网页资源，不会搜索网络。"
+  expect(searchWeb).toBeEnabled()
+  expect(searchWeb).toHaveAccessibleDescription(reason)
+  expect(within(card).getByText(reason)).toBeVisible()
+  fireEvent.click(searchWeb)
+  const dialog = screen.getByRole("dialog", { name: "文件和资源" })
+  expect(dialog).toHaveTextContent("Kokoro 产品网站")
+  expect(dialog).not.toHaveTextContent("研究简报.md")
+  fireEvent.pointerDown(within(dialog).getByRole("button", { name: "打开新增菜单" }))
+  const menuSearch = screen.getByRole("menuitem", { name: "搜索网络" })
+  expect(menuSearch).not.toHaveAttribute("aria-disabled", "true")
+  expect(menuSearch).toHaveAccessibleDescription(reason)
+  fireEvent.click(menuSearch)
+  await waitFor(() => expect(within(dialog).getByRole("textbox", { name: "搜索文件和资源" })).toHaveFocus())
+  expect(fetchMock).not.toHaveBeenCalled()
 })

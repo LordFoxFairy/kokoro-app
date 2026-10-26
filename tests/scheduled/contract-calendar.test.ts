@@ -15,7 +15,7 @@ import {
   startOfMonth,
 } from "@/features/scheduled-tasks"
 
-const requiredRecord = {
+const requiredRecord = { trigger_kind: "calendar" as const,
   id: "scheduled_1",
   title: "Digest",
   prompt: "Run it",
@@ -28,7 +28,7 @@ const requiredRecord = {
   status: "active",
 } as const
 
-const requiredCreate = {
+const requiredCreate = { trigger_kind: "calendar" as const,
   title: "Digest",
   prompt: "Run it",
   frequency: "daily",
@@ -81,7 +81,7 @@ describe("scheduled task UTC contract", () => {
       next_run_at: "2026-09-15T08:00:00.000Z",
       expires_at: "2026-09-30T23:59:59.999Z",
     }).success).toBe(true)
-    expect(scheduledTaskRecordSchema.safeParse({
+    expect(scheduledTaskRecordSchema.safeParse({ trigger_kind: "calendar" as const,
       id: requiredRecord.id,
       title: requiredRecord.title,
       prompt: requiredRecord.prompt,
@@ -102,7 +102,7 @@ describe("scheduled task UTC contract", () => {
       expect(scheduledTaskCreateRequestSchema.parse(body)).toEqual(body)
       expect(scheduledTaskPatchRequestSchema.parse(body)).toEqual(body)
     }
-    for (const patch of [{ time: "09:00" }, { weekdays: [1] }, { frequency: "monthly" }, { frequency: "daily", time: "09:00", timezone: "UTC", weekdays: [1] }, { recurrence_anchor_at: "2030-01-01T00:00:00Z" }, { next_run_at: "2030-01-01T00:00:00Z" }])
+    for (const patch of [{ time: "09:00" }, { weekdays: [1] }, { frequency: "monthly" }, { trigger_kind: "calendar" as const, frequency: "daily", time: "09:00", timezone: "UTC", weekdays: [1] }, { recurrence_anchor_at: "2030-01-01T00:00:00Z" }, { next_run_at: "2030-01-01T00:00:00Z" }])
       expect(scheduledTaskPatchRequestSchema.safeParse(patch).success).toBe(false)
     expect(scheduledTaskPatchRequestSchema.parse({ title: "Only content", enabled: false, expires_at: null })).toEqual({ title: "Only content", enabled: false, expires_at: null })
     expect(scheduledTaskCreateRequestSchema.safeParse({ ...requiredCreate, recurrence_anchor_at: "2030-01-01T00:00:00Z" }).success).toBe(false)
@@ -167,6 +167,7 @@ describe("scheduled task IANA calendar", () => {
 describe("scheduled task runtime record guard", () => {
   it("preserves nullable owner next-run state while validating every optional field", () => {
     expect(isScheduledTaskRecord({
+      triggerKind: "calendar",
       ...requiredRecord,
       timezone: "America/New_York",
       nextRun: "2026-09-15T08:00:00.000Z",
@@ -175,13 +176,13 @@ describe("scheduled task runtime record guard", () => {
       enabled: true,
       status: "active",
     })).toBe(true)
-    expect(isScheduledTaskRecord({ ...requiredRecord, nextRun: null })).toBe(true)
-    expect(isScheduledTaskRecord({ ...requiredRecord, timezone: 42 })).toBe(false)
-    expect(isScheduledTaskRecord({ ...requiredRecord, nextRun: "tomorrow" })).toBe(false)
-    expect(isScheduledTaskRecord({ ...requiredRecord, expiresAt: "2026-09-30" })).toBe(false)
-    expect(isScheduledTaskRecord({ ...requiredRecord, autoApprove: "yes" })).toBe(false)
-    expect(isScheduledTaskRecord({ ...requiredRecord, enabled: 1 })).toBe(false)
-    expect(isScheduledTaskRecord({ ...requiredRecord, status: "done" })).toBe(false)
+    expect(isScheduledTaskRecord({ triggerKind: "calendar", ...requiredRecord, nextRun: null })).toBe(true)
+    expect(isScheduledTaskRecord({ triggerKind: "calendar", ...requiredRecord, timezone: 42 })).toBe(false)
+    expect(isScheduledTaskRecord({ triggerKind: "calendar", ...requiredRecord, nextRun: "tomorrow" })).toBe(false)
+    expect(isScheduledTaskRecord({ triggerKind: "calendar", ...requiredRecord, expiresAt: "2026-09-30" })).toBe(false)
+    expect(isScheduledTaskRecord({ triggerKind: "calendar", ...requiredRecord, autoApprove: "yes" })).toBe(false)
+    expect(isScheduledTaskRecord({ triggerKind: "calendar", ...requiredRecord, enabled: 1 })).toBe(false)
+    expect(isScheduledTaskRecord({ triggerKind: "calendar", ...requiredRecord, status: "done" })).toBe(false)
   })
 })
 
@@ -201,9 +202,33 @@ describe("R80 project-associated scheduled task contract", () => {
   })
 
   it("keeps the runtime record guard aligned with the exact owner project reference", () => {
-    expect(isScheduledTaskRecord({ ...requiredRecord, projectId: "project_1" })).toBe(true)
-    expect(isScheduledTaskRecord({ ...requiredRecord, projectId: " project_1" })).toBe(false)
-    expect(isScheduledTaskRecord({ ...requiredRecord, projectId: "project_1 " })).toBe(false)
-    expect(isScheduledTaskRecord({ ...requiredRecord, projectId: 42 })).toBe(false)
+    expect(isScheduledTaskRecord({ triggerKind: "calendar", ...requiredRecord, projectId: "project_1" })).toBe(true)
+    expect(isScheduledTaskRecord({ triggerKind: "calendar", ...requiredRecord, projectId: " project_1" })).toBe(false)
+    expect(isScheduledTaskRecord({ triggerKind: "calendar", ...requiredRecord, projectId: "project_1 " })).toBe(false)
+    expect(isScheduledTaskRecord({ triggerKind: "calendar", ...requiredRecord, projectId: 42 })).toBe(false)
   })
+})
+
+it("I6 accepts a closed RSS definition, separates current feed facts from command ACKs, and rejects cross-trigger patches", () => {
+  const rss = { title: "Feed", prompt: "Summarize new entries", trigger_kind: "rss", feed_url: "https://news.example.com/feed", conditions: [[{ field: "title", operator: "contains", value: "发布" }]], auto_approve: false }
+  expect(scheduledTaskCreateRequestSchema.safeParse(rss).success).toBe(true)
+  expect(scheduledTaskPatchRequestSchema.safeParse({ trigger_kind: "rss", feed_url: rss.feed_url, conditions: [] }).success).toBe(true)
+  for (const extra of [{ frequency: "daily" }, { timezone: "UTC" }, { time: "08:00" }, { weekdays: [1] }]) {
+    expect(scheduledTaskCreateRequestSchema.safeParse({ ...rss, ...extra }).success).toBe(false)
+  }
+  expect(scheduledTaskPatchRequestSchema.safeParse({ feed_url: rss.feed_url }).success).toBe(false)
+  const ack = { ...rss, id: "rss-1", next_run_at: null, enabled: true, status: "active" }
+  expect(scheduledTaskMutationResponseSchema.safeParse({ task: ack }).success).toBe(true)
+  expect(scheduledTaskMutationResponseSchema.safeParse({ task: { ...ack, feed_state: "active" } }).success).toBe(false)
+  expect(scheduledTaskListResponseSchema.safeParse({ tasks: [{ ...ack, scheduling_state: "active", feed_state: "active", last_checked_at: null, next_check_at: null, error_code: null }] }).success).toBe(true)
+})
+
+it("I6 enforces UTF8 condition bytes, empty-operator closure and explicit trigger kind", () => {
+  const rss = { title: "Feed", prompt: "Summarize", trigger_kind: "rss", feed_url: "https://news.example.com/feed", conditions: [], auto_approve: false }
+  expect(scheduledTaskCreateRequestSchema.safeParse({ ...rss, conditions: [[{ field: "summary", operator: "contains", value: "😀".repeat(256) }]] }).success).toBe(true)
+  expect(scheduledTaskCreateRequestSchema.safeParse({ ...rss, conditions: [[{ field: "summary", operator: "contains", value: "😀".repeat(257) }]] }).success).toBe(false)
+  expect(scheduledTaskCreateRequestSchema.safeParse({ ...rss, conditions: [[{ field: "content", operator: "is_empty" }]] }).success).toBe(true)
+  expect(scheduledTaskCreateRequestSchema.safeParse({ ...rss, conditions: [[{ field: "content", operator: "is_empty", value: "" }]] }).success).toBe(false)
+  const kindless = Object.fromEntries(Object.entries(rss).filter(([key]) => key !== "trigger_kind"))
+  expect(scheduledTaskCreateRequestSchema.safeParse(kindless).success).toBe(false)
 })

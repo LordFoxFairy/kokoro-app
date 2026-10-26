@@ -30,6 +30,7 @@ export async function listProjectResources(
       filename: item.filename,
       mimeType: item.mime_type,
       sizeBytes: item.size_bytes,
+      contentSha256: item.content_sha256,
       createdAt: item.created_at,
     })),
     nextCursor: parsed.data.data.next_cursor,

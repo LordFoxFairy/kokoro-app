@@ -1,3 +1,118 @@
+## I6：RSS 任务与运行记录消费目标（2026-10-23，消费者本地实现待验收）
+
+当前已从正式 BFF 提交 8395b44cbcccef7958604a4dd85c301f68f5f46e 固定完整 Public20.0.0 / 168，原文 SHA256 6574930b3a893a208596e6f27c2f9e09122e759d111a7fdbf2d54c294efc0e8f。六个原 generator 正规 write/check，完整 20→19.3 inverse 后续接原历史证明。独立 connector-command-errors d176/profile1.0 仅 check，不改 Skills/MCP 业务。唯一机器事实源仍是 owner committed 原文；本片手写消费者 schema 沿现 scheduled 契约，不建立第二公共 API。
+
+Browser → 现 /api/scheduled-tasks CRUD/单项读取与 /api/scheduled-task-runs → BFF 现 /v1 对应资源，原身份、Origin、会话、query、超时、取消、EOF、错误及幂等规则保持。RSS 不新增 API 路由、client/store，也不让浏览器抓取 feed。正式 committed Public20 全文已固定并按现六 generator 正规刷新出处，保原 contract inverse/负控与独立 connector profile；不修改 owner 工作树或新建公共协议。
+
+任务定义采用 required trigger_kind=calendar|rss 的闭合 flat union，网络或 preview parser 都不默认 calendar。create 必须完整；PATCH 仅 title/prompt/expiry/approval/enabled 等既有公共字段可单独改变，出现任一 trigger 字段则必须给 trigger_kind 与完整闭合分支。calendar 保原四频率、time/timezone 与相应选择器，禁止 RSS 字段；RSS 要求 feed_url/conditions，禁止 frequency/time/timezone/weekdays/month_days/local_date，next_run_at 恒 null。项目归属沿原创建及 PATCH 限制，query 不提供授权，不因本节扩大可更新字段。
+
+feed_url 严格沿 owner 的 HTTPS/443、公网 FQDN 与 URL 字节策略，禁止凭据、fragment、控制字符、IP/local 地址或宽松别名；UI 校验不代替 owner 的 DNS/网络安全判定，不请求外部地址。conditions 是闭合 OR-of-AND，[] 表示不过滤，非空组最多 8 个、每组 1–16 条。field 仅 title/summary/content/author/category/link/domain；operator 仅 contains/not_contains/equals/not_equals/starts_with/not_starts_with/ends_with/not_ends_with/is_empty/is_not_empty。空值运算符禁止 value，其余 value 必须非空且 UTF8≤1024B，不能用 JS length 或 JSON Schema 字符数冒字节限额。比较沿 owner 文本规则，不自行转小写或使用用户正则；不把未知条件删掉后提交。
+
+list 的 data.tasks.items 与 detail GET 均为 ScheduledTaskDetails 权威投影，可带 scheduling_state；RSS 还带 feed_state=initializing|active|backoff|limit_reached、last_checked_at/next_check_at 与闭合 error_code，calendar 禁止 RSS feed 字段。默认现 list GET 足以展示，不增加 detail N+1。create/update/retry ACK 的 ScheduledTaskResponse 只含不可变定义，不含当前 feed 状态；ACK 后沿现完整重读采用事实，不从本地或 preview 补造。
+
+RSS expires_at 仍是公共 UTC instant。UI 在表单挂载时冻结并显示 browser IANA timezone，只用来解释日期；不发送 RSS timezone。编辑未改变到期勾选/日期则原样保留原 expires_at，改日期才换算，取消显式 null；calendar 原转换不改。unknown 恢复必须深复制条件组并冻结原完整 body/key，不能变更条件后复用旧身份或自动换 key 重发。
+
+运行项 required trigger_kind；calendar 使用真实计划 scheduled_for 且无 observed_at；RSS scheduled_for=null，observed_at 是真实数据库发现 instant。它不是 publisher 日期、下次 poll 或内部逻辑排序键。七个运行状态及 terminal 时间关系保持，UI 不发明摘要、输出、会话链接或执行成功。
+
+cursor 仍按原闭合结构、版本、canonical 编码、可信 tenant/subject、task/limit/sort 及 orderKey/dispatchId 严格前进校验；server 复用可信 session/RP 身份，browser 不猜身份。RSS 页顺序沿 owner，不能用 observed_at 验证或生成 logical orderKey，不能用 run_id 代 dispatch_id；仅对公开值确实等于排序键的 calendar 项保留可观测时间关系。next cursor 同位置/反向或错 scope 必须整页拒绝，不新增公开排序字段来满足消费者便利。
+
+preview/controlled 源码调用与合法 fixture 显式 kind；旧无 kind 本地缓存由原 strict parser 拒绝，不主动清数据、不新 storage key。未准入、非法项目、主体/代际变化及卸载继续退休旧读取与命令回调，取消不等于 owner 回滚。未支持的日期/附件/regex、高级自然语言监控及其他触发方式若展示，必须保持禁用和具体原因，不宣称整体自动化完成。
+
+本片已验证真实 union/条件/ACK/Details/cursor 边界、原 calendar/幂等/权限/取消回归与正式 pin 全文 inverse，并执行 contract、architecture、具名 ESLint 和直接 tsc。正常 HTTP/CUA、完整 suite 与构建仍由 Root 在冻结后验收；原 full auth 与既有失败保留，不因机器契约或 SQL 验证消除。
+
+## I5：本人积分隐藏初始化消费边界（2026-10-22，消费者实现候选）
+
+当前Web固定正式BFF 9fac77d25b4585d916b84c669a720e4c2ba62bb0 / Public19.3.0 / 168，canonical SHA256 bf1b8809173fcbbabb1d3c4c1994f55763e552b9d3b46b3c577ef10ee7291423。artifact来自该提交完整原文，六窄generator已正规write/check；独立connector-command-errors profile与Skills/MCP业务不变。机器字段/错误以正式artifact为准，本文不另建公共契约。
+
+同源PUT /api/session/billing/credit-account → BFF PUT /v1/billing/credit-account，operationId initializeBillingCreditAccount；BFF再消费正式Billing158579f8的本人自然幂等操作。Web不直连Billing、不授予积分或支付权限。原GET /api/session/billing/summary及ledger的path/query/transport保持只读，不在GET内创建。
+
+新资源候选在现/api/session catch-all的await params前进入具名窄adapter；所有非PUT方法返回405并带Allow: PUT，显式OPTIONS仅对该候选委托相同adapter；普通资源保留Next原204/完整Allow且零鉴权/上游IO，编码/结构别名不能绕回generic。原始target必须精确，无query/fragment/尾斜线或编码别名；required application/json闭合空对象，正文实际EOF且不超过4096B，拒重复/额外key、坏UTF8/BOM、非法长度、Idempotency-Key及Content-Encoding。身份/金额/tenant没有输入通道。
+
+同源边界核canonical protocol、真实Host及必须匹配的Origin；不额外依赖Next内部request.url hostname，不改全局Proxy或平行新增CSRF/凭据机制。复用productBffConfig、admittedProductSession、productBffHeaders；首末合法session的id、generation、access、accessExpiresAt、expiresAt、subject六字段必须一致且未过期。15秒单一server预算含params/body/session/上游真实EOF/最终复验，browser20秒含fetch与完整验证；BFF10秒预算不重置，晚响应只清理。
+
+200复用已有BillingSummaryResponse且必须为实际active snapshot，可为非零，ACK不成为展示余额；当前scope另读summary+ledger。disabled为正式403/billing_account_disabled且不循环；401/403、429及可选严格Retry-After、502协议坏、503依赖或待确认按正式闭合status/code/retryable投影。不能把任意404/异常当missing或成功，也不把BFF治理permission标签冒充新IAM grant。
+
+上游header+body合计1MiB，严格request-id配对、正确声明length与实际EOF、fatal UTF8/BOM/重复key/闭集结果，无Cookie/Location/encoding。BFF cache严格no-store；Web/browser最终沿现Proxy精确private, no-store, max-age=0，新分支显式序列化并设置正确UTF8 Content-Length，不能只信length或泛放开transfer encoding。新browser command独立transport，原getJson不改。
+
+只有已验证正式scope及strict missing初读可触发隐藏意图：用量入口两项均missing，账户入口summary missing；preview/未准入/非法scope/已有ready/disabled/混合失败零PUT。一次意图最多一PUT {}，无幂等键，无自动重试。取消/身份或代际变化永久退休旧回调且不宣称事务撤销；unknown后显式动作仅GET summary+ledger，404仍不重PUT。UI无开户CTA、假零余额、赠送或套餐事实。
+
+正式pin具有19.3→19.2完整原文inverse，继续全部旧父hash/业务oracle而不重签。旧开户草稿已保全文SHA与历史失败，按批准仅迁移触发时机，保空body/无key、真实非零后读、流水、精确请求与安全断言。当前传输/界面定向验证已通过；真实server HTTP对端已验证两字节正文/Content-Length与凭据边界，普通OPTIONS与候选方法矩阵已通过；正常浏览器整链由Root继续核验。尚未运行本片完整工程门，不把局部通过视为完整验收。
+
+## I4-M2：运行记录正式消费边界（2026-10-21，实施前）
+
+仅消费BFF已提交ef2ddca2773a28bf5e210fa2e8912a0fbbee0116 Public19.2.0/167，SHA256 ef56014105cc187bd86da74eb5ba6eef5f54aacb934e2f86e007c98719ff02f6。新GET /api/scheduled-task-runs → /v1/scheduled-task-runs；严格task_id可选、limit 1..100默认20、cursor可选<=2048，无body/重复/未知query、身份字段或Idempotency-Key。浏览器默认每页20；不把cursor或task_id当授权。
+
+owner原闭集data.items/next_cursor与错误枚举沿唯一artifact校验。item只含task_id/title/project_ref/run_id/scheduled_for/state/terminal_event_at；9位UTC计划时间与3位UTC源终态时间保原文，真实日期合法，非terminal的终态时间应null；不能把admitted命名为运行中或给出运行耗时。pending等待投递、admission_unknown受理待确认、admitted已受理、dispatch_failed投递失败、completed完成、cancelled取消、failed执行失败。标题不作摘要，run_id不拼会话链接，原始异常message不展示。
+
+专用adapter只同源GET，验证canonical Host/protocol与可选Origin，真正读取请求EOF为空；10秒单一截止覆盖所有await、首次session、BFF完整EOF和最终六字段同一session/expiry。上游5秒预算保持，Web不延长owner时间。读取最多1MiB，fatal UTF8/重复key/BOM/闭集/结果<=请求limit、请求task匹配、重复run/游标循环等非法整页502。owner no-store/x-request-id需一致、无Location/Set-Cookie/编码转移；429仅合法Retry-After。浏览器最终Proxy缓存精确private,no-store,max-age=0，JSON/x-request-id和严格状态schema正确；15秒完整deadline覆盖非合作fetch及body，带同源凭据不透传外部凭据、不redirect、不自动重试。
+
+cursor是不可授权opaque值，不从run_id推导下一页；生产完整校验tenant/subject/task/limit/sort。Web只发标准URLSearchParams；能正规核对的cursor scope与格式由adapter在当前IAM配置/subject下验证，浏览器不得假造tenant。当前页以owner顺序显示，按显示时区日期仅分组，不把Date毫秒排序覆盖纳秒顺序。手动刷新从头读取，跨页无快照保证。
+
+完整vendor从committed blob写入、六窄generator正规write/check且仅provenance元数据；独立connector profile保持。新的test-only逆证严格移本19.2 operation和schema块、逆version后恢复19.1完整SHA ac649109f7b394ab894d17352c5f9f106e24e1cbf94e74672569333190adfab5，再运行原I3/19.0/双父的全部旧assert/hash。不能重签历史hash或删负控来通过。这里只定义消费设计，实际入口与UI待验。
+
+## I3：已提交 Public19.1 项目资源下载（2026-10-21，本地实现）
+
+固定 BFF f59d4ab1dc263e554365f4bf028f66c8c3cbdc3e / Public19.1.0 / 166 operations / SHA256 ac649109f7b394ab894d17352c5f9f106e24e1cbf94e74672569333190adfab5。仅普通ASSET的 GET /api/hub/projects/{projectId}/resources/{asset_id}/content → /v1/projects/{projectId}/resources/{asset_id}/content，独立二进制adapter，不走generic JSON，不接受self、结构编码别名、query、key或非空body。两个选择器沿已发行入口的精确字符串规则并标准encodeURIComponent，无新wire字段或query。
+
+owner成功严格Content-Type、十进制Content-Length 0..1048576、attachment双文件名、安全request-id、Cache-Control:no-store、Referrer-Policy:no-referrer、nosniff，拒Cookie、redirect/Location和Content-Encoding。复用Hub唯一safeDownloadHeaders，真正EOF和精确长度完整后且末次session六字段不变才返回。server/browser缓存严格private, no-store, max-age=0。实际Proxy在原binary GET分支追加此精确路径保留no-referrer，不改个人/Artifact或其它全局策略。NextRequest会归一空query分隔符，Proxy不能据已丢失的裸问号作负控；有值query/POST/邻近/编码别名仍负控，Hub标准Request裸问号拒绝证据保留。
+
+owner错误仅正式400/401/403/404/429/502/503，沿ErrorEnvelope严格解析、request-id匹配、实际有界EOF、可选429 Retry-After为1..86400；不把错误当附件、不透传上游原文。本地超时504、断线499、依赖503及坏响应502均不产生字节成功。server30秒从入口包含params/请求EOF/首末session/上游EOF；browser40秒包含全部字节及列出的文件名/MIME/大小/SHA核对，仅显式GET/取消/重试，无写入或自动重放。
+
+原15条I3 mapper/真实Workspace断言保留，原缺入口RED与未到达记录不覆盖，后继实际Hub、Proxy和browser传输测试补齐。正式上传/删除/分享、身份、Skills/MCP不变；本地行为门不能替代正常OAuth真实下载验收。
+
+## I1：首页自动化沿现定时接口（2026-10-20，本地实现待 Root 验收）
+
+仅增加 `/app?workflow=automation` 页面状态，不新增 endpoint/schema/generated。正式模式仍经现同源 scheduled client 与固定 Public19；preview 只本地演示，controlled 只调用原 handler，不能混用。名称、提示词、daily/weekly/monthly/once、time/timezone、规则选择器、expires_at、auto_approve 和创建时 project_id 沿现严格请求；PATCH 归属不可变。需要批准映射 auto_approve=false；名称必填，不能从提示词伪造标题。
+
+Agent/连接器/独立任务模式/云电脑/本地文件夹没有创建字段，相关控件禁用并说明，不能发送未知字段。触发器、高级自动化没有 owner，不提交或执行。重复点击最多一次请求；unknown 只显式重试原 key/冻结 body，不自动重发。返回/重开、同 path 导航与项目/身份/代际变化沿原生命周期，旧回执不能续发 GET、导航或回焦。不可用/invalid 范围不能回退个人创建；成功后的当前 GET 与不可变创建 ACK 分开解释。当前已接线首页内联消费者，客户端、owner、schema/generated 均未改；本地 scheduled/AppSurface 回归 158 PASS，正常 owner 和浏览器验收待 Root。
+
+## F3：同源最终缓存头消费对齐（2026-10-20，本地实现待 Root 验收）
+
+Public19 owner 仍要求精确 `no-store`，其余状态/JSON/request-id/Location/无 Cookie/ID/key/10 秒边界不变。Root 独立两例 invalid_headers RED 后，删除 browser 已精确对齐实际 Proxy/rename 的 `private, no-store, max-age=0`；合法 202 与 200 由真实 Proxy 最终 Cache-Control 进入真实 browser 消费，每例请求一次。浏览器旧两指令、裸 no-store、缺失及其他缓存值仍拒绝；owner 两指令与三指令都拒绝，不放宽匹配或修改 owner。当前本地实现待 Root 验收，不重新 DELETE 已受理的真实项目。
+
+## 项目删除 F2：固定契约消费者已本地接线（2026-10-20）
+
+仍消费原 Public19.0.0 / BFF08a2120 / YAML955412b6，不改 F1 wire/adapter/browser、generated 或 owner。正式确认首次只发一条 bodyless DELETE 和冻结 key；unknown、429、503、in_progress 的显式重试沿用该 key，冲突不会换 key。202 先同步退休旧读写，再读固定 deletion GET；后续 GET 失败/404 不转回 DELETE、不推断完成。界面分别显示逻辑 pending/blocked/released，并持续说明 physical cleanup pending。preview/未准入菜单说明不可删除，取消零 DELETE；路由/身份退休后的旧回调不发请求。
+
+这只是本地 UI/生命周期候选：四冻结 F2 文件最终 269 PASS，包含 F1/项目/资源/导航的相关回归 630 PASS，定向 ESLint 通过。未运行真实 owner 删除或正常浏览器验收。以下为测试先行与 F1 阶段记录。
+
+## 项目删除 F2 消费约束（2026-10-20，文档与测试先行记录）
+
+沿 F1 固定 Public19.0.0 / BFF08a2120 / YAML955412b6：单次 bodyless DELETE + 原 Idempotency-Key；202 严格匹配 target 和 Location 后只固定同源 GET deletion。无新 endpoint/schema/owner。unknown、429、503、in_progress 只显式原 key 重试；conflict 不换 key。GET 的 404/503/网络错误不代表完成、不退回 DELETE。logical pending/blocked/released 始终伴 physical pending，不能宣称物理清理完成。
+
+202 消费先同步撤销当前项目旧读发布与新写资格，再新 owner GET；旧 list/detail/history/rename、资源 GET/confirmUpload/分页/重试及多文件下一次上传不得越过屏障。submit/Enter/retry/retryResume/stageToolDecision/指令/重命名/上传的真实回调均检查当前 scope guard，cancelRun 维持原语义。scope 不是服务端授权事实，仍依正式 admission；preview 零真实删除 IO。行消失或详情 404 不撤销已有恢复入口，普通 revision/unavailable 不重置原 key。F2 本阶段仅文档/测试，F1 固定代码和测试不改。
+
+## 项目删除 F1：固定 Public19 传输本地候选（2026-10-20）
+
+消费唯一 BFF 08a2120ea85b6cad5cf6e839ef14dbf83d908b92 / Public19.0.0 / YAML SHA256 955412b680bf7a2529c4c35f553ff272d7361769ea95bb441ba820b552ffc564。浏览器仅 bodyless DELETE `/api/hub/projects/{canonicalId}` 与 GET `/api/hub/projects/{canonicalId}/deletion`，映射现 `/v1/projects/...`；不新增 owner 协议、schema、generated、凭据或权限。DELETE 只发送 caller 冻结的 Idempotency-Key，GET 不带 key、body 或 query。无自动 DELETE 重试，浏览器状态读取永远固定本次 project 的同源路径，不能跟随 Location。
+
+202 只允许严格 `{data:{project_id,logical_release_state,physical_cleanup_state}}`，本次 ID 匹配且两状态均 pending；必须有本次 `/v1/projects/{id}/deletion` Location。GET 200 logical 可 pending/blocked/released，physical 始终 pending；不能将逻辑 released 称为物理清理完成。无 meta 或额外字段；owner Cache-Control 精确 no-store、JSON、request-id 与出站 request ID 相等，无 Set-Cookie，非 202 禁 Location。浏览器投影精确为 `private, no-store, max-age=0`，保 request-id；429 Retry-After 可缺省，存在则十进制 1..86400，其他状态不接受此头。不要求 Content-Length；完整有界原始 bytes/fatal UTF-8/重复键/BOM/EOF 都须校验。
+
+| 方法/状态 | 固定 code | retryable |
+| --- | --- | --- |
+| DELETE/400 | invalid_project_deletion_request / idempotency_key_required / invalid_idempotency_key | false |
+| GET/400 | invalid_project_deletion_request | false |
+| 两方法/401 | session_authentication_required / session_invalid | false |
+| 两方法/403 | service_auth_failed / session_forbidden / product_tenant_forbidden | false |
+| 两方法/404 | project_not_found | false |
+| DELETE/409 | idempotency_conflict / idempotency_in_progress | 分别 false / true |
+| 两方法/429 | session_rate_limited | true |
+| 两方法/503 | product_tenant_not_configured / iam_admission_unavailable / business_store_unavailable | true |
+
+GET 无 409 或幂等键错误。所有 code/status/retryable 组合闭集。Web 本地请求错误不冒充 owner 回执：非法请求 400、方法 405、Origin 403、session 401；无效 owner 响应 502、网络 503、总截止 504/request_timeout、取消 499/request_aborted。单一 10 秒包含异步 params、请求 EOF、两次完整 session 与 owner EOF；返回允许的 owner 错误前也复查六字段。F1 三个具名模块与 Hub 的 await params 前候选分流已本地实现；两个冻结测试文件 92 PASS，原 create/rename/Hub 回归 219 PASS。初始缺模块与真实行为 RED 分开归档，未改变任何冻结测试。浏览器以 redirect:error 拒绝重定向，只返回校验后的 snapshot；未接 F2 界面或执行真实删除。
+
+## 首页自动化概览（2026-10-20；切片 D）
+
+没有新 API、generated、owner、权限或请求。定时任务卡与原三项建议沿现 editor → 既有 scheduled client；live 创建仍使用固定 Public19 及原项目归属、原 key 和恢复边界，preview 仍只有既有本地任务演示。仅浏览概览或操作禁用的事件触发器/高级自动化入口不产生业务 IO，也不发送替代定时请求。两类服务尚无正式可消费契约，文案和 disabled 不构成已接通或已执行事实。Skills/MCP 与项目删除协议不变。
+
+## 首页项目定时任务范围（2026-10-20；切片 E）
+
+E 审查修正不改变协议：旧 source 的 mutation 回执在卸载或 client/准入/代际退休后不得发起新的读取。预览只在既有本地 draft/record 中保留可选项目归属，不调用正式 API；controlled 回调形状保持原约定。live 创建归属、PATCH 不修改归属、原 key 及恢复/重试规则保持不变。
+
+不新增 API、query wire、generated 或权限。继续 Browser→现同源 /api/scheduled-tasks→固定 BFF Public19；列表仍读取 owner 全量投影，浏览器按 record.projectId 精确派生当前项目范围。project_id 只沿既有 URL creationContext 与 create body 契约，缺省保持全部任务，重复/空白/非法解码属于范围输入错误且禁止创建。既有任意合法精确项目引用保持，不以 canonical 路由约束收紧创建/筛选。
+
+编辑只提交原任务 ID 与原 PATCH 字段，不改变 project_id。URL 不是身份或授权；原准入、owner 404、未知写入显式恢复/幂等身份和迟到回执守卫保留。返回链接仅对现可靠解析的站内项目目标展示。无事件触发器、高级自动化或项目删除契约变更。
+
 ## 设置与主线的契约组合（2026-10-20）
 
 本次视觉增量不定义新接口。正式知识 CRUD/usage、Public19、Skills/MCP 与连接器 availability 均保留最新主线实现和正式契约；旧分支的知识未接通说明仅适用于 preview 草稿与记忆导入。账户积分仅复用 summary 读取，其余无 owner 契约的资产动作仍禁用。
@@ -2017,3 +2132,13 @@ MCP管理Hub五方法显式caller key（其后signal?），不保隐式随机key
 ### Installation exact content（2026-10-16，实施设计）
 
 新增 browser-private `/api/hub/skill-installations/{id}/package` GET 与 `/api/hub/skill-installations/{id}/download` POST，分别固定转发已发布 BFF `/v1/skill-installations/{id}/package` 与 `/browser/v1/skill-installations/{id}/download`。GET 仅可有单个 file_path；POST 无 query、key 或非空 body。两者复用正式 Product Session 准入、同源 Origin、十秒预算、1 MiB 严格 JSON 边界；installation inspection 使用其专属 skill_package_* 错误，download 使用独立 download 错误矩阵。成功 source/revision 必须匹配本次权威 installation；文件路径/清单绑定原目录，下载只消费未过期受控 /skill-downloads 句柄，不接受对象存储 URL。目录与分享现有接口语义不变。
+
+## 项目网站与搜索入口真实性（2026-10-20；切片 H）
+
+无新 API、owner、generated、schema、权限或请求。固定 Public19 未提供项目网站关联和网络搜索接口，正式 UI 不得通过 previewWebsites、合成选择或本地保存冒充正式关联；网站入口禁用并显示“网站关联服务尚未接通，暂时无法添加网站。”，Dialog 也须拒绝正式模式的强制 open。preview 网站搜索和保存仅是局部演示，不产生网络请求或持久化。
+
+资源卡和资源菜单的“搜索网络”在正式模式一致禁用并关联可读原因；preview 仅筛选已有演示网页。web filter 本身不是网络搜索，继续保留。现正式文件 GET/搜索投影/上传、指令保存、Skills/MCP 导航和业务协议不变；query、展示能力或项目引用不构成准入。writer 与 Root 已独立复现 9 例 RED 后实施最小 UI 收口；定向回归仍核对正式文件读取、搜索、精确一次上传及回读，禁用动作本身零 IO。没有消费新的 owner 协议或修改传输。
+
+H2 窄屏补验只修网站演示 Dialog 的显示与滚动可达性，无 API、权限、owner、fixture、网络搜索或关联保存契约变化。正式模式双层 preview 守卫及两个禁用搜索入口保持；新增浏览器旅程使用既有 preview-project，两条真实演示候选不扩造数据，搜索/选择/保存关闭仍须零业务请求。既有壳层精确 GET /api/admin-access 准入读取单独记录，不能计作网站业务 IO；同路径写入及其他业务 API 仍必须为零。Root 独立几何 RED 放行后，仅追加网站局部 class/CSS；同三视口 3 PASS，原请求和业务协议未改。
+
+I4-M2 lifecycle clarification: the existing task source exposes successful client/generation read ownership without changing its frozen-list retention or CRUD behavior. Only run-history presentation remounts for a new client/admission generation. Removed selections remain retired until explicit user selection; they never widen automatically into the global feed. The browser calls its injected native fetch without assigning an arbitrary receiver. Final JSON responses declare exact UTF-8 length, including sanitized errors.

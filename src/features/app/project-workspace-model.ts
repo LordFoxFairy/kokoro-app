@@ -5,6 +5,9 @@ export type ProjectResourcePreview = {
   name: string
   kind: Exclude<ResourceKind, "all">
   detail: string
+  mimeType?: string
+  sizeBytes?: string
+  contentSha256?: string
 }
 
 export type ProjectWebsitePreview = {
@@ -17,6 +20,7 @@ export type ProjectScheduledPreview = {
   id: string
   title: string
   prompt: string
+  triggerKind: "calendar"
   frequency: "daily" | "weekly"
   time: string
   timezone: string
@@ -38,6 +42,7 @@ export const previewScheduledTasks: readonly ProjectScheduledPreview[] = [
     id: "daily-briefing",
     title: "每日简报",
     prompt: "汇总今天的重要消息",
+    triggerKind: "calendar",
     frequency: "daily",
     time: "08:00",
     timezone: "UTC",

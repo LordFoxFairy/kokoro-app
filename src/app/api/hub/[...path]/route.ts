@@ -86,6 +86,8 @@ import {
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { proxyProjectRename } from "@/lib/server/project-rename";
+import { isProjectDeletionRequest, proxyProjectDeletion } from "@/lib/server/project-deletion";
+import { isProjectResourceDownloadRequest, proxyProjectResourceDownload } from "@/lib/server/project-resource-download";
 
 import { sameOriginOk } from "@/lib/server/same-origin";
 import {
@@ -2299,6 +2301,8 @@ async function proxyHubRequest(
   request: Request,
   context: { params: Promise<{ path: string[] }> },
 ): Promise<Response> {
+  if (isProjectDeletionRequest(request)) return proxyProjectDeletion(request, context.params);
+  if (isProjectResourceDownloadRequest(request)) return proxyProjectResourceDownload(request, context.params, safeDownloadHeaders);
   const { path } = await context.params;
   if ((path[0] === "preferences" && path[1]?.startsWith("knowledge")) || (path[0] === "self" && path[1] === "preferences" && path[2]?.startsWith("knowledge")))
     return proxyPersonalKnowledge(request, path);

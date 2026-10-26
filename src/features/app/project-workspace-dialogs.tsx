@@ -1,7 +1,7 @@
 "use client"
 
 import { ChevronDown, Clock3, Cloud, File, Globe2, Grid2X2, Paperclip, Plus, Search, SlidersHorizontal, SquareCode } from "lucide-react"
-import { useRef, type Dispatch, type SetStateAction } from "react"
+import { useId, useRef, type Dispatch, type SetStateAction } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -16,11 +16,15 @@ import {
 import { useLocale } from "@/i18n/context"
 
 import type { ResourceUploadIntent } from "./kokoro-project-workspace"
+import { useProjectResourceDownload, type ProjectResourceDownloadScope } from "./use-project-resource-download"
 import type { ProjectResourcePreview, ProjectScheduledPreview, ProjectWebsitePreview, ResourceKind } from "./project-workspace-model"
 import dialogStyles from "./project-workspace-dialogs.module.css"
 
 type Revision = NonNullable<EmptyStateProps["projectInstructionHistory"]>[number]
 type DialogChange = (setOpen: (open: boolean) => void) => (open: boolean) => void
+const unavailableDownloadScope: ProjectResourceDownloadScope = {
+  projectRef: undefined, preview: false, open: false, boundary: undefined, isCurrent: () => false,
+}
 
 export type ProjectWorkspaceDialogsProps = {
   preview: boolean
@@ -47,6 +51,7 @@ export type ProjectWorkspaceDialogsProps = {
   resourceSearchRef: React.RefObject<HTMLInputElement | null>
   resourceInputRef: React.RefObject<HTMLInputElement | null>
   filteredResources: readonly ProjectResourcePreview[]
+  resourceDownloadScope?: ProjectResourceDownloadScope
   resourceListStatus: "loading" | "loadingMore" | "ready" | "error"
   resourceListErrorCursor: string | null
   resourceNextCursor: string | null
@@ -56,7 +61,7 @@ export type ProjectWorkspaceDialogsProps = {
   onRetryResourceUpload: (intent: ResourceUploadIntent) => void
   handleResourceFiles: (files: FileList) => Promise<void>
   websitesOpen: boolean
-  setWebsitesOpen: Dispatch<SetStateAction<boolean>>
+  setWebsitesOpen: (open: boolean) => void
   websiteQuery: string
   setWebsiteQuery: Dispatch<SetStateAction<string>>
   selectedWebsiteId: string | null
@@ -84,7 +89,7 @@ export function ProjectWorkspaceDialogs({
   preview, brandName, instructionsOpen, setInstructionsOpen, instructions, setInstructions, instructionsSaving, setInstructionsSaving,
   instructionsError, setInstructionsError, instructionsHistoryOpen, setInstructionsHistoryOpen, selectedInstructionRevision,
   setSelectedInstructionRevision, projectInstructionHistory, onSaveProjectInstructions, resourcesOpen, setResourcesOpen,
-  resourceQuery, setResourceQuery, setResourceKind, resourceSearchRef, resourceInputRef, filteredResources, resourceListStatus, resourceListErrorCursor, resourceNextCursor, onRetryResourceList, onLoadMoreResources, resourceUploads, onRetryResourceUpload,
+  resourceQuery, setResourceQuery, setResourceKind, resourceSearchRef, resourceInputRef, filteredResources, resourceDownloadScope, resourceListStatus, resourceListErrorCursor, resourceNextCursor, onRetryResourceList, onLoadMoreResources, resourceUploads, onRetryResourceUpload,
   handleResourceFiles, websitesOpen, setWebsitesOpen, websiteQuery, setWebsiteQuery,
   selectedWebsiteId, setSelectedWebsiteId, linkedWebsiteId, setLinkedWebsiteId, filteredWebsites, scheduledOpen, setScheduledOpen,
   scheduledQuery, setScheduledQuery, selectedScheduledId, setSelectedScheduledId, linkedScheduledId, setLinkedScheduledId,
@@ -93,6 +98,9 @@ export function ProjectWorkspaceDialogs({
 }: ProjectWorkspaceDialogsProps) {
   const { locale, t } = useLocale()
   const instructionsHistoryDialogRef = useRef<HTMLDivElement | null>(null)
+  const webSearchDescriptionId = useId()
+  const downloadDescriptionId = useId()
+  const resourceDownloads = useProjectResourceDownload(resourceDownloadScope ?? unavailableDownloadScope)
   return <>
     <Dialog open={instructionsOpen} onOpenChange={onContextDialogChange(setInstructionsOpen)}>
       <DialogContent className={dialogStyles.instructionsDialog} overlayClassName={dialogStyles.instructionsOverlay ?? ""} closeLabel={t("shell.closeDialog")}>
@@ -118,10 +126,18 @@ export function ProjectWorkspaceDialogs({
     <Dialog open={resourcesOpen} onOpenChange={onContextDialogChange(setResourcesOpen)}>
       <DialogContent className={dialogStyles.resourcesDialog} overlayClassName={dialogStyles.instructionsOverlay ?? ""} closeLabel={t("shell.closeDialog")}>
         <DialogTitle className={dialogStyles.resourcesDialogTitle}>{t("firstSite.filesAndResources")}</DialogTitle>
+        <DialogDescription id={webSearchDescriptionId}>{t(preview ? "firstSite.searchWebPreviewHint" : "firstSite.searchWebUnavailable")}</DialogDescription>
         <div className={dialogStyles.resourcesToolbar}><DropdownMenu><DropdownMenuTrigger asChild><Button type="button" variant="outline" size="icon-sm" aria-label={t("firstSite.filter")}><SlidersHorizontal /></Button></DropdownMenuTrigger><DropdownMenuContent align="start" sideOffset={4}><DropdownMenuItem onSelect={() => setResourceKind("all")}>{t("library.filterAll")}</DropdownMenuItem><DropdownMenuItem onSelect={() => setResourceKind("file")}>{t("library.filterDocuments")}</DropdownMenuItem><DropdownMenuItem onSelect={() => setResourceKind("web")}>{t("firstSite.webResource")}</DropdownMenuItem></DropdownMenuContent></DropdownMenu><label className={dialogStyles.resourcesSearch}><Search aria-hidden="true" /><Input ref={resourceSearchRef} aria-label={t("firstSite.searchResources")} placeholder={t("firstSite.searchResources")} value={resourceQuery} onChange={(event) => setResourceQuery(event.target.value)} /></label></div>
         {resourceListStatus === "loading" ? <p className={dialogStyles.resourceListState} role="status">{t("firstSite.resourceListLoading")}</p> : null}
         {resourceListStatus === "error" && resourceListErrorCursor === null ? <div className={dialogStyles.resourceListState} role="alert"><p>{t("firstSite.resourceListFailed")}</p><Button type="button" variant="outline" onClick={onRetryResourceList}>{t("firstSite.retry")}</Button></div> : null}
-        {resourceListStatus !== "loading" && !(resourceListStatus === "error" && resourceListErrorCursor === null) ? filteredResources.length > 0 ? <div className={dialogStyles.resourceList} role="list" aria-label={t("firstSite.filesAndResources")}>{filteredResources.map((resource) => <div key={resource.id} className={dialogStyles.resourceRow} role="listitem">{resource.kind === "web" ? <Globe2 aria-hidden="true" /> : <File aria-hidden="true" />}<span><strong>{resource.name}</strong><small>{resource.detail}</small></span></div>)}</div> : <div className={dialogStyles.resourcesEmpty}><File aria-hidden="true" /><p>{resourceQuery.trim() ? t("firstSite.noMatchingResources") : t("firstSite.resourceListEmpty")}</p></div> : null}
+        {resourceDownloads.unavailable ? <p id={downloadDescriptionId} className={dialogStyles.resourceListState}>{t("firstSite.resourceDownloadUnavailable")}</p> : null}
+        {resourceListStatus !== "loading" && !(resourceListStatus === "error" && resourceListErrorCursor === null) ? filteredResources.length > 0 ? <div className={dialogStyles.resourceList} role="list" aria-label={t("firstSite.filesAndResources")}>{filteredResources.map((resource) => <div key={resource.id} className={dialogStyles.resourceRow} role="listitem">{resource.kind === "web" ? <Globe2 aria-hidden="true" /> : <File aria-hidden="true" />}<span><strong>{resource.name}</strong><small>{resource.detail}</small>
+          {resourceDownloads.state(resource.id) === "pending" ? <small role="status">{t("firstSite.resourceDownloading")}</small> : null}
+          {resourceDownloads.state(resource.id) === "error" ? <small role="alert">{t("firstSite.resourceDownloadFailed")}</small> : null}
+          {resourceDownloads.state(resource.id) === "initiated" ? <small role="status">{t("firstSite.resourceDownloadInitiated")}</small> : null}
+        </span>{resource.kind === "file" ? resourceDownloads.state(resource.id) === "pending"
+          ? <Button type="button" size="sm" variant="outline" onClick={() => resourceDownloads.cancel(resource.id)}>{t("firstSite.resourceDownloadCancel")}</Button>
+          : <Button type="button" size="sm" variant="outline" disabled={resourceDownloads.unavailable} aria-describedby={resourceDownloads.unavailable ? downloadDescriptionId : undefined} aria-label={t(resourceDownloads.state(resource.id) === "error" ? "firstSite.resourceDownloadRetry" : "firstSite.resourceDownload", { name: resource.name })} onClick={() => { void resourceDownloads.start(resource) }}>{t("firstSite.resourceDownloadAction")}</Button> : null}</div>)}</div> : <div className={dialogStyles.resourcesEmpty}><File aria-hidden="true" /><p>{resourceQuery.trim() ? t("firstSite.noMatchingResources") : t("firstSite.resourceListEmpty")}</p></div> : null}
         {resourceListStatus === "error" && resourceListErrorCursor !== null ? <div className={dialogStyles.resourcePageState} role="alert"><span>{t("firstSite.resourceListFailed")}</span><Button type="button" variant="outline" onClick={onRetryResourceList}>{t("firstSite.retry")}</Button></div> : null}
         {resourceListStatus === "loadingMore" ? <p className={dialogStyles.resourcePageState} role="status">{t("firstSite.resourceListLoading")}</p> : null}
         {resourceListStatus === "ready" && resourceNextCursor !== null ? <Button type="button" variant="outline" className={dialogStyles.resourceLoadMore} onClick={onLoadMoreResources}>{t("firstSite.resourceLoadMore")}</Button> : null}
@@ -130,13 +146,13 @@ export function ProjectWorkspaceDialogs({
           <span><strong>{intent.file.name}</strong><small role={intent.status === "failed" ? "alert" : "status"}>{intent.status === "uploading" ? t("firstSite.resourceUploading") : t(intent.error === "resource_file_infected" ? "firstSite.resourceInfected" : intent.error === "idempotency_conflict" || intent.error === "resource_upload_aborted" ? "firstSite.resourceUploadRestart" : intent.error === "request_body_too_large" || intent.error === "upload_http_413" ? "firstSite.resourceTooLarge" : intent.retryable ? "firstSite.resourceUploadFailed" : "firstSite.resourceUploadRejected", { name: intent.file.name })}</small></span>
           {intent.status === "failed" && intent.retryable ? <Button type="button" variant="outline" size="sm" onClick={() => onRetryResourceUpload(intent)} aria-label={t("firstSite.resourceRetryUpload", { name: intent.file.name })}>{t("firstSite.retry")}</Button> : null}
         </div>)}</div> : null}
-        <div className={dialogStyles.resourcesAddGroup}><input ref={resourceInputRef} id="project-resource-upload" className={dialogStyles.resourcesFileInput} type="file" multiple onChange={(event) => { if (event.currentTarget.files) void handleResourceFiles(event.currentTarget.files); event.currentTarget.value = "" }} /><Button type="button" onClick={() => resourceInputRef.current?.click()}><Plus />{t("firstSite.add")}</Button><DropdownMenu><DropdownMenuTrigger asChild><Button type="button" size="icon-sm" aria-label={t("firstSite.addMenu")}><ChevronDown aria-hidden="true" /></Button></DropdownMenuTrigger><DropdownMenuContent className={dialogStyles.resourcesAddMenu} align="end" sideOffset={4}><DropdownMenuItem onSelect={() => resourceInputRef.current?.click()}><Paperclip />{t("firstSite.addLocalFile")}</DropdownMenuItem><DropdownMenuItem onSelect={() => { setResourceKind("web"); window.requestAnimationFrame(() => resourceSearchRef.current?.focus()) }}><Globe2 />{t("firstSite.searchWeb")}</DropdownMenuItem><DropdownMenuSub><DropdownMenuSubTrigger><Grid2X2 />{t("firstSite.more")}</DropdownMenuSubTrigger><DropdownMenuSubContent className={dialogStyles.resourcesMoreMenu} sideOffset={4}><DropdownMenuItem onSelect={() => onOpenSettings?.("mcp")}><Cloud />{t("firstSite.addFromGoogleDrive")}</DropdownMenuItem><DropdownMenuItem onSelect={() => onOpenSettings?.("mcp")}><Cloud />{t("firstSite.addFromOneDrivePersonal")}</DropdownMenuItem><DropdownMenuItem onSelect={() => onOpenSettings?.("mcp")}><Cloud />{t("firstSite.addFromOneDriveWork")}</DropdownMenuItem></DropdownMenuSubContent></DropdownMenuSub></DropdownMenuContent></DropdownMenu></div>
+        <div className={dialogStyles.resourcesAddGroup}><input ref={resourceInputRef} id="project-resource-upload" className={dialogStyles.resourcesFileInput} type="file" multiple onChange={(event) => { if (event.currentTarget.files) void handleResourceFiles(event.currentTarget.files); event.currentTarget.value = "" }} /><Button type="button" onClick={() => resourceInputRef.current?.click()}><Plus />{t("firstSite.add")}</Button><DropdownMenu><DropdownMenuTrigger asChild><Button type="button" size="icon-sm" aria-label={t("firstSite.addMenu")}><ChevronDown aria-hidden="true" /></Button></DropdownMenuTrigger><DropdownMenuContent className={dialogStyles.resourcesAddMenu} align="end" sideOffset={4}><DropdownMenuItem onSelect={() => resourceInputRef.current?.click()}><Paperclip />{t("firstSite.addLocalFile")}</DropdownMenuItem><DropdownMenuItem disabled={!preview} aria-describedby={webSearchDescriptionId} onSelect={() => { if (!preview) return; setResourceKind("web"); window.requestAnimationFrame(() => resourceSearchRef.current?.focus()) }}><Globe2 />{t("firstSite.searchWeb")}</DropdownMenuItem><DropdownMenuSub><DropdownMenuSubTrigger><Grid2X2 />{t("firstSite.more")}</DropdownMenuSubTrigger><DropdownMenuSubContent className={dialogStyles.resourcesMoreMenu} sideOffset={4}><DropdownMenuItem onSelect={() => onOpenSettings?.("mcp")}><Cloud />{t("firstSite.addFromGoogleDrive")}</DropdownMenuItem><DropdownMenuItem onSelect={() => onOpenSettings?.("mcp")}><Cloud />{t("firstSite.addFromOneDrivePersonal")}</DropdownMenuItem><DropdownMenuItem onSelect={() => onOpenSettings?.("mcp")}><Cloud />{t("firstSite.addFromOneDriveWork")}</DropdownMenuItem></DropdownMenuSubContent></DropdownMenuSub></DropdownMenuContent></DropdownMenu></div>
       </DialogContent>
     </Dialog>
 
-    <Dialog open={websitesOpen} onOpenChange={onContextDialogChange(setWebsitesOpen)}>
-      <DialogContent className={dialogStyles.projectPickerDialog} overlayClassName={dialogStyles.instructionsOverlay ?? ""} closeLabel={t("shell.closeDialog")}><DialogTitle className={dialogStyles.projectPickerTitle}>{t("firstSite.addWebsiteToProject")}</DialogTitle><label className={dialogStyles.projectPickerSearch}><Search aria-hidden="true" /><Input aria-label={t("firstSite.searchWebsites")} placeholder={t("firstSite.searchWebsites")} value={websiteQuery} onChange={(event) => setWebsiteQuery(event.target.value)} /></label>{filteredWebsites.length > 0 ? <div className={dialogStyles.projectPickerList} role="list" aria-label={t("firstSite.searchWebsites")}>{filteredWebsites.map((website) => { const selected = selectedWebsiteId === website.id || linkedWebsiteId === website.id; return <button key={website.id} type="button" className={dialogStyles.projectPickerRow} aria-pressed={selected} data-selected={selected || undefined} onClick={() => setSelectedWebsiteId(website.id)}><SquareCode aria-hidden="true" /><span><strong>{website.name}</strong><small>{website.detail}</small></span></button> })}</div> : <div className={dialogStyles.projectPickerEmpty}><SquareCode aria-hidden="true" /><span>{t("firstSite.noWebsites")}</span></div>}<DialogFooter className={dialogStyles.projectPickerFooter}><DialogClose asChild><Button type="button" variant="outline">{t("firstSite.cancel")}</Button></DialogClose><Button type="button" disabled={!selectedWebsiteId} onClick={() => { setLinkedWebsiteId(selectedWebsiteId); onContextDialogChange(setWebsitesOpen)(false) }}>{t("firstSite.save")}</Button></DialogFooter></DialogContent>
-    </Dialog>
+    {preview ? <Dialog open={websitesOpen} onOpenChange={setWebsitesOpen}>
+      <DialogContent className={`${dialogStyles.projectPickerDialog} ${dialogStyles.websitePickerDialog}`} overlayClassName={dialogStyles.instructionsOverlay ?? ""} closeLabel={t("shell.closeDialog")} onCloseAutoFocus={(event) => event.preventDefault()}><DialogTitle className={dialogStyles.projectPickerTitle}>{t("firstSite.addWebsiteToProject")}</DialogTitle><DialogDescription>{t("firstSite.websitesPreviewHint")}</DialogDescription><label className={dialogStyles.projectPickerSearch}><Search aria-hidden="true" /><Input aria-label={t("firstSite.searchWebsites")} placeholder={t("firstSite.searchWebsites")} value={websiteQuery} onChange={(event) => setWebsiteQuery(event.target.value)} /></label>{filteredWebsites.length > 0 ? <div className={dialogStyles.projectPickerList} role="list" aria-label={t("firstSite.searchWebsites")}>{filteredWebsites.map((website) => { const selected = selectedWebsiteId === website.id || linkedWebsiteId === website.id; return <button key={website.id} type="button" className={dialogStyles.projectPickerRow} aria-pressed={selected} data-selected={selected || undefined} onClick={() => setSelectedWebsiteId(website.id)}><SquareCode aria-hidden="true" /><span><strong>{website.name}</strong><small>{website.detail}</small></span></button> })}</div> : <div className={dialogStyles.projectPickerEmpty}><SquareCode aria-hidden="true" /><span>{t("firstSite.noWebsites")}</span></div>}<DialogFooter className={dialogStyles.projectPickerFooter}><DialogClose asChild><Button type="button" variant="outline">{t("firstSite.cancel")}</Button></DialogClose><Button type="button" disabled={!selectedWebsiteId} onClick={() => { setLinkedWebsiteId(selectedWebsiteId); setWebsitesOpen(false) }}>{t("firstSite.save")}</Button></DialogFooter></DialogContent>
+    </Dialog> : null}
 
     {preview ? <Dialog open={scheduledOpen} onOpenChange={onContextDialogChange(setScheduledOpen)}>
       <DialogContent className={dialogStyles.projectPickerDialog} overlayClassName={dialogStyles.instructionsOverlay ?? ""} closeLabel={t("shell.closeDialog")}><DialogTitle className={dialogStyles.projectPickerTitle}>{t("firstSite.projectScheduledTasks")}</DialogTitle><div className={dialogStyles.scheduledPickerToolbar}><label className={dialogStyles.projectPickerSearch}><Search aria-hidden="true" /><Input aria-label={t("firstSite.searchScheduledTasks")} placeholder={t("firstSite.searchScheduledTasks")} value={scheduledQuery} onChange={(event) => setScheduledQuery(event.target.value)} /></label><Button type="button" variant="outline" onClick={() => setScheduledEditorOpen(true)}><Plus />{t("firstSite.createNewItem")}</Button></div>{filteredScheduledTasks.length > 0 ? <div className={dialogStyles.projectPickerList} role="list" aria-label={t("firstSite.searchScheduledTasks")}>{filteredScheduledTasks.map((task) => { const selected = selectedScheduledId === task.id || linkedScheduledId === task.id; return <button key={task.id} type="button" className={dialogStyles.projectPickerRow} aria-pressed={selected} data-selected={selected || undefined} onClick={() => setSelectedScheduledId(task.id)}><Clock3 aria-hidden="true" /><span><strong>{task.title}</strong><small>{task.time} · {task.prompt}</small></span></button> })}</div> : <div className={dialogStyles.projectPickerEmpty}><Clock3 aria-hidden="true" /><span>{t("firstSite.noScheduledTasks")}</span></div>}<DialogFooter className={dialogStyles.projectPickerFooter}><DialogClose asChild><Button type="button" variant="outline">{t("firstSite.cancel")}</Button></DialogClose><Button type="button" disabled={!selectedScheduledId} onClick={() => { setLinkedScheduledId(selectedScheduledId); onContextDialogChange(setScheduledOpen)(false) }}>{t("firstSite.save")}</Button></DialogFooter></DialogContent>
@@ -153,6 +169,7 @@ function ScheduledTaskEditorDialogBridge({ open, onOpenChange, brandName, onSave
   const save = onSave === undefined
     ? undefined
     : async (value: ScheduledTaskEditorValue): Promise<void> => {
+      if (value.triggerKind !== "calendar") throw new Error("Project preview supports calendar tasks only")
       const { expiresAt, ...draft } = value
       await onSave({ ...draft, ...(typeof expiresAt === "string" ? { expiresAt } : {}) })
     }

@@ -47,6 +47,7 @@ export type ProjectResourceListPage = {
     filename: string
     mimeType: string
     sizeBytes: string
+    contentSha256: string
     createdAt: string
   }[]
   nextCursor: string | null

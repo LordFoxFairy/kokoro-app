@@ -1,3 +1,101 @@
+## I6：RSS 消费者局部状态目标（2026-10-23，消费者本地实现，待 Root 集成验收）
+
+Web 无 RSS 持久化 owner，不新增数据库、SQL、Redis namespace、poll/seen/dispatch 表、后台轮询器或浏览器任务 store。当前 Web 已固定正式 BFF 8395b44cbcccef7958604a4dd85c301f68f5f46e / Public20.0.0 / 168，SHA256 6574930b3a893a208596e6f27c2f9e09122e759d111a7fdbf2d54c294efc0e8f，并在原 feature 内接入 RSS。BFF 持有任务定义、当前 feed 与运行 metadata；内部 trigger/source epoch、seen、lease、逻辑 high-watermark 不进入 UI 数据。
+
+本地模型以 required triggerKind 区分 calendar 与 RSS，wire 仍由唯一 owner 的 trigger_kind 表达。calendar 保原 frequency/time/timezone/选择器；RSS 只有 feedUrl 与 conditions，不能混入 calendar 残留字段。title/prompt/project/expiry/审批等公共值沿既有语义，审批不可用提示不改，不能为 RSS 合成独立任务、Agent 或连接器配置。create 完整，涉及 trigger 的 PATCH 必须完整分支，不靠缺字段补 daily。
+
+表单临时状态只包括当前 kind、未提交 URL、最多 8 组×16 条条件、公共字段、校验错误、现设置弹层与提交阶段。[] 是无过滤，不是非法空组；每条只有已支持 7 field/10 operator，value 按 UTF8≤1024B 验证。唯一新增 scheduled-task-rss-fields.tsx 负责这些可编辑控件，放置/依赖见 TECHNICAL_DESIGN；不新建共享 schema/model helper 或复制客户端状态。
+
+RSS 到期日期解释时区在表单挂载时冻结为 browser IANA timezone，并向用户显示，属于局部 UI 状态而非 RSS 调度字段。编辑保存时，原勾选与显示日期未变则保留原 expires_at 的精确 UTC instant；仅日期变更才按该时区转换，明确取消为 null。保留初始日期/勾选/原 instant 以区分未编辑与转换，不因只改 prompt 重算到期；calendar 沿原 timezone 与到期行为。
+
+pending-create 和 mutation 身份仍归现客户端。冻结 body 时按完整分支复制 URL、每个条件组及每条规则，避免外部数组或关闭重开后的编辑改写 unknown 的原 body。unknown 只显式恢复同 key/body，不丢意图、不合成 ACK、不自动换 key 或写重试。inline/Dialog 同 scope 只保一个提交 hook，离开视图不把未知结果当作未发送。
+
+当前 client、可信 subject/admission/generation、项目及创建 scope 决定每个 UI attempt 的采用资格；作用域改变或卸载永久退休旧 attempt。每个 await 后及后续 IO/导航/回焦前核资格，晚成功/失败不发布到新 scope、不触发新 GET/提交，不因 A→B→A 重新采用。原 source、编辑器、项目删除屏障、pending-create 与原 calendar 幂等恢复保持，不建设第二生命周期 store。
+
+list 与 detail GET 同为权威 Details，现一次 list 读取可采用 RSS 当前 feedState、lastCheckedAt、nextCheckAt、errorCode；不新加逐行详情请求。mutation ACK 仅任务定义，不能补 current feedState；preview 不伪造初始化、backoff、成功或执行。RSS nextRun 为 null，nextCheck 只展示 poll 计划，日历明确排除 RSS，不能将 poll 时间冒成执行计划。
+
+运行 view model 保留 kind 与原实际 instant：calendar 的 scheduledFor 是计划时间，RSS 的 observedAt 是数据库发现时间、scheduledFor 为 null。原单页替换/错误清页、筛选/refresh/分页及主体退休继续；不以 observedAt 重排 owner 页，不缓存第二运行历史。opaque cursor 的内部 orderKey 是逻辑排队位置，与 RSS 发现时间不同；保原结构、scope/limit/task 与严格向后比较，不从公开 RSS 行推导该键、不补公开 dispatch_id。七状态与 terminal 事实由 owner 提供，不从 feed 状态推断 Run 已完成。
+
+preview/controlled 的已知源码与 fixture 显式带 calendar kind；网络和本地 preview parser 拒绝缺 kind，不提供兼容 fallback。保留原 localStorage key，不主动清用户缓存；旧无 kind 缓存不被采用，须准确记录这一 cutover 限制。演示只修改现本地 preview 定义，不访问 feed、不伪造 poll 或运行 metadata。
+
+当前已固定正式 Public20 并完成本地消费者实现，真实行为 RED 及条件深复制、到期原 instant、身份/项目/generation 退休、列表与 ACK 投影、日历排除和 cursor 边界的限定回归均保留证据。正常 RSS 保存/读取、派发、模型执行及完整工程/浏览器门仍须分别验收。原 I1–I5、积分/下载/删除/Skills/MCP 数据与历史失败记录逐字保留；full auth 失败及未完成能力不因本片关闭。
+
+## I5：本人积分隐藏初始化的局部意图（2026-10-22，消费者实现候选）
+
+Web不新增数据库、Redis namespace、SQL、账户表、资金owner或持久化初始化记录。Billing正式158579f8是账户/审计/余额唯一owner，BFF是public Product API owner。当前Web已固定正式9fac77d25b4585d916b84c669a720e4c2ba62bb0 / Public19.3.0 / 168，canonical SHA256 bf1b8809173fcbbabb1d3c4c1994f55763e552b9d3b46b3c577ef10ee7291423，并实现以下局部内存生命周期；正常页面与完整工程验收仍待Root。
+
+Billing仅在本人账户不存在时自然幂等创建并同事务审计，已有账户金额/held/generation不重置，disabled拒绝；没有grant、充值或新增积分流水。Web继续消费现credit_account_id/status/available_micros/held_micros与真实ledger，金额用既有BigInt formatCredits，不把ACK或本地0当当前余额，不推导Free/每日积分/奖励。初始化不是支付或授权扩大。
+
+局部状态依次为初读、准备中、权威后读、ready/读取失败，另有结果待确认与明确disabled。用量初读保原并行summary+ledger，均settled且strict missing才发命令；账户卡仅summary初读可进入相同意图。ready账户继续原summary-only卡片路径；只有实际初始化转换期追加两项权威后读，账户卡只显示summary。后读独立错误/真实分页保持，不把一个成功读伪装成完整账本。
+
+use-credit-account-initialization持两入口共享的窄意图；稳定BillingClient和可信subject只保已派发/待确认阶段，不保余额、cookie、access、token或第二身份事实。每个view另有完整preview/subject/admission/generation/client作用域、epoch、参与者与AbortController。subject非空、admitted=true且generation为非负safe integer才有资格；localStorage缓存标记不授权。
+
+同scope并发参与者只共享一次命令，退订退休自身回调；最后参与者离开或scope失准入取消命令，但已经派发的待确认标记不因StrictMode、tab切换、关重开或同主体新代际丢失。旧generation不复用成功结果，A→B→A只新读；每个await后及新IO前核当前资格。卸载、preview/client/主体/准入/代际变化后晚成功/失败均不发布、不回焦、不追加GET或PUT。
+
+PUT200的actual active snapshot仅作确认，必须另发当前summary+ledger GET再展示。后读失败不回滚初始化、不再次PUT。网络/503/超时/取消/断线可能已提交；待确认仅允许显式重新读取，404不变成自动再次命令。disabled是明确拒绝，不循环写。HTTP abort只终止当前消费资格，不代表owner回滚；硬刷新/多窗口不靠UI承诺全局exactly-once，最终依赖owner自然幂等不改已有资金。
+
+派发标记不持久到localStorage或任何owner表，无TTL轮询、自动写重试、后台初始化或全局登录副作用。原getJson/summary/ledger继续纯读取；资料CAS、设备、退出、Skills/MCP、调度与下载等现有数据生命周期不变。后继严格输入/15秒server与20秒browser预算、六字段session和cache/EOF规则见API_CONTRACT。
+
+旧Billing按钮草稿全文/SHA与历史失败保留，仅按批准迁移隐藏触发时机；实际非零后读、held、流水、精确5请求及安全oracle未削弱。当前候选已通过相关传输和132项三文件界面测试；Root仍需正常环境验收及工程门，不以owner能力或局部测试宣称Web整体目标完成。
+
+## I4-M2：运行记录只读页状态（2026-10-21，实施前）
+
+Web没有业务数据库、SQL、Redis或运行事实。BFF ef2ddca/Public19.2是唯一只读metadata来源；不持久化source payload、run结果、cursor、标题或权限。新视图模型仅把已验证wire七字段变为camelCase，保留原时间文本和owner顺序，不从prompt/调度失败/ACK推断运行完成。
+
+hook仅当前挂载scope内持有selectedTask、当前单页、nextCursor、loading/error与一次AbortController/epoch。global或精确task过滤共用同一GET；项目scope必须选择当前项目可读task，未选择/非法scope/源读取未知时不请求history。view切走、任务不可见、项目/subject/admission/generation/client变化、卸载永久退休原epoch并清页，A→B→A旧返回不恢复。新页读取开始及任何错误不保留原查询数据；翻页替换页，刷新清cursor，不在浏览器拼全局feed或长期历史cache。
+
+无新任务、立即执行、模型调用、支付、通知或外部事件副作用。preview/controlled不能当真实owner运行，保持零历史IO和明确不可用。当前已受理Run不因离开页面被取消，Web abort只退休读取。当前权限仅以服务端两次session与BFF资格投影为准，local selectedTask不是授权。单页读取不能保证跨页快照/原子撤权。
+
+## I3：项目资源下载的临时意图（2026-10-21，本地实现）
+
+不新增DB、持久化字段、owner字段或下载URL事实。已发行列表asset_id/filename/mime_type/size_bytes/content_sha256/created_at保持原严格schema及真实投影；preview不伪造可信metadata。每次点击冻结当前project/asset、可信文件名/大小/MIME/SHA，并绑定readBoundary的admitted、非空subject、非负safe integer generation及现项目删除资格。
+
+下载状态仅Dialog内存idle/pending/error/initiated，Map拥有当前单次AbortController；无localStorage授权、自动下载或自动重试。同一资源重复点击不重发；取消后显式重试重新单次GET。close、项目/主体/准入/代际、删除资格或卸载永久退休旧attempt，不复活A→B→A；迟到字节不能创建URL、点击、更新新scope或发新IO。只有完整EOF/1MiB/长度/MIME/文件名/SHA通过才创建objectURL，触发后即回收，状态不代表文件落盘成功。
+
+原列表读/上传确认/项目屏障保持。历史metadata两条与下载十三条真实RED保留，当前真实Workspace、Hub与Proxy消费验证的结果见CURRENT；正式OAuth浏览器下载由Root独立验收。
+
+## I1：首页自动化草稿归属（2026-10-20，本地实现待 Root 验收）
+
+Web 不新增持久化 owner、任务 store、客户端或缓存层。选择启动方式、设置 Popover 和未提交草稿仅属当前创建视图；列表/日历/原编辑仍消费现 scheduled feature。内联和 Dialog 同 scope 只挂载一个提交 hook，unknown 冻结草稿与幂等身份继续归现客户端 pending-create，离开重开不能丢弃或改写；显式恢复仍用原请求。scope/subject/admission/generation/卸载退休旧 UI 结果与回焦，不把路由参数当授权。
+
+仅现 title/prompt/frequency/time/timezone/规则选择器/expires_at/auto_approve/project_id 可以成为 owner 事实；首页 10:00 是未提交默认值，不改原 Dialog 或 owner。不存在 Agent、连接器、独立任务、云电脑、本地文件夹配置事实；禁用不等于默认已配置。next_run_at 为 null 的创建 ACK 不合成当前执行时间。当前首页消费者已复用原提交与 pending-create：关闭选择器、离页或作用域退休只销毁本地 UI，未知请求仍归原客户端；没有新 store、持久化或合成回执。F3 删除事实与 Billing 草稿保持冻结；本地回归不代表真实自动化执行验收。
+
+## F3：缓存投影修正不改变删除事实（2026-10-20，本地实现待 Root 验收）
+
+真实 owner 已受理的项目状态仍为 logical/physical pending，不因浏览器 invalid_headers 合成失败或完成，也不重新提交 DELETE。Root 独立 RED 后，本地仅将删除 browser 的缓存常量对齐最终 Proxy 的精确三指令值，合法 fixture 与相关缓存拒绝回归同步更新；不新增持久化、请求身份、状态或缓存层。owner 精确 no-store 与 F1/F2/T1 其他行为、Billing 草稿保持；当前结果仍待 Root 工程门与新自有空项目 UI 验收。
+
+## 项目删除 F2：当前局部内存实现（2026-10-20）
+
+新增的具名 intent hook 仅持有一个挂载路由 scope 的 target/key、名称、busy/accepted/revoked、snapshot 与 abort controller，不新增数据库、localStorage receipt、永久 ID 过滤或删除事实。关闭和普通读 revision 保留原意图；主体/admission/generation/项目/路由/卸载永久退休。202 receipt 不补造 Project，逻辑 released 仍必须显示物理清理 pending。
+
+现 read hook 将主体集合和项目回调生命周期分开；accepted 同步失效旧 context、list/detail/history/rename controller/epoch，随后采用完整新 owner 读取。新 owner 返回同 ID 也正常展示，但 accepted 意图继续阻止该 scope 写入。资源投影与上传队列绑定当前 context，迟到结果不能发布或续发请求。所有状态仍归 Web 局部内存，正式权限与删除事实归固定 owner；未执行真实删除。以下保留测试先行/F1 阶段记录。
+
+## 项目删除 F2 局部状态（2026-10-20，测试先行记录）
+
+无新数据库、localStorage receipt、项目永久黑名单或合成删除事实。未来具名 hook 的单 scope 内存持有 frozen target/key、open、pending/unknown/accepted/status、原 scope token 与 abort controller。首次确认生成一次 key；普通读取 revision/unavailable、关闭重开不改变它。真实主体/admission/generation/项目/路由/卸载使 token 永久退休，A→B→A 也不能采用旧结果或旧回焦。
+
+202 receipt 只证明 owner 已接受：同步退休现 list/detail/history/rename 与资源读 epoch，撤销旧写/分页/重试/confirmUpload/批量下一文件资格，随后读取真实 owner 新投影；不能从 receipt 补 Project 或永久过滤 owner 返回的同 ID。logical released 仍是 physical pending。新 owner 同 scope 读可以正常采用，GET 404/失败仅状态未知。删除状态由稳定路由 Header 呈现，不依赖列表行或详情 ready。F2 尚无生产实现，本阶段仅五文档与四 UI 测试路径。
+
+## 项目删除 F1：仅消费 owner 状态，无 Web 持久化（2026-10-20）
+
+删除事务、Project/Conversation tombstone、定时任务暂停和逻辑释放命令均归固定 BFF Public19 owner；Web 不建表、索引、数据库、localStorage receipt、永久 ID 黑名单或另一份删除事实。F1 wire/browser 返回的 snapshot 只含 `project_id`、`logical_release_state`、`physical_cleanup_state`：202 两状态 pending；GET logical pending/blocked/released，physical 仍 pending。ID 和 JSON 字段闭集、原始 EOF、头及方法错误矩阵必须先校验，不能把 404 或未知 ACK 当已删除。
+
+F1 adapter 内存只有 requestId、同一绝对 deadline/abort、两次六字段 session 与有界 reader；迟到结果没有业务副作用。浏览器操作是单次调用，不持有 UI 状态或自动重试。F2 后继才由具名 intent hook 持有冻结 project/key、unknown/recovery/accepted/status，关闭可保留同 scope 的未知 key，身份/准入/代际/项目/路由/卸载退休；202 同步退休旧 list/detail/history/rename 读取，随后新 owner GET 才能采用。该目标尚未实施，不生成第二持久化层，不改变现 Project 读写模型。
+
+Root 独立复跑真实 Hub RED 后，本地仅实现三层传输与 Hub 分流，不新增持久化或 F2 状态。F1 92 PASS、原 create/rename/Hub 219 PASS；原真实 RED 与 wire/browser 缺模块日志继续保留。E/D/H/H2、Billing 草稿、两份 F1 测试及全部旧测试字节保护；next-env 仅 Root 生成例外。未运行真实 owner 删除，F1 本地候选不证明正式界面删除闭环完成。
+
+## 首页自动化概览（2026-10-20；切片 D）
+
+三类卡片只表示产品用途及当前可用边界，不是新任务类型、连接器状态或持久化记录；没有 SQL、schema、迁移、缓存或 localStorage 新 key。定时任务的建议 prompt 与创建草稿仍由原 editor 生命周期拥有，取消、身份和项目范围退休沿既有行为，preview 项目归属保留 E 的修正。触发器和高级自动化没有本地创建、草稿持久化或合成执行状态，禁用入口不会写入任务存储。
+
+## 首页项目定时任务范围（2026-10-20；切片 E）
+
+E 审查修正沿用已有可选 projectId：preview 创建存入同一记录，编辑保留原记录归属；历史无 projectId 的本地记录仍属于无项目视图。source 挂载标记及当前准入/代际/client 仅为局部易失生命周期屏障，不新增持久化、共享缓存、命令 key 或兼容字段。
+
+Web 无新增持久化或缓存。record.projectId 仍是 BFF owner 投影；当前项目列表、日历及可编辑目标从同一完整记录集派生，精确比较，不 trim、猜 slug 或合成关联。无项目 query 时保留全部记录，invalid 不被当作正常无任务事实。
+
+局部 scope key 使用既有 creationContext 元组，与身份实例组合；A→B/invalid/个人时销毁旧编辑与删除确认、退休旧读取显示及异步回写。原 pending create 的 actor-scoped client/精确项目 key、冻结 body 与 command identity 保留，已有请求不因 UI 导航被宣称取消或成功。没有 SQL、schema、迁移、localStorage 或数据库 owner 变更。
+
 ## 设置视觉与主线状态组合（2026-10-20）
 
 保留主线知识 owner 数据及原 KnowledgeSession/Provider 的读取、写入、核实和准入退休语义；视觉增量不增加知识存储或第二份会话。账户详情和资产创建前表单仍为本地导航/临时草稿，知识 preview 草稿不冒充正式 owner 事实。
@@ -1565,3 +1663,13 @@ MCP管理按actor/client、connector locator保存五项typed原命令，仅未�
 ### Installation exact content（2026-10-16，实施设计）
 
 无 Web 持久模型。已安装详情只在当前 subject/admission generation/resource 生命周期持有权威 PersonalInstallation 与精确 package directory；不把 catalog current 元数据覆写安装 pin，不解析 SKILL.md 冒充 owner metadata。安装源变化只失效本次读取并请求用户刷新，不自动更新安装、不合成 download 权限。
+
+## 项目网站与搜索入口真实性（2026-10-20；切片 H）
+
+不新增数据库、schema、缓存或 localStorage。previewWebsites 只是本地演示输入，不是项目资产、网站关联或网络搜索结果；正式模式不读取它来展示关联候选。preview 的 open/query/selected/linked 仅为组件局部状态，由精确 [preview, projectRef ?? null] 边界拥有；模式或项目变化后退休，旧保存/关闭/排队回焦不得复活旧意图或影响新页面。
+
+现正式文件投影和上传回执仍由原 owner/client 拥有，web 资源类型筛选保持原含义，不合成正式网页记录。卡片新增的可选 disabled/aria-describedby 只表达当前动作边界，默认其他 caller 行为不变。Root 独立 RED 放行后，网站局部状态附当前边界实例 owner；边界变化创建新 owner，关闭/保存 setter 及回焦只接受仍挂载的原 owner，A→B→A 也不恢复旧状态。layout effect 清理使卸载后的回焦失效，无新持久化或共享状态。
+
+H2 仅为同一网站演示的局部布局补验，不新增草稿、候选、持久化、共享状态或滚动位置缓存。保留 H 的精确模式/项目 owner 退休与旧回焦守卫；两条现有演示候选足以验证实际短视口滚动可达，不制造额外数据来强迫滚动。生产仅使用 CSS 网格与候选区滚动分配实际高度，仍沿原搜索/选择状态；H 九个 UI 回归与其他 Dialog 原行为保持。
+
+I4-M2 lifecycle clarification: the existing task source exposes successful client/generation read ownership without changing its frozen-list retention or CRUD behavior. Only run-history presentation remounts for a new client/admission generation. Removed selections remain retired until explicit user selection; they never widen automatically into the global feed. The browser calls its injected native fetch without assigning an arbitrary receiver. Final JSON responses declare exact UTF-8 length, including sanitized errors.

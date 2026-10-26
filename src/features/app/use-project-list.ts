@@ -11,6 +11,16 @@ export type ProjectReadState<T> =
   | { status: "error"; retryable: boolean }
   | { status: "ready"; data: T }
 
+export type ProjectReadContext = {
+  generation: number | undefined
+  subject: string | null | undefined
+  admitted: boolean
+  projectRef: string | undefined
+  preview: boolean
+  unavailable: boolean
+  isCurrent: () => boolean
+}
+
 function denied(error: unknown): boolean {
   return error instanceof ProjectReadError && (error.status === 401 || error.status === 403)
 }
@@ -22,7 +32,15 @@ export function useProjectList(preview: boolean, boundary: ProjectReadBoundary |
   const generation = boundary?.generation
   const subject = boundary?.subject
   const key = useMemo(() => ({ generation, subject, admitted, revision }), [generation, subject, admitted, revision])
+  const initialKey = useRef(key)
   const renameContext = useMemo(() => ({ key, projectRef }), [key, projectRef])
+  const projectionRef = useRef<{ token: object; active: boolean } | null>(null)
+  useLayoutEffect(() => {
+    const scope = { token: renameContext, active: true }
+    projectionRef.current = scope
+    return () => { scope.active = false }
+  }, [renameContext])
+  const projectionIsCurrent = useCallback(() => projectionRef.current?.token === renameContext && projectionRef.current.active, [renameContext])
   const readScopeRef = useRef<{ key: object; active: boolean; epoch: number; controllers: Set<AbortController> } | null>(null)
   const renameScopeRef = useRef<{ key: object; active: boolean; controllers: Set<AbortController> } | null>(null)
   useLayoutEffect(() => {
@@ -46,7 +64,30 @@ export function useProjectList(preview: boolean, boundary: ProjectReadBoundary |
   const [history, setHistory] = useState<{ key: object; state: ProjectReadState<ProjectInstructionRevisionWire[]> } | null>(null)
   const [collection, setCollection] = useState<{ key: object; state: ProjectReadState<Project[]> } | null>(null)
   const [detail, setDetail] = useState<{ key: object; state: ProjectReadState<Project> } | null>(null)
-  const refresh = useCallback(() => setRevision((value) => value + 1), [])
+  const refresh = useCallback(() => {
+    if (projectionIsCurrent()) setRevision((value) => value + 1)
+  }, [projectionIsCurrent])
+  const acceptProjectDeletion = useCallback((target: string) => {
+    if (!admitted || target !== projectRef || !projectionIsCurrent()) return
+    // This is synchronous: a queued old callback cannot escape before effects.
+    if (projectionRef.current) projectionRef.current.active = false
+    const reads = readScopeRef.current
+    if (reads?.key === key) {
+      reads.epoch += 1
+      for (const controller of reads.controllers) controller.abort()
+      reads.controllers.clear()
+    }
+    const rename = renameScopeRef.current
+    if (rename?.key === renameContext) {
+      rename.active = false
+      for (const controller of rename.controllers) controller.abort()
+      rename.controllers.clear()
+    }
+    setCollection(null)
+    setDetail(null)
+    setHistory(null)
+    setRevision(value => value + 1)
+  }, [admitted, key, projectRef, projectionIsCurrent, renameContext])
 
   useEffect(() => {
     const readFence = readScopeRef.current
@@ -54,7 +95,7 @@ export function useProjectList(preview: boolean, boundary: ProjectReadBoundary |
     const epoch = readFence.epoch
     let live = true
     let controller: AbortController | null = null
-    queueMicrotask(() => {
+    const read = () => {
       if (!live || !readFence.active || readFence.key !== key || epoch !== readFence.epoch) return
       setCollection(null)
       if (!admitted) return
@@ -66,7 +107,11 @@ export function useProjectList(preview: boolean, boundary: ProjectReadBoundary |
           if (live && readFence.active && epoch === readFence.epoch && !controller?.signal.aborted) setCollection({ key, state: { status: "error", retryable: !denied(error) } })
         },
       )
-    })
+    }
+    // Initial setup is deferred so StrictMode replay owns only one request.
+    // Subsequent owner generations start during their committed effect.
+    if (key === initialKey.current) queueMicrotask(read)
+    else read()
     return () => {
       live = false
       controller?.abort()
@@ -100,19 +145,24 @@ export function useProjectList(preview: boolean, boundary: ProjectReadBoundary |
     return () => { live = false; controller.abort(); readFence.controllers.delete(controller) }
   }, [detailKey, key, projectRef, readDetail])
 
-  const readHistory = readInstructions && admitted && projectRef !== undefined && list.status === "ready"
+  const detailFailed = detail?.key === detailKey && detail.state.status === "error"
+  const readHistory = readInstructions && admitted && projectRef !== undefined && list.status === "ready" && !detailFailed
   useEffect(() => {
+    const readFence = readScopeRef.current
+    if (!readFence || readFence.key !== key) return
+    const epoch = readFence.epoch
     const controller = new AbortController()
+    readFence.controllers.add(controller)
     let live = true
     if (readHistory && projectRef !== undefined) void listProjectInstructionRevisions(projectRef, controller.signal).then(
-      (data) => { if (live && !controller.signal.aborted) setHistory({ key: detailKey, state: { status: "ready", data } }) },
+      (data) => { if (live && readFence.active && epoch === readFence.epoch && !controller.signal.aborted) setHistory({ key: detailKey, state: { status: "ready", data } }) },
       (error: unknown) => {
-        if (!live || controller.signal.aborted) return
+        if (!live || !readFence.active || epoch !== readFence.epoch || controller.signal.aborted) return
         if (denied(error)) setCollection({ key, state: { status: "error", retryable: false } })
         setHistory({ key: detailKey, state: { status: "error", retryable: !denied(error) && !(error instanceof ProjectReadError && error.status === 404) } })
       },
     )
-    return () => { live = false; controller.abort() }
+    return () => { live = false; controller.abort(); readFence.controllers.delete(controller) }
   }, [detailKey, key, projectRef, readHistory])
 
   const current: ProjectReadState<Project> = !admitted || projectRef === undefined
@@ -131,7 +181,7 @@ export function useProjectList(preview: boolean, boundary: ProjectReadBoundary |
   const refreshRenamedProject = useCallback(async (target: string, signal: AbortSignal): Promise<Project> => {
     const readFence = readScopeRef.current
     const renameFence = renameScopeRef.current
-    if (!admitted || target !== projectRef || !readFence?.active || readFence.key !== key
+    if (!admitted || !projectionIsCurrent() || target !== projectRef || !readFence?.active || readFence.key !== key
       || !renameFence?.active || renameFence.key !== detailKey || signal.aborted) {
       throw new DOMException("Aborted", "AbortError")
     }
@@ -147,7 +197,7 @@ export function useProjectList(preview: boolean, boundary: ProjectReadBoundary |
     signal.addEventListener("abort", abort, { once: true })
     if (signal.aborted) abort()
     const check = () => {
-      if (!readFence.active || !renameFence.active || epoch !== readFence.epoch || controller.signal.aborted) {
+      if (!projectionIsCurrent() || !readFence.active || !renameFence.active || epoch !== readFence.epoch || controller.signal.aborted) {
         throw new DOMException("Aborted", "AbortError")
       }
     }
@@ -173,9 +223,10 @@ export function useProjectList(preview: boolean, boundary: ProjectReadBoundary |
       readFence.controllers.delete(controller)
       renameFence.controllers.delete(controller)
     }
-  }, [admitted, projectRef, detailKey, key])
+  }, [admitted, projectRef, detailKey, key, projectionIsCurrent])
 
   const unavailable = list.status === "error" || current.status === "error"
-  const context = useMemo(() => ({ generation, subject, admitted, projectRef, preview, unavailable }), [generation, subject, admitted, projectRef, preview, unavailable])
-  return { list, current, instructionHistory, context, refresh, refreshRenamedProject }
+  const context: ProjectReadContext = useMemo(() => ({ generation, subject, admitted, projectRef, preview, unavailable,
+    isCurrent: projectionIsCurrent }), [generation, subject, admitted, projectRef, preview, unavailable, projectionIsCurrent])
+  return { list, current, instructionHistory, context, refresh, refreshRenamedProject, acceptProjectDeletion }
 }

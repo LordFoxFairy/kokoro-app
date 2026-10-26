@@ -1,3 +1,69 @@
+## I6 RSS 自动化消费者（2026-10-23，本地实现待验收）
+
+现 scheduled feature 同一生命周期承接显式 calendar/RSS 分支、RSS URL/条件组与公共到期编辑；只有权威 list/detail 读取采用 feed 当前事实，RSS 运行显示发现时间并保持 owner 顺序。唯一新生产文件为 scheduled-task-rss-fields.tsx；无新 API、客户端、store、外部 feed IO 或 Skills/MCP 业务。Public20 正式原文经六原生成器及完整父版本 inverse；独立 connector profile 保持。验证与限制见 CURRENT。
+
+I5：本人积分账户初始化由billing-credit-account具名contract/server adapter、原BillingClient独立command与use-credit-account-initialization窄意图承接；正式账户卡/用量入口隐藏触发，余额仍由当前summary/ledger读取。已固定正式Public19.3，候选定向通过、Root集成验收待完成，无开户CTA或支付功能。
+
+## I3 项目资源下载（2026-10-21，本地实现）
+
+新增四个具名文件：contract/project-resource-download.ts、lib/server/project-resource-download.ts、features/app/project-resource-download.ts、features/app/use-project-resource-download.ts。Hub窄分流和现Workspace/Dialog接线，30/40秒完整字节预算、可信SHA/大小/MIME、取消/重试与scope永久退休；旧列表/上传/删除不变。Public19.1.0正式固定原文经六现generator，旧19.0完整逆证继续。精确测试与未验边界见CURRENT。
+
+## I4 审批入口准确可用状态（2026-10-21，本地修复）
+
+现 scheduled-task-editor-options.tsx 只读展示既有审批字段：普通编辑器 Switch 禁用且关联准确说明；workflow 以禁用的现有审批规则按钮替代两项无执行保证的选择。editor-form 与 automation-workflow 移除失效 options 写入 props，原 state/submission/client、保存和未知结果恢复不变。九语言说明自动核准尚不可用，执行沿现有审批规则，不承诺逐 Run 批准。
+
+公共 Surface 三项行为 RED 后通过；相关调度/UI/i18n 419 PASS、架构及适用合同 53 PASS、具名 ESLint 和直接 tsc 通过。原测试只迁移获准的审批入口操作，其余精确字段/历史/日历断言保护。Root 正常界面与独审待验，审批能力本身仍未实现，详见 CURRENT。
+
+## I4 日历同日任务展开（2026-10-21，本地实现）
+
+现 scheduled-task-calendar-view.tsx 与邻 CSS 在同日显示前三项实际下次执行及准确的剩余数量，Popover 展示全部任务、完整标题、显示时区和调度状态。选择任务沿原编辑器，关闭后回到仍存在的 More 按钮；月份、时区、来源及现主体/项目作用域变化退休旧展开。排序稳定且不修改输入；现 calendar.ts 的 scheduledRunInstant 复用原无时区受控记录的 UTC 解释，日期分组与显示共用，无新公开入口、规则推算或请求。
+
+固定 Node22 相关调度/UI/i18n 416 PASS，架构及适用合同检查 53 PASS，具名 ESLint 与直接 tsc 通过。初始缺入口 RED、非 UTC 受控时间 RED 和修正前通过证据保留，详见 CURRENT。正常浏览器与窄屏实景由 Root 后续独立验收；正式资源下载等未完边界不因此关闭。
+
+## I3 已发行列表 metadata 窄片（2026-10-21）
+
+现 contract/project-resource.ts 的本地列表类型、project-resource-list.ts mapper、project-workspace-model.ts 展示模型与 use-project-resources.ts 行投影保留已有 SHA/大小/MIME。没有新 wire 字段/endpoint/pin，preview/web 不伪造元数据，上传确认流程不变。三个现测试仅补合法 list fixture 的必需 SHA 和原 mapper 精确 expected；15 条 I3 语义断言保持。
+
+两条 metadata 回归和原三文件旧行为分别 2 PASS/52 PASS，具名 ESLint、直接 tsc --noEmit --incremental false 通过。首轮 I3 helper 两处 override 类型失败保留，Root 授权仅补两类型词，全部业务断言/值/函数体不变；逆向字节保护及实际结果见 CURRENT。下载入口仍缺失，前阶段另 13 条真实 RED 与未到达边界保留，不能把 metadata 修复当下载完成。
+
+## I3：项目资源下载准备（2026-10-21，文档/真实行为 RED）
+
+本阶段只更新三设计面、CURRENT/本索引，以及既有 tests/contract/project-resource-list.test.ts 与 tests/ui/project-resources-live.test.tsx。前者直接核真实列表 mapper 的 SHA/大小/MIME 投影；后者沿合法 wire → 真实 list reader → Workspace/Dialog，区分零自动下载与具名点击、取消/重试/迟到结果的可达性。原两测试全文前缀、生产及 Billing 草稿保护。
+
+后继四个具名文件的 contract/server/browser/intent 职责及完整生命周期见三设计面；不新增 API 字段、顶层框架或第二套列表 client。正式 Public19.1 artifact 尚未发行，本阶段不生成、不 pin、不实现下载；原工程/正常验收事实见 CURRENT，不能据此称整个首页目标完成。
+
+## 首页自动化内联创建 I1（2026-10-20，本切片验收通过）
+
+`features/scheduled-tasks/ui/scheduled-task-automation-workflow.tsx` 拥有启动方式、内联表单与设置 Popover；AppSurface 复用 scheduled location 的 workflow query 投影，现 Surface、字段与 submission 共享原提交和未知结果恢复。首页默认 10:00，原编辑 Dialog 与三建议保持。没有新客户端、协议或持久化；未有 owner 的选项禁用并说明。测试业务断言与旧前缀保持，仅新增 admission mock 泛型对齐真实 fetch 类型。
+
+同文件 `ScheduledTaskManagementView` 只呈现管理列表/日历与 Dialog，作用域容器继续拥有原 hook 与生命周期；标题保留可见 token 焦点。Root architecture 50、相关 380、合同 310 通过，完整 lint/typecheck/build 通过；预览明暗桌面/手机 4 PASS，正常唯一创建 ACK 与权威 GET/刷新通过且零 Chat 写。完整证据及事件/高级、项目下载、原失败和 review 门等未完边界见 CURRENT，不代表全仓或可合并验收。
+
+## 项目删除 F2 本地接线（2026-10-20）
+
+`app-frame/use-app-frame-project-deletion.ts` 管冻结意图和恢复；`workspace-header/workspace-header-project-deletion.tsx` 管稳定 Header 确认/进度/焦点。现 AppFrame/header props 链传递 control；`use-project-list.ts` 同步退休旧读，`use-project-resources.ts` 与 Workspace 退休旧资源/上传后续请求。真实 actions、project mutations 及 retry/resume/toolDecision 同时检查当前 context 与 accepted 意图。没有新增 API、持久化或通用框架，F1/四 F2 测试原字节冻结。相关回归 630 PASS、最终四文件 UI 269 PASS及定向 lint 通过；Root 审查/工程/正常运行待验。以下为阶段记录。
+
+## 项目删除 F2（2026-10-20，文档与测试阶段记录）
+
+新 tests/ui/project-deletion.test.tsx 与 project-list-deletion.test.tsx 分别定义单 scope 意图/恢复与真实读取退休；现 app-frame-rail、project-resources-live 仅追加真实接线与旧回调行为。未来两个具名 hook/Dialog 与现 AppFrame/header/list/resources/actions 最小接线见三设计面。F1 四源及两测试已冻结，Root 同输入 311 PASS；F2 本阶段不写生产，不改 locale/E2E，不把缺模块当功能 RED。
+
+本阶段实际两现文件 18 项语义 RED；两个新文件的 25 项模块缺失及 10 项屏障接口缺失单列，不替代行为证据。测试定向 lint 通过，旧测试全文前缀保护；Root 审阅和独立复跑后才决定生产授权。
+
+## 项目删除 F1（2026-10-20，传输本地候选）
+
+现 tests/app/project-deletion-proxy.test.ts 验证实际 Hub exports 的输入、ACK、headers 和完整生命周期；tests/contract/project-deletion.test.ts 固定 Public19 并验证 wire/browser。三个 project-deletion.ts 分别位于 contract、lib/server、features/app，只拥有纯 wire、强同源 adapter、单次 bodyless DELETE/固定 GET；Hub 仅精确分流。Root 独立 RED 后已实现，冻结两测试 92 PASS、原 create/rename/Hub 219 PASS，定向 ESLint 通过。位置比较与 F2 五具名职责见三设计面；F2 UI 未放行，现 E/D/H/H2 全部保留。
+
+## 自动化概览（切片 D，本地候选）
+
+三类用途卡片归现 `src/features/scheduled-tasks/ui/scheduled-task-empty-state.tsx` 与邻 CSS，使用日历、事件链和条件分支示意图；原定时创建和三项建议保留。事件触发器/高级自动化没有 owner 契约，只展示明确禁用边界。九语言及既有 UI/浏览器回归沿同一入口，source/client/editor、项目范围和恢复逻辑不变，验证事实见 `docs/CURRENT.md`。
+
+## 项目定时任务范围
+
+`src/features/scheduled-tasks/ui/use-scheduled-task-source.ts` 从现有任务投影派生精确项目范围；`scheduled-task-surface.tsx` 按主体和已解析范围退休读取、编辑及确认。列表、日历和编辑目标共用同一投影，无项目参数时仍展示全部任务。`scheduled-task-location.ts` 继续拥有 query/hash，可靠项目返回链接复用现有站内目标解析器；invalid 范围明确报错且禁止创建，不用项目 query 代替身份准入。
+
+原客户端持有的 pending create 与命令身份不变。事件触发器、高级自动化的真实服务和项目删除仍是后继范围；实际验证见 `docs/CURRENT.md`。
+
+旧 mutation 完成后的读取入口由 source 的当前挂载/准入/代际/client 屏障收口。预览项目新建仍归现 `scheduled-task-operations.ts` 与 `preview-task-store.ts`，仅沿用可选 projectId；编辑保留原归属，controlled 回调约定不变。
+
 ## 设置内部页面
 
 `src/ui/settings/sections/` 中的账户、Mail、邮箱、电话、钱包、集成和开发者组件负责所属内页及创建前表单。`account-credit-summary` 复用既有 Billing summary；`src/ui/billing/billing-resource-content` 展示非任务用量分类，`pricing-plan-details-dialog` 只展示正式套餐目录的原始金额。
@@ -423,3 +489,17 @@ MCP/Custom API配置的焦点后继：保留readonly配置控件而不是临时�
 ### Connector恢复原因与原请求重试边界
 
 现 `src/ui/mcp/connector-command-failure.ts` 消费已固定profile给出非敏感reason/消息key；单命令和Register持失败限制，Prepare创建/详情共享，终止原因不重试、不换key。九语言与原alert/button接线，原UI布局/HTTP/owner事实保持；人工核验与真正OAuth闭环不冒本片完成。
+
+## 项目网站与搜索入口真实性（切片 H，本地候选）
+
+沿现 `features/app/kokoro-project-workspace.tsx`、`project-context-card.tsx`、`project-workspace-dialogs.tsx` 收口正式与演示边界，不新建能力层。正式网站关联和网络搜索没有 Public19 owner 契约，入口原生禁用并关联可见说明；preview 仅本地筛选/选择，模式或项目切换退休旧意图与回焦。现正式文件和 Skills/MCP 保持。Root 独立复现 RED 后已实现三组件与九语言，相关四文件 140 PASS；生产冻结，独审/浏览器和集成门由 Root 后验，事实见 `docs/CURRENT.md`。
+
+H2 追加窄屏补修：网站 Dialog 单独使用 `websitePickerDialog` 局部 class 与现相邻 CSS，按实际 viewport 限高并让候选区滚动，标题和页脚可达。共享定时/资源 Dialog 与 H 生命周期不变；旧 CSS 的真实几何 RED、修后 320×568/320×400/1280×800 三例通过均保留外部证据，Root 最终复核待收口。
+
+
+### Scheduled run updates
+The automation management surface shares Calendar, Tasks and Updates navigation. Updates consumes the committed BFF public19.2 read-only run-history contract through `/api/scheduled-task-runs`; it preserves owner ordering and timestamp text, supports explicit task filtering and replacement pagination, and cancels retired reads. Project scope requires an eligible selected task. Preview and clients without the read capability report unavailable history. This adds no execution command or persistent Web state.
+
+## I6 RSS 暂停状态显示（2026-10-23）
+
+现 scheduled-task-list.tsx 将卡片既有的 schedulingState 优先级传给 RSS 事实展示。非启用任务显示真实任务状态，并隐藏失效的下次检查时间；订阅源、上次检查及历史错误保留。没有协议、状态写入或轮询改动。原 Surface 测试全文保护，新增五种非启用状态及启用正控；验证见 CURRENT。

@@ -1,3 +1,4 @@
+import { restoreRssTriggerParent } from "../tests/contract/bff-rss-trigger-parent"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import {
@@ -674,9 +675,9 @@ import { createHash as r76Hash } from "node:crypto"
 import { readFile as r76ReadFile } from "node:fs/promises"
 import r76Yaml from "yaml"
 
-async function r76PublicSpec() {
+async function r76PublicSpec(parent = false) {
   const bytes = await r76ReadFile("src/generated/bff-public-openapi.yaml")
-  const spec = r76Yaml.parse(bytes.toString("utf8")) as {
+  const spec = r76Yaml.parse((parent ? restoreRssTriggerParent(bytes) : bytes).toString("utf8")) as {
     info: { version: string }
     components: {
       schemas: Record<
@@ -724,12 +725,12 @@ async function r76PublicSpec() {
 describe("R255 ScheduledTask owner recurrence graph under the current public pin", () => {
   it("consumes the exact locally accepted current canonical bytes", async () => {
     const { bytes, spec } = await r76PublicSpec()
-    expect(r76Hash("sha256").update(bytes).digest("hex")).toBe("955412b680bf7a2529c4c35f553ff272d7361769ea95bb441ba820b552ffc564")
-    expect(spec.info.version).toBe("19.0.0")
+    expect(r76Hash("sha256").update(bytes).digest("hex")).toBe("6574930b3a893a208596e6f27c2f9e09122e759d111a7fdbf2d54c294efc0e8f")
+    expect(spec.info.version).toBe("20.0.0")
   })
 
   it("publishes current rule details separately from immutable command snapshots", async () => {
-    const schemas = (await r76PublicSpec()).spec.components.schemas
+    const schemas = (await r76PublicSpec(true)).spec.components.schemas
     expect(schemas.ScheduledTaskDetails).toMatchObject({
       allOf: [{ $ref: "#/components/schemas/ScheduledTask" }],
       required: ["scheduling_state"],
@@ -741,7 +742,7 @@ describe("R255 ScheduledTask owner recurrence graph under the current public pin
   })
 
   it("requires nullable owner next and explicit selected calendar rules on create", async () => {
-    const schemas = (await r76PublicSpec()).spec.components.schemas
+    const schemas = (await r76PublicSpec(true)).spec.components.schemas
     const task = schemas.ScheduledTask!
     const create = schemas.CreateScheduledTaskRequest!
     expect(task.required).toContain("next_run_at")
@@ -773,7 +774,7 @@ describe("R255 ScheduledTask owner recurrence graph under the current public pin
   })
 
   it("keeps PATCH closed with complete selected rules and no owner next-run input", async () => {
-    const patch = (await r76PublicSpec()).spec.components.schemas.ScheduledTaskPatchRequest!
+    const patch = (await r76PublicSpec(true)).spec.components.schemas.ScheduledTaskPatchRequest!
     expect(patch.type).toBe("object")
     expect(patch.additionalProperties).toBe(false)
     expect(patch.required ?? []).toEqual([])

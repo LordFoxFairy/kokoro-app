@@ -34,6 +34,7 @@ export type AppFrameProjectOptions = {
   projectDetail: ProjectReadState<Project>
   instructionHistory: ProjectReadState<ProjectInstructionRevisionWire[]>
   instructionContext: object
+  canWriteProject?: () => boolean
   refreshProject: () => void
   refreshRenamedProject?: (target: string, signal: AbortSignal) => Promise<Project>
   renameBoundary?: ProjectReadBoundary
@@ -62,12 +63,18 @@ export function useAppFrameProject({
   projectDetail,
   instructionHistory,
   instructionContext,
+  canWriteProject,
   refreshProject,
   refreshRenamedProject,
   renameBoundary,
   renameRouteKey,
 }: AppFrameProjectOptions) {
   const t = useT()
+  const projectCreatedRef = useRef(onProjectCreated)
+  useLayoutEffect(() => { projectCreatedRef.current = onProjectCreated }, [onProjectCreated])
+  const canWrite = useCallback(() => (canWriteProject?.() ?? true)
+    && (!("isCurrent" in instructionContext) || typeof instructionContext.isCurrent !== "function" || instructionContext.isCurrent() === true),
+  [canWriteProject, instructionContext])
   // Command lifecycle is fenced independently of read revision and draft state.
   const [renameRouteEpoch, setRenameRouteEpoch] = useState(0)
   const renameContext = useMemo(() => ({ projectRef, projectWorkspace, admitted: renameBoundary?.admitted, subject: renameBoundary?.subject,
@@ -104,7 +111,7 @@ export function useAppFrameProject({
       scope.controller = null
     }
   }, [renameContext])
-  const renameAvailable = mounted && projectWorkspace && !preview && renameBoundary?.admitted === true
+  const renameAvailable = canWrite() && mounted && projectWorkspace && !preview && renameBoundary?.admitted === true
     && renameBoundary.subject !== null && projectDetail.status === "ready" && projectDetail.data.id === projectRef
     && projectRenameIdSchema.safeParse(projectRef).success && refreshRenamedProject !== undefined && renameView.problem !== "permission"
   const setRenameView = useCallback((ui: Omit<RenameUi, "frozen">) => {
@@ -115,11 +122,11 @@ export function useAppFrameProject({
   const runRename = useCallback(async (readOnly: boolean, restart = false) => {
     const scope = renameScopeRef.current
     const retained = scope?.intent
-    if (!scope?.active || scope.context !== renameContext || !retained || scope.busy || !refreshRenamedProject || !projectRef) return
+    if (!canWrite() || !scope?.active || scope.context !== renameContext || !retained || scope.busy || !refreshRenamedProject || !projectRef) return
     scope.busy = true
     const controller = new AbortController()
     scope.controller = controller
-    const current = () => scope.active && renameScopeRef.current === scope && !controller.signal.aborted && scope.intent?.command === retained.command
+    const current = () => canWrite() && scope.active && renameScopeRef.current === scope && !controller.signal.aborted && scope.intent?.command === retained.command
       && (typeof window === "undefined" || retained.route === `${window.location.pathname}${window.location.search}${window.location.hash}`)
     setRenameView({ open: true, name: retained.rawInput, status: readOnly ? "confirming-read" : "pending", problem: null })
     try {
@@ -152,15 +159,15 @@ export function useAppFrameProject({
       if (scope.controller === controller) scope.controller = null
       scope.busy = false
     }
-  }, [projectRef, refreshRenamedProject, renameContext, setRenameView])
+  }, [canWrite, projectRef, refreshRenamedProject, renameContext, setRenameView])
   const openRename = useCallback(() => {
     const scope = renameScopeRef.current
-    if (!renameAvailable || !scope?.active || scope.context !== renameContext || scope.busy) return
+    if (!canWrite() || !renameAvailable || !scope?.active || scope.context !== renameContext || scope.busy) return
     scope.route = `${window.location.pathname}${window.location.search}${window.location.hash}`
     const retained = scope.intent
     setRenameView(retained ? { open: true, name: retained.rawInput, status: retained.readOnly ? "read-error" : "unknown",
       problem: retained.readOnly ? "read" : "unknown" } : { open: true, name: projectDetail.status === "ready" ? projectDetail.data.name : "", status: "idle", problem: null })
-  }, [projectDetail, renameAvailable, renameContext, setRenameView])
+  }, [canWrite, projectDetail, renameAvailable, renameContext, setRenameView])
   const projectRename: ProjectRenameControl = {
     focusScopeToken: renameContext,
     available: renameAvailable,
@@ -182,7 +189,7 @@ export function useAppFrameProject({
     },
     onSave: () => {
       const scope = renameScopeRef.current
-      if (!renameAvailable || !scope?.active || scope.context !== renameContext || scope.busy || scope.intent || !projectRef) return
+      if (!canWrite() || !renameAvailable || !scope?.active || scope.context !== renameContext || scope.busy || scope.intent || !projectRef) return
       if (window.location.pathname !== `/app/project/${projectRef}`) return
       const parsed = projectRenameRequestSchema.safeParse({ name: renameView.name })
       if (!parsed.success) { setRenameView({ ...renameView, status: "error", problem: "invalid" }); return }
@@ -318,7 +325,7 @@ export function useAppFrameProject({
 
   const saveProjectInstructions = useCallback(async (instructions: string) => {
     const saveScope = saveScopeRef.current
-    if (!saveScope?.active || saveScope.context !== instructionContext || !projectRef) throw new DOMException("Aborted", "AbortError")
+    if (!canWrite() || !saveScope?.active || saveScope.context !== instructionContext || !projectRef) throw new DOMException("Aborted", "AbortError")
     if (preview) {
       window.localStorage.setItem(`kokoro.preview.project.${projectRef}.instructions`, instructions)
       const revision: ProjectInstructionRevision = { id: crypto.randomUUID(), instruction: instructions, updatedAt: Date.now(), actorName: t("firstSite.you"), current: true }
@@ -332,21 +339,25 @@ export function useAppFrameProject({
     saveScope.controllers.add(controller)
     try {
       await updateProjectInstructions(projectRef, instructions, `project-instructions:${projectRef}:${crypto.randomUUID()}`, controller.signal)
-      if (!saveScope.active || controller.signal.aborted) throw new DOMException("Aborted", "AbortError")
+      if (!canWrite() || !saveScope.active || controller.signal.aborted) throw new DOMException("Aborted", "AbortError")
       // Only the current owner GET supplies instruction/history after an ACK.
       refreshProject()
     } finally { saveScope.controllers.delete(controller) }
-  }, [preview, projectRef, t, projectDetail, projectInstructionHistory, instructionContext, refreshProject])
+  }, [canWrite, preview, projectRef, t, projectDetail, projectInstructionHistory, instructionContext, refreshProject])
 
   const uploadProjectResource = useCallback(async (file: File, idempotencyKey: string) => {
+    if (!canWrite()) throw new DOMException("Aborted", "AbortError")
     if (!projectRef) throw new ProjectResourceUploadError("project_not_selected", false)
-    return uploadProjectResourceRequest(projectRef, file, idempotencyKey)
-  }, [projectRef])
+    const result = await uploadProjectResourceRequest(projectRef, file, idempotencyKey)
+    if (!canWrite()) throw new DOMException("Aborted", "AbortError")
+    return result
+  }, [canWrite, projectRef])
 
   const listProjectResources = useCallback(async (cursor: string | null, signal: AbortSignal) => {
+    if (!canWrite()) throw new DOMException("Aborted", "AbortError")
     if (!projectRef) throw new Error("project_not_selected")
     return listProjectResourcesRequest(projectRef, cursor, signal)
-  }, [projectRef])
+  }, [canWrite, projectRef])
 
   const openProject = useCallback((nextProjectRef: string, handoffDraft?: string) => {
     const projectRefToOpen = nextProjectRef
@@ -429,10 +440,10 @@ export function useAppFrameProject({
     // Refresh the current owner's collection independently of navigation.
     // Old-account and disposed completions have no projection write authority.
     if (currentScope?.active && currentScope.context.subject === intent.subject && currentScope.context.admitted !== false) {
-      try { onProjectCreated?.() } catch { /* Owner success is not an unknown POST outcome. */ }
+      try { projectCreatedRef.current?.() } catch { /* Owner success is not an unknown POST outcome. */ }
     }
     finishProjectNavigation(intent)
-  }, [finishProjectNavigation, onProjectCreated])
+  }, [finishProjectNavigation])
 
   const createProject = useCallback((input: Readonly<{ name?: string; draft?: string }> = {}) => {
     const handoffDraft = input.draft ?? draft

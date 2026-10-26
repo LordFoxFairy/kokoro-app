@@ -12,34 +12,18 @@ export function missingScheduledClientError(): Error {
 }
 
 function createDraft(value: ScheduledTaskEditorValue, projectId?: string): ScheduledTaskDraft {
-  return {
-    ...(projectId === undefined ? {} : { projectId }),
-    title: value.title,
-    prompt: value.prompt,
-    frequency: value.frequency,
-    time: value.time,
-    timezone: value.timezone,
-    ...(value.frequency === "weekly" ? { weekdays: value.weekdays } : {}),
-    ...(value.frequency === "monthly" ? { monthDays: value.monthDays } : {}),
-    ...(value.frequency === "once" ? { localDate: value.localDate } : {}),
-    autoApprove: value.autoApprove,
-    ...(typeof value.expiresAt === "string" ? { expiresAt: value.expiresAt } : {}),
-  }
+  const common = { ...(projectId === undefined ? {} : { projectId }), title: value.title, prompt: value.prompt,
+    autoApprove: value.autoApprove, ...(typeof value.expiresAt === "string" ? { expiresAt: value.expiresAt } : {}) }
+  return value.triggerKind === "rss"
+    ? { ...common, triggerKind: "rss", feedUrl: value.feedUrl, conditions: value.conditions.map(group => group.map(clause => ({ ...clause }))) }
+    : { ...common, triggerKind: "calendar", frequency: value.frequency, time: value.time, timezone: value.timezone,
+      ...(value.frequency === "weekly" ? { weekdays: value.weekdays } : {}),
+      ...(value.frequency === "monthly" ? { monthDays: value.monthDays } : {}),
+      ...(value.frequency === "once" ? { localDate: value.localDate } : {}) }
 }
 
 function updatePatch(value: ScheduledTaskEditorValue): ScheduledTaskPatch {
-  return {
-    title: value.title,
-    prompt: value.prompt,
-    frequency: value.frequency,
-    time: value.time,
-    timezone: value.timezone,
-    ...(value.frequency === "weekly" ? { weekdays: value.weekdays } : {}),
-    ...(value.frequency === "monthly" ? { monthDays: value.monthDays } : {}),
-    ...(value.frequency === "once" ? { localDate: value.localDate } : {}),
-    ...(value.expiresAt === undefined ? {} : { expiresAt: value.expiresAt }),
-    autoApprove: value.autoApprove,
-  }
+  return { ...createDraft(value), ...(value.expiresAt === undefined ? {} : { expiresAt: value.expiresAt }) }
 }
 
 export async function saveScheduledTask(
@@ -67,7 +51,7 @@ export async function saveScheduledTask(
     if (isCurrent()) await reload()
     return
   }
-  const draft = createDraft(value, runtime.mode === "live" ? projectId : undefined)
+  const draft = createDraft(value, runtime.mode === "controlled" ? undefined : projectId)
   if (runtime.mode === "preview") {
     await runtime.handlers.onSave?.(draft)
     await insertPreviewTask(draft)

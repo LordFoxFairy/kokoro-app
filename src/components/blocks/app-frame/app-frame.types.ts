@@ -39,6 +39,7 @@ export type ProjectInstructionRevision = {
 };
 
 export type ProjectScheduledTaskInput = {
+  triggerKind: "calendar";
   title: string;
   prompt: string;
   frequency: string;
@@ -115,6 +116,7 @@ export type EmptyStateProps = {
    */
   projectReadBoundary?: ProjectReadBoundary;
   projectInstructionContext?: object;
+  canWriteProject?: () => boolean;
   projectHistoryStatus?: "blocked" | "loading" | "ready" | "error";
   projectHistoryRetryable?: boolean;
   projectDetail?: ProjectReadState<Project>;

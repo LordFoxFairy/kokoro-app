@@ -12,7 +12,7 @@ import { ScheduledTaskSurface } from "@/features/scheduled-tasks";
 import { LocaleProvider } from "@/i18n/context";
 
 const storageKey = "kokoro.preview.scheduled-tasks";
-const storedTask = {
+const storedTask = { triggerKind: "calendar" as const,
   id: "scheduled_preview_1",
   title: "Stored task",
   prompt: "Run it",
@@ -165,3 +165,86 @@ it("keeps the selected weekday through preview storage and a later prompt-only e
   await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   expect(JSON.parse(window.localStorage.getItem(storageKey)!)[0]).toMatchObject({ weekdays: first.weekdays, prompt: "Changed preview only" });
 });
+
+it("I6 does not adopt kindless legacy cache or manufacture RSS poll facts", async () => {
+  window.localStorage.setItem("kokoro.locale", "en")
+  window.localStorage.setItem(storageKey, JSON.stringify([{ id: "legacy", title: "Legacy", frequency: "daily", time: "08:00" }]))
+  const fetcher = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("No feed IO in preview"))
+  render(<LocaleProvider><ScheduledTaskSurface mode="preview" /></LocaleProvider>)
+  expect(screen.queryByText("Legacy")).toBeNull()
+  expect(window.localStorage.getItem(storageKey)).toContain("legacy")
+  fireEvent.click(screen.getByRole("button", { name: "Create trigger" }))
+  fireEvent.click(screen.getByRole("button", { name: "Triggers" }))
+  fireEvent.change(screen.getByRole("textbox", { name: "Unread email summary" }), { target: { value: "Preview feed" } })
+  fireEvent.change(screen.getByRole("textbox", { name: "RSS feed URL" }), { target: { value: "https://news.example.com/feed" } })
+  fireEvent.change(screen.getByRole("textbox", { name: "Summarize unread email and highlight important messages" }), { target: { value: "Summarize" } })
+  fireEvent.click(screen.getByRole("button", { name: "Create automation" }))
+  await screen.findByText("Preview feed")
+  const rows = JSON.parse(window.localStorage.getItem(storageKey) ?? "[]")
+  expect(rows).toHaveLength(1)
+  expect(rows[0]).toMatchObject({ triggerKind: "rss", nextRun: null, conditions: [] })
+  expect(rows[0]).not.toHaveProperty("feedState")
+  expect(rows[0]).not.toHaveProperty("schedulingState")
+  expect(rows[0]).not.toHaveProperty("nextCheckAt")
+  expect(fetcher).not.toHaveBeenCalled()
+})
+
+it.each([
+  ["script URL", { feedUrl: "javascript:invalid" }],
+  ["HTTP URL", { feedUrl: "http://news.example.com/feed" }],
+  ["credential URL", { feedUrl: "https://user@news.example.com/feed" }],
+  ["private hostname", { feedUrl: "https://feed.local/feed" }],
+  ["IP address", { feedUrl: "https://127.0.0.1/feed" }],
+  ["URL fragment", { feedUrl: "https://news.example.com/feed#part" }],
+  ["unknown feed state", { feedState: "not-a-feed-state" }],
+  ["non-string feed state", { feedState: 1 }],
+  ["invalid last check", { lastCheckedAt: "not-a-time" }],
+  ["non-UTC next check", { nextCheckAt: "2026-10-23T10:00:00+08:00" }],
+  ["non-string next check", { nextCheckAt: 1 }],
+  ["unknown scheduling state", { schedulingState: "not-a-state" }],
+  ["unknown error code", { errorCode: "not-an-owner-code" }],
+  ["non-string error code", { errorCode: 1 }],
+] as const)("I6 guard drops malformed RSS %s without clearing the cache or reading a feed", async (name, extra) => {
+  const { isScheduledTaskRecord } = await import("@/features/scheduled-tasks")
+  const row = { id: "rss-invalid", title: "Invalid stored feed", triggerKind: "rss", feedUrl: "https://news.example.com/feed", conditions: [], nextRun: null, ...extra }
+  expect(isScheduledTaskRecord(row), name).toBe(false)
+  const serialized = JSON.stringify([row])
+  window.localStorage.setItem(storageKey, serialized)
+  const fetcher = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("No feed IO in preview"))
+  render(<LocaleProvider><ScheduledTaskSurface mode="preview" /></LocaleProvider>)
+  expect(screen.queryByText("Invalid stored feed")).toBeNull()
+  expect(window.localStorage.getItem(storageKey)).toBe(serialized)
+  expect(fetcher).not.toHaveBeenCalled()
+})
+
+it("I6 guard accepts RSS preview definitions and closed controlled feed facts", async () => {
+  const { isScheduledTaskRecord } = await import("@/features/scheduled-tasks")
+  const row = { id: "rss-valid", title: "Valid stored feed", triggerKind: "rss", feedUrl: "https://news.example.com/feed", conditions: [[{ field: "title", operator: "contains", value: "发布" }]], nextRun: null }
+  expect(isScheduledTaskRecord(row)).toBe(true)
+  for (const feedState of ["initializing", "active", "backoff", "limit_reached"]) {
+    for (const schedulingState of ["pending", "active", "paused", "exhausted", "failed"]) {
+      expect(isScheduledTaskRecord({ ...row, feedState, schedulingState, lastCheckedAt: "2026-10-23T02:00:00.123456Z", nextCheckAt: null, errorCode: null })).toBe(true)
+    }
+  }
+  expect(isScheduledTaskRecord({ ...row, lastCheckedAt: null, nextCheckAt: "2026-10-23T02:01:00Z", errorCode: "rss_feed_timeout" })).toBe(true)
+  window.localStorage.setItem(storageKey, JSON.stringify([row]))
+  render(<LocaleProvider><ScheduledTaskSurface mode="preview" /></LocaleProvider>)
+  expect(screen.getByText("Valid stored feed")).toBeVisible()
+})
+
+it.each([
+  ["status", { status: ["active"] }],
+  ["condition field", { conditions: [[{ field: ["title"], operator: "contains", value: "release" }]] }],
+  ["condition operator", { conditions: [[{ field: "title", operator: ["contains"], value: "release" }]] }],
+] as const)("I6 JSON arrays cannot stand in for the RSS %s enum", async (name, extra) => {
+  const { isScheduledTaskRecord } = await import("@/features/scheduled-tasks")
+  const row = JSON.parse(JSON.stringify({ id: "rss-array", title: "Invalid array enum", triggerKind: "rss", feedUrl: "https://news.example.com/feed", conditions: [], nextRun: null, ...extra }))
+  expect(isScheduledTaskRecord(row), name).toBe(false)
+  const serialized = JSON.stringify([row])
+  window.localStorage.setItem(storageKey, serialized)
+  const fetcher = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("No feed IO in preview"))
+  render(<LocaleProvider><ScheduledTaskSurface mode="preview" /></LocaleProvider>)
+  expect(screen.queryByText("Invalid array enum")).toBeNull()
+  expect(window.localStorage.getItem(storageKey)).toBe(serialized)
+  expect(fetcher).not.toHaveBeenCalled()
+})

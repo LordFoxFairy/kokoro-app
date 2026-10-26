@@ -1,3 +1,173 @@
+## I6：RSS 自动化消费者目标设计（2026-10-23，消费者本地实现，待 Root 集成验收）
+
+当前 Web 已从正式 BFF 提交 8395b44cbcccef7958604a4dd85c301f68f5f46e 固定完整 Public20.0.0 / 168 operations，原文 SHA256 6574930b3a893a208596e6f27c2f9e09122e759d111a7fdbf2d54c294efc0e8f。现 scheduled feature 已接入显式 calendar/RSS 定义、内联条件表单与读取投影；六个原 generator 正规 write/check，独立 connector profile 只 check，业务保持。完整 20→19.3 inverse 后继续原历史链。BFF 的独立 SQL 验证不替代运行时与 Web 验收，Agent disabled 也不是执行成功证据。
+
+Owner 仍是 Web 的 scheduled-tasks feature，BFF 持有 ScheduledTask、feed 状态及运行 metadata，Scheduler/Agent 分别持有调度与执行事实。采用扩展现 feature、同源入口、客户端、source/editor/submission 与 pending-create；淘汰新 EventAutomation 模块、第二客户端/store 和新 API 路由，原因是它们会复制同一资源、权限、幂等恢复和退休边界。Web 不读取外部 feed、不拥有 poll/seen/dispatch 数据或新的持久化。
+
+| 放置 | 本片实施职责 |
+| --- | --- |
+| src/contract/scheduled.ts；src/features/scheduled-tasks/model/scheduled-task.ts | 现 wire 与内部模型增加 required calendar/RSS 互斥分支，区分定义 ACK 与权威 Details；不缺省 calendar 或伪造 daily |
+| src/features/scheduled-tasks/api/scheduled-task-client.ts；ui/scheduled-task-operations.ts | 原创建/更新/读取和 snake_case 映射接线；原 key/body 恢复，条件组逐组逐条深复制；不新增网络客户端 |
+| ui/scheduled-task-editor-state.ts、scheduled-task-editor-fields.tsx、use-scheduled-task-editor-submission.ts | 原表单生命周期承接两类输入、公共字段、校验及到期转换；同 scope 只挂一个提交 hook，Dialog 与 inline 不并持请求 |
+| ui/scheduled-task-rss-fields.tsx（唯一新增普通源码） | 订阅源 URL 与有界 OR-of-AND 条件编辑；放在现 scheduled-tasks/ui，比塞入 calendar 字段或新 triggers 子模块更符合独立表单变化原因，无新目录/框架 |
+| ui/scheduled-task-automation-workflow.tsx、scheduled-task-empty-state.tsx | 既有首页 workflow 增加 RSS 选择，仍保 calendar 创建、原建议与项目 scope；高级自动化及其他未有契约的触发方式保留明确禁用原因 |
+| ui/scheduled-task-list.tsx、use-scheduled-task-calendar.ts；ui/preview-task-store.ts | 列表消费真实 feed 状态；日历只采用 calendar；preview/controlled 显式 kind、零外部 feed IO，不合成初始化/运行事实 |
+| src/contract/scheduled-task-runs.ts；model/scheduled-task-run.ts；api/scheduled-task-runs-client.ts；ui/scheduled-task-run-updates.tsx | 原运行 reader 映射 kind 与实际时间，保持 owner 页序、严格 cursor 与既有读取生命周期；不公开内部逻辑排序键 |
+| 现 scheduled-task-editor.module.css、scheduled-task-surface.module.css 与 src/i18n 九字典 | 仅相邻表单/条件组响应式与完整文案，沿语义 token、320px 和键盘焦点，不修改共享组件 |
+
+表内 ui/model/api 路径均位于 src/features/scheduled-tasks；具体写集和旧 fixture 迁移沿已批准正式实施卡。本节不授权新增其他 schema/model helper。运行时 schema 与推导类型沿现 contract 共置，纯 view 值沿现 model，不为每个分支建立一套重复 DTO。现 src/app/api/scheduled-tasks/[[...path]]/route.ts 已承接 CRUD 和单项 GET；以现边界转发，不因 RSS 新建入口。list 与 detail 均为权威 ScheduledTaskDetails，默认复用现一次 list GET，不增加每行 detail N+1；mutation ACK 是单独的定义投影，不能合成当前 feed 状态。
+
+创建必须给完整 trigger_kind 分支；PATCH 只有公共字段时可独立变更，涉及任一触发字段必须给完整且排他的分支。calendar 保原四频率/时间/IANA timezone/选择器；RSS 只有 feed_url/conditions，不发送 calendar 残留字段。首页 calendar 10:00、原 Dialog 08:00、名称必填、审批只读不可用与真实 project_id 归属均保持。RSS 控件只提供已发行的 7 字段/10 运算符，组内且、组间或，最多 8 组、每组 16 条；日期、附件、正则等未支持项若展示须禁用并说明，不能假称保存或执行。
+
+RSS expires_at 是公共 UTC instant。表单挂载时冻结 browser IANA timezone 并可见展示，仅用于本地日期输入；不把它写成 RSS timezone。编辑时未改变到期勾选和显示日期，保留原 expires_at 的精确 instant；用户改变日期才换算，明确取消发送 null。calendar 继续原 timezone/到期语义。preview/controlled 的已知源码 fixture 与调用方显式带 calendar kind；网络和本地 preview parser 不按缺字段推断 kind，不新 storage key、不主动清 localStorage，旧无 kind 缓存按原 strict invalid 规则不采用，保留这项 cutover 限制。
+
+同一现客户端持有待确认意图，unknown 冻结完整 branch、URL、每组每条条件、公共字段与原 key；关闭重开仍显式恢复原 body/key，不因编辑器重新挂载而换身份。每个 await 后和下一次 IO/导航/回焦前检查当前 client、主体、准入、generation、项目及 scope；退出、切换或卸载永久退休旧消费资格，A→B→A 不复活迟到结果。不额外自动 poll、写重试或绕过原创建恢复。
+
+列表中的 RSS next_run_at 必须为 null，feed_state/last_checked_at/next_check_at/error_code 只来自已校验的权威 list/detail GET；ACK、preview、客户端时钟不能补造。RSS 不进入日历，next_check_at 仅是下次读取计划，不是任务执行时间。运行记录按 kind 显示 calendar 的计划时间或 RSS 的 observed_at 发现时间，不从 publisher 日期或内部逻辑顺序推导时间、执行摘要、产物链接或成功。
+
+现 cursor 的结构、tenant/subject/task/limit 绑定及 orderKey/dispatchId 严格向后防重复保持。RSS 的公开 observed_at 不等于内部 logical orderKey，不能替换现 scheduled_for 尾键校验；当前保留可观测 calendar 时间关系校验，并对 RSS 页沿 owner 顺序及 opaque cursor 前进验证，不新增 wire 排序字段或用发现时间重新排序。公开 RSS 行没有 dispatch_id，不能用 run_id 冒充该尾键。
+
+已从正式 committed blob 固定完整 Public20 原文，按现六个 generator 正规 write/check 刷新出处，保留旧 19.3 原文 inverse 和业务负控。入口为 scripts/generate-bff-{team-client,shared-tasks-client,account-profile-client,account-sessions-client,archived-tasks-client,agent-failure}.mjs；独立 connector-command-errors 仅运行原 check，不升级 d176/profile1.0；scheduled 手写 contract 不新增生成框架，独立 connector profile 与 Skills/MCP 业务不得混改。
+
+真实 Surface/client 行为 RED 后，限定回归已覆盖 RSS 创建/编辑、完整与交叉分支、UTF8 条件边界、到期精确保留、unknown 深复制恢复、权威读与 ACK 区别、日历排除及运行 cursor，并通过相关旧 calendar/身份回归。已执行 contract、architecture、具名 ESLint 和直接 tsc；完整 lint/typecheck/test/build/e2e、正常同源 HTTP/CUA 的 RSS 保存/读取及 1280/320 键盘和几何仍由 Root 在冻结后验收。真实 poll/派发与模型执行由 owner 的独立门证明。原 full auth 失败、Billing 历史记录与未完成能力保留，不据本节宣称全目标完成或可合并。
+
+## I5：本人积分账户隐藏初始化（2026-10-22，消费者实现候选，待 Root 集成验收）
+
+当前 Web 已从正式 BFF 提交9fac77d25b4585d916b84c669a720e4c2ba62bb0固定 Public19.3.0 / 168 operations，canonical SHA256 bf1b8809173fcbbabb1d3c4c1994f55763e552b9d3b46b3c577ef10ee7291423，并经现六窄generator正规write/check。Billing正式158579f8fdeb62ba5064365260942b62a195a4bb仍是自然幂等本人初始化的唯一账户owner，固定4.0.0-experimental.3 / SHA256 f934d6f81842fafaec2e3e64cca6bd4669f86601979bd737941a5695506814fe。当前为实现候选：传输与界面定向验证已通过，Root正常环境及完整工程门仍待验。
+
+产品在两个正式积分入口隐藏初始化，不提供开户CTA，不展示乐观零余额、Free、每日赠送或充值承诺。Browser → Web同源adapter → BFF → Billing方向保持；Billing是账户、审计与余额唯一owner，Web不访问内部owner/数据库或新增持久化。现AccountCard资料CAS、设备、退出、AppGate、登录回调与全站加载不增加命令。
+
+比较将初始化藏进summary和全局登录，两者分别破坏GET只读语义与扩大写入面；采用积分入口局部触发。比较generic转发与现catch-all中的精确分流，采用后者加具名窄adapter，复用现productBffConfig、admittedProductSession、productBffHeaders与HttpOnly session，不复制平行配置/身份store，不建新目录或通用命令框架。
+
+| 放置 | 当前唯一职责 |
+| --- | --- |
+| src/contract/billing-credit-account.ts（新） | 此操作path、空body和严格闭集结果/错误；200复用既有summary schema，不复制金额类型 |
+| src/lib/server/billing-credit-account.ts（新） | 精确同源入口、raw input、15秒绝对预算、首末session六字段、有界上游EOF与取消 |
+| src/app/api/session/[...path]/route.ts | await params前分流此资源候选，非PUT返回405/Allow: PUT，原generic与summary/ledger不变 |
+| src/billing/client.ts | required initializeCreditAccount及独立20秒command transport；原getJson/summary/ledger完全只读，无optional/fallback成功 |
+| src/ui/billing/use-credit-account-initialization.ts（新） | 两入口共用窄意图/阶段/退休，只记已派发与待确认，不缓存余额或凭据 |
+| src/ui/billing/billing-panel.tsx | 初始化与现独立summary/ledger状态组合，保留错误、筛选和分页 |
+| src/ui/settings/sections/account-credit-summary.tsx | 正式账户卡共用意图；ready仍仅summary初读，实际初始化转换期才summary+ledger权威后读 |
+| src/dev/preview-clients.ts、具名测试替身及现九语言 | required方法明确不可用拒绝/spy，preview不调用；仅必要状态文案，不合成成功 |
+
+正式readBoundary须admitted=true、非空subject、非负safe integer generation才允许读取；preview/未准入/非法scope零网络。用量页保留并行summary+ledger初读，两者settled且均strict missing才初始化；混合ready/错误不写。账户卡仅summary初读，其strict missing进入相同意图；已有ready或disabled账户不PUT。普通404、坏meta及依赖错误不当作缺账户。
+
+同一document稳定BillingClient与可信subject保存窄派发标记；每个view持完整scope/epoch和取消资格。同scope参与者共享单一命令，退订只退休自身回调，最后参与者离开或失准入则取消并保留已派发待确认标记。StrictMode、tab切换、关闭重开和同主体新generation不能清除该事实；不同代际不复用旧成功/回调，A→B→A只新读。每个await后及下一次IO前核current，旧结果不得发布、回焦或追加请求。
+
+首次意图最多一次PUT {}且无key。ACK仅确认，不直接展示其余额或空流水；当前scope另发summary+ledger完整GET，账户卡只消费summary展示。后读一方ready另一方错仍沿现独立状态，不假称账本完整，也不再PUT。网络/503/超时/断线/取消可能已经提交，进入待确认；显式恢复只读取当前summary+ledger，404仍不自动PUT。typed disabled明确拒绝且不循环。没有后台poll或自动写重试；硬刷新/多窗口的全局exactly-once最终依赖owner自然幂等，不由UI伪保证。
+
+Web15秒从入口覆盖params、真正正文EOF、首次session、BFF fetch/完整EOF和最终六字段一致性/未过期；browser20秒含完整响应与验证，BFF自身10秒不重新计时。非合作await受同一deadline race，取消不宣称回滚owner事务。精确input/Origin/headers与cache规则见API_CONTRACT；不改原GET10秒transport或全局Proxy。
+
+旧Billing草稿全文/SHA与原失败已归档，按批准仅迁移隐藏触发时机；原PUT{}无key、精确5请求、实际非零summary/held与流水、大数和安全oracle保持。真实组件行为RED由Root独立复现14FAIL/114PASS；新传输风险从实际catch-all行为RED转为通过，三份积分界面测试当前132PASS。原getJson、summary/ledger读取实现与其他业务保持；尚不称全仓通过或可合并。
+
+## I4-M2：已提交运行记录消费者设计（2026-10-21，实施前）
+
+Owner仍为Web scheduled-tasks feature。生产者为BFF ef2ddca2773a28bf5e210fa2e8912a0fbbee0116，Public19.2.0/167，全文SHA256 ef56014105cc187bd86da74eb5ba6eef5f54aacb934e2f86e007c98719ff02f6。本片实现按次运行metadata，不能代表摘要、产物、立即运行、逐次审批、RSS/Webhook或高级自动化已完成。
+
+| 放置 | 单一职责与取舍 |
+| --- | --- |
+| src/contract/scheduled-task-runs.ts | 固定artifact的闭集wire/错误/时间/游标验证；复用现raw JSON重复键解析，不创建第二机器契约或通用parser |
+| src/lib/server/scheduled-task-runs.ts | 专用同源GET、10秒唯一总预算、首末Product session和有界完整EOF；不扩旧CRUD generic proxy |
+| src/app/api/scheduled-task-runs/route.ts | Next文件约定必需的单文件路由，只导出具名adapter；避免占用旧scheduled-tasks/{id}身份 |
+| src/features/scheduled-tasks/model/scheduled-task-run.ts | browser内部camelCase只读模型与client签名，不存第二运行事实 |
+| src/features/scheduled-tasks/api/scheduled-task-runs-client.ts | 15秒单次同源GET、取消/严格响应、wire到view映射；不改变旧CRUD命令/未知恢复 |
+| src/features/scheduled-tasks/ui/use-scheduled-task-runs.ts | 当前scope的页/筛选/取消/退休；无后台轮询、自动重试或历史缓存 |
+| src/features/scheduled-tasks/ui/scheduled-task-run-updates.tsx | 按显示时区日期分组的真实运行记录、状态/空/错/刷新/翻页；无假会话链接或输出 |
+
+不放在日历task Record嵌入全部history、不建顶层automation模块/数据库/第二引擎。既有Surface组合新hook，location保留calendar/list并增updates；三个可键盘访问的视图控件提升到现共用呈现位置，移除旧List重复控件，空态和读取失败也保留切换。现编辑/创建/日历/项目范围与插件入口行为保持。runtime有完整真实client才有运行读取能力；controlled/preview不合成run，显示不可用说明且零网络。
+
+正式全局updates单次查询，不按任务N+1拼feed。项目scope先选择当前displayedTasks中的任务，再使用同一operation的task_id；不先扫全局后过滤制造项目空态。任务选择只内存，不新增URL授权字段，context/subject/准入/代际/client变化永久退休。selected task离开当前可读列表或源读取失败时清除记录并停止继续IO。若任务定义在别处变化，当前读取只证明该次owner资格，不承诺跨请求原子撤权。
+
+翻页替换当前页，不累积旧页；下一页只消费owner cursor，一次用户操作一请求，刷新回第一页；没有自动补满。schema/HTTP/取消/资格错误都立即清除本次查询旧记录。按钮busy同步single-flight，晚promise/EOF不能写新scope，A→B→A不可复活。退出updates或卸载即abort；身份短暂失准入同样撤销旧读。现任务删除/项目scope变动不得继续展示旧run。
+
+先保留实际Surface行为RED，由Root复现后才实施。新增浏览器、真实route export和strict协议测试覆盖一总预算/非合作读取/首末session、七状态与错shape/字节、全局与单任务、翻页、清旧数据与作用域；生成/架构/lint/type/build及正常登录CUA分层记录。BFF源码/Schema不变，Web无Git权限。
+
+## I3：固定项目资源下载消费者（2026-10-21，本地实现）
+
+唯一 owner artifact 为已提交 BFF f59d4ab1dc263e554365f4bf028f66c8c3cbdc3e 的 Public19.1.0/166，canonical SHA256 ac649109f7b394ab894d17352c5f9f106e24e1cbf94e74672569333190adfab5。逐字 vendor 后正规执行六个现窄 generator；只有 agent-failure provenance 三字段变化，其余生成源码不变，独立 connector-command-errors profile 与 Skills/MCP 业务保持。完整旧19.0及两个历史父版本继续做原文逆证，不消费19.2工作树。
+
+比较把字节传输塞入列表或 Workspace 与按现责任分离，采用四个具名相邻文件，不建通用框架：contract/project-resource-download.ts 为纯消费规则，lib/server/project-resource-download.ts 为同源 adapter，features/app/project-resource-download.ts 为单次浏览器传输，use-project-resource-download.ts 为 Dialog 当前下载意图。列表已经保留的可信大小/MIME/SHA 不重写；Workspace 只传精确项目、readBoundary 和现删除资格，Dialog 组合本地意图与状态，直挂未传入准入上下文时下载禁用。
+
+Hub 在 generic JSON 前识别项目 content 候选（包括须拒绝的结构编码别名），向新 server 窄注入原 safeDownloadHeaders。单一30秒绝对截止点覆盖 params、请求真实EOF、首次 session、上游完整EOF及最终六字段 session 一致性；不合作 await 由中断竞赛约束，取消不等待 cancel Promise。原个人/Artifact规则不变。实际Proxy回归暴露最终Referrer-Policy覆盖，故仅在现binary GET无query分支追加精确项目content路径，选择器只能是标准组件编码；原个人/Artifact判断不改。
+
+浏览器单次40秒预算包含 fetch、实际EOF、1MiB/声明长度、可信文件名/MIME和SHA校验，禁redirect且不提供业务凭据。全部通过后当前意图才创建objectURL并触发attachment，结束即回收，仅报告已发起下载，不宣称文件落盘。重复点击合并同一pending；取消、显式重试、关闭、项目/主体/准入/代际/删除资格及卸载均退休旧attempt，A→B→A不复活。预览和未准入操作禁用有原因。具体本地门与正常OAuth浏览器尚待项见CURRENT。
+
+## I1：首页自动化内联创建（2026-10-20，本切片验收通过）
+
+实际参考流程是概览“开始体验”进入首页“自动化工作流”，选择启动方式后内联定时创建；切片 D 仅提供三卡，本轮补齐该定时流程，触发器/高级仍禁用。采用 `/app?workflow=automation`，项目沿现 `project_id` 精确解析；同 path query、原生站内导航和 popstate 由现 scheduled location 订阅投影，不能仅依 pathname。比较后不采用 `/app/scheduled?create=inline`（仍是管理页），也不扩通用聊天 CreationIntent（会扩大误发聊天边界）。普通首页、管理列表/日历、原编辑弹窗与三建议预填继续可用。
+
+唯一生命周期仍归 scheduled-tasks feature：现 Surface/location 挂载一个创建视图，具名新 `ui/scheduled-task-automation-workflow.tsx` 只承载启动方式和内联表单；复用原 editor、submission、client 与 pending-create，不新增 store/client/API。内联表单与管理 Dialog 不同时持有提交 hook；首页表单默认 10:00，原 Dialog 默认值不变。名称仍必填，频率/时间单行、提示词与锚定设置 Popover 用局部 token CSS，320 下内容与末端动作可滚达。
+
+设置仅对现持久字段提供控件：四频率及选择器、时区、到期、审批（需要批准反向映射 auto_approve）、当前项目范围。Agent、连接器、独立任务模式、云电脑、本地文件夹无字段，禁用且说明具体原因，不画成已配置或承诺保存。触发器/高级仍无 owner，不发请求。unknown 保留原 key/body，离开后显式恢复；scope/subject/admission/generation 退休旧表单与晚结果，但不能清掉原客户端同主体 pending 意图。创建 ACK 的 next_run_at 可为 null，当前 GET 才是调度事实。
+
+Root 独立复跑阶段一行为测试为 15 FAIL / 1 PASS，已放行并实现现 AppSurface、feature index、Surface/location/empty-state、editor-fields/options/state/submission、相邻两 CSS、一个具名 UI 文件及九语言；types 无需修改。现 location 订阅同时投影首页 workflow query，沿原始 project_id 参数保留无效范围，表单按主体、准入、代际、项目与 transport/handler 退休。五个阶段一测试的业务断言和旧全文前缀保持；仅新增 admission mock 泛型对齐真实 fetch 类型，客户端、协议、通用 Composer、F3 与 Billing 草稿未改。
+
+Root 最终独立 architecture 50 PASS、相关 scheduled/AppSurface/rail 380 PASS、完整 lint 通过，未变 contract 保留 310 PASS；mock 单行复核后 admission 9 PASS、typecheck-v2 和 production build 通过。预览实际 1280/320 明暗 4 PASS，CUA 确认选择器、表单、设置与 Escape 回焦；正常 OAuth 唯一旅程恰好一次 POST ACK200，当前 GET active/精确下一次时间与刷新可见均通过，零 Chat 业务写。ACK 的 next_run_at=null 与当前 GET 调度事实保持分离；证据文件名及精确结果见 CURRENT。
+
+Root 首轮工程门发现标题焦点被移除、作用域组件超过函数预算，原 48 PASS / 2 FAIL 及后续 mock 类型失败记录保留。当前标题使用语义 ring，原文件的 `ScheduledTaskManagementView` 只负责管理列表/日历与 Dialog 呈现；所有 hook 仍由原 Scoped 容器按原顺序拥有，首页与 Dialog 提交生命周期不变，未定义样式引用已移除。独立源码与差异审查没有阻断，但指定 hix-code-review 门仍缺失；本切片通过不代表全仓 GREEN、可合并或事件/高级及项目下载等整个目标已完成。
+
+## F3：删除浏览器缓存策略与实际 Proxy 对齐（2026-10-20，本地实现待 Root 验收）
+
+正常 Web 实际 DELETE 已返回 202，固定 GET 返回 pending/pending，但最终 Proxy 的精确三指令 Cache-Control 被旧删除浏览器两指令校验误拒。Root 独立复现真实 `proxy(NextRequest)` → deleteProject/getProjectDeletion 两例 invalid_headers 后，现仅将 `contract/project-deletion.ts` 浏览器常量对齐既有 Proxy 和相邻 rename 的 `private, no-store, max-age=0`，并同步合法 fixture；不改全局 Proxy、不新增缓存抽象、不接受包含匹配，owner 仍精确 no-store。原两种响应的真实 Proxy 回归保留，另验证浏览器旧两指令、裸 no-store、缺失及其他值均拒绝，owner 两指令和三指令均拒绝。JSON、请求身份、状态矩阵和 10 秒边界不变；本地实现待 Root 工程门与新自有空项目 UI 验收，既有已受理 G2 项目不重复 DELETE。
+
+## 项目删除 F2：本地实现候选（2026-10-20）
+
+Root 独立语义 RED 后已实现既定 14 源码与九语言，固定 F1 四源/两测试及四 F2 测试未改。新 `use-app-frame-project-deletion.ts` 只持有当前路由的冻结 target/key、恢复状态与取消控制；新 `workspace-header-project-deletion.tsx` 在稳定 Header 中呈现确认、未知结果、显式恢复和逻辑/物理进度，初始聚焦取消。普通列表 revision/unavailable 不改变意图；真实主体、准入、generation、项目、路由和卸载永久退休旧回调。429、503、in_progress 与冲突分别说明，均不自动重试或更换原 key；202 后只固定 GET。
+
+`acceptProjectDeletion` 在 React 提交前同步撤销旧 context/epoch/controller，随后采用新 owner 投影，不维护 ID 黑名单。集合仍由主体拥有，项目切换保留已读取集合与原 rail reader；项目级旧回调独立退休。旧创建 ACK 仅通过当前主体的最新 refresh 更新集合，不恢复旧导航或草稿。详情与历史保留原并行读取，失败投影不复活旧历史。资源 projection/upload 队列按当前 scope 隔离，旧 GET、confirmUpload、分页/重试、晚上传和多文件下一次请求均检查当前资格。真实 submit/Enter、rename、指令、上传与 engine retry/resume/toolDecision 同步检查 context 和 accepted 意图；延迟回焦再检查，cancelRun 不变。
+
+本地相关回归 12 文件 630 PASS；最终错误分类文案后四冻结 UI 文件再验 269 PASS，23 生产文件定向 ESLint 通过。没有启动服务或浏览器，也没有真实 owner DELETE；Root 独审、最终工程门和正常 Web 验收仍待进行。以下测试先行/F1 段落是对应阶段记录。
+
+## 项目删除 F2：意图、可恢复界面与同步退休（2026-10-20，文档与测试阶段记录）
+
+本阶段只写文档和行为测试，F1 四源与两测试完全冻结。Root 已在同输入独跑 F1 与原 create/rename/Hub 共 311 PASS；F1 独审并行，F2 生产仍未授权。沿固定 Public19.0.0 / BFF08a2120 / digest955412b6，不扩 owner、generated、会话协议或持久化。
+
+采用两个具名模块：现 app-frame 同目录新 `use-app-frame-project-deletion.ts` 管单 scope 意图；现 workspace-header 同目录新 `workspace-header-project-deletion.tsx` 只呈现确认、恢复、逻辑进度和焦点。比较后不继续增长 rename hook/菜单、不建全局 registry。现 AppFrame、main-surface、header/session-actions/menu/types 只传具名 control，稳定项目路由 Header 挂载恢复入口，不能依赖项目行存在或详情 ready。新确认仅正式、已准入且当前 ready canonical 项目；preview 及未准入不发送 DELETE。
+
+意图 hook 输入采用具名对象 `{projectRef,projectWorkspace,preview,mounted,boundary,routeKey,current,onAccepted}`，输出 `{available,open,status,problem,snapshot,focusScopeToken,onOpen,onClose,onConfirm,onRetry,onRead}`。首次确认冻结 target 与唯一 key；pending 同步防重。未知 ACK、503/429/in_progress 保原 key，只能显式重发；冲突不能生成新 key。关闭/重开、普通 read revision 或 unavailable 不清意图。202 后进入 accepted，只调用固定 GET；GET 404/网络错误不回 DELETE。logical pending/blocked/released 均明确 physical pending。身份、admission、generation、项目、真实 route 及卸载永久退休；A→B→A 不复活，迟到结果不得刷新、导航或回焦。
+
+`useProjectList.acceptProjectDeletion(id)` 是同步屏障：先失效旧 list/detail/history/rename epoch 与 controller，再触发新 owner 读取；仅 receipt 不能合成 Project，不能永久过滤 ID。context 提供 scope 绑定 `isCurrent()`，旧 context 在接受或真实身份边界变化后立即为 false；普通读取 revision 与删除 intent 身份分开。现 use-app-frame-project / Workspace / useProjectResources 显式接该 context：旧 GET 不发布，旧 refresh/retry/loadMore/confirmUpload 不发新 GET，晚 upload receipt 不触发确认读，多文件循环每个文件调用前检查当前资格。
+
+现 useAppFrameActions 通过 `canWriteProject()` 在真实旧 submitDraft/Enter 闭包触及 newConversation/submit 前再检查；rename、instructions、上传同 guard。该写资格同时依当前 context 与本 scope accepted 意图：新 owner 读取正常采用不等于已受理项目恢复写资格，普通刷新不能清 accepted 或原 key。AppFrame 内 retry、retryResume、stageToolDecision 也在 engine 调用前检查，延迟回焦再检查；cancelRun 保原语义，不因删除盲禁。禁止只靠按钮 disabled 或下一次 effect 退休。
+
+测试放现 tests/ui：新 project-deletion（具名意图；缺模块单列实施缺口）、project-list-deletion（真实读 hook/屏障），仅追加现 app-frame-rail 与 project-resources-live。Root 放行依据包含实际 AppFrame 菜单、真实 actions 与 Workspace/read hook 的行为 RED，不能以新模块缺失/undefined 代替语义证据。本阶段不改生产、locale/E2E 或旧断言，不启动服务/浏览器/资源。
+
+## 项目删除 F1：固定传输边界本地候选（2026-10-20）
+
+当前仍无正式删除界面消费者；本轮已将原 Hub 通用路径的 DELETE body 忽略、删除 Location/request-id 缺验证问题收口到具名 adapter。F1 只建立固定契约、同源 adapter、浏览器单次操作；F2 才接删除意图、确认/恢复界面和旧读取退休屏障。固定 BFF 08a2120ea85b6cad5cf6e839ef14dbf83d908b92 / Public19.0.0，唯一 YAML SHA256 955412b680bf7a2529c4c35f553ff272d7361769ea95bb441ba820b552ffc564，不改 owner、generated、依赖或数据库。Root 独立复跑实际 Hub 77 FAIL / 3 PASS 后，已授权并实现三个具名模块和 Hub 精确分流；F2 未实施，F1 不等于删除闭环完成。
+
+| 职责 | 采用位置与公开面 | 比较后不采用 |
+| --- | --- | --- |
+| 删除 wire | 新 `src/contract/project-deletion.ts`：canonical ID/key、严格 ACK/status、方法对应错误矩阵；匹配函数采用具名只读输入 | 不塞入 rename 或通用 Project schema；两者状态与返回契约不同，不建顶层目录 |
+| 同源适配 | 新 `src/lib/server/project-deletion.ts`；现 Hub 仅在 await params 前按原生 URL 精确分流候选 | 不继续通用透传，不在大 route 内写删除生命周期 |
+| 浏览器操作 | 新 `src/features/app/project-deletion.ts`：`deleteProject(intent, signal)`、`getProjectDeletion(projectId, signal)` 返回校验后的三字段 snapshot | 不放 SessionClient 或通用命令 registry；Project 不是会话 |
+| F2 意图 | 未来 `app-frame/use-app-frame-project-deletion.ts`：冻结 target/key、unknown 显式恢复、202 后只 GET、scope 退休 | 不继续增长项目组合 hook，不建全局状态 |
+| F2 视图 | 未来 `workspace-header/workspace-header-project-deletion.tsx`：确认、恢复、进度和焦点 | 不把删除表单塞进 rename 菜单，不依赖项目行仍存在才挂载 |
+
+F1 复用 productBffConfig/productBffHeaders/currentProductSession、requestWithDomain 以及现 rename 的纯 ID/key/严格 JSON/Retry-After 帮助；生命周期按 session-archive 的绝对截止与完整 session 复查，不机械复制较弱 rename adapter。原生 raw path 先分类，DELETE `/api/hub/projects/{id}`、GET `/api/hub/projects/{id}/deletion` 是唯一有效形状；self、encoded、slug、trailing、任何 query（含裸问号）都严格拒绝，raw 与 decoded params 逐字一致。其他项目读/写与 Skills/MCP 路由不扩变。DELETE 必须零字节直到真实 EOF，GET 无 body/query/key；key 单一 printable ASCII 1..128、不含空白或逗号，不 trim/合并。Origin/Host/协议精确校验，服务端凭据不得透传浏览器伪造身份。
+
+10 秒从入口覆盖 params、请求 EOF、首次 session、owner 响应完整 EOF、最终 session；每次 await 后检查 signal/deadline。超时/取消立即返回，迟到响应只能非阻塞 cancel，cancel Promise 不可拖住预算。六字段 id/generation/subject/access/accessExpiresAt/expiresAt 最终必须完全相等且未过期，允许的 owner 错误同样复查。成功/错误读取有界 bytes、fatal UTF-8、BOM/重复键拒绝、真实 EOF，不要求 Content-Length，也不启用 strictResponseLength:true 硬收紧 200。
+
+测试放现 `tests/app/project-deletion-proxy.test.ts`（实际 Hub exports，partial upstream mock 保留真实 reader）和 `tests/contract/project-deletion.test.ts`（固定发布物与未来 wire/browser）。原实际 Hub 语义 RED 与缺模块日志分别保留；冻结原测试后，F1 两文件 92 PASS，原 create/rename/Hub 三文件 219 PASS，定向 ESLint 通过。candidate 分类对 projects/self/deletion 关键段只安全 decode 一次用于拒绝分流，不把 alias 规范化为合法请求；其他原 Hub 路由完整保留。浏览器 fetch 明确拒绝 redirect、只读固定同源 GET。F2 UI/hook/list/locale/E2E 及全部测试字节保护；Root 最终独审/复跑与集成仍待完成。
+
+## 首页自动化概览（2026-10-20；切片 D，本地候选）
+
+沿现 `/app/scheduled` 无任务分支的 `ScheduledTaskEmptyState` 展示定时任务、触发器、高级自动化 Beta 三卡。定时任务说明时间与频率，使用原创建按钮、editor 和三项建议预填；触发器说明事件触发，高级自动化说明自然语言表达条件与步骤，两类均无可消费的 owner 契约，原生禁用最终入口并关联各自可见原因，不冒充已创建、已连接或执行成功。卡片采用语义 list、h3、现 lucide 与 token，桌面三列、窄屏单列；装饰图不显示账号、资产、回执或执行事实。
+
+位置采用现 `scheduled-task-empty-state.tsx` 与 `scheduled-task-surface.module.css`，卡片仍属于同一空态职责，不建新文件。另建顶层 automation 模块或泛化卡片框架会复制路由、scope 与生命周期，故不采用。只在现九语言增加用途、Beta、入口和禁用原因文案，不修改 source、client、editor、URL、原建议 key、项目范围、准入或命令恢复。无任务时显示概览，有任务时保持原列表/日历。
+
+先在现 React UI 测试追加三卡语义、禁用原因/零调用、三建议原文预填和项目创建回归；writer 与 Root 均独立复现 5 FAIL 后，已沿两源和九 locale 实现。原空态四按钮计数仅迁移为六个（原四入口保留，新增两个禁用入口）；原浏览器 B 空项目检查仅收紧到真正 task-list 的 listitem，并验证三张介绍卡及原任务不在该项目，其余旧断言保持。现 Playwright 追加真实键盘及 1280/320 明暗布局旅程，由 Root 独占运行实例后验。后两类真实服务、项目删除及整体目标仍未完成。
+
+## 首页项目定时任务范围（2026-10-20；切片 E）
+
+现 ScheduledTaskSource 已读取 owner 全量投影，但项目入口未筛选。沿现 scheduled-tasks/ui 实施：source 用同一已解析 creationContext 派生记录，project 精确匹配 record.projectId，personal 无 query 保留全部，invalid 不呈现任务且显式报输入错误。Surface 的实例 key 纳入现无碰撞 context key；同路由项目变化退休旧编辑、确认和读取，tab/view 变化保持原实例。列表、日历与编辑目标共同消费这一个投影，不新增 owner、路由、store 或第二任务链。
+
+位置采用现 source/surface/location/content 与相邻 CSS；新增顶层自动化模块会复制现身份与回执生命周期，故不采用。返回项目仅复用现可靠站内目标解析器，任意精确引用仍可筛选/创建，不猜 canonical 或把 slug 改写成 UUID。项目 query 不构成授权，原身份准入与主体退休保留。旧 durable pending create 仍由原 actor-scoped client 与精确项目 key 拥有，切页不丢原幂等身份，迟到回执不能 reload/关闭或覆盖当前范围。
+
+测试先行覆盖 A/B/无 query、列表/日历/编辑一致、invalid、删除确认/草稿退休、迟到读取和创建、原 PATCH 不写归属与定时建议/创建链。仅该切片已授权，三类自动化概览 D 与项目删除后继未在本片实施。Root 负责独立审查、运行副本与集成工程门；Web writer 不启动浏览器/数据库服务，不提交或推送。
+
+E 审查修正：source 的读取入口先检查当前挂载、准入、代际及 client，再分配请求序号；卸载后的旧 mutation 回执不能重新启动 GET，进行中的结果仍经序号屏障退役。挂载状态随局部 layout effect setup/cleanup 更新，兼容 Strict Mode 的效果重放和合法重新准入。preview 新建把原 creationContext 项目引用传入既有 draft 并写入已有可选 projectId；编辑仅更新原字段，保留原归属。controlled 模式继续原不携带项目归属的回调约定，不扩大 live client 或命令重试语义。
+
 ## 设置视觉与主线能力的集成边界（2026-10-20）
 
 账户保留本版 AccountDetail 内页与标题聚焦/返回；Skills 目录状态继续由主线 Modal 的受控 explore 状态拥有，不在 Panel 重建第二份状态。共享 Header 同时保留主线可访问标题名和账户内页聚焦；Skills/MCP 标题样式沿主线。个性化正式知识继续使用主线稳定 subject key 的 KnowledgePanel 及原 Provider，准入复查不卸载草稿；仅 preview 继续本地禁写知识草稿。其余设置视觉变化不修改知识、连接器或 Skills 的契约和持久化。
@@ -3098,3 +3268,21 @@ Hub update/remove签名显式caller key，删隐式随机key，不留旧签名fa
 新增窄use-private-mcp-authorization窗口消费者：复用现useMcpOAuthPopup，只持等待/非敏感错误状态与actor/client/window/admission围栏，不持凭据、第二份owner事实或授权命令registry。一个窗口一次在途Reconnect，同点击栈预开popup，exact server/connector/CAS来自本代详情；关闭/切目标/准入退休取消等待与popup，晚ACK仅失活原actor投影，不导航、不关闭后开窗口。Begin/Reconnect成功只代表等待授权，不关闭详情或伪造active；callback通知沿现owner projection重新读取，真实ready后才回原主动作。失败不自动重发、不借GET认定提交；用户显式新授权仍由owner CAS与pending/exchange约束裁决。
 
 写区本hook、现projection coordinator/custom detail、既有rail回归及MCP INDEX/CURRENT。原Provider/generic OAuth、URL创建、receipt unknown语义不迁移。先实际缺按钮RED和迟到/关窗围栏，再正常关闭创建→详情重连→AS拒绝→显式重连→成功及断开；自有loopback仅声明读取，无工具/模型/资金调用，原popup presentation与外部服务差异如实保留。
+
+## 项目网站与搜索入口真实性（2026-10-20；切片 H，本地候选）
+
+固定 Public19 尚无项目网站关联或网络搜索 API。正式项目即使声明 websites 展示能力，也只显示可见未接通原因和原生禁用的新增入口，不消费 previewWebsites。ProjectWorkspaceDialogs 同时以 preview 为网站 Dialog 的必要条件，直接传入 open 和演示数据也不能在正式模式呈现或保存。preview 保留现搜索、选择、保存关闭流程，但明确“仅本地演示：搜索、选择和保存不会关联真实网站。”
+
+最小位置为现 kokoro-project-workspace.tsx 的网站状态/数据源及两个搜索入口、project-context-card.tsx 的可选 action disabled/aria-describedby 和 ReactNode description、project-workspace-dialogs.tsx 的网站二次守卫及资源菜单。沿既有组件，不新建模块、能力框架、CSS 或路由。网站临时意图以精确 [preview, projectRef ?? null] 拥有；边界变化清除 open/query/selected/linked。每个边界实例持有局部 owner，跨 A→B→A 也不复用；layout effect setup/cleanup 标记当前实例，旧 setter 和排队回焦均核对 owner。网站 Dialog 的默认关闭回焦由局部受控回焦取代，普通取消/保存仍回原入口，退休时不回旧入口。其他 Dialog、正式文件生命周期及 Skills/MCP 不变。
+
+两个“搜索网络”动作在正式模式均禁用并关联“网络搜索服务尚未接通，暂时无法搜索网络。”；preview 说明“仅筛选本地演示网页资源，不会搜索网络。”。现 web 资源筛选继续可用，文件列表、搜索、上传和原设置导航保持。现 workspace UI 新增 9 例由 writer 与 Root 分别复现 RED 后实施，全部新旧断言保持，相关四文件 140 PASS。九语言仅增加上述用途/边界文案。E2E 后续只用既有 fixture 规划预览演示和 320px 键盘/包含，本轮不写入或启动服务；独立审查与最终工程门由 Root 执行。
+
+### H2：网站选择器窄屏几何补验（本地候选）
+
+Root 正常后台 CUA 已在 320×568 复现网站 Dialog 高 612px、top=-22，标题和关闭按钮越上界、取消越下界；资源 Dialog 正常，H 尚未验收。现共享 projectPickerDialog 也被定时选择器消费，不能直接改该共享规则。最小生产仅在现 project-workspace-dialogs.tsx 网站 Dialog 追加 websitePickerDialog class，及现 project-workspace-dialogs.module.css 的该类局部规则。高度限于原桌面高度与实际 100dvh 减两侧余量的较小值；网格将剩余高度分配给可滚动候选区，标题为关闭留空间，页脚留在自然布局，不改通用 Dialog、资源、定时、Skills/MCP 或状态/协议。
+
+先在现 public-shell.spec.ts 末尾追加行为回归，保留完整旧字节前缀；手设真实 320×568、320×400 与桌面视口，检查标题文字、关闭、原因、搜索、候选区域、取消/保存的实际矩形和滚动可达，保留本地搜索/选择/保存及 Escape 回焦、零业务请求。使用 Root 已运行的 3378，不启动或停止服务，输出仅写外部证据目录。旧 CSS 上记录真实几何 RED，由 Root 独立复跑后才放行两文件生产修正。
+
+writer 测试先行结果为 2 FAIL / 1 PASS（5.6 秒），Root 同输入独立复现 2 FAIL / 1 PASS（5.2 秒）：320×568 的 top=-22、320×400 的 top=-106 均在实际 Dialog 几何断言失败。最小修复后同三例 3 PASS（4.6 秒），两个窄屏分别为 y16–552、y16–384；桌面、标题/关闭分离、候选滚动可达、搜索/选择/保存、Escape/取消回焦与零业务请求均通过。精确 GET /api/admin-access 既有准入读取单独记录；首轮分类误将它算作业务 IO 的原失败日志保留，最终未忽略该路径写入或其他业务请求。所有旧 E2E 与 H 九个 UI 用例保持；Root 最终独审与后台 CUA 尚待收口，不能仅凭本地通过声明 H 已验收。
+
+I4-M2 lifecycle clarification: the existing task source exposes successful client/generation read ownership without changing its frozen-list retention or CRUD behavior. Only run-history presentation remounts for a new client/admission generation. Removed selections remain retired until explicit user selection; they never widen automatically into the global feed. The browser calls its injected native fetch without assigning an arbitrary receiver. Final JSON responses declare exact UTF-8 length, including sanitized errors.

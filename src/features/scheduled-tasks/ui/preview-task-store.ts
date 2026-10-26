@@ -120,54 +120,35 @@ function previewTaskId(tasks: readonly ScheduledTaskRecord[]): string {
   return id
 }
 
+function previewDefinition(draft: ScheduledTaskEditorValue | ScheduledTaskDraft): Omit<Extract<ScheduledTaskRecord, { triggerKind: "calendar" }>, "id"> | Omit<Extract<ScheduledTaskRecord, { triggerKind: "rss" }>, "id"> {
+  const common = { title: draft.title, prompt: draft.prompt, autoApprove: draft.autoApprove,
+    ...(typeof draft.expiresAt === "string" ? { expiresAt: draft.expiresAt } : {}) }
+  if (draft.triggerKind === "rss") return { ...common, triggerKind: "rss", feedUrl: draft.feedUrl, conditions: draft.conditions.map(group => group.map(clause => ({ ...clause }))), nextRun: null }
+  const nextRun = nextPreviewRun(draft.time, draft.frequency, draft.timezone, new Date(), draft)
+  return { ...common, triggerKind: "calendar", frequency: draft.frequency, time: draft.time, timezone: draft.timezone,
+    ...(draft.frequency === "weekly" ? { weekdays: draft.weekdays } : {}),
+    ...(draft.frequency === "monthly" ? { monthDays: draft.monthDays } : {}),
+    ...(draft.frequency === "once" ? { localDate: draft.localDate } : {}), nextRun, schedulingState: nextRun === null ? "exhausted" : "active" }
+}
+
 export function insertPreviewTask(draft: ScheduledTaskDraft): Promise<void> {
   return withPreviewTaskLock(() => {
     const current = readPreviewTasks()
-    const nextRun = nextPreviewRun(draft.time, draft.frequency, draft.timezone, new Date(), draft)
-    const nextTask: ScheduledTaskRecord = {
-      id: previewTaskId(current),
-      title: draft.title,
-      prompt: draft.prompt,
-      frequency: draft.frequency,
-      time: draft.time,
-      timezone: draft.timezone,
-      ...(draft.frequency === "weekly" ? { weekdays: draft.weekdays } : {}),
-      ...(draft.frequency === "monthly" ? { monthDays: draft.monthDays } : {}),
-      ...(draft.frequency === "once" ? { localDate: draft.localDate } : {}),
-      nextRun,
-      schedulingState: nextRun === null ? "exhausted" : "active",
-      autoApprove: draft.autoApprove,
-      enabled: true,
-      ...(draft.expiresAt === undefined ? {} : { expiresAt: draft.expiresAt }),
-    }
+    const nextTask = { ...previewDefinition(draft), id: previewTaskId(current), enabled: true,
+      ...(draft.projectId === undefined ? {} : { projectId: draft.projectId }) }
+    if (!isScheduledTaskRecord(nextTask)) throw new Error("Invalid preview task")
     persistPreviewTasks([nextTask, ...current])
   })
 }
 
 export function replacePreviewTask(taskId: string, draft: ScheduledTaskEditorValue): Promise<void> {
   return withPreviewTaskLock(() => {
-    const next = readPreviewTasks().map((task) => {
+    const next = readPreviewTasks().map(task => {
       if (task.id !== taskId) return task
-      const nextRun = nextPreviewRun(draft.time, draft.frequency, draft.timezone, new Date(), draft)
-      const updated: ScheduledTaskRecord = {
-        ...task,
-        title: draft.title,
-        prompt: draft.prompt,
-        frequency: draft.frequency,
-        time: draft.time,
-        timezone: draft.timezone,
-        ...(draft.frequency === "weekly" && draft.weekdays ? { weekdays: [...draft.weekdays] } : {}),
-        ...(draft.frequency === "monthly" && draft.monthDays ? { monthDays: [...draft.monthDays] } : {}),
-        ...(draft.frequency === "once" && draft.localDate ? { localDate: draft.localDate } : {}),
-        nextRun,
-        schedulingState: nextRun === null ? "exhausted" : task.enabled === false ? "paused" : "active",
-        autoApprove: draft.autoApprove,
-      }
-      if (draft.frequency !== "weekly") delete updated.weekdays
-      if (draft.frequency !== "monthly") delete updated.monthDays
-      if (draft.frequency !== "once") delete updated.localDate
-      if (typeof draft.expiresAt === "string") updated.expiresAt = draft.expiresAt
-      else delete updated.expiresAt
+      const updated = { ...previewDefinition(draft), id: task.id,
+        ...(task.projectId === undefined ? {} : { projectId: task.projectId }),
+        ...(task.enabled === undefined ? {} : { enabled: task.enabled }), ...(task.status === undefined ? {} : { status: task.status }) }
+      if (!isScheduledTaskRecord(updated)) throw new Error("Invalid preview task")
       return updated
     })
     persistPreviewTasks(next)

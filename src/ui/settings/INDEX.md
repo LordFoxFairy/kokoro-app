@@ -1,4 +1,4 @@
-账户积分：`sections/account-credit-summary.tsx` 仅复用稳定 BillingClient 的 summary 读取及严格错误分类、十秒预算和 BigInt 格式化，不读取账本或执行开户/支付；只在已准入且主体与代际有效时加载，切身份、撤准入、卸载或进入登录方式内页即退休。展示真实可用/冻结积分、账户状态与未开户/失败/重试，未知不合成零或套餐，preview 原值不变。
+账户积分：`sections/account-credit-summary.tsx` 对已有账户仍只读稳定BillingClient.summary及BigInt格式化；可信scope严格missing后共用隐藏初始化意图，实际转换期权威重读summary与ledger，仅展示summary真实值。命令ACK不展示、待确认只读恢复，主体/准入/代际/卸载退休，preview原值不变，不推断零余额、套餐或赠款。
 
 帮助中心：`sections/help-section.tsx` 在当前语言的八篇静态指南标题与正文内搜索，四类数量从目录派生，筛选与单项展开只驻留当前页面。复用 Accordion 与原 onSelectSetting 跳转，不请求资料、发送客服消息或保存查询。原账户/分享正文整合入指南，能力范围常驻底部；离页重入清空筛选与展开。
 

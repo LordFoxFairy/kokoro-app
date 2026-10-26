@@ -1,3 +1,5 @@
+import { cloneScheduledTaskDraft } from "../model/scheduled-task"
+import { createScheduledTaskRunsReader } from "./scheduled-task-runs-client"
 import { ZodError } from "zod"
 
 import {
@@ -46,28 +48,23 @@ function describeUnknown(error: unknown): string {
 }
 
 function toRecord(task: ScheduledTaskRecordResponse): ScheduledTaskRecord {
-  const record: ScheduledTaskRecord = {
-    id: task.id,
-    title: task.title,
-    frequency: task.frequency,
-    time: task.time,
-    nextRun: task.next_run_at,
-  }
-  if (task.project_id !== undefined) record.projectId = task.project_id
-  if (task.prompt !== undefined) record.prompt = task.prompt
-  if (task.timezone !== undefined) record.timezone = task.timezone
-  if (task.expires_at !== undefined) record.expiresAt = task.expires_at
-  if (task.auto_approve !== undefined) record.autoApprove = task.auto_approve
-  if (task.enabled !== undefined) record.enabled = task.enabled
-  if (task.status !== undefined) record.status = task.status
-  if (task.weekdays !== undefined) record.weekdays = [...task.weekdays]
-  if (task.month_days !== undefined) record.monthDays = [...task.month_days]
-  if (task.local_date !== undefined) record.localDate = task.local_date
-  return record
+  const common = { id: task.id, title: task.title, prompt: task.prompt, nextRun: task.next_run_at,
+    autoApprove: task.auto_approve, enabled: task.enabled, status: task.status,
+    ...(task.project_id === undefined ? {} : { projectId: task.project_id }),
+    ...(task.expires_at === undefined ? {} : { expiresAt: task.expires_at }) }
+  return task.trigger_kind === "rss"
+    ? { ...common, triggerKind: "rss", feedUrl: task.feed_url, conditions: task.conditions.map(group => group.map(clause => ({ ...clause }))) }
+    : { ...common, triggerKind: "calendar", frequency: task.frequency, time: task.time, timezone: task.timezone,
+      ...(task.weekdays === undefined ? {} : { weekdays: [...task.weekdays] }),
+      ...(task.month_days === undefined ? {} : { monthDays: [...task.month_days] }),
+      ...(task.local_date === undefined ? {} : { localDate: task.local_date }) }
 }
 
 function toDetails(task: ScheduledTaskDetailsResponse): ScheduledTaskRecord {
-  return { ...toRecord(task), schedulingState: task.scheduling_state }
+  const record = toRecord(task)
+  if (task.trigger_kind === "rss" && record.triggerKind === "rss") return { ...record, schedulingState: task.scheduling_state,
+    feedState: task.feed_state, lastCheckedAt: task.last_checked_at, nextCheckAt: task.next_check_at, errorCode: task.error_code }
+  return { ...record, schedulingState: task.scheduling_state }
 }
 
 function parseRequest<T>(parse: () => T): T {
@@ -80,40 +77,24 @@ function parseRequest<T>(parse: () => T): T {
 }
 
 function createBody(draft: ScheduledTaskDraft) {
-  return parseRequest(() =>
-    scheduledTaskCreateRequestSchema.parse({
-      ...(draft.projectId === undefined ? {} : { project_id: draft.projectId }),
-      title: draft.title,
-      prompt: draft.prompt,
-      frequency: draft.frequency,
-      time: draft.time,
-      timezone: draft.timezone,
+  return parseRequest(() => scheduledTaskCreateRequestSchema.parse({
+    ...(draft.projectId === undefined ? {} : { project_id: draft.projectId }), title: draft.title, prompt: draft.prompt,
+    trigger_kind: draft.triggerKind, auto_approve: draft.autoApprove,
+    ...(draft.triggerKind === "rss" ? { feed_url: draft.feedUrl, conditions: draft.conditions } : {
+      frequency: draft.frequency, time: draft.time, timezone: draft.timezone,
       ...(draft.weekdays === undefined ? {} : { weekdays: draft.weekdays }),
       ...(draft.monthDays === undefined ? {} : { month_days: draft.monthDays }),
       ...(draft.localDate === undefined ? {} : { local_date: draft.localDate }),
-      auto_approve: draft.autoApprove,
-      ...(draft.expiresAt === undefined ? {} : { expires_at: draft.expiresAt }),
-    }),
-  )
+    }), ...(draft.expiresAt === undefined ? {} : { expires_at: draft.expiresAt }),
+  }))
 }
 
 function patchBody(patch: ScheduledTaskPatch) {
-  return parseRequest(() =>
-    scheduledTaskPatchRequestSchema.parse({
-      title: patch.title,
-      prompt: patch.prompt,
-      frequency: patch.frequency,
-      time: patch.time,
-      timezone: patch.timezone,
-      weekdays: patch.weekdays,
-      month_days: patch.monthDays,
-      local_date: patch.localDate,
-      expires_at: patch.expiresAt,
-      auto_approve: patch.autoApprove,
-      enabled: patch.enabled,
-      status: patch.status,
-    }),
-  )
+  return parseRequest(() => scheduledTaskPatchRequestSchema.parse(Object.fromEntries(Object.entries({
+    title: patch.title, prompt: patch.prompt, trigger_kind: patch.triggerKind, feed_url: patch.feedUrl, conditions: patch.conditions,
+    frequency: patch.frequency, time: patch.time, timezone: patch.timezone, weekdays: patch.weekdays, month_days: patch.monthDays,
+    local_date: patch.localDate, expires_at: patch.expiresAt, auto_approve: patch.autoApprove, enabled: patch.enabled, status: patch.status,
+  }).filter(([, value]) => value !== undefined))))
 }
 
 function createIdempotencyKey(prefix: string, taskId?: string): string {
@@ -254,15 +235,7 @@ export function pendingScheduledTaskCreate(
   projectId?: string,
 ): ScheduledTaskDraft | undefined {
   const draft = pendingCreates.get(client)?.get(contextKey(projectId))
-  return draft ? cloneDraft(draft) : undefined
-}
-
-function cloneDraft(draft: ScheduledTaskDraft): ScheduledTaskDraft {
-  return {
-    ...draft,
-    ...(draft.weekdays === undefined ? {} : { weekdays: [...draft.weekdays] }),
-    ...(draft.monthDays === undefined ? {} : { monthDays: [...draft.monthDays] }),
-  }
+  return draft ? cloneScheduledTaskDraft(draft) : undefined
 }
 
 async function createTask(
@@ -272,7 +245,7 @@ async function createTask(
   admission: (() => number | null) | undefined,
   input: ScheduledTaskDraft,
 ): Promise<ScheduledTaskRecord> {
-  const draft = cloneDraft(input)
+  const draft = cloneScheduledTaskDraft(input)
   const body = createBody(draft)
   const context = contextKey(draft.projectId)
   const pending = creates.get(context)
@@ -310,6 +283,7 @@ export function createScheduledTaskClient(
   const commandIdentities = new Map<string, CommandIdentity>()
   const creates = new Map<string, ScheduledTaskDraft>()
   const client: ScheduledTaskClient = {
+    listScheduledTaskRuns: createScheduledTaskRunsReader(fetcher, admission),
     listScheduledTasks: async () => {
       const response = await request(
         fetcher,

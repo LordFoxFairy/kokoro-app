@@ -1,3 +1,15 @@
+## I4 审批可用状态（2026-10-21）
+
+九语言仅纠正 firstSite.autoApproveHint，并新增 scheduled.workflowApprovalRuntime，表达自动核准暂不可用、执行沿现有审批规则。旧 autoApprove 值只读保留，不将 false 描述为每次执行必经批准；其余字典值和已验日历文案逐字保护。相关调度和 i18n resolve 验证事实见 CURRENT。
+
+## I4 日历剩余数量（2026-10-21）
+
+九语言新增 scheduled.calendarMoreTasks，仅表示同日前三项之外的准确数量；日期、运行时刻和显示时区沿现 locale/Intl。保留原 scheduled.failed 的调度失败语义和全部旧字典值，不新增 owner 状态或兼容协议。既有 i18n resolve 与完整相关调度回归通过，实际门及浏览器待验边界见根 CURRENT。
+
+## 调度管理状态
+
+九种语言的 `scheduled.failed` 表示调度失败，与 BFF 当前 `scheduling_state` 及任务登记失败事实一致。该状态不表示智能体某次运行的结果；具体运行历史须消费对应 owner 的执行事实。
+
 ## SET40 具体设置项搜索（2026-10-15；D0，先tests-only）
 
 基线Web f82c891965f80eed9ff0c022d3f77b39bdbad42e，939 tracked clean。Computer Use实际Manus：昵称→个性化+昵称、点child切页并保query/结果焦点；通知→通用+浏览器通知；仅菜单名命中只parent；无匹配未找到结果、当前内容不变。现仅菜单过滤且强留selected，窄屏隐藏search，存在明确功能缺口。
