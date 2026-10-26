@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -11,13 +10,10 @@ import type {
 import type { CustomApiProfile } from "@/hub/custom-api.schema";
 import { useT } from "@/i18n/context";
 
-import { McpServerIcon } from "./mcp-server-icon";
 import { McpEmptyConnections } from "./mcp-empty-connections";
-import { providerArtwork } from "./mcp-projection-types";
-import { McpAvailabilityStatus } from "./mcp-availability-status";
 import { McpCustomApiCard } from "./mcp-custom-api-card";
 import styles from "./mcp-projection-read.module.css";
-import galleryStyles from "./mcp-custom-api-gallery.module.css";
+import { McpConnectorCard } from "./mcp-connector-card";
 
 export function McpConnectionList({
   connectors,
@@ -95,57 +91,9 @@ export function McpConnectionList({
             {displayedCustomApis.map((profile) => (
               <McpCustomApiCard key={`custom-api:${profile.profile_id}`} profile={profile} onSelect={onSelectCustomApi} />
             ))}
-            {displayedConnectors.map((connector) => {
-              const provider = providersByKey.get(connector.provider_key);
-              const connectorName =
-                connector.display_name ||
-                provider?.display_name ||
-                t("firstSite.unavailable");
-              const providerName = provider?.display_name;
-              const connectorDescription =
-                connector.description ||
-                (providerName !== connectorName ? providerName : undefined);
-              return (
-                <li
-                  key={connector.connector_id}
-                  className={styles.connectorCard}
-                  data-testid="mcp-projection"
-                >
-                  <button
-                    type="button"
-                    className={styles.connectorTrigger}
-                    onClick={(event) => onEdit(connector, event.currentTarget)}
-                    aria-label={connectorName}
-                  >
-                    <span className={styles.connectorMark} aria-hidden="true">
-                      {provider ? (
-                        <Image
-                          src={providerArtwork(provider)}
-                          alt=""
-                          fill
-                          sizes="2.5rem"
-                          unoptimized
-                        />
-                      ) : connector.server_id ? (
-                        <McpServerIcon serverId={connector.server_id} mediaRevision={serverMediaRevisions?.get(connector.server_id) ?? 0}
-                          fallback={<span className={galleryStyles.initial}>{Array.from(connectorName.trim())[0] ?? ""}</span>} />
-                      ) : (
-                        <span className={galleryStyles.initial}>{Array.from(connectorName.trim())[0] ?? ""}</span>
-                      )}
-                    </span>
-                    <span className={styles.connectorIdentity}>
-                      <span>
-                        <strong>{connectorName}</strong>
-                        {connectorDescription ? (
-                          <small>{connectorDescription}</small>
-                        ) : null}
-                      </span>
-                    </span>
-                    <McpAvailabilityStatus availability={connector.availability} className={styles.status} availableIconClassName={styles.statusCheck} />
-                  </button>
-                </li>
-              );
-            })}
+            {displayedConnectors.map(connector => <McpConnectorCard key={connector.connector_id} connector={connector}
+              provider={providersByKey.get(connector.provider_key)} onSelect={onEdit}
+              mediaRevision={connector.server_id ? serverMediaRevisions?.get(connector.server_id) ?? 0 : 0} />)}
           </ul>
         </>
       )}

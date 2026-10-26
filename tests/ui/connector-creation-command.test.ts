@@ -630,6 +630,76 @@ describe("MCP typed management and Prepare interlock", () => {
   const server = { availability: "unavailable" as const, server_id: "managed-server", display_name: "Edited", server_url: "https://mcp.example.test/", status: "pending" as const, state_version: "2", headers: [], transport: "streamable_http" as const, prepare_status: "pending_prepare" as const, declarations: [], declarations_available: false }
   const client = () => ({ updatePrivateMcpServer: vi.fn().mockResolvedValue({ server, connector, replayed: false }), deletePrivateMcpServer: vi.fn().mockResolvedValue({ server_id: server.server_id, deleted: true, replayed: false }), updateMcpConnector: vi.fn().mockResolvedValue(connector), setMcpConnectorEnabled: vi.fn().mockResolvedValue(connector), removeMcpConnector: vi.fn().mockResolvedValue({ ...connector, status: "revoked", enabled: false }), preparePrivateMcpServer: vi.fn().mockRejectedValue(new Error("unknown prepare")) })
 
+  it("shares only confirmed irreversible deletion locators across finish and readmission, then retires them", async () => {
+    const { createMcpLifecycleCommands } = await import("@/ui/mcp/mcp-management-commands")
+    const hub = client(), flow = createMcpLifecycleCommands({ client: hub, boundary: admitted, onConfirmed: vi.fn() })
+    const original = flow.management.getConfirmedDeletedSnapshot()
+    hub.deletePrivateMcpServer.mockRejectedValueOnce(new Error("lost ACK"))
+    const intent = { operation: "delete_server" as const, connectorId: connector.connector_id, serverId: server.server_id, input: { expected_state_version: "2" } }
+    expect(await flow.management.submit(intent, admitted)).toBe(false)
+    expect(flow.management.getConfirmedDeletedSnapshot()).toBe(original)
+    expect(await flow.management.resume(connector.connector_id, admitted)).toBe(true)
+    const confirmed = flow.management.getConfirmedDeletedSnapshot()
+    expect(confirmed).toEqual([connector.connector_id]); expect(Object.isFrozen(confirmed)).toBe(true)
+    expect(flow.management.finish(connector.connector_id, admitted)).toBe(true)
+    flow.management.bind({ ...admitted, admitted: false, generation: 2 })
+    flow.management.bind({ ...admitted, generation: 3 })
+    expect(flow.management.getConfirmedDeletedSnapshot()).toBe(confirmed)
+    flow.management.bind({ ...admitted, subject: "other-actor" })
+    expect(flow.management.getConfirmedDeletedSnapshot()).toEqual([])
+  })
+
+  it.each([false, true])("a late deletion ACK records a safe locator only while its actor owner lives (retired=%s)", async retired => {
+    const { createMcpLifecycleCommands } = await import("@/ui/mcp/mcp-management-commands")
+    const hub = client(), flow = createMcpLifecycleCommands({ client: hub, boundary: admitted, onConfirmed: vi.fn() })
+    let acknowledge!: (value: { server_id: string; deleted: boolean; replayed: boolean }) => void
+    hub.deletePrivateMcpServer.mockReturnValue(new Promise(resolve => { acknowledge = resolve }))
+    const close = new AbortController()
+    const pending = flow.management.submit({ operation: "delete_server", connectorId: connector.connector_id, serverId: server.server_id, input: { expected_state_version: "2" } }, admitted, close.signal)
+    close.abort()
+    if (retired) flow.management.bind({ ...admitted, subject: "other-actor" })
+    acknowledge({ server_id: server.server_id, deleted: true, replayed: false }); await pending
+    expect(flow.management.getConfirmedDeletedSnapshot()).toEqual(retired ? [] : [connector.connector_id])
+  })
+
+  it("does not turn reversible disconnect or rejected deletion into permanent display suppression", async () => {
+    const { createMcpLifecycleCommands } = await import("@/ui/mcp/mcp-management-commands")
+    const hub = client(), flow = createMcpLifecycleCommands({ client: hub, boundary: admitted, onConfirmed: vi.fn() })
+    expect(await flow.management.submit({ operation: "disconnect", connectorId: connector.connector_id, serverId: server.server_id, input: { expected_state_version: "2" } }, admitted)).toBe(true)
+    expect(flow.management.getConfirmedDeletedSnapshot()).toEqual([])
+    expect(flow.management.finish(connector.connector_id, admitted)).toBe(true)
+    hub.deletePrivateMcpServer.mockRejectedValue(new HubClientError("http", "safe", "invalid_mcp_personal_request", 400, false))
+    expect(await flow.management.submit({ operation: "delete_server", connectorId: connector.connector_id, serverId: server.server_id, input: { expected_state_version: "2" } }, admitted)).toBe(false)
+    expect(flow.management.getConfirmedDeletedSnapshot()).toEqual([])
+  })
+
+  it("shares only exact revoked connector CAS evidence, retaining it over finish but not actor retirement", async () => {
+    const { createMcpLifecycleCommands } = await import("@/ui/mcp/mcp-management-commands")
+    const hub = client(), flow = createMcpLifecycleCommands({ client: hub, boundary: admitted, onConfirmed: vi.fn() })
+    const empty = flow.management.getConfirmedRevokedSnapshot()
+    hub.removeMcpConnector.mockRejectedValueOnce(new Error("lost ACK"))
+    const intent = { operation: "disconnect" as const, connectorId: connector.connector_id, serverId: server.server_id, input: { expected_state_version: "2" } }
+    expect(await flow.management.submit(intent, admitted)).toBe(false)
+    expect(flow.management.getConfirmedRevokedSnapshot()).toBe(empty)
+    expect(await flow.management.resume(connector.connector_id, admitted)).toBe(true)
+    const confirmed = flow.management.getConfirmedRevokedSnapshot()
+    expect(confirmed).toEqual([{ connectorId: connector.connector_id, stateVersion: connector.state_version }])
+    expect(Object.isFrozen(confirmed[0])).toBe(true)
+    expect(flow.management.finish(connector.connector_id, admitted)).toBe(true)
+    flow.management.bind({ ...admitted, generation: 2 })
+    expect(flow.management.getConfirmedRevokedSnapshot()).toBe(confirmed)
+    flow.management.bind({ ...admitted, subject: "other-actor" })
+    expect(flow.management.getConfirmedRevokedSnapshot()).toEqual([])
+  })
+
+  it.each(["wrong-target", "not-revoked"] as const)("does not record %s removal responses as revoked evidence", async outcome => {
+    const { createMcpLifecycleCommands } = await import("@/ui/mcp/mcp-management-commands")
+    const hub = client(), flow = createMcpLifecycleCommands({ client: hub, boundary: admitted, onConfirmed: vi.fn() })
+    hub.removeMcpConnector.mockResolvedValue({ ...connector, ...(outcome === "wrong-target" ? { connector_id: "other-target", status: "revoked" } : {}) })
+    await flow.management.submit({ operation: "disconnect", connectorId: connector.connector_id, serverId: server.server_id, input: { expected_state_version: "2" } }, admitted)
+    expect(flow.management.getConfirmedRevokedSnapshot()).toEqual([])
+  })
+
   it("freezes each of the five original operations and cannot replace it with another edit or new CAS", async () => {
     const { createMcpLifecycleCommands } = await import("@/ui/mcp/mcp-management-commands")
     const intents: import("@/ui/mcp/mcp-management-commands").McpManagementIntent[] = [

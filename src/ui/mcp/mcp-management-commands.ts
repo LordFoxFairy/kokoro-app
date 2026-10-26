@@ -47,6 +47,10 @@ function createManagement(options: { client: Client; preparation: McpPreparation
   let boundary = { ...options.boundary }, leases = 0, retired = false;
   const entries = new Map<string, Entry>(), listeners = new Set<() => void>();
   let snapshot: readonly McpManagementSummary[] = Object.freeze([]);
+  // Safe negative display facts only: never an admission or command authority.
+  const deleted = new Set<string>(), revoked = new Map<string, string>();
+  let deletedSnapshot: readonly string[] = Object.freeze([]);
+  let revokedSnapshot: readonly Readonly<{ connectorId: string; stateVersion: string }>[] = Object.freeze([]);
   const publish = () => {
     snapshot = Object.freeze([...entries.values()].map(entry => {
       const state = entry.command.getSnapshot();
@@ -59,7 +63,7 @@ function createManagement(options: { client: Client; preparation: McpPreparation
     entries.delete(entry.locator.connectorId); entry.unsubscribe();
     entry.command.bind({ ...boundary, subject: null, admitted: false }); entry.release();
   };
-  const retire = () => { retired = true; for (const entry of [...entries.values()]) remove(entry); publish(); };
+  const retire = () => { retired = true; for (const entry of [...entries.values()]) remove(entry); deleted.clear(); revoked.clear(); deletedSnapshot = Object.freeze([]); revokedSnapshot = Object.freeze([]); publish(); };
   const bind = (value: ProjectReadBoundary) => {
     if (retired) return;
     if (value.subject !== actor) { retire(); return; }
@@ -80,6 +84,8 @@ function createManagement(options: { client: Client; preparation: McpPreparation
   };
   return {
     getSnapshot: () => snapshot,
+    getConfirmedDeletedSnapshot: () => deletedSnapshot,
+    getConfirmedRevokedSnapshot: () => revokedSnapshot,
     subscribe: (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; },
     matches, bind,
     isBlocked: (connectorId: string) => { const entry = entries.get(connectorId); return entry !== undefined && entry.command.getSnapshot().kind !== "rejected"; },
@@ -98,6 +104,7 @@ function createManagement(options: { client: Client; preparation: McpPreparation
       if (entry) return Promise.resolve(false);
       // Set only from the frozen input after its exact target ACK is validated.
       let confirmedMediaServerId: string | undefined;
+      let confirmedRevokedVersion: string | undefined;
       const execute = async (body: McpManagementIntent, key: string, requestSignal: AbortSignal) => {
         const client = options.client;
         const bound = (connector: McpConnector) => {
@@ -115,14 +122,33 @@ function createManagement(options: { client: Client; preparation: McpPreparation
           }
           case "update_connector": return bound(await client.updateMcpConnector(body.connectorId, body.input, key, requestSignal));
           case "set_enabled": return bound(await client.setMcpConnectorEnabled(body.connectorId, body.input, key, requestSignal));
-          case "disconnect": return bound(await client.removeMcpConnector(body.connectorId, body.input, key, requestSignal));
+          case "disconnect": {
+            const connector = bound(await client.removeMcpConnector(body.connectorId, body.input, key, requestSignal));
+            if (connector.status === "revoked") confirmedRevokedVersion = connector.state_version;
+            return connector;
+          }
         }
       };
       const available = input.operation === "update_server" ? options.client.updatePrivateMcpServer !== undefined : input.operation === "delete_server" ? options.client.deletePrivateMcpServer !== undefined : true;
       if (!available) return Promise.resolve(false);
       const operation = input.operation;
       const command = createConnectorCommand<McpManagementIntent>({ boundary, surface: "mcp", invalidRequestCode: "invalid_mcp_personal_request", freeze: freezeIntent, execute,
-        onConfirmed: () => { if (cleanup(operation) && locator.serverId) options.preparation.retireTarget(locator.serverId, locator.connectorId); options.onConfirmed(confirmedMediaServerId); },
+        onConfirmed: () => {
+          // A closed window can still confirm this actor's operation, but a retired
+          // owner must never acquire a late fact from its former request.
+          if (!retired) {
+            if (operation === "delete_server" && !deleted.has(locator.connectorId)) {
+              deleted.add(locator.connectorId); deletedSnapshot = Object.freeze([...deleted]); publish();
+            }
+            if (operation === "disconnect" && confirmedRevokedVersion !== undefined &&
+              (!revoked.has(locator.connectorId) || BigInt(confirmedRevokedVersion) > BigInt(revoked.get(locator.connectorId)!))) {
+              revoked.set(locator.connectorId, confirmedRevokedVersion);
+              revokedSnapshot = Object.freeze([...revoked].map(([connectorId, stateVersion]) => Object.freeze({ connectorId, stateVersion }))); publish();
+            }
+          }
+          if (cleanup(operation) && locator.serverId) options.preparation.retireTarget(locator.serverId, locator.connectorId);
+          options.onConfirmed(confirmedMediaServerId);
+        },
       });
       entry = { locator, operation: input.operation, command, release: command.retain(boundary), unsubscribe: command.subscribe(publish) };
       entries.set(input.connectorId, entry);

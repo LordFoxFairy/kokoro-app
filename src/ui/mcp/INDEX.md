@@ -1,3 +1,12 @@
+## 插件广场个人 MCP（2026-10-26，源码候选）
+
+`McpPersonalServerGallery` 只展示既有 relations 完整有界扫描中的 typed MCP＋`server_id` 正向 locator、非 revoked 行；不以缺 Provider 推断私有，也不把 active 当 available。未分类只在 All，以已保存名称／说明查询。冷未读、重复 cursor、50页／10秒预算失败保持 unknown，并入广场聚合反馈，不冒全空或无匹配；不新增 reader、owner 请求或持久 store。
+
+`McpConnectorCard` 为 Settings／广场共享同一精确详情入口和媒体组件，管理行行为保留。广场卡走现 exact connector binding＋fresh private Server 读取，列表只作定位、不授配置或执行资格。为保原普通配置读取／已确认 name/notes 写后媒体寿命，同 owner/actor/admission/gen 最近一次完整 relations 仅作为本窗口只读显示连续性；当前 relations.complete/error 及 fresh 动作资格不被替代，confirmedRemoved 即时过滤，主体／准入代退休后不复用。图片只依 server ID＋该 server confirmed media revision 更新；不按扫描对象或 Connector CAS 全卡重探，不共享 blob 缓存，不改保存／连接／选择意图。
+
+
+跨 Settings／广场实例仅从既有 actor/client command owner 的已验证 ACK 保存安全负向显示事实，finish 不抹，真正 owner 退休清除且旧 late ACK 不复活。delete_server 为不可逆 connector ID；disconnect 仅保真实 revoked ACK 的 connector state_version，过滤 <= 此版本的旧行，后继完整非 revoked 更大 connector CAS 可恢复显示；不混用 server CAS，不存 body／秘密，不作为准入、详情或写权限。普通写不旋转媒体 key，图标容器以局部 relative 定位承接原绝对 frame。
+
 ## 配置 JSON 与返回层级（2026-10-26）
 
 JSON 窗口按参考保留短粘贴说明、左侧“复制到剪贴板”及右侧“保存”；取消由顶部关闭／Escape 承接。复制仅写当前用户输入到浏览器剪贴板，不解析改写、不保存、不导入／连接；锁定与本 scope 退休阻断新复制，迟到结果不进入新窗口，失败局部反馈，不冒保存成功。Header 安全说明独立 SR 描述不挤动 600×458／560×308 正常几何。

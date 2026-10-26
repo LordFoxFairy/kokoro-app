@@ -160,7 +160,7 @@ it("accepts exactly 1 MiB JPEG bytes without introducing another URL or metadata
 });
 
 // Real shell command provider -> coordinator -> list; one server has bytes, one has no binding.
-async function mediaEditJourney() {
+async function mediaEditJourney(initialView: "connections" | "catalog" = "connections") {
   const { createHubClient } = await import("@/hub/client");
   const { ConnectorCommandProvider, useMcpManagementCommands } = await import("@/ui/mcp/connector-command-context");
   const { McpProjectionRead } = await import("@/ui/mcp/mcp-projection-read");
@@ -171,12 +171,16 @@ async function mediaEditJourney() {
   const client = { ...createHubClient(), listMcpConnectors: reads,
     listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
     listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }),
+    getMcpConnector: vi.fn().mockResolvedValue(connector),
+    getPrivateMcpServer: vi.fn().mockResolvedValue({ server_id: connector.server_id, display_name: connector.display_name,
+      server_url: "https://mcp.example.test/mcp", status: "registered", availability: "unavailable", state_version: "1",
+      headers: [], transport: "streamable_http", prepare_status: "pending_prepare", declarations: [], declarations_available: false }),
     updatePrivateMcpServer: vi.fn().mockResolvedValue({ connector, server: { server_id: connector.server_id }, replayed: false }),
   };
   const subject = "media-edit-actor", boundary = { subject, admitted: true, generation: 0 };
   let management!: ReturnType<typeof useMcpManagementCommands>;
   function Commands() { management = useMcpManagementCommands(client, subject); return null; }
-  const view = render(<LocaleProvider><ConnectorCommandProvider client={client} boundary={boundary}><Commands /><McpProjectionRead client={client} identity={subject} readGeneration={0} initialView="connections" /></ConnectorCommandProvider></LocaleProvider>);
+  const view = render(<LocaleProvider><ConnectorCommandProvider client={client} boundary={boundary}><Commands /><McpProjectionRead client={client} identity={subject} readGeneration={0} initialView={initialView} embedded={initialView === "catalog"} /></ConnectorCommandProvider></LocaleProvider>);
   const original = await loadedImage(view.container); fireEvent.load(original);
   await waitFor(() => expect(fetchMedia).toHaveBeenCalledTimes(2));
   return { ...view, original, reads, client, management, boundary };
@@ -209,4 +213,55 @@ it.each(["replace", "clear"] as const)("a confirmed icon %s reloads only the exa
   expect(screen.getByText("A", { exact: true })).toBeVisible(); expect(card).toHaveFocus();
   if (operation === "clear") expect(image(journey.container)).toBeNull();
   else expect(await loadedImage(journey.container)).not.toBe(journey.original);
+});
+
+
+it.each(["name", "notes"] as const)("the personal plaza retains both loaded and absent media across a confirmed ordinary %s edit", async field => {
+  const journey = await mediaEditJourney("catalog");
+  await act(async () => {
+    expect(await journey.management.submit({ operation: "update_server", connectorId: connector.connector_id, serverId: connector.server_id!, input: { expected_state_version: "1", ...(field === "name" ? { display_name: "Changed" } : { notes: "Changed note" }) } }, journey.boundary)).toBe(true);
+  });
+  await waitFor(() => expect(journey.reads).toHaveBeenCalledTimes(2));
+  expect(fetchMedia).toHaveBeenCalledTimes(2);
+  expect(image(journey.container)).toBe(journey.original);
+  expect(screen.getByText("A", { exact: true })).toBeVisible();
+});
+
+
+it("the personal plaza opens exact fresh configuration reads without re-probing any card media", async () => {
+  const journey = await mediaEditJourney("catalog");
+  fireEvent.click(screen.getByRole("button", { name: "Saved MCP" }));
+  await waitFor(() => expect(journey.client.getMcpConnector).toHaveBeenCalledWith(connector.connector_id, expect.any(AbortSignal)));
+  await waitFor(() => expect(journey.client.getPrivateMcpServer).toHaveBeenCalledWith(connector.server_id, expect.any(AbortSignal)));
+  expect(await screen.findByRole("dialog")).toBeInTheDocument();
+  expect(journey.reads).toHaveBeenCalledOnce();
+  expect(fetchMedia).toHaveBeenCalledTimes(2);
+  expect(image(journey.container)).toBe(journey.original);
+});
+it.each(["replace", "clear"] as const)("the personal plaza retires only the confirmed %s icon while retaining unrelated absent media", async operation => {
+  const journey = await mediaEditJourney("catalog");
+  fetchMedia.mockResolvedValueOnce(operation === "clear" ? new Response(null, { status: 404 }) : response());
+  await act(async () => {
+    expect(await journey.management.submit({ operation: "update_server", connectorId: connector.connector_id, serverId: connector.server_id!, input: { expected_state_version: "1", ...(operation === "clear" ? { clear_icon: true as const } : { icon: { intent_id: "11111111-1111-4111-8111-111111111111", expected_state_version: "1" } }) } }, journey.boundary)).toBe(true);
+  });
+  await waitFor(() => expect(journey.reads).toHaveBeenCalledTimes(2));
+  expect(fetchMedia).toHaveBeenCalledTimes(3);
+  expect(fetchMedia).toHaveBeenLastCalledWith("/api/hub/mcp/servers/saved-server/icon", expect.any(Object));
+  expect(revokeUrl).toHaveBeenCalledWith(journey.original.getAttribute("src"));
+  expect(journey.container.contains(journey.original)).toBe(false);
+  expect(screen.getByText("A", { exact: true })).toBeVisible();
+});
+
+it("shares card logic across management and the plaza without sharing private blob lifetimes", async () => {
+  const { McpPersonalServerGallery } = await import("@/ui/mcp/mcp-personal-server-gallery");
+  const management = render(list(connector));
+  const first = await loadedImage(management.container); fireEvent.load(first);
+  expect(fetchMedia).toHaveBeenCalledOnce();
+  management.unmount();
+  expect(revokeUrl).toHaveBeenCalledWith(first.getAttribute("src"));
+  const gallery = render(<LocaleProvider><McpPersonalServerGallery connectors={[connector]} providers={[]} admitted confirmed query="" category="all" onSelect={noop} /></LocaleProvider>);
+  const second = await loadedImage(gallery.container);
+  expect(fetchMedia).toHaveBeenCalledTimes(2);
+  expect(fetchMedia).toHaveBeenLastCalledWith("/api/hub/mcp/servers/saved-server/icon", expect.any(Object));
+  expect(second.getAttribute("src")).not.toBe(first.getAttribute("src"));
 });
