@@ -1,3 +1,7 @@
+## 裸首页选择（2026-10-26）
+
+page-clients只在冷建direct engine且URL为裸/app时初始化本地空稿选择：复用localDraft＋未提交lifecycle＋无recovery的精确ID，否则保留旧索引项新建本地稿；无索引保原pending槽。缓存不补写conversation URL，只有显式选择或已接受Send发布实际ID。不调用取消/创建业务命令，不删除旧journal，失败不授发送资格。
+
 CHAT-1当前：`use-active-archive-state`区分原请求未确认与owner历史归档状态；正向snapshot/ACK/列表/receipt之前不因乐观正文查归档。`use-conversation-list`只为当前原意图提供显式未确认导航行，不作为已落库清单。
 
 ## CHAT-1 同标签未决意图（2026-10-24，候选）

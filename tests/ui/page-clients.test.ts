@@ -404,3 +404,156 @@ describe("live engine factory admission before browser recovery construction", (
     expect(fetch).not.toHaveBeenCalled()
   })
 })
+
+describe("cold bare direct homepage selection before engine recovery", () => {
+  const subject = "home-reload-reader"
+  let engine: ReturnType<typeof browserEngine>
+  beforeEach(() => {
+    invalidateBrowserAuthSessionIndexes()
+    window.localStorage.clear(); window.sessionStorage.clear()
+    window.history.replaceState(null, "", "/app")
+    expect(admitBrowserAuthSessionIndexes(subject, null)).toBe(true)
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json(makeSnapshot({ sessionId: "owner-old" }))))
+  })
+  afterEach(() => {
+    engine?.dispose(); releaseBrowserEngine(engine); engine = null
+    vi.restoreAllMocks(); vi.unstubAllGlobals()
+    window.localStorage.clear(); window.sessionStorage.clear(); window.history.replaceState(null, "", "/app")
+  })
+  const index = (id: string, localDraft = false) => ({ activeId: id, conversations: [{ id, title: localDraft ? "" : "Old failed task", updatedAt: 1, mode: "fast", ...(localDraft ? { localDraft: true } : {}) }] })
+  const seed = (id: string, localDraft = false) => window.localStorage.setItem(INDEX, JSON.stringify(index(id, localDraft)))
+  it("cold reload ignores a remembered owner active without reading, cancelling or sending to it", async () => {
+    seed("owner-old")
+    engine = browserEngine({ preview: false })
+    expect(engine).not.toBeNull()
+    expect(engine!.getSnapshot().store?.activeId).not.toBe("owner-old")
+    expect(engine!.getSnapshot().locallyCreatedSessionId).toBe(engine!.getSnapshot().store?.activeId)
+    expect(engine!.getSnapshot().thread.messages).toEqual([])
+    expect(engine!.getSnapshot().store?.conversations).toContainEqual(index("owner-old").conversations[0])
+    expect(fetch).not.toHaveBeenCalled()
+  })
+  it("a truly absent index stays unallocated so the original pending or login-handoff draft is not shadowed", () => {
+    const text = JSON.stringify({ __pending__: "explicit landing prompt\nkeep exact text" })
+    window.localStorage.setItem(DRAFTS, text)
+    engine = browserEngine({ preview: false })!
+    expect(engine.getSnapshot().store).toBeNull()
+    expect(window.localStorage.getItem(INDEX)).toBeNull()
+    expect(window.localStorage.getItem(DRAFTS)).toBe(text)
+    expect(fetch).not.toHaveBeenCalled()
+  })
+  it("reuses an exact positive unsubmitted local draft and leaves its saved text untouched", () => {
+    seed("home-local", true)
+    const body = JSON.stringify({ "home-local": "keep exact unsent text\n🦊" })
+    window.localStorage.setItem(DRAFTS, body)
+    engine = browserEngine({ preview: false })
+    expect(engine!.getSnapshot().store?.activeId).toBe("home-local")
+    expect(engine!.getSnapshot().locallyCreatedSessionId).toBe("home-local")
+    expect(window.localStorage.getItem(DRAFTS)).toBe(body)
+    expect(fetch).not.toHaveBeenCalled()
+  })
+  it("a stale localDraft flag cannot override its independent retirement proof", () => {
+    seed("retired-local", true)
+    expect(browserDraftLifecycle("direct").retire("retired-local")).toBe(true)
+    engine = browserEngine({ preview: false })
+    expect(engine!.getSnapshot().store?.activeId).not.toBe("retired-local")
+    expect(engine!.getSnapshot().locallyCreatedSessionId).toBe(engine!.getSnapshot().store?.activeId)
+    expect(fetch).not.toHaveBeenCalled()
+  })
+  it("New then a peer's old-active write still reloads as home while every old entry remains", () => {
+    seed("owner-old")
+    engine = browserEngine({ preview: false })!
+    engine.newConversation()
+    const afterNew = engine.getSnapshot().store!
+    engine.dispose(); releaseBrowserEngine(engine); engine = null
+    window.localStorage.setItem(INDEX, JSON.stringify({ ...afterNew, activeId: "owner-old" }))
+    ;(fetch as ReturnType<typeof vi.fn>).mockClear()
+    engine = browserEngine({ preview: false })
+    expect(engine!.getSnapshot().store?.activeId).not.toBe("owner-old")
+    expect(engine!.getSnapshot().thread.messages).toEqual([])
+    expect(engine!.getSnapshot().store?.conversations).toEqual(expect.arrayContaining(afterNew.conversations))
+    expect(fetch).not.toHaveBeenCalled()
+  })
+  it("keeps the exact hidden pending journal on home and replays only its original body/key after explicit reopening", async () => {
+    const { createBrowserSubmissionRecovery } = await import("@/ui/shell/browser-submission-recovery")
+    const recovery = createBrowserSubmissionRecovery({ subject, scope: { kind: "direct" }, isCurrent: () => readBrowserAuthIndexSubject() === subject, storage: () => window.sessionStorage })
+    const original = { sessionId: "pending-local", optimisticUserId: "original-user", idempotencyKey: "original-home-key", content: "original unknown text", options: { mode: "fast" as const, model: null, selectedSkillSourceRefs: ["skill:original"], selectedMcpConnectionIds: ["connection-original"] } }
+    expect(recovery.save(original)).toBe(true)
+    recovery.failure(original, "network")
+    seed(original.sessionId, true)
+    const raw = Object.fromEntries(Object.keys(window.sessionStorage).map(key => [key, window.sessionStorage.getItem(key)]))
+    engine = browserEngine({ preview: false })!
+    expect(engine.getSnapshot().store?.activeId).not.toBe(original.sessionId)
+    expect(engine.getSnapshot().thread.messages).toEqual([])
+    expect(Object.fromEntries(Object.keys(window.sessionStorage).map(key => [key, window.sessionStorage.getItem(key)]))).toEqual(raw)
+    expect(fetch).not.toHaveBeenCalled()
+    vi.mocked(fetch).mockImplementation(async (_input, init) => {
+      if (init?.method === "POST") throw Error("offline explicit retry")
+      return Response.json({ error: { code: "session_not_found", message: "Not found" } }, { status: 404 })
+    })
+    engine.openConversation(original.sessionId)
+    await waitFor(() => expect(engine!.getSnapshot().canRetryPendingSubmission).toBe(true))
+    expect(vi.mocked(fetch).mock.calls.every(([, init]) => (init?.method ?? "GET") === "GET")).toBe(true)
+    engine.retry()
+    await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([, init]) => init?.method === "POST")).toBe(true))
+    const post = vi.mocked(fetch).mock.calls.find(([, init]) => init?.method === "POST")!
+    expect(JSON.parse(String(post[1]?.body))).toMatchObject({ content: original.content,
+      selected_skill_source_refs: original.options.selectedSkillSourceRefs, selected_mcp_connection_ids: original.options.selectedMcpConnectionIds })
+    expect(new Headers(post[1]?.headers).get("idempotency-key")).toBe(original.idempotencyKey)
+    expect(vi.mocked(fetch).mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1)
+    expect(vi.mocked(fetch).mock.calls.every(([, init]) => ["GET", "POST"].includes(init?.method ?? "GET"))).toBe(true)
+  })
+  it("does not publish an engine if the actor changes during the local home index write", () => {
+    seed("owner-old")
+    const set = Storage.prototype.setItem
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (this: Storage, key: string, value: string) {
+      set.call(this, key, value)
+      if (this === window.localStorage && key === INDEX) set.call(this, SUBJECT_MARKER, "replacement-home-actor")
+    })
+    engine = browserEngine({ preview: false })
+    expect(engine).toBeNull()
+    expect(fetch).not.toHaveBeenCalled()
+  })
+  it("does not mistake a failed local index write for a persisted home draft", () => {
+    seed("owner-old")
+    const original = window.localStorage.getItem(INDEX)
+    const set = Storage.prototype.setItem
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (this: Storage, key: string, value: string) {
+      if (this === window.localStorage && key === INDEX) throw Error("quota")
+      set.call(this, key, value)
+    })
+    engine = browserEngine({ preview: false })
+    expect(engine).toBeNull()
+    expect(window.localStorage.getItem(INDEX)).toBe(original)
+    expect(fetch).not.toHaveBeenCalled()
+  })
+  it("a repeated committed factory read keeps the same home draft without a second allocation", () => {
+    seed("owner-old")
+    engine = browserEngine({ preview: false })!
+    const id = engine.getSnapshot().store?.activeId
+    const raw = window.localStorage.getItem(INDEX)
+    expect(browserEngine({ preview: false })).toBe(engine)
+    expect(engine.getSnapshot().store?.activeId).toBe(id)
+    expect(window.localStorage.getItem(INDEX)).toBe(raw)
+    expect(fetch).not.toHaveBeenCalled()
+  })
+  it("an explicit query id retains owner restoration instead of receiving a homepage draft", async () => {
+    seed("owner-old")
+    window.history.replaceState(null, "", "/app?conversation=owner-old")
+    engine = browserEngine({ preview: false })
+    await waitFor(() => expect(fetch).toHaveBeenCalledOnce())
+    expect(engine!.getSnapshot().store?.activeId).toBe("owner-old")
+  })
+  it("blocked lifecycle proof does not fabricate an empty owner's absence or open a Run", () => {
+    seed("blocked-local", true)
+    const original = window.localStorage.getItem(INDEX)
+    const get = Storage.prototype.getItem
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(function (this: Storage, key: string) {
+      if (key.includes(".draft-retired.")) throw Error("lifecycle unavailable")
+      return get.call(this, key)
+    })
+    engine = browserEngine({ preview: false })
+    expect(engine).toBeNull()
+    expect(window.localStorage.getItem(INDEX)).toBe(original)
+    expect(fetch).not.toHaveBeenCalled()
+  })
+})

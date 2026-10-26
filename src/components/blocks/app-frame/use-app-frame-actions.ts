@@ -112,6 +112,10 @@ export function useAppFrameActions({
       // without a new render. That is not a user selection change.
       if (requested !== conversationAtRender &&
         !(conversationAtRender === null && requested === directSelectionAtRender)) return
+      if (requested === null && currentId !== null && (
+        snapshot.locallyCreatedSessionId !== currentId || snapshot.thread.messages.length !== 0
+        || snapshot.hydrating || snapshot.machine.phase !== "idle" || snapshot.hasPendingSubmission || snapshot.canRetryPendingSubmission
+      )) return
     }
     if (snapshot.hydrating && conversationIdFromLocation() !== null) return
     if (snapshot.missingSessionId !== undefined && conversationIdFromLocation() === snapshot.missingSessionId
@@ -139,16 +143,13 @@ export function useAppFrameActions({
       return
     }
     clearDraft()
-    if (projectWorkspace) {
-      // A first project message creates its opaque conversation in the shared
-      // engine before the next render. Update both URL and route projection at
-      // the user action boundary; replaceState alone does not notify App
-      // Router, so waiting for a route effect would leave the overview painted
-      // beside a newly-created conversation.
-      const projectConversationId = engine.getSnapshot().store?.activeId ?? null
-      if (projectConversationId !== null) {
-        syncConversationUrl(projectConversationId, "replace")
-        setConversationRouteId(projectConversationId)
+    if (projectWorkspace || conversationAtRender === null) {
+      // Publish only this synchronously accepted Send, never a restored cache
+      // entry. Both first-message surfaces must leave their own overview now.
+      const acceptedConversationId = engine.getSnapshot().store?.activeId ?? null
+      if (acceptedConversationId !== null) {
+        syncConversationUrl(acceptedConversationId, "replace")
+        setConversationRouteId(acceptedConversationId)
       }
     }
     // Creation intent belongs to the empty composer only. Clear its persisted

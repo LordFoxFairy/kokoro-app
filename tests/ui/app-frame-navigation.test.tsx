@@ -40,10 +40,11 @@ it("a catalog is not replaced by conversation hydration or its failure", () => {
   expect(view.result.current.conversationHydrationFailed).toBe(false)
 })
 
-it("direct chat still restores its shareable conversation URL", () => {
+it("a bare direct homepage is not owned or redirected by the remembered conversation", () => {
   window.history.replaceState(null, "", "/app")
-  renderHook(() => useAppFrameNavigation(options))
-  expect(window.location.search).toBe("?conversation=conv-retained-direct")
+  const view = renderHook(() => useAppFrameNavigation(options))
+  expect(window.location.pathname + window.location.search).toBe("/app")
+  expect(view.result.current.routeOwnsConversation).toBe(false)
 })
 
 it.each([false, true])("a missing explicit conversation stays an error on its own URL (project=%s)", async (project) => {
@@ -130,3 +131,16 @@ it.each(["/app", "/app/project/project-new?conversation=conv-project-new"])(
   expect(client.createCalls).toEqual([])
   engine.dispose()
  })
+
+it("late hydration of a cached failed thread cannot claim the bare homepage or publish its id", () => {
+  window.history.replaceState(null, "", "/app")
+  const view = renderHook(({ count }) => useAppFrameNavigation({ ...options, threadMessageCount: count }), { initialProps: { count: 0 } })
+  view.rerender({ count: 2 })
+  expect(window.location.pathname + window.location.search).toBe("/app")
+  expect(view.result.current.routeOwnsConversation).toBe(false)
+})
+it.each(["?conversation=conv-retained-direct", "#conversation/conv-retained-direct"])("an explicit direct id still owns its existing thread: %s", suffix => {
+  window.history.replaceState(null, "", `/app${suffix}`)
+  const view = renderHook(() => useAppFrameNavigation(options))
+  expect(view.result.current.routeOwnsConversation).toBe(true)
+})

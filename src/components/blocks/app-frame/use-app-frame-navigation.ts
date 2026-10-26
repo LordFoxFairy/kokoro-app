@@ -222,19 +222,8 @@ export function useAppFrameNavigation({
     }
   }, [activeId, engine, mounted, ownsLocation, standaloneSurface])
 
-  // A restored direct session and a newly submitted first message both acquire
-  // a stable URL without adding an extra history entry on every stream event.
-  // Project overview is intentionally a URL without `conversation`; it is a
-  // workspace landing surface, not an implicit redirect to the last task.
-  useEffect(() => {
-    if (!mounted || standaloneSurface || projectWorkspace || activeId === null || threadMessageCount === 0) {
-      return
-    }
-    if (conversationIdFromLocation() === null) {
-      syncConversationUrl(activeId, "replace")
-    }
-  }, [activeId, mounted, projectWorkspace, standaloneSurface, syncConversationUrl, threadMessageCount])
-
+  // A bare direct URL selects Home, not the remembered active thread. Only
+  // explicit selection or an accepted user Send may publish a conversation ID.
   const resolvedConversationRouteId = standaloneSurface ? null : mounted
     ? conversationIdFromLocation()
     : conversationRouteId
@@ -242,9 +231,7 @@ export function useAppFrameNavigation({
   // replacing the engine instance. The URL is authoritative for that route:
   // never paint the direct thread while the project has no conversation route,
   // and never paint a stale thread while a deep-link is being opened.
-  const routeOwnsConversation = resolvedConversationRouteId === null
-    ? !projectWorkspace
-    : resolvedConversationRouteId === activeId
+  const routeOwnsConversation = resolvedConversationRouteId !== null && resolvedConversationRouteId === activeId
   // A settled error must also terminate a mismatched deep-link, even when the
   // fallback has messages. Never paint that other conversation's body; errors
   // on the matching route with existing messages retain their local UI.

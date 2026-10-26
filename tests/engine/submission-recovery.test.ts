@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { createSessionEngine } from "@/engine/machine"
 import type { CreateMessageArgs } from "@/engine/execution-adapter"
-import type { ConversationStore } from "@/core/conversations"
+import { addConversation, type ConversationStore } from "@/core/conversations"
 import { SessionClientError } from "@/engine/client"
 import { createFakeClient, createMemoryStorage, settle } from "./fakes"
 
@@ -67,4 +67,47 @@ describe("first submission survives document recreation without dispatching", ()
     expect(engine.getSnapshot().notice?.key).toBe("chat.localDraftPersistenceFailed")
     engine.dispose()
   })
+})
+
+it("a cold local home selection preserves another session's original unknown for explicit recovery without cancelling it", async () => {
+  const records = new Map<string, { submission: Intent; failureCode: string | null }>()
+  let abandoned = 0
+  const recovery = { read: (id: string) => records.get(id) ?? null,
+    save: (submission: Intent) => { records.set(submission.sessionId, { submission: structuredClone(submission), failureCode: null }); return true },
+    failure: (submission: Intent, code: string) => { const value = records.get(submission.sessionId); if (value) value.failureCode = code },
+    acknowledged: () => null, acknowledge: (submission: Intent) => { records.delete(submission.sessionId); return true },
+    abandon: () => { abandoned++; return true } }
+  const storage = createMemoryStorage<ConversationStore>()
+  const first = createFakeClient()
+  first.nextCreate = () => Promise.reject(Error("lost ACK"))
+  const originalEngine = createSessionEngine({ client: first, storage, submissionRecovery: recovery })
+  originalEngine.newConversation()
+  originalEngine.submit("original frozen input")
+  await settle()
+  const original = first.createCalls[0]!
+  const before = JSON.stringify(records.get(original.sessionId))
+  originalEngine.dispose()
+  // This is the existing local-store projection chosen before engine creation,
+  // not the command-bearing newConversation action after restoring the old Run.
+  storage.write(addConversation(storage.read(), "new-home-local", 2, "fast", true))
+  const client = createFakeClient()
+  client.nextCreate = () => Promise.reject(Error("explicit retry still offline"))
+  const home = createSessionEngine({ client, storage, submissionRecovery: recovery, draftLifecycle: { isUnsubmitted: id => id === "new-home-local", retire: () => true } })
+  try {
+    expect(home.getSnapshot().locallyCreatedSessionId).toBe("new-home-local")
+    expect(client.snapshotCalls).toEqual([])
+    expect(client.createCalls).toEqual([])
+    expect(client.controlCalls).toEqual([])
+    expect(client.deleteCalls).toEqual([])
+    expect(abandoned).toBe(0)
+    expect(JSON.stringify(records.get(original.sessionId))).toBe(before)
+    home.openConversation(original.sessionId)
+    await settle()
+    expect(home.getSnapshot().canRetryPendingSubmission).toBe(true)
+    expect(client.createCalls).toEqual([])
+    home.retry(); await settle()
+    expect(client.createCalls).toEqual([original])
+    expect(client.controlCalls).toEqual([])
+    expect(abandoned).toBe(0)
+  } finally { home.dispose() }
 })

@@ -8,7 +8,7 @@ import { sessionBaseUrl } from "@/engine/config"
 import type { DraftLifecycle } from "@/engine/engine-types"
 import type { MessagePartsReadRecheck } from "@/engine/message-parts-reader"
 import { createSessionEngine, type SessionEngine } from "@/engine/machine"
-import { removeConversation, type ConversationStore } from "@/core/conversations"
+import { activeIsLocalDraft, addConversation, removeConversation, type ConversationStore } from "@/core/conversations"
 import { storedConversationStoreSchema } from "@/core/persistence"
 import { createPersistedStore } from "@/lib/persisted-store"
 import type { PersistedStore } from "@/lib/persisted-store"
@@ -31,6 +31,7 @@ import {
   createPreviewTeamClient,
 } from "@/dev/preview-clients"
 
+import type { SubmissionRecovery } from "@/engine/submission-recovery"
 import { createBrowserSubmissionRecovery, SUBMISSION_RECOVERY_PREFIX } from "./browser-submission-recovery"
 
 import { consumeLandingPrompt } from "./use-draft"
@@ -257,6 +258,24 @@ function conversationStore(scopeKey: string): PersistedStore<ConversationStore> 
   return created
 }
 
+/** Cold direct-home selection is a local index projection, never a Run command. */
+function prepareDirectHome(storage: PersistedStore<ConversationStore>, lifecycle: DraftLifecycle, recovery: SubmissionRecovery): ConversationStore | null | undefined {
+  try {
+    // Choose from one initial backing-index read: a failed UI write may live
+    // in the generic cache and is not proof of a persisted home selection.
+    const persisted = window.localStorage.getItem(`${STORAGE_KEY}.direct`)
+    const current = persisted === null ? null : storedConversationStoreSchema.parse(JSON.parse(persisted))
+    // A truly fresh index keeps the existing route-neutral pending draft slot.
+    if (current === null) return null
+    if (current && activeIsLocalDraft(current) && lifecycle.isUnsubmitted(current.activeId) && recovery.read(current.activeId) === null) return current
+    const next = addConversation(current, `conv_${crypto.randomUUID()}`, Date.now(), "fast", true)
+    if (current?.conversations.some(entry => entry.id === next.activeId) || !lifecycle.isUnsubmitted(next.activeId)) return undefined
+    // Keep every former index entry and its independent recovery record intact.
+    storage.write(next)
+    return window.localStorage.getItem(`${STORAGE_KEY}.direct`) === JSON.stringify(next) ? next : undefined
+  } catch { return undefined }
+}
+
 export function evictBrowserConversationIndex(scopeKey: string, sessionId: string): void {
   const liveEngine = pageEngines.get(`live:${scopeKey}`)?.engine
   if (liveEngine) {
@@ -387,19 +406,39 @@ export function browserEngine(options: { preview?: boolean; scope?: SessionScope
     const client = options.preview === true
       ? browserPreviewClient()
       : createSessionClient({ baseUrl: sessionBaseUrl() })
-    const engine = createSessionEngine({
-      client,
-      ...(mode === "preview" ? {} : { captureMessagePartsReadRecheck: () => recoverySubject === null ? undefined : capturePartsReadRecheck?.(recoverySubject) }),
-      ...(mode === "preview" ? {} : { submissionRecovery: createBrowserSubmissionRecovery({
+    const storage = conversationStore(sessionScopeKey(scope))
+    const draftLifecycle = browserDraftLifecycle(sessionScopeKey(scope))
+    const submissionRecovery = mode === "preview" ? undefined : createBrowserSubmissionRecovery({
         subject: recoverySubject ?? "", scope,
         isCurrent: () => {
           try { return recoverySubject !== null && admittedBrowserSubject === recoverySubject && readBrowserAuthIndexSubject() === recoverySubject }
           catch { return false }
         },
         storage: () => window.sessionStorage,
-      }) }),
-      storage: conversationStore(sessionScopeKey(scope)),
-      draftLifecycle: browserDraftLifecycle(sessionScopeKey(scope)),
+      })
+    const url = new URL(window.location.href)
+    const bareHome = scope.kind === "direct" && url.pathname.replace(/\/$/u, "") === "/app"
+      && !url.searchParams.has("conversation") && !/^#\/?conversation(?:=|\/)/u.test(url.hash)
+    let initialHome = submissionRecovery && bareHome ? prepareDirectHome(storage, draftLifecycle, submissionRecovery) : undefined
+    if (submissionRecovery && bareHome && initialHome === undefined) return null
+    const engineStorage: PersistedStore<ConversationStore> = initialHome === undefined ? storage : {
+      ...storage,
+      read: () => {
+        const selected = initialHome
+        initialHome = undefined
+        return selected === undefined ? storage.read() : selected
+      },
+    }
+    if (mode === "live") {
+      try { if (recoverySubject !== admittedBrowserSubject || readBrowserAuthIndexSubject() !== recoverySubject) return null }
+      catch { return null }
+    }
+    const engine = createSessionEngine({
+      client,
+      ...(mode === "preview" ? {} : { captureMessagePartsReadRecheck: () => recoverySubject === null ? undefined : capturePartsReadRecheck?.(recoverySubject) }),
+      ...(submissionRecovery === undefined ? {} : { submissionRecovery }),
+      storage: engineStorage,
+      draftLifecycle,
       scope,
     })
     pageEngines.set(engineKey, { engine, owners: new Set(), pendingRelease: null, releaseWhenSettled: null, invalidated: false })

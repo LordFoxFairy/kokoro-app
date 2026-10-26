@@ -22,13 +22,14 @@ function setup(explicitRoute = false, createDraft = true) {
   const original = engine.getSnapshot().store?.activeId ?? null
   if (explicitRoute) window.history.replaceState(null, "", `/app?conversation=${original}`)
   const clearDraft = vi.fn()
+  const syncConversationUrl = vi.fn(), setConversationRouteId = vi.fn()
   const view = renderHook(() => useAppFrameActions({
     engine, activeId: original, projectWorkspace: false, standaloneSurface: false, chatHref: "/app",
     draft: "original direct draft", clearDraft, updateDraft: vi.fn(), setDeploymentIntent: vi.fn(),
-    syncConversationUrl: vi.fn(), setConversationRouteId: vi.fn(), focusComposer: vi.fn(),
+    syncConversationUrl, setConversationRouteId, focusComposer: vi.fn(),
     closeSettings: vi.fn(), brandName: "Kokoro", commandNewChatTimerRef: { current: null },
   }), { wrapper: LocaleProvider })
-  return { client, engine, original, clearDraft, view }
+  return { client, engine, original, clearDraft, view, syncConversationUrl, setConversationRouteId }
 }
 
 it.each(["/app/project/project-next", "/app/project/project-next?conversation=conv-next", "/app/library", "/app?conversation=conv-next"])(
@@ -220,4 +221,32 @@ it("action-time New task focus waits two animation frames for a later catalog su
     act(() => { frames[1]!(0) })
     expect(context.focusComposer).toHaveBeenCalledTimes(immediate + 1)
   } finally { raf.mockRestore(); context.view.unmount(); context.engine.dispose() }
+})
+
+it("the first accepted homepage Send publishes exactly its newly accepted id at the user action boundary", () => {
+  const context = setup()
+  try {
+    expect(context.syncConversationUrl).not.toHaveBeenCalled()
+    act(() => context.view.result.current.submitDraft())
+    expect(context.client.createCalls).toHaveLength(1)
+    expect(context.syncConversationUrl).toHaveBeenCalledExactlyOnceWith(context.original, "replace")
+    expect(context.setConversationRouteId).toHaveBeenCalledExactlyOnceWith(context.original)
+  } finally { context.engine.dispose() }
+})
+it("a bare homepage cannot append a draft to a hidden remembered owner conversation", async () => {
+  const client = createFakeClient()
+  const storage = createMemoryStorage<ConversationStore>({ activeId: "owner-old", conversations: [{ id: "owner-old", title: "Old failed task", updatedAt: 1, mode: "fast" }] })
+  const engine = createSessionEngine({ client, storage })
+  await settle()
+  const clearDraft = vi.fn(), syncConversationUrl = vi.fn(), setConversationRouteId = vi.fn()
+  const view = renderHook(() => useAppFrameActions({ engine, activeId: "owner-old", projectWorkspace: false, standaloneSurface: false, chatHref: "/app",
+    draft: "new homepage requirement", clearDraft, updateDraft: vi.fn(), setDeploymentIntent: vi.fn(), syncConversationUrl, setConversationRouteId,
+    focusComposer: vi.fn(), closeSettings: vi.fn(), brandName: "Kokoro", commandNewChatTimerRef: { current: null } }), { wrapper: LocaleProvider })
+  try {
+    act(() => view.result.current.submitDraft())
+    expect(client.createCalls).toEqual([])
+    expect(clearDraft).not.toHaveBeenCalled()
+    expect(syncConversationUrl).not.toHaveBeenCalled()
+    expect(setConversationRouteId).not.toHaveBeenCalled()
+  } finally { engine.dispose() }
 })

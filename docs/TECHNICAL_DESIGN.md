@@ -1,3 +1,21 @@
+## 2026-10-26 裸 `/app` 首页与 direct 缓存选择（已正常激活并验 New／冷重载）
+
+**目标／当前事实。** 仅收 Root 已复现的“全局 New→`/app` 空稿→硬刷新被旧 failed active 改回 conversation URL”，及随后首次明确 Send 的正确 URL；不改项目、原22 WIP／AppFrame入口、API／数据契约或全局 New 原运行取消语义。原 `133a5ee` 的 `use-app-frame-navigation` 把裸 direct 当旧 thread 的呈现资格并从 active 缓存补 URL；`page-clients` 的共享 localStorage index 又先于路由恢复旧 active。缓存不是 route authority；旧 pending／ACK／owner正文不因首页偏好被删除或重派。
+
+**一次方案比较。** 优先采用现 `ConversationStore` 的窄初始化投影：首次获得 direct engine 且实际位于裸 `/app` 时，只复用 active entry 自带 `localDraft:true` **且**现 append-only draft lifecycle 明确仍 unsubmitted 的精确 ID；真实无索引保持原null／`__pending__`草稿槽，首次明确Send才分配；已有索引但无该正向证明则用现 `addConversation` 创建一个本地空 draft，把旧 entries 原样留在同一索引，不选择旧 owner active、不按时间／第一个候选猜稿。现 storage facade 先完成这个 UI 选择，再构造 engine，令原构造期只读恢复看到本地 draft，不先 hydrate 旧 active；无 POST／Cancel／Delete，不触旧 submission recovery。该方案足够本次 New／冷重载（New 已走原动作产生正向 draft），无需新增 tab draft registry 或 engine API。它不新增“多标签各自首页草稿ID”的持久保证；跨标签的既有共享索引语义不在本片改造成另一套恢复事实源。
+
+备选 tab-local ID＋engine home 动作只在真实反例证明上述冷启动范围不足时再报：现 `selectConversation` 只能选择已有索引项，`openConversation` 会退休 localDraft 并请求 owner，private `activateConversation` 不能从装配层调用；直接复用 `newConversation` 则会 abandon/cancel 原 pending／Run。若扩大到已存在 engine 的任意 warm route 自动切首页，须明确本地激活而非取消；本片不为尚未要求的广泛路径先加 API／registry。
+
+**路由／Send。** 裸 `/app` 不从缓存 thread 补 conversation URL，也不授旧 thread 呈现资格；显式 query/hash ID、rail 和前后退仍沿现精确打开。`actions.submitDraft` 只有用户明确 Send 被原 engine 同步接纳后，才像现 project 分支一样把实际 active ID 写 canonical URL／route projection。裸首页 Send 必须是当前本地 draft 正向身份或真正无 active 的首次分配；旧 owner／unknown fallback 不可因 URL 为空被追加新消息。拒绝不清正文、选择或旧请求；unknown 原 ID/body/key/ACK 与 journal 保持，只有原显式恢复入口处理，不从 GET 成功／404冒 receipt，也不在 reload 隐式调用新任务动作。
+
+**精确写区／删除。** 候选生产缩为 `src/ui/shell/page-clients.ts`、`src/components/blocks/app-frame/use-app-frame-navigation.ts`、`src/components/blocks/app-frame/use-app-frame-actions.ts`；原预留 `src/engine/{engine-types.ts,machine.ts}` 本次保持原字节。移除“缓存 thread 自动取得裸首页 URL”的旧 effect／oracle，不建新 router、storage框架、恢复注册表、wire字段或表。验证仅复用 `tests/ui/page-clients.test.ts`、`tests/ui/app-frame-navigation.test.tsx`、`tests/ui/direct-submit-navigation.test.tsx`、`tests/engine/submission-recovery.test.ts`；必要文档限本段及收口事实，不改API／DATA。
+
+**验收／停止线。** 先RED真实持久store：旧owner active＋本地draft的New/冷重建、空稿仍裸`/app`；旧unknown journal逐字／原key保留、零 create/control/delete，显式旧ID重开后原key恢复。正向 draft重载保草稿，已退休／错scope／actor换代／存储失败不伪正向；首次Send才写新ID，旧callback／迟到／多tab改active、显式ID/404深链、项目隔离保持。若需 engine动作／tab registry 或其它源码路径才能承接这些已限定风险，先停该扩展并向Root报告。Root独占正常源／资源／浏览器与Git；本D0不动源码，不重复付费Run。
+
+**本轮停写资格。** 候选按上述3生产＋4现测落地，engine两文件未改。Node22最终7个相关文件132 PASS／0SKIP，7个代码写区eslint为0；前轮非增量typecheck为0，最终复跑为2（并发修改的AccountReadSnapshots缺rememberSummary，非本写区，交对应owner／Root复验），不冒最终整树类型通过；真实backing storage＋journal测试证明首页无业务读写，原pending JSON逐字保留，显式旧ID重开后只重放原body／key，ACK／取消不由首页猜测。额外只读邻接rail套件251 PASS／6 FAIL（MCP被动读可见Retry／alert旧oracle），未改断言、不称整owner默认门通过。真实正常New→reload／first Send由Root按冻结源验收，本worker不操作正常服务、浏览器、DB或模型；其它入口／全需求状态不由本片升级。
+
+**Root接棒资格（2026-10-26）：** 当前App220223a实际组合物理候选中，本片8相关行为文件206通过，lint/build/全types均0，原rememberSummary并发缺口已由独立积分切片正式承接。三源已在同一正常Turbopack进程HMR，实际裸/app与原生“新建任务”后硬刷新均保欢迎页/空稿/原裸地址；单次有界CDP记录未截断，零非auth业务写、零旧线程读取。旧owner与journal仍由既有显式恢复选择，不从首页重派。首次明确Send的URL保护已过真实backing/journal和actions行为；此轮未发模型，不把该项等同新的付费首发成功或完整首页场景能力。完整收据由Root唯一计划§2.1与ignored home-project-next-20261026/root-home-integration承接。
+
 ## 2026-10-26 BFF28 工具展示类别消费（实施候选，尚未正常激活）
 
 **前置/写入边界。** App26 正式本地基线 `5b651f40d6e16e8afa92c5149a97a86e684aadad` 与 BFF28 正式本地 commit `5dfce099c7ce448e18b8ce5b1e26bb01692c9033` 已由 Root 交付；从该 BFF Git blob 获取唯一 full Public28，SHA256 `34ca44c01ebc73f7ff76a4a06be33696b96ba1636e8818f02c38d57b1f539809`，按批准写区消费，不消费未提交原件。旧 Public27 全文 SHA256 `d2b3d546164cadc9655616fc44daf1511a6f7d4a2e5d172f1415552af8942ed1` 继续作为不可变父证明。Agent 拥有受信工具定义与安全类别，BFF 拥有公开 wire/durable AG-UI，App 仅严格解析和本地化，不连接 Agent/内部 owner。源码候选与正常激活分开；Root 的原22项混合 WIP、媒体8路径均保独立写区。
