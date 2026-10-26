@@ -109,9 +109,9 @@ export function UrlMcpForm({
     !duplicateHeader &&
     !oauthIsPartial &&
     !submitting && !locked && flow.available;
-  const registerAndPrepare = async (publish: boolean): Promise<void> => {
+  const saveConfiguration = async (publish: boolean): Promise<void> => {
     if (!canSubmit && !state.unknown && !state.registered) return;
-    const save = publish || state.publishRequested ? creation.saveForPublication : creation.save;
+    const save = publish ? creation.saveForPublication : creation.saveConfiguration;
     await save({ display_name: name.trim(), server_url: url.trim(),
       ...(showHeaders && configuredHeaders.length ? { headers: configuredHeaders.map(header => ({ name: header.name.trim().toLowerCase(), value: header.value })) } : {}),
       ...(showOAuth && clientId.trim() ? { oauth_client: { client_id: clientId.trim(), client_secret: clientSecret } } : {}),
@@ -127,7 +127,7 @@ export function UrlMcpForm({
       <div className={styles.urlMcpActions}>
         <Button type="button" variant="outline" onClick={creation.cancel}>{t("mcp.cancel")}</Button><span />
         {requiresOAuth ? <Button type="button" disabled={!admitted || submitting || Boolean(state.unknown)} onClick={() => void creation.authorize()}>{t("settings.connect")}</Button> : null}
-        {isReady && !state.unknown || completion !== "idle" ? <Button type="button" disabled={!admitted || submitting || !creation.mayResume} onClick={() => void creation.done()}>{t("mcp.creationDone")}</Button> : !requiresOAuth || state.unknown ? <Button type="button" disabled={!admitted || submitting || !creation.mayResume} onClick={() => void registerAndPrepare(false)}>{submitLabel}</Button> : null}
+        {isReady && !state.unknown || completion !== "idle" ? <Button type="button" disabled={!admitted || submitting || !creation.mayResume} onClick={() => void creation.done()}>{t("mcp.creationDone")}</Button> : !requiresOAuth || state.unknown ? <Button type="button" disabled={!admitted || submitting || !creation.mayResume} onClick={() => void saveConfiguration(false)}>{submitLabel}</Button> : null}
       </div>
     </section>;
   }
@@ -137,7 +137,7 @@ export function UrlMcpForm({
       className={styles.urlMcpForm}
       onSubmit={(event) => {
         event.preventDefault();
-        void registerAndPrepare(false);
+        void saveConfiguration(false);
       }}
     >
       {!admitted ? <p className="sr-only" role="status">{t("mcp.creationSession")}</p> : null}
@@ -316,7 +316,7 @@ export function UrlMcpForm({
         <Button
           type="button"
           disabled={!onPublish || !admitted || submitting || !creation.mayResume || (!state.unknown && !canSubmit)}
-          onClick={() => void registerAndPrepare(true)}
+          onClick={() => void saveConfiguration(true)}
         >
           {t("mcp.saveAndPublish")}
           <ChevronDown aria-hidden="true" />

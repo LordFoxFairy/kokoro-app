@@ -222,3 +222,9 @@ API／JSON创建窗口的每次等待由use-connector-creation-form持有独立c
 `mcp-url-form` 的保存并发布走 Register ACK → 独立 `mcp-project-publication-dialog`，不预开 OAuth、不暗跑 Prepare。`mcp-project-publication-commands` 由原 actor shell 持有精确原命令；取消 picker 保留已创建实体与精确详情。项目由既有本人 project reader 读取，pin 读包括墓碑 CAS；ACK 只显示定义发布、明确 execution_ready=false。异常仅 typed receipt/已发布 same_command 策略显式恢复；首次明确拒绝的修改须新输入，receipt 404不证明未提交。
 
 发布恢复 journal 与 commands 分离：日志只存非秘密原命令，首次 POST 前持久化、原 ACK 后精确清退；重载只恢复未知状态。原子 first-rejection 清退保护跨 tab 竞争。项目列表首屏独立于 pin 扫描，确认只读已选 CAS（4 lanes、128 总页、10秒），关闭中断且不隐式发写。
+
+### Configuration save and current private-server reads
+
+- Custom/URL Save confirms registration and the exact fresh server/connector pair, then opens that saved configuration. It does not implicitly Prepare or open OAuth; Connect remains an explicit detail action. Save-and-publish retains its own intent and project-picker qualification. Unknown commands retain their original intent, body, key and recovery boundary.
+- A current private-server typed HTTP 401 joins the existing captured subject/generation/signal readmission proof. Only a confirmed Session permits a new read generation; Save/CAS is never replayed. Other errors retain explicit Retry.
+- Configuration controls keep their outline variant; header/footer CSS owns geometry, not a second transparent/no-border override. The shorter-screen reachable footer is retained.

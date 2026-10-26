@@ -222,11 +222,11 @@ describe("private MCP creation registration and preparation", () => {
   it("a first exact duplicate-URL rejection leaves the form editable and a corrected submission gets a new command", async () => {
     const { flow, hub, scope, changed } = await setup()
     hub.registerPrivateMcpServer.mockRejectedValueOnce(new HubClientError("http", "duplicate", "mcp_personal_server_url_conflict", 409, false))
-    expect(await flow.submit(input, scope)).toBe(false)
+    expect(await flow.submit(input, scope, "connect")).toBe(false)
     expect(flow.getSnapshot()).toMatchObject({ unknown: null, registered: false, error: true, registrationRejection: "url_conflict" })
     expect(hub.preparePrivateMcpServer).not.toHaveBeenCalled()
     expect(changed).not.toHaveBeenCalled()
-    expect(await flow.submit({ ...input, server_url: "https://mcp.example.test/corrected" }, scope)).toBe(true)
+    expect(await flow.submit({ ...input, server_url: "https://mcp.example.test/corrected" }, scope, "connect")).toBe(true)
     expect(hub.registerPrivateMcpServer).toHaveBeenCalledTimes(2)
     expect(hub.registerPrivateMcpServer.mock.calls[1]?.[1]).not.toBe(hub.registerPrivateMcpServer.mock.calls[0]?.[1])
     expect(hub.registerPrivateMcpServer.mock.calls[1]?.[0].server_url).toBe("https://mcp.example.test/corrected")
@@ -237,27 +237,27 @@ describe("private MCP creation registration and preparation", () => {
     const { flow, hub, scope } = await setup()
     hub.registerPrivateMcpServer.mockRejectedValueOnce(new Error("lost ACK"))
       .mockRejectedValueOnce(new HubClientError("http", "duplicate", "mcp_personal_server_url_conflict", 409, false))
-    await flow.submit(input, scope)
+    await flow.submit(input, scope, "connect")
     const original = hub.registerPrivateMcpServer.mock.calls[0]?.slice(0, 2)
     await flow.retry(scope)
     expect(flow.getSnapshot()).toMatchObject({ unknown: "register", registrationRejection: null })
     expect(hub.registerPrivateMcpServer.mock.calls[1]?.slice(0, 2)).toEqual(original)
-    expect(await flow.submit({ ...input, server_url: "https://mcp.example.test/replacement" }, scope)).toBe(false)
+    expect(await flow.submit({ ...input, server_url: "https://mcp.example.test/replacement" }, scope, "connect")).toBe(false)
     expect(hub.registerPrivateMcpServer).toHaveBeenCalledTimes(2)
   })
 
   it.each([[409, true], [503, false], [400, false]])("an inconsistent duplicate tuple remains uncertain (%s / %s)", async (status, retryable) => {
     const { flow, hub, scope } = await setup()
     hub.registerPrivateMcpServer.mockRejectedValueOnce(new HubClientError("http", "unverified", "mcp_personal_server_url_conflict", status, retryable))
-    await flow.submit(input, scope)
+    await flow.submit(input, scope, "connect")
     expect(flow.getSnapshot().unknown).toBe("register")
-    expect(await flow.submit(input, scope)).toBe(false)
+    expect(await flow.submit(input, scope, "connect")).toBe(false)
     expect(hub.registerPrivateMcpServer).toHaveBeenCalledOnce()
   })
 
   it("registers once, then prepares only with a fresh exact server/connector pair and CAS", async () => {
     const { flow, hub, scope, changed } = await setup()
-    expect(await flow.submit(input, scope)).toBe(true)
+    expect(await flow.submit(input, scope, "connect")).toBe(true)
     expect(hub.registerPrivateMcpServer).toHaveBeenCalledOnce()
     expect(hub.preparePrivateMcpServer).toHaveBeenCalledWith("private-server", "7", expect.any(String), expect.any(AbortSignal))
     expect(hub.getPrivateMcpServer).toHaveBeenCalledTimes(2)
@@ -270,7 +270,7 @@ describe("private MCP creation registration and preparation", () => {
   it("expired registration stops at its original command across closing and recheck", async () => {
     const { flow, hub, scope, detach } = await setup()
     hub.registerPrivateMcpServer.mockRejectedValue(new HubClientError("http", "private", "mcp_personal_command_replay_expired", 412, false))
-    await flow.submit(input, scope)
+    await flow.submit(input, scope, "connect")
     await flow.retry(scope)
     detach(); flow.bind({ ...admitted, generation: 2 }); flow.attach(scope.window)
     await flow.retry({ ...scope, boundary: { ...admitted, generation: 2 } })
@@ -282,7 +282,7 @@ describe("private MCP creation registration and preparation", () => {
     const { flow, hub, scope, detach } = await setup()
     hub.registerPrivateMcpServer.mockRejectedValueOnce(new Error("lost registration ACK"))
     const draft = structuredClone(input)
-    expect(await flow.submit(draft, scope)).toBe(false)
+    expect(await flow.submit(draft, scope, "connect")).toBe(false)
     draft.headers[0]!.value = "edited"
     expect(flow.getSnapshot().unknown).toBe("register")
     expect(JSON.stringify(flow.getSnapshot())).not.toContain("fixture-only")
@@ -301,7 +301,7 @@ describe("private MCP creation registration and preparation", () => {
     let rejectPrepare!: (error: Error) => void
     const pending = new Promise<never>((_resolve, reject) => { rejectPrepare = reject })
     hub.preparePrivateMcpServer.mockImplementationOnce(() => pending)
-    const running = flow.submit(input, scope)
+    const running = flow.submit(input, scope, "connect")
     await vi.waitFor(() => expect(hub.preparePrivateMcpServer).toHaveBeenCalledOnce())
     flow.bind({ ...boundary, admitted: false, generation: 2 })
     expect(hub.preparePrivateMcpServer.mock.calls[0]?.[3]?.aborted).toBe(true)
@@ -323,7 +323,7 @@ describe("private MCP creation registration and preparation", () => {
     const { flow, hub, scope } = await setup()
     hub.getPrivateMcpServer.mockRejectedValueOnce(new Error("missing private server"))
     hub.getMcpConnector.mockImplementationOnce(() => new Promise(() => {}))
-    expect(await flow.submit(input, scope)).toBe(false)
+    expect(await flow.submit(input, scope, "connect")).toBe(false)
     expect(hub.getMcpConnector.mock.calls[0]?.[1]?.aborted).toBe(true)
     expect(hub.preparePrivateMcpServer).not.toHaveBeenCalled()
     expect(flow.getSnapshot()).toMatchObject({ registered: true, facts: null, error: true })
@@ -337,7 +337,7 @@ describe("private MCP creation registration and preparation", () => {
     const release = flow.subscribe(() => {
       if (!retired && flow.getSnapshot().name) { retired = true; flow.bind({ ...boundary, admitted: false, generation: 2 }) }
     })
-    expect(await flow.submit(input, scope)).toBe(false)
+    expect(await flow.submit(input, scope, "connect")).toBe(false)
     expect(hub.registerPrivateMcpServer).not.toHaveBeenCalled()
     expect(flow.getSnapshot().unknown).toBe("register")
     release()
@@ -347,7 +347,7 @@ describe("private MCP creation registration and preparation", () => {
     const { flow, hub, scope } = await setup()
     let acknowledge!: (value: ReturnType<typeof registration>) => void
     hub.registerPrivateMcpServer.mockImplementationOnce(() => new Promise(resolve => { acknowledge = resolve }))
-    const running = flow.submit(input, scope)
+    const running = flow.submit(input, scope, "connect")
     expect(hub.registerPrivateMcpServer).toHaveBeenCalledOnce()
     flow.attach({})
     expect(hub.registerPrivateMcpServer.mock.calls[0]?.[2]?.aborted).toBe(true)
@@ -359,7 +359,7 @@ describe("private MCP creation registration and preparation", () => {
   it("creation and a reopened detail share the same unknown Prepare rather than adopting a new CAS", async () => {
     const { flow, preparation, hub, scope, changed } = await setup()
     hub.preparePrivateMcpServer.mockRejectedValueOnce(new Error("lost preparation ACK"))
-    expect(await flow.submit(input, scope)).toBe(false)
+    expect(await flow.submit(input, scope, "connect")).toBe(false)
     expect(await preparation.prepare({ serverId: "private-server", connectorId: "private-connector", version: "99" }, boundary)).toBe(true)
     expect(hub.preparePrivateMcpServer.mock.calls[1]?.slice(0, 3)).toEqual(hub.preparePrivateMcpServer.mock.calls[0]?.slice(0, 3))
     expect(hub.preparePrivateMcpServer.mock.calls[1]?.[1]).toBe("7")
@@ -373,7 +373,7 @@ describe("private MCP creation registration and preparation", () => {
     const { flow, preparation, hub, scope, detach } = await setup()
     const release = flow.retain(boundary)
     hub.preparePrivateMcpServer.mockRejectedValueOnce(new Error("lost preparation ACK"))
-    expect(await flow.submit(input, scope)).toBe(false)
+    expect(await flow.submit(input, scope, "connect")).toBe(false)
     detach()
     preparation.retireTarget("private-server", "unrelated-connector")
     expect(flow.getSnapshot().unknown).toBe("prepare")
@@ -381,6 +381,39 @@ describe("private MCP creation registration and preparation", () => {
     expect(flow.getSnapshot()).toMatchObject({ registered: false, unknown: null, facts: null })
     expect(preparation.getSnapshot()).toEqual([])
     release()
+  })
+
+  it.each(["configure", "publish"] as const)("%s intent confirms configuration without calling Prepare or claiming ready", async intent => {
+    const { flow, hub, scope } = await setup()
+    expect(await flow.submit(input, scope, intent)).toBe(true)
+    expect(hub.preparePrivateMcpServer).not.toHaveBeenCalled()
+    expect(hub.beginMcpConnectorAuthorization).not.toHaveBeenCalled()
+    expect(flow.getSnapshot()).toMatchObject({ intent, publishRequested: intent === "publish", facts: { server: { prepare_status: "pending_prepare" }, connector: { status: "pending", enabled: false } } })
+    expect(intent === "configure" ? flow.finishConfiguration(scope) : flow.finishRegistration(scope)).toBe(true)
+  })
+
+  it("configuration qualification does not require a Prepare client", async () => {
+    const { hub, scope } = await setup()
+    const client = { registerPrivateMcpServer: hub.registerPrivateMcpServer, getPrivateMcpServer: hub.getPrivateMcpServer, getMcpConnector: hub.getMcpConnector, beginMcpConnectorAuthorization: hub.beginMcpConnectorAuthorization }
+    const { createMcpServerCreationFlow } = await import("@/ui/mcp/mcp-server-creation-flow")
+    const flow = createMcpServerCreationFlow({ client, preparation: createMcpPreparationCommands({ canPrepare: () => false, client, boundary, onConfirmed: vi.fn() }), boundary, onChanged: vi.fn() })
+    flow.attach(scope.window)
+    expect(flow.available).toBe(true)
+    expect(await flow.submit(input, scope, "configure")).toBe(true)
+    expect(flow.finishConfiguration(scope)).toBe(true)
+  })
+
+  it("configuration read failure retains the acknowledged target and retries only exact reads", async () => {
+    const { flow, hub, scope } = await setup()
+    hub.getPrivateMcpServer.mockRejectedValueOnce(new Error("fresh read unavailable"))
+    expect(await flow.submit(input, scope, "configure")).toBe(false)
+    expect(flow.getSnapshot()).toMatchObject({ registered: true, unknown: null, intent: "configure", facts: null })
+    expect(flow.finishConfiguration(scope)).toBe(false)
+    expect(await flow.retry(scope)).toBe(true)
+    expect(hub.registerPrivateMcpServer).toHaveBeenCalledOnce()
+    expect(hub.preparePrivateMcpServer).not.toHaveBeenCalled()
+    expect(flow.getSnapshot().facts?.server.prepare_status).toBe("pending_prepare")
+    expect(flow.finishConfiguration(scope)).toBe(true)
   })
 
 })

@@ -31,14 +31,16 @@ export function useMcpServerCreation(flow: McpServerCreationFlow, boundary: Proj
   const admitted = boundary.admitted && flow.matches(scope);
   const current = () => committed.current === scope && flow.matches(scope);
   useEffect(() => { if (admitted && state.registered) void flow.refresh(scope); }, [admitted, flow, scope, state.registered]);
-  const done = async (publish = publishing.current) => {
-    if (!current() || completing.current || completion === "closing") return;
+  const done = async () => {
+    if (!current() || completing.current || completion === "closing" || publishing.current && !onPublish) return;
     if (completionTarget.current === null) {
-      const facts = flow.getSnapshot().facts;
+      const snapshot = flow.getSnapshot(), facts = snapshot.facts;
+      const publish = snapshot.publishRequested;
+      if (publish && !onPublish) return;
       if (!facts) return;
       const target = Object.freeze({ serverId: facts.server.server_id, connectorId: facts.connector.connector_id, providerKey: facts.connector.provider_key });
       rememberCreatedMcpDetail(target, flow.client, boundary, facts);
-      if (!(publish ? flow.finishRegistration(scope) : flow.finish(scope))) { retireCreatedMcpDetail(target); return; }
+      if (!(snapshot.intent === "configure" ? flow.finishConfiguration(scope) : publish ? flow.finishRegistration(scope) : flow.finish(scope))) { retireCreatedMcpDetail(target); return; }
       publishing.current = publish;
       completionTarget.current = target;
     }
@@ -77,43 +79,27 @@ export function useMcpServerCreation(flow: McpServerCreationFlow, boundary: Proj
       await startPopup(requestAuthorization);
     } catch (error) { if (current()) setPopupError({ scope, failure: connectorCommandFailure("mcp", error) }); }
   };
-  const save = async (input?: McpPrivateServerRegistrationInput, oauth = false) => {
+  const saveConfiguration = async (input?: McpPrivateServerRegistrationInput) => {
     if (!current() || state.busy || completion !== "idle" || !connectorCommandMayResume(state.failure)) return;
+    if (flow.getSnapshot().publishRequested && !onPublish) return;
     setPopupError(null);
-    const run = () => state.unknown ? flow.retry(scope)
-      : state.registered ? flow.prepare(scope) : input ? flow.submit(input, scope) : Promise.resolve(false);
-    if (!oauth) {
-      if (await run() && current()) await done();
-      return;
-    }
-    // Reserve the popup in the click stack, before registration or discovery
-    // consumes the browser's transient user activation.
-    let connected = false;
-    try {
-      await startPopup(async signal => {
-        const pause = () => flow.pause(scope);
-        signal.addEventListener("abort", pause, { once: true });
-        try {
-          if (signal.aborted || !current()) throw new Error("MCP creation popup retired");
-          connected = await run();
-          if (signal.aborted || !current()) throw new Error("MCP creation popup retired");
-          return connected ? null : await requestAuthorization(signal);
-        } finally { signal.removeEventListener("abort", pause); }
-      });
-      if (connected && current()) await done();
-    } catch (error) { if (current()) setPopupError({ scope, failure: connectorCommandFailure("mcp", error) }); }
+    // A retained command keeps its original intent, including an old unknown Prepare.
+    const confirmed = state.unknown ? await flow.retry(scope)
+      : state.registered ? state.intent === "connect" ? await flow.prepare(scope) : Boolean(await flow.refresh(scope, true))
+      : input ? await flow.submit(input, scope, "configure") : false;
+    if (confirmed && current()) await done();
   };
   const saveForPublication = async (input?: McpPrivateServerRegistrationInput) => {
     if (!onPublish || !current() || state.busy || completion !== "idle" || !connectorCommandMayResume(state.failure)) return;
     setPopupError(null);
     const confirmed = state.unknown ? await flow.retry(scope)
       : state.registered ? Boolean(await flow.refresh(scope, true))
-      : input ? await flow.submit(input, scope, false) : false;
-    if (confirmed && current()) await done(true);
+      : input ? await flow.submit(input, scope, "publish") : false;
+    if (confirmed && current()) await done();
   };
   const locked = !admitted || state.busy || state.unknown !== null || state.registered || completion !== "idle";
   return { state, completion, admitted, submitting: state.busy || completion === "closing", locked,
-    editable: () => !locked && current(), save, saveForPublication, authorize, done,
+    editable: () => !locked && current(), saveConfiguration, saveForPublication, authorize, done,
     cancel: () => { if (committed.current === scope) { flow.dismiss(scope); committed.current = null; onCancel(); } },
     error: state.error || popupError?.scope === scope || completion === "retry",
     failure: state.failure ?? (popupError?.scope === scope ? popupError.failure : undefined),

@@ -224,7 +224,7 @@ it.each([
       // An already-frozen pre-transport request, not a rewritten new HTTP command.
       const window = {}, scope = { window, boundary };
       const detach = flow.attach(window);
-      await act(async () => { await flow.submit({ display_name: "Original MCP", server_url: "https://mcp.example.test/mcp" }, scope); });
+      await act(async () => { await flow.submit({ display_name: "Original MCP", server_url: "https://mcp.example.test/mcp" }, scope, "connect"); });
       detach();
     }
     const first = show();
@@ -258,4 +258,27 @@ it.each([
     expect(client.preparePrivateMcpServer).not.toHaveBeenCalled();
     reopened.unmount();
   } finally { release(); }
+});
+
+
+it.each(["streamable_http", "sse_compat"] as const)("Custom MCP %s Save completes configuration even while the external service is unavailable", async transport => {
+  const savedServer: McpPrivateServer = { availability: "unavailable", server_id: "configured-server", display_name: "Configured MCP", server_url: "https://mcp.example.test/configuration", notes: "", status: "registered", state_version: "1", headers: [], transport, prepare_status: "pending_prepare", declarations: [], declarations_available: false };
+  const savedConnector: McpConnector = { availability: "unavailable", connector_id: "configured-connector", server_id: savedServer.server_id, provider_key: "configured-provider", connector_type: "mcp", status: "pending", enabled: false, approved_scopes: [], state_version: "1" };
+  const client = { registerPrivateMcpServer: vi.fn().mockResolvedValue({ server: savedServer, connector: savedConnector, replayed: false }), getPrivateMcpServer: vi.fn().mockResolvedValue(savedServer), getMcpConnector: vi.fn().mockResolvedValue(savedConnector), preparePrivateMcpServer: vi.fn().mockRejectedValue(new Error("external unavailable")), beginMcpConnectorAuthorization: vi.fn() };
+  const flow = createMcpServerCreationFlow({ client, boundary, onChanged: vi.fn(), preparation: createMcpPreparationCommands({ client, boundary, canPrepare: () => true, onConfirmed: vi.fn() }) });
+  const onDone = vi.fn().mockResolvedValue(undefined);
+  render(<LocaleProvider><Dialog open><DialogContent><CustomMcpForm flow={flow} boundary={boundary} onCancel={vi.fn()} onDone={onDone} /></DialogContent></Dialog></LocaleProvider>);
+  if (transport === "sse_compat") {
+    fireEvent.keyDown(screen.getByRole("combobox", { name: "传输类型" }), { key: "ArrowDown" });
+    fireEvent.click(await screen.findByRole("option", { name: /^SSE$/u }));
+  }
+  fireEvent.change(screen.getByRole("textbox", { name: "服务器名称" }), { target: { value: savedServer.display_name } });
+  fireEvent.change(screen.getByRole("textbox", { name: "服务器 URL" }), { target: { value: savedServer.server_url } });
+  fireEvent.click(screen.getByRole("button", { name: /^保存$/u }));
+  await waitFor(() => expect(onDone).toHaveBeenCalledWith({ serverId: savedServer.server_id, connectorId: savedConnector.connector_id, providerKey: savedConnector.provider_key }, expect.any(Function)));
+  expect(client.registerPrivateMcpServer).toHaveBeenCalledOnce();
+  expect(client.getPrivateMcpServer).toHaveBeenCalledWith(savedServer.server_id, expect.any(AbortSignal));
+  expect(client.getMcpConnector).toHaveBeenCalledWith(savedConnector.connector_id, expect.any(AbortSignal));
+  expect(client.preparePrivateMcpServer).not.toHaveBeenCalled();
+  expect(client.beginMcpConnectorAuthorization).not.toHaveBeenCalled();
 });

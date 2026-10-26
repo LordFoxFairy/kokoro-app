@@ -1,12 +1,13 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
-import { createHubClient } from "@/hub/client"
+import { createHubClient, HubClientError } from "@/hub/client"
 import type { McpConnector, McpPrivateServer } from "@/hub/mcp-connector.schema"
 import { LocaleProvider } from "@/i18n/context"
 import { ConnectorCommandProvider } from "@/ui/mcp/connector-command-context"
 import { McpContent } from "@/ui/mcp/mcp-content"
 import { McpTrialProvider } from "@/ui/mcp/mcp-trial-context"
 import { CustomMcpDetailDialog } from "@/ui/mcp/custom-mcp-detail-dialog"
+import { ProductReadRecheckProvider, type ProductRead401 } from "@/ui/auth/product-read-recheck-context"
 
 beforeEach(() => localStorage.setItem("kokoro.locale", "zh"))
 afterEach(cleanup)
@@ -180,4 +181,79 @@ it.each(["read error", "unknown command", "actor", "generation", "admission", "t
   fireEvent.click(screen.getByRole("button", { name: "连接" }))
   expect(state.trial).not.toHaveBeenCalled()
   expect(state.prepare).not.toHaveBeenCalled()
+})
+
+
+async function pendingPrivateServerRead() {
+  let version = 3, notes = "Original note", held = false
+  let rejectRead!: (error: unknown) => void
+  const pending = new Promise<never>((_resolve, reject) => { rejectRead = reject })
+  let readSignal: AbortSignal | undefined
+  const connector = (): McpConnector => ({ availability: "available", connector_id: "proof-connector", server_id: "proof-server",
+    provider_key: "proof-provider", connector_type: "mcp", display_name: "Proof MCP", status: "active", enabled: true,
+    approved_scopes: [], state_version: String(version) })
+  const server = (): McpPrivateServer => ({ availability: "available", server_id: "proof-server", display_name: "Proof MCP",
+    server_url: "https://mcp.example.test/mcp", notes, status: "registered", state_version: String(version), headers: [],
+    transport: "streamable_http", prepare_status: "ready", declarations: [], declarations_available: true, connection_id: "proof-connection" })
+  const read = vi.fn(async (_id: string, signal?: AbortSignal) => {
+    if (version === 4 && !held) { held = true; readSignal = signal; return pending }
+    return server()
+  })
+  const patch = vi.fn<NonNullable<ReturnType<typeof createHubClient>["updatePrivateMcpServer"]>>().mockImplementation(async (_id, input) => {
+    version++; notes = input.notes ?? notes
+    return { server: server(), connector: connector(), replayed: false }
+  })
+  const client = { ...createHubClient(), getPrivateMcpServer: read, updatePrivateMcpServer: patch,
+    getMcpConnector: vi.fn(async () => connector()), listMcpConnectors: vi.fn(async () => ({ items: [connector()], next_cursor: null })),
+    listMcpConnectorProviders: vi.fn(async () => ({ items: [], next_cursor: null })), listCustomApis: vi.fn(async () => ({ items: [], page: { next_cursor: null } })) }
+  const report = vi.fn((proof: ProductRead401) => {
+    expect(proof).toMatchObject({ subject: "private-read-actor", generation: 7 })
+    expect(proof.signal).toBe(readSignal)
+    expect(proof.signal.aborted).toBe(false)
+  })
+  let boundary = { admitted: true, subject: "private-read-actor", generation: 7 }
+  const surface = () => <LocaleProvider><ProductReadRecheckProvider value={report}><ConnectorCommandProvider client={client} boundary={boundary}>
+    <McpContent client={client} initialView="connections" readBoundary={boundary} />
+  </ConnectorCommandProvider></ProductReadRecheckProvider></LocaleProvider>
+  const view = render(surface())
+  fireEvent.click(await screen.findByRole("button", { name: "Proof MCP" }))
+  const dialog = await screen.findByRole("dialog", { name: "Proof MCP" })
+  fireEvent.keyDown(within(dialog).getByRole("button", { name: "管理" }), { key: "Enter" })
+  fireEvent.click(await screen.findByRole("menuitem", { name: "编辑配置" }))
+  fireEvent.change(screen.getByRole("textbox", { name: "备注 （可选）" }), { target: { value: "Saved proof note" } })
+  fireEvent.click(screen.getByRole("button", { name: "保存" }))
+  await waitFor(() => expect(read).toHaveBeenCalledTimes(2))
+  expect(patch).toHaveBeenCalledOnce()
+  const original = { body: JSON.stringify(patch.mock.calls[0]?.[1]), key: patch.mock.calls[0]?.[2] }
+  return { view, dialog, read, patch, report, original, rejectRead,
+    signal: () => readSignal!,
+    change: (next: Partial<typeof boundary>) => { boundary = { ...boundary, ...next }; view.rerender(surface()) } }
+}
+
+it.each(["401", "403", "parse401", "network", "aborted"] as const)("the real saved private-server GET reports only its current typed HTTP401: %s", async failure => {
+  const state = await pendingPrivateServerRead()
+  const error = new HubClientError(failure === "401" || failure === "403" ? "http" : failure === "parse401" ? "parse" : failure,
+    "controlled private-server read", null, failure === "403" ? 403 : 401)
+  await act(async () => { state.rejectRead(error) })
+  expect(await within(state.dialog).findByRole("button", { name: "重试" })).toBeEnabled()
+  expect(screen.getByRole("button", { name: "保存" })).toBeDisabled()
+  expect(state.report).toHaveBeenCalledTimes(failure === "401" ? 1 : 0)
+  expect(state.read).toHaveBeenCalledTimes(2)
+  expect(state.patch).toHaveBeenCalledOnce()
+  expect({ body: JSON.stringify(state.patch.mock.calls[0]?.[1]), key: state.patch.mock.calls[0]?.[2] }).toEqual(state.original)
+})
+
+it.each(["actor", "generation", "close", "unmount"] as const)("a late private-server HTTP401 after %s never requests readmission or replays Save", async retirement => {
+  const state = await pendingPrivateServerRead()
+  if (retirement === "actor") state.change({ subject: "different-reader" })
+  else if (retirement === "generation") state.change({ generation: 8 })
+  else if (retirement === "close") {
+    fireEvent.keyDown(state.dialog, { key: "Escape" })
+    await waitFor(() => expect(state.dialog).not.toBeInTheDocument())
+  } else state.view.unmount()
+  expect(state.signal().aborted).toBe(true)
+  await act(async () => { state.rejectRead(new HubClientError("http", "late private read", null, 401)) })
+  expect(state.report).not.toHaveBeenCalled()
+  expect(state.patch).toHaveBeenCalledOnce()
+  expect({ body: JSON.stringify(state.patch.mock.calls[0]?.[1]), key: state.patch.mock.calls[0]?.[2] }).toEqual(state.original)
 })

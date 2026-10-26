@@ -4,7 +4,8 @@ import { type FormEvent, type RefObject, useEffect, useLayoutEffect, useMemo, us
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import type { HubClient } from "@/hub/client";
+import { HubClientError, type HubClient } from "@/hub/client";
+import { useProductReadRecheck } from "@/ui/auth/product-read-recheck-context";
 import type {
   McpConnector,
   McpConnectorProvider,
@@ -92,6 +93,7 @@ export function McpProjectionRead({
   createdDetail?: { target: McpServerCreationCompletion; onClose: () => void; returnFocusRef?: RefObject<HTMLElement | null> };
 }) {
   const t = useT();
+  const reportRead401 = useProductReadRecheck();
   const startTrial = useMcpTrial();
   const providerCreation = useProviderCreationCommands(client, identity);
   const providerCreationStates = useSyncExternalStore(providerCreation.subscribe, providerCreation.getSnapshot, providerCreation.getSnapshot);
@@ -445,13 +447,17 @@ export function McpProjectionRead({
         }
         setEditor({ kind: "edit", connector: selectedConnector, ...(server ? { server } : {}) });
         setConnectorIntent(current => current?.connectorId === connectorId ? { ...current, entered: true } : current);
-      } catch {
-        if (active && ownerRef.current === owner) setActionError(true);
+      } catch (error: unknown) {
+        if (active && ownerRef.current === owner && !controller.signal.aborted) {
+          setActionError(true);
+          if (error instanceof HubClientError && error.reason === "http" && error.status === 401)
+            reportRead401?.({ subject: identity, generation: readGeneration, signal: controller.signal });
+        }
       }
     };
     void read();
     return () => { active = false; controller.abort(); };
-  }, [admitted, client, connectorId, serverId, selectedConnector, selectedConnectorProvider, providerReady, detailRetry, owner, detailHandoff]);
+  }, [admitted, client, connectorId, serverId, selectedConnector, selectedConnectorProvider, providerReady, detailRetry, owner, detailHandoff, reportRead401, identity, readGeneration]);
   const connectProvider = (
     provider: McpConnectorProvider,
     onSuccess?: () => void,

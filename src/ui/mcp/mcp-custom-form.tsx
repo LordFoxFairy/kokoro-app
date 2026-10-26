@@ -104,7 +104,7 @@ export function CustomMcpForm({
     event?.preventDefault();
     if (!canSubmit && !state.unknown && !state.registered) return;
     icon.draft.protectForSave();
-    void creation.save({ ...icon.draft.change(), display_name: name.trim(), server_url: url.trim(), transport,
+    void creation.saveConfiguration({ ...icon.draft.change(), display_name: name.trim(), server_url: url.trim(), transport,
       ...(notes.trim() ? { notes: notes.trim() } : {}),
       ...(configuredHeaders.length ? { headers: configuredHeaders.map(header => ({ name: header.name.trim().toLowerCase(), value: header.value })) } : {}),
     });

@@ -3311,30 +3311,32 @@ it.each(["form", "url"] as const)("%s creation OAuth recheck closes its popup an
   const popup = { closed: false, opener: null, location: { replace: vi.fn() }, close: vi.fn(function () { popup.closed = true }) }
   vi.spyOn(window, "open").mockReturnValue(popup as unknown as Window)
   const registration = mcpCreationRegistration()
-  type Started = Awaited<ReturnType<import("@/hub/client").HubClient["beginMcpConnectorAuthorization"]>>
+  type Started = Awaited<ReturnType<import("@/hub/client").HubClient["reconnectMcpConnectorAuthorization"]>>
   let acknowledge!: (value: Started) => void
   const pending = new Promise<Started>(resolve => { acknowledge = resolve })
-  const begin = vi.fn<import("@/hub/client").HubClient["beginMcpConnectorAuthorization"]>(() => pending)
+  const reconnect = vi.fn<import("@/hub/client").HubClient["reconnectMcpConnectorAuthorization"]>(() => pending)
   const list = vi.fn().mockResolvedValue({ items: [], next_cursor: null })
   const hub = { ...apiCreationHub(), listMcpConnectors: list,
     registerPrivateMcpServer: vi.fn().mockResolvedValue(registration),
     getPrivateMcpServer: vi.fn().mockResolvedValue({ ...registration.server, transport: "streamable_http" as const, prepare_status: "needs_oauth", state_version: "7" }),
-    getMcpConnector: vi.fn().mockResolvedValue({ ...registration.connector, state_version: "7" }), beginMcpConnectorAuthorization: begin }
+    getMcpConnector: vi.fn().mockResolvedValue({ ...registration.connector, state_version: "7" }), beginMcpConnectorAuthorization: vi.fn(), reconnectMcpConnectorAuthorization: reconnect }
   vi.spyOn(pageClients, "browserHubClient").mockReturnValue(hub)
   const boundary = { admitted: true, subject: `server-oauth-${mode}`, generation: 1 }
   const view = render(apiCreationOverlay(boundary, mode))
   fireEvent.change(screen.getByRole("textbox", { name: /^服务器名称\*?$/ }), { target: { value: "Creation MCP" } })
   fireEvent.change(screen.getByRole("textbox", { name: /^服务器 URL\*?$/ }), { target: { value: "https://mcp.example.test/creation" } })
   fireEvent.click(screen.getByRole("button", { name: "保存" }))
+  await screen.findByRole("button", { name: "管理" })
+  expect(hub.beginMcpConnectorAuthorization).not.toHaveBeenCalled()
   fireEvent.click(await screen.findByRole("button", { name: "连接" }))
-  await waitFor(() => expect(begin).toHaveBeenCalledOnce())
+  await waitFor(() => expect(reconnect).toHaveBeenCalledOnce())
   view.rerender(apiCreationOverlay({ ...boundary, admitted: false, generation: 2 }, mode))
   expect(popup.close).toHaveBeenCalledOnce()
-  expect(begin.mock.calls[0]?.[2]?.aborted).toBe(true)
+  expect(reconnect.mock.calls[0]?.[2]?.aborted).toBe(true)
   await act(async () => { acknowledge({ authorization: { authorization_id: "late-creation-auth", authorization_url: "https://oauth.example.test/late", expires_at: "2999-01-01T00:00:00Z" }, connector: registration.connector }); await pending })
   expect(popup.location.replace).not.toHaveBeenCalled()
   expect(screen.getByRole("dialog")).toBeVisible()
-  expect(begin).toHaveBeenCalledOnce()
+  expect(reconnect).toHaveBeenCalledOnce()
 })
 
 const atomicMcpDocument = JSON.stringify({ mcpServers: { "Original import": { type: "streamableHttp", url: "https://mcp.example.test/original", headers: { "x-acceptance-check": "fixture-only" } } } })
@@ -3608,9 +3610,18 @@ it("Settings revalidates a registered MCP again after remote Prepare completes",
   fireEvent.change(screen.getByRole("textbox", { name: "服务器 URL" }), { target: { value: "https://mcp.example.test/prepare" } })
   fireEvent.click(screen.getByRole("button", { name: "保存" }))
   await waitFor(() => expect(list).toHaveBeenCalledTimes(2))
+  await screen.findByRole("button", { name: "管理" })
+  const configuredDetail = screen.getByRole("dialog", { name: "Prepared MCP" })
+  expect(within(configuredDetail).queryByLabelText("已连接")).not.toBeInTheDocument()
+  expect(hub.preparePrivateMcpServer).not.toHaveBeenCalled()
+  fireEvent.click(await within(configuredDetail).findByRole("button", { name: "连接" }))
+  await waitFor(() => expect(hub.preparePrivateMcpServer).toHaveBeenCalledOnce())
   await act(async () => { await Promise.resolve() })
   await act(async () => { finish(); await remote })
   await waitFor(() => expect(list).toHaveBeenCalledTimes(3))
+  // The existing explicit Connect success closes its detail; reopen the same resource.
+  await waitFor(() => expect(screen.queryByRole("dialog", { name: "Prepared MCP" })).not.toBeInTheDocument())
+  fireEvent.click(await screen.findByRole("button", { name: "Prepared MCP" }))
   const createdDetail = await screen.findByRole("dialog", { name: "Prepared MCP" })
   expect(await within(createdDetail).findByLabelText("已连接")).toBeVisible()
   fireEvent.keyDown(createdDetail, { key: "Escape" })
@@ -4156,7 +4167,7 @@ it.each(["form", "url"] as const)("%s MCP completion failure remains named and o
   expect(onDone).toHaveBeenLastCalledWith(completion, expect.any(Function))
   expect(onDone.mock.calls[1]?.[0]).toBe(onDone.mock.calls[0]?.[0])
   expect(hub.registerPrivateMcpServer).toHaveBeenCalledOnce()
-  expect(hub.preparePrivateMcpServer).toHaveBeenCalledOnce()
+  expect(hub.preparePrivateMcpServer).not.toHaveBeenCalled()
 })
 
 it.each(["recheck", "dialog-close"] as const)("URL Save-and-publish registers without an OAuth popup and retires picker handoff on %s", async retirement => {
@@ -4207,6 +4218,12 @@ it("a blocked browser popup cannot prevent URL registration and project selectio
   expect(await screen.findByRole("dialog", { name: "发布到项目" })).toBeVisible()
   expect(hub.registerPrivateMcpServer).toHaveBeenCalledOnce()
   expect(open).not.toHaveBeenCalled()
+  const picker = screen.getByRole("dialog", { name: "发布到项目" })
+  fireEvent.click(within(picker).getByRole("button", { name: "取消" }))
+  const detail = await screen.findByRole("dialog", { name: "Creation MCP" })
+  expect(detail).toBeVisible()
+  expect(hub.registerPrivateMcpServer).toHaveBeenCalledOnce()
+  expect(hub.getPrivateMcpServer).toHaveBeenCalledWith(registration.server.server_id, expect.any(AbortSignal))
 })
 
 it("URL definition publication does not run discovery or OAuth before handing off its registered entity", async () => {
@@ -4279,6 +4296,10 @@ it("global creation and Settings detail restore one Prepare, and confirmed disco
   fireEvent.change(screen.getByRole("textbox", { name: "服务器名称" }), { target: { value: "Creation MCP" } })
   fireEvent.change(screen.getByRole("textbox", { name: "服务器 URL" }), { target: { value: registration.server.server_url } })
   fireEvent.click(screen.getByRole("button", { name: "保存" }))
+  await screen.findByRole("button", { name: "管理" })
+  const configuredDetail = screen.getByRole("dialog", { name: "Creation MCP" })
+  expect(prepare).not.toHaveBeenCalled()
+  fireEvent.click(await within(configuredDetail).findByRole("button", { name: "连接" }))
   await screen.findByRole("button", { name: "重试原请求" })
   expect(prepare).toHaveBeenCalledOnce()
   version = "9"

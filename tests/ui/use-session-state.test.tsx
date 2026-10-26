@@ -1217,3 +1217,79 @@ it.each(["readonly", "rotating"] as const)("current read401 releases a retired p
     expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(kind === "rotating" ? 2 : 1)
   } finally { finish(session()); view.unmount() }
 })
+
+
+it("private-server Save GET401 uses real Session confirmation before a fresh generation read and never repeats PATCH", async () => {
+  const { render, screen, fireEvent, within } = await import("@testing-library/react")
+  const { AppGate } = await import("@/ui/auth/app-gate")
+  const { LocaleProvider } = await import("@/i18n/context")
+  const { McpContent } = await import("@/ui/mcp/mcp-content")
+  const { ConnectorCommandProvider } = await import("@/ui/mcp/connector-command-context")
+  const { createHubClient, HubClientError } = await import("@/hub/client")
+  const recovery = await import("@/ui/mcp/mcp-preparation-recovery")
+  const { createTestPreparationJournal } = await import("./fixtures/mcp-preparation-journal")
+  const journal = vi.spyOn(recovery, "createBrowserMcpPreparationRecovery").mockImplementation(() => createTestPreparationJournal(recovery))
+  window.localStorage.setItem("kokoro.locale", "zh")
+  let version = 3, notes = "Initial verified note", failedRead = false, authReads = 0
+  let confirmSession: ((response: Response) => void) | undefined
+  const admissions: import("@/ui/auth/use-session-state").ProjectReadBoundary[] = []
+  const connector = (): import("@/hub/mcp-connector.schema").McpConnector => ({ availability: "available", connector_id: "auth-read-connector", server_id: "auth-read-server",
+    provider_key: "auth-read-provider", connector_type: "mcp", display_name: "Session read MCP", status: "active", enabled: true, approved_scopes: [], state_version: String(version) })
+  const server = (): import("@/hub/mcp-connector.schema").McpPrivateServer => ({ availability: "available", server_id: "auth-read-server", display_name: "Session read MCP",
+    server_url: "https://mcp.example.test/mcp", notes, status: "registered", state_version: String(version), headers: [], transport: "streamable_http",
+    prepare_status: "ready", declarations: [], declarations_available: true, connection_id: "auth-read-connection" })
+  const read = vi.fn(async () => {
+    if (version === 4 && !failedRead) { failedRead = true; throw new HubClientError("http", "controlled current private-server read", null, 401) }
+    return server()
+  })
+  const patch = vi.fn<NonNullable<ReturnType<typeof createHubClient>["updatePrivateMcpServer"]>>().mockImplementation(async (_id, input) => {
+    version++; notes = input.notes ?? notes
+    return { server: server(), connector: connector(), replayed: false }
+  })
+  const client = { ...createHubClient(), getPrivateMcpServer: read, updatePrivateMcpServer: patch,
+    getMcpConnector: vi.fn(async () => connector()), listMcpConnectors: vi.fn(async () => ({ items: [connector()], next_cursor: null })),
+    listMcpConnectorProviders: vi.fn(async () => ({ items: [], next_cursor: null })), listCustomApis: vi.fn(async () => ({ items: [], page: { next_cursor: null } })) }
+  admittedProjectFixture = function PrivateServerFixture({ projectReadBoundary }) {
+    admissions.push(projectReadBoundary)
+    return <ConnectorCommandProvider client={client} boundary={projectReadBoundary}><McpContent client={client} initialView="connections" readBoundary={projectReadBoundary} /></ConnectorCommandProvider>
+  }
+  const fetchMock = vi.fn(async (path: string, init?: RequestInit) => {
+    if (path === "/api/auth/csrf") return csrf()
+    if (path === "/api/auth/session" && init?.method === "POST") return renewed()
+    if (path === "/api/auth/session") {
+      authReads++
+      if (authReads === 1) return session()
+      return new Promise<Response>(resolve => { confirmSession = resolve })
+    }
+    throw new Error("unexpected controlled Session request")
+  })
+  vi.stubGlobal("fetch", fetchMock)
+  const view = render(<LocaleProvider><AppGate /></LocaleProvider>)
+  try {
+    fireEvent.click(await screen.findByRole("button", { name: "Session read MCP" }))
+    const dialog = await screen.findByRole("dialog", { name: "Session read MCP" })
+    const originalGeneration = admissions.filter(value => value.admitted).at(-1)!.generation
+    fireEvent.keyDown(within(dialog).getByRole("button", { name: "管理" }), { key: "Enter" })
+    fireEvent.click(await screen.findByRole("menuitem", { name: "编辑配置" }))
+    fireEvent.change(screen.getByRole("textbox", { name: "备注 （可选）" }), { target: { value: "Verified saved note" } })
+    fireEvent.click(screen.getByRole("button", { name: "保存" }))
+    await waitFor(() => expect(patch).toHaveBeenCalledOnce())
+    const originalBody = JSON.stringify(patch.mock.calls[0]?.[1]), originalKey = patch.mock.calls[0]?.[2]
+    await waitFor(() => expect(authReads).toBe(2))
+    expect(read).toHaveBeenCalledTimes(2)
+    expect(screen.getByRole("button", { name: "保存" })).toBeDisabled()
+    expect(screen.getByRole("textbox", { name: "备注 （可选）" })).toHaveAttribute("readonly")
+    expect(admissions.at(-1)?.admitted).toBe(false)
+    await act(async () => { confirmSession!(session()) })
+    await waitFor(() => expect(read).toHaveBeenCalledTimes(3))
+    await waitFor(() => expect(screen.getByRole("button", { name: "保存" })).toBeEnabled())
+    expect(screen.getByRole("textbox", { name: "备注 （可选）" })).toHaveValue("Verified saved note")
+    expect(admissions.filter(value => value.admitted).at(-1)!.generation).toBeGreaterThan(originalGeneration)
+    expect(patch).toHaveBeenCalledOnce()
+    expect(patch.mock.calls[0]?.[1]).toEqual({ expected_state_version: "3", notes: "Verified saved note" })
+    expect(JSON.stringify(patch.mock.calls[0]?.[1])).toBe(originalBody)
+    expect(patch.mock.calls[0]?.[2]).toBe(originalKey)
+    expect(fetchMock.mock.calls.filter(([path, init]) => path === "/api/auth/session" && init?.method === "POST")).toHaveLength(1)
+    expect(authReads).toBe(2)
+  } finally { view.unmount(); admittedProjectFixture = undefined; journal.mockRestore(); confirmSession?.(session()) }
+})
