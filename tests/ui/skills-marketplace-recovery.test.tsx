@@ -14,7 +14,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-it("retries a failed marketplace search from its open pending detail without losing the selected revision", async () => {
+it("keeps a failed marketplace pending detail quiet and recovers its exact selection through normal search re-entry", async () => {
   const card = { skillId: "search-recovery-series", displayName: "Search recovery", currentVersion: { versionUid: "search-recovery-revision" } }
   const response = (body: unknown) => Response.json(body, { headers: { "cache-control": "private, no-store", "x-request-id": "catalog-recovery" } })
   const reads: { path: string; body: unknown }[] = []
@@ -48,32 +48,40 @@ it("retries a failed marketplace search from its open pending detail without los
   expect(within(dialog).queryByRole("alert")).toBeNull()
   expect(within(dialog).queryByRole("button", { name: "重试" })).toBeNull()
   await act(async () => { rejectSearch(Error("catalog temporarily unavailable")) })
-  await within(dialog).findByRole("alert")
+  await waitFor(() => expect(dialog).toHaveAttribute("aria-busy", "false"))
+  expect(within(dialog).queryByRole("alert")).toBeNull()
+  expect(within(dialog).queryByRole("button", { name: "重试" })).toBeNull()
   expect(reads.filter(read => read.path.endsWith("GetSkill"))).toHaveLength(0)
 
-  // The background Retry is inert while the detail is modal. Recovery must
-  // remain reachable inside the selected detail, not require closing it.
-  fireEvent.click(within(dialog).getByRole("button", { name: "重试" }))
+  // A normal search re-entry reads the failed query again; no failure card
+  // owns recovery and opening/closing a detail does not issue a command.
+  fireEvent.keyDown(dialog, { key: "Escape" })
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull())
+  expect(screen.getByRole("button", { name: card.displayName })).toBe(trigger)
+  fireEvent.change(screen.getByRole("searchbox", { name: "搜索技能" }), { target: { value: "" } })
+  await waitFor(() => expect(screen.getByRole("button", { name: `添加 ${card.displayName}` })).toBeEnabled())
+  fireEvent.change(screen.getByRole("searchbox", { name: "搜索技能" }), { target: { value: "Search" } })
   await waitFor(() => expect(finishRetry).toBeTypeOf("function"))
-  expect(screen.getByRole("dialog")).toBe(dialog)
-  expect(within(dialog).queryByRole("alert")).toBeNull()
-  expect(within(dialog).queryByRole("button", { name: "添加" })).toBeNull()
+  fireEvent.click(screen.getByRole("button", { name: card.displayName }))
+  const reopened = screen.getByRole("dialog")
+  expect(within(reopened).queryByRole("alert")).toBeNull()
+  expect(within(reopened).queryByRole("button", { name: "添加" })).toBeNull()
   await act(async () => { finishRetry(response({ skills: [card], tagOptions: {} })) })
-  expect(await within(dialog).findByText("Confirmed selected revision")).toBeVisible()
-  expect(screen.getByRole("dialog")).toBe(dialog)
+  expect(await within(reopened).findByText("Confirmed selected revision")).toBeVisible()
+  expect(screen.getByRole("dialog")).toBe(reopened)
   expect(searchReads).toBe(2)
-  expect(reads.filter(read => read.path.endsWith("ListHubSkills")).slice(1).map(read => read.body)).toEqual([
+  expect(reads.filter(read => read.path.endsWith("ListHubSkills") && (read.body as { query?: string }).query === "Search").map(read => read.body)).toEqual([
     { pageSize: 9, includeOfficialSkills: true, query: "Search" },
     { pageSize: 9, includeOfficialSkills: true, query: "Search" },
   ])
   expect(reads.filter(read => read.path.endsWith("GetSkill")).map(read => read.body)).toEqual([{ skillId: card.skillId }])
   expect(reads.every(read => /\/(?:ListSkills|ListHubSkills|GetSkill)$/u.test(read.path))).toBe(true)
-  fireEvent.keyDown(dialog, { key: "Escape" })
+  fireEvent.keyDown(reopened, { key: "Escape" })
   await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull())
-  await waitFor(() => expect(trigger).toHaveFocus())
+  await waitFor(() => expect(screen.getByRole("button", { name: card.displayName })).toHaveFocus())
 })
 
-it("offers pending-detail recovery only after admission and retires a late retry on actor change", async () => {
+it("keeps unadmitted pending details quiet and retires a late normal page re-entry on actor change", async () => {
   const card = { skillId: "recheck-series", displayName: "Rechecked skill", currentVersion: { versionUid: "recheck-revision" } }
   const response = (body: unknown) => Response.json(body, { headers: { "cache-control": "private, no-store", "x-request-id": "catalog-recheck" } })
   let catalogReads = 0
@@ -108,9 +116,15 @@ it("offers pending-detail recovery only after admission and retires a late retry
   expect(catalogReads).toBe(1)
 
   view.rerender(content(true, 2))
-  fireEvent.click(await within(dialog).findByRole("button", { name: "重试" }))
+  await waitFor(() => expect(catalogReads).toBe(2))
+  await waitFor(() => expect(dialog).toHaveAttribute("aria-busy", "false"))
+  expect(within(dialog).queryByRole("alert")).toBeNull()
+  expect(within(dialog).queryByRole("button", { name: "重试" })).toBeNull()
+  fireEvent.keyDown(dialog, { key: "Escape" })
+  view.unmount()
+  const reentered = render(content(true, 2))
   await waitFor(() => expect(finishRetry).toBeTypeOf("function"))
-  view.rerender(content(true, 3, "different-reader"))
+  reentered.rerender(content(true, 3, "different-reader"))
   await screen.findByRole("button", { name: card.displayName })
   await act(async () => { finishRetry(response({ skills: [card], tagOptions: {} })) })
   expect(screen.queryByRole("dialog")).toBeNull()

@@ -1,3 +1,11 @@
+## 2026-10-26 生产详情与文件的静默读取
+
+`ManusSkillDetailDialog` 的目录／安装／分享详情保留原窗口结构、字段占位和无障碍读取状态，不再用被动 metadata 或包读取失败面板承担恢复。正常关闭重开详情、重新进入阅读器和选择失败的同一文件可重新读取；未确认不当作空目录／空文件或成功，不自动安装、分享、下载或重放命令。未准入的显式会话恢复按钮、安装／分享／下载的实际操作失败和未知结果反馈保持。
+
+同一可信主体、准入代与精确版本内，返回概览后再进入阅读器复用当前已检查的 manifest，并重新读所选文件；仅该路径已确认的正文可在 typed 网络中断或严格 HTTP503 时保持。换路径先清旧正文；401／403／404／412 的已校验 owner 失败清包及依赖 metadata 资格，并清退该目录详情缓存；坏 wire／解析失败保守清包，不按文案猜权限。整个窗口关闭、actor／版本／准入代变化仍退休私有事实与迟到读取；不新增正文缓存或通用重试框架。
+
+`manus-skill-client` 的包读取独立启用既有 `HubClientError` 分类；默认 RPC List／Get／Download 错误语义不变。专项组件／client 测试覆盖可达的“已读→概览→再进入同文件失败”、正常恢复、路径切换与退休、typed 暂时／失效／损坏及取消边界；正常运行、Manus 对照及浏览器验收由主方另验。
+
 ## 2026-10-25 独立封面媒体消费
 
 `skill-cover-media.tsx` 由外层目录、Settings目录与详情共同使用。合法 exact revision URL 只是同源媒体定位，不代表有图；按原client/actor与URL换代，只有当前图片成功加载后展示，未加载／失败保留原fallback。详情仅按实际loaded预留封面宽度，统一unoptimized以保同源身份；不改变列表、安装、包读取或当前准入。
@@ -132,8 +140,8 @@ Settings 的正式入口是 `src/ui/settings/sections/skills-settings-section.ts
 - 安装池详情显式选择 installation metadata/package/download；目录 current 和分享保持独立。`@/hub/skill-installation-content` 校验精确 source/revision/目录并在退休时取消，不回退到当前系列。
 - `ManusSkillDetailDialog`（`manus-skill-detail-dialog.tsx`）：唯一的详情与文件阅读面；只在 owner
   返回 `skill_id` 与 `revision_skill_id` 时读取真实 package tree 和正文。缺少 binding 的旧投影保持详情入口禁用，
-  不再由浏览器合成 YAML、文件树或示例正文。目录／安装 metadata 读取失败在概览和 reader 都显示显式重试，
-  reader 不维持假加载；重试只重读原 locator，保当前文件／滚动意图，不重放安装、分享或发布命令。
+  不再由浏览器合成 YAML、文件树或示例正文。目录／安装 metadata 读取失败保稳定概览／reader 结构，
+  以正常进入／重新准入恢复精确 locator，保同目标的文件／滚动意图，不重放安装、分享或发布命令。
 - `@/lib/query` 与 `skills-resource-cache`：安装池使用 client-scoped `skillResourceKey(SKILLS_KEY, client)`；目录使用同样隔离的 `SKILLS_CATALOG_KEY`。正式 adapter 的 `skillQuota` 返回明确缺省，不请求旧 quota API；不存在可由旧 name-based cache 冒充的正式系列历史。
 
 ## 陷阱

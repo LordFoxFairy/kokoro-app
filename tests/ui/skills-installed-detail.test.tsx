@@ -427,7 +427,8 @@ it("does not render deleted-source private details, history or package actions f
  vi.stubGlobal("fetch",vi.fn(async()=>response({...installation,source_status:"deleted"})))
  render(<LocaleProvider><ManusSkillDetailDialog detailSource="installation" open readBoundary={{admitted:true,subject:"reader",generation:1}}
  skill={{installation_id:installation.installation_id,skill_id:installation.series_id,revision_skill_id:"manage-revision",source_ref:installation.source_ref,installed_source_ref:installation.source_ref,name:"Retained",description:"",content_hash:"series",scope:"personal",installed:true,enabled:false}} onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={()=>false} onManagePersonal={vi.fn()}/></LocaleProvider>)
- await screen.findByText("技能详情暂时不可用")
+ await waitFor(() => expect(screen.getByRole("dialog")).toHaveAttribute("aria-busy", "false"))
+ expect(screen.queryByRole("alert")).toBeNull()
  expect(screen.queryByText(installation.summary)).toBeNull()
  expect(screen.queryByRole("button",{name:"更多技能操作"})).toBeNull()
  expect(screen.getByRole("button",{name:"查看详情"})).toBeDisabled()
@@ -451,13 +452,13 @@ function detailRetryFixture(source: "catalog" | "installation") {
       skill: { id: skill.skill_id, version: skill.revision_skill_id, displayName: skill.name, description: summary },
     })
   const onAdd = vi.fn(), onTry = vi.fn(() => false)
-  const content = (boundary: ProjectReadBoundary = { admitted: true, subject: "reader", generation: 1 }, open = true) =>
+  const content = (boundary: ProjectReadBoundary = { admitted: true, subject: "reader", generation: 1 }, open = true, selected = skill) =>
     <LocaleProvider><ManusSkillDetailDialog detailSource={source} open={open} readBoundary={boundary}
-      skill={skill} onOpenChange={vi.fn()} onAdd={onAdd} onTry={onTry} /></LocaleProvider>
-  return { expectedPath, detailResponse, content, onAdd, onTry }
+      skill={selected} onOpenChange={vi.fn()} onAdd={onAdd} onTry={onTry} /></LocaleProvider>
+  return { expectedPath, detailResponse, content, onAdd, onTry, skill }
 }
 
-it.each(["catalog", "installation"] as const)("recovers a failed %s metadata read in the open detail by explicitly retrying the exact locator", async source => {
+it.each(["catalog", "installation"] as const)("keeps a failed %s metadata read quiet and recovers the exact locator on normal reopening", async source => {
   window.localStorage.setItem("kokoro.locale", "zh")
   const { expectedPath, detailResponse, content, onAdd, onTry } = detailRetryFixture(source)
   let resolveRetry!: (response: Response) => void
@@ -468,14 +469,17 @@ it.each(["catalog", "installation"] as const)("recovers a failed %s metadata rea
     if (requests.length === 1) throw new Error("temporary read failure")
     return retryRead
   }))
-  render(content())
-  await screen.findByText("技能详情暂时不可用")
+  const view = render(content())
+  await waitFor(() => expect(screen.getByRole("dialog")).toHaveAttribute("aria-busy", "false"))
+  expect(screen.queryByRole("alert")).toBeNull()
   expect(requests).toHaveLength(1)
   expect(screen.getByRole("button", { name: "查看详情" })).toBeDisabled()
-  fireEvent.click(screen.getByRole("button", { name: "重试" }))
-  await screen.findByText("正在加载技能详情…")
   expect(screen.queryByRole("button", { name: "重试" })).toBeNull()
+  view.rerender(content(undefined, false))
+  view.rerender(content())
   await waitFor(() => expect(requests).toHaveLength(2))
+  expect(screen.getByRole("dialog")).toHaveAttribute("aria-busy", "true")
+  expect(screen.getByRole("status")).toHaveTextContent("正在加载技能详情…")
   expect(requests[1]).toEqual(requests[0])
   expect(requests[0]?.path).toBe(expectedPath)
   if (source === "catalog") expect(JSON.parse(String(requests[0]?.body))).toEqual({ skillId: "manage-series" })
@@ -491,7 +495,7 @@ it.each([
   ["catalog", "close"], ["installation", "close"],
   ["catalog", "admission"], ["installation", "admission"],
   ["catalog", "actor"], ["installation", "actor"],
-] as const)("retires a pending %s metadata retry on %s without restoring its late facts", async (source, retirement) => {
+] as const)("retires a pending reopened %s metadata read on %s without restoring its late facts", async (source, retirement) => {
   window.localStorage.setItem("kokoro.locale", "zh")
   const { expectedPath, detailResponse, content } = detailRetryFixture(source)
   let resolveRetry!: (response: Response) => void
@@ -505,8 +509,10 @@ it.each([
     return detailResponse("Replacement actor detail")
   }))
   const view = render(content())
-  await screen.findByText("技能详情暂时不可用")
-  fireEvent.click(screen.getByRole("button", { name: "重试" }))
+  await waitFor(() => expect(screen.getByRole("dialog")).toHaveAttribute("aria-busy", "false"))
+  expect(screen.queryByRole("alert")).toBeNull()
+  view.rerender(content(undefined, false))
+  view.rerender(content())
   await waitFor(() => expect(signals).toHaveLength(2))
   view.rerender(content({
     admitted: retirement !== "admission", subject: retirement === "actor" ? "replacement-reader" : "reader", generation: retirement === "admission" ? 2 : 1,
@@ -518,7 +524,7 @@ it.each([
   else expect(signals).toHaveLength(2)
 })
 
-it.each(["catalog", "installation"] as const)("recovers %s metadata recheck failure while keeping the selected package reader location", async source => {
+it.each(["catalog", "installation"] as const)("keeps a failed %s metadata recheck quiet and restores the reader location only after fresh admission", async source => {
   window.localStorage.setItem("kokoro.locale", "zh")
   const { expectedPath, detailResponse, content } = detailRetryFixture(source)
   const packagePath = source === "installation"
@@ -557,13 +563,193 @@ it.each(["catalog", "installation"] as const)("recovers %s metadata recheck fail
   expect(screen.queryByRole("heading", { name: "Notes exact" })).toBeNull()
   view.rerender(content({ admitted: true, subject: "reader", generation: 2 }))
   await waitFor(() => expect(metadataReads).toBe(2))
-  expect(await screen.findByText("技能详情暂时不可用")).toBeVisible()
+  await waitFor(() => expect(screen.getByRole("dialog")).toHaveAttribute("aria-busy", "false"))
+  expect(screen.queryByRole("alert")).toBeNull()
+  expect(screen.queryByRole("button", { name: "重试" })).toBeNull()
   expect(screen.queryByRole("status", { name: "正在读取技能文件…" })).toBeNull()
   expect(packageReads).toHaveLength(previousPackageReads)
-  fireEvent.click(screen.getByRole("button", { name: "重试" }))
+  view.rerender(content({ admitted: false, subject: "reader", generation: 3 }))
+  view.rerender(content({ admitted: true, subject: "reader", generation: 3 }))
   const restoredNote = await screen.findByRole("heading", { name: "Notes exact" })
   expect(restoredNote.closest("[aria-busy]")).toHaveProperty("scrollTop", 180)
   expect(screen.getByRole("button", { name: "notes.md" })).toHaveAttribute("aria-pressed", "true")
   expect(metadataReads).toBe(3)
   expect(packageReads.slice(previousPackageReads)).toEqual([packagePath, `${packagePath}?file_path=notes.md`])
+})
+
+function quietPackageFixture(source: "catalog" | "installation") {
+  window.localStorage.setItem("kokoro.locale", "zh")
+  const fixture = detailRetryFixture(source)
+  const packagePath = source === "installation"
+    ? "/api/hub/skill-installations/manage-installation/package"
+    : "/api/hub/skills/manage-revision/package"
+  const texts = { "SKILL.md": "# Confirmed skill", "notes.md": "# Confirmed notes" }
+  const files = Object.entries(texts).map(([path, text]) => ({ path, size_bytes: String(new TextEncoder().encode(text).byteLength) }))
+  const response = (file: keyof typeof texts | null) => Response.json({ data: {
+    source_ref: "skill:manage-revision", revision: "3", files,
+    selected_file: file === null ? null : { path: file, text: texts[file] },
+  } }, { headers: { "cache-control": "no-store", "x-request-id": "quiet-package" } })
+  return { ...fixture, packagePath, response }
+}
+
+it.each([["catalog", "network"], ["catalog", "503"], ["installation", "network"], ["installation", "503"]] as const)("retains confirmed %s text on %s when normal reader re-entry reads that same file, not another path", async (source, failure) => {
+  const { expectedPath, detailResponse, content, packagePath, response, onAdd, onTry } = quietPackageFixture(source)
+  const reads: string[] = []
+  let fileReads = 0
+  let failReentry!: () => void
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+    const path = String(input)
+    reads.push(path)
+    if (path === expectedPath) return detailResponse("Confirmed detail")
+    expect(path.startsWith(packagePath)).toBe(true)
+    const file = new URL(path, "http://localhost").searchParams.get("file_path") as "SKILL.md" | "notes.md" | null
+    if (file === "SKILL.md" && ++fileReads === 2) return new Promise<Response>((resolve, reject) => { failReentry = () => failure === "network" ? reject(Error("same-file re-entry did not complete")) : resolve(packageFailure(source, 503)) })
+    return response(file)
+  }))
+  render(content())
+  await screen.findByText("Confirmed detail")
+  fireEvent.click(screen.getByRole("button", { name: "查看详情" }))
+  await screen.findByRole("heading", { name: "Confirmed skill" })
+  fireEvent.click(screen.getByRole("button", { name: "技能详情" }))
+  fireEvent.click(screen.getByRole("button", { name: "查看详情" }))
+  await waitFor(() => expect(failReentry).toBeTypeOf("function"))
+  expect(screen.getByRole("heading", { name: "Confirmed skill" })).toBeVisible()
+  await act(async () => { failReentry() })
+  expect(screen.getByRole("heading", { name: "Confirmed skill" })).toBeVisible()
+  expect(screen.queryByRole("alert")).toBeNull()
+  expect(screen.queryByRole("button", { name: "重试" })).toBeNull()
+  expect(screen.queryByRole("status", { name: "正在读取技能文件…" })).toBeNull()
+  // Re-entering the reader uses its current admitted manifest, not a second
+  // directory cache or an invented content refresh trigger.
+  expect(reads.filter(path => path === packagePath)).toHaveLength(1)
+  fireEvent.click(screen.getByRole("button", { name: "SKILL.md" }))
+  await waitFor(() => expect(fileReads).toBe(3))
+  await waitFor(() => expect(screen.getByRole("heading", { name: "Confirmed skill" }).closest("[aria-busy]")).toHaveAttribute("aria-busy", "false"))
+  fireEvent.click(screen.getByRole("button", { name: "notes.md" }))
+  expect(screen.queryByRole("heading", { name: "Confirmed skill" })).toBeNull()
+  expect(await screen.findByRole("heading", { name: "Confirmed notes" })).toBeVisible()
+  expect(onAdd).not.toHaveBeenCalled()
+  expect(onTry).not.toHaveBeenCalled()
+})
+
+it.each(["catalog", "installation"] as const)("keeps initial %s package failures distinct from empty success and recovers through normal reader controls", async source => {
+  const { expectedPath, detailResponse, content, packagePath, response } = quietPackageFixture(source)
+  let directoryReads = 0, fileReads = 0
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+    const path = String(input)
+    if (path === expectedPath) return detailResponse("Confirmed detail")
+    expect(path.startsWith(packagePath)).toBe(true)
+    const file = new URL(path, "http://localhost").searchParams.get("file_path") as "SKILL.md" | "notes.md" | null
+    if (file === null && ++directoryReads === 1) throw Error("directory unavailable")
+    if (file !== null && ++fileReads === 1) throw Error("file unavailable")
+    return response(file)
+  }))
+  render(content())
+  await screen.findByText("Confirmed detail")
+  fireEvent.click(screen.getByRole("button", { name: "查看详情" }))
+  await waitFor(() => expect(screen.getByRole("dialog")).toHaveAttribute("aria-busy", "false"))
+  expect(directoryReads).toBe(1)
+  expect(screen.queryByRole("alert")).toBeNull()
+  expect(screen.queryByRole("button", { name: "重试" })).toBeNull()
+  expect(screen.queryByText("暂无可读取的文本文件")).toBeNull()
+  expect(screen.queryByText("此包没有可读取的 SKILL.md，请选择其他文本文件")).toBeNull()
+  expect(screen.queryByText("此文件为空")).toBeNull()
+  expect(screen.queryByRole("heading", { name: "Confirmed skill" })).toBeNull()
+  fireEvent.click(screen.getByRole("button", { name: "技能详情" }))
+  fireEvent.click(screen.getByRole("button", { name: "查看详情" }))
+  await waitFor(() => expect(fileReads).toBe(1))
+  await waitFor(() => expect(screen.getByRole("dialog")).toHaveAttribute("aria-busy", "false"))
+  expect(screen.queryByRole("alert")).toBeNull()
+  expect(screen.queryByRole("heading", { name: "Confirmed skill" })).toBeNull()
+  fireEvent.click(screen.getByRole("button", { name: "SKILL.md" }))
+  expect(await screen.findByRole("heading", { name: "Confirmed skill" })).toBeVisible()
+  expect(directoryReads).toBe(2)
+  expect(fileReads).toBe(2)
+})
+
+function packageFailure(source: "catalog" | "installation", status: number) {
+  const code = status === 401 ? "session_invalid" : status === 403 ? "session_forbidden"
+    : status === 404 ? source === "installation" ? "skill_package_not_found" : "skill_not_found"
+    : status === 412 ? source === "installation" ? "skill_package_precondition_failed" : "skill_precondition_failed"
+    : source === "installation" ? "skill_package_dependency_unavailable" : "skill_dependency_unavailable"
+  return Response.json({ error: { code, message: "Owner read failure", retryable: status === 503 } }, {
+    status, headers: { "cache-control": "no-store", "x-request-id": "quiet-package-denied" },
+  })
+}
+
+it.each([
+  ["catalog", 401], ["catalog", 403], ["catalog", 404], ["catalog", 412], ["catalog", "parse"],
+  ["installation", 401], ["installation", 403], ["installation", 404], ["installation", 412], ["installation", "parse"],
+] as const)("retires confirmed %s package bytes after %s rather than presenting denied or damaged data as a temporary outage", async (source, failure) => {
+  const { expectedPath, detailResponse, content, response } = quietPackageFixture(source)
+  let fileReads = 0
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+    const path = String(input)
+    if (path === expectedPath) return detailResponse("Confirmed detail")
+    const file = new URL(path, "http://localhost").searchParams.get("file_path") as "SKILL.md" | "notes.md" | null
+    if (file === "SKILL.md" && ++fileReads === 2) {
+      return failure === "parse" ? Response.json({ wrong: "unvalidated body" }) : packageFailure(source, failure)
+    }
+    return response(file)
+  }))
+  render(content())
+  await screen.findByText("Confirmed detail")
+  fireEvent.click(screen.getByRole("button", { name: "查看详情" }))
+  await screen.findByRole("heading", { name: "Confirmed skill" })
+  fireEvent.click(screen.getByRole("button", { name: "技能详情" }))
+  fireEvent.click(screen.getByRole("button", { name: "查看详情" }))
+  await waitFor(() => expect(fileReads).toBe(2))
+  await waitFor(() => expect(screen.getByRole("dialog")).toHaveAttribute("aria-busy", "false"))
+  expect(screen.queryByRole("heading", { name: "Confirmed skill" })).toBeNull()
+  expect(screen.queryByRole("button", { name: "SKILL.md" })).toBeNull()
+  expect(screen.queryByRole("alert")).toBeNull()
+  fireEvent.click(screen.getByRole("button", { name: "技能详情" }))
+  if (failure !== "parse") {
+    expect(screen.getByRole("button", { name: "查看详情" })).toBeDisabled()
+    expect(screen.queryByRole("button", { name: "下载技能" })).toBeNull()
+  }
+  expect(fileReads).toBe(2)
+})
+
+it.each([
+  ["catalog", "close"], ["catalog", "actor"], ["catalog", "generation"], ["catalog", "version"],
+  ["installation", "close"], ["installation", "actor"], ["installation", "generation"], ["installation", "version"],
+] as const)("retires a selected %s file on %s and never adopts its late bytes", async (source, retirement) => {
+  const { expectedPath, detailResponse, content, response, skill, onAdd, onTry } = quietPackageFixture(source)
+  let finishRetired!: (response: Response) => void, retiredSignal: AbortSignal | undefined
+  let notesReads = 0
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input)
+    if (path === expectedPath) return detailResponse("Current scoped metadata")
+    const file = new URL(path, "http://localhost").searchParams.get("file_path") as "SKILL.md" | "notes.md" | null
+    if (file === "notes.md" && ++notesReads === 1) {
+      retiredSignal = init?.signal as AbortSignal
+      return new Promise<Response>(resolve => { finishRetired = resolve })
+    }
+    return response(file)
+  }))
+  const view = render(content())
+  await screen.findByText("Current scoped metadata")
+  fireEvent.click(screen.getByRole("button", { name: "查看详情" }))
+  await screen.findByRole("heading", { name: "Confirmed skill" })
+  fireEvent.click(screen.getByRole("button", { name: "notes.md" }))
+  await waitFor(() => expect(finishRetired).toBeTypeOf("function"))
+  expect(screen.queryByRole("heading", { name: "Confirmed skill" })).toBeNull()
+  if (retirement === "generation") {
+    view.rerender(content({ admitted: false, subject: "reader", generation: 2 }))
+    expect(screen.queryByRole("heading", { name: "Confirmed notes" })).toBeNull()
+    view.rerender(content({ admitted: true, subject: "reader", generation: 2 }))
+    await screen.findByRole("heading", { name: "Confirmed notes" })
+  } else {
+    view.rerender(content({ admitted: true, subject: retirement === "actor" ? "new-reader" : "reader", generation: 1 }, retirement !== "close",
+      retirement === "version" ? { ...skill, revision_skill_id: "replacement-revision", source_ref: "skill:replacement-revision" } : skill))
+  }
+  await waitFor(() => expect(retiredSignal?.aborted).toBe(true))
+  const late = await response("notes.md").json()
+  late.data.selected_file.text = "# RetiredXX notes"
+  await act(async () => { finishRetired(Response.json(late, { headers: { "cache-control": "no-store", "x-request-id": "retired-file" } })) })
+  expect(screen.queryByRole("heading", { name: "RetiredXX notes" })).toBeNull()
+  if (retirement !== "generation") expect(screen.queryByRole("heading", { name: "Confirmed notes" })).toBeNull()
+  expect(onAdd).not.toHaveBeenCalled()
+  expect(onTry).not.toHaveBeenCalled()
 })

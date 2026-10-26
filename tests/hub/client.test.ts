@@ -13,6 +13,7 @@ import {
   createSkillInstallationClient,
   HubClientError,
 } from "@/hub/client";
+import { getManusSkillPackage } from "@/ui/skills/manus-skill-client";
 
 function jsonResponse(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -2272,4 +2273,46 @@ describe("bounded MCP GET rate-limit cooldown", () => {
     } finally { vi.useRealTimers(); }
   });
 
+});
+
+it.each([
+  [401, "session_invalid", false], [403, "skill_forbidden", false],
+  [404, "skill_not_found", false], [412, "skill_precondition_failed", false],
+  [503, "skill_dependency_unavailable", true],
+] as const)("preserves strictly validated catalog package HTTP %s as a typed read failure", async (status, code, retryable) => {
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ error: { code, message: "Owner read failure", retryable } }), {
+    status, headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "typed-package" },
+  })));
+  await expect(getManusSkillPackage("typed-revision")).rejects.toMatchObject({ reason: "http", status, code, retryable });
+});
+
+it.each(["network", "json", "profile", "headers"] as const)("does not confuse catalog package %s with an authenticated owner denial", async failure => {
+  vi.stubGlobal("fetch", vi.fn(async () => {
+    if (failure === "network") throw new TypeError("network disconnected");
+    return new Response(failure === "json" ? "{" : JSON.stringify({ error: { code: "skill_forbidden", message: "Owner failure", retryable: failure === "profile" } }), {
+      status: 403, headers: { "content-type": "application/json", "cache-control": failure === "headers" ? "public" : "no-store", "x-request-id": "typed-package" },
+    });
+  }));
+  await expect(getManusSkillPackage("typed-revision")).rejects.toMatchObject({ reason: failure === "network" ? "network" : "parse" });
+});
+
+it.each(["caller", "deadline"] as const)("settles catalog package %s retirement and cancels an ignored late response without a second read", async retirement => {
+  vi.useFakeTimers();
+  try {
+    let finish!: (response: Response) => void;
+    const cancel = vi.fn();
+    const fetcher = vi.fn(() => new Promise<Response>(resolve => { finish = resolve; }));
+    vi.stubGlobal("fetch", fetcher);
+    const controller = new AbortController();
+    let failure: unknown;
+    void getManusSkillPackage("typed-revision", undefined, controller.signal).catch(error => { failure = error; });
+    if (retirement === "caller") controller.abort();
+    await vi.advanceTimersByTimeAsync(retirement === "caller" ? 0 : 10_000);
+    expect(failure).toBeInstanceOf(HubClientError);
+    expect(failure).toMatchObject({ reason: retirement === "caller" ? "aborted" : "network", status: null });
+    finish(new Response(new ReadableStream({ cancel })));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(fetcher).toHaveBeenCalledOnce();
+  } finally { vi.useRealTimers(); }
 });

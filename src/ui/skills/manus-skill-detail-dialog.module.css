@@ -131,11 +131,16 @@
  * Markdown arrived; these neutral placeholders reserve exactly that reading
  * structure without inventing package content. */
 .readerLoading { display:grid; gap:.875rem; padding-top:.25rem; }
+.metadataPlaceholder { display:grid; min-height:8rem; align-content:center; gap:.75rem; }
+.metadataPlaceholder i { display:block; height:.75rem; border-radius:999px; background:var(--muted); }
+.metadataPlaceholder i:first-child { width:45%; }
+.metadataPlaceholder i:last-child { width:70%; }
 .readerLoadingYaml { display:grid; height:7.25rem; align-content:center; gap:.55rem; padding:1rem; overflow:hidden; border:1px solid var(--border); border-radius:.5rem; background:var(--muted); }
 .readerLoadingYaml i,.readerLoadingTitle,.readerLoadingLine { display:block; height:.75rem; border-radius:999px; background:linear-gradient(90deg, color-mix(in srgb,var(--foreground) 6%,transparent), color-mix(in srgb,var(--foreground) 11%,transparent), color-mix(in srgb,var(--foreground) 6%,transparent)); background-size:200% 100%; animation:reader-loading-sheen 1.25s ease-in-out infinite; }
 .readerLoadingYaml i:nth-child(1) { width:35%; }.readerLoadingYaml i:nth-child(2) { width:82%; }.readerLoadingYaml i:nth-child(3) { width:58%; }
 .readerLoadingTitle { width:38%; height:1.5rem; margin-top:1.5rem; }
 .readerLoadingLine { width:88%; }.readerLoadingLineShort { width:66%; }
+.readerLoading[data-loading="false"] i,.readerLoading[data-loading="false"] > span { animation:none; }
 @keyframes reader-loading-sheen { to { background-position:-200% 0; } }
 @media (prefers-reduced-motion: reduce) { .readerLoadingYaml i,.readerLoadingTitle,.readerLoadingLine { animation:none; } }
 .mobileFileToggle { display:none; }

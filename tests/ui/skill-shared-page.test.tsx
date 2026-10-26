@@ -150,13 +150,15 @@ it("rejects a shared package directory with the same UID but another decimal rev
   vi.stubGlobal("fetch", fetcher)
   render(<LocaleProvider><SharedSkillPage /></LocaleProvider>)
   fireEvent.click(await screen.findByRole("button", { name: "查看详情" }))
-  await screen.findByRole("button", { name: "重试" })
+  await waitFor(() => expect(screen.getByRole("dialog")).toHaveAttribute("aria-busy", "false"))
+  expect(screen.queryByRole("button", { name: "重试" })).toBeNull()
+  expect(screen.queryByRole("alert")).toBeNull()
   expect(screen.queryByRole("button", { name: "SKILL.md" })).toBeNull()
   expect(fetcher.mock.calls.filter(([path]) => path.includes("/package"))).toHaveLength(1)
   expect(fetcher.mock.calls.some(([path]) => path.includes("file_path="))).toBe(false)
 })
 
-it("keeps the exact shared reader through recheck and summary retry without retaining retired facts", async () => {
+it("keeps the exact shared reader through quiet summary rechecks without retaining retired facts", async () => {
   const documents = { "SKILL.md": "# Shared root", "references/notes.md": "# Shared selected notes\n\n" + "Shared paragraph.\n\n".repeat(40) }
   const files = Object.entries(documents).map(([path, text]) => ({ path, size_bytes: String(new TextEncoder().encode(text).byteLength) }))
   let failSummary = false
@@ -190,20 +192,23 @@ it("keeps the exact shared reader through recheck and summary retry without reta
   expect(fetcher.mock.calls).toHaveLength(count)
   failSummary = true; context.admitted = true; context.state = "pass"
   mounted.rerender(<LocaleProvider><SharedSkillPage /></LocaleProvider>)
-  const retry = await within(dialog).findByRole("button", { name: "重试" })
+  await waitFor(() => expect(dialog).toHaveAttribute("aria-busy", "false"))
+  expect(within(dialog).queryByRole("button", { name: "重试" })).toBeNull()
+  expect(within(dialog).queryByRole("alert")).toBeNull()
   expect(screen.getByRole("dialog")).toBe(dialog)
-  failSummary = false; fireEvent.click(retry)
+  failSummary = false; context.generation = 3
+  mounted.rerender(<LocaleProvider><SharedSkillPage /></LocaleProvider>)
   const restored = await within(dialog).findByRole("heading", { name: "Shared selected notes", level: 1 })
   expect(restored.closest<HTMLElement>("[aria-busy]")!.scrollTop).toBe(240)
   expect(screen.getByRole("button", { name: "references" })).toHaveAttribute("aria-expanded", "true")
   const selectedReads = () => fetcher.mock.calls.filter(([path]) => path.includes("file_path=references%2Fnotes.md"))
   expect(selectedReads()).toHaveLength(2)
   // A new generation must also retire facts when admission never renders false.
-  context.generation = 3; mounted.rerender(<LocaleProvider><SharedSkillPage /></LocaleProvider>)
+  context.generation = 4; mounted.rerender(<LocaleProvider><SharedSkillPage /></LocaleProvider>)
   expect(screen.queryByRole("heading", { name: "Shared selected notes" })).toBeNull()
   await within(dialog).findByRole("heading", { name: "Shared selected notes", level: 1 })
   expect(selectedReads()).toHaveLength(3)
-  context.admitted = false; context.state = "unavailable"; context.unavailable = true; context.generation = 4
+  context.admitted = false; context.state = "unavailable"; context.unavailable = true; context.generation = 5
   mounted.rerender(<LocaleProvider><SharedSkillPage /></LocaleProvider>)
   expect(screen.getByRole("dialog")).toBe(dialog)
   expect(screen.queryByRole("heading", { name: "Shared selected notes" })).toBeNull()
@@ -214,7 +219,7 @@ it("keeps the exact shared reader through recheck and summary retry without reta
   context.requestPending = true
   mounted.rerender(<LocaleProvider><SharedSkillPage /></LocaleProvider>)
   expect(retrySession).toBeDisabled()
-  context.requestPending = false; context.unavailable = false; context.admitted = true; context.state = "pass"; context.generation = 5
+  context.requestPending = false; context.unavailable = false; context.admitted = true; context.state = "pass"; context.generation = 6
   mounted.rerender(<LocaleProvider><SharedSkillPage /></LocaleProvider>)
   await within(dialog).findByRole("heading", { name: "Shared selected notes", level: 1 })
   expect(selectedReads()).toHaveLength(4)

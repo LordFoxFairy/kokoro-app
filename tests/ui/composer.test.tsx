@@ -824,12 +824,38 @@ it("Textarea 在输入、删除和宽度改变时增高/收缩，忽略纯高度
 })
 
 
-it("catalog failure is visible with explicit retry and no internal details", () => {
+it.each([
+  { models: [], selectedModel: "unconfirmed-model", modelLocked: false },
+  { models: MODELS, selectedModel: "gpt-5", modelLocked: false },
+  { models: MODELS, selectedModel: "gpt-5", modelLocked: true },
+])("catalog failures remain quiet without replacing confirmed choices or submitting ($modelLocked, $selectedModel)", ({ models, selectedModel, modelLocked }) => {
   const onRetryModels = vi.fn()
-  renderComposer({ models: [], modelCatalogStatus: "error", onRetryModels })
-  expect(screen.getByRole("alert")).toHaveTextContent("Could not load the model catalog")
-  fireEvent.click(screen.getByRole("button", { name: "Retry loading" }))
-  expect(onRetryModels).toHaveBeenCalledOnce()
+  const props = renderComposer({ models, selectedModel, modelLocked, modelCatalogStatus: "error", onRetryModels, draft: "preserved draft" })
+  expect(screen.queryByRole("alert")).toBeNull()
+  expect(screen.queryByRole("button", { name: "Retry loading" })).toBeNull()
+  expect(screen.getByText("Could not load the model catalog. Please retry.")).toHaveAttribute("role", "status")
+  expect(document.querySelector('[data-slot="composer-selector-cluster"]')).toHaveAttribute("aria-busy", "false")
+  expect(screen.getByRole("textbox", { name: "Chat input" })).toHaveValue("preserved draft")
+  expect(props.onModelChange).not.toHaveBeenCalled()
+  expect(props.onSubmit).not.toHaveBeenCalled()
+  expect(onRetryModels).not.toHaveBeenCalled()
+  if (models.length === 0) {
+    expect(screen.queryByRole("button", { name: /Switch model:/ })).toBeNull()
+    expect(screen.queryByRole("button", { name: /locked this turn/i })).toBeNull()
+    expect(screen.queryByRole("menuitemradio")).toBeNull()
+  } else if (modelLocked) {
+    expect(screen.getByRole("button", { name: /Model: gpt-5 \(locked this turn\)/i })).toBeDisabled()
+    expect(screen.queryByRole("button", { name: /Switch model:/ })).toBeNull()
+  } else {
+    const trigger = screen.getByRole("button", { name: "Switch model: gpt-5" })
+    expect(trigger).toBeEnabled()
+    fireEvent.pointerDown(trigger)
+    expect(screen.getByRole("menuitemradio", { name: "gpt-5" })).toHaveAttribute("data-state", "checked")
+    expect(screen.getAllByRole("menuitemradio").map(item => item.textContent)).toEqual(MODELS.map(model => model.display_name))
+    expect(props.onModelChange).not.toHaveBeenCalled()
+    expect(props.onSubmit).not.toHaveBeenCalled()
+    expect(onRetryModels).not.toHaveBeenCalled()
+  }
 })
 
 it("confirmed empty catalog clears an invalid selection but loading does not", () => {

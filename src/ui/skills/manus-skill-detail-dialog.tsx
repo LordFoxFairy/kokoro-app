@@ -186,7 +186,6 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
   const [installation, setInstallation] = useState<PersonalInstallation | null>(null)
   const [detail, setDetail] = useState<ManusSkillDetail | null>(null)
   const [failed, setFailed] = useState(false)
-  const [detailAttempt, setDetailAttempt] = useState(0)
   const [downloading, setDownloading] = useState(false)
   const [downloadFailure, setDownloadFailure] = useState<"unavailable" | "incomplete" | null>(null)
   const downloadRequest = useRef<AbortController | null>(null)
@@ -260,12 +259,13 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
 
   const sharedDownloadAdmitted = sharedSummary ? boundary.admitted : true
   const sharedDownloadSubject = sharedSummary ? boundary.subject : null
+  const detailCacheKey = skill?.skill_id === undefined ? null : JSON.stringify([currentFetchScope(), boundary.subject ?? "anonymous", boundary.generation, skill.skill_id, skill.revision_skill_id ?? null])
   useEffect(() => {
     if (!open || !boundary.admitted || boundary.subject === null || !skill?.skill_id && !sharedSummary) return
     if (sharedSummary || detailSource === "installation" || !skill?.skill_id) return
     let active = true
-    const cacheKey = JSON.stringify([currentFetchScope(), boundary.subject ?? "anonymous", boundary.generation, skill.skill_id, skill.revision_skill_id ?? null])
-    const subscription = subscribeSkillDetail(cacheKey, skill.skill_id)
+    if (detailCacheKey === null) return
+    const subscription = subscribeSkillDetail(detailCacheKey, skill.skill_id)
     void subscription.promise.then((next) => {
       if (active && isLive()) setDetail(next)
     }).catch(() => {
@@ -275,7 +275,7 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
       active = false
       subscription.release()
     }
-  }, [open, detailSource, skill?.skill_id, skill?.revision_skill_id, sharedSummary, sharedDownloadAdmitted, sharedDownloadSubject, boundary.subject, boundary.admitted, boundary.generation, detailAttempt, isLive])
+  }, [open, detailSource, skill?.skill_id, skill?.revision_skill_id, sharedSummary, sharedDownloadAdmitted, sharedDownloadSubject, boundary.subject, boundary.admitted, boundary.generation, detailCacheKey, isLive])
 
   const installationId = skill?.installation_id
   const installationSeries = skill?.skill_id
@@ -293,25 +293,34 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
     }
     void load().catch(() => { if (!controller.signal.aborted && isLive()) setFailed(true) })
     return () => controller.abort()
-  }, [detailSource, sharedSummary, open, boundary.admitted, boundary.subject, installationId, installationSeries, installationSource, installationRevision, detailAttempt, isLive])
+  }, [detailSource, sharedSummary, open, boundary.admitted, boundary.subject, installationId, installationSeries, installationSource, installationRevision, isLive])
 
-  const retryDetail = () => {
-    if (!failed || !isLive()) return
-    // Retry only the selected metadata read. Reader location and any existing
-    // command intent stay separate; no install, share, or publication repeats.
-    setFailed(false)
-    setDetailAttempt(attempt => attempt + 1)
-  }
-
-  const boundRevision = !open || !boundary.admitted || boundary.subject === null ? null
+  const boundRevision = !open || !boundary.admitted || boundary.subject === null || failed ? null
     : sharedSummary ? sharedSummary.skill.skill_id
     : detailSource === "installation" ? installation?.source_ref.slice(6) ?? null
     : skill?.revision_skill_id !== undefined && detail?.skill.id === skill.skill_id && detail?.skill.version === skill.revision_skill_id ? skill.revision_skill_id : null
 
   const sharedRevision = sharedSummary?.skill.revision
+  const failReader = useCallback((error: unknown) => {
+    setReaderFailed(true)
+    setReaderLoading(false)
+    // Only a typed transport interruption or validated dependency outage may
+    // retain this generation's current document. Bad wire is not authority;
+    // a confirmed owner denial retires the dependent metadata/actions too.
+    if (error instanceof HubClientError && (error.reason === "network" && (error.status === null || error.status === 200)
+      || error.reason === "http" && error.status === 503 && error.retryable)) return
+    setReaderFile(null)
+    setDirectory(null)
+    if (error instanceof HubClientError && error.reason === "http" && [401, 403, 404, 412].includes(error.status ?? 0)) {
+      if (detailCacheKey !== null) detailCache.delete(detailCacheKey)
+      setDetail(null)
+      setInstallation(null)
+      setFailed(true)
+    }
+  }, [detailCacheKey])
 
   useEffect(() => {
-    if (!readerOpen || boundRevision === null) return
+    if (!readerOpen || boundRevision === null || directory !== null || readerFailed) return
     const controller = new AbortController()
     void (installation ? inspectInstallationPackage(installation, undefined, controller.signal) : getManusSkillPackage(boundRevision, undefined, controller.signal)).then((value) => {
       if (controller.signal.aborted || !isLive()) return
@@ -323,11 +332,11 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
       readerCursor.current.path = path
       setSelectedPath(path)
       setReaderLoading(path !== null)
-    }).catch(() => {
-      if (!controller.signal.aborted && isLive()) { setReaderFailed(true); setReaderLoading(false) }
+    }).catch((error: unknown) => {
+      if (!controller.signal.aborted && isLive()) failReader(error)
     })
     return () => controller.abort()
-  }, [readerOpen, boundRevision, installation, readerAttempt, sharedRevision, isLive, readerCursor])
+  }, [readerOpen, boundRevision, installation, directory, readerFailed, readerAttempt, sharedRevision, isLive, readerCursor, failReader])
 
   useEffect(() => {
     if (!readerOpen || boundRevision === null || directory === null || selectedPath === null) return
@@ -336,11 +345,11 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
       if (controller.signal.aborted || !isLive()) return
       setReaderFile(value.selected_file)
       setReaderLoading(false)
-    }).catch(() => {
-      if (!controller.signal.aborted && isLive()) { setReaderFailed(true); setReaderLoading(false) }
+    }).catch((error: unknown) => {
+      if (!controller.signal.aborted && isLive()) failReader(error)
     })
     return () => controller.abort()
-  }, [readerOpen, boundRevision, installation, directory, selectedPath, isLive])
+  }, [readerOpen, boundRevision, installation, directory, selectedPath, readerAttempt, isLive, failReader])
 
   useLayoutEffect(() => {
     if (!readerLoading && readerFile !== null && readerFile.path === selectedPath && isLive() && readerContentRef.current) {
@@ -351,10 +360,13 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
   const restartReader = (resetPosition: boolean) => {
     if (boundRevision === null || !isLive()) return
     setReaderOpen(true)
-    if (resetPosition) { readerCursor.current = { path: null, scrollTop: 0 }; setExpandedFolders(new Set()) }
-    setDirectory(null)
-    setSelectedPath(null)
-    setReaderFile(null)
+    const path = resetPosition ? directory?.files.some(file => file.path === "SKILL.md") ? "SKILL.md" : null : selectedPath
+    if (resetPosition) { readerCursor.current = { path, scrollTop: 0 }; setExpandedFolders(new Set()) }
+    setSelectedPath(path)
+    // A normal re-entry re-reads the selected file against the already
+    // inspected immutable manifest. Keep only that same path's confirmed text;
+    // changing path, resource, actor or admission still clears private facts.
+    setReaderFile(current => current?.path === path ? current : null)
     setReaderLoading(true)
     setReaderFailed(false)
     setMobileFilesOpen(false)
@@ -364,7 +376,7 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
     if (!isLive()) return
     setMobileFilesOpen(false)
     if (mobileFilesOpen) mobileFilesToggleRef.current?.focus()
-    if (path === selectedPath) return
+    if (path === selectedPath) { if (readerFailed) restartReader(false); return }
     readerCursor.current = { path, scrollTop: 0 }
     setSelectedPath(path)
     setReaderFile(null)
@@ -481,7 +493,7 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
   const cover = sharedSummary?.skill.cover_image === undefined ? record?.coverImage ?? skill?.cover_image : ownerCoverPath(sharedSummary.skill.cover_image, sharedSummary.skill.skill_id)
   const canShare = Boolean(sharedSummary || skill?.revision_skill_id)
   const canDownload = Boolean(boundRevision !== null || sharedSummary || installation)
-  const detailFailure = failed ? <div className={styles.status} role="alert"><p>{t("skills.detailUnavailable")}</p><Button type="button" variant="outline" onClick={retryDetail}>{t("skills.retry")}</Button></div> : null
+  const detailReadStatus = failed || loading ? <span className="sr-only" role="status">{t(failed ? "skills.detailUnavailable" : "skills.detailLoading")}</span> : null
 
   // Installation attribution comes from its admitted, exact-version read.
   // A caller's brand label is only valid for an owner-confirmed official source.
@@ -499,7 +511,9 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
           <DialogTitle className="sr-only">{pending ? t("skills.packageReader") : title}</DialogTitle>
           <DialogDescription className="sr-only">{t("skills.packageReader")}</DialogDescription>
         </DialogHeader>
-  const readerPlaceholder = <div className={styles.readerLoading} role="status" aria-label={t("skills.packageLoading")}>
+  const readerBusy = readerLoading && !failed && !readerFailed
+  const currentReaderFile = readerFile?.path === selectedPath ? readerFile : null
+  const readerPlaceholder = <div className={styles.readerLoading} data-loading={readerBusy || pending && !pendingFailed} role={readerBusy || pending && !pendingFailed ? "status" : undefined} aria-label={readerBusy || pending && !pendingFailed ? t("skills.packageLoading") : undefined}>
                 <span className={styles.readerLoadingYaml} aria-hidden="true"><i /><i /><i /></span>
                 <span className={styles.readerLoadingTitle} aria-hidden="true" />
                 <span className={styles.readerLoadingLine} aria-hidden="true" />
@@ -510,6 +524,7 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         ref={dialogRef}
+        aria-busy={pending ? !pendingFailed : loading || readerOpen && readerBusy}
         style={pending && detailHeight ? { minHeight: `min(${detailHeight}px, calc(100dvh - 2rem))` } : undefined}
         className={readerOpen ? `${styles.dialog} ${styles.readerDialog}` : styles.dialog}
         overlayClassName={styles.overlay!}
@@ -525,11 +540,12 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
           {readerOpen ? readerHeader : null}
           <div className={styles.body}>
           {readerOpen ? null : <DialogTitle>{t("skills.title")}</DialogTitle>}
-          {readerOpen ? <p role={pendingFailed ? "alert" : "status"}>{t(pendingFailed ? "skills.detailUnavailable" : "skills.detailLoading")}</p>
-            : <DialogDescription role={pendingFailed ? "alert" : "status"}>{t(pendingFailed ? "skills.detailUnavailable" : "skills.detailLoading")}</DialogDescription>}
-          {pendingFailed && onRetryPending ? <Button type="button" variant="outline" disabled={pendingBusy} onClick={onRetryPending}>{t("skills.retry")}</Button> : null}
+          <DialogDescription className="sr-only" role="status">{t(pendingFailed ? "skills.detailUnavailable" : "skills.detailLoading")}</DialogDescription>
+          {/* Session recovery is an explicit admission action, not a passive
+              metadata retry. Its existing callback and busy guard stay intact. */}
+          {!boundary.admitted && pendingFailed && onRetryPending ? <Button type="button" variant="outline" disabled={pendingBusy} onClick={onRetryPending}>{t("skills.retry")}</Button> : null}
           {onLoadMore ? <Button type="button" variant="outline" disabled={pendingBusy} onClick={onLoadMore}>{t("rail.loadMore")}</Button> : null}
-          {readerOpen && !pendingFailed ? readerPlaceholder : null}
+          {readerOpen ? readerPlaceholder : <div className={styles.metadataPlaceholder} aria-hidden="true"><i /><i /><i /></div>}
           </div>
         </> : <>
         <DetailToolbar
@@ -537,7 +553,7 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
           canShare={canShare}
           canDownload={canDownload}
           shareDisabled={shareIdentity === null || shareStatus === "pending" || shareStatus === "unknown"}
-          downloadDisabled={downloading || Boolean(sharedSummary && !boundary.admitted)}
+          downloadDisabled={downloading || failed || Boolean(sharedSummary && !boundary.admitted)}
           onShare={() => void share()}
           onDownload={() => void download()}
           shareLabel={t("skills.detailShare")}
@@ -565,8 +581,7 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
         {readerOpen ? null : <section className={styles.body}>
           <p className={styles.description}>{description}</p>
           {sourceUnavailable ? <p className={styles.status} role="status">{t("skills.sourceUnavailable")}</p> : null}
-          {loading ? <p className={styles.status}>{t("skills.detailLoading")}</p> : null}
-          {detailFailure}
+          {detailReadStatus}
           {record !== null && skill?.revision_skill_id !== undefined && record.version !== skill.revision_skill_id ? <p className={styles.status}>{t("skills.packageChanged")}</p> : null}
           {examples.length > 0 ? <SkillTrialExamples key={JSON.stringify([boundary.subject, boundary.generation, skill?.skill_id, boundRevision, skill?.installed_source_ref, trialReady])} examples={examples} ready={trialReady} onTry={prompt => currentSkill !== null && onTry(prompt, currentSkill)} /> : null}
         </section>}
@@ -587,18 +602,18 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
                 const next = new Set(current); if (next.has(path)) next.delete(path); else next.add(path); return next
               })} /></ul>
             </nav>
-            <div ref={readerContentRef} className={styles.fileContent} aria-busy={readerLoading && !failed} onScroll={event => {
-              if (isLive() && !readerLoading && readerFile !== null) readerCursor.current.scrollTop = event.currentTarget.scrollTop
+            <div ref={readerContentRef} className={styles.fileContent} aria-busy={readerBusy} onScroll={event => {
+              if (isLive() && currentReaderFile !== null) readerCursor.current.scrollTop = event.currentTarget.scrollTop
             }}>
               {selectedPath !== null ? <div className={styles.fileHeading}><FileText aria-hidden="true" /><span>{selectedPath}</span></div> : null}
-              {detailFailure}
-              {readerLoading && !failed ? readerPlaceholder : null}
-              {readerFailed ? <div role="alert"><p>{t("skills.packageUnavailable")}</p><Button type="button" variant="outline" onClick={() => restartReader(false)}>{t("skills.packageRetry")}</Button></div> : null}
+              {detailReadStatus}
+              {currentReaderFile === null && (readerLoading || readerFailed || failed) ? readerPlaceholder : null}
+              {readerFailed ? <span className="sr-only" role="status">{t("skills.packageUnavailable")}</span> : null}
               {!readerLoading && !readerFailed && directory?.files.length === 0 ? <p>{t("skills.packageEmpty")}</p> : null}
               {!readerLoading && !readerFailed && directory !== null && directory.files.length > 0 && selectedPath === null ? <p>{t("skills.packageNoMarkdown")}</p> : null}
-              {!readerLoading && !readerFailed && readerFile !== null ? <>
-                {readerFile.text === "" ? <p>{t("skills.packageEmptyFile")}</p> : null}
-                {readerFile.path.toLowerCase().endsWith(".md") ? <SkillPackageDocument text={readerFile.text} /> : <pre>{readerFile.text}</pre>}
+              {currentReaderFile !== null ? <>
+                {currentReaderFile.text === "" ? <p>{t("skills.packageEmptyFile")}</p> : null}
+                {currentReaderFile.path.toLowerCase().endsWith(".md") ? <SkillPackageDocument text={currentReaderFile.text} /> : <pre>{currentReaderFile.text}</pre>}
               </> : null}
             </div>
           </section> : null}
