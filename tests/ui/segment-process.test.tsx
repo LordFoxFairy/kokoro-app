@@ -2,9 +2,13 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, expect, it, vi } from "vitest"
 import type { RunProcessActivity } from "@/contract/chat"
 import { LocaleProvider } from "@/i18n/context"
+import { stateFromSnapshot } from "@/core/hydration"
+import { mergeMessageParts, preserveMessageParts } from "@/core/reducer"
+import { parseSessionSnapshot, type MessageTextPartSlice } from "@/contract/chat"
+import { ConversationThread } from "@/ui/thread/conversation-thread"
 import { AssistantTurn } from "@/ui/thread/assistant-turn"
 import { SegmentProcess } from "@/ui/thread/segment-process"
-import { makeInteractionState } from "../core/fixtures"
+import { makeInteractionState, makeSnapshot } from "../core/fixtures"
 afterEach(cleanup)
 it("HITL 卡独立于可收起的过程，手动收起不会隐藏决策入口", () => {
   render(<LocaleProvider><AssistantTurn sessionId="session_1"
@@ -88,4 +92,66 @@ it("keeps ordinary history reads offscreen and retains the visible answer node t
   rerender(<LocaleProvider><AssistantTurn {...props} parts={[{ messageId: "m", runId: "r", revision: "1", status: "complete" }]} /></LocaleProvider>)
   expect(screen.queryByRole("status")).toBeNull()
   expect(screen.getByText("stable visible answer")).toBe(answer)
+})
+
+it("keeps one disclosure across proven empty tool-round text and restores the boundary for late public content", () => {
+  const activity = (letter: string): RunProcessActivity => ({ activity: "tool", activity_id: `act_${letter.repeat(64)}`, segment_id: `seg_${letter.repeat(64)}`, status: "completed", display_code: "tool.execution" })
+  const steps = [
+    { kind: "activity" as const, seq: "1", segmentId: "activity-a", activity: activity("a") },
+    { kind: "text" as const, seq: "2", segmentId: "empty" },
+    { kind: "activity" as const, seq: "3", segmentId: "activity-b", activity: activity("b") },
+    { kind: "text" as const, seq: "4", segmentId: "answer" },
+    { kind: "activity" as const, seq: "5", segmentId: "activity-c", activity: activity("c") },
+  ]
+  const messages = {
+    empty: { id: "empty", runId: "run", role: "assistant" as const, content: "", textState: "completed" as const },
+    answer: { id: "answer", runId: "run", role: "assistant" as const, content: "public answer", textState: "completed" as const },
+  }
+  const props = { sessionId: "s", steps, isLive: false, stagedDecisions: {}, hitlActive: false, controlError: null }
+  const { container, rerender } = render(<LocaleProvider><AssistantTurn {...props} messagesById={messages} /></LocaleProvider>)
+  const disclosures = () => container.querySelectorAll('[data-slot="collapsible-trigger"]')
+  expect(disclosures()).toHaveLength(2)
+  expect(disclosures()[0]).toHaveTextContent("2 tool(s)")
+  const answer = screen.getByText("public answer")
+  expect(disclosures()[0]!.compareDocumentPosition(answer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  expect(answer.compareDocumentPosition(disclosures()[1]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  rerender(<LocaleProvider><AssistantTurn {...props} messagesById={{ ...messages, empty: { ...messages.empty, content: "owner corrected body" } }} /></LocaleProvider>)
+  expect(disclosures()).toHaveLength(3)
+  expect(screen.getByText("owner corrected body")).toBeVisible()
+  expect(screen.getByText("public answer")).toBeVisible()
+})
+
+
+it("renders one real same-run user across partial pages, EOF and late snapshots without duplicate keys", () => {
+  const snapshot = () => parseSessionSnapshot({ ...makeSnapshot(), messages: [
+    { message_id: "same-run-user", run_id: "run", role: "user", content: "same-run user prompt", status: "completed", created_at: "now" },
+    { message_id: "owner", run_id: "run", role: "assistant", content: null, status: "completed", created_at: "now", rendering: { mode: "ordered", format_version: 1, revision: "1", event_watermark: null, parts_cursor: "opaque" } },
+  ] })
+  let thread = stateFromSnapshot(snapshot())
+  const props = { sessionId: "session", isStreaming: false, isReconnecting: false, hasFailed: false, canRetryPendingSubmission: false, creditRejected: false, onOpenBilling: () => undefined, onOpenPricing: () => undefined, onRetry: () => undefined, mode: "fast" as const, stagingByRun: {}, hitlRunId: null, controlError: null }
+  const errors = vi.spyOn(console, "error").mockImplementation(() => undefined)
+  try {
+    const { container, rerender } = render(<LocaleProvider><ConversationThread {...props} thread={thread} /></LocaleProvider>)
+    const assertOneUser = () => {
+      // Task-title staging may repeat the prompt outside its user bubble.
+      // The owner user message/scroll item itself must still exist exactly once.
+      expect(container.querySelector('[data-message-id="same-run-user"]')).toHaveTextContent("same-run user prompt")
+      expect(container.querySelectorAll('[data-message-id="same-run-user"]')).toHaveLength(1)
+      const ids = [...container.querySelectorAll('[data-slot="message-scroller-item"]')].map((element) => element.getAttribute("data-message-id"))
+      expect(new Set(ids).size).toBe(ids.length)
+      expect(errors.mock.calls.some((args) => args.some((arg) => typeof arg === "string" && /same key|unique.*key/iu.test(arg)))).toBe(false)
+    }
+    assertOneUser()
+    for (let cycle = 1; cycle <= 3; cycle += 1) {
+      const part: MessageTextPartSlice = { kind: "text", part_id: "opaque-text", segment_id: "segment", text: "assistant answer", offset: "0", end: "16", total_scalars: "16", first_sequence: "1", latest_sequence: String(cycle), completed: true }
+      const read = { message_id: "owner", run_id: "run", revision: String(cycle), items: [part] }
+      thread = mergeMessageParts(thread, read, [], false)
+      rerender(<LocaleProvider><ConversationThread {...props} thread={thread} /></LocaleProvider>); assertOneUser()
+      thread = mergeMessageParts(thread, read, [], true)
+      rerender(<LocaleProvider><ConversationThread {...props} thread={thread} /></LocaleProvider>); assertOneUser()
+      thread = preserveMessageParts(thread, stateFromSnapshot(snapshot()))
+      rerender(<LocaleProvider><ConversationThread {...props} thread={thread} /></LocaleProvider>); assertOneUser()
+      expect(screen.getByText("assistant answer")).toBeVisible()
+    }
+  } finally { errors.mockRestore() }
 })

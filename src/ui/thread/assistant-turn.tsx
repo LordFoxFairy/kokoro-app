@@ -112,7 +112,7 @@ export function AssistantTurn({
     })
     return () => window.cancelAnimationFrame(frame)
   }, [interaction])
-  const segments = groupSegments(steps, activities)
+  const segments = groupSegments(steps, activities, messagesById)
   const processTailId = segments.at(-1)?.segmentId
   // Public7 process activities have opaque safe segment identities that are
   // independent from message identities. Keep the newest process live, but

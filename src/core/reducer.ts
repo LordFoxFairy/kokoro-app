@@ -112,7 +112,7 @@ function applyAssistantText(
       // completed 覆盖累计增量（replay 后不残留半句）；delta 追加。
       const content =
         event.kind === "message.completed" ? incoming : `${existing.content}${incoming}`
-      messages[index] = { ...existing, content, ...(existing.awaitingTextSegment ? { awaitingTextSegment: false } : {}) }
+      messages[index] = { ...existing, content, textState: event.kind === "message.completed" ? "completed" : "streaming", ...(existing.awaitingTextSegment ? { awaitingTextSegment: false } : {}) }
     }
     return
   }
@@ -120,6 +120,7 @@ function applyAssistantText(
     id: segmentId,
     role: "assistant",
     content: incoming,
+    textState: event.kind === "message.completed" ? "completed" : "streaming",
     runId: event.run_id,
   })
   // 文本步骤进入有序列表：标记「这一段文本在此 seq 出现」，渲染时与过程交错。
@@ -591,7 +592,7 @@ export function mergeMessageParts(state: SessionStreamState, read: {
   fragment.executionProcess = { runId: read.run_id, todos: null, activities: [] }
   const heldTextSegments = new Set<string>()
   const confirmedSlots = { ...known.confirmedSlots }
-  const oldById = new Map(state.messages.filter((item) => item.runId === read.run_id && !item.orderedContainer).map((item) => [item.id, item]))
+  const oldById = new Map(state.messages.filter((item) => item.role === "assistant" && item.runId === read.run_id && !item.orderedContainer).map((item) => [item.id, item]))
   for (const part of read.items) {
     if (part.kind === "text") {
       const old = oldById.get(part.segment_id)
@@ -601,7 +602,7 @@ export function mergeMessageParts(state: SessionStreamState, read: {
       // a complete text baseline. Existing live text continues independently.
       // Once the slot is complete, its pure baseline replaces/replays once.
       if (!partialSlot) confirmedSlots[`text:${part.segment_id}`] = part.latest_sequence
-      if (!partialSlot || old) fragment.messages.push({ id: part.segment_id, role: "assistant", content: partialSlot && old ? old.content : part.text, runId: read.run_id, snapshotMessageId: read.message_id })
+      if (!partialSlot || old) fragment.messages.push({ id: part.segment_id, role: "assistant", content: partialSlot && old ? old.content : part.text, runId: read.run_id, snapshotMessageId: read.message_id, textState: !partialSlot && part.offset === "0" && part.completed ? "completed" : "streaming" })
       ;(fragment.stepsByRun[read.run_id] ??= []).push({ kind: "text", seq: part.first_sequence, segmentId: part.segment_id })
     } else {
       confirmedSlots[`activity:${part.activity.activity_id}`] = part.latest_sequence
@@ -639,7 +640,7 @@ export function preserveMessageParts(previous: SessionStreamState, next: Session
   for (const value of Object.values(next.messageParts ?? {})) {
     const prior = previous.messageParts?.[value.messageId]
     if (!prior || prior.runId !== value.runId) continue
-    const old = previous.messages.filter((message) => message.runId === value.runId && !message.orderedContainer)
+    const old = previous.messages.filter((message) => message.role === "assistant" && message.runId === value.runId && !message.orderedContainer)
     const markerIndex = result.messages.findIndex((message) => message.snapshotMessageId === value.messageId)
     const messages = [...result.messages]
     messages.splice(markerIndex + 1, 0, ...old)

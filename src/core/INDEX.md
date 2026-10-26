@@ -63,3 +63,5 @@ web 的领域核心：会话线程状态、事件折叠 reducer、渲染投影�
 - snapshot 最近 100 件与 `deliveriesHasMore` 一并水合；完整历史由 Library 分页读取。
 
 CHAT-1：ConversationEntry可选literal localDraft，activeIsLocalDraft/retireLocalDraft只操作UI来源，不表示owner存在；索引元数据不能撤销独立提交退休标记。
+
+CHAT-ORDER empty boundaries: groupSegments accepts the current messagesById; only a completed whole-body fact with exact empty content is invisible between activity slots. Body-less END and incomplete/unread text never establish empty completion. SessionMessage.textState is internal provenance from full message.completed, complete owner parts, or inline completed body, not a new wire/Run phase.

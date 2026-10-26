@@ -146,7 +146,11 @@ export type Segment = {
 
 // Live safe activities share the text steps' real sequence. Only consecutive
 // activities form a process group; unanchored snapshot values retain fallback.
-export function groupSegments(steps: SessionStep[], activities: readonly RunProcessActivity[] = []): Segment[] {
+export function groupSegments(
+  steps: SessionStep[],
+  activities: readonly RunProcessActivity[] = [],
+  messagesById: Readonly<Record<string, SessionMessage>> = {},
+): Segment[] {
   // ordered 保留首次出现顺序；byId 仅做去重定位，二者指向同一对象。
   const ordered: Segment[] = []
   const byId = new Map<string, Segment>()
@@ -169,6 +173,10 @@ export function groupSegments(steps: SessionStep[], activities: readonly RunProc
       anchoredActivities.add(step.activity.activity_id)
       continue
     }
+    const message = step.kind === "text" ? messagesById[step.segmentId] : undefined
+    // An owner-confirmed completed empty body has no visible reading boundary.
+    // Missing/incomplete text and body-less END events remain conservative.
+    if (message?.role === "assistant" && message.textState === "completed" && message.content === "") continue
     activityGroup = null
     const segment = segmentFor(step.segmentId)
     if (step.kind === "thinking") {

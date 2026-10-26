@@ -23,6 +23,8 @@ export type SessionMessage = {
   id: string
   role: "assistant" | "user"
   content: string
+  // Only an authoritative whole body can establish completed text; END has no body.
+  textState?: "streaming" | "completed"
   // 该消息所属 run；用于把同一 run 的连续 assistant 段归并到一个 turn（用户消息以自身 id 充当）。
   runId: string
   // id is the local render anchor. A resumed segment may rebind that anchor;

@@ -38,3 +38,5 @@ Web专属thread viewport统一隐藏滚动条槽以匹配Composer阅读轴；共
 - Markdown 列表标记由本模块的 `.md ul` / `.md ol` 局部恢复，不能依赖被 CSS reset 清除的浏览器默认样式，也不能改动全局列表或任务列表语义。
 
 精确 model_settlement_pending / false 沿原唯一终态 footer 展示，正文和旧generic不改；没有新重试／结算请求。
+
+Completed-empty text slots use core provenance and do not split adjacent activity disclosures. All nonempty public text remains a boundary; late authoritative content restores that boundary. No CSS change.

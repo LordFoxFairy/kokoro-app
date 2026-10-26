@@ -87,3 +87,26 @@ it("does not suppress an unread B slot while a leading R20 A text is only partia
   expect(state.messages.find((message) => message.id === "a")?.content).toBe("complete A")
   expect(state.messages.find((message) => message.id === "b")?.content).toBe("visible unread B")
 })
+
+
+it("keeps the original user exactly once when real user and assistant rows share the owner run", () => {
+  const ownerSnapshot = () => parseSessionSnapshot({ ...snapshot(), messages: [
+    { message_id: "same-run-user", run_id: "r", role: "user", content: "same-run user prompt", status: "completed", created_at: "now" },
+    ...snapshot().messages!,
+  ] })
+  let state = stateFromSnapshot(ownerSnapshot())
+  const originalUser = state.messages.find((message) => message.role === "user")
+  const oneUser = () => {
+    expect(state.messages.filter((message) => message.role === "user")).toEqual([originalUser])
+    expect(state.messages.filter((message) => message.id === "same-run-user")).toHaveLength(1)
+  }
+  oneUser()
+  for (let cycle = 0; cycle < 3; cycle += 1) {
+    const revision = String(BigInt("9007199254740993") + BigInt(cycle))
+    const read = { message_id: "owner", run_id: "r", revision, items: [text("a", "authoritative assistant body", "1", revision)] }
+    state = mergeMessageParts(state, read, [], false); oneUser()
+    state = mergeMessageParts(state, read, [], true); oneUser()
+    state = preserveMessageParts(state, stateFromSnapshot(ownerSnapshot())); oneUser()
+    expect(state.messages.some((message) => message.role === "assistant" && message.content === "authoritative assistant body")).toBe(true)
+  }
+})

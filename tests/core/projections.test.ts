@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it } from "vitest"
 
 import { stateFromSnapshot } from "@/core/hydration"
 import { buildThreadItems, currentRunProgressTodos, groupSegments } from "@/core/projections"
-import { parseSessionSnapshot } from "@/contract/http"
-import { applyChatProjectionEvents, appendUserMessage } from "@/core/reducer"
+import { messagePartsPageSchema, parseSessionSnapshot } from "@/contract/http"
+import { applyChatProjectionEvents, appendUserMessage, mergeMessageParts } from "@/core/reducer"
 import { createSessionStreamState, type SessionStep } from "@/core/state"
 
 import { AGENT_FAILURE_PROFILES, makeAgentFailureEvent, makeEvent, makePublic4Snapshot, makeSnapshot, resetFixtureSeq } from "./fixtures"
@@ -258,4 +258,65 @@ describe("currentRunProgressTodos", () => {
     expect(currentRunProgressTodos(updated)).toEqual(completedPlan)
     expect(updated.executionHead?.state).toBe("active")
   })
+})
+
+
+describe("native tool rounds and authoritative empty text boundaries", () => {
+  const activity = (letter: string) => ({ activity: "tool" as const, activity_id: `act_${letter.repeat(64)}`, segment_id: `seg_${letter.repeat(64)}`, status: "completed" as const, display_code: "tool.execution" as const })
+  function readState(emptyCompleted: boolean, emptyBody = "", tailOnly = false) {
+    const initial = stateFromSnapshot(parseSessionSnapshot({ ...makeSnapshot(), messages: [{ message_id: "owner", role: "assistant", run_id: "run", content: null, status: "completed", created_at: "now", rendering: { mode: "ordered", format_version: 1, revision: "5", event_watermark: null, parts_cursor: "opaque" } }] }))
+    const text = (segment: string, body: string, position: string, completed = true) => ({ kind: "text", part_id: `opaque-${segment}`, segment_id: segment, first_sequence: position, latest_sequence: position, text: body, offset: "0", end: String(Array.from(body).length), total_scalars: String(Array.from(body).length), completed })
+    const process = (letter: string, position: string) => ({ kind: "activity", part_id: `opaque-${letter}`, first_sequence: position, latest_sequence: position, activity: activity(letter) })
+    const page = messagePartsPageSchema.parse({ session_id: "session", message_id: "owner", run_id: "run", format_version: 1, revision: "5", event_watermark: null, next_cursor: null, items: [process("a", "1"), (tailOnly ? { ...text("empty", "", "2", emptyCompleted), offset: "1", end: "1", total_scalars: "1" } : text("empty", emptyBody, "2", emptyCompleted)), process("b", "3"), text("visible", "public answer", "4"), process("c", "5")] })
+    return mergeMessageParts(initial, page, [], true)
+  }
+  function groups(state: ReturnType<typeof readState>) {
+    const turn = buildThreadItems(state)[0]
+    if (turn?.kind !== "assistant-turn") throw new Error("missing owner turn")
+    return groupSegments(turn.steps, [], turn.messagesById)
+  }
+  it("joins activities across an owner-proven completed empty slot but never across public text", () => {
+    const segments = groups(readState(true))
+    expect(segments.map((segment) => segment.activities.length)).toEqual([2, 0, 1])
+    expect(segments.some((segment) => segment.segmentId === "empty")).toBe(false)
+    expect(segments[1]?.segmentId).toBe("visible")
+    const corrected = applyChatProjectionEvents(readState(true), [makeEvent("message.completed", { segment_id: "empty", content: "late owner body" }, { run_id: "run", publicSequence: "6" })])
+    expect(groups(corrected).map((segment) => segment.activities.length)).toEqual([1, 0, 1, 0, 1])
+    expect(corrected.messages.find((message) => message.id === "empty")?.content).toBe("late owner body")
+  })
+  it("keeps unfinished or missing-body empty slots as conservative boundaries", () => {
+    const state = readState(false)
+    expect(groups(state).map((segment) => segment.activities.length)).toEqual([1, 0, 1, 0, 1])
+    expect(groups(readState(true, "", true)).map((segment) => segment.activities.length)).toEqual([1, 0, 1, 0, 1])
+    const turn = buildThreadItems(state)[0]
+    if (turn?.kind !== "assistant-turn") throw new Error("missing owner turn")
+    const withoutBody = Object.fromEntries(Object.entries(turn.messagesById).filter(([id]) => id !== "empty"))
+    expect(groupSegments(turn.steps, [], withoutBody).map((segment) => segment.activities.length)).toEqual([1, 0, 1, 0, 1])
+  })
+  it("does not infer a completed empty body from START/END and honors later authoritative content", () => {
+    const state = applyChatProjectionEvents(createSessionStreamState(), [
+      makeEvent("run.created", { run_id: "run" }, { run_id: "run" }),
+      makeEvent("activity.updated", activity("a"), { run_id: "run" }),
+      makeEvent("message.delta", { segment_id: "empty", delta: "", text_boundary: "start" }, { run_id: "run" }),
+      makeEvent("message.delta", { segment_id: "empty", delta: "", text_boundary: "end" }, { run_id: "run" }),
+      makeEvent("activity.updated", activity("b"), { run_id: "run" }),
+    ])
+    expect(groups(state).map((segment) => segment.activities.length)).toEqual([1, 0, 1])
+    const corrected = applyChatProjectionEvents(state, [makeEvent("message.completed", { segment_id: "empty", content: "owner corrected body" }, { run_id: "run" })])
+    expect(groups(corrected).map((segment) => segment.activities.length)).toEqual([1, 0, 1])
+    expect(corrected.messages.find((message) => message.id === "empty")?.content).toBe("owner corrected body")
+    expect(groups(readState(true, "late public content")).map((segment) => segment.activities.length)).toEqual([1, 0, 1, 0, 1])
+  })
+  it("does not upgrade END-only to a known empty body, but accepts an explicit empty whole-body completion", () => {
+    const state = applyChatProjectionEvents(createSessionStreamState(), [
+      makeEvent("run.created", { run_id: "run" }, { run_id: "run" }),
+      makeEvent("activity.updated", activity("a"), { run_id: "run" }),
+      makeEvent("message.delta", { segment_id: "empty", delta: "", text_boundary: "end" }, { run_id: "run" }),
+      makeEvent("activity.updated", activity("b"), { run_id: "run" }),
+    ])
+    expect(groups(state).map((segment) => segment.activities.length)).toEqual([1, 0, 1])
+    const confirmed = applyChatProjectionEvents(state, [makeEvent("message.completed", { segment_id: "empty", content: "" }, { run_id: "run" })])
+    expect(groups(confirmed).map((segment) => segment.activities.length)).toEqual([2])
+  })
+
 })
