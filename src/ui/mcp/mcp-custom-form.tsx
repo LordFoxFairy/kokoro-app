@@ -9,6 +9,7 @@ import { useCallback, useState, type FormEvent } from "react";
 import { Plus, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { DialogTitle } from "@/components/ui/dialog";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -110,7 +111,9 @@ export function CustomMcpForm({
     });
   };
 
-  if (state.registered || completion !== "idle") {
+  const recoveryRequired = error || state.unknown !== null || completion === "retry";
+  const legacyConnection = state.registered && state.intent !== "configure" && state.intent !== "publish";
+  if ((state.registered || completion !== "idle") && (recoveryRequired || legacyConnection)) {
     return <section className={styles.customMcpResult} aria-live="polite">
       <DialogTitle className={styles.customMcpTitle}>{state.facts?.server.display_name ?? (state.name || name)}</DialogTitle>
       {!admitted ? <p className="sr-only" role="status">{t("mcp.creationSession")}</p> : <p>{submitting ? t("mcp.submitting") : ready ? t("mcp.active") : t("mcp.pending")}</p>}
@@ -272,8 +275,9 @@ export function CustomMcpForm({
       </div>
       {error || state.unknown ? <p className={styles.customMcpError} role="alert">{t(state.registrationRejection === "url_conflict" ? "mcp.serverUrlConflict" : connectorCommandFailureMessage(creation.failure, state.unknown ? "mcp.serverCreateUnknown" : "mcp.error"))}</p> : null}
       <footer className={styles.customMcpActions}>
-        <Button type="submit" disabled={!admitted || submitting || !creation.mayResume || (!state.unknown && !canSubmit)}>
-          {submitting ? t("mcp.submitting") : t(state.unknown ? creation.mayResume ? "mcp.retryOriginal" : "mcp.recovery.inspectRequired" : "mcp.save")}
+        <Button type="submit" className="relative" aria-busy={submitting || undefined} disabled={!admitted || submitting || !creation.mayResume || (!state.unknown && !canSubmit)}>
+          <span className={submitting ? "invisible" : undefined} aria-hidden={submitting || undefined}>{t(state.unknown ? creation.mayResume ? "mcp.retryOriginal" : "mcp.recovery.inspectRequired" : "mcp.save")}</span>
+          {submitting ? <><span className="absolute inset-0 flex items-center justify-center" aria-hidden="true"><Spinner /></span><span className="sr-only" role="status">{t("mcp.submitting")}</span></> : null}
         </Button>
       </footer>
     </form>

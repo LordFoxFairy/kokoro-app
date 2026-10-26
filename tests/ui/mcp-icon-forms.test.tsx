@@ -282,3 +282,51 @@ it.each(["streamable_http", "sse_compat"] as const)("Custom MCP %s Save complete
   expect(client.preparePrivateMcpServer).not.toHaveBeenCalled();
   expect(client.beginMcpConnectorAuthorization).not.toHaveBeenCalled();
 });
+
+
+it.each(["confirmed", "read-failed"] as const)("Custom MCP configure keeps its original form through ACK, held reads and navigation closing: %s", async mode => {
+  const server: McpPrivateServer = { availability: "unavailable", server_id: "pending-custom-server", display_name: "Pending custom", server_url: "https://mcp.example.test/pending-custom", notes: "", status: "registered", state_version: "1", headers: [], transport: "sse_compat", prepare_status: "pending_prepare", declarations: [], declarations_available: false };
+  const connector: McpConnector = { availability: "unavailable", connector_id: "pending-custom-connector", server_id: server.server_id, provider_key: "pending-custom-provider", connector_type: "mcp", status: "pending", enabled: false, approved_scopes: [], state_version: "1" };
+  let acknowledge!: () => void, read!: () => void, close!: () => void;
+  const ack = new Promise<void>(resolve => { acknowledge = resolve; });
+  const exact = new Promise<void>(resolve => { read = resolve; });
+  const closing = new Promise<void>(resolve => { close = resolve; });
+  const client = { registerPrivateMcpServer: vi.fn(async () => { await ack; return { server, connector, replayed: false }; }), getPrivateMcpServer: vi.fn(async () => { await exact; if (mode === "read-failed") throw new Error("exact read failed"); return server; }), getMcpConnector: vi.fn(async () => { await exact; return connector; }), preparePrivateMcpServer: vi.fn(), beginMcpConnectorAuthorization: vi.fn() };
+  const flow = createMcpServerCreationFlow({ client, boundary, onChanged: vi.fn(), preparation: createMcpPreparationCommands({ client, boundary, canPrepare: () => true, onConfirmed: vi.fn() }) });
+  const onDone = vi.fn(async () => { await closing; });
+  render(<LocaleProvider><Dialog open><DialogContent><CustomMcpForm flow={flow} boundary={boundary} onCancel={vi.fn()} onDone={onDone} /></DialogContent></Dialog></LocaleProvider>);
+  fireEvent.keyDown(screen.getByRole("combobox", { name: "传输类型" }), { key: "ArrowDown" });
+  fireEvent.click(await screen.findByRole("option", { name: /^SSE$/u }));
+  const name = screen.getByRole("textbox", { name: "服务器名称" }), url = screen.getByRole("textbox", { name: "服务器 URL" });
+  fireEvent.change(name, { target: { value: server.display_name } });
+  fireEvent.change(url, { target: { value: server.server_url } });
+  const save = screen.getByRole("button", { name: /^保存$/u });
+  fireEvent.click(save);
+  expect(name).toBeInTheDocument();
+  await act(async () => { acknowledge(); await ack; });
+  await waitFor(() => expect(client.getPrivateMcpServer).toHaveBeenCalledOnce());
+  expect(name).toBeInTheDocument();
+  expect(url).toBeInTheDocument();
+  expect(name).toHaveValue(server.display_name);
+  expect(url).toHaveValue(server.server_url);
+  expect(screen.getByRole("combobox", { name: "传输类型" })).toHaveTextContent("SSE");
+  expect(name).toHaveAttribute("readonly");
+  expect(save).toBeDisabled();
+  expect(save).toHaveAttribute("aria-busy", "true");
+  expect(onDone).not.toHaveBeenCalled();
+  await act(async () => { read(); await exact; });
+  if (mode === "confirmed") {
+    await waitFor(() => expect(onDone).toHaveBeenCalledOnce());
+    expect(name).toBeInTheDocument();
+    expect(url).toBeInTheDocument();
+    expect(save).toBeDisabled();
+    await act(async () => { close(); await closing; });
+  } else {
+    expect(await screen.findByRole("alert")).toBeVisible();
+    expect(screen.getByRole("button", { name: "重试" })).toBeEnabled();
+    expect(onDone).not.toHaveBeenCalled();
+  }
+  expect(client.registerPrivateMcpServer).toHaveBeenCalledOnce();
+  expect(client.preparePrivateMcpServer).not.toHaveBeenCalled();
+  expect(client.beginMcpConnectorAuthorization).not.toHaveBeenCalled();
+});

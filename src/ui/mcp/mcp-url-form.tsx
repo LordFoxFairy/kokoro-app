@@ -7,10 +7,12 @@ import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
 import type { McpServerCreationFlow, McpServerCreationCompletion } from "./mcp-server-creation-flow";
 import { useMcpServerCreation } from "./use-mcp-server-creation";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { DialogTitle } from "@/components/ui/dialog";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { ChevronDown, Link2, Plus, Settings2, Trash2 } from "lucide-react";
+import { ChevronDown, Folder, Link2, Plus, Settings2, Trash2 } from "lucide-react";
 import { useT } from "@/i18n/context";
 
 import styles from "./mcp-create-dialog.module.css";
@@ -117,9 +119,13 @@ export function UrlMcpForm({
       ...(showOAuth && clientId.trim() ? { oauth_client: { client_id: clientId.trim(), client_secret: clientSecret } } : {}),
     });
   };
-  const submitLabel = t(submitting ? "mcp.submitting" : state.unknown ? creation.mayResume ? "mcp.retryOriginal" : "mcp.recovery.inspectRequired" : "mcp.save");
+  const idleSubmitLabel = t(state.unknown ? creation.mayResume ? "mcp.retryOriginal" : "mcp.recovery.inspectRequired" : "mcp.save");
+  const submitLabel = submitting ? t("mcp.submitting") : idleSubmitLabel;
 
-  if (state.registered || completion !== "idle") {
+  const publicationDisabled = !onPublish || !admitted || submitting || !creation.mayResume || (!state.unknown && !canSubmit);
+  const recoveryRequired = error || state.unknown !== null || completion === "retry";
+  const legacyConnection = state.registered && state.intent !== "configure" && state.intent !== "publish";
+  if ((state.registered || completion !== "idle") && (recoveryRequired || legacyConnection)) {
     return <section className={styles.urlMcpForm} aria-live="polite">
       {showTitle ? <DialogTitle className={styles.urlMcpTitle}>{state.facts?.server.display_name ?? (state.name || name)}</DialogTitle> : null}
       {!admitted ? <p className="sr-only" role="status">{t("mcp.creationSession")}</p> : <p className={styles.urlWarning}>{submitting ? t("mcp.submitting") : isReady ? t("mcp.active") : t("mcp.pending")}</p>}
@@ -186,7 +192,8 @@ export function UrlMcpForm({
         type="button"
         className={styles.advancedToggle}
         aria-expanded={advanced}
-        onClick={() => setAdvanced((value) => !value)}
+        disabled={locked}
+        onClick={() => { if (editable()) setAdvanced((value) => !value); }}
       >
         <Settings2 aria-hidden="true" />
         <span>{t("mcp.advancedSettings")}</span>
@@ -310,17 +317,25 @@ export function UrlMcpForm({
           {t("mcp.cancel")}
         </Button>
         <span />
-        <Button type="submit" variant="outline" disabled={!admitted || submitting || !creation.mayResume || (!state.unknown && !canSubmit)}>
-          {submitLabel}
+        <Button type="submit" variant="outline" className="relative" aria-busy={submitting || undefined} disabled={!admitted || submitting || !creation.mayResume || (!state.unknown && !canSubmit)}>
+          <span className={submitting ? "invisible" : undefined} aria-hidden={submitting || undefined}>{idleSubmitLabel}</span>
+          {submitting ? <><span className="absolute inset-0 flex items-center justify-center" aria-hidden="true"><Spinner /></span><span className="sr-only" role="status">{t("mcp.submitting")}</span></> : null}
         </Button>
-        <Button
-          type="button"
-          disabled={!onPublish || !admitted || submitting || !creation.mayResume || (!state.unknown && !canSubmit)}
-          onClick={() => void saveConfiguration(true)}
-        >
-          {t("mcp.saveAndPublish")}
-          <ChevronDown aria-hidden="true" />
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild disabled={publicationDisabled}>
+            <Button type="button" disabled={publicationDisabled}
+              onKeyDown={event => { if (publicationDisabled) event.preventDefault(); }}>
+              {t("mcp.saveAndPublish")}
+              <ChevronDown aria-hidden="true" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem disabled={publicationDisabled} onSelect={() => { if (!publicationDisabled) void saveConfiguration(true); }}>
+              <Folder aria-hidden="true" />
+              {t("mcp.publishTitle")}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </form>
   );
