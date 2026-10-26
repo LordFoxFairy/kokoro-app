@@ -176,7 +176,7 @@ GET `/iam/interactions/select-tenant` 的合法成功导航不变；顶层HTML�
 
 IAM sign-in 的原生表单仍为 csrf_token／email／password；每次 GET 独立随机 proof，cookie 名由精确签名 query 和 proof 的摘要共同派生。POST 原 issuer/path/method/query/form-cookie 绑定验证后才原值 CAS，一次消费；未证明失败零清理，已消费终态只清自己，Consent／invitation 不改。顶层 HTML 失效表单去固定失败页，不自动重发密码／OAuth；API 仍403。分配前检查每请求可见 proof 数及 cookie 分配预算（超额429），原 header 总字节预算仍为413；不驱逐别的有效表单；不是全局并发配额。
 
-OAuth/OIDC 继续归 IAM，App 只拥有 Product 登录交互和会话。原生顶层 HTML 登录／回调／authorize 失败 303 返回固定 `/auth/sign-in/failed`，不复制 query、owner body、Location 或 cookie；新页复用 App 现有 UI 组件与语义 token，显示登录状态及显式返回入口。渲染／刷新页面不重新发起 OAuth，不创建或恢复 session。API／iframe／非导航和 HTML q=0 保留原错误 status／JSON，不变成成功。
+OAuth/OIDC 继续归 IAM，App 只拥有 Product 登录交互和会话。原生顶层 HTML 登录／回调／authorize 失败 303 返回固定 `/auth/sign-in/failed`，不复制 query、owner body、Location 或 cookie；新页复用 App 现有 UI 组件与语义 token，显示登录状态及显式返回入口。失败页仅只读核当前 Product Session：canonical host 下 active 且 access 未过期才导航固定 /app，由原 AppLayout／AppGate 继续 fresh 准入，不猜原 Conversation／Project。无有效证明保显式恢复和登录；挂载及 focus／online／pageshow／可见恢复仅 GET 既有 /api/auth/session，每轮共用10秒绝对预算、最多2次GET，严格 authenticated／subject／未来 expires_at 后才 replace /app；隐藏／卸载退休且拒迟到。显式恢复只重读及 RSC refresh，登录只有用户点击 /login；不自动 OAuth／POST refresh、不消费旧 state、不改 cookie／storage，也不创建或恢复 session。API／iframe／非导航和 HTML q=0 保留原错误 status／JSON，不变成成功。
 
 合法 issuer error 必须先满足唯一 query、精确 issuer、state 与浏览器交易绑定并一次性消费；配置类失败仅记录固定分类，不记录 state、描述或凭据，不调用 token exchange。旧回调、错主体和重复回执不清除较新登录的 cookie。账户三 scope 是当前正式功能依赖，应通过 IAM 原有 Product Web client/resource 演进入口配对；不删除 scope、添加权限回退或把环境故障归咎于用户。
 

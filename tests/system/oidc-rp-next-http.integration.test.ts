@@ -6290,6 +6290,27 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     expect(paths).toHaveLength(before)
   })
 
+  it("AUTH recovery returns an active Session from the old failure URL to fixed /app without another OAuth request", async () => {
+    const jar = await authenticatedProductJar()
+    const before = paths.length
+    const failurePage = await http(nextPort, "/auth/sign-in/failed", "GET", "", { cookie: jar })
+    expect(failurePage.status).toBe(307)
+    expect(failurePage.headers.location).toBe("/app")
+    expect(failurePage.headers["set-cookie"] ?? []).toEqual([])
+    expect(paths).toHaveLength(before)
+  })
+
+  it("AUTH recovery keeps an anonymous failure document explicit without native state replay or a login loop", async () => {
+    const before = paths.length
+    const failurePage = await http(nextPort, "/auth/sign-in/failed?code=stale-code&state=stale-state")
+    expect(failurePage.status).toBe(200)
+    expect(failurePage.body).toContain("恢复工作区")
+    expect(failurePage.body).toContain('href="/login"')
+    expect(failurePage.headers.location).toBeUndefined()
+    expect(failurePage.headers["set-cookie"] ?? []).toEqual([])
+    expect(paths).toHaveLength(before)
+  })
+
   it.each(["expired callback", "refreshed signin"])("takes %s browser navigation off the technical URL without automatic retry", async scenario => {
     const target = scenario === "refreshed signin" ? "/api/auth/signin/kokoro-iam"
       : "/api/auth/callback/kokoro-iam?code=fixture-code&state=stale-state-123456&iss=" + encodeURIComponent(`http://localhost:${nextPort}/iam`)
@@ -6306,7 +6327,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     const before = paths.length
     const failurePage = await http(nextPort, response.headers.location as string)
     expect(failurePage.status).toBe(200)
-    expect(failurePage.body).toContain("登录暂未完成")
+    expect(failurePage.body).toContain("恢复工作区")
     expect(failurePage.body).not.toContain("stale-state-123456")
     expect(failurePage.body).not.toContain("fixture-code")
     expect(failurePage.headers.location).toBeUndefined()

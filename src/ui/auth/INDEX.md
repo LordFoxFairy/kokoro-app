@@ -36,6 +36,7 @@ AppGate在整个KokoroAppSurface外提供单用途read-recheck context；只有�
 会话态探针与 Product 退出交互。登录入口由 `src/app/login/route.ts` 服务端持有；鉴权由 HttpOnly Product Session cookie 同源携带，前端不持 token。
 
 ## 公开件
+- `SignInRecovery`（`sign-in-recovery.tsx`）：失败文档的局部 GET-only 当前 Session 观察；服务端 active/access 未过期可导航固定 `/app`，由原 AppGate 重新准入。挂载／focus／online／pageshow／可见恢复每轮共用10秒、最多2次 GET，隐藏／卸载退休，拒绝迟到；显式检查仅重读及 RSC refresh，不自动 OAuth／POST refresh，不存身份、不重放旧 state。
 - `useSessionState`（`use-session-state.ts`）：探正式 `GET /api/auth/session` → `"checking"|"pass"|"anonymous"|"unavailable"`；preview 仅由非生产显式开关放行，探针故障不降级为 anonymous，也不展示登录诊断卡片；可见页在 1s/3s 后至多自动重核两次，成功清理定时器，卸载取消，现有 focus/online/周期检查继续负责后续恢复。
 - `useSessionProbe`：在同一探针结果中保留 `preview|authenticated` 模式，供 `/app` 选择 Preview Transport 或真实 Session BFF。focus/visibility/周期探针共用未决检查；同一已准入主体保留原数据代际和页面内容，不因核验重取全部业务列表。探针序号只隔离异步结果；真正失败、匿名、身份标记变化/不可读及pagehide才退休旧数据。跨标签storage只在身份标记变化时核验，隐藏页先退休、可见后再请求；核验期间标记切走又切回也令原响应失效。pagehide允许pageshow建立新检查，业务请求仍逐次经过服务端权限校验。
 - `/` 是固定 Kokoro 公开首页；`/login` 是固定 Product RP 登录；`/app` 是受保护工作台。`/auth/sign-in` 只承载 IAM issuer 交互，不是 Product 登录页。
