@@ -138,3 +138,17 @@ it("the original API added card uses its list binding without losing selection o
   expect(next).toHaveBeenCalledOnce();
   expect(action).not.toHaveBeenCalled();
 });
+
+
+it.each([['QA MCP', 'Q'], ['  🦊 服务', '🦊']])("the custom MCP list preserves %s identity as its name initial without provider artwork", (name, initial) => {
+  localStorage.setItem("kokoro.locale", "zh");
+  const connector = { availability: "unavailable" as const, connector_id: "initial-connector", server_id: "initial-server", provider_key: "private-mcp", connector_type: "mcp" as const, status: "pending" as const, enabled: true, approved_scopes: [], state_version: "1", display_name: name };
+  const select = vi.fn(), action = vi.fn();
+  render(<LocaleProvider><McpConnectionList connectors={[connector]} customApis={[]} providers={[]} query="" brandName="Kokoro" onBrowse={action} onEdit={select} onSelectCustomApi={action} previousEnabled={false} nextEnabled={false} onPrevious={action} onNext={action} /></LocaleProvider>);
+  expect(screen.getByText(initial, { exact: true })).toBeVisible();
+  expect(screen.getByText("暂不可用", { exact: true })).toBeVisible();
+  const card = screen.getByRole("button", { name: name.trim() });
+  fireEvent.click(card);
+  expect(select).toHaveBeenCalledExactlyOnceWith(connector, card);
+  expect(action).not.toHaveBeenCalled();
+});

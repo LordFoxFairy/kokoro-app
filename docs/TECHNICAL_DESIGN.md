@@ -1,3 +1,11 @@
+## 2026-10-26 MCP 列表私有媒体读取（实施边界）
+
+MCP 列表继续只消费原 Connector 元数据；有 `server_id` 的自定义卡独立请求同源 icon 媒体，不逐卡请求 JSON 详情，不把 Storage 短引用放入列表。Provider artwork 与 API 图标沿原路径。新 `mcp-server-icon` 只拥有当前主体/准入代、server ID 与 connector state_version 的图片加载状态；成功后显示，未知/失败保真实名称首字母，无 spinner、自动重试或无图事实断言。保存/替换/清除的 confirmed-write projection revision 立即退休旧图并独立重新读取；仅改图标不保证 Connector CAS 增加，列表刷新失败也不保已确认清除的旧图。普通无已确认写入的被动 pending/failure 保当前图片。
+
+真实 Chromium 已证实：即使 HTTP no-store，同 URI 的新 img DOM（包括只换 fragment）仍可能复用 document decoded-image cache，不能保证替换/清除或新主体重新准入。故本片采用必要 src 例外：IntersectionObserver 延迟启动固定同源媒体 fetch（cache:no-store、credentials:same-origin、redirect:error），完整 EOF/10秒/1MiB/PNG-JPEG 校验后生成本组件寿命唯一 blob URL，img 保 lazy/async 且解码成功才切首字母。退休 abort+revoke、迟到响应不建 URL；blob URL 仅显示字节，不保存为 owner 事实、浏览器缓存或绑定，也不扩 query/nonce 协议。现 CSP 已允许 blob，无 CSP 变更。
+
+同源 `GET /api/hub/mcp/servers/{server_id}/icon` 只作独立 `lib/server` 二进制薄桥，catchall 仅具名 dispatch。沿 Product Session 与部署 domain，不接 query/body/framing/命令头或透传任意头；admission 到完整 EOF 共 10 秒、最大 1 MiB，缓冲完整验证后才返回 PNG/JPEG。BFF 固定 `/browser/v1/mcp/servers/{server_id}/icon`，私有机器契约固定正式 BFF `7a94139b607ca4e51feb1f5480b35f46c4afa53c` / `mcp-server-icon-browser/1.0.0`，完整原件 SHA256 `26569264ab799b753e9e57621167a34b2b5530f9e0d8d65cf9dc333d3aada766`，由窄生成器正规派生 ID/各 status 严格错误 validator；不改变 Public/RPC/Connector 字段、owner 权限或失败恢复。正常运行加载及浏览器保存旅程由 Root 另验。
+
 ## 被动读取反馈约束（2026-10-26）
 
 读取状态不等于页面状态：被动读取与刷新不得追加“正在加载／加载失败，请稍后再试／重试”整块面板，不通过全局隐藏 Alert 或清空翻译绕过。优先保留当前可信身份与代际内已确认的内容；首次未知保留页面结构与字段占位，不伪造零余额、空目录或成功。身份退休清除旧投影。保留内部 pending/error、取消与权限检查、必要 aria-busy/无障碍状态；失败不启用依赖新鲜数据的写操作。明确保存、删除、授权或执行失败在对应操作处反馈，未知写入结果仍先核实，不自动重放。重新进入正常页面/正常分页入口继续读取，不增设常驻异常卡。每个消费点单独验收，既有未迁移入口不冒称完成。

@@ -3752,16 +3752,19 @@ it.each(["failure", "missing"])("MCP recheck keeps a recoverable detail when the
   round = 2
   view.rerender(content(false, 2))
   view.rerender(content(true, 2))
-  fireEvent.click(await within(dialog).findByRole("button", { name: "重试" }))
-  // A retry while the dependency is still missing must remain recoverable.
-  await waitFor(() => expect(within(dialog).getByRole("button", { name: "重试" })).toBeVisible())
+  await within(dialog).findByText("连接列表加载失败")
+  expect(within(dialog).queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
+  // A fresh admission while the resource is still missing must stay locked.
+  view.rerender(content(false, 3)); view.rerender(content(true, 3))
+  await within(dialog).findByText("连接列表加载失败")
+  expect(within(dialog).queryByRole("button", { name: "连接" })).not.toBeInTheDocument()
   round = 3
-  fireEvent.click(within(dialog).getByRole("button", { name: "重试" }))
+  view.rerender(content(false, 4)); view.rerender(content(true, 4))
   expect(await screen.findByRole("dialog", { name: "Retry server" })).toBe(dialog)
   expect(read.mock.calls.every(args => args[0] === "retry-server")).toBe(true)
 })
 
-it("MCP initial private read failure remains visible and explicitly retryable on the list", async () => {
+it("MCP initial private read failure stays quiet and opening the same card reads again", async () => {
   const { McpContent: Content } = await import("@/ui/mcp/mcp-content")
   const McpContent = withMcpCommandOwner(Content)
   const connector = { availability: "unavailable" as const, connector_id: "first-failure", connector_type: "mcp" as const, provider_key: "private-first",
@@ -3775,9 +3778,10 @@ it("MCP initial private read failure remains visible and explicitly retryable on
     listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }) }
   render(<LocaleProvider><McpContent client={hub} preview initialView="connections" /></LocaleProvider>)
   fireEvent.click(await screen.findByRole("button", { name: "First read" }))
-  const alert = await screen.findByRole("alert")
+  await screen.findByText("连接列表加载失败")
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument()
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
-  fireEvent.click(within(alert).getByRole("button", { name: "重试" }))
+  fireEvent.click(screen.getByRole("button", { name: "First read" }))
   expect(await screen.findByRole("dialog", { name: "First read" })).toBeVisible()
   expect(read).toHaveBeenCalledTimes(2)
 })
@@ -3797,9 +3801,10 @@ it("MCP catalog recheck reports an absent exact provider without waiting for an 
   const dialog = await screen.findByRole("dialog", { name: "Provider detail" })
   round = 2
   view.rerender(content(false, 2)); view.rerender(content(true, 2))
-  expect(await within(dialog).findByRole("button", { name: "重试" })).toBeVisible()
+  await within(dialog).findByText("连接列表加载失败")
+  expect(within(dialog).queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
   round = 1
-  fireEvent.click(within(dialog).getByRole("button", { name: "重试" }))
+  view.rerender(content(false, 3)); view.rerender(content(true, 3))
   expect(await screen.findByRole("dialog", { name: "Provider detail" })).toBe(dialog)
 })
 
@@ -3945,9 +3950,10 @@ it("Custom API same-actor recheck keeps its detail through a failed read and res
   expect(screen.getByRole("dialog")).toBe(dialog)
   expect(within(dialog).getByLabelText("备注（可选）")).toHaveValue("")
   view.rerender(content(true, 2))
-  const retry = await within(dialog).findByRole("button", { name: "重试" })
+  await within(dialog).findByText("连接列表加载失败")
+  expect(within(dialog).queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
   round = 3
-  fireEvent.click(retry)
+  view.rerender(content(false, 3)); view.rerender(content(true, 3))
   await waitFor(() => expect(within(dialog).getByLabelText("名称")).toHaveValue("API 3"))
   expect(screen.getByRole("dialog")).toBe(dialog)
   expect(within(dialog).getByLabelText("备注（可选）")).toHaveValue("Instructions 3")
@@ -3984,7 +3990,7 @@ it("Custom API late confirmed update invalidates its own current projection with
   reader.unmount()
 })
 
-it("MCP first-open locator can retry its missing row after recheck instead of retrying only an absent detail", async () => {
+it("MCP first-open locator recovers its missing row after a new admission recheck", async () => {
   const { McpContent: Content } = await import("@/ui/mcp/mcp-content")
   const McpContent = withMcpCommandOwner(Content)
   let round = 1
@@ -4004,9 +4010,10 @@ it("MCP first-open locator can retry its missing row after recheck instead of re
   await waitFor(() => expect(hub.getPrivateMcpServer).toHaveBeenCalledOnce())
   round = 2
   view.rerender(content(false, 2)); view.rerender(content(true, 2))
-  const retry = await within(await screen.findByRole("alert")).findByRole("button", { name: "重试" })
+  await screen.findByText("连接列表加载失败")
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument()
   round = 3
-  fireEvent.click(retry)
+  view.rerender(content(false, 3)); view.rerender(content(true, 3))
   expect(await screen.findByRole("dialog", { name: "Initial missing" })).toBeVisible()
   await act(async () => { finish({ ...server, display_name: "Retired initial result" }); await old })
   expect(screen.queryByText("Retired initial result")).not.toBeInTheDocument()
@@ -4085,10 +4092,10 @@ it.each(["mcp", "api"])("%s configuration restores a bounded range without steal
     created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-16T00:00:00Z", environment: [] })
   const content = (name: string | null, pendingError = false) => <LocaleProvider>{kind === "mcp" ?
     <CustomMcpDetailDialog admitted={name !== null} managementCommand={undefined} onResumeManagement={() => {}} connector={name === null ? null : connector} server={name === null ? null : server(name)}
-      actionId={null} actionError={false} deleteId={null} returnFocusRef={{ current: null }} onClose={vi.fn()} pendingError={pendingError} onRetry={vi.fn()}
+      actionId={null} actionError={false} deleteId={null} returnFocusRef={{ current: null }} onClose={vi.fn()} pendingError={pendingError}
       onSaveConfiguration={vi.fn()} onPrepare={vi.fn()} onAuthorize={vi.fn()} onDisconnect={vi.fn()} onDeleteIntent={vi.fn()} onCancelDelete={vi.fn()} onDelete={vi.fn()} /> :
     <CustomApiDetailDialog admitted={name !== null} command={undefined} canUpdate canRemove onResume={() => {}} profile={name === null ? null : profile(name)} busy={false} actionError={false}
-      returnFocusRef={{ current: null }} onClose={vi.fn()} onSave={vi.fn()} onDelete={vi.fn()} pendingError={pendingError} onRetry={vi.fn()} />}</LocaleProvider>
+      returnFocusRef={{ current: null }} onClose={vi.fn()} onSave={vi.fn()} onDelete={vi.fn()} pendingError={pendingError} />}</LocaleProvider>
   const view = render(content("Long original name"))
   if (kind === "mcp") {
     fireEvent.keyDown(screen.getByRole("button", { name: "管理" }), { key: "ArrowDown" })
@@ -4122,9 +4129,8 @@ it.each(["mcp", "api"])("%s configuration restores a bounded range without steal
   view.rerender(content("Restored field scroll"))
   expect([note.scrollTop, note.scrollLeft]).toEqual([8, 4])
   view.rerender(content(null, true))
-  const retry = screen.getByRole("button", { name: "重试" })
-  act(() => retry.focus())
-  // A focused Close button remains mounted even when Retry disappears.
+  expect(screen.queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
+  // A focused Close button remains mounted through failed and fresh reads.
   const close = screen.getAllByRole("button", { name: "取消" }).find(button => !button.hasAttribute("disabled"))!
   act(() => close.focus())
   view.rerender(content("Recovered name"))

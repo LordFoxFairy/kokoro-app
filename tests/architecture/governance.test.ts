@@ -177,6 +177,7 @@ describe("Web governance boundary", () => {
         "contract:check:bff-connector-command-errors": z.string().min(1),
         "contract:check:bff-public-skill-list": z.string().min(1),
         "contract:check:bff-mcp-project-publication": z.string().min(1),
+        "contract:check:bff-mcp-server-icon": z.string().min(1),
       }),
     })
     const packageJson: unknown = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"))
@@ -185,6 +186,7 @@ describe("Web governance boundary", () => {
     expect(scripts["test:architecture"]).toBe("vitest run tests/architecture")
     expect(scripts["contract:check:bff-connector-command-errors"]).toBe("node scripts/generate-bff-connector-command-errors.mjs --check")
     expect(scripts["contract:check:bff-public-skill-list"]).toBe("node scripts/generate-bff-public-skill-list.mjs --check")
+    expect(scripts["contract:check:bff-mcp-server-icon"]).toBe("node scripts/generate-bff-mcp-server-icon.mjs --check")
     expect(scripts["contract:check:bff-mcp-project-publication"]).toBe("node scripts/generate-bff-mcp-project-publication.mjs --check")
     expect(scripts.contract.split(" && ").sort()).toEqual([
       "pnpm contract:check:bff-archived-tasks",
@@ -196,6 +198,7 @@ describe("Web governance boundary", () => {
       "pnpm contract:check:bff-connector-command-errors",
       "pnpm contract:check:bff-public-skill-list",
       "pnpm contract:check:bff-mcp-project-publication",
+      "pnpm contract:check:bff-mcp-server-icon",
       "vitest run contract tests/contract",
     ].sort())
   })

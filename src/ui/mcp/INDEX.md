@@ -1,10 +1,22 @@
+## MCP 已保存 Server 的独立媒体（2026-10-26）
+
+`mcp-server-icon.tsx` 只请求当前已准入列表的固定同源 Server 媒体；IntersectionObserver 延迟 cache:no-store 的受控二进制 fetch，完整EOF/10秒/1MiB/PNG-JPEG验证后以本寿命唯一blobURL展示（避免同URI decoded cache），解码成功才切换真实名称首字母，lazy/async、失败无重试/常驻错误卡，退休 abort/revoke。Provider artwork/API绑定来源和40px壳/24px首字母不变。主体/准入代、server_id/Connector CAS及既有 confirmed-write revision 控制图片寿命；已确认替换/clear立即退休旧图，列表刷新失败不保旧绑定，普通被动读取保本代已加载图。catchall新增具名薄代理见 `src/lib/server/INDEX.md`；无逐卡JSON、签名URL列表或新owner字段。正常配对/浏览器验收另列。
+
+## 已添加卡片视觉（2026-10-26）
+
+按当前Manus同态测量，MCP无provider图使用真实名称首个Unicode码点，沿用API首字母组件样式；40px白底/8px圆角图标壳、24px首字母、14px/500名称。该首字母视觉改动自身不新增逐Server读取；后续独立媒体通路见上节，不伪造已绑定图标或扩Connector投影。
+
+## 详情被动读取反馈（2026-10-26）
+
+自定义 MCP/API、提供方详情及连接编辑器保留各自对话框和字段边界，被动 pending/error 仅无障碍播报，不再挂红卡/重试按钮。退出重开重新执行原正式读取，未知资料不提升 ready、不启用保存/连接、不伪报空详情；保存已确认但回读失败仍清退秘密草稿并禁用新写入。未知写命令、Prepare/发布恢复日志和明确操作失败反馈保持。该窄展示切片不包含原图标保存ACK过渡候选。
+
 ## 2026-10-25 personal MCP 读取冷却
 
 既有Hub reader仅对connections及五种metadata GET的已验证HTTP429、retryable和合法Retry-After至多冷却重读一次；等待、第二请求及EOF共用原10秒绝对预算。缺失/坏/超过剩余预算的delay保原错误；abort无迟到发送。公开connections adapter沿原契约承接合法头，写命令/receipt/status/权限与Schema不改。本片不涵盖其它Skills/Project/Chat读取；正常验收与剩余缺口归Root执行板。
 
 ## 2026-10-25 配置保存后的局部读回展示
 
-`custom-mcp-detail-dialog.tsx` 只在本窗口已确认保存、同主体/代际/exact对象且fresh读回挂起的短窗口保留不可变HTTP/SSE标签及先前主动作展示；主动作仍以fresh资格禁用并在点击时再次检查；不伪造Current/CAS或解锁动作，错误、unknown与退休仍显式处理。相同严格窗口内，ACK→fresh读回仅保此前已可见且本次未移除的已配置Header名称和原行；不缓存value/版本/CAS，ACK仍立即清秘密草稿，新增名称须fresh事实后才展示，错误/unknown/退休后旧行不复活，保存/移除/试用等仍锁定。本窗口exact Update运行中只由保存控件提供可见进度并作屏幕阅读器播报，不再插入挤动表单的加载面板，unknown和真实读错保留。原Button outline恢复，配置按钮不再由局部CSS抹掉边框/背景/阴影。正常操作对照及未验范围归Root唯一执行板。
+`custom-mcp-detail-dialog.tsx` 只在本窗口已确认保存、同主体/代际/exact对象且fresh读回挂起的短窗口保留不可变HTTP/SSE标签及先前主动作展示；主动作仍以fresh资格禁用并在点击时再次检查；不伪造Current/CAS或解锁动作，错误、unknown与退休仍显式处理。相同严格窗口内，ACK→fresh读回仅保此前已可见且本次未移除的已配置Header名称和原行；不缓存value/版本/CAS，ACK仍立即清秘密草稿，新增名称须fresh事实后才展示，错误/unknown/退休后旧行不复活，保存/移除/试用等仍锁定。绑定图像过渡只保存本窗口已加载URL及原expiresAt两个primitive，不保完整binding/selector，Picker只消费展示fallback且按原到期时刻本地退图、不刷新能力；clear不保旧图、replace只保ready且已加载的新图。显式null同时遮住已确认draft遗留preview，错误/unknown/主体/代际/exact对象/窗口退休后不复活，fresh投影才取代过渡；图像不授任何事实或操作资格。本窗口exact Update运行中只由保存控件提供可见进度并作屏幕阅读器播报，不再插入挤动表单的加载面板，unknown和真实读错保留。原Button outline恢复，配置按钮不再由局部CSS抹掉边框/背景/阴影。正常操作对照及未验范围归Root唯一执行板。
 
 ## 2026-10-25 当前业务只读401的有限再准入
 

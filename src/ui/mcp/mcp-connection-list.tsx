@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { Cable, Search } from "lucide-react";
+import { Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import type {
@@ -11,14 +11,17 @@ import type {
 import type { CustomApiProfile } from "@/hub/custom-api.schema";
 import { useT } from "@/i18n/context";
 
+import { McpServerIcon } from "./mcp-server-icon";
 import { McpEmptyConnections } from "./mcp-empty-connections";
 import { providerArtwork } from "./mcp-projection-types";
 import { McpAvailabilityStatus } from "./mcp-availability-status";
 import { McpCustomApiCard } from "./mcp-custom-api-card";
 import styles from "./mcp-projection-read.module.css";
+import galleryStyles from "./mcp-custom-api-gallery.module.css";
 
 export function McpConnectionList({
   connectors,
+  mediaRevision = 0,
   customApis,
   providers,
   query,
@@ -32,6 +35,8 @@ export function McpConnectionList({
   onNext,
 }: {
   connectors: McpConnector[];
+  /** Retires media immediately after a confirmed write, including server-only icon changes. */
+  mediaRevision?: number;
   customApis: CustomApiProfile[];
   providers: McpConnectorProvider[];
   query: string;
@@ -121,8 +126,11 @@ export function McpConnectionList({
                           sizes="2.5rem"
                           unoptimized
                         />
+                      ) : connector.server_id ? (
+                        <McpServerIcon key={mediaRevision} serverId={connector.server_id} stateVersion={connector.state_version}
+                          fallback={<span className={galleryStyles.initial}>{Array.from(connectorName.trim())[0] ?? ""}</span>} />
                       ) : (
-                        <Cable />
+                        <span className={galleryStyles.initial}>{Array.from(connectorName.trim())[0] ?? ""}</span>
                       )}
                     </span>
                     <span className={styles.connectorIdentity}>

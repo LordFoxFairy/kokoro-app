@@ -1,3 +1,7 @@
+## 2026-10-26 MCP 列表 icon 媒体同源面（实施设计）
+
+新增仅浏览器私有 `GET /api/hub/mcp/servers/{server_id}/icon`，映射 BFF `GET /browser/v1/mcp/servers/{server_id}/icon`。请求只允许精确 ID 路径、无 query/body/Content-Type/framing/命令头；身份只取现 Product Session。200 为完整 `image/png` 或 `image/jpeg`，严格非零 Content-Length ≤ 1,048,576，no-store/nosniff/no-referrer；不透传 redirect、cookie、owner location 或任意依赖头。完整 admission/响应 EOF 同一 10 秒预算，未知错误拒绝，不污染列表读取。私有 profile 固定 BFF `7a94139b607ca4e51feb1f5480b35f46c4afa53c` / `mcp-server-icon-browser/1.0.0` / SHA256 `26569264ab799b753e9e57621167a34b2b5530f9e0d8d65cf9dc333d3aada766`，`contract/bff-mcp-server-icon-source.json` 记录来源，原件与 status/code/retryable 闭集经 `generate-bff-mcp-server-icon.mjs` 正规生成；Public27、Connector JSON 与原命令错误 profile 均不扩。浏览器始终 fetch 固定同源路径且禁止缓存/redirect，只有完整校验后的当前寿命 blob URL 进入 img src，避免浏览器复用同 URI 的旧解码图像；没有额外 query、Storage URL 或第二条 JSON 读取。
+
 ## 2026-10-25 personal HTTP/SSE 与 Public26 消费（源码候选）
 
 现 Browser→App `/api/hub`→BFF browser-private unary 路径不变，外部 SSE 由 Platform/Agent 执行。唯一 `src/generated/bff-public-openapi.yaml` 固定正式 BFF `aa0bdeb4397d3a022edf9b3cfc53d5a6cfb281b1`／Public26，全文 SHA256 `20d26736cf23da32c242c2c7cf75c45affb62c5d27696dcecb0bc6193bc39a09`；七个既有 public 生成链正规消费。Public26 Connection 的 `transport` 严格闭集为 `streamable_http|sse_compat`，unknown／STDIO／extra 拒绝；完整26→25→24逆证保旧全文 SHA、操作与权限断言，不改独立 connector-error／project-publication artifact。

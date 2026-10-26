@@ -601,7 +601,8 @@ it.each(["revoked", "type", "server"] as const)("keeps a selected connection fro
   render(<LocaleProvider><ConnectorCommandProvider client={client} boundary={{ subject: drift, admitted: true, generation: 0 }}><McpProjectionRead client={client} identity={drift} embedded /></ConnectorCommandProvider></LocaleProvider>)
   fireEvent.click(await screen.findByRole("button", { name: provider.display_name }))
   const dialog = await screen.findByRole("dialog")
-  expect(await within(dialog).findByRole("alert")).toBeVisible()
+  expect(await within(dialog).findByText("连接列表加载失败")).toBeInTheDocument()
+  expect(within(dialog).queryByRole("alert")).not.toBeInTheDocument()
   expect(within(dialog).queryByRole("button", { name: "连接" })).not.toBeInTheDocument()
   expect(get).toHaveBeenCalledExactlyOnceWith(connection.connector_id, expect.any(AbortSignal))
 })
@@ -621,9 +622,13 @@ it.each([false, true])("opens an off-page private connection only after exact co
   fireEvent.click(await screen.findByRole("button", { name: provider.display_name }))
   fireEvent.click(await within(await screen.findByRole("dialog")).findByRole("button", { name: /My private connection/ }))
   if (retry) {
-    const error = await screen.findByRole("alert")
+    await screen.findByText("连接列表加载失败")
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
     expect(getServer).not.toHaveBeenCalled()
-    fireEvent.click(within(error).getByRole("button", { name: "重试" }))
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "取消" }))
+    fireEvent.click(await screen.findByRole("button", { name: provider.display_name }))
+    fireEvent.click(await within(await screen.findByRole("dialog")).findByRole("button", { name: /My private connection/ }))
   }
   expect(await screen.findByRole("dialog", { name: server.display_name })).toBeVisible()
   expect(get).toHaveBeenCalledTimes(retry ? 2 : 1)
@@ -658,7 +663,8 @@ it.each(["revoked", "fresh-server"])("retires opened private detail through an e
   expect(screen.queryByRole("button", { name: "管理" })).not.toBeInTheDocument()
   await act(async () => finishConnection(outcome === "revoked" ? { ...connection, status: "revoked" } : connection))
   if (outcome === "revoked") {
-    expect(await screen.findByRole("alert")).toBeVisible()
+    expect(await within(dialog).findByText("连接列表加载失败")).toBeInTheDocument()
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument()
     expect(getServer).toHaveBeenCalledTimes(1)
   } else {
     await waitFor(() => expect(getServer).toHaveBeenCalledTimes(2))

@@ -50,13 +50,11 @@ export function CustomApiDetailDialog({
   onSave,
   onDelete,
   pendingError = false,
-  onRetry,
 }: {
   iconClient?: McpIconClient | undefined;
   iconBoundary?: ProjectReadBoundary | undefined;
   profile: CustomApiProfile | null;
   pendingError?: boolean;
-  onRetry?: () => void;
   actionError: boolean;
   busy: boolean;
   admitted: boolean;
@@ -179,14 +177,7 @@ export function CustomApiDetailDialog({
             </header>
             <div className={styles.apiConfigurationBody}>
               {commandStatus}
-              {!ready ? pendingError ? (
-                <Alert variant="destructive" role="alert">
-                  <AlertDescription>{t("mcp.loadError")}</AlertDescription>
-                  <Button type="button" variant="outline" onClick={onRetry} disabled={!onRetry}>
-                    {t("mcp.retry")}
-                  </Button>
-                </Alert>
-              ) : <span className="sr-only" role="status">{t("mcp.loading")}</span> : null}
+              {!ready ? <span className="sr-only" role="status">{t(pendingError ? "mcp.loadError" : "mcp.loading")}</span> : null}
               {actionError ? (
                 <Alert variant="destructive" role="alert">
                   <AlertDescription>{t("mcp.actionFailed")}</AlertDescription>

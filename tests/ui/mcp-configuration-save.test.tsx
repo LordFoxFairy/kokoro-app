@@ -2,6 +2,10 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 import { createHubClient, HubClientError } from "@/hub/client"
 import type { McpConnector, McpPrivateServer } from "@/hub/mcp-connector.schema"
+import type { McpIconBinding, McpIconIntent } from "@/hub/mcp-icon.schema"
+import type { McpIconClient } from "@/hub/mcp-icon-client"
+import { McpIconPicker } from "@/ui/mcp/mcp-icon-picker"
+import { createMcpIconDraft } from "@/ui/mcp/mcp-icon-draft"
 import { LocaleProvider } from "@/i18n/context"
 import { ConnectorCommandProvider } from "@/ui/mcp/connector-command-context"
 import { McpContent } from "@/ui/mcp/mcp-content"
@@ -10,7 +14,7 @@ import { CustomMcpDetailDialog } from "@/ui/mcp/custom-mcp-detail-dialog"
 import { ProductReadRecheckProvider, type ProductRead401 } from "@/ui/auth/product-read-recheck-context"
 
 beforeEach(() => localStorage.setItem("kokoro.locale", "zh"))
-afterEach(cleanup)
+afterEach(() => { cleanup(); vi.useRealTimers() })
 
 it.each(["confirmed", "unknown-then-replayed", "read-failed"])("configuration Save keeps its dialog, secrets/CAS recovery, and fresh second save: %s", async mode => {
   let version = 3, name = "Saved MCP"
@@ -70,9 +74,15 @@ it.each(["confirmed", "unknown-then-replayed", "read-failed"])("configuration Sa
     expect(update.mock.calls[1]?.slice(0, 3)).toEqual(update.mock.calls[0]?.slice(0, 3))
   }
   if (mode === "read-failed") {
-    await within(dialog).findByRole("button", { name: "重试" })
+    await within(dialog).findByText("连接列表加载失败")
+    expect(within(dialog).queryByRole("alert")).not.toBeInTheDocument()
+    expect(within(dialog).queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
     expect(screen.getByLabelText("传输类型 —")).toBeInTheDocument()
-    fireEvent.click(await within(dialog).findByRole("button", { name: "重试" }))
+    expect(screen.getByRole("button", { name: "保存" })).toBeDisabled()
+    expect(update).toHaveBeenCalledOnce()
+    // A normal owner invalidation can refresh this window; never resend Save.
+    const { invalidateMcpConnectorProjection } = await import("@/ui/mcp/use-mcp-projection")
+    act(() => invalidateMcpConnectorProjection(hub, "save-config-actor"))
   }
   await waitFor(() => expect(read).toHaveBeenCalledTimes(mode === "read-failed" ? 3 : 2))
   expect(screen.getByRole("dialog", { name: "MCP 配置" })).toBe(dialog)
@@ -124,7 +134,38 @@ vi.mock("@/ui/mcp/mcp-preparation-recovery", async importOriginal => {
 });
 
 
-async function confirmedPrimary(connected: boolean, headerDescriptors: McpPrivateServer["headers"] = []) {
+function configuredIcon(expiresAt = Date.now() + 60_000, label = "bound"): McpIconBinding {
+  return { intent_id: label === "replacement" ? "22345678-1234-1234-1234-123456789abc" : "12345678-1234-1234-1234-123456789abc", content_sha256: "a".repeat(64), mime_type: "image/png", size_bytes: "8", width: 24, height: 24,
+    preview_reference: { method: "GET", required_headers: {}, url: `https://storage.example.test/icon-${label}`, expires_at: new Date(expiresAt).toISOString() } }
+}
+
+function loadImage(image: HTMLElement, currentSrc = (image as HTMLImageElement).src) {
+  // jsdom does not load image bytes; model the browser load facts explicitly.
+  Object.defineProperties(image, { currentSrc: { configurable: true, value: currentSrc }, naturalWidth: { configurable: true, value: 24 } })
+  fireEvent.load(image)
+}
+
+function readyIconClient(binding: McpIconBinding) {
+  const at = new Date(Date.now() + 60_000).toISOString()
+  const intent: McpIconIntent = { intent_id: binding.intent_id, content_sha256: binding.content_sha256, mime_type: binding.mime_type, size_bytes: binding.size_bytes,
+    width: binding.width, height: binding.height, state: "ready", state_version: "3", filename: "replacement.png", expires_at: at, expired: false, created_at: at, updated_at: at }
+  return { begin: vi.fn<McpIconClient["begin"]>(), complete: vi.fn<McpIconClient["complete"]>(), cancel: vi.fn<McpIconClient["cancel"]>(),
+    importUrl: vi.fn<McpIconClient["importUrl"]>(async () => ({ intent, replayed: false })),
+    get: vi.fn<McpIconClient["get"]>(async () => ({ intent, preview_reference: binding.preview_reference! })) } satisfies McpIconClient
+}
+
+async function chooseReplacementIcon() {
+  fireEvent.keyDown(screen.getByRole("button", { name: /^上传$/u }), { key: "Enter" })
+  fireEvent.click(await screen.findByRole("menuitem", { name: "粘贴图片 URL" }))
+  const dialog = await screen.findByRole("dialog", { name: "通过 URL 添加图片" })
+  fireEvent.change(within(dialog).getByRole("textbox", { name: "图标 URL" }), { target: { value: "https://images.example.test/replacement.png" } })
+  fireEvent.click(within(dialog).getByRole("button", { name: /^添加$/u }))
+  await waitFor(() => expect(screen.getByRole("img", { name: "连接器图标" })).toHaveAttribute("src", "https://storage.example.test/icon-replacement"))
+}
+
+async function confirmedPrimary(connected: boolean, headerDescriptors: McpPrivateServer["headers"] = [], iconOptions?: {
+  binding: McpIconBinding; client?: McpIconClient; loaded?: boolean; loadSource?: string; edit?: () => Promise<void>;
+}) {
   const boundary = { admitted: true, generation: 3, subject: "primary-display-actor" }
   const connector: McpConnector = { availability: "available", connector_id: "primary-connector", server_id: "primary-server",
     provider_key: "primary-provider", connector_type: "mcp", display_name: "Primary MCP", status: "active", enabled: true,
@@ -132,9 +173,9 @@ async function confirmedPrimary(connected: boolean, headerDescriptors: McpPrivat
   const server: McpPrivateServer = { availability: "available", server_id: "primary-server", display_name: "Primary MCP",
     server_url: "https://mcp.example.test/mcp", notes: "Original note", status: "registered", state_version: "3", headers: headerDescriptors,
     transport: "streamable_http", prepare_status: connected ? "ready" : "pending_prepare", declarations: [], declarations_available: true,
-    ...(connected ? { connection_id: "primary-connection" } : {}) }
+    ...(connected ? { connection_id: "primary-connection" } : {}), ...(iconOptions ? { icon: iconOptions.binding } : {}) }
   const trial = vi.fn(() => true), prepare = vi.fn(), save = vi.fn()
-  let props: Parameters<typeof CustomMcpDetailDialog>[0] = { connector, server, admitted: true, iconBoundary: boundary,
+  let props: Parameters<typeof CustomMcpDetailDialog>[0] = { connector, server, admitted: true, iconBoundary: boundary, iconClient: iconOptions?.client,
     actionId: null, managementCommand: undefined, onResumeManagement: vi.fn(), actionError: false, deleteId: null,
     returnFocusRef: { current: null }, onClose: vi.fn(), onSaveConfiguration: save, onPrepare: prepare, onTrial: trial,
     onAuthorize: vi.fn(), onDisconnect: vi.fn(), onDeleteIntent: vi.fn(), onCancelDelete: vi.fn(), onDelete: vi.fn() }
@@ -145,13 +186,16 @@ async function confirmedPrimary(connected: boolean, headerDescriptors: McpPrivat
   const label = connected ? "试用一下" : "连接"
   const icon = screen.getByRole("button", { name: label }).querySelector("svg")?.outerHTML
   expect(icon).toBeTruthy()
+  if (iconOptions?.edit) await iconOptions.edit()
+  const shownImage = screen.queryByRole("img", { name: "连接器图标" })
+  if (shownImage && iconOptions?.loaded !== false) loadImage(shownImage, iconOptions?.loadSource)
   fireEvent.change(screen.getByRole("textbox", { name: "备注 （可选）" }), { target: { value: "Submitted primary note" } })
   fireEvent.click(screen.getByRole("button", { name: "保存" }))
   expect(save).toHaveBeenCalledOnce()
   const confirmation = {}
   update({ server: null, connector: null, configurationSaved: confirmation })
   const remount = () => { view.unmount(); view = render(<LocaleProvider><CustomMcpDetailDialog {...props} /></LocaleProvider>) }
-  return { update, remount, trial, prepare, save, label, icon, boundary, server, connector, confirmation }
+  return { update, remount, trial, prepare, save, shownImage, label, icon, boundary, server, connector, confirmation }
 }
 
 it.each([true, false])("confirmed own Save preserves the observed primary label/icon without granting a pending action: connected=%s", async connected => {
@@ -169,7 +213,8 @@ it.each([true, false])("confirmed own Save preserves the observed primary label/
 })
 
 it.each(["read error", "unknown command", "actor", "generation", "admission", "target", "connector", "window"])("pending primary/header display retires on %s and never revives before fresh facts", async reason => {
-  const state = await confirmedPrimary(true, [{ name: "x-confirmed-header", configured: true, status: "active", state_version: "2" }])
+  const state = await confirmedPrimary(true, [{ name: "x-confirmed-header", configured: true, status: "active", state_version: "2" }], { binding: configuredIcon() })
+  expect(screen.getByRole("img", { name: "连接器图标" })).toBe(state.shownImage)
   expect(screen.getByText("x-confirmed-header")).toBeVisible()
   expect(screen.getByRole("button", { name: "试用一下" })).toBeDisabled()
   const changed: Partial<Parameters<typeof CustomMcpDetailDialog>[0]> = reason === "read error" ? { pendingError: true }
@@ -182,12 +227,19 @@ it.each(["read error", "unknown command", "actor", "generation", "admission", "t
     : { server: { ...state.server, server_id: "other-server" } }
   if (reason === "window") state.remount()
   else state.update(changed)
+  if (state.shownImage) fireEvent.load(state.shownImage)
   expect(screen.queryByText("x-confirmed-header")).not.toBeInTheDocument()
+  expect(screen.queryByRole("img", { name: "连接器图标" })).not.toBeInTheDocument()
   expect(screen.queryByRole("button", { name: "试用一下" })).not.toBeInTheDocument()
-  if (reason === "read error") expect(screen.getByRole("alert")).toBeInTheDocument()
+  if (reason === "read error") {
+    expect(screen.getByText("连接列表加载失败")).toBeInTheDocument()
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
+  }
   state.update({ server: null, connector: null, iconBoundary: state.boundary, admitted: true, pendingError: false, managementCommand: undefined })
   expect(screen.queryByRole("button", { name: "试用一下" })).not.toBeInTheDocument()
   expect(screen.queryByText("x-confirmed-header")).not.toBeInTheDocument()
+  expect(screen.queryByRole("img", { name: "连接器图标" })).not.toBeInTheDocument()
   if (reason === "window") {
     expect(screen.queryByRole("button", { name: "保存" })).not.toBeInTheDocument()
     expect(state.trial).not.toHaveBeenCalled()
@@ -252,7 +304,9 @@ it.each(["401", "403", "parse401", "network", "aborted"] as const)("the real sav
   const error = new HubClientError(failure === "401" || failure === "403" ? "http" : failure === "parse401" ? "parse" : failure,
     "controlled private-server read", null, failure === "403" ? 403 : 401)
   await act(async () => { state.rejectRead(error) })
-  expect(await within(state.dialog).findByRole("button", { name: "重试" })).toBeEnabled()
+  expect(await within(state.dialog).findByText("连接列表加载失败")).toBeInTheDocument()
+  expect(within(state.dialog).queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
+  expect(within(state.dialog).queryByRole("alert")).not.toBeInTheDocument()
   expect(screen.getByRole("button", { name: "保存" })).toBeDisabled()
   expect(state.report).toHaveBeenCalledTimes(failure === "401" ? 1 : 0)
   expect(state.read).toHaveBeenCalledTimes(2)
@@ -283,6 +337,7 @@ it.each(["notes", "rotate", "remove"] as const)("confirmed Header names keep the
   const connector = (): McpConnector => ({ availability: "available", connector_id: "header-connector", server_id: "header-server",
     provider_key: "header-provider", connector_type: "mcp", display_name: "Header MCP", status: "active", enabled: true,
     approved_scopes: [], state_version: String(version) })
+  const boundIcon = configuredIcon()
   const server = (): McpPrivateServer => ({ availability: "available", server_id: "header-server", display_name: "Header MCP",
     server_url: "https://mcp.example.test/mcp", notes: "Original note", status: "registered", state_version: String(version),
     headers: [
@@ -291,7 +346,7 @@ it.each(["notes", "rotate", "remove"] as const)("confirmed Header names keep the
       { name: "x-revoked-key", configured: false, status: "revoked", state_version: "1" },
     ],
     transport: "streamable_http", prepare_status: "ready", declarations: [], declarations_available: true,
-    declaration_digest: "a".repeat(64), connection_id: "header-connection" })
+    declaration_digest: "a".repeat(64), connection_id: "header-connection", icon: boundIcon })
   const read = vi.fn(async () => { if (version > 1) await pendingRead; return server() })
   const patch = vi.fn<NonNullable<ReturnType<typeof createHubClient>["updatePrivateMcpServer"]>>().mockImplementation(async () => {
     version++
@@ -310,6 +365,8 @@ it.each(["notes", "rotate", "remove"] as const)("confirmed Header names keep the
   fireEvent.keyDown(within(dialog).getByRole("button", { name: "管理" }), { key: "Enter" })
   fireEvent.click(await screen.findByRole("menuitem", { name: "编辑配置" }))
   const confirmedRow = screen.getByText("x-present-key")
+  const confirmedImage = screen.getByRole("img", { name: "连接器图标" })
+  loadImage(confirmedImage)
   expect(screen.queryByText("x-revoked-key")).not.toBeInTheDocument()
   if (operation === "notes") {
     fireEvent.change(screen.getByRole("textbox", { name: "备注 （可选）" }), { target: { value: "Updated note" } })
@@ -326,6 +383,8 @@ it.each(["notes", "rotate", "remove"] as const)("confirmed Header names keep the
   expect(patch).toHaveBeenCalledOnce()
   expect(screen.queryByLabelText("Header value")).not.toBeInTheDocument()
   expect(screen.getByText("x-present-key")).toBe(confirmedRow)
+  expect(screen.getByRole("img", { name: "连接器图标" })).toBe(confirmedImage)
+  expect(confirmedImage).toHaveAttribute("src", boundIcon.preview_reference!.url)
   expect(screen.getByRole("button", { name: "移除 x-present-key" })).toBeDisabled()
   expect(screen.queryByText("x-revoked-key")).not.toBeInTheDocument()
   if (operation === "remove") expect(screen.queryByText("x-removed-key")).not.toBeInTheDocument()
@@ -344,4 +403,88 @@ it.each(["notes", "rotate", "remove"] as const)("confirmed Header names keep the
   expect(screen.queryByLabelText("Header value")).not.toBeInTheDocument()
   if (operation === "remove") expect(screen.queryByText("x-removed-key")).not.toBeInTheDocument()
   expect(patch).toHaveBeenCalledOnce()
+})
+
+
+it.each(["clear", "replace"] as const)("confirmed icon %s preserves only its actual saved presentation across the fresh-read gap", async operation => {
+  const original = configuredIcon(), replacement = configuredIcon(Date.now() + 60_000, "replacement")
+  const client = readyIconClient(replacement)
+  const state = await confirmedPrimary(true, [], { binding: original, client, edit: operation === "replace" ? chooseReplacementIcon : async () => {
+    fireEvent.keyDown(screen.getByRole("button", { name: /^上传$/u }), { key: "Enter" })
+    fireEvent.click(await screen.findByRole("menuitem", { name: "移除图片" }))
+    await waitFor(() => expect(screen.queryByRole("img", { name: "连接器图标" })).not.toBeInTheDocument())
+  } })
+  expect(screen.getByRole("button", { name: "保存" })).toBeDisabled()
+  expect(screen.getByRole("button", { name: /^上传$/u })).toBeDisabled()
+  expect(state.save.mock.calls[0]?.[0]).toEqual({ display_name: "Primary MCP", notes: "Submitted primary note", server_url: state.server.server_url,
+    header_upserts: [], header_removals: [], ...(operation === "clear" ? { clear_icon: true } : { icon: { intent_id: replacement.intent_id, expected_state_version: "3" } }) })
+  if (operation === "clear") expect(screen.queryByRole("img", { name: "连接器图标" })).not.toBeInTheDocument()
+  else {
+    expect(screen.getByRole("img", { name: "连接器图标" })).toBe(state.shownImage)
+    expect(state.shownImage).toHaveAttribute("src", replacement.preview_reference!.url)
+    state.update({ pendingError: true })
+    expect(screen.queryByRole("img", { name: "连接器图标" })).not.toBeInTheDocument()
+    state.update({ pendingError: false })
+    expect(screen.queryByRole("img", { name: "连接器图标" })).not.toBeInTheDocument()
+  }
+  const fresh = { ...state.server }; if (operation === "clear") delete fresh.icon; else fresh.icon = replacement
+  state.update({ server: fresh, connector: state.connector })
+  if (operation === "clear") expect(screen.queryByRole("img", { name: "连接器图标" })).not.toBeInTheDocument()
+  else expect(screen.getByRole("img", { name: "连接器图标" })).toHaveAttribute("src", replacement.preview_reference!.url)
+  expect(state.save).toHaveBeenCalledOnce()
+  expect(client.cancel).not.toHaveBeenCalled()
+})
+
+it.each(["not loaded", "expired", "stale source"] as const)("a %s bound icon is never retained as a post-ACK presentation", async reason => {
+  await confirmedPrimary(true, [], { binding: configuredIcon(reason === "expired" ? Date.now() - 1 : Date.now() + 60_000), loaded: reason !== "not loaded",
+    ...(reason === "stale source" ? { loadSource: "https://storage.example.test/previous-source" } : {}) })
+  expect(screen.queryByRole("img", { name: "连接器图标" })).not.toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "保存" })).toBeDisabled()
+})
+
+it("pending icon presentation expires at the original URL deadline without refreshing it", () => {
+  vi.useFakeTimers()
+  const draft = createMcpIconDraft(undefined, "preview-only-actor")
+  const view = render(<LocaleProvider><McpIconPicker draft={draft} state={draft.getSnapshot()} disabled
+    displayFallback={{ url: "https://storage.example.test/icon-bound", expiresAt: Date.now() + 1000 }} /></LocaleProvider>)
+  expect(screen.getByRole("img", { name: "连接器图标" })).toBeInTheDocument()
+  act(() => { vi.advanceTimersByTime(1000) })
+  expect(screen.queryByRole("img", { name: "连接器图标" })).not.toBeInTheDocument()
+  view.rerender(<LocaleProvider><McpIconPicker draft={draft} state={draft.getSnapshot()} disabled
+    displayFallback={{ url: "https://storage.example.test/icon-bound", expiresAt: Date.now() }} /></LocaleProvider>)
+  expect(screen.queryByRole("img", { name: "连接器图标" })).not.toBeInTheDocument()
+  expect(vi.getTimerCount()).toBe(0)
+})
+
+it("an already mounted picker never creates an image for a newly supplied expired reference", () => {
+  vi.useFakeTimers()
+  const draft = createMcpIconDraft(undefined, "expired-replacement-actor")
+  const started = Date.now()
+  const view = render(<LocaleProvider><McpIconPicker draft={draft} state={draft.getSnapshot()} disabled
+    current={configuredIcon(started + 10_000, "future")} /></LocaleProvider>)
+  expect(screen.getByRole("img", { name: "连接器图标" })).toBeInTheDocument()
+  act(() => { vi.advanceTimersByTime(1000) })
+  view.rerender(<LocaleProvider><McpIconPicker draft={draft} state={draft.getSnapshot()} disabled
+    current={configuredIcon(started + 500, "already-expired")} /></LocaleProvider>)
+  // Observe before any 0ms expiry timer: a stale component clock must not issue this src.
+  expect(screen.queryByRole("img", { name: "连接器图标" })).not.toBeInTheDocument()
+  expect(vi.getTimerCount()).toBe(0)
+})
+
+it("an old reference's late error cannot hide or clear the newly loaded preview", () => {
+  const draft = createMcpIconDraft(undefined, "late-image-error-actor"), onPreviewLoaded = vi.fn()
+  const first = { url: "https://storage.example.test/icon-first", expiresAt: Date.now() + 60_000 }
+  const second = { url: "https://storage.example.test/icon-second", expiresAt: Date.now() + 60_000 }
+  const view = render(<LocaleProvider><McpIconPicker draft={draft} state={draft.getSnapshot()} disabled displayFallback={first} onPreviewLoaded={onPreviewLoaded} /></LocaleProvider>)
+  const oldImage = screen.getByRole("img", { name: "连接器图标" }); loadImage(oldImage)
+  view.rerender(<LocaleProvider><McpIconPicker draft={draft} state={draft.getSnapshot()} disabled displayFallback={second} onPreviewLoaded={onPreviewLoaded} /></LocaleProvider>)
+  const newImage = screen.getByRole("img", { name: "连接器图标" }); loadImage(newImage)
+  const loadedCalls = onPreviewLoaded.mock.calls.length
+  fireEvent.error(oldImage)
+  expect(screen.getByRole("img", { name: "连接器图标" })).toBe(newImage)
+  expect(onPreviewLoaded).toHaveBeenCalledTimes(loadedCalls)
+  expect(onPreviewLoaded).toHaveBeenLastCalledWith(second, true)
+  fireEvent.error(newImage)
+  expect(screen.queryByRole("img", { name: "连接器图标" })).not.toBeInTheDocument()
+  expect(onPreviewLoaded).toHaveBeenLastCalledWith(second, false)
 })

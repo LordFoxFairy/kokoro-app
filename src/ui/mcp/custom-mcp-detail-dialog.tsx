@@ -4,7 +4,7 @@ import type { McpIconClient } from "@/hub/mcp-icon-client";
 import type { McpIconSaveChange } from "@/hub/mcp-icon.schema";
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
 import { useMcpIconDraft } from "./use-mcp-icon-draft";
-import { McpIconPicker } from "./mcp-icon-picker";
+import { McpIconPicker, type McpIconPreviewDisplay } from "./mcp-icon-picker";
 import { McpBoundIcon } from "./mcp-bound-icon";
 import { McpAvailabilityStatus } from "./mcp-availability-status";
 
@@ -55,10 +55,11 @@ import { useMcpEditorSelection } from "./use-mcp-editor-selection";
 import { isMcpCustomHeaderName } from "./mcp-header-validation";
 
 type HeaderDraft = { id: string; name: string; value: string };
-type SavedTransportDisplay = {
+type SavedConfigurationDisplay = {
   transport: McpPrivateServer["transport"];
   primaryIntent: "trial" | "connect" | null;
   headerNames: string[];
+  iconPreview: McpIconPreviewDisplay | null;
   subject: string;
   generation: number;
   serverId: string;
@@ -104,7 +105,6 @@ export function CustomMcpDetailDialog({
   preparationRecoveryError = false,
   onRetryPreparationRecovery,
   pendingError = false,
-  onRetry,
 }: {
   iconClient?: McpIconClient | undefined;
   iconBoundary?: ProjectReadBoundary | undefined;
@@ -118,7 +118,6 @@ export function CustomMcpDetailDialog({
   preparationRecoveryError?: boolean;
   onRetryPreparationRecovery?: () => void;
   pendingError?: boolean;
-  onRetry?: () => void;
   actionId: string | null;
   admitted: boolean;
   managementCommand: McpManagementSummary | undefined;
@@ -166,33 +165,35 @@ export function CustomMcpDetailDialog({
   const [managementOpen, setManagementOpen] = useState(false);
   const [headers, setHeaders] = useState<HeaderDraft[]>([]);
   const [removedHeaders, setRemovedHeaders] = useState<string[]>([]);
-  const [submittedFields, setSubmittedFields] = useState<{ name: string; notes: string; serverUrl: string; transport: SavedTransportDisplay | null } | null>(null);
+  const [submittedFields, setSubmittedFields] = useState<{ name: string; notes: string; serverUrl: string; transport: SavedConfigurationDisplay | null } | null>(null);
   const [observedSave, setObservedSave] = useState(configurationSaved);
   const [savedFactsPending, setSavedFactsPending] = useState(false);
-  const [savedTransport, setSavedTransport] = useState<(SavedTransportDisplay & { confirmation: object }) | null>(null);
-  const sameTransportScope = (value: SavedTransportDisplay) => editing && admitted && iconBoundary?.admitted === true &&
+  const [savedTransport, setSavedTransport] = useState<(SavedConfigurationDisplay & { confirmation: object }) | null>(null);
+  const [loadedIcon, setLoadedIcon] = useState<(McpIconPreviewDisplay & Pick<SavedConfigurationDisplay, "subject" | "generation" | "serverId" | "connectorId">) | null>(null);
+  const sameConfigurationScope = (value: Pick<SavedConfigurationDisplay, "subject" | "generation" | "serverId" | "connectorId">) => editing && admitted && iconBoundary?.admitted === true &&
     iconBoundary.subject === value.subject && iconBoundary.generation === value.generation &&
     (server === null || server.server_id === value.serverId) &&
     (connector === null || (connector.connector_id === value.connectorId && connector.server_id === value.serverId));
+  if (loadedIcon && !sameConfigurationScope(loadedIcon)) setLoadedIcon(null);
   const primaryIntentRetired = pendingError || preparationState === "unknown" || managementCommand?.kind === "unknown";
-  const submittedTransport = submittedFields?.transport && sameTransportScope(submittedFields.transport) ? submittedFields.transport : null;
+  const submittedTransport = submittedFields?.transport && sameConfigurationScope(submittedFields.transport) ? submittedFields.transport : null;
   if (submittedFields?.transport && !submittedTransport) {
     setSubmittedFields({ ...submittedFields, transport: null });
   } else if (submittedFields?.transport && primaryIntentRetired &&
-    (submittedFields.transport.primaryIntent !== null || submittedFields.transport.headerNames.length > 0)) {
-    setSubmittedFields({ ...submittedFields, transport: { ...submittedFields.transport, primaryIntent: null, headerNames: [] } });
+    (submittedFields.transport.primaryIntent !== null || submittedFields.transport.headerNames.length > 0 || submittedFields.transport.iconPreview !== null)) {
+    setSubmittedFields({ ...submittedFields, transport: { ...submittedFields.transport, primaryIntent: null, headerNames: [], iconPreview: null } });
   }
-  if (savedTransport && (ready || !sameTransportScope(savedTransport) || savedTransport.confirmation !== configurationSaved ||
+  if (savedTransport && (ready || !sameConfigurationScope(savedTransport) || savedTransport.confirmation !== configurationSaved ||
     preparationState === "unknown" || managementCommand?.kind === "unknown")) {
     setSavedTransport(null);
   } else if (savedTransport && primaryIntentRetired &&
-    (savedTransport.primaryIntent !== null || savedTransport.headerNames.length > 0)) {
-    setSavedTransport({ ...savedTransport, primaryIntent: null, headerNames: [] });
+    (savedTransport.primaryIntent !== null || savedTransport.headerNames.length > 0 || savedTransport.iconPreview !== null)) {
+    setSavedTransport({ ...savedTransport, primaryIntent: null, headerNames: [], iconPreview: null });
   }
   if (observedSave !== configurationSaved) {
     setObservedSave(configurationSaved);
     setSavedTransport(configurationSaved && submittedTransport ? { ...submittedTransport, primaryIntent: primaryIntentRetired ? null : submittedTransport.primaryIntent,
-      headerNames: primaryIntentRetired ? [] : submittedTransport.headerNames, confirmation: configurationSaved } : null);
+      headerNames: primaryIntentRetired ? [] : submittedTransport.headerNames, iconPreview: primaryIntentRetired ? null : submittedTransport.iconPreview, confirmation: configurationSaved } : null);
     if (configurationSaved) {
       // The command's transient completed notification may be batched with
       // finish(). This window-bound receipt still retires write-only drafts.
@@ -219,10 +220,11 @@ export function CustomMcpDetailDialog({
     setServerUrl(null);
   }
   // Only the immutable label, prior primary presentation and previously visible
-  // Header names survive this confirmed save's read gap, never values/current
+  // Header names and a loaded, unexpired icon URL survive this confirmed save's
+  // read gap, never values/current
   // facts/CAS or action permission. Newly submitted names require a fresh read.
   const retainingTransport = savedFactsPending && !ready && !pendingError && savedTransport !== null &&
-    sameTransportScope(savedTransport) && savedTransport.confirmation === configurationSaved &&
+    sameConfigurationScope(savedTransport) && savedTransport.confirmation === configurationSaved &&
     preparationState !== "unknown" && managementCommand?.kind !== "unknown";
   const displayedTransport = currentServer?.transport ?? (retainingTransport ? savedTransport.transport : undefined);
   const displayedHeaderNames = currentServer ? currentServer.headers
@@ -290,8 +292,14 @@ export function CustomMcpDetailDialog({
       headers.some((item) => !item.name.trim() || !item.value)
     )
       return;
+    const iconReference = icon.state.clear ? undefined : icon.state.dirty
+      ? icon.state.kind === "ready" ? icon.state.preview : undefined : currentServer?.icon?.preview_reference;
+    const iconPreview = loadedIcon && sameConfigurationScope(loadedIcon) && iconReference?.method === "GET" &&
+      Object.keys(iconReference.required_headers).length === 0 && loadedIcon.url === iconReference.url &&
+      loadedIcon.expiresAt === Date.parse(iconReference.expires_at) && loadedIcon.expiresAt > Date.now()
+      ? { url: loadedIcon.url, expiresAt: loadedIcon.expiresAt } : null;
     setSubmittedFields({ name, notes, serverUrl, transport: iconBoundary?.admitted && iconBoundary.subject !== null &&
-      connector.server_id === server.server_id ? { transport: server.transport, primaryIntent: trialAvailable ? "trial" : "connect",
+      connector.server_id === server.server_id ? { transport: server.transport, primaryIntent: trialAvailable ? "trial" : "connect", iconPreview,
         headerNames: server.headers.filter(header => header.configured && header.status === "active" && !removedHeaders.includes(header.name)).map(header => header.name), subject: iconBoundary.subject,
         generation: iconBoundary.generation, serverId: server.server_id, connectorId: connector.connector_id } : null });
     icon.draft.protectForSave();
@@ -359,14 +367,9 @@ export function CustomMcpDetailDialog({
             <div className={styles.configurationBody}>
               {operationStatus}
               {managementStatus}
-              {!ready ? pendingError ? (
-                <Alert variant="destructive" role="alert">
-                  <AlertDescription>{t("mcp.loadError")}</AlertDescription>
-                  <Button type="button" variant="outline" onClick={onRetry} disabled={!onRetry}>
-                    {t("mcp.retry")}
-                  </Button>
-                </Alert>
-              ) : !retainingTransport ? <span className="sr-only" role="status">{t("mcp.loading")}</span> : null : null}
+              {!ready && (pendingError || !retainingTransport) ? (
+                <span className="sr-only" role="status">{t(pendingError ? "mcp.loadError" : "mcp.loading")}</span>
+              ) : null}
               {recoveryStatus}
               {actionError ? (
                 <Alert variant="destructive" role="alert">
@@ -392,7 +395,17 @@ export function CustomMcpDetailDialog({
                   </div>
                 </div>
               </div>
-              <McpIconPicker draft={icon.draft} state={icon.state} current={currentServer?.icon} disabled={locked} />
+              <McpIconPicker draft={icon.draft} state={icon.state} current={currentServer?.icon} disabled={locked}
+                displayFallback={savedFactsPending && !ready ? retainingTransport ? savedTransport.iconPreview : null : undefined}
+                onPreviewLoaded={(preview, loaded) => {
+                  if (!loaded) {
+                    setLoadedIcon(current => current && sameConfigurationScope(current) && current.url === preview.url && current.expiresAt === preview.expiresAt ? null : current);
+                    return;
+                  }
+                  setLoadedIcon(editing && ready && iconBoundary?.admitted && iconBoundary.subject !== null &&
+                    server && connector && connector.server_id === server.server_id ? { ...preview, subject: iconBoundary.subject, generation: iconBoundary.generation,
+                      serverId: server.server_id, connectorId: connector.connector_id } : null);
+                }} />
               <div className={styles.field}>
                 <Label htmlFor="custom-mcp-notes">
                   备注 <span className={styles.optional}>（可选）</span>
@@ -556,10 +569,10 @@ export function CustomMcpDetailDialog({
           </form>
         ) : !server || !connector ? (
           <section className={styles.detail} aria-busy={!pendingError}>
-            <header className={styles.detailHero}><DialogTitle>{t("mcp.edit")}</DialogTitle></header>
+            <header className={styles.detailHero}><DialogTitle>{t("mcp.details")}</DialogTitle></header>
             <div className={styles.detailBody}>
               {managementStatus}
-              {pendingError ? <Alert variant="destructive" role="alert"><AlertDescription>{t("mcp.loadError")}</AlertDescription><Button type="button" variant="outline" onClick={onRetry}>{t("mcp.retry")}</Button></Alert> : <span role="status">{t("mcp.loading")}</span>}
+              <span className="sr-only" role="status">{t(pendingError ? "mcp.loadError" : "mcp.loading")}</span>
             </div>
           </section>
         ) : (

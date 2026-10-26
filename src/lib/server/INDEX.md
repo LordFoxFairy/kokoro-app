@@ -1,3 +1,7 @@
+## MCP Server icon 私有媒体（2026-10-26）
+
+`mcp-server-icon.ts` 只承接 exact `GET /api/hub/mcp/servers/{server_id}/icon`，沿现 Product Session、部署 Domain 与 BFF `/browser/v1`；从正式私有机器 profile 派生闭合 ID/error validator，不扩大 generic proxy。拒 query/body/framing/命令头，完整 EOF 后才返回≤1MiB PNG/JPEG，admission→EOF共10秒，取消/迟到不发额外请求；只发精确媒体头，redirect/未知错误拒绝，失败不影响Connector JSON读取。无Storage直连/新schema/自动重试。
+
 ## CREDIT-1 管理员积分薄通路（2026-10-22）
 
 `admin-billing-proxy.ts`仅处理具名当前成员GET／非现金充值POST及三项计价配置读／发布，复用Product受信会话、requestWithDomain和有限body读取。权限/资金/整数换算owner仍BFF/Billing；原命令字节与key不变，10秒总预算覆盖body、会话与ACK EOF，响应1MiB；仅新计价POST请求1MiB，原充值16KiB。无业务重试、凭据/tenant回退或账本存储；正常完整旅程另验。下方为原模块说明。

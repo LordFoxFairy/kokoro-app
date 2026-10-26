@@ -1,0 +1,9 @@
+{
+  "owner": "kokoro-bff",
+  "candidate": false,
+  "owner_commit": "7a94139b607ca4e51feb1f5480b35f46c4afa53c",
+  "profile": "mcp-server-icon-browser",
+  "profile_version": "1.0.0",
+  "source_path": "contract/openapi/browser/v1/mcp-server-icon.json",
+  "source_sha256": "26569264ab799b753e9e57621167a34b2b5530f9e0d8d65cf9dc333d3aada766"
+}

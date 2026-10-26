@@ -28,7 +28,7 @@ function makeClient(over: Partial<PricingClient> = {}): PricingClient {
 afterEach(cleanup)
 
 function renderPanel(client: PricingClient) {
-  render(<PricingPanel {...{ preview: false, readBoundary: { admitted: true, subject: "billing-test-owner", generation: 1 } }} client={client} onClose={() => {}} />, { wrapper: LocaleProvider })
+  return render(<PricingPanel {...{ preview: false, readBoundary: { admitted: true, subject: "billing-test-owner", generation: 1 } }} client={client} onClose={() => {}} />, { wrapper: LocaleProvider })
 }
 
 describe("PricingPanel", () => {
@@ -80,7 +80,7 @@ describe("PricingPanel", () => {
     expect(screen.queryByRole("button", { name: "Payments unavailable" })).toBeNull()
   })
 
-  it("shows loading while the catalog is unresolved, then its real offer", async () => {
+  it("keeps unresolved catalog quiet and accessible, then renders its real offer", async () => {
     let resolve!: (value: { plans: typeof PLAN[] }) => void
     renderPanel(makeClient({ plans: () => new Promise((done) => { resolve = done }) }))
     expect(screen.getByRole("status")).toBeInTheDocument()
@@ -89,12 +89,19 @@ describe("PricingPanel", () => {
     await screen.findByTestId("pricing-card")
   })
 
-  it("retains catalog error and explicit retry without invoking checkout", async () => {
+  it("keeps failed reads quiet without fake empty offers; reopening reads again", async () => {
     const plans = vi.fn().mockRejectedValueOnce(new Error("read failure")).mockResolvedValueOnce({ plans: [PLAN] })
     const checkout = vi.fn()
-    renderPanel(makeClient({ plans, checkout }))
-    const retry = await screen.findByRole("button", { name: "Reload plans" })
-    fireEvent.click(retry)
+    const client = makeClient({ plans, checkout })
+    const mounted = renderPanel(client)
+    await screen.findByText("Failed to load plans")
+    expect(screen.queryByRole("alert")).toBeNull()
+    expect(screen.queryByRole("button", { name: "Reload plans" })).toBeNull()
+    expect(screen.queryByText("No plans available to purchase")).toBeNull()
+    expect(screen.queryByTestId("pricing-card")).toBeNull()
+    expect(plans).toHaveBeenCalledTimes(1)
+    mounted.unmount()
+    renderPanel(client)
     await screen.findByTestId("pricing-card")
     expect(plans).toHaveBeenCalledTimes(2)
     expect(checkout).not.toHaveBeenCalled()
@@ -114,7 +121,7 @@ describe("SET26 pricing scope and bounded reads", () => {
     await screen.findByTestId("pricing-card");
     mounted.rerender(draw(client, false));
     expect(screen.queryByTestId("pricing-card")).toBeNull();
-    await screen.findByRole("button", { name: "Reload plans" });
+    await screen.findByText("Failed to load plans");
     expect(plans).toHaveBeenCalledTimes(2);
   });
   it("a new client synchronously hides a previous client's offer instead of letting stale data win over error", async () => {
@@ -123,10 +130,10 @@ describe("SET26 pricing scope and bounded reads", () => {
     const plans = vi.fn().mockRejectedValue(new Error("replacement unavailable"));
     mounted.rerender(draw(makeClient({ plans })));
     expect(screen.queryByTestId("pricing-card")).toBeNull();
-    await screen.findByRole("button", { name: "Reload plans" });
+    await screen.findByText("Failed to load plans");
     expect(plans).toHaveBeenCalledOnce();
   });
-  it("10s noncooperative catalog settles into explicit retry and cannot overwrite its newer attempt", async () => {
+  it("10s noncooperative catalog retires quietly and cannot overwrite a reopened view", async () => {
     let finish!: (value: { plans: typeof PLAN[] }) => void;
     let signal: AbortSignal | undefined;
     const plans = vi.fn().mockImplementationOnce((current?: AbortSignal) => {
@@ -137,12 +144,14 @@ describe("SET26 pricing scope and bounded reads", () => {
     const { act } = await import("@testing-library/react");
     try {
       vi.useFakeTimers();
-      render(draw(client));
+      const mounted = render(draw(client));
       await act(async () => { await vi.advanceTimersByTimeAsync(9_999); });
       expect(screen.getByRole("status")).toBeInTheDocument();
       await act(async () => { await vi.advanceTimersByTimeAsync(1); });
       expect(signal?.aborted).toBe(true);
-      fireEvent.click(screen.getByRole("button", { name: "Reload plans" }));
+      expect(screen.queryByRole("button", { name: "Reload plans" })).toBeNull();
+      mounted.unmount();
+      render(draw(client));
       await act(async () => {});
       expect(plans).toHaveBeenCalledTimes(2);
       await act(async () => { finish({ plans: [PLAN] }); });
@@ -191,19 +200,23 @@ it("SET26 caller deadline discovered before delayed timer aborts injected client
   });
   try {
     render(<LocaleProvider><PricingContent {...{ client: makeClient({ plans }), preview: false, readBoundary: { admitted: true, subject: "pricing-owner", generation: 1 } }} /></LocaleProvider>);
-    await screen.findByRole("button", { name: "Reload plans" });
+    await screen.findByText("Failed to load plans");
     expect(signal?.aborted).toBe(true);
     expect(screen.queryByTestId("pricing-card")).toBeNull();
   } finally { time.mockRestore(); }
 });
 
-it("SET26 two synchronous manual retry clicks dispatch exactly one new read", async () => {
-  const plans = vi.fn().mockRejectedValueOnce(new Error("catalog failed")).mockImplementationOnce(() => new Promise(() => {}));
-  render(<LocaleProvider><PricingContent {...{ client: makeClient({ plans }), preview: false, readBoundary: { admitted: true, subject: "pricing-owner", generation: 1 } }} /></LocaleProvider>);
-  const retry = await screen.findByRole("button", { name: "Reload plans" });
+it("passive failed catalog does not dispatch background retry on rerender", async () => {
+  const plans = vi.fn().mockRejectedValue(new Error("catalog failed"));
+  const client = makeClient({ plans });
+  const draw = () => <LocaleProvider><PricingContent client={client} readBoundary={{ admitted: true, subject: "pricing-owner", generation: 1 }} /></LocaleProvider>;
+  const mounted = render(draw());
+  await screen.findByText("Failed to load plans");
+  mounted.rerender(draw());
   const { act } = await import("@testing-library/react");
-  act(() => { retry.click(); retry.click(); });
-  expect(plans).toHaveBeenCalledTimes(2);
+  await act(async () => {});
+  expect(plans).toHaveBeenCalledTimes(1);
+  expect(screen.queryByRole("button", { name: "Reload plans" })).toBeNull();
 });
 
 it("SET26 unmount aborts its noncooperative catalog and ignores late completion", async () => {
@@ -253,19 +266,19 @@ it("plan detail previews filter actual billing periods without inventing discoun
   expect(checkout).not.toHaveBeenCalled();
 });
 
-it("reloads an empty catalog once per explicit intent and displays only the newly returned offer", async () => {
+it("reopening a confirmed empty catalog displays only the newly returned offer", async () => {
   let finish!: (value: { plans: typeof PLAN[] }) => void;
   const plans = vi.fn().mockResolvedValueOnce({ plans: [] }).mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
   const checkout = vi.fn();
-  renderPanel(makeClient({ plans, checkout }));
+  const client = makeClient({ plans, checkout });
+  const mounted = renderPanel(client);
   await screen.findByText("No plans available to purchase");
   expect(plans).toHaveBeenCalledOnce();
-  const reload = screen.getByRole("button", { name: "Reload plans" });
-  expect(reload).toBeEnabled();
+  expect(screen.queryByRole("button", { name: "Reload plans" })).toBeNull();
   expect(screen.queryByTestId("pricing-card")).not.toBeInTheDocument();
 
-  fireEvent.click(reload);
-  fireEvent.click(reload);
+  mounted.unmount();
+  renderPanel(client);
   expect(screen.getByRole("status")).toBeVisible();
   expect(screen.queryByRole("button", { name: "Reload plans" })).not.toBeInTheDocument();
   expect(plans).toHaveBeenCalledTimes(2);

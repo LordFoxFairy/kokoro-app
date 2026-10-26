@@ -1,3 +1,7 @@
+## 2026-10-26 MCP 列表 icon 媒体边界
+
+无 Schema、SQL、Redis、浏览器持久存储或新增 owner 字段。现 `server_id` 仅定位独立媒体 GET；列表不缓存 Storage URL、签名或绑定事实。图片加载成功/失败只属于当前主体/准入代及 server_id + connector state_version 的组件寿命；Connector CAS 或既有 confirmed-write projection revision 变化即重新读取，旧图片/迟到事件退休；后者不等待列表刷新成功，也不保存 ACK 缓存。媒体失败不证明图标为空，也不改变 Connector 可用性或授权。blob URL 只引用当前组件已验证媒体字节，退休 revoke、请求 abort/迟到丢弃；不保存到 storage、全局缓存、列表 DTO 或 owner 绑定，原同 URI 图像解码缓存不作为显示来源。
+
 ## 2026-10-25 项目定义发布的浏览器原意图日志（候选）
 
 本地 IndexedDB `kokoro-mcp-project-publication` version 1 / `intents`，key=`JSON.stringify([verifiedSubject])`，每 actor 一个未决发布命令；不是 Platform revision/pin 的事实副本。闭合 versioned envelope 保存 subject、target(serverId/connectorId/providerKey)、完整 original(server/connector/source CAS/有序项目与 pin CAS)、key、已发布闭合 failure tuple 及是否已记录失败。没有 URL、密钥、Headers、OAuth 数据或工具内容。首次写必须 commit 后才发送；刷新仅恢复 unknown，显式动作经当前 session/generation 重新准入，无自动 POST。

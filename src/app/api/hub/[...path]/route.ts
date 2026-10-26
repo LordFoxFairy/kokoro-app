@@ -1,3 +1,4 @@
+import { proxyMcpServerIcon } from "@/lib/server/mcp-server-icon";
 import { mcpPublicationPath } from "@/hub/mcp-project-publication.schema";
 import { proxyMcpProjectPublication } from "@/lib/server/mcp-project-publication";
 import { mcpIconOperation, mcpIconInputs, mcpIconMatches, type McpIconOperation } from "@/hub/mcp-icon.schema";
@@ -2315,6 +2316,7 @@ async function proxyHubRequest(
   context: { params: Promise<{ path: string[] }> },
 ): Promise<Response> {
   const { path } = await context.params;
+  if (path[0] === "mcp" && path[1] === "servers" && path[3] === "icon") return proxyMcpServerIcon(request, path);
   if (mcpPublicationPath(path)) return proxyMcpProjectPublication(request, path);
   if ((path[0] === "preferences" && path[1]?.startsWith("knowledge")) || (path[0] === "self" && path[1] === "preferences" && path[2]?.startsWith("knowledge")))
     return proxyPersonalKnowledge(request, path);
