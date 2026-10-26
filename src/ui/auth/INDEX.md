@@ -32,6 +32,8 @@ AppGate在整个KokoroAppSurface外提供单用途read-recheck context；只有�
 
 # ui/auth — 登录与会话态门面
 
+`ProductReadRecheck` 的可选结果只在原探针发布同主体可信新数据代后成立；原 MCP hooks 继续忽略结果。顺序 Message parts reader 可在原10秒内等待一次，不自行请求 Session/续期。主体变化（含排队ABA）、pagehide、卸载和读取消退休等待，不授予新身份或重复写入。
+
 ## 职责
 会话态探针与 Product 退出交互。登录入口由 `src/app/login/route.ts` 服务端持有；鉴权由 HttpOnly Product Session cookie 同源携带，前端不持 token。
 

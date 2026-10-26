@@ -236,6 +236,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     partsReads.set(messageId, controller)
     if (fresh || !partsJournals.has(known.runId)) partsJournals.set(known.runId, { events: [], bytes: 0, overflow: false })
     const journal = partsJournals.get(known.runId)!
+    const recoverUnauthorized = deps.captureMessagePartsReadRecheck?.()
     const current = () => !disposed && !controller.signal.aborted && partsReads.get(messageId) === controller && hydrateGeneration === generation && store?.activeId === sessionId && thread.messageParts?.[messageId]?.runId === known.runId
     setPartsStatus(messageId, "loading")
     const merge = (read: MessagePartsRead, complete: boolean) => {
@@ -246,6 +247,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       notify()
     }
     void readMessageParts({ client: deps.client, sessionId, messageId, runId: known.runId, scope,
+      ...(recoverUnauthorized === undefined ? {} : { recoverUnauthorized }),
       minimumRevision: known.revision,
       ...(known.partIds === undefined ? {} : { retainedPartIds: known.partIds }),
       ...(fresh || known.cursor === undefined ? {} : { cursor: known.cursor, ...(known.watermark === undefined ? {} : { expected: { revision: known.revision, event_watermark: known.watermark } }) }), signal: controller.signal,

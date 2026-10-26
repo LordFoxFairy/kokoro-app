@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef } from "react"
+import { useEffect, useLayoutEffect, useRef } from "react"
 import { useT } from "@/i18n/context"
 import { usePathname, useRouter } from "next/navigation"
 
@@ -14,6 +14,7 @@ import { ProductReadRecheckProvider } from "./product-read-recheck-context"
 import { useSessionProbe } from "./use-session-state"
 import { openProductSignIn } from "./product-auth-client"
 import { useScheduledTaskClient } from "./use-scheduled-task-client"
+import { bindBrowserMessagePartsReadRecheck } from "@/ui/shell/page-clients"
 
 export function AppGate({ brandName, desktopRailCollapsed, serverAdmitted = false, serverUnavailable = false }: {
   brandName?: string
@@ -35,6 +36,14 @@ export function AppGate({ brandName, desktopRailCollapsed, serverAdmitted = fals
   const brand = livePresentation ? manifest.brand : DEFAULT_BRAND
   const brandLogoUrl = livePresentation ? manifest.brand.logoUrl : undefined
   const state = probe.state
+
+  useLayoutEffect(() => bindBrowserMessagePartsReadRecheck(subject => {
+    const boundary = probe.projectReadBoundary, report = probe.reportReadUnauthorized
+    if (serverUnavailable || probe.mode !== "authenticated" || !boundary.admitted || boundary.subject !== subject || !report) return
+    // The engine captures this exact epoch before its page GET. Later renders
+    // must not reconstruct a failed read's proof from a replacement identity.
+    return async signal => await report({ subject, generation: boundary.generation, signal }) === true
+  }), [probe.projectReadBoundary, probe.reportReadUnauthorized, probe.mode, serverUnavailable])
 
   useEffect(() => {
     if (state !== "anonymous" || window.location.pathname === "/login") {

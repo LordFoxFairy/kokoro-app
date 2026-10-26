@@ -34,6 +34,45 @@ describe("bounded message parts read", () => {
     await expect(readMessageParts({ client, sessionId: "s", messageId: "m", runId: "r", scope: { kind: "direct" }, signal: new AbortController().signal })).rejects.toMatchObject({ status: 409, code: "message_parts_changed" })
     expect(client.partsCalls).toHaveLength(1); expect(client.createCalls).toHaveLength(0)
   })
+  it("recovers one admitted401 at the exact continuation cursor without losing its prefix", async () => {
+    const client = createFakeClient(); let calls = 0
+    const recoverUnauthorized = vi.fn(async () => true)
+    client.nextParts = async () => {
+      calls++
+      if (calls === 1) return page([text()], "opaque-next")
+      if (calls === 2) throw new SessionClientError("http", "unauthenticated", "unauthenticated", 401)
+      return page([text({ text: "a", offset: "1", end: "2" })])
+    }
+    const result = await readMessageParts({ client, sessionId: "s", messageId: "m", runId: "r", scope: { kind: "project", projectRef: "project" }, signal: new AbortController().signal, recoverUnauthorized })
+    expect(result.items[0]).toMatchObject({ text: "😀a" })
+    expect(client.partsCalls.map(({ cursor, scope }) => [cursor, scope])).toEqual([[undefined, { kind: "project", projectRef: "project" }], ["opaque-next", { kind: "project", projectRef: "project" }], ["opaque-next", { kind: "project", projectRef: "project" }]])
+    expect(recoverUnauthorized).toHaveBeenCalledTimes(1)
+    expect(client.createCalls).toHaveLength(0)
+  })
+  it.each(["second401", "403", "parse401", "409", "denied"])("retains the actual %s error without a second auth episode", async failure => {
+    const client = createFakeClient()
+    const error = new SessionClientError(failure === "parse401" ? "parse" : "http", failure, failure === "409" ? "message_parts_changed" : "unauthenticated", failure === "403" ? 403 : failure === "409" ? 409 : 401)
+    client.nextParts = async () => { throw error }
+    const recoverUnauthorized = vi.fn(async () => failure !== "denied")
+    await expect(readMessageParts({ client, sessionId: "s", messageId: "m", runId: "r", scope: { kind: "direct" }, signal: new AbortController().signal, recoverUnauthorized })).rejects.toBe(error)
+    expect(recoverUnauthorized).toHaveBeenCalledTimes(failure === "second401" || failure === "denied" ? 1 : 0)
+    expect(client.partsCalls).toHaveLength(failure === "second401" ? 2 : 1)
+  })
+  it.each(["timeout", "cancel"])("includes auth recovery in its original absolute budget and rejects late %s", async kind => {
+    vi.useFakeTimers(); const client = createFakeClient(), controller = new AbortController()
+    let admit!: (accepted: boolean) => void
+    const recoverUnauthorized = vi.fn((signal: AbortSignal) => { expect(signal.aborted).toBe(false); return new Promise<boolean>(resolve => { admit = resolve }) })
+    client.nextParts = async () => { await new Promise(resolve => setTimeout(resolve, 6_000)); throw new SessionClientError("http", "unauthenticated", "unauthenticated", 401) }
+    const pending = readMessageParts({ client, sessionId: "s", messageId: "m", runId: "r", scope: { kind: "direct" }, signal: controller.signal, recoverUnauthorized })
+    const rejected = expect(pending).rejects.toThrow("retired or timed out")
+    await vi.advanceTimersByTimeAsync(9_000)
+    if (kind === "cancel") controller.abort()
+    else await vi.advanceTimersByTimeAsync(1_000)
+    await rejected
+    admit(true); await vi.advanceTimersByTimeAsync(0)
+    expect(client.partsCalls).toHaveLength(1)
+    expect(recoverUnauthorized.mock.calls[0]?.[0].aborted).toBe(true)
+  })
   it("has one absolute deadline even when a client ignores cancellation", async () => {
     vi.useFakeTimers(); const client = createFakeClient()
     client.nextParts = () => new Promise(() => undefined)

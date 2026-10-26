@@ -42,8 +42,11 @@ export async function readPartsJson(response: Response, signal: AbortSignal): Pr
 }
 
 export type MessagePartsRead = Omit<MessagePartsPage, "items" | "next_cursor"> & { items: MessagePart[] }
+/** Captured by the trusted browser admission owner before the first page GET. */
+export type MessagePartsReadRecheck = (signal: AbortSignal) => Promise<boolean>
 export async function readMessageParts(args: {
   client: SessionClient; sessionId: string; messageId: string; runId: string; scope: SessionScope;
+  recoverUnauthorized?: MessagePartsReadRecheck;
   cursor?: string; retainedPartIds?: readonly string[]; minimumRevision?: string; expected?: { revision: string; event_watermark: MessagePartsPage["event_watermark"] }; signal: AbortSignal; onProgress?: (read: MessagePartsRead) => void;
 }): Promise<MessagePartsRead> {
   const controller = new AbortController()
@@ -55,6 +58,7 @@ export async function readMessageParts(args: {
     if (args.signal.aborted) abort()
     const read = async (): Promise<MessagePartsRead> => {
       let cursor = args.cursor, baseline: MessagePartsRead | undefined
+      let recoverySpent = false
       const cursors = new Set<string>(), identities = new Set<string>()
       const slots = new Map<string, MessagePart>()
       let last: MessagePart | undefined
@@ -64,7 +68,19 @@ export async function readMessageParts(args: {
           if (cursors.has(cursor)) throw new SessionClientError("parse", "Message parts cursor cycle")
           cursors.add(cursor)
         }
-        const page = messagePartsPageSchema.parse(await args.client.fetchMessageParts({ sessionId: args.sessionId, messageId: args.messageId, ...(cursor === undefined ? {} : { cursor }), limit: 16, scope: args.scope, signal: controller.signal }))
+        const request = { sessionId: args.sessionId, messageId: args.messageId, ...(cursor === undefined ? {} : { cursor }), limit: 16, scope: args.scope, signal: controller.signal }
+        let response: MessagePartsPage
+        try { response = await args.client.fetchMessageParts(request) }
+        catch (error) {
+          if (controller.signal.aborted || recoverySpent || !(error instanceof SessionClientError) || error.reason !== "http" || error.status !== 401 || !args.recoverUnauthorized) throw error
+          recoverySpent = true
+          // Same read episode, scope and opaque cursor; the original timer also
+          // bounds Product readmission. Never recover a command or a409 here.
+          if (!await args.recoverUnauthorized(controller.signal)) throw error
+          if (controller.signal.aborted) throw new SessionClientError("network", "Message parts read retired")
+          response = await args.client.fetchMessageParts(request)
+        }
+        const page = messagePartsPageSchema.parse(response)
         if (args.minimumRevision !== undefined && BigInt(page.revision) < BigInt(args.minimumRevision)) throw new SessionClientError("parse", "Message parts revision regressed")
         if (args.expected && (page.revision !== args.expected.revision || page.event_watermark !== args.expected.event_watermark)) throw new SessionClientError("parse", "Message parts snapshot binding mismatch")
         if (page.items.length > 16) throw new SessionClientError("parse", "Message parts page exceeds requested limit")

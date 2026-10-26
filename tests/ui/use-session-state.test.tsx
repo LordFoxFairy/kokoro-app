@@ -1057,6 +1057,55 @@ it("current read401 from simultaneous old-generation readers joins an ongoing re
   } finally { finishRefresh(renewed()); view.unmount() }
 })
 
+it("returns shared read recovery only after trusted same-subject admission, including a late sibling401", async () => {
+  let finish!: (response: Response) => void
+  const fetchMock = vi.fn().mockResolvedValueOnce(session()).mockResolvedValueOnce(csrf()).mockResolvedValueOnce(renewed())
+    .mockImplementationOnce(() => new Promise<Response>(resolve => { finish = resolve }))
+  vi.stubGlobal("fetch", fetchMock)
+  const view = renderHook(() => useSessionProbe())
+  try {
+    await waitFor(() => expect(view.result.current.projectReadBoundary.admitted).toBe(true))
+    const old = view.result.current.projectReadBoundary, signal = new AbortController().signal
+    let first: Promise<boolean> | void, sibling: Promise<boolean> | void
+    act(() => { first = view.result.current.reportReadUnauthorized({ ...old, signal }) })
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4))
+    act(() => { sibling = view.result.current.reportReadUnauthorized({ ...old, signal }) })
+    expect(view.result.current.projectReadBoundary.admitted).toBe(false)
+    let accepted = false
+    void Promise.resolve(first!).then(value => { accepted = value === true })
+    await act(async () => { await Promise.resolve() })
+    expect(accepted).toBe(false)
+    await act(async () => { finish(session()) })
+    await waitFor(() => expect(view.result.current.projectReadBoundary.admitted).toBe(true))
+    await expect(first!).resolves.toBe(true)
+    await expect(sibling!).resolves.toBe(true)
+    expect(fetchMock).toHaveBeenCalledTimes(4)
+    expect(view.result.current.projectReadBoundary.generation).toBeGreaterThan(old.generation)
+  } finally { view.unmount() }
+})
+
+it.each(["abort", "pagehide", "identityABA", "unmount", "foreign200"] as const)("does not grant a late read recovery after %s", async retirement => {
+  let finish!: (response: Response) => void
+  const fetchMock = vi.fn().mockResolvedValueOnce(session()).mockResolvedValueOnce(csrf()).mockResolvedValueOnce(renewed())
+    .mockImplementationOnce(() => new Promise<Response>(resolve => { finish = resolve }))
+  vi.stubGlobal("fetch", fetchMock)
+  const view = renderHook(() => useSessionProbe()), controller = new AbortController()
+  try {
+    await waitFor(() => expect(view.result.current.projectReadBoundary.admitted).toBe(true))
+    let recovery: Promise<boolean> | void
+    act(() => { recovery = view.result.current.reportReadUnauthorized({ ...view.result.current.projectReadBoundary, signal: controller.signal }) })
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4))
+    act(() => {
+      if (retirement === "abort") controller.abort()
+      if (retirement === "pagehide") window.dispatchEvent(new Event("pagehide"))
+      if (retirement === "identityABA") window.dispatchEvent(new StorageEvent("storage", { key: "kokoro.web.auth-index-subject", oldValue: "reader-a", newValue: "reader-b", storageArea: window.localStorage }))
+      if (retirement === "unmount") view.unmount()
+    })
+    await act(async () => { finish(retirement === "foreign200" ? Response.json({ authenticated: true, subject: "reader-b" }) : session()) })
+    await expect(recovery!).resolves.toBe(false)
+  } finally { view.unmount() }
+})
+
 it("current read401 ignores aborted, foreign and stale proofs and pagehide does not spend a recovery", async () => {
   const fetchMock = vi.fn().mockResolvedValueOnce(session()).mockResolvedValueOnce(csrf()).mockResolvedValueOnce(renewed())
     .mockImplementation(async () => session())
@@ -1161,7 +1210,7 @@ it("current read401 receives another credit only after an independent normal ren
   const view = renderHook(() => useSessionProbe())
   try {
     await waitFor(() => expect(view.result.current.projectReadBoundary.admitted).toBe(true))
-    const report = () => view.result.current.reportReadUnauthorized({ ...view.result.current.projectReadBoundary, signal: new AbortController().signal })
+    const report = () => { view.result.current.reportReadUnauthorized({ ...view.result.current.projectReadBoundary, signal: new AbortController().signal }) }
     act(report)
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4))
     await waitFor(() => expect(view.result.current.projectReadBoundary.admitted).toBe(true))

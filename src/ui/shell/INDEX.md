@@ -35,6 +35,8 @@ Web专属thread viewport统一隐藏滚动条槽以匹配Composer阅读轴；共
 <!-- SET16：use-task-notifications.ts 从已准入subject/generation订阅typed信号，hidden/blur时投递；切会话关闭owned提示/声音，身份及scope退役取消订阅；use-awaiting-notify.ts仅徽标/title。 -->
 # ui/shell — 页面装配层
 
+`bindBrowserMessagePartsReadRecheck` 仅承接 AppGate 的原 Product 准入端口；live engine 在 parts 首次读取前捕获精确 subject/data generation。列表、写命令、preview 不接该恢复，不由本地 marker 授权；同一页401恢复不重启 Message reader 的10秒预算或改变 scope/cursor。
+
 - 挂载内导航：独立目录页面不解释/写入 conversation URL，不接管聊天恢复、错误或 Todo 状态；目录组件 key 不随后台 activeId 改变。返回 Direct/Project 仍按原会话深链恢复。
 - History 和延迟 URL 写入必须匹配当前 engine 的精确 scope pathname；跨 Direct/Project 的旧闭包不打开、清空或取消会话。新路由的 scope 自己恢复，未知地址不回落为 Direct。
 - 侧栏桌面密度按实测使用 14px 正文、13px 分组、36px 行；触屏 44px 命中区仅由显式 drawer 标记控制。“更多”按参考保留 Computer Use/Skills/个性化；Computer Use 未开放时明确禁用，不伪造可用能力。已启用的 scheduled 进入一级“自动化”（保持原正式路径和 mounted 导航），不再在更多重复；缺失/关闭时仍明确不可用。其他 manifest 独有入口保持原访问。

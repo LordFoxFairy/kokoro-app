@@ -6,6 +6,7 @@ import { createPreviewClient, previewClientFromEnv } from "@/dev/preview-transpo
 import { createSessionClient, type SessionClient } from "@/engine/client"
 import { sessionBaseUrl } from "@/engine/config"
 import type { DraftLifecycle } from "@/engine/engine-types"
+import type { MessagePartsReadRecheck } from "@/engine/message-parts-reader"
 import { createSessionEngine, type SessionEngine } from "@/engine/machine"
 import { removeConversation, type ConversationStore } from "@/core/conversations"
 import { storedConversationStoreSchema } from "@/core/persistence"
@@ -38,6 +39,13 @@ const STORAGE_KEY = "kokoro.web.conversations"
 export const AUTH_INDEX_SUBJECT_KEY = "kokoro.web.auth-index-subject"
 // Set only by successful Product Session admission in this document, never restored from a marker.
 let admittedBrowserSubject: string | null = null
+let capturePartsReadRecheck: ((subject: string) => MessagePartsReadRecheck | undefined) | undefined
+
+/** AppGate supplies its existing Product Session admission, never a cache marker. */
+export function bindBrowserMessagePartsReadRecheck(capture: NonNullable<typeof capturePartsReadRecheck>): () => void {
+  capturePartsReadRecheck = capture
+  return () => { if (capturePartsReadRecheck === capture) capturePartsReadRecheck = undefined }
+}
 
 /** Remove only browser-owned conversation indexes before admitting a live identity. */
 export function invalidateBrowserAuthSessionIndexes(): void {
@@ -381,6 +389,7 @@ export function browserEngine(options: { preview?: boolean; scope?: SessionScope
       : createSessionClient({ baseUrl: sessionBaseUrl() })
     const engine = createSessionEngine({
       client,
+      ...(mode === "preview" ? {} : { captureMessagePartsReadRecheck: () => recoverySubject === null ? undefined : capturePartsReadRecheck?.(recoverySubject) }),
       ...(mode === "preview" ? {} : { submissionRecovery: createBrowserSubmissionRecovery({
         subject: recoverySubject ?? "", scope,
         isCurrent: () => {

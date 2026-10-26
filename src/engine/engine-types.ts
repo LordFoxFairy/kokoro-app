@@ -12,6 +12,7 @@ import type { SessionScope } from "./session-scope"
 import type { SubmissionRecovery } from "./submission-recovery"
 import type { TaskNotification } from "./task-notification"
 import type { ToolDecision } from "./hitl-staging"
+import type { MessagePartsReadRecheck } from "./message-parts-reader"
 
 export type NoticeSpec = {
   key: MessageKey
@@ -125,6 +126,8 @@ export type EngineDeps = {
   storage: PersistedStore<ConversationStore>
   draftLifecycle?: DraftLifecycle
   submissionRecovery?: SubmissionRecovery
+  /** One readonly401 recovery, captured from the current trusted data epoch. */
+  captureMessagePartsReadRecheck?: () => MessagePartsReadRecheck | undefined
   /** Direct inbox and project workbenches never share a persisted session index. */
   scope?: SessionScope
   now?: () => number

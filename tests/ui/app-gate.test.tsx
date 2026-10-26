@@ -13,6 +13,7 @@ const state = vi.hoisted(() => ({
   probeOptions: vi.fn(),
   unavailable: false,
   pending: false,
+  reportReadUnauthorized: vi.fn(async () => true),
 }))
 
 const router = vi.hoisted(() => ({ refresh: vi.fn() }))
@@ -30,6 +31,7 @@ vi.mock("@/ui/auth/use-session-state", () => ({
     projectReadBoundary: { admitted: state.probeMode === "authenticated" && !state.unavailable, subject: state.probeMode === "authenticated" ? "reader" : null, generation: 1 },
     unavailable: state.unavailable,
     requestPending: state.pending,
+    reportReadUnauthorized: state.reportReadUnauthorized,
   }) },
 }))
 vi.mock("@/system/use-runtime-manifest", () => ({
@@ -58,6 +60,24 @@ vi.mock("@/features/app/kokoro-app-surface", () => ({
 }))
 
 import { AppGate } from "@/ui/auth/app-gate"
+import * as pageClients from "@/ui/shell/page-clients"
+
+it("captures the verified Product data epoch for engine parts reads, not the replacement render", async () => {
+  state.probeMode = "authenticated"; state.probeState = "pass"; state.unavailable = false
+  const bind = vi.spyOn(pageClients, "bindBrowserMessagePartsReadRecheck")
+  const view = render(<LocaleProvider><AppGate /></LocaleProvider>)
+  try {
+    const capture = bind.mock.calls.at(-1)![0]
+    expect(capture("other-actor")).toBeUndefined()
+    const recover = capture("reader")!
+    state.unavailable = true
+    view.rerender(<LocaleProvider><AppGate /></LocaleProvider>)
+    expect(bind.mock.calls.at(-1)![0]("reader")).toBeUndefined()
+    const signal = new AbortController().signal
+    await expect(recover(signal)).resolves.toBe(true)
+    expect(state.reportReadUnauthorized).toHaveBeenLastCalledWith({ subject: "reader", generation: 1, signal })
+  } finally { view.unmount(); bind.mockRestore() }
+})
 
 beforeEach(() => {
   state.source = "error"

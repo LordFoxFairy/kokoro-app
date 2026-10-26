@@ -6,7 +6,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react"
 
-import type { ProductReadRecheck } from "./product-read-recheck-context"
+import type { ProductRead401, ProductReadRecheck } from "./product-read-recheck-context"
 
 import { currentCsrf, refreshProductSession } from "@/ui/auth/product-auth-client"
 
@@ -42,6 +42,11 @@ type ResolvedSession =
   | { mode: "authenticated"; subject: string; subjectAtProbeStart: string | null | undefined; renewalConfirmed: boolean }
   | { mode: "anonymous"; subject: null }
   | { mode: "unavailable"; subject: null }
+
+type ReadRecoveryAdmission = {
+  subject: string; generation: number; admittedGeneration: number | null; retired: boolean;
+  result: Promise<boolean>; settle: (accepted: boolean) => void;
+}
 
 const REFRESH_INTERVAL_MS = 120_000
 type SessionObservation = { indexSubject: string | null | undefined; retired: boolean }
@@ -191,25 +196,71 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean;
   }))
   const admissionRef = useRef(probe.projectReadBoundary)
   const readEpisode = useRef({ spent: false, recovering: false })
+  const readRecoveryAdmission = useRef<ReadRecoveryAdmission | null>(null)
+  const retireReadRecovery = useCallback(() => {
+    const recovery = readRecoveryAdmission.current
+    if (recovery) { recovery.retired = true; recovery.settle(false); readRecoveryAdmission.current = null }
+  }, [])
   const [readRecoveryBlocked, setReadRecoveryBlocked] = useState(false)
-  useLayoutEffect(() => { admissionRef.current = probe.projectReadBoundary }, [probe.projectReadBoundary])
+  useLayoutEffect(() => {
+    const boundary = probe.projectReadBoundary
+    admissionRef.current = boundary
+    const recovery = readRecoveryAdmission.current
+    if (probe.unavailable || serverUnavailable) retireReadRecovery()
+    else if (recovery && !recovery.retired && boundary.admitted && boundary.subject === recovery.subject && boundary.generation !== recovery.generation) {
+      recovery.admittedGeneration = boundary.generation
+      recovery.settle(true)
+    }
+  }, [probe.projectReadBoundary, probe.unavailable, serverUnavailable, retireReadRecovery])
+  useEffect(() => retireReadRecovery, [retireReadRecovery])
   const retry = useCallback(() => {
     if (serverUnavailable) return
+    retireReadRecovery()
     readEpisode.current = { spent: false, recovering: false }
     setReadRecoveryBlocked(false)
     setProbe((current) => current.mode === "authenticated"
       ? { ...current, requestPending: true }
       : { ...current, state: "checking", unavailable: false, requestPending: true })
     setRetryGeneration((current) => current + 1)
-  }, [serverUnavailable])
+  }, [serverUnavailable, retireReadRecovery])
   const reportReadUnauthorized = useCallback<ProductReadRecheck>((read) => {
     const current = admissionRef.current
     if (EXPLICIT_PREVIEW || serverUnavailable || documentSuspended || read.signal.aborted ||
-      !current.admitted || read.subject === null || current.subject !== read.subject ||
-      current.generation !== read.generation || admittedSubject !== read.subject) return
-    try { if (readBrowserAuthIndexSubject() !== read.subject) return } catch { return }
+      read.subject === null || admittedSubject !== read.subject) return undefined
+    try { if (readBrowserAuthIndexSubject() !== read.subject) return undefined } catch { return undefined }
+    const waitForAdmission = (recovery: ReadRecoveryAdmission, proof: ProductRead401): Promise<boolean> => new Promise(resolve => {
+      let done = false
+      const finish = (accepted: boolean) => {
+        if (done) return
+        done = true
+        proof.signal.removeEventListener("abort", abort)
+        const latest = admissionRef.current
+        let markerMatches = false
+        try { markerMatches = readBrowserAuthIndexSubject() === recovery.subject } catch { /* No trusted browser identity. */ }
+        resolve(accepted && !proof.signal.aborted && !recovery.retired && !documentSuspended && markerMatches &&
+          latest.admitted && latest.subject === recovery.subject && latest.generation === recovery.admittedGeneration)
+      }
+      const abort = () => finish(false)
+      proof.signal.addEventListener("abort", abort, { once: true })
+      if (proof.signal.aborted) abort()
+      void recovery.result.then(finish)
+    })
+    // A sibling GET may receive401 after the first report synchronously retired
+    // its data epoch. Join only that exact episode, never a replacement actor.
+    const existing = readRecoveryAdmission.current
+    if (existing && !existing.retired && existing.subject === read.subject && existing.generation === read.generation)
+      return waitForAdmission(existing, read)
+    if (!current.admitted || current.subject !== read.subject || current.generation !== read.generation) return undefined
     // Revoke synchronously: sibling/late g1 failures cannot interrupt its recovery.
     const exhausted = readEpisode.current.spent
+    retireReadRecovery()
+    let recovery: ReadRecoveryAdmission | undefined
+    if (!exhausted) {
+      let settle!: ReadRecoveryAdmission["settle"]
+      const result = new Promise<boolean>(resolve => { settle = resolve })
+      recovery = { subject: read.subject, generation: read.generation, admittedGeneration: null, retired: false, result, settle }
+      readRecoveryAdmission.current = recovery
+    }
     readEpisode.current = { spent: true, recovering: !exhausted }
     const retired = { ...current, admitted: false, generation: ++generationRef.current }
     admissionRef.current = retired
@@ -218,7 +269,9 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean;
     // Effect replacement retires the old subscriber, not the shared auth work.
     // In particular an in-progress CAS/unknown POST must continue unchanged.
     if (!exhausted) setRetryGeneration(value => value + 1)
-  }, [serverUnavailable])
+    if (recovery) return waitForAdmission(recovery, read)
+    return undefined
+  }, [serverUnavailable, retireReadRecovery])
 
   useEffect(() => {
     if (EXPLICIT_PREVIEW || serverUnavailable) return
@@ -246,6 +299,7 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean;
       // A cross-tab identity change retires data even while a probe is pending.
       // The browser marker can revoke existing admission, never establish it.
       if (admittedSubject !== null && indexSubject !== admittedSubject) {
+        retireReadRecovery()
         browserConversationMoveCoordinator().suspendVerifiedSubject(admittedSubject)
         admissionRef.current = { ...admissionRef.current, admitted: false }
         setProbe((current) => ({ ...current, projectReadBoundary: {
@@ -301,6 +355,7 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean;
             if (admittedSubject === null) {
               admittedSubject = resolved.subject
             } else if (admittedSubject !== resolved.subject) {
+              retireReadRecovery()
               browserConversationMoveCoordinator().revokeSubject()
               admissionRef.current = { ...admissionRef.current, admitted: false }
               setProbe({ state: "checking", mode: "checking", unavailable: false, requestPending: false, retry,
@@ -329,6 +384,7 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean;
           }
         }
         if (resolved.mode === "anonymous") {
+          retireReadRecovery()
           admissionRef.current = { ...admissionRef.current, admitted: false }
           readEpisode.current = { spent: false, recovering: false }
           setReadRecoveryBlocked(false)
@@ -366,6 +422,7 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean;
       // Revoke the shared observation so late subscribers cannot accept it either.
       const changed = event.key === null || event.oldValue !== event.newValue
       if (changed) {
+        retireReadRecovery()
         // Each hook receives the same event. Retire only the check preceding
         // that event, not the fresh check already started by another listener.
         if (lastIdentityStorageEvent !== event) {
@@ -381,6 +438,7 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean;
       if (retireChangedSubject() !== admittedSubject || changed) onVisible()
     }
     const onPageHide = (): void => {
+      retireReadRecovery()
       documentSuspended = true
       admissionRef.current = { ...admissionRef.current, admitted: false }
       pendingCheck = null
@@ -415,7 +473,7 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean;
       clearInterval(timer)
       clearTimeout(recoveryTimer)
     }
-  }, [retry, retryGeneration, serverUnavailable, serverAdmitted])
+  }, [retry, retryGeneration, serverUnavailable, serverAdmitted, retireReadRecovery])
 
   return { ...probe, reportReadUnauthorized, readRecoveryBlocked }
 }

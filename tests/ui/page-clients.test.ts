@@ -1,6 +1,43 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { waitFor } from "@testing-library/react"
+import { makeSnapshot } from "../core/fixtures"
 
-import { admitBrowserAuthSessionIndexes, browserEngine, invalidateBrowserAuthSessionIndexes, releaseBrowserEngine, retainBrowserEngine, browserDraftLifecycle, browserConversationMoveCoordinator, browserListClient, readBrowserAuthIndexSubject } from "@/ui/shell/page-clients"
+import { admitBrowserAuthSessionIndexes, bindBrowserMessagePartsReadRecheck, browserEngine, invalidateBrowserAuthSessionIndexes, releaseBrowserEngine, retainBrowserEngine, browserDraftLifecycle, browserConversationMoveCoordinator, browserListClient, readBrowserAuthIndexSubject } from "@/ui/shell/page-clients"
+
+it("binds live ordered history to Product admission and repeats only the exact failed page GET", async () => {
+  window.localStorage.clear(); window.sessionStorage.clear()
+  admitBrowserAuthSessionIndexes("parts-read-actor", null)
+  const recover = vi.fn(async (signal: AbortSignal) => !signal.aborted)
+  const capture = vi.fn((subject: string) => subject === "parts-read-actor" ? recover : undefined)
+  const unbind = bindBrowserMessagePartsReadRecheck(capture)
+  const base = { session_id: "s", message_id: "m", run_id: "r", format_version: 1, revision: "7", event_watermark: null }
+  const text = { kind: "text", part_id: "opaque", segment_id: "segment", first_sequence: "1", latest_sequence: "7", text: "a", offset: "0", end: "1", total_scalars: "2", completed: true }
+  let parts = 0
+  const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    expect(init?.method ?? "GET").toBe("GET")
+    if (url.includes("/parts?")) {
+      parts++
+      if (parts === 1) return Response.json({ ...base, items: [text], next_cursor: "opaque-next" })
+      if (parts === 2) return Response.json({ error: { code: "unauthenticated" } }, { status: 401 })
+      return Response.json({ ...base, items: [{ ...text, text: "b", offset: "1", end: "2" }], next_cursor: null })
+    }
+    return Response.json(makeSnapshot({ sessionId: "s", messages: [{ message_id: "m", role: "assistant", run_id: "r", content: null, status: "completed", created_at: "now", rendering: { mode: "ordered", format_version: 1, revision: "7", event_watermark: null, parts_cursor: "opaque-initial" } }] }))
+  })
+  vi.stubGlobal("fetch", fetchMock)
+  const engine = browserEngine({ preview: false, scope: { kind: "project", projectRef: "parts-auth-scope" } })!
+  try {
+    engine.openConversation("s")
+    await waitFor(() => expect(engine.getSnapshot().thread.messageParts?.m?.status).toBe("complete"))
+    expect(engine.getSnapshot().thread.messages.filter(message => message.role === "assistant" && !message.orderedContainer).map(message => message.content)).toEqual(["ab"])
+    const calls = fetchMock.mock.calls.filter(([url]) => url.includes("/parts?"))
+    expect(calls).toHaveLength(3)
+    expect(calls[1]![0]).toBe(calls[2]![0])
+    expect(calls.every(([url]) => new URL(url, "http://localhost").searchParams.get("project_ref") === "parts-auth-scope")).toBe(true)
+    expect(capture).toHaveBeenCalledWith("parts-read-actor")
+    expect(recover).toHaveBeenCalledTimes(1)
+    expect(fetchMock.mock.calls.every(call => !(call[1] as RequestInit | undefined)?.method || (call[1] as RequestInit).method === "GET")).toBe(true)
+  } finally { engine.dispose(); releaseBrowserEngine(engine); unbind(); invalidateBrowserAuthSessionIndexes(); vi.unstubAllGlobals(); window.localStorage.clear(); window.sessionStorage.clear() }
+})
 
 describe("页面 Chat client transport selection", () => {
   afterEach(() => {
