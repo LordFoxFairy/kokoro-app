@@ -1,5 +1,7 @@
 过程行顺序（2026-10-25，局部候选）：`SegmentProcess`在单个折叠块内按传入`activities`首次顺序逐项渲染Tool／Subagent／Skill，不按类型重排；同`activity_id`状态更新保原节点及手动开合，安全摘要、失败计数和独立HITL不变。本片不修正文／过程的跨段timeline或折叠块数量，正常组合由Root另验。
 
+过程样式（2026-10-25，局部候选）：沿已归档Manus完成态将普通过程入口收为14px／20px、常规字重的muted内容宽度披露；去外框、静态Sparkles、主体底色与嵌套滚动，普通Tool／Skill／Subagent行仅在`processBody`内去胶囊，随主聊天滚动。保Collapsible、inert、手动开合、键盘焦点、窄端44px触达和减少动态；不改独立HITL、错误footer、Forming、正文或Canvas，不造时长／浏览语义。运行态未有参考，本片不重新设计；跨段顺序、连续分组及正常视觉组合由Root另验。
+
 CHAT-1（2026-10-24，候选）：`UnconfirmedSubmissionFeedback`与依赖未就绪共用中性恢复排版，但明确区分未确认admission和owner执行失败；原文/原请求人工恢复，不把已完成Run误说失败，不自动POST。
 
 ## 2026-10-20 执行未就绪反馈

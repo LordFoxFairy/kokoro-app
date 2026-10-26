@@ -19,7 +19,8 @@ web 的领域核心：会话线程状态、事件折叠 reducer、渲染投影�
   - 本地命令（非事件折叠）：`appendUserMessage`（本地 echo，usr_ 前缀 id）、
     `markToolRejected`（拒绝乐观置位，防回流翻绿勾）、`markRunCancelled`（停止本地收口）。
 - `projections.ts`：`buildThreadItems`（连续同 runId assistant 归并为 turn；safe process 可在首 token 前建立 turn；纯派生，
-  渲染层唯一读取模型）、`groupSegments`/`Segment`（正文锚点与 public7 safe activity 按 opaque segment 聚合）、
+  渲染层唯一读取模型）、`groupSegments`/`Segment`（live safe activity 与正文按真实步骤顺序交错，连续相邻活动合组；
+  没有首次位置锚点的旧 snapshot activity 保原 opaque segment fallback，不猜历史顺序）、
   `currentRunProgressTodos`（只派生 exact 当前非 queued head 对应 selected process 的计划；终态/历史计划不冒 active 进度，不改原 Todo 状态）。
 - `hydration.ts`：`stateFromSnapshot`——从 BFF 同一事务 snapshot 水合
   messages/pending pauses/meta/files/deliveries/activeRunId，并保存 `event_watermark` 为
@@ -44,6 +45,9 @@ web 的领域核心：会话线程状态、事件折叠 reducer、渲染投影�
 - 终态 runStatus/runError 是单槽投影：仅在无在途锚点或终态属在途 run 时写——
   reattach 全量回放里历史 run 的终态不得覆写在途 run。
 - selected process activity 以 activity_id 替换完整值并保留首次位置；Todo 每帧有序全值替换，`null` 与 `[]` 不合并。
+- 新观察的 live safe activity 同时记录 `SessionStep.activity` 的首次真实 `event.seq`；同 activity_id 后续更新原槽，
+  不移动、不重复。旧 snapshot 已有但无锚点的活动更新不伪造首次位置；正文 item 是合组边界，所有公开正文保持常显。
+  本片不改 hydration/wire、不将同一 text segment 后继 delta 拆成新 message，也不声明历史 timeline 或 final phase 已恢复。
 
 ## 扩展规则
 

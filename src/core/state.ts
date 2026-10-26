@@ -71,6 +71,8 @@ export type SessionStep =
   | { kind: "tool"; seq: number; segmentId: string; tool: SessionToolCall }
   | { kind: "subagent"; seq: number; segmentId: string; subagent: SessionSubagent }
   | { kind: "text"; seq: number; segmentId: string }
+  // Only a newly observed live activity has a known first public position.
+  | { kind: "activity"; seq: number; segmentId: string; activity: RunProcessActivity }
 
 // session.created 投影：sessions 集合的真实元数据（标题真源在服务端）。
 type SessionMeta = {

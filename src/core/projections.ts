@@ -145,11 +145,14 @@ export type Segment = {
   activities: RunProcessActivity[]
 }
 
-// 按 segmentId 把有序步骤分段，保持首次出现顺序（即真实发生时序）。
+// Live safe activities share the text steps' real sequence. Only consecutive
+// activities form a process group; unanchored snapshot values retain fallback.
 export function groupSegments(steps: SessionStep[], activities: readonly RunProcessActivity[] = []): Segment[] {
   // ordered 保留首次出现顺序；byId 仅做去重定位，二者指向同一对象。
   const ordered: Segment[] = []
   const byId = new Map<string, Segment>()
+  const anchoredActivities = new Set<string>()
+  let activityGroup: Segment | null = null
   const segmentFor = (id: string): Segment => {
     const existing = byId.get(id)
     if (existing) {
@@ -161,6 +164,13 @@ export function groupSegments(steps: SessionStep[], activities: readonly RunProc
     return created
   }
   for (const step of steps) {
+    if (step.kind === "activity") {
+      activityGroup ??= segmentFor(step.segmentId)
+      activityGroup.activities.push(step.activity)
+      anchoredActivities.add(step.activity.activity_id)
+      continue
+    }
+    activityGroup = null
     const segment = segmentFor(step.segmentId)
     if (step.kind === "thinking") {
       segment.thinking += step.text
@@ -172,6 +182,7 @@ export function groupSegments(steps: SessionStep[], activities: readonly RunProc
     // text 步骤只标记该段存在；正文从 messagesById 取。
   }
   for (const activity of activities) {
+    if (anchoredActivities.has(activity.activity_id)) continue
     const segmentId = activity.activity === "skill" ? `skill:${activity.preflight_id}` : activity.segment_id
     segmentFor(segmentId).activities.push(activity)
   }

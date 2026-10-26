@@ -271,23 +271,33 @@
 /* —— 过程块（思考/工具/子智能体的可折叠披露） —— */
 
 .process {
-  border: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
-  border-radius: var(--radius-sm);
   background: transparent;
-  font-size: 0.84rem;
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
 }
 
-/* 过程标题为 button：抹平浏览器默认按钮外观，铺满宽度、文本左对齐、字体继承。 */
+/* 普通过程是内容宽度的次级披露，不是横跨阅读列的卡片标题。 */
 .processSummary {
   display: flex;
-  width: 100%;
+  width: fit-content;
+  max-width: 100%;
+  height: auto;
+  min-height: 1.75rem;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.4rem 0.6rem;
+  justify-content: flex-start;
+  gap: 0.25rem;
+  padding: 0.25rem 0;
+  background: transparent;
   text-align: left;
   font: inherit;
-  color: color-mix(in srgb, var(--primary) 60%, var(--foreground) 40%);
-  font-weight: 500;
+  color: inherit;
+  font-weight: 400;
+}
+
+.processSummary:hover {
+  background: transparent;
+  color: var(--foreground);
 }
 
 /* 键盘焦点：暖木 inset 环，不被父盒 overflow 裁掉；圆角对齐顶角避免方角焦点框。 */
@@ -299,10 +309,7 @@
 }
 
 .processSpark {
-  width: 0.95rem;
-  height: 0.95rem;
-  flex-shrink: 0;
-  color: var(--primary);
+  display: none;
 }
 
 .processTitle {
@@ -315,7 +322,7 @@
 .processChevron {
   width: 0.75rem;
   height: 0.75rem;
-  margin-left: auto;
+  margin-left: 0;
   flex-shrink: 0;
   opacity: 0.65;
   transition: transform var(--motion-fast) var(--ease-standard);
@@ -325,8 +332,7 @@
   transform: rotate(180deg);
 }
 
-/* 展开/收起高度过渡：grid-rows 0fr↔1fr 是动画 height:auto 的稳妥手法。
-   clip 是 grid 项、纯 overflow:hidden+min-height:0——收起时把 body（含其滚动视口）整体裁到 0。 */
+/* 展开/收起仍由 grid 0fr↔1fr 与 clip 裁剪；展开内容随主聊天滚动。 */
 .processReveal {
   display: grid;
   grid-template-rows: 0fr;
@@ -378,32 +384,12 @@
   }
 }
 
-/* 展开后的过程主体：思考文本 + 工具/子智能体分组，分隔细线区隔。
-   思考过程可能很长：整块作为单一滚动区封顶，绝不把对话顶上去。
-   底部暖木渐隐是纯 CSS scroll-shadow：滚到底或不溢出时 cover 层盖住 shadow 自动隐藏。 */
+/* 普通过程内容不另设底色、边框或嵌套滚动区。 */
 .processBody {
   display: flex;
   flex-direction: column;
-  gap: 0.45rem;
-  padding: 0 0.6rem 0.55rem;
-  max-height: 24rem;
-  overflow-y: auto;
-  scrollbar-width: thin;
-  background: var(--secondary);
-}
-
-/* Fast/Thinking 过程密度差异：Thinking 略松，Fast 略紧。只调内部 gap，不动盒模型。 */
-.process[data-mode="thinking"] .processBody {
-  gap: 0.6rem;
-}
-
-.process[data-mode="fast"] .processBody {
-  gap: 0.32rem;
-}
-
-.processBody > * + * {
-  padding-top: 0.45rem;
-  border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  gap: 0.25rem;
+  padding: 0 0 0.25rem;
 }
 
 /* 思考文本：轻、静，像内心独白；随过程主体一起滚动。 */
@@ -419,7 +405,7 @@
 .actgroup {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: 0;
 }
 
 /* 同帧多工具批量审批提示：点明这一步的工具要一起决定，弱化为木色 muted 一行。 */
@@ -903,6 +889,34 @@
 /* 无结论时的静态行头：去掉指针手型，明确「不可展开」。 */
 .subagentSummaryStatic {
   cursor: default;
+}
+
+/* 只读 Tool/Skill/Subagent 过程行轻量排列；不改独立 HITL、错误面板或 Canvas。 */
+.processBody .tool,
+.processBody .subagent {
+  color: inherit;
+  font: inherit;
+}
+
+.processBody .tool .toolSummary,
+.processBody .subagent .subagentSummary {
+  gap: 0.25rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0.25rem 0;
+  cursor: default;
+}
+
+.processBody .toolName,
+.processBody .subagentName {
+  color: inherit;
+  font: inherit;
+}
+
+.processBody .toolIcon,
+.processBody .subagentIcon {
+  color: inherit;
 }
 
 .subagentIcon {

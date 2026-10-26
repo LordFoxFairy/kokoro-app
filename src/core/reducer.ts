@@ -384,6 +384,15 @@ function applyEvent(draft: Draft, event: ChatProjectionEvent): void {
     case "activity.updated": {
       if (draft.state.executionProcess?.runId !== event.run_id) break
       const index = draft.state.executionProcess.activities.findIndex((item) => item.activity_id === event.payload.activity_id)
+      const steps = stepsOf(draft, event.run_id)
+      const anchored = updateStep(steps,
+        (step) => step.kind === "activity" && step.activity.activity_id === event.payload.activity_id,
+        (step) => step.kind === "activity" ? { ...step, activity: event.payload } : step)
+      // Snapshot activities have no first-event anchor. A later update must not
+      // pass its own sequence off as that activity's first position.
+      if (!anchored && index === -1) insertOrdered(steps, {
+        kind: "activity", seq: event.seq, segmentId: `activity:${event.payload.activity_id}`, activity: event.payload,
+      })
       if (index === -1) draft.state.executionProcess.activities.push(event.payload)
       else draft.state.executionProcess.activities[index] = event.payload
       break

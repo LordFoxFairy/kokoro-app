@@ -103,6 +103,52 @@ describe("buildThreadItems", () => {
 })
 
 describe("groupSegments", () => {
+  it("interleaves live safe activity groups with every real text item without moving updated activities", () => {
+    const tool = { activity: "tool" as const, activity_id: `act_${"1".repeat(64)}`, segment_id: `seg_${"2".repeat(64)}`, status: "running" as const, display_code: "tool.execution" as const }
+    const nextTool = { ...tool, activity_id: `act_${"3".repeat(64)}`, segment_id: `seg_${"4".repeat(64)}` }
+    const skill = { activity: "skill" as const, activity_id: `act_${"5".repeat(64)}`, preflight_id: `spf_${"6".repeat(64)}`, source_refs: ["skill:alpha"], phase: "loading" as const }
+    const subagent = { activity: "subagent" as const, activity_id: `act_${"7".repeat(64)}`, segment_id: `seg_${"8".repeat(64)}`, status: "running" as const, display_code: "subagent.execution" as const }
+    const first = applyChatProjectionEvents(createSessionStreamState(), [
+      makeEvent("run.created", { run_id: "run_1" }, { seq: 1 }),
+      makeEvent("message.delta", { segment_id: "text_a", delta: "A" }, { seq: 2 }),
+      makeEvent("activity.updated", tool, { seq: 3 }),
+      makeEvent("activity.updated", nextTool, { seq: 4 }),
+      makeEvent("message.delta", { segment_id: "text_b", delta: "B" }, { seq: 5 }),
+      makeEvent("activity.updated", skill, { seq: 6 }),
+      makeEvent("activity.updated", subagent, { seq: 7 }),
+      makeEvent("message.delta", { segment_id: "text_c", delta: "C" }, { seq: 8 }),
+    ])
+    const updated = applyChatProjectionEvents(first, [
+      makeEvent("activity.updated", { ...tool, status: "completed" }, { seq: 9 }),
+      makeEvent("activity.updated", { ...skill, preflight_id: `spf_${"9".repeat(64)}`, phase: "ready" }, { seq: 10 }),
+    ])
+    const turn = buildThreadItems(updated)[0]
+    const oldTurn = buildThreadItems(first)[0]
+    if (turn?.kind !== "assistant-turn" || oldTurn?.kind !== "assistant-turn") throw new Error("expected assistant turn")
+    const segments = groupSegments(turn.steps, updated.executionProcess?.activities)
+    expect(segments.map((segment) => turn.messagesById[segment.segmentId]?.content ?? segment.activities.map((activity) => activity.activity).join(","))).toEqual([
+      "A", "tool,tool", "B", "skill,subagent", "C",
+    ])
+    expect(segments.map((segment) => segment.segmentId)).toEqual(groupSegments(oldTurn.steps, first.executionProcess?.activities).map((segment) => segment.segmentId))
+    expect(segments.flatMap((segment) => segment.activities)).toEqual(updated.executionProcess?.activities)
+    expect(groupSegments(turn.steps)).toEqual(segments)
+  })
+
+  it("keeps unanchored snapshot activities on the original legacy fallback path", () => {
+    const tool = { activity: "tool" as const, activity_id: `act_${"a".repeat(64)}`, segment_id: `seg_${"b".repeat(64)}`, status: "completed" as const, display_code: "tool.execution" as const }
+    const skill = { activity: "skill" as const, activity_id: `act_${"c".repeat(64)}`, preflight_id: `spf_${"d".repeat(64)}`, source_refs: ["skill:alpha"], phase: "ready" as const }
+    const snapshot = {
+      ...makeSnapshot({ messages: [{ message_id: "durable", role: "assistant", run_id: "run_1", content: "legacy text", status: "completed", created_at: "2026-07-02T00:00:00Z" }] }),
+      execution_process: { run_id: "run_1", todos: null, activities: [tool, skill], next_cursor: null },
+    }
+    const restored = stateFromSnapshot(snapshot)
+    expect(groupSegments(restored.stepsByRun.run_1 ?? [], restored.executionProcess?.activities)).toMatchObject([
+      { segmentId: "durable", activities: [] },
+      { segmentId: tool.segment_id, activities: [tool] },
+      { segmentId: `skill:${skill.preflight_id}`, activities: [skill] },
+    ])
+  })
+
   it("按 segmentId 聚合并保持首次出现顺序", () => {
     const steps: SessionStep[] = [
       { kind: "thinking", seq: 1, segmentId: "seg_1", text: "think " },
