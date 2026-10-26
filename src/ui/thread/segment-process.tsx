@@ -97,7 +97,6 @@ export function SegmentProcess({
 
   const tools = activities.filter((activity): activity is Extract<RunProcessActivity, { activity: "tool" }> => activity.activity === "tool")
   const subagents = activities.filter((activity): activity is Extract<RunProcessActivity, { activity: "subagent" }> => activity.activity === "subagent")
-  const skills = activities.filter((activity): activity is Extract<RunProcessActivity, { activity: "skill" }> => activity.activity === "skill")
   const hasActivity = activities.length > 0
   if (!hasActivity) {
     return null
@@ -150,25 +149,15 @@ export function SegmentProcess({
           {/* inert（收起时）把内容移出无障碍树 + 不可聚焦，补回 Collapsible 的隐藏语义；
               它不设 display:none，故 grid 高度过渡仍能动（视觉裁剪由 clip 的 overflow:hidden 负责）。 */}
           <div className={styles.processBody} inert={!open}>
-            {tools.length > 0 ? (
-              <div className={styles.actgroup} aria-label={t("thread.toolCall")}>
-                {tools.map((activity) => <ToolCallRow key={activity.activity_id} activity={activity} />)}
-              </div>
-            ) : null}
-
-            {subagents.length > 0 ? (
-              <div className={styles.actgroup} aria-label={t("thread.subagent")}>
-                {subagents.map((activity) => <SubagentRow key={activity.activity_id} activity={activity} />)}
-              </div>
-            ) : null}
-
-            {skills.length > 0 ? (
-              <div className={styles.actgroup}>
-                {skills.map((activity) => <div className={styles.tool} data-status={activity.phase} key={activity.activity_id}>
+            <div className={styles.actgroup}>
+              {activities.map((activity) => {
+                if (activity.activity === "tool") return <ToolCallRow key={activity.activity_id} activity={activity} />
+                if (activity.activity === "subagent") return <SubagentRow key={activity.activity_id} activity={activity} />
+                return <div className={styles.tool} data-status={activity.phase} key={activity.activity_id}>
                   <div className={styles.toolSummary}><span className={styles.toolName}>{t("thread.skill")}</span><span>{t(activity.phase === "resolving" ? "thread.skillResolving" : activity.phase === "loading" ? "thread.skillLoading" : activity.phase === "ready" ? "thread.skillReady" : "thread.skillFailed")}</span></div>
-                </div>)}
-              </div>
-            ) : null}
+                </div>
+              })}
+            </div>
           </div>
         </div>
       </CollapsibleContent>
