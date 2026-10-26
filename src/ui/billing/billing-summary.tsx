@@ -66,9 +66,10 @@ function NormalSummary({ summary, onOpenPricing }: { summary: ContractBillingSum
 }
 
 export function BillingSummary({ summary, embedded, retrying, onOpenPricing }: BillingSummaryProps) {
+  const t = useT()
   const confirmed = summary.kind === "ready" ? summary.summary : null
   return (
-    <section className={styles.balanceCard} data-testid="billing-balance" data-slot="billing-balance-card" aria-busy={summary.kind === "loading" || retrying}>
+    <section className={styles.balanceCard} data-testid="billing-balance" data-slot="billing-balance-card" data-embedded={embedded ? "billing" : undefined} aria-label={t("settings.creditsMenu")} aria-busy={summary.kind === "loading" || retrying}>
       {embedded ? <EmbeddedSummary summary={confirmed} onOpenPricing={confirmed === null ? undefined : onOpenPricing} /> : <NormalSummary summary={confirmed} onOpenPricing={confirmed === null ? undefined : onOpenPricing} />}
     </section>
   )

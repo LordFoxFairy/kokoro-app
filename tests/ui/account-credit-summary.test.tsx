@@ -50,7 +50,7 @@ it("reads only the admitted account summary and displays exact owner credits", a
   expect(await within(credits).findByText("9007199254740993123.456789")).toBeVisible();
   expect(within(credits).getByText("0")).toBeVisible();
   expect(within(credits).getByText("On hold")).toBeVisible();
-  expect(screen.getByText("Credits", { exact: true })).toBeVisible();
+  expect(within(credits).getByText("Available balance", { exact: true })).toBeVisible();
   expect(fetcher.mock.calls.map(([input]) => input).sort()).toEqual(["/api/account/profile", summaryPath].sort());
   for (const [, init] of fetcher.mock.calls) expect(init?.method ?? "GET").toBe("GET");
   expect(screen.queryByText("Free")).not.toBeInTheDocument();
@@ -174,6 +174,7 @@ it("keeps unknown fields quiet after network failure and rereads only on a norma
 });
 
 it("keeps confirmed same-scope credits while a background reread fails", async () => {
+  localStorage.setItem("kokoro.web.auth-index-subject", admitted.subject);
   fetcher.mockResolvedValueOnce(json(summary)).mockRejectedValueOnce(new Error("offline"));
   const draw = (open: boolean) => <LocaleProvider><AccountReadSnapshotBoundary preview={false} readBoundary={admitted}>{open ? <AccountCreditSummary readBoundary={admitted} /> : null}</AccountReadSnapshotBoundary></LocaleProvider>;
   const view = render(draw(true));

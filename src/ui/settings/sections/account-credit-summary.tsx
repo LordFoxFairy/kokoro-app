@@ -2,23 +2,22 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
-import { formatCredits } from "@/billing/format";
+import { BillingSummary as CreditSummaryCard } from "@/ui/billing/billing-summary";
 import type { BillingSummary } from "@/contract/http";
 import { useT } from "@/i18n/context";
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
 import { browserBillingClient, readBrowserAuthIndexSubject } from "@/ui/shell/page-clients";
 import { useAccountReadSnapshots } from "../account-read-snapshots";
 
-import styles from "./settings-sections.module.css";
-
 type Result = { scope: string } & (
   | { phase: "ready"; summary: BillingSummary }
   | { phase: "error" }
 );
 
-/** The account overview owns one read, without mounting the ledger consumer. */
-export function AccountCreditSummary({ preview = false, readBoundary }: {
+/** Same compact credit card, sharing the open Settings read without mounting history. */
+export function AccountCreditSummary({ preview = false, readBoundary, onOpenPricing }: {
   preview?: boolean;
+  onOpenPricing?: () => void;
   readBoundary: ProjectReadBoundary | undefined;
 }) {
   const t = useT();
@@ -30,9 +29,13 @@ export function AccountCreditSummary({ preview = false, readBoundary }: {
     ? JSON.stringify([subject, generation]) : null;
   const [client] = useState(() => browserBillingClient());
   const snapshots = useAccountReadSnapshots();
-  const rememberSummary = snapshots?.rememberSummary;
+  const readSummary = snapshots?.readSummary;
+  let summarySubjectCurrent = readSummary === undefined;
+  if (!summarySubjectCurrent) {
+    try { summarySubjectCurrent = readBrowserAuthIndexSubject() === subject; } catch { /* An unreadable marker retires shared data. */ }
+  }
   const [result, setResult] = useState<Result | null>(() => {
-    const summary = scope !== null && snapshots?.summary?.scope === scope ? snapshots.summary.value : null;
+    const summary = summarySubjectCurrent && scope !== null && snapshots?.summary?.scope === scope && snapshots.summary.client === client ? snapshots.summary.value : null;
     return summary && scope !== null ? { scope, phase: "ready", summary } : null;
   });
   const current = useRef<AbortController | null>(null);
@@ -52,9 +55,8 @@ export function AccountCreditSummary({ preview = false, readBoundary }: {
     void Promise.resolve().then(async () => {
       if (!isCurrent()) return;
       try {
-        const summary = await client.summary(controller.signal, () => isCurrent() && readBrowserAuthIndexSubject() === subject);
+        const summary = await (readSummary ? readSummary(client) : client.summary(controller.signal, () => isCurrent() && readBrowserAuthIndexSubject() === subject));
         if (isCurrent()) {
-          rememberSummary?.(scope, summary);
           setResult({ scope, phase: "ready", summary });
         }
       } catch {
@@ -65,16 +67,14 @@ export function AccountCreditSummary({ preview = false, readBoundary }: {
       if (current.current === controller) current.current = null;
       controller.abort();
     };
-  }, [client, scope, rememberSummary, subject]);
+  }, [client, scope, readSummary, subject]);
 
-  const visible = result?.scope === scope && result.phase === "ready" ? result.summary : null;
-  const pending = scope !== null && result?.scope !== scope;
-  return <section className={styles.accountCreditSummary} aria-label={t("settings.creditsMenu")} aria-busy={pending}>
-    {scope === null ? <span className="sr-only" role="status">{t("settings.accountCreditsUnknown")}</span> : pending ? <span className="sr-only" role="status" aria-label={t("billing.loading")} /> : null}
-    <dl className={styles.accountCreditNumbers}>
-      <div><dt>{t("billing.balance")}</dt><dd>{visible === null ? "—" : formatCredits(visible.available_micros)}</dd></div>
-      <div><dt>{t("billing.held")}</dt><dd>{visible === null ? "—" : formatCredits(visible.held_micros)}</dd></div>
-    </dl>
-    {visible === null ? null : <p className={styles.accountCreditStatus} role="status" data-account-status={visible.status}>{t(visible.status === "disabled" ? "settings.accountCreditsDisabled" : "settings.accountCreditsActive")}</p>}
-  </section>;
+  const warm = summarySubjectCurrent && scope !== null && snapshots?.summary?.scope === scope && snapshots.summary.client === client ? snapshots.summary.value : null;
+  const visible = summarySubjectCurrent ? (result?.scope === scope && result.phase === "ready" ? result.summary : warm) : null;
+  const pending = scope !== null && summarySubjectCurrent && visible === null && result?.scope !== scope;
+  return <>
+    <CreditSummaryCard summary={visible === null ? { kind: pending ? "loading" : "error" } : { kind: "ready", summary: visible }} embedded retrying={false} onOpenPricing={onOpenPricing} />
+    {scope === null || !summarySubjectCurrent ? <span className="sr-only" role="status">{t("settings.accountCreditsUnknown")}</span> : pending ? <span className="sr-only" role="status" aria-label={t("billing.loading")} /> : null}
+    {visible === null ? null : <p className="sr-only" role="status" data-account-status={visible.status}>{t(visible.status === "disabled" ? "settings.accountCreditsDisabled" : "settings.accountCreditsActive")}</p>}
+  </>;
 }
