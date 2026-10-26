@@ -1,3 +1,11 @@
+## CHAT-ORDER 私有有序 Message 消费（当前切片）
+
+一 Run 一个持久 assistant Message；私有快照的 `content:null` 表示正文未内联，不表示空消息成功。原公开分享快照独立旧 parser、原 Message/命令 ACK 不变。Web 只经同源 exact Message parts GET，在后台用一个绝对 10 秒预算连续读取、校验 complete UTF-8 EOF / 1 MiB 每页 / Unicode scalar offset 与 stable slot；不等待所有历史正文才开启 AG-UI。
+
+`segment_id` 是公开 AG-UI Message 身份，`part_id` 是不可拆解的 opaque 身份。新 `metadata.kokoro.public_sequence` 是 BFF public ledger 坐标，与原 Agent `seq`、不透明 `agui_*` 续传游标分开；内部十进制比较用 BigInt，读取正文绝不推进 SSE 游标。基线按真实 first position 恢复文字/连续活动组；只有完整槽按 latest_sequence 确认、完整版本 EOF 才提升整 Message confirmedRevision。未完整长文字只暂存读取前缀，保已有 live 可见内容，未读槽的真实 live 继续显示；EOF 以纯基线回放 revision 之后的公开事件一次，新 live 不被旧页覆盖。所有公开文字常显，不推测最后一段是 final，也不添加私有摘要或浏览器语义。
+
+快照及 parts 显式使用相同 direct/project scope，共用最多 3 个读取槽（包含显式重读队列）。每 Message 读取受会话/主体引擎寿命、scope、generation、取消控制；切换或关闭后迟到结果退休。HTTP409 且 exact `message_parts_changed` 保留可见内容，只提供显式只读重读，不重派 Run。TEXT_END 后有界 fresh read 承接完成纠正与无 delta 完成；HITL、copy、失败 footer 与旧 inline Message 保原语义。实际成套正常运行/浏览器验收由 Root 绑定最终 commit，源码切片通过不代表已上线闭环。
+
 ## 2026-10-25 当前业务只读401的有限再准入
 
 AppGate在整个KokoroAppSurface外提供单用途read-recheck context；只有既有MCP/API投影、精确connector详情、composer metadata及Project GET hook的当前typed HTTP401，携其原subject/generation/未abort signal，才可报告。403、parse、network、迟到、preview和所有写命令不触发。Probe同步撤旧数据代，合并一次原Session检查；既有POST/CAS/未知轮换不取消、不重派，真正同主体确认后才发布新代由原hook重读GET。

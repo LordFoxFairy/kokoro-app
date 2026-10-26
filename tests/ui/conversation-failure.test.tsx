@@ -461,8 +461,8 @@ describe("ConversationThread 失败卡渲染", () => {
       },
     }
     const { container } = renderFailure(thread)
-    const failedTurn = container.querySelector('[data-message-id="assistant:run_failed:message:a1"]')
-    const successfulTurn = container.querySelector('[data-message-id="assistant:run_success:message:a2"]')
+    const failedTurn = container.querySelector('[data-message-id="assistant:run_failed:turn:0"]')
+    const successfulTurn = container.querySelector('[data-message-id="assistant:run_success:turn:0"]')
     expect(container.querySelectorAll('[data-message-id="u1"], [data-message-id="u2"]')).toHaveLength(2)
     expect(failedTurn?.querySelector('[data-run-failure="run_failed"]')).not.toBeNull()
     expect(successfulTurn?.querySelector('[role="alert"]')).toBeNull()
@@ -487,11 +487,11 @@ describe("ConversationThread 失败卡渲染", () => {
       runFailuresById: { run_a: { failedRunId: "run_a", kind: "agent" as const, profile } },
     }
     const { container } = renderFailure(thread)
-    const turns = container.querySelectorAll('[data-slot="message-scroller-item"][data-message-id^="assistant:run_a:message:"]')
+    const turns = container.querySelectorAll('[data-slot="message-scroller-item"][data-message-id^="assistant:run_a:turn:"]')
     expect(turns).toHaveLength(2)
     expect([...turns].map((turn) => turn.getAttribute("data-message-id"))).toEqual([
-      "assistant:run_a:message:a1",
-      "assistant:run_a:message:a2",
+      "assistant:run_a:turn:0",
+      "assistant:run_a:turn:1",
     ])
     expect(turns[0]?.querySelector('[data-run-failure="run_a"]')).toBeNull()
     expect(turns[1]?.querySelectorAll('[data-run-failure="run_a"]')).toHaveLength(1)
@@ -569,7 +569,7 @@ describe("ConversationThread 失败卡渲染", () => {
     const css = readFileSync(`${process.cwd()}/src/ui/thread/thread.module.css`, "utf8")
     expect(css).toMatch(/\.assistantActions\s*\{[^}]*display:\s*flex;/u)
     const { container } = renderFailure(failedThread("dependency_unavailable"))
-    const turn = container.querySelector('[data-message-id="assistant:run_1:message:m_a"]')
+    const turn = container.querySelector('[data-message-id="assistant:run_1:turn:0"]')
     expect(turn?.querySelector(`button[aria-label="${tr("thread.copyAnswer")}"]`)).not.toBeNull()
   })
 
@@ -639,7 +639,7 @@ describe("ConversationThread 失败卡渲染", () => {
     )
     expect(container.querySelector('[data-message-id="m_u1"]')).toHaveTextContent("same persisted prompt")
     expect(container.querySelector('[data-message-id="m_u2"]')).toHaveTextContent("same persisted prompt")
-    const assistantItem = container.querySelector('[data-slot="message-scroller-item"][data-message-id="assistant:run_1:message:m_a"]')
+    const assistantItem = container.querySelector('[data-slot="message-scroller-item"][data-message-id="assistant:run_1:turn:0"]')
     const feedback = container.querySelector('[data-run-failure="run_1"]')
     expect(assistantItem?.querySelector("article")).not.toBeNull()
     expect(feedback?.closest('[data-slot="message-scroller-item"]')).toBe(assistantItem)

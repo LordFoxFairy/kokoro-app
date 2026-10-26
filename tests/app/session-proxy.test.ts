@@ -264,3 +264,30 @@ describe("/api/session/[...path] proxy", () => {
     expect(res.status).toBe(403)
   })
 })
+
+describe("exact private message parts GET adapter", () => {
+  const path = ["sessions", "s", "messages", "m", "parts"]
+  const page = { session_id: "s", message_id: "m", run_id: "r", format_version: 1, revision: "0", event_watermark: null, items: [], next_cursor: null }
+  it("forwards admitted credentials, explicit scope and no-store with the exact byte/time budget", async () => {
+    requestWithDomain.mockResolvedValue(new Response(JSON.stringify({ data: page, meta: { request_id: "parts-request" } }), { headers: { "content-type": "application/json" } }))
+    const { GET } = await import("@/app/api/session/[...path]/route")
+    const response = await GET(new Request("http://localhost/api/session/sessions/s/messages/m/parts?project_ref=project&limit=16&cursor=opaque", { headers: { authorization: "Bearer forged" } }), params(path))
+    expect(response.status).toBe(200); expect(await response.json()).toEqual(page)
+    expect(response.headers.get("cache-control")).toBe("private, no-store")
+    const [target, , options] = requestWithDomain.mock.calls[0] as [string, string, { timeoutMs: number; maxResponseBytes: number; strictResponseLength: boolean; headers: HeadersInit }]
+    expect(target).toBe("http://bff.test/v1/sessions/s/messages/m/parts?project_ref=project&limit=16&cursor=opaque")
+    expect(options).toMatchObject({ timeoutMs: 10_000, maxResponseBytes: 1_048_576, strictResponseLength: true })
+    expect(new Headers(options.headers).get("authorization")).toBe("Bearer product-access")
+  })
+  it.each(["scope=direct&project_ref=p", "limit=33", "cursor=", "limit=1&limit=2", "other=x"])("rejects malformed query %s without forwarding", async (query) => {
+    const { GET } = await import("@/app/api/session/[...path]/route")
+    const response = await GET(new Request(`http://localhost/api/session/sessions/s/messages/m/parts?${query}`), params(path))
+    expect(response.status).toBe(400); expect(requestWithDomain).not.toHaveBeenCalled()
+  })
+  it("does not admit command headers or treat a malformed200 as a successful empty message", async () => {
+    const { GET } = await import("@/app/api/session/[...path]/route")
+    expect((await GET(new Request("http://localhost/api/session/sessions/s/messages/m/parts", { headers: { "idempotency-key": "command" } }), params(path))).status).toBe(400)
+    requestWithDomain.mockResolvedValue(new Response(JSON.stringify({ data: { ...page, revision: "01" }, meta: { request_id: "req" } }), { headers: { "content-type": "application/json" } }))
+    expect((await GET(new Request("http://localhost/api/session/sessions/s/messages/m/parts"), params(path))).status).toBe(502)
+  })
+})

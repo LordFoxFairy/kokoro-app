@@ -1,3 +1,4 @@
+<!-- Ordered private histories keep all public text visible, fold only consecutive activities, use stable run/turn keys and expose a per-Message read-only partial reload. Shared threads use only the original inline public parser and never request private parts. -->
 过程行顺序（2026-10-25，局部候选）：`SegmentProcess`在单个折叠块内按传入`activities`首次顺序逐项渲染Tool／Subagent／Skill，不按类型重排；同`activity_id`状态更新保原节点及手动开合，安全摘要、失败计数和独立HITL不变。本片不修正文／过程的跨段timeline或折叠块数量，正常组合由Root另验。
 
 过程样式（2026-10-25，局部候选）：沿已归档Manus完成态将普通过程入口收为14px／20px、常规字重的muted内容宽度披露；去外框、静态Sparkles、主体底色与嵌套滚动，普通Tool／Skill／Subagent行仅在`processBody`内去胶囊，随主聊天滚动。保Collapsible、inert、手动开合、键盘焦点、窄端44px触达和减少动态；不改独立HITL、错误footer、Forming、正文或Canvas，不造时长／浏览语义。运行态未有参考，本片不重新设计；跨段顺序、连续分组及正常视觉组合由Root另验。

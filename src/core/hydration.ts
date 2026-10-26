@@ -37,10 +37,11 @@ export function stateFromSnapshot(snapshot: SessionSnapshot): SessionStreamState
   const messages: SessionMessage[] = snapshotMessages.map((message) => ({
     id: message.message_id,
     role: message.role,
-    content: message.content,
+    content: message.content ?? "",
+    ...("rendering" in message ? { orderedContainer: true } : {}),
     runId: message.run_id ?? message.message_id,
     ...(message.role === "assistant" ? { snapshotMessageId: message.message_id } : {}),
-    ...(message === candidate ? { awaitingTextSegment: true } : {}),
+    ...(message === candidate && !("rendering" in message) ? { awaitingTextSegment: true } : {}),
   }))
   const head = snapshot.execution_head
   const pending = head?.pending_pauses ?? []
@@ -67,7 +68,7 @@ export function stateFromSnapshot(snapshot: SessionSnapshot): SessionStreamState
   // Snapshot text precedes all post-watermark frames. These negative local
   // positions are render anchors, not fabricated owner event sequence/cursors.
   for (const [index, message] of messages.entries()) {
-    if (message.role !== "assistant") continue
+    if (message.role !== "assistant" || message.orderedContainer) continue
     const steps = stepsByRun[message.runId] ?? []
     steps.push({ kind: "text", seq: index - messages.length, segmentId: message.id })
     stepsByRun[message.runId] = steps
@@ -90,6 +91,10 @@ export function stateFromSnapshot(snapshot: SessionSnapshot): SessionStreamState
     },
     interactionsByRun: head && pending[0] ? { [head.run_id]: pending[0] } : {},
     messages,
+    messageParts: Object.fromEntries(snapshotMessages.flatMap((message) => "rendering" in message ? [[message.message_id, {
+      messageId: message.message_id, runId: message.run_id, revision: message.rendering.revision,
+      descriptor: true as const, watermark: message.rendering.event_watermark, cursor: message.rendering.parts_cursor, status: "unread" as const,
+    }]] : [])),
     stepsByRun,
     runFailuresById,
     unattributedFailure,

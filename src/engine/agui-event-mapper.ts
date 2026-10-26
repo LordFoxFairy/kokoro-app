@@ -145,6 +145,7 @@ function projectionEnvelope(
   return parseChatProjectionEvent({
     event_id: cursor,
     seq: metadata.seq,
+    ...(!("public_sequence" in metadata) || metadata.public_sequence === undefined ? {} : { publicSequence: metadata.public_sequence }),
     session_id: metadata.session_id,
     run_id: metadata.run_id ?? `session:${metadata.session_id}`,
     timestamp: metadata.timestamp,

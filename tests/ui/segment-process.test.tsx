@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
-import { afterEach, expect, it } from "vitest"
+import { afterEach, expect, it, vi } from "vitest"
 import type { RunProcessActivity } from "@/contract/chat"
 import { LocaleProvider } from "@/i18n/context"
 import { AssistantTurn } from "@/ui/thread/assistant-turn"
@@ -58,4 +58,34 @@ it("keeps mixed process rows in owner order through status updates and manual co
   expect(screen.getByText("Ready")).toBeInTheDocument()
   expect(screen.getByText("Failed")).toBeInTheDocument()
   expect(screen.getAllByText("Completed")).toHaveLength(2)
+})
+
+
+it("keeps partial public text visible and exposes a separate per-Message read action", () => {
+  const reload = vi.fn()
+  render(<LocaleProvider><AssistantTurn sessionId="session_1"
+    steps={[{ kind: "text", seq: "1", segmentId: "segment" }]}
+    messagesById={{ segment: { id: "segment", runId: "run", role: "assistant", content: "confirmed public text" } }}
+    parts={[{ messageId: "owner-message", runId: "run", revision: "9", status: "changed" }]}
+    onRetryMessageParts={reload} isLive={false} stagedDecisions={{}} hitlActive={false} controlError={null}
+  /></LocaleProvider>)
+  expect(screen.getByText("confirmed public text")).toBeVisible()
+  fireEvent.click(screen.getByRole("button", { name: "Reload this message" }))
+  expect(reload).toHaveBeenCalledExactlyOnceWith("owner-message")
+  expect(screen.getByText("confirmed public text")).toBeVisible()
+})
+
+it("keeps ordinary history reads offscreen and retains the visible answer node through completion", () => {
+  const props = { sessionId: "s", steps: [{ kind: "text" as const, seq: "1", segmentId: "segment" }], messagesById: { segment: { id: "segment", runId: "r", role: "assistant" as const, content: "stable visible answer" } }, isLive: false, stagedDecisions: {}, hitlActive: false, controlError: null }
+  const { rerender } = render(<LocaleProvider><AssistantTurn {...props} parts={[{ messageId: "m", runId: "r", revision: "1", status: "unread" }]} /></LocaleProvider>)
+  const answer = screen.getByText("stable visible answer")
+  // This is the existing shared offscreen accessibility utility, not a new
+  // visible loading row or a layout/screenshot oracle.
+  expect(screen.getByRole("status")).toHaveClass("sr-only")
+  rerender(<LocaleProvider><AssistantTurn {...props} parts={[{ messageId: "m", runId: "r", revision: "1", status: "loading" }]} /></LocaleProvider>)
+  expect(screen.getByRole("status")).toHaveClass("sr-only")
+  expect(screen.getByText("stable visible answer")).toBe(answer)
+  rerender(<LocaleProvider><AssistantTurn {...props} parts={[{ messageId: "m", runId: "r", revision: "1", status: "complete" }]} /></LocaleProvider>)
+  expect(screen.queryByRole("status")).toBeNull()
+  expect(screen.getByText("stable visible answer")).toBe(answer)
 })

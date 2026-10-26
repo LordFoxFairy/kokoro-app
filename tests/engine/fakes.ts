@@ -26,6 +26,8 @@ export type FakeStream = {
 export type FakeClient = SessionClient & {
   createCalls: { sessionId: string; body: MessageCreateParams }[]
   controlCalls: { sessionId: string; runId: string; body: RunControlBody; commandId: string }[]
+  partsCalls: Parameters<SessionClient["fetchMessageParts"]>[0][]
+  nextParts: SessionClient["fetchMessageParts"]
   snapshotCalls: string[]
   processPageCalls: {
     sessionId: string
@@ -64,6 +66,9 @@ export function createFakeClient(): FakeClient {
   const client: FakeClient = {
     createCalls: [],
     controlCalls: [],
+    partsCalls: [],
+    nextParts: () => Promise.reject(new Error("unexpected message parts read")),
+    fetchMessageParts: (args) => { client.partsCalls.push(args); return client.nextParts(args) },
     snapshotCalls: [],
     processPageCalls: [],
     streams: [],

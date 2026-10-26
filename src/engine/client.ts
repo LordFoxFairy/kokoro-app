@@ -4,6 +4,9 @@ import type { InteractionState } from "@/contract/control"
 import { ZodError } from "zod"
 
 import {
+  messagePartsPath,
+  messagePartsPageSchema,
+  type MessagePartsPage,
   controlPath,
   eventsPath,
   messagesPath,
@@ -48,6 +51,7 @@ import {
 import type { EventCursor } from "@/contract/agui-events"
 import type { ChatProjectionEvent } from "@/core/chat-projection-event"
 import { AgUiChatTransport } from "./agui-chat-transport"
+import { readPartsJson } from "./message-parts-reader"
 import { SessionClientError, type ClientFailureReason } from "./client-error"
 import { ConversationMoveError } from "./conversation-move-error"
 import type { SessionScope } from "./session-scope"
@@ -84,7 +88,8 @@ export type SessionClient = {
   listSessions: (cursor?: string, scope?: SessionScope) => Promise<SessionList>
   createMessage: (sessionId: string, body: MessageCreateParams) => Promise<MessageCreateReceipt>
   // 服务端不存在该会话（404）返回 null（本地新会话的合法答案）；其余失败照常上抛。
-  fetchSnapshot: (sessionId: string, options?: { signal?: AbortSignal }) => Promise<SessionSnapshot | null>
+  fetchSnapshot: (sessionId: string, options?: { signal?: AbortSignal; scope?: SessionScope }) => Promise<SessionSnapshot | null>
+  fetchMessageParts: (args: { sessionId: string; messageId: string; cursor?: string; limit?: number; scope: SessionScope; signal: AbortSignal }) => Promise<MessagePartsPage>
   fetchRunProcessPage: (args: { sessionId: string; runId: string; watermark: EventCursor; cursor?: EventCursor; limit?: number; scope?: SessionScope; signal?: AbortSignal }) => Promise<RunProcessPage>
   sendControl: (
     sessionId: string,
@@ -358,7 +363,7 @@ async function httpError(method: string, url: string, response: Response): Promi
   } catch {
     // 无 JSON 错误体：保留状态码描述。
   }
-  return new SessionClientError("http", detail, code)
+  return new SessionClientError("http", detail, code, response.status)
 }
 
 async function parseJsonResponse<T>(response: Response, parse: (raw: unknown) => T): Promise<T> {
@@ -517,7 +522,9 @@ export function createSessionClient(options: { baseUrl: string }): SessionClient
     },
 
     fetchSnapshot: async (sessionId, options) => {
-      const target = url(snapshotPath(sessionId))
+      const scope = options?.scope ?? { kind: "direct" }
+      const query = new URLSearchParams(scope.kind === "project" ? { project_ref: scope.projectRef } : { scope: "direct" })
+      const target = url(`${snapshotPath(sessionId)}?${query.toString()}`)
       let response: Response
       try {
         response = await fetch(target, { cache: "no-store", ...(options?.signal ? { signal: options.signal } : {}) })
@@ -534,6 +541,26 @@ export function createSessionClient(options: { baseUrl: string }): SessionClient
         throw await httpError("GET", target, response)
       }
       return parseJsonResponse(response, parseSessionSnapshot)
+    },
+
+    fetchMessageParts: async ({ sessionId, messageId, cursor, limit = 16, scope, signal }) => {
+      if (!Number.isInteger(limit) || limit < 1 || limit > 32) throw new SessionClientError("parse", "Invalid message parts page limit")
+      const query = new URLSearchParams({ limit: String(limit) })
+      if (cursor !== undefined) query.set("cursor", cursor)
+      if (scope.kind === "project") query.set("project_ref", scope.projectRef)
+      else query.set("scope", "direct")
+      const target = url(`${messagePartsPath(sessionId, messageId)}?${query.toString()}`)
+      let response: Response
+      try { response = await fetch(target, { cache: "no-store", signal }) }
+      catch { throw new SessionClientError("network", "Message parts read failed") }
+      const raw = await readPartsJson(response, signal)
+      if (!response.ok) {
+        const error = typeof raw === "object" && raw !== null && "error" in raw ? raw.error : null
+        const code = typeof error === "object" && error !== null && "code" in error && typeof error.code === "string" ? error.code : typeof error === "string" ? error : null
+        throw new SessionClientError("http", "Message parts read failed", code, response.status)
+      }
+      try { return messagePartsPageSchema.parse(raw) }
+      catch { throw new SessionClientError("parse", "Invalid message parts page") }
     },
 
     fetchRunProcessPage: async ({ sessionId, runId, watermark, cursor, limit = 100, scope = { kind: "direct" }, signal }) => {

@@ -1,3 +1,4 @@
+import { restorePublic26MessagePartsContract } from "./bff-message-parts-parent"
 import { createHash } from "node:crypto"
 import { readFile } from "node:fs/promises"
 import { resolve } from "node:path"
@@ -5,13 +6,13 @@ import { resolve } from "node:path"
 import { expect, it } from "vitest"
 import YAML from "yaml"
 
-const OWNER_COMMIT = "aa0bdeb4397d3a022edf9b3cfc53d5a6cfb281b1"
-const OWNER_SHA256 = "20d26736cf23da32c242c2c7cf75c45affb62c5d27696dcecb0bc6193bc39a09"
-const OWNER_VERSION = "26.0.0"
+const OWNER_COMMIT = "5ee7b500cf0990e19702e2f26764dcb835af3b40"
+const OWNER_SHA256 = "d2b3d546164cadc9655616fc44daf1511a6f7d4a2e5d172f1415552af8942ed1"
+const OWNER_VERSION = "27.0.0"
 
 it("pins BFF project creation to the owner request, idempotency and canonical response", async () => {
   const bytes = await readFile(resolve(process.cwd(), "src/generated/bff-public-openapi.yaml"))
-  expect(OWNER_COMMIT).toBe("aa0bdeb4397d3a022edf9b3cfc53d5a6cfb281b1")
+  expect(OWNER_COMMIT).toBe("5ee7b500cf0990e19702e2f26764dcb835af3b40")
   expect(createHash("sha256").update(bytes).digest("hex")).toBe(OWNER_SHA256)
   const spec = YAML.parse(bytes.toString()) as {
     info: { version: string }
@@ -87,7 +88,7 @@ it("pins existing public Project list/get permissions, envelopes and absence of 
 it("pins the sole added Project rename operation and its closed command receipt/error/header contract", async () => {
   const bytes = await readFile(resolve(process.cwd(), "src/generated/bff-public-openapi.yaml"))
   expect(createHash("sha256").update(bytes).digest("hex")).toBe(OWNER_SHA256)
-  const spec = YAML.parse(bytes.toString()) as {
+  const spec = YAML.parse(restorePublic26MessagePartsContract(bytes.toString())) as {
     paths: Record<string, Record<string, { operationId?: string }>>
     components: { schemas: Record<string, unknown>; responses: Record<string, unknown>; parameters: Record<string, unknown> }
   }

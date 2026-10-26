@@ -2,7 +2,7 @@
 import { cleanup, render, screen } from "@testing-library/react"
 import { afterEach, describe, expect, it } from "vitest"
 
-import type { SessionSnapshot } from "@/contract/http"
+import { parseSharedSessionSnapshot, type SharedSessionSnapshot } from "@/contract/http"
 import { BFF_AGENT_FAILURE_TUPLES } from "@/generated/bff-agent-failure"
 import { LocaleProvider } from "@/i18n/context"
 import { LOCALE_STORAGE_KEY } from "@/i18n/messages"
@@ -10,7 +10,7 @@ import { SharedThread } from "@/ui/shared/shared-thread"
 
 import { expectedAgentFailureZhCopy, expectedZhCopy, makeFailedSnapshot } from "../core/fixtures"
 
-function snapshot(): SessionSnapshot {
+function snapshot(): SharedSessionSnapshot {
   return {
     session: {
       session_id: "ses_1",
@@ -52,7 +52,7 @@ describe("SharedThread", () => {
     "renders the safe shared $code retryable=$retryable failure without mutation or raw details",
     (profile) => {
       window.localStorage.setItem(LOCALE_STORAGE_KEY, "zh")
-      render(<SharedThread snapshot={makeFailedSnapshot(profile)} />, { wrapper: LocaleProvider })
+      render(<SharedThread snapshot={parseSharedSessionSnapshot(makeFailedSnapshot(profile))} />, { wrapper: LocaleProvider })
       expect(screen.getByRole("alert")).toBeTruthy()
       expect(screen.getByText(expectedAgentFailureZhCopy(profile.code))).toBeTruthy()
       expect(screen.queryByText(profile.code)).toBeNull()
@@ -64,7 +64,7 @@ describe("SharedThread", () => {
 
   it("renders a failureless persisted failure as generic safe read-only feedback", () => {
     window.localStorage.setItem(LOCALE_STORAGE_KEY, "zh")
-    render(<SharedThread snapshot={makeFailedSnapshot(null)} />, { wrapper: LocaleProvider })
+    render(<SharedThread snapshot={parseSharedSessionSnapshot(makeFailedSnapshot(null))} />, { wrapper: LocaleProvider })
     expect(screen.getByRole("alert")).toBeTruthy()
     expect(screen.getByText(expectedZhCopy("fail.generic"))).toBeTruthy()
     expect(screen.queryByText("Agent run failed")).toBeNull()

@@ -1,3 +1,4 @@
+import { restorePublic26MessagePartsContract } from "./bff-message-parts-parent"
 import { createHash } from "node:crypto"
 import { resolve } from "node:path"
 import { readFile } from "node:fs/promises"
@@ -7,8 +8,8 @@ import * as sdk from "@/generated/bff-account-sessions/sdk.gen"
 import { accountSessionsSchema, accountSessionRevokeSchema } from "@/lib/account-sessions.schema"
 it("pins the complete formal public15.2 artifact with 145 operations and exactly two narrow SDK exports", async () => {
   const bytes = await readFile(resolve(process.cwd(), "src/generated/bff-public-openapi.yaml"))
-  expect(createHash("sha256").update(bytes).digest("hex")).toBe("20d26736cf23da32c242c2c7cf75c45affb62c5d27696dcecb0bc6193bc39a09")
-  const spec = YAML.parse(bytes.toString())
+  expect(createHash("sha256").update(bytes).digest("hex")).toBe("d2b3d546164cadc9655616fc44daf1511a6f7d4a2e5d172f1415552af8942ed1")
+  const spec = YAML.parse(restorePublic26MessagePartsContract(bytes.toString()))
   expect(spec.info.version).toBe("26.0.0")
   expect(Object.values(spec.paths).flatMap((path) => Object.keys(path as object).filter((key) => ["get", "post", "put", "delete", "patch", "head", "options"].includes(key)))).toHaveLength(186)
   expect(Object.keys(sdk)).toEqual(["listAccountSessions", "revokeAccountSession"])

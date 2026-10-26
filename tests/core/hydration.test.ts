@@ -1,3 +1,4 @@
+let publicLedgerFixtureSequence = 1000
 // snapshot 水合规格：当前读模型 + opaque AG-UI watermark 组成一致续流起点。
 import { describe, expect, it } from "vitest"
 
@@ -241,7 +242,7 @@ describe("snapshot text continuation", () => {
       { type: "TEXT_MESSAGE_CONTENT", delta: "I assist you today?" },
       { type: "TEXT_MESSAGE_END" },
     ].map((frame, index) => mapper.map(`agui_${(11 + index).toString(16).padStart(32, "0")}`, {
-      ...frame, timestamp: 1, messageId: "msg_agent", metadata: { kokoro: {
+      ...frame, timestamp: 1, messageId: "msg_agent", metadata: { kokoro: { public_sequence: String(++publicLedgerFixtureSequence),
         event_id: `event_${index}`, seq: 11 + index, session_id: "conv_1", run_id: "run_1",
         timestamp: "2026-07-02T00:00:01Z",
       } },
@@ -287,7 +288,7 @@ it.each([1, 3])("continues the unique streaming prefix after %i completed same-r
     { type: "TEXT_MESSAGE_END" },
   ].flatMap((frame, index) => {
     const mapped = mapper.map(`agui_${(11 + index).toString(16).padStart(32, "0")}`, {
-      ...frame, timestamp: 1, messageId: "live_segment", metadata: { kokoro: {
+      ...frame, timestamp: 1, messageId: "live_segment", metadata: { kokoro: { public_sequence: String(++publicLedgerFixtureSequence),
         event_id: `continuation_${index}`, seq: 11 + index, session_id: "conv_1", run_id: "run_1",
         timestamp: "2026-07-02T00:00:02Z",
       } },

@@ -65,6 +65,46 @@ export const messageRecordSchema = z
   })
 export type MessageRecord = z.infer<typeof messageRecordSchema>
 
+// Private reads retain Message ownership while bounded parts are read separately.
+export const messagePartsDecimalSchema = z.string().regex(/^(?:0|[1-9][0-9]{0,18})(?![\s\S])/u)
+  .refine((value) => BigInt(value) <= BigInt("9223372036854775807"))
+const positivePartsDecimalSchema = messagePartsDecimalSchema.refine((value) => value !== "0")
+const scalarTextSchema = z.string().refine((value) => Array.from(value).length <= 4096 && !/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/u.test(value))
+export const orderedMessageRenderingSchema = z.object({
+  mode: z.literal("ordered"), format_version: z.literal(1), revision: messagePartsDecimalSchema,
+  event_watermark: eventCursorSchema.nullable(), parts_cursor: z.string().min(1),
+}).strict()
+export const orderedAssistantMessageReadSchema = z.object({
+  message_id: z.string().min(1), role: z.literal("assistant"), content: z.null(),
+  status: z.enum(["pending", "streaming", "completed", "failed"]), created_at: z.string().min(1),
+  run_id: z.string().min(1), failure: agentFailureProfileSchema.optional(),
+  selected_skill_source_refs: selectedSkillSourceRefsSchema.optional(), rendering: orderedMessageRenderingSchema,
+}).strict().refine((message) => message.failure === undefined || message.status === "failed")
+export const chatMessageReadSchema = z.union([messageRecordSchema, orderedAssistantMessageReadSchema])
+export type ChatMessageRead = z.infer<typeof chatMessageReadSchema>
+const messagePartPosition = { part_id: z.string().min(1), first_sequence: positivePartsDecimalSchema, latest_sequence: positivePartsDecimalSchema }
+export const messageTextPartSliceSchema = z.object({
+  kind: z.literal("text"), ...messagePartPosition, segment_id: z.string().min(1), text: scalarTextSchema,
+  offset: messagePartsDecimalSchema, end: messagePartsDecimalSchema, total_scalars: messagePartsDecimalSchema, completed: z.boolean(),
+}).strict().refine((part) => BigInt(part.offset) <= BigInt(part.end) && BigInt(part.end) <= BigInt(part.total_scalars) &&
+  BigInt(part.end) - BigInt(part.offset) === BigInt(Array.from(part.text).length))
+export const messageActivityPartSchema = z.object({ kind: z.literal("activity"), ...messagePartPosition, activity: runProcessActivitySchema }).strict()
+export const messagePartSchema = z.union([messageTextPartSliceSchema, messageActivityPartSchema])
+export type MessagePart = z.infer<typeof messagePartSchema>
+export type MessageTextPartSlice = z.infer<typeof messageTextPartSliceSchema>
+export const messagePartsPageSchema = z.object({
+  session_id: z.string().min(1), message_id: z.string().min(1), run_id: z.string().min(1), format_version: z.literal(1),
+  revision: messagePartsDecimalSchema, event_watermark: eventCursorSchema.nullable(), items: z.array(messagePartSchema).max(32), next_cursor: z.string().min(1).nullable(),
+}).strict().superRefine((page, context) => {
+  let previous = BigInt(0)
+  for (const part of page.items) {
+    const first = BigInt(part.first_sequence), latest = BigInt(part.latest_sequence)
+    if (first < previous || first > latest || latest > BigInt(page.revision)) context.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid public part position" })
+    previous = first
+  }
+})
+export type MessagePartsPage = z.infer<typeof messagePartsPageSchema>
+
 export const pendingPauseSchema = interactionStateSchema.refine((state) => state.phase === "waiting" || state.phase === "resuming")
 export type PendingPause = z.infer<typeof pendingPauseSchema>
 export const executionHeadSchema = z.object({
@@ -97,7 +137,7 @@ export const sessionListSchema = z
   })
   .strict()
 export type SessionList = z.infer<typeof sessionListSchema>
-export const sessionSnapshotSchema = z
+export const sharedSessionSnapshotSchema = z
   .object({
     session: sessionMetaSchema,
     messages: z.array(messageRecordSchema).optional(),
@@ -109,6 +149,9 @@ export const sessionSnapshotSchema = z
     event_watermark: eventCursorSchema.nullable(),
   })
   .strict()
+export type SharedSessionSnapshot = z.infer<typeof sharedSessionSnapshotSchema>
+export function parseSharedSessionSnapshot(input: unknown): SharedSessionSnapshot { return sharedSessionSnapshotSchema.parse(input) }
+export const sessionSnapshotSchema = sharedSessionSnapshotSchema.extend({ messages: z.array(chatMessageReadSchema).optional() }).strict()
 export type SessionSnapshot = z.infer<typeof sessionSnapshotSchema>
 
 export function parseSessionSnapshot(input: unknown): SessionSnapshot {

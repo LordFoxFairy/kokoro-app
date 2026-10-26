@@ -1,3 +1,4 @@
+<!-- Ordered private Message reads: message-parts-reader.ts is the sole bounded continuation reader; machine owns its context retirement and read-only retryMessageParts. It never retries commands or advances resumeCursor. -->
 CHAT-1当前：`ownerConfirmedSessionId`只投影当前视图的正向snapshot/create ACK，内存保存，不由乐观正文或浏览器索引推断；供归档读取资格使用，不授权或改变原提交恢复。
 
 ## CHAT-1 未决提交刷新恢复（2026-10-24，候选）

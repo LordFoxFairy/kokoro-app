@@ -718,6 +718,7 @@ function AppFrameRuntime({
     onOpenBilling: () => overlays.openSettings("credits"),
     onOpenPricing: () => overlays.openSettings("subscription"),
     onRetry: retryAndFocusComposer,
+    onRetryMessageParts: (messageId) => engine?.retryMessageParts?.(messageId),
     mode,
     stagingByRun: staging,
     hitlRunId: (machine.phase === "waiting" || machine.phase === "resuming") ? machine.runId : null,

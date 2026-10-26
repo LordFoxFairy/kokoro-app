@@ -93,6 +93,7 @@ export type SessionEngine = {
   retryResume: () => void
   retry: () => void
   // 连接 hard failure 的只读恢复：重新 snapshot-first，不重发 user/message。
+  retryMessageParts?: (messageId: string) => void
   reconnect: () => void
   cancelRun: () => void
   stageToolDecision: (runId: string, toolId: string, decision: ToolDecision) => void

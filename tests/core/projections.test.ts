@@ -71,8 +71,8 @@ describe("buildThreadItems", () => {
     const turns = buildThreadItems(state).filter((item) => item.kind === "assistant-turn")
     expect(turns).toHaveLength(2)
     expect(turns.map((turn) => turn.anchorId)).toEqual([
-      "assistant:run_a:message:a1",
-      "assistant:run_a:message:a2",
+      "assistant:run_a:turn:0",
+      "assistant:run_a:turn:1",
     ])
     expect(buildThreadItems(state).filter((item) => item.kind === "assistant-turn").map((turn) => turn.anchorId))
       .toEqual(turns.map((turn) => turn.anchorId))
@@ -94,7 +94,7 @@ describe("buildThreadItems", () => {
     const turns = buildThreadItems(state).filter((item) => item.kind === "assistant-turn")
     expect(turns).toHaveLength(1)
     expect(turns[0]).toMatchObject({
-      anchorId: "assistant:run_process:step:thinking_1",
+      anchorId: "assistant:run_process:turn:0",
       runId: "run_process",
       steps: [{ kind: "thinking", segmentId: "thinking_1", text: "working" }],
       failure: { failedRunId: "run_process", kind: "agent", profile },

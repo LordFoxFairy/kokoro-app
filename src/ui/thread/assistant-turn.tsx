@@ -6,7 +6,7 @@ import { InputCard } from "@/ui/hitl/input-card"
 import type { AgentMode } from "@/core/conversations"
 import { DEFAULT_BRAND } from "@/config/brand"
 import { groupSegments } from "@/core/projections"
-import type { SessionMessage, SessionStep } from "@/core/state"
+import type { MessagePartsState, SessionMessage, SessionStep } from "@/core/state"
 import type { RunProcessActivity } from "@/contract/chat"
 import type { MachinePhase } from "@/engine/machine-state"
 import type { ToolDecision } from "@/engine/hitl-staging"
@@ -22,6 +22,8 @@ import { SegmentProcess } from "./segment-process"
 import styles from "./thread.module.css"
 
 type AssistantTurnProps = {
+  parts?: readonly MessagePartsState[]
+  onRetryMessageParts?: (messageId: string) => void
   interaction?: InteractionState
   executionPhase?: MachinePhase
   brandName?: string
@@ -80,6 +82,8 @@ function FormingContent({
 // 只有整轮的尾段在流式时带就近光标（唯一 live 锚点）。
 export function AssistantTurn({
   interaction,
+  parts = [],
+  onRetryMessageParts,
   executionPhase,
   brandName = DEFAULT_BRAND.name,
   steps,
@@ -179,6 +183,12 @@ export function AssistantTurn({
             </span>
           </div>
         ) : null}
+        {parts.filter((part) => part.status !== "complete").map((part) => (
+          <div key={part.messageId} role="status" data-message-parts={part.status} className={part.status === "loading" || part.status === "unread" ? "sr-only" : undefined}>
+            <span>{t(part.status === "loading" || part.status === "unread" ? "thread.partsReading" : "thread.partsPartial")}</span>
+            {part.status !== "loading" && part.status !== "unread" && onRetryMessageParts ? <Button type="button" variant="ghost" onClick={() => onRetryMessageParts(part.messageId)}>{t("thread.partsReload")}</Button> : null}
+          </div>
+        ))}
         {phaseLabel && !showScaffold ? <p role="status">{phaseLabel}</p> : null}
         {showScaffold ? (
           <div className={styles.turnSegment}>

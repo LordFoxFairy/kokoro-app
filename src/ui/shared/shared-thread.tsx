@@ -4,13 +4,13 @@
 // 无输入框、无控制面、无 HITL、无重试。deliveries 公共下载面 V1 不做，故 sessionId 传 null
 // 令成果区收起（不暴露不可用的鉴权下载按钮）；files 字节端点亦不开放公共面。
 
-import type { SessionSnapshot } from "@/contract/http"
+import type { SharedSessionSnapshot } from "@/contract/http"
 import { stateFromSnapshot } from "@/core/hydration"
 import { ConversationThread } from "@/ui/thread/conversation-thread"
 
 const NO_STAGING: Record<string, Record<string, never>> = {}
 
-export function SharedThread({ snapshot, brandName }: { snapshot: SessionSnapshot; brandName?: string }) {
+export function SharedThread({ snapshot, brandName }: { snapshot: SharedSessionSnapshot; brandName?: string }) {
   const thread = stateFromSnapshot(snapshot)
   return (
     <ConversationThread

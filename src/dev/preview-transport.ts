@@ -451,6 +451,8 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
       }
     },
 
+    fetchMessageParts: () => Promise.reject(new Error("Preview has no private ordered message parts")),
+
     fetchSnapshot: async (sessionId): Promise<SessionSnapshot | null> => {
       await ensureRestored()
       const session = sessions.get(sessionId)

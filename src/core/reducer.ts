@@ -1,6 +1,7 @@
 // 事件折叠：event_id 幂等去重 + 批量折叠（可变草稿一次快照）+ never 穷尽守卫。
 
-import { assertInteractionRevision } from "./state"
+import { assertInteractionRevision, createSessionStreamState } from "./state"
+import type { MessagePart } from "@/contract/chat"
 
 import type { ChatProjectionEvent } from "@/core/chat-projection-event"
 
@@ -30,7 +31,7 @@ function stepsOf(draft: Draft, runId: string): SessionStep[] {
 // 按 (seq, 到达先后) 稳定就地插入：同 seq 追加在既有之后，保持 append 语义。
 function insertOrdered(steps: SessionStep[], step: SessionStep): void {
   let index = steps.length
-  while (index > 0 && (steps[index - 1]?.seq ?? 0) > step.seq) {
+  while (index > 0 && BigInt(steps[index - 1]?.seq ?? 0) > BigInt(step.seq)) {
     index -= 1
   }
   steps.splice(index, 0, step)
@@ -60,10 +61,27 @@ function closeSnapshotContinuation(draft: Draft, runId: string): void {
   }
 }
 
+function retainedByOrderedBaseline(state: SessionStreamState, event: EventOf<"message.delta"> | EventOf<"message.completed"> | EventOf<"activity.updated">): boolean {
+  const ordered = Object.values(state.messageParts ?? {}).find((part) => part.runId === event.run_id && part.descriptor)
+  if (!ordered) return false
+  // Missing coordinates are not upgraded from Agent seq, even if it is huge.
+  if (event.publicSequence === undefined) return true
+  if (ordered.confirmedRevision !== undefined && BigInt(event.publicSequence) <= BigInt(ordered.confirmedRevision)) return true
+  const identity = event.kind === "activity.updated" ? `activity:${event.payload.activity_id}` : `text:${event.payload.segment_id}`
+  const confirmed = ordered.confirmedSlots?.[identity]
+  return confirmed !== undefined && BigInt(event.publicSequence) <= BigInt(confirmed)
+}
+function stepPosition(event: { seq: number; publicSequence?: string | undefined }): number | string {
+  if (event.publicSequence !== undefined) return event.publicSequence
+  const legacyRenderAnchor = event.seq
+  return legacyRenderAnchor
+}
+
 function applyAssistantText(
   draft: Draft,
   event: EventOf<"message.delta"> | EventOf<"message.completed">,
 ): void {
+  if (retainedByOrderedBaseline(draft.state, event)) return
   const { messages } = draft.state
   const segmentId = event.payload.segment_id
   const incoming = event.kind === "message.completed" ? event.payload.content : event.payload.delta
@@ -73,7 +91,7 @@ function applyAssistantText(
     closeSnapshotContinuation(draft, event.run_id)
   }
   let index = messages.findIndex((message) => message.role === "assistant" &&
-    message.runId === event.run_id && message.id === segmentId)
+    message.runId === event.run_id && !message.orderedContainer && message.id === segmentId)
   if (index < 0 && boundary !== "start" && draft.state.activeRunId === event.run_id) {
     const candidates = messages.flatMap((message, candidateIndex) =>
       message.role === "assistant" && message.runId === event.run_id && message.awaitingTextSegment
@@ -105,10 +123,9 @@ function applyAssistantText(
     runId: event.run_id,
   })
   // 文本步骤进入有序列表：标记「这一段文本在此 seq 出现」，渲染时与过程交错。
-  insertOrdered(stepsOf(draft, event.run_id), {
-    kind: "text",
-    seq: event.seq,
-    segmentId,
+  const textSteps = stepsOf(draft, event.run_id)
+  if (!textSteps.some((step) => step.kind === "text" && step.segmentId === segmentId)) insertOrdered(textSteps, {
+    kind: "text", seq: stepPosition(event), segmentId,
   })
 }
 
@@ -124,7 +141,7 @@ function applyThinkingDelta(draft: Draft, event: EventOf<"thinking.delta">): voi
   if (!updated) {
     insertOrdered(steps, {
       kind: "thinking",
-      seq: event.seq,
+      seq: stepPosition(event),
       segmentId,
       text: event.payload.delta,
     })
@@ -147,7 +164,7 @@ function applyToolInvoked(draft: Draft, event: EventOf<"tool.invoked">): void {
   if (!updated) {
     insertOrdered(steps, {
       kind: "tool",
-      seq: event.seq,
+      seq: stepPosition(event),
       segmentId: payload.segment_id,
       tool: {
         id: payload.tool_id,
@@ -194,7 +211,7 @@ function applyToolReturned(draft: Draft, event: EventOf<"tool.returned">): void 
     // 无配对的 invoked（部分 replay）：仍记录已完成的结果，不丢事件。
     insertOrdered(steps, {
       kind: "tool",
-      seq: event.seq,
+      seq: stepPosition(event),
       segmentId: payload.segment_id,
       tool: { id: payload.tool_id, name: payload.name, args: {}, status: returnedStatus, ...resultFields },
     })
@@ -204,7 +221,7 @@ function applyToolReturned(draft: Draft, event: EventOf<"tool.returned">): void 
 function applySubagentStarted(draft: Draft, event: EventOf<"subagent.started">): void {
   insertOrdered(stepsOf(draft, event.run_id), {
     kind: "subagent",
-    seq: event.seq,
+    seq: stepPosition(event),
     segmentId: event.payload.segment_id,
     subagent: {
       id: event.payload.subagent_id,
@@ -382,6 +399,7 @@ function applyEvent(draft: Draft, event: ChatProjectionEvent): void {
       if (draft.state.executionProcess?.runId === event.run_id) draft.state.executionProcess.todos = event.payload.todos
       break
     case "activity.updated": {
+      if (retainedByOrderedBaseline(draft.state, event)) break
       if (draft.state.executionProcess?.runId !== event.run_id) break
       const index = draft.state.executionProcess.activities.findIndex((item) => item.activity_id === event.payload.activity_id)
       const steps = stepsOf(draft, event.run_id)
@@ -391,7 +409,7 @@ function applyEvent(draft: Draft, event: ChatProjectionEvent): void {
       // Snapshot activities have no first-event anchor. A later update must not
       // pass its own sequence off as that activity's first position.
       if (!anchored && index === -1) insertOrdered(steps, {
-        kind: "activity", seq: event.seq, segmentId: `activity:${event.payload.activity_id}`, activity: event.payload,
+        kind: "activity", seq: stepPosition(event), segmentId: `activity:${event.payload.activity_id}`, activity: event.payload,
       })
       if (index === -1) draft.state.executionProcess.activities.push(event.payload)
       else draft.state.executionProcess.activities[index] = event.payload
@@ -485,6 +503,7 @@ export function applyChatProjectionEvents(
         state: {
           seenEventIds: new Set(state.seenEventIds),
           messages: [...state.messages],
+          ...(state.messageParts === undefined ? {} : { messageParts: state.messageParts }),
           todos: state.todos,
           executionProcess: state.executionProcess === null ? null : {
             ...state.executionProcess,
@@ -557,4 +576,82 @@ export function markRunCancelled(
     return state
   }
   return { ...state, stepsByRun: { ...state.stepsByRun, [runId]: closed } }
+}
+
+
+// Exact public positions, not opaque transport cursor order. Baseline replacement
+// is restricted to this owner Message; post-revision public events win by replay.
+export function mergeMessageParts(state: SessionStreamState, read: {
+  message_id: string; run_id: string; revision: string; items: readonly MessagePart[];
+}, events: readonly ChatProjectionEvent[], complete: boolean): SessionStreamState {
+  const known = state.messageParts?.[read.message_id]
+  if (!known || known.runId !== read.run_id || BigInt(read.revision) < BigInt(known.revision)) return state
+  let fragment = createSessionStreamState()
+  fragment.activeRunId = read.run_id
+  fragment.executionProcess = { runId: read.run_id, todos: null, activities: [] }
+  const heldTextSegments = new Set<string>()
+  const confirmedSlots = { ...known.confirmedSlots }
+  const oldById = new Map(state.messages.filter((item) => item.runId === read.run_id && !item.orderedContainer).map((item) => [item.id, item]))
+  for (const part of read.items) {
+    if (part.kind === "text") {
+      const old = oldById.get(part.segment_id)
+      const partialSlot = part.end !== part.total_scalars
+      if (partialSlot && old) heldTextSegments.add(part.segment_id)
+      // An incomplete scalar prefix is staged by the reader, not published as
+      // a complete text baseline. Existing live text continues independently.
+      // Once the slot is complete, its pure baseline replaces/replays once.
+      if (!partialSlot) confirmedSlots[`text:${part.segment_id}`] = part.latest_sequence
+      if (!partialSlot || old) fragment.messages.push({ id: part.segment_id, role: "assistant", content: partialSlot && old ? old.content : part.text, runId: read.run_id, snapshotMessageId: read.message_id })
+      ;(fragment.stepsByRun[read.run_id] ??= []).push({ kind: "text", seq: part.first_sequence, segmentId: part.segment_id })
+    } else {
+      confirmedSlots[`activity:${part.activity.activity_id}`] = part.latest_sequence
+      ;(fragment.stepsByRun[read.run_id] ??= []).push({ kind: "activity", seq: part.first_sequence, segmentId: `activity:${part.activity.activity_id}`, activity: part.activity })
+      fragment.executionProcess.activities.push(part.activity)
+    }
+  }
+  const newer = events.filter((event) => event.run_id === read.run_id && "publicSequence" in event && event.publicSequence !== undefined && BigInt(event.publicSequence) > BigInt(read.revision) &&
+    (event.kind === "message.delta" || event.kind === "message.completed" || event.kind === "activity.updated") &&
+    ((event.kind !== "message.delta" && event.kind !== "message.completed") || !heldTextSegments.has(event.payload.segment_id)))
+  fragment = applyChatProjectionEvents(fragment, newer)
+  let messages = [...fragment.messages]
+  const steps = [...(fragment.stepsByRun[read.run_id] ?? [])]
+  if (!complete) {
+    const ids = new Set(messages.map((item) => item.id))
+    messages = [...messages, ...[...oldById.values()].filter((item) => !ids.has(item.id))]
+    const anchored = new Set(steps.map((item) => item.kind === "activity" ? `activity:${item.activity.activity_id}` : `${item.kind}:${item.segmentId}`))
+    steps.push(...(state.stepsByRun[read.run_id] ?? []).filter((item) => !anchored.has(item.kind === "activity" ? `activity:${item.activity.activity_id}` : `${item.kind}:${item.segmentId}`)))
+    steps.sort((a, b) => BigInt(a.seq) < BigInt(b.seq) ? -1 : BigInt(a.seq) > BigInt(b.seq) ? 1 : 0)
+  }
+  // Retain the durable owner marker even for a genuinely empty ordered Message.
+  const marker = state.messages.find((item) => item.orderedContainer && item.snapshotMessageId === read.message_id)
+  if (marker) messages.unshift(marker)
+  const start = state.messages.findIndex((item) => item.runId === read.run_id && item.role === "assistant")
+  const other = state.messages.filter((item) => item.runId !== read.run_id || item.role !== "assistant")
+  other.splice(start < 0 ? other.length : Math.min(start, other.length), 0, ...messages)
+  return { ...state, messages: other, stepsByRun: { ...state.stepsByRun, [read.run_id]: steps },
+    messageParts: { ...state.messageParts, [read.message_id]: { ...known, descriptor: true, confirmedSlots, partIds: [...new Set([...(known.partIds ?? []), ...read.items.map((part) => part.part_id)])], ...(complete ? { confirmedRevision: read.revision } : {}), revision: read.revision, status: complete ? "complete" : "partial" } } }
+}
+
+// A fresh private snapshot may omit all inline text. Keep confirmed visible
+// slots until its asynchronous version-bound read replaces this exact Message.
+export function preserveMessageParts(previous: SessionStreamState, next: SessionStreamState): SessionStreamState {
+  let result = next
+  for (const value of Object.values(next.messageParts ?? {})) {
+    const prior = previous.messageParts?.[value.messageId]
+    if (!prior || prior.runId !== value.runId) continue
+    const old = previous.messages.filter((message) => message.runId === value.runId && !message.orderedContainer)
+    const markerIndex = result.messages.findIndex((message) => message.snapshotMessageId === value.messageId)
+    const messages = [...result.messages]
+    messages.splice(markerIndex + 1, 0, ...old)
+    result = { ...result, messages,
+      messageParts: { ...result.messageParts, [value.messageId]: { ...prior, ...value,
+        revision: BigInt(value.revision) < BigInt(prior.revision) ? prior.revision : value.revision,
+        ...(prior.confirmedRevision === undefined ? {} : { confirmedRevision: prior.confirmedRevision }),
+        ...(prior.confirmedSlots === undefined ? {} : { confirmedSlots: prior.confirmedSlots }),
+        ...(prior.partIds === undefined ? {} : { partIds: prior.partIds }),
+        ...(prior.status === "changed" ? { status: "changed" as const } : {}),
+      } },
+      stepsByRun: { ...result.stepsByRun, [value.runId]: previous.stepsByRun[value.runId] ?? [] } }
+  }
+  return result
 }

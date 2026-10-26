@@ -1,3 +1,4 @@
+import { restorePublic26MessagePartsContract } from "./bff-message-parts-parent"
 import { createHash } from "node:crypto"
 import { readFile } from "node:fs/promises"
 import { expect, it } from "vitest"
@@ -30,10 +31,12 @@ it("rejects metadata-only Public25 reference, schema and unrelated byte drift be
 it("pins three formal pricing operations while preserving every preceding byte and operation", async () => {
   const raw = await readFile("src/generated/bff-public-openapi.yaml"),
     parentRaw = restoreMeteringParent(raw),
-    spec = YAML.parse(raw.toString()),
+    current = YAML.parse(raw.toString()),
+    spec = YAML.parse(restorePublic26MessagePartsContract(raw.toString())),
     parent = YAML.parse(parentRaw.toString())
-  expect(createHash("sha256").update(raw).digest("hex")).toBe("20d26736cf23da32c242c2c7cf75c45affb62c5d27696dcecb0bc6193bc39a09")
+  expect(createHash("sha256").update(raw).digest("hex")).toBe("d2b3d546164cadc9655616fc44daf1511a6f7d4a2e5d172f1415552af8942ed1")
   expect(createHash("sha256").update(parentRaw).digest("hex")).toBe("f6b8f3bd250c144a2d648af94c9fd5fe068db33991a4289b849a077eef009f32")
+  expect(current.info.version).toBe("27.0.0")
   expect(spec.info.version).toBe("26.0.0")
   expect(parent.info.version).toBe("22.4.0")
   const inventory = (doc: typeof spec) =>

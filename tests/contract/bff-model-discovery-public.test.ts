@@ -1,3 +1,4 @@
+import { restorePublic26MessagePartsContract } from "./bff-message-parts-parent"
 import { createHash } from "node:crypto"
 import { readFile } from "node:fs/promises"
 import { expect, it } from "vitest"
@@ -6,8 +7,8 @@ import { restoreModelDiscoveryParent } from "./bff-model-discovery-parent"
 const digest = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex")
 it("pins only the formal provider discovery GET and preserves the complete Public22.2 parent", async () => {
   const bytes = await readFile("src/generated/bff-public-openapi.yaml")
-  expect(digest(bytes)).toBe("20d26736cf23da32c242c2c7cf75c45affb62c5d27696dcecb0bc6193bc39a09")
-  const spec = YAML.parse(bytes.toString())
+  expect(digest(bytes)).toBe("d2b3d546164cadc9655616fc44daf1511a6f7d4a2e5d172f1415552af8942ed1")
+  const spec = YAML.parse(restorePublic26MessagePartsContract(bytes.toString()))
   expect(spec.info.version).toBe("26.0.0")
   const path = spec.paths["/v1/admin/model-providers/{provider_id}/upstream-models"]
   expect(Object.keys(path)).toEqual(["get"])
@@ -23,8 +24,9 @@ it("pins only the formal provider discovery GET and preserves the complete Publi
   expect(count(spec)).toBe(186)
   expect(count(old)).toBe(181)
   expect(old.paths["/v1/admin/model-providers/{provider_id}/upstream-models"]).toBeUndefined()
-  for (const changed of [Buffer.concat([bytes, Buffer.from("\n")]), Buffer.from(bytes.toString().replace("listAdminModelProviderUpstreamModels", "arbitraryProxy")), Buffer.from(bytes.toString().replace("  version: 26.0.0", "  version: 22.2.0"))]) {
-    expect(changed.equals(bytes)).toBe(false)
+  const baseline = Buffer.from(restorePublic26MessagePartsContract(bytes.toString()))
+  for (const changed of [Buffer.concat([baseline, Buffer.from("\n")]), Buffer.from(baseline.toString().replace("listAdminModelProviderUpstreamModels", "arbitraryProxy")), Buffer.from(baseline.toString().replace("  version: 26.0.0", "  version: 22.2.0"))]) {
+    expect(changed.equals(baseline)).toBe(false)
     expect(() => restoreModelDiscoveryParent(changed)).toThrow()
   }
 })

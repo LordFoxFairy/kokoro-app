@@ -26,6 +26,7 @@ export const kokoroAgUiMetadataSchema = z
   .object({
     event_id: z.string().min(1),
     seq: z.number().int().nonnegative(),
+    public_sequence: z.string().regex(/^[1-9][0-9]{0,18}(?![\s\S])/u).refine((value) => BigInt(value) <= BigInt("9223372036854775807")),
     session_id: z.string().min(1),
     run_id: z.string().min(1).nullable(),
     timestamp: z.string().datetime({ offset: true }),
@@ -44,6 +45,7 @@ const dispatchRunErrorMetadataSchema = z
     event_id: z.string().min(1),
     seq: z.string().regex(/^[1-9][0-9]*$/u),
     source_owner: z.literal("kokoro-bff"),
+    public_sequence: z.string().regex(/^[1-9][0-9]{0,18}(?![\s\S])/u).refine((value) => BigInt(value) <= BigInt("9223372036854775807")),
     session_id: z.string().min(1),
     run_id: nonblankString,
     timestamp: z.string().datetime({ offset: true }),

@@ -7,7 +7,7 @@ import { useEffect, useState } from "react"
 import { useParams } from "next/navigation"
 import Link from "next/link"
 
-import { parseSessionSnapshot, type SessionSnapshot } from "@/contract/http"
+import { parseSharedSessionSnapshot, type SharedSessionSnapshot } from "@/contract/http"
 import { useT } from "@/i18n/context"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -21,7 +21,7 @@ import styles from "./shared.module.css"
 type ViewState =
   | { kind: "loading" }
   | { kind: "notFound"; shareId: string }
-  | { kind: "ready"; shareId: string; snapshot: SessionSnapshot }
+  | { kind: "ready"; shareId: string; snapshot: SharedSessionSnapshot }
 
 export default function SharedPage() {
   const t = useT()
@@ -47,7 +47,7 @@ export default function SharedPage() {
           if (live) setState({ kind: "notFound", shareId })
           return
         }
-        const snapshot = parseSessionSnapshot(await res.json())
+        const snapshot = parseSharedSessionSnapshot(await res.json())
         if (live) setState({ kind: "ready", shareId, snapshot })
       } catch {
         // 网络/解析失败：与不可达同不透明 404 态（公共面不泄内部细节）。

@@ -1,3 +1,5 @@
+import { readMessageParts, type MessagePartsRead } from "./message-parts-reader"
+import { mergeMessageParts, preserveMessageParts } from "@/core/reducer"
 import { selectedMcpConnectionIdsSchema } from "@/contract/chat"
 // 显式会话状态机 + 引擎：snapshot-first 水合 / 流句柄 / in-flight 守卫 / runId 锚定收束单点持有。
 
@@ -180,6 +182,107 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   // 多 tab 实时同步：订阅会话 store 的跨 tab 变更（persisted-store 的 storage 事件）。
   let unsubscribeStore: (() => void) | null = null
 
+  const partsReads = new Map<string, AbortController>()
+  const queuedPartsReads = new Map<string, { fresh: boolean; sessionId: string; generation: number }>()
+  const partsJournals = new Map<string, { events: ChatProjectionEvent[]; bytes: number; overflow: boolean }>()
+  const endedPartsRuns = new Set<string>()
+  const cancelledPartsRuns = new Set<string>()
+
+  function retireMessageParts(): void {
+    for (const controller of partsReads.values()) controller.abort()
+    partsReads.clear(); queuedPartsReads.clear(); partsJournals.clear(); endedPartsRuns.clear(); cancelledPartsRuns.clear()
+  }
+  function retireRunMessageParts(runId: string): void {
+    cancelledPartsRuns.add(runId)
+    for (const part of Object.values(thread.messageParts ?? {})) {
+      if (part.runId !== runId) continue
+      partsReads.get(part.messageId)?.abort()
+      partsReads.delete(part.messageId)
+      queuedPartsReads.delete(part.messageId)
+      if (part.status === "loading" || part.status === "unread") setPartsStatus(part.messageId, "partial")
+    }
+    partsJournals.delete(runId); endedPartsRuns.delete(runId)
+  }
+  function setPartsStatus(messageId: string, status: "loading" | "partial" | "complete" | "changed" | "failed"): void {
+    const part = thread.messageParts?.[messageId]
+    if (part) thread = { ...thread, messageParts: { ...thread.messageParts, [messageId]: { ...part, status } } }
+  }
+  function drainPartsQueue(): void {
+    if (disposed) return
+    while (partsReads.size < 3 && queuedPartsReads.size > 0) {
+      const entries = [...queuedPartsReads.entries()]
+      const [messageId, queued] = entries.find(([, entry]) => entry.fresh) ?? entries[0]!
+      queuedPartsReads.delete(messageId)
+      if (queued.sessionId !== store?.activeId || queued.generation !== hydrateGeneration) continue
+      startMessagePartsRead(messageId, queued.fresh)
+    }
+  }
+  function fetchOrderedMessage(messageId: string, fresh = false): void {
+    if (disposed || !store || !thread.messageParts?.[messageId]) return
+    if (partsReads.has(messageId)) {
+      if (!fresh) return
+      partsReads.get(messageId)?.abort(); partsReads.delete(messageId)
+    }
+    queuedPartsReads.set(messageId, { fresh, sessionId: store.activeId, generation: hydrateGeneration })
+    setPartsStatus(messageId, "loading")
+    drainPartsQueue()
+  }
+  function startMessagePartsRead(messageId: string, fresh: boolean): void {
+    const known = thread.messageParts?.[messageId]
+    const sessionId = store?.activeId
+    if (!known || !sessionId || disposed) return
+    partsReads.get(messageId)?.abort()
+    const controller = new AbortController(), generation = hydrateGeneration
+    partsReads.set(messageId, controller)
+    if (fresh || !partsJournals.has(known.runId)) partsJournals.set(known.runId, { events: [], bytes: 0, overflow: false })
+    const journal = partsJournals.get(known.runId)!
+    const current = () => !disposed && !controller.signal.aborted && partsReads.get(messageId) === controller && hydrateGeneration === generation && store?.activeId === sessionId && thread.messageParts?.[messageId]?.runId === known.runId
+    setPartsStatus(messageId, "loading")
+    const merge = (read: MessagePartsRead, complete: boolean) => {
+      if (!current()) return
+      if (journal.overflow) { controller.abort(); partsReads.delete(messageId); setPartsStatus(messageId, "partial"); drainPartsQueue(); readSnapshotParts(); notify(); return }
+      thread = mergeMessageParts(thread, read, journal.events, complete)
+      if (!complete) setPartsStatus(messageId, "loading")
+      notify()
+    }
+    void readMessageParts({ client: deps.client, sessionId, messageId, runId: known.runId, scope,
+      minimumRevision: known.revision,
+      ...(known.partIds === undefined ? {} : { retainedPartIds: known.partIds }),
+      ...(fresh || known.cursor === undefined ? {} : { cursor: known.cursor, ...(known.watermark === undefined ? {} : { expected: { revision: known.revision, event_watermark: known.watermark } }) }), signal: controller.signal,
+      onProgress: (read) => merge(read, false),
+    }).then((read) => merge(read, true)).catch((error: unknown) => {
+      if (!current()) return
+      setPartsStatus(messageId, error instanceof SessionClientError && error.status === 409 && error.code === "message_parts_changed" ? "changed" : "failed")
+      notify()
+    }).finally(() => {
+      if (partsReads.get(messageId) === controller) { partsReads.delete(messageId); drainPartsQueue(); readSnapshotParts() }
+    })
+  }
+  function readSnapshotParts(): void {
+    if (disposed) return
+    // Prioritize the visible tail. Historical Messages never fan out an entire
+    // snapshot into 100 simultaneous body reads or delay the live stream.
+    for (const part of Object.values(thread.messageParts ?? {}).reverse()) {
+      if (partsReads.size >= 3) break
+      if (part.status === "unread" && cancelledPartsRuns.has(part.runId)) setPartsStatus(part.messageId, "partial")
+      else if (part.status === "unread") fetchOrderedMessage(part.messageId)
+    }
+  }
+  function registerMessagePartsReceipt(sessionId: string, receipt: MessageCreateReceipt): void {
+    if (disposed || store?.activeId !== sessionId) return
+    thread = { ...thread, messageParts: { ...thread.messageParts, [receipt.assistant_message_id]: thread.messageParts?.[receipt.assistant_message_id] ?? {
+      messageId: receipt.assistant_message_id, runId: receipt.run_id, revision: "0", status: "unread",
+    } } }
+    if (!partsJournals.has(receipt.run_id)) partsJournals.set(receipt.run_id, { events: [], bytes: 0, overflow: false })
+    if (endedPartsRuns.has(receipt.run_id) && thread.messageParts?.[receipt.assistant_message_id]?.status !== "changed" && !cancelledPartsRuns.has(receipt.run_id)) fetchOrderedMessage(receipt.assistant_message_id, true)
+  }
+  function retryMessageParts(messageId: string): void {
+    if (!thread.messageParts?.[messageId] || partsReads.has(messageId) || queuedPartsReads.has(messageId)) return
+    cancelledPartsRuns.delete(thread.messageParts[messageId]!.runId)
+    fetchOrderedMessage(messageId, true)
+    notify()
+  }
+
   function restoreSubmission(sessionId: string): boolean | null {
     if (!deps.submissionRecovery) return false
     try {
@@ -290,6 +393,17 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     if (disposed) {
       return
     }
+    const completedTextRuns = new Set<string>()
+    for (const event of events) {
+      if (event.kind === "message.delta" && event.payload.text_boundary === "end") { completedTextRuns.add(event.run_id); endedPartsRuns.add(event.run_id) }
+      if (event.kind !== "message.delta" && event.kind !== "message.completed" && event.kind !== "activity.updated") continue
+      const journal = partsJournals.get(event.run_id)
+      if (!journal) continue
+      if (event.publicSequence === undefined) { journal.overflow = true; continue }
+      const bytes = new TextEncoder().encode(JSON.stringify(event)).byteLength
+      if (journal.bytes + bytes > 1_048_576) journal.overflow = true
+      else { journal.events.push(event); journal.bytes += bytes }
+    }
     const optimisticUserIds = new Set([...pendingSteerReceipts.values()].map((intent) => intent.optimisticUserId))
     if (pendingSubmission) optimisticUserIds.add(pendingSubmission.optimisticUserId)
     const reduction = reduceProjectionEvents({ thread, machine, events, optimisticUserIds })
@@ -316,6 +430,10 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     }
     thread = reduction.thread
     machine = reduction.machine
+    for (const runId of completedTextRuns) {
+      const part = Object.values(thread.messageParts ?? {}).find((item) => item.runId === runId)
+      if (part && part.status !== "changed" && !cancelledPartsRuns.has(runId)) fetchOrderedMessage(part.messageId, true)
+    }
     exposeUnconfirmedSubmission()
     taskNotifications.observe(events)
     if (machine.phase === "waiting" || machine.phase === "streaming") {
@@ -397,8 +515,11 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     liveDeliveries?: Pick<SessionStreamState, "deliveries" | "deliveriesHasMore">,
     notificationGeneration = taskNotifications.generation(),
   ): void {
+    for (const controller of partsReads.values()) controller.abort()
+    partsReads.clear()
+    queuedPartsReads.clear()
     const previous = thread
-    const hydrated = stateFromSnapshot(sessionSnapshot)
+    const hydrated = preserveMessageParts(previous, stateFromSnapshot(sessionSnapshot))
     missingSessionId = undefined
     ownerConfirmedSessionId = sessionId
     if (locallyCreatedSessionId === sessionId) locallyCreatedSessionId = undefined
@@ -435,6 +556,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     clearReattachTimer()
     taskNotifications.anchorSnapshot(sessionId, sessionSnapshot, notificationGeneration)
     thread = hydrated
+    readSnapshotParts()
     observeSnapshotTerminals(sessionId, sessionSnapshot)
     machine = transition(machine, { type: "RESET" })
     const head = sessionSnapshot.execution_head
@@ -512,6 +634,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       return
     }
     const sessionId = store.activeId
+    retireRunMessageParts(runId)
     closeStream()
     clearReattachTimer()
     staging.delete(runId)
@@ -576,6 +699,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     missingSessionId = undefined
     taskNotifications.select(sessionId)
     const notificationGeneration = taskNotifications.generation()
+    retireMessageParts()
     hydrateGeneration += 1
     observedTerminalRuns.clear()
     pendingSteerReceipts.clear()
@@ -642,7 +766,8 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
             (message.status === "completed" || message.status === "failed"),
         )
         taskNotifications.anchorSnapshot(sessionId, sessionSnapshot, notificationGeneration)
-        thread = stateFromSnapshot(sessionSnapshot)
+        thread = preserveMessageParts(thread, stateFromSnapshot(sessionSnapshot))
+        readSnapshotParts()
         observeSnapshotTerminals(sessionId, sessionSnapshot)
         const submissionToRestore = afterExpiredCursor ? recoveredSubmission : pendingSubmission
         if (
@@ -858,6 +983,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     if (pendingSubmission !== submission || store?.activeId !== submission.sessionId) {
       return
     }
+    registerMessagePartsReceipt(submission.sessionId, receipt)
     ownerConfirmedSessionId = submission.sessionId
     if (!ownerAlreadySettled) taskNotifications.anchorReceipt(submission.sessionId, receipt, notificationAdmissions.get(submission) ?? -1)
     missingSessionId = undefined
@@ -952,6 +1078,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
           }
           return
         }
+        registerMessagePartsReceipt(sessionId, receipt)
         pendingSubmission = null
         recoveredSubmission = null
         recoveredSubmissionError = null
@@ -1027,6 +1154,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
           if (disposed || store?.activeId !== steerSessionId || hydrateGeneration !== steerGeneration) {
             return
           }
+          registerMessagePartsReceipt(steerSessionId, receipt)
           taskNotifications.anchorReceipt(steerSessionId, receipt, notificationAdmissions.get(submission) ?? -1)
           const alreadyProjected = thread.messages.some((message) => message.id === receipt.user_message_id)
           thread = reconcileUserMessageId(thread, receipt.user_message_id, submission.optimisticUserId)
@@ -1241,6 +1369,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     locallyCreatedSessionId = restoringDraft ? next.activeId : undefined
     missingSessionId = undefined
     taskNotifications.select(next.activeId)
+    retireMessageParts()
     const previousSessionId = store?.activeId ?? null
     recoveringExpiredCursor = false
     connection = { status: "connected" }
@@ -1335,6 +1464,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     // Preserve the idempotency key so a late receipt can cancel the server run.
     if (deps.submissionRecovery ? !abandonPendingSubmission() : !cancelPendingSubmission()) return
     abandonActiveRun()
+    retireMessageParts()
     hydrateGeneration += 1
     const next = addConversation(store, createId("conv"), now(), store ? "fast" : pendingMode, deps.draftLifecycle !== undefined)
     locallyCreatedSessionId = next.activeId
@@ -1430,6 +1560,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     const runId = machine.runId
     const sessionId = store.activeId
     const generation = hydrateGeneration
+    retireRunMessageParts(runId)
     machine = transition(machine, { type: "CANCEL" })
     notify()
     execution.cancelRun({ sessionId, runId, commandId: createId("command") }).catch((error: unknown) => {
@@ -1476,6 +1607,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     selectedMcpConnectionIds = Object.freeze([])
     locallyCreatedSessionId = undefined
     taskNotifications.dispose()
+    retireMessageParts()
     disposed = true
     deleteIntentGeneration += 1
     deleteIntent = null
@@ -1515,6 +1647,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     // machine 卡在旧 streaming 相位、runId 指向已删 run，hydrate 的 REATTACH 被守卫拒、不自愈。
     // 清空 storage 没有新的 session 可供 hydrate；递增代际使旧 snapshot 的 then/catch
     // 都失效，且必须同步结束 loading，否则旧请求永远悬挂在 hydrating=true。
+    retireMessageParts()
     hydrateGeneration += 1
     hydrating = false
     recoveringExpiredCursor = false
@@ -1567,6 +1700,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     },
     submit,
     retry,
+    retryMessageParts,
     retryResume,
     reconnect,
     cancelRun,

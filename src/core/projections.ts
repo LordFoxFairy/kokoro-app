@@ -42,11 +42,11 @@ function withRestoredTextSteps(
   const covered = new Set(
     steps.filter((step) => step.kind === "text").map((step) => step.segmentId),
   )
-  const missing = Object.keys(messagesById).filter((id) => !covered.has(id))
+  const missing = Object.keys(messagesById).filter((id) => !covered.has(id) && !messagesById[id]?.orderedContainer)
   if (missing.length === 0) {
     return steps
   }
-  let nextSeq = steps.reduce((max, step) => Math.max(max, step.seq), 0)
+  let nextSeq = steps.reduce((max, step) => Math.max(max, typeof step.seq === "number" ? step.seq : Number.MIN_SAFE_INTEGER), 0)
   const synthetic: SessionStep[] = missing.map((segmentId) => {
     nextSeq += 1
     return { kind: "text", seq: nextSeq, segmentId }
@@ -73,14 +73,14 @@ export function buildThreadItems(state: SessionStreamState): ThreadItem[] {
 
     // 收拢连续的同 runId assistant 消息，组成一个 turn 的文本段索引。
     const runId = message.runId
-    const anchorId = `assistant:${runId}:message:${message.id}`
+    const anchorId = `assistant:${runId}:turn:${items.filter((item) => item.kind === "assistant-turn" && item.runId === runId).length}`
     const messagesById: Record<string, SessionMessage> = {}
     while (i < state.messages.length) {
       const candidate = state.messages[i]
       if (candidate === undefined || candidate.role !== "assistant" || candidate.runId !== runId) {
         break
       }
-      messagesById[candidate.id] = candidate
+      if (!candidate.orderedContainer) messagesById[candidate.id] = candidate
       i += 1
     }
 
@@ -100,10 +100,9 @@ export function buildThreadItems(state: SessionStreamState): ThreadItem[] {
       continue
     }
     const steps = state.stepsByRun[runId] ?? []
-    const firstSegmentId = steps[0]?.segmentId ?? "process"
     items.push({
       kind: "assistant-turn",
-      anchorId: `assistant:${runId}:step:${firstSegmentId}`,
+      anchorId: `assistant:${runId}:turn:0`,
       runId,
       steps,
       messagesById: {},
@@ -118,7 +117,7 @@ export function buildThreadItems(state: SessionStreamState): ThreadItem[] {
     renderedRuns.add(runId)
     items.push({
       kind: "assistant-turn",
-      anchorId: `assistant:${runId}:failure`,
+      anchorId: `assistant:${runId}:turn:0`,
       runId,
       steps: [],
       messagesById: {},

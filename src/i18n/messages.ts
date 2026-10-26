@@ -42,6 +42,9 @@ export const LOCALE_NAMES: Record<Locale, string> = {
 
 // zh 是完整源（所有 key 必在此）。命名约定：<区域>.<用途>。{var} 为插值占位。
 export const zh = {
+  "thread.partsReading": "正在读取消息历史…",
+  "thread.partsPartial": "部分消息历史尚未读取，已显示的内容会保留。",
+  "thread.partsReload": "重新读取此消息",
   "thread.conversationMissing": "未找到该会话",
   "thread.conversationMissingHint": "会话不存在或已被删除。原地址已保留，你可以重试读取或新建任务。",
 

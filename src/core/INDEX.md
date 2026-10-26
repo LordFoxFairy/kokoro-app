@@ -1,3 +1,4 @@
+<!-- Ordered messages: nullable private descriptors keep an owner marker + per-Message unread/loading/partial/changed state. mergeMessageParts restores scalar text slots and safe activities at exact decimal public ledger positions, then replays newer publicSequence events. Agent seq and opaque SSE resumeCursor are separate coordinates. -->
 # core — 纯状态模型与事件折叠（零 I/O 零 React）
 
 ## 职责

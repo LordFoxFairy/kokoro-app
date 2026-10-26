@@ -23,7 +23,7 @@ const AGENT_FAILURE_TUPLES = [
 ] as const
 
 const metadata = {
-  kokoro: {
+  kokoro: { public_sequence: "1001",
     event_id: "agent-event-1",
     seq: 7,
     session_id: "session-1",
@@ -153,7 +153,7 @@ describe("AG-UI wire contract", () => {
         type: "RUN_ERROR",
         code: failure.code,
         message: "Agent run failed",
-        metadata: { kokoro: { failure } },
+        metadata: { kokoro: { public_sequence: "1001", failure } },
       })
     },
   )
@@ -178,8 +178,7 @@ describe("AG-UI wire contract", () => {
       message: "Agent run failed",
       code: "model_unavailable",
       metadata: {
-        kokoro: {
-          ...metadata.kokoro,
+        kokoro: { ...metadata.kokoro,
           failure: { source: "agent", code: "model_unavailable", retryable: true },
         },
       },
@@ -229,8 +228,7 @@ describe("AG-UI wire contract", () => {
         ...event,
         timestamp: 1,
         metadata: {
-          kokoro: {
-            ...metadata.kokoro,
+          kokoro: { ...metadata.kokoro,
             failure: { source: "agent", code: "internal_error", retryable: false },
           },
         },
@@ -248,8 +246,7 @@ describe("AG-UI wire contract", () => {
       message: "Agent launch could not be confirmed",
       code: "new_opaque_launch_failure",
       metadata: {
-        kokoro: {
-          ...metadata.kokoro,
+        kokoro: { ...metadata.kokoro,
           seq: sourceSequence,
           source_owner: "kokoro-bff",
         },
@@ -257,7 +254,7 @@ describe("AG-UI wire contract", () => {
     })).toMatchObject({
       type: "RUN_ERROR",
       code: "new_opaque_launch_failure",
-      metadata: { kokoro: { seq: sourceSequence, source_owner: "kokoro-bff" } },
+      metadata: { kokoro: { public_sequence: "1001", seq: sourceSequence, source_owner: "kokoro-bff" } },
     })
   })
 
@@ -281,8 +278,7 @@ describe("AG-UI wire contract", () => {
       message: "Agent launch could not be confirmed",
       code: "agent_http_400",
       metadata: {
-        kokoro: {
-          ...metadata.kokoro,
+        kokoro: { ...metadata.kokoro,
           seq: "9007199254740993123456789",
           source_owner: "kokoro-bff",
         },
@@ -334,4 +330,11 @@ describe("AG-UI wire contract", () => {
       expect(() => eventCursorSchema.parse(cursor)).toThrow()
     },
   )
+})
+
+
+it("requires a public ledger coordinate independently of the Agent source seq", () => {
+  const valid = { type: "TEXT_MESSAGE_CONTENT", timestamp: 1, messageId: "segment", delta: "visible", metadata: { kokoro: { ...metadata.kokoro, seq: 1, public_sequence: "9007199254740993" } } }
+  expect(parseAgUiEvent(valid).metadata.kokoro).toMatchObject({ seq: 1, public_sequence: "9007199254740993" })
+  for (const public_sequence of [undefined, 1, "0", "01", "1\n", "9223372036854775808"]) expect(() => parseAgUiEvent({ ...valid, metadata: { kokoro: { ...valid.metadata.kokoro, public_sequence } } })).toThrow()
 })

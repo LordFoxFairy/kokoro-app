@@ -491,6 +491,7 @@ describe("cursor pagination and same-origin client paths", () => {
         kokoro: {
           event_id: "evt_43",
           seq: 43,
+          public_sequence: "501",
           session_id: "project_session",
           run_id: "run_1",
           timestamp: "2026-08-31T12:00:01.000Z",
@@ -755,8 +756,8 @@ describe("Skill metadata and download contract separation", () => {
 describe("R255 ScheduledTask owner recurrence graph under the current public pin", () => {
   it("consumes the exact locally accepted current canonical bytes", async () => {
     const { bytes, spec } = await r76PublicSpec()
-    expect(r76Hash("sha256").update(bytes).digest("hex")).toBe("20d26736cf23da32c242c2c7cf75c45affb62c5d27696dcecb0bc6193bc39a09")
-    expect(spec.info.version).toBe("26.0.0")
+    expect(r76Hash("sha256").update(bytes).digest("hex")).toBe("d2b3d546164cadc9655616fc44daf1511a6f7d4a2e5d172f1415552af8942ed1")
+    expect(spec.info.version).toBe("27.0.0")
   })
 
   it("publishes current rule details separately from immutable command snapshots", async () => {

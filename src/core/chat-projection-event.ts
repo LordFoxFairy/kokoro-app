@@ -213,6 +213,7 @@ const envelope = z
   .object({
     event_id: z.string().min(1),
     seq: z.number().int().nonnegative(),
+    publicSequence: z.string().regex(/^[1-9][0-9]{0,18}(?![\s\S])/u).refine((value) => BigInt(value) <= BigInt("9223372036854775807")).optional(),
     session_id: z.string().min(1),
     run_id: z.string().min(1),
     timestamp: z.string().min(1),

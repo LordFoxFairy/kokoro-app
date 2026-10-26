@@ -30,6 +30,7 @@ export type SessionMessage = {
   snapshotMessageId?: string
   // Only the unique assistant prefix of an active snapshot run can be claimed.
   awaitingTextSegment?: boolean
+  orderedContainer?: boolean
 }
 
 // 结构化终态收口：stale-*（run 终态时仍悬挂）与 cancelled（用户停止）零 UI 文案，人话由渲染层生成。
@@ -65,14 +66,17 @@ export type SessionSubagent = {
   error?: string
 }
 
-// 有序 Step：过程与文本按 session 落定的 seq 排成一列，而非按 kind 归桶。
+// Step position: string = exact public-ledger decimal; number = legacy local
+// render anchor only. Legacy anchors never establish an ordered-read revision.
+export type StepPosition = number | string
+// 有序 Step：过程与文本按 session 落定的位置排成一列，而非按 kind 归桶。
 export type SessionStep =
-  | { kind: "thinking"; seq: number; segmentId: string; text: string }
-  | { kind: "tool"; seq: number; segmentId: string; tool: SessionToolCall }
-  | { kind: "subagent"; seq: number; segmentId: string; subagent: SessionSubagent }
-  | { kind: "text"; seq: number; segmentId: string }
+  | { kind: "thinking"; seq: StepPosition; segmentId: string; text: string }
+  | { kind: "tool"; seq: StepPosition; segmentId: string; tool: SessionToolCall }
+  | { kind: "subagent"; seq: StepPosition; segmentId: string; subagent: SessionSubagent }
+  | { kind: "text"; seq: StepPosition; segmentId: string }
   // Only a newly observed live activity has a known first public position.
-  | { kind: "activity"; seq: number; segmentId: string; activity: RunProcessActivity }
+  | { kind: "activity"; seq: StepPosition; segmentId: string; activity: RunProcessActivity }
 
 // session.created 投影：sessions 集合的真实元数据（标题真源在服务端）。
 type SessionMeta = {
@@ -101,7 +105,13 @@ export type SessionDelivery = {
   note?: string
 }
 
+export type MessagePartsState = {
+  messageId: string; runId: string; revision: string; cursor?: string;
+  descriptor?: true; confirmedSlots?: Readonly<Record<string, string>>; confirmedRevision?: string; watermark?: EventCursor | null; partIds?: readonly string[];
+  status: "unread" | "loading" | "partial" | "complete" | "changed" | "failed";
+}
 export type SessionStreamState = {
+  messageParts?: Record<string, MessagePartsState>
   executionHead: ExecutionHead | null
   interactionsByRun: Record<string, InteractionState>
   // 工作区文件清单（snapshot 水合；终态后重拉刷新）。
@@ -132,6 +142,7 @@ export type SessionStreamState = {
 
 export function createSessionStreamState(): SessionStreamState {
   return {
+    messageParts: {},
     executionHead: null,
     interactionsByRun: {},
     files: [],

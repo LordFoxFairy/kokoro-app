@@ -54,6 +54,7 @@ export type ConversationThreadProps = {
   onOpenBilling: () => void
   // PAY-2：402 说明处的「查看套餐」入口——闭环 Wave3 留的价格入口，打开购买面板。
   onOpenPricing: () => void
+  onRetryMessageParts?: (messageId: string) => void
   onRetry: () => void
   // 本会话模式：透传给每轮过程块，驱动 Fast/Thinking 的密度与文案差异。
   mode: AgentMode
@@ -158,6 +159,7 @@ function ConversationThreadSurface({
   onOpenBilling,
   onOpenPricing,
   onRetry,
+  onRetryMessageParts,
   mode,
   stagingByRun,
   hitlRunId,
@@ -168,10 +170,13 @@ function ConversationThreadSurface({
 }: ConversationThreadProps) {
   const t = useT()
   // 把扁平 messages + 有序 steps 折成线程项：用户气泡 / assistant 轮（一个 runId 一轮）。
-  const items = buildThreadItems(thread)
-
-  // 流式中：最后一个 assistant 轮是当前在途的那一轮——唯一带「实时」语义的 turn。
   const liveRunId = isStreaming ? currentRunId ?? thread.activeRunId ?? undefined : undefined
+  const items = buildThreadItems(thread)
+  // Once the owner Run is known, the forming surface and its first public text
+  // share one keyed turn; a text delta never remounts the disclosure/HITL host.
+  if (liveRunId !== undefined && !items.some((item) => item.kind === "assistant-turn" && item.runId === liveRunId)) {
+    items.push({ kind: "assistant-turn", anchorId: `assistant:${liveRunId}:turn:0`, runId: liveRunId, steps: [], messagesById: {} })
+  }
 
   // 提交后、首个 step/token 未到：在途轮还没产生任何可渲染项（最后一项仍是用户胶囊）。
   // 合成一个无内容的 live 脚手架轮，让 AssistantTurn 渲染「就近 live 成形线」，
@@ -269,6 +274,8 @@ function ConversationThreadSurface({
                   {...(onOpenFile === undefined ? {} : { onOpenFile })}
                   activities={thread.executionProcess?.runId === item.runId ? thread.executionProcess.activities : []}
                   {...(thread.interactionsByRun[item.runId] === undefined ? {} : { interaction: thread.interactionsByRun[item.runId] })}
+                  parts={Object.values(thread.messageParts ?? {}).filter((part) => part.runId === item.runId)}
+                  {...(onRetryMessageParts === undefined ? {} : { onRetryMessageParts })}
                   steps={item.steps}
                   messagesById={item.messagesById}
                   {...(item.runId === liveRunId && executionPhase ? { executionPhase } : {})}

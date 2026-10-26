@@ -1,3 +1,4 @@
+import { restorePublic26MessagePartsContract } from "./bff-message-parts-parent"
 // Test-only exact Public22.5 ->22.4 complete-artifact inverse; no runtime import.
 import { createHash } from "node:crypto"
 const proof = {
@@ -27,6 +28,7 @@ const proof = {
 const hash = (value: string) => createHash("sha256").update(value).digest("hex")
 // Test-only exact Public26 ->25 complete-artifact inverse; old parent proofs remain sealed.
 export function restorePublic25PersonalSseContract(source: string) {
+  source = restorePublic26MessagePartsContract(source)
   if (!/^  version: 26\.0\.0$/mu.test(source)) return source
   if (hash(source) !== "20d26736cf23da32c242c2c7cf75c45affb62c5d27696dcecb0bc6193bc39a09") throw Error("Personal SSE fixed current contract drift")
   const field = "        transport: { type: string, enum: [streamable_http, sse_compat] }\n"
