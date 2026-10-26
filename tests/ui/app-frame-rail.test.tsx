@@ -2371,7 +2371,9 @@ it("retires a previously published Settings retry callback instead of borrowing 
   const onDetailProjection = (value: CatalogDetailProjection) => projections.push(value)
   const content = (generation: number) => <LocaleProvider><SkillCatalogDialog inline open client={createManusSkillHubClient(hub, { admitted: true, subject: "retry-actor", generation })} enabledOverrides={new Map()} installedOverrides={new Map()} busy={null} errorName={null} onOpenChange={vi.fn()} onCloseAutoFocus={vi.fn()} onOpenUpload={vi.fn()} onOpenGithub={vi.fn()} onSetEnabled={vi.fn()} onOpenDetail={vi.fn()} selectedDetailKey={JSON.stringify(["retry-series", "retry-revision"])} onDetailProjection={onDetailProjection} /></LocaleProvider>
   const view = render(content(1))
-  await screen.findByRole("button", { name: "重试" })
+  await waitFor(() => expect(projections.at(-1)?.failed).toBe(true))
+  expect(screen.queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument()
   const retiredRetry = projections.at(-1)!.retry
   view.rerender(content(2))
   await screen.findByRole("button", { name: "查看详情 Fresh retry item" })
@@ -2593,7 +2595,7 @@ it("queries Settings Explore through the owner and preserves its nine-item filte
   expect(calls.at(-1)).toEqual({ pageSize: 9, includeOfficialSkills: true, query: "needle", tag: "SKILL_HUB_TAG_CODING", pageToken: "settings-query-next" })
 })
 
-it("retires Settings cursor reads on filter changes and can retry the current page without late results", async () => {
+it("retires Settings cursor reads on filter changes and continues the failed current page without late results", async () => {
   const intersect = observeSettingsCatalogPages()
   let releaseOld!: (response: Response) => void
   let oldSignal: AbortSignal | null | undefined
@@ -2631,16 +2633,22 @@ it("retires Settings cursor reads on filter changes and can retry the current pa
   await act(async () => { queuedOldObserver([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver) })
   expect(oldRequests).toBe(1)
   intersect()
-  fireEvent.click(await screen.findByRole("button", { name: "重试" }))
+  await waitFor(() => expect(codingAttempts).toBe(1))
+  const more = screen.getByRole("button", { name: "加载更多" })
+  await waitFor(() => expect(more).toBeEnabled())
+  expect(screen.queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+  fireEvent.click(more)
   await screen.findByRole("button", { name: "查看详情 coding-second" })
   await act(async () => { releaseOld(response({ skills: [card("late-old-page")], tagOptions: {} })) })
   expect(screen.queryByRole("button", { name: "查看详情 late-old-page" })).toBeNull()
   expect(codingAttempts).toBe(2)
 })
 
-it("shows a failed Settings filter read and retries it instead of turning the previous page into a successful empty result", async () => {
+it("keeps a failed Settings filter read quiet and recovers through normal filter re-entry without claiming empty", async () => {
   observeSettingsCatalogPages()
   let attempts = 0
+  let defaultReads = 0
   const response = (data: unknown) => Response.json(data, { headers: { "cache-control": "private, no-store", "x-request-id": "req-settings-retry" } })
   const card = (id: string) => ({ skillId: id, displayName: id, currentVersion: { versionUid: `${id}-revision` } })
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
@@ -2649,6 +2657,7 @@ it("shows a failed Settings filter read and retries it instead of turning the pr
     if (path.endsWith("ListSkills")) return response({ userAddedSkills: [], officialSkills: [] })
     if (path.endsWith("ListHubSkills")) {
       const body = JSON.parse(String(init?.body))
+      if (!body.query) defaultReads++
       if (body.query === "offline" && ++attempts === 1) throw Error("Transient catalog read failure")
       return response({ skills: [card(body.query ? "Recovered indexed match" : "Initial retained page")], tagOptions: {} })
     }
@@ -2657,8 +2666,15 @@ it("shows a failed Settings filter read and retries it instead of turning the pr
   mountSettingsCatalog()
   await screen.findByRole("button", { name: "查看详情 Initial retained page" })
   fireEvent.change(screen.getByRole("searchbox", { name: "搜索技能" }), { target: { value: "offline" } })
-  await screen.findByRole("alert")
-  fireEvent.click(screen.getByRole("button", { name: "重试" }))
+  await waitFor(() => expect(attempts).toBe(1))
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
+  expect(screen.queryByText("没有匹配的技能")).not.toBeInTheDocument()
+  const search = screen.getByRole("searchbox", { name: "搜索技能" })
+  fireEvent.change(search, { target: { value: "" } })
+  await waitFor(() => expect(defaultReads).toBe(2))
+  await screen.findByRole("button", { name: "查看详情 Initial retained page" })
+  fireEvent.change(search, { target: { value: "offline" } })
   await screen.findByRole("button", { name: "查看详情 Recovered indexed match" })
   expect(screen.queryByRole("alert")).toBeNull()
   expect(attempts).toBe(2)
@@ -5078,23 +5094,26 @@ it("an admitted completion retry keeps its exact locator after a pending callbac
   expect(hub.registerPrivateMcpServer).toHaveBeenCalledOnce()
 })
 
-it("created detail rejects a mismatched fresh server and retries only the acknowledged entity", async () => {
+it("created detail rejects a mismatched fresh server and recovers only the acknowledged entity on readmission", async () => {
   const { McpCreateDialog } = await import("@/ui/mcp/mcp-create-dialog")
   const hub = exactCreationHub()
   const server = { ...mcpCreationRegistration().server, availability: "available" as const, status: "registered" as const, transport: "streamable_http" as const, prepare_status: "ready" as const, declarations_available: true }
   let mismatched = false
   hub.getPrivateMcpServer.mockImplementation(async () => mismatched ? { ...server, server_id: "different-server", display_name: "Wrong private server" } : server)
-  render(<LocaleProvider><ConnectorCommandProvider client={hub} boundary={{ admitted: true, subject: "exact-binding-check", generation: 1 }}>
+  const content = (generation: number) => <LocaleProvider><ConnectorCommandProvider client={hub} boundary={{ admitted: true, subject: "exact-binding-check", generation }}>
     <McpCreateDialog client={hub} mode="form" open onOpenChange={vi.fn()} onDone={async () => { mismatched = true }} />
-  </ConnectorCommandProvider></LocaleProvider>)
+  </ConnectorCommandProvider></LocaleProvider>
+  const view = render(content(1))
   fireEvent.change(screen.getByRole("textbox", { name: "服务器名称" }), { target: { value: "Creation MCP" } })
   fireEvent.change(screen.getByRole("textbox", { name: "服务器 URL" }), { target: { value: server.server_url } })
   fireEvent.click(screen.getByRole("button", { name: "保存" }))
-  expect(await screen.findByRole("alert")).toBeVisible()
+  expect(await screen.findByText("连接列表加载失败")).toHaveClass("sr-only")
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
   expect(screen.queryByText("Wrong private server")).not.toBeInTheDocument()
   expect(screen.queryByRole("button", { name: "管理" })).not.toBeInTheDocument()
   mismatched = false
-  fireEvent.click(screen.getByRole("button", { name: "重试" }))
+  view.rerender(content(2))
   expect(await screen.findByRole("button", { name: "管理" })).toBeVisible()
   expect(hub.registerPrivateMcpServer).toHaveBeenCalledOnce()
   expect(hub.getPrivateMcpServer.mock.calls.every(([id]) => id === "creation-server")).toBe(true)
@@ -5134,7 +5153,11 @@ it.each(["pending", "failed"] as const)("independent confirmed API cards stay us
   await waitFor(() => expect(hub.listCustomApis).toHaveBeenCalledOnce())
   const card = await screen.findByRole("button", { name: profile.name })
   expect(card).toBeVisible()
-  if (mode === "failed") expect(screen.getByText("连接列表加载失败")).toBeVisible()
+  if (mode === "failed") {
+    expect(screen.getByText("连接列表加载失败")).toHaveClass("sr-only")
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
+  }
   expect(screen.queryByRole("navigation", { name: "MCP pages" })).toBeNull()
   fireEvent.click(card)
   const dialog = await screen.findByRole("dialog", { name: "编辑自定义 API" })
@@ -5143,7 +5166,8 @@ it.each(["pending", "failed"] as const)("independent confirmed API cards stay us
   fireEvent.click(within(dialog).getByRole("button", { name: "关闭连接面板" }))
   expect(screen.queryByText("还没有连接器。")).not.toBeInTheDocument()
   if (mode === "failed") {
-    fireEvent.click(screen.getByRole("button", { name: "重试" }))
+    const { invalidateMcpConnectorProjection } = await import("@/ui/mcp/use-mcp-projection")
+    act(() => invalidateMcpConnectorProjection(hub, identity))
     expect(await screen.findByRole("button", { name: "Recovered MCP" })).toBeVisible()
     expect(screen.getByRole("button", { name: profile.name })).toBeVisible()
     expect(screen.queryByText("连接列表加载失败")).not.toBeInTheDocument()
@@ -5165,9 +5189,12 @@ it("empty API data does not turn a pending or failed MCP read into an all-empty 
   await waitFor(() => expect(hub.listCustomApis).toHaveBeenCalledOnce())
   expect(screen.queryByText("还没有连接器。")).not.toBeInTheDocument()
   await act(async () => { reject(new Error("temporary MCP read failure")) })
-  expect(await screen.findByText("连接列表加载失败")).toBeVisible()
+  expect(await screen.findByText("连接列表加载失败")).toHaveClass("sr-only")
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
   expect(screen.queryByText("还没有连接器。")).not.toBeInTheDocument()
-  fireEvent.click(screen.getByRole("button", { name: "重试" }))
+  const { invalidateMcpConnectorProjection } = await import("@/ui/mcp/use-mcp-projection")
+  act(() => invalidateMcpConnectorProjection(hub, identity))
   expect(await screen.findByText("还没有连接器。")).toBeInTheDocument()
   expect(screen.getByRole("button", { name: "添加连接器" })).toBeVisible()
   expect(screen.queryByText("连接列表加载失败")).not.toBeInTheDocument()

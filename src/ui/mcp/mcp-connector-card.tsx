@@ -5,16 +5,18 @@ import type { McpConnector, McpConnectorProvider } from "@/hub/mcp-connector.sch
 import { useT } from "@/i18n/context";
 import { McpAvailabilityStatus } from "./mcp-availability-status";
 import { McpServerIcon } from "./mcp-server-icon";
+import { McpSearchHighlight } from "./mcp-search-highlight";
 import { providerArtwork } from "./mcp-projection-types";
 import styles from "./mcp-projection-read.module.css";
 import galleryStyles from "./mcp-custom-api-gallery.module.css";
 
 /** One exact Connector/detail action and media lifetime, shared by management and the plaza. */
-export function McpConnectorCard({ connector, provider, mediaRevision = 0, presentation = "management", onSelect }: {
+export function McpConnectorCard({ connector, provider, mediaRevision = 0, presentation = "management", searchQuery = "", onSelect }: {
   connector: McpConnector;
   provider?: McpConnectorProvider | undefined;
   mediaRevision?: number;
   presentation?: "management" | "plaza";
+  searchQuery?: string;
   onSelect: (connector: McpConnector, trigger: HTMLElement) => void;
 }) {
   const t = useT();
@@ -32,7 +34,7 @@ export function McpConnectorCard({ connector, provider, mediaRevision = 0, prese
       </span>
       <span className={plaza ? galleryStyles.copy : styles.connectorIdentity}>
         <span>
-          <strong className={plaza ? styles.providerName : undefined}>{name}</strong>
+          <strong className={plaza ? styles.providerName : undefined}><McpSearchHighlight text={name} query={plaza ? searchQuery : ""} /></strong>
           {description ? <small className={plaza ? styles.providerDescription : undefined}>{description}</small> : null}
         </span>
       </span>

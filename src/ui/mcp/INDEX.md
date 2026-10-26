@@ -259,3 +259,9 @@ API／JSON创建窗口的每次等待由use-connector-creation-form持有独立c
 - Configuration controls keep their outline variant; header/footer CSS owns geometry, not a second transparent/no-border override. The shorter-screen reachable footer is retained.
 
 - URL save-and-publish first opens the real project-publication menu. Opening, closing or Escape does not register; only selecting the project action invokes the existing publication intent. Normal configure/publish pending retains the original form; progress is confined to the Save control with an unchanged non-busy label footprint and a nested overlay spinner. Error, unknown and navigation-retry recovery stay explicit.
+## 插件广场名称搜索命中（2026-10-26）
+
+Provider、个人 MCP 和 Custom API 的广场名称复用 `McpSearchHighlight`：查询按原筛选的 trim 处理，转义正则元字符后仅拆分纯文本，匹配文字使用透明背景和实测蓝色，继承名称字体。空查询与无命中不插 mark；不处理 HTML，不改变原名称 ARIA、过滤、详情点击或媒体 key。只在 plaza 呈现中启用，管理搜索与描述保持原样；颜色仅为该组件局部 token，不新增全局主题。
+
+
+配置工具按钮沿 Manus 实测使用不参与布局的描边：复制 UUID 为 13px/500、添加 Header 为14px/500；两者 border 0、outline 1px、透明背景，保留 focus-visible 2px/offset 2px。不要给 outline 额外叠加布局 border，也不以放宽宽度容差掩盖差异。

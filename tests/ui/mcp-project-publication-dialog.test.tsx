@@ -27,7 +27,10 @@ function setup(pins: McpProjectPin[] = []) {
  fireEvent.change(screen.getByRole("textbox", { name: /^服务器名称/ }), { target: { value: server.display_name } });
  fireEvent.change(screen.getByRole("textbox", { name: /^服务器 URL/ }), { target: { value: server.server_url } });
  await waitFor(() => expect(screen.getByRole("button", { name: "保存并发布" })).toBeEnabled());
- fireEvent.click(screen.getByRole("button", { name: "保存并发布" }));
+ fireEvent.keyDown(screen.getByRole("button", { name: "保存并发布" }), { key: "ArrowDown" });
+ const item = await screen.findByRole("menuitem", { name: "发布到项目" });
+ expect(client.registerPrivateMcpServer).not.toHaveBeenCalled();
+ fireEvent.click(item);
  return screen.findByRole("dialog", { name: "发布到项目" });
  };
  return { client, publication, create, onDone, view, form };
@@ -106,8 +109,10 @@ it("a confirmed mutation retires the creation observation before cancel; failed 
  act(() => invalidateMcpConnectorProjection(client, boundary.subject));
  fireEvent.click(within(picker).getByRole("button", { name: "取消" }));
  expect(screen.queryByRole("dialog", { name: server.display_name })).toBeNull();
- const detail = screen.getByRole("dialog", { name: "编辑" });
- await waitFor(() => expect(within(detail).getByRole("button", { name: "重试" })).toBeVisible());
+ const detail = screen.getByRole("dialog", { name: "详情" });
+ await waitFor(() => expect(within(detail).getByRole("status")).toHaveTextContent("连接列表加载失败"));
+ expect(within(detail).queryByRole("button", { name: "管理" })).toBeNull();
+ expect(within(detail).queryByRole("button", { name: "连接" })).toBeNull();
  expect(client.getMcpConnector).toHaveBeenCalledTimes(reads + 1);
  expect(within(detail).queryByRole("button", { name: server.server_id })).toBeNull();
 });
@@ -121,8 +126,10 @@ it("starting a new source observation retires the handoff even when confirmation
  const reads = client.getMcpConnector.mock.calls.length;
  fireEvent.click(within(picker).getByRole("button", { name: "取消" }));
  expect(screen.queryByRole("dialog", { name: server.display_name })).toBeNull();
- const detail = screen.getByRole("dialog", { name: "编辑" });
- await waitFor(() => expect(within(detail).getByRole("button", { name: "重试" })).toBeVisible());
+ const detail = screen.getByRole("dialog", { name: "详情" });
+ await waitFor(() => expect(within(detail).getByRole("status")).toHaveTextContent("连接列表加载失败"));
+ expect(within(detail).queryByRole("button", { name: "管理" })).toBeNull();
+ expect(within(detail).queryByRole("button", { name: "连接" })).toBeNull();
  expect(client.getMcpConnector).toHaveBeenCalledTimes(reads + 1);
  expect(publication.publish).not.toHaveBeenCalled();
 });
@@ -134,7 +141,10 @@ it("an already displayed handoff retires synchronously when its mutation revisio
  client.getMcpConnector.mockRejectedValue(Error("source retired"));
  act(() => invalidateMcpConnectorProjection(client, boundary.subject));
  expect(screen.queryByRole("dialog", { name: server.display_name })).toBeNull();
- await waitFor(() => expect(within(screen.getByRole("dialog", { name: "编辑" })).getByRole("button", { name: "重试" })).toBeVisible());
+ const detail = screen.getByRole("dialog", { name: "详情" });
+ await waitFor(() => expect(within(detail).getByRole("status")).toHaveTextContent("连接列表加载失败"));
+ expect(within(detail).queryByRole("button", { name: "管理" })).toBeNull();
+ expect(within(detail).queryByRole("button", { name: "连接" })).toBeNull();
 });
 
 it("a newer source version observed during confirmation never falls back to the creation version on cancel", async () => {

@@ -15,6 +15,7 @@ import {
 } from "./mcp-projection-types";
 import { useMcpCategoryLayout } from "./use-mcp-category-layout";
 import { McpCategoryDropdown } from "./mcp-category-dropdown";
+import { McpSearchHighlight } from "./mcp-search-highlight";
 import styles from "./mcp-projection-read.module.css";
 
 type Category = keyof typeof MCP_CATEGORY_MESSAGES;
@@ -147,7 +148,7 @@ export function McpProviderDirectory({
                   </span>
                   <span className={styles.providerCopy}>
                     <span className={styles.providerName}>
-                      {provider.display_name}
+                      <McpSearchHighlight text={provider.display_name} query={presentation === "plaza" ? query : ""} />
                     </span>
                     {provider.description ? (
                       <span className={styles.providerDescription}>

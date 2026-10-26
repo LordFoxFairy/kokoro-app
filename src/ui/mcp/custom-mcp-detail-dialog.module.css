@@ -227,6 +227,16 @@
   font-weight: 500;
   line-height: 1.125rem;
 }
+/* Reference outline paints outside the intrinsic button size, unlike a border.
+   The configuration's higher-specificity :focus-visible outline remains intact. */
+.configurationHeader button,
+.headers > button {
+  border: 0;
+  outline: 1px solid var(--settings-search-border);
+  outline-offset: 0;
+  background: transparent;
+  box-shadow: none;
+}
 .configurationHeader svg { width: 1rem; height: 1rem; }
 .configurationButtonLabel { padding-inline-end: 0.125rem; }
 .configurationGrid {

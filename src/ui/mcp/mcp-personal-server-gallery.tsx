@@ -33,7 +33,7 @@ export function McpPersonalServerGallery({ providers, serverMediaRevisions, onSe
   return <section className={styles.section} aria-label={t("mcp.title")}>
     <ul className={styles.grid}>
       {visible.map(connector => <McpConnectorCard key={connector.connector_id} connector={connector}
-        provider={providersByKey.get(connector.provider_key)} presentation="plaza" onSelect={onSelect}
+        provider={providersByKey.get(connector.provider_key)} presentation="plaza" searchQuery={read.query} onSelect={onSelect}
         mediaRevision={connector.server_id ? serverMediaRevisions?.get(connector.server_id) ?? 0 : 0} />)}
     </ul>
   </section>;

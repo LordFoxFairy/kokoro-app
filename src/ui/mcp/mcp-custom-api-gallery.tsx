@@ -33,7 +33,7 @@ export function McpCustomApiGallery({ profiles, admitted, confirmed, query, cate
   if (visible.length === 0) return null;
   return <section className={styles.section} aria-label={t("connectorCatalog.customApi")}>
     <ul className={styles.grid}>
-      {visible.map(profile => <McpCustomApiCard key={profile.profile_id} profile={profile} presentation="plaza" onSelect={onSelect} />)}
+      {visible.map(profile => <McpCustomApiCard key={profile.profile_id} profile={profile} presentation="plaza" searchQuery={query} onSelect={onSelect} />)}
     </ul>
   </section>;
 }

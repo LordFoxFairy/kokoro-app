@@ -108,6 +108,20 @@ it.each(["unknown", "trial"] as const)("configuration %s feedback keeps short-sc
       const button = page.getByRole("button", { name, exact: true })
       expect((await button.locator("svg").boundingBox())?.width).toBe(16)
       expect(Math.abs((await button.boundingBox())!.width - width)).toBeLessThan(1)
+      expect(await button.evaluate(element => {
+        const style = getComputedStyle(element)
+        return { left: style.borderLeftWidth, right: style.borderRightWidth, outline: style.outlineStyle,
+          width: style.outlineWidth, offset: style.outlineOffset, color: style.outlineColor,
+          background: style.backgroundColor, shadow: style.boxShadow }
+      })).toEqual({ left: "0px", right: "0px", outline: "solid", width: "1px", offset: "0px",
+        color: "rgba(0, 0, 0, 0.12)", background: "rgba(0, 0, 0, 0)", shadow: "none" })
+      if (!await button.isDisabled()) {
+        await button.focus()
+        expect(await button.evaluate(element => {
+          const style = getComputedStyle(element)
+          return { visible: element.matches(":focus-visible"), outline: style.outlineStyle, width: style.outlineWidth, offset: style.outlineOffset }
+        })).toEqual({ visible: true, outline: "solid", width: "2px", offset: "2px" })
+      }
     }
     const form = screen.getByRole("textbox", { name: "服务器名称" }).closest("form")
     for (const alert of screen.getAllByRole("alert")) expect(form).toContainElement(alert)

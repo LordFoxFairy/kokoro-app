@@ -4,14 +4,16 @@ import { Check } from "lucide-react";
 import type { CustomApiProfile } from "@/hub/custom-api.schema";
 import { useT } from "@/i18n/context";
 import { McpBoundIcon } from "./mcp-bound-icon";
+import { McpSearchHighlight } from "./mcp-search-highlight";
 import styles from "./mcp-projection-read.module.css";
 import galleryStyles from "./mcp-custom-api-gallery.module.css";
 
 /** One confirmed API identity and detail action, shared by management and discovery. */
-export function McpCustomApiCard({ profile, onSelect, presentation = "management" }: {
+export function McpCustomApiCard({ profile, onSelect, presentation = "management", searchQuery = "" }: {
   profile: CustomApiProfile;
   onSelect: (profile: CustomApiProfile, trigger: HTMLElement) => void;
   presentation?: "management" | "plaza";
+  searchQuery?: string;
 }) {
   const t = useT();
   const plaza = presentation === "plaza";
@@ -25,7 +27,7 @@ export function McpCustomApiCard({ profile, onSelect, presentation = "management
         </span>
         <span className={plaza ? galleryStyles.copy : styles.connectorIdentity}>
           <span>
-            <strong className={plaza ? styles.providerName : undefined}>{profile.name}</strong>
+            <strong className={plaza ? styles.providerName : undefined}><McpSearchHighlight text={profile.name} query={plaza ? searchQuery : ""} /></strong>
             <small className={plaza ? styles.providerDescription : undefined}>{profile.instructions ?? t("connectorCatalog.customApi")}</small>
           </span>
         </span>
