@@ -25,7 +25,7 @@ it("pins the fixed Public27 owner and restores the entire sealed Public26 parent
   const { default: YAML } = await import("yaml")
   const { restorePublic26MessagePartsContract } = await import("./bff-tool-display-parent")
   const source = await readFile("src/generated/bff-public-openapi.yaml", "utf8")
-  expect(createHash("sha256").update(source).digest("hex")).toBe("e0bb74069c65fb8d414a6a3cb0d6f4c8d9bcb40bb693c2409a9cbe051b8bac53")
+  expect(createHash("sha256").update(source).digest("hex")).toBe("85a1b51cd151581b51d7ea7992d85e04462c03fafb36d0527e1df352dd85223a")
   const parent = restorePublic26MessagePartsContract(source)
   expect(createHash("sha256").update(parent).digest("hex")).toBe("20d26736cf23da32c242c2c7cf75c45affb62c5d27696dcecb0bc6193bc39a09")
   const { restorePublic28ProjectResourceContract } = await import("./bff-project-resource-parent")
@@ -36,12 +36,12 @@ it("pins the fixed Public27 owner and restores the entire sealed Public26 parent
   for (const changed of [source + "\n", source.replace("getSessionMessageParts", "rewrittenParts"), source.replace("KokoroAgUiReplayMetadata", "RewrittenMetadata")]) expect(() => restorePublic26MessagePartsContract(changed)).toThrow()
 })
 
-for (const display_code of ["tool.execution", "tool.file.read", "tool.mcp.discover", "tool.mcp.describe", "tool.mcp.call", "tool.web.search", "tool.web.fetch"]) {
+for (const display_code of ["tool.execution", "tool.file.read", "tool.mcp.discover", "tool.mcp.describe", "tool.mcp.call", "tool.web.search", "tool.web.fetch", "tool.file.write", "tool.file.deliver"]) {
   it(`Public28 ordered parts keep ${display_code} and original coordinates`, () => {
     const activity = { activity: "tool", activity_id: `act_${"a".repeat(64)}`, segment_id: `seg_${"b".repeat(64)}`, status: "failed", display_code }
     const part = { kind: "activity", part_id: `activity:${activity.activity_id}`, first_sequence: "2", latest_sequence: "3", activity }
     const input = { ...page, items: [part] }
     expect(messagePartsPageSchema.parse(input)).toEqual(input)
-    expect(() => messagePartsPageSchema.parse({ ...input, items: [{ ...part, activity: { ...activity, display_code: "tool.file.write" } }] })).toThrow()
+    expect(() => messagePartsPageSchema.parse({ ...input, items: [{ ...part, activity: { ...activity, display_code: "tool.file.unknown" } }] })).toThrow()
   })
 }

@@ -340,7 +340,7 @@ it("requires a public ledger coordinate independently of the Agent source seq", 
 })
 
 // Public28 accepts only owner-published safe classification, never a guessed tool name.
-for (const display_code of ["tool.execution", "tool.file.read", "tool.mcp.discover", "tool.mcp.describe", "tool.mcp.call", "tool.web.search", "tool.web.fetch"]) {
+for (const display_code of ["tool.execution", "tool.file.read", "tool.mcp.discover", "tool.mcp.describe", "tool.mcp.call", "tool.web.search", "tool.web.fetch", "tool.file.write", "tool.file.deliver"]) {
   for (const status of ["running", "completed", "failed"]) {
     it(`Public28 live activity preserves ${display_code}/${status}`, () => {
       const value = { activity: "tool", activity_id: `act_${"a".repeat(64)}`, segment_id: `seg_${"b".repeat(64)}`, status, display_code }
@@ -348,7 +348,7 @@ for (const display_code of ["tool.execution", "tool.file.read", "tool.mcp.discov
     })
   }
 }
-for (const patch of [{ display_code: "tool.file.write" }, { display_code: "subagent.execution" }, { activity: "subagent", display_code: "tool.web.search" }, { display_code: null }, { name: "web_search" }, { args: { query: "private" } }, { phase: "reading" }]) {
+for (const patch of [{ display_code: "tool.file.unknown" }, { display_code: "subagent.execution" }, { activity: "subagent", display_code: "tool.web.search" }, { display_code: null }, { name: "web_search" }, { args: { query: "private" } }, { phase: "reading" }]) {
   it(`Public28 rejects unknown/cross-branch/raw activity ${JSON.stringify(patch)}`, () => {
     const value = { activity: "tool", activity_id: `act_${"a".repeat(64)}`, segment_id: `seg_${"b".repeat(64)}`, status: "running", display_code: "tool.execution", ...patch }
     expect(() => parseAgUiEvent({ type: "CUSTOM", timestamp: 1, name: "kokoro.activity.updated", value, metadata })).toThrow()

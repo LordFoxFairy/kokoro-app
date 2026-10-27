@@ -439,6 +439,8 @@ export const fr: Partial<Record<MessageKey, string>> = {
   "thread.scrollToStart": "Faire défiler jusqu’au début",
   "thread.toolCall": "Appel d'outil",
   "thread.toolFileRead": "Lire un fichier",
+  "thread.toolFileWrite": "Écrire un fichier",
+  "thread.toolFileDeliver": "Livrer un fichier",
   "thread.toolMcpDiscover": "Découvrir les outils MCP",
   "thread.toolMcpDescribe": "Décrire un outil MCP",
   "thread.toolMcpCall": "Appeler un outil MCP",

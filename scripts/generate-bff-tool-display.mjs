@@ -9,9 +9,9 @@ import YAML from "yaml"
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const sourcePath = join(root, "src/generated/bff-public-openapi.yaml")
 const outputPath = join(root, "src/generated/bff-tool-display.ts")
-const ownerCommit = "21c6447316aefcd8189f7dcedbb522d91a8e6cf5"
-const sourceSha256 = "e0bb74069c65fb8d414a6a3cb0d6f4c8d9bcb40bb693c2409a9cbe051b8bac53"
-const openapiVersion = "28.2.0"
+const ownerCommit = "b2b9eb1eac4a3f0b0cd4099ed59cbf756f14124c"
+const sourceSha256 = "85a1b51cd151581b51d7ea7992d85e04462c03fafb36d0527e1df352dd85223a"
+const openapiVersion = "28.3.0"
 
 export function inspectBffToolDisplayContract(document) {
   assert.equal(document.info.version, openapiVersion, "BFF tool display version drift")
@@ -24,7 +24,7 @@ export function inspectBffToolDisplayContract(document) {
   assert.deepEqual(tool.properties.activity, { const: "tool" })
   assert.deepEqual(tool.properties.display_code, {
     type: "string",
-    enum: ["tool.execution", "tool.file.read", "tool.mcp.discover", "tool.mcp.describe", "tool.mcp.call", "tool.web.search", "tool.web.fetch"],
+    enum: ["tool.execution", "tool.file.read", "tool.mcp.discover", "tool.mcp.describe", "tool.mcp.call", "tool.web.search", "tool.web.fetch", "tool.file.write", "tool.file.deliver"],
   }, "BFF tool display closed set drift")
   assert.equal(subagent.additionalProperties, false)
   assert.deepEqual(subagent.properties.activity, { const: "subagent" })

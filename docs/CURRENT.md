@@ -1,3 +1,7 @@
+## 2026-10-27 Public28.3 文件工具类别消费者候选
+
+App以c440092为本片基线，固定BFF `b2b9eb1eac4a3f0b0cd4099ed59cbf756f14124c` 的正式Public28.3完整原件；十条公共生成链、两个工具标签及九语言按既有D0承接，三个私有pin不变。原live新code/标签RED为8失败；生成与两映射后首8相关suite229通过。完整contract385通过；9个相关行为suite166通过（含fresh ordered重开、private parts恢复及独立Markdown组合）。十生成器两次write/check与100生成物逐字确定性通过，受影响lint与完整types为0；在线Docs完整check含48测试、5例、186公开operation及54HTML/18508内部链接通过，保既有大chunk warning。首contract漏迁移的ScheduledTask current pin及新重开fixture revision低于position均已修正，旧历史SHA／位置保护原样。最终冻结与正常组合由Root独立复核，不把源码交付冒正常工具执行。Markdown独立writer两路径保持，正常资源／Git由Root独占。
+
 ## 2026-10-27 当前产品闭环交付边界
 
 本轮按完整依赖闭包承接此前未提交的Project指令入口与Skills分类，不再让正常环境依赖隐形工作树文件。Project顶部/rail共用精确编辑目标；未知保存保原key/body且锁正文，关闭重开不换意图，已ACK回读失败只GET；身份/项目/路由/准入退休取消旧请求。仅document-local恢复，现wire无CAS，不宣称跨刷新或多标签并发防覆盖。Root正常QA实际held PATCH200超过客户端预算→unknown→关闭重开→同key/body重试200，试验历史仅一次；随后显式保存原文200、阻断history读取，再恢复仅GET200，原文权威回读一致。无新Run/模型/资金操作；两次QA保存对应两revision/receipt，旧Agent/Billing全行保持。

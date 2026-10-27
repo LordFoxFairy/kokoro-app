@@ -516,6 +516,8 @@ export const ja: Partial<Record<MessageKey, string>> = {
   "thread.scrollToStart": "先頭までスクロール",
   "thread.toolCall": "ツール呼び出し",
   "thread.toolFileRead": "ファイルを読む",
+  "thread.toolFileWrite": "ファイルを書き込む",
+  "thread.toolFileDeliver": "ファイルを納品する",
   "thread.toolMcpDiscover": "MCP ツールを探す",
   "thread.toolMcpDescribe": "MCP ツールの説明を見る",
   "thread.toolMcpCall": "MCP ツールを呼び出す",

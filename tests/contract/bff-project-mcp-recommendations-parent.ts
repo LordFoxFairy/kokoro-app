@@ -1,5 +1,6 @@
 // Test-only exact additive Public28.2→28.1 proof; never imported by production.
 import { createHash } from "node:crypto";
+import { restorePublic282FileToolDisplayContract } from "./bff-file-tool-display-parent";
 const hash = (source: string) =>
   createHash("sha256").update(source).digest("hex");
 const blocks = [
@@ -12,6 +13,7 @@ const blocks = [
 export function restorePublic281ProjectMcpRecommendationsContract(
   source: string,
 ): string {
+  source = restorePublic282FileToolDisplayContract(source);
   if (!/^  version: 28\.2\.0$/mu.test(source)) {
     if (source.includes("PROJECT-MCP-RECOMMENDATIONS-"))
       throw Error("Project recommendations version drift");

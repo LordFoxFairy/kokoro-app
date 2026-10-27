@@ -439,6 +439,8 @@ export const ko: Partial<Record<MessageKey, string>> = {
   "thread.scrollToStart": "처음으로 스크롤",
   "thread.toolCall": "도구 호출",
   "thread.toolFileRead": "파일 읽기",
+  "thread.toolFileWrite": "파일 쓰기",
+  "thread.toolFileDeliver": "파일 전달",
   "thread.toolMcpDiscover": "MCP 도구 찾기",
   "thread.toolMcpDescribe": "MCP 도구 설명 보기",
   "thread.toolMcpCall": "MCP 도구 호출",

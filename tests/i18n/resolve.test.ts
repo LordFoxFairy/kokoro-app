@@ -5,6 +5,15 @@ import { OVERLAYS } from "@/i18n/overlays"
 import { negotiateLocale, resolveMessage } from "@/i18n/resolve"
 
 describe("i18n 协商（technical/14）", () => {
+  it("所有已上线语言显式提供中性文件操作类别，不借完成状态或路径命名", () => {
+    for (const locale of LOCALES) {
+      for (const key of ["thread.toolFileWrite", "thread.toolFileDeliver"] as const) {
+        const source = locale === "zh" ? zh : OVERLAYS[locale]
+        expect(source[key]).toBeTruthy()
+        expect(resolveMessage(locale, key)).toBe(source[key])
+      }
+    }
+  })
   it("存储偏好优先于浏览器语言", () => {
     expect(negotiateLocale("en", ["zh-CN"])).toBe("en")
     expect(negotiateLocale("zh", ["en-US"])).toBe("zh")

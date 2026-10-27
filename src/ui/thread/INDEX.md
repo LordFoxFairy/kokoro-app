@@ -1,3 +1,5 @@
+文件工具类别（2026-10-27，Public28.3消费者）：ToolCallRow新增正式 `tool.file.write`／`tool.file.deliver` 的九语言中性操作标签，完成与失败仍沿原status。live／snapshot／ordered重开共用原activity schema；不读raw名称、文件路径或参数，不将类别冒成功或Artifact关联。消费者候选验收与正常配对由Root分别记录。
+
 工具类别（2026-10-26，源码候选）：`ToolCallRow` 只按正式 Public28 的安全 `display_code` 穷尽映射本地标签；旧 generic、状态行及稳定节点不变，不读取 raw名称/参数或猜 Skill/网页标题、phase、时长。唯一activity schema与生成来源见技术设计，正常组合由Root另验。
 
 <!-- Ordered private histories keep all public text visible, fold only consecutive activities, use stable run/turn keys and expose a per-Message read-only partial reload. Shared threads use only the original inline public parser and never request private parts. -->

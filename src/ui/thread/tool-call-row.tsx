@@ -8,6 +8,8 @@ type ToolActivity = Extract<RunProcessActivity, { activity: "tool" }>
 const TOOL_LABELS = {
   "tool.execution": "thread.toolCall",
   "tool.file.read": "thread.toolFileRead",
+  "tool.file.write": "thread.toolFileWrite",
+  "tool.file.deliver": "thread.toolFileDeliver",
   "tool.mcp.discover": "thread.toolMcpDiscover",
   "tool.mcp.describe": "thread.toolMcpDescribe",
   "tool.mcp.call": "thread.toolMcpCall",

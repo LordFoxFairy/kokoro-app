@@ -4,7 +4,7 @@ import type { RunProcessActivity } from "@/contract/chat"
 import { LocaleProvider } from "@/i18n/context"
 import { stateFromSnapshot } from "@/core/hydration"
 import { mergeMessageParts, preserveMessageParts } from "@/core/reducer"
-import { parseSessionSnapshot, type MessageTextPartSlice } from "@/contract/chat"
+import { messagePartsPageSchema, parseSessionSnapshot, type MessageTextPartSlice } from "@/contract/chat"
 import { ConversationThread } from "@/ui/thread/conversation-thread"
 import { AssistantTurn } from "@/ui/thread/assistant-turn"
 import { SegmentProcess } from "@/ui/thread/segment-process"
@@ -162,7 +162,39 @@ const public28Labels = [
   ["tool.execution", "Tool call"], ["tool.file.read", "Read file"],
   ["tool.mcp.discover", "Discover MCP tools"], ["tool.mcp.describe", "Describe MCP tool"],
   ["tool.mcp.call", "Call MCP tool"], ["tool.web.search", "Search the web"], ["tool.web.fetch", "Read webpage"],
+  ["tool.file.write", "Write file"], ["tool.file.deliver", "Deliver file"],
 ] as const
+it.each([
+  ["tool.file.write", "Write file"], ["tool.file.deliver", "Deliver file"],
+] as const)("%s survives snapshot and reopened ordered history as a category, not assistant text", (display_code, label) => {
+  const activity = { activity: "tool", activity_id: `act_${"c".repeat(64)}`, segment_id: `seg_${"d".repeat(64)}`, status: "completed", display_code }
+  const owner = { message_id: "file-owner", run_id: "file-run", role: "assistant", content: "public answer", status: "completed", created_at: "now" }
+  const snapshot = parseSessionSnapshot({ ...makeSnapshot(), messages: [owner], execution_process: { run_id: "file-run", todos: null, activities: [activity], next_cursor: null } })
+  const props = { sessionId: "session", isStreaming: false, isReconnecting: false, hasFailed: false, canRetryPendingSubmission: false, creditRejected: false, onOpenBilling: vi.fn(), onOpenPricing: vi.fn(), onRetry: vi.fn(), mode: "fast" as const, stagingByRun: {}, hitlRunId: null, controlError: null }
+  const show = (thread: ReturnType<typeof stateFromSnapshot>) => render(<LocaleProvider><ConversationThread {...props} thread={thread} /></LocaleProvider>)
+  const revealCategory = () => {
+    const toggle = screen.getByRole("button", { name: /1 tool\(s\)/u })
+    if (toggle.getAttribute("aria-expanded") === "false") fireEvent.click(toggle)
+    expect(screen.getByText(label)).toBeVisible()
+  }
+  const view = show(stateFromSnapshot(snapshot))
+  revealCategory()
+  expect(screen.getByText("public answer")).toBeVisible()
+  view.unmount()
+
+  const reopened = parseSessionSnapshot({ ...makeSnapshot(), messages: [{ ...owner, content: null, rendering: { mode: "ordered", format_version: 1, revision: "3", event_watermark: null, parts_cursor: "opaque" } }] })
+  const text = (id: string, value: string, seq: string) => ({ kind: "text", part_id: id, segment_id: id, first_sequence: seq, latest_sequence: seq, text: value, offset: "0", end: String(value.length), total_scalars: String(value.length), completed: true })
+  const page = messagePartsPageSchema.parse({ session_id: "session", message_id: owner.message_id, run_id: owner.run_id, format_version: 1, revision: "3", event_watermark: null, items: [
+    text("before", "before file action", "1"), { kind: "activity", part_id: "file-part", first_sequence: "2", latest_sequence: "2", activity }, text("after", "after file action", "3"),
+  ], next_cursor: null })
+  const thread = mergeMessageParts(stateFromSnapshot(reopened), { message_id: page.message_id, run_id: page.run_id, revision: page.revision, items: page.items }, [], true)
+  show(thread)
+  revealCategory()
+  expect(screen.getByText("before file action")).toBeVisible()
+  expect(screen.getByText("after file action")).toBeVisible()
+  expect(thread.messages.filter(message => !message.orderedContainer).some(message => message.content?.includes(label))).toBe(false)
+  expect(props.onRetry).not.toHaveBeenCalled()
+})
 for (const [display_code, label] of public28Labels) {
   it(`Public28 renders ${display_code} without changing the lifecycle row identity`, () => {
     const activity = { activity: "tool" as const, activity_id: `act_${"a".repeat(64)}`, segment_id: `seg_${"b".repeat(64)}`, status: "running" as const, display_code }

@@ -545,6 +545,8 @@ export const zh = {
   "thread.scrollToStart": "滚动到开头",
   "thread.toolCall": "工具调用",
   "thread.toolFileRead": "读取文件",
+  "thread.toolFileWrite": "写入文件",
+  "thread.toolFileDeliver": "交付文件",
   "thread.toolMcpDiscover": "发现 MCP 工具",
   "thread.toolMcpDescribe": "查看 MCP 工具说明",
   "thread.toolMcpCall": "调用 MCP 工具",

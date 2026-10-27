@@ -74,7 +74,7 @@ describe("R135 public7 snapshot process contract", () => {
   })
 })
 
-for (const display_code of ["tool.execution", "tool.file.read", "tool.mcp.discover", "tool.mcp.describe", "tool.mcp.call", "tool.web.search", "tool.web.fetch"]) {
+for (const display_code of ["tool.execution", "tool.file.read", "tool.mcp.discover", "tool.mcp.describe", "tool.mcp.call", "tool.web.search", "tool.web.fetch", "tool.file.write", "tool.file.deliver"]) {
   it(`Public28 snapshot keeps ${display_code} without synthesizing names or phases`, () => {
     const safe = { activity: "tool", activity_id: activityId, segment_id: segmentId, status: "completed", display_code }
     const process = { run_id: "run_a", todos: null, activities: [safe], next_cursor: null }

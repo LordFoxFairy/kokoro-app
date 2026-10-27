@@ -111,7 +111,7 @@ it("keeps the original user exactly once when real user and assistant rows share
   }
 })
 
-for (const display_code of ["tool.execution", "tool.file.read", "tool.mcp.discover", "tool.mcp.describe", "tool.mcp.call", "tool.web.search", "tool.web.fetch"] as const) {
+for (const display_code of ["tool.execution", "tool.file.read", "tool.mcp.discover", "tool.mcp.describe", "tool.mcp.call", "tool.web.search", "tool.web.fetch", "tool.file.write", "tool.file.deliver"] as const) {
   it(`Public28 ${display_code} stays in its owner slot without disturbing surrounding text`, () => {
     if (activity.kind !== "activity" || activity.activity.activity !== "tool") throw new Error("tool fixture")
     const safe = { ...activity, activity: { ...activity.activity, display_code } }

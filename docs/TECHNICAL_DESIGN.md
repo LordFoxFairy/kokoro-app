@@ -1,3 +1,9 @@
+## 2026-10-27 Public28.3 文件工具展示消费者
+
+固定正式BFF `b2b9eb1eac4a3f0b0cd4099ed59cbf756f14124c`／Public28.3.0／192操作，完整 canonical SHA256 `85a1b51cd151581b51d7ea7992d85e04462c03fafb36d0527e1df352dd85223a`；唯一 `src/generated/bff-public-openapi.yaml` 从该 Git blob原字节取得，十条公共生成链正规重出。现唯一 activity validator沿 generated tuple自动承接两个新类别，ToolCallRow穷尽映射九语言“写入文件／交付文件”；不推断文件名、路径、参数、内容或产物关联，不改执行／权限／网络或状态机。
+
+新增 test-only exact28.3→28.2 逆证先还原完整旧 SHA `e0bb74069c65fb8d414a6a3cb0d6f4c8d9bcb40bb693c2409a9cbe051b8bac53`，再进入未改28.2→28.1→28→27及更早父链；三条独立MCP私有pin原样。消费者源码验证与正常激活分开，Root先配对BFF/App reader再准入Agent8.1 producer；新值持久化后保留可读消费者，旧generic不回填。
+
 ## PROJECT-MCP-RECOMMENDATIONS-CONSUMER-D1（2026-10-27，独立消费者候选）
 
 固定正式BFF `21c6447316aefcd8189f7dcedbb522d91a8e6cf5`／Public28.2／192操作、canonical全文SHA256 `e0bb74069c65fb8d414a6a3cb0d6f4c8d9bcb40bb693c2409a9cbe051b8bac53`，只从Git blob取得唯一完整snapshot，九条原public生成链统一正规更新，独立MCP私有pin不变；新增具名窄generator从同一snapshot导出三种refs、请求/响应和status/code/retryable闭集，生成物不手改。test-only exact28.2→28.1先验完整新旧全文，保原历史hash／fixture与证明链。在线Docs固定同一正式版本，不另建wire事实源。

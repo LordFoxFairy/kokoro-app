@@ -1,3 +1,7 @@
+## 2026-10-27 Public28.3：仅展示闭集，无存储模型变化
+
+当前消费者固定正式BFF `b2b9eb1eac4a3f0b0cd4099ed59cbf756f14124c`／Public28.3.0／192操作，完整 canonical SHA256 `85a1b51cd151581b51d7ea7992d85e04462c03fafb36d0527e1df352dd85223a`。两项文件工具类别沿既有activity/segment身份、status、ordered坐标及恢复规则保存与呈现，不新增表、字段、浏览器存储或第二套wire；旧generic历史不改写。闭集由同一generated tuple消费，不复制业务DTO，三个独立私有pin保持。
+
 ## PROJECT-MCP-RECOMMENDATIONS-CONSUMER-D1（2026-10-27，独立消费者候选）
 
 固定正式BFF `21c6447316aefcd8189f7dcedbb522d91a8e6cf5`／Public28.2／192操作、canonical全文SHA256 `e0bb74069c65fb8d414a6a3cb0d6f4c8d9bcb40bb693c2409a9cbe051b8bac53`，只从Git blob取得唯一完整snapshot，九条原public生成链统一正规更新，独立MCP私有pin不变；新增具名窄generator从同一snapshot导出三种refs、请求/响应和status/code/retryable闭集，生成物不手改。test-only exact28.2→28.1先验完整新旧全文，保原历史hash／fixture与证明链。在线Docs固定同一正式版本，不另建wire事实源。

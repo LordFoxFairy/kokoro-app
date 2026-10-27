@@ -1,3 +1,7 @@
+## 2026-10-27 当前 Public28.3 原件
+
+固定BFF `b2b9eb1eac4a3f0b0cd4099ed59cbf756f14124c`／Public28.3.0／192操作，完整 canonical SHA256 `85a1b51cd151581b51d7ea7992d85e04462c03fafb36d0527e1df352dd85223a`，唯一完整snapshot和十个既有公共生成器同步正规更新。新增两个文件工具类别来自正式 `RunToolActivity`，Failure业务tuple及其它接口不变；三条独立私有pin保持。测试先精确逆回完整28.2全文，再走原历史父链，不作运行fallback或历史重分类。
+
 ## 2026-10-27 Project MCP推荐独立正式消费者
 
 完整Public28.2.0／192操作snapshot固定BFF `21c6447316aefcd8189f7dcedbb522d91a8e6cf5` canonical Git blob，SHA256 `e0bb74069c65fb8d414a6a3cb0d6f4c8d9bcb40bb693c2409a9cbe051b8bac53`；九个既有public生成器正规重出，新具名 `scripts/generate-bff-project-mcp-recommendations.mjs` 派生三ref闭集、CAS完整替换输入、ACK和错误tuple。独立MCP私有pin不变；test-only exact28.2→28.1全文逆证先验证新全文和具名delta，再进入未改旧父hash证明。在线Docs同pin，窄承接早已公开的Public27两个扩展节点，不增加执行权限。

@@ -439,6 +439,8 @@ export const es: Partial<Record<MessageKey, string>> = {
   "thread.scrollToStart": "Desplazarse al inicio",
   "thread.toolCall": "llamada de herramienta",
   "thread.toolFileRead": "Leer archivo",
+  "thread.toolFileWrite": "Escribir archivo",
+  "thread.toolFileDeliver": "Entregar archivo",
   "thread.toolMcpDiscover": "Descubrir herramientas MCP",
   "thread.toolMcpDescribe": "Ver descripción de herramienta MCP",
   "thread.toolMcpCall": "Llamar a herramienta MCP",

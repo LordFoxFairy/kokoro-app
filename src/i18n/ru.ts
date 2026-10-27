@@ -439,6 +439,8 @@ export const ru: Partial<Record<MessageKey, string>> = {
   "thread.scrollToStart": "Прокрутить в начало",
   "thread.toolCall": "Вызов инструмента",
   "thread.toolFileRead": "Чтение файла",
+  "thread.toolFileWrite": "Запись файла",
+  "thread.toolFileDeliver": "Передача файла",
   "thread.toolMcpDiscover": "Поиск инструментов MCP",
   "thread.toolMcpDescribe": "Описание инструмента MCP",
   "thread.toolMcpCall": "Вызов инструмента MCP",
