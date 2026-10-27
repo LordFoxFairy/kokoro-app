@@ -47,7 +47,7 @@ export function ProjectMcpRecommendationsPicker({
   const selected = new Set(selectedIds)
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent ref={panel} className={styles.dialog} closeLabel={copy.close} aria-busy={locked}
+      <DialogContent ref={panel} className={styles.dialog} {...(styles.overlay ? { overlayClassName: styles.overlay } : {})} closeLabel={copy.close} aria-busy={locked}
         onOpenAutoFocus={event => {
           event.preventDefault()
           panel.current?.focus({ preventScroll: true })

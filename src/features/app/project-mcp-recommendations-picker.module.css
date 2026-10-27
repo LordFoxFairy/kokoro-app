@@ -1,3 +1,8 @@
+.overlay {
+  background: rgba(0, 0, 0, .3);
+  backdrop-filter: blur(4px);
+}
+
 .dialog[data-slot="dialog-content"] {
   display: flex;
   flex-direction: column;
