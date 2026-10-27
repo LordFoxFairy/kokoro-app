@@ -1,3 +1,4 @@
+import { restorePublic281ProjectMcpRecommendationsContract } from "./bff-project-mcp-recommendations-parent"
 // Build/test-only strict additive Project-resource inverse; never imported by production.
 import { createHash } from "node:crypto"
 const hash = (value: string) => createHash("sha256").update(value).digest("hex")
@@ -7,6 +8,7 @@ const blocks = [
   ["SCHEMAS", "a23e8f4b6f4efcaad3b53c4bdd54544b9556c8a5798462748f13791526bebf6d"],
 ]
 export function restorePublic28ProjectResourceContract(source: string) {
+  source = restorePublic281ProjectMcpRecommendationsContract(source)
   if (!/^  version: 28\.1\.0$/mu.test(source)) return source
   let parent = source
   for (const [kind, digest] of blocks) {

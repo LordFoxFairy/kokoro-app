@@ -756,8 +756,8 @@ describe("Skill metadata and download contract separation", () => {
 describe("R255 ScheduledTask owner recurrence graph under the current public pin", () => {
   it("consumes the exact locally accepted current canonical bytes", async () => {
     const { bytes, spec } = await r76PublicSpec()
-    expect(r76Hash("sha256").update(bytes).digest("hex")).toBe("07e98d803ac3c7342c2e322b507e8760d89e63bc5ecdab3cdf447b68bf3c904c")
-    expect(spec.info.version).toBe("28.1.0")
+    expect(r76Hash("sha256").update(bytes).digest("hex")).toBe("e0bb74069c65fb8d414a6a3cb0d6f4c8d9bcb40bb693c2409a9cbe051b8bac53")
+    expect(spec.info.version).toBe("28.2.0")
   })
 
   it("publishes current rule details separately from immutable command snapshots", async () => {

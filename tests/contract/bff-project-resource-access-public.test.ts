@@ -1,3 +1,4 @@
+import { restorePublic281ProjectMcpRecommendationsContract } from "./bff-project-mcp-recommendations-parent"
 import { createHash } from "node:crypto"
 import { execFileSync } from "node:child_process"
 import { readFile } from "node:fs/promises"
@@ -11,10 +12,10 @@ const hash = (s: string) => createHash("sha256").update(s).digest("hex")
 it("consumes only fixed Public28.1 and inverses its exact resource delta before unchanged Public28 history", async () => {
   const source = await readFile(snapshot, "utf8")
   expect(hash(source)).toBe(BFF_PROJECT_RESOURCE_PROVENANCE.sourceSha256)
-  expect(BFF_PROJECT_RESOURCE_PROVENANCE).toEqual({ ownerCommit: "11777152bf8fe2ae316e4c67fb355eab94e7c0b5", sourceSha256: "07e98d803ac3c7342c2e322b507e8760d89e63bc5ecdab3cdf447b68bf3c904c", openapiVersion: "28.1.0" })
+  expect(BFF_PROJECT_RESOURCE_PROVENANCE).toEqual({ ownerCommit: "21c6447316aefcd8189f7dcedbb522d91a8e6cf5", sourceSha256: "e0bb74069c65fb8d414a6a3cb0d6f4c8d9bcb40bb693c2409a9cbe051b8bac53", openapiVersion: "28.2.0" })
   expect(hash(restorePublic28ProjectResourceContract(source))).toBe(projectResourcePublic28Sha256)
   expect(projectResourcePublic28Sha256).toBe("34ca44c01ebc73f7ff76a4a06be33696b96ba1636e8818f02c38d57b1f539809")
-  const spec = YAML.parse(source)
+  const spec = YAML.parse(restorePublic281ProjectMcpRecommendationsContract(source))
   const methods = ["get", "post", "put", "patch", "delete", "head", "options"]
   expect(Object.values(spec.paths).flatMap((p) => Object.keys(p as object).filter((k) => methods.includes(k)))).toHaveLength(190)
   const parent = YAML.parse(restorePublic28ProjectResourceContract(source))

@@ -1,3 +1,7 @@
+## Project MCP推荐配置同源薄桥（2026-10-27）
+
+`project-mcp-recommendations.ts`仅承接exact `GET/PUT /api/hub/projects/{id}/mcp-recommendations`，沿ProductSession／部署Domain和BFF公开v1配置owner，不透传caller身份、query、command key或外部URL。请求完整有界读取后保原bytes并设置可信Content-Length；strict JSON／duplicate／UTF8／closed fault tuple／ACK绑定验证，16KiB请求、64KiB响应、admission至EOF共10秒；取消退休、未知不重派。推荐不是个人连接授权，浏览器无Platform直连或业务存储。
+
 ## Project resource attachment consumer (candidate)
 
 Hub route仅对exact Project resource item/download路径附加闭集输入保护，沿当前Product Session与BFFProject owner。下载复用safeDownloadHeaders和boundedArtifactBody的字节原语与1GiB/EOF/取消预算，不复用personal或Artifact业务授权；仅具名attachment头出境，无Storage URL/Location，错误body不当binary成功。

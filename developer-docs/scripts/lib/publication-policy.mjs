@@ -107,7 +107,17 @@ function inspectValue(value, path, violations, seen, options) {
     const childPath = path === '' ? key : `${path}.${key}`;
     if (
       key.toLowerCase().startsWith('x-kokoro-') &&
-      !PUBLIC_KOKORO_NAMES.has(key.toLowerCase())
+      !PUBLIC_KOKORO_NAMES.has(key.toLowerCase()) &&
+      !(
+        (key === 'x-kokoro-max-response-bytes' &&
+          path === `${options.rootPath}.paths./v1/sessions/{id}/messages/{messageId}/parts.get` &&
+          child === 1048576) ||
+        (key === 'x-kokoro-owner-metadata' &&
+          path === `${options.rootPath}.components.schemas.SessionEventStream` &&
+          child !== null && typeof child === 'object' && !Array.isArray(child) &&
+          Object.keys(child).length === 1 &&
+          child.$ref === '#/components/schemas/KokoroAgUiReplayMetadata')
+      )
     ) {
       addViolation(violations, childPath, `unknown Kokoro extension ${key}`);
     }
@@ -129,7 +139,7 @@ export function assertPublicationSafe(
   options = {},
 ) {
   const violations = [];
-  inspectValue(value, label, violations, new Set(), options);
+  inspectValue(value, label, violations, new Set(), { ...options, rootPath: label });
   if (violations.length > 0) {
     throw new PublicationPolicyError(label, violations);
   }

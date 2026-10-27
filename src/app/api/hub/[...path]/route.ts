@@ -1,3 +1,4 @@
+import { proxyProjectMcpRecommendations } from "@/lib/server/project-mcp-recommendations";
 import { proxyMcpServerIcon } from "@/lib/server/mcp-server-icon";
 import { mcpPublicationPath } from "@/hub/mcp-project-publication.schema";
 import { proxyMcpProjectPublication } from "@/lib/server/mcp-project-publication";
@@ -2318,6 +2319,7 @@ async function proxyHubRequest(
   const { path } = await context.params;
   if (path[0] === "mcp" && path[1] === "servers" && path[3] === "icon") return proxyMcpServerIcon(request, path);
   if (mcpPublicationPath(path)) return proxyMcpProjectPublication(request, path);
+  if (path.length === 3 && path[0] === "projects" && path[2] === "mcp-recommendations") return proxyProjectMcpRecommendations(request, path);
   if ((path[0] === "preferences" && path[1]?.startsWith("knowledge")) || (path[0] === "self" && path[1] === "preferences" && path[2]?.startsWith("knowledge")))
     return proxyPersonalKnowledge(request, path);
   // Retire the old browser `/self/mcp` namespace. MCP is a first-class private adapter route.

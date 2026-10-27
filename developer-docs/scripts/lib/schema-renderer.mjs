@@ -34,7 +34,7 @@ export function slugify(value) {
 }
 
 function referenceName(reference) {
-  return reference.split('/').at(-1) ?? reference;
+  return (reference.split('/').at(-1) ?? reference).replaceAll('~1', '/').replaceAll('~0', '~');
 }
 
 export function resolveReference(contract, value, label) {
@@ -83,7 +83,10 @@ export function schemaType(contract, schema) {
     }
     resolveReference(contract, schema, 'schema');
     const name = referenceName(schema.$ref);
-    return `[${name}](./schemas#${slugify(name)})`;
+    const topLevelSchema = schema.$ref.startsWith('#/components/schemas/')
+      ? schema.$ref.split('/')[3].replaceAll('~1', '/').replaceAll('~0', '~')
+      : name;
+    return `[${name}](./schemas#${slugify(topLevelSchema)})`;
   }
   if (Array.isArray(schema.oneOf)) {
     return `one of: ${schema.oneOf.map((item) => schemaType(contract, item)).join(' or ')}`;

@@ -1,3 +1,9 @@
+## 2026-10-27 Project MCP推荐独立正式消费者
+
+完整Public28.2.0／192操作snapshot固定BFF `21c6447316aefcd8189f7dcedbb522d91a8e6cf5` canonical Git blob，SHA256 `e0bb74069c65fb8d414a6a3cb0d6f4c8d9bcb40bb693c2409a9cbe051b8bac53`；九个既有public生成器正规重出，新具名 `scripts/generate-bff-project-mcp-recommendations.mjs` 派生三ref闭集、CAS完整替换输入、ACK和错误tuple。独立MCP私有pin不变；test-only exact28.2→28.1全文逆证先验证新全文和具名delta，再进入未改旧父hash证明。在线Docs同pin，窄承接早已公开的Public27两个扩展节点，不增加执行权限。
+
+推荐仅配置偏好，不是definition pin／Connection授权或CustomAPI执行能力；standalone client与Hub same-origin薄桥只承接本人Project GET/PUT。PUT自然幂等，无Idempotency-Key／receipt／自动重试；网络未知后GET只证当前状态。16KiB请求、64KiB响应、admission至EOF共10秒，真实HTTP loopback覆盖可信Content-Length、完整原bytes、取消和总预算。组件接线、正常激活和跨owner产品验收由Root另行负责，以下记录按原发行保留。
+
 ## 2026-10-27 Project资源消费者固定发行物
 
 唯一公开snapshot由BFF `11777152bf8fe2ae316e4c67fb355eab94e7c0b5` 的canonical Git blob原字节固定，Public28.1.0/190 operations，SHA256 `07e98d803ac3c7342c2e322b507e8760d89e63bc5ecdab3cdf447b68bf3c904c`。八个既有public窄生成器正规重出；Project资源decoder由 `scripts/generate-bff-project-resource.mjs` 从同snapshot派生，生成check纳入具名contract测试，不增第二editable wire源。metadata仅`data.resource`（无list-only created_at）；下载是完整attachment二进制，删除是永久逻辑Asset删除而非解除关联。test-only exact28.1→28完整逆证先核原28全文与原187项库存，再委托未改旧SHA证明链；不作runtime兼容。正常激活/真实owner/浏览器结果由Root验收，本文不冒称。

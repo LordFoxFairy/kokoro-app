@@ -18,7 +18,7 @@ import {
   writeReferenceFiles,
 } from '../scripts/lib/reference-generator.mjs';
 import { assertPublicationSafe } from '../scripts/lib/publication-policy.mjs';
-import { renderExample } from '../scripts/lib/schema-renderer.mjs';
+import { renderExample, schemaType } from '../scripts/lib/schema-renderer.mjs';
 
 function fixtureContract(visibility = 'public') {
   return {
@@ -509,4 +509,56 @@ test('publishes named numeric body/depth limits without admitting other extensio
   }
   operation['x-kokoro-unreviewed-limit'] = 100;
   assert.throws(() => assertPublicContract(contract, catalogEntry), /unknown Kokoro extension/u);
+});
+
+test('public replay metadata accepts only the two formally published bounded extension nodes', () => {
+  const value = {
+    paths: { '/v1/sessions/{id}/messages/{messageId}/parts': { get: { 'x-kokoro-max-response-bytes': 1048576 } } },
+    components: { schemas: { SessionEventStream: { 'x-kokoro-owner-metadata': { $ref: '#/components/schemas/KokoroAgUiReplayMetadata' } } } },
+  };
+  assert.doesNotThrow(() => assertPublicationSafe(value));
+  for (const changed of [
+    { paths: { '/v1/other': { get: { 'x-kokoro-max-response-bytes': 1048576 } } } },
+    { paths: { '/v1/sessions/{id}/messages/{messageId}/parts': { post: { 'x-kokoro-max-response-bytes': 1048576 } } } },
+    { paths: { '/v1/sessions/{id}/messages/{messageId}/parts': { get: { 'x-kokoro-max-response-bytes': 2097152 } } } },
+    { components: { schemas: { Other: { 'x-kokoro-owner-metadata': value.components.schemas.SessionEventStream['x-kokoro-owner-metadata'] } } } },
+    { components: { schemas: { SessionEventStream: { 'x-kokoro-owner-metadata': { $ref: '#/components/schemas/PrivatePayload' } } } } },
+    { components: { schemas: { SessionEventStream: { 'x-kokoro-owner-metadata': { $ref: '#/components/schemas/KokoroAgUiReplayMetadata', secret: 'extra' } } } } },
+    { nested: value },
+    { 'x-kokoro-unknown': true },
+    ['x-kokoro-owner-metadata', ' unexpected-header'].join(':'),
+    { description: ['-----BEGIN', 'PRIVATE KEY-----'].join(' ') },
+  ]) assert.throws(() => assertPublicationSafe(changed));
+});
+
+test('formal Project recommendations natural PUT publishes no command key and rejects unrelated natural operations', () => {
+  const contract = fixtureContract();
+  const operation = contract.paths['/v1/sessions/{id}/messages'].post;
+  operation.operationId = 'replaceProjectMcpRecommendations';
+  operation['x-kokoro-idempotency'] = 'natural';
+  operation.parameters = [];
+  contract.paths = { '/v1/projects/{projectId}/mcp-recommendations': { put: operation } };
+  const files = generateReferenceFiles(contract, catalogEntry);
+  assert.equal(JSON.parse(files.get('manifest.json')).operations[0].idempotency, 'natural');
+  assert.doesNotMatch(files.get('chat.md'), /Idempotency-Key/u);
+  operation.parameters = [{ $ref: '#/components/parameters/IdempotencyKey' }];
+  assert.throws(() => generateReferenceFiles(contract, catalogEntry), /must not declare Idempotency-Key/u);
+  operation.parameters = [];
+  operation.operationId = 'unrelatedOperation';
+  assert.throws(() => generateReferenceFiles(contract, catalogEntry), /unsupported x-kokoro-idempotency/u);
+});
+
+
+test('nested local schema pointers link to their real top-level schema anchor without skipping pointer validation', () => {
+  const contract = { components: { schemas: {
+    AgentFailureEnvelope: { properties: { failure: { type: 'object' } } },
+    'Name/With~Escapes': { properties: { 'part/key~id': { type: 'string' } } },
+  } } };
+  assert.equal(schemaType(contract, { $ref: '#/components/schemas/AgentFailureEnvelope/properties/failure' }), '[failure](./schemas#agent-failure-envelope)');
+  assert.equal(schemaType(contract, { $ref: '#/components/schemas/Name~1With~0Escapes/properties/part~1key~0id' }), '[part/key~id](./schemas#name-with-escapes)');
+  for (const ref of [
+    '#/components/schemas/AgentFailureEnvelope/properties/missing',
+    '#/components/schemas/Name~1With~0Escapes/properties/part~1key~1id',
+    'https://example.invalid/private.json#/components/schemas/AgentFailureEnvelope',
+  ]) assert.throws(() => schemaType(contract, { $ref: ref }), /unresolved|external/u);
 });
