@@ -1,5 +1,10 @@
 # 变更记录
 
+## Public 28.5.0
+
+- 固定BFF `c195d2325ba9c433cc4c64e25e6c67eaf73c47f6`，完整SHA256 `109a2ae063b10699ae52776b09533c5622d906679c093d65730a289206043b1a`，194项operation；旧Project wire与私有过滤保持。
+- 新增本人项目固定列表／精确当前读取及自然幂等目标状态PUT；个人偏好不授Project可见性，未知只显式GET，不声称原命令receipt或自动重放。
+
 ## Public 28.4.0
 
 - 固定 BFF `3d52a90ec42601a19536e95a8b9e48f93a63276c` 完整契约；192 项 operation 不变，保原公开／私有过滤。

@@ -10,7 +10,7 @@ it("private publication artifact is exactly pinned and reproducible without modi
  expect(MCP_PUBLICATION_POLICY.visibility).toBe("browser-private"); expect(MCP_PUBLICATION_POLICY.execution_ready).toBe(false);
  expect(MCP_PUBLICATION_POLICY.receipt_not_found_proves_no_commit).toBe(false);
  execFileSync(process.execPath, ["scripts/generate-bff-mcp-project-publication.mjs", "--check"]);
- expect(createHash("sha256").update(readFileSync("src/generated/bff-public-openapi.yaml")).digest("hex")).toBe("48aa9638d133223c9f78655e9398ddbb44159963f92a2db891a09212f3aa2726");
+ expect(createHash("sha256").update(readFileSync("src/generated/bff-public-openapi.yaml")).digest("hex")).toBe("109a2ae063b10699ae52776b09533c5622d906679c093d65730a289206043b1a");
 });
 it("all private closed fault tuples reject changed status or retryable bit", () => {
  for (const tuple of [...Object.values(MCP_PUBLICATION_POLICY.faults), ...Object.values(MCP_PUBLICATION_POLICY.admission_faults)]) {

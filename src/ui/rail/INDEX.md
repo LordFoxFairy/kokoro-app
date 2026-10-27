@@ -30,4 +30,8 @@ AppFrame可信ProjectReadBoundary沿原rail props/shell进入account余额；同
 
 ## 项目行操作
 
-`workspace-rail-project-menu` 将真实右键、Shift+F10／菜单键及 ellipsis 投影到同一目标的四个动作：编辑名称、查看原 overview、仅收起该项目任务、删除确认。Instructions 保留现 header/settings 入口；pin 等正式 BFF owner 契约后接入，当前无占位操作或本地持久化。菜单使用已锁 Radix ContextMenu 的薄包装及原 Dropdown；导航／身份变化关闭，键盘拖拽与会话菜单独立。
+`workspace-rail-project-menu` 将真实右键、Shift+F10／菜单键及 ellipsis 投影到同一目标的五个动作：本人固定状态、编辑名称、查看原 overview、仅收起该项目任务、删除确认。Instructions 保留现 header/settings 入口；固定状态由正式 BFF Project pin 契约读取，未确认时不冒固定或未固定，无本地持久化。菜单使用已锁 Radix ContextMenu 的薄包装及原 Dropdown；导航／身份变化关闭，键盘拖拽与会话菜单独立。
+
+## Project pin consumer
+
+本人项目pin来自AppFrame全局`useProjectPins`，Pinned区只投影已读且当前owner可见项目，按owner时间/id顺序；分页未耗尽不推断其他项目未固定。Project真实右键／ellipsis共享固定或取消固定第五项；未知仅精确GET核验，pending禁同project重入。菜单编辑/查看用FolderPen/Eye与16px图标，View普通同tab点击先关移动Sheet再dispatch导航，modified link语义保留。

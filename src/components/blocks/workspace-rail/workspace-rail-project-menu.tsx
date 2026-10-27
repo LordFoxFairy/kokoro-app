@@ -1,8 +1,9 @@
 "use client"
 
+import type { ProjectPinsModel } from "@/features/app/use-project-pins"
 import { useEffect, useLayoutEffect, useRef, useState, type ReactElement, type ReactNode } from "react"
 import Link from "next/link"
-import { ChevronsUp, Ellipsis, FolderOpen, SquarePen, Trash2 } from "lucide-react"
+import { ChevronsUp, Ellipsis, Eye, FolderPen, Pin, PinOff, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -16,6 +17,8 @@ type Props = {
   identity: string
   admitted: boolean
   triggerClassName: string
+  onSetPin?: (id: string, value: boolean, opener: HTMLButtonElement | null) => void
+  pins?: ProjectPinsModel
   onRename?: (target: string, opener: HTMLButtonElement | null) => void
   onDelete?: (target: string, opener: HTMLButtonElement | null) => void
   onShowLess: () => void
@@ -24,7 +27,7 @@ type Props = {
 }
 
 /** Two native menu surfaces share one exact target and one action definition. */
-export function WorkspaceRailProjectMenu({ project, identity, admitted, triggerClassName, onRename, onDelete, onShowLess, onNavigate, children }: Props) {
+export function WorkspaceRailProjectMenu({ project, identity, admitted, triggerClassName, pins, onSetPin, onRename, onDelete, onShowLess, onNavigate, children }: Props) {
   const t = useT()
   const trigger = useRef<HTMLButtonElement | null>(null)
   const [openIdentity, setOpenIdentity] = useState(identity)
@@ -52,10 +55,29 @@ export function WorkspaceRailProjectMenu({ project, identity, admitted, triggerC
   const invoke = (action: () => void) => {
     if (live.current) action()
   }
+  const pinFact = pins && Object.hasOwn(pins.targets, project.id) ? pins.targets[project.id] : undefined
+  const pinKnown = pinFact?.status === "known"
+  const pinChecking = pinFact?.status === "reading" || pinFact?.status === "pending"
+  const pinLabel = pinKnown ? pinFact.value.is_pinned ? "firstSite.unpinProject" : "firstSite.pinProject"
+    : pinChecking || pinFact === undefined ? "firstSite.projectPinStatus" : "firstSite.checkProjectPin"
+  const PinIcon = pinKnown && pinFact.value.is_pinned ? PinOff : Pin
+  const selectPin = (event: Event) => {
+    event.preventDefault()
+    invoke(() => {
+      if (!pins) return
+      if (pinKnown) {
+        if (onSetPin) onSetPin(project.id, !pinFact.value.is_pinned, trigger.current)
+        else void pins.set(project.id, !pinFact.value.is_pinned)
+      } else void pins.check(project.id)
+    })
+  }
   const items = (kind: "context" | "dropdown") => {
     const Item = kind === "context" ? ContextMenuItem : DropdownMenuItem
     return (
       <>
+        {pins?.available ? <Item disabled={pinChecking || pinFact === undefined || pinFact.status === "unavailable"} onSelect={selectPin}>
+          <PinIcon aria-hidden="true" />{t(pinLabel)}
+        </Item> : null}
         {onRename ? (
           <Item
             onSelect={() =>
@@ -65,7 +87,7 @@ export function WorkspaceRailProjectMenu({ project, identity, admitted, triggerC
               })
             }
           >
-            <SquarePen aria-hidden="true" />
+            <FolderPen aria-hidden="true" />
             {t("firstSite.editProject")}
           </Item>
         ) : null}
@@ -77,11 +99,12 @@ export function WorkspaceRailProjectMenu({ project, identity, admitted, triggerC
                 event.preventDefault()
                 return
               }
+              // Close the Sheet before navigation can synchronously unmount this portal.
+              if (!event.defaultPrevented && event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) onNavigate()
               interceptMountedSurfaceNavigation(event, project.href)
             }}
-            onClick={() => invoke(onNavigate)}
           >
-            <FolderOpen aria-hidden="true" />
+            <Eye aria-hidden="true" />
             {t("firstSite.viewProject")}
           </Link>
         </Item>
@@ -112,12 +135,13 @@ export function WorkspaceRailProjectMenu({ project, identity, admitted, triggerC
       onOpenChange={(open) => {
         setOpenIdentity(identity)
         setDropdownOpen(open)
-        if (open) setContextOpen(false)
+        if (open) { setContextOpen(false); pins?.ensure(project.id) }
       }}
     >
       <DropdownMenuTrigger asChild>
         <Button
           ref={trigger}
+          data-project-menu-trigger="true"
           type="button"
           variant="ghost"
           size="icon-xs"
@@ -139,7 +163,7 @@ export function WorkspaceRailProjectMenu({ project, identity, admitted, triggerC
       onOpenChange={(open) => {
         setOpenIdentity(identity)
         setContextOpen(open)
-        if (open) setDropdownOpen(false)
+        if (open) { setDropdownOpen(false); pins?.ensure(project.id) }
       }}
     >
       <ContextMenuTrigger asChild disabled={!admitted}>

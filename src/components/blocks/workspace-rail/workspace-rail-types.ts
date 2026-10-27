@@ -1,3 +1,4 @@
+import type { ProjectPinsModel } from "@/features/app/use-project-pins"
 import type { ComponentType, RefObject, SVGProps } from "react"
 
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
@@ -53,6 +54,7 @@ export type WorkspaceRailProps = {
   onRequestProjectRename?: (projectId: string, opener?: HTMLButtonElement | null) => void
   onRequestProjectDelete?: (projectId: string, opener: HTMLButtonElement | null) => void
   /** Owner-confirmed project collection. A known projectHref alone is only a current-route shortcut. */
+  projectPins?: ProjectPinsModel
   projects?: readonly WorkspaceRailProject[]
   projectListStatus?: "blocked" | "loading" | "ready" | "error"
   projectListRetryable?: boolean

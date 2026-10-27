@@ -4,6 +4,12 @@
 import type { MessageKey } from "./messages"
 
 export const fr: Partial<Record<MessageKey, string>> = {
+  "firstSite.pinProject": "Épingler",
+  "firstSite.unpinProject": "Désépingler",
+  "firstSite.projectPinStatus": "État de l’épingle",
+  "firstSite.checkProjectPin": "Vérifier l’épingle",
+  "firstSite.pinnedProjects": "Épinglés",
+  "firstSite.moreProjectPins": "Afficher plus de projets épinglés",
   "rail.actionRename": "Renommer",
   "rail.actionMove": "Déplacer vers",
   "rail.actionArchive": "Archiver",

@@ -1,3 +1,9 @@
+## PROJECT-PIN：正式BFF个人偏好消费 D0（2026-10-27）
+
+全局个人pin由既有BFF Project owner拥有，复用正式 PROJECT-PIN-D0；App只持当前准入主体的RAM投影与每project串行pending，不新增数据owner、Schema、localStorage或通用偏好框架。AppFrame挂载层持collection，不按projectRef/URL清空；旧actor/准入及不可见Project立即退休。已读分页按owner顺序展示Pinned区，未耗尽页不证明缺席；菜单按需精确GET确认目标。PUT未知仅显式精确GET观察当前值，不自动重放、不冒原命令receipt；原项目编辑/删除/unknown/key/body链不变。
+
+验证：先正式pin/schema行为RED，窄生成器确定性/check、client/hook/rail focused、真实loopback薄桥；Root独立统一门、正常资源/浏览器/Git。本阶段不以mock或源码完成称正常已验。
+
 ## 2026-10-27 Public28.4 具体动作对象消费者（第二阶段本地候选）
 
 固定 BFF 正式 Git commit `3d52a90ec42601a19536e95a8b9e48f93a63276c`／Public28.4.0／192 operations，完整 canonical SHA256 `48aa9638d133223c9f78655e9398ddbb44159963f92a2db891a09212f3aa2726`；App 起点 `0f72e2f208fcf93a360cac3cad890a20c8d090e9`。唯一原件从此 Git blob 原字节取得，十条既有公共生成链正规重出；三条独立 MCP 私有 pin／恢复规则不变。既有 `generate-bff-tool-display.mjs` 同一有限提取器派生 closed detail profile：kind、名称 scalar／UTF-8 上限、NFC／禁 Cc/Cf/Cs、code-kind 条件与仅 file 的 canonical basename pattern；不在浏览器另抄 wire DTO／pattern，MCP 名称合法斜线不误套文件约束。现唯一 activity schema 用 generated profile 和 TextEncoder 校验，live CUSTOM／AI SDK data part／私有 snapshot／ordered parts 共用；unknown、null、extra、错 kind／code、坏 Unicode 均拒绝。

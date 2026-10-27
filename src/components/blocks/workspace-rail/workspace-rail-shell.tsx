@@ -61,6 +61,7 @@ export function WorkspaceRailShell({
   onCreateProject,
   onRequestProjectRename,
   onRequestProjectDelete,
+  projectPins,
   projects,
   projectListStatus,
   projectListRetryable,
@@ -402,6 +403,7 @@ export function WorkspaceRailShell({
             {...(onCreateProject === undefined ? {} : { onCreateProject })}
             {...(onRequestProjectRename === undefined ? {} : { onRequestProjectRename })}
             {...(onRequestProjectDelete === undefined ? {} : { onRequestProjectDelete })}
+      {...(projectPins === undefined ? {} : { projectPins })}
             onNewChat={onNewChat}
             closeNavigation={closeNavigation}
             onOpenSettings={openSettings}

@@ -147,3 +147,7 @@ runtime token、内部服务地址、workload secret 或后端隔离键。
 - `model-publish-body.ts`：仅模型修订发布的有界EOF校验，证明Next空POST流，无正文生成或模型执行。
 
 - `mcp-project-publication.ts`：三条 URL MCP 定义发布 browser-private 薄桥（发布、项目 pin 读取、原请求回执）；当前 Session/同源写、body/key 原封保留、10s 总预算、65KiB 请求/256KiB 响应、完整EOF及原实体/CAS绑定。无 owner 直连、SQL、重试或公开 API 扩展。移除 pin 接口本片不开放。
+
+## Project pin consumer
+
+`project-pins.ts`只处理GET `/api/hub/self/project-pins`与PUT `/api/hub/projects/{id}/pin`；strip-self别名在generic proxy前拒绝。沿Product Session／same-origin／部署Domain，不透传caller身份/key/CAS，strict JSON≤1KiB与完整响应≤64KiB，同一次10秒admission→EOF预算、取消与静态异常。所有错误沿正式ErrorEnvelope，不另造retryable DTO。

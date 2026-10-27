@@ -1,3 +1,9 @@
+## PROJECT-PIN：正式BFF个人偏好消费 D0（2026-10-27）
+
+唯一完整artifact固定BFF c195d2325ba9c433cc4c64e25e6c67eaf73c47f6／Public28.5／194操作，SHA256 109a2ae063b10699ae52776b09533c5622d906679c093d65730a289206043b1a；同snapshot正规生成，原三private pin不动，test-only完整28.5→28.4逆证再委托旧链。浏览器只新增GET /api/hub/self/project-pins（分页limit/cursor或互斥单project_id）与PUT /api/hub/projects/{id}/pin（closed {is_pinned:boolean}，≤1KiB，无key/CAS/query）。沿现Product Session／部署Domain／same-origin写防护，10秒admission至完整EOF、64KiB响应、取消及静态异常；generated schema核目标、bool/null条件、分页顺序/唯一性与方法fault。pin不授可见权，不改Project DTO。
+
+验证：先正式pin/schema行为RED，窄生成器确定性/check、client/hook/rail focused、真实loopback薄桥；Root独立统一门、正常资源/浏览器/Git。本阶段不以mock或源码完成称正常已验。
+
 ## 2026-10-27 Public28.4 安全工具对象与共享隔离（本地消费者候选）
 
 唯一原件固定 BFF `3d52a90ec42601a19536e95a8b9e48f93a63276c`／28.4.0／192 operations／SHA256 `48aa9638d133223c9f78655e9398ddbb44159963f92a2db891a09212f3aa2726`，十公共生成链与在线 Docs 同源，独立 MCP 私有 artifact 不改。optional `RunToolActivity.display_detail` 仅 closed `{kind:file|mcp_tool,name}`；name 为 1–120 Unicode scalar、≤480 UTF-8 bytes、NFC 且禁 Cc/Cf/Cs。code-kind 与 file-only basename pattern从 canonical allOf 条件正规派生；MCP 工具名称可含斜线。App 严格拒 null／extra／未知 kind／不匹配类别，不修正、截断或从参数补名称；旧 absent 保持合法。live／snapshot／parts 共用一份 validator，名称仅纯文本展示，不新增请求／endpoint／授权／执行事实。

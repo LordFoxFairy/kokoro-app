@@ -4,6 +4,12 @@
 import type { MessageKey } from "./messages"
 
 export const ja: Partial<Record<MessageKey, string>> = {
+  "firstSite.pinProject": "固定",
+  "firstSite.unpinProject": "固定を解除",
+  "firstSite.projectPinStatus": "固定状態",
+  "firstSite.checkProjectPin": "固定状態を確認",
+  "firstSite.pinnedProjects": "固定済み",
+  "firstSite.moreProjectPins": "固定プロジェクトをさらに表示",
   "rail.actionRename": "名前を変更",
   "rail.actionMove": "移動先",
   "rail.actionArchive": "アーカイブ",

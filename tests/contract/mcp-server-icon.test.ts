@@ -11,7 +11,7 @@ it("pins and regenerates only the independent browser-private media profile, wit
   expect(MCP_SERVER_ICON_POLICY.new_command_authorized).toBe(false);
   expect(MCP_SERVER_ICON_POLICY.automatic_retries).toBe(false);
   execFileSync(process.execPath, ["scripts/generate-bff-mcp-server-icon.mjs", "--check"]);
-  expect(createHash("sha256").update(readFileSync("src/generated/bff-public-openapi.yaml")).digest("hex")).toBe("48aa9638d133223c9f78655e9398ddbb44159963f92a2db891a09212f3aa2726");
+  expect(createHash("sha256").update(readFileSync("src/generated/bff-public-openapi.yaml")).digest("hex")).toBe("109a2ae063b10699ae52776b09533c5622d906679c093d65730a289206043b1a");
   expect(createHash("sha256").update(readFileSync("src/generated/bff-connector-command-errors.json")).digest("hex")).toBe("5c12e237e03a6be446a564034ec5c18965e996be24ddeb40807ec4b9b074d83d");
 });
 it("the producer's status-specific closed tuples reject changed retryability and unknown fields", () => {

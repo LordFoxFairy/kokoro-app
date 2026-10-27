@@ -4,6 +4,12 @@
 import type { MessageKey } from "./messages"
 
 export const ru: Partial<Record<MessageKey, string>> = {
+  "firstSite.pinProject": "Закрепить",
+  "firstSite.unpinProject": "Открепить",
+  "firstSite.projectPinStatus": "Статус закрепления",
+  "firstSite.checkProjectPin": "Проверить закрепление",
+  "firstSite.pinnedProjects": "Закреплённые",
+  "firstSite.moreProjectPins": "Показать больше закреплённых проектов",
   "rail.actionRename": "Переименовать",
   "rail.actionMove": "Переместить в",
   "rail.actionArchive": "Архивировать",

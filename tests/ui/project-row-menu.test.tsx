@@ -1,4 +1,7 @@
-import type { ReactNode } from "react"
+import { useProjectPins } from "@/features/app/use-project-pins"
+import { useEffect, useState, type ReactNode } from "react"
+import { flushSync } from "react-dom"
+import { WorkspaceRailProjectMenu } from "@/components/blocks/workspace-rail/workspace-rail-project-menu"
 import { act, cleanup, fireEvent, render, renderHook, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 import { WorkspaceRail } from "@/components/blocks/workspace-rail/workspace-rail"
@@ -24,7 +27,7 @@ afterEach(() => {
   vi.restoreAllMocks()
   window.history.replaceState(null, "", "/app")
 })
-function rail() {
+function rail(overrides: Partial<Parameters<typeof WorkspaceRail>[0]> = {}) {
   const rename = vi.fn(),
     remove = vi.fn(),
     create = vi.fn()
@@ -52,6 +55,7 @@ function rail() {
           listError={false}
           hasMore={false}
           onLoadMore={() => {}}
+          {...overrides}
         />
       </LocaleProvider>
     </ThemeProvider>,
@@ -192,4 +196,100 @@ it("跨行B确认只发B的原空DELETE；unknown重试保同key/body，202只�
   expect(new Headers(fetch.mock.calls[1]?.[1]?.headers).get("idempotency-key")).toBe(key)
   expect(retire).toHaveBeenCalledWith(b.id)
   expect(window.location.pathname).toBe("/app")
+})
+
+
+it("a ready owner pin is a fifth real menu action, not a row-local toggle",async()=>{
+ const set=vi.fn().mockResolvedValue(undefined),ensure=vi.fn()
+ const projectPins={context:{},available:true,targets:{[b.id]:{status:"known" as const,value:{project_id:b.id,is_pinned:false,pinned_at:null}}},pinned:[],loading:false,failed:false,loaded:true,nextCursor:null,ensure,check:vi.fn().mockResolvedValue(undefined),set,loadMore:vi.fn(),refresh:vi.fn()}
+ const c=rail({projectPins} as Partial<Parameters<typeof WorkspaceRail>[0]>)
+ fireEvent.contextMenu(c.rowButton)
+ const menu=await screen.findByRole("menu")
+ fireEvent.click(within(menu).getByRole("menuitem",{name:"固定"}))
+ expect(set).toHaveBeenCalledExactlyOnceWith(b.id,true)
+ expect(c.remove).not.toHaveBeenCalled();expect(c.rename).not.toHaveBeenCalled()
+})
+
+it("View closes navigation before a synchronous surface event can unmount its portal",async()=>{
+ const order:string[]=[]
+ function Fixture(){
+  const [shown,setShown]=useState(true)
+  useEffect(()=>{const close=()=>{order.push("surface");flushSync(()=>setShown(false))};window.addEventListener("kokoro:surface-navigation",close,{once:true});return()=>window.removeEventListener("kokoro:surface-navigation",close)},[])
+  return shown?<WorkspaceRailProjectMenu project={{id:b.id,name:b.name,href:`/app/project/${b.id}`}} identity="actor" admitted triggerClassName="" onShowLess={()=>{}} onNavigate={()=>order.push("close")}>
+   {trigger=><div><button>{b.name}</button>{trigger}</div>}
+  </WorkspaceRailProjectMenu>:null
+ }
+ render(<LocaleProvider><Fixture/></LocaleProvider>)
+ fireEvent.keyDown(screen.getByRole("button",{name:"项目选项"}),{key:"ArrowDown"})
+ fireEvent.click(await screen.findByRole("menuitem",{name:"查看项目"}))
+ expect(order).toEqual(["close","surface"])
+ expect(window.location.pathname).toBe(`/app/project/${b.id}`)
+})
+
+function pinModel(status:"known"|"pending"|"unknown"="known"){
+ const value={project_id:b.id,is_pinned:true,pinned_at:"2026-10-27T00:00:00.000Z"}
+ return {context:{},available:true,targets:{[b.id]:status==="known"?{status,value}:{status,previous:value}},pinned:[{project_id:b.id,pinned_at:value.pinned_at}],loading:false,failed:false,loaded:true,nextCursor:"next" as string|null,ensure:vi.fn(),check:vi.fn().mockResolvedValue(undefined),set:vi.fn().mockResolvedValue(undefined),loadMore:vi.fn(),refresh:vi.fn()}
+}
+it("Pinned is a real unique owner-ordered section and its row uses the same Unpin menu",async()=>{
+ const projectPins=pinModel(),c=rail({projectPins} as Partial<Parameters<typeof WorkspaceRail>[0]>)
+ const pinned=screen.getByRole("list",{name:"已固定"}),ordinary=screen.getByRole("list",{name:"项目"})
+ expect(within(pinned).getByRole("button",{name:b.name})).toBeVisible();expect(within(ordinary).queryByRole("button",{name:b.name})).toBeNull()
+ expect(screen.getAllByRole("button",{name:b.name})).toHaveLength(1)
+ fireEvent.click(within(pinned).getByRole("button",{name:"显示更多固定项目"}));expect(projectPins.loadMore).toHaveBeenCalledOnce()
+ fireEvent.keyDown(within(c.row).getByRole("button",{name:"项目选项"}),{key:"ArrowDown"})
+ const menu=await screen.findByRole("menu");expect(within(menu).getAllByRole("menuitem")).toHaveLength(5)
+ fireEvent.click(within(menu).getByRole("menuitem",{name:"取消固定"}));expect(projectPins.set).toHaveBeenCalledExactlyOnceWith(b.id,false)
+})
+it.each(["pending","unknown"] as const)("%s pin keeps its prior Pinned row without exposing another write",async status=>{
+ const projectPins=pinModel(status),c=rail({projectPins} as Partial<Parameters<typeof WorkspaceRail>[0]>)
+ expect(within(screen.getByRole("list",{name:"已固定"})).getByRole("button",{name:b.name})).toBeVisible()
+ fireEvent.contextMenu(c.rowButton);const menu=await screen.findByRole("menu")
+ expect(within(menu).queryByRole("menuitem",{name:"固定"})).toBeNull();expect(within(menu).queryByRole("menuitem",{name:"取消固定"})).toBeNull()
+ if(status==="pending")expect(within(menu).getByRole("menuitem",{name:"固定状态"})).toHaveAttribute("data-disabled")
+ else {fireEvent.click(within(menu).getByRole("menuitem",{name:"核验固定状态"}));expect(projectPins.check).toHaveBeenCalledExactlyOnceWith(b.id)}
+ expect(projectPins.set).not.toHaveBeenCalled()
+})
+
+it.each([false,true])("pin and unpin move a row between real sections without losing keyboard focus (Projects collapsed=%s)",async collapsed=>{
+ const client={list:vi.fn().mockResolvedValue({items:[],next_cursor:null}),set:vi.fn(async(id:string,is_pinned:boolean)=>({project_id:id,is_pinned,pinned_at:is_pinned?"2026-10-27T00:00:00.000Z":null}))}
+ function Host(){const projectPins=useProjectPins({preview:false,boundary:{admitted:true,subject:"actor",generation:1},visibleIds:[b.id],client});return <WorkspaceRail collapsed={false} onToggleCollapse={()=>{}} onNewChat={()=>{}} chatHref="/app" projects={[{id:b.id,name:b.name,href:`/app/project/${b.id}`}]} projectListStatus="ready" projectPins={projectPins} conversations={[]} activeId={null} awaitingIds={new Set()} onSelectConversation={()=>{}} onDeleteConversation={async()=>true} onRenameConversation={()=>{}} onOpenSettings={()=>{}} listLoading={false} listError={false} hasMore={false} onLoadMore={()=>{}}/>}
+ render(<ThemeProvider><LocaleProvider><Host/></LocaleProvider></ThemeProvider>)
+ for(const label of ["固定","取消固定"]){
+ if(collapsed&&label==="取消固定")fireEvent.click(screen.getByRole("button",{name:"收起项目"}))
+ const trigger=within(screen.getByRole("button",{name:b.name}).closest("[data-project-id]") as HTMLElement).getByRole("button",{name:"项目选项"})
+ trigger.focus();fireEvent.keyDown(trigger,{key:"ArrowDown"})
+ const action=await screen.findByRole("menuitem",{name:label});action.focus();fireEvent.keyDown(action,{key:"Enter",code:"Enter"})
+ await waitFor(()=>expect(screen.queryByRole("menu")).toBeNull())
+ if(collapsed&&label==="取消固定")await waitFor(()=>expect(screen.getByRole("button",{name:"展开项目"})).toHaveFocus())
+ else await waitFor(()=>expect(within(screen.getByRole("button",{name:b.name}).closest("[data-project-id]") as HTMLElement).getByRole("button",{name:"项目选项"})).toHaveFocus())
+ }
+ expect(client.set.mock.calls).toEqual([[b.id,true,expect.any(AbortSignal)],[b.id,false,expect.any(AbortSignal)]])
+})
+
+
+it("an initial pin collection failure adds no empty Pinned error panel or retry surface",()=>{
+ const projectPins={...pinModel(),targets:{},pinned:[],nextCursor:null,loaded:false,failed:true}
+ rail({projectPins} as Partial<Parameters<typeof WorkspaceRail>[0]>)
+ expect(screen.queryByRole("list",{name:"已固定"})).toBeNull()
+ expect(screen.queryByText("重新读取固定项目")).toBeNull()
+ expect(screen.queryByRole("alert")).toBeNull()
+})
+
+
+it("returning to the same route does not revive an earlier pin focus request",async()=>{
+ let finish!:(value:{project_id:string,is_pinned:boolean,pinned_at:string})=>void
+ const client={list:vi.fn().mockResolvedValue({items:[],next_cursor:null}),set:vi.fn(()=>new Promise<{project_id:string,is_pinned:boolean,pinned_at:string}>(resolve=>{finish=resolve}))}
+ function Host(){const projectPins=useProjectPins({preview:false,boundary:{admitted:true,subject:"actor",generation:1},visibleIds:[b.id],client});return <WorkspaceRail collapsed={false} onToggleCollapse={()=>{}} onNewChat={()=>{}} chatHref="/app" projects={[{id:b.id,name:b.name,href:`/app/project/${b.id}`}]} projectListStatus="ready" projectPins={projectPins} conversations={[]} activeId={null} awaitingIds={new Set()} onSelectConversation={()=>{}} onDeleteConversation={async()=>true} onRenameConversation={()=>{}} onOpenSettings={()=>{}} listLoading={false} listError={false} hasMore={false} onLoadMore={()=>{}}/>}
+ render(<ThemeProvider><LocaleProvider><Host/></LocaleProvider></ThemeProvider>)
+ const trigger=within(screen.getByRole("button",{name:b.name}).closest("[data-project-id]") as HTMLElement).getByRole("button",{name:"项目选项"})
+ trigger.focus();fireEvent.keyDown(trigger,{key:"ArrowDown"})
+ const action=await screen.findByRole("menuitem",{name:"固定"});action.focus();fireEvent.keyDown(action,{key:"Enter",code:"Enter"})
+ expect(client.set).toHaveBeenCalledOnce()
+ const source=window.location.pathname
+ act(()=>{window.history.pushState(null,"","/app/library");window.dispatchEvent(new Event("kokoro:surface-navigation"));window.history.pushState(null,"",source);window.dispatchEvent(new Event("kokoro:surface-navigation"))})
+ act(()=>{(document.activeElement as HTMLElement).blur()})
+ await act(async()=>{finish({project_id:b.id,is_pinned:true,pinned_at:"2026-10-27T00:00:00.000Z"});await Promise.resolve()})
+ await waitFor(()=>expect(screen.getByRole("list",{name:"已固定"})).toBeVisible())
+ await act(async()=>{await new Promise(resolve=>window.requestAnimationFrame(resolve))})
+ expect(document.body).toHaveFocus()
 })

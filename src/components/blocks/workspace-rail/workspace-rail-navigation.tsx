@@ -1,6 +1,7 @@
 "use client"
 
-import { Fragment, type Dispatch, type RefObject, type SetStateAction, useState } from "react"
+import type { ProjectPinsModel } from "@/features/app/use-project-pins"
+import { useLayoutEffect, useRef, Fragment, type Dispatch, type RefObject, type SetStateAction, useState } from "react"
 import Link from "next/link"
 import { Check, ChevronDown, ChevronRight, Ellipsis, Folder, Shapes, Monitor, Plus, SquareMousePointer, SquarePen, WandSparkles, Workflow } from "lucide-react"
 
@@ -51,6 +52,7 @@ export type WorkspaceRailNavigationProps = Pick<WorkspaceRailProps, "conversatio
   setProjectPickerOpen: Dispatch<SetStateAction<boolean>>
   onCreateProject?: (input?: Readonly<{ name?: string; draft?: string }>) => void
   onRequestProjectRename?: (projectId: string, opener?: HTMLButtonElement | null) => void
+  projectPins?: ProjectPinsModel
   onRequestProjectDelete?: (projectId: string, opener: HTMLButtonElement | null) => void
   onNewChat: () => void
   closeNavigation: () => void
@@ -84,6 +86,7 @@ export function WorkspaceRailNavigation({
   onCreateProject,
   onRequestProjectRename,
   onRequestProjectDelete,
+  projectPins,
   onNewChat,
   closeNavigation,
   onOpenSettings,
@@ -185,8 +188,126 @@ export function WorkspaceRailNavigation({
     })
   }
 
+  const navigationRef = useRef<HTMLElement>(null)
+  const pinFocusScope = useRef<object>({})
+  const pinVisibleIds = useRef<ReadonlySet<string>>(new Set())
+  useLayoutEffect(() => { pinVisibleIds.current = new Set(orderedProjects.map(item => item.id)) }, [orderedProjects])
+  useLayoutEffect(() => {
+    const scope = {}
+    pinFocusScope.current = scope
+    const retireFocus = () => { pinFocusScope.current = {} }
+    window.addEventListener("popstate", retireFocus)
+    window.addEventListener("kokoro:surface-navigation", retireFocus)
+    return () => {
+      if (pinFocusScope.current === scope) pinFocusScope.current = {}
+      window.removeEventListener("popstate", retireFocus)
+      window.removeEventListener("kokoro:surface-navigation", retireFocus)
+    }
+  }, [projectPins?.context])
+  const setProjectPin = (id: string, value: boolean, opener: HTMLButtonElement | null) => {
+    const scope = pinFocusScope.current
+    const route = `${window.location.pathname}${window.location.search}${window.location.hash}`
+    void projectPins?.set(id, value).then(() => window.requestAnimationFrame(() => {
+      if (pinFocusScope.current !== scope || !pinVisibleIds.current.has(id) || route !== `${window.location.pathname}${window.location.search}${window.location.hash}` || !navigationRef.current || opener?.isConnected
+        || document.activeElement !== document.body) return
+      const row = [...navigationRef.current.querySelectorAll<HTMLElement>("[data-project-id]")].find(item => item.dataset.projectId === id)
+      const target = row?.querySelector<HTMLButtonElement>("[data-project-menu-trigger]")
+        ?? navigationRef.current.querySelector<HTMLButtonElement>('[aria-controls="rail-project-list"], [data-navigation-section="project"]')
+      if (target?.isConnected && !target.disabled && (typeof target.checkVisibility !== "function" || target.checkVisibility())) target.focus({ preventScroll: true })
+    }))
+  }
+  const pinnedProjects = projectPins?.pinned.flatMap(pin => {
+    const project=orderedProjects.find(item=>item.id===pin.project_id)
+    return project ? [project] : []
+  }) ?? []
+  const pinnedIds=new Set(pinnedProjects.map(item=>item.id))
+  const ordinaryProjects=orderedProjects.filter(item=>!pinnedIds.has(item.id))
+  const renderProjectRows = (items: readonly WorkspaceRailProject[]) => items.map((project) => {
+                const active = (projectActive && project.href === projectHref) || project.active === true
+                const conversationsExpanded = projectConversationExpansion.get(project.id) ?? active
+                const testId = active || orderedProjects.length === 1 ? "rail-project" : `rail-project-${project.id}`
+                const dragging = dragState?.kind === "project" && dragState.id === project.id
+                const dragOver = dragOverKey === `project:${project.id}`
+                return (
+                  <Fragment key={project.id}>
+                  <WorkspaceRailProjectMenu project={project} identity={conversationReads?.identity ?? "controlled"} admitted={conversationReads?.admitted !== false && (projectListStatus === undefined || projectListStatus === "ready")}
+                    triggerClassName={cn(itemStyles.projectAction, itemStyles.projectOptions)}
+                    {...(projectPins === undefined ? {} : { pins: projectPins, onSetPin: setProjectPin })}
+                    {...(onRequestProjectRename === undefined ? {} : { onRename: onRequestProjectRename })}
+                    {...(onRequestProjectDelete === undefined ? {} : { onDelete: onRequestProjectDelete })}
+                    onShowLess={() => setProjectConversationExpansion(current => new Map(current).set(project.id, false))}
+                    onNavigate={closeNavigation}>{menuTrigger => <SidebarMenuItem
+                    className={cn(itemStyles.item, navigationStyles.projectRow, dragging && itemStyles.itemDragging, dragOver && itemStyles.itemDragOver)}
+                    data-project-id={project.id}
+                    data-drag-kind="project"
+                    data-project-active={active ? "true" : "false"}
+                    data-dragging={dragging ? "true" : "false"}
+                    data-drag-over={dragOver ? "true" : "false"}
+                  >
+                    <SidebarMenuButton
+                      type="button"
+                      className={itemStyles.itemSelect}
+                      isActive={active}
+                      {...dragProps("project", project.id)}
+                      onPointerDown={markPointerFocus}
+                      onClick={() => toggleProjectConversations(project.id, conversationsExpanded)}
+                      aria-label={project.name}
+                      aria-expanded={conversationsExpanded}
+                      aria-controls={`rail-project-conversations-${project.id}`}
+                      data-testid={testId}
+                      data-navigation-section="project"
+                    >
+                      <span className={itemStyles.projectGlyph} aria-hidden="true">
+                        <Folder className={cn(railStyles.icon, itemStyles.projectFolderIcon)} />
+                        <ChevronRight className={cn(railStyles.icon, itemStyles.projectChevron)} />
+                      </span>
+                      <span className={itemStyles.itemTitle}>{project.name}</span>
+                    </SidebarMenuButton>
+                    <span className={itemStyles.projectActions}>
+                      {menuTrigger}
+                      <Button asChild variant="ghost" size="icon-xs" className={itemStyles.projectAction}>
+                        <Link href={project.href}
+                          {...(mountedSurfacePrefetch === undefined ? {} : { prefetch: mountedSurfacePrefetch })}
+                          onPointerDown={markPointerFocus}
+                          onClickCapture={(event) => interceptMountedSurfaceNavigation(event, project.href)}
+                          onClick={closeNavigation}
+                          aria-label={`${t("rail.newChat")} · ${project.name}`}
+                          aria-current={active ? "page" : undefined}
+                        >
+                          <SquarePen aria-hidden="true" />
+                        </Link>
+                      </Button>
+                    </span>
+                  </SidebarMenuItem>}</WorkspaceRailProjectMenu>
+                  {conversationsExpanded ? <SidebarMenuItem
+                      id={`rail-project-conversations-${project.id}`}
+                      className={navigationStyles.projectConversationGroup}
+                    >
+                      {conversationReads ? <ScopedConversationGroup
+                        scope={{ kind: "project", projectRef: project.id }}
+                        reads={conversationReads}
+                        compactDesktop={false}
+                        query=""
+                        searchOpen={false}
+                        awaitingIds={awaitingIds}
+                        closeNavigation={closeNavigation}
+                        onNewChat={onNewChat}
+                        hideSectionHeader
+                        conversationMove={conversationMove}
+                        conversationMovePending={conversationMovePending}
+                        conversationMoveFailed={conversationMoveFailed}
+                        {...(onRetryConversationMove === undefined ? {} : { onRetryConversationMove })}
+                        projects={orderedProjects}
+                        projectListReady={projectListStatus === "ready"}
+                        onRequestDelete={onRequestDelete}
+                      /> : <p className={itemStyles.empty} role="status">{t("firstSite.unavailable")}</p>}
+                    </SidebarMenuItem> : null}
+                  </Fragment>
+                )
+              })
+
   return (
-    <nav className={navigationStyles.nav} aria-label={t("rail.navAria")}>
+    <nav ref={navigationRef} className={navigationStyles.nav} aria-label={t("rail.navAria")}>
       <SidebarMenu data-desktop-global-menu="true">
         {/* 新对话：带 ⇧⌘O 快捷键（AppFrame 已接入键盘）。 */}
         <SidebarMenuItem>
@@ -354,6 +475,14 @@ export function WorkspaceRailNavigation({
         </SidebarGroupContent>
       </SidebarGroup>
 
+      {!compactDesktop && projectPins?.available && (pinnedProjects.length>0 || projectPins.nextCursor!==null) ? <SidebarGroup className={navigationStyles.projectGroup}>
+        <SidebarGroupLabel>{t("firstSite.pinnedProjects")}</SidebarGroupLabel>
+        <SidebarGroupContent><SidebarMenu aria-label={t("firstSite.pinnedProjects")}>
+          {renderProjectRows(pinnedProjects)}
+          {projectPins.nextCursor!==null ? <SidebarMenuItem><Button variant="ghost" disabled={projectPins.loading} onClick={projectPins.loadMore}>{t("firstSite.moreProjectPins")}</Button></SidebarMenuItem> : null}
+        </SidebarMenu></SidebarGroupContent>
+      </SidebarGroup> : null}
+
       {projectHref || projects !== undefined || onCreateProject ? <SidebarGroup className={cn(navigationStyles.navGroup, navigationStyles.projectGroup)} data-desktop-projects="true" data-projects-expanded={projectsExpanded ? "true" : "false"}>
         {!compactDesktop ? <SidebarGroupLabel className={cn(railStyles.navGroupLabel, navigationStyles.navGroupLabel)}>
           <Button
@@ -436,88 +565,7 @@ export function WorkspaceRailNavigation({
           ) : (
             <SidebarMenu id="rail-project-list" data-project-list="true" aria-label={t("firstSite.projects")}>
               {projectReadFeedback ? <SidebarMenuItem>{projectReadFeedback}</SidebarMenuItem> : null}
-              {orderedProjects.map((project) => {
-                const active = (projectActive && project.href === projectHref) || project.active === true
-                const conversationsExpanded = projectConversationExpansion.get(project.id) ?? active
-                const testId = active || orderedProjects.length === 1 ? "rail-project" : `rail-project-${project.id}`
-                const dragging = dragState?.kind === "project" && dragState.id === project.id
-                const dragOver = dragOverKey === `project:${project.id}`
-                return (
-                  <Fragment key={project.id}>
-                  <WorkspaceRailProjectMenu project={project} identity={conversationReads?.identity ?? "controlled"} admitted={conversationReads?.admitted !== false && (projectListStatus === undefined || projectListStatus === "ready")}
-                    triggerClassName={cn(itemStyles.projectAction, itemStyles.projectOptions)}
-                    {...(onRequestProjectRename === undefined ? {} : { onRename: onRequestProjectRename })}
-                    {...(onRequestProjectDelete === undefined ? {} : { onDelete: onRequestProjectDelete })}
-                    onShowLess={() => setProjectConversationExpansion(current => new Map(current).set(project.id, false))}
-                    onNavigate={closeNavigation}>{menuTrigger => <SidebarMenuItem
-                    className={cn(itemStyles.item, navigationStyles.projectRow, dragging && itemStyles.itemDragging, dragOver && itemStyles.itemDragOver)}
-                    data-project-id={project.id}
-                    data-drag-kind="project"
-                    data-project-active={active ? "true" : "false"}
-                    data-dragging={dragging ? "true" : "false"}
-                    data-drag-over={dragOver ? "true" : "false"}
-                  >
-                    <SidebarMenuButton
-                      type="button"
-                      className={itemStyles.itemSelect}
-                      isActive={active}
-                      {...dragProps("project", project.id)}
-                      onPointerDown={markPointerFocus}
-                      onClick={() => toggleProjectConversations(project.id, conversationsExpanded)}
-                      aria-label={project.name}
-                      aria-expanded={conversationsExpanded}
-                      aria-controls={`rail-project-conversations-${project.id}`}
-                      data-testid={testId}
-                      data-navigation-section="project"
-                    >
-                      <span className={itemStyles.projectGlyph} aria-hidden="true">
-                        <Folder className={cn(railStyles.icon, itemStyles.projectFolderIcon)} />
-                        <ChevronRight className={cn(railStyles.icon, itemStyles.projectChevron)} />
-                      </span>
-                      <span className={itemStyles.itemTitle}>{project.name}</span>
-                    </SidebarMenuButton>
-                    <span className={itemStyles.projectActions}>
-                      {menuTrigger}
-                      <Button asChild variant="ghost" size="icon-xs" className={itemStyles.projectAction}>
-                        <Link href={project.href}
-                          {...(mountedSurfacePrefetch === undefined ? {} : { prefetch: mountedSurfacePrefetch })}
-                          onPointerDown={markPointerFocus}
-                          onClickCapture={(event) => interceptMountedSurfaceNavigation(event, project.href)}
-                          onClick={closeNavigation}
-                          aria-label={`${t("rail.newChat")} · ${project.name}`}
-                          aria-current={active ? "page" : undefined}
-                        >
-                          <SquarePen aria-hidden="true" />
-                        </Link>
-                      </Button>
-                    </span>
-                  </SidebarMenuItem>}</WorkspaceRailProjectMenu>
-                  {conversationsExpanded ? <SidebarMenuItem
-                      id={`rail-project-conversations-${project.id}`}
-                      className={navigationStyles.projectConversationGroup}
-                    >
-                      {conversationReads ? <ScopedConversationGroup
-                        scope={{ kind: "project", projectRef: project.id }}
-                        reads={conversationReads}
-                        compactDesktop={false}
-                        query=""
-                        searchOpen={false}
-                        awaitingIds={awaitingIds}
-                        closeNavigation={closeNavigation}
-                        onNewChat={onNewChat}
-                        hideSectionHeader
-                        conversationMove={conversationMove}
-                        conversationMovePending={conversationMovePending}
-                        conversationMoveFailed={conversationMoveFailed}
-                        {...(onRetryConversationMove === undefined ? {} : { onRetryConversationMove })}
-                        projects={orderedProjects}
-                        projectListReady={projectListStatus === "ready"}
-                        onRequestDelete={onRequestDelete}
-                      /> : <p className={itemStyles.empty} role="status">{t("firstSite.unavailable")}</p>}
-                    </SidebarMenuItem> : null}
-                  </Fragment>
-                )
-              })}
+              {renderProjectRows(ordinaryProjects)}
             </SidebarMenu>
           )}
         </SidebarGroupContent> : null}

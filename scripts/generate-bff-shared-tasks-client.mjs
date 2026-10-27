@@ -20,7 +20,7 @@ const sourcePath = join(root, "src/generated/bff-public-openapi.yaml");
 const outputPath = join(root, "src/generated/bff-shared-tasks");
 const configPath = join(root, "openapi-ts.bff-shared-tasks.config.ts");
 const expectedDigest =
-  "48aa9638d133223c9f78655e9398ddbb44159963f92a2db891a09212f3aa2726";
+  "109a2ae063b10699ae52776b09533c5622d906679c093d65730a289206043b1a";
 const operations = [["GET", "/v1/account/shared-tasks"], ["POST", "/v1/sessions/{id}/share"], ["DELETE", "/v1/sessions/{id}/share"]];
 
 const digest = (bytes) => createHash("sha256").update(bytes).digest("hex");

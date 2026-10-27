@@ -583,3 +583,21 @@ test('tool target Unicode extensions publish only at their exact canonical name 
     wrap({ ...node, description: ['-----BEGIN', 'PRIVATE KEY-----'].join(' ') }),
   ]) assert.throws(() => assertPublicationSafe(value));
 });
+
+
+test('formal personal Project pin natural PUT publishes no command key and rejects unrelated natural operations', () => {
+  const contract = fixtureContract();
+  const operation = contract.paths['/v1/sessions/{id}/messages'].post;
+  operation.operationId = 'setProjectPin';
+  operation['x-kokoro-idempotency'] = 'natural';
+  operation.parameters = [];
+  contract.paths = { '/v1/projects/{projectId}/pin': { put: operation } };
+  const files = generateReferenceFiles(contract, catalogEntry);
+  assert.equal(JSON.parse(files.get('manifest.json')).operations[0].idempotency, 'natural');
+  assert.doesNotMatch(files.get('chat.md'), /Idempotency-Key/u);
+  operation.parameters = [{ $ref: '#/components/parameters/IdempotencyKey' }];
+  assert.throws(() => generateReferenceFiles(contract, catalogEntry), /must not declare Idempotency-Key/u);
+  operation.parameters = [];
+  operation.operationId = 'unrelatedOperation';
+  assert.throws(() => generateReferenceFiles(contract, catalogEntry), /unsupported x-kokoro-idempotency/u);
+});

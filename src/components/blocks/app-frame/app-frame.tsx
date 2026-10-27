@@ -1,5 +1,6 @@
 "use client"
 
+import { useProjectPins } from "@/features/app/use-project-pins"
 import { McpTrialProvider } from "@/ui/mcp/mcp-trial-context"
 import { useSessionArchive } from "@/ui/shell/use-session-archive"
 
@@ -470,6 +471,9 @@ function AppFrameRuntime({
     })
   }
   const projectReads = useProjectList(preview, projectReadBoundary, projectRef, projectWorkspace)
+  const projectPins = useProjectPins({ preview, boundary: projectReadBoundary,
+    visibleIds: projectReads.list.status === "ready" ? projectReads.list.data.map(item=>item.id) : null,
+    onUnavailable: projectReads.retireProject })
   const projectedWorkspaceCapabilities = projectWorkspaceCapabilities(featureFlags, workspaceCapabilities, { preview })
   const recommendations = useProjectMcpRecommendations({
     projectId: projectReads.current.status === "ready" && projectReads.current.data.id === projectRef ? projectReads.current.data.id : null,
@@ -909,6 +913,7 @@ function AppFrameRuntime({
     ...(projectRef === undefined ? {} : { projectRef }),
     onOpenSettings: overlays.openSettings,
     onOpenProject: project.openProject,
+    ...(projectPins.available ? { projectPins } : {}),
     onCreateProject: project.createProject,
     onCreateMcp: overlays.openMcpCreate,
     onCreateSkillWithAi: actions.startSkillCreationFromSettings,
@@ -994,6 +999,7 @@ function AppFrameRuntime({
       projectListRetryable: projectReads.list.status === "error" && projectReads.list.retryable,
       onRetryProjects: refreshProjects,
     } : {}),
+    ...(projectPins.available ? { projectPins } : {}),
     onCreateProject: project.createProject,
     ...(project.projectMenuAccess ? { onRequestProjectRename: project.requestProjectRename, onRequestProjectDelete: project.requestProjectDeletion } : {}),
     ...(activeNavigationKey === undefined ? {} : { activeNavigationKey }),

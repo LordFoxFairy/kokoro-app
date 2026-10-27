@@ -80,8 +80,10 @@ test('the generated reference is the metadata inventory for the pinned BFF contr
       && (['none', 'required', 'inherent'].includes(operation.idempotency)
         || (operation.idempotency === 'natural'
           && operation.method === 'PUT'
-          && operation.path === '/v1/projects/{projectId}/mcp-recommendations'
-          && operation.operationId === 'replaceProjectMcpRecommendations')),
+          && ((operation.path === '/v1/projects/{projectId}/mcp-recommendations'
+            && operation.operationId === 'replaceProjectMcpRecommendations')
+            || (operation.path === '/v1/projects/{projectId}/pin'
+              && operation.operationId === 'setProjectPin')))),
   ));
 
   const referenceText = [...files.values()].join('\n');

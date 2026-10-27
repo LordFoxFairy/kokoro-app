@@ -9,9 +9,9 @@ import YAML from "yaml"
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const sourcePath = join(root, "src/generated/bff-public-openapi.yaml")
 const outputPath = join(root, "src/generated/bff-tool-display.ts")
-const ownerCommit = "3d52a90ec42601a19536e95a8b9e48f93a63276c"
-const sourceSha256 = "48aa9638d133223c9f78655e9398ddbb44159963f92a2db891a09212f3aa2726"
-const openapiVersion = "28.4.0"
+const ownerCommit = "c195d2325ba9c433cc4c64e25e6c67eaf73c47f6"
+const sourceSha256 = "109a2ae063b10699ae52776b09533c5622d906679c093d65730a289206043b1a"
+const openapiVersion = "28.5.0"
 
 export function inspectBffToolDisplayContract(document) {
   assert.equal(document.info.version, openapiVersion, "BFF tool display version drift")

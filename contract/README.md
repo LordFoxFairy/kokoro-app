@@ -1,3 +1,7 @@
+## Project pin consumer
+
+Public28.5固定BFF c195d2325ba9c433cc4c64e25e6c67eaf73c47f6／194操作／SHA256109a2ae063b10699ae52776b09533c5622d906679c093d65730a289206043b1a。本人Project pin仅两具名操作；原10public生成链与新窄pin decoder同一snapshot正规生成，三个private pin不变。精确完整28.5→28.4 inverse委托旧证明链，不为runtime兼容。
+
 ## 2026-10-27 当前 Public28.4 原件
 
 固定 BFF `3d52a90ec42601a19536e95a8b9e48f93a63276c`／28.4.0／192 operations／canonical SHA256 `48aa9638d133223c9f78655e9398ddbb44159963f92a2db891a09212f3aa2726`，唯一 Git blob 原件经十公共生成链消费。有限工具 profile 派生 optional 安全对象和条件 code-kind／file basename 规则；公共 snapshot process 收为 null，私有独立保留。新增完整28.4→28.3 test-only inverse 后再进入原历史父链，原 SHA 与三条私有 MCP pin 不变；正常 producer／reader 配对由 Root 验收。
