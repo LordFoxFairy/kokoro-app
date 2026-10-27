@@ -414,7 +414,7 @@ export function useAppFrameProject({
   useLayoutEffect(() => { renderedInstructionProject.current = projectRef }, [projectRef])
   const requestProjectInstructions = useCallback((target: string, returnFocus: HTMLButtonElement | null) => {
     const scope = instructionEntryScopeRef.current
-    if (renderedInstructionProject.current !== projectRef || !instructionAccess || !target || !scope?.active || scope.context !== instructionEntryContext) return
+    if (renderedInstructionProject.current !== projectRef || renameScopeRef.current?.context !== renameContext || renameScopeRef.current?.active !== true || renameScopeRef.current.route !== currentRoute() || !instructionAccess || !target || !scope?.active || scope.context !== instructionEntryContext) return
     const sameProject = projectWorkspace && target === projectRef && window.location.pathname === `/app/project/${encodeURIComponent(target)}`
     const route = sameProject ? currentRoute() : `/app/project/${encodeURIComponent(target)}`
     const request: ProjectInstructionRequest = {
@@ -446,8 +446,8 @@ export function useAppFrameProject({
   // A read refresh cannot retire an uncertain write. Only identity, Project,
   // admission, or actual route retirement owns this command lifetime.
   const [instructionRouteEpoch, setInstructionRouteEpoch] = useState(0)
-  const instructionCommandContext = useMemo(() => ({ instructionEntryContext, projectRef, projectWorkspace, instructionRouteEpoch }),
-    [instructionEntryContext, projectRef, projectWorkspace, instructionRouteEpoch])
+  const instructionCommandContext = useMemo(() => ({ instructionEntryContext, projectRef, projectWorkspace, instructionRouteEpoch, route: renameRouteKey }),
+    [instructionEntryContext, projectRef, projectWorkspace, instructionRouteEpoch, renameRouteKey])
   type InstructionIntent = { projectRef: string; instruction: string; key: string; acknowledged: boolean }
   const saveScopeRef = useRef<{ context: object; active: boolean; busy: boolean; revoked: boolean;
     intent: InstructionIntent | null; controllers: Set<AbortController> } | null>(null)

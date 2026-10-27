@@ -37,10 +37,11 @@ function subscribeRoute(notify: () => void) {
   return () => { window.removeEventListener("kokoro:surface-navigation", notify); window.removeEventListener("popstate", notify) }
 }
 
-function mountProjectMenu(respond?: (path: string, init?: RequestInit) => Promise<Response | undefined>) {
+function mountProjectMenu(respond?: (path: string, init?: RequestInit) => Promise<Response | undefined>, listSessions?: ReturnType<typeof createFakeClient>["listSessions"]) {
   let projects = [{ ...projectA }, { ...projectB }]
   const writes: Array<{ path: string; body: unknown }> = []
   const fakeClient = createFakeClient()
+  if (listSessions) fakeClient.listSessions = listSessions
   engine = createSessionEngine({ client: fakeClient, storage: createMemoryStorage<ConversationStore>(null), now: () => 1_000 })
   vi.spyOn(pageClients, "browserListClient").mockReturnValue(fakeClient)
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
@@ -60,12 +61,12 @@ function mountProjectMenu(respond?: (path: string, init?: RequestInit) => Promis
     }
     return Response.json({}, { status: 503 })
   })
-  function Frame({ boundary = initialBoundary, enabled = true, implicit = false, previewMode = false }: { boundary?: typeof initialBoundary; enabled?: boolean; implicit?: boolean; previewMode?: boolean }) {
+  function Frame({ boundary = initialBoundary, enabled = true, implicit = false, previewMode = false, conversations = false }: { conversations?: boolean; boundary?: typeof initialBoundary; enabled?: boolean; implicit?: boolean; previewMode?: boolean }) {
     const path = useSyncExternalStore(subscribeRoute, () => window.location.pathname)
     const projectRef = path.split("/").at(-1)
     return <ThemeProvider><LocaleProvider><AppFrame engine={engine} preview={previewMode} chatHref="/app" projectWorkspace
       {...(projectRef === undefined ? {} : { projectRef })} emptyState={KokoroProjectWorkspace} projectReadBoundary={boundary}
-      {...(implicit ? { featureFlags: [{ key: "workspace.instructions", enabled }] } : { workspaceCapabilities: { ...capabilities, instructions: enabled } })} /></LocaleProvider></ThemeProvider>
+      {...(implicit ? { featureFlags: [{ key: "workspace.instructions", enabled }] } : { workspaceCapabilities: { ...capabilities, instructions: enabled, projectConversations: conversations } })} /></LocaleProvider></ThemeProvider>
   }
   const view = render(<Frame />)
   return { ...view, writes, Frame }
@@ -445,7 +446,10 @@ it.each([409, 429, 503, "invalid_ack"] as const)("指令 %s 不推断未写入�
 
 
 it("真实Frame的Project root到Task只有一个context/composer，设置不跳URL且Canvas草稿视图保挂载", async () => {
-  const view = mountProjectMenu()
+  let resolveTasks!: (page: Awaited<ReturnType<ReturnType<typeof createFakeClient>["listSessions"]>>) => void
+  const tasks = new Promise<Awaited<ReturnType<ReturnType<typeof createFakeClient>["listSessions"]>>>(resolve => { resolveTasks = resolve })
+  const view = mountProjectMenu(undefined, (_cursor, scope) => scope?.kind === "project" ? tasks : Promise.resolve({ sessions: [], next_cursor: null }))
+  view.rerender(<view.Frame conversations />)
   await screen.findByRole("heading", { name: projectA.name })
   const context = document.querySelector('[data-project-context="true"]')
   await act(async () => { engine.submit("project task for context") })
@@ -481,6 +485,27 @@ it("真实Frame的Project root到Task只有一个context/composer，设置不跳
   expect(readCanvasState()).toBe(canvasState)
   expect(location.href).toBe(url)
   expect(view.writes).toEqual([])
+  act(() => resetCanvasStore())
+  await act(async () => { resolveTasks({ sessions: [{ session_id: activeId!, title: "Retained context task", updated_at: "2026-10-01T00:00:00Z" }], next_cursor: null }) })
+  for (let round = 0; round < 2; round++) {
+    // The public Root link retains the engine's old activeId. The rail action
+    // returns via syncConversationUrl, which intentionally emits no surface event.
+    fireEvent.click(await screen.findByRole("link", { name: `新对话 · ${projectA.name}` }), { button: 0 })
+    await waitFor(() => expect(location.search).toBe(""))
+    expect(engine.getSnapshot().store?.activeId).toBe(activeId)
+    const projectRail = screen.getByRole("navigation", { name: "项目会话" })
+    fireEvent.click(await within(projectRail).findByRole("button", { name: "Retained context task" }))
+    await waitFor(() => expect(location.href).toBe(url))
+    expect(engine.getSnapshot().store?.activeId).toBe(activeId)
+    const currentTrigger = within(document.querySelector<HTMLElement>('[data-slot="workspace-header"]')!).getByRole("button", { name: "项目选项" })
+    fireEvent.keyDown(currentTrigger, { key: "ArrowDown" })
+    fireEvent.click(within(await screen.findByRole("menu")).getByRole("menuitem", { name: "项目设置" }))
+    expect(await screen.findByRole("heading", { name: "项目设置" })).toBeVisible()
+    expect(document.querySelector('[data-project-context="true"]')).toBe(context)
+    expect(document.querySelectorAll('[data-project-context="true"]')).toHaveLength(1)
+    expect(document.querySelectorAll('[data-slot="composer-wrap"]')).toHaveLength(1)
+    fireEvent.click(screen.getByRole("button", { name: "关闭项目设置" }))
+  }
   act(() => resetCanvasStore())
 })
 
@@ -520,4 +545,59 @@ it("Task上下文中的未知指令关闭整个设置后仍原body/key，显式�
   expect(submitted).toHaveLength(2)
   expect(submitted[1]).toEqual(submitted[0])
   expect(location.href).toBe(url)
+})
+
+it("real Frame Root → retained Task retires the Root instruction intent without a synthetic navigation event", async () => {
+  let resolveTasks!: (page: Awaited<ReturnType<ReturnType<typeof createFakeClient>["listSessions"]>>) => void
+  const tasks = new Promise<Awaited<ReturnType<ReturnType<typeof createFakeClient>["listSessions"]>>>(resolve => { resolveTasks = resolve })
+  const submitted: string[] = []
+  const view = mountProjectMenu(async (_path, init) => {
+    if (init?.method !== "PATCH") return undefined
+    submitted.push(String(init.body))
+    throw new TypeError("unknown Root write")
+  }, (_cursor, scope) => scope?.kind === "project" ? tasks : Promise.resolve({ sessions: [], next_cursor: null }))
+  view.rerender(<view.Frame conversations />)
+  await screen.findByRole("heading", { name: projectA.name })
+  await act(async () => { engine.submit("retained task") })
+  const id = engine.getSnapshot().store!.activeId!
+  await act(async () => { resolveTasks({ sessions: [{ session_id: id, title: "Root-return task", updated_at: "2026-10-01T00:00:00Z" }], next_cursor: null }) })
+  fireEvent.click(await screen.findByRole("link", { name: `新对话 · ${projectA.name}` }), { button: 0 })
+  await waitFor(() => expect(location.search).toBe(""))
+  const { menu } = await headerMenu()
+  fireEvent.click(within(menu).getByRole("menuitem", { name: "编辑指令" }))
+  const dialog = await screen.findByRole("dialog", { name: "项目指令" })
+  fireEvent.change(within(dialog).getByRole("textbox"), { target: { value: "Root-only unknown body" } })
+  fireEvent.click(within(dialog).getByRole("button", { name: "保存" }))
+  expect(await within(dialog).findByRole("alert")).toHaveTextContent("操作结果尚未确认")
+  fireEvent.keyDown(dialog, { key: "Escape" })
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+  fireEvent.click(within(screen.getByRole("navigation", { name: "项目会话" })).getByRole("button", { name: "Root-return task" }))
+  await waitFor(() => expect(location.search).toBe(`?conversation=${id}`))
+  expect(engine.getSnapshot().store?.activeId).toBe(id)
+  const trigger = within(document.querySelector<HTMLElement>('[data-slot="workspace-header"]')!).getByRole("button", { name: "项目选项" })
+  fireEvent.keyDown(trigger, { key: "ArrowDown" })
+  fireEvent.click(within(await screen.findByRole("menu")).getByRole("menuitem", { name: "编辑指令" }))
+  const taskDialog = await screen.findByRole("dialog", { name: "项目指令" })
+  expect(within(taskDialog).getByRole("textbox")).toBeEnabled()
+  expect(within(taskDialog).getByRole("textbox")).toHaveValue(projectA.instruction)
+  expect(submitted).toHaveLength(1)
+})
+
+it.each(["?conversation=task-b", "?conversation=task-a&view=other", "?conversation=task-a#other"])("an old instruction menu callback is retired by rendered full route %s without a surface event", destination => {
+  const base = `/app/project/${projectA.id}`
+  history.replaceState(null, "", `${base}?conversation=task-a`)
+  const options: AppFrameProjectOptions = { projectRef: projectA.id, projectWorkspace: true, preview: false, mounted: true,
+    draft: "", updateDraft: vi.fn(), clearDraft: vi.fn(), projectDetail: { status: "ready", data: projectA },
+    instructionHistory: { status: "ready", data: [] }, instructionContext: {}, instructionsEnabled: true,
+    refreshProject: vi.fn(), renameBoundary: initialBoundary, renameRouteKey: location.pathname + location.search + location.hash }
+  const view = renderHook((props: AppFrameProjectOptions) => useAppFrameProject(props), { initialProps: options, wrapper: LocaleProvider })
+  const old = view.result.current.requestProjectInstructions
+  history.pushState(null, "", base + destination)
+  act(() => old(projectA.id, null))
+  expect(view.result.current.projectInstructionRequest).toBeUndefined()
+  view.rerender({ ...options, renameRouteKey: location.pathname + location.search + location.hash })
+  act(() => old(projectA.id, null))
+  expect(view.result.current.projectInstructionRequest).toBeUndefined()
+  act(() => view.result.current.requestProjectInstructions(projectA.id, null))
+  expect(view.result.current.projectInstructionRequest?.isCurrent()).toBe(true)
 })

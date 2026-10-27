@@ -537,7 +537,7 @@ function AppFrameRuntime({
     retireProject: projectReads.retireProject,
     refreshRenamedProject: projectReads.refreshRenamedProject,
     ...(projectReadBoundary === undefined ? {} : { renameBoundary: projectReadBoundary }),
-    renameRouteKey: JSON.stringify([projectRef ?? null, activeId, navigationState.settingsTab]),
+    renameRouteKey: JSON.stringify([projectRef ?? null, activeId, navigationState.settingsTab, draftRoute, typeof window === "undefined" ? null : window.location.hash]),
   })
 
   const actions = useAppFrameActions({

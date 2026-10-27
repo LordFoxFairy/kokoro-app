@@ -107,14 +107,17 @@ export function KokoroProjectWorkspace({
   const instructionsAvailable = Boolean(capabilities?.instructions) && (preview ||
     (projectReadBoundary === undefined || projectReadBoundary.admitted && projectReadBoundary.subject !== null)
     && (projectDetail === undefined || projectDetail.status === "ready" && projectDetail.data.id === projectRef))
-  const [instructionRouteEpoch, setInstructionRouteEpoch] = useState(0)
+  const [instructionRouteState, setInstructionRouteState] = useState({ route: presentationRoute, epoch: 0 })
+  // Conversation selection can commit history without emitting a surface event.
+  // Retire the same existing scopes before that rendered route can present them.
+  if (instructionRouteState.route !== presentationRoute) {
+    setInstructionRouteState({ route: presentationRoute, epoch: instructionRouteState.epoch + 1 })
+  }
+  const instructionRouteEpoch = instructionRouteState.epoch
   useLayoutEffect(() => {
-    let route = `${window.location.pathname}${window.location.search}${window.location.hash}`
     const retire = () => {
-      const next = `${window.location.pathname}${window.location.search}${window.location.hash}`
-      if (route === next) return
-      route = next
-      setInstructionRouteEpoch((value) => value + 1)
+      const route = `${window.location.pathname}${window.location.search}${window.location.hash}`
+      setInstructionRouteState(current => current.route === route ? current : { route, epoch: current.epoch + 1 })
     }
     window.addEventListener("popstate", retire)
     window.addEventListener("kokoro:surface-navigation", retire)
