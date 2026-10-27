@@ -64,7 +64,7 @@ function mountProjectMenu(respond?: (path: string, init?: RequestInit) => Promis
     const projectRef = path.split("/").at(-1)
     return <ThemeProvider><LocaleProvider><AppFrame engine={engine} preview={previewMode} chatHref="/app" projectWorkspace
       {...(projectRef === undefined ? {} : { projectRef })} emptyState={KokoroProjectWorkspace} projectReadBoundary={boundary}
-      {...(implicit ? {} : { workspaceCapabilities: { ...capabilities, instructions: enabled } })} /></LocaleProvider></ThemeProvider>
+      {...(implicit ? { featureFlags: [{ key: "workspace.instructions", enabled }] } : { workspaceCapabilities: { ...capabilities, instructions: enabled } })} /></LocaleProvider></ThemeProvider>
   }
   const view = render(<Frame />)
   return { ...view, writes, Frame }
@@ -260,7 +260,7 @@ it("未决菜单请求在离开目标路由或换actor后退休，A→B→A不�
 })
 
 
-it("正式壳默认能力与 workspace 使用同一投影，未显式传 capabilities 也保留指令入口", async () => {
+it("正式壳消费已解析 workspace.instructions 能力，未显式传 capabilities 也保留指令入口", async () => {
   const view = mountProjectMenu()
   view.rerender(<view.Frame implicit />)
   const { menu } = await headerMenu()

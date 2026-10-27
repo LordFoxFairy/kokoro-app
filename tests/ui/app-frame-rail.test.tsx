@@ -145,6 +145,54 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
+it("live Project cold start never advertises unknown capabilities and only resolved flags enable cards; preview stays explicit", async () => {
+  const pageClients = await import("@/ui/shell/page-clients")
+  vi.spyOn(pageClients, "browserEngine").mockReturnValue(engine)
+  vi.spyOn(pageClients, "browserListClient").mockReturnValue(client)
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "project-reader")
+  window.history.replaceState({}, "", "/app/project/project_read_alpha")
+  pathname.value = window.location.pathname
+  vi.spyOn(globalThis, "fetch").mockImplementation(async input => {
+    const path = new URL(input instanceof Request ? input.url : String(input), window.location.origin).pathname
+    if (path === "/api/hub/projects") return projectReadEnvelope()
+    if (path === "/api/hub/projects/project_read_alpha") return Response.json({ data: { project: projectReadFixtures[0] }, meta: { request_id: "req_project" } })
+    return Response.json({}, { status: 503 })
+  })
+  const frame = (flags: React.ComponentProps<typeof AppFrame>["featureFlags"], preview = false) => (
+    <ThemeProvider><LocaleProvider><AppFrame chatHref="/app" preview={preview} projectWorkspace projectRef="project_read_alpha"
+      projectReadBoundary={{ admitted: true, subject: "project-reader", generation: 1 }} emptyState={KokoroProjectWorkspace}
+      {...(flags === undefined ? {} : { featureFlags: flags })} /></LocaleProvider></ThemeProvider>
+  )
+  const expectUnadvertised = () => {
+    expect(screen.queryByText("网站", { exact: true })).not.toBeInTheDocument()
+    expect(screen.queryByText("定时任务", { exact: true })).not.toBeInTheDocument()
+    expect(screen.queryByRole("region", { name: "连接器" })).not.toBeInTheDocument()
+  }
+  const view = render(frame(undefined))
+  try {
+    expectUnadvertised()
+    await screen.findByRole("heading", { name: "研究项目甲" })
+    expectUnadvertised()
+    view.rerender(frame([]))
+    expectUnadvertised()
+    view.rerender(frame([{ key: "workspace.connectors", enabled: true }]))
+    expect(screen.getByRole("region", { name: "连接器" })).toBeInTheDocument()
+    expect(screen.queryByText("网站", { exact: true })).not.toBeInTheDocument()
+    expect(screen.queryByText("定时任务", { exact: true })).not.toBeInTheDocument()
+    view.rerender(frame([{ key: "project.connectors", enabled: true }]))
+    expect(screen.getByRole("region", { name: "连接器" })).toBeInTheDocument()
+    view.rerender(frame(undefined))
+    expectUnadvertised()
+    view.rerender(frame(undefined, true))
+    expect(screen.getByText("网站", { exact: true })).toBeInTheDocument()
+    expect(screen.getByText("定时任务", { exact: true })).toBeInTheDocument()
+    expect(screen.getByRole("region", { name: "连接器" })).toBeInTheDocument()
+  } finally {
+    view.unmount()
+    window.history.replaceState({}, "", "/app")
+  }
+})
+
 it.each([
   { label: "direct chat", standaloneSurface: false, hideWorkspaceHeader: false, composer: true, header: true },
   { label: "standalone catalog", standaloneSurface: true, hideWorkspaceHeader: true, composer: false, header: false },
@@ -5430,7 +5478,7 @@ it.each(["completed", "failed", "cancelled"] as const)("current task progress re
   } finally { closeCanvas(sessionId) }
 })
 
-async function mountRememberedProjectComposer(options: { workspace?: boolean; beforeRender?: (value: { projectEngine: SessionEngine; projectClient: FakeClient }) => void | Promise<void> } = {}) {
+async function mountRememberedProjectComposer(options: { workspace?: boolean; featureFlags?: React.ComponentProps<typeof AppFrame>["featureFlags"]; beforeRender?: (value: { projectEngine: SessionEngine; projectClient: FakeClient }) => void | Promise<void> } = {}) {
   const projectRef = "project_composer-draft"
   const remembered = "conv_composer-history"
   const projectClient = createFakeClient()
@@ -5451,6 +5499,7 @@ async function mountRememberedProjectComposer(options: { workspace?: boolean; be
   window.history.replaceState({}, "", `/app/project/${projectRef}`)
   const props = { engine: projectEngine, chatHref: "/app", projectWorkspace: true, projectRef,
     projectReadBoundary: { admitted: true, subject: "composer-draft-actor", generation: 1 },
+    ...(options.featureFlags === undefined ? {} : { featureFlags: options.featureFlags, navigation: [{ key: "mcp", label: "连接器" }] }),
     ...(options.workspace ? { emptyState: KokoroProjectWorkspace, workspaceCapabilities: { instructions: false, connectors: true, resources: false, skills: false, projectConversations: false } } : {}),
   }
   const frame = (next = props) => <ThemeProvider><LocaleProvider><AppFrame {...next} /></LocaleProvider></ThemeProvider>
@@ -5513,7 +5562,7 @@ async function projectRecommendationFixture(hold = false) {
 
 it("Project recommendations seed only the pristine root from the complete Connection directory before exact first Send", async () => {
   const { hub } = await projectRecommendationFixture()
-  const { projectEngine, projectClient, view } = await mountRememberedProjectComposer()
+  const { projectEngine, projectClient, view } = await mountRememberedProjectComposer({ featureFlags: [{ key: "workspace.connectors", enabled: true }] })
   try {
     await waitFor(() => expect(screen.getByRole("button", { name: "连接器 (1)" })).toBeVisible())
     expect(hub.listMcpConnections.mock.calls.some(call => call[0]?.cursor === "second")).toBe(true)
@@ -5527,7 +5576,7 @@ it("Project recommendations seed only the pristine root from the complete Connec
 
 it("explicit manual empty Project MCP selection wins over a late recommendation response", async () => {
   const fixture = await projectRecommendationFixture(true)
-  const { projectEngine, projectClient, view } = await mountRememberedProjectComposer()
+  const { projectEngine, projectClient, view } = await mountRememberedProjectComposer({ featureFlags: [{ key: "workspace.connectors", enabled: true }] })
   try {
     await toggleProjectDraftMcp()
     await toggleProjectDraftMcp()

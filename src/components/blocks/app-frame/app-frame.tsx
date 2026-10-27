@@ -470,7 +470,7 @@ function AppFrameRuntime({
     })
   }
   const projectReads = useProjectList(preview, projectReadBoundary, projectRef, projectWorkspace)
-  const projectedWorkspaceCapabilities = projectWorkspaceCapabilities(featureFlags, workspaceCapabilities)
+  const projectedWorkspaceCapabilities = projectWorkspaceCapabilities(featureFlags, workspaceCapabilities, { preview })
   const recommendations = useProjectMcpRecommendations({
     projectId: projectReads.current.status === "ready" && projectReads.current.data.id === projectRef ? projectReads.current.data.id : null,
     boundary: projectReadBoundary,

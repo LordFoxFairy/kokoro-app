@@ -17,6 +17,24 @@ const download = vi.mocked(beginLibraryArtifactDownload)
 
 afterEach(() => { cleanup(); vi.clearAllMocks(); vi.unstubAllGlobals() })
 
+it("keeps the full filename and metadata discoverable with separate compact accessible file actions", () => {
+  const file = { ...delivery, title: `${"long-report-".repeat(20)}.pdf` }
+  const onOpen = vi.fn()
+  render(<LocaleProvider><DeliverySection sessionId="session_1" deliveries={[file]} onOpen={onOpen} /></LocaleProvider>)
+
+  const open = screen.getByRole("button", { name: `Open delivery ${file.title}` })
+  expect(open).toHaveAttribute("title", file.title)
+  expect(open).toHaveTextContent(file.title)
+  expect(open).toHaveTextContent("2.0 KB")
+  fireEvent.click(open)
+  expect(onOpen).toHaveBeenCalledWith(file)
+
+  const action = screen.getByRole("button", { name: "Download" })
+  expect(action).toHaveAttribute("title", "Download")
+  expect(action).toHaveTextContent(/^$/)
+  expect(download).not.toHaveBeenCalled()
+})
+
 it("uses the owner binary selector and native download helper, never the old hash Blob path", async () => {
   download.mockResolvedValue()
   const fetchMock = vi.fn()

@@ -209,7 +209,7 @@ export function conversationIdFromLocation(): string | null {
   }
 }
 
-const DEFAULT_WORKSPACE_CAPABILITIES: WorkspaceCapabilities = {
+const PREVIEW_WORKSPACE_CAPABILITIES: WorkspaceCapabilities = {
   instructions: true,
   connectors: true,
   resources: true,
@@ -232,14 +232,17 @@ const WORKSPACE_CAPABILITY_KEYS: Readonly<Record<keyof WorkspaceCapabilities, re
 export function projectWorkspaceCapabilities(
   flags: readonly RuntimeFeatureFlag[] | undefined,
   explicit: WorkspaceCapabilities | undefined,
+  context: { preview: boolean },
 ): WorkspaceCapabilities {
   if (explicit) return explicit
-  const fallback = flags === undefined ? DEFAULT_WORKSPACE_CAPABILITIES : {
+  const fallback = flags === undefined && context.preview ? PREVIEW_WORKSPACE_CAPABILITIES : {
     instructions: false,
     connectors: false,
     resources: false,
     skills: false,
     projectConversations: false,
+    websites: false,
+    scheduledTasks: false,
   }
   return Object.fromEntries(
     Object.entries(WORKSPACE_CAPABILITY_KEYS).map(([capability, keys]) => {
