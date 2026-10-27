@@ -1,3 +1,7 @@
+## T02：详情与包读取的安静呈现
+
+首读／切换尚无正文时只保留 sr-only 状态与原 aria-busy，不绘制正文骨架／动画或可见加载句。overview 保原 metadata 空 shell 高度；两现 reader 的请求、缓存、actor／revision／原 path 保文、准入退休、错误清退与显式重试边界不变。
+
 ## 2026-10-26 个人系列删除确认的静默读取（候选）
 
 `personal-skill-delete-dialog` 的被动 history 读取不展示 loading／失败重试面板；名称、删除范围警告、取消与禁用确认保持。只有正式 history 成功且 series 精确绑定后，才取得原 publication CAS（显式 null 才是无发布）；未知／失败不当空、不开放新删除。关闭后重新打开沿原读取路径重查，不新增缓存或自动命令重放。已开始的删除 busy／unknown／rejected 及原 body／key／CAS、显式原意图重试、准入退休与迟到 ACK 保护不变。正常 UI 验收由主方另验。

@@ -1,3 +1,7 @@
+import { chromium } from "@playwright/test"
+import { createServer } from "vite"
+import { basename } from "node:path"
+import readerStyles from "@/ui/skills/manus-skill-detail-dialog.module.css"
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, expect, it, vi } from "vitest"
 
@@ -780,3 +784,73 @@ it.each([
   expect(onAdd).not.toHaveBeenCalled()
   expect(onTry).not.toHaveBeenCalled()
 })
+
+
+it("first shared reader pending is only a one-pixel announcement, with the real CSS frame and navigation stable until the file arrives", async () => {
+  const f = quietPackageFixture("installation")
+  let finish!: (response: Response) => void
+  const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+    const path = String(input)
+    if (path === f.expectedPath) return f.detailResponse("Quiet first read")
+    expect(path.startsWith(f.packagePath)).toBe(true)
+    if (path === f.packagePath) return new Promise<Response>(resolve => { finish = resolve })
+    return f.response("SKILL.md")
+  })
+  vi.stubGlobal("fetch", fetcher)
+  render(f.content()); await screen.findByText("Quiet first read")
+  fireEvent.click(screen.getByRole("button", { name: "查看详情" }))
+  await screen.findByRole("status", { name: "正在读取技能文件…" })
+  const back = screen.getByRole("button", { name: "技能详情" }); back.focus()
+  const dialog = screen.getByRole("dialog"), pendingHtml = dialog.outerHTML
+  const vite = await createServer({ configFile: false, root: process.cwd(), server: { middlewareMode: true, hmr: false, watch: null }, css: { modules: { generateScopedName: (name, filename) => basename(filename.replace(/\?.*$/u, "")) === "manus-skill-detail-dialog.module.css" ? readerStyles[name]! : name } } })
+  let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
+  try {
+    const css = await Promise.all(["/src/app/globals.css", "/src/ui/skills/manus-skill-detail-dialog.module.css"].map(async path => {
+      const result = await vite.transformRequest(`${path}?inline`), json = result?.code.match(/export default ([\s\S]*?);?\s*$/u)?.[1]
+      if (!json) throw Error("reader CSS compilation missing inline output")
+      return JSON.parse(json.replace(/;\s*$/u, "")) as string
+    }))
+    browser = await chromium.launch({ headless: true })
+    await act(async () => { finish(f.response(null)) })
+    await screen.findByRole("heading", { name: "Confirmed skill" })
+    expect(screen.getByRole("button", { name: "技能详情" })).toBe(back); expect(document.activeElement).toBe(back)
+    const readyHtml = dialog.outerHTML
+    for (const viewport of [{ width: 839, height: 900 }, { width: 390, height: 400 }]) {
+      const page = await browser.newPage({ viewport }); await page.route("**/*", route => route.abort())
+      const markup = (html: string) => `<!doctype html><html><head><style>${css.join("\n")}</style></head><body data-web-skin="kokoro">${html}</body></html>`
+      await page.setContent(markup(pendingHtml))
+      const frame = await page.getByRole("dialog").boundingBox(), announcement = page.getByRole("status", { name: "正在读取技能文件…" })
+      const paint = await announcement.evaluate(element => { const style = getComputedStyle(element), box = element.getBoundingClientRect(); return { width: box.width, height: box.height, position: style.position, overflow: style.overflow, animation: style.animationName, decorativeChildren: element.querySelectorAll('[aria-hidden="true"]').length } })
+      expect(paint).toEqual({ width: 1, height: 1, position: "absolute", overflow: "hidden", animation: "none", decorativeChildren: 0 })
+      expect(await announcement.evaluate(element => element.closest('[aria-busy="true"]') !== null)).toBe(true)
+      await page.setContent(markup(readyHtml)); expect(await page.getByRole("dialog").boundingBox()).toEqual(frame)
+      expect(await page.getByRole("heading", { name: "Confirmed skill" }).isVisible()).toBe(true)
+      await page.close()
+    }
+    expect(fetcher.mock.calls.map(([path]) => String(path))).toEqual([f.expectedPath, f.packagePath, `${f.packagePath}?file_path=SKILL.md`])
+    expect(f.onAdd).not.toHaveBeenCalled(); expect(f.onTry).not.toHaveBeenCalled()
+  } finally { try { await browser?.close() } finally { await vite.close() } }
+}, 20_000)
+
+it("pending overview reserves its existing empty shell without decorative loading bars or enabling unknown actions", async () => {
+  localStorage.setItem("kokoro.locale", "zh")
+  const add = vi.fn(), trial = vi.fn()
+  render(<LocaleProvider><ManusSkillDetailDialog open pending skill={null} readBoundary={{ admitted: true, subject: "quiet-overview", generation: 1 }} onOpenChange={vi.fn()} onAdd={add} onTry={trial} /></LocaleProvider>)
+  const dialog = screen.getByRole("dialog"), placeholder = dialog.querySelector(`.${readerStyles.metadataPlaceholder}`)
+  expect(dialog).toHaveAttribute("aria-busy", "true"); expect(screen.getByRole("status")).toHaveClass("sr-only")
+  expect(placeholder).not.toBeNull()
+  const vite = await createServer({ configFile: false, root: process.cwd(), server: { middlewareMode: true, hmr: false, watch: null }, css: { modules: { generateScopedName: (name, filename) => basename(filename.replace(/\?.*$/u, "")) === "manus-skill-detail-dialog.module.css" ? readerStyles[name]! : name } } })
+  let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
+  try {
+    const css = await Promise.all(["/src/app/globals.css", "/src/ui/skills/manus-skill-detail-dialog.module.css"].map(async path => {
+      const result = await vite.transformRequest(`${path}?inline`), json = result?.code.match(/export default ([\s\S]*?);?\s*$/u)?.[1]
+      if (!json) throw Error("overview CSS compilation missing inline output")
+      return JSON.parse(json.replace(/;\s*$/u, "")) as string
+    }))
+    browser = await chromium.launch({ headless: true }); const page = await browser.newPage({ viewport: { width: 839, height: 900 } })
+    await page.route("**/*", route => route.abort()); await page.setContent(`<!doctype html><html><head><style>${css.join("\n")}</style></head><body data-web-skin="kokoro">${dialog.outerHTML}</body></html>`)
+    const paint = await page.locator(`.${readerStyles.metadataPlaceholder}`).evaluate(element => { const style = getComputedStyle(element); return { height: element.getBoundingClientRect().height, minHeight: style.minHeight, children: element.childElementCount, text: element.textContent, animation: style.animationName } })
+    expect(paint).toEqual({ height: 128, minHeight: "128px", children: 0, text: "", animation: "none" })
+    expect(screen.queryByRole("button", { name: "查看详情" })).toBeNull(); expect(add).not.toHaveBeenCalled(); expect(trial).not.toHaveBeenCalled()
+  } finally { try { await browser?.close() } finally { await vite.close() } }
+}, 20_000)

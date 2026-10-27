@@ -437,7 +437,7 @@ function PersonalSkillPackageReader({ skillId, title, onBack }: { skillId: strin
       </nav>
       <div className={readerStyles.fileContent} aria-busy={loading}>
         {selectedPath !== null ? <div className={readerStyles.fileHeading}><FileText aria-hidden="true" /><span>{selectedPath}</span></div> : null}
-        {loading ? <p role="status">{t("skills.packageLoading")}</p> : null}
+        {loading ? <p className="sr-only" role="status">{t("skills.packageLoading")}</p> : null}
         {failed ? <div role="alert"><p>{t("skills.packageUnavailable")}</p><Button type="button" variant="outline" onClick={retry}>{t("skills.packageRetry")}</Button></div> : null}
         {!loading && !failed && directory?.files.length === 0 ? <p>{t("skills.packageEmpty")}</p> : null}
         {!loading && !failed && directory !== null && directory.files.length > 0 && selectedPath === null ? <p>{t("skills.packageNoMarkdown")}</p> : null}

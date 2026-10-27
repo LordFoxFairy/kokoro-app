@@ -514,12 +514,9 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
         </DialogHeader>
   const readerBusy = readerLoading && !failed && !readerFailed
   const currentReaderFile = readerFile?.path === selectedPath ? readerFile : null
-  const readerPlaceholder = <div className={styles.readerLoading} data-loading={readerBusy || pending && !pendingFailed} role={readerBusy || pending && !pendingFailed ? "status" : undefined} aria-label={readerBusy || pending && !pendingFailed ? t("skills.packageLoading") : undefined}>
-                <span className={styles.readerLoadingYaml} aria-hidden="true"><i /><i /><i /></span>
-                <span className={styles.readerLoadingTitle} aria-hidden="true" />
-                <span className={styles.readerLoadingLine} aria-hidden="true" />
-                <span className={`${styles.readerLoadingLine} ${styles.readerLoadingLineShort}`} aria-hidden="true" />
-              </div>
+  const readerPlaceholder = readerBusy || pending && !pendingFailed
+    ? <span className="sr-only" role="status" aria-label={t("skills.packageLoading")}>{t("skills.packageLoading")}</span>
+    : null
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -546,7 +543,7 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
               metadata retry. Its existing callback and busy guard stay intact. */}
           {!boundary.admitted && pendingFailed && onRetryPending ? <Button type="button" variant="outline" disabled={pendingBusy} onClick={onRetryPending}>{t("skills.retry")}</Button> : null}
           {onLoadMore ? <Button type="button" variant="outline" disabled={pendingBusy} onClick={onLoadMore}>{t("rail.loadMore")}</Button> : null}
-          {readerOpen ? readerPlaceholder : <div className={styles.metadataPlaceholder} aria-hidden="true"><i /><i /><i /></div>}
+          {readerOpen ? readerPlaceholder : <div className={styles.metadataPlaceholder} aria-hidden="true" />}
           </div>
         </> : <>
         <DetailToolbar
