@@ -1,3 +1,5 @@
+具体动作摘要第一阶段（2026-10-27）：九 locale 新增调用／混合活动次数、失败数与独立 Run 继续处理文案；只按真实 activity 计数，不冒独立文件或结果数。既有类别／三态键及 fallback 规则保留，正式对象名称由后继 owner 安全 metadata 提供，不从文案推断。
+
 工具类别（2026-10-26，源码候选）：九locale各自拥有六个安全工具类别标签，原 `thread.toolCall` generic与状态文案原值保持。只由 `ToolCallRow` 对正式 Public28 code做穷尽 MessageKey映射，不改 fallback/overlays或其它业务文案。
 
 ## SET40 具体设置项搜索（2026-10-15；D0，先tests-only）

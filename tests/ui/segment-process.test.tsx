@@ -10,22 +10,27 @@ import { AssistantTurn } from "@/ui/thread/assistant-turn"
 import { SegmentProcess } from "@/ui/thread/segment-process"
 import { makeInteractionState, makeSnapshot } from "../core/fixtures"
 afterEach(cleanup)
-it("a live Run with a real process uses only its disclosure for progress, including after completed tools and an empty answer tail", () => {
+it("a completed single action stays direct and owns the sole Run continuation through an empty answer tail", () => {
   const activity = { activity: "tool" as const, activity_id: `act_${"3".repeat(64)}`, segment_id: `seg_${"4".repeat(64)}`, status: "completed" as const, display_code: "tool.file.write" as const }
   const props = { sessionId: "single-progress", messagesById: {}, isLive: true, mode: "fast" as const, stagedDecisions: {}, hitlActive: false, controlError: null }
   const activityStep = { kind: "activity" as const, seq: "1", segmentId: activity.segment_id, activity }
   const { rerender } = render(<LocaleProvider><AssistantTurn {...props} steps={[activityStep]} /></LocaleProvider>)
-  const summary = screen.getByRole("button", { name: /^Processing/u })
+  const action = screen.getByText("Write file")
+  expect(document.querySelector('[data-slot="collapsible-trigger"]')).toBeNull()
   expect(screen.queryByText("Composing an answer")).not.toBeInTheDocument()
-  expect(summary).toHaveTextContent("Processing…")
-  fireEvent.click(summary)
-  expect(summary).toHaveAttribute("aria-expanded", "false")
+  expect(screen.getAllByRole("status")).toHaveLength(1)
+  expect(screen.getByRole("status")).toHaveTextContent("Continuing…")
+  expect(screen.getByText("Completed")).toHaveClass("sr-only")
+  expect(action.closest('[data-status="completed"]')).not.toBeNull()
 
   rerender(<LocaleProvider><AssistantTurn {...props} steps={[activityStep, { kind: "text", seq: "2", segmentId: "pending-answer" }]} messagesById={{ "pending-answer": { id: "pending-answer", runId: "run", role: "assistant", content: "" } }} /></LocaleProvider>)
   expect(screen.queryByText("Composing an answer")).not.toBeInTheDocument()
-  expect(screen.getByRole("button", { name: /^Processing/u })).toBe(summary)
-  expect(summary).toHaveTextContent("Processing…")
-  expect(summary).toHaveAttribute("aria-expanded", "false")
+  expect(screen.getByText("Write file")).toBe(action)
+  expect(screen.getAllByRole("status")).toHaveLength(1)
+  expect(screen.getByRole("status")).toHaveTextContent("Continuing…")
+  rerender(<LocaleProvider><AssistantTurn {...props} steps={[activityStep, { kind: "text", seq: "2", segmentId: "pending-answer" }]} messagesById={{ "pending-answer": { id: "pending-answer", runId: "run", role: "assistant", content: "real answer" } }} /></LocaleProvider>)
+  expect(screen.queryByText("Continuing…")).toBeNull()
+  expect(screen.getByText("real answer")).toBeVisible()
 })
 
 it("before any process or token there is one accessible forming state, preserving queued, stopping and reconnect labels", () => {
@@ -66,7 +71,7 @@ it("a process-only Run retains explicit queued, stopping and reconnect status wi
 it("HITL 卡独立于可收起的过程，手动收起不会隐藏决策入口", () => {
   render(<LocaleProvider><AssistantTurn sessionId="session_1"
     steps={[]}
-    activities={[{ activity: "tool", activity_id: `act_${"a".repeat(64)}`, segment_id: `seg_${"b".repeat(64)}`, status: "running", display_code: "tool.execution" }]}
+    activities={[{ activity: "tool", activity_id: `act_${"a".repeat(64)}`, segment_id: `seg_${"b".repeat(64)}`, status: "running", display_code: "tool.execution" }, { activity: "tool", activity_id: `act_${"9".repeat(64)}`, segment_id: `seg_${"b".repeat(64)}`, status: "completed", display_code: "tool.file.read" }]}
     messagesById={{}} isLive mode="thinking" stagedDecisions={{}} hitlActive controlError={null} onToolDecision={() => {}}
     interaction={makeInteractionState("tool_1", ["tool_1"], { description: "需要批准写入文件" })} executionPhase="waiting" /></LocaleProvider>)
   const summary = document.querySelector<HTMLButtonElement>('[data-slot="collapsible-trigger"]')
@@ -110,8 +115,9 @@ it("keeps mixed process rows in owner order through status updates and manual co
     expect(row).toBe(originalRows[index])
     expect(row.closest("[inert]")).not.toBeNull()
   })
-  expect(summary).toHaveTextContent("2 tool(s) (1 failed)")
-  expect(summary).toHaveTextContent("1 subagent(s)")
+  expect(summary).toHaveTextContent("Skill · Tool call · Subagent")
+  expect(summary).toHaveTextContent("4 activities")
+  expect(summary).toHaveTextContent("1 failed")
   expect(screen.getByText("Ready")).toBeInTheDocument()
   expect(screen.getByText("Failed")).toBeInTheDocument()
   expect(screen.getAllByText("Completed")).toHaveLength(2)
@@ -163,13 +169,13 @@ it("keeps one disclosure across proven empty tool-round text and restores the bo
   const props = { sessionId: "s", steps, isLive: false, stagedDecisions: {}, hitlActive: false, controlError: null }
   const { container, rerender } = render(<LocaleProvider><AssistantTurn {...props} messagesById={messages} /></LocaleProvider>)
   const disclosures = () => container.querySelectorAll('[data-slot="collapsible-trigger"]')
-  expect(disclosures()).toHaveLength(2)
-  expect(disclosures()[0]).toHaveTextContent("2 tool(s)")
+  expect(disclosures()).toHaveLength(1)
+  expect(disclosures()[0]).toHaveTextContent("2 calls")
   const answer = screen.getByText("public answer")
   expect(disclosures()[0]!.compareDocumentPosition(answer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-  expect(answer.compareDocumentPosition(disclosures()[1]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  expect(answer.compareDocumentPosition(screen.getAllByText("Tool call").at(-1)!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   rerender(<LocaleProvider><AssistantTurn {...props} messagesById={{ ...messages, empty: { ...messages.empty, content: "owner corrected body" } }} /></LocaleProvider>)
-  expect(disclosures()).toHaveLength(3)
+  expect(disclosures()).toHaveLength(0)
   expect(screen.getByText("owner corrected body")).toBeVisible()
   expect(screen.getByText("public answer")).toBeVisible()
 })
@@ -226,8 +232,7 @@ it.each([
   const props = { sessionId: "session", isStreaming: false, isReconnecting: false, hasFailed: false, canRetryPendingSubmission: false, creditRejected: false, onOpenBilling: vi.fn(), onOpenPricing: vi.fn(), onRetry: vi.fn(), mode: "fast" as const, stagingByRun: {}, hitlRunId: null, controlError: null }
   const show = (thread: ReturnType<typeof stateFromSnapshot>) => render(<LocaleProvider><ConversationThread {...props} thread={thread} /></LocaleProvider>)
   const revealCategory = () => {
-    const toggle = screen.getByRole("button", { name: /1 tool\(s\)/u })
-    if (toggle.getAttribute("aria-expanded") === "false") fireEvent.click(toggle)
+    expect(document.querySelector('[data-slot="collapsible-trigger"]')).toBeNull()
     expect(screen.getByText(label)).toBeVisible()
   }
   const view = show(stateFromSnapshot(snapshot))
@@ -261,3 +266,109 @@ for (const [display_code, label] of public28Labels) {
     }
   })
 }
+
+
+it("grows a direct action into one disclosure without remounting rows and preserves manual intent after remount", () => {
+  const first = { activity: "tool" as const, activity_id: `act_${"7".repeat(64)}`, segment_id: "stable-action-growth", status: "running" as const, display_code: "tool.file.read" as const }
+  const second = { ...first, activity_id: `act_${"8".repeat(64)}`, display_code: "tool.web.search" as const }
+  const props = { segmentId: "stable-action-growth", live: true }
+  const { rerender, unmount } = render(<LocaleProvider><SegmentProcess {...props} activities={[first]} /></LocaleProvider>)
+  const row = screen.getByText("Read file")
+  expect(screen.queryByRole("button")).toBeNull()
+  rerender(<LocaleProvider><SegmentProcess {...props} activities={[first, second]} /></LocaleProvider>)
+  expect(screen.getByText("Read file")).toBe(row)
+  const trigger = screen.getByRole("button", { name: /Read file · Search the web · 2 calls/u })
+  fireEvent.click(trigger)
+  expect(trigger).toHaveAttribute("aria-expanded", "false")
+  rerender(<LocaleProvider><SegmentProcess {...props} live={false} activities={[{ ...first, status: "completed" }, { ...second, status: "failed" }]} /></LocaleProvider>)
+  expect(screen.getByRole("button")).toBe(trigger)
+  expect(screen.getByText("Read file")).toBe(row)
+  expect(row.closest("[inert]")).not.toBeNull()
+  unmount()
+  render(<LocaleProvider><SegmentProcess {...props} activities={[first, second]} /></LocaleProvider>)
+  expect(screen.getByRole("button")).toHaveAttribute("aria-expanded", "false")
+})
+
+it("counts every failed mixed activity without inventing distinct file or result quantities", () => {
+  const activities: RunProcessActivity[] = [
+    { activity: "tool", activity_id: "one", segment_id: "mixed-failures", display_code: "tool.file.read", status: "failed" },
+    { activity: "tool", activity_id: "two", segment_id: "mixed-failures", display_code: "tool.file.read", status: "completed" },
+    { activity: "subagent", activity_id: "three", segment_id: "mixed-failures", display_code: "subagent.execution", status: "failed" },
+    { activity: "skill", activity_id: "four", preflight_id: "preflight", source_refs: [], phase: "failed" },
+  ]
+  render(<LocaleProvider><SegmentProcess segmentId="mixed-failures" activities={activities} live={false} /></LocaleProvider>)
+  const summary = screen.getByRole("button")
+  expect(summary).toHaveTextContent("Read file · Subagent · Skill")
+  expect(summary).toHaveTextContent("4 activities")
+  expect(summary).toHaveTextContent("3 failed")
+  expect(summary).not.toHaveTextContent(/2 files|results/u)
+})
+
+it("uses nine category-specific decorative icons and pure UI target text, never unknown activity fields", () => {
+  const icons = new Set<string | null>()
+  for (const [display_code, label] of public28Labels) {
+    const activity = { activity: "tool" as const, activity_id: "category", segment_id: "category", status: "completed" as const, display_code, display_detail: { name: "untrusted unknown field" } }
+    const props = { activity, targetText: "<b>literal target</b>" }
+    const view = render(<LocaleProvider><ToolCallRow {...props} /></LocaleProvider>)
+    const row = screen.getByText(label).parentElement!
+    icons.add(row.querySelector("svg")?.getAttribute("class") ?? null)
+    expect(row.querySelector("svg")).toHaveAttribute("aria-hidden", "true")
+    expect(screen.getByText("<b>literal target</b>")).toHaveAttribute("title", "<b>literal target</b>")
+    expect(row.querySelector("b, a, button")).toBeNull()
+    expect(screen.queryByText("untrusted unknown field")).toBeNull()
+    expect(screen.getByText("Completed")).toHaveClass("sr-only")
+    view.unmount()
+  }
+  expect(icons.size).toBe(9)
+})
+
+it("does not duplicate queued, resume, cancel, HITL or reconnect cues with Run continuation", () => {
+  const activity = { activity: "tool" as const, activity_id: "settled-status", segment_id: "settled-status", status: "completed" as const, display_code: "tool.file.read" as const }
+  const props = { sessionId: "status-exclusive", steps: [{ kind: "activity" as const, seq: "1", segmentId: activity.segment_id, activity }], messagesById: {}, isLive: true, stagedDecisions: {}, hitlActive: false, controlError: null }
+  const { rerender } = render(<LocaleProvider><AssistantTurn {...props} /></LocaleProvider>)
+  expect(screen.getByText("Continuing…")).toBeVisible()
+  for (const phase of ["queued", "resuming", "cancelling"] as const) {
+    rerender(<LocaleProvider><AssistantTurn {...props} executionPhase={phase} /></LocaleProvider>)
+    expect(screen.queryByText("Continuing…")).toBeNull()
+  }
+  rerender(<LocaleProvider><AssistantTurn {...props} reconnecting /></LocaleProvider>)
+  expect(screen.queryByText("Continuing…")).toBeNull()
+  rerender(<LocaleProvider><AssistantTurn {...props} hitlActive /></LocaleProvider>)
+  expect(screen.queryByText("Continuing…")).toBeNull()
+  rerender(<LocaleProvider><AssistantTurn {...props} steps={[{ ...props.steps[0]!, activity: { ...activity, status: "running" } }]} /></LocaleProvider>)
+  expect(screen.queryByText("Continuing…")).toBeNull()
+  expect(screen.getByText("Running")).toBeVisible()
+})
+
+
+it("keeps an explicitly opened group open when it settles and when a single row grows again", () => {
+  const one = { activity: "tool" as const, activity_id: "open-one", segment_id: "open-intent", status: "completed" as const, display_code: "tool.file.read" as const }
+  const two = { ...one, activity_id: "open-two", display_code: "tool.file.write" as const }
+  const props = { segmentId: "open-intent", live: false }
+  const { rerender } = render(<LocaleProvider><SegmentProcess {...props} activities={[one, two]} /></LocaleProvider>)
+  const trigger = screen.getByRole("button")
+  expect(trigger).toHaveAttribute("aria-expanded", "false")
+  fireEvent.click(trigger)
+  expect(trigger).toHaveAttribute("aria-expanded", "true")
+  const row = screen.getByText("Read file")
+  rerender(<LocaleProvider><SegmentProcess {...props} activities={[one]} /></LocaleProvider>)
+  expect(screen.queryByRole("button")).toBeNull()
+  expect(screen.getByText("Read file")).toBe(row)
+  expect(row.closest("[inert]")).toBeNull()
+  rerender(<LocaleProvider><SegmentProcess {...props} activities={[one, two]} /></LocaleProvider>)
+  expect(screen.getByText("Read file")).toBe(row)
+  expect(screen.getByRole("button")).toHaveAttribute("aria-expanded", "true")
+})
+
+it("keeps active mixed work distinguishable in its collapsed action summary", () => {
+  const one = { activity: "tool" as const, activity_id: "active-summary-one", segment_id: "active-summary", status: "completed" as const, display_code: "tool.file.read" as const }
+  const two = { ...one, activity_id: "active-summary-two", status: "running" as const, display_code: "tool.web.search" as const }
+  const { rerender } = render(<LocaleProvider><SegmentProcess segmentId="active-summary" activities={[one, two]} live /></LocaleProvider>)
+  const summary = screen.getByRole("button")
+  fireEvent.click(summary)
+  expect(summary).toHaveAttribute("aria-expanded", "false")
+  expect(summary).toHaveTextContent("Running")
+  rerender(<LocaleProvider><SegmentProcess segmentId="active-summary" activities={[one, { ...two, status: "completed" }]} live={false} /></LocaleProvider>)
+  expect(summary).not.toHaveTextContent("Running")
+  expect(summary).toHaveAttribute("aria-expanded", "false")
+})

@@ -251,6 +251,7 @@ export function AssistantTurn({
                 segmentId={segment.segmentId}
                 activities={segment.activities}
                 live={liveProcessSegment}
+                continueProcessing={liveProcessSegment && !tailHasText && phaseLabel === null && !reconnecting && !hitlActive}
                 {...(mode === undefined ? {} : { mode })}
               />
             </div>

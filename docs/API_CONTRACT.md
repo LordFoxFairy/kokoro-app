@@ -1,3 +1,9 @@
+## 2026-10-27 具体动作安全对象候选消费／分享隔离（D0；待正式 owner 发行）
+
+当前正式消费者仍是下节 BFF Public28.3；Agent8.2／Public28.4 仅后继依赖，未取得正式 commit 与完整原件／摘要前不更新生成物、运行 schema 或手写 wire DTO。候选工具活动沿现唯一 AG-UI／snapshot／ordered parts 增 optional `display_detail {kind:file|mcp_tool,name}`，名称上限 120 Unicode scalar／480 UTF-8 bytes 并由源边界限定；最终字段、校验和 provenance 以正式 owner artifact 为唯一来源。App 十条既有公共生成链从同一 Git blob 原件正规更新，保独立 MCP 私有 pin 与旧父证明；旧 absent 合法，只显示原类别，不猜对象或回填历史。
+
+对象仅用于纯文本动作展示、长名 ellipsis／完整 title，不是文件路径读取、MCP 执行或链接授权，不新增 endpoint／请求字段／权限／业务写入。live CUSTOM、私有 snapshot 和 activity parts 必须共用 strict schema 保值；坏 metadata 不静默降级或从参数／答案修复。匿名分享的 `execution_process` 明确只接受 null（App `z.null()`）；私有 snapshot 从 shared schema extend 后单独恢复 nullable process，分享不消费私有活动／metadata、不请求 private parts。当前宽 shared parser 是待修消费者边界，不把现状冒成目标已实现；完整 UI／consumer 写区与验收见本仓 `TECHNICAL_DESIGN.md` 首节，第一阶段结构／图标落地不代表具体对象目标已完成或正常组合生效。
+
 ## 2026-10-27 当前 Public28.3 文件工具类别
 
 固定正式BFF `b2b9eb1eac4a3f0b0cd4099ed59cbf756f14124c`／Public28.3.0／192操作，完整 canonical SHA256 `85a1b51cd151581b51d7ea7992d85e04462c03fafb36d0527e1df352dd85223a`。唯一增量为 `RunToolActivity.display_code` 正式闭集追加 `tool.file.write`、`tool.file.deliver`；success仍只由原status表达，旧 `tool.execution` 合法，未知值、跨分支值及raw字段仍严格拒绝。live CUSTOM、snapshot与ordered parts共用生成tuple和现validator，无新endpoint、请求字段或执行许可。

@@ -201,3 +201,14 @@ it("Public28 safe tool labels have explicit native copy in every supported local
     }
   }
 })
+
+
+it("all shipped locales own action counts, mixed failures and the distinct Run continuation copy", () => {
+  for (const locale of LOCALES) {
+    const source = locale === "zh" ? zh : OVERLAYS[locale]
+    for (const key of ["thread.actionCalls", "thread.actionActivities", "thread.actionFailures", "thread.continueProcessing"] as const) {
+      const own = (source as Readonly<Record<string, string | undefined>>)[key]
+      expect(own, `${locale}:${key}`).toBeTruthy()
+    }
+  }
+})
