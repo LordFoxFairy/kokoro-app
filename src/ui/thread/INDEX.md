@@ -39,6 +39,7 @@ Web专属thread viewport统一隐藏滚动条槽以匹配Composer阅读轴；共
 - 失败双源：机器错误态与 agent 裁决的 run.failed 终态都要显式呈现。
 - 402（credit_insufficient）走计费专用说明 + 价格入口，不复用通用失败文案。
 - Delivery 卡以二元 ID 打开 Canvas/原生同源下载，详情失败可重试/取消；`has_more` 直达 Library 作品页。
+- Thread 的 Delivery 卡仅按真实 conversationId＋runId 归到该 Run 最后一个现有助手轮后，不随后续读取轮移到尾部；无所属轮的当前会话成果仅保留一次 Library 入口，不猜 message 关联。Canvas／资料库继续聚合全集，`has_more` 仍是会话级提示。
 - Markdown 列表标记由本模块的 `.md ul` / `.md ol` 局部恢复，不能依赖被 CSS reset 清除的浏览器默认样式，也不能改动全局列表或任务列表语义。
 
 精确 model_settlement_pending / false 沿原唯一终态 footer 展示，正文和旧generic不改；没有新重试／结算请求。

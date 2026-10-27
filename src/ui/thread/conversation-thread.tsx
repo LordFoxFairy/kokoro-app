@@ -169,13 +169,32 @@ function ConversationThreadSurface({
   showTaskTitle = true,
 }: ConversationThreadProps) {
   const t = useT()
-  // 把扁平 messages + 有序 steps 折成线程项：用户气泡 / assistant 轮（一个 runId 一轮）。
+  // 把扁平 messages + 有序 steps 折成线程项；同 Run 可有多个 assistant 轮。
   const liveRunId = isStreaming ? currentRunId ?? thread.activeRunId ?? undefined : undefined
   const items = buildThreadItems(thread)
   // Once the owner Run is known, the forming surface and its first public text
   // share one keyed turn; a text delta never remounts the disclosure/HITL host.
   if (liveRunId !== undefined && !items.some((item) => item.kind === "assistant-turn" && item.runId === liveRunId)) {
     items.push({ kind: "assistant-turn", anchorId: `assistant:${liveRunId}:turn:0`, runId: liveRunId, steps: [], messagesById: {} })
+  }
+
+  // Delivery owns a Run, not an inferred message. Render it once after that
+  // Run's last existing turn; later read-only Runs must not move earlier cards.
+  const lastTurnByRun = new Map<string, number>()
+  for (const [index, item] of items.entries()) {
+    if (item.kind === "assistant-turn") lastTurnByRun.set(item.runId, index)
+  }
+  const deliveriesByRun = new Map<string, SessionDelivery[]>()
+  let hasUnplacedDeliveries = false
+  for (const delivery of thread.deliveries) {
+    if (sessionId === null || delivery.conversationId !== sessionId) continue
+    if (!lastTurnByRun.has(delivery.runId)) {
+      hasUnplacedDeliveries = true
+      continue
+    }
+    const deliveries = deliveriesByRun.get(delivery.runId) ?? []
+    deliveries.push(delivery)
+    deliveriesByRun.set(delivery.runId, deliveries)
   }
 
   // 提交后、首个 step/token 未到：在途轮还没产生任何可渲染项（最后一项仍是用户胶囊）。
@@ -294,6 +313,14 @@ function ConversationThreadSurface({
                     ? {}
                     : { failureFooter: <TerminalFailureFeedback failure={item.failure} /> })}
                 />
+                {onOpenDelivery && sessionId !== null && lastTurnByRun.get(item.runId) === itemIndex && deliveriesByRun.has(item.runId) ? (
+                  <DeliverySection
+                    sessionId={sessionId}
+                    deliveries={deliveriesByRun.get(item.runId)!}
+                    preview={preview}
+                    onOpen={onOpenDelivery}
+                  />
+                ) : null}
               </>
             )}
           </MessageScrollerItem>
@@ -323,13 +350,14 @@ function ConversationThreadSurface({
         {canRetryResume && onRetryResume ? <MessageScrollerItem messageId="resume-retry">
           <Button type="button" variant="outline" onClick={onRetryResume}>{t("hitl.retryResume")}</Button>
         </MessageScrollerItem> : null}
-        {/* 成果区：会话流尾部聚合本会话全部成果（终态一目了然，不用翻消息流）。 */}
-        {onOpenDelivery && sessionId !== null && (thread.deliveries.length > 0 || thread.deliveriesHasMore) ? (
+        {/* Only the conversation-level Library entry remains at the tail.
+            Missing owner turns never attach a historical card to a new Run. */}
+        {onOpenDelivery && sessionId !== null && (hasUnplacedDeliveries || thread.deliveriesHasMore) ? (
           <MessageScrollerItem messageId="deliveries">
             <DeliverySection
               sessionId={sessionId}
-              deliveries={thread.deliveries}
-              hasMore={thread.deliveriesHasMore}
+              deliveries={[]}
+              hasMore
               preview={preview}
               onOpen={onOpenDelivery}
             />

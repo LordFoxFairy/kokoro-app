@@ -581,7 +581,7 @@ describe("ConversationThread 失败卡渲染", () => {
     { name: "有效会话且有更多页", sessionId: "ses_1", deliveries: [], hasMore: true, canOpen: true, visible: true },
     { name: "有效会话且已有成果", sessionId: "ses_1", deliveries: [delivery], hasMore: false, canOpen: true, visible: true },
     { name: "无打开动作且已有成果", sessionId: "ses_1", deliveries: [delivery], hasMore: false, canOpen: false, visible: false },
-  ])("成果滚动项仅在成果区可渲染时存在：$name", ({ sessionId, deliveries, hasMore, canOpen, visible }) => {
+  ])("无所属轮的成果保留 Library 入口，并遵守会话和打开动作边界：$name", ({ sessionId, deliveries, hasMore, canOpen, visible }) => {
     const { container } = render(
       <ConversationThread
         sessionId={sessionId}
@@ -602,13 +602,11 @@ describe("ConversationThread 失败卡渲染", () => {
       />,
       { wrapper: LocaleProvider },
     )
-    const wrapper = container.querySelector('[data-message-id="deliveries"]')
-    if (visible) {
-      expect(wrapper).not.toBeNull()
-      expect(wrapper?.querySelector("section")).not.toBeNull()
-    } else {
-      expect(wrapper).toBeNull()
-    }
+    const libraryLinks = screen.queryAllByRole("link", { name: tr("delivery.viewAll") })
+    expect(libraryLinks).toHaveLength(visible ? 1 : 0)
+    if (visible) expect(libraryLinks[0]).toHaveAttribute("href", "/app/library?tab=artifacts")
+    // No Run turn is present in this window: keep access, never invent a card owner.
+    expect(container.querySelector('[data-canvas-opener="true"]')).toBeNull()
   })
 
   it("空终态助手轮保留消息身份并在同一滚动项承接唯一普通失败反馈", () => {
