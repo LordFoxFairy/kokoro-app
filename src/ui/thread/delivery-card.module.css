@@ -94,7 +94,9 @@
   white-space: nowrap;
 }
 
-.download {
+/* Keep this file action touch-sized inside the desktop shell too. Its
+   generic icon-button rule otherwise resets height to 36px/min-height to 0. */
+.section .card .download[data-slot="button"][data-size="icon"] {
   width: 2.75rem;
   height: 2.75rem;
   min-width: 2.75rem;
