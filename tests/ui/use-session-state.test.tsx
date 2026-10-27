@@ -1277,7 +1277,10 @@ it("private-server Save GET401 uses real Session confirmation before a fresh gen
   const { createHubClient, HubClientError } = await import("@/hub/client")
   const recovery = await import("@/ui/mcp/mcp-preparation-recovery")
   const { createTestPreparationJournal } = await import("./fixtures/mcp-preparation-journal")
-  const journal = vi.spyOn(recovery, "createBrowserMcpPreparationRecovery").mockImplementation(() => createTestPreparationJournal(recovery))
+  const lifecycle = await import("@/ui/mcp/mcp-management-commands")
+  const createLifecycle = lifecycle.createMcpLifecycleCommands
+  const journal = vi.spyOn(lifecycle, "createMcpLifecycleCommands").mockImplementation(options =>
+    createLifecycle({ ...options, recovery: createTestPreparationJournal(recovery) }))
   window.localStorage.setItem("kokoro.locale", "zh")
   let version = 3, notes = "Initial verified note", failedRead = false, authReads = 0
   let confirmSession: ((response: Response) => void) | undefined

@@ -1,3 +1,33 @@
+## PREPARE-JOURNAL-V2：feature 本地 port，不新增传输（2026-10-27，Root 已核引用槽；存储候选）
+
+本节不是 HTTP／RPC contract。现正式 BFF `6557f189`／receipt1.0 及所有 generated/pin 不变；后续方法专属 POST reason4、query reason4／5 只由正式 BFF 原件生成，本片不定义其 wire 字段或数值 enum。以下只是 IDB adapter 的非秘密领域接口，不能由任意 HTTP status／message／Current 推导退休资格：
+
+```ts
+type McpPreparationDisposition = "unknown_fenced" | "definite_rejected";
+type McpPreparationPolicyRef = Readonly<{
+  artifact_sha256: string; profile: string; version: string;
+}>;
+type McpPreparationRetirement = Readonly<{
+  disposition: McpPreparationDisposition;
+  policy_ref: McpPreparationPolicyRef;
+}>;
+type McpPreparationHistoryCursor = Readonly<{
+  subject: string; serverId: string; key: string; version: string;
+}>;
+// base McpPreparationRecovery 保持原样；factory 返回扩展 McpPreparationJournal：
+retireWaiting(record: McpPreparationRecord, retirement: McpPreparationRetirement,
+  signal?: AbortSignal): Promise<McpRetiredPreparationRecord>;
+getRetired(record: McpPreparationRecord): Promise<McpRetiredPreparationRecord | undefined>;
+listRetired(subject: string, serverId: string,
+  options?: Readonly<{ limit?: number; after?: McpPreparationHistoryCursor }>):
+  Promise<Readonly<{ items: readonly McpRetiredPreparationRecord[];
+    nextCursor: McpPreparationHistoryCursor | null }>>;
+```
+
+`policy_ref` 是固定本地引用槽：artifact_sha256 为 lowercase 64-hex，profile／version 为 1–128 个非空格 printable ASCII；值由以后正式 consumer 从其已验证生成政策填入，不设任何当前候选值、默认 pin 或 reason enum。存储层只验证 closed shape、相等性及原命令身份，不将该槽当授权或网络证明。`retireWaiting` 只在事务 commit 后返回历史记录；失败 reject，不调用成功回调、不返回新 key／CAS／发送许可。重复 exact 退休返回原不可变历史，仍不是 K2 资格。reserve 有 active 时仍返回已有记录；仅无 active 时，在同一双 store 事务先查 exact retired primary key，存在即拒同 K/CAS 重建（不因换 connector 绕开）。不同 CAS 重用旧 key 的全局防错仍由后继不同 crypto K 及 owner 原 key/CAS 守卫，不新增索引。
+
+只读列表限可信当前 subject＋server，limit 默认20／最大50，以 subject_server index 内 primary key 正序续页（不是按本地时间承诺顺序）。cursor 保原 subject／server／key／CAS，入参须与本页 subject／server exact 相等。用 openCursor／continuePrimaryKey 对非 unique index＋唯一 primary key 原生 seek，不 getAll／全扫排序；最多读取 limit+1 个结果及常数次 seek，校验每条 closed record 与 key 一致。相同静态历史集合不重漏；并发新插入由新一轮第一页读取，不承诺跨事务全局 snapshot。getRetired 始终按原 identity 精确读。具体持久 codec 与原子约束见 [数据设计](DATA_MODEL.md) 本节；读取历史不进入 active restore 或请求重放。
+
 ## Prepare completed 只读恢复 （2026-10-27，正式原件消费者）
 
 本节取代旧 Prepare inspection→POST replay 的恢复约定；其它 Register／Update／发布和通用错误恢复不变。正式 BFF `6557f1895d4e1a4f6d2ad9e9e37ca4fc18371d45` 的独立私有原件 `contract/openapi/browser/v1/mcp-prepare-receipt.json` 固定 SHA256 `ad1f842626677c97ee3734aff3663f296cc9c58ccfe886ae116abf8f8b991810`，由具名 generator 派生 closed schema、policy 与 error tuple，public 与其它 private pin 不变。owner 边界如下：

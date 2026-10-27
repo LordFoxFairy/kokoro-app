@@ -1,3 +1,29 @@
+## PREPARE-JOURNAL-V2：精确 codec／additive 迁移（2026-10-27，Root 已核引用槽；存储候选）
+
+仅同源本 feature `kokoro-mcp-preparation` IndexedDB 从1升2；无 SQL、后端 owner 表、其它 journal、通用 command 状态或 raw owner facts。现 `intents` store、`subject` index、key=`JSON.stringify([subject,serverId])` 与 active closed `{subject,target:{serverId,connectorId,version},key,failure?}` 原格式／值保持，不在升级时读改或推断旧行。旧有效版本／key validator 不收紧。
+
+```ts
+type McpRetiredPreparationRecord = Readonly<{
+  schema_version: 2;
+  subject: string;
+  target: McpPreparationTarget; // 原 serverId／connectorId／version，不重基
+  key: string;
+  disposition: "unknown_fenced" | "definite_rejected";
+  policy_ref: Readonly<{ artifact_sha256: string; profile: string; version: string }>;
+  retired_at: string; // adapter 首次实际归档时生成 UTC ISO，仅本地展示
+}>;
+```
+
+新增 `retired_intents` store，primary key=`JSON.stringify([subject,target.serverId,key,target.version])`，新增非 unique compound index `subject_server`，keyPath=`["subject","target.serverId"]`。record、target、policy_ref 和 cursor 均 strict closed；subject／target／key 复用原 validator；schema_version 固定2，disposition 为上述本地域闭集，retired_at 是 UTC ISO。policy_ref 格式见 [API 设计](API_CONTRACT.md) 本节：它是正式 consumer 未来填充的引用槽，不猜发布字段或把它视为证明。无 URL、headers、secret、cipher、raw ACK/error、Current／权限快照；disposition 已承载具名本地退休理由，不复制尚未交付的 wire reason enum。
+
+**迁移方法。** `indexedDB.open(name,2)` 的 onupgradeneeded 只在缺失时建原 store/index（fresh DB），并新增 retired store/index；升级 v1 不遍历／重写／退休任何 active row。错误或 blocked 拒绝本次 open，复位 opened promise；已拒请求之后迟到 onsuccess 必须立即 close，不让失败操作复活。各版本连接 onversionchange 主动 close＋清 opened；旧 open(name,1) 在 v2 后 VersionError，禁止 fallback 删除、降级或重建。回滚只用后继兼容 reader 的 roll-forward，不清 v2 数据；本片不实施自动历史清理。
+
+**retireWaiting 原子性。** 校验入参及未 abort 后，一个 readwrite transaction 同时覆盖 intents＋retired_intents；重读 active，exact 比较 subject／server／connector／原 version／key。历史不存在且 active exact 时插入新 closed 历史、删除 exact active；只在 tx.oncomplete resolve，任一错误／存储失败／signal abort 全回滚。存储方法只识别 signal，不自行发网络或解释 owner outcome；未来 feature caller 负责当前 actor／generation／window 并将退休同步成 abort。commit 已完成后的迟到取消不恢复旧 active，也不自动驱动新窗。
+
+历史已存在时仅验证原 identity、disposition、policy_ref 均 exact 后返回原记录，保首次 retired_at，绝不覆盖历史或删除别的 K2；若历史已存在却 active 仍是同 K，按不可能半态拒绝。无历史且 active 缺失／被替换、历史冲突／坏 codec 一律 abort，不能凭缺失猜已退休。readonly history 验 stored primary key 与值一致，按 subject_server 有界续页；restore/list/current/reserve 仍只读 active。成功 `complete` 继续只清 exact active，不归档、不删 history，保 missing 的旧幂等语义；reason4／5 以后只走独立退休 port，不借 complete/onConfirmed。未来 consumer 在旧 K 退休后须核 exact entry／retired 身份再处理晚 ACK；不能借 complete missing 成功把已退休 K 复活为 completed locator 或清后继 K2，本存储片不改 commands。reserve 在同一双 store readwrite 事务先保已有 active 合并；无 active 才查本次 exact retired primary key，存在即拒绝重建（包括换 connector），避免 adapter 自造上述半态。不同 CAS 重用旧 key 的全局防错仍归后继不同 crypto K 和 owner 原 key/CAS 守卫，不加泛 key 索引；新 K2 的另次显式 fresh/manage 资格仍不是本 port 的授权职责。
+
+**真实 IDB 验收。** 自有临时 origin／一 context 两 page：fresh v2 和原生 v1 行原值保留；配合 versionchange／不配合 blocked／迟到 success close／旧 v1 VersionError；history 插入后或 active delete 后注入 tx.abort 均双 store 回滚；并发 duplicate 与 K／K2、bad codec／key绑定、abort前后、不可变时间与 bounded pagination、跨 subject 隔离及 reload 仅恢复 active。原 successful complete 与 query1 native fixture 继续通过。端口替身或 fixture ACK 不称真实 owner 集成；正常浏览器、登录／IDB、服务与 Git 仍由 Root 独占。
+
 ## Prepare completed 只读恢复 D0（2026-10-27，无新增 Schema）
 
 本节替代旧“日志恢复后 fresh 核验并授权原 POST 重放”的生命周期，其余非秘密 Prepare journal 与 owner 边界保留。Platform 拥有原 completed receipt；App 不存 owner事实镜像、成功缓存或 negative 终态，不新增 SQL、Redis、数据库、浏览器 store、版本迁移或 pending/resuming 实体。正式私有 artifact 的固定 commit/digest 与生成入口见 API_CONTRACT；原 failure codec 及 journal Schema 不变。

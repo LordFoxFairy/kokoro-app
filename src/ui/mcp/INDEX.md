@@ -1,3 +1,7 @@
+## Prepare journal v2 存储（2026-10-27，独立候选，未接退休 UI／wire）
+
+`mcp-preparation-recovery.ts` 的同一 browser adapter 返回扩展 `McpPreparationJournal`，旧 base port 与 active 格式保持；IDB v2 只新增 retired_intents／subject_server。`retireWaiting` 原子归档 exact K＋删除 active，历史只读有界 keyset，reserve 无 active 时双 store 拒 exact 已退休 K/CAS 重建；closed disposition／policy_ref 是本地元数据，不代正式 BFF 政策或新命令权限。failed／fenced 不走成功 complete；旧 client version fence、blocked／late success close、abort／K2／immutable history 见 native v2 回归。未来 consumer 必须补 exact entry／late-ACK guard 后再接线；当前 commands／UI／Hub／pin 未改。三 canonical 前缀保存类型／codec／迁移与停止线。
+
 ## Prepare 原结果只读恢复（2026-10-27）
 
 `mcp-preparation-commands.ts` 在首次 POST 开始后单调 query-only；restored/unknown 均经原 key/CAS/target 的正式 receipt GET，不再 fresh inspection 放行 POST。沿原 ConnectorCommand/IDB compare-by-key，只有 strict completed 与 clear commit 成功才完成；创建及详情缺少 Current 时也可显式恢复，Current 权限与首次写门保持。RAM locator 只供完成定位，不回填 Current 或授执行权；actor/window/K2/provider 冲突保护见生命周期及 flow 回归。机器源和薄代理见 API_CONTRACT 正式私有 pin，未知/expired/失败 marker 不冒终态。

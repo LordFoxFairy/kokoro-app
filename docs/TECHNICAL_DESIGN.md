@@ -1,3 +1,11 @@
+## PREPARE-JOURNAL-V2：本地等待退休与只读历史（2026-10-27，存储 D0；Root 已核引用槽；存储候选）
+
+基线为已正式交付的 App `bb451ac735c547aa0d27704bf115533cc95ebfd0`。本片只扩现 `mcp-preparation-recovery.ts`、其原生隔离 IDB 回归及 MCP INDEX；不接 commands／UI／Hub／route／generated，不猜下一 BFF policy／commit／enum。仅同 feature 本地存储能力，不新增 owner 表、通用 journal 或 command 状态；未来调用者须沿正式方法专属政策验证 reason4／5、当前 actor／generation／window 后才传退休参数，存储引用槽本身不证明 owner 结果或授新写权限。
+
+reason4 对应本地 `definite_rejected`，reason5 对应仍未知的 `unknown_fenced`；后者只能用户显式 stopWaiting。两者走独立 `retireWaiting` 双 store 事务，绝不借成功 `complete`／onConfirmed／completion locator。此片只提供存储 port，不添加任何自动触发；新 K2 仍须以后另一次显式连接、fresh Current／manage 及原 owner 守卫。退休历史始终原 key／CAS 只读，不能重放、还原 active 或改 K2。
+
+必要实现为同库 v2 additive upgrade、exact 双 store 事务及只读 history；active codec／failure／成功 complete 语义保持；reserve 保已有 active 合并，只在无 active 时以双 store 事务拒绝已退休同 key／CAS 重新创建（换 connector 也拒绝）。精确类型、键、引用槽、分页和迁移见 [数据设计](DATA_MODEL.md) 本节；port 与未来 wire 停止线见 [API 设计](API_CONTRACT.md) 本节。升级 blocked／VersionError／abort 失败保守返回，迟到 open 成功主动 close，不删库／降级／重建。没有正常资源或 owner wire 接线；原生测试只用自有隔离 Chromium context／临时 origin，先 RED 后 GREEN。
+
 ## Prepare completed 只读恢复 （2026-10-27，正式原件消费者）
 
 **裁决／停止线。** 本节取代下方旧 Prepare“fresh 双 GET 核验→proof→原 POST 重放”设计，仅影响未知 Prepare 的恢复；首次明确连接仍用原 POST。Platform 是原 Prepare receipt 的唯一 owner，BFF 正式发布 `GetPersonalMcpPrepareReceipt` 的 browser-private GET，App 只查原命令结果。D0 已经 Root 审查通过；正式 BFF `6557f1895d4e1a4f6d2ad9e9e37ca4fc18371d45` 私有原件 SHA256 `ad1f842626677c97ee3734aff3663f296cc9c58ccfe886ae116abf8f8b991810` 是新增 generated policy/schema 的唯一源，现公共及其它私有 pin 不变。
