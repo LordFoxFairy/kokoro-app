@@ -1,3 +1,11 @@
+## 自定义 API 剩余控件与创建准入（2026-10-27）
+
+原 `McpIconPicker` 在 API/MCP 创建及编辑中共用24px Lucide Image占位，60px预览/10px圆角/14%虚线边框/4%填充、右侧8px间距与66×32px透明outline上传按钮；失败/过期仍退回占位，不刷新能力或改变原暂存selector寿命。API关闭glyph20px仅局部作用域，不改共享Dialog。
+
+API备注optional独立400/muted，主label500；密钥每行独立12px圆角框/16px内边距和间距，单行不渲染移除，追加后每行36px移除按钮由hover显示。键盘focus-within与coarse-pointer持续可见是明确可达性差异，点击后最少留1行。首行字段offset与780px单行内在布局不变，每额外独立框增加238px，仍单body滚动/固定可见动作。
+
+帮助仅本表单局部Popover：12px CircleHelp、具名button、hover及显式键盘/tap读取、Escape关闭；280px最大宽、12/16px文本与4/8px内边距、黑90%/white及white22%边框，九语言仅新增帮助文案。创建要求至少1个完整密钥pair；额外全空行忽略，半填/同名继续拒绝。未知原请求重试、既有无凭据profile的详情读取/编辑、契约/状态/journal/flow均不变，不将保存配置当连接成功。旧name-only测试仅补公开QA pair并保留原恢复/ACK围栏断言，正常服务旅程归Root验收。
+
 ## 自定义 API 创建表单视觉（2026-10-27）
 
 `custom-api-form.module.css` 与 `mcp-create-dialog.module.css` 的 API 作用域使用实测内在内容高度，不固定724或780px；600px宽、95vw/95dvh上限，标题74px、页脚76px，只有字段body滚动，多密钥自然增高。复用settings surface/control token及既有菜单阴影；输入36px/8px圆角，说明与密钥值100/80px、10px圆角，字段焦点保留参考1px inset，按钮键盘焦点保留2px外圈。关闭按钮28px、top20px/right12px。

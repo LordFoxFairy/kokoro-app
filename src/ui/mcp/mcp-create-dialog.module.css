@@ -102,6 +102,11 @@
   background: transparent;
 }
 
+.customApiDialog > :global([data-slot="dialog-close"]) > svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
 .urlMcpDialog[data-slot="dialog-content"] {
   max-width: 95vw;
   max-height: 95dvh;

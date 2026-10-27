@@ -109,15 +109,15 @@
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  padding: 1rem;
-  border: 1px solid rgb(0 0 0 / 6%);
-  border-radius: 0.75rem;
 }
 .environmentRow {
   position: relative;
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1fr);
   gap: 1rem;
+  padding: 1rem;
+  border: 1px solid rgb(0 0 0 / 6%);
+  border-radius: 0.75rem;
 }
 .environmentRow > div {
   display: grid;
@@ -126,10 +126,22 @@
 }
 .environmentRow button {
   position: absolute;
-  top: 0.5rem;
-  right: 0.5rem;
-  width: 2rem;
-  height: 2rem;
+  top: 1rem;
+  right: 1rem;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  border: 1px solid rgb(0 0 0 / 6%);
+  border-radius: 0.5rem;
+  background: var(--settings-surface);
+  color: var(--destructive);
+  opacity: 0;
+}
+.environmentRow button > svg { width: 1.25rem; height: 1.25rem; }
+.environmentRow:hover button,
+.environmentRow:focus-within button { opacity: 1; }
+@media (pointer: coarse) {
+  .environmentRow button { opacity: 1; }
 }
 .environmentRow textarea {
   min-height: 5rem;
@@ -202,4 +214,26 @@
 .footer button:first-child:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
+}
+
+.field label:has(> .optional) { gap: 0; }
+.optional { color: var(--muted-foreground); font-weight: 400; }
+.environmentHeading { display: flex; height: 1.25rem; align-items: center; gap: 0.25rem; }
+.secretHelp { position: relative; top: -1px; display: inline-flex; width: 0.75rem; height: 0.75rem; padding: 0; border: 0; border-radius: 0.125rem; align-items: center; justify-content: center; background: transparent; color: var(--muted-foreground); cursor: help; }
+.secretHelp > svg { width: 0.75rem; height: 0.75rem; }
+.secretHelpContent {
+  --api-help-surface: rgb(0 0 0 / 90%);
+  --api-help-border: rgb(255 255 255 / 22%);
+  --api-help-foreground: #ffffff;
+  width: max-content;
+  max-width: min(17.5rem, calc(100vw - 2rem));
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--api-help-border);
+  border-radius: 0.5rem;
+  background: var(--api-help-surface);
+  color: var(--api-help-foreground);
+  box-shadow: none;
+  font-size: 0.75rem;
+  font-weight: 400;
+  line-height: 1rem;
 }

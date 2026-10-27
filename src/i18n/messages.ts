@@ -1324,6 +1324,8 @@ export const zh = {
   "connectorCatalog.secretValuePlaceholder":
     "Value of the secret, such as sk-example-1234",
   "connectorCatalog.addSecret": "添加密钥",
+  "connectorCatalog.secretNameHelpLabel": "密钥名称帮助",
+  "connectorCatalog.secretNameHelp": "使用唯一的密钥名称以避免与其他 API 的冲突。例如，对于 Youtube API 使用 YOUTUBE_API_KEY，对于 Google API 使用 GOOGLE_API_KEY。",
   "connectorCatalog.removeSecret": "移除密钥",
   "connectorCatalog.outlookDescription":
     "在 Kokoro 中撰写、搜索并管理 Outlook 电子邮件",

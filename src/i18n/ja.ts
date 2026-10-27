@@ -1340,6 +1340,8 @@ export const ja: Partial<Record<MessageKey, string>> = {
   "connectorCatalog.secretValue": "値",
   "connectorCatalog.secretValuePlaceholder": "シークレットの値（例: sk-example-1234）",
   "connectorCatalog.addSecret": "シークレットを追加",
+  "connectorCatalog.secretNameHelpLabel": "シークレット名のヘルプ",
+  "connectorCatalog.secretNameHelp": "他の API との競合を避けるため、一意のシークレット名を使用してください。たとえば、Youtube API には YOUTUBE_API_KEY、Google API には GOOGLE_API_KEY を使用します。",
   "connectorCatalog.removeSecret": "シークレットを削除",
   "settings.deploymentWebsites": "Websites",
   "settings.deploymentNoWebsites": "No websites yet",

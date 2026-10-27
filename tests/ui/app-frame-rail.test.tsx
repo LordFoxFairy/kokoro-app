@@ -3200,6 +3200,7 @@ it.each([
   }
   const input = await screen.findByRole("textbox", { name: "名称" })
   fireEvent.change(input, { target: { value: profile.name } })
+  fillApiCreationSecretFixture()
   fireEvent.click(screen.getByRole("button", { name: "保存" }))
   await waitFor(() => expect(hub.createCustomApi).toHaveBeenCalledOnce())
   expect(list).toHaveBeenCalledTimes(2)
@@ -3265,6 +3266,7 @@ it.each(["global", "settings"] as const)("%s creation ACK cannot close a newer c
   await waitFor(() => expect(shared.result.current.loading).toBe(false))
   await open("api")
   fireEvent.change(await screen.findByRole("textbox", { name: "名称" }), { target: { value: profile.name } })
+  fillApiCreationSecretFixture()
   fireEvent.click(screen.getByRole("button", { name: "保存" }))
   await waitFor(() => expect(hub.createCustomApi).toHaveBeenCalledOnce())
   // The Dialog's close button remains available even while the footer is busy.
@@ -3291,6 +3293,7 @@ it.each(["mode", "visibility"] as const)("a retained creation host fences old co
   const dialog = (mode: "custom-api" | "json", open = true) => <StrictMode><LocaleProvider><ConnectorCommandProvider client={hub} boundary={{ admitted: true, subject: "preview", generation: 0 }}><McpCreateDialog client={hub} mode={mode} open={open} onOpenChange={close} onDone={confirmed} /></ConnectorCommandProvider></LocaleProvider></StrictMode>
   const view = render(dialog("custom-api"))
   fireEvent.change(screen.getByRole("textbox", { name: "名称" }), { target: { value: "Old API" } })
+  fillApiCreationSecretFixture()
   fireEvent.click(screen.getByRole("button", { name: "保存" }))
   await waitFor(() => expect(hub.createCustomApi).toHaveBeenCalledOnce())
   await waitFor(() => expect(confirmed).toHaveBeenCalledOnce())
@@ -3311,6 +3314,11 @@ function apiCreationOverlay(boundary: import("@/ui/auth/use-session-state").Proj
     settingsReturnFocusRef={{ current: null }} shellRef={{ current: null }} mcpCreateMode={mode} setMcpCreateMode={vi.fn()}
     mcpCreateReturnFocusRef={{ current: null }} commandMenu={() => null} commandProps={{ onNewChat: vi.fn(), onOpenSettings: vi.fn() }}
     commandOpen={false} onCommandOpenChange={vi.fn()} /></LocaleProvider>
+}
+
+function fillApiCreationSecretFixture() {
+  fireEvent.change(screen.getByRole("textbox", { name: "密钥名称" }), { target: { value: "QA_API_KEY" } })
+  fireEvent.change(screen.getByRole("textbox", { name: /^值$/u }), { target: { value: "qa-public-fixture-value" } })
 }
 
 function apiCreationHub() {
@@ -3558,6 +3566,7 @@ it("API creation preserves one frozen command after a lost acknowledgement", asy
   render(apiCreationOverlay({ admitted: true, subject: "unknown-create-actor", generation: 1 }))
   const name = screen.getByRole("textbox", { name: "名称" })
   fireEvent.change(name, { target: { value: "Original API" } })
+  fillApiCreationSecretFixture()
   fireEvent.click(screen.getByRole("button", { name: "保存" }))
   await screen.findByRole("alert")
   expect(name).toHaveAttribute("readonly")
@@ -3575,6 +3584,7 @@ it("API creation resumes the original request after closing the window and reche
   const boundary = { admitted: true, subject: "resuming-actor", generation: 1 }
   const view = render(apiCreationOverlay(boundary))
   fireEvent.change(screen.getByRole("textbox", { name: "名称" }), { target: { value: profile.name } })
+  fillApiCreationSecretFixture()
   fireEvent.click(screen.getByRole("button", { name: "保存" }))
   await screen.findByRole("alert")
   view.rerender(apiCreationOverlay(boundary, null))
@@ -3588,7 +3598,7 @@ it("API creation resumes the original request after closing the window and reche
   fireEvent.click(screen.getByRole("button", { name: "重试原请求" }))
   await waitFor(() => expect(create).toHaveBeenCalledTimes(2))
   expect(create.mock.calls[1]?.slice(0, 2)).toEqual(create.mock.calls[0]?.slice(0, 2))
-  expect(create.mock.calls[1]?.[0]).toEqual({ name: profile.name, environment: [] })
+  expect(create.mock.calls[1]?.[0]).toEqual({ name: profile.name, environment: [{ name: "QA_API_KEY", value: "qa-public-fixture-value" }] })
 })
 
 it.each([false, true])("an acknowledged API secret stays cleared and Done can recover a close failure (recheck: %s)", async recheckClosing => {

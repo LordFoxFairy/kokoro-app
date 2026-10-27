@@ -1280,6 +1280,8 @@ export const ko: Partial<Record<MessageKey, string>> = {
   "connectorCatalog.secretValue": "값",
   "connectorCatalog.secretValuePlaceholder": "비밀 키 값(예: sk-example-1234)",
   "connectorCatalog.addSecret": "비밀 키 추가",
+  "connectorCatalog.secretNameHelpLabel": "비밀 키 이름 도움말",
+  "connectorCatalog.secretNameHelp": "다른 API와 충돌하지 않도록 고유한 비밀 키 이름을 사용하세요. 예를 들어 Youtube API에는 YOUTUBE_API_KEY를, Google API에는 GOOGLE_API_KEY를 사용하세요.",
   "connectorCatalog.removeSecret": "비밀 키 제거",
   "connectorCatalog.elevenLabsApiDescription": "Generate lifelike speech, clone voices, and create audio content",
   "connectorCatalog.openAiDescription": "Use GPT models for intelligent text generation and processing",

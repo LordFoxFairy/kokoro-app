@@ -127,6 +127,10 @@ it.each(["api-cancel", "api-unmount", "json-cancel", "json-unmount"])("%s stops 
     : <Dialog open><DialogContent><JsonMcpImportForm flow={flow as ReturnType<typeof createMcpJsonImportFlow>} boundary={{ ...boundary }} onCancel={onCancel} onDone={done} /></DialogContent></Dialog>;
   const oldWindow = render(content(oldDone), { wrapper: LocaleProvider });
   fireEvent.change(isApi ? screen.getByLabelText(/^(Name|名称)$/u) : screen.getByRole("textbox"), { target: { value: isApi ? "Original API" : documentValue } });
+  if (isApi) {
+    fireEvent.change(screen.getByLabelText(/^(Secret name|密钥名称)$/u), { target: { value: "QA_API_KEY" } });
+    fireEvent.change(screen.getByLabelText(/^(Value|值)$/u), { target: { value: "qa-public-fixture-value" } });
+  }
   fireEvent.click(screen.getByRole("button", { name: isApi ? /^(Save|保存)$/u : /^(Import|导入)$/u }));
   await waitFor(() => expect(write).toHaveBeenCalledOnce());
   const firstSignal = write.mock.calls[0]?.[2] as AbortSignal;

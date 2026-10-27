@@ -6,12 +6,13 @@ import { McpIconPicker } from "./mcp-icon-picker";
 import { connectorCommandMayResume, connectorCommandFailureMessage } from "./connector-command-failure";
 
 import { type FormEvent, useCallback, useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { CircleHelp, Plus, Trash2 } from "lucide-react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { useT } from "@/i18n/context";
@@ -44,6 +45,7 @@ export function CustomApiForm({
   const t = useT();
   const [name, setName] = useState("");
   const [instructions, setInstructions] = useState("");
+  const [secretHelpOpen, setSecretHelpOpen] = useState(false);
   // Manus starts an API profile with one explicit secret pair. Keeping that
   // row visible makes the required owner input discoverable and avoids an
   // empty framed area that looked like a failed/unfinished form.
@@ -70,6 +72,7 @@ export function CustomApiForm({
   );
   const valid =
     name.trim().length > 0 &&
+    configuredEnvironment.length > 0 &&
     configuredEnvironment.every((item) => item.name.trim() && item.value) &&
     new Set(configuredEnvironment.map((item) => item.name.trim())).size ===
       configuredEnvironment.length;
@@ -122,7 +125,7 @@ export function CustomApiForm({
         <McpIconPicker draft={icon.draft} state={icon.state} disabled={locked} />
         <div className={styles.field}>
           <Label htmlFor="custom-api-instructions">
-            {t("connectorCatalog.notes")} {t("connectorCatalog.optional")}
+            {t("connectorCatalog.notes")}<span className={styles.optional}>{t("connectorCatalog.optional")}</span>
           </Label>
           <Textarea
             id="custom-api-instructions"
@@ -137,13 +140,25 @@ export function CustomApiForm({
           className={styles.environment}
           aria-labelledby="custom-api-secrets-title"
         >
-          <Label
-            id="custom-api-secrets-title"
-            className={styles.environmentTitle}
-          >
-            {t("connectorCatalog.secrets")}{" "}
-            {t("connectorCatalog.environmentVariables")}
-          </Label>
+          <div className={styles.environmentHeading}>
+            <Label id="custom-api-secrets-title" className={styles.environmentTitle}>
+              {t("connectorCatalog.secrets")}{" "}{t("connectorCatalog.environmentVariables")}
+            </Label>
+            <Popover open={secretHelpOpen} onOpenChange={setSecretHelpOpen}>
+              <PopoverTrigger asChild>
+                <button type="button" className={styles.secretHelp} aria-label={t("connectorCatalog.secretNameHelpLabel")}
+                  onClick={event => { event.preventDefault(); setSecretHelpOpen(true); }}
+                  onPointerEnter={event => { if (event.pointerType === "mouse") setSecretHelpOpen(true); }}
+                  onPointerLeave={event => { if (event.pointerType === "mouse" && !event.currentTarget.matches(":focus-visible")) setSecretHelpOpen(false); }}>
+                  <CircleHelp aria-hidden="true" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className={styles.secretHelpContent} side="top" sideOffset={6}
+                aria-label={t("connectorCatalog.secretNameHelpLabel")} onOpenAutoFocus={event => event.preventDefault()}>
+                {t("connectorCatalog.secretNameHelp")}
+              </PopoverContent>
+            </Popover>
+          </div>
           <div className={styles.environmentContent}>
             {environment.map((item, index) => (
               <div className={styles.environmentRow} key={item.id}>
@@ -177,7 +192,7 @@ export function CustomApiForm({
                   }
                 />
               </div>
-              <Button
+              {environment.length > 1 ? <Button
                 type="button"
                 size="icon"
                 variant="ghost"
@@ -185,12 +200,12 @@ export function CustomApiForm({
                 aria-label={`${t("connectorCatalog.removeSecret")} ${index + 1}`}
                 onClick={() =>
                   editable() && setEnvironment((items) =>
-                    items.filter(({ id }) => id !== item.id),
+                    items.length > 1 ? items.filter(({ id }) => id !== item.id) : items,
                   )
                 }
               >
                 <Trash2 aria-hidden="true" />
-              </Button>
+              </Button> : null}
               </div>
             ))}
           </div>

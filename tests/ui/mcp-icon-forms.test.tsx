@@ -10,6 +10,8 @@ import type { McpIconIntent } from "@/hub/mcp-icon.schema";
 import { LocaleProvider } from "@/i18n/context";
 import { CustomApiDetailDialog } from "@/ui/mcp/custom-api-detail-dialog";
 import { CustomApiForm } from "@/ui/mcp/custom-api-form";
+import { McpIconPicker } from "@/ui/mcp/mcp-icon-picker";
+import { createMcpIconDraft } from "@/ui/mcp/mcp-icon-draft";
 import { createCustomApiCreateFlow } from "@/ui/mcp/custom-api-create-flow";
 import { CustomMcpForm } from "@/ui/mcp/mcp-custom-form";
 import { ConnectorCommandProvider } from "@/ui/mcp/connector-command-context";
@@ -80,6 +82,11 @@ function renderCreationDialog(mode: "form" | "custom-api", icon: ReturnType<type
   return { view, create, register, done };
 }
 
+function fillApiCreationSecret() {
+  fireEvent.change(screen.getByRole("textbox", { name: "密钥名称" }), { target: { value: "QA_API_KEY" } });
+  fireEvent.change(screen.getByRole("textbox", { name: /^值$/u }), { target: { value: "qa-public-fixture-value" } });
+}
+
 beforeEach(() => { localStorage.setItem("kokoro.locale", "zh"); });
 afterEach(() => { cleanup(); localStorage.removeItem("kokoro.locale"); });
 
@@ -89,14 +96,22 @@ it("Custom API URL staging never creates a connector until original Save carries
   const flow = createCustomApiCreateFlow({ client: { createCustomApi: create }, boundary, onConfirmed: vi.fn() });
   const view = render(<LocaleProvider><CustomApiForm flow={flow} iconClient={icon.client} boundary={boundary} onCancel={vi.fn()} onDone={async () => undefined} /></LocaleProvider>);
   fireEvent.change(screen.getByRole("textbox", { name: /^名称$/u }), { target: { value: profile.name } });
+  fillApiCreationSecret();
   await chooseUrl(icon.client);
   expect(create).not.toHaveBeenCalled();
   expect(screen.getByRole("button", { name: /^保存$/u })).toBeDisabled();
   await acknowledgeIcon(icon);
   expect(create).not.toHaveBeenCalled();
+  // A broken display reference returns to the same shared Image mark without
+  // changing the staged selector or issuing another import/create.
+  fireEvent.error(screen.getByRole("img", { name: "连接器图标" }));
+  expect(screen.queryByRole("img", { name: "连接器图标" })).not.toBeInTheDocument();
+  expect(view.container.querySelector(".lucide-image")).toBeInTheDocument();
+  expect(view.container.querySelector(".lucide-image-plus")).not.toBeInTheDocument();
+  expect(icon.client.importUrl).toHaveBeenCalledOnce();
   fireEvent.click(screen.getByRole("button", { name: /^保存$/u }));
   await waitFor(() => expect(create).toHaveBeenCalledOnce());
-  expect(create.mock.calls[0]?.[0]).toEqual({ name: profile.name, environment: [], icon: selector });
+  expect(create.mock.calls[0]?.[0]).toEqual({ name: profile.name, environment: [{ name: "QA_API_KEY", value: "qa-public-fixture-value" }], icon: selector });
   expect(create.mock.calls[0]?.[1]).toMatch(/^[a-f0-9-]{36}$/u);
   view.unmount();
   expect(icon.client.cancel).not.toHaveBeenCalled();
@@ -189,12 +204,13 @@ it("the real creation dialog's successful Save dismissal never cancels the hande
   const icon = iconFixture();
   const fixture = renderCreationDialog("custom-api", icon);
   fireEvent.change(screen.getByRole("textbox", { name: /^名称$/u }), { target: { value: profile.name } });
+  fillApiCreationSecret();
   await chooseUrl(icon.client);
   await acknowledgeIcon(icon);
   fireEvent.click(screen.getByRole("button", { name: /^保存$/u }));
   await waitFor(() => expect(fixture.create).toHaveBeenCalledOnce());
   await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-  expect(fixture.create.mock.calls[0]?.[0]).toEqual({ name: profile.name, environment: [], icon: selector });
+  expect(fixture.create.mock.calls[0]?.[0]).toEqual({ name: profile.name, environment: [{ name: "QA_API_KEY", value: "qa-public-fixture-value" }], icon: selector });
   expect(fixture.done).toHaveBeenCalledOnce();
   expect(fixture.register).not.toHaveBeenCalled();
   expect(icon.client.cancel).not.toHaveBeenCalled();
@@ -329,4 +345,76 @@ it.each(["confirmed", "read-failed"] as const)("Custom MCP configure keeps its o
   expect(client.registerPrivateMcpServer).toHaveBeenCalledOnce();
   expect(client.preparePrivateMcpServer).not.toHaveBeenCalled();
   expect(client.beginMcpConnectorAuthorization).not.toHaveBeenCalled();
+});
+
+
+it("API creation requires one complete secret, ignores empty extra rows and keeps the last row", async () => {
+  const create = vi.fn<NonNullable<HubClient["createCustomApi"]>>(async () => profile);
+  const flow = createCustomApiCreateFlow({ client: { createCustomApi: create }, boundary, onConfirmed: vi.fn() });
+  render(<LocaleProvider><CustomApiForm flow={flow} boundary={boundary} onCancel={vi.fn()} onDone={async () => undefined} /></LocaleProvider>);
+  const save = screen.getByRole("button", { name: /^保存$/u });
+  fireEvent.change(screen.getByRole("textbox", { name: /^名称$/u }), { target: { value: profile.name } });
+  expect(save).toBeDisabled();
+  expect(screen.queryByRole("button", { name: /^移除密钥/u })).not.toBeInTheDocument();
+  fireEvent.click(save);
+  expect(create).not.toHaveBeenCalled();
+  fireEvent.change(screen.getByRole("textbox", { name: /^值$/u }), { target: { value: "qa-value-without-name" } });
+  expect(save).toBeDisabled();
+  fireEvent.change(screen.getByRole("textbox", { name: /^值$/u }), { target: { value: "" } });
+  fireEvent.change(screen.getByRole("textbox", { name: "密钥名称" }), { target: { value: "QA_API_KEY" } });
+  expect(save).toBeDisabled();
+  fireEvent.change(screen.getByRole("textbox", { name: /^值$/u }), { target: { value: "qa-public-fixture-value" } });
+  expect(save).toBeEnabled();
+  fireEvent.click(screen.getByRole("button", { name: "添加密钥" }));
+  expect(save).toBeEnabled();
+  expect(screen.getAllByRole("button", { name: /^移除密钥/u })).toHaveLength(2);
+  fireEvent.change(screen.getAllByRole("textbox", { name: "密钥名称" })[1]!, { target: { value: "QA_API_KEY" } });
+  expect(save).toBeDisabled();
+  fireEvent.change(screen.getAllByRole("textbox", { name: /^值$/u })[1]!, { target: { value: "qa-other-public-value" } });
+  expect(save).toBeDisabled();
+  fireEvent.change(screen.getAllByRole("textbox", { name: "密钥名称" })[1]!, { target: { value: "QA_OTHER_KEY" } });
+  expect(save).toBeEnabled();
+  fireEvent.click(screen.getByRole("button", { name: "移除密钥 2" }));
+  expect(screen.queryByRole("button", { name: /^移除密钥/u })).not.toBeInTheDocument();
+  expect(screen.getAllByRole("textbox", { name: "密钥名称" })).toHaveLength(1);
+  expect(save).toBeEnabled();
+  fireEvent.click(screen.getByRole("button", { name: "添加密钥" }));
+  fireEvent.click(save);
+  await waitFor(() => expect(create).toHaveBeenCalledOnce());
+  expect(create.mock.calls[0]?.[0]).toEqual({ name: profile.name, environment: [{ name: "QA_API_KEY", value: "qa-public-fixture-value" }] });
+});
+
+it("API secret help opens on pointer hover and explicit keyboard/tap activation without saving", async () => {
+  const create = vi.fn();
+  const flow = createCustomApiCreateFlow({ client: { createCustomApi: create }, boundary, onConfirmed: vi.fn() });
+  render(<LocaleProvider><CustomApiForm flow={flow} boundary={boundary} onCancel={vi.fn()} onDone={async () => undefined} /></LocaleProvider>);
+  const help = screen.getByRole("button", { name: "密钥名称帮助" });
+  help.focus();
+  fireEvent.click(help); // Native button activation: Enter/Space/click/tap share this command.
+  const content = await screen.findByText(/使用唯一的密钥名称以避免与其他 API 的冲突/u);
+  expect(content).toBeVisible();
+  fireEvent.keyDown(content, { key: "Escape" });
+  await waitFor(() => expect(screen.queryByText(/使用唯一的密钥名称以避免与其他 API 的冲突/u)).not.toBeInTheDocument());
+  fireEvent.pointerEnter(help, { pointerType: "mouse" });
+  expect(await screen.findByText(/使用唯一的密钥名称以避免与其他 API 的冲突/u)).toBeVisible();
+  // Real mouse users enter the target before clicking; activation must not
+  // toggle the already-visible hover help closed.
+  fireEvent.click(help);
+  expect(screen.getByText(/使用唯一的密钥名称以避免与其他 API 的冲突/u)).toBeVisible();
+  fireEvent.keyDown(screen.getByText(/使用唯一的密钥名称以避免与其他 API 的冲突/u), { key: "Escape" });
+  await waitFor(() => expect(screen.queryByText(/使用唯一的密钥名称以避免与其他 API 的冲突/u)).not.toBeInTheDocument());
+  expect(create).not.toHaveBeenCalled();
+});
+
+
+it("an expired shared picker display returns to Image without renewing its reference", () => {
+  const icon = iconFixture();
+  const draft = createMcpIconDraft(icon.client, boundary.subject);
+  const view = render(<LocaleProvider><McpIconPicker draft={draft} state={draft.getSnapshot()}
+    displayFallback={{ url: "https://storage.example.test/expired-preview", expiresAt: Date.now() - 1 }} /></LocaleProvider>);
+  expect(screen.queryByRole("img", { name: "连接器图标" })).not.toBeInTheDocument();
+  expect(view.container.querySelector(".lucide-image")).toBeInTheDocument();
+  expect(view.container.querySelector(".lucide-image-plus")).not.toBeInTheDocument();
+  expect(icon.client.get).not.toHaveBeenCalled();
+  expect(icon.client.importUrl).not.toHaveBeenCalled();
 });

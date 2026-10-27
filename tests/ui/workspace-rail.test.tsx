@@ -1507,6 +1507,8 @@ it("an expired Custom API creation shows inspection guidance, keeps its frozen d
   render(<LocaleProvider><CustomApiForm flow={flow} boundary={boundary} onCancel={onCancel} onDone={onDone} /></LocaleProvider>)
   const name = screen.getByLabelText(/^(Name|名称)$/u)
   fireEvent.change(name, { target: { value: "Original API" } })
+  fireEvent.change(screen.getByLabelText(/^(Secret name|密钥名称)$/u), { target: { value: "QA_API_KEY" } })
+  fireEvent.change(screen.getByLabelText(/^(Value|值)$/u), { target: { value: "qa-public-fixture-value" } })
   fireEvent.click(screen.getByRole("button", { name: /^(Save|保存)$/u }))
   expect(await screen.findByRole("alert")).toHaveTextContent(/期限|expired/iu)
   expect(screen.getByRole("button", { name: /核验|Check status/iu })).toBeDisabled()

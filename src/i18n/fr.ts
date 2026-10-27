@@ -1280,6 +1280,8 @@ export const fr: Partial<Record<MessageKey, string>> = {
   "connectorCatalog.secretValue": "Valeur",
   "connectorCatalog.secretValuePlaceholder": "Valeur du secret, par exemple sk-example-1234",
   "connectorCatalog.addSecret": "Ajouter un secret",
+  "connectorCatalog.secretNameHelpLabel": "Aide sur le nom du secret",
+  "connectorCatalog.secretNameHelp": "Utilisez des noms de secrets uniques pour éviter les conflits avec d’autres API. Par exemple, utilisez YOUTUBE_API_KEY pour l’API Youtube et GOOGLE_API_KEY pour l’API Google.",
   "connectorCatalog.removeSecret": "Supprimer le secret",
   "connectorCatalog.elevenLabsApiDescription": "Generate lifelike speech, clone voices, and create audio content",
   "connectorCatalog.openAiDescription": "Use GPT models for intelligent text generation and processing",

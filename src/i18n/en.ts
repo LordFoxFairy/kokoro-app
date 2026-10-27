@@ -1221,6 +1221,8 @@ export const en: Partial<Record<MessageKey, string>> = {
   "connectorCatalog.secretValue": "Value",
   "connectorCatalog.secretValuePlaceholder": "Value of the secret, such as sk-example-1234",
   "connectorCatalog.addSecret": "Add secret",
+  "connectorCatalog.secretNameHelpLabel": "Secret name help",
+  "connectorCatalog.secretNameHelp": "Use unique secret names to avoid conflicts with other APIs. For example, use YOUTUBE_API_KEY for the Youtube API and GOOGLE_API_KEY for the Google API.",
   "connectorCatalog.removeSecret": "Remove secret",
   "connectorCatalog.outlookDescription": "Write, search, and manage Outlook email in Kokoro",
   "connectorCatalog.tiktokDescription": "Automate TikTok advertising management and reporting",

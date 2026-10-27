@@ -1,7 +1,7 @@
 "use client";
 /* eslint-disable @next/next/no-img-element -- Short-lived capabilities must not enter the image optimizer cache. */
 import { useEffect, useId, useRef, useState } from "react";
-import { ChevronDown, ImagePlus, Link2 } from "lucide-react";
+import { ChevronDown, Image as ImageIcon, Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -35,7 +35,7 @@ export function McpIconPicker({ draft, state, current, disabled = false, display
   return <div className={styles.field}>
     <span className={styles.label}>图标</span>
     <div className={styles.row}>
-      <span className={styles.preview}>{preview ? <IconPreview key={`${preview.url}\0${preview.expiresAt}`} preview={preview} onPreviewLoaded={onPreviewLoaded} /> : <ImagePlus aria-hidden="true" />}</span>
+      <span className={styles.preview}>{preview ? <IconPreview key={`${preview.url}\0${preview.expiresAt}`} preview={preview} onPreviewLoaded={onPreviewLoaded} /> : <ImageIcon aria-hidden="true" />}</span>
       <div className={styles.copy}>
         <DropdownMenu><DropdownMenuTrigger asChild><Button type="button" variant="outline" className={styles.upload} disabled={locked} aria-busy={state.kind === "running"}>上传<ChevronDown aria-hidden="true" /></Button></DropdownMenuTrigger>
           <DropdownMenuContent align="start"><DropdownMenuItem onSelect={() => file.current?.click()}>从设备上传</DropdownMenuItem><DropdownMenuItem onSelect={() => { setUrl(""); setUrlOpen(true); }}>粘贴图片 URL</DropdownMenuItem>{preview || state.dirty || current ? <DropdownMenuItem onSelect={() => void draft.remove()}>移除图片</DropdownMenuItem> : null}</DropdownMenuContent>
@@ -67,7 +67,7 @@ function IconPreview({ preview, onPreviewLoaded }: {
     const timer = setTimeout(() => setClock(Date.now()), Math.max(0, Math.min(expiresAt - Date.now(), 2_147_483_647)));
     return () => clearTimeout(timer);
   }, [expiresAt, clock, failed]);
-  if (!Number.isFinite(expiresAt) || expiresAt <= clock || failed) return <ImagePlus aria-hidden="true" />;
+  if (!Number.isFinite(expiresAt) || expiresAt <= clock || failed) return <ImageIcon aria-hidden="true" />;
   return <img src={url} alt="连接器图标" crossOrigin="anonymous" referrerPolicy="no-referrer"
     onLoad={event => {
       if (event.currentTarget.isConnected && event.currentTarget.currentSrc === event.currentTarget.src && event.currentTarget.naturalWidth > 0)
