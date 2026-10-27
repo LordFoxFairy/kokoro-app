@@ -876,3 +876,74 @@ describe("Provider actor-owned original Create", () => {
     expect(create).toHaveBeenCalledOnce()
   })
 })
+
+describe("Custom API confirmed removal display facts", () => {
+  it("records only the exact confirmed original removal, keeping its safe locator over finish and same-actor read generations", async () => {
+    const { createCustomApiManagementCommands } = await import("@/ui/mcp/custom-api-management-commands")
+    const remove = vi.fn().mockRejectedValueOnce(new Error("lost ACK")).mockResolvedValue(undefined)
+    const flow = createCustomApiManagementCommands({ client: { removeCustomApi: remove }, boundary: admitted, onConfirmed: vi.fn() })
+    const empty = flow.getConfirmedDeletedSnapshot()
+    const body = { expected_state_version: "4" }
+    expect(await flow.submit({ operation: "remove", profileId: "exact-removed-api", input: body }, admitted)).toBe(false)
+    body.expected_state_version = "99"
+    expect(flow.getConfirmedDeletedSnapshot()).toBe(empty)
+    expect(remove).toHaveBeenCalledOnce()
+    expect(await flow.resume("exact-removed-api", admitted)).toBe(true)
+    expect(remove.mock.calls[1]?.slice(0, 3)).toEqual(remove.mock.calls[0]?.slice(0, 3))
+    expect(remove.mock.calls[1]?.[1]).toEqual({ expected_state_version: "4" })
+    const confirmed = flow.getConfirmedDeletedSnapshot()
+    expect(confirmed).toEqual(["exact-removed-api"])
+    expect(Object.isFrozen(confirmed)).toBe(true)
+    expect(flow.finish("exact-removed-api", admitted)).toBe(true)
+    expect(flow.getConfirmedDeletedSnapshot()).toBe(confirmed)
+    flow.bind({ ...admitted, admitted: false, generation: 2 })
+    flow.bind({ ...admitted, generation: 2 })
+    expect(flow.getConfirmedDeletedSnapshot()).toBe(confirmed)
+    flow.bind({ ...admitted, subject: "another-actor", generation: 3 })
+    expect(flow.getConfirmedDeletedSnapshot()).toEqual([])
+    expect(remove).toHaveBeenCalledTimes(2)
+  })
+
+  it.each([false, true])("a late exact removal ACK stays with its original live actor owner (retired=%s)", async retired => {
+    const { createCustomApiManagementCommands } = await import("@/ui/mcp/custom-api-management-commands")
+    let acknowledge!: () => void
+    const remove = vi.fn(() => new Promise<void>(resolve => { acknowledge = resolve }))
+    const flow = createCustomApiManagementCommands({ client: { removeCustomApi: remove }, boundary: admitted, onConfirmed: vi.fn() })
+    const close = new AbortController()
+    const operation = flow.submit({ operation: "remove", profileId: "late-exact-api", input: { expected_state_version: "2" } }, admitted, close.signal)
+    close.abort()
+    if (retired) flow.bind({ ...admitted, subject: "replacement-actor" })
+    else { flow.bind({ ...admitted, admitted: false, generation: 2 }); flow.bind({ ...admitted, generation: 2 }) }
+    acknowledge(); await operation
+    expect(flow.getConfirmedDeletedSnapshot()).toEqual(retired ? [] : ["late-exact-api"])
+    expect(remove).toHaveBeenCalledOnce()
+  })
+
+  it("does not suppress an update, a rejected removal or another client owner's profile", async () => {
+    const { createCustomApiManagementCommands } = await import("@/ui/mcp/custom-api-management-commands")
+    const remove = vi.fn().mockRejectedValue(new HubClientError("http", "safe", "invalid_custom_api_request", 400, false))
+    const flow = createCustomApiManagementCommands({ client: { updateCustomApi: vi.fn().mockResolvedValue(profile), removeCustomApi: remove }, boundary: admitted, onConfirmed: vi.fn() })
+    expect(await flow.submit({ operation: "update", profileId: profile.profile_id, input: { expected_state_version: "1", name: "Changed" } }, admitted)).toBe(true)
+    expect(flow.getConfirmedDeletedSnapshot()).toEqual([])
+    expect(await flow.submit({ operation: "remove", profileId: "rejected-api", input: { expected_state_version: "1" } }, admitted)).toBe(false)
+    expect(flow.getConfirmedDeletedSnapshot()).toEqual([])
+    const other = createCustomApiManagementCommands({ client: { removeCustomApi: vi.fn().mockResolvedValue(undefined) }, boundary: admitted, onConfirmed: vi.fn() })
+    await other.submit({ operation: "remove", profileId: "rejected-api", input: { expected_state_version: "1" } }, admitted)
+    expect(other.getConfirmedDeletedSnapshot()).toEqual(["rejected-api"])
+    expect(flow.getConfirmedDeletedSnapshot()).toEqual([])
+  })
+
+  it("the real production client rejects another profile's DELETE ACK before any negative display fact is recorded", async () => {
+    const { createHubClient } = await import("@/hub/client")
+    const { createCustomApiManagementCommands } = await import("@/ui/mcp/custom-api-management-commands")
+    const fetch = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ data: { profile_id: "wrong-profile", deleted: true, replayed: false } }),
+      { headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "request-safe" } }))
+    try {
+      const flow = createCustomApiManagementCommands({ client: createHubClient(), boundary: admitted, onConfirmed: vi.fn() })
+      expect(await flow.submit({ operation: "remove", profileId: "exact-api", input: { expected_state_version: "1" } }, admitted)).toBe(false)
+      expect(flow.getSnapshot()[0]?.kind).toBe("unknown")
+      expect(flow.getConfirmedDeletedSnapshot()).toEqual([])
+      expect(fetch).toHaveBeenCalledExactlyOnceWith("/api/hub/connectors/custom-apis/exact-api", expect.objectContaining({ method: "DELETE" }))
+    } finally { fetch.mockRestore() }
+  })
+})

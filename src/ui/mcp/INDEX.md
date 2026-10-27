@@ -1,3 +1,7 @@
+## 自定义 API 删除后的显示退休（2026-10-27）
+
+API management 与现MCP删除使用同一边界原则：仅原冻结remove请求经生产client严格验证deleted:true及exact profile_id的ACK后，在现actor/client command owner内记录只含profile_id的RAM负向显示事实。finish／关窗／同actor再准入generation不丢失；真正owner退休清空，旧late ACK不复活。广场、Settings管理与命令恢复入口统一过滤该ID，失败刷新、迟到旧head／后续页不令已删除卡复现；其它API行仍保原连续性。此记录不是权限、正文、原key/body/CAS或新持久源；unknown／拒绝不记，原请求恢复与精确读取不改，不自动DELETE或清整个列表。
+
 ## 插件广场个人 MCP（2026-10-26，源码候选）
 
 `McpPersonalServerGallery` 只展示既有 relations 完整有界扫描中的 typed MCP＋`server_id` 正向 locator、非 revoked 行；不以缺 Provider 推断私有，也不把 active 当 available。未分类只在 All，以已保存名称／说明查询。冷未读、重复 cursor、50页／10秒预算失败保持 unknown，并入广场聚合反馈，不冒全空或无匹配；不新增 reader、owner 请求或持久 store。

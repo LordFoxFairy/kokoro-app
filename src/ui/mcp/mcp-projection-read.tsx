@@ -102,6 +102,7 @@ export function McpProjectionRead({
   const preparationStates = useSyncExternalStore(preparation.subscribe, preparation.getSnapshot, preparation.getSnapshot);
   const apiManagement = useCustomApiManagementCommands(client, identity);
   const apiManagementStates = useSyncExternalStore(apiManagement.subscribe, apiManagement.getSnapshot, apiManagement.getSnapshot);
+  const confirmedDeletedApiIds = useSyncExternalStore(apiManagement.subscribe, apiManagement.getConfirmedDeletedSnapshot, apiManagement.getConfirmedDeletedSnapshot);
   const management = useMcpManagementCommands(client, identity);
   const managementStates = useSyncExternalStore(management.subscribe, management.getSnapshot, management.getSnapshot);
   const confirmedDeletedIds = useSyncExternalStore(management.subscribe, management.getConfirmedDeletedSnapshot, management.getConfirmedDeletedSnapshot);
@@ -269,7 +270,7 @@ export function McpProjectionRead({
   // Private servers retain explicit selection and their own editor.
   if (admitted && resolvingDirectory && relations.complete && !relations.error && directoryConnections.length === 1 && !directoryConnections[0]!.server_id)
     setSelectedProviderConnectionId(directoryConnections[0]!.connector_id, true, bindingFor(directoryConnections[0]!));
-  const customApis = customApiState.data?.items ?? [];
+  const customApis = (customApiState.data?.items ?? []).filter(profile => !confirmedDeletedApiIds.includes(profile.profile_id));
   const providerConnectionDetail = useMcpProviderConnection({ client, identity, admitted, readGeneration,
     connectorId: selectedProviderConnectionId ?? providerCreationState?.connectorId ?? null, providerKey: selectedProviderKey,
     ...(providerConnectionIntent?.binding ? { binding: providerConnectionIntent.binding } : {}),
@@ -674,7 +675,7 @@ export function McpProjectionRead({
           setConnectorIntent({ connectorId: item.connectorId, ...(item.serverId ? { serverId: item.serverId } : {}), entered: true, window: {} });
         }}><span className="truncate">{t(item.kind === "completed" ? "mcp.creationDone" : "mcp.retryOriginal")} · {item.connectorId}</span></Button>) : null}
       {view === "connections" && admitted ? apiManagementStates.filter(item =>
-        item.kind !== "rejected" && !customApis.some(profile => profile.profile_id === item.profileId)
+        item.kind !== "rejected" && !confirmedDeletedApiIds.includes(item.profileId) && !customApis.some(profile => profile.profile_id === item.profileId)
       ).map(item => <Button key={item.profileId} type="button" variant="outline" className="max-w-full" onClick={event => {
         editorReturnFocusRef.current = event.currentTarget;
         setApiIntent({ profileId: item.profileId, window: {} });

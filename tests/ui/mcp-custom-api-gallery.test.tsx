@@ -256,3 +256,48 @@ it("keeps the owner-bound icon path and falls back to the API initial when its p
   expect(container.querySelector("img")).not.toBeInTheDocument()
   expect(screen.getByText("1")).toBeInTheDocument()
 })
+
+it.each(["failed_head", "stale_head", "stale_tail"] as const)("a confirmed API removal cannot revive in either retained surface after %s", async scenario => {
+  window.localStorage.setItem("kokoro.locale", "zh")
+  const other = { ...profile, profile_id: "unrelated-exact-api", name: "Another saved API" }
+  let removed = false
+  const list = vi.fn<NonNullable<HubClient["listCustomApis"]>>().mockImplementation(async query => {
+    if (!removed) return { items: [profile, other], page: { next_cursor: null } }
+    if (scenario === "failed_head") throw Error("confirmed delete but current head unavailable")
+    if (scenario === "stale_tail") return query?.cursor
+      ? { items: [profile], page: { next_cursor: null } }
+      : { items: [other], page: { next_cursor: "opaque-after-delete" } }
+    return { items: [profile, other], page: { next_cursor: null } }
+  })
+  const client = { ...createHubClient(),
+    listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+    listMcpConnectors: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+    listCustomApis: list, getCustomApi: vi.fn().mockResolvedValue(profile),
+    removeCustomApi: vi.fn(async () => { removed = true }),
+  }
+  const boundary = { subject: `api-deletion-${scenario}`, admitted: true, generation: 0 }
+  render(<LocaleProvider><ConnectorCommandProvider client={client} boundary={boundary}>
+    <div data-testid="api-retained-plaza"><McpProjectionRead client={client} identity={boundary.subject} embedded initialView="catalog" /></div>
+    <div data-testid="api-retained-management"><McpProjectionRead client={client} identity={boundary.subject} embedded settingsLayout initialView="connections" /></div>
+  </ConnectorCommandProvider></LocaleProvider>)
+  const plaza = within(screen.getByTestId("api-retained-plaza"))
+  const management = within(screen.getByTestId("api-retained-management"))
+  await plaza.findByRole("button", { name: profile.name })
+  fireEvent.click(await management.findByRole("button", { name: profile.name }))
+  const detail = await screen.findByRole("dialog", { name: "编辑自定义 API" })
+  fireEvent.click(within(detail).getByRole("button", { name: "删除" }))
+  fireEvent.click(within(detail).getByRole("button", { name: "确认移除" }))
+  await waitFor(() => expect(client.removeCustomApi).toHaveBeenCalledOnce())
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+  if (scenario === "stale_tail") {
+    fireEvent.click(await plaza.findByRole("button", { name: "加载更多 · API" }))
+    await waitFor(() => expect(list.mock.calls.some(([query]) => query?.cursor === "opaque-after-delete")).toBe(true))
+  }
+  await waitFor(() => {
+    expect(plaza.queryByRole("button", { name: profile.name })).not.toBeInTheDocument()
+    expect(management.queryByRole("button", { name: profile.name })).not.toBeInTheDocument()
+  })
+  expect(plaza.getByRole("button", { name: other.name })).toBeVisible()
+  expect(management.getByRole("button", { name: other.name })).toBeVisible()
+  expect(client.removeCustomApi).toHaveBeenCalledExactlyOnceWith(profile.profile_id, { expected_state_version: profile.state_version }, expect.any(String), expect.any(AbortSignal))
+})
