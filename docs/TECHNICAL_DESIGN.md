@@ -185,7 +185,7 @@ Platform producer 固定 `8cfead647856ef54ec851a3bebe169a3ca14d212`；App 由既
 
 **版本与回执。** Platform原Update事务校当前Server版本；旧Prepare计划、外部I/O前后与最终写回校Server和Header／OAuth快照。配置更新先赢时旧结果不覆盖新事实；已经发出的旧外部调用可能仍完成一次，CAS不撤回I/O。Prepare先赢时旧CAS Update仍冲突，由用户读取当前状态后决定新保存；不得自动改body/key以过门。已failed外部Prepare在现owner回执准入即OutcomeUnknown、不会再次外呼；这只是现有事实，不把保存ACK当作旧Prepare成功／失败收口。完整旧连接未知恢复保留独立缺口，不在本片伪造终态。
 
-**窗口与过渡。** 只有本窗口exact Update ACK到达才沿既有connectorIntent轮换window token，退休先前inspection proof及其read signal，原Prepare entry/key/body/journal保持，下一次核验必须显式重取。本窗口同actor／generation／对象已确认配置保存、fresh读取间隙仅保不可变HTTP/SSE标签；Prepare unknown仍退休Connect/Try主动作与先前Header名称／图像展示，不保当前CAS／值或执行资格。pendingError、对象／主体／代际／窗口退休仍清展示，fresh owner资料才重获保存资格。
+**窗口与过渡。** 配置态不把旧Prepare未知说明呈现为配置错误面板，只保读屏状态播报及显式原请求核验／恢复按钮；连接详情保留其原说明，配置自身未知结果与显式试用失败不隐去。只有本窗口exact Update ACK到达才沿既有connectorIntent轮换window token，退休先前inspection proof及其read signal，原Prepare entry/key/body/journal保持，下一次核验必须显式重取。本窗口同actor／generation／对象已确认配置保存、fresh读取间隙仅保不可变HTTP/SSE标签；Prepare unknown仍退休Connect/Try主动作与先前Header名称／图像展示，不保当前CAS／值或执行资格。pendingError、对象／主体／代际／窗口退休仍清展示，fresh owner资料才重获保存资格。
 
 **验收与恢复。** 先复现正常SSE配置字段readOnly、保存disabled及两层门控；App回归覆盖unknown独立保存／零Prepare、配置unknown仍锁、ACK后旧proof失效／重开仍unknown、读取间隙SSE标签与错误／主体退休。Platform既有真实PG事务补失败Prepare→Update→原命令重试与双向先后／迟到围栏证据，不把I/O double称真实远程Provider。正常只编辑具名无凭据QA的备注并读回／恢复原备注，版本照实前进；原未知回执／其它配置／凭据／Run／账本保持，故障注入必须清理。回退恢复原App程序，已保存真实配置和未知请求均不删除或伪回滚。
 

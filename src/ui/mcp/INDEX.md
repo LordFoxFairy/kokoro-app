@@ -227,6 +227,8 @@ Connector恢复错误当前已固定BFF browser-private profile并由Hub/同源a
 
 ## MCP 五项管理恢复与 Prepare 互锁
 
+配置编辑态的旧Prepare unknown说明仅作为sr-only状态播报，footer仍提供原“需先核验状态／重试原请求”动作；返回非编辑详情后仍可见原unknown说明。配置自身management unknown与trialError继续明确可见，不把连接状态误列为配置保存错误；不改按钮资格、原请求／journal或自动触发恢复。
+
 `mcp-management-commands.ts` 只构造MCP固定五项typed management与现Prepare，不成为通用registry。每connector及可选private server绑定一个管理原命令，unknown冻结操作/body/CAS/key；其间新Prepare和其他管理被状态层拒绝。已恢复的Prepare unknown仅允许独立update_server保存配置，采用当前可信Server CAS，不改原Prepare正文/key/CAS、不自动连接或重放；Prepare running/completed、核验running、恢复未ready与配置自身running/unknown仍阻止配置保存，其它管理互锁不变。Update ACK只消费配置命令并轮换详情window/abort旧核验proof，原Prepare及journal保持未知，后续恢复须重新核验；短暂fresh读取缺口仅保同主体/代际/目标/配置ACK的不可变transport标签，旧primary/Header/icon展示仍退休。明确disconnect/delete仍沿原清理语义允许，确认ACK才退休匹配Prepare。Provider/Private/Generic详情经同一index及`mcp-management-status.tsx`呈现，关闭/准入暂停当前等待、换actor退休；原窗口ACK只失活原投影，当前显式恢复/Done才可关闭当代window。列表缺行保locator恢复入口，不生成owner事实或GET结清。
 
 私有MCP ACK清实际header草稿/移除意图；非敏感明确输入在只读完成窗口保留至Done，避免把新GET当原命令正文。Hub update/delete server与update/enabled/remove connector均显式caller key、严格locator/写入安全字段及ACK，不变HTTP或原生OAuth。旧runAction只留下未覆盖的目录创建/原生授权协调，不能据此声称其完整命令恢复已完成。整文档重载、显式结束未知等待、真实OAuth和剩余视觉仍待后继。

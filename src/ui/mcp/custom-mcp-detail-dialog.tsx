@@ -390,7 +390,9 @@ export function CustomMcpDetailDialog({
   };
 
   const operationStatus = <>
-    {preparationState === "unknown" ? <Alert role="alert"><AlertDescription>{t(connectorCommandFailureMessage(preparationFailure, "mcp.serverCreateUnknown"))}</AlertDescription></Alert> : null}
+    {preparationState === "unknown" ? editing
+      ? <span className="sr-only" role="status">{t(connectorCommandFailureMessage(preparationFailure, "mcp.serverCreateUnknown"))}</span>
+      : <Alert role="alert"><AlertDescription>{t(connectorCommandFailureMessage(preparationFailure, "mcp.serverCreateUnknown"))}</AlertDescription></Alert> : null}
     {trialError ? <Alert variant="destructive" role="alert"><AlertDescription>{t("mcp.tryUnavailable")}</AlertDescription></Alert> : null}
   </>;
 

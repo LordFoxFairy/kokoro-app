@@ -83,7 +83,15 @@ it.each(["unknown", "trial"] as const)("configuration %s feedback keeps short-sc
   fireEvent.click(await screen.findByRole("menuitem", { name: "编辑配置" }))
   if (scenario === "trial") fireEvent.click(screen.getByRole("button", { name: "试用一下" }))
   const dialog = screen.getByRole("dialog", { name: "MCP 配置" })
-  expect(screen.getAllByRole("alert").length).toBeGreaterThan(0)
+  if (scenario === "unknown") {
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+    expect(screen.getByRole("status")).toHaveClass("sr-only")
+    expect(screen.getByRole("status").textContent).toBeTruthy()
+    expect(screen.getByRole("button", { name: "重试原请求" })).toBeEnabled()
+    expect(screen.getByRole("button", { name: /^保存$/u })).toBeEnabled()
+  } else {
+    expect(screen.getAllByRole("alert").length).toBeGreaterThan(0)
+  }
   const vite = await createServer({ configFile: false, root: process.cwd(), server: { middlewareMode: true, hmr: false, watch: null }, css: { modules: { generateScopedName: (name, filename) => basename(filename.replace(/\?.*$/u, "")) === "custom-mcp-detail-dialog.module.css" ? detailStyles[name] ?? name : basename(filename.replace(/\?.*$/u, "")) === "mcp-icon-picker.module.css" ? iconStyles[name] ?? name : name } } })
   let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
   try {
@@ -97,6 +105,18 @@ it.each(["unknown", "trial"] as const)("configuration %s feedback keeps short-sc
     const page = await browser.newPage({ viewport: { width: 390, height: 400 } })
     await page.route("**/*", route => route.abort())
     await page.setContent(`<!doctype html><html><head><style>${css.join("\n")}</style></head><body data-web-skin="kokoro">${dialog.outerHTML}</body></html>`)
+    if (scenario === "unknown") {
+      expect(await page.getByRole("alert").count()).toBe(0)
+      const announcement = page.getByRole("status")
+      expect(await announcement.count()).toBe(1)
+      expect(await announcement.evaluate(element => {
+        const style = getComputedStyle(element)
+        return { position: style.position, width: parseFloat(style.width), height: parseFloat(style.height), overflow: style.overflow }
+      })).toEqual({ position: "absolute", width: 1, height: 1, overflow: "hidden" })
+      expect(await page.getByRole("button", { name: "重试原请求" }).isEnabled()).toBe(true)
+    } else {
+      expect(await page.getByRole("alert").count()).toBeGreaterThan(0)
+    }
     const save = page.getByRole("button", { name: "保存", exact: true })
     const bounds = await save.boundingBox()
     expect(bounds).not.toBeNull()
@@ -124,7 +144,7 @@ it.each(["unknown", "trial"] as const)("configuration %s feedback keeps short-sc
       }
     }
     const form = screen.getByRole("textbox", { name: "服务器名称" }).closest("form")
-    for (const alert of screen.getAllByRole("alert")) expect(form).toContainElement(alert)
+    for (const feedback of screen.getAllByRole(scenario === "unknown" ? "status" : "alert")) expect(form).toContainElement(feedback)
     const evidence = process.env.KOKORO_VISUAL_EVIDENCE_DIR
     if (evidence) { await mkdir(evidence, { recursive: true }); await page.screenshot({ path: join(evidence, `configuration-${scenario}-short.png`) }) }
     expect(props.onSaveConfiguration).not.toHaveBeenCalled()

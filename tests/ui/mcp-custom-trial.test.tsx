@@ -40,6 +40,44 @@ it("an unknown Prepare retains its original recovery action and is not a trial",
   expect(trial).not.toHaveBeenCalled()
 })
 
+it.each([
+  { failure: "invalid" as const, canResume: false, label: "需先核验状态" },
+  { failure: "outcome_unknown" as const, canResume: true, label: "重试原请求" },
+])("Prepare $failure belongs to visible detail guidance and a screen-reader-only configuration status, not a configuration error panel", async ({ failure, canResume, label }) => {
+  const shown = show({ preparationState: "unknown", preparationFailure: failure, preparationCanResume: canResume, preparationCanInspect: true })
+  const detailExplanation = screen.getByRole("alert").textContent
+  expect(detailExplanation).toBeTruthy()
+  expect(shown.prepare).not.toHaveBeenCalled()
+  fireEvent.keyDown(screen.getByRole("button", { name: "管理" }), { key: "Enter" })
+  fireEvent.click(await screen.findByRole("menuitem", { name: "编辑配置" }))
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+  const announcement = screen.getByRole("status")
+  expect(announcement).toHaveTextContent(detailExplanation!)
+  expect(announcement).toHaveClass("sr-only")
+  expect(screen.getByRole("button", { name: label })).toBeEnabled()
+  expect(screen.getByRole("button", { name: "保存" })).toBeEnabled()
+  expect(screen.getByRole("textbox", { name: "服务器名称" })).not.toHaveAttribute("readonly")
+  expect(shown.prepare).not.toHaveBeenCalled()
+  // Configuration's own unknown outcome remains an explicit visible panel.
+  shown.update({ managementCommand: { operation: "update_server", connectorId: connector.connector_id,
+    serverId: server.server_id, kind: "unknown", failure: "outcome_unknown" } })
+  const commandPanel = screen.getAllByRole("status").find(node => node.getAttribute("data-slot") === "alert")
+  expect(commandPanel).toBeDefined()
+  expect(commandPanel).not.toHaveClass("sr-only")
+  expect(commandPanel).toHaveTextContent("原请求结果尚未确认。恢复时将使用同一个请求。")
+  expect(screen.getByRole("button", { name: "保存" })).toBeDisabled()
+  expect(shown.prepare).not.toHaveBeenCalled()
+  shown.update({ managementCommand: undefined })
+  fireEvent.click(screen.getByRole("button", { name: label }))
+  expect(shown.prepare).toHaveBeenCalledOnce()
+  fireEvent.click(screen.getByRole("button", { name: "取消" }))
+  expect(screen.getByRole("dialog", { name: "QA MCP" })).toBeVisible()
+  expect(screen.getByRole("alert")).toHaveTextContent(detailExplanation!)
+  expect(screen.queryByRole("status")).not.toBeInTheDocument()
+  expect(shown.prepare).toHaveBeenCalledOnce()
+  expect(shown.trial).not.toHaveBeenCalled()
+})
+
 it("a refused trial from configuration keeps the editor with visible feedback", async () => {
   show({ onTrial: () => false })
   fireEvent.keyDown(screen.getByRole("button", { name: "管理" }), { key: "Enter" })
