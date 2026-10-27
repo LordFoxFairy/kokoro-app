@@ -2811,12 +2811,18 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
 
   it("captures request errors through the real Next instrumentation hook without exposing private error fields", async () => {
     const outputStart = output.length
+    const pathStart = paths.length
     const manifestsBefore = await nextManifestMetadata()
     const response = await http(nextPort, "/api/rp-request-error-fixture", "GET", "", {}, 10_000)
     const manifestsAfter = await nextManifestMetadata()
-    expect(response.status).toBe(500)
-    await expect.poll(() => requestErrorDiagnostics(output.slice(outputStart))
-      .find((record) => record.route === "fixture_synthetic"), { timeout: 2_000 }).toBeDefined()
+    try {
+      expect(response.status).toBe(500)
+      await expect.poll(() => requestErrorDiagnostics(output.slice(outputStart))
+        .find((record) => record.route === "fixture_synthetic"), { timeout: 2_000 }).toBeDefined()
+    } catch (cause) {
+      throw new Error(nextFailureDiagnostic("fixture_request_error_hook", response, outputStart, pathStart,
+        manifestsBefore, manifestsAfter), { cause })
+    }
     const record = requestErrorDiagnostics(output.slice(outputStart))
       .find((candidate) => candidate.route === "fixture_synthetic")
     expect(record).toBeDefined()
