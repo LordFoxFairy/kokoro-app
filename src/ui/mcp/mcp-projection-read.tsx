@@ -388,7 +388,9 @@ export function McpProjectionRead({
       // those older list facts must not unlock another save or Try.
       setEditor(null);
       setConnectorIntent(current => current?.window === expectedWindow ? {
-        ...current, exact: true,
+        // Retire the old window's inspection proof, not its unknown Prepare
+        // intent/key/CAS. The new facts require an explicit fresh inspection.
+        ...current, exact: true, window: {},
         binding: { connectorType: "mcp", ...(current.serverId ? { serverId: current.serverId } : {}) },
         configurationSaved: {},
       } : current);

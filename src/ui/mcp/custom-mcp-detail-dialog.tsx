@@ -194,8 +194,8 @@ export function CustomMcpDetailDialog({
     (submittedFields.transport.primaryIntent !== null || submittedFields.transport.headerNames.length > 0 || submittedFields.transport.iconPreview !== null)) {
     setSubmittedFields({ ...submittedFields, transport: { ...submittedFields.transport, primaryIntent: null, headerNames: [], iconPreview: null } });
   }
-  if (savedTransport && (ready || !sameConfigurationScope(savedTransport) || savedTransport.confirmation !== configurationSaved ||
-    preparationState === "unknown" || managementCommand?.kind === "unknown")) {
+  if (savedTransport && (pendingError || ready || !sameConfigurationScope(savedTransport) || savedTransport.confirmation !== configurationSaved ||
+    managementCommand?.kind === "unknown")) {
     setSavedTransport(null);
   } else if (savedTransport && primaryIntentRetired &&
     (savedTransport.primaryIntent !== null || savedTransport.headerNames.length > 0 || savedTransport.iconPreview !== null)) {
@@ -237,7 +237,7 @@ export function CustomMcpDetailDialog({
   // facts/CAS or action permission. Newly submitted names require a fresh read.
   const retainingTransport = savedFactsPending && !ready && !pendingError && savedTransport !== null &&
     sameConfigurationScope(savedTransport) && savedTransport.confirmation === configurationSaved &&
-    preparationState !== "unknown" && managementCommand?.kind !== "unknown";
+    managementCommand?.kind !== "unknown";
   const displayedTransport = currentServer?.transport ?? (retainingTransport ? savedTransport.transport : undefined);
   const displayedHeaderNames = currentServer ? currentServer.headers
     .filter(header => header.configured && header.status === "active" && !removedHeaders.includes(header.name))
@@ -257,7 +257,9 @@ export function CustomMcpDetailDialog({
     managementCommand.connectorId === submittedTransport.connectorId;
   const managementStatus = savingThisConfiguration ? <span className="sr-only" role="status">{t("settings.name.saving")}</span>
     : <McpManagementStatus command={managementCommand} admitted={admitted} onResume={onResumeManagement} />;
-  const locked = managementLocked || busy || !ready || !preparationRecoveryReady || preparationState === "unknown" || preparationState === "completed";
+  const locked = managementLocked || busy || !ready || !preparationRecoveryReady || preparationState === "running" || preparationState === "completed";
+  // The unknown-Prepare exception authorizes configuration Save only.
+  const publicationLocked = locked || preparationState === "unknown";
   const icon = useMcpIconDraft(iconClient, iconBoundary ?? { subject: null, admitted: false, generation: 0 }, locked, configurationSaved, currentServer);
   const mayResumePreparation = preparationCanResume ?? connectorCommandMayResume(preparationFailure);
   const prepareLabel = preparationState === "unknown" ? t(mayResumePreparation ? "mcp.retryOriginal" : "mcp.recovery.inspectRequired") : preparationState === "completed" ? t("mcp.creationDone") : t("settings.connect");
@@ -333,7 +335,7 @@ export function CustomMcpDetailDialog({
     submitConfiguration({ name, notes, serverUrl, headers, removedHeaders });
   };
   const saveAndPublish = () => {
-    if (locked || !publicationAvailable || !onPublish || !currentServer || currentServer.transport !== "streamable_http" ||
+    if (publicationLocked || !publicationAvailable || !onPublish || !currentServer || currentServer.transport !== "streamable_http" ||
       !connector || !iconBoundary?.admitted || iconBoundary.subject === null) return;
     const changed = name.trim() !== currentServer.display_name || notes.trim() !== (currentServer.notes ?? "") ||
       serverUrl.trim() !== currentServer.server_url || headers.length > 0 || removedHeaders.length > 0 || icon.state.dirty;
@@ -351,14 +353,14 @@ export function CustomMcpDetailDialog({
     // This prop only changes after the original matching management command's
     // ACK. Neither an updated list nor a fresh-looking server is an ACK.
     if (configurationSaved !== undefined && configurationSaved !== intent.before) intent.acknowledged = configurationSaved;
-    if (!intent.acknowledged || intent.acknowledged !== configurationSaved || !ready || locked || !publicationAvailable || !onPublish ||
+    if (!intent.acknowledged || intent.acknowledged !== configurationSaved || !ready || publicationLocked || !publicationAvailable || !onPublish ||
       server?.transport !== "streamable_http" || connector?.connector_type !== "mcp") return;
     // Consume before invoking the parent: StrictMode replay and re-renders may
     // not reopen a picker. Actual publication still requires its confirmation.
     publicationAfterSave.current = null;
     onPublish();
   }, [editing, admitted, iconBoundary?.admitted, iconBoundary?.subject, iconBoundary?.generation, server, connector,
-    managementCommand?.kind, configurationSaved, ready, locked, publicationAvailable, onPublish]);
+    managementCommand?.kind, configurationSaved, ready, publicationLocked, publicationAvailable, onPublish]);
   useEffect(() => () => { publicationAfterSave.current = null; }, []);
   const saveJson = (fields: McpConfigurationJsonFields) => {
     if (!jsonEditor || jsonEditor.scope !== jsonScope || liveJsonScope.current !== jsonScope || locked || !currentServer) return;
@@ -627,12 +629,12 @@ export function CustomMcpDetailDialog({
                   </Button>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button type="button" aria-label="保存选项" disabled={locked}>
+                      <Button type="button" aria-label="保存选项" disabled={publicationLocked}>
                         <ChevronDown aria-hidden="true" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className={styles.configurationMenu}>
-                      <DropdownMenuItem disabled={locked || !publicationAvailable || !icon.draft.canSave() || !onPublish}
+                      <DropdownMenuItem disabled={publicationLocked || !publicationAvailable || !icon.draft.canSave() || !onPublish}
                         onSelect={saveAndPublish}>发布到项目</DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -674,7 +676,7 @@ export function CustomMcpDetailDialog({
                       断开连接
                     </DropdownMenuItem>
                     <DropdownMenuSeparator className={styles.managementDivider} />
-                    <DropdownMenuItem disabled={locked || preparationState === "running" || !publicationAvailable || !onPublish} onSelect={() => onPublish?.()}>
+                    <DropdownMenuItem disabled={publicationLocked || !publicationAvailable || !onPublish} onSelect={() => { if (!publicationLocked && publicationAvailable) onPublish?.(); }}>
                       <FolderOpen aria-hidden="true" />
                       发布到项目
                     </DropdownMenuItem>

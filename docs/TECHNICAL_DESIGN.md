@@ -177,6 +177,18 @@ Platform producer 固定 `8cfead647856ef54ec851a3bebe169a3ca14d212`；App 由既
 
 沿已批准方案，固定 BFF400fab6／Platform7d8115a。现 Hub 同源有限传输复用原session／body限额／总预算／取消；新增独立mcp-icon schema/client和draft控制器／选择组件，现MCP与API创建／配置复用，不把状态放AppFrame。浏览器只向同源Hub发命令；字节仅使用owner短PUT capability，凭据omit、redirect error、SHA／size固定。选图不创建连接器；ready selector进入原保存，unknown保原key/body/CAS；取消／替换只回收未绑定intent，已保存图由owner原事务处理，缺图省略保留。无签名引用持久化，关闭／reload遗留由owner到期清理兜底；Get只读不推进恢复。
 
+## 2026-10-27 配置保存与旧连接核验分离（已批准方案细化）
+
+**裁决与owner。** 承接用户已批准“保存只保存配置／连接在详情独立触发；保留已有未知连接请求”。App只修现有配置UI、管理命令和窗口资格，Platform继续唯一写入Server／凭据／Prepare回执；BFF只沿现正式通路。无新增服务、Schema、wire、存储或依赖。下方旧“管理与Prepare互锁”对独立配置保存的unknown一刀切由本节收窄，其余原请求恢复规则保留。
+
+**提交与互锁。** 当前actor／client／admission generation已准入、精确Server＋Connector可信读取且恢复日志ready时，只有`update_server`可越过同目标旧Prepare unknown；使用用户本次显式保存的独立key/body与当前Server CAS，不借用或升级原Prepare expected version。Prepare running／completed、inspection running、恢复未ready及配置自身running／unknown仍按原边界锁定；其它管理／执行动作不扩大资格。配置保存本身不发Prepare、OAuth、连接或工具调用，不清旧日志，不自动重试／rebase。401／取消／迟到／route／actor变化仍按原围栏。
+
+**版本与回执。** Platform原Update事务校当前Server版本；旧Prepare计划、外部I/O前后与最终写回校Server和Header／OAuth快照。配置更新先赢时旧结果不覆盖新事实；已经发出的旧外部调用可能仍完成一次，CAS不撤回I/O。Prepare先赢时旧CAS Update仍冲突，由用户读取当前状态后决定新保存；不得自动改body/key以过门。已failed外部Prepare在现owner回执准入即OutcomeUnknown、不会再次外呼；这只是现有事实，不把保存ACK当作旧Prepare成功／失败收口。完整旧连接未知恢复保留独立缺口，不在本片伪造终态。
+
+**窗口与过渡。** 只有本窗口exact Update ACK到达才沿既有connectorIntent轮换window token，退休先前inspection proof及其read signal，原Prepare entry/key/body/journal保持，下一次核验必须显式重取。本窗口同actor／generation／对象已确认配置保存、fresh读取间隙仅保不可变HTTP/SSE标签；Prepare unknown仍退休Connect/Try主动作与先前Header名称／图像展示，不保当前CAS／值或执行资格。pendingError、对象／主体／代际／窗口退休仍清展示，fresh owner资料才重获保存资格。
+
+**验收与恢复。** 先复现正常SSE配置字段readOnly、保存disabled及两层门控；App回归覆盖unknown独立保存／零Prepare、配置unknown仍锁、ACK后旧proof失效／重开仍unknown、读取间隙SSE标签与错误／主体退休。Platform既有真实PG事务补失败Prepare→Update→原命令重试与双向先后／迟到围栏证据，不把I/O double称真实远程Provider。正常只编辑具名无凭据QA的备注并读回／恢复原备注，版本照实前进；原未知回执／其它配置／凭据／Run／账本保持，故障注入必须清理。回退恢复原App程序，已保存真实配置和未知请求均不删除或伪回滚。
+
 ## 2026-10-24 Prepare 原请求恢复（既有JSON卡，设计门）
 
 **实现收敛（仍待正常验收）：** 恢复list跨generation的旧结果只退休旧读取，并启动当前准入的恢复，不留永久loading。核验proof绑定本次外部AbortSignal及UI已有window token；取消/关窗/代际变化/一次重放均退休proof，render只读state中的token，POST仍重核实际signal与原日志。迟到exact ACK已清退日志后的completed允许新窗口显式Done消费，不重复POST。只有通用命令已证明never-uncertain的首次400拒绝才compare-by-key清退未执行意图；unknown后400不清退。恢复日志未ready时配置变更锁定，既有显式清理语义保留。

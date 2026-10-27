@@ -424,8 +424,17 @@ it.each(["confirmed", "unknown-then-replayed", "read-failed"])("configuration Sa
   expect(screen.getByRole("textbox", { name: "服务器名称" })).toHaveValue("First saved name")
   expect(screen.getByRole("textbox", { name: "服务器名称" })).toHaveAttribute("readonly")
   expect(screen.getByRole("button", { name: "保存" })).toBeDisabled()
-  expect(screen.getByLabelText("传输类型 HTTP")).toHaveTextContent("HTTP")
-  expect(within(dialog).queryByText("正在加载…")).not.toBeInTheDocument()
+  if (mode === "read-failed") {
+    // A genuine read failure retired the confirmed descriptor. Starting a new
+    // read does not revive it; only that read's fresh owner facts may do so.
+    expect(screen.getByLabelText("传输类型 —")).toHaveTextContent("—")
+    const loadingAnnouncement = within(dialog).getByRole("status")
+    expect(loadingAnnouncement).toHaveTextContent("正在加载…")
+    expect(loadingAnnouncement).toHaveClass("sr-only")
+  } else {
+    expect(screen.getByLabelText("传输类型 HTTP")).toHaveTextContent("HTTP")
+    expect(within(dialog).queryByText("正在加载…")).not.toBeInTheDocument()
+  }
   const pendingPrimary = screen.getByRole("button", { name: mode === "confirmed" ? "试用一下" : "连接" })
   expect(pendingPrimary).toBeDisabled()
   fireEvent.click(pendingPrimary)
@@ -434,6 +443,7 @@ it.each(["confirmed", "unknown-then-replayed", "read-failed"])("configuration Sa
   await waitFor(() => expect(screen.getByRole("textbox", { name: "服务器名称" })).not.toHaveAttribute("readonly"))
   expect(screen.getByRole("dialog", { name: "MCP 配置" })).toBe(dialog)
   expect(screen.getByRole("button", { name: "试用一下" })).toBeEnabled()
+  expect(screen.getByLabelText("传输类型 HTTP")).toHaveTextContent("HTTP")
   expect(screen.getByText("x-test-key")).toBeVisible()
   const confirmedCalls = mode === "unknown-then-replayed" ? 2 : 1
   expect(update).toHaveBeenCalledTimes(confirmedCalls)
@@ -456,6 +466,70 @@ it.each(["confirmed", "unknown-then-replayed", "read-failed"])("configuration Sa
   expect(update.mock.calls[confirmedCalls]?.[1]).toEqual({ expected_state_version: "4", display_name: "Second saved name" })
   expect(update.mock.calls[confirmedCalls]?.[2]).not.toBe(update.mock.calls[0]?.[2])
   await act(async () => { releaseSecondRead(); await pendingSecondRead })
+})
+
+it("an inspected unknown Prepare allows an independent fresh-CAS SSE Save without completing or replaying Prepare", async () => {
+  let version = 3, name = "Independent SSE"
+  let releaseRead!: () => void
+  const pendingRead = new Promise<void>(resolve => { releaseRead = resolve })
+  const server = (): McpPrivateServer => ({ availability: "available", server_id: "independent-server", display_name: name,
+    server_url: "https://mcp.example.test/sse", notes: "Original note", status: "registered", state_version: String(version),
+    headers: [{ name: "x-existing", configured: true, status: "active", state_version: "2" }],
+    transport: "sse_compat", prepare_status: "pending_prepare", declarations: [], declarations_available: false })
+  const connector = (): McpConnector => ({ availability: "available", connector_id: "independent-connector", server_id: "independent-server",
+    provider_key: "independent-provider", connector_type: "mcp", display_name: name, status: "active", enabled: true,
+    approved_scopes: [], state_version: String(version) })
+  const read = vi.fn(async () => { if (version === 4) await pendingRead; return server() })
+  const prepare = vi.fn<NonNullable<ReturnType<typeof createHubClient>["preparePrivateMcpServer"]>>()
+    .mockRejectedValue(new HubClientError("http", "Unconfirmed Prepare", "mcp_personal_response_invalid", 502, false))
+  const update = vi.fn<NonNullable<ReturnType<typeof createHubClient>["updatePrivateMcpServer"]>>(async (_id, input) => {
+    version++; name = input.display_name ?? name
+    return { server: server(), connector: connector(), replayed: false }
+  })
+  const hub = { ...createHubClient(), getPrivateMcpServer: read, updatePrivateMcpServer: update, preparePrivateMcpServer: prepare,
+    getMcpConnector: vi.fn(async () => connector()),
+    listMcpConnectors: vi.fn(async () => ({ items: [connector()], next_cursor: null })),
+    listMcpConnectorProviders: vi.fn(async () => ({ items: [], next_cursor: null })),
+    listCustomApis: vi.fn(async () => ({ items: [], page: { next_cursor: null } })) }
+  const boundary = { admitted: true, generation: 1, subject: "independent-save-actor" }
+  render(<LocaleProvider><ConnectorCommandProvider client={hub} boundary={boundary}>
+    <McpContent client={hub} initialView="connections" readBoundary={boundary} />
+  </ConnectorCommandProvider></LocaleProvider>)
+  fireEvent.click(await screen.findByRole("button", { name }))
+  const dialog = await screen.findByRole("dialog", { name })
+  fireEvent.click(await within(dialog).findByRole("button", { name: "连接" }))
+  fireEvent.click(await screen.findByRole("button", { name: "需先核验状态" }))
+  await screen.findByRole("button", { name: "重试原请求" })
+  const originalPrepare = prepare.mock.calls[0]?.slice(0, 3)
+  expect(originalPrepare?.slice(0, 2)).toEqual(["independent-server", "3"])
+  fireEvent.keyDown(within(dialog).getByRole("button", { name: "管理" }), { key: "Enter" })
+  fireEvent.click(await screen.findByRole("menuitem", { name: "编辑配置" }))
+  expect(screen.getByRole("textbox", { name: "服务器名称" })).not.toHaveAttribute("readonly")
+  expect(screen.getByRole("textbox", { name: "备注 （可选）" })).not.toHaveAttribute("readonly")
+  expect(screen.getByRole("textbox", { name: "服务器 URL" })).not.toHaveAttribute("readonly")
+  fireEvent.change(screen.getByRole("textbox", { name: "服务器名称" }), { target: { value: "Saved independently" } })
+  fireEvent.click(screen.getByRole("button", { name: "保存" }))
+  await waitFor(() => expect(update).toHaveBeenCalledOnce())
+  expect(update.mock.calls[0]?.slice(0, 2)).toEqual(["independent-server", { expected_state_version: "3", display_name: "Saved independently" }])
+  await waitFor(() => expect(screen.getByRole("textbox", { name: "服务器名称" })).toHaveValue("Saved independently"))
+  expect(screen.getByRole("dialog", { name: "MCP 配置" })).toBe(dialog)
+  expect(screen.getByLabelText("传输类型 SSE")).toHaveTextContent("SSE")
+  expect(screen.queryByText("x-existing")).not.toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "保存" })).toBeDisabled()
+  expect(screen.queryByRole("button", { name: "试用一下" })).not.toBeInTheDocument()
+  expect(prepare).toHaveBeenCalledOnce()
+  await act(async () => { releaseRead(); await pendingRead })
+  await waitFor(() => expect(screen.getByRole("textbox", { name: "服务器名称" })).not.toHaveAttribute("readonly"))
+  // Save retires the old window's inspection proof, not the original unknown intent.
+  expect(screen.getByRole("button", { name: "需先核验状态" })).toBeEnabled()
+  expect(screen.queryByRole("button", { name: "重试原请求" })).not.toBeInTheDocument()
+  fireEvent.click(within(dialog).getByRole("button", { name: "取消" }))
+  fireEvent.click(within(dialog).getByRole("button", { name: "取消" }))
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+  fireEvent.click(await screen.findByRole("button", { name: "Saved independently" }))
+  expect(await screen.findByRole("button", { name: "需先核验状态" })).toBeEnabled()
+  expect(prepare).toHaveBeenCalledOnce()
+  expect(prepare.mock.calls[0]?.slice(0, 3)).toEqual(originalPrepare)
 })
 
 // Native storage is covered separately; these jsdom tests retain all original command/UI assertions.
@@ -529,6 +603,34 @@ async function confirmedPrimary(connected: boolean, headerDescriptors: McpPrivat
   const remount = () => { view.unmount(); view = render(<LocaleProvider><CustomMcpDetailDialog {...props} /></LocaleProvider>) }
   return { update, remount, trial, prepare, save, shownImage, label, icon, boundary, server, connector, confirmation }
 }
+
+it.each(["Prepare running", "Prepare completed", "inspection running", "journal unreadable", "Update unknown"] as const)("unknown Prepare does not relax the configuration protection for %s", async reason => {
+  const state = await confirmedPrimary(false)
+  state.update({ server: state.server, connector: state.connector, preparationState: "unknown" })
+  expect(screen.getByRole("textbox", { name: "服务器名称" })).not.toHaveAttribute("readonly")
+  state.update(reason === "Prepare running" ? { preparationState: "running" }
+    : reason === "Prepare completed" ? { preparationState: "completed" }
+    : reason === "inspection running" ? { actionId: state.connector.connector_id }
+    : reason === "journal unreadable" ? { preparationRecoveryReady: false }
+    : { managementCommand: { kind: "unknown", operation: "update_server", connectorId: state.connector.connector_id, serverId: state.server.server_id } })
+  expect(screen.getByRole("textbox", { name: "服务器名称" })).toHaveAttribute("readonly")
+  expect(screen.getByRole("button", { name: "保存" })).toBeDisabled()
+  expect(state.save).toHaveBeenCalledOnce()
+  expect(state.prepare).not.toHaveBeenCalled()
+})
+
+it.each(["read error", "actor", "generation"] as const)("unknown Prepare keeps only the confirmed transport label during its own Save read gap, then retires on %s", async reason => {
+  const state = await confirmedPrimary(true, [{ name: "x-old-header", configured: true, status: "active", state_version: "2" }])
+  state.update({ preparationState: "unknown", preparationCanResume: false, preparationCanInspect: true })
+  expect(screen.getByLabelText("传输类型 HTTP")).toHaveTextContent("HTTP")
+  expect(screen.queryByText("x-old-header")).not.toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "试用一下" })).not.toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "需先核验状态" })).toBeDisabled()
+  state.update(reason === "read error" ? { pendingError: true } : { iconBoundary: { ...state.boundary,
+    ...(reason === "actor" ? { subject: "different-actor" } : { generation: state.boundary.generation + 1 }) } })
+  expect(screen.getByLabelText("传输类型 —")).toBeInTheDocument()
+  expect(state.prepare).not.toHaveBeenCalled()
+})
 
 it.each([true, false])("confirmed own Save preserves the observed primary label/icon without granting a pending action: connected=%s", async connected => {
   const state = await confirmedPrimary(connected)

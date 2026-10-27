@@ -69,7 +69,14 @@ function createManagement(options: { client: Client; preparation: McpPreparation
     if (value.subject !== actor) { retire(); return; }
     boundary = { ...value }; for (const entry of entries.values()) entry.command.bind(boundary); publish();
   };
-  const preparationBlocks = (entry: Pick<Entry, "operation" | "locator">) => !cleanup(entry.operation) && (!options.preparation.recoveryReady() || options.preparation.getSnapshot().some(item => item.connectorId === entry.locator.connectorId && item.kind !== "rejected"));
+  // Configuration Save is independent of an unresolved connection attempt.
+  // Only unknown Prepare permits Update; an active attempt/inspection and an
+  // unreadable recovery journal still protect the current owner observation.
+  const preparationBlocks = (entry: Pick<Entry, "operation" | "locator">) => !cleanup(entry.operation) &&
+    (!options.preparation.recoveryReady() || options.preparation.getSnapshot().some(item =>
+      item.connectorId === entry.locator.connectorId && item.kind !== "rejected" &&
+      !(entry.operation === "update_server" && item.kind === "unknown" && item.inspection !== "running")));
+
   const run = async (entry: Entry, value: ProjectReadBoundary, signal: AbortSignal | undefined, input?: McpManagementIntent) => {
     if (!matches(value) || signal?.aborted || entries.get(entry.locator.connectorId) !== entry || preparationBlocks(entry)) return false;
     const kind = entry.command.getSnapshot().kind;
