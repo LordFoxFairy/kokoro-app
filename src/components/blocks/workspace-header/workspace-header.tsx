@@ -57,6 +57,7 @@ export function WorkspaceHeader({
   emptyWorkspace = false,
   projectWorkspace = false,
   projectRename,
+  projectContext,
   projectInstruction,
   projectDelete,
   showNavigationTrigger = false,
@@ -85,6 +86,7 @@ export function WorkspaceHeader({
           {...(onOpenSettings === undefined ? {} : { onOpenSettings })}
           projectWorkspace={projectWorkspace}
           {...(projectRename === undefined ? {} : { projectRename })}
+          {...(projectContext === undefined ? {} : { projectContext })}
           {...(projectInstruction === undefined ? {} : { projectInstruction })}
           {...(projectDelete === undefined ? {} : { projectDelete })}
           shareClient={shareClient}

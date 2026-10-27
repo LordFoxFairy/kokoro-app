@@ -32,6 +32,11 @@ export type ProjectDeleteControl = {
   onCheck: () => void
 }
 
+export type ProjectContextControl = {
+  onTriggerMount: (target: HTMLButtonElement | null) => void;
+  available: boolean; open: boolean; onOpen: (target: HTMLButtonElement | null) => void; onClose: () => void;
+};
+
 export type ProjectInstructionControl = {
   onTriggerMount: (target: HTMLButtonElement | null) => void
   available: boolean
@@ -41,6 +46,7 @@ export type ProjectInstructionControl = {
 export type WorkspaceHeaderProps = {
   activeId: string | null
   projectRename?: ProjectRenameControl
+  projectContext?: ProjectContextControl
   projectInstruction?: ProjectInstructionControl
   projectDelete?: ProjectDeleteControl
   shareClient: Pick<SessionClient, "createShare" | "revokeShare">
@@ -60,5 +66,5 @@ export type WorkspaceHeaderIdentityProps = Pick<
 
 export type WorkspaceHeaderActionProps = Pick<
   WorkspaceHeaderProps,
-  "activeId" | "projectRename" | "projectInstruction" | "projectDelete" | "emptyWorkspace" | "onOpenSettings" | "projectWorkspace" | "shareClient"
+  "projectContext" | "activeId" | "projectRename" | "projectInstruction" | "projectDelete" | "emptyWorkspace" | "onOpenSettings" | "projectWorkspace" | "shareClient"
 >

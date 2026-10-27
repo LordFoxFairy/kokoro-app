@@ -1968,6 +1968,8 @@ export const zh = {
   "firstSite.projects": "项目",
   "firstSite.collapseProjects": "收起项目",
   "firstSite.expandProjects": "展开项目",
+  "firstSite.projectSettings": "项目设置",
+  "firstSite.closeProjectSettings": "关闭项目设置",
   "firstSite.projectOptions": "项目选项",
   "firstSite.projectSort": "项目排序方式",
   "firstSite.newProjectSection": "新建分区",

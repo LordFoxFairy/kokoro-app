@@ -126,6 +126,9 @@ export type ProjectInstructionRequest = Readonly<{
 }>;
 
 export type EmptyStateProps = {
+  projectConversationContent?: React.ReactNode;
+  projectContextVisible?: boolean;
+  onCloseProjectContext?: (() => void) | undefined;
   /**
    * The shell's current admission decision. Route-owned surfaces must use this
    * boundary before mounting their own browser reads.

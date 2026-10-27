@@ -4,6 +4,8 @@
 import type { MessageKey } from "./messages"
 
 export const de: Partial<Record<MessageKey, string>> = {
+  "firstSite.projectSettings": "Projekteinstellungen",
+  "firstSite.closeProjectSettings": "Projekteinstellungen schließen",
   "thread.conversationMissing": "Unterhaltung nicht gefunden",
   "thread.conversationMissingHint": "Diese Unterhaltung existiert nicht oder wurde gelöscht. Ihre Adresse bleibt erhalten. Laden Sie sie erneut oder starten Sie eine neue Aufgabe.",
 

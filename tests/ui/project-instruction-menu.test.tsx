@@ -10,6 +10,7 @@ import { ThemeProvider } from "@/ui/theme/theme-context"
 import { createSessionEngine, type SessionEngine } from "@/engine/machine"
 import { createFakeClient, createMemoryStorage } from "../engine/fakes"
 import * as pageClients from "@/ui/shell/page-clients"
+import { openCanvas, readCanvasState, resetCanvasStore } from "@/ui/canvas/canvas-store"
 import type { ConversationStore } from "@/core/conversations"
 
 const projectA = { id: "project_11111111-1111-1111-1111-111111111111", name: "项目甲", slug: "a", description: "", instruction: "甲的原指令", created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-01T00:00:00Z" }
@@ -440,4 +441,83 @@ it.each([409, 429, 503, "invalid_ack"] as const)("指令 %s 不推断未写入�
   await waitFor(() => expect(screen.queryByRole("dialog", { name: "项目指令" })).not.toBeInTheDocument())
   expect(submitted).toHaveLength(2)
   expect(submitted[1]).toEqual(submitted[0])
+})
+
+
+it("真实Frame的Project root到Task只有一个context/composer，设置不跳URL且Canvas草稿视图保挂载", async () => {
+  const view = mountProjectMenu()
+  await screen.findByRole("heading", { name: projectA.name })
+  const context = document.querySelector('[data-project-context="true"]')
+  await act(async () => { engine.submit("project task for context") })
+  const activeId = engine.getSnapshot().store?.activeId
+  expect(activeId).toBeTruthy()
+  act(() => { history.pushState(null, "", `/app/project/${projectA.id}?conversation=${activeId}`); window.dispatchEvent(new Event("kokoro:surface-navigation")) })
+  await waitFor(() => expect(document.querySelector('[data-slot="conversation-timeline"]')).not.toBeNull())
+  expect(document.querySelector('[data-project-context="true"]')).toBe(context)
+  expect(document.querySelectorAll('[data-project-context="true"]')).toHaveLength(1)
+  expect(document.querySelectorAll('[data-slot="composer-wrap"]')).toHaveLength(1)
+  const url = location.href
+  act(() => { openCanvas(activeId!, { kind: "node", title: "Canvas draft", node: <input aria-label="Canvas unsaved field" defaultValue="initial" /> }) })
+  const field = await screen.findByRole("textbox", { name: "Canvas unsaved field" })
+  fireEvent.change(field, { target: { value: "retained unsaved Canvas view" } })
+  const canvasState = readCanvasState()
+  const trigger = within(document.querySelector<HTMLElement>('[data-slot="workspace-header"]')!).getByRole("button", { name: "项目选项" })
+  fireEvent.keyDown(trigger, { key: "ArrowDown" })
+  fireEvent.click(within(await screen.findByRole("menu")).getByRole("menuitem", { name: "项目设置" }))
+  expect(await screen.findByRole("heading", { name: "项目设置" })).toBeVisible()
+  expect(field).toBeInTheDocument()
+  expect(field).not.toBeVisible()
+  expect(readCanvasState()).toBe(canvasState)
+  fireEvent.click(screen.getByRole("button", { name: "新增指令" }))
+  const dialog = await screen.findByRole("dialog", { name: "项目指令" })
+  fireEvent.keyDown(dialog, { key: "Escape" })
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+  expect(screen.getByRole("heading", { name: "项目设置" })).toBeVisible()
+  expect(readCanvasState()).toBe(canvasState)
+  fireEvent.click(screen.getByRole("button", { name: "关闭项目设置" }))
+  await waitFor(() => expect(field).toBeVisible())
+  expect(screen.getByRole("textbox", { name: "Canvas unsaved field" })).toBe(field)
+  expect(field).toHaveValue("retained unsaved Canvas view")
+  expect(readCanvasState()).toBe(canvasState)
+  expect(location.href).toBe(url)
+  expect(view.writes).toEqual([])
+  act(() => resetCanvasStore())
+})
+
+
+it("Task上下文中的未知指令关闭整个设置后仍原body/key，显式重试不改变会话URL", async () => {
+  const submitted: Array<{ key: string | null; body: string }> = []
+  mountProjectMenu(async (_path, init) => {
+    if (init?.method !== "PATCH") return undefined
+    submitted.push({ key: new Headers(init.headers).get("Idempotency-Key"), body: String(init.body) })
+    if (submitted.length === 1) throw new TypeError("ACK lost")
+    return undefined
+  })
+  await screen.findByRole("heading", { name: projectA.name })
+  await act(async () => { engine.submit("another project task") })
+  const id = engine.getSnapshot().store?.activeId
+  act(() => { history.pushState(null, "", `/app/project/${projectA.id}?conversation=${id}`); window.dispatchEvent(new Event("kokoro:surface-navigation")) })
+  await waitFor(() => expect(document.querySelector('[data-slot="conversation-timeline"]')).not.toBeNull())
+  const url = location.href
+  const edit = async () => {
+    const trigger = within(document.querySelector<HTMLElement>('[data-slot="workspace-header"]')!).getByRole("button", { name: "项目选项" })
+    fireEvent.keyDown(trigger, { key: "ArrowDown" })
+    fireEvent.click(within(await screen.findByRole("menu")).getByRole("menuitem", { name: "编辑指令" }))
+    return screen.findByRole("dialog", { name: "项目指令" })
+  }
+  let dialog = await edit()
+  fireEvent.change(within(dialog).getByRole("textbox"), { target: { value: "Task unknown instruction" } })
+  fireEvent.click(within(dialog).getByRole("button", { name: "保存" }))
+  expect(await within(dialog).findByRole("alert")).toHaveTextContent("操作结果尚未确认")
+  fireEvent.click(within(dialog).getByRole("button", { name: "取消" }))
+  fireEvent.click(screen.getByRole("button", { name: "关闭项目设置" }))
+  dialog = await edit()
+  expect(within(dialog).getByRole("textbox")).toHaveValue("Task unknown instruction")
+  expect(within(dialog).getByRole("textbox")).toBeDisabled()
+  expect(submitted).toHaveLength(1)
+  fireEvent.click(within(dialog).getByRole("button", { name: "重试原操作" }))
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+  expect(submitted).toHaveLength(2)
+  expect(submitted[1]).toEqual(submitted[0])
+  expect(location.href).toBe(url)
 })

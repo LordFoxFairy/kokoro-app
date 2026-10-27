@@ -9,7 +9,7 @@ import { ConversationThread, type ConversationThreadProps } from "@/ui/thread/co
 import { TodoBar } from "@/ui/todo/todo-bar"
 import { WorkspaceHeader } from "@/components/blocks/workspace-header/workspace-header"
 import { useT } from "@/i18n/context"
-import type { ProjectDeleteControl, ProjectInstructionControl, ProjectRenameControl } from "@/components/blocks/workspace-header/workspace-header.types"
+import type { ProjectContextControl, ProjectDeleteControl, ProjectInstructionControl, ProjectRenameControl } from "@/components/blocks/workspace-header/workspace-header.types"
 import type { SettingsTab } from "@/ui/settings/settings-modal"
 
 import {
@@ -31,6 +31,7 @@ export type AppFrameMainSurfaceProps = {
   standaloneSurface: boolean
   projectWorkspace: boolean
   projectRename?: ProjectRenameControl
+  projectContext?: ProjectContextControl
   projectInstruction?: ProjectInstructionControl
   projectDelete?: ProjectDeleteControl
   projectRef: string | undefined
@@ -102,6 +103,7 @@ export function AppFrameMainSurface({
   standaloneSurface,
   projectWorkspace,
   projectRename,
+  projectContext,
   projectInstruction,
   projectDelete,
   projectRef,
@@ -154,6 +156,7 @@ export function AppFrameMainSurface({
           emptyWorkspace={!showConversation}
           projectWorkspace={projectWorkspace}
           {...(projectRename === undefined ? {} : { projectRename })}
+          {...(projectContext === undefined ? {} : { projectContext })}
           {...(projectInstruction === undefined ? {} : { projectInstruction })}
           {...(projectDelete === undefined ? {} : { projectDelete })}
           // The header owns the only menu trigger while the compact rail is
@@ -186,7 +189,15 @@ export function AppFrameMainSurface({
         className={statusStyles.timelineStage}
         data-canvas-reopen={canvas.canReopenCanvas ? "true" : undefined}
       >
-        {!mounted ? (
+        {mounted && projectWorkspace && !conversationMissing ? <EmptyState
+          key={JSON.stringify(["project", projectRef ?? null, emptyStateProps.preview ?? false])}
+          {...emptyStateProps}
+          projectContextVisible={projectContext?.open ?? false}
+          onCloseProjectContext={projectContext?.onClose}
+          {...(showConversation || conversationHydrating || conversationHydrationFailed ? { projectConversationContent:
+            conversationHydrating ? <AppFrameLoadingSurface /> : conversationHydrationFailed ? <AppFrameConversationErrorSurface detail={machineError} onRetry={retryConversationHydration} missing={conversationMissing} /> : <div data-slot="conversation-timeline" className="min-h-0 flex flex-1"><ConversationThread {...conversationProps} /></div>
+          } : {})}
+        /> : !mounted ? (
           <AppFrameLoadingSurface />
         ) : !standaloneSurface && conversationHydrating ? (
           <AppFrameLoadingSurface />

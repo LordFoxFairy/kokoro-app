@@ -105,3 +105,40 @@ it("cancel during a real configuration hook's pending PUT returns focus to the c
   expect(section).toHaveFocus()
   expect(client.replace).toHaveBeenCalledOnce()
 })
+
+
+it("hidden Project context closes the picker, rejects hidden mutations, and ignores a late result after reopening", async () => {
+  const value = model()
+  let finish!: (value: "conflict") => void
+  vi.mocked(value.save).mockImplementation(() => new Promise(resolve => { finish = resolve }))
+  const view = render(<LocaleProvider><ProjectMcpRecommendationsSection active model={value} /></LocaleProvider>)
+  fireEvent.click(screen.getByRole("button", { name: "新增" }))
+  fireEvent.click(screen.getByRole("button", { name: "保存" }))
+  view.rerender(<LocaleProvider><ProjectMcpRecommendationsSection active={false} model={value} /></LocaleProvider>)
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+  for (const button of screen.getAllByRole("button")) fireEvent.click(button)
+  expect(value.save).toHaveBeenCalledTimes(1)
+  view.rerender(<LocaleProvider><ProjectMcpRecommendationsSection active model={value} /></LocaleProvider>)
+  fireEvent.click(screen.getByRole("button", { name: "新增" }))
+  await act(async () => finish("conflict"))
+  expect(screen.getByRole("dialog", { name: "推荐连接器" })).toBeVisible()
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+  expect(value.save).toHaveBeenCalledTimes(1)
+})
+
+it.each([false, true])("a deferred saved-row removal publishes only within its original opening (reopened=%s)", async reopened => {
+  const value = model()
+  let finish!: (value: "conflict") => void
+  vi.mocked(value.save).mockImplementation(() => new Promise(resolve => { finish = resolve }))
+  const view = render(<LocaleProvider><ProjectMcpRecommendationsSection active model={value} /></LocaleProvider>)
+  fireEvent.click(screen.getByRole("button", { name: /移除.*unlisted/ }))
+  expect(value.save).toHaveBeenCalledWith([])
+  if (reopened) {
+    view.rerender(<LocaleProvider><ProjectMcpRecommendationsSection active={false} model={value} /></LocaleProvider>)
+    view.rerender(<LocaleProvider><ProjectMcpRecommendationsSection active model={value} /></LocaleProvider>)
+  }
+  await act(async () => finish("conflict"))
+  if (reopened) expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+  else expect(screen.getByRole("alert")).toHaveTextContent("当前推荐已有其他修改")
+  expect(value.save).toHaveBeenCalledTimes(1)
+})

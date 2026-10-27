@@ -16,12 +16,13 @@ import { ProjectSkillSourcePicker } from "./project-skill-source-picker"
 import { useProjectSkills, type ProjectSkillCommand } from "./use-project-skills"
 import styles from "./project-skills.module.css"
 
-type Props = Pick<EmptyStateProps, "projectDetail" | "projectReadBoundary" | "onOpenSettings" | "preview">
+type Props = Pick<EmptyStateProps, "projectDetail" | "projectReadBoundary" | "onOpenSettings" | "preview"> & { active?: boolean }
 export function ProjectSkillsSection({
   projectDetail,
   projectReadBoundary,
   onOpenSettings,
   preview = false,
+  active = true,
 }: Props) {
   const t = useT()
   const [open, setOpen] = useState(false)
@@ -31,7 +32,7 @@ export function ProjectSkillsSection({
   const [query, setQuery] = useState("")
   const [source, setSource] = useState<"personal" | "official" | null>(null)
   const projectId = projectDetail?.status === "ready" ? projectDetail.data.id : null
-  const model = useProjectSkills(preview ? null : projectId, projectReadBoundary, open)
+  const model = useProjectSkills(preview ? null : projectId, projectReadBoundary, open && active)
   const [draft, setDraft] = useState({
     selection: model.facts?.selection ?? null,
     ids: model.facts?.selection.installation_ids ?? [],
@@ -44,6 +45,11 @@ export function ProjectSkillsSection({
     item: PersonalInstallation | null
     command: ProjectSkillCommand | "abandon"
   } | null>(null)
+  const [previousActive, setPreviousActive] = useState(active)
+  if (previousActive !== active) {
+    setPreviousActive(active)
+    if (!active) { setOpen(false); setConfirmation(null); setSource(null) }
+  }
   if (confirmation && confirmation.facts !== model.facts) setConfirmation(null)
   const confirm = confirmation?.facts === model.facts ? confirmation : null
   const locked =
@@ -74,19 +80,20 @@ export function ProjectSkillsSection({
           emptyVisual={<Image className={styles.artwork} src="/site-assets/project-skills.svg" width={75} height={64} alt="" aria-hidden="true" />}
           showChevron
           onClick={(event) => {
+            if (!active) return
             opener.current = event.currentTarget
             setOpen(true)
           }}
         />
       </section>
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={active && open} onOpenChange={setOpen}>
         <DialogContent
           ref={panel}
           className={styles.dialog}
           closeLabel={t("shell.closeDialog")}
           onCloseAutoFocus={(event) => {
             event.preventDefault()
-            if (opener.current?.isConnected) opener.current.focus()
+            if (active && opener.current?.isConnected) opener.current.focus()
           }}
         >
           <header className={styles.header}>
@@ -278,7 +285,7 @@ export function ProjectSkillsSection({
         </DialogContent>
       </Dialog>
       <Dialog
-        open={confirm !== null}
+        open={active && confirm !== null}
         onOpenChange={(value) => {
           if (!value) setConfirmation(null)
         }}

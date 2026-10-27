@@ -7,15 +7,16 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useT } from "@/i18n/context"
 import { MoreHorizontal } from "lucide-react"
-import type { ProjectDeleteControl, ProjectInstructionControl, ProjectRenameControl } from "./workspace-header.types"
+import type { ProjectContextControl, ProjectDeleteControl, ProjectInstructionControl, ProjectRenameControl } from "./workspace-header.types"
 
 type WorkspaceHeaderProjectMenuProps = {
   projectRename?: ProjectRenameControl
+  projectContext?: ProjectContextControl
   projectInstruction?: ProjectInstructionControl
   projectDelete?: ProjectDeleteControl
 }
 
-export function WorkspaceHeaderProjectMenu({ projectRename, projectInstruction, projectDelete }: WorkspaceHeaderProjectMenuProps) {
+export function WorkspaceHeaderProjectMenu({ projectRename, projectContext, projectInstruction, projectDelete }: WorkspaceHeaderProjectMenuProps) {
   const t = useT()
   const inputId = useId()
   const moreTriggerRef = useRef<HTMLButtonElement | null>(null)
@@ -45,7 +46,7 @@ export function WorkspaceHeaderProjectMenu({ projectRename, projectInstruction, 
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button ref={(node) => { moreTriggerRef.current = node; projectInstruction?.onTriggerMount(node) }} type="button" variant="ghost" size="icon-sm" className="size-8 min-h-8" aria-label={t("firstSite.projectOptions")}>
+          <Button ref={(node) => { moreTriggerRef.current = node; projectInstruction?.onTriggerMount(node); projectContext?.onTriggerMount(node) }} type="button" variant="ghost" size="icon-sm" className="size-8 min-h-8" aria-label={t("firstSite.projectOptions")}>
             <MoreHorizontal aria-hidden="true" />
           </Button>
         </DropdownMenuTrigger>
@@ -60,6 +61,7 @@ export function WorkspaceHeaderProjectMenu({ projectRename, projectInstruction, 
               projectRename.onOpen()
             }}>{t("firstSite.renameProject")}</DropdownMenuItem>
           ) : null}
+          {projectContext?.available ? <DropdownMenuItem onSelect={() => projectContext.onOpen(moreTriggerRef.current)}>{t("firstSite.projectSettings")}</DropdownMenuItem> : null}
           {projectInstruction?.available ? <DropdownMenuItem onSelect={() => projectInstruction.onOpen(moreTriggerRef.current)}>{t("firstSite.editProjectInstructions")}</DropdownMenuItem> : null}
           {projectDelete?.available ? <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => {
             const source = moreTriggerRef.current

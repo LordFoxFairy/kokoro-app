@@ -532,6 +532,7 @@ function AppFrameRuntime({
     instructionHistory: projectReads.instructionHistory,
     instructionContext: projectReads.context,
     instructionsEnabled: projectedWorkspaceCapabilities.instructions,
+    contextEnabled: [projectedWorkspaceCapabilities.instructions, projectedWorkspaceCapabilities.resources, projectedWorkspaceCapabilities.connectors, projectedWorkspaceCapabilities.skills].some(Boolean),
     refreshProject: refreshProjects,
     retireProject: projectReads.retireProject,
     refreshRenamedProject: projectReads.refreshRenamedProject,
@@ -820,8 +821,8 @@ function AppFrameRuntime({
     controlError: (machine.phase === "waiting" || machine.phase === "resuming") ? machine.error : null,
     onToolDecision: (runId, toolId, decision) => engine?.stageToolDecision(runId, toolId, decision),
     onCancelRun: () => engine?.cancelRun(),
-    onOpenFile: canvas.openFile,
-    onOpenDelivery: canvas.openDelivery,
+    onOpenFile: (path) => { project.dismissProjectContext(); canvas.openFile(path) },
+    onOpenDelivery: (delivery) => { project.dismissProjectContext(); canvas.openDelivery(delivery) },
   }
 
   const projectConversations: NonNullable<EmptyStateProps["projectConversations"]> = conversations.map((conversation) => ({
@@ -951,6 +952,7 @@ function AppFrameRuntime({
       onReconnect={() => engine?.reconnect()}
       projectCreation={project.projectCreation}
       projectRename={project.projectRename}
+      projectContext={project.projectContext}
       projectInstruction={project.projectInstruction}
       projectDelete={project.projectDelete}
       onRetryProjectCreation={project.retryProjectCreation}
@@ -963,7 +965,7 @@ function AppFrameRuntime({
       emptyStateProps={emptyStateProps}
       composer={composer}
       emptyStateOwnsComposer={emptyStateOwnsComposer}
-      canvas={canvas}
+      canvas={{ ...canvas, onReopen: () => { project.dismissProjectContext(); canvas.onReopen() } }}
     />
   )
 
@@ -1122,6 +1124,7 @@ function AppFrameRuntime({
       railProps={railProps}
       mainSurface={mainSurface}
       canvas={canvas}
+      hideCanvas={project.projectContext.open && !projectOverview}
       thread={thread}
       activeId={activeId}
       overlays={overlaySurfaces}

@@ -7,7 +7,7 @@ import { ProjectReadError } from "@/features/app/project-list"
 import { projectRenameIdSchema, projectRenameRequestSchema, type ProjectRenameIntent } from "@/contract/project-rename"
 import { projectDeletionIdSchema, type ProjectDeletionIntent } from "@/contract/project-deletion"
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
-import type { ProjectDeleteControl, ProjectRenameControl } from "@/components/blocks/workspace-header/workspace-header.types"
+import type { ProjectContextControl, ProjectDeleteControl, ProjectRenameControl } from "@/components/blocks/workspace-header/workspace-header.types"
 import { uploadProjectResource as uploadProjectResourceRequest } from "@/features/app/project-resource-upload"
 import { ProjectResourceUploadError } from "@/features/app/project-resource-upload"
 import { listProjectResources as listProjectResourcesRequest } from "@/features/app/project-resource-list"
@@ -35,6 +35,7 @@ export type AppFrameProjectOptions = {
   clearDraft: () => void
   projectDetail: ProjectReadState<Project>
   instructionHistory: ProjectReadState<ProjectInstructionRevisionWire[]>
+  contextEnabled?: boolean
   instructionsEnabled?: boolean
   instructionContext: object
   refreshProject: () => void
@@ -67,6 +68,7 @@ export function useAppFrameProject({
   instructionHistory,
   instructionContext,
   instructionsEnabled = false,
+  contextEnabled = false,
   refreshProject,
   retireProject,
   refreshRenamedProject,
@@ -350,10 +352,39 @@ export function useAppFrameProject({
     onCheck: () => { if (deleteScopeRef.current?.context === renameContext && deleteScopeRef.current.intent) void runDelete(true) },
   }
 
+  const contextTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const contextAvailable = mounted && projectWorkspace && contextEnabled && projectRef !== undefined
+    && (preview || renameBoundary?.admitted === true && renameBoundary.subject !== null && projectDetail.status === "ready" && projectDetail.data.id === projectRef)
+  const [contextView, setContextView] = useState<{ context: object; route: string; opener: HTMLButtonElement | null } | null>(null)
+  const contextLive = useRef<{ context: object; route: string; opener: HTMLButtonElement | null } | null>(null)
+  const currentRoute = () => `${window.location.pathname}${window.location.search}${window.location.hash}`
+  const contextOpen = contextAvailable && contextView?.context === renameContext && contextView.route === currentRoute()
+  useLayoutEffect(() => { contextLive.current = contextOpen ? contextView : null; return () => { contextLive.current = null } }, [contextView, contextOpen])
+  const dismissProjectContext = useCallback(() => { contextLive.current = null; setContextView(null) }, [])
+  const projectContext: ProjectContextControl = {
+    onTriggerMount: target => { contextTriggerRef.current = target },
+    available: contextAvailable, open: contextOpen,
+    onOpen: (opener) => {
+      if (!contextAvailable || renameScopeRef.current?.context !== renameContext || !renameScopeRef.current.active || renameScopeRef.current.route !== currentRoute()) return
+      setContextView({ context: renameContext, route: currentRoute(), opener })
+    },
+    onClose: () => {
+      const closing = contextLive.current
+      dismissProjectContext()
+      window.requestAnimationFrame(() => {
+        if (!closing || closing.context !== renameScopeRef.current?.context || !renameScopeRef.current.active || closing.route !== currentRoute() || contextLive.current) return
+        const available = (target: HTMLButtonElement | null) => target?.isConnected && !target.disabled && (typeof target.checkVisibility !== "function" || target.checkVisibility())
+        const target = available(closing.opener) ? closing.opener : contextTriggerRef.current
+        if (target && available(target)) target.focus({ preventScroll: true })
+      })
+    },
+  }
+
   // A menu handoff is document-local and expires with admission or navigation.
   // It never copies instructions or survives a different actor's lifetime.
-  const instructionEntryContext = useMemo(() => ({ mounted, preview, instructionsEnabled,
-    admitted: renameBoundary?.admitted, subject: renameBoundary?.subject, generation: renameBoundary?.generation }), [mounted, preview, instructionsEnabled,
+  const [instructionEntryEpoch, setInstructionEntryEpoch] = useState(0)
+  const instructionEntryContext = useMemo(() => ({ mounted, preview, instructionsEnabled, instructionEntryEpoch,
+    admitted: renameBoundary?.admitted, subject: renameBoundary?.subject, generation: renameBoundary?.generation }), [mounted, preview, instructionsEnabled, instructionEntryEpoch,
     renameBoundary?.admitted, renameBoundary?.subject, renameBoundary?.generation])
   type InstructionEntryScope = { context: object; active: boolean; request: ProjectInstructionRequest | null; route: string | null }
   const instructionTriggerRef = useRef<HTMLButtonElement | null>(null)
@@ -364,8 +395,10 @@ export function useAppFrameProject({
     const scope: InstructionEntryScope = { context: instructionEntryContext, active: true, request: null, route: null }
     instructionEntryScopeRef.current = scope
     const retire = () => {
-      if (scope.route === `${window.location.pathname}${window.location.search}${window.location.hash}`) return
+      if (!scope.active || scope.route === `${window.location.pathname}${window.location.search}${window.location.hash}`) return
+      scope.active = false
       scope.request = null
+      setInstructionEntryEpoch(value => value + 1)
       setInstructionEntry((current) => current?.context === scope.context ? null : current)
     }
     window.addEventListener("popstate", retire)
@@ -377,10 +410,13 @@ export function useAppFrameProject({
       window.removeEventListener("kokoro:surface-navigation", retire)
     }
   }, [instructionEntryContext])
+  const renderedInstructionProject = useRef(projectRef)
+  useLayoutEffect(() => { renderedInstructionProject.current = projectRef }, [projectRef])
   const requestProjectInstructions = useCallback((target: string, returnFocus: HTMLButtonElement | null) => {
     const scope = instructionEntryScopeRef.current
-    if (!instructionAccess || !target || !scope?.active || scope.context !== instructionEntryContext) return
-    const route = `/app/project/${encodeURIComponent(target)}`
+    if (renderedInstructionProject.current !== projectRef || !instructionAccess || !target || !scope?.active || scope.context !== instructionEntryContext) return
+    const sameProject = projectWorkspace && target === projectRef && window.location.pathname === `/app/project/${encodeURIComponent(target)}`
+    const route = sameProject ? currentRoute() : `/app/project/${encodeURIComponent(target)}`
     const request: ProjectInstructionRequest = {
       projectRef: target,
       returnFocus: returnFocus?.isConnected ? returnFocus : null,
@@ -392,8 +428,10 @@ export function useAppFrameProject({
     scope.request = request
     scope.route = route
     setInstructionEntry({ context: instructionEntryContext, request })
-    navigateMountedSurface(route)
-  }, [instructionAccess, instructionEntryContext])
+    if (sameProject) {
+      if (contextAvailable) setContextView({ context: renameContext, route, opener: returnFocus })
+    } else navigateMountedSurface(route)
+  }, [instructionAccess, instructionEntryContext, projectWorkspace, projectRef, contextAvailable, renameContext])
   const instructionReady = instructionAccess && projectWorkspace && projectRef !== undefined
     && (preview || projectDetail.status === "ready" && projectDetail.data.id === projectRef)
   const projectInstruction = {
@@ -723,6 +761,8 @@ export function useAppFrameProject({
 
   return {
     projectRename,
+    projectContext,
+    dismissProjectContext,
     projectDelete,
     projectInstruction,
     projectInstructionRequest,

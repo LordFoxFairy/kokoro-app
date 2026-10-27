@@ -4,6 +4,8 @@
 import type { MessageKey } from "./messages"
 
 export const ko: Partial<Record<MessageKey, string>> = {
+  "firstSite.projectSettings": "프로젝트 설정",
+  "firstSite.closeProjectSettings": "프로젝트 설정 닫기",
   "thread.conversationMissing": "대화를 찾을 수 없습니다",
   "thread.conversationMissingHint": "존재하지 않거나 삭제된 대화입니다. 원래 주소는 유지됩니다. 다시 불러오거나 새 작업을 시작하세요.",
 

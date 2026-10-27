@@ -1,6 +1,6 @@
 "use client"
 
-import { ChevronDown, ChevronRight, ListFilter, Plus, Upload } from "lucide-react"
+import { Plus } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import { useCallback, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type SetStateAction } from "react"
@@ -13,11 +13,12 @@ import { useLocale } from "@/i18n/context"
 import { cn } from "@/lib/utils"
 import { ProjectResourceUploadError } from "./project-resource-upload"
 
-import { ProjectContextCard, ProjectContextSection } from "./project-context-card"
+import { ProjectContextCard } from "./project-context-card"
 import { ProjectIdentity } from "./project-identity"
 import { ProjectConversations } from "./project-conversations"
-import { ProjectSkillsSection } from "./project-skills-section"
-import { ProjectMcpRecommendationsSection } from "./project-mcp-recommendations-section"
+import { ProjectContextComposition } from "./project-context-composition"
+import { ProjectContextDialogs } from "./project-context-dialogs"
+import contextStyles from "./project-context-composition.module.css"
 import { ProjectWorkspaceDialogs } from "./project-workspace-dialogs"
 import { previewScheduledTasks, previewWebsites, type ProjectScheduledPreview, type ResourceKind } from "./project-workspace-model"
 import { useProjectComposerClearance } from "./use-project-composer-clearance"
@@ -26,13 +27,16 @@ import { useProjectResources } from "./use-project-resources"
 import styles from "./kokoro-project-workspace.module.css"
 import layoutStyles from "./project-workspace-layout.module.css"
 
+const projectContextRoute = () => typeof window === "undefined" ? "" : `${window.location.pathname}${window.location.search}${window.location.hash}`
+
 type ProjectWorkspaceProps = Pick<
   EmptyStateProps,
   "brandName" | "composer" | "onOpenSettings" | "onPrompt" | "projectConversations" | "projectConversationsLoading" | "projectConversationsError" | "onRetryProjectConversations" | "activeProjectConversationId" | "onSelectProjectConversation" | "workspaceCapabilities"
-  | "projectInstructionRequest" | "projectInstructions" | "projectInstructionHistory" | "onSaveProjectInstructions" | "onUploadProjectResource" | "onListProjectResources" | "projectRef" | "preview" | "onCreateProjectScheduledTask" | "projectDetail" | "onRetryProjectRead" | "projectInstructionContext" | "projectHistoryStatus" | "projectHistoryRetryable" | "projectReadBoundary" | "projectMcpRecommendations"
+  | "projectInstructionRequest" | "projectInstructions" | "projectInstructionHistory" | "onSaveProjectInstructions" | "onUploadProjectResource" | "onListProjectResources" | "projectRef" | "preview" | "onCreateProjectScheduledTask" | "projectDetail" | "onRetryProjectRead" | "projectInstructionContext" | "projectHistoryStatus" | "projectHistoryRetryable" | "projectReadBoundary" | "projectMcpRecommendations" | "projectConversationContent" | "projectContextVisible" | "onCloseProjectContext"
 >
 
 type InstructionEditorState = {
+  draftInitialized: boolean
   request: ProjectInstructionRequest | null
   instructionsOpen: boolean
   instructions: string
@@ -61,6 +65,9 @@ export type ResourceUploadIntent = {
 export function KokoroProjectWorkspace({
   brandName,
   composer,
+  projectConversationContent,
+  projectContextVisible = true,
+  onCloseProjectContext,
   onOpenSettings,
   projectConversations = [],
   projectConversationsLoading = false,
@@ -86,7 +93,16 @@ export function KokoroProjectWorkspace({
   onCreateProjectScheduledTask,
 }: ProjectWorkspaceProps) {
   const { locale, t } = useLocale()
-  const { surfaceRef, composerRef } = useProjectComposerClearance(true)
+  const { surfaceRef, composerRef } = useProjectComposerClearance(projectConversationContent === undefined)
+  const task = projectConversationContent !== undefined
+  const contextActive = !task || projectContextVisible
+  const presentationRoute = projectContextRoute()
+  const presentationToken = useMemo(() => ({ active: contextActive, projectRef, preview, route: presentationRoute,
+    subject: projectReadBoundary?.subject, admitted: projectReadBoundary?.admitted, generation: projectReadBoundary?.generation, resources: workspaceCapabilities?.resources }),
+    [contextActive, projectRef, preview, presentationRoute, projectReadBoundary?.subject, projectReadBoundary?.admitted, projectReadBoundary?.generation, workspaceCapabilities?.resources])
+  const activePresentation = useRef({ active: contextActive, token: presentationToken })
+  useLayoutEffect(() => { activePresentation.current = { active: contextActive, token: presentationToken } }, [contextActive, presentationToken])
+  const presentationCurrent = () => activePresentation.current.active && activePresentation.current.token === presentationToken && projectContextRoute() === presentationRoute
   const capabilities = workspaceCapabilities
   const instructionsAvailable = Boolean(capabilities?.instructions) && (preview ||
     (projectReadBoundary === undefined || projectReadBoundary.admitted && projectReadBoundary.subject !== null)
@@ -112,7 +128,7 @@ export function KokoroProjectWorkspace({
     projectReadBoundary?.admitted, projectReadBoundary?.subject, projectReadBoundary?.generation, instructionRouteEpoch])
   const instructionContext = instructionFocusContext
   const emptyInstructionEditor: InstructionEditorState = {
-    request: null, instructionsOpen: false, instructions: projectInstructions, instructionsSaving: false,
+    draftInitialized: false, request: null, instructionsOpen: false, instructions: projectInstructions, instructionsSaving: false,
     instructionsError: false, instructionsResult: null, instructionsHistoryOpen: false, selectedInstructionRevision: null,
   }
   const [instructionEditor, setInstructionEditor] = useState({ context: instructionContext, state: emptyInstructionEditor })
@@ -121,7 +137,7 @@ export function KokoroProjectWorkspace({
   if (instructionEditor.context !== instructionContext) {
     setInstructionEditor({ context: instructionContext, state: emptyInstructionEditor })
   } else if (instructionsAvailable && projectInstructionRequest && instructionEditor.state.request !== projectInstructionRequest) {
-    setInstructionEditor({ context: instructionContext, state: { ...(instructionEditor.state.instructionsResult !== null
+    setInstructionEditor({ context: instructionContext, state: { ...((instructionEditor.state.draftInitialized || instructionEditor.state.instructionsResult !== null)
       ? instructionEditor.state : emptyInstructionEditor), request: projectInstructionRequest, instructionsOpen: true } })
   }
   const editor = instructionEditor.context === instructionContext ? instructionEditor.state : emptyInstructionEditor
@@ -134,13 +150,24 @@ export function KokoroProjectWorkspace({
     })
   }
   const setInstructionsOpen = instructionSetter("instructionsOpen")
-  const setInstructions = instructionSetter("instructions")
+  const setInstructions = (value: SetStateAction<string>) => {
+    instructionSetter("draftInitialized")(true)
+    instructionSetter("instructions")(value)
+  }
   const setInstructionsSaving = instructionSetter("instructionsSaving")
   const setInstructionsError = instructionSetter("instructionsError")
   const setInstructionsResult = instructionSetter("instructionsResult")
   const setInstructionsHistoryOpen = instructionSetter("instructionsHistoryOpen")
   const setSelectedInstructionRevision = instructionSetter("selectedInstructionRevision")
   const [resourcesOpen, setResourcesOpen] = useState(false)
+  const [previousPresentation, setPreviousPresentation] = useState(contextActive)
+  if (previousPresentation !== contextActive) {
+    setPreviousPresentation(contextActive)
+    if (!contextActive) {
+      setInstructionEditor(current => ({ ...current, state: { ...current.state, instructionsOpen: false, instructionsHistoryOpen: false } }))
+      setResourcesOpen(false)
+    }
+  }
   const [resourceQuery, setResourceQuery] = useState("")
   const [resourceKind, setResourceKind] = useState<ResourceKind>("all")
   const resourcesAvailable = preview || projectReadBoundary === undefined
@@ -152,6 +179,12 @@ export function KokoroProjectWorkspace({
   const resourceIdentity = JSON.stringify([projectRef, preview, resourceSubject])
   const resources = useProjectResources(projectRef, preview, onListProjectResources, resourceContext, resourcesAvailable)
   const resourceActions = useProjectResourceActions(projectRef, resourceContext, resourcesAvailable && !preview, resources.confirmDelete)
+  const closeResourceDetail = resourceActions.close
+  useLayoutEffect(() => {
+    if (!contextActive) return
+    // The existing close aborts detail I/O and retains unknown deletion intents by original key.
+    return () => closeResourceDetail()
+  }, [contextActive, closeResourceDetail])
   const [uploadState, setUploadState] = useState<{ identity: string; context: object; items: readonly ResourceUploadIntent[] }>(
     { identity: resourceIdentity, context: resourceContext, items: [] })
   if (uploadState.context !== resourceContext) {
@@ -203,6 +236,7 @@ export function KokoroProjectWorkspace({
   }, [instructionsOpen, instructionFocusContext, editor.request])
   const onInstructionsCloseAutoFocus = (event: Event) => {
     event.preventDefault()
+    if (!presentationCurrent()) return
     const focus = instructionFocusRef.current
     if (!focus || focus.context !== activeInstructionFocusContextRef.current
       || focus.route !== `${window.location.pathname}${window.location.search}${window.location.hash}`
@@ -218,12 +252,15 @@ export function KokoroProjectWorkspace({
   }
 
   const restoreContextOpener = useCallback(() => {
+    const route = `${window.location.pathname}${window.location.search}${window.location.hash}`
     window.requestAnimationFrame(() => {
+      if (!activePresentation.current.active || activePresentation.current.token !== presentationToken || activeInstructionFocusContextRef.current !== instructionFocusContext
+        || route !== `${window.location.pathname}${window.location.search}${window.location.hash}`) return
       const target = contextOpenerRef.current
-      if (!target?.isConnected || target.disabled) return
+      if (!target?.isConnected || target.disabled || typeof target.checkVisibility === "function" && !target.checkVisibility()) return
       target.focus({ preventScroll: true })
     })
-  }, [])
+  }, [presentationToken, instructionFocusContext])
 
   const onContextDialogChange = useCallback((setOpen: (open: boolean) => void) => (open: boolean) => {
     setOpen(open)
@@ -232,19 +269,21 @@ export function KokoroProjectWorkspace({
 
   const openResources = (event: MouseEvent<HTMLButtonElement>, kind: ResourceKind = "all") => {
     const scope = resourceScope.current
-    if (!resourcesOpen && scope?.active && scope.context === resourceContext && scope.opened && !preview) void resources.refresh()
+    if (!presentationCurrent() || !resourcesAvailable || !scope?.active || scope.context !== resourceContext) return
+    if (!resourcesOpen && scope.opened && !preview) void resources.refresh()
     rememberContextOpener(event)
     setResourceKind(kind)
     setResourceQuery("")
     setResourcesOpen(true)
     if (kind === "web") {
-      window.requestAnimationFrame(() => resourceSearchRef.current?.focus())
+      window.requestAnimationFrame(() => { if (presentationCurrent() && resourceScope.current?.context === resourceContext) resourceSearchRef.current?.focus() })
     }
   }
 
   const openResourceUpload = (event: MouseEvent<HTMLButtonElement>) => {
+    if (!presentationCurrent() || !resourcesAvailable) return
     openResources(event)
-    window.requestAnimationFrame(() => resourceInputRef.current?.click())
+    window.requestAnimationFrame(() => { if (presentationCurrent() && resourceScope.current?.active && resourceScope.current.context === resourceContext) resourceInputRef.current?.click() })
   }
 
   const filteredResources = resources.items.filter((resource) => {
@@ -265,7 +304,7 @@ export function KokoroProjectWorkspace({
 
   const submitResourceUpload = async (intent: ResourceUploadIntent) => {
     const scope = resourceScope.current
-    if (!resourcesAvailable || !scope?.active || scope.context !== resourceContext || scope.uploads.has(intent.id)) return
+    if (!presentationCurrent() || !resourcesAvailable || !scope?.active || scope.context !== resourceContext || scope.uploads.has(intent.id)) return
     const current = () => scope.active && resourceScope.current === scope
     scope.uploads.add(intent.id)
     setResourceUploads((current) => current.map((item) => item.id === intent.id ? { ...item, status: "uploading", error: undefined } : item))
@@ -293,7 +332,7 @@ export function KokoroProjectWorkspace({
 
   const handleResourceFiles = async (files: FileList) => {
     const scope = resourceScope.current
-    if (!resourcesAvailable || !scope?.active || scope.context !== resourceContext) return
+    if (!presentationCurrent() || !resourcesAvailable || !scope?.active || scope.context !== resourceContext) return
     const intents = Array.from(files).map((file): ResourceUploadIntent => {
       const identity = crypto.randomUUID()
       return { id: identity, file, key: `project-resource:${identity}`, status: "uploading", error: undefined, retryable: true }
@@ -333,10 +372,11 @@ export function KokoroProjectWorkspace({
   }
 
   const openInstructions = (event: MouseEvent<HTMLButtonElement>) => {
-    if (!instructionsAvailable) return
+    if (!instructionsAvailable || !presentationCurrent()) return
     instructionSetter("request")(null)
     rememberContextOpener(event)
-    if (instructionsResult === null || instructionsResult.status === "rejected") {
+    if (!editor.draftInitialized || instructionsResult?.status === "rejected") {
+      instructionSetter("draftInitialized")(true)
       setInstructions(projectInstructions)
       setInstructionsResult(null)
       setInstructionsError(false)
@@ -346,88 +386,23 @@ export function KokoroProjectWorkspace({
 
   return (
     <section
-      className={cn(styles.surface, layoutStyles.surface)}
+      className={cn(styles.surface, task ? contextStyles.surface : layoutStyles.surface)}
+      data-project-view={task ? "conversation" : "overview"}
+      data-project-context-open={contextActive ? "true" : "false"}
       ref={surfaceRef}
-      data-slot="project-workspace"
+      data-slot={task ? "project-task-workspace" : "project-workspace"}
       data-locale={locale}
       aria-label={t("firstSite.projects")}
     >
-      <div className={layoutStyles.document}>
-        <ProjectIdentity preview={preview} {...(brandName === undefined ? {} : { brandName })} {...(projectDetail === undefined ? {} : { projectDetail })} {...(onRetryProjectRead === undefined ? {} : { onRetryProjectRead })} />
+      <div className={task ? contextStyles.document : layoutStyles.document}>
+        {task ? <div className={contextStyles.timeline}>{projectConversationContent}</div> : <ProjectIdentity preview={preview} {...(brandName === undefined ? {} : { brandName })} {...(projectDetail === undefined ? {} : { projectDetail })} {...(onRetryProjectRead === undefined ? {} : { onRetryProjectRead })} />}
 
-        <aside className={cn(styles.context, layoutStyles.context)} aria-label={t("firstSite.workspaceStatus")}>
-          {(capabilities?.instructions || capabilities?.connectors) ? (
-            <Card className={styles.contextCard} data-context-kind="instructions">
-              {capabilities?.instructions ? (
-                <CardHeader className={styles.cardHeader}>
-                  <CardTitle className={styles.cardTitle}>
-                    <Button type="button" variant="ghost" size="sm" disabled={!instructionsAvailable} onClick={openInstructions}>
-                      {t("firstSite.instructions")}
-                      <ChevronRight data-icon="inline-end" aria-hidden="true" />
-                    </Button>
-                  </CardTitle>
-                </CardHeader>
-              ) : null}
-              {capabilities?.instructions ? (
-                <CardContent className={styles.cardDescription}>
-                  {t("firstSite.instructionsHint")}
-                  {!preview && projectHistoryStatus === "loading" ? <p role="status">{t("firstSite.projectsLoading")}</p> : null}
-                  {!preview && projectHistoryStatus === "error" ? <div role="alert">
-                    <p>{t("firstSite.projectsError")}</p>
-                    <Button type="button" variant="outline" disabled={!projectHistoryRetryable || !onRetryProjectRead} onClick={onRetryProjectRead}>{t("firstSite.retry")}</Button>
-                  </div> : null}
-                </CardContent>
-              ) : null}
-              {capabilities?.instructions ? (
-                <CardFooter className={styles.instructionAction}>
-                  <Button type="button" variant="outline" size="sm"
-                    aria-label={`${t("firstSite.add")}${t("firstSite.instructions")}`}
-                    disabled={!instructionsAvailable}
-                    onClick={openInstructions}>
-                    <Plus aria-hidden="true" />{t("firstSite.add")}
-                  </Button>
-                </CardFooter>
-              ) : null}
-              {capabilities?.connectors ? (
-                <ProjectMcpRecommendationsSection model={projectMcpRecommendations} />
-              ) : null}
-            </Card>
-          ) : null}
-
-          {(capabilities?.resources || capabilities?.skills) ? (
-            <Card className={styles.contextCard} data-context-kind="resources-skills">
-              {capabilities.resources ? (
-                <section data-context-section="resources" aria-label={t("firstSite.filesAndResources")}><ProjectContextSection
-                  title={t("firstSite.filesAndResources")}
-                  description={t("firstSite.filesHint")}
-                  actions={[
-                    { id: "upload", label: t("firstSite.upload"), icon: Upload, trailingIcon: ChevronDown },
-                    { id: "search-web", label: t("firstSite.searchWeb"), icon: ListFilter },
-                  ]}
-                  showChevron
-                  onClick={(event) => {
-                    openResources(event)
-                  }}
-                  onAction={(id, event) => {
-                    if (id === "upload") {
-                      openResourceUpload(event)
-                      return
-                    }
-                    if (id === "search-web") {
-                      openResources(event, "web")
-                    }
-                  }}
-                /></section>
-              ) : null}
-              {capabilities.skills ? (
-                <ProjectSkillsSection key={JSON.stringify([projectReadBoundary?.subject ?? null, projectRef ?? null])}
-                  preview={preview} {...(projectDetail === undefined ? {} : { projectDetail })}
-                  {...(projectReadBoundary === undefined ? {} : { projectReadBoundary })}
-                  {...(onOpenSettings === undefined ? {} : { onOpenSettings })} />
-              ) : null}
-            </Card>
-          ) : null}
-          {capabilities?.websites ? (
+        <ProjectContextComposition retirementKey={instructionRouteEpoch} active={contextActive} task={task} onClose={onCloseProjectContext}
+          workspaceCapabilities={capabilities} preview={preview} projectDetail={projectDetail} projectReadBoundary={projectReadBoundary} projectRef={projectRef}
+          projectHistoryStatus={projectHistoryStatus} projectHistoryRetryable={projectHistoryRetryable} onRetryProjectRead={onRetryProjectRead}
+          onOpenSettings={onOpenSettings} projectMcpRecommendations={projectMcpRecommendations} instructionsAvailable={instructionsAvailable}
+          onInstructions={openInstructions} onResources={openResources} onUpload={openResourceUpload}>
+          {!task && capabilities?.websites ? (
             <ProjectContextCard
               kind="websites"
               title={t("firstSite.websites")}
@@ -451,7 +426,7 @@ export function KokoroProjectWorkspace({
               }}
             />
           ) : null}
-          {capabilities?.scheduledTasks && !preview ? (
+          {!task && capabilities?.scheduledTasks && !preview ? (
             <Card className={styles.contextCard} data-context-kind="scheduled"><CardHeader className={styles.cardHeader}><CardTitle className={styles.cardTitle}>{t("firstSite.scheduledTasks")}</CardTitle></CardHeader>
               <CardContent className={styles.cardDescription}><p>{t("firstSite.independentScheduledTasks")}</p></CardContent>
               <CardFooter className={styles.cardFooter}><Button asChild variant="outline"><Link href={projectRef
@@ -459,7 +434,7 @@ export function KokoroProjectWorkspace({
                 : "/app/scheduled"}>{t("firstSite.openScheduledTasks")}</Link></Button></CardFooter>
             </Card>
           ) : null}
-          {capabilities?.scheduledTasks && preview ? (
+          {!task && capabilities?.scheduledTasks && preview ? (
             <ProjectContextCard
               kind="scheduled"
               title={t("firstSite.scheduledTasks")}
@@ -482,8 +457,8 @@ export function KokoroProjectWorkspace({
               }}
             />
           ) : null}
-        </aside>
-        {capabilities?.projectConversations ? <ProjectConversations
+        </ProjectContextComposition>
+        {!task && capabilities?.projectConversations ? <ProjectConversations
           projectConversations={projectConversations}
           projectConversationsLoading={projectConversationsLoading}
           projectConversationsError={projectConversationsError}
@@ -492,12 +467,13 @@ export function KokoroProjectWorkspace({
           {...(onSelectProjectConversation === undefined ? {} : { onSelectProjectConversation })}
         /> : null}
       </div>
-      <div ref={composerRef} className={cn(styles.composer, layoutStyles.composer)}>{composer}</div>
+      {!task ? <div ref={composerRef} className={cn(styles.composer, layoutStyles.composer)}>{composer}</div> : null}
 
-      <ProjectWorkspaceDialogs
+      <ProjectContextDialogs
+        active={contextActive}
         preview={preview}
-        {...(brandName === undefined ? {} : { brandName })}
         instructionsAvailable={instructionsAvailable}
+        historyAvailable={preview || projectHistoryStatus === undefined || projectHistoryStatus === "ready"}
         onInstructionsCloseAutoFocus={onInstructionsCloseAutoFocus}
         instructionsOpen={instructionsOpen && instructionsAvailable}
         setInstructionsOpen={setInstructionsOpen}
@@ -514,8 +490,18 @@ export function KokoroProjectWorkspace({
         selectedInstructionRevision={selectedInstructionRevision}
         setSelectedInstructionRevision={setSelectedInstructionRevision}
         projectInstructionHistory={projectInstructionHistory}
-        {...(onSaveProjectInstructions === undefined ? {} : { onSaveProjectInstructions })}
-        resourceActions={resourceActions}
+        {...(onSaveProjectInstructions === undefined ? {} : { onSaveProjectInstructions: async (value: string) => {
+          if (!presentationCurrent()) throw new DOMException("Aborted", "AbortError")
+          await onSaveProjectInstructions(value)
+          instructionSetter("draftInitialized")(false)
+        } })}
+        resourceActions={{ ...resourceActions,
+          open: id => { if (presentationCurrent()) resourceActions.open(id) },
+          close: () => { if (presentationCurrent()) resourceActions.close() },
+          askDelete: () => { if (presentationCurrent()) resourceActions.askDelete() },
+          confirmDelete: () => { if (presentationCurrent()) resourceActions.confirmDelete() },
+          download: () => { if (presentationCurrent()) resourceActions.download() },
+        }}
         resourceFocusContext={resourceContext}
         resourcesAvailable={resourcesAvailable}
         resourcesOpen={resourcesOpen}
@@ -533,7 +519,12 @@ export function KokoroProjectWorkspace({
         resourceUploads={resourceUploads}
         onRetryResourceUpload={(intent) => { void submitResourceUpload(intent) }}
         handleResourceFiles={handleResourceFiles}
-        websitesOpen={websitesOpen}
+        {...(onOpenSettings === undefined ? {} : { onOpenSettings })}
+        onContextDialogChange={onContextDialogChange}
+      />
+      <ProjectWorkspaceDialogs preview={preview}
+        {...(brandName === undefined ? {} : { brandName })}
+        websitesOpen={!task && websitesOpen}
         setWebsitesOpen={setWebsitesOpen}
         websiteQuery={websiteQuery}
         setWebsiteQuery={setWebsiteQuery}
@@ -542,7 +533,7 @@ export function KokoroProjectWorkspace({
         linkedWebsiteId={linkedWebsiteId}
         setLinkedWebsiteId={setLinkedWebsiteId}
         filteredWebsites={filteredWebsites}
-        scheduledOpen={scheduledOpen}
+        scheduledOpen={!task && scheduledOpen}
         setScheduledOpen={setScheduledOpen}
         scheduledQuery={scheduledQuery}
         setScheduledQuery={setScheduledQuery}
@@ -551,10 +542,9 @@ export function KokoroProjectWorkspace({
         linkedScheduledId={linkedScheduledId}
         setLinkedScheduledId={setLinkedScheduledId}
         filteredScheduledTasks={filteredScheduledTasks}
-        scheduledEditorOpen={scheduledEditorOpen}
+        scheduledEditorOpen={!task && scheduledEditorOpen}
         setScheduledEditorOpen={setScheduledEditorOpen}
         onCreateProjectScheduledTask={handleScheduledTaskSave}
-        {...(onOpenSettings === undefined ? {} : { onOpenSettings })}
         onContextDialogChange={onContextDialogChange}
       />
     </section>

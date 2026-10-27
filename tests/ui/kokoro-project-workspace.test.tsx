@@ -318,8 +318,8 @@ const projectSkill = { installation_id: "project-install-1", source_ref: "skill:
   installed_at: "2026-10-10T00:00:00Z", updated_at: "2026-10-10T00:00:00Z", display_name: "Project Skill", summary: "Exact project installation", source_status: "active",
   skill_updated_at: "2026-10-10T00:00:00Z", example_prompts: [], category_keys: [], product: { publication_audience: "owner", state_version: "5" }, tags: [] }
 const skillReply = (data: unknown, status = 200) => Response.json(data, { status, headers: { "cache-control": "no-store", "x-request-id": "project-skills-ui" } })
-const skillWorkspace = (boundary = { admitted: true, subject: "project-reader", generation: 1 }, loading = false) => <LocaleProvider><KokoroProjectWorkspace
-  composer={<div>composer</div>} onPrompt={vi.fn()} workspaceCapabilities={capabilities} preview={false} projectRef={skillProjectId}
+const skillWorkspace = (boundary = { admitted: true, subject: "project-reader", generation: 1 }, loading = false, presentation: Pick<Parameters<typeof KokoroProjectWorkspace>[0], "projectConversationContent" | "projectContextVisible"> = {}) => <LocaleProvider><KokoroProjectWorkspace
+  {...presentation} composer={<div>composer</div>} onPrompt={vi.fn()} workspaceCapabilities={capabilities} preview={false} projectRef={skillProjectId}
   projectDetail={loading ? { status: "loading" } : { status: "ready", data: skillProject }} projectReadBoundary={boundary} /></LocaleProvider>
 const openProjectSkills = (container: HTMLElement) => fireEvent.click(within(contextCard(container, "resources-skills")).getByRole("button", { name: /^技能$/ }))
 
@@ -1149,4 +1149,36 @@ it("Project delete keeps an untyped 400/403/409 outcome and its original command
       ])
     } finally { view.unmount(); window.history.replaceState(null, "", originalUrl) }
   } finally { fetchMock.mockRestore() }
+})
+
+it("stable Project host retires a Skills dialog and unknown command on an actual Task route change", async () => {
+  history.replaceState(null, "", `/app/project/${skillProjectId}?conversation=first-task`)
+  const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    if (init?.method === "PUT") throw new TypeError("owner ACK unknown")
+    if (url.endsWith("skill-selection")) return skillReply({ data: { project_id: skillProjectId, installation_ids: [] } })
+    return skillReply({ data: [projectSkill] })
+  })
+  vi.stubGlobal("fetch", fetchMock)
+  const task = { projectConversationContent: <div>Task timeline</div>, projectContextVisible: true }
+  const view = render(skillWorkspace(undefined, false, task))
+  openProjectSkills(view.container)
+  const dialog = screen.getByRole("dialog", { name: "项目技能" })
+  fireEvent.click(await within(dialog).findByRole("switch", { name: "启用 Project Skill" }))
+  await within(dialog).findByText("操作结果尚未确认。重试会使用原操作，不会创建新的请求。")
+  view.rerender(skillWorkspace(undefined, false, { ...task, projectContextVisible: false }))
+  expect(screen.queryByRole("dialog", { name: "项目技能" })).not.toBeInTheDocument()
+  view.rerender(skillWorkspace(undefined, false, task))
+  openProjectSkills(view.container)
+  await screen.findByText("操作结果尚未确认。重试会使用原操作，不会创建新的请求。")
+  fireEvent.click(screen.getByRole("button", { name: "重试原操作" }))
+  await waitFor(() => expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(2))
+  const original = fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT").map(([, init]) => ({ body: init?.body, key: new Headers(init?.headers).get("Idempotency-Key") }))
+  expect(original[1]).toEqual(original[0])
+  act(() => { history.pushState(null, "", `/app/project/${skillProjectId}?conversation=second-task`); window.dispatchEvent(new Event("kokoro:surface-navigation")) })
+  expect(screen.queryByRole("dialog", { name: "项目技能" })).not.toBeInTheDocument()
+  openProjectSkills(view.container)
+  await screen.findByRole("switch", { name: "启用 Project Skill" })
+  expect(screen.queryByText("操作结果尚未确认。重试会使用原操作，不会创建新的请求。")).not.toBeInTheDocument()
+  expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(2)
+  history.replaceState(null, "", "/app")
 })

@@ -4,6 +4,8 @@
 import type { MessageKey } from "./messages"
 
 export const ja: Partial<Record<MessageKey, string>> = {
+  "firstSite.projectSettings": "プロジェクト設定",
+  "firstSite.closeProjectSettings": "プロジェクト設定を閉じる",
   "thread.conversationMissing": "会話が見つかりません",
   "thread.conversationMissingHint": "この会話は存在しないか、削除されています。元のアドレスは保持されています。再読み込みするか、新しいタスクを開始してください。",
 

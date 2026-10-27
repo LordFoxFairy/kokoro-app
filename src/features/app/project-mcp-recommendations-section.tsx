@@ -1,6 +1,6 @@
 "use client"
 
-import { useLayoutEffect, useRef, useState } from "react"
+import { useLayoutEffect, useMemo, useRef, useState } from "react"
 import Image from "next/image"
 import { Cable, Plus, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -25,32 +25,40 @@ function SourceIcon({ item }: { item: ProjectMcpRecommendationOption | undefined
 }
 
 /** A project configuration editor, separate from account connection management and execution selection. */
-export function ProjectMcpRecommendationsSection({ model }: { model?: ProjectMcpRecommendationsModel | undefined }) {
+export function ProjectMcpRecommendationsSection({ model, active = true }: { active?: boolean; model?: ProjectMcpRecommendationsModel | undefined }) {
   const t = useT(), opener = useRef<HTMLButtonElement>(null), fallbackFocus = useRef<HTMLElement>(null)
   const context = model?.context
+  const opening = useMemo(() => ({ active, context }), [active, context])
+  const currentOpening = useRef<object | null>(null)
+  useLayoutEffect(() => { currentOpening.current = active ? opening : null; return () => { currentOpening.current = null } }, [opening, active])
   const [editor, setEditor] = useState<{ context: object | undefined; window: object | null; open: boolean; query: string; draft: readonly ProjectMcpRecommendationRef[]; message: "conflict" | "unconfirmed" | "limit" | null; readVersion: string | null; touched: boolean }>({ context, window: null, open: false, query: "", draft: [], message: null, readVersion: null, touched: false })
+  const [previousActive, setPreviousActive] = useState(active)
+  if (previousActive !== active) {
+    setPreviousActive(active)
+    if (!active) setEditor(previous => ({ ...previous, open: false }))
+  }
   if (editor.context !== context) setEditor({ context, window: null, open: false, query: "", draft: [], message: null, readVersion: null, touched: false })
   else if (editor.open && !editor.touched && model?.configReady && model.facts && editor.readVersion !== model.facts.state_version)
     setEditor({ ...editor, draft: [...model.facts.recommendations], readVersion: model.facts.state_version })
   const view = editor.context === context ? editor : null
   const live = useRef<typeof editor | null>(null)
-  useLayoutEffect(() => { live.current = view; return () => { if (live.current === view) live.current = null } }, [view])
+  useLayoutEffect(() => { live.current = active ? view : null; return () => { if (live.current === view) live.current = null } }, [view, active])
   const options = new Map(model?.options.map(item => [item.id, item]))
   const refs = model?.facts?.recommendations ?? []
   const label = (ref: ProjectMcpRecommendationRef) => options.get(projectMcpRecommendationKey(ref))?.label ??
     `${ref.kind === "provider" ? ref.provider_key : ref.kind === "mcp_connector" ? ref.connector_id : ref.profile_id} · ${t("projectMcp.unavailable")}`
   const message = (value: "conflict" | "unconfirmed" | "limit" | null) => value ? t(`projectMcp.${value}`) : undefined
   const open = () => {
-    if (!model?.isCurrent() || model.busy) return
+    if (!live.current || !active || !model?.isCurrent() || model.busy) return
     if (!model.configReady || !model.directoryReady) model.refresh()
     setEditor({ context, window: {}, open: true, query: "", draft: [...refs], message: null,
       touched: false, readVersion: model.configReady ? model.facts?.state_version ?? null : null })
   }
   const save = async (draft: readonly ProjectMcpRecommendationRef[], window: object | null) => {
-    if (!model?.isCurrent()) return
+    if (!active || currentOpening.current !== opening || !live.current || !model?.isCurrent() || window !== null && (live.current.window !== window || !live.current.open)) return
     setEditor(previous => previous.context === context && previous.window === window ? { ...previous, touched: true } : previous)
     const result = await model.save(draft)
-    if (!model.isCurrent() || result === "retired") return
+    if (currentOpening.current !== opening || !model.isCurrent() || result === "retired") return
     setEditor(previous => previous.context !== context || previous.window !== window || window !== null && !previous.open ? previous
       : { ...previous, open: result === "current" ? false : previous.open,
         message: result === "current" ? null : result })
@@ -72,17 +80,17 @@ export function ProjectMcpRecommendationsSection({ model }: { model?: ProjectMcp
       return <li key={id}><span className={styles.icon} aria-hidden="true"><SourceIcon item={options.get(id)} /></span>
         <span className={styles.name} title={name}>{name}</span>
         <Button size="icon-xs" variant="ghost" disabled={!model?.configReady || !model.directoryReady || model.busy}
-          aria-label={t("projectMcp.remove", { name })} onClick={() => void save(refs.filter(item => projectMcpRecommendationKey(item) !== id), view?.window ?? null)}><X aria-hidden="true" /></Button>
+          aria-label={t("projectMcp.remove", { name })} onClick={() => void save(refs.filter(item => projectMcpRecommendationKey(item) !== id), null)}><X aria-hidden="true" /></Button>
       </li>
     })}</ul> : null}
     {view?.message && !view.open ? <p className={styles.feedback} role="alert">{message(view.message)}</p> : null}
-    <ProjectMcpRecommendationsPicker open={view?.open === true} items={items} query={view?.query ?? ""}
+    <ProjectMcpRecommendationsPicker open={active && view?.open === true} items={items} query={view?.query ?? ""}
       selectedIds={draft.map(projectMcpRecommendationKey)} readReady={model?.configReady === true && model.directoryReady}
       pending={model?.busy ?? false} hasMore={false} onMore={() => undefined}
       {...(feedback ? { writeError: feedback } : {})}
       onQueryChange={query => setEditor(previous => previous.context === context ? { ...previous, query } : previous)}
       onToggle={id => setEditor(previous => {
-        if (!model?.isCurrent() || previous.context !== context || !previous.open) return previous
+        if (!active || !live.current || !model?.isCurrent() || previous.context !== context || previous.window !== view?.window || !previous.open) return previous
         const selected = previous.draft.some(ref => projectMcpRecommendationKey(ref) === id)
         if (!selected && previous.draft.length >= 16) return { ...previous, message: "limit" }
         const ref = candidates.get(id)
@@ -90,7 +98,7 @@ export function ProjectMcpRecommendationsSection({ model }: { model?: ProjectMcp
       })}
       onSave={() => { if (view?.open) void save(view.draft, view.window) }}
       onOpenChange={open => { if (!open) setEditor(previous => previous.context === context ? { ...previous, open: false } : previous) }}
-      returnFocus={() => live.current?.context === context && live.current?.window === view?.window && model?.isCurrent()
+      returnFocus={() => active && live.current?.context === context && live.current?.window === view?.window && model?.isCurrent()
         ? opener.current?.disabled ? fallbackFocus.current : opener.current : null}
       copy={{ title: t("projectMcp.title"), description: t("projectMcp.description"), searchPlaceholder: t("firstSite.search"),
         cancel: t("mcp.cancel"), save: t("mcp.save"), close: t("shell.closeDialog"), more: t("data.more"), empty: t("projectMcp.empty") }} />

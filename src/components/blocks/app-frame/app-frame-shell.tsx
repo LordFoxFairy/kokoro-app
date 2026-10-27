@@ -49,6 +49,7 @@ export type AppFrameShellProps = {
   onCanvasResizeStart: (event: ReactPointerEvent<HTMLDivElement>) => void
   railProps: RailProps
   mainSurface: ReactNode
+  hideCanvas?: boolean
   canvas: CanvasWorkspace
   thread: Thread
   activeId: string | null
@@ -79,6 +80,7 @@ export function AppFrameShell({
   railProps,
   mainSurface,
   canvas,
+  hideCanvas = false,
   thread,
   activeId,
   overlays,
@@ -100,7 +102,7 @@ export function AppFrameShell({
         data-narrow-web={narrowWeb ? "true" : undefined}
         data-rail-collapsed={resolvedRailCollapsed ? "true" : "false"}
         data-rail-hidden={railHidden ? "true" : undefined}
-        data-canvas-open={canvas.canvasOpen ? "true" : undefined}
+        data-canvas-open={canvas.canvasOpen && !hideCanvas ? "true" : undefined}
         data-resizing={isResizing ? "true" : undefined}
         style={
           {
@@ -155,7 +157,7 @@ export function AppFrameShell({
           <div
             ref={workspaceRef}
             className={styles.workspace}
-            data-canvas-open={canvas.canvasOpen ? "true" : undefined}
+            data-canvas-open={canvas.canvasOpen && !hideCanvas ? "true" : undefined}
           >
             <ResizablePanelGroup
               id="kokoro-workspace"
@@ -173,7 +175,7 @@ export function AppFrameShell({
               </ResizablePanel>
               {canvas.resolvedCanvas !== null && activeId !== null ? (
                 <>
-                  {!canvas.fullscreen ? (
+                  {!canvas.fullscreen && !hideCanvas ? (
                     <ResizableHandle
                       id="canvas-resize"
                       className={styles.canvasHandle}
@@ -193,6 +195,10 @@ export function AppFrameShell({
                     maxSize={`${CANVAS_MAX}px`}
                     groupResizeBehavior="preserve-pixel-size"
                     className={styles.canvasPanel}
+                    hidden={hideCanvas}
+                    inert={hideCanvas ? true : undefined}
+                    aria-hidden={hideCanvas || undefined}
+                    style={hideCanvas ? { display: "none" } : undefined}
                   >
                     <ContextPanel
                       preview={preview}

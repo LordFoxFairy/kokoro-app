@@ -4,6 +4,8 @@
 import type { MessageKey } from "./messages"
 
 export const ru: Partial<Record<MessageKey, string>> = {
+  "firstSite.projectSettings": "Настройки проекта",
+  "firstSite.closeProjectSettings": "Закрыть настройки проекта",
   "thread.conversationMissing": "Беседа не найдена",
   "thread.conversationMissingHint": "Эта беседа не существует или была удалена. Её адрес сохранён. Повторите загрузку или создайте новую задачу.",
 
