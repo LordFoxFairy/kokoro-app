@@ -4,13 +4,13 @@ import type { GithubImported } from "@/ui/skills/personal-skill-github-import-fl
 
 import Image from "next/image"
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
-import { Check, CircleDot, ChevronDown, LoaderCircle, Plus, Search, SquarePen, Upload, X } from "lucide-react"
+import { Check, CircleDot, ChevronDown, ListFilterPlus, LoaderCircle, Plus, Search, SquarePen, Upload, X } from "lucide-react"
 
 import type { EmptyStateProps } from "@/components/blocks/app-frame/app-frame"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import type { SkillCatalog, SkillCatalogCard, CatalogSkillCategory } from "@/hub/schemas"
 import { browserHubClient } from "@/ui/shell/page-clients"
@@ -88,6 +88,30 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
   )
   const [query, setQuery] = useState("")
   const [category, setCategory] = useState<SkillCategory>("all")
+  const [compactCategories, setCompactCategories] = useState(false)
+  const categoryNavRef = useRef<HTMLElement | null>(null)
+  const categoryMeasureRef = useRef<HTMLDivElement | null>(null)
+  useLayoutEffect(() => {
+    const nav = categoryNavRef.current
+    const labels = categoryMeasureRef.current
+    if (!nav || !labels) return
+    let available = nav.getBoundingClientRect().width
+    let required = labels.getBoundingClientRect().width
+    const update = () => {
+      if (available > 0 && required > 0) setCompactCategories(required > available)
+    }
+    const observer = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        if (entry.target === nav) available = entry.contentRect.width
+        if (entry.target === labels) required = entry.contentRect.width
+      }
+      update()
+    })
+    observer.observe(nav)
+    observer.observe(labels)
+    update()
+    return () => observer.disconnect()
+  }, [])
   const [committedQuery, setCommittedQuery] = useState("")
   useEffect(() => {
     const timer = setTimeout(() => setCommittedQuery(query.trim()), 250)
@@ -264,19 +288,33 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
           </span>
         ) : null}
         <div className={styles.content}>
-          <nav className={styles.categoryFilter} aria-label={t("skills.categoryAria")}>
-            <div className={styles.compactCategoryTabs} role="group" aria-label={t("skills.categoryAria")}>
+          <nav ref={categoryNavRef} className={styles.categoryFilter} aria-label={t("skills.categoryAria")}>
+            {/* Measure labels, not a second hidden set of interactive controls.
+                The current locale and available canvas decide which one UI fits. */}
+            <div className={styles.categoryMeasurement} aria-hidden="true"><div ref={categoryMeasureRef} className={styles.categoryMeasureRow}>{CATEGORIES.map(({ value, key }) => <span key={value}>{t(key)}</span>)}</div></div>
+            {compactCategories ? <DropdownMenu>
+              <DropdownMenuTrigger asChild><Button type="button" variant="outline" className={styles.categoryTrigger}><ListFilterPlus aria-hidden="true" /><span>{t(CATEGORIES.find(item => item.value === category)!.key)}</span><ChevronDown aria-hidden="true" /></Button></DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className={styles.categoryMenu} aria-label={t("skills.categoryAria")}>
+                <DropdownMenuRadioGroup value={category} onValueChange={value => {
+                  const selected = CATEGORIES.find(item => item.value === value)
+                  if (selected) setCategory(selected.value)
+                }}>
+                  {CATEGORIES.map(({ value, key }) => <DropdownMenuRadioItem className={styles.categoryMenuItem} key={value} value={value}>{t(key)}{category === value ? <Check aria-hidden="true" /> : null}</DropdownMenuRadioItem>)}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu> : <div className={styles.compactCategoryTabs} role="group" aria-label={t("skills.categoryAria")}>
               {CATEGORIES.map(({ value, key }) => (
                 <button
                   key={value}
                   type="button"
                   data-active={category === value || undefined}
+                  aria-pressed={category === value}
                   onClick={() => setCategory(value)}
                 >
                   {t(key)}
                 </button>
               ))}
-            </div>
+            </div>}
           </nav>
 
           {importNotice ? (
