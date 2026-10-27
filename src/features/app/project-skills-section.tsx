@@ -54,6 +54,7 @@ export function ProjectSkillsSection({
   const confirm = confirmation?.facts === model.facts ? confirmation : null
   const locked =
     !model.allowed || model.status !== "ready" || model.listStatus !== "ready" || model.pending !== null
+  const readBusy = !preview && (model.status === "blocked" || model.status === "loading" || model.listStatus === "loading")
   const changed = selection !== null && JSON.stringify(ids) !== JSON.stringify(selection.installation_ids)
   const settings = () => {
     setOpen(false)
@@ -66,7 +67,7 @@ export function ProjectSkillsSection({
         <p className={styles.emptyTitle}>{t(query.trim() ? "skills.personal.empty" : "skills.personal.emptyState")}</p>
         {!query.trim() ? <p>{t("projectSkills.emptyHint")}</p> : null}
       </div>
-      {!query.trim() ? <ProjectSkillAddMenu primary disabled={!model.allowed || model.pending !== null}
+      {!query.trim() ? <ProjectSkillAddMenu primary disabled={locked}
         onPick={setSource} {...(onOpenSettings ? { onManage: settings } : {})} /> : null}
     </div>
   </div>
@@ -89,6 +90,7 @@ export function ProjectSkillsSection({
       <Dialog open={active && open} onOpenChange={setOpen}>
         <DialogContent
           ref={panel}
+          aria-busy={readBusy}
           className={styles.dialog}
           closeLabel={t("shell.closeDialog")}
           onCloseAutoFocus={(event) => {
@@ -128,7 +130,7 @@ export function ProjectSkillsSection({
                   }}
                 />
               </label>
-              <ProjectSkillAddMenu disabled={!model.allowed || model.pending !== null}
+              <ProjectSkillAddMenu disabled={locked}
                 onPick={setSource} {...(onOpenSettings ? { onManage: settings } : {})} />
             </div>
           ) : null}
@@ -165,7 +167,7 @@ export function ProjectSkillsSection({
               <ProjectSkillSourcePicker
                 mode={source}
                 boundary={projectReadBoundary}
-                busy={model.pending !== null || !model.allowed}
+                busy={locked}
                 onBack={() => setSource(null)}
                 onInstall={(sourceRef) => {
                   void model.execute({ kind: "install", sourceRef }).then((complete) => {
@@ -178,30 +180,16 @@ export function ProjectSkillsSection({
                 {preview ? (
                   emptyContent
                 ) : model.status === "blocked" || model.status === "loading" ? (
-                  <p className={styles.empty} role="status">
+                  <p className="sr-only" role="status">
                     {model.status === "blocked" ? t("projectSkills.checking") : t("projectSkills.loading")}
                   </p>
                 ) : model.status === "error" ? (
-                  <div className={styles.empty} role="alert">
-                    <p>{t("projectSkills.readFailed")}</p>
-                    {!model.pending ? (
-                      <Button variant="outline" onClick={model.reload}>
-                        {t("firstSite.retry")}
-                      </Button>
-                    ) : null}
-                  </div>
+                  <p className="sr-only" role="status">{t("projectSkills.readFailed")}</p>
                 ) : (
                   <>
-                    {model.listStatus === "loading" ? (
-                      <p role="status">{t("projectSkills.loading")}</p>
-                    ) : model.listStatus === "error" ? (
-                      <div role="alert">
-                        <p>{t("projectSkills.readFailed")}</p>
-                        <Button variant="outline" onClick={() => model.search(query)}>
-                          {t("firstSite.retry")}
-                        </Button>
-                      </div>
-                    ) : model.facts?.items.length === 0 ? (
+                    {model.listStatus === "loading" ? <p className="sr-only" role="status">{t("projectSkills.loading")}</p>
+                      : model.listStatus === "error" ? <p className="sr-only" role="status">{t("projectSkills.readFailed")}</p> : null}
+                    {model.listStatus === "ready" && model.facts?.items.length === 0 ? (
                       emptyContent
                     ) : (
                       <div className={styles.grid}>
