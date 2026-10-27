@@ -19,6 +19,13 @@ export type ComposerConnectionsController = {
   loadMore: () => void
   toggle: (id: string) => void
 }
+/** A Project overview owns local choices without touching its retained conversation. */
+export type ComposerConnectionDraftSelection = {
+  context: object
+  selectedIds: readonly string[]
+  isCurrent: () => boolean
+  update: (change: (ids: readonly string[]) => readonly string[]) => void
+}
 type ConnectionReader = Pick<HubClient, "listMcpConnections" | "getMcpConnector">
 const emptySelection: readonly string[] = Object.freeze([])
 const noopSubscribe = () => () => undefined
@@ -31,41 +38,53 @@ function subjectMarkerMatches(enforce: boolean, subject: string | null): boolean
 }
 
 /** Current draft intent, not the account's enabled state or a provider recommendation. */
-export function useComposerConnections({ engine, client, boundary, enforceSubjectMarker }: {
+export function useComposerConnections({ engine, client, boundary, enforceSubjectMarker, localDraft }: {
   engine: SessionEngine | null
   client: ConnectionReader
   boundary: ProjectReadBoundary
   enforceSubjectMarker: boolean
+  localDraft?: ComposerConnectionDraftSelection
 }): ComposerConnectionsController {
   const reportRead401 = useProductReadRecheck()
   const { admitted, subject, generation } = boundary
-  const scope = useMemo(() => ({ engine, client, admitted, subject, generation, enforceSubjectMarker }), [engine, client, admitted, subject, generation, enforceSubjectMarker])
+  const owner = useMemo(() => ({ engine, client, admitted, subject, generation, enforceSubjectMarker }), [engine, client, admitted, subject, generation, enforceSubjectMarker])
+  const draftContext = localDraft?.context
+  const scope = useMemo(() => ({ ...owner, draftContext }), [owner, draftContext])
   const [request, setRequest] = useState<{ scope: typeof scope; revision: number; cursor?: string | undefined }>({ scope, revision: 0 })
   const [catalog, setCatalog] = useState<{ scope: typeof scope; revision: number; items: ComposerConnection[]; nextCursor?: string | undefined; status: ComposerConnectionsController["status"] }>({ scope, revision: -1, items: [], status: "loading" })
-  const [retiredScope, setRetiredScope] = useState<typeof scope | null>(null)
+  const [retiredOwner, setRetiredOwner] = useState<typeof owner | null>(null)
   const loadedCursors = useRef(new Set<string>())
+  const committedScope = useRef<typeof scope | null>(null)
   const activeRequest = request.scope === scope ? request : { scope, revision: 0 }
   const markerMatches = subjectMarkerMatches(enforceSubjectMarker, subject)
   const valid = () => admitted && subject !== null && subjectMarkerMatches(enforceSubjectMarker, subject)
   const canAct = () => {
-    if (valid() && retiredScope !== scope) return true
+    if (committedScope.current !== scope) return false
+    if (valid() && retiredOwner !== owner) return localDraft?.isCurrent() ?? true
     engine?.setSelectedMcpConnectionIds([])
-    setRetiredScope(scope)
+    setRetiredOwner(owner)
     return false
   }
-  const available = valid() && retiredScope !== scope && engine !== null
+  const available = valid() && retiredOwner !== owner && engine !== null
   const sameScope = catalog.scope === scope && available
   const items = sameScope ? catalog.items : []
   const status = !available ? "disabled" : sameScope && catalog.revision === activeRequest.revision ? catalog.status : "loading"
   const snapshot = useSyncExternalStore(engine?.subscribe ?? noopSubscribe, engine?.getSnapshot ?? serverSnapshot, serverSnapshot)
-  const selectedIds = available ? snapshot.selectedMcpConnectionIds ?? emptySelection : emptySelection
+  const selectedIds = available ? localDraft
+    ? localDraft.isCurrent() ? localDraft.selectedIds : emptySelection
+    : snapshot.selectedMcpConnectionIds ?? emptySelection : emptySelection
 
   useLayoutEffect(() => {
+    committedScope.current = scope
     loadedCursors.current = new Set()
+    return () => { if (committedScope.current === scope) committedScope.current = null }
+  }, [scope])
+
+  useLayoutEffect(() => {
     const retire = () => {
-      if (!subjectMarkerMatches(scope.enforceSubjectMarker, scope.subject)) {
-        scope.engine?.setSelectedMcpConnectionIds([])
-        setRetiredScope(scope)
+      if (!subjectMarkerMatches(owner.enforceSubjectMarker, owner.subject)) {
+        owner.engine?.setSelectedMcpConnectionIds([])
+        setRetiredOwner(owner)
       }
     }
     const onStorage = (event: StorageEvent) => {
@@ -75,19 +94,21 @@ export function useComposerConnections({ engine, client, boundary, enforceSubjec
     window.addEventListener("storage", onStorage)
     return () => {
       window.removeEventListener("storage", onStorage)
-      scope.engine?.setSelectedMcpConnectionIds([])
+      owner.engine?.setSelectedMcpConnectionIds([])
     }
-  }, [scope, markerMatches])
+  // Only identity/engine retirement clears its selection. Entering or leaving
+  // a local Project draft changes catalog scope, never the hidden engine.
+  }, [owner, markerMatches])
 
   useEffect(() => {
-    if (!admitted || subject === null || engine === null || retiredScope === scope) return
+    if (!admitted || subject === null || engine === null || retiredOwner === owner) return
     let live = true
     const controller = new AbortController()
     const current = () => {
       if (!live || controller.signal.aborted) return false
       if (subjectMarkerMatches(enforceSubjectMarker, subject)) return true
       engine.setSelectedMcpConnectionIds([])
-      setRetiredScope(scope)
+      setRetiredOwner(owner)
       return false
     }
     const assertCurrent = () => { if (!current()) throw new Error("retired Connection read") }
@@ -138,7 +159,7 @@ export function useComposerConnections({ engine, client, boundary, enforceSubjec
       }
     })
     return () => { live = false; controller.abort() }
-  }, [scope, activeRequest.revision, activeRequest.cursor, admitted, subject, engine, client, enforceSubjectMarker, retiredScope, reportRead401, generation])
+  }, [scope, activeRequest.revision, activeRequest.cursor, admitted, subject, engine, client, enforceSubjectMarker, retiredOwner, owner, reportRead401, generation])
 
   return {
     items, selectedIds, status, nextCursor: sameScope ? catalog.nextCursor : undefined,
@@ -148,9 +169,10 @@ export function useComposerConnections({ engine, client, boundary, enforceSubjec
     },
     toggle: id => {
       if (!canAct() || engine === null) return
-      const original = engine.getSnapshot().selectedMcpConnectionIds ?? emptySelection
-      if (original.includes(id)) engine.setSelectedMcpConnectionIds(original.filter(value => value !== id))
-      else if (items.some(item => item.id === id && item.selectable) && original.length < 16) engine.setSelectedMcpConnectionIds([...original, id])
+      const change = (original: readonly string[]) => original.includes(id) ? original.filter(value => value !== id)
+        : items.some(item => item.id === id && item.selectable) && original.length < 16 ? [...original, id] : original
+      if (localDraft) localDraft.update(change)
+      else engine.setSelectedMcpConnectionIds(change(engine.getSnapshot().selectedMcpConnectionIds ?? emptySelection))
     },
   }
 }

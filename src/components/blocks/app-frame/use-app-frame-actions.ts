@@ -29,7 +29,7 @@ export type AppFrameActionsOptions = {
   projectWorkspace: boolean
   projectRef?: string
   routedConversationId?: string | null
-  projectComposerDraft?: { mode: AgentMode; model: string | null; isCurrent: () => boolean }
+  projectComposerDraft?: { mode: AgentMode; model: string | null; selectedMcpConnectionIds: readonly string[]; isCurrent: () => boolean }
   onProjectDraftAccepted?: () => void
   standaloneSurface: boolean
   chatHref: string

@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, renderHook, screen } from "@testing-library/react"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
-import { useSyncExternalStore } from "react"
+import { useState, useSyncExternalStore } from "react"
 import type { ConversationStore } from "@/core/conversations"
 import { createSessionEngine } from "@/engine/machine"
 import type { HubClient } from "@/hub/client"
@@ -67,6 +67,64 @@ it("retires old identity reads and selection, including a late read whose transp
   expect(hook.result.current.items).toEqual([])
   expect(engine.getSnapshot().selectedMcpConnectionIds).toEqual([])
   expect(client.getMcpConnector).not.toHaveBeenCalled()
+  engine.dispose()
+})
+
+it("local Project draft choices never clear the retained engine on entry/exit or reread its catalog on each toggle", async () => {
+  const engine = makeEngine(), client = reader()
+  engine.setSelectedMcpConnectionIds(["retained:connection"])
+  const first = {}, second = {}
+  let current: object | null = null
+  const hook = renderHook(({ context }: { context: object | null }) => {
+    const [choice, setChoice] = useState<{ context: object | null; ids: readonly string[] }>({ context, ids: [] })
+    return useComposerConnections({ engine, client, boundary, enforceSubjectMarker: false,
+      ...(context ? { localDraft: {
+        context, selectedIds: choice.context === context ? choice.ids : [], isCurrent: () => current === context,
+        update: (change: (ids: readonly string[]) => readonly string[]) => setChoice(previous => current === context
+          ? { context, ids: change(previous.context === context ? previous.ids : []) } : previous),
+      } } : {}),
+    })
+  }, { initialProps: { context: null as object | null } })
+  await act(async () => { await settle() })
+  const ordinaryToggle = hook.result.current.toggle
+  current = first
+  hook.rerender({ context: first })
+  await act(async () => { await settle() })
+  act(() => ordinaryToggle("connection:a"))
+  expect(engine.getSnapshot().selectedMcpConnectionIds).toEqual(["retained:connection"])
+  expect(hook.result.current.selectedIds).toEqual([])
+  const reads = client.listMcpConnections.mock.calls.length
+  act(() => hook.result.current.toggle("connection:a"))
+  expect(hook.result.current.selectedIds).toEqual(["connection:a"])
+  act(() => { hook.result.current.toggle("connection:a"); hook.result.current.toggle("connection:a") })
+  expect(hook.result.current.selectedIds).toEqual(["connection:a"])
+  expect(client.listMcpConnections).toHaveBeenCalledTimes(reads)
+  const staleToggle = hook.result.current.toggle
+  current = second
+  hook.rerender({ context: second })
+  await act(async () => { await settle(); staleToggle("connection:a") })
+  expect(hook.result.current.selectedIds).toEqual([])
+  expect(engine.getSnapshot().selectedMcpConnectionIds).toEqual(["retained:connection"])
+  current = null
+  hook.rerender({ context: null })
+  await act(async () => { await settle() })
+  expect(hook.result.current.selectedIds).toEqual(["retained:connection"])
+  hook.unmount()
+  engine.dispose()
+})
+
+it("a retired Project draft catalog cannot publish a late page into the next draft", async () => {
+  const engine = makeEngine(), client = reader(), first = {}, second = {}
+  let finish!: (value: { connections: McpConnection[] }) => void
+  client.listMcpConnections.mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+  const hook = renderHook(({ context }) => useComposerConnections({ engine, client, boundary, enforceSubjectMarker: false,
+    localDraft: { context, selectedIds: [], isCurrent: () => true, update: vi.fn() },
+  }), { initialProps: { context: first } })
+  hook.rerender({ context: second })
+  await act(async () => { await settle(); finish({ connections: [connection("retired")] }); await settle() })
+  expect(hook.result.current.items.map(item => item.id)).toEqual(["connection:a"])
+  expect(client.getMcpConnector.mock.calls.map(call => call[0])).not.toContain("connector:retired")
+  hook.unmount()
   engine.dispose()
 })
 

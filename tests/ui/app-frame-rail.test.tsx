@@ -5459,6 +5459,164 @@ async function mountRememberedProjectComposer(options: { beforeRender?: (value: 
   return { projectEngine, projectClient, remembered, props, frame, view }
 }
 
+async function projectDraftMcpDirectory() {
+  const clients = await import("@/ui/shell/page-clients")
+  const hub = { ...createHubClient(),
+    listMcpConnections: vi.fn().mockResolvedValue({ connections: ["a", "b"].map(id => ({
+      connection_id: `connection:${id}`, connector_id: `connector:${id}`, server_id: `server:${id}`,
+      provider_key: "project-draft", transport: "streamable_http", status: "active",
+    })) }),
+    getMcpConnector: vi.fn().mockImplementation(async id => ({ connector_id: id,
+      server_id: `server:${id.slice("connector:".length)}`, provider_key: "project-draft", connector_type: "mcp",
+      status: "active", enabled: true, availability: "available", state_version: "1", approved_scopes: [], display_name: `MCP ${id}`,
+    })),
+  }
+  vi.spyOn(clients, "browserHubClient").mockReturnValue(hub)
+  return hub
+}
+
+async function toggleProjectDraftMcp() {
+  fireEvent.click(screen.getByRole("button", { name: /^连接器 \(\d+\)$/ }))
+  const choice = await screen.findByRole("switch", { name: "MCP connector:a" })
+  fireEvent.click(choice)
+  fireEvent.keyDown(choice, { key: "Escape" })
+}
+
+it.each([false, true])("project overview hands its exact local MCP IDs only to the fresh allocated message (unknown=%s)", async unknown => {
+  await projectDraftMcpDirectory()
+  const { projectEngine, projectClient, remembered, view } = await mountRememberedProjectComposer()
+  const applications: { id: string | undefined; ids: readonly string[] }[] = []
+  const original = projectEngine.setSelectedMcpConnectionIds
+  const selection = vi.spyOn(projectEngine, "setSelectedMcpConnectionIds").mockImplementation(ids => {
+    applications.push({ id: projectEngine.getSnapshot().store?.activeId, ids: [...ids] }); original(ids)
+  })
+  if (unknown) projectClient.nextCreate = () => Promise.reject(Error("unknown project MCP receipt"))
+  try {
+    await toggleProjectDraftMcp()
+    const applicationsBeforeSend = selection.mock.calls.length
+    expect(screen.getByRole("button", { name: "连接器 (1)" })).toBeVisible()
+    fireEvent.change(screen.getByRole("textbox", { name: "对话输入" }), { target: { value: "send exact project MCP draft" } })
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "对话输入" }), { key: "Enter" })
+    await waitFor(() => expect(projectClient.createCalls).toHaveLength(1))
+    const first = structuredClone(projectClient.createCalls[0])
+    expect(first?.sessionId).not.toBe(remembered)
+    expect(first?.body.selected_mcp_connection_ids).toEqual(["connection:a"])
+    expect(applicationsBeforeSend).toBe(0)
+    expect(applications).toEqual([{ id: first?.sessionId, ids: ["connection:a"] }])
+    if (unknown) {
+      await waitFor(() => expect(projectEngine.getSnapshot().canRetryPendingSubmission).toBe(true))
+      projectClient.nextCreate = () => Promise.resolve(makeReceipt("run_project_mcp_retry"))
+      act(() => projectEngine.retry())
+      await waitFor(() => expect(projectClient.createCalls).toHaveLength(2))
+      expect(projectClient.createCalls[1]).toEqual(first)
+    }
+  } finally { view.unmount(); projectEngine.dispose() }
+})
+
+it.each(["idle", "pending", "unknown", "active"] as const)("project overview MCP choices leave hidden %s selection and execution untouched", async state => {
+  await projectDraftMcpDirectory()
+  let selection: ReturnType<typeof vi.spyOn>
+  const { projectEngine, projectClient, remembered, view } = await mountRememberedProjectComposer({ beforeRender: async ({ projectEngine, projectClient }) => {
+    projectEngine.setSelectedMcpConnectionIds(["connection:b"])
+    if (state === "pending") projectClient.nextCreate = () => new Promise(() => {})
+    if (state === "unknown") projectClient.nextCreate = () => Promise.reject(Error("hidden MCP unknown"))
+    if (state !== "idle") {
+      projectEngine.submit("retained hidden MCP task")
+      if (state === "unknown") await waitFor(() => expect(projectEngine.getSnapshot().canRetryPendingSubmission).toBe(true))
+      if (state === "active") await waitFor(() => expect(projectClient.streams).toHaveLength(1))
+    }
+    selection = vi.spyOn(projectEngine, "setSelectedMcpConnectionIds")
+  } })
+  try {
+    const before = projectEngine.getSnapshot(), calls = structuredClone(projectClient.createCalls)
+    expect(screen.getByRole("button", { name: "连接器 (0)" })).toBeVisible()
+    await toggleProjectDraftMcp()
+    expect(selection!).not.toHaveBeenCalled()
+    expect(projectEngine.getSnapshot().selectedMcpConnectionIds).toEqual(["connection:b"])
+    expect(projectEngine.getSnapshot().store?.activeId).toBe(remembered)
+    expect(projectEngine.getSnapshot().machine).toEqual(before.machine)
+    expect(projectEngine.getSnapshot().thread.messages).toEqual(before.thread.messages)
+    expect(projectClient.createCalls).toEqual(calls)
+  } finally { view.unmount(); projectEngine.dispose() }
+})
+
+it("project overview MCP draft survives rejected allocation and explicitly hands off a later cleared selection", async () => {
+  await projectDraftMcpDirectory()
+  const { projectEngine, projectClient, remembered, view } = await mountRememberedProjectComposer()
+  const reset = vi.spyOn(projectEngine, "newConversation").mockImplementation(() => {})
+  const original = projectEngine.setSelectedMcpConnectionIds
+  const applications: { id: string | undefined; ids: readonly string[] }[] = []
+  vi.spyOn(projectEngine, "setSelectedMcpConnectionIds").mockImplementation(ids => {
+    applications.push({ id: projectEngine.getSnapshot().store?.activeId, ids: [...ids] }); original(ids)
+  })
+  try {
+    await toggleProjectDraftMcp()
+    fireEvent.change(screen.getByRole("textbox", { name: "对话输入" }), { target: { value: "preserve MCP allocation intent" } })
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "对话输入" }), { key: "Enter" })
+    expect(projectClient.createCalls).toEqual([])
+    expect(applications).toEqual([])
+    expect(projectEngine.getSnapshot().store?.activeId).toBe(remembered)
+    expect(screen.getByRole("button", { name: "连接器 (1)" })).toBeVisible()
+    await toggleProjectDraftMcp()
+    reset.mockRestore()
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "对话输入" }), { key: "Enter" })
+    await waitFor(() => expect(projectClient.createCalls).toHaveLength(1))
+    expect(applications).toEqual([{ id: projectClient.createCalls[0]?.sessionId, ids: [] }])
+    expect(projectClient.createCalls[0]?.body).not.toHaveProperty("selected_mcp_connection_ids")
+  } finally { view.unmount(); projectEngine.dispose() }
+})
+
+it("project overview never hands MCP IDs to a draft whose route retires during fresh allocation", async () => {
+  await projectDraftMcpDirectory()
+  const { projectEngine, projectClient, view } = await mountRememberedProjectComposer()
+  const allocate = projectEngine.newConversation
+  vi.spyOn(projectEngine, "newConversation").mockImplementation(() => {
+    allocate()
+    window.history.pushState({}, "", "/app")
+    window.dispatchEvent(new PopStateEvent("popstate"))
+  })
+  const selection = vi.spyOn(projectEngine, "setSelectedMcpConnectionIds")
+  try {
+    await toggleProjectDraftMcp()
+    fireEvent.change(screen.getByRole("textbox", { name: "对话输入" }), { target: { value: "departed root intent" } })
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "对话输入" }), { key: "Enter" })
+    await act(async () => { await settle() })
+    expect(projectClient.createCalls).toEqual([])
+    expect(selection).not.toHaveBeenCalled()
+  } finally { view.unmount(); projectEngine.dispose() }
+})
+
+it.each(["route", "actor", "generation", "project"] as const)("project overview local MCP draft retires on %s without allocating a conversation", async change => {
+  await projectDraftMcpDirectory()
+  const { projectEngine, projectClient, props, frame, view } = await mountRememberedProjectComposer()
+  const reset = vi.spyOn(projectEngine, "newConversation")
+  try {
+    await toggleProjectDraftMcp()
+    expect(screen.getByRole("button", { name: "连接器 (1)" })).toBeVisible()
+    if (change === "route") {
+      act(() => {
+        window.history.pushState({}, "", "/app")
+        window.dispatchEvent(new PopStateEvent("popstate"))
+        window.history.pushState({}, "", `/app/project/${props.projectRef}`)
+        window.dispatchEvent(new PopStateEvent("popstate"))
+      })
+    } else if (change === "project") {
+      window.history.replaceState({}, "", "/app/project/project_next-draft")
+      view.rerender(frame({ ...props, projectRef: "project_next-draft" }))
+    } else {
+      if (change === "actor") {
+        window.localStorage.setItem("kokoro.web.auth-index-subject", "next-mcp-draft-actor")
+        act(() => window.dispatchEvent(new StorageEvent("storage", { key: "kokoro.web.auth-index-subject" })))
+      }
+      view.rerender(frame({ ...props, projectReadBoundary: { admitted: true,
+        subject: change === "actor" ? "next-mcp-draft-actor" : props.projectReadBoundary.subject, generation: 2 } }))
+    }
+    expect(screen.getByRole("button", { name: "连接器 (0)" })).toBeVisible()
+    expect(reset).not.toHaveBeenCalled()
+    expect(projectClient.createCalls).toEqual([])
+  } finally { view.unmount(); projectEngine.dispose() }
+})
+
 it("project overview keeps its model draft local until its fresh conversation exists", async () => {
   const writes: { id: string | undefined; model: string | null }[] = []
   let model: ReturnType<typeof vi.spyOn>

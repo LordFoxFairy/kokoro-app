@@ -165,7 +165,8 @@ export function useAppFrameSkillTrial({ engine, preview, boundary }: {
 
   /** The shell has already checked its route and Send admission. Allocation
    * stays synchronous so no old choice can be rebound by a later callback. */
-  const submitCurrentDraft = useCallback((content: string, allocateProjectConversation = false, projectDraft?: { mode: AgentMode; model: string | null }): boolean => {
+  const submitCurrentDraft = useCallback((content: string, allocateProjectConversation = false,
+    projectDraft?: { mode: AgentMode; model: string | null; selectedMcpConnectionIds: readonly string[]; isCurrent: () => boolean }): boolean => {
     const owner = ownerRef.current
     if (!engine || !owner || owner.context !== lifetime || owner.engine !== engine) return false
     const current = selectionRef.current
@@ -179,8 +180,12 @@ export function useAppFrameSkillTrial({ engine, preview, boundary }: {
         const mode = before.store ? activeMode(before.store) : before.pendingMode
         engine.newConversation()
         if (engine.getSnapshot().store?.activeId === before.store?.activeId) return false
+        if (projectDraft && !projectDraft.isCurrent()) return false
         engine.setMode(projectDraft?.mode ?? mode)
-        if (projectDraft) engine.setModel(projectDraft.model)
+        if (projectDraft) {
+          engine.setModel(projectDraft.model)
+          engine.setSelectedMcpConnectionIds([...projectDraft.selectedMcpConnectionIds])
+        }
         if (transfer && (selectionRef.current !== transfer.selection || !transfer.selection.active || !actionIsCurrent())) return false
       }
       return engine.submit(content)

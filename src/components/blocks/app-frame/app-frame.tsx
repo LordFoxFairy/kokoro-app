@@ -261,12 +261,6 @@ function AppFrameRuntime({
     ? featureFlags === undefined && (workspaceCapabilities?.connectors ?? true)
     : navigation.some(item => item.key === "mcp" && isRuntimeNavigationEnabled(item, featureFlags))
   const connectionsBoundary = preview ? { admitted: true, subject: "preview", generation: 0 } : projectReadBoundary ?? { admitted: injectedEngine !== undefined, subject: "injected", generation: 0 }
-  const connections = useComposerConnections({
-    engine,
-    client: browserHubClient({ preview }),
-    boundary: { ...connectionsBoundary, admitted: connectionsBoundary.admitted && composerConnectionsEnabled },
-    enforceSubjectMarker: !preview && injectedEngine === undefined,
-  })
   const [moveSelectionGeneration, setMoveSelectionGeneration] = useState(0)
   const handleConversationDeleteConfirmed = useCallback((scope: typeof sessionScope, id: string) => {
     if (sessionScopeKey(scope) === moveScopeKey) setMoveSelectionGeneration((generation) => generation + 1)
@@ -426,9 +420,11 @@ function AppFrameRuntime({
     engine, projectRef, route: draftRoute, actor: moveActor,
     identity: railReadIdentity, admitted: railReadAdmitted, epoch: projectDraftEpoch,
     mode: "fast" as AgentMode, model: readChatModel(),
+    mcpConnectionIds: [] as readonly string[],
   }), [engine, projectRef, draftRoute, moveActor, projectDraftEpoch, railReadIdentity, railReadAdmitted])
   const [projectDraftSelection, setProjectDraftSelection] = useState(() => ({
     context: projectDraftContext, mode: projectDraftContext.mode, model: projectDraftContext.model,
+    mcpConnectionIds: projectDraftContext.mcpConnectionIds,
   }))
   const projectDraft = projectDraftSelection.context === projectDraftContext ? projectDraftSelection : projectDraftContext
   const liveProjectDraft = useRef<typeof projectDraftContext | null>(null)
@@ -465,9 +461,29 @@ function AppFrameRuntime({
     if (!projectDraftIsCurrent()) return
     setProjectDraftSelection(previous => {
       const current = previous.context === projectDraftContext ? previous : projectDraftContext
-      return { context: projectDraftContext, mode: current.mode, model: current.model, ...choice }
+      return { context: projectDraftContext, mode: current.mode, model: current.model, mcpConnectionIds: current.mcpConnectionIds, ...choice }
     })
   }
+  const connections = useComposerConnections({
+    engine,
+    client: browserHubClient({ preview }),
+    boundary: { ...connectionsBoundary, admitted: connectionsBoundary.admitted && composerConnectionsEnabled },
+    enforceSubjectMarker: !preview && injectedEngine === undefined,
+    ...(projectOverview ? { localDraft: {
+      context: projectDraftContext,
+      selectedIds: projectDraft.mcpConnectionIds,
+      isCurrent: projectDraftIsCurrent,
+      update: (change: (ids: readonly string[]) => readonly string[]) => {
+        if (!projectDraftIsCurrent()) return
+        setProjectDraftSelection(previous => {
+          if (!projectDraftIsCurrent()) return previous
+          const current = previous.context === projectDraftContext ? previous : projectDraftContext
+          return { context: projectDraftContext, mode: current.mode, model: current.model,
+            mcpConnectionIds: change(current.mcpConnectionIds) }
+        })
+      },
+    } } : {}),
+  })
   const projectReads = useProjectList(preview, projectReadBoundary, projectRef, projectWorkspace)
   const refreshProjects = projectReads.refresh
   const handleProjectOpen = useCallback((id: string, handoffDraft?: string) => {
@@ -508,7 +524,8 @@ function AppFrameRuntime({
     projectWorkspace,
     ...(projectRef === undefined ? {} : { projectRef }),
     routedConversationId,
-    ...(projectOverview ? { projectComposerDraft: { mode: projectDraft.mode, model: projectDraft.model, isCurrent: projectDraftIsCurrent },
+    ...(projectOverview ? { projectComposerDraft: { mode: projectDraft.mode, model: projectDraft.model,
+      selectedMcpConnectionIds: projectDraft.mcpConnectionIds, isCurrent: projectDraftIsCurrent },
       onProjectDraftAccepted: () => selectors.setSelectedModel(projectDraft.model) } : {}),
     standaloneSurface,
     chatHref,
