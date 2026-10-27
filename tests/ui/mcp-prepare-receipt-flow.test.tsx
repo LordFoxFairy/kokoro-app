@@ -226,3 +226,41 @@ it("a historical GET clearing after window retirement remains lookup-origin and 
     expect(await journal.current(boundary.subject, server.server_id)).toBeUndefined(); hook.unmount();
   } finally { finishClear(); f.release(); }
 });
+
+
+it("committed typed4 clears only creation unknown, never success or retry-as-new; separate reconnect uses fresh CAS", async () => {
+  const rules = await import("@/ui/mcp/mcp-preparation-recovery");
+  const { createTestPreparationJournal } = await import("./fixtures/mcp-preparation-journal");
+  const recovery = createTestPreparationJournal(rules), f = fixture(recovery);
+  try {
+    await f.start();
+    f.client.getMcpPrepareReceipt.mockRejectedValueOnce(new HubClientError("http", "QA rejection", "mcp_personal_prepare_rejected", 412, false));
+    expect(await f.flow.retry(f.scope)).toBe(false);
+    expect(f.flow.getSnapshot().unknown).toBeNull(); expect(f.flow.getSnapshot().preparationView?.retired?.disposition).toBe("definite_rejected");
+    expect(f.flow.getSnapshot().registered).toBe(true); expect(f.flow.finish(f.scope)).toBe(false);
+    expect(await f.flow.retry(f.scope)).toBe(false); expect(await f.flow.prepare(f.scope)).toBe(false);
+    expect(f.client.preparePrivateMcpServer).toHaveBeenCalledOnce();
+    f.client.getPrivateMcpServer.mockResolvedValue({ ...server, state_version: "9" });
+    f.client.preparePrivateMcpServer.mockResolvedValueOnce({ ...receipt(), server: { ...receipt().server, state_version: "10" } });
+    await f.flow.reconnect(f.scope);
+    expect(f.client.preparePrivateMcpServer.mock.calls[1]?.[1]).toBe("9");
+    expect(f.client.preparePrivateMcpServer.mock.calls[1]?.[2]).not.toBe(f.client.preparePrivateMcpServer.mock.calls[0]?.[2]);
+  } finally { f.release(); }
+});
+
+it.each(["unknown","completed"] as const)("old creation K1 cannot consume or recover successor K2 %s under the same locator",async successor=>{
+ const rules=await import("@/ui/mcp/mcp-preparation-recovery");const{createTestPreparationJournal}=await import("./fixtures/mcp-preparation-journal");const journal=createTestPreparationJournal(rules),f=fixture(journal);
+ try{
+  await f.start();const original=f.preparation.getAttempt(server.server_id,connector.connector_id,boundary)!;
+  expect(await f.preparation.resumeAttempt(original,boundary)).toBe(true);expect(f.preparation.finish(server.server_id,boundary)).toBe(true);
+  expect(await f.preparation.prepare({serverId:server.server_id,connectorId:connector.connector_id,version:"4"},boundary)).toBe(false);
+  const next=f.preparation.getAttempt(server.server_id,connector.connector_id,boundary)!;expect(next.key).not.toBe(original.key);
+  if(successor==="completed"){
+   f.client.getMcpPrepareReceipt.mockResolvedValueOnce({...receipt(),server:{...receipt().server,state_version:"5"}});
+   expect(await f.preparation.resumeAttempt(next,boundary)).toBe(true);
+  }
+  const before=f.client.getMcpPrepareReceipt.mock.calls.length;
+  expect(f.flow.getPreparationCompletion(f.scope)).toBeNull();expect(await f.flow.retry(f.scope)).toBe(false);expect(f.flow.finish(f.scope)).toBe(false);
+  expect(f.client.getMcpPrepareReceipt).toHaveBeenCalledTimes(before);expect(f.preparation.getSnapshot()[0]?.kind).toBe(successor);
+ }finally{f.release();}
+});

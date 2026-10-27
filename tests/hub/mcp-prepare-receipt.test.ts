@@ -67,3 +67,11 @@ it("bounds slow EOF and cancellation even when the body ignores AbortSignal", as
   await vi.advanceTimersByTimeAsync(10_001);
   expect(await result).toMatchObject({ reason: "aborted" }); expect(cancel).toHaveBeenCalledOnce();
 });
+
+
+it.each([["POST",412,"mcp_personal_prepare_rejected","http"],["GET",412,"mcp_personal_prepare_rejected","http"],["GET",409,"mcp_personal_prepare_execution_fenced","http"],["POST",409,"mcp_personal_prepare_execution_fenced","parse"]] as const)("method-specific outcome %s/%i/%s is %s without retry", async (method,status,code,reason) => {
+ const fetch=vi.fn().mockResolvedValue(respond({error:{code,message:"QA outcome",retryable:false}},status));vi.stubGlobal("fetch",fetch);
+ const client=createHubClient();
+ await expect(method==="GET"?client.getMcpPrepareReceipt!("receipt-server","1","original-key"):client.preparePrivateMcpServer!("receipt-server","1","original-key")).rejects.toMatchObject({reason,...(reason==="http"?{status,code,retryable:false}:{})});
+ expect(fetch).toHaveBeenCalledOnce(); expect(fetch.mock.calls[0]![1].method).toBe(method);
+});

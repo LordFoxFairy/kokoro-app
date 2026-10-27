@@ -1,5 +1,6 @@
 "use client";
 
+import { useMcpPreparationHistory } from "./use-mcp-preparation-history";
 import { connectorCommandFailure, connectorCommandMayResume, type ConnectorCommandFailure } from "./connector-command-failure";
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
@@ -23,6 +24,7 @@ export function useMcpServerCreation(flow: McpServerCreationFlow, boundary: Proj
     if (flow.getSnapshot().registered) clearSecrets(); listener();
   }), [flow, clearSecrets]);
   const state = useSyncExternalStore(subscribe, flow.getSnapshot, flow.getSnapshot);
+  const history = useMcpPreparationHistory(flow.preparation, boundary, state.preparationView?.attempt.target.serverId ?? state.facts?.server.server_id ?? null, token);
   const [completion, setCompletion] = useState<"idle" | "closing" | "retry">("idle");
   const completionTarget = useRef<McpServerCreationCompletion | null>(null);
   const completing = useRef(false);
@@ -103,14 +105,17 @@ export function useMcpServerCreation(flow: McpServerCreationFlow, boundary: Proj
     if (confirmed && current()) await done();
   };
   const locked = !admitted || state.busy || state.unknown !== null || state.registered || completion !== "idle";
-  return { state, completion, admitted, submitting: state.busy || completion === "closing", locked,
+  return { state, completion, history, preparationView: state.preparationView,
+    checkPreparation: async () => { if (current() && await flow.retry(scope) && current()) await done(); },
+    stopWaiting: () => current() ? flow.stopWaiting(scope) : Promise.resolve(false),
+    reconnect: async () => { if (current() && await flow.reconnect(scope) && current()) await done(); }, admitted, submitting: state.busy || completion === "closing", locked,
     editable: () => !locked && current(), saveConfiguration, saveForPublication, authorize, done,
     cancel: () => { if (committed.current === scope) { flow.dismiss(scope); committed.current = null; onCancel(); } },
-    error: state.error || popupError?.scope === scope || completion === "retry",
+    error: state.error || state.preparationView?.kind === "rejected" || popupError?.scope === scope || completion === "retry",
     failure: state.failure ?? (popupError?.scope === scope ? popupError.failure : undefined),
     mayResume,
     // This ready flag is the form's Done affordance, not runtime/Connection authority.
-    ready: Boolean(recoveredPreparation) || state.facts?.server.prepare_status === "ready" && state.facts.connector.status === "active" && state.facts.connector.enabled,
+    ready: !state.preparationView?.retired && (Boolean(recoveredPreparation) || state.facts?.server.prepare_status === "ready" && state.facts.connector.status === "active" && state.facts.connector.enabled),
     needsOAuth: !recoveredPreparation && flow.canAuthorize(scope),
   };
 }

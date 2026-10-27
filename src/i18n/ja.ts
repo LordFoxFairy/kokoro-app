@@ -4,6 +4,17 @@
 import type { MessageKey } from "./messages"
 
 export const ja: Partial<Record<MessageKey, string>> = {
+  "mcp.preparation.check": "接続結果を確認",
+  "mcp.preparation.stop": "待機を終了",
+  "mcp.preparation.reconnect": "再接続",
+  "mcp.preparation.unknown": "この接続試行の結果はまだ確認されていません。",
+  "mcp.preparation.fenced": "結果は不明のままです。待機を終了しても、発生した可能性のある操作は取り消されません。",
+  "mcp.preparation.endedUnknown": "待機を終了しました。接続結果は不明のままです。",
+  "mcp.preparation.rejected": "接続が拒否されました。",
+  "mcp.preparation.history": "終了した接続試行",
+  "mcp.preparation.recorded": "記録日時",
+  "mcp.preparation.originalCompleted": "元の試行は完了しました。現在の接続状態ではありません。",
+  "mcp.preparation.more": "さらに表示",
   "firstSite.pinProject": "固定",
   "firstSite.unpinProject": "固定を解除",
   "firstSite.projectPinStatus": "固定状態",

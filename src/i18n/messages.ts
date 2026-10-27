@@ -42,6 +42,17 @@ export const LOCALE_NAMES: Record<Locale, string> = {
 
 // zh 是完整源（所有 key 必在此）。命名约定：<区域>.<用途>。{var} 为插值占位。
 export const zh = {
+  "mcp.preparation.check": "查看连接结果",
+  "mcp.preparation.stop": "结束等待",
+  "mcp.preparation.reconnect": "重新连接",
+  "mcp.preparation.unknown": "这次连接的结果尚未确认。",
+  "mcp.preparation.fenced": "这次连接的结果仍未确认。结束等待不会撤销可能已发生的操作。",
+  "mcp.preparation.endedUnknown": "已结束等待，连接结果仍未确认。",
+  "mcp.preparation.rejected": "连接被拒绝。",
+  "mcp.preparation.history": "已结束的连接尝试",
+  "mcp.preparation.recorded": "记录时间",
+  "mcp.preparation.originalCompleted": "原连接尝试已完成；这不是当前连接状态。",
+  "mcp.preparation.more": "显示更多",
   "firstSite.pinProject": "固定",
   "firstSite.unpinProject": "取消固定",
   "firstSite.projectPinStatus": "固定状态",

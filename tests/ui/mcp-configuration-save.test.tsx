@@ -499,9 +499,9 @@ it("an unresolved queried Prepare allows an independent fresh-CAS SSE Save witho
   fireEvent.click(await screen.findByRole("button", { name }))
   const dialog = await screen.findByRole("dialog", { name })
   fireEvent.click(await within(dialog).findByRole("button", { name: "连接" }))
-  fireEvent.click(await screen.findByRole("button", { name: "需先核验状态" }))
+  fireEvent.click(await screen.findByRole("button", { name: "查看连接结果" }))
   await waitFor(() => expect(lookup).toHaveBeenCalledOnce())
-  await waitFor(() => expect(screen.getByRole("button", { name: "需先核验状态" })).toBeEnabled())
+  await waitFor(() => expect(screen.getByRole("button", { name: "查看连接结果" })).toBeEnabled())
   const originalPrepare = prepare.mock.calls[0]?.slice(0, 3)
   expect(originalPrepare?.slice(0, 2)).toEqual(["independent-server", "3"])
   fireEvent.keyDown(within(dialog).getByRole("button", { name: "管理" }), { key: "Enter" })
@@ -523,13 +523,13 @@ it("an unresolved queried Prepare allows an independent fresh-CAS SSE Save witho
   await act(async () => { releaseRead(); await pendingRead })
   await waitFor(() => expect(screen.getByRole("textbox", { name: "服务器名称" })).not.toHaveAttribute("readonly"))
   // Save retires the old window, not the original unknown query/key/CAS.
-  expect(screen.getByRole("button", { name: "需先核验状态" })).toBeEnabled()
+  expect(screen.getByRole("button", { name: "查看连接结果" })).toBeEnabled()
   expect(screen.queryByRole("button", { name: "重试原请求" })).not.toBeInTheDocument()
   fireEvent.click(within(dialog).getByRole("button", { name: "取消" }))
   fireEvent.click(within(dialog).getByRole("button", { name: "取消" }))
   await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
   fireEvent.click(await screen.findByRole("button", { name: "Saved independently" }))
-  expect(await screen.findByRole("button", { name: "需先核验状态" })).toBeEnabled()
+  expect(await screen.findByRole("button", { name: "查看连接结果" })).toBeEnabled()
   expect(prepare).toHaveBeenCalledOnce()
   expect(lookup).toHaveBeenCalledOnce()
   expect(lookup.mock.calls[0]?.slice(0, 3)).toEqual(originalPrepare)
@@ -629,7 +629,7 @@ it.each(["read error", "actor", "generation"] as const)("unknown Prepare keeps o
   expect(screen.getByLabelText("传输类型 HTTP")).toHaveTextContent("HTTP")
   expect(screen.queryByText("x-old-header")).not.toBeInTheDocument()
   expect(screen.queryByRole("button", { name: "试用一下" })).not.toBeInTheDocument()
-  expect(screen.getByRole("button", { name: "需先核验状态" })).toBeDisabled()
+  expect(screen.getByRole("button", { name: "查看连接结果" })).toBeDisabled()
   state.update(reason === "read error" ? { pendingError: true } : { iconBoundary: { ...state.boundary,
     ...(reason === "actor" ? { subject: "different-actor" } : { generation: state.boundary.generation + 1 }) } })
   expect(screen.getByLabelText("传输类型 —")).toBeInTheDocument()
@@ -957,10 +957,28 @@ it.each(["advanced", "failed_current"] as const)("the original detail completes 
   const previousReads = read.mock.calls.length;
   view.rerender(content(2));
   await waitFor(() => expect(read.mock.calls.length).toBeGreaterThan(previousReads));
-  const recover = await within(dialog).findByRole("button", { name: "需先核验状态" });
+  const recover = await within(dialog).findByRole("button", { name: "查看连接结果" });
   await waitFor(() => expect(recover).toBeEnabled());
   fireEvent.click(recover);
   await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   expect(lookup).toHaveBeenCalledOnce(); expect(lookup.mock.calls[0]!.slice(0, 3)).toEqual(original);
   expect(prepare).toHaveBeenCalledOnce(); expect(authorize).not.toHaveBeenCalled();
+});
+
+
+it.each(["ready","needs_oauth"] as const)("stale disconnected detail adopts fresh %s Current without reserving or sending Prepare",async status=>{
+ let current=false;
+ const pendingServer:McpPrivateServer={availability:"unavailable",server_id:"fresh-detail-server",display_name:"Fresh Current MCP",server_url:"https://qa.example.test/mcp",status:"registered",state_version:"1",headers:[],transport:"streamable_http",prepare_status:"pending_prepare",declarations:[],declarations_available:false};
+ const pendingConnector:McpConnector={availability:"unavailable",connector_id:"fresh-detail-connector",server_id:pendingServer.server_id,provider_key:"fresh-detail-provider",connector_type:"mcp",display_name:pendingServer.display_name,status:"pending",enabled:false,approved_scopes:[],state_version:"1"};
+ const freshServer:McpPrivateServer={...pendingServer,state_version:"9",prepare_status:status,...(status==="ready"?{availability:"available",connection_id:"fresh-connection",declarations_available:true,declaration_digest:"a".repeat(64)}:{})};
+ const freshConnector:McpConnector={...pendingConnector,state_version:"9",status:"active",enabled:true,...(status==="ready"?{availability:"available"}:{})};
+ const prepare=vi.fn(),authorize=vi.fn();
+ const hub={...createHubClient(),preparePrivateMcpServer:prepare,beginMcpConnectorAuthorization:authorize,getPrivateMcpServer:vi.fn(async()=>current?freshServer:pendingServer),getMcpConnector:vi.fn(async()=>current?freshConnector:pendingConnector),
+ listMcpConnectors:vi.fn(async()=>({items:[pendingConnector],next_cursor:null})),listMcpConnectorProviders:vi.fn(async()=>({items:[],next_cursor:null})),listCustomApis:vi.fn(async()=>({items:[],page:{next_cursor:null}}))};
+ const boundary={subject:"fresh-current-detail",admitted:true,generation:1};
+ render(<LocaleProvider><ConnectorCommandProvider client={hub} boundary={boundary}><McpContent client={hub} initialView="connections" readBoundary={boundary}/></ConnectorCommandProvider></LocaleProvider>);
+ fireEvent.click(await screen.findByRole("button",{name:pendingServer.display_name}));const dialog=await screen.findByRole("dialog",{name:pendingServer.display_name});
+ const connect=await within(dialog).findByRole("button",{name:"连接"});current=true;fireEvent.click(connect);
+ await within(dialog).findByRole("button",{name:status==="ready"?"试用一下":"重新连接"});
+ expect(prepare).not.toHaveBeenCalled();expect(authorize).not.toHaveBeenCalled();expect(dialog).toBeVisible();expect(within(dialog).queryByRole("button",{name:"完成"})).toBeNull();
 });

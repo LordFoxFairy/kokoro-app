@@ -35,14 +35,14 @@ it("a refused draft handoff keeps the detail and explains that no trial started"
 })
 it("an unknown Prepare retains its original recovery action and is not a trial", () => {
   const { trial, prepare } = show({ preparationState: "unknown" })
-  fireEvent.click(screen.getByRole("button", { name: "需先核验状态" }))
+  fireEvent.click(screen.getByRole("button", { name: "查看连接结果" }))
   expect(prepare).toHaveBeenCalledOnce()
   expect(trial).not.toHaveBeenCalled()
 })
 
 it.each([
-  { failure: "invalid" as const, canResume: true, label: "需先核验状态" },
-  { failure: "outcome_unknown" as const, canResume: true, label: "需先核验状态" },
+  { failure: "invalid" as const, canResume: true, label: "查看连接结果" },
+  { failure: "outcome_unknown" as const, canResume: true, label: "查看连接结果" },
 ])("Prepare $failure belongs to visible detail guidance and a screen-reader-only configuration status, not a configuration error panel", async ({ failure, canResume, label }) => {
   const shown = show({ preparationState: "unknown", preparationFailure: failure, preparationCanResume: canResume })
   const detailExplanation = screen.getByRole("alert").textContent
@@ -253,7 +253,7 @@ it("an unknown Prepare retains only its own confirmed SSE label, never prior tri
   expect(screen.queryByRole("button", { name: "试用一下" })).not.toBeInTheDocument()
   expect(screen.queryByText("x-observed")).not.toBeInTheDocument()
   expect(screen.queryByRole("img", { name: "连接器图标" })).not.toBeInTheDocument()
-  const recovery = screen.getByRole("button", { name: "需先核验状态" })
+  const recovery = screen.getByRole("button", { name: "查看连接结果" })
   // Current/ready facts remain retired, but the delegated original receipt
   // lookup is read-only and does not borrow those permissions.
   expect(recovery).toBeEnabled()

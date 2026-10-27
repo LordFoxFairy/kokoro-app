@@ -1,3 +1,7 @@
+## Prepare 方法专属结果消费者
+
+`mcp-preparation-commands.ts` 沿原 actor/entry 管理 exact 原尝试：typed4 仅 committed failed archive，GET typed5 仍 unknown 且只显式结束等待；退休不成功／不导航。`mcp-preparation-recovery.ts` v2 同双store事务互斥 history 与 successful complete，不增加schema。`mcp-preparation-status.tsx` 为创建／URL／详情／placeholder 的紧凑呈现，`use-mcp-preparation-history.ts` 为窗口内稳定分页与原tuple只读GET；历史不清K2／不合并Current。另一次显式新连接须 fresh Current/provider/manage/CAS 与不同cryptoK。正式BFF394a双原件正规生成，正常资源配对由Root另验。
+
 ## Prepare journal v2 存储（2026-10-27，独立候选，未接退休 UI／wire）
 
 `mcp-preparation-recovery.ts` 的同一 browser adapter 返回扩展 `McpPreparationJournal`，旧 base port 与 active 格式保持；IDB v2 只新增 retired_intents／subject_server。`retireWaiting` 原子归档 exact K＋删除 active，历史只读有界 keyset，reserve 无 active 时双 store 拒 exact 已退休 K/CAS 重建；closed disposition／policy_ref 是本地元数据，不代正式 BFF 政策或新命令权限。failed／fenced 不走成功 complete；旧 client version fence、blocked／late success close、abort／K2／immutable history 见 native v2 回归。未来 consumer 必须补 exact entry／late-ACK guard 后再接线；当前 commands／UI／Hub／pin 未改。三 canonical 前缀保存类型／codec／迁移与停止线。

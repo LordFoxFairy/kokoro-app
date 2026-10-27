@@ -18,6 +18,9 @@ import { McpCustomApiGallery, visibleCustomApiGalleryProfiles } from "./mcp-cust
 import { McpPersonalServerGallery, visiblePersonalMcpServers } from "./mcp-personal-server-gallery";
 import { McpConnectorEditorDialog } from "./mcp-connector-editor-dialog";
 import { useMcpTrial } from "./mcp-trial-context";
+import { McpPreparationStatus } from "./mcp-preparation-status";
+import { useMcpPreparationHistory } from "./use-mcp-preparation-history";
+import { samePreparationRecord, type McpPreparationRecord } from "./mcp-preparation-recovery";
 import { CustomMcpDetailDialog } from "./custom-mcp-detail-dialog";
 import { McpProjectPublicationDialog } from "./mcp-project-publication-dialog";
 import type { McpCreateMode } from "./mcp-panel-model";
@@ -153,6 +156,12 @@ export function McpProjectionRead({
     };
   }, [connectorIntent?.window, owner]);
   const preparationState = preparationStates.find(item => item.serverId === connectorIntent?.serverId && item.connectorId === connectorIntent?.connectorId);
+  const [detailAttempt, setDetailAttempt] = useState<{ window: object; attempt: McpPreparationRecord } | null>(null);
+  const detailBoundary = useMemo(() => ({ subject: identity, admitted, generation: readGeneration }), [identity, admitted, readGeneration]);
+  const currentAttempt = connectorIntent?.serverId ? preparation.getAttempt(connectorIntent.serverId, connectorIntent.connectorId, detailBoundary) : null;
+  const capturedAttempt = detailAttempt?.window === connectorIntent?.window ? detailAttempt?.attempt ?? currentAttempt : currentAttempt;
+  const preparationView = capturedAttempt ? preparation.getView(capturedAttempt, detailBoundary) : null;
+  const preparationHistory = useMcpPreparationHistory(preparation, detailBoundary, connectorIntent?.serverId ?? null, connectorIntent?.window ?? owner);
   const [providerWindowToken, setProviderWindowToken] = useState<{ fromDirectory?: true }>({});
   const providerWindow = useRef<{ intent: object; controller: AbortController } | null>(null);
   const [selectedProviderKey, setSelectedProviderKey] = useState<string | null>(null);
@@ -402,6 +411,38 @@ export function McpProjectionRead({
     }
     if (origin === "editor") resetEditor();
     else { setSelectedProviderKey(null); setSelectedProviderConnectionId(null); }
+  };
+  const prepareDetail = async (newAttempt: boolean) => {
+    if (!admitted || ownerRef.current !== owner || !preparation.available || !connectorIntent?.serverId) return;
+    const intent = connectorIntent, serverId = intent.serverId!, connectorId = intent.connectorId, window = editorWindow.current;
+    if (!window || window.intent !== intent.window) return;
+    const boundary = { subject: identity, admitted, generation: readGeneration };
+    const current = () => ownerRef.current === owner && editorWindow.current === window && !window.controller.signal.aborted;
+    const view = capturedAttempt ? preparation.getView(capturedAttempt, boundary) : null;
+    if (newAttempt ? !view?.retired : Boolean(view?.retired)) return;
+    const pending = preparation.getSnapshot().find(item => item.serverId === serverId && item.connectorId === connectorId);
+    const recovering = !newAttempt && (pending?.kind === "unknown" || pending?.kind === "completed");
+    const activeAttempt = preparation.getAttempt(serverId, connectorId, boundary);
+    const attempt = capturedAttempt ?? activeAttempt;
+    if (capturedAttempt && activeAttempt && !samePreparationRecord(capturedAttempt, activeAttempt) || capturedAttempt && !view?.retired && view?.kind === null) return;
+    if (attempt) setDetailAttempt({ window: intent.window, attempt });
+    if (!recovering && (management.isBlocked(connectorId) || !editor?.server || editor.server.server_id !== serverId || editor.connector.connector_id !== connectorId)) return;
+    setActionError(false);
+    try {
+      let confirmed: boolean, original = attempt;
+      if (recovering && attempt) confirmed = await preparation.resumeAttempt(attempt, boundary, window.controller.signal);
+      else {
+        const result = await preparation.connectFresh(serverId, connectorId, intent.providerKey ?? editor!.connector.provider_key, boundary, window.controller.signal);
+        if (!current()) return;
+        if (result.current) { setDetailAttempt(null); setEditor({ kind: "edit", ...result.current }); return; }
+        confirmed = result.confirmed; original = result.attempt ?? original;
+      }
+      if (!current()) return;
+      if (original) setDetailAttempt({ window: intent.window, attempt: original });
+      if (confirmed && original && preparation.finish(serverId, boundary, original)) resetEditor();
+      else if (preparation.getSnapshot().find(item => item.serverId === serverId)?.kind !== "unknown" &&
+        !(original && preparation.getView(original, boundary).retired)) setActionError(true);
+    } catch { if (current()) setActionError(true); }
   };
   const beginEdit = (connector: McpConnector, returnFocus: HTMLElement, exact = false) => {
     if (!owner.admitted || ownerRef.current !== owner) return;
@@ -671,6 +712,14 @@ export function McpProjectionRead({
           </> : null}
         </div>
       ) : null}
+      {view === "connections" && admitted ? preparationStates.filter(item => item.kind !== "rejected" &&
+        !connectors.some(connector => connector.connector_id === item.connectorId) && !managementStates.some(command => command.connectorId === item.connectorId && command.kind !== "rejected")).map(item =>
+        <Button key={`prepare-${item.serverId}`} type="button" variant="outline" className="max-w-full" onClick={event => {
+          const attempt = preparation.getAttempt(item.serverId, item.connectorId, detailBoundary), window = {};
+          editorReturnFocusRef.current = event.currentTarget; setActionError(false); setEditor(null);
+          setDetailAttempt(attempt ? { window, attempt } : null);
+          setConnectorIntent({ connectorId: item.connectorId, serverId: item.serverId, entered: true, window });
+        }}><span className="truncate">{t(item.kind === "completed" ? "mcp.creationDone" : "mcp.preparation.check")} · {item.connectorId}</span></Button>) : null}
       {view === "connections" && admitted ? managementStates.filter(item => item.kind !== "rejected" && !confirmedDeletedIds.includes(item.connectorId) && !connectors.some(connector => connector.connector_id === item.connectorId)).map(item =>
         <Button key={item.connectorId} type="button" variant="outline" className="max-w-full" onClick={event => {
           editorReturnFocusRef.current = event.currentTarget; setActionError(false); setEditor(null);
@@ -774,6 +823,15 @@ export function McpProjectionRead({
           managementCommand={managementState}
           {...(connectorIntent.configurationSaved ? { configurationSaved: connectorIntent.configurationSaved } : {})}
           onResumeManagement={() => { if (connectorIntent) void runManagement("editor", connectorIntent.connectorId); }}
+          preparationStatus={<McpPreparationStatus view={preparationView} history={preparationHistory} disabled={!admitted || preparationView?.kind === "running"}
+            onCheck={() => { void prepareDetail(false); }}
+            onStop={() => {
+              if (!capturedAttempt || !connectorIntent || !editorWindow.current || editorWindow.current.intent !== connectorIntent.window) return;
+              setDetailAttempt({ window: connectorIntent.window, attempt: capturedAttempt });
+              void preparation.stopWaiting(capturedAttempt, detailBoundary, editorWindow.current.controller.signal);
+            }}
+            onReconnect={() => { void prepareDetail(true); }} />}
+          preparationRetired={Boolean(preparationView?.retired)}
           preparationState={preparationState?.kind ?? "idle"}
           preparationFailure={preparationState?.failure}
           preparationCanResume={connectorIntent.serverId ? preparation.canResume(connectorIntent.serverId) : false}
@@ -830,26 +888,7 @@ export function McpProjectionRead({
             resetEditor();
             return true;
           } })}
-          onPrepare={() => {
-            if (!admitted || ownerRef.current !== owner || !preparation.available || !connectorIntent.serverId) return;
-            const serverId = connectorIntent.serverId, connectorId = connectorIntent.connectorId;
-            const window = editorWindow.current;
-            if (!window || window.intent !== connectorIntent.window) return;
-            const boundary = { subject: identity, admitted, generation: readGeneration };
-            const current = () => ownerRef.current === owner && editorWindow.current === window;
-            const pending = preparation.getSnapshot().find(item => item.serverId === serverId && item.connectorId === connectorId);
-            const recovering = pending?.kind === "unknown" || pending?.kind === "completed";
-            if (!recovering && (!editor?.server || editor.server.server_id !== serverId || editor.connector.connector_id !== connectorId)) return;
-            setActionError(false);
-            const result = recovering
-              ? preparation.resume(serverId, connectorId, boundary, window.controller.signal)
-              : preparation.prepare({ serverId, connectorId, version: editor!.server!.state_version }, boundary, window.controller.signal);
-            void result.then(confirmed => {
-              if (!current()) return;
-              if (confirmed && preparation.finish(serverId, boundary)) resetEditor();
-              else if (preparation.getSnapshot().find(item => item.serverId === serverId)?.kind !== "unknown") setActionError(true);
-            }).catch(() => { if (current()) setActionError(true); });
-          }}
+          onPrepare={() => { void prepareDetail(false); }}
           onDisconnect={() => {
             if (!editor) return;
             void runManagement("editor", editor.connector.connector_id, { operation: "disconnect", connectorId: editor.connector.connector_id, ...(editor.server ? { serverId: editor.server.server_id } : {}), input: { expected_state_version: editor.connector.state_version } });

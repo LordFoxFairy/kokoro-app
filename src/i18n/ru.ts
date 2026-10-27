@@ -4,6 +4,17 @@
 import type { MessageKey } from "./messages"
 
 export const ru: Partial<Record<MessageKey, string>> = {
+  "mcp.preparation.check": "Проверить результат",
+  "mcp.preparation.stop": "Прекратить ожидание",
+  "mcp.preparation.reconnect": "Подключиться снова",
+  "mcp.preparation.unknown": "Результат этой попытки ещё не подтверждён.",
+  "mcp.preparation.fenced": "Результат остаётся неизвестным. Прекращение ожидания не отменяет операции, которые могли произойти.",
+  "mcp.preparation.endedUnknown": "Ожидание прекращено; результат подключения остаётся неизвестным.",
+  "mcp.preparation.rejected": "Подключение отклонено.",
+  "mcp.preparation.history": "Завершённые попытки подключения",
+  "mcp.preparation.recorded": "Время записи",
+  "mcp.preparation.originalCompleted": "Исходная попытка завершена; это не текущее состояние подключения.",
+  "mcp.preparation.more": "Показать ещё",
   "firstSite.pinProject": "Закрепить",
   "firstSite.unpinProject": "Открепить",
   "firstSite.projectPinStatus": "Статус закрепления",

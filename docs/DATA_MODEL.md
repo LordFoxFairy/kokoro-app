@@ -1,3 +1,13 @@
+## PREPARE-OUTCOME：退休与成功的原子互斥（2026-10-27，consumer候选）
+
+沿下方已交付 journal-v2 的 active 原格式／retired_intents／subject_server 稳定 seek，版本仍2，无新字段、store、index、owner表。退休 record 仍闭合 schema_version2、subject、target(serverId/connectorId/version)、key、disposition、policy_ref、immutable retired_at；policy_ref 从正式 BFF394a outcomes1.0 原件 SHA `5169cbf5e431cc71a23e2717bda9b51c77f08bed82cae149667532511b3afe72` 与 profile/version 正规生成，不从 UI 输入授结果权限。definite_rejected 来自方法专属 typed rejected；unknown_fenced 仍未知且仅显式结束等待。
+
+本节精确覆盖存储阶段“complete原样保持”停止线：complete 现在同一 readwrite 事务锁 intents＋retired_intents，先按原 subject/server/key/CAS 查询 exact retired primary key，有 history（含换connector）即 abort，不清 active、不返回成功。否则保持原 exact active 比较／delete与 missing 无history幂等。与 retireWaiting 双store事务形成一次串行选择：archive 赢则晚 ACK 拒绝；strict成功 clear 赢则后续 archive 缺active而拒绝，不能伪造history。普通有效晚 ACK 未本地退休时仍沿原语义结算 captured actor。
+
+commands 对捕获旧 K 的 success／failure／400清理／管理清理按 exact entry 与 durable history 围栏，不能晚到清 K2、复活 completion locator 或污染全局 recoveryError。退休历史与新 K2 独立，reserve 已有active先合并、无active拒同K/CAS退休tuple重启不变；不同CAS重用旧key的全局防错仍由新 cryptoK 和 owner 原 key/CAS 守卫负责。
+
+RAM 仅保窗口／原attempt引用、严格 ACK 后 completion.via、从 committed history 得来的显示与有界历史查询结果。历史完成ACK不成为Current、不写回 active/history/权限，不发新Prepare。新连接须独立点击 fresh Current/manage/CAS 与新key；无额外持久状态、平行 journal 或通用 command 状态。只读历史显示记录时间，不把 primary-key 首项称最近。
+
 ## PREPARE-JOURNAL-V2：精确 codec／additive 迁移（2026-10-27，Root 已核引用槽；存储候选）
 
 仅同源本 feature `kokoro-mcp-preparation` IndexedDB 从1升2；无 SQL、后端 owner 表、其它 journal、通用 command 状态或 raw owner facts。现 `intents` store、`subject` index、key=`JSON.stringify([subject,serverId])` 与 active closed `{subject,target:{serverId,connectorId,version},key,failure?}` 原格式／值保持，不在升级时读改或推断旧行。旧有效版本／key validator 不收紧。

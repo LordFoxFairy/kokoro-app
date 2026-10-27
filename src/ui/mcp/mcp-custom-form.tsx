@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
 import type { McpServerCreationFlow, McpServerCreationCompletion } from "./mcp-server-creation-flow";
+import { McpPreparationStatus } from "./mcp-preparation-status";
 import { useMcpServerCreation } from "./use-mcp-server-creation";
 import { useT } from "@/i18n/context";
 
@@ -111,17 +112,20 @@ export function CustomMcpForm({
     });
   };
 
-  const recoveryRequired = error || state.unknown !== null || completion === "retry";
+  const hasPreparationStatus = state.preparationView?.kind === "unknown" || Boolean(state.preparationView?.retired);
+  const recoveryRequired = Boolean(state.preparationView?.retired) || error || state.unknown !== null || completion === "retry";
   const legacyConnection = state.registered && state.intent !== "configure" && state.intent !== "publish";
   if ((state.registered || completion !== "idle") && (recoveryRequired || legacyConnection)) {
     return <section className={styles.customMcpResult} aria-live="polite">
       <DialogTitle className={styles.customMcpTitle}>{state.facts?.server.display_name ?? (state.name || name)}</DialogTitle>
       {!admitted ? <p className="sr-only" role="status">{t("mcp.creationSession")}</p> : <p>{submitting ? t("mcp.submitting") : ready ? t("mcp.active") : t("mcp.pending")}</p>}
-      {error || state.unknown ? <p role="alert">{t(state.registrationRejection === "url_conflict" ? "mcp.serverUrlConflict" : connectorCommandFailureMessage(creation.failure, state.unknown ? "mcp.serverCreateUnknown" : "mcp.error"))}</p> : null}
+      {(error || state.unknown) && !hasPreparationStatus ? <p role="alert">{t(state.registrationRejection === "url_conflict" ? "mcp.serverUrlConflict" : connectorCommandFailureMessage(creation.failure, state.unknown ? "mcp.serverCreateUnknown" : "mcp.error"))}</p> : null}
+      <McpPreparationStatus view={creation.preparationView} history={creation.history} disabled={!admitted || submitting}
+        onCheck={() => void creation.checkPreparation()} onStop={() => void creation.stopWaiting()} onReconnect={() => void creation.reconnect()} />
       <footer>
         <Button type="button" variant="outline" onClick={() => { icon.draft.cancel(); creation.cancel(); }}>{t("mcp.cancel")}</Button>
         {needsOAuth ? <Button type="button" disabled={!admitted || submitting || Boolean(state.unknown)} onClick={() => void creation.authorize()}>{t("settings.connect")}</Button> : null}
-        {ready && !state.unknown || completion !== "idle" ? <Button type="button" disabled={!admitted || submitting || !creation.mayResume} onClick={() => void creation.done()}>{t("mcp.creationDone")}</Button> : !needsOAuth || state.unknown ? <Button type="button" disabled={!admitted || submitting || !creation.mayResume} onClick={() => save()}>{t(state.unknown ? creation.mayResume ? "mcp.retryOriginal" : "mcp.recovery.inspectRequired" : "mcp.retry")}</Button> : null}
+        {ready && !state.unknown || completion !== "idle" ? <Button type="button" disabled={!admitted || submitting || !creation.mayResume} onClick={() => void creation.done()}>{t("mcp.creationDone")}</Button> : !hasPreparationStatus && (!needsOAuth || state.unknown) ? <Button type="button" disabled={!admitted || submitting || !creation.mayResume} onClick={() => save()}>{t(state.unknown ? creation.mayResume ? "mcp.retryOriginal" : "mcp.recovery.inspectRequired" : "mcp.retry")}</Button> : null}
       </footer>
     </section>;
   }
@@ -273,7 +277,7 @@ export function CustomMcpForm({
           </Button>
         </fieldset>
       </div>
-      {error || state.unknown ? <p className={styles.customMcpError} role="alert">{t(state.registrationRejection === "url_conflict" ? "mcp.serverUrlConflict" : connectorCommandFailureMessage(creation.failure, state.unknown ? "mcp.serverCreateUnknown" : "mcp.error"))}</p> : null}
+      {(error || state.unknown) && !hasPreparationStatus ? <p className={styles.customMcpError} role="alert">{t(state.registrationRejection === "url_conflict" ? "mcp.serverUrlConflict" : connectorCommandFailureMessage(creation.failure, state.unknown ? "mcp.serverCreateUnknown" : "mcp.error"))}</p> : null}
       <footer className={styles.customMcpActions}>
         <Button type="submit" className="relative" aria-busy={submitting || undefined} disabled={!admitted || submitting || !creation.mayResume || (!state.unknown && !canSubmit)}>
           <span className={submitting ? "invisible" : undefined} aria-hidden={submitting || undefined}>{t(state.unknown ? creation.mayResume ? "mcp.retryOriginal" : "mcp.recovery.inspectRequired" : "mcp.save")}</span>

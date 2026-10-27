@@ -288,3 +288,39 @@ it("reserve refuses the exact retired key/CAS, including connector substitution,
   expect(result.oldRequest).toEqual({ record: result.next.record, created: false });
   expect(result.current).toEqual(result.next.record); expect(result.history).toEqual(result.saved);
 });
+
+
+it("native two-tab archive wins against a late successful complete, preserving history and K2", async () => {
+  await seedV1(first);
+  const archived = await second.evaluate(({ record, retirement }) => (window as unknown as NativeWindow).journal.retireWaiting(record, retirement), { record: original, retirement });
+  const next = await second.evaluate(record => (window as unknown as NativeWindow).journal.reserve(record.subject, { ...record.target, version: "9" }, "successor-k2"), original);
+  const result = await first.evaluate(async record => {
+    const journal = (window as unknown as NativeWindow).journal;
+    return { refused: await journal.complete(record).then(() => false, () => true), current: await journal.current(record.subject, record.target.serverId), history: await journal.getRetired(record) };
+  }, original);
+  expect(result).toEqual({ refused: true, current: next.record, history: archived });
+});
+
+it("native archive-vs-complete shares a write transaction: exactly one can win", async () => {
+  await seedV1(first);
+  const [archive, complete] = await Promise.all([
+    first.evaluate(({ record, retirement }) => (window as unknown as NativeWindow).journal.retireWaiting(record, retirement).then(() => true, () => false), { record: original, retirement }),
+    second.evaluate(record => (window as unknown as NativeWindow).journal.complete(record).then(() => true, () => false), original),
+  ]);
+  expect(Number(archive) + Number(complete)).toBe(1);
+  const state = await snapshot(first); expect(state.active).toBeUndefined(); expect(state.retired).toHaveLength(archive ? 1 : 0);
+});
+
+it("native complete rejects locally archived missing-active and connector substitution, not ordinary missing success", async () => {
+  await seedV1(first);
+  await second.evaluate(({ record, retirement }) => (window as unknown as NativeWindow).journal.retireWaiting(record, retirement), { record: original, retirement });
+  const result = await first.evaluate(async record => {
+    const journal = (window as unknown as NativeWindow).journal;
+    return {
+      original: await journal.complete(record).then(() => false, () => true),
+      substituted: await journal.complete({ ...record, target: { ...record.target, connectorId: "different-connector" } }).then(() => false, () => true),
+      ordinary: await journal.complete({ ...record, key: "never-archived-success" }).then(() => true, () => false),
+    };
+  }, original);
+  expect(result).toEqual({ original: true, substituted: true, ordinary: true });
+});

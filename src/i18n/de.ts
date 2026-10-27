@@ -4,6 +4,17 @@
 import type { MessageKey } from "./messages"
 
 export const de: Partial<Record<MessageKey, string>> = {
+  "mcp.preparation.check": "Verbindungsergebnis prüfen",
+  "mcp.preparation.stop": "Warten beenden",
+  "mcp.preparation.reconnect": "Erneut verbinden",
+  "mcp.preparation.unknown": "Das Ergebnis dieses Verbindungsversuchs ist noch nicht bestätigt.",
+  "mcp.preparation.fenced": "Das Ergebnis ist weiterhin unklar. Das Beenden macht mögliche Vorgänge nicht rückgängig.",
+  "mcp.preparation.endedUnknown": "Warten beendet; das Verbindungsergebnis ist weiterhin unklar.",
+  "mcp.preparation.rejected": "Die Verbindung wurde abgelehnt.",
+  "mcp.preparation.history": "Beendete Verbindungsversuche",
+  "mcp.preparation.recorded": "Erfasst am",
+  "mcp.preparation.originalCompleted": "Der ursprüngliche Versuch wurde abgeschlossen; dies ist nicht der aktuelle Verbindungsstatus.",
+  "mcp.preparation.more": "Mehr anzeigen",
   "firstSite.pinProject": "Anheften",
   "firstSite.unpinProject": "Lösen",
   "firstSite.projectPinStatus": "Anheftstatus",

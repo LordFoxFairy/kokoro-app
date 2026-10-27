@@ -4,6 +4,17 @@
 import type { MessageKey } from "./messages"
 
 export const ko: Partial<Record<MessageKey, string>> = {
+  "mcp.preparation.check": "연결 결과 확인",
+  "mcp.preparation.stop": "대기 종료",
+  "mcp.preparation.reconnect": "다시 연결",
+  "mcp.preparation.unknown": "이 연결 시도의 결과가 아직 확인되지 않았습니다.",
+  "mcp.preparation.fenced": "결과가 아직 불확실합니다. 대기를 종료해도 이미 발생했을 수 있는 작업은 취소되지 않습니다.",
+  "mcp.preparation.endedUnknown": "대기가 종료되었습니다. 연결 결과는 여전히 불확실합니다.",
+  "mcp.preparation.rejected": "연결이 거부되었습니다.",
+  "mcp.preparation.history": "종료된 연결 시도",
+  "mcp.preparation.recorded": "기록 시간",
+  "mcp.preparation.originalCompleted": "원래 시도가 완료되었습니다. 현재 연결 상태는 아닙니다.",
+  "mcp.preparation.more": "더 보기",
   "firstSite.pinProject": "고정",
   "firstSite.unpinProject": "고정 해제",
   "firstSite.projectPinStatus": "고정 상태",

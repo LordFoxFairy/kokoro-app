@@ -2,23 +2,31 @@
 import { z } from "zod";
 export const MCP_PREPARE_RECEIPT_PROVENANCE = {
   "owner": "kokoro-bff",
-  "owner_commit": "6557f1895d4e1a4f6d2ad9e9e37ca4fc18371d45",
+  "owner_commit": "394ae559cd2018206c32d5ca3014de248effa203",
   "source_path": "contract/openapi/browser/v1/mcp-prepare-receipt.json",
-  "source_sha256": "ad1f842626677c97ee3734aff3663f296cc9c58ccfe886ae116abf8f8b991810",
+  "source_sha256": "97ac49936f7107ba5f25b9237997642069693b1e6d0b6dd38034718636ee6112",
   "profile": "mcp-prepare-receipt-lookup",
-  "profile_version": "1.0.0",
+  "profile_version": "1.1.0",
   "candidate": false
 } as const;
 export const MCP_PREPARE_RECEIPT_POLICY = {
   "profile": "mcp-prepare-receipt-lookup",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "visibility": "browser-private",
   "path": "/browser/v1/mcp/servers/{server_id}/prepare-receipt",
   "operation_id": "getMcpPrepareReceipt",
   "permission": "mcp_personal.read",
   "lookup_only": true,
   "completed_only": true,
-  "negative_ack": false,
+  "completed_only_scope": "success_wrapper",
+  "negative_ack": true,
+  "negative_ack_scope": "prepare_connection_rejected_typed_error_only",
+  "outcomes_profile": "mcp-prepare-outcomes",
+  "outcomes_version": "1.0.0",
+  "allowed_faults": [
+    "rejected",
+    "execution_fenced"
+  ],
   "automatic_retries": false,
   "new_command_authorized": false,
   "prepare_authorized": false,
@@ -112,8 +120,22 @@ export const MCP_PREPARE_RECEIPT_POLICY = {
       "status": 409,
       "code": "mcp_personal_command_ownership_lost",
       "retryable": false
+    },
+    {
+      "status": 412,
+      "code": "mcp_personal_prepare_rejected",
+      "retryable": false
+    },
+    {
+      "status": 409,
+      "code": "mcp_personal_prepare_execution_fenced",
+      "retryable": false
     }
-  ]
+  ],
+  "outcomes_source": {
+    "path": "../../../mcp-prepare-outcomes-v1.json",
+    "sha256": "5169cbf5e431cc71a23e2717bda9b51c77f08bed82cae149667532511b3afe72"
+  }
 } as const;
 export const mcpPrepareReceiptServerIdSchema = z.string().regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$", "u"));
 export const mcpPrepareReceiptVersionSchema = z.string().regex(new RegExp("^[1-9][0-9]{0,9}(?![\\s\\S])", "u"));
@@ -124,8 +146,8 @@ export const mcpPrepareReceiptErrors = {
 "401": z.union([z.object({"error": z.object({"code": z.literal("session_authentication_required"), "message": z.string(), "retryable": z.literal(false)}).strict()}).strict(), z.object({"error": z.object({"code": z.literal("session_invalid"), "message": z.string(), "retryable": z.literal(false)}).strict()}).strict()]),
 "403": z.union([z.object({"error": z.object({"code": z.literal("service_auth_failed"), "message": z.string(), "retryable": z.literal(false)}).strict()}).strict(), z.object({"error": z.object({"code": z.literal("product_tenant_forbidden"), "message": z.string(), "retryable": z.literal(false)}).strict()}).strict(), z.object({"error": z.object({"code": z.literal("session_forbidden"), "message": z.string(), "retryable": z.literal(false)}).strict()}).strict()]),
 "404": z.object({"error": z.object({"code": z.literal("mcp_personal_not_found"), "message": z.string(), "retryable": z.literal(false)}).strict()}).strict(),
-"409": z.union([z.object({"error": z.object({"code": z.literal("mcp_personal_command_in_progress"), "message": z.string(), "retryable": z.literal(true)}).strict()}).strict(), z.object({"error": z.object({"code": z.literal("mcp_personal_idempotency_conflict"), "message": z.string(), "retryable": z.literal(false)}).strict()}).strict(), z.object({"error": z.object({"code": z.literal("mcp_personal_command_ownership_lost"), "message": z.string(), "retryable": z.literal(false)}).strict()}).strict()]),
-"412": z.object({"error": z.object({"code": z.literal("mcp_personal_command_replay_expired"), "message": z.string(), "retryable": z.literal(false)}).strict()}).strict(),
+"409": z.union([z.object({"error": z.object({"code": z.literal("mcp_personal_command_in_progress"), "message": z.string(), "retryable": z.literal(true)}).strict()}).strict(), z.object({"error": z.object({"code": z.literal("mcp_personal_idempotency_conflict"), "message": z.string(), "retryable": z.literal(false)}).strict()}).strict(), z.object({"error": z.object({"code": z.literal("mcp_personal_command_ownership_lost"), "message": z.string(), "retryable": z.literal(false)}).strict()}).strict(), z.object({"error": z.object({"code": z.literal("mcp_personal_prepare_execution_fenced"), "message": z.string(), "retryable": z.literal(false)}).strict()}).strict()]),
+"412": z.union([z.object({"error": z.object({"code": z.literal("mcp_personal_command_replay_expired"), "message": z.string(), "retryable": z.literal(false)}).strict()}).strict(), z.object({"error": z.object({"code": z.literal("mcp_personal_prepare_rejected"), "message": z.string(), "retryable": z.literal(false)}).strict()}).strict()]),
 "429": z.object({"error": z.object({"code": z.literal("session_rate_limited"), "message": z.string(), "retryable": z.literal(true)}).strict()}).strict(),
 "502": z.object({"error": z.object({"code": z.literal("mcp_personal_response_invalid"), "message": z.string(), "retryable": z.literal(false)}).strict()}).strict(),
 "503": z.union([z.object({"error": z.object({"code": z.literal("mcp_personal_dependency_unavailable"), "message": z.string(), "retryable": z.literal(true)}).strict()}).strict(), z.object({"error": z.object({"code": z.literal("product_tenant_not_configured"), "message": z.string(), "retryable": z.literal(true)}).strict()}).strict(), z.object({"error": z.object({"code": z.literal("iam_admission_unavailable"), "message": z.string(), "retryable": z.literal(true)}).strict()}).strict(), z.object({"error": z.object({"code": z.literal("mcp_personal_command_outcome_unknown"), "message": z.string(), "retryable": z.literal(false)}).strict()}).strict()])

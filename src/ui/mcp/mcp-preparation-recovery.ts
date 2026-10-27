@@ -183,13 +183,22 @@ export function createBrowserMcpPreparationRecovery(): McpPreparationJournal {
       const write = store.put(decode({ subject: current.subject, target: current.target, key: current.key, ...(next === undefined ? {} : { failure: next }) }), storageKey(record.subject, record.target.serverId));
       write.onsuccess = () => accept(undefined);
     })),
-    complete: record => transaction<void>("readwrite", (store, accept) => read(store, record.subject, record.target.serverId, current => {
-      // Missing may mean another window already retired this exact acknowledged intent.
-      if (!current) { accept(undefined); return; }
-      if (!samePreparationRecord(current, record)) throw new Error("record replaced");
-      const deletion = store.delete(storageKey(record.subject, record.target.serverId));
-      deletion.onsuccess = () => accept(undefined);
-    })),
+    complete: record => transaction<void>("readwrite", (store, accept, tx) => {
+      const archived = tx.objectStore("retired_intents").getKey(retiredKey(record));
+      archived.onsuccess = () => {
+        try {
+          // The same transaction orders historical retirement against ACK clear.
+          // Even a missing active slot cannot revive a locally archived attempt.
+          if (archived.result !== undefined) throw new Error("acknowledged intent locally retired");
+          read(store, record.subject, record.target.serverId, current => {
+            if (!current) { accept(undefined); return; }
+            if (!samePreparationRecord(current, record)) throw new Error("record replaced");
+            const deletion = store.delete(storageKey(record.subject, record.target.serverId));
+            deletion.onsuccess = () => accept(undefined);
+          });
+        } catch { tx.abort(); }
+      };
+    }, ["intents", "retired_intents"]),
     retireWaiting: async (input, retirement, signal) => {
       const record = decode(input), disposition = retirementSchema.parse(retirement), key = retiredKey(record);
       signal?.throwIfAborted();

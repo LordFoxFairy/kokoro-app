@@ -1,4 +1,4 @@
-import { mcpPrepareReceiptDataSchema, mcpPrepareReceiptRequest, mcpPrepareReceiptMatches, mcpPrepareReceiptErrorAllowed, mcpPrepareReceiptLookupOnly } from "./mcp-prepare-receipt.schema";
+import { mcpPrepareReceiptDataSchema, mcpPrepareReceiptRequest, mcpPrepareReceiptMatches, mcpPrepareReceiptErrorAllowed, mcpPreparePostErrorAllowed, mcpPrepareReceiptLookupOnly } from "./mcp-prepare-receipt.schema";
 import { parseMcpConnectorJson } from "./mcp-connector-json";
 import { createMcpProjectPublicationClient, type McpProjectPublicationClient } from "./mcp-project-publication-client";
 import { createMcpIconClient, type McpIconClient } from "./mcp-icon-client";
@@ -779,7 +779,7 @@ async function requestMcpConnector<T extends ZodTypeAny>(
             : operation === "server"
               ? "connector"
               : operation;
-        const errorAllowed = operation === "prepareReceipt" ? mcpPrepareReceiptErrorAllowed(response.status, raw) : authorizationOperation
+        const errorAllowed = operation === "prepareReceipt" ? mcpPrepareReceiptErrorAllowed(response.status, raw) : operation === "prepareServer" ? mcpPreparePostErrorAllowed(response.status, raw) : authorizationOperation
           ? mcpConnectorErrorAllowed("authorization", response.status, parsed.data)
           : mcpConnectorErrorAllowed(
               connectorOperation as

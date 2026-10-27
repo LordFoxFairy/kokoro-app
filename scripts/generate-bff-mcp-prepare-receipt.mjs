@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { renderMcpPrepareOutcomes } from "./generate-bff-mcp-prepare-outcomes.mjs";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
@@ -30,7 +32,17 @@ export function renderMcpPrepareReceipt(bytes, provenance) {
   assert.equal(policy.visibility, "browser-private"); assert.equal(policy.path, "/browser/v1/mcp/servers/{server_id}/prepare-receipt");
   assert.equal(policy.permission, "mcp_personal.read");
   assert.equal(policy.operation_id, "getMcpPrepareReceipt"); assert.equal(policy.lookup_only, true); assert.equal(policy.completed_only, true);
-  assert.equal(policy.negative_ack, false); assert.equal(policy.automatic_retries, false); assert.equal(policy.new_command_authorized, false); assert.equal(policy.prepare_authorized, false);
+  assert.equal(policy.negative_ack, true);
+  assert.equal(policy.completed_only_scope, "success_wrapper");
+  assert.equal(policy.negative_ack_scope, "prepare_connection_rejected_typed_error_only");
+  const outcomesBytes = readFileSync(resolve(process.cwd(), "src/generated/bff-mcp-prepare-outcomes.json"));
+  const outcomesProvenance = JSON.parse(readFileSync(resolve(process.cwd(), "contract/bff-mcp-prepare-outcomes-source.json"), "utf8"));
+  renderMcpPrepareOutcomes(outcomesBytes, outcomesProvenance);
+  assert.equal(outcomesProvenance.owner_commit, provenance.owner_commit);
+  const outcomes = JSON.parse(outcomesBytes);
+  assert.equal(policy.outcomes_profile, outcomes.profile); assert.equal(policy.outcomes_version, outcomes.version);
+  assert.deepEqual(policy.allowed_faults, outcomes.operations.getMcpPrepareReceipt);
+  assert.deepEqual(policy.outcomes_source, { path: "../../../mcp-prepare-outcomes-v1.json", sha256: outcomesProvenance.source_sha256 }); assert.equal(policy.automatic_retries, false); assert.equal(policy.new_command_authorized, false); assert.equal(policy.prepare_authorized, false);
   assert.equal(policy.supersedes_prepare_inspection_recovery, true); assert.deepEqual(policy.same_command, { method: "GET", target: "original_lookup" });
   assert.deepEqual(Object.keys(spec.paths), [policy.path]); assert.deepEqual(Object.keys(spec.paths[policy.path]), ["get"]);
   const op = spec.paths[policy.path].get;

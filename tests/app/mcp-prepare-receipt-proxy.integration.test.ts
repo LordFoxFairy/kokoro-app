@@ -82,3 +82,12 @@ it("rejects duplicate response keys through real HTTP instead of accepting the l
   };
   expect((await GET(input(), context())).status).toBe(502); expect(calls).toHaveLength(1);
 });
+
+
+it.each([["POST",412,"mcp_personal_prepare_rejected",412],["GET",412,"mcp_personal_prepare_rejected",412],["GET",409,"mcp_personal_prepare_execution_fenced",409],["POST",409,"mcp_personal_prepare_execution_fenced",502]] as const)("real same-origin loopback %s preserves only method-specific %s", async (method,status,code,expected) => {
+ peer=(_request,response)=>json(response,{error:{code,message:"QA outcome",retryable:false}},status);
+ const segments=method==="POST"?["mcp","servers","receipt-server","prepare"]:path;
+ const request=method==="POST"?new Request(`http://web.test/api/hub/${segments.join("/")}`,{method:"POST",headers:{origin:"http://web.test","content-type":"application/json","idempotency-key":"original-key"},body:JSON.stringify({expected_state_version:"1"})}):input();
+ const response=await (method==="POST"?POST:GET)(request,context(segments));expect(response.status).toBe(expected);expect(calls).toHaveLength(1);
+ expect(calls[0]?.method).toBe(method);expect(calls[0]?.headers["idempotency-key"]).toBe("original-key");
+});

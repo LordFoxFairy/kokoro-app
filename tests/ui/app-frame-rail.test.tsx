@@ -4361,7 +4361,8 @@ it.each([false, true])("private detail Prepare restores the same original comman
   const lookup = vi.fn().mockRejectedValue(new HubClientError("http", "Unresolved lookup", "mcp_personal_command_outcome_unknown", 503, false))
   const hub = { ...apiCreationHub(), getMcpPrepareReceipt: lookup, preparePrivateMcpServer: prepare,
     listMcpConnectors: vi.fn(async () => ({ items: [{ ...registration.connector, state_version: version }], next_cursor: null })),
-    getPrivateMcpServer: vi.fn(async () => ({ ...registration.server, state_version: version })) }
+    getPrivateMcpServer: vi.fn(async () => ({ ...registration.server, state_version: version })),
+    getMcpConnector: vi.fn(async () => ({ ...registration.connector, state_version: version })) }
   const boundary = { admitted: true, subject: "detail-original-prepare", generation: 1 }
   const content = (admitted = true, generation = 1) => <LocaleProvider><ConnectorCommandProvider client={hub} boundary={{ ...boundary, admitted, generation }}><McpContent client={hub} initialView="connections" readBoundary={{ ...boundary, admitted, generation }} /></ConnectorCommandProvider></LocaleProvider>
   const view = render(content())
@@ -4372,7 +4373,7 @@ it.each([false, true])("private detail Prepare restores the same original comman
   fireEvent.click(screen.getByRole("button", { name: "取消" }))
   if (recheck) { view.rerender(content(false, 2)); version = "9"; view.rerender(content(true, 2)) }
   fireEvent.click(await screen.findByRole("button", { name: "Creation MCP" }))
-  const button = await screen.findByRole("button", { name: /^(连接|需先核验状态)$/ })
+  const button = await screen.findByRole("button", { name: /^(连接|查看连接结果)$/ })
   fireEvent.click(button)
   await waitFor(() => expect(lookup).toHaveBeenCalledOnce())
   expect(lookup.mock.calls[0]?.slice(0, 3)).toEqual(prepare.mock.calls[0]?.slice(0, 3))
@@ -4406,12 +4407,12 @@ it("global creation and Settings detail restore one Prepare, and confirmed disco
   const configuredDetail = screen.getByRole("dialog", { name: "Creation MCP" })
   expect(prepare).not.toHaveBeenCalled()
   fireEvent.click(await within(configuredDetail).findByRole("button", { name: "连接" }))
-  await screen.findByRole("button", { name: "需先核验状态" })
+  await screen.findByRole("button", { name: "查看连接结果" })
   expect(prepare).toHaveBeenCalledOnce()
   version = "9"
   view.rerender(content(false))
   fireEvent.click(await screen.findByRole("button", { name: "Creation MCP" }))
-  const retry = await screen.findByRole("button", { name: "需先核验状态" })
+  const retry = await screen.findByRole("button", { name: "查看连接结果" })
   expect(prepare).toHaveBeenCalledOnce()
   fireEvent.click(retry)
   await waitFor(() => expect(lookup).toHaveBeenCalledOnce())
@@ -4440,6 +4441,7 @@ it("closing a preparing detail aborts its wait; a late ACK cannot close the succ
   })
   const hub = { ...apiCreationHub(), preparePrivateMcpServer: prepare,
     getPrivateMcpServer: vi.fn(async () => registration.server),
+    getMcpConnector: vi.fn(async () => registration.connector),
     listMcpConnectors: vi.fn(async () => ({ items: [registration.connector], next_cursor: null })) }
   const boundary = { admitted: true, subject: "detail-window-prepare", generation: 1 }
   render(<LocaleProvider><ConnectorCommandProvider client={hub} boundary={boundary}>
@@ -4451,7 +4453,7 @@ it("closing a preparing detail aborts its wait; a late ACK cannot close the succ
   fireEvent.click(screen.getByRole("button", { name: "取消" }))
   expect(prepare.mock.calls[0]?.[3]?.aborted).toBe(true)
   fireEvent.click(await screen.findByRole("button", { name: "Creation MCP" }))
-  await screen.findByRole("button", { name: "需先核验状态" })
+  await screen.findByRole("button", { name: "查看连接结果" })
   await act(async () => { acknowledge(); await pending })
   expect(screen.getByRole("dialog", { name: "Creation MCP" })).toBeVisible()
   fireEvent.click(await screen.findByRole("button", { name: "完成" }))

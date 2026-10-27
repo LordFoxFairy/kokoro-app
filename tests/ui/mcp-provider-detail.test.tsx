@@ -47,7 +47,7 @@ it.each(["lost ACK", "replay expired"])("reconnects failed private OAuth alongsi
     return screen.findByRole("dialog", { name: server.display_name })
   }
   let dialog = await open()
-  const recoveryLabel = "需先核验状态"
+  const recoveryLabel = "查看连接结果"
   const resume = within(dialog).getByRole("button", { name: recoveryLabel })
   expect(resume).toBeEnabled()
   fireEvent.click(within(dialog).getByRole("button", { name: "重新连接" }))
@@ -84,7 +84,7 @@ it.each(["running Prepare", "unknown management", "unknown management with Prepa
   expect(button).toBeDisabled()
   fireEvent.click(button)
   expect(authorize).not.toHaveBeenCalled()
-  if (pending === "unknown management with Prepare") expect(screen.getByRole("button", { name: "需先核验状态" })).toBeEnabled()
+  if (pending === "unknown management with Prepare") expect(screen.getByRole("button", { name: "查看连接结果" })).toBeEnabled()
 })
 
 it.each(["window", "actor", "admission"])("rejects private OAuth without the current admitted exact binding and ignores a retired %s's late ACK", async retired => {
@@ -867,18 +867,18 @@ it("unknown invalid Prepare queries only its original receipt across close and c
     return screen.findByRole("dialog", { name: server.display_name })
   }
   let dialog = await open()
-  const inspect = within(dialog).getByRole("button", { name: "需先核验状态" })
+  const inspect = within(dialog).getByRole("button", { name: "查看连接结果" })
   expect(inspect).toBeEnabled()
   const before = [get.mock.calls.length, getServer.mock.calls.length]
   fireEvent.click(inspect)
   await waitFor(() => expect(lookup).toHaveBeenCalledOnce())
-  await waitFor(() => expect(within(dialog).getByRole("button", { name: "需先核验状态" })).toBeEnabled())
+  await waitFor(() => expect(within(dialog).getByRole("button", { name: "查看连接结果" })).toBeEnabled())
   expect(get).toHaveBeenCalledTimes(before[0]!); expect(getServer).toHaveBeenCalledTimes(before[1]!)
   expect(prepare).toHaveBeenCalledOnce()
   expect(commands.getSnapshot()[0]?.kind).toBe("unknown")
   fireEvent.click(within(dialog).getByRole("button", { name: "取消" }))
   dialog = await open()
-  const inspectAgain = within(dialog).getByRole("button", { name: "需先核验状态" })
+  const inspectAgain = within(dialog).getByRole("button", { name: "查看连接结果" })
   expect(inspectAgain).toBeEnabled(); expect(prepare).toHaveBeenCalledOnce()
   fireEvent.click(inspectAgain)
   await waitFor(() => expect(commands.getSnapshot()).toEqual([]))

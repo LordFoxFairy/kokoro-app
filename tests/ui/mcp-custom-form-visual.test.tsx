@@ -87,7 +87,7 @@ it.each(["unknown", "trial"] as const)("configuration %s feedback keeps short-sc
     expect(screen.queryByRole("alert")).not.toBeInTheDocument()
     expect(screen.getByRole("status")).toHaveClass("sr-only")
     expect(screen.getByRole("status").textContent).toBeTruthy()
-    expect(screen.getByRole("button", { name: "需先核验状态" })).toBeEnabled()
+    expect(screen.getByRole("button", { name: "查看连接结果" })).toBeEnabled()
     expect(screen.getByRole("button", { name: /^保存$/u })).toBeEnabled()
   } else {
     expect(screen.getAllByRole("alert").length).toBeGreaterThan(0)
@@ -113,7 +113,7 @@ it.each(["unknown", "trial"] as const)("configuration %s feedback keeps short-sc
         const style = getComputedStyle(element)
         return { position: style.position, width: parseFloat(style.width), height: parseFloat(style.height), overflow: style.overflow }
       })).toEqual({ position: "absolute", width: 1, height: 1, overflow: "hidden" })
-      expect(await page.getByRole("button", { name: "需先核验状态" }).isEnabled()).toBe(true)
+      expect(await page.getByRole("button", { name: "查看连接结果" }).isEnabled()).toBe(true)
     } else {
       expect(await page.getByRole("alert").count()).toBeGreaterThan(0)
     }

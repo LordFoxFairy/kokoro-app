@@ -12,7 +12,7 @@ const provenance = JSON.parse(file("contract/bff-mcp-prepare-receipt-source.json
 const digest = (value: Uint8Array) => createHash("sha256").update(value).digest("hex");
 
 it("pins the full formal private artifact independently of the unchanged public and other private sources", () => {
-  expect(provenance).toMatchObject({ owner_commit: "6557f1895d4e1a4f6d2ad9e9e37ca4fc18371d45", source_path: "contract/openapi/browser/v1/mcp-prepare-receipt.json", source_sha256: "ad1f842626677c97ee3734aff3663f296cc9c58ccfe886ae116abf8f8b991810", candidate: false });
+  expect(provenance).toMatchObject({ owner_commit: "394ae559cd2018206c32d5ca3014de248effa203", source_path: "contract/openapi/browser/v1/mcp-prepare-receipt.json", source_sha256: "97ac49936f7107ba5f25b9237997642069693b1e6d0b6dd38034718636ee6112", candidate: false });
   expect(digest(bytes)).toBe(provenance.source_sha256); expect(MCP_PREPARE_RECEIPT_PROVENANCE).toEqual(provenance);
   expect(digest(file("src/generated/bff-connector-command-errors.json"))).toBe("5c12e237e03a6be446a564034ec5c18965e996be24ddeb40807ec4b9b074d83d");
   expect(MCP_PREPARE_RECEIPT_POLICY.same_command).toEqual({ method: "GET", target: "original_lookup" });
@@ -27,7 +27,8 @@ it.each(["lookup_only", "automatic_retries", "negative_ack", "prepare_authorized
   const spec = JSON.parse(bytes.toString("utf8"));
   const policy = spec["x-kokoro-lookup-policy"], response = spec.paths[policy.path].get.responses[200].content["application/json"].schema;
   if (field === "lookup_only") policy.lookup_only = false;
-  else if (["automatic_retries", "negative_ack", "prepare_authorized"].includes(field)) policy[field] = true;
+  else if (field === "negative_ack") policy.negative_ack = false;
+  else if (["automatic_retries", "prepare_authorized"].includes(field)) policy[field] = true;
   else if (field === "same_command") policy.same_command.method = "POST";
   else if (field === "completed_status") response.properties.data.properties.completed.properties.server.properties.prepare_status.enum.push("pending_prepare");
   else if (field === "replayed") response.properties.data.properties.completed.properties.replayed.const = false;

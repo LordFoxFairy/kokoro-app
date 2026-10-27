@@ -1,3 +1,15 @@
+## PREPARE-OUTCOME：独立政策1.0＋lookup1.1（2026-10-27，正式394a消费候选）
+
+唯一源为 BFF `394ae559cd2018206c32d5ca3014de248effa203` 正式 `contract/mcp-prepare-outcomes-v1.json`（SHA256 `5169cbf5e431cc71a23e2717bda9b51c77f08bed82cae149667532511b3afe72`）及 `contract/openapi/browser/v1/mcp-prepare-receipt.json`（`97ac49936f7107ba5f25b9237997642069693b1e6d0b6dd38034718636ee6112`）。两 source pin／raw snapshot／TS 分别正规生成，lookup 必须引用 exact outcomes digest 与同 BFF commit。原件内 owner_feature 属 Platform f294，不将它误作 BFF pin；共享 connector错误／Public不变。
+
+- 初次 `prepareServer` POST 仅新增 `412/mcp_personal_prepare_rejected/false`，原 GET `getMcpPrepareReceipt` 可新增该 tuple 及 `409/mcp_personal_prepare_execution_fenced/false`。Hub 与 same-origin adapter 各自按方法严格闭集；POST5、其它 mutation4／5、错 status／retryable／开放 shape 均拒。原 trusted Session／同源准入、key、CAS、10秒绝对预算、取消和严格 JSON不变。
+- lookup `negative_ack=true` 仅 scoped `prepare_connection_rejected_typed_error_only`；`completed_only` 仅 `success_wrapper`。fenced 仍 unknown，automatic_intent_retirement_authorized=false；无自动重试、新命令／Prepare授权。成功仍严格 ready／needs_oauth＋replayed true 原绑定，不新增 negative DTO 或 synthetic Current。
+- façade 退休动作捕获 exact 原 record；retireWaiting 的 committed immutable record 是唯一退休事实。typed rejected 自动 failed archive，typed fenced 只允许用户显式 stopWaiting。任何退休不得走 generic command success／complete／onConfirmed。原严格成功链与 completion.via 保持。
+- listRetired／inspectRetired 仅窗口作用域历史读；历史 GET 固定原 key／CAS／server／connector，结果只显示，不清 active K2、不生成 locator／授权限／导航。分页沿稳定 primary-key cursor，不声称时间倒序。
+- 新连接是另一显式动作：fresh exact Current／provider／manage gate＋fresh CAS＋不同 crypto key；旧 retry／原查询／归档／历史按钮绝不隐式起 K2。并发已有 active 只合并展示 unknown，不由此旧动作 execute。
+
+无新 wire owner／后端表／通用状态或新 IDB 版本；当前源码候选与 Root 正常配对验收分开。
+
 ## PREPARE-JOURNAL-V2：feature 本地 port，不新增传输（2026-10-27，Root 已核引用槽；存储候选）
 
 本节不是 HTTP／RPC contract。现正式 BFF `6557f189`／receipt1.0 及所有 generated/pin 不变；后续方法专属 POST reason4、query reason4／5 只由正式 BFF 原件生成，本片不定义其 wire 字段或数值 enum。以下只是 IDB adapter 的非秘密领域接口，不能由任意 HTTP status／message／Current 推导退休资格：

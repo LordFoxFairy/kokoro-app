@@ -1,3 +1,15 @@
+## PREPARE-OUTCOME：方法专属结果、原尝试退休与独立新连接（2026-10-27，正式原件消费者候选）
+
+本节承接下方 journal-v2 与 completed-only 恢复，取代“成功 complete 仍完全不变”的存储阶段停止线，不改 generic ConnectorCommand 状态／生命周期。固定 BFF `394ae559cd2018206c32d5ca3014de248effa203` 两份独立原件：outcomes1.0 SHA `5169cbf5e431cc71a23e2717bda9b51c77f08bed82cae149667532511b3afe72`、lookup1.1 SHA `97ac49936f7107ba5f25b9237997642069693b1e6d0b6dd38034718636ee6112`；BFF publication pin 与原件内 Native owner_feature `f29428f6e6d23e9f35642fe3de5463472bc1f873` 分层，App 不另建 Platform client。正规生成器校验 profile／scope／方法闭集与跨原件 digest；原 Public／共享错误 pin 不动。
+
+Prepare façade 捕获不可变 `{subject,target(serverId,connectorId,version),key}`。首次 POST 仅消费正式 rejected；原 receipt GET 可消费 rejected／execution_fenced，按精确 status/code/retryable 匹配，不凭消息、generic409／412、Current.prepare_failed 或数字 enum 猜结果。rejected 仅经 exact journal retireWaiting 成功归档为 definite_rejected；execution_fenced 仍 unknown，仅显式“结束等待”归档 unknown_fenced。归档不 resolve 通用 execute，不触 completed／onConfirmed／Done／OAuth／导航。失败、abort 与未确认保原 K；原严格 ready／needs_oauth ACK＋exact clear 才沿原 completion.via 成功路径，两个 late-window 与首次 fresh needs_oauth 的正式 OAuth 入口保持。
+
+所有旧 K 回调、generic400 清理及管理 retireTarget 都绑定 captured entry；跨 tab 已退休／换 K2 时只读回 exact history、清理旧 RAM，不 failure(K1) 污染 K2 或全局 recoveryError。complete 在同一双 store 写事务先查 exact retired primary key，有 history 即拒成功，防 read-before-clear 竞争复活 locator；无 history 的普通 ACK／missing 幂等语义保持。无新 IDB schema／owner 表。
+
+创建流程从 committed retirement 单一事实清除旧 unknown，保已保存资源；旧 retry／Save 不转成 K2。另一次“重新连接”先 fresh 读 exact Current／provider／CAS 与管理互锁，再 reserve 不同 crypto key；已有并发 K2 只合并为未知显示、不由旧 continuation 执行。fresh ready／needs_oauth 只回既有明确动作，不从历史提升权限。
+
+`mcp-preparation-status.tsx` 仅紧凑呈现和显式回调，创建表单／URL／详情／missing-Current／恢复入口复用；`use-mcp-preparation-history.ts` 只拥有窗口内有界分页、取消和结果显示。历史按现 scope＋primary-key 顺序，不称第一页“最近”；显示记录时间。历史 GET 仅查原 key／CAS／connector，不实例化 active、不清 K2、不修改 Current／history／locator，不触 onConfirmed 或导航。无大异常面板、全局样式／依赖变更。focused/native/type/lint 后停写交 Root 全门与正常配对，候选不冒正常启用。
+
 ## PREPARE-JOURNAL-V2：本地等待退休与只读历史（2026-10-27，存储 D0；Root 已核引用槽；存储候选）
 
 基线为已正式交付的 App `bb451ac735c547aa0d27704bf115533cc95ebfd0`。本片只扩现 `mcp-preparation-recovery.ts`、其原生隔离 IDB 回归及 MCP INDEX；不接 commands／UI／Hub／route／generated，不猜下一 BFF policy／commit／enum。仅同 feature 本地存储能力，不新增 owner 表、通用 journal 或 command 状态；未来调用者须沿正式方法专属政策验证 reason4／5、当前 actor／generation／window 后才传退休参数，存储引用槽本身不证明 owner 结果或授新写权限。

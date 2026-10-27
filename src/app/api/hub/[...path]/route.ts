@@ -1,4 +1,4 @@
-import { mcpPrepareReceiptRequest, mcpPrepareReceiptMatches, mcpPrepareReceiptErrorAllowed, mcpPrepareReceiptLookupOnly } from "@/hub/mcp-prepare-receipt.schema";
+import { mcpPrepareReceiptRequest, mcpPrepareReceiptMatches, mcpPrepareReceiptErrorAllowed, mcpPreparePostErrorAllowed, mcpPrepareReceiptLookupOnly } from "@/hub/mcp-prepare-receipt.schema";
 import { proxyProjectPins } from "@/lib/server/project-pins";
 import { proxyProjectMcpRecommendations } from "@/lib/server/project-mcp-recommendations";
 import { proxyMcpServerIcon } from "@/lib/server/mcp-server-icon";
@@ -832,7 +832,7 @@ async function proxyMcpConnector(
                 query,
                 input,
               )
-        : receiptOperation ? mcpPrepareReceiptErrorAllowed(upstream.status, raw) : authorization
+        : receiptOperation ? mcpPrepareReceiptErrorAllowed(upstream.status, raw) : operation === "prepareServer" ? mcpPreparePostErrorAllowed(upstream.status, raw) : authorization
           ? mcpConnectorErrorAllowed("authorization", upstream.status, raw)
           : mcpConnectorErrorAllowed(
               connectorOperation as McpConnectorOperation,
