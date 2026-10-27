@@ -10,6 +10,59 @@ import { AssistantTurn } from "@/ui/thread/assistant-turn"
 import { SegmentProcess } from "@/ui/thread/segment-process"
 import { makeInteractionState, makeSnapshot } from "../core/fixtures"
 afterEach(cleanup)
+it("a live Run with a real process uses only its disclosure for progress, including after completed tools and an empty answer tail", () => {
+  const activity = { activity: "tool" as const, activity_id: `act_${"3".repeat(64)}`, segment_id: `seg_${"4".repeat(64)}`, status: "completed" as const, display_code: "tool.file.write" as const }
+  const props = { sessionId: "single-progress", messagesById: {}, isLive: true, mode: "fast" as const, stagedDecisions: {}, hitlActive: false, controlError: null }
+  const activityStep = { kind: "activity" as const, seq: "1", segmentId: activity.segment_id, activity }
+  const { rerender } = render(<LocaleProvider><AssistantTurn {...props} steps={[activityStep]} /></LocaleProvider>)
+  const summary = screen.getByRole("button", { name: /^Processing/u })
+  expect(screen.queryByText("Composing an answer")).not.toBeInTheDocument()
+  expect(summary).toHaveTextContent("Processing…")
+  fireEvent.click(summary)
+  expect(summary).toHaveAttribute("aria-expanded", "false")
+
+  rerender(<LocaleProvider><AssistantTurn {...props} steps={[activityStep, { kind: "text", seq: "2", segmentId: "pending-answer" }]} messagesById={{ "pending-answer": { id: "pending-answer", runId: "run", role: "assistant", content: "" } }} /></LocaleProvider>)
+  expect(screen.queryByText("Composing an answer")).not.toBeInTheDocument()
+  expect(screen.getByRole("button", { name: /^Processing/u })).toBe(summary)
+  expect(summary).toHaveTextContent("Processing…")
+  expect(summary).toHaveAttribute("aria-expanded", "false")
+})
+
+it("before any process or token there is one accessible forming state, preserving queued, stopping and reconnect labels", () => {
+  const props = { sessionId: "forming", steps: [], messagesById: {}, isLive: true, mode: "fast" as const, stagedDecisions: {}, hitlActive: false, controlError: null }
+  const { rerender } = render(<LocaleProvider><AssistantTurn {...props} /></LocaleProvider>)
+  expect(screen.getAllByRole("status")).toHaveLength(1)
+  expect(screen.getByRole("status")).toHaveTextContent("Composing an answer")
+  for (const [phase, label] of [["queued", "Queued, waiting to execute"], ["resuming", "Resuming execution; decisions submitted"], ["cancelling", "Stopping, waiting for execution to finish"]] as const) {
+    rerender(<LocaleProvider><AssistantTurn {...props} executionPhase={phase} /></LocaleProvider>)
+    expect(screen.getAllByRole("status")).toHaveLength(1)
+    expect(screen.getByRole("status")).toHaveTextContent(label)
+    rerender(<LocaleProvider><AssistantTurn {...props} steps={[{ kind: "text", seq: "1", segmentId: "before-token" }]} executionPhase={phase} /></LocaleProvider>)
+    expect(screen.getAllByRole("status")).toHaveLength(1)
+    expect(screen.getByRole("status")).toHaveTextContent(label)
+  }
+  rerender(<LocaleProvider><AssistantTurn {...props} reconnecting /></LocaleProvider>)
+  expect(screen.getAllByRole("status")).toHaveLength(1)
+  expect(screen.getByRole("status")).toHaveTextContent("Reconnecting…")
+  rerender(<LocaleProvider><AssistantTurn {...props} steps={[{ kind: "text", seq: "1", segmentId: "before-token" }]} executionPhase="queued" reconnecting /></LocaleProvider>)
+  expect(screen.getByText("Queued, waiting to execute")).toBeVisible()
+  expect(screen.getByText("Reconnecting…")).toBeVisible()
+})
+
+it("a process-only Run retains explicit queued, stopping and reconnect status without adding an answer placeholder", () => {
+  const props = { sessionId: "process-status", steps: [], messagesById: {}, activities: [{ activity: "tool" as const, activity_id: `act_${"5".repeat(64)}`, segment_id: `seg_${"6".repeat(64)}`, status: "completed" as const, display_code: "tool.file.deliver" as const }], isLive: true, mode: "fast" as const, stagedDecisions: {}, hitlActive: false, controlError: null }
+  const { rerender } = render(<LocaleProvider><AssistantTurn {...props} /></LocaleProvider>)
+  expect(screen.queryByText("Composing an answer")).not.toBeInTheDocument()
+  for (const [phase, label] of [["queued", "Queued, waiting to execute"], ["resuming", "Resuming execution; decisions submitted"], ["cancelling", "Stopping, waiting for execution to finish"]] as const) {
+    rerender(<LocaleProvider><AssistantTurn {...props} executionPhase={phase} /></LocaleProvider>)
+    expect(screen.getAllByText(label)).toHaveLength(1)
+    expect(screen.getByRole("status")).toHaveTextContent(label)
+  }
+  rerender(<LocaleProvider><AssistantTurn {...props} reconnecting /></LocaleProvider>)
+  expect(screen.getByRole("status")).toHaveTextContent("Reconnecting…")
+  expect(screen.queryByText("Composing an answer")).not.toBeInTheDocument()
+})
+
 it("HITL 卡独立于可收起的过程，手动收起不会隐藏决策入口", () => {
   render(<LocaleProvider><AssistantTurn sessionId="session_1"
     steps={[]}

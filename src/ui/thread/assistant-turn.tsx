@@ -64,7 +64,7 @@ function FormingContent({
 }) {
   const t = useT()
   return (
-    <span className={styles.forming}>
+    <span className={styles.forming} role="status">
       <span className={styles.formingLabel}>{reconnecting ? t("thread.reconnecting") : label}</span>
       {!waitingForDecision ? (
         <span className={styles.pulse} aria-hidden>
@@ -113,7 +113,7 @@ export function AssistantTurn({
     return () => window.cancelAnimationFrame(frame)
   }, [interaction])
   const segments = groupSegments(steps, activities, messagesById)
-  const processTailId = segments.at(-1)?.segmentId
+  const hasTurnProcess = segments.some((segment) => segment.activities.length > 0)
   // Public7 process activities have opaque safe segment identities that are
   // independent from message identities. Keep the newest process live, but
   // anchor answer streaming to the last segment that actually owns a message.
@@ -127,6 +127,9 @@ export function AssistantTurn({
   }
   const tailMessage = answerTailId ? messagesById[answerTailId] : undefined
   const tailHasText = Boolean(tailMessage) && (tailMessage?.content.length ?? 0) > 0
+  // An empty answer segment is not a second progress surface. Until text
+  // arrives, keep the last real process disclosure as the live affordance.
+  const processTailId = (!tailHasText ? segments.findLast((segment) => segment.activities.length > 0)?.segmentId : undefined) ?? segments.at(-1)?.segmentId
   const phaseLabel = executionPhase === "queued" ? t("hitl.queued") : executionPhase === "resuming" ? t("hitl.resuming") : executionPhase === "cancelling" ? t("hitl.cancelling") : null
   const formingLabel = phaseLabel ?? (hitlActive
     ? t("hitl.approvalTitle")
@@ -136,9 +139,9 @@ export function AssistantTurn({
   // 提交后首个 step/token 未到：这一轮还没有任何 segment，但仍在途——给一个成形脚手架
   // （单条「正在…」），绝不让在途轮塌成空帧。落定/非流式则不渲染脚手架。
   const showScaffold = isLive && segments.length === 0 && !interaction?.groups.length
-  // 重连可读：尾段已有正文时（streaming 盒，无 forming 盒承载「重连中…」），用 turn 级状态条补出
-  // 重连信号——否则刷新回半截 run 只剩呼吸脉冲、看不出在重连还是卡死。无正文时仍由成形盒显示，互斥不重复。
-  const showReconnectStrip = reconnecting && tailHasText
+  // Process-only turns have no answer placeholder either; retain the distinct
+  // connection status here. Only the no-process/no-text path uses forming.
+  const showReconnectStrip = reconnecting && (tailHasText || hasTurnProcess || (phaseLabel !== null && !showScaffold))
   const [copied, setCopied] = useState(false)
   const answerText = segments
     .map((segment) => messagesById[segment.segmentId]?.content ?? "")
@@ -173,7 +176,7 @@ export function AssistantTurn({
           <span>{t("firstSite.kokoro", { brand: brandName })}</span>
         </div>
         {showReconnectStrip ? (
-          <div className={styles.turnReconnect} data-anchor="reconnecting">
+          <div className={styles.turnReconnect} data-anchor="reconnecting" role="status">
             {t("thread.reconnecting")}
             {/* 脉冲三点：与无正文路径的成形盒动态线索一致，让「正在重连」可读。 */}
             <span className={styles.pulse} aria-hidden>
@@ -212,10 +215,9 @@ export function AssistantTurn({
           const liveProcessSegment = isLive && segment.segmentId === processTailId
           const showCaret = liveAnswerSegment && hasText
           const hasProcess = segment.activities.length > 0
-          // HITL 的过程卡本身就是当前状态锚点；不要再在它上方渲染
-          // 一条重复的「工具调用待批准」forming 行，避免审批态撑高后
-          // 首条消息被自动滚动挤出视口。
-          const forming = isLive && !tailHasText && liveProcessSegment && !hasText && !(hitlActive && hasProcess)
+          // A real process or explicit phase already owns progress. Completed
+          // tools waiting for an answer do not need a second wait line either.
+          const forming = isLive && !tailHasText && liveProcessSegment && !hasText && !hasTurnProcess && phaseLabel === null
           // 既无气泡又无过程的空段不渲染：避免落定空正文段留一个占位 segment（多段时多撑一个 gap 槽）。
           if (!hasText && !forming && !hasProcess) {
             return null
