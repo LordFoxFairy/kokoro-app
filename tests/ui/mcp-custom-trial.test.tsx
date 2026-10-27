@@ -354,3 +354,32 @@ it("an exact in-flight configuration Save announces saving without inserting a l
   expect(screen.getByRole("button", { name: "保存" })).toBeDisabled()
   expect(shown.save).toHaveBeenCalledOnce()
 })
+
+it.each(["current", "missing"] as const)("%s detail keeps connection history after its hero inside the owned detail section", scenario => {
+  show({ ...(scenario === "missing" ? { server: null, connector: null, pendingError: true } : {}), preparationState: "unknown",
+    preparationStatus: <section aria-label="已结束的连接尝试"><p>原尝试结果仍未知</p><button type="button">查看历史连接结果</button></section> })
+  const history = screen.getByRole("region", { name: "已结束的连接尝试" })
+  const title = screen.getByRole("heading", { name: scenario === "missing" ? "详情" : "QA MCP", level: 2 })
+  // The status slot is part of the detail's scrolling content, never a sibling
+  // that adds its own grid height ahead of the fixed Manus detail frame.
+  expect(title.compareDocumentPosition(history) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  expect(history.parentElement?.closest("section")).toContainElement(title)
+  expect(screen.getAllByRole("region", { name: "已结束的连接尝试" })).toHaveLength(1)
+})
+
+it("configuration excludes connection history/actions while retaining the independent unknown announcement and real configuration errors", async () => {
+  const shown = show({ preparationState: "unknown", preparationFailure: "outcome_unknown",
+    preparationStatus: <section aria-label="已结束的连接尝试"><p>原尝试结果仍未知</p><button type="button">结束等待</button><button type="button">查看历史连接结果</button></section> })
+  fireEvent.keyDown(screen.getByRole("button", { name: "管理" }), { key: "Enter" })
+  fireEvent.click(await screen.findByRole("menuitem", { name: "编辑配置" }))
+  expect(screen.queryByRole("region", { name: "已结束的连接尝试" })).not.toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "结束等待" })).not.toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "查看历史连接结果" })).not.toBeInTheDocument()
+  expect(screen.getByRole("status")).toHaveClass("sr-only")
+  expect(screen.getByRole("button", { name: "保存" })).toBeEnabled()
+  shown.update({ managementCommand: { operation: "update_server", connectorId: connector.connector_id, serverId: server.server_id, kind: "unknown", failure: "outcome_unknown" } })
+  const configurationError = screen.getAllByRole("status").find(node => node.getAttribute("data-slot") === "alert")
+  expect(configurationError).toBeDefined(); expect(configurationError).not.toHaveClass("sr-only")
+  expect(screen.getByRole("button", { name: "保存" })).toBeDisabled()
+  expect(shown.prepare).not.toHaveBeenCalled(); expect(shown.trial).not.toHaveBeenCalled()
+})

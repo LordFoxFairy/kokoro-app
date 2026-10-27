@@ -391,12 +391,17 @@ export function CustomMcpDetailDialog({
     target.focus({ preventScroll: true });
   };
 
+  const trialStatus = trialError ? <Alert variant="destructive" role="alert"><AlertDescription>{t("mcp.tryUnavailable")}</AlertDescription></Alert> : null;
   const operationStatus = <>
     {preparationStatus}
-    {!preparationStatus && preparationState === "unknown" ? editing
-      ? <span className="sr-only" role="status">{t(connectorCommandFailureMessage(preparationFailure, "mcp.serverCreateUnknown"))}</span>
-      : <Alert role="alert"><AlertDescription>{t(connectorCommandFailureMessage(preparationFailure, "mcp.serverCreateUnknown"))}</AlertDescription></Alert> : null}
-    {trialError ? <Alert variant="destructive" role="alert"><AlertDescription>{t("mcp.tryUnavailable")}</AlertDescription></Alert> : null}
+    {!preparationStatus && preparationState === "unknown" ? <Alert role="alert"><AlertDescription>{t(connectorCommandFailureMessage(preparationFailure, "mcp.serverCreateUnknown"))}</AlertDescription></Alert> : null}
+    {trialStatus}
+  </>;
+  // Configuration owns only its own errors; connection recovery/history stays
+  // in the detail's padded scroll body, never above the fixed hero or in this form.
+  const configurationStatus = <>
+    {preparationState === "unknown" ? <span className="sr-only" role="status">{t(connectorCommandFailureMessage(preparationFailure, "mcp.serverCreateUnknown"))}</span> : null}
+    {trialStatus}
   </>;
 
   return (
@@ -416,7 +421,6 @@ export function CustomMcpDetailDialog({
         closeLabel={t("mcp.cancel")}
         onCloseAutoFocus={closeFocus}
       >
-        {!editing ? operationStatus : null}
         {editing ? (
           <form
             {...selectionProps}
@@ -440,7 +444,7 @@ export function CustomMcpDetailDialog({
               </Button>
             </header>
             <div className={styles.configurationBody}>
-              {operationStatus}
+              {configurationStatus}
               {managementStatus}
               {!ready && (pendingError || !retainingTransport) ? (
                 <span className="sr-only" role="status">{t(pendingError ? "mcp.loadError" : "mcp.loading")}</span>
@@ -654,7 +658,7 @@ export function CustomMcpDetailDialog({
               {preparationState === "unknown" || preparationState === "completed" ? <div className={styles.detailActions}>{primaryAction()}</div> : null}
             </header>
             <div className={styles.detailBody}>
-              {!preparationStatus ? operationStatus : null}
+              {operationStatus}
               {preparationState === "unknown" || preparationState === "completed" ? recoveryStatus : null}
               {managementStatus}
               <span className="sr-only" role="status">{t(pendingError ? "mcp.loadError" : "mcp.loading")}</span>
@@ -709,6 +713,7 @@ export function CustomMcpDetailDialog({
               </div>
             </header>
             <div className={styles.detailBody}>
+              {operationStatus}
               {managementStatus}
               {recoveryStatus}
               {publicationRecoveryError ? <Alert variant="destructive" role="alert">

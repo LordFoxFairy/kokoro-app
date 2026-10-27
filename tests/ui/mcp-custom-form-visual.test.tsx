@@ -6,6 +6,8 @@ import { basename, join } from "node:path"
 import { afterEach, expect, it, vi } from "vitest"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { LocaleProvider } from "@/i18n/context"
+import { McpPreparationStatus } from "@/ui/mcp/mcp-preparation-status";
+import statusStyles from "@/ui/mcp/mcp-preparation-status.module.css";
 import { CustomMcpDetailDialog } from "@/ui/mcp/custom-mcp-detail-dialog"
 import detailStyles from "@/ui/mcp/custom-mcp-detail-dialog.module.css"
 import { CustomMcpForm } from "@/ui/mcp/mcp-custom-form"
@@ -171,3 +173,58 @@ it("offers a real HTTP/SSE choice and freezes it in the creation command", async
  expect(flow.getSnapshot().unknown).toBe("register"); expect(choice).toBeDisabled(); expect(choice).toHaveTextContent("SSE");
  fireEvent.keyDown(choice, { key: "ArrowDown" }); expect(screen.queryByRole("option", { name: /^HTTP$/u })).toBeNull(); expect(register).toHaveBeenCalledOnce();
 });
+
+
+it.each(["current", "missing"] as const)("%s detail history shares the fixed hero frame and scrolls within its padded body on normal/short screens", async variant => {
+  localStorage.setItem("kokoro.locale", "zh")
+  const props: Parameters<typeof CustomMcpDetailDialog>[0] = {
+    connector: { availability: "unavailable", connector_id: "history-connector", server_id: "history-server", provider_key: "qa", connector_type: "mcp", display_name: "QA SSE Transport 20261025 2210", status: "pending", enabled: false, approved_scopes: [], state_version: "4" },
+    server: { availability: "unavailable", server_id: "history-server", display_name: "QA SSE Transport 20261025 2210", server_url: "https://qa.example.test/sse", status: "registered", state_version: "4", headers: [], transport: "sse_compat", prepare_status: "prepare_failed", declarations: [], declarations_available: false },
+    preparationState: "unknown", preparationCanResume: true, actionId: null, admitted: true, managementCommand: undefined,
+    onResumeManagement: vi.fn(), actionError: false, deleteId: null, returnFocusRef: { current: null }, onClose: vi.fn(), onSaveConfiguration: vi.fn(), onPrepare: vi.fn(), onAuthorize: vi.fn(), onDisconnect: vi.fn(), onDeleteIntent: vi.fn(), onCancelDelete: vi.fn(), onDelete: vi.fn(),
+    ...(variant === "missing" ? { connector: null, server: null, pendingError: true } : {}),
+  }
+  const history = { items: (["unknown_fenced", "definite_rejected"] as const).map((disposition, i) => ({ schema_version: 2 as const, subject: "qa", target: { serverId: "history-server", connectorId: "history-connector", version: String(i + 1) }, key: `qa-key-${i}`, disposition, policy_ref: { artifact_sha256: "a".repeat(64), profile: "qa", version: "1" }, retired_at: "2026-10-27T00:00:00.000Z" })), cursor: null, error: false, loading: false, results: {}, inspect: vi.fn(async () => {}), reload: vi.fn(async () => {}), more: vi.fn(async () => {}) }
+  render(<LocaleProvider><CustomMcpDetailDialog {...props} preparationStatus={<McpPreparationStatus history={history} />} /></LocaleProvider>)
+  fireEvent.click(screen.getByRole("button", { name: "已结束的连接尝试" }))
+  const dialog = screen.getByRole("dialog")
+  const modules: Record<string, Record<string, string>> = { "custom-mcp-detail-dialog.module.css": detailStyles, "mcp-preparation-status.module.css": statusStyles }
+  const vite = await createServer({ configFile: false, root: process.cwd(), server: { middlewareMode: true, hmr: false, watch: null }, css: { modules: { generateScopedName: (name, filename) => modules[basename(filename.replace(/\?.*$/u, ""))]?.[name] ?? name } } })
+  let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
+  try {
+    const css = await Promise.all(["/src/app/globals.css", "/src/ui/mcp/custom-mcp-detail-dialog.module.css", "/src/ui/mcp/mcp-preparation-status.module.css"].map(async path => {
+      const result = await vite.transformRequest(`${path}?inline`), json = result?.code.match(/export default ([\s\S]*?);?\s*$/u)?.[1]
+      if (!json) throw Error("CSS compilation missing inline output")
+      return JSON.parse(json.replace(/;\s*$/u, "")) as string
+    }))
+    browser = await chromium.launch({ headless: true })
+    for (const viewport of [{ width: 839, height: 900 }, { width: 652, height: 767 }, { width: 390, height: 400 }]) {
+      const page = await browser.newPage({ viewport }); await page.route("**/*", route => route.abort())
+      await page.setContent(`<!doctype html><html><head><style>${css.join("\n")}</style></head><body data-web-skin="kokoro">${dialog.outerHTML}</body></html>`)
+      const frame = page.getByRole("dialog"), heading = frame.getByRole("heading", { level: 2 }), title = await heading.boundingBox()
+      const disclosure = frame.getByRole("button", { name: "已结束的连接尝试" }), bounds = await frame.boundingBox()
+      expect(bounds).not.toBeNull(); expect(bounds!.height).toBeLessThanOrEqual(Math.min(558, viewport.height - 32) + 2)
+      expect(bounds!.y).toBeGreaterThanOrEqual(15); expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(viewport.height - 15)
+      expect(title).not.toBeNull(); expect(title!.y).toBeGreaterThanOrEqual(bounds!.y)
+      const structure = await disclosure.evaluate(element => {
+        const frame = element.closest('[role="dialog"]')!, section = element.closest("section")!, hero = section.querySelector("header")!
+        let scroll = element.parentElement
+        while (scroll && scroll !== frame && getComputedStyle(scroll).overflowY !== "auto") scroll = scroll.parentElement
+        const padding = scroll ? getComputedStyle(scroll) : null
+        return { sameSection: section.contains(hero), insideScroll: scroll !== null && scroll !== frame, left: padding?.paddingLeft, right: padding?.paddingRight, height: scroll?.clientHeight, heroBottom: hero.getBoundingClientRect().bottom, historyTop: element.getBoundingClientRect().top }
+      })
+      const padding = viewport.width <= 704 ? "16px" : "24px" // existing detail responsive rule, not a new layout value
+      expect(structure).toMatchObject({ sameSection: true, insideScroll: true, left: padding, right: padding })
+      expect(structure.height).toBeGreaterThan(0); expect(structure.historyTop).toBeGreaterThanOrEqual(structure.heroBottom - 1)
+      const rowAction = frame.getByRole("button", { name: "查看连接结果" }).last(); await rowAction.focus()
+      expect(await rowAction.evaluate(element => document.activeElement === element)).toBe(true)
+      const rowBounds = await rowAction.boundingBox(); expect(rowBounds).not.toBeNull(); expect(rowBounds!.y + rowBounds!.height).toBeLessThanOrEqual(bounds!.y + bounds!.height)
+      if (variant === "current") { await frame.getByText("UUID", { exact: true }).scrollIntoViewIfNeeded(); expect(await frame.getByText("UUID", { exact: true }).isVisible()).toBe(true) }
+      expect((await heading.boundingBox())!.y).toBe(title!.y)
+      const evidence = process.env.KOKORO_VISUAL_EVIDENCE_DIR
+      if (evidence) { await mkdir(evidence, { recursive: true }); await frame.screenshot({ path: join(evidence, `mcp-detail-history-${variant}-${viewport.width}x${viewport.height}.png`) }) }
+      await page.close()
+    }
+    expect(props.onPrepare).not.toHaveBeenCalled(); expect(history.inspect).not.toHaveBeenCalled(); expect(props.onSaveConfiguration).not.toHaveBeenCalled()
+  } finally { try { await browser?.close() } finally { await vite.close() } }
+}, 20_000)

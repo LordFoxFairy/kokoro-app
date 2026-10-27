@@ -523,7 +523,9 @@ it("an unresolved queried Prepare allows an independent fresh-CAS SSE Save witho
   await act(async () => { releaseRead(); await pendingRead })
   await waitFor(() => expect(screen.getByRole("textbox", { name: "服务器名称" })).not.toHaveAttribute("readonly"))
   // Save retires the old window, not the original unknown query/key/CAS.
-  expect(screen.getByRole("button", { name: "查看连接结果" })).toBeEnabled()
+  // Its connection recovery stays in detail, not the independent configuration.
+  expect(screen.queryByRole("button", { name: "查看连接结果" })).not.toBeInTheDocument()
+  expect(screen.getByRole("status")).toHaveClass("sr-only")
   expect(screen.queryByRole("button", { name: "重试原请求" })).not.toBeInTheDocument()
   fireEvent.click(within(dialog).getByRole("button", { name: "取消" }))
   fireEvent.click(within(dialog).getByRole("button", { name: "取消" }))
