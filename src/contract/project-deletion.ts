@@ -1,6 +1,6 @@
 import { z } from "zod"
 
-import { parseProjectRenameJson, projectRenameIdSchema, projectRenameKeySchema } from "./project-rename"
+import { parseProjectRenameJson, projectRenameBrowserCacheControl, projectRenameIdSchema, projectRenameKeySchema } from "./project-rename"
 
 // Mirrors the fixed public BFF ProjectDeletionAccepted/StatusResource shapes.
 export const projectDeletionIdSchema = projectRenameIdSchema
@@ -42,7 +42,7 @@ export function parseProjectDeletionJson(text: string): unknown {
 
 export function projectDeletionBrowserHeadersValid(headers: Headers): boolean {
   return /^application\/json(?:;\s*charset=utf-8)?(?![\s\S])/iu.test(headers.get("content-type") ?? "")
-    && headers.get("cache-control") === "private, no-store"
+    && headers.get("cache-control") === projectRenameBrowserCacheControl
 }
 
 export function projectDeletionOwnerErrorAllowed(status: number, code: ProjectDeletionOwnerCode, retryable: boolean, readOnly: boolean): boolean {

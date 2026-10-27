@@ -140,7 +140,10 @@ export function WorkspaceHeaderProjectMenu({ projectRename, projectInstruction, 
             onInteractOutside={(event) => { if (deleteBusy) event.preventDefault() }}>
             <DialogHeader>
               <DialogTitle>{t("firstSite.deleteProject")}</DialogTitle>
-              <DialogDescription>{t("firstSite.projectDeleteDescription")}</DialogDescription>
+              <DialogDescription>
+                <span className="block font-medium text-foreground">{t("firstSite.projectDeleteTarget", { name: projectDelete.targetName })}</span>
+                <span className="mt-2 block">{t("firstSite.projectDeleteDescription")}</span>
+              </DialogDescription>
             </DialogHeader>
             {deleteBusy ? <p role="status" className="text-sm text-muted-foreground">{t("firstSite.projectDeleting")}</p> : null}
             {projectDelete.problem ? <p role="alert" className="text-sm text-destructive">

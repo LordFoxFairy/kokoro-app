@@ -1,0 +1,71 @@
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 8px;
+}
+.row > svg {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  color: var(--muted-foreground);
+}
+.open {
+  display: grid;
+  gap: 4px;
+  text-align: left;
+  min-width: 0;
+  flex: 1;
+  border-radius: 6px;
+  padding: 4px;
+  background: transparent;
+  cursor: pointer;
+}
+.open strong,
+.open small {
+  overflow-wrap: anywhere;
+}
+.open small {
+  color: var(--muted-foreground);
+}
+.open:hover {
+  background: var(--accent);
+}
+.open:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.open:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.detail {
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+}
+.metadata {
+  display: grid;
+  gap: 12px;
+}
+.metadata div {
+  display: grid;
+  grid-template-columns: minmax(72px, 1fr) minmax(0, 3fr);
+  gap: 12px;
+}
+.metadata dt {
+  color: var(--muted-foreground);
+}
+.metadata dd {
+  overflow-wrap: anywhere;
+}
+.actions {
+  flex-wrap: wrap;
+}
+@media (max-width: 480px) {
+  .metadata div {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+}

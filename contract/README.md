@@ -1,3 +1,7 @@
+## 2026-10-27 Project资源消费者固定发行物
+
+唯一公开snapshot由BFF `11777152bf8fe2ae316e4c67fb355eab94e7c0b5` 的canonical Git blob原字节固定，Public28.1.0/190 operations，SHA256 `07e98d803ac3c7342c2e322b507e8760d89e63bc5ecdab3cdf447b68bf3c904c`。八个既有public窄生成器正规重出；Project资源decoder由 `scripts/generate-bff-project-resource.mjs` 从同snapshot派生，生成check纳入具名contract测试，不增第二editable wire源。metadata仅`data.resource`（无list-only created_at）；下载是完整attachment二进制，删除是永久逻辑Asset删除而非解除关联。test-only exact28.1→28完整逆证先核原28全文与原187项库存，再委托未改旧SHA证明链；不作runtime兼容。正常激活/真实owner/浏览器结果由Root验收，本文不冒称。
+
 ## 2026-10-26 Public28 安全工具类别（源码候选）
 
 唯一 full snapshot 从正式 BFF `5dfce099c7ce448e18b8ce5b1e26bb01692c9033` Git blob取得，28.0.0／187操作／SHA256 `34ca44c01ebc73f7ff76a4a06be33696b96ba1636e8818f02c38d57b1f539809`。七个原 public 窄生成器正规重出；新增 `generate-bff-tool-display.mjs` 从同一 full 原件生成安全七类 tuple/type/provenance，`pnpm contract` 严格检查。唯一共享 activity schema承接 live/snapshot/ordered parts；test-only28→27完整回原 SHA256 `d2b3d546164cadc9655616fc44daf1511a6f7d4a2e5d172f1415552af8942ed1` 后进入未改固定27 helper与旧父链。独立MCP私有原件/pin不变，无新网络/Schema/phase；正常组合由Root另验。

@@ -220,21 +220,23 @@ export function useAppFrameProject({
   type DeleteScope = {
     context: typeof renameContext; route: string; active: boolean; busy: boolean; revoked: boolean; controller: AbortController | null
     intent: ProjectDeletionIntent | null
+    targetName: string | null
   }
-  type DeleteUi = Pick<ProjectDeleteControl, "open" | "status" | "problem" | "frozen">
-  const emptyDeleteUi: DeleteUi = { open: false, status: "idle", problem: null, frozen: false }
+  type DeleteUi = Pick<ProjectDeleteControl, "open" | "status" | "problem" | "frozen" | "targetName">
+  const emptyDeleteUi: DeleteUi = { open: false, targetName: "", status: "idle", problem: null, frozen: false }
   const deleteScopeRef = useRef<DeleteScope | null>(null)
   const [deleteUi, setDeleteUi] = useState<{ context: typeof renameContext; ui: DeleteUi } | null>(null)
   const deleteView = deleteUi?.context === renameContext ? deleteUi.ui : emptyDeleteUi
   useLayoutEffect(() => {
     const scope: DeleteScope = { context: renameContext, route: typeof window === "undefined" ? "" : `${window.location.pathname}${window.location.search}${window.location.hash}`,
-      active: true, busy: false, revoked: false, controller: null, intent: null }
+      active: true, busy: false, revoked: false, controller: null, intent: null, targetName: null }
     deleteScopeRef.current = scope
     const retire = () => {
       if (`${window.location.pathname}${window.location.search}${window.location.hash}` === scope.route) return
       scope.active = false
       scope.controller?.abort()
       scope.intent = null
+      scope.targetName = null
       setDeleteUi((current) => current?.context === scope.context ? null : current)
     }
     window.addEventListener("popstate", retire)
@@ -245,16 +247,21 @@ export function useAppFrameProject({
       scope.active = false
       scope.controller?.abort()
       scope.intent = null
+      scope.targetName = null
       scope.controller = null
     }
   }, [renameContext])
   const deleteAvailable = mounted && projectWorkspace && !preview && renameBoundary?.admitted === true
     && renameBoundary.subject !== null && projectDetail.status === "ready" && projectDetail.data.id === projectRef
     && projectDeletionIdSchema.safeParse(projectRef).success && deleteView.problem !== "permission"
-  const setDeleteView = useCallback((ui: Omit<DeleteUi, "frozen">) => {
+  const setDeleteView = useCallback((ui: Omit<DeleteUi, "frozen" | "targetName">) => {
     const scope = deleteScopeRef.current
     if (scope?.active && scope.context === renameContext) {
-      setDeleteUi({ context: renameContext, ui: { ...ui, frozen: scope.intent !== null || scope.revoked } })
+      setDeleteUi({ context: renameContext, ui: {
+        ...ui,
+        targetName: scope.targetName ?? "",
+        frozen: scope.intent !== null || scope.revoked,
+      } })
     }
   }, [renameContext])
   const confirmProjectDeleted = useCallback((scope: DeleteScope, intent: ProjectDeletionIntent) => {
@@ -263,6 +270,7 @@ export function useAppFrameProject({
       || intent.projectId !== projectRef) return
     // A validated 202/receipt confirms this actor's logical negative fact. Owner outbox cleanup remains background work.
     scope.intent = null
+    scope.targetName = null
     retireProject?.(intent.projectId)
     refreshProject()
     setDeleteView({ open: false, status: "idle", problem: null })
@@ -316,8 +324,9 @@ export function useAppFrameProject({
     if (!deleteAvailable || !scope?.active || scope.context !== renameContext || scope.busy) return
     scope.route = `${window.location.pathname}${window.location.search}${window.location.hash}`
     const retained = scope.intent
+    if (!retained) scope.targetName = projectDetail.status === "ready" && projectDetail.data.id === projectRef ? projectDetail.data.name : null
     setDeleteView(retained ? { open: true, status: "unknown", problem: "unknown" } : { open: true, status: "idle", problem: null })
-  }, [deleteAvailable, renameContext, setDeleteView])
+  }, [deleteAvailable, projectDetail, projectRef, renameContext, setDeleteView])
   const projectDelete: ProjectDeleteControl = {
     focusScopeToken: renameContext,
     available: deleteAvailable,
@@ -326,12 +335,14 @@ export function useAppFrameProject({
     onClose: () => {
       const scope = deleteScopeRef.current
       if (!scope?.active || scope.context !== renameContext || scope.busy) return
+      if (!scope.intent) scope.targetName = null
       setDeleteView(scope.intent ? { ...deleteView, open: false } : { open: false, status: "idle", problem: scope.revoked ? "permission" : null })
     },
     onConfirm: () => {
       const scope = deleteScopeRef.current
       if (!deleteAvailable || !scope?.active || scope.context !== renameContext || scope.busy || scope.intent || !projectRef) return
       if (window.location.pathname !== `/app/project/${projectRef}`) return
+      scope.targetName ??= projectDetail.status === "ready" && projectDetail.data.id === projectRef ? projectDetail.data.name : null
       scope.intent = Object.freeze({ projectId: projectRef, idempotencyKey: crypto.randomUUID(), body: null })
       void runDelete(false)
     },

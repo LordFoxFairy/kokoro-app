@@ -5,6 +5,7 @@ export class ProjectResourceUploadError extends Error {
     readonly code: string,
     readonly retryable: boolean,
     readonly status?: number,
+    readonly localValidation = false,
   ) {
     super(code)
     this.name = "ProjectResourceUploadError"
@@ -32,13 +33,24 @@ export async function uploadProjectResource(
   }
   if (!response.ok) {
     let code = `upload_http_${response.status}`
+    let localValidation = false
     try {
-      const payload = await response.json() as { error?: { code?: unknown } }
-      if (typeof payload.error?.code === "string") code = payload.error.code
+      const payload: unknown = await response.json()
+      if (payload !== null && typeof payload === "object" && !Array.isArray(payload)) {
+        const error = (payload as { error?: unknown }).error
+        // This exact Web-owned413 is emitted before any BFF request. Owner
+        // ErrorEnvelope/unknown network outcomes never receive this provenance.
+        if (response.status === 413 && response.headers.get("x-kokoro-local-upload-validation") === "request-body-too-large"
+          && Object.keys(payload).length === 1 && error === "request_body_too_large") {
+          code = "request_body_too_large"; localValidation = true
+        } else if (error !== null && typeof error === "object" && typeof (error as { code?: unknown }).code === "string") {
+          code = (error as { code: string }).code
+        }
+      }
     } catch { /* Preserve status when the upstream error body is unavailable. */ }
     const retryable = response.status >= 500 || response.status === 429
       || (response.status === 409 && code === "idempotency_in_progress")
-    throw new ProjectResourceUploadError(code, retryable, response.status)
+    throw new ProjectResourceUploadError(code, retryable, response.status, localValidation)
   }
   let payload: unknown
   try {

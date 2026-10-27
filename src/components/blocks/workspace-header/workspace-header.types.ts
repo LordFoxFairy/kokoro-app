@@ -19,6 +19,7 @@ export type ProjectRenameControl = {
 
 export type ProjectDeleteControl = {
   focusScopeToken: object
+  readonly targetName: string
   available: boolean
   open: boolean
   status: "idle" | "pending" | "unknown" | "error"

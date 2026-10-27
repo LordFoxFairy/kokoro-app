@@ -1,3 +1,11 @@
+## 2026-10-27 当前 Project 资源消费者边界（优先于下方历史候选）
+
+固定 BFF `11777152bf8fe2ae316e4c67fb355eab94e7c0b5`、Public28.1.0/190 operations，完整原件 SHA256 `07e98d803ac3c7342c2e322b507e8760d89e63bc5ecdab3cdf447b68bf3c904c`。新增 Project resource item metadata、原生附件下载与空 body/原 key 的 Asset 永久逻辑删除；既有生成器正规更新、历史187操作及negative保护保留，未新增第二可编辑wire。MCP独立固定契约及AG-UI网络协议不变。
+
+浏览器同源响应必须消费现有 Proxy 的正式 `projectRenameBrowserCacheControl = private, no-store, max-age=0`；这不同于内部 BFF 的两directive响应。真实200因误认两directive而被客户端拒绝的缺陷已用同一常量修正，不改Proxy策略、不放宽private/no-store/zero-age保护。typed owner error与裸HTTP状态分开；未知DELETE保原空body/key，可信401/403才退休该授权scope。
+
+当前上传沿已发布1MiB请求体限制；本片不擅自放大政策。唯有Web在发送BFF前返回的exact413+不可转发本地provenance，才可在重选同名文件时退休该失败行；pending/unknown仍保原File/key。原生附件沿现有1GiB有界verified transfer，不执行HTML/SVG，无inline preview冒承诺；UI仅声明已发起，实际完成由浏览器下载结果确认。Project删除202仅证明工作区逻辑删除，后台清理状态不伪造同步完成。
+
 ## 2026-10-26 Public28 安全工具类别消费者（实施候选，尚未正常激活）
 
 **唯一 wire 来源。** `src/generated/bff-public-openapi.yaml` 从正式 BFF `5dfce099c7ce448e18b8ce5b1e26bb01692c9033` Git blob取得，固定28.0.0／全文 SHA256 `34ca44c01ebc73f7ff76a4a06be33696b96ba1636e8818f02c38d57b1f539809`；App26 正式本地 `5b651f40d6e16e8afa92c5149a97a86e684aadad` 前置已满足，Root 已授权既定写区。`generate-bff-tool-display.mjs` 仅提取 owner `RunToolActivity.display_code.enum` 到只读 generated tuple/type/provenance，无另一份可编辑字段事实；七个既有 public 生成器随同一完整正式原件正规更新，MCP 独立私有 artifact及其恢复政策原样保持。正常生效仍待 Root 配对，不从候选/Agent原件猜 wire。
@@ -2254,3 +2262,12 @@ MCP管理Hub五方法显式caller key（其后signal?），不保隐式随机key
 本片没有新 wire/API/schema。已安装候选复用现 `listSkillPool`→Personal Skill installation 同源读及严格 actor lifetime；名称/summary 只作真实元数据展示，不读取包或下载句柄。enabled/active 且安装 pin、revision、source_ref 相符才可选择；无示例仍可使用。列表不是执行授权，发送继续由既有 message-create、BFF/owner guard 验证 exact refs。
 
 选择只改变同 hook 管理的未来意图，不发送模型、不改变 installation enabled，不制造提示词或默认全选。Project 未选择仍省略、显式移除仍[]；Direct 默认[]；首次 Send 的同步草稿承接不扩展导航资格，未知提交继续复用原冻结请求。新增资源菜单及 action-time New task 校正均不放宽原 Send 的 canonical chatHref/actor/activeId 检查。
+
+
+## Project resource item consumer (Public28.1 candidate)
+
+`GET /api/hub/projects/{projectRef}/resources/{asset_id}`、`GET .../{asset_id}/download`、empty `DELETE .../{asset_id}`分别映射固定BFF三个具名操作。唯一snapshot与现有public generators正规更新；`src/generated/bff-project-resource.ts`从固定schema派生，`src/contract/project-resource.ts`只复用这些decoder，不成为第二editable wire源。metadata为`data.resource`且无created_at；DELETE200为exact asset_id/deleted_at/replayed及request meta，未知或不匹配不当成功。owner ErrorEnvelope无retryable字段，不添加虚构字段。
+
+同源adapter沿当前Product Session/部署Domain/服务鉴别，拒query、self alias、非空正文/不支持framing与读命令头，DELETE仅透传原始key不制造tenant。Project下载只复用既有无授权的完整attachment字节传输：1GiB、准确Content-Length、原UTF8 Content-Disposition、no-referrer/nosniff、有限时间、取消与短流拒绝；不JSON解析bytes，不暴露Location/owner secret。BFF仍负责每次Project授权、完整spool SHA/size验证和二次owner核验。浏览器原生下载启动之后的完成/取消由浏览器管理，不宣称Web已观察EOF。
+
+Web在上传body实际超过原1MiB且尚未发送BFF的413分支独占`x-kokoro-local-upload-validation: request-body-too-large`；generic owner响应转发不允许此header，client只在exact本地413 body+该marker同现时标localValidation。重新选同名文件只替换这种failed local-validation行，既有pending/unknown与owner拒绝不伪归本地、不丢原File/key。原大小政策不变；旧内存行若未观察到来源不凭状态/文案猜测其origin。

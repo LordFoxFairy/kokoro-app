@@ -1,3 +1,7 @@
+## Project resource attachment consumer (candidate)
+
+Hub route仅对exact Project resource item/download路径附加闭集输入保护，沿当前Product Session与BFFProject owner。下载复用safeDownloadHeaders和boundedArtifactBody的字节原语与1GiB/EOF/取消预算，不复用personal或Artifact业务授权；仅具名attachment头出境，无Storage URL/Location，错误body不当binary成功。
+
 ## MCP Server icon 私有媒体（2026-10-26）
 
 `mcp-server-icon.ts` 只承接 exact `GET /api/hub/mcp/servers/{server_id}/icon`，沿现 Product Session、部署 Domain 与 BFF `/browser/v1`；从正式私有机器 profile 派生闭合 ID/error validator，不扩大 generic proxy。拒 query/body/framing/命令头，完整 EOF 后才返回≤1MiB PNG/JPEG，admission→EOF共10秒，取消/迟到不发额外请求；只发精确媒体头，redirect/未知错误拒绝，失败不影响Connector JSON读取。无Storage直连/新schema/自动重试。

@@ -10,6 +10,7 @@ type ResourceListState = {
   nextCursor: string | null
   status: "loading" | "loadingMore" | "ready" | "error"
   errorCursor: string | null
+  refreshFailed?: boolean
 }
 
 const initialLiveState: ResourceListState = { items: [], nextCursor: null, status: "loading", errorCursor: null }
@@ -34,10 +35,14 @@ export function useProjectResources(projectRef: string | undefined, preview: boo
   const setState = useCallback((update: (current: ResourceListState) => ResourceListState) => {
     setProjection((current) => ({ scope, state: update(current?.scope === scope ? current.state : preview ? initialPreviewState : initialLiveState) }))
   }, [scope, preview])
+  // Exact actor/project lifetime negative facts survive a stale or failed refresh.
+  const retired = useRef<{ scope: typeof scope; ids: Set<string> } | null>(null)
+  const [retiredProjection, setRetiredProjection] = useState<{ scope: typeof scope; ids: ReadonlySet<string> } | null>(null)
   const requestId = useRef(0)
   const controllerRef = useRef<AbortController | null>(null)
   useLayoutEffect(() => {
     const lease = { scope, active: true }
+    retired.current = { scope, ids: new Set() }
     live.current = lease
     return () => {
       lease.active = false
@@ -47,16 +52,17 @@ export function useProjectResources(projectRef: string | undefined, preview: boo
   }, [scope])
   const current = useCallback(() => available && live.current?.active === true && live.current.scope === scope, [available, scope])
 
-  const load = useCallback(async (cursor: string | null): Promise<void> => {
+  const load = useCallback(async (cursor: string | null, preserve = false): Promise<void> => {
     if (!current()) return
     const id = ++requestId.current
     controllerRef.current?.abort()
     const controller = new AbortController()
     controllerRef.current = controller
     setState((current) => ({
-      items: cursor === null ? [] : current.items,
+      items: cursor === null && !preserve ? [] : current.items,
       nextCursor: cursor === null ? null : current.nextCursor,
-      status: cursor === null ? "loading" : "loadingMore",
+      status: cursor === null && !preserve ? "loading" : "loadingMore",
+      refreshFailed: false,
       errorCursor: null,
     }))
     try {
@@ -65,13 +71,13 @@ export function useProjectResources(projectRef: string | undefined, preview: boo
       if (!current() || controller.signal.aborted || id !== requestId.current) return
       if (cursor !== null && page.nextCursor === cursor) throw new Error("project_resources_cursor_loop")
       setState((current) => {
-        const rows = page.items.map(resourceRow)
+        const rows = page.items.filter(item => !retired.current?.ids.has(item.assetId)).map(resourceRow)
         const items = cursor === null ? rows : [...current.items, ...rows.filter((row) => !current.items.some((item) => item.id === row.id))]
         return { items, nextCursor: page.nextCursor, status: "ready", errorCursor: null }
       })
     } catch {
       if (!current() || controller.signal.aborted || id !== requestId.current) return
-      setState((current) => ({ ...current, status: "error", errorCursor: cursor }))
+      setState((current) => preserve ? { ...current, status: "ready", refreshFailed: true } : { ...current, status: "error", errorCursor: cursor })
     }
   }, [current, listResources, projectRef, setState])
 
@@ -90,12 +96,12 @@ export function useProjectResources(projectRef: string | undefined, preview: boo
     }
   }, [load, preview])
 
-  const refresh = useCallback(() => load(null), [load])
+  const refresh = useCallback(() => load(null, true), [load])
   const loadMore = useCallback(() => {
     if (state.status !== "ready" || state.nextCursor === null) return Promise.resolve()
     return load(state.nextCursor)
   }, [load, state.nextCursor, state.status])
-  const retry = useCallback(() => load(state.errorCursor), [load, state.errorCursor])
+  const retry = useCallback(() => load(state.errorCursor, state.refreshFailed === true), [load, state.errorCursor, state.refreshFailed])
   const confirmUpload = useCallback(async (receipt: ProjectResourceUploadResult) => {
     if (!current()) return
     if (preview) {
@@ -108,9 +114,19 @@ export function useProjectResources(projectRef: string | undefined, preview: boo
       return
     }
     // The POST receipt proves mutation success, but only a fresh owner GET
-    // can make it a listed resource. A GET error remains visible separately.
-    await refresh()
-  }, [current, preview, refresh, setState])
+    // can make it a listed resource. Preserve known siblings during that
+    // recheck or its failure; never insert the receipt as an observed list row.
+    await load(null, true)
+  }, [current, preview, load, setState])
 
-  return { ...state, refresh, loadMore, retry, confirmUpload }
+  const confirmDelete = useCallback((assetId: string) => {
+    if (!current()) return
+    if (retired.current?.scope !== scope) return
+    retired.current.ids.add(assetId)
+    setRetiredProjection({ scope, ids: new Set(retired.current.ids) })
+    setState(previous => ({ ...previous, items: previous.items.filter(item => item.id !== assetId) }))
+    void load(null, true)
+  }, [current, load, scope, setState, setRetiredProjection])
+
+  return { ...state, refreshFailed: state.refreshFailed === true, items: state.items.filter(item => !(retiredProjection?.scope === scope && retiredProjection.ids.has(item.id))), refresh, loadMore, retry, confirmUpload, confirmDelete }
 }

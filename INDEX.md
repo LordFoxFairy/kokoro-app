@@ -1,3 +1,7 @@
+## Project resource item consumer (candidate)
+
+`src/features/app/project-resource-row.tsx` / `project-resource-detail.tsx`负责资源行、fresh metadata和显式永久删除确认；`use-project-resource-actions.ts`持document-local原命令及actor/project/route fence，`use-project-resources.ts`持ACK后精确负事实与fresh列表。`project-resource-access.ts`仅走same-origin固定生成decoder；原生attachment仅报告started、无inlineHTML/SVG。固定契约与实际验证见本轮收据，不将候选称正常已生效。
+
 Prepare恢复（2026-10-24，已正常加载）：`src/ui/mcp/mcp-preparation-recovery.ts`负责非秘密IndexedDB事务，既有preparation commands/详情负责主体及窗口核验、显式原命令恢复；正常只读已验，未知恢复和原回执仍待验，见CURRENT。
 
 MCP试用（2026-10-24）：`src/ui/mcp/mcp-trial-context.tsx`桥接详情和现AppFrame；`src/components/blocks/app-frame/use-app-frame-mcp-trial.ts`隔离主体/路由寿命及新草稿exact Connection交接，Try不再冒Prepare。真实证据/未验范围见 `docs/CURRENT.md`。

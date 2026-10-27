@@ -5054,3 +5054,106 @@ describe("MCP Connection 429 cooldown metadata", () => {
     expect(response.headers.get("retry-after")).toBeNull();
   });
 });
+
+it("streams Project attachment bytes above1MiB with its UTF8 filename, fresh Product headers and no internal locator", async () => {
+  const size = 1_048_577;
+  vi.mocked(requestWithDomain).mockResolvedValueOnce(new Response(new Uint8Array(size), { headers: {
+    "content-type": "application/octet-stream", "content-length": String(size),
+    "content-disposition": "attachment; filename=\"notes.bin\"; filename*=UTF-8''%E7%AC%94%E8%AE%B0.bin",
+    "cache-control": "no-store", "referrer-policy": "no-referrer", "x-content-type-options": "nosniff", "x-request-id": "resource-request", "location": "https://storage.invalid/private",
+  } }));
+  const { GET } = await import("@/app/api/hub/[...path]/route");
+  const response = await GET(new Request("http://localhost/api/hub/projects/project-one/resources/asset-one/download", { headers: { "x-kokoro-tenant-id": "forged", "authorization": "Bearer forged" } }), params(["projects", "project-one", "resources", "asset-one", "download"]));
+  expect(response.status).toBe(200);
+  expect(response.headers.get("content-disposition")).toContain("%E7%AC%94%E8%AE%B0.bin");
+  expect(response.headers.get("location")).toBeNull(); expect(response.headers.get("referrer-policy")).toBe("no-referrer");
+  expect((await response.arrayBuffer()).byteLength).toBe(size);
+  const [target, , options] = vi.mocked(requestWithDomain).mock.calls[0]!;
+  expect(target).toBe("http://bff.test/v1/projects/project-one/resources/asset-one/download");
+  expect(options).toMatchObject({ maxResponseBytes: 1_073_741_824, strictResponseLength: true });
+  expect(new Headers(options?.headers).get("authorization")).toBe("Bearer product-access");
+  expect(new Headers(options?.headers).has("x-kokoro-tenant-id")).toBe(false);
+});
+
+it("rejects Project download query/alias, unsafe header and truncated bytes without JSON-parsing binary", async () => {
+  const { GET } = await import("@/app/api/hub/[...path]/route");
+  for (const [url, segments] of [
+    ["http://localhost/api/hub/projects/project-one/resources/asset-one/download?x=1", ["projects", "project-one", "resources", "asset-one", "download"]],
+    ["http://localhost/api/hub/self/projects/project-one/resources/asset-one/download", ["self", "projects", "project-one", "resources", "asset-one", "download"]],
+  ] as const) expect((await GET(new Request(url), params([...segments]))).status).toBe(400);
+  expect(requestWithDomain).not.toHaveBeenCalled();
+  vi.mocked(requestWithDomain).mockResolvedValueOnce(new Response(new Uint8Array([1]), { headers: { "content-type": "application/octet-stream", "content-length": "2", "content-disposition": "attachment; filename=\"a\"; filename*=UTF-8''a", "cache-control": "no-store", "referrer-policy": "no-referrer", "x-content-type-options": "nosniff", "x-request-id": "r" } }));
+  const response = await GET(new Request("http://localhost/api/hub/projects/p/resources/a/download"), params(["projects", "p", "resources", "a", "download"]));
+  await expect(response.arrayBuffer()).rejects.toThrow("incomplete");
+});
+
+it("marks upload validation only before the BFF request and never forwards an owner's forged local-validation header", async () => {
+ const {POST}=await import("@/app/api/hub/[...path]/route");const path=params(["projects","p","resources"])
+ const local=await POST(new Request("http://localhost/api/hub/projects/p/resources",{method:"POST",headers:{origin:"http://localhost","content-type":"application/octet-stream"},body:new Uint8Array(1_100_000)}),path)
+ expect(local.status).toBe(413);expect(local.headers.get("x-kokoro-local-upload-validation")).toBe("request-body-too-large");expect(requestWithDomain).not.toHaveBeenCalled()
+ vi.mocked(requestWithDomain).mockResolvedValueOnce(Response.json({error:"request_body_too_large"},{status:413,headers:{"x-kokoro-local-upload-validation":"request-body-too-large"}}))
+ const small=new FormData();small.append("files",new File(["abc"],"same.txt"))
+ const owner=await POST(new Request("http://localhost/api/hub/projects/p/resources",{method:"POST",headers:{origin:"http://localhost"},body:small}),path)
+ expect(owner.headers.has("x-kokoro-local-upload-validation")).toBe(false)
+})
+
+it.each([null, "0"])("accepts actual EOF on an empty Next DELETE stream with content-length %s and preserves the original command", async length => {
+  const { DELETE } = await import("@/app/api/hub/[...path]/route")
+  vi.mocked(requestWithDomain).mockResolvedValueOnce(Response.json({ data: { asset_id: "a", deleted_at: "2026-10-27T00:00:00Z", replayed: true }, meta: { request_id: "r" } }))
+  const headers = new Headers({ origin: "http://localhost", "idempotency-key": "original-command" })
+  if (length !== null) headers.set("content-length", length)
+  const request = new Request("http://localhost/api/hub/projects/p/resources/a", {
+    method: "DELETE", headers, body: new ReadableStream<Uint8Array>({ start(controller) { controller.close() } }), duplex: "half",
+  } as RequestInit & { duplex: string })
+  expect(request.body).not.toBeNull()
+  const response = await DELETE(request, params(["projects", "p", "resources", "a"]))
+  expect(response.status).toBe(200)
+  expect(requestWithDomain).toHaveBeenCalledTimes(1)
+  const [target, , options] = vi.mocked(requestWithDomain).mock.calls[0]!
+  expect(target).toBe("http://bff.test/v1/projects/p/resources/a")
+  expect(new Headers(options?.headers).get("idempotency-key")).toBe("original-command")
+  expect(options?.body).toBeUndefined()
+})
+it.each([
+  { "content-type": "application/json" }, { "transfer-encoding": "chunked" },
+  { "content-encoding": "identity" }, { "content-length": "1" },
+])("rejects forbidden DELETE framing/header %j before owner I/O", async extra => {
+  const { DELETE } = await import("@/app/api/hub/[...path]/route")
+  const request = new Request("http://localhost/api/hub/projects/p/resources/a", { method: "DELETE", headers: { origin: "http://localhost", "idempotency-key": "original-command", ...extra } })
+  expect((await DELETE(request, params(["projects", "p", "resources", "a"]))).status).toBe(400)
+  expect(requestWithDomain).not.toHaveBeenCalled()
+})
+it("rejects a single actual DELETE byte even when length0 is declared", async () => {
+  const { DELETE } = await import("@/app/api/hub/[...path]/route")
+  const request = new Request("http://localhost/api/hub/projects/p/resources/a", { method: "DELETE", headers: { origin: "http://localhost", "idempotency-key": "original-command", "content-length": "0" }, body: new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(new Uint8Array([1])); controller.close() } }), duplex: "half" } as RequestInit & { duplex: string })
+  expect((await DELETE(request, params(["projects", "p", "resources", "a"]))).status).toBe(400)
+  expect(requestWithDomain).not.toHaveBeenCalled()
+})
+it("cancels a pending zero-byte DELETE EOF read without forwarding a command", async () => {
+  const { DELETE } = await import("@/app/api/hub/[...path]/route")
+  const controller = new AbortController(), cancel = vi.fn()
+  const request = new Request("http://localhost/api/hub/projects/p/resources/a", { method: "DELETE", headers: { origin: "http://localhost", "idempotency-key": "original-command" }, signal: controller.signal, body: new ReadableStream<Uint8Array>({ cancel }), duplex: "half" } as RequestInit & { duplex: string })
+  const result = DELETE(request, params(["projects", "p", "resources", "a"]))
+  await vi.waitFor(() => expect(request.body?.locked).toBe(true))
+  controller.abort()
+  expect((await result).status).toBe(400)
+  expect(cancel).toHaveBeenCalled()
+  expect(requestWithDomain).not.toHaveBeenCalled()
+})
+it("bounds a never-ending empty DELETE stream at10seconds and keeps GET bodies forbidden", async () => {
+  const { DELETE, GET } = await import("@/app/api/hub/[...path]/route")
+  vi.useFakeTimers()
+  try {
+    const cancel = vi.fn()
+    const request = new Request("http://localhost/api/hub/projects/p/resources/a", { method: "DELETE", headers: { origin: "http://localhost", "idempotency-key": "original-command" }, body: new ReadableStream<Uint8Array>({ cancel }), duplex: "half" } as RequestInit & { duplex: string })
+    const result = DELETE(request, params(["projects", "p", "resources", "a"]))
+    await vi.advanceTimersByTimeAsync(10_001)
+    expect((await result).status).toBe(400)
+    expect(cancel).toHaveBeenCalled()
+    expect(requestWithDomain).not.toHaveBeenCalled()
+    const get = new Request("http://localhost/api/hub/projects/p/resources/a")
+    Object.defineProperty(get, "body", { value: new ReadableStream<Uint8Array>({ start(controller) { controller.close() } }) })
+    expect((await GET(get, params(["projects", "p", "resources", "a"]))).status).toBe(400)
+    expect(requestWithDomain).not.toHaveBeenCalled()
+  } finally { vi.useRealTimers() }
+})

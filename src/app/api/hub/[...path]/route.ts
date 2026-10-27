@@ -2640,6 +2640,42 @@ async function proxyHubRequest(
       { status: 400 },
     );
   }
+  // Project item operations retain their own Project authorization at BFF. Only
+  // the existing verified attachment byte transport is shared with Artifact.
+  const projectResourceItem = businessPath[0] === "projects" && businessPath[2] === "resources" && businessPath.length >= 4;
+  const projectResourceDownload = projectResourceItem && businessPath.length === 5 && businessPath[4] === "download" && request.method === "GET";
+  if (projectResourceItem && (path[0] === "self" || search !== "" || ![businessPath[1], businessPath[3]].every(id => /^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u.test(id ?? ""))
+    || !(businessPath.length === 4 && ["GET", "DELETE"].includes(request.method) || projectResourceDownload)
+    || request.method === "GET" && request.body !== null || request.headers.has("content-type") || request.headers.has("transfer-encoding") || request.headers.has("content-encoding")
+    || request.headers.has("content-length") && (request.method === "GET" || request.headers.get("content-length") !== "0")
+    || request.method === "GET" && request.headers.has("idempotency-key")
+    || request.method === "DELETE" && !/^[\x21-\x7e]{1,191}$/u.test(request.headers.get("idempotency-key") ?? ""))) {
+    return NextResponse.json({ error: "invalid_project_resource" }, { status: 400, headers: { "cache-control": "private, no-store" } });
+  }
+  if (projectResourceItem && request.method === "DELETE") {
+    // Next may represent an empty DELETE as a non-null stream. Require real
+    // zero-byte EOF, not a null-body assumption, before any owner mutation.
+    const deadline = new AbortController();
+    const signal = AbortSignal.any([request.signal, deadline.signal]);
+    const timer = setTimeout(() => deadline.abort(new UpstreamTimeoutError()), 10_000);
+    let stop = () => {};
+    const interrupted = new Promise<never>((_, reject) => {
+      stop = () => reject(signal.reason ?? new DOMException("Request aborted", "AbortError"));
+      signal.addEventListener("abort", stop, { once: true });
+      if (signal.aborted) stop();
+    });
+    try {
+      signal.throwIfAborted();
+      await Promise.race([readBoundedRequestBody(request, 0, signal), interrupted]);
+      signal.throwIfAborted();
+    } catch {
+      return NextResponse.json({ error: "invalid_project_resource" }, { status: 400, headers: { "cache-control": "private, no-store" } });
+    } finally {
+      clearTimeout(timer);
+      signal.removeEventListener("abort", stop);
+    }
+  }
+  const verifiedAttachmentDownload = artifactDownload || projectResourceDownload;
   const boundedFileUpload =
     request.method === "POST" &&
     ((businessPath.length === 3 &&
@@ -2705,7 +2741,13 @@ async function proxyHubRequest(
               ? "request_body_too_large"
               : "request_body_unreadable",
         },
-        { status: error instanceof UpstreamRequestTooLargeError ? 413 : 400 },
+        {
+          status: error instanceof UpstreamRequestTooLargeError ? 413 : 400,
+          // Web-owned provenance: this branch has not sent anything to BFF.
+          // Generic upstream response forwarding deliberately excludes it.
+          headers: boundedFileUpload && error instanceof UpstreamRequestTooLargeError
+            ? { "x-kokoro-local-upload-validation": "request-body-too-large" } : {},
+        },
       );
     }
   }
@@ -2720,7 +2762,7 @@ async function proxyHubRequest(
       ...(personalDownload
         ? { maxResponseBytes: MAX_PERSONAL_DOWNLOAD_BYTES }
         : {}),
-      ...(artifactDownload
+      ...(verifiedAttachmentDownload
         ? {
             maxResponseBytes: MAX_ARTIFACT_DOWNLOAD_BYTES,
             maxErrorResponseBytes: 16 * 1024 * 1024,
@@ -2769,16 +2811,19 @@ async function proxyHubRequest(
     }
   }
 
-  if (artifactDownload) {
+  if (verifiedAttachmentDownload) {
+    const invalidDownload = () => projectResourceDownload
+      ? NextResponse.json({ error: "project_resource_invalid_response" }, { status: 502, headers: { "cache-control": "private, no-store" } })
+      : invalidArtifactDownloadResponse();
     if (upstream.status < 400 && upstream.status !== 200) {
       await upstream.body?.cancel();
-      return invalidArtifactDownloadResponse();
+      return invalidDownload();
     }
     if (upstream.status === 200) {
       const safeHeaders = artifactDownloadHeaders(upstream.headers);
       if (safeHeaders === null || upstream.body === null) {
         await upstream.body?.cancel();
-        return invalidArtifactDownloadResponse();
+        return invalidDownload();
       }
       return new Response(
         boundedArtifactBody(

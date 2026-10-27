@@ -133,7 +133,7 @@ describe("ShareButton", () => {
     )
 
     expect(document.querySelector('[data-workspace-upgrade="true"]')).toBeNull()
-    expect(screen.getByRole("button", { name: "More settings sections" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "项目选项" })).toBeInTheDocument()
 
     rerender(
       <WorkspaceHeader
@@ -146,7 +146,7 @@ describe("ShareButton", () => {
 
     expect(document.querySelector('[data-workspace-upgrade="true"]')).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Credits & usage" })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "More settings sections" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "项目选项" })).toBeInTheDocument()
   })
 
   it("presents a project link as private navigation without invented owners or editable invites", async () => {

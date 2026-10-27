@@ -996,13 +996,13 @@ it("Project delete keeps cancel at zero writes, preserves an unknown command key
   const retireProject = vi.fn(); const refreshProject = vi.fn()
   const fetchMock = vi.spyOn(globalThis, "fetch")
     .mockResolvedValueOnce(Response.json({ error: { code: "business_store_unavailable", message: "uncertain", retryable: true } }, {
-      status: 503, headers: { "cache-control": "private, no-store" },
+      status: 503, headers: { "cache-control": "private, no-store, max-age=0" },
     }))
     .mockResolvedValueOnce(Response.json({ error: { code: "business_store_unavailable", message: "read uncertain", retryable: true } }, {
-      status: 503, headers: { "cache-control": "private, no-store" },
+      status: 503, headers: { "cache-control": "private, no-store, max-age=0" },
     }))
     .mockResolvedValueOnce(Response.json({ data: { project_id: id, logical_release_state: "pending", physical_cleanup_state: "pending" } }, {
-      status: 202, headers: { "cache-control": "private, no-store" },
+      status: 202, headers: { "cache-control": "private, no-store, max-age=0" },
     }))
   const options = {
     projectRef: id, projectWorkspace: true, preview: false, mounted: true, draft: "draft", updateDraft: vi.fn(), clearDraft: vi.fn(),
@@ -1016,6 +1016,9 @@ it("Project delete keeps cancel at zero writes, preserves an unknown command key
     expect(fetchMock).not.toHaveBeenCalled()
     act(() => { view.result.current.projectDelete.onOpen(); view.result.current.projectDelete.onConfirm() })
     await waitFor(() => expect(view.result.current.projectDelete.problem).toBe("unknown"))
+    expect(view.result.current.projectDelete.targetName).toBe("Delete me")
+    act(() => { view.result.current.projectDelete.onClose(); view.result.current.projectDelete.onOpen() })
+    expect(view.result.current.projectDelete.targetName).toBe("Delete me")
     expect(fetchMock).toHaveBeenCalledTimes(1)
     const first = fetchMock.mock.calls[0]
     expect(first?.[0]).toBe(`/api/hub/projects/${id}`)
@@ -1047,7 +1050,7 @@ it("Project menu contains only project actions and never opens account or upgrad
     projectRename={{ focusScopeToken: scope, available: true, open: false, name: "", status: "idle", problem: null, frozen: false,
       onOpen: vi.fn(), onClose: vi.fn(), onChange: vi.fn(), onSave: vi.fn(), onRetry: vi.fn(), onRestart: vi.fn() }}
     projectInstruction={{ available: true, onTriggerMount: vi.fn(), onOpen: vi.fn() }}
-    projectDelete={{ focusScopeToken: scope, available: true, open: false, status: "idle", problem: null, frozen: false,
+    projectDelete={{ focusScopeToken: scope, targetName: "Project A", available: true, open: false, status: "idle", problem: null, frozen: false,
       onOpen: vi.fn(), onClose: vi.fn(), onConfirm: vi.fn(), onRetry: vi.fn(), onCheck: vi.fn() }}
   /></LocaleProvider>)
   fireEvent.pointerDown(screen.getByRole("button", { name: "项目选项" }), { button: 0, ctrlKey: false })
@@ -1056,6 +1059,18 @@ it("Project menu contains only project actions and never opens account or upgrad
   expect(screen.getByRole("menuitem", { name: "删除项目" })).toBeInTheDocument()
   expect(screen.queryByRole("menuitem", { name: "账户" })).toBeNull()
   expect(screen.queryByRole("menuitem", { name: "升级" })).toBeNull()
+})
+
+it("Project delete dialog names its loaded target before the existing risk explanation", async () => {
+  const { WorkspaceHeaderProjectMenu } = await import("@/components/blocks/workspace-header/workspace-header-project-menu")
+  const scope = {}
+  render(<LocaleProvider><WorkspaceHeaderProjectMenu
+    projectDelete={{ focusScopeToken: scope, targetName: "Project A", available: true, open: true, status: "idle", problem: null, frozen: false,
+      onOpen: vi.fn(), onClose: vi.fn(), onConfirm: vi.fn(), onRetry: vi.fn(), onCheck: vi.fn() }}
+  /></LocaleProvider>)
+  const dialog = screen.getByRole("dialog", { name: "删除项目" })
+  expect(dialog).toHaveTextContent("将删除「Project A」。")
+  expect(dialog).toHaveTextContent("删除项目会移除其会话和项目内容；此操作会立即从你的工作区中移除该项目。")
 })
 
 it("Project delete retires its command on a route change and ignores a late 202", async () => {
@@ -1079,12 +1094,14 @@ it("Project delete retires its command on a route change and ignores a late 202"
   try {
     act(() => { view.result.current.projectDelete.onOpen(); view.result.current.projectDelete.onConfirm() })
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+    expect(view.result.current.projectDelete.targetName).toBe("Late")
     window.history.pushState(null, "", "/app")
     act(() => window.dispatchEvent(new PopStateEvent("popstate")))
     expect(fetchMock.mock.calls[0]?.[1]?.signal?.aborted).toBe(true)
+    expect(view.result.current.projectDelete.targetName).toBe("")
     await act(async () => {
       deliver(Response.json({ data: { project_id: id, logical_release_state: "pending", physical_cleanup_state: "pending" } }, {
-        status: 202, headers: { "cache-control": "private, no-store" },
+        status: 202, headers: { "cache-control": "private, no-store, max-age=0" },
       }))
       await Promise.resolve()
     })
@@ -1099,7 +1116,7 @@ it("Project delete keeps an untyped 400/403/409 outcome and its original command
   const id = "project_12345678-1234-1234-1234-123456789abc"
   const intent = { projectId: id, idempotencyKey: "original-key", body: null as null }
   const malformed = (status: number) => Response.json({ error: { code: "untyped_owner_error", message: "untrusted", retryable: false } }, {
-    status, headers: { "cache-control": "private, no-store" },
+    status, headers: { "cache-control": "private, no-store, max-age=0" },
   })
   const fetchMock = vi.spyOn(globalThis, "fetch")
   fetchMock.mockResolvedValueOnce(malformed(400)).mockResolvedValueOnce(malformed(403)).mockResolvedValueOnce(malformed(409))
@@ -1111,7 +1128,7 @@ it("Project delete keeps an untyped 400/403/409 outcome and its original command
     const originalUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`
     window.history.replaceState(null, "", `/app/project/${id}`)
     fetchMock.mockResolvedValueOnce(malformed(403)).mockResolvedValueOnce(Response.json({ data: { project_id: id, logical_release_state: "pending", physical_cleanup_state: "pending" } }, {
-      status: 202, headers: { "cache-control": "private, no-store" },
+      status: 202, headers: { "cache-control": "private, no-store, max-age=0" },
     }))
     const retireProject = vi.fn()
     const view = renderHook(() => useAppFrameProject({

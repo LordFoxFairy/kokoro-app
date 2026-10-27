@@ -20,6 +20,7 @@ import { ProjectSkillsSection } from "./project-skills-section"
 import { ProjectWorkspaceDialogs } from "./project-workspace-dialogs"
 import { previewScheduledTasks, previewWebsites, type ProjectScheduledPreview, type ResourceKind } from "./project-workspace-model"
 import { useProjectComposerClearance } from "./use-project-composer-clearance"
+import { useProjectResourceActions } from "./use-project-resource-actions"
 import { useProjectResources } from "./use-project-resources"
 import styles from "./kokoro-project-workspace.module.css"
 import layoutStyles from "./project-workspace-layout.module.css"
@@ -48,6 +49,7 @@ export type ResourceUploadIntent = {
   status: "uploading" | "failed"
   error: string | undefined
   retryable: boolean
+  localValidation?: boolean
 }
 
 /**
@@ -143,10 +145,11 @@ export function KokoroProjectWorkspace({
     || projectReadBoundary.admitted && projectReadBoundary.subject !== null
   const resourceSubject = projectReadBoundary?.subject
   const resourceGeneration = projectReadBoundary?.generation
-  const resourceContext = useMemo(() => ({ projectRef, preview, resourceSubject, resourceGeneration, resourcesAvailable }),
-    [projectRef, preview, resourceSubject, resourceGeneration, resourcesAvailable])
+  const resourceContext = useMemo(() => ({ projectRef, preview, resourceSubject, resourceGeneration, resourcesAvailable, instructionRouteEpoch }),
+    [projectRef, preview, resourceSubject, resourceGeneration, resourcesAvailable, instructionRouteEpoch])
   const resourceIdentity = JSON.stringify([projectRef, preview, resourceSubject])
   const resources = useProjectResources(projectRef, preview, onListProjectResources, resourceContext, resourcesAvailable)
+  const resourceActions = useProjectResourceActions(projectRef, resourceContext, resourcesAvailable && !preview, resources.confirmDelete)
   const [uploadState, setUploadState] = useState<{ identity: string; context: object; items: readonly ResourceUploadIntent[] }>(
     { identity: resourceIdentity, context: resourceContext, items: [] })
   if (uploadState.context !== resourceContext) {
@@ -160,12 +163,16 @@ export function KokoroProjectWorkspace({
   const setResourceUploads = (update: (items: readonly ResourceUploadIntent[]) => readonly ResourceUploadIntent[]) => {
     setUploadState((current) => current.context === resourceContext ? { ...current, items: update(current.items) } : current)
   }
-  const resourceScope = useRef<{ context: object; active: boolean; uploads: Set<string> } | null>(null)
+  const resourceScope = useRef<{ context: object; active: boolean; opened: boolean; uploads: Set<string> } | null>(null)
   useLayoutEffect(() => {
-    const scope = { context: resourceContext, active: true, uploads: new Set<string>() }
+    const scope = { context: resourceContext, active: true, opened: false, uploads: new Set<string>() }
     resourceScope.current = scope
     return () => { scope.active = false }
   }, [resourceContext])
+  useLayoutEffect(() => {
+    const scope = resourceScope.current
+    if (resourcesOpen && scope?.context === resourceContext) scope.opened = true
+  }, [resourceContext, resourcesOpen])
   const resourceInputRef = useRef<HTMLInputElement | null>(null)
   const resourceSearchRef = useRef<HTMLInputElement | null>(null)
   const [websitesOpen, setWebsitesOpen] = useState(false)
@@ -222,6 +229,8 @@ export function KokoroProjectWorkspace({
   }, [restoreContextOpener])
 
   const openResources = (event: MouseEvent<HTMLButtonElement>, kind: ResourceKind = "all") => {
+    const scope = resourceScope.current
+    if (!resourcesOpen && scope?.active && scope.context === resourceContext && scope.opened && !preview) void resources.refresh()
     rememberContextOpener(event)
     setResourceKind(kind)
     setResourceQuery("")
@@ -273,6 +282,7 @@ export function KokoroProjectWorkspace({
         status: "failed",
         error: uploadError?.code ?? "upload_network_error",
         retryable: uploadError?.retryable ?? true,
+        localValidation: uploadError?.localValidation === true,
       } : item))
     } finally {
       scope.uploads.delete(intent.id)
@@ -287,7 +297,8 @@ export function KokoroProjectWorkspace({
       return { id: identity, file, key: `project-resource:${identity}`, status: "uploading", error: undefined, retryable: true }
     })
     if (intents.length === 0) return
-    setResourceUploads((current) => [...current, ...intents])
+    const selectedNames = new Set(intents.map(intent => intent.file.name))
+    setResourceUploads((current) => [...current.filter(intent => !(intent.status === "failed" && intent.localValidation === true && selectedNames.has(intent.file.name))), ...intents])
     for (const intent of intents) {
       if (!scope.active || resourceScope.current !== scope) break
       await submitResourceUpload(intent)
@@ -509,6 +520,8 @@ export function KokoroProjectWorkspace({
         setSelectedInstructionRevision={setSelectedInstructionRevision}
         projectInstructionHistory={projectInstructionHistory}
         {...(onSaveProjectInstructions === undefined ? {} : { onSaveProjectInstructions })}
+        resourceActions={resourceActions}
+        resourceFocusContext={resourceContext}
         resourcesAvailable={resourcesAvailable}
         resourcesOpen={resourcesOpen}
         setResourcesOpen={setResourcesOpen}
@@ -519,9 +532,8 @@ export function KokoroProjectWorkspace({
         resourceInputRef={resourceInputRef}
         filteredResources={filteredResources}
         resourceListStatus={resources.status}
-        resourceListErrorCursor={resources.errorCursor}
+        resourceRefreshFailed={resources.refreshFailed}
         resourceNextCursor={resources.nextCursor}
-        onRetryResourceList={() => { void resources.retry() }}
         onLoadMoreResources={() => { void resources.loadMore() }}
         resourceUploads={resourceUploads}
         onRetryResourceUpload={(intent) => { void submitResourceUpload(intent) }}

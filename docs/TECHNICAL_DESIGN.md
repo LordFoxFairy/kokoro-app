@@ -1,3 +1,11 @@
+## 2026-10-27 本次 Project 产品切片（覆盖历史实施候选状态）
+
+资源row/detail、scope-local actions与typed client分别维护；同源adapter复用原verified附件字节传输，BFF仍为Project/当前授权owner，Storage保留Asset/扫描/对象生命周期owner。只读列表与详情保持已读presentation，fresh metadata独立准入写入/下载，不把旧row当授权；普通读取状态仅aria-busy/sr-only，不新建通用可见加载/错误重试面板。上传ACK后的fresh list保已有兄弟行，新asset仍只在权威GET后列入。无intent的本地删除确认在取消时解除；未知写入不因关闭、普通读失败或裸4xx而换key。
+
+Project根页是独立新任务草稿，不继承隐藏历史的锁定/模式/模型；selector在根页挂载时不写旧engine，Send先分配新ID后才同步应用draft选择。Project菜单只含项目操作并显示实际已读目标名，目标与意图随actor/project/route/admission生命周期围栏退休。没有借UI重构清空旧Run/unknown/重试记录，也未新增网络协议或数据owner。
+
+此片不实现Project成员协作授权、不公开个人会话/凭据、不把私有URL当共享权限。Manus已观察共同上下文与个人任务/凭据边界继续作为后续设计门，真实完整上线仍由Root唯一计划、正常行为证据和精确组合判定。
+
 ## 2026-10-26 裸 `/app` 首页与 direct 缓存选择（已正常激活并验 New／冷重载）
 
 **目标／当前事实。** 仅收 Root 已复现的“全局 New→`/app` 空稿→硬刷新被旧 failed active 改回 conversation URL”，及随后首次明确 Send 的正确 URL；不改项目、原22 WIP／AppFrame入口、API／数据契约或全局 New 原运行取消语义。原 `133a5ee` 的 `use-app-frame-navigation` 把裸 direct 当旧 thread 的呈现资格并从 active 缓存补 URL；`page-clients` 的共享 localStorage index 又先于路由恢复旧 active。缓存不是 route authority；旧 pending／ACK／owner正文不因首页偏好被删除或重派。
@@ -3543,3 +3551,12 @@ App固定BFF f71a179 / Public24原Git blob，七public窄生成器正规重出�
 保留原生 textarea 与现 SelectedSkillPill，不声称已复刻 Manus 的行内 contenteditable skillTag。专用菜单使用现 UI primitives/语义 token，无新依赖/通用选择框架；无业务协议、owner 或数据模型变化。Manus 2026-10-25 已观察的候选行高50px、padding6px 8px、标题14px/20px、描述单行省略沿专用 CSS 落位；窄屏单面板、触控及独立滚动保留，正常同视口对照由 Root 验证。
 
 同日独立路由修补：New task 在成功分配后按动作时 actual pathname 判断是否回 canonical chatHref，不依赖已过时的 standaloneSurface；focus wrapper 同步决定跨 surface 双 RAF。保留原 Send 严格路径/会话 guard、Project 分支和导航 owner，不用 picker 绕过旧路径。
+
+
+## Project resource access consumer (fixed Public28.1, candidate)
+
+固定 BFF `11777152bf8fe2ae316e4c67fb355eab94e7c0b5` 唯一 public snapshot；具名 row/detail 与 feature-local command scope 消费生成的 metadata/deletion decoder。列表行不是附件权威信息：详情和每次下载前重新 GET 精确 Project/Asset，Browser 仅访问同源 adapter，不读取 Storage 地址或套用 personal/Artifact 业务授权。所有格式仅原生 attachment 下载，无 HTML/SVG 执行或内联预览；界面仅确认下载已启动，不冒称浏览器传输已完成。
+
+DELETE 是不可逆普通 Asset 逻辑删除，不是解除关联，也不证明物理清理完成；用户先看到精确文件名及风险确认，再创建唯一空正文/key。未知响应/HTML/裸4xx/错误profile/超时或取消保留原命令，关闭重开不自动提交；只有严格 owner envelope+对应 status/code 才确定拒绝，可信准入撤销退休该actor意图。ACK精确绑定 asset_id 后仅屏蔽此ID并重新列表，慢/失败/旧页不会复活它；新ID不受影响。actor/project/admission generation/实际route改变会取消旧请求、退休document-local意图并拒绝迟到结果。没有跨reload/多tab恢复承诺。
+
+资源详情初次readonly壳稳定，metadata未准入禁操作；通用读取状态仅aria-busy/sr-only，无可见异常/重试面板，关闭后再点行自然fresh重读。主动下载失败紧凑反馈、未知写入原命令恢复独立保留，quiet-read不掩写失败。

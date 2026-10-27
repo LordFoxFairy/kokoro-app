@@ -51,3 +51,6 @@ export type ProjectResourceListPage = {
   }[]
   nextCursor: string | null
 }
+
+// Runtime decoders are generated only from the fixed BFF public snapshot.
+export { projectResourceItemResponseSchema, projectResourceDeletionResponseSchema, projectResourceErrorEnvelopeSchema, projectResourceAssetIdSchema } from "@/generated/bff-project-resource"
