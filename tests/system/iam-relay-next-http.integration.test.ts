@@ -808,7 +808,7 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
         })
         expect(tenant?.status()).toBe(200)
         expect(page.url()).toBe(`http://localhost:${nextPort}/auth/sign-in/failed`)
-        await page.getByRole("heading", { name: "登录暂未完成", exact: true }).waitFor({ state: "visible" })
+        await page.getByRole("heading", { name: "恢复工作区", exact: true }).waitFor({ state: "visible" })
         expect(await page.getByRole("combobox", { name: "Tenant" }).count()).toBe(0)
         expect(await page.getByRole("button", { name: "Continue" }).count()).toBe(0)
 
@@ -1230,7 +1230,7 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
       await page.getByLabel("密码").fill("secret")
       await page.getByRole("button", { name: "登录" }).click()
       await page.waitForURL(`http://localhost:${nextPort}/auth/sign-in/failed`)
-      await page.getByRole("link", { name: "返回登录", exact: true }).waitFor({ state: "visible" })
+      await page.getByRole("link", { name: "重新登录", exact: true }).waitFor({ state: "visible" })
       await page.reload()
       expect(requests).not.toContain("/login")
       expect(requests).not.toContain("/api/auth/signin/kokoro-iam")
@@ -1713,7 +1713,7 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
       for (let i = 0; i < 2; i++) {
         const page = await rawHttp(nextPort, "/auth/sign-in/failed")
         expect(page.status).toBe(200)
-        expect(page.body).toContain("登录暂未完成")
+        expect(page.body).toContain("恢复工作区")
       }
       expect(receivedPaths).toEqual([])
     } else expect(JSON.parse(response.body)).toMatchObject({ error: { code: "iam_interaction_unavailable" } })

@@ -2334,9 +2334,14 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
           response.end(JSON.stringify({ data: { session_id: "session-no-meta" } }))
           return
         }
+        const directMoveSnapshot = request.url?.match(/^\/v1\/sessions\/(conv_[0-9a-f-]+)\?scope=direct$/u)?.[1]
+        const projectMoveSnapshot = request.url === `/v1/sessions/${moveConversationA}?project_ref=${moveProjectA}`
+          ? moveConversationA
+          : undefined
+        const moveSnapshotSessionId = directMoveSnapshot ?? projectMoveSnapshot
         if (request.method === "GET" && moveUiFixtureEnabled &&
-          (request.url === `/v1/sessions/${moveConversationA}` || request.url === `/v1/sessions/${moveConversationB}`)) {
-          const sessionId = request.url.slice("/v1/sessions/".length)
+          (moveSnapshotSessionId === moveConversationA || moveSnapshotSessionId === moveConversationB)) {
+          const sessionId = moveSnapshotSessionId
           const moveMessages = moveBindingFixtureEnabled && sessionId === moveConversationA ? [{
             message_id: "message-move-binding-a",
             role: "user",
@@ -2360,7 +2365,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
           return
         }
         if (request.method === "GET" && projectDeleteFixtureEnabled &&
-          request.url === `/v1/sessions/${projectDeleteConversationA}`) {
+          request.url === `/v1/sessions/${projectDeleteConversationA}?project_ref=${projectDeleteProject}`) {
           sessionSnapshotRequests += 1
           response.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" })
           response.end(JSON.stringify({
@@ -4102,7 +4107,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     }
   }, 45_000)
 
-  it("R141 bounds an unfinished session-list response and restores the list only after Retry", async () => {
+  it("R141 bounds an unfinished session-list response and restores the list after normal re-entry", async () => {
     const proxy = await sessionProbeProxy(nextPort)
     let browser: Browser | undefined
     let page: Page | undefined
@@ -4123,19 +4128,23 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       expect(loginRequestsAtListBarrier).toBe(loginRequestsAfterAdmission)
 
       const directList = page.locator('[data-conversation-list="direct"]')
-      const alert = directList.getByRole("alert")
-      const retry = alert.getByRole("button", { name: /Retry|重试/u })
-      await alert.waitFor({ timeout: 15_000 })
+      const status = directList.getByText("Failed to load chats", { exact: true })
+      await expect.poll(() => status.count(), { timeout: 15_000 }).toBe(1)
+      expect(await directList.getByRole("alert").count()).toBe(0)
+      expect(await directList.getByRole("button", { name: /Retry|重试/u }).count()).toBe(0)
       expect(new URL(page.url()).pathname).toBe("/app")
       expect(proxy.listRequests()).toBe(1)
       expect(proxy.loginRequests()).toBe(loginRequestsAtListBarrier)
 
       proxy.releaseListBodies()
-      await retry.click()
+      const reentered = await page.reload({ waitUntil: "domcontentloaded", timeout: 12_000 })
+      expect(reentered?.status()).toBe(200)
+      await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: 15_000 })
+      await expandDesktopRail(page)
       await expect.poll(() => proxy.listRequests(), { timeout: 10_000 }).toBe(2)
       await page.getByText("Bounded list alpha", { exact: true }).waitFor({ state: "visible", timeout: 10_000 })
       await page.getByText("Bounded list beta", { exact: true }).waitFor({ state: "visible", timeout: 10_000 })
-      await expect.poll(() => alert.count(), { timeout: 10_000 }).toBe(0)
+      await expect.poll(() => directList.getByText("Failed to load chats", { exact: true }).count(), { timeout: 10_000 }).toBe(0)
       expect(proxy.loginRequests()).toBe(loginRequestsAtListBarrier)
       await context.close()
     } catch (error) {
@@ -4149,7 +4158,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     }
   }, 50_000)
 
-  it("R141 keeps a 503 session list on an explicit Retry surface and restores the authoritative list", async () => {
+  it("R141 keeps a 503 session list out of the primary surface and restores the authoritative list after normal re-entry", async () => {
     const proxy = await sessionProbeProxy(nextPort)
     let browser: Browser | undefined
     let page: Page | undefined
@@ -4168,19 +4177,23 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       expect(loginRequestsAtListBarrier).toBe(loginRequestsAfterAdmission)
 
       const directList = page.locator('[data-conversation-list="direct"]')
-      const alert = directList.getByRole("alert")
-      const retry = alert.getByRole("button", { name: /Retry|重试/u })
-      await alert.waitFor({ timeout: 10_000 })
+      const status = directList.getByText("Failed to load chats", { exact: true })
+      await expect.poll(() => status.count(), { timeout: 10_000 }).toBe(1)
+      expect(await directList.getByRole("alert").count()).toBe(0)
+      expect(await directList.getByRole("button", { name: /Retry|重试/u }).count()).toBe(0)
       expect(new URL(page.url()).pathname).toBe("/app")
       expect(proxy.listRequests()).toBe(1)
       expect(proxy.loginRequests()).toBe(loginRequestsAtListBarrier)
 
       sessionListStatus = 200
-      await retry.click()
+      const reentered = await page.reload({ waitUntil: "domcontentloaded", timeout: 12_000 })
+      expect(reentered?.status()).toBe(200)
+      await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: 15_000 })
+      await expandDesktopRail(page)
       await expect.poll(() => proxy.listRequests(), { timeout: 10_000 }).toBe(2)
       await page.getByText("Bounded list alpha", { exact: true }).waitFor({ state: "visible", timeout: 10_000 })
       await page.getByText("Bounded list beta", { exact: true }).waitFor({ state: "visible", timeout: 10_000 })
-      await expect.poll(() => alert.count(), { timeout: 10_000 }).toBe(0)
+      await expect.poll(() => directList.getByText("Failed to load chats", { exact: true }).count(), { timeout: 10_000 }).toBe(0)
       expect(proxy.loginRequests()).toBe(loginRequestsAtListBarrier)
       await context.close()
     } catch (error) {
@@ -5397,7 +5410,12 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       expect(await reloadedList.getByText("R190 title B", { exact: true }).count()).toBe(0)
       expect(await reloadedList.getByText("R190 title A", { exact: true }).count()).toBe(0)
 
-      await reloadedList.getByRole("button", { name: /Retry|重试/u }).click()
+      expect(await reloadedList.getByRole("alert").count()).toBe(0)
+      expect(await reloadedList.getByRole("button", { name: /Retry|重试/u }).count()).toBe(0)
+      const reentered = await page.reload({ waitUntil: "domcontentloaded", timeout: 12_000 })
+      expect(reentered?.status()).toBe(200)
+      await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: 15_000 })
+      await expandDesktopRail(page)
       await expect.poll(() => renameLifecycleListResponses.at(-1), { timeout: 10_000 }).toEqual({
         status: 200,
         title: "R190 canonical D",
@@ -5679,7 +5697,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       const conversationA = directList.locator('[data-conversation-id="session-list-a"]')
       await conversationA.click()
       await expect.poll(() => sessionSnapshotRequests, { timeout: 10_000 }).toBe(1)
-      expect(sessionBoundaryRequests).toContainEqual({ method: "GET", path: "/v1/sessions/session-list-a" })
+      expect(sessionBoundaryRequests).toContainEqual({ method: "GET", path: "/v1/sessions/session-list-a?scope=direct" })
       expect(new URL(page.url()).pathname).toBe("/app")
       await expect.poll(() => conversationA.getAttribute("aria-pressed"), { timeout: 10_000 }).toBe("true")
       await page.getByText("R143 authoritative conversation A body", { exact: true }).waitFor({ state: "visible", timeout: 10_000 })
@@ -5750,7 +5768,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       const conversationA = directList.locator('[data-conversation-id="session-list-a"]')
       await conversationA.click()
       await expect.poll(() => sessionSnapshotRequests, { timeout: 10_000 }).toBe(1)
-      expect(sessionBoundaryRequests).toContainEqual({ method: "GET", path: "/v1/sessions/session-list-a" })
+      expect(sessionBoundaryRequests).toContainEqual({ method: "GET", path: "/v1/sessions/session-list-a?scope=direct" })
       expect(new URL(page.url()).pathname).toBe("/app")
       await expect.poll(() => conversationA.getAttribute("aria-pressed"), { timeout: 10_000 }).toBe("true")
       await page.getByText("R143 authoritative conversation A body", { exact: true }).waitFor({ state: "visible", timeout: 10_000 })

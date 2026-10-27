@@ -238,6 +238,7 @@ vi.mock("@/ui/shell/page-clients", () => ({
     uploadConnectorIcon,
   }),
   browserPricingClient: () => ({}),
+  readBrowserAuthIndexSubject: () => window.localStorage.getItem("kokoro.web.auth-index-subject"),
   browserEngine: () => null,
 }));
 
@@ -410,6 +411,7 @@ describe("SettingsModal 设置中心模态", () => {
 
   it("keeps account upgrade as readable catalog navigation without a transaction", async () => {
     const onTabChange = vi.fn();
+    window.localStorage.setItem("kokoro.web.auth-index-subject", "settings-reader");
     renderSettings(() => {}, onTabChange);
     const upgrade = await screen.findByRole("button", { name: "升级" });
     expect(upgrade).toBeEnabled();

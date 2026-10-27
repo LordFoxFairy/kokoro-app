@@ -1,4 +1,51 @@
-import { expect, test, type Locator } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
+
+// Keep the original user journey and assertions unchanged. These passive
+// observations distinguish a responsive focus handoff from a whole-document
+// development reload; a later green run alone does not explain an old failure.
+const navigationObservations = new WeakMap<Page, unknown[]>();
+test.beforeEach(async ({ page }) => {
+  const observations: unknown[] = [];
+  navigationObservations.set(page, observations);
+  const record = (kind: string, value: unknown) => observations.push({ at: Date.now(), kind, value });
+  page.on("framenavigated", frame => {
+    if (frame === page.mainFrame()) record("main-frame-navigation", frame.url());
+  });
+  page.on("websocket", socket => {
+    if (!socket.url().includes("/_next/webpack-hmr")) return;
+    socket.on("framereceived", frame => {
+      try {
+        const value: unknown = JSON.parse(typeof frame.payload === "string" ? frame.payload : frame.payload.toString());
+        if (value !== null && typeof value === "object") {
+          const message = value as { action?: unknown; type?: unknown; data?: unknown };
+          record("development-message", {
+            action: typeof message.action === "string" ? message.action : null,
+            type: typeof message.type === "string" ? message.type : null,
+            reason: typeof message.data === "string" ? message.data.slice(0, 200) : null,
+          });
+        }
+      } catch { /* Non-JSON frames have no diagnostic action. */ }
+    });
+  });
+  page.on("console", message => {
+    const text = message.text();
+    if (text.startsWith("[navigation-focus]") || text.startsWith("[navigation-unload]") || text.startsWith("[Fast Refresh]")) record("console", text);
+  });
+  await page.addInitScript(() => {
+    const describeFocus = () => {
+      const active = document.activeElement;
+      return active instanceof HTMLElement ? { tag: active.tagName, label: active.getAttribute("aria-label"), id: active.id } : null;
+    };
+    document.addEventListener("focusin", () => console.debug("[navigation-focus]", JSON.stringify(describeFocus())), { capture: true });
+    window.addEventListener("beforeunload", () => console.debug("[navigation-unload]", JSON.stringify(describeFocus())));
+  });
+});
+test.afterEach(async ({ page }, testInfo) => {
+  await testInfo.attach("navigation-observations", {
+    body: JSON.stringify(navigationObservations.get(page) ?? [], null, 2),
+    contentType: "application/json",
+  });
+});
 
 // A CSS-hidden destination still exists in jsdom. Check its rendered bounds
 // through the user's More-menu, keyboard and resize journey instead.
