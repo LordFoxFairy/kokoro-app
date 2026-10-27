@@ -1492,7 +1492,7 @@ it("SET29 preview keeps the published preview balance path without a live bounda
 it("SET47 task archive is a keyboard-accessible menu action with its own caller",async()=>{
  const archive=vi.fn();const remove=vi.fn();renderRail({onArchiveConversation:archive,onDeleteConversation:remove});
  await openConversationActions();
- const item=await screen.findByRole("menuitem",{name:"归档任务"});fireEvent.click(item);expect(archive).toHaveBeenCalledWith("ses_1");expect(remove).not.toHaveBeenCalled();
+ const item=await screen.findByRole("menuitem",{name:"归档任务 · 旧标题"});fireEvent.click(item);expect(archive).toHaveBeenCalledWith("ses_1");expect(remove).not.toHaveBeenCalled();
 });
 // SET47-END
 
@@ -1547,7 +1547,7 @@ it("one conversation ellipsis owns all actions without stealing row selection or
   const trigger = await openConversationActions()
   expect(screen.getByRole("menuitem", { name: "重命名会话 旧标题" })).toBeVisible()
   expect(screen.getByRole("menuitem", { name: "移动会话 旧标题" })).toHaveAttribute("aria-haspopup", "menu")
-  expect(screen.getByRole("menuitem", { name: "归档任务" })).toBeVisible()
+  expect(screen.getByRole("menuitem", { name: "归档任务 · 旧标题" })).toBeVisible()
   expect(screen.getByRole("menuitem", { name: "删除会话 旧标题" })).toBeVisible()
   expect(trigger).not.toHaveAttribute("draggable")
   fireEvent.keyDown(screen.getByRole("menu", { name: "更多 · 旧标题" }), { key: "Escape" })
@@ -1577,7 +1577,7 @@ it("conversation ellipsis keeps pending actions unavailable without disabling un
   renderRail({ onArchiveConversation: archive, archiveBusy: true, onMoveConversation: move, conversationMovePending: true })
   await openConversationActions()
   expect(screen.getByRole("menuitem", { name: "移动会话 旧标题" })).toHaveAttribute("data-disabled")
-  expect(screen.getByRole("menuitem", { name: "归档任务" })).toHaveAttribute("data-disabled")
+  expect(screen.getByRole("menuitem", { name: "归档任务 · 旧标题" })).toHaveAttribute("data-disabled")
   expect(screen.getByRole("menuitem", { name: "重命名会话 旧标题" })).not.toHaveAttribute("data-disabled")
   expect(screen.getByRole("menuitem", { name: "删除会话 旧标题" })).not.toHaveAttribute("data-disabled")
   expect(archive).not.toHaveBeenCalled()
@@ -1588,7 +1588,7 @@ it("conversation ellipsis retains the invalid archive identity explanation and n
   const archive = vi.fn()
   renderRail({ conversations: [{ id: ".", title: "旧标题" }], onArchiveConversation: archive })
   await openConversationActions()
-  const item = screen.getByRole("menuitem", { name: "归档任务" })
+  const item = screen.getByRole("menuitem", { name: "归档任务 · 旧标题" })
   expect(item).toHaveAttribute("data-disabled")
   expect(screen.getByText("此历史任务标识无法通过浏览器安全访问，暂不可操作。")).toBeVisible()
   fireEvent.click(item)
@@ -1611,4 +1611,65 @@ it("conversation menu keyboard rename hands off focus and Escape restores the dr
   const trigger = await openConversationActions()
   fireEvent.keyDown(screen.getByRole("menu", { name: "更多 · 旧标题" }), { key: "Escape" })
   await waitFor(() => expect(trigger).toHaveFocus())
+})
+
+
+it("long conversation titles stay in precise aria targets, not visible menu action labels", async () => {
+  const title = "任务".repeat(128)
+  const rename = vi.fn(), move = vi.fn(), archive = vi.fn(), remove = vi.fn()
+  renderRail({ conversations: [{ id: "ses_long_title", title }], onRenameConversation: rename,
+    onMoveConversation: move, onArchiveConversation: archive, onDeleteConversation: remove })
+  await openConversationActions(title)
+  const menu = screen.getByRole("menu", { name: `更多 · ${title}` })
+  expect(within(menu).getAllByRole("menuitem").map(item => item.textContent)).toEqual(["重命名", "移动到", "归档", "删除"])
+  expect(within(menu).getByRole("menuitem", { name: `重命名会话 ${title}` })).toHaveTextContent(/^重命名$/u)
+  expect(within(menu).getByRole("menuitem", { name: `移动会话 ${title}` })).toHaveTextContent(/^移动到$/u)
+  expect(within(menu).getByRole("menuitem", { name: `删除会话 ${title}` })).toHaveTextContent(/^删除$/u)
+  expect(within(menu).getByRole("menuitem", { name: `归档任务 · ${title}` })).toHaveTextContent(/^归档$/u)
+  expect(menu).not.toHaveTextContent(title)
+  fireEvent.click(within(menu).getByRole("menuitem", { name: `重命名会话 ${title}` }))
+  const input = await screen.findByRole("textbox", { name: "会话标题" })
+  expect(input).toHaveValue(title)
+  fireEvent.keyDown(input, { key: "Escape" })
+  expect(rename).not.toHaveBeenCalled()
+  expect(move).not.toHaveBeenCalled()
+  expect(archive).not.toHaveBeenCalled()
+  expect(remove).not.toHaveBeenCalled()
+})
+
+it("a long unbroken Project destination retains its full exact identity in the move submenu", async () => {
+  const projectId = "project_00000000-0000-4000-8000-000000000909"
+  const name = "D".repeat(256)
+  const onMove = vi.fn()
+  renderRail({ projects: [{ id: projectId, name, href: `/app/project/${projectId}` }], projectListStatus: "ready", conversationScope: { kind: "direct" }, onMoveConversation: onMove })
+  await openConversationActions()
+  const move = screen.getByRole("menuitem", { name: "移动会话 旧标题" })
+  expect(move).toHaveTextContent(/^移动到$/u)
+  move.focus()
+  fireEvent.keyDown(move, { key: "ArrowRight" })
+  const destination = await screen.findByRole("menuitem", { name })
+  expect(destination.textContent).toBe(name)
+  fireEvent.click(destination)
+  expect(onMove).toHaveBeenCalledExactlyOnceWith("ses_1", projectId)
+})
+
+
+it.each([
+  ["zh", ["重命名", "移动到", "归档", "删除"]],
+  ["en", ["Rename", "Move to", "Archive", "Delete"]],
+  ["de", ["Umbenennen", "Verschieben nach", "Archivieren", "Löschen"]],
+  ["es", ["Cambiar nombre", "Mover a", "Archivar", "Eliminar"]],
+  ["fr", ["Renommer", "Déplacer vers", "Archiver", "Supprimer"]],
+  ["ja", ["名前を変更", "移動先", "アーカイブ", "削除"]],
+  ["ko", ["이름 바꾸기", "이동 위치", "보관", "삭제"]],
+  ["pt", ["Renomear", "Mover para", "Arquivar", "Excluir"]],
+  ["ru", ["Переименовать", "Переместить в", "Архивировать", "Удалить"]],
+] as const)("%s conversation menu uses short localized text and keeps the full aria target", async (locale, labels) => {
+  window.localStorage.setItem("kokoro.locale", locale)
+  renderRail({ conversations: [{ id: "ses_locale", title: "Target" }], onMoveConversation: vi.fn(), onArchiveConversation: vi.fn() })
+  const trigger = screen.getByRole("button", { name: / · Target$/u })
+  fireEvent.keyDown(trigger, { key: "Enter", code: "Enter" })
+  const items = within(await screen.findByRole("menu")).getAllByRole("menuitem")
+  expect(items.map(item => item.textContent)).toEqual(labels)
+  for (const item of items) expect(item.getAttribute("aria-label")).toContain("Target")
 })

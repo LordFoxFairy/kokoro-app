@@ -4,6 +4,10 @@
 import type { MessageKey } from "./messages"
 
 export const ko: Partial<Record<MessageKey, string>> = {
+  "rail.actionRename": "이름 바꾸기",
+  "rail.actionMove": "이동 위치",
+  "rail.actionArchive": "보관",
+  "rail.actionDelete": "삭제",
   "firstSite.projectMenuDelete": "삭제",
   "firstSite.editProject": "프로젝트 편집",
   "firstSite.viewProject": "프로젝트 보기",

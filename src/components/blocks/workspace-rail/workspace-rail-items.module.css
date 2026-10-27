@@ -119,6 +119,18 @@
 }
 .itemOptions:hover { color: var(--foreground); }
 .itemOptions svg { width: 1rem; height: 1rem; }
+/* Portal menus belong to this feature, not the global dropdown primitive.
+ * Respect the actual collision side width as well as a narrow viewport. */
+.itemMenu {
+  width: 14rem;
+  min-width: 0;
+  max-width: min(calc(100vw - 1rem), var(--radix-dropdown-menu-content-available-width, calc(100vw - 1rem)));
+  max-height: var(--radix-dropdown-menu-content-available-height);
+  overflow-y: auto;
+}
+.itemMoveMenu { width: 16rem; }
+.itemMenuText { min-width: 0; flex: 1; overflow-wrap: anywhere; white-space: normal; }
+.itemMenu p { overflow-wrap: anywhere; }
 .itemRenameInput { min-width: 0; flex: 1; margin: 0.2rem 0.35rem; border-color: var(--ring); border-radius: var(--radius-sm); font-size: 0.85rem; }
 .loadMore { width: calc(100% - 1.3rem); margin: 0.35rem 0.65rem 0.2rem; border-radius: var(--radius-sm); font-size: 0.8rem; }
 

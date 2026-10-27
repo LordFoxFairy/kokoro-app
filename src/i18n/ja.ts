@@ -4,6 +4,10 @@
 import type { MessageKey } from "./messages"
 
 export const ja: Partial<Record<MessageKey, string>> = {
+  "rail.actionRename": "名前を変更",
+  "rail.actionMove": "移動先",
+  "rail.actionArchive": "アーカイブ",
+  "rail.actionDelete": "削除",
   "firstSite.projectMenuDelete": "削除",
   "firstSite.editProject": "プロジェクトを編集",
   "firstSite.viewProject": "プロジェクトを表示",

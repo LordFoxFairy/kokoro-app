@@ -4,6 +4,10 @@
 import type { MessageKey } from "./messages"
 
 export const ru: Partial<Record<MessageKey, string>> = {
+  "rail.actionRename": "Переименовать",
+  "rail.actionMove": "Переместить в",
+  "rail.actionArchive": "Архивировать",
+  "rail.actionDelete": "Удалить",
   "firstSite.projectMenuDelete": "Удалить",
   "firstSite.editProject": "Изменить проект",
   "firstSite.viewProject": "Открыть проект",

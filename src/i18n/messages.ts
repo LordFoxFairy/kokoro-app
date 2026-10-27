@@ -42,6 +42,10 @@ export const LOCALE_NAMES: Record<Locale, string> = {
 
 // zh 是完整源（所有 key 必在此）。命名约定：<区域>.<用途>。{var} 为插值占位。
 export const zh = {
+  "rail.actionRename": "重命名",
+  "rail.actionMove": "移动到",
+  "rail.actionArchive": "归档",
+  "rail.actionDelete": "删除",
   "firstSite.projectMenuDelete": "删除",
   "firstSite.editProject": "编辑项目",
   "firstSite.viewProject": "查看项目",

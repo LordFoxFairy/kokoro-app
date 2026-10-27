@@ -158,7 +158,7 @@ export function WorkspaceRailSessionItem({
                 <Ellipsis aria-hidden="true" />
               </SidebarMenuAction>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" onCloseAutoFocus={(event) => {
+            <DropdownMenuContent className={itemStyles.itemMenu} align="end" onCloseAutoFocus={(event) => {
               const afterClose = afterMenuCloseRef.current
               if (!afterClose) return
               afterMenuCloseRef.current = null
@@ -168,40 +168,40 @@ export function WorkspaceRailSessionItem({
               menuTriggerRef.current?.focus()
               afterClose()
             }}>
-              <DropdownMenuItem onSelect={() => {
+              <DropdownMenuItem aria-label={t("rail.renameChat", { title })} onSelect={() => {
                 afterMenuCloseRef.current = () => onStartRename(conversation.id, conversation.title)
               }}>
-                <Pencil aria-hidden="true" />{t("rail.renameChat", { title })}
+                <Pencil aria-hidden="true" /><span className={itemStyles.itemMenuText}>{t("rail.actionRename")}</span>
               </DropdownMenuItem>
               {onMoveConversation ? (
                 <DropdownMenuSub>
-                  <DropdownMenuSubTrigger disabled={conversationMovePending}>
-                    <FolderInput aria-hidden="true" />{t("rail.moveChat", { title })}
+                  <DropdownMenuSubTrigger aria-label={t("rail.moveChat", { title })} disabled={conversationMovePending}>
+                    <FolderInput aria-hidden="true" /><span className={itemStyles.itemMenuText}>{t("rail.actionMove")}</span>
                   </DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent>
+                  <DropdownMenuSubContent className={cn(itemStyles.itemMenu, itemStyles.itemMoveMenu)}>
                     {moveDestinations.map((destination) => (
                       <DropdownMenuItem key={destination.id ?? "direct"}
                         onSelect={() => onMoveConversation(conversation.id, destination.id)}>
-                        {destination.name}
+                        <span className={itemStyles.itemMenuText}>{destination.name}</span>
                       </DropdownMenuItem>
                     ))}
                     {conversationMove?.status === "unknown" && onRetryConversationMove ? (
-                      <DropdownMenuItem onSelect={onRetryConversationMove}>{t("rail.retryMoveChat")}</DropdownMenuItem>
+                      <DropdownMenuItem onSelect={onRetryConversationMove}><span className={itemStyles.itemMenuText}>{t("rail.retryMoveChat")}</span></DropdownMenuItem>
                     ) : null}
                   </DropdownMenuSubContent>
                 </DropdownMenuSub>
               ) : null}
               {onArchiveConversation ? <>
-                <DropdownMenuItem disabled={archiveBusy || !archiveIdAvailable(conversation.id)}
+                <DropdownMenuItem aria-label={`${t("archive.action")} · ${title}`} disabled={archiveBusy || !archiveIdAvailable(conversation.id)}
                   onSelect={() => onArchiveConversation(conversation.id)}>
-                  <Archive aria-hidden="true" />{t("archive.action")}
+                  <Archive aria-hidden="true" /><span className={itemStyles.itemMenuText}>{t("rail.actionArchive")}</span>
                 </DropdownMenuItem>
                 {!archiveIdAvailable(conversation.id) ? <p>{t("archive.idUnavailable")}</p> : null}
               </> : null}
-              <DropdownMenuItem variant="destructive" onSelect={() => {
+              <DropdownMenuItem aria-label={t("rail.deleteChat", { title })} variant="destructive" onSelect={() => {
                 afterMenuCloseRef.current = () => onRequestDelete(conversation)
               }}>
-                <X aria-hidden="true" />{t("rail.deleteChat", { title })}
+                <X aria-hidden="true" /><span className={itemStyles.itemMenuText}>{t("rail.actionDelete")}</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
