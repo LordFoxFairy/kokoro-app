@@ -541,7 +541,8 @@ function AppFrameRuntime({
     retireProject: projectReads.retireProject,
     refreshRenamedProject: projectReads.refreshRenamedProject,
     ...(projectReadBoundary === undefined ? {} : { renameBoundary: projectReadBoundary }),
-    renameRouteKey: JSON.stringify([projectRef ?? null, activeId, navigationState.settingsTab, draftRoute, typeof window === "undefined" ? null : window.location.hash]),
+    // Project dialogs follow the address, not a retained task engine acquiring its activeId.
+    renameRouteKey: JSON.stringify([projectRef ?? null, navigationState.settingsTab, draftRoute, typeof window === "undefined" ? null : window.location.hash]),
   })
 
   const actions = useAppFrameActions({

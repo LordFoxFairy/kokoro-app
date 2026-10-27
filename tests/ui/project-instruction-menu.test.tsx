@@ -11,7 +11,7 @@ import { createSessionEngine, type SessionEngine } from "@/engine/machine"
 import { createFakeClient, createMemoryStorage } from "../engine/fakes"
 import * as pageClients from "@/ui/shell/page-clients"
 import { openCanvas, readCanvasState, resetCanvasStore } from "@/ui/canvas/canvas-store"
-import type { ConversationStore } from "@/core/conversations"
+import { addConversation, type ConversationStore } from "@/core/conversations"
 
 const projectA = { id: "project_11111111-1111-1111-1111-111111111111", name: "项目甲", slug: "a", description: "", instruction: "甲的原指令", created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-01T00:00:00Z" }
 const projectB = { ...projectA, id: "project_22222222-2222-2222-2222-222222222222", name: "项目乙", slug: "b", instruction: "乙的原指令" }
@@ -61,10 +61,10 @@ function mountProjectMenu(respond?: (path: string, init?: RequestInit) => Promis
     }
     return Response.json({}, { status: 503 })
   })
-  function Frame({ boundary = initialBoundary, enabled = true, implicit = false, previewMode = false, conversations = false }: { conversations?: boolean; boundary?: typeof initialBoundary; enabled?: boolean; implicit?: boolean; previewMode?: boolean }) {
+  function Frame({ boundary = initialBoundary, enabled = true, implicit = false, previewMode = false, conversations = false, scopedEngines = false }: { scopedEngines?: boolean; conversations?: boolean; boundary?: typeof initialBoundary; enabled?: boolean; implicit?: boolean; previewMode?: boolean }) {
     const path = useSyncExternalStore(subscribeRoute, () => window.location.pathname)
     const projectRef = path.split("/").at(-1)
-    return <ThemeProvider><LocaleProvider><AppFrame engine={engine} preview={previewMode} chatHref="/app" projectWorkspace
+    return <ThemeProvider><LocaleProvider><AppFrame {...(scopedEngines ? {} : { engine })} preview={previewMode} chatHref="/app" projectWorkspace
       {...(projectRef === undefined ? {} : { projectRef })} emptyState={KokoroProjectWorkspace} projectReadBoundary={boundary}
       {...(implicit ? { featureFlags: [{ key: "workspace.instructions", enabled }] } : { workspaceCapabilities: { ...capabilities, instructions: enabled, projectConversations: conversations } })} /></LocaleProvider></ThemeProvider>
   }
@@ -642,4 +642,61 @@ it("侧栏编辑项目复用B名称单字段表单，取消不改项目或指令
   await waitFor(() => expect(trigger).toHaveFocus())
   expect(view.writes).toEqual([])
   expect(screen.getByRole("heading", { name: projectB.name })).toBeInTheDocument()
+})
+
+it("652移动侧栏跨项目编辑取消后，首个返回A删除请求仍打开A确认且取消零写", async () => {
+  const oldMatchMedia = window.matchMedia
+  const oldWidth = window.innerWidth
+  Object.defineProperty(window, "innerWidth", { configurable: true, value: 652 })
+  window.matchMedia = vi.fn((query: string) => ({ matches: /width/u.test(query), media: query, onchange: null,
+    addListener: () => undefined, removeListener: () => undefined, addEventListener: () => undefined,
+    removeEventListener: () => undefined, dispatchEvent: () => false }))
+  const deleted: string[] = []
+  // Real per-project leases hydrate a remembered task after the target route first renders.
+  const retainedA = createSessionEngine({ client: createFakeClient(), storage: createMemoryStorage<ConversationStore>(addConversation(null, "retained-a", 1000)), scope: { kind: "project", projectRef: projectA.id } })
+  const retainedB = createSessionEngine({ client: createFakeClient(), storage: createMemoryStorage<ConversationStore>(addConversation(null, "retained-b", 1000)), scope: { kind: "project", projectRef: projectB.id } })
+  try {
+    vi.spyOn(pageClients, "browserEngine").mockImplementation(({ scope } = {}) => scope?.kind === "project" && scope.projectRef === projectB.id ? retainedB : retainedA)
+    vi.spyOn(pageClients, "retainBrowserEngine").mockReturnValue(() => {})
+    window.localStorage.setItem("kokoro.web.auth-index-subject", initialBoundary.subject)
+    const view = mountProjectMenu(async (path, init) => { if (init?.method === "DELETE") deleted.push(path); return undefined })
+    view.rerender(<view.Frame scopedEngines />)
+    await screen.findByRole("heading", { name: projectA.name })
+    const openSidebar = () => {
+      const header = document.querySelector<HTMLElement>('[data-slot="workspace-header"]')!
+      fireEvent.click(header.querySelector<HTMLButtonElement>('[data-web-navigation-trigger="true"]')!)
+    }
+    openSidebar()
+    fireEvent.contextMenu(await screen.findByRole("button", { name: projectB.name }), { clientX: 140, clientY: 280 })
+    fireEvent.click(within(await screen.findByRole("menu")).getByRole("menuitem", { name: "编辑项目" }))
+    const rename = await screen.findByRole("dialog", { name: "重命名项目" })
+    expect(window.location.pathname).toBe(`/app/project/${projectB.id}`)
+    expect(window.location.hash).toBe("#rename")
+    expect(within(rename).getByRole("textbox", { name: "项目名称" })).toHaveValue(projectB.name)
+    fireEvent.click(within(rename).getByRole("button", { name: "取消" }))
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "重命名项目" })).not.toBeInTheDocument())
+    expect(window.location.hash).toBe("")
+    expect(screen.getByRole("heading", { name: projectB.name })).toBeInTheDocument()
+    const header = document.querySelector<HTMLElement>('[data-slot="workspace-header"]')!
+    await waitFor(() => expect(within(header).getByRole("button", { name: "项目选项" })).toHaveFocus())
+    openSidebar()
+    fireEvent.contextMenu(await screen.findByRole("button", { name: projectA.name }), { clientX: 140, clientY: 240 })
+    fireEvent.click(within(await screen.findByRole("menu")).getByRole("menuitem", { name: "删除" }))
+    expect(window.location.pathname).toBe(`/app/project/${projectA.id}`)
+    expect(window.location.search + window.location.hash).toBe("")
+    const deletion = await screen.findByRole("dialog", { name: "删除项目" })
+    expect(deletion).toHaveTextContent(projectA.name)
+    expect(deletion).not.toHaveTextContent(projectB.name)
+    expect(deleted).toEqual([])
+    fireEvent.click(within(deletion).getByRole("button", { name: "取消" }))
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "删除项目" })).not.toBeInTheDocument())
+    expect(view.writes).toEqual([])
+    expect(deleted).toEqual([])
+    view.unmount()
+  } finally {
+    retainedA.dispose()
+    retainedB.dispose()
+    window.matchMedia = oldMatchMedia
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: oldWidth })
+  }
 })
