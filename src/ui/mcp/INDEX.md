@@ -1,3 +1,9 @@
+## 自定义 API 创建表单视觉（2026-10-27）
+
+`custom-api-form.module.css` 与 `mcp-create-dialog.module.css` 的 API 作用域使用实测内在内容高度，不固定724或780px；600px宽、95vw/95dvh上限，标题74px、页脚76px，只有字段body滚动，多密钥自然增高。复用settings surface/control token及既有菜单阴影；输入36px/8px圆角，说明与密钥值100/80px、10px圆角，字段焦点保留参考1px inset，按钮键盘焦点保留2px外圈。关闭按钮28px、top20px/right12px。
+
+短屏明确工程差异：参考390×400仍有500px最小高度并裁掉页脚；本实现将最小高度限制为`min(500px,95dvh)`，保留全部字段可滚动及页脚键盘可达，不宣称此缺陷态像素一致。`tests/ui/mcp-custom-api-visual.test.tsx`以真实组件DOM、Vite编译生产CSS及Chromium验证普通/短/窄/多密钥几何，不代替正常服务旅程。业务TS、全局token及共享Input/Button未变。
+
 ## 自定义 API 删除后的显示退休（2026-10-27）
 
 API management 与现MCP删除使用同一边界原则：仅原冻结remove请求经生产client严格验证deleted:true及exact profile_id的ACK后，在现actor/client command owner内记录只含profile_id的RAM负向显示事实。finish／关窗／同actor再准入generation不丢失；真正owner退休清空，旧late ACK不复活。广场、Settings管理与命令恢复入口统一过滤该ID，失败刷新、迟到旧head／后续页不令已删除卡复现；其它API行仍保原连续性。此记录不是权限、正文、原key/body/CAS或新持久源；unknown／拒绝不记，原请求恢复与精确读取不改，不自动DELETE或清整个列表。

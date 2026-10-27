@@ -2,20 +2,19 @@
   display: flex;
   width: 100%;
   min-height: 0;
-  /* The dialog owns the viewport cap.  A second, slightly larger cap here
-   * previously pushed the fixed footer below the rounded dialog on short
-   * screens, leaving only a clipped fragment of its buttons visible. */
-  height: 100%;
-  max-height: 100%;
-  flex: 1 1 auto;
+  /* Intrinsic content sets the height. The explicit viewport cap also bounds
+   * the form because an auto-height shell has no definite percentage height. */
+  max-height: 95dvh;
+  flex: 0 1 auto;
+  overflow: hidden;
   flex-direction: column;
-  background: var(--background);
+  background: var(--settings-surface);
 }
 .header {
   display: flex;
   flex: 0 0 auto;
   /* Manus keeps the title and first field in one uninterrupted surface. */
-  padding: 1.25rem 3.75rem 0.4375rem 1.25rem;
+  padding: 1.25rem 3.5rem 0.75rem 1.25rem;
 }
 .header h2 {
   margin: 0;
@@ -24,7 +23,7 @@
   line-height: 1.5rem;
 }
 .header p {
-  margin: 0.25rem 0 0;
+  margin: 0;
   color: var(--muted-foreground);
   font-size: 0.8125rem;
   line-height: 1.125rem;
@@ -32,13 +31,16 @@
 .body {
   display: flex;
   min-height: 0;
-  flex: 1;
+  flex: 0 1 auto;
   flex-direction: column;
   gap: 1rem;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 0 1.25rem;
 }
+.body > * { flex-shrink: 0; }
 .field {
+  min-width: 0;
   display: grid;
   gap: 0.5rem;
 }
@@ -138,8 +140,35 @@
 .environmentRow :global(input),
 .environmentRow :global(textarea) {
   border: 0;
-  background: rgb(55 53 47 / 6%);
+  background: var(--settings-editor-control-fill);
+  font-size: 0.875rem;
+  font-weight: 400;
+}
+.field :global(input),
+.environmentRow :global(input) {
+  height: 2.25rem;
+  min-height: 2.25rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  line-height: 1.25rem;
   box-shadow: none;
+}
+.field :global(textarea),
+.environmentRow :global(textarea) {
+  padding: 0.5rem 0.75rem 0.5rem 1rem;
+  border-radius: 0.625rem;
+  line-height: 1.375rem;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 5%);
+}
+.field :global(textarea) { height: 6.25rem; }
+.environmentRow :global(textarea) { height: 5rem; }
+.form :is(input, textarea):focus {
+  /* The measured inset is the field focus indicator, including initial autofocus. */
+  box-shadow: inset 0 0 0 1px var(--settings-control-border);
+}
+.form button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
 }
 .addSecret {
   width: fit-content;
@@ -152,18 +181,25 @@
   flex: 0 0 auto;
   justify-content: flex-end;
   gap: 0.75rem;
-  padding: 1rem 1.25rem;
-  border-top: 1px solid var(--border);
-  background: var(--background);
+  padding: 1.25rem;
+  background: var(--settings-surface);
 }
-@media (max-width: 34rem) {
-  .form {
-    height: 100%;
-  }
-  .environmentRow {
-    grid-template-columns: 1fr 2rem;
-  }
-  .environmentRow > div:first-child {
-    grid-column: 1 / -1;
-  }
+.footer button {
+  height: 2.25rem;
+  min-height: 2.25rem;
+  min-width: 4.5rem;
+  padding: 0 0.75rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+.footer button:first-child {
+  border: 0;
+  outline: 1px solid var(--settings-search-border);
+  background: transparent;
+  box-shadow: none;
+}
+.footer button:first-child:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
 }
