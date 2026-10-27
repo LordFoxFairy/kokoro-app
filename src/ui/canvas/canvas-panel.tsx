@@ -424,15 +424,13 @@ function WorkspaceList({
 
 function DeliveryTextPreview({ delivery, sessionId, boundary }: { delivery: SessionDelivery; sessionId: string; boundary: ProjectReadBoundary | undefined }) {
   const { t } = useLocale()
-  const [attempt, setAttempt] = useState(0)
   const subject = boundary?.subject ?? null
   const admitted = boundary?.admitted === true
   const generation = boundary?.generation
   const eligible = sessionId === delivery.conversationId && Number.isSafeInteger(delivery.size) && delivery.size >= 0 && delivery.size <= ARTIFACT_TEXT_PREVIEW_MAX_BYTES && (delivery.mime === "text/plain" || delivery.mime === "text/markdown")
-  const scope = useMemo(() => ({ subject, admitted, generation, conversationId: delivery.conversationId, artifactId: delivery.artifactId, mime: delivery.mime, size: delivery.size, eligible, attempt }), [subject, admitted, generation, delivery.conversationId, delivery.artifactId, delivery.mime, delivery.size, eligible, attempt])
+  const scope = useMemo(() => ({ subject, admitted, generation, conversationId: delivery.conversationId, artifactId: delivery.artifactId, mime: delivery.mime, size: delivery.size, eligible }), [subject, admitted, generation, delivery.conversationId, delivery.artifactId, delivery.mime, delivery.size, eligible])
   const [result, setResult] = useState<{ scope: typeof scope; kind: "text"; text: string } | { scope: typeof scope; kind: "failed" | "unsupported" } | null>(null)
   const live = useRef<typeof scope | null>(null)
-  const controllerRef = useRef<AbortController | null>(null)
   const retiredActor = useRef<string | null>(null)
   const actor = JSON.stringify([subject, generation])
   useLayoutEffect(() => {
@@ -442,7 +440,6 @@ function DeliveryTextPreview({ delivery, sessionId, boundary }: { delivery: Sess
   useEffect(() => {
     if (!eligible || !admitted || subject === null) return
     const controller = new AbortController()
-    controllerRef.current = controller
     const current = () => live.current === scope && !controller.signal.aborted
     const markerMatches = () => {
       try { return readBrowserAuthIndexSubject() === subject }
@@ -473,16 +470,16 @@ function DeliveryTextPreview({ delivery, sessionId, boundary }: { delivery: Sess
     }).catch(() => { if (current()) setResult({ scope, kind: "failed" }) })
     return () => {
       controller.abort()
-      if (controllerRef.current === controller) controllerRef.current = null
       window.removeEventListener("storage", storage)
       window.removeEventListener("pagehide", retire)
     }
   }, [scope, eligible, admitted, subject, actor])
   const visible = result?.scope === scope ? result : null
-  if (!eligible || !admitted || subject === null || visible?.kind === "unsupported") return <p>{t("artifact.cannotPreview")}</p>
+  if (!admitted || subject === null || sessionId !== delivery.conversationId) return <p className="sr-only" role="status">{t("artifact.cannotPreview")}</p>
+  if (!eligible || visible?.kind === "unsupported") return <p>{t("artifact.cannotPreview")}</p>
   if (visible?.kind === "text") return <pre className="whitespace-pre-wrap break-words" aria-label={t("canvas.previewTab")}>{visible.text}</pre>
-  if (visible?.kind === "failed") return <div role="alert"><p>{t("artifact.cannotPreview")}</p><Button type="button" variant="outline" onClick={() => setAttempt(value => value + 1)}>{t("artifact.retryPreview")}</Button></div>
-  return <div role="status"><p>{t("artifact.loadingPreview")}</p><Button type="button" variant="outline" onClick={() => { controllerRef.current?.abort(); setResult({ scope, kind: "failed" }) }}>{t("data.cancel")}</Button></div>
+  if (visible?.kind === "failed") return <p className="sr-only" role="alert">{t("artifact.cannotPreview")}</p>
+  return <div aria-busy="true"><p className="sr-only" role="status">{t("artifact.loadingPreview")}</p></div>
 }
 
 function ContentBody({

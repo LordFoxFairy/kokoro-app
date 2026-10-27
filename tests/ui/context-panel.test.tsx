@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, expect, it, vi } from "vitest"
-import { useState } from "react"
+import { useMemo, useState } from "react"
 
 import { LocaleProvider } from "@/i18n/context"
 import { ContextPanel } from "@/components/blocks/context-panel/context-panel"
@@ -327,6 +327,9 @@ it("桌面 Canvas 关闭过渡期间不进入读屏和键盘顺序", async () =>
 import { createHash, webcrypto } from "node:crypto"
 import { act } from "@testing-library/react"
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
+import { createSessionStreamState } from "@/core/state"
+import { useCanvasWorkspace } from "@/ui/shell/use-canvas-workspace"
+import { resetCanvasStore } from "@/ui/canvas/canvas-store"
 
 const artifactText = "# Real delivery\n中文正文 <script>alert(1)</script> ![no network](https://foreign.test/x.png)"
 const artifactBytes = new TextEncoder().encode(artifactText)
@@ -336,10 +339,10 @@ function textMetadata(artifactId = "artifact_text") {
   return Response.json({ data: { kind: "artifact", conversation_id: "session_1", artifact_id: artifactId, asset_id: "asset_text", artifact_kind: "document", title: "Delivered text", filename: "report.md", mime_type: "text/markdown", size_bytes: String(artifactBytes.length), content_sha256: createHash("sha256").update(artifactBytes).digest("hex"), source_run_id: "run_1", delivered_at: "2026-10-25T00:00:00Z" }, meta: { request_id: "preview-request" } })
 }
 function textResponse() { return new Response(artifactBytes, { headers: { "content-type": "text/markdown", "content-length": String(artifactBytes.length) } }) }
-function renderTextCanvas(boundary: ProjectReadBoundary | undefined, delivery = textDelivery) {
-  return <LocaleProvider><CanvasPanel sessionId="session_1" content={{ kind: "delivery", delivery }} files={[]} deliveries={[delivery]} fullscreen={false} onSelectFile={vi.fn()} onSelectDelivery={vi.fn()} onToggleFullscreen={vi.fn()} onClose={vi.fn()} {...(boundary === undefined ? {} : { readBoundary: boundary })} /></LocaleProvider>
+function renderTextCanvas(boundary: ProjectReadBoundary | undefined, delivery = textDelivery, sessionId = "session_1") {
+  return <LocaleProvider><CanvasPanel sessionId={sessionId} content={{ kind: "delivery", delivery }} files={[]} deliveries={[delivery]} fullscreen={false} onSelectFile={vi.fn()} onSelectDelivery={vi.fn()} onToggleFullscreen={vi.fn()} onClose={vi.fn()} {...(boundary === undefined ? {} : { readBoundary: boundary })} /></LocaleProvider>
 }
-afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); window.localStorage.removeItem("kokoro.web.auth-index-subject") })
+afterEach(() => { resetCanvasStore(); vi.unstubAllGlobals(); vi.restoreAllMocks(); window.localStorage.removeItem("kokoro.web.auth-index-subject") })
 
 it("Canvas opens the actual bounded delivered bytes, not just metadata, without executing Markdown or fetching external resources", async () => {
   window.localStorage.setItem("kokoro.web.auth-index-subject", "preview-reader")
@@ -357,7 +360,7 @@ it("Canvas opens the actual bounded delivered bytes, not just metadata, without 
 it.each([undefined, { admitted: false, subject: "preview-reader", generation: 1 }])("missing or retired trusted boundary refuses preview but leaves native download available %j", async boundary => {
   const fetcher = vi.fn(); vi.stubGlobal("fetch", fetcher)
   render(renderTextCanvas(boundary))
-  expect(screen.getByText("Cannot preview — please download.")).toBeVisible()
+  expect(screen.getByText("Cannot preview — please download.")).toHaveClass("sr-only")
   expect(screen.getByRole("button", { name: "Download" })).toBeEnabled()
   expect(fetcher).not.toHaveBeenCalled()
 })
@@ -384,30 +387,30 @@ it("switching artifact or trusted generation retires the old request and never s
   expect(pending).toHaveLength(2)
   view.rerender(renderTextCanvas({ ...textBoundary, admitted: false, generation: 3 }))
   expect(pending[1]!.signal.aborted).toBe(true)
-  expect(screen.getByText("Cannot preview — please download.")).toBeVisible()
+  expect(screen.getByText("Cannot preview — please download.")).toHaveClass("sr-only")
 })
 
-it("actor marker retirement and user cancellation abort preview without reopening the retired actor on retry", async () => {
+it("actor marker retirement aborts preview and same-generation rerender cannot restart the retired scope", async () => {
   window.localStorage.setItem("kokoro.web.auth-index-subject", "preview-reader")
   let requestSignal: AbortSignal | undefined
   const fetcher = vi.fn((_url: string, options: RequestInit) => { requestSignal = options.signal!; return new Promise<Response>(() => {}) })
   vi.stubGlobal("fetch", fetcher)
-  render(renderTextCanvas(textBoundary))
+  const view = render(renderTextCanvas(textBoundary))
   await waitFor(() => expect(fetcher).toHaveBeenCalledOnce())
-  fireEvent.click(screen.getByRole("button", { name: "Cancel" }))
-  expect(requestSignal?.aborted).toBe(true)
-  fireEvent.click(screen.getByRole("button", { name: "Reload preview" }))
-  await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2))
   act(() => {
     window.localStorage.setItem("kokoro.web.auth-index-subject", "other-reader")
     window.dispatchEvent(new StorageEvent("storage", { key: "kokoro.web.auth-index-subject", newValue: "other-reader" }))
   })
   expect(requestSignal?.aborted).toBe(true)
-  expect(screen.getByText("Cannot preview — please download.")).toBeVisible()
+  expect(screen.getByRole("alert")).toHaveClass("sr-only")
   window.localStorage.setItem("kokoro.web.auth-index-subject", "preview-reader")
-  fireEvent.click(screen.getByRole("button", { name: "Reload preview" }))
+  view.rerender(renderTextCanvas(textBoundary))
   await act(async () => { await Promise.resolve(); await Promise.resolve() })
-  expect(fetcher).toHaveBeenCalledTimes(2)
+  expect(fetcher).toHaveBeenCalledOnce()
+  expect(view.container.querySelector("pre")).toBeNull()
+  expect(screen.queryByRole("button", { name: "Reload preview" })).not.toBeInTheDocument()
+  view.rerender(renderTextCanvas({ ...textBoundary, generation: 2 }))
+  await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2))
 })
 
 it("a trusted generation change alone hides old text, aborts its body and cannot display a late previous generation", async () => {
@@ -429,7 +432,7 @@ it("a trusted generation change alone hides old text, aborts its body and cannot
   expect(fetcher.mock.calls[2]![1].signal.aborted).toBe(true)
 })
 
-it("a preview failure retries only explicitly, while native download keeps its exact owner filename and binary URL", async () => {
+it("a SHA-failed preview reads fresh only after explicit Close/reopen, while native download keeps its exact filename and URL", async () => {
   window.localStorage.setItem("kokoro.web.auth-index-subject", "preview-reader")
   vi.stubGlobal("crypto", webcrypto)
   const invalid = textMetadata()
@@ -438,11 +441,14 @@ it("a preview failure retries only explicitly, while native download keeps its e
     .mockResolvedValueOnce(textMetadata()).mockResolvedValueOnce(textResponse()).mockResolvedValueOnce(textMetadata())
   vi.stubGlobal("fetch", fetcher)
   const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {})
-  const view = render(renderTextCanvas(textBoundary))
-  expect(await screen.findByRole("button", { name: "Reload preview" })).toBeVisible()
+  const view = render(<ControlledDeliveredCanvas />)
+  fireEvent.click(screen.getByRole("button", { name: "Open delivered preview" }))
+  expect(await screen.findByRole("alert")).toHaveClass("sr-only")
   expect(view.container.querySelector("pre")).toBeNull()
   expect(fetcher).toHaveBeenCalledTimes(2)
-  fireEvent.click(screen.getByRole("button", { name: "Reload preview" }))
+  fireEvent.click(screen.getByRole("button", { name: "Close preview" }))
+  await waitFor(() => expect(view.container.querySelector('[data-slot="context-panel"]')).toBeNull())
+  fireEvent.click(screen.getByRole("button", { name: "Open delivered preview" }))
   await waitFor(() => expect(view.container.querySelector("pre")?.textContent).toBe(artifactText))
   fireEvent.click(screen.getByRole("button", { name: "Download" }))
   await waitFor(() => expect(click).toHaveBeenCalledOnce())
@@ -462,7 +468,7 @@ it.each(["subject", "generation", "artifact"] as const)("a synchronous %s replac
   if (changed === "subject") window.localStorage.setItem("kokoro.web.auth-index-subject", "next-reader")
   view.rerender(renderTextCanvas({ ...textBoundary, ...(changed === "subject" ? { subject: "next-reader" } : changed === "generation" ? { generation: 2 } : {}) }, changed === "artifact" ? { ...textDelivery, artifactId: "artifact_next" } : textDelivery))
   expect(view.container.querySelector("pre")).toBeNull()
-  expect(screen.getByText("Loading preview…")).toBeVisible()
+  expect(screen.getByText("Loading preview…")).toHaveClass("sr-only")
 })
 
 it("closing the Canvas retires a text request immediately, before any parent's delayed exit unmount", async () => {
@@ -495,10 +501,11 @@ it("queued auth-index A to B to A retires a pending preview before the parent co
     window.dispatchEvent(new StorageEvent("storage", { storageArea: window.localStorage, key: "kokoro.web.auth-index-subject", oldValue: "other-reader", newValue: "preview-reader" }))
   })
   expect(oldSignal.aborted).toBe(true)
-  expect(screen.getByText("Cannot preview — please download.")).toBeVisible()
+  expect(screen.getByRole("alert")).toHaveClass("sr-only")
   await act(async () => { finish(textMetadata()); await Promise.resolve(); await Promise.resolve() })
   expect(fetcher).toHaveBeenCalledOnce()
-  fireEvent.click(screen.getByRole("button", { name: "Reload preview" }))
+  // Removed UI retry is replaced by a same-scope render negative; it must not revive retired bytes.
+  view.rerender(renderTextCanvas(textBoundary))
   await act(async () => { await Promise.resolve(); await Promise.resolve() })
   expect(fetcher).toHaveBeenCalledOnce()
   view.rerender(renderTextCanvas({ ...textBoundary, generation: 2 }))
@@ -506,7 +513,7 @@ it("queued auth-index A to B to A retires a pending preview before the parent co
   expect(fetcher).toHaveBeenCalledTimes(3)
 })
 
-it("queued auth-index change and clear hide verified text immediately without reviving on same-generation retry", async () => {
+it("queued auth-index change and clear hide verified text immediately without reviving on same-generation rerender", async () => {
   window.localStorage.setItem("kokoro.web.auth-index-subject", "preview-reader")
   vi.stubGlobal("crypto", webcrypto)
   const fetcher = vi.fn().mockResolvedValueOnce(textMetadata()).mockResolvedValueOnce(textResponse())
@@ -519,7 +526,8 @@ it("queued auth-index change and clear hide verified text immediately without re
     window.dispatchEvent(new StorageEvent("storage", { storageArea: window.localStorage, key: "kokoro.web.auth-index-subject", oldValue: "preview-reader", newValue: "other-reader" }))
   })
   expect(view.container.querySelector("pre")).toBeNull()
-  fireEvent.click(screen.getByRole("button", { name: "Reload preview" }))
+  // Removed UI retry is replaced by a same-scope render negative; it must not revive retired bytes.
+  view.rerender(renderTextCanvas(textBoundary))
   await act(async () => { await Promise.resolve(); await Promise.resolve() })
   expect(fetcher).toHaveBeenCalledTimes(2)
   act(() => { window.dispatchEvent(new StorageEvent("storage", { storageArea: window.localStorage, key: null })) })
@@ -539,7 +547,7 @@ it("a queued localStorage clear retires ready text even if its marker has alread
     window.dispatchEvent(new StorageEvent("storage", { storageArea: window.localStorage, key: null }))
   })
   expect(view.container.querySelector("pre")).toBeNull()
-  expect(screen.getByText("Cannot preview — please download.")).toBeVisible()
+  expect(screen.getByRole("alert")).toHaveClass("sr-only")
 })
 
 it("unrelated storage and unchanged auth-index events do not revoke the still-current verified preview", async () => {
@@ -571,4 +579,71 @@ it("current task progress footer retires with an empty active-plan projection wi
   expect(screen.getByText("retained delivered content")).toBeInTheDocument()
   expect(screen.getByRole("radio", { name: /Files|文件/ })).toBeInTheDocument()
   expect(screen.getByRole("button", { name: /Close preview|关闭预览/ })).toBeInTheDocument()
+})
+
+
+function ControlledDeliveredCanvas() {
+  const thread = useMemo(() => ({ ...createSessionStreamState(), deliveries: [textDelivery] }), [])
+  const canvas = useCanvasWorkspace("session_1", thread, true)
+  return <LocaleProvider><button type="button" onClick={() => canvas.openDelivery(textDelivery)}>Open delivered preview</button>
+    {canvas.resolvedCanvas ? <ContextPanel sessionId="session_1" content={canvas.resolvedCanvas} files={[]} deliveries={[textDelivery]}
+      readBoundary={textBoundary} fullscreen={canvas.fullscreen} onSelectFile={canvas.onSelectFile} onSelectDelivery={canvas.onSelectDelivery}
+      onToggleFullscreen={canvas.onToggleFullscreen} onClose={canvas.onClose} /> : null}
+  </LocaleProvider>
+}
+
+it("delivery loading is quiet; Close aborts before delayed unmount and explicit reopen reads fresh bytes", async () => {
+  localStorage.setItem("kokoro.web.auth-index-subject", "preview-reader")
+  vi.stubGlobal("crypto", webcrypto)
+  let late!: (value: Response) => void
+  const fetcher = vi.fn().mockImplementationOnce(() => new Promise<Response>(resolve => { late = resolve }))
+    .mockResolvedValueOnce(textMetadata()).mockResolvedValueOnce(textResponse())
+  vi.stubGlobal("fetch", fetcher)
+  const view = render(<ControlledDeliveredCanvas />)
+  fireEvent.click(screen.getByRole("button", { name: "Open delivered preview" }))
+  await waitFor(() => expect(fetcher).toHaveBeenCalledOnce())
+  const loading = screen.getByRole("status")
+  expect(loading).toHaveClass("sr-only")
+  expect(loading.closest('[aria-busy="true"]')).not.toBeNull()
+  expect(screen.queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument()
+  const oldSignal = fetcher.mock.calls[0]![1].signal as AbortSignal
+  fireEvent.click(screen.getByRole("button", { name: "Close preview" }))
+  expect(oldSignal.aborted).toBe(true)
+  await act(async () => { late(textMetadata()); await Promise.resolve(); await Promise.resolve() })
+  expect(view.container.querySelector("pre")).toBeNull()
+  expect(fetcher).toHaveBeenCalledOnce()
+  await waitFor(() => expect(view.container.querySelector('[data-slot="context-panel"]')).toBeNull())
+  fireEvent.click(screen.getByRole("button", { name: "Open delivered preview" }))
+  await waitFor(() => expect(view.container.querySelector("pre")?.textContent).toBe(artifactText))
+  expect(fetcher).toHaveBeenCalledTimes(3)
+})
+
+it("ordinary delivery read failure has only sr-only error semantics and recovers solely by Close/reopen GET", async () => {
+  localStorage.setItem("kokoro.web.auth-index-subject", "preview-reader")
+  vi.stubGlobal("crypto", webcrypto)
+  const fetcher = vi.fn().mockRejectedValueOnce(new TypeError("metadata read unavailable"))
+    .mockResolvedValueOnce(textMetadata()).mockResolvedValueOnce(textResponse())
+  vi.stubGlobal("fetch", fetcher)
+  const view = render(<ControlledDeliveredCanvas />)
+  fireEvent.click(screen.getByRole("button", { name: "Open delivered preview" }))
+  expect(await screen.findByRole("alert")).toHaveClass("sr-only")
+  expect(screen.queryByRole("button", { name: "Reload preview" })).not.toBeInTheDocument()
+  expect(view.container.querySelector("pre")).toBeNull()
+  expect(fetcher).toHaveBeenCalledOnce()
+  fireEvent.click(screen.getByRole("button", { name: "Close preview" }))
+  await waitFor(() => expect(view.container.querySelector('[data-slot="context-panel"]')).toBeNull())
+  fireEvent.click(screen.getByRole("button", { name: "Open delivered preview" }))
+  await waitFor(() => expect(view.container.querySelector("pre")?.textContent).toBe(artifactText))
+  expect(fetcher).toHaveBeenCalledTimes(3)
+})
+
+
+it("a mismatched conversation is quiet unreadability, not a format failure or a byte request", () => {
+  localStorage.setItem("kokoro.web.auth-index-subject", "preview-reader")
+  const fetcher = vi.fn()
+  vi.stubGlobal("fetch", fetcher)
+  const view = render(renderTextCanvas(textBoundary, textDelivery, "other_session"))
+  expect(screen.getByRole("status")).toHaveClass("sr-only")
+  expect(view.container.querySelector('[aria-busy="true"], pre')).toBeNull()
+  expect(fetcher).not.toHaveBeenCalled()
 })
