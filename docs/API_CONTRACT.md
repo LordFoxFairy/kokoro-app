@@ -1,3 +1,9 @@
+## 2026-10-27 Public28.4 安全工具对象与共享隔离（本地消费者候选）
+
+唯一原件固定 BFF `3d52a90ec42601a19536e95a8b9e48f93a63276c`／28.4.0／192 operations／SHA256 `48aa9638d133223c9f78655e9398ddbb44159963f92a2db891a09212f3aa2726`，十公共生成链与在线 Docs 同源，独立 MCP 私有 artifact 不改。optional `RunToolActivity.display_detail` 仅 closed `{kind:file|mcp_tool,name}`；name 为 1–120 Unicode scalar、≤480 UTF-8 bytes、NFC 且禁 Cc/Cf/Cs。code-kind 与 file-only basename pattern从 canonical allOf 条件正规派生；MCP 工具名称可含斜线。App 严格拒 null／extra／未知 kind／不匹配类别，不修正、截断或从参数补名称；旧 absent 保持合法。live／snapshot／parts 共用一份 validator，名称仅纯文本展示，不新增请求／endpoint／授权／执行事实。
+
+匿名 `SessionSnapshotResponse.execution_process` 及 public example 正式仅 null；App shared z.null，private snapshot extend 单独恢复 nullable process。canonical optional execution_head 不在本片删除；SharedThread 在私有 hydration 前显式去 head，公共消息仍不接受 private rendering／parts，匿名 UI 不取得私有进度。正式新旧全文逆证与原父 hash 保留；完整正常激活及后端闭环不由消费者门禁代证。
+
 ## 2026-10-27 具体动作安全对象候选消费／分享隔离（D0；待正式 owner 发行）
 
 当前正式消费者仍是下节 BFF Public28.3；Agent8.2／Public28.4 仅后继依赖，未取得正式 commit 与完整原件／摘要前不更新生成物、运行 schema 或手写 wire DTO。候选工具活动沿现唯一 AG-UI／snapshot／ordered parts 增 optional `display_detail {kind:file|mcp_tool,name}`，名称上限 120 Unicode scalar／480 UTF-8 bytes 并由源边界限定；最终字段、校验和 provenance 以正式 owner artifact 为唯一来源。App 十条既有公共生成链从同一 Git blob 原件正规更新，保独立 MCP 私有 pin 与旧父证明；旧 absent 合法，只显示原类别，不猜对象或回填历史。

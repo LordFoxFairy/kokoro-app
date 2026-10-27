@@ -34,9 +34,9 @@ it("pins three formal pricing operations while preserving every preceding byte a
     current = YAML.parse(raw.toString()),
     spec = YAML.parse(restorePublic26MessagePartsContract(raw.toString())),
     parent = YAML.parse(parentRaw.toString())
-  expect(createHash("sha256").update(raw).digest("hex")).toBe("85a1b51cd151581b51d7ea7992d85e04462c03fafb36d0527e1df352dd85223a")
+  expect(createHash("sha256").update(raw).digest("hex")).toBe("48aa9638d133223c9f78655e9398ddbb44159963f92a2db891a09212f3aa2726")
   expect(createHash("sha256").update(parentRaw).digest("hex")).toBe("f6b8f3bd250c144a2d648af94c9fd5fe068db33991a4289b849a077eef009f32")
-  expect(current.info.version).toBe("28.3.0")
+  expect(current.info.version).toBe("28.4.0")
   expect(spec.info.version).toBe("26.0.0")
   expect(parent.info.version).toBe("22.4.0")
   const inventory = (doc: typeof spec) =>

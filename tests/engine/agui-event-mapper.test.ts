@@ -458,3 +458,15 @@ for (const display_code of ["tool.execution", "tool.file.read", "tool.mcp.discov
     expect(mapped.uiMessageChunks).not.toEqual(expect.arrayContaining([expect.objectContaining({ type: expect.stringMatching(/^(text|reasoning|tool)/u) })]))
   })
 }
+
+it("Public28.4 preserves one immutable target in both AG-UI projection and AI SDK data parts, never answer text", () => {
+  const mapper = new AgUiEventMapper()
+  const display_detail = { kind: "mcp_tool", name: "provider/tools.read" }
+  const base = { activity: "tool", activity_id: `act_${"a".repeat(64)}`, segment_id: `seg_${"b".repeat(64)}`, display_code: "tool.mcp.call", display_detail }
+  for (const [index, status] of ["running", "completed", "failed"].entries()) {
+    const value = { ...base, status }
+    const frame = mapper.map(CURSORS.start, { type: "CUSTOM", timestamp: 1, name: "kokoro.activity.updated", value, metadata: metadata(`target-${index}`, index + 1) })
+    expect(frame.projectionEvent).toMatchObject({ kind: "activity.updated", payload: value })
+    expect(frame.uiMessageChunks).toEqual([expect.objectContaining({ type: "data-kokoro", data: expect.objectContaining({ kind: "activity.updated", payload: value }) })])
+  }
+})

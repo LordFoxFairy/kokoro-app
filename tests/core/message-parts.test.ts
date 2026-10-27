@@ -123,3 +123,25 @@ for (const display_code of ["tool.execution", "tool.file.read", "tool.mcp.discov
     expect(mergeMessageParts(state, { message_id: "owner", run_id: "r", revision: "9007199254740992", items: [] }, [], true)).toBe(state)
   })
 }
+
+it("keeps safe target identity across snapshot, live status, ordered parts, lagging reopen and foreign-run events", () => {
+  const target = { activity: "tool" as const, activity_id: `act_${"c".repeat(64)}`, segment_id: `seg_${"d".repeat(64)}`, status: "running" as const, display_code: "tool.file.read" as const, display_detail: { kind: "file" as const, name: "owner.md" } }
+  const input = parseSessionSnapshot({ ...snapshot(), execution_process: { run_id: "r", todos: null, activities: [target], next_cursor: null } })
+  const first = stateFromSnapshot(input)
+  expect(first.executionProcess?.activities).toEqual([target])
+  const read = { message_id: "owner", run_id: "r", revision: "9007199254740993", items: [text("before-target", "before target", "1"), { kind: "activity" as const, part_id: "target-part", first_sequence: "2", latest_sequence: "9007199254740993", activity: target }, text("after-target", "after target", "3")] }
+  let state = mergeMessageParts(first, read, [], true)
+  const updated = { ...target, status: "completed" as const }
+  state = applyChatProjectionEvents(state, [makeEvent("activity.updated", updated, { run_id: "r", publicSequence: "9007199254740994" })])
+  const expected = () => groupSegments(state.stepsByRun.r ?? [], state.executionProcess?.activities).flatMap(segment => segment.activities)
+  expect(expected()).toEqual([updated])
+  expect(state.stepsByRun.r?.find(step => step.kind === "activity")?.seq).toBe("2")
+  state = preserveMessageParts(state, stateFromSnapshot(input))
+  expect(expected()).toEqual([updated])
+  state = applyChatProjectionEvents(state, [
+    makeEvent("activity.updated", { ...target, display_detail: { ...target.display_detail, name: "stale.md" } }, { run_id: "r", publicSequence: "9007199254740993" }),
+    makeEvent("activity.updated", { ...target, display_detail: { ...target.display_detail, name: "foreign.md" } }, { run_id: "different-run", publicSequence: "9007199254740995" }),
+  ])
+  expect(expected()).toEqual([updated])
+  expect(state.messages.filter(item => !item.orderedContainer).map(item => item.content)).toEqual(["before target", "after target"])
+})

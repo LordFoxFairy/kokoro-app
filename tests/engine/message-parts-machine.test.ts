@@ -165,3 +165,30 @@ it.each(["ACK-before-END", "END-before-ACK"])("registers an exact steer receipt 
   expect(engine.getSnapshot().thread.messages.find((message) => message.id === "segment")?.content).toBe("steer corrected")
   expect(client.createCalls).toHaveLength(1)
 })
+
+it("retires a safe-target response from the old Project engine before adopting another scope", async () => {
+  const targetPage = (name: string): MessagePartsPage => ({ ...result(), items: [{ kind: "activity", part_id: "target-part", first_sequence: "2", latest_sequence: "10", activity: { activity: "tool", activity_id: `act_${"a".repeat(64)}`, segment_id: `seg_${"b".repeat(64)}`, status: "completed", display_code: "tool.file.read", display_detail: { kind: "file", name } } }] })
+  const oldClient = createFakeClient()
+  oldClient.nextSnapshot = async () => orderedSnapshot()
+  let late!: (page: MessagePartsPage) => void
+  oldClient.nextParts = () => new Promise(resolve => { late = resolve })
+  const oldEngine = createSessionEngine({ client: oldClient, storage: createMemoryStorage<ConversationStore>(addConversation(null, "s", 1)), scope: { kind: "project", projectRef: "old-project" } })
+  try {
+    await settle()
+    oldEngine.dispose()
+    const client = createFakeClient()
+    client.nextSnapshot = async () => orderedSnapshot()
+    const currentPage = targetPage("current-owner.md")
+    const currentPart = currentPage.items[0]
+    if (currentPart?.kind !== "activity") throw new Error("safe target fixture")
+    client.nextParts = async () => currentPage
+    engine = createSessionEngine({ client, storage: createMemoryStorage<ConversationStore>(addConversation(null, "s", 1)), scope: { kind: "project", projectRef: "new-project" } })
+    await settle(); late(targetPage("retired-owner.md")); await settle()
+    const activities = (engine.getSnapshot().thread.stepsByRun.r ?? []).flatMap(step => step.kind === "activity" ? [step.activity] : [])
+    expect(activities).toEqual([currentPart.activity])
+    expect(oldClient.partsCalls[0]?.signal.aborted).toBe(true)
+    expect(oldClient.partsCalls[0]?.scope).toEqual({ kind: "project", projectRef: "old-project" })
+    expect(client.partsCalls[0]?.scope).toEqual({ kind: "project", projectRef: "new-project" })
+    expect(client.createCalls).toHaveLength(0)
+  } finally { oldEngine.dispose() }
+})

@@ -11,10 +11,10 @@ import { restorePublic282FileToolDisplayContract } from "./bff-file-tool-display
 const hash = (value: string | Buffer) => createHash("sha256").update(value).digest("hex")
 it("consumes the complete formal BFF28 once and restores the original whole Public27 and Public26", async () => {
   const raw = await readFile("src/generated/bff-public-openapi.yaml", "utf8")
-  expect(hash(raw)).toBe("85a1b51cd151581b51d7ea7992d85e04462c03fafb36d0527e1df352dd85223a")
+  expect(hash(raw)).toBe("48aa9638d133223c9f78655e9398ddbb44159963f92a2db891a09212f3aa2726")
   const spec = YAML.parse(raw)
-  expect(spec.info.version).toBe("28.3.0")
-  expect(BFF_TOOL_DISPLAY_PROVENANCE).toEqual({ ownerCommit: "b2b9eb1eac4a3f0b0cd4099ed59cbf756f14124c", sourceSha256: hash(raw), openapiVersion: "28.3.0" })
+  expect(spec.info.version).toBe("28.4.0")
+  expect(BFF_TOOL_DISPLAY_PROVENANCE).toEqual({ ownerCommit: "3d52a90ec42601a19536e95a8b9e48f93a63276c", sourceSha256: hash(raw), openapiVersion: "28.4.0" })
   expect(BFF_TOOL_DISPLAY_CODES).toEqual(["tool.execution", "tool.file.read", "tool.mcp.discover", "tool.mcp.describe", "tool.mcp.call", "tool.web.search", "tool.web.fetch", "tool.file.write", "tool.file.deliver"])
   expect(spec.components.schemas.RunToolActivity.properties.display_code.enum).toEqual(BFF_TOOL_DISPLAY_CODES)
   expect(hash(restorePublic282FileToolDisplayContract(raw))).toBe("e0bb74069c65fb8d414a6a3cb0d6f4c8d9bcb40bb693c2409a9cbe051b8bac53")
@@ -27,11 +27,11 @@ it("consumes the complete formal BFF28 once and restores the original whole Publ
 })
 it("generates only a closed tool tuple from the fixed schema and rejects weakened or cross-branch metadata", async () => {
   const generator = await import(/* @vite-ignore */ pathToFileURL(resolve("scripts/generate-bff-tool-display.mjs")).href) as {
-    inspectBffToolDisplayContract: (spec: unknown) => readonly string[]
-    renderBffToolDisplayArtifact: (codes: readonly string[]) => string
+    inspectBffToolDisplayContract: (spec: unknown) => { codes: readonly string[]; detail: unknown }
+    renderBffToolDisplayArtifact: (profile: { codes: readonly string[]; detail: unknown }) => string
   }
   const spec = YAML.parse(await readFile("src/generated/bff-public-openapi.yaml", "utf8"))
-  expect(generator.inspectBffToolDisplayContract(spec)).toEqual(BFF_TOOL_DISPLAY_CODES)
+  expect(generator.inspectBffToolDisplayContract(spec).codes).toEqual(BFF_TOOL_DISPLAY_CODES)
   expect(generator.renderBffToolDisplayArtifact(generator.inspectBffToolDisplayContract(spec))).toBe(await readFile("src/generated/bff-tool-display.ts", "utf8"))
   for (const mutate of [
     (s: typeof spec) => { s.info.version = "27.0.0" },
@@ -45,4 +45,28 @@ it("generates only a closed tool tuple from the fixed schema and rejects weakene
     mutate(changed)
     expect(() => generator.inspectBffToolDisplayContract(changed)).toThrow()
   }
+})
+
+it("derives the complete finite target profile from canonical conditional file and MCP branches", async () => {
+  const generator = await import(/* @vite-ignore */ pathToFileURL(resolve("scripts/generate-bff-tool-display.mjs")).href) as {
+    inspectBffToolDisplayContract: (spec: unknown) => { codes: readonly string[]; detail: { fileNamePattern: string; kinds: readonly string[]; nameMaxScalars: number; nameMaxUtf8Bytes: number; codesByKind: Record<string, readonly string[]> } }
+  }
+  const raw = await readFile("src/generated/bff-public-openapi.yaml", "utf8")
+  const spec = YAML.parse(raw)
+  const profile = generator.inspectBffToolDisplayContract(spec)
+  expect(profile.detail).toMatchObject({ kinds: ["file", "mcp_tool"], nameMaxScalars: 120, nameMaxUtf8Bytes: 480, fileNamePattern: spec.components.schemas.RunToolActivity.allOf[0].then.properties.display_detail.properties.name.pattern })
+  expect(profile.detail.codesByKind.file).toEqual(["tool.file.read", "tool.file.write", "tool.file.deliver"])
+  expect(profile.detail.codesByKind.mcp_tool).toEqual(["tool.mcp.describe", "tool.mcp.call"])
+  for (const mutate of [
+    (s: typeof spec) => { s.components.schemas.RunToolActivity.properties.display_detail.additionalProperties = true },
+    (s: typeof spec) => { delete s.components.schemas.RunToolActivity.allOf[0].then.properties.display_detail.properties.name.pattern },
+    (s: typeof spec) => { s.components.schemas.RunToolActivity.properties.display_detail.properties.name["x-kokoro-unicode-domain"] = "arbitrary Unicode" },
+    (s: typeof spec) => { s.components.schemas.SessionSnapshotResponse.properties.data.properties.execution_process = { type: "object" } },
+  ]) {
+    const changed = structuredClone(spec); mutate(changed)
+    expect(() => generator.inspectBffToolDisplayContract(changed)).toThrow()
+  }
+  const { restorePublic283ToolDisplayDetailContract } = await import("./bff-tool-display-detail-parent")
+  expect(hash(restorePublic283ToolDisplayDetailContract(raw))).toBe("85a1b51cd151581b51d7ea7992d85e04462c03fafb36d0527e1df352dd85223a")
+  for (const changed of [raw + "\n", raw.replace("listTeamMembers", "mutatedUnrelatedOperation")]) expect(() => restorePublic283ToolDisplayDetailContract(changed)).toThrow()
 })

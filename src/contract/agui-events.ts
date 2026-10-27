@@ -3,7 +3,7 @@
 
 import { EventSchemas, EventType, RunFinishedOutcomeSchema } from "@ag-ui/core"
 import { z } from "zod"
-import { BFF_TOOL_DISPLAY_CODES } from "@/generated/bff-tool-display"
+import { BFF_TOOL_DISPLAY_CODES, BFF_TOOL_DISPLAY_DETAIL_PROFILE } from "@/generated/bff-tool-display"
 
 import { interactionStateSchema } from "./control"
 import { agentFailureCodeSchema, agentFailureProfileSchema } from "./agent-failure"
@@ -14,7 +14,25 @@ const unicodeString = (max: number) => z.string().min(1).refine((value) => Array
 export const runTodoSchema = z.object({ content: unicodeString(1024), status: z.enum(["pending", "in_progress", "completed"]) }).strict()
 const activityIdSchema = z.string().regex(/^act_[0-9a-f]{64}$/u)
 const segmentIdSchema = z.string().regex(/^seg_[0-9a-f]{64}$/u)
-const toolActivitySchema = z.object({ activity: z.literal("tool"), activity_id: activityIdSchema, segment_id: segmentIdSchema, status: z.enum(["running", "completed", "failed"]), display_code: z.enum(BFF_TOOL_DISPLAY_CODES) }).strict()
+const detailProfile = BFF_TOOL_DISPLAY_DETAIL_PROFILE
+const forbiddenDetailUnicode = new RegExp(detailProfile.forbiddenUnicodeCategories.map((category) => `\\p{${category}}`).join("|"), "u")
+const fileDetailNamePattern = new RegExp(detailProfile.fileNamePattern, "u")
+const toolDisplayDetailSchema = z.object({
+  kind: z.enum(detailProfile.kinds),
+  name: z.string().superRefine((value, context) => {
+    const scalars = Array.from(value).length
+    if (scalars < detailProfile.nameMinScalars || scalars > detailProfile.nameMaxScalars || new TextEncoder().encode(value).length > detailProfile.nameMaxUtf8Bytes || value.normalize(detailProfile.normalization) !== value || forbiddenDetailUnicode.test(value)) {
+      context.addIssue({ code: z.ZodIssueCode.custom, message: "invalid safe tool target name" })
+    }
+  }),
+}).strict()
+const toolActivitySchema = z.object({ activity: z.literal("tool"), activity_id: activityIdSchema, segment_id: segmentIdSchema, status: z.enum(["running", "completed", "failed"]), display_code: z.enum(BFF_TOOL_DISPLAY_CODES), display_detail: toolDisplayDetailSchema.optional() }).strict().superRefine((value, context) => {
+  const detail = value.display_detail
+  if (!detail) return
+  if (!detailProfile.codesByKind[detail.kind].some((code) => code === value.display_code) || (detail.kind === "file" && !fileDetailNamePattern.test(detail.name))) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["display_detail"], message: "tool target does not match its owner category" })
+  }
+})
 const subagentActivitySchema = z.object({ activity: z.literal("subagent"), activity_id: activityIdSchema, segment_id: segmentIdSchema, status: z.enum(["running", "completed", "failed"]), display_code: z.literal("subagent.execution") }).strict()
 const skillActivitySchema = z.object({ activity: z.literal("skill"), activity_id: activityIdSchema, preflight_id: z.string().regex(/^spf_[0-9a-f]{64}$/u), source_refs: z.array(z.string().regex(/^skill:(?!skill:)[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u)).min(1).max(16).refine((items) => new Set(items).size === items.length), phase: z.enum(["resolving", "loading", "ready", "failed"]), error_code: z.enum(["skill_resolve_failed", "skill_load_failed"]).optional() }).strict().superRefine((value, context) => {
   if ((value.phase === "failed") !== (value.error_code !== undefined)) context.addIssue({ code: z.ZodIssueCode.custom, path: ["error_code"], message: "invalid conditional error_code" })

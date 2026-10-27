@@ -7,13 +7,13 @@ import styles from "./thread.module.css"
 
 type ToolActivity = Extract<RunProcessActivity, { activity: "tool" }>
 
-/** Categories are owner facts; targetText is UI-only until the formal detail contract is consumed. */
-export function ToolCallRow({ activity, targetText, continuation }: {
+/** Both the category and its optional target come from the same validated owner activity. */
+export function ToolCallRow({ activity, continuation }: {
   activity: ToolActivity
-  targetText?: string
   continuation?: ReactNode
 }) {
   const t = useT()
+  const targetText = activity.display_detail?.name
   const { label, Icon } = TOOL_ACTION_PRESENTATION[activity.display_code]
   const status = t(activity.status === "running" ? "thread.processRunning" : activity.status === "completed" ? "thread.processCompleted" : "thread.processFailed")
   return <div className={styles.action} data-status={activity.status}><div className={styles.actionRow}>

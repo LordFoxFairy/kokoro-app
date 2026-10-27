@@ -1,3 +1,11 @@
+## 2026-10-27 Public28.4 具体动作对象消费者（第二阶段本地候选）
+
+固定 BFF 正式 Git commit `3d52a90ec42601a19536e95a8b9e48f93a63276c`／Public28.4.0／192 operations，完整 canonical SHA256 `48aa9638d133223c9f78655e9398ddbb44159963f92a2db891a09212f3aa2726`；App 起点 `0f72e2f208fcf93a360cac3cad890a20c8d090e9`。唯一原件从此 Git blob 原字节取得，十条既有公共生成链正规重出；三条独立 MCP 私有 pin／恢复规则不变。既有 `generate-bff-tool-display.mjs` 同一有限提取器派生 closed detail profile：kind、名称 scalar／UTF-8 上限、NFC／禁 Cc/Cf/Cs、code-kind 条件与仅 file 的 canonical basename pattern；不在浏览器另抄 wire DTO／pattern，MCP 名称合法斜线不误套文件约束。现唯一 activity schema 用 generated profile 和 TextEncoder 校验，live CUSTOM／AI SDK data part／私有 snapshot／ordered parts 共用；unknown、null、extra、错 kind／code、坏 Unicode 均拒绝。
+
+`ToolCallRow` 直接消费已验证 `activity.display_detail.name`，移除过渡 UI-only targetText prop；纯文本／ellipsis／完整 title，不解析 HTML／Markdown、不产生链接或权限、不从 raw 参数／答案猜目标。旧 absent 仍类别；第一阶段 singleton／multi、九图标、真实三态／Run continuation、activity key、segment 开合与正文顺序全部保持，无 core reducer／projection／hydration 重写。共享 parser 的 execution_process 明确 z.null，私有 extend 显式恢复 nullable process；正式 canonical 仍允许 optional head，SharedThread 在进入原 hydration 前投影去掉它，不将公共 head 当私有执行状态，原消息只读与 failure 呈现保持。
+
+测试新增 exact28.4→28.3 全文逆证，再进入未改历史父 SHA／链；无运行转换或旧活动回填。定向 RED→GREEN 覆盖三入口保值、合法 120 astral／480 bytes、NFC／控制类别／孤立 surrogate、仅 file basename、MCP slash、类别匹配、UI literal text／title／状态节点、ordered 重开／迟到旧 revision／异 Run 与共享 head 隔离。owner 后端完整验收、正常 producer／reader 激活及真实浏览器对照由 Root 独立绑定；本消费者源码和 fixture 通过不冒后端／正常产品整链闭环。
+
 ## 2026-10-27 具体动作摘要（D0，Root 已核准第一阶段 UI）
 
 **目标／owner／证据边界。** App 基线 `00974e03dcd8581efb40031f04b19ea0b4928df1`，本片唯一前端 writer 承接现安全活动行，不改执行链。单项去泛“处理过程 · 1 个工具”外壳，多项连续活动用具体类别组成紧凑摘要；完整目标包含正式 owner 安全对象，而非只换图标。Agent 拥有受信工具定义、类别与对象名称源边界；BFF 拥有公开 wire、durable AG-UI、snapshot／parts；App 仅严格解析、本地化和呈现。已有 Manus 实测只支撑连续分组／轻量披露，用户给出 Codex 方向；本机 Codex app 参考未取得，不宣称 Codex 像素一比一。不新建计划、流程框架、网络协议、owner、数据模型或依赖，不回填旧事件或重跑工具制造详情。

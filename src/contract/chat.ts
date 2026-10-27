@@ -142,7 +142,7 @@ export const sharedSessionSnapshotSchema = z
     session: sessionMetaSchema,
     messages: z.array(messageRecordSchema).optional(),
     execution_head: executionHeadSchema.optional(),
-    execution_process: runExecutionProcessSchema.nullable(),
+    execution_process: z.null(),
     files: z.array(workspaceFileSchema),
     deliveries: z.array(deliverySchema),
     deliveries_has_more: z.boolean(),
@@ -151,7 +151,7 @@ export const sharedSessionSnapshotSchema = z
   .strict()
 export type SharedSessionSnapshot = z.infer<typeof sharedSessionSnapshotSchema>
 export function parseSharedSessionSnapshot(input: unknown): SharedSessionSnapshot { return sharedSessionSnapshotSchema.parse(input) }
-export const sessionSnapshotSchema = sharedSessionSnapshotSchema.extend({ messages: z.array(chatMessageReadSchema).optional() }).strict()
+export const sessionSnapshotSchema = sharedSessionSnapshotSchema.extend({ messages: z.array(chatMessageReadSchema).optional(), execution_process: runExecutionProcessSchema.nullable() }).strict()
 export type SessionSnapshot = z.infer<typeof sessionSnapshotSchema>
 
 export function parseSessionSnapshot(input: unknown): SessionSnapshot {

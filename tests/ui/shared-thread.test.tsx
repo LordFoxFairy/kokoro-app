@@ -1,11 +1,12 @@
 // 公共只读线程（SHARE-1）：从公共快照复用 ConversationThread 渲染件——用户气泡 + assistant 文本。
 import { cleanup, render, screen } from "@testing-library/react"
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { parseSharedSessionSnapshot, type SharedSessionSnapshot } from "@/contract/http"
 import { BFF_AGENT_FAILURE_TUPLES } from "@/generated/bff-agent-failure"
 import { LocaleProvider } from "@/i18n/context"
 import { LOCALE_STORAGE_KEY } from "@/i18n/messages"
+import * as hydration from "@/core/hydration"
 import { SharedThread } from "@/ui/shared/shared-thread"
 
 import { expectedAgentFailureZhCopy, expectedZhCopy, makeFailedSnapshot } from "../core/fixtures"
@@ -71,4 +72,21 @@ describe("SharedThread", () => {
     expect(screen.queryByRole("button", { name: expectedZhCopy("thread.retry") })).toBeNull()
     expect(document.querySelector('[data-slot="collapsible"]')).toBeNull()
   })
+})
+
+
+it("projects a formally allowed public head away before private thread hydration without mutating the public response", () => {
+  const head = { run_id: "private-head", state: "queued" as const, pending_pauses: [] }
+  const owner = parseSharedSessionSnapshot({ ...snapshot(), execution_head: head })
+  const hydrate = vi.spyOn(hydration, "stateFromSnapshot")
+  try {
+    render(<SharedThread snapshot={owner} />, { wrapper: LocaleProvider })
+    // This public→private projection is the security boundary under test, not
+    // an internal rendering sequence or private helper implementation.
+    expect(hydrate.mock.calls[0]?.[0]).not.toHaveProperty("execution_head")
+    expect(owner.execution_head).toEqual(head)
+    expect(screen.getByText("hi from assistant")).toBeVisible()
+    expect(screen.queryByRole("status")).toBeNull()
+    expect(document.querySelector('[data-slot="collapsible"]')).toBeNull()
+  } finally { hydrate.mockRestore() }
 })

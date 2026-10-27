@@ -25,7 +25,7 @@ it("pins the fixed Public27 owner and restores the entire sealed Public26 parent
   const { default: YAML } = await import("yaml")
   const { restorePublic26MessagePartsContract } = await import("./bff-tool-display-parent")
   const source = await readFile("src/generated/bff-public-openapi.yaml", "utf8")
-  expect(createHash("sha256").update(source).digest("hex")).toBe("85a1b51cd151581b51d7ea7992d85e04462c03fafb36d0527e1df352dd85223a")
+  expect(createHash("sha256").update(source).digest("hex")).toBe("48aa9638d133223c9f78655e9398ddbb44159963f92a2db891a09212f3aa2726")
   const parent = restorePublic26MessagePartsContract(source)
   expect(createHash("sha256").update(parent).digest("hex")).toBe("20d26736cf23da32c242c2c7cf75c45affb62c5d27696dcecb0bc6193bc39a09")
   const { restorePublic28ProjectResourceContract } = await import("./bff-project-resource-parent")
@@ -45,3 +45,10 @@ for (const display_code of ["tool.execution", "tool.file.read", "tool.mcp.discov
     expect(() => messagePartsPageSchema.parse({ ...input, items: [{ ...part, activity: { ...activity, display_code: "tool.file.unknown" } }] })).toThrow()
   })
 }
+
+it("Public28.4 ordered activity slots retain safe target values, reject mismatches, and do not change public text", () => {
+  const activity = { activity: "tool", activity_id: `act_${"a".repeat(64)}`, segment_id: `seg_${"b".repeat(64)}`, status: "completed", display_code: "tool.mcp.describe", display_detail: { kind: "mcp_tool", name: "provider/tools.read" } }
+  const part = { kind: "activity", part_id: "safe-target", first_sequence: "2", latest_sequence: "3", activity }
+  expect(messagePartsPageSchema.parse({ ...page, items: [text, part] }).items).toEqual([text, part])
+  expect(() => messagePartsPageSchema.parse({ ...page, items: [{ ...part, activity: { ...activity, display_detail: { ...activity.display_detail, kind: "file" } } }] })).toThrow()
+})

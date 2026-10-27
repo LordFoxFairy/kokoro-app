@@ -354,3 +354,23 @@ for (const patch of [{ display_code: "tool.file.unknown" }, { display_code: "sub
     expect(() => parseAgUiEvent({ type: "CUSTOM", timestamp: 1, name: "kokoro.activity.updated", value, metadata })).toThrow()
   })
 }
+
+it("Public28.4 accepts only owner-safe optional tool targets and preserves valid Unicode scalar names", () => {
+  const base = { activity: "tool", activity_id: `act_${"a".repeat(64)}`, segment_id: `seg_${"b".repeat(64)}`, status: "running", display_code: "tool.file.read" }
+  const parse = (value: unknown) => parseAgUiEvent({ type: "CUSTOM", timestamp: 1, name: "kokoro.activity.updated", value, metadata })
+  for (const name of ["report.md", "é.md", "😀".repeat(120)]) {
+    const value = { ...base, display_detail: { kind: "file", name } }
+    expect(parse(value)).toMatchObject({ value })
+  }
+  const mcp = { ...base, display_code: "tool.mcp.call", display_detail: { kind: "mcp_tool", name: "vendor/tool:execute" } }
+  expect(parse(mcp)).toMatchObject({ value: mcp })
+  expect(parse(base)).toMatchObject({ value: base })
+  for (const display_detail of [null, {}, { kind: "unknown", name: "name" }, { kind: "file", name: "file", extra: true }, ...["", ".", "..", "/path", "a/b", "a\\b", "C:name", "e\u0301", "bad\nname", "bad\u200dname", "\ud800", "😀".repeat(121)].map(name => ({ kind: "file", name }))]) {
+    expect(() => parse({ ...base, display_detail })).toThrow()
+  }
+  for (const display_code of ["tool.execution", "tool.web.search", "tool.web.fetch", "tool.mcp.discover", "tool.mcp.describe"]) {
+    expect(() => parse({ ...base, display_code, display_detail: { kind: "file", name: "file.md" } })).toThrow()
+  }
+  expect(() => parse({ ...base, display_detail: { kind: "mcp_tool", name: "tool/name" } })).toThrow()
+  expect(() => parse({ ...mcp, activity: "subagent", display_code: "subagent.execution" })).toThrow()
+})

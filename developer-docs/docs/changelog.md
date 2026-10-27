@@ -1,5 +1,11 @@
 # 变更记录
 
+## Public 28.4.0
+
+- 固定 BFF `3d52a90ec42601a19536e95a8b9e48f93a63276c` 完整契约；192 项 operation 不变，保原公开／私有过滤。
+- 工具活动增加可选安全文件／MCP 工具显示对象，名称受 Unicode／字节及类别规则约束；不公开原始参数或执行结果，也不授予读取／执行权限。
+- 公开分享快照 execution_process 明确为 null；私有执行过程继续独立准入。消费者配对不代表正常 producer 已启用。
+
 ## Public 28.3.0
 
 - 固定BFF `b2b9eb1eac4a3f0b0cd4099ed59cbf756f14124c` 正式完整原件；192项operation库存不变，门户继续按原visibility过滤私有接口。

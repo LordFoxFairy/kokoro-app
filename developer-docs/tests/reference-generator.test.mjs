@@ -562,3 +562,24 @@ test('nested local schema pointers link to their real top-level schema anchor wi
     'https://example.invalid/private.json#/components/schemas/AgentFailureEnvelope',
   ]) assert.throws(() => schemaType(contract, { $ref: ref }), /unresolved|external/u);
 });
+
+test('tool target Unicode extensions publish only at their exact canonical name node with reviewed values', () => {
+  const node = {
+    type: 'string',
+    'x-kokoro-utf8-byte-limit': 480,
+    'x-kokoro-unicode-domain': 'NFC Unicode scalars; no Cc, Cf or Cs',
+  };
+  const wrap = (name) => ({ components: { schemas: { RunToolActivity: { properties: { display_detail: { properties: { name } } } } } } });
+  assert.doesNotThrow(() => assertPublicationSafe(wrap(node)));
+  for (const value of [
+    wrap({ ...node, 'x-kokoro-utf8-byte-limit': 481 }),
+    wrap({ ...node, 'x-kokoro-utf8-byte-limit': '480' }),
+    wrap({ ...node, 'x-kokoro-unicode-domain': 'arbitrary Unicode' }),
+    wrap({ ...node, 'x-kokoro-unreviewed-target': true }),
+    { components: { schemas: { Other: { properties: { display_detail: { properties: { name: node } } } } } } },
+    { components: { schemas: { RunToolActivity: { properties: { display_detail: { name: node } } } } } },
+    { nested: wrap(node) },
+    { description: ['x-kokoro-utf8-byte-limit', ' 480'].join(':') },
+    wrap({ ...node, description: ['-----BEGIN', 'PRIVATE KEY-----'].join(' ') }),
+  ]) assert.throws(() => assertPublicationSafe(value));
+});

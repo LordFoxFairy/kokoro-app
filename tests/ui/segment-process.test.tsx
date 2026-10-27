@@ -226,7 +226,7 @@ const public28Labels = [
 it.each([
   ["tool.file.write", "Write file"], ["tool.file.deliver", "Deliver file"],
 ] as const)("%s survives snapshot and reopened ordered history as a category, not assistant text", (display_code, label) => {
-  const activity = { activity: "tool", activity_id: `act_${"c".repeat(64)}`, segment_id: `seg_${"d".repeat(64)}`, status: "completed", display_code }
+  const activity = { activity: "tool", activity_id: `act_${"c".repeat(64)}`, segment_id: `seg_${"d".repeat(64)}`, status: "completed", display_code, display_detail: { kind: "file", name: "published-output.md" } }
   const owner = { message_id: "file-owner", run_id: "file-run", role: "assistant", content: "public answer", status: "completed", created_at: "now" }
   const snapshot = parseSessionSnapshot({ ...makeSnapshot(), messages: [owner], execution_process: { run_id: "file-run", todos: null, activities: [activity], next_cursor: null } })
   const props = { sessionId: "session", isStreaming: false, isReconnecting: false, hasFailed: false, canRetryPendingSubmission: false, creditRejected: false, onOpenBilling: vi.fn(), onOpenPricing: vi.fn(), onRetry: vi.fn(), mode: "fast" as const, stagingByRun: {}, hitlRunId: null, controlError: null }
@@ -234,6 +234,7 @@ it.each([
   const revealCategory = () => {
     expect(document.querySelector('[data-slot="collapsible-trigger"]')).toBeNull()
     expect(screen.getByText(label)).toBeVisible()
+    expect(screen.getByText("published-output.md")).toHaveAttribute("title", "published-output.md")
   }
   const view = show(stateFromSnapshot(snapshot))
   revealCategory()
@@ -304,23 +305,35 @@ it("counts every failed mixed activity without inventing distinct file or result
   expect(summary).not.toHaveTextContent(/2 files|results/u)
 })
 
-it("uses nine category-specific decorative icons and pure UI target text, never unknown activity fields", () => {
+it("uses nine category-specific decorative icons without reading unknown activity fields", () => {
   const icons = new Set<string | null>()
   for (const [display_code, label] of public28Labels) {
-    const activity = { activity: "tool" as const, activity_id: "category", segment_id: "category", status: "completed" as const, display_code, display_detail: { name: "untrusted unknown field" } }
-    const props = { activity, targetText: "<b>literal target</b>" }
-    const view = render(<LocaleProvider><ToolCallRow {...props} /></LocaleProvider>)
+    const activity = { activity: "tool" as const, activity_id: "category", segment_id: "category", status: "completed" as const, display_code, raw_target: "untrusted unknown field" }
+    const view = render(<LocaleProvider><ToolCallRow activity={activity} /></LocaleProvider>)
     const row = screen.getByText(label).parentElement!
     icons.add(row.querySelector("svg")?.getAttribute("class") ?? null)
     expect(row.querySelector("svg")).toHaveAttribute("aria-hidden", "true")
-    expect(screen.getByText("<b>literal target</b>")).toHaveAttribute("title", "<b>literal target</b>")
-    expect(row.querySelector("b, a, button")).toBeNull()
+    expect(row.querySelector("a, button")).toBeNull()
     expect(screen.queryByText("untrusted unknown field")).toBeNull()
     expect(screen.getByText("Completed")).toHaveClass("sr-only")
     view.unmount()
   }
   expect(icons.size).toBe(9)
 })
+
+it("renders only the formal safe target as literal text with its full title through terminal updates", () => {
+  const display_detail = { kind: "mcp_tool" as const, name: "<b>provider/tool</b>" }
+  const activity = { activity: "tool" as const, activity_id: "target-row", segment_id: "target-row", status: "running" as const, display_code: "tool.mcp.call" as const, display_detail }
+  const { rerender } = render(<LocaleProvider><ToolCallRow activity={activity} /></LocaleProvider>)
+  const target = screen.getByText(display_detail.name)
+  expect(target).toHaveAttribute("title", display_detail.name)
+  expect(target.parentElement!.querySelector("b, a, button")).toBeNull()
+  rerender(<LocaleProvider><ToolCallRow activity={{ ...activity, status: "completed" }} /></LocaleProvider>)
+  expect(screen.getByText(display_detail.name)).toBe(target)
+  rerender(<LocaleProvider><ToolCallRow activity={{ ...activity, status: "failed" }} /></LocaleProvider>)
+  expect(screen.getByText(display_detail.name)).toBe(target)
+})
+
 
 it("does not duplicate queued, resume, cancel, HITL or reconnect cues with Run continuation", () => {
   const activity = { activity: "tool" as const, activity_id: "settled-status", segment_id: "settled-status", status: "completed" as const, display_code: "tool.file.read" as const }

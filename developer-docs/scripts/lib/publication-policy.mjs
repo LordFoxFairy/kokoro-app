@@ -112,6 +112,9 @@ function inspectValue(value, path, violations, seen, options) {
         (key === 'x-kokoro-max-response-bytes' &&
           path === `${options.rootPath}.paths./v1/sessions/{id}/messages/{messageId}/parts.get` &&
           child === 1048576) ||
+        (path === `${options.rootPath}.components.schemas.RunToolActivity.properties.display_detail.properties.name` &&
+          ((key === 'x-kokoro-utf8-byte-limit' && child === 480) ||
+            (key === 'x-kokoro-unicode-domain' && child === 'NFC Unicode scalars; no Cc, Cf or Cs'))) ||
         (key === 'x-kokoro-owner-metadata' &&
           path === `${options.rootPath}.components.schemas.SessionEventStream` &&
           child !== null && typeof child === 'object' && !Array.isArray(child) &&

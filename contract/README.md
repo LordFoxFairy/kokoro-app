@@ -1,3 +1,7 @@
+## 2026-10-27 当前 Public28.4 原件
+
+固定 BFF `3d52a90ec42601a19536e95a8b9e48f93a63276c`／28.4.0／192 operations／canonical SHA256 `48aa9638d133223c9f78655e9398ddbb44159963f92a2db891a09212f3aa2726`，唯一 Git blob 原件经十公共生成链消费。有限工具 profile 派生 optional 安全对象和条件 code-kind／file basename 规则；公共 snapshot process 收为 null，私有独立保留。新增完整28.4→28.3 test-only inverse 后再进入原历史父链，原 SHA 与三条私有 MCP pin 不变；正常 producer／reader 配对由 Root 验收。
+
 ## 2026-10-27 当前 Public28.3 原件
 
 固定BFF `b2b9eb1eac4a3f0b0cd4099ed59cbf756f14124c`／Public28.3.0／192操作，完整 canonical SHA256 `85a1b51cd151581b51d7ea7992d85e04462c03fafb36d0527e1df352dd85223a`，唯一完整snapshot和十个既有公共生成器同步正规更新。新增两个文件工具类别来自正式 `RunToolActivity`，Failure业务tuple及其它接口不变；三条独立私有pin保持。测试先精确逆回完整28.2全文，再走原历史父链，不作运行fallback或历史重分类。

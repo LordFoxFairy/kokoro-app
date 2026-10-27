@@ -1,11 +1,13 @@
 // Test-only exact Public28.3→28.2 inverse. Never imported by production.
 import { createHash } from "node:crypto"
+import { restorePublic283ToolDisplayDetailContract } from "./bff-tool-display-detail-parent"
 
 const hash = (source: string) => createHash("sha256").update(source).digest("hex")
 const parentField = "        display_code: { type: string, enum: [tool.execution, tool.file.read, tool.mcp.discover, tool.mcp.describe, tool.mcp.call, tool.web.search, tool.web.fetch] }\n"
 const currentField = parentField.replace("tool.web.fetch]", "tool.web.fetch, tool.file.write, tool.file.deliver]")
 
 export function restorePublic282FileToolDisplayContract(source: string): string {
+  source = restorePublic283ToolDisplayDetailContract(source)
   if (!/^  version: 28\.3\.0$/mu.test(source)) return source
   if (hash(source) !== "85a1b51cd151581b51d7ea7992d85e04462c03fafb36d0527e1df352dd85223a"
     || source.split(currentField).length !== 2) throw Error("File tool display full current drift")

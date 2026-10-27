@@ -82,3 +82,14 @@ for (const display_code of ["tool.execution", "tool.file.read", "tool.mcp.discov
     expect(() => sessionSnapshotSchema.parse(public7Snapshot({ ...process, activities: [{ ...safe, name: "private" }] }))).toThrow()
   })
 }
+
+it("Public28.4 keeps target metadata private while anonymous process is exactly null", async () => {
+  const { sharedSessionSnapshotSchema } = await import("@/contract/chat")
+  const activity = { activity: "tool", activity_id: activityId, segment_id: segmentId, status: "completed", display_code: "tool.file.read", display_detail: { kind: "file", name: "owner.md" } }
+  const process = { run_id: "run_a", todos: null, activities: [activity], next_cursor: null }
+  expect(sessionSnapshotSchema.parse(public7Snapshot(process))).toMatchObject({ execution_process: process })
+  expect(sharedSessionSnapshotSchema.parse(public7Snapshot(null)).execution_process).toBeNull()
+  for (const value of [process, { ...process, activities: [] }, undefined]) {
+    expect(() => sharedSessionSnapshotSchema.parse(public7Snapshot(value))).toThrow()
+  }
+})

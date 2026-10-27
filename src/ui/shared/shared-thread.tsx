@@ -11,7 +11,10 @@ import { ConversationThread } from "@/ui/thread/conversation-thread"
 const NO_STAGING: Record<string, Record<string, never>> = {}
 
 export function SharedThread({ snapshot, brandName }: { snapshot: SharedSessionSnapshot; brandName?: string }) {
-  const thread = stateFromSnapshot(snapshot)
+  // The public contract still permits a legacy head; it never acquires private UI authority.
+  const publicSnapshot = { ...snapshot }
+  delete publicSnapshot.execution_head
+  const thread = stateFromSnapshot(publicSnapshot)
   return (
     <ConversationThread
       {...(brandName === undefined ? {} : { brandName })}

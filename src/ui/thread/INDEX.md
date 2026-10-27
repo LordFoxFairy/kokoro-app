@@ -1,3 +1,5 @@
+具体动作对象第二阶段（2026-10-27，Public28.4 消费者候选）：`ToolCallRow` 从唯一严格 activity 的 optional display_detail.name 纯文本呈现目标，移除 UI-only targetText 过渡 prop；长名 ellipsis／完整 title，不生链接，不猜 raw 参数／答案。正式 finite profile 与校验入口见本仓技术设计；旧 absent 和第一阶段所有顺序／节点／开合／状态语义保持。SharedThread 的公开 head 在进入私有 hydration 前丢弃，共享 process 必须 null。正常组合／浏览器验收仍由 Root 绑定。
+
 具体动作摘要第一阶段（2026-10-27，Root 已核 D0，完整对象消费待正式发行）：`SegmentProcess` 单项直接呈现安全活动行，多项才提供类别组成摘要和真实调用／活动次数；同一 Collapsible／forceMount 内容树保 1→2 节点身份与原 segment disclosure 偏好，公开正文边界不改。`tool-action-presentation.ts` 是九类 label／icon 的唯一纯 UI 映射，不是 wire DTO；完成小勾配读屏状态，失败与运行仍有文字，混合失败包含 Skill／Subagent。同一行的继续处理 cue 只由 AssistantTurn 原 Run／尾锚／连接／HITL 事实派生且所有活动已落定，不改工具状态或叠加 forming。`targetText` 暂为显式 UI-only prop，不读取 activity 未发布字段；完整 metadata／分享隔离与正常验收仍依赖正式 owner 后继，不以本阶段称整片完成。
 
 文件工具类别（2026-10-27，Public28.3消费者）：ToolCallRow新增正式 `tool.file.write`／`tool.file.deliver` 的九语言中性操作标签，完成与失败仍沿原status。live／snapshot／ordered重开共用原activity schema；不读raw名称、文件路径或参数，不将类别冒成功或Artifact关联。消费者候选验收与正常配对由Root分别记录。
