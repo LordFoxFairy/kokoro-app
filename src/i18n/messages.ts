@@ -42,6 +42,11 @@ export const LOCALE_NAMES: Record<Locale, string> = {
 
 // zh 是完整源（所有 key 必在此）。命名约定：<区域>.<用途>。{var} 为插值占位。
 export const zh = {
+  "firstSite.projectMenuDelete": "删除",
+  "firstSite.editProject": "编辑项目",
+  "firstSite.viewProject": "查看项目",
+  "firstSite.projectShowLess": "显示更少",
+
   "thread.partsReading": "正在读取消息历史…",
   "thread.partsPartial": "部分消息历史尚未读取，已显示的内容会保留。",
   "thread.partsReload": "重新读取此消息",

@@ -72,8 +72,8 @@ function mountProjectMenu(respond?: (path: string, init?: RequestInit) => Promis
   return { ...view, writes, Frame }
 }
 
-async function headerMenu() {
-  await screen.findByRole("heading", { name: projectA.name })
+async function headerMenu(project = projectA) {
+  await screen.findByRole("heading", { name: project.name })
   const header = document.querySelector<HTMLElement>('[data-slot="workspace-header"]')!
   const trigger = within(header).getByRole("button", { name: "项目选项" })
   trigger.focus()
@@ -109,7 +109,7 @@ it("顶部编辑保存使用现 PATCH 并以 owner 回读作为重开内容", as
   expect(await screen.findByRole("textbox", { name: "项目指令" })).toHaveValue("甲的正式更新")
 })
 
-it("侧栏键盘入口切到指定项目再复用 editor，取消回到同一个项目菜单按钮", async () => {
+it("侧栏查看指定项目后复用顶部指令 editor，取消回到同一个顶部菜单按钮", async () => {
   const view = mountProjectMenu()
   await screen.findByRole("heading", { name: projectA.name })
   const row = screen.getByRole("button", { name: projectB.name }).closest("[data-project-id]") as HTMLElement
@@ -117,13 +117,16 @@ it("侧栏键盘入口切到指定项目再复用 editor，取消回到同一个
   trigger.focus()
   fireEvent.keyDown(trigger, { key: "ArrowDown" })
   const menu = await screen.findByRole("menu", { name: "项目选项" })
-  fireEvent.click(within(menu).getByRole("menuitem", { name: "编辑指令" }))
+  expect(within(menu).queryByRole("menuitem", { name: "编辑指令" })).not.toBeInTheDocument()
+  fireEvent.click(within(menu).getByRole("menuitem", { name: "查看项目" }))
+  const header = await headerMenu(projectB)
+  fireEvent.click(within(header.menu).getByRole("menuitem", { name: "编辑指令" }))
   const dialog = await screen.findByRole("dialog", { name: "项目指令" })
   expect(window.location.pathname).toBe(`/app/project/${projectB.id}`)
   expect(within(dialog).getByRole("textbox")).toHaveValue(projectB.instruction)
   fireEvent.keyDown(within(dialog).getByRole("textbox"), { key: "Escape" })
   await waitFor(() => expect(screen.queryByRole("dialog", { name: "项目指令" })).not.toBeInTheDocument())
-  await waitFor(() => expect(trigger).toHaveFocus())
+  await waitFor(() => expect(header.trigger).toHaveFocus())
   expect(view.writes).toEqual([])
 })
 
@@ -203,7 +206,9 @@ it("移动侧栏关闭后 editor 仍可编辑，取消返回仍可见的顶部�
     fireEvent.click(navigationTrigger)
     const row = (await screen.findByRole("button", { name: projectB.name })).closest("[data-project-id]") as HTMLElement
     fireEvent.keyDown(within(row).getByRole("button", { name: "项目选项" }), { key: "ArrowDown" })
-    fireEvent.click(within(await screen.findByRole("menu", { name: "项目选项" })).getByRole("menuitem", { name: "编辑指令" }))
+    fireEvent.click(within(await screen.findByRole("menu", { name: "项目选项" })).getByRole("menuitem", { name: "查看项目" }))
+    const targetHeader = await headerMenu(projectB)
+    fireEvent.click(within(targetHeader.menu).getByRole("menuitem", { name: "编辑指令" }))
     const dialog = await screen.findByRole("dialog", { name: "项目指令" })
     expect(within(dialog).getByRole("textbox")).toHaveValue(projectB.instruction)
     fireEvent.click(within(dialog).getByRole("button", { name: "取消" }))
@@ -270,14 +275,13 @@ it("正式壳消费已解析 workspace.instructions 能力，未显式传 capabi
 })
 
 
-it("preview 路由快捷项目仍把实际 projectRef 交给 editor，不把 href 当业务身份", async () => {
+it("preview 顶部指令入口仍使用实际 projectRef，不把 href 当业务身份", async () => {
   const view = mountProjectMenu()
   window.localStorage.setItem(`kokoro.preview.project.${projectA.id}.instructions`, "本地原项目指令")
   view.rerender(<view.Frame previewMode />)
-  const row = await screen.findByRole("button", { name: "当前项目" })
-  const trigger = within(row.closest("[data-project-id]") as HTMLElement).getByRole("button", { name: "项目选项" })
-  fireEvent.keyDown(trigger, { key: "ArrowDown" })
-  fireEvent.click(within(await screen.findByRole("menu", { name: "项目选项" })).getByRole("menuitem", { name: "编辑指令" }))
+  const header = document.querySelector<HTMLElement>('[data-slot="workspace-header"]')!
+  fireEvent.keyDown(within(header).getByRole("button", { name: "项目选项" }), { key: "ArrowDown" })
+  fireEvent.click(within(await screen.findByRole("menu")).getByRole("menuitem", { name: "编辑指令" }))
   expect(window.location.pathname).toBe(`/app/project/${projectA.id}`)
   expect(await screen.findByRole("textbox", { name: "项目指令" })).toHaveValue("本地原项目指令")
 })
@@ -600,4 +604,42 @@ it.each(["?conversation=task-b", "?conversation=task-a&view=other", "?conversati
   expect(view.result.current.projectInstructionRequest).toBeUndefined()
   act(() => view.result.current.requestProjectInstructions(projectA.id, null))
   expect(view.result.current.projectInstructionRequest?.isCurrent()).toBe(true)
+})
+
+it("侧栏真实右键删除B只在目标页打开现确认框，取消零DELETE并回到同一行按钮", async () => {
+  const deleted: string[] = []
+  mountProjectMenu(async (path, init) => { if (init?.method === "DELETE") deleted.push(path); return undefined })
+  await screen.findByRole("heading", { name: projectA.name })
+  const rowButton = screen.getByRole("button", { name: projectB.name })
+  const row = rowButton.closest("[data-project-id]") as HTMLElement
+  const trigger = within(row).getByRole("button", { name: "项目选项" })
+  fireEvent.contextMenu(rowButton, { clientX: 120, clientY: 160 })
+  fireEvent.click(within(await screen.findByRole("menu")).getByRole("menuitem", { name: "删除" }))
+  const dialog = await screen.findByRole("dialog", { name: "删除项目" })
+  expect(window.location.pathname).toBe(`/app/project/${projectB.id}`)
+  expect(dialog).toHaveTextContent(projectB.name)
+  expect(dialog).not.toHaveTextContent(projectA.name)
+  expect(deleted).toEqual([])
+  fireEvent.click(within(dialog).getByRole("button", { name: "取消" }))
+  await waitFor(() => expect(screen.queryByRole("dialog", { name: "删除项目" })).not.toBeInTheDocument())
+  await waitFor(() => expect(trigger).toHaveFocus())
+  expect(deleted).toEqual([])
+})
+
+it("侧栏编辑项目复用B名称单字段表单，取消不改项目或指令并返回原行", async () => {
+  const view = mountProjectMenu()
+  await screen.findByRole("heading", { name: projectA.name })
+  const row = screen.getByRole("button", { name: projectB.name }).closest("[data-project-id]") as HTMLElement
+  const trigger = within(row).getByRole("button", { name: "项目选项" })
+  fireEvent.keyDown(trigger, { key: "ArrowDown" })
+  fireEvent.click(within(await screen.findByRole("menu")).getByRole("menuitem", { name: "编辑项目" }))
+  const dialog = await screen.findByRole("dialog", { name: "重命名项目" })
+  const input = within(dialog).getByRole("textbox", { name: "项目名称" })
+  expect(input).toHaveValue(projectB.name)
+  expect(within(dialog).getAllByRole("textbox")).toHaveLength(1)
+  fireEvent.change(input, { target: { value: "未保存名称" } })
+  fireEvent.click(within(dialog).getByRole("button", { name: "取消" }))
+  await waitFor(() => expect(trigger).toHaveFocus())
+  expect(view.writes).toEqual([])
+  expect(screen.getByRole("heading", { name: projectB.name })).toBeInTheDocument()
 })

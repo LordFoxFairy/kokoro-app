@@ -3,6 +3,7 @@ import type { SettingsTab } from "@/ui/settings/settings-modal"
 
 export type ProjectRenameControl = {
   focusScopeToken: object
+  returnFocus?: (fallback?: HTMLButtonElement | null) => boolean
   available: boolean
   open: boolean
   name: string
@@ -19,6 +20,7 @@ export type ProjectRenameControl = {
 
 export type ProjectDeleteControl = {
   focusScopeToken: object
+  returnFocus?: (fallback?: HTMLButtonElement | null) => boolean
   readonly targetName: string
   available: boolean
   open: boolean

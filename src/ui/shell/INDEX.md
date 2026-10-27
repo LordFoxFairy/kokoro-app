@@ -73,3 +73,5 @@ Web专属thread viewport统一隐藏滚动条槽以匹配Composer阅读轴；共
 `useComposerConnections`仅持当前主体/准入代际/engine的Connection列表及metadata读缓存（四并发、显式分页、重复游标/身份错配拒绝）；selection真态在engine，打开菜单背景重读，同scope失败保已知列表。主体退休取消/忽略迟到，不持久化或授权；自有读取不挤入Settings coordinator。
 
 CHAT-1：page-clients将draftLifecycle按既有主体准入和scope装配；独立draft-retired键沿原conversation前缀清理，无正文/secret/TTL。保原ID和Skill试用引用，不在索引覆盖时恢复已退休来源。
+
+项目行删除只提交 RAM target handoff：先导航指定项目，当前受信 owner read 精确 ready 后才打开原确认框，取消不写。旧项目的无参删除控制不接受另一行目标；确认仍冻结原 project ID/key/空 body，unknown 显式恢复、202 退休及迟到／身份／导航隔离保持。行菜单编辑名称复用现 rename，焦点返回需当前 route、owner、scope 同时匹配；失联／隐藏行只回当前 header，旧回调不挪动新项目焦点。

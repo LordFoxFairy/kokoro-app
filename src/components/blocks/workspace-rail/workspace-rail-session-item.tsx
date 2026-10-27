@@ -1,10 +1,18 @@
 "use client"
 
-import { type RefObject, useState } from "react"
-import { Archive, FolderInput, Pencil, X } from "lucide-react"
+import { type RefObject, useRef, useState } from "react"
+import { Archive, Ellipsis, FolderInput, Pencil, X } from "lucide-react"
 
 import { Input } from "@/components/ui/input"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import {
   SidebarMenuAction,
   SidebarMenuButton,
@@ -72,7 +80,9 @@ export function WorkspaceRailSessionItem({
   onRetryConversationMove,
 }: WorkspaceRailSessionItemProps) {
   const t = useT()
-  const [moveOpen, setMoveOpen] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuTriggerRef = useRef<HTMLButtonElement>(null)
+  const afterMenuCloseRef = useRef<(() => void) | null>(null)
 
   if (conversation.submissionUnconfirmed) {
     // This is an exact local recovery destination, not an owner-backed task row.
@@ -117,7 +127,7 @@ export function WorkspaceRailSessionItem({
         />
       ) : (
         <>
-          {/* 双击标题或使用悬停编辑按钮进入内联改题。 */}
+          {/* 双击标题或使用行菜单进入内联改题。 */}
           <SidebarMenuButton
             isActive={active}
             className={itemStyles.itemSelect}
@@ -137,49 +147,64 @@ export function WorkspaceRailSessionItem({
             ) : null}
             <span className={itemStyles.itemTitle}>{title}</span>
           </SidebarMenuButton>
-          <SidebarMenuAction
-            showOnHover
-            className={itemStyles.itemRename}
-            type="button"
-            aria-label={t("rail.renameChat", { title })}
-            onClick={() => onStartRename(conversation.id, conversation.title)}
-          >
-            <Pencil aria-hidden="true" />
-          </SidebarMenuAction>
-          {onMoveConversation ? (
-            <DropdownMenu open={moveOpen} onOpenChange={setMoveOpen}>
-              <DropdownMenuTrigger asChild>
-                <SidebarMenuAction showOnHover className={itemStyles.itemMove} type="button"
-                  aria-label={t("rail.moveChat", { title })} disabled={conversationMovePending}
-                  onClick={() => setMoveOpen(true)}>
-                  <FolderInput aria-hidden="true" />
-                </SidebarMenuAction>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {moveDestinations.map((destination) => (
-                  <DropdownMenuItem
-                    key={destination.id ?? "direct"}
-                    onSelect={() => onMoveConversation(conversation.id, destination.id)}
-                  >
-                    {destination.name}
-                  </DropdownMenuItem>
-                ))}
-                {conversationMove?.status === "unknown" && onRetryConversationMove ? (
-                  <DropdownMenuItem onSelect={onRetryConversationMove}>{t("rail.retryMoveChat")}</DropdownMenuItem>
-                ) : null}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : null}
-          {onArchiveConversation ? <DropdownMenu><DropdownMenuTrigger asChild><SidebarMenuAction showOnHover className={itemStyles.itemArchive} type="button" aria-label={t("archive.action")} disabled={archiveBusy}><Archive aria-hidden="true" /></SidebarMenuAction></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem disabled={archiveBusy||!archiveIdAvailable(conversation.id)} onSelect={()=>onArchiveConversation(conversation.id)}>{t("archive.action")}</DropdownMenuItem>{!archiveIdAvailable(conversation.id)?<p>{t("archive.idUnavailable")}</p>:null}</DropdownMenuContent></DropdownMenu> : null}
-          <SidebarMenuAction
-            showOnHover
-            className={cn(itemStyles.itemDelete, itemStyles.itemDeleteAction)}
-            type="button"
-            aria-label={t("rail.deleteChat", { title })}
-            onClick={() => onRequestDelete(conversation)}
-          >
-            <X aria-hidden="true" />
-          </SidebarMenuAction>
+          <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+            <DropdownMenuTrigger asChild>
+              <SidebarMenuAction
+                ref={menuTriggerRef}
+                className={itemStyles.itemOptions}
+                type="button"
+                aria-label={`${t("rail.more")} · ${title}`}
+              >
+                <Ellipsis aria-hidden="true" />
+              </SidebarMenuAction>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" onCloseAutoFocus={(event) => {
+              const afterClose = afterMenuCloseRef.current
+              if (!afterClose) return
+              afterMenuCloseRef.current = null
+              // Rename replaces the trigger; delete opens an independent dialog.
+              // Let that next owner receive focus instead of Radix restoring it.
+              event.preventDefault()
+              menuTriggerRef.current?.focus()
+              afterClose()
+            }}>
+              <DropdownMenuItem onSelect={() => {
+                afterMenuCloseRef.current = () => onStartRename(conversation.id, conversation.title)
+              }}>
+                <Pencil aria-hidden="true" />{t("rail.renameChat", { title })}
+              </DropdownMenuItem>
+              {onMoveConversation ? (
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger disabled={conversationMovePending}>
+                    <FolderInput aria-hidden="true" />{t("rail.moveChat", { title })}
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent>
+                    {moveDestinations.map((destination) => (
+                      <DropdownMenuItem key={destination.id ?? "direct"}
+                        onSelect={() => onMoveConversation(conversation.id, destination.id)}>
+                        {destination.name}
+                      </DropdownMenuItem>
+                    ))}
+                    {conversationMove?.status === "unknown" && onRetryConversationMove ? (
+                      <DropdownMenuItem onSelect={onRetryConversationMove}>{t("rail.retryMoveChat")}</DropdownMenuItem>
+                    ) : null}
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+              ) : null}
+              {onArchiveConversation ? <>
+                <DropdownMenuItem disabled={archiveBusy || !archiveIdAvailable(conversation.id)}
+                  onSelect={() => onArchiveConversation(conversation.id)}>
+                  <Archive aria-hidden="true" />{t("archive.action")}
+                </DropdownMenuItem>
+                {!archiveIdAvailable(conversation.id) ? <p>{t("archive.idUnavailable")}</p> : null}
+              </> : null}
+              <DropdownMenuItem variant="destructive" onSelect={() => {
+                afterMenuCloseRef.current = () => onRequestDelete(conversation)
+              }}>
+                <X aria-hidden="true" />{t("rail.deleteChat", { title })}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </>
       )}
     </SidebarMenuItem>

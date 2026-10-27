@@ -4,6 +4,11 @@
 import type { MessageKey } from "./messages"
 
 export const ko: Partial<Record<MessageKey, string>> = {
+  "firstSite.projectMenuDelete": "삭제",
+  "firstSite.editProject": "프로젝트 편집",
+  "firstSite.viewProject": "프로젝트 보기",
+  "firstSite.projectShowLess": "간략히 표시",
+
   "firstSite.projectSettings": "프로젝트 설정",
   "firstSite.closeProjectSettings": "프로젝트 설정 닫기",
   "thread.conversationMissing": "대화를 찾을 수 없습니다",

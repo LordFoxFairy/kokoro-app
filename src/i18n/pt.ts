@@ -4,6 +4,11 @@
 import type { MessageKey } from "./messages"
 
 export const pt: Partial<Record<MessageKey, string>> = {
+  "firstSite.projectMenuDelete": "Excluir",
+  "firstSite.editProject": "Editar projeto",
+  "firstSite.viewProject": "Ver projeto",
+  "firstSite.projectShowLess": "Mostrar menos",
+
   "firstSite.projectSettings": "Configurações do projeto",
   "firstSite.closeProjectSettings": "Fechar configurações do projeto",
   "thread.conversationMissing": "Conversa não encontrada",

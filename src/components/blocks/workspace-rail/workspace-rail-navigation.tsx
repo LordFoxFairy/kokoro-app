@@ -1,6 +1,6 @@
 "use client"
 
-import { Fragment, type Dispatch, type RefObject, type SetStateAction, useRef, useState } from "react"
+import { Fragment, type Dispatch, type RefObject, type SetStateAction, useState } from "react"
 import Link from "next/link"
 import { Check, ChevronDown, ChevronRight, Ellipsis, Folder, Shapes, Monitor, Plus, SquareMousePointer, SquarePen, WandSparkles, Workflow } from "lucide-react"
 
@@ -33,6 +33,7 @@ import type { RailConversationReads, WorkbenchNavigationItem, WorkspaceRailProje
 import { itemStyles, navigationStyles, railStyles } from "./workspace-rail-styles"
 import { WorkspaceRailLoadingPlaceholder } from "./workspace-rail-loading-placeholder"
 import { WorkspaceRailProjectCreateDialog } from "./workspace-rail-project-create-dialog"
+import { WorkspaceRailProjectMenu } from "./workspace-rail-project-menu"
 import { ScopedConversationGroup } from "./workspace-rail-session-list"
 export { WorkspaceRailHeader, type WorkspaceRailHeaderProps } from "./workspace-rail-header"
 
@@ -49,8 +50,8 @@ export type WorkspaceRailNavigationProps = Pick<WorkspaceRailProps, "conversatio
   projectPickerOpen: boolean
   setProjectPickerOpen: Dispatch<SetStateAction<boolean>>
   onCreateProject?: (input?: Readonly<{ name?: string; draft?: string }>) => void
-  onRequestProjectRename?: (projectId: string) => void
-  onRequestProjectInstructions?: (projectId: string, returnFocus: HTMLButtonElement | null) => void
+  onRequestProjectRename?: (projectId: string, opener?: HTMLButtonElement | null) => void
+  onRequestProjectDelete?: (projectId: string, opener: HTMLButtonElement | null) => void
   onNewChat: () => void
   closeNavigation: () => void
   onOpenSettings: (tab: SettingsTab) => void
@@ -82,7 +83,7 @@ export function WorkspaceRailNavigation({
   setProjectPickerOpen,
   onCreateProject,
   onRequestProjectRename,
-  onRequestProjectInstructions,
+  onRequestProjectDelete,
   onNewChat,
   closeNavigation,
   onOpenSettings,
@@ -443,7 +444,12 @@ export function WorkspaceRailNavigation({
                 const dragOver = dragOverKey === `project:${project.id}`
                 return (
                   <Fragment key={project.id}>
-                  <SidebarMenuItem
+                  <WorkspaceRailProjectMenu project={project} identity={conversationReads?.identity ?? "controlled"} admitted={conversationReads?.admitted !== false && (projectListStatus === undefined || projectListStatus === "ready")}
+                    triggerClassName={cn(itemStyles.projectAction, itemStyles.projectOptions)}
+                    {...(onRequestProjectRename === undefined ? {} : { onRename: onRequestProjectRename })}
+                    {...(onRequestProjectDelete === undefined ? {} : { onDelete: onRequestProjectDelete })}
+                    onShowLess={() => setProjectConversationExpansion(current => new Map(current).set(project.id, false))}
+                    onNavigate={closeNavigation}>{menuTrigger => <SidebarMenuItem
                     className={cn(itemStyles.item, navigationStyles.projectRow, dragging && itemStyles.itemDragging, dragOver && itemStyles.itemDragOver)}
                     data-project-id={project.id}
                     data-drag-kind="project"
@@ -471,9 +477,7 @@ export function WorkspaceRailNavigation({
                       <span className={itemStyles.itemTitle}>{project.name}</span>
                     </SidebarMenuButton>
                     <span className={itemStyles.projectActions}>
-                      <ProjectOptionsMenu projectId={project.id} closeNavigation={closeNavigation}
-                        {...(onRequestProjectRename === undefined ? {} : { onRequestProjectRename })}
-                        {...(onRequestProjectInstructions === undefined ? {} : { onRequestProjectInstructions })} />
+                      {menuTrigger}
                       <Button asChild variant="ghost" size="icon-xs" className={itemStyles.projectAction}>
                         <Link href={project.href}
                           {...(mountedSurfacePrefetch === undefined ? {} : { prefetch: mountedSurfacePrefetch })}
@@ -487,7 +491,7 @@ export function WorkspaceRailNavigation({
                         </Link>
                       </Button>
                     </span>
-                  </SidebarMenuItem>
+                  </SidebarMenuItem>}</WorkspaceRailProjectMenu>
                   {conversationsExpanded ? <SidebarMenuItem
                       id={`rail-project-conversations-${project.id}`}
                       className={navigationStyles.projectConversationGroup}
@@ -521,32 +525,4 @@ export function WorkspaceRailNavigation({
       <WorkspaceRailProjectCreateDialog open={projectCreateOpen} onOpenChange={setProjectCreateOpen} {...(onCreateProject === undefined ? {} : { onCreate: onCreateProject })} />
     </nav>
   )
-}
-
-/** Each project keeps the exact live menu trigger for the editor's focus return. */
-function ProjectOptionsMenu({ projectId, onRequestProjectRename, onRequestProjectInstructions, closeNavigation }: {
-  projectId: string
-  onRequestProjectRename?: WorkspaceRailNavigationProps["onRequestProjectRename"]
-  onRequestProjectInstructions?: WorkspaceRailNavigationProps["onRequestProjectInstructions"]
-  closeNavigation: () => void
-}) {
-  const t = useT()
-  const triggerRef = useRef<HTMLButtonElement | null>(null)
-  if (!onRequestProjectRename && !onRequestProjectInstructions) return null
-  return <DropdownMenu>
-    <DropdownMenuTrigger asChild>
-      <Button ref={triggerRef} type="button" variant="ghost" size="icon-xs" className={cn(itemStyles.projectAction, itemStyles.projectOptions)} aria-label={t("firstSite.projectOptions")}>
-        <Ellipsis aria-hidden="true" />
-      </Button>
-    </DropdownMenuTrigger>
-    <DropdownMenuContent align="end" side="bottom" sideOffset={4} className={navigationStyles.projectRowMenu}>
-      {onRequestProjectRename ? <DropdownMenuItem onSelect={() => onRequestProjectRename(projectId)}>
-        <SquarePen aria-hidden="true" />{t("firstSite.renameProject")}
-      </DropdownMenuItem> : null}
-      {onRequestProjectInstructions ? <DropdownMenuItem onSelect={() => {
-        onRequestProjectInstructions(projectId, triggerRef.current)
-        closeNavigation()
-      }}><SquarePen aria-hidden="true" />{t("firstSite.editProjectInstructions")}</DropdownMenuItem> : null}
-    </DropdownMenuContent>
-  </DropdownMenu>
 }

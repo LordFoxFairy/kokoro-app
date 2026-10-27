@@ -1255,8 +1255,9 @@ it.each(["pages", "pending rename"] as const)("a project keeps its own reader ac
       fireEvent.click(group().getByRole("button", { name: "加载更多" }))
       await group().findByRole("button", { name: "项目第二页" })
     } else {
-      fireEvent.click(group().getByRole("button", { name: "重命名会话 项目原题" }))
-      const input = group().getByRole("textbox")
+      fireEvent.keyDown(group().getByRole("button", { name: "更多 · 项目原题" }), { key: "Enter", code: "Enter" })
+      fireEvent.click(await screen.findByRole("menuitem", { name: "重命名会话 项目原题" }))
+      const input = await group().findByRole("textbox")
       fireEvent.change(input, { target: { value: "已确认的新题" } })
       fireEvent.keyDown(input, { key: "Enter" })
       await waitFor(() => expect(renameSession).toHaveBeenCalledOnce())
@@ -1814,8 +1815,11 @@ it.each(["library", "leave"] as const)("R254 Move %s只改owner绑定并刷新�
   try {
     await waitFor(() => expect(rememberedEngine.getSnapshot().hydrating).toBe(false))
     await screen.findByRole("link", { name: "新对话 · 项目Q" })
-    const row = await screen.findByRole("button", { name: "移动会话 记忆会话" })
-    fireEvent.click(row)
+    const row = await screen.findByRole("button", { name: "更多 · 记忆会话" })
+    fireEvent.keyDown(row, { key: "Enter", code: "Enter" })
+    const move = await screen.findByRole("menuitem", { name: "移动会话 记忆会话" })
+    move.focus()
+    fireEvent.keyDown(move, { key: "ArrowRight" })
     fireEvent.click(await screen.findByRole("menuitem", { name: target === p ? "项目P" : "项目Q" }))
     await waitFor(() => expect(moveRequests).toHaveLength(1))
     if (surface === "leave") {

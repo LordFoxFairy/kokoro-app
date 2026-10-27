@@ -50,8 +50,8 @@ export type WorkspaceRailProps = {
   /** Optional host action for the project-creation menu entry. */
   onCreateProject?: (input?: Readonly<{ name?: string; draft?: string }>) => void
   /** Routes the project options menu's rename action to the owner-backed editor. */
-  onRequestProjectRename?: (projectId: string) => void
-  onRequestProjectInstructions?: (projectId: string, returnFocus: HTMLButtonElement | null) => void
+  onRequestProjectRename?: (projectId: string, opener?: HTMLButtonElement | null) => void
+  onRequestProjectDelete?: (projectId: string, opener: HTMLButtonElement | null) => void
   /** Owner-confirmed project collection. A known projectHref alone is only a current-route shortcut. */
   projects?: readonly WorkspaceRailProject[]
   projectListStatus?: "blocked" | "loading" | "ready" | "error"

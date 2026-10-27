@@ -53,6 +53,11 @@ type ProjectCreationIntent = {
 }
 type ProjectCreationState = { pending: boolean; error: boolean; retryable: boolean }
 
+function menuRouteMatches(route: string, rename: boolean): boolean {
+  const current = `${window.location.pathname}${window.location.search}${window.location.hash}`
+  return current === route || rename && current === route.replace(/#rename$/u, "")
+}
+
 /** Owns project-scoped draft handoff, instructions, resources, and mutations. */
 export function useAppFrameProject({
   projectRef,
@@ -112,6 +117,51 @@ export function useAppFrameProject({
       scope.controller = null
     }
   }, [renameContext])
+  // Row-menu intents are RAM-only and actor-bound, but may cross to their exact target route.
+  const menuContext = useMemo(() => ({ mounted, preview, admitted: renameBoundary?.admitted,
+    subject: renameBoundary?.subject, generation: renameBoundary?.generation }),
+  [mounted, preview, renameBoundary?.admitted, renameBoundary?.subject, renameBoundary?.generation])
+  type MenuRequest = { target: string; route: string; context: typeof menuContext }
+  type MenuScope = { context: typeof menuContext; active: boolean; request: MenuRequest | null }
+  const menuScopeRef = useRef<MenuScope | null>(null)
+  const menuFocusRef = useRef<{ context: typeof menuContext; route: string; rename: boolean; opener: HTMLButtonElement | null } | null>(null)
+  const [deleteRequest, setDeleteRequest] = useState<MenuRequest | null>(null)
+  const projectMenuAccess = mounted && !preview && renameBoundary?.admitted === true && renameBoundary.subject !== null
+  useLayoutEffect(() => {
+    const scope: MenuScope = { context: menuContext, active: true, request: null }
+    menuScopeRef.current = scope
+    const retire = () => {
+      if (scope.request && !menuRouteMatches(scope.request.route, false)) {
+        scope.request = null
+        setDeleteRequest(null)
+      }
+      const focus = menuFocusRef.current
+      if (focus && !menuRouteMatches(focus.route, focus.rename)) menuFocusRef.current = null
+    }
+    window.addEventListener("popstate", retire)
+    window.addEventListener("kokoro:surface-navigation", retire)
+    return () => {
+      scope.active = false
+      scope.request = null
+      if (menuFocusRef.current?.context === menuContext) menuFocusRef.current = null
+      window.removeEventListener("popstate", retire)
+      window.removeEventListener("kokoro:surface-navigation", retire)
+    }
+  }, [menuContext])
+  const returnProjectMenuFocus = (fallback: HTMLButtonElement | null = null) => {
+    const focus = menuFocusRef.current
+    const scope = menuScopeRef.current
+    if (!focus || !scope?.active || scope.context !== menuContext || focus.context !== menuContext || !projectMenuAccess
+      || renameScopeRef.current?.context !== renameContext || !renameScopeRef.current.active
+      || projectRef === undefined || projectDetail.status !== "ready" || projectDetail.data.id !== projectRef
+      || window.location.pathname !== `/app/project/${encodeURIComponent(projectRef)}` || !menuRouteMatches(focus.route, focus.rename)) return false
+    const available = (node: HTMLButtonElement | null) => node?.isConnected && !node.disabled && (typeof node.checkVisibility !== "function" || node.checkVisibility())
+    const target = available(focus.opener) ? focus.opener : available(fallback) ? fallback : null
+    if (!target) return false
+    menuFocusRef.current = null
+    target.focus({ preventScroll: true })
+    return true
+  }
   const renameAvailable = mounted && projectWorkspace && !preview && renameBoundary?.admitted === true
     && renameBoundary.subject !== null && projectDetail.status === "ready" && projectDetail.data.id === projectRef
     && projectRenameIdSchema.safeParse(projectRef).success && refreshRenamedProject !== undefined && renameView.problem !== "permission"
@@ -171,6 +221,7 @@ export function useAppFrameProject({
   }, [projectDetail, renameAvailable, renameContext, setRenameView])
   const projectRename: ProjectRenameControl = {
     focusScopeToken: renameContext,
+    returnFocus: returnProjectMenuFocus,
     available: renameAvailable,
     ...renameView,
     onOpen: openRename,
@@ -210,10 +261,15 @@ export function useAppFrameProject({
       void runRename(true, true)
     },
   }
-  const requestProjectRename = useCallback((target: string) => {
-    if (preview || !projectRenameIdSchema.safeParse(target).success) return
-    navigateMountedSurface(`/app/project/${encodeURIComponent(target)}#rename`)
-  }, [preview])
+  const requestProjectRename = useCallback((target: string, opener: HTMLButtonElement | null = null) => {
+    const scope = menuScopeRef.current
+    const current = renameScopeRef.current
+    if (!projectMenuAccess || !scope?.active || scope.context !== menuContext || !projectRenameIdSchema.safeParse(target).success
+      || !current?.active || current.context !== renameContext || current.route !== `${window.location.pathname}${window.location.search}${window.location.hash}`) return
+    const route = `/app/project/${encodeURIComponent(target)}#rename`
+    menuFocusRef.current = { context: menuContext, route, rename: true, opener: opener?.isConnected ? opener : null }
+    navigateMountedSurface(route)
+  }, [projectMenuAccess, menuContext, renameContext])
   useEffect(() => {
     if (typeof window === "undefined" || window.location.hash !== "#rename" || !renameAvailable || renameView.open) return
     openRename()
@@ -331,6 +387,7 @@ export function useAppFrameProject({
   }, [deleteAvailable, projectDetail, projectRef, renameContext, setDeleteView])
   const projectDelete: ProjectDeleteControl = {
     focusScopeToken: renameContext,
+    returnFocus: returnProjectMenuFocus,
     available: deleteAvailable,
     ...deleteView,
     onOpen: openDelete,
@@ -351,6 +408,29 @@ export function useAppFrameProject({
     onRetry: () => { if (deleteScopeRef.current?.context === renameContext && deleteScopeRef.current.intent) void runDelete(false) },
     onCheck: () => { if (deleteScopeRef.current?.context === renameContext && deleteScopeRef.current.intent) void runDelete(true) },
   }
+
+  const requestProjectDeletion = useCallback((target: string, opener: HTMLButtonElement | null) => {
+    const scope = menuScopeRef.current
+    const current = renameScopeRef.current
+    if (!projectMenuAccess || !scope?.active || scope.context !== menuContext || !projectDeletionIdSchema.safeParse(target).success
+      || !current?.active || current.context !== renameContext || current.route !== `${window.location.pathname}${window.location.search}${window.location.hash}`) return
+    const path = `/app/project/${encodeURIComponent(target)}`
+    const route = window.location.pathname === path ? `${window.location.pathname}${window.location.search}${window.location.hash}` : path
+    const request: MenuRequest = { target, route, context: menuContext }
+    scope.request = request
+    menuFocusRef.current = { context: menuContext, route, rename: false, opener: opener?.isConnected ? opener : null }
+    setDeleteRequest(request)
+    navigateMountedSurface(route)
+  }, [projectMenuAccess, menuContext, renameContext])
+  useEffect(() => {
+    const scope = menuScopeRef.current
+    if (!deleteRequest || !scope?.active || scope.context !== menuContext || scope.request !== deleteRequest
+      || deleteRequest.context !== menuContext || !projectMenuAccess || !menuRouteMatches(deleteRequest.route, false)
+      || projectRef !== deleteRequest.target || projectDetail.status !== "ready" || projectDetail.data.id !== deleteRequest.target || !deleteAvailable) return
+    scope.request = null
+    setDeleteRequest(null)
+    openDelete()
+  }, [deleteRequest, menuContext, projectMenuAccess, projectRef, projectDetail, deleteAvailable, openDelete])
 
   const contextTriggerRef = useRef<HTMLButtonElement | null>(null)
   const contextAvailable = mounted && projectWorkspace && contextEnabled && projectRef !== undefined
@@ -764,6 +844,8 @@ export function useAppFrameProject({
     projectContext,
     dismissProjectContext,
     projectDelete,
+    requestProjectDeletion,
+    projectMenuAccess,
     projectInstruction,
     projectInstructionRequest,
     requestProjectInstructions,

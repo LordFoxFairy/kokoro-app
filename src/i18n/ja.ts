@@ -4,6 +4,11 @@
 import type { MessageKey } from "./messages"
 
 export const ja: Partial<Record<MessageKey, string>> = {
+  "firstSite.projectMenuDelete": "削除",
+  "firstSite.editProject": "プロジェクトを編集",
+  "firstSite.viewProject": "プロジェクトを表示",
+  "firstSite.projectShowLess": "表示を減らす",
+
   "firstSite.projectSettings": "プロジェクト設定",
   "firstSite.closeProjectSettings": "プロジェクト設定を閉じる",
   "thread.conversationMissing": "会話が見つかりません",

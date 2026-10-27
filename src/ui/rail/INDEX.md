@@ -27,3 +27,7 @@ AppFrame可信ProjectReadBoundary沿原rail props/shell进入account余额；同
 - 同主体 Product 会话重核验保持读取边界和既有列表，不触发业务重读。真正退休后的未准入表示等待读取，不表示请求失败：项目和会话侧栏共用现有无文字占位，旧身份行及游标立即退休，重新准入后读取，实际列表错误保留反馈和重试。
 
 窗口变化只约束当前有效rail宽度，保留用户偏好供放宽后恢复；Canvas共同适配归AppFrame layout，不能把其临时reserve锁进被动宽度。
+
+## 项目行操作
+
+`workspace-rail-project-menu` 将真实右键、Shift+F10／菜单键及 ellipsis 投影到同一目标的四个动作：编辑名称、查看原 overview、仅收起该项目任务、删除确认。Instructions 保留现 header/settings 入口；pin 等正式 BFF owner 契约后接入，当前无占位操作或本地持久化。菜单使用已锁 Radix ContextMenu 的薄包装及原 Dropdown；导航／身份变化关闭，键盘拖拽与会话菜单独立。

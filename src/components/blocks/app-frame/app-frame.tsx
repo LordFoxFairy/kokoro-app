@@ -995,12 +995,7 @@ function AppFrameRuntime({
       onRetryProjects: refreshProjects,
     } : {}),
     onCreateProject: project.createProject,
-    onRequestProjectRename: project.requestProjectRename,
-    ...(project.instructionAccess ? { onRequestProjectInstructions: (target, returnFocus) => {
-      // The explicit preview shortcut is keyed by href, not an owner Project ID.
-      const projectId = preview && projectRef !== undefined && target === `/app/project/${encodeURIComponent(projectRef)}` ? projectRef : target
-      project.requestProjectInstructions(projectId, returnFocus)
-    } } : {}),
+    ...(project.projectMenuAccess ? { onRequestProjectRename: project.requestProjectRename, onRequestProjectDelete: project.requestProjectDeletion } : {}),
     ...(activeNavigationKey === undefined ? {} : { activeNavigationKey }),
     preview,
     conversations,

@@ -87,33 +87,39 @@
 
 
 .item { display: flex; min-width: 0; align-items: center; border-radius: var(--radius-sm); transition: background-color var(--motion-fast) var(--ease-standard), opacity var(--motion-fast) var(--ease-standard); }
-.itemSelect { display: flex; min-width: 0; min-height: 2.1rem; flex: 1; align-items: center; gap: 0.4rem; border-radius: var(--radius-sm); padding: 0.4rem 6.5rem 0.4rem 0.55rem; font-size: 0.825rem; text-align: left; }
+.itemSelect { display: flex; min-width: 0; min-height: 2.1rem; flex: 1; align-items: center; gap: 0.4rem; border-radius: var(--radius-sm); padding: 0.4rem 0.55rem; font-size: 0.825rem; text-align: left; }
 .itemSelect[draggable="true"] { cursor: grab; touch-action: pan-y; }
 .itemSelect[aria-grabbed="true"] { cursor: grabbing; }
 .itemDragging { opacity: 0.55; }
 .itemDragOver .itemSelect { box-shadow: inset 0 0 0 2px var(--ring); }
 .itemTitle { display: block; min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .itemAwaiting { width: 0.45rem; height: 0.45rem; flex: 0 0 auto; border-radius: 999px; background: var(--warning); }
-.itemRename,
-.itemMove,
-.itemArchive,
-.itemDelete { width: 2rem; height: 2rem; flex: 0 0 auto; padding: 0; color: var(--muted-foreground); }
-.itemRename::after,
-.itemMove::after,
-.itemArchive::after,
-.itemDelete::after { inset: 0; }
-.itemRename:hover,
-.itemMove:hover,
-.itemArchive:hover,
-.itemDelete:hover { color: var(--foreground); }
-.itemRename { right: 4.25rem; }
-.itemMove { right: 2.25rem; }
-.itemDeleteAction { right: 0.25rem; }
+.itemOptions {
+  --rail-action-size: 2rem;
+  position: relative;
+  inset: auto;
+  width: 0;
+  min-width: 0;
+  height: var(--rail-action-size);
+  flex: 0 0 auto;
+  padding: 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  color: var(--muted-foreground);
+}
+.itemOptions::after { inset: 0; }
+.item:hover .itemOptions,
+.item:focus-within .itemOptions,
+.itemOptions[data-state="open"] {
+  width: var(--rail-action-size);
+  opacity: 1;
+  pointer-events: auto;
+  overflow: visible;
+}
+.itemOptions:hover { color: var(--foreground); }
+.itemOptions svg { width: 1rem; height: 1rem; }
 .itemRenameInput { min-width: 0; flex: 1; margin: 0.2rem 0.35rem; border-color: var(--ring); border-radius: var(--radius-sm); font-size: 0.85rem; }
-.itemRename svg,
-.itemMove svg,
-.itemArchive svg,
-.itemDelete svg { width: 0.9rem; height: 0.9rem; }
 .loadMore { width: calc(100% - 1.3rem); margin: 0.35rem 0.65rem 0.2rem; border-radius: var(--radius-sm); font-size: 0.8rem; }
 
 [data-desktop-rail="true"] .item { position: relative; z-index: 1; }
@@ -126,31 +132,16 @@
   justify-content: center;
 }
 
-@media (max-width: 960px) {
-  [data-desktop-rail="false"] .itemSelect { min-height: 2.75rem; padding-right: 8.75rem; }
-  [data-desktop-rail="false"] .itemRename,
-  [data-desktop-rail="false"] .itemMove,
-  [data-desktop-rail="false"] .itemDelete,
-  [data-desktop-rail="false"] .itemArchive { top: 50%; width: 2.75rem; height: 2.75rem; transform: translateY(-50%); }
-  [data-desktop-rail="false"] .itemRename { right: 5.75rem; }
-  [data-desktop-rail="false"] .itemMove { right: 3rem; }
-  [data-desktop-rail="false"] .itemDelete { right: 0.25rem; }
-  [data-desktop-rail="false"] .itemRenameInput { min-height: 2.75rem; }
+/* Mobile sheets and coarse pointers keep one visible 44px action target. */
+[data-desktop-rail="false"] .itemSelect { min-height: 2.75rem; }
+[data-desktop-rail="false"] .itemOptions {
+  --rail-action-size: 2.75rem;
+  width: var(--rail-action-size);
+  opacity: 1;
+  pointer-events: auto;
+  overflow: visible;
 }
-
-/* Row controls are real siblings, not overlays. Reserving padding only
- * shortened the title text while the controls already occupy their own flex
- * space. Project rows have the same geometry even before hover reveals actions. */
-.item[data-drag-kind="conversation"] > .itemSelect,
-.item[data-drag-kind="project"] > .itemSelect { padding-right: 0.55rem; }
-.item[data-drag-kind="conversation"] > .itemRename,
-.item[data-drag-kind="conversation"] > .itemMove,
-.item[data-drag-kind="conversation"] > .itemArchive,
-.item[data-drag-kind="conversation"] > .itemDelete {
-  position: relative;
-  inset: auto;
-  transform: none;
-}
+[data-desktop-rail="false"] .itemRenameInput { min-height: 2.75rem; }
 
 @media (prefers-reduced-motion: reduce) {
   .item { transition: none; }
@@ -159,17 +150,15 @@
 /* A project row discloses its own tasks; the adjacent shortcut opens its
  * workspace. Hover swaps only the decorative glyph, never the hit target. */
 .projectGlyph { position: relative; display: inline-grid; width: 1.25rem; height: 1.25rem; flex: 0 0 1.25rem; place-items: center; }
-/* Opacity keeps the resting row quiet without removing the menu trigger
- * from focus restoration when its portal closes outside the hovered row. */
-.projectActions { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 0; margin-inline-end: 0.125rem; opacity: 0; pointer-events: none; transition: opacity var(--motion-fast) var(--ease-standard); }
+/* Resting controls occupy no flex width. Keyboard focus or an open portal
+ * keeps the same real trigger available after the pointer leaves the row. */
+.projectActions { display: inline-flex; width: 0; min-width: 0; flex: 0 0 auto; align-items: center; gap: 0; overflow: hidden; opacity: 0; pointer-events: none; transition: opacity var(--motion-fast) var(--ease-standard); }
+[data-desktop-rail="false"] .projectActions,
 .item[data-drag-kind="project"]:hover .projectActions,
 .item[data-drag-kind="project"]:focus-within .projectActions,
-.projectActions:has([data-state="open"]) { opacity: 1; pointer-events: auto; }
-.projectAction { width: 2rem; height: 2rem; padding: 0; color: var(--muted-foreground); }
-.projectOptions { position: absolute; }
-.item[data-drag-kind="project"]:hover .projectOptions,
-.item[data-drag-kind="project"]:focus-within .projectOptions,
-.projectActions:has([data-state="open"]) .projectOptions { position: static; }
+.projectActions:has([data-state="open"]) { width: auto; overflow: visible; opacity: 1; pointer-events: auto; }
+.projectAction { width: 2rem; height: 2rem; flex: 0 0 auto; padding: 0; color: var(--muted-foreground); }
+.projectOptions { position: static; }
 .projectChevron { position: absolute; opacity: 0; color: var(--muted-foreground); transition: transform var(--motion-fast) var(--ease-standard); }
 .itemSelect[aria-expanded="true"] .projectChevron { transform: rotate(90deg); }
 [data-desktop-rail="true"] .item[data-drag-kind="project"]:hover .projectFolderIcon,
@@ -177,11 +166,12 @@
 [data-desktop-rail="true"] .item[data-drag-kind="project"]:hover .projectChevron,
 [data-desktop-rail="true"] .item[data-drag-kind="project"]:focus-within .projectChevron { opacity: 1; }
 .projectGlyph > svg { width: 1.125rem; height: 1.125rem; }
+[data-desktop-rail="false"] .projectAction { width: 2.75rem; height: 2.75rem; }
 .projectAction:hover { color: var(--foreground); }
 .projectAction svg { width: 1.125rem; height: 1.125rem; }
-@media (hover: none) {
-  .projectActions { opacity: 1; pointer-events: auto; }
-  .projectOptions { position: static; }
+@media (hover: none), (pointer: coarse) {
+  .projectActions { width: auto; overflow: visible; opacity: 1; pointer-events: auto; }
+  .itemOptions { --rail-action-size: 2.75rem; width: var(--rail-action-size); overflow: visible; opacity: 1; pointer-events: auto; }
   .projectAction { width: 2.75rem; height: 2.75rem; }
 }
 

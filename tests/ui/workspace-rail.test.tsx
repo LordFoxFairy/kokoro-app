@@ -5,7 +5,7 @@ import type { ConversationStore } from "@/core/conversations"
 import { createFakeClient, createMemoryStorage } from "../engine/fakes"
 import { createSessionEngine } from "@/engine/machine"
 import { createSessionClient } from "@/engine/client"
-// 侧栏会话重命名内联编辑（CONV-UX）：双击/✎ 进入编辑，Enter 提交、Escape 取消、空题与未改动不上抛。
+// 侧栏会话重命名内联编辑（CONV-UX）：双击/行菜单进入编辑，Enter 提交、Escape 取消、空题与未改动不上抛。
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
@@ -241,8 +241,11 @@ it("R170只把owner确认且非当前scope的目的地放入会话Move菜单", a
     } as unknown as Partial<Parameters<typeof WorkspaceRail>[0]>),
   })
 
-  fireEvent.click(screen.getByRole("button", { name: "移动会话 旧标题" }))
-  const menu = await screen.findByRole("menu")
+  await openConversationActions()
+  const move = screen.getByRole("menuitem", { name: "移动会话 旧标题" })
+  move.focus()
+  fireEvent.keyDown(move, { key: "ArrowRight" })
+  const menu = await screen.findByRole("menu", { name: "移动会话 旧标题" })
   expect(within(menu).getByRole("menuitem", { name: "直接会话" })).toBeEnabled()
   expect(within(menu).getByRole("menuitem", { name: "目标项目" })).toBeEnabled()
   expect(within(menu).queryByRole("menuitem", { name: "当前项目" })).toBeNull()
@@ -266,8 +269,11 @@ it.each(["loading", "error"] as const)(
       } as unknown as Partial<Parameters<typeof WorkspaceRail>[0]>),
     })
 
-    fireEvent.click(screen.getByRole("button", { name: "移动会话 旧标题" }))
-    const menu = await screen.findByRole("menu")
+    await openConversationActions()
+    const move = screen.getByRole("menuitem", { name: "移动会话 旧标题" })
+    move.focus()
+    fireEvent.keyDown(move, { key: "ArrowRight" })
+    const menu = await screen.findByRole("menu", { name: "移动会话 旧标题" })
     expect(within(menu).queryByRole("menuitem", { name: "synthetic-preview-project" })).toBeNull()
     expect(within(menu).queryAllByRole("menuitem")).toHaveLength(0)
   },
@@ -798,9 +804,11 @@ it("双击标题进入编辑，Enter 提交新题一次并把焦点还给会话�
   await waitFor(() => expect(screen.getByRole("button", { name: "旧标题" })).toHaveFocus())
 })
 
-it("✎ 按钮进入编辑，失焦提交", () => {
+it("会话菜单进入编辑并获得焦点，失焦提交", async () => {
   const { onRenameConversation } = renderRail()
-  fireEvent.click(screen.getByLabelText("重命名会话 旧标题"))
+  await openConversationActions()
+  fireEvent.click(screen.getByRole("menuitem", { name: "重命名会话 旧标题" }))
+  await waitFor(() => expect(screen.getByLabelText("会话标题")).toHaveFocus())
   const input = screen.getByLabelText("会话标题")
   fireEvent.change(input, { target: { value: "改一下" } })
   fireEvent.blur(input)
@@ -817,21 +825,21 @@ it("Escape 取消不上抛，标题回落原值", () => {
   expect(screen.getByText("旧标题")).toBeInTheDocument()
 })
 
-it("桌面删除确认取消后把焦点还给原删除按钮", async () => {
+it("桌面菜单删除确认取消后把焦点还给稳定的ellipsis", async () => {
   renderRail()
-  const deleteButton = screen.getByRole("button", { name: "删除会话 旧标题" })
-  deleteButton.focus()
-  fireEvent.click(deleteButton)
+  const trigger = await openConversationActions()
+  fireEvent.click(screen.getByRole("menuitem", { name: "删除会话 旧标题" }))
+  await screen.findByRole("alertdialog")
   fireEvent.click(screen.getByRole("button", { name: "取消" }))
-  await waitFor(() => expect(deleteButton).toHaveFocus())
+  await waitFor(() => expect(trigger).toHaveFocus())
 })
 
 it("桌面确认删除后把焦点交给稳定的新对话入口", async () => {
   const onDeleteConversation = vi.fn().mockResolvedValue(true)
   renderRail({ onDeleteConversation })
-  const deleteButton = screen.getByRole("button", { name: "删除会话 旧标题" })
-  deleteButton.focus()
-  fireEvent.click(deleteButton)
+  await openConversationActions()
+  fireEvent.click(screen.getByRole("menuitem", { name: "删除会话 旧标题" }))
+  await screen.findByRole("alertdialog")
   fireEvent.click(screen.getByRole("button", { name: "确认删除" }))
 
   expect(onDeleteConversation).toHaveBeenCalledWith("ses_1")
@@ -933,11 +941,13 @@ it("品牌入口使用真实的直接会话导航语义", () => {
   expect(conversation).toHaveAttribute("aria-pressed", "true")
 })
 
-it("侧栏操作按钮默认是 action，不会提交外层表单", () => {
+it("侧栏操作按钮默认是 action，不会提交外层表单", async () => {
   renderRail()
   expect(screen.getByTestId("rail-new-conversation")).toHaveAttribute("type", "button")
-  expect(screen.getByLabelText("重命名会话 旧标题")).toHaveAttribute("type", "button")
-  expect(screen.getByLabelText("删除会话 旧标题")).toHaveAttribute("type", "button")
+  const trigger = await openConversationActions()
+  expect(trigger).toHaveAttribute("type", "button")
+  expect(screen.getByRole("menuitem", { name: "重命名会话 旧标题" })).not.toHaveAttribute("type", "submit")
+  expect(screen.getByRole("menuitem", { name: "删除会话 旧标题" })).not.toHaveAttribute("type", "submit")
 })
 
 it("品牌入口由站点路由契约提供，而不是被 rail 写死", () => {
@@ -1081,13 +1091,15 @@ it("收起侧栏的新建项目只打开创建表单，不把菜单事件当草�
   expect(onCreateProject).not.toHaveBeenCalled()
 })
 
-it("会话重命名只提交 conversation 身份，canonical Project 名称与 id 原样保留", () => {
+it("会话重命名只提交 conversation 身份，canonical Project 名称与 id 原样保留", async () => {
   const { onRenameConversation } = renderRail({
     brandName: "不属于项目的品牌",
     projects: [{ id: "canonical-project", name: "独立项目名称", href: "/app/project/canonical-project" }],
     projectListStatus: "ready",
   })
-  fireEvent.click(screen.getByLabelText("重命名会话 旧标题"))
+  await openConversationActions()
+  fireEvent.click(screen.getByRole("menuitem", { name: "重命名会话 旧标题" }))
+  await waitFor(() => expect(screen.getByLabelText("会话标题")).toHaveFocus())
   const input = screen.getByRole("textbox", { name: "会话标题" })
   fireEvent.change(input, { target: { value: "新会话标题" } })
   fireEvent.keyDown(input, { key: "Enter" })
@@ -1139,12 +1151,15 @@ it("项目整行只展开任务，快捷入口进项目，重命名独立在菜�
     expect(onRequestProjectRename).not.toHaveBeenCalled()
   } finally { window.history.replaceState({}, "", oldLocation) }
   const controls = within(row.closest("[data-project-id]") as HTMLElement)
-  fireEvent.pointerDown(controls.getByRole("button", { name: "项目选项" }), { button: 0 })
-  fireEvent.click(await screen.findByRole("menuitem", { name: "重命名项目" }))
-  expect(onRequestProjectRename).toHaveBeenCalledExactlyOnceWith("project_a")
+  const projectTrigger = controls.getByRole("button", { name: "项目选项" })
+  fireEvent.pointerDown(projectTrigger, { button: 0 })
+  fireEvent.click(await screen.findByRole("menuitem", { name: "编辑项目" }))
+  expect(projectTrigger).toBeInstanceOf(HTMLButtonElement)
+  expect(projectTrigger.isConnected).toBe(true)
+  expect(onRequestProjectRename).toHaveBeenCalledExactlyOnceWith("project_a", projectTrigger)
 })
 
-it("项目菜单的重命名动作交给路由 owner，不制造本地副本", async () => {
+it("项目菜单的编辑动作交给路由 owner，不制造本地副本", async () => {
   const onRequestProjectRename = vi.fn()
   renderRail({
     projects: [{ id: "project_a", name: "独立项目名称", href: "/app/project/project_a" }],
@@ -1162,8 +1177,10 @@ it("项目菜单的重命名动作交给路由 owner，不制造本地副本", a
   await waitFor(() => expect(trigger).toHaveFocus())
   expect(onRequestProjectRename).not.toHaveBeenCalled()
   fireEvent.keyDown(trigger, { key: "ArrowDown" })
-  fireEvent.click(await screen.findByRole("menuitem", { name: "重命名项目" }))
-  expect(onRequestProjectRename).toHaveBeenCalledExactlyOnceWith("project_a")
+  fireEvent.click(await screen.findByRole("menuitem", { name: "编辑项目" }))
+  expect(trigger).toBeInstanceOf(HTMLButtonElement)
+  expect(trigger.isConnected).toBe(true)
+  expect(onRequestProjectRename).toHaveBeenCalledExactlyOnceWith("project_a", trigger)
 })
 
 it("无 scoped reader 仍保持整行展开语义，只展示不可用而不借用直接任务", () => {
@@ -1472,11 +1489,9 @@ it("SET29 preview keeps the published preview balance path without a live bounda
 })
 
 // SET47-BEGIN: the row menu delegates archive without destructive delete.
-import { itemStyles as set47ItemStyles } from "@/components/blocks/workspace-rail/workspace-rail-styles"
 it("SET47 task archive is a keyboard-accessible menu action with its own caller",async()=>{
  const archive=vi.fn();const remove=vi.fn();renderRail({onArchiveConversation:archive,onDeleteConversation:remove});
- const trigger=screen.getByRole("button",{name:"归档任务"});expect(set47ItemStyles.itemArchive).toBeTruthy();expect(trigger).toHaveClass(set47ItemStyles.itemArchive!);
- fireEvent.keyDown(trigger,{key:"Enter",code:"Enter"});
+ await openConversationActions();
  const item=await screen.findByRole("menuitem",{name:"归档任务"});fireEvent.click(item);expect(archive).toHaveBeenCalledWith("ses_1");expect(remove).not.toHaveBeenCalled();
 });
 // SET47-END
@@ -1513,4 +1528,87 @@ it("keeps an unconfirmed local submission navigable but does not offer owner mut
   expect(screen.queryByRole("button", { name: /重命名|删除|归档|移动/ })).not.toBeInTheDocument()
   fireEvent.click(row)
   expect(select).toHaveBeenCalledExactlyOnceWith("conv_unconfirmed")
+})
+
+
+async function openConversationActions(title = "旧标题") {
+  const trigger = screen.getByRole("button", { name: `更多 · ${title}` })
+  trigger.focus()
+  fireEvent.keyDown(trigger, { key: "Enter", code: "Enter" })
+  await screen.findByRole("menu", { name: `更多 · ${title}` })
+  return trigger
+}
+
+it("one conversation ellipsis owns all actions without stealing row selection or keyboard drag", async () => {
+  const onSelect = vi.fn()
+  renderRail({ onSelectConversation: onSelect, onMoveConversation: vi.fn(), onArchiveConversation: vi.fn() })
+  const row = screen.getByRole("button", { name: "旧标题" }).closest('[data-drag-kind="conversation"]') as HTMLElement
+  expect(within(row).getAllByRole("button")).toHaveLength(2)
+  const trigger = await openConversationActions()
+  expect(screen.getByRole("menuitem", { name: "重命名会话 旧标题" })).toBeVisible()
+  expect(screen.getByRole("menuitem", { name: "移动会话 旧标题" })).toHaveAttribute("aria-haspopup", "menu")
+  expect(screen.getByRole("menuitem", { name: "归档任务" })).toBeVisible()
+  expect(screen.getByRole("menuitem", { name: "删除会话 旧标题" })).toBeVisible()
+  expect(trigger).not.toHaveAttribute("draggable")
+  fireEvent.keyDown(screen.getByRole("menu", { name: "更多 · 旧标题" }), { key: "Escape" })
+  await waitFor(() => expect(trigger).toHaveFocus())
+  expect(onSelect).not.toHaveBeenCalled()
+  expect(screen.getByRole("button", { name: "旧标题" })).toHaveAttribute("aria-grabbed", "false")
+})
+
+it("conversation ellipsis retries an unknown move through its frozen caller, not a new move", async () => {
+  const onMove = vi.fn(), send = vi.fn()
+  const frozen = { sessionId: "ses_1", targetProjectId: null, commandId: "original-command-key", status: "unknown" as const }
+  const retry = vi.fn(() => send(frozen.commandId))
+  renderRail({ onMoveConversation: onMove, conversationMove: frozen, onRetryConversationMove: retry })
+  await openConversationActions()
+  const move = screen.getByRole("menuitem", { name: "移动会话 旧标题" })
+  move.focus()
+  fireEvent.keyDown(move, { key: "ArrowRight" })
+  fireEvent.click(await screen.findByRole("menuitem", { name: "重试移动会话" }))
+  expect(retry).toHaveBeenCalledTimes(1)
+  expect(send).toHaveBeenCalledExactlyOnceWith("original-command-key")
+  expect(onMove).not.toHaveBeenCalled()
+  expect(frozen.commandId).toBe("original-command-key")
+})
+
+it("conversation ellipsis keeps pending actions unavailable without disabling unrelated actions", async () => {
+  const archive = vi.fn(), move = vi.fn()
+  renderRail({ onArchiveConversation: archive, archiveBusy: true, onMoveConversation: move, conversationMovePending: true })
+  await openConversationActions()
+  expect(screen.getByRole("menuitem", { name: "移动会话 旧标题" })).toHaveAttribute("data-disabled")
+  expect(screen.getByRole("menuitem", { name: "归档任务" })).toHaveAttribute("data-disabled")
+  expect(screen.getByRole("menuitem", { name: "重命名会话 旧标题" })).not.toHaveAttribute("data-disabled")
+  expect(screen.getByRole("menuitem", { name: "删除会话 旧标题" })).not.toHaveAttribute("data-disabled")
+  expect(archive).not.toHaveBeenCalled()
+  expect(move).not.toHaveBeenCalled()
+})
+
+it("conversation ellipsis retains the invalid archive identity explanation and never invokes archive", async () => {
+  const archive = vi.fn()
+  renderRail({ conversations: [{ id: ".", title: "旧标题" }], onArchiveConversation: archive })
+  await openConversationActions()
+  const item = screen.getByRole("menuitem", { name: "归档任务" })
+  expect(item).toHaveAttribute("data-disabled")
+  expect(screen.getByText("此历史任务标识无法通过浏览器安全访问，暂不可操作。")).toBeVisible()
+  fireEvent.click(item)
+  expect(archive).not.toHaveBeenCalled()
+})
+
+
+it("conversation menu keyboard rename hands off focus and Escape restores the draggable row", async () => {
+  const { onRenameConversation } = renderRail()
+  await openConversationActions()
+  const rename = screen.getByRole("menuitem", { name: "重命名会话 旧标题" })
+  rename.focus()
+  fireEvent.keyDown(rename, { key: "Enter", code: "Enter" })
+  const input = await screen.findByRole("textbox", { name: "会话标题" })
+  await waitFor(() => expect(input).toHaveFocus())
+  fireEvent.change(input, { target: { value: "未保存" } })
+  fireEvent.keyDown(input, { key: "Escape" })
+  await waitFor(() => expect(screen.getByRole("button", { name: "旧标题" })).toHaveFocus())
+  expect(onRenameConversation).not.toHaveBeenCalled()
+  const trigger = await openConversationActions()
+  fireEvent.keyDown(screen.getByRole("menu", { name: "更多 · 旧标题" }), { key: "Escape" })
+  await waitFor(() => expect(trigger).toHaveFocus())
 })

@@ -77,6 +77,7 @@ export function WorkspaceHeaderProjectMenu({ projectRename, projectContext, proj
         <Dialog open={projectRename.open} onOpenChange={(open) => { if (!open && !busy) projectRename.onClose() }}>
           <DialogContent showCloseButton={false}
             onCloseAutoFocus={(event) => {
+              if (projectRename.returnFocus?.(moreTriggerRef.current)) { event.preventDefault(); return }
               const source = renameReturnFocusRef.current
               const sourceRoute = renameReturnFocusRouteRef.current
               const sourceScope = renameReturnFocusScopeRef.current
@@ -125,6 +126,7 @@ export function WorkspaceHeaderProjectMenu({ projectRename, projectContext, proj
         <Dialog open={projectDelete.open} onOpenChange={(open) => { if (!open && !deleteBusy) projectDelete.onClose() }}>
           <DialogContent showCloseButton={false}
             onCloseAutoFocus={(event) => {
+              if (projectDelete.returnFocus?.(moreTriggerRef.current)) { event.preventDefault(); return }
               const source = deleteReturnFocusRef.current
               const sourceRoute = deleteReturnFocusRouteRef.current
               const sourceScope = deleteReturnFocusScopeRef.current
