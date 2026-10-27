@@ -51,6 +51,8 @@ import { useAppFrameNavigation } from "./use-app-frame-navigation"
 import { useAppFrameOverlays } from "./use-app-frame-overlays"
 import { useAppFrameProject } from "./use-app-frame-project"
 import { useProjectList } from "@/features/app/use-project-list"
+import { useProjectMcpRecommendations } from "@/features/app/use-project-mcp-recommendations"
+import { projectMcpDefaultSelection } from "@/features/app/project-mcp-default-selection"
 import { navigateMountedSurface } from "@/ui/navigation/mounted-surface-navigation"
 import { sessionScopeKey } from "@/engine/session-scope"
 import archiveStyles from "@/ui/settings/settings-modal.module.css"
@@ -421,10 +423,12 @@ function AppFrameRuntime({
     identity: railReadIdentity, admitted: railReadAdmitted, epoch: projectDraftEpoch,
     mode: "fast" as AgentMode, model: readChatModel(),
     mcpConnectionIds: [] as readonly string[],
+    mcpTouched: false, mcpSeededVersion: null as string | null,
   }), [engine, projectRef, draftRoute, moveActor, projectDraftEpoch, railReadIdentity, railReadAdmitted])
   const [projectDraftSelection, setProjectDraftSelection] = useState(() => ({
     context: projectDraftContext, mode: projectDraftContext.mode, model: projectDraftContext.model,
     mcpConnectionIds: projectDraftContext.mcpConnectionIds,
+    mcpTouched: false, mcpSeededVersion: null as string | null,
   }))
   const projectDraft = projectDraftSelection.context === projectDraftContext ? projectDraftSelection : projectDraftContext
   const liveProjectDraft = useRef<typeof projectDraftContext | null>(null)
@@ -449,26 +453,36 @@ function AppFrameRuntime({
       window.removeEventListener("storage", retire)
     }
   }, [projectDraftContext, projectOverview])
-  const projectDraftIsCurrent = () => {
+  const projectDraftIsCurrent = useCallback(() => {
     try {
       return railReadAdmitted && liveProjectDraft.current === projectDraftContext && projectDraftContext.actor !== undefined
         && (preview || projectReadBoundary === undefined || projectReadBoundary.subject === projectDraftContext.actor)
         && `${window.location.pathname}${window.location.search}` === projectDraftContext.route
         && window.localStorage.getItem("kokoro.web.auth-index-subject") === projectDraftContext.actor
     } catch { return false }
-  }
+  }, [railReadAdmitted, projectDraftContext, preview, projectReadBoundary])
   const updateProjectDraft = (choice: Partial<{ mode: AgentMode; model: string | null }>) => {
     if (!projectDraftIsCurrent()) return
     setProjectDraftSelection(previous => {
       const current = previous.context === projectDraftContext ? previous : projectDraftContext
-      return { context: projectDraftContext, mode: current.mode, model: current.model, mcpConnectionIds: current.mcpConnectionIds, ...choice }
+      return { context: projectDraftContext, mode: current.mode, model: current.model, mcpConnectionIds: current.mcpConnectionIds,
+        mcpTouched: current.mcpTouched, mcpSeededVersion: current.mcpSeededVersion, ...choice }
     })
   }
+  const projectReads = useProjectList(preview, projectReadBoundary, projectRef, projectWorkspace)
+  const projectedWorkspaceCapabilities = projectWorkspaceCapabilities(featureFlags, workspaceCapabilities)
+  const recommendations = useProjectMcpRecommendations({
+    projectId: projectReads.current.status === "ready" && projectReads.current.data.id === projectRef ? projectReads.current.data.id : null,
+    boundary: projectReadBoundary,
+    enabled: projectWorkspace && !preview && projectedWorkspaceCapabilities.connectors === true,
+    hub: browserHubClient({ preview }),
+  })
   const connections = useComposerConnections({
     engine,
     client: browserHubClient({ preview }),
     boundary: { ...connectionsBoundary, admitted: connectionsBoundary.admitted && composerConnectionsEnabled },
     enforceSubjectMarker: !preview && injectedEngine === undefined,
+    loadAllForDefaults: projectOverview && !projectDraft.mcpTouched && recommendations.configReady && Boolean(recommendations.facts?.recommendations.length),
     ...(projectOverview ? { localDraft: {
       context: projectDraftContext,
       selectedIds: projectDraft.mcpConnectionIds,
@@ -479,12 +493,24 @@ function AppFrameRuntime({
           if (!projectDraftIsCurrent()) return previous
           const current = previous.context === projectDraftContext ? previous : projectDraftContext
           return { context: projectDraftContext, mode: current.mode, model: current.model,
-            mcpConnectionIds: change(current.mcpConnectionIds) }
+            mcpConnectionIds: change(current.mcpConnectionIds), mcpTouched: true, mcpSeededVersion: current.mcpSeededVersion }
         })
       },
     } } : {}),
   })
-  const projectReads = useProjectList(preview, projectReadBoundary, projectRef, projectWorkspace)
+  const recommendationFacts = recommendations.facts
+  if (projectOverview && !projectDraft.mcpTouched && recommendations.allowed && recommendations.configReady && recommendationFacts &&
+    projectDraft.mcpSeededVersion !== recommendationFacts.state_version &&
+    (recommendationFacts.recommendations.length > 0 ? connections.complete === true : connections.status === "ready")) {
+    const facts = recommendationFacts
+    const ids = projectMcpDefaultSelection(facts.recommendations, connections.items)
+    if (ids !== null) setProjectDraftSelection(previous => {
+      const current = previous.context === projectDraftContext ? previous : projectDraftContext
+      if (current.mcpTouched || current.mcpSeededVersion === facts.state_version) return previous
+      return { context: projectDraftContext, mode: current.mode, model: current.model,
+        mcpConnectionIds: ids, mcpTouched: false, mcpSeededVersion: facts.state_version }
+    })
+  }
   const refreshProjects = projectReads.refresh
   const handleProjectOpen = useCallback((id: string, handoffDraft?: string) => {
     // Navigation is independently fenced; creation ACK refreshes through
@@ -492,10 +518,6 @@ function AppFrameRuntime({
     if (onOpenProject) onOpenProject(id, handoffDraft)
     else navigateMountedSurface(`/app/project/${encodeURIComponent(id)}`)
   }, [onOpenProject])
-  const projectedWorkspaceCapabilities = projectWorkspaceCapabilities(
-    featureFlags,
-    workspaceCapabilities,
-  )
   const project = useAppFrameProject({
     projectRef,
     projectWorkspace,
@@ -860,6 +882,7 @@ function AppFrameRuntime({
     projectHistoryStatus: projectReads.instructionHistory.status,
     projectHistoryRetryable: projectReads.instructionHistory.status === "error" && projectReads.instructionHistory.retryable,
     projectDetail: projectReads.current,
+    projectMcpRecommendations: recommendations,
     onRetryProjectRead: refreshProjects,
     ...(brandName === undefined ? {} : { brandName }),
     preview,

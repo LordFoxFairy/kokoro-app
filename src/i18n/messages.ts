@@ -2501,6 +2501,15 @@ export const zh = {
   "settings.knowledgeCheck": "核实当前值",
   "settings.knowledgeInvalid": "请检查字段长度或无效字符，修改后再保存。",
   "settings.knowledgeReadOnly": "正在重新核验账号，暂时保留草稿。",
+
+  "projectMcp.title": "推荐连接器",
+  "projectMcp.description": "推荐的连接器默认为已连接的成员启用。每位成员可自行开启或关闭。",
+  "projectMcp.unavailable": "暂不可见",
+  "projectMcp.empty": "没有匹配的连接器",
+  "projectMcp.conflict": "当前推荐已有其他修改。你的选择已保留，请核对后再保存。",
+  "projectMcp.unconfirmed": "保存结果尚未确认。你的选择已保留，可关闭后重新读取当前配置。",
+  "projectMcp.limit": "最多推荐 16 个连接器。",
+  "projectMcp.remove": "移除推荐：{name}",
 } as const;
 
 export type MessageKey = keyof typeof zh;

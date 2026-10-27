@@ -1637,4 +1637,13 @@ export const ko: Partial<Record<MessageKey, string>> = {
   "library.viewOptions": "보기 옵션",
   "library.filterVideo": "동영상",
   "library.filterAudio": "오디오",
+
+  "projectMcp.title": "추천 커넥터",
+  "projectMcp.description": "추천 커넥터는 이미 연결한 구성원에게 기본으로 활성화됩니다. 각 구성원이 개별적으로 켜거나 끌 수 있습니다.",
+  "projectMcp.unavailable": "현재 표시할 수 없음",
+  "projectMcp.empty": "일치하는 커넥터 없음",
+  "projectMcp.conflict": "현재 추천에 다른 변경이 있습니다. 선택은 유지됩니다. 확인 후 다시 저장하세요.",
+  "projectMcp.unconfirmed": "저장 결과가 확인되지 않았습니다. 선택은 유지됩니다. 다시 열어 현재 설정을 읽으세요.",
+  "projectMcp.limit": "커넥터는 최대 16개까지 추천할 수 있습니다.",
+  "projectMcp.remove": "추천 제거: {name}",
 }

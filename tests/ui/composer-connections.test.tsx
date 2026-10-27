@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, renderHook, screen } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 import { useState, useSyncExternalStore } from "react"
 import type { ConversationStore } from "@/core/conversations"
@@ -126,6 +126,45 @@ it("a retired Project draft catalog cannot publish a late page into the next dra
   expect(client.getMcpConnector.mock.calls.map(call => call[0])).not.toContain("connector:retired")
   hook.unmount()
   engine.dispose()
+})
+
+it("Project default resolution reads beyond the first Connection page and confirms completeness without auto-selecting", async () => {
+  const engine = makeEngine(), client = reader()
+  client.listMcpConnections.mockResolvedValueOnce({ connections: [connection("connection:first")], next_cursor: "second" })
+    .mockResolvedValueOnce({ connections: [connection("connection:later")], next_cursor: undefined })
+  const hook = renderHook(() => useComposerConnections({ engine, client, boundary, enforceSubjectMarker: false, loadAllForDefaults: true }))
+  await waitFor(() => expect(hook.result.current.complete).toBe(true))
+  expect(hook.result.current.items.map(item => item.id)).toEqual(["connection:first", "connection:later"])
+  expect(hook.result.current.items[1]).toMatchObject({ connectorId: "connector:connection:later", providerKey: "private" })
+  expect(engine.getSnapshot().selectedMcpConnectionIds).toEqual([])
+  hook.unmount(); engine.dispose()
+})
+
+it("a duplicate ID or cursor during automatic Connection scan never becomes a ready complete default catalog", async () => {
+  const engine = makeEngine(), client = reader()
+  client.listMcpConnections.mockResolvedValue({ connections: [connection("connection:a")], next_cursor: "loop" })
+  const hook = renderHook(() => useComposerConnections({ engine, client, boundary, enforceSubjectMarker: false, loadAllForDefaults: true }))
+  await waitFor(() => expect(hook.result.current.status).toBe("error"))
+  expect(hook.result.current.complete).not.toBe(true)
+  expect(engine.getSnapshot().selectedMcpConnectionIds).toEqual([])
+  hook.unmount(); engine.dispose()
+})
+
+it("touching a previously pristine default draft does not reread it, and its next explicit refresh returns to manual pagination", async () => {
+  const engine = makeEngine(), client = reader()
+  client.listMcpConnections.mockResolvedValueOnce({ connections: [connection("connection:first")], next_cursor: "second" })
+    .mockResolvedValueOnce({ connections: [connection("connection:later")], next_cursor: undefined })
+  const hook = renderHook(({ pristine }) => useComposerConnections({ engine, client, boundary, enforceSubjectMarker: false, loadAllForDefaults: pristine }), { initialProps: { pristine: true } })
+  await waitFor(() => expect(hook.result.current.complete).toBe(true))
+  hook.rerender({ pristine: false })
+  await act(async () => { await settle() })
+  expect(client.listMcpConnections).toHaveBeenCalledTimes(2)
+  act(() => hook.result.current.refresh())
+  await waitFor(() => expect(hook.result.current.status).toBe("ready"))
+  expect(client.listMcpConnections).toHaveBeenCalledTimes(3)
+  expect(hook.result.current.nextCursor).toBe("page2")
+  expect(hook.result.current.complete).toBe(false)
+  hook.unmount(); engine.dispose()
 })
 
 it("retains the current menu on read failure and retries without enabling or creating connectors", async () => {

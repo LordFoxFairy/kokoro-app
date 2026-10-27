@@ -1699,4 +1699,13 @@ export const ja: Partial<Record<MessageKey, string>> = {
   "library.viewOptions": "表示オプション",
   "library.filterVideo": "動画",
   "library.filterAudio": "音声",
+
+  "projectMcp.title": "推奨コネクタ",
+  "projectMcp.description": "推奨コネクタは、接続済みのメンバーに対して既定で有効になります。各メンバーが個別にオン・オフできます。",
+  "projectMcp.unavailable": "現在表示できません",
+  "projectMcp.empty": "一致するコネクタがありません",
+  "projectMcp.conflict": "現在の推奨に別の変更があります。選択は保持されています。確認してから再保存してください。",
+  "projectMcp.unconfirmed": "保存結果を確認できていません。選択は保持されています。開き直して現在の設定を取得してください。",
+  "projectMcp.limit": "推奨できるコネクタは16個までです。",
+  "projectMcp.remove": "推奨を削除：{name}",
 }

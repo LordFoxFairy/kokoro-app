@@ -1637,4 +1637,13 @@ export const es: Partial<Record<MessageKey, string>> = {
   "library.viewOptions": "Opciones de vista",
   "library.filterVideo": "Vídeo",
   "library.filterAudio": "Audio",
+
+  "projectMcp.title": "Conectores recomendados",
+  "projectMcp.description": "Los conectores recomendados se activan de forma predeterminada para los miembros que ya los conectaron. Cada miembro puede activarlos o desactivarlos.",
+  "projectMcp.unavailable": "No disponible ahora",
+  "projectMcp.empty": "No hay conectores coincidentes",
+  "projectMcp.conflict": "Hay otros cambios en las recomendaciones actuales. Se conservan tus opciones; revísalas antes de guardar de nuevo.",
+  "projectMcp.unconfirmed": "El resultado del guardado no está confirmado. Se conservan tus opciones; vuelve a abrir para consultar la configuración actual.",
+  "projectMcp.limit": "Puedes recomendar hasta 16 conectores.",
+  "projectMcp.remove": "Quitar recomendación: {name}",
 }

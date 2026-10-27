@@ -1,6 +1,6 @@
 "use client"
 
-import { Cable, ChevronDown, ChevronRight, ListFilter, Plus, Upload } from "lucide-react"
+import { ChevronDown, ChevronRight, ListFilter, Plus, Upload } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import { useCallback, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type SetStateAction } from "react"
@@ -17,6 +17,7 @@ import { ProjectContextCard, ProjectContextSection } from "./project-context-car
 import { ProjectIdentity } from "./project-identity"
 import { ProjectConversations } from "./project-conversations"
 import { ProjectSkillsSection } from "./project-skills-section"
+import { ProjectMcpRecommendationsSection } from "./project-mcp-recommendations-section"
 import { ProjectWorkspaceDialogs } from "./project-workspace-dialogs"
 import { previewScheduledTasks, previewWebsites, type ProjectScheduledPreview, type ResourceKind } from "./project-workspace-model"
 import { useProjectComposerClearance } from "./use-project-composer-clearance"
@@ -28,7 +29,7 @@ import layoutStyles from "./project-workspace-layout.module.css"
 type ProjectWorkspaceProps = Pick<
   EmptyStateProps,
   "brandName" | "composer" | "onOpenSettings" | "onPrompt" | "projectConversations" | "projectConversationsLoading" | "projectConversationsError" | "onRetryProjectConversations" | "activeProjectConversationId" | "onSelectProjectConversation" | "workspaceCapabilities"
-  | "projectInstructionRequest" | "projectInstructions" | "projectInstructionHistory" | "onSaveProjectInstructions" | "onUploadProjectResource" | "onListProjectResources" | "projectRef" | "preview" | "onCreateProjectScheduledTask" | "projectDetail" | "onRetryProjectRead" | "projectInstructionContext" | "projectHistoryStatus" | "projectHistoryRetryable" | "projectReadBoundary"
+  | "projectInstructionRequest" | "projectInstructions" | "projectInstructionHistory" | "onSaveProjectInstructions" | "onUploadProjectResource" | "onListProjectResources" | "projectRef" | "preview" | "onCreateProjectScheduledTask" | "projectDetail" | "onRetryProjectRead" | "projectInstructionContext" | "projectHistoryStatus" | "projectHistoryRetryable" | "projectReadBoundary" | "projectMcpRecommendations"
 >
 
 type InstructionEditorState = {
@@ -81,6 +82,7 @@ export function KokoroProjectWorkspace({
   projectHistoryRetryable,
   onRetryProjectRead,
   projectReadBoundary,
+  projectMcpRecommendations,
   onCreateProjectScheduledTask,
 }: ProjectWorkspaceProps) {
   const { locale, t } = useLocale()
@@ -387,14 +389,7 @@ export function KokoroProjectWorkspace({
                 </CardFooter>
               ) : null}
               {capabilities?.connectors ? (
-                <div className={styles.connectorSection}><CardFooter className={styles.connectorRow}>
-                  <Cable aria-hidden="true" />
-                  <span>{t("firstSite.connectors")}</span>
-                  <Button type="button" variant="ghost" size="sm" onClick={() => onOpenSettings?.("mcp")}>
-                    <Plus data-icon="inline-start" aria-hidden="true" />
-                    {t("firstSite.add")}
-                  </Button>
-                </CardFooter></div>
+                <ProjectMcpRecommendationsSection model={projectMcpRecommendations} />
               ) : null}
             </Card>
           ) : null}

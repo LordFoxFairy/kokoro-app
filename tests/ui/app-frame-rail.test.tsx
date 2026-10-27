@@ -11,6 +11,7 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/engine/config", () => ({ sessionBaseUrl: () => "http://s.local" }))
 
 import { AppFrame } from "@/components/blocks/app-frame/app-frame"
+import { KokoroProjectWorkspace } from "@/features/app/kokoro-project-workspace"
 import { AppFrameOverlaySurfaces as RawAppFrameOverlaySurfaces } from "@/components/blocks/app-frame/app-frame-overlay-surfaces"
 import { useCatalogSkillInstallation } from "@/features/app/use-catalog-skill-installation"
 import { GithubImportDialog } from "@/ui/skills/github-import-dialog"
@@ -5429,7 +5430,7 @@ it.each(["completed", "failed", "cancelled"] as const)("current task progress re
   } finally { closeCanvas(sessionId) }
 })
 
-async function mountRememberedProjectComposer(options: { beforeRender?: (value: { projectEngine: SessionEngine; projectClient: FakeClient }) => void | Promise<void> } = {}) {
+async function mountRememberedProjectComposer(options: { workspace?: boolean; beforeRender?: (value: { projectEngine: SessionEngine; projectClient: FakeClient }) => void | Promise<void> } = {}) {
   const projectRef = "project_composer-draft"
   const remembered = "conv_composer-history"
   const projectClient = createFakeClient()
@@ -5450,6 +5451,7 @@ async function mountRememberedProjectComposer(options: { beforeRender?: (value: 
   window.history.replaceState({}, "", `/app/project/${projectRef}`)
   const props = { engine: projectEngine, chatHref: "/app", projectWorkspace: true, projectRef,
     projectReadBoundary: { admitted: true, subject: "composer-draft-actor", generation: 1 },
+    ...(options.workspace ? { emptyState: KokoroProjectWorkspace, workspaceCapabilities: { instructions: false, connectors: true, resources: false, skills: false, projectConversations: false } } : {}),
   }
   const frame = (next = props) => <ThemeProvider><LocaleProvider><AppFrame {...next} /></LocaleProvider></ThemeProvider>
   await waitFor(() => expect(projectEngine.getSnapshot().hydrating).toBe(false))
@@ -5475,9 +5477,99 @@ async function projectDraftMcpDirectory() {
   return hub
 }
 
-async function toggleProjectDraftMcp() {
+async function projectRecommendationFixture(hold = false) {
+  const hub = await projectDraftMcpDirectory()
+  hub.listMcpConnections.mockReset().mockImplementation(async (query: { cursor?: string }) => ({ connections: [query.cursor ? "b" : "a"].map(id => ({
+    connection_id: `connection:${id}`, connector_id: `connector:${id}`, server_id: `server:${id}`,
+    provider_key: id === "a" ? "alpha" : "beta", transport: "streamable_http", status: "active",
+  })), ...(query.cursor ? {} : { next_cursor: "second" }) }))
+  hub.getMcpConnector.mockImplementation(async (id: string) => ({ connector_id: id, server_id: `server:${id.slice("connector:".length)}`,
+    provider_key: id.endsWith(":a") ? "alpha" : "beta", connector_type: "mcp", status: "active", enabled: true,
+    availability: "available", state_version: "1", approved_scopes: [], display_name: `MCP ${id}` }))
+  Object.assign(hub, { listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [
+    { provider_key: "alpha", display_name: "Provider Alpha" }, { provider_key: "beta", display_name: "Provider Beta" },
+  ], next_cursor: null }),
+    listMcpConnectors: vi.fn().mockResolvedValue({ items: [], next_cursor: null }), listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }) })
+  const project = { id: "project_composer-draft", name: "Draft project", slug: "draft", description: "", created_at: "2026-10-27T00:00:00Z", updated_at: "2026-10-27T00:00:00Z" }
+  const configuration = { project_id: project.id, recommendations: [{ kind: "provider", provider_key: "beta" }], state_version: "1" }
+  const response = () => Response.json({ data: configuration }, { headers: { "cache-control": "no-store", "x-request-id": "recommendation-fixture" } })
+  let finish!: (value: Response) => void
+  const request = stubBusinessFetch(vi.fn<typeof fetch>(async (input, init) => {
+    const path = new URL(input instanceof Request ? input.url : String(input), window.location.origin).pathname
+    if (path.endsWith("/mcp-recommendations")) {
+      if (init?.method === "PUT") {
+        const body = JSON.parse(String(init.body)) as { recommendations: typeof configuration.recommendations; expected_state_version: string }
+        expect(body.expected_state_version).toBe(configuration.state_version)
+        configuration.recommendations = body.recommendations; configuration.state_version = String(Number(configuration.state_version) + 1)
+        return response()
+      }
+      return hold ? await new Promise<Response>(resolve => { finish = resolve }) : response()
+    }
+    if (path.endsWith("/instruction-revisions")) return Response.json({ data: { items: [] }, meta: { request_id: "read-fixture" } })
+    return Response.json({ data: path === "/api/hub/projects" ? { projects: [project] } : { project }, meta: { request_id: "read-fixture" } })
+  }))
+  return { hub, request, finish: () => finish(response()) }
+}
+
+it("Project recommendations seed only the pristine root from the complete Connection directory before exact first Send", async () => {
+  const { hub } = await projectRecommendationFixture()
+  const { projectEngine, projectClient, view } = await mountRememberedProjectComposer()
+  try {
+    await waitFor(() => expect(screen.getByRole("button", { name: "连接器 (1)" })).toBeVisible())
+    expect(hub.listMcpConnections.mock.calls.some(call => call[0]?.cursor === "second")).toBe(true)
+    expect(projectEngine.getSnapshot().selectedMcpConnectionIds).toEqual([])
+    fireEvent.change(screen.getByRole("textbox", { name: "对话输入" }), { target: { value: "send recommended beta" } })
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "对话输入" }), { key: "Enter" })
+    await waitFor(() => expect(projectClient.createCalls).toHaveLength(1))
+    expect(projectClient.createCalls[0]?.body.selected_mcp_connection_ids).toEqual(["connection:b"])
+  } finally { view.unmount(); projectEngine.dispose() }
+})
+
+it("explicit manual empty Project MCP selection wins over a late recommendation response", async () => {
+  const fixture = await projectRecommendationFixture(true)
+  const { projectEngine, projectClient, view } = await mountRememberedProjectComposer()
+  try {
+    await toggleProjectDraftMcp()
+    await toggleProjectDraftMcp()
+    await waitFor(() => expect(fixture.request.mock.calls.some(call => String(call[0]).endsWith("/mcp-recommendations"))).toBe(true))
+    await act(async () => { fixture.finish(); await settle() })
+    expect(screen.getByRole("button", { name: "连接器 (0)" })).toBeVisible()
+    fireEvent.change(screen.getByRole("textbox", { name: "对话输入" }), { target: { value: "explicitly no connector" } })
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "对话输入" }), { key: "Enter" })
+    await waitFor(() => expect(projectClient.createCalls).toHaveLength(1))
+    expect(projectClient.createCalls[0]?.body).not.toHaveProperty("selected_mcp_connection_ids")
+  } finally { view.unmount(); projectEngine.dispose() }
+})
+
+it.each([false, true])("saving actual Project recommendations updates only pristine root defaults (manually touched=%s)", async touched => {
+  const fixture = await projectRecommendationFixture()
+  const { projectEngine, projectClient, view } = await mountRememberedProjectComposer({ workspace: true })
+  try {
+    await waitFor(() => expect(screen.getByRole("button", { name: "连接器 (1)" })).toBeVisible())
+    if (touched) await toggleProjectDraftMcp("b")
+    const section = screen.getByRole("region", { name: "连接器" })
+    fireEvent.click(within(section).getByRole("button", { name: "新增" }))
+    const dialog = await screen.findByRole("dialog", { name: "推荐连接器" })
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: "Provider Beta" }))
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: "Provider Alpha" }))
+    fireEvent.click(within(dialog).getByRole("button", { name: "保存" }))
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "推荐连接器" })).toBeNull())
+    expect(fixture.request.mock.calls.filter(call => String(call[0]).endsWith("/mcp-recommendations") && call[1]?.method === "PUT")).toHaveLength(1)
+    expect(fixture.request.mock.calls.filter(call => String(call[0]).endsWith("/mcp-recommendations") && call[1]?.method === "GET")).toHaveLength(2)
+    expect(within(section).getByText("Provider Alpha")).toBeVisible()
+    expect(screen.getByRole("button", { name: `连接器 (${touched ? 0 : 1})` })).toBeVisible()
+    expect(projectEngine.getSnapshot().selectedMcpConnectionIds).toEqual([])
+    fireEvent.change(screen.getByRole("textbox", { name: "对话输入" }), { target: { value: "send updated project default" } })
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "对话输入" }), { key: "Enter" })
+    await waitFor(() => expect(projectClient.createCalls).toHaveLength(1))
+    if (touched) expect(projectClient.createCalls[0]?.body).not.toHaveProperty("selected_mcp_connection_ids")
+    else expect(projectClient.createCalls[0]?.body.selected_mcp_connection_ids).toEqual(["connection:a"])
+  } finally { view.unmount(); projectEngine.dispose() }
+})
+
+async function toggleProjectDraftMcp(id = "a") {
   fireEvent.click(screen.getByRole("button", { name: /^连接器 \(\d+\)$/ }))
-  const choice = await screen.findByRole("switch", { name: "MCP connector:a" })
+  const choice = await screen.findByRole("switch", { name: `MCP connector:${id}` })
   fireEvent.click(choice)
   fireEvent.keyDown(choice, { key: "Escape" })
 }

@@ -19,6 +19,7 @@ import type {
 import type { Project } from "@/contract/project";
 import type { ProjectReadState } from "@/features/app/use-project-list";
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
+import type { ProjectMcpRecommendationsModel } from "@/features/app/use-project-mcp-recommendations";
 
 import type { ScheduledTaskClient } from "@/features/scheduled-tasks";
 
@@ -134,6 +135,7 @@ export type EmptyStateProps = {
   projectHistoryStatus?: "blocked" | "loading" | "ready" | "error";
   projectHistoryRetryable?: boolean;
   projectDetail?: ProjectReadState<Project>;
+  projectMcpRecommendations?: ProjectMcpRecommendationsModel;
   onRetryProjectRead?: () => void;
   brandName?: string;
   /** Route-owned desktop surfaces use the same preview/live transport as the shell. */

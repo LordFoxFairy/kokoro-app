@@ -2017,4 +2017,13 @@ export const en: Partial<Record<MessageKey, string>> = {
   "library.viewOptions": "View options",
   "library.filterVideo": "Video",
   "library.filterAudio": "Audio",
+
+  "projectMcp.title": "Recommended connectors",
+  "projectMcp.description": "Recommended connectors are enabled by default for members who have already connected them. Each member can turn them on or off.",
+  "projectMcp.unavailable": "Currently unavailable",
+  "projectMcp.empty": "No matching connectors",
+  "projectMcp.conflict": "Other changes were found in the current recommendations. Your choices are kept; review before saving again.",
+  "projectMcp.unconfirmed": "The save result is unconfirmed. Your choices are kept; reopen to read the current configuration.",
+  "projectMcp.limit": "Recommend up to 16 connectors.",
+  "projectMcp.remove": "Remove recommendation: {name}",
 }
