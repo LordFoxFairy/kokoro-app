@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest"
 import { LocaleProvider } from "@/i18n/context"
 import { PersonalSkillsRead } from "@/ui/skills/personal-skills-read"
 import { HubClientError, type HubClient } from "@/hub/client"
-import type { SkillPublishClient } from "@/hub/skill-publish-client"
+import { createSkillPublishClient, type SkillPublishClient } from "@/hub/skill-publish-client"
 import { PersonalSkillPublishDialog } from "@/ui/skills/personal-skill-publish-dialog"
 
 vi.mock("@/ui/auth/use-session-state", () => ({
@@ -200,4 +200,19 @@ it("does not announce an in-flight publication read when current admission denie
  render(<LocaleProvider><PersonalSkillPublishDialog base={base} open admitted={false} client={{listHistory,createVersion} as unknown as SkillPublishClient} onOpenChange={vi.fn()} onPublished={vi.fn()}/></LocaleProvider>)
  expect(screen.getByTestId("personal-skill-publish-dialog").querySelector("form")).toHaveAttribute("aria-busy","false")
  expect(listHistory).not.toHaveBeenCalled();expect(createVersion).not.toHaveBeenCalled()
+})
+
+
+it.each([
+  { locale: "zh", description: "选择单个 ZIP 包。" },
+  { locale: "en", description: "Choose one ZIP package." },
+  { locale: "ja", description: "Choose one ZIP package." },
+])("$locale publish guidance exposes only the file instruction, not internal receipt/state or an early success promise", ({ locale, description }) => {
+  window.localStorage.setItem("kokoro.locale", locale)
+  const client = createSkillPublishClient(), createDraft = vi.spyOn(client, "createDraft"), publish = vi.spyOn(client, "publishDraft"), onPublished = vi.fn()
+  render(<LocaleProvider><PersonalSkillPublishDialog open client={client} onOpenChange={vi.fn()} onPublished={onPublished} /></LocaleProvider>)
+  const dialog = screen.getByTestId("personal-skill-publish-dialog")
+  expect(dialog).not.toHaveAccessibleDescription(/ACTIVE|回执|receipt/iu)
+  expect(dialog).toHaveAccessibleDescription(description)
+  expect(createDraft).not.toHaveBeenCalled(); expect(publish).not.toHaveBeenCalled(); expect(onPublished).not.toHaveBeenCalled()
 })

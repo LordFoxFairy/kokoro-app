@@ -315,7 +315,7 @@ const skillPublishFallback: Partial<Record<MessageKey, string>> = {
   "skills.publishReplaceUpload": "Select again and upload",
   "skills.publishChooseAudience": "Choose visibility",
   "skills.publishTitle": "Publish personal skill",
-  "skills.publishDescription": "Choose one ZIP package. Success appears only after an ACTIVE publish receipt.",
+  "skills.publishDescription": "Choose one ZIP package.",
   "skills.publishFile": "ZIP file (up to 32 MiB)",
   "skills.publishName": "Skill name",
   "skills.publishSummary": "Summary",

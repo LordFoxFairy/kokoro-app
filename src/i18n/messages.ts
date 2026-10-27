@@ -728,7 +728,7 @@ export const zh = {
   "skills.publishChooseAudience": "请选择可见范围",
   "skills.publishTitle": "发布个人技能",
   "skills.publishDescription":
-    "选择单个 ZIP 包。只有发布回执确认 ACTIVE 后才会显示成功。",
+    "选择单个 ZIP 包。",
   "skills.publishFile": "ZIP 文件（最多 32 MiB）",
   "skills.history.restore": "恢复",
   "skills.history.restoreTitle": "恢复此版本？",
