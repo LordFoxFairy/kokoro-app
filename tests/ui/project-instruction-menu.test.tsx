@@ -73,7 +73,7 @@ function mountProjectMenu(respond?: (path: string, init?: RequestInit) => Promis
 async function headerMenu() {
   await screen.findByRole("heading", { name: projectA.name })
   const header = document.querySelector<HTMLElement>('[data-slot="workspace-header"]')!
-  const trigger = within(header).getByRole("button", { name: "更多设置分区" })
+  const trigger = within(header).getByRole("button", { name: "项目选项" })
   trigger.focus()
   fireEvent.keyDown(trigger, { key: "ArrowDown" })
   return { trigger, menu: await screen.findByRole("menu") }
@@ -196,7 +196,7 @@ it("移动侧栏关闭后 editor 仍可编辑，取消返回仍可见的顶部�
     mountProjectMenu()
     await screen.findByRole("heading", { name: projectA.name })
     const header = document.querySelector<HTMLElement>('[data-slot="workspace-header"]')!
-    const fallback = within(header).getByRole("button", { name: "更多设置分区" })
+    const fallback = within(header).getByRole("button", { name: "项目选项" })
     const navigationTrigger = header.querySelector<HTMLButtonElement>('[data-web-navigation-trigger="true"]')!
     fireEvent.click(navigationTrigger)
     const row = (await screen.findByRole("button", { name: projectB.name })).closest("[data-project-id]") as HTMLElement
@@ -378,7 +378,7 @@ it("指令未知意图在换项目后退休，迟到 ACK 不为新项目读取�
   act(() => { window.history.pushState(null, "", `/app/project/${projectB.id}`); window.dispatchEvent(new Event("kokoro:surface-navigation")) })
   await screen.findByRole("heading", { name: projectB.name })
   const header = document.querySelector<HTMLElement>('[data-slot="workspace-header"]')!
-  fireEvent.keyDown(within(header).getByRole("button", { name: "更多设置分区" }), { key: "ArrowDown" })
+  fireEvent.keyDown(within(header).getByRole("button", { name: "项目选项" }), { key: "ArrowDown" })
   fireEvent.click(within(await screen.findByRole("menu")).getByRole("menuitem", { name: "编辑指令" }))
   const next = await screen.findByRole("dialog", { name: "项目指令" })
   const readCount = reads.length

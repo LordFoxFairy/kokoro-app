@@ -20,8 +20,9 @@ export type ComposerSelectors = {
   setSelectedModel: (value: string | null) => void
 }
 
-export function useComposerSelectors(engine: SessionEngine | null, options: { preview?: boolean } = {}): ComposerSelectors {
+export function useComposerSelectors(engine: SessionEngine | null, options: { preview?: boolean; applyModelToEngine?: boolean } = {}): ComposerSelectors {
   const preview = options.preview ?? false
+  const applyModelToEngine = options.applyModelToEngine ?? true
   const scope = useMemo(() => ({ engine, preview }), [engine, preview])
   const [attempt, setAttempt] = useState(0)
   const [catalog, setCatalog] = useState<{
@@ -54,8 +55,8 @@ export function useComposerSelectors(engine: SessionEngine | null, options: { pr
     }
   }, [scope, preview, attempt])
   useEffect(() => {
-    engine?.setModel(selectedModel)
-  }, [engine, selectedModel])
+    if (applyModelToEngine) engine?.setModel(selectedModel)
+  }, [applyModelToEngine, engine, selectedModel])
 
   return { models, modelCatalogStatus, retryModels: () => setAttempt(value => value + 1), selectedModel, setSelectedModel }
 }

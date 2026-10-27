@@ -1,7 +1,7 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import type { SessionEngine } from "@/engine/machine"
-import { activeMode } from "@/core/conversations"
+import { activeMode, type AgentMode } from "@/core/conversations"
 import type { SkillCard } from "@/hub/schemas"
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
 import { skillTrialSourceRef } from "@/ui/skills/skills-card-model"
@@ -165,7 +165,7 @@ export function useAppFrameSkillTrial({ engine, preview, boundary }: {
 
   /** The shell has already checked its route and Send admission. Allocation
    * stays synchronous so no old choice can be rebound by a later callback. */
-  const submitCurrentDraft = useCallback((content: string, allocateProjectConversation = false): boolean => {
+  const submitCurrentDraft = useCallback((content: string, allocateProjectConversation = false, projectDraft?: { mode: AgentMode; model: string | null }): boolean => {
     const owner = ownerRef.current
     if (!engine || !owner || owner.context !== lifetime || owner.engine !== engine) return false
     const current = selectionRef.current
@@ -179,7 +179,8 @@ export function useAppFrameSkillTrial({ engine, preview, boundary }: {
         const mode = before.store ? activeMode(before.store) : before.pendingMode
         engine.newConversation()
         if (engine.getSnapshot().store?.activeId === before.store?.activeId) return false
-        engine.setMode(mode)
+        engine.setMode(projectDraft?.mode ?? mode)
+        if (projectDraft) engine.setModel(projectDraft.model)
         if (transfer && (selectionRef.current !== transfer.selection || !transfer.selection.active || !actionIsCurrent())) return false
       }
       return engine.submit(content)

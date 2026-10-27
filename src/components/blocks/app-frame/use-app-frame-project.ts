@@ -2,10 +2,12 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 
 import { useT } from "@/i18n/context"
 import { renameProject, ProjectRenameError } from "@/features/app/project-rename"
+import { deleteProject, ProjectDeleteError, readProjectDeletion } from "@/features/app/project-delete"
 import { ProjectReadError } from "@/features/app/project-list"
 import { projectRenameIdSchema, projectRenameRequestSchema, type ProjectRenameIntent } from "@/contract/project-rename"
+import { projectDeletionIdSchema, type ProjectDeletionIntent } from "@/contract/project-deletion"
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
-import type { ProjectRenameControl } from "@/components/blocks/workspace-header/workspace-header.types"
+import type { ProjectDeleteControl, ProjectRenameControl } from "@/components/blocks/workspace-header/workspace-header.types"
 import { uploadProjectResource as uploadProjectResourceRequest } from "@/features/app/project-resource-upload"
 import { ProjectResourceUploadError } from "@/features/app/project-resource-upload"
 import { listProjectResources as listProjectResourcesRequest } from "@/features/app/project-resource-list"
@@ -36,6 +38,7 @@ export type AppFrameProjectOptions = {
   instructionsEnabled?: boolean
   instructionContext: object
   refreshProject: () => void
+  retireProject?: (projectId: string) => void
   refreshRenamedProject?: (target: string, signal: AbortSignal) => Promise<Project>
   renameBoundary?: ProjectReadBoundary
   renameRouteKey?: string
@@ -65,6 +68,7 @@ export function useAppFrameProject({
   instructionContext,
   instructionsEnabled = false,
   refreshProject,
+  retireProject,
   refreshRenamedProject,
   renameBoundary,
   renameRouteKey,
@@ -212,6 +216,128 @@ export function useAppFrameProject({
     if (typeof window === "undefined" || window.location.hash !== "#rename" || !renameAvailable || renameView.open) return
     openRename()
   }, [openRename, renameAvailable, renameView.open])
+
+  type DeleteScope = {
+    context: typeof renameContext; route: string; active: boolean; busy: boolean; revoked: boolean; controller: AbortController | null
+    intent: ProjectDeletionIntent | null
+  }
+  type DeleteUi = Pick<ProjectDeleteControl, "open" | "status" | "problem" | "frozen">
+  const emptyDeleteUi: DeleteUi = { open: false, status: "idle", problem: null, frozen: false }
+  const deleteScopeRef = useRef<DeleteScope | null>(null)
+  const [deleteUi, setDeleteUi] = useState<{ context: typeof renameContext; ui: DeleteUi } | null>(null)
+  const deleteView = deleteUi?.context === renameContext ? deleteUi.ui : emptyDeleteUi
+  useLayoutEffect(() => {
+    const scope: DeleteScope = { context: renameContext, route: typeof window === "undefined" ? "" : `${window.location.pathname}${window.location.search}${window.location.hash}`,
+      active: true, busy: false, revoked: false, controller: null, intent: null }
+    deleteScopeRef.current = scope
+    const retire = () => {
+      if (`${window.location.pathname}${window.location.search}${window.location.hash}` === scope.route) return
+      scope.active = false
+      scope.controller?.abort()
+      scope.intent = null
+      setDeleteUi((current) => current?.context === scope.context ? null : current)
+    }
+    window.addEventListener("popstate", retire)
+    window.addEventListener("kokoro:surface-navigation", retire)
+    return () => {
+      window.removeEventListener("popstate", retire)
+      window.removeEventListener("kokoro:surface-navigation", retire)
+      scope.active = false
+      scope.controller?.abort()
+      scope.intent = null
+      scope.controller = null
+    }
+  }, [renameContext])
+  const deleteAvailable = mounted && projectWorkspace && !preview && renameBoundary?.admitted === true
+    && renameBoundary.subject !== null && projectDetail.status === "ready" && projectDetail.data.id === projectRef
+    && projectDeletionIdSchema.safeParse(projectRef).success && deleteView.problem !== "permission"
+  const setDeleteView = useCallback((ui: Omit<DeleteUi, "frozen">) => {
+    const scope = deleteScopeRef.current
+    if (scope?.active && scope.context === renameContext) {
+      setDeleteUi({ context: renameContext, ui: { ...ui, frozen: scope.intent !== null || scope.revoked } })
+    }
+  }, [renameContext])
+  const confirmProjectDeleted = useCallback((scope: DeleteScope, intent: ProjectDeletionIntent) => {
+    const route = `${window.location.pathname}${window.location.search}${window.location.hash}`
+    if (!scope.active || deleteScopeRef.current !== scope || scope.context !== renameContext || route !== scope.route
+      || intent.projectId !== projectRef) return
+    // A validated 202/receipt confirms this actor's logical negative fact. Owner outbox cleanup remains background work.
+    scope.intent = null
+    retireProject?.(intent.projectId)
+    refreshProject()
+    setDeleteView({ open: false, status: "idle", problem: null })
+    navigateMountedSurface("/app")
+  }, [projectRef, refreshProject, renameContext, retireProject, setDeleteView])
+  const runDelete = useCallback(async (readOnly: boolean) => {
+    const scope = deleteScopeRef.current
+    const intent = scope?.intent
+    if (!scope?.active || scope.context !== renameContext || !intent || scope.busy) return
+    scope.busy = true
+    const controller = new AbortController()
+    scope.controller = controller
+    const current = () => scope.active && deleteScopeRef.current === scope && !controller.signal.aborted && scope.intent === intent
+      && `${window.location.pathname}${window.location.search}${window.location.hash}` === scope.route
+    setDeleteView({ open: true, status: "pending", problem: null })
+    try {
+      if (!current()) return
+      if (readOnly) await readProjectDeletion(intent.projectId, controller.signal)
+      else await deleteProject(intent, controller.signal)
+      if (!current()) return
+      confirmProjectDeleted(scope, intent)
+    } catch (error) {
+      if (!current()) return
+      const verifiedOwner = error instanceof ProjectDeleteError && error.verifiedOwner
+      const verifiedPermission = verifiedOwner && [
+        "session_authentication_required", "session_invalid", "service_auth_failed", "session_forbidden", "product_tenant_forbidden",
+      ].includes(error.code)
+      const verifiedRejectedWrite = !readOnly && verifiedOwner && [
+        "invalid_project_deletion_request", "idempotency_key_required", "invalid_idempotency_key", "project_not_found", "idempotency_conflict",
+      ].includes(error.code)
+      if (verifiedPermission) {
+        // Only the operation-specific, fully parsed owner admission profile may retire the actor-scoped intent.
+        scope.intent = null
+        scope.revoked = true
+        setDeleteView({ open: true, status: "error", problem: "permission" })
+      } else if (verifiedRejectedWrite) {
+        scope.intent = null
+        setDeleteView({ open: true, status: "error", problem: "rejected" })
+      } else {
+        // Unknown wire/status/profile and all receipt-read failures preserve the exact original key/body.
+        setDeleteView({ open: true, status: "unknown", problem: readOnly ? "read" : "unknown" })
+      }
+    } finally {
+      controller.abort()
+      if (scope.controller === controller) scope.controller = null
+      scope.busy = false
+    }
+  }, [confirmProjectDeleted, renameContext, setDeleteView])
+  const openDelete = useCallback(() => {
+    const scope = deleteScopeRef.current
+    if (!deleteAvailable || !scope?.active || scope.context !== renameContext || scope.busy) return
+    scope.route = `${window.location.pathname}${window.location.search}${window.location.hash}`
+    const retained = scope.intent
+    setDeleteView(retained ? { open: true, status: "unknown", problem: "unknown" } : { open: true, status: "idle", problem: null })
+  }, [deleteAvailable, renameContext, setDeleteView])
+  const projectDelete: ProjectDeleteControl = {
+    focusScopeToken: renameContext,
+    available: deleteAvailable,
+    ...deleteView,
+    onOpen: openDelete,
+    onClose: () => {
+      const scope = deleteScopeRef.current
+      if (!scope?.active || scope.context !== renameContext || scope.busy) return
+      setDeleteView(scope.intent ? { ...deleteView, open: false } : { open: false, status: "idle", problem: scope.revoked ? "permission" : null })
+    },
+    onConfirm: () => {
+      const scope = deleteScopeRef.current
+      if (!deleteAvailable || !scope?.active || scope.context !== renameContext || scope.busy || scope.intent || !projectRef) return
+      if (window.location.pathname !== `/app/project/${projectRef}`) return
+      scope.intent = Object.freeze({ projectId: projectRef, idempotencyKey: crypto.randomUUID(), body: null })
+      void runDelete(false)
+    },
+    onRetry: () => { if (deleteScopeRef.current?.context === renameContext && deleteScopeRef.current.intent) void runDelete(false) },
+    onCheck: () => { if (deleteScopeRef.current?.context === renameContext && deleteScopeRef.current.intent) void runDelete(true) },
+  }
 
   // A menu handoff is document-local and expires with admission or navigation.
   // It never copies instructions or survives a different actor's lifetime.
@@ -586,6 +712,7 @@ export function useAppFrameProject({
 
   return {
     projectRename,
+    projectDelete,
     projectInstruction,
     projectInstructionRequest,
     requestProjectInstructions,

@@ -6,6 +6,7 @@ import {
 } from "react"
 
 import type { SessionEngine } from "@/engine/machine"
+import type { AgentMode } from "@/core/conversations"
 import type { SkillCard } from "@/hub/schemas"
 import { useT } from "@/i18n/context"
 import { MAX_INPUT_LENGTH } from "@/ui/composer/composer"
@@ -28,6 +29,8 @@ export type AppFrameActionsOptions = {
   projectWorkspace: boolean
   projectRef?: string
   routedConversationId?: string | null
+  projectComposerDraft?: { mode: AgentMode; model: string | null; isCurrent: () => boolean }
+  onProjectDraftAccepted?: () => void
   standaloneSurface: boolean
   chatHref: string
   activeId: string | null
@@ -51,6 +54,8 @@ export function useAppFrameActions({
   projectWorkspace,
   projectRef,
   routedConversationId,
+  projectComposerDraft,
+  onProjectDraftAccepted,
   standaloneSurface,
   chatHref,
   activeId,
@@ -129,19 +134,21 @@ export function useAppFrameActions({
         if (current.store?.activeId !== routedConversationId || current.hydrating) return
       } else {
         // A root composer must not RESET a hidden POST, unknown receipt, or run.
+        if (projectComposerDraft && !projectComposerDraft.isCurrent()) return
         if (!current.canSubmitMessage || current.hydrating || current.connection.status !== "connected" ||
           current.machine.phase !== "idle" || current.hasPendingSubmission || current.canRetryPendingSubmission) return
       }
     }
     // 流式中提交继续沿现有 create-message 路径；queued/steer 的正式
     // owner 语义尚未发布，本层只消费 engine 的同步接纳结果。
-    const accepted = submitCurrentDraft(content, projectWorkspace && routedConversationId == null)
+    const accepted = submitCurrentDraft(content, projectWorkspace && routedConversationId == null, projectComposerDraft)
     if (!accepted) {
       // A synchronous guard (for example, a create receipt still in flight)
       // leaves the user's draft and creation/route intent untouched.
       focusComposer()
       return
     }
+    if (projectWorkspace && routedConversationId == null) onProjectDraftAccepted?.()
     clearDraft()
     if (projectWorkspace || conversationAtRender === null) {
       // Publish only this synchronously accepted Send, never a restored cache
@@ -157,7 +164,7 @@ export function useAppFrameActions({
     // blank conversation cannot inherit a stale Website/App capsule.
     setDeploymentIntent(null)
     focusComposer()
-  }, [actorAtRender, chatHref, conversationAtRender, directSelectionAtRender, routeAtRender, clearDraft, draft, engine, focusComposer, projectWorkspace, projectRef, routedConversationId, setConversationRouteId, setDeploymentIntent, submitCurrentDraft, syncConversationUrl])
+  }, [actorAtRender, projectComposerDraft, onProjectDraftAccepted, chatHref, conversationAtRender, directSelectionAtRender, routeAtRender, clearDraft, draft, engine, focusComposer, projectWorkspace, projectRef, routedConversationId, setConversationRouteId, setDeploymentIntent, submitCurrentDraft, syncConversationUrl])
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()

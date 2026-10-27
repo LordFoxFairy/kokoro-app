@@ -17,6 +17,20 @@ export type ProjectRenameControl = {
   onRestart: () => void
 }
 
+export type ProjectDeleteControl = {
+  focusScopeToken: object
+  available: boolean
+  open: boolean
+  status: "idle" | "pending" | "unknown" | "error"
+  problem: "permission" | "unknown" | "rejected" | "read" | null
+  frozen: boolean
+  onOpen: () => void
+  onClose: () => void
+  onConfirm: () => void
+  onRetry: () => void
+  onCheck: () => void
+}
+
 export type ProjectInstructionControl = {
   onTriggerMount: (target: HTMLButtonElement | null) => void
   available: boolean
@@ -27,6 +41,7 @@ export type WorkspaceHeaderProps = {
   activeId: string | null
   projectRename?: ProjectRenameControl
   projectInstruction?: ProjectInstructionControl
+  projectDelete?: ProjectDeleteControl
   shareClient: Pick<SessionClient, "createShare" | "revokeShare">
   onOpenSettings?: (tab: SettingsTab) => void
   brandName?: string
@@ -44,5 +59,5 @@ export type WorkspaceHeaderIdentityProps = Pick<
 
 export type WorkspaceHeaderActionProps = Pick<
   WorkspaceHeaderProps,
-  "activeId" | "projectRename" | "projectInstruction" | "emptyWorkspace" | "onOpenSettings" | "projectWorkspace" | "shareClient"
+  "activeId" | "projectRename" | "projectInstruction" | "projectDelete" | "emptyWorkspace" | "onOpenSettings" | "projectWorkspace" | "shareClient"
 >

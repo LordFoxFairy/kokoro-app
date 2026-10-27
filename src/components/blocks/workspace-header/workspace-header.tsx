@@ -58,6 +58,7 @@ export function WorkspaceHeader({
   projectWorkspace = false,
   projectRename,
   projectInstruction,
+  projectDelete,
   showNavigationTrigger = false,
   onNavigationToggle,
   navigationExpanded,
@@ -85,6 +86,7 @@ export function WorkspaceHeader({
           projectWorkspace={projectWorkspace}
           {...(projectRename === undefined ? {} : { projectRename })}
           {...(projectInstruction === undefined ? {} : { projectInstruction })}
+          {...(projectDelete === undefined ? {} : { projectDelete })}
           shareClient={shareClient}
         />
       </div>

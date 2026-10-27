@@ -986,3 +986,150 @@ it("官方来源选择复用正式目录，装入精确 version UID 而不把目
   expect(writes).toHaveLength(1)
   expect(JSON.parse(String(writes[0]?.[1]?.body))).toEqual({ source_ref: "skill:official-revision" })
 })
+
+it("Project delete keeps cancel at zero writes, preserves an unknown command key, and retires only the confirmed project", async () => {
+  const { useAppFrameProject } = await import("@/components/blocks/app-frame/use-app-frame-project")
+  const id = "project_12345678-1234-1234-1234-123456789abc"
+  const project = { id, name: "Delete me", slug: "delete-me", description: "", created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-01T00:00:00Z" }
+  const originalUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`
+  window.history.replaceState(null, "", `/app/project/${id}`)
+  const retireProject = vi.fn(); const refreshProject = vi.fn()
+  const fetchMock = vi.spyOn(globalThis, "fetch")
+    .mockResolvedValueOnce(Response.json({ error: { code: "business_store_unavailable", message: "uncertain", retryable: true } }, {
+      status: 503, headers: { "cache-control": "private, no-store" },
+    }))
+    .mockResolvedValueOnce(Response.json({ error: { code: "business_store_unavailable", message: "read uncertain", retryable: true } }, {
+      status: 503, headers: { "cache-control": "private, no-store" },
+    }))
+    .mockResolvedValueOnce(Response.json({ data: { project_id: id, logical_release_state: "pending", physical_cleanup_state: "pending" } }, {
+      status: 202, headers: { "cache-control": "private, no-store" },
+    }))
+  const options = {
+    projectRef: id, projectWorkspace: true, preview: false, mounted: true, draft: "draft", updateDraft: vi.fn(), clearDraft: vi.fn(),
+    projectDetail: { status: "ready" as const, data: project }, instructionHistory: { status: "blocked" as const }, instructionContext: {},
+    refreshProject, retireProject, renameBoundary: { admitted: true, subject: "reader", generation: 1 }, renameRouteKey: "delete-route",
+  }
+  const view = renderHook(() => useAppFrameProject(options), { wrapper: LocaleProvider })
+  try {
+    act(() => view.result.current.projectDelete.onOpen())
+    act(() => view.result.current.projectDelete.onClose())
+    expect(fetchMock).not.toHaveBeenCalled()
+    act(() => { view.result.current.projectDelete.onOpen(); view.result.current.projectDelete.onConfirm() })
+    await waitFor(() => expect(view.result.current.projectDelete.problem).toBe("unknown"))
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const first = fetchMock.mock.calls[0]
+    expect(first?.[0]).toBe(`/api/hub/projects/${id}`)
+    expect(first?.[1]?.method).toBe("DELETE")
+    expect(Object.hasOwn(first?.[1] ?? {}, "body")).toBe(false)
+    expect(new Headers(first?.[1]?.headers).get("idempotency-key")).toEqual(expect.any(String))
+    act(() => view.result.current.projectDelete.onCheck())
+    await waitFor(() => expect(view.result.current.projectDelete.problem).toBe("read"))
+    const receipt = fetchMock.mock.calls[1]
+    expect(receipt?.[0]).toBe(`/api/hub/projects/${id}/deletion`)
+    expect(receipt?.[1]?.method).toBe("GET")
+    expect(Object.hasOwn(receipt?.[1] ?? {}, "body")).toBe(false)
+    expect(new Headers(receipt?.[1]?.headers).has("idempotency-key")).toBe(false)
+    act(() => view.result.current.projectDelete.onRetry())
+    await waitFor(() => expect(retireProject).toHaveBeenCalledWith(id))
+    expect(refreshProject).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+    const second = fetchMock.mock.calls[2]
+    expect({ url: first?.[0], init: { method: first?.[1]?.method, body: first?.[1]?.body, key: new Headers(first?.[1]?.headers).get("idempotency-key") } })
+      .toEqual({ url: second?.[0], init: { method: second?.[1]?.method, body: second?.[1]?.body, key: new Headers(second?.[1]?.headers).get("idempotency-key") } })
+    expect(`${window.location.pathname}${window.location.search}${window.location.hash}`).toBe("/app")
+  } finally { view.unmount(); fetchMock.mockRestore(); window.history.replaceState(null, "", originalUrl) }
+})
+
+it("Project menu contains only project actions and never opens account or upgrade from the project surface", async () => {
+  const { WorkspaceHeaderProjectMenu } = await import("@/components/blocks/workspace-header/workspace-header-project-menu")
+  const scope = {}
+  render(<LocaleProvider><WorkspaceHeaderProjectMenu
+    projectRename={{ focusScopeToken: scope, available: true, open: false, name: "", status: "idle", problem: null, frozen: false,
+      onOpen: vi.fn(), onClose: vi.fn(), onChange: vi.fn(), onSave: vi.fn(), onRetry: vi.fn(), onRestart: vi.fn() }}
+    projectInstruction={{ available: true, onTriggerMount: vi.fn(), onOpen: vi.fn() }}
+    projectDelete={{ focusScopeToken: scope, available: true, open: false, status: "idle", problem: null, frozen: false,
+      onOpen: vi.fn(), onClose: vi.fn(), onConfirm: vi.fn(), onRetry: vi.fn(), onCheck: vi.fn() }}
+  /></LocaleProvider>)
+  fireEvent.pointerDown(screen.getByRole("button", { name: "项目选项" }), { button: 0, ctrlKey: false })
+  expect(screen.getByRole("menuitem", { name: "重命名项目" })).toBeInTheDocument()
+  expect(screen.getByRole("menuitem", { name: "编辑指令" })).toBeInTheDocument()
+  expect(screen.getByRole("menuitem", { name: "删除项目" })).toBeInTheDocument()
+  expect(screen.queryByRole("menuitem", { name: "账户" })).toBeNull()
+  expect(screen.queryByRole("menuitem", { name: "升级" })).toBeNull()
+})
+
+it("Project delete retires its command on a route change and ignores a late 202", async () => {
+  const { useAppFrameProject } = await import("@/components/blocks/app-frame/use-app-frame-project")
+  const id = "project_12345678-1234-1234-1234-123456789abc"
+  const project = { id, name: "Late", slug: "late", description: "", created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-01T00:00:00Z" }
+  const originalUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`
+  window.history.replaceState(null, "", `/app/project/${id}`)
+  let deliver: (response: Response) => void = () => { throw new Error("no pending DELETE") }
+  const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementationOnce((_url, init) => new Promise<Response>((resolve) => {
+    deliver = resolve
+    expect(init?.method).toBe("DELETE")
+  }))
+  const retireProject = vi.fn(); const refreshProject = vi.fn()
+  const options = {
+    projectRef: id, projectWorkspace: true, preview: false, mounted: true, draft: "draft", updateDraft: vi.fn(), clearDraft: vi.fn(),
+    projectDetail: { status: "ready" as const, data: project }, instructionHistory: { status: "blocked" as const }, instructionContext: {},
+    refreshProject, retireProject, renameBoundary: { admitted: true, subject: "reader", generation: 1 }, renameRouteKey: "delete-route",
+  }
+  const view = renderHook(() => useAppFrameProject(options), { wrapper: LocaleProvider })
+  try {
+    act(() => { view.result.current.projectDelete.onOpen(); view.result.current.projectDelete.onConfirm() })
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+    window.history.pushState(null, "", "/app")
+    act(() => window.dispatchEvent(new PopStateEvent("popstate")))
+    expect(fetchMock.mock.calls[0]?.[1]?.signal?.aborted).toBe(true)
+    await act(async () => {
+      deliver(Response.json({ data: { project_id: id, logical_release_state: "pending", physical_cleanup_state: "pending" } }, {
+        status: 202, headers: { "cache-control": "private, no-store" },
+      }))
+      await Promise.resolve()
+    })
+    expect(retireProject).not.toHaveBeenCalled()
+    expect(refreshProject).not.toHaveBeenCalled()
+  } finally { view.unmount(); fetchMock.mockRestore(); window.history.replaceState(null, "", originalUrl) }
+})
+
+it("Project delete keeps an untyped 400/403/409 outcome and its original command recoverable", async () => {
+  const { deleteProject } = await import("@/features/app/project-delete")
+  const { useAppFrameProject } = await import("@/components/blocks/app-frame/use-app-frame-project")
+  const id = "project_12345678-1234-1234-1234-123456789abc"
+  const intent = { projectId: id, idempotencyKey: "original-key", body: null as null }
+  const malformed = (status: number) => Response.json({ error: { code: "untyped_owner_error", message: "untrusted", retryable: false } }, {
+    status, headers: { "cache-control": "private, no-store" },
+  })
+  const fetchMock = vi.spyOn(globalThis, "fetch")
+  fetchMock.mockResolvedValueOnce(malformed(400)).mockResolvedValueOnce(malformed(403)).mockResolvedValueOnce(malformed(409))
+  try {
+    for (const status of [400, 403, 409]) {
+      await expect(deleteProject(intent, new AbortController().signal)).rejects.toMatchObject({ code: "unexpected_status", status })
+    }
+    const project = { id, name: "Delete me", slug: "delete-me", description: "", created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-01T00:00:00Z" }
+    const originalUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`
+    window.history.replaceState(null, "", `/app/project/${id}`)
+    fetchMock.mockResolvedValueOnce(malformed(403)).mockResolvedValueOnce(Response.json({ data: { project_id: id, logical_release_state: "pending", physical_cleanup_state: "pending" } }, {
+      status: 202, headers: { "cache-control": "private, no-store" },
+    }))
+    const retireProject = vi.fn()
+    const view = renderHook(() => useAppFrameProject({
+      projectRef: id, projectWorkspace: true, preview: false, mounted: true, draft: "draft", updateDraft: vi.fn(), clearDraft: vi.fn(),
+      projectDetail: { status: "ready" as const, data: project }, instructionHistory: { status: "blocked" as const }, instructionContext: {},
+      refreshProject: vi.fn(), retireProject, renameBoundary: { admitted: true, subject: "reader", generation: 1 }, renameRouteKey: "delete-route",
+    }), { wrapper: LocaleProvider })
+    try {
+      act(() => { view.result.current.projectDelete.onOpen(); view.result.current.projectDelete.onConfirm() })
+      await waitFor(() => expect(view.result.current.projectDelete.problem).toBe("unknown"))
+      expect(view.result.current.projectDelete.available).toBe(true)
+      act(() => view.result.current.projectDelete.onRetry())
+      await waitFor(() => expect(retireProject).toHaveBeenCalledWith(id))
+      const writes = fetchMock.mock.calls.slice(3).map(([url, init]) => ({ url, key: new Headers(init?.headers).get("idempotency-key"), body: init?.body }))
+      expect(writes).toEqual([
+        { url: `/api/hub/projects/${id}`, key: expect.any(String), body: undefined },
+        { url: `/api/hub/projects/${id}`, key: writes[0]?.key, body: undefined },
+      ])
+    } finally { view.unmount(); window.history.replaceState(null, "", originalUrl) }
+  } finally { fetchMock.mockRestore() }
+})

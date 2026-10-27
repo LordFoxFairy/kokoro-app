@@ -5,7 +5,7 @@ import { useSessionArchive } from "@/ui/shell/use-session-archive"
 
 import { type CSSProperties, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 
-import { activeMode } from "@/core/conversations"
+import { activeMode, type AgentMode } from "@/core/conversations"
 import { isCreditInsufficient } from "@/billing/rules"
 import { useHydrated } from "@/lib/use-hydrated"
 import { RAIL_COLLAPSED_WIDTH, RAIL_DEFAULT } from "@/ui/rail/use-rail-resize"
@@ -27,6 +27,7 @@ import { createManusSkillHubClient, retainManusSkillHubClient } from "@/ui/skill
 import { isRuntimeNavigationEnabled } from "@/ui/navigation/runtime-navigation-registry"
 import { useConversationReaders } from "@/ui/shell/use-conversation-readers"
 import { useDraft } from "@/ui/shell/use-draft"
+import { readChatModel } from "@/ui/settings/chat-prefs"
 import type { ConversationThreadProps } from "@/ui/thread/conversation-thread"
 import type { WorkspaceRailProps } from "@/components/blocks/workspace-rail/workspace-rail"
 import type { AppCommandMenuProps } from "./app-command-menu"
@@ -220,7 +221,9 @@ function AppFrameRuntime({
     accountTriggerRef,
   })
 
-  const selectors = useComposerSelectors(engine, { preview })
+  const routedConversationId = navigationState.resolvedConversationRouteId
+  const projectOverview = projectWorkspace && routedConversationId === null
+  const selectors = useComposerSelectors(engine, { preview, applyModelToEngine: !projectOverview })
 
   const focusComposer = useCallback(() => {
     const node = composerRef.current
@@ -251,7 +254,6 @@ function AppFrameRuntime({
     moveCoordinator.getSnapshot,
   )
   const moveScopeKey = sessionScopeKey(sessionScope)
-  const routedConversationId = navigationState.resolvedConversationRouteId
   const railReadIdentity = JSON.stringify([projectReadBoundary?.subject ?? "injected", projectReadBoundary?.generation ?? 0])
   const railReadAdmitted = preview || (projectReadBoundary === undefined ? injectedEngine !== undefined : projectReadBoundary.admitted && projectReadBoundary.subject !== null)
   // Account MCP selection follows the enabled connector module, not project default bindings.
@@ -417,6 +419,55 @@ function AppFrameRuntime({
   const clearDraft = useCallback(() => {
     if (draftRouteIsCurrent()) clearScopedDraft()
   }, [clearScopedDraft, draftRouteIsCurrent])
+  // An overview is a new task draft, not the retained engine's active task.
+  // Keep its choices local until accepted Send allocates a fresh conversation.
+  const [projectDraftEpoch, setProjectDraftEpoch] = useState(0)
+  const projectDraftContext = useMemo(() => ({
+    engine, projectRef, route: draftRoute, actor: moveActor,
+    identity: railReadIdentity, admitted: railReadAdmitted, epoch: projectDraftEpoch,
+    mode: "fast" as AgentMode, model: readChatModel(),
+  }), [engine, projectRef, draftRoute, moveActor, projectDraftEpoch, railReadIdentity, railReadAdmitted])
+  const [projectDraftSelection, setProjectDraftSelection] = useState(() => ({
+    context: projectDraftContext, mode: projectDraftContext.mode, model: projectDraftContext.model,
+  }))
+  const projectDraft = projectDraftSelection.context === projectDraftContext ? projectDraftSelection : projectDraftContext
+  const liveProjectDraft = useRef<typeof projectDraftContext | null>(null)
+  useLayoutEffect(() => {
+    if (!projectOverview) return
+    liveProjectDraft.current = projectDraftContext
+    const retire = () => {
+      try {
+        if (`${window.location.pathname}${window.location.search}` === projectDraftContext.route
+          && window.localStorage.getItem("kokoro.web.auth-index-subject") === projectDraftContext.actor) return
+      } catch { /* Unreadable actor evidence retires the draft. */ }
+      liveProjectDraft.current = null
+      setProjectDraftEpoch(epoch => epoch + 1)
+    }
+    window.addEventListener("popstate", retire)
+    window.addEventListener("kokoro:surface-navigation", retire)
+    window.addEventListener("storage", retire)
+    return () => {
+      if (liveProjectDraft.current === projectDraftContext) liveProjectDraft.current = null
+      window.removeEventListener("popstate", retire)
+      window.removeEventListener("kokoro:surface-navigation", retire)
+      window.removeEventListener("storage", retire)
+    }
+  }, [projectDraftContext, projectOverview])
+  const projectDraftIsCurrent = () => {
+    try {
+      return railReadAdmitted && liveProjectDraft.current === projectDraftContext && projectDraftContext.actor !== undefined
+        && (preview || projectReadBoundary === undefined || projectReadBoundary.subject === projectDraftContext.actor)
+        && `${window.location.pathname}${window.location.search}` === projectDraftContext.route
+        && window.localStorage.getItem("kokoro.web.auth-index-subject") === projectDraftContext.actor
+    } catch { return false }
+  }
+  const updateProjectDraft = (choice: Partial<{ mode: AgentMode; model: string | null }>) => {
+    if (!projectDraftIsCurrent()) return
+    setProjectDraftSelection(previous => {
+      const current = previous.context === projectDraftContext ? previous : projectDraftContext
+      return { context: projectDraftContext, mode: current.mode, model: current.model, ...choice }
+    })
+  }
   const projectReads = useProjectList(preview, projectReadBoundary, projectRef, projectWorkspace)
   const refreshProjects = projectReads.refresh
   const handleProjectOpen = useCallback((id: string, handoffDraft?: string) => {
@@ -444,6 +495,7 @@ function AppFrameRuntime({
     instructionContext: projectReads.context,
     instructionsEnabled: projectedWorkspaceCapabilities.instructions,
     refreshProject: refreshProjects,
+    retireProject: projectReads.retireProject,
     refreshRenamedProject: projectReads.refreshRenamedProject,
     ...(projectReadBoundary === undefined ? {} : { renameBoundary: projectReadBoundary }),
     renameRouteKey: JSON.stringify([projectRef ?? null, activeId, navigationState.settingsTab]),
@@ -456,6 +508,8 @@ function AppFrameRuntime({
     projectWorkspace,
     ...(projectRef === undefined ? {} : { projectRef }),
     routedConversationId,
+    ...(projectOverview ? { projectComposerDraft: { mode: projectDraft.mode, model: projectDraft.model, isCurrent: projectDraftIsCurrent },
+      onProjectDraftAccepted: () => selectors.setSelectedModel(projectDraft.model) } : {}),
     standaloneSurface,
     chatHref,
     activeId,
@@ -647,8 +701,9 @@ function AppFrameRuntime({
     machine.phase === "error" || thread.unattributedFailure !== null
   )
   const creditRejected = hasFailed && isCreditInsufficient(machine.error)
-  const mode = store ? activeMode(store) : pendingMode
-  const modeLocked = hasMessages
+  const mode = projectOverview ? projectDraft.mode : store ? activeMode(store) : pendingMode
+  const composerHasMessages = !projectOverview && hasMessages
+  const modeLocked = composerHasMessages
   const projectSubmissionAdmitted = !projectWorkspace || (
     typeof window !== "undefined"
     && projectRef !== undefined
@@ -753,7 +808,7 @@ function AppFrameRuntime({
     preview,
     brandName,
     projectWorkspace,
-    hasMessages,
+    hasMessages: composerHasMessages,
     creationIntent: projectedCreationIntent,
     onCreationIntentDismiss: actions.dismissCreationIntent,
     workspaceCapabilities: projectedWorkspaceCapabilities,
@@ -769,16 +824,16 @@ function AppFrameRuntime({
     canSend,
     onStop: () => engine?.cancelRun(),
     composerRef,
-    emptyWorkspace: !hasMessages,
+    emptyWorkspace: !composerHasMessages,
     mode,
-    onModeChange: (next) => engine?.setMode(next),
+    onModeChange: (next) => projectOverview ? updateProjectDraft({ mode: next }) : engine?.setMode(next),
     modeLocked,
     models: selectors.models,
     modelCatalogStatus: selectors.modelCatalogStatus,
     onRetryModels: selectors.retryModels,
     hideModelSelector: !hasMessages && (projectedCreationIntent === "website" || projectedCreationIntent === "app"),
-    selectedModel: selectors.selectedModel,
-    onModelChange: selectors.setSelectedModel,
+    selectedModel: projectOverview ? projectDraft.model : selectors.selectedModel,
+    onModelChange: projectOverview ? (model) => updateProjectDraft({ model }) : selectors.setSelectedModel,
     modelLocked: modeLocked,
   }
 
@@ -857,6 +912,7 @@ function AppFrameRuntime({
       projectCreation={project.projectCreation}
       projectRename={project.projectRename}
       projectInstruction={project.projectInstruction}
+      projectDelete={project.projectDelete}
       onRetryProjectCreation={project.retryProjectCreation}
       retryConversationHydration={retryConversationHydration}
       onOpenSettings={overlays.openSettings}

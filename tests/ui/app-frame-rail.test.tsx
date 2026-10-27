@@ -1594,10 +1594,11 @@ it("an explicit overview send carries the user's thinking mode into its fresh co
   projectClient.nextSnapshot = id => Promise.resolve(makeSnapshot({ sessionId: id }))
   const projectEngine = createSessionEngine({ client: projectClient, storage: createMemoryStorage<ConversationStore>({ activeId: remembered, conversations: [{ id: remembered, title: "blank remembered task", mode: "fast", updatedAt: 1000 }] }), scope: { kind: "project", projectRef } })
   await waitFor(() => expect(projectEngine.getSnapshot().hydrating).toBe(false))
-  projectEngine.setMode("thinking")
   const view = render(<ThemeProvider><LocaleProvider><AppFrame engine={projectEngine} chatHref="/app" projectWorkspace projectRef={projectRef} /></LocaleProvider></ThemeProvider>)
   try {
-    expect(projectEngine.getSnapshot().store?.conversations.find(entry => entry.id === remembered)?.mode).toBe("thinking")
+    fireEvent.pointerDown(screen.getByRole("button", { name: /切换模式/ }), { button: 0, ctrlKey: false })
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: /深度思考/ }))
+    expect(projectEngine.getSnapshot().store?.conversations.find(entry => entry.id === remembered)?.mode).toBe("fast")
     const composer = screen.getByRole("textbox", { name: "对话输入" })
     fireEvent.change(composer, { target: { value: "explicit thinking overview" } })
     fireEvent.keyDown(composer, { key: "Enter" })
@@ -5426,4 +5427,235 @@ it.each(["completed", "failed", "cancelled"] as const)("current task progress re
     expect(engine.getSnapshot().thread.executionHead).toBeNull()
     if (terminal === "failed") expect(engine.getSnapshot().thread.runFailuresById[runId]).toBeDefined()
   } finally { closeCanvas(sessionId) }
+})
+
+async function mountRememberedProjectComposer(options: { beforeRender?: (value: { projectEngine: SessionEngine; projectClient: FakeClient }) => void | Promise<void> } = {}) {
+  const projectRef = "project_composer-draft"
+  const remembered = "conv_composer-history"
+  const projectClient = createFakeClient()
+  projectClient.nextSnapshot = id => Promise.resolve(makeSnapshot({ sessionId: id,
+    messages: [{ message_id: "history-message", role: "assistant", run_id: "history-run", content: "completed hidden task", status: "completed", created_at: "2026-07-02T00:00:01Z" }],
+  }))
+  projectClient.listModels = async () => ({ models: [
+    { provider: "fixture", name: "draft-default", is_default: true, display_name: "Draft default", model_id: "11111111-1111-4111-8111-111111111111", revision_id: "22222222-2222-4222-8222-222222222222", provider_id: "33333333-3333-4333-8333-333333333333", feature_key: "chat", request_model: "draft-default" },
+    { provider: "fixture", name: "draft-choice", is_default: false, display_name: "Draft choice", model_id: "11111111-1111-4111-8111-111111111112", revision_id: "22222222-2222-4222-8222-222222222223", provider_id: "33333333-3333-4333-8333-333333333334", feature_key: "chat", request_model: "draft-choice" },
+  ], next_cursor: null })
+  const projectEngine = createSessionEngine({ client: projectClient,
+    storage: createMemoryStorage<ConversationStore>({ activeId: remembered, conversations: [{ id: remembered, title: "hidden history", mode: "thinking", updatedAt: 1000 }] }),
+    scope: { kind: "project", projectRef },
+  })
+  const pageClients = await import("@/ui/shell/page-clients")
+  vi.spyOn(pageClients, "browserListClient").mockReturnValue(projectClient)
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "composer-draft-actor")
+  window.history.replaceState({}, "", `/app/project/${projectRef}`)
+  const props = { engine: projectEngine, chatHref: "/app", projectWorkspace: true, projectRef,
+    projectReadBoundary: { admitted: true, subject: "composer-draft-actor", generation: 1 },
+  }
+  const frame = (next = props) => <ThemeProvider><LocaleProvider><AppFrame {...next} /></LocaleProvider></ThemeProvider>
+  await waitFor(() => expect(projectEngine.getSnapshot().hydrating).toBe(false))
+  await options.beforeRender?.({ projectEngine, projectClient })
+  const view = render(frame())
+  await waitFor(() => expect(document.querySelector('[data-composer-control="model"]')).toBeInTheDocument())
+  return { projectEngine, projectClient, remembered, props, frame, view }
+}
+
+it("project overview keeps its model draft local until its fresh conversation exists", async () => {
+  const writes: { id: string | undefined; model: string | null }[] = []
+  let model: ReturnType<typeof vi.spyOn>
+  const { projectEngine, projectClient, remembered, view } = await mountRememberedProjectComposer({
+    beforeRender: ({ projectEngine }) => {
+      const setModel = projectEngine.setModel
+      model = vi.spyOn(projectEngine, "setModel").mockImplementation(value => {
+        writes.push({ id: projectEngine.getSnapshot().store?.activeId, model: value })
+        setModel(value)
+      })
+    },
+  })
+  try {
+    expect(model!).not.toHaveBeenCalled()
+    fireEvent.pointerDown(screen.getByRole("button", { name: /切换模式/ }), { button: 0, ctrlKey: false })
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: /快速/ }))
+    fireEvent.pointerDown(screen.getByRole("button", { name: /切换模型/ }), { button: 0, ctrlKey: false })
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: /Draft choice/ }))
+    expect(model!).not.toHaveBeenCalled()
+    expect(projectEngine.getSnapshot().store?.activeId).toBe(remembered)
+    fireEvent.change(screen.getByRole("textbox", { name: "对话输入" }), { target: { value: "allocate before applying draft model" } })
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "对话输入" }), { key: "Enter" })
+    await waitFor(() => expect(projectClient.createCalls).toHaveLength(1))
+    const freshId = projectClient.createCalls[0]?.sessionId
+    expect(freshId).toBeDefined()
+    expect(writes[0]).toEqual({ id: freshId, model: "draft-choice" })
+    expect(writes.every(write => write.id === freshId && write.model === "draft-choice")).toBe(true)
+  } finally { view.unmount(); projectEngine.dispose() }
+})
+
+it.each(["unknown", "active"] as const)("project overview model draft does not mutate hidden %s state on mount or choice", async state => {
+  const writes: { id: string | undefined; model: string | null }[] = []
+  let model: ReturnType<typeof vi.spyOn>
+  const { projectEngine, projectClient, remembered, view } = await mountRememberedProjectComposer({
+    beforeRender: async ({ projectEngine, projectClient }) => {
+      if (state === "unknown") projectClient.nextCreate = () => Promise.reject(new Error("hidden unknown receipt"))
+      expect(projectEngine.submit(`hidden ${state} execution`)).toBe(true)
+      if (state === "unknown") await waitFor(() => expect(projectEngine.getSnapshot().canRetryPendingSubmission).toBe(true))
+      else await waitFor(() => expect(projectClient.streams).toHaveLength(1))
+      const setModel = projectEngine.setModel
+      model = vi.spyOn(projectEngine, "setModel").mockImplementation(value => {
+        writes.push({ id: projectEngine.getSnapshot().store?.activeId, model: value })
+        setModel(value)
+      })
+    },
+  })
+  try {
+    const before = projectEngine.getSnapshot()
+    expect(model!).not.toHaveBeenCalled()
+    fireEvent.pointerDown(screen.getByRole("button", { name: /切换模式/ }), { button: 0, ctrlKey: false })
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: /快速/ }))
+    fireEvent.pointerDown(screen.getByRole("button", { name: /切换模型/ }), { button: 0, ctrlKey: false })
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: /Draft choice/ }))
+    expect(model!).not.toHaveBeenCalled()
+    expect(writes).toEqual([])
+    expect(projectEngine.getSnapshot().store?.activeId).toBe(remembered)
+    expect(projectEngine.getSnapshot().machine).toEqual(before.machine)
+    expect(projectEngine.getSnapshot().thread.messages).toEqual(before.thread.messages)
+    expect(projectClient.createCalls).toHaveLength(1)
+  } finally { view.unmount(); projectEngine.dispose() }
+})
+
+it("project overview draft selectors are not locked by completed hidden history", async () => {
+  const { projectEngine, view, remembered } = await mountRememberedProjectComposer()
+  try {
+    expect(projectEngine.getSnapshot().thread.messages).toHaveLength(1)
+    expect(projectEngine.getSnapshot().store?.activeId).toBe(remembered)
+    expect(document.querySelector('[data-composer-control="model"]')).toBeEnabled()
+    expect(document.querySelector('[data-composer-control="mode"]')).toBeEnabled()
+    expect(screen.getByRole("button", { name: /切换模式/ })).toHaveTextContent("快速")
+  } finally { view.unmount(); projectEngine.dispose() }
+})
+
+it.each([false, true])("project overview draft choices do not mutate history and apply only after fresh allocation (unknown=%s)", async unknown => {
+  const { projectEngine, projectClient, remembered, view } = await mountRememberedProjectComposer()
+  const applications: (string | undefined)[] = []
+  const setMode = projectEngine.setMode, setModel = projectEngine.setModel
+  const mode = vi.spyOn(projectEngine, "setMode").mockImplementation(value => { applications.push(projectEngine.getSnapshot().store?.activeId); setMode(value) })
+  const model = vi.spyOn(projectEngine, "setModel").mockImplementation(value => { applications.push(projectEngine.getSnapshot().store?.activeId); setModel(value) })
+  const reset = vi.spyOn(projectEngine, "newConversation")
+  if (unknown) projectClient.nextCreate = () => Promise.reject(new Error("unknown receipt"))
+  try {
+    fireEvent.pointerDown(screen.getByRole("button", { name: /切换模式/ }), { button: 0, ctrlKey: false })
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: /快速/ }))
+    fireEvent.pointerDown(screen.getByRole("button", { name: /切换模型/ }), { button: 0, ctrlKey: false })
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: /Draft choice/ }))
+    expect(mode).not.toHaveBeenCalled()
+    expect(model).not.toHaveBeenCalled()
+    expect(reset).not.toHaveBeenCalled()
+    expect(projectEngine.getSnapshot().store?.activeId).toBe(remembered)
+    const old = structuredClone(projectEngine.getSnapshot().store?.conversations.find(row => row.id === remembered))
+    fireEvent.change(screen.getByRole("textbox", { name: "对话输入" }), { target: { value: "new independent draft" } })
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "对话输入" }), { key: "Enter" })
+    await waitFor(() => expect(projectClient.createCalls).toHaveLength(1))
+    expect(projectClient.createCalls[0]).toMatchObject({ body: { thinking: false, model: "draft-choice" } })
+    expect(projectEngine.getSnapshot().store?.conversations.find(row => row.id === projectClient.createCalls[0]?.sessionId)?.mode).toBe("fast")
+    expect(screen.getByRole("button", { name: "模型：Draft choice（本轮锁定）" })).toBeDisabled()
+    expect(projectClient.createCalls[0]?.sessionId).not.toBe(remembered)
+    expect(projectEngine.getSnapshot().store?.conversations.find(row => row.id === remembered)).toEqual(old)
+    expect(new URL(window.location.href).searchParams.get("conversation")).toBe(projectClient.createCalls[0]?.sessionId)
+    expect(applications.length).toBeGreaterThanOrEqual(2)
+    expect(applications.every(id => id === projectClient.createCalls[0]?.sessionId)).toBe(true)
+    if (unknown) {
+      await waitFor(() => expect(projectEngine.getSnapshot().canRetryPendingSubmission).toBe(true))
+      const intent = structuredClone(projectClient.createCalls[0])
+      projectClient.nextCreate = () => Promise.resolve(makeReceipt("run_draft_retry"))
+      act(() => projectEngine.retry())
+      await waitFor(() => expect(projectClient.createCalls).toHaveLength(2))
+      expect(projectClient.createCalls[1]).toEqual(intent)
+      expect(reset).toHaveBeenCalledOnce()
+    }
+  } finally { view.unmount(); projectEngine.dispose() }
+})
+
+
+it.each(["route", "actor", "generation"] as const)("project overview draft choices retire on %s without resetting hidden history", async change => {
+  const { projectEngine, projectClient, remembered, props, frame, view } = await mountRememberedProjectComposer()
+  const reset = vi.spyOn(projectEngine, "newConversation")
+  try {
+    fireEvent.pointerDown(screen.getByRole("button", { name: /切换模式/ }), { button: 0, ctrlKey: false })
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: /深度思考/ }))
+    fireEvent.pointerDown(screen.getByRole("button", { name: /切换模型/ }), { button: 0, ctrlKey: false })
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: /Draft choice/ }))
+    expect(screen.getByRole("button", { name: /切换模型/ })).toHaveTextContent("Draft choice")
+    if (change === "route") {
+      act(() => {
+        window.history.pushState({}, "", "/app")
+        window.dispatchEvent(new PopStateEvent("popstate"))
+        window.history.pushState({}, "", `/app/project/${props.projectRef}`)
+        window.dispatchEvent(new PopStateEvent("popstate"))
+      })
+    } else {
+      if (change === "actor") {
+        window.localStorage.setItem("kokoro.web.auth-index-subject", "next-draft-actor")
+        act(() => window.dispatchEvent(new StorageEvent("storage", { key: "kokoro.web.auth-index-subject" })))
+      }
+      view.rerender(frame({ ...props, projectReadBoundary: { admitted: true,
+        subject: change === "actor" ? "next-draft-actor" : props.projectReadBoundary.subject, generation: 2 } }))
+    }
+    expect(screen.getByRole("button", { name: /切换模型/ })).toHaveTextContent("Draft default")
+    expect(screen.getByRole("button", { name: /切换模式/ })).toHaveTextContent("快速")
+    expect(projectEngine.getSnapshot().store?.activeId).toBe(remembered)
+    expect(projectEngine.getSnapshot().store?.conversations.find(row => row.id === remembered)?.mode).toBe("thinking")
+    expect(projectClient.createCalls).toEqual([])
+    expect(reset).not.toHaveBeenCalled()
+  } finally { view.unmount(); projectEngine.dispose() }
+})
+
+it.each(["pending", "unknown", "active"] as const)("project overview draft choices leave hidden %s execution untouched", async state => {
+  const { projectEngine, projectClient, remembered, view } = await mountRememberedProjectComposer()
+  if (state === "pending") projectClient.nextCreate = () => new Promise(() => {})
+  if (state === "unknown") projectClient.nextCreate = () => Promise.reject(new Error("hidden unknown receipt"))
+  try {
+    act(() => { projectEngine.submit("original hidden execution") })
+    if (state === "unknown") await waitFor(() => expect(projectEngine.getSnapshot().canRetryPendingSubmission).toBe(true))
+    if (state === "active") await waitFor(() => expect(projectClient.streams).toHaveLength(1))
+    const before = projectEngine.getSnapshot()
+    const calls = structuredClone(projectClient.createCalls)
+    const mode = vi.spyOn(projectEngine, "setMode"), model = vi.spyOn(projectEngine, "setModel")
+    const reset = vi.spyOn(projectEngine, "newConversation"), cancel = vi.spyOn(projectEngine, "cancelRun")
+    fireEvent.pointerDown(screen.getByRole("button", { name: /切换模式/ }), { button: 0, ctrlKey: false })
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: /快速/ }))
+    fireEvent.pointerDown(screen.getByRole("button", { name: /切换模型/ }), { button: 0, ctrlKey: false })
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: /Draft choice/ }))
+    expect(mode).not.toHaveBeenCalled()
+    expect(model).not.toHaveBeenCalled()
+    expect(reset).not.toHaveBeenCalled()
+    expect(cancel).not.toHaveBeenCalled()
+    expect(projectEngine.getSnapshot().store?.activeId).toBe(remembered)
+    expect(projectEngine.getSnapshot().machine).toEqual(before.machine)
+    expect(projectEngine.getSnapshot().thread.messages).toEqual(before.thread.messages)
+    expect(projectClient.createCalls).toEqual(calls)
+    expect(window.location.search).toBe("")
+  } finally { view.unmount(); projectEngine.dispose() }
+})
+
+it("project overview rejected fresh allocation preserves its draft choices and hidden history", async () => {
+  const { projectEngine, projectClient, remembered, view } = await mountRememberedProjectComposer()
+  const reset = vi.spyOn(projectEngine, "newConversation").mockImplementation(() => {})
+  try {
+    fireEvent.pointerDown(screen.getByRole("button", { name: /切换模型/ }), { button: 0, ctrlKey: false })
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: /Draft choice/ }))
+    const mode = vi.spyOn(projectEngine, "setMode"), model = vi.spyOn(projectEngine, "setModel")
+    const composer = screen.getByRole("textbox", { name: "对话输入" })
+    fireEvent.change(composer, { target: { value: "preserve this draft" } })
+    fireEvent.keyDown(composer, { key: "Enter" })
+    expect(projectClient.createCalls).toEqual([])
+    expect(mode).not.toHaveBeenCalled()
+    expect(model).not.toHaveBeenCalled()
+    expect(composer).toHaveValue("preserve this draft")
+    expect(screen.getByRole("button", { name: /切换模型/ })).toHaveTextContent("Draft choice")
+    expect(projectEngine.getSnapshot().store?.activeId).toBe(remembered)
+    expect(window.location.search).toBe("")
+    reset.mockRestore()
+    fireEvent.keyDown(composer, { key: "Enter" })
+    await waitFor(() => expect(projectClient.createCalls).toHaveLength(1))
+    expect(projectClient.createCalls[0]?.body.model).toBe("draft-choice")
+    expect(projectClient.createCalls[0]?.sessionId).not.toBe(remembered)
+  } finally { view.unmount(); projectEngine.dispose() }
 })

@@ -6,7 +6,7 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 390, height: 420 }
     await page.setViewportSize(viewport)
     await page.addInitScript(() => localStorage.setItem("kokoro.locale", "zh"))
     await page.goto("/app/project/preview-project")
-    const trigger = page.locator('[data-slot="workspace-header"]').getByRole("button", { name: "更多设置分区", exact: true })
+    const trigger = page.locator('[data-slot="workspace-header"]').getByRole("button", { name: "项目选项", exact: true })
     await trigger.focus()
     await trigger.press("ArrowDown")
     const entry = page.getByRole("menuitem", { name: "编辑指令", exact: true })

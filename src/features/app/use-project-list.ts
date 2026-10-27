@@ -28,6 +28,7 @@ export function useProjectList(preview: boolean, boundary: ProjectReadBoundary |
       reportRead401?.({ subject: subject ?? null, generation, signal })
   }, [reportRead401, subject, generation])
   const key = useMemo(() => ({ generation, subject, admitted, revision }), [generation, subject, admitted, revision])
+  const identityKey = useMemo(() => ({ generation, subject, admitted }), [generation, subject, admitted])
   const renameContext = useMemo(() => ({ key, projectRef }), [key, projectRef])
   const readScopeRef = useRef<{ key: object; active: boolean; epoch: number; controllers: Set<AbortController> } | null>(null)
   const renameScopeRef = useRef<{ key: object; active: boolean; controllers: Set<AbortController> } | null>(null)
@@ -50,9 +51,20 @@ export function useProjectList(preview: boolean, boundary: ProjectReadBoundary |
     }
   }, [renameContext])
   const [history, setHistory] = useState<{ key: object; state: ProjectReadState<ProjectInstructionRevisionWire[]> } | null>(null)
+  // A durable 202 is a current-actor negative fact. Keep it over slow/failed collection refreshes.
+  const [retired, setRetired] = useState<{ key: object; ids: ReadonlySet<string> } | null>(null)
   const [collection, setCollection] = useState<{ key: object; state: ProjectReadState<Project[]> } | null>(null)
   const [detail, setDetail] = useState<{ key: object; state: ProjectReadState<Project> } | null>(null)
   const refresh = useCallback(() => setRevision((value) => value + 1), [])
+  const retireProject = useCallback((target: string) => {
+    if (!admitted) return
+    setRetired((current) => {
+      const ids = current?.key === identityKey ? new Set(current.ids) : new Set<string>()
+      ids.add(target)
+      return { key: identityKey, ids }
+    })
+  }, [admitted, identityKey])
+  const retiredIds = retired?.key === identityKey ? retired.ids : undefined
 
   useEffect(() => {
     const readFence = readScopeRef.current
@@ -83,12 +95,16 @@ export function useProjectList(preview: boolean, boundary: ProjectReadBoundary |
     }
   }, [admitted, key, report401])
 
-  const list: ProjectReadState<Project[]> = !admitted
+  const rawList: ProjectReadState<Project[]> = !admitted
     ? { status: "blocked" }
     : collection?.key === key ? collection.state : { status: "loading" }
+  const list: ProjectReadState<Project[]> = rawList.status === "ready" && retiredIds?.size
+    ? { status: "ready", data: rawList.data.filter((item) => !retiredIds.has(item.id)) }
+    : rawList
+  const projectRetired = projectRef !== undefined && retiredIds?.has(projectRef) === true
   const knownProject = list.status === "ready" ? list.data.find((item) => item.id === projectRef) : undefined
   const detailKey = renameContext
-  const readDetail = admitted && projectRef !== undefined && list.status === "ready" && knownProject === undefined
+  const readDetail = admitted && !projectRetired && projectRef !== undefined && list.status === "ready" && knownProject === undefined
   useEffect(() => {
     const readFence = readScopeRef.current
     if (!readFence || readFence.key !== key) return
@@ -126,7 +142,7 @@ export function useProjectList(preview: boolean, boundary: ProjectReadBoundary |
     return () => { live = false; controller.abort() }
   }, [detailKey, key, projectRef, readHistory, report401])
 
-  const current: ProjectReadState<Project> = !admitted || projectRef === undefined
+  const current: ProjectReadState<Project> = !admitted || projectRef === undefined || projectRetired
     ? { status: "blocked" }
     : knownProject !== undefined ? { status: "ready", data: knownProject }
       : list.status === "error" ? list
@@ -188,5 +204,5 @@ export function useProjectList(preview: boolean, boundary: ProjectReadBoundary |
 
   const unavailable = list.status === "error" || current.status === "error"
   const context = useMemo(() => ({ generation, subject, admitted, projectRef, preview, unavailable }), [generation, subject, admitted, projectRef, preview, unavailable])
-  return { list, current, instructionHistory, context, refresh, refreshRenamedProject }
+  return { list, current, instructionHistory, context, refresh, retireProject, refreshRenamedProject }
 }
