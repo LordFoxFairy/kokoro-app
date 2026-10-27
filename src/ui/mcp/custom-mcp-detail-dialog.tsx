@@ -102,7 +102,6 @@ export function CustomMcpDetailDialog({
   preparationState = "idle",
   preparationFailure,
   preparationCanResume,
-  preparationCanInspect = false,
   preparationRecoveryReady = true,
   preparationRecoveryError = false,
   onRetryPreparationRecovery,
@@ -115,7 +114,6 @@ export function CustomMcpDetailDialog({
   preparationState?: "idle" | "running" | "unknown" | "rejected" | "completed";
   preparationFailure?: ConnectorCommandFailure | undefined;
   preparationCanResume?: boolean;
-  preparationCanInspect?: boolean;
   preparationRecoveryReady?: boolean;
   preparationRecoveryError?: boolean;
   onRetryPreparationRecovery?: () => void;
@@ -261,8 +259,8 @@ export function CustomMcpDetailDialog({
   // The unknown-Prepare exception authorizes configuration Save only.
   const publicationLocked = locked || preparationState === "unknown";
   const icon = useMcpIconDraft(iconClient, iconBoundary ?? { subject: null, admitted: false, generation: 0 }, locked, configurationSaved, currentServer);
-  const mayResumePreparation = preparationCanResume ?? connectorCommandMayResume(preparationFailure);
-  const prepareLabel = preparationState === "unknown" ? t(mayResumePreparation ? "mcp.retryOriginal" : "mcp.recovery.inspectRequired") : preparationState === "completed" ? t("mcp.creationDone") : t("settings.connect");
+  const mayResumePreparation = preparationCanResume ?? (preparationState !== "unknown" && connectorCommandMayResume(preparationFailure));
+  const prepareLabel = preparationState === "unknown" ? t("mcp.recovery.inspectRequired") : preparationState === "completed" ? t("mcp.creationDone") : t("settings.connect");
   const needsAuthorization = ready && canAuthorizePrivateMcp(connector, server) &&
     preparationState !== "running" && preparationState !== "completed";
   // Reauthorization is a distinct explicit owner operation, not an ACK or a
@@ -280,12 +278,12 @@ export function CustomMcpDetailDialog({
     disabled={trialLocked} onClick={() => { if (!trialLocked) setTrialError(onTrial?.() !== true); }}>
     <Send aria-hidden="true" />试用一下
   </Button> : <><Button type="button" variant={editing ? "outline" : "default"}
-    disabled={managementLocked || busy || !ready || !preparationRecoveryReady || preparationState === "running" || (!needsAuthorization && !mayResumePreparation && !preparationCanInspect)}
+    disabled={!admitted || !preparationRecoveryReady || preparationState === "running" || (!needsAuthorization && (preparationState === "unknown" || preparationState === "completed") ? !mayResumePreparation : managementLocked || busy || !ready || (!needsAuthorization && !mayResumePreparation))}
     onClick={needsAuthorization ? onAuthorize : onPrepare}>
     {busy ? <Spinner aria-hidden="true" /> : needsAuthorization ? <Link2 aria-hidden="true" /> : <Send aria-hidden="true" />}
     {needsAuthorization ? t(connector?.status === "active" ? "thread.reconnect" : "settings.connect") : prepareLabel}
   </Button>{needsAuthorization && preparationState === "unknown" ? <Button type="button" variant="outline"
-    disabled={managementLocked || busy || !preparationRecoveryReady || (!mayResumePreparation && !preparationCanInspect)} onClick={onPrepare}>
+    disabled={!admitted || !preparationRecoveryReady || !mayResumePreparation} onClick={onPrepare}>
     {prepareLabel}
   </Button> : null}</>;
   const recoveryStatus = !preparationRecoveryReady ? <Alert role="status">
@@ -646,8 +644,13 @@ export function CustomMcpDetailDialog({
           </form>
         ) : !server || !connector ? (
           <section className={styles.detail} aria-busy={!pendingError}>
-            <header className={styles.detailHero}><DialogTitle>{t("mcp.details")}</DialogTitle></header>
+            <header className={styles.detailHero}>
+              <DialogTitle>{t("mcp.details")}</DialogTitle>
+              {preparationState === "unknown" || preparationState === "completed" ? <div className={styles.detailActions}>{primaryAction()}</div> : null}
+            </header>
             <div className={styles.detailBody}>
+              {operationStatus}
+              {preparationState === "unknown" || preparationState === "completed" ? recoveryStatus : null}
               {managementStatus}
               <span className="sr-only" role="status">{t(pendingError ? "mcp.loadError" : "mcp.loading")}</span>
             </div>

@@ -1,3 +1,5 @@
+import { mcpPrepareReceiptDataSchema, mcpPrepareReceiptRequest, mcpPrepareReceiptMatches, mcpPrepareReceiptErrorAllowed, mcpPrepareReceiptLookupOnly } from "./mcp-prepare-receipt.schema";
+import { parseMcpConnectorJson } from "./mcp-connector-json";
 import { createMcpProjectPublicationClient, type McpProjectPublicationClient } from "./mcp-project-publication-client";
 import { createMcpIconClient, type McpIconClient } from "./mcp-icon-client";
 import { type McpIconOperation, mcpIconSaveMatches } from "./mcp-icon.schema";
@@ -624,7 +626,8 @@ async function requestMcpConnector<T extends ZodTypeAny>(
     | "connectors"
     | "connector"
     | "providers"
-    | "provider",
+    | "provider"
+    | "prepareReceipt",
   path: string,
   schema: T,
   init?: RequestInit,
@@ -635,6 +638,7 @@ async function requestMcpConnector<T extends ZodTypeAny>(
     ["connectors", "connector", "providers", "provider", "server"].includes(
       operation,
     );
+  const boundedRead = allowCooldown || operation === "prepareReceipt";
   const deadlineAt = performance.now() + MCP_CONNECTOR_TIMEOUT_MS;
   const deadline = new AbortController();
   const timer = setTimeout(
@@ -653,14 +657,14 @@ async function requestMcpConnector<T extends ZodTypeAny>(
     for (let attempt = 0; ; attempt += 1) {
       response = undefined;
       try {
-        if (allowCooldown) joined.throwIfAborted();
+        if (boundedRead) joined.throwIfAborted();
         const pendingResponse = fetch(`${HUB_BASE}${path}`, {
           cache: "no-store",
           redirect: "error",
           ...init,
           signal: joined,
         });
-        response = allowCooldown
+        response = boundedRead
           ? await mcpReadWithinBudget(pendingResponse, joined, (late) => {
               void late.body?.cancel().catch(() => undefined);
             })
@@ -705,7 +709,7 @@ async function requestMcpConnector<T extends ZodTypeAny>(
         let size = 0;
         try {
           for (;;) {
-            const part = allowCooldown
+            const part = boundedRead
               ? await mcpReadWithinBudget(reader.read(), joined)
               : await reader.read();
             if (part.done) break;
@@ -724,6 +728,8 @@ async function requestMcpConnector<T extends ZodTypeAny>(
           reader.releaseLock();
         }
         joined.throwIfAborted();
+        if (operation === "prepareReceipt" && declared !== null && Number(declared) !== size)
+          throw new HubClientError("parse", "truncated Prepare receipt response", null, response.status);
         const bytes = new Uint8Array(size);
         let offset = 0;
         for (const chunk of chunks) {
@@ -732,7 +738,8 @@ async function requestMcpConnector<T extends ZodTypeAny>(
         }
         let raw: unknown;
         try {
-          raw = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+          const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+          raw = operation === "prepareReceipt" ? parseMcpConnectorJson(text) : JSON.parse(text);
         } catch (error) {
           throw new HubClientError(
             "parse",
@@ -772,7 +779,7 @@ async function requestMcpConnector<T extends ZodTypeAny>(
             : operation === "server"
               ? "connector"
               : operation;
-        const errorAllowed = authorizationOperation
+        const errorAllowed = operation === "prepareReceipt" ? mcpPrepareReceiptErrorAllowed(response.status, raw) : authorizationOperation
           ? mcpConnectorErrorAllowed("authorization", response.status, parsed.data)
           : mcpConnectorErrorAllowed(
               connectorOperation as
@@ -1007,6 +1014,13 @@ export type HubClient = {
     signal?: AbortSignal,
   ) => Promise<McpPrivateServer>;
   preparePrivateMcpServer?: (
+    serverId: string,
+    expectedStateVersion: string,
+    key: string,
+    signal?: AbortSignal,
+  ) => Promise<McpPrivateServerPrepare>;
+  /** Read-only original Prepare result; transport is paired only with its formal private artifact. */
+  getMcpPrepareReceipt?: (
     serverId: string,
     expectedStateVersion: string,
     key: string,
@@ -1302,6 +1316,15 @@ export function createHubClient(): HubClient {
           throw new HubClientError("parse", "MCP preparation ACK binding mismatch", null, null);
         return result;
       }),
+    getMcpPrepareReceipt: async (serverId, expectedStateVersion, key, signal) => {
+      if (!mcpPrepareReceiptLookupOnly()) throw new HubClientError("parse", "Prepare receipt policy mismatch", null, null);
+      const request = mcpPrepareReceiptRequest(serverId, expectedStateVersion, key);
+      const result = await requestMcpConnector("prepareReceipt", `/mcp/servers/${encodeURIComponent(request.serverId)}/prepare-receipt?expected_state_version=${encodeURIComponent(request.version)}`,
+        mcpPrepareReceiptDataSchema, { method: "GET", headers: { "Idempotency-Key": request.key } }, signal);
+      if (!mcpPrepareReceiptMatches({ data: result }, request.serverId, request.version))
+        throw new HubClientError("parse", "Prepare receipt ACK binding mismatch", null, null);
+      return result.completed;
+    },
     updatePrivateMcpServer: async (serverId, input, key, signal) => {
       const id = mcpConnectorIdSchema.parse(serverId), body = mcpPrivateServerUpdateInputSchema.parse(input);
       const result = await requestMcpConnector("updateServer", `/mcp/servers/${encodeURIComponent(id)}`, mcpPrivateServerUpdateSchema,

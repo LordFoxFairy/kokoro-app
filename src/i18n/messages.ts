@@ -1301,7 +1301,7 @@ export const zh = {
   "connectorCatalog.beta": "Beta",
   "connectorCatalog.customApiCreateTitle": "添加自定义 API",
   "connectorCatalog.customApiCreateDescription":
-    "使用自定义 API 连接器来整合任何支持密钥或令牌授权的外部服务。",
+    "使用自定义 API 连接器集成任何支持密钥或令牌授权的外部服务。",
   "connectorCatalog.customApiClose": "关闭新增自定义 API",
   "connectorCatalog.name": "名称",
   "connectorCatalog.namePlaceholder": "我的自定义 API",
@@ -1315,7 +1315,7 @@ export const zh = {
   "connectorCatalog.notes": "备注",
   "connectorCatalog.optional": "（可选）",
   "connectorCatalog.notesPlaceholder":
-    "提供 API 文件或说明，以告知 Kokoro 如何及何时使用此 API",
+    "提供 API 文档或说明，以告知 Kokoro 如何及何时使用此 API",
   "connectorCatalog.secrets": "密钥",
   "connectorCatalog.environmentVariables": "（环境变量）",
   "connectorCatalog.secretName": "密钥名称",

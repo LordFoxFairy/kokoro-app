@@ -1,0 +1,9 @@
+{
+  "owner": "kokoro-bff",
+  "owner_commit": "6557f1895d4e1a4f6d2ad9e9e37ca4fc18371d45",
+  "source_path": "contract/openapi/browser/v1/mcp-prepare-receipt.json",
+  "source_sha256": "ad1f842626677c97ee3734aff3663f296cc9c58ccfe886ae116abf8f8b991810",
+  "profile": "mcp-prepare-receipt-lookup",
+  "profile_version": "1.0.0",
+  "candidate": false
+}

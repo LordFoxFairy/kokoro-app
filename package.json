@@ -16,7 +16,7 @@
     "cf:typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "next typegen && tsc --noEmit",
-    "contract": "pnpm contract:check:bff-project-pins && pnpm contract:check:bff-project-mcp-recommendations && pnpm contract:check:bff-project-resource && pnpm contract:check:bff-tool-display && pnpm contract:check:bff-mcp-server-icon && pnpm contract:check:bff-mcp-project-publication && pnpm contract:check:bff-public-skill-list && pnpm contract:check:bff-connector-command-errors && pnpm contract:check:bff-archived-tasks && pnpm contract:check:bff-shared-tasks && pnpm contract:check:bff-account-profile && pnpm contract:check:bff-account-sessions && pnpm contract:check:bff-team && pnpm contract:check:bff-agent-failure && vitest run contract tests/contract",
+    "contract": "pnpm contract:check:bff-mcp-prepare-receipt && pnpm contract:check:bff-project-pins && pnpm contract:check:bff-project-mcp-recommendations && pnpm contract:check:bff-project-resource && pnpm contract:check:bff-tool-display && pnpm contract:check:bff-mcp-server-icon && pnpm contract:check:bff-mcp-project-publication && pnpm contract:check:bff-public-skill-list && pnpm contract:check:bff-connector-command-errors && pnpm contract:check:bff-archived-tasks && pnpm contract:check:bff-shared-tasks && pnpm contract:check:bff-account-profile && pnpm contract:check:bff-account-sessions && pnpm contract:check:bff-team && pnpm contract:check:bff-agent-failure && vitest run contract tests/contract",
     "contract:generate:bff-agent-failure": "node scripts/generate-bff-agent-failure.mjs --write",
     "contract:generate:bff-team": "node scripts/generate-bff-team-client.mjs --write",
     "contract:check:bff-agent-failure": "node scripts/generate-bff-agent-failure.mjs --check",
@@ -53,7 +53,9 @@
     "contract:check:bff-project-resource": "node scripts/generate-bff-project-resource.mjs --check",
     "test:project-mcp-recommendations": "vitest run tests/contract/project-mcp-recommendations.test.ts tests/hub/project-mcp-recommendations-client.test.ts tests/app/project-mcp-recommendations-proxy.integration.test.ts",
     "contract:generate:bff-project-pins": "node scripts/generate-bff-project-pins.mjs --write",
-    "contract:check:bff-project-pins": "node scripts/generate-bff-project-pins.mjs --check"
+    "contract:check:bff-project-pins": "node scripts/generate-bff-project-pins.mjs --check",
+    "contract:generate:bff-mcp-prepare-receipt": "node scripts/generate-bff-mcp-prepare-receipt.mjs --write",
+    "contract:check:bff-mcp-prepare-receipt": "node scripts/generate-bff-mcp-prepare-receipt.mjs --check"
   },
   "dependencies": {
     "@ag-ui/core": "0.0.59",

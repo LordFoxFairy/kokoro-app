@@ -1,3 +1,18 @@
+## Prepare completed 只读恢复 （2026-10-27，正式原件消费者）
+
+本节取代旧 Prepare inspection→POST replay 的恢复约定；其它 Register／Update／发布和通用错误恢复不变。正式 BFF `6557f1895d4e1a4f6d2ad9e9e37ca4fc18371d45` 的独立私有原件 `contract/openapi/browser/v1/mcp-prepare-receipt.json` 固定 SHA256 `ad1f842626677c97ee3734aff3663f296cc9c58ccfe886ae116abf8f8b991810`，由具名 generator 派生 closed schema、policy 与 error tuple，public 与其它 private pin 不变。owner 边界如下：
+
+- BFF：`GET /browser/v1/mcp/servers/{id}/prepare-receipt?expected_state_version=<原CAS>`，携原 `Idempotency-Key`，只读原结果；不触发 Prepare、外部 I/O、重试、新 key 或 CAS rebase。
+- App 同源入口：`GET /api/hub/mcp/servers/{id}/prepare-receipt?expected_state_version=<原CAS>`。只允许该精确 GET 使用原 key header；query 必填且唯一、合法原 CAS，无额外身份／query/body，无 body／Content-Length／Transfer-Encoding。其它 GET 禁 Idempotency-Key 的原规则不放宽，不把 GET 归类成 mutation 或伪造 JSON body。
+- 沿原 Product Session 当前准入及受信身份映射到 BFF；显式转发已验证原 key、仅该 query，保原 no-store、10秒 admission→完整 EOF 总预算、有界响应、fatal UTF-8／重复键拒绝、取消／迟到与安全错误映射。读取失败不能自动 fallback POST。
+- 仅 `data.completed` 承载原 Prepare ACK且 `replayed=true`，严格验证 closed shape、原 server/connector、原 CAS/key 所定位命令和 ACK 内部一致性。复用原 Prepare 的历史 replay 校验，不把历史 ACK 当 fresh Current，不因 current CAS 已前进而替换原 query CAS；不扩展成泛 optional transport／宽松 ACK。
+- 不新增 negative/completed=false 的成功分支。missing／expired／旧 failed marker／无可验证终态、非正式 tuple、损坏或不匹配响应全部保真实 unknown；HTTP GET 200、本次 fresh ready 或当前版本都不是原 receipt。
+- 唯有 exact completed＋本地 journal compare-by-key clear 成功才完成原意图；clear失败不重基也不伪完成。历史完成不授当前连接／执行／配置权限，后继 fresh 读取和显式新操作仍走原权限与 CAS。
+
+正式 private policy将 Prepare恢复精确收敛为 lookup_only；App同时替换旧 `prepare_inspection_recovery` 放行路径，不能只改一个按钮，亦不能让既有 same_command fallback产生POST。状态码／code／retryable闭集与该政策必须从同一正式原件生成，保其它原 tuple、旧版本证明与已有公共发行物，生成器校验原件全文 digest、政策及闭集，拒绝字节或语义漂移。
+
+验证须同时覆盖 client＋same-origin route＋命令／全部创建和详情恢复入口：该 GET 只携原 key/query，其它GET仍拒key；零自动POST、严格 completed绑定、历史CAS、body/framing／query重复与缺失、慢 admission/body总预算、取消／主体退休、clear失败、跨tab新key保护；mock 不称正常完成恢复。
+
 ## PROJECT-PIN：正式BFF个人偏好消费 D0（2026-10-27）
 
 唯一完整artifact固定BFF c195d2325ba9c433cc4c64e25e6c67eaf73c47f6／Public28.5／194操作，SHA256 109a2ae063b10699ae52776b09533c5622d906679c093d65730a289206043b1a；同snapshot正规生成，原三private pin不动，test-only完整28.5→28.4逆证再委托旧链。浏览器只新增GET /api/hub/self/project-pins（分页limit/cursor或互斥单project_id）与PUT /api/hub/projects/{id}/pin（closed {is_pinned:boolean}，≤1KiB，无key/CAS/query）。沿现Product Session／部署Domain／same-origin写防护，10秒admission至完整EOF、64KiB响应、取消及静态异常；generated schema核目标、bool/null条件、分页顺序/唯一性与方法fault。pin不授可见权，不改Project DTO。

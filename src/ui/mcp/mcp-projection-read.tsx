@@ -388,8 +388,8 @@ export function McpProjectionRead({
       // those older list facts must not unlock another save or Try.
       setEditor(null);
       setConnectorIntent(current => current?.window === expectedWindow ? {
-        // Retire the old window's inspection proof, not its unknown Prepare
-        // intent/key/CAS. The new facts require an explicit fresh inspection.
+        // Retire the old window, not the unknown Prepare intent/key/CAS.
+        // Its next explicit recovery queries the original receipt only.
         ...current, exact: true, window: {},
         binding: { connectorType: "mcp", ...(current.serverId ? { serverId: current.serverId } : {}) },
         configurationSaved: {},
@@ -776,12 +776,11 @@ export function McpProjectionRead({
           onResumeManagement={() => { if (connectorIntent) void runManagement("editor", connectorIntent.connectorId); }}
           preparationState={preparationState?.kind ?? "idle"}
           preparationFailure={preparationState?.failure}
-          preparationCanResume={connectorIntent.serverId ? preparation.canResume(connectorIntent.serverId, undefined, connectorIntent.window) : false}
-          preparationCanInspect={connectorIntent.serverId ? preparation.canInspect(connectorIntent.serverId) : false}
+          preparationCanResume={connectorIntent.serverId ? preparation.canResume(connectorIntent.serverId) : false}
           preparationRecoveryReady={preparation.recoveryReady()}
           preparationRecoveryError={preparation.recoveryFailed()}
           onRetryPreparationRecovery={() => { void preparation.restore({ subject: identity, admitted, generation: readGeneration }); }}
-          actionId={preparationState?.kind === "running" || preparationState?.inspection === "running" ? connectorIntent.connectorId : actionId}
+          actionId={preparationState?.kind === "running" ? connectorIntent.connectorId : actionId}
           actionError={actionError || managementState?.kind === "rejected" || privateAuthorization.error}
           authorizationBusy={privateAuthorization.busy}
           onAuthorize={() => {
@@ -832,24 +831,23 @@ export function McpProjectionRead({
             return true;
           } })}
           onPrepare={() => {
-            if (!editor?.server || !admitted || ownerRef.current !== owner || !preparation.available) return;
-            const target = { serverId: editor.server.server_id, connectorId: editor.connector.connector_id,
-              version: editor.server.state_version };
+            if (!admitted || ownerRef.current !== owner || !preparation.available || !connectorIntent.serverId) return;
+            const serverId = connectorIntent.serverId, connectorId = connectorIntent.connectorId;
             const window = editorWindow.current;
             if (!window || window.intent !== connectorIntent.window) return;
             const boundary = { subject: identity, admitted, generation: readGeneration };
             const current = () => ownerRef.current === owner && editorWindow.current === window;
+            const pending = preparation.getSnapshot().find(item => item.serverId === serverId && item.connectorId === connectorId);
+            const recovering = pending?.kind === "unknown" || pending?.kind === "completed";
+            if (!recovering && (!editor?.server || editor.server.server_id !== serverId || editor.connector.connector_id !== connectorId)) return;
             setActionError(false);
-            if (preparation.canInspect(target.serverId) && !preparation.canResume(target.serverId, window.controller.signal)) {
-              void preparation.inspect(target.serverId, target.connectorId, boundary, window.controller.signal, window.intent).then(inspected => {
-                if (current() && !inspected) setActionError(true);
-              }).catch(() => { if (current()) setActionError(true); });
-              return;
-            }
-            void preparation.prepare(target, boundary, window.controller.signal).then(confirmed => {
+            const result = recovering
+              ? preparation.resume(serverId, connectorId, boundary, window.controller.signal)
+              : preparation.prepare({ serverId, connectorId, version: editor!.server!.state_version }, boundary, window.controller.signal);
+            void result.then(confirmed => {
               if (!current()) return;
-              if (confirmed) { preparation.finish(target.serverId, boundary); resetEditor(); }
-              else if (preparation.getSnapshot().find(item => item.serverId === target.serverId)?.kind !== "unknown") setActionError(true);
+              if (confirmed && preparation.finish(serverId, boundary)) resetEditor();
+              else if (preparation.getSnapshot().find(item => item.serverId === serverId)?.kind !== "unknown") setActionError(true);
             }).catch(() => { if (current()) setActionError(true); });
           }}
           onDisconnect={() => {

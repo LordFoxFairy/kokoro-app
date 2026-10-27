@@ -37,9 +37,12 @@ export function useMcpServerCreation(flow: McpServerCreationFlow, boundary: Proj
       const snapshot = flow.getSnapshot(), facts = snapshot.facts;
       const publish = snapshot.publishRequested;
       if (publish && !onPublish) return;
-      if (!facts) return;
-      const target = Object.freeze({ serverId: facts.server.server_id, connectorId: facts.connector.connector_id, providerKey: facts.connector.provider_key });
-      rememberCreatedMcpDetail(target, flow.client, boundary, facts);
+      const recovered = flow.getPreparationCompletion(scope);
+      if (!facts && !recovered) return;
+      const target = Object.freeze(recovered ?? { serverId: facts!.server.server_id, connectorId: facts!.connector.connector_id, providerKey: facts!.connector.provider_key });
+      // A historical completed ACK grants only a locator. Only fresh Current facts
+      // may seed the existing detail handoff; failed reads never borrow the receipt.
+      if (facts) rememberCreatedMcpDetail(target, flow.client, boundary, facts);
       if (!(snapshot.intent === "configure" ? flow.finishConfiguration(scope) : publish ? flow.finishRegistration(scope) : flow.finish(scope))) { retireCreatedMcpDetail(target); return; }
       publishing.current = publish;
       completionTarget.current = target;
@@ -57,7 +60,7 @@ export function useMcpServerCreation(flow: McpServerCreationFlow, boundary: Proj
   });
   const requestAuthorization = async (signal: AbortSignal) => {
     const facts = await flow.refresh(scope, true);
-    if (signal.aborted || !current() || flow.getSnapshot().unknown || !facts ||
+    if (signal.aborted || !current() || !flow.canAuthorize(scope) || !facts ||
       facts.connector.status === "revoked" || facts.server.prepare_status !== "needs_oauth" ||
       !flow.client.beginMcpConnectorAuthorization)
       throw new Error("MCP authorization target retired");
@@ -73,14 +76,16 @@ export function useMcpServerCreation(flow: McpServerCreationFlow, boundary: Proj
       expiresAt: started.authorization.expires_at };
   };
   const authorize = async () => {
-    if (!current() || flow.getSnapshot().busy || flow.getSnapshot().unknown || completion !== "idle") return;
+    if (!current() || !flow.canAuthorize(scope) || completion !== "idle") return;
     setPopupError(null);
     try {
       await startPopup(requestAuthorization);
     } catch (error) { if (current()) setPopupError({ scope, failure: connectorCommandFailure("mcp", error) }); }
   };
+  const mayResume = state.unknown === "prepare" ? flow.canResume(scope) : connectorCommandMayResume(state.failure);
+  const recoveredPreparation = flow.getPreparationCompletion(scope);
   const saveConfiguration = async (input?: McpPrivateServerRegistrationInput) => {
-    if (!current() || state.busy || completion !== "idle" || !connectorCommandMayResume(state.failure)) return;
+    if (!current() || state.busy || completion !== "idle" || !mayResume) return;
     if (flow.getSnapshot().publishRequested && !onPublish) return;
     setPopupError(null);
     // A retained command keeps its original intent, including an old unknown Prepare.
@@ -90,7 +95,7 @@ export function useMcpServerCreation(flow: McpServerCreationFlow, boundary: Proj
     if (confirmed && current()) await done();
   };
   const saveForPublication = async (input?: McpPrivateServerRegistrationInput) => {
-    if (!onPublish || !current() || state.busy || completion !== "idle" || !connectorCommandMayResume(state.failure)) return;
+    if (!onPublish || !current() || state.busy || completion !== "idle" || !mayResume) return;
     setPopupError(null);
     const confirmed = state.unknown ? await flow.retry(scope)
       : state.registered ? Boolean(await flow.refresh(scope, true))
@@ -103,8 +108,9 @@ export function useMcpServerCreation(flow: McpServerCreationFlow, boundary: Proj
     cancel: () => { if (committed.current === scope) { flow.dismiss(scope); committed.current = null; onCancel(); } },
     error: state.error || popupError?.scope === scope || completion === "retry",
     failure: state.failure ?? (popupError?.scope === scope ? popupError.failure : undefined),
-    mayResume: connectorCommandMayResume(state.failure),
-    ready: state.facts?.server.prepare_status === "ready" && state.facts.connector.status === "active" && state.facts.connector.enabled,
-    needsOAuth: state.facts?.server.prepare_status === "needs_oauth",
+    mayResume,
+    // This ready flag is the form's Done affordance, not runtime/Connection authority.
+    ready: Boolean(recoveredPreparation) || state.facts?.server.prepare_status === "ready" && state.facts.connector.status === "active" && state.facts.connector.enabled,
+    needsOAuth: !recoveredPreparation && flow.canAuthorize(scope),
   };
 }

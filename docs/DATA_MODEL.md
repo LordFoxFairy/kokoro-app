@@ -1,3 +1,17 @@
+## Prepare completed 只读恢复 D0（2026-10-27，无新增 Schema）
+
+本节替代旧“日志恢复后 fresh 核验并授权原 POST 重放”的生命周期，其余非秘密 Prepare journal 与 owner 边界保留。Platform 拥有原 completed receipt；App 不存 owner事实镜像、成功缓存或 negative 终态，不新增 SQL、Redis、数据库、浏览器 store、版本迁移或 pending/resuming 实体。正式私有 artifact 的固定 commit/digest 与生成入口见 API_CONTRACT；原 failure codec 及 journal Schema 不变。
+
+- 原 IndexedDB `kokoro-mcp-preparation` v1／`intents`／subject index不变，key=`JSON.stringify([verifiedSubject,serverId])`；record仍 closed `{subject,target:{serverId,connectorId,version},key,failure?}`。version是冻结原CAS，不是最近GET或配置保存后的版本。未知没有自动TTL清退，旧failed marker查不到completed也不清。
+- 首次明确连接仍先原子reserve并commit后才POST；已有record／reload只恢复unknown。Prepare entry仅RAM单调记“后续只查询”，restored或unknown必为真，首次execute开始即封闭后续POST；不持久化该flag，因为重载一律query-only。无secret、URL、headers、OAuth／工具原文或receipt正文入日志。
+- 查询前和可信结果清退前核当前actor/admission/generation/window/signal、原entry及 `samePreparationRecord`；跨tab当前K变成K2时旧K不得采用K2、改原CAS、覆盖failure或清退K2。clear事务仍比较subject/server/connector/version/key，缺失只沿既有幂等清退语义处理，不由缺失本身证明业务完成。
+- exact completed ACK先严格验证，再 `recovery.complete(originalRecord)`；只有事务commit成功才经原ConnectorCommand完成，finish只收口该原entry。clear失败保unknown／原key/body/CAS，后续显式恢复仍GET；取消／真正owner退休保原未知日志，旧请求不关闭新窗。
+- 原failure只按正式profile单调收紧；same_command不降低query-only，missing／expired／旧failed也不变成“确定没执行”。删除旧inspection proof/window授权POST的结构，不保双恢复日志或别名。
+- 严格原 POST ACK／receipt ACK 且 clear 成功后只保 RAM 非秘密 server/connector/provider locator，服务显式 Done 定位，不保 receipt 正文或授权限。provider 冲突不因后继读失败抹去；entry／actor／K2 围栏阻断旧定位，clear 失败不暴露 locator。
+- 历史receipt不写当前Server/Connector投影，不改变其state_version、权限或availability；只触发原reader独立fresh重读。首次明确拒绝且从未不确定的原安全清退语义保留，不将其扩大到unknown后的错误。
+
+验收复用真实IDB／跨tab事务入口，覆盖completed与clear原子收口、clear失败／损坏存储、K→K2／迟到原ACK、无自动POST、原failed日志保持及reload恢复。设计门与正式 artifact 已交付；正常资源与Git仍由Root独占，源码／隔离验证不代表正常恢复已验收。
+
 ## 2026-10-27 Public28.3：仅展示闭集，无存储模型变化
 
 当前消费者固定正式BFF `b2b9eb1eac4a3f0b0cd4099ed59cbf756f14124c`／Public28.3.0／192操作，完整 canonical SHA256 `85a1b51cd151581b51d7ea7992d85e04462c03fafb36d0527e1df352dd85223a`。两项文件工具类别沿既有activity/segment身份、status、ordered坐标及恢复规则保存与呈现，不新增表、字段、浏览器存储或第二套wire；旧generic历史不改写。闭集由同一generated tuple消费，不复制业务DTO，三个独立私有pin保持。

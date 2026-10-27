@@ -1,3 +1,31 @@
+## Prepare completed 只读恢复 （2026-10-27，正式原件消费者）
+
+**裁决／停止线。** 本节取代下方旧 Prepare“fresh 双 GET 核验→proof→原 POST 重放”设计，仅影响未知 Prepare 的恢复；首次明确连接仍用原 POST。Platform 是原 Prepare receipt 的唯一 owner，BFF 正式发布 `GetPersonalMcpPrepareReceipt` 的 browser-private GET，App 只查原命令结果。D0 已经 Root 审查通过；正式 BFF `6557f1895d4e1a4f6d2ad9e9e37ca4fc18371d45` 私有原件 SHA256 `ad1f842626677c97ee3734aff3663f296cc9c58ccfe886ae116abf8f8b991810` 是新增 generated policy/schema 的唯一源，现公共及其它私有 pin 不变。
+
+**沿既有命令而非另建恢复实体。** 复用 `mcp-preparation-commands.ts` 的 entry、冻结 target/key、`ConnectorCommand.retry→execute→complete`、单 flight、actor/generation/window/signal 围栏及 `samePreparationRecord`。Prepare entry 增一个 RAM 单调“仅查询”标记：restored／发现 unknown 时立即成立；首次 execute 开始即封闭后续 POST 分支，故前置检查失败、超时／取消及重开后的重试也不再写。唯一初始明确提交可 POST，之后同 key 的 execute 永远 receipt GET；日志重载天然仅查询，无新持久字段、pending/resuming 实体或 generic 外部 confirm API。`connector-command.ts` 生命周期不重写，不改变其它命令恢复。
+
+**一次显式恢复收口。** commands 的旧 inspect／fresh 双读／inspection proof 与放行 POST 的分支整体删除或替换成同一 receipt 查询；创建 flow 的 unknown Prepare、详情原 inspect／resume、恢复按钮都走它，不留双恢复或“核验后再按一次 POST”。查询使用日志原 server/connector/CAS/key，不采纳详情当前 CAS；`same_command` 也不授权未知 Prepare POST，精确 `lookup_only` 能力以正式 profile 为准。`canPrepare` 当前仅表达 management 写互锁：保它保护首次 POST，但不把该写锁、当前 CAS 相等或当前 ready 当成只读恢复的前提；当前主体准入／精确 entry／窗口与取消围栏仍必需。
+
+**完成与当前态分离。** 只有严格校验原 `data.completed` ACK、`replayed=true`、原 exact server/connector/命令绑定且日志 compare-by-key 清退成功，既有 command 才 completed／允许 finish；clear 失败仍 unknown，下一次显式动作仍仅查询。历史 ACK 可落后于现在的 Server CAS，只证明原请求完成；不得覆盖 current projection、回填旧 ready、解锁执行或调用新的 Prepare/OAuth/Connect。后继 fresh 投影沿原 reader 单独重读；读取失败或当前已断开不推翻原 receipt，也不再要求第二次“重试 POST”才能结束恢复。关闭／新窗口／主体或代际退休时沿既有生命周期丢弃旧 continuation，不让旧查询导航／关闭新窗；已开始的 journal 事务只清原 tuple，绝不碰后继 key。
+
+**后继定位不授权限。** 严格原 POST ACK 或 receipt ACK 经精确 journal clear 成功后，entry 仅 RAM 保存 server/connector/provider 非秘密 locator，显式 Done 可定位原资源，不把历史 ACK 写回 Current 或授执行权。初次 POST 的 fresh needs_oauth 保留原显式 OAuth 后继，不由 locator 冒 ready 或跳授权；仅 ready/needs_oauth ACK 可保存 locator，pending/failed 无资格。已观察到的新 provider/target 冲突即使随后读取失败也不恢复旧定位；actor/代际/新 key/退休 entry 保护保持。晚到 ACK 可结算原 key，但不自动导航新窗口；clear 失败不暴露 locator。
+
+**已批准实施落点。**
+
+| 现落点 | 仅本需求增量 |
+| --- | --- |
+| `src/ui/mcp/mcp-preparation-commands.ts` | 单调 query-only 分支、删旧 inspection proof、统一恢复／清退 |
+| `src/ui/mcp/mcp-preparation-recovery.ts` | 保原 codec、currentRecord／samePreparationRecord 与事务；仅正式 policy 要求的窄适配 |
+| `src/ui/mcp/connector-command-failure.ts` | Prepare 专属正式 lookup-only 判断；不放宽 generic same_command |
+| `src/ui/mcp/mcp-server-creation-flow.ts`、`use-mcp-server-creation.ts` | unknown Prepare 一次 GET；解除 generic mayResume 对合法 lookup 的误拦，Register 恢复不变 |
+| `src/ui/mcp/mcp-projection-read.tsx`、`custom-mcp-detail-dialog.tsx` | 旧 inspect／resume 共一只读动作，区分读恢复与首次写互锁；当前权限仍 fresh 决定 |
+| `src/hub/client.ts`、`mcp-prepare-receipt.schema.ts`、`src/app/api/hub/[...path]/route.ts` | 正式同源 GET／严格历史 ACK decoder、方法专属 query/header 例外 |
+| 原 private profile／生成器及相关 contract、hub、proxy、preparation lifecycle/recovery/creation UI 测试 | 只沿正式原件生成；旧父证明／其它 policy 不变；management client 类型仅确需时承接 GET 能力 |
+
+`ConnectorCommandProvider` 仍唯一 actor/client owner，既有 journal 与 projection 不复制；其它 API/UI 与 i18n 不变；MCP INDEX 只补此恢复边界入口说明。
+
+**验收。** 先 RED 覆盖未知／restored／原同 key/CAS在 current CAS 前进后仍 GET，completed＋clear 成功仅一次完成；missing／expired／旧 failed／坏 ACK／错误绑定／clear失败继续 unknown且零POST。补迟到／换actor/generation/window、跨tab K→K2、并发查询、首次 POST 仍仅一次、创建和详情全入口、正式 error tuple/profile生成确定性与同源 GET key例外／总预算／取消；原 key/body、秘密与权限边界断言保留。Root 独占正常资源、浏览器与 Git，源码或 mock 不冒真实恢复验收。
+
 ## PROJECT-PIN：正式BFF个人偏好消费 D0（2026-10-27）
 
 全局个人pin由既有BFF Project owner拥有，复用正式 PROJECT-PIN-D0；App只持当前准入主体的RAM投影与每project串行pending，不新增数据owner、Schema、localStorage或通用偏好框架。AppFrame挂载层持collection，不按projectRef/URL清空；旧actor/准入及不可见Project立即退休。已读分页按owner顺序展示Pinned区，未耗尽页不证明缺席；菜单按需精确GET确认目标。PUT未知仅显式精确GET观察当前值，不自动重放、不冒原命令receipt；原项目编辑/删除/unknown/key/body链不变。

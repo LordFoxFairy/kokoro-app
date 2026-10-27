@@ -19,7 +19,7 @@ export type McpManagementSummary = Readonly<Locator & {
   operation: McpManagementIntent["operation"]; kind: ConnectorCommandState["kind"]; failure?: ConnectorCommandState["failure"];
 }>;
 type Entry = { locator: Locator; operation: McpManagementIntent["operation"]; command: ReturnType<typeof createConnectorCommand<McpManagementIntent>>; release: () => void; unsubscribe: () => void };
-type Client = Pick<HubClient, "updatePrivateMcpServer" | "deletePrivateMcpServer" | "updateMcpConnector" | "setMcpConnectorEnabled" | "removeMcpConnector" | "preparePrivateMcpServer" | "getPrivateMcpServer" | "getMcpConnector">;
+type Client = Pick<HubClient, "updatePrivateMcpServer" | "deletePrivateMcpServer" | "updateMcpConnector" | "setMcpConnectorEnabled" | "removeMcpConnector" | "preparePrivateMcpServer" | "getPrivateMcpServer" | "getMcpConnector" | "getMcpPrepareReceipt">;
 const cleanup = (operation: McpManagementIntent["operation"]) => operation === "disconnect" || operation === "delete_server";
 
 function freezeIntent(intent: McpManagementIntent): McpManagementIntent {
@@ -70,12 +70,12 @@ function createManagement(options: { client: Client; preparation: McpPreparation
     boundary = { ...value }; for (const entry of entries.values()) entry.command.bind(boundary); publish();
   };
   // Configuration Save is independent of an unresolved connection attempt.
-  // Only unknown Prepare permits Update; an active attempt/inspection and an
+  // Only unknown Prepare permits Update; an active attempt and an
   // unreadable recovery journal still protect the current owner observation.
   const preparationBlocks = (entry: Pick<Entry, "operation" | "locator">) => !cleanup(entry.operation) &&
     (!options.preparation.recoveryReady() || options.preparation.getSnapshot().some(item =>
       item.connectorId === entry.locator.connectorId && item.kind !== "rejected" &&
-      !(entry.operation === "update_server" && item.kind === "unknown" && item.inspection !== "running")));
+      !(entry.operation === "update_server" && item.kind === "unknown")));
 
   const run = async (entry: Entry, value: ProjectReadBoundary, signal: AbortSignal | undefined, input?: McpManagementIntent) => {
     if (!matches(value) || signal?.aborted || entries.get(entry.locator.connectorId) !== entry || preparationBlocks(entry)) return false;

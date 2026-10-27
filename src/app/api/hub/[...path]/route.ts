@@ -1,3 +1,4 @@
+import { mcpPrepareReceiptRequest, mcpPrepareReceiptMatches, mcpPrepareReceiptErrorAllowed, mcpPrepareReceiptLookupOnly } from "@/hub/mcp-prepare-receipt.schema";
 import { proxyProjectPins } from "@/lib/server/project-pins";
 import { proxyProjectMcpRecommendations } from "@/lib/server/project-mcp-recommendations";
 import { proxyMcpServerIcon } from "@/lib/server/mcp-server-icon";
@@ -428,12 +429,16 @@ async function proxyMcpConnector(
     );
   const url = new URL(request.url);
   const iconOperation = mcpIconOperation(path, request.method);
+  const receiptPath = path.length === 4 && path[1] === "servers" && path[3] === "prepare-receipt";
+  if (receiptPath && request.method !== "GET") return fail(405, "invalid_mcp_personal_request");
+  const receiptOperation = receiptPath && request.method === "GET";
   const operation:
     | McpConnectorOperation
     | McpConnectorAuthorizationOperation
     | McpPrivateServerOperation
     | McpIconOperation
-    | undefined = iconOperation ?? (
+    | "prepareReceipt"
+    | undefined = receiptOperation ? "prepareReceipt" : iconOperation ?? (
     path.length === 3 &&
       path[1] === "servers" &&
       path[2] === "import" &&
@@ -542,6 +547,7 @@ async function proxyMcpConnector(
     "providers",
     "provider",
     "server",
+    "prepareReceipt",
     "getIcon",
   ].includes(operation);
   const requiresIdempotency = [
@@ -553,6 +559,7 @@ async function proxyMcpConnector(
     "registerServer",
     "importJson",
     "prepareServer",
+    "prepareReceipt",
     "updateServer",
     "deleteServer",
     "beginIcon", "completeIcon", "cancelIcon", "importIcon",
@@ -570,11 +577,12 @@ async function proxyMcpConnector(
       "beginAuthorization",
       "reconnectAuthorization",
     ].includes(operation) ||
-    ["prepareServer", "updateServer", "deleteServer", "getIcon", "completeIcon", "cancelIcon"].includes(operation)
+    ["prepareServer", "prepareReceipt", "updateServer", "deleteServer", "getIcon", "completeIcon", "cancelIcon"].includes(operation)
       ? path[2]
       : undefined;
   const query = url.searchParams;
   const allowed =
+    operation === "prepareReceipt" ? ["expected_state_version"] :
     operation === "connectors"
       ? ["status", "limit", "cursor"]
       : operation === "connections"
@@ -618,6 +626,13 @@ async function proxyMcpConnector(
   )
     return fail(400, "invalid_mcp_personal_request");
   const key = request.headers.get("idempotency-key");
+  let receiptVersion: string | undefined;
+  if (receiptOperation) {
+    if (!mcpPrepareReceiptLookupOnly() || query.getAll("expected_state_version").length !== 1 ||
+      ["content-type", "content-encoding", "content-length", "transfer-encoding"].some(name => request.headers.has(name))) return fail(400, "invalid_mcp_personal_request");
+    try { receiptVersion = mcpPrepareReceiptRequest(id!, query.get("expected_state_version")!, key!).version; }
+    catch { return fail(400, "invalid_mcp_personal_request"); }
+  }
   if (
     mutation
       ? !sameOriginOk(request) ||
@@ -626,7 +641,7 @@ async function proxyMcpConnector(
           !/^[\x21-\x7e]{1,191}(?![\s\S])/u.test(key ?? "")) ||
         (!requiresIdempotency && key !== null)
       : request.body !== null ||
-        ["content-length", "transfer-encoding", "idempotency-key"].some(
+        ["content-length", "transfer-encoding", ...(receiptOperation ? [] : ["idempotency-key"])].some(
           (name) => request.headers.has(name),
         )
   )
@@ -695,14 +710,15 @@ async function proxyMcpConnector(
       () => undefined,
     );
     signal.throwIfAborted();
+    // Admission consumes the same receipt budget; never create a fresh 1ms owner budget after expiry.
+    if (receiptOperation && performance.now() >= expires) controller.abort();
+    signal.throwIfAborted();
     if (claims === undefined) return fail(503, "iam_admission_unavailable");
     if (claims === null) return fail(401, "session_authentication_required");
     const headers = productBffHeaders(config, claims, requestId);
     headers.set("accept", "application/json");
-    if (mutation) {
-      headers.set("content-type", "application/json");
-      if (requiresIdempotency) headers.set("idempotency-key", key!);
-    }
+    if (mutation) headers.set("content-type", "application/json");
+    if (requiresIdempotency) headers.set("idempotency-key", key!);
     upstream = await within(
       requestWithDomain(
         `${config.bffBaseUrl.replace(/\/+$/u, "")}/browser/v1/${path.map(encodeURIComponent).join("/")}${url.search}`,
@@ -751,6 +767,7 @@ async function proxyMcpConnector(
     try {
       for (;;) {
         const part = await within(reader.read());
+        if (receiptOperation && performance.now() >= expires) controller.abort();
         signal.throwIfAborted();
         if (part.done) break;
         size += part.value.byteLength;
@@ -772,7 +789,8 @@ async function proxyMcpConnector(
     }
     let raw: unknown;
     try {
-      raw = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+      const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+      raw = receiptOperation ? parseMcpConnectorJson(text) : JSON.parse(text);
     } catch {
       return fail(502, "mcp_personal_response_invalid");
     }
@@ -791,7 +809,7 @@ async function proxyMcpConnector(
           : operation;
     const valid =
       upstream.status === expected
-        ? iconOperation ? mcpIconMatches(iconOperation, raw, id, input) : authorization
+        ? receiptOperation ? mcpPrepareReceiptMatches(raw, id!, receiptVersion!) : iconOperation ? mcpIconMatches(iconOperation, raw, id, input) : authorization
           ? mcpConnectorAuthorizationMatches(
               operation as McpConnectorAuthorizationOperation,
               raw,
@@ -814,7 +832,7 @@ async function proxyMcpConnector(
                 query,
                 input,
               )
-        : authorization
+        : receiptOperation ? mcpPrepareReceiptErrorAllowed(upstream.status, raw) : authorization
           ? mcpConnectorErrorAllowed("authorization", upstream.status, raw)
           : mcpConnectorErrorAllowed(
               connectorOperation as McpConnectorOperation,

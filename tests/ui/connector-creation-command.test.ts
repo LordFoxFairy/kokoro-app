@@ -199,7 +199,7 @@ describe("MCP JSON owner-atomic creation command", () => {
 describe("private MCP creation registration and preparation", () => {
   const boundary = { admitted: true, subject: "private-create-actor", generation: 1 }
   const input = { display_name: "Private MCP", server_url: "https://mcp.example.test/private", headers: [{ name: "x-check", value: "fixture-only" }] }
-  const server = (ready = false, version = ready ? "8" : "7") => ({ availability: "unavailable" as const, server_id: "private-server", display_name: "Private MCP", server_url: input.server_url, status: ready ? "registered" as const : "pending" as const, state_version: version, headers: [], transport: "streamable_http" as const, prepare_status: ready ? "ready" as const : "pending_prepare" as const, declarations: [], declarations_available: ready })
+  const server = (ready = false, version = ready ? "8" : "7") => ({ availability: "unavailable" as const, server_id: "private-server", display_name: "Private MCP", server_url: input.server_url, status: ready ? "registered" as const : "pending" as const, state_version: version, headers: [], transport: "streamable_http" as const, prepare_status: ready ? "ready" as const : "pending_prepare" as const, declarations: [], declaration_digest: ready ? "a".repeat(64) : undefined, declarations_available: ready })
   const connector = (ready = false) => ({ availability: "unavailable" as const, connector_id: "private-connector", connector_type: "mcp" as const, provider_key: "private-command", server_id: "private-server", status: ready ? "active" as const : "pending" as const, approved_scopes: [], enabled: ready, state_version: ready ? "8" : "7" })
   const registration = () => ({ server: server(false, "1"), connector: connector(), replayed: false })
   async function setup() {
@@ -209,6 +209,7 @@ describe("private MCP creation registration and preparation", () => {
       registerPrivateMcpServer: vi.fn<NonNullable<HubClient["registerPrivateMcpServer"]>>().mockResolvedValue(registration()),
       getPrivateMcpServer: vi.fn<NonNullable<HubClient["getPrivateMcpServer"]>>(async () => server(ready)), getMcpConnector: vi.fn<NonNullable<HubClient["getMcpConnector"]>>(async () => connector(ready)),
       preparePrivateMcpServer: vi.fn<NonNullable<HubClient["preparePrivateMcpServer"]>>(async () => { ready = true; return { server: server(true), connector: connector(true), declarations: [], replayed: false } }),
+      getMcpPrepareReceipt: vi.fn<NonNullable<HubClient["getMcpPrepareReceipt"]>>(async () => { ready = true; return { server: server(true), connector: connector(true), declarations: [], replayed: true } }),
       beginMcpConnectorAuthorization: vi.fn(),
     }
     const changed = vi.fn(), preparation = createMcpPreparationCommands({ canPrepare: () => true, client: hub, boundary, onConfirmed: changed })
@@ -314,8 +315,9 @@ describe("private MCP creation registration and preparation", () => {
     await flow.refresh(next)
     expect(hub.preparePrivateMcpServer).toHaveBeenCalledOnce()
     expect(await flow.retry(next)).toBe(true)
-    expect(hub.preparePrivateMcpServer.mock.calls[1]?.slice(0, 3)).toEqual(hub.preparePrivateMcpServer.mock.calls[0]?.slice(0, 3))
-    expect(hub.preparePrivateMcpServer.mock.calls[1]?.[1]).toBe("7")
+    expect(hub.getMcpPrepareReceipt.mock.calls[0]?.slice(0, 3)).toEqual(hub.preparePrivateMcpServer.mock.calls[0]?.slice(0, 3))
+    expect(hub.preparePrivateMcpServer).toHaveBeenCalledOnce()
+    expect(hub.getMcpPrepareReceipt.mock.calls[0]?.[1]).toBe("7")
     expect(hub.registerPrivateMcpServer).toHaveBeenCalledOnce()
   })
 
@@ -361,8 +363,9 @@ describe("private MCP creation registration and preparation", () => {
     hub.preparePrivateMcpServer.mockRejectedValueOnce(new Error("lost preparation ACK"))
     expect(await flow.submit(input, scope, "connect")).toBe(false)
     expect(await preparation.prepare({ serverId: "private-server", connectorId: "private-connector", version: "99" }, boundary)).toBe(true)
-    expect(hub.preparePrivateMcpServer.mock.calls[1]?.slice(0, 3)).toEqual(hub.preparePrivateMcpServer.mock.calls[0]?.slice(0, 3))
-    expect(hub.preparePrivateMcpServer.mock.calls[1]?.[1]).toBe("7")
+    expect(hub.getMcpPrepareReceipt.mock.calls[0]?.slice(0, 3)).toEqual(hub.preparePrivateMcpServer.mock.calls[0]?.slice(0, 3))
+    expect(hub.preparePrivateMcpServer).toHaveBeenCalledOnce()
+    expect(hub.getMcpPrepareReceipt.mock.calls[0]?.[1]).toBe("7")
     expect(changed).toHaveBeenCalledTimes(2)
     expect(await flow.refresh(scope)).not.toBeNull()
     expect(flow.finish(scope)).toBe(true)
@@ -420,19 +423,20 @@ describe("private MCP creation registration and preparation", () => {
 
 describe("per-resource MCP preparation command owner", () => {
   const target = { serverId: "one-server", connectorId: "one-connector", version: "1" }
-  const response = (serverId = target.serverId, connectorId = target.connectorId) => ({
-    server: { availability: "unavailable" as const, server_id: serverId, server_url: "https://mcp.example.test/prepare", display_name: "Prepared", status: "registered" as const, state_version: "2", headers: [], transport: "streamable_http" as const, prepare_status: "ready" as const, declarations: [], declarations_available: true },
-    connector: { availability: "unavailable" as const, connector_id: connectorId, connector_type: "mcp" as const, provider_key: "private", server_id: serverId, status: "active" as const, approved_scopes: [], enabled: true, state_version: "2" },
+  const response = (serverId = target.serverId, connectorId = target.connectorId, version = "2") => ({
+    server: { availability: "unavailable" as const, server_id: serverId, server_url: "https://mcp.example.test/prepare", display_name: "Prepared", status: "registered" as const, state_version: version, headers: [], transport: "streamable_http" as const, prepare_status: "ready" as const, declarations: [], declaration_digest: "a".repeat(64), declarations_available: true },
+    connector: { availability: "unavailable" as const, connector_id: connectorId, connector_type: "mcp" as const, provider_key: "private", server_id: serverId, status: "active" as const, approved_scopes: [], enabled: true, state_version: version },
     declarations: [], replayed: false,
   })
   it("independent resources do not block each other and unknown retries keep their own key/version", async () => {
     const call = vi.fn<NonNullable<HubClient["preparePrivateMcpServer"]>>().mockRejectedValueOnce(new Error("lost ACK"))
-      .mockResolvedValueOnce(response("two-server", "two-connector")).mockResolvedValue(response())
-    const commands = createMcpPreparationCommands({ canPrepare: () => true, client: { preparePrivateMcpServer: call }, boundary: admitted, onConfirmed: vi.fn() })
+      .mockResolvedValueOnce(response("two-server", "two-connector", "9")).mockResolvedValue(response())
+    const lookup = vi.fn<NonNullable<HubClient["getMcpPrepareReceipt"]>>().mockResolvedValue({ ...response(), replayed: true })
+    const commands = createMcpPreparationCommands({ canPrepare: () => true, client: { preparePrivateMcpServer: call, getMcpPrepareReceipt: lookup }, boundary: admitted, onConfirmed: vi.fn() })
     expect(await commands.prepare(target, admitted)).toBe(false)
     expect(await commands.prepare({ serverId: "two-server", connectorId: "two-connector", version: "8" }, admitted)).toBe(true)
     expect(await commands.prepare({ ...target, version: "99" }, admitted)).toBe(true)
-    expect(call.mock.calls[2]?.slice(0, 3)).toEqual(call.mock.calls[0]?.slice(0, 3))
+    expect(lookup.mock.calls[0]?.slice(0, 3)).toEqual(call.mock.calls[0]?.slice(0, 3))
     expect(commands.getSnapshot().map(item => item.kind)).toEqual(["completed", "completed"])
     expect(commands.finish("one-server", admitted)).toBe(true)
     expect(commands.getSnapshot().map(item => item.serverId)).toEqual(["two-server"])
@@ -452,15 +456,16 @@ describe("per-resource MCP preparation command owner", () => {
   })
   it("a mismatched connector ACK remains unknown and a StrictMode lease replay preserves the command", async () => {
     const call = vi.fn<NonNullable<HubClient["preparePrivateMcpServer"]>>().mockResolvedValueOnce(response("one-server", "wrong-connector")).mockResolvedValue(response())
+    const lookup = vi.fn<NonNullable<HubClient["getMcpPrepareReceipt"]>>().mockResolvedValue({ ...response(), replayed: true })
     const changed = vi.fn()
-    const commands = createMcpPreparationCommands({ canPrepare: () => true, client: { preparePrivateMcpServer: call }, boundary: admitted, onConfirmed: changed })
+    const commands = createMcpPreparationCommands({ canPrepare: () => true, client: { preparePrivateMcpServer: call, getMcpPrepareReceipt: lookup }, boundary: admitted, onConfirmed: changed })
     const release = commands.retain(admitted)
     expect(await commands.prepare(target, admitted)).toBe(false)
     expect(changed).not.toHaveBeenCalled()
     release(); const retained = commands.retain(admitted); await Promise.resolve()
     expect(await commands.resume(target.serverId, "wrong-connector", admitted)).toBe(false)
     expect(await commands.resume(target.serverId, target.connectorId, admitted)).toBe(true)
-    expect(call.mock.calls[1]?.slice(0, 3)).toEqual(call.mock.calls[0]?.slice(0, 3))
+    expect(lookup.mock.calls[0]?.slice(0, 3)).toEqual(call.mock.calls[0]?.slice(0, 3))
     retained(); await Promise.resolve()
     expect(commands.getSnapshot()).toEqual([])
   })
@@ -468,10 +473,11 @@ describe("per-resource MCP preparation command owner", () => {
     let acknowledge!: (value: ReturnType<typeof response>) => void
     const call = vi.fn<NonNullable<HubClient["preparePrivateMcpServer"]>>()
       .mockImplementationOnce(() => new Promise(resolve => { acknowledge = resolve }))
-      .mockImplementationOnce((_id, _version, _key, signal) => new Promise((_resolve, reject) => {
-        signal?.addEventListener("abort", () => reject(new Error("current wait cancelled by known ACK")), { once: true })
-      }))
-    const commands = createMcpPreparationCommands({ canPrepare: () => true, client: { preparePrivateMcpServer: call }, boundary: admitted, onConfirmed: vi.fn() })
+
+    const lookup = vi.fn<NonNullable<HubClient["getMcpPrepareReceipt"]>>((_id, _version, _key, signal) => new Promise((_resolve, reject) => {
+      signal?.addEventListener("abort", () => reject(new Error("current wait cancelled by known ACK")), { once: true })
+    }))
+    const commands = createMcpPreparationCommands({ canPrepare: () => true, client: { preparePrivateMcpServer: call, getMcpPrepareReceipt: lookup }, boundary: admitted, onConfirmed: vi.fn() })
     const old = commands.prepare(target, admitted)
     commands.bind({ ...admitted, admitted: false, generation: 2 })
     const current = { ...admitted, generation: 2 }; commands.bind(current)
@@ -479,7 +485,7 @@ describe("per-resource MCP preparation command owner", () => {
     acknowledge(response())
     expect(await old).toBe(false)
     expect(await retry).toBe(true)
-    expect(call.mock.calls[1]?.slice(0, 3)).toEqual(call.mock.calls[0]?.slice(0, 3))
+    expect(lookup.mock.calls[0]?.slice(0, 3)).toEqual(call.mock.calls[0]?.slice(0, 3))
     expect(commands.getSnapshot()[0]?.kind).toBe("completed")
   })
 
@@ -797,32 +803,33 @@ describe("MCP typed management and Prepare interlock", () => {
   it("keeps configuration Update blocked by running and completed Prepare", async () => {
     const { createMcpLifecycleCommands } = await import("@/ui/mcp/mcp-management-commands")
     const hub = client(), flow = createMcpLifecycleCommands({ client: hub, boundary: admitted, onConfirmed: vi.fn() })
-    let acknowledge!: (value: { server: typeof server; connector: typeof connector; replayed: boolean }) => void
+    let acknowledge!: (value: Awaited<ReturnType<NonNullable<HubClient["preparePrivateMcpServer"]>>>) => void
     hub.preparePrivateMcpServer.mockImplementationOnce(() => new Promise(resolve => { acknowledge = resolve }))
     const waiting = flow.preparation.prepare({ serverId: server.server_id, connectorId: connector.connector_id, version: "1" }, admitted)
     await vi.waitFor(() => expect(hub.preparePrivateMcpServer).toHaveBeenCalledOnce())
     const update = { operation: "update_server" as const, connectorId: connector.connector_id, serverId: server.server_id, input: { expected_state_version: "2", display_name: "Other" } }
     expect(await flow.management.submit(update, admitted)).toBe(false)
-    acknowledge({ server, connector, replayed: false }); expect(await waiting).toBe(true)
+    acknowledge({ server: { ...server, status: "registered", prepare_status: "ready", declarations_available: true, declaration_digest: "a".repeat(64) }, connector, declarations: [], replayed: false }); expect(await waiting).toBe(true)
     expect(await flow.management.submit(update, admitted)).toBe(false)
     expect(hub.updatePrivateMcpServer).not.toHaveBeenCalled()
   })
 
-  it("blocks independent Update during an unknown Prepare inspection flight", async () => {
+  it("an explicit original receipt query is not a new Prepare and still preserves management mutual exclusion", async () => {
     const { createMcpLifecycleCommands } = await import("@/ui/mcp/mcp-management-commands")
-    let release!: (value: typeof server) => void
-    const read = new Promise<typeof server>(resolve => { release = resolve })
-    const hub = { ...client(), getPrivateMcpServer: vi.fn().mockReturnValue(read), getMcpConnector: vi.fn().mockResolvedValue(connector) }
+    let release!: () => void
+    const read = new Promise<void>(resolve => { release = resolve })
+    const hub = { ...client(), getMcpPrepareReceipt: vi.fn(async () => { await read; throw new Error("lookup outcome unknown") }) }
     hub.preparePrivateMcpServer.mockRejectedValue(new HubClientError("http", "safe", "mcp_personal_response_invalid", 502, false))
     const flow = createMcpLifecycleCommands({ client: hub, boundary: admitted, onConfirmed: vi.fn() })
     await flow.preparation.prepare({ serverId: server.server_id, connectorId: connector.connector_id, version: "1" }, admitted)
-    const checking = flow.preparation.inspect(server.server_id, connector.connector_id, admitted)
-    await vi.waitFor(() => expect(hub.getPrivateMcpServer).toHaveBeenCalledOnce())
+    const checking = flow.preparation.resume(server.server_id, connector.connector_id, admitted)
+    await vi.waitFor(() => expect(hub.getMcpPrepareReceipt).toHaveBeenCalledOnce())
     const update = { operation: "update_server" as const, connectorId: connector.connector_id, serverId: server.server_id, input: { expected_state_version: "2", display_name: "Other" } }
     expect(await flow.management.submit(update, admitted)).toBe(false)
     expect(hub.updatePrivateMcpServer).not.toHaveBeenCalled()
-    release(server); expect(await checking).toBe(true)
+    release(); expect(await checking).toBe(false)
     expect(await flow.management.submit(update, admitted)).toBe(true)
+    expect(hub.preparePrivateMcpServer).toHaveBeenCalledOnce()
   })
 
   it("independent Update unknown retains its own original body/key and blocks Prepare", async () => {

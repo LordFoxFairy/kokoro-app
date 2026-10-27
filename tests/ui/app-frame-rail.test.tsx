@@ -20,7 +20,7 @@ import { ManusSkillDetailDialog } from "@/ui/skills/manus-skill-detail-dialog"
 import { skillTrialSourceRef } from "@/ui/skills/skills-card-model"
 import { KokoroSkillsSurface } from "@/features/app/kokoro-skills-surface"
 import { SkillsSettingsSection } from "@/ui/settings/sections/skills-settings-section"
-import { createHubClient } from "@/hub/client"
+import { createHubClient, HubClientError } from "@/hub/client"
 import { McpProjectionRead as RawMcpProjectionRead } from "@/ui/mcp/mcp-projection-read"
 import { browserHubClient } from "@/ui/shell/page-clients"
 import { createMcpPreparationCommands } from "@/ui/mcp/mcp-preparation-commands"
@@ -3685,7 +3685,7 @@ it("Settings revalidates a registered MCP again after remote Prepare completes",
     status: ready ? "active" as const : "pending" as const, approved_scopes: [], enabled: ready, state_version: ready ? "2" : "1" })
   const registration = () => ({ server: { availability: ready ? "available" as const : "unavailable" as const, server_id: "prepared-server", display_name: "Prepared MCP", server_url: "https://mcp.example.test/prepare",
     status: ready ? "registered" as const : "pending" as const, state_version: ready ? "2" : "1", headers: [],
-    transport: "streamable_http" as const, prepare_status: ready ? "ready" as const : "pending_prepare" as const, declarations: [], declarations_available: ready }, connector: connector(), replayed: false })
+    transport: "streamable_http" as const, prepare_status: ready ? "ready" as const : "pending_prepare" as const, declarations: [], declaration_digest: ready ? "a".repeat(64) : undefined, declarations_available: ready }, connector: connector(), replayed: false })
   const list = vi.fn(async () => ({ items: registered ? [connector()] : [], next_cursor: null }))
   const hub = { ...createHubClient(), listMcpConnectors: list,
     listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
@@ -4358,7 +4358,8 @@ it.each([false, true])("private detail Prepare restores the same original comman
   const registration = mcpCreationRegistration()
   let version = "1"
   const prepare = vi.fn<NonNullable<import("@/hub/client").HubClient["preparePrivateMcpServer"]>>().mockRejectedValue(new Error("lost prepare ACK"))
-  const hub = { ...apiCreationHub(), preparePrivateMcpServer: prepare,
+  const lookup = vi.fn().mockRejectedValue(new HubClientError("http", "Unresolved lookup", "mcp_personal_command_outcome_unknown", 503, false))
+  const hub = { ...apiCreationHub(), getMcpPrepareReceipt: lookup, preparePrivateMcpServer: prepare,
     listMcpConnectors: vi.fn(async () => ({ items: [{ ...registration.connector, state_version: version }], next_cursor: null })),
     getPrivateMcpServer: vi.fn(async () => ({ ...registration.server, state_version: version })) }
   const boundary = { admitted: true, subject: "detail-original-prepare", generation: 1 }
@@ -4371,11 +4372,11 @@ it.each([false, true])("private detail Prepare restores the same original comman
   fireEvent.click(screen.getByRole("button", { name: "取消" }))
   if (recheck) { view.rerender(content(false, 2)); version = "9"; view.rerender(content(true, 2)) }
   fireEvent.click(await screen.findByRole("button", { name: "Creation MCP" }))
-  const button = await screen.findByRole("button", { name: /^(连接|重试原请求)$/ })
+  const button = await screen.findByRole("button", { name: /^(连接|需先核验状态)$/ })
   fireEvent.click(button)
-  await waitFor(() => expect(prepare).toHaveBeenCalledTimes(2))
-  expect(prepare.mock.calls[1]?.slice(0, 3)).toEqual(prepare.mock.calls[0]?.slice(0, 3))
-  expect(prepare.mock.calls[1]?.[1]).toBe("1")
+  await waitFor(() => expect(lookup).toHaveBeenCalledOnce())
+  expect(lookup.mock.calls[0]?.slice(0, 3)).toEqual(prepare.mock.calls[0]?.slice(0, 3))
+  expect(lookup.mock.calls[0]?.[1]).toBe("1")
 })
 
 it("global creation and Settings detail restore one Prepare, and confirmed disconnect releases the closed creation intent", async () => {
@@ -4385,7 +4386,8 @@ it("global creation and Settings detail restore one Prepare, and confirmed disco
   let version = "1", removed = false
   const prepare = vi.fn<NonNullable<import("@/hub/client").HubClient["preparePrivateMcpServer"]>>().mockRejectedValue(new Error("lost Prepare ACK"))
   const remove = vi.fn(async () => { removed = true; return { ...registration.connector, status: "revoked" as const } })
-  const hub = { ...apiCreationHub(), preparePrivateMcpServer: prepare, removeMcpConnector: remove,
+  const lookup = vi.fn().mockRejectedValue(new HubClientError("http", "Unresolved lookup", "mcp_personal_command_outcome_unknown", 503, false))
+  const hub = { ...apiCreationHub(), getMcpPrepareReceipt: lookup, preparePrivateMcpServer: prepare, removeMcpConnector: remove,
     registerPrivateMcpServer: vi.fn().mockResolvedValue(registration),
     getPrivateMcpServer: vi.fn(async () => ({ ...registration.server, state_version: version })),
     getMcpConnector: vi.fn(async () => registration.connector),
@@ -4404,17 +4406,17 @@ it("global creation and Settings detail restore one Prepare, and confirmed disco
   const configuredDetail = screen.getByRole("dialog", { name: "Creation MCP" })
   expect(prepare).not.toHaveBeenCalled()
   fireEvent.click(await within(configuredDetail).findByRole("button", { name: "连接" }))
-  await screen.findByRole("button", { name: "重试原请求" })
+  await screen.findByRole("button", { name: "需先核验状态" })
   expect(prepare).toHaveBeenCalledOnce()
   version = "9"
   view.rerender(content(false))
   fireEvent.click(await screen.findByRole("button", { name: "Creation MCP" }))
-  const retry = await screen.findByRole("button", { name: "重试原请求" })
+  const retry = await screen.findByRole("button", { name: "需先核验状态" })
   expect(prepare).toHaveBeenCalledOnce()
   fireEvent.click(retry)
-  await waitFor(() => expect(prepare).toHaveBeenCalledTimes(2))
-  expect(prepare.mock.calls[1]?.slice(0, 3)).toEqual(prepare.mock.calls[0]?.slice(0, 3))
-  expect(prepare.mock.calls[1]?.[1]).toBe("1")
+  await waitFor(() => expect(lookup).toHaveBeenCalledOnce())
+  expect(lookup.mock.calls[0]?.slice(0, 3)).toEqual(prepare.mock.calls[0]?.slice(0, 3))
+  expect(lookup.mock.calls[0]?.[1]).toBe("1")
   fireEvent.keyDown(screen.getByRole("button", { name: "管理" }), { key: "ArrowDown" })
   fireEvent.click(await screen.findByRole("menuitem", { name: "断开连接" }))
   await waitFor(() => expect(remove).toHaveBeenCalledOnce())
@@ -4423,7 +4425,7 @@ it("global creation and Settings detail restore one Prepare, and confirmed disco
   expect(screen.getByRole("textbox", { name: "服务器名称" })).toHaveValue("")
   expect(screen.getByRole("button", { name: "保存" })).toBeDisabled()
   expect(hub.registerPrivateMcpServer).toHaveBeenCalledOnce()
-  expect(prepare).toHaveBeenCalledTimes(2)
+  expect(prepare).toHaveBeenCalledOnce()
 })
 
 it("closing a preparing detail aborts its wait; a late ACK cannot close the successor window", async () => {
@@ -4432,7 +4434,9 @@ it("closing a preparing detail aborts its wait; a late ACK cannot close the succ
   let acknowledge!: () => void
   const pending = new Promise<void>(resolve => { acknowledge = resolve })
   const prepare = vi.fn<NonNullable<import("@/hub/client").HubClient["preparePrivateMcpServer"]>>(async () => {
-    await pending; return { ...registration, declarations: [] }
+    await pending; return { ...registration, declarations: [],
+      server: { ...registration.server, status: "registered" as const, state_version: "2", prepare_status: "ready" as const, declarations_available: true, declaration_digest: "a".repeat(64) },
+      connector: { ...registration.connector, status: "active" as const, enabled: true, state_version: "2" } }
   })
   const hub = { ...apiCreationHub(), preparePrivateMcpServer: prepare,
     getPrivateMcpServer: vi.fn(async () => registration.server),
@@ -4447,7 +4451,7 @@ it("closing a preparing detail aborts its wait; a late ACK cannot close the succ
   fireEvent.click(screen.getByRole("button", { name: "取消" }))
   expect(prepare.mock.calls[0]?.[3]?.aborted).toBe(true)
   fireEvent.click(await screen.findByRole("button", { name: "Creation MCP" }))
-  await screen.findByRole("button", { name: "重试原请求" })
+  await screen.findByRole("button", { name: "需先核验状态" })
   await act(async () => { acknowledge(); await pending })
   expect(screen.getByRole("dialog", { name: "Creation MCP" })).toBeVisible()
   fireEvent.click(await screen.findByRole("button", { name: "完成" }))

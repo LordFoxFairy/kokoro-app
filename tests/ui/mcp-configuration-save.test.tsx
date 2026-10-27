@@ -468,7 +468,7 @@ it.each(["confirmed", "unknown-then-replayed", "read-failed"])("configuration Sa
   await act(async () => { releaseSecondRead(); await pendingSecondRead })
 })
 
-it("an inspected unknown Prepare allows an independent fresh-CAS SSE Save without completing or replaying Prepare", async () => {
+it("an unresolved queried Prepare allows an independent fresh-CAS SSE Save without completing or replaying Prepare", async () => {
   let version = 3, name = "Independent SSE"
   let releaseRead!: () => void
   const pendingRead = new Promise<void>(resolve => { releaseRead = resolve })
@@ -482,11 +482,12 @@ it("an inspected unknown Prepare allows an independent fresh-CAS SSE Save withou
   const read = vi.fn(async () => { if (version === 4) await pendingRead; return server() })
   const prepare = vi.fn<NonNullable<ReturnType<typeof createHubClient>["preparePrivateMcpServer"]>>()
     .mockRejectedValue(new HubClientError("http", "Unconfirmed Prepare", "mcp_personal_response_invalid", 502, false))
+  const lookup = vi.fn().mockRejectedValue(new HubClientError("http", "Unknown receipt", "mcp_personal_command_outcome_unknown", 503, false))
   const update = vi.fn<NonNullable<ReturnType<typeof createHubClient>["updatePrivateMcpServer"]>>(async (_id, input) => {
     version++; name = input.display_name ?? name
     return { server: server(), connector: connector(), replayed: false }
   })
-  const hub = { ...createHubClient(), getPrivateMcpServer: read, updatePrivateMcpServer: update, preparePrivateMcpServer: prepare,
+  const hub = { ...createHubClient(), getPrivateMcpServer: read, updatePrivateMcpServer: update, preparePrivateMcpServer: prepare, getMcpPrepareReceipt: lookup,
     getMcpConnector: vi.fn(async () => connector()),
     listMcpConnectors: vi.fn(async () => ({ items: [connector()], next_cursor: null })),
     listMcpConnectorProviders: vi.fn(async () => ({ items: [], next_cursor: null })),
@@ -499,7 +500,8 @@ it("an inspected unknown Prepare allows an independent fresh-CAS SSE Save withou
   const dialog = await screen.findByRole("dialog", { name })
   fireEvent.click(await within(dialog).findByRole("button", { name: "连接" }))
   fireEvent.click(await screen.findByRole("button", { name: "需先核验状态" }))
-  await screen.findByRole("button", { name: "重试原请求" })
+  await waitFor(() => expect(lookup).toHaveBeenCalledOnce())
+  await waitFor(() => expect(screen.getByRole("button", { name: "需先核验状态" })).toBeEnabled())
   const originalPrepare = prepare.mock.calls[0]?.slice(0, 3)
   expect(originalPrepare?.slice(0, 2)).toEqual(["independent-server", "3"])
   fireEvent.keyDown(within(dialog).getByRole("button", { name: "管理" }), { key: "Enter" })
@@ -520,7 +522,7 @@ it("an inspected unknown Prepare allows an independent fresh-CAS SSE Save withou
   expect(prepare).toHaveBeenCalledOnce()
   await act(async () => { releaseRead(); await pendingRead })
   await waitFor(() => expect(screen.getByRole("textbox", { name: "服务器名称" })).not.toHaveAttribute("readonly"))
-  // Save retires the old window's inspection proof, not the original unknown intent.
+  // Save retires the old window, not the original unknown query/key/CAS.
   expect(screen.getByRole("button", { name: "需先核验状态" })).toBeEnabled()
   expect(screen.queryByRole("button", { name: "重试原请求" })).not.toBeInTheDocument()
   fireEvent.click(within(dialog).getByRole("button", { name: "取消" }))
@@ -529,6 +531,8 @@ it("an inspected unknown Prepare allows an independent fresh-CAS SSE Save withou
   fireEvent.click(await screen.findByRole("button", { name: "Saved independently" }))
   expect(await screen.findByRole("button", { name: "需先核验状态" })).toBeEnabled()
   expect(prepare).toHaveBeenCalledOnce()
+  expect(lookup).toHaveBeenCalledOnce()
+  expect(lookup.mock.calls[0]?.slice(0, 3)).toEqual(originalPrepare)
   expect(prepare.mock.calls[0]?.slice(0, 3)).toEqual(originalPrepare)
 })
 
@@ -604,13 +608,13 @@ async function confirmedPrimary(connected: boolean, headerDescriptors: McpPrivat
   return { update, remount, trial, prepare, save, shownImage, label, icon, boundary, server, connector, confirmation }
 }
 
-it.each(["Prepare running", "Prepare completed", "inspection running", "journal unreadable", "Update unknown"] as const)("unknown Prepare does not relax the configuration protection for %s", async reason => {
+it.each(["Prepare running", "Prepare completed", "lookup running", "journal unreadable", "Update unknown"] as const)("unknown Prepare does not relax the configuration protection for %s", async reason => {
   const state = await confirmedPrimary(false)
   state.update({ server: state.server, connector: state.connector, preparationState: "unknown" })
   expect(screen.getByRole("textbox", { name: "服务器名称" })).not.toHaveAttribute("readonly")
   state.update(reason === "Prepare running" ? { preparationState: "running" }
     : reason === "Prepare completed" ? { preparationState: "completed" }
-    : reason === "inspection running" ? { actionId: state.connector.connector_id }
+    : reason === "lookup running" ? { actionId: state.connector.connector_id }
     : reason === "journal unreadable" ? { preparationRecoveryReady: false }
     : { managementCommand: { kind: "unknown", operation: "update_server", connectorId: state.connector.connector_id, serverId: state.server.server_id } })
   expect(screen.getByRole("textbox", { name: "服务器名称" })).toHaveAttribute("readonly")
@@ -621,7 +625,7 @@ it.each(["Prepare running", "Prepare completed", "inspection running", "journal 
 
 it.each(["read error", "actor", "generation"] as const)("unknown Prepare keeps only the confirmed transport label during its own Save read gap, then retires on %s", async reason => {
   const state = await confirmedPrimary(true, [{ name: "x-old-header", configured: true, status: "active", state_version: "2" }])
-  state.update({ preparationState: "unknown", preparationCanResume: false, preparationCanInspect: true })
+  state.update({ preparationState: "unknown", preparationCanResume: false })
   expect(screen.getByLabelText("传输类型 HTTP")).toHaveTextContent("HTTP")
   expect(screen.queryByText("x-old-header")).not.toBeInTheDocument()
   expect(screen.queryByRole("button", { name: "试用一下" })).not.toBeInTheDocument()
@@ -926,3 +930,37 @@ it("an old reference's late error cannot hide or clear the newly loaded preview"
   expect(screen.queryByRole("img", { name: "连接器图标" })).not.toBeInTheDocument()
   expect(onPreviewLoaded).toHaveBeenLastCalledWith(second, false)
 })
+
+
+it.each(["advanced", "failed_current"] as const)("the original detail completes one read-only receipt lookup with %s Current facts", async current => {
+  const pendingServer: McpPrivateServer = { availability: "unavailable", server_id: "lookup-detail-server", display_name: "Lookup detail MCP", server_url: "https://mcp.example.test/lookup-detail", status: "registered", state_version: "1", headers: [], transport: "streamable_http", prepare_status: "pending_prepare", declarations: [], declarations_available: false };
+  const pendingConnector: McpConnector = { availability: "unavailable", connector_id: "lookup-detail-connector", server_id: pendingServer.server_id, provider_key: "lookup-detail-provider", connector_type: "mcp", display_name: pendingServer.display_name, status: "pending", enabled: false, approved_scopes: [], state_version: "1" };
+  const historical = { server: { ...pendingServer, state_version: "2", prepare_status: "ready" as const, declarations_available: true, declaration_digest: "a".repeat(64) }, connector: { ...pendingConnector, state_version: "2", status: "active" as const, enabled: true }, declarations: [], replayed: true };
+  const prepare = vi.fn().mockRejectedValue(new HubClientError("http", "lost ACK", "mcp_personal_response_invalid", 502, false));
+  const lookup = vi.fn<NonNullable<ReturnType<typeof createHubClient>["getMcpPrepareReceipt"]>>().mockResolvedValue(historical);
+  const read = vi.fn().mockResolvedValue(pendingServer);
+  const authorize = vi.fn();
+  const hub = { ...createHubClient(), preparePrivateMcpServer: prepare, getMcpPrepareReceipt: lookup, beginMcpConnectorAuthorization: authorize,
+    getPrivateMcpServer: read, getMcpConnector: vi.fn().mockResolvedValue(pendingConnector),
+    listMcpConnectors: vi.fn().mockResolvedValue({ items: [pendingConnector], next_cursor: null }),
+    listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }), listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }) };
+  const boundary = { admitted: true, generation: 1, subject: `lookup-detail-${current}` };
+  const content = (generation: number) => <LocaleProvider><ConnectorCommandProvider client={hub} boundary={{ ...boundary, generation }}><McpContent client={hub} initialView="connections" readBoundary={{ ...boundary, generation }} /></ConnectorCommandProvider></LocaleProvider>;
+  const view = render(content(1));
+  fireEvent.click(await screen.findByRole("button", { name: pendingServer.display_name }));
+  const dialog = await screen.findByRole("dialog", { name: pendingServer.display_name });
+  fireEvent.click(await within(dialog).findByRole("button", { name: "连接" }));
+  await waitFor(() => expect(prepare).toHaveBeenCalledOnce());
+  const original = prepare.mock.calls[0]!.slice(0, 3);
+  if (current === "failed_current") read.mockRejectedValue(new Error("Current read unavailable"));
+  else read.mockResolvedValue({ ...pendingServer, state_version: "9" });
+  const previousReads = read.mock.calls.length;
+  view.rerender(content(2));
+  await waitFor(() => expect(read.mock.calls.length).toBeGreaterThan(previousReads));
+  const recover = await within(dialog).findByRole("button", { name: "需先核验状态" });
+  await waitFor(() => expect(recover).toBeEnabled());
+  fireEvent.click(recover);
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  expect(lookup).toHaveBeenCalledOnce(); expect(lookup.mock.calls[0]!.slice(0, 3)).toEqual(original);
+  expect(prepare).toHaveBeenCalledOnce(); expect(authorize).not.toHaveBeenCalled();
+});

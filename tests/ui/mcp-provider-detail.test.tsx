@@ -25,10 +25,12 @@ it.each(["lost ACK", "replay expired"])("reconnects failed private OAuth alongsi
   const resumable = outcome === "lost ACK"
   const prepare = vi.fn().mockRejectedValue(resumable ? new Error("Prepare ACK lost")
     : new HubClientError("http", "Inspect original command", "mcp_personal_command_replay_expired", 412, false))
+  const lookup = vi.fn().mockRejectedValue(resumable ? new Error("Receipt lookup unknown")
+    : new HubClientError("http", "Original receipt expired", "mcp_personal_command_replay_expired", 412, false))
   const reconnect = vi.fn().mockRejectedValueOnce(new Error("AS denied"))
     .mockResolvedValue({ authorization: { authorization_url: "https://oauth.example.test/explicit", expires_at: "2030-01-01T00:00:00Z" } })
   const navigate = vi.fn()
-  const client = { ...createHubClient(), preparePrivateMcpServer: prepare, reconnectMcpConnectorAuthorization: reconnect,
+  const client = { ...createHubClient(), preparePrivateMcpServer: prepare, getMcpPrepareReceipt: lookup, reconnectMcpConnectorAuthorization: reconnect,
     getMcpConnector: vi.fn().mockResolvedValue(connector), getPrivateMcpServer: vi.fn().mockResolvedValue(server),
     listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
     listMcpConnectors: vi.fn().mockResolvedValue({ items: [connector], next_cursor: null }),
@@ -45,10 +47,9 @@ it.each(["lost ACK", "replay expired"])("reconnects failed private OAuth alongsi
     return screen.findByRole("dialog", { name: server.display_name })
   }
   let dialog = await open()
-  const recoveryLabel = resumable ? "重试原请求" : "需先核验状态"
+  const recoveryLabel = "需先核验状态"
   const resume = within(dialog).getByRole("button", { name: recoveryLabel })
-  if (resumable) expect(resume).toBeEnabled()
-  else expect(resume).toBeDisabled()
+  expect(resume).toBeEnabled()
   fireEvent.click(within(dialog).getByRole("button", { name: "重新连接" }))
   await waitFor(() => expect(reconnect).toHaveBeenCalledOnce())
   await waitFor(() => expect(within(dialog).getByRole("button", { name: "重新连接" })).toBeEnabled())
@@ -58,29 +59,32 @@ it.each(["lost ACK", "replay expired"])("reconnects failed private OAuth alongsi
   fireEvent.click(within(dialog).getByRole("button", { name: "取消" }))
   dialog = await open()
   fireEvent.click(within(dialog).getByRole("button", { name: recoveryLabel }))
-  await waitFor(() => expect(prepare).toHaveBeenCalledTimes(resumable ? 2 : 1))
-  if (resumable) expect(JSON.stringify(prepare.mock.calls[1]?.slice(0, 3))).toBe(original)
+  await waitFor(() => expect(lookup).toHaveBeenCalledOnce())
+  expect(JSON.stringify(lookup.mock.calls[0]?.slice(0, 3))).toBe(original)
+  expect(prepare).toHaveBeenCalledOnce()
   expect(commands.getSnapshot()[0]?.kind).toBe("unknown")
   fireEvent.click(within(dialog).getByRole("button", { name: "重新连接" }))
   await waitFor(() => expect(navigate).toHaveBeenCalledExactlyOnceWith("https://oauth.example.test/explicit"))
-  expect(prepare).toHaveBeenCalledTimes(resumable ? 2 : 1)
+  expect(prepare).toHaveBeenCalledOnce()
   expect(commands.getSnapshot()[0]?.kind).toBe("unknown")
   expect(JSON.stringify(prepare.mock.calls[0]?.slice(0, 3))).toBe(original)
 })
 
-it.each(["running Prepare", "unknown management"])("keeps private OAuth blocked during %s", async pending => {
+it.each(["running Prepare", "unknown management", "unknown management with Prepare"])("keeps private OAuth blocked during %s", async pending => {
   const { CustomMcpDetailDialog } = await import("@/ui/mcp/custom-mcp-detail-dialog")
   const { connector, server } = privateOAuthFixture()
   const authorize = vi.fn()
   render(<LocaleProvider><CustomMcpDetailDialog connector={connector} server={server} actionId={null} admitted
-    preparationState={pending === "running Prepare" ? "running" : "idle"}
-    managementCommand={pending === "unknown management" ? { connectorId: connector.connector_id, serverId: server.server_id, operation: "update_server", kind: "unknown" } : undefined}
+    preparationState={pending === "running Prepare" ? "running" : pending === "unknown management with Prepare" ? "unknown" : "idle"}
+    preparationCanResume={pending === "unknown management with Prepare"}
+    managementCommand={pending.startsWith("unknown management") ? { connectorId: connector.connector_id, serverId: server.server_id, operation: "update_server", kind: "unknown" } : undefined}
     onResumeManagement={vi.fn()} actionError={false} deleteId={null} returnFocusRef={{ current: null }} onClose={vi.fn()}
     onSaveConfiguration={vi.fn()} onPrepare={vi.fn()} onAuthorize={authorize} onDisconnect={vi.fn()} onDeleteIntent={vi.fn()} onCancelDelete={vi.fn()} onDelete={vi.fn()} /></LocaleProvider>)
   const button = screen.getByRole("button", { name: pending === "running Prepare" ? "连接" : "重新连接" })
   expect(button).toBeDisabled()
   fireEvent.click(button)
   expect(authorize).not.toHaveBeenCalled()
+  if (pending === "unknown management with Prepare") expect(screen.getByRole("button", { name: "需先核验状态" })).toBeEnabled()
 })
 
 it.each(["window", "actor", "admission"])("rejects private OAuth without the current admitted exact binding and ignores a retired %s's late ACK", async retired => {
@@ -838,20 +842,21 @@ vi.mock("@/ui/mcp/mcp-preparation-recovery", async importOriginal => {
   return { ...actual, createBrowserMcpPreparationRecovery: () => createTestPreparationJournal(actual) };
 });
 
-it("unknown invalid Prepare uses read-only inspection, retires window proof on close, then explicitly replays the original command", async () => {
+it("unknown invalid Prepare queries only its original receipt across close and completes in one GET action", async () => {
   const { act, waitFor, within } = await import("@testing-library/react")
   window.localStorage.setItem("kokoro.locale", "zh")
   const base = privateOAuthFixture()
   const connector = { ...base.connector, availability: "unavailable" as const }
-  const server = { ...base.server, oauth_client: undefined, availability: "unavailable" as const, state_version: "5" }
+  const server = { ...base.server, oauth_client: undefined, availability: "unavailable" as const, state_version: "9" }
   const prepare = vi.fn().mockRejectedValueOnce(new HubClientError("http", "invalid response", "mcp_personal_response_invalid", 502, false))
-    .mockResolvedValue({ server: { ...server, transport: "streamable_http" as const, prepare_status: "ready", declarations_available: true }, connector, declarations: [], replayed: true })
+  const lookup = vi.fn().mockRejectedValueOnce(new Error("Receipt lookup failed"))
+    .mockResolvedValue({ server: { ...server, state_version: "5", prepare_status: "ready", declarations_available: true, declaration_digest: "a".repeat(64) }, connector, declarations: [], replayed: true })
   const get = vi.fn().mockResolvedValue(connector), getServer = vi.fn().mockResolvedValue(server)
-  const client = { ...createHubClient(), preparePrivateMcpServer: prepare, getMcpConnector: get, getPrivateMcpServer: getServer,
+  const client = { ...createHubClient(), preparePrivateMcpServer: prepare, getMcpPrepareReceipt: lookup, getMcpConnector: get, getPrivateMcpServer: getServer,
     listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
     listMcpConnectors: vi.fn().mockResolvedValue({ items: [connector], next_cursor: null }),
     listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }) }
-  const boundary = { subject: "prepare-inspection-actor", admitted: true, generation: 0 }
+  const boundary = { subject: "prepare-receipt-actor", admitted: true, generation: 0 }
   let commands!: McpPreparationCommands
   function Probe() { commands = useMcpPreparationCommands(client, boundary.subject); return null }
   render(<LocaleProvider><ConnectorCommandProvider client={client} boundary={boundary}><Probe /><McpProjectionRead client={client} identity={boundary.subject} initialView="connections" /></ConnectorCommandProvider></LocaleProvider>)
@@ -866,18 +871,20 @@ it("unknown invalid Prepare uses read-only inspection, retires window proof on c
   expect(inspect).toBeEnabled()
   const before = [get.mock.calls.length, getServer.mock.calls.length]
   fireEvent.click(inspect)
-  await waitFor(() => expect(within(dialog).getByRole("button", { name: "重试原请求" })).toBeEnabled())
-  expect(get).toHaveBeenCalledTimes(before[0]! + 1); expect(getServer).toHaveBeenCalledTimes(before[1]! + 1)
+  await waitFor(() => expect(lookup).toHaveBeenCalledOnce())
+  await waitFor(() => expect(within(dialog).getByRole("button", { name: "需先核验状态" })).toBeEnabled())
+  expect(get).toHaveBeenCalledTimes(before[0]!); expect(getServer).toHaveBeenCalledTimes(before[1]!)
   expect(prepare).toHaveBeenCalledOnce()
+  expect(commands.getSnapshot()[0]?.kind).toBe("unknown")
   fireEvent.click(within(dialog).getByRole("button", { name: "取消" }))
   dialog = await open()
   const inspectAgain = within(dialog).getByRole("button", { name: "需先核验状态" })
   expect(inspectAgain).toBeEnabled(); expect(prepare).toHaveBeenCalledOnce()
   fireEvent.click(inspectAgain)
-  await waitFor(() => expect(within(dialog).getByRole("button", { name: "重试原请求" })).toBeEnabled())
-  fireEvent.click(within(dialog).getByRole("button", { name: "重试原请求" }))
-  await waitFor(() => expect(prepare).toHaveBeenCalledTimes(2))
-  expect(prepare.mock.calls[1]?.slice(0, 3)).toEqual(original)
-  expect(prepare.mock.calls[1]?.[1]).toBe("4")
   await waitFor(() => expect(commands.getSnapshot()).toEqual([]))
+  expect(lookup).toHaveBeenCalledTimes(2)
+  for (const call of lookup.mock.calls) expect(call.slice(0, 3)).toEqual(original)
+  expect(lookup.mock.calls[1]?.[1]).toBe("4")
+  expect(prepare).toHaveBeenCalledOnce()
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
 })

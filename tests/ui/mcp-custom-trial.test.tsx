@@ -8,7 +8,7 @@ const connector = { availability: "available", connector_id: "owned-connector", 
 const server = { availability: "available", server_id: "owned-server", display_name: "QA MCP", server_url: "https://mcp.example.test/mcp", status: "registered", state_version: "3", headers: [], transport: "streamable_http" as const, prepare_status: "ready", declarations: [], declarations_available: true, connection_id: "exact-runtime-connection" } satisfies McpPrivateServer
 function show(overrides: Partial<Parameters<typeof CustomMcpDetailDialog>[0]> = {}) {
   const trial = vi.fn(() => true), prepare = vi.fn()
-  const props = { connector, server, actionId: null, admitted: true, managementCommand: undefined,
+  const props = { connector, server, preparationCanResume: true, actionId: null, admitted: true, managementCommand: undefined,
     onResumeManagement: vi.fn(), actionError: false, deleteId: null, returnFocusRef: { current: null },
     onClose: vi.fn(), onSaveConfiguration: vi.fn(), onPrepare: prepare, onAuthorize: vi.fn(), onDisconnect: vi.fn(),
     onDeleteIntent: vi.fn(), onCancelDelete: vi.fn(), onDelete: vi.fn(), onTrial: trial, ...overrides }
@@ -35,16 +35,16 @@ it("a refused draft handoff keeps the detail and explains that no trial started"
 })
 it("an unknown Prepare retains its original recovery action and is not a trial", () => {
   const { trial, prepare } = show({ preparationState: "unknown" })
-  fireEvent.click(screen.getByRole("button", { name: "重试原请求" }))
+  fireEvent.click(screen.getByRole("button", { name: "需先核验状态" }))
   expect(prepare).toHaveBeenCalledOnce()
   expect(trial).not.toHaveBeenCalled()
 })
 
 it.each([
-  { failure: "invalid" as const, canResume: false, label: "需先核验状态" },
-  { failure: "outcome_unknown" as const, canResume: true, label: "重试原请求" },
+  { failure: "invalid" as const, canResume: true, label: "需先核验状态" },
+  { failure: "outcome_unknown" as const, canResume: true, label: "需先核验状态" },
 ])("Prepare $failure belongs to visible detail guidance and a screen-reader-only configuration status, not a configuration error panel", async ({ failure, canResume, label }) => {
-  const shown = show({ preparationState: "unknown", preparationFailure: failure, preparationCanResume: canResume, preparationCanInspect: true })
+  const shown = show({ preparationState: "unknown", preparationFailure: failure, preparationCanResume: canResume })
   const detailExplanation = screen.getByRole("alert").textContent
   expect(detailExplanation).toBeTruthy()
   expect(shown.prepare).not.toHaveBeenCalled()
@@ -253,11 +253,13 @@ it("an unknown Prepare retains only its own confirmed SSE label, never prior tri
   expect(screen.queryByRole("button", { name: "试用一下" })).not.toBeInTheDocument()
   expect(screen.queryByText("x-observed")).not.toBeInTheDocument()
   expect(screen.queryByRole("img", { name: "连接器图标" })).not.toBeInTheDocument()
-  const recovery = screen.getByRole("button", { name: "重试原请求" })
-  expect(recovery).toBeDisabled()
+  const recovery = screen.getByRole("button", { name: "需先核验状态" })
+  // Current/ready facts remain retired, but the delegated original receipt
+  // lookup is read-only and does not borrow those permissions.
+  expect(recovery).toBeEnabled()
   fireEvent.click(recovery)
   fireEvent.click(screen.getByRole("button", { name: "保存" }))
-  expect(shown.prepare).not.toHaveBeenCalled()
+  expect(shown.prepare).toHaveBeenCalledOnce()
   expect(shown.trial).not.toHaveBeenCalled()
   expect(save).toHaveBeenCalledOnce()
   shown.update({ preparationState: "idle" })

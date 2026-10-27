@@ -3,6 +3,7 @@ import { HubClientError, type HubClient } from "@/hub/client";
 import { connectorCreationKeySchema } from "@/hub/connector-creation-key.schema";
 import { mcpPrivateServerRegistrationInputSchema, type McpPrivateServerRegistrationInput,
   type McpPrivateServer, type McpConnector } from "@/hub/mcp-connector.schema";
+import { canAuthorizePrivateMcp } from "./private-mcp-oauth-binding";
 import type { McpPreparationCommands } from "./mcp-preparation-commands";
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
 
@@ -28,6 +29,9 @@ export function createMcpServerCreationFlow(options: { client: Client; preparati
   const preparation = options.preparation;
   let releasePreparation: (() => void) | undefined;
   let locator: { serverId: string; connectorId: string } | undefined;
+  // Only a successful Current read updates this non-secret binding. A failed
+  // read cannot erase an observed provider conflict and revive an older ACK locator.
+  let observedBinding: McpServerCreationCompletion | null = null;
   let active: Flight | undefined;
   let state: McpServerCreationState = { intent: null, registered: false, publishRequested: false, busy: false, unknown: null, facts: null, name: "", error: false, registrationRejection: null };
   const listeners = new Set<() => void>();
@@ -49,6 +53,19 @@ export function createMcpServerCreationFlow(options: { client: Client; preparati
     scope.boundary.subject === actor && scope.boundary.generation === boundary.generation;
   const ready = (facts: McpCreationFacts | null) => facts?.server.prepare_status === "ready" &&
     facts.connector.status === "active" && facts.connector.enabled;
+  const receiptCompletion = (scope: McpCreationScope, via?: "initial_post" | "receipt_lookup") => matches(scope) && locator
+    ? preparation.getCompletion(locator.serverId, locator.connectorId, scope.boundary, via) : null;
+  const boundPreparationCompletion = (scope: McpCreationScope) => {
+    const completed = receiptCompletion(scope), facts = state.facts;
+    if (!completed || observedBinding && (observedBinding.serverId !== completed.serverId || observedBinding.connectorId !== completed.connectorId || observedBinding.providerKey !== completed.providerKey) || facts && (facts.server.server_id !== completed.serverId || facts.connector.connector_id !== completed.connectorId ||
+      facts.connector.server_id !== completed.serverId || facts.connector.provider_key !== completed.providerKey)) return null;
+    return completed;
+  };
+  const preparationCompletion = (scope: McpCreationScope) => receiptCompletion(scope, "initial_post") && state.facts?.server.prepare_status === "needs_oauth"
+    ? null : boundPreparationCompletion(scope);
+  const canAuthorize = (scope: McpCreationScope) => matches(scope) && !active && !registration && !state.unknown &&
+    state.facts?.server.prepare_status === "needs_oauth" && canAuthorizePrivateMcp(state.facts.connector, state.facts.server) &&
+    (receiptCompletion(scope, "initial_post") ? boundPreparationCompletion(scope) !== null : preparationKind() === undefined);
   const cancel = () => {
     const previous = active; active = undefined;
     if (previous?.kind === "register" && registration) registration.uncertain = true;
@@ -57,7 +74,7 @@ export function createMcpServerCreationFlow(options: { client: Client; preparati
   const bind = (next: ProjectReadBoundary) => {
     if (retired) return;
     if (next.subject !== actor) {
-      retired = true; cancel(); registration = undefined; locator = undefined;
+      retired = true; cancel(); registration = undefined; locator = undefined; observedBinding = null;
       publish({ facts: null, name: "", error: false, registrationRejection: null }); return;
     }
     if (next.admitted === boundary.admitted && next.generation === boundary.generation) return;
@@ -83,7 +100,9 @@ export function createMcpServerCreationFlow(options: { client: Client; preparati
         if (active !== flight || !matches(scope) || locator !== target) return null;
         if (server.server_id !== target.serverId || connector.connector_id !== target.connectorId ||
           connector.server_id !== server.server_id || connector.connector_type !== "mcp") throw new Error("MCP creation locator mismatch");
-        const facts = { server, connector }; publish({ facts }); return facts;
+        const facts = { server, connector };
+        observedBinding = Object.freeze({ serverId: server.server_id, connectorId: connector.connector_id, providerKey: connector.provider_key });
+        publish({ facts }); return facts;
       } catch {
         flight.controller.abort();
         if (active === flight && matches(scope)) publish({ error: true, facts: null });
@@ -114,7 +133,15 @@ export function createMcpServerCreationFlow(options: { client: Client; preparati
       publish();
       if (!current) { reconcileLate(); return false; }
       if (!confirmed) { publish({ error: true }); return false; }
-      return ready(await read(scope, true));
+      const facts = await read(scope, true);
+      if (version !== undefined && facts?.server.prepare_status === "needs_oauth") {
+        return false;
+      }
+      if (receiptCompletion(scope)) {
+        if (!preparationCompletion(scope)) { publish({ error: true }); return false; }
+        return true;
+      }
+      return ready(facts);
     } catch {
       if (active === flight && matches(scope)) publish({ error: true });
       return false;
@@ -166,10 +193,10 @@ export function createMcpServerCreationFlow(options: { client: Client; preparati
   const resetKnown = (scope: McpCreationScope) => {
     if (!matches(scope) || active || registration || preparationKind() === "running" || preparationKind() === "unknown") return false;
     if (locator) {
-      if (preparationKind() === "completed") preparation.finish(locator.serverId, scope.boundary);
+      if (preparationKind() === "completed" && !preparation.finish(locator.serverId, scope.boundary)) return false;
       else if (preparationKind() === "rejected") preparation.retireTarget(locator.serverId, locator.connectorId);
     }
-    locator = undefined; publish({ name: "", facts: null, error: false, registrationRejection: null, publishRequested: false, intent: null }); return true;
+    locator = undefined; observedBinding = null; publish({ name: "", facts: null, error: false, registrationRejection: null, publishRequested: false, intent: null }); return true;
   };
   return {
     instanceId: crypto.randomUUID(), client,
@@ -179,6 +206,9 @@ export function createMcpServerCreationFlow(options: { client: Client; preparati
     getRegistrationTransport: () => registration?.body.transport,
     subscribe: (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; },
     matches,
+    canResume: (scope: McpCreationScope) => matches(scope) && locator !== undefined && preparation.canResume(locator.serverId),
+    getPreparationCompletion: preparationCompletion,
+    canAuthorize,
     bind,
     retain: (value: ProjectReadBoundary) => {
       if (retired) return () => {};
@@ -222,7 +252,8 @@ export function createMcpServerCreationFlow(options: { client: Client; preparati
       : read(scope, true).then(Boolean),
     finishConfiguration: (scope: McpCreationScope) => state.intent === "configure" && state.facts !== null && !state.unknown ? resetKnown(scope) : false,
     finishRegistration: (scope: McpCreationScope) => state.publishRequested && state.facts !== null && !state.unknown ? resetKnown(scope) : false,
-    finish: (scope: McpCreationScope) => ready(state.facts) && !state.unknown ? resetKnown(scope) : false,
+    finish: (scope: McpCreationScope) => !state.unknown && (receiptCompletion(scope)
+      ? preparationCompletion(scope) !== null : ready(state.facts)) ? resetKnown(scope) : false,
     dismiss: resetKnown,
     reconcile: async (scope: McpCreationScope) => { if (!matches(scope)) return false; options.onChanged(); return ready(await read(scope, true)); },
   };

@@ -73,7 +73,7 @@ it.each(["unknown", "trial"] as const)("configuration %s feedback keeps short-sc
   const props: Parameters<typeof CustomMcpDetailDialog>[0] = {
     connector: { availability: "available", connector_id: "owned-connector", server_id: "owned-server", provider_key: "owned-provider", connector_type: "mcp", display_name: "QA MCP", status: "active", enabled: true, approved_scopes: [], state_version: "2" },
     server: { availability: "available", server_id: "owned-server", display_name: "QA MCP", server_url: "https://mcp.example.test/mcp", status: "registered", state_version: "3", headers: [], transport: "streamable_http" as const, prepare_status: "ready", declarations: [], declarations_available: true, connection_id: "exact-runtime-connection" },
-    actionId: null, admitted: true, managementCommand: undefined, preparationState: scenario === "unknown" ? "unknown" : "idle",
+    actionId: null, admitted: true, managementCommand: undefined, preparationCanResume: true, preparationState: scenario === "unknown" ? "unknown" : "idle",
     onResumeManagement: vi.fn(), actionError: false, deleteId: null, returnFocusRef: { current: null },
     onClose: vi.fn(), onSaveConfiguration: vi.fn(), onPrepare: vi.fn(), onAuthorize: vi.fn(), onDisconnect: vi.fn(),
     onDeleteIntent: vi.fn(), onCancelDelete: vi.fn(), onDelete: vi.fn(), onTrial: () => false,
@@ -87,7 +87,7 @@ it.each(["unknown", "trial"] as const)("configuration %s feedback keeps short-sc
     expect(screen.queryByRole("alert")).not.toBeInTheDocument()
     expect(screen.getByRole("status")).toHaveClass("sr-only")
     expect(screen.getByRole("status").textContent).toBeTruthy()
-    expect(screen.getByRole("button", { name: "重试原请求" })).toBeEnabled()
+    expect(screen.getByRole("button", { name: "需先核验状态" })).toBeEnabled()
     expect(screen.getByRole("button", { name: /^保存$/u })).toBeEnabled()
   } else {
     expect(screen.getAllByRole("alert").length).toBeGreaterThan(0)
@@ -113,7 +113,7 @@ it.each(["unknown", "trial"] as const)("configuration %s feedback keeps short-sc
         const style = getComputedStyle(element)
         return { position: style.position, width: parseFloat(style.width), height: parseFloat(style.height), overflow: style.overflow }
       })).toEqual({ position: "absolute", width: 1, height: 1, overflow: "hidden" })
-      expect(await page.getByRole("button", { name: "重试原请求" }).isEnabled()).toBe(true)
+      expect(await page.getByRole("button", { name: "需先核验状态" }).isEnabled()).toBe(true)
     } else {
       expect(await page.getByRole("alert").count()).toBeGreaterThan(0)
     }

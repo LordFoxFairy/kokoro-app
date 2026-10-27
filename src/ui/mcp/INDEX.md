@@ -1,3 +1,7 @@
+## Prepare 原结果只读恢复（2026-10-27）
+
+`mcp-preparation-commands.ts` 在首次 POST 开始后单调 query-only；restored/unknown 均经原 key/CAS/target 的正式 receipt GET，不再 fresh inspection 放行 POST。沿原 ConnectorCommand/IDB compare-by-key，只有 strict completed 与 clear commit 成功才完成；创建及详情缺少 Current 时也可显式恢复，Current 权限与首次写门保持。RAM locator 只供完成定位，不回填 Current 或授执行权；actor/window/K2/provider 冲突保护见生命周期及 flow 回归。机器源和薄代理见 API_CONTRACT 正式私有 pin，未知/expired/失败 marker 不冒终态。
+
 ## 自定义 API 剩余控件与创建准入（2026-10-27）
 
 原 `McpIconPicker` 在 API/MCP 创建及编辑中共用24px Lucide Image占位，60px预览/10px圆角/14%虚线边框/4%填充、右侧8px间距与66×32px透明outline上传按钮；失败/过期仍退回占位，不刷新能力或改变原暂存selector寿命。API关闭glyph20px仅局部作用域，不改共享Dialog。
