@@ -1,6 +1,6 @@
 "use client"
 
-import { Fragment, type Dispatch, type RefObject, type SetStateAction, useState } from "react"
+import { Fragment, type Dispatch, type RefObject, type SetStateAction, useRef, useState } from "react"
 import Link from "next/link"
 import { Check, ChevronDown, ChevronRight, Ellipsis, Folder, Shapes, Monitor, Plus, SquareMousePointer, SquarePen, WandSparkles, Workflow } from "lucide-react"
 
@@ -50,6 +50,7 @@ export type WorkspaceRailNavigationProps = Pick<WorkspaceRailProps, "conversatio
   setProjectPickerOpen: Dispatch<SetStateAction<boolean>>
   onCreateProject?: (input?: Readonly<{ name?: string; draft?: string }>) => void
   onRequestProjectRename?: (projectId: string) => void
+  onRequestProjectInstructions?: (projectId: string, returnFocus: HTMLButtonElement | null) => void
   onNewChat: () => void
   closeNavigation: () => void
   onOpenSettings: (tab: SettingsTab) => void
@@ -81,6 +82,7 @@ export function WorkspaceRailNavigation({
   setProjectPickerOpen,
   onCreateProject,
   onRequestProjectRename,
+  onRequestProjectInstructions,
   onNewChat,
   closeNavigation,
   onOpenSettings,
@@ -469,19 +471,9 @@ export function WorkspaceRailNavigation({
                       <span className={itemStyles.itemTitle}>{project.name}</span>
                     </SidebarMenuButton>
                     <span className={itemStyles.projectActions}>
-                      {onRequestProjectRename ? <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button type="button" variant="ghost" size="icon-xs" className={cn(itemStyles.projectAction, itemStyles.projectOptions)} aria-label={t("firstSite.projectOptions")}>
-                            <Ellipsis aria-hidden="true" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" side="bottom" sideOffset={4} className={navigationStyles.projectRowMenu}>
-                          <DropdownMenuItem onSelect={() => onRequestProjectRename(project.id)}>
-                            <SquarePen aria-hidden="true" />
-                            {t("firstSite.renameProject")}
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu> : null}
+                      <ProjectOptionsMenu projectId={project.id} closeNavigation={closeNavigation}
+                        {...(onRequestProjectRename === undefined ? {} : { onRequestProjectRename })}
+                        {...(onRequestProjectInstructions === undefined ? {} : { onRequestProjectInstructions })} />
                       <Button asChild variant="ghost" size="icon-xs" className={itemStyles.projectAction}>
                         <Link href={project.href}
                           {...(mountedSurfacePrefetch === undefined ? {} : { prefetch: mountedSurfacePrefetch })}
@@ -529,4 +521,32 @@ export function WorkspaceRailNavigation({
       <WorkspaceRailProjectCreateDialog open={projectCreateOpen} onOpenChange={setProjectCreateOpen} {...(onCreateProject === undefined ? {} : { onCreate: onCreateProject })} />
     </nav>
   )
+}
+
+/** Each project keeps the exact live menu trigger for the editor's focus return. */
+function ProjectOptionsMenu({ projectId, onRequestProjectRename, onRequestProjectInstructions, closeNavigation }: {
+  projectId: string
+  onRequestProjectRename?: WorkspaceRailNavigationProps["onRequestProjectRename"]
+  onRequestProjectInstructions?: WorkspaceRailNavigationProps["onRequestProjectInstructions"]
+  closeNavigation: () => void
+}) {
+  const t = useT()
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
+  if (!onRequestProjectRename && !onRequestProjectInstructions) return null
+  return <DropdownMenu>
+    <DropdownMenuTrigger asChild>
+      <Button ref={triggerRef} type="button" variant="ghost" size="icon-xs" className={cn(itemStyles.projectAction, itemStyles.projectOptions)} aria-label={t("firstSite.projectOptions")}>
+        <Ellipsis aria-hidden="true" />
+      </Button>
+    </DropdownMenuTrigger>
+    <DropdownMenuContent align="end" side="bottom" sideOffset={4} className={navigationStyles.projectRowMenu}>
+      {onRequestProjectRename ? <DropdownMenuItem onSelect={() => onRequestProjectRename(projectId)}>
+        <SquarePen aria-hidden="true" />{t("firstSite.renameProject")}
+      </DropdownMenuItem> : null}
+      {onRequestProjectInstructions ? <DropdownMenuItem onSelect={() => {
+        onRequestProjectInstructions(projectId, triggerRef.current)
+        closeNavigation()
+      }}><SquarePen aria-hidden="true" />{t("firstSite.editProjectInstructions")}</DropdownMenuItem> : null}
+    </DropdownMenuContent>
+  </DropdownMenu>
 }

@@ -17,9 +17,16 @@ export type ProjectRenameControl = {
   onRestart: () => void
 }
 
+export type ProjectInstructionControl = {
+  onTriggerMount: (target: HTMLButtonElement | null) => void
+  available: boolean
+  onOpen: (returnFocus: HTMLButtonElement | null) => void
+}
+
 export type WorkspaceHeaderProps = {
   activeId: string | null
   projectRename?: ProjectRenameControl
+  projectInstruction?: ProjectInstructionControl
   shareClient: Pick<SessionClient, "createShare" | "revokeShare">
   onOpenSettings?: (tab: SettingsTab) => void
   brandName?: string
@@ -37,5 +44,5 @@ export type WorkspaceHeaderIdentityProps = Pick<
 
 export type WorkspaceHeaderActionProps = Pick<
   WorkspaceHeaderProps,
-  "activeId" | "projectRename" | "emptyWorkspace" | "onOpenSettings" | "projectWorkspace" | "shareClient"
+  "activeId" | "projectRename" | "projectInstruction" | "emptyWorkspace" | "onOpenSettings" | "projectWorkspace" | "shareClient"
 >

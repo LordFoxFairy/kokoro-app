@@ -1,3 +1,11 @@
+## 2026-10-27 当前产品闭环交付边界
+
+本轮按完整依赖闭包承接此前未提交的Project指令入口与Skills分类，不再让正常环境依赖隐形工作树文件。Project顶部/rail共用精确编辑目标；未知保存保原key/body且锁正文，关闭重开不换意图，已ACK回读失败只GET；身份/项目/路由/准入退休取消旧请求。仅document-local恢复，现wire无CAS，不宣称跨刷新或多标签并发防覆盖。Root正常QA实际held PATCH200超过客户端预算→unknown→关闭重开→同key/body重试200，试验历史仅一次；随后显式保存原文200、阻断history读取，再恢复仅GET200，原文权威回读一致。无新Run/模型/资金操作；两次QA保存对应两revision/receipt，旧Agent/Billing全行保持。
+
+Skills广场保单一分类状态，窄屏radio菜单键盘回焦/跨宽度保query；同1280参考实测header48、分类Y56/nav48、首卡Y104，按钮72/64×32，透明outline12%与#f8f8f7画布，390无横溢。共享Button未改，显式2px focus保留，未伪造官方目录/封面/使用量。当前内层管理壳与Manus同视口均1024×648；完整Skills分享/作者系列删除仍待精确动作验收，不用这些局部证据关闭整项。
+
+Root物理组合相关177行为、lint/build/types通过；两后继颜色声明以真实浏览器校验并进入最终组合重验。系统scope fixtures与恢复页旧oracles按已批准行为迁移，保鉴权/精确URL/取消/迟到/幂等/零交易及原预算，未删失败保护；默认完整门和E2E结果以最终冻结收据为准，不在此冒全绿。正式同态/事务证据与踩坑归Root唯一闭环计划§2.1；本PR保Draft，Project资源/分享权限等仍开放，未上线。
+
 ### 2026-10-25 并行集成与真实项目定义发布
 
 MCP发布39文件已在b710基础三方集成，保留已有CSP/Skills读恢复、API独立呈现、旧发送路由围栏和原49行诊断WIP。正式固定Platform dd8d536/BFF c124705，Register ACK后选项目、取消保留配置、已有详情管理发布、原命令持久恢复；发布不混同Prepare/OAuth，明确execution_ready=false。另接入外层Skills详情内Retry（原背景Retry被modal遮挡）及项目资源准入暂停/卸载的迟到ACK/后续批次退休，同主体保原File/key显式重试。

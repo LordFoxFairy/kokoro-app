@@ -129,6 +129,7 @@ export const zh = {
   "mcp.continueProviderConnection": "继续连接",
   "mcp.providerCreateConfirmed": "连接已创建。继续确认当前连接和授权状态。",
 
+  "firstSite.editProjectInstructions": "编辑指令",
   "firstSite.renameProject": "重命名项目",
   "firstSite.projectName": "项目名称",
   "firstSite.projectRenameDescription":

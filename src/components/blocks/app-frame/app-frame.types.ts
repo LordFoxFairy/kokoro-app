@@ -47,6 +47,13 @@ export type ProjectScheduledTaskInput = {
   autoApprove: boolean;
 };
 
+export class ProjectInstructionSaveError extends Error {
+  constructor(readonly status: "unknown" | "read-error" | "rejected" | "forbidden", readonly instruction: string) {
+    super(`project_instruction_${status}`)
+    this.name = "ProjectInstructionSaveError"
+  }
+}
+
 export type WorkspaceCapabilities = {
   instructions: boolean;
   connectors: boolean;
@@ -108,6 +115,15 @@ export type AppFrameProps = {
   commandMenu?: ComponentType<AppCommandMenuProps>;
 };
 
+/** Ephemeral UI handoff; Project content remains supplied by the current owner read. */
+export type ProjectInstructionRequest = Readonly<{
+  projectRef: string;
+  returnFocus: HTMLButtonElement | null;
+  fallbackFocus: () => HTMLButtonElement | null;
+  isCurrent: () => boolean;
+  onConsumed: () => void;
+}>;
+
 export type EmptyStateProps = {
   /**
    * The shell's current admission decision. Route-owned surfaces must use this
@@ -141,6 +157,7 @@ export type EmptyStateProps = {
   projectConversationsError?: boolean;
   onRetryProjectConversations?: () => void;
   /** Persisted project-level instructions loaded from the project projection. */
+  projectInstructionRequest?: ProjectInstructionRequest;
   projectInstructions?: string;
   projectInstructionHistory?: readonly ProjectInstructionRevision[];
   onSaveProjectInstructions?: (instructions: string) => Promise<void>;

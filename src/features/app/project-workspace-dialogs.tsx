@@ -8,7 +8,7 @@ import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, Di
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import type { EmptyStateProps } from "@/components/blocks/app-frame/app-frame"
+import { ProjectInstructionSaveError, type EmptyStateProps } from "@/components/blocks/app-frame/app-frame.types"
 import {
   ScheduledTaskEditorDialog,
   type ScheduledTaskEditorValue,
@@ -25,6 +25,8 @@ type DialogChange = (setOpen: (open: boolean) => void) => (open: boolean) => voi
 export type ProjectWorkspaceDialogsProps = {
   preview: boolean
   brandName?: string
+  instructionsAvailable: boolean
+  onInstructionsCloseAutoFocus: (event: Event) => void
   instructionsOpen: boolean
   setInstructionsOpen: Dispatch<SetStateAction<boolean>>
   instructions: string
@@ -32,6 +34,8 @@ export type ProjectWorkspaceDialogsProps = {
   instructionsSaving: boolean
   setInstructionsSaving: Dispatch<SetStateAction<boolean>>
   instructionsError: boolean
+  instructionsResult: ProjectInstructionSaveError | null
+  setInstructionsResult: Dispatch<SetStateAction<ProjectInstructionSaveError | null>>
   setInstructionsError: Dispatch<SetStateAction<boolean>>
   instructionsHistoryOpen: boolean
   setInstructionsHistoryOpen: Dispatch<SetStateAction<boolean>>
@@ -82,8 +86,8 @@ export type ProjectWorkspaceDialogsProps = {
 }
 
 export function ProjectWorkspaceDialogs({
-  preview, brandName, instructionsOpen, setInstructionsOpen, instructions, setInstructions, instructionsSaving, setInstructionsSaving,
-  instructionsError, setInstructionsError, instructionsHistoryOpen, setInstructionsHistoryOpen, selectedInstructionRevision,
+  preview, brandName, instructionsAvailable, onInstructionsCloseAutoFocus, instructionsOpen, setInstructionsOpen, instructions, setInstructions, instructionsSaving, setInstructionsSaving,
+  instructionsError, setInstructionsError, instructionsResult, setInstructionsResult, instructionsHistoryOpen, setInstructionsHistoryOpen, selectedInstructionRevision,
   setSelectedInstructionRevision, projectInstructionHistory, onSaveProjectInstructions, resourcesAvailable, resourcesOpen, setResourcesOpen,
   resourceQuery, setResourceQuery, setResourceKind, resourceSearchRef, resourceInputRef, filteredResources, resourceListStatus, resourceListErrorCursor, resourceNextCursor, onRetryResourceList, onLoadMoreResources, resourceUploads, onRetryResourceUpload,
   handleResourceFiles, websitesOpen, setWebsitesOpen, websiteQuery, setWebsiteQuery,
@@ -94,17 +98,42 @@ export function ProjectWorkspaceDialogs({
 }: ProjectWorkspaceDialogsProps) {
   const { locale, t } = useLocale()
   const instructionsHistoryDialogRef = useRef<HTMLDivElement | null>(null)
+  const frozenInstruction = instructionsResult?.status === "unknown" || instructionsResult?.status === "read-error" || instructionsResult?.status === "forbidden"
+  const saveInstruction = async () => {
+    if (!instructionsAvailable || instructionsSaving || !onSaveProjectInstructions || instructionsResult?.status === "forbidden") return
+    setInstructionsSaving(true)
+    setInstructionsError(false)
+    try {
+      await onSaveProjectInstructions(instructions)
+      setInstructionsResult(null)
+      setInstructionsOpen(false)
+    } catch (error) {
+      if (error instanceof ProjectInstructionSaveError) {
+        setInstructions(error.instruction)
+        setInstructionsResult(error)
+      }
+      setInstructionsError(true)
+    } finally { setInstructionsSaving(false) }
+  }
   return <>
-    <Dialog open={instructionsOpen} onOpenChange={onContextDialogChange(setInstructionsOpen)}>
-      <DialogContent className={dialogStyles.instructionsDialog} overlayClassName={dialogStyles.instructionsOverlay ?? ""} closeLabel={t("shell.closeDialog")}>
+    <Dialog open={instructionsOpen} onOpenChange={(open) => { if (!instructionsSaving) setInstructionsOpen(open) }}>
+      <DialogContent onCloseAutoFocus={onInstructionsCloseAutoFocus}
+        onEscapeKeyDown={(event) => { if (instructionsSaving) event.preventDefault() }}
+        onPointerDownOutside={(event) => { if (instructionsSaving) event.preventDefault() }}
+        onInteractOutside={(event) => { if (instructionsSaving) event.preventDefault() }}
+        className={dialogStyles.instructionsDialog} overlayClassName={dialogStyles.instructionsOverlay ?? ""} closeLabel={t("shell.closeDialog")}>
         <DialogHeader className={dialogStyles.instructionsDialogHeader}><DialogTitle>{t("firstSite.projectInstructionsTitle")}</DialogTitle><DialogDescription>{t("firstSite.projectInstructionsDescription")}</DialogDescription></DialogHeader>
-        <Textarea className={dialogStyles.instructionsTextarea} aria-label={t("firstSite.projectInstructionsTitle")} value={instructions} onChange={(event) => { setInstructions(event.target.value); setInstructionsError(false) }} />
-        {instructionsError ? <p className={dialogStyles.instructionsError}>{t("firstSite.projectInstructionsSaveError")}</p> : null}
+        <div className={dialogStyles.instructionsDialogBody}>
+          <Textarea disabled={!instructionsAvailable || instructionsSaving || frozenInstruction} className={dialogStyles.instructionsTextarea} aria-label={t("firstSite.projectInstructionsTitle")} value={instructions} onChange={(event) => { setInstructions(event.target.value); setInstructionsError(false) }} />
+          {instructionsError ? <p role="alert" className={dialogStyles.instructionsError}>{t(instructionsResult?.status === "unknown" ? "projectSkills.unknown"
+            : instructionsResult?.status === "read-error" ? "projectSkills.ackReadFailed"
+            : instructionsResult?.status === "forbidden" ? "skills.personal.forbidden" : "firstSite.projectInstructionsSaveError")}</p> : null}
+        </div>
         <DialogFooter className={dialogStyles.instructionsDialogFooter}>
           <Button type="button" variant="outline" className={dialogStyles.instructionsHistory} onClick={() => { setSelectedInstructionRevision(projectInstructionHistory[0]?.id ?? null); setInstructionsHistoryOpen(true) }}>{t("firstSite.history")}</Button>
           <span className={dialogStyles.instructionsFooterSpacer} />
-          <DialogClose asChild><Button type="button" variant="outline">{t("firstSite.cancel")}</Button></DialogClose>
-          <Button type="button" disabled={instructionsSaving} onClick={async () => { setInstructionsSaving(true); setInstructionsError(false); try { await onSaveProjectInstructions?.(instructions); onContextDialogChange(setInstructionsOpen)(false) } catch { setInstructionsError(true) } finally { setInstructionsSaving(false) } }}>{t("firstSite.save")}</Button>
+          <DialogClose asChild><Button type="button" variant="outline" disabled={instructionsSaving}>{t("firstSite.cancel")}</Button></DialogClose>
+          <Button type="button" disabled={!instructionsAvailable || instructionsSaving || !onSaveProjectInstructions || instructionsResult?.status === "forbidden"} onClick={() => { void saveInstruction() }}>{t(instructionsResult?.status === "unknown" ? "projectSkills.retryOriginal" : instructionsResult?.status === "read-error" ? "projectSkills.reload" : "firstSite.save")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

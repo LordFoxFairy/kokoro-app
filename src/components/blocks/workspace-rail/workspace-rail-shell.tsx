@@ -60,6 +60,7 @@ export function WorkspaceRailShell({
   projectActive = false,
   onCreateProject,
   onRequestProjectRename,
+  onRequestProjectInstructions,
   projects,
   projectListStatus,
   projectListRetryable,
@@ -400,6 +401,7 @@ export function WorkspaceRailShell({
             setProjectPickerOpen={setProjectPickerOpen}
             {...(onCreateProject === undefined ? {} : { onCreateProject })}
             {...(onRequestProjectRename === undefined ? {} : { onRequestProjectRename })}
+            {...(onRequestProjectInstructions === undefined ? {} : { onRequestProjectInstructions })}
             onNewChat={onNewChat}
             closeNavigation={closeNavigation}
             onOpenSettings={openSettings}

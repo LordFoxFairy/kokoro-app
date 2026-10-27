@@ -425,6 +425,10 @@ function AppFrameRuntime({
     if (onOpenProject) onOpenProject(id, handoffDraft)
     else navigateMountedSurface(`/app/project/${encodeURIComponent(id)}`)
   }, [onOpenProject])
+  const projectedWorkspaceCapabilities = projectWorkspaceCapabilities(
+    featureFlags,
+    workspaceCapabilities,
+  )
   const project = useAppFrameProject({
     projectRef,
     projectWorkspace,
@@ -438,6 +442,7 @@ function AppFrameRuntime({
     projectDetail: projectReads.current,
     instructionHistory: projectReads.instructionHistory,
     instructionContext: projectReads.context,
+    instructionsEnabled: projectedWorkspaceCapabilities.instructions,
     refreshProject: refreshProjects,
     refreshRenamedProject: projectReads.refreshRenamedProject,
     ...(projectReadBoundary === undefined ? {} : { renameBoundary: projectReadBoundary }),
@@ -659,10 +664,6 @@ function AppFrameRuntime({
     && !navigationState.conversationHydrating && !navigationState.conversationHydrationFailed
   const conversations = conversationsCtl?.conversations ?? []
   const projectedCreationIntent = projectWorkspace ? null : navigationState.deploymentIntent
-  const projectedWorkspaceCapabilities = projectWorkspaceCapabilities(
-    featureFlags,
-    workspaceCapabilities,
-  )
 
   const previousHasMessagesRef = useRef(hasMessages)
   useEffect(() => {
@@ -803,6 +804,7 @@ function AppFrameRuntime({
     projectConversationsLoading: conversationsCtl?.loading ?? true,
     projectConversationsError: conversationsCtl?.error ?? false,
     onRetryProjectConversations: () => conversationsCtl?.refresh(),
+    ...(project.projectInstructionRequest === undefined ? {} : { projectInstructionRequest: project.projectInstructionRequest }),
     projectInstructions: project.projectInstructions,
     projectInstructionHistory: project.projectInstructionHistory,
     onSaveProjectInstructions: project.saveProjectInstructions,
@@ -854,6 +856,7 @@ function AppFrameRuntime({
       onReconnect={() => engine?.reconnect()}
       projectCreation={project.projectCreation}
       projectRename={project.projectRename}
+      projectInstruction={project.projectInstruction}
       onRetryProjectCreation={project.retryProjectCreation}
       retryConversationHydration={retryConversationHydration}
       onOpenSettings={overlays.openSettings}
@@ -895,6 +898,11 @@ function AppFrameRuntime({
     } : {}),
     onCreateProject: project.createProject,
     onRequestProjectRename: project.requestProjectRename,
+    ...(project.instructionAccess ? { onRequestProjectInstructions: (target, returnFocus) => {
+      // The explicit preview shortcut is keyed by href, not an owner Project ID.
+      const projectId = preview && projectRef !== undefined && target === `/app/project/${encodeURIComponent(projectRef)}` ? projectRef : target
+      project.requestProjectInstructions(projectId, returnFocus)
+    } } : {}),
     ...(activeNavigationKey === undefined ? {} : { activeNavigationKey }),
     preview,
     conversations,

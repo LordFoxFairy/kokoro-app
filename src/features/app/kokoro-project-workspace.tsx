@@ -8,6 +8,7 @@ import { useCallback, useLayoutEffect, useMemo, useRef, useState, type MouseEven
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import type { EmptyStateProps } from "@/components/blocks/app-frame/app-frame"
+import type { ProjectInstructionRequest, ProjectInstructionSaveError } from "@/components/blocks/app-frame/app-frame.types"
 import { useLocale } from "@/i18n/context"
 import { cn } from "@/lib/utils"
 import { ProjectResourceUploadError } from "./project-resource-upload"
@@ -26,14 +27,16 @@ import layoutStyles from "./project-workspace-layout.module.css"
 type ProjectWorkspaceProps = Pick<
   EmptyStateProps,
   "brandName" | "composer" | "onOpenSettings" | "onPrompt" | "projectConversations" | "projectConversationsLoading" | "projectConversationsError" | "onRetryProjectConversations" | "activeProjectConversationId" | "onSelectProjectConversation" | "workspaceCapabilities"
-  | "projectInstructions" | "projectInstructionHistory" | "onSaveProjectInstructions" | "onUploadProjectResource" | "onListProjectResources" | "projectRef" | "preview" | "onCreateProjectScheduledTask" | "projectDetail" | "onRetryProjectRead" | "projectInstructionContext" | "projectHistoryStatus" | "projectHistoryRetryable" | "projectReadBoundary"
+  | "projectInstructionRequest" | "projectInstructions" | "projectInstructionHistory" | "onSaveProjectInstructions" | "onUploadProjectResource" | "onListProjectResources" | "projectRef" | "preview" | "onCreateProjectScheduledTask" | "projectDetail" | "onRetryProjectRead" | "projectInstructionContext" | "projectHistoryStatus" | "projectHistoryRetryable" | "projectReadBoundary"
 >
 
 type InstructionEditorState = {
+  request: ProjectInstructionRequest | null
   instructionsOpen: boolean
   instructions: string
   instructionsSaving: boolean
   instructionsError: boolean
+  instructionsResult: ProjectInstructionSaveError | null
   instructionsHistoryOpen: boolean
   selectedInstructionRevision: string | null
 }
@@ -63,6 +66,7 @@ export function KokoroProjectWorkspace({
   activeProjectConversationId,
   onSelectProjectConversation,
   workspaceCapabilities,
+  projectInstructionRequest,
   projectInstructions = "",
   projectInstructionHistory = [],
   onSaveProjectInstructions,
@@ -71,7 +75,6 @@ export function KokoroProjectWorkspace({
   projectRef,
   preview = false,
   projectDetail,
-  projectInstructionContext,
   projectHistoryStatus,
   projectHistoryRetryable,
   onRetryProjectRead,
@@ -81,19 +84,44 @@ export function KokoroProjectWorkspace({
   const { locale, t } = useLocale()
   const { surfaceRef, composerRef } = useProjectComposerClearance(true)
   const capabilities = workspaceCapabilities
-  const instructionContext = projectInstructionContext ?? `${preview}:${projectRef ?? ""}`
+  const instructionsAvailable = Boolean(capabilities?.instructions) && (preview ||
+    (projectReadBoundary === undefined || projectReadBoundary.admitted && projectReadBoundary.subject !== null)
+    && (projectDetail === undefined || projectDetail.status === "ready" && projectDetail.data.id === projectRef))
+  const [instructionRouteEpoch, setInstructionRouteEpoch] = useState(0)
+  useLayoutEffect(() => {
+    let route = `${window.location.pathname}${window.location.search}${window.location.hash}`
+    const retire = () => {
+      const next = `${window.location.pathname}${window.location.search}${window.location.hash}`
+      if (route === next) return
+      route = next
+      setInstructionRouteEpoch((value) => value + 1)
+    }
+    window.addEventListener("popstate", retire)
+    window.addEventListener("kokoro:surface-navigation", retire)
+    return () => {
+      window.removeEventListener("popstate", retire)
+      window.removeEventListener("kokoro:surface-navigation", retire)
+    }
+  }, [])
+  const instructionFocusContext = useMemo(() => ({ preview, projectRef, enabled: capabilities?.instructions, instructionRouteEpoch,
+    admitted: projectReadBoundary?.admitted, subject: projectReadBoundary?.subject, generation: projectReadBoundary?.generation }), [preview, projectRef, capabilities?.instructions,
+    projectReadBoundary?.admitted, projectReadBoundary?.subject, projectReadBoundary?.generation, instructionRouteEpoch])
+  const instructionContext = instructionFocusContext
   const emptyInstructionEditor: InstructionEditorState = {
-    instructionsOpen: false, instructions: projectInstructions, instructionsSaving: false,
-    instructionsError: false, instructionsHistoryOpen: false, selectedInstructionRevision: null,
+    request: null, instructionsOpen: false, instructions: projectInstructions, instructionsSaving: false,
+    instructionsError: false, instructionsResult: null, instructionsHistoryOpen: false, selectedInstructionRevision: null,
   }
   const [instructionEditor, setInstructionEditor] = useState({ context: instructionContext, state: emptyInstructionEditor })
   // A context change resets before React commits the dialog. Each setter keeps
   // its originating context, so an old save's catch/finally cannot edit B.
   if (instructionEditor.context !== instructionContext) {
     setInstructionEditor({ context: instructionContext, state: emptyInstructionEditor })
+  } else if (instructionsAvailable && projectInstructionRequest && instructionEditor.state.request !== projectInstructionRequest) {
+    setInstructionEditor({ context: instructionContext, state: { ...(instructionEditor.state.instructionsResult !== null
+      ? instructionEditor.state : emptyInstructionEditor), request: projectInstructionRequest, instructionsOpen: true } })
   }
   const editor = instructionEditor.context === instructionContext ? instructionEditor.state : emptyInstructionEditor
-  const { instructionsOpen, instructions, instructionsSaving, instructionsError, instructionsHistoryOpen, selectedInstructionRevision } = editor
+  const { instructionsOpen, instructions, instructionsSaving, instructionsError, instructionsResult, instructionsHistoryOpen, selectedInstructionRevision } = editor
   const instructionSetter = <K extends keyof InstructionEditorState>(field: K) => (value: SetStateAction<InstructionEditorState[K]>) => {
     setInstructionEditor((current) => {
       if (current.context !== instructionContext) return current
@@ -105,6 +133,7 @@ export function KokoroProjectWorkspace({
   const setInstructions = instructionSetter("instructions")
   const setInstructionsSaving = instructionSetter("instructionsSaving")
   const setInstructionsError = instructionSetter("instructionsError")
+  const setInstructionsResult = instructionSetter("instructionsResult")
   const setInstructionsHistoryOpen = instructionSetter("instructionsHistoryOpen")
   const setSelectedInstructionRevision = instructionSetter("selectedInstructionRevision")
   const [resourcesOpen, setResourcesOpen] = useState(false)
@@ -150,6 +179,30 @@ export function KokoroProjectWorkspace({
   const [linkedScheduledId, setLinkedScheduledId] = useState<string | null>(null)
   const [scheduledEditorOpen, setScheduledEditorOpen] = useState(false)
   const contextOpenerRef = useRef<HTMLButtonElement | null>(null)
+  const activeInstructionFocusContextRef = useRef<object | null>(null)
+  const instructionFocusRef = useRef<{ context: object; route: string; request: ProjectInstructionRequest | null; target: HTMLButtonElement | null } | null>(null)
+  useLayoutEffect(() => {
+    activeInstructionFocusContextRef.current = instructionFocusContext
+    return () => { activeInstructionFocusContextRef.current = null }
+  }, [instructionFocusContext])
+  useLayoutEffect(() => {
+    if (!instructionsOpen) return
+    instructionFocusRef.current = { context: instructionFocusContext,
+      route: `${window.location.pathname}${window.location.search}${window.location.hash}`,
+      request: editor.request, target: editor.request?.returnFocus ?? contextOpenerRef.current }
+    editor.request?.onConsumed()
+  }, [instructionsOpen, instructionFocusContext, editor.request])
+  const onInstructionsCloseAutoFocus = (event: Event) => {
+    event.preventDefault()
+    const focus = instructionFocusRef.current
+    if (!focus || focus.context !== activeInstructionFocusContextRef.current
+      || focus.route !== `${window.location.pathname}${window.location.search}${window.location.hash}`
+      || focus.request && !focus.request.isCurrent()) return
+    const available = (target: HTMLButtonElement | null) => target?.isConnected && !target.disabled
+      && (typeof target.checkVisibility !== "function" || target.checkVisibility())
+    const target = available(focus.target) ? focus.target : focus.request?.fallbackFocus()
+    if (target && available(target)) target.focus({ preventScroll: true })
+  }
 
   const rememberContextOpener = (event: MouseEvent<HTMLButtonElement>) => {
     contextOpenerRef.current = event.currentTarget
@@ -267,9 +320,14 @@ export function KokoroProjectWorkspace({
   }
 
   const openInstructions = (event: MouseEvent<HTMLButtonElement>) => {
+    if (!instructionsAvailable) return
+    instructionSetter("request")(null)
     rememberContextOpener(event)
-    setInstructions(projectInstructions)
-    setInstructionsError(false)
+    if (instructionsResult === null || instructionsResult.status === "rejected") {
+      setInstructions(projectInstructions)
+      setInstructionsResult(null)
+      setInstructionsError(false)
+    }
     setInstructionsOpen(true)
   }
 
@@ -290,7 +348,7 @@ export function KokoroProjectWorkspace({
               {capabilities?.instructions ? (
                 <CardHeader className={styles.cardHeader}>
                   <CardTitle className={styles.cardTitle}>
-                    <Button type="button" variant="ghost" size="sm" disabled={!preview && projectDetail !== undefined && projectDetail.status !== "ready"} onClick={openInstructions}>
+                    <Button type="button" variant="ghost" size="sm" disabled={!instructionsAvailable} onClick={openInstructions}>
                       {t("firstSite.instructions")}
                       <ChevronRight data-icon="inline-end" aria-hidden="true" />
                     </Button>
@@ -311,7 +369,7 @@ export function KokoroProjectWorkspace({
                 <CardFooter className={styles.instructionAction}>
                   <Button type="button" variant="outline" size="sm"
                     aria-label={`${t("firstSite.add")}${t("firstSite.instructions")}`}
-                    disabled={!preview && projectDetail !== undefined && projectDetail.status !== "ready"}
+                    disabled={!instructionsAvailable}
                     onClick={openInstructions}>
                     <Plus aria-hidden="true" />{t("firstSite.add")}
                   </Button>
@@ -433,7 +491,9 @@ export function KokoroProjectWorkspace({
       <ProjectWorkspaceDialogs
         preview={preview}
         {...(brandName === undefined ? {} : { brandName })}
-        instructionsOpen={instructionsOpen}
+        instructionsAvailable={instructionsAvailable}
+        onInstructionsCloseAutoFocus={onInstructionsCloseAutoFocus}
+        instructionsOpen={instructionsOpen && instructionsAvailable}
         setInstructionsOpen={setInstructionsOpen}
         instructions={instructions}
         setInstructions={setInstructions}
@@ -441,6 +501,8 @@ export function KokoroProjectWorkspace({
         setInstructionsSaving={setInstructionsSaving}
         instructionsError={instructionsError}
         setInstructionsError={setInstructionsError}
+        instructionsResult={instructionsResult}
+        setInstructionsResult={setInstructionsResult}
         instructionsHistoryOpen={instructionsHistoryOpen}
         setInstructionsHistoryOpen={setInstructionsHistoryOpen}
         selectedInstructionRevision={selectedInstructionRevision}

@@ -20,8 +20,8 @@ import {
 } from "./app-frame-helpers"
 import type { Project, ProjectInstructionRevisionWire } from "@/contract/project"
 import type { ProjectReadState } from "@/features/app/use-project-list"
-import { updateProjectInstructions } from "@/features/app/project-list"
-import type { ProjectInstructionRevision } from "./app-frame.types"
+import { getProject, listProjectInstructionRevisions, updateProjectInstructions } from "@/features/app/project-list"
+import { ProjectInstructionSaveError, type ProjectInstructionRequest, type ProjectInstructionRevision } from "./app-frame.types"
 
 export type AppFrameProjectOptions = {
   projectRef: string | undefined
@@ -33,6 +33,7 @@ export type AppFrameProjectOptions = {
   clearDraft: () => void
   projectDetail: ProjectReadState<Project>
   instructionHistory: ProjectReadState<ProjectInstructionRevisionWire[]>
+  instructionsEnabled?: boolean
   instructionContext: object
   refreshProject: () => void
   refreshRenamedProject?: (target: string, signal: AbortSignal) => Promise<Project>
@@ -62,6 +63,7 @@ export function useAppFrameProject({
   projectDetail,
   instructionHistory,
   instructionContext,
+  instructionsEnabled = false,
   refreshProject,
   refreshRenamedProject,
   renameBoundary,
@@ -211,17 +213,92 @@ export function useAppFrameProject({
     openRename()
   }, [openRename, renameAvailable, renameView.open])
 
-  const [previewProjection, setPreviewProjection] = useState<{ context: object; instruction: string; history: readonly ProjectInstructionRevision[] } | null>(null)
-  const saveScopeRef = useRef<{ context: object; active: boolean; controllers: Set<AbortController> } | null>(null)
+  // A menu handoff is document-local and expires with admission or navigation.
+  // It never copies instructions or survives a different actor's lifetime.
+  const instructionEntryContext = useMemo(() => ({ mounted, preview, instructionsEnabled,
+    admitted: renameBoundary?.admitted, subject: renameBoundary?.subject, generation: renameBoundary?.generation }), [mounted, preview, instructionsEnabled,
+    renameBoundary?.admitted, renameBoundary?.subject, renameBoundary?.generation])
+  type InstructionEntryScope = { context: object; active: boolean; request: ProjectInstructionRequest | null; route: string | null }
+  const instructionTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const instructionEntryScopeRef = useRef<InstructionEntryScope | null>(null)
+  const [instructionEntry, setInstructionEntry] = useState<{ context: object; request: ProjectInstructionRequest } | null>(null)
+  const instructionAccess = mounted && instructionsEnabled && (preview || renameBoundary?.admitted === true && renameBoundary.subject !== null)
   useLayoutEffect(() => {
-    const scope = { context: instructionContext, active: true, controllers: new Set<AbortController>() }
-    saveScopeRef.current = scope
+    const scope: InstructionEntryScope = { context: instructionEntryContext, active: true, request: null, route: null }
+    instructionEntryScopeRef.current = scope
+    const retire = () => {
+      if (scope.route === `${window.location.pathname}${window.location.search}${window.location.hash}`) return
+      scope.request = null
+      setInstructionEntry((current) => current?.context === scope.context ? null : current)
+    }
+    window.addEventListener("popstate", retire)
+    window.addEventListener("kokoro:surface-navigation", retire)
     return () => {
       scope.active = false
+      scope.request = null
+      window.removeEventListener("popstate", retire)
+      window.removeEventListener("kokoro:surface-navigation", retire)
+    }
+  }, [instructionEntryContext])
+  const requestProjectInstructions = useCallback((target: string, returnFocus: HTMLButtonElement | null) => {
+    const scope = instructionEntryScopeRef.current
+    if (!instructionAccess || !target || !scope?.active || scope.context !== instructionEntryContext) return
+    const route = `/app/project/${encodeURIComponent(target)}`
+    const request: ProjectInstructionRequest = {
+      projectRef: target,
+      returnFocus: returnFocus?.isConnected ? returnFocus : null,
+      fallbackFocus: () => instructionTriggerRef.current,
+      isCurrent: () => scope.active && scope.request === request
+        && route === `${window.location.pathname}${window.location.search}${window.location.hash}`,
+      onConsumed: () => setInstructionEntry((current) => current?.request === request ? null : current),
+    }
+    scope.request = request
+    scope.route = route
+    setInstructionEntry({ context: instructionEntryContext, request })
+    navigateMountedSurface(route)
+  }, [instructionAccess, instructionEntryContext])
+  const instructionReady = instructionAccess && projectWorkspace && projectRef !== undefined
+    && (preview || projectDetail.status === "ready" && projectDetail.data.id === projectRef)
+  const projectInstruction = {
+    onTriggerMount: (target: HTMLButtonElement | null) => { instructionTriggerRef.current = target },
+    available: instructionReady,
+    onOpen: (returnFocus: HTMLButtonElement | null) => { if (instructionReady && projectRef) requestProjectInstructions(projectRef, returnFocus) },
+  }
+  const projectInstructionRequest = instructionReady && instructionEntry?.context === instructionEntryContext
+    && instructionEntry.request.projectRef === projectRef ? instructionEntry.request : undefined
+
+  const [previewProjection, setPreviewProjection] = useState<{ context: object; instruction: string; history: readonly ProjectInstructionRevision[] } | null>(null)
+  // A read refresh cannot retire an uncertain write. Only identity, Project,
+  // admission, or actual route retirement owns this command lifetime.
+  const [instructionRouteEpoch, setInstructionRouteEpoch] = useState(0)
+  const instructionCommandContext = useMemo(() => ({ instructionEntryContext, projectRef, projectWorkspace, instructionRouteEpoch }),
+    [instructionEntryContext, projectRef, projectWorkspace, instructionRouteEpoch])
+  type InstructionIntent = { projectRef: string; instruction: string; key: string; acknowledged: boolean }
+  const saveScopeRef = useRef<{ context: object; active: boolean; busy: boolean; revoked: boolean;
+    intent: InstructionIntent | null; controllers: Set<AbortController> } | null>(null)
+  useLayoutEffect(() => {
+    const scope = { context: instructionCommandContext, active: true, busy: false, revoked: false,
+      intent: null as InstructionIntent | null, controllers: new Set<AbortController>() }
+    saveScopeRef.current = scope
+    const route = `${window.location.pathname}${window.location.search}${window.location.hash}`
+    const retire = () => {
+      if (!scope.active || route === `${window.location.pathname}${window.location.search}${window.location.hash}`) return
+      scope.active = false
+      scope.intent = null
+      for (const controller of scope.controllers) controller.abort()
+      setInstructionRouteEpoch((value) => value + 1)
+    }
+    window.addEventListener("popstate", retire)
+    window.addEventListener("kokoro:surface-navigation", retire)
+    return () => {
+      scope.active = false
+      scope.intent = null
       for (const controller of scope.controllers) controller.abort()
       scope.controllers.clear()
+      window.removeEventListener("popstate", retire)
+      window.removeEventListener("kokoro:surface-navigation", retire)
     }
-  }, [instructionContext])
+  }, [instructionCommandContext])
   const projectInstructions = preview
     ? previewProjection?.context === instructionContext ? previewProjection.instruction : ""
     : projectDetail.status === "ready" ? projectDetail.data.instruction ?? "" : ""
@@ -316,9 +393,9 @@ export function useAppFrameProject({
     return () => { active = false }
   }, [preview, projectRef, instructionContext, t])
 
-  const saveProjectInstructions = useCallback(async (instructions: string) => {
+  const saveProjectInstructions = useCallback(async (instructions: string): Promise<void> => {
     const saveScope = saveScopeRef.current
-    if (!saveScope?.active || saveScope.context !== instructionContext || !projectRef) throw new DOMException("Aborted", "AbortError")
+    if (!saveScope?.active || saveScope.context !== instructionCommandContext || !projectRef) throw new DOMException("Aborted", "AbortError")
     if (preview) {
       window.localStorage.setItem(`kokoro.preview.project.${projectRef}.instructions`, instructions)
       const revision: ProjectInstructionRevision = { id: crypto.randomUUID(), instruction: instructions, updatedAt: Date.now(), actorName: t("firstSite.you"), current: true }
@@ -327,16 +404,55 @@ export function useAppFrameProject({
       setPreviewProjection({ context: instructionContext, instruction: instructions, history })
       return
     }
-    if (projectDetail.status !== "ready") throw new Error("project_not_available")
+    if (projectDetail.status !== "ready" || projectDetail.data.id !== projectRef
+      || renameBoundary !== undefined && (!renameBoundary.admitted || renameBoundary.subject === null)) throw new Error("project_not_available")
+    if (saveScope.revoked) throw new ProjectInstructionSaveError("forbidden", instructions)
+    if (saveScope.busy) throw new DOMException("Operation pending", "AbortError")
+    // Retain the original bytes and identity even if a caller presents new text.
+    let intent = saveScope.intent ?? { projectRef, instruction: instructions,
+      key: `project-instructions:${projectRef}:${crypto.randomUUID()}`, acknowledged: false }
+    saveScope.intent = intent
+    saveScope.busy = true
     const controller = new AbortController()
     saveScope.controllers.add(controller)
+    const current = () => saveScope.active && saveScopeRef.current === saveScope && !controller.signal.aborted
     try {
-      await updateProjectInstructions(projectRef, instructions, `project-instructions:${projectRef}:${crypto.randomUUID()}`, controller.signal)
-      if (!saveScope.active || controller.signal.aborted) throw new DOMException("Aborted", "AbortError")
-      // Only the current owner GET supplies instruction/history after an ACK.
+      if (!intent.acknowledged) {
+        await updateProjectInstructions(intent.projectRef, intent.instruction, intent.key, controller.signal)
+        if (!current()) throw new DOMException("Aborted", "AbortError")
+        intent = { ...intent, acknowledged: true }
+        saveScope.intent = intent
+      }
+      // A known ACK never writes again, including after a failed owner read.
+      await getProject(intent.projectRef, controller.signal)
+      if (!current()) throw new DOMException("Aborted", "AbortError")
+      await listProjectInstructionRevisions(intent.projectRef, controller.signal)
+      if (!current()) throw new DOMException("Aborted", "AbortError")
       refreshProject()
-    } finally { saveScope.controllers.delete(controller) }
-  }, [preview, projectRef, t, projectDetail, projectInstructionHistory, instructionContext, refreshProject])
+      saveScope.intent = null
+      return
+    } catch (error) {
+      if (!current()) throw new DOMException("Aborted", "AbortError")
+      if (error instanceof ProjectReadError && (error.status === 401 || error.status === 403)) {
+        saveScope.revoked = true
+        saveScope.intent = null
+        throw new ProjectInstructionSaveError("forbidden", intent.instruction)
+      }
+      if (intent.acknowledged) throw new ProjectInstructionSaveError("read-error", intent.instruction)
+      if (error instanceof ProjectReadError && error.reason === "http" &&
+        (error.status === 400 || error.status === 404)) {
+        saveScope.intent = null
+        throw new ProjectInstructionSaveError("rejected", intent.instruction)
+      }
+      // A bare 409 can mean idempotency_in_progress, not a rejected mutation.
+      // The existing reader does not expose its code: preserve the exact intent.
+      throw new ProjectInstructionSaveError("unknown", intent.instruction)
+    } finally {
+      saveScope.busy = false
+      saveScope.controllers.delete(controller)
+      controller.abort()
+    }
+  }, [preview, projectRef, t, projectDetail, projectInstructionHistory, instructionContext, instructionCommandContext, refreshProject, renameBoundary])
 
   const uploadProjectResource = useCallback(async (file: File, idempotencyKey: string) => {
     if (!projectRef) throw new ProjectResourceUploadError("project_not_selected", false)
@@ -470,6 +586,10 @@ export function useAppFrameProject({
 
   return {
     projectRename,
+    projectInstruction,
+    projectInstructionRequest,
+    requestProjectInstructions,
+    instructionAccess,
     projectInstructions,
     projectInstructionHistory,
     saveProjectInstructions,

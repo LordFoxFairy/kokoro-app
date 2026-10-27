@@ -7,14 +7,15 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useT } from "@/i18n/context"
 import { MoreHorizontal } from "lucide-react"
-import type { ProjectRenameControl } from "./workspace-header.types"
+import type { ProjectInstructionControl, ProjectRenameControl } from "./workspace-header.types"
 
 type WorkspaceHeaderProjectMenuProps = {
   onOpenSettings?: (tab: "account" | "subscription") => void
   projectRename?: ProjectRenameControl
+  projectInstruction?: ProjectInstructionControl
 }
 
-export function WorkspaceHeaderProjectMenu({ onOpenSettings, projectRename }: WorkspaceHeaderProjectMenuProps) {
+export function WorkspaceHeaderProjectMenu({ onOpenSettings, projectRename, projectInstruction }: WorkspaceHeaderProjectMenuProps) {
   const t = useT()
   const inputId = useId()
   const moreTriggerRef = useRef<HTMLButtonElement | null>(null)
@@ -40,7 +41,7 @@ export function WorkspaceHeaderProjectMenu({ onOpenSettings, projectRename }: Wo
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button ref={moreTriggerRef} type="button" variant="ghost" size="icon-sm" className="size-8 min-h-8" aria-label={t("settings.moreSections")}>
+          <Button ref={(node) => { moreTriggerRef.current = node; projectInstruction?.onTriggerMount(node) }} type="button" variant="ghost" size="icon-sm" className="size-8 min-h-8" aria-label={t("settings.moreSections")}>
             <MoreHorizontal aria-hidden="true" />
           </Button>
         </DropdownMenuTrigger>
@@ -55,6 +56,7 @@ export function WorkspaceHeaderProjectMenu({ onOpenSettings, projectRename }: Wo
               projectRename.onOpen()
             }}>{t("firstSite.renameProject")}</DropdownMenuItem>
           ) : null}
+          {projectInstruction?.available ? <DropdownMenuItem onSelect={() => projectInstruction.onOpen(moreTriggerRef.current)}>{t("firstSite.editProjectInstructions")}</DropdownMenuItem> : null}
           <DropdownMenuItem onSelect={() => onOpenSettings?.("account")}>{t("settings.accountTitle")}</DropdownMenuItem>
           <DropdownMenuItem onSelect={() => onOpenSettings?.("subscription")}>{t("firstSite.upgrade")}</DropdownMenuItem>
         </DropdownMenuContent>

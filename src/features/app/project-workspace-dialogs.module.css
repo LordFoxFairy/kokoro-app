@@ -1,6 +1,8 @@
 .instructionsDialog {
   width: 35rem;
-  height: 35rem;
+  height: min(35rem, calc(100dvh - 2rem));
+  max-height: calc(100dvh - 2rem);
+  overflow: hidden;
   max-width: calc(100vw - 2rem);
   grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 0;
@@ -12,10 +14,12 @@
 .instructionsDialogHeader { gap: 0.75rem; }
 .instructionsDialogHeader [data-slot="dialog-title"] { font-size: 18px; line-height: 24px; font-weight: 600; }
 .instructionsDialogHeader [data-slot="dialog-description"] { font-size: 14px; line-height: 20px; }
+.instructionsDialogBody { display: flex; min-height: 0; flex-direction: column; padding-top: 0.875rem; }
 .instructionsTextarea {
-  height: 23.8125rem;
-  min-height: 23.8125rem;
-  margin-top: 0.875rem;
+  height: 100%;
+  min-height: 0;
+  flex: 1;
+  margin: 0;
   resize: none;
   border-radius: 8px;
   background: var(--muted);
@@ -29,13 +33,17 @@
   outline: 2px solid var(--ring);
   outline-offset: -2px;
 }
-.instructionsDialogFooter { align-items: center; padding-top: 1.5625rem; }
+.instructionsDialogFooter { flex-direction: row; align-items: center; padding-top: 1.5625rem; }
 .instructionsDialogFooter button { height: 2.25rem; min-width: 4.5rem; border-radius: 8px; padding-inline: 0.75rem; font-size: 14px; line-height: 20px; }
 .instructionsHistory { margin-right: auto; }
 .instructionsDialogFooter .instructionsHistory { width: 5rem; min-width: 5rem; }
 .instructionsFooterSpacer { flex: 1; }
-.instructionsError { margin: 0.5rem 0 0; color: var(--destructive); font-size: 13px; line-height: 18px; }
+.instructionsError { flex-shrink: 0; margin: 0.5rem 0 0; color: var(--destructive); font-size: 13px; line-height: 18px; }
 .instructionsOverlay { background: rgb(0 0 0 / 28%); backdrop-filter: blur(4px); }
+
+@media (max-width: 639px) {
+  .instructionsDialog { padding-inline: 1rem; }
+}
 
 .instructionsHistoryDialog {
   display: block;
