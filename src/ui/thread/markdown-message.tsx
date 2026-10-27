@@ -9,6 +9,8 @@ import styles from "./thread.module.css"
 const MARKDOWN_COMPONENTS: Components = {
   // LLM 生成的链接强制新窗 + noopener/noreferrer/nofollow：不泄露 referrer、不让目标页操作 opener。
   a({ children, href }) {
+    // The default URL filter may remove a destination; keep its text, not a current-page link.
+    if (!href?.trim()) return <>{children}</>
     return (
       <a href={href} target="_blank" rel="noopener noreferrer nofollow">
         {children}
