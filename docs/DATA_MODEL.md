@@ -1,3 +1,11 @@
+## S13：目录作者视图，不新增持久事实（2026-10-27）
+
+现 `SkillCatalogCard` 仅增加 optional product／publisher_profile，沿正式 Public28.6 的 Public9Facts／NativeProfile 原形状，不新建 store／DB／缓存或 owner。Hub 当前 publisher 的 kind/id 与 IAM profile 严格关联；repository publisher 只提供 owner provenance，creator_ref 不参与作者兜底。缺失事实及合法 missing 保未知且不显示作者，supplied 不一致保 invalid；不以 Community 或品牌伪造作者。
+
+仅新 Hub／Catalog refinement 复用正式 owner 闭集：source_kind 与 publisher 同有／同缺；third_party 必须 repository publisher＋github creation provenance、同 repository_id、github_repository presentation；personal／official 必须 IAM＋first_party。混合来源／缺 provenance／错 repository 仍 invalid，不改变共享 Product schema 其它消费者。
+
+系列 skill_id、current revision source_ref／revision_skill_id 与原安装 installation_id／installed_source_ref 各自身份保持；显示作者不改变安装、管理、执行权限或历史 revision。其余持久模型及刚收口 reader 的作用域不变。
+
 ## PREPARE-OUTCOME：退休与成功的原子互斥（2026-10-27，consumer候选）
 
 沿下方已交付 journal-v2 的 active 原格式／retired_intents／subject_server 稳定 seek，版本仍2，无新字段、store、index、owner表。退休 record 仍闭合 schema_version2、subject、target(serverId/connectorId/version)、key、disposition、policy_ref、immutable retired_at；policy_ref 从正式 BFF394a outcomes1.0 原件 SHA `5169cbf5e431cc71a23e2717bda9b51c77f08bed82cae149667532511b3afe72` 与 profile/version 正规生成，不从 UI 输入授结果权限。definite_rejected 来自方法专属 typed rejected；unknown_fenced 仍未知且仅显式结束等待。

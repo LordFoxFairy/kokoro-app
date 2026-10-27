@@ -70,44 +70,6 @@ export type SkillCard = z.infer<typeof skillCardSchema>
 
 export const skillPoolSchema = z.object({ skills: z.array(skillCardSchema) }).strict()
 
-// 发现目录与已新增技能池是两个不同的投影：目录可以包含尚未安装的官方/第三方
-// 技能，因此不能复用 SkillCard 的 enabled-only 语义。
-const skillCatalogCardSchema = z
-  .object({
-    // Catalog identity is independent from a display name. The Manus-style
-    // read projection supplies this key; older local fixtures may omit it.
-    skill_id: z.string().min(1).optional(),
-    installation_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u).optional(),
-    source_ref: z.string().regex(/^skill:[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u).optional(),
-    // Internal view binding from the exact installation, not Hub currentVersion.
-    installed_source_ref: z.string().regex(/^skill:[A-Za-z0-9][A-Za-z0-9._:-]{0,190}(?![\s\S])/u).optional(),
-    source_status: installationSourceStatusSchema.optional(),
-    revision_skill_id: z
-      .string()
-      .regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u)
-      .optional(),
-    name: z.string().min(1),
-    description: z.string(),
-    content_hash: z.string().min(1),
-    scope: z.string().min(1),
-    installed: z.boolean(),
-    enabled: z.boolean(),
-    categories: catalogCategoriesSchema.optional(),
-    updated_at: z.number().int().optional(),
-    usage_count: z
-      .string()
-      .regex(/^(0|[1-9][0-9]*)$/u)
-      .optional(),
-    cover_image: z.string().min(1).optional(),
-    example_questions: z.array(z.string().min(1)).optional(),
-    publisher_type: z.string().min(1).optional(),
-  })
-  .strict()
-export type SkillCatalogCard = z.infer<typeof skillCatalogCardSchema>
-
-export const skillCatalogSchema = z.object({ skills: z.array(skillCatalogCardSchema), next_cursor: z.string().nullable().optional() }).strict()
-export type SkillCatalog = z.infer<typeof skillCatalogSchema>
-
 // BFF public read projections. These are consumer validators, not editable owner contracts.
 const publishedSkillId = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u)
 export function skillCommandPath(id: string): string {
@@ -429,6 +391,72 @@ const skillPublisherProfileSchema = z.union([
     .strict(),
   z.object({ kind: z.literal("user"), id: z.string().min(1).max(255), status: z.literal("missing") }).strict(),
 ])
+// Optional display facts must still be bound to the same current publisher.
+// Absence is unknown, never a creator/source-classification fallback.
+function validateSkillPublisher(value: { product?: z.infer<typeof skillProductFactsSchema> | undefined; publisher_profile?: z.infer<typeof skillPublisherProfileSchema> | undefined }, context: z.RefinementCtx): void {
+  const product = value.product
+  const publisher = product?.publisher
+  // Mirror the owner-qualified product combinations only for these two new
+  // display projections; other existing Product consumers are unchanged.
+  if (product !== undefined && (
+    (product.source_kind === undefined) !== (publisher === undefined)
+    || product.source_kind === "third_party" && (publisher?.kind !== "github_repository"
+      || product.creation_provenance?.kind !== "github"
+      || publisher.github_repository.repository_id !== product.creation_provenance.repository_id
+      || product.presentation_kind !== "github_repository")
+    || (product.source_kind === "personal" || product.source_kind === "official") && (publisher?.kind !== "iam" || product.presentation_kind !== "first_party")
+  )) context.addIssue({ code: z.ZodIssueCode.custom, path: ["product"], message: "Publisher product facts must retain the owner-qualified source and provenance" })
+  const profile = value.publisher_profile
+  if (publisher?.kind === "iam") {
+    if (profile === undefined || profile.kind !== publisher.iam.kind || profile.id !== publisher.iam.id) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ["publisher_profile"], message: "Publisher profile must match the current IAM publisher" })
+    }
+  } else if (profile !== undefined) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["publisher_profile"], message: "Publisher profile requires a current IAM publisher" })
+  }
+}
+
+// 发现目录与已新增技能池是两个不同的投影：目录可以包含尚未安装的官方/第三方
+// 技能，因此不能复用 SkillCard 的 enabled-only 语义。
+const skillCatalogCardSchema = z
+  .object({
+    // Catalog identity is independent from a display name. The Manus-style
+    // read projection supplies this key; older local fixtures may omit it.
+    skill_id: z.string().min(1).optional(),
+    installation_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u).optional(),
+    source_ref: z.string().regex(/^skill:[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u).optional(),
+    // Internal view binding from the exact installation, not Hub currentVersion.
+    installed_source_ref: z.string().regex(/^skill:[A-Za-z0-9][A-Za-z0-9._:-]{0,190}(?![\s\S])/u).optional(),
+    source_status: installationSourceStatusSchema.optional(),
+    revision_skill_id: z
+      .string()
+      .regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u)
+      .optional(),
+    name: z.string().min(1),
+    description: z.string(),
+    content_hash: z.string().min(1),
+    scope: z.string().min(1),
+    installed: z.boolean(),
+    enabled: z.boolean(),
+    categories: catalogCategoriesSchema.optional(),
+    updated_at: z.number().int().optional(),
+    usage_count: z
+      .string()
+      .regex(/^(0|[1-9][0-9]*)$/u)
+      .optional(),
+    cover_image: z.string().min(1).optional(),
+    example_questions: z.array(z.string().min(1)).optional(),
+    publisher_type: z.string().min(1).optional(),
+    product: skillProductFactsSchema.optional(),
+    publisher_profile: skillPublisherProfileSchema.optional(),
+  })
+  .strict()
+  .superRefine(validateSkillPublisher)
+export type SkillCatalogCard = z.infer<typeof skillCatalogCardSchema>
+
+export const skillCatalogSchema = z.object({ skills: z.array(skillCatalogCardSchema), next_cursor: z.string().nullable().optional() }).strict()
+export type SkillCatalog = z.infer<typeof skillCatalogSchema>
+
 export const managedPersonalSkillSchema = z
   .object({
     skill_id: skillCommandId,
@@ -826,6 +854,8 @@ const websiteVersion = websiteOptional({
   licenseUrl: websiteString,
 })
 export const manuscriptHubSkillSchema = websiteOptional({
+  product: skillProductFactsSchema,
+  publisher_profile: skillPublisherProfileSchema,
   skillId: websiteString,
   originalName: websiteString,
   displayName: websiteString,
@@ -848,6 +878,7 @@ export const manuscriptHubSkillSchema = websiteOptional({
 })
   .extend({ skillId: websiteString.min(1) })
   .strict()
+  .superRefine(validateSkillPublisher)
 export const manuscriptHubPageSchema = z
   .object({
     skills: z.array(manuscriptHubSkillSchema),

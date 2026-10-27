@@ -1,3 +1,11 @@
+## S13：Hub 可选发布者事实（Public28.6，2026-10-27）
+
+固定 BFF `7f5c522b54762c5c0a01ffa7f71f5696eb4c70f6` 的唯一 canonical OpenAPI，SHA256 `a020e849f740165fa20099f5ab041b76bc480c70a9bbc067955e57f5ec22ae02`。`SpecificationHubResponse.skills[]` 新增 optional `product→Public9SkillProductFacts`、`publisher_profile→SkillPublisherProfile`，保原 closed 字段与身份。product.publisher 为 IAM 时必须有同 kind/id 的 found／合法 user missing profile；非 IAM 不接受 supplied profile。absence 仍未知；坏 ref 绑定／extra／union 是 invalid wire，不作为成功且省略作者。单一 additive reader 无历史专用 schema 或 required 迁移。
+
+仅新 Hub／Catalog refinement 复用正式 owner 闭集：source_kind 与 publisher 同有／同缺；third_party 必须 repository publisher＋github creation provenance、同 repository_id、github_repository presentation；personal／official 必须 IAM＋first_party。混合来源／缺 provenance／错 repository 仍 invalid，不改变共享 Product schema 其它消费者。
+
+11 现公共 generator 的固定 commit／digest 同步更新，private pin 不变。test-only 精确 28.6→28.5 仅移除本次两字段并还原 info.version，先核完整当前 SHA、再恢复完整父 SHA，之后进入未改旧证明链；不是运行兼容或 generic strip。HTTP 请求、权限、时限、缓存与写操作均不变。
+
 ## PREPARE-OUTCOME：独立政策1.0＋lookup1.1（2026-10-27，正式394a消费候选）
 
 唯一源为 BFF `394ae559cd2018206c32d5ca3014de248effa203` 正式 `contract/mcp-prepare-outcomes-v1.json`（SHA256 `5169cbf5e431cc71a23e2717bda9b51c77f08bed82cae149667532511b3afe72`）及 `contract/openapi/browser/v1/mcp-prepare-receipt.json`（`97ac49936f7107ba5f25b9237997642069693b1e6d0b6dd38034718636ee6112`）。两 source pin／raw snapshot／TS 分别正规生成，lookup 必须引用 exact outcomes digest 与同 BFF commit。原件内 owner_feature 属 Platform f294，不将它误作 BFF pin；共享 connector错误／Public不变。

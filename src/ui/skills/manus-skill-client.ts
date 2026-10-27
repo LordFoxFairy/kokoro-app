@@ -152,6 +152,8 @@ function toCard(skill: HubSkill, added: ReadonlyMap<string, Readonly<{ installed
     ...(skill.coverImage === undefined ? {} : { cover_image: ownerCoverPath(skill.coverImage, skill.currentVersion?.versionUid) }),
     ...(skill.exampleQuestions === undefined ? {} : { example_questions: skill.exampleQuestions }),
     ...(skill.publisherType === undefined ? {} : { publisher_type: skill.publisherType }),
+    ...(skill.product === undefined ? {} : { product: skill.product }),
+    ...(skill.publisher_profile === undefined ? {} : { publisher_profile: skill.publisher_profile }),
   }
 }
 

@@ -2316,3 +2316,72 @@ it.each(["caller", "deadline"] as const)("settles catalog package %s retirement 
     expect(fetcher).toHaveBeenCalledOnce();
   } finally { vi.useRealTimers(); }
 });
+
+const qualifiedCatalogRepository = {
+  kind: "github", repository_id: "123", repository_url: "https://github.com/qa-owner/skill", owner_login: "qa-owner", owner_url: "https://github.com/qa-owner",
+  asset_ref: "qa-github-package", commit: "a".repeat(40), path: "SKILL.md", content_sha256: "b".repeat(64), size_bytes: "100", mime_type: "application/zip",
+}
+const qualifiedRepositoryProduct = {
+  publication_audience: "catalog", state_version: "7", source_kind: "third_party", presentation_kind: "github_repository",
+  publisher: { kind: "github_repository", github_repository: qualifiedCatalogRepository }, creation_provenance: qualifiedCatalogRepository,
+}
+const catalogPublisherProduct = {
+  publication_audience: "catalog", state_version: "7", source_kind: "personal", presentation_kind: "first_party",
+  creator_ref: { kind: "user", id: "qa-importer" },
+  publisher: { kind: "iam", iam: { kind: "user", id: "qa-publisher" } },
+}
+const catalogPublisherProfile = { kind: "user", id: "qa-publisher", status: "found", display_name: "QA Publisher", image_url: null }
+
+it.each([
+  { product: qualifiedRepositoryProduct },
+  { product: { publication_audience: "catalog", state_version: "7" } },
+  { product: catalogPublisherProduct, publisher_profile: catalogPublisherProfile },
+  { product: { ...catalogPublisherProduct, source_kind: "official", publisher: { kind: "iam", iam: { kind: "organization", id: "qa-org" } } }, publisher_profile: { ...catalogPublisherProfile, kind: "organization", id: "qa-org" } },
+  { product: catalogPublisherProduct, publisher_profile: { kind: "user", id: "qa-publisher", status: "missing" } },
+  {},
+])("carries optional current catalog publisher facts without rebinding revisions: %j", async (facts) => {
+  const { createManusSkillHubClient } = await import("@/ui/skills/manus-skill-client")
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => jsonResponse(String(input).endsWith("ListHubSkills")
+    ? { skills: [{ skillId: "publisher-series", displayName: "Same series", currentVersion: { versionUid: "current-revision" }, ...facts }], tagOptions: {} }
+    : { userAddedSkills: [{ id: "publisher-series", version: "installed-revision", installationId: "publisher-installation", added: true, enabled: true }], officialSkills: [] })))
+  const result = await createManusSkillHubClient(createHubClient(), { admitted: true, subject: "publisher-reader", generation: 1 }).listSkillCatalog()
+  expect(result.skills[0]).toMatchObject({ skill_id: "publisher-series", source_ref: "skill:current-revision", revision_skill_id: "current-revision", installation_id: "publisher-installation", installed_source_ref: "skill:installed-revision", installed: true, enabled: true, ...facts })
+})
+
+it.each([
+  { product: catalogPublisherProduct, publisher_profile: { ...catalogPublisherProfile, id: "qa-importer" } },
+  { product: qualifiedRepositoryProduct, publisher_profile: catalogPublisherProfile },
+  { product: catalogPublisherProduct, publisher_profile: { ...catalogPublisherProfile, kind: "organization" } },
+  { product: catalogPublisherProduct },
+  { publisher_profile: catalogPublisherProfile },
+  { product: { ...catalogPublisherProduct, publisher: undefined }, publisher_profile: catalogPublisherProfile },
+  { product: catalogPublisherProduct, publisher_profile: { ...catalogPublisherProfile, extra: true } },
+  { product: { ...catalogPublisherProduct, extra: true }, publisher_profile: catalogPublisherProfile },
+  { product: catalogPublisherProduct, publisher_profile: { ...catalogPublisherProfile, status: "missing" } },
+])("rejects supplied catalog publisher wire rather than silently omitting it: %j", async (facts) => {
+  const { manuscriptHubPageSchema } = await import("@/hub/schemas")
+  const { createManusSkillHubClient } = await import("@/ui/skills/manus-skill-client")
+  const hub = { skills: [{ skillId: "publisher-series", ...facts }], tagOptions: {} }
+  expect(manuscriptHubPageSchema.safeParse(hub).success).toBe(false)
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => jsonResponse(String(input).endsWith("ListHubSkills") ? hub : { userAddedSkills: [], officialSkills: [] })))
+  await expect(createManusSkillHubClient(createHubClient(), { admitted: true, subject: "bad-publisher-reader", generation: 1 }).listSkillCatalog()).rejects.toThrow()
+  expect(skillCatalogSchema.safeParse({ skills: [{ skill_id: "publisher-series", name: "Skill", description: "", content_hash: "revision", scope: "third_party", installed: false, enabled: false, ...facts }] }).success).toBe(false)
+})
+
+it.each([
+  { product: { ...catalogPublisherProduct, source_kind: undefined }, publisher_profile: catalogPublisherProfile },
+  { product: { ...catalogPublisherProduct, source_kind: "personal", publisher: undefined, presentation_kind: "first_party" } },
+  { product: { ...catalogPublisherProduct, source_kind: "third_party", presentation_kind: "first_party" }, publisher_profile: catalogPublisherProfile },
+  { product: { ...qualifiedRepositoryProduct, source_kind: "personal", presentation_kind: "first_party", creation_provenance: { kind: "local" } } },
+  { product: { ...qualifiedRepositoryProduct, source_kind: "official", presentation_kind: "first_party" } },
+  { product: { ...qualifiedRepositoryProduct, creation_provenance: undefined } },
+  { product: { ...qualifiedRepositoryProduct, creation_provenance: { kind: "local" } } },
+  { product: { ...qualifiedRepositoryProduct, creation_provenance: { ...qualifiedCatalogRepository, repository_id: "456" } } },
+  { product: { ...qualifiedRepositoryProduct, presentation_kind: "first_party" } },
+  { product: { ...catalogPublisherProduct, source_kind: "official", presentation_kind: "github_repository" }, publisher_profile: catalogPublisherProfile },
+])("rejects owner-inconsistent publisher product facts in both Hub and catalog: %j", async (facts) => {
+  const { manuscriptHubPageSchema } = await import("@/hub/schemas")
+  const hub = manuscriptHubPageSchema.safeParse({ skills: [{ skillId: "publisher-series", ...facts }], tagOptions: {} }).success
+  const card = skillCatalogSchema.safeParse({ skills: [{ name: "Skill", description: "", content_hash: "revision", scope: "third_party", installed: false, enabled: false, ...facts }] }).success
+  expect({ hub, card }).toEqual({ hub: false, card: false })
+})

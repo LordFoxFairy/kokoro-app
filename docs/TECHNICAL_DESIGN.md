@@ -1,3 +1,11 @@
+## S13：目录发布者的只读事实消费（2026-10-27，候选）
+
+唯一 Public28.6 原件固定 BFF `7f5c522b54762c5c0a01ffa7f71f5696eb4c70f6`／SHA256 `a020e849f740165fa20099f5ab041b76bc480c70a9bbc067955e57f5ec22ae02`。沿现 Hub strict schema→toCard→目录及同一详情 publisherLabel，仅 additive optional product／publisher_profile；复用 Public9Facts 与现 NativeProfile 三种形状，不另建 parser／组件／缓存。supplied IAM profile 必须匹配当前 publisher kind/id；非 IAM 不接受 profile，坏 union／extra 均拒 invalid wire。absence 或合法 user missing 不显示作者；分类／品牌／creator 不代作者。GitHub 仅显示 owner 已验证 repository publisher 的 owner_login，不推断导入者或人的姓名。这些仅展示事实，不授安装、管理或执行权限。
+
+仅新 Hub／Catalog refinement 复用正式 owner 闭集：source_kind 与 publisher 同有／同缺；third_party 必须 repository publisher＋github creation provenance、同 repository_id、github_repository presentation；personal／official 必须 IAM＋first_party。混合来源／缺 provenance／错 repository 仍 invalid，不改变共享 Product schema 其它消费者。
+
+现 11 条公共生成链从同一 full snapshot 正规重出，五条独立 private provenance 保持。原详情 reader、请求、actor scope、缓存、engine、安装 identity 与样式不变；正常 producer 配对及 UI 验收由 Root 另验，候选不冒已激活。
+
 ## PREPARE-OUTCOME：方法专属结果、原尝试退休与独立新连接（2026-10-27，正式原件消费者候选）
 
 本节承接下方 journal-v2 与 completed-only 恢复，取代“成功 complete 仍完全不变”的存储阶段停止线，不改 generic ConnectorCommand 状态／生命周期。固定 BFF `394ae559cd2018206c32d5ca3014de248effa203` 两份独立原件：outcomes1.0 SHA `5169cbf5e431cc71a23e2717bda9b51c77f08bed82cae149667532511b3afe72`、lookup1.1 SHA `97ac49936f7107ba5f25b9237997642069693b1e6d0b6dd38034718636ee6112`；BFF publication pin 与原件内 Native owner_feature `f29428f6e6d23e9f35642fe3de5463472bc1f873` 分层，App 不另建 Platform client。正规生成器校验 profile／scope／方法闭集与跨原件 digest；原 Public／共享错误 pin 不动。

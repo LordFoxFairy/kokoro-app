@@ -28,9 +28,9 @@ import {
 
 import { restorePublic21 } from "./bff-configuration-parent"
 
-const OWNER_COMMIT = "c195d2325ba9c433cc4c64e25e6c67eaf73c47f6"
-const OWNER_SHA256 = "109a2ae063b10699ae52776b09533c5622d906679c093d65730a289206043b1a"
-const OWNER_VERSION = "28.5.0"
+const OWNER_COMMIT = "7f5c522b54762c5c0a01ffa7f71f5696eb4c70f6"
+const OWNER_SHA256 = "a020e849f740165fa20099f5ab041b76bc480c70a9bbc067955e57f5ec22ae02"
+const OWNER_VERSION = "28.6.0"
 const SNAPSHOT = resolve(process.cwd(), "src/generated/bff-public-openapi.yaml")
 
 type Shape = {
@@ -38,7 +38,7 @@ type Shape = {
   required?: string[]
   additionalProperties?: boolean
   properties?: Record<string, Shape>
-  items?: { $ref?: string }
+  items?: Shape
   type?: string | string[]
   const?: string | boolean
   enum?: string[]
@@ -225,7 +225,7 @@ describe("pinned BFF Skills and MCP public consumer contract", () => {
 
   it("pins exact owner bytes and six current Skill draft/publish operations", async () => {
     const bytes = await readFile(SNAPSHOT)
-    expect(OWNER_COMMIT).toBe("c195d2325ba9c433cc4c64e25e6c67eaf73c47f6")
+    expect(OWNER_COMMIT).toBe("7f5c522b54762c5c0a01ffa7f71f5696eb4c70f6")
     expect(createHash("sha256").update(bytes).digest("hex")).toBe(OWNER_SHA256)
     const spec = YAML.parse(bytes.toString()) as Spec
     expect(spec.info.version).toBe(OWNER_VERSION)
@@ -527,4 +527,31 @@ it("consumes the formal terminal series deletion contract without replacing with
  expect(deletePersonalSkillSeriesRequestSchema.safeParse({expected_state_version:"9223372036854775807",expected_publication:null}).success).toBe(false)
  expect(deletePersonalSkillSeriesRequestSchema.safeParse({expected_state_version:"8",expected_publication:null}).success).toBe(true)
  expect(field(shape(spec,"SkillInstallation"),"source_status").enum).toContain("deleted")
+})
+
+
+it("consumes the same optional Hub publisher refs from formal Public28.6 without inventing identity", async () => {
+  const spec = YAML.parse(await readFile(SNAPSHOT, "utf8")) as Spec
+  const hub = field(shape(spec, "SpecificationHubResponse"), "skills").items!
+  expect(hub.additionalProperties).toBe(false)
+  expect(field(hub, "product").$ref).toBe("#/components/schemas/Public9SkillProductFacts")
+  expect(field(hub, "publisher_profile").$ref).toBe("#/components/schemas/SkillPublisherProfile")
+  expect(hub.required ?? []).not.toContain("product")
+  expect(hub.required ?? []).not.toContain("publisher_profile")
+  const { manuscriptHubPageSchema } = await import("@/hub/schemas")
+  const product = { publication_audience: "catalog", state_version: "3", source_kind: "personal", presentation_kind: "first_party", publisher: { kind: "iam", iam: { kind: "user", id: "qa-publisher" } } }
+  const profile = { kind: "user", id: "qa-publisher", status: "found", display_name: "QA Publisher", image_url: null }
+  expect(manuscriptHubPageSchema.parse({ skills: [{ skillId: "qa-series", product, publisher_profile: profile }], tagOptions: {} }).skills[0]).toMatchObject({ product, publisher_profile: profile })
+  expect(manuscriptHubPageSchema.safeParse({ skills: [{ skillId: "qa-series", product, publisher_profile: { ...profile, id: "qa-creator" } }], tagOptions: {} }).success).toBe(false)
+})
+
+
+it("restores every Public28.5 byte before the sealed older proof chain and rejects unrelated publisher drift", async () => {
+  const { restorePublic285SkillPublisherContract: restore } = await import("./bff-skill-publisher-parent")
+  const raw = await readFile(SNAPSHOT, "utf8")
+  expect(createHash("sha256").update(restore(raw)).digest("hex")).toBe("109a2ae063b10699ae52776b09533c5622d906679c093d65730a289206043b1a")
+  for (const changed of [raw + "\n", raw.replace("listTeamMembers", "unrelatedOperation"), raw.replace('Same authorized current version owner product', 'Other version owner product'), raw.replace('Required exactly when product.publisher.kind is iam', 'Always optional publisher'), raw.replace('#/components/schemas/SkillPublisherProfile', '#/components/schemas/UnknownProfile'), raw.replace('SpecificationHubResponse:\n', 'SpecificationHubResponse:\n      extra: true\n')]) {
+    expect(changed).not.toBe(raw)
+    expect(() => restore(changed)).toThrow(/drift/)
+  }
 })

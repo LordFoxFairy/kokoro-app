@@ -74,7 +74,12 @@ export function KokoroSkillsSurface(props: KokoroSkillsSurfaceProps) {
 function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kokoro", onOpenSettings, onCreateSkillWithAi, onTrySkill, projectReadBoundary }: KokoroSkillsSurfaceProps) {
   const t = useT()
   const readBoundary = useMemo(() => projectReadBoundary ?? { admitted: preview, subject: preview ? "preview" : null, generation: 0 }, [preview, projectReadBoundary])
-  const publisherLabel = (skill: Pick<SkillCatalogCard, "scope">) => skill.scope === "official" ? brandName : skill.scope === "third_party" ? t("skills.community") : undefined
+  const publisherLabel = (skill: Pick<SkillCatalogCard, "product" | "publisher_profile">) => {
+    const publisher = skill.product?.publisher
+    if (publisher?.kind === "github_repository") return publisher.github_repository.owner_login
+    const profile = skill.publisher_profile
+    return publisher?.kind === "iam" && profile?.status === "found" && profile.kind === publisher.iam.kind && profile.id === publisher.iam.id ? profile.display_name : undefined
+  }
   const categoryLabel = (value: CatalogSkillCategory) => t(CATEGORIES.find((item) => item.value === value)?.key ?? "skills.categoryCoding")
   // The standalone page and the embedded Settings page must consume the same
   // owner-backed Skills projection.  The generic Hub client still addresses

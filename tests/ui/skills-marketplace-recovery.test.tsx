@@ -232,3 +232,57 @@ it("keeps the marketplace scaffold quiet for unknown reads, retains confirmed ca
   expect(screen.queryByTestId("skills-catalog-empty")).toBeNull()
   expect(screen.getByRole("searchbox", { name: "搜索技能" })).toBeVisible()
 })
+
+const publisherProduct = {
+  publication_audience: "catalog", state_version: "7", source_kind: "personal", presentation_kind: "first_party",
+  creator_ref: { kind: "user", id: "qa-importer-not-publisher" },
+  publisher: { kind: "iam", iam: { kind: "user", id: "qa-publisher" } },
+}
+const repositoryPublisher = {
+  kind: "github", repository_id: "123", repository_url: "https://github.com/qa-repository-owner/skill",
+  owner_login: "qa-repository-owner", owner_url: "https://github.com/qa-repository-owner",
+  asset_ref: "qa-github-package", commit: "a".repeat(40), path: "SKILL.md", content_sha256: "b".repeat(64), size_bytes: "100", mime_type: "application/zip",
+}
+
+it.each([
+  { label: "QA Real Publisher", facts: { product: publisherProduct, publisher_profile: { kind: "user", id: "qa-publisher", status: "found", display_name: "QA Real Publisher", image_url: null } } },
+  { label: "QA Real Organization", facts: { product: { ...publisherProduct, publisher: { kind: "iam", iam: { kind: "organization", id: "qa-org" } } }, publisher_profile: { kind: "organization", id: "qa-org", status: "found", display_name: "QA Real Organization", image_url: null } } },
+  { label: "qa-repository-owner", facts: { product: { ...publisherProduct, source_kind: "third_party", presentation_kind: "github_repository", creation_provenance: repositoryPublisher, publisher: { kind: "github_repository", github_repository: repositoryPublisher } }, verified: true, source: { owner: "qa-importer-not-publisher" } } },
+  { label: undefined, facts: { product: publisherProduct, publisher_profile: { kind: "user", id: "qa-publisher", status: "missing" } } },
+  { label: undefined, facts: {} },
+])("shows only the same proven publisher in catalog and detail: $label", async ({ label, facts }) => {
+  const card = { skillId: "s13-publisher-series", displayName: "Publisher QA Skill", publisherType: "SKILL_HUB_PUBLISHER_TYPE_COMMUNITY", currentVersion: { versionUid: "s13-publisher-revision" }, ...facts }
+  const calls: string[] = []
+  const response = (body: unknown) => Response.json(body, { headers: { "cache-control": "private, no-store", "x-request-id": "publisher-qa" } })
+  vi.spyOn(globalThis, "fetch").mockImplementation(async input => {
+    const path = String(input); calls.push(path)
+    if (path.endsWith("ListSkills")) return response({ userAddedSkills: [], officialSkills: [] })
+    if (path.endsWith("ListHubSkills")) return response({ skills: [card], tagOptions: {} })
+    if (path.endsWith("GetSkill")) return response({ skill: { id: card.skillId, version: card.currentVersion.versionUid, displayName: card.displayName, description: "Publisher QA metadata" } })
+    throw Error(`Unexpected publisher request ${path}`)
+  })
+  render(<LocaleProvider><KokoroSkillsSurface onPrompt={vi.fn()} preview={false} projectReadBoundary={{ admitted: true, subject: `s13-publisher-reader-${label ?? ("product" in facts ? "missing" : "absent")}`, generation: 1 }} /></LocaleProvider>)
+  await screen.findByRole("button", { name: card.displayName })
+  const grid = screen.getByTestId("skills-catalog-grid")
+  if (label !== undefined) expect(within(grid).getByText(label)).toBeVisible()
+  expect(within(grid).queryByText("社区")).toBeNull()
+  expect(within(grid).queryByText("qa-importer-not-publisher")).toBeNull()
+  fireEvent.click(within(grid).getByRole("button", { name: card.displayName }))
+  const dialog = await screen.findByRole("dialog")
+  await within(dialog).findByText("Publisher QA metadata")
+  if (label !== undefined) expect(within(dialog).getByText(label)).toBeVisible()
+  expect(within(dialog).queryByText("社区")).toBeNull()
+  expect(within(dialog).queryByText("qa-importer-not-publisher")).toBeNull()
+  expect(calls.every(path => /\/(?:ListSkills|ListHubSkills|GetSkill)$/u.test(path))).toBe(true)
+})
+
+it("does not turn a legacy official classification into a catalog author", async () => {
+  const response = (body: unknown) => Response.json(body, { headers: { "cache-control": "private, no-store" } })
+  vi.spyOn(globalThis, "fetch").mockImplementation(async input => response(String(input).endsWith("ListHubSkills")
+    ? { skills: [{ skillId: "unknown-official-author", displayName: "Unknown author", publisherType: "SKILL_HUB_PUBLISHER_TYPE_MANUS_OFFICIAL" }], tagOptions: {} }
+    : { userAddedSkills: [], officialSkills: [] }))
+  render(<LocaleProvider><KokoroSkillsSurface onPrompt={vi.fn()} brandName="QA Brand Not Author" preview={false} projectReadBoundary={{ admitted: true, subject: "unknown-official-author", generation: 1 }} /></LocaleProvider>)
+  await screen.findByRole("button", { name: "Unknown author" })
+  const grid = screen.getByTestId("skills-catalog-grid")
+  expect(within(grid).queryByText("QA Brand Not Author")).toBeNull()
+})

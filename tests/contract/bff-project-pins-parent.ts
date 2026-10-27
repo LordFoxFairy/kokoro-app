@@ -1,3 +1,4 @@
+import { restorePublic285SkillPublisherContract } from "./bff-skill-publisher-parent"
 // Test-only exact Public28.5→28.4 inverse; never a production compatibility reader.
 import { createHash } from "node:crypto"
 const hash = (source: string) => createHash("sha256").update(source).digest("hex")
@@ -7,6 +8,7 @@ const blocks: readonly string[] = [
   "    # PROJECT-PIN-RESPONSES-BEGIN\n    ProjectPinInvalid:\n      description: project_pin_request_invalid; retryable false\n      content:\n        application/json:\n          schema:\n            allOf:\n              - { $ref: '#/components/schemas/ErrorEnvelope' }\n              - properties:\n                  error:\n                    properties: { code: { const: project_pin_request_invalid }, retryable: { const: false } }\n    ProjectPinNotFound:\n      description: project_not_found; retryable false, including invisible or deleted Projects\n      content:\n        application/json:\n          schema:\n            allOf:\n              - { $ref: '#/components/schemas/ErrorEnvelope' }\n              - properties:\n                  error:\n                    properties: { code: { const: project_not_found }, retryable: { const: false } }\n    ProjectPinRateLimited:\n      description: Current IAM admission is rate limited\n      headers:\n        Retry-After:\n          schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }\n      content:\n        application/json:\n          schema: { $ref: '#/components/schemas/ErrorEnvelope' }\n    # PROJECT-PIN-RESPONSES-END\n"
 ]
 export function restorePublic284ProjectPinsContract(source: string): string {
+  source = restorePublic285SkillPublisherContract(source)
   if (!/^  version: 28\.5\.0$/mu.test(source)) return source
   if (hash(source) !== "109a2ae063b10699ae52776b09533c5622d906679c093d65730a289206043b1a") throw Error("Project pins full Public28.5 drift")
   for (const block of blocks) {
