@@ -3,7 +3,7 @@ import type { ResolvedCanvasContent } from "@/ui/canvas/canvas-store"
 import type { AnswerActionBoundary } from "./answer-action-scope"
 import { useRunDisplay } from "./use-run-display"
 import { overlayRunDisplay } from "./run-display-overlay"
-import { TOOL_ACTION_PRESENTATION } from "./tool-action-presentation"
+import { toolActionPresentation } from "./tool-action-presentation"
 import { useT } from "@/i18n/context"
 import { ActivityResult } from "./activity-result"
 import styles from "./activity-inspector.module.css"
@@ -25,11 +25,10 @@ export function ActivityInspector({ content, boundary }: {
   const activity = overlayRunDisplay([content.activity], display.facts)[0]!
   if (activity.activity !== "tool") return null
   const detail = display.facts?.activity_details.find(item => item.activity_id === content.activityId)
-  const targetDetail = detail?.target ?? activity.display_detail
-  const target = targetDetail?.kind === "file" ? targetDetail.virtual_path ?? targetDetail.name : targetDetail?.name
+  const { targetText: target, label } = toolActionPresentation(activity, detail)
   return <div className={styles.inspector}>
     {activity.action_title ? <h2 className={styles.target}>{activity.action_title}</h2> : null}
-    <p className={styles.operation}>{t(TOOL_ACTION_PRESENTATION[activity.display_code].label)}</p>
+    <p className={styles.operation}>{t(label)}</p>
     {target ? activity.action_title ? <p className={styles.targetReference}>{target}</p> : <h2 className={styles.target}>{target}</h2> : null}
     <p role="status" className={styles.status}>{t(activity.status === "running" ? "thread.processRunning" : activity.status === "failed" ? "thread.processFailed" : "thread.processCompleted")}</p>
     {display.phase === "loading" ? <span className="sr-only" role="status">{t("thread.partsReading")}</span> : null}

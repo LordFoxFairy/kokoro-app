@@ -101,3 +101,48 @@ it("reads the original call intent as the main line without repeating selectors 
   expect(screen.getByRole("button", { name: new RegExp(action_title) })).toBe(row)
   expect(container.querySelector('[data-status="failed"]')).not.toBeNull()
 })
+
+it("shows a legacy MCP call's exact tool name without repeating class labels or argument prose", () => {
+  render(<LocaleProvider><ToolCallRow activity={{ ...base, display_code: "tool.mcp.call", display_detail: { kind: "mcp_tool", name: "ask_wiki_question" } }} detail={{ activity_id: base.activity_id, tool_name: "mcp_call", input_preview: { text: '{"repo":"langchain-ai/langgraph","question":"What is LangGraph used for?"}', truncated: false, redacted: false } }} onInspect={vi.fn()} /></LocaleProvider>)
+  expect(screen.getByRole("button", { name: /^ask_wiki_question\s*Completed$/ })).toBeVisible()
+  expect(screen.queryByText("Call MCP tool")).toBeNull()
+  expect(screen.queryByText(/What is LangGraph/)).toBeNull()
+})
+
+it.each([
+  ["edit_file", "Edit file", "file_path"],
+  ["ls", "List directory", "path"],
+  ["glob", "Find files", "path"],
+  ["grep", "Search file contents", "path"],
+])("renders the same-call native %s identity and exact path instead of a generic tool row", (toolName, label, pathKey) => {
+  render(<LocaleProvider><ToolCallRow activity={{ ...base, display_code: "tool.execution" }} detail={{ activity_id: base.activity_id, tool_name: toolName, input_preview: { text: JSON.stringify({ [pathKey!]: fullPath }), truncated: false, redacted: false } }} onInspect={vi.fn()} /></LocaleProvider>)
+  const row = screen.getByRole("button")
+  expect(row).toHaveTextContent(`${label} ${fullPath}`)
+  expect(row).toHaveAccessibleName(/Completed$/)
+  expect(screen.getByText(fullPath)).toBeVisible()
+  expect(screen.queryByText("Tool call")).toBeNull()
+})
+
+it.each([
+  { truncated: true, redacted: false },
+  { truncated: false, redacted: true },
+])("does not reconstruct a path from a partial or redacted preview %o", flags => {
+  render(<LocaleProvider><ToolCallRow activity={{ ...base, display_code: "tool.execution" }} detail={{ activity_id: base.activity_id, tool_name: "edit_file", input_preview: { text: JSON.stringify({ file_path: fullPath }), ...flags } }} /></LocaleProvider>)
+  expect(screen.queryByText(fullPath)).toBeNull()
+})
+
+it("does not project another call's detail or misclassify an MCP named edit_file as a native edit", () => {
+  const { rerender } = render(<LocaleProvider><ToolCallRow activity={{ ...base, display_code: "tool.execution" }} detail={{ activity_id: `act_${"c".repeat(64)}`, tool_name: "edit_file", target: { kind: "file", name: "SKILL.md", virtual_path: fullPath } }} /></LocaleProvider>)
+  expect(screen.queryByText(fullPath)).toBeNull()
+  rerender(<LocaleProvider><ToolCallRow activity={{ ...base, display_code: "tool.mcp.call", display_detail: { kind: "mcp_tool", name: "edit_file" } }} detail={{ activity_id: base.activity_id, tool_name: "mcp_call", input_preview: { text: JSON.stringify({ file_path: fullPath }), truncated: false, redacted: false } }} /></LocaleProvider>)
+  expect(screen.getByText("edit_file")).toBeVisible()
+  expect(screen.queryByText("Edit file")).toBeNull()
+  expect(screen.queryByText(fullPath)).toBeNull()
+})
+
+it.each(['{}', '[]', 'null', '{', '{"path":"relative"}', '{"pattern":"/not-a-path"}', '{"path":"/bad\\u202Epath"}'])("does not guess the directory for an absent or invalid native input: %s", text => {
+  render(<LocaleProvider><ToolCallRow activity={{ ...base, display_code: "tool.execution" }} detail={{ activity_id: base.activity_id, tool_name: "ls", input_preview: { text, truncated: false, redacted: false } }} /></LocaleProvider>)
+  expect(screen.getByText("List directory")).toBeVisible()
+  expect(document.querySelector('[title="/"]')).toBeNull()
+  expect(document.querySelector(`.${detailStyles.inlineTarget}`)).toBeNull()
+})

@@ -1,5 +1,6 @@
-import { FileOutput, FilePenLine, FileText, Globe, Info, ListTree, Plug, Search, Wrench } from "lucide-react"
+import { FileOutput, FilePenLine, FileText, FolderOpen, Globe, Info, ListTree, Plug, Search, Wrench } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
+import type { RunActivityDetail } from "@/contract/answer-actions"
 import type { RunProcessActivity } from "@/contract/chat"
 import type { MessageKey } from "@/i18n/messages"
 
@@ -18,15 +19,38 @@ export const TOOL_ACTION_PRESENTATION = {
   "tool.web.fetch": { label: "thread.toolWebFetch", Icon: Globe },
 } satisfies Record<ToolCode, { label: MessageKey; Icon: LucideIcon }>
 
-/** Only original recognized scalar values; never a JSON log or an inferred purpose. */
-export function mcpInputContext(text: string | undefined): string | undefined {
-  if (!text) return undefined
+const NATIVE_EXECUTION_PRESENTATION = {
+  edit_file: { label: "thread.toolFileEdit", Icon: FilePenLine, pathKey: "file_path" },
+  ls: { label: "thread.toolDirectoryList", Icon: FolderOpen, pathKey: "path" },
+  glob: { label: "thread.toolFileFind", Icon: Search, pathKey: "path" },
+  grep: { label: "thread.toolFileSearch", Icon: Search, pathKey: "path" },
+} satisfies Record<string, { label: MessageKey; Icon: LucideIcon; pathKey: string }>
+
+/** Read a literal path from the original complete preview, never infer it from output. */
+function nativePath(detail: RunActivityDetail, key: string): string | undefined {
+  const preview = detail.input_preview
+  if (!preview || preview.truncated || preview.redacted) return undefined
   try {
-    const value: unknown = JSON.parse(text)
-    if (value === null || typeof value !== "object" || Array.isArray(value)) return undefined
-    const fields = value as Record<string, unknown>
-    const scalar = (key: string): string | undefined => typeof fields[key] === "string" && fields[key].trim() ? fields[key] : undefined
-    const parts = [scalar("repoName") ?? scalar("repo"), scalar("question") ?? scalar("query")].filter((part): part is string => part !== undefined)
-    return parts.length ? parts.join(" · ") : undefined
+    const input: unknown = JSON.parse(preview.text)
+    if (!input || typeof input !== "object" || Array.isArray(input)) return undefined
+    const value = (input as Record<string, unknown>)[key]
+    return typeof value === "string" && value.startsWith("/") && value.trim() === value
+      && !/[\p{Cc}\p{Cf}\p{Cs}]/u.test(value) ? value : undefined
   } catch { return undefined }
+}
+
+/** One display mapping for timeline and inspector; facts remain owned by the same activity. */
+export function toolActionPresentation(activity: Extract<RunProcessActivity, { activity: "tool" }>, suppliedDetail?: RunActivityDetail) {
+  const detail = suppliedDetail?.activity_id === activity.activity_id ? suppliedDetail : undefined
+  const target = detail?.target ?? activity.display_detail
+  const native = activity.display_code === "tool.execution" && detail && Object.hasOwn(NATIVE_EXECUTION_PRESENTATION, detail.tool_name)
+    ? NATIVE_EXECUTION_PRESENTATION[detail.tool_name as keyof typeof NATIVE_EXECUTION_PRESENTATION] : undefined
+  const targetText = target?.kind === "file" ? target.virtual_path ?? target.name : target?.name
+  return {
+    ...(native ?? TOOL_ACTION_PRESENTATION[activity.display_code]),
+    targetText: targetText ?? (native && detail ? nativePath(detail, native.pathKey) : undefined),
+    file: target?.kind === "file" || Boolean(native),
+    // An exact MCP target already identifies the operation; raw parameters live in the inspector.
+    targetOnly: activity.display_code === "tool.mcp.call" && target?.kind === "mcp_tool",
+  }
 }

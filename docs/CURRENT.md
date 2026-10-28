@@ -1,3 +1,13 @@
+## 2026-10-28 工具主行身份与技术参数分层（正常局部已验，整体仍OPEN）
+
+以fc60ed60为基线：主行与Canvas共用有限展示映射；旧MCP调用用真实目标名，不再重复“调用MCP工具”或拼接repo/question。edit_file/ls/glob/grep仅同activity私有身份映射中性操作，完整未脱敏输入中的原path/file_path可转述，不补默认目录、不产生文件访问权限。有action_title仍优先，原顺序、正文、失败及原始输入输出保持。
+
+正常3310只更新12份既定展示源码，858源与候选逐字一致，其它服务未改。原conv6530的同名失败/成功ask_wiki_question分别打开英文repo输入与中文repoName输入，状态和截断标记未串项；原conv689现显示“编辑文件 /qa-public-stages-verified-20261028.md”，详情同路径、edit_file及原old/new_string、成功替换结果，关闭回原按钮。仅旧Run只读、无新执行或费用。1280原生/Manus参考及747 MCP证据归Root ignored native-main-row与manus-recheck目录，非同任务MCP像素完成。
+
+验证：相关八suite105通过；新增坏路径等边界纳入扩大189suite，3898断言通过但Radix/jsdom share-button异步Event类型错误使整体exit1，原日志保留；该文件与两显示suite独立复验55通过，不称扩大门全绿。architecture50、contract441、lint、types、build与post-build types通过，独审未发现新增确定P0–P2。未重跑全默认/整套E2E，之前18个Next侧栏超时与全owner门仍未关闭，不合并。
+
+真实验收另遇多标签HMR后429波：新刷新页准入失败，保原会话、等待窗口后一次显式只读重试恢复正文/详情，项目及模型错误态仍留存。IAM/app同段429及随后200已记录，具体operation/错误体尚缺关联；不通过改配额/重启/清登录态掩盖。整体Agent视觉、限流恢复、截断MCP结果阅读仍OPEN。
+
 ## 2026-10-28 同调用行动标题与可见历史读取
 
 App 以 `a1cdb82` 为基线，固定 BFF `83978e7340357a25e64aa98d12c9bb34c07ad3a4` / Public28.13。主行优先显示 owner 同调用公开行动标题；无标题的旧记录保留真实类别/目标，不根据邻接正文补造。技术目标、参数及明确标识的“工具说明”在原详情中可达；长路径可换行。实际可见且展开的活动复用既有 Run reader 首次读取，去重、取消、失败停止线及 scope 隔离保持。

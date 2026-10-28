@@ -51,11 +51,11 @@ it("renders a selected activity in the existing Canvas without file actions or i
   expect(screen.getByText("ask_wiki_question")).toBeVisible()
   expect(screen.queryByText("Details were not provided in this record.")).toBeNull()
 })
-it("renders owner target and literal input context rather than the wrapper tool name", () => {
+it("renders the owner target without argument prose or the wrapper name in the main line", () => {
   const detail = { activity_id: "a", tool_name: "mcp_call", target: { kind: "mcp_tool" as const, name: "actual_lookup" }, input_preview: { text: '{"repo":"example/project","question":"original question"}', truncated: false, redacted: false } }
   render(<LocaleProvider><ToolCallRow activity={activity} detail={detail} onInspect={vi.fn()} /></LocaleProvider>)
   expect(screen.getByText("actual_lookup")).toBeVisible()
-  expect(screen.getByText("example/project · original question")).toBeVisible()
+  expect(screen.queryByText(/example\/project/)).toBeNull()
   expect(screen.queryByText(detail.input_preview.text)).toBeNull()
   expect(screen.queryByText("mcp_call")).toBeNull()
 })
@@ -99,9 +99,9 @@ it("a single Canvas action has exactly one operation entry while callers without
   expect(onInspect).toHaveBeenCalledTimes(1)
 })
 
-it("keeps the action verb visible beside a target instead of using a bare function name", () => {
+it("uses the exact operation name instead of repeating the MCP category beside every call", () => {
   render(<LocaleProvider><ToolCallRow activity={activity} /></LocaleProvider>)
-  expect(screen.getByText("Call MCP tool")).not.toHaveClass("sr-only")
+  expect(screen.queryByText("Call MCP tool")).toBeNull()
   expect(screen.getByText("ask_wiki_question")).toBeVisible()
 })
 

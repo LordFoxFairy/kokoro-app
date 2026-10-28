@@ -1,3 +1,9 @@
+## 原生动作身份与主行参数收敛（2026-10-28）
+
+在既有展示边界内修复：有action_title仍优先原公开意图；旧MCP调用只显示exact mcp_tool目标，准备动作保留原类别及真实名称，不虚构目的、不合并同名调用或隐藏失败。时间顺序、正文分界与单层披露不变。
+
+`tool-action-presentation.ts`统一主行与Canvas的原生操作/对象。仅同activity_id的私有详情、tool.execution及保留工具名edit_file/ls/glob/grep映射中性操作。优先结构化target，其次仅从完整、未脱敏的input_preview按工具提取原file_path/path；缺字段/坏JSON/非绝对路径/控制字符不推断目标，不从pattern/输出/当前目录补值，不升级为文件访问权限。原输入输出仍在详情。无网络、数据、状态机或执行语义变更。
+
 ## 同次调用行动标题与可见历史读取（2026-10-28，未激活）
 
 消费正式BFF83978e7／Public28.13，只沿原tool activity optional action_title，唯一schema→mapper/reducer/ordered/snapshot→ToolCallRow保持原身份与顺序；标题是同次调用公开意图，不是思维链、能力文档或相邻正文。主行有标题时不再重复类别、selector与参数；缺标题旧历史仍显示原事实，不补写标题。Canvas同标题、技术对象及原输入输出分层；私有tool_description是能力文档，独立纯文本展示，不当动作说明/HTML/自动链接。
@@ -24,7 +30,7 @@
 
 沿同一有序正文→相邻活动→正文，不将最后文字推断为final，不生成中间文字或耗时。过程入口只呈简洁过程与真实运行/失败，移除类别串＋数量；活动是可键盘打开的原生按钮，目标只消费已验证事实。Canvas新增exact Run/activity引用，当前受信actor/session读取最新活动；不将display path当文件读取授权。详情仅纯文本，未提供输入/输出明确为缺证，不等同空参数/成功。
 
-复用现Canvas宽窄壳、关闭/全屏/焦点恢复；详情不显示文件列表或下载。用户选中才有界读RunDisplay，原Run落定至多补读一次；关窗/换actor、session、准入代际退休旧结果。正式activity_details DTO固定BFF fb9dc4df／Public28.12，由原生成链接入，无手写wire或fallback。真实target优先为动作主标题，仅真实MCP调用从input_preview提取原repoName/repo/question/query字符串作单行上下文，未知结构不显示，绝不把整块JSON塞入行内；选中Canvas展示完整限额输入/输出及截断/脱敏标记。
+复用现Canvas宽窄壳、关闭/全屏/焦点恢复；详情不显示文件列表或下载。用户选中才有界读RunDisplay，原Run落定至多补读一次；关窗/换actor、session、准入代际退休旧结果。正式activity_details DTO固定BFF fb9dc4df／Public28.12，由原生成链接入，无手写wire或fallback。真实target优先为缺少行动标题的动作对象；MCP调用使用exact mcp_tool名称，不再在主行或悬浮标题拼接repo/question参数。选中Canvas展示完整限额输入/输出及截断/脱敏标记。
 
 参考为本地原始Manus观察 `/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/var/dev/mcp-prepare-receipt-20261027/display-rework/manus-process-order.png` 与同目录 `manus-process-details.png`。它证明轻量相邻动作组和右侧详情，不证明MCP连接器字段或历史参数。测试承接顺序、真实状态、点击身份、迟到隔离、单次补读和纯文本；视觉由Root正常浏览器对照。
 
