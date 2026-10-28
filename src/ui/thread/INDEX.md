@@ -10,7 +10,7 @@
 
 ## 动作阅读列重做（本地候选）
 
-正文间活动共用单层简洁披露，摘要计真实操作次数；真实文字仍在原位置。ToolCallRow同行呈现操作动词及原目标名/文件路径，原生按钮按exact Run/activity打开Canvas，完成不重复画勾；运行/失败保持文字。ActivityInspector只读纯文本，不打开display path、不当HTML/Markdown/链接。use-run-display在同AnswerActionBoundary/readEpoch/profile/Run共享一次用户读取；成功live或未失败在途至多终态补读，失败仅显式重读，加载不闪缺证。正式Public28.12 activity_details同原生成链接入；本候选不冒正常启用。参考/验证见本仓TD与Root原执行板。
+正文间活动共用单层简洁披露，摘要计真实操作次数；真实文字仍在原位置。ToolCallRow同行呈现操作动词及原目标名/文件路径，原生按钮按exact Run/activity打开Canvas，完成不重复画勾；运行/失败保持文字。ActivityInspector只读展示，不打开display path；MCP结果复用MarkdownMessage的text-only资源策略排版，原始HTML/URL不成为可执行节点或导航，技术记录保持纯文本。use-run-display在同AnswerActionBoundary/readEpoch/profile/Run共享一次用户读取；成功live或未失败在途至多终态补读，失败仅显式重读，加载不闪缺证。正式Public28.12 activity_details同原生成链接入；本候选不冒正常启用。参考/验证见本仓TD与Root原执行板。
 
 RunDisplay 28.11：run-display-overlay仅按原Run既存MCP id投影安全工具名／已证failed，不重写source／顺序或Run终态；旧RAM缺tool_facts视无新事实。use-run-display以正式profile SHA失效原只读memo，仍仅显式有界GET，原actor/scope/late与动作keys保持。
 
@@ -78,4 +78,4 @@ Completed-empty text slots use core provenance and do not split adjacent activit
 
 2026-10-28 正常浏览器补验：AppFrame 的 AnswerActionBoundary 必须传入持有 ContextPanel 的 AppFrameShell，而不是仅正文 MainSurface。原 conv6530 的成功/失败 MCP 动作现按 exact activity 展示原输入输出，换选不串项，关闭恢复到原按钮；这仅关闭详情接线缺陷，Manus 逐阶段自然语言说明与同视口视觉验收仍未完成。
 
-MCP 详情阅读：`activity-result.tsx` 将已验证预览分为纯文本结果与原始技术披露；`mcp-result-text.ts` 只识别明确文本形状、单次解码，不推断状态/意图或新增读取。截断与脱敏在结果旁保留，未知表示仍能在技术详情查看。
+MCP 详情阅读：`activity-result.tsx` 将已验证预览分为无外部资源的Markdown阅读结果与原始纯文本技术披露；`mcp-result-text.ts` 只识别明确文本形状、单次解码，不推断状态/意图或新增读取。截断与脱敏在结果旁保留，未知表示仍能在技术详情查看。

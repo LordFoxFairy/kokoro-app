@@ -1,3 +1,11 @@
+## 2026-10-28 MCP结果可读排版已正常验证（局部修复）
+
+ActivityResult复用现MarkdownMessage，工具结果以text-only资源策略渲染标题、列表、表格、强调与代码；HTML不执行、链接和图片仅文字，原始输入/输出仍逐字留在技术详情。普通回答默认行为不变，无新owner、契约、请求或历史改写。
+
+正常3310原conv6530实测：成功ask_wiki_question的核心能力/概念/执行模型/Notes已排版，底部完整可达；技术详情点击/Enter可打开原文，同名失败项仍失败且无成功输出。仅3源HMR，859源核同，无进程重启、模型调用或业务写入；本次日志观察窗口1次GET200。原始截图/回退/输入哈希归physical Root ignored `display-rework/tool-result-markdown/`。
+
+验证：先RED3失败/5通过；focused101通过；全UI+i18n首轮一条旧纯文本断言失败，改为阅读语义＋原始记录双验证后，扩大复跑3239通过/1项目弹窗退休用例超时；该原用例和本次相关4文件独立复核69通过。保留两次失败日志，未改项目用例/超时，不宣称全量通过。lint/typecheck/build/post-types及最后相关lint通过，独立审查无确定新增P0–P2。未跑全默认/contract/architecture/全E2E，手机触摸和宽表格浏览器场景未验，已有18个系统驱动缺口未修；本片不宣称整个Agent展示或上线目标完成。
+
 ## 2026-10-28 历史工具动作操作词修复（本地验收，正常激活另记）
 
 基线30ba1edb：旧MCP无action_title时不再只显示selector，主行和Canvas共用简短操作+真实对象；九语言一致更新，保新标题优先、全部失败/顺序、同次详情与参数不进主行。没有改Agent提示词、事件、历史或执行。既有general prompt及活跃worker源码已经包含公开阶段规则，不重复叠加。

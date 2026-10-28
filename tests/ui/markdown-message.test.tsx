@@ -5,6 +5,21 @@ import { MarkdownMessage } from "@/ui/thread/markdown-message"
 
 afterEach(cleanup)
 
+it("renders tool-result resources as text without link navigation, image loads or image preloads", () => {
+  const { container } = render(<MarkdownMessage resourcePolicy="text-only" content={[
+    "[External](https://example.test/private) [Relative](/account/delete) [Email](mailto:reader@example.test)",
+    "",
+    "![Remote](https://example.test/pixel) ![Local](file:///private/image.png)",
+    "",
+    "`[code link](https://example.test)`",
+  ].join("\n")} />)
+  expect(container).toHaveTextContent("External Relative Email")
+  expect(container).toHaveTextContent("Remote Local")
+  expect(container.querySelector("a,img,link")).toBeNull()
+  expect(document.head.querySelector('link[rel="preload"][as="image"]')).toBeNull()
+  expect(container.querySelector("code")).toHaveTextContent("[code link](https://example.test)")
+})
+
 it.each([
   ["unsupported sandbox scheme", "sandbox:/mnt/data/report.md"],
   ["private file scheme", "file:///private/report.md"],

@@ -59,19 +59,21 @@ it("renders the owner target without argument prose or the wrapper name in the m
   expect(screen.queryByText(detail.input_preview.text)).toBeNull()
   expect(screen.queryByText("mcp_call")).toBeNull()
 })
-it("displays bounded owner previews as literal text with truncation/redaction, not HTML, Markdown or links", async () => {
+it("formats the reading result but preserves literal technical previews and truncation/redaction without active resources", async () => {
   const { ActivityInspector } = await import("@/ui/thread/activity-inspector")
   const { waitFor } = await import("@testing-library/react")
   const detail = { activity_id: "a", tool_name: "mcp_call", target: { kind: "mcp_tool" as const, name: "original_tool" }, input_preview: { text: '<img src=x onerror=alert(1)> [title](https://example.test)', truncated: true, redacted: true }, output_preview: { text: '## Original output\nhttps://example.test', truncated: false, redacted: false } }
   const boundary = { actorId: "actor", sessionId: "s", isCurrent: () => true, client: { readDisplay: vi.fn().mockResolvedValue({ run_id: "run", display_skills: [], tool_paths: [], tool_facts: [], activity_details: [detail] }) } } as unknown as import("@/ui/thread/answer-action-scope").AnswerActionBoundary
   const { container } = render(<LocaleProvider><ActivityInspector content={{ kind: "activity", runId: "run", activityId: "a", subject: "actor", generation: 1, activity, terminal: true }} boundary={boundary} /></LocaleProvider>)
   await waitFor(() => expect(screen.getByRole("region", { name: "Result" })).toBeVisible())
-  expect(within(screen.getByRole("region", { name: "Result" })).getByText(detail.output_preview.text, { normalizer: value => value })).toBeVisible()
+  const result = within(screen.getByRole("region", { name: "Result" }))
+  expect(result.getByRole("heading", { name: "Original output" })).toBeVisible()
+  expect(result.getByText("https://example.test")).toBeVisible()
   expect(screen.getByText(detail.input_preview.text)).not.toBeVisible()
   fireEvent.click(screen.getByText("Technical details"))
   expect(screen.getByText(detail.input_preview.text)).toBeVisible()
   expect(container.querySelectorAll("img,a")).toHaveLength(0)
-  expect(screen.queryByRole("heading", { name: "Original output" })).toBeNull()
+  expect(screen.getByText(detail.output_preview.text, { normalizer: value => value })).toBeVisible()
   expect(screen.getByText("Truncated record")).toBeVisible()
   expect(screen.getByText("Sensitive content hidden")).toBeVisible()
   expect(screen.queryByText("Details were not provided in this record.")).toBeNull()

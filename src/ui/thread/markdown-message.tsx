@@ -19,14 +19,23 @@ const MARKDOWN_COMPONENTS: Components = {
   },
 }
 
-type MarkdownMessageProps = {
-  content: string
+// Tool output is readable Markdown, not permission to navigate or fetch assets.
+// Keep resource labels visible; the exact destinations remain in the raw record.
+const TEXT_RESOURCE_COMPONENTS: Components = {
+  ...MARKDOWN_COMPONENTS,
+  a: ({ children }) => <>{children}</>,
+  img: ({ alt }) => <span>{alt}</span>,
 }
 
-export function MarkdownMessage({ content }: MarkdownMessageProps) {
+type MarkdownMessageProps = {
+  content: string
+  resourcePolicy?: "default" | "text-only"
+}
+
+export function MarkdownMessage({ content, resourcePolicy = "default" }: MarkdownMessageProps) {
   return (
-    <div className={styles.md} data-slot="markdown-message">
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>
+    <div className={styles.md} data-slot="markdown-message" data-resource-policy={resourcePolicy}>
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={resourcePolicy === "text-only" ? TEXT_RESOURCE_COMPONENTS : MARKDOWN_COMPONENTS}>
         {content}
       </ReactMarkdown>
     </div>

@@ -1,6 +1,7 @@
 import type { RunActivityDetail } from "@/contract/answer-actions"
 import { useT } from "@/i18n/context"
 import { mcpResultText } from "./mcp-result-text"
+import { MarkdownMessage } from "./markdown-message"
 import styles from "./activity-inspector.module.css"
 
 type Preview = RunActivityDetail["output_preview"]
@@ -27,7 +28,7 @@ export function ActivityResult({ detail, mcpCall }: { detail: RunActivityDetail;
   return <>
     <section className={styles.section} aria-label={t("thread.activityResult")}>
       <h3 className={styles.heading}>{t("thread.activityResult")}</h3>
-      {paragraphs ? paragraphs.map((text, index) => <p className={styles.resultText} key={index}>{text}</p>)
+      {paragraphs ? paragraphs.map((text, index) => <div className={styles.resultMarkdown} key={index}><MarkdownMessage content={text} resourcePolicy="text-only" /></div>)
         : <p className={styles.missing}>{t(preview ? "thread.activityRawResult" : "thread.activityMissing")}</p>}
       <PreviewNotes preview={preview} />
     </section>

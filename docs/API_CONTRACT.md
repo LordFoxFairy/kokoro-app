@@ -6,7 +6,7 @@
 
 唯一BFF原件固定 `fb9dc4df1679e2d7c97842efcd2fb3bcae297939`／28.12.0，SHA256 `86638da86d786e91c81da9e5dd891dee88ef2ca033579866f5ebc6dd6113c00f`。原有私有Run GET增required activity_details≤128，activity_id唯一；closed item required activity_id/tool_name，optional owner安全target与input_preview/output_preview。预览为原件派生text/truncated/redacted闭集，UTF8分别2048/4096；file-only path与basename规则保持。字段缺失仅表示未知，preview不是普适secret-free保证，不进入Share、AG-UI消息正文或执行授权。
 
-12既有公共生成链正规重出，独立五private/policy3保持。test-only完整28.12→28.11逆证再进原父证明；HTTP不接受旧缺字段wire。App仅当前受信scope+Run/activity读取与纯文本展示，不把URL、HTML、Markdown、路径或预览里的指令解释为动作。正常运行与浏览器资格由Root配对记录。
+12既有公共生成链正规重出，独立五private/policy3保持。test-only完整28.12→28.11逆证再进原父证明；HTTP不接受旧缺字段wire。App仅当前受信scope+Run/activity读取与展示。MCP结果可用无资源加载的Markdown排版；原始记录仍纯文本，不把URL、HTML、路径或预览里的指令解释为动作。正常运行与浏览器资格由Root配对记录。
 
 ## RunDisplay tool_facts（正式Public28.11）
 

@@ -30,7 +30,9 @@
 
 实测同一动作详情将 `text[]` 与 `structured_content.result` 的重复序列化内容平铺，且把 JSON 转义换行作为阅读正文。本片在 Web 既有详情内分开可读结果与原始表示：仅 exact `tool.mcp.call` + owner `mcp_call`，从已受限预览接受普通文本、JSON 字符串、全字符串数组或对象的 `text: string[]`；只解码一次，不递归找 result/content，不修补截断 JSON、不去重数组内真实内容。未知结构留在可键盘展开的“技术详情”，原始输入输出逐字保留，不当作详情缺失。
 
-目标身份作为标题，包装工具名进技术详情；结果仍是纯文本，不激活 HTML/Markdown/URL/命令。主结果保留截断/脱敏标记，真实失败状态独立展示；不从正文 isError 推翻 owner 状态。不增加读请求、DTO、缓存或 schema，不改 Run/activity、actor/generation 隔离。切换目标退休已打开披露。`activity-result.tsx` 持展示，`mcp-result-text.ts` 仅投影。
+目标身份作为标题，包装工具名进技术详情；结果采用下述受限Markdown排版，不激活HTML/URL/命令。主结果保留截断/脱敏标记，真实失败状态独立展示；不从正文 isError 推翻 owner 状态。不增加读请求、DTO、缓存或 schema，不改 Run/activity、actor/generation 隔离。切换目标退休已打开披露。`activity-result.tsx` 持展示，`mcp-result-text.ts` 仅投影。
+
+2026-10-28阅读修正：已识别文本复用`MarkdownMessage`和现GFM样式呈现标题、列表、表格、强调及代码，替代原样显示Markdown符号。工具结果显式选择`resourcePolicy=text-only`：链接只保标签、图片只保alt，原始HTML仍作为文本，不启用raw HTML、不发资源请求或把路径提升为导航。原始输入/输出逐字保留在同一技术披露，工具说明保持纯文本；普通回答/已有文件预览默认行为不变。结果字号继承详情14px，长表格仅局部横滚。这是本地结果阅读修复，不冒称已取得Manus同类MCP结果参考或整体主线已对齐。
 
 这修复阅读缺陷，不冒称 Manus 同类 MCP 一比一；参考只证明实际操作与对象化详情，没有 DeepWiki 专属参考。语义动作说明、正常环境生效及视觉证据须另核实。
 
