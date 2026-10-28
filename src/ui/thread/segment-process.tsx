@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Bot, ChevronDown, Sparkles } from "lucide-react"
-import { useSyncExternalStore } from "react"
+import { useEffect, useSyncExternalStore } from "react"
 import { z } from "zod"
 
 import type { AgentMode } from "@/core/conversations"
@@ -70,7 +70,16 @@ export function SegmentProcess({
   const single = activities.length === 1
   // Keep the same force-mounted content tree when a second activity arrives.
   const open = single || (manualOpen ?? live)
-  if (activities.length === 0) return null
+  const hasActivities = activities.length > 0
+  useEffect(() => {
+    if (manualOpen !== true || !open || !hasActivities || !onInspect) return
+    // Let the parent read hook reactivate before a StrictMode child replay.
+    // A retired disclosure/profile cancels this one restoration, not retries it.
+    let current = true
+    queueMicrotask(() => { if (current) onInspect() })
+    return () => { current = false }
+  }, [manualOpen, open, hasActivities, onInspect])
+  if (!hasActivities) return null
 
   const allTools = activities.every((activity) => activity.activity === "tool")
   const hasPreparation = activities.some(isMcpPreparation)
