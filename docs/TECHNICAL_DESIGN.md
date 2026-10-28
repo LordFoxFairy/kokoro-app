@@ -1,3 +1,13 @@
+## 回答动作与真实过程展示（Root核准，正式owner消费者候选）
+
+固定正式BFF `0b67e0eab4918264a7270b828d558e631bdfb3f5`／Public28.10／SHA256 `9e6a8dddea847ecfd2905f378f4f76022b6cc49a1a4352a2e7abb4e73b3f1328`，12个既有public生成链正规生成；五private与独立download policy3不动。AnswerActions为重新生成／复制／赞／踩四个真实动作，28px桌面／44px触摸，Copy保持原文与完成反馈。durable Message只从snapshotMessageId／原receipt descriptor定位，拒segment与归属歧义；没有私有actor/scope准入的shared/preview不挂owner动作。
+
+反馈RAM仅本actor／Message，GET真值后才呈pressed；unknown PUT只显式GET，不自动重发。再生成控制器按原source Message绑定，一次新意图新K，unknown仅原K恢复。暂时同actor读准入／generation变化暂停I/O、pending转unknown保原K，不换target或销毁意图；真实actor／session／Project退休及late结果隔离。首次exact precommit400／409可确定拒绝，显式只读刷新后才允许用户新尝试；权限出口401／403与heldunknown重读拒绝均不证明旧意图未接受。
+
+Engine具名regenerateAnswer只消费正式ACK，不调用submit／retry、不append或rename human；ACK user_message_id仅原human关联。迟到ACK可幂等登记exact assistant，head／cursor／pending／用户消息lineage推进时不倒退；仅旧parts变化可由一次既有bounded snapshot发现已接受Run并保parts，不自动POST或新poller。latest canonical source、exact terminal、无active/pending/unknown、私有source确认才给新意图资格。runTerminalsById是唯一三态索引，旧HMR RAM只迁旧已确认cancel=true，不从TEXT_END／正文补成功，不清用户草稿；旧Engine缺新方法时禁用而非伪装支持。
+
+ProcessActivityRows只折连续discover／describe，展开保原named行，execution／文字／其它activity都是边界，统计实际activities不伪称调用数。正式live／ordered支持native Skill名／已证revision／virtual path；file默认完整path换行，MCP只实际安全name。历史仅具体Run用户展开／单行读详情才有界GET，pure overlay只补匹配的name/path，不改status／顺序／旧事件或借当前catalog；不snapshot N+1。正常组合与实际四动作／渲染由Root后续验收。
+
 ## Run 取消读取与呈现（Public28.9消费者候选）
 
 沿既有 AG-UI 与私有 snapshot：exact Run 的确定取消索引不进入浏览器持久层；本地放弃、HTTP202与失败空正文均不是取消证明。保已输出文字／安全活动及parts完整性。Stop后仅一次既有snapshot恢复，并以session／run／代际／cursor拒迟到；unknown显式重试保原command identity，不建后台poller。固定正式BFF `51e049df72c1fb2fe82b9114135c2fdc1a3450d9`／Public28.9／SHA256 `b438a749c919d24c4e0f1dadfdbcbbb11e0ac755f5785c543a661336c2cbb354`；12既有生成器承接唯一原件，私有marker由既有Agent failure生成器同时核闭集guard。Stop回读另核exact thread引用，拒同run／旧cursor下后继ACK覆盖；不清composer草稿。正常配对由Root验收。

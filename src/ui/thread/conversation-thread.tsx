@@ -1,3 +1,5 @@
+import type { AnswerActionBoundary } from "./answer-action-scope"
+import { answerActionTarget } from "./answer-action-target"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
@@ -29,6 +31,7 @@ import styles from "./thread.module.css"
 const NO_DECISIONS: Record<string, ToolDecision> = {}
 
 export type ConversationThreadProps = {
+  answerActionBoundary?: AnswerActionBoundary
   preview?: boolean
   brandName?: string
   onOpenFile?: (path: string) => void
@@ -166,6 +169,7 @@ function ConversationThreadSurface({
   controlError,
   onToolDecision,
   onCancelRun,
+  answerActionBoundary,
   showTaskTitle = true,
 }: ConversationThreadProps) {
   const t = useT()
@@ -288,6 +292,7 @@ function ConversationThreadSurface({
             ) : (
               <>
                 <AssistantTurn
+                  {...(answerActionBoundary === undefined ? {} : { answerActionBoundary, answerActionTarget: answerActionTarget(thread, { actorId: answerActionBoundary.actorId, sessionId: answerActionBoundary.sessionId, scope: answerActionBoundary.scope, runId: item.runId }) })}
                   {...(brandName === undefined ? {} : { brandName })}
                   sessionId={sessionId}
                   {...(onOpenFile === undefined ? {} : { onOpenFile })}

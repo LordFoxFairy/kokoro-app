@@ -1,3 +1,5 @@
+回答动作薄桥：session-answer-actions注册GET/PUT反馈、POST具名再生成及GET私有单Run display；正式Public28.10闭集decoder、原Product Session／同源Origin／10s完整EOF／取消和原key，无自动命令重发，不扩generic adapter。
+
 ## Project Skill 精确内容消费者
 
 `project-skill-content.ts` 为精确 Project installation 的薄同源入口，先于个人 package catchall；只调用固定正式 BFF operation，原 Product Session／bounded JSON／absolute deadline，不自行设置浏览器自报 Project/actor 权限。

@@ -9,6 +9,7 @@ import type {
   SessionToolCall,
   SessionTodo,
 } from "./state"
+import { normalizeRunTerminals } from "./state"
 import type { RunProcessActivity } from "@/contract/chat"
 
 // An active progress affordance belongs only to the exact current started Run.
@@ -56,6 +57,7 @@ function withRestoredTextSteps(
 }
 
 export function buildThreadItems(state: SessionStreamState): ThreadItem[] {
+  state = normalizeRunTerminals(state)
   const items: ThreadItem[] = []
   const renderedRuns = new Set<string>()
   let i = 0
@@ -113,7 +115,7 @@ export function buildThreadItems(state: SessionStreamState): ThreadItem[] {
   // RUN_ERROR may arrive before the first text/process frame. Preserve the
   // exact run as an empty assistant turn so its terminal footer has a truthful
   // owner rather than falling back to a thread-level alert.
-  for (const runId of new Set([...Object.keys(state.runFailuresById), ...Object.keys(state.cancelledRuns)])) {
+  for (const runId of new Set([...Object.keys(state.runFailuresById), ...Object.keys(state.runTerminalsById).filter((runId) => state.runTerminalsById[runId] === "cancelled")])) {
     if (renderedRuns.has(runId)) continue
     renderedRuns.add(runId)
     items.push({
@@ -131,7 +133,7 @@ export function buildThreadItems(state: SessionStreamState): ThreadItem[] {
   }
   return items.map((item, index) => {
     if (item.kind !== "assistant-turn" || lastTurnByRun.get(item.runId) !== index) return item
-    if (state.cancelledRuns[item.runId]) return { ...item, cancelled: true as const }
+    if (state.runTerminalsById[item.runId] === "cancelled") return { ...item, cancelled: true as const }
     const failure = state.runFailuresById[item.runId]
     return failure === undefined ? item : { ...item, failure }
   })

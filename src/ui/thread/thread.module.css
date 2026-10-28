@@ -132,13 +132,7 @@
   font-weight: 700;
 }
 
-.assistantActions {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  min-height: 2rem;
-  margin-top: 0.15rem;
-}
+
 
 
 /* 一段信息 = 正文在【上】＋ 它的过程挂在【下面】，竖直堆叠、段内小间距。 */

@@ -59,11 +59,12 @@ export function stateFromSnapshot(snapshot: SessionSnapshot): SessionStreamState
     finalAssistantByRun.set(message.run_id, message)
   }
   const runFailuresById: Record<string, AttributedRunFailure> = {}
-  const cancelledRuns: Record<string, true> = {}
+  const runTerminalsById: SessionStreamState["runTerminalsById"] = {}
   for (const [runId, message] of finalAssistantByRun) {
-    if (message.status !== "failed") continue
+    if (message.status !== "failed" && message.status !== "completed") continue
     if (snapshot.execution_head?.run_id === runId || (head?.run_id === runId && pending.length > 0)) continue
-    if (message.terminal_status === "cancelled") { cancelledRuns[runId] = true; continue }
+    runTerminalsById[runId] = message.terminal_status === "cancelled" ? "cancelled" : message.status
+    if (message.status === "completed" || message.terminal_status === "cancelled") continue
     runFailuresById[runId] = message.failure === undefined
       ? { failedRunId: runId, kind: "generic" }
       : { failedRunId: runId, kind: "agent", profile: message.failure }
@@ -100,7 +101,7 @@ export function stateFromSnapshot(snapshot: SessionSnapshot): SessionStreamState
     }]] : [])),
     stepsByRun,
     runFailuresById,
-    cancelledRuns,
+    runTerminalsById,
     unattributedFailure,
     files: snapshot.files,
     deliveries: snapshot.deliveries.map(deliveryFromSnapshot),

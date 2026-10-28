@@ -130,8 +130,8 @@ export type SessionStreamState = {
   runStatus: "idle" | RunCompletedStatus | "failed"
   // 已验证的安全失败按 owner run identity 索引；不保存 producer message、exception 或 stack。
   runFailuresById: Record<string, AttributedRunFailure>
-  // Only an owner terminal frame or explicit private snapshot marker proves cancellation.
-  cancelledRuns: Record<string, true>
+  // Exact owner Run terminals are independent of text/parts completion.
+  runTerminalsById: Record<string, "completed" | "cancelled" | "failed">
   // public snapshot 允许 failed assistant 没有 run_id；保留真失败但不伪造轮级归属。
   unattributedFailure: RunFailure | null
   // 在途 run 显式字段：snapshot 水合置位、匹配终态清空。
@@ -142,6 +142,26 @@ export type SessionStreamState = {
   // Durable BFF AG-UI cursor. This is the sole network resume position.
   resumeCursor: EventCursor | null
   meta: SessionMeta | null
+}
+
+// A retained page Engine can outlive a hot module update. Retire its old RAM
+// field on the next pure write; only previously confirmed cancellations migrate.
+// Text completion and the single current runStatus never establish a terminal.
+export function normalizeRunTerminals(state: SessionStreamState): SessionStreamState {
+  const hasLegacy = Object.hasOwn(state, "cancelledRuns")
+  if (state.runTerminalsById !== undefined && !hasLegacy) return state
+  const terminals: SessionStreamState["runTerminalsById"] = state.runTerminalsById ?? {}
+  if (state.runTerminalsById === undefined) {
+    const legacy: unknown = Reflect.get(state, "cancelledRuns")
+    if (legacy !== null && typeof legacy === "object" && !Array.isArray(legacy)) {
+      for (const [runId, value] of Object.entries(legacy)) {
+        if (value === true) Object.defineProperty(terminals, runId, { value: "cancelled", enumerable: true, writable: true, configurable: true })
+      }
+    }
+  }
+  const normalized = { ...state, runTerminalsById: terminals }
+  Reflect.deleteProperty(normalized, "cancelledRuns")
+  return normalized
 }
 
 export function createSessionStreamState(): SessionStreamState {
@@ -159,7 +179,7 @@ export function createSessionStreamState(): SessionStreamState {
     stepsByRun: {},
     runStatus: "idle",
     runFailuresById: {},
-    cancelledRuns: {},
+    runTerminalsById: {},
     unattributedFailure: null,
     activeRunId: null,
     lastSeq: 0,

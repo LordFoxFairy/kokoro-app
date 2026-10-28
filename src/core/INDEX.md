@@ -1,4 +1,6 @@
-取消投影：只有真实 run.completed(cancelled) 或私有 MessageRead 显式 terminal_status=cancelled 进入 exact cancelledRuns；失败空正文／无profile不推断取消，本地 markRunCancelled 只收工具，不造远端终态。取消不改变文字／ordered parts完整性。
+HMR RAM：页面Engine可沿用旧thread；纯normalizer仅将旧cancelledRuns中已确认true迁为cancelled并退休旧字段。新读容忍缺map，写入口一次规范后幂等；不由textState/runStatus补成功，不改消息/草稿或持久状态。
+
+取消投影：只有真实 run.completed(cancelled) 或私有 MessageRead 显式 terminal_status=cancelled 进入唯一 exact runTerminalsById（completed/cancelled/failed），不与cancelmap并存；真实Run完成/失败与可信snapshot status写该索引；TEXT_END不写。失败空正文／无profile不推断取消，本地 markRunCancelled 只收工具，不造远端终态。取消不改变文字／ordered parts完整性。
 
 <!-- Ordered messages: nullable private descriptors keep an owner marker + per-Message unread/loading/partial/changed state. mergeMessageParts restores scalar text slots and safe activities at exact decimal public ledger positions, then replays newer publicSequence events. Agent seq and opaque SSE resumeCursor are separate coordinates. -->
 # core — 纯状态模型与事件折叠（零 I/O 零 React）

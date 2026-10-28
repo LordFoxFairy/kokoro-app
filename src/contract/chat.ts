@@ -77,8 +77,10 @@ export const orderedMessageRenderingSchema = z.object({
 }).strict()
 const privateInlineMessageReadSchema = messageRecordSchema.innerType().extend({
   terminal_status: z.literal(BFF_PRIVATE_CANCELLED_STATUS).optional(),
+  regenerated_from_message_id:z.string().min(1).max(256).optional(),
 }).superRefine((message, context) => {
-  const { terminal_status: terminalStatus, ...original } = message
+  const { terminal_status: terminalStatus, regenerated_from_message_id:source, ...original } = message
+  if(source!==undefined&&(message.role!=="assistant"||!message.run_id?.trim()))context.addIssue({code:z.ZodIssueCode.custom,path:["regenerated_from_message_id"],message:"regeneration requires exact assistant Run"})
   const parsed = messageRecordSchema.safeParse(original)
   if (!parsed.success) for (const issue of parsed.error.issues) context.addIssue(issue)
   if (terminalStatus !== undefined && (message.role !== "assistant" || message.status !== "failed" ||
@@ -91,6 +93,7 @@ export const orderedAssistantMessageReadSchema = z.object({
   status: z.enum(["pending", "streaming", "completed", "failed"]), created_at: z.string().min(1),
   run_id: z.string().min(1), failure: agentFailureProfileSchema.optional(),
   terminal_status: z.literal(BFF_PRIVATE_CANCELLED_STATUS).optional(),
+  regenerated_from_message_id:z.string().min(1).max(256).optional(),
   selected_skill_source_refs: selectedSkillSourceRefsSchema.optional(), rendering: orderedMessageRenderingSchema,
 }).strict().refine((message) => (message.failure === undefined || message.status === "failed") &&
   (message.terminal_status === undefined || (message.status === "failed" && message.failure === undefined && message.run_id.trim().length > 0)))

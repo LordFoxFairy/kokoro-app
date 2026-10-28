@@ -1,6 +1,6 @@
 // 事件折叠：event_id 幂等去重 + 批量折叠（可变草稿一次快照）+ never 穷尽守卫。
 
-import { assertInteractionRevision, createSessionStreamState } from "./state"
+import { assertInteractionRevision, createSessionStreamState, normalizeRunTerminals } from "./state"
 import type { MessagePart } from "@/contract/chat"
 
 import type { ChatProjectionEvent } from "@/core/chat-projection-event"
@@ -286,11 +286,9 @@ function applyRunTerminal(
   closeSnapshotContinuation(draft, event.run_id)
   const steps = stepsOf(draft, event.run_id)
   const cancelled = event.kind === "run.completed" && event.payload.status === "cancelled"
-  if (cancelled) draft.state.cancelledRuns = { ...draft.state.cancelledRuns, [event.run_id]: true }
-  else if (draft.state.cancelledRuns[event.run_id]) {
-    const next = { ...draft.state.cancelledRuns }
-    delete next[event.run_id]
-    draft.state.cancelledRuns = next
+  draft.state.runTerminalsById = {
+    ...draft.state.runTerminalsById,
+    [event.run_id]: event.kind === "run.completed" ? event.payload.status : "failed",
   }
   const failed = event.kind !== "run.completed"
   const closed = closeOpenTools(steps, () => cancelled ? "cancelled" : failed ? "error" : "stale-running")
@@ -500,6 +498,7 @@ export function applyChatProjectionEvents(
   state: SessionStreamState,
   events: readonly ChatProjectionEvent[],
 ): SessionStreamState {
+  state = normalizeRunTerminals(state)
   let draft: Draft | null = null
   for (const event of events) {
     const base = draft?.state ?? state
@@ -524,7 +523,7 @@ export function applyChatProjectionEvents(
           deliveriesHasMore: state.deliveriesHasMore,
           runStatus: state.runStatus,
           runFailuresById: state.runFailuresById,
-          cancelledRuns: state.cancelledRuns,
+          runTerminalsById: state.runTerminalsById,
           unattributedFailure: state.unattributedFailure,
           activeRunId: state.activeRunId,
           executionHead: state.executionHead,
@@ -559,6 +558,7 @@ export function appendUserMessage(
   state: SessionStreamState,
   message: { id: string; content: string },
 ): SessionStreamState {
+  state = normalizeRunTerminals(state)
   return {
     ...state,
     messages: [
@@ -576,6 +576,7 @@ export function markRunCancelled(
   state: SessionStreamState,
   runId: string,
 ): SessionStreamState {
+  state = normalizeRunTerminals(state)
   const steps = state.stepsByRun[runId]
   if (!steps) {
     return state
@@ -593,6 +594,7 @@ export function markRunCancelled(
 export function mergeMessageParts(state: SessionStreamState, read: {
   message_id: string; run_id: string; revision: string; items: readonly MessagePart[];
 }, events: readonly ChatProjectionEvent[], complete: boolean): SessionStreamState {
+  state = normalizeRunTerminals(state)
   const known = state.messageParts?.[read.message_id]
   if (!known || known.runId !== read.run_id || BigInt(read.revision) < BigInt(known.revision)) return state
   let fragment = createSessionStreamState()
@@ -644,6 +646,8 @@ export function mergeMessageParts(state: SessionStreamState, read: {
 // A fresh private snapshot may omit all inline text. Keep confirmed visible
 // slots until its asynchronous version-bound read replaces this exact Message.
 export function preserveMessageParts(previous: SessionStreamState, next: SessionStreamState): SessionStreamState {
+  previous = normalizeRunTerminals(previous)
+  next = normalizeRunTerminals(next)
   let result = next
   for (const value of Object.values(next.messageParts ?? {})) {
     const prior = previous.messageParts?.[value.messageId]

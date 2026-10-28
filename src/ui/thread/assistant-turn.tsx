@@ -1,3 +1,8 @@
+import { useRunDisplay } from "./use-run-display"
+import { overlayRunDisplay } from "./run-display-overlay"
+import type { AnswerActionBoundary } from "./answer-action-scope"
+import type { AnswerActionTarget } from "./answer-action-target"
+import { OwnerAnswerActions } from "./owner-answer-actions"
 import type { InteractionState } from "@/contract/control"
 import { ApprovalCard } from "@/ui/hitl/approval-card"
 import { AskUserCard } from "@/ui/hitl/ask-user-card"
@@ -13,15 +18,18 @@ import type { ToolDecision } from "@/engine/hitl-staging"
 import { useT } from "@/i18n/context"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { CheckCircle2, Copy } from "lucide-react"
-import { useState, useEffect, useRef } from "react"
+import { CheckCircle2 } from "lucide-react"
+import { useEffect, useRef } from "react"
 import type { ReactNode } from "react"
 
 import { MarkdownMessage } from "./markdown-message"
 import { SegmentProcess } from "./segment-process"
+import { AnswerActions } from "./answer-actions"
 import styles from "./thread.module.css"
 
 type AssistantTurnProps = {
+  answerActionBoundary?: AnswerActionBoundary
+  answerActionTarget?: AnswerActionTarget | null
   parts?: readonly MessagePartsState[]
   onRetryMessageParts?: (messageId: string) => void
   interaction?: InteractionState
@@ -100,6 +108,8 @@ export function AssistantTurn({
   onCancelRun,
   taskTitle,
   failureFooter,
+  answerActionBoundary,
+  answerActionTarget,
   cancelled = false,
 }: AssistantTurnProps) {
   const t = useT()
@@ -114,7 +124,10 @@ export function AssistantTurn({
     })
     return () => window.cancelAnimationFrame(frame)
   }, [interaction])
-  const segments = groupSegments(steps, activities, messagesById)
+  const display = useRunDisplay(answerActionBoundary, answerActionTarget?.runId)
+  const displayedActivities = overlayRunDisplay(activities, display.facts)
+  const displayedSteps = steps.map(step => step.kind === "activity" ? { ...step, activity: overlayRunDisplay([step.activity], display.facts)[0]! } : step)
+  const segments = groupSegments(displayedSteps, displayedActivities, messagesById)
   const hasTurnProcess = segments.some((segment) => segment.activities.length > 0)
   // Public7 process activities have opaque safe segment identities that are
   // independent from message identities. Keep the newest process live, but
@@ -144,23 +157,11 @@ export function AssistantTurn({
   // Process-only turns have no answer placeholder either; retain the distinct
   // connection status here. Only the no-process/no-text path uses forming.
   const showReconnectStrip = reconnecting && (tailHasText || hasTurnProcess || (phaseLabel !== null && !showScaffold))
-  const [copied, setCopied] = useState(false)
   const answerText = segments
     .map((segment) => messagesById[segment.segmentId]?.content ?? "")
     .filter(Boolean)
     .join("\n\n")
 
-  const copyAnswer = async () => {
-    if (!answerText) return
-    try {
-      await navigator.clipboard.writeText(answerText)
-      setCopied(true)
-      window.setTimeout(() => setCopied(false), 1400)
-    } catch {
-      // Clipboard permission is optional; the action remains present without
-      // turning a browser policy denial into a visible runtime error.
-    }
-  }
 
   // 流式内容位于 conversation 的 polite live region 内。保持增量播报，
   // atomic=true 会在每个 token 到达时重复朗读整轮长答案。
@@ -254,6 +255,7 @@ export function AssistantTurn({
               ) : null}
               <SegmentProcess
                 segmentId={segment.segmentId}
+                {...(answerActionBoundary && answerActionTarget && display.facts === null ? { onInspect: display.inspect } : {})}
                 activities={segment.activities}
                 live={liveProcessSegment}
                 continueProcessing={liveProcessSegment && !tailHasText && phaseLabel === null && !reconnecting && !hitlActive}
@@ -285,19 +287,8 @@ export function AssistantTurn({
             </div>
           })}
         </div>)}
-        {!isLive && answerText ? (
-          <div className={styles.assistantActions} data-slot="assistant-actions">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              aria-label={t(copied ? "thread.copiedAnswer" : "thread.copyAnswer")}
-              title={t(copied ? "thread.copiedAnswer" : "thread.copyAnswer")}
-              onClick={() => void copyAnswer()}
-            >
-              <Copy aria-hidden="true" />
-            </Button>
-          </div>
+        {!isLive && (answerText || answerActionTarget) ? (
+          answerActionBoundary && answerActionTarget ? <OwnerAnswerActions boundary={answerActionBoundary} runId={answerActionTarget.runId} messageId={answerActionTarget.messageId} text={answerText} /> : <AnswerActions text={answerText} />
         ) : null}
         {!isLive && cancelled ? <p role="status" data-run-terminal="cancelled">{t("thread.cancelled")}</p> : !isLive ? failureFooter : null}
       </div>

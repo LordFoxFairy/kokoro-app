@@ -29,7 +29,7 @@ import {
   appendUserMessage,
   markRunCancelled,
 } from "@/core/reducer"
-import { sameInteractionState, createSessionStreamState, type SessionStreamState, type SessionMessage } from "@/core/state"
+import { sameInteractionState, createSessionStreamState, normalizeRunTerminals, type SessionStreamState, type SessionMessage } from "@/core/state"
 
 import { SessionClientError } from "./client"
 import { reconcileUserMessageId, reduceProjectionEvents } from "./event-reducer"
@@ -1285,6 +1285,51 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     return true
   }
 
+  async function regenerateAnswer(input: { sourceMessageId: string; sourceRunId: string; key: string; signal: AbortSignal }) {
+    const sessionId = store?.activeId, generation = hydrateGeneration
+    input.signal.throwIfAborted()
+    const sourceIds = new Set([
+      ...thread.messages.flatMap(message => message.role === "assistant" && message.runId === input.sourceRunId && message.snapshotMessageId ? [message.snapshotMessageId] : []),
+      ...Object.values(thread.messageParts ?? {}).flatMap(part => part.runId === input.sourceRunId ? [part.messageId] : []),
+    ])
+    if (disposed || !sessionId || ownerConfirmedSessionId !== sessionId || !deps.answerActions || sourceIds.size !== 1 ||
+      !sourceIds.has(input.sourceMessageId) || !input.key) throw Error("regeneration_source_not_current")
+    const beforeThread = thread, beforeMachine = machine
+    const beforePending = pendingSubmission, beforeSteers = [...pendingSteerReceipts.keys()]
+    const current = () => !disposed && !input.signal.aborted && hydrateGeneration === generation && store?.activeId === sessionId
+    const receipt = await deps.answerActions.regenerate({ sessionId, messageId: input.sourceMessageId }, input.key, input.signal)
+    if (!current()) throw Error("regeneration_retired")
+    if (receipt.regenerated_from_message_id !== input.sourceMessageId || receipt.run_id === input.sourceRunId ||
+      receipt.assistant_message_id === input.sourceMessageId) throw Error("regeneration_binding_mismatch")
+    const unchanged = thread === beforeThread && machine === beforeMachine && pendingSubmission === beforePending &&
+      beforeSteers.length === pendingSteerReceipts.size && beforeSteers.every(token => pendingSteerReceipts.has(token))
+    // This ACK owns only its new assistant/Run. The returned user ID is the
+    // original human association, never a new input echo or rename instruction.
+    registerMessagePartsReceipt(sessionId, receipt)
+    const terminal = normalizeRunTerminals(thread).runTerminalsById[receipt.run_id]
+    if (!terminal && unchanged && machine.phase === "idle" && pendingSubmission === null && pendingSteerReceipts.size === 0 && thread.activeRunId === null) {
+      machine = transition(transition(machine, { type: "SUBMIT" }), { type: "RECEIPT", runId: receipt.run_id })
+      openStream(sessionId, thread.resumeCursor)
+    } else if (!terminal && machine.phase === "idle" && thread.activeRunId === null && pendingSubmission === null && pendingSteerReceipts.size === 0) {
+      // A non-head read may have changed the thread while this command was
+      // accepted. Discover it once through the existing bounded owner read,
+      // not by replaying POST or reopening a stream at an unflushed cursor.
+      const readCursor = thread.resumeCursor, readMachine = machine, readHead = thread.executionHead, readActive = thread.activeRunId
+      const readUsers = thread.messages.filter(message => message.role === "user")
+      void execution.fetchSnapshot(sessionId).then(owner => {
+        const currentUsers = thread.messages.filter(message => message.role === "user")
+        if (!current() || thread.resumeCursor !== readCursor || thread.executionHead !== readHead || thread.activeRunId !== readActive ||
+          currentUsers.length !== readUsers.length || currentUsers.some((message, index) => message !== readUsers[index]) || machine !== readMachine || pendingSubmission !== null || pendingSteerReceipts.size !== 0 ||
+          owner?.session.session_id !== sessionId || !(owner.messages ?? []).some(message =>
+            message.role === "assistant" && message.message_id === receipt.assistant_message_id && message.run_id === receipt.run_id)) return
+        adoptOwnerSnapshot(sessionId, owner)
+        notify()
+      }).catch(() => { /* Accepted receipt remains known; no automatic command replay. */ })
+    }
+    notify()
+    return receipt
+  }
+
   function retry(): void {
     if (
       disposed ||
@@ -1782,6 +1827,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     retryResume,
     reconnect,
     cancelRun,
+    regenerateAnswer,
     stageToolDecision,
     selectConversation,
     openConversation,

@@ -1,3 +1,11 @@
+## 回答动作与私有Run展示（正式Public28.10消费者候选）
+
+固定正式BFF `0b67e0eab4918264a7270b828d558e631bdfb3f5`／Public28.10／SHA256 `9e6a8dddea847ecfd2905f378f4f76022b6cc49a1a4352a2e7abb4e73b3f1328`；既有tool-display generator同时派生closed action／display validators，无第二wire源。`GET/PUT /api/session/sessions/{id}/messages/{messageId}/feedback`映射同名`/v1`，PUT仅`{feedback: up|down|null}`自然幂等。`POST .../{messageId}/regenerate`仅`{}`＋原Idempotency-Key；202返回new run/assistant、original user关联及regenerated_from_message_id，不是成功终态或human镜像。private MessageRead的source关联不扩普通ChatMessage／share。
+
+`GET /api/session/sessions/{id}/runs/{runId}/display`只读本Run facts，不表示完整性；精确身份与10秒绝对预算贯穿准入／body／owner EOF，取消／UTF8／重复键／长度／status／响应关联严格核。feedback unknown只GET，regen unknown只同K显式POST恢复；正式closed4xx拒绝与可能postcommit权限拒绝区分，不借错误码造未提交事实。
+
+真实safe activity的新字段同时严格适用于AG-UI／snapshot／ordered parts：ready Skill display_skills必须唯一且为原source_refs子集，native name/path及可选decimal revision；file detail virtual_path只file可用、MCP禁止，旧absence未知。private按需Run GET不进入Shared读或snapshot批量扇出。test-only精确28.10→完整28.9逆回后承接原全部父证明，普通API／旧private/policy原件保持。
+
 ## 私有取消终态（消费者候选）
 
 Private ChatMessageRead 仅允许 optional terminal_status=cancelled；限定 assistant、failed、非空run_id且无failure，inline与ordered一致。缺省保持原failed语义，null与其它值拒绝；public ChatMessage／share／command不扩字段。RUN_FINISHED cancelled同义，202只admission，不推断正文或parts完整。唯一正式来源BFF `51e049df72c1fb2fe82b9114135c2fdc1a3450d9`／Public28.9／SHA256 `b438a749c919d24c4e0f1dadfdbcbbb11e0ac755f5785c543a661336c2cbb354`。完整test-only28.9→28.8逆回父SHA6376e2d2…承接旧风险；普通ChatMessage、command、share及五private／独立download policy3原件不变。

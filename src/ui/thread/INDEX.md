@@ -1,3 +1,11 @@
+正式回答消费者候选：OwnerAnswerActions绑定私有durable Message、真实四动作与sameK未知恢复；answer-action-scope把同actor准入暂停与真正身份退休分开。SkillActivityRow／ToolCallRow显native name和默认全virtual path，缺事实不猜；use-run-display只按具体Run显式读，pure overlay保status/order。
+
+MCP准备展示：process-activity-groups只合并同一连续过程段里相邻discover/describe，ProcessActivityRows的独立默认折叠组保每一真实行及顺序；mcp.call/文字/其它activity都是边界。准备参与真实activity总数，不冒执行次数；live延续cue不重复，不改owner状态或用当前目录补历史名。
+
+回答动作后继：answer-action-target只从现receipt/descriptor或snapshotMessageId绑定durable Message，拒segment fallback及归属歧义；纯view/身份比较不授网络权限。正式feedback／regenerate严格接线后，unread/unknown仍不冒null票，不新增正常假操作。
+
+AnswerActions：独立回答操作栏只持复制与短反馈；重新生成／赞踩需调用方提供真实动作及受控事实才显示。AssistantTurn无私有action boundary时仍只接原真实文本复制；私有边界经OwnerAnswerActions绑定具名engine／网络，不加持久化或假按钮；局部灰色图标、tooltip、键盘focus及disabled独立。
+
 确定取消仅中性“已停止”，原文字／过程保留；空取消可成turn。pending仅原停止中，unknown显示明确未确认及原意图重试，不当失败或完成；真实parts缺口保原只读恢复。
 
 补充历史读取反馈：仅当前可见非空正文的精确 durable Message 归属匹配时安静读屏；Tab 进入原重新读取按钮即恢复整行。无正文／别的 Message 保留原提示，status、原回调与 owner 读取语义不变。

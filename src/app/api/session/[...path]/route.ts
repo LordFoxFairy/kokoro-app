@@ -1,3 +1,4 @@
+import {sessionAnswerActions} from "@/lib/server/session-answer-actions"
 // Chat 同源适配器（BFF）：浏览器保留稳定的 `/api/session/*` 兼容路径，服务端统一
 // 投影到 `kokoro-bff/v1/*`。BFF Chat 模块负责消息/run/SSE 事实编排；浏览器不直连
 // Session、Gateway 或任意业务子仓库。HTTP/SSE/二进制一律流式转发，大 JSON 仅在
@@ -34,6 +35,7 @@ const AGUI_STREAM_IDLE_TIMEOUT_MS = 60_000
 const FORWARD_HEADERS = ["accept", "content-type", "last-event-id", "idempotency-key"] as const
 
 async function proxy(request: Request, context: { params: Promise<{ path: string[] }> }): Promise<Response> {
+  if(/^\/api\/session\/sessions\/[^/]+\/(?:messages\/[^/]+\/(?:feedback|regenerate)|runs\/[^/]+\/display)(?:$|\?)/u.test(new URL(request.url).pathname)) return sessionAnswerActions(request,context.params)
   if (/^\/api\/session\/sessions\/[^/]+\/(?:archive|restore)$/u.test(new URL(request.url).pathname)) return sessionArchive(request, context.params)
   if (["POST", "DELETE"].includes(request.method) && /^\/api\/session\/sessions\/[^/]+\/share$/u.test(new URL(request.url).pathname)) return sessionShare(request, context.params)
   const requestId = requestIdForRequest(request)

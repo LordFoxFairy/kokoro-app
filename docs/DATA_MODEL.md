@@ -1,6 +1,12 @@
+## 回答动作与过程补充的RAM视图（无新持久事实）
+
+actor/session/Project/run/durable Message决定本地action归属。feedback只有ready包含owner up/down/null；其余是unread/reading/writing/unknown/failed。再生成intent保存本source／原key／epoch与pending/unknown/rejected/accepted，accepted是owner准入ACK而非Run完成；未知不能新K。暂时同actor读准入只暂停并保key，真实actor/scope退休清理。rejected仅可证明的首次precommit拒绝，fresh owner读取后用户新尝试，权限出口拒绝不推断未写。
+
+runTerminalsById取真实Run terminal／可信私有snapshot，runFailuresById仅独有profile；HMR旧cancelmap一次规范后删字段，不存双map、不从text完成造成功。原human／answer不因再生成被替换，原user关联不作为镜像echo／rename。private Run display为单次按需安全事实overlay，不改原activity状态、位置、source/event/digest或账本，不增DB／owner／localStorage缓存。
+
 ## 取消视图（候选）
 
-仅内存 cancelledRuns exact Run索引，取真实AG-UI取消终态或私有snapshot显式marker；不是新owner、DB状态、缓存或持久实体。本地停止与未知取消不写此证明；正文／ordered Message parts的unread/partial/complete独立保留。
+仅内存 runTerminalsById exact Run索引，取真实AG-UI取消终态或私有snapshot显式marker；不是新owner、DB状态、缓存或持久实体。本地停止与未知取消不写此证明；正文／ordered Message parts的unread/partial/complete独立保留。
 
 ## GitHub discovery：仅响应容量，不新增持久事实
 

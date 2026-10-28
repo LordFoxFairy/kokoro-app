@@ -1,3 +1,4 @@
+import { createAnswerActionsClient } from "@/engine/answer-actions-client"
 // 页面级单例客户端 + 引擎：整页共享同源 BFF 客户端（鉴权由 httpOnly 信封 cookie 同源携带，
 // 前端不持 token），仅浏览器构造，SSR 为 null/惰性。shell 与各域 controller hook 共用这些单例，
 // 稳定引用供取数 effect/查询层依赖不抖动。
@@ -439,6 +440,7 @@ export function browserEngine(options: { preview?: boolean; scope?: SessionScope
     }
     const engine = createSessionEngine({
       client,
+      ...(mode === "preview" ? {} : { answerActions: createAnswerActionsClient({ baseUrl: sessionBaseUrl() }) }),
       messagePartsReadTarget: options.messagePartsReadTarget ?? null,
       ...(mode === "preview" ? {} : { captureMessagePartsReadRecheck: () => recoverySubject === null ? undefined : capturePartsReadRecheck?.(recoverySubject) }),
       ...(submissionRecovery === undefined ? {} : { submissionRecovery }),

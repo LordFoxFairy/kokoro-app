@@ -566,8 +566,8 @@ describe("ConversationThread 失败卡渲染", () => {
   })
 
   it("partial/full terminal 的 settled copy footer 仍可见可操作", () => {
-    const css = readFileSync(`${process.cwd()}/src/ui/thread/thread.module.css`, "utf8")
-    expect(css).toMatch(/\.assistantActions\s*\{[^}]*display:\s*flex;/u)
+    const css = readFileSync(`${process.cwd()}/src/ui/thread/answer-actions.module.css`, "utf8")
+    expect(css).toMatch(/\.actions\s*\{[^}]*display:\s*flex;/u)
     const { container } = renderFailure(failedThread("dependency_unavailable"))
     const turn = container.querySelector('[data-message-id="assistant:run_1:turn:0"]')
     expect(turn?.querySelector(`button[aria-label="${tr("thread.copyAnswer")}"]`)).not.toBeNull()

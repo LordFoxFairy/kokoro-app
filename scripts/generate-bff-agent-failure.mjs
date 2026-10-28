@@ -10,9 +10,9 @@ import YAML from "yaml"
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const sourcePath = join(root, "src/generated/bff-public-openapi.yaml")
 const outputPath = join(root, "src/generated/bff-agent-failure.ts")
-const ownerCommit = "51e049df72c1fb2fe82b9114135c2fdc1a3450d9"
-const expectedDigest = "b438a749c919d24c4e0f1dadfdbcbbb11e0ac755f5785c543a661336c2cbb354"
-const expectedVersion = "28.9.0"
+const ownerCommit = "0b67e0eab4918264a7270b828d558e631bdfb3f5"
+const expectedDigest = "9e6a8dddea847ecfd2905f378f4f76022b6cc49a1a4352a2e7abb4e73b3f1328"
+const expectedVersion = "28.10.0"
 const expectedChatMessageFingerprint = "d69b983fd87600f5c180494b27989d5eb2b32c12284bf5c7530930e3099c0bf6"
 
 const digest = (value) => createHash("sha256").update(value).digest("hex")
@@ -35,7 +35,13 @@ export function inspectBffAgentFailureContract(spec) {
   assert.equal(digest(stableJson(chatMessage)), expectedChatMessageFingerprint, "BFF ChatMessage failure fragment drift")
 
   const schemas = spec.components.schemas
-  const privateReads = [schemas.ChatMessageRead, schemas.OrderedAssistantMessageRead, schemas.CancelledAssistantMessageRead]
+  const privateReads = structuredClone([schemas.ChatMessageRead, schemas.OrderedAssistantMessageRead, schemas.CancelledAssistantMessageRead])
+  const sourceSchemas = [schemas.ChatMessageRead,schemas.OrderedAssistantMessageRead,schemas.CancelledAssistantMessageRead,schemas.RegeneratedAssistantMessageRead]
+  const closedFingerprint=digest(stableJson(sourceSchemas))
+  assert.equal(closedFingerprint,"795871baac08082c815fe7ef106e589de2859dbf166f9dcb7973bb8ec0aabca1","BFF regenerated private graph drift")
+  privateReads[0].oneOf=privateReads[0].oneOf.filter(item=>item.$ref!=="#/components/schemas/RegeneratedAssistantMessageRead")
+  delete privateReads[1].properties.regenerated_from_message_id
+  delete privateReads[2].properties.regenerated_from_message_id
   assert.equal(digest(stableJson(privateReads)), "86e632ab432cc13b6b3c3dcd6336949518d08d486484d8371c2c373f0ac8d896", "BFF private cancellation guard drift")
   const cancelledStatus = schemas.CancelledAssistantMessageRead.properties.terminal_status.const
   const roles = chatMessage.properties.role.enum

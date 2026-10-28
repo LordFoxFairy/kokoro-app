@@ -3434,7 +3434,7 @@ describe("cancel receipt is not a terminal", () => {
     engine.cancelRun(); await settle()
     expect(client.snapshotCalls).toHaveLength(1)
     expect(engine.getSnapshot().machine.phase).toBe("idle")
-    expect(thread().cancelledRuns.run_1).toBe(true)
+    expect(thread().runTerminalsById.run_1).toBe("cancelled")
     expect(thread().messages.some((message) => message.content === "prefix")).toBe(true)
     expect(client.controlCalls).toHaveLength(1)
   })
@@ -3443,13 +3443,13 @@ describe("cancel receipt is not a terminal", () => {
     client.nextControl = async () => { throw new SessionClientError("network", "lost ACK") }
     engine.cancelRun(); await settle()
     expect(engine.getSnapshot().machine.phase).toBe("cancelling")
-    expect(thread().cancelledRuns).toEqual({})
+    expect(thread().runTerminalsById).toEqual({})
     client.nextControl = async () => ({ run_id: "run_1", command_id: "original", request_digest: "digest", status: "pending", replayed: true })
     engine.cancelRun(); await settle()
     expect(client.controlCalls).toHaveLength(2)
     expect(client.controlCalls[1]).toEqual(client.controlCalls[0])
     expect(engine.getSnapshot().machine.phase).toBe("cancelling")
-    expect(thread().cancelledRuns).toEqual({})
+    expect(thread().runTerminalsById).toEqual({})
   })
   it("ignores cancellation snapshot after the actor/session engine generation retires", async () => {
     buildEngine(); engine.submit("stop me"); await settle()
@@ -3460,7 +3460,7 @@ describe("cancel receipt is not a terminal", () => {
     resolve({ ...makeSnapshot(), messages: [{ message_id: "a", role: "assistant", run_id: "run_1", content: "retired", status: "failed", terminal_status: "cancelled", created_at: "now" }] })
     await settle()
     expect(thread().messages.some((message) => message.content === "retired")).toBe(false)
-    expect(thread().cancelledRuns).toEqual({})
+    expect(thread().runTerminalsById).toEqual({})
   })
 })
 
@@ -3469,7 +3469,7 @@ it.each(["wrong-session", "wrong-run", "pending"])("does not confirm cancellatio
   client.nextSnapshot = async () => ({ ...makeSnapshot(), session: { ...makeSnapshot().session, session_id: kind === "wrong-session" ? "other" : "conv_1" }, messages: [{ message_id: "a", role: "assistant", run_id: kind === "wrong-run" ? "other" : "run_1", content: "", status: kind === "pending" ? "pending" : "failed", ...(kind === "pending" ? {} : { terminal_status: "cancelled" as const }), created_at: "now" }] })
   engine.cancelRun(); await settle()
   expect(engine.getSnapshot().machine.phase).toBe("cancelling")
-  expect(thread().cancelledRuns).toEqual({})
+  expect(thread().runTerminalsById).toEqual({})
   expect(client.controlCalls).toHaveLength(1)
 })
 

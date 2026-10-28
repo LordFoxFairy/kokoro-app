@@ -1,5 +1,6 @@
 "use client"
 
+import { useAnswerActionScope } from "@/ui/thread/answer-action-scope"
 import { useProjectPins } from "@/features/app/use-project-pins"
 import { McpTrialProvider } from "@/ui/mcp/mcp-trial-context"
 import { useSessionArchive } from "@/ui/shell/use-session-archive"
@@ -807,7 +808,11 @@ function AppFrameRuntime({
   const EmptyState = emptyState ?? DefaultEmptyState
   const shareClient: Pick<SessionClient, "createShare" | "revokeShare"> = browserListClient({ preview })
 
+  const answerActionBoundary = useAnswerActionScope({ engine, actorId: projectReadBoundary?.subject ?? null, sessionId: activeId,
+    scope: sessionScope, identity: railReadIdentity, admitted: railReadAdmitted, preview })
+
   const conversationProps: ConversationThreadProps = {
+    ...(answerActionBoundary === undefined ? {} : { answerActionBoundary }),
     preview,
     ...(brandName === undefined ? {} : { brandName }),
     sessionId: activeId,

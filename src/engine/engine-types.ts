@@ -1,3 +1,5 @@
+import type { AnswerActionsClient } from "./answer-actions-client"
+import type { AnswerRegenerationReceipt } from "@/contract/answer-actions"
 // 引擎对外类型契约：只描述快照、依赖和用户动作，不承载运行时编排。
 
 import type { ClientFailureReason, SessionClient } from "@/engine/client"
@@ -102,6 +104,8 @@ export type SessionEngine = {
   setMessagePartsReadTarget?: (target: MessagePartsReadTarget | null) => void
   reconnect: () => void
   cancelRun: () => void
+  /** Named owner regeneration; never an ordinary create-message or local human echo. */
+  regenerateAnswer?: (input: { sourceMessageId: string; sourceRunId: string; key: string; signal: AbortSignal }) => Promise<AnswerRegenerationReceipt>
   stageToolDecision: (runId: string, toolId: string, decision: ToolDecision) => void
   selectConversation: (id: string) => void
   // 打开服务端清单里的会话（本地索引未见则先纳入缓存再水合）。
@@ -127,6 +131,7 @@ export type DraftLifecycle = {
 }
 
 export type EngineDeps = {
+  answerActions?: Pick<AnswerActionsClient, "regenerate">
   client: SessionClient
   storage: PersistedStore<ConversationStore>
   draftLifecycle?: DraftLifecycle

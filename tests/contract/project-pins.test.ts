@@ -5,9 +5,9 @@ import YAML from "yaml"
 
 it("consumes the formal complete Public28.7 pin artifact", () => {
   const bytes = readFileSync("src/generated/bff-public-openapi.yaml")
-  expect(createHash("sha256").update(bytes).digest("hex")).toBe("b438a749c919d24c4e0f1dadfdbcbbb11e0ac755f5785c543a661336c2cbb354")
+  expect(createHash("sha256").update(bytes).digest("hex")).toBe("9e6a8dddea847ecfd2905f378f4f76022b6cc49a1a4352a2e7abb4e73b3f1328")
   const spec = YAML.parse(bytes.toString("utf8"))
-  expect(spec.info.version).toBe("28.9.0")
+  expect(spec.info.version).toBe("28.10.0")
   expect(spec.paths["/v1/self/project-pins"].get.operationId).toBe("listSelfProjectPins")
   expect(spec.paths["/v1/projects/{projectId}/pin"].put["x-kokoro-idempotency"]).toBe("natural")
 })
