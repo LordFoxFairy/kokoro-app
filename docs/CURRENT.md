@@ -1,3 +1,7 @@
+## 2026-10-28 正常整轮配对验证（单任务切片）
+
+正常组合 App e7b93c7e／BFF15cc9e1／Agent2e61b85已加载，BFF具名final nullable列演进已确认current；无历史回填。真实新只读任务正常完成，Agent final与BFF parts逐字/身份/顺序一致，正常网页收展及硬刷新保持最终答复独立。2模型attempt sealed、unknown0，usage仍partial。旧MCP历史、Canvas回焦、正常Swarm及整体产品验收仍OPEN，不能将本片成功等同整体完成。原始截图、精确运行前像和回退配置在Root ignored whole-turn-normal-20261028；唯一Root计划记载完整实际范围。无合并或Root版本提升。
+
 ## 2026-10-28 工具详情恢复与状态语义（局部正常生效）
 
 已复现终态补读中卸载再挂载：存在早期facts时spent保持占用，显式inspect也不再发送。仅解除已取消loading的占用，保同scope事实、原terminal/refreshed预算、主体/代际与晚结果围栏；visible重入或显式详情读取共享一次请求。MCP completed在主行和Canvas共用中性“调用已结束”，失败/运行状态不变，不把补充事实缺席当成功，也不跨身份缓存私有失败。无Schema/契约/业务写入。
