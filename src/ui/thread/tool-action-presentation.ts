@@ -46,9 +46,15 @@ export function toolActionPresentation(activity: Extract<RunProcessActivity, { a
   const native = activity.display_code === "tool.execution" && detail && Object.hasOwn(NATIVE_EXECUTION_PRESENTATION, detail.tool_name)
     ? NATIVE_EXECUTION_PRESENTATION[detail.tool_name as keyof typeof NATIVE_EXECUTION_PRESENTATION] : undefined
   const targetText = target?.kind === "file" ? target.virtual_path ?? target.name : target?.name
+  // Older MCP events only prove execution ended. A same-call private fact can
+  // establish failure; its absence is not proof of a successful business result.
+  const statusLabel: MessageKey = activity.status === "running" ? "thread.processRunning"
+    : activity.status === "failed" ? "thread.processFailed"
+      : activity.display_code.startsWith("tool.mcp.") ? "thread.toolCallEnded" : "thread.processCompleted"
   return {
     ...(native ?? TOOL_ACTION_PRESENTATION[activity.display_code]),
     targetText: targetText ?? (native && detail ? nativePath(detail, native.pathKey) : undefined),
     file: target?.kind === "file" || Boolean(native),
+    statusLabel,
   }
 }

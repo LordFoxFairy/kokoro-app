@@ -16,9 +16,9 @@ export function ToolCallRow({ activity, continuation, onInspect, detail: ownerDe
   continuation?: ReactNode
 }) {
   const t = useT()
-  const { label, Icon, targetText, file } = toolActionPresentation(activity, ownerDetail)
+  const { label, Icon, targetText, file, statusLabel } = toolActionPresentation(activity, ownerDetail)
   const actionTitle = activity.action_title
-  const status = t(activity.status === "running" ? "thread.processRunning" : activity.status === "completed" ? "thread.processCompleted" : "thread.processFailed")
+  const status = t(statusLabel)
   const content = <>
     <Icon className={styles.actionIcon} aria-hidden="true" />
     <span className={`${details.readingLine} ${actionTitle ? details.titleLine : file ? details.fileLine : ""}`} title={actionTitle ?? [t(label), targetText].filter(Boolean).join(" · ")}>

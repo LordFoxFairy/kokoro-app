@@ -583,6 +583,7 @@ export const ja: Partial<Record<MessageKey, string>> = {
   "thread.subagent": "復代理人",
   "thread.processRunning": "実行中",
   "thread.processCompleted": "完了",
+  "thread.toolCallEnded": "呼び出し終了",
   "thread.processFailed": "失敗",
   "thread.skill": "スキル",
   "thread.skillResolving": "解決中",

@@ -39,7 +39,10 @@ function createRunDisplayReader(boundary: AnswerActionBoundary | undefined, runI
     subscribe: (listener: () => void) => {
       if (retired) revision++
       retired = false
-      if (controller?.signal.aborted && facts === null && phase === "loading") { spent = false; phase = "idle"; revision++ }
+      // Leaving the view can abort the terminal refresh after an earlier read
+      // succeeded. Keep those same-scope facts, but release the cancelled read
+      // so reopening the visible passage can obtain the final result once.
+      if (controller?.signal.aborted && phase === "loading") { spent = false; phase = "idle"; revision++ }
       listeners.add(listener)
       return () => { listeners.delete(listener); if (!listeners.size) { retired = true; controller?.abort() } }
     },

@@ -264,7 +264,7 @@ for (const [display_code, label] of public28Labels) {
     for (const [status, text] of [["completed", "Completed"], ["failed", "Failed"]] as const) {
       rerender(<LocaleProvider><ToolCallRow activity={{ ...activity, status }} /></LocaleProvider>)
       expect(screen.getByText(label)).toBe(original)
-      expect(screen.getByText(text)).toBeInTheDocument()
+      expect(screen.getByText(status === "completed" && display_code.startsWith("tool.mcp.") ? "Call ended" : text)).toBeInTheDocument()
     }
   })
 }
@@ -319,7 +319,7 @@ it("uses nine category-specific decorative icons without reading unknown activit
     expect(row.querySelector("svg")).toHaveAttribute("aria-hidden", "true")
     expect(row.querySelector("a, button")).toBeNull()
     expect(screen.queryByText("untrusted unknown field")).toBeNull()
-    expect(screen.getByText("Completed")).toHaveClass("sr-only")
+    expect(screen.getByText(display_code.startsWith("tool.mcp.") ? "Call ended" : "Completed")).toHaveClass("sr-only")
     view.unmount()
   }
   expect(icons.size).toBe(9)

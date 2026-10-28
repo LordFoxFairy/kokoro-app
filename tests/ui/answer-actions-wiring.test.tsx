@@ -10,6 +10,7 @@ import { addConversation } from "@/core/conversations"
 import { useRunDisplay } from "@/ui/thread/use-run-display"
 import { overlayRunDisplay } from "@/ui/thread/run-display-overlay"
 import type { RunProcessActivity } from "@/contract/chat"
+import type { RunDisplay } from "@/contract/answer-actions"
 afterEach(() => { cleanup(); localStorage.clear() })
 function fixture() {
   let current = true
@@ -17,7 +18,7 @@ function fixture() {
   const snapshot: EngineSnapshot = { ...SERVER_ENGINE_SNAPSHOT, thread, ownerConfirmedSessionId: "session", store: addConversation(null, "session", 1) }
   const client = { readFeedback: vi.fn(async () => ({ session_id: "session", message_id: "answer", feedback: null })),
     setFeedback: vi.fn(async (_target: unknown, value: "up" | "down" | null) => ({ session_id: "session", message_id: "answer", feedback: value })),
-    regenerate: vi.fn(), readDisplay: vi.fn(async (target: { sessionId: string; runId: string }, signal: AbortSignal) => { signal.throwIfAborted(); return { run_id: target.runId, display_skills: [], activity_details: [], tool_facts: [], tool_paths: [] } }) }
+    regenerate: vi.fn(), readDisplay: vi.fn(async (target: { sessionId: string; runId: string }, signal: AbortSignal): Promise<RunDisplay> => { signal.throwIfAborted(); return { run_id: target.runId, display_skills: [], activity_details: [], tool_facts: [], tool_paths: [] } }) }
   const regenerateAnswer = vi.fn(async (_input: { sourceMessageId: string; sourceRunId: string; key: string; signal: AbortSignal }) => ({ run_id: "new-run", assistant_message_id: "new-answer", user_message_id: "original-human", regenerated_from_message_id: _input.sourceMessageId }))
   const engine = { getSnapshot: () => snapshot, regenerateAnswer } as unknown as SessionEngine
   const boundary: AnswerActionBoundary = { actorId: "actor", sessionId: "session", scope: { kind: "direct" }, epoch: {}, client, engine, isCurrent: () => current, regenerations: new Set(), changed: () => {} }
@@ -95,6 +96,33 @@ it("requests only one chosen original Run and retires late display facts without
   expect(overlaid[0]).toMatchObject({ display_detail: { virtual_path: "/workspace/a.txt", name: "a.txt" } })
   expect(overlaid[1]).toBe(rows[1])
   expect(rows[0]).not.toHaveProperty("display_detail")
+})
+it("reopens an interrupted terminal display read even when earlier facts were already retained", async () => {
+  const f = fixture()
+  const initial = { run_id: "run", display_skills: [], activity_details: [], tool_facts: [], tool_paths: [] }
+  let finishRetired!: (value: typeof initial) => void
+  f.client.readDisplay.mockResolvedValueOnce(initial)
+  f.client.readDisplay.mockImplementationOnce(() => new Promise(resolve => { finishRetired = resolve }))
+  const finalFacts: RunDisplay = { ...initial, tool_facts: [{ activity_id: "mcp", status: "failed" }] }
+  f.client.readDisplay.mockResolvedValueOnce(finalFacts)
+  const first = renderHook(({ terminal }) => useRunDisplay(f.boundary, "run", terminal), { initialProps: { terminal: false } })
+  act(() => first.result.current.inspect())
+  await waitFor(() => expect(first.result.current.phase).toBe("ready"))
+  first.rerender({ terminal: true })
+  expect(f.client.readDisplay).toHaveBeenCalledTimes(2)
+  expect(first.result.current.facts).toEqual(initial)
+  first.unmount()
+  expect(f.client.readDisplay.mock.calls[1]?.[1].aborted).toBe(true)
+
+  const reopened = renderHook(() => useRunDisplay(f.boundary, "run", true))
+  act(() => { reopened.result.current.ensureRead(); reopened.result.current.inspect() })
+  await waitFor(() => expect(f.client.readDisplay).toHaveBeenCalledTimes(3))
+  await waitFor(() => expect(reopened.result.current.phase).toBe("ready"))
+  expect(f.client.readDisplay.mock.calls[2]?.[0]).toEqual({ sessionId: "session", runId: "run" })
+  await act(async () => { finishRetired(initial) })
+  expect(reopened.result.current.facts).toEqual(finalFacts)
+  expect(overlayRunDisplay([{ activity: "tool", activity_id: "mcp", segment_id: "source", status: "completed", display_code: "tool.mcp.call" }], reopened.result.current.facts)[0]).toMatchObject({ activity: "tool", status: "failed" })
+  expect(f.client.readDisplay).toHaveBeenCalledTimes(3)
 })
 it("an exact owner display response overlays only matching original ready Skills, leaving missing revisions unknown", () => {
   const activity: RunProcessActivity = { activity: "skill", activity_id: "skill", preflight_id: "preflight", source_refs: ["skill:original"], phase: "ready" }

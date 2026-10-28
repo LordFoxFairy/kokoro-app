@@ -4,6 +4,26 @@ import { useRunDisplay } from "@/ui/thread/use-run-display"
 import type { AnswerActionBoundary } from "@/ui/thread/answer-action-scope"
 const facts = { run_id: "run", display_skills: [], tool_paths: [], activity_details: [], tool_facts: [] }
 afterEach(cleanup)
+it("keeps MCP end-of-call wording neutral when private failure evidence is retired", async () => {
+  const { render, screen } = await import("@testing-library/react")
+  const { ActivityInspector } = await import("@/ui/thread/activity-inspector")
+  const { LocaleProvider } = await import("@/i18n/context")
+  let current = true
+  const readDisplay = vi.fn().mockResolvedValue({ ...facts, tool_facts: [{ activity_id: "a", status: "failed" }] })
+  const boundary = { actorId: "actor", sessionId: "s", client: { readDisplay }, isCurrent: () => current } as unknown as AnswerActionBoundary
+  const content = { kind: "activity" as const, runId: "run", activityId: "a", subject: "actor", generation: 1, terminal: true, activity: { activity: "tool" as const, activity_id: "a", segment_id: "s", display_code: "tool.mcp.call" as const, status: "completed" as const } }
+  const source = JSON.stringify(content)
+  const view = render(<LocaleProvider><ActivityInspector content={content} boundary={boundary} /></LocaleProvider>)
+  expect(screen.getByText("Call ended")).toBeVisible()
+  expect(screen.queryByText("Completed")).toBeNull()
+  await screen.findByText("Failed")
+  current = false
+  view.rerender(<LocaleProvider><ActivityInspector content={content} boundary={boundary} /></LocaleProvider>)
+  expect(screen.queryByText("Failed")).toBeNull()
+  expect(screen.getByText("Call ended")).toBeVisible()
+  expect(JSON.stringify(content)).toBe(source)
+  expect(readDisplay).toHaveBeenCalledTimes(1)
+})
 it("only refreshes an inspected live Run once when its real terminal arrives", async () => {
   const readDisplay = vi.fn().mockResolvedValue(facts)
   const boundary = { sessionId: "s", client: { readDisplay }, isCurrent: () => true } as unknown as AnswerActionBoundary

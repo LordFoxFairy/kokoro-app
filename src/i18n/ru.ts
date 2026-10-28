@@ -506,6 +506,7 @@ export const ru: Partial<Record<MessageKey, string>> = {
   "thread.subagent": "субагент",
   "thread.processRunning": "Выполняется",
   "thread.processCompleted": "Завершено",
+  "thread.toolCallEnded": "Вызов завершён",
   "thread.processFailed": "Ошибка",
   "thread.skill": "Навык",
   "thread.skillResolving": "Разрешение",

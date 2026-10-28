@@ -506,6 +506,7 @@ export const ko: Partial<Record<MessageKey, string>> = {
   "thread.subagent": "하위 에이전트",
   "thread.processRunning": "실행 중",
   "thread.processCompleted": "완료됨",
+  "thread.toolCallEnded": "호출 종료",
   "thread.processFailed": "실패함",
   "thread.skill": "스킬",
   "thread.skillResolving": "확인 중",

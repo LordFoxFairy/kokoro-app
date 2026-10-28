@@ -615,6 +615,7 @@ export const zh = {
   "thread.subagent": "子智能体",
   "thread.processRunning": "运行中",
   "thread.processCompleted": "已完成",
+  "thread.toolCallEnded": "调用已结束",
   "thread.processFailed": "失败",
   "thread.skill": "技能",
   "thread.skillResolving": "正在解析",

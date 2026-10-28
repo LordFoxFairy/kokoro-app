@@ -1,3 +1,5 @@
+2026-10-28：`use-run-display.ts` 在同scope终态补读被卸载取消后解除读取占用，保留既有事实并允许重新可见时读取；不重置终态补读资格、不重试HTTP失败。`tool-action-presentation.ts` 同时拥有行动行与Canvas状态文案，MCP completed仅表述“调用已结束”，业务失败仍优先显示。
+
 2026-10-28 整轮过程：`completed-turn-sections.ts`只按正式 final 引用与完整正文划分；`turn-process.tsx`拥有整轮披露与可访问隐藏，原相邻动作组及正文顺序保持。未取得 final、partial、在途、HITL、取消/失败继续原可读布局；最终答复和状态反馈在披露外。参考入口实测14px/20px、4px gap、16px chevron，未有可靠耗时不造时长。正常激活和同任务浏览器验收仍待。
 
 2026-10-28 历史fallback：ToolCallRow与ActivityInspector共用简短操作+同次对象，删除MCP裸selector特判；有action_title保持原文优先。真实失败/顺序/详情不变，无推断历史意图。

@@ -1,3 +1,9 @@
+## 2026-10-28 工具详情恢复与状态语义（局部正常生效）
+
+已复现终态补读中卸载再挂载：存在早期facts时spent保持占用，显式inspect也不再发送。仅解除已取消loading的占用，保同scope事实、原terminal/refreshed预算、主体/代际与晚结果围栏；visible重入或显式详情读取共享一次请求。MCP completed在主行和Canvas共用中性“调用已结束”，失败/运行状态不变，不把补充事实缺席当成功，也不跨身份缓存私有失败。无Schema/契约/业务写入。
+
+先复现读取回归失败；扩大162文件3251通过，最后追加Canvas退休负控与类型收窄后，最终相关7文件104通过；完整lint、typecheck、build/post-types通过。首typecheck暴露测试union直接取status，改为工具形状断言，保留初次失败日志。独审无确定P0–P2。正常3310只更新13份已核基线源码并逐字验证，原conv6530四项失败保留，同行和Canvas均为中性完成文案，成功项结果完整可读。未重启、未迁移、无模型/业务写入；非真实在途网络取消注入，取消恢复由组件回归证明。关闭Canvas后焦点落WebArea，回焦问题仍OPEN，不冒称键盘全验收。原图/回退在physical Root ignored `display-rework/display-read-recovery-20261028/`。未重跑全默认、contract/architecture、全E2E；不是整轮结构或Manus展示闭环。
+
 ## 整轮过程分层（2026-10-28，实施中未正常激活）
 
 消费已推送BFF15cc9e1／Public28.14，正在接通live→history→whole-turn独立披露；正常页面仍为旧布局。以真实参考/本地截图复核，不以工程门替代完成。
