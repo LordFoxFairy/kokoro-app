@@ -69,3 +69,5 @@ Web专属thread viewport统一隐藏滚动条槽以匹配Composer阅读轴；共
 Completed-empty text slots use core provenance and do not split adjacent activity disclosures. All nonempty public text remains a boundary; late authoritative content restores that boundary. No CSS change.
 
 2026-10-28 正常浏览器补验：AppFrame 的 AnswerActionBoundary 必须传入持有 ContextPanel 的 AppFrameShell，而不是仅正文 MainSurface。原 conv6530 的成功/失败 MCP 动作现按 exact activity 展示原输入输出，换选不串项，关闭恢复到原按钮；这仅关闭详情接线缺陷，Manus 逐阶段自然语言说明与同视口视觉验收仍未完成。
+
+MCP 详情阅读：`activity-result.tsx` 将已验证预览分为纯文本结果与原始技术披露；`mcp-result-text.ts` 只识别明确文本形状、单次解码，不推断状态/意图或新增读取。截断与脱敏在结果旁保留，未知表示仍能在技术详情查看。

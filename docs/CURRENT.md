@@ -1,3 +1,9 @@
+## 2026-10-28 MCP 结果阅读候选（不等于整体展示验收）
+
+原会话成功 read_wiki_structure 输出为完整3492字符JSON，text与structured_content重复展示。本片仅修既有私有详情：真实工具目标作标题，明确文本结果按原换行阅读，原始输入/输出保留在可键盘披露的技术详情；未知/截断JSON不修补，截断/脱敏与失败状态保留，不新增请求、权限、DTO或执行。非MCP原身份仍可查，动作切换重置披露。
+
+Node22停写相关333、contract439、architecture50通过，lint、typecheck、build及post-build typecheck通过，冻结输入无漂移；独立只读审查发现的非MCP身份遗漏已修并复核。默认整套验证仍在运行；起初缺少KOKORO_TEST_REDIS_URL导致隔离存储会话fixture阻断，复用受管Redis、随机origin/UUID隔离后该完整文件8项通过，不删除正常会话。首次Node24验证已停止，旧平铺断言已迁移为真实阅读/原文可达性，失败记录保留。正常HMR、原会话点击/刷新及最终默认结果由Root后续记录；本候选不宣称自然语言动作语义或Manus一比一完成。
+
 ## 2026-10-27 Public28.3 文件工具类别消费者候选
 
 App以c440092为本片基线，固定BFF `b2b9eb1eac4a3f0b0cd4099ed59cbf756f14124c` 的正式Public28.3完整原件；十条公共生成链、两个工具标签及九语言按既有D0承接，三个私有pin不变。原live新code/标签RED为8失败；生成与两映射后首8相关suite229通过。完整contract385通过；9个相关行为suite166通过（含fresh ordered重开、private parts恢复及独立Markdown组合）。十生成器两次write/check与100生成物逐字确定性通过，受影响lint与完整types为0；在线Docs完整check含48测试、5例、186公开operation及54HTML/18508内部链接通过，保既有大chunk warning。首contract漏迁移的ScheduledTask current pin及新重开fixture revision低于position均已修正，旧历史SHA／位置保护原样。最终冻结与正常组合由Root独立复核，不把源码交付冒正常工具执行。Markdown独立writer两路径保持，正常资源／Git由Root独占。

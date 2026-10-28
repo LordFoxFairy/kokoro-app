@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react"
 import { afterEach, expect, it, vi } from "vitest"
 import { LocaleProvider } from "@/i18n/context"
 import { SegmentProcess } from "@/ui/thread/segment-process"
@@ -65,9 +65,13 @@ it("displays bounded owner previews as literal text with truncation/redaction, n
   const detail = { activity_id: "a", tool_name: "mcp_call", target: { kind: "mcp_tool" as const, name: "original_tool" }, input_preview: { text: '<img src=x onerror=alert(1)> [title](https://example.test)', truncated: true, redacted: true }, output_preview: { text: '## Original output\nhttps://example.test', truncated: false, redacted: false } }
   const boundary = { actorId: "actor", sessionId: "s", isCurrent: () => true, client: { readDisplay: vi.fn().mockResolvedValue({ run_id: "run", display_skills: [], tool_paths: [], tool_facts: [], activity_details: [detail] }) } } as unknown as import("@/ui/thread/answer-action-scope").AnswerActionBoundary
   const { container } = render(<LocaleProvider><ActivityInspector content={{ kind: "activity", runId: "run", activityId: "a", subject: "actor", generation: 1, activity, terminal: true }} boundary={boundary} /></LocaleProvider>)
-  await waitFor(() => expect(screen.getByText(detail.input_preview.text)).toBeVisible())
-  expect(container.querySelectorAll("pre")).toHaveLength(2)
-  expect(container.querySelectorAll("img,a,h2")).toHaveLength(0)
+  await waitFor(() => expect(screen.getByRole("region", { name: "Result" })).toBeVisible())
+  expect(within(screen.getByRole("region", { name: "Result" })).getByText(detail.output_preview.text, { normalizer: value => value })).toBeVisible()
+  expect(screen.getByText(detail.input_preview.text)).not.toBeVisible()
+  fireEvent.click(screen.getByText("Technical details"))
+  expect(screen.getByText(detail.input_preview.text)).toBeVisible()
+  expect(container.querySelectorAll("img,a")).toHaveLength(0)
+  expect(screen.queryByRole("heading", { name: "Original output" })).toBeNull()
   expect(screen.getByText("Truncated record")).toBeVisible()
   expect(screen.getByText("Sensitive content hidden")).toBeVisible()
   expect(screen.queryByText("Details were not provided in this record.")).toBeNull()

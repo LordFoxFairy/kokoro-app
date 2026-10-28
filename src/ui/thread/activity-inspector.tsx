@@ -5,6 +5,7 @@ import { useRunDisplay } from "./use-run-display"
 import { overlayRunDisplay } from "./run-display-overlay"
 import { TOOL_ACTION_PRESENTATION } from "./tool-action-presentation"
 import { useT } from "@/i18n/context"
+import { ActivityResult } from "./activity-result"
 import styles from "./activity-inspector.module.css"
 
 /** Selected, read-only safe facts. A displayed path never grants file access. */
@@ -27,18 +28,12 @@ export function ActivityInspector({ content, boundary }: {
   const targetDetail = detail?.target ?? activity.display_detail
   const target = targetDetail?.kind === "file" ? targetDetail.virtual_path ?? targetDetail.name : targetDetail?.name
   return <div className={styles.inspector}>
-    <p className={styles.operation}>{detail?.tool_name ?? t(TOOL_ACTION_PRESENTATION[activity.display_code].label)}</p>
-    {target ? <p className={styles.target}>{target}</p> : null}
+    <p className={styles.operation}>{t(TOOL_ACTION_PRESENTATION[activity.display_code].label)}</p>
+    {target ? <h2 className={styles.target}>{target}</h2> : null}
     <p role="status" className={styles.status}>{t(activity.status === "running" ? "thread.processRunning" : activity.status === "failed" ? "thread.processFailed" : "thread.processCompleted")}</p>
     {display.phase === "loading" ? <span className="sr-only" role="status">{t("thread.partsReading")}</span> : null}
     {display.phase === "error" ? <p className={styles.missing} role="status">{t("thread.activityReadFailed")}</p> : null}
-    {detail ? ([ ["thread.activityInput", detail.input_preview], ["thread.activityOutput", detail.output_preview] ] as const).map(([label, preview]) => <section key={label} className={styles.section}>
-      <h3 className={styles.heading}>{t(label)}</h3>
-      {preview ? <>
-        <pre className={styles.preview}>{preview.text}</pre>
-        {preview.truncated ? <span className={styles.annotation}>{t("thread.activityTruncated")}</span> : null}
-        {preview.redacted ? <span className={styles.annotation}>{t("thread.activityRedacted")}</span> : null}
-      </> : display.phase === "ready" ? <p className={styles.missing}>{t("thread.activityMissing")}</p> : null}
-    </section>) : display.phase === "ready" ? <p className={styles.missing}>{t("thread.activityMissing")}</p> : null}
+    {detail ? <ActivityResult key={detail.activity_id} detail={detail} mcpCall={activity.display_code === "tool.mcp.call" && detail.tool_name === "mcp_call"} />
+      : display.phase === "ready" ? <p className={styles.missing}>{t("thread.activityMissing")}</p> : null}
   </div>
 }
