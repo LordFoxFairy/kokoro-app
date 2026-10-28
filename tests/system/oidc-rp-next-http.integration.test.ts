@@ -1916,6 +1916,34 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     await expect.poll(() => rail.getAttribute("data-collapsed"), { timeout: 10_000 }).toBe("false")
   }
 
+  // The user opens a row menu first; actions live in a portal, not in the row.
+  async function openConversationMenu(page: Page, row: Locator): Promise<void> {
+    // Modal Radix menus aria-hide the background trigger while open; include
+    // it for state observation, while normal click actionability stays intact.
+    const more = row.getByRole("button", { name: /^(?:More|更多) · /u, includeHidden: true })
+    if (await more.getAttribute("aria-expanded") === "true") return
+    if (await page.getByRole("menu").count()) {
+      await page.keyboard.press("Escape")
+      await expect.poll(() => page.getByRole("menu").count()).toBe(0)
+    }
+    await row.hover()
+    await more.click()
+    await expect.poll(() => more.getAttribute("aria-expanded")).toBe("true")
+  }
+
+  function conversationMoveItem(page: Page): Locator {
+    return page.getByRole("menuitem", { name: /^(?:Move conversation|移动会话) /u })
+  }
+
+  async function openConversationMoveMenu(page: Page, row: Locator): Promise<void> {
+    await openConversationMenu(page, row)
+    const move = conversationMoveItem(page)
+    await expect.poll(() => move.getAttribute("aria-disabled")).not.toBe("true")
+    await move.focus()
+    await move.press("ArrowRight")
+    await expect.poll(() => move.getAttribute("aria-expanded")).toBe("true")
+  }
+
   async function openProjectWorkspace(page: Page, projectId: string): Promise<void> {
     // The row discloses tasks; its one adjacent Link opens the workspace.
     // Hover matches the real desktop affordance instead of clicking a hidden
@@ -4282,7 +4310,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       const beforeUrl = page.url()
       const beforeListRequests = proxy.listRequests()
 
-      await rowA.getByRole("button", { name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u }).click()
+      await openConversationMoveMenu(page, rowA)
       await page.getByRole("menuitem", { name: "Move target alpha", exact: true }).click()
       await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(1)
 
@@ -4342,27 +4370,28 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       const selectA = rowA.locator(`[data-conversation-id="${moveConversationA}"]`)
       await selectA.click()
       await expect.poll(() => selectA.getAttribute("aria-pressed"), { timeout: 10_000 }).toBe("true")
-      const moveA = rowA.getByRole("button", { name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u })
-      const moveB = rowB.getByRole("button", { name: /Move conversation Move conversation beta|移动会话 Move conversation beta/u })
-      await moveA.click()
+      await openConversationMoveMenu(page, rowA)
       await page.getByRole("menuitem", { name: "Move target alpha", exact: true }).click()
       await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(1)
-      await expect.poll(() => moveA.isDisabled(), { timeout: 10_000 }).toBe(true)
-      await expect.poll(() => moveB.isDisabled(), { timeout: 10_000 }).toBe(true)
+      await openConversationMenu(page, rowA)
+      await expect.poll(() => conversationMoveItem(page).getAttribute("aria-disabled"), { timeout: 10_000 }).toBe("true")
+      await openConversationMenu(page, rowB)
+      await expect.poll(() => conversationMoveItem(page).getAttribute("aria-disabled"), { timeout: 10_000 }).toBe("true")
       expect(moveBoundaryRequests).toHaveLength(1)
 
       moveFixtureMode = "close"
       releaseMove()
-      await expect.poll(() => moveA.isEnabled(), { timeout: 10_000 }).toBe(true)
-      await moveA.click()
+      await openConversationMenu(page, rowA)
+      await expect.poll(() => conversationMoveItem(page).getAttribute("aria-disabled"), { timeout: 10_000 }).not.toBe("true")
+      await openConversationMoveMenu(page, rowA)
       const retryItems = page.getByRole("menuitem", { name: /Retry moving conversation|重试移动会话/u })
       await retryItems.waitFor({ state: "visible", timeout: 10_000 })
       expect(await retryItems.count()).toBe(1)
       await page.keyboard.press("Escape")
-      await moveB.click()
+      await openConversationMoveMenu(page, rowB)
       expect(await page.getByRole("menuitem", { name: /Retry moving conversation|重试移动会话/u }).count()).toBe(0)
       await page.keyboard.press("Escape")
-      await moveA.click()
+      await openConversationMoveMenu(page, rowA)
       const retry = page.getByRole("menuitem", { name: /Retry moving conversation|重试移动会话/u })
       await retry.waitFor({ state: "visible", timeout: 10_000 })
       expect(moveBoundaryRequests).toHaveLength(1)
@@ -4419,9 +4448,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
         .waitFor({ state: "visible", timeout: 10_000 })
 
       const directGetsBeforeMove = moveBindingScopeGets.filter((entry) => entry.scope === "direct").length
-      await directRowA.getByRole("button", {
-        name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u,
-      }).click()
+      await openConversationMoveMenu(page, directRowA)
       await page.getByRole("menuitem", { name: "Move target alpha", exact: true }).click()
       await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(1)
       expect(moveBoundaryRequests[0]?.body).toBe(JSON.stringify({ target_project_id: moveProjectA }))
@@ -4544,7 +4571,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       const selectA = rowA.locator(`[data-conversation-id="${moveConversationA}"]`)
       const selectB = rowB.locator(`[data-conversation-id="${moveConversationB}"]`)
       await selectA.click()
-      await rowA.getByRole("button", { name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u }).click()
+      await openConversationMoveMenu(page, rowA)
       await page.getByRole("menuitem", { name: "Move target alpha", exact: true }).click()
       await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(1)
 
@@ -4614,12 +4641,9 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       const rowB = directList.locator(`[data-slot="sidebar-menu-item"]:has([data-conversation-id="${moveConversationB}"])`)
       const selectA = rowA.locator(`[data-conversation-id="${moveConversationA}"]`)
       const selectB = rowB.locator(`[data-conversation-id="${moveConversationB}"]`)
-      const moveA = rowA.getByRole("button", {
-        name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u,
-      })
       await selectA.click()
       await expect.poll(() => selectA.getAttribute("aria-pressed"), { timeout: 10_000 }).toBe("true")
-      await moveA.click()
+      await openConversationMoveMenu(page, rowA)
       await page.getByRole("menuitem", { name: "Move target alpha", exact: true }).click()
       await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(1)
 
@@ -4629,11 +4653,12 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       const listRequestsBeforeUnknown = proxy.listRequests()
       moveFixtureMode = "close"
       releaseMove()
-      await expect.poll(() => moveA.isEnabled(), { timeout: 10_000 }).toBe(true)
+      await openConversationMenu(page, rowA)
+      await expect.poll(() => conversationMoveItem(page).getAttribute("aria-disabled"), { timeout: 10_000 }).not.toBe("true")
       expect(page.url()).toBe(stableUrl)
       expect(proxy.listRequests()).toBe(listRequestsBeforeUnknown)
 
-      await moveA.click()
+      await openConversationMoveMenu(page, rowA)
       const retry = page.getByRole("menuitem", { name: /Retry moving conversation|重试移动会话/u })
       await retry.waitFor({ state: "visible", timeout: 10_000 })
       moveFixtureMode = "respond"
@@ -4688,14 +4713,13 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
         .waitFor({ state: "visible", timeout: 10_000 })
       const ownerMutationsBefore = paths.filter((value) => /\/messages(?:\?|$)|\/runs(?:\/|\?|$)/u.test(value)).length
 
-      await rowA.getByRole("button", { name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u }).click()
+      await openConversationMoveMenu(page, rowA)
       await page.getByRole("menuitem", { name: "Move target alpha", exact: true }).click()
       await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(1)
       expect(moveBindingProjectRef).toBe(moveProjectA)
-      await expect.poll(() => rowA.getByRole("button", {
-        name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u,
-      }).isEnabled(), { timeout: 10_000 }).toBe(true)
-      await rowA.getByRole("button", { name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u }).click()
+      await openConversationMenu(page, rowA)
+      await expect.poll(() => conversationMoveItem(page).getAttribute("aria-disabled"), { timeout: 10_000 }).not.toBe("true")
+      await openConversationMoveMenu(page, rowA)
       const retry = page.getByRole("menuitem", { name: /Retry moving conversation|重试移动会话/u })
       await retry.waitFor({ state: "visible", timeout: 10_000 })
 
@@ -4758,10 +4782,10 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       await expandDesktopRail(page)
       const directList = page.locator('[data-conversation-list="direct"]')
       const rowA = directList.locator(`[data-slot="sidebar-menu-item"]:has([data-conversation-id="${moveConversationA}"])`)
-      await rowA.getByRole("button", { name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u }).click()
+      await openConversationMoveMenu(page, rowA)
       await page.getByRole("menuitem", { name: "Move target alpha", exact: true }).click()
       await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(1)
-      await rowA.getByRole("button", { name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u }).click()
+      await openConversationMoveMenu(page, rowA)
       const retry = page.getByRole("menuitem", { name: /Retry moving conversation|重试移动会话/u })
       await retry.waitFor({ state: "visible", timeout: 10_000 })
       moveFixtureResponse = {
@@ -4823,9 +4847,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       const directList = page.locator('[data-conversation-list="direct"]')
       const directRowA = directList.locator(`[data-slot="sidebar-menu-item"]:has([data-conversation-id="${moveConversationA}"])`)
       await directRowA.locator(`[data-conversation-id="${moveConversationA}"]`).click()
-      await directRowA.getByRole("button", {
-        name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u,
-      }).click()
+      await openConversationMoveMenu(page, directRowA)
       await page.getByRole("menuitem", { name: "Move target alpha", exact: true }).click()
       await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(1)
 
@@ -4936,9 +4958,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       await expandDesktopRail(page)
       const directList = page.locator('[data-conversation-list="direct"]')
       const directRowA = directList.locator(`[data-slot="sidebar-menu-item"]:has([data-conversation-id="${moveConversationA}"])`)
-      await directRowA.getByRole("button", {
-        name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u,
-      }).click()
+      await openConversationMoveMenu(page, directRowA)
       await page.getByRole("menuitem", { name: "Move target alpha", exact: true }).click()
       await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(1)
       const frozenRequest = moveBoundaryRequests[0]
@@ -4973,10 +4993,9 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       const recoveryRow = recoveryList.locator(
         `[data-slot="sidebar-menu-item"]:has([data-conversation-id="${moveConversationA}"])`,
       )
-      const moveButton = recoveryRow.getByRole("button", {
-        name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u,
-      })
-      await moveButton.waitFor({ state: "visible", timeout: 10_000 })
+      const moreButton = recoveryRow.getByRole("button", { name: /^(?:More|更多) · /u })
+      await recoveryRow.hover()
+      await moreButton.waitFor({ state: "visible", timeout: 10_000 })
       await page.locator('[data-slot="composer-input"]').focus()
       expect(moveBoundaryRequests).toHaveLength(1)
 
@@ -4984,7 +5003,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       await retainedConversation.click()
       await expect.poll(() => new URL(page.url()).searchParams.get("conversation"), { timeout: 10_000 })
         .toBe(moveConversationA)
-      await moveButton.click()
+      await openConversationMoveMenu(page, recoveryRow)
       const retry = page.getByRole("menuitem", { name: /Retry moving conversation|重试移动会话/u })
       await retry.waitFor({ state: "visible", timeout: 10_000 })
       expect(moveBoundaryRequests).toHaveLength(1)
@@ -5325,7 +5344,8 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       await selectB.click()
       await expect.poll(() => composer.inputValue(), { timeout: 10_000 }).toBe("R188 direct B draft")
 
-      await rowB.getByRole("button", { name: "Rename chat Bounded list beta" }).click()
+      await openConversationMenu(page, rowB)
+      await page.getByRole("menuitem", { name: "Rename chat Bounded list beta", exact: true }).click()
       const renameInput = directList.locator('[data-slot="sidebar-menu-item"][data-editing="true"]')
         .getByRole("textbox", { name: "Chat title" })
       await renameInput.fill("Rejected owner title")
@@ -5350,7 +5370,8 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       await expect.poll(() => page.locator('[data-slot="composer-input"]').inputValue(), { timeout: 10_000 })
         .toBe("R188 direct A draft")
       const beforeDeleteUrl = page.url()
-      await reloadedList.getByRole("button", { name: "Delete chat Bounded list beta" }).click()
+      await openConversationMenu(page, reloadedList.locator('[data-slot="sidebar-menu-item"]:has([data-conversation-id="session-list-b"])'))
+      await page.getByRole("menuitem", { name: "Delete chat Bounded list beta", exact: true }).click()
       const dialog = page.getByRole("alertdialog")
       await dialog.getByRole("button", { name: "Delete chat", exact: true }).click()
       await expect.poll(() => deleteSessionRequests.length, { timeout: 10_000 }).toBe(1)
@@ -5405,7 +5426,8 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       const directList = page.locator('[data-conversation-list="direct"]')
       const rename = async (currentTitle: string, nextTitle: string): Promise<void> => {
         const row = directList.locator('[data-slot="sidebar-menu-item"]:has([data-conversation-id="session-list-b"])')
-        await row.getByRole("button", { name: `Rename chat ${currentTitle}` }).click()
+        await openConversationMenu(page, row)
+        await page.getByRole("menuitem", { name: `Rename chat ${currentTitle}`, exact: true }).click()
         const input = directList.getByRole("textbox", { name: "Chat title" })
         await input.fill(nextTitle)
         await input.press("Enter")
@@ -5436,7 +5458,8 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       await reloadedList.getByText("R190 title A", { exact: true }).waitFor({ state: "visible", timeout: 10_000 })
 
       const listsBeforeCanonicalC = renameLifecycleListResponses.length
-      await reloadedRow.getByRole("button", { name: "Rename chat R190 title A" }).click()
+      await openConversationMenu(page, reloadedRow)
+      await page.getByRole("menuitem", { name: "Rename chat R190 title A", exact: true }).click()
       await reloadedList.getByRole("textbox", { name: "Chat title" }).fill("R190 canonical C")
       await reloadedList.getByRole("textbox", { name: "Chat title" }).press("Enter")
       await expect.poll(() => renameSessionRequests.length, { timeout: 10_000 }).toBe(3)
@@ -5445,7 +5468,8 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       expect(renameLifecycleListResponses.at(-1)).toEqual({ status: 200, title: "R190 canonical C" })
 
       failNextRenameLifecycleList = true
-      await reloadedRow.getByRole("button", { name: "Rename chat R190 canonical C" }).click()
+      await openConversationMenu(page, reloadedRow)
+      await page.getByRole("menuitem", { name: "Rename chat R190 canonical C", exact: true }).click()
       await reloadedList.getByRole("textbox", { name: "Chat title" }).fill("R190 canonical D")
       await reloadedList.getByRole("textbox", { name: "Chat title" }).press("Enter")
       await expect.poll(() => renameSessionRequests.length, { timeout: 10_000 }).toBe(4)
@@ -5505,7 +5529,8 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       const directList = page.locator('[data-conversation-list="direct"]')
       const row = directList.locator('[data-slot="sidebar-menu-item"]:has([data-conversation-id="session-list-b"])')
       const listsBeforeRename = renameLifecycleListResponses.length
-      await row.getByRole("button", { name: "Rename chat Bounded list beta" }).click()
+      await openConversationMenu(page, row)
+      await page.getByRole("menuitem", { name: "Rename chat Bounded list beta", exact: true }).click()
       const input = directList.getByRole("textbox", { name: "Chat title" })
       await input.fill("R190 lost ACK canonical A")
       await input.press("Enter")
@@ -5574,7 +5599,8 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       const scopeGetsBeforeDelete = projectDeleteScopeGets.length
       const routeBeforeDelete = page.url()
 
-      await rowA.getByRole("button", { name: "Delete chat Project conversation A" }).click()
+      await openConversationMenu(page, rowA)
+      await page.getByRole("menuitem", { name: "Delete chat Project conversation A", exact: true }).click()
       const dialog = page.getByRole("alertdialog")
       await dialog.getByRole("button", { name: "Delete chat", exact: true }).click()
       await expect.poll(() => projectDeleteRequests.length, { timeout: 10_000 }).toBe(1)
@@ -5665,7 +5691,8 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       const routeBeforeDelete = page.url()
       const scopeGetsBeforeDelete = projectDeleteScopeGets.length
 
-      await rowA.getByRole("button", { name: "Delete chat Project conversation A" }).click()
+      await openConversationMenu(page, rowA)
+      await page.getByRole("menuitem", { name: "Delete chat Project conversation A", exact: true }).click()
       const dialog = page.getByRole("alertdialog")
       const confirm = dialog.getByRole("button", { name: "Delete chat", exact: true })
       await confirm.click()
@@ -5750,7 +5777,8 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       const draft = "R143 delayed delete keeps this draft"
       await composer.fill(draft)
 
-      await page.getByRole("button", { name: "Delete chat Bounded list alpha" }).click()
+      await openConversationMenu(page, directList.locator('[data-slot="sidebar-menu-item"]:has([data-conversation-id="session-list-a"])'))
+      await page.getByRole("menuitem", { name: "Delete chat Bounded list alpha", exact: true }).click()
       const dialog = page.getByRole("alertdialog")
       await dialog.getByRole("button", { name: "Delete chat", exact: true }).click()
       await expect.poll(() => deleteSessionRequests.length, { timeout: 10_000 }).toBe(1)
@@ -5821,7 +5849,8 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       const draft = "R143 rejected delete keeps this draft"
       await composer.fill(draft)
 
-      await page.getByRole("button", { name: "Delete chat Bounded list alpha" }).click()
+      await openConversationMenu(page, directList.locator('[data-slot="sidebar-menu-item"]:has([data-conversation-id="session-list-a"])'))
+      await page.getByRole("menuitem", { name: "Delete chat Bounded list alpha", exact: true }).click()
       const dialog = page.getByRole("alertdialog")
       await dialog.getByRole("button", { name: "Delete chat", exact: true }).click()
       await expect.poll(() => deleteSessionRequests.length, { timeout: 10_000 }).toBe(1)
