@@ -72,6 +72,17 @@ export class ModelCatalogReadError extends SessionClientError {
   }
 }
 
+/** Only list GET recovery consumes this cooldown; it never replays a mutation. */
+export class SessionListReadError extends SessionClientError {
+  readonly retryAfterMs: number
+  constructor(error: SessionClientError, retryAfter: string | null) {
+    super(error.reason, error.message, error.code, error.status)
+    this.name = "SessionListReadError"
+    const seconds = retryAfter !== null && /^(?:0|[1-9][0-9]{0,4})$/u.test(retryAfter) ? Number(retryAfter) : NaN
+    this.retryAfterMs = Number.isFinite(seconds) && seconds <= 86_400 ? Math.max(1_000, seconds * 1_000) : 30_000
+  }
+}
+
 export { SessionClientError }
 export type { ClientFailureReason }
 
@@ -458,7 +469,8 @@ export function createSessionClient(options: { baseUrl: string }): SessionClient
       try {
         const response = await fetch(target, { cache: "no-store", signal: controller.signal })
         if (!response.ok) {
-          throw await httpError("GET", target, response)
+          const failure = await httpError("GET", target, response)
+          throw response.status === 429 ? new SessionListReadError(failure, response.headers.get("retry-after")) : failure
         }
         return await parseJsonResponse(response, (raw) => sessionListSchema.parse(raw))
       } catch (error) {

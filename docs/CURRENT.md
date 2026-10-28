@@ -1,3 +1,11 @@
+## 2026-10-28 会话清单 429 一次恢复（正常激活由Root续记）
+
+以736633b8为基线，修复列表首页429后停在错误态：listSessions仅保存有界Retry-After，当前准入lifecycle等待后最多一次GET恢复；隐藏document等待前台，显式refresh/分页不绕过冷却，换主体/范围/准入退休timer与迟到结果。恢复不改URL/草稿/登录，不重放命令、不改IAM限额/BFF检查。429再失败不循环请求，非429仍沿既有正常重入语义；本片不宣称项目/所有目录统一恢复。
+
+RED2/原35通过；修复后最终相关137通过，扩大189suite3912通过（在后补StrictMode和分页2例前，追加两例已纳入最终137）。lint/typecheck/build/post-build types通过。真实隔离Next+Chromium+HTTP adapter，严格BFF fixture返回429→200：3项通过/94未选择，验证服务端2秒冷却后恰一次恢复、列表回显、草稿/URL/登录次数不变，并承接原503和未完成body路径；不是正常IAM故障注入或全E2E。独审无新增确定P0–P2，原其他门不冒通过。
+
+另已只读定位18个旧系统侧栏超时：产品3ca96014已改ellipsis/portal菜单，用例仍找旧独立Move/Rename/Delete按钮；18项在入口超时、尚未到原业务断言。后续仅迁移真实菜单操作，保留pending、同K恢复、路由/草稿/owner回执等全部断言，不以删用例消除失败。
+
 ## 2026-10-28 可见回答反馈按需读取（限流减载切片）
 
 基线50027f08，赞踩操作栏复用原DOM和控制器，只让可见document的可见操作栏启动反馈GET；每readEpoch一次，StrictMode废弃effect及旧observer不发请求，未知写入保持显式核实。缺IntersectionObserver仍退化为可见页挂载读取，未改IAM配额、BFF fresh admission或写入重放。

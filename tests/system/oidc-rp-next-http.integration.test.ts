@@ -2211,7 +2211,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
               sessionIds: moveSessions.map((session) => session.session_id),
             })
           }
-          response.writeHead(effectiveSessionListStatus, { "content-type": "application/json", "cache-control": "no-store" })
+          response.writeHead(effectiveSessionListStatus, { "content-type": "application/json", "cache-control": "no-store", ...(effectiveSessionListStatus === 429 ? { "retry-after": "2" } : {}) })
           response.end(JSON.stringify(effectiveSessionListStatus === 200 ? {
             data: { sessions: projectDeleteFixtureEnabled ? [
               { session_id: projectDeleteDirectConversation, title: "Direct conversation C", updated_at: "2026-10-03T09:00:00.000Z" },
@@ -2224,7 +2224,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
               ]),
             ], next_cursor: null },
             meta: { request_id: "req_r141_list" },
-          } : { error: { code: "service_unavailable", message: "fixture unavailable", retryable: true } }))
+          } : { error: { code: effectiveSessionListStatus === 429 ? "session_rate_limited" : "service_unavailable", message: "fixture unavailable", retryable: true } }))
           return
         }
         if (request.method === "GET" && request.url === `/v1/sessions?project_ref=${projectDeleteProject}` && projectDeleteFixtureEnabled) {
@@ -4209,6 +4209,43 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       sessionListStatus = 200
       try { await browser?.close() }
       finally { await proxy.close() }
+    }
+  }, 45_000)
+
+  it("recovers a rate-limited first page in the real rail without reloading, losing the draft or logging in again", async () => {
+    const proxy = await sessionProbeProxy(nextPort)
+    let browser: Browser | undefined
+    sessionListStatus = 429
+    try {
+      browser = await chromium.launch({ headless: true,
+        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
+      const context = await browser.newContext()
+      await admitBrowserContext(context)
+      const page = await context.newPage()
+      const responses: { status: number; at: number }[] = []
+      page.on("response", response => {
+        if (new URL(response.url()).pathname === "/api/session/sessions") responses.push({ status: response.status(), at: Date.now() })
+      })
+      await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
+      await expandDesktopRail(page)
+      const composer = page.locator('[data-slot="composer-input"]')
+      await expect.poll(() => composer.isEnabled(), { timeout: 15_000 }).toBe(true)
+      await expect.poll(() => responses.filter(item => item.status === 429).length, { timeout: 10_000 }).toBe(1)
+      const beforeUrl = page.url(), beforeLogins = proxy.loginRequests()
+      await composer.fill("keep this draft while list recovers")
+      sessionListStatus = 200
+      await page.getByText("Bounded list alpha", { exact: true }).waitFor({ state: "visible", timeout: 10_000 })
+      await page.getByText("Bounded list beta", { exact: true }).waitFor({ state: "visible", timeout: 10_000 })
+      expect(responses.map(item => item.status)).toEqual([429, 200])
+      expect(responses[1]!.at - responses[0]!.at).toBeGreaterThanOrEqual(1900)
+      expect(await composer.inputValue()).toBe("keep this draft while list recovers")
+      expect(page.url()).toBe(beforeUrl)
+      expect(proxy.loginRequests()).toBe(beforeLogins)
+      expect(await page.locator('[data-conversation-list="direct"]').getByRole("button", { name: /Retry|重试/u }).count()).toBe(0)
+      await context.close()
+    } finally {
+      sessionListStatus = 200
+      try { await browser?.close() } finally { await proxy.close() }
     }
   }, 45_000)
 

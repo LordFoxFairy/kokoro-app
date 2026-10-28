@@ -1198,3 +1198,19 @@ it.each([
     expect(fetchMock).toHaveBeenCalledOnce()
   } finally { vi.unstubAllGlobals() }
 })
+
+it.each([
+  ["7", 7_000], ["0", 1_000], ["86400", 86_400_000],
+  [null, 30_000], ["-1", 30_000], ["1.5", 30_000], ["999999999999999", 30_000],
+])("session list retains bounded 429 timing (%s), without replaying in the client", async (header, expected) => {
+  const fetchMock = vi.fn().mockResolvedValue(Response.json({ error: { code: "session_rate_limited", message: "limited" } }, {
+    status: 429, headers: header === null ? {} : { "retry-after": header },
+  }))
+  vi.stubGlobal("fetch", fetchMock)
+  try {
+    await expect(createSessionClient({ baseUrl: "/api/session" }).listSessions()).rejects.toMatchObject({
+      name: "SessionListReadError", reason: "http", status: 429, code: "session_rate_limited", retryAfterMs: expected,
+    })
+    expect(fetchMock).toHaveBeenCalledOnce()
+  } finally { vi.unstubAllGlobals() }
+})

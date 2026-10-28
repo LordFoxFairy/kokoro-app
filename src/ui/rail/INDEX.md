@@ -13,7 +13,7 @@ AppFrame可信ProjectReadBoundary沿原rail props/shell进入account余额；同
 
 ## 公开件
 - `WorkspaceRail`（`src/components/blocks/workspace-rail/workspace-rail.tsx`）：唯一侧栏组件；清单/回调/入口全由 props 注入。
-- `useSessionList`：服务端清单水合 + 复合游标翻页累加。
+- `useSessionList`：服务端清单水合 + 复合游标翻页累加；首页429按owner冷却仅恢复一次，隐藏页等待前台，当前lifecycle显式刷新和分页不绕过冷却。退休清timer，失败不循环轮询。
 - `useRailResize`：拖拽改宽（含 shell 容器几何 ref）。
 - `rail-search.ts`：清单本地过滤。
 

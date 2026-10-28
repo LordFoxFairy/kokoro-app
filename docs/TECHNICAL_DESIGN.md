@@ -1,3 +1,9 @@
+## 会话清单 429 有界恢复（2026-10-28）
+
+沿既有 listSessions → useSessionList：首页429保留原status/code与Retry-After，仅0–86400整数秒有效，0最少等待1秒、缺失/畸形用30秒。当前admitted lifecycle内冷却约束显式refresh和分页；一次首页episode仅允许一次延迟GET恢复，不成为轮询。隐藏document不发起读取，回前台只继续尚未消费的恢复；换identity/scope/准入退休清timer及迟到结果。429恢复成功正常发布原清单，不清草稿、路由或登录态。非429仍沿原失败/正常重入语义，未读不冒空成功、不重放任何写入；不修改IAM配额或BFF fresh admission。
+
+同源adapter原已转发Retry-After，本片不新增协议或owner。数据读取与schema仍原契约，首次页StrictMode共享flight、post-ACK新request key、分页与主体隔离保持。实测范围和系统菜单旧用例归因见CURRENT及Root唯一计划。
+
 ## 原生动作身份与主行参数收敛（2026-10-28）
 
 在既有展示边界内修复：有action_title仍优先原公开意图；旧MCP调用只显示exact mcp_tool目标，准备动作保留原类别及真实名称，不虚构目的、不合并同名调用或隐藏失败。时间顺序、正文分界与单层披露不变。

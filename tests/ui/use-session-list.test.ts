@@ -658,3 +658,119 @@ it.each(["unmount", "admission"] as const)("R254 %s退役首页后同scope新准
     expect(view.result.current.entries.map(entry => entry.id)).toEqual(["fresh-owned-row"])
   } finally { releaseOld(response("retired-private-row")); view.unmount() }
 })
+
+it("recovers a rate-limited first page once after the owner window, without a reload or retry storm", async () => {
+  vi.useFakeTimers()
+  const fetchMock = vi.fn()
+    .mockResolvedValueOnce(Response.json({ error: { code: "session_rate_limited", message: "limited" } }, { status: 429, headers: { "retry-after": "2" } }))
+    .mockResolvedValue(Response.json({ sessions: [item("recovered", "2026-10-28T00:00:00Z")], next_cursor: null }))
+  vi.stubGlobal("fetch", fetchMock)
+  const client = createSessionClient({ baseUrl: "/api/session" })
+  try {
+    const view = renderHook(() => useSessionList(client, 0))
+    await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+    expect(view.result.current.error).toBe(true)
+    await act(async () => { await vi.advanceTimersByTimeAsync(1999) })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    await act(async () => { await vi.advanceTimersByTimeAsync(1) })
+    expect(view.result.current.entries.map(row => row.id)).toEqual(["recovered"])
+    expect(view.result.current.error).toBe(false)
+    await act(async () => { await vi.advanceTimersByTimeAsync(60000); window.dispatchEvent(new Event("focus")) })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    view.unmount()
+  } finally { vi.useRealTimers(); vi.unstubAllGlobals() }
+})
+
+it("does not repeat a failed recovery or send it from a hidden or retired list", async () => {
+  vi.useFakeTimers()
+  let visibility: DocumentVisibilityState = "visible"
+  const visible = vi.spyOn(document, "visibilityState", "get").mockImplementation(() => visibility)
+  const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(Response.json({ error: { code: "session_rate_limited", message: "limited" } }, { status: 429, headers: { "retry-after": "2" } })))
+  vi.stubGlobal("fetch", fetchMock)
+  const client = createSessionClient({ baseUrl: "/api/session" })
+  try {
+    const view = renderHook(() => useSessionList(client, 0))
+    await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+    visibility = "hidden"
+    await act(async () => { await vi.advanceTimersByTimeAsync(2000) })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    visibility = "visible"
+    await act(async () => { document.dispatchEvent(new Event("visibilitychange")); await vi.advanceTimersByTimeAsync(0) })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    await act(async () => { await vi.advanceTimersByTimeAsync(100000); window.dispatchEvent(new Event("focus")); document.dispatchEvent(new Event("visibilitychange")) })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    view.unmount()
+    await act(async () => { document.dispatchEvent(new Event("visibilitychange")) })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  } finally { visible.mockRestore(); vi.useRealTimers(); vi.unstubAllGlobals() }
+})
+
+it("keeps an explicit refresh inside the same owner cooldown and retires its timer on identity change", async () => {
+  vi.useFakeTimers()
+  const fetchMock = vi.fn()
+    .mockResolvedValueOnce(Response.json({ error: { code: "session_rate_limited", message: "limited" } }, { status: 429, headers: { "retry-after": "2" } }))
+    .mockImplementation(() => Promise.resolve(Response.json({ sessions: [item("new-actor", "2026-10-28T00:00:00Z")], next_cursor: null })))
+  vi.stubGlobal("fetch", fetchMock)
+  const client = createSessionClient({ baseUrl: "/api/session" })
+  try {
+    const view = renderHook(({ signal, identity, admitted }) => useSessionList(client, signal, DIRECT_SESSION_SCOPE, undefined, { identity, admitted }), {
+      initialProps: { signal: 0, identity: "actor:1", admitted: true },
+    })
+    await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+    view.rerender({ signal: 1, identity: "actor:1", admitted: true })
+    await act(async () => { await vi.advanceTimersByTimeAsync(1999) })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    view.rerender({ signal: 1, identity: "actor:2", admitted: false })
+    await act(async () => { await vi.advanceTimersByTimeAsync(10000); document.dispatchEvent(new Event("visibilitychange")) })
+    expect(view.result.current.entries).toEqual([])
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    view.rerender({ signal: 1, identity: "actor:2", admitted: true })
+    await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(view.result.current.entries[0]?.id).toBe("new-actor")
+    view.unmount()
+  } finally { vi.useRealTimers(); vi.unstubAllGlobals() }
+})
+
+it("StrictMode consumes one initial list flight and one 429 recovery", async () => {
+  vi.useFakeTimers()
+  const fetchMock = vi.fn().mockImplementationOnce(() => Promise.resolve(Response.json({ error: { code: "session_rate_limited", message: "limited" } }, { status: 429, headers: { "retry-after": "1" } })))
+    .mockImplementation(() => Promise.resolve(Response.json({ sessions: [], next_cursor: null })))
+  vi.stubGlobal("fetch", fetchMock)
+  const client = createSessionClient({ baseUrl: "/api/session" })
+  try {
+    const view = renderHook(() => useSessionList(client, 0), { wrapper: ({ children }: { children: ReactNode }) => createElement(StrictMode, null, children) })
+    await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000) })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(view.result.current.error).toBe(false)
+    await act(async () => { window.dispatchEvent(new Event("focus")); await vi.advanceTimersByTimeAsync(60000) })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    view.unmount()
+  } finally { vi.useRealTimers(); vi.unstubAllGlobals() }
+})
+
+it("a pagination 429 gates more clicks and a refreshed first page until the same cooldown expires", async () => {
+  vi.useFakeTimers()
+  const fetchMock = vi.fn()
+    .mockImplementationOnce(() => Promise.resolve(Response.json({ sessions: [item("old", "2026-10-28T00:00:00Z")], next_cursor: "next" })))
+    .mockImplementationOnce(() => Promise.resolve(Response.json({ error: { code: "session_rate_limited", message: "limited" } }, { status: 429, headers: { "retry-after": "2" } })))
+    .mockImplementation(() => Promise.resolve(Response.json({ sessions: [item("fresh", "2026-10-28T00:00:00Z")], next_cursor: null })))
+  vi.stubGlobal("fetch", fetchMock)
+  const client = createSessionClient({ baseUrl: "/api/session" })
+  try {
+    const view = renderHook(({ signal }) => useSessionList(client, signal), { initialProps: { signal: 0 } })
+    await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+    await act(async () => { view.result.current.loadMore(); await vi.advanceTimersByTimeAsync(0) })
+    expect(view.result.current.entries[0]?.id).toBe("old")
+    act(() => { view.result.current.loadMore(); view.result.current.loadMore() })
+    view.rerender({ signal: 1 })
+    await act(async () => { await vi.advanceTimersByTimeAsync(1999) })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    await act(async () => { await vi.advanceTimersByTimeAsync(1) })
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+    expect(view.result.current.entries[0]?.id).toBe("fresh")
+    view.unmount()
+  } finally { vi.useRealTimers(); vi.unstubAllGlobals() }
+})
