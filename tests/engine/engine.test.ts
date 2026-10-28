@@ -3426,3 +3426,82 @@ describe("current-conversation exact MCP selection", () => {
     expect(client.createCalls.at(-1)?.body).not.toHaveProperty("selected_mcp_connection_ids")
   })
 })
+
+describe("cancel receipt is not a terminal", () => {
+  it("reads the existing owner snapshot once after202, accepting only exact terminal facts", async () => {
+    buildEngine(); engine.submit("stop me"); await settle()
+    client.nextSnapshot = async () => ({ ...makeSnapshot(), session: { ...makeSnapshot().session, session_id: "conv_1" }, messages: [{ message_id: "a", role: "assistant", run_id: "run_1", content: "prefix", status: "failed", terminal_status: "cancelled", created_at: "now" }] })
+    engine.cancelRun(); await settle()
+    expect(client.snapshotCalls).toHaveLength(1)
+    expect(engine.getSnapshot().machine.phase).toBe("idle")
+    expect(thread().cancelledRuns.run_1).toBe(true)
+    expect(thread().messages.some((message) => message.content === "prefix")).toBe(true)
+    expect(client.controlCalls).toHaveLength(1)
+  })
+  it("keeps an unknown cancellation identity for explicit retry; pending202 alone never confirms cancelled", async () => {
+    buildEngine(); engine.submit("stop me"); await settle()
+    client.nextControl = async () => { throw new SessionClientError("network", "lost ACK") }
+    engine.cancelRun(); await settle()
+    expect(engine.getSnapshot().machine.phase).toBe("cancelling")
+    expect(thread().cancelledRuns).toEqual({})
+    client.nextControl = async () => ({ run_id: "run_1", command_id: "original", request_digest: "digest", status: "pending", replayed: true })
+    engine.cancelRun(); await settle()
+    expect(client.controlCalls).toHaveLength(2)
+    expect(client.controlCalls[1]).toEqual(client.controlCalls[0])
+    expect(engine.getSnapshot().machine.phase).toBe("cancelling")
+    expect(thread().cancelledRuns).toEqual({})
+  })
+  it("ignores cancellation snapshot after the actor/session engine generation retires", async () => {
+    buildEngine(); engine.submit("stop me"); await settle()
+    let resolve!: (snapshot: ReturnType<typeof makeSnapshot>) => void
+    client.nextSnapshot = () => new Promise((yes) => { resolve = yes })
+    engine.cancelRun(); await settle()
+    engine.newConversation()
+    resolve({ ...makeSnapshot(), messages: [{ message_id: "a", role: "assistant", run_id: "run_1", content: "retired", status: "failed", terminal_status: "cancelled", created_at: "now" }] })
+    await settle()
+    expect(thread().messages.some((message) => message.content === "retired")).toBe(false)
+    expect(thread().cancelledRuns).toEqual({})
+  })
+})
+
+it.each(["wrong-session", "wrong-run", "pending"])("does not confirm cancellation from %s snapshot", async (kind) => {
+  buildEngine(); engine.submit("stop me"); await settle()
+  client.nextSnapshot = async () => ({ ...makeSnapshot(), session: { ...makeSnapshot().session, session_id: kind === "wrong-session" ? "other" : "conv_1" }, messages: [{ message_id: "a", role: "assistant", run_id: kind === "wrong-run" ? "other" : "run_1", content: "", status: kind === "pending" ? "pending" : "failed", ...(kind === "pending" ? {} : { terminal_status: "cancelled" as const }), created_at: "now" }] })
+  engine.cancelRun(); await settle()
+  expect(engine.getSnapshot().machine.phase).toBe("cancelling")
+  expect(thread().cancelledRuns).toEqual({})
+  expect(client.controlCalls).toHaveLength(1)
+})
+
+it("late cancelled read cannot overwrite a consecutive accepted run", async () => {
+  buildEngine(); engine.submit("first"); await settle()
+  let resolve!: (snapshot: ReturnType<typeof makeSnapshot>) => void
+  client.nextSnapshot = () => new Promise((yes) => { resolve = yes })
+  engine.cancelRun(); await settle()
+  const firstRead = resolve
+  client.lastStream().emit([makeEvent("run.completed", { status: "cancelled" })]); await settle()
+  engine.submit("second"); await settle()
+  firstRead({ ...makeSnapshot(), session: { ...makeSnapshot().session, session_id: "conv_1" }, messages: [{ message_id: "old", role: "assistant", run_id: "run_1", content: "stale", status: "failed", terminal_status: "cancelled", created_at: "now" }] })
+  await settle()
+  expect(engine.getSnapshot().machine.runId).toBe("run_2")
+  expect(thread().messages.some((message) => message.content === "stale")).toBe(false)
+})
+
+it("does not adopt a cancel read over an acknowledged same-run follow-up before SSE advances", async () => {
+  buildEngine(); engine.submit("first"); await settle()
+  let admit!: (receipt: ReturnType<typeof makeReceipt>) => void
+  client.nextCreate = () => new Promise((resolve) => { admit = resolve })
+  expect(engine.submit("optimistic follow-up")).toBe(true)
+  let read!: (snapshot: ReturnType<typeof makeSnapshot>) => void
+  client.nextSnapshot = () => new Promise((resolve) => { read = resolve })
+  engine.cancelRun(); await settle()
+  const cursor = thread().resumeCursor
+  admit(makeReceipt("run_2")); await settle()
+  expect(engine.getSnapshot().machine.runId).toBe("run_1")
+  expect(thread().resumeCursor).toBe(cursor)
+  read({ ...makeSnapshot(), session: { ...makeSnapshot().session, session_id: "conv_1" }, messages: [{ message_id: "a", role: "assistant", run_id: "run_1", content: "old RR", status: "failed", terminal_status: "cancelled", created_at: "now" }] })
+  await settle()
+  expect(engine.getSnapshot().machine.phase).toBe("cancelling")
+  expect(thread().messages.some((message) => message.id === "run_2:user" && message.content === "optimistic follow-up")).toBe(true)
+  expect(thread().messages.some((message) => message.content === "old RR")).toBe(false)
+})

@@ -49,6 +49,7 @@ type AssistantTurnProps = {
   onCancelRun?: () => void
   taskTitle?: string
   failureFooter?: ReactNode
+  cancelled?: boolean
 }
 
 // 成形态内容：就近的「正在…」线索 + 脉冲点，占位与正文同一 answer 元素，
@@ -99,6 +100,7 @@ export function AssistantTurn({
   onCancelRun,
   taskTitle,
   failureFooter,
+  cancelled = false,
 }: AssistantTurnProps) {
   const t = useT()
   const hadInteraction = useRef(Boolean(interaction?.groups.length))
@@ -297,7 +299,7 @@ export function AssistantTurn({
             </Button>
           </div>
         ) : null}
-        {!isLive ? failureFooter : null}
+        {!isLive && cancelled ? <p role="status" data-run-terminal="cancelled">{t("thread.cancelled")}</p> : !isLive ? failureFooter : null}
       </div>
     </article>
   )

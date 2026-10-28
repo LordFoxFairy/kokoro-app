@@ -1,3 +1,7 @@
+## Public28.9 私有取消读取（消费者候选）
+
+唯一snapshot固定正式BFF `51e049df72c1fb2fe82b9114135c2fdc1a3450d9`，SHA256 `b438a749c919d24c4e0f1dadfdbcbbb11e0ac755f5785c543a661336c2cbb354`；12现有生成器正规输出，原Agent failure生成器另核私有取消分支闭集guard、输出唯一取消literal。test-only具名inverse全字节回原28.8／6376e2d2…后进入不改的历史链；五private及独立policy3保持。不以202、本地停止或failed空正文推断取消；正常配对由Root独立验收。
+
 ## Project pin consumer
 
 Public28.5固定BFF c195d2325ba9c433cc4c64e25e6c67eaf73c47f6／194操作／SHA256109a2ae063b10699ae52776b09533c5622d906679c093d65730a289206043b1a。本人Project pin仅两具名操作；原10public生成链与新窄pin decoder同一snapshot正规生成，三个private pin不变。精确完整28.5→28.4 inverse委托旧证明链，不为runtime兼容。

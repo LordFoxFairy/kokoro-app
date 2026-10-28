@@ -295,6 +295,7 @@ function ConversationThreadSurface({
                   {...(thread.interactionsByRun[item.runId] === undefined ? {} : { interaction: thread.interactionsByRun[item.runId] })}
                   parts={Object.values(thread.messageParts ?? {}).filter((part) => part.runId === item.runId)}
                   {...(onRetryMessageParts === undefined ? {} : { onRetryMessageParts })}
+                  cancelled={item.cancelled === true}
                   steps={item.steps}
                   messagesById={item.messagesById}
                   {...(item.runId === liveRunId && executionPhase ? { executionPhase } : {})}
@@ -347,6 +348,10 @@ function ConversationThreadSurface({
           </MessageScrollerItem>
         ) : null}
 
+        {executionPhase === "cancelling" && controlError !== null && onCancelRun ? <MessageScrollerItem messageId="cancel-retry">
+          <p role="status">{t("thread.cancelUnknown")}</p>
+          <Button type="button" variant="outline" onClick={onCancelRun}>{t("thread.retryCancel")}</Button>
+        </MessageScrollerItem> : null}
         {canRetryResume && onRetryResume ? <MessageScrollerItem messageId="resume-retry">
           <Button type="button" variant="outline" onClick={onRetryResume}>{t("hitl.retryResume")}</Button>
         </MessageScrollerItem> : null}

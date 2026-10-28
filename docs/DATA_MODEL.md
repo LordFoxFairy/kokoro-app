@@ -1,3 +1,7 @@
+## 取消视图（候选）
+
+仅内存 cancelledRuns exact Run索引，取真实AG-UI取消终态或私有snapshot显式marker；不是新owner、DB状态、缓存或持久实体。本地停止与未知取消不写此证明；正文／ordered Message parts的unread/partial/complete独立保留。
+
 ## GitHub discovery：仅响应容量，不新增持久事实
 
 Public28.7仅把目录发现paths容量放至512；App不建立候选镜像、缓存、分页状态、表／索引／owner或新工作流。原完整候选同commit与immutable selector继续原流程；已选单包128和ZIP安全边界不变。该读边界不授import／publish／install成功或自动重试，unknown与原key/body/CAS照旧；正常激活与真实仓库验收独立。

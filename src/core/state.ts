@@ -130,6 +130,8 @@ export type SessionStreamState = {
   runStatus: "idle" | RunCompletedStatus | "failed"
   // 已验证的安全失败按 owner run identity 索引；不保存 producer message、exception 或 stack。
   runFailuresById: Record<string, AttributedRunFailure>
+  // Only an owner terminal frame or explicit private snapshot marker proves cancellation.
+  cancelledRuns: Record<string, true>
   // public snapshot 允许 failed assistant 没有 run_id；保留真失败但不伪造轮级归属。
   unattributedFailure: RunFailure | null
   // 在途 run 显式字段：snapshot 水合置位、匹配终态清空。
@@ -157,6 +159,7 @@ export function createSessionStreamState(): SessionStreamState {
     stepsByRun: {},
     runStatus: "idle",
     runFailuresById: {},
+    cancelledRuns: {},
     unattributedFailure: null,
     activeRunId: null,
     lastSeq: 0,

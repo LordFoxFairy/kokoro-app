@@ -5,6 +5,7 @@ import { eventCursorSchema, runProcessActivitySchema, runTodoSchema } from "./ag
 import { resumeDecisionSchema, interactionStateSchema } from "./control"
 import { deliverySchema, workspaceFileSchema } from "./artifacts"
 import { agentFailureProfileSchema } from "./agent-failure"
+import { BFF_PRIVATE_CANCELLED_STATUS } from "@/generated/bff-agent-failure"
 
 
 export const sessionMetaSchema = z
@@ -74,13 +75,26 @@ export const orderedMessageRenderingSchema = z.object({
   mode: z.literal("ordered"), format_version: z.literal(1), revision: messagePartsDecimalSchema,
   event_watermark: eventCursorSchema.nullable(), parts_cursor: z.string().min(1),
 }).strict()
+const privateInlineMessageReadSchema = messageRecordSchema.innerType().extend({
+  terminal_status: z.literal(BFF_PRIVATE_CANCELLED_STATUS).optional(),
+}).superRefine((message, context) => {
+  const { terminal_status: terminalStatus, ...original } = message
+  const parsed = messageRecordSchema.safeParse(original)
+  if (!parsed.success) for (const issue of parsed.error.issues) context.addIssue(issue)
+  if (terminalStatus !== undefined && (message.role !== "assistant" || message.status !== "failed" ||
+    !message.run_id?.trim() || message.failure !== undefined)) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["terminal_status"], message: "cancelled requires an exact failed assistant without failure" })
+  }
+})
 export const orderedAssistantMessageReadSchema = z.object({
   message_id: z.string().min(1), role: z.literal("assistant"), content: z.null(),
   status: z.enum(["pending", "streaming", "completed", "failed"]), created_at: z.string().min(1),
   run_id: z.string().min(1), failure: agentFailureProfileSchema.optional(),
+  terminal_status: z.literal(BFF_PRIVATE_CANCELLED_STATUS).optional(),
   selected_skill_source_refs: selectedSkillSourceRefsSchema.optional(), rendering: orderedMessageRenderingSchema,
-}).strict().refine((message) => message.failure === undefined || message.status === "failed")
-export const chatMessageReadSchema = z.union([messageRecordSchema, orderedAssistantMessageReadSchema])
+}).strict().refine((message) => (message.failure === undefined || message.status === "failed") &&
+  (message.terminal_status === undefined || (message.status === "failed" && message.failure === undefined && message.run_id.trim().length > 0)))
+export const chatMessageReadSchema = z.union([privateInlineMessageReadSchema, orderedAssistantMessageReadSchema])
 export type ChatMessageRead = z.infer<typeof chatMessageReadSchema>
 const messagePartPosition = { part_id: z.string().min(1), first_sequence: positivePartsDecimalSchema, latest_sequence: positivePartsDecimalSchema }
 export const messageTextPartSliceSchema = z.object({

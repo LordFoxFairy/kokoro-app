@@ -32,6 +32,7 @@ export type ThreadItem =
       steps: SessionStep[]
       messagesById: Record<string, SessionMessage>
       failure?: AttributedRunFailure
+      cancelled?: true
     }
 
 // 防御性恢复：若持久化快照缺少 text 步骤，按 assistant message 补齐渲染锚点。
@@ -112,7 +113,7 @@ export function buildThreadItems(state: SessionStreamState): ThreadItem[] {
   // RUN_ERROR may arrive before the first text/process frame. Preserve the
   // exact run as an empty assistant turn so its terminal footer has a truthful
   // owner rather than falling back to a thread-level alert.
-  for (const runId of Object.keys(state.runFailuresById)) {
+  for (const runId of new Set([...Object.keys(state.runFailuresById), ...Object.keys(state.cancelledRuns)])) {
     if (renderedRuns.has(runId)) continue
     renderedRuns.add(runId)
     items.push({
@@ -130,6 +131,7 @@ export function buildThreadItems(state: SessionStreamState): ThreadItem[] {
   }
   return items.map((item, index) => {
     if (item.kind !== "assistant-turn" || lastTurnByRun.get(item.runId) !== index) return item
+    if (state.cancelledRuns[item.runId]) return { ...item, cancelled: true as const }
     const failure = state.runFailuresById[item.runId]
     return failure === undefined ? item : { ...item, failure }
   })

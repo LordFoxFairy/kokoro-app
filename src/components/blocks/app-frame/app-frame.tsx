@@ -829,7 +829,7 @@ function AppFrameRuntime({
     mode,
     stagingByRun: staging,
     hitlRunId: (machine.phase === "waiting" || machine.phase === "resuming") ? machine.runId : null,
-    controlError: (machine.phase === "waiting" || machine.phase === "resuming") ? machine.error : null,
+    controlError: (machine.phase === "waiting" || machine.phase === "resuming" || machine.phase === "cancelling") ? machine.error : null,
     onToolDecision: (runId, toolId, decision) => engine?.stageToolDecision(runId, toolId, decision),
     onCancelRun: () => engine?.cancelRun(),
     onOpenFile: (path) => { project.dismissProjectContext(); canvas.openFile(path) },

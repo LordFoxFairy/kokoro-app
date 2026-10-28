@@ -1,3 +1,7 @@
+## 私有取消终态（消费者候选）
+
+Private ChatMessageRead 仅允许 optional terminal_status=cancelled；限定 assistant、failed、非空run_id且无failure，inline与ordered一致。缺省保持原failed语义，null与其它值拒绝；public ChatMessage／share／command不扩字段。RUN_FINISHED cancelled同义，202只admission，不推断正文或parts完整。唯一正式来源BFF `51e049df72c1fb2fe82b9114135c2fdc1a3450d9`／Public28.9／SHA256 `b438a749c919d24c4e0f1dadfdbcbbb11e0ac755f5785c543a661336c2cbb354`。完整test-only28.9→28.8逆回父SHA6376e2d2…承接旧风险；普通ChatMessage、command、share及五private／独立download policy3原件不变。
+
 ## Project Skill content：Public28.8 与私有下载资格／bytes policy3
 
 固定 BFF364f80cab855a4358eab956b7e3e3a4b5bae647b：Public SHA256 `6376e2d2a5fa9efd8e6ce4d9d4aa3686ad73dda8babffd9ac5b7097073538498`，独立 policy3 固定 BFF966ec5e7b0804185349a5f5413091d8e9e792bc9／SHA256 `4b84ccddb70421fc3f5f48766c4fd87fafb7d94f00eb9774f75b627f4f361925`。`GET /api/hub/projects/{projectId}/skill-installations/{installation_id}/package`（唯一 optional file_path）与 zero-body `POST .../download` 分别映射正式 `/v1/.../package` 与 `/browser/v1/.../download`。dispatcher 先于个人 package catchall；Product Session、可信 headers、10秒绝对准入至 EOF、1MiB JSON、取消／长度／UTF8／重复字段与严格响应闭集保持，不透传浏览器身份头。

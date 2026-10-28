@@ -190,8 +190,10 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   const partsJournals = new Map<string, { events: ChatProjectionEvent[]; bytes: number; overflow: boolean }>()
   const endedPartsRuns = new Set<string>()
   const cancelledPartsRuns = new Set<string>()
+  let cancelIntent: { sessionId: string; runId: string; generation: number; commandId: string; inFlight: boolean } | null = null
 
   function retireMessageParts(): void {
+    cancelIntent = null
     for (const read of partsReads.values()) read.controller.abort()
     partsReads.clear(); queuedPartsReads.clear(); partsJournals.clear(); endedPartsRuns.clear(); cancelledPartsRuns.clear()
   }
@@ -470,6 +472,16 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     }
     thread = reduction.thread
     machine = reduction.machine
+    for (const event of events) {
+      if (event.kind !== "run.completed" || event.payload.status !== "cancelled") continue
+      // Stop retired only the in-flight body read, not the body itself. A real
+      // terminal permits one existing bounded read to reconcile its exact parts.
+      if (cancelledPartsRuns.delete(event.run_id)) {
+        for (const part of Object.values(thread.messageParts ?? {})) {
+          if (part.runId === event.run_id && part.status !== "complete" && part.status !== "changed") fetchOrderedMessage(part.messageId, true)
+        }
+      }
+    }
     for (const runId of completedTextRuns) {
       const part = Object.values(thread.messageParts ?? {}).find((item) => item.runId === runId)
       if (part && part.status !== "changed" && !cancelledPartsRuns.has(runId)) fetchOrderedMessage(part.messageId, true)
@@ -482,6 +494,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       clearReattachTimer()
     }
     if (reduction.settledRunId !== null) {
+      if (cancelIntent?.runId === reduction.settledRunId) cancelIntent = null
       // 本轮终态收束：关流、清该 run 的决策暂存与幂等 id。
       staging.delete(reduction.settledRunId)
       resumeCommandIds.delete(reduction.settledRunId)
@@ -1596,17 +1609,41 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       notify()
       return
     }
-    if (!store || !machine.runId || machine.phase === "cancelling") return
+    if (!store || !machine.runId) return
     const runId = machine.runId
     const sessionId = store.activeId
     const generation = hydrateGeneration
+    if (machine.phase === "cancelling" && (machine.error === null || cancelIntent?.inFlight)) return
+    if (!cancelIntent || cancelIntent.runId !== runId || cancelIntent.sessionId !== sessionId || cancelIntent.generation !== generation) {
+      cancelIntent = { sessionId, runId, generation, commandId: createId("command"), inFlight: false }
+    }
+    const intent = cancelIntent
+    const current = () => !disposed && cancelIntent === intent && store?.activeId === sessionId &&
+      generation === hydrateGeneration && machine.runId === runId
+    intent.inFlight = true
     retireRunMessageParts(runId)
-    machine = transition(machine, { type: "CANCEL" })
+    machine = { ...transition(machine, { type: "CANCEL" }), error: null }
     notify()
-    execution.cancelRun({ sessionId, runId, commandId: createId("command") }).catch((error: unknown) => {
-      if (disposed || store?.activeId !== sessionId || generation !== hydrateGeneration || machine.runId !== runId) return
+    const cursor = thread.resumeCursor
+    execution.cancelRun({ sessionId, runId, commandId: intent.commandId }).catch((error: unknown) => {
+      if (!current()) return
       machine = transition(machine, { type: "CONTROL_FAILED", error: describeUnknown(error) })
       notify()
+    }).finally(() => {
+      intent.inFlight = false
+      if (!current()) return
+      // One read, not a poller:202/lost ACK is only admission or uncertainty.
+      // Only exact owner terminal data can settle this still-current run.
+      const readThread = thread
+      void execution.fetchSnapshot(sessionId).then((owner) => {
+        if (!current() || thread !== readThread || thread.resumeCursor !== cursor || owner?.session.session_id !== sessionId) return
+        if (owner.execution_head?.run_id === runId || !(owner.messages ?? []).some((message) =>
+          message.role === "assistant" && message.run_id === runId && (message.status === "completed" || message.status === "failed"))) return
+        cancelledPartsRuns.delete(runId)
+        cancelIntent = null
+        adoptOwnerSnapshot(sessionId, owner)
+        notify()
+      }).catch(() => { /* Keep the original intent/stream when the read is unavailable. */ })
     })
   }
 

@@ -1011,3 +1011,38 @@ it("an unconfirmed admission is not described as a failed execution, and only ex
   fireEvent.click(screen.getByRole("button", { name: tr("thread.retryOriginal") }))
   expect(retry).toHaveBeenCalledTimes(1)
 })
+
+describe("confirmed cancellation presentation", () => {
+  it.each(["", "preserved answer"])("keeps %j and shows a neutral stopped footer, not generic failure", (content) => {
+    const state = applyChatProjectionEvent({ ...createSessionStreamState(), messages: content ? [{ id: "a", role: "assistant", content, runId: "r" }] : [] }, {
+      event_id: "cancelled", session_id: "ses_1", run_id: "r", timestamp: "now", seq: 1,
+      kind: "run.completed", payload: { status: "cancelled" },
+    })
+    renderFailure(state)
+    expect(screen.getByText(tr("thread.cancelled"))).toBeInTheDocument()
+    if (content) expect(screen.getByText(content)).toBeInTheDocument()
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+  })
+})
+
+it("offers an explicit same-intent cancel retry only while cancellation is uncertain", () => {
+  const retryCancel = vi.fn()
+  render(<ConversationThread sessionId="ses_1" thread={createSessionStreamState()} isStreaming currentRunId="r" executionPhase="cancelling"
+    isReconnecting={false} hasFailed={false} canRetryPendingSubmission={false} creditRejected={false} onOpenBilling={vi.fn()} onOpenPricing={vi.fn()}
+    onRetry={vi.fn()} mode="fast" stagingByRun={{}} hitlRunId={null} controlError="lost ACK" onCancelRun={retryCancel} />, { wrapper: LocaleProvider })
+  expect(screen.getByText(tr("thread.cancelUnknown"))).toBeInTheDocument()
+  fireEvent.click(screen.getByRole("button", { name: tr("thread.retryCancel") }))
+  expect(retryCancel).toHaveBeenCalledTimes(1)
+  expect(screen.queryByText(tr("thread.cancelled"))).not.toBeInTheDocument()
+  expect(screen.queryByText("lost ACK")).not.toBeInTheDocument()
+})
+
+it("keeps a real unread cancelled body recoverable without inventing a generic Run failure", () => {
+  const state = stateFromSnapshot(makeSnapshot({ messages: [{ message_id: "a", role: "assistant", run_id: "r", status: "failed", terminal_status: "cancelled", content: "prefix", created_at: "now" }] }))
+  state.messageParts = { a: { messageId: "a", runId: "r", revision: "1", status: "partial" } }
+  renderFailure(state)
+  expect(screen.getByText("prefix")).toBeInTheDocument()
+  expect(screen.getByText(tr("thread.cancelled"))).toBeInTheDocument()
+  expect(screen.getByText(tr("thread.partsPartial"))).toBeInTheDocument()
+  expect(state.runFailuresById).toEqual({})
+})

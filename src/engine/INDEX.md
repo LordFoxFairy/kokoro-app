@@ -1,3 +1,5 @@
+取消恢复：202不结束Run；同页未知取消保存原commandId/run.cancel，显式重试复用它。每次响应后仅一次现snapshot读取，exact session/run/代际及cursor守卫通过且owner真终态才接管；SSE保持，真实取消后可重新读原有bounded parts，不建poller。
+
 <!-- Ordered private Message reads: message-parts-reader.ts is the sole bounded continuation reader; machine owns its context retirement and read-only retryMessageParts. It never retries commands or advances resumeCursor. -->
 <!-- A typed page GET401 may await the existing ProductReadRecheck once, using the captured subject/data epoch and the original10s episode; only trusted same-subject readmission permits the exact same scope/cursor GET. Abort/retirement,409 and subsequent401 do not replay. -->
 CHAT-1当前：`ownerConfirmedSessionId`只投影当前视图的正向snapshot/create ACK，内存保存，不由乐观正文或浏览器索引推断；供归档读取资格使用，不授权或改变原提交恢复。

@@ -59,9 +59,11 @@ export function stateFromSnapshot(snapshot: SessionSnapshot): SessionStreamState
     finalAssistantByRun.set(message.run_id, message)
   }
   const runFailuresById: Record<string, AttributedRunFailure> = {}
+  const cancelledRuns: Record<string, true> = {}
   for (const [runId, message] of finalAssistantByRun) {
     if (message.status !== "failed") continue
     if (snapshot.execution_head?.run_id === runId || (head?.run_id === runId && pending.length > 0)) continue
+    if (message.terminal_status === "cancelled") { cancelledRuns[runId] = true; continue }
     runFailuresById[runId] = message.failure === undefined
       ? { failedRunId: runId, kind: "generic" }
       : { failedRunId: runId, kind: "agent", profile: message.failure }
@@ -79,7 +81,7 @@ export function stateFromSnapshot(snapshot: SessionSnapshot): SessionStreamState
     ...createSessionStreamState(),
     ...(restoresFailedRun
       ? {
-          runStatus: "failed" as const,
+          runStatus: tailMessage?.terminal_status === "cancelled" ? "cancelled" as const : "failed" as const,
         }
       : {}),
     // run 锚点与终态清空语义依赖 activeRunId（状态而非线程内容）：水合保留。
@@ -98,6 +100,7 @@ export function stateFromSnapshot(snapshot: SessionSnapshot): SessionStreamState
     }]] : [])),
     stepsByRun,
     runFailuresById,
+    cancelledRuns,
     unattributedFailure,
     files: snapshot.files,
     deliveries: snapshot.deliveries.map(deliveryFromSnapshot),

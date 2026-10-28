@@ -1,3 +1,5 @@
+确定取消仅中性“已停止”，原文字／过程保留；空取消可成turn。pending仅原停止中，unknown显示明确未确认及原意图重试，不当失败或完成；真实parts缺口保原只读恢复。
+
 补充历史读取反馈：仅当前可见非空正文的精确 durable Message 归属匹配时安静读屏；Tab 进入原重新读取按钮即恢复整行。无正文／别的 Message 保留原提示，status、原回调与 owner 读取语义不变。
 
 具体动作对象第二阶段（2026-10-27，Public28.4 消费者候选）：`ToolCallRow` 从唯一严格 activity 的 optional display_detail.name 纯文本呈现目标，移除 UI-only targetText 过渡 prop；长名 ellipsis／完整 title，不生链接，不猜 raw 参数／答案。正式 finite profile 与校验入口见本仓技术设计；旧 absent 和第一阶段所有顺序／节点／开合／状态语义保持。SharedThread 的公开 head 在进入私有 hydration 前丢弃，共享 process 必须 null。正常组合／浏览器验收仍由 Root 绑定。

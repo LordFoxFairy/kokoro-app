@@ -285,8 +285,15 @@ function applyRunTerminal(
   delete draft.state.interactionsByRun[event.run_id]
   closeSnapshotContinuation(draft, event.run_id)
   const steps = stepsOf(draft, event.run_id)
+  const cancelled = event.kind === "run.completed" && event.payload.status === "cancelled"
+  if (cancelled) draft.state.cancelledRuns = { ...draft.state.cancelledRuns, [event.run_id]: true }
+  else if (draft.state.cancelledRuns[event.run_id]) {
+    const next = { ...draft.state.cancelledRuns }
+    delete next[event.run_id]
+    draft.state.cancelledRuns = next
+  }
   const failed = event.kind !== "run.completed"
-  const closed = closeOpenTools(steps, () => failed ? "error" : "stale-running")
+  const closed = closeOpenTools(steps, () => cancelled ? "cancelled" : failed ? "error" : "stale-running")
   if (closed) {
     draft.state.stepsByRun[event.run_id] = closed
   }
@@ -517,6 +524,7 @@ export function applyChatProjectionEvents(
           deliveriesHasMore: state.deliveriesHasMore,
           runStatus: state.runStatus,
           runFailuresById: state.runFailuresById,
+          cancelledRuns: state.cancelledRuns,
           unattributedFailure: state.unattributedFailure,
           activeRunId: state.activeRunId,
           executionHead: state.executionHead,

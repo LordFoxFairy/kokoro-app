@@ -1,3 +1,7 @@
+## Run 取消读取与呈现（Public28.9消费者候选）
+
+沿既有 AG-UI 与私有 snapshot：exact Run 的确定取消索引不进入浏览器持久层；本地放弃、HTTP202与失败空正文均不是取消证明。保已输出文字／安全活动及parts完整性。Stop后仅一次既有snapshot恢复，并以session／run／代际／cursor拒迟到；unknown显式重试保原command identity，不建后台poller。固定正式BFF `51e049df72c1fb2fe82b9114135c2fdc1a3450d9`／Public28.9／SHA256 `b438a749c919d24c4e0f1dadfdbcbbb11e0ac755f5785c543a661336c2cbb354`；12既有生成器承接唯一原件，私有marker由既有Agent failure生成器同时核闭集guard。Stop回读另核exact thread引用，拒同run／旧cursor下后继ACK覆盖；不清composer草稿。正常配对由Root验收。
+
 ## Project 已安装 Skill 的精确详情与下载（消费者候选）
 
 以既有 Project installation owner 为准：卡片打开仅捕获 Project／installation／source_ref／decimal revision 和 actor，现 Manus reader fresh metadata 使用 Project client，再通过具名 Project package／download 读取；Project 不复用个人或目录 source 权限，不回退 current version。reader／download 身份包含完整 Project pin 及当前 admission generation，换 Project、pin、actor、关闭或取消后迟到结果退役。详情与原包文件阅读器共享，Project 分支不暴露个人添加／启停／管理／分享／试用，也不传假回调；原列表、默认选择、更新、移除意图与命令键不变。
