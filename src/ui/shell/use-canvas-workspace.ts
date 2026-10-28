@@ -6,6 +6,7 @@
 
 import { useCallback, useSyncExternalStore } from "react"
 
+import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
 import type { SessionDelivery } from "@/core/state"
 import {
   canvasSlot,
@@ -27,6 +28,7 @@ export type CanvasWorkspace = {
   canvasOpen: boolean
   canReopenCanvas: boolean
   fullscreen: boolean
+  openActivity: (runId: string, activityId: string, subject: string) => void
   openFile: (path: string) => void
   openDelivery: (delivery: SessionDelivery) => void
   onSelectFile: (file: { path: string }) => void
@@ -36,16 +38,20 @@ export type CanvasWorkspace = {
   onReopen: () => void
 }
 
-export function useCanvasWorkspace(activeId: string | null, thread: Thread, mounted: boolean): CanvasWorkspace {
+export function useCanvasWorkspace(activeId: string | null, thread: Thread, mounted: boolean, boundary?: ProjectReadBoundary): CanvasWorkspace {
   const canvasState = useSyncExternalStore(subscribeCanvas, readCanvasState, serverCanvasState)
   const slot = canvasSlot(canvasState, activeId)
+  const activityAdmitted = slot.content?.kind !== "activity" || Boolean(boundary?.admitted && boundary.subject === slot.content.subject && boundary.generation === slot.content.generation)
   const resolvedCanvas =
-    mounted && activeId !== null && slot.open && slot.content !== null
+    mounted && activityAdmitted && activeId !== null && slot.open && slot.content !== null
       ? resolveCanvasContent(slot.content, thread)
       : null
   const canvasOpen = resolvedCanvas !== null && activeId !== null
-  const canReopenCanvas = mounted && activeId !== null && !slot.open && slot.content !== null
+  const canReopenCanvas = mounted && activityAdmitted && activeId !== null && !slot.open && slot.content !== null
 
+  const openActivity = useCallback((runId: string, activityId: string, subject: string) => {
+    if (activeId !== null && boundary?.admitted && boundary.subject === subject) openCanvas(activeId, { kind: "activity", runId, activityId, subject, generation: boundary.generation })
+  }, [activeId, boundary])
   const openFile = useCallback(
     (path: string) => {
       if (activeId !== null) {
@@ -99,6 +105,7 @@ export function useCanvasWorkspace(activeId: string | null, thread: Thread, moun
     canvasOpen,
     canReopenCanvas,
     fullscreen: slot.fullscreen,
+    openActivity,
     openFile,
     openDelivery,
     onSelectFile,

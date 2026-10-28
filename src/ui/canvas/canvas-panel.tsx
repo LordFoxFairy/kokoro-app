@@ -1,4 +1,6 @@
 "use client"
+import { ActivityInspector } from "@/ui/thread/activity-inspector"
+import type { AnswerActionBoundary } from "@/ui/thread/answer-action-scope"
 import { Button } from "@/components/ui/button"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Empty, EmptyDescription } from "@/components/ui/empty"
@@ -50,6 +52,8 @@ export function formatDeliveryTime(iso: string, locale: string): string {
 
 function contentTitle(content: ResolvedCanvasContent): string {
   switch (content.kind) {
+    case "activity":
+      return ""
     case "file":
       return content.file.path
     case "delivery":
@@ -60,6 +64,7 @@ function contentTitle(content: ResolvedCanvasContent): string {
 }
 
 export type CanvasPanelProps = {
+  answerActionBoundary?: AnswerActionBoundary
   sessionId: string
   readBoundary?: ProjectReadBoundary
   preview?: boolean
@@ -79,6 +84,7 @@ export type CanvasPanelProps = {
 }
 
 export function CanvasPanel({
+  answerActionBoundary,
   sessionId,
   readBoundary,
   preview = false,
@@ -107,13 +113,13 @@ export function CanvasPanel({
   const downloadControllerRef = useRef<AbortController | null>(null)
   const previewHeadingRef = useRef<HTMLHeadingElement>(null)
   const previousViewRef = useRef(view)
-  const title = contentTitle(content)
+  const title = content.kind === "activity" ? t("thread.activityDetails") : contentTitle(content)
   const contentKey =
     content.kind === "file"
       ? `file:${content.file.path}`
       : content.kind === "delivery"
         ? `delivery:${JSON.stringify([content.delivery.conversationId, content.delivery.artifactId])}`
-        : `node:${content.title}`
+        : content.kind === "activity" ? `activity:${content.runId}:${content.activityId}` : `node:${content.title}`
 
   useEffect(() => () => {
     downloadControllerRef.current?.abort()
@@ -170,13 +176,13 @@ export function CanvasPanel({
       <header className={styles.head}>
         <div className={styles.heading}>
           <h2 ref={previewHeadingRef} className={styles.name} title={title} tabIndex={-1}>
-            {view === "list" ? t("canvas.filesHeading") : title}
+            {content.kind !== "activity" && view === "list" ? t("canvas.filesHeading") : title}
           </h2>
           {view === "preview" && meta !== null ? (
             <span className={styles.meta}>{meta}</span>
           ) : null}
         </div>
-        <ToggleGroup
+        {content.kind !== "activity" ? <ToggleGroup
           type="single"
           value={view}
           onValueChange={(value) => {
@@ -191,7 +197,7 @@ export function CanvasPanel({
           <ToggleGroupItem value="list" size="sm">
             {t("canvas.filesTab")}
           </ToggleGroupItem>
-        </ToggleGroup>
+        </ToggleGroup> : null}
         <span className={styles.actions}>
           {view === "preview" && download !== null ? (
             <Button variant="ghost" size="sm"
@@ -291,7 +297,7 @@ export function CanvasPanel({
         </Alert>
       ) : null}
       <div className={styles.body}>
-        {view === "list" ? (
+        {content.kind === "activity" ? <ActivityInspector content={content} {...(answerActionBoundary ? { boundary: answerActionBoundary } : {})} /> : view === "list" ? (
           <WorkspaceList
             selected={content}
             files={files}
@@ -311,7 +317,7 @@ export function CanvasPanel({
           <ContentBody sessionId={sessionId} content={content} {...(closedPreviewKey === contentKey || readBoundary === undefined ? {} : { readBoundary })} />
         )}
       </div>
-      {todos.length > 0 ? (
+      {content.kind !== "activity" && todos.length > 0 ? (
         <footer className={styles.taskFooter} data-slot="canvas-task-footer">
           <div className={styles.timeline} aria-hidden="true">
             <span className={styles.timelineControls}>
@@ -488,7 +494,7 @@ function ContentBody({
   readBoundary,
 }: {
   sessionId: string
-  content: ResolvedCanvasContent
+  content: Exclude<ResolvedCanvasContent, { kind: "activity" }>
   readBoundary?: ProjectReadBoundary
 }) {
   switch (content.kind) {

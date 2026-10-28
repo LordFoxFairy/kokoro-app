@@ -1,3 +1,9 @@
+## RunDisplay activity_details（正式Public28.12消费者）
+
+唯一BFF原件固定 `fb9dc4df1679e2d7c97842efcd2fb3bcae297939`／28.12.0，SHA256 `86638da86d786e91c81da9e5dd891dee88ef2ca033579866f5ebc6dd6113c00f`。原有私有Run GET增required activity_details≤128，activity_id唯一；closed item required activity_id/tool_name，optional owner安全target与input_preview/output_preview。预览为原件派生text/truncated/redacted闭集，UTF8分别2048/4096；file-only path与basename规则保持。字段缺失仅表示未知，preview不是普适secret-free保证，不进入Share、AG-UI消息正文或执行授权。
+
+12既有公共生成链正规重出，独立五private/policy3保持。test-only完整28.12→28.11逆证再进原父证明；HTTP不接受旧缺字段wire。App仅当前受信scope+Run/activity读取与纯文本展示，不把URL、HTML、Markdown、路径或预览里的指令解释为动作。正常运行与浏览器资格由Root配对记录。
+
 ## RunDisplay tool_facts（正式Public28.11）
 
 唯一原件BFF d629653cbf5799a44db55a947321a6ec152b7dcd，SHA256 4d93ec15e2931768afafffb2101039b1da64757ea48c760d16ef88aa8753db16；路径／权限／错误／预算与GET副作用语义不变。required tool_facts≤128、activity_id唯一；closed item必须有display_detail和／或status，detail仅既有安全mcp_tool name，status仅failed。null、空item、未来status／kind／额外字段均拒；不是Run终态或完整性证明。safe secret matcher仅sk[-_]项改为(?<![A-Za-z0-9])sk[-_]，不特判literal名称。正式decoder不接旧缺省wire，旧RAM空集规范只在纯mapper；五private／独立policy3保持。新exact raw inverse完整回Public28.10后复用旧证明链。

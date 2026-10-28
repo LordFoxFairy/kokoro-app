@@ -9,17 +9,20 @@ import YAML from "yaml"
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const sourcePath = join(root, "src/generated/bff-public-openapi.yaml")
 const outputPath = join(root, "src/generated/bff-tool-display.ts")
-const ownerCommit = "d629653cbf5799a44db55a947321a6ec152b7dcd"
-const sourceSha256 = "4d93ec15e2931768afafffb2101039b1da64757ea48c760d16ef88aa8753db16"
-const openapiVersion = "28.11.0"
+const ownerCommit = "fb9dc4df1679e2d7c97842efcd2fb3bcae297939"
+const sourceSha256 = "86638da86d786e91c81da9e5dd891dee88ef2ca033579866f5ebc6dd6113c00f"
+const openapiVersion = "28.12.0"
 
 export function inspectBffToolDisplayContract(document) {
   assert.equal(document.info.version, openapiVersion, "BFF tool display version drift")
   const currentSchemas = document.components.schemas
   const toolFacts = currentSchemas.RunDisplay.properties.tool_facts
-  assert.deepEqual(currentSchemas.RunDisplay.required, ["run_id", "display_skills", "tool_paths", "tool_facts"])
+  assert.deepEqual(currentSchemas.RunDisplay.required, ["run_id", "display_skills", "tool_paths", "tool_facts", "activity_details"])
   assert.equal(createHash("sha256").update(JSON.stringify(toolFacts)).digest("hex"), "11bec751d5cb557a2a314533f552166e06126c620877b844c424789e41053595", "BFF exact tool facts member drift")
+  assert.equal(createHash("sha256").update(JSON.stringify(currentSchemas.RunDisplay.properties.activity_details)).digest("hex"), "e072544777f1574846108ef0762d26d6adbc34bbca2f5a0142ba9e9f57a19128", "BFF exact activity details drift")
   const priorSchemas = structuredClone(currentSchemas)
+  delete priorSchemas.RunDisplay.properties.activity_details
+  priorSchemas.RunDisplay.required = priorSchemas.RunDisplay.required.filter(key => key !== "activity_details")
   delete priorSchemas.RunDisplay.properties.tool_facts
   priorSchemas.RunDisplay.required = priorSchemas.RunDisplay.required.filter(key => key !== "tool_facts")
   const shapeKeys=["RunToolActivity","RunSubagentActivity","RunSkillActivity","RunDisplaySkill","RunDisplay","MessageFeedbackResponse","MessageRegenerationResponse","ErrorEnvelope","RequestMeta","ErrorDetail"]
@@ -103,7 +106,19 @@ function schemaCode(schema,schemas) {
  if(schema.enum)return schema.enum.length===1?`z.literal(${JSON.stringify(schema.enum[0])})`:`z.union([${schema.enum.map(v=>`z.literal(${JSON.stringify(v)})`).join(",")}])`
  if(Array.isArray(schema.type))return `z.union([${schema.type.map(type=>schemaCode({...schema,type},schemas)).join(",")}])`
  if(schema.type==="null")return "z.null()"
- if(schema.type==="object")return `z.object({${Object.entries(schema.properties??{}).map(([key,value])=>`${JSON.stringify(key)}:${schemaCode(value,schemas)}${(schema.required??[]).includes(key)?"":".optional()"}`).join(",")}})${schema.additionalProperties===false?".strict()":""}`
+ if(schema.type==="boolean")return "z.boolean()"
+ if(schema.type==="object") {
+  let code = `z.object({${Object.entries(schema.properties??{}).map(([key,value])=>`${JSON.stringify(key)}:${schemaCode(value,schemas)}${(schema.required??[]).includes(key)?"":".optional()"}`).join(",")}})${schema.additionalProperties===false?".strict()":""}`
+  if (schema.allOf) {
+   const [file, mcp] = schema.allOf
+   assert.deepEqual(schema.allOf, [
+    { if: { properties: { kind: { const: "file" } } }, then: { properties: { name: { pattern: file.then.properties.name.pattern } } } },
+    { if: { properties: { kind: { const: "mcp_tool" } } }, then: { not: { required: ["virtual_path"] } } },
+   ], "Unsupported activity target conditions")
+   code += `.refine(v=>v.kind===${JSON.stringify(file.if.properties.kind.const)}?new RegExp(${JSON.stringify(file.then.properties.name.pattern)},"u").test(v.name):v.kind!==${JSON.stringify(mcp.if.properties.kind.const)}||v.virtual_path===undefined)`
+  }
+  return code
+ }
  if(schema.type==="array")return `z.array(${schemaCode(schema.items,schemas)})${schema.maxItems===undefined?"":`.max(${schema.maxItems})`}${schema.minItems===undefined?"":`.min(${schema.minItems})`}`
  if(schema.type==="string"){
   let code="z.string()";if(schema.minLength!==undefined)code+=`.min(${schema.minLength})`;if(schema.pattern)code+=`.regex(new RegExp(${JSON.stringify(schema.pattern)},"u"))`;if(schema.maxLength!==undefined)code+=`.refine(v=>Array.from(v).length<=${schema.maxLength})`;
@@ -114,7 +129,7 @@ function schemaCode(schema,schemas) {
  throw Error("unsupported answer schema")
 }
 function renderAnswerSchemas(s,statuses){
- const specs={answerFeedbackWireSchema:s.MessageFeedbackResponse.properties.data,answerRegenerationReceiptWireSchema:s.MessageRegenerationResponse.properties.data,runDisplaySkillWireSchema:s.RunDisplaySkill,runDisplayWireSchema:s.RunDisplay,runToolFactWireSchema:s.RunDisplay.properties.tool_facts.items,safeVirtualPathWireSchema:s.RunDisplaySkill.properties.virtual_path,answerActionErrorWireSchema:s.ErrorEnvelope}
+ const specs={answerFeedbackWireSchema:s.MessageFeedbackResponse.properties.data,answerRegenerationReceiptWireSchema:s.MessageRegenerationResponse.properties.data,runDisplaySkillWireSchema:s.RunDisplaySkill,runDisplayWireSchema:s.RunDisplay,runToolFactWireSchema:s.RunDisplay.properties.tool_facts.items,runActivityDetailWireSchema:s.RunDisplay.properties.activity_details.items,safeVirtualPathWireSchema:s.RunDisplaySkill.properties.virtual_path,answerActionErrorWireSchema:s.ErrorEnvelope}
  return Object.entries(specs).map(([name,schema])=>`export const ${name} = ${schemaCode(schema,s)}`).join("\n")+`\nexport const BFF_ANSWER_ACTION_STATUSES = ${JSON.stringify(statuses)} as const\n`
 }
 async function main() {

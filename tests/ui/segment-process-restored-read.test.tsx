@@ -10,7 +10,7 @@ import { BFF_TOOL_DISPLAY_PROVENANCE } from "@/generated/bff-tool-display"
 import { SessionClientError } from "@/engine/client-error"
 const key = "kokoro.web.process-disclosure"
 const activity = (id: string): RunProcessActivity => ({ activity: "tool", activity_id: id, segment_id: "source", status: "completed", display_code: "tool.mcp.call" })
-const facts = { run_id: "run", display_skills: [], tool_paths: [], tool_facts: [] }
+const facts = { run_id: "run", display_skills: [], tool_paths: [], activity_details: [], tool_facts: [] }
 function Harness({ boundary, segmentId, live = false, single = false, empty = false, renderRevision = 0 }: {
   boundary: AnswerActionBoundary; segmentId: string; live?: boolean; single?: boolean; empty?: boolean; renderRevision?: number
 }) {
@@ -29,7 +29,7 @@ it("cold-mounts an explicitly persisted expanded process and restores exactly on
   localStorage.setItem(key, JSON.stringify({ "restored-cold": true }))
   const f = fixture()
   render(<StrictMode><Harness boundary={f.boundary} segmentId="restored-cold" /></StrictMode>)
-  expect(screen.getByRole("button", { name: /Call MCP tool/u })).toHaveAttribute("aria-expanded", "true")
+  expect(screen.getByRole("button", { name: /Process/u })).toHaveAttribute("aria-expanded", "true")
   await waitFor(() => expect(f.readDisplay).toHaveBeenCalledTimes(1))
   expect(f.readDisplay.mock.calls[0]?.[0]).toEqual({ sessionId: "session", runId: "run" })
 })

@@ -49,3 +49,10 @@
   color: var(--muted-foreground);
   overflow-wrap: anywhere;
 }
+
+.inspect { width: 100%; border: 0; background: transparent; text-align: start; cursor: pointer; border-radius: var(--radius-sm); color: inherit; }
+.inspect:hover { color: var(--foreground); background: var(--muted); }
+.inspect:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+@media (pointer: coarse) { .inspect { min-height: 44px; } }
+
+.context { flex: 1 1 12rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted-foreground); font-size: 13px; line-height: 20px; }

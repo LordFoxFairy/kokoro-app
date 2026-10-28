@@ -5,7 +5,7 @@ import type { AnswerActionBoundary } from "@/ui/thread/answer-action-scope"
 import { BFF_TOOL_DISPLAY_PROVENANCE } from "@/generated/bff-tool-display"
 afterEach(cleanup)
 it("invalidates only the per-Run ephemeral display memo on a formal profile upgrade, without automatic reads or commands", async () => {
-  const readDisplay = vi.fn(async () => ({ run_id: "old-run", display_skills: [], tool_paths: [], tool_facts: [] }))
+  const readDisplay = vi.fn(async () => ({ run_id: "old-run", display_skills: [], tool_paths: [], activity_details: [], tool_facts: [] }))
   const boundary = { client: { readDisplay }, sessionId: "session", isCurrent: () => true } as unknown as AnswerActionBoundary
   const { result, rerender } = renderHook(() => useRunDisplay(boundary, "old-run"))
   await act(async () => result.current.inspect())
@@ -22,7 +22,7 @@ it("invalidates only the per-Run ephemeral display memo on a formal profile upgr
 })
 it("retires a held old-profile read and ignores its late facts after the explicit new-profile read", async () => {
   const id = `act_${"a".repeat(64)}`
-  const newer = { run_id: "old-run", display_skills: [], tool_paths: [], tool_facts: [{ activity_id: id, display_detail: { kind: "mcp_tool" as const, name: "ask_wiki_question" } }] }
+  const newer = { run_id: "old-run", display_skills: [], tool_paths: [], activity_details: [], tool_facts: [{ activity_id: id, display_detail: { kind: "mcp_tool" as const, name: "ask_wiki_question" } }] }
   let resolveOld!: (value: typeof newer) => void, oldSignal!: AbortSignal
   const readDisplay = vi.fn<AnswerActionBoundary["client"]["readDisplay"]>()
     .mockImplementationOnce((target, signal) => { expect(target.runId).toBe("old-run"); oldSignal = signal; return new Promise(resolve => { resolveOld = resolve }) })
@@ -38,7 +38,7 @@ it("retires a held old-profile read and ignores its late facts after the explici
     expect(readDisplay).toHaveBeenCalledTimes(1)
     await act(async () => result.current.inspect())
     expect(result.current.facts?.tool_facts[0]?.display_detail?.name).toBe("ask_wiki_question")
-    await act(async () => resolveOld({ ...newer, tool_facts: [{ activity_id: id, display_detail: { kind: "mcp_tool", name: "old-public-name" } }] }))
+    await act(async () => resolveOld({ ...newer, activity_details: [], tool_facts: [{ activity_id: id, display_detail: { kind: "mcp_tool", name: "old-public-name" } }] }))
     expect(result.current.facts?.tool_facts[0]?.display_detail?.name).toBe("ask_wiki_question")
     expect(readDisplay).toHaveBeenCalledTimes(2)
   } finally { Reflect.set(BFF_TOOL_DISPLAY_PROVENANCE, "sourceSha256", profile) }

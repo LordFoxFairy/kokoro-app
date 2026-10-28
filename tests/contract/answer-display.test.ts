@@ -35,19 +35,19 @@ import { runDisplaySchema } from "@/contract/answer-actions"
 it("requires closed unique original tool adjuncts and rejects unknown status/kind/empty facts", () => {
   const id = `act_${"a".repeat(64)}`
   const fact = { activity_id: id, display_detail: { kind: "mcp_tool", name: "ask_wiki_question" }, status: "failed" }
-  const data = { run_id: "original-run", display_skills: [], tool_paths: [], tool_facts: [fact] }
+  const data = { run_id: "original-run", display_skills: [], tool_paths: [], activity_details: [], tool_facts: [fact] }
   expect(runDisplaySchema.safeParse(data).success).toBe(true)
   for (const changed of [
-    { ...data, tool_facts: undefined }, { ...data, tool_facts: null },
-    { ...data, tool_facts: [{ activity_id: id }] }, { ...data, tool_facts: [fact, fact] },
-    { ...data, tool_facts: Array.from({ length: 129 }, () => fact) },
-    { ...data, tool_facts: [{ ...fact, status: "completed" }] },
-    { ...data, tool_facts: [{ ...fact, extra: "untrusted" }] },
-    { ...data, tool_facts: [{ ...fact, activity_id: `${id}\n` }] },
-    { ...data, tool_facts: [{ ...fact, display_detail: { kind: "file", name: "ask_wiki_question" } }] },
-    { ...data, tool_facts: [{ ...fact, display_detail: { kind: "mcp_tool", name: "ask_wiki_question", virtual_path: "/workspace/extra" } }] },
+    { ...data, activity_details: [], tool_facts: undefined }, { ...data, activity_details: [], tool_facts: null },
+    { ...data, activity_details: [], tool_facts: [{ activity_id: id }] }, { ...data, activity_details: [], tool_facts: [fact, fact] },
+    { ...data, activity_details: [], tool_facts: Array.from({ length: 129 }, () => fact) },
+    { ...data, activity_details: [], tool_facts: [{ ...fact, status: "completed" }] },
+    { ...data, activity_details: [], tool_facts: [{ ...fact, extra: "untrusted" }] },
+    { ...data, activity_details: [], tool_facts: [{ ...fact, activity_id: `${id}\n` }] },
+    { ...data, activity_details: [], tool_facts: [{ ...fact, display_detail: { kind: "file", name: "ask_wiki_question" } }] },
+    { ...data, activity_details: [], tool_facts: [{ ...fact, display_detail: { kind: "mcp_tool", name: "ask_wiki_question", virtual_path: "/workspace/extra" } }] },
   ]) expect(runDisplaySchema.safeParse(changed).success).toBe(false)
   for (const name of ["sk_private", "sk-private", "my_sk_secret", "a/sk_secret", "a.sk-private", " sk_private", "access_token", "password", "id_rsa", "ghp_private", "A\u0000B"]) {
-    expect(runDisplaySchema.safeParse({ ...data, tool_facts: [{ ...fact, display_detail: { kind: "mcp_tool", name } }] }).success).toBe(false)
+    expect(runDisplaySchema.safeParse({ ...data, activity_details: [], tool_facts: [{ ...fact, display_detail: { kind: "mcp_tool", name } }] }).success).toBe(false)
   }
 })

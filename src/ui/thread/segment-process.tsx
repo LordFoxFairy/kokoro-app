@@ -1,17 +1,16 @@
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import { Bot, ChevronDown, Sparkles } from "lucide-react"
+import { ChevronDown } from "lucide-react"
 import { useEffect, useSyncExternalStore } from "react"
 import { z } from "zod"
 
 import type { AgentMode } from "@/core/conversations"
+import type { RunActivityDetail } from "@/contract/answer-actions"
 import type { RunProcessActivity } from "@/contract/chat"
 import { useT } from "@/i18n/context"
 import { createPersistedStore } from "@/lib/persisted-store"
 
 import { ProcessActivityRows } from "./process-activity-rows"
-import { isMcpPreparation } from "./process-activity-groups"
-import { TOOL_ACTION_PRESENTATION } from "./tool-action-presentation"
 import styles from "./thread.module.css"
 
 // 过程块展开意图（UI-only）：按全局唯一 segmentId 存手动 override，跨刷新保留；
@@ -48,6 +47,8 @@ function useDisclosure(segmentId: string): boolean | null {
 }
 
 type SegmentProcessProps = {
+  activityDetails?: readonly RunActivityDetail[]
+  onOpenActivity?: (activityId: string) => void
   onInspect?: () => void
   segmentId: string
   activities: RunProcessActivity[]
@@ -63,6 +64,8 @@ export function SegmentProcess({
   live,
   mode,
   onInspect,
+  onOpenActivity,
+  activityDetails,
   continueProcessing = false,
 }: SegmentProcessProps) {
   const t = useT()
@@ -81,15 +84,10 @@ export function SegmentProcess({
   }, [manualOpen, open, hasActivities, onInspect])
   if (!hasActivities) return null
 
-  const allTools = activities.every((activity) => activity.activity === "tool")
-  const hasPreparation = activities.some(isMcpPreparation)
   const failed = activities.filter((activity) => activity.activity === "skill" ? activity.phase === "failed" : activity.status === "failed").length
   const allSettled = activities.every((activity) => activity.activity === "skill" ? activity.phase === "ready" || activity.phase === "failed" : activity.status !== "running")
   const continuing = continueProcessing && allSettled
-  const labels = [...new Set(activities.map((activity) => t(isMcpPreparation(activity) ? "thread.toolPreparation" : activity.activity === "tool" ? TOOL_ACTION_PRESENTATION[activity.display_code].label : activity.activity === "subagent" ? "thread.subagent" : "thread.skill")))]
-  const summary = `${labels.join(" · ")} · ${t(allTools && !hasPreparation ? "thread.actionCalls" : "thread.actionActivities", { count: activities.length })}`
-  const first = activities[0]!
-  const SummaryIcon = first.activity === "tool" ? TOOL_ACTION_PRESENTATION[first.display_code].Icon : first.activity === "subagent" ? Bot : Sparkles
+  const summary = t("thread.processHeading")
   const continuation = continuing ? <span className={styles.actionContinuation} role="status">{t("thread.continueProcessing")}</span> : null
 
   return (
@@ -102,7 +100,6 @@ export function SegmentProcess({
     >
       {!single ? <CollapsibleTrigger asChild>
         <Button variant="ghost" type="button" className={styles.processSummary}>
-          <SummaryIcon className={styles.actionIcon} aria-hidden="true" />
           <span className={styles.processTitle} title={summary}>{summary}</span>
           {!allSettled ? <span className={styles.actionStatus}>{t("thread.processRunning")}</span> : null}
           {failed > 0 ? <span className={styles.actionFailure}>{t("thread.actionFailures", { count: failed })}</span> : null}
@@ -110,12 +107,12 @@ export function SegmentProcess({
           <ChevronDown className={styles.processChevron} aria-hidden="true" />
         </Button>
       </CollapsibleTrigger> : null}
-      {single && onInspect ? <Button type="button" variant="ghost" onClick={onInspect}>{t("thread.readActivityDetails")}</Button> : null}
+      {single && onInspect && !onOpenActivity ? <Button type="button" variant="ghost" onClick={onInspect}>{t("thread.readActivityDetails")}</Button> : null}
       <CollapsibleContent forceMount className={styles.processReveal}>
         <div className={styles.processClip}>
           <div className={styles.processBody} inert={!open}>
             <div className={styles.actgroup}>
-              <ProcessActivityRows activities={activities} continuation={single ? continuation : null} />
+              <ProcessActivityRows {...(activityDetails ? { activityDetails } : {})} {...(onOpenActivity ? { onOpenActivity } : {})} activities={activities} continuation={single ? continuation : null} />
             </div>
           </div>
         </div>

@@ -191,7 +191,7 @@ function AppFrameRuntime({
     activeId,
   } = engineState
 
-  const canvas = useCanvasWorkspace(activeId, thread, mounted)
+  const canvas = useCanvasWorkspace(activeId, thread, mounted, projectReadBoundary)
   const layout = useAppFrameLayout({
     desktopRailCollapsed,
     canvasOpen: canvas.canvasOpen,
@@ -838,6 +838,10 @@ function AppFrameRuntime({
     controlError: (machine.phase === "waiting" || machine.phase === "resuming" || machine.phase === "cancelling") ? machine.error : null,
     onToolDecision: (runId, toolId, decision) => engine?.stageToolDecision(runId, toolId, decision),
     onCancelRun: () => engine?.cancelRun(),
+    ...(answerActionBoundary ? { onOpenActivity: (runId: string, activityId: string) => {
+      if (!answerActionBoundary.isCurrent()) return
+      project.dismissProjectContext(); canvas.openActivity(runId, activityId, answerActionBoundary.actorId)
+    } } : {}),
     onOpenFile: (path) => { project.dismissProjectContext(); canvas.openFile(path) },
     onOpenDelivery: (delivery) => { project.dismissProjectContext(); canvas.openDelivery(delivery) },
   }
@@ -984,6 +988,7 @@ function AppFrameRuntime({
       emptyStateProps={emptyStateProps}
       composer={composer}
       emptyStateOwnsComposer={emptyStateOwnsComposer}
+      {...(answerActionBoundary ? { answerActionBoundary } : {})}
       canvas={{ ...canvas, onReopen: () => { project.dismissProjectContext(); canvas.onReopen() } }}
     />
   )

@@ -5,6 +5,7 @@ import {
   runDisplaySkillWireSchema,
   runDisplayWireSchema,
   runToolFactWireSchema,
+  runActivityDetailWireSchema,
   safeVirtualPathWireSchema,
   answerActionErrorWireSchema,
   BFF_ANSWER_ACTION_STATUSES,
@@ -45,9 +46,19 @@ export const runToolFactSchema = runToolFactWireSchema.superRefine((value, conte
     context.addIssue({ code: z.ZodIssueCode.custom, message: "invalid original MCP tool fact" })
   }
 })
+export const runActivityDetailSchema = runActivityDetailWireSchema.superRefine((value, context) => {
+  const target = value.target
+  if (!value.tool_name.trim() || sensitive.test(value.tool_name) ||
+    (target && (!target.name.trim() || sensitive.test(target.name) ||
+      (target.virtual_path !== undefined && (!safeVirtualPathSchema.safeParse(target.virtual_path).success || target.virtual_path.split("/").at(-1) !== target.name))))) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: "invalid original activity detail" })
+  }
+})
+export type RunActivityDetail = z.infer<typeof runActivityDetailSchema>
 export const runDisplaySchema = runDisplayWireSchema
   .extend({
     display_skills: z.array(runDisplaySkillSchema).max(16),
+    activity_details: z.array(runActivityDetailSchema).max(128),
     tool_facts: z.array(runToolFactSchema).max(128),
     tool_paths: runDisplayWireSchema.shape.tool_paths.element.extend({ virtual_path: safeVirtualPathSchema }).array().max(128),
   })
@@ -55,7 +66,8 @@ export const runDisplaySchema = runDisplayWireSchema
     if (
       new Set(value.display_skills.map((v) => v.source_ref)).size !== value.display_skills.length ||
       new Set(value.tool_paths.map((v) => v.activity_id)).size !== value.tool_paths.length ||
-      new Set(value.tool_facts.map((v) => v.activity_id)).size !== value.tool_facts.length
+      new Set(value.tool_facts.map((v) => v.activity_id)).size !== value.tool_facts.length ||
+      new Set(value.activity_details.map((v) => v.activity_id)).size !== value.activity_details.length
     )
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "duplicate display identity" })
   })

@@ -17,3 +17,16 @@ export const TOOL_ACTION_PRESENTATION = {
   "tool.web.search": { label: "thread.toolWebSearch", Icon: Search },
   "tool.web.fetch": { label: "thread.toolWebFetch", Icon: Globe },
 } satisfies Record<ToolCode, { label: MessageKey; Icon: LucideIcon }>
+
+/** Only original recognized scalar values; never a JSON log or an inferred purpose. */
+export function mcpInputContext(text: string | undefined): string | undefined {
+  if (!text) return undefined
+  try {
+    const value: unknown = JSON.parse(text)
+    if (value === null || typeof value !== "object" || Array.isArray(value)) return undefined
+    const fields = value as Record<string, unknown>
+    const scalar = (key: string): string | undefined => typeof fields[key] === "string" && fields[key].trim() ? fields[key] : undefined
+    const parts = [scalar("repoName") ?? scalar("repo"), scalar("question") ?? scalar("query")].filter((part): part is string => part !== undefined)
+    return parts.length ? parts.join(" · ") : undefined
+  } catch { return undefined }
+}

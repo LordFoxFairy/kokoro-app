@@ -6,7 +6,7 @@ it("accepts exact owner answer facts while rejecting unknown, wrong source mount
     answerRegenerationReceiptSchema.safeParse({ run_id: "r", user_message_id: "u", assistant_message_id: "a", regenerated_from_message_id: "source" }).success,
   ).toBe(true)
   const skill = { source_ref: "skill:pinned", name: "Original", virtual_path: "/.skills/cGlubmVk/SKILL.md", revision: "9007199254740993" }
-  const data = { run_id: "run", display_skills: [skill], tool_facts: [], tool_paths: [] }
+  const data = { run_id: "run", display_skills: [skill], activity_details: [], tool_facts: [], tool_paths: [] }
   expect(runDisplaySchema.safeParse(data).success).toBe(true)
   for (const revision of [null, "0", "-1", "01", "1\n", "9223372036854775808"]) {
     expect(runDisplaySchema.safeParse({ ...data, display_skills: [{ ...skill, revision }] }).success).toBe(false)
@@ -29,7 +29,7 @@ it("restores the entire formal28.9 parent and rejects partial or unrelated28.10 
     raw + "\n",
     raw.replace("getMessageFeedback", "getWrongFeedback"),
     raw.replace("#/components/schemas/RunDisplaySkill", "#/components/schemas/UnknownSkill"),
-    raw.replace("version: 28.11.0", "version: 28.12.0"),
+    raw.replace("version: 28.12.0", "version: 28.13.0"),
   ]) {
     expect(bad).not.toBe(raw)
     expect(() => restorePublic289MessageActionsContract(bad)).toThrow(/drift/)

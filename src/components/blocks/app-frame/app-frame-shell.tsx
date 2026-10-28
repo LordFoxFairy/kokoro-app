@@ -1,3 +1,4 @@
+import type { AnswerActionBoundary } from "@/ui/thread/answer-action-scope"
 import { currentRunProgressTodos } from "@/core/projections"
 import type {
   CSSProperties,
@@ -28,6 +29,7 @@ type Thread = EngineSnapshot["thread"]
 type RailProps = Omit<WorkspaceRailProps, "withinProvider">
 
 export type AppFrameShellProps = {
+  answerActionBoundary?: AnswerActionBoundary
   preview?: boolean
   readBoundary?: ProjectReadBoundary
   webSkin: NonNullable<AppFrameProps["webSkin"]>
@@ -58,6 +60,7 @@ export type AppFrameShellProps = {
 
 /** Owns the shadcn shell geometry: rail, main panel, optional Canvas, and overlays. */
 export function AppFrameShell({
+  answerActionBoundary,
   preview = false,
   readBoundary,
   webSkin,
@@ -201,6 +204,7 @@ export function AppFrameShell({
                     style={hideCanvas ? { display: "none" } : undefined}
                   >
                     <ContextPanel
+                      {...(answerActionBoundary ? { answerActionBoundary } : {})}
                       preview={preview}
                       {...(readBoundary === undefined ? {} : { readBoundary })}
                       sessionId={activeId}

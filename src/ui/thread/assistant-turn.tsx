@@ -29,12 +29,15 @@ import styles from "./thread.module.css"
 
 type AssistantTurnProps = {
   answerActionBoundary?: AnswerActionBoundary
+  runId?: string
+  terminal?: boolean
   answerActionTarget?: AnswerActionTarget | null
   parts?: readonly MessagePartsState[]
   onRetryMessageParts?: (messageId: string) => void
   interaction?: InteractionState
   executionPhase?: MachinePhase
   brandName?: string
+  onOpenActivity?: (activityId: string) => void
   onOpenFile?: (path: string) => void
   sessionId: string | null
   // 这一轮（一个 runId）按 seq 排好的有序步骤：思考/工具/子智能体/文本交错。
@@ -91,6 +94,7 @@ function FormingContent({
 // 只有整轮的尾段在流式时带就近光标（唯一 live 锚点）。
 export function AssistantTurn({
   interaction,
+  onOpenActivity,
   parts = [],
   onRetryMessageParts,
   executionPhase,
@@ -110,6 +114,8 @@ export function AssistantTurn({
   failureFooter,
   answerActionBoundary,
   answerActionTarget,
+  runId,
+  terminal = false,
   cancelled = false,
 }: AssistantTurnProps) {
   const t = useT()
@@ -124,7 +130,8 @@ export function AssistantTurn({
     })
     return () => window.cancelAnimationFrame(frame)
   }, [interaction])
-  const display = useRunDisplay(answerActionBoundary, answerActionTarget?.runId)
+  const displayRunId = runId ?? answerActionTarget?.runId
+  const display = useRunDisplay(answerActionBoundary, displayRunId, terminal)
   const displayedActivities = overlayRunDisplay(activities, display.facts)
   const displayedSteps = steps.map(step => step.kind === "activity" ? { ...step, activity: overlayRunDisplay([step.activity], display.facts)[0]! } : step)
   const segments = groupSegments(displayedSteps, displayedActivities, messagesById)
@@ -255,7 +262,9 @@ export function AssistantTurn({
               ) : null}
               <SegmentProcess
                 segmentId={segment.segmentId}
-                {...(answerActionBoundary && answerActionTarget && display.facts === null ? { onInspect: display.inspect } : {})}
+                {...(display.facts ? { activityDetails: display.facts.activity_details } : {})}
+                {...(onOpenActivity ? { onOpenActivity: (activityId: string) => { display.inspect(); onOpenActivity(activityId) } } : {})}
+                {...(answerActionBoundary && displayRunId && display.facts === null ? { onInspect: display.inspect } : {})}
                 activities={segment.activities}
                 live={liveProcessSegment}
                 continueProcessing={liveProcessSegment && !tailHasText && phaseLabel === null && !reconnecting && !hitlActive}

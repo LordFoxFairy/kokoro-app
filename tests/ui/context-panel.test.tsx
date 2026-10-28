@@ -647,3 +647,17 @@ it("a mismatched conversation is quiet unreadability, not a format failure or a 
   expect(view.container.querySelector('[aria-busy="true"], pre')).toBeNull()
   expect(fetcher).not.toHaveBeenCalled()
 })
+
+it("switching exact activity A to B returns keyboard focus to B when the same panel closes", async () => {
+  function Harness() {
+    const [selected, select] = useState<string | null>(null)
+    return <><button data-canvas-opener="true" onClick={() => select("a")}>Action A</button><button data-canvas-opener="true" onClick={() => select("b")}>Action B</button>
+      {selected ? <ContextPanel sessionId="s" content={{ kind: "activity", runId: "r", activityId: selected, subject: "actor", generation: 1, terminal: true, activity: { activity: "tool", activity_id: selected, segment_id: "segment", display_code: "tool.execution", status: "completed" } }} files={[]} deliveries={[]} fullscreen={false} onSelectFile={vi.fn()} onSelectDelivery={vi.fn()} onToggleFullscreen={vi.fn()} onClose={() => select(null)} /> : null}</>
+  }
+  render(<LocaleProvider><Harness /></LocaleProvider>)
+  const a = screen.getByRole("button", { name: "Action A" }), b = screen.getByRole("button", { name: "Action B" })
+  a.focus(); fireEvent.click(a)
+  b.focus(); fireEvent.click(b)
+  const close = screen.getByRole("button", { name: "Close preview" }); close.focus(); fireEvent.click(close)
+  await waitFor(() => expect(b).toHaveFocus())
+})

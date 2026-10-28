@@ -1,3 +1,11 @@
+## 动作阅读列与只读详情（本片既定设计）
+
+沿同一有序正文→相邻活动→正文，不将最后文字推断为final，不生成中间文字或耗时。过程入口只呈简洁过程与真实运行/失败，移除类别串＋数量；活动是可键盘打开的原生按钮，目标只消费已验证事实。Canvas新增exact Run/activity引用，当前受信actor/session读取最新活动；不将display path当文件读取授权。详情仅纯文本，未提供输入/输出明确为缺证，不等同空参数/成功。
+
+复用现Canvas宽窄壳、关闭/全屏/焦点恢复；详情不显示文件列表或下载。用户选中才有界读RunDisplay，原Run落定至多补读一次；关窗/换actor、session、准入代际退休旧结果。正式activity_details DTO固定BFF fb9dc4df／Public28.12，由原生成链接入，无手写wire或fallback。真实target优先为动作主标题，仅真实MCP调用从input_preview提取原repoName/repo/question/query字符串作单行上下文，未知结构不显示，绝不把整块JSON塞入行内；选中Canvas展示完整限额输入/输出及截断/脱敏标记。
+
+参考为本地原始Manus观察 `/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/var/dev/mcp-prepare-receipt-20261027/display-rework/manus-process-order.png` 与同目录 `manus-process-details.png`。它证明轻量相邻动作组和右侧详情，不证明MCP连接器字段或历史参数。测试承接顺序、真实状态、点击身份、迟到隔离、单次补读和纯文本；视觉由Root正常浏览器对照。
+
 ## 旧Run MCP展示附加事实（正式Public28.11消费者候选）
 
 固定BFF d629653cbf5799a44db55a947321a6ec152b7dcd／Public28.11／SHA256 4d93ec15e2931768afafffb2101039b1da64757ea48c760d16ef88aa8753db16。现有单Run display GET新增required tool_facts；仅按同Run既存MCP activity_id的安全name与已证failed纯展示覆盖，不改历史ledger／source digest／parts顺序／Run终态，不从当前catalog补名。真实ask_wiki_question等名称沿同一安全规则接纳，sk前缀仅ASCII token左边界拒绝，其他secret/path负控不变。

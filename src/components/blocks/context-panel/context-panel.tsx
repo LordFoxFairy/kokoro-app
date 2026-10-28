@@ -36,7 +36,16 @@ export function ContextPanel(props: CanvasPanelProps) {
   // the invoking control before the panel opens so closing it restores focus.
   const returnFocusRef = useRef<HTMLElement | null>(null)
   const previousSessionIdRef = useRef(props.sessionId)
+  const activityKey = props.content.kind === "activity" ? JSON.stringify([props.sessionId, props.content.runId, props.content.activityId]) : null
+  const previousActivityKey = useRef(activityKey)
+  useEffect(() => {
+    if (previousActivityKey.current === activityKey) return
+    previousActivityKey.current = activityKey
+    const active = document.activeElement
+    if (activityKey && active instanceof HTMLElement && active.matches('[data-canvas-opener="true"]') && (focusScopeRef?.current ?? document).contains(active)) returnFocusRef.current = active
+  }, [activityKey, focusScopeRef])
   const focusReturnTimerRef = useRef<number | null>(null)
+  const closingRef = useRef(false)
   const pendingDesktopTargetRef = useRef<HTMLElement | null>(null)
   useEffect(() => {
     if (returnFocusRef.current || typeof document === "undefined") return
@@ -52,17 +61,19 @@ export function ContextPanel(props: CanvasPanelProps) {
     returnFocusRef.current = getFocusableReturnTarget(focusScopeRef?.current ?? document)
   }, [focusScopeRef, props.sessionId])
   useEffect(() => () => {
-    if (focusReturnTimerRef.current !== null) {
+    if (!closingRef.current && focusReturnTimerRef.current !== null) {
       window.clearTimeout(focusReturnTimerRef.current)
     }
   }, [])
   const completeClose = useCallback(() => {
+    closingRef.current = true
     onClose()
     if (pendingDesktopTargetRef.current) {
       const desktopTarget = pendingDesktopTargetRef.current
       pendingDesktopTargetRef.current = null
       focusReturnTimerRef.current = window.setTimeout(() => {
         focusReturnTimerRef.current = null
+        if (focusScopeRef && !focusScopeRef.current) return
         const target = desktopTarget.isConnected
           ? desktopTarget
           : getCanvasOpener(focusScopeRef?.current ?? document) ?? getFocusableReturnTarget(focusScopeRef?.current ?? document)

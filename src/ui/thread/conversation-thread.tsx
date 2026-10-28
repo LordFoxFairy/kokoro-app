@@ -34,6 +34,7 @@ export type ConversationThreadProps = {
   answerActionBoundary?: AnswerActionBoundary
   preview?: boolean
   brandName?: string
+  onOpenActivity?: (runId: string, activityId: string) => void
   onOpenFile?: (path: string) => void
   // 成果卡点击 → canvas 打开冻结预览。
   onOpenDelivery?: (delivery: SessionDelivery) => void
@@ -147,6 +148,7 @@ function ConversationThreadSurface({
   brandName,
   sessionId,
   onOpenFile,
+  onOpenActivity,
   onOpenDelivery,
   thread,
   isStreaming,
@@ -292,9 +294,12 @@ function ConversationThreadSurface({
             ) : (
               <>
                 <AssistantTurn
+                  runId={item.runId}
+                  terminal={thread.runTerminalsById?.[item.runId] !== undefined}
                   {...(answerActionBoundary === undefined ? {} : { answerActionBoundary, answerActionTarget: answerActionTarget(thread, { actorId: answerActionBoundary.actorId, sessionId: answerActionBoundary.sessionId, scope: answerActionBoundary.scope, runId: item.runId }) })}
                   {...(brandName === undefined ? {} : { brandName })}
                   sessionId={sessionId}
+                  {...(onOpenActivity ? { onOpenActivity: (activityId: string) => onOpenActivity(item.runId, activityId) } : {})}
                   {...(onOpenFile === undefined ? {} : { onOpenFile })}
                   activities={thread.executionProcess?.runId === item.runId ? thread.executionProcess.activities : []}
                   {...(thread.interactionsByRun[item.runId] === undefined ? {} : { interaction: thread.interactionsByRun[item.runId] })}
@@ -322,6 +327,7 @@ function ConversationThreadSurface({
                 {onOpenDelivery && sessionId !== null && lastTurnByRun.get(item.runId) === itemIndex && deliveriesByRun.has(item.runId) ? (
                   <DeliverySection
                     sessionId={sessionId}
+                  {...(onOpenActivity ? { onOpenActivity: (activityId: string) => onOpenActivity(item.runId, activityId) } : {})}
                     deliveries={deliveriesByRun.get(item.runId)!}
                     preview={preview}
                     onOpen={onOpenDelivery}

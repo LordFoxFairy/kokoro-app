@@ -1,28 +1,68 @@
 import { BFF_TOOL_DISPLAY_PROVENANCE } from "@/generated/bff-tool-display"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useSyncExternalStore } from "react"
 import type { RunDisplay } from "@/contract/answer-actions"
 import type { AnswerActionBoundary } from "./answer-action-scope"
-function createRunDisplayReader(boundary: AnswerActionBoundary | undefined, runId: string | undefined, changed: (update: (value: number) => number) => void, profile: string) {
-    let facts: RunDisplay | null = null, controller: AbortController | null = null, spent = false, retired = false
-    const inspect = () => {
-      if (!boundary || !runId || !boundary.isCurrent() || spent || retired) return
-      spent = true; controller = new AbortController(); changed(value => value + 1)
-      const signal = controller.signal
-      void boundary.client.readDisplay({ sessionId: boundary.sessionId, runId }, signal).then(result => {
-        if (retired || signal.aborted || !boundary.isCurrent() || result.run_id !== runId) return
-        facts = result; changed(value => value + 1)
-      }).catch(() => {
-        if (!retired && !signal.aborted && boundary.isCurrent()) { spent = false; changed(value => value + 1) }
-        // Missing/unavailable display remains unknown; only a new explicit click may read again.
-      })
-    }
-    return { profile, get: () => facts, inspect, activate: () => { retired = false; if (controller?.signal.aborted && facts === null) spent = false }, retire: () => { retired = true; controller?.abort() } }
+
+function createRunDisplayReader(boundary: AnswerActionBoundary | undefined, runId: string | undefined, readEpoch: object | undefined) {
+  const listeners = new Set<() => void>()
+  let revision = 0
+  const changed = () => { revision++; for (const listener of listeners) listener() }
+  let facts: RunDisplay | null = null
+  let phase: "idle" | "loading" | "ready" | "error" = "idle"
+  let controller: AbortController | null = null
+  let spent = false, retired = false, inspected = false, terminal = false, refreshed = false
+  const current = () => !retired && boundary?.isCurrent() && boundary.readEpoch === readEpoch
+  const inspect = () => {
+    if (!boundary || !runId || !current() || spent) return
+    inspected = true; spent = true; phase = "loading"
+    const request = new AbortController()
+    controller = request; changed()
+    void boundary.client.readDisplay({ sessionId: boundary.sessionId, runId }, request.signal).then(result => {
+      if (!current() || request.signal.aborted || controller !== request || result.run_id !== runId) return
+      facts = result; phase = "ready"; changed()
+    }).catch(() => {
+      if (!current() || request.signal.aborted || controller !== request) return
+      spent = false; phase = "error"; changed()
+      // No automatic retry. A failed read needs another explicit inspection.
+    })
+  }
+  const settle = (nextTerminal: boolean) => {
+    const becameTerminal = nextTerminal && !terminal
+    terminal ||= nextTerminal
+    if (!becameTerminal || !inspected || refreshed || phase === "error" || !current()) return
+    refreshed = true; controller?.abort(); spent = false; inspect()
+  }
+  return {
+    get: () => current() ? facts : null, phase: () => current() ? phase : "idle" as const, inspect, settle,
+    snapshot: () => revision,
+    subscribe: (listener: () => void) => {
+      if (retired) revision++
+      retired = false
+      if (controller?.signal.aborted && facts === null) spent = false
+      listeners.add(listener)
+      return () => { listeners.delete(listener); if (!listeners.size) { retired = true; controller?.abort() } }
+    },
+  }
 }
-/** One explicitly requested Run read; no snapshot fan-out, background poll or command. */
-export function useRunDisplay(boundary: AnswerActionBoundary | undefined, runId: string | undefined) {
-  const [, changed] = useState(0)
+type Reader = ReturnType<typeof createRunDisplayReader>
+const readers = new WeakMap<AnswerActionBoundary, { epoch: object | undefined; profile: string; runs: Map<string, Reader> }>()
+const serverRevision = () => 0
+function scopedReader(boundary: AnswerActionBoundary | undefined, runId: string | undefined, epoch: object | undefined, profile: string): Reader {
+  if (!boundary || !runId) return createRunDisplayReader(undefined, undefined, epoch)
+  let scope = readers.get(boundary)
+  if (!scope || scope.epoch !== epoch || scope.profile !== profile) {
+    scope = { epoch, profile, runs: new Map() }; readers.set(boundary, scope)
+  }
+  let reader = scope.runs.get(runId)
+  if (!reader) { reader = createRunDisplayReader(boundary, runId, epoch); scope.runs.set(runId, reader) }
+  return reader
+}
+/** Timeline and Canvas share one exact scope/Run reader, never a global identity cache. */
+export function useRunDisplay(boundary: AnswerActionBoundary | undefined, runId: string | undefined, terminal = false) {
   const profile = BFF_TOOL_DISPLAY_PROVENANCE.sourceSha256
-  const read = useMemo(() => createRunDisplayReader(boundary, runId, changed, profile), [boundary, runId, profile])
-  useEffect(() => { read.activate(); return () => read.retire() }, [read])
-  return { facts: read.get(), inspect: read.inspect }
+  const epoch = boundary?.readEpoch
+  const read = useMemo(() => scopedReader(boundary, runId, epoch, profile), [boundary, runId, profile, epoch])
+  useSyncExternalStore(read.subscribe, read.snapshot, serverRevision)
+  useEffect(() => { read.settle(terminal) }, [read, terminal])
+  return { facts: read.get(), phase: read.phase(), inspect: read.inspect }
 }
