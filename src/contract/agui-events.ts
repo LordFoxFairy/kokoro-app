@@ -96,9 +96,11 @@ const runFinishedSchema = base.extend({
   // canonical AG-UI outcome. Keep both declared rather than accepting
   // arbitrary top-level fields from an untrusted stream.
   status: z.enum(["completed", "cancelled"]).optional(),
-  result: z.unknown().optional(),
+  result: z.union([z.object({ final_segment_id: z.string().min(1) }).strict(), z.object({ status: z.literal("cancelled") }).strict()]).optional(),
   outcome: RunFinishedOutcomeSchema.optional(),
   usage: z.array(z.record(z.unknown())).optional(),
+}).superRefine((event, context) => {
+  if (event.result && "final_segment_id" in event.result && (event.status === "cancelled" || event.outcome?.type === "interrupt")) context.addIssue({ code: z.ZodIssueCode.custom, message: "Cancelled Run has no final answer" })
 })
 
 const agentRunErrorSchema = z

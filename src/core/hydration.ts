@@ -95,8 +95,10 @@ export function stateFromSnapshot(snapshot: SessionSnapshot): SessionStreamState
     },
     interactionsByRun: head && pending[0] ? { [head.run_id]: pending[0] } : {},
     messages,
+    finalAnswersByRun: Object.fromEntries(snapshotMessages.flatMap(message => "rendering" in message ? [[message.run_id, { segmentId: message.rendering.final_segment_id ?? null, revision: message.rendering.revision }]] : [])),
     messageParts: Object.fromEntries(snapshotMessages.flatMap((message) => "rendering" in message ? [[message.message_id, {
       messageId: message.message_id, runId: message.run_id, revision: message.rendering.revision,
+      ...(message.rendering.final_segment_id === undefined ? {} : { finalSegmentId: message.rendering.final_segment_id }),
       descriptor: true as const, watermark: message.rendering.event_watermark, cursor: message.rendering.parts_cursor, status: "unread" as const,
     }]] : [])),
     stepsByRun,

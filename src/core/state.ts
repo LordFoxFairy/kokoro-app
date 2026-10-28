@@ -108,11 +108,13 @@ export type SessionDelivery = {
 }
 
 export type MessagePartsState = {
+  finalSegmentId?: string;
   messageId: string; runId: string; revision: string; cursor?: string;
   descriptor?: true; confirmedSlots?: Readonly<Record<string, string>>; confirmedRevision?: string; watermark?: EventCursor | null; partIds?: readonly string[];
   status: "unread" | "loading" | "partial" | "complete" | "changed" | "failed";
 }
 export type SessionStreamState = {
+  finalAnswersByRun?: Record<string, import("./final-answer-reference").FinalAnswerReference>
   messageParts?: Record<string, MessagePartsState>
   executionHead: ExecutionHead | null
   interactionsByRun: Record<string, InteractionState>
@@ -167,6 +169,7 @@ export function normalizeRunTerminals(state: SessionStreamState): SessionStreamS
 export function createSessionStreamState(): SessionStreamState {
   return {
     messageParts: {},
+    finalAnswersByRun: {},
     executionHead: null,
     interactionsByRun: {},
     files: [],

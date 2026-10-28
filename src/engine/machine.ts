@@ -283,7 +283,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       ...(recoverUnauthorized === undefined ? {} : { recoverUnauthorized }),
       minimumRevision: known.revision,
       ...(known.partIds === undefined ? {} : { retainedPartIds: known.partIds }),
-      ...(fresh || known.cursor === undefined ? {} : { cursor: known.cursor, ...(known.watermark === undefined ? {} : { expected: { revision: known.revision, event_watermark: known.watermark } }) }), signal: controller.signal,
+      ...(fresh || known.cursor === undefined ? {} : { cursor: known.cursor, ...(known.watermark === undefined ? {} : { expected: { revision: known.revision, event_watermark: known.watermark, ...(known.finalSegmentId === undefined ? {} : { final_segment_id: known.finalSegmentId }) } }) }), signal: controller.signal,
       onProgress: (read) => merge(read, false),
     }).then((read) => merge(read, true)).catch((error: unknown) => {
       if (!current()) return

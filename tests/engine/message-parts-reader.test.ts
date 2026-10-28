@@ -99,3 +99,15 @@ it("keeps a10s total across pages and preserves previously confirmed opaque slot
   client.nextParts = async () => page([])
   await expect(readMessageParts({ client, sessionId: "s", messageId: "m", runId: "r", scope: { kind: "direct" }, retainedPartIds: ["already-confirmed-opaque"], signal: new AbortController().signal })).rejects.toThrow("slot missing")
 })
+
+it("preserves a final answer identity across pages and rejects same-version reference drift", async () => {
+  const client = createFakeClient()
+  client.nextParts = async args => ({ ...page([text(args.cursor ? { text: "a", offset: "1", end: "2" } : {})], args.cursor ? null : "next"), final_segment_id: "public-segment" })
+  const args = { client, sessionId: "s", messageId: "m", runId: "r", scope: { kind: "direct" as const }, signal: new AbortController().signal }
+  const read = await readMessageParts(args)
+  expect(read.final_segment_id).toBe("public-segment")
+  expect(read.items[0]).toMatchObject({ text: "😀a", completed: true })
+  client.nextParts = async request => ({ ...page([text(request.cursor ? { text: "a", offset: "1", end: "2" } : {})], request.cursor ? null : "next"), final_segment_id: request.cursor ? "different" : "public-segment" })
+  await expect(readMessageParts(args)).rejects.toThrow("version mismatch")
+  await expect(readMessageParts({ ...args, expected: { revision: "7", event_watermark: null } })).rejects.toThrow("snapshot binding mismatch")
+})

@@ -1,3 +1,4 @@
+import { finalAnswerPartsComplete } from "./completed-turn-sections"
 import type { AnswerActionBoundary } from "./answer-action-scope"
 import { answerActionTarget } from "./answer-action-target"
 import { Button } from "@/components/ui/button"
@@ -296,6 +297,9 @@ function ConversationThreadSurface({
                 <AssistantTurn
                   runId={item.runId}
                   terminal={thread.runTerminalsById?.[item.runId] !== undefined}
+                  succeeded={thread.runTerminalsById?.[item.runId] === "completed"}
+                  {...(thread.finalAnswersByRun?.[item.runId]?.segmentId ? { finalSegmentId: thread.finalAnswersByRun[item.runId]!.segmentId! } : {})}
+                  finalPartsComplete={finalAnswerPartsComplete(thread.finalAnswersByRun?.[item.runId], thread.messageParts, item.runId)}
                   {...(answerActionBoundary === undefined ? {} : { answerActionBoundary, answerActionTarget: answerActionTarget(thread, { actorId: answerActionBoundary.actorId, sessionId: answerActionBoundary.sessionId, scope: answerActionBoundary.scope, runId: item.runId }) })}
                   {...(brandName === undefined ? {} : { brandName })}
                   sessionId={sessionId}

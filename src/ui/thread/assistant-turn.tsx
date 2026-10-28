@@ -1,3 +1,5 @@
+import { TurnProcess } from "./turn-process"
+import { completedTurnSections } from "./completed-turn-sections"
 import { useRunDisplay } from "./use-run-display"
 import { overlayRunDisplay } from "./run-display-overlay"
 import type { AnswerActionBoundary } from "./answer-action-scope"
@@ -19,7 +21,7 @@ import { useT } from "@/i18n/context"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { CheckCircle2 } from "lucide-react"
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import type { ReactNode } from "react"
 
 import { MarkdownMessage } from "./markdown-message"
@@ -30,6 +32,9 @@ import styles from "./thread.module.css"
 type AssistantTurnProps = {
   answerActionBoundary?: AnswerActionBoundary
   runId?: string
+  finalSegmentId?: string
+  succeeded?: boolean
+  finalPartsComplete?: boolean
   terminal?: boolean
   answerActionTarget?: AnswerActionTarget | null
   parts?: readonly MessagePartsState[]
@@ -116,9 +121,14 @@ export function AssistantTurn({
   answerActionTarget,
   runId,
   terminal = false,
+  finalSegmentId,
+  succeeded = false,
+  finalPartsComplete = false,
   cancelled = false,
 }: AssistantTurnProps) {
   const t = useT()
+  const [contentFocused, setContentFocused] = useState(false)
+  const [processInspected, setProcessInspected] = useState(false)
   const hadInteraction = useRef(Boolean(interaction?.groups.length))
   useEffect(() => {
     const hasInteraction = Boolean(interaction?.groups.length)
@@ -135,6 +145,9 @@ export function AssistantTurn({
   const displayedActivities = overlayRunDisplay(activities, display.facts)
   const displayedSteps = steps.map(step => step.kind === "activity" ? { ...step, activity: overlayRunDisplay([step.activity], display.facts)[0]! } : step)
   const segments = groupSegments(displayedSteps, displayedActivities, messagesById)
+  const completedSections = !isLive && !hitlActive && !interaction?.groups.length
+    ? completedTurnSections({ runId: displayRunId, succeeded, partsComplete: finalPartsComplete, finalSegmentId, segments, messagesById }) : null
+  const sections = contentFocused ? null : completedSections
   const hasTurnProcess = segments.some((segment) => segment.activities.length > 0)
   // Public7 process activities have opaque safe segment identities that are
   // independent from message identities. Keep the newest process live, but
@@ -164,11 +177,65 @@ export function AssistantTurn({
   // Process-only turns have no answer placeholder either; retain the distinct
   // connection status here. Only the no-process/no-text path uses forming.
   const showReconnectStrip = reconnecting && (tailHasText || hasTurnProcess || (phaseLabel !== null && !showScaffold))
-  const answerText = segments
+  const answerText = (completedSections ? [completedSections.final] : segments)
     .map((segment) => messagesById[segment.segmentId]?.content ?? "")
     .filter(Boolean)
     .join("\n\n")
 
+
+  const renderSegment = (segment: (typeof segments)[number]) => {
+    const message = messagesById[segment.segmentId]
+    const hasText = Boolean(message) && (message?.content.length ?? 0) > 0
+    const liveAnswerSegment = isLive && segment.segmentId === answerTailId
+    const liveProcessSegment = isLive && segment.segmentId === processTailId
+    const showCaret = liveAnswerSegment && hasText
+    const hasProcess = segment.activities.length > 0
+    // A real process or explicit phase already owns progress. Completed
+    // tools waiting for an answer do not need a second wait line either.
+    const forming = isLive && !tailHasText && liveProcessSegment && !hasText && !hasTurnProcess && phaseLabel === null
+    // 既无气泡又无过程的空段不渲染：避免落定空正文段留一个占位 segment（多段时多撑一个 gap 槽）。
+    if (!hasText && !forming && !hasProcess) {
+      return null
+    }
+    return (
+      <div className={styles.turnSegment} key={segment.segmentId}>
+        {/* 段内贯穿 forming→streaming→settled 三态：复用同一 answer 元素、同一盒模型，
+            data-state 只切换盒内内容（成形线索 ↔ 正文），首 token 不跳换整盒。 */}
+        {hasText || forming ? (
+          <div
+            className={cn(styles.bubble, styles.turnAnswer)}
+            data-state={hasText ? (liveAnswerSegment ? "streaming" : "settled") : "forming"}
+            data-anchor={forming && reconnecting ? "reconnecting" : undefined}
+          >
+            {hasText ? (
+              <>
+                <MarkdownMessage content={message?.content ?? ""} />
+                {/* 正在出字的就近线索：紧跟正文的内联闪烁光标，对读屏隐藏；落定即消失。 */}
+                {showCaret ? <span className={styles.caret} aria-hidden /> : null}
+              </>
+            ) : (
+              <FormingContent
+                label={formingLabel}
+                reconnecting={reconnecting}
+                waitingForDecision={hitlActive}
+              />
+            )}
+          </div>
+        ) : null}
+        <SegmentProcess
+          {...(answerActionBoundary && displayRunId ? { onVisible: display.ensureRead } : {})}
+          segmentId={segment.segmentId}
+          {...(display.facts ? { activityDetails: display.facts.activity_details } : {})}
+          {...(onOpenActivity ? { onOpenActivity: (activityId: string) => { setProcessInspected(true); display.inspect(); onOpenActivity(activityId) } } : {})}
+          {...(answerActionBoundary && displayRunId && display.facts === null ? { onInspect: display.inspect } : {})}
+          activities={segment.activities}
+          live={liveProcessSegment}
+          continueProcessing={liveProcessSegment && !tailHasText && phaseLabel === null && !reconnecting && !hitlActive}
+          {...(mode === undefined ? {} : { mode })}
+        />
+      </div>
+    )
+  }
 
   // 流式内容位于 conversation 的 polite live region 内。保持增量播报，
   // atomic=true 会在每个 token 到达时重复朗读整轮长答案。
@@ -221,59 +288,10 @@ export function AssistantTurn({
             </div>
           </div>
         ) : null}
-        {segments.map((segment) => {
-          const message = messagesById[segment.segmentId]
-          const hasText = Boolean(message) && (message?.content.length ?? 0) > 0
-          const liveAnswerSegment = isLive && segment.segmentId === answerTailId
-          const liveProcessSegment = isLive && segment.segmentId === processTailId
-          const showCaret = liveAnswerSegment && hasText
-          const hasProcess = segment.activities.length > 0
-          // A real process or explicit phase already owns progress. Completed
-          // tools waiting for an answer do not need a second wait line either.
-          const forming = isLive && !tailHasText && liveProcessSegment && !hasText && !hasTurnProcess && phaseLabel === null
-          // 既无气泡又无过程的空段不渲染：避免落定空正文段留一个占位 segment（多段时多撑一个 gap 槽）。
-          if (!hasText && !forming && !hasProcess) {
-            return null
-          }
-          return (
-            <div className={styles.turnSegment} key={segment.segmentId}>
-              {/* 段内贯穿 forming→streaming→settled 三态：复用同一 answer 元素、同一盒模型，
-                  data-state 只切换盒内内容（成形线索 ↔ 正文），首 token 不跳换整盒。 */}
-              {hasText || forming ? (
-                <div
-                  className={cn(styles.bubble, styles.turnAnswer)}
-                  data-state={hasText ? (liveAnswerSegment ? "streaming" : "settled") : "forming"}
-                  data-anchor={forming && reconnecting ? "reconnecting" : undefined}
-                >
-                  {hasText ? (
-                    <>
-                      <MarkdownMessage content={message?.content ?? ""} />
-                      {/* 正在出字的就近线索：紧跟正文的内联闪烁光标，对读屏隐藏；落定即消失。 */}
-                      {showCaret ? <span className={styles.caret} aria-hidden /> : null}
-                    </>
-                  ) : (
-                    <FormingContent
-                      label={formingLabel}
-                      reconnecting={reconnecting}
-                      waitingForDecision={hitlActive}
-                    />
-                  )}
-                </div>
-              ) : null}
-              <SegmentProcess
-                {...(answerActionBoundary && displayRunId ? { onVisible: display.ensureRead } : {})}
-                segmentId={segment.segmentId}
-                {...(display.facts ? { activityDetails: display.facts.activity_details } : {})}
-                {...(onOpenActivity ? { onOpenActivity: (activityId: string) => { display.inspect(); onOpenActivity(activityId) } } : {})}
-                {...(answerActionBoundary && displayRunId && display.facts === null ? { onInspect: display.inspect } : {})}
-                activities={segment.activities}
-                live={liveProcessSegment}
-                continueProcessing={liveProcessSegment && !tailHasText && phaseLabel === null && !reconnecting && !hitlActive}
-                {...(mode === undefined ? {} : { mode })}
-              />
-            </div>
-          )
-        })}
+        {segments.length > 0 ? <TurnProcess enabled={sections !== null} inspected={processInspected} onContentFocusChange={focused => setContentFocused(focused && sections === null)}>
+          {(sections?.process ?? segments).map(renderSegment)}
+        </TurnProcess> : null}
+        {sections ? renderSegment(sections.final) : null}
         {interaction?.groups.map((group) => <div key={group.group_id} data-interaction-group={group.group_id}>
           {group.items.map((item) => {
             const Card = item.kind === "tool_approval" ? ApprovalCard : item.kind === "ask_user_question" ? AskUserCard : item.kind === "result_review" ? ReviewCard : InputCard

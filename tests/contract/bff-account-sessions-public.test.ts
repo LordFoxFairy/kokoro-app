@@ -8,7 +8,7 @@ import * as sdk from "@/generated/bff-account-sessions/sdk.gen"
 import { accountSessionsSchema, accountSessionRevokeSchema } from "@/lib/account-sessions.schema"
 it("pins the complete formal public15.2 artifact with 145 operations and exactly two narrow SDK exports", async () => {
   const bytes = await readFile(resolve(process.cwd(), "src/generated/bff-public-openapi.yaml"))
-  expect(createHash("sha256").update(bytes).digest("hex")).toBe("30b288a7f719ec1d5a6f85c70ad80f18bbbce614fbdad1412d1ff3de7a0b2f9c")
+  expect(createHash("sha256").update(bytes).digest("hex")).toBe("921be666a3bd570eb984503528d9ee713e3739cc8525e2e1c2f46c96fa161a05")
   const spec = YAML.parse(restorePublic26MessagePartsContract(bytes.toString()))
   expect(spec.info.version).toBe("26.0.0")
   expect(Object.values(spec.paths).flatMap((path) => Object.keys(path as object).filter((key) => ["get", "post", "put", "delete", "patch", "head", "options"].includes(key)))).toHaveLength(186)

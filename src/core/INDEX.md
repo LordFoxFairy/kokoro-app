@@ -1,3 +1,5 @@
+2026-10-28 最终答复引用沿原AG-UI/快照/parts读取链消费：仅exact Run与公共revision可建立分层事实；旧版本、跨页不一致和未完整正文不替代新事实。无新读取通道，正常配对状态见CURRENT。
+
 HMR RAM：页面Engine可沿用旧thread；纯normalizer仅将旧cancelledRuns中已确认true迁为cancelled并退休旧字段。新读容忍缺map，写入口一次规范后幂等；不由textState/runStatus补成功，不改消息/草稿或持久状态。
 
 取消投影：只有真实 run.completed(cancelled) 或私有 MessageRead 显式 terminal_status=cancelled 进入唯一 exact runTerminalsById（completed/cancelled/failed），不与cancelmap并存；真实Run完成/失败与可信snapshot status写该索引；TEXT_END不写。失败空正文／无profile不推断取消，本地 markRunCancelled 只收工具，不造远端终态。取消不改变文字／ordered parts完整性。

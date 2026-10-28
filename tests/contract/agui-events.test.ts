@@ -382,3 +382,9 @@ it("preserves exact optional per-call intent in the original AG-UI activity, rej
   for (const action_title of [null, "", " trailing ", "😀".repeat(64)+"x", "line\nnext", "hidden\u200b", "\ud800", "token: value", "https://example.test?a=1&token=private"]) expect(() => parseAgUiEvent(event(action_title))).toThrow()
   expect(parseAgUiEvent({ ...event("a"), value: activity })).toMatchObject({ value: activity })
 })
+
+it("accepts final identity only as closed successful RUN_FINISHED evidence", () => {
+  const event = { type: "RUN_FINISHED", timestamp: 1, threadId: "session-1", runId: "run-1", metadata, status: "completed", result: { final_segment_id: "answer" } }
+  expect(parseAgUiEvent(event)).toMatchObject({ result: { final_segment_id: "answer" } })
+  for (const patch of [{ status: "cancelled" }, { outcome: { type: "interrupt", interrupts: [] } }, { result: { final_segment_id: "" } }, { result: { final_segment_id: null } }, { result: { final_segment_id: "answer", extra: true } }]) expect(() => parseAgUiEvent({ ...event, ...patch })).toThrow()
+})

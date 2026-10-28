@@ -1,3 +1,4 @@
+import { mergeFinalAnswerReference } from "./final-answer-reference"
 // 事件折叠：event_id 幂等去重 + 批量折叠（可变草稿一次快照）+ never 穷尽守卫。
 
 import { assertInteractionRevision, createSessionStreamState, normalizeRunTerminals } from "./state"
@@ -290,6 +291,11 @@ function applyRunTerminal(
     ...draft.state.runTerminalsById,
     [event.run_id]: event.kind === "run.completed" ? event.payload.status : "failed",
   }
+  if ("publicSequence" in event && event.publicSequence !== undefined) {
+    draft.state.finalAnswersByRun = { ...draft.state.finalAnswersByRun, [event.run_id]: mergeFinalAnswerReference(draft.state.finalAnswersByRun?.[event.run_id], {
+      revision: event.publicSequence, segmentId: event.kind === "run.completed" && !cancelled ? event.payload.final_segment_id ?? null : null,
+    }) }
+  }
   const failed = event.kind !== "run.completed"
   const closed = closeOpenTools(steps, () => cancelled ? "cancelled" : failed ? "error" : "stale-running")
   if (closed) {
@@ -524,6 +530,7 @@ export function applyChatProjectionEvents(
           runStatus: state.runStatus,
           runFailuresById: state.runFailuresById,
           runTerminalsById: state.runTerminalsById,
+          finalAnswersByRun: state.finalAnswersByRun ?? {},
           unattributedFailure: state.unattributedFailure,
           activeRunId: state.activeRunId,
           executionHead: state.executionHead,
@@ -592,7 +599,7 @@ export function markRunCancelled(
 // Exact public positions, not opaque transport cursor order. Baseline replacement
 // is restricted to this owner Message; post-revision public events win by replay.
 export function mergeMessageParts(state: SessionStreamState, read: {
-  message_id: string; run_id: string; revision: string; items: readonly MessagePart[];
+  message_id: string; run_id: string; revision: string; final_segment_id?: string | undefined; items: readonly MessagePart[];
 }, events: readonly ChatProjectionEvent[], complete: boolean): SessionStreamState {
   state = normalizeRunTerminals(state)
   const known = state.messageParts?.[read.message_id]
@@ -639,8 +646,11 @@ export function mergeMessageParts(state: SessionStreamState, read: {
   const start = state.messages.findIndex((item) => item.runId === read.run_id && item.role === "assistant")
   const other = state.messages.filter((item) => item.runId !== read.run_id || item.role !== "assistant")
   other.splice(start < 0 ? other.length : Math.min(start, other.length), 0, ...messages)
-  return { ...state, messages: other, stepsByRun: { ...state.stepsByRun, [read.run_id]: steps },
-    messageParts: { ...state.messageParts, [read.message_id]: { ...known, descriptor: true, confirmedSlots, partIds: [...new Set([...(known.partIds ?? []), ...read.items.map((part) => part.part_id)])], ...(complete ? { confirmedRevision: read.revision } : {}), revision: read.revision, status: complete ? "complete" : "partial" } } }
+  const knownVersion = { ...known }
+  delete knownVersion.finalSegmentId
+  const finalReference = mergeFinalAnswerReference(state.finalAnswersByRun?.[read.run_id], { segmentId: read.final_segment_id ?? null, revision: read.revision })
+  return { ...state, finalAnswersByRun: { ...state.finalAnswersByRun, [read.run_id]: finalReference }, messages: other, stepsByRun: { ...state.stepsByRun, [read.run_id]: steps },
+    messageParts: { ...state.messageParts, [read.message_id]: { ...knownVersion, ...(read.final_segment_id === undefined ? {} : { finalSegmentId: read.final_segment_id }), descriptor: true, confirmedSlots, partIds: [...new Set([...(known.partIds ?? []), ...read.items.map((part) => part.part_id)])], ...(complete ? { confirmedRevision: read.revision } : {}), revision: read.revision, status: complete ? "complete" : "partial" } } }
 }
 
 // A fresh private snapshot may omit all inline text. Keep confirmed visible
@@ -649,6 +659,9 @@ export function preserveMessageParts(previous: SessionStreamState, next: Session
   previous = normalizeRunTerminals(previous)
   next = normalizeRunTerminals(next)
   let result = next
+  for (const [runId, reference] of Object.entries(next.finalAnswersByRun ?? {})) {
+    result = { ...result, finalAnswersByRun: { ...result.finalAnswersByRun, [runId]: mergeFinalAnswerReference(previous.finalAnswersByRun?.[runId], reference) } }
+  }
   for (const value of Object.values(next.messageParts ?? {})) {
     const prior = previous.messageParts?.[value.messageId]
     if (!prior || prior.runId !== value.runId) continue
@@ -656,8 +669,14 @@ export function preserveMessageParts(previous: SessionStreamState, next: Session
     const markerIndex = result.messages.findIndex((message) => message.snapshotMessageId === value.messageId)
     const messages = [...result.messages]
     messages.splice(markerIndex + 1, 0, ...old)
-    result = { ...result, messages,
-      messageParts: { ...result.messageParts, [value.messageId]: { ...prior, ...value,
+    const retained = { ...prior }
+    delete retained.cursor
+    delete retained.watermark
+    delete retained.finalSegmentId
+    const newest = BigInt(value.revision) < BigInt(prior.revision) ? prior : value
+    const finalReference = mergeFinalAnswerReference(previous.finalAnswersByRun?.[value.runId], { segmentId: value.finalSegmentId ?? null, revision: value.revision })
+    result = { ...result, messages, finalAnswersByRun: { ...result.finalAnswersByRun, [value.runId]: finalReference },
+      messageParts: { ...result.messageParts, [value.messageId]: { ...retained, ...newest,
         revision: BigInt(value.revision) < BigInt(prior.revision) ? prior.revision : value.revision,
         ...(prior.confirmedRevision === undefined ? {} : { confirmedRevision: prior.confirmedRevision }),
         ...(prior.confirmedSlots === undefined ? {} : { confirmedSlots: prior.confirmedSlots }),

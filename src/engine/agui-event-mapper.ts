@@ -260,6 +260,7 @@ export class AgUiEventMapper {
         const outputTokens = usage?.outputTokens
         const projectionEvent = projectionEnvelope(cursor, event, "run.completed", {
           status: cancelled ? "cancelled" : "completed",
+          ...(!cancelled && event.result && "final_segment_id" in event.result ? { final_segment_id: event.result.final_segment_id } : {}),
           token_usage:
             typeof inputTokens === "number" && typeof outputTokens === "number"
               ? { input_tokens: inputTokens, output_tokens: outputTokens }

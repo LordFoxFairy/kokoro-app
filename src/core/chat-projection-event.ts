@@ -196,10 +196,11 @@ const subagentToolReturnedPayload = z
 const runCompletedPayload = z
   .object({
     status: z.enum(["completed", "cancelled"]),
+    final_segment_id: z.string().min(1).optional(),
     // agent 认真算的用量全链路贯通；无用量时为 null。
     token_usage: tokenUsageSchema.nullable().optional(),
   })
-  .strict()
+  .strict().refine(payload => payload.final_segment_id === undefined || payload.status === "completed")
 
 const runFailedPayload = z
   .object({

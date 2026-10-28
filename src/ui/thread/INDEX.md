@@ -1,3 +1,5 @@
+2026-10-28 整轮过程：`completed-turn-sections.ts`只按正式 final 引用与完整正文划分；`turn-process.tsx`拥有整轮披露与可访问隐藏，原相邻动作组及正文顺序保持。未取得 final、partial、在途、HITL、取消/失败继续原可读布局；最终答复和状态反馈在披露外。参考入口实测14px/20px、4px gap、16px chevron，未有可靠耗时不造时长。正常激活和同任务浏览器验收仍待。
+
 2026-10-28 历史fallback：ToolCallRow与ActivityInspector共用简短操作+同次对象，删除MCP裸selector特判；有action_title保持原文优先。真实失败/顺序/详情不变，无推断历史意图。
 
 2026-10-28 行动标题节奏：ToolCallRow公开标题采用单行视觉省略，完整名称与exact详情仍可键盘访问；仅原始文件路径保换行。局部activity-detail样式统一图标居中、hover仅文字强调，保focus/coarse触达，不改变Skill、事件或分组。

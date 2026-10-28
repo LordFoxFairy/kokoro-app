@@ -1,3 +1,5 @@
+2026-10-28 最终答复引用沿原AG-UI/快照/parts读取链消费：仅exact Run与公共revision可建立分层事实；旧版本、跨页不一致和未完整正文不替代新事实。无新读取通道，正常配对状态见CURRENT。
+
 具名回答再生成：regenerateAnswer接正式ACK／exact source，不经submit或human ID对账；late ACK保head/cursor/普通followup，良性历史parts变化经一次原bounded snapshot发现accepted。page-clients注入独立answer-actions-client；缺新方法的旧HMR实例不伪装可用。
 
 取消恢复：202不结束Run；同页未知取消保存原commandId/run.cancel，显式重试复用它。每次响应后仅一次现snapshot读取，exact session/run/代际及cursor守卫通过且owner真终态才接管；SSE保持，真实取消后可重新读原有bounded parts，不建poller。

@@ -47,7 +47,7 @@ export type MessagePartsReadRecheck = (signal: AbortSignal) => Promise<boolean>
 export async function readMessageParts(args: {
   client: SessionClient; sessionId: string; messageId: string; runId: string; scope: SessionScope;
   recoverUnauthorized?: MessagePartsReadRecheck;
-  cursor?: string; retainedPartIds?: readonly string[]; minimumRevision?: string; expected?: { revision: string; event_watermark: MessagePartsPage["event_watermark"] }; signal: AbortSignal; onProgress?: (read: MessagePartsRead) => void;
+  cursor?: string; retainedPartIds?: readonly string[]; minimumRevision?: string; expected?: { final_segment_id?: string; revision: string; event_watermark: MessagePartsPage["event_watermark"] }; signal: AbortSignal; onProgress?: (read: MessagePartsRead) => void;
 }): Promise<MessagePartsRead> {
   const controller = new AbortController()
   const abort = () => controller.abort()
@@ -82,11 +82,11 @@ export async function readMessageParts(args: {
         }
         const page = messagePartsPageSchema.parse(response)
         if (args.minimumRevision !== undefined && BigInt(page.revision) < BigInt(args.minimumRevision)) throw new SessionClientError("parse", "Message parts revision regressed")
-        if (args.expected && (page.revision !== args.expected.revision || page.event_watermark !== args.expected.event_watermark)) throw new SessionClientError("parse", "Message parts snapshot binding mismatch")
+        if (args.expected && (page.revision !== args.expected.revision || page.event_watermark !== args.expected.event_watermark || page.final_segment_id !== args.expected.final_segment_id)) throw new SessionClientError("parse", "Message parts snapshot binding mismatch")
         if (page.items.length > 16) throw new SessionClientError("parse", "Message parts page exceeds requested limit")
         if (page.session_id !== args.sessionId || page.message_id !== args.messageId || page.run_id !== args.runId) throw new SessionClientError("parse", "Message parts owner mismatch")
-        if (baseline && (page.revision !== baseline.revision || page.event_watermark !== baseline.event_watermark)) throw new SessionClientError("parse", "Message parts version mismatch")
-        baseline ??= { session_id: page.session_id, message_id: page.message_id, run_id: page.run_id, format_version: page.format_version, revision: page.revision, event_watermark: page.event_watermark, items: [] }
+        if (baseline && (page.revision !== baseline.revision || page.event_watermark !== baseline.event_watermark || page.final_segment_id !== baseline.final_segment_id)) throw new SessionClientError("parse", "Message parts version mismatch")
+        baseline ??= { ...(page.final_segment_id === undefined ? {} : { final_segment_id: page.final_segment_id }), session_id: page.session_id, message_id: page.message_id, run_id: page.run_id, format_version: page.format_version, revision: page.revision, event_watermark: page.event_watermark, items: [] }
         if (page.items.length === 0 && page.next_cursor !== null) throw new SessionClientError("parse", "Empty message parts continuation")
         for (const part of page.items) {
           const previous = slots.get(part.part_id)

@@ -1,3 +1,7 @@
+## 整轮过程／最终答复分层（2026-10-28，既定设计消费）
+
+以已实测 Manus 整轮收起／展开为基线。App 仅消费 BFF15cc9e1／Public28.14 的成功终态 final_segment_id，live用publicSequence、snapshot/page用revision绑定 exact Run，旧版本不覆盖新事实、同版本矛盾拒绝。正文完整且本版本parts读完后，既有AssistantTurn提取整轮披露组件：过程内部原顺序，最终答复独立一次。无引用、partial、失败、取消和HITL不猜末段、不折走内容。沿原reader generation/scope/abort；不新增服务、表、协议或请求。取消/失败/parts反馈及回答动作保持披露外；焦点在过程内时不自动隐藏。无可信耗时不编造时间。
+
 ## 历史动作的操作与对象（2026-10-28 后继）
 
 缺少同次公开action_title的记录继续保持真实身份，不把工具名当自然语言意图。共用presentation的MCP操作简化为“列出可用工具／查看工具说明／调用工具”，调用行与Canvas都保操作+原对象，删除仅显示selector的targetOnly特判。新action_title仍最高优先级；无对象只显示操作，不由参数、结果或能力文档推断目的。保持原顺序、独立失败、单层披露、exact详情、文件路径与键盘行为，不更改网络/数据/执行。

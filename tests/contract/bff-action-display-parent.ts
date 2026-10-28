@@ -1,3 +1,4 @@
+import { restorePublic2813FinalAnswerContract } from "./bff-final-answer-parent"
 // Test-only exact formal Public28.13 -> Public28.12 inverse. Never runtime.
 import { createHash } from "node:crypto"
 const hash = (value: string) => createHash("sha256").update(value).digest("hex")
@@ -9,6 +10,7 @@ const capabilityPublicDelta =
 const capabilityConditionPublicDelta =
   "            allOf:\n            - if:\n                required:\n                - tool_description\n              then:\n                required:\n                - target\n                properties:\n                  tool_name:\n                    enum:\n                    - mcp_call\n                    - mcp_describe_tool\n                  target:\n                    properties:\n                      kind:\n                        const: mcp_tool\n"
 export function restorePublic2812ActionDisplayContract(source: string): string {
+  source = restorePublic2813FinalAnswerContract(source)
   if (!/^  version: 28\.13\.0$/mu.test(source)) return source
   if (hash(source) !== actionDisplayCurrentSha256) throw Error("Action display complete Public28.13 child drift")
   const parent = source

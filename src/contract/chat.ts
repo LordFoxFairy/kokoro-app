@@ -74,6 +74,7 @@ const scalarTextSchema = z.string().refine((value) => Array.from(value).length <
 export const orderedMessageRenderingSchema = z.object({
   mode: z.literal("ordered"), format_version: z.literal(1), revision: messagePartsDecimalSchema,
   event_watermark: eventCursorSchema.nullable(), parts_cursor: z.string().min(1),
+  final_segment_id: z.string().min(1).optional(),
 }).strict()
 const privateInlineMessageReadSchema = messageRecordSchema.innerType().extend({
   terminal_status: z.literal(BFF_PRIVATE_CANCELLED_STATUS).optional(),
@@ -96,7 +97,8 @@ export const orderedAssistantMessageReadSchema = z.object({
   regenerated_from_message_id:z.string().min(1).max(256).optional(),
   selected_skill_source_refs: selectedSkillSourceRefsSchema.optional(), rendering: orderedMessageRenderingSchema,
 }).strict().refine((message) => (message.failure === undefined || message.status === "failed") &&
-  (message.terminal_status === undefined || (message.status === "failed" && message.failure === undefined && message.run_id.trim().length > 0)))
+  (message.terminal_status === undefined || (message.status === "failed" && message.failure === undefined && message.run_id.trim().length > 0)) &&
+  (message.rendering.final_segment_id === undefined || message.status === "completed"))
 export const chatMessageReadSchema = z.union([privateInlineMessageReadSchema, orderedAssistantMessageReadSchema])
 export type ChatMessageRead = z.infer<typeof chatMessageReadSchema>
 const messagePartPosition = { part_id: z.string().min(1), first_sequence: positivePartsDecimalSchema, latest_sequence: positivePartsDecimalSchema }
@@ -111,6 +113,7 @@ export type MessagePart = z.infer<typeof messagePartSchema>
 export type MessageTextPartSlice = z.infer<typeof messageTextPartSliceSchema>
 export const messagePartsPageSchema = z.object({
   session_id: z.string().min(1), message_id: z.string().min(1), run_id: z.string().min(1), format_version: z.literal(1),
+  final_segment_id: z.string().min(1).optional(),
   revision: messagePartsDecimalSchema, event_watermark: eventCursorSchema.nullable(), items: z.array(messagePartSchema).max(32), next_cursor: z.string().min(1).nullable(),
 }).strict().superRefine((page, context) => {
   let previous = BigInt(0)

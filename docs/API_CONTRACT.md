@@ -1,3 +1,7 @@
+## Public28.14 最终段消费
+
+固定 BFF15cc9e1bd50128db7d16e0cf3916c6ab4d037149，完整原件SHA256 921be666a3bd570eb984503528d9ee713e3739cc8525e2e1c2f46c96fa161a05。只有成功RUN_FINISHED.result与私有ordered rendering/page可带非空final_segment_id；字段缺席表示未知。引用不授予工具权限，不扩大Share、命令或路由。严格同页版本/水位/引用与原页面预算；完整逆回28.13原件后保留旧证明。
+
 ## 2026-10-28 Public28.13 动作意图消费者（未激活）
 
 固定正式BFF83978e7340357a25e64aa98d12c9bb34c07ad3a4，完整原件SHA30b288a7f719ec1d5a6f85c70ad80f18bbbce614fbdad1412d1ff3de7a0b2f9c。原窄生成器更新，私有独立发行不改；test-only完整28.13→28.12逆差再接全部既有父图，不作运行fallback。action_title仅tool可选，严格256 UTF-8字节/无首尾空白/控制格式代理字符或明确私密内容；tool_description仅exact MCP target的两个具名工具，1024字节原previewflags。Share仍process=null。沿现AG-UI/parts/read同源调用，无新增endpoint或身份。
