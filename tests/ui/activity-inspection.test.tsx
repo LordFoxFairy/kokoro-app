@@ -9,7 +9,7 @@ const activity = { activity: "tool" as const, activity_id: "a", segment_id: "seg
 afterEach(() => { cleanup(); resetCanvasStore() })
 it("uses one quiet process disclosure rather than a category and count wall", () => {
   render(<LocaleProvider><SegmentProcess segmentId="new-summary" activities={[activity, { ...activity, activity_id: "b" }]} live={false} /></LocaleProvider>)
-  expect(screen.getByRole("button", { name: "Process" })).toHaveAttribute("aria-expanded", "false")
+  expect(screen.getByRole("button", { name: "Tool calls: 2" })).toHaveAttribute("aria-expanded", "false")
   expect(screen.queryByText(/2 calls/)).toBeNull()
 })
 it("opens the exact action from a keyboard-focusable target without treating its name as a URL", () => {
@@ -93,4 +93,10 @@ it("a single Canvas action has exactly one operation entry while callers without
   expect(screen.getAllByRole("button")).toHaveLength(1)
   fireEvent.click(screen.getByRole("button"))
   expect(onInspect).toHaveBeenCalledTimes(1)
+})
+
+it("keeps the action verb visible beside a target instead of using a bare function name", () => {
+  render(<LocaleProvider><ToolCallRow activity={activity} /></LocaleProvider>)
+  expect(screen.getByText("Call MCP tool")).not.toHaveClass("sr-only")
+  expect(screen.getByText("ask_wiki_question")).toBeVisible()
 })

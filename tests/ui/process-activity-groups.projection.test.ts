@@ -1,10 +1,14 @@
 import { expect, it } from "vitest"
 import type { RunProcessActivity } from "@/contract/chat"
-import { groupProcessActivities } from "@/ui/thread/process-activity-groups"
+import { summarizeProcessActivities } from "@/ui/thread/process-summary"
 const tool = (id: string, code: "tool.mcp.discover" | "tool.mcp.describe" | "tool.mcp.call" | "tool.file.read"): RunProcessActivity => ({ activity: "tool", activity_id: id, segment_id: "segment", display_code: code, status: "completed" })
-it("groups only adjacent preparation, preserving every execution and unrelated activity boundary", () => {
-  const input = [tool("a", "tool.mcp.discover"), tool("b", "tool.mcp.describe"), tool("call", "tool.mcp.call"), tool("c", "tool.mcp.describe"), tool("file", "tool.file.read"), tool("d", "tool.mcp.describe")]
-  const groups = groupProcessActivities(input)
-  expect(groups.map((group) => group.kind === "preparation" ? group.activities.map((activity) => activity.activity_id) : group.activity.activity_id)).toEqual([["a", "b"], "call", ["c"], "file", ["d"]])
-  expect(groups.flatMap((group) => group.kind === "preparation" ? group.activities : [group.activity])).toEqual(input)
+it("counts attempts rather than claiming successes or unique resources, without mutating history", () => {
+ const input = [tool("a", "tool.mcp.discover"), tool("b", "tool.mcp.describe"), { ...tool("c", "tool.mcp.call"), status: "failed" as const }, tool("d", "tool.file.read"), tool("e", "tool.mcp.call")]
+ const before = structuredClone(input)
+ expect(summarizeProcessActivities(input)).toEqual([{ key: "thread.summaryCalls", count: 2 }, { key: "thread.summaryReads", count: 1 }])
+ expect(input).toEqual(before)
+})
+it("retains a truthful summary when only tool preparation exists", () => {
+ expect(summarizeProcessActivities([tool("a", "tool.mcp.describe"), tool("b", "tool.mcp.discover")])).toEqual([{ key: "thread.summaryToolInfo", count: 2 }])
+ expect(summarizeProcessActivities([])).toEqual([])
 })

@@ -1,5 +1,5 @@
-import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react"
-import { afterEach, expect, it } from "vitest"
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
+import { afterEach, expect, it, vi } from "vitest"
 import type { RunProcessActivity } from "@/contract/chat"
 import { LocaleProvider } from "@/i18n/context"
 import { AssistantTurn } from "@/ui/thread/assistant-turn"
@@ -7,57 +7,64 @@ import { SegmentProcess } from "@/ui/thread/segment-process"
 afterEach(cleanup)
 const tool = (id: string, code: "tool.mcp.discover" | "tool.mcp.describe" | "tool.mcp.call" | "tool.file.read"): RunProcessActivity => ({ activity: "tool", activity_id: id, segment_id: "segment", display_code: code, status: "completed" })
 
-it("keeps preparation collapsed by default during live work, exposes original rows and counts real activities", () => {
-  const activities = [tool("a", "tool.mcp.discover"), ...Array.from({ length: 9 }, (_, index) => tool(`description-${index}`, "tool.mcp.describe")), tool("call", "tool.mcp.call")]
-  const { container } = render(<LocaleProvider><SegmentProcess segmentId="prep-live" activities={activities} live /></LocaleProvider>)
-  const prep = screen.getByRole("button", { name: /Tool preparation/u })
-  expect(prep).toHaveAttribute("aria-expanded", "false")
-  const content = container.querySelector('[data-preparation-group] [data-slot="collapsible-content"]')!
-  expect(content).toHaveAttribute("aria-hidden", "true")
-  expect(content.querySelector("[inert]")).not.toBeNull()
-  expect(container.querySelector('[data-preparation-group]')).toHaveTextContent("Discover MCP tools")
-  expect(screen.getByText("Call MCP tool")).toBeInTheDocument()
-  const summary = screen.getAllByRole("button").find((button) => button !== prep)!
-  expect(summary).toHaveTextContent("Process")
-  expect(summary).not.toHaveTextContent("11 calls")
-  act(() => prep.focus())
-  expect(prep).toHaveFocus()
-  expect(prep).toHaveAttribute("type", "button")
-  fireEvent.click(prep)
-  expect(prep).toHaveAttribute("aria-expanded", "true")
-  expect(content).toHaveAttribute("aria-hidden", "false")
-  expect(document.getElementById(prep.getAttribute("aria-controls")!)).toBe(content)
+it("uses one disclosure for a mixed activity passage and keeps every operation in original order", () => {
+  const inspect = vi.fn()
+  const activities = [tool("a", "tool.mcp.discover"), tool("b", "tool.mcp.describe"), tool("c", "tool.mcp.call"), tool("d", "tool.file.read"), tool("e", "tool.mcp.describe")]
+  const { container } = render(<LocaleProvider><SegmentProcess segmentId="mixed-flat" activities={activities} live onOpenActivity={inspect} /></LocaleProvider>)
+  const toggles = screen.getAllByRole("button").filter(button => button.hasAttribute("aria-expanded"))
+  expect(toggles).toHaveLength(1)
+  expect(toggles[0]).toHaveTextContent("Tool calls: 1 · File reads: 1")
+  expect(screen.queryByText("Tool preparation")).toBeNull()
+  const rows = [...container.querySelectorAll<HTMLButtonElement>("button[data-canvas-opener]")]
+  rows.forEach(button => fireEvent.click(button))
+  expect(inspect.mock.calls.map(([id]) => id)).toEqual(["a", "b", "c", "d", "e"])
+  act(() => toggles[0]!.focus())
+  expect(toggles[0]).toHaveFocus()
+  fireEvent.click(toggles[0]!)
+  expect(toggles[0]).toHaveAttribute("aria-expanded", "false")
+  expect(container.querySelector("[inert]")).not.toBeNull()
 })
-it("preserves the same preparation rows, disclosure and one continuation across live updates", () => {
+it("keeps mounted operation identity and one continuation as live work grows", () => {
   const one = tool("a", "tool.mcp.discover"), two = tool("b", "tool.mcp.describe")
-  const { rerender } = render(<LocaleProvider><SegmentProcess segmentId="prep-update" activities={[one]} live continueProcessing /></LocaleProvider>)
-  const button = screen.getByRole("button", { name: /Tool preparation/u })
-  expect(screen.getAllByText("Continuing…")).toHaveLength(1)
-  fireEvent.click(button)
+  const { rerender } = render(<LocaleProvider><SegmentProcess segmentId="flat-update" activities={[one]} live continueProcessing /></LocaleProvider>)
   const row = screen.getByText("Discover MCP tools")
-  rerender(<LocaleProvider><SegmentProcess segmentId="prep-update" activities={[one, two]} live continueProcessing /></LocaleProvider>)
-  expect(screen.getByRole("button", { name: /Tool preparation/u })).toBe(button)
-  expect(button).toHaveAttribute("aria-expanded", "true")
+  expect(screen.getAllByText("Continuing…")).toHaveLength(1)
+  rerender(<LocaleProvider><SegmentProcess segmentId="flat-update" activities={[one, two]} live continueProcessing /></LocaleProvider>)
   expect(screen.getByText("Discover MCP tools")).toBe(row)
   expect(screen.getAllByText("Continuing…")).toHaveLength(1)
-  expect(within(document.getElementById(button.getAttribute("aria-controls")!)!).getAllByText(/^(Discover MCP tools|Describe MCP tool)$/u)).toHaveLength(2)
+  const disclosure = screen.getByRole("button", { name: /Tool information: 2/u })
+  fireEvent.click(disclosure)
+  rerender(<LocaleProvider><SegmentProcess segmentId="flat-update" activities={[one, two, tool("c", "tool.mcp.call")]} live continueProcessing /></LocaleProvider>)
+  expect(disclosure).toHaveAttribute("aria-expanded", "false")
 })
-
-it("does not group preparation across a real public text segment", () => {
+it("keeps actual public text between separate activity passages", () => {
   const first = tool("text-a", "tool.mcp.discover"), second = tool("text-b", "tool.mcp.describe")
   const steps = [{ kind: "activity" as const, seq: 1, segmentId: "prep-a", activity: first }, { kind: "text" as const, seq: 2, segmentId: "answer" }, { kind: "activity" as const, seq: 3, segmentId: "prep-b", activity: second }]
   render(<LocaleProvider><AssistantTurn sessionId="text-boundary" steps={steps} messagesById={{ answer: { id: "answer", role: "assistant", runId: "run", content: "real text between preparations" } }} isLive stagedDecisions={{}} hitlActive={false} controlError={null} /></LocaleProvider>)
-  expect(screen.getAllByRole("button", { name: /Tool preparation/u })).toHaveLength(2)
-  expect(screen.getByText("real text between preparations")).toBeInTheDocument()
+  const firstRow = screen.getByText("Discover MCP tools"), text = screen.getByText("real text between preparations"), secondRow = screen.getByText("Describe MCP tool")
+  expect(firstRow.compareDocumentPosition(text) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  expect(text.compareDocumentPosition(secondRow) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
 })
-it("counts the observed eight preparation and three execution activities without repeating generic MCP calls", () => {
-  const preparation = [tool("discover", "tool.mcp.discover"), ...Array.from({ length: 7 }, (_, index) => ({ ...tool(`describe-${index}`, "tool.mcp.describe"), display_detail: { kind: "mcp_tool" as const, name: `public_selector_${index}` } }))]
-  render(<LocaleProvider><SegmentProcess segmentId="real-eight-three" live activities={[...preparation, ...Array.from({ length: 3 }, (_, index) => ({ ...tool(`execution-${index}`, "tool.mcp.call"), display_detail: { kind: "mcp_tool" as const, name: `actual_call_${index}` } }))]} /></LocaleProvider>)
-  const group = screen.getByRole("button", { name: /Tool preparation/u })
-  expect(group).toHaveAttribute("aria-expanded", "false")
-  expect(screen.getAllByText("Call MCP tool")).toHaveLength(3)
-  expect(screen.getByRole("button", { name: "Process" })).toBeVisible()
-  expect(screen.getByText("actual_call_0")).toBeVisible()
-  fireEvent.click(group)
-  for (let index = 0; index < 7; index++) expect(screen.getByText(`public_selector_${index}`)).toBeVisible()
+it("does not repeat failed attempts in the summary or equate them with whole-turn failure", () => {
+  const activities = [{ ...tool("a", "tool.mcp.describe"), status: "failed" as const }, { ...tool("b", "tool.mcp.call"), status: "failed" as const }, tool("c", "tool.mcp.call")]
+  render(<LocaleProvider><SegmentProcess segmentId="failed-attempts" activities={activities} live /></LocaleProvider>)
+  const disclosure = screen.getByRole("button", { name: "Tool calls: 2" })
+  expect(disclosure).not.toHaveTextContent(/failed/iu)
+  expect(screen.getAllByText("Failed")).toHaveLength(2)
+  expect(screen.queryByText("Recovered")).toBeNull()
+})
+it("keeps a focused single action visible when terminal history gains a late second action", async () => {
+  const first = tool("focused-a", "tool.mcp.call"), second = tool("focused-b", "tool.file.read")
+  const inspect = vi.fn(), read = vi.fn()
+  const { rerender } = render(<LocaleProvider><SegmentProcess segmentId="late-focused-terminal" onInspect={read} live={false} activities={[first]} onOpenActivity={inspect} /></LocaleProvider>)
+  const action = screen.getByRole("button", { name: /Call MCP tool/u })
+  await act(async () => { action.focus(); await Promise.resolve() })
+  rerender(<LocaleProvider><SegmentProcess segmentId="late-focused-terminal" onInspect={read} live={false} activities={[first, second]} onOpenActivity={inspect} /></LocaleProvider>)
+  expect(action).toHaveFocus()
+  expect(action.closest("[inert]")).toBeNull()
+  expect(read).not.toHaveBeenCalled()
+  const disclosure = screen.getByRole("button", { name: "Tool calls: 1 · File reads: 1" })
+  expect(disclosure).toHaveAttribute("aria-expanded", "true")
+  fireEvent.click(disclosure)
+  expect(disclosure).toHaveAttribute("aria-expanded", "false")
 })

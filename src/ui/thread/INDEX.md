@@ -1,12 +1,12 @@
+过程展示（2026-10-28 参考修正）：`process-summary.ts`只统计当前正文间 passage 的真实操作次数；`process-activity-rows.tsx`保持原次序单层渲染，删除 MCP 准备嵌套分组。动作行保动词、原目标与上下文同一阅读流，详情继续由 exact Run/activity Canvas 承接；计数不表示成功或唯一资源数。
+
 ## 动作阅读列重做（本地候选）
 
-相邻活动过程入口仅简洁披露，准备子组无数量墙；真实文字仍在原位置。ToolCallRow优先原目标名/文件路径，原生按钮按exact Run/activity打开Canvas，完成不重复画勾；运行/失败保持文字。ActivityInspector只读纯文本，不打开display path、不当HTML/Markdown/链接。use-run-display在同AnswerActionBoundary/readEpoch/profile/Run共享一次用户读取；成功live或未失败在途至多终态补读，失败仅显式重读，加载不闪缺证。正式Public28.12 activity_details同原生成链接入；本候选不冒正常启用。参考/验证见本仓TD与Root原执行板。
+正文间活动共用单层简洁披露，摘要计真实操作次数；真实文字仍在原位置。ToolCallRow同行呈现操作动词及原目标名/文件路径，原生按钮按exact Run/activity打开Canvas，完成不重复画勾；运行/失败保持文字。ActivityInspector只读纯文本，不打开display path、不当HTML/Markdown/链接。use-run-display在同AnswerActionBoundary/readEpoch/profile/Run共享一次用户读取；成功live或未失败在途至多终态补读，失败仅显式重读，加载不闪缺证。正式Public28.12 activity_details同原生成链接入；本候选不冒正常启用。参考/验证见本仓TD与Root原执行板。
 
 RunDisplay 28.11：run-display-overlay仅按原Run既存MCP id投影安全工具名／已证failed，不重写source／顺序或Run终态；旧RAM缺tool_facts视无新事实。use-run-display以正式profile SHA失效原只读memo，仍仅显式有界GET，原actor/scope/late与动作keys保持。
 
 正式回答消费者候选：OwnerAnswerActions绑定私有durable Message、真实四动作与sameK未知恢复；answer-action-scope把同actor准入暂停与真正身份退休分开。SkillActivityRow／ToolCallRow显native name和默认全virtual path，缺事实不猜；use-run-display只按具体Run显式读，pure overlay保status/order。
-
-MCP准备展示：process-activity-groups只合并同一连续过程段里相邻discover/describe，ProcessActivityRows的独立默认折叠组保每一真实行及顺序；mcp.call/文字/其它activity都是边界。准备参与真实activity总数，不冒执行次数；live延续cue不重复，不改owner状态或用当前目录补历史名。
 
 回答动作后继：answer-action-target只从现receipt/descriptor或snapshotMessageId绑定durable Message，拒segment fallback及归属歧义；纯view/身份比较不授网络权限。正式feedback／regenerate严格接线后，unread/unknown仍不冒null票，不新增正常假操作。
 

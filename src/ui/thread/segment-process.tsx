@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { ChevronDown } from "lucide-react"
-import { useEffect, useSyncExternalStore } from "react"
+import { useEffect, useState, useSyncExternalStore } from "react"
 import { z } from "zod"
 
 import type { AgentMode } from "@/core/conversations"
@@ -10,6 +10,7 @@ import type { RunProcessActivity } from "@/contract/chat"
 import { useT } from "@/i18n/context"
 import { createPersistedStore } from "@/lib/persisted-store"
 
+import { summarizeProcessActivities } from "./process-summary"
 import { ProcessActivityRows } from "./process-activity-rows"
 import styles from "./thread.module.css"
 
@@ -71,8 +72,9 @@ export function SegmentProcess({
   const t = useT()
   const manualOpen = useDisclosure(segmentId)
   const single = activities.length === 1
+  const [focusedDirectRow, setFocusedDirectRow] = useState(false)
   // Keep the same force-mounted content tree when a second activity arrives.
-  const open = single || (manualOpen ?? live)
+  const open = single || focusedDirectRow || (manualOpen ?? live)
   const hasActivities = activities.length > 0
   useEffect(() => {
     if (manualOpen !== true || !open || !hasActivities || !onInspect) return
@@ -84,10 +86,9 @@ export function SegmentProcess({
   }, [manualOpen, open, hasActivities, onInspect])
   if (!hasActivities) return null
 
-  const failed = activities.filter((activity) => activity.activity === "skill" ? activity.phase === "failed" : activity.status === "failed").length
   const allSettled = activities.every((activity) => activity.activity === "skill" ? activity.phase === "ready" || activity.phase === "failed" : activity.status !== "running")
   const continuing = continueProcessing && allSettled
-  const summary = t("thread.processHeading")
+  const summary = summarizeProcessActivities(activities).map(({ key, count }) => t(key, { count })).join(" · ")
   const continuation = continuing ? <span className={styles.actionContinuation} role="status">{t("thread.continueProcessing")}</span> : null
 
   return (
@@ -96,13 +97,12 @@ export function SegmentProcess({
       data-mode={mode}
       data-open={open}
       open={open}
-      onOpenChange={(nextOpen) => { setDisclosure(segmentId, nextOpen); if (nextOpen) onInspect?.() }}
+      onOpenChange={(nextOpen) => { setFocusedDirectRow(false); setDisclosure(segmentId, nextOpen); if (nextOpen) onInspect?.() }}
     >
       {!single ? <CollapsibleTrigger asChild>
         <Button variant="ghost" type="button" className={styles.processSummary}>
           <span className={styles.processTitle} title={summary}>{summary}</span>
           {!allSettled ? <span className={styles.actionStatus}>{t("thread.processRunning")}</span> : null}
-          {failed > 0 ? <span className={styles.actionFailure}>{t("thread.actionFailures", { count: failed })}</span> : null}
           {continuation}
           <ChevronDown className={styles.processChevron} aria-hidden="true" />
         </Button>
@@ -110,7 +110,11 @@ export function SegmentProcess({
       {single && onInspect && !onOpenActivity ? <Button type="button" variant="ghost" onClick={onInspect}>{t("thread.readActivityDetails")}</Button> : null}
       <CollapsibleContent forceMount className={styles.processReveal}>
         <div className={styles.processClip}>
-          <div className={styles.processBody} inert={!open}>
+          <div className={styles.processBody} inert={!open} onFocusCapture={() => {
+            // A keyboard user inspecting a direct row must not lose it to inert
+            // when a late second activity turns this into a collapsed passage.
+            if (single) setFocusedDirectRow(true)
+          }}>
             <div className={styles.actgroup}>
               <ProcessActivityRows {...(activityDetails ? { activityDetails } : {})} {...(onOpenActivity ? { onOpenActivity } : {})} activities={activities} continuation={single ? continuation : null} />
             </div>

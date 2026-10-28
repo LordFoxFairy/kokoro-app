@@ -29,7 +29,7 @@ it("cold-mounts an explicitly persisted expanded process and restores exactly on
   localStorage.setItem(key, JSON.stringify({ "restored-cold": true }))
   const f = fixture()
   render(<StrictMode><Harness boundary={f.boundary} segmentId="restored-cold" /></StrictMode>)
-  expect(screen.getByRole("button", { name: /Process/u })).toHaveAttribute("aria-expanded", "true")
+  expect(screen.getByRole("button", { name: /Tool calls: 2/u })).toHaveAttribute("aria-expanded", "true")
   await waitFor(() => expect(f.readDisplay).toHaveBeenCalledTimes(1))
   expect(f.readDisplay.mock.calls[0]?.[0]).toEqual({ sessionId: "session", runId: "run" })
 })

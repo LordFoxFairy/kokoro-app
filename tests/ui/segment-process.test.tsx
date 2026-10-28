@@ -115,9 +115,10 @@ it("keeps mixed process rows in owner order through status updates and manual co
     expect(row).toBe(originalRows[index])
     expect(row.closest("[inert]")).not.toBeNull()
   })
-  expect(summary).toHaveTextContent("Process")
+  expect(summary).toHaveTextContent("Skill preparations: 1")
   expect(summary).not.toHaveTextContent("4 activities")
-  expect(summary).toHaveTextContent("1 failed")
+  expect(summary).not.toHaveTextContent("failed")
+  expect(screen.getAllByText("Failed")).toHaveLength(1)
   expect(screen.getByText("Ready")).toBeInTheDocument()
   expect(screen.getByText("Failed")).toBeInTheDocument()
   expect(screen.getAllByText("Completed")).toHaveLength(2)
@@ -170,7 +171,7 @@ it("keeps one disclosure across proven empty tool-round text and restores the bo
   const { container, rerender } = render(<LocaleProvider><AssistantTurn {...props} messagesById={messages} /></LocaleProvider>)
   const disclosures = () => container.querySelectorAll('[data-slot="collapsible-trigger"]')
   expect(disclosures()).toHaveLength(1)
-  expect(disclosures()[0]).toHaveTextContent("Process")
+  expect(disclosures()[0]).toHaveTextContent("Tool calls: 2")
   const answer = screen.getByText("public answer")
   expect(disclosures()[0]!.compareDocumentPosition(answer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   expect(answer.compareDocumentPosition(screen.getAllByText("Tool call").at(-1)!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
@@ -278,7 +279,7 @@ it("grows a direct action into one disclosure without remounting rows and preser
   expect(screen.queryByRole("button")).toBeNull()
   rerender(<LocaleProvider><SegmentProcess {...props} activities={[first, second]} /></LocaleProvider>)
   expect(screen.getByText("Read file")).toBe(row)
-  const trigger = screen.getByRole("button", { name: /Process/u })
+  const trigger = screen.getByRole("button", { name: /File reads: 1/u })
   fireEvent.click(trigger)
   expect(trigger).toHaveAttribute("aria-expanded", "false")
   rerender(<LocaleProvider><SegmentProcess {...props} live={false} activities={[{ ...first, status: "completed" }, { ...second, status: "failed" }]} /></LocaleProvider>)
@@ -299,9 +300,12 @@ it("counts every failed mixed activity without inventing distinct file or result
   ]
   render(<LocaleProvider><SegmentProcess segmentId="mixed-failures" activities={activities} live={false} /></LocaleProvider>)
   const summary = screen.getByRole("button")
-  expect(summary).toHaveTextContent("Process")
+  expect(summary).toHaveTextContent("File reads: 2 · Subtasks: 1 · Skill preparations: 1")
   expect(summary).not.toHaveTextContent("4 activities")
-  expect(summary).toHaveTextContent("3 failed")
+  expect(summary).not.toHaveTextContent("failed")
+  fireEvent.click(summary)
+  expect(screen.getAllByText("Failed")).toHaveLength(2)
+  expect(screen.getByText("Failed to load")).toBeInTheDocument()
   expect(summary).not.toHaveTextContent(/2 files|results/u)
 })
 
@@ -310,7 +314,7 @@ it("uses nine category-specific decorative icons without reading unknown activit
   for (const [display_code, label] of public28Labels) {
     const activity = { activity: "tool" as const, activity_id: "category", segment_id: "category", status: "completed" as const, display_code, raw_target: "untrusted unknown field" }
     const view = render(<LocaleProvider><ToolCallRow activity={activity} /></LocaleProvider>)
-    const row = screen.getByText(label).parentElement!
+    const row = screen.getByText(label).parentElement!.parentElement!
     icons.add(row.querySelector("svg")?.getAttribute("class") ?? null)
     expect(row.querySelector("svg")).toHaveAttribute("aria-hidden", "true")
     expect(row.querySelector("a, button")).toBeNull()

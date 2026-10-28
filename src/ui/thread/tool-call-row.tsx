@@ -24,9 +24,11 @@ export function ToolCallRow({ activity, continuation, onInspect, detail: ownerDe
   const status = t(activity.status === "running" ? "thread.processRunning" : activity.status === "completed" ? "thread.processCompleted" : "thread.processFailed")
   const content = <>
     <Icon className={styles.actionIcon} aria-hidden="true" />
-    <span className={targetText ? "sr-only" : styles.actionLabel} title={t(label)}>{t(label)}</span>
-    {targetText ? <span className={`${styles.actionTarget} ${details.target}`} title={targetText}>{targetText}</span> : null}
-    {context ? <span className={details.context} title={context}>{context}</span> : null}
+    <span className={`${details.readingLine} ${detail?.kind === "file" ? details.fileLine : ""}`} title={[t(label), targetText, context].filter(Boolean).join(" · ")}>
+      <span>{t(label)}</span>
+      {targetText ? <> <span className={details.inlineTarget} title={targetText}>{targetText}</span></> : null}
+      {context ? <> · <span>{context}</span></> : null}
+    </span>
     <span className={activity.status === "completed" ? "sr-only" : styles.actionStatus}>{status}</span>
   </>
   return <div className={styles.action} data-status={activity.status}>

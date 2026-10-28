@@ -77,12 +77,11 @@ it("actual local CSS overrides legacy ellipsis so full paths remain wrapping tex
   const activity = { ...base, display_detail: { kind: "file" as const, name: "SKILL.md", virtual_path: fullPath } }
   render(<LocaleProvider><div style={{ width: 180 }}><ToolCallRow activity={activity} /></div></LocaleProvider>)
   const target = screen.getByText(fullPath)
-  expect(getComputedStyle(target).whiteSpace).toBe("nowrap")
   attachModuleCss("../../src/ui/thread/activity-detail.module.css", detailStyles)
-  expect(getComputedStyle(target).whiteSpace).toBe("normal")
-  expect(getComputedStyle(target).overflow).toBe("visible")
-  expect(getComputedStyle(target).textOverflow).toBe("clip")
-  expect(getComputedStyle(target).overflowWrap).toBe("anywhere")
-  expect(getComputedStyle(target.parentElement!).flexWrap).toBe("wrap")
-  expect(target).toHaveTextContent(fullPath)
+  const line = target.parentElement!
+  expect(getComputedStyle(line).whiteSpace).toBe("normal")
+  expect(getComputedStyle(line).overflow).toBe("visible")
+  expect(getComputedStyle(line).textOverflow).toBe("clip")
+  expect(getComputedStyle(line).overflowWrap).toBe("anywhere")
+  expect(line).toHaveTextContent(fullPath)
 })
