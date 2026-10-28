@@ -1,3 +1,5 @@
+动作意图（2026-10-28，候选）：ToolCallRow优先原activity.action_title，ActivityInspector用同标题；ActivityResult中的tool_description是独立能力说明，不与调用目的混用。原缺省仍保历史标签/目标。SegmentProcess仅在展开且入视口时调用共享reader.ensureRead，idle-only/同Run去重，不把真实error改成自动重试；显式inspect与原终态补读保持。尚待正常配对和浏览器验收。
+
 过程展示（2026-10-28 参考修正）：`process-summary.ts`只统计当前正文间 passage 的真实操作次数；`process-activity-rows.tsx`保持原次序单层渲染，删除 MCP 准备嵌套分组。动作行保动词、原目标与上下文同一阅读流，详情继续由 exact Run/activity Canvas 承接；计数不表示成功或唯一资源数。
 
 ## 动作阅读列重做（本地候选）

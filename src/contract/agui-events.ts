@@ -1,4 +1,4 @@
-import {runDisplaySkillSchema,safeVirtualPathSchema} from "./answer-actions"
+import {actionTitleSchema,runDisplaySkillSchema,safeVirtualPathSchema} from "./answer-actions"
 // Web ↔ BFF streaming wire contract. This module validates canonical AG-UI
 // frames only; reducer/UI projection belongs to the engine adapter.
 
@@ -28,7 +28,7 @@ const toolDisplayDetailSchema = z.object({
     }
   }),
 }).strict()
-const toolActivitySchema = z.object({ activity: z.literal("tool"), activity_id: activityIdSchema, segment_id: segmentIdSchema, status: z.enum(["running", "completed", "failed"]), display_code: z.enum(BFF_TOOL_DISPLAY_CODES), display_detail: toolDisplayDetailSchema.optional() }).strict().superRefine((value, context) => {
+const toolActivitySchema = z.object({ activity: z.literal("tool"), activity_id: activityIdSchema, segment_id: segmentIdSchema, status: z.enum(["running", "completed", "failed"]), display_code: z.enum(BFF_TOOL_DISPLAY_CODES), action_title: actionTitleSchema.optional(), display_detail: toolDisplayDetailSchema.optional() }).strict().superRefine((value, context) => {
   const detail = value.display_detail
   if (!detail) return
   if(detail.virtual_path!==undefined&&(detail.kind!=="file"||detail.virtual_path.split("/").at(-1)!==detail.name)){context.addIssue({code:z.ZodIssueCode.custom,path:["display_detail"],message:"invalid exact file path"})}

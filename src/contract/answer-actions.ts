@@ -1,5 +1,6 @@
 import { z } from "zod"
 import {
+  actionTitleWireSchema,
   answerFeedbackWireSchema,
   answerRegenerationReceiptWireSchema,
   runDisplaySkillWireSchema,
@@ -12,6 +13,12 @@ import {
 } from "@/generated/bff-tool-display"
 const sensitive =
   /(?:^|[._ /-])(?:credentials?|secrets?|tokens?|passwords?|private[_-]?key)(?:$|[._ /-])|(?:^|\/)\.(?:ssh|aws|gnupg|kube)(?:\/|$)|(?:^|\/)\.env(?:[./_-]|$)|(?:^|\/)(?:\.netrc|\.npmrc|\.git-credentials|service[_-]account\.json)(?:$|\/)|(?:id_rsa|id_ed25519|\.pem$|\.p12$|\.pfx$|bearer\s|(?<![A-Za-z0-9])sk[-_]|gh[pousr]_|github_pat_|AKIA[A-Z0-9]{16}|-----BEGIN)|eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/iu
+// Exact public action text is independent of capability prose and never interpreted as markup.
+const privateDisplayText = /(?:https?:\/\/[^\s]+[?&](?:token|key|api_key|signature|sig|auth|x-amz-[a-z-]+)=|https?:\/\/[^\s/]+@|(?:^|[\s"'])(?:\/(?:Users|home|private|etc|var|proc|sys|root|tmp|opt)\/|[A-Z]:\\)|Traceback \(most recent call last\)|\b[A-Za-z]*(?:Error|Exception)\s*:|\b(?:Authorization|Set-Cookie|Cookie)\s*:|\b(?:api[_-]?key|password|secret|access[_-]?token)\s*[=:]|\b(?:DATABASE_URL|REDIS_URL|HOME|PATH)\s*=)/iu
+function safeDisplayProse(value: string): boolean {
+  return !sensitive.test(value) && !privateDisplayText.test(value) && !/[\p{Cs}\p{Cf}]/u.test(value) && !/\p{Cc}/u.test(value.replace(/[\n\r\t]/gu, ""))
+}
+export const actionTitleSchema = actionTitleWireSchema.refine(value => value === value.trim() && !/[\p{Cc}]/u.test(value) && safeDisplayProse(value) && !/\b(?:token|credential|secret|password|api[_-]?key)\s*[:=]/iu.test(value))
 export const answerActionIdSchema = z
   .string()
   .min(1)
@@ -47,6 +54,7 @@ export const runToolFactSchema = runToolFactWireSchema.superRefine((value, conte
   }
 })
 export const runActivityDetailSchema = runActivityDetailWireSchema.superRefine((value, context) => {
+  if (value.tool_description && !safeDisplayProse(value.tool_description.text)) context.addIssue({ code: z.ZodIssueCode.custom, message: "invalid capability description" })
   const target = value.target
   if (!value.tool_name.trim() || sensitive.test(value.tool_name) ||
     (target && (!target.name.trim() || sensitive.test(target.name) ||

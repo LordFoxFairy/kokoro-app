@@ -23,7 +23,7 @@ export function ActivityResult({ detail, mcpCall }: { detail: RunActivityDetail;
     {value ? <><pre className={styles.preview}>{value.text}</pre><PreviewNotes preview={value} /></>
       : <p className={styles.missing}>{t("thread.activityMissing")}</p>}
   </section>)
-  if (!mcpCall) return <><p className={styles.operation}>{detail.tool_name}</p>{original}</>
+  if (!mcpCall) return <><p className={styles.operation}>{detail.tool_name}</p>{detail.tool_description ? <section className={styles.section}><h3 className={styles.heading}>{t("thread.activityToolDescription")}</h3><p className={styles.resultText}>{detail.tool_description.text}</p><PreviewNotes preview={detail.tool_description} /></section> : null}{original}</>
   return <>
     <section className={styles.section} aria-label={t("thread.activityResult")}>
       <h3 className={styles.heading}>{t("thread.activityResult")}</h3>
@@ -35,6 +35,7 @@ export function ActivityResult({ detail, mcpCall }: { detail: RunActivityDetail;
       <summary>{t("thread.activityTechnical")}</summary>
       <div className={styles.technicalBody}>
         <p className={styles.operation}>{detail.tool_name}</p>
+        {detail.tool_description ? <section className={styles.section}><h3 className={styles.heading}>{t("thread.activityToolDescription")}</h3><p className={styles.resultText}>{detail.tool_description.text}</p><PreviewNotes preview={detail.tool_description} /></section> : null}
         {original}
       </div>
     </details>

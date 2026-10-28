@@ -104,3 +104,19 @@ it("keeps the action verb visible beside a target instead of using a bare functi
   expect(screen.getByText("Call MCP tool")).not.toHaveClass("sr-only")
   expect(screen.getByText("ask_wiki_question")).toBeVisible()
 })
+
+it("keeps same-call intent as the inspector heading and capability prose separate from the action", async () => {
+  const { ActivityInspector } = await import("@/ui/thread/activity-inspector")
+  const { waitFor } = await import("@testing-library/react")
+  const action_title = "检查项目状态如何在节点间传递"
+  const detail = { activity_id: "a", tool_name: "mcp_call", target: { kind: "mcp_tool" as const, name: "ask_wiki_question" }, tool_description: { text: "Answers questions about a repository.", truncated: false, redacted: false } }
+  const boundary = { actorId: "actor", sessionId: "intent", isCurrent: () => true, client: { readDisplay: vi.fn().mockResolvedValue({ run_id: "run", display_skills: [], tool_paths: [], tool_facts: [], activity_details: [detail] }) } } as unknown as import("@/ui/thread/answer-action-scope").AnswerActionBoundary
+  render(<LocaleProvider><ActivityInspector content={{ kind: "activity", runId: "run", activityId: "a", subject: "actor", generation: 1, activity: { ...activity, action_title }, terminal: true }} boundary={boundary} /></LocaleProvider>)
+  expect(screen.getByRole("heading", { name: action_title })).toBeVisible()
+  await waitFor(() => expect(screen.getByText("Technical details")).toBeVisible())
+  expect(screen.getByText(detail.tool_description.text)).not.toBeVisible()
+  fireEvent.click(screen.getByText("Technical details"))
+  expect(screen.getByText(detail.tool_description.text)).toBeVisible()
+  expect(screen.getByRole("heading", { name: "Tool description" })).toBeVisible()
+  expect(screen.getByRole("heading", { name: action_title })).toBeVisible()
+})

@@ -69,3 +69,18 @@ it("a terminal notification never retries a previously failed detail read", asyn
   await act(async () => {})
   expect(readDisplay).toHaveBeenCalledTimes(1)
 })
+
+it("visible demand and Canvas inspection share one request, and remount resumes only a cancelled read", async () => {
+  const readDisplay = vi.fn().mockImplementationOnce((_input, signal: AbortSignal) => new Promise((_resolve, reject) => signal.addEventListener("abort", () => reject(new Error("cancelled"))))).mockResolvedValue(facts)
+  const boundary = { sessionId: "cancel-visible", client: { readDisplay }, isCurrent: () => true } as unknown as AnswerActionBoundary
+  const first = renderHook(() => useRunDisplay(boundary, "run"))
+  act(() => { first.result.current.ensureRead(); first.result.current.inspect() })
+  expect(readDisplay).toHaveBeenCalledTimes(1)
+  first.unmount()
+  const second = renderHook(() => useRunDisplay(boundary, "run"))
+  act(() => second.result.current.ensureRead())
+  await waitFor(() => expect(second.result.current.facts).toEqual(facts))
+  expect(readDisplay).toHaveBeenCalledTimes(2)
+  act(() => second.result.current.ensureRead())
+  expect(readDisplay).toHaveBeenCalledTimes(2)
+})

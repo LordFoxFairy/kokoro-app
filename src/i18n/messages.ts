@@ -590,6 +590,7 @@ export const zh = {
   "thread.activityInput": "输入",
   "thread.activityOutput": "输出",
   "thread.activityResult": "结果",
+  "thread.activityToolDescription": "工具说明",
   "thread.activityTechnical": "技术详情",
   "thread.activityRawResult": "查看技术详情中的原始输出。",
   "thread.activityReadFailed": "暂未取得详情，点选此动作可重新读取。",

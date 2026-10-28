@@ -85,3 +85,19 @@ it("actual local CSS overrides legacy ellipsis so full paths remain wrapping tex
   expect(getComputedStyle(line).overflowWrap).toBe("anywhere")
   expect(line).toHaveTextContent(fullPath)
 })
+
+it("reads the original call intent as the main line without repeating selectors or parameters", () => {
+  const onInspect = vi.fn()
+  const action_title = "检查 LangGraph 的节点与状态如何连接"
+  const { container, rerender } = render(<LocaleProvider><ToolCallRow activity={{ ...base, display_code: "tool.mcp.call", action_title, display_detail: { kind: "mcp_tool", name: "read_wiki_structure" } }} detail={{ activity_id: base.activity_id, tool_name: "mcp_call", input_preview: { text: '{"repo":"langchain-ai/langgraph"}', truncated: false, redacted: false } }} onInspect={onInspect} /></LocaleProvider>)
+  const row = screen.getByRole("button", { name: new RegExp(action_title) })
+  expect(row).toHaveTextContent(action_title)
+  expect(screen.queryByText("read_wiki_structure")).toBeNull()
+  expect(screen.queryByText("langchain-ai/langgraph")).toBeNull()
+  expect(screen.queryByText("Call MCP tool")).toBeNull()
+  expect(container.querySelector("a")).toBeNull()
+  row.click(); expect(onInspect).toHaveBeenCalledExactlyOnceWith(base.activity_id)
+  rerender(<LocaleProvider><ToolCallRow activity={{ ...base, action_title, status: "failed" }} onInspect={onInspect} /></LocaleProvider>)
+  expect(screen.getByRole("button", { name: new RegExp(action_title) })).toBe(row)
+  expect(container.querySelector('[data-status="failed"]')).not.toBeNull()
+})

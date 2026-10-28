@@ -1,3 +1,7 @@
+## 2026-10-28 Public28.13 动作意图消费者（未激活）
+
+固定正式BFF83978e7340357a25e64aa98d12c9bb34c07ad3a4，完整原件SHA30b288a7f719ec1d5a6f85c70ad80f18bbbce614fbdad1412d1ff3de7a0b2f9c。原窄生成器更新，私有独立发行不改；test-only完整28.13→28.12逆差再接全部既有父图，不作运行fallback。action_title仅tool可选，严格256 UTF-8字节/无首尾空白/控制格式代理字符或明确私密内容；tool_description仅exact MCP target的两个具名工具，1024字节原previewflags。Share仍process=null。沿现AG-UI/parts/read同源调用，无新增endpoint或身份。
+
 ## RunDisplay activity_details（正式Public28.12消费者）
 
 唯一BFF原件固定 `fb9dc4df1679e2d7c97842efcd2fb3bcae297939`／28.12.0，SHA256 `86638da86d786e91c81da9e5dd891dee88ef2ca033579866f5ebc6dd6113c00f`。原有私有Run GET增required activity_details≤128，activity_id唯一；closed item required activity_id/tool_name，optional owner安全target与input_preview/output_preview。预览为原件派生text/truncated/redacted闭集，UTF8分别2048/4096；file-only path与basename规则保持。字段缺失仅表示未知，preview不是普适secret-free保证，不进入Share、AG-UI消息正文或执行授权。

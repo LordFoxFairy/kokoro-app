@@ -669,6 +669,7 @@ export const en: Partial<Record<MessageKey, string>> = {
   "thread.activityInput": "Input",
   "thread.activityOutput": "Output",
   "thread.activityResult": "Result",
+  "thread.activityToolDescription": "Tool description",
   "thread.activityTechnical": "Technical details",
   "thread.activityRawResult": "View the original output in technical details.",
   "thread.activityReadFailed": "Details could not be read. Select the action to try again.",

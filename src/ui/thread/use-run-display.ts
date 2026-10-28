@@ -26,6 +26,7 @@ function createRunDisplayReader(boundary: AnswerActionBoundary | undefined, runI
       // No automatic retry. A failed read needs another explicit inspection.
     })
   }
+  const ensureRead = () => { if (phase === "idle") inspect() }
   const settle = (nextTerminal: boolean) => {
     const becameTerminal = nextTerminal && !terminal
     terminal ||= nextTerminal
@@ -33,12 +34,12 @@ function createRunDisplayReader(boundary: AnswerActionBoundary | undefined, runI
     refreshed = true; controller?.abort(); spent = false; inspect()
   }
   return {
-    get: () => current() ? facts : null, phase: () => current() ? phase : "idle" as const, inspect, settle,
+    get: () => current() ? facts : null, phase: () => current() ? phase : "idle" as const, inspect, ensureRead, settle,
     snapshot: () => revision,
     subscribe: (listener: () => void) => {
       if (retired) revision++
       retired = false
-      if (controller?.signal.aborted && facts === null) spent = false
+      if (controller?.signal.aborted && facts === null && phase === "loading") { spent = false; phase = "idle"; revision++ }
       listeners.add(listener)
       return () => { listeners.delete(listener); if (!listeners.size) { retired = true; controller?.abort() } }
     },
@@ -64,5 +65,5 @@ export function useRunDisplay(boundary: AnswerActionBoundary | undefined, runId:
   const read = useMemo(() => scopedReader(boundary, runId, epoch, profile), [boundary, runId, profile, epoch])
   useSyncExternalStore(read.subscribe, read.snapshot, serverRevision)
   useEffect(() => { read.settle(terminal) }, [read, terminal])
-  return { facts: read.get(), phase: read.phase(), inspect: read.inspect }
+  return { facts: read.get(), phase: read.phase(), inspect: read.inspect, ensureRead: read.ensureRead }
 }

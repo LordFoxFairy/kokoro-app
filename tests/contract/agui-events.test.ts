@@ -374,3 +374,11 @@ it("Public28.4 accepts only owner-safe optional tool targets and preserves valid
   expect(() => parse({ ...base, display_detail: { kind: "mcp_tool", name: "tool/name" } })).toThrow()
   expect(() => parse({ ...mcp, activity: "subagent", display_code: "subagent.execution" })).toThrow()
 })
+
+it("preserves exact optional per-call intent in the original AG-UI activity, rejecting invalid text", () => {
+  const activity = { activity: "tool", activity_id: `act_${"a".repeat(64)}`, segment_id: `seg_${"b".repeat(64)}`, status: "running", display_code: "tool.mcp.call" }
+  const event = (action_title: unknown) => ({ type: "CUSTOM", timestamp: 1, name: "kokoro.activity.updated", value: { ...activity, action_title }, metadata })
+  for (const action_title of ["读取项目配置", "😀".repeat(64), "e\u0301", "<b>plain text</b>"]) expect(parseAgUiEvent(event(action_title))).toMatchObject({ value: { action_title } })
+  for (const action_title of [null, "", " trailing ", "😀".repeat(64)+"x", "line\nnext", "hidden\u200b", "\ud800", "token: value", "https://example.test?a=1&token=private"]) expect(() => parseAgUiEvent(event(action_title))).toThrow()
+  expect(parseAgUiEvent({ ...event("a"), value: activity })).toMatchObject({ value: activity })
+})

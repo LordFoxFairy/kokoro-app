@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { ChevronDown } from "lucide-react"
-import { useEffect, useState, useSyncExternalStore } from "react"
+import { useEffect, useRef, useState, useSyncExternalStore } from "react"
 import { z } from "zod"
 
 import type { AgentMode } from "@/core/conversations"
@@ -51,6 +51,7 @@ type SegmentProcessProps = {
   activityDetails?: readonly RunActivityDetail[]
   onOpenActivity?: (activityId: string) => void
   onInspect?: () => void
+  onVisible?: () => void
   segmentId: string
   activities: RunProcessActivity[]
   live: boolean
@@ -65,6 +66,7 @@ export function SegmentProcess({
   live,
   mode,
   onInspect,
+  onVisible,
   onOpenActivity,
   activityDetails,
   continueProcessing = false,
@@ -76,14 +78,19 @@ export function SegmentProcess({
   // Keep the same force-mounted content tree when a second activity arrives.
   const open = single || focusedDirectRow || (manualOpen ?? live)
   const hasActivities = activities.length > 0
+  const bodyRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
-    if (manualOpen !== true || !open || !hasActivities || !onInspect) return
-    // Let the parent read hook reactivate before a StrictMode child replay.
-    // A retired disclosure/profile cancels this one restoration, not retries it.
+    if (!open || !hasActivities || !onVisible || !bodyRef.current || typeof IntersectionObserver === "undefined") return
+    // Only an actually visible, expanded passage needs adjunct facts. The shared
+    // Run reader atomically deduplicates this with explicit inspection/Canvas.
     let current = true
-    queueMicrotask(() => { if (current) onInspect() })
-    return () => { current = false }
-  }, [manualOpen, open, hasActivities, onInspect])
+    const observer = new IntersectionObserver(entries => {
+      if (!entries.some(entry => entry.isIntersecting)) return
+      queueMicrotask(() => { if (current) onVisible() })
+    })
+    observer.observe(bodyRef.current)
+    return () => { current = false; observer.disconnect() }
+  }, [open, hasActivities, onVisible])
   if (!hasActivities) return null
 
   const allSettled = activities.every((activity) => activity.activity === "skill" ? activity.phase === "ready" || activity.phase === "failed" : activity.status !== "running")
@@ -110,7 +117,7 @@ export function SegmentProcess({
       {single && onInspect && !onOpenActivity ? <Button type="button" variant="ghost" onClick={onInspect}>{t("thread.readActivityDetails")}</Button> : null}
       <CollapsibleContent forceMount className={styles.processReveal}>
         <div className={styles.processClip}>
-          <div className={styles.processBody} inert={!open} onFocusCapture={() => {
+          <div ref={bodyRef} className={styles.processBody} inert={!open} onFocusCapture={() => {
             // A keyboard user inspecting a direct row must not lose it to inert
             // when a late second activity turns this into a collapsed passage.
             if (single) setFocusedDirectRow(true)

@@ -1,3 +1,9 @@
+## 同次调用行动标题与可见历史读取（2026-10-28，未激活）
+
+消费正式BFF83978e7／Public28.13，只沿原tool activity optional action_title，唯一schema→mapper/reducer/ordered/snapshot→ToolCallRow保持原身份与顺序；标题是同次调用公开意图，不是思维链、能力文档或相邻正文。主行有标题时不再重复类别、selector与参数；缺标题旧历史仍显示原事实，不补写标题。Canvas同标题、技术对象及原输入输出分层；私有tool_description是能力文档，独立纯文本展示，不当动作说明/HTML/自动链接。
+
+沿原boundary/readEpoch/profile/Run reader增加ensureRead：仅idle时读取一次。已展开且实际进入视口的过程主体（含单行动作）可触发；折叠、屏外和缺IntersectionObserver只保留显式读取。显式点击沿inspect，滚动不重试error，终态仍只允许原有最多一次补读。取消且无facts的loading重新订阅回idle，真实429/503不冒取消；原准入/abort/迟到围栏保持。多过程与Canvas共用同一读取，不新增请求路径、缓存owner或持久化。
+
 ## 2026-10-28 MCP 结果阅读修补（既有私有详情边界）
 
 实测同一动作详情将 `text[]` 与 `structured_content.result` 的重复序列化内容平铺，且把 JSON 转义换行作为阅读正文。本片在 Web 既有详情内分开可读结果与原始表示：仅 exact `tool.mcp.call` + owner `mcp_call`，从已受限预览接受普通文本、JSON 字符串、全字符串数组或对象的 `text: string[]`；只解码一次，不递归找 result/content，不修补截断 JSON、不去重数组内真实内容。未知结构留在可键盘展开的“技术详情”，原始输入输出逐字保留，不当作详情缺失。

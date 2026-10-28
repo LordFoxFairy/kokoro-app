@@ -9,18 +9,25 @@ import YAML from "yaml"
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const sourcePath = join(root, "src/generated/bff-public-openapi.yaml")
 const outputPath = join(root, "src/generated/bff-tool-display.ts")
-const ownerCommit = "fb9dc4df1679e2d7c97842efcd2fb3bcae297939"
-const sourceSha256 = "86638da86d786e91c81da9e5dd891dee88ef2ca033579866f5ebc6dd6113c00f"
-const openapiVersion = "28.12.0"
+const ownerCommit = "83978e7340357a25e64aa98d12c9bb34c07ad3a4"
+const sourceSha256 = "30b288a7f719ec1d5a6f85c70ad80f18bbbce614fbdad1412d1ff3de7a0b2f9c"
+const openapiVersion = "28.13.0"
 
 export function inspectBffToolDisplayContract(document) {
   assert.equal(document.info.version, openapiVersion, "BFF tool display version drift")
   const currentSchemas = document.components.schemas
+  assert.deepEqual(currentSchemas.RunToolActivity.properties.action_title, {"type":"string","minLength":1,"maxLength":256,"x-kokoro-utf8-byte-limit":256,"description":"Public intent of this exact model tool call, bound before approval edits. Not reasoning, capability documentation, execution status or authority. No surrounding whitespace, control/format/surrogate characters or private text. Omitted when absent or mismatched; never inferred from adjacent prose."}, "Action title schema drift")
+  assert.deepEqual(currentSchemas.RunDisplay.properties.activity_details.items.properties.tool_description, {"type":"object","required":["text","truncated","redacted"],"properties":{"text":{"type":"string","minLength":1,"maxLength":1024,"x-kokoro-utf8-byte-limit":1024},"truncated":{"type":"boolean"},"redacted":{"type":"boolean"}},"additionalProperties":false,"description":"Provider capability documentation observed in this Run, matched by connection and selector. Not a per-call purpose, execution result, title or authorization. Missing or conflicting evidence is omitted; private display only."}, "Capability description schema drift")
+  assert.deepEqual(currentSchemas.RunDisplay.properties.activity_details.items.allOf, [{"if":{"required":["tool_description"]},"then":{"required":["target"],"properties":{"tool_name":{"enum":["mcp_call","mcp_describe_tool"]},"target":{"properties":{"kind":{"const":"mcp_tool"}}}}}}], "Capability description condition drift")
+  const priorDetails = structuredClone(currentSchemas.RunDisplay.properties.activity_details)
+  delete priorDetails.items.properties.tool_description
+  delete priorDetails.items.allOf
   const toolFacts = currentSchemas.RunDisplay.properties.tool_facts
   assert.deepEqual(currentSchemas.RunDisplay.required, ["run_id", "display_skills", "tool_paths", "tool_facts", "activity_details"])
   assert.equal(createHash("sha256").update(JSON.stringify(toolFacts)).digest("hex"), "11bec751d5cb557a2a314533f552166e06126c620877b844c424789e41053595", "BFF exact tool facts member drift")
-  assert.equal(createHash("sha256").update(JSON.stringify(currentSchemas.RunDisplay.properties.activity_details)).digest("hex"), "e072544777f1574846108ef0762d26d6adbc34bbca2f5a0142ba9e9f57a19128", "BFF exact activity details drift")
+  assert.equal(createHash("sha256").update(JSON.stringify(priorDetails)).digest("hex"), "e072544777f1574846108ef0762d26d6adbc34bbca2f5a0142ba9e9f57a19128", "BFF exact activity details drift")
   const priorSchemas = structuredClone(currentSchemas)
+  delete priorSchemas.RunToolActivity.properties.action_title
   delete priorSchemas.RunDisplay.properties.activity_details
   priorSchemas.RunDisplay.required = priorSchemas.RunDisplay.required.filter(key => key !== "activity_details")
   delete priorSchemas.RunDisplay.properties.tool_facts
@@ -28,6 +35,7 @@ export function inspectBffToolDisplayContract(document) {
   const shapeKeys=["RunToolActivity","RunSubagentActivity","RunSkillActivity","RunDisplaySkill","RunDisplay","MessageFeedbackResponse","MessageRegenerationResponse","ErrorEnvelope","RequestMeta","ErrorDetail"]
   assert.equal(createHash("sha256").update(JSON.stringify(Object.fromEntries(shapeKeys.map(key=>[key,priorSchemas[key]])))).digest("hex"),"4a47c411569c988603feaada98718d4757dd266dd1135ecff36c8c82b91af98a","BFF answer/display full closed graph drift")
   const schemas = structuredClone(currentSchemas)
+  delete schemas.RunToolActivity.properties.action_title
   delete schemas.RunToolActivity.properties.display_detail.properties.virtual_path
   delete schemas.RunToolActivity.allOf[1].then.properties.display_detail
   const tool = schemas.RunToolActivity
@@ -109,7 +117,10 @@ function schemaCode(schema,schemas) {
  if(schema.type==="boolean")return "z.boolean()"
  if(schema.type==="object") {
   let code = `z.object({${Object.entries(schema.properties??{}).map(([key,value])=>`${JSON.stringify(key)}:${schemaCode(value,schemas)}${(schema.required??[]).includes(key)?"":".optional()"}`).join(",")}})${schema.additionalProperties===false?".strict()":""}`
-  if (schema.allOf) {
+  if (schema.allOf && schema.properties.tool_description) {
+    assert.deepEqual(schema.allOf, [{"if":{"required":["tool_description"]},"then":{"required":["target"],"properties":{"tool_name":{"enum":["mcp_call","mcp_describe_tool"]},"target":{"properties":{"kind":{"const":"mcp_tool"}}}}}}], "Unsupported capability conditions")
+    code += '.refine(v=>v.tool_description===undefined||((v.tool_name==="mcp_call"||v.tool_name==="mcp_describe_tool")&&v.target?.kind==="mcp_tool"))'
+  } else if (schema.allOf) {
    const [file, mcp] = schema.allOf
    assert.deepEqual(schema.allOf, [
     { if: { properties: { kind: { const: "file" } } }, then: { properties: { name: { pattern: file.then.properties.name.pattern } } } },
@@ -129,7 +140,7 @@ function schemaCode(schema,schemas) {
  throw Error("unsupported answer schema")
 }
 function renderAnswerSchemas(s,statuses){
- const specs={answerFeedbackWireSchema:s.MessageFeedbackResponse.properties.data,answerRegenerationReceiptWireSchema:s.MessageRegenerationResponse.properties.data,runDisplaySkillWireSchema:s.RunDisplaySkill,runDisplayWireSchema:s.RunDisplay,runToolFactWireSchema:s.RunDisplay.properties.tool_facts.items,runActivityDetailWireSchema:s.RunDisplay.properties.activity_details.items,safeVirtualPathWireSchema:s.RunDisplaySkill.properties.virtual_path,answerActionErrorWireSchema:s.ErrorEnvelope}
+ const specs={actionTitleWireSchema:s.RunToolActivity.properties.action_title,answerFeedbackWireSchema:s.MessageFeedbackResponse.properties.data,answerRegenerationReceiptWireSchema:s.MessageRegenerationResponse.properties.data,runDisplaySkillWireSchema:s.RunDisplaySkill,runDisplayWireSchema:s.RunDisplay,runToolFactWireSchema:s.RunDisplay.properties.tool_facts.items,runActivityDetailWireSchema:s.RunDisplay.properties.activity_details.items,safeVirtualPathWireSchema:s.RunDisplaySkill.properties.virtual_path,answerActionErrorWireSchema:s.ErrorEnvelope}
  return Object.entries(specs).map(([name,schema])=>`export const ${name} = ${schemaCode(schema,s)}`).join("\n")+`\nexport const BFF_ANSWER_ACTION_STATUSES = ${JSON.stringify(statuses)} as const\n`
 }
 async function main() {

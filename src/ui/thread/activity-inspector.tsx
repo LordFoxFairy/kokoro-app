@@ -28,8 +28,9 @@ export function ActivityInspector({ content, boundary }: {
   const targetDetail = detail?.target ?? activity.display_detail
   const target = targetDetail?.kind === "file" ? targetDetail.virtual_path ?? targetDetail.name : targetDetail?.name
   return <div className={styles.inspector}>
+    {activity.action_title ? <h2 className={styles.target}>{activity.action_title}</h2> : null}
     <p className={styles.operation}>{t(TOOL_ACTION_PRESENTATION[activity.display_code].label)}</p>
-    {target ? <h2 className={styles.target}>{target}</h2> : null}
+    {target ? activity.action_title ? <p className={styles.targetReference}>{target}</p> : <h2 className={styles.target}>{target}</h2> : null}
     <p role="status" className={styles.status}>{t(activity.status === "running" ? "thread.processRunning" : activity.status === "failed" ? "thread.processFailed" : "thread.processCompleted")}</p>
     {display.phase === "loading" ? <span className="sr-only" role="status">{t("thread.partsReading")}</span> : null}
     {display.phase === "error" ? <p className={styles.missing} role="status">{t("thread.activityReadFailed")}</p> : null}

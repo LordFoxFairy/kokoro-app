@@ -483,6 +483,7 @@ export const ru: Partial<Record<MessageKey, string>> = {
   "thread.activityInput": "Ввод",
   "thread.activityOutput": "Вывод",
   "thread.activityResult": "Результат",
+  "thread.activityToolDescription": "Описание инструмента",
   "thread.activityTechnical": "Технические сведения",
   "thread.activityRawResult": "Исходный вывод доступен в технических сведениях.",
   "thread.activityReadFailed": "Не удалось загрузить подробности. Выберите действие ещё раз.",

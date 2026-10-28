@@ -483,6 +483,7 @@ export const es: Partial<Record<MessageKey, string>> = {
   "thread.activityInput": "Entrada",
   "thread.activityOutput": "Salida",
   "thread.activityResult": "Resultado",
+  "thread.activityToolDescription": "Descripción de la herramienta",
   "thread.activityTechnical": "Detalles técnicos",
   "thread.activityRawResult": "Consulta la salida original en los detalles técnicos.",
   "thread.activityReadFailed": "No se pudieron leer los detalles. Selecciona la acción para reintentar.",

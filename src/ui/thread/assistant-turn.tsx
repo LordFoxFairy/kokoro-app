@@ -261,6 +261,7 @@ export function AssistantTurn({
                 </div>
               ) : null}
               <SegmentProcess
+                {...(answerActionBoundary && displayRunId ? { onVisible: display.ensureRead } : {})}
                 segmentId={segment.segmentId}
                 {...(display.facts ? { activityDetails: display.facts.activity_details } : {})}
                 {...(onOpenActivity ? { onOpenActivity: (activityId: string) => { display.inspect(); onOpenActivity(activityId) } } : {})}

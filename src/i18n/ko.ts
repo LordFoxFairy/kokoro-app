@@ -483,6 +483,7 @@ export const ko: Partial<Record<MessageKey, string>> = {
   "thread.activityInput": "입력",
   "thread.activityOutput": "출력",
   "thread.activityResult": "결과",
+  "thread.activityToolDescription": "도구 설명",
   "thread.activityTechnical": "기술 세부 정보",
   "thread.activityRawResult": "기술 세부 정보에서 원본 출력을 확인하세요.",
   "thread.activityReadFailed": "세부 정보를 읽지 못했습니다. 작업을 다시 선택하세요.",

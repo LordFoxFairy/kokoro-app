@@ -124,8 +124,8 @@ for (const display_code of ["tool.execution", "tool.file.read", "tool.mcp.discov
   })
 }
 
-it("keeps safe target identity across snapshot, live status, ordered parts, lagging reopen and foreign-run events", () => {
-  const target = { activity: "tool" as const, activity_id: `act_${"c".repeat(64)}`, segment_id: `seg_${"d".repeat(64)}`, status: "running" as const, display_code: "tool.file.read" as const, display_detail: { kind: "file" as const, name: "owner.md" } }
+it("keeps exact action title and safe target identity across snapshot, live status, ordered parts, lagging reopen and foreign-run events", () => {
+  const target = { activity: "tool" as const, activity_id: `act_${"c".repeat(64)}`, segment_id: `seg_${"d".repeat(64)}`, status: "running" as const, display_code: "tool.file.read" as const, action_title: "读取当前项目约定", display_detail: { kind: "file" as const, name: "owner.md" } }
   const input = parseSessionSnapshot({ ...snapshot(), execution_process: { run_id: "r", todos: null, activities: [target], next_cursor: null } })
   const first = stateFromSnapshot(input)
   expect(first.executionProcess?.activities).toEqual([target])

@@ -29,9 +29,16 @@ it("restores the entire formal28.9 parent and rejects partial or unrelated28.10 
     raw + "\n",
     raw.replace("getMessageFeedback", "getWrongFeedback"),
     raw.replace("#/components/schemas/RunDisplaySkill", "#/components/schemas/UnknownSkill"),
-    raw.replace("version: 28.12.0", "version: 28.13.0"),
+    raw.replace("version: 28.13.0", "version: 28.14.0"),
   ]) {
     expect(bad).not.toBe(raw)
     expect(() => restorePublic289MessageActionsContract(bad)).toThrow(/drift/)
   }
+})
+
+it("only admits capability descriptions for exact MCP tool targets, never as action intent", () => {
+  const detail = { activity_id: `act_${"c".repeat(64)}`, tool_name: "mcp_call", target: { kind: "mcp_tool", name: "lookup" }, tool_description: { text: "Capability description", truncated: false, redacted: false } }
+  const data = { run_id: "r", display_skills: [], tool_paths: [], tool_facts: [], activity_details: [detail] }
+  expect(runDisplaySchema.parse(data).activity_details[0]?.tool_description?.text).toBe("Capability description")
+  for (const bad of [{ ...detail, target: undefined }, { ...detail, tool_name: "read_file" }, { ...detail, target: { kind: "file", name: "a.md" } }, { ...detail, tool_description: { ...detail.tool_description, text: "😀".repeat(257) } }, { ...detail, tool_description: { ...detail.tool_description, text: "Authorization: private" } }]) expect(runDisplaySchema.safeParse({ ...data, activity_details: [bad] }).success).toBe(false)
 })
