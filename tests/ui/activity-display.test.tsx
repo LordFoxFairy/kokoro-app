@@ -86,6 +86,25 @@ it("actual local CSS overrides legacy ellipsis so full paths remain wrapping tex
   expect(line).toHaveTextContent(fullPath)
 })
 
+it("keeps a long public action title compact without losing its full accessible name or exact inspection target", () => {
+  attachModuleCss("../../src/ui/thread/thread.module.css", threadStyles)
+  attachModuleCss("../../src/ui/thread/activity-detail.module.css", detailStyles)
+  const action_title = "读取 DeepWiki 中 langchain-ai/langgraph 的文档目录并核实状态图相关页面的位置"
+  const onInspect = vi.fn()
+  render(<LocaleProvider><div style={{ width: 180 }}><ToolCallRow activity={{ ...base, action_title, display_detail: { kind: "file", name: "SKILL.md", virtual_path: fullPath } }} onInspect={onInspect} /></div></LocaleProvider>)
+  const row = screen.getByRole("button", { name: `${action_title}Completed` })
+  const line = screen.getByTitle(action_title)
+  expect(getComputedStyle(line).whiteSpace).toBe("nowrap")
+  expect(getComputedStyle(line).overflow).toBe("hidden")
+  expect(getComputedStyle(line).textOverflow).toBe("ellipsis")
+  expect(getComputedStyle(row).alignItems).toBe("center")
+  expect(row).toHaveTextContent(action_title)
+  row.focus()
+  expect(row).toHaveFocus()
+  row.click()
+  expect(onInspect).toHaveBeenCalledExactlyOnceWith(base.activity_id)
+})
+
 it("reads the original call intent as the main line without repeating selectors or parameters", () => {
   const onInspect = vi.fn()
   const action_title = "检查 LangGraph 的节点与状态如何连接"

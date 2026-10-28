@@ -1,3 +1,7 @@
+## 行动行的参考节奏（2026-10-28）
+
+实际Manus Webdev参考：主行动文本14px/20px、父行28px；标题单行省略，图标居中，hover仅文字加深。ToolCallRow据此将公开action_title与原始文件路径的排版分开：行动标题视觉截断但保完整DOM/accessible name/title和Canvas；无标题文件仍完整换行。沿现局部CSS去整行hover底色，保focus-visible、coarse pointer44px及真实失败文字；不调整wire、分组、历史或调用。这是已观察的视觉修正，不证明MCP旧历史的语义对齐。
+
 ## 会话清单 429 有界恢复（2026-10-28）
 
 沿既有 listSessions → useSessionList：首页429保留原status/code与Retry-After，仅0–86400整数秒有效，0最少等待1秒、缺失/畸形用30秒。当前admitted lifecycle内冷却约束显式refresh和分页；一次首页episode仅允许一次延迟GET恢复，不成为轮询。隐藏document不发起读取，回前台只继续尚未消费的恢复；换identity/scope/准入退休清timer及迟到结果。429恢复成功正常发布原清单，不清草稿、路由或登录态。非429仍沿原失败/正常重入语义，未读不冒空成功、不重放任何写入；不修改IAM配额或BFF fresh admission。

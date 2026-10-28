@@ -1,3 +1,9 @@
+## 2026-10-28 行动行视觉收敛（本地已验证，正常配对由Root记录）
+
+基线383486b3，仅ToolCallRow与局部activity-detail样式：公开行动标题不再误用完整文件路径的多行排版；保持完整DOM名称、title、精确点击及Canvas，原无标题文件路径仍换行。图标居中、hover仅文字强调，对齐实测Manus 14/20、28px与单行省略；保键盘focus和coarse44，不改状态、分组、传输或旧记录。新增实际计算样式回归先失败(normal vs nowrap)，修后相关5suite53、扩大189suite3915、lint/types/build/posttypes均通过，独审无确定问题。原jsdom navigation提示仍在，未重跑全默认/全E2E，18个旧侧栏系统driver尚未收口。
+
+真实正常新MCP验证由Root执行：discover/describe/call分别产生具体公开行动和对象，首次/终态Agent、BFF及orderedparts标题相同，刷新后仍可见。这里只证明该条真实链路，不将新标题强制回填旧历史；旧conv6530日志主导的呈现与整体Manus对齐仍OPEN。源码收敛不代替正常浏览器最终视觉证据。
+
 ## 2026-10-28 会话清单 429 一次恢复（正常激活由Root续记）
 
 以736633b8为基线，修复列表首页429后停在错误态：listSessions仅保存有界Retry-After，当前准入lifecycle等待后最多一次GET恢复；隐藏document等待前台，显式refresh/分页不绕过冷却，换主体/范围/准入退休timer与迟到结果。恢复不改URL/草稿/登录，不重放命令、不改IAM限额/BFF检查。429再失败不循环请求，非429仍沿既有正常重入语义；本片不宣称项目/所有目录统一恢复。

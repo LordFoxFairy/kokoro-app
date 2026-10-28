@@ -1,3 +1,5 @@
+2026-10-28 行动标题节奏：ToolCallRow公开标题采用单行视觉省略，完整名称与exact详情仍可键盘访问；仅原始文件路径保换行。局部activity-detail样式统一图标居中、hover仅文字强调，保focus/coarse触达，不改变Skill、事件或分组。
+
 2026-10-28：`tool-action-presentation.ts`为主行与Canvas共用的有限显示映射；同活动原生工具名与原路径映射中性操作。主行不拼接MCP参数，实际输入/输出保留在详情；不补旧标题/路径、不改失败或调用顺序。
 
 动作意图（2026-10-28，候选）：ToolCallRow优先原activity.action_title，ActivityInspector用同标题；ActivityResult中的tool_description是独立能力说明，不与调用目的混用。原缺省仍保历史标签/目标。SegmentProcess仅在展开且入视口时调用共享reader.ensureRead，idle-only/同Run去重，不把真实error改成自动重试；显式inspect与原终态补读保持。尚待正常配对和浏览器验收。
