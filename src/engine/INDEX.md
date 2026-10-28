@@ -125,3 +125,5 @@ CHAT-1：可选draftLifecycle显式注入浏览器来源退休I/O；无adapter�
 ## Route-owned ordered body reads
 
 `engine-types.ts` declares the narrow `MessagePartsReadTarget` (exact scope + conversation) and optional injected-view port; canonical `machine.ts` always implements it. Browser factories seed a target or explicit null before eager metadata hydration. Only parts/body reads are gated: snapshot/execution_head, pending/unknown journal keys and owned SSE/stop remain unchanged. Route retirement aborts and queues unfinished reads with their original cursor/fresh intent and bounded live suffix journal; matching reentry resumes, while foreign scope/ID and late pages remain fenced. No new transport or persisted state.
+
+- `client.listModels` 的 429 专用 `ModelCatalogReadError` 保留原 HTTP status/code 与有界 `retryAfterMs`：仅接受 0–86400 的十进制 delta-seconds，0 最小冷却 1 秒；缺失、畸形或超界使用 30 秒。此元数据只供目录 GET 的后续前台唤醒使用，客户端不自动重发，其他 HTTP 错误消费者不变；同一完整目录原 10 秒预算、分页与取消保持。

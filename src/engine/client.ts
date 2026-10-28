@@ -58,6 +58,20 @@ import type { SessionScope } from "./session-scope"
 import { shareErrorSchema } from "@/lib/shared-tasks.schema"
 import { parseSharedTasksJson } from "@/lib/shared-tasks-json"
 
+/** Retry metadata is private to the model catalog reader; other HTTP consumers are unchanged. */
+export class ModelCatalogReadError extends SessionClientError {
+  readonly retryAfterMs: number
+
+  constructor(error: SessionClientError, retryAfter: string | null) {
+    super(error.reason, error.message, error.code, error.status)
+    this.name = "ModelCatalogReadError"
+    // The owner emits delta-seconds. Bound accepted hints to one day; missing,
+    // malformed and oversized hints receive a conservative 30-second cooldown.
+    const seconds = retryAfter !== null && /^(?:0|[1-9][0-9]{0,4})$/u.test(retryAfter) ? Number(retryAfter) : NaN
+    this.retryAfterMs = Number.isFinite(seconds) && seconds <= 86_400 ? Math.max(1_000, seconds * 1_000) : 30_000
+  }
+}
+
 export { SessionClientError }
 export type { ClientFailureReason }
 
@@ -490,7 +504,10 @@ export function createSessionClient(options: { baseUrl: string }): SessionClient
           const target = url(`${modelCandidatesPath()}?${query}`)
           const response = await fetch(target, { cache: "no-store", signal: controller.signal })
           controller.signal.throwIfAborted()
-          if (!response.ok) throw await httpError("GET", target, response)
+          if (!response.ok) {
+            const failure = await httpError("GET", target, response)
+            throw response.status === 429 ? new ModelCatalogReadError(failure, response.headers.get("retry-after")) : failure
+          }
           const list = await parseJsonResponse(response, (raw) => modelCandidateListSchema.parse(raw))
           controller.signal.throwIfAborted()
           for (const candidate of list.models) {

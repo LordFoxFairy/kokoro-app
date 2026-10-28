@@ -83,3 +83,5 @@ CHAT-1：page-clients将draftLifecycle按既有主体准入和scope装配；独�
 ## Visible ordered Message target
 
 `page-clients.ts` always supplies explicit null when a browser caller omits the ordered-body target; cached canonical engines must expose the target port (no allow-all fallback). `use-app-frame-engine.ts` uses existing `conversationIdFromLocation` and the current scope pathname before committed acquisition, then revalidates on every committed layout and existing popstate/hashchange/surface-navigation events. Cleanup retires only parts; it never resets the engine, journal or run. Optional omission is limited to injected view-only ports and framework-free engine callers, not browser admission.
+
+- `use-composer-selectors.ts` 的目录生命周期按可信 Product subject/generation 与 preview 隔离，选择仍归 engine；隐藏文档、非 Composer surface、未准入时不发目录 GET。已确认同 scope 目录不随 engine/页面切换重读，失败/未知目录仅在重新进入、前台 focus/visibility 或可信重新准入时单 flight 恢复，不自循环。429 遵守目录专用 Retry-After 冷却（同主体跨代际仍保期限）；其他失败的自动唤醒冷却 30 秒。401 只上报现 AppGate GET 重准入，storage 变化、当前主体不符或撤权立即隐藏并拒绝迟到响应/旧选择；marker 从不授予准入。无新增错误面板或写命令重试。

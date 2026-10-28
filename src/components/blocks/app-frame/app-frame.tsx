@@ -233,7 +233,8 @@ function AppFrameRuntime({
 
   const routedConversationId = navigationState.resolvedConversationRouteId
   const projectOverview = projectWorkspace && routedConversationId === null
-  const selectors = useComposerSelectors(engine, { preview, applyModelToEngine: !projectOverview })
+  const selectors = useComposerSelectors(engine, { preview, applyModelToEngine: !projectOverview,
+    active: !standaloneSurface, ...(projectReadBoundary === undefined ? {} : { readBoundary: projectReadBoundary }) })
 
   const focusComposer = useCallback(() => {
     const node = composerRef.current

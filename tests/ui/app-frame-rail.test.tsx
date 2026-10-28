@@ -5917,7 +5917,7 @@ it.each(["route", "actor", "generation"] as const)("project overview draft choic
       view.rerender(frame({ ...props, projectReadBoundary: { admitted: true,
         subject: change === "actor" ? "next-draft-actor" : props.projectReadBoundary.subject, generation: 2 } }))
     }
-    expect(screen.getByRole("button", { name: /切换模型/ })).toHaveTextContent("Draft default")
+    await waitFor(() => expect(screen.getByRole("button", { name: /切换模型/ })).toHaveTextContent("Draft default"))
     expect(screen.getByRole("button", { name: /切换模式/ })).toHaveTextContent("快速")
     expect(projectEngine.getSnapshot().store?.activeId).toBe(remembered)
     expect(projectEngine.getSnapshot().store?.conversations.find(row => row.id === remembered)?.mode).toBe("thinking")
@@ -6006,4 +6006,28 @@ it("visible parts committed engine hook binds exact Project route and synchronou
     expect(local.createCalls).toHaveLength(0)
     expect(local.controlCalls).toHaveLength(0)
   } finally { view.unmount(); actual.dispose(); window.history.replaceState(null, "", "/app") }
+})
+
+it("the mounted frame only reads models when its trusted Composer becomes active", async () => {
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "catalog-frame")
+  const calls: string[] = []
+  stubBusinessFetch(vi.fn(async input => {
+    const path = new URL(String(input), window.location.origin).pathname
+    calls.push(path)
+    if (path.endsWith("/models")) return Response.json({ models: [], next_cursor: null })
+    return Response.json({ sessions: [], next_cursor: null })
+  }))
+  const frame = (standaloneSurface: boolean, admitted: boolean) => <ThemeProvider><LocaleProvider><AppFrame
+    engine={engine} chatHref="/app" standaloneSurface={standaloneSurface}
+    projectReadBoundary={{ admitted, subject: "catalog-frame", generation: 1 }}
+  /></LocaleProvider></ThemeProvider>
+  const view = render(frame(true, true))
+  await act(async () => { await settle() })
+  expect(calls.filter(path => path.endsWith("/models"))).toHaveLength(0)
+  view.rerender(frame(false, false))
+  await act(async () => { await settle() })
+  expect(calls.filter(path => path.endsWith("/models"))).toHaveLength(0)
+  view.rerender(frame(false, true))
+  await act(async () => { await settle() })
+  expect(calls.filter(path => path.endsWith("/models"))).toHaveLength(1)
 })

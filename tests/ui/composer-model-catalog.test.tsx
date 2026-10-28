@@ -21,6 +21,8 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); window.localStorage.clear(); 
 
 it("ordinary new chat exposes the business catalog before the first submission", async () => {
   window.localStorage.setItem("kokoro.locale", "en")
+  const boundary = { admitted: true, subject: "catalog-first-submit-reader", generation: 1 }
+  window.localStorage.setItem(pageClients.AUTH_INDEX_SUBJECT_KEY, boundary.subject)
   const client = createFakeClient()
   client.listModels = async () => ({ models: [{ provider: "provider", name: "chat/business", is_default: true,
     display_name: "Business chat", model_id: "11111111-1111-4111-8111-111111111111",
@@ -29,7 +31,7 @@ it("ordinary new chat exposes the business catalog before the first submission",
   vi.spyOn(pageClients, "browserListClient").mockReturnValue(client)
   const engine = createSessionEngine({ client, storage: createMemoryStorage<ConversationStore>(null) })
   try {
-    render(<ThemeProvider><LocaleProvider><AppFrame engine={engine} chatHref="/app" /></LocaleProvider></ThemeProvider>)
+    render(<ThemeProvider><LocaleProvider><AppFrame engine={engine} chatHref="/app" projectReadBoundary={boundary} /></LocaleProvider></ThemeProvider>)
     await act(async () => { await settle() })
     fireEvent.pointerDown(screen.getByRole("button", { name: "Switch model: Business chat" }))
     fireEvent.click(screen.getByRole("menuitemradio", { name: "Business chat" }))

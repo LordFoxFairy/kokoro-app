@@ -1182,3 +1182,19 @@ describe("private Message parts HTTP read", () => {
     await expect(createSessionClient({ baseUrl: "/api/session" }).fetchMessageParts({ sessionId: "s", messageId: "m", scope: { kind: "direct" }, signal: new AbortController().signal })).rejects.toMatchObject({ reason: "http", status: 409, code: "message_parts_changed" })
   })
 })
+
+it.each([
+  ["7", 7_000], ["0", 1_000], ["86400", 86_400_000],
+  [null, 30_000], ["-1", 30_000], ["1.5", 30_000], ["999999999999999", 30_000],
+])("model catalog retains bounded 429 retry timing (%s), without replaying GET", async (header, expected) => {
+  const fetchMock = vi.fn().mockResolvedValue(Response.json({ error: { code: "session_rate_limited", message: "admission limited" } }, {
+    status: 429, headers: header === null ? {} : { "retry-after": header },
+  }))
+  vi.stubGlobal("fetch", fetchMock)
+  try {
+    await expect(createSessionClient({ baseUrl: "/api/session" }).listModels()).rejects.toMatchObject({
+      name: "ModelCatalogReadError", reason: "http", status: 429, code: "session_rate_limited", retryAfterMs: expected,
+    })
+    expect(fetchMock).toHaveBeenCalledOnce()
+  } finally { vi.unstubAllGlobals() }
+})
