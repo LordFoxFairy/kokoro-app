@@ -2039,6 +2039,8 @@ export const zh = {
   "projectSkills.loading": "正在加载技能…",
   "projectSkills.checking": "正在确认项目访问权限…",
   "projectSkills.readFailed": "技能读取失败，请重试。",
+  "projectSkills.personalSourceReadFailed": "我的技能暂时未能读取。按 Enter 重新读取。",
+  "projectSkills.officialSourceReadFailed": "官方技能暂时未能读取。按 Enter 重新读取。",
   "projectSkills.defaultFor": "默认使用 {name}",
   "projectSkills.saveDefaults": "保存默认技能",
   "projectSkills.clear": "清空默认选择",

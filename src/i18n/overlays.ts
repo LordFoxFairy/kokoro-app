@@ -466,6 +466,8 @@ const projectSkillsFallback: Partial<Record<MessageKey, string>> = {
   "projectSkills.loading": "Loading skills\u2026",
   "projectSkills.checking": "Checking project access\u2026",
   "projectSkills.readFailed": "Could not read skills. Please retry.",
+  "projectSkills.personalSourceReadFailed": "Reading my skills failed. Press Enter to read again.",
+  "projectSkills.officialSourceReadFailed": "Reading official skills failed. Press Enter to read again.",
   "projectSkills.defaultFor": "Use {name} by default",
   "projectSkills.saveDefaults": "Save default skills",
   "projectSkills.clear": "Clear defaults",

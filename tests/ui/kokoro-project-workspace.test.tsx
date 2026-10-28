@@ -1182,3 +1182,129 @@ it("stable Project host retires a Skills dialog and unknown command on an actual
   expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(2)
   history.replaceState(null, "", "/app")
 })
+
+import { ProjectSkillSourcePicker } from "@/features/app/project-skill-source-picker"
+
+const sourcePickerView = (
+  boundary = { admitted: true, subject: "S12-source-reader", generation: 1 },
+  mode: "personal" | "official" = "personal",
+  busy = false,
+) => <LocaleProvider><ProjectSkillSourcePicker boundary={boundary} mode={mode} busy={busy} onBack={vi.fn()} onInstall={vi.fn()} /></LocaleProvider>
+
+it("S12 来源 pending 仅供读屏且不伪装真实空列表", async () => {
+  const pending = pendingInstructionResponse()
+  vi.stubGlobal("fetch", vi.fn(() => pending.promise))
+  render(sourcePickerView())
+  const field = screen.getByRole("textbox")
+  expect(field).toHaveAttribute("aria-busy", "true")
+  expect(screen.getByRole("status")).toHaveClass("sr-only")
+  expect(screen.queryByText("暂无已添加的技能")).not.toBeInTheDocument()
+  await act(async () => { pending.resolve(skillReply({ data: [] })) })
+  expect(field).toHaveAttribute("aria-busy", "false")
+  expect(await screen.findByText("暂无已添加的技能")).toBeVisible()
+  expect(screen.queryByRole("status")).not.toBeInTheDocument()
+})
+
+it("S12 来源失败是搜索字段提示，保query且仅Enter显式重读恢复", async () => {
+  let available = false
+  const queries: (string | null)[] = []
+  const fetchMock = vi.fn(async (url: string) => {
+    queries.push(new URL(url, "http://picker.test").searchParams.get("query"))
+    if (!available) throw new TypeError("source read unavailable")
+    return skillReply({ data: [{ ...projectSkill, display_name: "Recovered source" }] })
+  })
+  vi.stubGlobal("fetch", fetchMock)
+  const view = render(sourcePickerView())
+  const field = screen.getByRole("textbox")
+  await screen.findByText("我的技能暂时未能读取。按 Enter 重新读取。")
+  expect(field).toHaveAccessibleDescription("我的技能暂时未能读取。按 Enter 重新读取。")
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
+  expect(screen.queryByText("暂无已添加的技能")).not.toBeInTheDocument()
+  fireEvent.change(field, { target: { value: " needle " } })
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+  await screen.findByText("我的技能暂时未能读取。按 Enter 重新读取。")
+  fireEvent.keyDown(field, { key: "Enter", isComposing: true })
+  expect(fetchMock).toHaveBeenCalledTimes(2)
+  view.rerender(sourcePickerView(undefined, "personal", true))
+  fireEvent.keyDown(field, { key: "Enter" })
+  expect(fetchMock).toHaveBeenCalledTimes(2)
+  view.rerender(sourcePickerView())
+  available = true
+  fireEvent.keyDown(field, { key: "Enter" })
+  await screen.findByRole("heading", { name: "Recovered source" })
+  expect(fetchMock).toHaveBeenCalledTimes(3)
+  expect(queries).toEqual([null, "needle", "needle"])
+  expect(field).toHaveValue(" needle ")
+  expect(field).not.toHaveAttribute("aria-describedby")
+  expect(screen.queryByText("我的技能暂时未能读取。按 Enter 重新读取。")).not.toBeInTheDocument()
+})
+
+it("S12 来源搜索替换与关闭abort拒绝迟到结果，不覆盖query", async () => {
+  const reads: { signal: AbortSignal; resolve: (response: Response) => void }[] = []
+  vi.stubGlobal("fetch", vi.fn((_url: string, init?: RequestInit) => new Promise<Response>((resolve) => {
+    reads.push({ signal: init?.signal as AbortSignal, resolve })
+  })))
+  const view = render(sourcePickerView())
+  const field = screen.getByRole("textbox")
+  await waitFor(() => expect(reads).toHaveLength(1))
+  fireEvent.change(field, { target: { value: "old" } })
+  await waitFor(() => expect(reads).toHaveLength(2))
+  fireEvent.change(field, { target: { value: "new" } })
+  await waitFor(() => expect(reads).toHaveLength(3))
+  expect(reads[0]?.signal.aborted).toBe(true)
+  expect(reads[1]?.signal.aborted).toBe(true)
+  await act(async () => { reads[2]?.resolve(skillReply({ data: [{ ...projectSkill, display_name: "Current source" }] })) })
+  await screen.findByRole("heading", { name: "Current source" })
+  await act(async () => { reads[1]?.resolve(skillReply({ data: [{ ...projectSkill, display_name: "Late old source" }] })) })
+  expect(screen.queryByText("Late old source")).not.toBeInTheDocument()
+  expect(field).toHaveValue("new")
+  fireEvent.change(field, { target: { value: "close" } })
+  await waitFor(() => expect(reads).toHaveLength(4))
+  view.unmount()
+  expect(reads[3]?.signal.aborted).toBe(true)
+  await act(async () => { reads[3]?.resolve(skillReply({ data: [{ ...projectSkill, display_name: "Late closed source" }] })) })
+  expect(screen.queryByText("Late closed source")).not.toBeInTheDocument()
+  await act(async () => { reads[0]?.resolve(skillReply({ data: [] })) })
+})
+
+it("S12 来源actor与代际核验同步清私有结果且晚B不复活到新A", async () => {
+  const reads: { signal: AbortSignal; resolve: (response: Response) => void }[] = []
+  vi.stubGlobal("fetch", vi.fn((_url: string, init?: RequestInit) => new Promise<Response>((resolve) => {
+    reads.push({ signal: init?.signal as AbortSignal, resolve })
+  })))
+  const view = render(sourcePickerView())
+  await waitFor(() => expect(reads).toHaveLength(1))
+  await act(async () => { reads[0]?.resolve(skillReply({ data: [{ ...projectSkill, display_name: "Private source A" }] })) })
+  await screen.findByRole("heading", { name: "Private source A" })
+  view.rerender(sourcePickerView({ admitted: false, subject: "S12-source-reader", generation: 2 }))
+  expect(screen.queryByText("Private source A")).not.toBeInTheDocument()
+  expect(reads).toHaveLength(1)
+  view.rerender(sourcePickerView({ admitted: true, subject: "S12-source-B", generation: 3 }))
+  await waitFor(() => expect(reads).toHaveLength(2))
+  view.rerender(sourcePickerView({ admitted: true, subject: "S12-source-reader", generation: 4 }))
+  await waitFor(() => expect(reads).toHaveLength(3))
+  expect(reads[1]?.signal.aborted).toBe(true)
+  await act(async () => { reads[2]?.resolve(skillReply({ data: [{ ...projectSkill, display_name: "Fresh source A" }] })) })
+  await screen.findByRole("heading", { name: "Fresh source A" })
+  await act(async () => { reads[1]?.resolve(skillReply({ data: [{ ...projectSkill, display_name: "Private source B" }] })) })
+  expect(screen.queryByText("Private source B")).not.toBeInTheDocument()
+  expect(screen.queryByText("Private source A")).not.toBeInTheDocument()
+})
+
+it("S12 官方失败提示不当空列表，来源切换不带入个人结果", async () => {
+  const fetchMock = vi.fn(async (url: string) => {
+    if (url.endsWith("ListSkills")) return skillReply({ officialSkills: [], userAddedSkills: [] })
+    if (url.endsWith("ListHubSkills")) throw new TypeError("official read unavailable")
+    return skillReply({ data: [{ ...projectSkill, display_name: "Personal source only" }] })
+  })
+  vi.stubGlobal("fetch", fetchMock)
+  const boundary = { admitted: true, subject: "S12-source-modes", generation: 1 }
+  const view = render(sourcePickerView(boundary))
+  await screen.findByRole("heading", { name: "Personal source only" })
+  view.rerender(sourcePickerView(boundary, "official"))
+  expect(screen.queryByText("Personal source only")).not.toBeInTheDocument()
+  await screen.findByText("官方技能暂时未能读取。按 Enter 重新读取。")
+  expect(screen.getByRole("textbox")).toHaveAccessibleDescription("官方技能暂时未能读取。按 Enter 重新读取。")
+  expect(screen.queryByText("暂无已添加的技能")).not.toBeInTheDocument()
+})

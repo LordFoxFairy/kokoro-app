@@ -1,3 +1,7 @@
+## S11：已删除来源安装的显式清理
+
+Settings deleted 灰卡保留原 source_status／禁用详情正文，仅通过现 PersonalSkillActions 的“移除安装”入口，fresh GET 安装后核 actor／generation／原 installation＋series＋source，再复用现 RemoveFlow／确认框。fresh 读取占同一管理互锁，取消／换 actor／代际／目标或原触发器失联不弹旧确认；稳定 overflow triggerRef 与现 fallback 回焦保持。Remove 确认框的资格读取保64px空白及原 aria-busy／sr-only 状态，不绘制填色圆角骨架。旧 RemoveFlow、原 key unknown 恢复、严格 ACK 后失活列表均不变。不将系列删除当卸载，不自动删除／隐藏或伪造 installed=false，不读被删正文。
+
 ## GitHub preview：安静读取与字段错误
 
 预览读取 busy 仅 sr-only status／aria-busy，无可见加载句／spinner。preview 确定读取失败仅在仓库地址字段内显示“未读取到仓库内容，请检查仓库地址。”，原错误码仅读屏；import／publish／install 等写阶段及 unknown 的真实原状态／重试语义保持。此为呈现修复，不代表 GitHub503 owner 根因已修。

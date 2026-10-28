@@ -233,3 +233,191 @@ it("keeps a closed unknown removal reachable and mutually locked, retries its or
   expect(screen.queryByText("已移除")).toBeNull()
   expect(screen.queryByText("结果未知。重试将复用原请求，不会创建新操作。")).toBeNull()
 })
+
+function deletedCardFixture() {
+  let current: PersonalInstallation = { ...installation, enabled: false, source_status: "deleted", display_name: "Deleted source installation" }
+  const toCard = (value: PersonalInstallation): import("@/hub/schemas").SkillCard => ({ installation_id: value.installation_id, skill_id: value.series_id, source_ref: value.source_ref, installed_source_ref: value.source_ref, revision_skill_id: value.source_ref.slice(6), name: value.display_name, description: value.summary, content_hash: value.series_id, scope: "official", source_status: value.source_status, enabled: value.enabled })
+  let cards = [toCard(current)]
+  const calls: { path: string; method: string; signal?: AbortSignal }[] = []
+  const response = (data: unknown) => Response.json({ data }, { headers: { "cache-control": "no-store", "x-request-id": "deleted-card-cleanup" } })
+  const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input), method = init?.method ?? "GET"
+    calls.push({ path, method, ...(init?.signal ? { signal: init.signal } : {}) })
+    if (method === "DELETE") {
+      current = { ...current, installed: false, enabled: false, removed_at: current.updated_at }
+      cards = []
+      return response({ installation: current, change: "removed", event_id: "deleted-source-uninstall", replayed: false })
+    }
+    return response(current)
+  })
+  const client = { ...createPreviewHubClient(), listSkillPool: vi.fn(async () => cards) }
+  const content = (next = boundary, embedded = true) => <LocaleProvider><SkillsContent client={client} readBoundary={next} pinned={[]} onTogglePin={vi.fn()} embedded={embedded} /></LocaleProvider>
+  return { current, toCard, calls, fetcher, client, content, response, replaceCards: (next: typeof cards) => { cards = next } }
+}
+async function requestDeletedCardRemoval() {
+  const trigger = await screen.findByRole("button", { name: "更多技能操作" })
+  fireEvent.keyDown(trigger, { key: "ArrowDown" })
+  fireEvent.click(await screen.findByRole("menuitem", { name: "移除安装" }))
+  return trigger
+}
+
+it("opens deleted-card cleanup through fresh installation reads and cancellation issues no command or source read", async () => {
+  localStorage.setItem("kokoro.locale", "zh")
+  const f = deletedCardFixture(); vi.stubGlobal("fetch", f.fetcher)
+  render(f.content())
+  expect(await screen.findByRole("button", { name: f.current.display_name })).toBeDisabled()
+  const trigger = await requestDeletedCardRemoval()
+  await waitFor(() => expect(screen.getByRole("button", { name: "移除安装" })).toBeEnabled())
+  expect(f.calls.length).toBeGreaterThanOrEqual(2) // Target read, then the existing RemoveDialog fresh qualification.
+  expect(f.calls.every(call => call.method === "GET" && call.path === `/api/hub/self/skill-installations/${f.current.installation_id}`)).toBe(true)
+  fireEvent.click(screen.getByRole("button", { name: "取消" }))
+  await waitFor(() => expect(trigger).toHaveFocus())
+  expect(screen.getByRole("button", { name: f.current.display_name })).toBeDisabled()
+  expect(f.calls.some(call => call.method === "DELETE")).toBe(false)
+})
+
+it("removes only the deleted-source installation after explicit confirmation and the original strict ACK flow", async () => {
+  localStorage.setItem("kokoro.locale", "zh")
+  const f = deletedCardFixture(); vi.stubGlobal("fetch", f.fetcher)
+  render(f.content()); await screen.findByRole("button", { name: f.current.display_name })
+  await requestDeletedCardRemoval()
+  await waitFor(() => expect(screen.getByRole("button", { name: "移除安装" })).toBeEnabled())
+  expect(f.calls.some(call => call.method === "DELETE")).toBe(false)
+  fireEvent.click(screen.getByRole("button", { name: "移除安装" }))
+  await screen.findByText("已移除")
+  expect(f.calls.filter(call => call.method === "DELETE")).toEqual([{ path: `/api/hub/self/skill-installations/${f.current.installation_id}`, method: "DELETE", signal: expect.any(AbortSignal) }])
+  expect(f.calls.every(call => call.path === `/api/hub/self/skill-installations/${f.current.installation_id}`)).toBe(true)
+})
+
+it.each(["actor", "generation", "target"] as const)("does not open an old cleanup confirmation after a pending card read and %s replacement", async replacement => {
+  localStorage.setItem("kokoro.locale", "zh")
+  const f = deletedCardFixture(); let finish!: (value: Response) => void, signal: AbortSignal | undefined
+  const fetcher = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => { signal = init?.signal ?? undefined; return new Promise<Response>(resolve => { finish = resolve }) })
+  vi.stubGlobal("fetch", fetcher)
+  const view = render(f.content()); await screen.findByRole("button", { name: f.current.display_name })
+  await requestDeletedCardRemoval(); await waitFor(() => expect(fetcher).toHaveBeenCalledOnce())
+  if (replacement === "target") {
+    const { invalidate } = await import("@/lib/query"), { skillResourceKey, SKILLS_KEY } = await import("@/ui/skills/skills-resource-cache")
+    f.replaceCards([{ ...f.toCard(f.current), source_ref: "skill:replacement-revision", installed_source_ref: "skill:replacement-revision", revision_skill_id: "replacement-revision", description: "Replacement target is current" }])
+    act(() => invalidate(skillResourceKey(SKILLS_KEY, f.client)))
+    await screen.findByText("Replacement target is current")
+  } else {
+    view.rerender(f.content({ ...boundary, subject: replacement === "actor" ? "new-cleanup-actor" : boundary.subject, generation: 2 }))
+    await waitFor(() => expect(signal?.aborted).toBe(true))
+  }
+  await act(async () => { finish(f.response(f.current)) })
+  expect(screen.queryByRole("dialog")).toBeNull()
+  expect(screen.queryByRole("button", { name: "移除安装" })).toBeNull()
+  expect(fetcher).toHaveBeenCalledOnce()
+})
+
+it("keeps other installation writes interlocked while the deleted card's target read is pending", async () => {
+  localStorage.setItem("kokoro.locale", "zh")
+  const f = deletedCardFixture(), other = { ...f.toCard(installation), installation_id: "other-installation", skill_id: "other-series", name: "Other active skill", available_update: { source_ref: "skill:new-version", revision: "3" } }
+  f.replaceCards([f.toCard(f.current), other])
+  let finish!: (value: Response) => void
+  const fetcher = vi.fn(async () => new Promise<Response>(resolve => { finish = resolve })); vi.stubGlobal("fetch", fetcher)
+  render(f.content()); await screen.findByRole("button", { name: f.current.display_name }); await requestDeletedCardRemoval()
+  await waitFor(() => expect(fetcher).toHaveBeenCalledOnce())
+  expect(screen.getByRole("switch", { name: "停用 Other active skill" })).toBeDisabled()
+  expect(screen.getByRole("button", { name: /更新至 v3 Other active skill/u })).toBeDisabled()
+  expect(screen.getByRole("button", { name: "更多技能操作" })).toBeDisabled()
+  await act(async () => { finish(f.response(f.current)) })
+})
+
+it.each(["installation_id", "series_id", "source_ref"] as const)("rejects a changed fresh %s before opening deleted-card cleanup", async field => {
+  localStorage.setItem("kokoro.locale", "zh")
+  const f = deletedCardFixture(), fetcher = vi.fn(async () => f.response({ ...f.current, [field]: field === "source_ref" ? "skill:different-source" : "different-identity" }))
+  vi.stubGlobal("fetch", fetcher)
+  render(f.content()); await screen.findByRole("button", { name: f.current.display_name }); await requestDeletedCardRemoval()
+  await screen.findByRole("alert")
+  expect(screen.queryByRole("dialog")).toBeNull()
+  expect(screen.getByRole("button", { name: "更多技能操作" })).toBeEnabled()
+  expect(fetcher).toHaveBeenCalledOnce()
+})
+
+
+it("keeps the same deleted-card cleanup reachable from the existing standalone pool without enabling details", async () => {
+  localStorage.setItem("kokoro.locale", "zh")
+  const f = deletedCardFixture(); vi.stubGlobal("fetch", f.fetcher)
+  render(f.content(boundary, false))
+  expect(await screen.findByRole("button", { name: f.current.display_name })).toBeDisabled()
+  const trigger = await requestDeletedCardRemoval()
+  await waitFor(() => expect(screen.getByRole("button", { name: "移除安装" })).toBeEnabled())
+  fireEvent.click(screen.getByRole("button", { name: "取消" }))
+  await waitFor(() => expect(trigger).toHaveFocus())
+  expect(f.calls.every(call => call.method === "GET" && call.path === `/api/hub/self/skill-installations/${f.current.installation_id}`)).toBe(true)
+})
+
+it("keeps an explicit menu reread reachable after initial cleanup qualification fails, without issuing removal", async () => {
+  localStorage.setItem("kokoro.locale", "zh")
+  const f = deletedCardFixture(), fetcher = vi.fn().mockRejectedValueOnce(Error("qualification interrupted")).mockImplementation(f.fetcher)
+  vi.stubGlobal("fetch", fetcher)
+  render(f.content()); await screen.findByRole("button", { name: f.current.display_name })
+  const trigger = await requestDeletedCardRemoval()
+  await screen.findByRole("alert")
+  expect(fetcher).toHaveBeenCalledOnce()
+  expect(screen.queryByRole("dialog")).toBeNull()
+  expect(trigger).toBeEnabled()
+  await requestDeletedCardRemoval()
+  await waitFor(() => expect(screen.getByRole("button", { name: "移除安装" })).toBeEnabled())
+  expect(fetcher).toHaveBeenCalledTimes(3) // Explicit reread plus unchanged dialog qualification, no automatic retry.
+  expect(f.calls.every(call => call.method === "GET")).toBe(true)
+  fireEvent.click(screen.getByRole("button", { name: "取消" }))
+  await waitFor(() => expect(trigger).toHaveFocus())
+  expect(screen.getByRole("button", { name: f.current.display_name })).toBeDisabled()
+})
+
+it("returns standalone cleanup focus to the selected first deleted card, not the last card's overflow", async () => {
+  localStorage.setItem("kokoro.locale", "zh")
+  const f = deletedCardFixture(), second: PersonalInstallation = { ...f.current, installation_id: "second-deleted-installation", series_id: "second-deleted-series", source_ref: "skill:second-deleted-revision", display_name: "Second deleted source" }
+  f.replaceCards([f.toCard(f.current), f.toCard(second)])
+  const fetcher = vi.fn(async (input: RequestInfo | URL) => f.response(String(input).endsWith(second.installation_id) ? second : f.current))
+  vi.stubGlobal("fetch", fetcher)
+  render(f.content(boundary, false)); await screen.findByRole("button", { name: second.display_name })
+  const triggers = screen.getAllByRole("button", { name: "更多技能操作" }), firstTrigger = triggers[0]!, secondTrigger = triggers[1]!
+  expect(triggers).toHaveLength(2)
+  fireEvent.keyDown(firstTrigger, { key: "ArrowDown" }); fireEvent.click(await screen.findByRole("menuitem", { name: "移除安装" }))
+  await waitFor(() => expect(screen.getByRole("button", { name: "移除安装" })).toBeEnabled())
+  expect(fetcher.mock.calls.every(([input]) => String(input).endsWith(f.current.installation_id))).toBe(true)
+  fireEvent.click(screen.getByRole("button", { name: "取消" }))
+  await waitFor(() => expect(firstTrigger).toHaveFocus())
+  expect(secondTrigger).not.toHaveFocus()
+})
+
+it("keeps pending removal qualification as a stable blank space with only off-screen status until real facts arrive", async () => {
+  localStorage.setItem("kokoro.locale", "zh")
+  const f = deletedCardFixture(); let finish!: (response: Response) => void, reads = 0
+  const fetcher = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+    expect(init?.method ?? "GET").toBe("GET")
+    if (++reads === 1) return f.response(f.current)
+    return new Promise<Response>(resolve => { finish = resolve })
+  })
+  vi.stubGlobal("fetch", fetcher)
+  render(f.content()); await screen.findByRole("button", { name: f.current.display_name }); await requestDeletedCardRemoval()
+  await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2))
+  const dialog = screen.getByRole("dialog"), placeholder = dialog.querySelector<HTMLElement>(".h-16")!
+  expect(dialog).toHaveAttribute("aria-busy", "true")
+  expect(screen.queryByRole("button", { name: "移除安装" })).toBeNull()
+  expect(placeholder).not.toBeNull()
+  const { chromium } = await import("@playwright/test"), { createServer } = await import("vite")
+  const vite = await createServer({ configFile: false, root: process.cwd(), server: { middlewareMode: true, hmr: false, watch: null } })
+  let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
+  try {
+    const result = await vite.transformRequest("/src/app/globals.css?inline"), json = result?.code.match(/export default ([\s\S]*?);?\s*$/u)?.[1]
+    if (!json) throw Error("Remove qualification CSS compilation missing inline output")
+    const css = JSON.parse(json.replace(/;\s*$/u, "")) as string
+    browser = await chromium.launch({ headless: true }); const page = await browser.newPage({ viewport: { width: 652, height: 767 } })
+    await page.route("**/*", route => route.abort())
+    await page.setContent(`<!doctype html><html><head><style>${css}</style></head><body data-web-skin="kokoro">${dialog.outerHTML}</body></html>`)
+    expect(await page.locator(".h-16").evaluate(element => { const style = getComputedStyle(element); return { height: element.getBoundingClientRect().height, background: style.backgroundColor, radius: style.borderRadius } })).toEqual({ height: 64, background: "rgba(0, 0, 0, 0)", radius: "0px" })
+    await page.close()
+  } finally { try { await browser?.close() } finally { await vite.close() } }
+  expect(dialog.querySelector('[role="status"]')).toHaveClass("sr-only")
+  await act(async () => { finish(f.response(f.current)) })
+  await waitFor(() => expect(screen.getByRole("button", { name: "移除安装" })).toBeEnabled())
+  expect(dialog).toHaveAttribute("aria-busy", "false")
+  expect(dialog).toHaveTextContent(f.current.display_name)
+  expect(fetcher).toHaveBeenCalledTimes(2)
+  fireEvent.click(screen.getByRole("button", { name: "取消" }))
+}, 20_000)

@@ -40,7 +40,7 @@ export function SkillInstallationRemoveDialog({ flow, state, boundary, open, onO
         <strong>{state.current.display_name}</strong>
         <p>{t("skills.history.revision")} {state.current.revision}</p>
         <p>{t(state.current.installed ? "skills.personal.installed" : "skills.personal.removed")}</p>
-      </div> : <div className="h-16 rounded-lg bg-muted" aria-hidden="true" />}
+      </div> : <><div className="h-16" aria-hidden="true" />{admitted && busy && state.phase === "read" ? <span className="sr-only" role="status">{t("skills.detailLoading")}</span> : null}</>}
       {admitted && state.kind === "unknown" ? <p role="alert">{t("skills.personal.unknown")}</p> : null}
       {admitted && state.acknowledged && state.kind !== "completed" ? <p role="status">{t("skills.personal.confirmed")}</p> : null}
       {admitted && (state.kind === "unavailable" || state.kind === "read_failed" && !state.acknowledged)

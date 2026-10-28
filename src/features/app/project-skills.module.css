@@ -212,6 +212,13 @@
   background: transparent;
   font-size: 14px;
 }
+.sourceHint {
+  margin: -0.25rem 0 0.75rem;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
 .confirm {
   width: min(28rem, 95vw);
 }

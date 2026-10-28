@@ -50,6 +50,7 @@ import { cn } from "@/lib/utils";
 import { SkillCatalogDialog, type CatalogDetailProjection } from "./skills-catalog-dialog";
 import { formatBytes } from "./skills-format";
 import { InstalledSkillCard } from "./skills-installed-card";
+import { PersonalSkillActions } from "./personal-skill-actions";
 import { SkillRevisions } from "./skill-revisions";
 import { type SkillsPool, skillStateKey, skillSourceScope } from "./skills-pool-model";
 import type { SkillsScopeFilter } from "./skills-scope";
@@ -134,6 +135,7 @@ export function SkillsPoolTab({
   brandName,
   onOpenDetail,
   onUpdateSkill,
+  onRemoveInstalledSkill,
   embeddedCatalogOpen,
   onEmbeddedCatalogOpenChange,
   catalogTriggerRef: suppliedCatalogTriggerRef,
@@ -177,6 +179,7 @@ export function SkillsPoolTab({
   onCreateWithAi?: (prompt?: string) => void;
   onOpenDetail: (skill: SkillCard | SkillCatalogCard, source: HTMLElement) => void;
   onUpdateSkill: (skill: SkillCard, source: HTMLElement) => void;
+  onRemoveInstalledSkill?: (skill: SkillCard, source: HTMLElement) => void;
   /** Settings owns the embedded catalog route so its heading and content
    * transition from one state source. Standalone Skills keeps local state. */
   embeddedCatalogOpen?: boolean;
@@ -204,6 +207,7 @@ export function SkillsPoolTab({
   const disableTriggerRefs = useRef<Record<string, HTMLButtonElement | null>>(
     {},
   );
+  const removeTriggerRefs = useRef<Record<string, RefObject<HTMLButtonElement | null>>>({});
   const confirmDisableRefs = useRef<Record<string, HTMLButtonElement | null>>(
     {},
   );
@@ -548,6 +552,7 @@ export function SkillsPoolTab({
             // in the same scope are still independent installed Skills.
             const isEnabled =
               enabledOverrides.get(stateKey) ?? skill.enabled !== false;
+            const removeTrigger = removeTriggerRefs.current[stateKey] ??= { current: null };
             const detailAvailable =
               skill.source_status !== "deleted" &&
               skill.skill_id !== undefined &&
@@ -568,6 +573,7 @@ export function SkillsPoolTab({
                         : null
                     }
                     onUpdate={(source) => onUpdateSkill(skill, source)}
+                    {...(onRemoveInstalledSkill === undefined ? {} : { onRemoveInstallation: (source: HTMLElement) => onRemoveInstalledSkill(skill, source) })}
                     onEnabledChange={(enabled) =>
                       onSetEnabled(skill, enabled, stateKey)
                     }
@@ -643,6 +649,10 @@ export function SkillsPoolTab({
                           embedded && styles.embeddedItemActions,
                         )}
                       >
+                        {skill.source_status === "deleted" && skill.installation_id && onRemoveInstalledSkill ? <PersonalSkillActions
+                          disabled={busy !== null || isLocked} writable={false} triggerRef={removeTrigger}
+                          onRemoveInstallation={() => { if (removeTrigger.current) onRemoveInstalledSkill(skill, removeTrigger.current); }}
+                        /> : null}
                         {skill.available_update ? <Button type="button" variant="outline" disabled={busy !== null || skill.source_status === "deleted"} onClick={event => onUpdateSkill(skill, event.currentTarget)}>{t("skills.update.available", { revision: skill.available_update.revision })}</Button> : null}
                         <Button
                           variant="outline"

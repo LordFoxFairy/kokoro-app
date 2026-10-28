@@ -1,3 +1,4 @@
+import type { RefObject } from "react"
 import { ArchiveX, Trash2, Ellipsis, History, RefreshCw } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -7,15 +8,16 @@ import { useT } from "@/i18n/context"
 export type PersonalSkillOperation = "update" | "withdraw" | "history" | "delete"
 
 /** Publisher management and removing one's installation have distinct authority. */
-export function PersonalSkillActions({ disabled, writable = true, onSelect, onRemoveInstallation }: {
+export function PersonalSkillActions({ disabled, writable = true, onSelect, onRemoveInstallation, triggerRef }: {
   disabled: boolean
   writable?: boolean
   onSelect?: (operation: PersonalSkillOperation) => void
   onRemoveInstallation?: () => void
+  triggerRef?: RefObject<HTMLButtonElement | null>
 }) {
   const t = useT()
   return <DropdownMenu>
-    <DropdownMenuTrigger asChild><Button type="button" variant="ghost" size="icon-sm" aria-label={t("skills.detailMore")} disabled={disabled}><Ellipsis aria-hidden="true" /></Button></DropdownMenuTrigger>
+    <DropdownMenuTrigger asChild><Button ref={triggerRef} type="button" variant="ghost" size="icon-sm" aria-label={t("skills.detailMore")} disabled={disabled}><Ellipsis aria-hidden="true" /></Button></DropdownMenuTrigger>
     <DropdownMenuContent align="end" className="w-50 rounded-xl border-0 p-1">
       {onSelect ? <>
       <DropdownMenuItem onSelect={() => onSelect("history")}><History aria-hidden="true" />{t("skills.history.title")}</DropdownMenuItem>
