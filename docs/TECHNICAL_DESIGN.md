@@ -1,3 +1,9 @@
+## 历史动作的操作与对象（2026-10-28 后继）
+
+缺少同次公开action_title的记录继续保持真实身份，不把工具名当自然语言意图。共用presentation的MCP操作简化为“列出可用工具／查看工具说明／调用工具”，调用行与Canvas都保操作+原对象，删除仅显示selector的targetOnly特判。新action_title仍最高优先级；无对象只显示操作，不由参数、结果或能力文档推断目的。保持原顺序、独立失败、单层披露、exact详情、文件路径与键盘行为，不更改网络/数据/执行。
+
+此项只修复历史fallback缺动词/重复技术类别，不补造旧正文，也不将它称为完整Manus对齐。既有Agent general prompt已经包含多步公开阶段表达，本次没有再次叠加提示词或修改Agent。
+
 ## 行动行的参考节奏（2026-10-28）
 
 实际Manus Webdev参考：主行动文本14px/20px、父行28px；标题单行省略，图标居中，hover仅文字加深。ToolCallRow据此将公开action_title与原始文件路径的排版分开：行动标题视觉截断但保完整DOM/accessible name/title和Canvas；无标题文件仍完整换行。沿现局部CSS去整行hover底色，保focus-visible、coarse pointer44px及真实失败文字；不调整wire、分组、历史或调用。这是已观察的视觉修正，不证明MCP旧历史的语义对齐。

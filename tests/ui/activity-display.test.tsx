@@ -113,7 +113,7 @@ it("reads the original call intent as the main line without repeating selectors 
   expect(row).toHaveTextContent(action_title)
   expect(screen.queryByText("read_wiki_structure")).toBeNull()
   expect(screen.queryByText("langchain-ai/langgraph")).toBeNull()
-  expect(screen.queryByText("Call MCP tool")).toBeNull()
+  expect(screen.queryByText("Call tool")).toBeNull()
   expect(container.querySelector("a")).toBeNull()
   row.click(); expect(onInspect).toHaveBeenCalledExactlyOnceWith(base.activity_id)
   rerender(<LocaleProvider><ToolCallRow activity={{ ...base, action_title, status: "failed" }} onInspect={onInspect} /></LocaleProvider>)
@@ -121,10 +121,10 @@ it("reads the original call intent as the main line without repeating selectors 
   expect(container.querySelector('[data-status="failed"]')).not.toBeNull()
 })
 
-it("shows a legacy MCP call's exact tool name without repeating class labels or argument prose", () => {
+it("shows a legacy MCP operation and exact object without inventing intent or exposing argument prose", () => {
   render(<LocaleProvider><ToolCallRow activity={{ ...base, display_code: "tool.mcp.call", display_detail: { kind: "mcp_tool", name: "ask_wiki_question" } }} detail={{ activity_id: base.activity_id, tool_name: "mcp_call", input_preview: { text: '{"repo":"langchain-ai/langgraph","question":"What is LangGraph used for?"}', truncated: false, redacted: false } }} onInspect={vi.fn()} /></LocaleProvider>)
-  expect(screen.getByRole("button", { name: /^ask_wiki_question\s*Completed$/ })).toBeVisible()
-  expect(screen.queryByText("Call MCP tool")).toBeNull()
+  expect(screen.getByRole("button", { name: /^Call tool ask_wiki_question\s*Completed$/ })).toBeVisible()
+  expect(screen.getByText("Call tool")).toBeVisible()
   expect(screen.queryByText(/What is LangGraph/)).toBeNull()
 })
 
@@ -164,4 +164,17 @@ it.each(['{}', '[]', 'null', '{', '{"path":"relative"}', '{"pattern":"/not-a-pat
   expect(screen.getByText("List directory")).toBeVisible()
   expect(document.querySelector('[title="/"]')).toBeNull()
   expect(document.querySelector(`.${detailStyles.inlineTarget}`)).toBeNull()
+})
+
+
+it("keeps repeated legacy calls independently inspectable without hiding the failed attempt", () => {
+  const inspect = vi.fn()
+  const activity = { ...base, display_code: "tool.mcp.call" as const, display_detail: { kind: "mcp_tool" as const, name: "ask_wiki_question" } }
+  render(<LocaleProvider><ToolCallRow activity={{ ...activity, status: "failed" }} onInspect={inspect} /><ToolCallRow activity={{ ...activity, activity_id: "second-call" }} onInspect={inspect} /></LocaleProvider>)
+  const failed = screen.getByRole("button", { name: /^Call tool ask_wiki_question\s*Failed$/ })
+  const completed = screen.getByRole("button", { name: /^Call tool ask_wiki_question\s*Completed$/ })
+  failed.click(); completed.click()
+  expect(inspect.mock.calls).toEqual([[base.activity_id], ["second-call"]])
+  expect(failed).toBeVisible()
+  expect(completed).toBeVisible()
 })

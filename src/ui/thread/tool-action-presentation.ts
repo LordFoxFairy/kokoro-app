@@ -50,7 +50,5 @@ export function toolActionPresentation(activity: Extract<RunProcessActivity, { a
     ...(native ?? TOOL_ACTION_PRESENTATION[activity.display_code]),
     targetText: targetText ?? (native && detail ? nativePath(detail, native.pathKey) : undefined),
     file: target?.kind === "file" || Boolean(native),
-    // An exact MCP target already identifies the operation; raw parameters live in the inspector.
-    targetOnly: activity.display_code === "tool.mcp.call" && target?.kind === "mcp_tool",
   }
 }

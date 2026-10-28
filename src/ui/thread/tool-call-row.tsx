@@ -16,14 +16,14 @@ export function ToolCallRow({ activity, continuation, onInspect, detail: ownerDe
   continuation?: ReactNode
 }) {
   const t = useT()
-  const { label, Icon, targetText, file, targetOnly } = toolActionPresentation(activity, ownerDetail)
+  const { label, Icon, targetText, file } = toolActionPresentation(activity, ownerDetail)
   const actionTitle = activity.action_title
   const status = t(activity.status === "running" ? "thread.processRunning" : activity.status === "completed" ? "thread.processCompleted" : "thread.processFailed")
   const content = <>
     <Icon className={styles.actionIcon} aria-hidden="true" />
-    <span className={`${details.readingLine} ${actionTitle ? details.titleLine : file ? details.fileLine : ""}`} title={actionTitle ?? [targetOnly ? undefined : t(label), targetText].filter(Boolean).join(" · ")}>
+    <span className={`${details.readingLine} ${actionTitle ? details.titleLine : file ? details.fileLine : ""}`} title={actionTitle ?? [t(label), targetText].filter(Boolean).join(" · ")}>
       {actionTitle ? <span>{actionTitle}</span> : <>
-      {targetOnly ? null : <span>{t(label)}</span>}
+      <span>{t(label)}</span>
       {targetText ? <> <span className={details.inlineTarget} title={targetText}>{targetText}</span></> : null}
       </>}
     </span>

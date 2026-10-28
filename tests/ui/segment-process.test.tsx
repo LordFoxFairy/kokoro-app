@@ -220,8 +220,8 @@ it("renders one real same-run user across partial pages, EOF and late snapshots 
 import { ToolCallRow } from "@/ui/thread/tool-call-row"
 const public28Labels = [
   ["tool.execution", "Tool call"], ["tool.file.read", "Read file"],
-  ["tool.mcp.discover", "Discover MCP tools"], ["tool.mcp.describe", "Describe MCP tool"],
-  ["tool.mcp.call", "Call MCP tool"], ["tool.web.search", "Search the web"], ["tool.web.fetch", "Read webpage"],
+  ["tool.mcp.discover", "List available tools"], ["tool.mcp.describe", "Read tool description"],
+  ["tool.mcp.call", "Call tool"], ["tool.web.search", "Search the web"], ["tool.web.fetch", "Read webpage"],
   ["tool.file.write", "Write file"], ["tool.file.deliver", "Deliver file"],
 ] as const
 it.each([

@@ -1,3 +1,5 @@
+2026-10-28 历史fallback：ToolCallRow与ActivityInspector共用简短操作+同次对象，删除MCP裸selector特判；有action_title保持原文优先。真实失败/顺序/详情不变，无推断历史意图。
+
 2026-10-28 行动标题节奏：ToolCallRow公开标题采用单行视觉省略，完整名称与exact详情仍可键盘访问；仅原始文件路径保换行。局部activity-detail样式统一图标居中、hover仅文字强调，保focus/coarse触达，不改变Skill、事件或分组。
 
 2026-10-28：`tool-action-presentation.ts`为主行与Canvas共用的有限显示映射；同活动原生工具名与原路径映射中性操作。主行不拼接MCP参数，实际输入/输出保留在详情；不补旧标题/路径、不改失败或调用顺序。

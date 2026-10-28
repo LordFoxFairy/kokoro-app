@@ -99,9 +99,9 @@ it("a single Canvas action has exactly one operation entry while callers without
   expect(onInspect).toHaveBeenCalledTimes(1)
 })
 
-it("uses the exact operation name instead of repeating the MCP category beside every call", () => {
+it("keeps the operation verb with the exact legacy MCP object beside every call", () => {
   render(<LocaleProvider><ToolCallRow activity={activity} /></LocaleProvider>)
-  expect(screen.queryByText("Call MCP tool")).toBeNull()
+  expect(screen.getByText("Call tool")).toBeVisible()
   expect(screen.getByText("ask_wiki_question")).toBeVisible()
 })
 

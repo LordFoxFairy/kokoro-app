@@ -1,3 +1,9 @@
+## 2026-10-28 历史工具动作操作词修复（本地验收，正常激活另记）
+
+基线30ba1edb：旧MCP无action_title时不再只显示selector，主行和Canvas共用简短操作+真实对象；九语言一致更新，保新标题优先、全部失败/顺序、同次详情与参数不进主行。没有改Agent提示词、事件、历史或执行。既有general prompt及活跃worker源码已经包含公开阶段规则，不重复叠加。
+
+本次先RED1/20，后UI160文件3209通过；lint、typecheck、build与post-types通过，diff检查通过。首轮扩大UI有1条旧中文locator失败，已只改操作文案并保整壳Canvas输入/输出/请求次数断言；独审未见运行代码新增确定P0–P2。全默认、contract/architecture、全E2E未重跑（无契约变化，原18条侧栏系统driver欠账仍保留）。本片不代表Manus全过程对齐、PR合并或全产品可上线；正常环境与浏览器证据由Root原计划绑定。
+
 ## 2026-10-28 行动行视觉收敛（本地已验证，正常配对由Root记录）
 
 基线383486b3，仅ToolCallRow与局部activity-detail样式：公开行动标题不再误用完整文件路径的多行排版；保持完整DOM名称、title、精确点击及Canvas，原无标题文件路径仍换行。图标居中、hover仅文字强调，对齐实测Manus 14/20、28px与单行省略；保键盘focus和coarse44，不改状态、分组、传输或旧记录。新增实际计算样式回归先失败(normal vs nowrap)，修后相关5suite53、扩大189suite3915、lint/types/build/posttypes均通过，独审无确定问题。原jsdom navigation提示仍在，未重跑全默认/全E2E，18个旧侧栏系统driver尚未收口。

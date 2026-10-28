@@ -6060,7 +6060,7 @@ it("desktop action inspection carries the admitted reader through the actual App
     ])
     await settle()
   })
-  fireEvent.click(await screen.findByRole("button", { name: /调用 MCP 工具/ }))
+  fireEvent.click(await screen.findByRole("button", { name: /调用工具/ }))
   const inspector = await screen.findByRole("heading", { name: "动作详情" })
   expect(inspector).toBeVisible()
   expect(await screen.findByRole("region", { name: "结果" })).toHaveTextContent("original response evidence")
