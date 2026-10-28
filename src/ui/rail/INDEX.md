@@ -35,3 +35,5 @@ AppFrame可信ProjectReadBoundary沿原rail props/shell进入account余额；同
 ## Project pin consumer
 
 本人项目pin来自AppFrame全局`useProjectPins`，Pinned区只投影已读且当前owner可见项目，按owner时间/id顺序；分页未耗尽不推断其他项目未固定。Project真实右键／ellipsis共享固定或取消固定第五项；未知仅精确GET核验，pending禁同project重入。菜单编辑/查看用FolderPen/Eye与16px图标，View普通同tab点击先关移动Sheet再dispatch导航，modified link语义保留。
+
+Conversation rows keep title selection and the independent menu trigger as separate hit targets, with a single feature-scoped row highlight for hover, keyboard focus, active selection and open menus. The existing 36px desktop / 44px touch targets and project-row styles remain independent.

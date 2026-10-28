@@ -117,6 +117,14 @@
   pointer-events: auto;
   overflow: visible;
 }
+/* A conversation has two independent hit targets, but one visual row. Keep
+ * the shared highlight behind the title and its revealed menu action. */
+.item[data-drag-kind="conversation"]:not([data-editing="true"]):is(:hover, :focus-within, [data-active="true"], :has(.itemOptions[data-state="open"])) {
+  background-color: var(--sidebar-accent);
+}
+.item[data-drag-kind="conversation"] .itemSelect:is(:hover, :active, [data-active="true"]) {
+  background-color: transparent;
+}
 .itemOptions:hover { color: var(--foreground); }
 .itemOptions svg { width: 1rem; height: 1rem; }
 /* Portal menus belong to this feature, not the global dropdown primitive.
