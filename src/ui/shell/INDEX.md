@@ -75,3 +75,7 @@ Web专属thread viewport统一隐藏滚动条槽以匹配Composer阅读轴；共
 CHAT-1：page-clients将draftLifecycle按既有主体准入和scope装配；独立draft-retired键沿原conversation前缀清理，无正文/secret/TTL。保原ID和Skill试用引用，不在索引覆盖时恢复已退休来源。
 
 项目行删除只提交 RAM target handoff：先导航指定项目，当前受信 owner read 精确 ready 后才打开原确认框，取消不写。旧项目的无参删除控制不接受另一行目标；确认仍冻结原 project ID/key/空 body，unknown 显式恢复、202 退休及迟到／身份／导航隔离保持。行菜单编辑名称复用现 rename，焦点返回需当前 route、owner、scope 同时匹配；失联／隐藏行只回当前 header，旧回调不挪动新项目焦点。
+
+## Visible ordered Message target
+
+`page-clients.ts` always supplies explicit null when a browser caller omits the ordered-body target; cached canonical engines must expose the target port (no allow-all fallback). `use-app-frame-engine.ts` uses existing `conversationIdFromLocation` and the current scope pathname before committed acquisition, then revalidates on every committed layout and existing popstate/hashchange/surface-navigation events. Cleanup retires only parts; it never resets the engine, journal or run. Optional omission is limited to injected view-only ports and framework-free engine callers, not browser admission.

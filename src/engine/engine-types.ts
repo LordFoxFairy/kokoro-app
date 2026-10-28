@@ -81,6 +81,9 @@ export const SERVER_ENGINE_SNAPSHOT: EngineSnapshot = {
   hasPendingSubmission: false,
 }
 
+/** A mounted route may read ordered bodies only for this exact conversation and scope. */
+export type MessagePartsReadTarget = Readonly<{ scope: SessionScope; conversationId: string }>
+
 export type SessionEngine = {
   getSnapshot: () => EngineSnapshot
   subscribe: (listener: () => void) => () => void
@@ -95,6 +98,8 @@ export type SessionEngine = {
   retry: () => void
   // 连接 hard failure 的只读恢复：重新 snapshot-first，不重发 user/message。
   retryMessageParts?: (messageId: string) => void
+  /** View-only injected engines may omit this port; canonical browser engines always implement it. */
+  setMessagePartsReadTarget?: (target: MessagePartsReadTarget | null) => void
   reconnect: () => void
   cancelRun: () => void
   stageToolDecision: (runId: string, toolId: string, decision: ToolDecision) => void
@@ -128,6 +133,8 @@ export type EngineDeps = {
   submissionRecovery?: SubmissionRecovery
   /** One readonly401 recovery, captured from the current trusted data epoch. */
   captureMessagePartsReadRecheck?: () => MessagePartsReadRecheck | undefined
+  /** Seed before eager hydration. Browser factories always supply a target or null, never omission. */
+  messagePartsReadTarget?: MessagePartsReadTarget | null
   /** Direct inbox and project workbenches never share a persisted session index. */
   scope?: SessionScope
   now?: () => number

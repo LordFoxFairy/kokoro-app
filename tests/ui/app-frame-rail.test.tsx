@@ -5978,3 +5978,32 @@ it("project overview rejected fresh allocation preserves its draft choices and h
     expect(projectClient.createCalls[0]?.sessionId).not.toBe(remembered)
   } finally { view.unmount(); projectEngine.dispose() }
 })
+
+it("visible parts committed engine hook binds exact Project route and synchronously aborts on leaving", async () => {
+  const { useAppFrameEngine } = await import("@/components/blocks/app-frame/use-app-frame-engine")
+  const projectRef = "hook-visible-parts", scope = { kind: "project" as const, projectRef }, local = createFakeClient()
+  local.nextSnapshot = async () => makeSnapshot({ sessionId: "s", messages: [{ message_id: "m", role: "assistant", run_id: "r", content: null, status: "completed", created_at: "now", rendering: { mode: "ordered", format_version: 1, revision: "1", event_watermark: null, parts_cursor: "initial" } }] })
+  let late!: (page: Awaited<ReturnType<typeof local.fetchMessageParts>>) => void
+  local.nextParts = () => new Promise(resolve => { late = resolve })
+  const actual = createSessionEngine({ client: local, scope, storage: createMemoryStorage<ConversationStore>(addConversation(null, "s", 1)), messagePartsReadTarget: null })
+  window.history.replaceState(null, "", `/app/project/${projectRef}`)
+  const view = renderHook(() => useAppFrameEngine({ injectedEngine: actual, preview: false, projectRef }))
+  try {
+    await settle()
+    expect(local.partsCalls).toHaveLength(0)
+    act(() => { window.history.pushState(null, "", `/app/project/${projectRef}?conversation=s`); window.dispatchEvent(new PopStateEvent("popstate")) })
+    await waitFor(() => expect(local.partsCalls).toHaveLength(1))
+    act(() => {
+      window.history.pushState(null, "", `/app/project/${projectRef}`); window.dispatchEvent(new Event("kokoro:surface-navigation"))
+      expect(local.partsCalls[0]?.signal.aborted).toBe(true)
+    })
+    await act(async () => { late({ session_id: "s", message_id: "m", run_id: "r", format_version: 1, revision: "1", event_watermark: null, next_cursor: null, items: [] }) })
+    expect(actual.getSnapshot().thread.messageParts?.m?.status).not.toBe("complete")
+    act(() => { window.history.pushState(null, "", "/app/project/other?conversation=s"); window.dispatchEvent(new PopStateEvent("popstate")) })
+    await settle()
+    expect(local.partsCalls).toHaveLength(1)
+    expect(actual.getSnapshot().store?.activeId).toBe("s")
+    expect(local.createCalls).toHaveLength(0)
+    expect(local.controlCalls).toHaveLength(0)
+  } finally { view.unmount(); actual.dispose(); window.history.replaceState(null, "", "/app") }
+})

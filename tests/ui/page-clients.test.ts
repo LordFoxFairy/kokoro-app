@@ -24,7 +24,7 @@ it("binds live ordered history to Product admission and repeats only the exact f
     return Response.json(makeSnapshot({ sessionId: "s", messages: [{ message_id: "m", role: "assistant", run_id: "r", content: null, status: "completed", created_at: "now", rendering: { mode: "ordered", format_version: 1, revision: "7", event_watermark: null, parts_cursor: "opaque-initial" } }] }))
   })
   vi.stubGlobal("fetch", fetchMock)
-  const engine = browserEngine({ preview: false, scope: { kind: "project", projectRef: "parts-auth-scope" } })!
+  const engine = browserEngine({ preview: false, scope: { kind: "project", projectRef: "parts-auth-scope" }, messagePartsReadTarget: { scope: { kind: "project", projectRef: "parts-auth-scope" }, conversationId: "s" } })!
   try {
     engine.openConversation("s")
     await waitFor(() => expect(engine.getSnapshot().thread.messageParts?.m?.status).toBe("complete"))
@@ -556,4 +556,54 @@ describe("cold bare direct homepage selection before engine recovery", () => {
     expect(window.localStorage.getItem(INDEX)).toBe(original)
     expect(fetch).not.toHaveBeenCalled()
   })
+})
+
+it("visible parts browser factory defaults closed before Project remembered constructor hydration", async () => {
+  invalidateBrowserAuthSessionIndexes(); window.localStorage.clear(); window.sessionStorage.clear()
+  const scope = { kind: "project" as const, projectRef: "cold-visible-parts" }, subject = "cold-visible-reader"
+  window.history.replaceState(null, "", `/app/project/${scope.projectRef}`)
+  expect(admitBrowserAuthSessionIndexes(subject, null)).toBe(true)
+  const index = { activeId: "s", conversations: [{ id: "s", title: "remembered", mode: "fast", updatedAt: 1 }] }
+  window.localStorage.setItem(`kokoro.web.conversations.project:${scope.projectRef}`, JSON.stringify(index))
+  let parts = 0
+  vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+    if (url.includes("/parts?")) { parts++; throw Error("hidden body must not read") }
+    return Response.json(makeSnapshot({ sessionId: "s", messages: [{ message_id: "m", role: "assistant", run_id: "r", content: null, status: "completed", created_at: "now", rendering: { mode: "ordered", format_version: 1, revision: "7", event_watermark: null, parts_cursor: "original" } }] }))
+  }))
+  const current = browserEngine({ preview: false, scope })!
+  try {
+    await waitFor(() => expect(current.getSnapshot().hydrating).toBe(false))
+    expect(current.getSnapshot().ownerConfirmedSessionId).toBe("s")
+    expect(current.getSnapshot().store?.activeId).toBe("s")
+    expect(parts).toBe(0)
+    expect(JSON.parse(window.localStorage.getItem(`kokoro.web.conversations.project:${scope.projectRef}`)!)).toMatchObject({ activeId: "s", conversations: [{ id: "s", title: "server title", mode: "fast" }] })
+    expect(vi.mocked(fetch).mock.calls.every(([, init]) => (init?.method ?? "GET") === "GET")).toBe(true)
+    expect(current.setMessagePartsReadTarget).toBeTypeOf("function")
+  } finally { current.dispose(); releaseBrowserEngine(current); invalidateBrowserAuthSessionIndexes(); vi.unstubAllGlobals(); window.localStorage.clear(); window.sessionStorage.clear(); window.history.replaceState(null, "", "/app") }
+})
+
+it("visible parts Project root keeps original unknown journal and never creates/replays a command", async () => {
+  invalidateBrowserAuthSessionIndexes(); window.localStorage.clear(); window.sessionStorage.clear()
+  const scope = { kind: "project" as const, projectRef: "unknown-visible-parts" }, subject = "unknown-visible-reader"
+  window.history.replaceState(null, "", `/app/project/${scope.projectRef}`)
+  expect(admitBrowserAuthSessionIndexes(subject, null)).toBe(true)
+  const { createBrowserSubmissionRecovery } = await import("@/ui/shell/browser-submission-recovery")
+  const recovery = createBrowserSubmissionRecovery({ subject, scope, isCurrent: () => readBrowserAuthIndexSubject() === subject, storage: () => window.sessionStorage })
+  const original = { sessionId: "unknown-original", optimisticUserId: "original-user", idempotencyKey: "original-key", content: "original frozen text", options: { mode: "fast" as const, model: null, selectedSkillSourceRefs: undefined, selectedMcpConnectionIds: [] as string[] } }
+  expect(recovery.save(original)).toBe(true); recovery.failure(original, "network")
+  const frozen = recovery.read(original.sessionId)?.submission
+  expect(frozen).toMatchObject(original)
+  const journal = Object.fromEntries(Object.keys(window.sessionStorage).map(k => [k, window.sessionStorage.getItem(k)]))
+  window.localStorage.setItem(`kokoro.web.conversations.project:${scope.projectRef}`, JSON.stringify({ activeId: original.sessionId, conversations: [{ id: original.sessionId, title: "", mode: "fast", updatedAt: 1, localDraft: true }] }))
+  vi.stubGlobal("fetch", vi.fn(async () => Response.json({ error: { code: "session_not_found", message: "Missing" } }, { status: 404 })))
+  const current = browserEngine({ preview: false, scope })!
+  try {
+    await waitFor(() => expect(current.getSnapshot().canRetryPendingSubmission).toBe(true))
+    current.setMessagePartsReadTarget?.(null)
+    expect(current.getSnapshot().hasPendingSubmission).toBe(true)
+    expect(current.getSnapshot().store?.activeId).toBe(original.sessionId)
+    expect(Object.fromEntries(Object.keys(window.sessionStorage).map(k => [k, window.sessionStorage.getItem(k)]))).toEqual(journal)
+    expect(recovery.read(original.sessionId)?.submission).toEqual(frozen)
+    expect(vi.mocked(fetch).mock.calls.every(([, init]) => (init?.method ?? "GET") === "GET")).toBe(true)
+  } finally { current.dispose(); releaseBrowserEngine(current); invalidateBrowserAuthSessionIndexes(); vi.unstubAllGlobals(); window.localStorage.clear(); window.sessionStorage.clear(); window.history.replaceState(null, "", "/app") }
 })

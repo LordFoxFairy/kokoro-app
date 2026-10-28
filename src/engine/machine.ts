@@ -42,11 +42,12 @@ import {
   type EngineDeps,
   type EngineSnapshot,
   type ConnectionAvailability,
+  type MessagePartsReadTarget,
   type NoticeSpec,
   type SessionEngine,
 } from "./engine-types"
 import { IDLE_MACHINE, transition, type MachineState } from "./machine-state"
-import { DIRECT_SESSION_SCOPE } from "./session-scope"
+import { DIRECT_SESSION_SCOPE, sessionScopeKey } from "./session-scope"
 import {
   buildResumeDecisions,
   stageDecision,
@@ -182,21 +183,23 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   // 多 tab 实时同步：订阅会话 store 的跨 tab 变更（persisted-store 的 storage 事件）。
   let unsubscribeStore: (() => void) | null = null
 
-  const partsReads = new Map<string, AbortController>()
-  const queuedPartsReads = new Map<string, { fresh: boolean; sessionId: string; generation: number }>()
+  // Omission is only for framework-free engine callers; browser factory always closes this boundary explicitly.
+  let messagePartsReadTarget = deps.messagePartsReadTarget
+  const partsReads = new Map<string, { controller: AbortController; fresh: boolean }>()
+  const queuedPartsReads = new Map<string, { fresh: boolean; sessionId: string; generation: number; retainJournal?: boolean }>()
   const partsJournals = new Map<string, { events: ChatProjectionEvent[]; bytes: number; overflow: boolean }>()
   const endedPartsRuns = new Set<string>()
   const cancelledPartsRuns = new Set<string>()
 
   function retireMessageParts(): void {
-    for (const controller of partsReads.values()) controller.abort()
+    for (const read of partsReads.values()) read.controller.abort()
     partsReads.clear(); queuedPartsReads.clear(); partsJournals.clear(); endedPartsRuns.clear(); cancelledPartsRuns.clear()
   }
   function retireRunMessageParts(runId: string): void {
     cancelledPartsRuns.add(runId)
     for (const part of Object.values(thread.messageParts ?? {})) {
       if (part.runId !== runId) continue
-      partsReads.get(part.messageId)?.abort()
+      partsReads.get(part.messageId)?.controller.abort()
       partsReads.delete(part.messageId)
       queuedPartsReads.delete(part.messageId)
       if (part.status === "loading" || part.status === "unread") setPartsStatus(part.messageId, "partial")
@@ -207,37 +210,65 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     const part = thread.messageParts?.[messageId]
     if (part) thread = { ...thread, messageParts: { ...thread.messageParts, [messageId]: { ...part, status } } }
   }
-  function drainPartsQueue(): void {
+  function messagePartsReadable(sessionId = store?.activeId): boolean {
+    return messagePartsReadTarget === undefined || (messagePartsReadTarget !== null &&
+      messagePartsReadTarget.conversationId === sessionId && sessionScopeKey(messagePartsReadTarget.scope) === sessionScopeKey(scope))
+  }
+  function setMessagePartsReadTarget(target: MessagePartsReadTarget | null): void {
     if (disposed) return
+    if (messagePartsReadTarget === target || (messagePartsReadTarget != null && target !== null &&
+      messagePartsReadTarget.conversationId === target.conversationId && sessionScopeKey(messagePartsReadTarget.scope) === sessionScopeKey(target.scope))) return
+    messagePartsReadTarget = target === null ? null : { conversationId: target.conversationId, scope: { ...target.scope } }
+    if (!messagePartsReadable()) {
+      for (const [messageId, read] of partsReads) {
+        read.controller.abort()
+        if (store) queuedPartsReads.set(messageId, { fresh: read.fresh, sessionId: store.activeId, generation: hydrateGeneration, retainJournal: true })
+      }
+      partsReads.clear()
+      for (const [messageId, queued] of queuedPartsReads) {
+        queued.retainJournal = true
+        if (thread.messageParts?.[messageId]?.status === "loading") setPartsStatus(messageId, "partial")
+      }
+    } else {
+      drainPartsQueue()
+      readSnapshotParts()
+    }
+    notify()
+  }
+  function drainPartsQueue(): void {
+    if (disposed || !messagePartsReadable()) return
     while (partsReads.size < 3 && queuedPartsReads.size > 0) {
       const entries = [...queuedPartsReads.entries()]
       const [messageId, queued] = entries.find(([, entry]) => entry.fresh) ?? entries[0]!
       queuedPartsReads.delete(messageId)
       if (queued.sessionId !== store?.activeId || queued.generation !== hydrateGeneration) continue
-      startMessagePartsRead(messageId, queued.fresh)
+      startMessagePartsRead(messageId, queued.fresh, queued.retainJournal)
     }
   }
   function fetchOrderedMessage(messageId: string, fresh = false): void {
     if (disposed || !store || !thread.messageParts?.[messageId]) return
     if (partsReads.has(messageId)) {
       if (!fresh) return
-      partsReads.get(messageId)?.abort(); partsReads.delete(messageId)
+      partsReads.get(messageId)?.controller.abort(); partsReads.delete(messageId)
     }
-    queuedPartsReads.set(messageId, { fresh, sessionId: store.activeId, generation: hydrateGeneration })
-    setPartsStatus(messageId, "loading")
-    drainPartsQueue()
+    queuedPartsReads.set(messageId, { fresh: fresh || queuedPartsReads.get(messageId)?.fresh === true, sessionId: store.activeId, generation: hydrateGeneration,
+      retainJournal: !messagePartsReadable() || queuedPartsReads.get(messageId)?.retainJournal === true })
+    if (messagePartsReadable()) {
+      setPartsStatus(messageId, "loading")
+      drainPartsQueue()
+    }
   }
-  function startMessagePartsRead(messageId: string, fresh: boolean): void {
+  function startMessagePartsRead(messageId: string, fresh: boolean, retainJournal = false): void {
     const known = thread.messageParts?.[messageId]
     const sessionId = store?.activeId
-    if (!known || !sessionId || disposed) return
-    partsReads.get(messageId)?.abort()
+    if (!known || !sessionId || disposed || !messagePartsReadable(sessionId)) return
+    partsReads.get(messageId)?.controller.abort()
     const controller = new AbortController(), generation = hydrateGeneration
-    partsReads.set(messageId, controller)
-    if (fresh || !partsJournals.has(known.runId)) partsJournals.set(known.runId, { events: [], bytes: 0, overflow: false })
+    partsReads.set(messageId, { controller, fresh })
+    if ((fresh && !retainJournal) || !partsJournals.has(known.runId)) partsJournals.set(known.runId, { events: [], bytes: 0, overflow: false })
     const journal = partsJournals.get(known.runId)!
     const recoverUnauthorized = deps.captureMessagePartsReadRecheck?.()
-    const current = () => !disposed && !controller.signal.aborted && partsReads.get(messageId) === controller && hydrateGeneration === generation && store?.activeId === sessionId && thread.messageParts?.[messageId]?.runId === known.runId
+    const current = () => !disposed && messagePartsReadable(sessionId) && !controller.signal.aborted && partsReads.get(messageId)?.controller === controller && hydrateGeneration === generation && store?.activeId === sessionId && thread.messageParts?.[messageId]?.runId === known.runId
     setPartsStatus(messageId, "loading")
     const merge = (read: MessagePartsRead, complete: boolean) => {
       if (!current()) return
@@ -257,11 +288,17 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       setPartsStatus(messageId, error instanceof SessionClientError && error.status === 409 && error.code === "message_parts_changed" ? "changed" : "failed")
       notify()
     }).finally(() => {
-      if (partsReads.get(messageId) === controller) { partsReads.delete(messageId); drainPartsQueue(); readSnapshotParts() }
+      if (partsReads.get(messageId)?.controller === controller) { partsReads.delete(messageId); drainPartsQueue(); readSnapshotParts() }
     })
   }
   function readSnapshotParts(): void {
     if (disposed) return
+    // Hidden run delivery remains owned: preserve its bounded suffix journal before opening SSE,
+    // even though the historical body is not yet admitted by a visible route.
+    const runId = thread.activeRunId
+    if (runId && !partsJournals.has(runId) && Object.values(thread.messageParts ?? {}).some(part => part.runId === runId))
+      partsJournals.set(runId, { events: [], bytes: 0, overflow: false })
+    if (!messagePartsReadable()) return
     // Prioritize the visible tail. Historical Messages never fan out an entire
     // snapshot into 100 simultaneous body reads or delay the live stream.
     for (const part of Object.values(thread.messageParts ?? {}).reverse()) {
@@ -279,6 +316,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     if (endedPartsRuns.has(receipt.run_id) && thread.messageParts?.[receipt.assistant_message_id]?.status !== "changed" && !cancelledPartsRuns.has(receipt.run_id)) fetchOrderedMessage(receipt.assistant_message_id, true)
   }
   function retryMessageParts(messageId: string): void {
+    if (!messagePartsReadable()) return
     if (!thread.messageParts?.[messageId] || partsReads.has(messageId) || queuedPartsReads.has(messageId)) return
     cancelledPartsRuns.delete(thread.messageParts[messageId]!.runId)
     fetchOrderedMessage(messageId, true)
@@ -517,7 +555,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     liveDeliveries?: Pick<SessionStreamState, "deliveries" | "deliveriesHasMore">,
     notificationGeneration = taskNotifications.generation(),
   ): void {
-    for (const controller of partsReads.values()) controller.abort()
+    for (const read of partsReads.values()) read.controller.abort()
     partsReads.clear()
     queuedPartsReads.clear()
     const previous = thread
@@ -1703,6 +1741,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     submit,
     retry,
     retryMessageParts,
+    setMessagePartsReadTarget,
     retryResume,
     reconnect,
     cancelRun,

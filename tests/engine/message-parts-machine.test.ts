@@ -192,3 +192,79 @@ it("retires a safe-target response from the old Project engine before adopting a
     expect(client.createCalls).toHaveLength(0)
   } finally { oldEngine.dispose() }
 })
+
+it("visible parts target keeps hidden head/SSE while wrong conversation or scope cannot read", async () => {
+  const client = createFakeClient(), scope = { kind: "project" as const, projectRef: "visible-parts-project" }
+  client.nextSnapshot = async () => orderedSnapshot()
+  client.nextParts = async () => result("visible body")
+  engine = createSessionEngine({ client, scope, storage: createMemoryStorage<ConversationStore>(addConversation(null, "s", 1)), messagePartsReadTarget: null })
+  await settle()
+  expect(client.snapshotCalls).toEqual(["s"])
+  expect(engine.getSnapshot().machine).toMatchObject({ phase: "streaming", runId: "r" })
+  expect(client.streams).toHaveLength(1)
+  expect(client.partsCalls).toHaveLength(0)
+  engine.retryMessageParts?.("m")
+  expect(client.partsCalls).toHaveLength(0)
+  engine.setMessagePartsReadTarget?.({ scope: { kind: "project", projectRef: "other" }, conversationId: "s" })
+  engine.setMessagePartsReadTarget?.({ scope, conversationId: "other" })
+  await settle()
+  expect(client.partsCalls).toHaveLength(0)
+  engine.setMessagePartsReadTarget?.({ scope, conversationId: "s" })
+  await settle()
+  expect(client.partsCalls).toHaveLength(1)
+  expect(client.partsCalls[0]?.cursor).toBe("initial")
+  expect(client.partsCalls[0]?.scope).toEqual(scope)
+  expect(engine.getSnapshot().thread.messages.some(message => message.content === "visible body")).toBe(true)
+  expect(client.createCalls).toHaveLength(0)
+  expect(client.controlCalls).toHaveLength(0)
+  expect(client.streams[0]?.closed).toBe(false)
+})
+
+it("visible parts target aborts late continuation then resumes original cursor without losing confirmed prefix", async () => {
+  const client = createFakeClient(), scope = { kind: "project" as const, projectRef: "resume-visible-parts" }
+  client.nextSnapshot = async () => orderedSnapshot()
+  let late!: (page: MessagePartsPage) => void, call = 0
+  client.nextParts = async () => {
+    call++
+    if (call === 1 || call === 3) return { ...result("confirmed prefix"), next_cursor: "next" }
+    if (call === 2) return new Promise(resolve => { late = resolve })
+    return { ...result(), items: [] }
+  }
+  engine = createSessionEngine({ client, scope, storage: createMemoryStorage<ConversationStore>(addConversation(null, "s", 1)), messagePartsReadTarget: { scope, conversationId: "s" } })
+  await settle()
+  expect(client.partsCalls).toHaveLength(2)
+  engine.setMessagePartsReadTarget?.(null)
+  expect(client.partsCalls[1]?.signal.aborted).toBe(true)
+  const latePart = result("late hidden body").items[0]!
+  if (latePart.kind !== "text") throw new Error("Expected text fixture")
+  late({ ...result(), items: [{ ...latePart, part_id: "late", segment_id: "late", first_sequence: "3" }] })
+  await settle()
+  expect(engine.getSnapshot().thread.messages.some(message => message.content === "late hidden body")).toBe(false)
+  expect(engine.getSnapshot().thread.messages.some(message => message.content === "confirmed prefix")).toBe(true)
+  expect(client.partsCalls).toHaveLength(2)
+  engine.setMessagePartsReadTarget?.({ scope, conversationId: "s" })
+  await settle()
+  expect(client.partsCalls.map(args => args.cursor)).toEqual(["initial", "next", "initial", "next"])
+  expect(engine.getSnapshot().thread.messageParts?.m?.status).toBe("complete")
+  expect(client.streams[0]?.closed).toBe(false)
+  expect(client.createCalls).toHaveLength(0)
+  expect(client.controlCalls).toHaveLength(0)
+})
+
+it("visible parts hidden live suffix survives a delayed fresh completion correction", async () => {
+  const client = createFakeClient(), scope = { kind: "project" as const, projectRef: "hidden-live-parts" }
+  client.nextSnapshot = async () => orderedSnapshot()
+  client.nextParts = async () => result("baseline")
+  engine = createSessionEngine({ client, scope, storage: createMemoryStorage<ConversationStore>(addConversation(null, "s", 1)), messagePartsReadTarget: null })
+  await settle()
+  client.lastStream().emit([makeEvent("message.delta", { segment_id: "segment", delta: "!", text_boundary: "end" }, { session_id: "s", run_id: "r", seq: 1, publicSequence: "11" })])
+  await settle()
+  expect(client.partsCalls).toHaveLength(0)
+  engine.setMessagePartsReadTarget?.({ scope, conversationId: "s" })
+  await settle()
+  expect(engine.getSnapshot().thread.messages.some(message => message.content === "baseline!")).toBe(true)
+  expect(client.partsCalls).toHaveLength(1)
+  expect(client.partsCalls[0]?.cursor).toBeUndefined()
+  expect(client.streams[0]?.closed).toBe(false)
+  expect(client.createCalls).toHaveLength(0)
+})

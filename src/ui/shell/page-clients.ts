@@ -5,7 +5,7 @@
 import { createPreviewClient, previewClientFromEnv } from "@/dev/preview-transport"
 import { createSessionClient, type SessionClient } from "@/engine/client"
 import { sessionBaseUrl } from "@/engine/config"
-import type { DraftLifecycle } from "@/engine/engine-types"
+import type { DraftLifecycle, MessagePartsReadTarget } from "@/engine/engine-types"
 import type { MessagePartsReadRecheck } from "@/engine/message-parts-reader"
 import { createSessionEngine, type SessionEngine } from "@/engine/machine"
 import { activeIsLocalDraft, addConversation, removeConversation, type ConversationStore } from "@/core/conversations"
@@ -382,7 +382,7 @@ export function releaseBrowserEngine(engine: SessionEngine | null | undefined): 
   }
 }
 
-export function browserEngine(options: { preview?: boolean; scope?: SessionScope } = {}): SessionEngine | null {
+export function browserEngine(options: { preview?: boolean; scope?: SessionScope; messagePartsReadTarget?: MessagePartsReadTarget | null } = {}): SessionEngine | null {
   if (typeof window === "undefined") {
     return null
   }
@@ -399,7 +399,11 @@ export function browserEngine(options: { preview?: boolean; scope?: SessionScope
     } catch { return null }
   }
   const existing = pageEngines.get(engineKey)
-  if (existing) return existing.engine
+  if (existing) {
+    if (!existing.engine.setMessagePartsReadTarget) throw new Error("Canonical Message parts read boundary missing")
+    existing.engine.setMessagePartsReadTarget(options.messagePartsReadTarget ?? null)
+    return existing.engine
+  }
   {
     // The route adapter explicitly selects preview; otherwise Chat always
     // uses the same-origin `/api/session` BFF, including in development.
@@ -435,6 +439,7 @@ export function browserEngine(options: { preview?: boolean; scope?: SessionScope
     }
     const engine = createSessionEngine({
       client,
+      messagePartsReadTarget: options.messagePartsReadTarget ?? null,
       ...(mode === "preview" ? {} : { captureMessagePartsReadRecheck: () => recoverySubject === null ? undefined : capturePartsReadRecheck?.(recoverySubject) }),
       ...(submissionRecovery === undefined ? {} : { submissionRecovery }),
       storage: engineStorage,
