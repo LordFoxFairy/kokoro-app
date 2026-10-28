@@ -1420,3 +1420,18 @@
     justify-self: start;
   }
 }
+
+/* Supplementary history remains announced, without taking space over a real
+   answer. Tab reaches the original reload action and reveals its full row. */
+.partsSupplement:not(:has(:focus)) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}

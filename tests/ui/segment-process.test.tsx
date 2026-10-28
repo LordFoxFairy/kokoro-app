@@ -385,3 +385,46 @@ it("keeps active mixed work distinguishable in its collapsed action summary", ()
   expect(summary).not.toHaveTextContent("Running")
   expect(summary).toHaveAttribute("aria-expanded", "false")
 })
+
+it("keeps only an exact message's supplementary read error quiet until keyboard focus, without hiding unread content failures", async () => {
+  const { readFile } = await import("node:fs/promises")
+  const { default: threadStyles } = await import("@/ui/thread/thread.module.css")
+  const style = document.createElement("style")
+  style.textContent = (await readFile("src/ui/thread/thread.module.css", "utf8")).replaceAll(".partsSupplement", `.${threadStyles.partsSupplement ?? "partsSupplement"}`)
+  document.head.append(style)
+  const retry = vi.fn()
+  const props = { sessionId: "quiet-parts", steps: [{ kind: "text" as const, seq: "1", segmentId: "answer" }], isLive: false, stagedDecisions: {}, hitlActive: false, controlError: null, onRetryMessageParts: retry }
+  const message = { id: "answer", snapshotMessageId: "owner-message", runId: "run", role: "assistant" as const, content: "confirmed final body" }
+  const view = (content: string, owner = "owner-message", status: "changed" | "partial" | "failed" = "failed") => <LocaleProvider><AssistantTurn {...props}
+    messagesById={{ answer: { ...message, content } }} parts={[{ messageId: owner, runId: "run", revision: "1", status }]} /></LocaleProvider>
+  try {
+    const mounted = render(view(message.content))
+    const body = screen.getByText(message.content)
+    for (const status of ["failed", "changed", "partial"] as const) {
+      mounted.rerender(view(message.content, "owner-message", status))
+      const feedback = screen.getByRole("status")
+      expect(feedback).toHaveTextContent("Some message history is not yet available. Shown content is preserved.")
+      expect(getComputedStyle(feedback).width).toBe("1px")
+      const reload = screen.getByRole("button", { name: "Reload this message" })
+      reload.focus()
+      expect(document.activeElement).toBe(reload)
+      // JSDOM caches computed styles across focus changes; reattach the same
+      // real feature stylesheet, without changing its selectors or declarations.
+      style.remove(); document.head.append(style)
+      expect(getComputedStyle(feedback).position).toBe("static")
+      fireEvent.click(reload)
+      expect(retry).toHaveBeenLastCalledWith("owner-message")
+      reload.blur()
+      style.remove(); document.head.append(style)
+      expect(getComputedStyle(feedback).width).toBe("1px")
+      expect(screen.getByText(message.content)).toBe(body)
+    }
+    expect(retry).toHaveBeenCalledTimes(3)
+    for (const [content, owner] of [["", "owner-message"], ["   ", "owner-message"], [message.content, "different-message"]]) {
+      mounted.rerender(view(content!, owner!))
+      expect(getComputedStyle(screen.getByRole("status")).width).not.toBe("1px")
+      expect(screen.getByRole("button", { name: "Reload this message" })).toBeEnabled()
+    }
+    expect(retry).toHaveBeenCalledTimes(3)
+  } finally { style.remove() }
+})

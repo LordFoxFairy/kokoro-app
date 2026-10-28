@@ -187,7 +187,10 @@ export function AssistantTurn({
           </div>
         ) : null}
         {parts.filter((part) => part.status !== "complete").map((part) => (
-          <div key={part.messageId} role="status" data-message-parts={part.status} className={part.status === "loading" || part.status === "unread" ? "sr-only" : undefined}>
+          <div key={part.messageId} role="status" data-message-parts={part.status} className={part.status === "loading" || part.status === "unread" ? "sr-only" : segments.some((segment) => {
+            const message = messagesById[segment.segmentId]
+            return message?.role === "assistant" && message.runId === part.runId && (message.snapshotMessageId ?? message.id) === part.messageId && message.content.trim().length > 0
+          }) ? styles.partsSupplement : undefined}>
             <span>{t(part.status === "loading" || part.status === "unread" ? "thread.partsReading" : "thread.partsPartial")}</span>
             {part.status !== "loading" && part.status !== "unread" && onRetryMessageParts ? <Button type="button" variant="ghost" onClick={() => onRetryMessageParts(part.messageId)}>{t("thread.partsReload")}</Button> : null}
           </div>
