@@ -1,3 +1,11 @@
+## GitHub preview：安静读取与字段错误
+
+预览读取 busy 仅 sr-only status／aria-busy，无可见加载句／spinner。preview 确定读取失败仅在仓库地址字段内显示“未读取到仓库内容，请检查仓库地址。”，原错误码仅读屏；import／publish／install 等写阶段及 unknown 的真实原状态／重试语义保持。此为呈现修复，不代表 GitHub503 owner 根因已修。
+
+## S13：GitHub 详情来源与仓库统计
+
+metadata 仅从已准入 exact installation.product 或目录 skill.product 的 third_party repository publisher 读取 owner_login／可选 repo_stats。固定目录链接由既有合法 GitHub repository URL＋immutable commit＋逐段编码的目录 path 构造，不猜 main、不将 creator 当 publisher；危险目标不生成链接。统计沿 k 样式以 BigInt 保十进制精度，缺省不补零、不作 usage。封面沿实测 <560px 隐藏、有效媒体 slot220px／gap24px、图105×140px／左60px／底-10px／旋转6.21°；无有效媒体文字回全宽。标题20／26单行截断；保现 header 高度及 SkillCoverMedia loaded／owner guard，不拷参考 artwork。首方 metadata、reader／cache／effects／actions 不变；正常参考与实际配对由 Root 验收。
+
 ## T02：详情与包读取的安静呈现
 
 首读／切换尚无正文时只保留 sr-only 状态与原 aria-busy，不绘制正文骨架／动画或可见加载句。overview 保原 metadata 空 shell 高度；两现 reader 的请求、缓存、actor／revision／原 path 保文、准入退休、错误清退与显式重试边界不变。

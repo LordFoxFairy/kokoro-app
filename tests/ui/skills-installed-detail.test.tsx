@@ -854,3 +854,163 @@ it("pending overview reserves its existing empty shell without decorative loadin
     expect(screen.queryByRole("button", { name: "查看详情" })).toBeNull(); expect(add).not.toHaveBeenCalled(); expect(trial).not.toHaveBeenCalled()
   } finally { try { await browser?.close() } finally { await vite.close() } }
 }, 20_000)
+
+const githubMetadataRepository = {
+  kind: "github" as const, repository_id: "123", repository_url: "https://github.com/qa-owner/skills", owner_login: "qa-owner", owner_url: "https://github.com/qa-owner",
+  commit: "a".repeat(40), path: "tools/check", asset_ref: "qa-repo-package", content_sha256: "b".repeat(64), size_bytes: "100", mime_type: "application/zip" as const,
+  repo_stats: { stars: "33400", forks: "3700", observed_at: "2026-10-27T00:00:00Z", metadata_source_url: "https://api.github.com/repos/qa-owner/skills" },
+}
+function githubMetadataProduct(repository: Omit<typeof githubMetadataRepository, "repo_stats"> & { repo_stats?: typeof githubMetadataRepository.repo_stats } = githubMetadataRepository): NonNullable<SkillCatalogCard["product"]> {
+  return { publication_audience: "catalog", state_version: "1", source_kind: "third_party", presentation_kind: "github_repository", publisher: { kind: "github_repository", github_repository: repository }, creation_provenance: repository }
+}
+
+it("renders GitHub publisher as an immutable-directory link and observed stars/forks rather than usage", async () => {
+  const f = ordinaryMetadataFixture()
+  const card = { ...f.card, product: githubMetadataProduct(), usage_count: "777" }
+  const fetcher = vi.fn(async () => f.metadata())
+  vi.stubGlobal("fetch", fetcher)
+  render(f.content(undefined, card))
+  await screen.findByText("Confirmed metadata without download material")
+  const link = screen.getByRole("link", { name: "qa-owner" })
+  expect(link).toHaveAttribute("href", `https://github.com/qa-owner/skills/tree/${githubMetadataRepository.commit}/tools/check`)
+  expect(link).toHaveAttribute("target", "_blank"); expect(link).toHaveAttribute("rel", "noopener noreferrer")
+  expect(screen.getByText("Star 数 33.4k")).toBeVisible(); expect(screen.getByText("Fork 数 3.7k")).toBeVisible()
+  expect(screen.queryByText("已使用 777 次")).toBeNull()
+  expect(fetcher).toHaveBeenCalledTimes(1)
+})
+
+it.each([
+  { repository_url: "javascript:alert(1)" },
+  { repository_url: "https://github.com.evil.example/qa-owner/skills" },
+  { repository_url: "https://attacker@github.com/qa-owner/skills" },
+  { path: "../other" },
+  { owner_login: "different-owner" },
+])("does not turn unsafe GitHub provenance into a navigable target: %j", async changes => {
+  const f = ordinaryMetadataFixture(), repository = { ...githubMetadataRepository, ...changes }
+  vi.stubGlobal("fetch", vi.fn(async () => f.metadata()))
+  render(f.content(undefined, { ...f.card, product: githubMetadataProduct(repository) }))
+  await screen.findByText("Confirmed metadata without download material")
+  expect(screen.queryByRole("link", { name: repository.owner_login })).toBeNull()
+  expect(screen.getByText(repository.owner_login, { exact: true })).toBeVisible()
+})
+
+it("leaves absent repository stats absent and links the encoded owner directory without guessing a branch", async () => {
+  const f = ordinaryMetadataFixture()
+  const repository: NonNullable<Parameters<typeof githubMetadataProduct>[0]> = { ...githubMetadataRepository, path: "工具/quality #1" }
+  delete repository.repo_stats
+  vi.stubGlobal("fetch", vi.fn(async () => f.metadata()))
+  render(f.content(undefined, { ...f.card, product: githubMetadataProduct(repository) }))
+  await screen.findByText("Confirmed metadata without download material")
+  expect(screen.getByRole("link", { name: "qa-owner" })).toHaveAttribute("href", `https://github.com/qa-owner/skills/tree/${repository.commit}/${encodeURIComponent("工具")}/quality%20%231`)
+  expect(screen.queryByText(/Star 数/u)).toBeNull(); expect(screen.queryByText(/Fork 数/u)).toBeNull()
+})
+
+it("formats decimal repository counters exactly beyond safe Number precision", async () => {
+  const f = ordinaryMetadataFixture(), repository = { ...githubMetadataRepository, repo_stats: { ...githubMetadataRepository.repo_stats, stars: "9007199254741499", forks: "0" } }
+  vi.stubGlobal("fetch", vi.fn(async () => f.metadata()))
+  render(f.content(undefined, { ...f.card, product: githubMetadataProduct(repository) }))
+  await screen.findByText("Confirmed metadata without download material")
+  expect(screen.getByText("Star 数 9007199254741k")).toBeVisible()
+  expect(screen.queryByText("Star 数 9007199254742k")).toBeNull()
+  expect(screen.getByText("Fork 数 0")).toBeVisible()
+})
+
+it("uses only the admitted exact installation repository, never the newer catalog product", async () => {
+  localStorage.setItem("kokoro.locale", "zh")
+  const f = managementFixture(), originalRepository = { ...githubMetadataRepository, commit: "c".repeat(40), path: "original/pinned", repo_stats: { ...githubMetadataRepository.repo_stats, stars: "12", forks: "3" } }
+  const installation = { ...f.installation, product: githubMetadataProduct(originalRepository) }
+  const latestRepository = { ...githubMetadataRepository, repository_url: "https://github.com/catalog-owner/latest", owner_login: "catalog-owner", owner_url: "https://github.com/catalog-owner" }
+  let finish!: (response: Response) => void
+  const fetcher = vi.fn(async () => new Promise<Response>(resolve => { finish = resolve }))
+  vi.stubGlobal("fetch", fetcher)
+  render(<LocaleProvider><ManusSkillDetailDialog detailSource="installation" open readBoundary={{ admitted: true, subject: "github-installed-reader", generation: 1 }}
+    skill={{ skill_id: installation.series_id, installation_id: installation.installation_id, installed_source_ref: installation.source_ref, source_ref: installation.source_ref, revision_skill_id: installation.source_ref.slice(6), name: "Selected", description: "", content_hash: installation.series_id, scope: "third_party", installed: true, enabled: false, product: githubMetadataProduct(latestRepository) }}
+    publisherLabel="catalog-owner" onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={() => false} /></LocaleProvider>)
+  expect(screen.queryByRole("link", { name: "catalog-owner" })).toBeNull()
+  await act(async () => { finish(f.response(installation)) })
+  await screen.findByText(installation.summary)
+  expect(screen.getByRole("link", { name: "qa-owner" })).toHaveAttribute("href", `https://github.com/qa-owner/skills/tree/${originalRepository.commit}/original/pinned`)
+  expect(screen.queryByText("catalog-owner", { exact: true })).toBeNull()
+  expect(screen.getByText("Star 数 12")).toBeVisible(); expect(screen.queryByText("Star 数 33.4k")).toBeNull()
+  expect(fetcher.mock.calls).toEqual([["/api/hub/self/skill-installations/manage-installation", expect.any(Object)]])
+})
+
+it("keeps GitHub metadata at measured 13/18 typography and wrapping inside the unchanged desktop/mobile frame", async () => {
+  const f = ordinaryMetadataFixture()
+  vi.stubGlobal("fetch", vi.fn(async () => f.metadata()))
+  render(f.content(undefined, { ...f.card, product: githubMetadataProduct() }))
+  await screen.findByText("Confirmed metadata without download material")
+  const html = screen.getByRole("dialog").outerHTML
+  const vite = await createServer({ configFile: false, root: process.cwd(), server: { middlewareMode: true, hmr: false, watch: null }, css: { modules: { generateScopedName: (name, filename) => basename(filename.replace(/\?.*$/u, "")) === "manus-skill-detail-dialog.module.css" ? readerStyles[name]! : name } } })
+  let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
+  try {
+    const css = await Promise.all(["/src/app/globals.css", "/src/ui/skills/manus-skill-detail-dialog.module.css"].map(async path => {
+      const result = await vite.transformRequest(`${path}?inline`), json = result?.code.match(/export default ([\s\S]*?);?\s*$/u)?.[1]
+      if (!json) throw Error("metadata CSS compilation missing inline output")
+      return JSON.parse(json.replace(/;\s*$/u, "")) as string
+    }))
+    browser = await chromium.launch({ headless: true })
+    for (const viewport of [{ width: 652, height: 767 }, { width: 390, height: 400 }]) {
+      const page = await browser.newPage({ viewport }); await page.route("**/*", route => route.abort())
+      await page.setContent(`<!doctype html><html><head><style>${css.join("\n")}</style></head><body data-web-skin="kokoro">${html}</body></html>`)
+      const link = page.getByRole("link", { name: "qa-owner" })
+      expect(await link.evaluate(element => { const style = getComputedStyle(element); return { fontSize: style.fontSize, lineHeight: style.lineHeight, color: style.color } })).toEqual({ fontSize: "13px", lineHeight: "18px", color: "rgb(26, 26, 26)" })
+      expect(await page.getByRole("dialog").evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
+      if (viewport.width === 652) { const frame = await page.getByRole("dialog").boundingBox(); expect(frame?.width).toBeCloseTo(619.4, 0); expect(frame?.height).toBe(600) }
+      await link.focus(); expect(await link.evaluate(element => document.activeElement === element)).toBe(true)
+      await page.close()
+    }
+  } finally { try { await browser?.close() } finally { await vite.close() } }
+}, 20_000)
+
+it("uses the measured 560px cover breakpoint, immutable loaded artwork slot, and single-line title without reserving absent media", async () => {
+  const f = ordinaryMetadataFixture(), longTitle = "A very long exact owner skill title ".repeat(8)
+  const selected = { ...f.card, name: longTitle, product: githubMetadataProduct(), cover_image: "/api/hub/skills/ordinary-revision/cover" }
+  vi.stubGlobal("fetch", vi.fn(async () => f.response({ skill: { id: selected.skill_id, version: selected.revision_skill_id, displayName: longTitle, description: "Confirmed cover metadata" } })))
+  const view = render(f.content(undefined, selected))
+  await screen.findByText("Confirmed cover metadata")
+  const image = document.querySelector<HTMLImageElement>('img[src$="/api/hub/skills/ordinary-revision/cover"]')!
+  const unloadedHtml = screen.getByRole("dialog").outerHTML
+  Object.defineProperty(image, "naturalWidth", { configurable: true, value: 105 })
+  image.width = 105; image.height = 140
+  fireEvent.load(image)
+  await waitFor(() => expect(image.closest("[data-has-cover]")).toHaveAttribute("data-has-cover", "true"))
+  const loadedHtml = screen.getByRole("dialog").outerHTML
+  view.rerender(f.content(undefined, { ...f.card, name: longTitle, product: githubMetadataProduct() }))
+  const absentHtml = screen.getByRole("dialog").outerHTML
+  const vite = await createServer({ configFile: false, root: process.cwd(), server: { middlewareMode: true, hmr: false, watch: null }, css: { modules: { generateScopedName: (name, filename) => basename(filename.replace(/\?.*$/u, "")) === "manus-skill-detail-dialog.module.css" ? readerStyles[name]! : name } } })
+  let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
+  try {
+    const css = await Promise.all(["/src/app/globals.css", "/src/ui/skills/manus-skill-detail-dialog.module.css"].map(async path => {
+      const result = await vite.transformRequest(`${path}?inline`), json = result?.code.match(/export default ([\s\S]*?);?\s*$/u)?.[1]
+      if (!json) throw Error("cover CSS compilation missing inline output")
+      return JSON.parse(json.replace(/;\s*$/u, "")) as string
+    }))
+    browser = await chromium.launch({ headless: true })
+    for (const width of [652, 559, 560, 390]) {
+      const page = await browser.newPage({ viewport: { width, height: width === 390 ? 400 : 767 } }); await page.route("**/*", route => route.abort())
+      const markup = (html: string) => `<!doctype html><html><head><style>${css.join("\n")}</style></head><body data-web-skin="kokoro">${html}</body></html>`
+      await page.setContent(markup(loadedHtml))
+      const paint = await page.getByRole("dialog").evaluate((dialog, classes) => {
+        const hero = dialog.querySelector<HTMLElement>(`[data-has-cover]`)!, copy = dialog.querySelector<HTMLElement>(`.${classes.copy}`)!, cover = dialog.querySelector<HTMLElement>(`.${classes.cover}`)!, book = dialog.querySelector<HTMLElement>(`.${classes.coverBook}`), heading = dialog.querySelector("h2")!
+        const coverStyle = getComputedStyle(cover), titleStyle = getComputedStyle(heading), bookStyle = book ? getComputedStyle(book) : null
+        return { coverDisplay: coverStyle.display, coverWidth: cover.getBoundingClientRect().width, clip: coverStyle.overflow, copyWidth: copy.getBoundingClientRect().width, available: hero.getBoundingClientRect().width - parseFloat(getComputedStyle(hero).paddingLeft) - parseFloat(getComputedStyle(hero).paddingRight), noOverflow: dialog.scrollWidth <= dialog.clientWidth, title: { height: heading.getBoundingClientRect().height, font: titleStyle.fontSize, line: titleStyle.lineHeight, whiteSpace: titleStyle.whiteSpace, overflow: titleStyle.overflow, textOverflow: titleStyle.textOverflow }, book: bookStyle ? { width: bookStyle.width, height: bookStyle.height, left: bookStyle.left, bottom: bookStyle.bottom, radius: bookStyle.borderRadius, overflow: bookStyle.overflow, transform: bookStyle.transform } : null }
+      }, { copy: readerStyles.copy!, cover: readerStyles.cover!, coverBook: readerStyles.coverBook! })
+      expect(paint.coverDisplay, `cover display at ${width}`).toBe(width < 560 ? "none" : "block")
+      expect(paint.title).toEqual({ height: 26, font: "20px", line: "26px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" })
+      expect(paint.noOverflow).toBe(true)
+      expect(paint.copyWidth).toBeCloseTo(paint.available - (width < 560 ? 0 : 244), 0)
+      if (width >= 560) {
+        expect(paint.coverWidth).toBe(220); expect(paint.clip).toBe("clip")
+        expect(paint.book).toMatchObject({ width: "105px", height: "140px", left: "60px", bottom: "-10px", radius: "2px", overflow: "clip" })
+        expect(paint.book?.transform).toBe("matrix(0.994132, 0.108173, -0.108173, 0.994132, 0, 0)")
+      }
+      for (const html of [unloadedHtml, absentHtml]) {
+        await page.setContent(markup(html))
+        const full = await page.locator(`.${readerStyles.copy}`).evaluate(element => { const hero = element.parentElement!, style = getComputedStyle(hero); return { actual: element.getBoundingClientRect().width, available: hero.getBoundingClientRect().width - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) } })
+        expect(full.actual).toBeCloseTo(full.available, 0)
+      }
+      await page.close()
+    }
+  } finally { try { await browser?.close() } finally { await vite.close() } }
+}, 20_000)

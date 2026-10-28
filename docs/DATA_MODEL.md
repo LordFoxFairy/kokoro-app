@@ -1,3 +1,7 @@
+## GitHub discovery：仅响应容量，不新增持久事实
+
+Public28.7仅把目录发现paths容量放至512；App不建立候选镜像、缓存、分页状态、表／索引／owner或新工作流。原完整候选同commit与immutable selector继续原流程；已选单包128和ZIP安全边界不变。该读边界不授import／publish／install成功或自动重试，unknown与原key/body/CAS照旧；正常激活与真实仓库验收独立。
+
 ## S13：目录作者视图，不新增持久事实（2026-10-27）
 
 现 `SkillCatalogCard` 仅增加 optional product／publisher_profile，沿正式 Public28.6 的 Public9Facts／NativeProfile 原形状，不新建 store／DB／缓存或 owner。Hub 当前 publisher 的 kind/id 与 IAM profile 严格关联；repository publisher 只提供 owner provenance，creator_ref 不参与作者兜底。缺失事实及合法 missing 保未知且不显示作者，supplied 不一致保 invalid；不以 Community 或品牌伪造作者。

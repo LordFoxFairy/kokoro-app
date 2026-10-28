@@ -1,3 +1,9 @@
+## GitHub discovery：512候选目录与单包128分离（2026-10-27，消费者候选）
+
+固定正式BFF `d040eb04c5875eec2ade19be947435071dca2a5e`／Public28.7，canonical SHA256 `818dfe54d5eb50a72725983be136211c63bb17fa7392f94c5c1d46234db3ebd1`。仅现selection-required Preview候选路径上限128→512，保完整同commit数组，不分页／不静默截断；已选单包文件128、ZIP安全限制、原strict路径／身份／duplicate／错误／1MiB／取消与写意图键不变。11既有public生成链正规同步；test-only精确28.7→28.6入口承接完整旧父，五private394独立pin保持。本片不改reader／metadata／导入状态机，不将容量修正冒真实导入成功；Root统一最终验证和正常启用。
+
+现GitHub dialog以纯展示data-expanded复用原状态：已准入selection／ready及非preview原intent阶段保600px／viewport-24高度；短窗仅隐藏装饰brandFlow并缩原header／footer留白，保标题、说明、关闭、40px按钮及原overflow-auto，使252候选首项可见、尾项Tab可达。默认idle／preview与completed不扩；不新增hook／筛选控件／业务状态或I/O。
+
 ## S13：目录发布者的只读事实消费（2026-10-27，候选）
 
 唯一 Public28.6 原件固定 BFF `7f5c522b54762c5c0a01ffa7f71f5696eb4c70f6`／SHA256 `a020e849f740165fa20099f5ab041b76bc480c70a9bbc067955e57f5ec22ae02`。沿现 Hub strict schema→toCard→目录及同一详情 publisherLabel，仅 additive optional product／publisher_profile；复用 Public9Facts 与现 NativeProfile 三种形状，不另建 parser／组件／缓存。supplied IAM profile 必须匹配当前 publisher kind/id；非 IAM 不接受 profile，坏 union／extra 均拒 invalid wire。absence 或合法 user missing 不显示作者；分类／品牌／creator 不代作者。GitHub 仅显示 owner 已验证 repository publisher 的 owner_login，不推断导入者或人的姓名。这些仅展示事实，不授安装、管理或执行权限。

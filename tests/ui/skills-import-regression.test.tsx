@@ -1,3 +1,7 @@
+import { chromium } from "@playwright/test"
+import { createServer } from "vite"
+import { basename } from "node:path"
+import githubDialogStyles from "@/ui/skills/github-import-dialog.module.css"
 import { useState } from "react"
 import { SkillsContent } from "@/ui/skills/skills-panel"
 import { GithubImportDialog } from "@/ui/skills/github-import-dialog"
@@ -285,4 +289,130 @@ it("keeps the catalog read container unknown on failure, and confirmed cursor ca
   view.rerender(content({ ...base, listSkillCatalog: vi.fn(() => new Promise<typeof catalog>(() => undefined)) }))
   expect(screen.queryByRole("button", { name: `查看详情 ${first.name}` })).toBeNull()
   expect(screen.queryByTestId("skills-catalog-empty")).toBeNull()
+})
+
+
+it("GitHub preview keeps its real pending state and cancel controls without visible loading or a rotating button decoration", async () => {
+  let finish!: (response: Response) => void
+  const fetcher = vi.fn((input: RequestInfo | URL, init?: RequestInit) => { void input; void init; return new Promise<Response>(resolve => { finish = resolve }) })
+  vi.stubGlobal("fetch", fetcher)
+  const imported = vi.fn()
+  render(<GithubHarness onImported={imported} />)
+  const input = screen.getByTestId("github-repository-input"), submit = screen.getByTestId("github-import-submit")
+  fireEvent.change(input, { target: { value: "acme/skills" } }); fireEvent.click(submit)
+  const status = await screen.findByTestId("github-import-status")
+  expect(status).toHaveAttribute("role", "status")
+  expect({ screenReaderOnly: status.classList.contains("sr-only"), buttonDecorations: submit.querySelectorAll("svg").length }).toEqual({ screenReaderOnly: true, buttonDecorations: 0 })
+  expect(submit).toHaveAttribute("aria-busy", "true"); expect(submit).toBeDisabled(); expect(input).toBeDisabled()
+  expect(submit.querySelector("svg")).toBeNull()
+  expect(document.getElementById("github-repository-help")).toHaveClass("sr-only")
+  expect(screen.queryByTestId("github-import-complete")).toBeNull()
+  expect(fetcher).toHaveBeenCalledOnce()
+  const signal = fetcher.mock.calls[0]?.[1]?.signal
+  fireEvent.click(screen.getByRole("button", { name: "关闭 GitHub 导入" }))
+  await waitFor(() => expect(signal?.aborted).toBe(true))
+  await act(async () => { finish(Response.json({ data: { selection_required: true, repository_url: "https://github.com/acme/skills", commit: "a".repeat(40), paths: ["one", "two"] } }, { headers: { "cache-control": "no-store", "x-request-id": "quiet-preview" } })) })
+  expect(imported).not.toHaveBeenCalled(); expect(screen.queryByRole("button", { name: "one" })).toBeNull()
+})
+
+it.each([
+  { locale: "zh", message: "未读取到仓库内容，请检查仓库地址。" },
+  { locale: "en", message: "Repository content was not read. Check the repository URL." },
+])("$locale GitHub preview failure stays a short field error with the raw code off-screen and only an explicit fresh preview", async ({ locale, message }) => {
+  localStorage.setItem("kokoro.locale", locale)
+  const fetcher = vi.fn().mockResolvedValueOnce(Response.json({ error: { code: "skill_dependency_unavailable", message: "Internal owner dependency unavailable", retryable: true } }, { status: 503, headers: { "cache-control": "no-store", "x-request-id": "quiet-preview-failure" } }))
+    .mockResolvedValueOnce(Response.json({ data: { selection_required: true, repository_url: "https://github.com/acme/skills", commit: "a".repeat(40), paths: ["one", "two"] } }, { headers: { "cache-control": "no-store", "x-request-id": "quiet-preview-next" } }))
+  vi.stubGlobal("fetch", fetcher)
+  const imported = vi.fn()
+  render(<GithubHarness onImported={imported} />)
+  const input = screen.getByTestId("github-repository-input")
+  fireEvent.change(input, { target: { value: "acme/skills" } }); fireEvent.click(screen.getByTestId("github-import-submit"))
+  const error = await screen.findByRole("alert")
+  expect({ message: error.textContent, genericPanels: screen.getByTestId("github-import-dialog").querySelectorAll('[data-slot="alert"]').length, rawCodeHidden: screen.getByText("skill_dependency_unavailable").classList.contains("sr-only") }).toEqual({ message, genericPanels: 0, rawCodeHidden: true })
+  expect(error).not.toHaveAttribute("data-slot", "alert")
+  expect(screen.getByTestId("github-import-dialog").querySelector('[data-slot="alert"]')).toBeNull()
+  expect(screen.getByText("skill_dependency_unavailable")).toHaveClass("sr-only")
+  expect(input).toHaveAttribute("aria-invalid", "true"); expect(input).toHaveAccessibleDescription(expect.stringContaining(message))
+  expect(input).toBeEnabled(); expect(screen.getByTestId("github-import-submit")).toBeEnabled()
+  expect(screen.queryByRole("button", { name: /^(?:重试|Retry)$/ })).toBeNull()
+  expect(screen.queryByTestId("github-import-complete")).toBeNull(); expect(imported).not.toHaveBeenCalled()
+  expect(fetcher).toHaveBeenCalledOnce()
+  fireEvent.click(screen.getByTestId("github-import-submit"))
+  await screen.findByRole("button", { name: "one" })
+  expect(fetcher).toHaveBeenCalledTimes(2); expect(screen.queryByRole("alert")).toBeNull()
+  expect(fetcher.mock.calls.every(([url]) => url === "/api/hub/skills/github/preview")).toBe(true)
+  expect(imported).not.toHaveBeenCalled()
+})
+
+
+it.each(["zh", "en"])("%s GitHub selection exposes its first directory and scrolls the 252nd directory into the expanded read space", async locale => {
+  localStorage.setItem("kokoro.locale", locale)
+  const paths = Array.from({ length: 252 }, (_, index) => `plugin-${index}/skills/skill-${index}`)
+  const fetcher = vi.fn(async () => Response.json({ data: { selection_required: true, repository_url: "https://github.com/acme/skills", commit: "a".repeat(40), paths } }, { headers: { "cache-control": "no-store", "x-request-id": "expanded-selection" } }))
+  vi.stubGlobal("fetch", fetcher)
+  const imported = vi.fn()
+  render(<GithubHarness onImported={imported} />)
+  const idleHtml = screen.getByTestId("github-import-dialog").outerHTML
+  fireEvent.change(screen.getByTestId("github-repository-input"), { target: { value: "acme/skills" } })
+  fireEvent.click(screen.getByTestId("github-import-submit"))
+  await screen.findByRole("button", { name: paths[251]! })
+  const selectedHtml = screen.getByTestId("github-import-dialog").outerHTML
+  const vite = await createServer({ configFile: false, root: process.cwd(), server: { middlewareMode: true, hmr: false, watch: null }, css: { modules: { generateScopedName: (name, filename) => basename(filename.replace(/\?.*$/u, "")) === "github-import-dialog.module.css" ? githubDialogStyles[name]! : name } } })
+  let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
+  try {
+    const css = await Promise.all(["/src/app/globals.css", "/src/ui/skills/github-import-dialog.module.css"].map(async path => {
+      const result = await vite.transformRequest(`${path}?inline`), text = result?.code.match(/export default ([\s\S]*?);?\s*$/u)?.[1]
+      if (!text) throw Error("GitHub selection CSS compilation missing")
+      return JSON.parse(text.replace(/;\s*$/u, "")) as string
+    }))
+    browser = await chromium.launch({ headless: true })
+    for (const viewport of [{ width: 652, height: 767 }, { width: 390, height: 400 }]) {
+      const page = await browser.newPage({ viewport }); await page.route("**/*", route => route.abort())
+      const markup = (html: string) => `<!doctype html><html><head><style>${css.join("\n")}</style></head><body data-web-skin="kokoro">${html}</body></html>`
+      await page.setContent(markup(idleHtml)); expect((await page.getByTestId("github-import-dialog").boundingBox())?.height).toBe(344)
+      await page.setContent(markup(selectedHtml))
+      const layout = await page.getByTestId("github-import-dialog").evaluate((dialog, classes) => {
+        const body = dialog.querySelector<HTMLElement>(`.${classes.body}`)!, first = body.querySelector("fieldset button")!, row = first.getBoundingClientRect(), clip = body.getBoundingClientRect()
+        const header = dialog.querySelector('[data-slot="dialog-header"]')!, footer = dialog.querySelector('[data-slot="dialog-footer"]')!, button = footer.querySelector("button")!
+        return { expanded: dialog.getAttribute("data-expanded"), height: dialog.getBoundingClientRect().height, bodyHeight: clip.height, firstVisible: row.top >= clip.top && row.bottom <= clip.bottom, firstHeight: row.height, headerHeight: header.getBoundingClientRect().height, footerHeight: footer.getBoundingClientRect().height, footerButtonHeight: button.getBoundingClientRect().height, overflow: getComputedStyle(body).overflowY, noHorizontalOverflow: dialog.scrollWidth <= dialog.clientWidth, decorationHidden: getComputedStyle(dialog.querySelector(`.${classes.brandFlow}`)!).display === "none" }
+      }, { body: githubDialogStyles.body!, brandFlow: githubDialogStyles.brandFlow! })
+      expect({ expanded: layout.expanded, height: layout.height, firstVisible: layout.firstVisible }, JSON.stringify(layout)).toEqual({ expanded: "true", height: viewport.height <= 512 ? viewport.height - 24 : 600, firstVisible: true })
+      expect(layout.firstHeight).toBeGreaterThanOrEqual(36); expect(layout.footerButtonHeight).toBe(40)
+      expect(layout.overflow).toBe("auto"); expect(layout.noHorizontalOverflow).toBe(true)
+      if (viewport.height <= 512) { expect(layout.headerHeight).toBeLessThan(191); expect(layout.footerHeight).toBe(72); expect(layout.decorationHidden).toBe(true) }
+      else { expect(layout.headerHeight).toBe(191); expect(layout.footerHeight).toBe(88); expect(layout.decorationHidden).toBe(false) }
+      const last = page.getByRole("button", { name: paths[251]!, exact: true }); await last.focus(); await page.keyboard.press("Shift+Tab"); await page.keyboard.press("Tab")
+      expect(await last.evaluate((element, cls) => { const body = element.closest(`.${cls}`)!, row = element.getBoundingClientRect(), clip = body.getBoundingClientRect(); return document.activeElement === element && row.top >= clip.top && row.bottom <= clip.bottom }, githubDialogStyles.body!)).toBe(true)
+      await page.close()
+    }
+    expect(fetcher).toHaveBeenCalledOnce(); expect(imported).not.toHaveBeenCalled()
+  } finally { try { await browser?.close() } finally { await vite.close() } }
+}, 20_000)
+
+it("keeps ready and unresolved GitHub write stages expanded without changing their original explicit retry", async () => {
+  let rejectImport!: (reason: Error) => void
+  const fetcher = vi.fn((url: RequestInfo | URL, init?: RequestInit) => {
+    void init
+    if (String(url).endsWith("/preview")) return Promise.resolve(Response.json({ data: { selection_required: true, repository_url: "https://github.com/acme/skills", commit: "a".repeat(40), paths: ["one", "two"] } }, { headers: { "cache-control": "no-store", "x-request-id": "expanded-write" } }))
+    return new Promise<Response>((resolve, reject) => { void resolve; rejectImport = reject })
+  })
+  vi.stubGlobal("fetch", fetcher)
+  const imported = vi.fn()
+  render(<GithubHarness onImported={imported} />)
+  fireEvent.change(screen.getByTestId("github-repository-input"), { target: { value: "acme/skills" } }); fireEvent.click(screen.getByTestId("github-import-submit"))
+  fireEvent.click(await screen.findByRole("button", { name: "one" }))
+  expect(screen.getByTestId("github-import-dialog")).toHaveAttribute("data-expanded", "true")
+  fireEvent.click(screen.getByRole("button", { name: "添加到我的技能（仅自己可见）" }))
+  await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2))
+  expect(screen.getByTestId("github-import-dialog")).toHaveAttribute("data-expanded", "true")
+  await act(async () => { rejectImport(Error("controlled unknown import")) })
+  await screen.findByRole("alert")
+  expect(screen.getByTestId("github-import-dialog")).toHaveAttribute("data-expanded", "true")
+  expect(screen.queryByTestId("github-import-complete")).toBeNull(); expect(imported).not.toHaveBeenCalled()
+  expect(fetcher).toHaveBeenCalledTimes(2)
+  const original = fetcher.mock.calls[1]?.[1]
+  fireEvent.click(screen.getByRole("button", { name: "重试" }))
+  await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(3))
+  expect(fetcher.mock.calls[2]?.[1]?.body).toBe(original?.body)
+  expect(new Headers(fetcher.mock.calls[2]?.[1]?.headers).get("idempotency-key")).toBe(new Headers(original?.headers).get("idempotency-key"))
 })

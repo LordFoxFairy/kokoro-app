@@ -1,6 +1,7 @@
 "use client"
 
-import { ChevronRight, Download, FileText, Menu, Plus, Share } from "lucide-react"
+import Image from "next/image"
+import { ChevronRight, Download, FileText, GitFork, Menu, Plus, Share, Star } from "lucide-react"
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react"
 
 import { Badge } from "@/components/ui/badge"
@@ -8,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useLocale } from "@/i18n/context"
 import type { SkillCatalogCard, CatalogPackageData, PersonalInstallation } from "@/hub/schemas"
+import { githubRepositoryUrlSchema, githubSelectorSchema } from "@/hub/skill-github-import.schema"
 import { downloadManusSkill, getManusSkillDetail, getManusSkillPackage, type ManusSkillDetail } from "@/ui/skills/manus-skill-client"
 
 import { createSkillInstallationClient, HubClientError } from "@/hub/client"
@@ -166,6 +168,28 @@ function displayDate(value: string | undefined, locale: string): string | null {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return null
   return new Intl.DateTimeFormat(locale, { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" }).format(date)
+}
+
+// Metadata uses the same compact k convention as the directory, but keeps
+// decimal owner counters exact even beyond Number.MAX_SAFE_INTEGER.
+function displayRepositoryCount(value: string): string {
+  const count = BigInt(value)
+  if (count < BigInt(1000)) return value
+  if (count >= BigInt(100000)) return `${(count + BigInt(500)) / BigInt(1000)}k`
+  const tenths = (count + BigInt(50)) / BigInt(100)
+  const fraction = tenths % BigInt(10)
+  return `${tenths / BigInt(10)}${fraction === BigInt(0) ? "" : `.${fraction}`}k`
+}
+
+function repositoryDirectoryHref(repository: { repository_url: string; owner_login: string; commit: string; path: string }): string | undefined {
+  const url = githubRepositoryUrlSchema.safeParse(repository.repository_url)
+  if (!url.success) return undefined
+  const [owner, name] = url.data.slice("https://github.com/".length).split("/")
+  if (repository.owner_login !== owner) return undefined
+  const selected = githubSelectorSchema.safeParse({ owner, repository: name, commit: repository.commit, path: repository.path })
+  if (!selected.success) return undefined
+  const path = selected.data.path.split("/").map(encodeURIComponent).join("/")
+  return `${url.data}/tree/${selected.data.commit}${path === "" ? "" : `/${path}`}`
 }
 
 /** A stable, server-backed catalog detail dialog. It never synthesizes prompts,
@@ -501,6 +525,9 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
   const installationPublisher = installation?.publisher_profile?.status === "found"
     ? installation.publisher_profile.display_name
     : installation?.product.source_kind === "official" ? publisherLabel : undefined
+  const metadataProduct = sharedSummary ? undefined : detailSource === "installation" ? installation?.product : skill?.product
+  const repository = metadataProduct?.source_kind === "third_party" && metadataProduct.publisher?.kind === "github_repository" ? metadataProduct.publisher.github_repository : undefined
+  const repositoryHref = repository === undefined ? undefined : repositoryDirectoryHref(repository)
   const metadata = [
     detailSource === "installation" ? installationPublisher : publisherLabel,
     updated ? t("skills.updatedAt", { date: updated }) : undefined,
@@ -565,13 +592,24 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
           <div className={styles.copy}>
             {categoryLabels.length > 0 ? <div className={styles.categories}>{categoryLabels.slice(0, 2).map((label) => <Badge key={label} variant="secondary">{label}</Badge>)}</div> : null}
             <DialogTitle>{title}</DialogTitle>
-            <DialogDescription className={styles.meta}>{metadata.map((value, index) => <span key={index}>{index > 0 ? <span className={styles.separator} aria-hidden="true">|</span> : null}{value}</span>)}</DialogDescription>
+            {repository === undefined ? <DialogDescription className={styles.meta}>{metadata.map((value, index) => <span key={index}>{index > 0 ? <span className={styles.separator} aria-hidden="true">|</span> : null}{value}</span>)}</DialogDescription> : <DialogDescription asChild>
+              <div className={styles.githubMetadata}>
+                <p className={styles.githubMetadataRow}>
+                  <span className={styles.githubMetadataItem}><Image src="/assets/connectors/github.webp" alt="" width={12} height={12} aria-hidden="true" />{t("skills.githubSource")}{repositoryHref === undefined ? <span>{repository.owner_login}</span> : <a href={repositoryHref} target="_blank" rel="noopener noreferrer">{repository.owner_login}</a>}</span>
+                  {updated ? <span><span className={styles.separator} aria-hidden="true">|</span>{t("skills.updatedAt", { date: updated })}</span> : null}
+                </p>
+                {repository.repo_stats === undefined ? null : <p className={styles.githubMetadataRow}>
+                  <span className={styles.githubMetadataItem}><Star aria-hidden="true" />{t("skills.githubStars", { count: displayRepositoryCount(repository.repo_stats.stars) })}</span>
+                  <span className={styles.githubMetadataItem}><GitFork aria-hidden="true" />{t("skills.githubForks", { count: displayRepositoryCount(repository.repo_stats.forks) })}</span>
+                </p>}
+              </div>
+            </DialogDescription>}
             <div className={styles.actions}>
               <Button type="button" onClick={() => sharedSummary ? onAddShared?.() : currentSkill && onAdd(currentSkill)} disabled={busy || installed || detailSource === "installation" && (installation === null || sourceUnavailable || !boundary.admitted || boundary.subject === null)}>{enableInstallation ? t("skills.enable") : installed ? t("skills.addedToMine") : <><Plus aria-hidden="true" />{t("skills.addToMine")}</>}</Button>
               <Button type="button" variant="outline" disabled={boundRevision === null} onClick={() => restartReader(true)}><FileText aria-hidden="true" />{t("skills.packageViewDetails")}</Button>
             </div>
           </div>
-          {cover ? <div className={styles.cover} style={{ opacity: loaded ? 1 : 0 }}>{media}</div> : null}
+          {cover ? <div className={styles.cover} style={{ opacity: loaded ? 1 : 0 }}><div className={styles.coverBook}>{media}</div></div> : null}
         </DialogHeader>}</SkillCoverMedia>}
         {shareStatus === "unknown" ? <div className={styles.status} role="alert"><p>{t("skills.shareUnknown")}</p><Button type="button" variant="outline" onClick={() => void share(true)}>{t("skills.shareNew")}</Button></div> : null}
         {shareStatus === "copied" ? <p className={styles.status} role="status">{t("skills.detailLinkCopied")}</p> : null}

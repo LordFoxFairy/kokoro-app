@@ -1,5 +1,5 @@
-// Consumer boundary: BFF 486ec7e / public13.2; canonical SHA256
-// 3e4dd272fa8180b8f2a2bacc88d37f99ed5c77eaba05ef03e858ab766f891206.
+// Consumer boundary: BFF d040eb04c5875eec2ade19be947435071dca2a5e / Public28.7; canonical SHA256
+// 818dfe54d5eb50a72725983be136211c63bb17fa7392f94c5c1d46234db3ebd1.
 import { z } from "zod"
 import { createSkillDraftRequestSchema } from "./schemas"
 
@@ -28,7 +28,7 @@ const selectedPreview = z.object({ selection_required: z.literal(false), selecto
   const s = v.selector, r = v.repository
   return r.repository_url === `https://github.com/${s.owner}/${s.repository}` && r.owner_login === s.owner && r.owner_url === `https://github.com/${s.owner}` && r.commit === s.commit && r.path === s.path && r.repo_stats.metadata_source_url === `https://api.github.com/repos/${s.owner}/${s.repository}`
 })
-const selectionPreview = z.object({ selection_required: z.literal(true), repository_url: githubRepositoryUrlSchema, commit, paths: z.array(githubPathSchema).max(128) }).strict().refine(v => v.paths.length > 1 && new Set(v.paths).size === v.paths.length)
+const selectionPreview = z.object({ selection_required: z.literal(true), repository_url: githubRepositoryUrlSchema, commit, paths: z.array(githubPathSchema).max(512) }).strict().refine(v => v.paths.length > 1 && new Set(v.paths).size === v.paths.length)
 export const githubPreviewSchema = z.union([selectedPreview, selectionPreview])
 export const githubDraftSchema = z.object({ skill_id: id, source_ref: z.string().regex(/^skill:[A-Za-z0-9][A-Za-z0-9._:-]{0,190}(?![\s\S])/u), status: z.literal("draft"), state_version: positiveDecimal, valid: z.literal(true), content_digest: sha, manifest_identity: z.string().regex(/^(?:skill-md-v1|zip-v2):sha256:[a-f0-9]{64}(?![\s\S])/u) }).strict().refine(v => v.source_ref === `skill:${v.skill_id}`)
 export const githubSchemas = { preview: githubPreviewSchema, import: githubDraftSchema } as const

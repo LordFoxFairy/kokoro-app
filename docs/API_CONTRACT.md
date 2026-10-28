@@ -1,3 +1,7 @@
+## GitHub discovery：Public28.7目录候选边界
+
+唯一完整原件固定BFF `d040eb04c5875eec2ade19be947435071dca2a5e`，SHA256 `818dfe54d5eb50a72725983be136211c63bb17fa7392f94c5c1d46234db3ebd1`。仅 `GithubSkillResponse.data` selection_required=true 的 paths.maxItems=512；129／252／512保完整，513为invalid wire而非slice。`SkillPackageInspectionData.files.maxItems=128`及selected Preview、请求、路径、commit、duplicate、权限、error/status、幂等键和1MiB总响应限制不变；无新API／游标／分页。正式snapshot与11public正规生成消费同一原件，五private394不改；正常配对由Root另验。
+
 ## S13：Hub 可选发布者事实（Public28.6，2026-10-27）
 
 固定 BFF `7f5c522b54762c5c0a01ffa7f71f5696eb4c70f6` 的唯一 canonical OpenAPI，SHA256 `a020e849f740165fa20099f5ab041b76bc480c70a9bbc067955e57f5ec22ae02`。`SpecificationHubResponse.skills[]` 新增 optional `product→Public9SkillProductFacts`、`publisher_profile→SkillPublisherProfile`，保原 closed 字段与身份。product.publisher 为 IAM 时必须有同 kind/id 的 found／合法 user missing profile；非 IAM 不接受 supplied profile。absence 仍未知；坏 ref 绑定／extra／union 是 invalid wire，不作为成功且省略作者。单一 additive reader 无历史专用 schema 或 required 迁移。
