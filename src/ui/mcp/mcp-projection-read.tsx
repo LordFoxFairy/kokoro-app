@@ -24,6 +24,7 @@ import { samePreparationRecord, type McpPreparationRecord } from "./mcp-preparat
 import { CustomMcpDetailDialog } from "./custom-mcp-detail-dialog";
 import { McpProjectPublicationDialog } from "./mcp-project-publication-dialog";
 import type { McpCreateMode } from "./mcp-panel-model";
+import type { McpCatalogDialog } from "./mcp-content";
 import { McpProviderCatalogDialog } from "./mcp-provider-catalog-dialog";
 import { McpProviderDetailDialog } from "./mcp-provider-detail-dialog";
 import { McpProviderDirectory } from "./mcp-provider-directory";
@@ -73,7 +74,9 @@ export function McpProjectionRead({
   settingsLayout = false,
   refreshKey = 0,
   createdDetail,
+  catalogDialog,
 }: {
+  catalogDialog?: McpCatalogDialog;
   client: HubClient;
   embedded?: boolean;
   initialView?: McpProjectionView;
@@ -197,7 +200,9 @@ export function McpProjectionRead({
   const apiCommandState = apiManagementStates.find(item => item.profileId === selectedCustomApiId);
   const [providerQuery, setProviderQuery] = useState("");
   const [connectorQuery, setConnectorQuery] = useState("");
-  const [catalogOpen, setCatalogOpen] = useState(false);
+  const [localCatalogOpen, setLocalCatalogOpen] = useState(false);
+  const catalogOpen = catalogDialog?.open ?? localCatalogOpen;
+  const setCatalogOpen = catalogDialog?.onOpenChange ?? setLocalCatalogOpen;
   const [categoryFilter, setCategoryFilter] = useState<
     "all" | keyof typeof MCP_CATEGORY_MESSAGES
   >("all");
@@ -635,6 +640,7 @@ export function McpProjectionRead({
     <section
       ref={surfaceRef}
       className={styles.surface}
+      style={catalogDialog ? { display: "contents" } : undefined}
       data-testid="mcp-projection-read"
       data-embedded={embedded || undefined}
       data-settings-layout={settingsLayout || undefined}
@@ -642,6 +648,7 @@ export function McpProjectionRead({
       aria-busy={(!createdDetail && refreshing) || undefined}
     >
       {createdDetail ? null : <>
+      {catalogDialog ? null : <>
       <header className={styles.header}>
         {plaza ? <h1>{t("rail.plugins")}</h1> : settingsLayout ? null : <h2>{t("rail.navPlugins")}</h2>}
         <McpSettingsToolbar
@@ -770,18 +777,20 @@ export function McpProjectionRead({
       ) : null}
 
       </div>
+      </>}
       <McpProviderCatalogDialog
         open={catalogOpen}
+        disabled={!admitted}
         addedProviderKeys={addedProviderKeys}
         relationsComplete={relations.complete && !relations.error}
-        {...(directory.items.length > 0 || !directory.loading ? { providers: directory.items } : {})}
+        {...(admitted && (directory.items.length > 0 || !directory.loading) ? { providers: directory.items } : {})}
         hasMore={directory.hasMore}
         onLoadMore={directory.loadMore}
         loading={directory.loading}
         error={directoryError}
         query={providerQuery}
         categoryFilter={categoryFilter}
-        returnFocusRef={catalogReturnFocusRef}
+        returnFocusRef={catalogDialog?.returnFocusRef ?? catalogReturnFocusRef}
         onOpenChange={setCatalogOpen}
         onQueryChange={setProviderQuery}
         onCategoryFilterChange={setCategoryFilter}

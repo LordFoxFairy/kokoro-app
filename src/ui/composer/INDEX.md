@@ -30,7 +30,7 @@
 
 ## 当前消息的连接来源
 
-`ComposerConnections` 是独立受控Popover：精确Connection行选择、原选glyph、有限菜单内加载/失败/分页，Esc回触发器，显式添加/管理进原设置；不修改账号enabled或发模型。`composer-connections.module.css`持有测得的menu/pill/26×16switch几何与局部选中token，不受通用ghost按钮尺寸覆盖。
+`ComposerConnections` 是独立受控Popover：精确Connection行选择、原选glyph、有限分页，Esc回触发器。添加与管理使用独立回调进入目录窗口和原设置，不修改账号enabled或发模型；打开时原读取刷新保留，不额外展示手动刷新或通用重试面板，失败不伪装成功空态。指针打开不自动聚焦首行，键盘打开仍正常聚焦与回焦；`composer-connections.module.css`持有实测menu/pill/26×16switch几何与局部选中token。
 
 ## 当前草稿的 Skill picker
 

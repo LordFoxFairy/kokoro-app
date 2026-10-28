@@ -1,3 +1,7 @@
+## Composer MCP Add 与 Manage 的独立接线
+
+AppFrameComposer 必须将 Add 交给 `useAppFrameOverlays.openMcpCatalog`，Manage 仍为原 Settings mcp；不回退共用 Manage。`AppFrameOverlaySurfaces` 用原 browserHubClient／可信 readBoundary 和 ConnectorCommandProvider 渲染受控目录及既有创建窗。目录 RAM 窗口绑定 engine／scope／conversation／actor；同 actor 临时 admission／generation 变更只围栏事实与新命令，保留窗口、搜索及创建输入。真正更换身份／上下文或路由事件才退休目录与其创建视图，并清旧 returnFocus ref；迟到读或已排队的焦点回调不复活旧窗、不偷新页面焦点，不清 pending／unknown 命令。关闭回焦沿原目录、详情、创建窗口已有 returnFocus 链，不写浏览器地址。
+
 ## 裸首页选择（2026-10-26）
 
 page-clients只在冷建direct engine且URL为裸/app时初始化本地空稿选择：复用localDraft＋未提交lifecycle＋无recovery的精确ID，否则保留旧索引项新建本地稿；无索引保原pending槽。缓存不补写conversation URL，只有显式选择或已接受Send发布实际ID。不调用取消/创建业务命令，不删除旧journal，失败不授发送资格。

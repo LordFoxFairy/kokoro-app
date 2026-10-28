@@ -16,6 +16,7 @@ import styles from "./mcp-projection-read.module.css";
 
 export function McpProviderCatalogDialog({
   open,
+  disabled = false,
   providers,
   addedProviderKeys,
   relationsComplete = false,
@@ -33,6 +34,7 @@ export function McpProviderCatalogDialog({
   onCreate,
 }: {
   open: boolean;
+  disabled?: boolean;
   providers?: McpConnectorProvider[];
   addedProviderKeys?: ReadonlySet<string>;
   relationsComplete?: boolean;
@@ -81,9 +83,10 @@ export function McpProviderCatalogDialog({
           const returnFocus = returnFocusRef.current;
           if (!returnFocus?.isConnected) return;
           event.preventDefault();
-          window.requestAnimationFrame(() =>
-            returnFocus.focus({ preventScroll: true }),
-          );
+          window.requestAnimationFrame(() => {
+            if (returnFocusRef.current === returnFocus && returnFocus.isConnected)
+              returnFocus.focus({ preventScroll: true });
+          });
         }}
       >
         <header className={styles.catalogHeader}>
@@ -95,6 +98,7 @@ export function McpProviderCatalogDialog({
             {MCP_CATEGORY_OPTIONS.map(category => <span key={category} data-selected={categoryFilter === category}>{t(MCP_CATEGORY_MESSAGES[category])}</span>)}
           </div>
           <McpSettingsToolbar
+            disabled={disabled}
             view="catalog"
             query={query}
             onQueryChange={onQueryChange}

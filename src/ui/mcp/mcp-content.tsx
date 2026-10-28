@@ -1,12 +1,18 @@
 "use client";
 
+import type { RefObject } from "react";
+
 import type { HubClient } from "@/hub/client";
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
 
 import { McpProjectionRead } from "./mcp-projection-read";
 import type { McpCreateMode } from "./mcp-panel-model";
 
+export type McpCatalogDialog = { open: boolean; onOpenChange: (open: boolean) => void; returnFocusRef: RefObject<HTMLElement | null> };
+
 export type McpContentProps = {
+  /** Shell-owned modal only: reuse the directory/detail owner without another plaza. */
+  catalogDialog?: McpCatalogDialog;
   client: HubClient;
   preview?: boolean;
   embedded?: boolean;
@@ -37,6 +43,7 @@ export function McpContent(props: McpContentProps) {
       initialView={props.initialView ?? "catalog"}
       settingsLayout={props.settingsLayout ?? false}
       refreshKey={props.refreshKey ?? 0}
+      {...(props.catalogDialog === undefined ? {} : { catalogDialog: props.catalogDialog })}
       {...(props.brandName === undefined ? {} : { brandName: props.brandName })}
       {...(props.onCreateMcp === undefined
         ? {}
@@ -56,7 +63,9 @@ function McpProjectionScope({
   initialView,
   settingsLayout,
   refreshKey,
+  catalogDialog,
 }: {
+  catalogDialog?: McpCatalogDialog;
   client: HubClient;
   embedded: boolean;
   identity: string;
@@ -86,6 +95,7 @@ function McpProjectionScope({
       initialView={initialView}
       settingsLayout={settingsLayout}
       refreshKey={refreshKey}
+      {...(catalogDialog === undefined ? {} : { catalogDialog })}
       {...(brandName === undefined ? {} : { brandName })}
       {...(onCreateMcp === undefined ? {} : { onCreateMcp })}
     />

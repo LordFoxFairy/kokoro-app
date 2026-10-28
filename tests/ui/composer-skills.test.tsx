@@ -28,7 +28,7 @@ function Harness({ client, currentBoundary = boundary, scopeKey = "direct:null",
   return <AppFrameComposer
     skills={{ client, boundary: currentBoundary, scopeKey, selectable, onSelect: skill => { if (!onSelect(skill)) return false; setSelected({ name: skill.name, sourceRef: skill.source_ref! }); return true } }}
     preview={false} brandName="Kokoro" projectWorkspace={false} hasMessages={false} creationIntent={null} onCreationIntentDismiss={() => {}}
-    workspaceCapabilities={{ instructions: false, connectors: false, resources: true, skills: enabled, projectConversations: false }} onOpenSettings={onManage}
+    workspaceCapabilities={{ instructions: false, connectors: false, resources: true, skills: enabled, projectConversations: false }} onOpenSettings={onManage} onOpenMcpCatalog={vi.fn()}
     draft={draft} onDraftChange={setDraft} onKeyDown={event => { if (event.key === "Enter") onSubmit() }} onSubmit={event => { event.preventDefault(); onSubmit() }}
     isStreaming={false} canSend={true} onStop={() => {}} composerRef={composerRef} mode="fast" onModeChange={() => {}} modeLocked={false}
     models={[]} selectedModel={null} onModelChange={() => {}} modelLocked={false} selectedSkill={selectedSkill} onRemoveSelectedSkill={() => setSelected(null)}

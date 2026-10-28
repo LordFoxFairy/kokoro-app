@@ -1,3 +1,7 @@
+## Composer 添加连接器：受控目录窗口
+
+`McpContent.catalogDialog` 将现 `McpProjectionRead` 的目录 portal／详情窗用于 composer Add；主 section／toolbar 不再重复绘制，查询、严格身份／命令及创建窗仍复用原 owner。普通 Manage 仍是 Settings 已添加页。此本地 overlay 不改当前 Project／Conversation URL、草稿或 MCP 选择；与 Manus 的 `#connectors/all` URL 表达不同，不另加 hash 协议或路由 alias。同 actor 暂时准入刷新保留窗口／搜索及创建意图，现 read generation 退旧事实、禁新 Create；换 actor／route 才退窗并撤销旧回焦。正常目录 ESC 退回原 composer trigger，详情／创建关闭退回原目录窗栈；打开目录本身不连接、授权或执行模型。
+
 ## Prepare 方法专属结果消费者
 
 `mcp-preparation-commands.ts` 沿原 actor/entry 管理 exact 原尝试：typed4 仅 committed failed archive，GET typed5 仍 unknown 且只显式结束等待；退休不成功／不导航。`mcp-preparation-recovery.ts` v2 同双store事务互斥 history 与 successful complete，不增加schema。`mcp-preparation-status.tsx` 为创建／URL／详情／placeholder 的紧凑呈现，`use-mcp-preparation-history.ts` 为窗口内稳定分页与原tuple只读GET；历史不清K2／不合并Current。另一次显式新连接须 fresh Current/provider/manage/CAS 与不同cryptoK。正式BFF394a双原件正规生成，正常资源配对由Root另验。

@@ -198,7 +198,7 @@ it("selects in the independent menu and delivers the exact ID through the real e
   function Harness() {
     useSyncExternalStore(engine.subscribe, engine.getSnapshot, engine.getSnapshot)
     const choices = useComposerConnections({ engine, client, boundary, enforceSubjectMarker: false })
-    return <ComposerConnections controller={choices} onManage={onManage} />
+    return <ComposerConnections controller={choices} onAdd={vi.fn()} onManage={onManage} />
   }
   render(<LocaleProvider><Harness /></LocaleProvider>)
   await act(async () => { await settle() })
@@ -268,6 +268,64 @@ it("accepts a global provider Connection whose connector legitimately omits serv
   act(() => result.current.toggle("connection:a"))
   expect(engine.getSnapshot().selectedMcpConnectionIds).toEqual(["connection:a"])
   engine.dispose()
+})
+
+it("opens Add and Manage as separate explicit destinations without changing draft selections", async () => {
+  window.localStorage.setItem("kokoro.locale", "zh")
+  const onAdd = vi.fn(), onManage = vi.fn(), toggle = vi.fn()
+  const controller = { items: [{ id: "connection:a", name: "Docs", availability: "available" as const, selectable: true }], selectedIds: ["connection:a"], status: "ready" as const, nextCursor: undefined, refresh: vi.fn(), loadMore: vi.fn(), toggle }
+  render(<LocaleProvider><ComposerConnections controller={controller} onAdd={onAdd} onManage={onManage} /></LocaleProvider>)
+  const trigger = screen.getByRole("button", { name: "连接器 (1)" })
+  fireEvent.click(trigger)
+  fireEvent.click(await screen.findByRole("button", { name: "添加连接器" }))
+  expect(onAdd).toHaveBeenCalledExactlyOnceWith(trigger)
+  expect(onManage).not.toHaveBeenCalled()
+  expect(toggle).not.toHaveBeenCalled()
+  fireEvent.click(trigger)
+  fireEvent.click(await screen.findByRole("button", { name: "管理连接器" }))
+  expect(onManage).toHaveBeenCalledExactlyOnceWith(trigger)
+  expect(onAdd).toHaveBeenCalledTimes(1)
+  expect(controller.selectedIds).toEqual(["connection:a"])
+  expect(toggle).not.toHaveBeenCalled()
+})
+
+it("does not auto-highlight the first connector for a pointer open, but keeps keyboard entry and return focus", async () => {
+  window.localStorage.setItem("kokoro.locale", "zh")
+  const controller = { items: [{ id: "connection:a", name: "Docs", availability: "available" as const, selectable: true }], selectedIds: [], status: "ready" as const, nextCursor: undefined, refresh: vi.fn(), loadMore: vi.fn(), toggle: vi.fn() }
+  render(<LocaleProvider><ComposerConnections controller={controller} onAdd={vi.fn()} onManage={vi.fn()} /></LocaleProvider>)
+  const trigger = screen.getByRole("button", { name: "连接器 (0)" })
+  trigger.focus()
+  fireEvent.pointerDown(trigger)
+  fireEvent.click(trigger)
+  const choice = await screen.findByRole("switch", { name: "Docs" })
+  await act(async () => { await settle() })
+  expect(trigger).toHaveFocus()
+  expect(choice).not.toHaveFocus()
+  expect(screen.queryByRole("button", { name: "重新加载" })).not.toBeInTheDocument()
+  fireEvent.keyDown(trigger, { key: "Escape" })
+  await act(async () => { await settle() })
+  fireEvent.keyDown(trigger, { key: "Enter" })
+  fireEvent.click(trigger)
+  await waitFor(() => expect(screen.getByRole("switch", { name: "Docs" })).toHaveFocus())
+  fireEvent.keyDown(screen.getByRole("switch", { name: "Docs" }), { key: "Escape" })
+  await waitFor(() => expect(trigger).toHaveFocus())
+})
+
+it("retains known connector choices after a read failure without an extra refresh or generic retry panel", async () => {
+  window.localStorage.setItem("kokoro.locale", "zh")
+  const controller = { items: [{ id: "connection:a", name: "Docs", availability: "available" as const, selectable: true }], selectedIds: ["connection:a"], status: "ready" as const, nextCursor: undefined, refresh: vi.fn(), loadMore: vi.fn(), toggle: vi.fn() }
+  const onAdd = vi.fn(), onManage = vi.fn()
+  const view = render(<LocaleProvider><ComposerConnections controller={controller} onAdd={onAdd} onManage={onManage} /></LocaleProvider>)
+  fireEvent.click(screen.getByRole("button", { name: "连接器 (1)" }))
+  expect(await screen.findByRole("switch", { name: "Docs" })).toHaveAttribute("aria-checked", "true")
+  view.rerender(<LocaleProvider><ComposerConnections controller={{ ...controller, status: "error" }} onAdd={onAdd} onManage={onManage} /></LocaleProvider>)
+  expect(screen.getByRole("switch", { name: "Docs" })).toHaveAttribute("aria-checked", "true")
+  expect(screen.getByRole("status")).not.toBeEmptyDOMElement()
+  expect(screen.queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "重新加载" })).not.toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "添加连接器" })).toBeEnabled()
+  expect(screen.getByRole("button", { name: "管理连接器" })).toBeEnabled()
+  expect(controller.toggle).not.toHaveBeenCalled()
 })
 
 

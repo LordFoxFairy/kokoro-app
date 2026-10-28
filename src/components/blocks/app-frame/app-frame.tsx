@@ -81,6 +81,7 @@ function AppFrameBootingSurface({
       creationIntent={null}
       onCreationIntentDismiss={() => undefined}
       workspaceCapabilities={{ instructions: false, connectors: false, resources: false, skills: false, projectConversations: false }}
+      onOpenMcpCatalog={() => undefined}
       onOpenSettings={() => undefined}
       draft=""
       onDraftChange={() => undefined}
@@ -213,7 +214,12 @@ function AppFrameRuntime({
     ...(engineState.missingSessionId === undefined ? {} : { missingSessionId: engineState.missingSessionId }),
   })
 
+  const mcpCatalogScope = useMemo(() => ({ engine, sessionScope, preview, subject: projectReadBoundary?.subject,
+    conversation: navigationState.resolvedConversationRouteId, standaloneSurface }),
+  [engine, sessionScope, preview, projectReadBoundary?.subject, navigationState.resolvedConversationRouteId, standaloneSurface])
   const overlays = useAppFrameOverlays({
+    mcpCatalogScope,
+    mcpCatalogEnabled: preview || projectReadBoundary?.admitted === true && Boolean(projectReadBoundary.subject),
     mounted,
     settingsTab: navigationState.settingsTab,
     setSettingsTab: navigationState.setSettingsTab,
@@ -857,6 +863,7 @@ function AppFrameRuntime({
     creationIntent: projectedCreationIntent,
     onCreationIntentDismiss: actions.dismissCreationIntent,
     workspaceCapabilities: projectedWorkspaceCapabilities,
+    onOpenMcpCatalog: overlays.openMcpCatalog,
     onOpenSettings: overlays.openSettings,
     draft,
     onDraftChange: updateDraft,
@@ -1065,6 +1072,8 @@ function AppFrameRuntime({
     ) : null}
     <AppFrameOverlaySurfaces
       mounted={mounted}
+      mcpCatalog={{ open: overlays.mcpCatalogOpen, onOpenChange: open => { if (!open) overlays.closeMcpCatalog() },
+        returnFocusRef: overlays.mcpCatalogReturnFocusRef, onCreate: overlays.openMcpCatalogCreate }}
       settingsTab={navigationState.settingsTab}
       {...(overlays.settingsSkillsScope === undefined ? {} : { settingsSkillsScope: overlays.settingsSkillsScope })}
       brandName={brandName}

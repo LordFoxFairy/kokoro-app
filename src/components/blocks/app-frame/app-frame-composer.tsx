@@ -39,6 +39,7 @@ export type AppFrameComposerProps = ShellComposerProps & {
   creationIntent: CreationIntent | null
   onCreationIntentDismiss: () => void
   workspaceCapabilities: WorkspaceCapabilities
+  onOpenMcpCatalog: (returnTarget: HTMLElement | null) => void
   onOpenSettings: (tab: SettingsTab, returnTarget?: HTMLElement | null) => void
 }
 
@@ -88,6 +89,7 @@ export function AppFrameComposer({
   onCreationIntentDismiss,
   workspaceCapabilities,
   onOpenSettings,
+  onOpenMcpCatalog,
   ...composerProps
 }: AppFrameComposerProps) {
   const composerResourcesTriggerRef = useRef<HTMLButtonElement | null>(null)
@@ -183,7 +185,7 @@ export function AppFrameComposer({
                 }} />
             ) : null}
             {connectionsEnabled && connections ? (
-              <ComposerConnections controller={connections} onManage={(returnTarget) => onOpenSettings("mcp", returnTarget)} />
+              <ComposerConnections controller={connections} onAdd={onOpenMcpCatalog} onManage={(returnTarget) => onOpenSettings("mcp", returnTarget)} />
             ) : null}
           </>
         }
