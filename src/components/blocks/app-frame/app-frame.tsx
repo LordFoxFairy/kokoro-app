@@ -988,7 +988,6 @@ function AppFrameRuntime({
       emptyStateProps={emptyStateProps}
       composer={composer}
       emptyStateOwnsComposer={emptyStateOwnsComposer}
-      {...(answerActionBoundary ? { answerActionBoundary } : {})}
       canvas={{ ...canvas, onReopen: () => { project.dismissProjectContext(); canvas.onReopen() } }}
     />
   )
@@ -1124,6 +1123,7 @@ function AppFrameRuntime({
     <McpTrialProvider onTry={composerConnectionsEnabled ? actions.startMcpTrial : null}>
     <ConnectorCommandProvider client={browserHubClient({ preview })} boundary={preview ? { admitted: true, subject: "preview", generation: 0 } : projectReadBoundary ?? { admitted: false, subject: null, generation: 0 }}>
     <AppFrameShell
+      {...(answerActionBoundary ? { answerActionBoundary } : {})}
       {...(projectReadBoundary === undefined ? {} : { readBoundary: projectReadBoundary })}
       preview={preview}
       webSkin={resolvedWebSkin}

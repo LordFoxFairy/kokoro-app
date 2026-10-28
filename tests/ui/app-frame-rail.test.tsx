@@ -6031,3 +6031,39 @@ it("the mounted frame only reads models when its trusted Composer becomes active
   await act(async () => { await settle() })
   expect(calls.filter(path => path.endsWith("/models"))).toHaveLength(1)
 })
+
+it("desktop action inspection carries the admitted reader through the actual AppFrame shell", async () => {
+  const sessionId = "conv_action_inspection", runId = "run_action_inspection"
+  const activityId = `act_${"a".repeat(64)}`
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "inspection-actor")
+  window.history.replaceState({}, "", `/app?conversation=${sessionId}`)
+  pathname.value = "/app"
+  client.nextSnapshot = async () => makeSnapshot({ sessionId, activeRun: { run_id: runId, status: "running" }, messages: [{ message_id: "inspect-user", role: "user", content: "inspect original tool", status: "completed", created_at: "2026-07-02T00:00:00Z" }] })
+  const readDisplay = vi.fn((url: string) => {
+    expect(url).toBe(`http://s.local/sessions/${sessionId}/runs/${runId}/display`)
+    return Response.json({ run_id: runId, display_skills: [], tool_paths: [], tool_facts: [], activity_details: [{
+    activity_id: activityId, tool_name: "mcp_call", target: { kind: "mcp_tool", name: "ask_wiki_question" },
+    input_preview: { text: "original request arguments", truncated: false, redacted: false },
+    output_preview: { text: "original response evidence", truncated: false, redacted: false },
+  }] }) })
+  vi.spyOn(globalThis, "fetch").mockImplementation(async input => {
+    const url = String(input)
+    return url.endsWith(`/runs/${runId}/display`) ? readDisplay(url) : Response.json({}, { status: 503 })
+  })
+  await act(async () => { engine.openConversation(sessionId); await settle() })
+  mountFrame({ preview: false, projectReadBoundary: { admitted: true, subject: "inspection-actor", generation: 1 } })
+  await waitFor(() => expect(client.streams.length).toBeGreaterThan(0))
+  await act(async () => {
+    client.lastStream().emit([
+      makeEvent("run.created", { run_id: runId }, { run_id: runId, session_id: sessionId }),
+      makeEvent("activity.updated", { activity: "tool", activity_id: activityId, segment_id: `seg_${"b".repeat(64)}`, display_code: "tool.mcp.call", status: "completed" }, { run_id: runId, session_id: sessionId }),
+    ])
+    await settle()
+  })
+  fireEvent.click(await screen.findByRole("button", { name: /调用 MCP 工具/ }))
+  const inspector = await screen.findByRole("heading", { name: "动作详情" })
+  expect(inspector).toBeVisible()
+  expect(await screen.findByText("original request arguments")).toBeVisible()
+  expect(screen.getByText("original response evidence")).toBeVisible()
+  expect(readDisplay).toHaveBeenCalledOnce()
+})
