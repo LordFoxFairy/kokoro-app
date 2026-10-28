@@ -1,0 +1,12 @@
+{
+  "owner": "kokoro-bff",
+  "owner_commit": "364f80cab855a4358eab956b7e3e3a4b5bae647b",
+  "candidate": false,
+  "public_source_path": "contract/openapi/v1/openapi.yaml",
+  "public_source_sha256": "6376e2d2a5fa9efd8e6ce4d9d4aa3686ad73dda8babffd9ac5b7097073538498",
+  "policy_source_path": "contract/skill-download-policy.json",
+  "policy_source_sha256": "4b84ccddb70421fc3f5f48766c4fd87fafb7d94f00eb9774f75b627f4f361925",
+  "openapi_version": "28.8.0",
+  "policy_version": 3,
+  "policy_owner_commit": "966ec5e7b0804185349a5f5413091d8e9e792bc9"
+}

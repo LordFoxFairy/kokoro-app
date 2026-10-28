@@ -21,7 +21,7 @@ export function ProjectIdentity({ brandName = DEFAULT_BRAND.name, preview = fals
   const { locale, t } = useLocale()
 
   return (
-    <header className={cn(styles.projectIdentity, layoutStyles.projectIdentity)}>
+    <header className={cn(styles.projectIdentity, layoutStyles.projectIdentity)} aria-busy={!preview && projectDetail?.status === "loading" || undefined}>
       <span className={styles.projectMark} aria-hidden="true"><Folder /></span>
       <div>
         <h1>
@@ -40,7 +40,7 @@ export function ProjectIdentity({ brandName = DEFAULT_BRAND.name, preview = fals
             <p>{t("firstSite.projectsError")}</p>
             <Button type="button" variant="outline" onClick={onRetryProjectRead} disabled={!onRetryProjectRead || !projectDetail.retryable}>{t("firstSite.retry")}</Button>
           </div>
-        ) : <p role="status" data-testid="project-detail-loading">{t(projectDetail?.status === "loading" ? "firstSite.projectsLoading" : "firstSite.projectsUnavailable")}</p>}
+        ) : <p className={projectDetail?.status === "loading" ? "sr-only" : undefined} role="status" data-testid="project-detail-loading">{t(projectDetail?.status === "loading" ? "firstSite.projectsLoading" : "firstSite.projectsUnavailable")}</p>}
       </div>
     </header>
   )

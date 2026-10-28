@@ -1,3 +1,4 @@
+import { proxyProjectSkillContent } from "@/lib/server/project-skill-content";
 import { mcpPrepareReceiptRequest, mcpPrepareReceiptMatches, mcpPrepareReceiptErrorAllowed, mcpPreparePostErrorAllowed, mcpPrepareReceiptLookupOnly } from "@/hub/mcp-prepare-receipt.schema";
 import { proxyProjectPins } from "@/lib/server/project-pins";
 import { proxyProjectMcpRecommendations } from "@/lib/server/project-mcp-recommendations";
@@ -2374,6 +2375,7 @@ async function proxyHubRequest(
     return proxyGithubSkillImport(request, path);
   if (path[0] === "skills" && path[1] === "local-imports")
     return proxyLocalSkillImport(request, path);
+  if (path[0] === "projects" && path[2] === "skill-installations" && ["package", "download"].includes(path.at(-1) ?? "")) return proxyProjectSkillContent(request, path);
   if (path.at(-1) === "package" || (path[0] === "skill-installations" || path[0] === "self" && path[1] === "skills" && path[2] === "managed") && path.at(-1) === "download")
     return proxySkillPackage(request, path);
   if (path.at(-1) === "cover") return proxySkillCover(request, path);

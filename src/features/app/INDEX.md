@@ -1,3 +1,7 @@
+## Project Skill 精确内容消费者
+
+`project-skill-detail-dialog.tsx` 仅捕获真实 Project 安装与原 pin，回焦 host 交给同一 Manus reader 的显式 Project 分支；列表／默认／更新／移除不换 owner。
+
 # App product surfaces
 
 - `kokoro-project-workspace.tsx` keeps the Project host and its existing context state mounted across root and Task views. The root keeps its measured grid/composer; Task uses an independent flex timeline and one shell composer.

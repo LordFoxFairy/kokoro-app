@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useLayoutEffect, useMemo, useRef, useState } from "react"
 import Image from "next/image"
 import { Plus, Search, Puzzle } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -11,6 +11,7 @@ import type { EmptyStateProps } from "@/components/blocks/app-frame/app-frame.ty
 import type { PersonalInstallation } from "@/hub/schemas"
 import { ProjectContextSection } from "./project-context-card"
 import { ProjectSkillAddMenu } from "./project-skill-add-menu"
+import { ProjectSkillDetailDialog } from "./project-skill-detail-dialog"
 import { ProjectSkillCard } from "./project-skill-card"
 import { ProjectSkillSourcePicker } from "./project-skill-source-picker"
 import { useProjectSkills, type ProjectSkillCommand } from "./use-project-skills"
@@ -32,7 +33,21 @@ export function ProjectSkillsSection({
   const [query, setQuery] = useState("")
   const [source, setSource] = useState<"personal" | "official" | null>(null)
   const projectId = projectDetail?.status === "ready" ? projectDetail.data.id : null
+  const detailOpener = useRef<HTMLElement | null>(null)
+  const [detailTarget, setDetailTarget] = useState<{ projectId: string; subject: string; item: PersonalInstallation } | null>(null)
+  const detailContext = useRef({ projectId, subject: projectReadBoundary?.subject, active, open })
+  useLayoutEffect(() => {
+    detailContext.current = { projectId, subject: projectReadBoundary?.subject, active, open }
+    return () => { detailContext.current = { projectId: null, subject: null, active: false, open: false } }
+  }, [projectId, projectReadBoundary?.subject, active, open])
+  const detailReturnFocus = useMemo(() => ({ get current() {
+    const current = detailContext.current
+    return current.active && current.open && current.projectId === detailTarget?.projectId && current.subject === detailTarget?.subject ? detailOpener.current : null
+  } }), [detailTarget?.projectId, detailTarget?.subject])
   const model = useProjectSkills(preview ? null : projectId, projectReadBoundary, open && active)
+  const currentDetailItem = model.facts?.items.find(item => item.installation_id === detailTarget?.item.installation_id)
+  if (detailTarget && (!active || !open || detailTarget.projectId !== projectId || detailTarget.subject !== projectReadBoundary?.subject
+    || model.listStatus === "ready" && model.facts !== null && (!currentDetailItem || currentDetailItem.source_ref !== detailTarget.item.source_ref || currentDetailItem.revision !== detailTarget.item.revision))) setDetailTarget(null)
   const [draft, setDraft] = useState({
     selection: model.facts?.selection ?? null,
     ids: model.facts?.selection.installation_ids ?? [],
@@ -197,6 +212,11 @@ export function ProjectSkillsSection({
                           <ProjectSkillCard
                             key={item.installation_id}
                             item={item}
+                            {...(!locked && item.source_status !== "deleted" ? { onOpen: (trigger: HTMLElement) => {
+                              if (!projectId || !projectReadBoundary?.subject || !model.isCurrent()) return
+                              detailOpener.current = trigger
+                              setDetailTarget({ projectId, subject: projectReadBoundary.subject, item })
+                            } } : {})}
                             selected={ids.includes(item.installation_id)}
                             protectedDefault={
                               selection?.installation_ids.includes(item.installation_id) === true
@@ -326,6 +346,8 @@ export function ProjectSkillsSection({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {detailTarget && projectReadBoundary ? <ProjectSkillDetailDialog projectId={detailTarget.projectId} item={detailTarget.item}
+        boundary={projectReadBoundary} onClose={() => setDetailTarget(null)} returnFocusRef={detailReturnFocus} /> : null}
     </>
   )
 }

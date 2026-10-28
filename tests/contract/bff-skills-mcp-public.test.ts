@@ -28,9 +28,9 @@ import {
 
 import { restorePublic21 } from "./bff-configuration-parent"
 
-const OWNER_COMMIT = "d040eb04c5875eec2ade19be947435071dca2a5e"
-const OWNER_SHA256 = "818dfe54d5eb50a72725983be136211c63bb17fa7392f94c5c1d46234db3ebd1"
-const OWNER_VERSION = "28.7.0"
+const OWNER_COMMIT = "364f80cab855a4358eab956b7e3e3a4b5bae647b"
+const OWNER_SHA256 = "6376e2d2a5fa9efd8e6ce4d9d4aa3686ad73dda8babffd9ac5b7097073538498"
+const OWNER_VERSION = "28.8.0"
 const SNAPSHOT = resolve(process.cwd(), "src/generated/bff-public-openapi.yaml")
 
 type Shape = {
@@ -226,7 +226,7 @@ describe("pinned BFF Skills and MCP public consumer contract", () => {
 
   it("pins exact owner bytes and six current Skill draft/publish operations", async () => {
     const bytes = await readFile(SNAPSHOT)
-    expect(OWNER_COMMIT).toBe("d040eb04c5875eec2ade19be947435071dca2a5e")
+    expect(OWNER_COMMIT).toBe("364f80cab855a4358eab956b7e3e3a4b5bae647b")
     expect(createHash("sha256").update(bytes).digest("hex")).toBe(OWNER_SHA256)
     const spec = YAML.parse(bytes.toString()) as Spec
     expect(spec.info.version).toBe(OWNER_VERSION)
@@ -570,7 +570,8 @@ it("binds directory discovery to 512 paths while selected package files stay at 
 
 it("restores the complete Public28.6 parent through only the named discovery-cap delta and rejects unrelated drift", async () => {
   const { restorePublic286GithubDiscoveryContract: restore } = await import("./bff-github-discovery-parent")
-  const raw = await readFile(SNAPSHOT, "utf8"), parent = restore(raw)
+  const { restorePublic287ProjectSkillContentContract } = await import("./bff-project-skill-content-parent")
+  const raw = restorePublic287ProjectSkillContentContract(await readFile(SNAPSHOT, "utf8")), parent = restore(raw)
   expect(createHash("sha256").update(parent).digest("hex")).toBe("a020e849f740165fa20099f5ab041b76bc480c70a9bbc067955e57f5ec22ae02")
   const current = YAML.parse(raw) as Spec, previous = YAML.parse(parent) as Spec
   const normalized = structuredClone(current)

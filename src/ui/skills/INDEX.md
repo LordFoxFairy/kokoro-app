@@ -1,3 +1,7 @@
+## Project Skill 精确内容消费者
+
+`ManusSkillDetailDialog` 的 Project installation variant 只读当前 Project 的 metadata／package／download；resource identity 含 Project 与安装 pin，沿原 actor/generation/abort 围栏，不暴露个人写动作、分享或试用。
+
 ## GitHub 写入等待：稳定业务标签
 
 `github-import-dialog.tsx`在import/read/publish/install等待时保“添加到我的技能（仅自己可见）”主动作标签并禁用，preview仍为预览；Dialog统一aria-busy，原sr-only阶段状态不改。Unknown真实提示与显式原意图重试、关闭取消／迟到结果、Flow／body／key保持，不把等待显示为完成。

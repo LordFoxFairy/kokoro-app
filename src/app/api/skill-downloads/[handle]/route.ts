@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server"
-import { z } from "zod"
-import { shareErrorAllowed } from "@/hub/skill-share.schema"
+import { skillDownloadByteOperation, skillDownloadByteErrors, skillDownloadHandleSchema } from "@/generated/bff-project-skill-content"
 
 import { admittedProductSession, productBffConfig, productBffHeaders } from "@/lib/server/product-bff"
 import { requestWithDomain } from "@/lib/server/upstream-http"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
-const handlePattern = /^[A-Za-z0-9_-]{43}$/u
-const MAX_ZIP_BYTES = 1024 * 1024 * 1024
+const byteSuccess = skillDownloadByteOperation.responses["200"]
+const MAX_ZIP_BYTES = byteSuccess.body.maxBytes
 
 export async function GET(request: Request, context: { params: Promise<{ handle: string }> }): Promise<Response> {
   const requestId = crypto.randomUUID()
@@ -25,7 +24,8 @@ export async function GET(request: Request, context: { params: Promise<{ handle:
   let upstream: Response | undefined, streaming = false
   try {
     const { handle } = await within(context.params), url = new URL(request.url)
-    if (!handlePattern.test(handle)) return fail(404, "skill_download_not_found")
+    if (request.method !== skillDownloadByteOperation.method) return fail(405, "MethodNotAllowed")
+    if (!skillDownloadHandleSchema.safeParse(handle).success) return fail(404, "skill_download_not_found")
     if (url.pathname !== `/api/skill-downloads/${handle}` || url.search || url.hash || request.body !== null || ["content-length", "transfer-encoding", "idempotency-key"].some(name => request.headers.has(name))) return fail(400, "invalid_skill_request")
     const config = productBffConfig()
     if (config === null) return fail(503, "skill_dependency_unavailable")
@@ -40,12 +40,12 @@ export async function GET(request: Request, context: { params: Promise<{ handle:
     void pending.then(value => { if (signal.aborted) void value.body?.cancel().catch(() => undefined) }, () => undefined)
     upstream = await within(pending)
     signal.throwIfAborted()
-    if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(upstream.headers.get("x-request-id") ?? "") || !/\bno-store\b/iu.test(upstream.headers.get("cache-control") ?? "")) return fail(502, "skill_response_invalid")
+    if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(upstream.headers.get("x-request-id") ?? "") || upstream.headers.get("cache-control") !== skillDownloadByteOperation.responseHeaders["cache-control"].const) return fail(502, "skill_response_invalid")
     if (upstream.status !== 200) {
       // Error JSON is never presented as an attachment; redirects are never followed.
-      if (![400, 401, 403, 404, 405, 410, 429, 502, 503, 504].includes(upstream.status) || !/^application\/json(?:;\s*charset=utf-8)?$/iu.test(upstream.headers.get("content-type") ?? "") || upstream.body === null) return fail(502, "skill_response_invalid")
+      if (!skillDownloadByteErrors.some(item => item.status === upstream!.status) || upstream.headers.get("content-type") !== skillDownloadByteOperation.errorFraming.contentType || upstream.headers.has("content-disposition") || upstream.body === null) return fail(502, "skill_response_invalid")
       const declared = upstream.headers.get("content-length")
-      if (declared !== null && (!/^(0|[1-9][0-9]*)$/u.test(declared) || Number(declared) > 1_048_576)) return fail(502, "skill_response_invalid")
+      if (declared === null || !/^(0|[1-9][0-9]*)$/u.test(declared) || Number(declared) > 1_048_576) return fail(502, "skill_response_invalid")
       const reader = upstream.body.getReader(), chunks: Uint8Array[] = []
       let count = 0
       const abort = () => { void reader.cancel().catch(() => undefined) }
@@ -58,16 +58,16 @@ export async function GET(request: Request, context: { params: Promise<{ handle:
       for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength }
       let raw: unknown
       try { raw = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) } catch { return fail(502, "skill_response_invalid") }
-      const parsed = z.object({ error: z.object({ code: z.string().min(1), message: z.string().min(1), retryable: z.boolean().optional() }).strict() }).strict().safeParse(raw)
-      const bare: Readonly<Record<number, readonly string[]>> = { 401: ["Unauthenticated"], 403: ["PermissionDenied"], 404: ["NotFound"], 405: ["MethodNotAllowed"], 410: ["Gone"] }
-      if (!parsed.success || !(shareErrorAllowed("download", upstream.status, parsed.data.error.code) || bare[upstream.status]?.includes(parsed.data.error.code))) return fail(502, "skill_response_invalid")
-      return NextResponse.json(raw, { status: upstream.status, headers: { "cache-control": "private, no-store", "x-request-id": requestId } })
+      if (!skillDownloadByteErrors.some(item => item.status === upstream!.status && item.schema.safeParse(raw).success)) return fail(502, "skill_response_invalid")
+      const retryAfter = upstream.headers.get("retry-after")
+      if (retryAfter !== null && (upstream.status !== 429 || (raw as {error:{code:string}}).error.code !== "session_rate_limited" || !new RegExp(skillDownloadByteOperation.errorFraming.retryAfter.pattern, "u").test(retryAfter) || Number(retryAfter) > skillDownloadByteOperation.errorFraming.retryAfter.maximumSeconds)) return fail(502, "skill_response_invalid")
+      return NextResponse.json(raw, { status: upstream.status, headers: { "cache-control": "private, no-store", "x-request-id": requestId, ...(retryAfter === null ? {} : { "retry-after": retryAfter }) } })
     }
     const length = upstream.headers.get("content-length"), attachment = upstream.headers.get("content-disposition")
-    const match = /^attachment; filename="skill\.zip"; filename\*=UTF-8''(.+)$/u.exec(attachment ?? "")
+    const match = new RegExp(byteSuccess.headers.properties["content-disposition"].pattern, "u").test(attachment ?? "") ? /^attachment; filename="skill\.zip"; filename\*=UTF-8''(.+)$/u.exec(attachment ?? "") : null
     let filename = ""
     try { filename = match ? decodeURIComponent(match[1]!) : "" } catch { /* Invalid UTF-8 attachment metadata. */ }
-    if (upstream.headers.get("content-type") !== "application/zip" || length === null || !/^[1-9][0-9]*$/u.test(length) || !Number.isSafeInteger(Number(length)) || Number(length) > MAX_ZIP_BYTES || !filename || filename.length > 255 || /[\\/\u0000-\u001f\u007f]/u.test(filename) || !/\bno-store\b/iu.test(upstream.headers.get("cache-control") ?? "") || upstream.body === null) return fail(502, "skill_response_invalid")
+    if (upstream.headers.get("content-type") !== "application/zip" || length === null || !/^[1-9][0-9]*$/u.test(length) || !Number.isSafeInteger(Number(length)) || Number(length) > MAX_ZIP_BYTES || !filename || new TextEncoder().encode(filename).byteLength > byteSuccess.filenameMaxUtf8Bytes || /[\\/\u0000-\u001f\u007f]/u.test(filename) || !/\bno-store\b/iu.test(upstream.headers.get("cache-control") ?? "") || upstream.headers.get("x-content-type-options") !== byteSuccess.headers.properties["x-content-type-options"].const || upstream.headers.get("referrer-policy") !== byteSuccess.headers.properties["referrer-policy"].const || upstream.body === null) return fail(502, "skill_response_invalid")
     const reader = upstream.body.getReader()
     let count = 0, done = false
     let output: ReadableStreamDefaultController<Uint8Array>

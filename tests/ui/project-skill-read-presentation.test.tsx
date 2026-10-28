@@ -127,3 +127,23 @@ it.each(["unknown", "ack-read-failed"] as const)("quiet ordinary reads preserve 
   if (mode === "unknown") expect(writes[1]).toEqual(writes[0])
   expect(writes[0]?.key).toMatch(/^project-skill:/u)
 })
+
+it("opens an exact Project installation detail and reader without personal actions or catalog requests", async () => {
+  const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+    const path = String(input)
+    if (path.includes("skill-selection")) return defaults()
+    if (path.endsWith(`/skill-installations/${installation.installation_id}`)) return reply({ data: installation })
+    if (path.endsWith("/package")) return reply({ data: { source_ref: installation.source_ref, revision: installation.revision, files: [], selected_file: null } })
+    return reply({ data: [installation] })
+  })
+  vi.stubGlobal("fetch", fetcher)
+  mount(); const list = open()
+  const title = await within(list).findByRole("button", { name: installation.display_name })
+  fireEvent.click(title)
+  const detail = await screen.findByRole("dialog", { name: installation.display_name })
+  await waitFor(() => expect(fetcher.mock.calls.some(([path]) => String(path) === `/api/hub/projects/${id}/skill-installations/${installation.installation_id}`)).toBe(true))
+  expect(within(detail).queryByRole("button", { name: /添加到我的|分享|试用|启用|停用/ })).not.toBeInTheDocument()
+  fireEvent.click(within(detail).getByRole("button", { name: "查看详情" }))
+  await waitFor(() => expect(fetcher.mock.calls.some(([path]) => String(path) === `/api/hub/projects/${id}/skill-installations/${installation.installation_id}/package`)).toBe(true))
+  expect(fetcher.mock.calls.every(([path]) => String(path).startsWith(`/api/hub/projects/${id}/`))).toBe(true)
+})

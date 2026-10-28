@@ -302,3 +302,6 @@
   outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
+
+.titleButton { font: inherit; text-align: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+.titleButton:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 2px; }

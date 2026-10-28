@@ -1,3 +1,7 @@
+## Project Skill 精确内容消费者
+
+`project-skill-content.ts` 为精确 Project installation 的薄同源入口，先于个人 package catchall；只调用固定正式 BFF operation，原 Product Session／bounded JSON／absolute deadline，不自行设置浏览器自报 Project/actor 权限。
+
 ## Project MCP推荐配置同源薄桥（2026-10-27）
 
 `project-mcp-recommendations.ts`仅承接exact `GET/PUT /api/hub/projects/{id}/mcp-recommendations`，沿ProductSession／部署Domain和BFF公开v1配置owner，不透传caller身份、query、command key或外部URL。请求完整有界读取后保原bytes并设置可信Content-Length；strict JSON／duplicate／UTF8／closed fault tuple／ACK绑定验证，16KiB请求、64KiB响应、admission至EOF共10秒；取消退休、未知不重派。推荐不是个人连接授权，浏览器无Platform直连或业务存储。

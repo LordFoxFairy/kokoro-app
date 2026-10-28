@@ -1,3 +1,9 @@
+## Project Skill content：Public28.8 与私有下载资格／bytes policy3
+
+固定 BFF364f80cab855a4358eab956b7e3e3a4b5bae647b：Public SHA256 `6376e2d2a5fa9efd8e6ce4d9d4aa3686ad73dda8babffd9ac5b7097073538498`，独立 policy3 固定 BFF966ec5e7b0804185349a5f5413091d8e9e792bc9／SHA256 `4b84ccddb70421fc3f5f48766c4fd87fafb7d94f00eb9774f75b627f4f361925`。`GET /api/hub/projects/{projectId}/skill-installations/{installation_id}/package`（唯一 optional file_path）与 zero-body `POST .../download` 分别映射正式 `/v1/.../package` 与 `/browser/v1/.../download`。dispatcher 先于个人 package catchall；Product Session、可信 headers、10秒绝对准入至 EOF、1MiB JSON、取消／长度／UTF8／重复字段与严格响应闭集保持，不透传浏览器身份头。
+
+Project metadata、目录、文件与下载 descriptor 必须对应原 installation/source_ref/revision；路径只解码一次，文件仍过现 NFC／UTF8 256byte／排序／大小与 exact manifest 匹配。只有正式 package inspection 的 `412/skill_package_precondition_failed/retryable=false` 被接受；不得借 metadata union 给 opaque GET bytes 加412。policy3 的 byte_operation 单独生成 GET `/api/skill-downloads/{handle}` 验证：32MiB／UTF8 filename255byte、精确附件与必需安全 headers、bare／typed 各自错误形状、完整错误 EOF／长度、合法 Retry-After；不借 POST metadata／Share union。原 opaque path、流式取消、断流不拼 JSON 及10秒预算保持。四 POST 完整逆回 policy2 摘要454d，Public 全文6376不改。五个独立 private394 pin 不升级；新消费者尚不代表正常启用。
+
 ## GitHub discovery：Public28.7目录候选边界
 
 唯一完整原件固定BFF `d040eb04c5875eec2ade19be947435071dca2a5e`，SHA256 `818dfe54d5eb50a72725983be136211c63bb17fa7392f94c5c1d46234db3ebd1`。仅 `GithubSkillResponse.data` selection_required=true 的 paths.maxItems=512；129／252／512保完整，513为invalid wire而非slice。`SkillPackageInspectionData.files.maxItems=128`及selected Preview、请求、路径、commit、duplicate、权限、error/status、幂等键和1MiB总响应限制不变；无新API／游标／分页。正式snapshot与11public正规生成消费同一原件，五private394不改；正常配对由Root另验。

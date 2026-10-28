@@ -1014,3 +1014,61 @@ it("uses the measured 560px cover breakpoint, immutable loaded artwork slot, and
     }
   } finally { try { await browser?.close() } finally { await vite.close() } }
 }, 20_000)
+
+function projectInstalledFixture() {
+  localStorage.setItem("kokoro.locale", "zh")
+  const actualWindow = window, navigate = vi.fn()
+  const location = { ...actualWindow.location, assign: navigate }
+  vi.stubGlobal("window", new Proxy(actualWindow, { get: (target, key) => key === "location" ? location : Reflect.get(target, key, target) }))
+  const projectId = "project_11111111-1111-4111-8111-111111111111"
+  const row: PersonalInstallation = { installation_id: "project-installed", source_ref: "skill:project-version", series_id: "project-series", revision: "17", installed: true, enabled: true,
+    installed_at: "2026-10-10T00:00:00Z", updated_at: "2026-10-10T00:00:00Z", skill_updated_at: "2026-10-10T00:00:00Z", display_name: "Project pin", summary: "Project-only package", source_status: "active", tags: [], example_prompts: ["Not a personal trial"], category_keys: [], product: { publication_audience: "owner", state_version: "3" } }
+  const card: SkillCatalogCard = { skill_id: row.series_id, revision_skill_id: row.source_ref.slice(6), installation_id: row.installation_id, source_ref: row.source_ref, installed_source_ref: row.source_ref, name: row.display_name, description: row.summary, content_hash: row.series_id, scope: "unknown", installed: true, enabled: true }
+  const reply = (data: unknown) => Response.json(data, { headers: { "cache-control": "no-store", "x-request-id": "project-content-fixture" } })
+  const frame = (project = projectId, boundary = { admitted: true, subject: "project-reader", generation: 1 }) => <LocaleProvider><ManusSkillDetailDialog detailSource="project-installation" projectTarget={{ project_id: project, installation_id: row.installation_id, source_ref: row.source_ref, revision: row.revision }} readBoundary={boundary} skill={card} open onOpenChange={vi.fn()} /></LocaleProvider>
+  return { projectId, row, card, reply, frame, navigate }
+}
+
+it("Project download qualifies its installed pin only through the Project operation, never personal/catalog", async () => {
+  const f = projectInstalledFixture()
+  const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+    const path = String(input)
+    if (path === `/api/hub/projects/${f.projectId}/skill-installations/${f.row.installation_id}`) return f.reply({ data: f.row })
+    if (path === `/api/hub/projects/${f.projectId}/skill-installations/${f.row.installation_id}/download`) return f.reply({ data: { source_ref: f.row.source_ref, revision: f.row.revision, download_info: { download_url: `/skill-downloads/${"a".repeat(43)}`, filename: "project.zip", expires_at: "2999-01-01T00:00:00Z" } } })
+    throw Error("personal/catalog fallback is not Project authority")
+  })
+  vi.stubGlobal("fetch", fetcher)
+  render(f.frame())
+  await waitFor(() => expect(screen.getByRole("button", { name: "下载技能" })).toBeEnabled())
+  fireEvent.click(screen.getByRole("button", { name: "下载技能" }))
+  await waitFor(() => expect(f.navigate).toHaveBeenCalledWith(`/api/skill-downloads/${"a".repeat(43)}`))
+  expect(fetcher.mock.calls.map(([path]) => String(path))).toEqual([`/api/hub/projects/${f.projectId}/skill-installations/${f.row.installation_id}`, `/api/hub/projects/${f.projectId}/skill-installations/${f.row.installation_id}/download`])
+})
+
+it.each(["source_ref", "revision", "series_id", "installation_id"])("Project detail rejects a fresh mismatched %s instead of reading source bytes", async field => {
+  const f = projectInstalledFixture()
+  const fetcher = vi.fn(async (input: RequestInfo | URL) => { void input; return f.reply({ data: { ...f.row, [field]: field === "source_ref" ? "skill:foreign" : field === "revision" ? "18" : "foreign" } }) })
+  vi.stubGlobal("fetch", fetcher); render(f.frame())
+  const details = screen.getByRole("button", { name: "查看详情" })
+  await waitFor(() => expect(screen.getByText("技能详情暂时不可用")).toBeInTheDocument())
+  expect(details).toBeDisabled(); expect(screen.queryByRole("button", { name: "下载技能" })).not.toBeInTheDocument()
+  expect(fetcher).toHaveBeenCalledOnce()
+})
+it("Project changes retire a late file read even when installation and source pin are otherwise identical", async () => {
+  const f = projectInstalledFixture(), text = "private old Project"
+  let finish!: (response: Response) => void, signal: AbortSignal | undefined
+  const directory = { source_ref: f.row.source_ref, revision: f.row.revision, files: [{ path: "SKILL.md", size_bytes: String(new TextEncoder().encode(text).length) }], selected_file: null }
+  const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input)
+    if (path.endsWith("?file_path=SKILL.md")) { signal = init?.signal ?? undefined; return await new Promise<Response>(resolve => { finish = resolve }) }
+    if (path.endsWith("/package")) return f.reply({ data: directory })
+    return f.reply({ data: f.row })
+  }); vi.stubGlobal("fetch", fetcher)
+  const view = render(f.frame()); await waitFor(() => expect(screen.getByRole("button", { name: "查看详情" })).toBeEnabled())
+  fireEvent.click(screen.getByRole("button", { name: "查看详情" })); await waitFor(() => expect(finish).toBeTypeOf("function"))
+  view.rerender(f.frame("project_22222222-2222-4222-8222-222222222222"))
+  expect(signal?.aborted).toBe(true)
+  await act(async () => { finish(f.reply({ data: { ...directory, selected_file: { path: "SKILL.md", text } } })) })
+  expect(screen.queryByText(text)).not.toBeInTheDocument()
+  expect(f.navigate).not.toHaveBeenCalled()
+})

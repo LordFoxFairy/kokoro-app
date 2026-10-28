@@ -1,8 +1,10 @@
+import { restorePublic287ProjectSkillContentContract } from "./bff-project-skill-content-parent"
 // Test-only exact Public28.7→28.6 inverse; never a production compatibility reader.
 import { createHash } from "node:crypto"
 const hash = (source: string) => createHash("sha256").update(source).digest("hex")
 const discoveryCap = "                paths:\n                  type: array\n                  maxItems: 512\n"
 export function restorePublic286GithubDiscoveryContract(source: string): string {
+  source = restorePublic287ProjectSkillContentContract(source)
   if (!/^  version: 28\.7\.0$/mu.test(source)) {
     if (source.includes(discoveryCap)) throw Error("GitHub discovery version drift")
     return source

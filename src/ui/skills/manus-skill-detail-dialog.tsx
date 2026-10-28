@@ -13,7 +13,7 @@ import { githubRepositoryUrlSchema, githubSelectorSchema } from "@/hub/skill-git
 import { downloadManusSkill, getManusSkillDetail, getManusSkillPackage, type ManusSkillDetail } from "@/ui/skills/manus-skill-client"
 
 import { createSkillInstallationClient, HubClientError } from "@/hub/client"
-import { inspectInstallationPackage, downloadInstallationPackage } from "@/hub/skill-installation-content"
+import { inspectProjectInstallationPackage, downloadProjectInstallationPackage, type ProjectInstallationTarget, inspectInstallationPackage, downloadInstallationPackage } from "@/hub/skill-installation-content"
 import { createSkillShareClient } from "@/hub/skill-share-client"
 import type { ShareAck, ShareSummary } from "@/hub/skill-share.schema"
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
@@ -105,8 +105,7 @@ function subscribeSkillDetail(cacheKey: string, skillId: string): DetailSubscrip
   }
 }
 
-type Props = {
-  detailSource?: "catalog" | "installation"
+type CommonProps = {
   readBoundary: ProjectReadBoundary
   preview?: boolean
   pending?: boolean
@@ -126,13 +125,16 @@ type Props = {
   publisherLabel?: string
   categoryLabels?: readonly string[]
   onOpenChange: (open: boolean) => void
-  onAdd: (skill: SkillCatalogCard) => void
-  onTry: (prompt: string, selection: SkillCatalogCard) => boolean
   returnFocusRef?: RefObject<HTMLElement | null>
   onManagePersonal?: (operation: PersonalSkillOperation, installation: PersonalInstallation) => void
   onRemoveInstallation?: (installation: PersonalInstallation) => void
   personalManagementBusy?: boolean
 }
+
+type Props = CommonProps & (
+  | { detailSource: "project-installation"; projectTarget: ProjectInstallationTarget; onAdd?: never; onTry?: never; sharedSummary?: never; onAddShared?: never; onManagePersonal?: never; onRemoveInstallation?: never }
+  | { detailSource?: "catalog" | "installation"; projectTarget?: never; onAdd: (skill: SkillCatalogCard) => void; onTry: (prompt: string, selection: SkillCatalogCard) => boolean }
+)
 
 type DetailToolbarProps = {
   readerOpen: boolean
@@ -195,8 +197,11 @@ function repositoryDirectoryHref(repository: { repository_url: string; owner_log
 /** A stable, server-backed catalog detail dialog. It never synthesizes prompts,
  * source state or package identifiers in the browser. Package text comes only
  * from the admitted published-revision inspection boundary. */
-export function ManusSkillDetailDialog({ detailSource = "catalog", preview = false, pending = false, pendingFailed = false, pendingBusy = false, onLoadMore, onRetryPending, readBoundary: boundary, skill, open, busy = false, installationState, actionFailed = false, publisherLabel, categoryLabels = [], onOpenChange, onAdd, onTry, returnFocusRef, sharedSummary, onAddShared, installationNotice, onRetryInstallation, onManagePersonal, onRemoveInstallation, personalManagementBusy = false }: Props) {
+export function ManusSkillDetailDialog({ detailSource = "catalog", projectTarget, preview = false, pending = false, pendingFailed = false, pendingBusy = false, onLoadMore, onRetryPending, readBoundary: boundary, skill, open, busy = false, installationState, actionFailed = false, publisherLabel, categoryLabels = [], onOpenChange, onAdd, onTry, returnFocusRef, sharedSummary: sourceSummary, onAddShared, installationNotice, onRetryInstallation, onManagePersonal, onRemoveInstallation, personalManagementBusy = false }: Props) {
   const { locale, t } = useLocale()
+  const projectInstalled = detailSource === "project-installation"
+  const installedDetail = detailSource === "installation" || projectInstalled
+  const sharedSummary = projectInstalled ? undefined : sourceSummary
   const shareIntents = useRef(new Map<string, { identity: string; ack: ShareAck | null; unknown: boolean; pending: boolean; controller: AbortController | null }>())
   type ShareState = "pending" | "copied" | "copyFailed" | "failed" | "unknown"
   const [shareStates, setShareStates] = useState<Record<string, ShareState>>({})
@@ -224,7 +229,7 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
   const [expandedFolders, setExpandedFolders] = useState<ReadonlySet<string>>(new Set())
   const [mobileFilesOpen, setMobileFilesOpen] = useState(false)
   const mobileFilesToggleRef = useRef<HTMLButtonElement | null>(null)
-  const resourceIdentity = !open ? null : sharedSummary ? JSON.stringify(["shared", boundary.subject, sharedSummary.share_id, sharedSummary.source_ref]) : skill?.skill_id ? JSON.stringify([detailSource, skill.skill_id, skill.revision_skill_id, detailSource === "installation" ? skill.installation_id : null]) : null
+  const resourceIdentity = !open ? null : sharedSummary ? JSON.stringify(["shared", boundary.subject, sharedSummary.share_id, sharedSummary.source_ref]) : skill?.skill_id ? JSON.stringify([detailSource, projectInstalled ? projectTarget : null, skill.skill_id, skill.revision_skill_id, installedDetail ? skill.installation_id : null]) : null
   // The mounted parent is keyed by its exact selected locator. A pending
   // projection may remove all private facts without changing that selection.
   const [viewTarget, setViewTarget] = useState({ subject: boundary.subject, resource: resourceIdentity })
@@ -284,10 +289,10 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
 
   const sharedDownloadAdmitted = sharedSummary ? boundary.admitted : true
   const sharedDownloadSubject = sharedSummary ? boundary.subject : null
-  const detailCacheKey = skill?.skill_id === undefined ? null : JSON.stringify([currentFetchScope(), boundary.subject ?? "anonymous", boundary.generation, skill.skill_id, skill.revision_skill_id ?? null])
+  const detailCacheKey = projectInstalled || skill?.skill_id === undefined ? null : JSON.stringify([currentFetchScope(), boundary.subject ?? "anonymous", boundary.generation, skill.skill_id, skill.revision_skill_id ?? null])
   useEffect(() => {
     if (!open || !boundary.admitted || boundary.subject === null || !skill?.skill_id && !sharedSummary) return
-    if (sharedSummary || detailSource === "installation" || !skill?.skill_id) return
+    if (sharedSummary || installedDetail || !skill?.skill_id) return
     let active = true
     if (detailCacheKey === null) return
     const subscription = subscribeSkillDetail(detailCacheKey, skill.skill_id)
@@ -300,29 +305,30 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
       active = false
       subscription.release()
     }
-  }, [open, detailSource, skill?.skill_id, skill?.revision_skill_id, sharedSummary, sharedDownloadAdmitted, sharedDownloadSubject, boundary.subject, boundary.admitted, boundary.generation, detailCacheKey, isLive])
+  }, [open, detailSource, installedDetail, skill?.skill_id, skill?.revision_skill_id, sharedSummary, sharedDownloadAdmitted, sharedDownloadSubject, boundary.subject, boundary.admitted, boundary.generation, detailCacheKey, isLive])
 
   const installationId = skill?.installation_id
   const installationSeries = skill?.skill_id
   const installationSource = skill?.source_ref
   const installationRevision = skill?.revision_skill_id
   useEffect(() => {
-    if (detailSource !== "installation" || sharedSummary || !open || !boundary.admitted || boundary.subject === null) return
+    if (!installedDetail || sharedSummary || !open || !boundary.admitted || boundary.subject === null) return
     const controller = new AbortController()
     const load = async () => {
       if (!installationId || !installationRevision || installationSource !== `skill:${installationRevision}`) throw new Error("skill_response_invalid")
-      const value = await createSkillInstallationClient().get(installationId, controller.signal)
+      if (projectInstalled && (!projectTarget || projectTarget.installation_id !== installationId || projectTarget.source_ref !== installationSource)) throw new Error("skill_response_invalid")
+      const value = await createSkillInstallationClient(projectInstalled ? { projectId: projectTarget!.project_id } : undefined).get(installationId, controller.signal)
       if (controller.signal.aborted || !isLive()) return
-      if (value.source_status === "deleted" || !value.installed || value.series_id !== installationSeries || value.source_ref !== installationSource) throw new Error("skill_response_invalid")
+      if (value.source_status === "deleted" || !value.installed || value.series_id !== installationSeries || value.source_ref !== installationSource || value.installation_id !== installationId || projectInstalled && value.revision !== projectTarget!.revision) throw new Error("skill_response_invalid")
       setInstallation(value)
     }
     void load().catch(() => { if (!controller.signal.aborted && isLive()) setFailed(true) })
     return () => controller.abort()
-  }, [detailSource, sharedSummary, open, boundary.admitted, boundary.subject, installationId, installationSeries, installationSource, installationRevision, isLive])
+  }, [detailSource, installedDetail, projectInstalled, projectTarget, sharedSummary, open, boundary.admitted, boundary.subject, installationId, installationSeries, installationSource, installationRevision, isLive])
 
   const boundRevision = !open || !boundary.admitted || boundary.subject === null || failed ? null
     : sharedSummary ? sharedSummary.skill.skill_id
-    : detailSource === "installation" ? installation?.source_ref.slice(6) ?? null
+    : installedDetail ? installation?.source_ref.slice(6) ?? null
     : skill?.revision_skill_id !== undefined && detail?.skill.id === skill.skill_id && detail?.skill.version === skill.revision_skill_id ? skill.revision_skill_id : null
 
   const sharedRevision = sharedSummary?.skill.revision
@@ -347,7 +353,7 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
   useEffect(() => {
     if (!readerOpen || boundRevision === null || directory !== null || readerFailed) return
     const controller = new AbortController()
-    void (installation ? inspectInstallationPackage(installation, undefined, controller.signal) : getManusSkillPackage(boundRevision, undefined, controller.signal)).then((value) => {
+    void (installation ? projectInstalled ? inspectProjectInstallationPackage(projectTarget!, undefined, controller.signal) : inspectInstallationPackage(installation, undefined, controller.signal) : getManusSkillPackage(boundRevision, undefined, controller.signal)).then((value) => {
       if (controller.signal.aborted || !isLive()) return
       if (sharedRevision !== undefined && value.revision !== sharedRevision) throw new Error("skill_response_invalid")
       setDirectory(value)
@@ -361,12 +367,12 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
       if (!controller.signal.aborted && isLive()) failReader(error)
     })
     return () => controller.abort()
-  }, [readerOpen, boundRevision, installation, directory, readerFailed, readerAttempt, sharedRevision, isLive, readerCursor, failReader])
+  }, [readerOpen, boundRevision, installation, directory, readerFailed, readerAttempt, sharedRevision, isLive, readerCursor, failReader, projectInstalled, projectTarget])
 
   useEffect(() => {
     if (!readerOpen || boundRevision === null || directory === null || selectedPath === null) return
     const controller = new AbortController()
-    void (installation ? inspectInstallationPackage(installation, selectedPath, controller.signal, directory) : getManusSkillPackage(boundRevision, selectedPath, controller.signal, directory)).then((value) => {
+    void (installation ? projectInstalled ? inspectProjectInstallationPackage(projectTarget!, selectedPath, controller.signal, directory) : inspectInstallationPackage(installation, selectedPath, controller.signal, directory) : getManusSkillPackage(boundRevision, selectedPath, controller.signal, directory)).then((value) => {
       if (controller.signal.aborted || !isLive()) return
       setReaderFile(value.selected_file)
       setReaderLoading(false)
@@ -374,7 +380,7 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
       if (!controller.signal.aborted && isLive()) failReader(error)
     })
     return () => controller.abort()
-  }, [readerOpen, boundRevision, installation, directory, selectedPath, readerAttempt, isLive, failReader])
+  }, [readerOpen, boundRevision, installation, directory, selectedPath, readerAttempt, isLive, failReader, projectInstalled, projectTarget])
 
   useLayoutEffect(() => {
     if (!readerLoading && readerFile !== null && readerFile.path === selectedPath && isLive() && readerContentRef.current) {
@@ -420,9 +426,9 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
       if (sharedSummary) {
         const result = await createSkillShareClient().download(sharedSummary.share_id, sharedSummary.source_ref, sharedSummary.skill.revision, controller.signal)
         if (!controller.signal.aborted && isLive()) window.location.assign(`/api${result.download_info.download_url}`)
-      } else if (detailSource === "installation") {
+      } else if (installedDetail) {
         if (!installation) return
-        const result = await downloadInstallationPackage(installation, controller.signal)
+        const result = projectInstalled ? await downloadProjectInstallationPackage(projectTarget!, controller.signal) : await downloadInstallationPackage(installation, controller.signal)
         if (!controller.signal.aborted && isLive()) window.location.assign(`/api${result.download_info.download_url}`)
       } else if (skill?.skill_id) {
         const result = await downloadManusSkill(skill.skill_id, boundRevision, controller.signal)
@@ -443,7 +449,7 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
   const sourceRef = boundRevision === null ? null : `skill:${boundRevision}`
   // The command's unknown-result tombstone belongs to actor/source, while
   // ACK and clipboard presentation belong only to this admitted read lifetime.
-  const shareSource = boundary.subject && sourceRef ? JSON.stringify([boundary.subject, sourceRef]) : null
+  const shareSource = !projectInstalled && boundary.subject && sourceRef ? JSON.stringify([boundary.subject, sourceRef]) : null
   const shareIdentity = boundary.admitted && identity && shareSource ? JSON.stringify([identity, shareSource]) : null
   const liveShareIdentity = useRef(shareIdentity)
   useLayoutEffect(() => {
@@ -501,7 +507,7 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
   const shareStatus = shareIdentity === null ? null : shareSource !== null && unknownShares[shareSource] ? "unknown" : shareStates[shareIdentity] ?? null
 
   if (!skill && !sharedSummary && !pending) return null
-  const record = detailSource !== "installation" && detail !== null && detail.skill.id === skill?.skill_id ? detail.skill : null
+  const record = !installedDetail && detail !== null && detail.skill.id === skill?.skill_id ? detail.skill : null
   const loading = !sharedSummary && open && skill?.skill_id !== undefined && record === null && installation === null && !failed
   const title = sharedSummary?.skill.display_name ?? installation?.display_name ?? record?.displayName ?? record?.name ?? skill?.name ?? t("skills.title")
   const description = sharedSummary?.skill.description ?? installation?.summary ?? record?.userDescription ?? record?.description ?? skill?.description ?? ""
@@ -510,13 +516,13 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
   const installationEnabled = installationState?.enabled ?? installation?.enabled ?? false
   // The exact installation was rebound above; actions must not reuse a stale
   // card's source availability after this fresh read.
-  const currentSkill = detailSource === "installation" && installation && skill ? { ...skill, source_status: installation.source_status, enabled: installationEnabled } : skill
-  const sourceUnavailable = detailSource === "installation" && installation !== null && installation.source_status !== "active"
-  const enableInstallation = detailSource === "installation" && installation?.installed === true && !installationEnabled
-  const installed = detailSource === "installation" ? installation !== null && installationEnabled : installationState === undefined ? record?.added ?? skill?.installed ?? false : installationState.installed && installationState.enabled
-  const trialReady = !sharedSummary && !sourceUnavailable && (preview || boundary.admitted && boundary.subject !== null && installed && boundRevision !== null && currentSkill !== null && skillTrialSourceRef(currentSkill) === `skill:${boundRevision}`)
+  const currentSkill = installedDetail && installation && skill ? { ...skill, source_status: installation.source_status, enabled: installationEnabled } : skill
+  const sourceUnavailable = installedDetail && installation !== null && installation.source_status !== "active"
+  const enableInstallation = !projectInstalled && installedDetail && installation?.installed === true && !installationEnabled
+  const installed = installedDetail ? installation !== null && installationEnabled : installationState === undefined ? record?.added ?? skill?.installed ?? false : installationState.installed && installationState.enabled
+  const trialReady = !projectInstalled && !sharedSummary && !sourceUnavailable && (preview || boundary.admitted && boundary.subject !== null && installed && boundRevision !== null && currentSkill !== null && skillTrialSourceRef(currentSkill) === `skill:${boundRevision}`)
   const cover = sharedSummary?.skill.cover_image === undefined ? record?.coverImage ?? skill?.cover_image : ownerCoverPath(sharedSummary.skill.cover_image, sharedSummary.skill.skill_id)
-  const canShare = Boolean(sharedSummary || skill?.revision_skill_id)
+  const canShare = !projectInstalled && Boolean(sharedSummary || skill?.revision_skill_id)
   const canDownload = Boolean(boundRevision !== null || sharedSummary || installation)
   const detailReadStatus = failed || loading ? <span className="sr-only" role="status">{t(failed ? "skills.detailUnavailable" : "skills.detailLoading")}</span> : null
 
@@ -525,11 +531,11 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
   const installationPublisher = installation?.publisher_profile?.status === "found"
     ? installation.publisher_profile.display_name
     : installation?.product.source_kind === "official" ? publisherLabel : undefined
-  const metadataProduct = sharedSummary ? undefined : detailSource === "installation" ? installation?.product : skill?.product
+  const metadataProduct = sharedSummary ? undefined : installedDetail ? installation?.product : skill?.product
   const repository = metadataProduct?.source_kind === "third_party" && metadataProduct.publisher?.kind === "github_repository" ? metadataProduct.publisher.github_repository : undefined
   const repositoryHref = repository === undefined ? undefined : repositoryDirectoryHref(repository)
   const metadata = [
-    detailSource === "installation" ? installationPublisher : publisherLabel,
+    installedDetail ? installationPublisher : publisherLabel,
     updated ? t("skills.updatedAt", { date: updated }) : undefined,
     !sharedSummary && skill?.usage_count ? t("skills.usedCount", { count: Number(skill.usage_count).toLocaleString(locale) }) : undefined,
   ].filter((value): value is string => Boolean(value))
@@ -605,7 +611,7 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
               </div>
             </DialogDescription>}
             <div className={styles.actions}>
-              <Button type="button" onClick={() => sharedSummary ? onAddShared?.() : currentSkill && onAdd(currentSkill)} disabled={busy || installed || detailSource === "installation" && (installation === null || sourceUnavailable || !boundary.admitted || boundary.subject === null)}>{enableInstallation ? t("skills.enable") : installed ? t("skills.addedToMine") : <><Plus aria-hidden="true" />{t("skills.addToMine")}</>}</Button>
+              {!projectInstalled ? <Button type="button" onClick={() => sharedSummary ? onAddShared?.() : currentSkill && onAdd?.(currentSkill)} disabled={busy || installed || detailSource === "installation" && (installation === null || sourceUnavailable || !boundary.admitted || boundary.subject === null)}>{enableInstallation ? t("skills.enable") : installed ? t("skills.addedToMine") : <><Plus aria-hidden="true" />{t("skills.addToMine")}</>}</Button> : null}
               <Button type="button" variant="outline" disabled={boundRevision === null} onClick={() => restartReader(true)}><FileText aria-hidden="true" />{t("skills.packageViewDetails")}</Button>
             </div>
           </div>
@@ -621,7 +627,7 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
           {sourceUnavailable ? <p className={styles.status} role="status">{t("skills.sourceUnavailable")}</p> : null}
           {detailReadStatus}
           {record !== null && skill?.revision_skill_id !== undefined && record.version !== skill.revision_skill_id ? <p className={styles.status}>{t("skills.packageChanged")}</p> : null}
-          {examples.length > 0 ? <SkillTrialExamples key={JSON.stringify([boundary.subject, boundary.generation, skill?.skill_id, boundRevision, skill?.installed_source_ref, trialReady])} examples={examples} ready={trialReady} onTry={prompt => currentSkill !== null && onTry(prompt, currentSkill)} /> : null}
+          {!projectInstalled && examples.length > 0 ? <SkillTrialExamples key={JSON.stringify([boundary.subject, boundary.generation, skill?.skill_id, boundRevision, skill?.installed_source_ref, trialReady])} examples={examples} ready={trialReady} onTry={prompt => currentSkill !== null && (onTry?.(prompt, currentSkill) ?? false)} /> : null}
         </section>}
         {downloadFailure ? <p className={styles.status} role="alert">{t(downloadFailure === "unavailable" ? "skills.downloadUnavailable" : "skills.downloadIncomplete")}</p> : null}
         {readerOpen ? <section className={styles.reader} aria-label={t("skills.packageReader")}>

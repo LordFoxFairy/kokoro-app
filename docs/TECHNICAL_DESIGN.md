@@ -1,3 +1,9 @@
+## Project 已安装 Skill 的精确详情与下载（消费者候选）
+
+以既有 Project installation owner 为准：卡片打开仅捕获 Project／installation／source_ref／decimal revision 和 actor，现 Manus reader fresh metadata 使用 Project client，再通过具名 Project package／download 读取；Project 不复用个人或目录 source 权限，不回退 current version。reader／download 身份包含完整 Project pin 及当前 admission generation，换 Project、pin、actor、关闭或取消后迟到结果退役。详情与原包文件阅读器共享，Project 分支不暴露个人添加／启停／管理／分享／试用，也不传假回调；原列表、默认选择、更新、移除意图与命令键不变。
+
+机器只消费正式 BFF364f80cab855a4358eab956b7e3e3a4b5bae647b 的完整 Public28.8 与独立 download policy3（四个 POST 保 policy2 原形，GET bytes 独立闭集）。新 feature generator 按 source pin／原件摘要生成 closed decoder；11 public 窄生成链正规更新，5 private394 原件保持。test-only 精确逆回完整 Public28.7 后进入全部原父证明链，不是运行兼容路径。此 App 切片不新增 owner／表／缓存／依赖；正常组合与浏览器验收由 Root 后续执行。Project identity 的真实 loading 仅保 sr-only 文案与 header aria-busy；标题空位保尺寸、不绘制灰条，不沿用品牌／旧项目名；unknown／error 语义原样。
+
 ## GitHub discovery：512候选目录与单包128分离（2026-10-27，消费者候选）
 
 固定正式BFF `d040eb04c5875eec2ade19be947435071dca2a5e`／Public28.7，canonical SHA256 `818dfe54d5eb50a72725983be136211c63bb17fa7392f94c5c1d46234db3ebd1`。仅现selection-required Preview候选路径上限128→512，保完整同commit数组，不分页／不静默截断；已选单包文件128、ZIP安全限制、原strict路径／身份／duplicate／错误／1MiB／取消与写意图键不变。11既有public生成链正规同步；test-only精确28.7→28.6入口承接完整旧父，五private394独立pin保持。本片不改reader／metadata／导入状态机，不将容量修正冒真实导入成功；Root统一最终验证和正常启用。

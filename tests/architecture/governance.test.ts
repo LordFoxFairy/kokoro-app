@@ -180,6 +180,7 @@ describe("Web governance boundary", () => {
         "contract:check:bff-mcp-server-icon": z.string().min(1),
         "contract:check:bff-tool-display": z.string().min(1),
         "contract:check:bff-project-resource": z.string().min(1),
+        "contract:check:bff-project-skill-content": z.string().min(1),
         "contract:generate:bff-mcp-prepare-outcomes": z.string().min(1),
         "contract:check:bff-mcp-prepare-outcomes": z.string().min(1),
         "contract:generate:bff-mcp-prepare-receipt": z.string().min(1),
@@ -191,6 +192,7 @@ describe("Web governance boundary", () => {
     const packageJson: unknown = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"))
 
     const scripts = packageSchema.parse(packageJson).scripts
+    expect(scripts["contract:check:bff-project-skill-content"]).toBe("node scripts/generate-bff-project-skill-content.mjs --check")
     expect(scripts["contract:check:bff-project-resource"]).toBe("node scripts/generate-bff-project-resource.mjs --check")
     expect(scripts["contract:check:bff-project-pins"]).toBe("node scripts/generate-bff-project-pins.mjs --check")
     expect(scripts["contract:check:bff-project-mcp-recommendations"]).toBe("node scripts/generate-bff-project-mcp-recommendations.mjs --check")
@@ -219,6 +221,7 @@ describe("Web governance boundary", () => {
       "pnpm contract:check:bff-mcp-server-icon",
       "pnpm contract:check:bff-tool-display",
       "pnpm contract:check:bff-project-resource",
+      "pnpm contract:check:bff-project-skill-content",
       "pnpm contract:check:bff-project-pins",
       "pnpm contract:check:bff-project-mcp-recommendations",
       "vitest run contract tests/contract",
