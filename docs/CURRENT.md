@@ -1,3 +1,9 @@
+## 2026-10-28 可见回答反馈按需读取（限流减载切片）
+
+基线50027f08，赞踩操作栏复用原DOM和控制器，只让可见document的可见操作栏启动反馈GET；每readEpoch一次，StrictMode废弃effect及旧observer不发请求，未知写入保持显式核实。缺IntersectionObserver仍退化为可见页挂载读取，未改IAM配额、BFF fresh admission或写入重放。
+
+初始回归2失败/10通过，修复后相关3suite26通过；扩大UI/core/engine/i18n 189suite3902通过（日志保留jsdom navigation未实现提示），lint/typecheck/build/post-build typecheck通过。独审无确定P0–P2。未重跑全默认/整套E2E，既有18个Next侧栏系统用例超时仍未闭环；本片不声称所有429恢复或整产品验收，Retry-After和列表恢复另记。正常生效与浏览器验收由Root续记。
+
 ## 2026-10-28 工具主行身份与技术参数分层（正常局部已验，整体仍OPEN）
 
 以fc60ed60为基线：主行与Canvas共用有限展示映射；旧MCP调用用真实目标名，不再重复“调用MCP工具”或拼接repo/question。edit_file/ls/glob/grep仅同activity私有身份映射中性操作，完整未脱敏输入中的原path/file_path可转述，不补默认目录、不产生文件访问权限。有action_title仍优先，原顺序、正文、失败及原始输入输出保持。

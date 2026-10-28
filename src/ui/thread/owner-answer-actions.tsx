@@ -1,7 +1,8 @@
-import { useEffect, useLayoutEffect, useMemo, useState } from "react"
+import { useLayoutEffect, useMemo, useRef, useState } from "react"
 import { useT } from "@/i18n/context"
 import { Button } from "@/components/ui/button"
 import { AnswerActions } from "./answer-actions"
+import { useVisibleFeedbackRead } from "./use-visible-feedback-read"
 import type { AnswerActionBoundary } from "./answer-action-scope"
 import { canRegenerateAnswer } from "./answer-action-scope"
 import { createAnswerFeedbackController } from "./answer-feedback-controller"
@@ -41,11 +42,12 @@ export function OwnerAnswerActions({ boundary, runId, messageId, text }: {
   }, [boundary, controls])
   const readEpoch = boundary.readEpoch ?? boundary.epoch
   useLayoutEffect(() => { if (!boundary.isCurrent()) { controls.feedback.suspend(); controls.regenerate.suspend() } })
-  useEffect(() => { if (boundary.isCurrent() && controls.feedback.getState().kind !== "unknown") void controls.feedback.read() }, [boundary, controls, readEpoch])
+  const actionsRoot = useRef<HTMLDivElement>(null)
+  useVisibleFeedbackRead(actionsRoot, boundary, controls.feedback, readEpoch)
   const feedback = controls.feedback.getState(), regeneration = controls.regenerate.getState()
   const owned = boundary.isCurrent()
   return <>
-    <AnswerActions text={text} regenerate={{ label: t("thread.regenerateAnswer"), onClick: () => { if (regeneration.kind === "unknown" || canRegenerateAnswer(boundary, target)) void controls.regenerate.run() },
+    <AnswerActions rootRef={actionsRoot} text={text} regenerate={{ label: t("thread.regenerateAnswer"), onClick: () => { if (regeneration.kind === "unknown" || canRegenerateAnswer(boundary, target)) void controls.regenerate.run() },
       disabled: !owned || (regeneration.kind !== "unknown" && !canRegenerateAnswer(boundary, target)) || regeneration.kind === "pending" || regeneration.kind === "accepted" || (regeneration.kind === "rejected" && regeneration.intent.evidence === boundary.engine.getSnapshot().thread) }}
       feedback={{ positiveLabel: t("thread.positiveFeedback"), negativeLabel: t("thread.negativeFeedback"), onChange: value => { void controls.feedback.write(value) },
         ...(feedback.kind === "ready" && owned ? { value: feedback.value } : { value: undefined, disabled: true as const }) }} />

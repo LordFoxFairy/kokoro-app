@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react"
+import { useEffect, useRef, useState, type ReactNode, type Ref } from "react"
 import { Copy, RotateCcw, ThumbsDown, ThumbsUp } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { useT } from "@/i18n/context"
@@ -6,6 +6,7 @@ import styles from "./answer-actions.module.css"
 
 type AnswerActionsProps = {
   text: string
+  rootRef?: Ref<HTMLDivElement>
   disabled?: boolean
   regenerate?: { label: string; onClick: () => void; disabled?: boolean }
   feedback?: {
@@ -29,7 +30,7 @@ function Action({ label, icon, onClick, disabled, pressed }: {
 
 // Optional actions are rendered only when a real owner-backed callback exists.
 // Votes are controlled facts; this component never persists or invents feedback.
-export function AnswerActions({ text, disabled = false, regenerate, feedback }: AnswerActionsProps) {
+export function AnswerActions({ text, rootRef, disabled = false, regenerate, feedback }: AnswerActionsProps) {
   const t = useT()
   const [copiedText, setCopiedText] = useState<string | null>(null)
   const attempt = useRef(0)
@@ -50,7 +51,7 @@ export function AnswerActions({ text, disabled = false, regenerate, feedback }: 
   }
   const copied = copiedText === text && text.length > 0
   return <TooltipProvider>
-    <div className={styles.actions} data-slot="assistant-actions">
+    <div ref={rootRef} className={styles.actions} data-slot="assistant-actions">
       {regenerate ? <Action label={regenerate.label} icon={<RotateCcw aria-hidden="true" />} onClick={regenerate.onClick} disabled={disabled || regenerate.disabled === true} /> : null}
       <Action label={t(copied ? "thread.copiedAnswer" : "thread.copyAnswer")} icon={<Copy aria-hidden="true" />} onClick={() => void copy()} disabled={disabled || !text} />
       {feedback ? <>

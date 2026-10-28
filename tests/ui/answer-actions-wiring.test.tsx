@@ -182,3 +182,80 @@ it("a paused in-flight regeneration becomes unknown, not stuck pending, and resu
     expect(screen.queryByText(/Regeneration is unconfirmed/u)).not.toBeInTheDocument()
   } finally { vi.unstubAllGlobals() }
 })
+
+it("loads feedback only for visible answer controls and does not load hidden-tab history", async () => {
+  const observers: { emit: (visible: boolean) => void; disconnect: ReturnType<typeof vi.fn> }[] = []
+  vi.stubGlobal("IntersectionObserver", class {
+    disconnect = vi.fn()
+    constructor(callback: IntersectionObserverCallback) { observers.push({ emit: visible => callback([{ isIntersecting: visible } as IntersectionObserverEntry], this as unknown as IntersectionObserver), disconnect: this.disconnect }) }
+    observe() {}
+  })
+  let visibility: DocumentVisibilityState = "hidden"
+  const visibilitySpy = vi.spyOn(document, "visibilityState", "get").mockImplementation(() => visibility)
+  const f = fixture()
+  try {
+    render(<LocaleProvider><OwnerAnswerActions boundary={f.boundary} runId="run" messageId="answer" text="answer" /><OwnerAnswerActions boundary={f.boundary} runId="older-run" messageId="older-answer" text="older" /></LocaleProvider>)
+    expect(f.client.readFeedback).not.toHaveBeenCalled()
+    act(() => observers[0]!.emit(true))
+    await act(async () => {})
+    expect(f.client.readFeedback).not.toHaveBeenCalled()
+    visibility = "visible"
+    act(() => document.dispatchEvent(new Event("visibilitychange")))
+    await waitFor(() => expect(f.client.readFeedback).toHaveBeenCalledTimes(1))
+    act(() => { observers[0]!.emit(false); observers[0]!.emit(true); observers[0]!.emit(true) })
+    await act(async () => {})
+    expect(f.client.readFeedback).toHaveBeenCalledTimes(1)
+    expect(screen.getAllByRole("button", { name: "Good response" })[0]).toBeEnabled()
+    expect(screen.getAllByRole("button", { name: "Good response" })[1]).toBeDisabled()
+  } finally { visibilitySpy.mockRestore(); vi.unstubAllGlobals() }
+})
+
+it("keeps an offscreen feedback failure from retrying on every intersection", async () => {
+  let enter!: () => void
+  vi.stubGlobal("IntersectionObserver", class {
+    constructor(callback: IntersectionObserverCallback) { enter = () => callback([{ isIntersecting: true } as IntersectionObserverEntry], this as unknown as IntersectionObserver) }
+    observe() {} disconnect() {}
+  })
+  const f = fixture(); f.client.readFeedback.mockRejectedValue(Error("rate limited"))
+  try {
+    render(<LocaleProvider><OwnerAnswerActions boundary={f.boundary} runId="run" messageId="answer" text="answer" /></LocaleProvider>)
+    act(() => enter())
+    await waitFor(() => expect(f.client.readFeedback).toHaveBeenCalledTimes(1))
+    act(() => { enter(); enter() })
+    await act(async () => {})
+    expect(f.client.readFeedback).toHaveBeenCalledTimes(1)
+    expect(f.client.setFeedback).not.toHaveBeenCalled()
+  } finally { vi.unstubAllGlobals() }
+})
+
+it("does not send the retired StrictMode effect's feedback request", async () => {
+  const f = fixture()
+  render(<StrictMode><LocaleProvider><OwnerAnswerActions boundary={f.boundary} runId="run" messageId="answer" text="answer" /></LocaleProvider></StrictMode>)
+  await waitFor(() => expect(screen.getByRole("button", { name: "Good response" })).toBeEnabled())
+  expect(f.client.readFeedback).toHaveBeenCalledTimes(1)
+})
+
+it("discards visibility events after retirement and re-reads after admission's read epoch changes", async () => {
+  const enter: (() => void)[] = []
+  vi.stubGlobal("IntersectionObserver", class {
+    constructor(callback: IntersectionObserverCallback) { enter.push(() => callback([{ isIntersecting: true } as IntersectionObserverEntry], this as unknown as IntersectionObserver)) }
+    observe() {} disconnect() {}
+  })
+  const f = fixture()
+  try {
+    const { rerender, unmount } = render(<LocaleProvider><OwnerAnswerActions boundary={f.boundary} runId="run" messageId="answer" text="answer" /></LocaleProvider>)
+    act(() => enter[0]!())
+    await waitFor(() => expect(f.client.readFeedback).toHaveBeenCalledTimes(1))
+    f.boundary.readEpoch = {}
+    rerender(<LocaleProvider><OwnerAnswerActions boundary={f.boundary} runId="run" messageId="answer" text="answer" /></LocaleProvider>)
+    act(() => enter[0]!())
+    await act(async () => {})
+    expect(f.client.readFeedback).toHaveBeenCalledTimes(1)
+    act(() => enter[1]!())
+    await waitFor(() => expect(f.client.readFeedback).toHaveBeenCalledTimes(2))
+    unmount()
+    act(() => enter[1]!())
+    await act(async () => {})
+    expect(f.client.readFeedback).toHaveBeenCalledTimes(2)
+  } finally { vi.unstubAllGlobals() }
+})

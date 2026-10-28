@@ -46,6 +46,8 @@
 
 反馈RAM仅本actor／Message，GET真值后才呈pressed；unknown PUT只显式GET，不自动重发。再生成控制器按原source Message绑定，一次新意图新K，unknown仅原K恢复。暂时同actor读准入／generation变化暂停I/O、pending转unknown保原K，不换target或销毁意图；真实actor／session／Project退休及late结果隔离。首次exact precommit400／409可确定拒绝，显式只读刷新后才允许用户新尝试；权限出口401／403与heldunknown重读拒绝均不证明旧意图未接受。
 
+反馈 GET 按操作栏可见性读取：有 IntersectionObserver 时只读取当前可见操作栏，隐藏 document 不启动；每个 readEpoch 只自动读一次，滚动不重试失败。缺 observer 时仅退化为可见 document 内挂载读取；未读仍禁用赞踩，不伪造 null。StrictMode 废弃 effect 不发请求，主体退休及准入变化沿原控制器隔离，unknown 写入仍显式核实。此片不调整 IAM 限额/BFF fresh admission，不代替 Retry-After 冷却或整页恢复。
+
 Engine具名regenerateAnswer只消费正式ACK，不调用submit／retry、不append或rename human；ACK user_message_id仅原human关联。迟到ACK可幂等登记exact assistant，head／cursor／pending／用户消息lineage推进时不倒退；仅旧parts变化可由一次既有bounded snapshot发现已接受Run并保parts，不自动POST或新poller。latest canonical source、exact terminal、无active/pending/unknown、私有source确认才给新意图资格。runTerminalsById是唯一三态索引，旧HMR RAM只迁旧已确认cancel=true，不从TEXT_END／正文补成功，不清用户草稿；旧Engine缺新方法时禁用而非伪装支持。
 
 ProcessActivityRows只折连续discover／describe，展开保原named行，execution／文字／其它activity都是边界，统计实际activities不伪称调用数。正式live／ordered支持native Skill名／已证revision／virtual path；file默认完整path换行，MCP只实际安全name。历史仅具体Run用户展开／单行读详情才有界GET，pure overlay只补匹配的name/path，不改status／顺序／旧事件或借当前catalog；不snapshot N+1。正常组合与实际四动作／渲染由Root后续验收。
