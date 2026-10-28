@@ -1,3 +1,7 @@
+## GitHub 写入等待：稳定业务标签
+
+`github-import-dialog.tsx`在import/read/publish/install等待时保“添加到我的技能（仅自己可见）”主动作标签并禁用，preview仍为预览；Dialog统一aria-busy，原sr-only阶段状态不改。Unknown真实提示与显式原意图重试、关闭取消／迟到结果、Flow／body／key保持，不把等待显示为完成。
+
 ## S11：已删除来源安装的显式清理
 
 Settings deleted 灰卡保留原 source_status／禁用详情正文，仅通过现 PersonalSkillActions 的“移除安装”入口，fresh GET 安装后核 actor／generation／原 installation＋series＋source，再复用现 RemoveFlow／确认框。fresh 读取占同一管理互锁，取消／换 actor／代际／目标或原触发器失联不弹旧确认；稳定 overflow triggerRef 与现 fallback 回焦保持。Remove 确认框的资格读取保64px空白及原 aria-busy／sr-only 状态，不绘制填色圆角骨架。旧 RemoveFlow、原 key unknown 恢复、严格 ACK 后失活列表均不变。不将系列删除当卸载，不自动删除／隐藏或伪造 installed=false，不读被删正文。

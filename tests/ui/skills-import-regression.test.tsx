@@ -416,3 +416,63 @@ it("keeps ready and unresolved GitHub write stages expanded without changing the
   expect(fetcher.mock.calls[2]?.[1]?.body).toBe(original?.body)
   expect(new Headers(fetcher.mock.calls[2]?.[1]?.headers).get("idempotency-key")).toBe(new Headers(original?.headers).get("idempotency-key"))
 })
+
+it.each(["zh", "en"])("%s GitHub import and original-intent Retry stay quiet with the correct stable disabled write action", async locale => {
+  localStorage.setItem("kokoro.locale", locale)
+  const pending: { reject: (error: Error) => void; resolve: (response: Response) => void; signal: AbortSignal | undefined }[] = []
+  const fetcher = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input).endsWith("/preview")) return Promise.resolve(Response.json({ data: { selection_required: true, repository_url: "https://github.com/acme/skills", commit: "a".repeat(40), paths: ["one", "two"] } }, { headers: { "cache-control": "no-store", "x-request-id": "pending-write-preview" } }))
+    return new Promise<Response>((resolve, reject) => { pending.push({ reject, resolve, signal: init?.signal ?? undefined }) })
+  })
+  vi.stubGlobal("fetch", fetcher)
+  const imported = vi.fn()
+  render(<GithubHarness onImported={imported} />)
+  fireEvent.change(screen.getByTestId("github-repository-input"), { target: { value: "acme/skills" } })
+  fireEvent.click(screen.getByTestId("github-import-submit"))
+  fireEvent.click(await screen.findByRole("button", { name: "one" }))
+  const action = locale === "zh" ? "添加到我的技能（仅自己可见）" : "Add to my skills (only me)"
+  fireEvent.click(screen.getByRole("button", { name: action }))
+  await waitFor(() => expect(pending).toHaveLength(1))
+  const firstBody = fetcher.mock.calls[1]?.[1]?.body, firstKey = new Headers(fetcher.mock.calls[1]?.[1]?.headers).get("idempotency-key")
+  const vite = await createServer({ configFile: false, root: process.cwd(), server: { middlewareMode: true, hmr: false, watch: null }, css: { modules: { generateScopedName: (name, filename) => basename(filename.replace(/\?.*$/u, "")) === "github-import-dialog.module.css" ? githubDialogStyles[name]! : name } } })
+  let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
+  try {
+    const css = await Promise.all(["/src/app/globals.css", "/src/ui/skills/github-import-dialog.module.css"].map(async path => {
+      const result = await vite.transformRequest(`${path}?inline`), text = result?.code.match(/export default ([\s\S]*?);?\s*$/u)?.[1]
+      if (!text) throw Error("GitHub pending write CSS compilation missing")
+      return JSON.parse(text.replace(/;\s*$/u, "")) as string
+    }))
+    browser = await chromium.launch({ headless: true })
+    const page = await browser.newPage({ viewport: { width: 652, height: 767 } }); await page.route("**/*", route => route.abort())
+    for (const attempt of [0, 1]) {
+      const dialog = screen.getByTestId("github-import-dialog"), status = screen.getByTestId("github-import-status")
+      expect(status).toHaveAttribute("role", "status"); expect(status).toHaveClass("sr-only")
+      expect(status).toHaveTextContent(locale === "zh" ? "正在创建个人技能草稿…" : "Creating a personal skill draft…")
+      await page.setContent(`<!doctype html><html><head><style>${css.join("\n")}</style></head><body data-web-skin="kokoro">${dialog.outerHTML}</body></html>`)
+      const facts = await page.getByTestId("github-import-dialog").evaluate(root => {
+        const status = root.querySelector<HTMLElement>('[data-testid="github-import-status"]')!, style = getComputedStyle(status), rect = status.getBoundingClientRect(), button = root.querySelector<HTMLButtonElement>('[data-slot="dialog-footer"] button')!
+        return { label: button.textContent, disabled: button.disabled, dialogBusy: root.getAttribute("aria-busy"), buttonBusy: button.getAttribute("aria-busy"), width: rect.width, height: rect.height, clipped: style.overflow === "hidden" && (style.clipPath !== "none" || style.clip !== "auto"), position: style.position, buttonDecorations: button.querySelectorAll("svg").length }
+      })
+      expect(facts, JSON.stringify({ locale, attempt, facts })).toEqual({ label: action, disabled: true, dialogBusy: "true", buttonBusy: "true", width: 1, height: 1, clipped: true, position: "absolute", buttonDecorations: 0 })
+      expect(screen.queryByTestId("github-import-complete")).toBeNull(); expect(imported).not.toHaveBeenCalled()
+      expect(screen.getByTestId("github-repository-input")).toBeDisabled()
+      if (attempt === 0) {
+        await act(async () => { pending[0]!.reject(Error("controlled original import unknown")) })
+        await screen.findByRole("alert")
+        const retry = screen.getByRole("button", { name: locale === "zh" ? "重试" : "Retry" })
+        expect(retry).toBeEnabled(); expect(screen.getByTestId("github-import-dialog")).toHaveAttribute("aria-busy", "false")
+        fireEvent.click(retry)
+        await waitFor(() => expect(pending).toHaveLength(2))
+        expect(fetcher.mock.calls[2]?.[1]?.body).toBe(firstBody)
+        expect(new Headers(fetcher.mock.calls[2]?.[1]?.headers).get("idempotency-key")).toBe(firstKey)
+      }
+    }
+    fireEvent.click(screen.getByRole("button", { name: locale === "zh" ? "关闭 GitHub 导入" : "Close GitHub import" }))
+    await waitFor(() => expect(pending[1]!.signal?.aborted).toBe(true))
+    await act(async () => { pending[1]!.resolve(Response.json({ data: { skill_id: "late", source_ref: "skill:late", status: "draft", state_version: "1", valid: true, content_digest: "b".repeat(64), manifest_identity: `zip-v2:sha256:${"b".repeat(64)}` }, }, { status: 201, headers: { "cache-control": "no-store", "x-request-id": "late-pending-write" } })) })
+    expect(imported).not.toHaveBeenCalled(); expect(screen.queryByTestId("github-import-complete")).toBeNull()
+    expect(fetcher).toHaveBeenCalledTimes(3)
+    expect(fetcher.mock.calls.every(([url]) => String(url).endsWith("/preview") || String(url).endsWith("/import"))).toBe(true)
+    await page.close()
+  } finally { try { await browser?.close() } finally { await vite.close() } }
+}, 20_000)
