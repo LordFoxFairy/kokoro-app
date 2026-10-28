@@ -9,15 +9,21 @@ import YAML from "yaml"
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const sourcePath = join(root, "src/generated/bff-public-openapi.yaml")
 const outputPath = join(root, "src/generated/bff-tool-display.ts")
-const ownerCommit = "0b67e0eab4918264a7270b828d558e631bdfb3f5"
-const sourceSha256 = "9e6a8dddea847ecfd2905f378f4f76022b6cc49a1a4352a2e7abb4e73b3f1328"
-const openapiVersion = "28.10.0"
+const ownerCommit = "d629653cbf5799a44db55a947321a6ec152b7dcd"
+const sourceSha256 = "4d93ec15e2931768afafffb2101039b1da64757ea48c760d16ef88aa8753db16"
+const openapiVersion = "28.11.0"
 
 export function inspectBffToolDisplayContract(document) {
   assert.equal(document.info.version, openapiVersion, "BFF tool display version drift")
   const currentSchemas = document.components.schemas
+  const toolFacts = currentSchemas.RunDisplay.properties.tool_facts
+  assert.deepEqual(currentSchemas.RunDisplay.required, ["run_id", "display_skills", "tool_paths", "tool_facts"])
+  assert.equal(createHash("sha256").update(JSON.stringify(toolFacts)).digest("hex"), "11bec751d5cb557a2a314533f552166e06126c620877b844c424789e41053595", "BFF exact tool facts member drift")
+  const priorSchemas = structuredClone(currentSchemas)
+  delete priorSchemas.RunDisplay.properties.tool_facts
+  priorSchemas.RunDisplay.required = priorSchemas.RunDisplay.required.filter(key => key !== "tool_facts")
   const shapeKeys=["RunToolActivity","RunSubagentActivity","RunSkillActivity","RunDisplaySkill","RunDisplay","MessageFeedbackResponse","MessageRegenerationResponse","ErrorEnvelope","RequestMeta","ErrorDetail"]
-  assert.equal(createHash("sha256").update(JSON.stringify(Object.fromEntries(shapeKeys.map(key=>[key,currentSchemas[key]])))).digest("hex"),"4a47c411569c988603feaada98718d4757dd266dd1135ecff36c8c82b91af98a","BFF answer/display full closed graph drift")
+  assert.equal(createHash("sha256").update(JSON.stringify(Object.fromEntries(shapeKeys.map(key=>[key,priorSchemas[key]])))).digest("hex"),"4a47c411569c988603feaada98718d4757dd266dd1135ecff36c8c82b91af98a","BFF answer/display full closed graph drift")
   const schemas = structuredClone(currentSchemas)
   delete schemas.RunToolActivity.properties.display_detail.properties.virtual_path
   delete schemas.RunToolActivity.allOf[1].then.properties.display_detail
@@ -94,7 +100,7 @@ export function renderBffToolDisplayArtifact({ codes, detail,actions,statuses })
 function schemaCode(schema,schemas) {
  if(schema.$ref) return schemaCode(schemas[schema.$ref.split("/").at(-1)],schemas)
  if(schema.const!==undefined)return `z.literal(${JSON.stringify(schema.const)})`
- if(schema.enum)return `z.union([${schema.enum.map(v=>`z.literal(${JSON.stringify(v)})`).join(",")}])`
+ if(schema.enum)return schema.enum.length===1?`z.literal(${JSON.stringify(schema.enum[0])})`:`z.union([${schema.enum.map(v=>`z.literal(${JSON.stringify(v)})`).join(",")}])`
  if(Array.isArray(schema.type))return `z.union([${schema.type.map(type=>schemaCode({...schema,type},schemas)).join(",")}])`
  if(schema.type==="null")return "z.null()"
  if(schema.type==="object")return `z.object({${Object.entries(schema.properties??{}).map(([key,value])=>`${JSON.stringify(key)}:${schemaCode(value,schemas)}${(schema.required??[]).includes(key)?"":".optional()"}`).join(",")}})${schema.additionalProperties===false?".strict()":""}`
@@ -108,7 +114,7 @@ function schemaCode(schema,schemas) {
  throw Error("unsupported answer schema")
 }
 function renderAnswerSchemas(s,statuses){
- const specs={answerFeedbackWireSchema:s.MessageFeedbackResponse.properties.data,answerRegenerationReceiptWireSchema:s.MessageRegenerationResponse.properties.data,runDisplaySkillWireSchema:s.RunDisplaySkill,runDisplayWireSchema:s.RunDisplay,safeVirtualPathWireSchema:s.RunDisplaySkill.properties.virtual_path,answerActionErrorWireSchema:s.ErrorEnvelope}
+ const specs={answerFeedbackWireSchema:s.MessageFeedbackResponse.properties.data,answerRegenerationReceiptWireSchema:s.MessageRegenerationResponse.properties.data,runDisplaySkillWireSchema:s.RunDisplaySkill,runDisplayWireSchema:s.RunDisplay,runToolFactWireSchema:s.RunDisplay.properties.tool_facts.items,safeVirtualPathWireSchema:s.RunDisplaySkill.properties.virtual_path,answerActionErrorWireSchema:s.ErrorEnvelope}
  return Object.entries(specs).map(([name,schema])=>`export const ${name} = ${schemaCode(schema,s)}`).join("\n")+`\nexport const BFF_ANSWER_ACTION_STATUSES = ${JSON.stringify(statuses)} as const\n`
 }
 async function main() {

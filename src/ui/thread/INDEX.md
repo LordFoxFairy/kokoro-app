@@ -1,3 +1,5 @@
+RunDisplay 28.11：run-display-overlay仅按原Run既存MCP id投影安全工具名／已证failed，不重写source／顺序或Run终态；旧RAM缺tool_facts视无新事实。use-run-display以正式profile SHA失效原只读memo，仍仅显式有界GET，原actor/scope/late与动作keys保持。
+
 正式回答消费者候选：OwnerAnswerActions绑定私有durable Message、真实四动作与sameK未知恢复；answer-action-scope把同actor准入暂停与真正身份退休分开。SkillActivityRow／ToolCallRow显native name和默认全virtual path，缺事实不猜；use-run-display只按具体Run显式读，pure overlay保status/order。
 
 MCP准备展示：process-activity-groups只合并同一连续过程段里相邻discover/describe，ProcessActivityRows的独立默认折叠组保每一真实行及顺序；mcp.call/文字/其它activity都是边界。准备参与真实activity总数，不冒执行次数；live延续cue不重复，不改owner状态或用当前目录补历史名。

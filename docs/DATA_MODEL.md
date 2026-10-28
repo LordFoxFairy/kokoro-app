@@ -1,3 +1,7 @@
+## 原Run工具展示证据（无新持久事实）
+
+tool_facts只是现有按Run私有GET的只读安全附加投影：仅匹配已存在MCP工具的activity_id，描述／调用可显示已证selector，已证failed仅影响该tool展示，真实Run终态索引与原source／parts／账本不写。未知仍generic；不存在的activity不插入，file／web／subagent／Skill不串此MCP事实。旧per-Run RAM在profile变化时退休并只接受用户明确GET，不创建缓存／持久表／恢复实体，不影响原unknown命令键或草稿。
+
 ## 回答动作与过程补充的RAM视图（无新持久事实）
 
 actor/session/Project/run/durable Message决定本地action归属。feedback只有ready包含owner up/down/null；其余是unread/reading/writing/unknown/failed。再生成intent保存本source／原key／epoch与pending/unknown/rejected/accepted，accepted是owner准入ACK而非Run完成；未知不能新K。暂时同actor读准入只暂停并保key，真实actor/scope退休清理。rejected仅可证明的首次precommit拒绝，fresh owner读取后用户新尝试，权限出口拒绝不推断未写。

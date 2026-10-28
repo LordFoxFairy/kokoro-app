@@ -4,12 +4,13 @@ import {
   answerRegenerationReceiptWireSchema,
   runDisplaySkillWireSchema,
   runDisplayWireSchema,
+  runToolFactWireSchema,
   safeVirtualPathWireSchema,
   answerActionErrorWireSchema,
   BFF_ANSWER_ACTION_STATUSES,
 } from "@/generated/bff-tool-display"
 const sensitive =
-  /(?:^|[._ /-])(?:credentials?|secrets?|tokens?|passwords?|private[_-]?key)(?:$|[._ /-])|(?:^|\/)\.(?:ssh|aws|gnupg|kube)(?:\/|$)|(?:^|\/)\.env(?:[./_-]|$)|(?:^|\/)(?:\.netrc|\.npmrc|\.git-credentials|service[_-]account\.json)(?:$|\/)|(?:id_rsa|id_ed25519|\.pem$|\.p12$|\.pfx$|bearer\s|sk[-_]|gh[pousr]_|github_pat_|AKIA[A-Z0-9]{16}|-----BEGIN)|eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/iu
+  /(?:^|[._ /-])(?:credentials?|secrets?|tokens?|passwords?|private[_-]?key)(?:$|[._ /-])|(?:^|\/)\.(?:ssh|aws|gnupg|kube)(?:\/|$)|(?:^|\/)\.env(?:[./_-]|$)|(?:^|\/)(?:\.netrc|\.npmrc|\.git-credentials|service[_-]account\.json)(?:$|\/)|(?:id_rsa|id_ed25519|\.pem$|\.p12$|\.pfx$|bearer\s|(?<![A-Za-z0-9])sk[-_]|gh[pousr]_|github_pat_|AKIA[A-Z0-9]{16}|-----BEGIN)|eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/iu
 export const answerActionIdSchema = z
   .string()
   .min(1)
@@ -36,15 +37,25 @@ export const runDisplaySkillSchema = runDisplaySkillWireSchema.superRefine((valu
   )
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "invalid original Skill display binding" })
 })
+// A tool adjunct is not an event or Run terminal. Its proof applies only to
+// one exact original MCP activity; the UI enforces the known activity category.
+export const runToolFactSchema = runToolFactWireSchema.superRefine((value, context) => {
+  if ((value.display_detail === undefined && value.status === undefined) ||
+    (value.display_detail !== undefined && (!value.display_detail.name.trim() || sensitive.test(value.display_detail.name)))) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: "invalid original MCP tool fact" })
+  }
+})
 export const runDisplaySchema = runDisplayWireSchema
   .extend({
     display_skills: z.array(runDisplaySkillSchema).max(16),
+    tool_facts: z.array(runToolFactSchema).max(128),
     tool_paths: runDisplayWireSchema.shape.tool_paths.element.extend({ virtual_path: safeVirtualPathSchema }).array().max(128),
   })
   .superRefine((value, ctx) => {
     if (
       new Set(value.display_skills.map((v) => v.source_ref)).size !== value.display_skills.length ||
-      new Set(value.tool_paths.map((v) => v.activity_id)).size !== value.tool_paths.length
+      new Set(value.tool_paths.map((v) => v.activity_id)).size !== value.tool_paths.length ||
+      new Set(value.tool_facts.map((v) => v.activity_id)).size !== value.tool_facts.length
     )
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "duplicate display identity" })
   })

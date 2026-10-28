@@ -17,7 +17,7 @@ function fixture() {
   const snapshot: EngineSnapshot = { ...SERVER_ENGINE_SNAPSHOT, thread, ownerConfirmedSessionId: "session", store: addConversation(null, "session", 1) }
   const client = { readFeedback: vi.fn(async () => ({ session_id: "session", message_id: "answer", feedback: null })),
     setFeedback: vi.fn(async (_target: unknown, value: "up" | "down" | null) => ({ session_id: "session", message_id: "answer", feedback: value })),
-    regenerate: vi.fn(), readDisplay: vi.fn(async (target: { sessionId: string; runId: string }, signal: AbortSignal) => { signal.throwIfAborted(); return { run_id: target.runId, display_skills: [], tool_paths: [] } }) }
+    regenerate: vi.fn(), readDisplay: vi.fn(async (target: { sessionId: string; runId: string }, signal: AbortSignal) => { signal.throwIfAborted(); return { run_id: target.runId, display_skills: [], tool_facts: [], tool_paths: [] } }) }
   const regenerateAnswer = vi.fn(async (_input: { sourceMessageId: string; sourceRunId: string; key: string; signal: AbortSignal }) => ({ run_id: "new-run", assistant_message_id: "new-answer", user_message_id: "original-human", regenerated_from_message_id: _input.sourceMessageId }))
   const engine = { getSnapshot: () => snapshot, regenerateAnswer } as unknown as SessionEngine
   const boundary: AnswerActionBoundary = { actorId: "actor", sessionId: "session", scope: { kind: "direct" }, epoch: {}, client, engine, isCurrent: () => current, regenerations: new Set(), changed: () => {} }
@@ -86,11 +86,11 @@ it("requests only one chosen original Run and retires late display facts without
   expect(f.client.readDisplay).toHaveBeenCalledTimes(0)
   act(() => { result.current.inspect(); result.current.inspect() })
   expect(f.client.readDisplay).toHaveBeenCalledTimes(1)
-  unmount(); resolve({ run_id: "run", display_skills: [], tool_paths: [] }); await act(async () => {})
+  unmount(); resolve({ run_id: "run", display_skills: [], tool_facts: [], tool_paths: [] }); await act(async () => {})
   expect(f.client.readDisplay.mock.calls[0]?.[1]?.aborted).toBe(true)
   const rows: RunProcessActivity[] = [{ activity: "tool", activity_id: "file", segment_id: "slot", status: "failed", display_code: "tool.file.read" },
     { activity: "tool", activity_id: "mcp", segment_id: "slot2", status: "completed", display_code: "tool.mcp.call" }]
-  const overlaid = overlayRunDisplay(rows, { run_id: "run", display_skills: [], tool_paths: [{ activity_id: "file", virtual_path: "/workspace/a.txt" }, { activity_id: "mcp", virtual_path: "/workspace/not-mcp" }] })
+  const overlaid = overlayRunDisplay(rows, { run_id: "run", display_skills: [], tool_facts: [], tool_paths: [{ activity_id: "file", virtual_path: "/workspace/a.txt" }, { activity_id: "mcp", virtual_path: "/workspace/not-mcp" }] })
   expect(overlaid.map(row => [row.activity_id, row.activity === "tool" ? row.status : ""])).toEqual([["file", "failed"], ["mcp", "completed"]])
   expect(overlaid[0]).toMatchObject({ display_detail: { virtual_path: "/workspace/a.txt", name: "a.txt" } })
   expect(overlaid[1]).toBe(rows[1])
@@ -98,7 +98,7 @@ it("requests only one chosen original Run and retires late display facts without
 })
 it("an exact owner display response overlays only matching original ready Skills, leaving missing revisions unknown", () => {
   const activity: RunProcessActivity = { activity: "skill", activity_id: "skill", preflight_id: "preflight", source_refs: ["skill:original"], phase: "ready" }
-  const facts = { run_id: "run", tool_paths: [], display_skills: [
+  const facts = { run_id: "run", tool_facts: [], tool_paths: [], display_skills: [
     { source_ref: "skill:original", name: "actual native name", virtual_path: "/.skills/b3JpZ2luYWw/SKILL.md" },
     { source_ref: "skill:unrelated", name: "never borrowed", virtual_path: "/.skills/dW5yZWxhdGVk/SKILL.md", revision: "7" },
   ] }

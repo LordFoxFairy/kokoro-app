@@ -1,7 +1,8 @@
+import { BFF_TOOL_DISPLAY_PROVENANCE } from "@/generated/bff-tool-display"
 import { useEffect, useMemo, useState } from "react"
 import type { RunDisplay } from "@/contract/answer-actions"
 import type { AnswerActionBoundary } from "./answer-action-scope"
-function createRunDisplayReader(boundary: AnswerActionBoundary | undefined, runId: string | undefined, changed: (update: (value: number) => number) => void) {
+function createRunDisplayReader(boundary: AnswerActionBoundary | undefined, runId: string | undefined, changed: (update: (value: number) => number) => void, profile: string) {
     let facts: RunDisplay | null = null, controller: AbortController | null = null, spent = false, retired = false
     const inspect = () => {
       if (!boundary || !runId || !boundary.isCurrent() || spent || retired) return
@@ -15,12 +16,13 @@ function createRunDisplayReader(boundary: AnswerActionBoundary | undefined, runI
         // Missing/unavailable display remains unknown; only a new explicit click may read again.
       })
     }
-    return { get: () => facts, inspect, activate: () => { retired = false; if (controller?.signal.aborted && facts === null) spent = false }, retire: () => { retired = true; controller?.abort() } }
+    return { profile, get: () => facts, inspect, activate: () => { retired = false; if (controller?.signal.aborted && facts === null) spent = false }, retire: () => { retired = true; controller?.abort() } }
 }
 /** One explicitly requested Run read; no snapshot fan-out, background poll or command. */
 export function useRunDisplay(boundary: AnswerActionBoundary | undefined, runId: string | undefined) {
   const [, changed] = useState(0)
-  const read = useMemo(() => createRunDisplayReader(boundary, runId, changed), [boundary, runId])
+  const profile = BFF_TOOL_DISPLAY_PROVENANCE.sourceSha256
+  const read = useMemo(() => createRunDisplayReader(boundary, runId, changed, profile), [boundary, runId, profile])
   useEffect(() => { read.activate(); return () => read.retire() }, [read])
   return { facts: read.get(), inspect: read.inspect }
 }

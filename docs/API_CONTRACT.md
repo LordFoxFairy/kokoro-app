@@ -1,3 +1,7 @@
+## RunDisplay tool_facts（正式Public28.11）
+
+唯一原件BFF d629653cbf5799a44db55a947321a6ec152b7dcd，SHA256 4d93ec15e2931768afafffb2101039b1da64757ea48c760d16ef88aa8753db16；路径／权限／错误／预算与GET副作用语义不变。required tool_facts≤128、activity_id唯一；closed item必须有display_detail和／或status，detail仅既有安全mcp_tool name，status仅failed。null、空item、未来status／kind／额外字段均拒；不是Run终态或完整性证明。safe secret matcher仅sk[-_]项改为(?<![A-Za-z0-9])sk[-_]，不特判literal名称。正式decoder不接旧缺省wire，旧RAM空集规范只在纯mapper；五private／独立policy3保持。新exact raw inverse完整回Public28.10后复用旧证明链。
+
 ## 回答动作与私有Run展示（正式Public28.10消费者候选）
 
 固定正式BFF `0b67e0eab4918264a7270b828d558e631bdfb3f5`／Public28.10／SHA256 `9e6a8dddea847ecfd2905f378f4f76022b6cc49a1a4352a2e7abb4e73b3f1328`；既有tool-display generator同时派生closed action／display validators，无第二wire源。`GET/PUT /api/session/sessions/{id}/messages/{messageId}/feedback`映射同名`/v1`，PUT仅`{feedback: up|down|null}`自然幂等。`POST .../{messageId}/regenerate`仅`{}`＋原Idempotency-Key；202返回new run/assistant、original user关联及regenerated_from_message_id，不是成功终态或human镜像。private MessageRead的source关联不扩普通ChatMessage／share。

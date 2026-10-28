@@ -24,3 +24,30 @@ it("preserves owner Skill names/exact path and regenerated answer association on
   expect(messageRecordSchema.safeParse(answer).success).toBe(false)
   expect(chatMessageReadSchema.safeParse({ ...answer, role: "user" }).success).toBe(false)
 })
+
+import { runDisplaySkillSchema, safeVirtualPathSchema } from "@/contract/answer-actions"
+it.each(["ask_question", "ask_wiki_question", "task_read", "desk_tool", "1sk_name"])("does not mistake original %s for a secret-prefix token", name => {
+  expect(runDisplaySkillSchema.safeParse({ source_ref: "skill:pinned", name, virtual_path: "/.skills/cGlubmVk/SKILL.md" }).success).toBe(true)
+  expect(safeVirtualPathSchema.safeParse(`/workspace/${name}/result.md`).success).toBe(true)
+})
+
+import { runDisplaySchema } from "@/contract/answer-actions"
+it("requires closed unique original tool adjuncts and rejects unknown status/kind/empty facts", () => {
+  const id = `act_${"a".repeat(64)}`
+  const fact = { activity_id: id, display_detail: { kind: "mcp_tool", name: "ask_wiki_question" }, status: "failed" }
+  const data = { run_id: "original-run", display_skills: [], tool_paths: [], tool_facts: [fact] }
+  expect(runDisplaySchema.safeParse(data).success).toBe(true)
+  for (const changed of [
+    { ...data, tool_facts: undefined }, { ...data, tool_facts: null },
+    { ...data, tool_facts: [{ activity_id: id }] }, { ...data, tool_facts: [fact, fact] },
+    { ...data, tool_facts: Array.from({ length: 129 }, () => fact) },
+    { ...data, tool_facts: [{ ...fact, status: "completed" }] },
+    { ...data, tool_facts: [{ ...fact, extra: "untrusted" }] },
+    { ...data, tool_facts: [{ ...fact, activity_id: `${id}\n` }] },
+    { ...data, tool_facts: [{ ...fact, display_detail: { kind: "file", name: "ask_wiki_question" } }] },
+    { ...data, tool_facts: [{ ...fact, display_detail: { kind: "mcp_tool", name: "ask_wiki_question", virtual_path: "/workspace/extra" } }] },
+  ]) expect(runDisplaySchema.safeParse(changed).success).toBe(false)
+  for (const name of ["sk_private", "sk-private", "my_sk_secret", "a/sk_secret", "a.sk-private", " sk_private", "access_token", "password", "id_rsa", "ghp_private", "A\u0000B"]) {
+    expect(runDisplaySchema.safeParse({ ...data, tool_facts: [{ ...fact, display_detail: { kind: "mcp_tool", name } }] }).success).toBe(false)
+  }
+})

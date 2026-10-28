@@ -1,3 +1,9 @@
+## 旧Run MCP展示附加事实（正式Public28.11消费者候选）
+
+固定BFF d629653cbf5799a44db55a947321a6ec152b7dcd／Public28.11／SHA256 4d93ec15e2931768afafffb2101039b1da64757ea48c760d16ef88aa8753db16。现有单Run display GET新增required tool_facts；仅按同Run既存MCP activity_id的安全name与已证failed纯展示覆盖，不改历史ledger／source digest／parts顺序／Run终态，不从当前catalog补名。真实ask_wiki_question等名称沿同一安全规则接纳，sk前缀仅ASCII token左边界拒绝，其他secret/path负控不变。
+
+旧HMR RAM缺附加字段按无新证据读，HTTP仍严格required；正式profile SHA仅使既有per-Run display memo失效，下一次用户显式展开沿原有界GET，不自动读／poll，不清URL、草稿、消息或动作意图。Copy／反馈／regen／lateACK／sameK与actor准入安全保持。12既有生成链正规更新；完整28.11→28.10 test-only逆证承接旧父，不增加owner、endpoint或通用恢复中心。
+
 ## 回答动作与真实过程展示（Root核准，正式owner消费者候选）
 
 固定正式BFF `0b67e0eab4918264a7270b828d558e631bdfb3f5`／Public28.10／SHA256 `9e6a8dddea847ecfd2905f378f4f76022b6cc49a1a4352a2e7abb4e73b3f1328`，12个既有public生成链正规生成；五private与独立download policy3不动。AnswerActions为重新生成／复制／赞／踩四个真实动作，28px桌面／44px触摸，Copy保持原文与完成反馈。durable Message只从snapshotMessageId／原receipt descriptor定位，拒segment与归属歧义；没有私有actor/scope准入的shared/preview不挂owner动作。

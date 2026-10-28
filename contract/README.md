@@ -1,6 +1,6 @@
 ## Public28.10 answer actions／exact Run display（consumer候选）
 
-唯一完整snapshot来自正式BFF `0b67e0eab4918264a7270b828d558e631bdfb3f5`，SHA256 `9e6a8dddea847ecfd2905f378f4f76022b6cc49a1a4352a2e7abb4e73b3f1328`。12现有public生成器正规重出；扩原tool-display generator从closed成功／错误／状态图生成窄answer validators，五private与独立policy3保持。test-only完整28.10→28.9源自正式owner唯一inverse，之后旧父所有hash/oracle不变，无runtime fallback。
+唯一完整snapshot来自正式BFF `d629653cbf5799a44db55a947321a6ec152b7dcd`，SHA256 `4d93ec15e2931768afafffb2101039b1da64757ea48c760d16ef88aa8753db16`。12现有public生成器正规重出；扩原tool-display generator从closed成功／错误／状态图生成窄answer validators，五private与独立policy3保持。test-only完整28.10→28.9源自正式owner唯一inverse，之后旧父所有hash/oracle不变，无runtime fallback。
 
 新flat same-origin事实包括feedback、regeneration receipt和单Run display；新可选Skill name/path/revision与file virtual_path由同一schema strict解码，private regenerated_from_message_id不扩ordinary/public/share Message。非canonical revision、mount错、wrong ref／extra／unsafe path拒绝；新client与四operation adapter保当次Session、原key、单10秒／1MiB完整EOF／取消，不自动重发写请求、不从当前catalog造名称。
 
