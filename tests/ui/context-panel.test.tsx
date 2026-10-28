@@ -1,10 +1,12 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, expect, it, vi } from "vitest"
-import { useMemo, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 
 import { LocaleProvider } from "@/i18n/context"
 import { ContextPanel } from "@/components/blocks/context-panel/context-panel"
 import { CanvasPanel } from "@/ui/canvas/canvas-panel"
+import { ToolCallRow } from "@/ui/thread/tool-call-row"
+import type { RunProcessActivity } from "@/contract/chat"
 
 const originalWidth = window.innerWidth
 
@@ -651,7 +653,7 @@ it("a mismatched conversation is quiet unreadability, not a format failure or a 
 it("switching exact activity A to B returns keyboard focus to B when the same panel closes", async () => {
   function Harness() {
     const [selected, select] = useState<string | null>(null)
-    return <><button data-canvas-opener="true" onClick={() => select("a")}>Action A</button><button data-canvas-opener="true" onClick={() => select("b")}>Action B</button>
+    return <><button data-canvas-opener="true" data-activity-id="a" onClick={() => select("a")}>Action A</button><button data-canvas-opener="true" data-activity-id="b" onClick={() => select("b")}>Action B</button>
       {selected ? <ContextPanel sessionId="s" content={{ kind: "activity", runId: "r", activityId: selected, subject: "actor", generation: 1, terminal: true, activity: { activity: "tool", activity_id: selected, segment_id: "segment", display_code: "tool.execution", status: "completed" } }} files={[]} deliveries={[]} fullscreen={false} onSelectFile={vi.fn()} onSelectDelivery={vi.fn()} onToggleFullscreen={vi.fn()} onClose={() => select(null)} /> : null}</>
   }
   render(<LocaleProvider><Harness /></LocaleProvider>)
@@ -660,4 +662,37 @@ it("switching exact activity A to B returns keyboard focus to B when the same pa
   b.focus(); fireEvent.click(b)
   const close = screen.getByRole("button", { name: "Close preview" }); close.focus(); fireEvent.click(close)
   await waitFor(() => expect(b).toHaveFocus())
+})
+
+// Pointer activation need not focus a button (notably Safari). Identity, not
+// ambient document.activeElement or a repeated tool label, owns the return target.
+it.each(["pointer", "switch", "replace", "hidden", "hidden-after-unrelated-focus"] as const)("activity detail restores an exact visible target after %s", async scenario => {
+  const activity = (id: string): Extract<RunProcessActivity, { activity: "tool" }> => ({ activity: "tool", activity_id: id, segment_id: "segment", display_code: "tool.mcp.call", status: "completed", action_title: "Read wiki" })
+  function Harness() {
+    const [selected, select] = useState<string | null>(null)
+    const [revision, setRevision] = useState(0)
+    const [hidden, setHidden] = useState(false)
+    const scope = useRef<HTMLDivElement>(null)
+    return <div ref={scope}>
+      <button onClick={() => setRevision(value => value + 1)}>Replace rows</button>
+      <button onClick={() => setHidden(true)}>Hide selected row</button>
+      <div key={revision}>
+        <div hidden={hidden}><ToolCallRow activity={activity("a")} onInspect={select} /></div>
+        <ToolCallRow activity={activity("b")} onInspect={select} />
+      </div>
+      <textarea aria-label="Composer" data-settings-return-target="composer" />
+      {selected ? <ContextPanel focusScopeRef={scope} sessionId="s" content={{ kind: "activity", runId: "r", activityId: selected, subject: "actor", generation: 1, terminal: true, activity: activity(selected) }} files={[]} deliveries={[]} fullscreen={false} onSelectFile={vi.fn()} onSelectDelivery={vi.fn()} onToggleFullscreen={vi.fn()} onClose={() => select(null)} /> : null}
+    </div>
+  }
+  render(<LocaleProvider><Harness /></LocaleProvider>)
+  const rows = () => screen.getAllByRole("button", { name: /^Read wiki/ })
+  if (scenario === "hidden-after-unrelated-focus") screen.getByRole("button", { name: "Replace rows" }).focus()
+  fireEvent.click(rows()[scenario === "switch" ? 1 : 0]!)
+  if (scenario === "switch") fireEvent.click(rows()[0]!)
+  if (scenario === "replace") fireEvent.click(screen.getByRole("button", { name: "Replace rows" }))
+  if (scenario.startsWith("hidden")) fireEvent.click(screen.getByRole("button", { name: "Hide selected row" }))
+  const target = scenario.startsWith("hidden") ? screen.getByRole("textbox", { name: "Composer" }) : rows()[0]!
+  const close = screen.getByRole("button", { name: "Close preview" })
+  close.focus(); fireEvent.click(close)
+  await waitFor(() => expect(target).toHaveFocus())
 })

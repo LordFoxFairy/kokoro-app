@@ -83,3 +83,5 @@ Completed-empty text slots use core provenance and do not split adjacent activit
 2026-10-28 正常浏览器补验：AppFrame 的 AnswerActionBoundary 必须传入持有 ContextPanel 的 AppFrameShell，而不是仅正文 MainSurface。原 conv6530 的成功/失败 MCP 动作现按 exact activity 展示原输入输出，换选不串项，关闭恢复到原按钮；这仅关闭详情接线缺陷，Manus 逐阶段自然语言说明与同视口视觉验收仍未完成。
 
 MCP 详情阅读：`activity-result.tsx` 将已验证预览分为无外部资源的Markdown阅读结果与原始纯文本技术披露；`mcp-result-text.ts` 只识别明确文本形状、单次解码，不推断状态/意图或新增读取。截断与脱敏在结果旁保留，未知表示仍能在技术详情查看。
+
+2026-10-28 回焦修正：可打开的 ToolCallRow 暴露 opaque activity identity，由 ContextPanel 在关闭后重解析当前 shell 内同一可见行；不依赖鼠标激活是否获得焦点，不按同名/末行选择。

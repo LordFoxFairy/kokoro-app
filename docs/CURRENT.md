@@ -1,3 +1,9 @@
+## 2026-10-28 动作详情关闭回焦已正常修复（局部）
+
+根因：依赖打开时的 ambient focus／最后一个 Canvas opener，pointer 打开和主区域 DOM 替换后会落 WebArea 或跳到同名其它动作。ToolCallRow 提供 exact activity identity；ContextPanel 在退出后重新解析当前 shell 内同一可见动作，不选择 hidden/inert/disabled／Canvas 自身；原动作已隐藏时落 composer/sidebar，不回到无关旧按钮。文件/产物原回焦路径保留。无 API、数据模型或历史修改。
+
+正常3310两份源码核基线后备份/HMR：新 conv3eb 动作和旧 conv6530 的失败 ask_wiki_question 均关闭后回同一 activity，Return 可重新打开该条，原失败状态及最终文字不变。五个回归场景包含 pointer、切换、节点替换、隐藏及旧无关焦点；独审先发现后者，已实际 RED 后修复。旧手写 A/B fixture 补实际行 identity，原 focus 断言保持。原始证据及回退在Root ignored `display-rework/activity-focus-20261028/`。最终相关5文件112项通过、lint/typecheck与diff检查通过；未重跑全默认/build/全E2E。此项不关闭旧MCP整轮语义、阶段正文、真实网络取消或整体Manus对齐。
+
 ## 2026-10-28 正常整轮配对验证（单任务切片）
 
 正常组合 App e7b93c7e／BFF15cc9e1／Agent2e61b85已加载，BFF具名final nullable列演进已确认current；无历史回填。真实新只读任务正常完成，Agent final与BFF parts逐字/身份/顺序一致，正常网页收展及硬刷新保持最终答复独立。2模型attempt sealed、unknown0，usage仍partial。旧MCP历史、Canvas回焦、正常Swarm及整体产品验收仍OPEN，不能将本片成功等同整体完成。原始截图、精确运行前像和回退配置在Root ignored whole-turn-normal-20261028；唯一Root计划记载完整实际范围。无合并或Root版本提升。

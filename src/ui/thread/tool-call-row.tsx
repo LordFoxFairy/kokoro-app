@@ -30,7 +30,7 @@ export function ToolCallRow({ activity, continuation, onInspect, detail: ownerDe
     <span className={activity.status === "completed" ? "sr-only" : styles.actionStatus}>{status}</span>
   </>
   return <div className={styles.action} data-status={activity.status}>
-    {onInspect ? <button type="button" data-canvas-opener="true" className={`${styles.actionRow} ${details.row} ${details.inspect}`} onClick={() => onInspect(activity.activity_id)}>{content}</button>
+    {onInspect ? <button type="button" data-canvas-opener="true" data-activity-id={activity.activity_id} className={`${styles.actionRow} ${details.row} ${details.inspect}`} onClick={() => onInspect(activity.activity_id)}>{content}</button>
       : <div className={`${styles.actionRow} ${details.row}`}>{content}</div>}
     {continuation}
   </div>
