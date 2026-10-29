@@ -161,6 +161,9 @@ export function AssistantTurn({
   const completedSections = !isLive && !hitlActive && !interaction?.groups.length
     ? completedTurnSections({ runId: displayRunId, succeeded, partsComplete: finalSegmentId ? finalPartsComplete : Boolean(legacyFinalId), finalSegmentId: finalSegmentId ?? legacyFinalId, segments, messagesById }) : null
   const sections = contentFocused ? null : completedSections
+  // A single tools-only passage already has the whole-turn disclosure.
+  const directProcessId = sections?.process.length === 1 && !messagesById[sections.process[0]!.segmentId]?.content.length
+    ? sections.process[0]!.segmentId : undefined
   const hasTurnProcess = segments.some((segment) => segment.activities.length > 0)
   // Public7 process activities have opaque safe segment identities that are
   // independent from message identities. Keep the newest process live, but
@@ -238,6 +241,7 @@ export function AssistantTurn({
         <SegmentProcess
           {...(answerActionBoundary && displayRunId ? { onVisible: display.ensureRead } : {})}
           segmentId={segment.segmentId}
+          direct={segment.segmentId === directProcessId}
           {...(display.facts ? { activityDetails: display.facts.activity_details } : {})}
           {...(onOpenActivity ? { onOpenActivity: (activityId: string) => { setProcessInspected(true); display.inspect(); onOpenActivity(activityId) } } : {})}
           {...(answerActionBoundary && displayRunId && display.facts === null ? { onInspect: display.inspect } : {})}

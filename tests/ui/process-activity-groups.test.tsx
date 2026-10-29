@@ -13,7 +13,7 @@ it("uses one disclosure for a mixed activity passage and keeps every operation i
   const { container } = render(<LocaleProvider><SegmentProcess segmentId="mixed-flat" activities={activities} live onOpenActivity={inspect} /></LocaleProvider>)
   const toggles = screen.getAllByRole("button").filter(button => button.hasAttribute("aria-expanded"))
   expect(toggles).toHaveLength(1)
-  expect(toggles[0]).toHaveTextContent("Tool calls: 1 · File reads: 1")
+  expect(toggles[0]).toHaveTextContent("Tool information: 3 · Tool calls: 1 · File reads: 1")
   expect(screen.queryByText("Tool preparation")).toBeNull()
   const rows = [...container.querySelectorAll<HTMLButtonElement>("button[data-canvas-opener]")]
   rows.forEach(button => fireEvent.click(button))
@@ -48,7 +48,7 @@ it("keeps actual public text between separate activity passages", () => {
 it("does not repeat failed attempts in the summary or equate them with whole-turn failure", () => {
   const activities = [{ ...tool("a", "tool.mcp.describe"), status: "failed" as const }, { ...tool("b", "tool.mcp.call"), status: "failed" as const }, tool("c", "tool.mcp.call")]
   render(<LocaleProvider><SegmentProcess segmentId="failed-attempts" activities={activities} live /></LocaleProvider>)
-  const disclosure = screen.getByRole("button", { name: "Tool calls: 2" })
+  const disclosure = screen.getByRole("button", { name: "Tool information: 1 · Tool calls: 2" })
   expect(disclosure).not.toHaveTextContent(/failed/iu)
   expect(screen.getAllByText("Failed")).toHaveLength(2)
   expect(screen.queryByText("Recovered")).toBeNull()

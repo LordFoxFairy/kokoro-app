@@ -19,7 +19,5 @@ export function summarizeProcessActivities(activities: readonly RunProcessActivi
     }
     counts.set(key, (counts.get(key) ?? 0) + 1)
   }
-  // Preparation stays in the expanded history, but the summary foregrounds work.
-  if (counts.size > 1) counts.delete("thread.summaryToolInfo")
   return [...counts].map(([key, count]) => ({ key, count }))
 }

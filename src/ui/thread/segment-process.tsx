@@ -53,6 +53,8 @@ type SegmentProcessProps = {
   onInspect?: () => void
   onVisible?: () => void
   segmentId: string
+  // The parent whole-turn disclosure owns the only tools-only passage.
+  direct?: boolean
   activities: RunProcessActivity[]
   live: boolean
   mode?: AgentMode
@@ -70,13 +72,14 @@ export function SegmentProcess({
   onOpenActivity,
   activityDetails,
   continueProcessing = false,
+  direct = false,
 }: SegmentProcessProps) {
   const t = useT()
   const manualOpen = useDisclosure(segmentId)
   const single = activities.length === 1
   const [focusedDirectRow, setFocusedDirectRow] = useState(false)
   // Keep the same force-mounted content tree when a second activity arrives.
-  const open = single || focusedDirectRow || (manualOpen ?? live)
+  const open = direct || single || focusedDirectRow || (manualOpen ?? live)
   const hasActivities = activities.length > 0
   const bodyRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -106,7 +109,7 @@ export function SegmentProcess({
       open={open}
       onOpenChange={(nextOpen) => { setFocusedDirectRow(false); setDisclosure(segmentId, nextOpen); if (nextOpen) onInspect?.() }}
     >
-      {!single ? <CollapsibleTrigger asChild>
+      {!single && !direct ? <CollapsibleTrigger asChild>
         <Button variant="ghost" type="button" className={styles.processSummary}>
           <span className={styles.processTitle} title={summary}>{summary}</span>
           {!allSettled ? <span className={styles.actionStatus}>{t("thread.processRunning")}</span> : null}

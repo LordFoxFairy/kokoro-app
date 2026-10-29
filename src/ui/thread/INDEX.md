@@ -88,3 +88,7 @@ MCP 详情阅读：`activity-result.tsx` 将已验证预览分为无外部资源
 
 - `completed-turn-sections.ts`：正式 final 优先；只读 display 旁证需 exact Run／唯一完整 parts／确认 revision／真实正文身份，不进入 durable merge。
 - `assistant-turn.tsx`：历史成功轮外层可见时沿原 scope reader 单次取证；折叠区内部是否展开不决定首次读。焦点、旧失败与时间顺序保持。
+
+过程摘要计数（2026-10-28）：同一 passage 每项活动计一次，包括混合组的 MCP 发现/说明；计数表示观察到的尝试，不表示成功或唯一资源。摘要不再隐去准备次数，原时间顺序、相邻分组、披露与 activity identity 不变。
+
+单段过程披露（2026-10-28）：已准入整轮披露且过程仅单段无正文时，SegmentProcess以direct展示活动，避免“处理过程→工具组”重复折叠；仍保同一force-mounted行树，焦点保护未结束不隐藏原局部摘要。真实正文分隔的多段保局部组，live/未证final路径不变。

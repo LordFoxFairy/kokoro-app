@@ -103,3 +103,85 @@ it("requires one exact complete parts owner and does not manufacture a final fro
   expect(displayFinalSegmentId(facts, "other", [part])).toBeUndefined()
   expect(displayFinalSegmentId(null, "run", [part])).toBeUndefined()
 })
+
+it("uses only the whole-turn disclosure for one uninterrupted tools-only process", () => {
+  const second = { ...activity, activity_id: "b" }
+  const plainSteps: SessionStep[] = [
+    { kind: "activity", seq: "1", segmentId: "tools", activity },
+    { kind: "activity", seq: "2", segmentId: "tools", activity: second },
+    { kind: "text", seq: "3", segmentId: "answer" },
+  ]
+  const inspect = vi.fn()
+  const { container } = render(<LocaleProvider><AssistantTurn {...props} steps={plainSteps} onOpenActivity={inspect} /></LocaleProvider>)
+  const process = screen.getByRole("button", { name: "Process" })
+  fireEvent.click(process)
+  expect(screen.getAllByRole("button").filter(button => button.hasAttribute("aria-expanded"))).toEqual([process])
+  const rows = [...container.querySelectorAll<HTMLButtonElement>("button[data-canvas-opener]")]
+  expect(rows).toHaveLength(2)
+  rows.forEach(row => { expect(row.closest("[inert]")).toBeNull(); fireEvent.click(row) })
+  expect(inspect.mock.calls.map(([id]) => id)).toEqual(["a", "b"])
+  fireEvent.click(process)
+  expect(rows[0]!.closest("[inert]")).not.toBeNull()
+  expect(screen.getByText("Final answer remains visible").closest("[inert]")).toBeNull()
+})
+
+it("keeps local disclosures when actual public text separates multiple tool passages", () => {
+  const events: SessionStep[] = [
+    { kind: "activity", seq: "1", segmentId: "tools", activity },
+    { kind: "activity", seq: "2", segmentId: "tools", activity: { ...activity, activity_id: "b" } },
+    { kind: "text", seq: "3", segmentId: "stage" },
+    { kind: "activity", seq: "4", segmentId: "other-tools", activity: { ...activity, activity_id: "c" } },
+    { kind: "activity", seq: "5", segmentId: "other-tools", activity: { ...activity, activity_id: "d" } },
+    { kind: "text", seq: "6", segmentId: "answer" },
+  ]
+  render(<LocaleProvider><AssistantTurn {...props} steps={events} /></LocaleProvider>)
+  fireEvent.click(screen.getByRole("button", { name: "Process" }))
+  expect(screen.getAllByRole("button", { name: "File reads: 2" })).toHaveLength(2)
+  expect(screen.getByText("Inspecting the requested file")).toBeVisible()
+})
+
+it("defers removing a focused passage header until blur, then ignores its saved closed state inside the whole-turn disclosure", () => {
+  const tools: SessionStep[] = [
+    { kind: "activity", seq: "1", segmentId: "late-tools-only", activity },
+    { kind: "activity", seq: "2", segmentId: "late-tools-only", activity: { ...activity, activity_id: "b" } },
+    { kind: "text", seq: "3", segmentId: "answer" },
+  ]
+  const { container, rerender } = render(<LocaleProvider><AssistantTurn {...props} steps={tools} finalPartsComplete={false} onOpenActivity={vi.fn()} /></LocaleProvider>)
+  const header = screen.getByRole("button", { name: "File reads: 2" })
+  fireEvent.click(header)
+  fireEvent.click(header)
+  const row = container.querySelector<HTMLButtonElement>('button[data-activity-id="a"]')!
+  act(() => header.focus())
+  rerender(<LocaleProvider><AssistantTurn {...props} steps={tools} onOpenActivity={vi.fn()} /></LocaleProvider>)
+  expect(header).toHaveFocus()
+  expect(screen.queryByRole("button", { name: "Process" })).toBeNull()
+  act(() => header.blur())
+  fireEvent.click(screen.getByRole("button", { name: "Process" }))
+  expect(header).not.toBeInTheDocument()
+  expect(container.querySelector('button[data-activity-id="a"]')).toBe(row)
+  expect(row.closest("[inert]")).toBeNull()
+})
+
+it("preserves the exact Canvas opener when a tools-only turn gains final proof", () => {
+  const tools: SessionStep[] = [
+    { kind: "activity", seq: "1", segmentId: "canvas-tools-only", activity },
+    { kind: "activity", seq: "2", segmentId: "canvas-tools-only", activity: { ...activity, activity_id: "b" } },
+    { kind: "text", seq: "3", segmentId: "answer" },
+  ]
+  const canvas = document.createElement("button")
+  document.body.append(canvas)
+  try {
+    const inspect = vi.fn(() => canvas.focus())
+    const { rerender } = render(<LocaleProvider><AssistantTurn {...props} steps={tools} finalPartsComplete={false} onOpenActivity={inspect} /></LocaleProvider>)
+    fireEvent.click(screen.getByRole("button", { name: "File reads: 2" }))
+    const opener = screen.getAllByRole("button", { name: /Read file/u })[0]!
+    fireEvent.click(opener)
+    rerender(<LocaleProvider><AssistantTurn {...props} steps={tools} onOpenActivity={inspect} /></LocaleProvider>)
+    expect(screen.getByRole("button", { name: "Process" })).toHaveAttribute("aria-expanded", "true")
+    expect(opener).toBeVisible()
+    expect(opener.closest("[inert]")).toBeNull()
+    act(() => opener.focus())
+    expect(opener).toHaveFocus()
+    expect(screen.queryByRole("button", { name: "File reads: 2" })).toBeNull()
+  } finally { canvas.remove() }
+})
