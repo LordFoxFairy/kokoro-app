@@ -83,7 +83,9 @@ test('the generated reference is the metadata inventory for the pinned BFF contr
           && ((operation.path === '/v1/projects/{projectId}/mcp-recommendations'
             && operation.operationId === 'replaceProjectMcpRecommendations')
             || (operation.path === '/v1/projects/{projectId}/pin'
-              && operation.operationId === 'setProjectPin')))),
+              && operation.operationId === 'setProjectPin')
+            || (operation.path === '/v1/sessions/{id}/messages/{messageId}/feedback'
+              && operation.operationId === 'setMessageFeedback')))),
   ));
 
   const referenceText = [...files.values()].join('\n');

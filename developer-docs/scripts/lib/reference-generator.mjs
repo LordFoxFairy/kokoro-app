@@ -185,7 +185,8 @@ export function assertPublicContract(contractValue, catalogEntry) {
     const idempotency = requireString(operation, 'x-kokoro-idempotency', label);
     const naturalRecommendations = method === 'PUT' &&
       ((path === '/v1/projects/{projectId}/mcp-recommendations' && operationId === 'replaceProjectMcpRecommendations') ||
-       (path === '/v1/projects/{projectId}/pin' && operationId === 'setProjectPin')) && idempotency === 'natural';
+       (path === '/v1/projects/{projectId}/pin' && operationId === 'setProjectPin') ||
+       (path === '/v1/sessions/{id}/messages/{messageId}/feedback' && operationId === 'setMessageFeedback')) && idempotency === 'natural';
     if (!IDEMPOTENCY_VALUES.has(idempotency) && !naturalRecommendations) {
       throw new ReferenceGenerationError(
         `${operationId} has unsupported x-kokoro-idempotency ${idempotency}`,

@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from 'node:util';
 import { ReferenceGenerationError } from './reference-errors.mjs';
 
 const PUBLIC_KOKORO_NAMES = new Set([
@@ -85,6 +86,89 @@ function inspectString(value, path, violations, options) {
   }
 }
 
+// Reviewed display metadata is allowed only on its exact canonical schema node.
+// Strings still pass the normal recursive publication checks below.
+const displayByteLimits = new Map([
+  [
+    "RunDisplay.properties.tool_facts.items.properties.display_detail.properties.name",
+    480,
+  ],
+  ["RunDisplay.properties.activity_details.items.properties.tool_name", 480],
+  [
+    "RunDisplay.properties.activity_details.items.properties.target.properties.name",
+    480,
+  ],
+  ["RunDisplaySkill.properties.name", 480],
+  ["RunDisplay.properties.tool_paths.items.properties.virtual_path", 4096],
+  [
+    "RunDisplay.properties.activity_details.items.properties.target.properties.virtual_path",
+    4096,
+  ],
+  ["RunDisplaySkill.properties.virtual_path", 4096],
+  ["RunToolActivity.properties.display_detail.properties.virtual_path", 4096],
+  [
+    "RunDisplay.properties.activity_details.items.properties.input_preview.properties.text",
+    2048,
+  ],
+  [
+    "RunDisplay.properties.activity_details.items.properties.output_preview.properties.text",
+    4096,
+  ],
+  [
+    "RunDisplay.properties.activity_details.items.properties.tool_description.properties.text",
+    1024,
+  ],
+  ["RunToolActivity.properties.action_title", 256],
+]);
+function reviewedDisplayAnnotation(path, key, value, rootPath) {
+  const prefix = `${rootPath}.components.schemas.`;
+  if (!path.startsWith(prefix)) return false;
+  const node = path.slice(prefix.length);
+  if (key === "x-kokoro-utf8-byte-limit")
+    return displayByteLimits.has(node) && value === displayByteLimits.get(node);
+  if (key === "x-kokoro-unicode-domain")
+    return (
+      (node.endsWith(".name") ||
+        node.endsWith(".tool_name") ||
+        node.endsWith(".virtual_path")) &&
+      displayByteLimits.has(node) &&
+      value === "NFC Unicode scalars; no Cc, Cf or Cs"
+    );
+  if (key === "x-kokoro-int64-decimal")
+    return (
+      [
+        "RunDisplay.properties.final_answer.properties.revision",
+        "RunDisplaySkill.properties.revision",
+      ].includes(node) && value === true
+    );
+  const skillList = [
+    "RunDisplay.properties.display_skills",
+    "RunSkillActivity.properties.display_skills",
+  ].includes(node);
+  if (key === "x-kokoro-unique-by")
+    return skillList
+      ? value === "source_ref"
+      : [
+          "RunDisplay.properties.tool_paths",
+          "RunDisplay.properties.tool_facts",
+          "RunDisplay.properties.activity_details",
+        ].includes(node) && value === "activity_id";
+  if (key === "x-kokoro-binding")
+    return skillList
+      ? value ===
+          "unique source_ref subset of original ready source_refs; no current catalog lookup"
+      : node === "RunDisplaySkill" &&
+          value ===
+            "virtual_path must equal /.skills/{base64url(ASCII source_ref suffix)}/SKILL.md; revision only from this Run exact ResolvedSkill, absent if unproven";
+  return (
+    node === "SessionEventStream" &&
+    key === "x-kokoro-run-finished-results" &&
+    isDeepStrictEqual(value, {
+      completed: { $ref: "#/components/schemas/FinalAnswerResult" },
+    })
+  );
+}
+
 function inspectValue(value, path, violations, seen, options) {
   if (typeof value === 'string') {
     inspectString(value, path, violations, options);
@@ -108,6 +192,7 @@ function inspectValue(value, path, violations, seen, options) {
     if (
       key.toLowerCase().startsWith('x-kokoro-') &&
       !PUBLIC_KOKORO_NAMES.has(key.toLowerCase()) &&
+      !reviewedDisplayAnnotation(path, key, child, options.rootPath) &&
       !(
         (key === 'x-kokoro-max-response-bytes' &&
           path === `${options.rootPath}.paths./v1/sessions/{id}/messages/{messageId}/parts.get` &&

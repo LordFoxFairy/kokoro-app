@@ -2413,3 +2413,7 @@ MCP管理Hub五方法显式caller key（其后signal?），不保隐式随机key
 同源adapter沿当前Product Session/部署Domain/服务鉴别，拒query、self alias、非空正文/不支持framing与读命令头，DELETE仅透传原始key不制造tenant。Project下载只复用既有无授权的完整attachment字节传输：1GiB、准确Content-Length、原UTF8 Content-Disposition、no-referrer/nosniff、有限时间、取消与短流拒绝；不JSON解析bytes，不暴露Location/owner secret。BFF仍负责每次Project授权、完整spool SHA/size验证和二次owner核验。浏览器原生下载启动之后的完成/取消由浏览器管理，不宣称Web已观察EOF。
 
 Web在上传body实际超过原1MiB且尚未发送BFF的413分支独占`x-kokoro-local-upload-validation: request-body-too-large`；generic owner响应转发不允许此header，client只在exact本地413 body+该marker同现时标localValidation。重新选同名文件只替换这种failed local-validation行，既有pending/unknown与owner拒绝不伪归本地、不丢原File/key。原大小政策不变；旧内存行若未观察到来源不凭状态/文案猜测其origin。
+
+## Public28.15 最终答复只读旁证（配对候选）
+
+原私有 RunDisplay optional `final_answer` 为 closed `{segment_id, revision}`；已由 BFF `38b942742574bccb12d58546301ee0c7cf4014c3` 正式 Public28.15 生成。不是 durable final 事件、权限或历史补写入口。客户端仅在 exact Run 完整 parts 与确认 revision 满足时使用，正式 final 始终优先。无新 HTTP 路由、Share 字段或执行行为。

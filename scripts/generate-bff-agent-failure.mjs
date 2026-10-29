@@ -10,9 +10,9 @@ import YAML from "yaml"
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const sourcePath = join(root, "src/generated/bff-public-openapi.yaml")
 const outputPath = join(root, "src/generated/bff-agent-failure.ts")
-const ownerCommit = "15cc9e1bd50128db7d16e0cf3916c6ab4d037149"
-const expectedDigest = "921be666a3bd570eb984503528d9ee713e3739cc8525e2e1c2f46c96fa161a05"
-const expectedVersion = "28.14.0"
+const ownerCommit = "38b942742574bccb12d58546301ee0c7cf4014c3"
+const expectedDigest = "8a56966d2d9a4a380b29dadeb9f79f5db8ef9975e8e2bbac4b1748ef03a70234"
+const expectedVersion = "28.15.0"
 const expectedChatMessageFingerprint = "d69b983fd87600f5c180494b27989d5eb2b32c12284bf5c7530930e3099c0bf6"
 
 const digest = (value) => createHash("sha256").update(value).digest("hex")

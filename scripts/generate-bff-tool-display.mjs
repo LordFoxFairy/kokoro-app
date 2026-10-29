@@ -9,13 +9,14 @@ import YAML from "yaml"
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const sourcePath = join(root, "src/generated/bff-public-openapi.yaml")
 const outputPath = join(root, "src/generated/bff-tool-display.ts")
-const ownerCommit = "15cc9e1bd50128db7d16e0cf3916c6ab4d037149"
-const sourceSha256 = "921be666a3bd570eb984503528d9ee713e3739cc8525e2e1c2f46c96fa161a05"
-const openapiVersion = "28.14.0"
+const ownerCommit = "38b942742574bccb12d58546301ee0c7cf4014c3"
+const sourceSha256 = "8a56966d2d9a4a380b29dadeb9f79f5db8ef9975e8e2bbac4b1748ef03a70234"
+const openapiVersion = "28.15.0"
 
 export function inspectBffToolDisplayContract(document) {
   assert.equal(document.info.version, openapiVersion, "BFF tool display version drift")
   const currentSchemas = document.components.schemas
+  assert.deepEqual(currentSchemas.RunDisplay.properties.final_answer, {"type": "object", "required": ["segment_id", "revision"], "additionalProperties": false, "description": "Private read-only legacy final proof bound to this owner's exact completed Message parts revision; never a historical write or an execution authority. Existing durable final identity takes precedence; unproven or conflicting bindings are omitted.", "properties": {"segment_id": {"type": "string", "pattern": "^msg_[0-9a-f]{32}(?![\\s\\S])"}, "revision": {"type": "string", "pattern": "^[1-9][0-9]{0,18}(?![\\s\\S])", "x-kokoro-int64-decimal": true}}}, "Private final display binding drift")
   assert.deepEqual(currentSchemas.RunToolActivity.properties.action_title, {"type":"string","minLength":1,"maxLength":256,"x-kokoro-utf8-byte-limit":256,"description":"Public intent of this exact model tool call, bound before approval edits. Not reasoning, capability documentation, execution status or authority. No surrounding whitespace, control/format/surrogate characters or private text. Omitted when absent or mismatched; never inferred from adjacent prose."}, "Action title schema drift")
   assert.deepEqual(currentSchemas.RunDisplay.properties.activity_details.items.properties.tool_description, {"type":"object","required":["text","truncated","redacted"],"properties":{"text":{"type":"string","minLength":1,"maxLength":1024,"x-kokoro-utf8-byte-limit":1024},"truncated":{"type":"boolean"},"redacted":{"type":"boolean"}},"additionalProperties":false,"description":"Provider capability documentation observed in this Run, matched by connection and selector. Not a per-call purpose, execution result, title or authorization. Missing or conflicting evidence is omitted; private display only."}, "Capability description schema drift")
   assert.deepEqual(currentSchemas.RunDisplay.properties.activity_details.items.allOf, [{"if":{"required":["tool_description"]},"then":{"required":["target"],"properties":{"tool_name":{"enum":["mcp_call","mcp_describe_tool"]},"target":{"properties":{"kind":{"const":"mcp_tool"}}}}}}], "Capability description condition drift")
@@ -27,6 +28,7 @@ export function inspectBffToolDisplayContract(document) {
   assert.equal(createHash("sha256").update(JSON.stringify(toolFacts)).digest("hex"), "11bec751d5cb557a2a314533f552166e06126c620877b844c424789e41053595", "BFF exact tool facts member drift")
   assert.equal(createHash("sha256").update(JSON.stringify(priorDetails)).digest("hex"), "e072544777f1574846108ef0762d26d6adbc34bbca2f5a0142ba9e9f57a19128", "BFF exact activity details drift")
   const priorSchemas = structuredClone(currentSchemas)
+  delete priorSchemas.RunDisplay.properties.final_answer
   delete priorSchemas.RunToolActivity.properties.action_title
   delete priorSchemas.RunDisplay.properties.activity_details
   priorSchemas.RunDisplay.required = priorSchemas.RunDisplay.required.filter(key => key !== "activity_details")

@@ -1,3 +1,9 @@
+## 2026-10-28 历史整轮最终答复只读证明（已验证，待正常激活）
+
+固定消费 BFF38b9427/Public28.15，Agent b80d683 的原生终态只读证明与 BFF 自有 parts/revision 精确绑定；仅可见成功历史轮读取，正式 final 优先，不改旧事件/消息，不猜末段。展开保留真实文字与工具交叉顺序；无证明或冲突保持原展示。配套开发者文档同步正式契约，保留精确节点发布约束。
+
+停写基线本次源码：完整默认355文件/6855测试通过，build通过；contract443、architecture50、focused360、lint/typecheck通过；developer-docs完整check通过（52测试、193操作、54 HTML链接检查）。首次扩大默认缺显式Redis并遇既有Radix焦点异常，未删断言；原用例独立21通过，配置受管Redis自有随机fixture后完整默认重跑通过，清理只限自身键。正常页面激活与对照尚未执行，不能据此称视觉或全产品闭环。
+
 ## 2026-10-28 动作详情关闭回焦已正常修复（局部）
 
 根因：依赖打开时的 ambient focus／最后一个 Canvas opener，pointer 打开和主区域 DOM 替换后会落 WebArea 或跳到同名其它动作。ToolCallRow 提供 exact activity identity；ContextPanel 在退出后重新解析当前 shell 内同一可见动作，不选择 hidden/inert/disabled／Canvas 自身；原动作已隐藏时落 composer/sidebar，不回到无关旧按钮。文件/产物原回焦路径保留。无 API、数据模型或历史修改。

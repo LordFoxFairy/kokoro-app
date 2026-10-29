@@ -1,5 +1,5 @@
 import { TurnProcess } from "./turn-process"
-import { completedTurnSections } from "./completed-turn-sections"
+import { completedTurnSections, displayFinalSegmentId } from "./completed-turn-sections"
 import { useRunDisplay } from "./use-run-display"
 import { overlayRunDisplay } from "./run-display-overlay"
 import type { AnswerActionBoundary } from "./answer-action-scope"
@@ -142,11 +142,24 @@ export function AssistantTurn({
   }, [interaction])
   const displayRunId = runId ?? answerActionTarget?.runId
   const display = useRunDisplay(answerActionBoundary, displayRunId, terminal)
+  const ensureDisplayRead = display.ensureRead
+  const turnRef = useRef<HTMLElement>(null)
+  const needsFinalProof = terminal && succeeded && !cancelled && !isLive && !hitlActive && !interaction?.groups.length && !finalSegmentId
+  useEffect(() => {
+    if (!needsFinalProof || !turnRef.current || typeof IntersectionObserver === "undefined") return
+    let current = true
+    const observer = new IntersectionObserver(entries => {
+      if (entries.some(entry => entry.isIntersecting)) queueMicrotask(() => { if (current) ensureDisplayRead() })
+    })
+    observer.observe(turnRef.current)
+    return () => { current = false; observer.disconnect() }
+  }, [needsFinalProof, ensureDisplayRead])
+  const legacyFinalId = finalSegmentId === undefined ? displayFinalSegmentId(display.facts, displayRunId, parts) : undefined
   const displayedActivities = overlayRunDisplay(activities, display.facts)
   const displayedSteps = steps.map(step => step.kind === "activity" ? { ...step, activity: overlayRunDisplay([step.activity], display.facts)[0]! } : step)
   const segments = groupSegments(displayedSteps, displayedActivities, messagesById)
   const completedSections = !isLive && !hitlActive && !interaction?.groups.length
-    ? completedTurnSections({ runId: displayRunId, succeeded, partsComplete: finalPartsComplete, finalSegmentId, segments, messagesById }) : null
+    ? completedTurnSections({ runId: displayRunId, succeeded, partsComplete: finalSegmentId ? finalPartsComplete : Boolean(legacyFinalId), finalSegmentId: finalSegmentId ?? legacyFinalId, segments, messagesById }) : null
   const sections = contentFocused ? null : completedSections
   const hasTurnProcess = segments.some((segment) => segment.activities.length > 0)
   // Public7 process activities have opaque safe segment identities that are
@@ -240,7 +253,7 @@ export function AssistantTurn({
   // 流式内容位于 conversation 的 polite live region 内。保持增量播报，
   // atomic=true 会在每个 token 到达时重复朗读整轮长答案。
   return (
-    <article className={styles.turn} aria-atomic={isLive ? false : undefined}>
+    <article ref={turnRef} className={styles.turn} aria-atomic={isLive ? false : undefined}>
       <div className={styles.turnSpine}>
         {taskTitle ? (
           <div className={styles.taskStage} data-slot="task-stage" aria-hidden="true">

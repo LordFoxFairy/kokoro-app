@@ -64,3 +64,42 @@ it("keeps an inspected opener visible when completion arrives while Canvas owns 
   expect(opener.closest("[inert]")).toBeNull()
   canvas.remove()
 })
+it("reads visible legacy final proof once and folds only after its exact parts revision is present", async () => {
+  const callbacks = new Set<IntersectionObserverCallback>()
+  vi.stubGlobal("IntersectionObserver", class {
+    constructor(private callback: IntersectionObserverCallback) {}
+    observe() { callbacks.add(this.callback) }
+    disconnect() { callbacks.delete(this.callback) }
+  })
+  try {
+    const readDisplay = vi.fn().mockResolvedValue({ run_id: "run", display_skills: [], tool_paths: [], activity_details: [], tool_facts: [], final_answer: { segment_id: "answer", revision: "8" } })
+    const boundary = { sessionId: "s", isCurrent: () => true, client: { readDisplay } } as unknown as import("@/ui/thread/answer-action-scope").AnswerActionBoundary
+    const part = { messageId: "container", runId: "run", revision: "8", confirmedRevision: "7", partIds: ["text:stage", "activity:a", "text:answer"], status: "complete" as const }
+    const { finalSegmentId, ...legacyProps } = props
+    void finalSegmentId
+    const { rerender } = render(<LocaleProvider><AssistantTurn {...legacyProps} finalPartsComplete={false} parts={[part]} answerActionBoundary={boundary} /></LocaleProvider>)
+    expect(readDisplay).not.toHaveBeenCalled()
+    await act(async () => { for (const cb of callbacks) cb([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver) })
+    expect(readDisplay).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole("button", { name: "Process" })).toBeNull()
+    rerender(<LocaleProvider><AssistantTurn {...legacyProps} finalPartsComplete={false} parts={[{ ...part, confirmedRevision: "8" }]} answerActionBoundary={boundary} /></LocaleProvider>)
+    expect(screen.getByRole("button", { name: "Process" })).toHaveAttribute("aria-expanded", "false")
+    expect(screen.getByText("Final answer remains visible")).toBeVisible()
+    expect(screen.getByText("Inspecting the requested file")).not.toBeVisible()
+    expect(readDisplay).toHaveBeenCalledTimes(1)
+    // Durable identity takes precedence, including when its body has not arrived.
+    rerender(<LocaleProvider><AssistantTurn {...props} finalSegmentId="different" finalPartsComplete={false} parts={[{ ...part, confirmedRevision: "8" }]} answerActionBoundary={boundary} /></LocaleProvider>)
+    expect(screen.queryByRole("button", { name: "Process" })).toBeNull()
+  } finally { vi.unstubAllGlobals() }
+})
+it("requires one exact complete parts owner and does not manufacture a final from unknown or conflicting data", async () => {
+  const { displayFinalSegmentId } = await import("@/ui/thread/completed-turn-sections")
+  const facts = { run_id: "run", display_skills: [], tool_paths: [], activity_details: [], tool_facts: [], final_answer: { segment_id: "answer", revision: "8" } }
+  const part = { messageId: "container", runId: "run", revision: "8", confirmedRevision: "8", partIds: ["text:answer"], status: "complete" as const }
+  expect(displayFinalSegmentId(facts, "run", [part])).toBe("answer")
+  for (const parts of [[], [part, part], [{ ...part, status: "partial" as const }], [{ ...part, confirmedRevision: "7" }], [{ ...part, partIds: ["text:other"] }], [{ ...part, finalSegmentId: "other" }]]) {
+    expect(displayFinalSegmentId(facts, "run", parts)).toBeUndefined()
+  }
+  expect(displayFinalSegmentId(facts, "other", [part])).toBeUndefined()
+  expect(displayFinalSegmentId(null, "run", [part])).toBeUndefined()
+})

@@ -10,9 +10,9 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const sourcePath = join(root, "src/generated/bff-public-openapi.yaml")
 const outputPath = join(root, "src/generated/bff-project-resource.ts")
 const provenance = {
-  ownerCommit: "15cc9e1bd50128db7d16e0cf3916c6ab4d037149",
-  sourceSha256: "921be666a3bd570eb984503528d9ee713e3739cc8525e2e1c2f46c96fa161a05",
-  openapiVersion: "28.14.0",
+  ownerCommit: "38b942742574bccb12d58546301ee0c7cf4014c3",
+  sourceSha256: "8a56966d2d9a4a380b29dadeb9f79f5db8ef9975e8e2bbac4b1748ef03a70234",
+  openapiVersion: "28.15.0",
 }
 const names = ["ProjectResourceItem", "ProjectResourceItemResponse", "ProjectResourceDeletionResponse", "ErrorEnvelope"]
 

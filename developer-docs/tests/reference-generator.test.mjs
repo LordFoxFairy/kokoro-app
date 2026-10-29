@@ -601,3 +601,88 @@ test('formal personal Project pin natural PUT publishes no command key and rejec
   operation.operationId = 'unrelatedOperation';
   assert.throws(() => generateReferenceFiles(contract, catalogEntry), /unsupported x-kokoro-idempotency/u);
 });
+
+test("final display annotations are limited to reviewed nodes and exact values", () => {
+  const wrap = (node, key, value) => {
+    const root = {};
+    const parts = ("components.schemas." + node).split(".");
+    let current = root;
+    for (const part of parts) current = current[part] ??= {};
+    current[key] = value;
+    return root;
+  };
+  const cases = [
+    [
+      "RunDisplay.properties.final_answer.properties.revision",
+      "x-kokoro-int64-decimal",
+      true,
+    ],
+    [
+      "RunDisplay.properties.display_skills",
+      "x-kokoro-unique-by",
+      "source_ref",
+    ],
+    ["RunDisplay.properties.tool_facts", "x-kokoro-unique-by", "activity_id"],
+    [
+      "RunDisplay.properties.activity_details.items.properties.input_preview.properties.text",
+      "x-kokoro-utf8-byte-limit",
+      2048,
+    ],
+    [
+      "RunToolActivity.properties.action_title",
+      "x-kokoro-utf8-byte-limit",
+      256,
+    ],
+    [
+      "SessionEventStream",
+      "x-kokoro-run-finished-results",
+      { completed: { $ref: "#/components/schemas/FinalAnswerResult" } },
+    ],
+  ];
+  for (const [node, key, value] of cases) {
+    assert.doesNotThrow(() => assertPublicationSafe(wrap(node, key, value)));
+    for (const bad of [
+      null,
+      "wrong",
+      typeof value === "number" ? value + 1 : false,
+    ])
+      assert.throws(() => assertPublicationSafe(wrap(node, key, bad)));
+    assert.throws(() =>
+      assertPublicationSafe(wrap("Other." + node, key, value)),
+    );
+    assert.throws(() =>
+      assertPublicationSafe({ nested: wrap(node, key, value) }),
+    );
+  }
+  for (const bad of [
+    { completed: { $ref: "#/components/schemas/Other" } },
+    {
+      completed: {
+        $ref: "#/components/schemas/FinalAnswerResult",
+        extra: true,
+      },
+    },
+    {
+      completed: { $ref: "#/components/schemas/FinalAnswerResult" },
+      failed: {},
+    },
+  ]) {
+    assert.throws(() =>
+      assertPublicationSafe(
+        wrap("SessionEventStream", "x-kokoro-run-finished-results", bad),
+      ),
+    );
+  }
+});
+
+test('formal answer feedback natural PUT is exact and does not require a command key', () => {
+  const contract = fixtureContract();
+  const operation = contract.paths['/v1/sessions/{id}/messages'].post;
+  operation.operationId = 'setMessageFeedback';
+  operation['x-kokoro-idempotency'] = 'natural';
+  operation.parameters = [];
+  contract.paths = { '/v1/sessions/{id}/messages/{messageId}/feedback': { put: operation } };
+  assert.doesNotThrow(() => generateReferenceFiles(contract, catalogEntry));
+  operation.parameters = [{ $ref: '#/components/parameters/IdempotencyKey' }];
+  assert.throws(() => generateReferenceFiles(contract, catalogEntry), /must not declare Idempotency-Key/u);
+});

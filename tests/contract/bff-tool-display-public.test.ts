@@ -11,10 +11,10 @@ import { restorePublic282FileToolDisplayContract } from "./bff-file-tool-display
 const hash = (value: string | Buffer) => createHash("sha256").update(value).digest("hex")
 it("consumes the complete formal BFF28 once and restores the original whole Public27 and Public26", async () => {
   const raw = await readFile("src/generated/bff-public-openapi.yaml", "utf8")
-  expect(hash(raw)).toBe("921be666a3bd570eb984503528d9ee713e3739cc8525e2e1c2f46c96fa161a05")
+  expect(hash(raw)).toBe("8a56966d2d9a4a380b29dadeb9f79f5db8ef9975e8e2bbac4b1748ef03a70234")
   const spec = YAML.parse(raw)
-  expect(spec.info.version).toBe("28.14.0")
-  expect(BFF_TOOL_DISPLAY_PROVENANCE).toEqual({ ownerCommit: "15cc9e1bd50128db7d16e0cf3916c6ab4d037149", sourceSha256: hash(raw), openapiVersion: "28.14.0" })
+  expect(spec.info.version).toBe("28.15.0")
+  expect(BFF_TOOL_DISPLAY_PROVENANCE).toEqual({ ownerCommit: "38b942742574bccb12d58546301ee0c7cf4014c3", sourceSha256: hash(raw), openapiVersion: "28.15.0" })
   expect(BFF_TOOL_DISPLAY_CODES).toEqual(["tool.execution", "tool.file.read", "tool.mcp.discover", "tool.mcp.describe", "tool.mcp.call", "tool.web.search", "tool.web.fetch", "tool.file.write", "tool.file.deliver"])
   expect(spec.components.schemas.RunToolActivity.properties.display_code.enum).toEqual(BFF_TOOL_DISPLAY_CODES)
   expect(hash(restorePublic282FileToolDisplayContract(raw))).toBe("e0bb74069c65fb8d414a6a3cb0d6f4c8d9bcb40bb693c2409a9cbe051b8bac53")

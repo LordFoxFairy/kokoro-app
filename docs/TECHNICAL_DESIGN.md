@@ -3782,3 +3782,7 @@ App固定BFF f71a179 / Public24原Git blob，七public窄生成器正规重出�
 DELETE 是不可逆普通 Asset 逻辑删除，不是解除关联，也不证明物理清理完成；用户先看到精确文件名及风险确认，再创建唯一空正文/key。未知响应/HTML/裸4xx/错误profile/超时或取消保留原命令，关闭重开不自动提交；只有严格 owner envelope+对应 status/code 才确定拒绝，可信准入撤销退休该actor意图。ACK精确绑定 asset_id 后仅屏蔽此ID并重新列表，慢/失败/旧页不会复活它；新ID不受影响。actor/project/admission generation/实际route改变会取消旧请求、退休document-local意图并拒绝迟到结果。没有跨reload/多tab恢复承诺。
 
 资源详情初次readonly壳稳定，metadata未准入禁操作；通用读取状态仅aria-busy/sr-only，无可见异常/重试面板，关闭后再点行自然fresh重读。主动下载失败紧凑反馈、未知写入原命令恢复独立保留，quiet-read不掩写失败。
+
+## 旧成功轮的只读最终答复展示（2026-10-28，配对候选）
+
+消费 BFF RunDisplay 的 optional `final_answer`，仅供当前私有会话视图，不合入 `finalAnswersByRun` 或覆盖正式 `final_segment_id`。成功且非 live/HITL 的可见轮次按原 scope/Run reader 单次读取；完整 ordered parts 的当前确认 revision 达到绑定 revision、且精确非空 completed text 身份存在时，沿现 whole-turn disclosure 展示过程与最终正文。缺证、冲突、离屏、失败及取消不推断；读失败不自动重试、不增加异常面板。无数据或执行状态写入。

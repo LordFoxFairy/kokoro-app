@@ -85,3 +85,6 @@ Completed-empty text slots use core provenance and do not split adjacent activit
 MCP 详情阅读：`activity-result.tsx` 将已验证预览分为无外部资源的Markdown阅读结果与原始纯文本技术披露；`mcp-result-text.ts` 只识别明确文本形状、单次解码，不推断状态/意图或新增读取。截断与脱敏在结果旁保留，未知表示仍能在技术详情查看。
 
 2026-10-28 回焦修正：可打开的 ToolCallRow 暴露 opaque activity identity，由 ContextPanel 在关闭后重解析当前 shell 内同一可见行；不依赖鼠标激活是否获得焦点，不按同名/末行选择。
+
+- `completed-turn-sections.ts`：正式 final 优先；只读 display 旁证需 exact Run／唯一完整 parts／确认 revision／真实正文身份，不进入 durable merge。
+- `assistant-turn.tsx`：历史成功轮外层可见时沿原 scope reader 单次取证；折叠区内部是否展开不决定首次读。焦点、旧失败与时间顺序保持。
