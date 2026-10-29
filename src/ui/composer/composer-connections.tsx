@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useRef, useState, type ReactNode } from "react"
+import { useRef, useState, type ReactNode } from "react"
 import { Cable, Plus, SlidersHorizontal } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { useT } from "@/i18n/context"
@@ -28,17 +28,6 @@ export function ComposerConnections({ controller, onAdd, onManage }: {
 }) {
   const t = useT()
   const [open, setOpen] = useState(false)
-  const [side, setSide] = useState("top")
-  // Follow Radix's resolved collision placement; DOM order matches visual and
-  // keyboard order, including when the panel flips below the composer.
-  const observePlacement = useCallback((node: HTMLDivElement | null) => {
-    if (!node) return
-    const read = () => setSide(node.dataset.side ?? "top")
-    read()
-    const observer = new MutationObserver(read)
-    observer.observe(node, { attributes: true, attributeFilter: ["data-side"] })
-    return () => observer.disconnect()
-  }, [])
   const trigger = useRef<HTMLButtonElement>(null)
   const openingManagement = useRef(false)
   const pointerOpening = useRef(false)
@@ -54,7 +43,6 @@ export function ComposerConnections({ controller, onAdd, onManage }: {
     { key: "add", icon: Plus, label: t("mcp.addConnector"), action: onAdd },
     { key: "manage", icon: SlidersHorizontal, label: t("plugins.manageConnectors"), action: onManage },
   ]
-  if (side === "top") actions.reverse()
   const footer = <div className={styles.footer}>
     {actions.map(({ key, icon: Icon, label, action }) => <button key={key} type="button" className={styles.row} onClick={() => openDestination(action)}><Icon aria-hidden="true" /><span>{label}</span></button>)}
   </div>
@@ -64,8 +52,7 @@ export function ComposerConnections({ controller, onAdd, onManage }: {
         {selectedItems.length ? selectedItems.slice(0, 2).map(item => <span key={item.selectionKey} className={styles.glyph} aria-hidden="true"><McpBoundIcon icon={item.icon} alt="" fallback={Array.from(item.name)[0]} /></span>) : <Cable aria-hidden="true" />}
         {selectedCount > 2 ? <span className={styles.count} aria-hidden="true">+{selectedCount - 2}</span> : null}
       </PopoverTrigger>
-      <PopoverContent ref={observePlacement} onOpenAutoFocus={event => { if (pointerOpening.current) event.preventDefault() }} onCloseAutoFocus={event => { if (openingManagement.current) { event.preventDefault(); openingManagement.current = false } }} aria-label={t("firstSite.connectors")} side="top" sideOffset={8} align="start" collisionPadding={12} className={styles.panel}>
-        {side === "top" ? footer : null}
+      <PopoverContent onOpenAutoFocus={event => { if (pointerOpening.current) event.preventDefault() }} onCloseAutoFocus={event => { if (openingManagement.current) { event.preventDefault(); openingManagement.current = false } }} aria-label={t("firstSite.connectors")} side="top" sideOffset={8} align="start" collisionPadding={12} className={styles.panel}>
         <div className={styles.list} aria-busy={controller.status === "loading" || controller.customApiStatus === "loading"}>
           {controller.items.map(item => <ConnectionRow key={`mcp:${item.id}`} name={item.name} checked={selected.has(item.id)} disabled={!selected.has(item.id) && (!item.selectable || selected.size >= 16)} onToggle={() => controller.toggle(item.id)} availability={!item.selectable ? <McpAvailabilityStatus availability={item.availability === "available" ? "unavailable" : item.availability} className={styles.availability} /> : null} />)}
           {apiItems.map(item => <ConnectionRow key={`api:${item.id}`} name={item.name} icon={item.icon} checked={selectedApis.has(item.id)} disabled={!selectedApis.has(item.id) && (item.selectable === false || selectedApis.size >= 32)} onToggle={() => controller.toggleCustomApi?.(item.id)} />)}
@@ -76,7 +63,7 @@ export function ComposerConnections({ controller, onAdd, onManage }: {
           {(controller.status === "error" || controller.customApiStatus === "error") ? <span className="sr-only" role="status">{t("mcp.loadError")}</span> : null}
           {((controller.nextCursor && controller.status === "ready") || (controller.customApiNextCursor && controller.customApiStatus === "ready")) ? <button type="button" className={styles.row} onClick={controller.loadMore}>{t("data.more")}</button> : null}
         </div>
-        {side !== "top" ? footer : null}
+        {footer}
       </PopoverContent>
     </Popover>
   )

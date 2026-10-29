@@ -1,3 +1,13 @@
+## 2026-10-29 连接器菜单固定列表优先（正常页面已验）
+
+实际 Manus 首页1280×720、中文浅色菜单向上展开，DOM/computed style为flex-col：列表→添加→管理，底栏81px、36px行、200–400px面板。旧“向上管理→添加→列表”记录有误，本轮以新取证纠正，不沿旧测试维持错误。共享ComposerConnections删除placement监听和反转，底栏始终在列表后，上边分隔线；不改选择、身份、分页、请求或目的地。
+
+主控已严格核对90c07f4两份运行源前像并HMR到3310。真实验收：会话向上、首页碰撞向下均列表优先；Enter进入首项，Escape返回触发器；管理→关闭保留原conversation URL和API选择1；添加→取消同样回焦与保留选择；390×844本地无横向溢出。参考和本地首页同1280×720，另存本地会话前后截图；内容数量/已连接与可添加列表不同，不称整菜单像素一致。参考窄屏未取得，390仅证明本地边界。原始材料留Root ignored `var/dev/connector-menu-parity-20261029/`。
+
+主方停写验证：连接器两文件26通过；lint、typecheck、build与diff通过。完整default359文件/6894通过，余下HTTP套件因漏传KOKORO_TEST_REDIS_URL失败且2项未运行；随后复用受管Redis、随机origin/session隔离，原HTTP文件8通过，失败记录保留。未重跑整套Playwright；真实浏览器覆盖本次主路径，独审无新增确定缺陷。
+
+“＋”仍未闭环：本轮Manus实际为Google Drive、OneDrive、Figma、技能、最近任务、资料库、本地文件；本地只接通技能，消息契约/冻结dispatch尚无附件引用。该项继续沿Root唯一计划推进，不将已有项目上传或静态入口冒称任务附件成功。
+
 ## 2026-10-29 Custom API 任务选择正式消费（候选，待正常配对）
 
 固定BFF853ca9a的Public28.17，SHA ea0031103488daa1fcc0cca45fdd13f4d4061546ac4525c745ec47105649f7e7；正规生成消费安全profile ID/version，精确int32转换并沿原发送、unknown重试及私有snapshot恢复。API列表沿现Hub接口读取，MCP/API复用行组件但各自保存身份和恢复代际，手选保护与项目草稿保留；实际API图标按现契约展示，无逐profile读取或凭据进入界面状态。MCP契约无图标字段，未编造字段或加N+1。沿Manus已观察菜单次序/尺寸，不新增加载及异常面板。

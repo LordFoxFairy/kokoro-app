@@ -1,4 +1,4 @@
-`composer-connections.tsx` uses one switch-row presentation for distinct MCP and Custom API choices. Identity keys and limits stay separate (16 MCP/32 APIs); upward management→add→list order, existing36px rows and200–400px panel budget stay unchanged. Pending/error reads remain quiet and never impersonate empty success.
+`composer-connections.tsx` uses one switch-row presentation for distinct MCP and Custom API choices. Identity keys and limits stay separate (16 MCP/32 APIs); stable list→add→management order for both placements, existing36px rows and200–400px panel budget stay unchanged. Pending/error reads remain quiet and never impersonate empty success.
 
 ## 语音预览边界（2026-10-28）
 
@@ -44,4 +44,4 @@ AppFrameComposer 仅显式 preview 允许演示转写；NODE_ENV 不改变用户
 
 Composer 仅报告新输入的 slash 范围；成功选择仅移除该范围，保留原文、原会话和光标，不自动 Send。IME、paste、URL/path 与选区替换不打开命令；菜单键盘/Esc 不落入原 Enter-submit。真正 source 选择与首次 Send 承接仍由 `useAppFrameSkillTrial` 单一生命周期持有，旧 actor/scope/route 的结果和迟到 focus 不复活。`SelectedSkillPill` 原样复用，当前仍为 textarea＋controls pill，不冒称行内不可编辑 token 已一比一。
 
-2026-10-28：连接器按实际top/bottom placement排列DOM操作顺序；键盘与视觉一致。已发送选择由私有snapshot提供候选，Engine保护新提交／手选，controller完整重新核验目录后CAS恢复。加号仍缺真实文件／资料库／最近任务上下文链，不将本节现Skills实现视作完整资源菜单。
+2026-10-29实测修正：Manus首页与项目的连接器列表在前、添加和管理固定底部，不随上下placement逆序；删除原placement监听与反转，键盘首次进入真实首个选择项、Esc回焦。已发送选择由私有snapshot提供候选，Engine保护新提交／手选，controller完整重新核验目录后CAS恢复。加号仍缺真实文件／资料库／最近任务上下文链，不将本节现Skills实现视作完整资源菜单。

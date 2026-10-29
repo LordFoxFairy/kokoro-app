@@ -17,7 +17,6 @@
 .switch[data-checked="true"] { background: var(--composer-connection-selected); }
 .switch[data-checked="true"] > span { transform: translateX(10px); }
 .footer { flex: 0 0 auto; border-top: 1px solid var(--border); padding: 4px; }
-.panel[data-side="top"] .footer { border-top: 0; border-bottom: 1px solid var(--border); }
 .empty { margin: 0; padding: 12px 8px; color: var(--muted-foreground); font-size: 0.8125rem; }
 .availability { max-width: 5rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted-foreground); font-size: 0.6875rem; }
 @media (prefers-reduced-motion: reduce) { .switch, .switch > span { transition: none; } }
