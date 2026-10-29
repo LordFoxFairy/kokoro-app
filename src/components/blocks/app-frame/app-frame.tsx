@@ -1,5 +1,7 @@
 "use client"
 
+import type { CustomApiSelection } from "@/engine/custom-api-selection"
+
 import { useAnswerActionScope } from "@/ui/thread/answer-action-scope"
 import { useProjectPins } from "@/features/app/use-project-pins"
 import { McpTrialProvider } from "@/ui/mcp/mcp-trial-context"
@@ -432,11 +434,13 @@ function AppFrameRuntime({
     identity: railReadIdentity, admitted: railReadAdmitted, epoch: projectDraftEpoch,
     mode: "fast" as AgentMode, model: readChatModel(),
     mcpConnectionIds: [] as readonly string[],
+    customApiProfiles: [] as readonly CustomApiSelection[],
     mcpTouched: false, mcpSeededVersion: null as string | null,
   }), [engine, projectRef, draftRoute, moveActor, projectDraftEpoch, railReadIdentity, railReadAdmitted])
   const [projectDraftSelection, setProjectDraftSelection] = useState(() => ({
     context: projectDraftContext, mode: projectDraftContext.mode, model: projectDraftContext.model,
     mcpConnectionIds: projectDraftContext.mcpConnectionIds,
+    customApiProfiles: projectDraftContext.customApiProfiles,
     mcpTouched: false, mcpSeededVersion: null as string | null,
   }))
   const projectDraft = projectDraftSelection.context === projectDraftContext ? projectDraftSelection : projectDraftContext
@@ -474,7 +478,7 @@ function AppFrameRuntime({
     if (!projectDraftIsCurrent()) return
     setProjectDraftSelection(previous => {
       const current = previous.context === projectDraftContext ? previous : projectDraftContext
-      return { context: projectDraftContext, mode: current.mode, model: current.model, mcpConnectionIds: current.mcpConnectionIds,
+      return { context: projectDraftContext, mode: current.mode, model: current.model, mcpConnectionIds: current.mcpConnectionIds, customApiProfiles: current.customApiProfiles,
         mcpTouched: current.mcpTouched, mcpSeededVersion: current.mcpSeededVersion, ...choice }
     })
   }
@@ -498,6 +502,15 @@ function AppFrameRuntime({
     ...(projectOverview ? { localDraft: {
       context: projectDraftContext,
       selectedIds: projectDraft.mcpConnectionIds,
+      selectedCustomApiProfiles: projectDraft.customApiProfiles,
+      updateCustomApis: (change: (values: readonly CustomApiSelection[]) => readonly CustomApiSelection[]) => {
+        if (!projectDraftIsCurrent()) return
+        setProjectDraftSelection(previous => {
+          if (!projectDraftIsCurrent()) return previous
+          const current = previous.context === projectDraftContext ? previous : projectDraftContext
+          return { ...current, context: projectDraftContext, customApiProfiles: change(current.customApiProfiles) }
+        })
+      },
       isCurrent: projectDraftIsCurrent,
       update: (change: (ids: readonly string[]) => readonly string[]) => {
         if (!projectDraftIsCurrent()) return
@@ -505,7 +518,7 @@ function AppFrameRuntime({
           if (!projectDraftIsCurrent()) return previous
           const current = previous.context === projectDraftContext ? previous : projectDraftContext
           return { context: projectDraftContext, mode: current.mode, model: current.model,
-            mcpConnectionIds: change(current.mcpConnectionIds), mcpTouched: true, mcpSeededVersion: current.mcpSeededVersion }
+            mcpConnectionIds: change(current.mcpConnectionIds), customApiProfiles: current.customApiProfiles, mcpTouched: true, mcpSeededVersion: current.mcpSeededVersion }
         })
       },
     } } : {}),
@@ -520,7 +533,7 @@ function AppFrameRuntime({
       const current = previous.context === projectDraftContext ? previous : projectDraftContext
       if (current.mcpTouched || current.mcpSeededVersion === facts.state_version) return previous
       return { context: projectDraftContext, mode: current.mode, model: current.model,
-        mcpConnectionIds: ids, mcpTouched: false, mcpSeededVersion: facts.state_version }
+        mcpConnectionIds: ids, customApiProfiles: current.customApiProfiles, mcpTouched: false, mcpSeededVersion: facts.state_version }
     })
   }
   const refreshProjects = projectReads.refresh
@@ -561,7 +574,7 @@ function AppFrameRuntime({
     ...(projectRef === undefined ? {} : { projectRef }),
     routedConversationId,
     ...(projectOverview ? { projectComposerDraft: { mode: projectDraft.mode, model: projectDraft.model,
-      selectedMcpConnectionIds: projectDraft.mcpConnectionIds, isCurrent: projectDraftIsCurrent },
+      selectedMcpConnectionIds: projectDraft.mcpConnectionIds, selectedCustomApiProfiles: projectDraft.customApiProfiles, isCurrent: projectDraftIsCurrent },
       onProjectDraftAccepted: () => selectors.setSelectedModel(projectDraft.model) } : {}),
     standaloneSurface,
     chatHref,

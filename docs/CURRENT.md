@@ -1,3 +1,11 @@
+## 2026-10-29 Custom API 任务选择正式消费（候选，待正常配对）
+
+固定BFF853ca9a的Public28.17，SHA ea0031103488daa1fcc0cca45fdd13f4d4061546ac4525c745ec47105649f7e7；正规生成消费安全profile ID/version，精确int32转换并沿原发送、unknown重试及私有snapshot恢复。API列表沿现Hub接口读取，MCP/API复用行组件但各自保存身份和恢复代际，手选保护与项目草稿保留；实际API图标按现契约展示，无逐profile读取或凭据进入界面状态。MCP契约无图标字段，未编造字段或加N+1。沿Manus已观察菜单次序/尺寸，不新增加载及异常面板。
+
+主控停写最终：360文件6896通过（包含受管Redis独立随机键HTTP会话验证），lint/typecheck、完整contract445、architecture50、build通过；固定75路径复核无漂移。未运行整套Playwright；正常选中/发送/刷新与同视口参考对照待配对。独审发现MCP失败会挡API分页，已改为两目录各自ready/cursor合并；原实现真实两项失败、修复后两文件29通过。完整默认初次6894通过/1失败来自原401夹具同时让MCP/API失败，现分别验证两个生产GET owner并保原一次报告/错误类型/actor/generation断言，原文件78通过后重跑完整默认通过。保留所有失败证据，不弱化门禁。
+
+普通旧会话刷新选择仍单独核实为DeepWiki1项；账号全部已添加配置不等于某轮选择。本片不代表“＋”资源或整体产品闭环；正常服务切换由Root统一记录。
+
 ## 2026-10-28 MCP 输入菜单／已发送选择：正常页面已生效，资源入口仍 OPEN
 
 本次不是仅改候选：BFF `b1233d90403bd69e32998ccc8f71236213c28964` 已提交并推送原 PR17；App 消费正式 Public28.16 artifact，SHA256 `82485c2b7be17ad04f56d3656a58b42ea8d308c9dc22db5807a09ab706418a77`。先部署兼容 App reader（14份精确前像核验源），再仅重载 BFF53714；Agent／worker／App进程不变，无DDL、历史回填、连接或模型执行。私有 snapshot 只投影最新普通用户消息的精确冻结选择，不与账号已添加列表或工具调用次数混同。

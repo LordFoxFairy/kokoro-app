@@ -1,3 +1,9 @@
+## Custom API发送与私有恢复（正式Public28.17消费者候选）
+
+固定BFF853ca9a5d8da3500b0c37543c72198a520e46225，唯一全snapshot SHAea0031103488daa1fcc0cca45fdd13f4d4061546ac4525c745ec47105649f7e7。MessageCreateRequest与private composer_selection均可选selected_custom_api_profiles:[{profile_id,expected_state_version}]，≤32／profileID唯一／closed；版本为整数1..2147483647，不接字符串、分数、零、溢出、说明或凭据。原generator派生schema同时用于发送、本地原K恢复、snapshot decoder；空选择省略保持原无选择JSON/digest。
+
+仅当前本人列表profile_id/state_version/name/icon用于候选，列表/configured不授予执行权限；内部canonical string版本与formal int32精确转换。恢复只用source_message_id绑定原normal用户dispatch，先current列表原ID+原version再恢复；缺省不回捞旧选择、不将profileID送MCP IDs。Shared仍拒composer字段，私有授权/同源/请求预算不变。test-only从正式owner projector精确逆回完整28.16(82485c2b…418a77)，再承接原父链；无运行兼容fallback，未因此宣称normal已启用。
+
 ## Public28.14 最终段消费
 
 固定 BFF15cc9e1bd50128db7d16e0cf3916c6ab4d037149，完整原件SHA256 921be666a3bd570eb984503528d9ee713e3739cc8525e2e1c2f46c96fa161a05。只有成功RUN_FINISHED.result与私有ordered rendering/page可带非空final_segment_id；字段缺席表示未知。引用不授予工具权限，不扩大Share、命令或路由。严格同页版本/水位/引用与原页面预算；完整逆回28.13原件后保留旧证明。

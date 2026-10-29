@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { createBrowserSubmissionRecovery, SUBMISSION_RECOVERY_PREFIX } from "@/ui/shell/browser-submission-recovery"
 import { createSessionEngine } from "@/engine/machine"
 import type { PendingSubmission } from "@/engine/submission-recovery"
-import type { ConversationStore } from "@/core/conversations"
+import { addConversation, type ConversationStore } from "@/core/conversations"
 import { createFakeClient, createMemoryStorage, settle } from "../engine/fakes"
 import { SessionClientError } from "@/engine/client"
 import { makeEvent, makeSnapshot } from "../core/fixtures"
@@ -371,4 +371,26 @@ it("an exact journal receipt learned from another engine is reconciled by GET ra
   expect(engine.getSnapshot().hasPendingSubmission).toBe(false)
   expect(engine.getSnapshot().missingSessionId).toBe(intent.sessionId)
   engine.dispose()
+})
+
+it("reloads the original safe API version and key without sending or adopting a newer draft selection", async () => {
+  const journal = recovery()
+  const original: PendingSubmission = { ...intent, options: { ...intent.options, selectedCustomApiProfiles: [{ profileId: "api:selected", expectedStateVersion: "7" }] } }
+  expect(journal.save(original)).toBe(true)
+  const raw = window.sessionStorage.getItem(window.sessionStorage.key(0)!)!
+  expect(JSON.parse(raw).request.selected_custom_api_profiles).toEqual([{ profile_id: "api:selected", expected_state_version: 7 }])
+  expect(raw).not.toContain("instructions")
+  expect(journal.read(original.sessionId)?.submission).toEqual(original)
+  expect(journal.save({ ...original, options: { ...original.options, selectedCustomApiProfiles: [{ profileId: "api:selected", expectedStateVersion: "8" }] } })).toBe(false)
+  expect(recovery("other-actor").read(original.sessionId)).toBeNull()
+  const storage = createMemoryStorage<ConversationStore>(addConversation(null, original.sessionId, 1))
+  const client = createFakeClient()
+  client.nextCreate = async () => { throw new SessionClientError("network", "unknown") }
+  const restored = createSessionEngine({ client, storage, submissionRecovery: journal })
+  await settle()
+  expect(client.createCalls).toEqual([])
+  restored.setSelectedCustomApiProfiles!([{ profileId: "api:later", expectedStateVersion: "8" }])
+  restored.retry(); await settle()
+  expect(client.createCalls[0]?.body).toMatchObject({ idempotency_key: original.idempotencyKey, selected_custom_api_profiles: [{ profile_id: "api:selected", expected_state_version: 7 }], selected_mcp_connection_ids: ["connection-one"] })
+  restored.dispose()
 })

@@ -1,3 +1,9 @@
+## Composer Custom API safe selection（Root已核准，正式契约消费者候选）
+
+在现连接器入口复用同一行展示，独立消费本人Custom API列表的profile_id/state_version/name/icon，不把profileID映射成MCP Connection ID，不推导执行权限或自动选择。32项安全引用在engine内独立保存、深冻结至原提交意图；同actor当前catalog刷新不重基已选CAS。Project overview保持本地draft，与保留会话/MCP推荐隔离；新任务分配后沿现提交桥转交。现列表按页一次，不做逐profile GET；actor/generation/route/abort与迟到回调退休，loading/error保持安静且不伪空。
+
+固定正式BFF853ca9a5d8da3500b0c37543c72198a520e46225／Public28.17／ea0031103488daa1fcc0cca45fdd13f4d4061546ac4525c745ec47105649f7e7，12条既有public生成链正规更新。发送与private composer同一safe-ref schema由原tool-display generator派生；内部current version保持canonical字符串，在边界精确校验为int32整数。原K浏览器journal承接完整原body，重新选择不改原unknown意图；owner snapshot仅原用户dispatch的refs可供恢复，独立API版本guard保护手选，当前API同ID/版本均匹配才恢复，不重基CAS。原MCP的16项限制/选择/准备/授权与Manus向上管理→添加→列表、36px行和200–400px预算不变。不扩“＋”资源菜单。MCP已读connector没有icon字段，保持原glyph，不猜provider图标或额外getPrivateServer；API只用本人profile已准入icon。
+
 ## 整轮过程／最终答复分层（2026-10-28，既定设计消费）
 
 以已实测 Manus 整轮收起／展开为基线。App 仅消费 BFF15cc9e1／Public28.14 的成功终态 final_segment_id，live用publicSequence、snapshot/page用revision绑定 exact Run，旧版本不覆盖新事实、同版本矛盾拒绝。正文完整且本版本parts读完后，既有AssistantTurn提取整轮披露组件：过程内部原顺序，最终答复独立一次。无引用、partial、失败、取消和HITL不猜末段、不折走内容。沿原reader generation/scope/abort；不新增服务、表、协议或请求。取消/失败/parts反馈及回答动作保持披露外；焦点在过程内时不自动隐藏。无可信耗时不编造时间。

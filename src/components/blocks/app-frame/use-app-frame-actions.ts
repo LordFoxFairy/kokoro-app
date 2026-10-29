@@ -1,3 +1,4 @@
+import type { CustomApiSelection } from "@/engine/custom-api-selection"
 import {
   type FormEvent,
   type KeyboardEvent,
@@ -29,7 +30,7 @@ export type AppFrameActionsOptions = {
   projectWorkspace: boolean
   projectRef?: string
   routedConversationId?: string | null
-  projectComposerDraft?: { mode: AgentMode; model: string | null; selectedMcpConnectionIds: readonly string[]; isCurrent: () => boolean }
+  projectComposerDraft?: { mode: AgentMode; model: string | null; selectedMcpConnectionIds: readonly string[]; selectedCustomApiProfiles?: readonly CustomApiSelection[]; isCurrent: () => boolean }
   onProjectDraftAccepted?: () => void
   standaloneSurface: boolean
   chatHref: string

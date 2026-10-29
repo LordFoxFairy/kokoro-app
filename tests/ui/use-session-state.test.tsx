@@ -1133,7 +1133,7 @@ it("current read401 ignores aborted, foreign and stale proofs and pagehide does 
   } finally { view.unmount() }
 })
 
-it.each(["projection", "api", "detail", "composer", "project"] as const)("reports only a current typed HTTP401 from the production %s GET owner", async kind => {
+it.each(["projection", "api", "detail", "composer", "composerApi", "project"] as const)("reports only a current typed HTTP401 from the production %s GET owner", async kind => {
   const { ProductReadRecheckProvider } = await import("@/ui/auth/product-read-recheck-context")
   const { createHubClient, HubClientError } = await import("@/hub/client")
   const { useMcpProjection } = await import("@/ui/mcp/use-mcp-projection")
@@ -1148,9 +1148,9 @@ it.each(["projection", "api", "detail", "composer", "project"] as const)("report
   for (const failure of ["401", "403", "parse401", "network", "aborted"] as const) {
     const error = new HubClientError(failure === "401" || failure === "403" ? "http" : failure === "parse401" ? "parse" : failure, "controlled read failure", null, failure === "403" ? 403 : 401)
     const fail = vi.fn(async () => { throw error })
-    const client = { ...createHubClient(), listMcpConnectorProviders: fail, listCustomApis: fail, getMcpConnector: fail,
+    const client = { ...createHubClient(), listMcpConnectorProviders: fail, listCustomApis: kind === "composer" ? vi.fn(async () => ({ items: [], page: { next_cursor: null } })) : fail, getMcpConnector: fail,
       listMcpConnectors: vi.fn(async () => ({ items: [], next_cursor: null })),
-      listMcpConnections: vi.fn(async () => ({ connections: [{ connection_id: "connection:a", connector_id: "connector:a", server_id: "server:a", provider_key: "qa", transport: "streamable_http" as const, status: "active" as const }] })),
+      listMcpConnections: vi.fn(async () => ({ connections: kind === "composerApi" ? [] : [{ connection_id: "connection:a", connector_id: "connector:a", server_id: "server:a", provider_key: "qa", transport: "streamable_http" as const, status: "active" as const }] })),
     }
     const projectFetch = vi.fn(async () => {
       if (failure === "401" || failure === "403") return new Response(null, { status: failure === "401" ? 401 : 403 })
@@ -1168,6 +1168,7 @@ it.each(["projection", "api", "detail", "composer", "project"] as const)("report
       api: function useApiReader() { return useCustomApiProjection({ client, identity: boundary.subject, refreshKey: 0, admitted: true, readGeneration: 7 }) },
       detail: function useDetailReader() { return useMcpProviderConnection({ client, identity: boundary.subject, admitted: true, readGeneration: 7, connectorId: "connector:a", providerKey: "qa", known: undefined, retry: 0 }) },
       composer: function useComposerReader() { return useComposerConnections({ engine, client, boundary, enforceSubjectMarker: false }) },
+      composerApi: function useComposerApiReader() { return useComposerConnections({ engine, client, boundary, enforceSubjectMarker: false }) },
       project: function useProjectReader() { return useProjectList(false, boundary) },
     }
     const view = renderHook(() => { readers[kind]() }, { wrapper })

@@ -1,3 +1,5 @@
+Custom API draft selection lives in `custom-api-selection.ts` as immutable profileId/expectedStateVersion references (max32, unique profile IDs), separately from MCP Connection IDs. `machine.ts` scopes and freezes this safe intent per submission; no credentials/instructions or account preference. Formal853ca/Public28.17 serialization, browser original-key recovery and private snapshot hydration use the same generated safe-ref schema; API restoration has its own manual-selection version guard.
+
 2026-10-28 最终答复引用沿原AG-UI/快照/parts读取链消费：仅exact Run与公共revision可建立分层事实；旧版本、跨页不一致和未完整正文不替代新事实。无新读取通道，正常配对状态见CURRENT。
 
 具名回答再生成：regenerateAnswer接正式ACK／exact source，不经submit或human ID对账；late ACK保head/cursor/普通followup，良性历史parts变化经一次原bounded snapshot发现accepted。page-clients注入独立answer-actions-client；缺新方法的旧HMR实例不伪装可用。

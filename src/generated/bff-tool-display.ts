@@ -2,9 +2,9 @@
 import {z} from "zod"
 
 export const BFF_TOOL_DISPLAY_PROVENANCE = {
-  "ownerCommit": "b1233d90403bd69e32998ccc8f71236213c28964",
-  "sourceSha256": "82485c2b7be17ad04f56d3656a58b42ea8d308c9dc22db5807a09ab706418a77",
-  "openapiVersion": "28.16.0"
+  "ownerCommit": "853ca9a5d8da3500b0c37543c72198a520e46225",
+  "sourceSha256": "ea0031103488daa1fcc0cca45fdd13f4d4061546ac4525c745ec47105649f7e7",
+  "openapiVersion": "28.17.0"
 } as const
 
 export const BFF_TOOL_DISPLAY_CODES = [
@@ -47,6 +47,8 @@ export const BFF_TOOL_DISPLAY_DETAIL_PROFILE = {
   }
 } as const
 
+export const customApiStateVersionWireSchema = z.number().int().min(1).max(2147483647)
+export const selectedCustomApiProfilesWireSchema = z.array(z.object({"profile_id":z.string().min(1).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}(?![\\s\\S])","u")).refine(v=>Array.from(v).length<=191),"expected_state_version":z.number().int().min(1).max(2147483647)}).strict()).max(32).refine(values => new Set(values.map(value => value.profile_id)).size === values.length)
 export const actionTitleWireSchema = z.string().min(1).refine(v=>Array.from(v).length<=256).refine(v=>new TextEncoder().encode(v).length<=256)
 export const answerFeedbackWireSchema = z.object({"session_id":z.string().min(1).refine(v=>Array.from(v).length<=256),"message_id":z.string().min(1).refine(v=>Array.from(v).length<=256),"feedback":z.union([z.literal("up"),z.literal("down"),z.literal(null)])}).strict()
 export const answerRegenerationReceiptWireSchema = z.object({"run_id":z.string().min(1).refine(v=>Array.from(v).length<=256),"user_message_id":z.string().min(1).refine(v=>Array.from(v).length<=256),"assistant_message_id":z.string().min(1).refine(v=>Array.from(v).length<=256),"regenerated_from_message_id":z.string().min(1).refine(v=>Array.from(v).length<=256)}).strict()

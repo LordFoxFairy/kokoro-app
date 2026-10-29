@@ -1,3 +1,4 @@
+import { selectedCustomApiProfilesWireSchema } from "@/generated/bff-tool-display"
 // Canonical v1 runtime contract. Keep these schemas synchronized with the checked-in API documentation and contract tests.
 
 import { z } from "zod"
@@ -190,7 +191,9 @@ export const selectedMcpConnectionIdsSchema = z
     }
   })
 
-export const sessionSnapshotSchema = sharedSessionSnapshotSchema.extend({ messages: z.array(chatMessageReadSchema).optional(), execution_process: runExecutionProcessSchema.nullable(), composer_selection: z.object({ source_message_id: z.string().min(1), selected_mcp_connection_ids: selectedMcpConnectionIdsSchema }).strict().optional() }).strict()
+export const selectedCustomApiProfilesSchema = selectedCustomApiProfilesWireSchema
+
+export const sessionSnapshotSchema = sharedSessionSnapshotSchema.extend({ messages: z.array(chatMessageReadSchema).optional(), execution_process: runExecutionProcessSchema.nullable(), composer_selection: z.object({ source_message_id: z.string().min(1), selected_mcp_connection_ids: selectedMcpConnectionIdsSchema, selected_custom_api_profiles: selectedCustomApiProfilesSchema.optional() }).strict().optional() }).strict()
 export type SessionSnapshot = z.infer<typeof sessionSnapshotSchema>
 
 export function parseSessionSnapshot(input: unknown): SessionSnapshot {
@@ -206,6 +209,7 @@ export const messageCreateParamsSchema = z
     thinking: z.boolean().optional(),
     selected_skill_source_refs: selectedSkillSourceRefsSchema.optional(),
     selected_mcp_connection_ids: selectedMcpConnectionIdsSchema.optional(),
+    selected_custom_api_profiles: selectedCustomApiProfilesSchema.optional(),
     // Opaque project ownership for a project's first task. Tenant/site
     // identity is resolved by the BFF and is deliberately not browser data.
     project_ref: z.string().min(1).optional(),

@@ -1,7 +1,9 @@
+import { restorePublic2816CustomApiSelectionContract } from "./bff-custom-api-selection-parent"
 // Build/test-only exact additive private snapshot change; no runtime downgrade.
 import { createHash } from "node:crypto"
 const hash = (source: string) => createHash("sha256").update(source).digest("hex")
 export function restorePublic2815ComposerSelectionContract(source: string) {
+  source = restorePublic2816CustomApiSelectionContract(source)
   if (!/^  version: 28\.16\.0$/mu.test(source)) return source
   if (hash(source) !== "82485c2b7be17ad04f56d3656a58b42ea8d308c9dc22db5807a09ab706418a77") throw Error("Composer selection Public28.16 child drift")
   const field =

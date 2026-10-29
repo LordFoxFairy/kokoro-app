@@ -1,3 +1,7 @@
+## Custom API草稿选择（复用原安全提交意图，无新owner表）
+
+仅现engine／Project draft的profile/version引用，≤32且profileID唯一，换会话/actor退休，不落Conversation账号偏好。发送时深冻结到原PendingSubmission，现browser sessionStorage journal v1仅增加可选正式safe-ref字段，原无字段记录仍按原body/key恢复；不保存指令、env名称/值或凭据，不新增store／Schema／迁移。未知结果只显式原K/body恢复，后续目录刷新或UI选择不改旧意图。已接受选择由原owner private snapshot投影，App无第二选择事实源；当前CAS不符只排除恢复，不能替换原CAS。原MCP/Skills与父会话权限保持。
+
 ## 原Run工具展示证据（无新持久事实）
 
 tool_facts只是现有按Run私有GET的只读安全附加投影：仅匹配已存在MCP工具的activity_id，描述／调用可显示已证selector，已证failed仅影响该tool展示，真实Run终态索引与原source／parts／账本不写。未知仍generic；不存在的activity不插入，file／web／subagent／Skill不串此MCP事实。旧per-Run RAM在profile变化时退休并只接受用户明确GET，不创建缓存／持久表／恢复实体，不影响原unknown命令键或草稿。

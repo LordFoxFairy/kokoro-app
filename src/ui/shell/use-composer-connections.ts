@@ -1,5 +1,8 @@
 "use client"
 
+import { useComposerCustomApis, type ComposerCustomApi } from "./use-composer-custom-apis"
+import type { CustomApiSelection } from "@/engine/custom-api-selection"
+
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 import type { SessionEngine } from "@/engine/machine"
 import { SERVER_ENGINE_SNAPSHOT } from "@/engine/machine"
@@ -11,6 +14,11 @@ import { AUTH_INDEX_SUBJECT_KEY, readBrowserAuthIndexSubject } from "./page-clie
 
 export type ComposerConnection = { id: string; name: string; availability: McpAvailability; selectable: boolean; connectorId?: string; providerKey?: string }
 export type ComposerConnectionsController = {
+  customApiItems?: readonly ComposerCustomApi[]
+  selectedCustomApiProfiles?: readonly CustomApiSelection[]
+  customApiStatus?: "loading" | "ready" | "error" | "disabled"
+  customApiNextCursor?: string | undefined
+  toggleCustomApi?: (id: string) => void
   items: readonly ComposerConnection[]
   selectedIds: readonly string[]
   status: "loading" | "ready" | "error" | "disabled"
@@ -24,11 +32,14 @@ export type ComposerConnectionsController = {
 export type ComposerConnectionDraftSelection = {
   context: object
   selectedIds: readonly string[]
+  selectedCustomApiProfiles?: readonly CustomApiSelection[]
+  updateCustomApis?: (change: (values: readonly CustomApiSelection[]) => readonly CustomApiSelection[]) => void
   isCurrent: () => boolean
   update: (change: (ids: readonly string[]) => readonly string[]) => void
 }
-type ConnectionReader = Pick<HubClient, "listMcpConnections" | "getMcpConnector">
+type ConnectionReader = Pick<HubClient, "listMcpConnections" | "getMcpConnector" | "listCustomApis">
 const emptySelection: readonly string[] = Object.freeze([])
+const emptyCustomSelection: readonly CustomApiSelection[] = Object.freeze([])
 const noopSubscribe = () => () => undefined
 const serverSnapshot = () => SERVER_ENGINE_SNAPSHOT
 
@@ -47,6 +58,7 @@ export function useComposerConnections({ engine, client, boundary, enforceSubjec
   localDraft?: ComposerConnectionDraftSelection
   loadAllForDefaults?: boolean
 }): ComposerConnectionsController {
+  const apis = useComposerCustomApis({ engine, client, boundary, enforceSubjectMarker, ...(localDraft ? { localDraft: { context: localDraft.context, selectedProfiles: localDraft.selectedCustomApiProfiles ?? emptyCustomSelection, isCurrent: localDraft.isCurrent, update: localDraft.updateCustomApis ?? (() => undefined) } } : {}) })
   const reportRead401 = useProductReadRecheck()
   const { admitted, subject, generation } = boundary
   const snapshot = useSyncExternalStore(engine?.subscribe ?? noopSubscribe, engine?.getSnapshot ?? serverSnapshot, serverSnapshot)
@@ -206,10 +218,12 @@ export function useComposerConnections({ engine, client, boundary, enforceSubjec
   })
 
   return {
+    customApiItems: apis.items, selectedCustomApiProfiles: apis.selectedProfiles, customApiStatus: apis.status, customApiNextCursor: apis.nextCursor, toggleCustomApi: apis.toggle,
     items, selectedIds, status, complete: sameScope && catalog.revision === activeRequest.revision && catalog.status === "ready" && catalog.complete === true,
     nextCursor: sameScope ? catalog.nextCursor : undefined,
-    refresh: () => { if (canAct()) setRequest(previous => ({ scope, revision: previous.scope === scope ? previous.revision + 1 : 1 })) },
+    refresh: () => { if (canAct()) { apis.refresh(); setRequest(previous => ({ scope, revision: previous.scope === scope ? previous.revision + 1 : 1 })) } },
     loadMore: () => {
+      apis.loadMore()
       if (canAct() && status !== "loading" && sameScope && catalog.nextCursor !== undefined) setRequest(previous => ({ scope, revision: previous.scope === scope ? previous.revision + 1 : 1, cursor: catalog.nextCursor }))
     },
     toggle: id => {

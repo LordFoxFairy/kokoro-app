@@ -1,3 +1,5 @@
+`composer-connections.tsx` uses one switch-row presentation for distinct MCP and Custom API choices. Identity keys and limits stay separate (16 MCP/32 APIs); upward management→add→list order, existing36px rows and200–400px panel budget stay unchanged. Pending/error reads remain quiet and never impersonate empty success.
+
 ## 语音预览边界（2026-10-28）
 
 AppFrameComposer 仅显式 preview 允许演示转写；NODE_ENV 不改变用户会话输入真实性。回归见 tests/ui/app-frame-voice.test.tsx；真实语音和参考交互验收状态见 docs/CURRENT.md。

@@ -1,3 +1,5 @@
+`use-composer-custom-apis.ts` reads the current actor’s existing paged Custom API list once per catalog request, without per-profile GETs. It retains only name/icon/current version, fences actor/generation/draft/abort, and does not rebase a selected version on refresh. `use-composer-connections.ts` composes these independent choices with existing MCP behavior; no execution permission is inferred from list metadata.
+
 ## Composer MCP Add 与 Manage 的独立接线
 
 AppFrameComposer 必须将 Add 交给 `useAppFrameOverlays.openMcpCatalog`，Manage 仍为原 Settings mcp；不回退共用 Manage。`AppFrameOverlaySurfaces` 用原 browserHubClient／可信 readBoundary 和 ConnectorCommandProvider 渲染受控目录及既有创建窗。目录 RAM 窗口绑定 engine／scope／conversation／actor；同 actor 临时 admission／generation 变更只围栏事实与新命令，保留窗口、搜索及创建输入。真正更换身份／上下文或路由事件才退休目录与其创建视图，并清旧 returnFocus ref；迟到读或已排队的焦点回调不复活旧窗、不偷新页面焦点，不清 pending／unknown 命令。关闭回焦沿原目录、详情、创建窗口已有 returnFocus 链，不写浏览器地址。

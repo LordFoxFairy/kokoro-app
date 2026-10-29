@@ -1,3 +1,4 @@
+import { freezeCustomApiSelection, type CustomApiSelection, type CustomApiSelectionRestore } from "./custom-api-selection"
 import type { McpSelectionRestore } from "./engine-types"
 import { readMessageParts, type MessagePartsRead } from "./message-parts-reader"
 import { mergeMessageParts, preserveMessageParts } from "@/core/reducer"
@@ -164,6 +165,9 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   // 当前会话 exact source refs：只在内存中保存，不从 browser store 恢复。
   let selectedSkillSourceRefs: string[] | undefined = scope.kind === "project" ? undefined : []
   // 选中模型（MODEL-UX，shell 注入）：非 null 即随首条 messageCreate 上 wire 为 model（首条锁语义在 UI 层）。
+  let selectedCustomApiProfiles: readonly CustomApiSelection[] = Object.freeze([])
+  let customApiSelectionRestore: CustomApiSelectionRestore | undefined
+  let customApiSelectionVersion = 0
   let mcpSelectionRestore: McpSelectionRestore | undefined
   let mcpSelectionVersion = 0
   let selectedMcpConnectionIds: readonly string[] = Object.freeze([])
@@ -384,6 +388,8 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       thread,
       pendingMode,
       selectedMcpConnectionIds,
+      selectedCustomApiProfiles,
+      ...(customApiSelectionRestore === undefined ? {} : { customApiSelectionRestore }),
       ...(mcpSelectionRestore === undefined ? {} : { mcpSelectionRestore }),
       staging: stagingView,
       hydrating,
@@ -763,6 +769,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     unprojectedAdmissions.clear()
     const generation = hydrateGeneration
     const selectionVersion = mcpSelectionVersion
+    const apiSelectionVersion = customApiSelectionVersion
     if (!afterExpiredCursor && !hydrating) {
       hydrating = true
       notify()
@@ -804,6 +811,11 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
         if (!afterExpiredCursor && selectionVersion === mcpSelectionVersion && pendingSubmission === null && preparedSubmission === null) {
           const selection = sessionSnapshot.composer_selection
           mcpSelectionRestore = selection === undefined ? undefined : Object.freeze({ sessionId, sourceMessageId: selection.source_message_id, ids: Object.freeze([...selection.selected_mcp_connection_ids]) })
+        }
+        if (!afterExpiredCursor && apiSelectionVersion === customApiSelectionVersion && pendingSubmission === null && preparedSubmission === null) {
+          const selection = sessionSnapshot.composer_selection
+          customApiSelectionRestore = selection === undefined ? undefined : Object.freeze({ sessionId, sourceMessageId: selection.source_message_id,
+            profiles: freezeCustomApiSelection((selection.selected_custom_api_profiles ?? []).map(value => ({ profileId: value.profile_id, expectedStateVersion: String(value.expected_state_version) }))) })
         }
         ownerConfirmedSessionId = sessionId
         locallyCreatedSessionId = undefined
@@ -971,10 +983,12 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     // the previous message's choices after this request is acknowledged.
     mcpSelectionRestore = undefined
     mcpSelectionVersion++
+    customApiSelectionRestore = undefined; customApiSelectionVersion++
     return {
       mode,
       model: selectedModel,
       selectedMcpConnectionIds: [...selectedMcpConnectionIds],
+      selectedCustomApiProfiles: freezeCustomApiSelection(selectedCustomApiProfiles),
       selectedSkillSourceRefs: selectedSkillSourceRefs === undefined ? undefined : [...selectedSkillSourceRefs],
     }
   }
@@ -1090,7 +1104,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     missingSessionId = undefined
     const submission = {
       ...args,
-      options: { ...args.options, selectedMcpConnectionIds: [...(args.options.selectedMcpConnectionIds ?? [])], selectedSkillSourceRefs: args.options.selectedSkillSourceRefs === undefined ? undefined : [...args.options.selectedSkillSourceRefs] },
+      options: { ...args.options, selectedCustomApiProfiles: freezeCustomApiSelection(args.options.selectedCustomApiProfiles ?? []), selectedMcpConnectionIds: [...(args.options.selectedMcpConnectionIds ?? [])], selectedSkillSourceRefs: args.options.selectedSkillSourceRefs === undefined ? undefined : [...args.options.selectedSkillSourceRefs] },
     }
     pendingSubmission = submission
     recoveredSubmission = null
@@ -1500,6 +1514,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       selectedSkillSourceRefs = scope.kind === "project" ? undefined : []
       mcpSelectionRestore = undefined; mcpSelectionVersion += 1
       selectedMcpConnectionIds = Object.freeze([])
+      selectedCustomApiProfiles = Object.freeze([]); customApiSelectionRestore = undefined; customApiSelectionVersion++
     }
     thread = createSessionStreamState()
     observedTerminalRuns.clear()
@@ -1595,6 +1610,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     selectedSkillSourceRefs = scope.kind === "project" ? undefined : []
     mcpSelectionRestore = undefined; mcpSelectionVersion += 1
     selectedMcpConnectionIds = Object.freeze([])
+      selectedCustomApiProfiles = Object.freeze([]); customApiSelectionRestore = undefined; customApiSelectionVersion++
     thread = createSessionStreamState()
     observedTerminalRuns.clear()
     pendingSteerReceipts.clear()
@@ -1707,6 +1723,22 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     })
   }
 
+  function setSelectedCustomApiProfiles(profiles: readonly CustomApiSelection[]): void {
+    if (disposed) return
+    selectedCustomApiProfiles = freezeCustomApiSelection(profiles)
+    customApiSelectionRestore = undefined; customApiSelectionVersion++
+    notify()
+  }
+
+  function restoreCustomApiSelection(candidate: CustomApiSelectionRestore, eligible: readonly CustomApiSelection[]): void {
+    if (disposed || candidate !== customApiSelectionRestore || store?.activeId !== candidate.sessionId || pendingSubmission !== null || preparedSubmission !== null) return
+    const next = freezeCustomApiSelection(eligible)
+    if (next.some(value => !candidate.profiles.some(saved => saved.profileId === value.profileId && saved.expectedStateVersion === value.expectedStateVersion))) return
+    selectedCustomApiProfiles = next
+    customApiSelectionRestore = undefined; customApiSelectionVersion++
+    notify()
+  }
+
   function setSelectedMcpConnectionIds(connectionIds: readonly string[]): void {
     if (disposed) return
     const next = selectedMcpConnectionIdsSchema.parse(connectionIds)
@@ -1759,6 +1791,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   function dispose(): void {
     mcpSelectionRestore = undefined; mcpSelectionVersion += 1
     selectedMcpConnectionIds = Object.freeze([])
+      selectedCustomApiProfiles = Object.freeze([]); customApiSelectionRestore = undefined; customApiSelectionVersion++
     locallyCreatedSessionId = undefined
     taskNotifications.dispose()
     retireMessageParts()
@@ -1820,6 +1853,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     selectedSkillSourceRefs = scope.kind === "project" ? undefined : []
     mcpSelectionRestore = undefined; mcpSelectionVersion += 1
     selectedMcpConnectionIds = Object.freeze([])
+      selectedCustomApiProfiles = Object.freeze([]); customApiSelectionRestore = undefined; customApiSelectionVersion++
     thread = createSessionStreamState()
     observedTerminalRuns.clear()
     pendingSteerReceipts.clear()
@@ -1870,6 +1904,8 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     reconcileConversationCache,
     setMode,
     setSelectedSkillSourceRefs,
+    setSelectedCustomApiProfiles,
+    restoreCustomApiSelection,
     setSelectedMcpConnectionIds,
     restoreMcpSelection,
     setModel,

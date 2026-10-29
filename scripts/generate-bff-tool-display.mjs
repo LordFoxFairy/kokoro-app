@@ -9,13 +9,16 @@ import YAML from "yaml"
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const sourcePath = join(root, "src/generated/bff-public-openapi.yaml")
 const outputPath = join(root, "src/generated/bff-tool-display.ts")
-const ownerCommit = "b1233d90403bd69e32998ccc8f71236213c28964"
-const sourceSha256 = "82485c2b7be17ad04f56d3656a58b42ea8d308c9dc22db5807a09ab706418a77"
-const openapiVersion = "28.16.0"
+const ownerCommit = "853ca9a5d8da3500b0c37543c72198a520e46225"
+const sourceSha256 = "ea0031103488daa1fcc0cca45fdd13f4d4061546ac4525c745ec47105649f7e7"
+const openapiVersion = "28.17.0"
 
 export function inspectBffToolDisplayContract(document) {
   assert.equal(document.info.version, openapiVersion, "BFF tool display version drift")
   const currentSchemas = document.components.schemas
+  const selection = currentSchemas.MessageCreateRequest.properties.selected_custom_api_profiles
+  assert.deepEqual(selection, currentSchemas.PrivateSessionSnapshotResponse.properties.data.properties.composer_selection.properties.selected_custom_api_profiles, "BFF Custom API send/restore selection drift")
+  assert.equal(createHash("sha256").update(JSON.stringify(selection)).digest("hex"), "d81839ddab4582f9356f99e0ba8926daeb9a17d7b224240c83a7c620b9b8b892", "BFF safe Custom API reference schema drift")
   assert.deepEqual(currentSchemas.RunDisplay.properties.final_answer, {"type": "object", "required": ["segment_id", "revision"], "additionalProperties": false, "description": "Private read-only legacy final proof bound to this owner's exact completed Message parts revision; never a historical write or an execution authority. Existing durable final identity takes precedence; unproven or conflicting bindings are omitted.", "properties": {"segment_id": {"type": "string", "pattern": "^msg_[0-9a-f]{32}(?![\\s\\S])"}, "revision": {"type": "string", "pattern": "^[1-9][0-9]{0,18}(?![\\s\\S])", "x-kokoro-int64-decimal": true}}}, "Private final display binding drift")
   assert.deepEqual(currentSchemas.RunToolActivity.properties.action_title, {"type":"string","minLength":1,"maxLength":256,"x-kokoro-utf8-byte-limit":256,"description":"Public intent of this exact model tool call, bound before approval edits. Not reasoning, capability documentation, execution status or authority. No surrounding whitespace, control/format/surrogate characters or private text. Omitted when absent or mismatched; never inferred from adjacent prose."}, "Action title schema drift")
   assert.deepEqual(currentSchemas.RunDisplay.properties.activity_details.items.properties.tool_description, {"type":"object","required":["text","truncated","redacted"],"properties":{"text":{"type":"string","minLength":1,"maxLength":1024,"x-kokoro-utf8-byte-limit":1024},"truncated":{"type":"boolean"},"redacted":{"type":"boolean"}},"additionalProperties":false,"description":"Provider capability documentation observed in this Run, matched by connection and selector. Not a per-call purpose, execution result, title or authorization. Missing or conflicting evidence is omitted; private display only."}, "Capability description schema drift")
@@ -133,6 +136,7 @@ function schemaCode(schema,schemas) {
   return code
  }
  if(schema.type==="array")return `z.array(${schemaCode(schema.items,schemas)})${schema.maxItems===undefined?"":`.max(${schema.maxItems})`}${schema.minItems===undefined?"":`.min(${schema.minItems})`}`
+ if(schema.type==="integer") return `z.number().int().min(${schema.minimum}).max(${schema.maximum})`
  if(schema.type==="string"){
   let code="z.string()";if(schema.minLength!==undefined)code+=`.min(${schema.minLength})`;if(schema.pattern)code+=`.regex(new RegExp(${JSON.stringify(schema.pattern)},"u"))`;if(schema.maxLength!==undefined)code+=`.refine(v=>Array.from(v).length<=${schema.maxLength})`;
   if(schema["x-kokoro-utf8-byte-limit"])code+=`.refine(v=>new TextEncoder().encode(v).length<=${schema["x-kokoro-utf8-byte-limit"]})`;
@@ -142,8 +146,8 @@ function schemaCode(schema,schemas) {
  throw Error("unsupported answer schema")
 }
 function renderAnswerSchemas(s,statuses){
- const specs={actionTitleWireSchema:s.RunToolActivity.properties.action_title,answerFeedbackWireSchema:s.MessageFeedbackResponse.properties.data,answerRegenerationReceiptWireSchema:s.MessageRegenerationResponse.properties.data,runDisplaySkillWireSchema:s.RunDisplaySkill,runDisplayWireSchema:s.RunDisplay,runToolFactWireSchema:s.RunDisplay.properties.tool_facts.items,runActivityDetailWireSchema:s.RunDisplay.properties.activity_details.items,safeVirtualPathWireSchema:s.RunDisplaySkill.properties.virtual_path,answerActionErrorWireSchema:s.ErrorEnvelope}
- return Object.entries(specs).map(([name,schema])=>`export const ${name} = ${schemaCode(schema,s)}`).join("\n")+`\nexport const BFF_ANSWER_ACTION_STATUSES = ${JSON.stringify(statuses)} as const\n`
+ const specs={customApiStateVersionWireSchema:s.MessageCreateRequest.properties.selected_custom_api_profiles.items.properties.expected_state_version,selectedCustomApiProfilesWireSchema:s.MessageCreateRequest.properties.selected_custom_api_profiles,actionTitleWireSchema:s.RunToolActivity.properties.action_title,answerFeedbackWireSchema:s.MessageFeedbackResponse.properties.data,answerRegenerationReceiptWireSchema:s.MessageRegenerationResponse.properties.data,runDisplaySkillWireSchema:s.RunDisplaySkill,runDisplayWireSchema:s.RunDisplay,runToolFactWireSchema:s.RunDisplay.properties.tool_facts.items,runActivityDetailWireSchema:s.RunDisplay.properties.activity_details.items,safeVirtualPathWireSchema:s.RunDisplaySkill.properties.virtual_path,answerActionErrorWireSchema:s.ErrorEnvelope}
+ return Object.entries(specs).map(([name,schema])=>`export const ${name} = ${schemaCode(schema,s)}${name === "selectedCustomApiProfilesWireSchema" ? ".refine(values => new Set(values.map(value => value.profile_id)).size === values.length)" : ""}`).join("\n")+`\nexport const BFF_ANSWER_ACTION_STATUSES = ${JSON.stringify(statuses)} as const\n`
 }
 async function main() {
   const mode = process.argv[2]

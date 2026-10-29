@@ -1,3 +1,4 @@
+import type { CustomApiSelection } from "@/engine/custom-api-selection"
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import type { SessionEngine } from "@/engine/machine"
@@ -166,7 +167,7 @@ export function useAppFrameSkillTrial({ engine, preview, boundary }: {
   /** The shell has already checked its route and Send admission. Allocation
    * stays synchronous so no old choice can be rebound by a later callback. */
   const submitCurrentDraft = useCallback((content: string, allocateProjectConversation = false,
-    projectDraft?: { mode: AgentMode; model: string | null; selectedMcpConnectionIds: readonly string[]; isCurrent: () => boolean }): boolean => {
+    projectDraft?: { mode: AgentMode; model: string | null; selectedMcpConnectionIds: readonly string[]; selectedCustomApiProfiles?: readonly CustomApiSelection[]; isCurrent: () => boolean }): boolean => {
     const owner = ownerRef.current
     if (!engine || !owner || owner.context !== lifetime || owner.engine !== engine) return false
     const current = selectionRef.current
@@ -185,6 +186,7 @@ export function useAppFrameSkillTrial({ engine, preview, boundary }: {
         if (projectDraft) {
           engine.setModel(projectDraft.model)
           engine.setSelectedMcpConnectionIds([...projectDraft.selectedMcpConnectionIds])
+          engine.setSelectedCustomApiProfiles?.(projectDraft.selectedCustomApiProfiles ?? [])
         }
         if (transfer && (selectionRef.current !== transfer.selection || !transfer.selection.active || !actionIsCurrent())) return false
       }

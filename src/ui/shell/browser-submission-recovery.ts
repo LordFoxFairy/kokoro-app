@@ -1,3 +1,4 @@
+import { freezeCustomApiSelection } from "@/engine/custom-api-selection"
 import { z } from "zod"
 import { messageCreateParamsSchema, messageCreateReceiptSchema } from "@/contract/chat"
 import { buildMessageCreateParams } from "@/engine/execution-adapter"
@@ -58,7 +59,8 @@ export function createBrowserSubmissionRecovery(args: {
         idempotencyKey: record.request.idempotency_key, content: record.request.content,
         options: { mode: record.request.thinking ? "thinking" : "fast", model: record.request.model ?? null,
           selectedSkillSourceRefs: record.request.selected_skill_source_refs,
-          selectedMcpConnectionIds: record.request.selected_mcp_connection_ids ?? [] },
+          selectedMcpConnectionIds: record.request.selected_mcp_connection_ids ?? [],
+          ...(record.request.selected_custom_api_profiles === undefined ? {} : { selectedCustomApiProfiles: freezeCustomApiSelection(record.request.selected_custom_api_profiles.map(value => ({ profileId: value.profile_id, expectedStateVersion: String(value.expected_state_version) }))) }) },
       } }
     },
     save: submission => {

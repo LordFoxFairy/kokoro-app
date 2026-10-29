@@ -1,3 +1,7 @@
+## Public28.17 Custom API safe refs（正式输入候选消费）
+
+固定正式BFF853ca9a5d8da3500b0c37543c72198a520e46225／SHAea0031103488daa1fcc0cca45fdd13f4d4061546ac4525c745ec47105649f7e7，既有12public generator正规重出。原tool-display generator从MessageCreateRequest与private composer同字段派生closed≤32／unique profile_id／正int32版本schema及version叶；不另建wire中心。新test-only bff-custom-api-selection-parent只迁入正式owner函数的TS类型，精确逆回完整28.16，再进原composer父链。其余private／policy3／Auth／relay／lock不迁，无normal激活声明。
+
 ## Public28.10 answer actions／exact Run display（consumer候选）
 
 唯一完整snapshot来自正式BFF `d629653cbf5799a44db55a947321a6ec152b7dcd`，SHA256 `4d93ec15e2931768afafffb2101039b1da64757ea48c760d16ef88aa8753db16`。12现有public生成器正规重出；扩原tool-display generator从closed成功／错误／状态图生成窄answer validators，五private与独立policy3保持。test-only完整28.10→28.9源自正式owner唯一inverse，之后旧父所有hash/oracle不变，无runtime fallback。
