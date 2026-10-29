@@ -306,8 +306,8 @@ it("does not auto-highlight the first connector for a pointer open, but keeps ke
   await act(async () => { await settle() })
   fireEvent.keyDown(trigger, { key: "Enter" })
   fireEvent.click(trigger)
-  await waitFor(() => expect(screen.getByRole("switch", { name: "Docs" })).toHaveFocus())
-  fireEvent.keyDown(screen.getByRole("switch", { name: "Docs" }), { key: "Escape" })
+  await waitFor(() => expect(screen.getByRole("button", { name: "管理连接器" })).toHaveFocus())
+  fireEvent.keyDown(screen.getByRole("button", { name: "管理连接器" }), { key: "Escape" })
   await waitFor(() => expect(trigger).toHaveFocus())
 })
 

@@ -49,17 +49,24 @@ export function useComposerConnections({ engine, client, boundary, enforceSubjec
 }): ComposerConnectionsController {
   const reportRead401 = useProductReadRecheck()
   const { admitted, subject, generation } = boundary
+  const snapshot = useSyncExternalStore(engine?.subscribe ?? noopSubscribe, engine?.getSnapshot ?? serverSnapshot, serverSnapshot)
   const owner = useMemo(() => ({ engine, client, admitted, subject, generation, enforceSubjectMarker }), [engine, client, admitted, subject, generation, enforceSubjectMarker])
   const draftContext = localDraft?.context
-  const scope = useMemo(() => ({ ...owner, draftContext }), [owner, draftContext])
+  // Retain this epoch after consumption, but revalidate the catalog for every
+  // new restoration candidate. A prior conversation's availability is stale.
+  const [restoreEpoch, setRestoreEpoch] = useState(snapshot.mcpSelectionRestore)
+  if (!localDraft && snapshot.mcpSelectionRestore && snapshot.mcpSelectionRestore !== restoreEpoch)
+    setRestoreEpoch(snapshot.mcpSelectionRestore)
+  const scope = useMemo(() => ({ ...owner, draftContext, restoreEpoch }), [owner, draftContext, restoreEpoch])
   const [request, setRequest] = useState<{ scope: typeof scope; revision: number; cursor?: string | undefined }>({ scope, revision: 0 })
   const [catalog, setCatalog] = useState<{ scope: typeof scope; revision: number; items: ComposerConnection[]; nextCursor?: string | undefined; status: ComposerConnectionsController["status"]; complete?: boolean }>({ scope, revision: -1, items: [], status: "loading" })
   const revisionAtRender = request.scope === scope ? request.revision : 0
   const [fullScanRequest, setFullScanRequest] = useState<{ scope: typeof scope; revision: number } | null>(null)
   // Keep an already dispatched scan stable when manual selection touches the
   // draft, but do not turn its later user refresh into another automatic scan.
-  const fullScan = loadAllForDefaults || fullScanRequest?.scope === scope && fullScanRequest.revision === revisionAtRender
-  if (loadAllForDefaults && (fullScanRequest?.scope !== scope || fullScanRequest.revision !== revisionAtRender))
+  const restoreRequested = !localDraft && snapshot.mcpSelectionRestore !== undefined
+  const fullScan = loadAllForDefaults || restoreRequested || fullScanRequest?.scope === scope && fullScanRequest.revision === revisionAtRender
+  if ((loadAllForDefaults || restoreRequested) && (fullScanRequest?.scope !== scope || fullScanRequest.revision !== revisionAtRender))
     setFullScanRequest({ scope, revision: revisionAtRender })
   const [retiredOwner, setRetiredOwner] = useState<typeof owner | null>(null)
   const loadedCursors = useRef(new Set<string>())
@@ -78,7 +85,6 @@ export function useComposerConnections({ engine, client, boundary, enforceSubjec
   const sameScope = catalog.scope === scope && available
   const items = sameScope ? catalog.items : []
   const status = !available ? "disabled" : sameScope && catalog.revision === activeRequest.revision ? catalog.status : "loading"
-  const snapshot = useSyncExternalStore(engine?.subscribe ?? noopSubscribe, engine?.getSnapshot ?? serverSnapshot, serverSnapshot)
   const selectedIds = available ? localDraft
     ? localDraft.isCurrent() ? localDraft.selectedIds : emptySelection
     : snapshot.selectedMcpConnectionIds ?? emptySelection : emptySelection
@@ -89,7 +95,10 @@ export function useComposerConnections({ engine, client, boundary, enforceSubjec
     return () => { if (committedScope.current === scope) committedScope.current = null }
   }, [scope])
 
+  const previousOwner = useRef(owner)
   useLayoutEffect(() => {
+    if (previousOwner.current !== owner) previousOwner.current.engine?.setSelectedMcpConnectionIds([])
+    previousOwner.current = owner
     const retire = () => {
       if (!subjectMarkerMatches(owner.enforceSubjectMarker, owner.subject)) {
         owner.engine?.setSelectedMcpConnectionIds([])
@@ -103,7 +112,6 @@ export function useComposerConnections({ engine, client, boundary, enforceSubjec
     window.addEventListener("storage", onStorage)
     return () => {
       window.removeEventListener("storage", onStorage)
-      owner.engine?.setSelectedMcpConnectionIds([])
     }
   // Only identity/engine retirement clears its selection. Entering or leaving
   // a local Project draft changes catalog scope, never the hidden engine.
@@ -190,6 +198,12 @@ export function useComposerConnections({ engine, client, boundary, enforceSubjec
     }).finally(() => clearTimeout(timer))
     return () => { live = false; controller.abort(); clearTimeout(timer) }
   }, [scope, activeRequest.revision, activeRequest.cursor, admitted, subject, engine, client, enforceSubjectMarker, retiredOwner, owner, reportRead401, generation, fullScan])
+
+  useEffect(() => {
+    const candidate = snapshot.mcpSelectionRestore
+    if (!candidate || localDraft || !available || snapshot.hydrating || committedScope.current !== scope || !valid() || !sameScope || catalog.status !== "ready" || catalog.revision !== activeRequest.revision || catalog.complete !== true) return
+    engine?.restoreMcpSelection?.(candidate, candidate.ids.filter(id => catalog.items.some(item => item.id === id && item.selectable)))
+  })
 
   return {
     items, selectedIds, status, complete: sameScope && catalog.revision === activeRequest.revision && catalog.status === "ready" && catalog.complete === true,

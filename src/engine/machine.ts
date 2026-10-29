@@ -1,3 +1,4 @@
+import type { McpSelectionRestore } from "./engine-types"
 import { readMessageParts, type MessagePartsRead } from "./message-parts-reader"
 import { mergeMessageParts, preserveMessageParts } from "@/core/reducer"
 import { selectedMcpConnectionIdsSchema } from "@/contract/chat"
@@ -163,6 +164,8 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   // 当前会话 exact source refs：只在内存中保存，不从 browser store 恢复。
   let selectedSkillSourceRefs: string[] | undefined = scope.kind === "project" ? undefined : []
   // 选中模型（MODEL-UX，shell 注入）：非 null 即随首条 messageCreate 上 wire 为 model（首条锁语义在 UI 层）。
+  let mcpSelectionRestore: McpSelectionRestore | undefined
+  let mcpSelectionVersion = 0
   let selectedMcpConnectionIds: readonly string[] = Object.freeze([])
   let selectedModel: string | null = null
 
@@ -381,6 +384,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       thread,
       pendingMode,
       selectedMcpConnectionIds,
+      ...(mcpSelectionRestore === undefined ? {} : { mcpSelectionRestore }),
       staging: stagingView,
       hydrating,
       connection,
@@ -758,6 +762,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     pendingSteerReceipts.clear()
     unprojectedAdmissions.clear()
     const generation = hydrateGeneration
+    const selectionVersion = mcpSelectionVersion
     if (!afterExpiredCursor && !hydrating) {
       hydrating = true
       notify()
@@ -795,6 +800,10 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
           }
           notify()
           return
+        }
+        if (!afterExpiredCursor && selectionVersion === mcpSelectionVersion && pendingSubmission === null && preparedSubmission === null) {
+          const selection = sessionSnapshot.composer_selection
+          mcpSelectionRestore = selection === undefined ? undefined : Object.freeze({ sessionId, sourceMessageId: selection.source_message_id, ids: Object.freeze([...selection.selected_mcp_connection_ids]) })
         }
         ownerConfirmedSessionId = sessionId
         locallyCreatedSessionId = undefined
@@ -958,6 +967,10 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   }
 
   function messageExecutionOptions(mode: AgentMode): MessageExecutionOptions {
+    // The new request freezes current intent; a late catalog must not restore
+    // the previous message's choices after this request is acknowledged.
+    mcpSelectionRestore = undefined
+    mcpSelectionVersion++
     return {
       mode,
       model: selectedModel,
@@ -1485,6 +1498,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     deferredCreateReceipt = null
     if (previousSessionId !== next.activeId) {
       selectedSkillSourceRefs = scope.kind === "project" ? undefined : []
+      mcpSelectionRestore = undefined; mcpSelectionVersion += 1
       selectedMcpConnectionIds = Object.freeze([])
     }
     thread = createSessionStreamState()
@@ -1579,6 +1593,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     deferredCreateReceipt = null
     connection = { status: "connected" }
     selectedSkillSourceRefs = scope.kind === "project" ? undefined : []
+    mcpSelectionRestore = undefined; mcpSelectionVersion += 1
     selectedMcpConnectionIds = Object.freeze([])
     thread = createSessionStreamState()
     observedTerminalRuns.clear()
@@ -1695,7 +1710,23 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   function setSelectedMcpConnectionIds(connectionIds: readonly string[]): void {
     if (disposed) return
     const next = selectedMcpConnectionIdsSchema.parse(connectionIds)
-    if (next.length === selectedMcpConnectionIds.length && next.every((id, index) => id === selectedMcpConnectionIds[index])) return
+    const hadCandidate = mcpSelectionRestore !== undefined
+    mcpSelectionRestore = undefined
+    mcpSelectionVersion += 1
+    if (next.length === selectedMcpConnectionIds.length && next.every((id, index) => id === selectedMcpConnectionIds[index])) {
+      if (hadCandidate) notify()
+      return
+    }
+    selectedMcpConnectionIds = Object.freeze(next)
+    notify()
+  }
+
+  function restoreMcpSelection(candidate: McpSelectionRestore, eligibleIds: readonly string[]): void {
+    if (disposed || candidate !== mcpSelectionRestore || store?.activeId !== candidate.sessionId || pendingSubmission !== null || preparedSubmission !== null) return
+    const next = selectedMcpConnectionIdsSchema.parse(eligibleIds)
+    if (next.some(id => !candidate.ids.includes(id))) return
+    mcpSelectionRestore = undefined
+    mcpSelectionVersion += 1
     selectedMcpConnectionIds = Object.freeze(next)
     notify()
   }
@@ -1726,6 +1757,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   }
 
   function dispose(): void {
+    mcpSelectionRestore = undefined; mcpSelectionVersion += 1
     selectedMcpConnectionIds = Object.freeze([])
     locallyCreatedSessionId = undefined
     taskNotifications.dispose()
@@ -1786,6 +1818,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     recoveredSubmissionError = null
     deferredCreateReceipt = null
     selectedSkillSourceRefs = scope.kind === "project" ? undefined : []
+    mcpSelectionRestore = undefined; mcpSelectionVersion += 1
     selectedMcpConnectionIds = Object.freeze([])
     thread = createSessionStreamState()
     observedTerminalRuns.clear()
@@ -1838,6 +1871,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     setMode,
     setSelectedSkillSourceRefs,
     setSelectedMcpConnectionIds,
+    restoreMcpSelection,
     setModel,
     dispose,
   }

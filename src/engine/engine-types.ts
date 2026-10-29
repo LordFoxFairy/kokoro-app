@@ -33,7 +33,10 @@ export type ConversationMoveIntent = Readonly<{
   status: "pending" | "unknown"
 }>
 
+export type McpSelectionRestore = Readonly<{ sessionId: string; sourceMessageId: string; ids: readonly string[] }>
+
 export type EngineSnapshot = {
+  mcpSelectionRestore?: McpSelectionRestore
   // Transient current-conversation draft intent, absent only in injected view-only engines.
   selectedMcpConnectionIds?: readonly string[]
   // In-memory current-view creation provenance, never persisted or inferred from cache.
@@ -119,6 +122,7 @@ export type SessionEngine = {
   // 当前会话的 exact Skill source refs；只在内存中保存，提交时冻结进 typed wire。
   setSelectedSkillSourceRefs: (sourceRefs: readonly string[] | undefined) => void
   setSelectedMcpConnectionIds: (connectionIds: readonly string[]) => void
+  restoreMcpSelection?: (candidate: McpSelectionRestore, eligibleIds: readonly string[]) => void
   // 选中模型（MODEL-UX）：首条消息上 wire 为 messageCreate.model。
   setModel: (model: string | null) => void
   dispose: () => void

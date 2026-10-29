@@ -43,7 +43,7 @@ afterEach(() => {
 
 describe("SharedPage", () => {
   it("uses the runtime site skin on the public ready header", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(snapshot), { status: 200 })))
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: snapshot, meta: { request_id: "req-share-read" } }), { status: 200 })))
 
     const { default: SharedPage } = await import("@/app/shared/[id]/page")
     renderPage(SharedPage)
@@ -64,4 +64,19 @@ describe("SharedPage", () => {
     expect(screen.getByText("Acme Site")).toBeTruthy()
     expect(screen.getByRole("link", { name: "Back to Kokoro" })).toBeTruthy()
   })
+})
+
+// The public adapter preserves the owner envelope; no test-only bare snapshot.
+it.each([
+  ["dependency failure", 503, null],
+  ["bare snapshot", 200, snapshot],
+  ["private process", 200, { data: { ...snapshot, execution_process: { run_id: "private" } }, meta: { request_id: "req-1" } }],
+  ["unexpected field", 200, { data: snapshot, meta: { request_id: "req-1" }, private_token: "not-for-public" }],
+])("does not claim revocation or render private data on %s", async (_name, status, body) => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(body === null ? null : JSON.stringify(body), { status })))
+  const { default: SharedPage } = await import("@/app/shared/[id]/page")
+  renderPage(SharedPage)
+  expect(await screen.findByText("Shared content could not be displayed.")).toBeVisible()
+  expect(screen.queryByText("The link may have been revoked, or the session deleted.")).toBeNull()
+  expect(screen.queryByTestId("shared-page")).toBeNull()
 })

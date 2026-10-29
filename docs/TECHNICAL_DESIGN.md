@@ -3786,3 +3786,9 @@ DELETE 是不可逆普通 Asset 逻辑删除，不是解除关联，也不证明
 ## 旧成功轮的只读最终答复展示（2026-10-28，配对候选）
 
 消费 BFF RunDisplay 的 optional `final_answer`，仅供当前私有会话视图，不合入 `finalAnswersByRun` 或覆盖正式 `final_segment_id`。成功且非 live/HITL 的可见轮次按原 scope/Run reader 单次读取；完整 ordered parts 的当前确认 revision 达到绑定 revision、且精确非空 completed text 身份存在时，沿现 whole-turn disclosure 展示过程与最终正文。缺证、冲突、离屏、失败及取消不推断；读失败不自动重试、不增加异常面板。无数据或执行状态写入。
+
+## 2026-10-28 Composer 已发送 MCP 选择恢复
+
+BFF拥有发送事实，Web Engine只持有候选与单调本地版本；当前controller负责目录核验，避免把服务端历史选择等同当前授权。候选消费／手选／发送冻结／换会话／身份退休是独立原子界限；unknown提交仍使用原请求。目录scope绑定候选epoch而非仅账号，StrictMode cleanup不清空选择，只有真实owner切换退休旧值。公开分享不消费候选；项目overview的localDraft保持隔离。
+
+菜单独立ComposerConnections／module.css，以Radix实际data-side控制DOM顺序：top时管理、添加、列表；bottom时列表、添加、管理。保持最小容器200px／最大400px与实际可用高度共同约束，列表自身min-height为0；不再用列表空白撑高度。callback-ref监听placement变化并清理observer，键盘顺序与可见顺序一致。

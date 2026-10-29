@@ -1,3 +1,7 @@
+## 语音预览边界（2026-10-28）
+
+AppFrameComposer 仅显式 preview 允许演示转写；NODE_ENV 不改变用户会话输入真实性。回归见 tests/ui/app-frame-voice.test.tsx；真实语音和参考交互验收状态见 docs/CURRENT.md。
+
 # ui/composer — 输入区
 
 ## 职责
@@ -37,3 +41,5 @@
 `composer-skills-menu.tsx` 用现 Popover/Command 组合资源根菜单、已安装搜索及显式添加/管理；`+` 与单个手输 `/` 共用，仅读 actor-scoped 现 Skills pool，不创建或启用安装。加载/失败/无结果分开，enabled/active/exact pin 校验复用现规则。候选行沿 Manus 2026-10-25 实测50px、6px 8px padding、14px/20px标题与单行描述；独立局部 CSS 负责窄屏逐级面板和滚动。
 
 Composer 仅报告新输入的 slash 范围；成功选择仅移除该范围，保留原文、原会话和光标，不自动 Send。IME、paste、URL/path 与选区替换不打开命令；菜单键盘/Esc 不落入原 Enter-submit。真正 source 选择与首次 Send 承接仍由 `useAppFrameSkillTrial` 单一生命周期持有，旧 actor/scope/route 的结果和迟到 focus 不复活。`SelectedSkillPill` 原样复用，当前仍为 textarea＋controls pill，不冒称行内不可编辑 token 已一比一。
+
+2026-10-28：连接器按实际top/bottom placement排列DOM操作顺序；键盘与视觉一致。已发送选择由私有snapshot提供候选，Engine保护新提交／手选，controller完整重新核验目录后CAS恢复。加号仍缺真实文件／资料库／最近任务上下文链，不将本节现Skills实现视作完整资源菜单。

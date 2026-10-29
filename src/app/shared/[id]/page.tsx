@@ -7,7 +7,7 @@ import { useEffect, useState } from "react"
 import { useParams } from "next/navigation"
 import Link from "next/link"
 
-import { parseSharedSessionSnapshot, type SharedSessionSnapshot } from "@/contract/http"
+import { parseSharedSessionResponse, type SharedSessionSnapshot } from "@/contract/http"
 import { useT } from "@/i18n/context"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -21,6 +21,7 @@ import styles from "./shared.module.css"
 type ViewState =
   | { kind: "loading" }
   | { kind: "notFound"; shareId: string }
+  | { kind: "unavailable"; shareId: string }
   | { kind: "ready"; shareId: string; snapshot: SharedSessionSnapshot }
 
 export default function SharedPage() {
@@ -44,14 +45,14 @@ export default function SharedPage() {
           signal: controller.signal,
         })
         if (!res.ok) {
-          if (live) setState({ kind: "notFound", shareId })
+          if (live) setState({ kind: res.status === 404 ? "notFound" : "unavailable", shareId })
           return
         }
-        const snapshot = parseSharedSessionSnapshot(await res.json())
+        const snapshot = parseSharedSessionResponse(await res.json())
         if (live) setState({ kind: "ready", shareId, snapshot })
       } catch {
-        // 网络/解析失败：与不可达同不透明 404 态（公共面不泄内部细节）。
-        if (live && !controller.signal.aborted) setState({ kind: "notFound", shareId })
+        // A failed read does not prove revocation. Do not expose upstream details.
+        if (live && !controller.signal.aborted) setState({ kind: "unavailable", shareId })
       }
     })()
     return () => {
@@ -73,6 +74,10 @@ export default function SharedPage() {
         <p className={styles.hint} role="status" aria-live="polite">{t("shared.loading")}</p>
       </main>
     )
+  }
+
+  if (state.kind === "unavailable") {
+    return <main className={styles.page}><p className={styles.hint} role="status">{t("shared.readError")}</p></main>
   }
 
   if (state.kind === "notFound") {

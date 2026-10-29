@@ -1,3 +1,4 @@
+import { restorePublic2815ComposerSelectionContract } from "./bff-composer-selection-parent"
 // Exact build/test-only Public28.14 addition; never a runtime downgrade.
 import { createHash } from "node:crypto"
 const hash = (source: string) => createHash("sha256").update(source).digest("hex")
@@ -33,6 +34,7 @@ export function restorePublic2813FinalAnswerContract(source: string) {
 }
 
 export function restorePublic2814FinalDisplayContract(source: string) {
+  source = restorePublic2815ComposerSelectionContract(source)
   if (!/^  version: 28\.15\.0$/mu.test(source)) return source
   if (hash(source) !== "8a56966d2d9a4a380b29dadeb9f79f5db8ef9975e8e2bbac4b1748ef03a70234") throw Error("Private final Public28.15 child drift")
   const field =

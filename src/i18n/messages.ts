@@ -1483,6 +1483,10 @@ export const zh = {
   "share.projectCopyFailed": "复制失败，请重试",
   "share.projectHint": "复制链接不会授予访问权限，访问项目仍需登录并具备相应权限。",
   "share.creating": "创建中…",
+  "share.publicAccess": "公开访问",
+  "share.publishHint": "确认分享后，任何持有链接的人都可只读查看本会话。",
+  "share.publish": "立即分享",
+  "share.close": "关闭分享面板",
   "share.title": "分享此会话",
   "share.readonlyHint": "任何持链接者可只读查看本会话线程与成果；随时可撤销。",
   "share.linkAria": "公共分享链接",
@@ -1497,6 +1501,7 @@ export const zh = {
   // 公共分享页（SHARE-1）
   "shared.loading": "正在加载…",
   "shared.notFound": "此分享不可用",
+  "shared.readError": "分享内容暂未显示。",
   "shared.notFoundHint": "链接可能已被撤销，或会话已删除。",
   "shared.backHome": "回到 Kokoro",
   "shared.readonlyBadge": "只读分享",

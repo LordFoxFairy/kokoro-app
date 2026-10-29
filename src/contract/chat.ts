@@ -171,13 +171,12 @@ export const sharedSessionSnapshotSchema = z
   .strict()
 export type SharedSessionSnapshot = z.infer<typeof sharedSessionSnapshotSchema>
 export function parseSharedSessionSnapshot(input: unknown): SharedSessionSnapshot { return sharedSessionSnapshotSchema.parse(input) }
-export const sessionSnapshotSchema = sharedSessionSnapshotSchema.extend({ messages: z.array(chatMessageReadSchema).optional(), execution_process: runExecutionProcessSchema.nullable() }).strict()
-export type SessionSnapshot = z.infer<typeof sessionSnapshotSchema>
-
-export function parseSessionSnapshot(input: unknown): SessionSnapshot {
-  return sessionSnapshotSchema.parse(input)
-}
-
+// Public GET /v1/shared/{shareId}; the same-origin adapter preserves this envelope.
+const sharedSessionResponseSchema = z.object({
+  data: sharedSessionSnapshotSchema,
+  meta: z.object({ request_id: z.string().min(1).max(256) }).strict(),
+}).strict()
+export function parseSharedSessionResponse(input: unknown): SharedSessionSnapshot { return sharedSessionResponseSchema.parse(input).data }
 // Message intent only: owner checks current eligibility; never derive execution from trace names.
 export const selectedMcpConnectionIdsSchema = z
   .array(z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}(?![\s\S])/u))
@@ -190,6 +189,13 @@ export const selectedMcpConnectionIdsSchema = z
       context.addIssue({ code: z.ZodIssueCode.custom, message: "Connection selection exceeds its JSON byte budget" })
     }
   })
+
+export const sessionSnapshotSchema = sharedSessionSnapshotSchema.extend({ messages: z.array(chatMessageReadSchema).optional(), execution_process: runExecutionProcessSchema.nullable(), composer_selection: z.object({ source_message_id: z.string().min(1), selected_mcp_connection_ids: selectedMcpConnectionIdsSchema }).strict().optional() }).strict()
+export type SessionSnapshot = z.infer<typeof sessionSnapshotSchema>
+
+export function parseSessionSnapshot(input: unknown): SessionSnapshot {
+  return sessionSnapshotSchema.parse(input)
+}
 
 export const messageCreateParamsSchema = z
   .object({

@@ -135,7 +135,7 @@ export function AppFrameComposer({
         environmentLabel={translate("settings.desktopApp", { brand: brandName ?? "Kokoro" })}
         projectWorkspace={projectWorkspace}
         environmentSelectorPlacement={projectWorkspace && hasMessages ? "floating" : "controls"}
-        voicePreview={preview || process.env.NODE_ENV !== "production"}
+        voicePreview={preview}
         onDraftChange={value => { setResourceMenu(null); composerProps.onDraftChange(value) }}
         onResourceMenuRequest={command => {
           if (!resourcesEnabled) return

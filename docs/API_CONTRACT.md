@@ -2417,3 +2417,9 @@ Web在上传body实际超过原1MiB且尚未发送BFF的413分支独占`x-kokoro
 ## Public28.15 最终答复只读旁证（配对候选）
 
 原私有 RunDisplay optional `final_answer` 为 closed `{segment_id, revision}`；已由 BFF `38b942742574bccb12d58546301ee0c7cf4014c3` 正式 Public28.15 生成。不是 durable final 事件、权限或历史补写入口。客户端仅在 exact Run 完整 parts 与确认 revision 满足时使用，正式 final 始终优先。无新 HTTP 路由、Share 字段或执行行为。
+
+## 2026-10-28 私有 snapshot：已发送 MCP 选择
+
+固定消费 BFF `b1233d90403bd69e32998ccc8f71236213c28964` 的 Public28.16.0；唯一 snapshot SHA256 `82485c2b7be17ad04f56d3656a58b42ea8d308c9dc22db5807a09ab706418a77`。私有 SessionSnapshot 新增可选 `composer_selection {source_message_id,selected_mcp_connection_ids}`，仅为已发送事实的只读投影，不是账号候选目录／执行授权。缺失不推断，空数组表示已发送空选；公开 Share 严格拒绝该字段。所有 public生成器正规重生，独立private来源不变；inverse完整恢复Public28.15的精确字节。
+
+Web不从trace或浏览器存储猜选中；当前会话、主体、hydrate代次和手动改动版本绑定候选。controller重新读取完整目录，只有enabled／active且当前可用项可恢复。新提交冻结原body/key时退休旧候选，迟到目录不得覆盖新选择；每轮恢复有独立catalog scope，目录异常时不自动启用、也不新增可见重试面板。该字段不支持Custom API或文件引用，不扩大它们的执行契约。
