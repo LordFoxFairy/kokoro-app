@@ -262,3 +262,5 @@
 .main[data-desktop-web="true"][data-web-view="thread"] :global([data-slot="message-scroller-viewport"]) {
   scrollbar-width: none;
 }
+
+.submissionError { margin: 0 0 0.5rem; color: var(--destructive); font-size: 0.8125rem; line-height: 1.25rem; }

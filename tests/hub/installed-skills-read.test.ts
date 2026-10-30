@@ -256,3 +256,21 @@ it("history preview binds managed source and revision before disclosing a docume
  await expect(inspectManagedSkillPackage(target,"SKILL.md",undefined,directory)).rejects.toMatchObject({reason:"parse"})
  expect(fetcher.mock.calls.map(call=>call[0])).toEqual(["/api/hub/self/skills/managed/exact-old/package","/api/hub/self/skills/managed/exact-old/package?file_path=SKILL.md"])
 })
+
+it("Project installation package reads bind Project and immutable pin without a personal/catalog fallback", async () => {
+  const { inspectProjectInstallationPackage } = await import("@/hub/skill-installation-content")
+  const fetcher = vi.fn(async (input: RequestInfo | URL) => { void input; return response({ data: { source_ref: "skill:version-project", revision: "17", files: [], selected_file: null } }) })
+  vi.stubGlobal("fetch", fetcher)
+  const target = { project_id: "project-exact", installation_id: "installation-exact", source_ref: "skill:version-project", revision: "17" }
+  await inspectProjectInstallationPackage(target)
+  expect(fetcher.mock.calls[0]?.[0]).toBe("/api/hub/projects/project-exact/skill-installations/installation-exact/package")
+  expect(fetcher).toHaveBeenCalledOnce()
+})
+
+it.each(["source", "revision", "file", "extra"])("Project content rejects %s mismatches and never borrows a personal source read", async variant => {
+  const { inspectProjectInstallationPackage } = await import("@/hub/skill-installation-content")
+  const data = { source_ref: variant === "source" ? "skill:foreign" : "skill:version-project", revision: variant === "revision" ? "18" : "17", files: variant === "file" ? [{ path: "other.md", size_bytes: "1" }] : [], selected_file: variant === "file" ? { path: "other.md", text: "x" } : null, ...(variant === "extra" ? { extra: true } : {}) }
+  const fetcher = vi.fn(async (input: RequestInfo | URL) => { void input; return response({ data }) }); vi.stubGlobal("fetch", fetcher)
+  await expect(inspectProjectInstallationPackage({ project_id: "project-exact", installation_id: "installation-exact", source_ref: "skill:version-project", revision: "17" }, variant === "file" ? "SKILL.md" : undefined)).rejects.toMatchObject({ reason: "parse" })
+  expect(fetcher).toHaveBeenCalledOnce(); expect(String(fetcher.mock.calls[0]?.[0])).toContain("/projects/project-exact/skill-installations/")
+})

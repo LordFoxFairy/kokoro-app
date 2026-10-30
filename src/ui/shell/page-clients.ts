@@ -1,3 +1,4 @@
+import { createAnswerActionsClient } from "@/engine/answer-actions-client"
 // 页面级单例客户端 + 引擎：整页共享同源 BFF 客户端（鉴权由 httpOnly 信封 cookie 同源携带，
 // 前端不持 token），仅浏览器构造，SSR 为 null/惰性。shell 与各域 controller hook 共用这些单例，
 // 稳定引用供取数 effect/查询层依赖不抖动。
@@ -5,8 +6,10 @@
 import { createPreviewClient, previewClientFromEnv } from "@/dev/preview-transport"
 import { createSessionClient, type SessionClient } from "@/engine/client"
 import { sessionBaseUrl } from "@/engine/config"
+import type { DraftLifecycle, MessagePartsReadTarget } from "@/engine/engine-types"
+import type { MessagePartsReadRecheck } from "@/engine/message-parts-reader"
 import { createSessionEngine, type SessionEngine } from "@/engine/machine"
-import { removeConversation, type ConversationStore } from "@/core/conversations"
+import { activeIsLocalDraft, addConversation, removeConversation, type ConversationStore } from "@/core/conversations"
 import { storedConversationStoreSchema } from "@/core/persistence"
 import { createPersistedStore } from "@/lib/persisted-store"
 import type { PersistedStore } from "@/lib/persisted-store"
@@ -29,14 +32,27 @@ import {
   createPreviewTeamClient,
 } from "@/dev/preview-clients"
 
+import type { SubmissionRecovery } from "@/engine/submission-recovery"
+import { createBrowserSubmissionRecovery, SUBMISSION_RECOVERY_PREFIX } from "./browser-submission-recovery"
+
 import { consumeLandingPrompt } from "./use-draft"
 
 const STORAGE_KEY = "kokoro.web.conversations"
-const AUTH_INDEX_SUBJECT_KEY = "kokoro.web.auth-index-subject"
+export const AUTH_INDEX_SUBJECT_KEY = "kokoro.web.auth-index-subject"
+// Set only by successful Product Session admission in this document, never restored from a marker.
+let admittedBrowserSubject: string | null = null
+let capturePartsReadRecheck: ((subject: string) => MessagePartsReadRecheck | undefined) | undefined
+
+/** AppGate supplies its existing Product Session admission, never a cache marker. */
+export function bindBrowserMessagePartsReadRecheck(capture: NonNullable<typeof capturePartsReadRecheck>): () => void {
+  capturePartsReadRecheck = capture
+  return () => { if (capturePartsReadRecheck === capture) capturePartsReadRecheck = undefined }
+}
 
 /** Remove only browser-owned conversation indexes before admitting a live identity. */
 export function invalidateBrowserAuthSessionIndexes(): void {
   if (typeof window === "undefined") return
+  admittedBrowserSubject = null
   for (const [key, entry] of pageEngines) {
     if (key.startsWith("live:")) {
       entry.invalidated = true
@@ -44,6 +60,12 @@ export function invalidateBrowserAuthSessionIndexes(): void {
       if (entry.owners.size === 0 && entry.engine.getSnapshot().hasPendingSubmission) releaseBrowserEngine(entry.engine)
     }
   }
+  const recoveryKeys: string[] = []
+  for (let index = 0; index < window.sessionStorage.length; index++) {
+    const key = window.sessionStorage.key(index)
+    if (key?.startsWith(SUBMISSION_RECOVERY_PREFIX)) recoveryKeys.push(key)
+  }
+  for (const key of recoveryKeys) window.sessionStorage.removeItem(key)
   const prefix = `${STORAGE_KEY}.`
   const keys: string[] = []
   for (let index = 0; index < window.localStorage.length; index += 1) {
@@ -85,6 +107,7 @@ export function admitBrowserAuthSessionIndexes(subject: string, subjectAtProbeSt
     window.localStorage.setItem("kokoro.web.drafts", JSON.stringify({ ...drafts, __pending__: prompt }))
   }
   if (currentSubject !== subject) window.localStorage.setItem(AUTH_INDEX_SUBJECT_KEY, subject)
+  admittedBrowserSubject = subject
   return true
 }
 
@@ -207,6 +230,24 @@ const pageConversationStores = new Map<string, PersistedStore<ConversationStore>
 let pageMoveCoordinator: ConversationMoveCoordinator | null = null
 let pageMovePagehideBound = false
 
+/** Append-only UI retirement keys cannot be undone by a stale whole-index write. */
+export function browserDraftLifecycle(scopeKey: string): DraftLifecycle {
+  const key = (id: string) => `${STORAGE_KEY}.draft-retired.${encodeURIComponent(scopeKey)}.${encodeURIComponent(id)}`
+  return {
+    isUnsubmitted: id => {
+      try { return window.localStorage.getItem(key(id)) === null }
+      catch { return false }
+    },
+    retire: id => {
+      try {
+        if (window.localStorage.getItem(key(id)) === "1") return true
+        window.localStorage.setItem(key(id), "1")
+        return window.localStorage.getItem(key(id)) === "1"
+      } catch { return false }
+    },
+  }
+}
+
 function conversationStore(scopeKey: string): PersistedStore<ConversationStore> {
   const existing = pageConversationStores.get(scopeKey)
   if (existing) return existing
@@ -216,6 +257,24 @@ function conversationStore(scopeKey: string): PersistedStore<ConversationStore> 
   })
   pageConversationStores.set(scopeKey, created)
   return created
+}
+
+/** Cold direct-home selection is a local index projection, never a Run command. */
+function prepareDirectHome(storage: PersistedStore<ConversationStore>, lifecycle: DraftLifecycle, recovery: SubmissionRecovery): ConversationStore | null | undefined {
+  try {
+    // Choose from one initial backing-index read: a failed UI write may live
+    // in the generic cache and is not proof of a persisted home selection.
+    const persisted = window.localStorage.getItem(`${STORAGE_KEY}.direct`)
+    const current = persisted === null ? null : storedConversationStoreSchema.parse(JSON.parse(persisted))
+    // A truly fresh index keeps the existing route-neutral pending draft slot.
+    if (current === null) return null
+    if (current && activeIsLocalDraft(current) && lifecycle.isUnsubmitted(current.activeId) && recovery.read(current.activeId) === null) return current
+    const next = addConversation(current, `conv_${crypto.randomUUID()}`, Date.now(), "fast", true)
+    if (current?.conversations.some(entry => entry.id === next.activeId) || !lifecycle.isUnsubmitted(next.activeId)) return undefined
+    // Keep every former index entry and its independent recovery record intact.
+    storage.write(next)
+    return window.localStorage.getItem(`${STORAGE_KEY}.direct`) === JSON.stringify(next) ? next : undefined
+  } catch { return undefined }
 }
 
 export function evictBrowserConversationIndex(scopeKey: string, sessionId: string): void {
@@ -324,7 +383,7 @@ export function releaseBrowserEngine(engine: SessionEngine | null | undefined): 
   }
 }
 
-export function browserEngine(options: { preview?: boolean; scope?: SessionScope } = {}): SessionEngine | null {
+export function browserEngine(options: { preview?: boolean; scope?: SessionScope; messagePartsReadTarget?: MessagePartsReadTarget | null } = {}): SessionEngine | null {
   if (typeof window === "undefined") {
     return null
   }
@@ -333,17 +392,60 @@ export function browserEngine(options: { preview?: boolean; scope?: SessionScope
     : options.preview ? "preview" : "live"
   const scope = options.scope ?? DIRECT_SESSION_SCOPE
   const engineKey = `${mode}:${sessionScopeKey(scope)}`
+  const recoverySubject = admittedBrowserSubject
+  if (mode === "live") {
+    try {
+      // A cached marker can retire a subject, never grant live admission.
+      if (recoverySubject === null || readBrowserAuthIndexSubject() !== recoverySubject || admittedBrowserSubject !== recoverySubject) return null
+    } catch { return null }
+  }
   const existing = pageEngines.get(engineKey)
-  if (existing) return existing.engine
+  if (existing) {
+    if (!existing.engine.setMessagePartsReadTarget) throw new Error("Canonical Message parts read boundary missing")
+    existing.engine.setMessagePartsReadTarget(options.messagePartsReadTarget ?? null)
+    return existing.engine
+  }
   {
     // The route adapter explicitly selects preview; otherwise Chat always
     // uses the same-origin `/api/session` BFF, including in development.
     const client = options.preview === true
       ? browserPreviewClient()
       : createSessionClient({ baseUrl: sessionBaseUrl() })
+    const storage = conversationStore(sessionScopeKey(scope))
+    const draftLifecycle = browserDraftLifecycle(sessionScopeKey(scope))
+    const submissionRecovery = mode === "preview" ? undefined : createBrowserSubmissionRecovery({
+        subject: recoverySubject ?? "", scope,
+        isCurrent: () => {
+          try { return recoverySubject !== null && admittedBrowserSubject === recoverySubject && readBrowserAuthIndexSubject() === recoverySubject }
+          catch { return false }
+        },
+        storage: () => window.sessionStorage,
+      })
+    const url = new URL(window.location.href)
+    const bareHome = scope.kind === "direct" && url.pathname.replace(/\/$/u, "") === "/app"
+      && !url.searchParams.has("conversation") && !/^#\/?conversation(?:=|\/)/u.test(url.hash)
+    let initialHome = submissionRecovery && bareHome ? prepareDirectHome(storage, draftLifecycle, submissionRecovery) : undefined
+    if (submissionRecovery && bareHome && initialHome === undefined) return null
+    const engineStorage: PersistedStore<ConversationStore> = initialHome === undefined ? storage : {
+      ...storage,
+      read: () => {
+        const selected = initialHome
+        initialHome = undefined
+        return selected === undefined ? storage.read() : selected
+      },
+    }
+    if (mode === "live") {
+      try { if (recoverySubject !== admittedBrowserSubject || readBrowserAuthIndexSubject() !== recoverySubject) return null }
+      catch { return null }
+    }
     const engine = createSessionEngine({
       client,
-      storage: conversationStore(sessionScopeKey(scope)),
+      ...(mode === "preview" ? {} : { answerActions: createAnswerActionsClient({ baseUrl: sessionBaseUrl() }) }),
+      messagePartsReadTarget: options.messagePartsReadTarget ?? null,
+      ...(mode === "preview" ? {} : { captureMessagePartsReadRecheck: () => recoverySubject === null ? undefined : capturePartsReadRecheck?.(recoverySubject) }),
+      ...(submissionRecovery === undefined ? {} : { submissionRecovery }),
+      storage: engineStorage,
+      draftLifecycle,
       scope,
     })
     pageEngines.set(engineKey, { engine, owners: new Set(), pendingRelease: null, releaseWhenSettled: null, invalidated: false })

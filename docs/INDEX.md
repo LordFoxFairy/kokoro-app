@@ -1,3 +1,19 @@
+## 2026-10-24 Agent 待核对终态（候选，未正常激活）
+
+固定BFF `b0f201e99c2ae3fa213942c5a909f47b06640a02`／Public23.1／raw `703dba47da8a5c659b4236bb0a72317588ad29a4ca444ff9e5c99cfbcd00634b`。原186操作不变；七public窄消费者正规生成，ChatMessage／RUN_ERROR只承接新增model_settlement_pending且retryable=false，未知／坏profile保持拒绝。既有ConversationThread与九语言保正文并说明结算待核对，不猜已扣款／释放、不给终态重发动作、不改历史generic。完整23.0父字节逆证及原证明链保持，在线Docs固定同一发行物。完整工程／正常激活状态见[CURRENT](CURRENT.md)。
+
+## 当前精确模型绑定（2026-10-22）
+
+已固定Public23；源契约、七生成器、精确22.5父保护和App在线Docs同步，完整本地验收见[CURRENT](CURRENT.md)。后台修订选择及实际Agent资金链仍在同一计划内，未宣称正常生效。
+
+## 当前计价管理接线（2026-10-22）
+
+Public22.5／固定BFF4d8a028，三面设计顶部记录同源桥边界，`CURRENT.md`记录完整App／preview／Docs证据与未正常激活范围；可编辑公开门户仍只在 `developer-docs/`，不新增契约或价格事实副本。
+
+## 管理员积分充值通路（2026-10-22）
+
+当前固定Public22.4，具名成员读取及非现金充值经原Product同源链；设计见 `TECHNICAL_DESIGN.md`／`API_CONTRACT.md`，实际验证与未完成范围见 `CURRENT.md`。对外指南唯一维护在App `developer-docs/docs/guides/credits.md`，不复制为另一份公开事实源。
+
 ## 当前租户 Credit 初始化（2026-10-22）
 
 设计与传输门见 `TECHNICAL_DESIGN.md`、`API_CONTRACT.md` 文首：固定 Public22.2.0，由既有 BillingClient 负责可信404后单次幂等初始化、原GET核实与同一预算/取消；现账户和用量只显示真实投影。源码候选的 focused 验证不代表正常浏览器/支付/扣费验收。

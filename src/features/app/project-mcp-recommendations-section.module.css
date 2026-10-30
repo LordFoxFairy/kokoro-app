@@ -1,0 +1,11 @@
+.section { border-top: 1px solid var(--border); padding: .5rem 1rem; min-width: 0; }
+.section:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.header { display: flex; align-items: center; gap: .5rem; min-height: 2.5rem; font-size: .875rem; }
+.header > svg { width: 1rem; height: 1rem; color: var(--muted-foreground); }
+.header > button { margin-inline-start: auto; }
+.saved { margin: 0; padding: .25rem 0; list-style: none; }
+.saved li { display: flex; align-items: center; gap: .5rem; min-height: 2rem; min-width: 0; }
+.icon { position: relative; flex: none; display: grid; place-items: center; overflow: hidden; width: 1.25rem; height: 1.25rem; border-radius: .25rem; }
+.icon svg { width: 1rem; height: 1rem; }
+.name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .8125rem; }
+.feedback { margin: .25rem 0; color: var(--muted-foreground); font-size: .8125rem; line-height: 1.25rem; overflow-wrap: anywhere; }

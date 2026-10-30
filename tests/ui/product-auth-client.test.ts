@@ -197,3 +197,24 @@ it("encodes the known settings return fragment inside the login query, not after
   openProductSignIn(navigate)
   expect(navigate).toHaveBeenCalledExactlyOnceWith(`/login?${new URLSearchParams({ return_to: "/app#/account/settings/mcp" })}`)
 })
+
+
+it("consumes one caller-preloaded CSRF result without starting a second CSRF read", async () => {
+  const controller = new AbortController()
+  let finish!: (token: string) => void
+  const pending = new Promise<string>(resolve => { finish = resolve })
+  const dispatch = vi.fn()
+  const fetchMock = vi.fn().mockResolvedValue(Response.json({ authenticated: true, subject: "reader-a", expires_at: Date.now() + 3_600_000 }))
+  vi.stubGlobal("fetch", fetchMock)
+  const result = refreshProductSession(controller.signal, dispatch, pending)
+  void result.catch(() => undefined)
+  try {
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(dispatch).not.toHaveBeenCalled()
+    finish("a".repeat(64))
+    await expect(result).resolves.toEqual({ mode: "authenticated", subject: "reader-a" })
+    expect(fetchMock).toHaveBeenCalledExactlyOnceWith("/api/auth/session", expect.objectContaining({ method: "POST", signal: controller.signal }))
+    expect(fetchMock.mock.calls[0]![1].body.toString()).toBe(`csrfToken=${"a".repeat(64)}`)
+    expect(dispatch).toHaveBeenCalledTimes(1)
+  } finally { controller.abort() }
+})

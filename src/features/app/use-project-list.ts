@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import type { Project, ProjectInstructionRevisionWire } from "@/contract/project"
+import { useProductReadRecheck } from "@/ui/auth/product-read-recheck-context"
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
 import { getProject, listProjects, listProjectInstructionRevisions, ProjectReadError } from "./project-list"
 
@@ -17,11 +18,17 @@ function denied(error: unknown): boolean {
 
 /** Page-owned collection/detail generations; no persistent or cross-user cache. */
 export function useProjectList(preview: boolean, boundary: ProjectReadBoundary | undefined, projectRef?: string, readInstructions = false) {
+  const reportRead401 = useProductReadRecheck()
   const admitted = !preview && boundary?.admitted === true && boundary.subject !== null
   const [revision, setRevision] = useState(0)
   const generation = boundary?.generation
   const subject = boundary?.subject
+  const report401 = useCallback((error: unknown, signal: AbortSignal) => {
+    if (!signal.aborted && error instanceof ProjectReadError && error.reason === "http" && error.status === 401 && generation !== undefined)
+      reportRead401?.({ subject: subject ?? null, generation, signal })
+  }, [reportRead401, subject, generation])
   const key = useMemo(() => ({ generation, subject, admitted, revision }), [generation, subject, admitted, revision])
+  const identityKey = useMemo(() => ({ generation, subject, admitted }), [generation, subject, admitted])
   const renameContext = useMemo(() => ({ key, projectRef }), [key, projectRef])
   const readScopeRef = useRef<{ key: object; active: boolean; epoch: number; controllers: Set<AbortController> } | null>(null)
   const renameScopeRef = useRef<{ key: object; active: boolean; controllers: Set<AbortController> } | null>(null)
@@ -44,9 +51,20 @@ export function useProjectList(preview: boolean, boundary: ProjectReadBoundary |
     }
   }, [renameContext])
   const [history, setHistory] = useState<{ key: object; state: ProjectReadState<ProjectInstructionRevisionWire[]> } | null>(null)
+  // A durable 202 is a current-actor negative fact. Keep it over slow/failed collection refreshes.
+  const [retired, setRetired] = useState<{ key: object; ids: ReadonlySet<string> } | null>(null)
   const [collection, setCollection] = useState<{ key: object; state: ProjectReadState<Project[]> } | null>(null)
   const [detail, setDetail] = useState<{ key: object; state: ProjectReadState<Project> } | null>(null)
   const refresh = useCallback(() => setRevision((value) => value + 1), [])
+  const retireProject = useCallback((target: string) => {
+    if (!admitted) return
+    setRetired((current) => {
+      const ids = current?.key === identityKey ? new Set(current.ids) : new Set<string>()
+      ids.add(target)
+      return { key: identityKey, ids }
+    })
+  }, [admitted, identityKey])
+  const retiredIds = retired?.key === identityKey ? retired.ids : undefined
 
   useEffect(() => {
     const readFence = readScopeRef.current
@@ -63,7 +81,10 @@ export function useProjectList(preview: boolean, boundary: ProjectReadBoundary |
       void listProjects(controller.signal).then(
         (data) => { if (live && readFence.active && epoch === readFence.epoch && !controller?.signal.aborted) setCollection({ key, state: { status: "ready", data } }) },
         (error: unknown) => {
-          if (live && readFence.active && epoch === readFence.epoch && !controller?.signal.aborted) setCollection({ key, state: { status: "error", retryable: !denied(error) } })
+          if (live && readFence.active && epoch === readFence.epoch && controller !== null && !controller.signal.aborted) {
+            report401(error, controller.signal)
+            setCollection({ key, state: { status: "error", retryable: !denied(error) } })
+          }
         },
       )
     })
@@ -72,14 +93,18 @@ export function useProjectList(preview: boolean, boundary: ProjectReadBoundary |
       controller?.abort()
       if (controller !== null) readFence.controllers.delete(controller)
     }
-  }, [admitted, key])
+  }, [admitted, key, report401])
 
-  const list: ProjectReadState<Project[]> = !admitted
+  const rawList: ProjectReadState<Project[]> = !admitted
     ? { status: "blocked" }
     : collection?.key === key ? collection.state : { status: "loading" }
+  const list: ProjectReadState<Project[]> = rawList.status === "ready" && retiredIds?.size
+    ? { status: "ready", data: rawList.data.filter((item) => !retiredIds.has(item.id)) }
+    : rawList
+  const projectRetired = projectRef !== undefined && retiredIds?.has(projectRef) === true
   const knownProject = list.status === "ready" ? list.data.find((item) => item.id === projectRef) : undefined
   const detailKey = renameContext
-  const readDetail = admitted && projectRef !== undefined && list.status === "ready" && knownProject === undefined
+  const readDetail = admitted && !projectRetired && projectRef !== undefined && list.status === "ready" && knownProject === undefined
   useEffect(() => {
     const readFence = readScopeRef.current
     if (!readFence || readFence.key !== key) return
@@ -92,13 +117,14 @@ export function useProjectList(preview: boolean, boundary: ProjectReadBoundary |
       (data) => { if (live && readFence.active && epoch === readFence.epoch && !controller.signal.aborted) setDetail({ key: detailKey, state: { status: "ready", data } }) },
       (error: unknown) => {
         if (!live || !readFence.active || epoch !== readFence.epoch || controller.signal.aborted) return
+        report401(error, controller.signal)
         // A denial on either read revokes the whole earlier Project projection.
         if (denied(error)) setCollection({ key, state: { status: "error", retryable: false } })
         setDetail({ key: detailKey, state: { status: "error", retryable: !denied(error) && !(error instanceof ProjectReadError && error.status === 404) } })
       },
     )
     return () => { live = false; controller.abort(); readFence.controllers.delete(controller) }
-  }, [detailKey, key, projectRef, readDetail])
+  }, [detailKey, key, projectRef, readDetail, report401])
 
   const readHistory = readInstructions && admitted && projectRef !== undefined && list.status === "ready"
   useEffect(() => {
@@ -108,14 +134,15 @@ export function useProjectList(preview: boolean, boundary: ProjectReadBoundary |
       (data) => { if (live && !controller.signal.aborted) setHistory({ key: detailKey, state: { status: "ready", data } }) },
       (error: unknown) => {
         if (!live || controller.signal.aborted) return
+        report401(error, controller.signal)
         if (denied(error)) setCollection({ key, state: { status: "error", retryable: false } })
         setHistory({ key: detailKey, state: { status: "error", retryable: !denied(error) && !(error instanceof ProjectReadError && error.status === 404) } })
       },
     )
     return () => { live = false; controller.abort() }
-  }, [detailKey, key, projectRef, readHistory])
+  }, [detailKey, key, projectRef, readHistory, report401])
 
-  const current: ProjectReadState<Project> = !admitted || projectRef === undefined
+  const current: ProjectReadState<Project> = !admitted || projectRef === undefined || projectRetired
     ? { status: "blocked" }
     : knownProject !== undefined ? { status: "ready", data: knownProject }
       : list.status === "error" ? list
@@ -177,5 +204,5 @@ export function useProjectList(preview: boolean, boundary: ProjectReadBoundary |
 
   const unavailable = list.status === "error" || current.status === "error"
   const context = useMemo(() => ({ generation, subject, admitted, projectRef, preview, unavailable }), [generation, subject, admitted, projectRef, preview, unavailable])
-  return { list, current, instructionHistory, context, refresh, refreshRenamedProject }
+  return { list, current, instructionHistory, context, refresh, retireProject, refreshRenamedProject }
 }

@@ -1,3 +1,21 @@
+Custom API draft selection lives in `custom-api-selection.ts` as immutable profileId/expectedStateVersion references (max32, unique profile IDs), separately from MCP Connection IDs. `machine.ts` scopes and freezes this safe intent per submission; no credentials/instructions or account preference. Formal853ca/Public28.17 serialization, browser original-key recovery and private snapshot hydration use the same generated safe-ref schema; API restoration has its own manual-selection version guard.
+
+2026-10-28 最终答复引用沿原AG-UI/快照/parts读取链消费：仅exact Run与公共revision可建立分层事实；旧版本、跨页不一致和未完整正文不替代新事实。无新读取通道，正常配对状态见CURRENT。
+
+具名回答再生成：regenerateAnswer接正式ACK／exact source，不经submit或human ID对账；late ACK保head/cursor/普通followup，良性历史parts变化经一次原bounded snapshot发现accepted。page-clients注入独立answer-actions-client；缺新方法的旧HMR实例不伪装可用。
+
+取消恢复：202不结束Run；同页未知取消保存原commandId/run.cancel，显式重试复用它。每次响应后仅一次现snapshot读取，exact session/run/代际及cursor守卫通过且owner真终态才接管；SSE保持，真实取消后可重新读原有bounded parts，不建poller。
+
+<!-- Ordered private Message reads: message-parts-reader.ts is the sole bounded continuation reader; machine owns its context retirement and read-only retryMessageParts. It never retries commands or advances resumeCursor. -->
+<!-- A typed page GET401 may await the existing ProductReadRecheck once, using the captured subject/data epoch and the original10s episode; only trusted same-subject readmission permits the exact same scope/cursor GET. Abort/retirement,409 and subsequent401 do not replay. -->
+CHAT-1当前：`ownerConfirmedSessionId`只投影当前视图的正向snapshot/create ACK，内存保存，不由乐观正文或浏览器索引推断；供归档读取资格使用，不授权或改变原提交恢复。
+
+## CHAT-1 未决提交刷新恢复（2026-10-24，候选）
+
+`submission-recovery.ts`只定义浏览器恢复意图/adapter，`machine.ts`在首发前确认保存、snapshot-first恢复并保原key/options；明确New/取消须确认退休。精确ACK本地写失败保RAM receipt，下次只补本地写，不重发已接收命令。owner运行相位与未决admission分开，终态后可恢复exact receipt而不复活Run。浏览器I/O在ui/shell，网络协议不变；见三面设计及CURRENT。
+
+PROJECT-1（2026-10-24）：EngineSnapshot.missingSessionId 是本 active 的权威缺席观察，不是本地创建或持久状态。new／switch／hydrate／accepted create 清退；同 session pending/unknown、本页新建及非空正文不因 null 改缺失。openConversation 对当前 missing ID 允许原 ID 只读 Retry；null 与 exact deferred receipt 竞态采用 ACK、零重复 POST，GC 原驱逐保持。
+
 <!-- SET47 archive consumer: 2026-10-15 -->
 SET47：可选EngineSnapshot.locallyCreatedSessionId仅证明当前engine尚未确认持久化的本地创建任务。首次submit/newConversation同步产生；历史打开、外部store、dispose、subject/logout、owner snapshot/message receipt与当前列表/状态/归档ACK证明后退休。retireLocalCreationProvenance只清证明并通知，不清线程或取消Run。归档请求由页面hook持有，engine不新增归档数据库/网络真源。
 
@@ -103,3 +121,15 @@ SET47：可选EngineSnapshot.locallyCreatedSessionId仅证明当前engine尚未�
 - `EngineSnapshot.hasPendingSubmission` 只读投影原冻结 create 是否仍未获回执，供浏览器 scope 租约保护使用；不同于仅在合法 error 相位为真的 `canRetryPendingSubmission`。不作为服务端成功或授权证明，不落盘。
 
 - `client.listModels` 只聚合正式 `feature_key=chat` 目录：逐页传递 opaque cursor，整次读取共用 10 秒预算和 caller 取消；重复 cursor/业务标签、非 chat 候选或超过 100 页均失败，不以部分列表冒完整成功。返回完整列表与 `next_cursor: null`，wire 本身不变。
+
+当前会话MCP：`setSelectedMcpConnectionIds`只接受正式有界唯一ID并复制/冻结，`selectedMcpConnectionIds`快照可供选择器订阅；new/select/外部退休/dispose清空，首次本地会话准入保留。adapter仅非空时发送`selected_mcp_connection_ids`；pending options复制首发数组，同key unknown/retry不随之后选择变化，未选原wire不变；无持久化或trace推导。
+
+CHAT-1：可选draftLifecycle显式注入浏览器来源退休I/O；无adapter不持久恢复New证明。New保持原conv ID，首次POST/retry先确认独立退休标记，失败保输入和原pending key/body。正向localDraft仅在未退休时恢复，历史无字段/读取故障仍走owner，不按404猜draft。
+
+## Route-owned ordered body reads
+
+`engine-types.ts` declares the narrow `MessagePartsReadTarget` (exact scope + conversation) and optional injected-view port; canonical `machine.ts` always implements it. Browser factories seed a target or explicit null before eager metadata hydration. Only parts/body reads are gated: snapshot/execution_head, pending/unknown journal keys and owned SSE/stop remain unchanged. Route retirement aborts and queues unfinished reads with their original cursor/fresh intent and bounded live suffix journal; matching reentry resumes, while foreign scope/ID and late pages remain fenced. No new transport or persisted state.
+
+- `client.listModels` 的 429 专用 `ModelCatalogReadError` 保留原 HTTP status/code 与有界 `retryAfterMs`：仅接受 0–86400 的十进制 delta-seconds，0 最小冷却 1 秒；缺失、畸形或超界使用 30 秒。此元数据只供目录 GET 的后续前台唤醒使用，客户端不自动重发，其他 HTTP 错误消费者不变；同一完整目录原 10 秒预算、分页与取消保持。
+
+- `SessionListReadError` 仅承接listSessions GET429的有界Retry-After，保留status/code；client本身不重发，由当前准入的rail负责一次读取恢复，非429及写操作不受影响。

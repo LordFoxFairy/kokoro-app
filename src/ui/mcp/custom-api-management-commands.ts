@@ -22,7 +22,7 @@ function freezeIntent(intent: CustomApiManagementIntent): CustomApiManagementInt
   return Object.freeze({ operation: "update", profileId, input: Object.freeze(input) });
 }
 
-/** Only per-profile API update/remove intents. No owner facts or secret snapshots. */
+/** Per-profile commands plus irreversible, ACK-only negative display locators. No secret snapshots. */
 export function createCustomApiManagementCommands(options: {
   client: Pick<HubClient, "updateCustomApi" | "removeCustomApi">;
   boundary: ProjectReadBoundary;
@@ -32,6 +32,8 @@ export function createCustomApiManagementCommands(options: {
   let boundary = { ...options.boundary }, leases = 0, retired = false;
   const entries = new Map<string, Entry>(), listeners = new Set<() => void>();
   let snapshot: readonly CustomApiManagementSummary[] = Object.freeze([]);
+  const deleted = new Set<string>();
+  let deletedSnapshot: readonly string[] = Object.freeze([]);
   const publish = () => {
     snapshot = Object.freeze([...entries.values()].map(entry => {
       const state = entry.command.getSnapshot();
@@ -44,7 +46,7 @@ export function createCustomApiManagementCommands(options: {
     entries.delete(entry.profileId); entry.unsubscribe();
     entry.command.bind({ ...boundary, subject: null, admitted: false }); entry.release();
   };
-  const retire = () => { retired = true; for (const entry of [...entries.values()]) remove(entry); publish(); };
+  const retire = () => { retired = true; for (const entry of [...entries.values()]) remove(entry); deleted.clear(); deletedSnapshot = Object.freeze([]); publish(); };
   const bind = (value: ProjectReadBoundary) => {
     if (retired) return;
     if (value.subject !== actor) { retire(); return; }
@@ -66,6 +68,7 @@ export function createCustomApiManagementCommands(options: {
     canUpdate: options.client.updateCustomApi !== undefined,
     canRemove: options.client.removeCustomApi !== undefined,
     getSnapshot: () => snapshot,
+    getConfirmedDeletedSnapshot: () => deletedSnapshot,
     subscribe: (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; },
     matches, bind,
     retain: (value: ProjectReadBoundary) => {
@@ -79,12 +82,26 @@ export function createCustomApiManagementCommands(options: {
       let entry = entries.get(input.profileId);
       if (entry?.command.getSnapshot().kind === "rejected") { remove(entry); entry = undefined; }
       if (entry) return Promise.resolve(false);
+      let confirmedRemovedProfileId: string | undefined;
       const command = createConnectorCommand<CustomApiManagementIntent>({
         boundary, surface: "custom_api", invalidRequestCode: "invalid_custom_api_request", freeze: freezeIntent,
-        execute: (body, key, requestSignal) => body.operation === "update"
-          ? options.client.updateCustomApi!(body.profileId, body.input, key, requestSignal)
-          : options.client.removeCustomApi!(body.profileId, body.input, key, requestSignal),
-        onConfirmed: options.onConfirmed,
+        execute: async (body, key, requestSignal) => {
+          if (body.operation === "update") return options.client.updateCustomApi!(body.profileId, body.input, key, requestSignal);
+          // The production client validates deleted:true and the exact profile_id
+          // before resolving. Record only the already-frozen original locator.
+          await options.client.removeCustomApi!(body.profileId, body.input, key, requestSignal);
+          confirmedRemovedProfileId = body.profileId;
+          return undefined;
+        },
+        onConfirmed: () => {
+          // A late ACK may outlive its dialog, never its original actor owner.
+          if (!retired && confirmedRemovedProfileId !== undefined && !deleted.has(confirmedRemovedProfileId)) {
+            deleted.add(confirmedRemovedProfileId);
+            deletedSnapshot = Object.freeze([...deleted]);
+            publish();
+          }
+          options.onConfirmed();
+        },
       });
       entry = { profileId: input.profileId, operation: input.operation, command, release: command.retain(boundary), unsubscribe: command.subscribe(publish) };
       entries.set(input.profileId, entry);

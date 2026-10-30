@@ -1,3 +1,4 @@
+import type { ProjectPinsModel } from "@/features/app/use-project-pins"
 import type { ComponentType, RefObject, SVGProps } from "react"
 
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
@@ -50,8 +51,10 @@ export type WorkspaceRailProps = {
   /** Optional host action for the project-creation menu entry. */
   onCreateProject?: (input?: Readonly<{ name?: string; draft?: string }>) => void
   /** Routes the project options menu's rename action to the owner-backed editor. */
-  onRequestProjectRename?: (projectId: string) => void
+  onRequestProjectRename?: (projectId: string, opener?: HTMLButtonElement | null) => void
+  onRequestProjectDelete?: (projectId: string, opener: HTMLButtonElement | null) => void
   /** Owner-confirmed project collection. A known projectHref alone is only a current-route shortcut. */
+  projectPins?: ProjectPinsModel
   projects?: readonly WorkspaceRailProject[]
   projectListStatus?: "blocked" | "loading" | "ready" | "error"
   projectListRetryable?: boolean

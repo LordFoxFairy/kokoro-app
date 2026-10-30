@@ -1,3 +1,182 @@
+## Custom API草稿选择（复用原安全提交意图，无新owner表）
+
+仅现engine／Project draft的profile/version引用，≤32且profileID唯一，换会话/actor退休，不落Conversation账号偏好。发送时深冻结到原PendingSubmission，现browser sessionStorage journal v1仅增加可选正式safe-ref字段，原无字段记录仍按原body/key恢复；不保存指令、env名称/值或凭据，不新增store／Schema／迁移。未知结果只显式原K/body恢复，后续目录刷新或UI选择不改旧意图。已接受选择由原owner private snapshot投影，App无第二选择事实源；当前CAS不符只排除恢复，不能替换原CAS。原MCP/Skills与父会话权限保持。
+
+## 原Run工具展示证据（无新持久事实）
+
+tool_facts只是现有按Run私有GET的只读安全附加投影：仅匹配已存在MCP工具的activity_id，描述／调用可显示已证selector，已证failed仅影响该tool展示，真实Run终态索引与原source／parts／账本不写。未知仍generic；不存在的activity不插入，file／web／subagent／Skill不串此MCP事实。旧per-Run RAM在profile变化时退休并只接受用户明确GET，不创建缓存／持久表／恢复实体，不影响原unknown命令键或草稿。
+
+## 回答动作与过程补充的RAM视图（无新持久事实）
+
+actor/session/Project/run/durable Message决定本地action归属。feedback只有ready包含owner up/down/null；其余是unread/reading/writing/unknown/failed。再生成intent保存本source／原key／epoch与pending/unknown/rejected/accepted，accepted是owner准入ACK而非Run完成；未知不能新K。暂时同actor读准入只暂停并保key，真实actor/scope退休清理。rejected仅可证明的首次precommit拒绝，fresh owner读取后用户新尝试，权限出口拒绝不推断未写。
+
+runTerminalsById取真实Run terminal／可信私有snapshot，runFailuresById仅独有profile；HMR旧cancelmap一次规范后删字段，不存双map、不从text完成造成功。原human／answer不因再生成被替换，原user关联不作为镜像echo／rename。private Run display为单次按需安全事实overlay，不改原activity状态、位置、source/event/digest或账本，不增DB／owner／localStorage缓存。
+
+## 取消视图（候选）
+
+仅内存 runTerminalsById exact Run索引，取真实AG-UI取消终态或私有snapshot显式marker；不是新owner、DB状态、缓存或持久实体。本地停止与未知取消不写此证明；正文／ordered Message parts的unread/partial/complete独立保留。
+
+## GitHub discovery：仅响应容量，不新增持久事实
+
+Public28.7仅把目录发现paths容量放至512；App不建立候选镜像、缓存、分页状态、表／索引／owner或新工作流。原完整候选同commit与immutable selector继续原流程；已选单包128和ZIP安全边界不变。该读边界不授import／publish／install成功或自动重试，unknown与原key/body/CAS照旧；正常激活与真实仓库验收独立。
+
+## S13：目录作者视图，不新增持久事实（2026-10-27）
+
+现 `SkillCatalogCard` 仅增加 optional product／publisher_profile，沿正式 Public28.6 的 Public9Facts／NativeProfile 原形状，不新建 store／DB／缓存或 owner。Hub 当前 publisher 的 kind/id 与 IAM profile 严格关联；repository publisher 只提供 owner provenance，creator_ref 不参与作者兜底。缺失事实及合法 missing 保未知且不显示作者，supplied 不一致保 invalid；不以 Community 或品牌伪造作者。
+
+仅新 Hub／Catalog refinement 复用正式 owner 闭集：source_kind 与 publisher 同有／同缺；third_party 必须 repository publisher＋github creation provenance、同 repository_id、github_repository presentation；personal／official 必须 IAM＋first_party。混合来源／缺 provenance／错 repository 仍 invalid，不改变共享 Product schema 其它消费者。
+
+系列 skill_id、current revision source_ref／revision_skill_id 与原安装 installation_id／installed_source_ref 各自身份保持；显示作者不改变安装、管理、执行权限或历史 revision。其余持久模型及刚收口 reader 的作用域不变。
+
+## PREPARE-OUTCOME：退休与成功的原子互斥（2026-10-27，consumer候选）
+
+沿下方已交付 journal-v2 的 active 原格式／retired_intents／subject_server 稳定 seek，版本仍2，无新字段、store、index、owner表。退休 record 仍闭合 schema_version2、subject、target(serverId/connectorId/version)、key、disposition、policy_ref、immutable retired_at；policy_ref 从正式 BFF394a outcomes1.0 原件 SHA `5169cbf5e431cc71a23e2717bda9b51c77f08bed82cae149667532511b3afe72` 与 profile/version 正规生成，不从 UI 输入授结果权限。definite_rejected 来自方法专属 typed rejected；unknown_fenced 仍未知且仅显式结束等待。
+
+本节精确覆盖存储阶段“complete原样保持”停止线：complete 现在同一 readwrite 事务锁 intents＋retired_intents，先按原 subject/server/key/CAS 查询 exact retired primary key，有 history（含换connector）即 abort，不清 active、不返回成功。否则保持原 exact active 比较／delete与 missing 无history幂等。与 retireWaiting 双store事务形成一次串行选择：archive 赢则晚 ACK 拒绝；strict成功 clear 赢则后续 archive 缺active而拒绝，不能伪造history。普通有效晚 ACK 未本地退休时仍沿原语义结算 captured actor。
+
+commands 对捕获旧 K 的 success／failure／400清理／管理清理按 exact entry 与 durable history 围栏，不能晚到清 K2、复活 completion locator 或污染全局 recoveryError。退休历史与新 K2 独立，reserve 已有active先合并、无active拒同K/CAS退休tuple重启不变；不同CAS重用旧key的全局防错仍由新 cryptoK 和 owner 原 key/CAS 守卫负责。
+
+RAM 仅保窗口／原attempt引用、严格 ACK 后 completion.via、从 committed history 得来的显示与有界历史查询结果。历史完成ACK不成为Current、不写回 active/history/权限，不发新Prepare。新连接须独立点击 fresh Current/manage/CAS 与新key；无额外持久状态、平行 journal 或通用 command 状态。只读历史显示记录时间，不把 primary-key 首项称最近。
+
+## PREPARE-JOURNAL-V2：精确 codec／additive 迁移（2026-10-27，Root 已核引用槽；存储候选）
+
+仅同源本 feature `kokoro-mcp-preparation` IndexedDB 从1升2；无 SQL、后端 owner 表、其它 journal、通用 command 状态或 raw owner facts。现 `intents` store、`subject` index、key=`JSON.stringify([subject,serverId])` 与 active closed `{subject,target:{serverId,connectorId,version},key,failure?}` 原格式／值保持，不在升级时读改或推断旧行。旧有效版本／key validator 不收紧。
+
+```ts
+type McpRetiredPreparationRecord = Readonly<{
+  schema_version: 2;
+  subject: string;
+  target: McpPreparationTarget; // 原 serverId／connectorId／version，不重基
+  key: string;
+  disposition: "unknown_fenced" | "definite_rejected";
+  policy_ref: Readonly<{ artifact_sha256: string; profile: string; version: string }>;
+  retired_at: string; // adapter 首次实际归档时生成 UTC ISO，仅本地展示
+}>;
+```
+
+新增 `retired_intents` store，primary key=`JSON.stringify([subject,target.serverId,key,target.version])`，新增非 unique compound index `subject_server`，keyPath=`["subject","target.serverId"]`。record、target、policy_ref 和 cursor 均 strict closed；subject／target／key 复用原 validator；schema_version 固定2，disposition 为上述本地域闭集，retired_at 是 UTC ISO。policy_ref 格式见 [API 设计](API_CONTRACT.md) 本节：它是正式 consumer 未来填充的引用槽，不猜发布字段或把它视为证明。无 URL、headers、secret、cipher、raw ACK/error、Current／权限快照；disposition 已承载具名本地退休理由，不复制尚未交付的 wire reason enum。
+
+**迁移方法。** `indexedDB.open(name,2)` 的 onupgradeneeded 只在缺失时建原 store/index（fresh DB），并新增 retired store/index；升级 v1 不遍历／重写／退休任何 active row。错误或 blocked 拒绝本次 open，复位 opened promise；已拒请求之后迟到 onsuccess 必须立即 close，不让失败操作复活。各版本连接 onversionchange 主动 close＋清 opened；旧 open(name,1) 在 v2 后 VersionError，禁止 fallback 删除、降级或重建。回滚只用后继兼容 reader 的 roll-forward，不清 v2 数据；本片不实施自动历史清理。
+
+**retireWaiting 原子性。** 校验入参及未 abort 后，一个 readwrite transaction 同时覆盖 intents＋retired_intents；重读 active，exact 比较 subject／server／connector／原 version／key。历史不存在且 active exact 时插入新 closed 历史、删除 exact active；只在 tx.oncomplete resolve，任一错误／存储失败／signal abort 全回滚。存储方法只识别 signal，不自行发网络或解释 owner outcome；未来 feature caller 负责当前 actor／generation／window 并将退休同步成 abort。commit 已完成后的迟到取消不恢复旧 active，也不自动驱动新窗。
+
+历史已存在时仅验证原 identity、disposition、policy_ref 均 exact 后返回原记录，保首次 retired_at，绝不覆盖历史或删除别的 K2；若历史已存在却 active 仍是同 K，按不可能半态拒绝。无历史且 active 缺失／被替换、历史冲突／坏 codec 一律 abort，不能凭缺失猜已退休。readonly history 验 stored primary key 与值一致，按 subject_server 有界续页；restore/list/current/reserve 仍只读 active。成功 `complete` 继续只清 exact active，不归档、不删 history，保 missing 的旧幂等语义；reason4／5 以后只走独立退休 port，不借 complete/onConfirmed。未来 consumer 在旧 K 退休后须核 exact entry／retired 身份再处理晚 ACK；不能借 complete missing 成功把已退休 K 复活为 completed locator 或清后继 K2，本存储片不改 commands。reserve 在同一双 store readwrite 事务先保已有 active 合并；无 active 才查本次 exact retired primary key，存在即拒绝重建（包括换 connector），避免 adapter 自造上述半态。不同 CAS 重用旧 key 的全局防错仍归后继不同 crypto K 和 owner 原 key/CAS 守卫，不加泛 key 索引；新 K2 的另次显式 fresh/manage 资格仍不是本 port 的授权职责。
+
+**真实 IDB 验收。** 自有临时 origin／一 context 两 page：fresh v2 和原生 v1 行原值保留；配合 versionchange／不配合 blocked／迟到 success close／旧 v1 VersionError；history 插入后或 active delete 后注入 tx.abort 均双 store 回滚；并发 duplicate 与 K／K2、bad codec／key绑定、abort前后、不可变时间与 bounded pagination、跨 subject 隔离及 reload 仅恢复 active。原 successful complete 与 query1 native fixture 继续通过。端口替身或 fixture ACK 不称真实 owner 集成；正常浏览器、登录／IDB、服务与 Git 仍由 Root 独占。
+
+## Prepare completed 只读恢复 D0（2026-10-27，无新增 Schema）
+
+本节替代旧“日志恢复后 fresh 核验并授权原 POST 重放”的生命周期，其余非秘密 Prepare journal 与 owner 边界保留。Platform 拥有原 completed receipt；App 不存 owner事实镜像、成功缓存或 negative 终态，不新增 SQL、Redis、数据库、浏览器 store、版本迁移或 pending/resuming 实体。正式私有 artifact 的固定 commit/digest 与生成入口见 API_CONTRACT；原 failure codec 及 journal Schema 不变。
+
+- 原 IndexedDB `kokoro-mcp-preparation` v1／`intents`／subject index不变，key=`JSON.stringify([verifiedSubject,serverId])`；record仍 closed `{subject,target:{serverId,connectorId,version},key,failure?}`。version是冻结原CAS，不是最近GET或配置保存后的版本。未知没有自动TTL清退，旧failed marker查不到completed也不清。
+- 首次明确连接仍先原子reserve并commit后才POST；已有record／reload只恢复unknown。Prepare entry仅RAM单调记“后续只查询”，restored或unknown必为真，首次execute开始即封闭后续POST；不持久化该flag，因为重载一律query-only。无secret、URL、headers、OAuth／工具原文或receipt正文入日志。
+- 查询前和可信结果清退前核当前actor/admission/generation/window/signal、原entry及 `samePreparationRecord`；跨tab当前K变成K2时旧K不得采用K2、改原CAS、覆盖failure或清退K2。clear事务仍比较subject/server/connector/version/key，缺失只沿既有幂等清退语义处理，不由缺失本身证明业务完成。
+- exact completed ACK先严格验证，再 `recovery.complete(originalRecord)`；只有事务commit成功才经原ConnectorCommand完成，finish只收口该原entry。clear失败保unknown／原key/body/CAS，后续显式恢复仍GET；取消／真正owner退休保原未知日志，旧请求不关闭新窗。
+- 原failure只按正式profile单调收紧；same_command不降低query-only，missing／expired／旧failed也不变成“确定没执行”。删除旧inspection proof/window授权POST的结构，不保双恢复日志或别名。
+- 严格原 POST ACK／receipt ACK 且 clear 成功后只保 RAM 非秘密 server/connector/provider locator，服务显式 Done 定位，不保 receipt 正文或授权限。provider 冲突不因后继读失败抹去；entry／actor／K2 围栏阻断旧定位，clear 失败不暴露 locator。
+- 历史receipt不写当前Server/Connector投影，不改变其state_version、权限或availability；只触发原reader独立fresh重读。首次明确拒绝且从未不确定的原安全清退语义保留，不将其扩大到unknown后的错误。
+
+验收复用真实IDB／跨tab事务入口，覆盖completed与clear原子收口、clear失败／损坏存储、K→K2／迟到原ACK、无自动POST、原failed日志保持及reload恢复。设计门与正式 artifact 已交付；正常资源与Git仍由Root独占，源码／隔离验证不代表正常恢复已验收。
+
+## 2026-10-27 Public28.3：仅展示闭集，无存储模型变化
+
+当前消费者固定正式BFF `b2b9eb1eac4a3f0b0cd4099ed59cbf756f14124c`／Public28.3.0／192操作，完整 canonical SHA256 `85a1b51cd151581b51d7ea7992d85e04462c03fafb36d0527e1df352dd85223a`。两项文件工具类别沿既有activity/segment身份、status、ordered坐标及恢复规则保存与呈现，不新增表、字段、浏览器存储或第二套wire；旧generic历史不改写。闭集由同一generated tuple消费，不复制业务DTO，三个独立私有pin保持。
+
+## PROJECT-MCP-RECOMMENDATIONS-CONSUMER-D1（2026-10-27，独立消费者候选）
+
+固定正式BFF `21c6447316aefcd8189f7dcedbb522d91a8e6cf5`／Public28.2／192操作、canonical全文SHA256 `e0bb74069c65fb8d414a6a3cb0d6f4c8d9bcb40bb693c2409a9cbe051b8bac53`，只从Git blob取得唯一完整snapshot，九条原public生成链统一正规更新，独立MCP私有pin不变；新增具名窄generator从同一snapshot导出三种refs、请求/响应和status/code/retryable闭集，生成物不手改。test-only exact28.2→28.1先验完整新旧全文，保原历史hash／fixture与证明链。在线Docs固定同一正式版本，不另建wire事实源。
+
+standalone `src/hub/project-mcp-recommendations-client.ts`只GET/PUT当前Project推荐配置；不改HubClient、不接任何组件／Composer／locale。PUT自然幂等无key/receipt/journal，闭合原expected CAS+完整refs，ACK精确project、canonical引用集合、state_version为expected或expected+1（各自有界）；未知不自动PUT，后继GET只证明当前配置。三种ref仅偏好，私有引用不变成他人配置／执行授权，CustomAPI运行缺口仍OPEN。
+
+`src/lib/server/project-mcp-recommendations.ts`经现Hub catchall精确两方法入口进入BFF同尾`/v1`，ProductSession是唯一用户身份，PUT沿现same-origin；拒query/body身份/command key及坏framing。16KiB请求/64KiB响应，从body/admission到响应EOF同10秒绝对预算，fatalUTF8、重复JSON键、closed shape、headers/status tuple与绑定均验证；取消/超时/迟到不冒成功、不换key重发。上游PUT只发送已完整有界读取的原bytes，显式可信Content-Length，不允许TE；浏览器响应复用private/no-store/zero-age策略，client沿既有hasHubNoStoreDirective接受正式扩展directive，不误认必须exact no-store。Web不直连Platform、不存业务数据或secret。
+
+验证先正式pin/wire RED，再纯生成两次确定性/check、client边界/取消/慢body总预算、真实HTTP loopback薄桥（Session显式替身；真实CL/EOF/不透传caller身份），并跑相关contract/lint/types/build。运行／正常服务／App UI接线、Git index/提交均不在本片；Root与picker其他writer文件严格排除。
+
+**本worker交付事实。** App基线已由Root前进到 `9fa5c289865d3d7f0daee219d01f63a46147b67f`；本片仅wire／generated／proxy／contract／Docs，不接并行UI文件。完整正式pin与历史父证明、100份生成物再次正规重出字节一致；真实HTTP薄桥与standalone取消／ACK／方法专属fault闭集已验。在线Docs由陈旧Public24固定到同一28.2：只按精确节点承接原Public27两项公开扩展，natural仅具名新PUT，nested local JSON-pointer链接所属顶层schema且保完整ref解析；原private route过滤／秘密扫描／header allowlist不放宽。首次失败日志与最终命令日志在本地ignored测试收据，未提交运行材料。正常服务／配置／库与Git index、提交、push均由Root负责，本worker未操作；CustomAPI运行绑定仍缺，不以推荐保存冒执行可用。
+
+
+## 2026-10-26 MCP 列表 icon 媒体边界
+
+无 Schema、SQL、Redis、浏览器持久存储或新增 owner 字段。现 `server_id` 仅定位独立媒体 GET；列表不缓存 Storage URL、签名或绑定事实。图片加载成功/失败只属于当前主体/准入代及 server_id + connector state_version 的组件寿命；Connector CAS 或既有 confirmed-write projection revision 变化即重新读取，旧图片/迟到事件退休；后者不等待列表刷新成功，也不保存 ACK 缓存。媒体失败不证明图标为空，也不改变 Connector 可用性或授权。blob URL 只引用当前组件已验证媒体字节，退休 revoke、请求 abort/迟到丢弃；不保存到 storage、全局缓存、列表 DTO 或 owner 绑定，原同 URI 图像解码缓存不作为显示来源。
+
+## 2026-10-25 项目定义发布的浏览器原意图日志（候选）
+
+本地 IndexedDB `kokoro-mcp-project-publication` version 1 / `intents`，key=`JSON.stringify([verifiedSubject])`，每 actor 一个未决发布命令；不是 Platform revision/pin 的事实副本。闭合 versioned envelope 保存 subject、target(serverId/connectorId/providerKey)、完整 original(server/connector/source CAS/有序项目与 pin CAS)、key、已发布闭合 failure tuple 及是否已记录失败。没有 URL、密钥、Headers、OAuth 数据或工具内容。首次写必须 commit 后才发送；刷新仅恢复 unknown，显式动作经当前 session/generation 重新准入，无自动 POST。
+
+reserve 原子保旧，failure 只单调收紧、晚到400/412不清掉 unknown 历史；原 typed ACK compareClear按exact原命令，首次明确拒绝改意图另用firstRejectionOnly原子条件并核当前精确tuple。取消/退出不删除未决日志，不以 TTL 丢未知请求。损坏/存储拒绝失败闭合；真实 IndexedDB 与跨tab刷新浏览器验收由最终集成执行。无新增后端表、owner或公共协议。
+
+## 2026-10-24 图标选择草稿
+
+无新增业务数据库／本地持久事实。组件草稿只保存当前actor/window的原命令key/body/CAS、未绑定intent与瞬时preview；引用不入日志／IndexedDB／localStorage。保存提交即锁住所选intent，确认后移交owner绑定；结果未知保持原选择／原命令，关闭不误取消可能已绑定的intent。已知未绑定遗留可显式cancel，关页中断和未知Begin无ID由Platform到期清理，不以Get冒取消完成。
+
+## 2026-10-24 Prepare 原请求恢复（既有JSON卡，设计门）
+
+**存储验证边界：** failure codec只接受正式profile的分类（例如`replay_expired`而非虚构`expired`）；同key标记只收紧，不被乱序回调降级。首次确定未执行的400拒绝与exact ACK分别compare-by-key退休，不清理unknown后的400。核验proof/window token不持久化，不保存owner ready/成功facts；旧浏览器从未持久化的意图不由新日志追认。
+
+**跨tab约束（独审补齐）：** failure存写也核exact subject/server/connector/key，且同key乱序回调不能把inspect_owner/expired/conflict降回undefined或same_command；invalid只可收紧为其它不可恢复分类。已恢复RAM K在核验前后及POST前须与日志原子重核；另一tab已清退K并reserve K2时，旧窗口不得采用K2、沿用K的核验凭证、覆盖其failure或清退K2。保守锁旧窗口并重新加载，不改owner/回执协议。
+
+**问题/基线：** 长metadata已由BFF14bb159/App c3f301e修正且正常GET200；原502 invalid仍按browser-private profile1.0 inspect_owner锁定，旧tab消失证明RAM不能作为关闭/重开的恢复保证。当前主体/同实体ready只证当前状态，不证原命令receipt。
+
+**取舍/边界：** 保留通用错误语义，增加Prepare专属“核验后显式原命令重放”政策；不把所有invalid改same_command，也不新建Platform receipt查询RPC/事实镜像。BFF code-first profile1.1新增独立prepare_inspection_recovery，原错误tuple/recovery、automatic_retries=false、new_command_authorized=false与Public24完整原件不变。条件为operation=prepareServer、failure=invalid、当前主体、精确server+connector可信读及原server版本不倒退；授权只允许原key/body/CAS显式重放，不授权新命令。其它inspect_owner错误不变。
+
+**失败/验证：** 核验零POST，读取失败/错ID/错关联/旧版本/取消/身份或generation变化均不授恢复；核验不是成功、不是receipt。重放仍由owner当前授权/CAS/幂等回执裁决，完整exact ACK到达才收口。保过期/身份冲突锁定及迟到ACK、秘密清退、管理与Prepare互锁；固定消费者由正式提交及digest正规生成。先行为RED→窄修→相关门→正常同一实体与原请求验收；不以GET200称原Prepare恢复。
+
+**App状态/恢复落点：** 沿mcp-preparation-commands与原ConnectorCommandProvider，仅Prepare增加非秘密恢复日志；新mcp-preparation-recovery.ts负责浏览器IndexedDB原子reserve、严格codec、失败标记与exact ACK后的compare-by-key清退，不保存headers、URL、OAuth/令牌、工具原文或业务成功facts。使用IndexedDB读写事务串行化跨tab同actor/server的首次命令，而非localStorage覆盖竞争或仅sessionStorage丢tab；无新依赖/服务/后端表。原generic connector command仅增加显式unknown bootstrap及Prepare专属mayResume钩子，默认行为不变；不将其它Create/Update秘密写入日志。
+
+**本地数据模型：** IndexedDB `kokoro-mcp-preparation` version1，`intents` object store，key为JSON.stringify([verifiedSubject,serverId])，subject index；record closed `{subject,target:{serverId,connectorId,version},key,failure?}`，严格复用当前ID/CAS/key及已发布failure分类。首次POST前reserve事务必须commit；已存在则采用原target/key，绝不分配替代命令。初始化/重开只恢复unknown，不发POST、不把存储当主体证明或owner事实；同actor当前Session准入后才能读，跨actor不展示/不恢复。日志不自动TTL清掉未知意图；过期由owner明确返回后封锁。浏览器存储不可用/坏记录失败闭合且允许显式重新读取，不降级RAM后发送。
+
+**生命周期：** 页面/弹窗关闭和reload保持日志；新实例恢复后需重新可信核验，再显式重放；核验凭证只在当前actor+generation有效，取消/重验/一次重放即退休。原请求body/key/CAS不可被当前owner新版本改写。完整client ACK且exact connector绑定通过后才compare-by-key删除日志；删除失败保未知，不置假成功；不同新key不可被迟到清退。旧actor实例退休只取消内存，非秘密日志留给原actor再次真实准入恢复，不授权新actor。恢复加载/失败与业务owner读取分别呈现，未完成恢复读取时阻止新Prepare/试用/同实体变更；管理清理仍沿既有owner语义。
+
+**测试/正常验收：** 存储port测试reserve先于POST、跨实例恢复、原key/body/CAS、错actor/identity/generation、损坏/不可用/提交及清退失败、迟到ACK及新key保护；正常浏览器验证真实IndexedDB事务与reload，不把测试port替身称真实存储。UI核验按钮只GET，核验后显式原请求POST与完整回执，再刷新同ID；不重建连接、不清failure绕过政策。复用原最小组件与错误文案，不新建恢复中心。
+
+## 2026-10-24 MCP注册拒绝的局部投影
+
+`registrationRejection`仅是当前MCP创建流程的可空UI拒绝分类，内容不包含URL或秘密，不进入业务表、浏览器持久化或传输契约。只在首个精确确定拒绝时标识URL重复；新显式提交/清退清空。原未知提交仍由不可变注册意图保留key/body，不因重放返回重复URL而替换。
+
+## 2026-10-24 MCP试用局部状态
+
+不新增持久业务事实或Schema。Try只创建现浏览器草稿、写入现草稿提示词并设置engine瞬态exact Connection选择；不写账号enabled或替owner创建连接/授权。草稿文本沿既有持久策略，选择沿既有New/select/主体退休规则，不声称刷新后仍持久选中。route/subject/generation动作寿命只用于拒绝迟到回调，非第二套授权或任务状态机。
+
+## CHAT-1：浏览器未决提交记录（2026-10-24，实施设计）
+
+新增仅App-owned同标签sessionStorage恢复数据；独立前缀按已验证subject、direct/project scope及conv分键。版本化严格记录保原session、optimistic ID、原idempotency key及唯一builder产出的冻结请求；pending可带公开失败码，ACK保存exact receipt，明确放弃保存退休态。主体由原Product Session准入授予、marker只核变更；无服务端身份/会话/Run/账本真源。单记录1MiB，超限/配额/读写拒绝不截断、不腾空他人数据、不发送。
+
+ACK/退休按原key比较更新，不擦后继意图；没有精确回执时不按正文或404判成功/未执行。主体切换清理当前tab恢复前缀，scope独立，普通dispose保留；tab关闭遵循sessionStorage寿命，无跨设备承诺。损坏记录闭锁而不是空记录；ACK持久化失败不能伪造恢复成功。原Conversation索引、localDraft退休键及BFF durable ledger保持唯一职责，无SQL/Schema/owner变化。
+
+## CHAT-1：本地New来源与不可回退的来源退休（2026-10-24）
+
+ConversationEntry仅增可选localDraft:true，现严格Zod literal；缺省仍历史索引。另由现page-clients按scope写独立`kokoro.web.conversations.draft-retired.<scope>.<encoded session>`键，值为固定版本1；存在/异常即不授予草稿证明，不是会话存在或提交成功事实。主体准入/清理沿原索引前缀，不写secret或正文，无消息/Run/幂等请求副本。New/首次发送保同一ID，原模式/Skills/MCP/模型及composer键不变。首次POST先确证退休键写入，否则保输入与原key/body且零POST；刷新不补发。退休键不做自动过期，只在现主体索引清理或用户浏览器数据重置时清理；配额失败显式可重试，不删其它资料。
+
+## 2026-10-24 普通会话 MCP 精确选择（App 实施中，正常未激活）
+
+不新增数据库、后台账号偏好或另一份owner状态。本次最小合理默认只在原engine的当前会话草稿状态保存所选Connection ID，发送时复制进原pending submission，原key/body的未知恢复不受后来的勾选变化影响。切主体/新会话/准入退休清退；旧Run的重试/恢复从原冻结输入继承，不拿当前缓存重建。未观察的跨刷新草稿保留及账号默认开关语义不实现，不擅自新建全局设置或以未答复暂停当前切片。
+
+## AUTH-1：Web登录表单短期引用（2026-10-23，正常已加载）
+
+复用受管Web Redis，新临时键`kokoro:web:iam-signin-flow:<origin-sha256>:<random-flow>`；闭集v1值只有原始签名query、独立browser proof SHA256及绝对expires_at。flow为18随机字节base64url，独立proof为32随机字节，后者仅HttpOnly、SameSite=Lax、Path=/auth/sign-in cookie持有；query、邮箱、密码、用户token不放flow cookie。SET NX，TTL取原exp剩余与300秒较小值；读/刷新不续期，丢失重新正式登录，不承载身份durable truth。
+
+读取/退休核精确flow、origin、唯一cookie、proof和闭集记录；退休原值CAS删除，错误proof不删。CSRF仍独立一次消费，signin cookie保持每render独立并绑定flow，刷新只CAS退休本请求已观察并验证归属的旧proof，缺失nonce只回收已观察且精确匹配flow/token的cookie名，不删除其他记录；consent/invitation不动；feedback保加密且按flow隔离。成功清本flow cookie，不清其他交易。无SQL、新服务、旧格式兼容读取或共享Redis清理；正常App已加载；实际旅程证据见登录指南。
+
+## AUTH-1：服务端cookie的issuer Session绑定（2026-10-22）
+
+ProductClaims在现id／generation／subject／access及期限旁新增必填issuerSessionId，值来自原生已验签ID token sid；有界合法Unicode、不含控制字符，不能从user ID／Product Session ID推导。仅加密HttpOnly cookie持有，不增加Redis记录字段／表／业务owner。现refresh-at-rest／AAD／双CAS／tombstone保持。refresh后原sid不变；缺失／错签名／异sid闭锁原待定会话，旧无sid cookie直接失效，无兼容填充。本片只约束浏览器登录／续期，不给Run增加用户token或额外Billing grant。
+
+## AGENT-1／MODEL-1：精确模型绑定同源消费者（2026-10-22，本地已验）
+
+最终1142输入无漂移，完整App七门／4749 PASS、preview108及独立Docs45测试／54HTML17941链接通过，四MCP SHA恢复，独审Approved。正常激活和实际Agent资金链仍待，详见CURRENT首节。
+
+沿Root唯一主链和Billing rate2已批决定，主方唯一writer，App基线bc0c8c3；固定BFFa77276b35b07eb65df8a0af2e41b461b393afb12／Public23.0.0／34ea71e0aa56256ca00fc5b3c40abd4d142bea82e664a6871190b8547ec2b9e6。唯一snapshot增加MeteringRate required model_revision{id,content_digest}，原七窄生成器正规重出；不为透明桥创建重复validator。原三具名计价通路、Product Session、1MiB/12层、原充值16KiB和10秒／原body-key-time恢复语义不变，无新路由／服务／表／运行fallback。
+
+写区为固定snapshot、七生成器和原派生／直接契约与薄桥fixture、App在线Docs catalog和指南／相邻当前文档；原四MCP WIP按既有精确保护，不覆盖或夹带提交。先原contract新required pair行为RED，再仅pair/version delta的test-only完整22.5逆证承接原历史门，业务网络协议不变。在线Docs同步解释精确修订而非模型显示名／Key推价；发布配置不是消费许可。完整App工程、preview和Docs门停写验收，正常配对／实际Agent资金链后继，不称一比一全站或正常结算已验。
+
+## AGENT-1／CREDIT-1：计价配置不属于App（2026-10-22）
+
+无App表、价格缓存、预算副本或提交receipt。Billing唯一持有不可变rate/policy、整积分预算及审计／幂等；BFF拥有可信租户和管理员准入。App只在现同源桥转一次已准入命令及有限回包，不猜有效价、不取整、不扣款，也不把GET latest/null作为未知提交未发生的依据。
+
+## CREDIT-1 薄adapter不拥有资金数据（2026-10-22）
+
+无新增表、账户、充值意图或余额缓存。Product session仍按原Redis/cookie owner；当前tenant/actor来自受信会话及BFF。Admin持有同tab原命令，Billing拥有唯一账户／grant／journal／audit/幂等回执，App不持久化、换算或补偿余额，不把读取失败合成0。
+
 ## MODEL-1 上游发现不新增App事实（2026-10-22）
 
 App同源Admin桥只短暂转发已准入请求与有限响应，provider/credential/候选模型事实归System/BFF，选择候选的局部UI归独立Admin。无SQL、缓存、表、Key存储、持久化状态或自动发布/价格推测；response不能成为App可编辑模型目录。配置Domain与Product Session是既有可信边界，浏览器tenant/actor不建立事实。
@@ -1601,3 +1780,6 @@ MCP管理按actor/client、connector locator保存五项typed原命令，仅未�
 ### Installation exact content（2026-10-16，实施设计）
 
 无 Web 持久模型。已安装详情只在当前 subject/admission generation/resource 生命周期持有权威 PersonalInstallation 与精确 package directory；不把 catalog current 元数据覆写安装 pin，不解析 SKILL.md 冒充 owner metadata。安装源变化只失效本次读取并请求用户刷新，不自动更新安装、不合成 download 权限。
+
+
+实施中：选择在engine只读内存快照与原pending options，composer控制器缓存仅归当前subject/准入generation/engine；URL、localStorage、数据库与后台enabled均不持有本选择。不得将菜单占位、读失败或历史trace合成可用Connection。正常未激活/联合旅程未验，不新增资金或恢复事实。

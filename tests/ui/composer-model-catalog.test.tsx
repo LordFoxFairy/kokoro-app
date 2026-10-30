@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
-import { afterEach, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, expect, it, vi } from "vitest"
 
 vi.mock("next/navigation", () => ({ usePathname: () => "/app", useRouter: () => ({ push: vi.fn(), replace: vi.fn() }) }))
 
@@ -11,10 +11,18 @@ import * as pageClients from "@/ui/shell/page-clients"
 import { createFakeClient, createMemoryStorage, settle } from "../engine/fakes"
 import type { ConversationStore } from "@/core/conversations"
 
-afterEach(() => { cleanup(); vi.restoreAllMocks(); window.localStorage.clear() })
+let originalUrl: string
+beforeEach(() => {
+  originalUrl = window.location.href
+  // The real shell reads history as well as Next's pathname.
+  window.history.replaceState(null, "", "/app")
+})
+afterEach(() => { cleanup(); vi.restoreAllMocks(); window.localStorage.clear(); window.history.replaceState(null, "", originalUrl) })
 
 it("ordinary new chat exposes the business catalog before the first submission", async () => {
   window.localStorage.setItem("kokoro.locale", "en")
+  const boundary = { admitted: true, subject: "catalog-first-submit-reader", generation: 1 }
+  window.localStorage.setItem(pageClients.AUTH_INDEX_SUBJECT_KEY, boundary.subject)
   const client = createFakeClient()
   client.listModels = async () => ({ models: [{ provider: "provider", name: "chat/business", is_default: true,
     display_name: "Business chat", model_id: "11111111-1111-4111-8111-111111111111",
@@ -23,7 +31,7 @@ it("ordinary new chat exposes the business catalog before the first submission",
   vi.spyOn(pageClients, "browserListClient").mockReturnValue(client)
   const engine = createSessionEngine({ client, storage: createMemoryStorage<ConversationStore>(null) })
   try {
-    render(<ThemeProvider><LocaleProvider><AppFrame engine={engine} chatHref="/app" /></LocaleProvider></ThemeProvider>)
+    render(<ThemeProvider><LocaleProvider><AppFrame engine={engine} chatHref="/app" projectReadBoundary={boundary} /></LocaleProvider></ThemeProvider>)
     await act(async () => { await settle() })
     fireEvent.pointerDown(screen.getByRole("button", { name: "Switch model: Business chat" }))
     fireEvent.click(screen.getByRole("menuitemradio", { name: "Business chat" }))

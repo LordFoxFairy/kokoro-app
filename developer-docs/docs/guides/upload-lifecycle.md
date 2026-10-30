@@ -8,7 +8,7 @@
 
 成功响应是 generic `{ "data": { "ok": true }, "meta": { "request_id": "..." } }` envelope。它只确认 BFF 接纳了请求。
 
-本页这个项目资源入口的 `22.3.0` 响应仍未返回 resource ID、upload session 或扫描／处理状态；不要把其他技能、包或资料库接口的生命周期套到这个 receipt。因此：
+本页这个项目资源入口的 `22.4.0` 响应仍未返回 resource ID、upload session 或扫描／处理状态；不要把其他技能、包或资料库接口的生命周期套到这个 receipt。因此：
 
 - 在产品流程确认结果前保留源文件和 request ID；
 - 不从 `ok: true` 推断病毒扫描、异步处理或 promotion 已完成；

@@ -1,3 +1,23 @@
+`use-composer-custom-apis.ts` reads the current actor’s existing paged Custom API list once per catalog request, without per-profile GETs. It retains only name/icon/current version, fences actor/generation/draft/abort, and does not rebase a selected version on refresh. `use-composer-connections.ts` composes these independent choices with existing MCP behavior; no execution permission is inferred from list metadata.
+
+## Composer MCP Add 与 Manage 的独立接线
+
+AppFrameComposer 必须将 Add 交给 `useAppFrameOverlays.openMcpCatalog`，Manage 仍为原 Settings mcp；不回退共用 Manage。`AppFrameOverlaySurfaces` 用原 browserHubClient／可信 readBoundary 和 ConnectorCommandProvider 渲染受控目录及既有创建窗。目录 RAM 窗口绑定 engine／scope／conversation／actor；同 actor 临时 admission／generation 变更只围栏事实与新命令，保留窗口、搜索及创建输入。真正更换身份／上下文或路由事件才退休目录与其创建视图，并清旧 returnFocus ref；迟到读或已排队的焦点回调不复活旧窗、不偷新页面焦点，不清 pending／unknown 命令。关闭回焦沿原目录、详情、创建窗口已有 returnFocus 链，不写浏览器地址。
+
+## 裸首页选择（2026-10-26）
+
+page-clients只在冷建direct engine且URL为裸/app时初始化本地空稿选择：复用localDraft＋未提交lifecycle＋无recovery的精确ID，否则保留旧索引项新建本地稿；无索引保原pending槽。缓存不补写conversation URL，只有显式选择或已接受Send发布实际ID。不调用取消/创建业务命令，不删除旧journal，失败不授发送资格。
+
+CHAT-1当前：`use-active-archive-state`区分原请求未确认与owner历史归档状态；正向snapshot/ACK/列表/receipt之前不因乐观正文查归档。`use-conversation-list`只为当前原意图提供显式未确认导航行，不作为已落库清单。
+
+## CHAT-1 同标签未决意图（2026-10-24，候选）
+
+`browser-submission-recovery.ts`按已验证subject、scope、conv持有有界sessionStorage记录，复用原请求builder/严格schema；ACK/明确放弃原key退休，晚ACK不删后继。page-clients的主体资格只由原Product Session成功准入授予，marker仅核变化；普通dispose保留，身份切换清前缀。读异常不是空记录；不存owner线程/凭据，不建立跨tab锁或自动POST。
+
+## 项目与全局 New（2026-10-24）
+
+全局 New 从项目返回 direct `/app`：当前准入/subject marker 校验后，短暂 retain 目标 direct engine 并先 RESET 后 mounted 导航，finally 释放；不重置离开的项目。项目行快捷入口仍是项目根地址；项目 Skill handoff 保留自身作用域。空项目会话与概览共用项目工作区，不以 viewport 替换成默认欢迎页；真实消息由原 thread 渲染。实际证据与未完成项见 [CURRENT](../../../docs/CURRENT.md)。
+
 ## 主链读取状态（2026-10-21）
 
 - 模型目录按当前 engine/preview 生命周期读取完整 chat 分页；失败保留同身份已知内容并允许重试，切换身份/engine 退休旧请求与选择。普通新会话首发前显示业务模型选择器；业务 label 上 wire，别名仅展示。
@@ -25,6 +45,8 @@ Web专属thread viewport统一隐藏滚动条槽以匹配Composer阅读轴；共
 <!-- SET16：use-task-notifications.ts 从已准入subject/generation订阅typed信号，hidden/blur时投递；切会话关闭owned提示/声音，身份及scope退役取消订阅；use-awaiting-notify.ts仅徽标/title。 -->
 # ui/shell — 页面装配层
 
+`bindBrowserMessagePartsReadRecheck` 仅承接 AppGate 的原 Product 准入端口；live engine 在 parts 首次读取前捕获精确 subject/data generation。列表、写命令、preview 不接该恢复，不由本地 marker 授权；同一页401恢复不重启 Message reader 的10秒预算或改变 scope/cursor。
+
 - 挂载内导航：独立目录页面不解释/写入 conversation URL，不接管聊天恢复、错误或 Todo 状态；目录组件 key 不随后台 activeId 改变。返回 Direct/Project 仍按原会话深链恢复。
 - History 和延迟 URL 写入必须匹配当前 engine 的精确 scope pathname；跨 Direct/Project 的旧闭包不打开、清空或取消会话。新路由的 scope 自己恢复，未知地址不回落为 Direct。
 - 侧栏桌面密度按实测使用 14px 正文、13px 分组、36px 行；触屏 44px 命中区仅由显式 drawer 标记控制。“更多”按参考保留 Computer Use/Skills/个性化；Computer Use 未开放时明确禁用，不伪造可用能力。已启用的 scheduled 进入一级“自动化”（保持原正式路径和 mounted 导航），不再在更多重复；缺失/关闭时仍明确不可用。其他 manifest 独有入口保持原访问。
@@ -38,8 +60,8 @@ Web专属thread viewport统一隐藏滚动条槽以匹配Composer阅读轴；共
 
 ## 公开件
 - `AppFrame`（`src/components/blocks/app-frame/app-frame.tsx`）：User Web 唯一工作区入口。props `engine?`（测试注入缝）/ `brandName?` / `brandMark?` / `brandLogoUrl?`。AppGate 统一消费 runtime manifest，确保第一个 site 的主题和品牌跨登录、工作台、设置一致。
-- `page-clients.ts`：页面级单例客户端/引擎（`browserEngine` / `browserListClient` / `browserHubClient` / `browserBillingClient` / `browserPricingClient` / `browserTeamClient`）。仅浏览器构造，SSR 为 null。
-- `readBrowserAuthIndexSubject` / `admitBrowserAuthSessionIndexes`：以独立 UI subject marker 比较可信探针前后身份；同 subject 新文档保留索引，不同 subject 只清 `kokoro.web.conversations.` 前缀后更新 marker。marker 不是认证或授权证明。
+- `page-clients.ts`：页面级单例客户端/引擎（`browserEngine` / `browserListClient` / `browserHubClient` / `browserBillingClient` / `browserPricingClient` / `browserTeamClient`）。仅浏览器构造，SSR 为 null；live 还须当前文档可信 subject 与 marker 一致，未准入返回 null。AppFrame 仅在无 lease 时借现 Move 通知唤醒重核，通知本身不授权。
+- `AUTH_INDEX_SUBJECT_KEY` / `readBrowserAuthIndexSubject` / `admitBrowserAuthSessionIndexes`：唯一 UI subject marker key 同时供跨标签事件过滤和可信探针前后身份比较；同 subject 新文档保留索引，不同 subject 只清 `kokoro.web.conversations.` 前缀后更新 marker。marker 仅撤销旧读取，不是认证或授权证明。
 - 域 controller hooks（各自持查询/store/回调）：`useComposerSelectors` / `useDraft` / `useConversationList` / `useConversationReaders` / `useAwaitingNotify` / `useCanvasWorkspace`。Skill source 选择只在 engine 会话内存中，不使用 browser store。
 
 ## 协作者
@@ -53,3 +75,15 @@ Web专属thread viewport统一隐藏滚动条槽以匹配Composer阅读轴；共
 - `useComposerSelectors` 的模型/agent 初值取 `@/ui/settings/chat-prefs` 缺省偏好——新对话首帧预填，开跑后 modeLocked 锁定，会话级锁语义不变。
 
 - scope 切换只在本页暂留未获 create receipt 的原 engine（包括 unknown），不新建持久化 store、不自动重发；回到原 scope 继续原 key/body。回执落定且无页面 owner 即释放，身份失效强制退休无 owner 的缓存；已确认运行保持原先离页释放行为。
+
+`useComposerConnections`仅持当前主体/准入代际/engine的Connection列表及metadata读缓存（四并发、显式分页、重复游标/身份错配拒绝）；selection真态在engine，打开菜单背景重读，同scope失败保已知列表。主体退休取消/忽略迟到，不持久化或授权；自有读取不挤入Settings coordinator。
+
+CHAT-1：page-clients将draftLifecycle按既有主体准入和scope装配；独立draft-retired键沿原conversation前缀清理，无正文/secret/TTL。保原ID和Skill试用引用，不在索引覆盖时恢复已退休来源。
+
+项目行删除只提交 RAM target handoff：先导航指定项目，当前受信 owner read 精确 ready 后才打开原确认框，取消不写。旧项目的无参删除控制不接受另一行目标；确认仍冻结原 project ID/key/空 body，unknown 显式恢复、202 退休及迟到／身份／导航隔离保持。行菜单编辑名称复用现 rename，焦点返回需当前 route、owner、scope 同时匹配；失联／隐藏行只回当前 header，旧回调不挪动新项目焦点。
+
+## Visible ordered Message target
+
+`page-clients.ts` always supplies explicit null when a browser caller omits the ordered-body target; cached canonical engines must expose the target port (no allow-all fallback). `use-app-frame-engine.ts` uses existing `conversationIdFromLocation` and the current scope pathname before committed acquisition, then revalidates on every committed layout and existing popstate/hashchange/surface-navigation events. Cleanup retires only parts; it never resets the engine, journal or run. Optional omission is limited to injected view-only ports and framework-free engine callers, not browser admission.
+
+- `use-composer-selectors.ts` 的目录生命周期按可信 Product subject/generation 与 preview 隔离，选择仍归 engine；隐藏文档、非 Composer surface、未准入时不发目录 GET。已确认同 scope 目录不随 engine/页面切换重读，失败/未知目录仅在重新进入、前台 focus/visibility 或可信重新准入时单 flight 恢复，不自循环。429 遵守目录专用 Retry-After 冷却（同主体跨代际仍保期限）；其他失败的自动唤醒冷却 30 秒。401 只上报现 AppGate GET 重准入，storage 变化、当前主体不符或撤权立即隐藏并拒绝迟到响应/旧选择；marker 从不授予准入。无新增错误面板或写命令重试。

@@ -124,7 +124,6 @@ it("项目会话路由在读取未完成时不误报空会话，也不显示异�
         composer={<div>composer</div>}
         onPrompt={vi.fn()}
         workspaceCapabilities={capabilities}
-        projectConversation
         projectConversationsError
       />
     </LocaleProvider>,
@@ -143,7 +142,6 @@ it("项目会话路由在读取未完成时不误报空会话，也不显示异�
         composer={<div>composer</div>}
         onPrompt={vi.fn()}
         workspaceCapabilities={capabilities}
-        projectConversation
         projectConversationsLoading
       />
     </LocaleProvider>,
@@ -322,8 +320,8 @@ const projectSkill = { installation_id: "project-install-1", source_ref: "skill:
   installed_at: "2026-10-10T00:00:00Z", updated_at: "2026-10-10T00:00:00Z", display_name: "Project Skill", summary: "Exact project installation", source_status: "active",
   skill_updated_at: "2026-10-10T00:00:00Z", example_prompts: [], category_keys: [], product: { publication_audience: "owner", state_version: "5" }, tags: [] }
 const skillReply = (data: unknown, status = 200) => Response.json(data, { status, headers: { "cache-control": "no-store", "x-request-id": "project-skills-ui" } })
-const skillWorkspace = (boundary = { admitted: true, subject: "project-reader", generation: 1 }, loading = false) => <LocaleProvider><KokoroProjectWorkspace
-  composer={<div>composer</div>} onPrompt={vi.fn()} workspaceCapabilities={capabilities} preview={false} projectRef={skillProjectId}
+const skillWorkspace = (boundary = { admitted: true, subject: "project-reader", generation: 1 }, loading = false, presentation: Pick<Parameters<typeof KokoroProjectWorkspace>[0], "projectConversationContent" | "projectContextVisible"> = {}) => <LocaleProvider><KokoroProjectWorkspace
+  {...presentation} composer={<div>composer</div>} onPrompt={vi.fn()} workspaceCapabilities={capabilities} preview={false} projectRef={skillProjectId}
   projectDetail={loading ? { status: "loading" } : { status: "ready", data: skillProject }} projectReadBoundary={boundary} /></LocaleProvider>
 const openProjectSkills = (container: HTMLElement) => fireEvent.click(within(contextCard(container, "resources-skills")).getByRole("button", { name: /^技能$/ }))
 
@@ -596,12 +594,16 @@ it("正式项目任务入口到独立任务页，不提供样例选择或本地�
   expect(within(card).queryByRole("button")).not.toBeInTheDocument()
 })
 
-it("新的项目会话欢迎面使用 Conversation DOM 与标题关联", () => {
-  render(<LocaleProvider><KokoroProjectWorkspace projectConversation onPrompt={vi.fn()} composer={<textarea aria-label="测试输入" />} /></LocaleProvider>)
-  const surface = document.querySelector('[data-slot="project-conversation-welcome"]')
-  expect(surface).toBeInTheDocument()
-  expect(surface).toHaveAttribute("aria-labelledby", "kokoro-project-conversation-heading")
-  expect(screen.getByRole("heading", { name: "新对话" })).toHaveAttribute("id", "kokoro-project-conversation-heading")
+it("empty project conversations retain identity, context and real project history", () => {
+  const project = { id: "project-context", name: "项目上下文", slug: "context", description: "", created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-01T01:00:00Z" }
+  render(<LocaleProvider><KokoroProjectWorkspace preview={false}
+    projectRef={project.id} projectDetail={{ status: "ready", data: project }}
+    workspaceCapabilities={capabilities} projectConversations={[{ id: "existing-task", title: "已有项目任务" }]}
+    onPrompt={vi.fn()} composer={<textarea aria-label="测试输入" />} /></LocaleProvider>)
+  expect(screen.getByRole("heading", { name: "项目上下文" })).toBeVisible()
+  expect(screen.getByText("已有项目任务")).toBeVisible()
+  expect(screen.getByRole("textbox", { name: "测试输入" })).toBeVisible()
+  expect(screen.queryByText("还没有项目会话。新建一个会话以开始。")).toBeNull()
 })
 
 it("正式项目任务入口精确编码 opaque projectRef，缺少引用时不猜测关联", () => {
@@ -630,6 +632,7 @@ it("正式项目标题/时间只消费 canonical detail，切换 loading/error �
   expect(screen.queryByText("项目不可用")).toBeNull()
   expect(screen.getByTestId("project-title-loading")).toHaveAttribute("aria-hidden", "true")
   expect(screen.getByTestId("project-detail-loading")).toHaveTextContent("正在加载项目…")
+  expect(screen.getByTestId("project-detail-loading").closest("header")).toHaveAttribute("aria-busy", "true")
   view.rerender(<LocaleProvider><KokoroProjectWorkspace {...props} projectDetail={{ status: "error", retryable: false }} /></LocaleProvider>)
   expect(screen.getByTestId("project-detail-error")).toBeInTheDocument()
   expect(screen.getByRole("button", { name: "重试" })).toBeDisabled()
@@ -985,4 +988,326 @@ it("官方来源选择复用正式目录，装入精确 version UID 而不把目
   const writes = fetchMock.mock.calls.filter(([url, init]) => url.endsWith("/skill-installations") && init?.method === "POST")
   expect(writes).toHaveLength(1)
   expect(JSON.parse(String(writes[0]?.[1]?.body))).toEqual({ source_ref: "skill:official-revision" })
+})
+
+it("Project delete keeps cancel at zero writes, preserves an unknown command key, and retires only the confirmed project", async () => {
+  const { useAppFrameProject } = await import("@/components/blocks/app-frame/use-app-frame-project")
+  const id = "project_12345678-1234-1234-1234-123456789abc"
+  const project = { id, name: "Delete me", slug: "delete-me", description: "", created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-01T00:00:00Z" }
+  const originalUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`
+  window.history.replaceState(null, "", `/app/project/${id}`)
+  const retireProject = vi.fn(); const refreshProject = vi.fn()
+  const fetchMock = vi.spyOn(globalThis, "fetch")
+    .mockResolvedValueOnce(Response.json({ error: { code: "business_store_unavailable", message: "uncertain", retryable: true } }, {
+      status: 503, headers: { "cache-control": "private, no-store, max-age=0" },
+    }))
+    .mockResolvedValueOnce(Response.json({ error: { code: "business_store_unavailable", message: "read uncertain", retryable: true } }, {
+      status: 503, headers: { "cache-control": "private, no-store, max-age=0" },
+    }))
+    .mockResolvedValueOnce(Response.json({ data: { project_id: id, logical_release_state: "pending", physical_cleanup_state: "pending" } }, {
+      status: 202, headers: { "cache-control": "private, no-store, max-age=0" },
+    }))
+  const options = {
+    projectRef: id, projectWorkspace: true, preview: false, mounted: true, draft: "draft", updateDraft: vi.fn(), clearDraft: vi.fn(),
+    projectDetail: { status: "ready" as const, data: project }, instructionHistory: { status: "blocked" as const }, instructionContext: {},
+    refreshProject, retireProject, renameBoundary: { admitted: true, subject: "reader", generation: 1 }, renameRouteKey: "delete-route",
+  }
+  const view = renderHook(() => useAppFrameProject(options), { wrapper: LocaleProvider })
+  try {
+    act(() => view.result.current.projectDelete.onOpen())
+    act(() => view.result.current.projectDelete.onClose())
+    expect(fetchMock).not.toHaveBeenCalled()
+    act(() => { view.result.current.projectDelete.onOpen(); view.result.current.projectDelete.onConfirm() })
+    await waitFor(() => expect(view.result.current.projectDelete.problem).toBe("unknown"))
+    expect(view.result.current.projectDelete.targetName).toBe("Delete me")
+    act(() => { view.result.current.projectDelete.onClose(); view.result.current.projectDelete.onOpen() })
+    expect(view.result.current.projectDelete.targetName).toBe("Delete me")
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const first = fetchMock.mock.calls[0]
+    expect(first?.[0]).toBe(`/api/hub/projects/${id}`)
+    expect(first?.[1]?.method).toBe("DELETE")
+    expect(Object.hasOwn(first?.[1] ?? {}, "body")).toBe(false)
+    expect(new Headers(first?.[1]?.headers).get("idempotency-key")).toEqual(expect.any(String))
+    act(() => view.result.current.projectDelete.onCheck())
+    await waitFor(() => expect(view.result.current.projectDelete.problem).toBe("read"))
+    const receipt = fetchMock.mock.calls[1]
+    expect(receipt?.[0]).toBe(`/api/hub/projects/${id}/deletion`)
+    expect(receipt?.[1]?.method).toBe("GET")
+    expect(Object.hasOwn(receipt?.[1] ?? {}, "body")).toBe(false)
+    expect(new Headers(receipt?.[1]?.headers).has("idempotency-key")).toBe(false)
+    act(() => view.result.current.projectDelete.onRetry())
+    await waitFor(() => expect(retireProject).toHaveBeenCalledWith(id))
+    expect(refreshProject).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+    const second = fetchMock.mock.calls[2]
+    expect({ url: first?.[0], init: { method: first?.[1]?.method, body: first?.[1]?.body, key: new Headers(first?.[1]?.headers).get("idempotency-key") } })
+      .toEqual({ url: second?.[0], init: { method: second?.[1]?.method, body: second?.[1]?.body, key: new Headers(second?.[1]?.headers).get("idempotency-key") } })
+    expect(`${window.location.pathname}${window.location.search}${window.location.hash}`).toBe("/app")
+  } finally { view.unmount(); fetchMock.mockRestore(); window.history.replaceState(null, "", originalUrl) }
+})
+
+it("Project menu contains only project actions and never opens account or upgrade from the project surface", async () => {
+  const { WorkspaceHeaderProjectMenu } = await import("@/components/blocks/workspace-header/workspace-header-project-menu")
+  const scope = {}
+  render(<LocaleProvider><WorkspaceHeaderProjectMenu
+    projectRename={{ focusScopeToken: scope, available: true, open: false, name: "", status: "idle", problem: null, frozen: false,
+      onOpen: vi.fn(), onClose: vi.fn(), onChange: vi.fn(), onSave: vi.fn(), onRetry: vi.fn(), onRestart: vi.fn() }}
+    projectInstruction={{ available: true, onTriggerMount: vi.fn(), onOpen: vi.fn() }}
+    projectDelete={{ focusScopeToken: scope, targetName: "Project A", available: true, open: false, status: "idle", problem: null, frozen: false,
+      onOpen: vi.fn(), onClose: vi.fn(), onConfirm: vi.fn(), onRetry: vi.fn(), onCheck: vi.fn() }}
+  /></LocaleProvider>)
+  fireEvent.pointerDown(screen.getByRole("button", { name: "项目选项" }), { button: 0, ctrlKey: false })
+  expect(screen.getByRole("menuitem", { name: "重命名项目" })).toBeInTheDocument()
+  expect(screen.getByRole("menuitem", { name: "编辑指令" })).toBeInTheDocument()
+  expect(screen.getByRole("menuitem", { name: "删除项目" })).toBeInTheDocument()
+  expect(screen.queryByRole("menuitem", { name: "账户" })).toBeNull()
+  expect(screen.queryByRole("menuitem", { name: "升级" })).toBeNull()
+})
+
+it("Project delete dialog names its loaded target before the existing risk explanation", async () => {
+  const { WorkspaceHeaderProjectMenu } = await import("@/components/blocks/workspace-header/workspace-header-project-menu")
+  const scope = {}
+  render(<LocaleProvider><WorkspaceHeaderProjectMenu
+    projectDelete={{ focusScopeToken: scope, targetName: "Project A", available: true, open: true, status: "idle", problem: null, frozen: false,
+      onOpen: vi.fn(), onClose: vi.fn(), onConfirm: vi.fn(), onRetry: vi.fn(), onCheck: vi.fn() }}
+  /></LocaleProvider>)
+  const dialog = screen.getByRole("dialog", { name: "删除项目" })
+  expect(dialog).toHaveTextContent("将删除「Project A」。")
+  expect(dialog).toHaveTextContent("删除项目会移除其会话和项目内容；此操作会立即从你的工作区中移除该项目。")
+})
+
+it("Project delete retires its command on a route change and ignores a late 202", async () => {
+  const { useAppFrameProject } = await import("@/components/blocks/app-frame/use-app-frame-project")
+  const id = "project_12345678-1234-1234-1234-123456789abc"
+  const project = { id, name: "Late", slug: "late", description: "", created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-01T00:00:00Z" }
+  const originalUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`
+  window.history.replaceState(null, "", `/app/project/${id}`)
+  let deliver: (response: Response) => void = () => { throw new Error("no pending DELETE") }
+  const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementationOnce((_url, init) => new Promise<Response>((resolve) => {
+    deliver = resolve
+    expect(init?.method).toBe("DELETE")
+  }))
+  const retireProject = vi.fn(); const refreshProject = vi.fn()
+  const options = {
+    projectRef: id, projectWorkspace: true, preview: false, mounted: true, draft: "draft", updateDraft: vi.fn(), clearDraft: vi.fn(),
+    projectDetail: { status: "ready" as const, data: project }, instructionHistory: { status: "blocked" as const }, instructionContext: {},
+    refreshProject, retireProject, renameBoundary: { admitted: true, subject: "reader", generation: 1 }, renameRouteKey: "delete-route",
+  }
+  const view = renderHook(() => useAppFrameProject(options), { wrapper: LocaleProvider })
+  try {
+    act(() => { view.result.current.projectDelete.onOpen(); view.result.current.projectDelete.onConfirm() })
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+    expect(view.result.current.projectDelete.targetName).toBe("Late")
+    window.history.pushState(null, "", "/app")
+    act(() => window.dispatchEvent(new PopStateEvent("popstate")))
+    expect(fetchMock.mock.calls[0]?.[1]?.signal?.aborted).toBe(true)
+    expect(view.result.current.projectDelete.targetName).toBe("")
+    await act(async () => {
+      deliver(Response.json({ data: { project_id: id, logical_release_state: "pending", physical_cleanup_state: "pending" } }, {
+        status: 202, headers: { "cache-control": "private, no-store, max-age=0" },
+      }))
+      await Promise.resolve()
+    })
+    expect(retireProject).not.toHaveBeenCalled()
+    expect(refreshProject).not.toHaveBeenCalled()
+  } finally { view.unmount(); fetchMock.mockRestore(); window.history.replaceState(null, "", originalUrl) }
+})
+
+it("Project delete keeps an untyped 400/403/409 outcome and its original command recoverable", async () => {
+  const { deleteProject } = await import("@/features/app/project-delete")
+  const { useAppFrameProject } = await import("@/components/blocks/app-frame/use-app-frame-project")
+  const id = "project_12345678-1234-1234-1234-123456789abc"
+  const intent = { projectId: id, idempotencyKey: "original-key", body: null as null }
+  const malformed = (status: number) => Response.json({ error: { code: "untyped_owner_error", message: "untrusted", retryable: false } }, {
+    status, headers: { "cache-control": "private, no-store, max-age=0" },
+  })
+  const fetchMock = vi.spyOn(globalThis, "fetch")
+  fetchMock.mockResolvedValueOnce(malformed(400)).mockResolvedValueOnce(malformed(403)).mockResolvedValueOnce(malformed(409))
+  try {
+    for (const status of [400, 403, 409]) {
+      await expect(deleteProject(intent, new AbortController().signal)).rejects.toMatchObject({ code: "unexpected_status", status })
+    }
+    const project = { id, name: "Delete me", slug: "delete-me", description: "", created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-01T00:00:00Z" }
+    const originalUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`
+    window.history.replaceState(null, "", `/app/project/${id}`)
+    fetchMock.mockResolvedValueOnce(malformed(403)).mockResolvedValueOnce(Response.json({ data: { project_id: id, logical_release_state: "pending", physical_cleanup_state: "pending" } }, {
+      status: 202, headers: { "cache-control": "private, no-store, max-age=0" },
+    }))
+    const retireProject = vi.fn()
+    const view = renderHook(() => useAppFrameProject({
+      projectRef: id, projectWorkspace: true, preview: false, mounted: true, draft: "draft", updateDraft: vi.fn(), clearDraft: vi.fn(),
+      projectDetail: { status: "ready" as const, data: project }, instructionHistory: { status: "blocked" as const }, instructionContext: {},
+      refreshProject: vi.fn(), retireProject, renameBoundary: { admitted: true, subject: "reader", generation: 1 }, renameRouteKey: "delete-route",
+    }), { wrapper: LocaleProvider })
+    try {
+      act(() => { view.result.current.projectDelete.onOpen(); view.result.current.projectDelete.onConfirm() })
+      await waitFor(() => expect(view.result.current.projectDelete.problem).toBe("unknown"))
+      expect(view.result.current.projectDelete.available).toBe(true)
+      act(() => view.result.current.projectDelete.onRetry())
+      await waitFor(() => expect(retireProject).toHaveBeenCalledWith(id))
+      const writes = fetchMock.mock.calls.slice(3).map(([url, init]) => ({ url, key: new Headers(init?.headers).get("idempotency-key"), body: init?.body }))
+      expect(writes).toEqual([
+        { url: `/api/hub/projects/${id}`, key: expect.any(String), body: undefined },
+        { url: `/api/hub/projects/${id}`, key: writes[0]?.key, body: undefined },
+      ])
+    } finally { view.unmount(); window.history.replaceState(null, "", originalUrl) }
+  } finally { fetchMock.mockRestore() }
+})
+
+it("stable Project host retires a Skills dialog and unknown command on an actual Task route change", async () => {
+  history.replaceState(null, "", `/app/project/${skillProjectId}?conversation=first-task`)
+  const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    if (init?.method === "PUT") throw new TypeError("owner ACK unknown")
+    if (url.endsWith("skill-selection")) return skillReply({ data: { project_id: skillProjectId, installation_ids: [] } })
+    return skillReply({ data: [projectSkill] })
+  })
+  vi.stubGlobal("fetch", fetchMock)
+  const task = { projectConversationContent: <div>Task timeline</div>, projectContextVisible: true }
+  const view = render(skillWorkspace(undefined, false, task))
+  openProjectSkills(view.container)
+  const dialog = screen.getByRole("dialog", { name: "项目技能" })
+  fireEvent.click(await within(dialog).findByRole("switch", { name: "启用 Project Skill" }))
+  await within(dialog).findByText("操作结果尚未确认。重试会使用原操作，不会创建新的请求。")
+  view.rerender(skillWorkspace(undefined, false, { ...task, projectContextVisible: false }))
+  expect(screen.queryByRole("dialog", { name: "项目技能" })).not.toBeInTheDocument()
+  view.rerender(skillWorkspace(undefined, false, task))
+  openProjectSkills(view.container)
+  await screen.findByText("操作结果尚未确认。重试会使用原操作，不会创建新的请求。")
+  fireEvent.click(screen.getByRole("button", { name: "重试原操作" }))
+  await waitFor(() => expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(2))
+  const original = fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT").map(([, init]) => ({ body: init?.body, key: new Headers(init?.headers).get("Idempotency-Key") }))
+  expect(original[1]).toEqual(original[0])
+  act(() => { history.pushState(null, "", `/app/project/${skillProjectId}?conversation=second-task`); window.dispatchEvent(new Event("kokoro:surface-navigation")) })
+  expect(screen.queryByRole("dialog", { name: "项目技能" })).not.toBeInTheDocument()
+  openProjectSkills(view.container)
+  await screen.findByRole("switch", { name: "启用 Project Skill" })
+  expect(screen.queryByText("操作结果尚未确认。重试会使用原操作，不会创建新的请求。")).not.toBeInTheDocument()
+  expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(2)
+  history.replaceState(null, "", "/app")
+})
+
+import { ProjectSkillSourcePicker } from "@/features/app/project-skill-source-picker"
+
+const sourcePickerView = (
+  boundary = { admitted: true, subject: "S12-source-reader", generation: 1 },
+  mode: "personal" | "official" = "personal",
+  busy = false,
+) => <LocaleProvider><ProjectSkillSourcePicker boundary={boundary} mode={mode} busy={busy} onBack={vi.fn()} onInstall={vi.fn()} /></LocaleProvider>
+
+it("S12 来源 pending 仅供读屏且不伪装真实空列表", async () => {
+  const pending = pendingInstructionResponse()
+  vi.stubGlobal("fetch", vi.fn(() => pending.promise))
+  render(sourcePickerView())
+  const field = screen.getByRole("textbox")
+  expect(field).toHaveAttribute("aria-busy", "true")
+  expect(screen.getByRole("status")).toHaveClass("sr-only")
+  expect(screen.queryByText("暂无已添加的技能")).not.toBeInTheDocument()
+  await act(async () => { pending.resolve(skillReply({ data: [] })) })
+  expect(field).toHaveAttribute("aria-busy", "false")
+  expect(await screen.findByText("暂无已添加的技能")).toBeVisible()
+  expect(screen.queryByRole("status")).not.toBeInTheDocument()
+})
+
+it("S12 来源失败是搜索字段提示，保query且仅Enter显式重读恢复", async () => {
+  let available = false
+  const queries: (string | null)[] = []
+  const fetchMock = vi.fn(async (url: string) => {
+    queries.push(new URL(url, "http://picker.test").searchParams.get("query"))
+    if (!available) throw new TypeError("source read unavailable")
+    return skillReply({ data: [{ ...projectSkill, display_name: "Recovered source" }] })
+  })
+  vi.stubGlobal("fetch", fetchMock)
+  const view = render(sourcePickerView())
+  const field = screen.getByRole("textbox")
+  await screen.findByText("我的技能暂时未能读取。按 Enter 重新读取。")
+  expect(field).toHaveAccessibleDescription("我的技能暂时未能读取。按 Enter 重新读取。")
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
+  expect(screen.queryByText("暂无已添加的技能")).not.toBeInTheDocument()
+  fireEvent.change(field, { target: { value: " needle " } })
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+  await screen.findByText("我的技能暂时未能读取。按 Enter 重新读取。")
+  fireEvent.keyDown(field, { key: "Enter", isComposing: true })
+  expect(fetchMock).toHaveBeenCalledTimes(2)
+  view.rerender(sourcePickerView(undefined, "personal", true))
+  fireEvent.keyDown(field, { key: "Enter" })
+  expect(fetchMock).toHaveBeenCalledTimes(2)
+  view.rerender(sourcePickerView())
+  available = true
+  fireEvent.keyDown(field, { key: "Enter" })
+  await screen.findByRole("heading", { name: "Recovered source" })
+  expect(fetchMock).toHaveBeenCalledTimes(3)
+  expect(queries).toEqual([null, "needle", "needle"])
+  expect(field).toHaveValue(" needle ")
+  expect(field).not.toHaveAttribute("aria-describedby")
+  expect(screen.queryByText("我的技能暂时未能读取。按 Enter 重新读取。")).not.toBeInTheDocument()
+})
+
+it("S12 来源搜索替换与关闭abort拒绝迟到结果，不覆盖query", async () => {
+  const reads: { signal: AbortSignal; resolve: (response: Response) => void }[] = []
+  vi.stubGlobal("fetch", vi.fn((_url: string, init?: RequestInit) => new Promise<Response>((resolve) => {
+    reads.push({ signal: init?.signal as AbortSignal, resolve })
+  })))
+  const view = render(sourcePickerView())
+  const field = screen.getByRole("textbox")
+  await waitFor(() => expect(reads).toHaveLength(1))
+  fireEvent.change(field, { target: { value: "old" } })
+  await waitFor(() => expect(reads).toHaveLength(2))
+  fireEvent.change(field, { target: { value: "new" } })
+  await waitFor(() => expect(reads).toHaveLength(3))
+  expect(reads[0]?.signal.aborted).toBe(true)
+  expect(reads[1]?.signal.aborted).toBe(true)
+  await act(async () => { reads[2]?.resolve(skillReply({ data: [{ ...projectSkill, display_name: "Current source" }] })) })
+  await screen.findByRole("heading", { name: "Current source" })
+  await act(async () => { reads[1]?.resolve(skillReply({ data: [{ ...projectSkill, display_name: "Late old source" }] })) })
+  expect(screen.queryByText("Late old source")).not.toBeInTheDocument()
+  expect(field).toHaveValue("new")
+  fireEvent.change(field, { target: { value: "close" } })
+  await waitFor(() => expect(reads).toHaveLength(4))
+  view.unmount()
+  expect(reads[3]?.signal.aborted).toBe(true)
+  await act(async () => { reads[3]?.resolve(skillReply({ data: [{ ...projectSkill, display_name: "Late closed source" }] })) })
+  expect(screen.queryByText("Late closed source")).not.toBeInTheDocument()
+  await act(async () => { reads[0]?.resolve(skillReply({ data: [] })) })
+})
+
+it("S12 来源actor与代际核验同步清私有结果且晚B不复活到新A", async () => {
+  const reads: { signal: AbortSignal; resolve: (response: Response) => void }[] = []
+  vi.stubGlobal("fetch", vi.fn((_url: string, init?: RequestInit) => new Promise<Response>((resolve) => {
+    reads.push({ signal: init?.signal as AbortSignal, resolve })
+  })))
+  const view = render(sourcePickerView())
+  await waitFor(() => expect(reads).toHaveLength(1))
+  await act(async () => { reads[0]?.resolve(skillReply({ data: [{ ...projectSkill, display_name: "Private source A" }] })) })
+  await screen.findByRole("heading", { name: "Private source A" })
+  view.rerender(sourcePickerView({ admitted: false, subject: "S12-source-reader", generation: 2 }))
+  expect(screen.queryByText("Private source A")).not.toBeInTheDocument()
+  expect(reads).toHaveLength(1)
+  view.rerender(sourcePickerView({ admitted: true, subject: "S12-source-B", generation: 3 }))
+  await waitFor(() => expect(reads).toHaveLength(2))
+  view.rerender(sourcePickerView({ admitted: true, subject: "S12-source-reader", generation: 4 }))
+  await waitFor(() => expect(reads).toHaveLength(3))
+  expect(reads[1]?.signal.aborted).toBe(true)
+  await act(async () => { reads[2]?.resolve(skillReply({ data: [{ ...projectSkill, display_name: "Fresh source A" }] })) })
+  await screen.findByRole("heading", { name: "Fresh source A" })
+  await act(async () => { reads[1]?.resolve(skillReply({ data: [{ ...projectSkill, display_name: "Private source B" }] })) })
+  expect(screen.queryByText("Private source B")).not.toBeInTheDocument()
+  expect(screen.queryByText("Private source A")).not.toBeInTheDocument()
+})
+
+it("S12 官方失败提示不当空列表，来源切换不带入个人结果", async () => {
+  const fetchMock = vi.fn(async (url: string) => {
+    if (url.endsWith("ListSkills")) return skillReply({ officialSkills: [], userAddedSkills: [] })
+    if (url.endsWith("ListHubSkills")) throw new TypeError("official read unavailable")
+    return skillReply({ data: [{ ...projectSkill, display_name: "Personal source only" }] })
+  })
+  vi.stubGlobal("fetch", fetchMock)
+  const boundary = { admitted: true, subject: "S12-source-modes", generation: 1 }
+  const view = render(sourcePickerView(boundary))
+  await screen.findByRole("heading", { name: "Personal source only" })
+  view.rerender(sourcePickerView(boundary, "official"))
+  expect(screen.queryByText("Personal source only")).not.toBeInTheDocument()
+  await screen.findByText("官方技能暂时未能读取。按 Enter 重新读取。")
+  expect(screen.getByRole("textbox")).toHaveAccessibleDescription("官方技能暂时未能读取。按 Enter 重新读取。")
+  expect(screen.queryByText("暂无已添加的技能")).not.toBeInTheDocument()
 })

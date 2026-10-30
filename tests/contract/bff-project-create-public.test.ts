@@ -1,3 +1,4 @@
+import { restorePublic26MessagePartsContract } from "./bff-tool-display-parent"
 import { createHash } from "node:crypto"
 import { readFile } from "node:fs/promises"
 import { resolve } from "node:path"
@@ -5,13 +6,13 @@ import { resolve } from "node:path"
 import { expect, it } from "vitest"
 import YAML from "yaml"
 
-const OWNER_COMMIT = "e461d5178c6bf92558d7cd7dd288cb29cb008525"
-const OWNER_SHA256 = "727159cea88e9f70ca3d1127306e8a6a6bcaa568398de8b0d8fec1cce6b3fae3"
-const OWNER_VERSION = "22.3.0"
+const OWNER_COMMIT = "853ca9a5d8da3500b0c37543c72198a520e46225"
+const OWNER_SHA256 = "ea0031103488daa1fcc0cca45fdd13f4d4061546ac4525c745ec47105649f7e7"
+const OWNER_VERSION = "28.17.0"
 
 it("pins BFF project creation to the owner request, idempotency and canonical response", async () => {
   const bytes = await readFile(resolve(process.cwd(), "src/generated/bff-public-openapi.yaml"))
-  expect(OWNER_COMMIT).toBe("e461d5178c6bf92558d7cd7dd288cb29cb008525")
+  expect(OWNER_COMMIT).toBe("853ca9a5d8da3500b0c37543c72198a520e46225")
   expect(createHash("sha256").update(bytes).digest("hex")).toBe(OWNER_SHA256)
   const spec = YAML.parse(bytes.toString()) as {
     info: { version: string }
@@ -87,7 +88,7 @@ it("pins existing public Project list/get permissions, envelopes and absence of 
 it("pins the sole added Project rename operation and its closed command receipt/error/header contract", async () => {
   const bytes = await readFile(resolve(process.cwd(), "src/generated/bff-public-openapi.yaml"))
   expect(createHash("sha256").update(bytes).digest("hex")).toBe(OWNER_SHA256)
-  const spec = YAML.parse(bytes.toString()) as {
+  const spec = YAML.parse(restorePublic26MessagePartsContract(bytes.toString())) as {
     paths: Record<string, Record<string, { operationId?: string }>>
     components: { schemas: Record<string, unknown>; responses: Record<string, unknown>; parameters: Record<string, unknown> }
   }
@@ -96,8 +97,8 @@ it("pins the sole added Project rename operation and its closed command receipt/
       .filter(([method]) => ["get", "post", "put", "patch", "delete", "options", "head"].includes(method))
       .map(([, operation]) => operation.operationId),
   )
-  expect(operations).toHaveLength(182)
-  expect(new Set(operations).size).toBe(182)
+  expect(operations).toHaveLength(186)
+  expect(new Set(operations).size).toBe(186)
   expect(operations.filter((operation) => operation === "renameProject")).toHaveLength(1)
   expect(spec.paths["/v1/projects/{projectId}/name"]?.patch).toMatchObject({
     operationId: "renameProject",

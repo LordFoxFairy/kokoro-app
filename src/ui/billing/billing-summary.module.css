@@ -1,5 +1,5 @@
 .balanceCard { padding: 1.1rem 1.25rem; background: var(--secondary); border-radius: var(--radius-xl); }
-[data-embedded="billing"] .balanceCard { width: 100%; height: 11.9375rem; min-height: 11.9375rem; box-sizing: border-box; padding: 0 1rem; border: 1px solid var(--border); border-radius: 0.75rem; background: var(--secondary); color: var(--foreground); }
+.balanceCard[data-embedded="billing"] { width: 100%; height: 11.9375rem; min-height: 11.9375rem; box-sizing: border-box; padding: 0 1rem; border: 1px solid var(--border); border-radius: 0.75rem; background: var(--secondary); color: var(--foreground); }
 .embeddedBalanceContent { display: flex; height: 100%; min-height: 0; flex-direction: column; }
 .embeddedPlanHeader { display: flex; align-items: center; justify-content: space-between; height: 3.5625rem; min-height: 3.5625rem; gap: 1rem; border-bottom: 1px dashed var(--border); font-size: 1rem; }
 .embeddedPlanHeader strong { font-family: var(--font-serif); font-size: 1rem; font-weight: 700; line-height: 1.375rem; }
@@ -9,7 +9,7 @@
 .embeddedCreditCopy { min-width: 0; flex: 1; }
 .embeddedMetric { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; font-size: 0.875rem; line-height: 1.25rem; }
 .embeddedMetric > span:first-child { display: inline-flex; align-items: center; gap: 0.25rem; font-weight: 500; }
-.embeddedMetric strong { font-size: 0.875rem; font-weight: 500; line-height: 1.25rem; font-variant-numeric: tabular-nums; }
+.embeddedMetric strong { min-width: 0; overflow-wrap: anywhere; text-align: end; font-size: 0.875rem; font-weight: 500; line-height: 1.25rem; font-variant-numeric: tabular-nums; }
 .embeddedMetricSubrow { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-top: 0.25rem; color: var(--muted-foreground); font-size: 0.8125rem; line-height: 1.125rem; font-variant-numeric: tabular-nums; }
 .embeddedRefreshHint { margin: 0.25rem 0 0; color: var(--muted-foreground); font-size: 0.75rem; line-height: 1.125rem; }
 .metricHelp[type="button"] { display: inline-flex; width: 0.875rem; height: 0.875rem; min-height: 0; align-items: center; justify-content: center; border: 0; padding: 0; background: transparent; color: var(--muted-foreground); }

@@ -1,3 +1,61 @@
+## Public28.17 Custom API safe refs（正式输入候选消费）
+
+固定正式BFF853ca9a5d8da3500b0c37543c72198a520e46225／SHAea0031103488daa1fcc0cca45fdd13f4d4061546ac4525c745ec47105649f7e7，既有12public generator正规重出。原tool-display generator从MessageCreateRequest与private composer同字段派生closed≤32／unique profile_id／正int32版本schema及version叶；不另建wire中心。新test-only bff-custom-api-selection-parent只迁入正式owner函数的TS类型，精确逆回完整28.16，再进原composer父链。其余private／policy3／Auth／relay／lock不迁，无normal激活声明。
+
+## Public28.10 answer actions／exact Run display（consumer候选）
+
+唯一完整snapshot来自正式BFF `d629653cbf5799a44db55a947321a6ec152b7dcd`，SHA256 `4d93ec15e2931768afafffb2101039b1da64757ea48c760d16ef88aa8753db16`。12现有public生成器正规重出；扩原tool-display generator从closed成功／错误／状态图生成窄answer validators，五private与独立policy3保持。test-only完整28.10→28.9源自正式owner唯一inverse，之后旧父所有hash/oracle不变，无runtime fallback。
+
+新flat same-origin事实包括feedback、regeneration receipt和单Run display；新可选Skill name/path/revision与file virtual_path由同一schema strict解码，private regenerated_from_message_id不扩ordinary/public/share Message。非canonical revision、mount错、wrong ref／extra／unsafe path拒绝；新client与四operation adapter保当次Session、原key、单10秒／1MiB完整EOF／取消，不自动重发写请求、不从当前catalog造名称。
+
+## Public28.9 私有取消读取（消费者候选）
+
+唯一snapshot固定正式BFF `51e049df72c1fb2fe82b9114135c2fdc1a3450d9`，SHA256 `b438a749c919d24c4e0f1dadfdbcbbb11e0ac755f5785c543a661336c2cbb354`；12现有生成器正规输出，原Agent failure生成器另核私有取消分支闭集guard、输出唯一取消literal。test-only具名inverse全字节回原28.8／6376e2d2…后进入不改的历史链；五private及独立policy3保持。不以202、本地停止或failed空正文推断取消；正常配对由Root独立验收。
+
+## Project pin consumer
+
+Public28.5固定BFF c195d2325ba9c433cc4c64e25e6c67eaf73c47f6／194操作／SHA256109a2ae063b10699ae52776b09533c5622d906679c093d65730a289206043b1a。本人Project pin仅两具名操作；原10public生成链与新窄pin decoder同一snapshot正规生成，三个private pin不变。精确完整28.5→28.4 inverse委托旧证明链，不为runtime兼容。
+
+## 2026-10-27 当前 Public28.4 原件
+
+固定 BFF `3d52a90ec42601a19536e95a8b9e48f93a63276c`／28.4.0／192 operations／canonical SHA256 `48aa9638d133223c9f78655e9398ddbb44159963f92a2db891a09212f3aa2726`，唯一 Git blob 原件经十公共生成链消费。有限工具 profile 派生 optional 安全对象和条件 code-kind／file basename 规则；公共 snapshot process 收为 null，私有独立保留。新增完整28.4→28.3 test-only inverse 后再进入原历史父链，原 SHA 与三条私有 MCP pin 不变；正常 producer／reader 配对由 Root 验收。
+
+## 2026-10-27 当前 Public28.3 原件
+
+固定BFF `b2b9eb1eac4a3f0b0cd4099ed59cbf756f14124c`／Public28.3.0／192操作，完整 canonical SHA256 `85a1b51cd151581b51d7ea7992d85e04462c03fafb36d0527e1df352dd85223a`，唯一完整snapshot和十个既有公共生成器同步正规更新。新增两个文件工具类别来自正式 `RunToolActivity`，Failure业务tuple及其它接口不变；三条独立私有pin保持。测试先精确逆回完整28.2全文，再走原历史父链，不作运行fallback或历史重分类。
+
+## 2026-10-27 Project MCP推荐独立正式消费者
+
+完整Public28.2.0／192操作snapshot固定BFF `21c6447316aefcd8189f7dcedbb522d91a8e6cf5` canonical Git blob，SHA256 `e0bb74069c65fb8d414a6a3cb0d6f4c8d9bcb40bb693c2409a9cbe051b8bac53`；九个既有public生成器正规重出，新具名 `scripts/generate-bff-project-mcp-recommendations.mjs` 派生三ref闭集、CAS完整替换输入、ACK和错误tuple。独立MCP私有pin不变；test-only exact28.2→28.1全文逆证先验证新全文和具名delta，再进入未改旧父hash证明。在线Docs同pin，窄承接早已公开的Public27两个扩展节点，不增加执行权限。
+
+推荐仅配置偏好，不是definition pin／Connection授权或CustomAPI执行能力；standalone client与Hub same-origin薄桥只承接本人Project GET/PUT。PUT自然幂等，无Idempotency-Key／receipt／自动重试；网络未知后GET只证当前状态。16KiB请求、64KiB响应、admission至EOF共10秒，真实HTTP loopback覆盖可信Content-Length、完整原bytes、取消和总预算。组件接线、正常激活和跨owner产品验收由Root另行负责，以下记录按原发行保留。
+
+## 2026-10-27 Project资源消费者固定发行物
+
+唯一公开snapshot由BFF `11777152bf8fe2ae316e4c67fb355eab94e7c0b5` 的canonical Git blob原字节固定，Public28.1.0/190 operations，SHA256 `07e98d803ac3c7342c2e322b507e8760d89e63bc5ecdab3cdf447b68bf3c904c`。八个既有public窄生成器正规重出；Project资源decoder由 `scripts/generate-bff-project-resource.mjs` 从同snapshot派生，生成check纳入具名contract测试，不增第二editable wire源。metadata仅`data.resource`（无list-only created_at）；下载是完整attachment二进制，删除是永久逻辑Asset删除而非解除关联。test-only exact28.1→28完整逆证先核原28全文与原187项库存，再委托未改旧SHA证明链；不作runtime兼容。正常激活/真实owner/浏览器结果由Root验收，本文不冒称。
+
+## 2026-10-26 Public28 安全工具类别（源码候选）
+
+唯一 full snapshot 从正式 BFF `5dfce099c7ce448e18b8ce5b1e26bb01692c9033` Git blob取得，28.0.0／187操作／SHA256 `34ca44c01ebc73f7ff76a4a06be33696b96ba1636e8818f02c38d57b1f539809`。七个原 public 窄生成器正规重出；新增 `generate-bff-tool-display.mjs` 从同一 full 原件生成安全七类 tuple/type/provenance，`pnpm contract` 严格检查。唯一共享 activity schema承接 live/snapshot/ordered parts；test-only28→27完整回原 SHA256 `d2b3d546164cadc9655616fc44daf1511a6f7d4a2e5d172f1415552af8942ed1` 后进入未改固定27 helper与旧父链。独立MCP私有原件/pin不变，无新网络/Schema/phase；正常组合由Root另验。
+
+## 2026-10-25 personal SSE 固定 Public26 消费者候选
+
+唯一 public snapshot 来自正式 BFF Git 对象 `aa0bdeb4397d3a022edf9b3cfc53d5a6cfb281b1`／Public26，全文 SHA256 `20d26736cf23da32c242c2c7cf75c45affb62c5d27696dcecb0bc6193bc39a09`；七个原 public 生成器正规重出。Connection transport 只接受 HTTP/SSE；test-only 完整26→25逆恢复原 SHA256 `7261ac9ce2140555ba97ebff2bf0359533cc49dda014b08dcd6a6054a8d38b1c` 后进入未变25→24与历史证明，不是运行 fallback。独立 connector-error／project-publication 原件、固定 pin 与生成链不变；候选完整门／正常成套由 Root 串行接手，下方按原发行保留历史。
+
+## 2026-10-22 当前精确模型绑定发行
+
+唯一snapshot固定BFF `a77276b35b07eb65df8a0af2e41b461b393afb12`／Public23.0.0／186，SHA256 `34ea71e0aa56256ca00fc5b3c40abd4d142bea82e664a6871190b8547ec2b9e6`。MeteringRate必填model_revision闭集{id,content_digest}；七原生成器正规配对，完整22.5父件与186有序操作受test-only inverse保护，无运行兼容。当前本地验收见CURRENT，以下为历史。
+
+## CREDIT-1 管理员积分同源通路（2026-10-22，本地候选）
+
+唯一canonical固定BFF `4d8a02828ea29fb933b29bc60670ada9761cadef`／Public22.5.0／183，SHA256 `c77e4921ccce98cfd91d77fc6897cf327599f237ed13438117323b6a3f8555eb`；七个既有public窄生成器正规重出／check，独立connector错误profile未改。新test-only精确逆回原22.3全文和182项顺序，再进入未改旧父hash证明，不是运行兼容。
+
+`admin-credit-proxy.ts`仅为当前租户成员GET与非现金充值POST接原Product会话；不扩identity/billing前缀，不解析／换算资金DTO，不自报tenant/actor，不自动重试或修改原body/key/时间。复用原有限传输，16KiB请求、1MiB响应、body→session→ACK EOF同10秒绝对预算；取消／迟到／未知返回未确认，不造成功。源码位置与内部边界见 `src/lib/server/INDEX.md` 和三面设计。
+
+主方停写完整七门均exit0：contract302、architecture50、250文件4721测试PASS／0SKIP，默认Turbopack build和post-types通过；独立preview桌面／移动108 E2E PASS，零重试，官方typegen恢复后1143非文档输入SHA256无漂移。新11项真实loopback薄桥与原Admin／模型24项、两个契约用例共37 PASS。独审无确定P0–P2；Product session在loopback中为显式夹具，不冒正常资金／登录旅程。旧固定pin断言与新test-only数组strict类型失败保留，按新正式pin／准确测试类型修正，未放宽门禁。
+
+App在线Docs固定同源契约，177公开操作／369schema、原6私有操作不发布；新增积分与非现金充值指南。完整Docs check通过（44测试、五例、确定性生成／架构／构建，54HTML／17654内部链接），构建仍有原大chunk警告。未将normal运行、模型／工具或实际扣分算作本片完成；正常后台→App→BFF→Billing旅程紧接验证，真钱支付不做。原四MCP视觉WIP已独立保存，本片不包含它们。
+
 ## MODEL-1 Admin上游发现同源桥候选（2026-10-22）
 
 现 `src/app/api/admin/[...path]/route.ts` 仅新增精确 provider UUID 的 `upstream-models` GET，沿Product Session/配置Domain/BFF管理权限与原request-id/no-store；拒query、body framing（含CL0）、Content-Type及命令头。准入至完整响应EOF共10秒/1MiB，取消不晚发请求，无Key、模型执行、自动发布或新持久事实。真实loopback薄adapter新增15项及原Admin9项均通过；正常浏览器/完整owner链由主方后续配对，不以此称UI已验收。

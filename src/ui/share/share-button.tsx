@@ -2,8 +2,7 @@
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Link2 } from "lucide-react"
+import { Check, Globe, Link2, Share2, X } from "lucide-react"
 import { Spinner } from "@/components/ui/spinner"
 
 // 会话头部分享控件（SHARE-1）：创建可撤销只读分享 → 复制公共链接 / 撤销。
@@ -34,6 +33,7 @@ function shareUrl(shareId: string): string {
 
 export function ShareButton({ client, sessionId }: ShareButtonProps) {
   const t = useT()
+  const [open, setOpen] = useState(false)
   const [state, setState] = useState<ShareState>({ kind: "idle" })
   const [busy, setBusy] = useState<"copy" | "revoke" | null>(null)
   const [confirmingRevoke, setConfirmingRevoke] = useState(false)
@@ -82,7 +82,7 @@ export function ShareButton({ client, sessionId }: ShareButtonProps) {
   }, [])
 
   const closeShared = useCallback(() => {
-    setState({ kind: "idle" })
+    setOpen(false)
     setConfirmingRevoke(false)
     // The controlled Popover can unmount before Radix's default focus return
     // runs. Keep the share action keyboard-reopenable after Escape, Done, and
@@ -136,15 +136,17 @@ export function ShareButton({ client, sessionId }: ShareButtonProps) {
       return
     }
     setBusy(null)
+    setState({ kind: "idle" })
     closeShared()
   }, [busy, client, closeShared, sessionId, state])
 
   return (
     <div className={styles.wrap} data-testid="share-control">
       <Popover
-        open={state.kind === "shared"}
-        onOpenChange={(open) => {
-          if (!open && state.kind === "shared") closeShared()
+        open={open}
+        onOpenChange={(nextOpen) => {
+          if (nextOpen) setOpen(true)
+          else closeShared()
         }}
       >
         <PopoverContent
@@ -157,72 +159,91 @@ export function ShareButton({ client, sessionId }: ShareButtonProps) {
             focusTrigger()
           }}
         >
-          <div className="sr-only">{t("share.title")}</div>
-          {state.kind === "shared" ? (
-            <>
-              <p className={styles.hint}>{t("share.readonlyHint")}</p>
-              <div className={styles.linkRow}>
-                <Input className={styles.link} readOnly value={state.url} aria-label={t("share.linkAria")} />
-                <Button ref={copyButtonRef} variant="outline" type="button" className={styles.copy} disabled={busy !== null} aria-busy={busy === "copy"} onClick={() => void copy()}>
-                  {busy === "copy" ? <Spinner aria-hidden="true" /> : null}
-                  {state.copied ? t("share.copied") : t("share.copy")}
-                </Button>
+          <div className={styles.header}>
+            <h2 className={styles.title}>{t("share.button")}</h2>
+            <Button variant="ghost" type="button" className={styles.close} aria-label={t("share.close")} onClick={closeShared}>
+              <X aria-hidden="true" />
+            </Button>
+          </div>
+          <div className={styles.body}>
+            <div className={styles.accessRow}>
+              <span className={styles.accessIcon}><Globe aria-hidden="true" /></span>
+              <div className={styles.accessText}>
+                <span className={styles.accessTitle}>{t("share.publicAccess")}</span>
+                <p className={styles.hint}>{state.kind === "shared" ? t("share.readonlyHint") : t("share.publishHint")}</p>
               </div>
-              {state.revokeError ? (
-                <Alert variant="destructive" className={styles.err}>
-                  <AlertDescription>{t("share.error")}</AlertDescription>
-                </Alert>
-              ) : null}
-              {confirmingRevoke ? (
-                <div className={styles.confirmation} role="group" aria-label={t("share.revokeConfirmHint")}>
-                  <p className={styles.confirmationHint}>{t("share.revokeConfirmHint")}</p>
+              {state.kind === "shared" ? <Check className={styles.check} aria-hidden="true" /> : null}
+            </div>
+            {state.kind === "shared" ? (
+              <>
+                <div className={styles.linkRow}>
+                  <Input className={styles.link} readOnly value={state.url} aria-label={t("share.linkAria")} />
+                  <Button ref={copyButtonRef} variant="outline" type="button" className={styles.copy} disabled={busy !== null} aria-busy={busy === "copy"} onClick={() => void copy()}>
+                    {busy === "copy" ? <Spinner aria-hidden="true" /> : null}
+                    {state.copied ? t("share.copied") : t("share.copy")}
+                  </Button>
+                </div>
+                {state.revokeError ? (
+                  <p role="status" className={styles.err}>{t("share.error")}</p>
+                ) : null}
+                {confirmingRevoke ? (
+                  <div className={styles.confirmation} role="group" aria-label={t("share.revokeConfirmHint")}>
+                    <p className={styles.confirmationHint}>{t("share.revokeConfirmHint")}</p>
+                    <div className={styles.actions}>
+                      <Button
+                        ref={confirmRevokeRef}
+                        variant="destructive"
+                        type="button"
+                        className={styles.revoke}
+                        disabled={busy !== null}
+                        aria-busy={busy === "revoke"}
+                        onClick={() => void revoke()}
+                      >
+                        {busy === "revoke" ? <Spinner aria-hidden="true" /> : null}
+                        {t("share.revokeConfirm")}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        type="button"
+                        className={styles.dismiss}
+                        disabled={busy !== null}
+                        onClick={() => {
+                          setConfirmingRevoke(false)
+                          window.requestAnimationFrame(() => revokeTriggerRef.current?.focus())
+                        }}
+                      >
+                        {t("share.cancel")}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
                   <div className={styles.actions}>
                     <Button
-                      ref={confirmRevokeRef}
-                      variant="destructive"
+                      variant="ghost"
                       type="button"
                       className={styles.revoke}
+                      ref={revokeTriggerRef}
                       disabled={busy !== null}
                       aria-busy={busy === "revoke"}
-                      onClick={() => void revoke()}
+                      onClick={() => setConfirmingRevoke(true)}
                     >
-                      {busy === "revoke" ? <Spinner aria-hidden="true" /> : null}
-                      {t("share.revokeConfirm")}
+                      {t("share.revoke")}
                     </Button>
-                    <Button
-                      variant="outline"
-                      type="button"
-                      className={styles.dismiss}
-                      disabled={busy !== null}
-                      onClick={() => {
-                        setConfirmingRevoke(false)
-                        window.requestAnimationFrame(() => revokeTriggerRef.current?.focus())
-                      }}
-                    >
-                      {t("share.cancel")}
+                    <Button variant="outline" type="button" className={styles.dismiss} onClick={closeShared}>
+                      {t("share.done")}
                     </Button>
                   </div>
-                </div>
-              ) : (
-                <div className={styles.actions}>
-                  <Button
-                    variant="destructive"
-                    type="button"
-                    className={styles.revoke}
-                    ref={revokeTriggerRef}
-                    disabled={busy !== null}
-                    aria-busy={busy === "revoke"}
-                    onClick={() => setConfirmingRevoke(true)}
-                  >
-                    {t("share.revoke")}
-                  </Button>
-                  <Button variant="outline" type="button" className={styles.dismiss} onClick={closeShared}>
-                    {t("share.done")}
-                  </Button>
-                </div>
-              )}
-            </>
-          ) : null}
+                )}
+              </>
+            ) : (
+              <>
+                {state.kind === "error" ? <p role="status" className={styles.err}>{t("share.error")}</p> : null}
+                <Button type="button" className={styles.publish} disabled={state.kind === "creating"} aria-busy={state.kind === "creating"} onClick={() => void create()}>
+                  <Link2 aria-hidden="true" />{t("share.publish")}
+                </Button>
+              </>
+            )}
+          </div>
         </PopoverContent>
         <PopoverTrigger asChild>
           <Button variant="outline"
@@ -230,22 +251,12 @@ export function ShareButton({ client, sessionId }: ShareButtonProps) {
             className={styles.trigger}
             ref={triggerRef}
             data-testid="share-button"
-            disabled={state.kind === "creating"}
-            aria-busy={state.kind === "creating"}
-            onClick={() => {
-              if (state.kind !== "shared") void create()
-            }}
           >
-            {state.kind === "creating" ? <Spinner aria-hidden="true" /> : <Link2 data-icon="inline-start" aria-hidden="true" />}
-            {state.kind === "creating" ? t("share.creating") : t("share.button")}
+            <Share2 data-icon="inline-start" aria-hidden="true" />
+            {t("share.button")}
           </Button>
         </PopoverTrigger>
       </Popover>
-      {state.kind === "error" ? (
-        <Alert variant="destructive" className={styles.err}>
-          <AlertDescription>{t("share.error")}</AlertDescription>
-        </Alert>
-      ) : null}
     </div>
   )
 }

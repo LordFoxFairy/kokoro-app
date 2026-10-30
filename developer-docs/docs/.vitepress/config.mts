@@ -123,6 +123,7 @@ export default defineConfig({
           { text: '断线后 replay', link: '/guides/replay-after-disconnect' },
           { text: '幂等 command', link: '/guides/idempotent-commands' },
           { text: 'Cursor 分页', link: '/guides/cursor-pagination' },
+          { text: '积分与非现金充值', link: '/guides/credits' },
           { text: '上传生命周期', link: '/guides/upload-lifecycle' },
           { text: 'Webhooks 当前边界', link: '/guides/webhooks' },
         ],

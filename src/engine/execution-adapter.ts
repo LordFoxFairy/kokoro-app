@@ -1,3 +1,5 @@
+import { selectedCustomApiProfilesSchema } from "@/contract/chat"
+import { freezeCustomApiSelection, type CustomApiSelection } from "./custom-api-selection"
 // Engine 执行/传输适配边界：集中构造消息与 control wire，并隔离流代际和微任务批处理。
 
 import type { InteractionState, ResumeDecision } from "@/contract/control"
@@ -21,6 +23,8 @@ export type MessageExecutionOptions = {
   mode: AgentMode
   model: string | null
   selectedSkillSourceRefs: readonly string[] | undefined
+  selectedCustomApiProfiles?: readonly CustomApiSelection[]
+  selectedMcpConnectionIds?: readonly string[]
 }
 
 export type CreateMessageArgs = {
@@ -76,12 +80,15 @@ export function buildMessageCreateParams(args: {
   scope: SessionScope
 }): MessageCreateParams {
   const { options } = args
+  const customApis = freezeCustomApiSelection(options.selectedCustomApiProfiles ?? [])
   return {
     idempotency_key: args.idempotencyKey,
     content: args.content,
     thinking: options.mode === "thinking",
     ...(options.model !== null ? { model: options.model } : {}),
     ...(options.selectedSkillSourceRefs === undefined ? {} : { selected_skill_source_refs: [...options.selectedSkillSourceRefs] }),
+    ...(options.selectedMcpConnectionIds?.length ? { selected_mcp_connection_ids: [...options.selectedMcpConnectionIds] } : {}),
+    ...(customApis.length ? { selected_custom_api_profiles: selectedCustomApiProfilesSchema.parse(customApis.map(value => ({ profile_id: value.profileId, expected_state_version: Number(value.expectedStateVersion) }))) } : {}),
     ...(args.scope.kind === "project" ? { project_ref: args.scope.projectRef } : {}),
   }
 }

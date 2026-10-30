@@ -1,11 +1,11 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { useState } from "react"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 
 import { LocaleProvider } from "@/i18n/context"
 import { PersonalSkillsRead } from "@/ui/skills/personal-skills-read"
-import { HubClientError, type HubClient } from "@/hub/client"
-import type { SkillPublishClient } from "@/hub/skill-publish-client"
+import { createHubClient, HubClientError, type HubClient } from "@/hub/client"
+import { createSkillPublishClient, type SkillPublishClient } from "@/hub/skill-publish-client"
 import { PersonalSkillPublishDialog } from "@/ui/skills/personal-skill-publish-dialog"
 
 vi.mock("@/ui/auth/use-session-state", () => ({
@@ -200,4 +200,46 @@ it("does not announce an in-flight publication read when current admission denie
  render(<LocaleProvider><PersonalSkillPublishDialog base={base} open admitted={false} client={{listHistory,createVersion} as unknown as SkillPublishClient} onOpenChange={vi.fn()} onPublished={vi.fn()}/></LocaleProvider>)
  expect(screen.getByTestId("personal-skill-publish-dialog").querySelector("form")).toHaveAttribute("aria-busy","false")
  expect(listHistory).not.toHaveBeenCalled();expect(createVersion).not.toHaveBeenCalled()
+})
+
+
+it.each([
+  { locale: "zh", description: "选择单个 ZIP 包。" },
+  { locale: "en", description: "Choose one ZIP package." },
+  { locale: "ja", description: "Choose one ZIP package." },
+])("$locale publish guidance exposes only the file instruction, not internal receipt/state or an early success promise", ({ locale, description }) => {
+  window.localStorage.setItem("kokoro.locale", locale)
+  const client = createSkillPublishClient(), createDraft = vi.spyOn(client, "createDraft"), publish = vi.spyOn(client, "publishDraft"), onPublished = vi.fn()
+  render(<LocaleProvider><PersonalSkillPublishDialog open client={client} onOpenChange={vi.fn()} onPublished={onPublished} /></LocaleProvider>)
+  const dialog = screen.getByTestId("personal-skill-publish-dialog")
+  expect(dialog).not.toHaveAccessibleDescription(/ACTIVE|回执|receipt/iu)
+  expect(dialog).toHaveAccessibleDescription(description)
+  expect(createDraft).not.toHaveBeenCalled(); expect(publish).not.toHaveBeenCalled(); expect(onPublished).not.toHaveBeenCalled()
+})
+
+
+it("personal package pending keeps its navigation and exposes only a screen-reader loading status without a fake empty state", async () => {
+  const skill = { skill_id: "quiet-personal", source_ref: "skill:quiet-personal", series_id: "quiet-series", revision: "1", name: "Quiet personal", summary: "Confirmed personal", tags: [], status: "active" as const, skill_updated_at: "2026-10-27T00:00:00Z", example_prompts: [], category_keys: [], product: { source_kind: "personal" as const, publication_audience: "owner" as const, state_version: "1" } }
+  let finish!: (response: Response) => void
+  const text = "# Personal confirmed", files = [{ path: "SKILL.md", size_bytes: String(new TextEncoder().encode(text).byteLength) }]
+  const response = (data: unknown, managed = false) => Response.json({ data, ...(managed ? { meta: { request_id: "quiet-personal" } } : {}) }, { headers: { "cache-control": "no-store", "x-request-id": "quiet-personal" } })
+  const fetcher = vi.spyOn(globalThis, "fetch").mockImplementation(async input => {
+    const path = String(input)
+    if (path.endsWith("/package")) return new Promise<Response>(resolve => { finish = resolve })
+    if (path.includes("/package?")) return response({ source_ref: skill.source_ref, revision: "1", files, selected_file: { path: "SKILL.md", text } })
+    return response(skill, true)
+  })
+  try {
+    const listPersonalSkills = vi.fn().mockResolvedValue({ skills: [skill], next_cursor: null })
+    render(<LocaleProvider><PersonalSkillsRead client={{ ...createHubClient(), listPersonalSkills }} /></LocaleProvider>)
+    fireEvent.click(await screen.findByRole("button", { name: skill.name })); await screen.findByRole("dialog", { name: skill.name })
+    fireEvent.click(screen.getByRole("button", { name: "查看详情" }))
+    const loading = await screen.findByRole("status"); expect(loading).toHaveTextContent("正在读取技能文件…"); expect(loading).toHaveClass("sr-only")
+    expect(loading.parentElement).toHaveAttribute("aria-busy", "true")
+    const back = screen.getByRole("button", { name: "返回简介" }); back.focus()
+    expect(screen.queryByRole("heading", { name: "Personal confirmed" })).toBeNull()
+    await act(async () => { finish(response({ source_ref: skill.source_ref, revision: "1", files, selected_file: null })) })
+    await screen.findByRole("heading", { name: "Personal confirmed" }); expect(screen.getByRole("button", { name: "返回简介" })).toBe(back); expect(document.activeElement).toBe(back)
+    expect(screen.queryByRole("status")).toBeNull(); expect(fetcher.mock.calls).toHaveLength(3)
+  } finally { fetcher.mockRestore() }
 })

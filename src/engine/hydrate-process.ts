@@ -9,7 +9,7 @@ function assertSnapshotReadActive(signal: AbortSignal, deadlineAt: number): void
 
 export async function fetchCompleteSnapshot(client: SessionClient, sessionId: string, scope: SessionScope, signal: AbortSignal, deadlineAt: number, retryExpired = true): Promise<SessionSnapshot | null> {
   assertSnapshotReadActive(signal, deadlineAt)
-  const snapshot = await client.fetchSnapshot(sessionId, { signal })
+  const snapshot = await client.fetchSnapshot(sessionId, { signal, scope })
   assertSnapshotReadActive(signal, deadlineAt)
   if (snapshot === null || snapshot.execution_process === null) return snapshot
   const process = snapshot.execution_process

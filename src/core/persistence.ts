@@ -10,6 +10,7 @@ const storedEntrySchema = z
     title: z.string(),
     updatedAt: z.number(),
     mode: z.enum(["fast", "thinking"]),
+    localDraft: z.literal(true).optional(),
   })
   .strict()
 

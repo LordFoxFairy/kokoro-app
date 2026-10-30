@@ -52,12 +52,10 @@ export function McpProviderDetailDialog({
   onPrompt,
   open,
   pendingError = false,
-  onRetry,
 }: {
   provider: McpConnectorProvider | null;
   open?: boolean;
   pendingError?: boolean;
-  onRetry?: () => void;
   /** An admitted installed row or an exact selected locator; never an inferred provider-key binding. */
   connection?: McpConnector | null;
   connectionLookup?: McpProviderConnectionLookup;
@@ -226,7 +224,7 @@ export function McpProviderDetailDialog({
           <section className={styles.providerDetailBody} aria-busy={!pendingError}>
             <McpManagementStatus command={managementCommand} admitted={admitted} onResume={onResumeManagement} />
             <DialogTitle>{t("rail.navPlugins")}</DialogTitle>
-            {pendingError ? <Alert variant="destructive" role="alert"><AlertDescription>{t("mcp.loadError")}</AlertDescription><Button type="button" variant="outline" onClick={onRetry}>{t("mcp.retry")}</Button></Alert> : <span role="status">{t("mcp.loading")}</span>}
+            <span className="sr-only" role="status">{t(pendingError ? "mcp.loadError" : "mcp.loading")}</span>
           </section>
         )}
       </DialogContent>

@@ -1,10 +1,11 @@
 // Composer 模型选择器（MODEL-UX）：候选下拉渲染 + 选择回调（raw business label key）+ 首条锁定态 + 空候选隐藏。
 import { readFileSync } from "node:fs"
 import { act, cleanup, createEvent, fireEvent, render, screen } from "@testing-library/react"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { renderHook } from "@testing-library/react"
 import { createSessionEngine } from "@/engine/machine"
 import { createFakeClient, createMemoryStorage, settle } from "../engine/fakes"
+import { ProductReadRecheckProvider } from "@/ui/auth/product-read-recheck-context"
 import { useComposerSelectors } from "@/ui/shell/use-composer-selectors"
 import { createRef, type FormEvent, useState } from "react"
 
@@ -44,7 +45,9 @@ function renderComposer(overrides: Partial<Parameters<typeof Composer>[0]> = {})
   return props
 }
 
+beforeEach(() => window.localStorage.setItem("kokoro.web.auth-index-subject", "catalog-reader"))
 afterEach(() => {
+  window.localStorage.removeItem("kokoro.web.auth-index-subject")
   cleanup()
   vi.useRealTimers()
 })
@@ -117,7 +120,7 @@ describe("Composer model selector", () => {
     const client = createFakeClient()
     const engine = createSessionEngine({ client, storage: createMemoryStorage<ConversationStore>(null) })
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ models: MODELS, next_cursor: null })))
-    const hook = renderHook(() => useComposerSelectors(engine))
+    const hook = renderHook(() => useComposerSelectors(engine, { readBoundary: catalogAdmission }))
     try {
       await act(async () => { await settle(); engine.submit("no legacy preference"); await settle() })
       expect(client.createCalls[0]?.body).not.toHaveProperty("model")
@@ -748,16 +751,9 @@ it("编辑器基础输入表面去除阴影，不依赖 fine pointer 或聚焦�
   expect(baseInput).toMatch(/box-shadow:\s*none;/)
 })
 
-it("桌面前置 ghost 工具没有静态方框，并保留独立环境控件与可见焦点保障", () => {
+it("独立环境控件与高对比模式保留可见焦点保障", () => {
   const css = readFileSync(`${process.cwd()}/src/ui/composer/composer.module.css`, "utf8")
-  const leadingTools = css.match(/^\.wrap\[data-desktop-web="true"\] \.leadingActions button\s*\{([^}]*)\}/m)?.[1]
-  expect(leadingTools).toBeDefined()
-  expect(leadingTools).toMatch(/width:\s*2rem;/)
-  expect(leadingTools).toMatch(/height:\s*2rem;/)
-  expect(leadingTools).toMatch(/background:\s*transparent;/)
-  expect(leadingTools).not.toMatch(/(?:border|outline)(?:-[a-z]+)?:/)
-  expect(css).not.toMatch(/\.leadingActions button \+ button\s*\{[^}]*(?:border|outline)(?:-[a-z]+)?:/)
-
+  // Toolbar geometry/focus is exercised in the real browser journey, not a private CSS selector.
   const environmentControl = css.match(
     /^\.wrap\[data-desktop-web="true"\]\[data-empty-workspace="true"\] \[data-environment-state="static"\]\s*\{([^}]*)\}/m,
   )?.[1]
@@ -831,12 +827,38 @@ it("Textarea 在输入、删除和宽度改变时增高/收缩，忽略纯高度
 })
 
 
-it("catalog failure is visible with explicit retry and no internal details", () => {
+it.each([
+  { models: [], selectedModel: "unconfirmed-model", modelLocked: false },
+  { models: MODELS, selectedModel: "gpt-5", modelLocked: false },
+  { models: MODELS, selectedModel: "gpt-5", modelLocked: true },
+])("catalog failures remain quiet without replacing confirmed choices or submitting ($modelLocked, $selectedModel)", ({ models, selectedModel, modelLocked }) => {
   const onRetryModels = vi.fn()
-  renderComposer({ models: [], modelCatalogStatus: "error", onRetryModels })
-  expect(screen.getByRole("alert")).toHaveTextContent("Could not load the model catalog")
-  fireEvent.click(screen.getByRole("button", { name: "Retry loading" }))
-  expect(onRetryModels).toHaveBeenCalledOnce()
+  const props = renderComposer({ models, selectedModel, modelLocked, modelCatalogStatus: "error", onRetryModels, draft: "preserved draft" })
+  expect(screen.queryByRole("alert")).toBeNull()
+  expect(screen.queryByRole("button", { name: "Retry loading" })).toBeNull()
+  expect(screen.getByText("Could not load the model catalog. Please retry.")).toHaveAttribute("role", "status")
+  expect(document.querySelector('[data-slot="composer-selector-cluster"]')).toHaveAttribute("aria-busy", "false")
+  expect(screen.getByRole("textbox", { name: "Chat input" })).toHaveValue("preserved draft")
+  expect(props.onModelChange).not.toHaveBeenCalled()
+  expect(props.onSubmit).not.toHaveBeenCalled()
+  expect(onRetryModels).not.toHaveBeenCalled()
+  if (models.length === 0) {
+    expect(screen.queryByRole("button", { name: /Switch model:/ })).toBeNull()
+    expect(screen.queryByRole("button", { name: /locked this turn/i })).toBeNull()
+    expect(screen.queryByRole("menuitemradio")).toBeNull()
+  } else if (modelLocked) {
+    expect(screen.getByRole("button", { name: /Model: gpt-5 \(locked this turn\)/i })).toBeDisabled()
+    expect(screen.queryByRole("button", { name: /Switch model:/ })).toBeNull()
+  } else {
+    const trigger = screen.getByRole("button", { name: "Switch model: gpt-5" })
+    expect(trigger).toBeEnabled()
+    fireEvent.pointerDown(trigger)
+    expect(screen.getByRole("menuitemradio", { name: "gpt-5" })).toHaveAttribute("data-state", "checked")
+    expect(screen.getAllByRole("menuitemradio").map(item => item.textContent)).toEqual(MODELS.map(model => model.display_name))
+    expect(props.onModelChange).not.toHaveBeenCalled()
+    expect(props.onSubmit).not.toHaveBeenCalled()
+    expect(onRetryModels).not.toHaveBeenCalled()
+  }
 })
 
 it("confirmed empty catalog clears an invalid selection but loading does not", () => {
@@ -847,7 +869,7 @@ it("confirmed empty catalog clears an invalid selection but loading does not", (
   expect(empty.onModelChange).toHaveBeenCalledWith(null)
 })
 
-it("selector retries a failed read and retires the previous engine's late catalog", async () => {
+it("selector retries a failed read and retires the previous admission's late catalog", async () => {
   const engineA = createSessionEngine({ client: createFakeClient(), storage: createMemoryStorage<ConversationStore>(null) })
   const engineB = createSessionEngine({ client: createFakeClient(), storage: createMemoryStorage<ConversationStore>(null) })
   let finish!: (response: Response) => void
@@ -855,13 +877,13 @@ it("selector retries a failed read and retires the previous engine's late catalo
     .mockImplementationOnce(() => new Promise<Response>(resolve => { finish = resolve }))
     .mockResolvedValueOnce(Response.json({ models: [MODELS[1]], next_cursor: null }))
   vi.stubGlobal("fetch", fetchMock)
-  const hook = renderHook(({ engine }) => useComposerSelectors(engine), { initialProps: { engine: engineA } })
+  const hook = renderHook(({ engine, generation }) => useComposerSelectors(engine, { readBoundary: { ...catalogAdmission, generation } }), { initialProps: { engine: engineA, generation: 1 } })
   try {
     await act(async () => { await settle() })
     expect(hook.result.current.modelCatalogStatus).toBe("error")
     act(() => hook.result.current.retryModels())
     await act(async () => { await settle() })
-    hook.rerender({ engine: engineB })
+    hook.rerender({ engine: engineB, generation: 2 })
     await act(async () => { await settle() })
     expect(hook.result.current.models).toEqual([MODELS[1]])
     await act(async () => { finish(Response.json({ models: [MODELS[0]], next_cursor: null })); await settle() })
@@ -870,22 +892,22 @@ it("selector retries a failed read and retires the previous engine's late catalo
   } finally { hook.unmount(); engineA.dispose(); engineB.dispose(); vi.unstubAllGlobals() }
 })
 
-it("an engine change retires its explicit model choice before the new catalog arrives", async () => {
+it("an engine change retires its explicit model choice without discarding the admitted catalog", async () => {
   const engineA = createSessionEngine({ client: createFakeClient(), storage: createMemoryStorage<ConversationStore>(null) })
   const engineB = createSessionEngine({ client: createFakeClient(), storage: createMemoryStorage<ConversationStore>(null) })
   const setModelB = vi.spyOn(engineB, "setModel")
   vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(Response.json({ models: MODELS, next_cursor: null }))
     .mockImplementation(() => new Promise<Response>(() => {})))
-  const hook = renderHook(({ engine }) => useComposerSelectors(engine), { initialProps: { engine: engineA } })
+  const hook = renderHook(({ engine }) => useComposerSelectors(engine, { readBoundary: catalogAdmission }), { initialProps: { engine: engineA } })
   try {
     await act(async () => { await settle() })
     act(() => hook.result.current.setSelectedModel("gpt-5"))
     hook.rerender({ engine: engineB })
-    expect(hook.result.current.models).toEqual([])
+    expect(hook.result.current.models).toEqual(MODELS)
     expect(hook.result.current.selectedModel).toBeNull()
     expect(setModelB).not.toHaveBeenCalledWith("gpt-5")
     hook.rerender({ engine: engineA })
-    expect(hook.result.current.models).toEqual([])
+    expect(hook.result.current.models).toEqual(MODELS)
     expect(hook.result.current.selectedModel).toBeNull()
   } finally { hook.unmount(); engineA.dispose(); engineB.dispose(); vi.unstubAllGlobals() }
 })
@@ -893,7 +915,7 @@ it("an engine change retires its explicit model choice before the new catalog ar
 it("a failed refresh retains the confirmed candidates and explicit business label", async () => {
   vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(Response.json({ models: MODELS, next_cursor: null }))
     .mockRejectedValueOnce(new Error("internal upstream failure")))
-  const hook = renderHook(() => useComposerSelectors(null))
+  const hook = renderHook(() => useComposerSelectors(null, { readBoundary: catalogAdmission }))
   try {
     await act(async () => { await settle() })
     act(() => { hook.result.current.setSelectedModel("gpt-5"); hook.result.current.retryModels() })
@@ -919,4 +941,263 @@ it.each([{ models: [] }, { models: MODELS }])("catalog reads remain visually qui
     fireEvent.pointerDown(trigger)
     expect(screen.getByRole("menuitemradio", { name: "gpt-5" })).toHaveAttribute("data-state", "checked")
   }
+})
+
+it("requests the resource menu for one typed slash at the caret without replacing the surrounding text", () => {
+  const onResourceMenuRequest = vi.fn()
+  const props = renderComposer({ draft: "before after", onResourceMenuRequest })
+  const input = screen.getByRole("textbox", { name: "Chat input" })
+  fireEvent.change(input, { target: { value: "before /after", selectionStart: 8, selectionEnd: 8 } })
+  expect(props.onDraftChange).toHaveBeenCalledWith("before /after")
+  expect(onResourceMenuRequest).toHaveBeenCalledWith({ draft: "before /after", start: 7, end: 8 })
+  expect(props.onSubmit).not.toHaveBeenCalled()
+})
+
+it("does not open slash commands from IME, pasted content, a URL, or replacement of selected text", () => {
+  const onResourceMenuRequest = vi.fn()
+  renderComposer({ onResourceMenuRequest })
+  const input = screen.getByRole("textbox", { name: "Chat input" })
+  fireEvent.compositionStart(input)
+  fireEvent.change(input, { target: { value: "/" } })
+  fireEvent.compositionEnd(input)
+  fireEvent.input(input, { inputType: "insertFromPaste", target: { value: "/" } })
+  fireEvent.change(input, { target: { value: "https://example.test/a" } })
+  expect(onResourceMenuRequest).not.toHaveBeenCalled()
+  cleanup()
+  renderComposer({ draft: "selected text", onResourceMenuRequest })
+  fireEvent.change(screen.getByRole("textbox", { name: "Chat input" }), { target: { value: "/" } })
+  expect(onResourceMenuRequest).not.toHaveBeenCalled()
+})
+
+const catalogAdmission = { admitted: true, subject: "catalog-reader", generation: 1 }
+
+it("catalog waits for a trusted active Composer and retains its data across engine changes", async () => {
+  const engineA = createSessionEngine({ client: createFakeClient(), storage: createMemoryStorage<ConversationStore>(null) })
+  const engineB = createSessionEngine({ client: createFakeClient(), storage: createMemoryStorage<ConversationStore>(null) })
+  const fetchMock = vi.fn().mockResolvedValue(Response.json({ models: MODELS, next_cursor: null }))
+  vi.stubGlobal("fetch", fetchMock)
+  const hook = renderHook(({ active, boundary, engine }) => useComposerSelectors(engine, { active, readBoundary: boundary }), {
+    initialProps: { active: false, boundary: catalogAdmission, engine: engineA },
+  })
+  try {
+    await act(async () => { await settle() })
+    expect(fetchMock).not.toHaveBeenCalled()
+    hook.rerender({ active: true, boundary: { ...catalogAdmission, admitted: false }, engine: engineA })
+    await act(async () => { await settle() })
+    expect(fetchMock).not.toHaveBeenCalled()
+    hook.rerender({ active: true, boundary: catalogAdmission, engine: engineA })
+    await act(async () => { await settle() })
+    expect(fetchMock).toHaveBeenCalledOnce()
+    act(() => hook.result.current.setSelectedModel("gpt-5"))
+    hook.rerender({ active: true, boundary: catalogAdmission, engine: engineB })
+    expect(hook.result.current.models).toEqual(MODELS)
+    expect(hook.result.current.selectedModel).toBeNull()
+    await act(async () => { await settle() })
+    expect(fetchMock).toHaveBeenCalledOnce()
+    hook.rerender({ active: false, boundary: catalogAdmission, engine: engineB })
+    hook.rerender({ active: true, boundary: catalogAdmission, engine: engineB })
+    await act(async () => { await settle() })
+    expect(fetchMock).toHaveBeenCalledOnce()
+  } finally { hook.unmount(); engineA.dispose(); engineB.dispose(); vi.unstubAllGlobals() }
+})
+
+it("catalog recovers 429 on a coalesced foreground return after Retry-After, never on an autonomous loop", async () => {
+  vi.useFakeTimers()
+  const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(Response.json({ error: { code: "session_rate_limited", message: "limited" } }, { status: 429, headers: { "retry-after": "5" } })))
+  vi.stubGlobal("fetch", fetchMock)
+  const hook = renderHook(() => useComposerSelectors(null, { active: true, readBoundary: catalogAdmission }))
+  try {
+    await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+    expect(fetchMock).toHaveBeenCalledOnce()
+    expect(hook.result.current.modelCatalogStatus).toBe("error")
+    await act(async () => {
+      window.dispatchEvent(new Event("focus")); document.dispatchEvent(new Event("visibilitychange"))
+      await vi.advanceTimersByTimeAsync(0); await vi.advanceTimersByTimeAsync(4_999)
+    })
+    expect(fetchMock).toHaveBeenCalledOnce()
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); await vi.advanceTimersByTimeAsync(0) })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    await act(async () => { await vi.advanceTimersByTimeAsync(60_000); await vi.advanceTimersByTimeAsync(0) })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    fetchMock.mockImplementation(() => Promise.resolve(Response.json({ models: MODELS, next_cursor: null })))
+    await act(async () => { window.dispatchEvent(new Event("focus")); document.dispatchEvent(new Event("visibilitychange")); await vi.advanceTimersByTimeAsync(0) })
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+    expect(hook.result.current.models).toEqual(MODELS)
+    expect(fetchMock.mock.calls.every(([url]) => String(url).includes("/models?feature_key=chat"))).toBe(true)
+  } finally { hook.unmount(); vi.unstubAllGlobals() }
+})
+
+it("catalog admission retirement aborts late data and a new verified generation reads independently", async () => {
+  let finish!: (response: Response) => void
+  const fetchMock = vi.fn().mockImplementationOnce(() => new Promise<Response>(resolve => { finish = resolve }))
+    .mockResolvedValueOnce(Response.json({ models: [MODELS[1]], next_cursor: null }))
+  vi.stubGlobal("fetch", fetchMock)
+  const hook = renderHook(({ boundary }) => useComposerSelectors(null, { readBoundary: boundary }), { initialProps: { boundary: catalogAdmission } })
+  try {
+    await act(async () => { await settle() })
+    hook.rerender({ boundary: { ...catalogAdmission, admitted: false } })
+    expect(fetchMock.mock.calls[0]?.[1]?.signal.aborted).toBe(true)
+    expect(hook.result.current.models).toEqual([])
+    window.localStorage.setItem("kokoro.web.auth-index-subject", "next-reader")
+    hook.rerender({ boundary: { ...catalogAdmission, subject: "next-reader", generation: 2 } })
+    await act(async () => { await settle() })
+    expect(hook.result.current.models).toEqual([MODELS[1]])
+    await act(async () => { finish(Response.json({ models: [MODELS[0]], next_cursor: null })); await settle() })
+    expect(hook.result.current.models).toEqual([MODELS[1]])
+  } finally { hook.unmount(); vi.unstubAllGlobals() }
+})
+
+it("catalog reports only captured current GET401 to AppGate, without rotating auth or replaying a command", async () => {
+  const report = vi.fn()
+  const fetchMock = vi.fn().mockResolvedValue(Response.json({ error: { code: "session_invalid", message: "recheck" } }, { status: 401 }))
+  vi.stubGlobal("fetch", fetchMock)
+  const hook = renderHook(() => useComposerSelectors(null, { readBoundary: catalogAdmission }), {
+    wrapper: ({ children }) => <ProductReadRecheckProvider value={report}>{children}</ProductReadRecheckProvider>,
+  })
+  try {
+    await act(async () => { await settle() })
+    expect(report).toHaveBeenCalledWith({ subject: "catalog-reader", generation: 1, signal: expect.any(AbortSignal) })
+    expect(fetchMock).toHaveBeenCalledOnce()
+    expect(fetchMock.mock.calls[0]?.[0]).toContain("/models?feature_key=chat")
+  } finally { hook.unmount(); vi.unstubAllGlobals() }
+})
+
+it("catalog retires a queued cross-tab A-B-A change, rejecting late data and stale selection until a new admission", async () => {
+  let finish!: (response: Response) => void
+  const fetchMock = vi.fn().mockResolvedValueOnce(Response.json({ models: MODELS, next_cursor: null }))
+    .mockImplementationOnce(() => new Promise<Response>(resolve => { finish = resolve }))
+    .mockResolvedValueOnce(Response.json({ models: [MODELS[1]], next_cursor: null }))
+  vi.stubGlobal("fetch", fetchMock)
+  const hook = renderHook(({ generation }) => useComposerSelectors(null, { readBoundary: { ...catalogAdmission, generation } }), { initialProps: { generation: 1 } })
+  try {
+    await act(async () => { await settle() })
+    const staleSelect = hook.result.current.setSelectedModel
+    act(() => { staleSelect("gpt-5"); hook.result.current.retryModels() })
+    await act(async () => { await settle() })
+    act(() => window.dispatchEvent(new StorageEvent("storage", { key: "kokoro.web.auth-index-subject", oldValue: "catalog-reader", newValue: "other-reader", storageArea: window.localStorage })))
+    expect(fetchMock.mock.calls[1]?.[1]?.signal.aborted).toBe(true)
+    expect(hook.result.current.models).toEqual([])
+    expect(hook.result.current.selectedModel).toBeNull()
+    act(() => staleSelect("gpt-5"))
+    expect(hook.result.current.selectedModel).toBeNull()
+    await act(async () => { finish(Response.json({ models: MODELS, next_cursor: null })); window.dispatchEvent(new Event("focus")); await settle() })
+    expect(hook.result.current.models).toEqual([])
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    hook.rerender({ generation: 2 })
+    await act(async () => { await settle() })
+    expect(hook.result.current.models).toEqual([MODELS[1]])
+  } finally { hook.unmount(); vi.unstubAllGlobals() }
+})
+
+it("catalog checks the current subject before a queued storage event or an old menu selection can land", async () => {
+  let finish!: (response: Response) => void
+  const fetchMock = vi.fn().mockResolvedValueOnce(Response.json({ models: MODELS, next_cursor: null }))
+    .mockImplementationOnce(() => new Promise<Response>(resolve => { finish = resolve }))
+  vi.stubGlobal("fetch", fetchMock)
+  const hook = renderHook(() => useComposerSelectors(null, { readBoundary: catalogAdmission }))
+  try {
+    await act(async () => { await settle() })
+    const select = hook.result.current.setSelectedModel
+    act(() => hook.result.current.retryModels())
+    await act(async () => { await settle() })
+    window.localStorage.setItem("kokoro.web.auth-index-subject", "other-reader")
+    act(() => select("gpt-5"))
+    expect(hook.result.current.selectedModel).toBeNull()
+    await act(async () => { finish(Response.json({ models: MODELS, next_cursor: null })); await settle() })
+    expect(hook.result.current.models).toEqual([])
+  } finally { hook.unmount(); vi.unstubAllGlobals() }
+})
+
+it("a hidden admitted Composer postpones the first model read until actual visibility", async () => {
+  const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden")
+  const fetchMock = vi.fn().mockResolvedValue(Response.json({ models: MODELS, next_cursor: null }))
+  vi.stubGlobal("fetch", fetchMock)
+  const hook = renderHook(() => useComposerSelectors(null, { readBoundary: catalogAdmission }))
+  try {
+    await act(async () => { await settle(); window.dispatchEvent(new Event("focus")); await settle() })
+    expect(fetchMock).not.toHaveBeenCalled()
+    visibility.mockReturnValue("visible")
+    await act(async () => { document.dispatchEvent(new Event("visibilitychange")); window.dispatchEvent(new Event("focus")); await settle() })
+    expect(fetchMock).toHaveBeenCalledOnce()
+  } finally { hook.unmount(); visibility.mockRestore(); vi.unstubAllGlobals() }
+})
+
+it.each([undefined, "invalid"])("catalog missing or invalid 429 hint uses one 30s cooldown and preserves confirmed choices (%s)", async hint => {
+  vi.useFakeTimers()
+  const fetchMock = vi.fn().mockResolvedValueOnce(Response.json({ models: MODELS, next_cursor: null }))
+    .mockImplementation(() => Promise.resolve(Response.json({ error: { code: "session_rate_limited", message: "limited" } }, { status: 429, headers: hint === undefined ? {} : { "retry-after": hint } })))
+  vi.stubGlobal("fetch", fetchMock)
+  const hook = renderHook(({ active }) => useComposerSelectors(null, { active, readBoundary: catalogAdmission }), { initialProps: { active: true } })
+  try {
+    await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+    act(() => { hook.result.current.setSelectedModel("gpt-5"); hook.result.current.retryModels() })
+    await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+    expect(hook.result.current.models).toEqual(MODELS)
+    expect(hook.result.current.selectedModel).toBe("gpt-5")
+    hook.rerender({ active: false }); hook.rerender({ active: true })
+    await act(async () => {
+      for (let index = 0; index < 10; index++) window.dispatchEvent(new Event("focus"))
+      await vi.advanceTimersByTimeAsync(29_999)
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    await act(async () => { await vi.advanceTimersByTimeAsync(1) })
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+    await act(async () => { await vi.advanceTimersByTimeAsync(120_000) })
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+    expect(hook.result.current.models).toEqual(MODELS)
+    expect(hook.result.current.selectedModel).toBe("gpt-5")
+  } finally { hook.unmount(); vi.unstubAllGlobals() }
+})
+
+it("catalog rejects a late successful body after the actual account changes before its storage event", async () => {
+  let finish!: (response: Response) => void
+  vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(resolve => { finish = resolve })))
+  const hook = renderHook(() => useComposerSelectors(null, { readBoundary: catalogAdmission }))
+  try {
+    await act(async () => { await settle() })
+    window.localStorage.setItem("kokoro.web.auth-index-subject", "other-reader")
+    await act(async () => { finish(Response.json({ models: MODELS, next_cursor: null })); await settle() })
+    expect(hook.result.current.models).toEqual([])
+    expect(hook.result.current.selectedModel).toBeNull()
+  } finally { hook.unmount(); vi.unstubAllGlobals() }
+})
+
+it("catalog admission changes do not reset a same-subject owner rate-limit deadline", async () => {
+  vi.useFakeTimers()
+  const fetchMock = vi.fn().mockImplementationOnce(() => Promise.resolve(Response.json({ error: { code: "session_rate_limited", message: "limited" } }, { status: 429, headers: { "retry-after": "5" } })))
+    .mockImplementation(() => Promise.resolve(Response.json({ models: MODELS, next_cursor: null })))
+  vi.stubGlobal("fetch", fetchMock)
+  const hook = renderHook(({ generation }) => useComposerSelectors(null, { readBoundary: { ...catalogAdmission, generation } }), { initialProps: { generation: 1 } })
+  try {
+    await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+    hook.rerender({ generation: 2 })
+    await act(async () => { await vi.advanceTimersByTimeAsync(4_999) })
+    expect(fetchMock).toHaveBeenCalledOnce()
+    await act(async () => { await vi.advanceTimersByTimeAsync(1) })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(hook.result.current.models).toEqual(MODELS)
+  } finally { hook.unmount(); vi.unstubAllGlobals() }
+})
+
+it.each(["suspended", "readmitted"] as const)("an old catalog generation cannot write a new model choice after %s", async state => {
+  const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(Response.json({ models: MODELS, next_cursor: null })))
+  vi.stubGlobal("fetch", fetchMock)
+  const hook = renderHook(({ boundary }) => useComposerSelectors(null, { readBoundary: boundary }), { initialProps: { boundary: catalogAdmission } })
+  try {
+    await act(async () => { await settle() })
+    act(() => hook.result.current.setSelectedModel("gpt-5"))
+    const oldSelect = hook.result.current.setSelectedModel
+    hook.rerender({ boundary: { ...catalogAdmission, admitted: state === "readmitted", generation: 2 } })
+    await act(async () => { await settle() })
+    if (state === "readmitted") expect(hook.result.current.selectedModel).toBe("gpt-5")
+    act(() => oldSelect("claude-sonnet-4-6"))
+    if (state === "suspended") {
+      expect(hook.result.current.selectedModel).toBeNull()
+      hook.rerender({ boundary: { ...catalogAdmission, generation: 3 } })
+      await act(async () => { await settle() })
+    }
+    expect(hook.result.current.selectedModel).toBe("gpt-5")
+    act(() => hook.result.current.setSelectedModel("claude-sonnet-4-6"))
+    expect(hook.result.current.selectedModel).toBe("claude-sonnet-4-6")
+  } finally { hook.unmount(); vi.unstubAllGlobals() }
 })

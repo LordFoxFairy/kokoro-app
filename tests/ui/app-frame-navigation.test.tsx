@@ -40,10 +40,35 @@ it("a catalog is not replaced by conversation hydration or its failure", () => {
   expect(view.result.current.conversationHydrationFailed).toBe(false)
 })
 
-it("direct chat still restores its shareable conversation URL", () => {
+it("a bare direct homepage is not owned or redirected by the remembered conversation", () => {
   window.history.replaceState(null, "", "/app")
-  renderHook(() => useAppFrameNavigation(options))
-  expect(window.location.search).toBe("?conversation=conv-retained-direct")
+  const view = renderHook(() => useAppFrameNavigation(options))
+  expect(window.location.pathname + window.location.search).toBe("/app")
+  expect(view.result.current.routeOwnsConversation).toBe(false)
+})
+
+it.each([false, true])("a missing explicit conversation stays an error on its own URL (project=%s)", async (project) => {
+  const path = project ? "/app/project/project-missing" : "/app"
+  window.history.replaceState(null, "", `${path}?conversation=${options.activeId}`)
+  const view = renderHook(() => useAppFrameNavigation({ ...options,
+    scope: project ? { kind: "project", projectRef: "project-missing" } : options.scope,
+    projectWorkspace: project, projectRef: project ? "project-missing" : undefined,
+    threadMessageCount: 0, ...{ missingSessionId: options.activeId },
+  }))
+  await act(async () => {})
+  expect(view.result.current.conversationHydrationFailed).toBe(true)
+  expect(view.result.current.conversationHydrating).toBe(false)
+  expect(window.location.pathname + window.location.search).toBe(`${path}?conversation=${options.activeId}`)
+})
+
+it("a missing cached session does not turn the project overview or a local new draft into a deep-link error", () => {
+  window.history.replaceState(null, "", "/app/project/project-missing")
+  const view = renderHook(() => useAppFrameNavigation({ ...options,
+    scope: { kind: "project", projectRef: "project-missing" }, projectWorkspace: true,
+    projectRef: "project-missing", threadMessageCount: 0, ...{ missingSessionId: options.activeId },
+  }))
+  expect(view.result.current.conversationHydrationFailed).toBe(false)
+  expect(view.result.current.conversationHydrating).toBe(false)
 })
 
 it.each([
@@ -92,3 +117,30 @@ it.each(["/app", "/app/project/project-new?conversation=conv-project-new"])(
     engine.dispose()
   },
 )
+
+ it("an explicit same-ID URL still asks the owner even when a local draft was restored", async () => {
+  const client = createFakeClient()
+  const storage = createMemoryStorage<ConversationStore>({ activeId: "conv_local_draft", conversations: [{ id: "conv_local_draft", title: "", updatedAt: 1, mode: "fast", localDraft: true }] })
+  const engine = createSessionEngine({ client, storage, draftLifecycle: { isUnsubmitted: () => true, retire: () => true } })
+  expect(client.snapshotCalls).toEqual([])
+  window.history.replaceState(null, "", "/app?conversation=conv_local_draft")
+  renderHook(() => useAppFrameNavigation({ ...options, engine, activeId: "conv_local_draft", threadMessageCount: 0 }))
+  await act(async () => {})
+  expect(client.snapshotCalls).toEqual(["conv_local_draft"])
+  expect(engine.getSnapshot().missingSessionId).toBe("conv_local_draft")
+  expect(client.createCalls).toEqual([])
+  engine.dispose()
+ })
+
+it("late hydration of a cached failed thread cannot claim the bare homepage or publish its id", () => {
+  window.history.replaceState(null, "", "/app")
+  const view = renderHook(({ count }) => useAppFrameNavigation({ ...options, threadMessageCount: count }), { initialProps: { count: 0 } })
+  view.rerender({ count: 2 })
+  expect(window.location.pathname + window.location.search).toBe("/app")
+  expect(view.result.current.routeOwnsConversation).toBe(false)
+})
+it.each(["?conversation=conv-retained-direct", "#conversation/conv-retained-direct"])("an explicit direct id still owns its existing thread: %s", suffix => {
+  window.history.replaceState(null, "", `/app${suffix}`)
+  const view = renderHook(() => useAppFrameNavigation(options))
+  expect(view.result.current.routeOwnsConversation).toBe(true)
+})

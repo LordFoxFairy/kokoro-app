@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { browserBillingClient } from "@/ui/shell/page-clients";
@@ -6,6 +6,7 @@ import type { BillingSummary } from "@/contract/http";
 import { LocaleProvider } from "@/i18n/context";
 import { AccountCard } from "@/ui/settings/sections/account-card";
 import { AccountCreditSummary } from "@/ui/settings/sections/account-credit-summary";
+import { AccountReadSnapshotBoundary } from "@/ui/settings/account-read-snapshots";
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
@@ -49,7 +50,7 @@ it("reads only the admitted account summary and displays exact owner credits", a
   expect(await within(credits).findByText("9007199254740993123.456789")).toBeVisible();
   expect(within(credits).getByText("0")).toBeVisible();
   expect(within(credits).getByText("On hold")).toBeVisible();
-  expect(screen.getByText("Credits", { exact: true })).toBeVisible();
+  expect(within(credits).getByText("Available balance", { exact: true })).toBeVisible();
   expect(fetcher.mock.calls.map(([input]) => input).sort()).toEqual(["/api/account/profile", summaryPath].sort());
   for (const [, init] of fetcher.mock.calls) expect(init?.method ?? "GET").toBe("GET");
   expect(screen.queryByText("Free")).not.toBeInTheDocument();
@@ -139,23 +140,28 @@ it.each([
   ["extra missing-account fields", { error: { code: "billing_account_not_found", message: "Missing" }, meta: { request_id: "credits-read" }, extra: true }, 404],
   ["malformed summary", { ...summary, available_micros: 0 }, 200],
   ["unavailable service", { error: { code: "billing_unavailable" } }, 503],
-] as const)("shows an error rather than a fabricated missing account or balance for %s", async (_name, body, status) => {
+] as const)("keeps unknown credit fields neutral without an error panel or a fabricated balance for %s", async (_name, body, status) => {
   fetcher.mockResolvedValueOnce(json(body, status));
   render(credit());
-  expect(await screen.findByRole("alert")).toHaveTextContent("Failed to load, try again later");
-  expect(screen.getByRole("button", { name: "Reload" })).toBeEnabled();
+  await waitFor(() => expect(screen.getByRole("region", { name: "Credits" })).toHaveAttribute("aria-busy", "false"));
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Reload" })).not.toBeInTheDocument();
+  expect(screen.getAllByText("—")).toHaveLength(2);
   expect(screen.queryByText("No credit account yet")).not.toBeInTheDocument();
   expect(screen.queryByText("0")).not.toBeInTheDocument();
   expect(fetcher).toHaveBeenCalledTimes(1);
 });
 
-it("waits for an explicit retry after a network failure and reads only summary again", async () => {
+it("keeps unknown fields quiet after network failure and rereads only on a normal remount", async () => {
   const retry = deferred<Response>();
   fetcher.mockRejectedValueOnce(new Error("offline")).mockReturnValueOnce(retry.promise);
-  render(credit());
-  await screen.findByRole("alert");
+  const view = render(credit());
+  await waitFor(() => expect(screen.getByRole("region", { name: "Credits" })).toHaveAttribute("aria-busy", "false"));
   expect(fetcher).toHaveBeenCalledTimes(1);
-  fireEvent.click(screen.getByRole("button", { name: "Reload" }));
+  expect(screen.getAllByText("—")).toHaveLength(2);
+  expect(screen.queryByRole("button", { name: "Reload" })).not.toBeInTheDocument();
+  view.unmount();
+  render(credit());
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   expect(screen.getByRole("status")).toHaveAccessibleName(/Loading/);
   await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
@@ -165,6 +171,22 @@ it("waits for an explicit retry after a network failure and reads only summary a
     expect(input).toBe(summaryPath);
     expect(init?.method ?? "GET").toBe("GET");
   }
+});
+
+it("keeps confirmed same-scope credits while a background reread fails", async () => {
+  localStorage.setItem("kokoro.web.auth-index-subject", admitted.subject);
+  fetcher.mockResolvedValueOnce(json(summary)).mockRejectedValueOnce(new Error("offline"));
+  const draw = (open: boolean) => <LocaleProvider><AccountReadSnapshotBoundary preview={false} readBoundary={admitted}>{open ? <AccountCreditSummary readBoundary={admitted} /> : null}</AccountReadSnapshotBoundary></LocaleProvider>;
+  const view = render(draw(true));
+  await screen.findByText("9007199254740993123.456789");
+  view.rerender(draw(false));
+  view.rerender(draw(true));
+  expect(screen.getByText("9007199254740993123.456789")).toBeVisible();
+  await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
+  await act(async () => {});
+  expect(screen.getByText("9007199254740993123.456789")).toBeVisible();
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Reload" })).not.toBeInTheDocument();
 });
 
 it.each(["subject", "generation"] as const)("synchronously clears loaded credits and aborts the prior %s read", async (change) => {

@@ -782,11 +782,48 @@ async function isolatedNext(projectRoot: string, engine: NextDevEngine): Promise
   try {
     await cp(path.join(projectRoot, "src"), path.join(root, "src"), { recursive: true })
     await cp(path.join(projectRoot, "public"), path.join(root, "public"), { recursive: true })
+    if (process.env.KOKORO_TEST_JSON_EOF_TRACE_DIR || process.env.KOKORO_TEST_SESSION_HANDLER_TRACE === "1") {
+      const authRoute = path.join(root, "src/app/api/auth/[...nextauth]/route.ts")
+      const source = await readFile(authRoute, "utf8")
+      const original = `export async function POST(request: NextRequest, context: Context): Promise<Response> {
+  return representLoginFailure(request, await handle(request, context, "POST"))
+}`
+      if (source.split(original).length !== 2) throw new Error("Session diagnostic fixture source drift")
+      // Only the disposable copy is observed. Never read the body, cookies or
+      // credentials, and preserve the native Response and thrown value.
+      const observed = `let sessionDiagnosticSequence = 0
+export async function POST(request: NextRequest, context: Context): Promise<Response> {
+  if (request.nextUrl.pathname !== "/api/auth/session") {
+    return representLoginFailure(request, await handle(request, context, "POST"))
+  }
+  const sequence = ++sessionDiagnosticSequence
+  const emit = (phase: string, status?: number): void => {
+    if (sequence > 128) return
+    try {
+      process.stdout.write("KOKORO_TEST_SESSION_HANDLER " + JSON.stringify({
+        phase, sequence, pid: process.pid, ...(status === undefined ? {} : { status }),
+      }) + "\\n")
+    } catch { /* diagnostics never replace the request outcome */ }
+  }
+  emit("handler_enter")
+  try {
+    const response = representLoginFailure(request, await handle(request, context, "POST"))
+    emit("handler_return", response.status)
+    return response
+  } catch (error) {
+    emit("handler_throw")
+    throw error
+  }
+}`
+      await writeFile(authRoute, source.replace(original, observed))
+    }
     await writeFile(path.join(root, "json-parse-diagnostic.cjs"), `const { createHash } = require("node:crypto")
 const originalParse = JSON.parse
 let emitted = 0
+const scoped = process.env.KOKORO_TEST_SESSION_HANDLER_TRACE === "1"
+const counts = new Map()
 function caller(stack) {
-  for (const raw of String(stack).split("\\n").slice(1, 9)) {
+  for (const raw of String(stack).split("\\n").slice(1, scoped ? 16 : 9)) {
     const frame = raw.replaceAll("\\\\", "/")
     const line = frame.match(/:(\\d+):\\d+\\)?$/)?.[1]
     if (frame.includes("/next/dist/server/load-manifest")) return { category: "next_manifest_loader", line }
@@ -801,7 +838,7 @@ function caller(stack) {
 JSON.parse = function parse(text, reviver) {
   try { return originalParse.call(this, text, reviver) }
   catch (error) {
-    if (emitted < 16) {
+    if (emitted < 16 || scoped) {
       emitted += 1
       try {
         const isString = typeof text === "string"
@@ -817,7 +854,11 @@ JSON.parse = function parse(text, reviver) {
           scanned_bytes: bounded === null ? 0 : bounded.byteLength, truncated,
           sha256: bounded === null ? null : createHash("sha256").update(bounded).digest("hex"),
           line: location.line === undefined ? null : Number(location.line) }
-        process.stderr.write("KOKORO_TEST_JSON_PARSE_FAILURE " + JSON.stringify(record).slice(0, 8191) + "\\n")
+        const count = counts.get(location.category) || 0
+        if (!scoped || count < 8) {
+          counts.set(location.category, count + 1)
+          process.stderr.write("KOKORO_TEST_JSON_PARSE_FAILURE " + JSON.stringify(record).slice(0, 8191) + "\\n")
+        }
       } catch {}
     }
     throw error
@@ -916,6 +957,7 @@ export const onRequestError: Instrumentation.onRequestError = (error, request, c
       error_code: error instanceof SyntaxError && error.message === "Unexpected end of JSON input" ? "json_unexpected_eof" : "other",
       method: request.method === "POST" || request.method === "GET" ? request.method : "other",
       route: request.path.split("?", 1)[0] === "/api/auth/signout" ? "auth_signout" :
+        request.path.split("?", 1)[0] === "/api/auth/session" ? "auth_session" :
         request.path.split("?", 1)[0] === "/api/rp-request-error-fixture" ? "fixture_synthetic" : "other",
       router_kind: context.routerKind === "App Router" ? "app" : context.routerKind === "Pages Router" ? "pages" : "other",
       route_type: ["route", "render", "action", "proxy"].includes(context.routeType) ? context.routeType : "other",
@@ -1235,7 +1277,7 @@ function requestErrorDiagnostics(value: string): RequestErrorDiagnostic[] {
         error_class: oneOf(item.error_class, ["syntax_error", "type_error", "other_error", "non_error"], "non_error"),
         error_code: oneOf(item.error_code, ["json_unexpected_eof", "other"], "other"),
         method: oneOf(item.method, ["POST", "GET", "other"], "other"),
-        route: oneOf(item.route, ["auth_signout", "fixture_synthetic", "other"], "other"),
+        route: oneOf(item.route, ["auth_signout", "auth_session", "fixture_synthetic", "other"], "other"),
         router_kind: oneOf(item.router_kind, ["app", "pages", "other"], "other"),
         route_type: oneOf(item.route_type, ["route", "render", "action", "proxy", "other"], "other"),
         frames,
@@ -1243,6 +1285,31 @@ function requestErrorDiagnostics(value: string): RequestErrorDiagnostic[] {
     } catch { /* malformed diagnostic output is ignored and asserted by its focused system test */ }
   }
   return records
+}
+
+function sessionHandlerDiagnostics(output: string): Readonly<Record<string, string | number>>[] {
+  const prefix = "KOKORO_TEST_SESSION_HANDLER "
+  const rows: Record<string, string | number>[] = []
+  for (const line of output.slice(-64 * 1024).split(/\r?\n/u)) {
+    if (line.length > 512) continue
+    const start = line.indexOf(prefix)
+    if (start < 0) continue
+    try {
+      const raw: unknown = JSON.parse(line.slice(start + prefix.length))
+      if (typeof raw !== "object" || raw === null) continue
+      const item = raw as Record<string, unknown>
+      if (typeof item.phase !== "string" || !["handler_enter", "handler_return", "handler_throw"].includes(item.phase) ||
+          typeof item.sequence !== "number" || !Number.isSafeInteger(item.sequence) || item.sequence < 1 || item.sequence > 128 ||
+          typeof item.pid !== "number" || !Number.isSafeInteger(item.pid) || item.pid < 1) continue
+      const row: Record<string, string | number> = { phase: item.phase, sequence: item.sequence, pid: item.pid }
+      if (item.phase === "handler_return") {
+        if (typeof item.status !== "number" || !Number.isSafeInteger(item.status) || item.status < 100 || item.status > 599) continue
+        row.status = item.status
+      }
+      rows.push(row)
+    } catch { /* Ignore incomplete lines; no arbitrary fields are returned. */ }
+  }
+  return rows.slice(-16)
 }
 
 async function diagnosticWithin<T>(promise: Promise<T>, fallback: T, timeoutMs = 500): Promise<T> {
@@ -1308,7 +1375,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
   let next: ChildProcess | undefined
   let nextPort = 0
   const oauthCodes = new Map<string, { nonce: string; challenge: string }>()
-  let invalidIdToken: "none" | "nonce" | "issuer" | "audience" | "signature" | "algorithm" | "expired" = "none"
+  let invalidIdToken: "none" | "nonce" | "issuer" | "audience" | "signature" | "algorithm" | "expired" | "session" = "none"
   let invalidUserinfoSubject = false
   let oversizedRefreshCredential = false
   let oversizedAccessCredential = false
@@ -1603,6 +1670,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       next_json_failure_sources: nextJsonFailureSources(nextOutput),
       json_parse_failure_diagnostics: jsonParseFailureDiagnostics(nextOutput),
       request_error_diagnostics: requestErrorDiagnostics(nextOutput),
+      session_handler_events: sessionHandlerDiagnostics(nextOutput),
       next_manifests_before: manifestsBefore,
       next_manifests_after: manifestsAfter,
       next_manifest_changes: nextManifestChanges(manifestsBefore, manifestsAfter),
@@ -1848,6 +1916,34 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     await expect.poll(() => rail.getAttribute("data-collapsed"), { timeout: 10_000 }).toBe("false")
   }
 
+  // The user opens a row menu first; actions live in a portal, not in the row.
+  async function openConversationMenu(page: Page, row: Locator): Promise<void> {
+    // Modal Radix menus aria-hide the background trigger while open; include
+    // it for state observation, while normal click actionability stays intact.
+    const more = row.getByRole("button", { name: /^(?:More|更多) · /u, includeHidden: true })
+    if (await more.getAttribute("aria-expanded") === "true") return
+    if (await page.getByRole("menu").count()) {
+      await page.keyboard.press("Escape")
+      await expect.poll(() => page.getByRole("menu").count()).toBe(0)
+    }
+    await row.hover()
+    await more.click()
+    await expect.poll(() => more.getAttribute("aria-expanded")).toBe("true")
+  }
+
+  function conversationMoveItem(page: Page): Locator {
+    return page.getByRole("menuitem", { name: /^(?:Move conversation|移动会话) /u })
+  }
+
+  async function openConversationMoveMenu(page: Page, row: Locator): Promise<void> {
+    await openConversationMenu(page, row)
+    const move = conversationMoveItem(page)
+    await expect.poll(() => move.getAttribute("aria-disabled")).not.toBe("true")
+    await move.focus()
+    await move.press("ArrowRight")
+    await expect.poll(() => move.getAttribute("aria-expanded")).toBe("true")
+  }
+
   async function openProjectWorkspace(page: Page, projectId: string): Promise<void> {
     // The row discloses tasks; its one adjacent Link opens the workspace.
     // Hover matches the real desktop affordance instead of clicking a hidden
@@ -2031,8 +2127,9 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
               expect(["refresh-opaque", "refresh-rotated"]).toContain(refresh)
               refreshRequests.push(refresh!)
               expect(body.get("code_verifier")).toBeNull()
-              const send = (): void => sendJson(response, "token", refreshResponseOverride ??
-                { access_token: "access-rotated", refresh_token: "refresh-rotated", token_type: "Bearer", expires_in: 600 })
+              const now=Math.floor(Date.now()/1000)
+              const refreshedId=jwt(keys.privateKey,{iss:`http://localhost:${nextPort}/iam`,aud:clientId,sub:"user-one",sid:"issuer-session-one",iat:now,exp:now+600})
+              const send = (): void => sendJson(response, "token", {access_token:"access-rotated",refresh_token:"refresh-rotated",token_type:"Bearer",expires_in:600,id_token:refreshedId,...refreshResponseOverride})
               if (holdRefresh) { releaseRefresh = send; onRefreshStarted?.() }
               else send()
               return
@@ -2047,7 +2144,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
             const now = Math.floor(Date.now() / 1000)
             const idToken = jwt(invalidIdToken === "algorithm" ? rsaKeys.privateKey : invalidIdToken === "signature" ? wrongKeys.privateKey : keys.privateKey,
               { iss: invalidIdToken === "issuer" ? "https://evil.example/iam" : `http://localhost:${nextPort}/iam`,
-                aud: invalidIdToken === "audience" ? "wrong-client" : clientId, sub: oversizedSubject ? "s".repeat(257) : "user-one",
+                sid:invalidIdToken==="session"?undefined:"issuer-session-one",aud: invalidIdToken === "audience" ? "wrong-client" : clientId, sub: oversizedSubject ? "s".repeat(257) : "user-one",
                 nonce: invalidIdToken === "nonce" ? "wrong-nonce" : codeFacts!.nonce,
                 iat: invalidIdToken === "expired" ? now - 1_200 : now,
                 exp: invalidIdToken === "expired" ? now - 600 : now + 600 },
@@ -2142,7 +2239,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
               sessionIds: moveSessions.map((session) => session.session_id),
             })
           }
-          response.writeHead(effectiveSessionListStatus, { "content-type": "application/json", "cache-control": "no-store" })
+          response.writeHead(effectiveSessionListStatus, { "content-type": "application/json", "cache-control": "no-store", ...(effectiveSessionListStatus === 429 ? { "retry-after": "2" } : {}) })
           response.end(JSON.stringify(effectiveSessionListStatus === 200 ? {
             data: { sessions: projectDeleteFixtureEnabled ? [
               { session_id: projectDeleteDirectConversation, title: "Direct conversation C", updated_at: "2026-10-03T09:00:00.000Z" },
@@ -2155,7 +2252,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
               ]),
             ], next_cursor: null },
             meta: { request_id: "req_r141_list" },
-          } : { error: { code: "service_unavailable", message: "fixture unavailable", retryable: true } }))
+          } : { error: { code: effectiveSessionListStatus === 429 ? "session_rate_limited" : "service_unavailable", message: "fixture unavailable", retryable: true } }))
           return
         }
         if (request.method === "GET" && request.url === `/v1/sessions?project_ref=${projectDeleteProject}` && projectDeleteFixtureEnabled) {
@@ -2265,9 +2362,14 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
           response.end(JSON.stringify({ data: { session_id: "session-no-meta" } }))
           return
         }
+        const directMoveSnapshot = request.url?.match(/^\/v1\/sessions\/(conv_[0-9a-f-]+)\?scope=direct$/u)?.[1]
+        const projectMoveSnapshot = request.url === `/v1/sessions/${moveConversationA}?project_ref=${moveProjectA}`
+          ? moveConversationA
+          : undefined
+        const moveSnapshotSessionId = directMoveSnapshot ?? projectMoveSnapshot
         if (request.method === "GET" && moveUiFixtureEnabled &&
-          (request.url === `/v1/sessions/${moveConversationA}` || request.url === `/v1/sessions/${moveConversationB}`)) {
-          const sessionId = request.url.slice("/v1/sessions/".length)
+          (moveSnapshotSessionId === moveConversationA || moveSnapshotSessionId === moveConversationB)) {
+          const sessionId = moveSnapshotSessionId
           const moveMessages = moveBindingFixtureEnabled && sessionId === moveConversationA ? [{
             message_id: "message-move-binding-a",
             role: "user",
@@ -2291,7 +2393,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
           return
         }
         if (request.method === "GET" && projectDeleteFixtureEnabled &&
-          request.url === `/v1/sessions/${projectDeleteConversationA}`) {
+          request.url === `/v1/sessions/${projectDeleteConversationA}?project_ref=${projectDeleteProject}`) {
           sessionSnapshotRequests += 1
           response.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" })
           response.end(JSON.stringify({
@@ -2595,6 +2697,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     const token = cookie.split(";")[0]?.slice("kokoro_product_session=".length)
     if (token === undefined) return
     const claims = await decode({ token, secret: authSecret, salt: "kokoro-product-session-v1" })
+    expect(claims?.issuerSessionId).toBe("issuer-session-one")
     if (typeof claims?.id === "string") productIds.add(claims.id)
   }
 
@@ -2736,12 +2839,18 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
 
   it("captures request errors through the real Next instrumentation hook without exposing private error fields", async () => {
     const outputStart = output.length
+    const pathStart = paths.length
     const manifestsBefore = await nextManifestMetadata()
     const response = await http(nextPort, "/api/rp-request-error-fixture", "GET", "", {}, 10_000)
     const manifestsAfter = await nextManifestMetadata()
-    expect(response.status).toBe(500)
-    await expect.poll(() => requestErrorDiagnostics(output.slice(outputStart))
-      .find((record) => record.route === "fixture_synthetic"), { timeout: 2_000 }).toBeDefined()
+    try {
+      expect(response.status).toBe(500)
+      await expect.poll(() => requestErrorDiagnostics(output.slice(outputStart))
+        .find((record) => record.route === "fixture_synthetic"), { timeout: 2_000 }).toBeDefined()
+    } catch (cause) {
+      throw new Error(nextFailureDiagnostic("fixture_request_error_hook", response, outputStart, pathStart,
+        manifestsBefore, manifestsAfter), { cause })
+    }
     const record = requestErrorDiagnostics(output.slice(outputStart))
       .find((candidate) => candidate.route === "fixture_synthetic")
     expect(record).toBeDefined()
@@ -2784,6 +2893,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     expect(JSON.parse(projection.body)).toMatchObject({ authenticated: true, subject: "user-one" })
     expect(projection.body).not.toContain("access-opaque")
     expect(projection.body).not.toContain("refresh-opaque")
+    expect(projection.body).not.toMatch(/issuerSessionId|issuer-session-one/u)
     expect((callback.headers["set-cookie"] as string[]).every((cookie) =>
       !cookie.includes("kokoro_session="))).toBe(true)
     expect(paths).toContain("/iam/oauth2/token")
@@ -2992,6 +3102,10 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
         const separator = pair.indexOf("=")
         return separator > 0 ? [{ name: pair.slice(0, separator), value: pair.slice(separator + 1), url: origin }] : []
       })
+      // The first HTML must honor the same non-sensitive layout preference as
+      // the mounted workspace. Previously every cold rail was 52px, so a
+      // returning user with an expanded rail saw the entire page jump 248px.
+      cookies.push({ name: "sidebar_state", value: "true", url: origin })
       const noScriptContext = await browser.newContext({ javaScriptEnabled: false })
       try {
         await noScriptContext.addCookies(cookies)
@@ -3005,6 +3119,29 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
         expect(await noScriptPage.locator('[data-slot="composer-input"]').isDisabled()).toBe(true)
         expect(await noScriptPage.getByTestId("runtime-loading").count()).toBe(0)
         expect(await noScriptPage.getByTestId("app-frame-loading").count()).toBe(0)
+        expect((await noScriptPage.locator('[data-app-frame-main="true"]').boundingBox())?.x).toBe(300)
+        await noScriptPage.setViewportSize({ width: 390, height: 844 })
+        expect((await noScriptPage.locator('[data-app-frame-main="true"]').boundingBox())?.x).toBe(0)
+        await noScriptPage.setViewportSize({ width: 1280, height: 720 })
+        await noScriptContext.addCookies([{ name: "sidebar_state", value: "false", url: origin }])
+        await noScriptPage.reload({ waitUntil: "domcontentloaded" })
+        expect((await noScriptPage.locator('[data-app-frame-main="true"]').boundingBox())?.x).toBe(52)
+        await noScriptContext.addCookies([{ name: "sidebar_state", value: "invalid", url: origin }])
+        await noScriptPage.reload({ waitUntil: "domcontentloaded" })
+        expect((await noScriptPage.locator('[data-app-frame-main="true"]').boundingBox())?.x).toBe(52)
+        await noScriptPage.goto(`${origin}/app/project/project-layout`, { waitUntil: "domcontentloaded" })
+        const projectBootX = (await noScriptPage.locator('[data-app-frame-main="true"]').boundingBox())?.x
+        if (projectBootX !== 300) {
+          const styles = await noScriptPage.evaluate(() => ({
+            ready: document.readyState,
+            pendingStyles: Array.from(document.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]')).filter(link => link.sheet === null).length,
+          }))
+          // Diagnostic only: retain the original pre-load geometry assertion.
+          await noScriptPage.waitForLoadState("load", { timeout: 2_000 }).catch(() => undefined)
+          console.info("R147 project boot geometry", { beforeLoadX: projectBootX, ...styles,
+            afterLoadX: (await noScriptPage.locator('[data-app-frame-main="true"]').boundingBox())?.x })
+        }
+        expect(projectBootX).toBe(300)
       } finally {
         await noScriptContext.close()
       }
@@ -3067,6 +3204,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
           await page.locator('[data-app-frame-main="true"]').waitFor({ state: "visible", timeout: remaining() })
           await page.locator('[data-slot="composer-input"]').waitFor({ state: "visible", timeout: remaining() })
           expect(await page.locator('[data-slot="composer-input"]').isEnabled()).toBe(true)
+          expect((await page.locator('[data-app-frame-main="true"]').boundingBox())?.x).toBe(300)
         } catch (error) {
           throw new AggregateError([error], await diagnostic(`${stage}_convergence`))
         }
@@ -4003,7 +4141,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     }
   }, 45_000)
 
-  it("R141 bounds an unfinished session-list response and restores the list only after Retry", async () => {
+  it("R141 bounds an unfinished session-list response and restores the list after normal re-entry", async () => {
     const proxy = await sessionProbeProxy(nextPort)
     let browser: Browser | undefined
     let page: Page | undefined
@@ -4024,19 +4162,23 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       expect(loginRequestsAtListBarrier).toBe(loginRequestsAfterAdmission)
 
       const directList = page.locator('[data-conversation-list="direct"]')
-      const alert = directList.getByRole("alert")
-      const retry = alert.getByRole("button", { name: /Retry|重试/u })
-      await alert.waitFor({ timeout: 15_000 })
+      const status = directList.getByText("Failed to load chats", { exact: true })
+      await expect.poll(() => status.count(), { timeout: 15_000 }).toBe(1)
+      expect(await directList.getByRole("alert").count()).toBe(0)
+      expect(await directList.getByRole("button", { name: /Retry|重试/u }).count()).toBe(0)
       expect(new URL(page.url()).pathname).toBe("/app")
       expect(proxy.listRequests()).toBe(1)
       expect(proxy.loginRequests()).toBe(loginRequestsAtListBarrier)
 
       proxy.releaseListBodies()
-      await retry.click()
+      const reentered = await page.reload({ waitUntil: "domcontentloaded", timeout: 12_000 })
+      expect(reentered?.status()).toBe(200)
+      await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: 15_000 })
+      await expandDesktopRail(page)
       await expect.poll(() => proxy.listRequests(), { timeout: 10_000 }).toBe(2)
       await page.getByText("Bounded list alpha", { exact: true }).waitFor({ state: "visible", timeout: 10_000 })
       await page.getByText("Bounded list beta", { exact: true }).waitFor({ state: "visible", timeout: 10_000 })
-      await expect.poll(() => alert.count(), { timeout: 10_000 }).toBe(0)
+      await expect.poll(() => directList.getByText("Failed to load chats", { exact: true }).count(), { timeout: 10_000 }).toBe(0)
       expect(proxy.loginRequests()).toBe(loginRequestsAtListBarrier)
       await context.close()
     } catch (error) {
@@ -4050,7 +4192,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     }
   }, 50_000)
 
-  it("R141 keeps a 503 session list on an explicit Retry surface and restores the authoritative list", async () => {
+  it("R141 keeps a 503 session list out of the primary surface and restores the authoritative list after normal re-entry", async () => {
     const proxy = await sessionProbeProxy(nextPort)
     let browser: Browser | undefined
     let page: Page | undefined
@@ -4069,19 +4211,23 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       expect(loginRequestsAtListBarrier).toBe(loginRequestsAfterAdmission)
 
       const directList = page.locator('[data-conversation-list="direct"]')
-      const alert = directList.getByRole("alert")
-      const retry = alert.getByRole("button", { name: /Retry|重试/u })
-      await alert.waitFor({ timeout: 10_000 })
+      const status = directList.getByText("Failed to load chats", { exact: true })
+      await expect.poll(() => status.count(), { timeout: 10_000 }).toBe(1)
+      expect(await directList.getByRole("alert").count()).toBe(0)
+      expect(await directList.getByRole("button", { name: /Retry|重试/u }).count()).toBe(0)
       expect(new URL(page.url()).pathname).toBe("/app")
       expect(proxy.listRequests()).toBe(1)
       expect(proxy.loginRequests()).toBe(loginRequestsAtListBarrier)
 
       sessionListStatus = 200
-      await retry.click()
+      const reentered = await page.reload({ waitUntil: "domcontentloaded", timeout: 12_000 })
+      expect(reentered?.status()).toBe(200)
+      await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: 15_000 })
+      await expandDesktopRail(page)
       await expect.poll(() => proxy.listRequests(), { timeout: 10_000 }).toBe(2)
       await page.getByText("Bounded list alpha", { exact: true }).waitFor({ state: "visible", timeout: 10_000 })
       await page.getByText("Bounded list beta", { exact: true }).waitFor({ state: "visible", timeout: 10_000 })
-      await expect.poll(() => alert.count(), { timeout: 10_000 }).toBe(0)
+      await expect.poll(() => directList.getByText("Failed to load chats", { exact: true }).count(), { timeout: 10_000 }).toBe(0)
       expect(proxy.loginRequests()).toBe(loginRequestsAtListBarrier)
       await context.close()
     } catch (error) {
@@ -4091,6 +4237,43 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       sessionListStatus = 200
       try { await browser?.close() }
       finally { await proxy.close() }
+    }
+  }, 45_000)
+
+  it("recovers a rate-limited first page in the real rail without reloading, losing the draft or logging in again", async () => {
+    const proxy = await sessionProbeProxy(nextPort)
+    let browser: Browser | undefined
+    sessionListStatus = 429
+    try {
+      browser = await chromium.launch({ headless: true,
+        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
+      const context = await browser.newContext()
+      await admitBrowserContext(context)
+      const page = await context.newPage()
+      const responses: { status: number; at: number }[] = []
+      page.on("response", response => {
+        if (new URL(response.url()).pathname === "/api/session/sessions") responses.push({ status: response.status(), at: Date.now() })
+      })
+      await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
+      await expandDesktopRail(page)
+      const composer = page.locator('[data-slot="composer-input"]')
+      await expect.poll(() => composer.isEnabled(), { timeout: 15_000 }).toBe(true)
+      await expect.poll(() => responses.filter(item => item.status === 429).length, { timeout: 10_000 }).toBe(1)
+      const beforeUrl = page.url(), beforeLogins = proxy.loginRequests()
+      await composer.fill("keep this draft while list recovers")
+      sessionListStatus = 200
+      await page.getByText("Bounded list alpha", { exact: true }).waitFor({ state: "visible", timeout: 10_000 })
+      await page.getByText("Bounded list beta", { exact: true }).waitFor({ state: "visible", timeout: 10_000 })
+      expect(responses.map(item => item.status)).toEqual([429, 200])
+      expect(responses[1]!.at - responses[0]!.at).toBeGreaterThanOrEqual(1900)
+      expect(await composer.inputValue()).toBe("keep this draft while list recovers")
+      expect(page.url()).toBe(beforeUrl)
+      expect(proxy.loginRequests()).toBe(beforeLogins)
+      expect(await page.locator('[data-conversation-list="direct"]').getByRole("button", { name: /Retry|重试/u }).count()).toBe(0)
+      await context.close()
+    } finally {
+      sessionListStatus = 200
+      try { await browser?.close() } finally { await proxy.close() }
     }
   }, 45_000)
 
@@ -4127,7 +4310,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       const beforeUrl = page.url()
       const beforeListRequests = proxy.listRequests()
 
-      await rowA.getByRole("button", { name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u }).click()
+      await openConversationMoveMenu(page, rowA)
       await page.getByRole("menuitem", { name: "Move target alpha", exact: true }).click()
       await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(1)
 
@@ -4187,27 +4370,28 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       const selectA = rowA.locator(`[data-conversation-id="${moveConversationA}"]`)
       await selectA.click()
       await expect.poll(() => selectA.getAttribute("aria-pressed"), { timeout: 10_000 }).toBe("true")
-      const moveA = rowA.getByRole("button", { name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u })
-      const moveB = rowB.getByRole("button", { name: /Move conversation Move conversation beta|移动会话 Move conversation beta/u })
-      await moveA.click()
+      await openConversationMoveMenu(page, rowA)
       await page.getByRole("menuitem", { name: "Move target alpha", exact: true }).click()
       await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(1)
-      await expect.poll(() => moveA.isDisabled(), { timeout: 10_000 }).toBe(true)
-      await expect.poll(() => moveB.isDisabled(), { timeout: 10_000 }).toBe(true)
+      await openConversationMenu(page, rowA)
+      await expect.poll(() => conversationMoveItem(page).getAttribute("aria-disabled"), { timeout: 10_000 }).toBe("true")
+      await openConversationMenu(page, rowB)
+      await expect.poll(() => conversationMoveItem(page).getAttribute("aria-disabled"), { timeout: 10_000 }).toBe("true")
       expect(moveBoundaryRequests).toHaveLength(1)
 
       moveFixtureMode = "close"
       releaseMove()
-      await expect.poll(() => moveA.isEnabled(), { timeout: 10_000 }).toBe(true)
-      await moveA.click()
+      await openConversationMenu(page, rowA)
+      await expect.poll(() => conversationMoveItem(page).getAttribute("aria-disabled"), { timeout: 10_000 }).not.toBe("true")
+      await openConversationMoveMenu(page, rowA)
       const retryItems = page.getByRole("menuitem", { name: /Retry moving conversation|重试移动会话/u })
       await retryItems.waitFor({ state: "visible", timeout: 10_000 })
       expect(await retryItems.count()).toBe(1)
       await page.keyboard.press("Escape")
-      await moveB.click()
+      await openConversationMoveMenu(page, rowB)
       expect(await page.getByRole("menuitem", { name: /Retry moving conversation|重试移动会话/u }).count()).toBe(0)
       await page.keyboard.press("Escape")
-      await moveA.click()
+      await openConversationMoveMenu(page, rowA)
       const retry = page.getByRole("menuitem", { name: /Retry moving conversation|重试移动会话/u })
       await retry.waitFor({ state: "visible", timeout: 10_000 })
       expect(moveBoundaryRequests).toHaveLength(1)
@@ -4264,9 +4448,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
         .waitFor({ state: "visible", timeout: 10_000 })
 
       const directGetsBeforeMove = moveBindingScopeGets.filter((entry) => entry.scope === "direct").length
-      await directRowA.getByRole("button", {
-        name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u,
-      }).click()
+      await openConversationMoveMenu(page, directRowA)
       await page.getByRole("menuitem", { name: "Move target alpha", exact: true }).click()
       await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(1)
       expect(moveBoundaryRequests[0]?.body).toBe(JSON.stringify({ target_project_id: moveProjectA }))
@@ -4389,7 +4571,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       const selectA = rowA.locator(`[data-conversation-id="${moveConversationA}"]`)
       const selectB = rowB.locator(`[data-conversation-id="${moveConversationB}"]`)
       await selectA.click()
-      await rowA.getByRole("button", { name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u }).click()
+      await openConversationMoveMenu(page, rowA)
       await page.getByRole("menuitem", { name: "Move target alpha", exact: true }).click()
       await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(1)
 
@@ -4459,12 +4641,9 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       const rowB = directList.locator(`[data-slot="sidebar-menu-item"]:has([data-conversation-id="${moveConversationB}"])`)
       const selectA = rowA.locator(`[data-conversation-id="${moveConversationA}"]`)
       const selectB = rowB.locator(`[data-conversation-id="${moveConversationB}"]`)
-      const moveA = rowA.getByRole("button", {
-        name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u,
-      })
       await selectA.click()
       await expect.poll(() => selectA.getAttribute("aria-pressed"), { timeout: 10_000 }).toBe("true")
-      await moveA.click()
+      await openConversationMoveMenu(page, rowA)
       await page.getByRole("menuitem", { name: "Move target alpha", exact: true }).click()
       await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(1)
 
@@ -4474,11 +4653,12 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       const listRequestsBeforeUnknown = proxy.listRequests()
       moveFixtureMode = "close"
       releaseMove()
-      await expect.poll(() => moveA.isEnabled(), { timeout: 10_000 }).toBe(true)
+      await openConversationMenu(page, rowA)
+      await expect.poll(() => conversationMoveItem(page).getAttribute("aria-disabled"), { timeout: 10_000 }).not.toBe("true")
       expect(page.url()).toBe(stableUrl)
       expect(proxy.listRequests()).toBe(listRequestsBeforeUnknown)
 
-      await moveA.click()
+      await openConversationMoveMenu(page, rowA)
       const retry = page.getByRole("menuitem", { name: /Retry moving conversation|重试移动会话/u })
       await retry.waitFor({ state: "visible", timeout: 10_000 })
       moveFixtureMode = "respond"
@@ -4533,14 +4713,13 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
         .waitFor({ state: "visible", timeout: 10_000 })
       const ownerMutationsBefore = paths.filter((value) => /\/messages(?:\?|$)|\/runs(?:\/|\?|$)/u.test(value)).length
 
-      await rowA.getByRole("button", { name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u }).click()
+      await openConversationMoveMenu(page, rowA)
       await page.getByRole("menuitem", { name: "Move target alpha", exact: true }).click()
       await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(1)
       expect(moveBindingProjectRef).toBe(moveProjectA)
-      await expect.poll(() => rowA.getByRole("button", {
-        name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u,
-      }).isEnabled(), { timeout: 10_000 }).toBe(true)
-      await rowA.getByRole("button", { name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u }).click()
+      await openConversationMenu(page, rowA)
+      await expect.poll(() => conversationMoveItem(page).getAttribute("aria-disabled"), { timeout: 10_000 }).not.toBe("true")
+      await openConversationMoveMenu(page, rowA)
       const retry = page.getByRole("menuitem", { name: /Retry moving conversation|重试移动会话/u })
       await retry.waitFor({ state: "visible", timeout: 10_000 })
 
@@ -4603,10 +4782,10 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       await expandDesktopRail(page)
       const directList = page.locator('[data-conversation-list="direct"]')
       const rowA = directList.locator(`[data-slot="sidebar-menu-item"]:has([data-conversation-id="${moveConversationA}"])`)
-      await rowA.getByRole("button", { name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u }).click()
+      await openConversationMoveMenu(page, rowA)
       await page.getByRole("menuitem", { name: "Move target alpha", exact: true }).click()
       await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(1)
-      await rowA.getByRole("button", { name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u }).click()
+      await openConversationMoveMenu(page, rowA)
       const retry = page.getByRole("menuitem", { name: /Retry moving conversation|重试移动会话/u })
       await retry.waitFor({ state: "visible", timeout: 10_000 })
       moveFixtureResponse = {
@@ -4668,9 +4847,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       const directList = page.locator('[data-conversation-list="direct"]')
       const directRowA = directList.locator(`[data-slot="sidebar-menu-item"]:has([data-conversation-id="${moveConversationA}"])`)
       await directRowA.locator(`[data-conversation-id="${moveConversationA}"]`).click()
-      await directRowA.getByRole("button", {
-        name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u,
-      }).click()
+      await openConversationMoveMenu(page, directRowA)
       await page.getByRole("menuitem", { name: "Move target alpha", exact: true }).click()
       await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(1)
 
@@ -4781,9 +4958,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       await expandDesktopRail(page)
       const directList = page.locator('[data-conversation-list="direct"]')
       const directRowA = directList.locator(`[data-slot="sidebar-menu-item"]:has([data-conversation-id="${moveConversationA}"])`)
-      await directRowA.getByRole("button", {
-        name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u,
-      }).click()
+      await openConversationMoveMenu(page, directRowA)
       await page.getByRole("menuitem", { name: "Move target alpha", exact: true }).click()
       await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(1)
       const frozenRequest = moveBoundaryRequests[0]
@@ -4818,10 +4993,9 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       const recoveryRow = recoveryList.locator(
         `[data-slot="sidebar-menu-item"]:has([data-conversation-id="${moveConversationA}"])`,
       )
-      const moveButton = recoveryRow.getByRole("button", {
-        name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u,
-      })
-      await moveButton.waitFor({ state: "visible", timeout: 10_000 })
+      const moreButton = recoveryRow.getByRole("button", { name: /^(?:More|更多) · /u })
+      await recoveryRow.hover()
+      await moreButton.waitFor({ state: "visible", timeout: 10_000 })
       await page.locator('[data-slot="composer-input"]').focus()
       expect(moveBoundaryRequests).toHaveLength(1)
 
@@ -4829,7 +5003,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       await retainedConversation.click()
       await expect.poll(() => new URL(page.url()).searchParams.get("conversation"), { timeout: 10_000 })
         .toBe(moveConversationA)
-      await moveButton.click()
+      await openConversationMoveMenu(page, recoveryRow)
       const retry = page.getByRole("menuitem", { name: /Retry moving conversation|重试移动会话/u })
       await retry.waitFor({ state: "visible", timeout: 10_000 })
       expect(moveBoundaryRequests).toHaveLength(1)
@@ -5170,7 +5344,8 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       await selectB.click()
       await expect.poll(() => composer.inputValue(), { timeout: 10_000 }).toBe("R188 direct B draft")
 
-      await rowB.getByRole("button", { name: "Rename chat Bounded list beta" }).click()
+      await openConversationMenu(page, rowB)
+      await page.getByRole("menuitem", { name: "Rename chat Bounded list beta", exact: true }).click()
       const renameInput = directList.locator('[data-slot="sidebar-menu-item"][data-editing="true"]')
         .getByRole("textbox", { name: "Chat title" })
       await renameInput.fill("Rejected owner title")
@@ -5195,7 +5370,8 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       await expect.poll(() => page.locator('[data-slot="composer-input"]').inputValue(), { timeout: 10_000 })
         .toBe("R188 direct A draft")
       const beforeDeleteUrl = page.url()
-      await reloadedList.getByRole("button", { name: "Delete chat Bounded list beta" }).click()
+      await openConversationMenu(page, reloadedList.locator('[data-slot="sidebar-menu-item"]:has([data-conversation-id="session-list-b"])'))
+      await page.getByRole("menuitem", { name: "Delete chat Bounded list beta", exact: true }).click()
       const dialog = page.getByRole("alertdialog")
       await dialog.getByRole("button", { name: "Delete chat", exact: true }).click()
       await expect.poll(() => deleteSessionRequests.length, { timeout: 10_000 }).toBe(1)
@@ -5250,7 +5426,8 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       const directList = page.locator('[data-conversation-list="direct"]')
       const rename = async (currentTitle: string, nextTitle: string): Promise<void> => {
         const row = directList.locator('[data-slot="sidebar-menu-item"]:has([data-conversation-id="session-list-b"])')
-        await row.getByRole("button", { name: `Rename chat ${currentTitle}` }).click()
+        await openConversationMenu(page, row)
+        await page.getByRole("menuitem", { name: `Rename chat ${currentTitle}`, exact: true }).click()
         const input = directList.getByRole("textbox", { name: "Chat title" })
         await input.fill(nextTitle)
         await input.press("Enter")
@@ -5281,7 +5458,8 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       await reloadedList.getByText("R190 title A", { exact: true }).waitFor({ state: "visible", timeout: 10_000 })
 
       const listsBeforeCanonicalC = renameLifecycleListResponses.length
-      await reloadedRow.getByRole("button", { name: "Rename chat R190 title A" }).click()
+      await openConversationMenu(page, reloadedRow)
+      await page.getByRole("menuitem", { name: "Rename chat R190 title A", exact: true }).click()
       await reloadedList.getByRole("textbox", { name: "Chat title" }).fill("R190 canonical C")
       await reloadedList.getByRole("textbox", { name: "Chat title" }).press("Enter")
       await expect.poll(() => renameSessionRequests.length, { timeout: 10_000 }).toBe(3)
@@ -5290,7 +5468,8 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       expect(renameLifecycleListResponses.at(-1)).toEqual({ status: 200, title: "R190 canonical C" })
 
       failNextRenameLifecycleList = true
-      await reloadedRow.getByRole("button", { name: "Rename chat R190 canonical C" }).click()
+      await openConversationMenu(page, reloadedRow)
+      await page.getByRole("menuitem", { name: "Rename chat R190 canonical C", exact: true }).click()
       await reloadedList.getByRole("textbox", { name: "Chat title" }).fill("R190 canonical D")
       await reloadedList.getByRole("textbox", { name: "Chat title" }).press("Enter")
       await expect.poll(() => renameSessionRequests.length, { timeout: 10_000 }).toBe(4)
@@ -5298,7 +5477,12 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       expect(await reloadedList.getByText("R190 title B", { exact: true }).count()).toBe(0)
       expect(await reloadedList.getByText("R190 title A", { exact: true }).count()).toBe(0)
 
-      await reloadedList.getByRole("button", { name: /Retry|重试/u }).click()
+      expect(await reloadedList.getByRole("alert").count()).toBe(0)
+      expect(await reloadedList.getByRole("button", { name: /Retry|重试/u }).count()).toBe(0)
+      const reentered = await page.reload({ waitUntil: "domcontentloaded", timeout: 12_000 })
+      expect(reentered?.status()).toBe(200)
+      await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: 15_000 })
+      await expandDesktopRail(page)
       await expect.poll(() => renameLifecycleListResponses.at(-1), { timeout: 10_000 }).toEqual({
         status: 200,
         title: "R190 canonical D",
@@ -5345,7 +5529,8 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       const directList = page.locator('[data-conversation-list="direct"]')
       const row = directList.locator('[data-slot="sidebar-menu-item"]:has([data-conversation-id="session-list-b"])')
       const listsBeforeRename = renameLifecycleListResponses.length
-      await row.getByRole("button", { name: "Rename chat Bounded list beta" }).click()
+      await openConversationMenu(page, row)
+      await page.getByRole("menuitem", { name: "Rename chat Bounded list beta", exact: true }).click()
       const input = directList.getByRole("textbox", { name: "Chat title" })
       await input.fill("R190 lost ACK canonical A")
       await input.press("Enter")
@@ -5414,7 +5599,8 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       const scopeGetsBeforeDelete = projectDeleteScopeGets.length
       const routeBeforeDelete = page.url()
 
-      await rowA.getByRole("button", { name: "Delete chat Project conversation A" }).click()
+      await openConversationMenu(page, rowA)
+      await page.getByRole("menuitem", { name: "Delete chat Project conversation A", exact: true }).click()
       const dialog = page.getByRole("alertdialog")
       await dialog.getByRole("button", { name: "Delete chat", exact: true }).click()
       await expect.poll(() => projectDeleteRequests.length, { timeout: 10_000 }).toBe(1)
@@ -5505,7 +5691,8 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       const routeBeforeDelete = page.url()
       const scopeGetsBeforeDelete = projectDeleteScopeGets.length
 
-      await rowA.getByRole("button", { name: "Delete chat Project conversation A" }).click()
+      await openConversationMenu(page, rowA)
+      await page.getByRole("menuitem", { name: "Delete chat Project conversation A", exact: true }).click()
       const dialog = page.getByRole("alertdialog")
       const confirm = dialog.getByRole("button", { name: "Delete chat", exact: true })
       await confirm.click()
@@ -5580,7 +5767,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       const conversationA = directList.locator('[data-conversation-id="session-list-a"]')
       await conversationA.click()
       await expect.poll(() => sessionSnapshotRequests, { timeout: 10_000 }).toBe(1)
-      expect(sessionBoundaryRequests).toContainEqual({ method: "GET", path: "/v1/sessions/session-list-a" })
+      expect(sessionBoundaryRequests).toContainEqual({ method: "GET", path: "/v1/sessions/session-list-a?scope=direct" })
       expect(new URL(page.url()).pathname).toBe("/app")
       await expect.poll(() => conversationA.getAttribute("aria-pressed"), { timeout: 10_000 }).toBe("true")
       await page.getByText("R143 authoritative conversation A body", { exact: true }).waitFor({ state: "visible", timeout: 10_000 })
@@ -5590,7 +5777,8 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       const draft = "R143 delayed delete keeps this draft"
       await composer.fill(draft)
 
-      await page.getByRole("button", { name: "Delete chat Bounded list alpha" }).click()
+      await openConversationMenu(page, directList.locator('[data-slot="sidebar-menu-item"]:has([data-conversation-id="session-list-a"])'))
+      await page.getByRole("menuitem", { name: "Delete chat Bounded list alpha", exact: true }).click()
       const dialog = page.getByRole("alertdialog")
       await dialog.getByRole("button", { name: "Delete chat", exact: true }).click()
       await expect.poll(() => deleteSessionRequests.length, { timeout: 10_000 }).toBe(1)
@@ -5651,7 +5839,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       const conversationA = directList.locator('[data-conversation-id="session-list-a"]')
       await conversationA.click()
       await expect.poll(() => sessionSnapshotRequests, { timeout: 10_000 }).toBe(1)
-      expect(sessionBoundaryRequests).toContainEqual({ method: "GET", path: "/v1/sessions/session-list-a" })
+      expect(sessionBoundaryRequests).toContainEqual({ method: "GET", path: "/v1/sessions/session-list-a?scope=direct" })
       expect(new URL(page.url()).pathname).toBe("/app")
       await expect.poll(() => conversationA.getAttribute("aria-pressed"), { timeout: 10_000 }).toBe("true")
       await page.getByText("R143 authoritative conversation A body", { exact: true }).waitFor({ state: "visible", timeout: 10_000 })
@@ -5661,7 +5849,8 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       const draft = "R143 rejected delete keeps this draft"
       await composer.fill(draft)
 
-      await page.getByRole("button", { name: "Delete chat Bounded list alpha" }).click()
+      await openConversationMenu(page, directList.locator('[data-slot="sidebar-menu-item"]:has([data-conversation-id="session-list-a"])'))
+      await page.getByRole("menuitem", { name: "Delete chat Bounded list alpha", exact: true }).click()
       const dialog = page.getByRole("alertdialog")
       await dialog.getByRole("button", { name: "Delete chat", exact: true }).click()
       await expect.poll(() => deleteSessionRequests.length, { timeout: 10_000 }).toBe(1)
@@ -5895,13 +6084,13 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     expect(browserRejected.headers.location).toBe("/auth/sign-out?failed=1")
     const failurePage = await http(nextPort, browserRejected.headers.location as string)
     expect(failurePage.status).toBe(200)
-    expect(failurePage.body).toContain("退出失败")
+    expect(failurePage.body).toContain("退出暂未完成")
     expect(failurePage.body).not.toContain('action="/iam/oauth2/end-session/confirm"')
     for (const query of ["failed=1&failed=1", "failed=invalid", "failed="]) {
       const invalidFailure = await http(nextPort, `/auth/sign-out?${query}`)
       expect(invalidFailure.status).toBe(200)
       expect(invalidFailure.headers["referrer-policy"]).toBe("no-referrer")
-      expect(invalidFailure.body).toContain("退出失败")
+      expect(invalidFailure.body).toContain("退出暂未完成")
       expect(invalidFailure.body).not.toContain('action="/iam/oauth2/end-session/confirm"')
     }
     expect(issuerSessionActive).toBe(true)
@@ -6057,6 +6246,13 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       releaseRefresh = undefined
       expect((await refreshing).status).toBe(409)
       expect((await http(nextPort, "/api/auth/session", "GET", "", { cookie })).body).toContain('"authenticated":false')
+      if (process.env.KOKORO_TEST_JSON_EOF_TRACE_DIR || process.env.KOKORO_TEST_SESSION_HANDLER_TRACE === "1") {
+        await expect.poll(() => {
+          const events = sessionHandlerDiagnostics(output.slice(outputStart))
+          return events.some((entry) => entry.phase === "handler_enter" && events.some((exit) =>
+            exit.phase === "handler_return" && exit.status === 409 && exit.pid === entry.pid && exit.sequence === entry.sequence))
+        }).toBe(true)
+      }
     } finally { holdRefresh = false; releaseRefresh?.(); releaseRefresh = undefined; onRefreshStarted = undefined }
   })
 
@@ -6184,6 +6380,27 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     expect(paths).toHaveLength(before)
   })
 
+  it("AUTH recovery returns an active Session from the old failure URL to fixed /app without another OAuth request", async () => {
+    const jar = await authenticatedProductJar()
+    const before = paths.length
+    const failurePage = await http(nextPort, "/auth/sign-in/failed", "GET", "", { cookie: jar })
+    expect(failurePage.status).toBe(307)
+    expect(failurePage.headers.location).toBe("/app")
+    expect(failurePage.headers["set-cookie"] ?? []).toEqual([])
+    expect(paths).toHaveLength(before)
+  })
+
+  it("AUTH recovery keeps an anonymous failure document explicit without native state replay or a login loop", async () => {
+    const before = paths.length
+    const failurePage = await http(nextPort, "/auth/sign-in/failed?code=stale-code&state=stale-state")
+    expect(failurePage.status).toBe(200)
+    expect(failurePage.body).toContain("恢复工作区")
+    expect(failurePage.body).toContain('href="/login"')
+    expect(failurePage.headers.location).toBeUndefined()
+    expect(failurePage.headers["set-cookie"] ?? []).toEqual([])
+    expect(paths).toHaveLength(before)
+  })
+
   it.each(["expired callback", "refreshed signin"])("takes %s browser navigation off the technical URL without automatic retry", async scenario => {
     const target = scenario === "refreshed signin" ? "/api/auth/signin/kokoro-iam"
       : "/api/auth/callback/kokoro-iam?code=fixture-code&state=stale-state-123456&iss=" + encodeURIComponent(`http://localhost:${nextPort}/iam`)
@@ -6200,7 +6417,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     const before = paths.length
     const failurePage = await http(nextPort, response.headers.location as string)
     expect(failurePage.status).toBe(200)
-    expect(failurePage.body).toContain("登录失败")
+    expect(failurePage.body).toContain("恢复工作区")
     expect(failurePage.body).not.toContain("stale-state-123456")
     expect(failurePage.body).not.toContain("fixture-code")
     expect(failurePage.headers.location).toBeUndefined()
@@ -6329,7 +6546,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     expect(paths).toHaveLength(before)
   })
 
-  it.each(["nonce", "issuer", "audience", "signature", "algorithm", "expired"] as const)("rejects a wrong ID token %s before userinfo and session", async (variant) => {
+  it.each(["nonce", "issuer", "audience", "signature", "algorithm", "expired", "session"] as const)("rejects a wrong ID token %s before userinfo and session", async (variant) => {
     const { jar, location, signin } = await start()
     invalidIdToken = variant
     try {

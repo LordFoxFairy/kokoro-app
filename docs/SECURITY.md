@@ -116,6 +116,12 @@ Untrusted browser input
 
 SSE 需要允许正确 content type/streaming，但不豁免鉴权、no-store、request id 和连接限制。
 
+本地开发的 Storage 上传与图标预览共用精确配置的 loopback origin：仅当 development、
+`KOKORO_WEB_ORIGIN`、实际 Host/协议及可选 Origin 全部匹配时，
+`KOKORO_WEB_LOCAL_UPLOAD_ORIGIN` 才加入 `connect-src` 与 `img-src`。
+不接受请求头提供的源、任意 HTTP、凭据或路径；生产策略保持不变。上传成功还须实际验证图像解码，
+防止 PUT/扫描成功但 `<img>` 被 CSP 拦截的漏验。
+
 ## 6. 认证与授权检查
 
 1. Web 校验加密 Product Session cookie 的结构、时效与 Redis 在线 generation。

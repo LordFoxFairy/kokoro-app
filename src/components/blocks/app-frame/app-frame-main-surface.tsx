@@ -1,3 +1,4 @@
+import { currentRunProgressTodos } from "@/core/projections"
 import type { ComponentType, ReactNode } from "react"
 
 import { Button } from "@/components/ui/button"
@@ -8,11 +9,12 @@ import { ConversationThread, type ConversationThreadProps } from "@/ui/thread/co
 import { TodoBar } from "@/ui/todo/todo-bar"
 import { WorkspaceHeader } from "@/components/blocks/workspace-header/workspace-header"
 import { useT } from "@/i18n/context"
-import type { ProjectRenameControl } from "@/components/blocks/workspace-header/workspace-header.types"
+import type { ProjectContextControl, ProjectDeleteControl, ProjectInstructionControl, ProjectRenameControl } from "@/components/blocks/workspace-header/workspace-header.types"
 import type { SettingsTab } from "@/ui/settings/settings-modal"
 
 import {
   AppFrameConnectionStatus,
+  AppFrameConversationErrorSurface,
   AppFrameLoadingSurface,
 } from "./app-frame-status-surfaces"
 import type { EmptyStateProps } from "./app-frame.types"
@@ -29,8 +31,10 @@ export type AppFrameMainSurfaceProps = {
   standaloneSurface: boolean
   projectWorkspace: boolean
   projectRename?: ProjectRenameControl
+  projectContext?: ProjectContextControl
+  projectInstruction?: ProjectInstructionControl
+  projectDelete?: ProjectDeleteControl
   projectRef: string | undefined
-  projectConversationView: boolean
   resolvedRailCollapsed: boolean
   narrowWeb: boolean
   compactDesktopRail: boolean
@@ -40,9 +44,13 @@ export type AppFrameMainSurfaceProps = {
   showConversation: boolean
   conversationHydrating: boolean
   conversationHydrationFailed: boolean
+  conversationMissing?: boolean
+  machineError: string | null
   connection: EngineSnapshot["connection"]
+  onReconnect: () => void
   projectCreation: { pending: boolean; error: boolean; retryable: boolean }
   onRetryProjectCreation: () => void
+  retryConversationHydration: () => void
   onOpenSettings: (tab: SettingsTab, returnTarget?: HTMLElement | null) => void
   shareClient: Pick<SessionClient, "createShare" | "revokeShare">
   thread: Thread
@@ -95,8 +103,10 @@ export function AppFrameMainSurface({
   standaloneSurface,
   projectWorkspace,
   projectRename,
+  projectContext,
+  projectInstruction,
+  projectDelete,
   projectRef,
-  projectConversationView,
   resolvedRailCollapsed,
   narrowWeb,
   compactDesktopRail,
@@ -106,9 +116,13 @@ export function AppFrameMainSurface({
   showConversation,
   conversationHydrating,
   conversationHydrationFailed,
+  conversationMissing = false,
+  machineError,
   connection,
+  onReconnect,
   projectCreation,
   onRetryProjectCreation,
+  retryConversationHydration,
   onOpenSettings,
   shareClient,
   thread,
@@ -130,7 +144,7 @@ export function AppFrameMainSurface({
       data-rail-collapsed={resolvedRailCollapsed ? "true" : "false"}
       // Empty direct chat and project workspaces share one document geometry
       // with active conversations.
-      data-web-view={showConversation ? "thread" : projectConversationView ? "project-conversation" : "welcome"}
+      data-web-view={showConversation ? "thread" : "welcome"}
     >
       {/* 会话头部（SHARE-1）：有活跃会话且已开聊时显分享入口——创建可撤销只读链接。 */}
       {mounted && !hideWorkspaceHeader ? (
@@ -142,6 +156,9 @@ export function AppFrameMainSurface({
           emptyWorkspace={!showConversation}
           projectWorkspace={projectWorkspace}
           {...(projectRename === undefined ? {} : { projectRename })}
+          {...(projectContext === undefined ? {} : { projectContext })}
+          {...(projectInstruction === undefined ? {} : { projectInstruction })}
+          {...(projectDelete === undefined ? {} : { projectDelete })}
           // The header owns the only menu trigger while the compact rail is
           // hidden. Once the rail is visible, its own shadcn trigger becomes
           // the owner so the canvas never shows two competing toggles.
@@ -166,17 +183,31 @@ export function AppFrameMainSurface({
         </div>
       ) : null}
       {mounted && !standaloneSurface && connection.status !== "connected" ? (
-        <AppFrameConnectionStatus connection={connection} />
+        <AppFrameConnectionStatus connection={connection} onReconnect={onReconnect} />
       ) : null}
       <div
         className={statusStyles.timelineStage}
         data-canvas-reopen={canvas.canReopenCanvas ? "true" : undefined}
       >
-        {!mounted ? (
+        {mounted && projectWorkspace && !conversationMissing ? <EmptyState
+          key={JSON.stringify(["project", projectRef ?? null, emptyStateProps.preview ?? false])}
+          {...emptyStateProps}
+          projectContextVisible={projectContext?.open ?? false}
+          onCloseProjectContext={projectContext?.onClose}
+          {...(showConversation || conversationHydrating || conversationHydrationFailed ? { projectConversationContent:
+            conversationHydrating ? <AppFrameLoadingSurface /> : conversationHydrationFailed ? <AppFrameConversationErrorSurface detail={machineError} onRetry={retryConversationHydration} missing={conversationMissing} /> : <div data-slot="conversation-timeline" className="min-h-0 flex flex-1"><ConversationThread {...conversationProps} /></div>
+          } : {})}
+        /> : !mounted ? (
           <AppFrameLoadingSurface />
         ) : !standaloneSurface && conversationHydrating ? (
           <AppFrameLoadingSurface />
-        ) : showConversation || conversationHydrationFailed ? (
+        ) : !standaloneSurface && conversationHydrationFailed ? (
+          <AppFrameConversationErrorSurface
+            detail={machineError}
+            onRetry={retryConversationHydration}
+            missing={conversationMissing}
+          />
+        ) : showConversation ? (
           <div data-slot="conversation-timeline" className="min-h-0 flex-1">
             <ConversationThread {...conversationProps} />
           </div>
@@ -201,11 +232,11 @@ export function AppFrameMainSurface({
       </div>
 
       {/* 计划条钉在输入框正上方，可收缩；思考/工具/子智能体在 ConversationThread 内联呈现。 */}
-      {mounted && !standaloneSurface ? <TodoBar todos={thread.todos} /> : null}
+      {mounted && !standaloneSurface ? <TodoBar todos={currentRunProgressTodos(thread)} /> : null}
 
       {/* Site-owned empty surfaces may move the same composer into their own
           welcome layout; active conversations always use the shell slot. */}
-      {!standaloneSurface && (showConversation || !emptyStateOwnsComposer) ? composer : null}
+      {!standaloneSurface && !conversationMissing && (showConversation || !emptyStateOwnsComposer) ? composer : null}
     </section>
   )
 }

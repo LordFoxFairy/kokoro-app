@@ -103,6 +103,19 @@ export function SettingsCompactMoreMenu({
         '[data-testid="settings-modal"][data-slot="dialog-content"]',
       );
       if (!trigger || !dialog) return;
+      // CSS owns the responsive mode. A portal outlives the compact rail, so
+      // retire it when that rail disappears instead of painting unstyled menu
+      // items over the desktop panel or leaving focus on a hidden trigger.
+      if (window.getComputedStyle(trigger).display === "none") {
+        const ownedFocus = menuRef.current?.contains(document.activeElement)
+          || document.activeElement === trigger;
+        closeMenu(false);
+        setMenuLayer(null);
+        if (ownedFocus) dialog.querySelector<HTMLElement>(
+          '[role="tab"][aria-selected="true"]',
+        )?.focus({ preventScroll: true });
+        return;
+      }
 
       const triggerRect = trigger.getBoundingClientRect();
       const dialogRect = dialog.getBoundingClientRect();
@@ -126,11 +139,15 @@ export function SettingsCompactMoreMenu({
     updatePosition();
     window.addEventListener("resize", updatePosition);
     document.addEventListener("scroll", updatePosition, true);
+    const observer = new ResizeObserver(updatePosition);
+    const trigger = rootRef.current?.querySelector<HTMLButtonElement>("button");
+    if (trigger) observer.observe(trigger);
     return () => {
       window.removeEventListener("resize", updatePosition);
       document.removeEventListener("scroll", updatePosition, true);
+      observer.disconnect();
     };
-  }, [open]);
+  }, [open, closeMenu]);
 
   useLayoutEffect(() => {
     if (open && menuRef.current && pendingFocus.current) {

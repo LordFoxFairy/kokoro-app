@@ -7,8 +7,21 @@ import type {
   SessionStreamState,
   SessionSubagent,
   SessionToolCall,
+  SessionTodo,
 } from "./state"
+import { normalizeRunTerminals } from "./state"
 import type { RunProcessActivity } from "@/contract/chat"
+
+// An active progress affordance belongs only to the exact current started Run.
+// Historical plans stay intact; a queued successor does not inherit their work.
+export function currentRunProgressTodos(
+  state: Pick<SessionStreamState, "executionHead" | "executionProcess">,
+): SessionTodo[] {
+  const head = state.executionHead
+  const process = state.executionProcess
+  if (head === null || head.state === "queued" || process === null || head.run_id !== process.runId) return []
+  return process.todos ?? []
+}
 
 // 线程渲染项：连续同 runId 的 assistant 消息归并为一个 turn；用户消息单独成项。
 export type ThreadItem =
@@ -20,6 +33,7 @@ export type ThreadItem =
       steps: SessionStep[]
       messagesById: Record<string, SessionMessage>
       failure?: AttributedRunFailure
+      cancelled?: true
     }
 
 // 防御性恢复：若持久化快照缺少 text 步骤，按 assistant message 补齐渲染锚点。
@@ -30,11 +44,11 @@ function withRestoredTextSteps(
   const covered = new Set(
     steps.filter((step) => step.kind === "text").map((step) => step.segmentId),
   )
-  const missing = Object.keys(messagesById).filter((id) => !covered.has(id))
+  const missing = Object.keys(messagesById).filter((id) => !covered.has(id) && !messagesById[id]?.orderedContainer)
   if (missing.length === 0) {
     return steps
   }
-  let nextSeq = steps.reduce((max, step) => Math.max(max, step.seq), 0)
+  let nextSeq = steps.reduce((max, step) => Math.max(max, typeof step.seq === "number" ? step.seq : Number.MIN_SAFE_INTEGER), 0)
   const synthetic: SessionStep[] = missing.map((segmentId) => {
     nextSeq += 1
     return { kind: "text", seq: nextSeq, segmentId }
@@ -43,6 +57,7 @@ function withRestoredTextSteps(
 }
 
 export function buildThreadItems(state: SessionStreamState): ThreadItem[] {
+  state = normalizeRunTerminals(state)
   const items: ThreadItem[] = []
   const renderedRuns = new Set<string>()
   let i = 0
@@ -61,14 +76,14 @@ export function buildThreadItems(state: SessionStreamState): ThreadItem[] {
 
     // 收拢连续的同 runId assistant 消息，组成一个 turn 的文本段索引。
     const runId = message.runId
-    const anchorId = `assistant:${runId}:message:${message.id}`
+    const anchorId = `assistant:${runId}:turn:${items.filter((item) => item.kind === "assistant-turn" && item.runId === runId).length}`
     const messagesById: Record<string, SessionMessage> = {}
     while (i < state.messages.length) {
       const candidate = state.messages[i]
       if (candidate === undefined || candidate.role !== "assistant" || candidate.runId !== runId) {
         break
       }
-      messagesById[candidate.id] = candidate
+      if (!candidate.orderedContainer) messagesById[candidate.id] = candidate
       i += 1
     }
 
@@ -88,10 +103,9 @@ export function buildThreadItems(state: SessionStreamState): ThreadItem[] {
       continue
     }
     const steps = state.stepsByRun[runId] ?? []
-    const firstSegmentId = steps[0]?.segmentId ?? "process"
     items.push({
       kind: "assistant-turn",
-      anchorId: `assistant:${runId}:step:${firstSegmentId}`,
+      anchorId: `assistant:${runId}:turn:0`,
       runId,
       steps,
       messagesById: {},
@@ -101,12 +115,12 @@ export function buildThreadItems(state: SessionStreamState): ThreadItem[] {
   // RUN_ERROR may arrive before the first text/process frame. Preserve the
   // exact run as an empty assistant turn so its terminal footer has a truthful
   // owner rather than falling back to a thread-level alert.
-  for (const runId of Object.keys(state.runFailuresById)) {
+  for (const runId of new Set([...Object.keys(state.runFailuresById), ...Object.keys(state.runTerminalsById).filter((runId) => state.runTerminalsById[runId] === "cancelled")])) {
     if (renderedRuns.has(runId)) continue
     renderedRuns.add(runId)
     items.push({
       kind: "assistant-turn",
-      anchorId: `assistant:${runId}:failure`,
+      anchorId: `assistant:${runId}:turn:0`,
       runId,
       steps: [],
       messagesById: {},
@@ -119,6 +133,7 @@ export function buildThreadItems(state: SessionStreamState): ThreadItem[] {
   }
   return items.map((item, index) => {
     if (item.kind !== "assistant-turn" || lastTurnByRun.get(item.runId) !== index) return item
+    if (state.runTerminalsById[item.runId] === "cancelled") return { ...item, cancelled: true as const }
     const failure = state.runFailuresById[item.runId]
     return failure === undefined ? item : { ...item, failure }
   })
@@ -130,49 +145,55 @@ export type Segment = {
   thinking: string
   tools: SessionToolCall[]
   subagents: SessionSubagent[]
-  // Legacy process steps are still emitted by older AG-UI runs. Preserve
-  // their order so the renderer cannot silently drop them.
-  legacySteps: Array<Extract<SessionStep, { kind: "thinking" | "tool" | "subagent" }>>
   activities: RunProcessActivity[]
 }
 
-// 按 segmentId 把有序步骤分段，保持首次出现顺序（即真实发生时序）。
-export function groupSegments(steps: SessionStep[], activities: readonly RunProcessActivity[] = []): Segment[] {
+// Live safe activities share the text steps' real sequence. Only consecutive
+// activities form a process group; unanchored snapshot values retain fallback.
+export function groupSegments(
+  steps: SessionStep[],
+  activities: readonly RunProcessActivity[] = [],
+  messagesById: Readonly<Record<string, SessionMessage>> = {},
+): Segment[] {
   // ordered 保留首次出现顺序；byId 仅做去重定位，二者指向同一对象。
   const ordered: Segment[] = []
   const byId = new Map<string, Segment>()
+  const anchoredActivities = new Set<string>()
+  let activityGroup: Segment | null = null
   const segmentFor = (id: string): Segment => {
     const existing = byId.get(id)
     if (existing) {
       return existing
     }
-    const created: Segment = { segmentId: id, thinking: "", tools: [], subagents: [], legacySteps: [], activities: [] }
+    const created: Segment = { segmentId: id, thinking: "", tools: [], subagents: [], activities: [] }
     byId.set(id, created)
     ordered.push(created)
     return created
   }
-  // Reducer normally keeps this list ordered, but snapshots from older builds
-  // may contain append order. Sorting a copy makes the projection deterministic
-  // without mutating the durable state or changing equal-seq arrival order.
-  const orderedSteps = steps
-    .map((step, index) => ({ step, index }))
-    .sort((left, right) => left.step.seq - right.step.seq || left.index - right.index)
-    .map(({ step }) => step)
-  for (const step of orderedSteps) {
+  for (const step of steps) {
+    if (step.kind === "activity") {
+      activityGroup ??= segmentFor(step.segmentId)
+      activityGroup.activities.push(step.activity)
+      anchoredActivities.add(step.activity.activity_id)
+      continue
+    }
+    const message = step.kind === "text" ? messagesById[step.segmentId] : undefined
+    // An owner-confirmed completed empty body has no visible reading boundary.
+    // Missing/incomplete text and body-less END events remain conservative.
+    if (message?.role === "assistant" && message.textState === "completed" && message.content === "") continue
+    activityGroup = null
     const segment = segmentFor(step.segmentId)
     if (step.kind === "thinking") {
       segment.thinking += step.text
-      segment.legacySteps.push(step)
     } else if (step.kind === "tool") {
       segment.tools.push(step.tool)
-      segment.legacySteps.push(step)
     } else if (step.kind === "subagent") {
       segment.subagents.push(step.subagent)
-      segment.legacySteps.push(step)
     }
     // text 步骤只标记该段存在；正文从 messagesById 取。
   }
   for (const activity of activities) {
+    if (anchoredActivities.has(activity.activity_id)) continue
     const segmentId = activity.activity === "skill" ? `skill:${activity.preflight_id}` : activity.segment_id
     segmentFor(segmentId).activities.push(activity)
   }

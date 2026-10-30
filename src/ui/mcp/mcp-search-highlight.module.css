@@ -1,0 +1,8 @@
+.match {
+  /* Observed Manus plaza name hit; no corresponding global semantic token. */
+  --mcp-search-highlight: #0081f2;
+  background: transparent;
+  color: var(--mcp-search-highlight);
+  font: inherit;
+  padding: 0;
+}

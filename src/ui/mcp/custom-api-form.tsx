@@ -1,14 +1,18 @@
 "use client";
 
+import type { McpIconClient } from "@/hub/mcp-icon-client";
+import { useMcpIconDraft } from "./use-mcp-icon-draft";
+import { McpIconPicker } from "./mcp-icon-picker";
 import { connectorCommandMayResume, connectorCommandFailureMessage } from "./connector-command-failure";
 
 import { type FormEvent, useCallback, useState } from "react";
-import { ImagePlus, Plus, Trash2 } from "lucide-react";
+import { CircleHelp, Plus, Trash2 } from "lucide-react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { useT } from "@/i18n/context";
@@ -27,11 +31,13 @@ type EnvironmentDraft = { id: string; name: string; value: string };
  */
 export function CustomApiForm({
   flow,
+  iconClient,
   boundary,
   onCancel,
   onDone,
 }: {
   flow: CustomApiCreateFlow;
+  iconClient?: McpIconClient | undefined;
   boundary: ProjectReadBoundary;
   onCancel: () => void;
   onDone: () => Promise<void>;
@@ -39,6 +45,7 @@ export function CustomApiForm({
   const t = useT();
   const [name, setName] = useState("");
   const [instructions, setInstructions] = useState("");
+  const [secretHelpOpen, setSecretHelpOpen] = useState(false);
   // Manus starts an API profile with one explicit secret pair. Keeping that
   // row visible makes the required owner input discoverable and avoids an
   // empty framed area that looked like a failed/unfinished form.
@@ -48,6 +55,8 @@ export function CustomApiForm({
   const clearSecrets = useCallback(() => setEnvironment(items => items.map(item => ({ ...item, value: "" }))), []);
   const { state, completion, admitted, submitting, locked, editable, maySubmit, waitForCommand, cancel, done } =
     useConnectorCreationForm(flow, boundary, onDone, clearSecrets);
+
+  const icon = useMcpIconDraft(iconClient, boundary, locked, state.kind === "completed");
 
   const updateEnvironment = (id: string, patch: Partial<EnvironmentDraft>) =>
     setEnvironment((items) =>
@@ -63,6 +72,7 @@ export function CustomApiForm({
   );
   const valid =
     name.trim().length > 0 &&
+    configuredEnvironment.length > 0 &&
     configuredEnvironment.every((item) => item.name.trim() && item.value) &&
     new Set(configuredEnvironment.map((item) => item.name.trim())).size ===
       configuredEnvironment.length;
@@ -71,14 +81,15 @@ export function CustomApiForm({
     if (!maySubmit()) return;
     const confirmed = await waitForCommand(signal => state.kind === "unknown"
       ? flow.retry(boundary, signal)
-      : editable() && valid ? flow.submit({
+      : editable() && valid && icon.draft.canSave() ? (icon.draft.protectForSave(), flow.submit({
+        ...icon.draft.change(),
         name: name.trim(),
         ...(instructions.trim() ? { instructions: instructions.trim() } : {}),
         environment: configuredEnvironment.map((item) => ({
           name: item.name.trim(),
           value: item.value,
         })),
-      }, boundary, signal) : Promise.resolve(false));
+      }, boundary, signal)) : Promise.resolve(false));
     if (confirmed) await done();
   };
 
@@ -111,23 +122,10 @@ export function CustomApiForm({
             onChange={(event) => { if (editable()) setName(event.target.value); }}
           />
         </div>
-        <div className={styles.iconField} aria-label="图标">
-          <Label>图标</Label>
-          <div className={styles.iconUploadRow}>
-            <span className={styles.iconPreview} aria-hidden="true">
-              <ImagePlus />
-            </span>
-            <div className={styles.iconUploadCopy}>
-              <Button type="button" variant="outline" size="sm" disabled>
-                上传
-              </Button>
-              <small>PNG 或 JPG，最大 1 MB。推荐尺寸 256×256 像素。</small>
-            </div>
-          </div>
-        </div>
+        <McpIconPicker draft={icon.draft} state={icon.state} disabled={locked} />
         <div className={styles.field}>
           <Label htmlFor="custom-api-instructions">
-            {t("connectorCatalog.notes")} {t("connectorCatalog.optional")}
+            {t("connectorCatalog.notes")}<span className={styles.optional}>{t("connectorCatalog.optional")}</span>
           </Label>
           <Textarea
             id="custom-api-instructions"
@@ -142,13 +140,25 @@ export function CustomApiForm({
           className={styles.environment}
           aria-labelledby="custom-api-secrets-title"
         >
-          <Label
-            id="custom-api-secrets-title"
-            className={styles.environmentTitle}
-          >
-            {t("connectorCatalog.secrets")}{" "}
-            {t("connectorCatalog.environmentVariables")}
-          </Label>
+          <div className={styles.environmentHeading}>
+            <Label id="custom-api-secrets-title" className={styles.environmentTitle}>
+              {t("connectorCatalog.secrets")}{" "}{t("connectorCatalog.environmentVariables")}
+            </Label>
+            <Popover open={secretHelpOpen} onOpenChange={setSecretHelpOpen}>
+              <PopoverTrigger asChild>
+                <button type="button" className={styles.secretHelp} aria-label={t("connectorCatalog.secretNameHelpLabel")}
+                  onClick={event => { event.preventDefault(); setSecretHelpOpen(true); }}
+                  onPointerEnter={event => { if (event.pointerType === "mouse") setSecretHelpOpen(true); }}
+                  onPointerLeave={event => { if (event.pointerType === "mouse" && !event.currentTarget.matches(":focus-visible")) setSecretHelpOpen(false); }}>
+                  <CircleHelp aria-hidden="true" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className={styles.secretHelpContent} side="top" sideOffset={6}
+                aria-label={t("connectorCatalog.secretNameHelpLabel")} onOpenAutoFocus={event => event.preventDefault()}>
+                {t("connectorCatalog.secretNameHelp")}
+              </PopoverContent>
+            </Popover>
+          </div>
           <div className={styles.environmentContent}>
             {environment.map((item, index) => (
               <div className={styles.environmentRow} key={item.id}>
@@ -182,7 +192,7 @@ export function CustomApiForm({
                   }
                 />
               </div>
-              <Button
+              {environment.length > 1 ? <Button
                 type="button"
                 size="icon"
                 variant="ghost"
@@ -190,12 +200,12 @@ export function CustomApiForm({
                 aria-label={`${t("connectorCatalog.removeSecret")} ${index + 1}`}
                 onClick={() =>
                   editable() && setEnvironment((items) =>
-                    items.filter(({ id }) => id !== item.id),
+                    items.length > 1 ? items.filter(({ id }) => id !== item.id) : items,
                   )
                 }
               >
                 <Trash2 aria-hidden="true" />
-              </Button>
+              </Button> : null}
               </div>
             ))}
           </div>
@@ -215,13 +225,13 @@ export function CustomApiForm({
         <Button
           type="button"
           variant="outline"
-          onClick={() => cancel(onCancel)}
+          onClick={() => { icon.draft.cancel(); cancel(onCancel); }}
         >
           {t("mcp.cancel")}
         </Button>
         {state.kind === "completed" || completion !== "idle" ? <Button type="button" disabled={!admitted || completion === "closing"} onClick={() => void done()}>{t("mcp.creationDone")}</Button> : <Button
           type="submit"
-          disabled={!connectorCommandMayResume(state.failure) || !admitted || submitting || !flow.available || (state.kind !== "unknown" && !valid)}
+          disabled={!connectorCommandMayResume(state.failure) || !admitted || submitting || !flow.available || (state.kind !== "unknown" && (!valid || !icon.draft.canSave()))}
         >
           {submitting ? <Spinner aria-hidden="true" /> : null}
           {t(state.kind === "unknown" ? connectorCommandMayResume(state.failure) ? "mcp.retryOriginal" : "mcp.recovery.inspectRequired" : "mcp.save")}

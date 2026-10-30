@@ -1,3 +1,4 @@
+import { restorePublic26MessagePartsContract } from "./bff-tool-display-parent"
 import { execFileSync } from "node:child_process"
 import { tmpdir } from "node:os"
 import { pathToFileURL } from "node:url"
@@ -27,9 +28,9 @@ import {
 
 import { restorePublic21 } from "./bff-configuration-parent"
 
-const OWNER_COMMIT = "e461d5178c6bf92558d7cd7dd288cb29cb008525"
-const OWNER_SHA256 = "727159cea88e9f70ca3d1127306e8a6a6bcaa568398de8b0d8fec1cce6b3fae3"
-const OWNER_VERSION = "22.3.0"
+const OWNER_COMMIT = "853ca9a5d8da3500b0c37543c72198a520e46225"
+const OWNER_SHA256 = "ea0031103488daa1fcc0cca45fdd13f4d4061546ac4525c745ec47105649f7e7"
+const OWNER_VERSION = "28.17.0"
 const SNAPSHOT = resolve(process.cwd(), "src/generated/bff-public-openapi.yaml")
 
 type Shape = {
@@ -37,7 +38,8 @@ type Shape = {
   required?: string[]
   additionalProperties?: boolean
   properties?: Record<string, Shape>
-  items?: { $ref?: string }
+  items?: Shape
+  maxItems?: number
   type?: string | string[]
   const?: string | boolean
   enum?: string[]
@@ -202,7 +204,7 @@ function assertProjectionSemantics(spec: Spec): void {
 
 describe("pinned BFF Skills and MCP public consumer contract", () => {
   it("proves the exact project union patch without weakening the model parent oracle", async () => {
-    const source = await readFile(SNAPSHOT, "utf8")
+    const source = restorePublic26MessagePartsContract(await readFile(SNAPSHOT, "utf8"))
     const parent = restorePublic21(Buffer.from(source))
     expect(createHash("sha256").update(parent).digest("hex")).toBe("a902a20ad95e46c01bfc8f5a80260c14565cfe557137759d5ecd42bc1a60f7c2")
     const description = source.match(/^      description: .*Same-series precedence is the complete project row.*$/mu)?.[0]
@@ -213,7 +215,7 @@ describe("pinned BFF Skills and MCP public consumer contract", () => {
       source.replace(addition, addition + addition),
       source.replace(addition, "") + addition + "\n",
       source.replace("complete project row", "latest project installation"),
-      source.replace("  version: 22.3.0", "  version: 21.1.0"),
+      source.replace("  version: 26.0.0", "  version: 21.1.0"),
       source + "\n",
     ]
     for (const mutated of mutations) {
@@ -224,7 +226,7 @@ describe("pinned BFF Skills and MCP public consumer contract", () => {
 
   it("pins exact owner bytes and six current Skill draft/publish operations", async () => {
     const bytes = await readFile(SNAPSHOT)
-    expect(OWNER_COMMIT).toBe("e461d5178c6bf92558d7cd7dd288cb29cb008525")
+    expect(OWNER_COMMIT).toBe("853ca9a5d8da3500b0c37543c72198a520e46225")
     expect(createHash("sha256").update(bytes).digest("hex")).toBe(OWNER_SHA256)
     const spec = YAML.parse(bytes.toString()) as Spec
     expect(spec.info.version).toBe(OWNER_VERSION)
@@ -473,7 +475,7 @@ it("pins the current public revision's shared-skill operation without replacing 
 it("pins and derives the separate browser-private connector error profile without replacing public OpenAPI", async () => {
   const { BFF_CONNECTOR_COMMAND_ERROR_PROVENANCE: provenance, BFF_CONNECTOR_COMMAND_ERROR_POLICY: policy } = await import("@/generated/bff-connector-command-errors")
   const bytes = await readFile(resolve(process.cwd(), "src/generated/bff-connector-command-errors.json"))
-  expect(provenance).toEqual({ ownerCommit: "d176e3d0cbbc2eab903dae2b2d969906ba5808fe", sourceSha256: "24158f50a6f4dac1b34553797f0b1afcc8f99dbc79f36b916d03b56999a67a71", profileVersion: "1.0.0" })
+  expect(provenance).toEqual({ ownerCommit: "a9a6918d47e1f2654edf8720c561ee06eb57a78c", sourceSha256: "5c12e237e03a6be446a564034ec5c18965e996be24ddeb40807ec4b9b074d83d", profileVersion: "1.1.0" })
   expect(createHash("sha256").update(bytes).digest("hex")).toBe(provenance.sourceSha256)
   expect(policy).toEqual(JSON.parse(bytes.toString("utf8")))
   expect(policy.visibility).toBe("browser-private")
@@ -526,4 +528,60 @@ it("consumes the formal terminal series deletion contract without replacing with
  expect(deletePersonalSkillSeriesRequestSchema.safeParse({expected_state_version:"9223372036854775807",expected_publication:null}).success).toBe(false)
  expect(deletePersonalSkillSeriesRequestSchema.safeParse({expected_state_version:"8",expected_publication:null}).success).toBe(true)
  expect(field(shape(spec,"SkillInstallation"),"source_status").enum).toContain("deleted")
+})
+
+
+it("consumes the same optional Hub publisher refs from formal Public28.6 without inventing identity", async () => {
+  const spec = YAML.parse(await readFile(SNAPSHOT, "utf8")) as Spec
+  const hub = field(shape(spec, "SpecificationHubResponse"), "skills").items!
+  expect(hub.additionalProperties).toBe(false)
+  expect(field(hub, "product").$ref).toBe("#/components/schemas/Public9SkillProductFacts")
+  expect(field(hub, "publisher_profile").$ref).toBe("#/components/schemas/SkillPublisherProfile")
+  expect(hub.required ?? []).not.toContain("product")
+  expect(hub.required ?? []).not.toContain("publisher_profile")
+  const { manuscriptHubPageSchema } = await import("@/hub/schemas")
+  const product = { publication_audience: "catalog", state_version: "3", source_kind: "personal", presentation_kind: "first_party", publisher: { kind: "iam", iam: { kind: "user", id: "qa-publisher" } } }
+  const profile = { kind: "user", id: "qa-publisher", status: "found", display_name: "QA Publisher", image_url: null }
+  expect(manuscriptHubPageSchema.parse({ skills: [{ skillId: "qa-series", product, publisher_profile: profile }], tagOptions: {} }).skills[0]).toMatchObject({ product, publisher_profile: profile })
+  expect(manuscriptHubPageSchema.safeParse({ skills: [{ skillId: "qa-series", product, publisher_profile: { ...profile, id: "qa-creator" } }], tagOptions: {} }).success).toBe(false)
+})
+
+
+it("restores every Public28.5 byte before the sealed older proof chain and rejects unrelated publisher drift", async () => {
+  const { restorePublic285SkillPublisherContract: restore } = await import("./bff-skill-publisher-parent")
+  const raw = await readFile(SNAPSHOT, "utf8")
+  expect(createHash("sha256").update(restore(raw)).digest("hex")).toBe("109a2ae063b10699ae52776b09533c5622d906679c093d65730a289206043b1a")
+  for (const changed of [raw + "\n", raw.replace("listTeamMembers", "unrelatedOperation"), raw.replace('Same authorized current version owner product', 'Other version owner product'), raw.replace('Required exactly when product.publisher.kind is iam', 'Always optional publisher'), raw.replace('#/components/schemas/SkillPublisherProfile', '#/components/schemas/UnknownProfile'), raw.replace('SpecificationHubResponse:\n', 'SpecificationHubResponse:\n      extra: true\n')]) {
+    expect(changed).not.toBe(raw)
+    expect(() => restore(changed)).toThrow(/drift/)
+  }
+})
+
+
+it("binds directory discovery to 512 paths while selected package files stay at 128", async () => {
+  const spec = YAML.parse(await readFile(SNAPSHOT, "utf8")) as Spec
+  const alternatives = (field(shape(spec, "GithubSkillResponse"), "data") as Shape & { oneOf?: Shape[] }).oneOf ?? []
+  const discovery = alternatives.find(branch => field(branch, "selection_required").const === true)
+  expect(discovery).toBeDefined()
+  expect(field(discovery!, "paths").maxItems).toBe(512)
+  expect(field(shape(spec, "SkillPackageInspectionData"), "files").maxItems).toBe(128)
+})
+
+
+it("restores the complete Public28.6 parent through only the named discovery-cap delta and rejects unrelated drift", async () => {
+  const { restorePublic286GithubDiscoveryContract: restore } = await import("./bff-github-discovery-parent")
+  const { restorePublic287ProjectSkillContentContract } = await import("./bff-project-skill-content-parent")
+  const raw = restorePublic287ProjectSkillContentContract(await readFile(SNAPSHOT, "utf8")), parent = restore(raw)
+  expect(createHash("sha256").update(parent).digest("hex")).toBe("a020e849f740165fa20099f5ab041b76bc480c70a9bbc067955e57f5ec22ae02")
+  const current = YAML.parse(raw) as Spec, previous = YAML.parse(parent) as Spec
+  const normalized = structuredClone(current)
+  normalized.info.version = "28.6.0"
+  const branches = (field(shape(normalized, "GithubSkillResponse"), "data") as Shape & { oneOf?: Shape[] }).oneOf ?? []
+  const discovery = branches.find(branch => field(branch, "selection_required").const === true)
+  field(discovery!, "paths").maxItems = 128
+  expect(normalized).toEqual(previous)
+  for (const changed of [raw + "\n", raw.replace("listTeamMembers", "unrelatedOperation"), raw.replace("version: 28.7.0", "version: 28.8.0"), raw.replace("maxItems: 512", "maxItems: 513"), raw.replace("maxItems: 128", "maxItems: 129"), raw.replace("maxLength: 39", "maxLength: 40")]) {
+    expect(changed).not.toBe(raw)
+    expect(() => restore(changed)).toThrow(/drift/)
+  }
 })

@@ -1,3 +1,10 @@
+2026-10-28 最终答复引用沿原AG-UI/快照/parts读取链消费：仅exact Run与公共revision可建立分层事实；旧版本、跨页不一致和未完整正文不替代新事实。无新读取通道，正常配对状态见CURRENT。
+
+HMR RAM：页面Engine可沿用旧thread；纯normalizer仅将旧cancelledRuns中已确认true迁为cancelled并退休旧字段。新读容忍缺map，写入口一次规范后幂等；不由textState/runStatus补成功，不改消息/草稿或持久状态。
+
+取消投影：只有真实 run.completed(cancelled) 或私有 MessageRead 显式 terminal_status=cancelled 进入唯一 exact runTerminalsById（completed/cancelled/failed），不与cancelmap并存；真实Run完成/失败与可信snapshot status写该索引；TEXT_END不写。失败空正文／无profile不推断取消，本地 markRunCancelled 只收工具，不造远端终态。取消不改变文字／ordered parts完整性。
+
+<!-- Ordered messages: nullable private descriptors keep an owner marker + per-Message unread/loading/partial/changed state. mergeMessageParts restores scalar text slots and safe activities at exact decimal public ledger positions, then replays newer publicSequence events. Agent seq and opaque SSE resumeCursor are separate coordinates. -->
 # core — 纯状态模型与事件折叠（零 I/O 零 React）
 
 ## 职责
@@ -19,7 +26,9 @@ web 的领域核心：会话线程状态、事件折叠 reducer、渲染投影�
   - 本地命令（非事件折叠）：`appendUserMessage`（本地 echo，usr_ 前缀 id）、
     `markToolRejected`（拒绝乐观置位，防回流翻绿勾）、`markRunCancelled`（停止本地收口）。
 - `projections.ts`：`buildThreadItems`（连续同 runId assistant 归并为 turn；safe process 可在首 token 前建立 turn；纯派生，
-  渲染层唯一读取模型）、`groupSegments`/`Segment`（正文锚点与 public7 safe activity 按 opaque segment 聚合）。
+  渲染层唯一读取模型）、`groupSegments`/`Segment`（live safe activity 与正文按真实步骤顺序交错，连续相邻活动合组；
+  没有首次位置锚点的旧 snapshot activity 保原 opaque segment fallback，不猜历史顺序）、
+  `currentRunProgressTodos`（只派生 exact 当前非 queued head 对应 selected process 的计划；终态/历史计划不冒 active 进度，不改原 Todo 状态）。
 - `hydration.ts`：`stateFromSnapshot`——从 BFF 同一事务 snapshot 水合
   messages/pending pauses/meta/files/deliveries/activeRunId，并保存 `event_watermark` 为
   `resumeCursor`；尾部 settled failed assistant 在无 active/HITL 时按 Message.failure 恢复 agent 或 generic safe failure，
@@ -43,6 +52,9 @@ web 的领域核心：会话线程状态、事件折叠 reducer、渲染投影�
 - 终态 runStatus/runError 是单槽投影：仅在无在途锚点或终态属在途 run 时写——
   reattach 全量回放里历史 run 的终态不得覆写在途 run。
 - selected process activity 以 activity_id 替换完整值并保留首次位置；Todo 每帧有序全值替换，`null` 与 `[]` 不合并。
+- 新观察的 live safe activity 同时记录 `SessionStep.activity` 的首次真实 `event.seq`；同 activity_id 后续更新原槽，
+  不移动、不重复。旧 snapshot 已有但无锚点的活动更新不伪造首次位置；正文 item 是合组边界，所有公开正文保持常显。
+  本片不改 hydration/wire、不将同一 text segment 后继 delta 拆成新 message，也不声明历史 timeline 或 final phase 已恢复。
 
 ## 扩展规则
 
@@ -55,3 +67,7 @@ web 的领域核心：会话线程状态、事件折叠 reducer、渲染投影�
 - message.user 三态吸收（id 命中更新 / 本地 echo 就地改 id / 新建）：SSE 常跑赢 HTTP 回执。
 - delivery.created 以 `(conversationId, artifactId)` 幂等（非 hash）；同 hash 的不同成果保留两件。
 - snapshot 最近 100 件与 `deliveriesHasMore` 一并水合；完整历史由 Library 分页读取。
+
+CHAT-1：ConversationEntry可选literal localDraft，activeIsLocalDraft/retireLocalDraft只操作UI来源，不表示owner存在；索引元数据不能撤销独立提交退休标记。
+
+CHAT-ORDER empty boundaries: groupSegments accepts the current messagesById; only a completed whole-body fact with exact empty content is invisible between activity slots. Body-less END and incomplete/unread text never establish empty completion. SessionMessage.textState is internal provenance from full message.completed, complete owner parts, or inline completed body, not a new wire/Run phase.

@@ -1,3 +1,9 @@
+`composer-connections.tsx` uses one switch-row presentation for distinct MCP and Custom API choices. Identity keys and limits stay separate (16 MCP/32 APIs); stable list→add→management order for both placements, existing36px rows and200–400px panel budget stay unchanged. Pending/error reads remain quiet and never impersonate empty success.
+
+## 语音预览边界（2026-10-28）
+
+AppFrameComposer 仅显式 preview 允许演示转写；NODE_ENV 不改变用户会话输入真实性。回归见 tests/ui/app-frame-voice.test.tsx；真实语音和参考交互验收状态见 docs/CURRENT.md。
+
 # ui/composer — 输入区
 
 ## 职责
@@ -11,7 +17,7 @@
 - `environmentSelectorPlacement`：项目线程桌面态可将环境入口锚定到编辑器上方；默认仍位于工具行。
 
 ## 协作者
-上游：`@/ui/shell`（draft、submit/keydown、selectors）；typed Skill source 选择尚无正式 UI 入口。
+上游：`@/ui/shell`（draft、submit/keydown、selectors）；已安装 Skill picker 通过 AppFrame 的同一试用生命周期提交当前草稿选择。
 
 ## 陷阱
 - Enter 发送 / Shift+Enter 换行；IME 合成期 Enter 只确认候选词不发送。
@@ -26,4 +32,16 @@
 
 - 恢复或语音追加的草稿超过现有 4000 字符提交上限时，保留完整草稿，在输入区关联可访问提示并禁用 Send；表单提交也阻断，缩短后自动恢复。有效输入不额外占布局。
 
-- 模型目录通过受控 `modelCatalogStatus` / `onRetryModels` 区分加载、成功与失败；失败保留当前候选并显式重试，只显示已有通用目录提示，不展示内部错误。仅完整成功目录校正失效选择（含真正空目录），已锁定会话不改模型；产品模式与业务模型身份保持分离。
+- 模型目录保留受控 `modelCatalogStatus` 的加载／成功／失败事实；失败只作 SR 状态，不在 Composer 插入可见错误／重试面板。同 scope 已确认候选和选择保留，首次未知不造候选或默认值；仅完整成功目录校正失效选择（含真正空目录），已锁定会话不改模型。底层 `retryModels` 的显式程序化恢复保持；正常页面重新挂载会重新读取，不宣称同一常驻壳的重入已恢复，也不把此展示修正当读取故障根因修复。明确发送失败仍归原消息／命令反馈，产品模式与业务模型身份保持分离。
+
+## 当前消息的连接来源
+
+`ComposerConnections` 是独立受控Popover：精确Connection行选择、原选glyph、有限分页，Esc回触发器。添加与管理使用独立回调进入目录窗口和原设置，不修改账号enabled或发模型；打开时原读取刷新保留，不额外展示手动刷新或通用重试面板，失败不伪装成功空态。指针打开不自动聚焦首行，键盘打开仍正常聚焦与回焦；`composer-connections.module.css`持有实测menu/pill/26×16switch几何与局部选中token。
+
+## 当前草稿的 Skill picker
+
+`composer-skills-menu.tsx` 用现 Popover/Command 组合资源根菜单、已安装搜索及显式添加/管理；`+` 与单个手输 `/` 共用，仅读 actor-scoped 现 Skills pool，不创建或启用安装。加载/失败/无结果分开，enabled/active/exact pin 校验复用现规则。候选行沿 Manus 2026-10-25 实测50px、6px 8px padding、14px/20px标题与单行描述；独立局部 CSS 负责窄屏逐级面板和滚动。
+
+Composer 仅报告新输入的 slash 范围；成功选择仅移除该范围，保留原文、原会话和光标，不自动 Send。IME、paste、URL/path 与选区替换不打开命令；菜单键盘/Esc 不落入原 Enter-submit。真正 source 选择与首次 Send 承接仍由 `useAppFrameSkillTrial` 单一生命周期持有，旧 actor/scope/route 的结果和迟到 focus 不复活。`SelectedSkillPill` 原样复用，当前仍为 textarea＋controls pill，不冒称行内不可编辑 token 已一比一。
+
+2026-10-29实测修正：Manus首页与项目的连接器列表在前、添加和管理固定底部，不随上下placement逆序；删除原placement监听与反转，键盘首次进入真实首个选择项、Esc回焦。已发送选择由私有snapshot提供候选，Engine保护新提交／手选，controller完整重新核验目录后CAS恢复。加号仍缺真实文件／资料库／最近任务上下文链，不将本节现Skills实现视作完整资源菜单。

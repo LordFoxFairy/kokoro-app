@@ -1,3 +1,8 @@
+import { mcpPrepareReceiptDataSchema, mcpPrepareReceiptRequest, mcpPrepareReceiptMatches, mcpPrepareReceiptErrorAllowed, mcpPreparePostErrorAllowed, mcpPrepareReceiptLookupOnly } from "./mcp-prepare-receipt.schema";
+import { parseMcpConnectorJson } from "./mcp-connector-json";
+import { createMcpProjectPublicationClient, type McpProjectPublicationClient } from "./mcp-project-publication-client";
+import { createMcpIconClient, type McpIconClient } from "./mcp-icon-client";
+import { type McpIconOperation, mcpIconSaveMatches } from "./mcp-icon.schema";
 import { projectSkillIdSchema } from "./project-skills.schema";
 // hub self 面 HTTP 客户端：同源 `/api/hub/*` BFF 代理（注入 web-bff 凭据 + 信封 scope/user）。
 // 入站过 Zod，失败以类型化错误上抛；错误体尽力取 hub 错误码（如 hub.skill_required）供 UI 本地化。
@@ -367,10 +372,83 @@ export function hasHubNoStoreDirective(headers: Headers): boolean {
 const MCP_CONNECTION_READ_BYTES = 1024 * 1024;
 const MCP_CONNECTION_READ_TIMEOUT_MS = 10_000;
 
+/** Only the bounded MCP metadata GETs use this signal-aware I/O wait. */
+function mcpReadWithinBudget<T>(
+  pending: Promise<T>,
+  signal: AbortSignal,
+  discardLate?: (value: T) => void,
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    const abort = () => {
+      if (settled) return;
+      settled = true;
+      signal.removeEventListener("abort", abort);
+      reject(signal.reason);
+    };
+    signal.addEventListener("abort", abort, { once: true });
+    if (signal.aborted) abort();
+    void pending.then(
+      (value) => {
+        if (settled) {
+          discardLate?.(value);
+          return;
+        }
+        settled = true;
+        signal.removeEventListener("abort", abort);
+        resolve(value);
+      },
+      (error: unknown) => {
+        if (settled) return;
+        settled = true;
+        signal.removeEventListener("abort", abort);
+        reject(error);
+      },
+    );
+  });
+}
+
+/** No default delay, no command replay, and no fresh deadline for the second GET. */
+async function mcpReadCooldown(
+  error: unknown,
+  deadlineAt: number,
+  signal: AbortSignal,
+): Promise<boolean> {
+  if (
+    !(error instanceof HubClientError) ||
+    error.reason !== "http" ||
+    error.status !== 429 ||
+    !error.retryable ||
+    error.retryAfter === null ||
+    !/^[1-9][0-9]{0,4}(?![\s\S])/u.test(error.retryAfter) ||
+    Number(error.retryAfter) > 86400
+  )
+    return false;
+  const delay = Number(error.retryAfter) * 1000;
+  if (delay >= deadlineAt - performance.now()) return false;
+  signal.throwIfAborted();
+  await new Promise<void>((resolve, reject) => {
+    const abort = () => {
+      clearTimeout(timer);
+      signal.removeEventListener("abort", abort);
+      reject(signal.reason);
+    };
+    const timer = setTimeout(() => {
+      signal.removeEventListener("abort", abort);
+      resolve();
+    }, delay);
+    signal.addEventListener("abort", abort, { once: true });
+    if (signal.aborted) abort();
+  });
+  signal.throwIfAborted();
+  return true;
+}
+
 async function readMcpConnections(
   path: string,
   signal?: AbortSignal,
 ): Promise<McpConnectionPage> {
+  const deadlineAt = performance.now() + MCP_CONNECTION_READ_TIMEOUT_MS;
   const deadline = new AbortController();
   const timer = setTimeout(
     () =>
@@ -385,119 +463,137 @@ async function readMcpConnections(
       : AbortSignal.any([signal, deadline.signal]);
   let response: Response | undefined;
   try {
-    response = await fetch(`${HUB_BASE}${path}`, {
-      cache: "no-store",
-      redirect: "error",
-      signal: joined,
-    });
-    if (
-      !hasHubNoStoreDirective(response.headers) ||
-      !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(
-        response.headers.get("x-request-id") ?? "",
-      ) ||
-      !/^application\/json(?:;\s*charset=utf-8)?$/iu.test(
-        response.headers.get("content-type") ?? "",
-      )
-    ) {
-      throw new HubClientError(
-        "parse",
-        "invalid BFF connection response headers",
-        null,
-        response.status,
-      );
-    }
-    const declared = response.headers.get("content-length");
-    if (
-      declared !== null &&
-      (!/^(0|[1-9][0-9]*)$/u.test(declared) ||
-        Number(declared) > MCP_CONNECTION_READ_BYTES)
-    ) {
-      throw new HubClientError(
-        "parse",
-        "BFF connection response is too large",
-        null,
-        response.status,
-      );
-    }
-    if (response.body === null)
-      throw new HubClientError(
-        "parse",
-        "missing BFF connection response body",
-        null,
-        response.status,
-      );
-    const reader = response.body.getReader();
-    const chunks: Uint8Array[] = [];
-    let size = 0;
-    try {
-      for (;;) {
-        const part = await reader.read();
-        if (part.done) break;
-        size += part.value.byteLength;
-        if (size > MCP_CONNECTION_READ_BYTES)
+    for (let attempt = 0; ; attempt += 1) {
+      response = undefined;
+      try {
+        joined.throwIfAborted();
+        const pendingResponse = fetch(`${HUB_BASE}${path}`, {
+          cache: "no-store",
+          redirect: "error",
+          signal: joined,
+        });
+        response = await mcpReadWithinBudget(pendingResponse, joined, (late) => {
+          void late.body?.cancel().catch(() => undefined);
+        });
+        if (
+          !hasHubNoStoreDirective(response.headers) ||
+          !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(
+            response.headers.get("x-request-id") ?? "",
+          ) ||
+          !/^application\/json(?:;\s*charset=utf-8)?$/iu.test(
+            response.headers.get("content-type") ?? "",
+          )
+        ) {
+          throw new HubClientError(
+            "parse",
+            "invalid BFF connection response headers",
+            null,
+            response.status,
+          );
+        }
+        const declared = response.headers.get("content-length");
+        if (
+          declared !== null &&
+          (!/^(0|[1-9][0-9]*)$/u.test(declared) ||
+            Number(declared) > MCP_CONNECTION_READ_BYTES)
+        ) {
           throw new HubClientError(
             "parse",
             "BFF connection response is too large",
             null,
             response.status,
           );
-        chunks.push(part.value);
-      }
-    } finally {
-      void reader.cancel().catch(() => undefined);
-      reader.releaseLock();
-    }
-    joined.throwIfAborted();
-    const bytes = new Uint8Array(size);
-    let offset = 0;
-    for (const chunk of chunks) {
-      bytes.set(chunk, offset);
-      offset += chunk.byteLength;
-    }
-    let raw: unknown;
-    try {
-      raw = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
-    } catch (error) {
-      throw new HubClientError(
-        "parse",
-        describeUnknown(error),
-        null,
-        response.status,
-      );
-    }
-    if (response.status === 200) {
-      const parsed = z
-        .object({ data: mcpConnectionPageSchema })
-        .strict()
-        .safeParse(raw);
-      if (!parsed.success)
+        }
+        if (response.body === null)
+          throw new HubClientError(
+            "parse",
+            "missing BFF connection response body",
+            null,
+            response.status,
+          );
+        const reader = response.body.getReader();
+        const chunks: Uint8Array[] = [];
+        let size = 0;
+        try {
+          for (;;) {
+            const part = await mcpReadWithinBudget(reader.read(), joined);
+            if (part.done) break;
+            size += part.value.byteLength;
+            if (size > MCP_CONNECTION_READ_BYTES)
+              throw new HubClientError(
+                "parse",
+                "BFF connection response is too large",
+                null,
+                response.status,
+              );
+            chunks.push(part.value);
+          }
+        } finally {
+          void reader.cancel().catch(() => undefined);
+          reader.releaseLock();
+        }
+        joined.throwIfAborted();
+        const bytes = new Uint8Array(size);
+        let offset = 0;
+        for (const chunk of chunks) {
+          bytes.set(chunk, offset);
+          offset += chunk.byteLength;
+        }
+        let raw: unknown;
+        try {
+          raw = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+        } catch (error) {
+          throw new HubClientError(
+            "parse",
+            describeUnknown(error),
+            null,
+            response.status,
+          );
+        }
+        if (response.status === 200) {
+          const parsed = z
+            .object({ data: mcpConnectionPageSchema })
+            .strict()
+            .safeParse(raw);
+          if (!parsed.success)
+            throw new HubClientError(
+              "parse",
+              parsed.error.message,
+              null,
+              response.status,
+            );
+          return parsed.data.data;
+        }
+        const parsed = mcpConnectionReadErrorSchema.safeParse(raw);
+        if (
+          !parsed.success ||
+          !mcpConnectionErrorAllowed(response.status, parsed.data.error.code)
+        )
+          throw new HubClientError(
+            "parse",
+            "invalid BFF connection error",
+            null,
+            response.status,
+          );
         throw new HubClientError(
-          "parse",
-          parsed.error.message,
-          null,
+          "http",
+          parsed.data.error.message,
+          parsed.data.error.code,
           response.status,
+          parsed.data.error.retryable,
+          response.headers.get("x-request-id"),
+          response.status === 429 ? response.headers.get("retry-after") : null,
         );
-      return parsed.data.data;
+      } catch (error) {
+        if (
+          attempt === 0 &&
+          await mcpReadCooldown(error, deadlineAt, joined)
+        ) continue;
+        throw error;
+      } finally {
+        void response?.body?.cancel().catch(() => undefined);
+      }
     }
-    const parsed = mcpConnectionReadErrorSchema.safeParse(raw);
-    if (
-      !parsed.success ||
-      !mcpConnectionErrorAllowed(response.status, parsed.data.error.code)
-    )
-      throw new HubClientError(
-        "parse",
-        "invalid BFF connection error",
-        null,
-        response.status,
-      );
-    throw new HubClientError(
-      "http",
-      parsed.data.error.message,
-      parsed.data.error.code,
-      response.status,
-      parsed.data.error.retryable,
-      response.headers.get("x-request-id"),
-    );
   } catch (error) {
     if (error instanceof HubClientError) throw error;
     throw new HubClientError(
@@ -526,15 +622,24 @@ async function requestMcpConnector<T extends ZodTypeAny>(
     | McpConnectorCommandOperation
     | McpConnectorAuthorizationOperation
     | McpPrivateServerOperation
+    | McpIconOperation
     | "connectors"
     | "connector"
     | "providers"
-    | "provider",
+    | "provider"
+    | "prepareReceipt",
   path: string,
   schema: T,
   init?: RequestInit,
   signal?: AbortSignal,
 ): Promise<z.infer<T>> {
+  const allowCooldown =
+    (init?.method === undefined || init.method === "GET") &&
+    ["connectors", "connector", "providers", "provider", "server"].includes(
+      operation,
+    );
+  const boundedRead = allowCooldown || operation === "prepareReceipt";
+  const deadlineAt = performance.now() + MCP_CONNECTOR_TIMEOUT_MS;
   const deadline = new AbortController();
   const timer = setTimeout(
     () =>
@@ -549,143 +654,168 @@ async function requestMcpConnector<T extends ZodTypeAny>(
       : AbortSignal.any([signal, deadline.signal]);
   let response: Response | undefined;
   try {
-    response = await fetch(`${HUB_BASE}${path}`, {
-      cache: "no-store",
-      redirect: "error",
-      ...init,
-      signal: joined,
-    });
-    const requestId = response.headers.get("x-request-id");
-    if (
-      !hasHubNoStoreDirective(response.headers) ||
-      !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(requestId ?? "") ||
-      !/^application\/json(?:;\s*charset=utf-8)?$/iu.test(
-        response.headers.get("content-type") ?? "",
-      )
-    ) {
-      throw new HubClientError(
-        "parse",
-        "invalid MCP current-user response headers",
-        null,
-        response.status,
-      );
-    }
-    const declared = response.headers.get("content-length");
-    if (
-      declared !== null &&
-      (!/^(0|[1-9][0-9]*)$/u.test(declared) ||
-        Number(declared) > MCP_CONNECTOR_RESPONSE_BYTES)
-    ) {
-      throw new HubClientError(
-        "parse",
-        "MCP current-user response is too large",
-        null,
-        response.status,
-      );
-    }
-    if (response.body === null)
-      throw new HubClientError(
-        "parse",
-        "missing MCP current-user response body",
-        null,
-        response.status,
-      );
-    const reader = response.body.getReader();
-    const chunks: Uint8Array[] = [];
-    let size = 0;
-    try {
-      for (;;) {
-        const part = await reader.read();
-        if (part.done) break;
-        size += part.value.byteLength;
-        if (size > MCP_CONNECTOR_RESPONSE_BYTES)
+    for (let attempt = 0; ; attempt += 1) {
+      response = undefined;
+      try {
+        if (boundedRead) joined.throwIfAborted();
+        const pendingResponse = fetch(`${HUB_BASE}${path}`, {
+          cache: "no-store",
+          redirect: "error",
+          ...init,
+          signal: joined,
+        });
+        response = boundedRead
+          ? await mcpReadWithinBudget(pendingResponse, joined, (late) => {
+              void late.body?.cancel().catch(() => undefined);
+            })
+          : await pendingResponse;
+        const requestId = response.headers.get("x-request-id");
+        if (
+          !hasHubNoStoreDirective(response.headers) ||
+          !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(requestId ?? "") ||
+          !/^application\/json(?:;\s*charset=utf-8)?$/iu.test(
+            response.headers.get("content-type") ?? "",
+          )
+        ) {
+          throw new HubClientError(
+            "parse",
+            "invalid MCP current-user response headers",
+            null,
+            response.status,
+          );
+        }
+        const declared = response.headers.get("content-length");
+        if (
+          declared !== null &&
+          (!/^(0|[1-9][0-9]*)$/u.test(declared) ||
+            Number(declared) > MCP_CONNECTOR_RESPONSE_BYTES)
+        ) {
           throw new HubClientError(
             "parse",
             "MCP current-user response is too large",
             null,
             response.status,
           );
-        chunks.push(part.value);
-      }
-    } finally {
-      void reader.cancel().catch(() => undefined);
-      reader.releaseLock();
-    }
-    joined.throwIfAborted();
-    const bytes = new Uint8Array(size);
-    let offset = 0;
-    for (const chunk of chunks) {
-      bytes.set(chunk, offset);
-      offset += chunk.byteLength;
-    }
-    let raw: unknown;
-    try {
-      raw = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
-    } catch (error) {
-      throw new HubClientError(
-        "parse",
-        describeUnknown(error),
-        null,
-        response.status,
-      );
-    }
-    const expected =
-      operation === "create" ||
-      operation === "createConnection" ||
-      operation === "registerServer" ||
-      operation === "importJson"
-        ? 201
-        : 200;
-    if (response.status === expected) {
-      const parsed = z.object({ data: schema }).strict().safeParse(raw);
-      if (!parsed.success)
+        }
+        if (response.body === null)
+          throw new HubClientError(
+            "parse",
+            "missing MCP current-user response body",
+            null,
+            response.status,
+          );
+        const reader = response.body.getReader();
+        const chunks: Uint8Array[] = [];
+        let size = 0;
+        try {
+          for (;;) {
+            const part = boundedRead
+              ? await mcpReadWithinBudget(reader.read(), joined)
+              : await reader.read();
+            if (part.done) break;
+            size += part.value.byteLength;
+            if (size > MCP_CONNECTOR_RESPONSE_BYTES)
+              throw new HubClientError(
+                "parse",
+                "MCP current-user response is too large",
+                null,
+                response.status,
+              );
+            chunks.push(part.value);
+          }
+        } finally {
+          void reader.cancel().catch(() => undefined);
+          reader.releaseLock();
+        }
+        joined.throwIfAborted();
+        if (operation === "prepareReceipt" && declared !== null && Number(declared) !== size)
+          throw new HubClientError("parse", "truncated Prepare receipt response", null, response.status);
+        const bytes = new Uint8Array(size);
+        let offset = 0;
+        for (const chunk of chunks) {
+          bytes.set(chunk, offset);
+          offset += chunk.byteLength;
+        }
+        let raw: unknown;
+        try {
+          const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+          raw = operation === "prepareReceipt" ? parseMcpConnectorJson(text) : JSON.parse(text);
+        } catch (error) {
+          throw new HubClientError(
+            "parse",
+            describeUnknown(error),
+            null,
+            response.status,
+          );
+        }
+        const expected =
+          operation === "create" ||
+          operation === "createConnection" ||
+          operation === "registerServer" ||
+          operation === "importJson"
+            ? 201
+            : 200;
+        if (response.status === expected) {
+          const parsed = z.object({ data: schema }).strict().safeParse(raw);
+          if (!parsed.success)
+            throw new HubClientError(
+              "parse",
+              parsed.error.message,
+              null,
+              response.status,
+            );
+          return parsed.data.data;
+        }
+        const parsed = mcpConnectorErrorSchema.safeParse(raw);
+        const authorizationOperation = [
+          "beginAuthorization",
+          "reconnectAuthorization",
+          "completeAuthorization",
+          "createConnection",
+        ].includes(operation);
+        const connectorOperation =
+          operation === "registerServer"
+            ? "create"
+            : operation === "server"
+              ? "connector"
+              : operation;
+        const errorAllowed = operation === "prepareReceipt" ? mcpPrepareReceiptErrorAllowed(response.status, raw) : operation === "prepareServer" ? mcpPreparePostErrorAllowed(response.status, raw) : authorizationOperation
+          ? mcpConnectorErrorAllowed("authorization", response.status, parsed.data)
+          : mcpConnectorErrorAllowed(
+              connectorOperation as
+                | McpConnectorCommandOperation
+                | "connectors"
+                | "providers",
+              response.status,
+              parsed.data,
+            );
+        if (!parsed.success || !errorAllowed)
+          throw new HubClientError(
+            "parse",
+            "invalid MCP current-user error",
+            null,
+            response.status,
+          );
         throw new HubClientError(
-          "parse",
-          parsed.error.message,
-          null,
+          "http",
+          parsed.data.error.message,
+          parsed.data.error.code,
           response.status,
+          parsed.data.error.retryable,
+          requestId,
+          response.status === 429 ? response.headers.get("retry-after") : null,
         );
-      return parsed.data.data;
+      } catch (error) {
+        if (
+          attempt === 0 &&
+          allowCooldown &&
+          await mcpReadCooldown(error, deadlineAt, joined)
+        ) continue;
+        throw error;
+      } finally {
+        void response?.body?.cancel().catch(() => undefined);
+      }
     }
-    const parsed = mcpConnectorErrorSchema.safeParse(raw);
-    const authorizationOperation = [
-      "beginAuthorization",
-      "reconnectAuthorization",
-      "completeAuthorization",
-      "createConnection",
-    ].includes(operation);
-    const connectorOperation =
-      operation === "registerServer"
-        ? "create"
-        : operation === "server"
-          ? "connector"
-          : operation;
-    const errorAllowed = authorizationOperation
-      ? mcpConnectorErrorAllowed("authorization", response.status, parsed.data)
-      : mcpConnectorErrorAllowed(
-          connectorOperation as
-            | McpConnectorCommandOperation
-            | "connectors"
-            | "providers",
-          response.status,
-          parsed.data,
-        );
-    if (!parsed.success || !errorAllowed)
-      throw new HubClientError(
-        "parse",
-        "invalid MCP current-user error",
-        null,
-        response.status,
-      );
-    throw new HubClientError(
-      "http",
-      parsed.data.error.message,
-      parsed.data.error.code,
-      response.status,
-      parsed.data.error.retryable,
-      requestId,
-      response.status === 429 ? response.headers.get("retry-after") : null,
-    );
   } catch (error) {
     if (error instanceof HubClientError) throw error;
     throw new HubClientError(
@@ -799,6 +929,8 @@ function idempotencyHeaders(
 }
 
 export type HubClient = {
+  mcpIcons?: McpIconClient;
+  mcpProjectPublication?: McpProjectPublicationClient;
   listPersonalSkills: (
     cursor?: string,
     signal?: AbortSignal,
@@ -887,6 +1019,13 @@ export type HubClient = {
     key: string,
     signal?: AbortSignal,
   ) => Promise<McpPrivateServerPrepare>;
+  /** Read-only original Prepare result; transport is paired only with its formal private artifact. */
+  getMcpPrepareReceipt?: (
+    serverId: string,
+    expectedStateVersion: string,
+    key: string,
+    signal?: AbortSignal,
+  ) => Promise<McpPrivateServerPrepare>;
   updatePrivateMcpServer?: (
     serverId: string,
     input: McpPrivateServerUpdateInput,
@@ -953,6 +1092,8 @@ export type HubClient = {
 
 export function createHubClient(): HubClient {
   return {
+    mcpIcons: createMcpIconClient(requestMcpConnector),
+    mcpProjectPublication: createMcpProjectPublicationClient(),
     listPersonalSkills: (cursor, signal) =>
       createSkillPublishClient().listPublished(cursor, signal),
     getPublishedPersonalSkill: async (id, signal) => {
@@ -1049,7 +1190,7 @@ export function createHubClient(): HubClient {
       ).custom_api;
       const names = body.environment.map(value => value.name).sort();
       const received = profile.environment.map(value => value.name).sort();
-      if (profile.name !== body.name || profile.instructions !== body.instructions ||
+      if (!mcpIconSaveMatches(profile.icon, body) || profile.name !== body.name || profile.instructions !== body.instructions ||
         names.length !== received.length || names.some((name, index) => name !== received[index]) ||
         profile.environment.some(value => !value.configured))
         throw new HubClientError("parse", "Custom API creation ACK binding mismatch", null, null);
@@ -1085,7 +1226,7 @@ export function createHubClient(): HubClient {
         { method: "PATCH", headers: { ...JSON_HEADERS, "Idempotency-Key": connectorCreationKeySchema.parse(key) }, body: JSON.stringify(body) }, signal,
       )).custom_api;
       const environment = new Map(profile.environment.map(item => [item.name, item]));
-      if (profile.profile_id !== id || environment.size !== profile.environment.length ||
+      if (!mcpIconSaveMatches(profile.icon, body) || profile.profile_id !== id || environment.size !== profile.environment.length ||
         (body.name !== undefined && profile.name !== body.name) ||
         (body.instructions !== undefined && profile.instructions !== body.instructions) ||
         (body.clear_instructions === true && profile.instructions !== undefined) ||
@@ -1175,6 +1316,15 @@ export function createHubClient(): HubClient {
           throw new HubClientError("parse", "MCP preparation ACK binding mismatch", null, null);
         return result;
       }),
+    getMcpPrepareReceipt: async (serverId, expectedStateVersion, key, signal) => {
+      if (!mcpPrepareReceiptLookupOnly()) throw new HubClientError("parse", "Prepare receipt policy mismatch", null, null);
+      const request = mcpPrepareReceiptRequest(serverId, expectedStateVersion, key);
+      const result = await requestMcpConnector("prepareReceipt", `/mcp/servers/${encodeURIComponent(request.serverId)}/prepare-receipt?expected_state_version=${encodeURIComponent(request.version)}`,
+        mcpPrepareReceiptDataSchema, { method: "GET", headers: { "Idempotency-Key": request.key } }, signal);
+      if (!mcpPrepareReceiptMatches({ data: result }, request.serverId, request.version))
+        throw new HubClientError("parse", "Prepare receipt ACK binding mismatch", null, null);
+      return result.completed;
+    },
     updatePrivateMcpServer: async (serverId, input, key, signal) => {
       const id = mcpConnectorIdSchema.parse(serverId), body = mcpPrivateServerUpdateInputSchema.parse(input);
       const result = await requestMcpConnector("updateServer", `/mcp/servers/${encodeURIComponent(id)}`, mcpPrivateServerUpdateSchema,

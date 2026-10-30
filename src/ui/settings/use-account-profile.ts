@@ -66,7 +66,11 @@ export function useAccountProfile(
         scopeRef.current === r.scope &&
         !r.controller.signal.aborted
       )
-        setView({ scope: r.scope, profile: null, phase: "error" });
+        setView((previous) => ({
+          scope: r.scope,
+          profile: previous.scope === r.scope ? previous.profile : null,
+          phase: "error",
+        }));
       return null;
     } finally {
       r.pending = false;

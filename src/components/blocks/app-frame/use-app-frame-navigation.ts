@@ -1,3 +1,4 @@
+import { activeIsLocalDraft } from "@/core/conversations"
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react"
 
 import type { SessionEngine, MachineState } from "@/engine/machine"
@@ -24,6 +25,7 @@ export type AppFrameNavigationOptions = {
   activeId: string | null
   threadMessageCount: number
   hydrating: boolean
+  missingSessionId?: string
   machinePhase: MachineState["phase"]
 }
 
@@ -39,6 +41,7 @@ export function useAppFrameNavigation({
   activeId,
   threadMessageCount,
   hydrating,
+  missingSessionId,
   machinePhase,
 }: AppFrameNavigationOptions) {
   const scopePath = scope.kind === "project"
@@ -167,7 +170,7 @@ export function useAppFrameNavigation({
       const currentSnapshot = engine?.getSnapshot()
       const currentId = currentSnapshot?.store?.activeId ?? null
       if (requestedConversation !== null) {
-        if (requestedConversation !== currentId) {
+        if (requestedConversation !== currentId || activeIsLocalDraft(currentSnapshot?.store ?? null)) {
           engine?.openConversation(requestedConversation)
         }
       } else if (!projectWorkspace && previousConversation !== null && currentId !== null) {
@@ -197,7 +200,7 @@ export function useAppFrameNavigation({
     // Route leaves are intentionally empty so AppFrame stays mounted. Apply a
     // newly entered conversation query to the newly selected scope here; the
     // initial deep-link effect only runs once per shell mount.
-    if (requestedConversation !== null && requestedConversation !== (engine?.getSnapshot().store?.activeId ?? null)) {
+    if (requestedConversation !== null && (requestedConversation !== (engine?.getSnapshot().store?.activeId ?? null) || activeIsLocalDraft(engine?.getSnapshot().store ?? null))) {
       engine?.openConversation(requestedConversation)
     }
     const frame = window.requestAnimationFrame(() => setConversationRouteId(requestedConversation))
@@ -214,24 +217,13 @@ export function useAppFrameNavigation({
     // The shell may have first mounted on a catalog and only now entered
     // chat. Only this location may supply a deep-link, not that catalog's URL.
     const requestedConversation = conversationIdFromLocation()
-    if (requestedConversation !== null && requestedConversation !== activeId) {
+    if (requestedConversation !== null && (requestedConversation !== activeId || activeIsLocalDraft(engine?.getSnapshot().store ?? null))) {
       engine?.openConversation(requestedConversation)
     }
   }, [activeId, engine, mounted, ownsLocation, standaloneSurface])
 
-  // A restored direct session and a newly submitted first message both acquire
-  // a stable URL without adding an extra history entry on every stream event.
-  // Project overview is intentionally a URL without `conversation`; it is a
-  // workspace landing surface, not an implicit redirect to the last task.
-  useEffect(() => {
-    if (!mounted || standaloneSurface || projectWorkspace || activeId === null || threadMessageCount === 0) {
-      return
-    }
-    if (conversationIdFromLocation() === null) {
-      syncConversationUrl(activeId, "replace")
-    }
-  }, [activeId, mounted, projectWorkspace, standaloneSurface, syncConversationUrl, threadMessageCount])
-
+  // A bare direct URL selects Home, not the remembered active thread. Only
+  // explicit selection or an accepted user Send may publish a conversation ID.
   const resolvedConversationRouteId = standaloneSurface ? null : mounted
     ? conversationIdFromLocation()
     : conversationRouteId
@@ -239,17 +231,17 @@ export function useAppFrameNavigation({
   // replacing the engine instance. The URL is authoritative for that route:
   // never paint the direct thread while the project has no conversation route,
   // and never paint a stale thread while a deep-link is being opened.
-  const routeOwnsConversation = resolvedConversationRouteId === null
-    ? !projectWorkspace
-    : resolvedConversationRouteId === activeId
+  const routeOwnsConversation = resolvedConversationRouteId !== null && resolvedConversationRouteId === activeId
   // A settled error must also terminate a mismatched deep-link, even when the
   // fallback has messages. Never paint that other conversation's body; errors
   // on the matching route with existing messages retain their local UI.
-  const conversationHydrationFailed = mounted
+  const conversationMissing = mounted && !standaloneSurface && !hydrating
+    && routeOwnsConversation && resolvedConversationRouteId !== null && resolvedConversationRouteId === missingSessionId
+  const conversationHydrationFailed = conversationMissing || (mounted
     && resolvedConversationRouteId !== null
     && !hydrating
     && machinePhase === "error"
-    && (!routeOwnsConversation || threadMessageCount === 0)
+    && (!routeOwnsConversation || threadMessageCount === 0))
   // A deep-linked task must not fall through to the empty project welcome
   // while the scoped engine is still switching or fetching its snapshot. That
   // intermediate tree was perceived as a blank page (and could briefly show a
@@ -299,6 +291,7 @@ export function useAppFrameNavigation({
     routeOwnsConversation,
     conversationHydrating,
     conversationHydrationFailed,
+    conversationMissing,
     syncSettingsUrl,
     syncConversationUrl,
     settingsHistoryEntryRef,

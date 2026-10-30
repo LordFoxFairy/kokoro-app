@@ -13,6 +13,7 @@ export function ProjectSkillCard({
   protectedDefault,
   locked,
   limitReached,
+  onOpen,
   onSelect,
   onEnabled,
   onRemove,
@@ -23,6 +24,7 @@ export function ProjectSkillCard({
   protectedDefault: boolean
   locked: boolean
   limitReached: boolean
+  onOpen?: (trigger: HTMLElement) => void
   onSelect: (selected: boolean) => void
   onEnabled: (enabled: boolean) => void
   onRemove: (source: HTMLElement) => void
@@ -32,7 +34,7 @@ export function ProjectSkillCard({
   return (
     <article className={styles.card}>
       <div className={styles.cardTop}>
-        <h3>{item.display_name}</h3>
+        <h3>{onOpen ? <button type="button" className={styles.titleButton} onClick={event => onOpen(event.currentTarget)}>{item.display_name}</button> : item.display_name}</h3>
         <Switch
           checked={item.enabled}
           disabled={locked || protectedDefault || (!item.enabled && item.source_status !== "active")}

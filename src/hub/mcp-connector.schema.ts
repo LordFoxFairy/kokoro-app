@@ -1,3 +1,4 @@
+import { mcpIconBindingSchema, mcpIconSelectionSchema, mcpIconSaveMatches, type McpIconOperation } from "./mcp-icon.schema";
 import { z } from "zod";
 import { connectorCommandErrorAllowed } from "./connector-command-error";
 
@@ -115,14 +116,14 @@ const privateServerUrl = z
       return false;
     }
   });
-const privateText = (min: number, max: number, multiline = false) =>
+const privateText = (min: number, max: number | undefined, multiline = false) =>
   z.string().refine((value) => {
     if (
       /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/u.test(
         value,
       ) ||
       new TextEncoder().encode(value).byteLength < min ||
-      new TextEncoder().encode(value).byteLength > max
+      (max !== undefined && new TextEncoder().encode(value).byteLength > max)
     )
       return false;
     return multiline
@@ -205,12 +206,15 @@ const privateOauthClientDescriptorSchema = z
   .strict()
   .refine((value) => value.configured === (value.status === "configured"));
 const privateSelectorText = privateText(1, 256);
+// Discovered display text can contain paragraphs (for example MCP descriptions).
+// Owner discovery has no per-field length cap; the transport bounds the whole
+// response. Keep identifiers and writable fields on their existing length rules.
 const privateDeclarationSchema = z.discriminatedUnion("kind", [
   z
     .object({
       kind: z.literal("tool"),
       selector: privateSelectorText,
-      display_name: privateText(1, 1000),
+      display_name: privateText(1, undefined, true),
       input_schema_digest: z.string().regex(/^[a-f0-9]{64}(?![\s\S])/u),
       output_schema_digest: z
         .string()
@@ -223,19 +227,21 @@ const privateDeclarationSchema = z.discriminatedUnion("kind", [
     .object({
       kind: z.literal("resource"),
       selector: privateSelectorText,
-      display_name: privateText(1, 1000),
+      display_name: privateText(1, undefined, true),
     })
     .strict(),
   z
     .object({
       kind: z.literal("prompt"),
       selector: privateSelectorText,
-      display_name: privateText(1, 1000),
+      display_name: privateText(1, undefined, true),
     })
     .strict(),
 ]);
-export const mcpPrivateServerSchema = z
+const mcpPrivateServerShape = z
   .object({
+    transport: z.enum(["streamable_http", "sse_compat"]).optional(),
+    icon: mcpIconBindingSchema.optional(),
     server_id: mcpConnectorIdSchema,
     availability: mcpAvailabilitySchema,
     display_name: privateText(1, 100),
@@ -274,8 +280,8 @@ export const mcpPrivateServerSchema = z
     connection_id: mcpConnectorIdSchema.optional(),
     declarations_available: z.boolean(),
   })
-  .strict()
-  .superRefine((value, context) => {
+  .strict();
+const validateMcpServerDeclarations = (value: z.infer<typeof mcpPrivateServerShape>, context: z.RefinementCtx) => {
     if (
       (!value.declarations_available &&
         (value.declarations.length > 0 ||
@@ -288,11 +294,15 @@ export const mcpPrivateServerSchema = z
         code: "custom",
         message: "private server declaration state is inconsistent",
       });
-  });
+  };
+const mcpPrivateAcknowledgementServerSchema = mcpPrivateServerShape.superRefine(validateMcpServerDeclarations);
+export const mcpPrivateServerSchema = mcpPrivateServerShape.extend({ transport: z.enum(["streamable_http", "sse_compat"]) }).superRefine(validateMcpServerDeclarations);
 export const mcpPrivateServerRegistrationInputSchema = z
   .object({
+    icon: mcpIconSelectionSchema.optional(),
     display_name: privateText(1, 100),
     server_url: privateServerUrl,
+    transport: z.enum(["streamable_http", "sse_compat"]).optional(),
     notes: privateText(1, 4000, true).optional(),
     headers: privateHeaderWritesSchema.optional(),
     oauth_client: privateOauthClientWriteSchema.optional(),
@@ -303,6 +313,8 @@ export const mcpPrivateServerPrepareInputSchema = z
   .strict();
 export const mcpPrivateServerUpdateInputSchema = z
   .object({
+    icon: mcpIconSelectionSchema.optional(),
+    clear_icon: z.literal(true).optional(),
     expected_state_version: mcpConnectorStateVersionSchema,
     display_name: privateText(1, 100).optional(),
     notes: privateText(1, 4000, true).optional(),
@@ -316,6 +328,7 @@ export const mcpPrivateServerUpdateInputSchema = z
   .strict()
   .superRefine((value, context) => {
     if (
+      (value.icon !== undefined && value.clear_icon === true) ||
       (value.notes !== undefined && value.clear_notes === true) ||
       (value.oauth_client !== undefined &&
         value.revoke_oauth_client === true) ||
@@ -335,7 +348,7 @@ export const mcpPrivateServerUpdateInputSchema = z
       (value.header_upserts?.length ?? 0) === 0 &&
       (value.header_removals?.length ?? 0) === 0 &&
       value.oauth_client === undefined &&
-      value.revoke_oauth_client !== true
+      value.revoke_oauth_client !== true && value.icon === undefined && value.clear_icon !== true
     )
       context.addIssue({
         code: "custom",
@@ -344,7 +357,7 @@ export const mcpPrivateServerUpdateInputSchema = z
   });
 export const mcpPrivateServerRegistrationSchema = z
   .object({
-    server: mcpPrivateServerSchema,
+    server: mcpPrivateAcknowledgementServerSchema,
     connector: mcpConnectorSchema,
     replayed: z.boolean(),
   })
@@ -366,7 +379,7 @@ export const mcpPrivateJsonImportSchema = z
       .array(
         z
           .object({
-            server: mcpPrivateServerSchema,
+            server: mcpPrivateAcknowledgementServerSchema,
             connector: mcpConnectorSchema,
           })
           .strict(),
@@ -383,7 +396,7 @@ export const mcpPrivateJsonImportSchema = z
   .strict();
 export const mcpPrivateServerPrepareSchema = z
   .object({
-    server: mcpPrivateServerSchema,
+    server: mcpPrivateAcknowledgementServerSchema,
     connector: mcpConnectorSchema,
     declarations: z.array(privateDeclarationSchema).max(2000),
     replayed: z.boolean(),
@@ -391,7 +404,7 @@ export const mcpPrivateServerPrepareSchema = z
   .strict();
 export const mcpPrivateServerUpdateSchema = z
   .object({
-    server: mcpPrivateServerSchema,
+    server: mcpPrivateAcknowledgementServerSchema,
     connector: mcpConnectorSchema,
     replayed: z.boolean(),
   })
@@ -429,6 +442,7 @@ export function mcpPrivateJsonImportMatches(value: unknown, input?: unknown): bo
     typeof document !== "object" ||
     document === null ||
     Array.isArray(document) ||
+    Object.keys(document).some((key) => key !== "mcpServers") ||
     typeof (document as Record<string, unknown>).mcpServers !== "object" ||
     (document as Record<string, unknown>).mcpServers === null ||
     Array.isArray((document as Record<string, unknown>).mcpServers)
@@ -437,15 +451,32 @@ export function mcpPrivateJsonImportMatches(value: unknown, input?: unknown): bo
   const expected = Object.entries(
     (document as { mcpServers: Record<string, unknown> }).mcpServers,
   ).map(([displayName, raw]) => {
+    if (typeof raw !== "object" || raw === null || Array.isArray(raw))
+      return undefined;
+    const item = raw as Record<string, unknown>;
     if (
-      typeof raw !== "object" ||
-      raw === null ||
-      Array.isArray(raw) ||
-      (raw as Record<string, unknown>).type !== "streamableHttp" ||
-      typeof (raw as Record<string, unknown>).url !== "string"
+      Object.keys(item).some((key) => !["type", "url", "headers"].includes(key)) ||
+      (item.type !== "streamableHttp" && item.type !== "sse") ||
+      (item.headers !== undefined &&
+        (typeof item.headers !== "object" || item.headers === null || Array.isArray(item.headers)))
     )
       return undefined;
-    return { displayName, serverUrl: (raw as { url: string }).url };
+    const request = mcpPrivateServerRegistrationInputSchema.safeParse({
+      display_name: displayName,
+      server_url: item.url,
+      transport: item.type === "sse" ? "sse_compat" : "streamable_http",
+      headers: Object.entries(item.headers ?? {}).map(([name, value]) => ({
+        name: name.toLowerCase(),
+        value,
+      })),
+    });
+    if (!request.success) return undefined;
+    return {
+      displayName,
+      serverUrl: request.data.server_url,
+      transport: request.data.transport,
+      headerNames: new Set(request.data.headers?.map(({ name }) => name) ?? []),
+    };
   });
   if (expected.some((entry) => entry === undefined)) return false;
   const parsed = z
@@ -459,8 +490,15 @@ export function mcpPrivateJsonImportMatches(value: unknown, input?: unknown): bo
       const match = expected[index];
       return (
         match !== undefined &&
+        (entry.server.transport === undefined
+          ? parsed.data.data.replayed && expected.every(item => item?.transport === "streamable_http")
+          : entry.server.transport === match.transport) &&
         entry.server.display_name === match.displayName &&
         entry.server.server_url === match.serverUrl &&
+        entry.server.headers.length === match.headerNames.size &&
+        entry.server.headers.every((header) =>
+          header.configured && header.status === "active" && match.headerNames.has(header.name),
+        ) &&
         entry.connector.server_id === entry.server.server_id &&
         entry.connector.enabled === false &&
         entry.connector.status === "pending"
@@ -487,7 +525,7 @@ function privateServerResponseMatches(
     .object({
       data: z
         .object({
-          server: mcpPrivateServerSchema,
+          server: mcpPrivateAcknowledgementServerSchema,
           connector: mcpConnectorSchema,
           replayed: z.boolean(),
           declarations: z.array(privateDeclarationSchema).max(2000).optional(),
@@ -497,7 +535,8 @@ function privateServerResponseMatches(
     .strict()
     .safeParse(value);
   if (!parsed.success) return false;
-  const { server, connector } = parsed.data.data;
+  const { server, connector, replayed } = parsed.data.data;
+  if (server.transport === undefined && !replayed) return false;
   if (
     (serverId !== undefined && server.server_id !== serverId) ||
     connector.server_id !== server.server_id ||
@@ -536,15 +575,21 @@ export function mcpPrivateServerMatches(
       ? (input as Record<string, unknown>)
       : undefined;
   if (operation === "registerServer") {
+    const request = mcpPrivateServerRegistrationInputSchema.safeParse(input);
     const parsed = z
       .object({ data: mcpPrivateServerRegistrationSchema })
       .strict()
       .safeParse(value);
     return (
       parsed.success &&
+      request.success &&
+      (parsed.data.data.server.transport === undefined
+        ? parsed.data.data.replayed && request.data.transport === undefined
+        : parsed.data.data.server.transport === (request.data.transport ?? "streamable_http")) &&
       body !== undefined &&
       parsed.data.data.server.display_name === body.display_name &&
       parsed.data.data.server.server_url === body.server_url &&
+      mcpIconSaveMatches(parsed.data.data.server.icon, body) &&
       privateServerResponseMatches(value, undefined, body, false)
     );
   }
@@ -570,6 +615,7 @@ export function mcpPrivateServerMatches(
     typeof value === "object" && value !== null && "data" in value ? value.data : undefined,
   );
   const request = mcpPrivateServerUpdateInputSchema.safeParse(input);
+  if (parsed.success && request.success && !mcpIconSaveMatches(parsed.data.server.icon, request.data)) return false;
   if (!parsed.success || !request.success) return false;
   const server = parsed.data.server, update = request.data;
   const headers = new Map(server.headers.map(header => [header.name, header]));
@@ -750,7 +796,7 @@ export const mcpConnectorErrorSchema = z
   })
   .strict();
 export function mcpConnectorErrorAllowed(
-  operation: McpConnectorOperation | McpPrivateServerOperation | "authorization",
+  operation: McpConnectorOperation | McpPrivateServerOperation | McpIconOperation | "authorization",
   httpStatus: number,
   value: unknown,
 ): boolean {
@@ -762,7 +808,7 @@ export function mcpConnectorErrorAllowed(
   )
     return false;
   const published = connectorCommandErrorAllowed("mcp", httpStatus, parsed.data.error,
-    !["connectors", "connector", "connections", "connection", "providers", "provider", "server"].includes(operation));
+    !["connectors", "connector", "connections", "connection", "providers", "provider", "server", "getIcon"].includes(operation));
   if (published !== undefined) return published;
   return (
     (mcpConnectorErrors[httpStatus]?.includes(parsed.data.error.code) ??

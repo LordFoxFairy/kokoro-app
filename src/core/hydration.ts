@@ -37,10 +37,12 @@ export function stateFromSnapshot(snapshot: SessionSnapshot): SessionStreamState
   const messages: SessionMessage[] = snapshotMessages.map((message) => ({
     id: message.message_id,
     role: message.role,
-    content: message.content,
+    content: message.content ?? "",
+    ...(message.role === "assistant" && !("rendering" in message) && message.status === "completed" ? { textState: "completed" as const } : {}),
+    ...("rendering" in message ? { orderedContainer: true } : {}),
     runId: message.run_id ?? message.message_id,
     ...(message.role === "assistant" ? { snapshotMessageId: message.message_id } : {}),
-    ...(message === candidate ? { awaitingTextSegment: true } : {}),
+    ...(message === candidate && !("rendering" in message) ? { awaitingTextSegment: true } : {}),
   }))
   const head = snapshot.execution_head
   const pending = head?.pending_pauses ?? []
@@ -57,9 +59,12 @@ export function stateFromSnapshot(snapshot: SessionSnapshot): SessionStreamState
     finalAssistantByRun.set(message.run_id, message)
   }
   const runFailuresById: Record<string, AttributedRunFailure> = {}
+  const runTerminalsById: SessionStreamState["runTerminalsById"] = {}
   for (const [runId, message] of finalAssistantByRun) {
-    if (message.status !== "failed") continue
+    if (message.status !== "failed" && message.status !== "completed") continue
     if (snapshot.execution_head?.run_id === runId || (head?.run_id === runId && pending.length > 0)) continue
+    runTerminalsById[runId] = message.terminal_status === "cancelled" ? "cancelled" : message.status
+    if (message.status === "completed" || message.terminal_status === "cancelled") continue
     runFailuresById[runId] = message.failure === undefined
       ? { failedRunId: runId, kind: "generic" }
       : { failedRunId: runId, kind: "agent", profile: message.failure }
@@ -67,7 +72,7 @@ export function stateFromSnapshot(snapshot: SessionSnapshot): SessionStreamState
   // Snapshot text precedes all post-watermark frames. These negative local
   // positions are render anchors, not fabricated owner event sequence/cursors.
   for (const [index, message] of messages.entries()) {
-    if (message.role !== "assistant") continue
+    if (message.role !== "assistant" || message.orderedContainer) continue
     const steps = stepsByRun[message.runId] ?? []
     steps.push({ kind: "text", seq: index - messages.length, segmentId: message.id })
     stepsByRun[message.runId] = steps
@@ -77,7 +82,7 @@ export function stateFromSnapshot(snapshot: SessionSnapshot): SessionStreamState
     ...createSessionStreamState(),
     ...(restoresFailedRun
       ? {
-          runStatus: "failed" as const,
+          runStatus: tailMessage?.terminal_status === "cancelled" ? "cancelled" as const : "failed" as const,
         }
       : {}),
     // run 锚点与终态清空语义依赖 activeRunId（状态而非线程内容）：水合保留。
@@ -90,8 +95,15 @@ export function stateFromSnapshot(snapshot: SessionSnapshot): SessionStreamState
     },
     interactionsByRun: head && pending[0] ? { [head.run_id]: pending[0] } : {},
     messages,
+    finalAnswersByRun: Object.fromEntries(snapshotMessages.flatMap(message => "rendering" in message ? [[message.run_id, { segmentId: message.rendering.final_segment_id ?? null, revision: message.rendering.revision }]] : [])),
+    messageParts: Object.fromEntries(snapshotMessages.flatMap((message) => "rendering" in message ? [[message.message_id, {
+      messageId: message.message_id, runId: message.run_id, revision: message.rendering.revision,
+      ...(message.rendering.final_segment_id === undefined ? {} : { finalSegmentId: message.rendering.final_segment_id }),
+      descriptor: true as const, watermark: message.rendering.event_watermark, cursor: message.rendering.parts_cursor, status: "unread" as const,
+    }]] : [])),
     stepsByRun,
     runFailuresById,
+    runTerminalsById,
     unattributedFailure,
     files: snapshot.files,
     deliveries: snapshot.deliveries.map(deliveryFromSnapshot),

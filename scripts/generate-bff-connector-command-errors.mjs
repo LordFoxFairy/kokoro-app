@@ -8,15 +8,15 @@ import { fileURLToPath } from "node:url"
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const source = resolve(root, "src/generated/bff-connector-command-errors.json")
 const output = resolve(root, "src/generated/bff-connector-command-errors.ts")
-const ownerCommit = "d176e3d0cbbc2eab903dae2b2d969906ba5808fe"
-const sourceSha256 = "24158f50a6f4dac1b34553797f0b1afcc8f99dbc79f36b916d03b56999a67a71"
+const ownerCommit = "a9a6918d47e1f2654edf8720c561ee06eb57a78c"
+const sourceSha256 = "5c12e237e03a6be446a564034ec5c18965e996be24ddeb40807ec4b9b074d83d"
 
 export function renderConnectorCommandErrors(bytes) {
   assert.equal(createHash("sha256").update(bytes).digest("hex"), sourceSha256, "BFF connector error profile digest drift")
   const policy = JSON.parse(bytes.toString("utf8"))
   assert.equal(policy.owner, "kokoro-bff")
   assert.equal(policy.profile, "connector-command-recovery-errors")
-  assert.equal(policy.version, "1.0.0")
+  assert.equal(policy.version, "1.1.0")
   assert.equal(policy.visibility, "browser-private")
   assert.equal(policy.automatic_retries, false)
   assert.equal(policy.new_command_authorized, false)

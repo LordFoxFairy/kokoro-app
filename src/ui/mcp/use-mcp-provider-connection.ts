@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useMcpConnectorRevision } from "./use-mcp-projection";
-import type { HubClient } from "@/hub/client";
+import { HubClientError, type HubClient } from "@/hub/client";
+import { useProductReadRecheck } from "@/ui/auth/product-read-recheck-context";
 import type { McpConnector } from "@/hub/mcp-connector.schema";
 
 export type McpConnectorBinding = { connectorType: McpConnector["connector_type"]; serverId?: string };
@@ -12,6 +13,7 @@ export function useMcpProviderConnection({ client, identity, admitted, readGener
   client: HubClient; identity: string; admitted: boolean; readGeneration: number;
   connectorId: string | null; providerKey: string | null; known: McpConnector | undefined; retry: number; binding?: McpConnectorBinding;
 }) {
+  const reportRead401 = useProductReadRecheck();
   const revision = useMcpConnectorRevision(client, identity);
   const scope = useMemo(() => ({ client, identity, admitted, readGeneration, connectorId, providerKey, known, retry, revision, binding }),
     [client, identity, admitted, readGeneration, connectorId, providerKey, known, retry, revision, binding]);
@@ -26,9 +28,14 @@ export function useMcpProviderConnection({ client, identity, admitted, readGener
         (!binding || (connection.status !== "revoked" && connection.connector_type === binding.connectorType &&
           (connection.server_id ?? null) === (binding.serverId ?? null)))
         ? { scope, connection, error: false } : { scope, error: true });
-    }, () => { if (!controller.signal.aborted) setResult({ scope, error: true }); });
+    }, (error: unknown) => {
+      if (controller.signal.aborted) return;
+      if (error instanceof HubClientError && error.reason === "http" && error.status === 401)
+        reportRead401?.({ subject: identity, generation: readGeneration, signal: controller.signal });
+      setResult({ scope, error: true });
+    });
     return () => controller.abort();
-  }, [scope, admitted, connectorId, client, known, providerKey, binding]);
+  }, [scope, admitted, connectorId, client, known, providerKey, binding, reportRead401, identity, readGeneration]);
   return { readScope: scope, connection: admitted ? known ?? (result?.scope === scope ? result.connection : undefined) ?? null : null,
     error: admitted && !known && result?.scope === scope && result.error };
 }

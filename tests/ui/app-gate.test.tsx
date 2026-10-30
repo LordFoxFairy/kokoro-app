@@ -10,8 +10,10 @@ const state = vi.hoisted(() => ({
   pathname: "/app",
   openProductSignIn: vi.fn(),
   retry: vi.fn(),
+  probeOptions: vi.fn(),
   unavailable: false,
   pending: false,
+  reportReadUnauthorized: vi.fn(async () => true),
 }))
 
 const router = vi.hoisted(() => ({ refresh: vi.fn() }))
@@ -22,14 +24,15 @@ vi.mock("next/navigation", () => ({
 }))
 vi.mock("@/ui/auth/product-auth-client", () => ({ openProductSignIn: state.openProductSignIn }))
 vi.mock("@/ui/auth/use-session-state", () => ({
-  useSessionProbe: () => ({
+  useSessionProbe: (options: unknown) => { state.probeOptions(options); return ({
     state: state.probeState,
     mode: state.probeMode,
     retry: state.retry,
     projectReadBoundary: { admitted: state.probeMode === "authenticated" && !state.unavailable, subject: state.probeMode === "authenticated" ? "reader" : null, generation: 1 },
     unavailable: state.unavailable,
     requestPending: state.pending,
-  }),
+    reportReadUnauthorized: state.reportReadUnauthorized,
+  }) },
 }))
 vi.mock("@/system/use-runtime-manifest", () => ({
   useRuntimeManifest: () => ({
@@ -57,6 +60,24 @@ vi.mock("@/features/app/kokoro-app-surface", () => ({
 }))
 
 import { AppGate } from "@/ui/auth/app-gate"
+import * as pageClients from "@/ui/shell/page-clients"
+
+it("captures the verified Product data epoch for engine parts reads, not the replacement render", async () => {
+  state.probeMode = "authenticated"; state.probeState = "pass"; state.unavailable = false
+  const bind = vi.spyOn(pageClients, "bindBrowserMessagePartsReadRecheck")
+  const view = render(<LocaleProvider><AppGate /></LocaleProvider>)
+  try {
+    const capture = bind.mock.calls.at(-1)![0]
+    expect(capture("other-actor")).toBeUndefined()
+    const recover = capture("reader")!
+    state.unavailable = true
+    view.rerender(<LocaleProvider><AppGate /></LocaleProvider>)
+    expect(bind.mock.calls.at(-1)![0]("reader")).toBeUndefined()
+    const signal = new AbortController().signal
+    await expect(recover(signal)).resolves.toBe(true)
+    expect(state.reportReadUnauthorized).toHaveBeenLastCalledWith({ subject: "reader", generation: 1, signal })
+  } finally { view.unmount(); bind.mockRestore() }
+})
 
 beforeEach(() => {
   state.source = "error"
@@ -65,6 +86,7 @@ beforeEach(() => {
   state.pathname = "/app"
   state.openProductSignIn.mockClear()
   state.retry.mockClear()
+  state.probeOptions.mockClear()
   router.refresh.mockClear()
   state.unavailable = false
   state.pending = false
@@ -243,4 +265,14 @@ it.each(["visibilitychange", "pageshow"])("resumes bounded server admission chec
     expect(router.refresh).toHaveBeenCalledTimes(2)
     expect(state.openProductSignIn).not.toHaveBeenCalled()
   } finally { visible.mockRestore() }
+})
+
+
+it("uses the server-admitted boolean only as a cold CSRF-read hint while Runtime stays gated", () => {
+  state.probeMode = "checking"
+  state.probeState = "checking"
+  render(<LocaleProvider><AppGate serverAdmitted /></LocaleProvider>)
+  expect(state.probeOptions).toHaveBeenCalledWith({ serverUnavailable: false, serverAdmitted: true })
+  expect(screen.getByTestId("app-surface")).toHaveAttribute("data-booting", "true")
+  expect(screen.getByTestId("app-surface")).toHaveAttribute("data-admitted", "false")
 })

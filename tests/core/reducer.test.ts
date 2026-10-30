@@ -53,6 +53,44 @@ describe("event_id 幂等去重", () => {
 })
 
 describe("replay 收敛", () => {
+  it("anchors each new live safe activity once at its first real sequence and updates the same slot", () => {
+    const tool = { activity: "tool" as const, activity_id: `act_${"1".repeat(64)}`, segment_id: `seg_${"2".repeat(64)}`, status: "running" as const, display_code: "tool.execution" as const }
+    const skill = { activity: "skill" as const, activity_id: `act_${"3".repeat(64)}`, preflight_id: `spf_${"4".repeat(64)}`, source_refs: ["skill:alpha"], phase: "failed" as const, error_code: "skill_load_failed" as const }
+    const first = applyChatProjectionEvents(createSessionStreamState(), [
+      makeEvent("run.created", { run_id: "run_1" }, { seq: 1 }),
+      makeEvent("message.delta", { segment_id: "text_a", delta: "A" }, { seq: 2 }),
+      makeEvent("activity.updated", tool, { seq: 3 }),
+      makeEvent("message.delta", { segment_id: "text_b", delta: "B" }, { seq: 4 }),
+      makeEvent("activity.updated", skill, { seq: 5 }),
+    ])
+    const completed = { ...tool, status: "completed" as const }
+    const loading = { activity: "skill" as const, activity_id: skill.activity_id, preflight_id: `spf_${"5".repeat(64)}`, source_refs: ["skill:alpha"], phase: "loading" as const }
+    const updates = [makeEvent("activity.updated", completed, { seq: 6 }), makeEvent("activity.updated", loading, { seq: 7 })]
+    const updated = applyChatProjectionEvents(first, updates)
+    expect(updated.stepsByRun.run_1?.map((step) => [step.kind, step.seq])).toEqual([
+      ["text", 2], ["activity", 3], ["text", 4], ["activity", 5],
+    ])
+    expect(updated.stepsByRun.run_1?.filter((step) => step.kind === "activity").map((step) => step.activity)).toEqual([completed, loading])
+    expect(first.stepsByRun.run_1?.filter((step) => step.kind === "activity").map((step) => step.activity)).toEqual([tool, skill])
+    expect(updated.executionProcess?.activities).toEqual([completed, loading])
+    expect(applyChatProjectionEvents(updated, updates)).toBe(updated)
+  })
+
+  it("does not invent a first-position anchor for an activity already restored without one", () => {
+    const tool = { activity: "tool" as const, activity_id: `act_${"6".repeat(64)}`, segment_id: `seg_${"7".repeat(64)}`, status: "running" as const, display_code: "tool.execution" as const }
+    const snapshot = {
+      ...makeSnapshot({ activeRun: { run_id: "run_1", status: "running" } }),
+      execution_process: { run_id: "run_1", todos: null, activities: [tool], next_cursor: null },
+    }
+    const updated = applyChatProjectionEvents(stateFromSnapshot(snapshot), [
+      makeEvent("activity.updated", { ...tool, status: "completed" }, { seq: 11 }),
+      makeEvent("activity.updated", { ...tool, activity_id: `act_${"8".repeat(64)}` }, { seq: 12 }),
+    ])
+    const anchors = updated.stepsByRun.run_1?.filter((step) => step.kind === "activity")
+    expect(anchors?.map((step) => [step.seq, step.activity.activity_id])).toEqual([[12, `act_${"8".repeat(64)}`]])
+    expect(updated.executionProcess?.activities).toEqual([{ ...tool, status: "completed" }, { ...tool, activity_id: `act_${"8".repeat(64)}` }])
+  })
+
   it("R135 replaces a safe activity as a whole while preserving its first position", () => {
     const first = {
       kind: "activity.updated", event_id: "evt_r135_1", seq: 1, session_id: "ses_1", run_id: "run_a",

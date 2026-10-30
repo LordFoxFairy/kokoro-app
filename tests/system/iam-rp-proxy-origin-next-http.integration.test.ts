@@ -76,6 +76,7 @@ describe("IAM and RP origin admission behind a real local HTTPS reverse proxy", 
   const redisUrl = process.env.KOKORO_WEB_REDIS_URL ?? "redis://127.0.0.1:6379/9"
   const issuedCsrf = new Set<string>()
   const issuedStates = new Set<string>()
+  const issuedFlows = new Set<string>()
   const bffPaths: string[] = []
   let root: string | undefined
   let bff: Server | undefined
@@ -93,6 +94,7 @@ describe("IAM and RP origin admission behind a real local HTTPS reverse proxy", 
       if (server.listening) await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve())) }
     if (root !== undefined) { const directory = root; root = undefined; await rm(directory, { recursive: true, force: true }) }
     const keys = [
+      ...[...issuedFlows].map(id => `kokoro:web:iam-signin-flow:${createHash("sha256").update(WEB_ORIGIN).digest("hex")}:${id}`),
       ...[...issuedCsrf].map((token) => `kokoro:web:iam-csrf:${createHash("sha256").update(WEB_ORIGIN).digest("hex")}:${createHash("sha256").update(token).digest("hex")}`),
       ...[...issuedStates].map((state) => `kokoro:web:oidc-state:${createHash("sha256").update(WEB_ORIGIN).digest("hex")}:${createHash("sha256").update(state).digest("hex")}`),
     ]
@@ -106,6 +108,26 @@ describe("IAM and RP origin admission behind a real local HTTPS reverse proxy", 
         new Promise<never>((_resolve, reject) => { timer = setTimeout(() => reject(new Error("proxy fixture Redis cleanup deadline")), 2_000) }),
       ])
     } finally { if (timer !== undefined) clearTimeout(timer); client.destroy() }
+  }
+
+  function action(page: HttpResult): string {
+    const result = page.body.match(/action="(\/auth\/sign-in\?flow=[A-Za-z0-9_-]{24})"/u)?.[1]
+    if (!result) throw new Error("proxy fixture short form action missing")
+    return result
+  }
+
+  async function signInPage(extra: Record<string, string> = {}): Promise<HttpResult> {
+    const entry = await http(proxyPort, `/auth/sign-in${SIGNED_QUERY}`, "GET", "", extra)
+    expect(entry.status).toBe(303)
+    const target = new URL(entry.headers.location as string, WEB_ORIGIN)
+    expect(target.origin).toBe(WEB_ORIGIN)
+    expect(target.search).toMatch(/^\?flow=[A-Za-z0-9_-]{24}$/u)
+    issuedFlows.add(target.searchParams.get("flow")!)
+    const page = await http(proxyPort, target.pathname + target.search, "GET", "", { ...extra, cookie: cookies(entry) })
+    expect(page.body).not.toContain("sig=%2BAb")
+    return { ...page, headers: { ...page.headers, "set-cookie": [
+      ...(page.headers["set-cookie"] as string[] | undefined ?? []), ...(entry.headers["set-cookie"] as string[] | undefined ?? []),
+    ] } }
   }
 
   beforeAll(async () => {
@@ -177,7 +199,7 @@ describe("IAM and RP origin admission behind a real local HTTPS reverse proxy", 
 
   it("admits fixed-host proxy GET across IAM relay, outer/inner interactions and RP CSRF", async () => {
     expect((await http(proxyPort, "/iam/jwks")).status).toBe(200)
-    const signIn = await http(proxyPort, `/auth/sign-in${SIGNED_QUERY}`)
+    const signIn = await signInPage()
     expect(signIn.status).toBe(200)
     csrfToken(signIn, issuedCsrf)
     const selectOuter = await http(proxyPort, `/auth/select-tenant${SIGNED_QUERY}`)
@@ -199,9 +221,9 @@ describe("IAM and RP origin admission behind a real local HTTPS reverse proxy", 
   })
 
   it("admits fixed-host proxy mutations only with canonical Origin and CSRF", async () => {
-    const signIn = await http(proxyPort, `/auth/sign-in${SIGNED_QUERY}`)
+    const signIn = await signInPage()
     const token = csrfToken(signIn, issuedCsrf)
-    const accepted = await http(proxyPort, `/auth/sign-in${SIGNED_QUERY}`, "POST",
+    const accepted = await http(proxyPort, action(signIn), "POST",
       `csrf_token=${token}&email=user%40example.test&password=secret`,
       { origin: WEB_ORIGIN, cookie: cookies(signIn) })
     expect(accepted.status).toBe(303)
@@ -224,10 +246,10 @@ describe("IAM and RP origin admission behind a real local HTTPS reverse proxy", 
     const forwarded = { origin: WEB_ORIGIN, "x-forwarded-host": "wrong-forwarded.example.test",
       "x-forwarded-proto": "http" }
     expect((await http(proxyPort, "/iam/jwks", "GET", "", forwarded)).status).toBe(200)
-    const signIn = await http(proxyPort, `/auth/sign-in${SIGNED_QUERY}`, "GET", "", forwarded)
+    const signIn = await signInPage(forwarded)
     expect(signIn.status).toBe(200)
     const token = csrfToken(signIn, issuedCsrf)
-    expect((await http(proxyPort, `/auth/sign-in${SIGNED_QUERY}`, "POST",
+    expect((await http(proxyPort, action(signIn), "POST",
       `csrf_token=${token}&email=user%40example.test&password=secret`,
       { ...forwarded, cookie: cookies(signIn) })).status).toBe(303)
     expect((await http(proxyPort, "/api/auth/csrf", "GET", "", forwarded)).status).toBe(200)

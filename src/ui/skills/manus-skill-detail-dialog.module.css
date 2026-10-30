@@ -1,19 +1,18 @@
 .dialog[data-slot="dialog-content"] {
-  /* A summary is a lightweight preview, not a document workspace. Keep it
-   * content-sized so a skill without prompts does not leave a large inert
-   * white panel below its real description. The package reader explicitly
-   * opts into the fixed 800 × 600 workspace further down. */
-  width:min(50rem,calc(100vw - 2rem));
-  max-width:calc(100vw - 2rem);
+  /* Summary and document views use the same measured Manus envelope.
+   * Reserve the preview's 600px canvas even when prompts are absent, while
+   * keeping the whole sheet within 90dvh on shorter viewports. */
+  width:min(50rem,95vw);
+  max-width:95vw;
   height:auto;
-  min-height:0;
+  min-height:min(37.5rem,90dvh);
   display:flex;
   flex-direction:column;
-  max-height:calc(100dvh - 2rem);
+  max-height:min(43.75rem,90dvh);
   gap:0;
   overflow:hidden;
   padding:0;
-  border-radius:1rem;
+  border-radius:.75rem;
   background:var(--background);
 }
 .overlay { background:rgb(0 0 0 / 40%); backdrop-filter:blur(5px); }
@@ -25,25 +24,31 @@
 .hero { flex:0 0 auto; position:relative; min-height:13.875rem; box-sizing:border-box; display:flex; flex-direction:row; align-items:center; padding:3.75rem 1.5rem 1.5rem; border-bottom:1px solid var(--border); text-align:left; }
 .copy { display:flex; width:100%; min-width:0; max-width:100%; flex-direction:column; align-items:flex-start; gap:.375rem; }
 .hero[data-has-cover="true"] { min-height:13.875rem; }
-.hero[data-has-cover="true"] .copy { max-width:calc(100% - 10rem); }
+.hero[data-has-cover="true"] .copy { max-width:calc(100% - 15.25rem); }
 .categories { display:flex; flex-wrap:wrap; gap:.375rem; }
 .copy :global([data-slot="badge"]) { border:0; color:var(--muted-foreground); font-size:.75rem; font-weight:500; }
-.copy h2 { margin:0; font-size:1.25rem; line-height:1.35; letter-spacing:-.015em; overflow-wrap:anywhere; }
+.copy h2 { width:100%; max-width:100%; margin:0; font-size:1.25rem; line-height:1.625rem; letter-spacing:normal; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .meta { display:flex; flex-wrap:wrap; gap:.375rem; margin:0; font-size:.8125rem; line-height:1.25rem; color:var(--muted-foreground); }
+.githubMetadata { display:flex; flex-direction:column; gap:.375rem; margin:0; color:var(--foreground); font-size:.8125rem; line-height:1.125rem; }
+.githubMetadataRow { display:flex; flex-wrap:wrap; align-items:center; gap:.375rem; margin:0; }
+.githubMetadataItem { display:inline-flex; align-items:center; gap:.25rem; min-width:0; }
+.githubMetadataItem svg,.githubMetadataItem img { width:.75rem; height:.75rem; flex:0 0 .75rem; color:var(--muted-foreground); }
+.githubMetadataItem a { color:inherit; text-decoration:none; overflow-wrap:anywhere; }
+.githubMetadataItem a:hover { text-decoration:underline; }
 .separator { margin-right:.375rem; }
 .detailLabel { display:inline-flex; height:2rem; align-items:center; gap:.375rem; padding:0 .75rem; border:1px solid var(--border); border-radius:.5rem; color:var(--muted-foreground); }
 .detailLabel svg { width:1rem; height:1rem; }
 .actions { display:flex; gap:.5rem; margin-top:.875rem; }.actions button { box-sizing:border-box; min-height:2rem; height:2rem; padding:0 .75rem; border-radius:.5rem; font-size:.875rem; font-weight:500; line-height:1rem; }.actions svg { width:1rem; height:1rem; }
-.cover { pointer-events:none; position:absolute; right:3rem; bottom:0; width:8.5rem; height:8.5rem; overflow:hidden; border-radius:.5rem .5rem 0 0; background:var(--muted); box-shadow:0 .5rem 1rem rgb(0 0 0 / 10%); }.cover img { object-fit:cover; }
+.cover { pointer-events:none; position:absolute; top:3.75rem; right:1.5rem; bottom:0; width:13.75rem; overflow:clip; }
+.coverBook { position:absolute; left:3.75rem; bottom:-.625rem; width:6.5625rem; height:8.75rem; overflow:clip; border-radius:.125rem; transform:rotate(6.21deg); }
+.cover img { object-fit:cover; }
 .body { flex:0 1 auto; min-height:0; max-height:calc(100dvh - 15.875rem); overflow:auto; padding:1.5rem; }.description { max-width:46rem; margin:0 0 1rem; font-size:.875rem; line-height:1.5rem; color:var(--foreground); }.status { color:var(--muted-foreground); }
 .examples { display:grid; gap:.625rem; }.examples button { box-sizing:border-box; min-height:2.75rem; display:flex; align-items:center; gap:.625rem; width:100%; padding:.625rem .75rem; border:1px solid var(--border); border-radius:.5rem; background:transparent; color:var(--foreground); text-align:left; font:inherit; cursor:pointer; }.examples button:hover { background:var(--muted); }.examples button span { font-size:.8125rem; line-height:1.25rem; }.examples svg { width:1rem; height:1rem; flex:0 0 1rem; color:var(--muted-foreground); }
 @media(max-width:42rem) {
-  /* The compact summary keeps its title and action block stable, while the
-   * overall sheet follows the content just like its desktop counterpart. */
+  /* The compact summary keeps the same 95vw envelope as its reader. */
   .dialog[data-slot="dialog-content"] {
     width:min(90rem,95vw);
     max-width:95vw;
-    min-height:0;
   }
   .hero {
     min-height:13.875rem;
@@ -51,7 +56,6 @@
     align-items:flex-start;
   }
   .copy { max-width:100%; }
-  .hero[data-has-cover="true"] .copy { max-width:100%; }
   .copy h2 {
     font-size:1.25rem;
     font-weight:600;
@@ -59,7 +63,6 @@
     line-height:1.625rem;
   }
   .hero[data-has-cover="true"] { min-height:13.875rem; }
-  .cover { display:none; }
   .body { padding:1.5rem 1.5rem 2rem; }
   .description {
     margin-bottom:1.5rem;
@@ -73,6 +76,11 @@
   }
   .actions { flex-wrap:wrap; margin-top:1.25rem; }
   .topActions,.readerTopActions { right:3.8rem; }
+}
+
+@media not all and (min-width:560px) {
+  .cover { display:none; }
+  .hero[data-has-cover="true"] .copy { max-width:100%; }
 }
 
 .reader { display:grid; grid-template-columns:minmax(10rem,15rem) minmax(0,1fr); margin:1.5rem 0; border:1px solid var(--border); border-radius:.75rem; overflow:hidden; }
@@ -129,18 +137,8 @@
 .readerDialog .fileList,.readerDialog .fileContent { min-height:0; max-height:none; overflow:auto; }
 .readerDialog .fileContent { padding:1.5rem; }
 .readerDialog .fileContent .fileHeading { display:none; }
-/* Keep the reader's owner-backed request visually in the final document
- * rhythm. A naked loading sentence made the 800×600 surface jump as YAML and
- * Markdown arrived; these neutral placeholders reserve exactly that reading
- * structure without inventing package content. */
-.readerLoading { display:grid; gap:.875rem; padding-top:.25rem; }
-.readerLoadingYaml { display:grid; height:7.25rem; align-content:center; gap:.55rem; padding:1rem; overflow:hidden; border:1px solid var(--border); border-radius:.5rem; background:var(--muted); }
-.readerLoadingYaml i,.readerLoadingTitle,.readerLoadingLine { display:block; height:.75rem; border-radius:999px; background:linear-gradient(90deg, color-mix(in srgb,var(--foreground) 6%,transparent), color-mix(in srgb,var(--foreground) 11%,transparent), color-mix(in srgb,var(--foreground) 6%,transparent)); background-size:200% 100%; animation:reader-loading-sheen 1.25s ease-in-out infinite; }
-.readerLoadingYaml i:nth-child(1) { width:35%; }.readerLoadingYaml i:nth-child(2) { width:82%; }.readerLoadingYaml i:nth-child(3) { width:58%; }
-.readerLoadingTitle { width:38%; height:1.5rem; margin-top:1.5rem; }
-.readerLoadingLine { width:88%; }.readerLoadingLineShort { width:66%; }
-@keyframes reader-loading-sheen { to { background-position:-200% 0; } }
-@media (prefers-reduced-motion: reduce) { .readerLoadingYaml i,.readerLoadingTitle,.readerLoadingLine { animation:none; } }
+/* Keep the existing metadata height while loading stays off-screen. */
+.metadataPlaceholder { display:grid; min-height:8rem; align-content:center; gap:.75rem; }
 .mobileFileToggle { display:none; }
 .fileList ul { list-style:none; margin:0; padding:0; }.fileList ul ul { padding-left:1rem; }
 .fileList button { display:flex; align-items:center; gap:.25rem; width:100%; min-height:0; }

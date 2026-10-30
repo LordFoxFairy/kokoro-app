@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useLayoutEffect, useMemo, useRef, useState } from "react"
 import Image from "next/image"
 import { Plus, Search, Puzzle } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -11,17 +11,19 @@ import type { EmptyStateProps } from "@/components/blocks/app-frame/app-frame.ty
 import type { PersonalInstallation } from "@/hub/schemas"
 import { ProjectContextSection } from "./project-context-card"
 import { ProjectSkillAddMenu } from "./project-skill-add-menu"
+import { ProjectSkillDetailDialog } from "./project-skill-detail-dialog"
 import { ProjectSkillCard } from "./project-skill-card"
 import { ProjectSkillSourcePicker } from "./project-skill-source-picker"
 import { useProjectSkills, type ProjectSkillCommand } from "./use-project-skills"
 import styles from "./project-skills.module.css"
 
-type Props = Pick<EmptyStateProps, "projectDetail" | "projectReadBoundary" | "onOpenSettings" | "preview">
+type Props = Pick<EmptyStateProps, "projectDetail" | "projectReadBoundary" | "onOpenSettings" | "preview"> & { active?: boolean }
 export function ProjectSkillsSection({
   projectDetail,
   projectReadBoundary,
   onOpenSettings,
   preview = false,
+  active = true,
 }: Props) {
   const t = useT()
   const [open, setOpen] = useState(false)
@@ -31,7 +33,21 @@ export function ProjectSkillsSection({
   const [query, setQuery] = useState("")
   const [source, setSource] = useState<"personal" | "official" | null>(null)
   const projectId = projectDetail?.status === "ready" ? projectDetail.data.id : null
-  const model = useProjectSkills(preview ? null : projectId, projectReadBoundary, open)
+  const detailOpener = useRef<HTMLElement | null>(null)
+  const [detailTarget, setDetailTarget] = useState<{ projectId: string; subject: string; item: PersonalInstallation } | null>(null)
+  const detailContext = useRef({ projectId, subject: projectReadBoundary?.subject, active, open })
+  useLayoutEffect(() => {
+    detailContext.current = { projectId, subject: projectReadBoundary?.subject, active, open }
+    return () => { detailContext.current = { projectId: null, subject: null, active: false, open: false } }
+  }, [projectId, projectReadBoundary?.subject, active, open])
+  const detailReturnFocus = useMemo(() => ({ get current() {
+    const current = detailContext.current
+    return current.active && current.open && current.projectId === detailTarget?.projectId && current.subject === detailTarget?.subject ? detailOpener.current : null
+  } }), [detailTarget?.projectId, detailTarget?.subject])
+  const model = useProjectSkills(preview ? null : projectId, projectReadBoundary, open && active)
+  const currentDetailItem = model.facts?.items.find(item => item.installation_id === detailTarget?.item.installation_id)
+  if (detailTarget && (!active || !open || detailTarget.projectId !== projectId || detailTarget.subject !== projectReadBoundary?.subject
+    || model.listStatus === "ready" && model.facts !== null && (!currentDetailItem || currentDetailItem.source_ref !== detailTarget.item.source_ref || currentDetailItem.revision !== detailTarget.item.revision))) setDetailTarget(null)
   const [draft, setDraft] = useState({
     selection: model.facts?.selection ?? null,
     ids: model.facts?.selection.installation_ids ?? [],
@@ -44,10 +60,16 @@ export function ProjectSkillsSection({
     item: PersonalInstallation | null
     command: ProjectSkillCommand | "abandon"
   } | null>(null)
+  const [previousActive, setPreviousActive] = useState(active)
+  if (previousActive !== active) {
+    setPreviousActive(active)
+    if (!active) { setOpen(false); setConfirmation(null); setSource(null) }
+  }
   if (confirmation && confirmation.facts !== model.facts) setConfirmation(null)
   const confirm = confirmation?.facts === model.facts ? confirmation : null
   const locked =
     !model.allowed || model.status !== "ready" || model.listStatus !== "ready" || model.pending !== null
+  const readBusy = !preview && (model.status === "blocked" || model.status === "loading" || model.listStatus === "loading")
   const changed = selection !== null && JSON.stringify(ids) !== JSON.stringify(selection.installation_ids)
   const settings = () => {
     setOpen(false)
@@ -60,7 +82,7 @@ export function ProjectSkillsSection({
         <p className={styles.emptyTitle}>{t(query.trim() ? "skills.personal.empty" : "skills.personal.emptyState")}</p>
         {!query.trim() ? <p>{t("projectSkills.emptyHint")}</p> : null}
       </div>
-      {!query.trim() ? <ProjectSkillAddMenu primary disabled={!model.allowed || model.pending !== null}
+      {!query.trim() ? <ProjectSkillAddMenu primary disabled={locked}
         onPick={setSource} {...(onOpenSettings ? { onManage: settings } : {})} /> : null}
     </div>
   </div>
@@ -74,19 +96,21 @@ export function ProjectSkillsSection({
           emptyVisual={<Image className={styles.artwork} src="/site-assets/project-skills.svg" width={75} height={64} alt="" aria-hidden="true" />}
           showChevron
           onClick={(event) => {
+            if (!active) return
             opener.current = event.currentTarget
             setOpen(true)
           }}
         />
       </section>
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={active && open} onOpenChange={setOpen}>
         <DialogContent
           ref={panel}
+          aria-busy={readBusy}
           className={styles.dialog}
           closeLabel={t("shell.closeDialog")}
           onCloseAutoFocus={(event) => {
             event.preventDefault()
-            if (opener.current?.isConnected) opener.current.focus()
+            if (active && opener.current?.isConnected) opener.current.focus()
           }}
         >
           <header className={styles.header}>
@@ -121,7 +145,7 @@ export function ProjectSkillsSection({
                   }}
                 />
               </label>
-              <ProjectSkillAddMenu disabled={!model.allowed || model.pending !== null}
+              <ProjectSkillAddMenu disabled={locked}
                 onPick={setSource} {...(onOpenSettings ? { onManage: settings } : {})} />
             </div>
           ) : null}
@@ -158,7 +182,7 @@ export function ProjectSkillsSection({
               <ProjectSkillSourcePicker
                 mode={source}
                 boundary={projectReadBoundary}
-                busy={model.pending !== null || !model.allowed}
+                busy={locked}
                 onBack={() => setSource(null)}
                 onInstall={(sourceRef) => {
                   void model.execute({ kind: "install", sourceRef }).then((complete) => {
@@ -171,30 +195,16 @@ export function ProjectSkillsSection({
                 {preview ? (
                   emptyContent
                 ) : model.status === "blocked" || model.status === "loading" ? (
-                  <p className={styles.empty} role="status">
+                  <p className="sr-only" role="status">
                     {model.status === "blocked" ? t("projectSkills.checking") : t("projectSkills.loading")}
                   </p>
                 ) : model.status === "error" ? (
-                  <div className={styles.empty} role="alert">
-                    <p>{t("projectSkills.readFailed")}</p>
-                    {!model.pending ? (
-                      <Button variant="outline" onClick={model.reload}>
-                        {t("firstSite.retry")}
-                      </Button>
-                    ) : null}
-                  </div>
+                  <p className="sr-only" role="status">{t("projectSkills.readFailed")}</p>
                 ) : (
                   <>
-                    {model.listStatus === "loading" ? (
-                      <p role="status">{t("projectSkills.loading")}</p>
-                    ) : model.listStatus === "error" ? (
-                      <div role="alert">
-                        <p>{t("projectSkills.readFailed")}</p>
-                        <Button variant="outline" onClick={() => model.search(query)}>
-                          {t("firstSite.retry")}
-                        </Button>
-                      </div>
-                    ) : model.facts?.items.length === 0 ? (
+                    {model.listStatus === "loading" ? <p className="sr-only" role="status">{t("projectSkills.loading")}</p>
+                      : model.listStatus === "error" ? <p className="sr-only" role="status">{t("projectSkills.readFailed")}</p> : null}
+                    {model.listStatus === "ready" && model.facts?.items.length === 0 ? (
                       emptyContent
                     ) : (
                       <div className={styles.grid}>
@@ -202,6 +212,11 @@ export function ProjectSkillsSection({
                           <ProjectSkillCard
                             key={item.installation_id}
                             item={item}
+                            {...(!locked && item.source_status !== "deleted" ? { onOpen: (trigger: HTMLElement) => {
+                              if (!projectId || !projectReadBoundary?.subject || !model.isCurrent()) return
+                              detailOpener.current = trigger
+                              setDetailTarget({ projectId, subject: projectReadBoundary.subject, item })
+                            } } : {})}
                             selected={ids.includes(item.installation_id)}
                             protectedDefault={
                               selection?.installation_ids.includes(item.installation_id) === true
@@ -278,7 +293,7 @@ export function ProjectSkillsSection({
         </DialogContent>
       </Dialog>
       <Dialog
-        open={confirm !== null}
+        open={active && confirm !== null}
         onOpenChange={(value) => {
           if (!value) setConfirmation(null)
         }}
@@ -331,6 +346,8 @@ export function ProjectSkillsSection({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {detailTarget && projectReadBoundary ? <ProjectSkillDetailDialog projectId={detailTarget.projectId} item={detailTarget.item}
+        boundary={projectReadBoundary} onClose={() => setDetailTarget(null)} returnFocusRef={detailReturnFocus} /> : null}
     </>
   )
 }

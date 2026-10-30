@@ -10,7 +10,7 @@ export function openProductSignIn(
   navigate(target === null ? "/login" : `/login?${new URLSearchParams({ return_to: target })}`);
 }
 
-async function currentCsrf(signal?: AbortSignal): Promise<string> {
+export async function currentCsrf(signal?: AbortSignal): Promise<string> {
   signal?.throwIfAborted();
   const response = await fetch("/api/auth/csrf", { cache: "no-store", ...(signal ? { signal } : {}) });
   const raw: unknown = response.ok
@@ -65,8 +65,10 @@ export async function endProductSession(
 export async function refreshProductSession(
   signal: AbortSignal,
   onRefreshDispatch?: () => void,
+  prefetchedCsrf?: Promise<string>,
 ): Promise<{ mode: "authenticated"; subject: string } | { mode: "confirm" }> {
-  const csrfToken = await currentCsrf(signal);
+  signal.throwIfAborted();
+  const csrfToken = await (prefetchedCsrf ?? currentCsrf(signal));
   signal.throwIfAborted();
   // CSRF reads can fail or be cancelled without creating an uncertain mutation.
   onRefreshDispatch?.();

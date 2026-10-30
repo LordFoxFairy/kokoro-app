@@ -40,6 +40,17 @@ describe("session execution adapter", () => {
     ])
   })
 
+  it("sends selected Connection IDs as execution input and omits an empty MCP selection", async () => {
+    const client = createFakeClient()
+    const adapter = createExecutionAdapter({ client, scope: { kind: "direct" } })
+    const options = { mode: "fast" as const, model: null, selectedSkillSourceRefs: [], selectedMcpConnectionIds: ["connection:a", "connection:b"] }
+    await adapter.createMessage({ sessionId: "session_1", content: "read docs", idempotencyKey: "mcp_1", options })
+    expect(client.createCalls[0]?.body).toHaveProperty("selected_mcp_connection_ids", ["connection:a", "connection:b"])
+    expect(client.createCalls[0]?.body).not.toHaveProperty("mcp_servers")
+    await adapter.createMessage({ sessionId: "session_1", content: "no tools", idempotencyKey: "mcp_2", options: { ...options, selectedMcpConnectionIds: [] } })
+    expect(client.createCalls[1]?.body).not.toHaveProperty("selected_mcp_connection_ids")
+  })
+
   it("always sends an explicit empty typed Skill selection", async () => {
     const client = createFakeClient()
     const adapter = createExecutionAdapter({ client, scope: { kind: "direct" } })

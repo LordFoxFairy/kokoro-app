@@ -1,3 +1,5 @@
+账户被动读取反馈：`use-account-profile`在同准入scope刷新失败时保留最后确认资料，但phase仍为error、编辑禁用；`account-card`不追加读取失败/重试卡。初次未知显示原字段占位，切主体/代际立即清退；明确保存、复制、退出失败继续在对应动作处反馈。设备页保当前/已读列表、正常刷新和写入核对动作，被动读取状态仅无障碍播报，不冒成功空列表。
+
 <!-- 2026-10-22 continuation retirement correction -->
 积分客户端每次续发 PUT 或核实 GET 前复验调用方 `getCurrent`；真实账户/用量/rail传入现 controller/current 与发起时已准入subject的marker一致性检查。只更新storage、无rerender/focus仍会抑制旧续发；marker丢失、不匹配或读取异常一律退休。marker只抑制，不授予session权限；非UI调用可不传callback，初次GET契约保持，无新store/轮询/锁。
 
@@ -146,3 +148,5 @@ SET54：现 settings-compact-more-menu 独占 More 的指针/键盘激活、enab
 `SettingsNavigationRail` 在桌面使用纵向侧栏、窄屏使用完整横向滚动导航；不再按六个固定分区隐藏 Skills 等后续入口。更多菜单来自同一导航模型并排除当前分区，保留不可用项与键盘语义。根据实际布局方向清退旧轴滚动，选中项定位后不再向前回滚而挤出右侧边界。
 
 参考：同日 Manus 技能设置 390×844，后续分区实际保留于横向滚动容器，更多菜单含账户等全部非当前分区。新增一个真实浏览器旅程覆盖 Skills 深链、更多→集成、320/390/767/768 缩放及键盘→开发者；只验证可见性/可达性，不锁 CSS 字符串或像素常量。隔离预览不代表正常业务数据/CRUD验收。
+
+紧凑More的portal在触发器随响应式模式隐藏时关闭；菜单拥有的焦点回到当前tab，外部焦点不被夺取。验收包含菜单打开状态跨断点，而非只有静态尺寸。

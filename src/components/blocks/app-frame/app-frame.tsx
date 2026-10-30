@@ -1,11 +1,18 @@
 "use client"
+
+import type { CustomApiSelection } from "@/engine/custom-api-selection"
+
+import { useAnswerActionScope } from "@/ui/thread/answer-action-scope"
+import { useProjectPins } from "@/features/app/use-project-pins"
+import { McpTrialProvider } from "@/ui/mcp/mcp-trial-context"
 import { useSessionArchive } from "@/ui/shell/use-session-archive"
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
+import { type CSSProperties, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 
-import { activeMode } from "@/core/conversations"
+import { activeMode, type AgentMode } from "@/core/conversations"
 import { isCreditInsufficient } from "@/billing/rules"
 import { useHydrated } from "@/lib/use-hydrated"
+import { RAIL_COLLAPSED_WIDTH, RAIL_DEFAULT } from "@/ui/rail/use-rail-resize"
 import { matchesSavedKeyboardShortcut } from "@/lib/keyboard-shortcuts"
 import { useIsMobile } from "@/hooks/use-mobile"
 import type { SessionClient } from "@/engine/client"
@@ -19,8 +26,12 @@ import { useTaskNotifications } from "@/ui/shell/use-task-notifications"
 import { useAwaitingNotify } from "@/ui/shell/use-awaiting-notify"
 import { useCanvasWorkspace } from "@/ui/shell/use-canvas-workspace"
 import { useComposerSelectors } from "@/ui/shell/use-composer-selectors"
+import { useComposerConnections } from "@/ui/shell/use-composer-connections"
+import { createManusSkillHubClient, retainManusSkillHubClient } from "@/ui/skills/manus-skill-client"
+import { isRuntimeNavigationEnabled } from "@/ui/navigation/runtime-navigation-registry"
 import { useConversationReaders } from "@/ui/shell/use-conversation-readers"
 import { useDraft } from "@/ui/shell/use-draft"
+import { readChatModel } from "@/ui/settings/chat-prefs"
 import type { ConversationThreadProps } from "@/ui/thread/conversation-thread"
 import type { WorkspaceRailProps } from "@/components/blocks/workspace-rail/workspace-rail"
 import type { AppCommandMenuProps } from "./app-command-menu"
@@ -44,6 +55,8 @@ import { useAppFrameNavigation } from "./use-app-frame-navigation"
 import { useAppFrameOverlays } from "./use-app-frame-overlays"
 import { useAppFrameProject } from "./use-app-frame-project"
 import { useProjectList } from "@/features/app/use-project-list"
+import { useProjectMcpRecommendations } from "@/features/app/use-project-mcp-recommendations"
+import { projectMcpDefaultSelection } from "@/features/app/project-mcp-default-selection"
 import { navigateMountedSurface } from "@/ui/navigation/mounted-surface-navigation"
 import { sessionScopeKey } from "@/engine/session-scope"
 import archiveStyles from "@/ui/settings/settings-modal.module.css"
@@ -56,10 +69,11 @@ export { COMPACT_DESKTOP_RAIL_BREAKPOINT, settingsTabFromLocation }
 
 function AppFrameBootingSurface({
   brandName,
+  desktopRailCollapsed = false,
   projectWorkspace = false,
   standaloneSurface = false,
   hideWorkspaceHeader = false,
-}: Pick<AppFrameProps, "brandName" | "projectWorkspace" | "standaloneSurface" | "hideWorkspaceHeader">) {
+}: Pick<AppFrameProps, "brandName" | "desktopRailCollapsed" | "projectWorkspace" | "standaloneSurface" | "hideWorkspaceHeader">) {
   const composerRef = useRef<HTMLTextAreaElement | null>(null)
   const composer = (
     <AppFrameComposer
@@ -70,6 +84,7 @@ function AppFrameBootingSurface({
       creationIntent={null}
       onCreationIntentDismiss={() => undefined}
       workspaceCapabilities={{ instructions: false, connectors: false, resources: false, skills: false, projectConversations: false }}
+      onOpenMcpCatalog={() => undefined}
       onOpenSettings={() => undefined}
       draft=""
       onDraftChange={() => undefined}
@@ -90,7 +105,8 @@ function AppFrameBootingSurface({
     />
   )
   return (
-    <div className={shellStyles.shell} data-desktop-web="true" data-web-skin="kokoro">
+    <div className={shellStyles.shell} data-desktop-web="true" data-web-skin="kokoro"
+      style={{ "--rail-width": `${desktopRailCollapsed ? RAIL_COLLAPSED_WIDTH : RAIL_DEFAULT}px` } as CSSProperties}>
       <div className={`${shellStyles.inset} flex flex-1`} data-slot="sidebar-inset">
         {/* Keep the first admitted document spatially continuous with the
          * mounted workspace. This is intentionally a static shell, not a
@@ -121,6 +137,7 @@ export function AppFrame(props: AppFrameProps) {
   return props.booting
     ? <AppFrameBootingSurface
         {...(props.brandName === undefined ? {} : { brandName: props.brandName })}
+        {...(props.desktopRailCollapsed === undefined ? {} : { desktopRailCollapsed: props.desktopRailCollapsed })}
         {...(props.projectWorkspace === undefined ? {} : { projectWorkspace: props.projectWorkspace })}
         {...(props.standaloneSurface === undefined ? {} : { standaloneSurface: props.standaloneSurface })}
         {...(props.hideWorkspaceHeader === undefined ? {} : { hideWorkspaceHeader: props.hideWorkspaceHeader })}
@@ -176,7 +193,7 @@ function AppFrameRuntime({
     activeId,
   } = engineState
 
-  const canvas = useCanvasWorkspace(activeId, thread, mounted)
+  const canvas = useCanvasWorkspace(activeId, thread, mounted, projectReadBoundary)
   const layout = useAppFrameLayout({
     desktopRailCollapsed,
     canvasOpen: canvas.canvasOpen,
@@ -197,9 +214,15 @@ function AppFrameRuntime({
     threadMessageCount: thread.messages.length,
     hydrating,
     machinePhase: machine.phase,
+    ...(engineState.missingSessionId === undefined ? {} : { missingSessionId: engineState.missingSessionId }),
   })
 
+  const mcpCatalogScope = useMemo(() => ({ engine, sessionScope, preview, subject: projectReadBoundary?.subject,
+    conversation: navigationState.resolvedConversationRouteId, standaloneSurface }),
+  [engine, sessionScope, preview, projectReadBoundary?.subject, navigationState.resolvedConversationRouteId, standaloneSurface])
   const overlays = useAppFrameOverlays({
+    mcpCatalogScope,
+    mcpCatalogEnabled: preview || projectReadBoundary?.admitted === true && Boolean(projectReadBoundary.subject),
     mounted,
     settingsTab: navigationState.settingsTab,
     setSettingsTab: navigationState.setSettingsTab,
@@ -210,7 +233,10 @@ function AppFrameRuntime({
     accountTriggerRef,
   })
 
-  const selectors = useComposerSelectors(engine, { preview })
+  const routedConversationId = navigationState.resolvedConversationRouteId
+  const projectOverview = projectWorkspace && routedConversationId === null
+  const selectors = useComposerSelectors(engine, { preview, applyModelToEngine: !projectOverview,
+    active: !standaloneSurface, ...(projectReadBoundary === undefined ? {} : { readBoundary: projectReadBoundary }) })
 
   const focusComposer = useCallback(() => {
     const node = composerRef.current
@@ -241,9 +267,13 @@ function AppFrameRuntime({
     moveCoordinator.getSnapshot,
   )
   const moveScopeKey = sessionScopeKey(sessionScope)
-  const routedConversationId = navigationState.resolvedConversationRouteId
   const railReadIdentity = JSON.stringify([projectReadBoundary?.subject ?? "injected", projectReadBoundary?.generation ?? 0])
   const railReadAdmitted = preview || (projectReadBoundary === undefined ? injectedEngine !== undefined : projectReadBoundary.admitted && projectReadBoundary.subject !== null)
+  // Account MCP selection follows the enabled connector module, not project default bindings.
+  const composerConnectionsEnabled = navigation === undefined
+    ? featureFlags === undefined && (workspaceCapabilities?.connectors ?? true)
+    : navigation.some(item => item.key === "mcp" && isRuntimeNavigationEnabled(item, featureFlags))
+  const connectionsBoundary = preview ? { admitted: true, subject: "preview", generation: 0 } : projectReadBoundary ?? { admitted: injectedEngine !== undefined, subject: "injected", generation: 0 }
   const [moveSelectionGeneration, setMoveSelectionGeneration] = useState(0)
   const handleConversationDeleteConfirmed = useCallback((scope: typeof sessionScope, id: string) => {
     if (sessionScopeKey(scope) === moveScopeKey) setMoveSelectionGeneration((generation) => generation + 1)
@@ -396,7 +426,116 @@ function AppFrameRuntime({
   const clearDraft = useCallback(() => {
     if (draftRouteIsCurrent()) clearScopedDraft()
   }, [clearScopedDraft, draftRouteIsCurrent])
+  // An overview is a new task draft, not the retained engine's active task.
+  // Keep its choices local until accepted Send allocates a fresh conversation.
+  const [projectDraftEpoch, setProjectDraftEpoch] = useState(0)
+  const projectDraftContext = useMemo(() => ({
+    engine, projectRef, route: draftRoute, actor: moveActor,
+    identity: railReadIdentity, admitted: railReadAdmitted, epoch: projectDraftEpoch,
+    mode: "fast" as AgentMode, model: readChatModel(),
+    mcpConnectionIds: [] as readonly string[],
+    customApiProfiles: [] as readonly CustomApiSelection[],
+    mcpTouched: false, mcpSeededVersion: null as string | null,
+  }), [engine, projectRef, draftRoute, moveActor, projectDraftEpoch, railReadIdentity, railReadAdmitted])
+  const [projectDraftSelection, setProjectDraftSelection] = useState(() => ({
+    context: projectDraftContext, mode: projectDraftContext.mode, model: projectDraftContext.model,
+    mcpConnectionIds: projectDraftContext.mcpConnectionIds,
+    customApiProfiles: projectDraftContext.customApiProfiles,
+    mcpTouched: false, mcpSeededVersion: null as string | null,
+  }))
+  const projectDraft = projectDraftSelection.context === projectDraftContext ? projectDraftSelection : projectDraftContext
+  const liveProjectDraft = useRef<typeof projectDraftContext | null>(null)
+  useLayoutEffect(() => {
+    if (!projectOverview) return
+    liveProjectDraft.current = projectDraftContext
+    const retire = () => {
+      try {
+        if (`${window.location.pathname}${window.location.search}` === projectDraftContext.route
+          && window.localStorage.getItem("kokoro.web.auth-index-subject") === projectDraftContext.actor) return
+      } catch { /* Unreadable actor evidence retires the draft. */ }
+      liveProjectDraft.current = null
+      setProjectDraftEpoch(epoch => epoch + 1)
+    }
+    window.addEventListener("popstate", retire)
+    window.addEventListener("kokoro:surface-navigation", retire)
+    window.addEventListener("storage", retire)
+    return () => {
+      if (liveProjectDraft.current === projectDraftContext) liveProjectDraft.current = null
+      window.removeEventListener("popstate", retire)
+      window.removeEventListener("kokoro:surface-navigation", retire)
+      window.removeEventListener("storage", retire)
+    }
+  }, [projectDraftContext, projectOverview])
+  const projectDraftIsCurrent = useCallback(() => {
+    try {
+      return railReadAdmitted && liveProjectDraft.current === projectDraftContext && projectDraftContext.actor !== undefined
+        && (preview || projectReadBoundary === undefined || projectReadBoundary.subject === projectDraftContext.actor)
+        && `${window.location.pathname}${window.location.search}` === projectDraftContext.route
+        && window.localStorage.getItem("kokoro.web.auth-index-subject") === projectDraftContext.actor
+    } catch { return false }
+  }, [railReadAdmitted, projectDraftContext, preview, projectReadBoundary])
+  const updateProjectDraft = (choice: Partial<{ mode: AgentMode; model: string | null }>) => {
+    if (!projectDraftIsCurrent()) return
+    setProjectDraftSelection(previous => {
+      const current = previous.context === projectDraftContext ? previous : projectDraftContext
+      return { context: projectDraftContext, mode: current.mode, model: current.model, mcpConnectionIds: current.mcpConnectionIds, customApiProfiles: current.customApiProfiles,
+        mcpTouched: current.mcpTouched, mcpSeededVersion: current.mcpSeededVersion, ...choice }
+    })
+  }
   const projectReads = useProjectList(preview, projectReadBoundary, projectRef, projectWorkspace)
+  const projectPins = useProjectPins({ preview, boundary: projectReadBoundary,
+    visibleIds: projectReads.list.status === "ready" ? projectReads.list.data.map(item=>item.id) : null,
+    onUnavailable: projectReads.retireProject })
+  const projectedWorkspaceCapabilities = projectWorkspaceCapabilities(featureFlags, workspaceCapabilities, { preview })
+  const recommendations = useProjectMcpRecommendations({
+    projectId: projectReads.current.status === "ready" && projectReads.current.data.id === projectRef ? projectReads.current.data.id : null,
+    boundary: projectReadBoundary,
+    enabled: projectWorkspace && !preview && projectedWorkspaceCapabilities.connectors === true,
+    hub: browserHubClient({ preview }),
+  })
+  const connections = useComposerConnections({
+    engine,
+    client: browserHubClient({ preview }),
+    boundary: { ...connectionsBoundary, admitted: connectionsBoundary.admitted && composerConnectionsEnabled },
+    enforceSubjectMarker: !preview && injectedEngine === undefined,
+    loadAllForDefaults: projectOverview && !projectDraft.mcpTouched && recommendations.configReady && Boolean(recommendations.facts?.recommendations.length),
+    ...(projectOverview ? { localDraft: {
+      context: projectDraftContext,
+      selectedIds: projectDraft.mcpConnectionIds,
+      selectedCustomApiProfiles: projectDraft.customApiProfiles,
+      updateCustomApis: (change: (values: readonly CustomApiSelection[]) => readonly CustomApiSelection[]) => {
+        if (!projectDraftIsCurrent()) return
+        setProjectDraftSelection(previous => {
+          if (!projectDraftIsCurrent()) return previous
+          const current = previous.context === projectDraftContext ? previous : projectDraftContext
+          return { ...current, context: projectDraftContext, customApiProfiles: change(current.customApiProfiles) }
+        })
+      },
+      isCurrent: projectDraftIsCurrent,
+      update: (change: (ids: readonly string[]) => readonly string[]) => {
+        if (!projectDraftIsCurrent()) return
+        setProjectDraftSelection(previous => {
+          if (!projectDraftIsCurrent()) return previous
+          const current = previous.context === projectDraftContext ? previous : projectDraftContext
+          return { context: projectDraftContext, mode: current.mode, model: current.model,
+            mcpConnectionIds: change(current.mcpConnectionIds), customApiProfiles: current.customApiProfiles, mcpTouched: true, mcpSeededVersion: current.mcpSeededVersion }
+        })
+      },
+    } } : {}),
+  })
+  const recommendationFacts = recommendations.facts
+  if (projectOverview && !projectDraft.mcpTouched && recommendations.allowed && recommendations.configReady && recommendationFacts &&
+    projectDraft.mcpSeededVersion !== recommendationFacts.state_version &&
+    (recommendationFacts.recommendations.length > 0 ? connections.complete === true : connections.status === "ready")) {
+    const facts = recommendationFacts
+    const ids = projectMcpDefaultSelection(facts.recommendations, connections.items)
+    if (ids !== null) setProjectDraftSelection(previous => {
+      const current = previous.context === projectDraftContext ? previous : projectDraftContext
+      if (current.mcpTouched || current.mcpSeededVersion === facts.state_version) return previous
+      return { context: projectDraftContext, mode: current.mode, model: current.model,
+        mcpConnectionIds: ids, customApiProfiles: current.customApiProfiles, mcpTouched: false, mcpSeededVersion: facts.state_version }
+    })
+  }
   const refreshProjects = projectReads.refresh
   const handleProjectOpen = useCallback((id: string, handoffDraft?: string) => {
     // Navigation is independently fenced; creation ACK refreshes through
@@ -417,10 +556,14 @@ function AppFrameRuntime({
     projectDetail: projectReads.current,
     instructionHistory: projectReads.instructionHistory,
     instructionContext: projectReads.context,
+    instructionsEnabled: projectedWorkspaceCapabilities.instructions,
+    contextEnabled: [projectedWorkspaceCapabilities.instructions, projectedWorkspaceCapabilities.resources, projectedWorkspaceCapabilities.connectors, projectedWorkspaceCapabilities.skills].some(Boolean),
     refreshProject: refreshProjects,
+    retireProject: projectReads.retireProject,
     refreshRenamedProject: projectReads.refreshRenamedProject,
     ...(projectReadBoundary === undefined ? {} : { renameBoundary: projectReadBoundary }),
-    renameRouteKey: JSON.stringify([projectRef ?? null, activeId, navigationState.settingsTab]),
+    // Project dialogs follow the address, not a retained task engine acquiring its activeId.
+    renameRouteKey: JSON.stringify([projectRef ?? null, navigationState.settingsTab, draftRoute, typeof window === "undefined" ? null : window.location.hash]),
   })
 
   const actions = useAppFrameActions({
@@ -430,6 +573,9 @@ function AppFrameRuntime({
     projectWorkspace,
     ...(projectRef === undefined ? {} : { projectRef }),
     routedConversationId,
+    ...(projectOverview ? { projectComposerDraft: { mode: projectDraft.mode, model: projectDraft.model,
+      selectedMcpConnectionIds: projectDraft.mcpConnectionIds, selectedCustomApiProfiles: projectDraft.customApiProfiles, isCurrent: projectDraftIsCurrent },
+      onProjectDraftAccepted: () => selectors.setSelectedModel(projectDraft.model) } : {}),
     standaloneSurface,
     chatHref,
     activeId,
@@ -621,8 +767,9 @@ function AppFrameRuntime({
     machine.phase === "error" || thread.unattributedFailure !== null
   )
   const creditRejected = hasFailed && isCreditInsufficient(machine.error)
-  const mode = store ? activeMode(store) : pendingMode
-  const modeLocked = hasMessages
+  const mode = projectOverview ? projectDraft.mode : store ? activeMode(store) : pendingMode
+  const composerHasMessages = !projectOverview && hasMessages
+  const modeLocked = composerHasMessages
   const projectSubmissionAdmitted = !projectWorkspace || (
     typeof window !== "undefined"
     && projectRef !== undefined
@@ -635,13 +782,9 @@ function AppFrameRuntime({
       : activeId === routedConversationId)
   )
   const canSend = draft.trim().length > 0 && canSubmitMessage && projectSubmissionAdmitted
+    && !navigationState.conversationHydrating && !navigationState.conversationHydrationFailed
   const conversations = conversationsCtl?.conversations ?? []
-  const projectConversationView = projectWorkspace && navigationState.resolvedConversationRouteId !== null && !narrowWeb
   const projectedCreationIntent = projectWorkspace ? null : navigationState.deploymentIntent
-  const projectedWorkspaceCapabilities = projectWorkspaceCapabilities(
-    featureFlags,
-    workspaceCapabilities,
-  )
 
   const previousHasMessagesRef = useRef(hasMessages)
   useEffect(() => {
@@ -657,10 +800,33 @@ function AppFrameRuntime({
     window.requestAnimationFrame(() => focusComposer())
   }, [engine, focusComposer])
 
+  const retryConversationHydration = useCallback(() => {
+    const requestedConversationId = navigationState.resolvedConversationRouteId ?? activeId
+    if (!engine || requestedConversationId === null) return
+    const current = engine.getSnapshot()
+    if (current.missingSessionId === requestedConversationId) {
+      engine.openConversation(requestedConversationId)
+      return
+    }
+    if (current.store?.activeId === requestedConversationId) {
+      const fallback = current.store.conversations.find(({ id }) => id !== requestedConversationId)
+      if (fallback) {
+        engine.selectConversation(fallback.id)
+      } else {
+        engine.newConversation()
+      }
+    }
+    engine.openConversation(requestedConversationId)
+  }, [activeId, engine, navigationState.resolvedConversationRouteId])
+
   const EmptyState = emptyState ?? DefaultEmptyState
   const shareClient: Pick<SessionClient, "createShare" | "revokeShare"> = browserListClient({ preview })
 
+  const answerActionBoundary = useAnswerActionScope({ engine, actorId: projectReadBoundary?.subject ?? null, sessionId: activeId,
+    scope: sessionScope, identity: railReadIdentity, admitted: railReadAdmitted, preview })
+
   const conversationProps: ConversationThreadProps = {
+    ...(answerActionBoundary === undefined ? {} : { answerActionBoundary }),
     preview,
     ...(brandName === undefined ? {} : { brandName }),
     sessionId: activeId,
@@ -678,14 +844,19 @@ function AppFrameRuntime({
     onOpenBilling: () => overlays.openSettings("credits"),
     onOpenPricing: () => overlays.openSettings("subscription"),
     onRetry: retryAndFocusComposer,
+    onRetryMessageParts: (messageId) => engine?.retryMessageParts?.(messageId),
     mode,
     stagingByRun: staging,
     hitlRunId: (machine.phase === "waiting" || machine.phase === "resuming") ? machine.runId : null,
-    controlError: (machine.phase === "waiting" || machine.phase === "resuming") ? machine.error : null,
+    controlError: (machine.phase === "waiting" || machine.phase === "resuming" || machine.phase === "cancelling") ? machine.error : null,
     onToolDecision: (runId, toolId, decision) => engine?.stageToolDecision(runId, toolId, decision),
     onCancelRun: () => engine?.cancelRun(),
-    onOpenFile: canvas.openFile,
-    onOpenDelivery: canvas.openDelivery,
+    ...(answerActionBoundary ? { onOpenActivity: (runId: string, activityId: string) => {
+      if (!answerActionBoundary.isCurrent()) return
+      project.dismissProjectContext(); canvas.openActivity(runId, activityId, answerActionBoundary.actorId)
+    } } : {}),
+    onOpenFile: (path) => { project.dismissProjectContext(); canvas.openFile(path) },
+    onOpenDelivery: (delivery) => { project.dismissProjectContext(); canvas.openDelivery(delivery) },
   }
 
   const projectConversations: NonNullable<EmptyStateProps["projectConversations"]> = conversations.map((conversation) => ({
@@ -693,14 +864,29 @@ function AppFrameRuntime({
     title: conversation.title,
   }))
 
+  const composerSkillBoundary = useMemo(() => projectReadBoundary ?? { admitted: false, subject: null, generation: 0 }, [projectReadBoundary])
+  const composerSkillClient = useMemo(() => createManusSkillHubClient(browserHubClient({ preview }), composerSkillBoundary), [preview, composerSkillBoundary])
+  useLayoutEffect(() => {
+    if (preview || !composerSkillBoundary.admitted || composerSkillBoundary.subject === null) return
+    return retainManusSkillHubClient(composerSkillClient)
+  }, [preview, composerSkillBoundary, composerSkillClient])
+  const composerSkillScope = useMemo(() => ({ engine, scope: moveScopeKey, conversationId: projectWorkspace ? routedConversationId : activeId }), [engine, moveScopeKey, projectWorkspace, routedConversationId, activeId])
+  const skillSelectionSnapshot = engine?.getSnapshot()
+
   const composerProps: AppFrameComposerProps = {
+    skills: { client: composerSkillClient, boundary: composerSkillBoundary, scopeKey: composerSkillScope, selectable: canSubmitMessage && !hydrating && !skillSelectionSnapshot?.hasPendingSubmission && !skillSelectionSnapshot?.canRetryPendingSubmission, onSelect: actions.selectSkillForCurrentDraft },
+    connections,
+    connectionsEnabled: composerConnectionsEnabled,
+    localDraftPersistenceFailed: engine?.getSnapshot().notice?.key === "chat.localDraftPersistenceFailed",
+    submissionRecoveryFailed: engine?.getSnapshot().notice?.key === "chat.submissionRecoveryFailed",
     preview,
     brandName,
     projectWorkspace,
-    hasMessages,
+    hasMessages: composerHasMessages,
     creationIntent: projectedCreationIntent,
     onCreationIntentDismiss: actions.dismissCreationIntent,
     workspaceCapabilities: projectedWorkspaceCapabilities,
+    onOpenMcpCatalog: overlays.openMcpCatalog,
     onOpenSettings: overlays.openSettings,
     draft,
     onDraftChange: updateDraft,
@@ -713,16 +899,16 @@ function AppFrameRuntime({
     canSend,
     onStop: () => engine?.cancelRun(),
     composerRef,
-    emptyWorkspace: !hasMessages,
+    emptyWorkspace: !composerHasMessages,
     mode,
-    onModeChange: (next) => engine?.setMode(next),
+    onModeChange: (next) => projectOverview ? updateProjectDraft({ mode: next }) : engine?.setMode(next),
     modeLocked,
     models: selectors.models,
     modelCatalogStatus: selectors.modelCatalogStatus,
     onRetryModels: selectors.retryModels,
     hideModelSelector: !hasMessages && (projectedCreationIntent === "website" || projectedCreationIntent === "app"),
-    selectedModel: selectors.selectedModel,
-    onModelChange: selectors.setSelectedModel,
+    selectedModel: projectOverview ? projectDraft.model : selectors.selectedModel,
+    onModelChange: projectOverview ? (model) => updateProjectDraft({ model }) : selectors.setSelectedModel,
     modelLocked: modeLocked,
   }
 
@@ -732,6 +918,7 @@ function AppFrameRuntime({
     projectHistoryStatus: projectReads.instructionHistory.status,
     projectHistoryRetryable: projectReads.instructionHistory.status === "error" && projectReads.instructionHistory.retryable,
     projectDetail: projectReads.current,
+    projectMcpRecommendations: recommendations,
     onRetryProjectRead: refreshProjects,
     ...(brandName === undefined ? {} : { brandName }),
     preview,
@@ -745,18 +932,19 @@ function AppFrameRuntime({
     activeProjectConversationId: activeId,
     onSelectProjectConversation: selectConversationWithMoveFence,
     onOpenSession: selectConversationWithMoveFence,
-    projectConversationsLoading: conversationsCtl?.loading ?? railReadAdmitted,
-    projectConversationsError: conversationsCtl?.error ?? !railReadAdmitted,
+    projectConversationsLoading: conversationsCtl?.loading ?? true,
+    projectConversationsError: conversationsCtl?.error ?? false,
     onRetryProjectConversations: () => conversationsCtl?.refresh(),
+    ...(project.projectInstructionRequest === undefined ? {} : { projectInstructionRequest: project.projectInstructionRequest }),
     projectInstructions: project.projectInstructions,
     projectInstructionHistory: project.projectInstructionHistory,
     onSaveProjectInstructions: project.saveProjectInstructions,
     onUploadProjectResource: project.uploadProjectResource,
     onListProjectResources: project.listProjectResources,
     ...(projectRef === undefined ? {} : { projectRef }),
-    projectConversation: projectConversationView,
     onOpenSettings: overlays.openSettings,
     onOpenProject: project.openProject,
+    ...(projectPins.available ? { projectPins } : {}),
     onCreateProject: project.createProject,
     onCreateMcp: overlays.openMcpCreate,
     onCreateSkillWithAi: actions.startSkillCreationFromSettings,
@@ -769,7 +957,7 @@ function AppFrameRuntime({
     shareClient,
   }
 
-  const composer = <AppFrameComposer {...composerProps} />
+  const composer = navigationState.conversationMissing ? null : <AppFrameComposer {...composerProps} />
 
   const toggleNavigationRail = useCallback(() => {
     if (layout.compactDesktopRail) layout.setCompactRailOpen((open) => !open)
@@ -785,7 +973,6 @@ function AppFrameRuntime({
       standaloneSurface={standaloneSurface}
       projectWorkspace={projectWorkspace}
       projectRef={projectRef}
-      projectConversationView={projectConversationView}
       resolvedRailCollapsed={layout.resolvedRailCollapsed}
       narrowWeb={narrowWeb}
       compactDesktopRail={layout.compactDesktopRail}
@@ -795,10 +982,17 @@ function AppFrameRuntime({
       showConversation={showConversation}
       conversationHydrating={navigationState.conversationHydrating}
       conversationHydrationFailed={navigationState.conversationHydrationFailed || initialSnapshotFailed}
+      conversationMissing={navigationState.conversationMissing}
+      machineError={machine.error}
       connection={connection}
+      onReconnect={() => engine?.reconnect()}
       projectCreation={project.projectCreation}
       projectRename={project.projectRename}
+      projectContext={project.projectContext}
+      projectInstruction={project.projectInstruction}
+      projectDelete={project.projectDelete}
       onRetryProjectCreation={project.retryProjectCreation}
+      retryConversationHydration={retryConversationHydration}
       onOpenSettings={overlays.openSettings}
       shareClient={shareClient}
       thread={thread}
@@ -807,7 +1001,7 @@ function AppFrameRuntime({
       emptyStateProps={emptyStateProps}
       composer={composer}
       emptyStateOwnsComposer={emptyStateOwnsComposer}
-      canvas={canvas}
+      canvas={{ ...canvas, onReopen: () => { project.dismissProjectContext(); canvas.onReopen() } }}
     />
   )
 
@@ -836,8 +1030,9 @@ function AppFrameRuntime({
       projectListRetryable: projectReads.list.status === "error" && projectReads.list.retryable,
       onRetryProjects: refreshProjects,
     } : {}),
+    ...(projectPins.available ? { projectPins } : {}),
     onCreateProject: project.createProject,
-    onRequestProjectRename: project.requestProjectRename,
+    ...(project.projectMenuAccess ? { onRequestProjectRename: project.requestProjectRename, onRequestProjectDelete: project.requestProjectDeletion } : {}),
     ...(activeNavigationKey === undefined ? {} : { activeNavigationKey }),
     preview,
     conversations,
@@ -872,9 +1067,9 @@ function AppFrameRuntime({
     onRetryConversationMove: retryConversationMove,
     onOpenSettings: overlays.openSettings,
     accountTriggerRef,
-    listLoading: conversationsCtl?.loading ?? railReadAdmitted,
+    listLoading: conversationsCtl?.loading ?? true,
     listLoadingMore: conversationsCtl?.loadingMore ?? false,
-    listError: conversationsCtl?.error ?? !railReadAdmitted,
+    listError: conversationsCtl?.error ?? false,
     onRetryList: () => conversationsCtl?.refresh(),
     hasMore: conversationsCtl?.hasMore ?? false,
     onLoadMore: () => conversationsCtl?.loadMore(),
@@ -893,7 +1088,6 @@ function AppFrameRuntime({
   const overlaySurfaces = (
     <>
     {!preview && projectReadBoundary?.admitted && archive.blocked ? <div className={archiveStyles.archiveFeedback} role="group" aria-label={t("data.unknown")}><p role="alert">{t("data.unknown")}</p><button type="button" disabled={archive.busy} onClick={()=>void archive.reconcile()}>{t("data.reload")}</button>{archive.review?<button type="button" disabled={archive.busy} onClick={archive.proceed}>{t("data.continue")}</button>:null}</div>:null}
-    {!preview && projectReadBoundary?.admitted && (projectWorkspace?routedConversationId:activeId) && conversationsCtl && conversationsCtl.archiveStatus!=="archived" && (conversationsCtl.archiveStatus==="unknown"||conversationsCtl.archiveStatus==="missing") ? <div className={archiveStyles.archiveFeedback} role="status">{conversationsCtl.archiveStateError?t("archive.stateFailed"):t("archive.checking")}{conversationsCtl.archiveStateError?<button type="button" onClick={conversationsCtl.retryArchiveState}>{t("data.reload")}</button>:null}</div>:null}
     {copyFeedback !== null && copyFeedback.lifetime.view === copyView && copyFeedback.lifetime.live ? (
       <div className={shellStyles.taskLinkFeedback} role={copyFeedback.kind === "success" ? "status" : "alert"}>
         {t(copyFeedback.kind === "success" ? "shell.taskLinkCopied" : "shell.taskLinkCopyFailed")}
@@ -901,6 +1095,8 @@ function AppFrameRuntime({
     ) : null}
     <AppFrameOverlaySurfaces
       mounted={mounted}
+      mcpCatalog={{ open: overlays.mcpCatalogOpen, onOpenChange: open => { if (!open) overlays.closeMcpCatalog() },
+        returnFocusRef: overlays.mcpCatalogReturnFocusRef, onCreate: overlays.openMcpCatalogCreate }}
       settingsTab={navigationState.settingsTab}
       {...(overlays.settingsSkillsScope === undefined ? {} : { settingsSkillsScope: overlays.settingsSkillsScope })}
       brandName={brandName}
@@ -937,8 +1133,11 @@ function AppFrameRuntime({
   return (
     <>
     {conversationReaders.hosts}
+    <McpTrialProvider onTry={composerConnectionsEnabled ? actions.startMcpTrial : null}>
     <ConnectorCommandProvider client={browserHubClient({ preview })} boundary={preview ? { admitted: true, subject: "preview", generation: 0 } : projectReadBoundary ?? { admitted: false, subject: null, generation: 0 }}>
     <AppFrameShell
+      {...(answerActionBoundary ? { answerActionBoundary } : {})}
+      {...(projectReadBoundary === undefined ? {} : { readBoundary: projectReadBoundary })}
       preview={preview}
       webSkin={resolvedWebSkin}
       narrowWeb={narrowWeb}
@@ -960,11 +1159,13 @@ function AppFrameRuntime({
       railProps={railProps}
       mainSurface={mainSurface}
       canvas={canvas}
+      hideCanvas={project.projectContext.open && !projectOverview}
       thread={thread}
       activeId={activeId}
       overlays={overlaySurfaces}
     />
     </ConnectorCommandProvider>
+    </McpTrialProvider>
     </>
   )
 }

@@ -1,0 +1,58 @@
+.row.row {
+  flex-wrap: nowrap;
+  align-items: center;
+}
+
+
+.skills {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  margin: 0;
+  padding: 0 0 0.25rem 1.25rem;
+  list-style: none;
+}
+
+.skill {
+  min-width: 0;
+}
+
+.heading {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  min-width: 0;
+}
+
+.name,
+.path {
+  color: var(--foreground);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.path {
+  display: block;
+  min-width: 0;
+}
+
+.revision {
+  color: var(--muted-foreground);
+  overflow-wrap: anywhere;
+}
+
+.inspect { width: 100%; border: 0; background: transparent; text-align: start; cursor: pointer; border-radius: var(--radius-sm); color: inherit; }
+.inspect:hover { color: var(--foreground); }
+.inspect:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+@media (pointer: coarse) { .inspect { min-height: 44px; } }
+
+/* One reading line, not independently stretching name and parameter columns. */
+.readingLine { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Public intent is a compact action; exact file paths below remain fully readable. */
+.readingLine.titleLine { white-space: nowrap; }
+.inlineTarget { color: inherit; }
+.fileLine { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+@media (max-width: 640px) {
+  .readingLine { white-space: normal; overflow-wrap: anywhere; }
+}

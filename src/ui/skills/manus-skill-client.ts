@@ -1,10 +1,10 @@
 import { z } from "zod"
 
-import { createSkillInstallationClient, hasHubNoStoreDirective, type HubClient } from "@/hub/client"
+import { createSkillInstallationClient, hasHubNoStoreDirective, HubClientError, type HubClient } from "@/hub/client"
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
 import { retireResources } from "@/lib/query/resource-store"
 import { skillResourceKey, SKILLS_KEY, SKILLS_CATALOG_KEY } from "./skills-resource-cache"
-import { catalogPackageResponseSchema, catalogPackageErrorSchema, CATALOG_PACKAGE_ERRORS, catalogPackageMatches, catalogPackagePrivatePath, type CatalogPackageData, manuscriptReadErrorSchema, MANUSCRIPT_READ_ERRORS, manuscriptHubSkillSchema, manuscriptHubPageSchema, manuscriptListSchema, manuscriptDetailSchema, type CatalogSkillCategory, type SkillCard, type SkillCatalog, type SkillCatalogCard } from "@/hub/schemas"
+import { catalogPackageResponseSchema, catalogPackageErrorSchema, CATALOG_PACKAGE_ERRORS, catalogPackageMatches, catalogPackagePrivatePath, type CatalogPackageData, manuscriptReadErrorSchema, MANUSCRIPT_READ_ERRORS, manuscriptHubSkillSchema, manuscriptHubPageSchema, manuscriptListSchema, manuscriptDetailSchema, manuscriptDownloadSchema, type CatalogSkillCategory, type SkillCard, type SkillCatalog, type SkillCatalogCard } from "@/hub/schemas"
 
 // Catalog consumers share the v1 resource namespace. Callers can append their
 // own view parameters, while an owner mutation invalidates this prefix once.
@@ -56,11 +56,16 @@ async function post<T extends z.ZodTypeAny>(operation: "ListSkills" | "ListHubSk
   return schema.parse(raw)
 }
 
-async function readJson(url: string, init: RequestInit, signal?: AbortSignal): Promise<{ response: Response; raw: unknown }> {
+async function readJson(url: string, init: RequestInit, signal?: AbortSignal, packageRead = false): Promise<{ response: Response; raw: unknown }> {
   const deadline = new AbortController()
   const timer = setTimeout(() => deadline.abort(), 10_000)
   const joined = signal === undefined ? deadline.signal : AbortSignal.any([signal, deadline.signal])
   let response: Response | undefined
+  // Only package inspection needs typed read failures. Existing RPC callers
+  // retain their original errors and never enable this branch.
+  const invalid = () => packageRead
+    ? new HubClientError("parse", "Invalid Skill package response", null, response?.status ?? null)
+    : new Error("skill_response_invalid")
   try {
     joined.throwIfAborted()
     response = await new Promise<Response>((resolve, reject) => {
@@ -75,7 +80,7 @@ async function readJson(url: string, init: RequestInit, signal?: AbortSignal): P
     joined.throwIfAborted()
     const declared = response.headers.get("content-length")
     if (declared !== null && (!/^(0|[1-9][0-9]*)$/u.test(declared) || Number(declared) > 1_048_576)
-      || response.body === null) throw new Error("skill_response_invalid")
+      || response.body === null) throw invalid()
     const reader = response.body.getReader()
     const chunks: Uint8Array[] = []
     let size = 0
@@ -88,7 +93,7 @@ async function readJson(url: string, init: RequestInit, signal?: AbortSignal): P
         joined.throwIfAborted()
         if (part.done) break
         size += part.value.byteLength
-        if (size > 1_048_576) throw new Error("skill_response_invalid")
+        if (size > 1_048_576) throw invalid()
         chunks.push(part.value)
       }
     } finally {
@@ -101,10 +106,14 @@ async function readJson(url: string, init: RequestInit, signal?: AbortSignal): P
     for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength }
     let raw: unknown
     try { raw = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) }
-    catch { throw new Error("skill_response_invalid") }
+    catch { throw invalid() }
     joined.throwIfAborted()
     return { response, raw }
   } catch (error) {
+    if (packageRead) {
+      if (error instanceof HubClientError) throw error
+      throw new HubClientError(signal?.aborted ? "aborted" : "network", "Skill package read did not complete", null, response?.status ?? null)
+    }
     if (signal?.aborted) throw new Error("skill_read_aborted")
     if (joined.aborted) throw new Error("skill_read_timeout")
     throw error
@@ -143,6 +152,8 @@ function toCard(skill: HubSkill, added: ReadonlyMap<string, Readonly<{ installed
     ...(skill.coverImage === undefined ? {} : { cover_image: ownerCoverPath(skill.coverImage, skill.currentVersion?.versionUid) }),
     ...(skill.exampleQuestions === undefined ? {} : { example_questions: skill.exampleQuestions }),
     ...(skill.publisherType === undefined ? {} : { publisher_type: skill.publisherType }),
+    ...(skill.product === undefined ? {} : { product: skill.product }),
+    ...(skill.publisher_profile === undefined ? {} : { publisher_profile: skill.publisher_profile }),
   }
 }
 
@@ -270,13 +281,14 @@ export function createManusSkillHubClient(base: HubClient, boundary: ProjectRead
 
 
 export type ManusSkillDetail = z.infer<typeof manuscriptDetailSchema>
+export type ManusSkillDownload = z.infer<typeof manuscriptDownloadSchema>
 
 export function ownerCoverPath(cover: string, revision: string | undefined): string {
   if (!revision || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u.test(revision)
     || cover !== `/api/v1/skills/${encodeURIComponent(revision)}/cover`) throw new Error("skill_response_invalid")
   return `/api/hub/skills/${encodeURIComponent(revision)}/cover`
 }
-function detailForSeries(raw: ManusSkillDetail, skillId: string): ManusSkillDetail {
+function detailForSeries<T extends ManusSkillDetail>(raw: T, skillId: string): T {
   if (raw.skill.id !== skillId) throw new Error("skill_response_invalid")
   return raw.skill.coverImage === undefined ? raw : { ...raw, skill: { ...raw.skill, coverImage: ownerCoverPath(raw.skill.coverImage, raw.skill.version) } }
 }
@@ -286,8 +298,10 @@ export async function getManusSkillDetail(skillId: string, signal?: AbortSignal)
 
 /** Uses the distinct Manus service operation instead of treating a GetSkill
  * response as a permanent download authority. */
-export async function downloadManusSkill(skillId: string, signal?: AbortSignal): Promise<ManusSkillDetail> {
-  return detailForSeries(await post("DownloadSkill", { skillId }, manuscriptDetailSchema, signal), skillId)
+export async function downloadManusSkill(skillId: string, expectedRevisionSkillId: string, signal?: AbortSignal): Promise<ManusSkillDownload> {
+  const result = detailForSeries(await post("DownloadSkill", { skillId }, manuscriptDownloadSchema, signal), skillId)
+  if (result.skill.version !== expectedRevisionSkillId) throw new Error("skill_response_invalid")
+  return result
 }
 
 function throwReadError(operation: "ListSkills" | "ListHubSkills" | "GetSkill" | "DownloadSkill", status: number, raw: unknown): never {
@@ -298,15 +312,20 @@ function throwReadError(operation: "ListSkills" | "ListHubSkills" | "GetSkill" |
 }
 
 export async function getManusSkillPackage(revisionSkillId: string, filePath?: string, signal?: AbortSignal, expectedDirectory?: CatalogPackageData): Promise<CatalogPackageData> {
-  const { response, raw } = await readJson(catalogPackagePrivatePath(revisionSkillId, filePath), { method: "GET" }, signal)
+  const { response, raw } = await readJson(catalogPackagePrivatePath(revisionSkillId, filePath), { method: "GET" }, signal, true)
+  const invalid = () => new HubClientError("parse", "Invalid Skill package response", null, response.status)
   if (!hasHubNoStoreDirective(response.headers) || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(response.headers.get("x-request-id") ?? "")
-    || !/^application\/json(?:;\s*charset=utf-8)?$/iu.test(response.headers.get("content-type") ?? "")) throw new Error("skill_response_invalid")
+    || !/^application\/json(?:;\s*charset=utf-8)?$/iu.test(response.headers.get("content-type") ?? "")) throw invalid()
   if (response.status !== 200) {
     const error = catalogPackageErrorSchema.safeParse(raw)
-    if (!error.success || !CATALOG_PACKAGE_ERRORS[response.status]?.includes(error.data.error.code)) throw new Error("skill_response_invalid")
-    throw new Error(error.data.error.code)
+    const retryAfter = response.headers.get("retry-after")
+    if (!error.success || !CATALOG_PACKAGE_ERRORS[response.status]?.includes(error.data.error.code)
+      || [401, 403, 404, 412].includes(response.status) && error.data.error.retryable
+      || response.status === 503 && !error.data.error.retryable
+      || retryAfter !== null && (response.status !== 429 || !/^[1-9][0-9]{0,4}(?![\s\S])/u.test(retryAfter))) throw invalid()
+    throw new HubClientError("http", error.data.error.message, error.data.error.code, response.status, error.data.error.retryable, response.headers.get("x-request-id"), retryAfter)
   }
   const parsed = catalogPackageResponseSchema.safeParse(raw)
-  if (!parsed.success || !catalogPackageMatches(parsed.data.data, revisionSkillId, filePath, expectedDirectory)) throw new Error("skill_response_invalid")
+  if (!parsed.success || !catalogPackageMatches(parsed.data.data, revisionSkillId, filePath, expectedDirectory)) throw invalid()
   return parsed.data.data
 }

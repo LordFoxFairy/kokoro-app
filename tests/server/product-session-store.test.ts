@@ -224,3 +224,84 @@ describe("Product Session Redis double-CAS", () => {
     expect(await inspectSession(config, id, 1)).toBe(true)
   })
 })
+
+it("reproduces refresh admission401 at list entry and archive exit without admitting the old cookie", async () => {
+  // Real RP cookies/Redis CAS and production GET adapters; only BFF business
+  // content is a double. No issuer, Next server, or normal browser session.
+  const { randomUUID } = await import("node:crypto")
+  const { vi } = await import("vitest")
+  // Match the Node crypto/JWT byte realm inside this server test's jsdom worker.
+  vi.stubGlobal("Uint8Array", Object.getPrototypeOf(Buffer.prototype).constructor)
+  const productBff = await import("@/lib/server/product-bff")
+  const upstream = await import("@/lib/server/upstream-http")
+  const { productSessionCookie } = await import("@/lib/server/product-session")
+  const { GET } = await import("@/app/api/session/[...path]/route")
+  const owned = { ...config, webOrigin: `http://auth-read-race-${randomUUID()}.fixture` }
+  const candidate = await createSession(owned, "qa-only-refresh")
+  const ownedKeys = [`${productSessionKeyPrefix(owned.webOrigin)}${candidate.id}`, `${productSessionKeyPrefix(owned.webOrigin)}${candidate.id}:tombstone`]
+  const claims = { ...candidate, generation: 0, access: "qa-only-access", accessExpiresAt: Date.now() + 600_000, subject: "qa-read-race", issuerSessionId: "qa-only-issuer-session" }
+  const cookie = async (generation: number) => (await productSessionCookie({ ...claims, generation }, owned.secret, owned.webOrigin)).split(";", 1)[0]!
+  const read = (jar: string, archive = false) => {
+    const path = archive ? ["sessions", "qa-read-race", "archive"] : ["sessions"]
+    return GET(new Request(`${owned.webOrigin}/api/session/${path.join("/")}`, { headers: { host: new URL(owned.webOrigin).host, cookie: jar } }), { params: Promise.resolve({ path }) })
+  }
+  let release!: () => void
+  const latch = new Promise<void>(resolve => { release = resolve })
+  let entered!: () => void
+  const atBff = new Promise<void>(resolve => { entered = resolve })
+  let holdArchive = false
+  const configuration = vi.spyOn(productBff, "productBffConfig").mockReturnValue({ bffBaseUrl: "http://bff.fixture", domain: "qa.fixture", internalSecret: null, session: owned })
+  const business = vi.spyOn(upstream, "requestWithDomain").mockImplementation(async (url, _domain, options) => {
+    expect(options.method).toBe("GET")
+    const archive = String(url).endsWith("/archive")
+    if (archive && holdArchive) { entered(); await latch }
+    const requestId = new Headers(options.headers).get("x-kokoro-request-id")!
+    return Response.json(archive ? { data: { session_id: "qa-read-race", archived_at: null } } : { data: [], meta: { request_id: requestId } }, { headers: { "cache-control": "no-store", "x-request-id": requestId } })
+  })
+  try {
+    const oldCookie = await cookie(0)
+    expect((await read(oldCookie)).status).toBe(200)
+    const reserved = await reserveRefresh(owned, candidate.id, 0)
+    expect(reserved).not.toBeNull()
+    expect(await inspectSessionState(owned, candidate.id, 0)).toBe("refreshing")
+    const duringRefresh = await read(oldCookie)
+    expect(duringRefresh.status).toBe(401)
+    expect(await duringRefresh.json()).toMatchObject({ error: { code: "unauthenticated" } })
+    expect(business).toHaveBeenCalledTimes(1)
+    expect(await finalizeRefresh(owned, candidate.id, 0, reserved!.reservation, "qa-only-rotated-refresh")).toBe(true)
+    expect((await read(oldCookie)).status).toBe(401)
+    expect(business).toHaveBeenCalledTimes(1)
+    const currentCookie = await cookie(1)
+    expect((await read(currentCookie)).status).toBe(200)
+
+    holdArchive = true
+    const pendingArchive = read(currentCookie, true)
+    await atBff
+    const next = await reserveRefresh(owned, candidate.id, 1)
+    expect(next).not.toBeNull()
+    expect(await finalizeRefresh(owned, candidate.id, 1, next!.reservation, "qa-only-final-refresh")).toBe(true)
+    release()
+    const retired = await pendingArchive
+    expect(retired.status).toBe(401)
+    expect(await retired.json()).toMatchObject({ error: { code: "session_invalid", retryable: false } })
+    expect(business).toHaveBeenCalledTimes(3)
+    const latestCookie = await cookie(2)
+    expect((await read(latestCookie, true)).status).toBe(200)
+    expect((await read(latestCookie)).status).toBe(200)
+    expect(await tombstoneSession(owned, candidate.id, 2)).toMatchObject({ status: "active" })
+    expect((await read(latestCookie)).status).toBe(401)
+    expect(business).toHaveBeenCalledTimes(5)
+  } finally {
+    release()
+    configuration.mockRestore()
+    business.mockRestore()
+    vi.unstubAllGlobals()
+    const client = createClient({ url: redisUrl, socket: { connectTimeout: 500, reconnectStrategy: false } })
+    client.on("error", () => undefined)
+    try {
+      await client.connect()
+      await client.del(ownedKeys)
+      expect(await client.exists(ownedKeys)).toBe(0)
+    } finally { client.destroy() }
+  }
+})

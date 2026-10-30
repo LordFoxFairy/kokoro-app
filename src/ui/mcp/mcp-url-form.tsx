@@ -4,13 +4,16 @@ import { connectorCommandFailureMessage } from "./connector-command-failure";
 
 import { useCallback, useState } from "react";
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
-import type { McpServerCreationFlow } from "./mcp-server-creation-flow";
+import type { McpServerCreationFlow, McpServerCreationCompletion } from "./mcp-server-creation-flow";
+import { McpPreparationStatus } from "./mcp-preparation-status";
 import { useMcpServerCreation } from "./use-mcp-server-creation";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { DialogTitle } from "@/components/ui/dialog";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { ChevronDown, Link2, Plus, Settings2, Trash2 } from "lucide-react";
+import { ChevronDown, Folder, Link2, Plus, Settings2, Trash2 } from "lucide-react";
 import { useT } from "@/i18n/context";
 
 import styles from "./mcp-create-dialog.module.css";
@@ -53,6 +56,7 @@ export function UrlMcpForm({
   boundary,
   onCancel,
   onDone,
+  onPublish,
   onAuthorizationNavigate,
   showTitle = true,
   title,
@@ -63,7 +67,8 @@ export function UrlMcpForm({
   flow: McpServerCreationFlow;
   boundary: ProjectReadBoundary;
   onCancel: () => void;
-  onDone: () => Promise<void>;
+  onDone: (result: McpServerCreationCompletion, current: () => boolean) => Promise<void>;
+  onPublish?: (result: McpServerCreationCompletion, current: () => boolean) => Promise<void>;
   onAuthorizationNavigate?: (url: string) => void;
   showTitle?: boolean;
   title?: string;
@@ -82,7 +87,7 @@ export function UrlMcpForm({
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
   const clearSecrets = useCallback(() => { setHeaders(current => current.map(header => ({ ...header, value: "" }))); setClientSecret(""); }, []);
-  const creation = useMcpServerCreation(flow, boundary, onCancel, onDone, clearSecrets, onAuthorizationNavigate);
+  const creation = useMcpServerCreation(flow, boundary, onCancel, onDone, clearSecrets, onAuthorizationNavigate, onPublish);
   const { state, completion, admitted, submitting, locked, editable, error, ready: isReady, needsOAuth: requiresOAuth } = creation;
   const configuredHeaders = headers.filter((header) => header.name.trim());
   const headerIsPartial =
@@ -107,24 +112,32 @@ export function UrlMcpForm({
     !duplicateHeader &&
     !oauthIsPartial &&
     !submitting && !locked && flow.available;
-  const registerAndPrepare = async (openOAuth: boolean): Promise<void> => {
+  const saveConfiguration = async (publish: boolean): Promise<void> => {
     if (!canSubmit && !state.unknown && !state.registered) return;
-    await creation.save({ display_name: name.trim(), server_url: url.trim(),
+    const save = publish ? creation.saveForPublication : creation.saveConfiguration;
+    await save({ display_name: name.trim(), server_url: url.trim(),
       ...(showHeaders && configuredHeaders.length ? { headers: configuredHeaders.map(header => ({ name: header.name.trim().toLowerCase(), value: header.value })) } : {}),
       ...(showOAuth && clientId.trim() ? { oauth_client: { client_id: clientId.trim(), client_secret: clientSecret } } : {}),
-    }, openOAuth);
+    });
   };
-  const submitLabel = t(submitting ? "mcp.submitting" : state.unknown ? creation.mayResume ? "mcp.retryOriginal" : "mcp.recovery.inspectRequired" : "mcp.save");
+  const idleSubmitLabel = t(state.unknown ? creation.mayResume ? "mcp.retryOriginal" : "mcp.recovery.inspectRequired" : "mcp.save");
+  const submitLabel = submitting ? t("mcp.submitting") : idleSubmitLabel;
 
-  if (state.registered || completion !== "idle") {
+  const publicationDisabled = !onPublish || !admitted || submitting || !creation.mayResume || (!state.unknown && !canSubmit);
+  const hasPreparationStatus = state.preparationView?.kind === "unknown" || Boolean(state.preparationView?.retired);
+  const recoveryRequired = Boolean(state.preparationView?.retired) || error || state.unknown !== null || completion === "retry";
+  const legacyConnection = state.registered && state.intent !== "configure" && state.intent !== "publish";
+  if ((state.registered || completion !== "idle") && (recoveryRequired || legacyConnection)) {
     return <section className={styles.urlMcpForm} aria-live="polite">
       {showTitle ? <DialogTitle className={styles.urlMcpTitle}>{state.facts?.server.display_name ?? (state.name || name)}</DialogTitle> : null}
       {!admitted ? <p className="sr-only" role="status">{t("mcp.creationSession")}</p> : <p className={styles.urlWarning}>{submitting ? t("mcp.submitting") : isReady ? t("mcp.active") : t("mcp.pending")}</p>}
-      {error || state.unknown ? <p className={styles.compactDialogError} role="alert">{t(connectorCommandFailureMessage(creation.failure, state.unknown ? "mcp.serverCreateUnknown" : "mcp.error"))}</p> : null}
+      {(error || state.unknown) && !hasPreparationStatus ? <p className={styles.compactDialogError} role="alert">{t(state.registrationRejection === "url_conflict" ? "mcp.serverUrlConflict" : connectorCommandFailureMessage(creation.failure, state.unknown ? "mcp.serverCreateUnknown" : "mcp.error"))}</p> : null}
+      <McpPreparationStatus view={creation.preparationView} history={creation.history} disabled={!admitted || submitting}
+        onCheck={() => void creation.checkPreparation()} onStop={() => void creation.stopWaiting()} onReconnect={() => void creation.reconnect()} />
       <div className={styles.urlMcpActions}>
         <Button type="button" variant="outline" onClick={creation.cancel}>{t("mcp.cancel")}</Button><span />
         {requiresOAuth ? <Button type="button" disabled={!admitted || submitting || Boolean(state.unknown)} onClick={() => void creation.authorize()}>{t("settings.connect")}</Button> : null}
-        {isReady && !state.unknown || completion !== "idle" ? <Button type="button" disabled={!admitted || submitting || !creation.mayResume} onClick={() => void creation.done()}>{t("mcp.creationDone")}</Button> : !requiresOAuth || state.unknown ? <Button type="button" disabled={!admitted || submitting || !creation.mayResume} onClick={() => void registerAndPrepare(false)}>{submitLabel}</Button> : null}
+        {isReady && !state.unknown || completion !== "idle" ? <Button type="button" disabled={!admitted || submitting || !creation.mayResume} onClick={() => void creation.done()}>{t("mcp.creationDone")}</Button> : !hasPreparationStatus && (!requiresOAuth || state.unknown) ? <Button type="button" disabled={!admitted || submitting || !creation.mayResume} onClick={() => void saveConfiguration(false)}>{submitLabel}</Button> : null}
       </div>
     </section>;
   }
@@ -134,7 +147,7 @@ export function UrlMcpForm({
       className={styles.urlMcpForm}
       onSubmit={(event) => {
         event.preventDefault();
-        void registerAndPrepare(false);
+        void saveConfiguration(false);
       }}
     >
       {!admitted ? <p className="sr-only" role="status">{t("mcp.creationSession")}</p> : null}
@@ -144,6 +157,7 @@ export function UrlMcpForm({
           {showBeta ? <span>{t("connectorCatalog.beta")}</span> : null}
         </DialogTitle>
       ) : null}
+      <div className={styles.urlMcpBody}>
       <Field className={styles.urlMcpField}>
         <FieldLabel htmlFor="url-mcp-name">
           {t("mcp.customName")}
@@ -183,7 +197,8 @@ export function UrlMcpForm({
         type="button"
         className={styles.advancedToggle}
         aria-expanded={advanced}
-        onClick={() => setAdvanced((value) => !value)}
+        disabled={locked}
+        onClick={() => { if (editable()) setAdvanced((value) => !value); }}
       >
         <Settings2 aria-hidden="true" />
         <span>{t("mcp.advancedSettings")}</span>
@@ -298,26 +313,35 @@ export function UrlMcpForm({
       ) : null}
       {error || state.unknown ? (
         <p className={styles.compactDialogError} role="alert">
-          {t(connectorCommandFailureMessage(creation.failure, state.unknown ? "mcp.serverCreateUnknown" : "mcp.error"))}
+          {t(state.registrationRejection === "url_conflict" ? "mcp.serverUrlConflict" : connectorCommandFailureMessage(creation.failure, state.unknown ? "mcp.serverCreateUnknown" : "mcp.error"))}
         </p>
       ) : null}
       <p className={styles.urlWarning}>{t("mcp.urlWarning")}</p>
+      </div>
       <div className={styles.urlMcpActions}>
         <Button type="button" variant="outline" onClick={creation.cancel}>
           {t("mcp.cancel")}
         </Button>
         <span />
-        <Button type="submit" variant="outline" disabled={!admitted || submitting || !creation.mayResume || (!state.unknown && !canSubmit)}>
-          {submitLabel}
+        <Button type="submit" variant="outline" className="relative" aria-busy={submitting || undefined} disabled={!admitted || submitting || !creation.mayResume || (!state.unknown && !canSubmit)}>
+          <span className={submitting ? "invisible" : undefined} aria-hidden={submitting || undefined}>{idleSubmitLabel}</span>
+          {submitting ? <><span className="absolute inset-0 flex items-center justify-center" aria-hidden="true"><Spinner /></span><span className="sr-only" role="status">{t("mcp.submitting")}</span></> : null}
         </Button>
-        <Button
-          type="button"
-          disabled={!admitted || submitting || !creation.mayResume || (!state.unknown && !canSubmit)}
-          onClick={() => void registerAndPrepare(true)}
-        >
-          {t("mcp.saveAndPublish")}
-          <ChevronDown aria-hidden="true" />
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild disabled={publicationDisabled}>
+            <Button type="button" disabled={publicationDisabled}
+              onKeyDown={event => { if (publicationDisabled) event.preventDefault(); }}>
+              {t("mcp.saveAndPublish")}
+              <ChevronDown aria-hidden="true" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem disabled={publicationDisabled} onSelect={() => { if (!publicationDisabled) void saveConfiguration(true); }}>
+              <Folder aria-hidden="true" />
+              {t("mcp.publishTitle")}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </form>
   );

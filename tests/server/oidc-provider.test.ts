@@ -1,3 +1,5 @@
+import {TokenSet,type Client} from "openid-client"
+import type {AuthOptions} from "next-auth"
 import { NextRequest } from "next/server"
 import type { OAuthConfig } from "next-auth/providers/oauth"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
@@ -29,6 +31,15 @@ import { oidcHandoffCsrfName } from "@/lib/server/oidc-transaction-cookies"
 import { GET, POST } from "@/app/api/auth/[...nextauth]/route"
 import { oidcAuthOptions, oidcRpConfig, OIDC_SCOPE } from "@/lib/server/oidc-provider"
 
+async function nativeVerifiedAccount(options: AuthOptions, accountOverride: Record<string, unknown> = {}) {
+ const idToken="eyJhbGciOiJFZERTQSJ9."+Buffer.from(JSON.stringify({sub:"subject-a",sid:"issuer-a"})).toString("base64url")+".signature-verified-by-client-fixture"
+ const tokenSet=new TokenSet({id_token:idToken,access_token:"verified-access",refresh_token:"verified-refresh",expires_in:300})
+ const client={issuer:{},callback:()=>Promise.resolve(tokenSet)} as unknown as Client
+ const provider=options.providers[0] as OAuthConfig<{sub:string}>
+ const handler=provider.token as {request:(input:object)=>Promise<unknown>}
+ await handler.request({client,params:{},checks:{},provider:{callbackUrl:oidcRpConfig(ENV)!.callbackUrl}})
+ await options.callbacks!.signIn!({account:{provider:"kokoro-iam",providerAccountId:"subject-a",id_token:idToken,access_token:"verified-access",refresh_token:"verified-refresh",expires_at:Math.floor(Date.now()/1000)+300,...accountOverride}} as never)
+}
 const BASE_SCOPE = "openid profile email offline_access iam:session-authorization.verify"
 const TEAM_READ_SCOPES = ["iam:member.read", "iam:invitation.read", "iam:role.read"]
 const TEAM_WRITE_SCOPES = ["iam:member.write", "iam:invitation.write"]
@@ -214,7 +225,7 @@ describe("transaction-bound Product login return", () => {
     productSessionCookie.mockResolvedValue("kokoro_product_session=fixture; HttpOnly")
     newSessionCandidate.mockReturnValue({ id: "00000000-0000-4000-8000-000000000303", expiresAt: Date.now() + 3_600_000 })
     nextAuth.mockImplementation(async (_request, _context, options) => {
-      await options.callbacks.signIn({ account: { provider: "kokoro-iam", providerAccountId: "subject-a", access_token: "verified-access", refresh_token: "verified-refresh", expires_at: Math.floor(Date.now() / 1000) + 300 } })
+      await nativeVerifiedAccount(options)
       return new Response(null, { status: 302, headers: { location: "/app" } })
     })
   }
@@ -381,4 +392,21 @@ describe("native OAuth failure returns to the product, never retries authenticat
     expect(response.headers.get("location")).toBeNull()
     expect(response.headers.getSetCookie()).toEqual([])
   })
+})
+
+describe("verified native ID token session binding",()=>{
+ it("does not promote an isolated Auth.js account into a trusted issuer session",async()=>{
+  const onVerified=vi.fn(),options=oidcAuthOptions(oidcRpConfig(ENV)!,onVerified,new AbortController().signal)
+  await options.callbacks!.signIn!({account:{provider:"kokoro-iam",providerAccountId:"subject-a",access_token:"access",refresh_token:"refresh",expires_at:Math.floor(Date.now()/1000)+300}} as never)
+  expect(onVerified).not.toHaveBeenCalled()
+ })
+ it.each([{id_token:"substituted-token"},{providerAccountId:"another-subject"}])("rejects an account substituted after the verified callback: %j",async accountOverride=>{
+  const onVerified=vi.fn()
+  await nativeVerifiedAccount(oidcAuthOptions(oidcRpConfig(ENV)!,onVerified,new AbortController().signal),accountOverride)
+  expect(onVerified).not.toHaveBeenCalled()
+ })
+ it("retains only the sid captured from the verified callback TokenSet",async()=>{
+  const onVerified=vi.fn();await nativeVerifiedAccount(oidcAuthOptions(oidcRpConfig(ENV)!,onVerified,new AbortController().signal));expect(onVerified).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({subject:"subject-a",issuerSessionId:"issuer-a"}))
+ })
+
 })

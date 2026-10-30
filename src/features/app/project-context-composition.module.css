@@ -1,0 +1,10 @@
+.surface { background: var(--conversation-canvas, var(--background)); display: flex; flex: 1; min-height: 0; overflow: hidden; }
+.document { display: flex; flex: 1; min-width: 0; min-height: 0; }
+.timeline { display: flex; flex: 1; min-width: 0; min-height: 0; }
+.task { flex: 0 0 20rem; min-width: 0; min-height: 0; overflow-y: auto; padding: 1rem; border-inline-start: 1px solid var(--border); background: var(--background); }
+.task[hidden] { display: none; }
+.header { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin-bottom: 1rem; }
+.header h2 { font-size: .875rem; font-weight: 600; }
+@container workspace-main (width < 48rem) { .document { flex-direction: column; } .task { flex: 0 1 auto; max-height: 45%; border-inline-start: 0; border-top: 1px solid var(--border); } }
+
+:global([data-canvas-reopen="true"]) .timeline :global([data-slot="message-scroller-viewport"]) { padding-bottom: 4.25rem; }

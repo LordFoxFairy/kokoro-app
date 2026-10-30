@@ -5,6 +5,15 @@ import { OVERLAYS } from "@/i18n/overlays"
 import { negotiateLocale, resolveMessage } from "@/i18n/resolve"
 
 describe("i18n 协商（technical/14）", () => {
+  it("所有已上线语言显式提供中性文件操作类别，不借完成状态或路径命名", () => {
+    for (const locale of LOCALES) {
+      for (const key of ["thread.toolFileWrite", "thread.toolFileDeliver"] as const) {
+        const source = locale === "zh" ? zh : OVERLAYS[locale]
+        expect(source[key]).toBeTruthy()
+        expect(resolveMessage(locale, key)).toBe(source[key])
+      }
+    }
+  })
   it("存储偏好优先于浏览器语言", () => {
     expect(negotiateLocale("en", ["zh-CN"])).toBe("en")
     expect(negotiateLocale("zh", ["en-US"])).toBe("zh")
@@ -174,4 +183,32 @@ describe("无 owner 事实时不承诺收费方式", () => {
       expect(Object.hasOwn(overlay, "thread.creditNote")).toBe(false)
     }
   })
+})
+
+
+const public28Keys = ["thread.toolCall", "thread.toolFileRead", "thread.toolMcpDiscover", "thread.toolMcpDescribe", "thread.toolMcpCall", "thread.toolWebSearch", "thread.toolWebFetch"] as const
+it("Public28 safe tool labels have explicit native copy in every supported locale", () => {
+  expect(LOCALES).toHaveLength(9)
+  for (const locale of LOCALES) {
+    const dictionary = locale === "zh" ? zh : OVERLAYS[locale]
+    for (const key of public28Keys) {
+      expect(Object.hasOwn(dictionary, key), `${locale}/${key}`).toBe(true)
+      const value = dictionary[key]
+      expect(typeof value, `${locale}/${key}`).toBe("string")
+      expect(value?.trim().length).toBeGreaterThan(0)
+      expect(resolveMessage(locale, key)).toBe(value)
+      expect(value).not.toMatch(/tool\.(?:execution|file|mcp|web)/u)
+    }
+  }
+})
+
+
+it("all shipped locales own action counts, mixed failures and the distinct Run continuation copy", () => {
+  for (const locale of LOCALES) {
+    const source = locale === "zh" ? zh : OVERLAYS[locale]
+    for (const key of ["thread.actionCalls", "thread.actionActivities", "thread.actionFailures", "thread.continueProcessing"] as const) {
+      const own = (source as Readonly<Record<string, string | undefined>>)[key]
+      expect(own, `${locale}:${key}`).toBeTruthy()
+    }
+  }
 })

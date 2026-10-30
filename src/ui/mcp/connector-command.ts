@@ -7,6 +7,7 @@ export type ConnectorCommandState = Readonly<{
   kind: "idle" | "running" | "unknown" | "rejected" | "completed";
   name?: string;
   failure?: ConnectorCommandFailure;
+  rejection?: "url_conflict";
 }>;
 type Command<T> = { readonly body: T; readonly key: string; readonly name: string | undefined; uncertain: boolean; failure: ConnectorCommandFailure | undefined };
 
@@ -19,6 +20,12 @@ export function createConnectorCommand<T>(options: {
   surface: ConnectorCommandSurface;
   boundary: ProjectReadBoundary;
   onConfirmed: () => void;
+  /** Opt-in owner semantics for an initial, never-uncertain rejection only. */
+  classifyRejection?: (error: HubClientError) => ConnectorCommandState["rejection"];
+  /** Only typed, non-secret callers opt into an unknown intent restored before any I/O. */
+  restored?: Readonly<{ body: T; key: string; failure?: ConnectorCommandFailure | undefined }>;
+  /** Operation-specific published recovery; defaults remain unchanged for all other commands. */
+  mayResume?: (failure: ConnectorCommandFailure | undefined) => boolean;
   key?: () => string;
 }) {
   const actor = options.boundary.subject;
@@ -27,13 +34,18 @@ export function createConnectorCommand<T>(options: {
   let command: Command<T> | undefined;
   let active: { controller: AbortController } | undefined;
   let state: ConnectorCommandState = { kind: "idle" };
+  if (options.restored && actor !== null) {
+    const body = options.freeze(options.restored.body);
+    command = { body, key: connectorCreationKeySchema.parse(options.restored.key), name: options.name?.(body), uncertain: true, failure: options.restored.failure };
+    state = { kind: "unknown", ...(command.name === undefined ? {} : { name: command.name }), ...(command.failure === undefined ? {} : { failure: command.failure }) };
+  }
   const listeners = new Set<() => void>();
   const update = (next: ConnectorCommandState) => {
     state = Object.freeze(next);
     listeners.forEach(listener => listener());
   };
-  const publish = (kind: ConnectorCommandState["kind"], name: string | undefined, failure?: ConnectorCommandFailure) =>
-    update({ kind, ...(name === undefined ? {} : { name }), ...(failure === undefined ? {} : { failure }) });
+  const publish = (kind: ConnectorCommandState["kind"], name: string | undefined, failure?: ConnectorCommandFailure, rejection?: ConnectorCommandState["rejection"]) =>
+    update({ kind, ...(name === undefined ? {} : { name }), ...(failure === undefined ? {} : { failure }), ...(rejection === undefined ? {} : { rejection }) });
   const admitted = () => !retired && actor !== null && boundary.subject === actor && boundary.admitted;
   const matches = (value: ProjectReadBoundary) => !retired && value.subject === boundary.subject &&
     value.admitted === boundary.admitted && value.generation === boundary.generation;
@@ -62,7 +74,7 @@ export function createConnectorCommand<T>(options: {
   const run = async (value: ProjectReadBoundary, signal?: AbortSignal): Promise<boolean> => {
     const intent = command;
     const execute = options.execute;
-    if (signal?.aborted || !matches(value) || !admitted() || active || !intent || !execute || !connectorCommandMayResume(intent.failure)) return false;
+    if (signal?.aborted || !matches(value) || !admitted() || active || !intent || !execute || !(options.mayResume ?? connectorCommandMayResume)(intent.failure)) return false;
     const running = { controller: new AbortController() };
     active = running;
     const pauseWindow = () => { if (active === running) cancel(); };
@@ -85,12 +97,13 @@ export function createConnectorCommand<T>(options: {
       return current;
     } catch (error) {
       if (retired || command !== intent || active !== running) return false;
-      const rejected = !intent.uncertain && error instanceof HubClientError &&
-        error.reason === "http" && error.status === 400 &&
-        error.code === options.invalidRequestCode && !error.retryable;
+      const initialHttpFailure = !intent.uncertain && error instanceof HubClientError && error.reason === "http";
+      const rejection = initialHttpFailure ? options.classifyRejection?.(error) : undefined;
+      const rejected = initialHttpFailure && (rejection !== undefined || error.status === 400 &&
+        error.code === options.invalidRequestCode && !error.retryable);
       if (rejected) command = undefined;
       else { intent.uncertain = true; intent.failure = connectorCommandFailure(options.surface, error); }
-      publish(rejected ? "rejected" : "unknown", intent.name, intent.failure);
+      publish(rejected ? "rejected" : "unknown", intent.name, intent.failure, rejection);
       return false;
     } finally {
       signal?.removeEventListener("abort", pauseWindow);

@@ -1,0 +1,288 @@
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
+import { afterEach, beforeEach, expect, it, vi } from "vitest"
+
+import { KokoroSkillsSurface } from "@/features/app/kokoro-skills-surface"
+import { LocaleProvider } from "@/i18n/context"
+
+beforeEach(() => {
+  window.localStorage.clear()
+  window.localStorage.setItem("kokoro.locale", "zh")
+})
+
+afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
+})
+
+it("keeps a failed marketplace pending detail quiet and recovers its exact selection through normal search re-entry", async () => {
+  const card = { skillId: "search-recovery-series", displayName: "Search recovery", currentVersion: { versionUid: "search-recovery-revision" } }
+  const response = (body: unknown) => Response.json(body, { headers: { "cache-control": "private, no-store", "x-request-id": "catalog-recovery" } })
+  const reads: { path: string; body: unknown }[] = []
+  let searchReads = 0
+  let rejectSearch!: (error: Error) => void
+  let finishRetry!: (response: Response) => void
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    const path = String(input)
+    const body: unknown = JSON.parse(String(init?.body))
+    reads.push({ path, body })
+    if (path.endsWith("ListSkills")) return response({ userAddedSkills: [], officialSkills: [] })
+    if (path.endsWith("ListHubSkills")) {
+      if ((body as { query?: string }).query) {
+        searchReads++
+        if (searchReads === 1) return new Promise<Response>((_, reject) => { rejectSearch = reject })
+        return new Promise<Response>(resolve => { finishRetry = resolve })
+      }
+      return response({ skills: [card], tagOptions: {} })
+    }
+    if (path.endsWith("GetSkill")) return response({
+      skill: { id: card.skillId, version: card.currentVersion.versionUid, displayName: card.displayName, description: "Confirmed selected revision" },
+    })
+    throw Error(`Unexpected request: ${path}`)
+  })
+  render(<LocaleProvider><KokoroSkillsSurface onPrompt={vi.fn()} preview={false} projectReadBoundary={{ admitted: true, subject: "marketplace-recovery-reader", generation: 1 }} /></LocaleProvider>)
+  const trigger = await screen.findByRole("button", { name: card.displayName })
+  fireEvent.change(screen.getByRole("searchbox", { name: "搜索技能" }), { target: { value: "Search" } })
+  await waitFor(() => expect(rejectSearch).toBeTypeOf("function"))
+  fireEvent.click(trigger)
+  const dialog = await screen.findByRole("dialog")
+  expect(within(dialog).queryByRole("alert")).toBeNull()
+  expect(within(dialog).queryByRole("button", { name: "重试" })).toBeNull()
+  await act(async () => { rejectSearch(Error("catalog temporarily unavailable")) })
+  await waitFor(() => expect(dialog).toHaveAttribute("aria-busy", "false"))
+  expect(within(dialog).queryByRole("alert")).toBeNull()
+  expect(within(dialog).queryByRole("button", { name: "重试" })).toBeNull()
+  expect(reads.filter(read => read.path.endsWith("GetSkill"))).toHaveLength(0)
+
+  // A normal search re-entry reads the failed query again; no failure card
+  // owns recovery and opening/closing a detail does not issue a command.
+  fireEvent.keyDown(dialog, { key: "Escape" })
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull())
+  expect(screen.getByRole("button", { name: card.displayName })).toBe(trigger)
+  fireEvent.change(screen.getByRole("searchbox", { name: "搜索技能" }), { target: { value: "" } })
+  await waitFor(() => expect(screen.getByRole("button", { name: `添加 ${card.displayName}` })).toBeEnabled())
+  fireEvent.change(screen.getByRole("searchbox", { name: "搜索技能" }), { target: { value: "Search" } })
+  await waitFor(() => expect(finishRetry).toBeTypeOf("function"))
+  fireEvent.click(screen.getByRole("button", { name: card.displayName }))
+  const reopened = screen.getByRole("dialog")
+  expect(within(reopened).queryByRole("alert")).toBeNull()
+  expect(within(reopened).queryByRole("button", { name: "添加" })).toBeNull()
+  await act(async () => { finishRetry(response({ skills: [card], tagOptions: {} })) })
+  expect(await within(reopened).findByText("Confirmed selected revision")).toBeVisible()
+  expect(screen.getByRole("dialog")).toBe(reopened)
+  expect(searchReads).toBe(2)
+  expect(reads.filter(read => read.path.endsWith("ListHubSkills") && (read.body as { query?: string }).query === "Search").map(read => read.body)).toEqual([
+    { pageSize: 9, includeOfficialSkills: true, query: "Search" },
+    { pageSize: 9, includeOfficialSkills: true, query: "Search" },
+  ])
+  expect(reads.filter(read => read.path.endsWith("GetSkill")).map(read => read.body)).toEqual([{ skillId: card.skillId }])
+  expect(reads.every(read => /\/(?:ListSkills|ListHubSkills|GetSkill)$/u.test(read.path))).toBe(true)
+  fireEvent.keyDown(reopened, { key: "Escape" })
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull())
+  await waitFor(() => expect(screen.getByRole("button", { name: card.displayName })).toHaveFocus())
+})
+
+it("keeps unadmitted pending details quiet and retires a late normal page re-entry on actor change", async () => {
+  const card = { skillId: "recheck-series", displayName: "Rechecked skill", currentVersion: { versionUid: "recheck-revision" } }
+  const response = (body: unknown) => Response.json(body, { headers: { "cache-control": "private, no-store", "x-request-id": "catalog-recheck" } })
+  let catalogReads = 0
+  let finishRetry!: (response: Response) => void
+  const metadataReads: unknown[] = []
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    const path = String(input)
+    if (path.endsWith("ListSkills")) return response({ userAddedSkills: [], officialSkills: [] })
+    if (path.endsWith("ListHubSkills")) {
+      catalogReads++
+      if (catalogReads === 2) throw Error("recheck catalog unavailable")
+      if (catalogReads === 3) return new Promise<Response>(resolve => { finishRetry = resolve })
+      return response({ skills: [card], tagOptions: {} })
+    }
+    if (path.endsWith("GetSkill")) {
+      metadataReads.push(JSON.parse(String(init?.body)))
+      return response({
+        skill: { id: card.skillId, version: card.currentVersion.versionUid, displayName: card.displayName, description: "Current metadata" },
+      })
+    }
+    throw Error(`Unexpected request: ${path}`)
+  })
+  const content = (admitted: boolean, generation: number, subject = "original-reader") => <LocaleProvider><KokoroSkillsSurface onPrompt={vi.fn()} preview={false} projectReadBoundary={{ admitted, subject, generation }} /></LocaleProvider>
+  const view = render(content(true, 1))
+  fireEvent.click(await screen.findByRole("button", { name: card.displayName }))
+  await screen.findByText("Current metadata")
+  view.rerender(content(false, 2))
+  const dialog = screen.getByRole("dialog")
+  expect(within(dialog).queryByRole("button", { name: "重试" })).toBeNull()
+  expect(within(dialog).queryByRole("alert")).toBeNull()
+  expect(screen.queryByText("Current metadata")).toBeNull()
+  expect(catalogReads).toBe(1)
+
+  view.rerender(content(true, 2))
+  await waitFor(() => expect(catalogReads).toBe(2))
+  await waitFor(() => expect(dialog).toHaveAttribute("aria-busy", "false"))
+  expect(within(dialog).queryByRole("alert")).toBeNull()
+  expect(within(dialog).queryByRole("button", { name: "重试" })).toBeNull()
+  fireEvent.keyDown(dialog, { key: "Escape" })
+  view.unmount()
+  const reentered = render(content(true, 2))
+  await waitFor(() => expect(finishRetry).toBeTypeOf("function"))
+  reentered.rerender(content(true, 3, "different-reader"))
+  await screen.findByRole("button", { name: card.displayName })
+  await act(async () => { finishRetry(response({ skills: [card], tagOptions: {} })) })
+  expect(screen.queryByRole("dialog")).toBeNull()
+  expect(screen.queryByText("Current metadata")).toBeNull()
+  expect(metadataReads).toEqual([{ skillId: card.skillId }])
+})
+
+it("keeps marketplace artwork until authenticated media loads and retires it across actor changes", async () => {
+  const revision = "artwork-revision"
+  const response = (body: unknown) => Response.json(body, { headers: { "cache-control": "private, no-store", "x-request-id": "artwork-read" } })
+  vi.spyOn(globalThis, "fetch").mockImplementation(async input => {
+    if (String(input).endsWith("ListSkills")) return response({ userAddedSkills: [], officialSkills: [] })
+    return response({ skills: [{ skillId: "artwork-series", displayName: "Artwork skill", currentVersion: { versionUid: revision }, coverImage: `/api/v1/skills/${revision}/cover` }], tagOptions: {} })
+  })
+  const content = (subject: string, generation = 1) => <LocaleProvider><KokoroSkillsSurface onPrompt={vi.fn()} preview={false} projectReadBoundary={{ admitted: true, subject, generation }} /></LocaleProvider>
+  const view = render(content("artwork-reader"))
+  const image = await waitFor(() => {
+    const node = view.container.querySelector<HTMLImageElement>(`img[src$="/api/hub/skills/${revision}/cover"]`)
+    expect(node).not.toBeNull()
+    return node!
+  })
+  const art = image.parentElement!
+  // A resource URL is not proof that an image exists. Keep the original
+  // decorative fallback for pending, 404, unavailable and aborted loads.
+  expect(image).not.toBeVisible()
+  expect(art.querySelector("svg")).not.toBeNull()
+  fireEvent.error(image)
+  expect(image).not.toBeVisible()
+  expect(art.querySelector("svg")).not.toBeNull()
+  expect(screen.getByRole("button", { name: "Artwork skill" })).toBeEnabled()
+
+  view.rerender(content("artwork-reader", 2))
+  const next = await waitFor(() => {
+    const node = view.container.querySelector<HTMLImageElement>(`img[src$="/api/hub/skills/${revision}/cover"]`)
+    expect(node).not.toBe(image)
+    expect(node).not.toBeNull()
+    return node!
+  })
+  Object.defineProperty(next, "naturalWidth", { configurable: true, value: 120 })
+  // jsdom does not apply the CSS module's positioned, fixed-size artwork.
+  next.parentElement!.style.position = "relative"
+  next.width = 120
+  next.height = 160
+  const resourceRestarts: MutationRecord[] = []
+  const observer = new MutationObserver(records => resourceRestarts.push(...records))
+  observer.observe(next, { attributes: true, attributeFilter: ["src"] })
+  fireEvent.load(next)
+  await waitFor(() => expect(next).toBeVisible())
+  expect(resourceRestarts).toHaveLength(0)
+  observer.disconnect()
+  expect(next.parentElement!.querySelector("svg")).toBeNull()
+
+  view.rerender(content("different-artwork-reader"))
+  const replacement = await waitFor(() => {
+    const node = view.container.querySelector<HTMLImageElement>(`img[src$="/api/hub/skills/${revision}/cover"]`)
+    expect(node).not.toBe(next)
+    expect(node).not.toBeNull()
+    return node!
+  })
+  fireEvent.load(next)
+  expect(replacement).not.toBeVisible()
+  expect(replacement.parentElement!.querySelector("svg")).not.toBeNull()
+})
+
+
+import { invalidate } from "@/lib/query"
+import { __resetResourceStore } from "@/lib/query/resource-store"
+import { SKILL_CATALOG_RESOURCE_KEY } from "@/ui/skills/manus-skill-client"
+
+it("keeps the marketplace scaffold quiet for unknown reads, retains confirmed cards on refresh failure and fences a retired actor's late result", async () => {
+  __resetResourceStore()
+  const response = (body: unknown) => Response.json(body, { headers: { "cache-control": "private, no-store", "x-request-id": "quiet-marketplace" } })
+  const card = { skillId: "quiet-market-series", displayName: "Confirmed marketplace card", currentVersion: { versionUid: "quiet-market-revision" } }
+  let finish!: (value: Response) => void, finishRetired!: (value: Response) => void, reject!: (error: Error) => void, calls = 0
+  vi.spyOn(globalThis, "fetch").mockImplementation(async input => {
+    if (String(input).endsWith("ListSkills")) return response({ userAddedSkills: [], officialSkills: [] })
+    calls++
+    if (calls === 1) return new Promise<Response>(resolve => { finish = resolve })
+    if (calls === 3) return new Promise<Response>(resolve => { finishRetired = resolve })
+    if (calls === 2) return new Promise<Response>((_, fail) => { reject = fail })
+    return new Promise<Response>(() => undefined)
+  })
+  const content = (subject = "quiet-market-a") => <LocaleProvider><KokoroSkillsSurface onPrompt={vi.fn()} preview={false} projectReadBoundary={{ admitted: true, subject, generation: 1 }} /></LocaleProvider>
+  const view = render(content())
+  await waitFor(() => expect(finish).toBeTypeOf("function"))
+  expect(screen.getByRole("searchbox", { name: "搜索技能" })).toBeVisible()
+  expect(view.container.querySelector('[data-slot="skeleton"]')).toBeNull()
+  expect(screen.queryByTestId("skills-catalog-empty")).toBeNull()
+  await act(async () => { finish(response({ skills: [card], tagOptions: {} })) })
+  const trigger = await screen.findByRole("button", { name: card.displayName })
+  act(() => invalidate(SKILL_CATALOG_RESOURCE_KEY))
+  await waitFor(() => expect(reject).toBeTypeOf("function"))
+  expect(screen.getByRole("button", { name: card.displayName })).toBe(trigger)
+  await act(async () => { reject(Error("controlled passive refresh failure")) })
+  expect(screen.getByRole("button", { name: card.displayName })).toBe(trigger)
+  expect(screen.queryByRole("button", { name: "重试" })).toBeNull()
+  expect(screen.queryByRole("alert")).toBeNull()
+  act(() => invalidate(SKILL_CATALOG_RESOURCE_KEY))
+  await waitFor(() => expect(calls).toBe(3))
+  view.rerender(content("quiet-market-b"))
+  await waitFor(() => expect(calls).toBe(4))
+  await act(async () => { finishRetired(response({ skills: [{ ...card, displayName: "Retired actor late card" }], tagOptions: {} })) })
+  expect(screen.queryByRole("button", { name: "Retired actor late card" })).toBeNull()
+  expect(screen.queryByRole("button", { name: card.displayName })).toBeNull()
+  expect(screen.queryByTestId("skills-catalog-empty")).toBeNull()
+  expect(screen.getByRole("searchbox", { name: "搜索技能" })).toBeVisible()
+})
+
+const publisherProduct = {
+  publication_audience: "catalog", state_version: "7", source_kind: "personal", presentation_kind: "first_party",
+  creator_ref: { kind: "user", id: "qa-importer-not-publisher" },
+  publisher: { kind: "iam", iam: { kind: "user", id: "qa-publisher" } },
+}
+const repositoryPublisher = {
+  kind: "github", repository_id: "123", repository_url: "https://github.com/qa-repository-owner/skill",
+  owner_login: "qa-repository-owner", owner_url: "https://github.com/qa-repository-owner",
+  asset_ref: "qa-github-package", commit: "a".repeat(40), path: "SKILL.md", content_sha256: "b".repeat(64), size_bytes: "100", mime_type: "application/zip",
+}
+
+it.each([
+  { label: "QA Real Publisher", facts: { product: publisherProduct, publisher_profile: { kind: "user", id: "qa-publisher", status: "found", display_name: "QA Real Publisher", image_url: null } } },
+  { label: "QA Real Organization", facts: { product: { ...publisherProduct, publisher: { kind: "iam", iam: { kind: "organization", id: "qa-org" } } }, publisher_profile: { kind: "organization", id: "qa-org", status: "found", display_name: "QA Real Organization", image_url: null } } },
+  { label: "qa-repository-owner", facts: { product: { ...publisherProduct, source_kind: "third_party", presentation_kind: "github_repository", creation_provenance: repositoryPublisher, publisher: { kind: "github_repository", github_repository: repositoryPublisher } }, verified: true, source: { owner: "qa-importer-not-publisher" } } },
+  { label: undefined, facts: { product: publisherProduct, publisher_profile: { kind: "user", id: "qa-publisher", status: "missing" } } },
+  { label: undefined, facts: {} },
+])("shows only the same proven publisher in catalog and detail: $label", async ({ label, facts }) => {
+  const card = { skillId: "s13-publisher-series", displayName: "Publisher QA Skill", publisherType: "SKILL_HUB_PUBLISHER_TYPE_COMMUNITY", currentVersion: { versionUid: "s13-publisher-revision" }, ...facts }
+  const calls: string[] = []
+  const response = (body: unknown) => Response.json(body, { headers: { "cache-control": "private, no-store", "x-request-id": "publisher-qa" } })
+  vi.spyOn(globalThis, "fetch").mockImplementation(async input => {
+    const path = String(input); calls.push(path)
+    if (path.endsWith("ListSkills")) return response({ userAddedSkills: [], officialSkills: [] })
+    if (path.endsWith("ListHubSkills")) return response({ skills: [card], tagOptions: {} })
+    if (path.endsWith("GetSkill")) return response({ skill: { id: card.skillId, version: card.currentVersion.versionUid, displayName: card.displayName, description: "Publisher QA metadata" } })
+    throw Error(`Unexpected publisher request ${path}`)
+  })
+  render(<LocaleProvider><KokoroSkillsSurface onPrompt={vi.fn()} preview={false} projectReadBoundary={{ admitted: true, subject: `s13-publisher-reader-${label ?? ("product" in facts ? "missing" : "absent")}`, generation: 1 }} /></LocaleProvider>)
+  await screen.findByRole("button", { name: card.displayName })
+  const grid = screen.getByTestId("skills-catalog-grid")
+  if (label !== undefined) expect(within(grid).getByText(label)).toBeVisible()
+  expect(within(grid).queryByText("社区")).toBeNull()
+  expect(within(grid).queryByText("qa-importer-not-publisher")).toBeNull()
+  fireEvent.click(within(grid).getByRole("button", { name: card.displayName }))
+  const dialog = await screen.findByRole("dialog")
+  await within(dialog).findByText("Publisher QA metadata")
+  if (label !== undefined) expect(within(dialog).getByText(label)).toBeVisible()
+  expect(within(dialog).queryByText("社区")).toBeNull()
+  expect(within(dialog).queryByText("qa-importer-not-publisher")).toBeNull()
+  expect(calls.every(path => /\/(?:ListSkills|ListHubSkills|GetSkill)$/u.test(path))).toBe(true)
+})
+
+it("does not turn a legacy official classification into a catalog author", async () => {
+  const response = (body: unknown) => Response.json(body, { headers: { "cache-control": "private, no-store" } })
+  vi.spyOn(globalThis, "fetch").mockImplementation(async input => response(String(input).endsWith("ListHubSkills")
+    ? { skills: [{ skillId: "unknown-official-author", displayName: "Unknown author", publisherType: "SKILL_HUB_PUBLISHER_TYPE_MANUS_OFFICIAL" }], tagOptions: {} }
+    : { userAddedSkills: [], officialSkills: [] }))
+  render(<LocaleProvider><KokoroSkillsSurface onPrompt={vi.fn()} brandName="QA Brand Not Author" preview={false} projectReadBoundary={{ admitted: true, subject: "unknown-official-author", generation: 1 }} /></LocaleProvider>)
+  await screen.findByRole("button", { name: "Unknown author" })
+  const grid = screen.getByTestId("skills-catalog-grid")
+  expect(within(grid).queryByText("QA Brand Not Author")).toBeNull()
+})

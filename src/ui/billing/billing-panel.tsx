@@ -11,6 +11,8 @@ import { useT } from "@/i18n/context"
 import { cn } from "@/lib/utils"
 import { useOverlayClose } from "@/ui/shell/use-overlay-close"
 
+import { useAccountReadSnapshots } from "@/ui/settings/account-read-snapshots"
+
 import { BillingLedger } from "./billing-ledger"
 import { type LedgerFilter, type LedgerState, type SummaryState } from "./billing-model"
 import { BillingSummary } from "./billing-summary"
@@ -57,16 +59,22 @@ export function BillingContent(props: BillingContentProps) {
   return <BillingScopedContent key={scope} {...props} />
 }
 
-function BillingScopedContent({ client, readBoundary, onOpenPricing, embedded = false }: BillingContentProps) {
+function BillingScopedContent({ client, readBoundary, onOpenPricing, embedded = false, preview = false }: BillingContentProps) {
   const t = useT()
   const actor = readActor()
   const subject = readBoundary?.subject
-  const [projection, setProjection] = useState<{ client: BillingClient; actor: string | null | undefined; summary: SummaryState; ledger: LedgerState }>({ client, actor, summary: { kind: "loading" }, ledger: { kind: "loading" } })
+  const snapshots = useAccountReadSnapshots()
+  const readSummary = snapshots?.readSummary
+  const summarySubjectCurrent = readSummary === undefined || preview || actor === subject
+  const summaryScope = JSON.stringify([subject, readBoundary?.generation])
+  const warmSummary = summarySubjectCurrent && snapshots?.summary?.scope === summaryScope && snapshots.summary.client === client ? snapshots.summary.value : null
+  const [projection, setProjection] = useState<{ client: BillingClient; actor: string | null | undefined; summary: SummaryState; ledger: LedgerState }>({ client, actor, summary: warmSummary === null ? { kind: "loading" } : { kind: "ready", summary: warmSummary }, ledger: { kind: "loading" } })
   const [filter, setFilter] = useState<LedgerFilter>("all")
   const [retrying, setRetrying] = useState(false)
+  const [summaryRefreshing, setSummaryRefreshing] = useState(false)
   const attempt = useRef<{ controller: AbortController; client: BillingClient; actor: string | null | undefined; paging: boolean; cursors: Set<string> } | null>(null)
   const matches = projection.client === client && projection.actor === actor
-  const summary: SummaryState = matches ? projection.summary : { kind: "loading" }
+  const summary: SummaryState = matches && summarySubjectCurrent ? projection.summary : { kind: summarySubjectCurrent ? "loading" : "error" }
   const ledger: LedgerState = useMemo(() => matches ? projection.ledger : { kind: "loading" }, [matches, projection.ledger])
 
   const refresh = useCallback(() => {
@@ -75,14 +83,19 @@ function BillingScopedContent({ client, readBoundary, onOpenPricing, embedded = 
     attempt.current = flight
     const current = () => attempt.current === flight && !flight.controller.signal.aborted && readActor() === actor
     setRetrying(true)
-    setProjection({ client, actor, summary: { kind: "loading" }, ledger: { kind: "loading" } })
+    setSummaryRefreshing(true)
+    setProjection(previous => previous.client === client && previous.actor === actor
+      ? { ...previous, summary: previous.summary.kind === "ready" ? previous.summary : { kind: "loading" }, ledger: previous.ledger.kind === "ready" ? { ...previous.ledger, loadingMore: false, pageError: false } : { kind: "loading" } }
+      : { client, actor, summary: { kind: "loading" }, ledger: { kind: "loading" } })
     const summaryRead = async () => {
       try {
         if (actor === undefined) throw new Error("billing_identity_unavailable")
-        const value = await client.summary(flight.controller.signal, () => current() && typeof actor === "string" && actor.trim().length > 0 && actor === subject)
+        const value = await (readSummary ? readSummary(client) : client.summary(flight.controller.signal, () => current() && typeof actor === "string" && actor.trim().length > 0 && actor === subject))
         if (current()) setProjection((previous) => ({ ...previous, summary: { kind: "ready", summary: value } }))
       } catch {
-        if (current()) setProjection((previous) => ({ ...previous, summary: { kind: "error" } }))
+        if (current()) setProjection((previous) => ({ ...previous, summary: previous.summary.kind === "ready" ? previous.summary : { kind: "error" } }))
+      } finally {
+        if (current()) setSummaryRefreshing(false)
       }
     }
     const ledgerRead = async () => {
@@ -93,11 +106,11 @@ function BillingScopedContent({ client, readBoundary, onOpenPricing, embedded = 
         const entries = uniqueEntries(page.items)
         if (current()) setProjection((previous) => ({ ...previous, ledger: { kind: "ready", entries, cursor: page.page.next_cursor, loadingMore: false, pageError: false } }))
       } catch {
-        if (current()) setProjection((previous) => ({ ...previous, ledger: { kind: "error" } }))
+        if (current()) setProjection((previous) => ({ ...previous, ledger: previous.ledger.kind === "ready" ? previous.ledger : { kind: "error" } }))
       }
     }
     void Promise.all([summaryRead(), ledgerRead()]).finally(() => { if (current()) setRetrying(false) })
-  }, [actor, client, subject])
+  }, [actor, client, subject, readSummary])
 
   useLayoutEffect(() => {
     let live = true
@@ -125,14 +138,13 @@ function BillingScopedContent({ client, readBoundary, onOpenPricing, embedded = 
       flight.paging = false
     }
   }, [client, ledger, retrying, subject])
-  const retry = () => { if (!retrying && !(ledger.kind === "ready" && ledger.loadingMore)) refresh() }
 
   const entries = ledger.kind === "ready" ? ledger.entries : EMPTY_LEDGER_ENTRIES
   const content = (
     <div className={cn(styles.body, embedded ? styles.embeddedBody : undefined)} data-embedded={embedded ? "billing" : undefined}>
-      <BillingSummary summary={summary} embedded={embedded} retrying={retrying} ledgerLoadingMore={ledger.kind === "ready" && ledger.loadingMore} onRetry={() => void retry()} onOpenPricing={onOpenPricing} />
+      <BillingSummary summary={summary} embedded={embedded} retrying={summaryRefreshing} onOpenPricing={onOpenPricing} />
       {!embedded ? <BillingUsage entries={entries} onOpenPricing={onOpenPricing} /> : null}
-      <BillingLedger ledger={ledger} filter={filter} embedded={embedded} retrying={retrying} onFilterChange={setFilter} onRetry={() => void retry()} onLoadMore={() => void loadMore()} />
+      <BillingLedger ledger={ledger} filter={filter} embedded={embedded} retrying={retrying} onFilterChange={setFilter} onLoadMore={() => void loadMore()} />
     </div>
   )
   if (!embedded) return content

@@ -1,3 +1,134 @@
+## Composer 添加连接器：受控目录窗口
+
+`McpContent.catalogDialog` 将现 `McpProjectionRead` 的目录 portal／详情窗用于 composer Add；主 section／toolbar 不再重复绘制，查询、严格身份／命令及创建窗仍复用原 owner。普通 Manage 仍是 Settings 已添加页。此本地 overlay 不改当前 Project／Conversation URL、草稿或 MCP 选择；与 Manus 的 `#connectors/all` URL 表达不同，不另加 hash 协议或路由 alias。同 actor 暂时准入刷新保留窗口／搜索及创建意图，现 read generation 退旧事实、禁新 Create；换 actor／route 才退窗并撤销旧回焦。正常目录 ESC 退回原 composer trigger，详情／创建关闭退回原目录窗栈；打开目录本身不连接、授权或执行模型。
+
+## Prepare 方法专属结果消费者
+
+`mcp-preparation-commands.ts` 沿原 actor/entry 管理 exact 原尝试：typed4 仅 committed failed archive，GET typed5 仍 unknown 且只显式结束等待；退休不成功／不导航。`mcp-preparation-recovery.ts` v2 同双store事务互斥 history 与 successful complete，不增加schema。`mcp-preparation-status.tsx` 为创建／URL／详情／placeholder 的紧凑呈现，`use-mcp-preparation-history.ts` 为窗口内稳定分页与原tuple只读GET；历史不清K2／不合并Current。另一次显式新连接须 fresh Current/provider/manage/CAS 与不同cryptoK。正式BFF394a双原件正规生成，正常资源配对由Root另验。
+
+## Prepare journal v2 存储（2026-10-27，独立候选，未接退休 UI／wire）
+
+`mcp-preparation-recovery.ts` 的同一 browser adapter 返回扩展 `McpPreparationJournal`，旧 base port 与 active 格式保持；IDB v2 只新增 retired_intents／subject_server。`retireWaiting` 原子归档 exact K＋删除 active，历史只读有界 keyset，reserve 无 active 时双 store 拒 exact 已退休 K/CAS 重建；closed disposition／policy_ref 是本地元数据，不代正式 BFF 政策或新命令权限。failed／fenced 不走成功 complete；旧 client version fence、blocked／late success close、abort／K2／immutable history 见 native v2 回归。未来 consumer 必须补 exact entry／late-ACK guard 后再接线；当前 commands／UI／Hub／pin 未改。三 canonical 前缀保存类型／codec／迁移与停止线。
+
+## Prepare 原结果只读恢复（2026-10-27）
+
+`mcp-preparation-commands.ts` 在首次 POST 开始后单调 query-only；restored/unknown 均经原 key/CAS/target 的正式 receipt GET，不再 fresh inspection 放行 POST。沿原 ConnectorCommand/IDB compare-by-key，只有 strict completed 与 clear commit 成功才完成；创建及详情缺少 Current 时也可显式恢复，Current 权限与首次写门保持。RAM locator 只供完成定位，不回填 Current 或授执行权；actor/window/K2/provider 冲突保护见生命周期及 flow 回归。机器源和薄代理见 API_CONTRACT 正式私有 pin，未知/expired/失败 marker 不冒终态。
+
+## 自定义 API 剩余控件与创建准入（2026-10-27）
+
+原 `McpIconPicker` 在 API/MCP 创建及编辑中共用24px Lucide Image占位，60px预览/10px圆角/14%虚线边框/4%填充、右侧8px间距与66×32px透明outline上传按钮；失败/过期仍退回占位，不刷新能力或改变原暂存selector寿命。API关闭glyph20px仅局部作用域，不改共享Dialog。
+
+API备注optional独立400/muted，主label500；密钥每行独立12px圆角框/16px内边距和间距，单行不渲染移除，追加后每行36px移除按钮由hover显示。键盘focus-within与coarse-pointer持续可见是明确可达性差异，点击后最少留1行。首行字段offset与780px单行内在布局不变，每额外独立框增加238px，仍单body滚动/固定可见动作。
+
+帮助仅本表单局部Popover：12px CircleHelp、具名button、hover及显式键盘/tap读取、Escape关闭；280px最大宽、12/16px文本与4/8px内边距、黑90%/white及white22%边框，九语言仅新增帮助文案。创建要求至少1个完整密钥pair；额外全空行忽略，半填/同名继续拒绝。未知原请求重试、既有无凭据profile的详情读取/编辑、契约/状态/journal/flow均不变，不将保存配置当连接成功。旧name-only测试仅补公开QA pair并保留原恢复/ACK围栏断言，正常服务旅程归Root验收。
+
+## 自定义 API 创建表单视觉（2026-10-27）
+
+`custom-api-form.module.css` 与 `mcp-create-dialog.module.css` 的 API 作用域使用实测内在内容高度，不固定724或780px；600px宽、95vw/95dvh上限，标题74px、页脚76px，只有字段body滚动，多密钥自然增高。复用settings surface/control token及既有菜单阴影；输入36px/8px圆角，说明与密钥值100/80px、10px圆角，字段焦点保留参考1px inset，按钮键盘焦点保留2px外圈。关闭按钮28px、top20px/right12px。
+
+短屏明确工程差异：参考390×400仍有500px最小高度并裁掉页脚；本实现将最小高度限制为`min(500px,95dvh)`，保留全部字段可滚动及页脚键盘可达，不宣称此缺陷态像素一致。`tests/ui/mcp-custom-api-visual.test.tsx`以真实组件DOM、Vite编译生产CSS及Chromium验证普通/短/窄/多密钥几何，不代替正常服务旅程。业务TS、全局token及共享Input/Button未变。
+
+## 自定义 API 删除后的显示退休（2026-10-27）
+
+API management 与现MCP删除使用同一边界原则：仅原冻结remove请求经生产client严格验证deleted:true及exact profile_id的ACK后，在现actor/client command owner内记录只含profile_id的RAM负向显示事实。finish／关窗／同actor再准入generation不丢失；真正owner退休清空，旧late ACK不复活。广场、Settings管理与命令恢复入口统一过滤该ID，失败刷新、迟到旧head／后续页不令已删除卡复现；其它API行仍保原连续性。此记录不是权限、正文、原key/body/CAS或新持久源；unknown／拒绝不记，原请求恢复与精确读取不改，不自动DELETE或清整个列表。
+
+## 插件广场个人 MCP（2026-10-26，源码候选）
+
+`McpPersonalServerGallery` 只展示既有 relations 完整有界扫描中的 typed MCP＋`server_id` 正向 locator、非 revoked 行；不以缺 Provider 推断私有，也不把 active 当 available。未分类只在 All，以已保存名称／说明查询。冷未读、重复 cursor、50页／10秒预算失败保持 unknown，并入广场聚合反馈，不冒全空或无匹配；不新增 reader、owner 请求或持久 store。
+
+`McpConnectorCard` 为 Settings／广场共享同一精确详情入口和媒体组件，管理行行为保留。广场卡走现 exact connector binding＋fresh private Server 读取，列表只作定位、不授配置或执行资格。为保原普通配置读取／已确认 name/notes 写后媒体寿命，同 owner/actor/admission/gen 最近一次完整 relations 仅作为本窗口只读显示连续性；当前 relations.complete/error 及 fresh 动作资格不被替代，confirmedRemoved 即时过滤，主体／准入代退休后不复用。图片只依 server ID＋该 server confirmed media revision 更新；不按扫描对象或 Connector CAS 全卡重探，不共享 blob 缓存，不改保存／连接／选择意图。
+
+
+跨 Settings／广场实例仅从既有 actor/client command owner 的已验证 ACK 保存安全负向显示事实，finish 不抹，真正 owner 退休清除且旧 late ACK 不复活。delete_server 为不可逆 connector ID；disconnect 仅保真实 revoked ACK 的 connector state_version，过滤 <= 此版本的旧行，后继完整非 revoked 更大 connector CAS 可恢复显示；不混用 server CAS，不存 body／秘密，不作为准入、详情或写权限。普通写不旋转媒体 key，图标容器以局部 relative 定位承接原绝对 frame。
+
+## 配置 JSON 与返回层级（2026-10-26）
+
+JSON 窗口按参考保留短粘贴说明、左侧“复制到剪贴板”及右侧“保存”；取消由顶部关闭／Escape 承接。复制仅写当前用户输入到浏览器剪贴板，不解析改写、不保存、不导入／连接；锁定与本 scope 退休阻断新复制，迟到结果不进入新窗口，失败局部反馈，不冒保存成功。Header 安全说明独立 SR 描述不挤动 600×458／560×308 正常几何。
+
+现配置管理的 JSON 编辑器只映射当前一个服务器，复用拒重复键 parser 和既有字段 schema，经原 Update/CAS/命令冻结链保存，不走 Import/Register 或自动 Prepare。不可变 transport 的改变、额外字段及非法 Header 明确校验；已保存秘密从不回显或生成占位值，省略／空 headers 不撤原绑定，仅提供的值显式 upsert。JSON 子层关闭回配置，配置关闭清退 write-only／Header 草稿并取消未提交图标，再回原对象详情；详情再关闭才回列表。原未知管理命令独立保留，只由原 key/body/CAS 恢复，身份／代际／对象退休清 JSON 呈现，不借层级切换重放。
+
+配置“发布到项目”是明确的 Save→匹配 Update ACK→exact fresh Server/Connector→picker 继续动作，不借旧列表充当保存回执；HTTP与原发布准入全部满足后只打开一次 picker，选项目并确认才正式发布。窗口／主体／代际／对象退休只清此 UI continuation，不丢管理 unknown。StrictMode effect 重放不重复打开，未改变内容时直接使用当前已保存定义；不自动 Prepare、不授项目执行资格。
+
+## MCP 已保存 Server 的独立媒体（2026-10-26）
+
+`mcp-server-icon.tsx` 只请求当前已准入列表的固定同源 Server 媒体；IntersectionObserver 延迟 cache:no-store 的受控二进制 fetch，完整EOF/10秒/1MiB/PNG-JPEG验证后以本寿命唯一blobURL展示（避免同URI decoded cache），解码成功才切换真实名称首字母，lazy/async、失败无重试/常驻错误卡，退休 abort/revoke。Provider artwork/API绑定来源和40px壳/24px首字母不变。主体/准入代、server_id/Connector CAS及既有 confirmed-write revision 控制图片寿命；已确认替换/clear立即退休旧图，列表刷新失败不保旧绑定，普通被动读取保本代已加载图。catchall新增具名薄代理见 `src/lib/server/INDEX.md`；无逐卡JSON、签名URL列表或新owner字段。正常配对/浏览器验收另列。
+
+## 已添加卡片视觉（2026-10-26）
+
+按当前Manus同态测量，MCP无provider图使用真实名称首个Unicode码点，沿用API首字母组件样式；40px白底/8px圆角图标壳、24px首字母、14px/500名称。该首字母视觉改动自身不新增逐Server读取；后续独立媒体通路见上节，不伪造已绑定图标或扩Connector投影。
+
+## 详情被动读取反馈（2026-10-26）
+
+自定义 MCP/API、提供方详情及连接编辑器保留各自对话框和字段边界，被动 pending/error 仅无障碍播报，不再挂红卡/重试按钮。退出重开重新执行原正式读取，未知资料不提升 ready、不启用保存/连接、不伪报空详情；保存已确认但回读失败仍清退秘密草稿并禁用新写入。未知写命令、Prepare/发布恢复日志和明确操作失败反馈保持。该窄展示切片不包含原图标保存ACK过渡候选。
+
+## 2026-10-25 personal MCP 读取冷却
+
+既有Hub reader仅对connections及五种metadata GET的已验证HTTP429、retryable和合法Retry-After至多冷却重读一次；等待、第二请求及EOF共用原10秒绝对预算。缺失/坏/超过剩余预算的delay保原错误；abort无迟到发送。公开connections adapter沿原契约承接合法头，写命令/receipt/status/权限与Schema不改。本片不涵盖其它Skills/Project/Chat读取；正常验收与剩余缺口归Root执行板。
+
+## 2026-10-25 配置保存后的局部读回展示
+
+`custom-mcp-detail-dialog.tsx` 只在本窗口已确认保存、同主体/代际/exact对象且fresh读回挂起的短窗口保留不可变HTTP/SSE标签及先前主动作展示；主动作仍以fresh资格禁用并在点击时再次检查；不伪造Current/CAS或解锁动作，错误、unknown与退休仍显式处理。相同严格窗口内，ACK→fresh读回仅保此前已可见且本次未移除的已配置Header名称和原行；不缓存value/版本/CAS，ACK仍立即清秘密草稿，新增名称须fresh事实后才展示，错误/unknown/退休后旧行不复活，保存/移除/试用等仍锁定。绑定图像过渡只保存本窗口已加载URL及原expiresAt两个primitive，不保完整binding/selector，Picker只消费展示fallback且按原到期时刻本地退图、不刷新能力；clear不保旧图、replace只保ready且已加载的新图。显式null同时遮住已确认draft遗留preview，错误/unknown/主体/代际/exact对象/窗口退休后不复活，fresh投影才取代过渡；图像不授任何事实或操作资格。本窗口exact Update运行中只由保存控件提供可见进度并作屏幕阅读器播报，不再插入挤动表单的加载面板，unknown和真实读错保留。原Button outline恢复，配置按钮不再由局部CSS抹掉边框/背景/阴影。正常操作对照及未验范围归Root唯一执行板。
+
+## 2026-10-25 当前业务只读401的有限再准入
+
+AppGate在整个KokoroAppSurface外提供单用途read-recheck context；只有既有MCP/API投影、精确connector详情、composer metadata及Project GET hook的当前typed HTTP401，携其原subject/generation/未abort signal，才可报告。403、parse、network、迟到、preview和所有写命令不触发。Probe同步撤旧数据代，合并一次原Session检查；既有POST/CAS/未知轮换不取消、不重派，真正同主体确认后才发布新代由原hook重读GET。
+
+恢复自身的GET/POST成功不重置预算；恢复新代若再401，撤准入且不自动再探针，仅该分支显示既有Retry按钮，调用原probe.retry开始明确独立恢复。后续独立正常续期可重新授予一次恢复额度；原页隐藏/主体退休/ABA围栏保留。不改HTTP/Schema/权限、命令正文/key或费用，不把本片定向回归说成原plaza相邻200错误根因或ChatEngine/bootstrap全局修复；正常激活与主方验收另做。
+
+## 2026-10-25 personal HTTP/SSE 消费者候选
+
+`mcp-custom-form.tsx` 复用原 Select 提供显式 HTTP/SSE；fresh 配置详情只显示真实且不可编辑的 transport。`hub/mcp-connector.schema.ts` 分开 required Current 与 operation-aware historical ACK，两层原 route/client 共同核 replayed／原请求，旧 absent body/key 不补值；JSON 保原整文档和单 key，HTTP/SSE 逐项原序绑定。URL 添加仍 absent HTTP，自定义 API 不变；项目发布 UI/action 两 guard 只接受 fresh HTTP。六个创建／恢复生命周期源文件原字节保持，creation flow 仅新增非秘密只读 transport getter；unknown 关窗重开显示原请求协议，旧 absent 显示“—”，原命令仍冻结／显式恢复；正式多 owner 正常验收由 Root 接手。
+
+## 外层广场个人 API 与管理共卡（2026-10-25）
+
+`mcp-custom-api-card.tsx`由管理列表和外层`mcp-custom-api-gallery.tsx`共用；广场仅呈现当前主体已准入且确认过的真实 Custom API profile，不由缺失 Provider 猜私有 MCP、不伪造目录。尚无正式 API 分类，故只在“全部”展示，名称/备注搜索只过滤已读取页，原 opaque 续页与独立读取失败/重试保留；有已确认 API 时不再展示整个目录为空的误导文案。点击继续按精确 profile_id 打开原编辑器，未触发新创建或 Prepare。
+
+## 已确认 API 与独立 MCP 读取分离（2026-10-25）
+
+`mcp-projection-read.tsx`在当前 API 列表已返回非空卡片时允许展示与打开原详情，即使独立初始 MCP 列表仍加载或失败；MCP 原 loading/error/读重试保持，不把失败当空成功，不触发新创建/重发。MCP 翻页仍只按已读回游标。`app-frame-rail`行为回归保 partial-read 的已确认卡片与详情、原错误、显式读重试恢复、真正全空态和未知 MCP 游标不启用翻页；未把偶发正常初始网络失败归因于共享flight。
+
+## 2026-10-25 图标暂存与密钥编辑候选
+
+`mcp-icon-draft.ts` 拥有窗口内暂存命令状态与原key/body/CAS恢复，`use-mcp-icon-draft.ts`绑定主体／准入／窗口，`mcp-icon-picker.tsx`和局部CSS复用在原API/MCP创建及编辑表单。选图仅创建暂存记录，原实体保存才携带selector／clear；关闭由`mcp-create-dismiss-context.ts`显式回收已知未绑定图标，未知保存不取消可能已绑定资源。`mcp-bound-icon.tsx`只展示已准入安全引用，失败／到期回退，不新增GET或刷新签名。
+
+API详情复用原更新契约支持同名轮换、移除／撤销及未保存取消；已有密钥值不回读、不把placeholder当秘密提交，ACK清退草稿。列表即使当前页均已撤销仍保留合法游标的翻页入口。上述为候选实现，正常浏览器收据与余项以CURRENT／Root唯一执行板为准。
+
+### 创建完成后的精确详情交接
+
+`mcp-server-creation-flow.ts`只导出已确认绑定的非秘密locator；`use-mcp-server-creation.ts`在finish清退前固定server/connector/provider，完成回调失败重试同locator、不重新注册。`mcp-create-dialog.tsx`在原actor/generation/window仍有效时交给现`mcp-projection-read.tsx`的detail-only入口，后者重新读取并验证精确绑定，避免复制广场或从名称/首张卡猜详情。API与独立JSON导入保持原完成分支。正常四入口验收与URL项目发布后继分开记录，不把完成跳转当项目发布。
+
+## 2026-10-24 私有 MCP 配置布局
+
+`custom-mcp-detail-dialog.tsx`沿独立配置header／滚动body／footer组织；同名CSS仅配置态采用实测95vw／600×714、持续两列、局部控件token与图标右侧说明，短屏body收缩而操作可达。配置复制SVG16px，复制／添加Header文字以局部configurationButtonLabel承接2px逻辑尾距，宽度仍由内容决定；不改通用Button。详情态和管理／Prepare／试用／秘密／CAS语义保持；可见focus使用语义ring outline。参考规格与差异在`docs/manus-reference-audit-v2.md`，状态以CURRENT为准。
+
+## 2026-10-24 Header 配置与撤销历史分离
+
+`custom-mcp-detail-dialog.tsx`只显示正式描述符中active且configured的当前Header；revoked历史仍由owner／wire保留，不构造重复移除。现mcp-custom-trial回归保有效项、撤销同名重新配置与未保存Try行为；正常回读／刷新证据见CURRENT。
+
+## Prepare 持久恢复与核验（2026-10-24，正常读取已验、恢复待验）
+
+`mcp-preparation-recovery.ts`只拥有非秘密IndexedDB原子事务/严格codec/compare-by-key退休；`mcp-preparation-commands.ts`协调当前主体、恢复、核验proof、原请求与ACK，不镜像owner状态。`connector-command`仅增加显式unknown bootstrap及可选恢复政策；其它命令默认语义保持。核验沿现详情两GET，proof绑定窗口并随关闭退休，明确重试才POST；迟到已确认completed仅Done收口。存储失败不降级RAM，管理变更互锁与原清理语义保留。设计与实际证据/未验范围见App三面设计及CURRENT，不据此声称正常MCP闭环。
+
+## 私有MCP长发现文本（2026-10-24）
+
+现src/hub/mcp-connector.schema.ts承接owner无逐字段长度上限的发现显示文本；其它字段/控制字符/Unicode/strict校验与整体传输预算保持。tests/hub/mcp-connector-schema.test.ts覆盖三类长描述的GET和原Prepare receipt；原长CJK拒绝断言因合法owner语义改为正例，坏Unicode负控仍保留。旧502冻结请求仍inspect_owner，不因本片自动重放或置成功。
+
+## 2026-10-24 JSON首次重复URL拒绝
+
+`mcp-json-import-flow.ts`仅为JSON整文档原子导入启用`connector-command.ts`的首次明确拒绝分类；精确409/url_conflict/retryable=false且此前无未知结果时释放未执行意图。表单复用具名URL重复消息并保全文可编辑，更正后新key一次提交完整文档。其它构造者不启用分类，旧unknown/CAS/主体/窗口退休不变。当前真实JSON201后Prepare502的长metadata消费缺口见CURRENT，未据此关闭JSON或MCP。
+
+## 2026-10-24 私有MCP配置保存落点
+
+`custom-mcp-detail-dialog.tsx`以实际字段/Header草稿判断未保存变更并禁用Try；`mcp-projection-read.tsx`仅在当前主体/代际/窗口确认update_server后保留配置层、发出本地保存receipt并切换精确connector/server回读。旧CAS动作退休，秘密草稿在确认时清退；非秘密已提交值只在确认后作为临时草稿承接回读，fresh事实到达后rebase。未知命令仍恢复原key/body，失败读取只重读、不再次PATCH。未改API/owner；实际验证与未验范围见App CURRENT。
+
+## 2026-10-24 创建重复URL的确定拒绝
+
+`mcp-server-creation-flow.ts`区分首次确定的URL重复拒绝与未知提交；custom和URL表单使用具名提示并保字段可编辑。旧unknown重放依旧保原命令，status/code/retryable不符不释放。正常证据与未闭合CRUD见CURRENT，不以此称四入口已完成。
+
+## 2026-10-24 私有详情试用交接
+
+`mcp-trial-context.tsx`只桥接挂载AppFrame的草稿动作，不拥有网络或连接状态；`mcp-projection-read.tsx`核当前精确私有server/connector和命令锁，`custom-mcp-detail-dialog.tsx`把ready Try与原Prepare/OAuth恢复分开。原配置字段/秘密只写/管理CAS不变。正常验收状态见App CURRENT；四创建和全Skills/MCP未据此完成。
+
 ## 广场分类的可用列宽适配（2026-10-19）
 
 `use-mcp-category-layout.ts` 承接原目录弹窗的标签实测与焦点交接，广场复用同一机制；不再用视口42rem猜测分类是否容纳。按当前语言完整标签宽度与实际控件列宽比较，中文412px为本次参考实测临界值而非代码常量。窄列搜索与筛选同排，筛选36px、14/18px、8px圆角；设置目录保留32px。查询/分类不重建、不发额外命令；缩放隐藏中的分类控件不可聚焦，展开中的菜单切回标签时关闭并交还当前选项。无API、数据或owner变更。参考1280/390及459/460边界来自实际Manus，浏览器回归绑定真实布局，不断言CSS源码。
@@ -79,7 +210,7 @@ Settings 的 Browse 与空态添加入口打开独立目录弹窗，不替换已
 Provider 目录与个人连接列表分别读取、分别保留成功投影并独立显示失败/重试；任一 owner read 延迟或失败不阻塞另一侧已成功内容。每份投影绑定当前 read identity，身份变化时旧数据立即退出渲染，inflight 仍按订阅生命周期取消。
 OAuth 点击同步预开并隔离 popup，再使用 owner 返回的 HTTPS URL；callback Complete 在 StrictMode 下共享 inflight，只通过 BroadcastChannel 发送 connector_id 触发 owner projection 重读，不广播 code/state/token，也不以通知判定 active。popup 阻止时不发起 owner command，关闭、过期与卸载均清理句柄。
 
-创建入口严格按 Manus 已观察顺序拆分为 `custom-api`、`custom-mcp`、`json` 与 `url`；它们不得落入同一个泛化表单。Custom MCP 先显示详情层，再进入独立 `MCP 配置`；Custom API 使用独立 profile/环境变量详情。JSON 的来源格式含 STDIO、SSE、Streamable HTTP，必须只调用 Platform 原子 import contract：浏览器不得把 JSON 拆成多个 Register 请求或把非 HTTP 条目改写为 HTTP。现有固定 BFF/App artifact 已接原子 HTTP import，整份原文只提交一次。当前 owner 仅接受 `streamableHttp`；STDIO 和 SSE 返回明确 precondition，不改写传输格式、不冒称支持运行。URL 的 BYO OAuth 字段仅属于 URL 高级层，值只提交给 owner，不在投影或浏览器存储回显。
+创建入口严格按 Manus 已观察顺序拆分为 `custom-api`、`custom-mcp`、`json` 与 `url`；它们不得落入同一个泛化表单。Custom MCP 先显示详情层，再进入独立 `MCP 配置`；Custom API 点击卡片直接打开独立 profile/环境变量编辑器，不增加只读概览层。JSON 的来源格式含 STDIO、SSE、Streamable HTTP，必须只调用 Platform 原子 import contract：浏览器不得把 JSON 拆成多个 Register 请求或把非 HTTP 条目改写为 HTTP。现有固定 BFF/App artifact 已接原子 HTTP import，整份原文只提交一次。当前 owner 仅接受 `streamableHttp`；STDIO 和 SSE 返回明确 precondition，不改写传输格式、不冒称支持运行。URL 的 BYO OAuth 字段仅属于 URL 高级层，值只提交给 owner，不在投影或浏览器存储回显。
 
 ## 当前组件职责
 
@@ -88,10 +219,10 @@ OAuth 点击同步预开并隔离 popup，再使用 owner 返回的 HTTPS URL；
 - `mcp-provider-directory.tsx` / `mcp-connection-list.tsx`：仅负责真实 owner 投影的筛选与卡片呈现。
 - `mcp-provider-catalog-dialog.tsx`、`mcp-provider-detail-dialog.tsx`、`mcp-connector-editor-dialog.tsx`：分别拥有目录、Provider 详情、Provider 生命周期编辑的焦点/弹窗边界。
 - `custom-mcp-detail-dialog.tsx`：只拥有自定义 MCP 的详情、管理菜单与 `MCP 配置`；读取 owner-issued server ID 后才渲染，绝不按显示名猜类型。
-- `custom-api-detail-dialog.tsx` / `custom-api-form.tsx` / `use-custom-api-projection.ts`：只拥有 Custom API profile 的安全详情和编辑；环境变量值永不进入读取视图。
+- `custom-api-detail-dialog.tsx` / `custom-api-detail-dialog.module.css` / `custom-api-form.tsx` / `use-custom-api-projection.ts`：只拥有 Custom API profile 的直达编辑和独立样式；原命令恢复/删除确认保持，环境变量值永不进入读取视图，不变不提交。
 - `connector-command.ts` / `use-connector-creation-form.ts`：仅本地单命令的准入/lease/unknown及异步完成关闭机制，由 API/JSON 创建、MCP Prepare 与 typed Custom API 管理实际消费者共用，不是网络代理或命令注册表。
 - `custom-api-create-flow.ts` / `mcp-json-import-flow.ts` / `connector-command-context.tsx`：各自 typed 输入/创建命令与稳定 AppFrameRuntime 的 API/JSON actor/client 命令槽。冻结正文/key只在RAM，unknown显式同请求恢复；关闭窗口不丢命令，换actor/真正卸载退休。确认清实际secret/JSON原文，API和JSON分别失活捕获主体的独立投影，Form/Dialog只拥有当前窗口关闭。JSON仍一次原子HTTP导入，不循环Register。
-- `mcp-server-creation-flow.ts` / `use-mcp-server-creation.ts`：Custom/URL 多阶段创建的独立 actor/client 工作流和当前窗口消费者；原 Register/Prepare key、正文与 CAS 仅在 RAM 保留，未知结果显式恢复原命令。Register 确认只留精确 locator，新 Prepare 读取本代 server/connector，OAuth 不借旧准入，晚 ACK 仅刷新原主体。
+- `mcp-server-creation-flow.ts` / `use-mcp-server-creation.ts`：Custom/URL 多阶段创建的独立 actor/client 工作流和当前窗口消费者；原 Register/Prepare key、正文与 CAS 仅在 RAM 保留，未知结果显式恢复原命令。Register completion 对外只含精确 locator；同一次创建已确认的安全只读视图可由 opaque 内存 handoff 在同 client/actor/准入代际/revision 内交给详情，免去取消 picker 后的重复读取与空白闪跳。新观察、确认开始或任一绑定失效即退休，不落 IDB/路由，错误不复活旧 facts；普通冷开与新 Prepare 仍读取本代 server/connector，OAuth 不借旧准入，晚 ACK 仅刷新原主体。
 - `mcp-projection-types.ts`：共享的投影视图类型、分类词汇和 owner artwork/status 映射；不含请求或模拟数据。
 
 
@@ -126,7 +257,9 @@ Connector恢复错误当前已固定BFF browser-private profile并由Hub/同源a
 
 ## MCP 五项管理恢复与 Prepare 互锁
 
-`mcp-management-commands.ts` 只构造MCP固定五项typed management与现Prepare，不成为通用registry。每connector及可选private server绑定一个管理原命令，unknown冻结操作/body/CAS/key；其间新Prepare和其他管理被状态层拒绝，Prepare未结阻止修改配置/启停。明确disconnect/delete仍沿原清理语义允许，确认ACK才退休匹配Prepare。Provider/Private/Generic详情经同一index及`mcp-management-status.tsx`呈现，关闭/准入暂停当前等待、换actor退休；原窗口ACK只失活原投影，当前显式恢复/Done才可关闭当代window。列表缺行保locator恢复入口，不生成owner事实或GET结清。
+配置编辑态的旧Prepare unknown说明仅作为sr-only状态播报，footer仍提供原“需先核验状态／重试原请求”动作；返回非编辑详情后仍可见原unknown说明。配置自身management unknown与trialError继续明确可见，不把连接状态误列为配置保存错误；不改按钮资格、原请求／journal或自动触发恢复。
+
+`mcp-management-commands.ts` 只构造MCP固定五项typed management与现Prepare，不成为通用registry。每connector及可选private server绑定一个管理原命令，unknown冻结操作/body/CAS/key；其间新Prepare和其他管理被状态层拒绝。已恢复的Prepare unknown仅允许独立update_server保存配置，采用当前可信Server CAS，不改原Prepare正文/key/CAS、不自动连接或重放；Prepare running/completed、核验running、恢复未ready与配置自身running/unknown仍阻止配置保存，其它管理互锁不变。Update ACK只消费配置命令并轮换详情window/abort旧核验proof，原Prepare及journal保持未知，后续恢复须重新核验；短暂fresh读取缺口仅保同主体/代际/目标/配置ACK的不可变transport标签，旧primary/Header/icon展示仍退休。明确disconnect/delete仍沿原清理语义允许，确认ACK才退休匹配Prepare。Provider/Private/Generic详情经同一index及`mcp-management-status.tsx`呈现，关闭/准入暂停当前等待、换actor退休；原窗口ACK只失活原投影，当前显式恢复/Done才可关闭当代window。列表缺行保locator恢复入口，不生成owner事实或GET结清。
 
 私有MCP ACK清实际header草稿/移除意图；非敏感明确输入在只读完成窗口保留至Done，避免把新GET当原命令正文。Hub update/delete server与update/enabled/remove connector均显式caller key、严格locator/写入安全字段及ACK，不变HTTP或原生OAuth。旧runAction只留下未覆盖的目录创建/原生授权协调，不能据此声称其完整命令恢复已完成。整文档重载、显式结束未知等待、真实OAuth和剩余视觉仍待后继。
 
@@ -143,3 +276,28 @@ API／JSON创建窗口的每次等待由use-connector-creation-form持有独立c
 `use-mcp-provider-detail.ts` 只在已打开的精确provider不在当前已读页时走Hub单项GET；ACK必须匹配provider_key，关闭/准入/actor退休旧响应。已安装且无private server的MCP可直接打开此详情，不等待目录成功，不扫描全部页。现有私有server、BYOK、授权和管理命令职责不变。
 
 证据：`tests/ui/mcp-provider-directory.test.tsx`、`mcp-provider-detail.test.tsx`、现Hub/rail回归。正常空目录已读，尚无真实非空提供方/真实第三方OAuth闭环，不把协议fixture当目录内容完成或推荐事实。
+
+
+## 自定义 MCP 表单视觉修正（2026-10-24）
+
+按已归档 Manus 实测修正表单 surface/阴影、普通 URL 输入、备注圆角与 headers 标签层级，尺寸和提交工作流不变。隔离 CSS/DOM 证据只证明本表单视觉；HTTP 只读和图标上传禁用仍是明确未闭环项，不称完整对齐。视觉夹具无论 Chromium 启动或关闭失败都释放 Vite 资源。
+
+## URL MCP 项目定义发布（2026-10-25 候选）
+
+`mcp-url-form` 的保存并发布走 Register ACK → 独立 `mcp-project-publication-dialog`，不预开 OAuth、不暗跑 Prepare。`mcp-project-publication-commands` 由原 actor shell 持有精确原命令；取消 picker 保留已创建实体与精确详情。项目由既有本人 project reader 读取，pin 读包括墓碑 CAS；ACK 只显示定义发布、明确 execution_ready=false。异常仅 typed receipt/已发布 same_command 策略显式恢复；首次明确拒绝的修改须新输入，receipt 404不证明未提交。
+
+发布恢复 journal 与 commands 分离：日志只存非秘密原命令，首次 POST 前持久化、原 ACK 后精确清退；重载只恢复未知状态。原子 first-rejection 清退保护跨 tab 竞争。项目列表首屏独立于 pin 扫描，确认只读已选 CAS（4 lanes、128 总页、10秒），关闭中断且不隐式发写。
+
+### Configuration save and current private-server reads
+
+- Custom/URL Save confirms registration and the exact fresh server/connector pair, then opens that saved configuration. It does not implicitly Prepare or open OAuth; Connect remains an explicit detail action. Save-and-publish retains its own intent and project-picker qualification. Unknown commands retain their original intent, body, key and recovery boundary.
+- A current private-server typed HTTP 401 joins the existing captured subject/generation/signal readmission proof. Only a confirmed Session permits a new read generation; Save/CAS is never replayed. Other errors retain explicit Retry.
+- Configuration controls keep their outline variant; header/footer CSS owns geometry, not a second transparent/no-border override. The shorter-screen reachable footer is retained.
+
+- URL save-and-publish first opens the real project-publication menu. Opening, closing or Escape does not register; only selecting the project action invokes the existing publication intent. Normal configure/publish pending retains the original form; progress is confined to the Save control with an unchanged non-busy label footprint and a nested overlay spinner. Error, unknown and navigation-retry recovery stay explicit.
+## 插件广场名称搜索命中（2026-10-26）
+
+Provider、个人 MCP 和 Custom API 的广场名称复用 `McpSearchHighlight`：查询按原筛选的 trim 处理，转义正则元字符后仅拆分纯文本，匹配文字使用透明背景和实测蓝色，继承名称字体。空查询与无命中不插 mark；不处理 HTML，不改变原名称 ARIA、过滤、详情点击或媒体 key。只在 plaza 呈现中启用，管理搜索与描述保持原样；颜色仅为该组件局部 token，不新增全局主题。
+
+
+配置工具按钮沿 Manus 实测使用不参与布局的描边：复制 UUID 为 13px/500、添加 Header 为14px/500；两者 border 0、outline 1px、透明背景，保留 focus-visible 2px/offset 2px。不要给 outline 额外叠加布局 border，也不以放宽宽度容差掩盖差异。

@@ -1,3 +1,19 @@
+## 设置积分卡复用与读取（2026-10-26）
+
+账户概览和用量页均使用 `BillingSummary embedded`；紧凑卡片的样式由自身标识决定，不再依赖用量页祖先。账户页仅挂载摘要，不读取历史。`AccountReadSnapshotBoundary` 在当前打开的设置、可信主体/准入代际、同一 BillingClient 内保留确认摘要并合并仍在途的读取；页签卸载不取消共享读取，整个设置关闭、主体/代际或客户端换代则退休。完成后再次进入仍后台重新读取，不设 TTL 或持久缓存；同 scope 已知值在等待/失败时保留，未知保持 `—`。余额刷新与历史请求各自结束；历史慢不让已确认余额继续 busy。沿用同源客户、10 秒预算、精确十进制金额、现有准入及 missing-account 初始化契约。
+
+## 套餐目录被动读取（2026-10-26）
+
+`pricing-panel` 保留稳定内容区；加载及读取失败仅提供无障碍状态，不再展示 skeleton、红色错误卡或重试按钮。初次未知与成功空目录分开；退出重开沿原准入 scope 发起新 GET，无后台轮询或自动重试。目录当前只有挂载读取，不新增缓存或刷新框架；10 秒预算、取消、主体/代际/客户端退休及迟到结果保护保持。真实 not_configured 和购买禁用原因保留，checkout 不调用。
+
+## 未开放资源用量的用户呈现（2026-10-23）
+
+网站／电脑分类移除内部“服务未接通、费用额度记录不可读”的实现说明。每个面板只显示一处本地化“暂未开放”；网站三卡以 `—` 表示未知值，并通过 `aria-describedby` 关联原因，不伪造 0 或暂无记录。未接入筛选的日期控件禁用，删除无效本地日期状态。既有分类、任务真实 summary/ledger、身份隔离、分页、电话弹窗和禁用交易不变。九语言同步维护；此项只修正展示，不代表资源用量服务交付。
+
+## 积分流水的用户文案（2026-10-22）
+
+`billing-model.reasonKey`只负责只读展示映射：正式来源`admin_credit`在用户侧显示“积分到账”，不暴露管理员身份或声称现金支付；未识别来源统一为“积分变动”，不猜成充值／消费。九语言均维护独立词条，`billing-ledger`的嵌入／独立两种视图共用；API原source_kind、金额、符号、排序、过滤和分页不变。两视图九语言回归及实际正常页面已验，详见CURRENT本次局部修复。
+
 <!-- 2026-10-22 continuation retirement correction -->
 积分客户端每次续发 PUT 或核实 GET 前复验调用方 `getCurrent`；真实账户/用量/rail传入现 controller/current 与发起时已准入subject的marker一致性检查。只更新storage、无rerender/focus仍会抑制旧续发；marker丢失、不匹配或读取异常一律退休。marker只抑制，不授予session权限；非UI调用可不传callback，初次GET契约保持，无新store/轮询/锁。
 
@@ -9,7 +25,7 @@
 
 订阅在 pricing-panel 内仅按正式目录的 month/year/once 字段过滤；pricing-plan-details-dialog 展示原金额、币种、周期及积分，不折算年费或推断优惠。周期切换不重读目录，购买仍禁用并说明支付未接通，身份退休沿现宿主 key。
 
-设置内用量分类现在可本地切换：现 billing-panel 的任务读取、分页与身份退休保持；billing-resource-content 负责网站与游戏的临时日期输入及三类不可读用量卡、居中的不可用云电脑引导和复用电话说明弹窗。三卡桌面同行、窄屏纵排，原因全文和日期草稿保持。缺少服务时不显示费用、额度或虚构空列表，自动充值/电脑创建仍禁用；无新客户端、业务请求或开户实现。订阅真实空目录使用中性图标、原空态文案和显式重新读取，复用原单飞 retry、预算和身份退休，不自动重试或触发支付。
+设置内用量分类现在可本地切换：现 billing-panel 的任务读取、分页与身份退休保持；billing-resource-content 负责网站与游戏的三类未知用量卡及禁用日期筛选、居中的不可用云电脑引导和复用电话说明弹窗。三卡桌面同行、窄屏纵排，未开放提示只显示一次，日期不提供未接通的交互。缺少服务时不显示费用、额度或虚构空列表，自动充值/电脑创建仍禁用；无新客户端、业务请求或开户实现。订阅真实空目录使用中性图标、原空态文案和显式重新读取，复用原单飞 retry、预算和身份退休，不自动重试或触发支付。
 
 SET26 review correction: formal plans owns the actual body reader; one absolute deadline and parent retirement cancel it and release its lock. Response.json plus locked body.cancel is rejected. Checkout and all wire behavior remain protected.
 

@@ -28,6 +28,7 @@ beforeEach(() => {
     id: "00000000-0000-4000-8000-000000000001",
     generation: 0,
     subject: "admin-user",
+    issuerSessionId:"fixture-issuer-session",
     access: "product-access",
     accessExpiresAt: Date.now() + 60_000,
     expiresAt: Date.now() + 7 * 24 * 60 * 60_000,

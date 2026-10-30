@@ -45,7 +45,6 @@ export function PersonalSkillDeleteDialog({
     body?: DeletePersonalSkillSeriesRequest;
     error?: boolean;
   } | null>(null);
-  const [attempt, setAttempt] = useState(0);
   const [intent, setIntent] = useState<{
     body: DeletePersonalSkillSeriesRequest;
     key: string;
@@ -87,7 +86,7 @@ export function PersonalSkillDeleteDialog({
           setSnapshot({ generation, error: true });
       });
     return () => controller.abort();
-  }, [open, admitted, generation, skill, client, intent, attempt]);
+  }, [open, admitted, generation, skill, client, intent]);
   useLayoutEffect(
     () => () => {
       if (flight.current) uncertain.current = true;
@@ -166,23 +165,6 @@ export function PersonalSkillDeleteDialog({
         <DialogTitle>{t("skills.delete.title")}</DialogTitle>
         <DialogDescription>{t("skills.delete.warning")}</DialogDescription>
         <p className="break-words text-sm font-medium">{skill.name}</p>
-        {!intent && !current ? (
-          <p role="status">{t("skills.loading")}</p>
-        ) : null}
-        {!intent && current?.error ? (
-          <p role="alert">
-            {t("skills.history.failed")}
-            <Button
-              variant="outline"
-              onClick={() => {
-                setSnapshot(null);
-                setAttempt((v) => v + 1);
-              }}
-            >
-              {t("skills.retry")}
-            </Button>
-          </p>
-        ) : null}
         {visible !== "idle" ? (
           <p role={visible === "busy" ? "status" : "alert"}>
             {t(

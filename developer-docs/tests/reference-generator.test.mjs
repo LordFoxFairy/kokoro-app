@@ -18,7 +18,7 @@ import {
   writeReferenceFiles,
 } from '../scripts/lib/reference-generator.mjs';
 import { assertPublicationSafe } from '../scripts/lib/publication-policy.mjs';
-import { renderExample } from '../scripts/lib/schema-renderer.mjs';
+import { renderExample, schemaType } from '../scripts/lib/schema-renderer.mjs';
 
 function fixtureContract(visibility = 'public') {
   return {
@@ -489,4 +489,200 @@ test('renders declared inherent idempotency without inventing a request key and 
   operation.parameters = [];
   operation['x-kokoro-idempotency'] = 'invented';
   assert.throws(() => generateReferenceFiles(contract, catalogEntry), /unsupported x-kokoro-idempotency invented/u);
+});
+
+test('publishes named numeric body/depth limits without admitting other extensions', () => {
+  const contract = fixtureContract();
+  const operation = contract.paths['/v1/sessions/{id}/messages'].post;
+  operation['x-kokoro-max-body-bytes'] = 1048576;
+  operation['x-kokoro-max-json-depth'] = 12;
+  const rendered = generateReferenceFiles(contract, catalogEntry).get('chat.md');
+  assert.match(rendered, /Body byte limit[^\n]*1048576/u);
+  assert.match(rendered, /JSON depth limit[^\n]*12/u);
+  for (const name of ['x-kokoro-max-body-bytes', 'x-kokoro-max-json-depth']) {
+    const original = operation[name];
+    for (const value of [0, -1, 1.5, '12', Number.MAX_SAFE_INTEGER + 1]) {
+      operation[name] = value;
+      assert.throws(() => assertPublicContract(contract, catalogEntry), /positive safe integer/u);
+    }
+    operation[name] = original;
+  }
+  operation['x-kokoro-unreviewed-limit'] = 100;
+  assert.throws(() => assertPublicContract(contract, catalogEntry), /unknown Kokoro extension/u);
+});
+
+test('public replay metadata accepts only the two formally published bounded extension nodes', () => {
+  const value = {
+    paths: { '/v1/sessions/{id}/messages/{messageId}/parts': { get: { 'x-kokoro-max-response-bytes': 1048576 } } },
+    components: { schemas: { SessionEventStream: { 'x-kokoro-owner-metadata': { $ref: '#/components/schemas/KokoroAgUiReplayMetadata' } } } },
+  };
+  assert.doesNotThrow(() => assertPublicationSafe(value));
+  for (const changed of [
+    { paths: { '/v1/other': { get: { 'x-kokoro-max-response-bytes': 1048576 } } } },
+    { paths: { '/v1/sessions/{id}/messages/{messageId}/parts': { post: { 'x-kokoro-max-response-bytes': 1048576 } } } },
+    { paths: { '/v1/sessions/{id}/messages/{messageId}/parts': { get: { 'x-kokoro-max-response-bytes': 2097152 } } } },
+    { components: { schemas: { Other: { 'x-kokoro-owner-metadata': value.components.schemas.SessionEventStream['x-kokoro-owner-metadata'] } } } },
+    { components: { schemas: { SessionEventStream: { 'x-kokoro-owner-metadata': { $ref: '#/components/schemas/PrivatePayload' } } } } },
+    { components: { schemas: { SessionEventStream: { 'x-kokoro-owner-metadata': { $ref: '#/components/schemas/KokoroAgUiReplayMetadata', secret: 'extra' } } } } },
+    { nested: value },
+    { 'x-kokoro-unknown': true },
+    ['x-kokoro-owner-metadata', ' unexpected-header'].join(':'),
+    { description: ['-----BEGIN', 'PRIVATE KEY-----'].join(' ') },
+  ]) assert.throws(() => assertPublicationSafe(changed));
+});
+
+test('formal Project recommendations natural PUT publishes no command key and rejects unrelated natural operations', () => {
+  const contract = fixtureContract();
+  const operation = contract.paths['/v1/sessions/{id}/messages'].post;
+  operation.operationId = 'replaceProjectMcpRecommendations';
+  operation['x-kokoro-idempotency'] = 'natural';
+  operation.parameters = [];
+  contract.paths = { '/v1/projects/{projectId}/mcp-recommendations': { put: operation } };
+  const files = generateReferenceFiles(contract, catalogEntry);
+  assert.equal(JSON.parse(files.get('manifest.json')).operations[0].idempotency, 'natural');
+  assert.doesNotMatch(files.get('chat.md'), /Idempotency-Key/u);
+  operation.parameters = [{ $ref: '#/components/parameters/IdempotencyKey' }];
+  assert.throws(() => generateReferenceFiles(contract, catalogEntry), /must not declare Idempotency-Key/u);
+  operation.parameters = [];
+  operation.operationId = 'unrelatedOperation';
+  assert.throws(() => generateReferenceFiles(contract, catalogEntry), /unsupported x-kokoro-idempotency/u);
+});
+
+
+test('nested local schema pointers link to their real top-level schema anchor without skipping pointer validation', () => {
+  const contract = { components: { schemas: {
+    AgentFailureEnvelope: { properties: { failure: { type: 'object' } } },
+    'Name/With~Escapes': { properties: { 'part/key~id': { type: 'string' } } },
+  } } };
+  assert.equal(schemaType(contract, { $ref: '#/components/schemas/AgentFailureEnvelope/properties/failure' }), '[failure](./schemas#agent-failure-envelope)');
+  assert.equal(schemaType(contract, { $ref: '#/components/schemas/Name~1With~0Escapes/properties/part~1key~0id' }), '[part/key~id](./schemas#name-with-escapes)');
+  for (const ref of [
+    '#/components/schemas/AgentFailureEnvelope/properties/missing',
+    '#/components/schemas/Name~1With~0Escapes/properties/part~1key~1id',
+    'https://example.invalid/private.json#/components/schemas/AgentFailureEnvelope',
+  ]) assert.throws(() => schemaType(contract, { $ref: ref }), /unresolved|external/u);
+});
+
+test('tool target Unicode extensions publish only at their exact canonical name node with reviewed values', () => {
+  const node = {
+    type: 'string',
+    'x-kokoro-utf8-byte-limit': 480,
+    'x-kokoro-unicode-domain': 'NFC Unicode scalars; no Cc, Cf or Cs',
+  };
+  const wrap = (name) => ({ components: { schemas: { RunToolActivity: { properties: { display_detail: { properties: { name } } } } } } });
+  assert.doesNotThrow(() => assertPublicationSafe(wrap(node)));
+  for (const value of [
+    wrap({ ...node, 'x-kokoro-utf8-byte-limit': 481 }),
+    wrap({ ...node, 'x-kokoro-utf8-byte-limit': '480' }),
+    wrap({ ...node, 'x-kokoro-unicode-domain': 'arbitrary Unicode' }),
+    wrap({ ...node, 'x-kokoro-unreviewed-target': true }),
+    { components: { schemas: { Other: { properties: { display_detail: { properties: { name: node } } } } } } },
+    { components: { schemas: { RunToolActivity: { properties: { display_detail: { name: node } } } } } },
+    { nested: wrap(node) },
+    { description: ['x-kokoro-utf8-byte-limit', ' 480'].join(':') },
+    wrap({ ...node, description: ['-----BEGIN', 'PRIVATE KEY-----'].join(' ') }),
+  ]) assert.throws(() => assertPublicationSafe(value));
+});
+
+
+test('formal personal Project pin natural PUT publishes no command key and rejects unrelated natural operations', () => {
+  const contract = fixtureContract();
+  const operation = contract.paths['/v1/sessions/{id}/messages'].post;
+  operation.operationId = 'setProjectPin';
+  operation['x-kokoro-idempotency'] = 'natural';
+  operation.parameters = [];
+  contract.paths = { '/v1/projects/{projectId}/pin': { put: operation } };
+  const files = generateReferenceFiles(contract, catalogEntry);
+  assert.equal(JSON.parse(files.get('manifest.json')).operations[0].idempotency, 'natural');
+  assert.doesNotMatch(files.get('chat.md'), /Idempotency-Key/u);
+  operation.parameters = [{ $ref: '#/components/parameters/IdempotencyKey' }];
+  assert.throws(() => generateReferenceFiles(contract, catalogEntry), /must not declare Idempotency-Key/u);
+  operation.parameters = [];
+  operation.operationId = 'unrelatedOperation';
+  assert.throws(() => generateReferenceFiles(contract, catalogEntry), /unsupported x-kokoro-idempotency/u);
+});
+
+test("final display annotations are limited to reviewed nodes and exact values", () => {
+  const wrap = (node, key, value) => {
+    const root = {};
+    const parts = ("components.schemas." + node).split(".");
+    let current = root;
+    for (const part of parts) current = current[part] ??= {};
+    current[key] = value;
+    return root;
+  };
+  const cases = [
+    [
+      "RunDisplay.properties.final_answer.properties.revision",
+      "x-kokoro-int64-decimal",
+      true,
+    ],
+    [
+      "RunDisplay.properties.display_skills",
+      "x-kokoro-unique-by",
+      "source_ref",
+    ],
+    ["RunDisplay.properties.tool_facts", "x-kokoro-unique-by", "activity_id"],
+    [
+      "RunDisplay.properties.activity_details.items.properties.input_preview.properties.text",
+      "x-kokoro-utf8-byte-limit",
+      2048,
+    ],
+    [
+      "RunToolActivity.properties.action_title",
+      "x-kokoro-utf8-byte-limit",
+      256,
+    ],
+    [
+      "SessionEventStream",
+      "x-kokoro-run-finished-results",
+      { completed: { $ref: "#/components/schemas/FinalAnswerResult" } },
+    ],
+  ];
+  for (const [node, key, value] of cases) {
+    assert.doesNotThrow(() => assertPublicationSafe(wrap(node, key, value)));
+    for (const bad of [
+      null,
+      "wrong",
+      typeof value === "number" ? value + 1 : false,
+    ])
+      assert.throws(() => assertPublicationSafe(wrap(node, key, bad)));
+    assert.throws(() =>
+      assertPublicationSafe(wrap("Other." + node, key, value)),
+    );
+    assert.throws(() =>
+      assertPublicationSafe({ nested: wrap(node, key, value) }),
+    );
+  }
+  for (const bad of [
+    { completed: { $ref: "#/components/schemas/Other" } },
+    {
+      completed: {
+        $ref: "#/components/schemas/FinalAnswerResult",
+        extra: true,
+      },
+    },
+    {
+      completed: { $ref: "#/components/schemas/FinalAnswerResult" },
+      failed: {},
+    },
+  ]) {
+    assert.throws(() =>
+      assertPublicationSafe(
+        wrap("SessionEventStream", "x-kokoro-run-finished-results", bad),
+      ),
+    );
+  }
+});
+
+test('formal answer feedback natural PUT is exact and does not require a command key', () => {
+  const contract = fixtureContract();
+  const operation = contract.paths['/v1/sessions/{id}/messages'].post;
+  operation.operationId = 'setMessageFeedback';
+  operation['x-kokoro-idempotency'] = 'natural';
+  operation.parameters = [];
+  contract.paths = { '/v1/sessions/{id}/messages/{messageId}/feedback': { put: operation } };
+  assert.doesNotThrow(() => generateReferenceFiles(contract, catalogEntry));
+  operation.parameters = [{ $ref: '#/components/parameters/IdempotencyKey' }];
+  assert.throws(() => generateReferenceFiles(contract, catalogEntry), /must not declare Idempotency-Key/u);
 });

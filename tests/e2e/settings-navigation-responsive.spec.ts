@@ -1,4 +1,51 @@
-import { expect, test, type Locator } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
+
+// Keep the original user journey and assertions unchanged. These passive
+// observations distinguish a responsive focus handoff from a whole-document
+// development reload; a later green run alone does not explain an old failure.
+const navigationObservations = new WeakMap<Page, unknown[]>();
+test.beforeEach(async ({ page }) => {
+  const observations: unknown[] = [];
+  navigationObservations.set(page, observations);
+  const record = (kind: string, value: unknown) => observations.push({ at: Date.now(), kind, value });
+  page.on("framenavigated", frame => {
+    if (frame === page.mainFrame()) record("main-frame-navigation", frame.url());
+  });
+  page.on("websocket", socket => {
+    if (!socket.url().includes("/_next/webpack-hmr")) return;
+    socket.on("framereceived", frame => {
+      try {
+        const value: unknown = JSON.parse(typeof frame.payload === "string" ? frame.payload : frame.payload.toString());
+        if (value !== null && typeof value === "object") {
+          const message = value as { action?: unknown; type?: unknown; data?: unknown };
+          record("development-message", {
+            action: typeof message.action === "string" ? message.action : null,
+            type: typeof message.type === "string" ? message.type : null,
+            reason: typeof message.data === "string" ? message.data.slice(0, 200) : null,
+          });
+        }
+      } catch { /* Non-JSON frames have no diagnostic action. */ }
+    });
+  });
+  page.on("console", message => {
+    const text = message.text();
+    if (text.startsWith("[navigation-focus]") || text.startsWith("[navigation-unload]") || text.startsWith("[Fast Refresh]")) record("console", text);
+  });
+  await page.addInitScript(() => {
+    const describeFocus = () => {
+      const active = document.activeElement;
+      return active instanceof HTMLElement ? { tag: active.tagName, label: active.getAttribute("aria-label"), id: active.id } : null;
+    };
+    document.addEventListener("focusin", () => console.debug("[navigation-focus]", JSON.stringify(describeFocus())), { capture: true });
+    window.addEventListener("beforeunload", () => console.debug("[navigation-unload]", JSON.stringify(describeFocus())));
+  });
+});
+test.afterEach(async ({ page }, testInfo) => {
+  await testInfo.attach("navigation-observations", {
+    body: JSON.stringify(navigationObservations.get(page) ?? [], null, 2),
+    contentType: "application/json",
+  });
+});
 
 // A CSS-hidden destination still exists in jsdom. Check its rendered bounds
 // through the user's More-menu, keyboard and resize journey instead.
@@ -28,9 +75,19 @@ test("settings keeps Skills and later destinations visible through compact navig
   const integration = modal.getByRole("tab", { name: "集成", exact: true });
   await expectRevealed(integration);
   for (const width of [320, 768, 767, 390]) {
+    // Leave More open while entering the desktop layout: its portalled list
+    // must retire with the compact trigger, not lose its CSS over the panel.
+    if (width === 768) {
+      await more.press("ArrowDown");
+      await expect(modal.getByRole("menuitem", { name: "账户", exact: true })).toBeFocused();
+    }
     await page.setViewportSize({ width, height: 844 });
     await expectRevealed(integration);
     await expect.poll(() => modal.evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+    if (width === 768) {
+      await expect(modal.getByRole("menu")).toHaveCount(0);
+      await expect(integration).toBeFocused();
+    }
   }
   await integration.focus();
   await page.keyboard.press("ArrowRight");
@@ -38,4 +95,42 @@ test("settings keeps Skills and later destinations visible through compact navig
   await expect(developer).toBeFocused();
   await expectRevealed(developer);
   await page.screenshot({ path: testInfo.outputPath("settings-compact-navigation.png") });
+  await modal.getByRole("button", { name: "关闭设置", exact: true }).click();
+  await page.setViewportSize({ width: 1280, height: 720 });
+  const shell = page.locator('[data-slot="sidebar-wrapper"]');
+  await expect(shell).not.toHaveAttribute("data-narrow-web", "true");
+  const expand = page.getByRole("button", { name: "展开侧栏", exact: true });
+  if (await expand.isVisible()) await expand.click();
+  await expect(shell).toHaveAttribute("data-rail-collapsed", "false");
+  const separator = page.getByRole("separator", { name: "调整侧栏宽度" });
+  await separator.hover();
+  // Expanded state commits before the width transition ends. Hover can return
+  // during that transition; stale coordinates can hit a navigation row instead.
+  await expect.poll(() => separator.evaluate(element => {
+    const handle = element.getBoundingClientRect();
+    const shell = element.closest('[data-slot="sidebar-wrapper"]')!.getBoundingClientRect();
+    return Math.abs(handle.x + handle.width / 2 - shell.x - Number(element.getAttribute("aria-valuenow"))) < 1;
+  })).toBe(true);
+  const handle = await separator.boundingBox();
+  if (!handle) throw new Error("Rail resize handle is missing");
+  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+  await page.mouse.down();
+  await expect(page.locator('[data-slot="sidebar-wrapper"]')).toHaveAttribute("data-rail-resizing", "true");
+  await page.mouse.move(440, handle.y + handle.height / 2);
+  await page.mouse.up();
+  await expect(separator).toHaveAttribute("aria-valuenow", "440");
+  for (const width of [800, 768]) {
+    await page.setViewportSize({ width, height: 600 });
+    await expect(separator).toHaveAttribute("aria-valuenow", String(width - 420));
+    await expect.poll(() => page.locator('[data-slot="sidebar-inset"]').evaluate(el => el.getBoundingClientRect().width)).toBeGreaterThanOrEqual(419);
+  }
+  await page.setViewportSize({ width: 600, height: 600 });
+  await expect(shell).toHaveAttribute("data-narrow-web", "true");
+  await expand.focus();
+  await expect(expand).toBeFocused();
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await expect(shell).not.toHaveAttribute("data-narrow-web", "true");
+  await expect(page.getByRole("button", { name: "收起侧栏", exact: true })).toBeFocused();
+  await expect(separator).toHaveAttribute("aria-valuenow", "440");
+  await page.screenshot({ path: testInfo.outputPath("sidebar-restored-preference.png") });
 });

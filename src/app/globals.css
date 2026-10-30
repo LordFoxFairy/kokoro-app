@@ -151,6 +151,7 @@
   --library-canvas: #f8f8f7;
   --settings-surface: #f8f8f7;
   --settings-control-fill: rgb(55 53 47 / 8%);
+  --settings-editor-control-fill: rgb(55 53 47 / 6%);
   --settings-subtle-control-fill: rgb(55 53 47 / 4%);
   --settings-search-border: rgb(0 0 0 / 12%);
   --settings-control-border: rgb(0 0 0 / 14%);
@@ -193,6 +194,7 @@
   --settings-subtle-control-fill: rgb(255 255 255 / 6%);
   --settings-search-border: var(--border);
   --settings-control-fill: color-mix(in srgb, var(--foreground) 8%, transparent);
+  --settings-editor-control-fill: color-mix(in srgb, var(--foreground) 6%, transparent);
   --settings-control-border: color-mix(in srgb, var(--foreground) 14%, transparent);
   --settings-description-foreground: var(--muted-foreground);
   --foreground: #f2f1ec;

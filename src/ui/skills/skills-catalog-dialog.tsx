@@ -27,7 +27,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Empty, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import type { ManusSkillHubClient } from "./manus-skill-client";
 import type { CatalogSkillCategory, SkillCard, SkillCatalog, SkillCatalogCard } from "@/hub/schemas";
@@ -38,6 +37,7 @@ import { formatSkillDate } from "./skills-format";
 import { toSkillActionCard } from "./skills-card-model";
 import { mergeSkillCatalogPages, skillStateKey, skillSourceScope } from "./skills-pool-model";
 import { SKILLS_CATALOG_KEY, skillResourceKey } from "./skills-resource-cache";
+import { SkillCoverMedia } from "./skill-cover-media";
 import styles from "./skills-panel.module.css";
 
 type CatalogCategory = "all" | CatalogSkillCategory;
@@ -526,46 +526,15 @@ export function SkillCatalogDialog({
         </Alert>
       ) : null}
       {catalog.error !== undefined && displayedCatalog !== undefined ? (
-        <div className={styles.catalogLoadError} role="alert">
-          <p>{t("skills.loadError")}</p>
-          <Button type="button" variant="outline" onClick={retry} disabled={catalog.loading}>
-            {t("skills.retry")}
-          </Button>
-        </div>
+        <span className="sr-only" role="status">{t("skills.loadError")}</span>
       ) : null}
       <div
         className={styles.catalogGrid}
         data-testid="skills-catalog-scroll"
         aria-busy={catalogRefreshing || undefined}
       >
-        {(displayedCatalog === undefined && catalog.error === undefined) || (catalog.data === undefined && catalog.loading && filtered.length === 0) ? (
-          Array.from({ length: 4 }, (_, index) => (
-            <Card
-              className={styles.catalogCard}
-              key={`catalog-loading-${index}`}
-              aria-hidden="true"
-            >
-              <CardContent className={styles.catalogCardContent}>
-                <Skeleton className={styles.catalogSkeletonTitle} />
-                <Skeleton className={styles.catalogSkeletonDescription} />
-                <Skeleton className={styles.catalogSkeletonMeta} />
-              </CardContent>
-            </Card>
-          ))
-        ) : catalog.error !== undefined && displayedCatalog === undefined ? (
-          <div className={styles.catalogLoadError} role="alert">
-            <p>{t("skills.loadError")}</p>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={retry}
-              disabled={catalog.loading}
-              aria-busy={catalog.loading}
-            >
-              {catalog.loading ? <Spinner aria-hidden="true" /> : null}
-              {catalog.loading ? t("skills.loading") : t("skills.retry")}
-            </Button>
-          </div>
+        {displayedCatalog === undefined || catalog.data === undefined && filtered.length === 0 ? (
+          <span className="sr-only" role="status">{t(catalog.error === undefined ? "skills.loading" : "skills.loadError")}</span>
         ) : filtered.length > 0 ? (
           filtered.map((skill) => {
             const stateKey = skillStateKey(skill.scope, skill.name, skill.skill_id);
@@ -587,14 +556,11 @@ export function SkillCatalogDialog({
                 <CardContent className={styles.catalogCardContent}>
                   <div className={styles.catalogCardRow}>
                     <div className={styles.catalogCover} aria-hidden="true">
-                      {skill.cover_image ? (
-                        <Image
-                          src={skill.cover_image}
-                          alt=""
-                          fill
-                          sizes="112px"
-                        />
-                      ) : null}
+                      <SkillCoverMedia
+                        src={skill.cover_image}
+                        identity={skillResourceKey("hub/skills/cover", client)}
+                        sizes="112px"
+                      />
                     </div>
                     <button
                       type="button"
@@ -664,12 +630,10 @@ export function SkillCatalogDialog({
       </div>
       {catalog.data !== undefined && displayedCatalog?.next_cursor ? (
         <div ref={catalogMoreRef} className={styles.catalogMore}>
-          {loadingMore ? <Spinner aria-hidden="true" /> : null}
-          {loadMoreFailed ? (
-            <Button type="button" variant="outline" onClick={() => void loadMore()}>
-              {t("skills.retry")}
-            </Button>
-          ) : null}
+          {loadMoreFailed ? <span className="sr-only" role="status">{t("skills.loadError")}</span> : null}
+          <Button type="button" variant="outline" onClick={() => void loadMore()} disabled={loadingMore} aria-busy={loadingMore}>
+            {t("rail.loadMore")}
+          </Button>
         </div>
       ) : null}
     </>

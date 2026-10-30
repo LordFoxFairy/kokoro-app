@@ -18,6 +18,7 @@ import styles from "./mcp-create-dialog.module.css";
 const JSON_IMPORT_PLACEHOLDER = JSON.stringify({
   mcpServers: {
     SERVER_NAME: { type: "streamableHttp", url: "https://HOST/mcp" },
+    SSE_SERVER_NAME: { type: "sse", url: "https://HOST/sse" },
   },
 }, null, 2);
 
@@ -79,7 +80,7 @@ export function JsonMcpImportForm({
       />
       {failed ? (
         <p className={styles.compactDialogError} role="alert">
-          {t(state.kind === "unknown" ? connectorCommandFailureMessage(state.failure, "mcp.jsonImportUnknown") : "mcp.jsonImportInvalid")}
+          {t(state.kind === "unknown" ? connectorCommandFailureMessage(state.failure, "mcp.jsonImportUnknown") : state.rejection === "url_conflict" ? "mcp.serverUrlConflict" : "mcp.jsonImportInvalid")}
         </p>
       ) : null}
       {completed ? <p role="status">{t("mcp.jsonImportConfirmed")}</p> : null}

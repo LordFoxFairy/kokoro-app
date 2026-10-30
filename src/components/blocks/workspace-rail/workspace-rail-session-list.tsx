@@ -4,7 +4,6 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject }
 import { ListFilter, Plus } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import { Spinner } from "@/components/ui/spinner"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -87,7 +86,6 @@ export function WorkspaceRailSessionList({
   listLoading,
   listLoadingMore = false,
   listError,
-  onRetryList,
   hasMore,
   onLoadMore,
   onNewChat,
@@ -171,17 +169,12 @@ export function WorkspaceRailSessionList({
             <div className={itemStyles.listNotice} role="alert">{t("rail.moveFailed")}</div>
           ) : null}
           {blocked ? (
-            <p className={itemStyles.empty} role="status">{t("firstSite.unavailable")}</p>
+            <WorkspaceRailLoadingPlaceholder
+              label={t("rail.listLoading")}
+              testId="conversations-loading"
+            />
           ) : listError && !hasConversations ? (
-            <div className={itemStyles.listNotice} role="alert">
-              <p className={itemStyles.empty}>{t("rail.listError")}</p>
-              {onRetryList ? (
-                <Button variant="outline" size="sm" type="button" disabled={listLoading} aria-busy={listLoading} onClick={onRetryList}>
-                  {listLoading ? <Spinner aria-hidden="true" /> : null}
-                  {listLoading ? t("rail.listLoading") : t("rail.retryList")}
-                </Button>
-              ) : null}
-            </div>
+            <span className="sr-only" role="status">{t("rail.listError")}</span>
           ) : listLoading && !hasConversations ? (
             <WorkspaceRailLoadingPlaceholder
               label={t("rail.listLoading")}
@@ -189,15 +182,6 @@ export function WorkspaceRailSessionList({
             />
           ) : ordered.length > 0 ? (
             <>
-              {listError && onRetryList ? (
-                <div className={itemStyles.listNotice} role="alert">
-                  <p className={itemStyles.empty}>{t("rail.listError")}</p>
-                  <Button variant="outline" size="sm" type="button" disabled={listLoading} aria-busy={listLoading} onClick={onRetryList}>
-                    {listLoading ? <Spinner aria-hidden="true" /> : null}
-                    {listLoading ? t("rail.listLoading") : t("rail.retryList")}
-                  </Button>
-                </div>
-              ) : null}
               <SidebarMenu>
                 {ordered.map((conversation) => {
                   const title = conversation.title || t("rail.newChat")
@@ -244,7 +228,6 @@ export function WorkspaceRailSessionList({
                   aria-busy={listLoadingMore}
                   onClick={onLoadMore}
                 >
-                  {listLoadingMore ? <Spinner aria-hidden="true" /> : null}
                   {t("rail.loadMore")}
                 </Button>
               ) : null}
@@ -361,7 +344,7 @@ function ScopedConversationGroupView({ scope, reads, projects, projectListReady,
   return <ConversationGroup {...props} conversationMoveFailed={props.conversationMoveFailed && reads.failedMoveScopeKey === key} scopeKey={key} onNewChat={() => { if (reads.admitted && controller) reads.onNewChat(scope) }} blocked={!reads.admitted} projectActive={scope.kind === "project"}
     conversations={controller?.conversations ?? []} hasConversations={(controller?.conversations.length ?? 0) > 0}
     activeId={current ? reads.activeId : null}
-    listLoading={controller?.loading ?? reads.admitted} listLoadingMore={controller?.loadingMore ?? false} listError={controller?.error ?? !reads.admitted}
+    listLoading={controller?.loading ?? true} listLoadingMore={controller?.loadingMore ?? false} listError={controller?.error ?? false}
     {...(reads.admitted && controller ? { onRetryList: controller.refresh } : {})} hasMore={controller?.hasMore ?? false} onLoadMore={() => controller?.loadMore()}
     onSelectConversation={(id) => { if (reads.admitted) reads.onSelect(scope, id) }}
     {...(reads.onArchive ? {onArchiveConversation:reads.onArchive,archiveBusy:reads.archiveBusy??false}: {})}

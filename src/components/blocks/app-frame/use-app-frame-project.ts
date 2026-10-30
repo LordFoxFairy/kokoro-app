@@ -2,10 +2,12 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 
 import { useT } from "@/i18n/context"
 import { renameProject, ProjectRenameError } from "@/features/app/project-rename"
+import { deleteProject, ProjectDeleteError, readProjectDeletion } from "@/features/app/project-delete"
 import { ProjectReadError } from "@/features/app/project-list"
 import { projectRenameIdSchema, projectRenameRequestSchema, type ProjectRenameIntent } from "@/contract/project-rename"
+import { projectDeletionIdSchema, type ProjectDeletionIntent } from "@/contract/project-deletion"
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
-import type { ProjectRenameControl } from "@/components/blocks/workspace-header/workspace-header.types"
+import type { ProjectContextControl, ProjectDeleteControl, ProjectRenameControl } from "@/components/blocks/workspace-header/workspace-header.types"
 import { uploadProjectResource as uploadProjectResourceRequest } from "@/features/app/project-resource-upload"
 import { ProjectResourceUploadError } from "@/features/app/project-resource-upload"
 import { listProjectResources as listProjectResourcesRequest } from "@/features/app/project-resource-list"
@@ -20,8 +22,8 @@ import {
 } from "./app-frame-helpers"
 import type { Project, ProjectInstructionRevisionWire } from "@/contract/project"
 import type { ProjectReadState } from "@/features/app/use-project-list"
-import { updateProjectInstructions } from "@/features/app/project-list"
-import type { ProjectInstructionRevision } from "./app-frame.types"
+import { getProject, listProjectInstructionRevisions, updateProjectInstructions } from "@/features/app/project-list"
+import { ProjectInstructionSaveError, type ProjectInstructionRequest, type ProjectInstructionRevision } from "./app-frame.types"
 
 export type AppFrameProjectOptions = {
   projectRef: string | undefined
@@ -33,8 +35,11 @@ export type AppFrameProjectOptions = {
   clearDraft: () => void
   projectDetail: ProjectReadState<Project>
   instructionHistory: ProjectReadState<ProjectInstructionRevisionWire[]>
+  contextEnabled?: boolean
+  instructionsEnabled?: boolean
   instructionContext: object
   refreshProject: () => void
+  retireProject?: (projectId: string) => void
   refreshRenamedProject?: (target: string, signal: AbortSignal) => Promise<Project>
   renameBoundary?: ProjectReadBoundary
   renameRouteKey?: string
@@ -47,6 +52,11 @@ type ProjectCreationIntent = {
   navigationScope: { active: boolean; context: object }
 }
 type ProjectCreationState = { pending: boolean; error: boolean; retryable: boolean }
+
+function menuRouteMatches(route: string, rename: boolean): boolean {
+  const current = `${window.location.pathname}${window.location.search}${window.location.hash}`
+  return current === route || rename && current === route.replace(/#rename$/u, "")
+}
 
 /** Owns project-scoped draft handoff, instructions, resources, and mutations. */
 export function useAppFrameProject({
@@ -62,7 +72,10 @@ export function useAppFrameProject({
   projectDetail,
   instructionHistory,
   instructionContext,
+  instructionsEnabled = false,
+  contextEnabled = false,
   refreshProject,
+  retireProject,
   refreshRenamedProject,
   renameBoundary,
   renameRouteKey,
@@ -104,6 +117,51 @@ export function useAppFrameProject({
       scope.controller = null
     }
   }, [renameContext])
+  // Row-menu intents are RAM-only and actor-bound, but may cross to their exact target route.
+  const menuContext = useMemo(() => ({ mounted, preview, admitted: renameBoundary?.admitted,
+    subject: renameBoundary?.subject, generation: renameBoundary?.generation }),
+  [mounted, preview, renameBoundary?.admitted, renameBoundary?.subject, renameBoundary?.generation])
+  type MenuRequest = { target: string; route: string; context: typeof menuContext }
+  type MenuScope = { context: typeof menuContext; active: boolean; request: MenuRequest | null }
+  const menuScopeRef = useRef<MenuScope | null>(null)
+  const menuFocusRef = useRef<{ context: typeof menuContext; route: string; rename: boolean; opener: HTMLButtonElement | null } | null>(null)
+  const [deleteRequest, setDeleteRequest] = useState<MenuRequest | null>(null)
+  const projectMenuAccess = mounted && !preview && renameBoundary?.admitted === true && renameBoundary.subject !== null
+  useLayoutEffect(() => {
+    const scope: MenuScope = { context: menuContext, active: true, request: null }
+    menuScopeRef.current = scope
+    const retire = () => {
+      if (scope.request && !menuRouteMatches(scope.request.route, false)) {
+        scope.request = null
+        setDeleteRequest(null)
+      }
+      const focus = menuFocusRef.current
+      if (focus && !menuRouteMatches(focus.route, focus.rename)) menuFocusRef.current = null
+    }
+    window.addEventListener("popstate", retire)
+    window.addEventListener("kokoro:surface-navigation", retire)
+    return () => {
+      scope.active = false
+      scope.request = null
+      if (menuFocusRef.current?.context === menuContext) menuFocusRef.current = null
+      window.removeEventListener("popstate", retire)
+      window.removeEventListener("kokoro:surface-navigation", retire)
+    }
+  }, [menuContext])
+  const returnProjectMenuFocus = (fallback: HTMLButtonElement | null = null) => {
+    const focus = menuFocusRef.current
+    const scope = menuScopeRef.current
+    if (!focus || !scope?.active || scope.context !== menuContext || focus.context !== menuContext || !projectMenuAccess
+      || renameScopeRef.current?.context !== renameContext || !renameScopeRef.current.active
+      || projectRef === undefined || projectDetail.status !== "ready" || projectDetail.data.id !== projectRef
+      || window.location.pathname !== `/app/project/${encodeURIComponent(projectRef)}` || !menuRouteMatches(focus.route, focus.rename)) return false
+    const available = (node: HTMLButtonElement | null) => node?.isConnected && !node.disabled && (typeof node.checkVisibility !== "function" || node.checkVisibility())
+    const target = available(focus.opener) ? focus.opener : available(fallback) ? fallback : null
+    if (!target) return false
+    menuFocusRef.current = null
+    target.focus({ preventScroll: true })
+    return true
+  }
   const renameAvailable = mounted && projectWorkspace && !preview && renameBoundary?.admitted === true
     && renameBoundary.subject !== null && projectDetail.status === "ready" && projectDetail.data.id === projectRef
     && projectRenameIdSchema.safeParse(projectRef).success && refreshRenamedProject !== undefined && renameView.problem !== "permission"
@@ -163,6 +221,7 @@ export function useAppFrameProject({
   }, [projectDetail, renameAvailable, renameContext, setRenameView])
   const projectRename: ProjectRenameControl = {
     focusScopeToken: renameContext,
+    returnFocus: returnProjectMenuFocus,
     available: renameAvailable,
     ...renameView,
     onOpen: openRename,
@@ -202,26 +261,299 @@ export function useAppFrameProject({
       void runRename(true, true)
     },
   }
-  const requestProjectRename = useCallback((target: string) => {
-    if (preview || !projectRenameIdSchema.safeParse(target).success) return
-    navigateMountedSurface(`/app/project/${encodeURIComponent(target)}#rename`)
-  }, [preview])
+  const requestProjectRename = useCallback((target: string, opener: HTMLButtonElement | null = null) => {
+    const scope = menuScopeRef.current
+    const current = renameScopeRef.current
+    if (!projectMenuAccess || !scope?.active || scope.context !== menuContext || !projectRenameIdSchema.safeParse(target).success
+      || !current?.active || current.context !== renameContext || current.route !== `${window.location.pathname}${window.location.search}${window.location.hash}`) return
+    const route = `/app/project/${encodeURIComponent(target)}#rename`
+    menuFocusRef.current = { context: menuContext, route, rename: true, opener: opener?.isConnected ? opener : null }
+    navigateMountedSurface(route)
+  }, [projectMenuAccess, menuContext, renameContext])
   useEffect(() => {
     if (typeof window === "undefined" || window.location.hash !== "#rename" || !renameAvailable || renameView.open) return
     openRename()
   }, [openRename, renameAvailable, renameView.open])
 
-  const [previewProjection, setPreviewProjection] = useState<{ context: object; instruction: string; history: readonly ProjectInstructionRevision[] } | null>(null)
-  const saveScopeRef = useRef<{ context: object; active: boolean; controllers: Set<AbortController> } | null>(null)
+  type DeleteScope = {
+    context: typeof renameContext; route: string; active: boolean; busy: boolean; revoked: boolean; controller: AbortController | null
+    intent: ProjectDeletionIntent | null
+    targetName: string | null
+  }
+  type DeleteUi = Pick<ProjectDeleteControl, "open" | "status" | "problem" | "frozen" | "targetName">
+  const emptyDeleteUi: DeleteUi = { open: false, targetName: "", status: "idle", problem: null, frozen: false }
+  const deleteScopeRef = useRef<DeleteScope | null>(null)
+  const [deleteUi, setDeleteUi] = useState<{ context: typeof renameContext; ui: DeleteUi } | null>(null)
+  const deleteView = deleteUi?.context === renameContext ? deleteUi.ui : emptyDeleteUi
   useLayoutEffect(() => {
-    const scope = { context: instructionContext, active: true, controllers: new Set<AbortController>() }
-    saveScopeRef.current = scope
+    const scope: DeleteScope = { context: renameContext, route: typeof window === "undefined" ? "" : `${window.location.pathname}${window.location.search}${window.location.hash}`,
+      active: true, busy: false, revoked: false, controller: null, intent: null, targetName: null }
+    deleteScopeRef.current = scope
+    const retire = () => {
+      if (`${window.location.pathname}${window.location.search}${window.location.hash}` === scope.route) return
+      scope.active = false
+      scope.controller?.abort()
+      scope.intent = null
+      scope.targetName = null
+      setDeleteUi((current) => current?.context === scope.context ? null : current)
+    }
+    window.addEventListener("popstate", retire)
+    window.addEventListener("kokoro:surface-navigation", retire)
+    return () => {
+      window.removeEventListener("popstate", retire)
+      window.removeEventListener("kokoro:surface-navigation", retire)
+      scope.active = false
+      scope.controller?.abort()
+      scope.intent = null
+      scope.targetName = null
+      scope.controller = null
+    }
+  }, [renameContext])
+  const deleteAvailable = mounted && projectWorkspace && !preview && renameBoundary?.admitted === true
+    && renameBoundary.subject !== null && projectDetail.status === "ready" && projectDetail.data.id === projectRef
+    && projectDeletionIdSchema.safeParse(projectRef).success && deleteView.problem !== "permission"
+  const setDeleteView = useCallback((ui: Omit<DeleteUi, "frozen" | "targetName">) => {
+    const scope = deleteScopeRef.current
+    if (scope?.active && scope.context === renameContext) {
+      setDeleteUi({ context: renameContext, ui: {
+        ...ui,
+        targetName: scope.targetName ?? "",
+        frozen: scope.intent !== null || scope.revoked,
+      } })
+    }
+  }, [renameContext])
+  const confirmProjectDeleted = useCallback((scope: DeleteScope, intent: ProjectDeletionIntent) => {
+    const route = `${window.location.pathname}${window.location.search}${window.location.hash}`
+    if (!scope.active || deleteScopeRef.current !== scope || scope.context !== renameContext || route !== scope.route
+      || intent.projectId !== projectRef) return
+    // A validated 202/receipt confirms this actor's logical negative fact. Owner outbox cleanup remains background work.
+    scope.intent = null
+    scope.targetName = null
+    retireProject?.(intent.projectId)
+    refreshProject()
+    setDeleteView({ open: false, status: "idle", problem: null })
+    navigateMountedSurface("/app")
+  }, [projectRef, refreshProject, renameContext, retireProject, setDeleteView])
+  const runDelete = useCallback(async (readOnly: boolean) => {
+    const scope = deleteScopeRef.current
+    const intent = scope?.intent
+    if (!scope?.active || scope.context !== renameContext || !intent || scope.busy) return
+    scope.busy = true
+    const controller = new AbortController()
+    scope.controller = controller
+    const current = () => scope.active && deleteScopeRef.current === scope && !controller.signal.aborted && scope.intent === intent
+      && `${window.location.pathname}${window.location.search}${window.location.hash}` === scope.route
+    setDeleteView({ open: true, status: "pending", problem: null })
+    try {
+      if (!current()) return
+      if (readOnly) await readProjectDeletion(intent.projectId, controller.signal)
+      else await deleteProject(intent, controller.signal)
+      if (!current()) return
+      confirmProjectDeleted(scope, intent)
+    } catch (error) {
+      if (!current()) return
+      const verifiedOwner = error instanceof ProjectDeleteError && error.verifiedOwner
+      const verifiedPermission = verifiedOwner && [
+        "session_authentication_required", "session_invalid", "service_auth_failed", "session_forbidden", "product_tenant_forbidden",
+      ].includes(error.code)
+      const verifiedRejectedWrite = !readOnly && verifiedOwner && [
+        "invalid_project_deletion_request", "idempotency_key_required", "invalid_idempotency_key", "project_not_found", "idempotency_conflict",
+      ].includes(error.code)
+      if (verifiedPermission) {
+        // Only the operation-specific, fully parsed owner admission profile may retire the actor-scoped intent.
+        scope.intent = null
+        scope.revoked = true
+        setDeleteView({ open: true, status: "error", problem: "permission" })
+      } else if (verifiedRejectedWrite) {
+        scope.intent = null
+        setDeleteView({ open: true, status: "error", problem: "rejected" })
+      } else {
+        // Unknown wire/status/profile and all receipt-read failures preserve the exact original key/body.
+        setDeleteView({ open: true, status: "unknown", problem: readOnly ? "read" : "unknown" })
+      }
+    } finally {
+      controller.abort()
+      if (scope.controller === controller) scope.controller = null
+      scope.busy = false
+    }
+  }, [confirmProjectDeleted, renameContext, setDeleteView])
+  const openDelete = useCallback(() => {
+    const scope = deleteScopeRef.current
+    if (!deleteAvailable || !scope?.active || scope.context !== renameContext || scope.busy) return
+    scope.route = `${window.location.pathname}${window.location.search}${window.location.hash}`
+    const retained = scope.intent
+    if (!retained) scope.targetName = projectDetail.status === "ready" && projectDetail.data.id === projectRef ? projectDetail.data.name : null
+    setDeleteView(retained ? { open: true, status: "unknown", problem: "unknown" } : { open: true, status: "idle", problem: null })
+  }, [deleteAvailable, projectDetail, projectRef, renameContext, setDeleteView])
+  const projectDelete: ProjectDeleteControl = {
+    focusScopeToken: renameContext,
+    returnFocus: returnProjectMenuFocus,
+    available: deleteAvailable,
+    ...deleteView,
+    onOpen: openDelete,
+    onClose: () => {
+      const scope = deleteScopeRef.current
+      if (!scope?.active || scope.context !== renameContext || scope.busy) return
+      if (!scope.intent) scope.targetName = null
+      setDeleteView(scope.intent ? { ...deleteView, open: false } : { open: false, status: "idle", problem: scope.revoked ? "permission" : null })
+    },
+    onConfirm: () => {
+      const scope = deleteScopeRef.current
+      if (!deleteAvailable || !scope?.active || scope.context !== renameContext || scope.busy || scope.intent || !projectRef) return
+      if (window.location.pathname !== `/app/project/${projectRef}`) return
+      scope.targetName ??= projectDetail.status === "ready" && projectDetail.data.id === projectRef ? projectDetail.data.name : null
+      scope.intent = Object.freeze({ projectId: projectRef, idempotencyKey: crypto.randomUUID(), body: null })
+      void runDelete(false)
+    },
+    onRetry: () => { if (deleteScopeRef.current?.context === renameContext && deleteScopeRef.current.intent) void runDelete(false) },
+    onCheck: () => { if (deleteScopeRef.current?.context === renameContext && deleteScopeRef.current.intent) void runDelete(true) },
+  }
+
+  const requestProjectDeletion = useCallback((target: string, opener: HTMLButtonElement | null) => {
+    const scope = menuScopeRef.current
+    const current = renameScopeRef.current
+    if (!projectMenuAccess || !scope?.active || scope.context !== menuContext || !projectDeletionIdSchema.safeParse(target).success
+      || !current?.active || current.context !== renameContext || current.route !== `${window.location.pathname}${window.location.search}${window.location.hash}`) return
+    const path = `/app/project/${encodeURIComponent(target)}`
+    const route = window.location.pathname === path ? `${window.location.pathname}${window.location.search}${window.location.hash}` : path
+    const request: MenuRequest = { target, route, context: menuContext }
+    scope.request = request
+    menuFocusRef.current = { context: menuContext, route, rename: false, opener: opener?.isConnected ? opener : null }
+    setDeleteRequest(request)
+    navigateMountedSurface(route)
+  }, [projectMenuAccess, menuContext, renameContext])
+  useEffect(() => {
+    const scope = menuScopeRef.current
+    if (!deleteRequest || !scope?.active || scope.context !== menuContext || scope.request !== deleteRequest
+      || deleteRequest.context !== menuContext || !projectMenuAccess || !menuRouteMatches(deleteRequest.route, false)
+      || projectRef !== deleteRequest.target || projectDetail.status !== "ready" || projectDetail.data.id !== deleteRequest.target || !deleteAvailable) return
+    scope.request = null
+    setDeleteRequest(null)
+    openDelete()
+  }, [deleteRequest, menuContext, projectMenuAccess, projectRef, projectDetail, deleteAvailable, openDelete])
+
+  const contextTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const contextAvailable = mounted && projectWorkspace && contextEnabled && projectRef !== undefined
+    && (preview || renameBoundary?.admitted === true && renameBoundary.subject !== null && projectDetail.status === "ready" && projectDetail.data.id === projectRef)
+  const [contextView, setContextView] = useState<{ context: object; route: string; opener: HTMLButtonElement | null } | null>(null)
+  const contextLive = useRef<{ context: object; route: string; opener: HTMLButtonElement | null } | null>(null)
+  const currentRoute = () => `${window.location.pathname}${window.location.search}${window.location.hash}`
+  const contextOpen = contextAvailable && contextView?.context === renameContext && contextView.route === currentRoute()
+  useLayoutEffect(() => { contextLive.current = contextOpen ? contextView : null; return () => { contextLive.current = null } }, [contextView, contextOpen])
+  const dismissProjectContext = useCallback(() => { contextLive.current = null; setContextView(null) }, [])
+  const projectContext: ProjectContextControl = {
+    onTriggerMount: target => { contextTriggerRef.current = target },
+    available: contextAvailable, open: contextOpen,
+    onOpen: (opener) => {
+      if (!contextAvailable || renameScopeRef.current?.context !== renameContext || !renameScopeRef.current.active || renameScopeRef.current.route !== currentRoute()) return
+      setContextView({ context: renameContext, route: currentRoute(), opener })
+    },
+    onClose: () => {
+      const closing = contextLive.current
+      dismissProjectContext()
+      window.requestAnimationFrame(() => {
+        if (!closing || closing.context !== renameScopeRef.current?.context || !renameScopeRef.current.active || closing.route !== currentRoute() || contextLive.current) return
+        const available = (target: HTMLButtonElement | null) => target?.isConnected && !target.disabled && (typeof target.checkVisibility !== "function" || target.checkVisibility())
+        const target = available(closing.opener) ? closing.opener : contextTriggerRef.current
+        if (target && available(target)) target.focus({ preventScroll: true })
+      })
+    },
+  }
+
+  // A menu handoff is document-local and expires with admission or navigation.
+  // It never copies instructions or survives a different actor's lifetime.
+  const [instructionEntryEpoch, setInstructionEntryEpoch] = useState(0)
+  const instructionEntryContext = useMemo(() => ({ mounted, preview, instructionsEnabled, instructionEntryEpoch,
+    admitted: renameBoundary?.admitted, subject: renameBoundary?.subject, generation: renameBoundary?.generation }), [mounted, preview, instructionsEnabled, instructionEntryEpoch,
+    renameBoundary?.admitted, renameBoundary?.subject, renameBoundary?.generation])
+  type InstructionEntryScope = { context: object; active: boolean; request: ProjectInstructionRequest | null; route: string | null }
+  const instructionTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const instructionEntryScopeRef = useRef<InstructionEntryScope | null>(null)
+  const [instructionEntry, setInstructionEntry] = useState<{ context: object; request: ProjectInstructionRequest } | null>(null)
+  const instructionAccess = mounted && instructionsEnabled && (preview || renameBoundary?.admitted === true && renameBoundary.subject !== null)
+  useLayoutEffect(() => {
+    const scope: InstructionEntryScope = { context: instructionEntryContext, active: true, request: null, route: null }
+    instructionEntryScopeRef.current = scope
+    const retire = () => {
+      if (!scope.active || scope.route === `${window.location.pathname}${window.location.search}${window.location.hash}`) return
+      scope.active = false
+      scope.request = null
+      setInstructionEntryEpoch(value => value + 1)
+      setInstructionEntry((current) => current?.context === scope.context ? null : current)
+    }
+    window.addEventListener("popstate", retire)
+    window.addEventListener("kokoro:surface-navigation", retire)
     return () => {
       scope.active = false
+      scope.request = null
+      window.removeEventListener("popstate", retire)
+      window.removeEventListener("kokoro:surface-navigation", retire)
+    }
+  }, [instructionEntryContext])
+  const renderedInstructionProject = useRef(projectRef)
+  useLayoutEffect(() => { renderedInstructionProject.current = projectRef }, [projectRef])
+  const requestProjectInstructions = useCallback((target: string, returnFocus: HTMLButtonElement | null) => {
+    const scope = instructionEntryScopeRef.current
+    if (renderedInstructionProject.current !== projectRef || renameScopeRef.current?.context !== renameContext || renameScopeRef.current?.active !== true || renameScopeRef.current.route !== currentRoute() || !instructionAccess || !target || !scope?.active || scope.context !== instructionEntryContext) return
+    const sameProject = projectWorkspace && target === projectRef && window.location.pathname === `/app/project/${encodeURIComponent(target)}`
+    const route = sameProject ? currentRoute() : `/app/project/${encodeURIComponent(target)}`
+    const request: ProjectInstructionRequest = {
+      projectRef: target,
+      returnFocus: returnFocus?.isConnected ? returnFocus : null,
+      fallbackFocus: () => instructionTriggerRef.current,
+      isCurrent: () => scope.active && scope.request === request
+        && route === `${window.location.pathname}${window.location.search}${window.location.hash}`,
+      onConsumed: () => setInstructionEntry((current) => current?.request === request ? null : current),
+    }
+    scope.request = request
+    scope.route = route
+    setInstructionEntry({ context: instructionEntryContext, request })
+    if (sameProject) {
+      if (contextAvailable) setContextView({ context: renameContext, route, opener: returnFocus })
+    } else navigateMountedSurface(route)
+  }, [instructionAccess, instructionEntryContext, projectWorkspace, projectRef, contextAvailable, renameContext])
+  const instructionReady = instructionAccess && projectWorkspace && projectRef !== undefined
+    && (preview || projectDetail.status === "ready" && projectDetail.data.id === projectRef)
+  const projectInstruction = {
+    onTriggerMount: (target: HTMLButtonElement | null) => { instructionTriggerRef.current = target },
+    available: instructionReady,
+    onOpen: (returnFocus: HTMLButtonElement | null) => { if (instructionReady && projectRef) requestProjectInstructions(projectRef, returnFocus) },
+  }
+  const projectInstructionRequest = instructionReady && instructionEntry?.context === instructionEntryContext
+    && instructionEntry.request.projectRef === projectRef ? instructionEntry.request : undefined
+
+  const [previewProjection, setPreviewProjection] = useState<{ context: object; instruction: string; history: readonly ProjectInstructionRevision[] } | null>(null)
+  // A read refresh cannot retire an uncertain write. Only identity, Project,
+  // admission, or actual route retirement owns this command lifetime.
+  const [instructionRouteEpoch, setInstructionRouteEpoch] = useState(0)
+  const instructionCommandContext = useMemo(() => ({ instructionEntryContext, projectRef, projectWorkspace, instructionRouteEpoch, route: renameRouteKey }),
+    [instructionEntryContext, projectRef, projectWorkspace, instructionRouteEpoch, renameRouteKey])
+  type InstructionIntent = { projectRef: string; instruction: string; key: string; acknowledged: boolean }
+  const saveScopeRef = useRef<{ context: object; active: boolean; busy: boolean; revoked: boolean;
+    intent: InstructionIntent | null; controllers: Set<AbortController> } | null>(null)
+  useLayoutEffect(() => {
+    const scope = { context: instructionCommandContext, active: true, busy: false, revoked: false,
+      intent: null as InstructionIntent | null, controllers: new Set<AbortController>() }
+    saveScopeRef.current = scope
+    const route = `${window.location.pathname}${window.location.search}${window.location.hash}`
+    const retire = () => {
+      if (!scope.active || route === `${window.location.pathname}${window.location.search}${window.location.hash}`) return
+      scope.active = false
+      scope.intent = null
+      for (const controller of scope.controllers) controller.abort()
+      setInstructionRouteEpoch((value) => value + 1)
+    }
+    window.addEventListener("popstate", retire)
+    window.addEventListener("kokoro:surface-navigation", retire)
+    return () => {
+      scope.active = false
+      scope.intent = null
       for (const controller of scope.controllers) controller.abort()
       scope.controllers.clear()
+      window.removeEventListener("popstate", retire)
+      window.removeEventListener("kokoro:surface-navigation", retire)
     }
-  }, [instructionContext])
+  }, [instructionCommandContext])
   const projectInstructions = preview
     ? previewProjection?.context === instructionContext ? previewProjection.instruction : ""
     : projectDetail.status === "ready" ? projectDetail.data.instruction ?? "" : ""
@@ -316,9 +648,9 @@ export function useAppFrameProject({
     return () => { active = false }
   }, [preview, projectRef, instructionContext, t])
 
-  const saveProjectInstructions = useCallback(async (instructions: string) => {
+  const saveProjectInstructions = useCallback(async (instructions: string): Promise<void> => {
     const saveScope = saveScopeRef.current
-    if (!saveScope?.active || saveScope.context !== instructionContext || !projectRef) throw new DOMException("Aborted", "AbortError")
+    if (!saveScope?.active || saveScope.context !== instructionCommandContext || !projectRef) throw new DOMException("Aborted", "AbortError")
     if (preview) {
       window.localStorage.setItem(`kokoro.preview.project.${projectRef}.instructions`, instructions)
       const revision: ProjectInstructionRevision = { id: crypto.randomUUID(), instruction: instructions, updatedAt: Date.now(), actorName: t("firstSite.you"), current: true }
@@ -327,16 +659,55 @@ export function useAppFrameProject({
       setPreviewProjection({ context: instructionContext, instruction: instructions, history })
       return
     }
-    if (projectDetail.status !== "ready") throw new Error("project_not_available")
+    if (projectDetail.status !== "ready" || projectDetail.data.id !== projectRef
+      || renameBoundary !== undefined && (!renameBoundary.admitted || renameBoundary.subject === null)) throw new Error("project_not_available")
+    if (saveScope.revoked) throw new ProjectInstructionSaveError("forbidden", instructions)
+    if (saveScope.busy) throw new DOMException("Operation pending", "AbortError")
+    // Retain the original bytes and identity even if a caller presents new text.
+    let intent = saveScope.intent ?? { projectRef, instruction: instructions,
+      key: `project-instructions:${projectRef}:${crypto.randomUUID()}`, acknowledged: false }
+    saveScope.intent = intent
+    saveScope.busy = true
     const controller = new AbortController()
     saveScope.controllers.add(controller)
+    const current = () => saveScope.active && saveScopeRef.current === saveScope && !controller.signal.aborted
     try {
-      await updateProjectInstructions(projectRef, instructions, `project-instructions:${projectRef}:${crypto.randomUUID()}`, controller.signal)
-      if (!saveScope.active || controller.signal.aborted) throw new DOMException("Aborted", "AbortError")
-      // Only the current owner GET supplies instruction/history after an ACK.
+      if (!intent.acknowledged) {
+        await updateProjectInstructions(intent.projectRef, intent.instruction, intent.key, controller.signal)
+        if (!current()) throw new DOMException("Aborted", "AbortError")
+        intent = { ...intent, acknowledged: true }
+        saveScope.intent = intent
+      }
+      // A known ACK never writes again, including after a failed owner read.
+      await getProject(intent.projectRef, controller.signal)
+      if (!current()) throw new DOMException("Aborted", "AbortError")
+      await listProjectInstructionRevisions(intent.projectRef, controller.signal)
+      if (!current()) throw new DOMException("Aborted", "AbortError")
       refreshProject()
-    } finally { saveScope.controllers.delete(controller) }
-  }, [preview, projectRef, t, projectDetail, projectInstructionHistory, instructionContext, refreshProject])
+      saveScope.intent = null
+      return
+    } catch (error) {
+      if (!current()) throw new DOMException("Aborted", "AbortError")
+      if (error instanceof ProjectReadError && (error.status === 401 || error.status === 403)) {
+        saveScope.revoked = true
+        saveScope.intent = null
+        throw new ProjectInstructionSaveError("forbidden", intent.instruction)
+      }
+      if (intent.acknowledged) throw new ProjectInstructionSaveError("read-error", intent.instruction)
+      if (error instanceof ProjectReadError && error.reason === "http" &&
+        (error.status === 400 || error.status === 404)) {
+        saveScope.intent = null
+        throw new ProjectInstructionSaveError("rejected", intent.instruction)
+      }
+      // A bare 409 can mean idempotency_in_progress, not a rejected mutation.
+      // The existing reader does not expose its code: preserve the exact intent.
+      throw new ProjectInstructionSaveError("unknown", intent.instruction)
+    } finally {
+      saveScope.busy = false
+      saveScope.controllers.delete(controller)
+      controller.abort()
+    }
+  }, [preview, projectRef, t, projectDetail, projectInstructionHistory, instructionContext, instructionCommandContext, refreshProject, renameBoundary])
 
   const uploadProjectResource = useCallback(async (file: File, idempotencyKey: string) => {
     if (!projectRef) throw new ProjectResourceUploadError("project_not_selected", false)
@@ -470,6 +841,15 @@ export function useAppFrameProject({
 
   return {
     projectRename,
+    projectContext,
+    dismissProjectContext,
+    projectDelete,
+    requestProjectDeletion,
+    projectMenuAccess,
+    projectInstruction,
+    projectInstructionRequest,
+    requestProjectInstructions,
+    instructionAccess,
     projectInstructions,
     projectInstructionHistory,
     saveProjectInstructions,

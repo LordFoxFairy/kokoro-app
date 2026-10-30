@@ -70,13 +70,44 @@ it("offers keyboard category selection and continuation without replacing the se
   expect(screen.getByRole("searchbox")).toBeInTheDocument()
 })
 
-it("keeps confirmed provider cards visible without a blocking retry panel during refresh", () => {
+it("keeps unknown results quiet and the continuation label stable while its owner read is pending", () => {
   window.localStorage.setItem("kokoro.locale", "zh")
-  render(<LocaleProvider><McpProviderCatalogDialog open providers={seed.items} loading={false} hasMore={false}
-    onLoadMore={vi.fn()} error onRetry={vi.fn()} query="" categoryFilter="all" returnFocusRef={{ current: null }}
-    onOpenChange={vi.fn()} onQueryChange={vi.fn()} onCategoryFilterChange={vi.fn()} onSelectProvider={vi.fn()} /></LocaleProvider>)
+  const props = { query: "", showSearch: true, categoryFilter: "all" as const, onCategoryFilterChange: vi.fn(), onSelectProvider: vi.fn() }
+  const { rerender } = render(<LocaleProvider><McpProviderDirectory {...props} providers={[]} loading /></LocaleProvider>)
+  const search = screen.getByRole("searchbox")
+  expect(screen.queryByText("当前没有可添加的连接器提供方。")).not.toBeInTheDocument()
+  expect(screen.getByRole("status")).toHaveClass("sr-only")
+  rerender(<LocaleProvider><McpProviderDirectory {...props} providers={seed.items} loading hasMore onLoadMore={vi.fn()} /></LocaleProvider>)
+  expect(screen.getByRole("searchbox")).toBe(search)
   expect(screen.getByRole("button", { name: "first" })).toBeVisible()
+  expect(screen.getByRole("button", { name: "加载更多" })).toBeDisabled()
+  expect(screen.getByRole("button", { name: "加载更多" })).toHaveAttribute("aria-busy", "true")
+})
+
+it.each(["pending", "failed"] as const)("keeps the external catalog %s without a loading/error panel or a false empty directory", state => {
+  window.localStorage.setItem("kokoro.locale", "zh")
+  const select = vi.fn()
+  const props = { open: true, providers: [], loading: state === "pending", error: state === "failed", hasMore: false,
+    query: "", categoryFilter: "all" as const, returnFocusRef: { current: null }, onOpenChange: vi.fn(),
+    onQueryChange: vi.fn(), onCategoryFilterChange: vi.fn(), onLoadMore: vi.fn(), onSelectProvider: select }
+  const { rerender } = render(<LocaleProvider><McpProviderCatalogDialog {...props} /></LocaleProvider>)
+  const search = screen.getByRole("searchbox")
+  expect(screen.queryByText("当前没有可添加的连接器提供方。")).not.toBeInTheDocument()
+  expect(screen.queryByText("没有匹配的连接")).not.toBeInTheDocument()
   expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
+  expect(screen.getByRole("status")).toHaveClass("sr-only")
+  expect(select).not.toHaveBeenCalled()
+  rerender(<LocaleProvider><McpProviderCatalogDialog {...props} providers={seed.items} loading={false} error={false} /></LocaleProvider>)
+  const card = screen.getByRole("button", { name: "first" })
+  expect(screen.getByRole("searchbox")).toBe(search)
+  rerender(<LocaleProvider><McpProviderCatalogDialog {...props} providers={seed.items} loading={false} error /></LocaleProvider>)
+  expect(screen.getByRole("button", { name: "first" })).toBe(card)
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+  fireEvent.click(card)
+  expect(select).toHaveBeenCalledExactlyOnceWith(seed.items[0], card)
+  rerender(<LocaleProvider><McpProviderCatalogDialog {...props} loading={false} error={false} /></LocaleProvider>)
+  expect(screen.getByText("当前没有可添加的连接器提供方。")).toBeVisible()
 })
 
 it("stops a repeated provider cursor and explicitly restarts from the first page without discarding rows", async () => {
@@ -121,7 +152,7 @@ it("hands category focus between the rail and menu when the actual localized lab
   try {
     render(<LocaleProvider><McpProviderCatalogDialog open providers={seed.items} loading={false} hasMore={false}
       onLoadMore={vi.fn()} error={false} query="" categoryFilter="all" returnFocusRef={{ current: null }}
-      onOpenChange={vi.fn()} onQueryChange={vi.fn()} onCategoryFilterChange={vi.fn()} onRetry={vi.fn()}
+      onOpenChange={vi.fn()} onQueryChange={vi.fn()} onCategoryFilterChange={vi.fn()}
       onSelectProvider={vi.fn()} /></LocaleProvider>)
     const rail = screen.getByRole("button", { name: "开发", pressed: false })
     act(() => rail.focus())

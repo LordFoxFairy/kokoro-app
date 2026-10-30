@@ -1,6 +1,7 @@
 import { PersonalKnowledgeProvider } from "@/ui/settings/knowledge/session-context";
 import { useEffect, type ComponentType, type RefObject } from "react";
 
+import { McpContent, type McpCatalogDialog } from "@/ui/mcp/mcp-content";
 import { McpCreateDialog } from "@/ui/mcp/mcp-create-dialog";
 import type { McpCreateMode } from "@/ui/mcp/mcp-panel-model";
 import { SettingsModal, type SettingsTab } from "@/ui/settings/settings-modal";
@@ -19,6 +20,7 @@ import type { AppCommandMenuProps } from "./app-command-menu";
 export type AppFrameOverlaySurfacesProps = {
   onArchiveChanged?: (state: import("@/lib/archived-tasks.schema").ArchiveState) => void;
   mounted: boolean;
+  mcpCatalog?: McpCatalogDialog & { onCreate: (mode: McpCreateMode, returnTarget?: HTMLElement | null) => void };
   settingsTab: SettingsTab | null;
   settingsSkillsScope?: SkillsScopeFilter;
   brandName: string | undefined;
@@ -42,6 +44,7 @@ export type AppFrameOverlaySurfacesProps = {
 /** Owns the mounted Settings/MCP/command overlay surfaces and their adapters. */
 export function AppFrameOverlaySurfaces({
   mounted,
+  mcpCatalog,
   settingsTab,
   settingsSkillsScope,
   brandName,
@@ -123,6 +126,13 @@ export function AppFrameOverlaySurfaces({
           focusScopeRef={shellRef}
         />
       ) : null}
+
+      {mounted && mcpCatalog?.open ? <McpContent
+        client={browserHubClient({ preview })} preview={preview}
+        {...(readBoundary === undefined ? {} : { readBoundary })}
+        {...(brandName === undefined ? {} : { brandName })}
+        catalogDialog={mcpCatalog} settingsLayout onCreateMcp={mcpCatalog.onCreate}
+      /> : null}
 
       {mounted && mcpCreateMode !== null ? (
         <McpCreateDialog

@@ -1,0 +1,17 @@
+.inspector { display: flex; flex-direction: column; gap: 16px; min-width: 0; padding: 20px; font-size: 14px; line-height: 20px; }
+.operation, .status, .missing { margin: 0; color: var(--muted-foreground); }
+.target { margin: 0; font-size: 16px; line-height: 24px; font-weight: 600; overflow-wrap: anywhere; white-space: pre-wrap; color: var(--foreground); }
+.section { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.heading { margin: 0; font-size: 14px; font-weight: 500; }
+.preview { margin: 0; padding: 12px; border-radius: var(--radius-md); background: var(--muted); font-size: 13px; line-height: 20px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.annotation { color: var(--muted-foreground); font-size: 12px; }
+.resultText { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; }
+.resultMarkdown { min-width: 0; overflow-wrap: anywhere; }
+.resultMarkdown > [data-slot="markdown-message"] { font-size: inherit; line-height: 1.6; }
+.resultMarkdown table { display: block; max-width: 100%; overflow-x: auto; }
+.technical { border-top: 1px solid var(--border); padding-top: 16px; min-width: 0; }
+.technical summary { cursor: pointer; color: var(--muted-foreground); width: fit-content; }
+.technical summary:focus-visible { outline: 2px solid var(--ring); outline-offset: 4px; border-radius: var(--radius-sm); }
+.technicalBody { display: flex; flex-direction: column; gap: 16px; padding-top: 16px; min-width: 0; }
+
+.targetReference { margin: 0; color: var(--muted-foreground); white-space: pre-wrap; overflow-wrap: anywhere; }

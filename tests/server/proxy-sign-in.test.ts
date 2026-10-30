@@ -4,12 +4,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { iamSignInCsrfCookieName } from "@/lib/server/iam-interaction-csrf"
 import { contentSecurityPolicy } from "@/lib/server/security-headers"
 
-const { issueIamInteractionCsrf } = vi.hoisted(() => ({ issueIamInteractionCsrf: vi.fn() }))
-
-vi.mock("@/lib/server/iam-interaction-csrf", async (original) => ({
-  ...(await original<typeof import("@/lib/server/iam-interaction-csrf")>()), issueIamInteractionCsrf,
+const { issueIamInteractionCsrf, readIamSignInFlow, createIamSignInFlow, retireObservedSignInCsrf } = vi.hoisted(() => ({
+  issueIamInteractionCsrf: vi.fn(), readIamSignInFlow: vi.fn(), createIamSignInFlow: vi.fn(), retireObservedSignInCsrf: vi.fn(),
 }))
 
+vi.mock("@/lib/server/iam-interaction-csrf", async (original) => ({
+  ...(await original<typeof import("@/lib/server/iam-interaction-csrf")>()), issueIamInteractionCsrf, retireObservedSignInCsrf,
+}))
+
+vi.mock("@/lib/server/iam-sign-in-flow", async original => ({
+  ...(await original<typeof import("@/lib/server/iam-sign-in-flow")>()), readIamSignInFlow, createIamSignInFlow,
+}))
+const FLOW = "f".repeat(24)
+const SHORT_QUERY = `?flow=${FLOW}`
 const ORIGIN = "https://web.example.test:4433"
 const QUERY = "?sig=%2BAb"
 const TOKEN = "a".repeat(43)
@@ -27,6 +34,9 @@ function request(path: string, headers: HeadersInit = {}): NextRequest {
 describe("HTTPS issuer sign-in Proxy rewrite", () => {
   beforeEach(() => {
     for (const [key, value] of Object.entries(ENV)) process.env[key] = value
+    readIamSignInFlow.mockReset().mockResolvedValue({ query: QUERY, expiresAt: Date.now() + 60_000 })
+    createIamSignInFlow.mockReset().mockResolvedValue({ id: FLOW, path: `/auth/sign-in${SHORT_QUERY}`, cookie: `flow=proof; HttpOnly` })
+    retireObservedSignInCsrf.mockReset().mockResolvedValue([])
     issueIamInteractionCsrf.mockReset().mockResolvedValue({
       token: TOKEN,
       cookie: `${iamSignInCsrfCookieName(QUERY, TOKEN)}=${TOKEN}; Path=/auth/sign-in; Max-Age=300; HttpOnly; SameSite=Lax`,
@@ -34,12 +44,21 @@ describe("HTTPS issuer sign-in Proxy rewrite", () => {
   })
   afterEach(() => { for (const key of Object.keys(ENV)) delete process.env[key] })
 
-  it("keeps the TLS-terminated public origin and non-default port for the internal form rewrite", async () => {
+  it("redirects the protocol entry to a short browser-bound form address before rendering", async () => {
     const { proxy } = await import("@/proxy")
     const response = await proxy(request(`/auth/sign-in${QUERY}`))
+    expect(response.status).toBe(303)
+    expect(response.headers.get("location")).toMatch(/^https:\/\/web\.example\.test:4433\/auth\/sign-in\?flow=[A-Za-z0-9_-]{24}$/u)
+    expect(response.headers.get("location")).not.toContain("sig=")
+    expect(response.headers.get("referrer-policy")).toBe("no-referrer")
+  })
+
+  it("keeps the TLS-terminated public origin and non-default port for the internal form rewrite", async () => {
+    const { proxy } = await import("@/proxy")
+    const response = await proxy(request(`/auth/sign-in${SHORT_QUERY}`))
 
     expect(response.status).toBe(200)
-    expect(response.headers.get("x-middleware-rewrite")).toBe(`${ORIGIN}/auth/sign-in/form${QUERY}`)
+    expect(response.headers.get("x-middleware-rewrite")).toBe(`${ORIGIN}/auth/sign-in/form${SHORT_QUERY}`)
     expect(response.headers.get("cache-control")).toContain("no-store")
     expect(issueIamInteractionCsrf).toHaveBeenCalledWith(expect.objectContaining({
       webOrigin: ORIGIN, path: "/auth/sign-in", method: "POST", query: QUERY,
@@ -48,22 +67,32 @@ describe("HTTPS issuer sign-in Proxy rewrite", () => {
 
   it("uses the verified public origin when Next normalizes request.url to its internal listener", async () => {
     const { proxy } = await import("@/proxy")
-    const internal = new NextRequest(`https://127.0.0.1:5151/auth/sign-in${QUERY}`, {
+    const internal = new NextRequest(`https://127.0.0.1:5151/auth/sign-in${SHORT_QUERY}`, {
       headers: { host: "web.example.test:4433" },
     })
     const response = await proxy(internal)
 
     expect(response.status).toBe(200)
-    expect(response.headers.get("x-middleware-rewrite")).toBe(`${ORIGIN}/auth/sign-in/form${QUERY}`)
+    expect(response.headers.get("x-middleware-rewrite")).toBe(`${ORIGIN}/auth/sign-in/form${SHORT_QUERY}`)
   })
 
   it("rejects a new render at its visible proof budget without deleting existing forms", async () => {
     const { proxy } = await import("@/proxy")
     const cookie = ["a", "b", "c", "d"].map(letter => `${iamSignInCsrfCookieName(QUERY, letter.repeat(43))}=proof`).join("; ")
-    const response = await proxy(request(`/auth/sign-in${QUERY}`, { cookie }))
+    const response = await proxy(request(`/auth/sign-in${SHORT_QUERY}`, { cookie }))
     expect(response.status).toBe(429)
     expect(response.headers.get("set-cookie")).toBeNull()
     expect(issueIamInteractionCsrf).not.toHaveBeenCalled()
+  })
+
+  it("clears already-retired observed proofs even when issuing the replacement fails", async () => {
+    const { proxy } = await import("@/proxy")
+    const name = iamSignInCsrfCookieName(QUERY, TOKEN, FLOW)!
+    retireObservedSignInCsrf.mockImplementation(async (_input, onRetired) => { onRetired(name); return [name] })
+    issueIamInteractionCsrf.mockRejectedValue(new Error("Redis unavailable"))
+    const result = await proxy(request(`/auth/sign-in${SHORT_QUERY}`, { cookie: `${name}=${TOKEN}` }))
+    expect(result.status).toBe(503)
+    expect(result.headers.getSetCookie()).toEqual([`${name}=; Path=/auth/sign-in; Max-Age=0; HttpOnly; SameSite=Lax`])
   })
 
   it("rejects direct form requests even when a browser forges internal headers", async () => {
@@ -126,7 +155,7 @@ describe("development local upload CSP boundary", () => {
     const response = await proxy(new NextRequest(`${webOrigin}/app/skills`, { headers: { host: "127.0.0.1:3311" } }))
     const policy = response.headers.get("content-security-policy")!
     const nonce = /'nonce-([^']+)'/u.exec(policy)![1]!
-    expect(policy).toBe(contentSecurityPolicy(nonce, true).replace("connect-src 'self' https: wss:", `connect-src 'self' https: wss: ${uploadOrigin}`))
+    expect(policy).toBe(contentSecurityPolicy(nonce, true).replace("connect-src 'self' https: wss:", `connect-src 'self' https: wss: ${uploadOrigin}`).replace("img-src 'self' data: blob: https:", `img-src 'self' data: blob: https: ${uploadOrigin}`))
     expect(response.headers.get("x-middleware-request-content-security-policy")).toBe(policy)
     expect(response.headers.get("cache-control")).toBe("private, no-store, max-age=0")
     expect(response.headers.get("vary")).toBe("Cookie")

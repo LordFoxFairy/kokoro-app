@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useLayoutEffect, useMemo, useState } from "react"
+import { useEffect, useId, useLayoutEffect, useMemo, useState } from "react"
 import { ChevronLeft, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { createHubClient, createSkillInstallationClient } from "@/hub/client"
@@ -25,6 +25,7 @@ export function ProjectSkillSourcePicker({
   onInstall: (sourceRef: string) => void
 }) {
   const t = useT()
+  const sourceHintId = useId()
   const [query, setQuery] = useState("")
   const [cursor, setCursor] = useState<string | null>(null)
   const [retry, setRetry] = useState(0)
@@ -111,20 +112,25 @@ export function ProjectSkillSourcePicker({
         placeholder={t("skills.searchPlaceholder")}
         value={query}
         disabled={busy}
+        aria-busy={current === null}
+        aria-invalid={current?.failed || undefined}
+        aria-describedby={current?.failed ? sourceHintId : undefined}
+        onKeyDown={(event) => {
+          if (event.key !== "Enter" || event.nativeEvent.isComposing || busy || !current?.failed) return
+          event.preventDefault()
+          setRetry((value) => value + 1)
+        }}
         onChange={(event) => {
           setQuery(event.target.value)
           setCursor(null)
         }}
       />
       {!current ? (
-        <p role="status">{t("projectSkills.loading")}</p>
+        <p className="sr-only" role="status">{t("projectSkills.loading")}</p>
       ) : current.failed ? (
-        <div role="alert">
-          <p>{t("projectSkills.readFailed")}</p>
-          <Button variant="outline" onClick={() => setRetry((value) => value + 1)}>
-            {t("firstSite.retry")}
-          </Button>
-        </div>
+        <p className={styles.sourceHint} id={sourceHintId} role="status">
+          {mode === "personal" ? t("projectSkills.personalSourceReadFailed") : t("projectSkills.officialSourceReadFailed")}
+        </p>
       ) : (
         <>
           {current.items.length === 0 ? (

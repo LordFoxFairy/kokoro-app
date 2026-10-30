@@ -11,6 +11,7 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/engine/config", () => ({ sessionBaseUrl: () => "http://s.local" }))
 
 import { AppFrame } from "@/components/blocks/app-frame/app-frame"
+import { KokoroProjectWorkspace } from "@/features/app/kokoro-project-workspace"
 import { AppFrameOverlaySurfaces as RawAppFrameOverlaySurfaces } from "@/components/blocks/app-frame/app-frame-overlay-surfaces"
 import { useCatalogSkillInstallation } from "@/features/app/use-catalog-skill-installation"
 import { GithubImportDialog } from "@/ui/skills/github-import-dialog"
@@ -19,7 +20,7 @@ import { ManusSkillDetailDialog } from "@/ui/skills/manus-skill-detail-dialog"
 import { skillTrialSourceRef } from "@/ui/skills/skills-card-model"
 import { KokoroSkillsSurface } from "@/features/app/kokoro-skills-surface"
 import { SkillsSettingsSection } from "@/ui/settings/sections/skills-settings-section"
-import { createHubClient } from "@/hub/client"
+import { createHubClient, HubClientError } from "@/hub/client"
 import { McpProjectionRead as RawMcpProjectionRead } from "@/ui/mcp/mcp-projection-read"
 import { browserHubClient } from "@/ui/shell/page-clients"
 import { createMcpPreparationCommands } from "@/ui/mcp/mcp-preparation-commands"
@@ -32,7 +33,8 @@ import { ThemeProvider } from "@/ui/theme/theme-context"
 import { createSessionEngine, type SessionEngine } from "@/engine/machine"
 import { createSessionClient, SessionClientError } from "@/engine/client"
 import { addConversation, type ConversationStore } from "@/core/conversations"
-import { makeSnapshot } from "../core/fixtures"
+import { AGENT_FAILURE_PROFILES, makeAgentFailureEvent, makeEvent, makeSnapshot } from "../core/fixtures"
+import { closeCanvas, openCanvas } from "@/ui/canvas/canvas-store"
 import { createFakeClient, createMemoryStorage, makeReceipt, settle, type FakeClient } from "../engine/fakes"
 
 // Isolated surfaces use the same explicit actor/client owner as AppFrameRuntime.
@@ -141,6 +143,54 @@ afterEach(() => {
   Object.defineProperty(window, "matchMedia", { configurable: true, value: originalMatchMedia })
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
+})
+
+it("live Project cold start never advertises unknown capabilities and only resolved flags enable cards; preview stays explicit", async () => {
+  const pageClients = await import("@/ui/shell/page-clients")
+  vi.spyOn(pageClients, "browserEngine").mockReturnValue(engine)
+  vi.spyOn(pageClients, "browserListClient").mockReturnValue(client)
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "project-reader")
+  window.history.replaceState({}, "", "/app/project/project_read_alpha")
+  pathname.value = window.location.pathname
+  vi.spyOn(globalThis, "fetch").mockImplementation(async input => {
+    const path = new URL(input instanceof Request ? input.url : String(input), window.location.origin).pathname
+    if (path === "/api/hub/projects") return projectReadEnvelope()
+    if (path === "/api/hub/projects/project_read_alpha") return Response.json({ data: { project: projectReadFixtures[0] }, meta: { request_id: "req_project" } })
+    return Response.json({}, { status: 503 })
+  })
+  const frame = (flags: React.ComponentProps<typeof AppFrame>["featureFlags"], preview = false) => (
+    <ThemeProvider><LocaleProvider><AppFrame chatHref="/app" preview={preview} projectWorkspace projectRef="project_read_alpha"
+      projectReadBoundary={{ admitted: true, subject: "project-reader", generation: 1 }} emptyState={KokoroProjectWorkspace}
+      {...(flags === undefined ? {} : { featureFlags: flags })} /></LocaleProvider></ThemeProvider>
+  )
+  const expectUnadvertised = () => {
+    expect(screen.queryByText("网站", { exact: true })).not.toBeInTheDocument()
+    expect(screen.queryByText("定时任务", { exact: true })).not.toBeInTheDocument()
+    expect(screen.queryByRole("region", { name: "连接器" })).not.toBeInTheDocument()
+  }
+  const view = render(frame(undefined))
+  try {
+    expectUnadvertised()
+    await screen.findByRole("heading", { name: "研究项目甲" })
+    expectUnadvertised()
+    view.rerender(frame([]))
+    expectUnadvertised()
+    view.rerender(frame([{ key: "workspace.connectors", enabled: true }]))
+    expect(screen.getByRole("region", { name: "连接器" })).toBeInTheDocument()
+    expect(screen.queryByText("网站", { exact: true })).not.toBeInTheDocument()
+    expect(screen.queryByText("定时任务", { exact: true })).not.toBeInTheDocument()
+    view.rerender(frame([{ key: "project.connectors", enabled: true }]))
+    expect(screen.getByRole("region", { name: "连接器" })).toBeInTheDocument()
+    view.rerender(frame(undefined))
+    expectUnadvertised()
+    view.rerender(frame(undefined, true))
+    expect(screen.getByText("网站", { exact: true })).toBeInTheDocument()
+    expect(screen.getByText("定时任务", { exact: true })).toBeInTheDocument()
+    expect(screen.getByRole("region", { name: "连接器" })).toBeInTheDocument()
+  } finally {
+    view.unmount()
+    window.history.replaceState({}, "", "/app")
+  }
 })
 
 it.each([
@@ -338,6 +388,17 @@ it("含767.5px缩放的768边界往返保持桌面偏好，不残留抽屉", asy
   })
   resizeDesktopViewport(767)
   await waitFor(() => expect(shell).toHaveAttribute("data-rail-hidden", "true"))
+})
+
+it.each(["fine", "coarse"] as const)("%s 窄屏导航焦点在恢复展开桌面侧栏后交给可见折叠按钮", async (pointer) => {
+  setDesktopViewport(800, pointer)
+  mountFrame({ desktopRailCollapsed: false })
+  await screen.findByRole("button", { name: "收起侧栏" })
+  resizeDesktopViewport(600)
+  const trigger = await screen.findByRole("button", { name: "展开侧栏" })
+  act(() => trigger.focus())
+  resizeDesktopViewport(800)
+  await waitFor(() => expect(screen.getByRole("button", { name: "收起侧栏" })).toHaveFocus())
 })
 
 it("触屏导航抽屉的打开和关闭不改变桌面侧栏偏好", async () => {
@@ -556,11 +617,11 @@ async function mountAuthenticatedProjectRail(
   })
   const view = render(<ThemeProvider><LocaleProvider><AppGate brandName="站点品牌" /></LocaleProvider></ThemeProvider>)
   await screen.findByRole("textbox", { name: "对话输入" })
-  fireEvent.click(screen.getByRole("button", { name: "展开侧栏" }), { detail: 0 })
+  fireEvent.click(await screen.findByRole("button", { name: "展开侧栏" }), { detail: 0 })
   return { ...view, fetchMock }
 }
 
-it.each(["401", "bad-shape"])("正式列表先健康再刷新至 %s，清旧项目且不伪装为空集合", async (failure) => {
+it.each(["401", "bad-shape"])("身份重新准入后列表返回 %s，清旧项目且不伪装为空集合", async (failure) => {
   let calls = 0
   await mountAuthenticatedProjectRail(async () => {
     calls++
@@ -570,16 +631,23 @@ it.each(["401", "bad-shape"])("正式列表先健康再刷新至 %s，清旧项�
   })
   await screen.findByRole("link", { name: "新对话 · 研究项目甲" })
   expect(calls).toBe(1)
+  window.localStorage.removeItem("kokoro.web.auth-index-subject")
   act(() => window.dispatchEvent(new Event("focus")))
-  await screen.findByTestId("projects-error")
-  expect(calls).toBe(2)
+  if (failure === "401") {
+    // One automatic re-admission/read is allowed; its second 401 withdraws
+    // admission and exposes the gate's explicit independent recovery action.
+    const status = await screen.findByRole("status", { name: "连接暂时中断" })
+    expect(status.querySelector("button")).toBeEnabled()
+    expect(calls).toBe(3)
+  } else {
+    await waitFor(() => expect(calls).toBe(2))
+    await act(async () => {})
+    expect(screen.queryByTestId("projects-error")).not.toBeInTheDocument()
+  }
   expect(screen.queryByRole("link", { name: "新对话 · 研究项目甲" })).not.toBeInTheDocument()
   expect(screen.queryByRole("link", { name: "新对话 · 研究项目乙" })).not.toBeInTheDocument()
   expect(screen.queryByTestId("projects-empty")).not.toBeInTheDocument()
   expect(document.querySelectorAll("[data-project-list] [data-project-id]")).toHaveLength(0)
-  const retry = screen.getByTestId("projects-error").querySelector("button")
-  if (failure === "401") expect(retry).toBeDisabled()
-  else expect(retry).toBeEnabled()
 })
 
 it("只有成功读取 projects=[] 才呈现项目空态", async () => {
@@ -591,7 +659,46 @@ it("只有成功读取 projects=[] 才呈现项目空态", async () => {
   expect(document.querySelectorAll("[data-project-list] [data-project-id]")).toHaveLength(0)
 })
 
-it("同 subject 重核验开始就清空并取消旧读取，迟到响应不能复活项目或重挂 Chat", async () => {
+it("同账号焦点核验保留项目、会话和草稿，不重新请求业务列表", async () => {
+  const sessionReads = vi.spyOn(client, "listSessions").mockResolvedValue({
+    sessions: [{ session_id: "conv_stable_rail", title: "保留的会话", updated_at: "2026-10-23T00:00:00Z" }], next_cursor: null,
+  })
+  let finishCheck!: (response: Response) => void
+  let checks = 0
+  let projectReads = 0
+  await mountAuthenticatedProjectRail(async () => { projectReads++; return projectReadEnvelope() }, async () => {
+    checks++
+    if (checks === 2) return new Promise<Response>((resolve) => { finishCheck = resolve })
+    return Response.json({ authenticated: true, subject: "project-reader" })
+  })
+  const projectLink = await screen.findByRole("link", { name: "新对话 · 研究项目甲" })
+  const conversation = await screen.findByRole("button", { name: "保留的会话" })
+  const sessionReadCount = sessionReads.mock.calls.length
+  const composer = screen.getByRole("textbox", { name: "对话输入" })
+  fireEvent.change(composer, { target: { value: "核验期间保留的草稿" } })
+  act(() => window.dispatchEvent(new Event("focus")))
+  await waitFor(() => expect(checks).toBe(2))
+  expect(projectReads).toBe(1)
+  expect(screen.queryByText("项目不可用")).not.toBeInTheDocument()
+  expect(screen.queryByText("不可用", { exact: true })).not.toBeInTheDocument()
+  expect(screen.queryByTestId("projects-error")).not.toBeInTheDocument()
+  expect(screen.queryByTestId("projects-empty")).not.toBeInTheDocument()
+  expect(screen.getByRole("link", { name: "新对话 · 研究项目甲" })).toBe(projectLink)
+  expect(screen.getByRole("button", { name: "保留的会话" })).toBe(conversation)
+  expect(screen.queryByTestId("projects-loading")).not.toBeInTheDocument()
+  expect(screen.queryByTestId("conversations-loading")).not.toBeInTheDocument()
+  expect(screen.getByRole("textbox", { name: "对话输入" })).toBe(composer)
+  expect(composer).toHaveValue("核验期间保留的草稿")
+  await act(async () => { finishCheck(Response.json({ authenticated: true, subject: "project-reader" })) })
+  await screen.findByRole("link", { name: "新对话 · 研究项目甲" })
+  expect(projectReads).toBe(1)
+  expect(sessionReads).toHaveBeenCalledTimes(sessionReadCount)
+  expect(screen.getByRole("button", { name: "保留的会话" })).toBe(conversation)
+  expect(screen.getByRole("textbox", { name: "对话输入" })).toBe(composer)
+  expect(composer).toHaveValue("核验期间保留的草稿")
+})
+
+it("身份标记退休后清空并取消旧读取，迟到响应不能复活项目或重挂 Chat", async () => {
   let resolveOld: (response: Response) => void = () => { throw new Error("old read not pending") }
   let resolveSession: (response: Response) => void = () => { throw new Error("session not pending") }
   let calls = 0
@@ -610,8 +717,10 @@ it("同 subject 重核验开始就清空并取消旧读取，迟到响应不能�
   })
   await screen.findByRole("link", { name: "新对话 · 研究项目甲" })
   const composer = screen.getByRole("textbox", { name: "对话输入" })
+  window.localStorage.removeItem("kokoro.web.auth-index-subject")
   act(() => window.dispatchEvent(new Event("focus")))
   await waitFor(() => expect(calls).toBe(2))
+  window.localStorage.removeItem("kokoro.web.auth-index-subject")
   act(() => window.dispatchEvent(new Event("focus")))
   await waitFor(() => expect(checks).toBe(3))
   expect(signals[1]?.aborted).toBe(true)
@@ -1146,8 +1255,9 @@ it.each(["pages", "pending rename"] as const)("a project keeps its own reader ac
       fireEvent.click(group().getByRole("button", { name: "加载更多" }))
       await group().findByRole("button", { name: "项目第二页" })
     } else {
-      fireEvent.click(group().getByRole("button", { name: "重命名会话 项目原题" }))
-      const input = group().getByRole("textbox")
+      fireEvent.keyDown(group().getByRole("button", { name: "更多 · 项目原题" }), { key: "Enter", code: "Enter" })
+      fireEvent.click(await screen.findByRole("menuitem", { name: "重命名会话 项目原题" }))
+      const input = await group().findByRole("textbox")
       fireEvent.change(input, { target: { value: "已确认的新题" } })
       fireEvent.keyDown(input, { key: "Enter" })
       await waitFor(() => expect(renameSession).toHaveBeenCalledOnce())
@@ -1171,6 +1281,47 @@ it.each(["pages", "pending rename"] as const)("a project keeps its own reader ac
   } finally { view.unmount(); projectEngine.dispose(); window.history.replaceState({}, "", "/app") }
 })
 
+it("global New task leaves the project untouched and resets only the admitted direct target", async () => {
+  const pageClients = await import("@/ui/shell/page-clients")
+  const direct = createSessionEngine({ client: createFakeClient(), storage: createMemoryStorage<ConversationStore>(null) })
+  const projectRef = "project_00000000-0000-4000-8000-000000000888"
+  const project = createSessionEngine({ client: createFakeClient(), storage: createMemoryStorage<ConversationStore>(null), scope: { kind: "project", projectRef } })
+  const projectReset = vi.spyOn(project, "newConversation")
+  const directReset = vi.spyOn(direct, "newConversation")
+  const factory = vi.spyOn(pageClients, "browserEngine").mockReturnValue(direct)
+  const release = vi.fn()
+  vi.spyOn(pageClients, "retainBrowserEngine").mockReturnValue(release)
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "global-new-reader")
+  window.history.replaceState({}, "", `/app/project/${projectRef}?conversation=old-project-task`)
+  const clearDraft = vi.fn()
+  const view = renderHook(() => useAppFrameActions({
+    engine: project, projectWorkspace: true, projectRef,
+    readBoundary: { admitted: true, subject: "global-new-reader", generation: 1 },
+    standaloneSurface: false, chatHref: "/app", activeId: null, draft: "project draft", clearDraft,
+    updateDraft: vi.fn(), setDeploymentIntent: vi.fn(), syncConversationUrl: vi.fn(),
+    setConversationRouteId: vi.fn(), focusComposer: vi.fn(), closeSettings: vi.fn(),
+    brandName: "Kokoro", commandNewChatTimerRef: { current: null },
+  }), { wrapper: LocaleProvider })
+  try {
+    act(() => view.result.current.startNewChatWithUrl())
+    expect(window.location.pathname + window.location.search).toBe("/app")
+    expect(directReset).toHaveBeenCalledTimes(1)
+    expect(projectReset).not.toHaveBeenCalled()
+    expect(clearDraft).not.toHaveBeenCalled()
+    expect(release).toHaveBeenCalledTimes(1)
+    factory.mockClear()
+    window.history.replaceState({}, "", `/app/project/${projectRef}`)
+    window.localStorage.setItem("kokoro.web.auth-index-subject", "another-reader")
+    act(() => view.result.current.startNewChatWithUrl())
+    expect(window.location.pathname).toBe(`/app/project/${projectRef}`)
+    expect(factory).not.toHaveBeenCalled()
+    expect(directReset).toHaveBeenCalledTimes(1)
+  } finally {
+    view.unmount(); direct.dispose(); project.dispose(); vi.restoreAllMocks()
+    window.history.replaceState({}, "", "/app")
+  }
+})
+
 it("project overview draft and explicit new-conversation draft remain distinct after Home and project entry", async () => {
   const projectRef = "project_00000000-0000-4000-8000-000000000801"
   const projectPath = `/app/project/${projectRef}`
@@ -1188,7 +1339,12 @@ it("project overview draft and explicit new-conversation draft remain distinct a
     const rootDraft = "root overview first\nroot overview second"
     fireEvent.change(composer(), { target: { value: rootDraft } })
     await waitFor(() => expect(JSON.parse(window.localStorage.getItem(draftsKey) ?? "{}")[rootKey]).toBe(rootDraft))
-    fireEvent.click(screen.getByTestId("rail-new-conversation"))
+    act(() => {
+      projectEngine.newConversation()
+      const id = projectEngine.getSnapshot().store?.activeId
+      window.history.pushState({}, "", `${projectPath}?conversation=${encodeURIComponent(id!)}`)
+      window.dispatchEvent(new PopStateEvent("popstate"))
+    })
     const convB = projectEngine.getSnapshot().store?.activeId
     expect(convB).toMatch(/^conv_/u)
     expect(new URL(window.location.href).searchParams.get("conversation")).toBe(convB)
@@ -1208,6 +1364,29 @@ it("project overview draft and explicit new-conversation draft remain distinct a
     expect(JSON.parse(window.localStorage.getItem(draftsKey) ?? "{}")[convB!]).toBe(convDraft)
     expect(projectClient.createCalls).toHaveLength(0)
   } finally { view.unmount(); projectEngine.dispose(); window.history.replaceState({}, "", "/app") }
+})
+
+it.each([false, true])("missing conversation deep link does not render an editable new task; retry reads only its ID (project=%s)", async (project) => {
+  const projectRef = "project_00000000-0000-4000-8000-000000000802"
+  const id = "conv_00000000-0000-4000-8000-000000000803"
+  const path = project ? `/app/project/${projectRef}` : "/app"
+  window.history.replaceState({}, "", `${path}?conversation=${id}`)
+  mountFrame({ ...(project ? { projectWorkspace: true, projectRef } : {}),
+    emptyState: () => <div>workspace overview</div>,
+  })
+  await waitFor(() => expect(screen.getByRole("heading", { name: "未找到该会话" })).toBeInTheDocument())
+  expect(screen.queryByText("workspace overview")).not.toBeInTheDocument()
+  expect(screen.queryByRole("textbox", { name: "对话输入" })).not.toBeInTheDocument()
+  expect(window.location.pathname + window.location.search).toBe(`${path}?conversation=${id}`)
+  const knownIds = engine.getSnapshot().store?.conversations.map(entry => entry.id)
+  client.nextSnapshot = sessionId => Promise.resolve(makeSnapshot({ sessionId }))
+  fireEvent.click(screen.getByRole("button", { name: /^重试$/ }))
+  await waitFor(() => expect(screen.queryByRole("heading", { name: "未找到该会话" })).not.toBeInTheDocument())
+  expect(client.snapshotCalls).toEqual([id, id])
+  expect(engine.getSnapshot().store?.conversations.map(entry => entry.id)).toEqual(knownIds)
+  expect(client.createCalls).toEqual([])
+  expect(window.location.pathname + window.location.search).toBe(`${path}?conversation=${id}`)
+  expect(screen.getByRole("textbox", { name: "对话输入" })).toBeInTheDocument()
 })
 
 it("explicit project conversation hydration owns only its requested draft, never the remembered task while pending", async () => {
@@ -1297,12 +1476,12 @@ it("an explicit project overview submission creates a fresh target instead of po
 })
 
 
-function mountProjectSubmitBoundary(projectEngine: SessionEngine, projectRef: string, conversation: string | null = null) {
+function mountProjectSubmitBoundary(projectEngine: SessionEngine, projectRef: string, conversation: string | null = null, projectWorkspace = true) {
   const clearDraft = vi.fn()
   const syncConversationUrl = vi.fn()
   const setConversationRouteId = vi.fn()
   const options = {
-    engine: projectEngine, projectWorkspace: true, projectRef, routedConversationId: conversation,
+    engine: projectEngine, projectWorkspace, projectRef, routedConversationId: conversation,
     standaloneSurface: false, chatHref: "/app", activeId: projectEngine.getSnapshot().store?.activeId ?? null,
     draft: "new root intent", clearDraft, updateDraft: vi.fn(), setDeploymentIntent: vi.fn(),
     syncConversationUrl, setConversationRouteId,
@@ -1311,6 +1490,25 @@ function mountProjectSubmitBoundary(projectEngine: SessionEngine, projectRef: st
   const view = renderHook(() => useAppFrameActions(options), { wrapper: LocaleProvider })
   return { ...view, clearDraft, syncConversationUrl, setConversationRouteId }
 }
+
+it.each([false, true])("a retained submit handler cannot send a hydrating or missing explicit task (project=%s)", async projectWorkspace => {
+  const projectRef = "project_missing-submit"
+  const id = "conv_missing-submit"
+  window.history.replaceState({}, "", `${projectWorkspace ? `/app/project/${projectRef}` : "/app"}?conversation=${id}`)
+  let read!: (value: null) => void
+  client.nextSnapshot = () => new Promise(resolve => { read = resolve })
+  engine.openConversation(id)
+  const view = mountProjectSubmitBoundary(engine, projectRef, id, projectWorkspace)
+  const submit = () => view.result.current.handleSubmit({ preventDefault: vi.fn() } as unknown as React.FormEvent<HTMLFormElement>)
+  act(submit)
+  expect(client.createCalls).toEqual([])
+  await act(async () => { read(null); await settle() })
+  act(submit)
+  expect(client.createCalls).toEqual([])
+  expect(view.clearDraft).not.toHaveBeenCalled()
+  expect(engine.getSnapshot().store?.activeId).toBe(id)
+  view.unmount()
+})
 
 it.each(["pending", "unknown", "active", "reconnecting", "disposed"] as const)("project overview preserves hidden %s state instead of resetting it for a new submission", async (state) => {
   const projectRef = "project_00000000-0000-4000-8000-000000000811"
@@ -1446,10 +1644,11 @@ it("an explicit overview send carries the user's thinking mode into its fresh co
   projectClient.nextSnapshot = id => Promise.resolve(makeSnapshot({ sessionId: id }))
   const projectEngine = createSessionEngine({ client: projectClient, storage: createMemoryStorage<ConversationStore>({ activeId: remembered, conversations: [{ id: remembered, title: "blank remembered task", mode: "fast", updatedAt: 1000 }] }), scope: { kind: "project", projectRef } })
   await waitFor(() => expect(projectEngine.getSnapshot().hydrating).toBe(false))
-  projectEngine.setMode("thinking")
   const view = render(<ThemeProvider><LocaleProvider><AppFrame engine={projectEngine} chatHref="/app" projectWorkspace projectRef={projectRef} /></LocaleProvider></ThemeProvider>)
   try {
-    expect(projectEngine.getSnapshot().store?.conversations.find(entry => entry.id === remembered)?.mode).toBe("thinking")
+    fireEvent.pointerDown(screen.getByRole("button", { name: /切换模式/ }), { button: 0, ctrlKey: false })
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: /深度思考/ }))
+    expect(projectEngine.getSnapshot().store?.conversations.find(entry => entry.id === remembered)?.mode).toBe("fast")
     const composer = screen.getByRole("textbox", { name: "对话输入" })
     fireEvent.change(composer, { target: { value: "explicit thinking overview" } })
     fireEvent.keyDown(composer, { key: "Enter" })
@@ -1616,8 +1815,11 @@ it.each(["library", "leave"] as const)("R254 Move %s只改owner绑定并刷新�
   try {
     await waitFor(() => expect(rememberedEngine.getSnapshot().hydrating).toBe(false))
     await screen.findByRole("link", { name: "新对话 · 项目Q" })
-    const row = await screen.findByRole("button", { name: "移动会话 记忆会话" })
-    fireEvent.click(row)
+    const row = await screen.findByRole("button", { name: "更多 · 记忆会话" })
+    fireEvent.keyDown(row, { key: "Enter", code: "Enter" })
+    const move = await screen.findByRole("menuitem", { name: "移动会话 记忆会话" })
+    move.focus()
+    fireEvent.keyDown(move, { key: "ArrowRight" })
     fireEvent.click(await screen.findByRole("menuitem", { name: target === p ? "项目P" : "项目Q" }))
     await waitFor(() => expect(moveRequests).toHaveLength(1))
     if (surface === "leave") {
@@ -2223,7 +2425,9 @@ it("retires a previously published Settings retry callback instead of borrowing 
   const onDetailProjection = (value: CatalogDetailProjection) => projections.push(value)
   const content = (generation: number) => <LocaleProvider><SkillCatalogDialog inline open client={createManusSkillHubClient(hub, { admitted: true, subject: "retry-actor", generation })} enabledOverrides={new Map()} installedOverrides={new Map()} busy={null} errorName={null} onOpenChange={vi.fn()} onCloseAutoFocus={vi.fn()} onOpenUpload={vi.fn()} onOpenGithub={vi.fn()} onSetEnabled={vi.fn()} onOpenDetail={vi.fn()} selectedDetailKey={JSON.stringify(["retry-series", "retry-revision"])} onDetailProjection={onDetailProjection} /></LocaleProvider>
   const view = render(content(1))
-  await screen.findByRole("button", { name: "重试" })
+  await waitFor(() => expect(projections.at(-1)?.failed).toBe(true))
+  expect(screen.queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument()
   const retiredRetry = projections.at(-1)!.retry
   view.rerender(content(2))
   await screen.findByRole("button", { name: "查看详情 Fresh retry item" })
@@ -2254,7 +2458,7 @@ it("keeps Settings Explore intent and its detail shell across same-actor recheck
       const selected = new URL(path, "http://local.test").searchParams.get("file_path") as keyof typeof documents | null
       return response({ data: { source_ref: "skill:settings-intent-revision", revision: "1", files, selected_file: selected === null ? null : { path: selected, text: documents[selected] } } })
     }
-    if (path.endsWith("GetSkill")) return response({ skill: { id: "settings-intent-series", version: "settings-intent-revision", displayName: "Intent match", description: round === 1 ? "Retired detail facts" : "New detail facts" }, downloadInfo: { downloadUrl: "/api/skill-downloads/settings-intent", filename: "fixture.zip", expiresAt: "2028-01-01T00:00:00Z" } })
+    if (path.endsWith("GetSkill")) return response({ skill: { id: "settings-intent-series", version: "settings-intent-revision", displayName: "Intent match", description: round === 1 ? "Retired detail facts" : "New detail facts" } })
     throw Error("Unexpected settings recheck request")
   })
   const hubClient = createHubClient()
@@ -2291,9 +2495,17 @@ it("keeps Settings Explore intent and its detail shell across same-actor recheck
   await act(async () => { await Promise.resolve() })
   expect(calls).toHaveLength(count)
   view.rerender(content(true, "settings-intent-actor", 2))
-  await within(dialog).findByRole("alert")
+  await waitFor(() => expect(dialog).toHaveAttribute("aria-busy", "false"))
+  expect(within(dialog).queryByRole("alert")).toBeNull()
+  expect(within(dialog).queryByRole("button", { name: "重试" })).toBeNull()
   expect(screen.queryByText("Retired detail facts")).toBeNull()
-  fireEvent.click(within(dialog).getByRole("button", { name: "重试" }))
+  expect(screen.queryByText("Retired catalog facts")).toBeNull()
+  expect(within(dialog).queryByRole("heading", { name: "Verified selected document" })).toBeNull()
+  expect(packageReads).toHaveLength(readCount)
+  // A normal same-actor admission recheck reads the current filter again;
+  // a failed passive read no longer owns a visible Retry panel.
+  view.rerender(content(false, "settings-intent-actor", 3))
+  view.rerender(content(true, "settings-intent-actor", 3))
   await within(dialog).findByRole("heading", { name: "Verified selected document", level: 1 })
   expect(within(dialog).getByRole("heading", { name: "Verified selected document", level: 1 }).closest("[aria-busy]")).toHaveProperty("scrollTop", 240)
   expect(within(dialog).getByRole("button", { name: "references" })).toHaveAttribute("aria-expanded", "true")
@@ -2309,7 +2521,7 @@ it("keeps Settings Explore intent and its detail shell across same-actor recheck
   await waitFor(() => expect(search).toHaveFocus())
   fireEvent.click(screen.getByRole("button", { name: "查看详情 Intent match" }))
   await within(screen.getByRole("dialog")).findByText("New detail facts")
-  view.rerender(content(true, "settings-other-actor", 3))
+  view.rerender(content(true, "settings-other-actor", 4))
   expect(screen.queryByRole("dialog")).toBeNull()
   expect(screen.getByRole("searchbox", { name: "搜索技能" })).toHaveValue("")
   view.rerender(content(true, "settings-intent-actor", 4))
@@ -2333,7 +2545,7 @@ it("re-establishes the exact Settings detail revision on new cursor pages rather
     }
     if (path.endsWith("GetSkill")) {
       details.push(String(init?.body))
-      return response({ skill: { id: "exact-settings-series", version: "chosen-revision", displayName: "chosen-revision", description: `Exact facts ${round}` }, downloadInfo: { downloadUrl: "/api/skill-downloads/settings-exact", filename: "fixture.zip", expiresAt: "2028-01-01T00:00:00Z" } })
+      return response({ skill: { id: "exact-settings-series", version: "chosen-revision", displayName: "chosen-revision", description: `Exact facts ${round}` } })
     }
     throw Error("Unexpected exact revision request")
   })
@@ -2437,7 +2649,7 @@ it("queries Settings Explore through the owner and preserves its nine-item filte
   expect(calls.at(-1)).toEqual({ pageSize: 9, includeOfficialSkills: true, query: "needle", tag: "SKILL_HUB_TAG_CODING", pageToken: "settings-query-next" })
 })
 
-it("retires Settings cursor reads on filter changes and can retry the current page without late results", async () => {
+it("retires Settings cursor reads on filter changes and continues the failed current page without late results", async () => {
   const intersect = observeSettingsCatalogPages()
   let releaseOld!: (response: Response) => void
   let oldSignal: AbortSignal | null | undefined
@@ -2475,16 +2687,22 @@ it("retires Settings cursor reads on filter changes and can retry the current pa
   await act(async () => { queuedOldObserver([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver) })
   expect(oldRequests).toBe(1)
   intersect()
-  fireEvent.click(await screen.findByRole("button", { name: "重试" }))
+  await waitFor(() => expect(codingAttempts).toBe(1))
+  const more = screen.getByRole("button", { name: "加载更多" })
+  await waitFor(() => expect(more).toBeEnabled())
+  expect(screen.queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+  fireEvent.click(more)
   await screen.findByRole("button", { name: "查看详情 coding-second" })
   await act(async () => { releaseOld(response({ skills: [card("late-old-page")], tagOptions: {} })) })
   expect(screen.queryByRole("button", { name: "查看详情 late-old-page" })).toBeNull()
   expect(codingAttempts).toBe(2)
 })
 
-it("shows a failed Settings filter read and retries it instead of turning the previous page into a successful empty result", async () => {
+it("keeps a failed Settings filter read quiet and recovers through normal filter re-entry without claiming empty", async () => {
   observeSettingsCatalogPages()
   let attempts = 0
+  let defaultReads = 0
   const response = (data: unknown) => Response.json(data, { headers: { "cache-control": "private, no-store", "x-request-id": "req-settings-retry" } })
   const card = (id: string) => ({ skillId: id, displayName: id, currentVersion: { versionUid: `${id}-revision` } })
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
@@ -2493,6 +2711,7 @@ it("shows a failed Settings filter read and retries it instead of turning the pr
     if (path.endsWith("ListSkills")) return response({ userAddedSkills: [], officialSkills: [] })
     if (path.endsWith("ListHubSkills")) {
       const body = JSON.parse(String(init?.body))
+      if (!body.query) defaultReads++
       if (body.query === "offline" && ++attempts === 1) throw Error("Transient catalog read failure")
       return response({ skills: [card(body.query ? "Recovered indexed match" : "Initial retained page")], tagOptions: {} })
     }
@@ -2501,8 +2720,15 @@ it("shows a failed Settings filter read and retries it instead of turning the pr
   mountSettingsCatalog()
   await screen.findByRole("button", { name: "查看详情 Initial retained page" })
   fireEvent.change(screen.getByRole("searchbox", { name: "搜索技能" }), { target: { value: "offline" } })
-  await screen.findByRole("alert")
-  fireEvent.click(screen.getByRole("button", { name: "重试" }))
+  await waitFor(() => expect(attempts).toBe(1))
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
+  expect(screen.queryByText("没有匹配的技能")).not.toBeInTheDocument()
+  const search = screen.getByRole("searchbox", { name: "搜索技能" })
+  fireEvent.change(search, { target: { value: "" } })
+  await waitFor(() => expect(defaultReads).toBe(2))
+  await screen.findByRole("button", { name: "查看详情 Initial retained page" })
+  fireEvent.change(search, { target: { value: "offline" } })
   await screen.findByRole("button", { name: "查看详情 Recovered indexed match" })
   expect(screen.queryByRole("alert")).toBeNull()
   expect(attempts).toBe(2)
@@ -2520,7 +2746,7 @@ it.each([false, true])("keeps a confirmed matching card mounted while search rev
       if (JSON.parse(String(init?.body)).pageToken) return response({ skills: [card], tagOptions: {} })
       return response({ skills: cursorPage ? [{ ...card, skillId: "initial-series", displayName: "Other initial card" }] : [card], tagOptions: {}, ...(cursorPage ? { nextPageToken: "search-click-next" } : {}) })
     }
-    if (path.endsWith("GetSkill")) return response({ skill: { id: card.skillId, version: "search-click-revision", displayName: card.displayName, description: "Confirmed exact revision" }, downloadInfo: { downloadUrl: "/api/skill-downloads/fixture", filename: "fixture.zip", expiresAt: "2999-01-01T00:00:00Z" } })
+    if (path.endsWith("GetSkill")) return response({ skill: { id: card.skillId, version: "search-click-revision", displayName: card.displayName, description: "Confirmed exact revision" } })
     throw Error("Unexpected search-click request")
   })
   const boundary = { admitted: true, subject: "search-click-actor", generation: 1 }
@@ -2659,7 +2885,7 @@ it("same actor recheck preserves catalog search and detail chrome while retiring
     const path = String(input)
     if (path.endsWith("ListHubSkills")) return response({ skills: [card], tagOptions: {} })
     if (path.endsWith("ListSkills")) return response({ userAddedSkills: [], officialSkills: [] })
-    if (path.endsWith("GetSkill")) return response({ skill: { id: "series-recheck", version: "revision-recheck", displayName: "Private title", description: round === 1 ? "Private facts" : "Fresh facts" }, downloadInfo: { downloadUrl: "/api/skill-downloads/recheck", filename: "fixture.zip", expiresAt: "2028-01-01T00:00:00Z" } })
+    if (path.endsWith("GetSkill")) return response({ skill: { id: "series-recheck", version: "revision-recheck", displayName: "Private title", description: round === 1 ? "Private facts" : "Fresh facts" } })
     throw Error("Unexpected catalog request")
   })
   const view = render(<LocaleProvider><KokoroSkillsSurface preview={false} projectReadBoundary={{ admitted: true, subject: "catalog-recheck-actor", generation: 1 }} onPrompt={vi.fn()} /></LocaleProvider>)
@@ -2743,7 +2969,7 @@ it.each([false, true])("catalog detail recheck uses the current cursor and never
       if (round === 2 && failCurrentPage) { failCurrentPage = false; throw Error("current page failed") }
       return response({ skills: [{ skillId: "paged-series", displayName: "Paged skill", currentVersion: { versionUid: round === 2 && changed ? "newer-revision" : "paged-revision" } }], tagOptions: {} })
     }
-    if (path.endsWith("GetSkill")) return response({ skill: { id: "paged-series", version: "paged-revision", displayName: "Paged skill", description: "Private page-two detail" }, downloadInfo: { downloadUrl: "/api/skill-downloads/paged", filename: "paged.zip", expiresAt: "2028-01-01T00:00:00Z" } })
+    if (path.endsWith("GetSkill")) return response({ skill: { id: "paged-series", version: "paged-revision", displayName: "Paged skill", description: "Private page-two detail" } })
     throw Error("Unexpected catalog request")
   })
   const surface = (admitted: boolean, generation: number) => <LocaleProvider><KokoroSkillsSurface preview={false} projectReadBoundary={{ admitted, subject: `paged-actor-${changed}`, generation }} onPrompt={vi.fn()} /></LocaleProvider>
@@ -2758,14 +2984,21 @@ it.each([false, true])("catalog detail recheck uses the current cursor and never
   expect(within(dialog).queryByText("Private page-two detail")).toBeNull()
   view.rerender(surface(true, 2))
   fireEvent.click(await screen.findByRole("button", { name: "加载更多" }))
-  await within(dialog).findByRole("alert")
-  fireEvent.click(within(dialog).getByRole("button", { name: "加载更多" }))
+  await waitFor(() => expect(cursorCalls).toEqual(["old-next", "current-next"]))
+  await waitFor(() => expect(dialog).toHaveAttribute("aria-busy", "false"))
+  expect(within(dialog).queryByRole("alert")).toBeNull()
+  expect(within(dialog).queryByRole("button", { name: "重试" })).toBeNull()
+  const loadMore = within(dialog).getByRole("button", { name: "加载更多" })
+  await waitFor(() => expect(loadMore).toBeEnabled())
+  fireEvent.click(loadMore)
   await waitFor(() => expect(cursorCalls).toEqual(["old-next", "current-next", "current-next"]))
   if (changed) {
-    await within(dialog).findByRole("alert")
+    await waitFor(() => expect(dialog).toHaveAttribute("aria-busy", "false"))
+    expect(within(dialog).queryByRole("alert")).toBeNull()
     expect(within(dialog).queryByRole("heading", { name: "Paged skill" })).toBeNull()
     expect(within(dialog).queryByText("Private page-two detail")).toBeNull()
   } else await within(dialog).findByRole("heading", { name: "Paged skill" })
+  expect(vi.mocked(globalThis.fetch).mock.calls.filter(([path]) => String(path).endsWith("GetSkill"))).toHaveLength(changed ? 1 : 2)
   expect(screen.getByRole("dialog")).toBe(dialog)
 })
 
@@ -2777,7 +3010,7 @@ it.each(["network", "retired"])("unknown share survives same actor recheck witho
   })
   vi.spyOn(globalThis, "fetch").mockImplementation(async input => {
     if (String(input).endsWith("/skill-shares")) return writes()
-    return Response.json({ skill: { id: "trial-series", version: "trial-version", displayName: "Owner trial", description: "Owner facts" }, downloadInfo: { downloadUrl: "/api/skill-downloads/trial", filename: "fixture.zip", expiresAt: "2028-01-01T00:00:00Z" } })
+    return Response.json({ skill: { id: "trial-series", version: "trial-version", displayName: "Owner trial", description: "Owner facts" } })
   })
   const dialog = (admitted: boolean, generation: number) => <LocaleProvider><ManusSkillDetailDialog readBoundary={{ admitted, subject: `share-recheck-${kind}`, generation }} skill={{ ...executableTrial, installed: true }} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={() => false} /></LocaleProvider>
   const view = render(dialog(true, 1))
@@ -2967,6 +3200,7 @@ it.each([
   }
   const input = await screen.findByRole("textbox", { name: "名称" })
   fireEvent.change(input, { target: { value: profile.name } })
+  fillApiCreationSecretFixture()
   fireEvent.click(screen.getByRole("button", { name: "保存" }))
   await waitFor(() => expect(hub.createCustomApi).toHaveBeenCalledOnce())
   expect(list).toHaveBeenCalledTimes(2)
@@ -3032,6 +3266,7 @@ it.each(["global", "settings"] as const)("%s creation ACK cannot close a newer c
   await waitFor(() => expect(shared.result.current.loading).toBe(false))
   await open("api")
   fireEvent.change(await screen.findByRole("textbox", { name: "名称" }), { target: { value: profile.name } })
+  fillApiCreationSecretFixture()
   fireEvent.click(screen.getByRole("button", { name: "保存" }))
   await waitFor(() => expect(hub.createCustomApi).toHaveBeenCalledOnce())
   // The Dialog's close button remains available even while the footer is busy.
@@ -3058,6 +3293,7 @@ it.each(["mode", "visibility"] as const)("a retained creation host fences old co
   const dialog = (mode: "custom-api" | "json", open = true) => <StrictMode><LocaleProvider><ConnectorCommandProvider client={hub} boundary={{ admitted: true, subject: "preview", generation: 0 }}><McpCreateDialog client={hub} mode={mode} open={open} onOpenChange={close} onDone={confirmed} /></ConnectorCommandProvider></LocaleProvider></StrictMode>
   const view = render(dialog("custom-api"))
   fireEvent.change(screen.getByRole("textbox", { name: "名称" }), { target: { value: "Old API" } })
+  fillApiCreationSecretFixture()
   fireEvent.click(screen.getByRole("button", { name: "保存" }))
   await waitFor(() => expect(hub.createCustomApi).toHaveBeenCalledOnce())
   await waitFor(() => expect(confirmed).toHaveBeenCalledOnce())
@@ -3080,6 +3316,11 @@ function apiCreationOverlay(boundary: import("@/ui/auth/use-session-state").Proj
     commandOpen={false} onCommandOpenChange={vi.fn()} /></LocaleProvider>
 }
 
+function fillApiCreationSecretFixture() {
+  fireEvent.change(screen.getByRole("textbox", { name: "密钥名称" }), { target: { value: "QA_API_KEY" } })
+  fireEvent.change(screen.getByRole("textbox", { name: /^值$/u }), { target: { value: "qa-public-fixture-value" } })
+}
+
 function apiCreationHub() {
   return { ...createHubClient(),
     listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }),
@@ -3090,7 +3331,7 @@ function apiCreationHub() {
 }
 
 function mcpCreationRegistration() {
-  return { server: { availability: "unavailable" as const, server_id: "creation-server", display_name: "Creation MCP", server_url: "https://mcp.example.test/creation", status: "pending" as const, state_version: "1", headers: [], prepare_status: "pending_prepare" as const, declarations: [], declarations_available: false },
+  return { server: { availability: "unavailable" as const, server_id: "creation-server", display_name: "Creation MCP", server_url: "https://mcp.example.test/creation", status: "pending" as const, state_version: "1", headers: [], transport: "streamable_http" as const, prepare_status: "pending_prepare" as const, declarations: [], declarations_available: false },
     connector: { availability: "unavailable" as const, connector_id: "creation-connector", connector_type: "mcp" as const, provider_key: "private-creation", server_id: "creation-server", display_name: "Creation MCP", status: "pending" as const, approved_scopes: [], enabled: false, state_version: "1" }, replayed: false }
 }
 
@@ -3163,30 +3404,32 @@ it.each(["form", "url"] as const)("%s creation OAuth recheck closes its popup an
   const popup = { closed: false, opener: null, location: { replace: vi.fn() }, close: vi.fn(function () { popup.closed = true }) }
   vi.spyOn(window, "open").mockReturnValue(popup as unknown as Window)
   const registration = mcpCreationRegistration()
-  type Started = Awaited<ReturnType<import("@/hub/client").HubClient["beginMcpConnectorAuthorization"]>>
+  type Started = Awaited<ReturnType<import("@/hub/client").HubClient["reconnectMcpConnectorAuthorization"]>>
   let acknowledge!: (value: Started) => void
   const pending = new Promise<Started>(resolve => { acknowledge = resolve })
-  const begin = vi.fn<import("@/hub/client").HubClient["beginMcpConnectorAuthorization"]>(() => pending)
+  const reconnect = vi.fn<import("@/hub/client").HubClient["reconnectMcpConnectorAuthorization"]>(() => pending)
   const list = vi.fn().mockResolvedValue({ items: [], next_cursor: null })
   const hub = { ...apiCreationHub(), listMcpConnectors: list,
     registerPrivateMcpServer: vi.fn().mockResolvedValue(registration),
-    getPrivateMcpServer: vi.fn().mockResolvedValue({ ...registration.server, prepare_status: "needs_oauth", state_version: "7" }),
-    getMcpConnector: vi.fn().mockResolvedValue({ ...registration.connector, state_version: "7" }), beginMcpConnectorAuthorization: begin }
+    getPrivateMcpServer: vi.fn().mockResolvedValue({ ...registration.server, transport: "streamable_http" as const, prepare_status: "needs_oauth", state_version: "7" }),
+    getMcpConnector: vi.fn().mockResolvedValue({ ...registration.connector, state_version: "7" }), beginMcpConnectorAuthorization: vi.fn(), reconnectMcpConnectorAuthorization: reconnect }
   vi.spyOn(pageClients, "browserHubClient").mockReturnValue(hub)
   const boundary = { admitted: true, subject: `server-oauth-${mode}`, generation: 1 }
   const view = render(apiCreationOverlay(boundary, mode))
   fireEvent.change(screen.getByRole("textbox", { name: /^服务器名称\*?$/ }), { target: { value: "Creation MCP" } })
   fireEvent.change(screen.getByRole("textbox", { name: /^服务器 URL\*?$/ }), { target: { value: "https://mcp.example.test/creation" } })
   fireEvent.click(screen.getByRole("button", { name: "保存" }))
+  await screen.findByRole("button", { name: "管理" })
+  expect(hub.beginMcpConnectorAuthorization).not.toHaveBeenCalled()
   fireEvent.click(await screen.findByRole("button", { name: "连接" }))
-  await waitFor(() => expect(begin).toHaveBeenCalledOnce())
+  await waitFor(() => expect(reconnect).toHaveBeenCalledOnce())
   view.rerender(apiCreationOverlay({ ...boundary, admitted: false, generation: 2 }, mode))
   expect(popup.close).toHaveBeenCalledOnce()
-  expect(begin.mock.calls[0]?.[2]?.aborted).toBe(true)
+  expect(reconnect.mock.calls[0]?.[2]?.aborted).toBe(true)
   await act(async () => { acknowledge({ authorization: { authorization_id: "late-creation-auth", authorization_url: "https://oauth.example.test/late", expires_at: "2999-01-01T00:00:00Z" }, connector: registration.connector }); await pending })
   expect(popup.location.replace).not.toHaveBeenCalled()
   expect(screen.getByRole("dialog")).toBeVisible()
-  expect(begin).toHaveBeenCalledOnce()
+  expect(reconnect).toHaveBeenCalledOnce()
 })
 
 const atomicMcpDocument = JSON.stringify({ mcpServers: { "Original import": { type: "streamableHttp", url: "https://mcp.example.test/original", headers: { "x-acceptance-check": "fixture-only" } } } })
@@ -3323,6 +3566,7 @@ it("API creation preserves one frozen command after a lost acknowledgement", asy
   render(apiCreationOverlay({ admitted: true, subject: "unknown-create-actor", generation: 1 }))
   const name = screen.getByRole("textbox", { name: "名称" })
   fireEvent.change(name, { target: { value: "Original API" } })
+  fillApiCreationSecretFixture()
   fireEvent.click(screen.getByRole("button", { name: "保存" }))
   await screen.findByRole("alert")
   expect(name).toHaveAttribute("readonly")
@@ -3340,6 +3584,7 @@ it("API creation resumes the original request after closing the window and reche
   const boundary = { admitted: true, subject: "resuming-actor", generation: 1 }
   const view = render(apiCreationOverlay(boundary))
   fireEvent.change(screen.getByRole("textbox", { name: "名称" }), { target: { value: profile.name } })
+  fillApiCreationSecretFixture()
   fireEvent.click(screen.getByRole("button", { name: "保存" }))
   await screen.findByRole("alert")
   view.rerender(apiCreationOverlay(boundary, null))
@@ -3353,7 +3598,7 @@ it("API creation resumes the original request after closing the window and reche
   fireEvent.click(screen.getByRole("button", { name: "重试原请求" }))
   await waitFor(() => expect(create).toHaveBeenCalledTimes(2))
   expect(create.mock.calls[1]?.slice(0, 2)).toEqual(create.mock.calls[0]?.slice(0, 2))
-  expect(create.mock.calls[1]?.[0]).toEqual({ name: profile.name, environment: [] })
+  expect(create.mock.calls[1]?.[0]).toEqual({ name: profile.name, environment: [{ name: "QA_API_KEY", value: "qa-public-fixture-value" }] })
 })
 
 it.each([false, true])("an acknowledged API secret stays cleared and Done can recover a close failure (recheck: %s)", async recheckClosing => {
@@ -3440,7 +3685,7 @@ it("Settings revalidates a registered MCP again after remote Prepare completes",
     status: ready ? "active" as const : "pending" as const, approved_scopes: [], enabled: ready, state_version: ready ? "2" : "1" })
   const registration = () => ({ server: { availability: ready ? "available" as const : "unavailable" as const, server_id: "prepared-server", display_name: "Prepared MCP", server_url: "https://mcp.example.test/prepare",
     status: ready ? "registered" as const : "pending" as const, state_version: ready ? "2" : "1", headers: [],
-    prepare_status: ready ? "ready" as const : "pending_prepare" as const, declarations: [], declarations_available: ready }, connector: connector(), replayed: false })
+    transport: "streamable_http" as const, prepare_status: ready ? "ready" as const : "pending_prepare" as const, declarations: [], declaration_digest: ready ? "a".repeat(64) : undefined, declarations_available: ready }, connector: connector(), replayed: false })
   const list = vi.fn(async () => ({ items: registered ? [connector()] : [], next_cursor: null }))
   const hub = { ...createHubClient(), listMcpConnectors: list,
     listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
@@ -3460,9 +3705,22 @@ it("Settings revalidates a registered MCP again after remote Prepare completes",
   fireEvent.change(screen.getByRole("textbox", { name: "服务器 URL" }), { target: { value: "https://mcp.example.test/prepare" } })
   fireEvent.click(screen.getByRole("button", { name: "保存" }))
   await waitFor(() => expect(list).toHaveBeenCalledTimes(2))
+  await screen.findByRole("button", { name: "管理" })
+  const configuredDetail = screen.getByRole("dialog", { name: "Prepared MCP" })
+  expect(within(configuredDetail).queryByLabelText("已连接")).not.toBeInTheDocument()
+  expect(hub.preparePrivateMcpServer).not.toHaveBeenCalled()
+  fireEvent.click(await within(configuredDetail).findByRole("button", { name: "连接" }))
+  await waitFor(() => expect(hub.preparePrivateMcpServer).toHaveBeenCalledOnce())
   await act(async () => { await Promise.resolve() })
   await act(async () => { finish(); await remote })
   await waitFor(() => expect(list).toHaveBeenCalledTimes(3))
+  // The existing explicit Connect success closes its detail; reopen the same resource.
+  await waitFor(() => expect(screen.queryByRole("dialog", { name: "Prepared MCP" })).not.toBeInTheDocument())
+  fireEvent.click(await screen.findByRole("button", { name: "Prepared MCP" }))
+  const createdDetail = await screen.findByRole("dialog", { name: "Prepared MCP" })
+  expect(await within(createdDetail).findByLabelText("已连接")).toBeVisible()
+  fireEvent.keyDown(createdDetail, { key: "Escape" })
+  await waitFor(() => expect(screen.queryByRole("dialog", { name: "Prepared MCP" })).not.toBeInTheDocument())
   expect(await screen.findByLabelText("已连接")).toBeVisible()
   expect(screen.getByRole("searchbox", { name: "搜索连接器" })).toBe(query)
   expect(query).toHaveValue("Prepared")
@@ -3479,7 +3737,7 @@ it("MCP same-actor recheck keeps search and the private detail shell but retires
     status: "pending" as const, approved_scopes: [], enabled: false, state_version: String(round) })
   const server = () => ({ availability: "unavailable" as const, server_id: "recheck-server", display_name: round === 1 ? "Private MCP" : "Fresh MCP",
     server_url: "https://mcp.example.test/recheck", notes: "Private note", status: "pending" as const,
-    state_version: String(round), headers: [], prepare_status: "pending_prepare" as const,
+    state_version: String(round), headers: [], transport: "streamable_http" as const, prepare_status: "pending_prepare" as const,
     declarations: [], declarations_available: false })
   const list = vi.fn(async () => ({ items: [connector()], next_cursor: null }))
   const read = vi.fn().mockImplementation(() => round === 1 ? Promise.resolve(server()) : nextServer)
@@ -3499,7 +3757,7 @@ it("MCP same-actor recheck keeps search and the private detail shell but retires
   expect(query).toHaveValue("Private")
   expect(screen.getByRole("dialog")).toBe(dialog)
   expect(screen.queryByText("recheck-server")).not.toBeInTheDocument()
-  expect(screen.queryByRole("button", { name: "试用一下" })).not.toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "连接" })).not.toBeInTheDocument()
   expect(read).toHaveBeenCalledOnce()
   view.rerender(content(true, 2))
   await waitFor(() => expect(read).toHaveBeenCalledTimes(2))
@@ -3523,7 +3781,7 @@ it("MCP recheck restores typed configuration against fresh facts/CAS and an old 
   const ack = new Promise<void>(resolve => { acknowledge = resolve })
   const server = () => ({ availability: "unavailable" as const, server_id: "draft-server", display_name: `Server ${round}`, notes: `Owner note ${round}`,
     server_url: `https://mcp.example.test/v${round}`, status: "pending" as const, state_version: String(round),
-    headers: [], prepare_status: "pending_prepare" as const, declarations: [], declarations_available: false })
+    headers: [], transport: "streamable_http" as const, prepare_status: "pending_prepare" as const, declarations: [], declarations_available: false })
   const read = vi.fn(async () => server())
   const update = vi.fn(async () => { await ack; return { server: server(), connector: { availability: "unavailable" as const, connector_id: "draft-connector", connector_type: "mcp" as const,
     provider_key: "private-draft", server_id: "draft-server", display_name: `Server ${round}`, status: "pending" as const,
@@ -3571,7 +3829,7 @@ it.each(["failure", "missing"])("MCP recheck keeps a recoverable detail when the
     server_id: "retry-server", display_name: "Retry server", status: "pending" as const,
     approved_scopes: [], enabled: false, state_version: "1" }
   const server = { availability: "unavailable" as const, server_id: "retry-server", display_name: "Retry server", server_url: "https://mcp.example.test/retry",
-    status: "pending" as const, state_version: "1", headers: [], prepare_status: "pending_prepare" as const,
+    status: "pending" as const, state_version: "1", headers: [], transport: "streamable_http" as const, prepare_status: "pending_prepare" as const,
     declarations: [], declarations_available: false }
   const read = vi.fn(async (serverId: string) => {
     if (serverId !== "retry-server") throw Error("wrong resource");
@@ -3589,32 +3847,36 @@ it.each(["failure", "missing"])("MCP recheck keeps a recoverable detail when the
   round = 2
   view.rerender(content(false, 2))
   view.rerender(content(true, 2))
-  fireEvent.click(await within(dialog).findByRole("button", { name: "重试" }))
-  // A retry while the dependency is still missing must remain recoverable.
-  await waitFor(() => expect(within(dialog).getByRole("button", { name: "重试" })).toBeVisible())
+  await within(dialog).findByText("连接列表加载失败")
+  expect(within(dialog).queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
+  // A fresh admission while the resource is still missing must stay locked.
+  view.rerender(content(false, 3)); view.rerender(content(true, 3))
+  await within(dialog).findByText("连接列表加载失败")
+  expect(within(dialog).queryByRole("button", { name: "连接" })).not.toBeInTheDocument()
   round = 3
-  fireEvent.click(within(dialog).getByRole("button", { name: "重试" }))
+  view.rerender(content(false, 4)); view.rerender(content(true, 4))
   expect(await screen.findByRole("dialog", { name: "Retry server" })).toBe(dialog)
   expect(read.mock.calls.every(args => args[0] === "retry-server")).toBe(true)
 })
 
-it("MCP initial private read failure remains visible and explicitly retryable on the list", async () => {
+it("MCP initial private read failure stays quiet and opening the same card reads again", async () => {
   const { McpContent: Content } = await import("@/ui/mcp/mcp-content")
   const McpContent = withMcpCommandOwner(Content)
   const connector = { availability: "unavailable" as const, connector_id: "first-failure", connector_type: "mcp" as const, provider_key: "private-first",
     server_id: "first-server", display_name: "First read", status: "pending" as const, approved_scopes: [], enabled: false, state_version: "1" }
   const read = vi.fn().mockRejectedValueOnce(Error("temporary first read")).mockResolvedValue({ availability: "unavailable" as const, server_id: "first-server",
     display_name: "First read", server_url: "https://mcp.example.test/first", status: "pending", state_version: "1",
-    headers: [], prepare_status: "pending_prepare", declarations: [], declarations_available: false })
+    headers: [], transport: "streamable_http" as const, prepare_status: "pending_prepare", declarations: [], declarations_available: false })
   const hub = { ...createHubClient(), getPrivateMcpServer: read,
     listMcpConnectors: vi.fn().mockResolvedValue({ items: [connector], next_cursor: null }),
     listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
     listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }) }
   render(<LocaleProvider><McpContent client={hub} preview initialView="connections" /></LocaleProvider>)
   fireEvent.click(await screen.findByRole("button", { name: "First read" }))
-  const alert = await screen.findByRole("alert")
+  await screen.findByText("连接列表加载失败")
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument()
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
-  fireEvent.click(within(alert).getByRole("button", { name: "重试" }))
+  fireEvent.click(screen.getByRole("button", { name: "First read" }))
   expect(await screen.findByRole("dialog", { name: "First read" })).toBeVisible()
   expect(read).toHaveBeenCalledTimes(2)
 })
@@ -3634,9 +3896,10 @@ it("MCP catalog recheck reports an absent exact provider without waiting for an 
   const dialog = await screen.findByRole("dialog", { name: "Provider detail" })
   round = 2
   view.rerender(content(false, 2)); view.rerender(content(true, 2))
-  expect(await within(dialog).findByRole("button", { name: "重试" })).toBeVisible()
+  await within(dialog).findByText("连接列表加载失败")
+  expect(within(dialog).queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
   round = 1
-  fireEvent.click(within(dialog).getByRole("button", { name: "重试" }))
+  view.rerender(content(false, 3)); view.rerender(content(true, 3))
   expect(await screen.findByRole("dialog", { name: "Provider detail" })).toBe(dialog)
 })
 
@@ -3776,17 +4039,19 @@ it("Custom API same-actor recheck keeps its detail through a failed read and res
   expect(within(savedApi).queryByLabelText("已连接")).not.toBeInTheDocument()
   expect(within(savedApi).getByLabelText("已添加")).toBeVisible()
   fireEvent.click(savedApi)
-  const dialog = screen.getByRole("dialog", { name: "API 1" })
+  const dialog = screen.getByRole("dialog", { name: "编辑自定义 API" })
   round = 2
   view.rerender(content(false, 2))
   expect(screen.getByRole("dialog")).toBe(dialog)
-  expect(screen.queryByText("Instructions 1")).not.toBeInTheDocument()
+  expect(within(dialog).getByLabelText("备注（可选）")).toHaveValue("")
   view.rerender(content(true, 2))
-  const retry = await within(dialog).findByRole("button", { name: "重试" })
+  await within(dialog).findByText("连接列表加载失败")
+  expect(within(dialog).queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
   round = 3
-  fireEvent.click(retry)
-  expect(await screen.findByRole("dialog", { name: "API 3" })).toBe(dialog)
-  expect(within(dialog).getByText("Instructions 3")).toBeVisible()
+  view.rerender(content(false, 3)); view.rerender(content(true, 3))
+  await waitFor(() => expect(within(dialog).getByLabelText("名称")).toHaveValue("API 3"))
+  expect(screen.getByRole("dialog")).toBe(dialog)
+  expect(within(dialog).getByLabelText("备注（可选）")).toHaveValue("Instructions 3")
 })
 
 it("Custom API late confirmed update invalidates its own current projection without closing the rechecked detail", async () => {
@@ -3806,9 +4071,9 @@ it("Custom API late confirmed update invalidates its own current projection with
   const content = (admitted: boolean, generation: number) => <LocaleProvider><McpContent client={hub} initialView="connections" readBoundary={{ admitted, generation, subject: "late-api-actor" }} /></LocaleProvider>
   const view = render(content(true, 1))
   fireEvent.click(await screen.findByRole("button", { name: "Old API" }))
-  const dialog = screen.getByRole("dialog", { name: "Old API" })
-  fireEvent.click(within(dialog).getByRole("button", { name: "编辑" }))
-  fireEvent.click(within(dialog).getByRole("button", { name: "保存修改" }))
+  const dialog = screen.getByRole("dialog", { name: "编辑自定义 API" })
+  fireEvent.change(within(dialog).getByLabelText("名称"), { target: { value: "Confirmed API" } })
+  fireEvent.click(within(dialog).getByRole("button", { name: "保存" }))
   await waitFor(() => expect(update).toHaveBeenCalledOnce())
   view.rerender(content(false, 2)); view.rerender(content(true, 2))
   const reader = renderHook(() => useCustomApiProjection({ client: hub, identity: "late-api-actor", refreshKey: 0, readGeneration: 2 }))
@@ -3820,7 +4085,7 @@ it("Custom API late confirmed update invalidates its own current projection with
   reader.unmount()
 })
 
-it("MCP first-open locator can retry its missing row after recheck instead of retrying only an absent detail", async () => {
+it("MCP first-open locator recovers its missing row after a new admission recheck", async () => {
   const { McpContent: Content } = await import("@/ui/mcp/mcp-content")
   const McpContent = withMcpCommandOwner(Content)
   let round = 1
@@ -3829,7 +4094,7 @@ it("MCP first-open locator can retry its missing row after recheck instead of re
   const connector = { availability: "unavailable" as const, connector_id: "initial-missing", connector_type: "mcp" as const, provider_key: "initial-missing",
     server_id: "initial-missing-server", display_name: "Initial missing", status: "pending" as const, approved_scopes: [], enabled: false, state_version: "1" }
   const server = { availability: "unavailable" as const, server_id: "initial-missing-server", display_name: "Initial missing", server_url: "https://mcp.example.test/initial-missing",
-    status: "pending", state_version: "1", headers: [], prepare_status: "pending_prepare", declarations: [], declarations_available: false }
+    status: "pending", state_version: "1", headers: [], transport: "streamable_http" as const, prepare_status: "pending_prepare", declarations: [], declarations_available: false }
   const hub = { ...createHubClient(), getPrivateMcpServer: vi.fn().mockReturnValueOnce(old).mockResolvedValue(server),
     listMcpConnectors: vi.fn(async () => ({ items: round === 2 ? [] : [connector], next_cursor: null })),
     listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
@@ -3840,9 +4105,10 @@ it("MCP first-open locator can retry its missing row after recheck instead of re
   await waitFor(() => expect(hub.getPrivateMcpServer).toHaveBeenCalledOnce())
   round = 2
   view.rerender(content(false, 2)); view.rerender(content(true, 2))
-  const retry = await within(await screen.findByRole("alert")).findByRole("button", { name: "重试" })
+  await screen.findByText("连接列表加载失败")
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument()
   round = 3
-  fireEvent.click(retry)
+  view.rerender(content(false, 3)); view.rerender(content(true, 3))
   expect(await screen.findByRole("dialog", { name: "Initial missing" })).toBeVisible()
   await act(async () => { finish({ ...server, display_name: "Retired initial result" }); await old })
   expect(screen.queryByText("Retired initial result")).not.toBeInTheDocument()
@@ -3861,7 +4127,7 @@ it.each([
   const server = (fresh: boolean) => ({ availability: "unavailable" as const, server_id: "selection-server", display_name: fresh ? "Updated server" : "Original server",
     notes: fresh ? "Fresh owner note" : "Retired owner note", server_url: "https://mcp.example.test/selection",
     status: "pending" as const, state_version: fresh ? "2" : "1", headers: [{ name: "x-existing", configured: true, state_version: "1", status: "active" as const }],
-    prepare_status: "pending_prepare" as const, declarations: [], declarations_available: false })
+    transport: "streamable_http" as const, prepare_status: "pending_prepare" as const, declarations: [], declarations_available: false })
   const profile = (fresh: boolean) => ({ profile_id: "selection-api", name: fresh ? "Updated server" : "Original server",
     instructions: fresh ? "Fresh owner note" : "Retired owner note", state_version: fresh ? "2" : "1",
     created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-16T00:00:00Z", environment: [] })
@@ -3875,7 +4141,7 @@ it.each([
   if (kind === "mcp") {
     fireEvent.keyDown(screen.getByRole("button", { name: "管理" }), { key: "ArrowDown" })
     fireEvent.click(await screen.findByRole("menuitem", { name: "编辑配置" }))
-  } else fireEvent.click(screen.getByRole("button", { name: "编辑" }))
+  }
   const label = kind === "mcp" ? "服务器名称" : "名称"
   if (target === "secret") fireEvent.click(screen.getByRole("button", { name: kind === "mcp" ? "添加自定义 header" : "添加密钥" }))
   const control = () => target === "secret" ? screen.getByLabelText(kind === "mcp" ? "Header value" : "密钥值") : screen.getByRole("textbox", { name: label })
@@ -3896,9 +4162,9 @@ it.each([
   expect(screen.queryByText("Retired owner note")).not.toBeInTheDocument()
   if (kind === "mcp") {
     expect(screen.queryByText("x-existing")).not.toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "试用一下" })).toBeDisabled()
+    expect(screen.getByRole("button", { name: "连接" })).toBeDisabled()
   }
-  expect(screen.getByRole("button", { name: kind === "mcp" ? "保存" : "保存修改" })).toBeDisabled()
+  expect(screen.getByRole("button", { name: "保存" })).toBeDisabled()
   if (dirty) act(() => { field.setSelectionRange(0, field.value.length, "forward"); fireEvent.select(field) })
   else fireEvent.select(field)
   view.rerender(content(true, true))
@@ -3916,20 +4182,20 @@ it.each(["mcp", "api"])("%s configuration restores a bounded range without steal
   const connector = { availability: "unavailable" as const, connector_id: "focus-choice", connector_type: "mcp" as const, provider_key: "focus-choice",
     server_id: "focus-choice-server", status: "pending" as const, approved_scopes: [], enabled: false, state_version: "1" }
   const server = (name: string) => ({ availability: "unavailable" as const, server_id: "focus-choice-server", display_name: name, notes: "Fresh note paragraph", server_url: "https://mcp.example.test/focus-choice",
-    status: "pending" as const, state_version: "1", headers: [], prepare_status: "pending_prepare" as const, declarations: [], declarations_available: false })
+    status: "pending" as const, state_version: "1", headers: [], transport: "streamable_http" as const, prepare_status: "pending_prepare" as const, declarations: [], declarations_available: false })
   const profile = (name: string) => ({ profile_id: "focus-choice-api", name, instructions: "Fresh note paragraph", state_version: "1",
     created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-16T00:00:00Z", environment: [] })
   const content = (name: string | null, pendingError = false) => <LocaleProvider>{kind === "mcp" ?
     <CustomMcpDetailDialog admitted={name !== null} managementCommand={undefined} onResumeManagement={() => {}} connector={name === null ? null : connector} server={name === null ? null : server(name)}
-      actionId={null} actionError={false} deleteId={null} returnFocusRef={{ current: null }} onClose={vi.fn()} pendingError={pendingError} onRetry={vi.fn()}
+      actionId={null} actionError={false} deleteId={null} returnFocusRef={{ current: null }} onClose={vi.fn()} pendingError={pendingError}
       onSaveConfiguration={vi.fn()} onPrepare={vi.fn()} onAuthorize={vi.fn()} onDisconnect={vi.fn()} onDeleteIntent={vi.fn()} onCancelDelete={vi.fn()} onDelete={vi.fn()} /> :
     <CustomApiDetailDialog admitted={name !== null} command={undefined} canUpdate canRemove onResume={() => {}} profile={name === null ? null : profile(name)} busy={false} actionError={false}
-      returnFocusRef={{ current: null }} onClose={vi.fn()} onSave={vi.fn()} onDelete={vi.fn()} pendingError={pendingError} onRetry={vi.fn()} />}</LocaleProvider>
+      returnFocusRef={{ current: null }} onClose={vi.fn()} onSave={vi.fn()} onDelete={vi.fn()} pendingError={pendingError} />}</LocaleProvider>
   const view = render(content("Long original name"))
   if (kind === "mcp") {
     fireEvent.keyDown(screen.getByRole("button", { name: "管理" }), { key: "ArrowDown" })
     fireEvent.click(await screen.findByRole("menuitem", { name: "编辑配置" }))
-  } else fireEvent.click(screen.getByRole("button", { name: "编辑" }))
+  }
   const field = screen.getByRole("textbox", { name: kind === "mcp" ? "服务器名称" : "名称" }) as HTMLInputElement
   act(() => { field.focus(); field.setSelectionRange(5, 9); fireEvent.select(field) })
   view.rerender(content(null))
@@ -3958,9 +4224,8 @@ it.each(["mcp", "api"])("%s configuration restores a bounded range without steal
   view.rerender(content("Restored field scroll"))
   expect([note.scrollTop, note.scrollLeft]).toEqual([8, 4])
   view.rerender(content(null, true))
-  const retry = screen.getByRole("button", { name: "重试" })
-  act(() => retry.focus())
-  // A focused Close button remains mounted even when Retry disappears.
+  expect(screen.queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
+  // A focused Close button remains mounted through failed and fresh reads.
   const close = screen.getAllByRole("button", { name: "取消" }).find(button => !button.hasAttribute("disabled"))!
   act(() => close.focus())
   view.rerender(content("Recovered name"))
@@ -3977,7 +4242,7 @@ it.each(["form", "url"] as const)("%s MCP completion failure remains named and o
   let prepared = false
   const hub = { registerPrivateMcpServer: vi.fn().mockResolvedValue(registration),
     beginMcpConnectorAuthorization: vi.fn(),
-    getPrivateMcpServer: vi.fn(async () => ({ ...registration.server, state_version: prepared ? "3" : "2", prepare_status: prepared ? "ready" as const : "pending_prepare" as const })),
+    getPrivateMcpServer: vi.fn(async () => ({ ...registration.server, state_version: prepared ? "3" : "2", transport: "streamable_http" as const, prepare_status: prepared ? "ready" as const : "pending_prepare" as const })),
     getMcpConnector: vi.fn(async () => ({ ...registration.connector, status: prepared ? "active" as const : "pending" as const, enabled: prepared })),
     preparePrivateMcpServer: vi.fn(async () => { prepared = true; return { ...registration, declarations: [] } }) }
   const boundary = { admitted: true, subject: `completion-${mode}`, generation: 1 }
@@ -3990,6 +4255,8 @@ it.each(["form", "url"] as const)("%s MCP completion failure remains named and o
   fireEvent.change(screen.getByRole("textbox", { name: /^服务器 URL\*?$/ }), { target: { value: registration.server.server_url } })
   fireEvent.click(screen.getByRole("button", { name: "保存" }))
   await waitFor(() => expect(onDone).toHaveBeenCalledOnce())
+  const completion = { serverId: registration.server.server_id, connectorId: registration.connector.connector_id, providerKey: registration.connector.provider_key }
+  expect(onDone).toHaveBeenLastCalledWith(completion, expect.any(Function))
   expect(await screen.findByRole("alert")).toBeVisible()
   expect(screen.getByRole("heading", { name: "Creation MCP" })).toBeVisible()
   act(() => flow.bind({ ...boundary, admitted: false, generation: 2 }))
@@ -3998,14 +4265,18 @@ it.each(["form", "url"] as const)("%s MCP completion failure remains named and o
   view.rerender(form(2))
   fireEvent.click(screen.getByRole("button", { name: "完成" }))
   await waitFor(() => expect(onDone).toHaveBeenCalledTimes(2))
+  expect(onDone).toHaveBeenLastCalledWith(completion, expect.any(Function))
+  expect(onDone.mock.calls[1]?.[0]).toBe(onDone.mock.calls[0]?.[0])
   expect(hub.registerPrivateMcpServer).toHaveBeenCalledOnce()
-  expect(hub.preparePrivateMcpServer).toHaveBeenCalledOnce()
+  expect(hub.preparePrivateMcpServer).not.toHaveBeenCalled()
 })
 
-it.each(["recheck", "popup-close"] as const)("URL Save-and-publish reserves its popup before registration and retires the continuation on %s", async retirement => {
+it.each(["recheck", "dialog-close"] as const)("URL Save-and-publish registers without an OAuth popup and retires picker handoff on %s", async retirement => {
+  const publicationRecovery = await import("@/ui/mcp/mcp-project-publication-recovery")
+  const { createTestPublicationJournal } = await import("./mcp-publication-journal-fixture")
+  vi.spyOn(publicationRecovery, "createBrowserMcpProjectPublicationRecovery").mockImplementation(createTestPublicationJournal)
   const pageClients = await import("@/ui/shell/page-clients")
-  const popup = { closed: false, opener: {}, close: vi.fn(), location: { replace: vi.fn() } }
-  const open = vi.spyOn(window, "open").mockReturnValue(popup as unknown as Window)
+  const open = vi.spyOn(window, "open").mockReturnValue(null)
   let acknowledge!: () => void
   const pending = new Promise<void>(resolve => { acknowledge = resolve })
   const registration = mcpCreationRegistration()
@@ -4017,60 +4288,69 @@ it.each(["recheck", "popup-close"] as const)("URL Save-and-publish reserves its 
   const view = render(apiCreationOverlay(boundary, "url"))
   fireEvent.change(screen.getByRole("textbox", { name: /^服务器名称\*?$/ }), { target: { value: "Creation MCP" } })
   fireEvent.change(screen.getByRole("textbox", { name: /^服务器 URL\*?$/ }), { target: { value: registration.server.server_url } })
-  fireEvent.click(screen.getByRole("button", { name: "保存并发布" }))
-  expect(open).toHaveBeenCalledOnce()
+  await waitFor(() => expect(screen.getByRole("button", { name: "保存并发布" })).toBeEnabled())
+  fireEvent.keyDown(screen.getByRole("button", { name: "保存并发布" }), { key: "ArrowDown" })
+  fireEvent.click(await screen.findByRole("menuitem", { name: "发布到项目" }))
+  expect(open).not.toHaveBeenCalled()
   expect(hub.registerPrivateMcpServer).toHaveBeenCalledOnce()
-  expect(popup.opener).toBeNull()
   if (retirement === "recheck") view.rerender(apiCreationOverlay({ ...boundary, admitted: false, generation: 2 }, "url"))
-  else {
-    popup.closed = true
-    await waitFor(() => expect(hub.registerPrivateMcpServer.mock.calls[0]?.[2]?.aborted).toBe(true))
-  }
-  expect(popup.close).toHaveBeenCalledTimes(retirement === "recheck" ? 1 : 0)
+  else view.rerender(apiCreationOverlay(boundary, null))
+  await waitFor(() => expect(hub.registerPrivateMcpServer.mock.calls[0]?.[2]?.aborted).toBe(true))
   await act(async () => { acknowledge(); await pending })
   expect(hub.preparePrivateMcpServer).not.toHaveBeenCalled()
   expect(hub.beginMcpConnectorAuthorization).not.toHaveBeenCalled()
-  expect(popup.location.replace).not.toHaveBeenCalled()
+  expect(screen.queryByRole("dialog", { name: "发布到项目" })).not.toBeInTheDocument()
 })
 
-it("a blocked URL Save-and-publish popup does not register a server as a hidden side effect", async () => {
+it("a blocked browser popup cannot prevent URL registration and project selection", async () => {
+  const publicationRecovery = await import("@/ui/mcp/mcp-project-publication-recovery")
+  const { createTestPublicationJournal } = await import("./mcp-publication-journal-fixture")
+  vi.spyOn(publicationRecovery, "createBrowserMcpProjectPublicationRecovery").mockImplementation(createTestPublicationJournal)
   const pageClients = await import("@/ui/shell/page-clients")
-  vi.spyOn(window, "open").mockReturnValue(null)
-  const hub = { ...apiCreationHub(), registerPrivateMcpServer: vi.fn().mockResolvedValue(mcpCreationRegistration()) }
+  const open = vi.spyOn(window, "open").mockReturnValue(null)
+  const registration = mcpCreationRegistration()
+  const hub = { ...apiCreationHub(), registerPrivateMcpServer: vi.fn().mockResolvedValue(registration),
+    getPrivateMcpServer: vi.fn().mockResolvedValue(registration.server), getMcpConnector: vi.fn().mockResolvedValue(registration.connector) }
   vi.spyOn(pageClients, "browserHubClient").mockReturnValue(hub)
   render(apiCreationOverlay({ admitted: true, subject: "blocked-publish-actor", generation: 1 }, "url"))
   fireEvent.change(screen.getByRole("textbox", { name: /^服务器名称\*?$/ }), { target: { value: "Creation MCP" } })
   fireEvent.change(screen.getByRole("textbox", { name: /^服务器 URL\*?$/ }), { target: { value: "https://mcp.example.test/creation" } })
-  fireEvent.click(screen.getByRole("button", { name: "保存并发布" }))
-  expect(hub.registerPrivateMcpServer).not.toHaveBeenCalled()
-  expect(await screen.findByRole("alert")).toBeVisible()
+  await waitFor(() => expect(screen.getByRole("button", { name: "保存并发布" })).toBeEnabled())
+  fireEvent.keyDown(screen.getByRole("button", { name: "保存并发布" }), { key: "ArrowDown" })
+  fireEvent.click(await screen.findByRole("menuitem", { name: "发布到项目" }))
+  expect(await screen.findByRole("dialog", { name: "发布到项目" })).toBeVisible()
+  expect(hub.registerPrivateMcpServer).toHaveBeenCalledOnce()
+  expect(open).not.toHaveBeenCalled()
+  const picker = screen.getByRole("dialog", { name: "发布到项目" })
+  fireEvent.click(within(picker).getByRole("button", { name: "取消" }))
+  const detail = await screen.findByRole("dialog", { name: "Creation MCP" })
+  expect(detail).toBeVisible()
+  expect(hub.registerPrivateMcpServer).toHaveBeenCalledOnce()
+  expect(hub.getPrivateMcpServer).toHaveBeenCalledWith(registration.server.server_id, expect.any(AbortSignal))
 })
 
-it("URL Save-and-publish closes the reservation without an error when owner discovery needs no OAuth", async () => {
+it("URL definition publication does not run discovery or OAuth before handing off its registered entity", async () => {
   const { Dialog, DialogContent } = await import("@/components/ui/dialog")
   const { UrlMcpForm } = await import("@/ui/mcp/mcp-url-form")
   const { createMcpServerCreationFlow } = await import("@/ui/mcp/mcp-server-creation-flow")
-  const popup = { closed: false, opener: {}, close: vi.fn(), location: { replace: vi.fn() } }
-  vi.spyOn(window, "open").mockReturnValue(popup as unknown as Window)
+  const open = vi.spyOn(window, "open").mockReturnValue(null)
   const registration = mcpCreationRegistration()
-  let prepared = false
   const hub = { registerPrivateMcpServer: vi.fn().mockResolvedValue(registration), beginMcpConnectorAuthorization: vi.fn(),
-    getPrivateMcpServer: vi.fn(async () => ({ ...registration.server, prepare_status: prepared ? "ready" as const : "pending_prepare" as const, state_version: prepared ? "3" : "2" })),
-    getMcpConnector: vi.fn(async () => ({ ...registration.connector, enabled: prepared, status: prepared ? "active" as const : "pending" as const })),
-    preparePrivateMcpServer: vi.fn(async () => { prepared = true; return { ...registration, declarations: [] } }) }
+    getPrivateMcpServer: vi.fn().mockResolvedValue(registration.server), getMcpConnector: vi.fn().mockResolvedValue(registration.connector), preparePrivateMcpServer: vi.fn() }
   const boundary = { admitted: true, subject: "publish-no-oauth", generation: 1 }
   const flow = createMcpServerCreationFlow({ client: hub, preparation: createMcpPreparationCommands({ canPrepare: () => true, client: hub, boundary, onConfirmed: vi.fn() }), boundary, onChanged: vi.fn() })
-  const onDone = vi.fn().mockResolvedValue(undefined)
-  render(<LocaleProvider><Dialog open><DialogContent><UrlMcpForm flow={flow} boundary={boundary} onCancel={vi.fn()} onDone={onDone} /></DialogContent></Dialog></LocaleProvider>)
+  const onDone = vi.fn().mockResolvedValue(undefined), onPublish = vi.fn().mockResolvedValue(undefined)
+  render(<LocaleProvider><Dialog open><DialogContent><UrlMcpForm flow={flow} boundary={boundary} onCancel={vi.fn()} onDone={onDone} onPublish={onPublish} /></DialogContent></Dialog></LocaleProvider>)
   fireEvent.change(screen.getByRole("textbox", { name: /^服务器名称\*?$/ }), { target: { value: "Creation MCP" } })
   fireEvent.change(screen.getByRole("textbox", { name: /^服务器 URL\*?$/ }), { target: { value: registration.server.server_url } })
-  fireEvent.click(screen.getByRole("button", { name: "保存并发布" }))
-  await waitFor(() => expect(onDone).toHaveBeenCalledOnce())
-  expect(popup.close).toHaveBeenCalledOnce()
-  expect(popup.location.replace).not.toHaveBeenCalled()
-  expect(hub.preparePrivateMcpServer).toHaveBeenCalledOnce()
+  await waitFor(() => expect(screen.getByRole("button", { name: "保存并发布" })).toBeEnabled())
+  fireEvent.keyDown(screen.getByRole("button", { name: "保存并发布" }), { key: "ArrowDown" })
+  fireEvent.click(await screen.findByRole("menuitem", { name: "发布到项目" }))
+  await waitFor(() => expect(onPublish).toHaveBeenCalledOnce())
+  expect(onDone).not.toHaveBeenCalled()
+  expect(open).not.toHaveBeenCalled()
+  expect(hub.preparePrivateMcpServer).not.toHaveBeenCalled()
   expect(hub.beginMcpConnectorAuthorization).not.toHaveBeenCalled()
-  expect(screen.queryByRole("alert")).not.toBeInTheDocument()
 })
 
 it.each([false, true])("private detail Prepare restores the same original command after reopening (recheck: %s)", async recheck => {
@@ -4078,24 +4358,26 @@ it.each([false, true])("private detail Prepare restores the same original comman
   const registration = mcpCreationRegistration()
   let version = "1"
   const prepare = vi.fn<NonNullable<import("@/hub/client").HubClient["preparePrivateMcpServer"]>>().mockRejectedValue(new Error("lost prepare ACK"))
-  const hub = { ...apiCreationHub(), preparePrivateMcpServer: prepare,
+  const lookup = vi.fn().mockRejectedValue(new HubClientError("http", "Unresolved lookup", "mcp_personal_command_outcome_unknown", 503, false))
+  const hub = { ...apiCreationHub(), getMcpPrepareReceipt: lookup, preparePrivateMcpServer: prepare,
     listMcpConnectors: vi.fn(async () => ({ items: [{ ...registration.connector, state_version: version }], next_cursor: null })),
-    getPrivateMcpServer: vi.fn(async () => ({ ...registration.server, state_version: version })) }
+    getPrivateMcpServer: vi.fn(async () => ({ ...registration.server, state_version: version })),
+    getMcpConnector: vi.fn(async () => ({ ...registration.connector, state_version: version })) }
   const boundary = { admitted: true, subject: "detail-original-prepare", generation: 1 }
   const content = (admitted = true, generation = 1) => <LocaleProvider><ConnectorCommandProvider client={hub} boundary={{ ...boundary, admitted, generation }}><McpContent client={hub} initialView="connections" readBoundary={{ ...boundary, admitted, generation }} /></ConnectorCommandProvider></LocaleProvider>
   const view = render(content())
   fireEvent.click(await screen.findByRole("button", { name: "Creation MCP" }))
-  fireEvent.click(await screen.findByRole("button", { name: "试用一下" }))
+  fireEvent.click(await screen.findByRole("button", { name: "连接" }))
   await screen.findByRole("alert")
   expect(prepare).toHaveBeenCalledOnce()
   fireEvent.click(screen.getByRole("button", { name: "取消" }))
   if (recheck) { view.rerender(content(false, 2)); version = "9"; view.rerender(content(true, 2)) }
   fireEvent.click(await screen.findByRole("button", { name: "Creation MCP" }))
-  const button = await screen.findByRole("button", { name: /^(试用一下|重试原请求)$/ })
+  const button = await screen.findByRole("button", { name: /^(连接|查看连接结果)$/ })
   fireEvent.click(button)
-  await waitFor(() => expect(prepare).toHaveBeenCalledTimes(2))
-  expect(prepare.mock.calls[1]?.slice(0, 3)).toEqual(prepare.mock.calls[0]?.slice(0, 3))
-  expect(prepare.mock.calls[1]?.[1]).toBe("1")
+  await waitFor(() => expect(lookup).toHaveBeenCalledOnce())
+  expect(lookup.mock.calls[0]?.slice(0, 3)).toEqual(prepare.mock.calls[0]?.slice(0, 3))
+  expect(lookup.mock.calls[0]?.[1]).toBe("1")
 })
 
 it("global creation and Settings detail restore one Prepare, and confirmed disconnect releases the closed creation intent", async () => {
@@ -4105,7 +4387,8 @@ it("global creation and Settings detail restore one Prepare, and confirmed disco
   let version = "1", removed = false
   const prepare = vi.fn<NonNullable<import("@/hub/client").HubClient["preparePrivateMcpServer"]>>().mockRejectedValue(new Error("lost Prepare ACK"))
   const remove = vi.fn(async () => { removed = true; return { ...registration.connector, status: "revoked" as const } })
-  const hub = { ...apiCreationHub(), preparePrivateMcpServer: prepare, removeMcpConnector: remove,
+  const lookup = vi.fn().mockRejectedValue(new HubClientError("http", "Unresolved lookup", "mcp_personal_command_outcome_unknown", 503, false))
+  const hub = { ...apiCreationHub(), getMcpPrepareReceipt: lookup, preparePrivateMcpServer: prepare, removeMcpConnector: remove,
     registerPrivateMcpServer: vi.fn().mockResolvedValue(registration),
     getPrivateMcpServer: vi.fn(async () => ({ ...registration.server, state_version: version })),
     getMcpConnector: vi.fn(async () => registration.connector),
@@ -4120,17 +4403,21 @@ it("global creation and Settings detail restore one Prepare, and confirmed disco
   fireEvent.change(screen.getByRole("textbox", { name: "服务器名称" }), { target: { value: "Creation MCP" } })
   fireEvent.change(screen.getByRole("textbox", { name: "服务器 URL" }), { target: { value: registration.server.server_url } })
   fireEvent.click(screen.getByRole("button", { name: "保存" }))
-  await screen.findByRole("button", { name: "重试原请求" })
+  await screen.findByRole("button", { name: "管理" })
+  const configuredDetail = screen.getByRole("dialog", { name: "Creation MCP" })
+  expect(prepare).not.toHaveBeenCalled()
+  fireEvent.click(await within(configuredDetail).findByRole("button", { name: "连接" }))
+  await screen.findByRole("button", { name: "查看连接结果" })
   expect(prepare).toHaveBeenCalledOnce()
   version = "9"
   view.rerender(content(false))
   fireEvent.click(await screen.findByRole("button", { name: "Creation MCP" }))
-  const retry = await screen.findByRole("button", { name: "重试原请求" })
+  const retry = await screen.findByRole("button", { name: "查看连接结果" })
   expect(prepare).toHaveBeenCalledOnce()
   fireEvent.click(retry)
-  await waitFor(() => expect(prepare).toHaveBeenCalledTimes(2))
-  expect(prepare.mock.calls[1]?.slice(0, 3)).toEqual(prepare.mock.calls[0]?.slice(0, 3))
-  expect(prepare.mock.calls[1]?.[1]).toBe("1")
+  await waitFor(() => expect(lookup).toHaveBeenCalledOnce())
+  expect(lookup.mock.calls[0]?.slice(0, 3)).toEqual(prepare.mock.calls[0]?.slice(0, 3))
+  expect(lookup.mock.calls[0]?.[1]).toBe("1")
   fireEvent.keyDown(screen.getByRole("button", { name: "管理" }), { key: "ArrowDown" })
   fireEvent.click(await screen.findByRole("menuitem", { name: "断开连接" }))
   await waitFor(() => expect(remove).toHaveBeenCalledOnce())
@@ -4139,7 +4426,7 @@ it("global creation and Settings detail restore one Prepare, and confirmed disco
   expect(screen.getByRole("textbox", { name: "服务器名称" })).toHaveValue("")
   expect(screen.getByRole("button", { name: "保存" })).toBeDisabled()
   expect(hub.registerPrivateMcpServer).toHaveBeenCalledOnce()
-  expect(prepare).toHaveBeenCalledTimes(2)
+  expect(prepare).toHaveBeenCalledOnce()
 })
 
 it("closing a preparing detail aborts its wait; a late ACK cannot close the successor window", async () => {
@@ -4148,22 +4435,25 @@ it("closing a preparing detail aborts its wait; a late ACK cannot close the succ
   let acknowledge!: () => void
   const pending = new Promise<void>(resolve => { acknowledge = resolve })
   const prepare = vi.fn<NonNullable<import("@/hub/client").HubClient["preparePrivateMcpServer"]>>(async () => {
-    await pending; return { ...registration, declarations: [] }
+    await pending; return { ...registration, declarations: [],
+      server: { ...registration.server, status: "registered" as const, state_version: "2", prepare_status: "ready" as const, declarations_available: true, declaration_digest: "a".repeat(64) },
+      connector: { ...registration.connector, status: "active" as const, enabled: true, state_version: "2" } }
   })
   const hub = { ...apiCreationHub(), preparePrivateMcpServer: prepare,
     getPrivateMcpServer: vi.fn(async () => registration.server),
+    getMcpConnector: vi.fn(async () => registration.connector),
     listMcpConnectors: vi.fn(async () => ({ items: [registration.connector], next_cursor: null })) }
   const boundary = { admitted: true, subject: "detail-window-prepare", generation: 1 }
   render(<LocaleProvider><ConnectorCommandProvider client={hub} boundary={boundary}>
     <McpContent client={hub} initialView="connections" readBoundary={boundary} />
   </ConnectorCommandProvider></LocaleProvider>)
   fireEvent.click(await screen.findByRole("button", { name: "Creation MCP" }))
-  fireEvent.click(await screen.findByRole("button", { name: "试用一下" }))
+  fireEvent.click(await screen.findByRole("button", { name: "连接" }))
   await waitFor(() => expect(prepare).toHaveBeenCalledOnce())
   fireEvent.click(screen.getByRole("button", { name: "取消" }))
   expect(prepare.mock.calls[0]?.[3]?.aborted).toBe(true)
   fireEvent.click(await screen.findByRole("button", { name: "Creation MCP" }))
-  await screen.findByRole("button", { name: "重试原请求" })
+  await screen.findByRole("button", { name: "查看连接结果" })
   await act(async () => { acknowledge(); await pending })
   expect(screen.getByRole("dialog", { name: "Creation MCP" })).toBeVisible()
   fireEvent.click(await screen.findByRole("button", { name: "完成" }))
@@ -4181,10 +4471,9 @@ it("an unconfirmed Custom API edit keeps its draft read-only and exposes origina
     listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }), listMcpConnectors: vi.fn().mockResolvedValue({ items: [], next_cursor: null }) }
   render(<LocaleProvider><McpContent client={hub} initialView="connections" readBoundary={{ admitted: true, generation: 1, subject: "api-management-actor" }} /></LocaleProvider>)
   fireEvent.click(await screen.findByRole("button", { name: "Editable API" }))
-  fireEvent.click(screen.getByRole("button", { name: "编辑" }))
   const name = screen.getByLabelText("名称")
   fireEvent.change(name, { target: { value: "Original edit" } })
-  fireEvent.click(screen.getByRole("button", { name: "保存修改" }))
+  fireEvent.click(screen.getByRole("button", { name: "保存" }))
   await waitFor(() => expect(update).toHaveBeenCalledOnce())
   expect(await screen.findByRole("button", { name: "重试原请求" })).toBeEnabled()
   expect(name).toHaveAttribute("readonly")
@@ -4230,11 +4519,10 @@ it("a late API edit ACK clears actual secret drafts without closing a successor 
     listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }), listMcpConnectors: vi.fn().mockResolvedValue({ items: [], next_cursor: null }) }
   render(<LocaleProvider><McpContent client={hub} initialView="connections" readBoundary={{ admitted: true, generation: 1, subject: "api-late-window-actor" }} /></LocaleProvider>)
   fireEvent.click(await screen.findByRole("button", { name: "Late managed API" }))
-  fireEvent.click(screen.getByRole("button", { name: "编辑" }))
   fireEvent.click(screen.getByRole("button", { name: "添加密钥" }))
   fireEvent.change(screen.getByLabelText("密钥名称"), { target: { value: "SECRET" } })
   fireEvent.change(screen.getByLabelText("密钥值"), { target: { value: "private-draft" } })
-  fireEvent.click(screen.getByRole("button", { name: "保存修改" }))
+  fireEvent.click(screen.getByRole("button", { name: "保存" }))
   fireEvent.click(within(screen.getByRole("dialog")).getAllByRole("button", { name: "取消" }).at(-1)!)
   expect(update.mock.calls[0]?.[3].aborted).toBe(true)
   fireEvent.click(screen.getByRole("button", { name: "Other managed API" }))
@@ -4246,7 +4534,6 @@ it("a late API edit ACK clears actual secret drafts without closing a successor 
   fireEvent.click(screen.getByRole("button", { name: "完成" }))
   await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
   fireEvent.click(screen.getByRole("button", { name: "Late managed API" }))
-  fireEvent.click(screen.getByRole("button", { name: "编辑" }))
   expect(screen.queryByLabelText("密钥值")).not.toBeInTheDocument()
   expect(screen.getByLabelText("名称")).not.toHaveAttribute("readonly")
   expect(update).toHaveBeenCalledOnce()
@@ -4260,7 +4547,6 @@ it("a mounted API editor clears secret values on ACK and rejects submitted edits
     command={kind ? { profileId: profile.profile_id, operation: "update", kind } : undefined}
     onResume={resume} onSave={save} onDelete={vi.fn()} onClose={vi.fn()} returnFocusRef={{ current: null }} /></LocaleProvider>
   const view = render(content())
-  fireEvent.click(screen.getByRole("button", { name: "编辑" }))
   fireEvent.click(screen.getByRole("button", { name: "添加密钥" }))
   fireEvent.change(screen.getByLabelText("密钥名称"), { target: { value: "SECRET" } })
   fireEvent.change(screen.getByLabelText("密钥值"), { target: { value: "mounted-secret" } })
@@ -4280,7 +4566,7 @@ it("an unknown private MCP edit is read-only and offers the original management 
   const { McpContent: Content } = await import("@/ui/mcp/mcp-content")
   const McpContent = withMcpCommandOwner(Content)
   const connector = { availability: "unavailable" as const, connector_id: "managed-mcp", server_id: "managed-server", connector_type: "mcp" as const, provider_key: "fixture", display_name: "Managed MCP", status: "pending" as const, enabled: false, approved_scopes: [], state_version: "1" }
-  const server = { availability: "unavailable" as const, server_id: "managed-server", display_name: "Managed MCP", server_url: "https://mcp.example.test/", status: "pending", state_version: "1", headers: [], prepare_status: "pending_prepare", declarations: [], declarations_available: false }
+  const server = { availability: "unavailable" as const, server_id: "managed-server", display_name: "Managed MCP", server_url: "https://mcp.example.test/", status: "pending", state_version: "1", headers: [], transport: "streamable_http" as const, prepare_status: "pending_prepare", declarations: [], declarations_available: false }
   const update = vi.fn().mockRejectedValue(new Error("lost edit ACK"))
   const hub = { ...createHubClient(), updatePrivateMcpServer: update, getPrivateMcpServer: vi.fn().mockResolvedValue(server), listMcpConnectors: vi.fn().mockResolvedValue({ items: [connector], next_cursor: null }), listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }), listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }) }
   render(<LocaleProvider><McpContent client={hub} initialView="connections" readBoundary={{ admitted: true, generation: 1, subject: "managed-mcp-actor" }} /></LocaleProvider>)
@@ -4324,7 +4610,7 @@ it.each(["toggle", "disconnect"] as const)("provider %s resumes its original com
 it("a mounted MCP editor clears header secrets on management ACK but preserves non-secret edits while waiting for Done", async () => {
   const { CustomMcpDetailDialog } = await import("@/ui/mcp/custom-mcp-detail-dialog")
   const connector = { availability: "unavailable" as const, connector_id: "mounted-mcp", server_id: "mounted-server", connector_type: "mcp" as const, provider_key: "fixture", status: "pending" as const, enabled: false, approved_scopes: [], state_version: "1" }
-  const server = { availability: "unavailable" as const, server_id: "mounted-server", display_name: "Mounted MCP", server_url: "https://mcp.example.test/", status: "pending" as const, state_version: "1", headers: [], prepare_status: "pending_prepare" as const, declarations: [], declarations_available: false }
+  const server = { availability: "unavailable" as const, server_id: "mounted-server", display_name: "Mounted MCP", server_url: "https://mcp.example.test/", status: "pending" as const, state_version: "1", headers: [], transport: "streamable_http" as const, prepare_status: "pending_prepare" as const, declarations: [], declarations_available: false }
   const save = vi.fn()
   const content = (kind?: "unknown" | "completed") => <LocaleProvider><CustomMcpDetailDialog connector={connector} server={server} admitted
     managementCommand={kind ? { connectorId: connector.connector_id, serverId: server.server_id, operation: "update_server", kind } : undefined}
@@ -4340,7 +4626,7 @@ it("a mounted MCP editor clears header secrets on management ACK but preserves n
   fireEvent.change(name, { target: { value: "My draft" } })
   view.rerender(content("unknown"))
   expect(name).toHaveAttribute("readonly")
-  expect(screen.getByRole("button", { name: "试用一下" })).toBeDisabled()
+  expect(screen.getByRole("button", { name: "连接" })).toBeDisabled()
   fireEvent.submit(name.closest("form")!); expect(save).not.toHaveBeenCalled()
   view.rerender(content("completed"))
   expect(screen.queryByLabelText("Header value")).not.toBeInTheDocument()
@@ -4353,7 +4639,7 @@ it("a lost private MCP deletion ACK remains reachable after its row disappears a
   const McpContent = withMcpCommandOwner(Content)
   let listed = true
   const connector = { availability: "unavailable" as const, connector_id: "missing-managed-mcp", server_id: "missing-managed-server", connector_type: "mcp" as const, provider_key: "fixture", display_name: "Missing managed MCP", status: "pending" as const, enabled: false, approved_scopes: [], state_version: "1" }
-  const server = { availability: "unavailable" as const, server_id: "missing-managed-server", display_name: "Missing managed MCP", server_url: "https://mcp.example.test/", status: "pending", state_version: "1", headers: [], prepare_status: "pending_prepare", declarations: [], declarations_available: false }
+  const server = { availability: "unavailable" as const, server_id: "missing-managed-server", display_name: "Missing managed MCP", server_url: "https://mcp.example.test/", status: "pending", state_version: "1", headers: [], transport: "streamable_http" as const, prepare_status: "pending_prepare", declarations: [], declarations_available: false }
   const remove = vi.fn().mockRejectedValueOnce(new Error("lost deletion ACK")).mockResolvedValue({ server_id: server.server_id, deleted: true, replayed: true })
   const hub = { ...createHubClient(), deletePrivateMcpServer: remove, getPrivateMcpServer: vi.fn().mockResolvedValue(server), listMcpConnectors: vi.fn(async () => ({ items: listed ? [connector] : [], next_cursor: null })), listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }), listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }) }
   const content = (generation: number) => <LocaleProvider><McpContent client={hub} initialView="connections" readBoundary={{ admitted: true, generation, subject: "missing-mcp-management-actor" }} /></LocaleProvider>
@@ -4411,7 +4697,7 @@ it.each(["forbidden", "not-found", "network"])("installation detail keeps pin A 
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
     const path = String(input); requests.push(path)
     const headers = { "cache-control": "private, no-store", "x-request-id": "pin-detail" }
-    if (path.endsWith("GetSkill")) return Response.json({ skill: { id: "pin-series", version: "pin-B", displayName: "Catalog B", description: "B summary" }, downloadInfo: { downloadUrl: "/api/skill-downloads/current-B", filename: "B.zip", expiresAt: "2028-01-01T00:00:00Z" } }, { headers })
+    if (path.endsWith("GetSkill")) return Response.json({ skill: { id: "pin-series", version: "pin-B", displayName: "Catalog B", description: "B summary" } }, { headers })
     if (path.endsWith("/download")) { if (downloadFailure === "network") throw new TypeError("network interrupted"); return Response.json({ error: { code: downloadFailure === "not-found" ? "skill_not_found" : "skill_download_forbidden", message: "Download denied independently", retryable: false } }, { status: downloadFailure === "not-found" ? 404 : 403, headers }) }
     if (path.includes("/package")) {
       const selected = new URL(path, "http://local.test").searchParams.get("file_path") as keyof typeof fileTexts | null
@@ -4588,7 +4874,7 @@ it("catalog detail still reads current B even when its card also carries install
   const requests: string[] = []
   vi.spyOn(globalThis, "fetch").mockImplementation(async input => {
     requests.push(String(input))
-    return Response.json({ skill: { id: "separate-series", version: "current-B", displayName: "Catalog current B", description: "Catalog B metadata" }, downloadInfo: { downloadUrl: "/api/skill-downloads/catalog-B", filename: "B.zip", expiresAt: "2028-01-01T00:00:00Z" } })
+    return Response.json({ skill: { id: "separate-series", version: "current-B", displayName: "Catalog current B", description: "Catalog B metadata" } })
   })
   render(<LocaleProvider><ManusSkillDetailDialog readBoundary={{ admitted: true, subject: "catalog-pin-reader", generation: 1 }} skill={{ skill_id: "separate-series", revision_skill_id: "current-B", source_ref: "skill:current-B", installed_source_ref: "skill:installed-A", installation_id: "installed-A-id", name: "Catalog card", description: "Current card", content_hash: "series", scope: "official", installed: true, enabled: true }} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={() => false} /></LocaleProvider>)
   await screen.findByText("Catalog B metadata")
@@ -4615,7 +4901,7 @@ it.each(["pin-changed", "series-changed", "removed"])("installation detail rejec
 function privateOAuthDetailFixture() {
   const base = mcpCreationRegistration()
   const connector = { ...base.connector, state_version: "7" }
-  const server = { ...base.server, prepare_status: "needs_oauth" as const, authorization_status: "pending" as const }
+  const server = { ...base.server, transport: "streamable_http" as const, prepare_status: "needs_oauth" as const, authorization_status: "pending" as const }
   const prepare = vi.fn()
   const response = { connector, authorization: { authorization_id: "private-detail-attempt", authorization_url: "https://oauth.example.test/private-detail", expires_at: new Date(Date.now() + 60_000).toISOString() } }
   const reconnect = vi.fn<(id: string, input: unknown, signal?: AbortSignal) => Promise<typeof response>>().mockResolvedValue(response)
@@ -4687,4 +4973,1099 @@ it.each(["close", "recheck"] as const)("private OAuth retires %s without blockin
   view.unmount()
   await act(async () => { acknowledgeFresh(); await freshGate })
   expect(navigate).not.toHaveBeenCalled()
+})
+
+it("Custom API card opens its editor directly, keeps unchanged save disabled and closes on cancel", async () => {
+  const { CustomApiDetailDialog } = await import("@/ui/mcp/custom-api-detail-dialog")
+  const close = vi.fn(), save = vi.fn(), remove = vi.fn()
+  const profile = { profile_id: "direct-api", name: "Direct API", instructions: "Original instruction", state_version: "1", created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-24T00:00:00Z", environment: [] }
+  render(<LocaleProvider><CustomApiDetailDialog profile={profile} admitted busy={false} actionError={false} command={undefined}
+    canUpdate canRemove onResume={vi.fn()} returnFocusRef={{ current: null }} onClose={close} onSave={save} onDelete={remove} /></LocaleProvider>)
+  const dialog = screen.getByRole("dialog", { name: "编辑自定义 API" })
+  expect(within(dialog).getByRole("textbox", { name: "名称" })).toHaveValue("Direct API")
+  expect(within(dialog).getByRole("textbox", { name: "名称" })).toHaveFocus()
+  expect(within(dialog).getByRole("button", { name: "复制 UUID" })).toBeEnabled()
+  expect(within(dialog).queryByRole("button", { name: "编辑" })).not.toBeInTheDocument()
+  const submit = within(dialog).getByRole("button", { name: "保存" })
+  expect(submit).toBeDisabled()
+  fireEvent.change(within(dialog).getByRole("textbox", { name: "名称" }), { target: { value: "Updated API" } })
+  expect(submit).toBeEnabled()
+  fireEvent.click(submit)
+  expect(save).toHaveBeenCalledWith({ expected_state_version: "1", name: "Updated API", instructions: "Original instruction" })
+  expect(remove).not.toHaveBeenCalled()
+  fireEvent.click(within(dialog).getByRole("button", { name: "取消" }))
+  expect(close).toHaveBeenCalledTimes(1)
+})
+
+it("opening a Custom API with legal owner whitespace does not enable or submit a normalized rewrite", async () => {
+  const { CustomApiDetailDialog } = await import("@/ui/mcp/custom-api-detail-dialog")
+  const save = vi.fn()
+  const profile = { profile_id: "whitespace-api", name: " API ", instructions: " note\n", state_version: "1", created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-24T00:00:00Z", environment: [] }
+  render(<LocaleProvider><CustomApiDetailDialog profile={profile} admitted busy={false} actionError={false} command={undefined}
+    canUpdate canRemove onResume={vi.fn()} returnFocusRef={{ current: null }} onClose={vi.fn()} onSave={save} onDelete={vi.fn()} /></LocaleProvider>)
+  const field = screen.getByRole("textbox", { name: "名称" })
+  expect(field).toHaveValue(" API ")
+  expect(screen.getByRole("button", { name: "保存" })).toBeDisabled()
+  fireEvent.submit(field.closest("form")!)
+  expect(save).not.toHaveBeenCalled()
+})
+
+it("a pending Custom API save reports form busy without inserting a loading banner above its fields", async () => {
+  const { CustomApiDetailDialog } = await import("@/ui/mcp/custom-api-detail-dialog")
+  const profile = { profile_id: "pending-api-layout", name: "Pending API", state_version: "1", created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-24T00:00:00Z", environment: [] }
+  render(<LocaleProvider><CustomApiDetailDialog profile={profile} admitted busy actionError={false} command={{ profileId: profile.profile_id, operation: "update", kind: "running" }}
+    canUpdate canRemove onResume={vi.fn()} returnFocusRef={{ current: null }} onClose={vi.fn()} onSave={vi.fn()} onDelete={vi.fn()} /></LocaleProvider>)
+  expect(screen.getByLabelText("名称").closest("form")).toHaveAttribute("aria-busy", "true")
+  expect(screen.queryByText("正在加载…")).not.toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "保存" })).toBeDisabled()
+})
+
+it("a failed draft retirement shows a send error and retains the composer input", async () => {
+  engine.dispose()
+  client = createFakeClient()
+  engine = createSessionEngine({ client, storage: createMemoryStorage<ConversationStore>(null), draftLifecycle: { isUnsubmitted: () => true, retire: () => false } })
+  engine.newConversation()
+  mountFrame()
+  const composer = screen.getByRole("textbox", { name: "对话输入" })
+  fireEvent.change(composer, { target: { value: "preserve this unsent draft" } })
+  fireEvent.submit(composer.closest("form")!)
+  expect(await screen.findByRole("alert")).toHaveTextContent("消息尚未发送")
+  expect(composer).toHaveValue("preserve this unsent draft")
+  expect(client.createCalls).toEqual([])
+})
+
+it.each(["custom", "url"] as const)("a known duplicate private MCP URL explains the rejection and preserves editable fields without retrying automatically (%s)", async mode => {
+  window.localStorage.setItem("kokoro.locale", "zh")
+  const { Dialog, DialogContent } = await import("@/components/ui/dialog")
+  const { CustomMcpForm } = await import("@/ui/mcp/mcp-custom-form")
+  const { createMcpServerCreationFlow } = await import("@/ui/mcp/mcp-server-creation-flow")
+  const { HubClientError } = await import("@/hub/client")
+  const { UrlMcpForm } = await import("@/ui/mcp/mcp-url-form")
+  const boundary = { admitted: true, subject: "duplicate-url-ui", generation: 1 }
+  const registration = mcpCreationRegistration()
+  const hub = { registerPrivateMcpServer: vi.fn().mockRejectedValue(new HubClientError("http", "duplicate", "mcp_personal_server_url_conflict", 409, false)),
+    preparePrivateMcpServer: vi.fn(), getPrivateMcpServer: vi.fn(), getMcpConnector: vi.fn(), beginMcpConnectorAuthorization: vi.fn() }
+  const flow = createMcpServerCreationFlow({ client: hub, boundary, onChanged: vi.fn(), preparation: createMcpPreparationCommands({ client: hub, boundary, canPrepare: () => true, onConfirmed: vi.fn() }) })
+  const Form = mode === "custom" ? CustomMcpForm : UrlMcpForm
+  render(<LocaleProvider><Dialog open><DialogContent><Form flow={flow} boundary={boundary} onDone={async () => undefined} onCancel={vi.fn()} /></DialogContent></Dialog></LocaleProvider>)
+  const name = screen.getByRole("textbox", { name: /^服务器名称\*?$/ })
+  const url = screen.getByRole("textbox", { name: /^服务器 URL\*?$/ })
+  fireEvent.change(name, { target: { value: "Keep QA name" } })
+  fireEvent.change(url, { target: { value: registration.server.server_url } })
+  fireEvent.click(screen.getByRole("button", { name: "保存" }))
+  expect(await screen.findByRole("alert")).toHaveTextContent("此服务器 URL 已添加")
+  expect(name).toHaveValue("Keep QA name")
+  expect(url).toHaveValue(registration.server.server_url)
+  expect(name).not.toHaveAttribute("readonly")
+  expect(url).not.toHaveAttribute("readonly")
+  expect(screen.getByRole("button", { name: "保存" })).toBeEnabled()
+  expect(screen.queryByRole("button", { name: "重试原请求" })).not.toBeInTheDocument()
+  expect(hub.registerPrivateMcpServer).toHaveBeenCalledOnce()
+  expect(hub.preparePrivateMcpServer).not.toHaveBeenCalled()
+})
+
+// Native storage is covered separately; these jsdom tests retain all original command/UI assertions.
+vi.mock("@/ui/mcp/mcp-preparation-recovery", async importOriginal => {
+  const actual = await importOriginal<typeof import("@/ui/mcp/mcp-preparation-recovery")>();
+  const { createTestPreparationJournal } = await import("./fixtures/mcp-preparation-journal");
+  return { ...actual, createBrowserMcpPreparationRecovery: () => createTestPreparationJournal(actual) };
+});
+
+
+function exactCreationHub() {
+  const registered = mcpCreationRegistration()
+  const server = { ...registered.server, availability: "available" as const, status: "registered" as const, transport: "streamable_http" as const, prepare_status: "ready" as const, declarations_available: true }
+  const connector = { ...registered.connector, availability: "available" as const, status: "active" as const, enabled: true }
+  // Same display name intentionally points to a different row; ACK identity wins.
+  const other = { ...connector, connector_id: "different-connector", server_id: "different-server", provider_key: "different-provider" }
+  return { ...apiCreationHub(),
+    listMcpConnectors: vi.fn(async () => ({ items: [other], next_cursor: null })),
+    registerPrivateMcpServer: vi.fn(async () => ({ server, connector, replayed: false })),
+    getPrivateMcpServer: vi.fn<NonNullable<import("@/hub/client").HubClient["getPrivateMcpServer"]>>(async () => server), getMcpConnector: vi.fn<NonNullable<import("@/hub/client").HubClient["getMcpConnector"]>>(async () => connector),
+    preparePrivateMcpServer: vi.fn(),
+  }
+}
+
+it.each([ ["global", "form"], ["global", "url"], ["settings", "form"], ["settings", "url"] ] as const)(
+  "%s %s creation opens the exact acknowledged detail without a matching list row", async (entry, mode) => {
+    const { ConnectorsSettingsSection } = await import("@/ui/settings/sections/connectors-settings-section")
+    const pageClients = await import("@/ui/shell/page-clients")
+    const hub = exactCreationHub()
+    vi.spyOn(pageClients, "browserHubClient").mockReturnValue(hub)
+    const boundary = { admitted: true, subject: `exact-${entry}-${mode}`, generation: 1 }
+    render(entry === "global" ? apiCreationOverlay(boundary, mode) :
+      <LocaleProvider><ConnectorCommandProvider client={hub} boundary={boundary}><ConnectorsSettingsSection client={hub} preview={false} brandName="Kokoro" readBoundary={boundary} /></ConnectorCommandProvider></LocaleProvider>)
+    if (entry === "settings") {
+      fireEvent.keyDown(await screen.findByRole("button", { name: "创建" }), { key: "ArrowDown" })
+      fireEvent.click(await screen.findByRole("menuitem", { name: mode === "form" ? "自定义 MCP" : /通过 URL 添加 MCP/u }))
+    }
+    fireEvent.change(screen.getByRole("textbox", { name: /^服务器名称\*?$/u }), { target: { value: "Creation MCP" } })
+    fireEvent.change(screen.getByRole("textbox", { name: /^服务器 URL\*?$/u }), { target: { value: "https://mcp.example.test/creation" } })
+    fireEvent.click(screen.getByRole("button", { name: "保存" }))
+    expect(await screen.findByRole("button", { name: "管理" })).toBeVisible()
+    expect(screen.getByRole("dialog", { name: "Creation MCP" })).toBeVisible()
+    expect(hub.registerPrivateMcpServer).toHaveBeenCalledOnce()
+    expect(hub.preparePrivateMcpServer).not.toHaveBeenCalled()
+    expect(hub.getMcpConnector.mock.calls.every(([id]) => id === "creation-connector")).toBe(true)
+    expect(hub.getPrivateMcpServer.mock.calls.every(([id]) => id === "creation-server")).toBe(true)
+    // Creation read + fresh detail read; no list scan is accepted as detail facts.
+    expect(hub.getMcpConnector.mock.calls.length).toBeGreaterThanOrEqual(2)
+    expect(hub.getPrivateMcpServer.mock.calls.length).toBeGreaterThanOrEqual(2)
+  },
+)
+
+it.each(["window", "subject"] as const)("a successful completion callback after %s retirement never opens the old ACK detail", async retirement => {
+  const { McpCreateDialog } = await import("@/ui/mcp/mcp-create-dialog")
+  const hub = exactCreationHub()
+  let release!: () => void
+  const pending = new Promise<void>(resolve => { release = resolve })
+  const onDone = vi.fn(async () => pending)
+  const dialog = (subject: string, open = true) => <LocaleProvider><ConnectorCommandProvider client={hub} boundary={{ admitted: true, subject, generation: 1 }}>
+    <McpCreateDialog client={hub} mode="form" open={open} onOpenChange={vi.fn()} onDone={onDone} />
+  </ConnectorCommandProvider></LocaleProvider>
+  const view = render(dialog("original-actor"))
+  fireEvent.change(screen.getByRole("textbox", { name: "服务器名称" }), { target: { value: "Creation MCP" } })
+  fireEvent.change(screen.getByRole("textbox", { name: "服务器 URL" }), { target: { value: "https://mcp.example.test/creation" } })
+  fireEvent.click(screen.getByRole("button", { name: "保存" }))
+  await waitFor(() => expect(onDone).toHaveBeenCalledOnce())
+  if (retirement === "window") view.rerender(dialog("original-actor", false))
+  view.rerender(dialog(retirement === "subject" ? "next-actor" : "original-actor"))
+  const name = await screen.findByRole("textbox", { name: "服务器名称" })
+  fireEvent.change(name, { target: { value: "New window draft" } })
+  await act(async () => { release(); await pending })
+  expect(screen.queryByRole("button", { name: "管理" })).not.toBeInTheDocument()
+  expect(name).toHaveValue("New window draft")
+  expect(hub.registerPrivateMcpServer).toHaveBeenCalledOnce()
+})
+
+it("an admitted completion retry keeps its exact locator after a pending callback loses its generation", async () => {
+  const { McpCreateDialog } = await import("@/ui/mcp/mcp-create-dialog")
+  const hub = exactCreationHub()
+  let release!: () => void
+  const pending = new Promise<void>(resolve => { release = resolve })
+  const onDone = vi.fn().mockImplementationOnce(async () => pending).mockResolvedValue(undefined)
+  const dialog = (admitted: boolean, generation: number) => <LocaleProvider><ConnectorCommandProvider client={hub} boundary={{ admitted, subject: "completion-recheck", generation }}>
+    <McpCreateDialog client={hub} mode="form" open onOpenChange={vi.fn()} onDone={onDone} />
+  </ConnectorCommandProvider></LocaleProvider>
+  const view = render(dialog(true, 1))
+  fireEvent.change(screen.getByRole("textbox", { name: "服务器名称" }), { target: { value: "Creation MCP" } })
+  fireEvent.change(screen.getByRole("textbox", { name: "服务器 URL" }), { target: { value: "https://mcp.example.test/creation" } })
+  fireEvent.click(screen.getByRole("button", { name: "保存" }))
+  await waitFor(() => expect(onDone).toHaveBeenCalledOnce())
+  view.rerender(dialog(false, 2))
+  await act(async () => { release(); await pending })
+  expect(screen.queryByRole("button", { name: "管理" })).not.toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "完成" })).toBeDisabled()
+  view.rerender(dialog(true, 2))
+  fireEvent.click(screen.getByRole("button", { name: "完成" }))
+  expect(await screen.findByRole("button", { name: "管理" })).toBeVisible()
+  expect(onDone).toHaveBeenCalledTimes(2)
+  expect(onDone.mock.calls[1]?.[0]).toBe(onDone.mock.calls[0]?.[0])
+  expect(hub.registerPrivateMcpServer).toHaveBeenCalledOnce()
+})
+
+it("created detail rejects a mismatched fresh server and recovers only the acknowledged entity on readmission", async () => {
+  const { McpCreateDialog } = await import("@/ui/mcp/mcp-create-dialog")
+  const hub = exactCreationHub()
+  const server = { ...mcpCreationRegistration().server, availability: "available" as const, status: "registered" as const, transport: "streamable_http" as const, prepare_status: "ready" as const, declarations_available: true }
+  let mismatched = false
+  hub.getPrivateMcpServer.mockImplementation(async () => mismatched ? { ...server, server_id: "different-server", display_name: "Wrong private server" } : server)
+  const content = (generation: number) => <LocaleProvider><ConnectorCommandProvider client={hub} boundary={{ admitted: true, subject: "exact-binding-check", generation }}>
+    <McpCreateDialog client={hub} mode="form" open onOpenChange={vi.fn()} onDone={async () => { mismatched = true }} />
+  </ConnectorCommandProvider></LocaleProvider>
+  const view = render(content(1))
+  fireEvent.change(screen.getByRole("textbox", { name: "服务器名称" }), { target: { value: "Creation MCP" } })
+  fireEvent.change(screen.getByRole("textbox", { name: "服务器 URL" }), { target: { value: server.server_url } })
+  fireEvent.click(screen.getByRole("button", { name: "保存" }))
+  expect(await screen.findByText("连接列表加载失败")).toHaveClass("sr-only")
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
+  expect(screen.queryByText("Wrong private server")).not.toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "管理" })).not.toBeInTheDocument()
+  mismatched = false
+  view.rerender(content(2))
+  expect(await screen.findByRole("button", { name: "管理" })).toBeVisible()
+  expect(hub.registerPrivateMcpServer).toHaveBeenCalledOnce()
+  expect(hub.getPrivateMcpServer.mock.calls.every(([id]) => id === "creation-server")).toBe(true)
+  expect(hub.getMcpConnector.mock.calls.every(([id]) => id === "creation-connector")).toBe(true)
+})
+
+it("a newer creation window retires the older pending exact-detail handoff", async () => {
+  const { McpCreateDialog } = await import("@/ui/mcp/mcp-create-dialog")
+  const hub = exactCreationHub()
+  let release!: () => void
+  const pending = new Promise<void>(resolve => { release = resolve })
+  const onDone = vi.fn(async () => pending)
+  const windows = (newer: boolean) => <LocaleProvider><ConnectorCommandProvider client={hub} boundary={{ admitted: true, subject: "two-window-actor", generation: 1 }}>
+    <McpCreateDialog key="older" client={hub} mode="form" open onOpenChange={vi.fn()} onDone={onDone} />
+    {newer ? <McpCreateDialog key="newer" client={hub} mode="url" open onOpenChange={vi.fn()} /> : null}
+  </ConnectorCommandProvider></LocaleProvider>
+  const view = render(windows(false))
+  fireEvent.change(screen.getByRole("textbox", { name: "服务器名称" }), { target: { value: "Creation MCP" } })
+  fireEvent.change(screen.getByRole("textbox", { name: "服务器 URL" }), { target: { value: "https://mcp.example.test/creation" } })
+  fireEvent.click(screen.getByRole("button", { name: "保存" }))
+  await waitFor(() => expect(onDone).toHaveBeenCalledOnce())
+  view.rerender(windows(true))
+  await act(async () => { release(); await pending })
+  expect(screen.queryByRole("button", { name: "管理", hidden: true })).not.toBeInTheDocument()
+  expect(screen.getByRole("textbox", { name: /^服务器名称\*?$/u })).toHaveValue("")
+  expect(hub.registerPrivateMcpServer).toHaveBeenCalledOnce()
+})
+
+it.each(["pending", "failed"] as const)("independent confirmed API cards stay usable when the initial MCP list is %s", async mode => {
+  const profile = { profile_id: `independent-api-${mode}`, name: `Independent API ${mode}`, state_version: "1", environment: [], created_at: "2026-10-25T00:00:00Z", updated_at: "2026-10-25T00:00:00Z" }
+  const hub = { ...createHubClient(), listMcpConnectors: vi.fn().mockImplementationOnce(async () => { if (mode === "failed") throw new Error("temporary MCP read failure"); return new Promise<never>(() => {}) }).mockResolvedValue({ items: [{ availability: "unavailable", connector_id: "recovered-mcp", connector_type: "mcp", provider_key: "private-recovered", status: "pending", approved_scopes: [], enabled: false, state_version: "1", display_name: "Recovered MCP" }], next_cursor: "recovered-owner-cursor" }),
+    listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+    listCustomApis: vi.fn().mockResolvedValue({ items: [profile], page: { next_cursor: null } }), getCustomApi: vi.fn().mockResolvedValue(profile),
+  }
+  const identity = `independent-api-reader-${mode}`
+  render(<LocaleProvider><ConnectorCommandProvider client={hub} boundary={{ admitted: true, subject: identity, generation: 1 }}><RawMcpProjectionRead client={hub} identity={identity} admitted readGeneration={1} initialView="connections" /></ConnectorCommandProvider></LocaleProvider>)
+  await waitFor(() => expect(hub.listCustomApis).toHaveBeenCalledOnce())
+  const card = await screen.findByRole("button", { name: profile.name })
+  expect(card).toBeVisible()
+  if (mode === "failed") {
+    expect(screen.getByText("连接列表加载失败")).toHaveClass("sr-only")
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
+  }
+  expect(screen.queryByRole("navigation", { name: "MCP pages" })).toBeNull()
+  fireEvent.click(card)
+  const dialog = await screen.findByRole("dialog", { name: "编辑自定义 API" })
+  expect(within(dialog).getByRole("textbox", { name: "名称" })).toHaveValue(profile.name)
+  expect(hub.listMcpConnectors).toHaveBeenCalledOnce()
+  fireEvent.click(within(dialog).getByRole("button", { name: "关闭连接面板" }))
+  expect(screen.queryByText("还没有连接器。")).not.toBeInTheDocument()
+  if (mode === "failed") {
+    const { invalidateMcpConnectorProjection } = await import("@/ui/mcp/use-mcp-projection")
+    act(() => invalidateMcpConnectorProjection(hub, identity))
+    expect(await screen.findByRole("button", { name: "Recovered MCP" })).toBeVisible()
+    expect(screen.getByRole("button", { name: profile.name })).toBeVisible()
+    expect(screen.queryByText("连接列表加载失败")).not.toBeInTheDocument()
+    expect(within(screen.getByRole("navigation", { name: "MCP pages" })).getByRole("button", { name: "下一页" })).toBeEnabled()
+    expect(hub.listMcpConnectors).toHaveBeenCalledTimes(2)
+    expect(hub.listCustomApis).toHaveBeenCalledOnce()
+  }
+})
+
+it("empty API data does not turn a pending or failed MCP read into an all-empty success", async () => {
+  let reject!: (reason: Error) => void
+  const pending = new Promise<never>((_, fail) => { reject = fail })
+  const hub = { ...createHubClient(), listMcpConnectors: vi.fn().mockReturnValueOnce(pending).mockResolvedValue({ items: [], next_cursor: null }),
+    listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+    listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }),
+  }
+  const identity = "independent-confirmed-empty-reader"
+  render(<LocaleProvider><ConnectorCommandProvider client={hub} boundary={{ admitted: true, subject: identity, generation: 1 }}><RawMcpProjectionRead client={hub} identity={identity} admitted readGeneration={1} initialView="connections" /></ConnectorCommandProvider></LocaleProvider>)
+  await waitFor(() => expect(hub.listCustomApis).toHaveBeenCalledOnce())
+  expect(screen.queryByText("还没有连接器。")).not.toBeInTheDocument()
+  await act(async () => { reject(new Error("temporary MCP read failure")) })
+  expect(await screen.findByText("连接列表加载失败")).toHaveClass("sr-only")
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
+  expect(screen.queryByText("还没有连接器。")).not.toBeInTheDocument()
+  const { invalidateMcpConnectorProjection } = await import("@/ui/mcp/use-mcp-projection")
+  act(() => invalidateMcpConnectorProjection(hub, identity))
+  expect(await screen.findByText("还没有连接器。")).toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "添加连接器" })).toBeVisible()
+  expect(screen.queryByText("连接列表加载失败")).not.toBeInTheDocument()
+  expect(screen.queryByRole("navigation", { name: "MCP pages" })).not.toBeInTheDocument()
+  expect(hub.listMcpConnectors).toHaveBeenCalledTimes(2)
+})
+
+// Current-draft selection is deliberately separate from Settings' prompt/new-chat trial.
+function currentSkillDraftActions(draft = "original editable text", trialEngine = engine, projectRef?: string) {
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "draft-actor")
+  const updateDraft = vi.fn(), clearDraft = vi.fn(), closeSettings = vi.fn()
+  const view = renderHook(({ currentEngine, admitted, subject, generation }) => useAppFrameActions({
+    engine: currentEngine, readBoundary: { admitted, subject, generation },
+    projectWorkspace: projectRef !== undefined, ...(projectRef === undefined ? {} : { projectRef }),
+    routedConversationId: null, standaloneSurface: false, chatHref: "/app",
+    activeId: currentEngine.getSnapshot().store?.activeId ?? null, draft, clearDraft, updateDraft,
+    setDeploymentIntent: vi.fn(), syncConversationUrl: vi.fn(), setConversationRouteId: vi.fn(), focusComposer: vi.fn(),
+    closeSettings, brandName: "Kokoro", commandNewChatTimerRef: { current: null },
+  }), { wrapper: LocaleProvider, initialProps: { currentEngine: trialEngine, admitted: true, subject: "draft-actor", generation: 1 } })
+  return { ...view, updateDraft, clearDraft, closeSettings }
+}
+
+it("composer skill selection keeps a no-example current Direct null draft and sends its exact ref only on Send", async () => {
+  window.history.replaceState({}, "", "/app")
+  const view = currentSkillDraftActions()
+  const create = vi.spyOn(engine, "newConversation")
+  let accepted: boolean | undefined
+  act(() => { accepted = view.result.current.selectSkillForCurrentDraft(executableTrial) })
+  expect(accepted).toBe(true)
+  expect(engine.getSnapshot().store).toBeNull()
+  expect(create).not.toHaveBeenCalled()
+  expect(view.result.current.selectedSkill).toEqual({ name: "Owner trial", sourceRef: "skill:trial-version" })
+  expect(view.updateDraft).not.toHaveBeenCalled()
+  expect(view.clearDraft).not.toHaveBeenCalled()
+  expect(view.closeSettings).not.toHaveBeenCalled()
+  expect(client.createCalls).toEqual([])
+  await act(async () => { view.result.current.submitDraft(); await settle() })
+  expect(client.createCalls).toHaveLength(1)
+  expect(client.createCalls[0]?.body).toMatchObject({ content: "original editable text", selected_skill_source_refs: ["skill:trial-version"] })
+  expect(view.result.current.selectedSkill?.sourceRef).toBe("skill:trial-version")
+  expect(view.clearDraft).toHaveBeenCalledOnce()
+})
+
+it("composer skill selection preserves an existing task and ordinary draft text without reset or send", async () => {
+  window.history.replaceState({}, "", "/app")
+  engine.newConversation()
+  const id = engine.getSnapshot().store!.activeId
+  const view = currentSkillDraftActions("text before / and after")
+  const create = vi.spyOn(engine, "newConversation")
+  act(() => { view.result.current.selectSkillForCurrentDraft(executableTrial) })
+  expect(engine.getSnapshot().store?.activeId).toBe(id)
+  expect(create).not.toHaveBeenCalled()
+  expect(client.createCalls).toEqual([])
+  expect(view.updateDraft).not.toHaveBeenCalled()
+  act(() => view.result.current.clearSelectedSkill())
+  await act(async () => { view.result.current.submitDraft(); await settle() })
+  expect(client.createCalls[0]?.body.selected_skill_source_refs).toEqual([])
+})
+
+it.each([false, true])("composer skill selection transfers the Project overview draft only inside its explicit first Send (remembered=%s)", async remembered => {
+  const projectRef = "project_00000000-0000-4000-8000-000000000901"
+  window.history.replaceState({}, "", `/app/project/${projectRef}`)
+  const projectClient = createFakeClient()
+  const projectEngine = createSessionEngine({ client: projectClient, storage: createMemoryStorage<ConversationStore>(null), scope: { kind: "project", projectRef } })
+  if (remembered) projectEngine.newConversation()
+  const originalId = projectEngine.getSnapshot().store?.activeId ?? null
+  const view = currentSkillDraftActions("project original", projectEngine, projectRef)
+  try {
+    act(() => { view.result.current.selectSkillForCurrentDraft(executableTrial) })
+    expect(projectEngine.getSnapshot().store?.activeId ?? null).toBe(originalId)
+    expect(projectClient.createCalls).toEqual([])
+    await act(async () => { view.result.current.submitDraft(); await settle() })
+    expect(projectClient.createCalls[0]?.body).toMatchObject({ project_ref: projectRef, content: "project original", selected_skill_source_refs: ["skill:trial-version"] })
+    expect(view.result.current.selectedSkill?.sourceRef).toBe("skill:trial-version")
+    expect(client.createCalls).toEqual([])
+  } finally { view.unmount(); projectEngine.dispose() }
+})
+
+it.each([
+  { enabled: false }, { source_status: "withdrawn" as const }, { installed_source_ref: "skill:another" }, { revision_skill_id: "another" },
+])("composer skill selection rejects a non-executable or mismatched pin %j", patch => {
+  window.history.replaceState({}, "", "/app")
+  const view = currentSkillDraftActions()
+  let accepted: boolean | undefined
+  act(() => { accepted = view.result.current.selectSkillForCurrentDraft({ ...executableTrial, ...patch }) })
+  expect(accepted).toBe(false)
+  expect(view.result.current.selectedSkill).toBeNull()
+  expect(engine.getSnapshot().store).toBeNull()
+  expect(client.createCalls).toEqual([])
+})
+
+it("composer skill selection retires both current and retained callbacks across a departed route A to B to A", async () => {
+  window.history.replaceState({}, "", "/app")
+  const view = currentSkillDraftActions()
+  const oldSelect = view.result.current.selectSkillForCurrentDraft
+  act(() => { oldSelect(executableTrial) })
+  act(() => {
+    window.history.replaceState({}, "", "/app/library")
+    window.dispatchEvent(new PopStateEvent("popstate"))
+    window.history.replaceState({}, "", "/app")
+    window.dispatchEvent(new PopStateEvent("popstate"))
+  })
+  expect(view.result.current.selectedSkill).toBeNull()
+  let accepted: boolean | undefined
+  act(() => { accepted = oldSelect(executableTrial) })
+  expect(accepted).toBe(false)
+  await act(async () => { engine.submit("ordinary message"); await settle() })
+  expect(client.createCalls[0]?.body.selected_skill_source_refs).toEqual([])
+})
+
+it("composer skill selection retires on actor admission and engine/scope replacement without old remove clearing a replacement", async () => {
+  window.history.replaceState({}, "", "/app")
+  const view = currentSkillDraftActions()
+  act(() => { view.result.current.selectSkillForCurrentDraft(executableTrial) })
+  const oldSelect = view.result.current.selectSkillForCurrentDraft, oldRemove = view.result.current.clearSelectedSkill
+  view.rerender({ currentEngine: engine, admitted: false, subject: "draft-actor", generation: 2 })
+  expect(view.result.current.selectedSkill).toBeNull()
+  act(() => { expect(oldSelect(executableTrial)).toBe(false) })
+  const replacementClient = createFakeClient()
+  const replacement = createSessionEngine({ client: replacementClient, storage: createMemoryStorage<ConversationStore>(null), scope: { kind: "project", projectRef: "project:replacement" } })
+  try {
+    view.rerender({ currentEngine: replacement, admitted: true, subject: "draft-actor", generation: 3 })
+    act(() => { view.result.current.selectSkillForCurrentDraft({ ...executableTrial, name: "Replacement" }); oldRemove() })
+    expect(view.result.current.selectedSkill?.name).toBe("Replacement")
+    act(() => {
+      window.localStorage.setItem("kokoro.web.auth-index-subject", "other-actor")
+      window.dispatchEvent(new StorageEvent("storage", { key: "kokoro.web.auth-index-subject", newValue: "other-actor" }))
+    })
+    expect(view.result.current.selectedSkill).toBeNull()
+    await act(async () => { replacement.submit("ordinary"); await settle() })
+    expect(replacementClient.createCalls[0]?.body.selected_skill_source_refs).toBeUndefined()
+  } finally { view.unmount(); replacement.dispose() }
+})
+
+it("composer skill selection preserves frozen unknown submission after clear and rejects a new source until resolved", async () => {
+  window.history.replaceState({}, "", "/app")
+  const view = currentSkillDraftActions()
+  act(() => { view.result.current.selectSkillForCurrentDraft(executableTrial) })
+  client.nextCreate = () => Promise.reject(new SessionClientError("network", "unknown commit"))
+  await act(async () => { view.result.current.submitDraft(); await settle() })
+  const first = client.createCalls[0]
+  expect(engine.getSnapshot().canRetryPendingSubmission).toBe(true)
+  act(() => {
+    view.result.current.clearSelectedSkill()
+    expect(view.result.current.selectSkillForCurrentDraft(executableTrial)).toBe(false)
+  })
+  client.nextCreate = () => Promise.resolve(makeReceipt("run_current_draft_retry"))
+  await act(async () => { engine.retry(); await settle() })
+  expect(client.createCalls).toEqual([first, first])
+  expect(first?.body.selected_skill_source_refs).toEqual(["skill:trial-version"])
+})
+
+it("composer skill selection survives only its own first-Send canonical URL publication, not a later route change", async () => {
+  window.history.replaceState({}, "", "/app")
+  const view = currentSkillDraftActions()
+  act(() => { view.result.current.selectSkillForCurrentDraft(executableTrial) })
+  await act(async () => { view.result.current.submitDraft(); await settle() })
+  const id = engine.getSnapshot().store!.activeId
+  act(() => {
+    window.history.replaceState({}, "", `/app?conversation=${id}`)
+    window.dispatchEvent(new PopStateEvent("popstate"))
+  })
+  expect(view.result.current.selectedSkill?.sourceRef).toBe("skill:trial-version")
+})
+
+it("composer skill selection retires a draft on a rendered route change even without a browser history event", () => {
+  window.history.replaceState({}, "", "/app")
+  const view = currentSkillDraftActions()
+  act(() => { view.result.current.selectSkillForCurrentDraft(executableTrial) })
+  window.history.replaceState({}, "", "/app/library")
+  view.rerender({ currentEngine: engine, admitted: true, subject: "draft-actor", generation: 1 })
+  expect(view.result.current.selectedSkill).toBeNull()
+})
+
+it("composer skill selection admits a fresh callback after same-batch route A to B to A without reviving a retained callback", () => {
+  window.history.replaceState({}, "", "/app")
+  const view = currentSkillDraftActions()
+  const retiredSelect = view.result.current.selectSkillForCurrentDraft
+  act(() => { retiredSelect(executableTrial) })
+  act(() => {
+    window.history.pushState({}, "", "/app?settings=skills")
+    window.dispatchEvent(new PopStateEvent("popstate"))
+    window.history.replaceState({}, "", "/app")
+    window.dispatchEvent(new PopStateEvent("popstate"))
+  })
+  expect(view.result.current.selectedSkill).toBeNull()
+  act(() => { expect(retiredSelect(executableTrial)).toBe(false) })
+  act(() => { expect(view.result.current.selectSkillForCurrentDraft(executableTrial)).toBe(true) })
+  expect(view.result.current.selectedSkill?.sourceRef).toBe("skill:trial-version")
+  expect(engine.getSnapshot().store).toBeNull()
+  expect(client.createCalls).toEqual([])
+})
+
+
+it.each(["completed", "failed", "cancelled"] as const)("current task progress retires both live hosts on exact %s terminal without completing the original todos", async terminal => {
+  const sessionId = `conv_progress_${terminal}`
+  const runId = `run_progress_${terminal}`
+  const todos = [{ content: "original plan one", status: "in_progress" as const }, { content: "original plan two", status: "pending" as const }]
+  window.history.replaceState({}, "", `/app?conversation=${sessionId}`)
+  let snapshot = makeSnapshot({ sessionId, activeRun: { run_id: runId, status: "running" } })
+  client.nextSnapshot = async () => snapshot
+  await act(async () => { engine.openConversation(sessionId); await settle() })
+  mountFrame({ preview: true })
+  await waitFor(() => expect(client.streams.length).toBeGreaterThan(0))
+  const stream = client.lastStream()
+  await act(async () => {
+    stream.emit([
+      makeEvent("run.created", { run_id: runId }, { run_id: runId, session_id: sessionId }),
+      makeEvent("todo.updated", { todos }, { run_id: runId, session_id: sessionId }),
+    ])
+    openCanvas(sessionId, { kind: "node", title: "retained result", node: <p>delivered result stays visible</p> })
+    await settle()
+  })
+  expect(screen.getByRole("progressbar", { name: "任务进度" })).toHaveAttribute("aria-valuenow", "0")
+  expect(document.querySelector('[data-slot="canvas-task-footer"]')).toHaveTextContent("0 / 2")
+  snapshot = makeSnapshot({ sessionId })
+  try {
+    await act(async () => {
+      stream.emit([terminal === "failed"
+        ? makeAgentFailureEvent(AGENT_FAILURE_PROFILES[0]!, { run_id: runId, session_id: sessionId })
+        : makeEvent("run.completed", { status: terminal, token_usage: null }, { run_id: runId, session_id: sessionId })])
+      await settle()
+    })
+    expect(screen.queryByRole("progressbar", { name: "任务进度" })).not.toBeInTheDocument()
+    expect(document.querySelector('[data-slot="canvas-task-footer"]')).not.toBeInTheDocument()
+    expect(screen.getByText("delivered result stays visible")).toBeInTheDocument()
+    expect(engine.getSnapshot().thread.todos).toEqual(todos)
+    expect(engine.getSnapshot().thread.executionProcess?.todos).toEqual(todos)
+    expect(engine.getSnapshot().thread.executionHead).toBeNull()
+    if (terminal === "failed") expect(engine.getSnapshot().thread.runFailuresById[runId]).toBeDefined()
+  } finally { closeCanvas(sessionId) }
+})
+
+async function mountRememberedProjectComposer(options: { workspace?: boolean; featureFlags?: React.ComponentProps<typeof AppFrame>["featureFlags"]; beforeRender?: (value: { projectEngine: SessionEngine; projectClient: FakeClient }) => void | Promise<void> } = {}) {
+  const projectRef = "project_composer-draft"
+  const remembered = "conv_composer-history"
+  const projectClient = createFakeClient()
+  projectClient.nextSnapshot = id => Promise.resolve(makeSnapshot({ sessionId: id,
+    messages: [{ message_id: "history-message", role: "assistant", run_id: "history-run", content: "completed hidden task", status: "completed", created_at: "2026-07-02T00:00:01Z" }],
+  }))
+  projectClient.listModels = async () => ({ models: [
+    { provider: "fixture", name: "draft-default", is_default: true, display_name: "Draft default", model_id: "11111111-1111-4111-8111-111111111111", revision_id: "22222222-2222-4222-8222-222222222222", provider_id: "33333333-3333-4333-8333-333333333333", feature_key: "chat", request_model: "draft-default" },
+    { provider: "fixture", name: "draft-choice", is_default: false, display_name: "Draft choice", model_id: "11111111-1111-4111-8111-111111111112", revision_id: "22222222-2222-4222-8222-222222222223", provider_id: "33333333-3333-4333-8333-333333333334", feature_key: "chat", request_model: "draft-choice" },
+  ], next_cursor: null })
+  const projectEngine = createSessionEngine({ client: projectClient,
+    storage: createMemoryStorage<ConversationStore>({ activeId: remembered, conversations: [{ id: remembered, title: "hidden history", mode: "thinking", updatedAt: 1000 }] }),
+    scope: { kind: "project", projectRef },
+  })
+  const pageClients = await import("@/ui/shell/page-clients")
+  vi.spyOn(pageClients, "browserListClient").mockReturnValue(projectClient)
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "composer-draft-actor")
+  window.history.replaceState({}, "", `/app/project/${projectRef}`)
+  const props = { engine: projectEngine, chatHref: "/app", projectWorkspace: true, projectRef,
+    projectReadBoundary: { admitted: true, subject: "composer-draft-actor", generation: 1 },
+    ...(options.featureFlags === undefined ? {} : { featureFlags: options.featureFlags, navigation: [{ key: "mcp", label: "连接器" }] }),
+    ...(options.workspace ? { emptyState: KokoroProjectWorkspace, workspaceCapabilities: { instructions: false, connectors: true, resources: false, skills: false, projectConversations: false } } : {}),
+  }
+  const frame = (next = props) => <ThemeProvider><LocaleProvider><AppFrame {...next} /></LocaleProvider></ThemeProvider>
+  await waitFor(() => expect(projectEngine.getSnapshot().hydrating).toBe(false))
+  await options.beforeRender?.({ projectEngine, projectClient })
+  const view = render(frame())
+  await waitFor(() => expect(document.querySelector('[data-composer-control="model"]')).toBeInTheDocument())
+  return { projectEngine, projectClient, remembered, props, frame, view }
+}
+
+async function projectDraftMcpDirectory() {
+  const clients = await import("@/ui/shell/page-clients")
+  const hub = { ...createHubClient(),
+    listMcpConnections: vi.fn().mockResolvedValue({ connections: ["a", "b"].map(id => ({
+      connection_id: `connection:${id}`, connector_id: `connector:${id}`, server_id: `server:${id}`,
+      provider_key: "project-draft", transport: "streamable_http", status: "active",
+    })) }),
+    getMcpConnector: vi.fn().mockImplementation(async id => ({ connector_id: id,
+      server_id: `server:${id.slice("connector:".length)}`, provider_key: "project-draft", connector_type: "mcp",
+      status: "active", enabled: true, availability: "available", state_version: "1", approved_scopes: [], display_name: `MCP ${id}`,
+    })),
+  }
+  vi.spyOn(clients, "browserHubClient").mockReturnValue(hub)
+  return hub
+}
+
+async function projectRecommendationFixture(hold = false) {
+  const hub = await projectDraftMcpDirectory()
+  hub.listMcpConnections.mockReset().mockImplementation(async (query: { cursor?: string }) => ({ connections: [query.cursor ? "b" : "a"].map(id => ({
+    connection_id: `connection:${id}`, connector_id: `connector:${id}`, server_id: `server:${id}`,
+    provider_key: id === "a" ? "alpha" : "beta", transport: "streamable_http", status: "active",
+  })), ...(query.cursor ? {} : { next_cursor: "second" }) }))
+  hub.getMcpConnector.mockImplementation(async (id: string) => ({ connector_id: id, server_id: `server:${id.slice("connector:".length)}`,
+    provider_key: id.endsWith(":a") ? "alpha" : "beta", connector_type: "mcp", status: "active", enabled: true,
+    availability: "available", state_version: "1", approved_scopes: [], display_name: `MCP ${id}` }))
+  Object.assign(hub, { listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [
+    { provider_key: "alpha", display_name: "Provider Alpha" }, { provider_key: "beta", display_name: "Provider Beta" },
+  ], next_cursor: null }),
+    listMcpConnectors: vi.fn().mockResolvedValue({ items: [], next_cursor: null }), listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }) })
+  const project = { id: "project_composer-draft", name: "Draft project", slug: "draft", description: "", created_at: "2026-10-27T00:00:00Z", updated_at: "2026-10-27T00:00:00Z" }
+  const configuration = { project_id: project.id, recommendations: [{ kind: "provider", provider_key: "beta" }], state_version: "1" }
+  const response = () => Response.json({ data: configuration }, { headers: { "cache-control": "no-store", "x-request-id": "recommendation-fixture" } })
+  let finish!: (value: Response) => void
+  const request = stubBusinessFetch(vi.fn<typeof fetch>(async (input, init) => {
+    const path = new URL(input instanceof Request ? input.url : String(input), window.location.origin).pathname
+    if (path.endsWith("/mcp-recommendations")) {
+      if (init?.method === "PUT") {
+        const body = JSON.parse(String(init.body)) as { recommendations: typeof configuration.recommendations; expected_state_version: string }
+        expect(body.expected_state_version).toBe(configuration.state_version)
+        configuration.recommendations = body.recommendations; configuration.state_version = String(Number(configuration.state_version) + 1)
+        return response()
+      }
+      return hold ? await new Promise<Response>(resolve => { finish = resolve }) : response()
+    }
+    if (path.endsWith("/instruction-revisions")) return Response.json({ data: { items: [] }, meta: { request_id: "read-fixture" } })
+    return Response.json({ data: path === "/api/hub/projects" ? { projects: [project] } : { project }, meta: { request_id: "read-fixture" } })
+  }))
+  return { hub, request, finish: () => finish(response()) }
+}
+
+it("Project recommendations seed only the pristine root from the complete Connection directory before exact first Send", async () => {
+  const { hub } = await projectRecommendationFixture()
+  const { projectEngine, projectClient, view } = await mountRememberedProjectComposer({ featureFlags: [{ key: "workspace.connectors", enabled: true }] })
+  try {
+    await waitFor(() => expect(screen.getByRole("button", { name: "连接器 (1)" })).toBeVisible())
+    expect(hub.listMcpConnections.mock.calls.some(call => call[0]?.cursor === "second")).toBe(true)
+    expect(projectEngine.getSnapshot().selectedMcpConnectionIds).toEqual([])
+    fireEvent.change(screen.getByRole("textbox", { name: "对话输入" }), { target: { value: "send recommended beta" } })
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "对话输入" }), { key: "Enter" })
+    await waitFor(() => expect(projectClient.createCalls).toHaveLength(1))
+    expect(projectClient.createCalls[0]?.body.selected_mcp_connection_ids).toEqual(["connection:b"])
+  } finally { view.unmount(); projectEngine.dispose() }
+})
+
+it("explicit manual empty Project MCP selection wins over a late recommendation response", async () => {
+  const fixture = await projectRecommendationFixture(true)
+  const { projectEngine, projectClient, view } = await mountRememberedProjectComposer({ featureFlags: [{ key: "workspace.connectors", enabled: true }] })
+  try {
+    await toggleProjectDraftMcp()
+    await toggleProjectDraftMcp()
+    await waitFor(() => expect(fixture.request.mock.calls.some(call => String(call[0]).endsWith("/mcp-recommendations"))).toBe(true))
+    await act(async () => { fixture.finish(); await settle() })
+    expect(screen.getByRole("button", { name: "连接器 (0)" })).toBeVisible()
+    fireEvent.change(screen.getByRole("textbox", { name: "对话输入" }), { target: { value: "explicitly no connector" } })
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "对话输入" }), { key: "Enter" })
+    await waitFor(() => expect(projectClient.createCalls).toHaveLength(1))
+    expect(projectClient.createCalls[0]?.body).not.toHaveProperty("selected_mcp_connection_ids")
+  } finally { view.unmount(); projectEngine.dispose() }
+})
+
+it.each([false, true])("saving actual Project recommendations updates only pristine root defaults (manually touched=%s)", async touched => {
+  const fixture = await projectRecommendationFixture()
+  const { projectEngine, projectClient, view } = await mountRememberedProjectComposer({ workspace: true })
+  try {
+    await waitFor(() => expect(screen.getByRole("button", { name: "连接器 (1)" })).toBeVisible())
+    if (touched) await toggleProjectDraftMcp("b")
+    const section = screen.getByRole("region", { name: "连接器" })
+    fireEvent.click(within(section).getByRole("button", { name: "新增" }))
+    const dialog = await screen.findByRole("dialog", { name: "推荐连接器" })
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: "Provider Beta" }))
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: "Provider Alpha" }))
+    fireEvent.click(within(dialog).getByRole("button", { name: "保存" }))
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "推荐连接器" })).toBeNull())
+    expect(fixture.request.mock.calls.filter(call => String(call[0]).endsWith("/mcp-recommendations") && call[1]?.method === "PUT")).toHaveLength(1)
+    expect(fixture.request.mock.calls.filter(call => String(call[0]).endsWith("/mcp-recommendations") && call[1]?.method === "GET")).toHaveLength(2)
+    expect(within(section).getByText("Provider Alpha")).toBeVisible()
+    expect(screen.getByRole("button", { name: `连接器 (${touched ? 0 : 1})` })).toBeVisible()
+    expect(projectEngine.getSnapshot().selectedMcpConnectionIds).toEqual([])
+    fireEvent.change(screen.getByRole("textbox", { name: "对话输入" }), { target: { value: "send updated project default" } })
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "对话输入" }), { key: "Enter" })
+    await waitFor(() => expect(projectClient.createCalls).toHaveLength(1))
+    if (touched) expect(projectClient.createCalls[0]?.body).not.toHaveProperty("selected_mcp_connection_ids")
+    else expect(projectClient.createCalls[0]?.body.selected_mcp_connection_ids).toEqual(["connection:a"])
+  } finally { view.unmount(); projectEngine.dispose() }
+})
+
+async function toggleProjectDraftMcp(id = "a") {
+  fireEvent.click(screen.getByRole("button", { name: /^连接器 \(\d+\)$/ }))
+  const choice = await screen.findByRole("switch", { name: `MCP connector:${id}` })
+  fireEvent.click(choice)
+  fireEvent.keyDown(choice, { key: "Escape" })
+}
+
+it.each([false, true])("project overview hands its exact local MCP IDs only to the fresh allocated message (unknown=%s)", async unknown => {
+  await projectDraftMcpDirectory()
+  const { projectEngine, projectClient, remembered, view } = await mountRememberedProjectComposer()
+  const applications: { id: string | undefined; ids: readonly string[] }[] = []
+  const original = projectEngine.setSelectedMcpConnectionIds
+  const selection = vi.spyOn(projectEngine, "setSelectedMcpConnectionIds").mockImplementation(ids => {
+    applications.push({ id: projectEngine.getSnapshot().store?.activeId, ids: [...ids] }); original(ids)
+  })
+  if (unknown) projectClient.nextCreate = () => Promise.reject(Error("unknown project MCP receipt"))
+  try {
+    await toggleProjectDraftMcp()
+    const applicationsBeforeSend = selection.mock.calls.length
+    expect(screen.getByRole("button", { name: "连接器 (1)" })).toBeVisible()
+    fireEvent.change(screen.getByRole("textbox", { name: "对话输入" }), { target: { value: "send exact project MCP draft" } })
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "对话输入" }), { key: "Enter" })
+    await waitFor(() => expect(projectClient.createCalls).toHaveLength(1))
+    const first = structuredClone(projectClient.createCalls[0])
+    expect(first?.sessionId).not.toBe(remembered)
+    expect(first?.body.selected_mcp_connection_ids).toEqual(["connection:a"])
+    expect(applicationsBeforeSend).toBe(0)
+    expect(applications).toEqual([{ id: first?.sessionId, ids: ["connection:a"] }])
+    if (unknown) {
+      await waitFor(() => expect(projectEngine.getSnapshot().canRetryPendingSubmission).toBe(true))
+      projectClient.nextCreate = () => Promise.resolve(makeReceipt("run_project_mcp_retry"))
+      act(() => projectEngine.retry())
+      await waitFor(() => expect(projectClient.createCalls).toHaveLength(2))
+      expect(projectClient.createCalls[1]).toEqual(first)
+    }
+  } finally { view.unmount(); projectEngine.dispose() }
+})
+
+it.each(["idle", "pending", "unknown", "active"] as const)("project overview MCP choices leave hidden %s selection and execution untouched", async state => {
+  await projectDraftMcpDirectory()
+  let selection: ReturnType<typeof vi.spyOn>
+  const { projectEngine, projectClient, remembered, view } = await mountRememberedProjectComposer({ beforeRender: async ({ projectEngine, projectClient }) => {
+    projectEngine.setSelectedMcpConnectionIds(["connection:b"])
+    if (state === "pending") projectClient.nextCreate = () => new Promise(() => {})
+    if (state === "unknown") projectClient.nextCreate = () => Promise.reject(Error("hidden MCP unknown"))
+    if (state !== "idle") {
+      projectEngine.submit("retained hidden MCP task")
+      if (state === "unknown") await waitFor(() => expect(projectEngine.getSnapshot().canRetryPendingSubmission).toBe(true))
+      if (state === "active") await waitFor(() => expect(projectClient.streams).toHaveLength(1))
+    }
+    selection = vi.spyOn(projectEngine, "setSelectedMcpConnectionIds")
+  } })
+  try {
+    const before = projectEngine.getSnapshot(), calls = structuredClone(projectClient.createCalls)
+    expect(screen.getByRole("button", { name: "连接器 (0)" })).toBeVisible()
+    await toggleProjectDraftMcp()
+    expect(selection!).not.toHaveBeenCalled()
+    expect(projectEngine.getSnapshot().selectedMcpConnectionIds).toEqual(["connection:b"])
+    expect(projectEngine.getSnapshot().store?.activeId).toBe(remembered)
+    expect(projectEngine.getSnapshot().machine).toEqual(before.machine)
+    expect(projectEngine.getSnapshot().thread.messages).toEqual(before.thread.messages)
+    expect(projectClient.createCalls).toEqual(calls)
+  } finally { view.unmount(); projectEngine.dispose() }
+})
+
+it("project overview MCP draft survives rejected allocation and explicitly hands off a later cleared selection", async () => {
+  await projectDraftMcpDirectory()
+  const { projectEngine, projectClient, remembered, view } = await mountRememberedProjectComposer()
+  const reset = vi.spyOn(projectEngine, "newConversation").mockImplementation(() => {})
+  const original = projectEngine.setSelectedMcpConnectionIds
+  const applications: { id: string | undefined; ids: readonly string[] }[] = []
+  vi.spyOn(projectEngine, "setSelectedMcpConnectionIds").mockImplementation(ids => {
+    applications.push({ id: projectEngine.getSnapshot().store?.activeId, ids: [...ids] }); original(ids)
+  })
+  try {
+    await toggleProjectDraftMcp()
+    fireEvent.change(screen.getByRole("textbox", { name: "对话输入" }), { target: { value: "preserve MCP allocation intent" } })
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "对话输入" }), { key: "Enter" })
+    expect(projectClient.createCalls).toEqual([])
+    expect(applications).toEqual([])
+    expect(projectEngine.getSnapshot().store?.activeId).toBe(remembered)
+    expect(screen.getByRole("button", { name: "连接器 (1)" })).toBeVisible()
+    await toggleProjectDraftMcp()
+    reset.mockRestore()
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "对话输入" }), { key: "Enter" })
+    await waitFor(() => expect(projectClient.createCalls).toHaveLength(1))
+    expect(applications).toEqual([{ id: projectClient.createCalls[0]?.sessionId, ids: [] }])
+    expect(projectClient.createCalls[0]?.body).not.toHaveProperty("selected_mcp_connection_ids")
+  } finally { view.unmount(); projectEngine.dispose() }
+})
+
+it("project overview never hands MCP IDs to a draft whose route retires during fresh allocation", async () => {
+  await projectDraftMcpDirectory()
+  const { projectEngine, projectClient, view } = await mountRememberedProjectComposer()
+  const allocate = projectEngine.newConversation
+  vi.spyOn(projectEngine, "newConversation").mockImplementation(() => {
+    allocate()
+    window.history.pushState({}, "", "/app")
+    window.dispatchEvent(new PopStateEvent("popstate"))
+  })
+  const selection = vi.spyOn(projectEngine, "setSelectedMcpConnectionIds")
+  try {
+    await toggleProjectDraftMcp()
+    fireEvent.change(screen.getByRole("textbox", { name: "对话输入" }), { target: { value: "departed root intent" } })
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "对话输入" }), { key: "Enter" })
+    await act(async () => { await settle() })
+    expect(projectClient.createCalls).toEqual([])
+    expect(selection).not.toHaveBeenCalled()
+  } finally { view.unmount(); projectEngine.dispose() }
+})
+
+it.each(["route", "actor", "generation", "project"] as const)("project overview local MCP draft retires on %s without allocating a conversation", async change => {
+  await projectDraftMcpDirectory()
+  const { projectEngine, projectClient, props, frame, view } = await mountRememberedProjectComposer()
+  const reset = vi.spyOn(projectEngine, "newConversation")
+  try {
+    await toggleProjectDraftMcp()
+    expect(screen.getByRole("button", { name: "连接器 (1)" })).toBeVisible()
+    if (change === "route") {
+      act(() => {
+        window.history.pushState({}, "", "/app")
+        window.dispatchEvent(new PopStateEvent("popstate"))
+        window.history.pushState({}, "", `/app/project/${props.projectRef}`)
+        window.dispatchEvent(new PopStateEvent("popstate"))
+      })
+    } else if (change === "project") {
+      window.history.replaceState({}, "", "/app/project/project_next-draft")
+      view.rerender(frame({ ...props, projectRef: "project_next-draft" }))
+    } else {
+      if (change === "actor") {
+        window.localStorage.setItem("kokoro.web.auth-index-subject", "next-mcp-draft-actor")
+        act(() => window.dispatchEvent(new StorageEvent("storage", { key: "kokoro.web.auth-index-subject" })))
+      }
+      view.rerender(frame({ ...props, projectReadBoundary: { admitted: true,
+        subject: change === "actor" ? "next-mcp-draft-actor" : props.projectReadBoundary.subject, generation: 2 } }))
+    }
+    expect(screen.getByRole("button", { name: "连接器 (0)" })).toBeVisible()
+    expect(reset).not.toHaveBeenCalled()
+    expect(projectClient.createCalls).toEqual([])
+  } finally { view.unmount(); projectEngine.dispose() }
+})
+
+it("project overview keeps its model draft local until its fresh conversation exists", async () => {
+  const writes: { id: string | undefined; model: string | null }[] = []
+  let model: ReturnType<typeof vi.spyOn>
+  const { projectEngine, projectClient, remembered, view } = await mountRememberedProjectComposer({
+    beforeRender: ({ projectEngine }) => {
+      const setModel = projectEngine.setModel
+      model = vi.spyOn(projectEngine, "setModel").mockImplementation(value => {
+        writes.push({ id: projectEngine.getSnapshot().store?.activeId, model: value })
+        setModel(value)
+      })
+    },
+  })
+  try {
+    expect(model!).not.toHaveBeenCalled()
+    fireEvent.pointerDown(screen.getByRole("button", { name: /切换模式/ }), { button: 0, ctrlKey: false })
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: /快速/ }))
+    fireEvent.pointerDown(screen.getByRole("button", { name: /切换模型/ }), { button: 0, ctrlKey: false })
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: /Draft choice/ }))
+    expect(model!).not.toHaveBeenCalled()
+    expect(projectEngine.getSnapshot().store?.activeId).toBe(remembered)
+    fireEvent.change(screen.getByRole("textbox", { name: "对话输入" }), { target: { value: "allocate before applying draft model" } })
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "对话输入" }), { key: "Enter" })
+    await waitFor(() => expect(projectClient.createCalls).toHaveLength(1))
+    const freshId = projectClient.createCalls[0]?.sessionId
+    expect(freshId).toBeDefined()
+    expect(writes[0]).toEqual({ id: freshId, model: "draft-choice" })
+    expect(writes.every(write => write.id === freshId && write.model === "draft-choice")).toBe(true)
+  } finally { view.unmount(); projectEngine.dispose() }
+})
+
+it.each(["unknown", "active"] as const)("project overview model draft does not mutate hidden %s state on mount or choice", async state => {
+  const writes: { id: string | undefined; model: string | null }[] = []
+  let model: ReturnType<typeof vi.spyOn>
+  const { projectEngine, projectClient, remembered, view } = await mountRememberedProjectComposer({
+    beforeRender: async ({ projectEngine, projectClient }) => {
+      if (state === "unknown") projectClient.nextCreate = () => Promise.reject(new Error("hidden unknown receipt"))
+      expect(projectEngine.submit(`hidden ${state} execution`)).toBe(true)
+      if (state === "unknown") await waitFor(() => expect(projectEngine.getSnapshot().canRetryPendingSubmission).toBe(true))
+      else await waitFor(() => expect(projectClient.streams).toHaveLength(1))
+      const setModel = projectEngine.setModel
+      model = vi.spyOn(projectEngine, "setModel").mockImplementation(value => {
+        writes.push({ id: projectEngine.getSnapshot().store?.activeId, model: value })
+        setModel(value)
+      })
+    },
+  })
+  try {
+    const before = projectEngine.getSnapshot()
+    expect(model!).not.toHaveBeenCalled()
+    fireEvent.pointerDown(screen.getByRole("button", { name: /切换模式/ }), { button: 0, ctrlKey: false })
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: /快速/ }))
+    fireEvent.pointerDown(screen.getByRole("button", { name: /切换模型/ }), { button: 0, ctrlKey: false })
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: /Draft choice/ }))
+    expect(model!).not.toHaveBeenCalled()
+    expect(writes).toEqual([])
+    expect(projectEngine.getSnapshot().store?.activeId).toBe(remembered)
+    expect(projectEngine.getSnapshot().machine).toEqual(before.machine)
+    expect(projectEngine.getSnapshot().thread.messages).toEqual(before.thread.messages)
+    expect(projectClient.createCalls).toHaveLength(1)
+  } finally { view.unmount(); projectEngine.dispose() }
+})
+
+it("project overview draft selectors are not locked by completed hidden history", async () => {
+  const { projectEngine, view, remembered } = await mountRememberedProjectComposer()
+  try {
+    expect(projectEngine.getSnapshot().thread.messages).toHaveLength(1)
+    expect(projectEngine.getSnapshot().store?.activeId).toBe(remembered)
+    expect(document.querySelector('[data-composer-control="model"]')).toBeEnabled()
+    expect(document.querySelector('[data-composer-control="mode"]')).toBeEnabled()
+    expect(screen.getByRole("button", { name: /切换模式/ })).toHaveTextContent("快速")
+  } finally { view.unmount(); projectEngine.dispose() }
+})
+
+it.each([false, true])("project overview draft choices do not mutate history and apply only after fresh allocation (unknown=%s)", async unknown => {
+  const { projectEngine, projectClient, remembered, view } = await mountRememberedProjectComposer()
+  const applications: (string | undefined)[] = []
+  const setMode = projectEngine.setMode, setModel = projectEngine.setModel
+  const mode = vi.spyOn(projectEngine, "setMode").mockImplementation(value => { applications.push(projectEngine.getSnapshot().store?.activeId); setMode(value) })
+  const model = vi.spyOn(projectEngine, "setModel").mockImplementation(value => { applications.push(projectEngine.getSnapshot().store?.activeId); setModel(value) })
+  const reset = vi.spyOn(projectEngine, "newConversation")
+  if (unknown) projectClient.nextCreate = () => Promise.reject(new Error("unknown receipt"))
+  try {
+    fireEvent.pointerDown(screen.getByRole("button", { name: /切换模式/ }), { button: 0, ctrlKey: false })
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: /快速/ }))
+    fireEvent.pointerDown(screen.getByRole("button", { name: /切换模型/ }), { button: 0, ctrlKey: false })
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: /Draft choice/ }))
+    expect(mode).not.toHaveBeenCalled()
+    expect(model).not.toHaveBeenCalled()
+    expect(reset).not.toHaveBeenCalled()
+    expect(projectEngine.getSnapshot().store?.activeId).toBe(remembered)
+    const old = structuredClone(projectEngine.getSnapshot().store?.conversations.find(row => row.id === remembered))
+    fireEvent.change(screen.getByRole("textbox", { name: "对话输入" }), { target: { value: "new independent draft" } })
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "对话输入" }), { key: "Enter" })
+    await waitFor(() => expect(projectClient.createCalls).toHaveLength(1))
+    expect(projectClient.createCalls[0]).toMatchObject({ body: { thinking: false, model: "draft-choice" } })
+    expect(projectEngine.getSnapshot().store?.conversations.find(row => row.id === projectClient.createCalls[0]?.sessionId)?.mode).toBe("fast")
+    expect(screen.getByRole("button", { name: "模型：Draft choice（本轮锁定）" })).toBeDisabled()
+    expect(projectClient.createCalls[0]?.sessionId).not.toBe(remembered)
+    expect(projectEngine.getSnapshot().store?.conversations.find(row => row.id === remembered)).toEqual(old)
+    expect(new URL(window.location.href).searchParams.get("conversation")).toBe(projectClient.createCalls[0]?.sessionId)
+    expect(applications.length).toBeGreaterThanOrEqual(2)
+    expect(applications.every(id => id === projectClient.createCalls[0]?.sessionId)).toBe(true)
+    if (unknown) {
+      await waitFor(() => expect(projectEngine.getSnapshot().canRetryPendingSubmission).toBe(true))
+      const intent = structuredClone(projectClient.createCalls[0])
+      projectClient.nextCreate = () => Promise.resolve(makeReceipt("run_draft_retry"))
+      act(() => projectEngine.retry())
+      await waitFor(() => expect(projectClient.createCalls).toHaveLength(2))
+      expect(projectClient.createCalls[1]).toEqual(intent)
+      expect(reset).toHaveBeenCalledOnce()
+    }
+  } finally { view.unmount(); projectEngine.dispose() }
+})
+
+
+it.each(["route", "actor", "generation"] as const)("project overview draft choices retire on %s without resetting hidden history", async change => {
+  const { projectEngine, projectClient, remembered, props, frame, view } = await mountRememberedProjectComposer()
+  const reset = vi.spyOn(projectEngine, "newConversation")
+  try {
+    fireEvent.pointerDown(screen.getByRole("button", { name: /切换模式/ }), { button: 0, ctrlKey: false })
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: /深度思考/ }))
+    fireEvent.pointerDown(screen.getByRole("button", { name: /切换模型/ }), { button: 0, ctrlKey: false })
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: /Draft choice/ }))
+    expect(screen.getByRole("button", { name: /切换模型/ })).toHaveTextContent("Draft choice")
+    if (change === "route") {
+      act(() => {
+        window.history.pushState({}, "", "/app")
+        window.dispatchEvent(new PopStateEvent("popstate"))
+        window.history.pushState({}, "", `/app/project/${props.projectRef}`)
+        window.dispatchEvent(new PopStateEvent("popstate"))
+      })
+    } else {
+      if (change === "actor") {
+        window.localStorage.setItem("kokoro.web.auth-index-subject", "next-draft-actor")
+        act(() => window.dispatchEvent(new StorageEvent("storage", { key: "kokoro.web.auth-index-subject" })))
+      }
+      view.rerender(frame({ ...props, projectReadBoundary: { admitted: true,
+        subject: change === "actor" ? "next-draft-actor" : props.projectReadBoundary.subject, generation: 2 } }))
+    }
+    await waitFor(() => expect(screen.getByRole("button", { name: /切换模型/ })).toHaveTextContent("Draft default"))
+    expect(screen.getByRole("button", { name: /切换模式/ })).toHaveTextContent("快速")
+    expect(projectEngine.getSnapshot().store?.activeId).toBe(remembered)
+    expect(projectEngine.getSnapshot().store?.conversations.find(row => row.id === remembered)?.mode).toBe("thinking")
+    expect(projectClient.createCalls).toEqual([])
+    expect(reset).not.toHaveBeenCalled()
+  } finally { view.unmount(); projectEngine.dispose() }
+})
+
+it.each(["pending", "unknown", "active"] as const)("project overview draft choices leave hidden %s execution untouched", async state => {
+  const { projectEngine, projectClient, remembered, view } = await mountRememberedProjectComposer()
+  if (state === "pending") projectClient.nextCreate = () => new Promise(() => {})
+  if (state === "unknown") projectClient.nextCreate = () => Promise.reject(new Error("hidden unknown receipt"))
+  try {
+    act(() => { projectEngine.submit("original hidden execution") })
+    if (state === "unknown") await waitFor(() => expect(projectEngine.getSnapshot().canRetryPendingSubmission).toBe(true))
+    if (state === "active") await waitFor(() => expect(projectClient.streams).toHaveLength(1))
+    const before = projectEngine.getSnapshot()
+    const calls = structuredClone(projectClient.createCalls)
+    const mode = vi.spyOn(projectEngine, "setMode"), model = vi.spyOn(projectEngine, "setModel")
+    const reset = vi.spyOn(projectEngine, "newConversation"), cancel = vi.spyOn(projectEngine, "cancelRun")
+    fireEvent.pointerDown(screen.getByRole("button", { name: /切换模式/ }), { button: 0, ctrlKey: false })
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: /快速/ }))
+    fireEvent.pointerDown(screen.getByRole("button", { name: /切换模型/ }), { button: 0, ctrlKey: false })
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: /Draft choice/ }))
+    expect(mode).not.toHaveBeenCalled()
+    expect(model).not.toHaveBeenCalled()
+    expect(reset).not.toHaveBeenCalled()
+    expect(cancel).not.toHaveBeenCalled()
+    expect(projectEngine.getSnapshot().store?.activeId).toBe(remembered)
+    expect(projectEngine.getSnapshot().machine).toEqual(before.machine)
+    expect(projectEngine.getSnapshot().thread.messages).toEqual(before.thread.messages)
+    expect(projectClient.createCalls).toEqual(calls)
+    expect(window.location.search).toBe("")
+  } finally { view.unmount(); projectEngine.dispose() }
+})
+
+it("project overview rejected fresh allocation preserves its draft choices and hidden history", async () => {
+  const { projectEngine, projectClient, remembered, view } = await mountRememberedProjectComposer()
+  const reset = vi.spyOn(projectEngine, "newConversation").mockImplementation(() => {})
+  try {
+    fireEvent.pointerDown(screen.getByRole("button", { name: /切换模型/ }), { button: 0, ctrlKey: false })
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: /Draft choice/ }))
+    const mode = vi.spyOn(projectEngine, "setMode"), model = vi.spyOn(projectEngine, "setModel")
+    const composer = screen.getByRole("textbox", { name: "对话输入" })
+    fireEvent.change(composer, { target: { value: "preserve this draft" } })
+    fireEvent.keyDown(composer, { key: "Enter" })
+    expect(projectClient.createCalls).toEqual([])
+    expect(mode).not.toHaveBeenCalled()
+    expect(model).not.toHaveBeenCalled()
+    expect(composer).toHaveValue("preserve this draft")
+    expect(screen.getByRole("button", { name: /切换模型/ })).toHaveTextContent("Draft choice")
+    expect(projectEngine.getSnapshot().store?.activeId).toBe(remembered)
+    expect(window.location.search).toBe("")
+    reset.mockRestore()
+    fireEvent.keyDown(composer, { key: "Enter" })
+    await waitFor(() => expect(projectClient.createCalls).toHaveLength(1))
+    expect(projectClient.createCalls[0]?.body.model).toBe("draft-choice")
+    expect(projectClient.createCalls[0]?.sessionId).not.toBe(remembered)
+  } finally { view.unmount(); projectEngine.dispose() }
+})
+
+it("visible parts committed engine hook binds exact Project route and synchronously aborts on leaving", async () => {
+  const { useAppFrameEngine } = await import("@/components/blocks/app-frame/use-app-frame-engine")
+  const projectRef = "hook-visible-parts", scope = { kind: "project" as const, projectRef }, local = createFakeClient()
+  local.nextSnapshot = async () => makeSnapshot({ sessionId: "s", messages: [{ message_id: "m", role: "assistant", run_id: "r", content: null, status: "completed", created_at: "now", rendering: { mode: "ordered", format_version: 1, revision: "1", event_watermark: null, parts_cursor: "initial" } }] })
+  let late!: (page: Awaited<ReturnType<typeof local.fetchMessageParts>>) => void
+  local.nextParts = () => new Promise(resolve => { late = resolve })
+  const actual = createSessionEngine({ client: local, scope, storage: createMemoryStorage<ConversationStore>(addConversation(null, "s", 1)), messagePartsReadTarget: null })
+  window.history.replaceState(null, "", `/app/project/${projectRef}`)
+  const view = renderHook(() => useAppFrameEngine({ injectedEngine: actual, preview: false, projectRef }))
+  try {
+    await settle()
+    expect(local.partsCalls).toHaveLength(0)
+    act(() => { window.history.pushState(null, "", `/app/project/${projectRef}?conversation=s`); window.dispatchEvent(new PopStateEvent("popstate")) })
+    await waitFor(() => expect(local.partsCalls).toHaveLength(1))
+    act(() => {
+      window.history.pushState(null, "", `/app/project/${projectRef}`); window.dispatchEvent(new Event("kokoro:surface-navigation"))
+      expect(local.partsCalls[0]?.signal.aborted).toBe(true)
+    })
+    await act(async () => { late({ session_id: "s", message_id: "m", run_id: "r", format_version: 1, revision: "1", event_watermark: null, next_cursor: null, items: [] }) })
+    expect(actual.getSnapshot().thread.messageParts?.m?.status).not.toBe("complete")
+    act(() => { window.history.pushState(null, "", "/app/project/other?conversation=s"); window.dispatchEvent(new PopStateEvent("popstate")) })
+    await settle()
+    expect(local.partsCalls).toHaveLength(1)
+    expect(actual.getSnapshot().store?.activeId).toBe("s")
+    expect(local.createCalls).toHaveLength(0)
+    expect(local.controlCalls).toHaveLength(0)
+  } finally { view.unmount(); actual.dispose(); window.history.replaceState(null, "", "/app") }
+})
+
+it("the mounted frame only reads models when its trusted Composer becomes active", async () => {
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "catalog-frame")
+  const calls: string[] = []
+  stubBusinessFetch(vi.fn(async input => {
+    const path = new URL(String(input), window.location.origin).pathname
+    calls.push(path)
+    if (path.endsWith("/models")) return Response.json({ models: [], next_cursor: null })
+    return Response.json({ sessions: [], next_cursor: null })
+  }))
+  const frame = (standaloneSurface: boolean, admitted: boolean) => <ThemeProvider><LocaleProvider><AppFrame
+    engine={engine} chatHref="/app" standaloneSurface={standaloneSurface}
+    projectReadBoundary={{ admitted, subject: "catalog-frame", generation: 1 }}
+  /></LocaleProvider></ThemeProvider>
+  const view = render(frame(true, true))
+  await act(async () => { await settle() })
+  expect(calls.filter(path => path.endsWith("/models"))).toHaveLength(0)
+  view.rerender(frame(false, false))
+  await act(async () => { await settle() })
+  expect(calls.filter(path => path.endsWith("/models"))).toHaveLength(0)
+  view.rerender(frame(false, true))
+  await act(async () => { await settle() })
+  expect(calls.filter(path => path.endsWith("/models"))).toHaveLength(1)
+})
+
+it("desktop action inspection carries the admitted reader through the actual AppFrame shell", async () => {
+  const sessionId = "conv_action_inspection", runId = "run_action_inspection"
+  const activityId = `act_${"a".repeat(64)}`
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "inspection-actor")
+  window.history.replaceState({}, "", `/app?conversation=${sessionId}`)
+  pathname.value = "/app"
+  client.nextSnapshot = async () => makeSnapshot({ sessionId, activeRun: { run_id: runId, status: "running" }, messages: [{ message_id: "inspect-user", role: "user", content: "inspect original tool", status: "completed", created_at: "2026-07-02T00:00:00Z" }] })
+  const readDisplay = vi.fn((url: string) => {
+    expect(url).toBe(`http://s.local/sessions/${sessionId}/runs/${runId}/display`)
+    return Response.json({ run_id: runId, display_skills: [], tool_paths: [], tool_facts: [], activity_details: [{
+    activity_id: activityId, tool_name: "mcp_call", target: { kind: "mcp_tool", name: "ask_wiki_question" },
+    input_preview: { text: "original request arguments", truncated: false, redacted: false },
+    output_preview: { text: "original response evidence", truncated: false, redacted: false },
+  }] }) })
+  vi.spyOn(globalThis, "fetch").mockImplementation(async input => {
+    const url = String(input)
+    return url.endsWith(`/runs/${runId}/display`) ? readDisplay(url) : Response.json({}, { status: 503 })
+  })
+  await act(async () => { engine.openConversation(sessionId); await settle() })
+  mountFrame({ preview: false, projectReadBoundary: { admitted: true, subject: "inspection-actor", generation: 1 } })
+  await waitFor(() => expect(client.streams.length).toBeGreaterThan(0))
+  await act(async () => {
+    client.lastStream().emit([
+      makeEvent("run.created", { run_id: runId }, { run_id: runId, session_id: sessionId }),
+      makeEvent("activity.updated", { activity: "tool", activity_id: activityId, segment_id: `seg_${"b".repeat(64)}`, display_code: "tool.mcp.call", status: "completed" }, { run_id: runId, session_id: sessionId }),
+    ])
+    await settle()
+  })
+  fireEvent.click(await screen.findByRole("button", { name: /调用工具/ }))
+  const inspector = await screen.findByRole("heading", { name: "动作详情" })
+  expect(inspector).toBeVisible()
+  expect(await screen.findByRole("region", { name: "结果" })).toHaveTextContent("original response evidence")
+  expect(screen.getByText("original request arguments")).not.toBeVisible()
+  fireEvent.click(screen.getByText("技术详情"))
+  expect(screen.getByText("original request arguments")).toBeVisible()
+  expect(readDisplay).toHaveBeenCalledOnce()
 })

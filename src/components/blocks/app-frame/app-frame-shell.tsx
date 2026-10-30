@@ -1,3 +1,5 @@
+import type { AnswerActionBoundary } from "@/ui/thread/answer-action-scope"
+import { currentRunProgressTodos } from "@/core/projections"
 import type {
   CSSProperties,
   KeyboardEvent as ReactKeyboardEvent,
@@ -13,6 +15,7 @@ import { ContextPanel } from "@/components/blocks/context-panel/context-panel"
 import { WorkspaceNavigationTrigger } from "@/components/blocks/workspace-header/workspace-header"
 import { WorkspaceRail, type WorkspaceRailProps } from "@/components/blocks/workspace-rail/workspace-rail"
 import type { EngineSnapshot } from "@/engine/machine"
+import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
 import type { CanvasWorkspace } from "@/ui/shell/use-canvas-workspace"
 import { CANVAS_MAX, CANVAS_MIN } from "@/ui/canvas/use-canvas-resize"
 import { RAIL_COLLAPSED_WIDTH, RAIL_MAX, RAIL_MIN } from "@/ui/rail/use-rail-resize"
@@ -26,7 +29,9 @@ type Thread = EngineSnapshot["thread"]
 type RailProps = Omit<WorkspaceRailProps, "withinProvider">
 
 export type AppFrameShellProps = {
+  answerActionBoundary?: AnswerActionBoundary
   preview?: boolean
+  readBoundary?: ProjectReadBoundary
   webSkin: NonNullable<AppFrameProps["webSkin"]>
   narrowWeb: boolean
   compactDesktopRail: boolean
@@ -46,6 +51,7 @@ export type AppFrameShellProps = {
   onCanvasResizeStart: (event: ReactPointerEvent<HTMLDivElement>) => void
   railProps: RailProps
   mainSurface: ReactNode
+  hideCanvas?: boolean
   canvas: CanvasWorkspace
   thread: Thread
   activeId: string | null
@@ -54,7 +60,9 @@ export type AppFrameShellProps = {
 
 /** Owns the shadcn shell geometry: rail, main panel, optional Canvas, and overlays. */
 export function AppFrameShell({
+  answerActionBoundary,
   preview = false,
+  readBoundary,
   webSkin,
   narrowWeb,
   compactDesktopRail,
@@ -75,6 +83,7 @@ export function AppFrameShell({
   railProps,
   mainSurface,
   canvas,
+  hideCanvas = false,
   thread,
   activeId,
   overlays,
@@ -96,7 +105,7 @@ export function AppFrameShell({
         data-narrow-web={narrowWeb ? "true" : undefined}
         data-rail-collapsed={resolvedRailCollapsed ? "true" : "false"}
         data-rail-hidden={railHidden ? "true" : undefined}
-        data-canvas-open={canvas.canvasOpen ? "true" : undefined}
+        data-canvas-open={canvas.canvasOpen && !hideCanvas ? "true" : undefined}
         data-resizing={isResizing ? "true" : undefined}
         style={
           {
@@ -151,7 +160,7 @@ export function AppFrameShell({
           <div
             ref={workspaceRef}
             className={styles.workspace}
-            data-canvas-open={canvas.canvasOpen ? "true" : undefined}
+            data-canvas-open={canvas.canvasOpen && !hideCanvas ? "true" : undefined}
           >
             <ResizablePanelGroup
               id="kokoro-workspace"
@@ -169,7 +178,7 @@ export function AppFrameShell({
               </ResizablePanel>
               {canvas.resolvedCanvas !== null && activeId !== null ? (
                 <>
-                  {!canvas.fullscreen ? (
+                  {!canvas.fullscreen && !hideCanvas ? (
                     <ResizableHandle
                       id="canvas-resize"
                       className={styles.canvasHandle}
@@ -189,15 +198,21 @@ export function AppFrameShell({
                     maxSize={`${CANVAS_MAX}px`}
                     groupResizeBehavior="preserve-pixel-size"
                     className={styles.canvasPanel}
+                    hidden={hideCanvas}
+                    inert={hideCanvas ? true : undefined}
+                    aria-hidden={hideCanvas || undefined}
+                    style={hideCanvas ? { display: "none" } : undefined}
                   >
                     <ContextPanel
+                      {...(answerActionBoundary ? { answerActionBoundary } : {})}
                       preview={preview}
+                      {...(readBoundary === undefined ? {} : { readBoundary })}
                       sessionId={activeId}
                       content={canvas.resolvedCanvas}
                       files={thread.files}
                       deliveries={thread.deliveries}
                       deliveriesHasMore={thread.deliveriesHasMore}
-                      todos={thread.todos}
+                      todos={currentRunProgressTodos(thread)}
                       focusScopeRef={shellRef}
                       fullscreen={canvas.fullscreen}
                       onSelectFile={canvas.onSelectFile}

@@ -15,6 +15,7 @@ import {
 } from "./mcp-projection-types";
 import { useMcpCategoryLayout } from "./use-mcp-category-layout";
 import { McpCategoryDropdown } from "./mcp-category-dropdown";
+import { McpSearchHighlight } from "./mcp-search-highlight";
 import styles from "./mcp-projection-read.module.css";
 
 type Category = keyof typeof MCP_CATEGORY_MESSAGES;
@@ -112,7 +113,9 @@ export function McpProviderDirectory({
         className={styles.providerSection}
         aria-label={t("mcp.provider")}
       >
-        {resultsPlaceholder !== undefined ? resultsPlaceholder : providers.length === 0 ? (
+        {resultsPlaceholder !== undefined ? resultsPlaceholder : providers.length === 0 && loading ? (
+          <span className="sr-only" role="status">{t("mcp.loading")}</span>
+        ) : providers.length === 0 ? (
           <div className={styles.emptyProvider}>
             <Link2 aria-hidden="true" />
             <p>{t(query.trim() || categoryFilter !== "all" ? "mcp.noMatch" : "mcp.noProviders")}</p>
@@ -145,7 +148,7 @@ export function McpProviderDirectory({
                   </span>
                   <span className={styles.providerCopy}>
                     <span className={styles.providerName}>
-                      {provider.display_name}
+                      <McpSearchHighlight text={provider.display_name} query={presentation === "plaza" ? query : ""} />
                     </span>
                     {provider.description ? (
                       <span className={styles.providerDescription}>
@@ -165,7 +168,7 @@ export function McpProviderDirectory({
         {hasMore && onLoadMore ? (
           <div className={styles.pagination}>
             <Button type="button" variant="outline" onClick={onLoadMore} disabled={loading} aria-busy={loading}>
-              {t(loading ? "mcp.loading" : "rail.loadMore")}
+              {t("rail.loadMore")}
             </Button>
           </div>
         ) : null}

@@ -22,134 +22,6 @@
   flex-direction: column;
 }
 
-/* Custom API shares the secure-detail dialog primitive with Custom MCP, but
- * it is a smaller aggregate: name, note and configured-secret count.  Keep
- * its layout explicit instead of inheriting the MCP detail's fixed-height
- * hero geometry, which previously left a distracting empty lower half. */
-.detail.apiDetail {
-  height: auto;
-  min-height: 0;
-  max-height: calc(100dvh - 2rem);
-}
-.apiDetailHeader {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 1.5rem 1.5rem 1rem;
-  border-bottom: 1px solid rgb(0 0 0 / 7%);
-}
-.apiDetailHeader .icon {
-  width: 2.75rem;
-  height: 2.75rem;
-  flex-basis: 2.75rem;
-  border-radius: 0.625rem;
-}
-.apiDetailHeader h2 {
-  margin: 0;
-  font-size: 1.125rem;
-  font-weight: 600;
-  line-height: 1.5rem;
-}
-.apiDetailHeader p {
-  margin: 0.125rem 0 0;
-  color: var(--muted-foreground);
-  font-size: 0.8125rem;
-  line-height: 1.125rem;
-}
-.apiDetailBody {
-  display: grid;
-  gap: 1rem;
-  overflow-y: auto;
-  padding: 1.25rem 1.5rem 1.5rem;
-}
-.apiFacts {
-  display: grid;
-  gap: 0.875rem;
-  margin: 0;
-  padding: 1rem;
-  border: 1px solid rgb(0 0 0 / 8%);
-  border-radius: 0.75rem;
-}
-.apiFacts div {
-  display: grid;
-  gap: 0.25rem;
-}
-.apiFacts dt {
-  color: var(--muted-foreground);
-  font-size: 0.75rem;
-  font-weight: 500;
-  line-height: 1rem;
-}
-.apiFacts dd {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  margin: 0;
-  overflow-wrap: anywhere;
-  color: var(--foreground);
-  font-size: 0.875rem;
-  line-height: 1.25rem;
-}
-.apiFacts code {
-  font-family: inherit;
-  font-size: 0.8125rem;
-}
-.apiManagement {
-  display: flex;
-  justify-content: flex-end;
-}
-.apiManagement > button,
-.apiRemove {
-  height: 2.25rem;
-  min-height: 2.25rem;
-  padding-inline: 0.875rem;
-  font-size: 0.875rem;
-}
-.apiRemove {
-  width: fit-content;
-  color: var(--destructive);
-}
-.configuration.apiConfiguration {
-  height: min(44.625rem, calc(100dvh - 2rem));
-}
-.apiConfigurationHeader {
-  padding: 1.25rem 1.25rem 0;
-}
-.apiConfigurationHeader h2 {
-  margin: 0;
-  font-size: 1.125rem;
-  font-weight: 600;
-  line-height: 1.5rem;
-}
-.apiConfigurationHeader p {
-  margin: 0.25rem 0 0;
-  color: var(--muted-foreground);
-  font-size: 0.8125rem;
-  line-height: 1.125rem;
-}
-.apiConfigurationBody {
-  display: grid;
-  flex: 1;
-  gap: 0.875rem;
-  overflow-y: auto;
-  padding: 1.25rem;
-}
-.apiConfigurationFooter {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 1rem 1.25rem 1.25rem;
-  border-top: 1px solid rgb(0 0 0 / 7%);
-}
-.apiConfigurationFooter > button {
-  height: 2.25rem;
-  min-height: 2.25rem;
-  padding-inline: 0.875rem;
-  font-size: 0.875rem;
-}
-
 /* Manus custom MCP detail: 680×558, its own state separate from configuration. */
 .detail {
   height: min(34.875rem, calc(100dvh - 2rem));
@@ -306,38 +178,67 @@
   font-size: 0.875rem;
 }
 
-/* Manus configuration is a separate 600×714 editing layer. */
+/* Measured Manus configuration: 600×714; body alone scrolls on shorter screens. */
 .dialog[data-variant="configuration"] {
-  width: min(37.5rem, calc(100vw - 2rem));
+  width: min(37.5rem, 95vw);
+  max-width: 95vw;
+  max-height: 95dvh;
+  border: 0;
+  background: var(--settings-surface);
 }
 .configuration {
-  height: min(44.625rem, calc(100dvh - 2rem));
+  height: min(44.625rem, 95dvh);
 }
+.configuration :is(button, input, textarea):focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.configurationFooter svg { width: 1rem; height: 1rem; }
 .configurationBody {
+  display: flex;
   min-height: 0;
   flex: 1;
+  flex-direction: column;
+  gap: 1rem;
   overflow-y: auto;
-  padding: 1.25rem;
+  padding: 0 1.25rem;
 }
+.configurationBody > * { flex-shrink: 0; }
 .configurationHeader {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 0.5rem;
-  margin-bottom: 1rem;
+  padding: 1.25rem 3.5rem 0.75rem 1.25rem;
 }
 .configurationHeader h2 {
   margin: 0;
   font-size: 1.125rem;
-  font-weight: 650;
+  font-weight: 600;
   line-height: 1.5rem;
 }
 .configurationHeader button {
   height: 1.75rem;
   min-height: 1.75rem;
+  gap: 0.25rem;
   padding-inline: 0.5rem;
-  font-size: 0.75rem;
+  border-radius: 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.125rem;
 }
-.configurationHeader svg { width: 0.875rem; height: 0.875rem; }
+/* Reference outline paints outside the intrinsic button size, unlike a border.
+   The configuration's higher-specificity :focus-visible outline remains intact. */
+.configurationHeader button,
+.headers > button {
+  border: 0;
+  outline: 1px solid var(--settings-search-border);
+  outline-offset: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.configurationHeader svg { width: 1rem; height: 1rem; }
+.configurationButtonLabel { padding-inline-end: 0.125rem; }
 .configurationGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -346,27 +247,41 @@
 .field,
 .iconField {
   display: grid;
-  gap: 0.375rem;
-  margin-top: 0.875rem;
+  min-width: 0;
+  gap: 0.5rem;
 }
-.configurationGrid .field { margin-top: 0; }
 .field label,
 .iconField label,
 .headers legend {
   color: var(--foreground);
-  font-size: 0.8125rem;
-  font-weight: 600;
-  line-height: 1.125rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
 }
 .optional { color: var(--muted-foreground); font-weight: 400; }
+.field :global(input),
+.field textarea {
+  border: 0;
+  background: var(--settings-editor-control-fill);
+  font-size: 0.875rem;
+  font-weight: 400;
+}
+.field :global(input):not(:focus-visible),
+.field textarea:not(:focus-visible) { box-shadow: none; }
 .field :global(input) {
   height: 2.25rem;
   min-height: 2.25rem;
+  padding: 0.5rem 0.75rem;
   border-radius: 0.5rem;
+  line-height: 1.25rem;
 }
 .field textarea {
+  height: 6.25rem;
   min-height: 6.25rem;
-  resize: vertical;
+  padding: 0.5rem 0.75rem 0.5rem 1rem;
+  border-radius: 0.625rem;
+  line-height: 1.375rem;
+  resize: none;
 }
 .staticValue {
   display: flex;
@@ -374,37 +289,46 @@
   align-items: center;
   justify-content: space-between;
   border-radius: 0.5rem;
-  background: var(--secondary);
-  padding: 0 0.875rem;
+  background: var(--settings-editor-control-fill);
+  padding: 0.5rem 0.75rem;
   font-size: 0.875rem;
+  line-height: 1.25rem;
 }
 .staticValue svg { width: 1rem; height: 1rem; }
 .iconUploadRow {
-  display: grid;
-  grid-template-columns: 3.75rem auto 1fr;
-  align-items: center;
+  display: flex;
+  align-items: flex-start;
   gap: 0.75rem;
 }
 .configurationIcon {
   display: grid;
   width: 3.75rem;
   height: 3.75rem;
+  flex: 0 0 3.75rem;
   place-items: center;
-  border: 1px dashed rgb(0 0 0 / 15%);
+  border: 1px dashed var(--settings-control-border);
   border-radius: 0.5rem;
-  background: var(--secondary);
+  background: var(--settings-editor-control-fill);
   font-size: 0.875rem;
+}
+.iconUploadDescription {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 .uploadUnavailable {
   display: inline-flex;
   width: fit-content;
-  height: 2.25rem;
+  height: 2rem;
+  flex: 0 0 auto;
   align-items: center;
   border: 1px solid var(--border);
   border-radius: 0.5rem;
-  padding: 0 0.75rem;
+  padding: 0 0.5rem;
   color: var(--muted-foreground);
   font-size: 0.875rem;
+  line-height: 1.125rem;
 }
 .iconUploadRow small {
   color: var(--muted-foreground);
@@ -413,12 +337,23 @@
 }
 .headers {
   display: grid;
+  min-width: 0;
   gap: 0.5rem;
-  margin: 0.875rem 0 0;
+  margin: 0;
   padding: 0;
   border: 0;
 }
-.headers > button { width: fit-content; }
+.headers legend { margin-bottom: 0.5rem; }
+.headers > button {
+  width: fit-content;
+  height: 2rem;
+  gap: 0.375rem;
+  padding-inline: 0.75rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+}
 .existingHeader,
 .headerDraft {
   display: grid;
@@ -433,31 +368,36 @@
   flex: 0 0 auto;
   align-items: center;
   justify-content: space-between;
-  padding: 1rem 1.25rem 1.25rem;
-  border-top: 1px solid rgb(0 0 0 / 7%);
+  gap: 0.75rem;
+  padding: 1.25rem;
 }
+.configurationActions { gap: 0.75rem; }
 .configurationFooter > button,
 .configurationActions button {
   height: 2.25rem;
   min-height: 2.25rem;
   padding-inline: 0.75rem;
+  border-radius: 0.5rem;
   font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
 }
 .saveSplit {
   display: inline-flex;
 }
 .saveSplit button {
-  border-color: var(--foreground);
   background: var(--foreground);
   color: var(--background);
 }
 .saveSplit button:first-child {
+  min-width: 4.5rem;
   border-radius: 0.5rem 0 0 0.5rem;
-  border-right-color: rgb(255 255 255 / 22%);
 }
 .saveSplit button:last-child {
-  min-width: 2.25rem;
+  width: 2.0625rem;
+  min-width: 2.0625rem;
   padding-inline: 0.5rem;
+  border-left: 1px solid var(--settings-control-border);
   border-radius: 0 0.5rem 0.5rem 0;
 }
 .configurationMenu {
@@ -470,14 +410,21 @@
   font-size: 0.8125rem;
 }
 
+.jsonDialog[data-slot="dialog-content"] { width: min(37.5rem, 95vw); max-width: 95vw; height: min(28.625rem, 95dvh); max-height: 95dvh; padding: 0; gap: 0; overflow: hidden; border: 0; border-radius: 1rem; background: var(--settings-surface); }
+.jsonForm { display: flex; flex-direction: column; min-height: 0; height: 100%; }
+.jsonTitle { flex: 0 0 auto; margin: 1.25rem 3.5rem 0 1.25rem; font-size: 1.125rem; line-height: 1.5rem; font-weight: 600; }
+.jsonDescription { flex: 0 0 auto; margin: 0 1.25rem; font-size: 0.8125rem; line-height: 1.125rem; }
+.jsonForm > textarea { flex: 1 1 19.25rem; min-height: 0; width: calc(100% - 2.5rem); margin: 0.75rem 1.25rem 0; resize: none; padding: 0.5rem 0.75rem 0.5rem 1rem; border: 0; border-radius: 0.625rem; background: var(--settings-editor-control-fill); box-shadow: none; font-size: 0.875rem; line-height: 1.375rem; }
+.jsonFeedback { flex: 0 1 auto; max-height: 30%; overflow-y: auto; margin-inline: 1.25rem; font-size: 0.8125rem; }
+.jsonFeedback p { margin: 0.375rem 0 0; }
+.jsonActions { display: flex; flex: 0 0 auto; justify-content: space-between; gap: 0.75rem; padding: 1.25rem; }
+.jsonActions button { height: 2.25rem; min-height: 2.25rem; padding-inline: 0.75rem; border-radius: 0.5rem; }
+
 @media (max-width: 44rem) {
   .detailHero { padding-inline: 1rem; }
   .detailBody { padding-inline: 1rem; }
-  .configurationGrid { grid-template-columns: 1fr; gap: 0; }
 }
 @media (max-width: 34rem) {
-  .iconUploadRow { grid-template-columns: 3.75rem auto; }
-  .iconUploadRow small { grid-column: 1 / -1; }
   .configurationFooter { align-items: flex-end; gap: 0.75rem; }
   .configurationActions { flex-wrap: wrap; justify-content: flex-end; }
   .headerDraft { grid-template-columns: 1fr 2rem; }

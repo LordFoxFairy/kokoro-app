@@ -1,3 +1,4 @@
+import {restoreCreditGrantParent} from "./bff-credit-grant-parent"
 // Test-only exact Public22.3 ->22.2 full artifact inverse. Never imported by runtime code.
 import { createHash } from "node:crypto"
 const proof = {
@@ -26,6 +27,7 @@ const proof = {
 } as const
 const hash = (value: string) => createHash("sha256").update(value).digest("hex")
 export function restoreModelDiscoveryParent(bytes: Uint8Array): Buffer {
+  bytes=restoreCreditGrantParent(bytes)
   const source = Buffer.from(bytes).toString("utf8")
   if (hash(source) !== proof.current) throw Error("Model discovery fixed source drift")
   const lines = source.split(/(?<=\n)/u)

@@ -36,7 +36,7 @@ const CURSOR_12 = "agui_0000000000000000000000000000000c"
 const CURSOR_20 = "agui_00000000000000000000000000000014"
 const CURSOR_30 = "agui_0000000000000000000000000000001e"
 
-function buildEngine(initial: ConversationStore | null = null, reattachTimeoutMs?: number, scope?: SessionScope) {
+function buildEngine(initial: ConversationStore | null = null, reattachTimeoutMs?: number, scope?: SessionScope, draftLifecycle?: { isUnsubmitted: (id: string) => boolean; retire: (id: string) => boolean }) {
   client = createFakeClient()
   storage = createMemoryStorage<ConversationStore>(initial)
   let idCounter = 0
@@ -47,6 +47,7 @@ function buildEngine(initial: ConversationStore | null = null, reattachTimeoutMs
     createId: (prefix) => `${prefix}_${(idCounter += 1)}`,
     ...(reattachTimeoutMs !== undefined ? { reattachTimeoutMs } : {}),
     ...(scope !== undefined ? { scope } : {}),
+    ...(draftLifecycle ? { draftLifecycle } : {}),
   })
   return engine
 }
@@ -79,6 +80,163 @@ function activeEntry() {
   }
   return entry
 }
+
+it("missing owner snapshot is explicit view evidence, not local creation provenance", async () => {
+  buildEngine()
+  engine.newConversation()
+  expect(engine.getSnapshot()).not.toHaveProperty("missingSessionId")
+  expect(client.snapshotCalls).toEqual([])
+  engine.openConversation("conv_missing_owner")
+  await settle()
+  expect(engine.getSnapshot()).toMatchObject({ missingSessionId: "conv_missing_owner", hydrating: false })
+  expect(engine.getSnapshot().thread.messages).toEqual([])
+  expect(storage.read()).not.toHaveProperty("missingSessionId")
+  engine.newConversation()
+  expect(engine.getSnapshot()).not.toHaveProperty("missingSessionId")
+  expect(client.createCalls).toEqual([])
+})
+
+it("a stale missing snapshot cannot mark the replacement conversation missing", async () => {
+  buildEngine()
+  let resolveMissing!: (value: null) => void
+  client.nextSnapshot = () => new Promise(resolve => { resolveMissing = resolve })
+  engine.openConversation("conv_missing_old")
+  engine.newConversation()
+  resolveMissing(null)
+  await settle()
+  expect(engine.getSnapshot()).not.toHaveProperty("missingSessionId")
+})
+
+it.each(["pending", "unknown", "receipt"] as const)("an absent read never loses the %s create outcome", async outcome => {
+  const seeded: ConversationStore = { activeId: "conv_race", conversations: [{ id: "conv_race", title: "", updatedAt: 1, mode: "fast" }] }
+  let read!: (value: null) => void
+  let accept!: (value: ReturnType<typeof makeReceipt>) => void
+  let reject!: (error: Error) => void
+  buildConfiguredEngine(seeded, fake => {
+    fake.nextSnapshot = () => new Promise(resolve => { read = resolve })
+    fake.nextCreate = () => new Promise((resolve, fail) => { accept = resolve; reject = fail })
+  })
+  expect(engine.submit("preserve exact original message")).toBe(true)
+  if (outcome === "unknown") reject(new SessionClientError("network", "unknown create result"))
+  if (outcome === "receipt") accept(makeReceipt("run_race"))
+  await settle()
+  read(null)
+  await settle()
+  expect(engine.getSnapshot()).not.toHaveProperty("missingSessionId")
+  expect(thread().messages).toMatchObject([{ role: "user", content: "preserve exact original message" }])
+  expect(engine.getSnapshot().store?.activeId).toBe(seeded.activeId)
+  expect(client.createCalls).toHaveLength(1)
+  if (outcome === "unknown") expect(engine.getSnapshot().canRetryPendingSubmission).toBe(true)
+  if (outcome === "receipt") {
+    expect(engine.getSnapshot().machine).toMatchObject({ phase: "queued", runId: "run_race" })
+    expect(client.streams).toHaveLength(1)
+    expect(client.lastStream().sessionId).toBe(seeded.activeId)
+  }
+})
+
+describe("positive local draft reload and irreversible submission retirement", () => {
+  function lifecycle() {
+    const retired = new Set<string>()
+    return { retired, isUnsubmitted: (id: string) => !retired.has(id), retire: vi.fn((id: string) => { retired.add(id); return true }) }
+  }
+  it("restores a positive unsubmitted draft with the same ID and no owner reads", async () => {
+    const drafts = lifecycle()
+    buildEngine(null, undefined, undefined, drafts)
+    engine.newConversation()
+    const id = engine.getSnapshot().store!.activeId
+    const persisted = JSON.parse(JSON.stringify(storage.read())) as ConversationStore
+    engine.dispose(); buildEngine(persisted, undefined, undefined, drafts)
+    await settle()
+    expect(engine.getSnapshot()).toMatchObject({ locallyCreatedSessionId: id, hydrating: false })
+    expect(engine.getSnapshot()).not.toHaveProperty("missingSessionId")
+    expect(client.snapshotCalls).toEqual([])
+    expect(client.createCalls).toEqual([])
+  })
+  it("finishes initial hydration when draft eligibility changes between independent reads", async () => {
+    const initial: ConversationStore = { activeId: "conv_flapping_initial", conversations: [{ id: "conv_flapping_initial", title: "", updatedAt: 1, mode: "fast", localDraft: true }] }
+    const drafts = { isUnsubmitted: vi.fn(() => true).mockReturnValueOnce(false), retire: () => true }
+    buildEngine(initial, undefined, undefined, drafts)
+    await settle()
+    expect(client.snapshotCalls).toEqual([initial.activeId])
+    expect(engine.getSnapshot()).toMatchObject({ hydrating: false, missingSessionId: initial.activeId })
+    expect(engine.getSnapshot()).not.toHaveProperty("locallyCreatedSessionId")
+  })
+  it("follows an external draft with one coherent owner-read decision", async () => {
+    const drafts = { isUnsubmitted: vi.fn(() => true).mockReturnValueOnce(false), retire: () => true }
+    buildEngine(null, undefined, undefined, drafts)
+    const external: ConversationStore = { activeId: "conv_flapping_external", conversations: [{ id: "conv_flapping_external", title: "", updatedAt: 1, mode: "fast", localDraft: true }] }
+    storage.write(external)
+    await settle()
+    expect(client.snapshotCalls).toEqual([external.activeId])
+    expect(engine.getSnapshot()).toMatchObject({ hydrating: false, missingSessionId: external.activeId })
+    expect(engine.getSnapshot()).not.toHaveProperty("locallyCreatedSessionId")
+  })
+  it("retires before POST, keeps the original ID and selections, and rejects stale index proof on reload", async () => {
+    const drafts = lifecycle()
+    buildEngine(null, undefined, undefined, drafts); engine.newConversation()
+    const id = engine.getSnapshot().store!.activeId
+    const stale = JSON.parse(JSON.stringify(storage.read())) as ConversationStore
+    engine.setMode("thinking"); engine.setSelectedMcpConnectionIds(["connection-selected"])
+    engine.setSelectedSkillSourceRefs(["skill-selected"]); engine.setModel("selected-model")
+    client.nextCreate = () => { expect(drafts.retired.has(id)).toBe(true); return Promise.reject(new SessionClientError("network", "unknown original")) }
+    expect(engine.submit("exact original")).toBe(true); await settle()
+    const first = client.createCalls[0]!
+    expect(first).toMatchObject({ sessionId: id, body: { content: "exact original", thinking: true, selected_mcp_connection_ids: ["connection-selected"], selected_skill_source_refs: ["skill-selected"], model: "selected-model" } })
+    storage.write(stale); engine.retry(); await settle()
+    expect(client.createCalls).toEqual([first, first])
+    expect(engine.getSnapshot().canRetryPendingSubmission).toBe(true)
+    engine.dispose(); buildEngine(stale, undefined, undefined, drafts); await settle()
+    expect(client.snapshotCalls).toEqual([id])
+    expect(engine.getSnapshot()).not.toHaveProperty("locallyCreatedSessionId")
+    expect(engine.getSnapshot().missingSessionId).toBe(id)
+    expect(client.createCalls).toEqual([])
+  })
+  it("does not lose an unknown original when stale draft metadata is followed by same-ID open", async () => {
+    const drafts = lifecycle()
+    buildEngine(null, undefined, undefined, drafts); engine.newConversation()
+    const id = engine.getSnapshot().store!.activeId
+    const stale = JSON.parse(JSON.stringify(storage.read())) as ConversationStore
+    client.nextCreate = () => Promise.reject(new SessionClientError("network", "unknown original"))
+    engine.submit("preserve frozen original"); await settle()
+    const original = client.createCalls[0]!
+    storage.write(stale); engine.openConversation(id); await settle()
+    expect(engine.getSnapshot().canRetryPendingSubmission).toBe(true)
+    expect(engine.getSnapshot().thread.messages).toMatchObject([{content: "preserve frozen original"}])
+    engine.retry(); await settle()
+    expect(client.createCalls).toEqual([original, original])
+  })
+  it("a failed retirement read cannot erase the before-POST persistence obligation", async () => {
+    const initial = { activeId: "conv_read_failed", conversations: [{ id: "conv_read_failed", title: "", updatedAt: 1, mode: "fast" as const, localDraft: true as const }] }
+    const drafts = { isUnsubmitted: () => false, retire: vi.fn(() => false) }
+    buildEngine(initial, undefined, undefined, drafts); await settle()
+    expect(engine.getSnapshot()).not.toHaveProperty("locallyCreatedSessionId")
+    expect(engine.submit("hold this input")).toBe(false)
+    expect(drafts.retire).toHaveBeenCalledWith(initial.activeId)
+    expect(client.createCalls).toEqual([])
+  })
+  it("a new conversation does not inherit the previous unsent storage error", () => {
+    const drafts = lifecycle(); drafts.retire.mockReturnValue(false)
+    buildEngine(null, undefined, undefined, drafts); engine.newConversation()
+    engine.submit("blocked draft")
+    expect(engine.getSnapshot().notice?.key).toBe("chat.localDraftPersistenceFailed")
+    engine.newConversation()
+    expect(engine.getSnapshot().notice).toBeNull()
+    expect(client.createCalls).toEqual([])
+  })
+  it("keeps input unsent when retirement cannot persist and allows a later explicit send", async () => {
+    const drafts = lifecycle(); drafts.retire.mockReturnValue(false)
+    buildEngine(null, undefined, undefined, drafts); engine.newConversation()
+    const id = engine.getSnapshot().store!.activeId
+    expect(engine.submit("do not lose this input")).toBe(false)
+    expect(client.createCalls).toEqual([])
+    expect(engine.getSnapshot().thread.messages).toEqual([])
+    expect(engine.getSnapshot().notice?.key).toBe("chat.localDraftPersistenceFailed")
+    drafts.retire.mockImplementation(value => { drafts.retired.add(value); return true })
+    expect(engine.submit("do not lose this input")).toBe(true); await settle()
+    expect(client.createCalls).toHaveLength(1)
+    expect(client.createCalls[0]).toMatchObject({sessionId: id, body: { content: "do not lose this input" }})
+  })
+})
 
 describe("提交链路", () => {
   it("首次提交：建会话、POST 契约体（idempotency_key）、回执锚定、事件折叠、终态收束", async () => {
@@ -3211,4 +3369,139 @@ describe("SET16 canonical task observer wiring", () => {
     client.lastStream().emit([makeEvent("run.completed", { status: "completed" }, { session_id: "conv_1" })]); await settle()
     expect(observer).not.toHaveBeenCalled()
   })
+})
+
+
+describe("current-conversation exact MCP selection", () => {
+  it("freezes IDs before async admission and preserves the original unknown-submit retry", async () => {
+    buildEngine()
+    const ids = ["connection:original", "connection:second"]
+    engine.setSelectedMcpConnectionIds(ids)
+    ids[0] = "connection:caller-mutated"
+    client.nextCreate = () => Promise.reject(new SessionClientError("network", "unknown commit"))
+    expect(engine.submit("use selected docs")).toBe(true)
+    engine.setSelectedMcpConnectionIds(["connection:later"])
+    await settle()
+    const first = structuredClone(client.createCalls[0])
+    expect(first?.body).toHaveProperty("selected_mcp_connection_ids", ["connection:original", "connection:second"])
+    client.nextCreate = () => Promise.resolve(makeReceipt("run_retry_mcp"))
+    engine.retry()
+    await settle()
+    expect(client.createCalls[1]).toEqual(first)
+    expect(engine.getSnapshot().selectedMcpConnectionIds).toEqual(["connection:later"])
+  })
+
+  it("publishes immutable transient selection, retains it on first admission, and clears it on explicit new/dispose", async () => {
+    buildEngine()
+    expect(engine.getSnapshot().selectedMcpConnectionIds).toEqual([])
+    const listener = vi.fn()
+    engine.subscribe(listener)
+    engine.setSelectedMcpConnectionIds(["connection:a"])
+    expect(listener).toHaveBeenCalledTimes(1)
+    expect(Object.isFrozen(engine.getSnapshot().selectedMcpConnectionIds)).toBe(true)
+    expect(() => engine.setSelectedMcpConnectionIds(["duplicate", "duplicate"])).toThrow()
+    expect(engine.getSnapshot().selectedMcpConnectionIds).toEqual(["connection:a"])
+    engine.submit("first conversation")
+    await settle()
+    expect(engine.getSnapshot().selectedMcpConnectionIds).toEqual(["connection:a"])
+    expect(JSON.stringify(storage.read())).not.toContain("connection:a")
+    engine.newConversation()
+    expect(engine.getSnapshot().selectedMcpConnectionIds).toEqual([])
+    engine.setSelectedMcpConnectionIds(["connection:b"])
+    engine.dispose()
+    expect(engine.getSnapshot().selectedMcpConnectionIds).toEqual([])
+  })
+
+  it("retires selection on navigation rather than reusing another conversation's tools", async () => {
+    let seeded = addConversation(null, "conv_mcp_a", 100)
+    seeded = addConversation(seeded, "conv_mcp_b", 200)
+    buildEngine(seeded)
+    await settle()
+    engine.setSelectedMcpConnectionIds(["connection:b"])
+    engine.selectConversation("conv_mcp_a")
+    await settle()
+    expect(engine.getSnapshot().selectedMcpConnectionIds).toEqual([])
+    engine.submit("no cross-conversation selection")
+    await settle()
+    expect(client.createCalls.at(-1)?.body).not.toHaveProperty("selected_mcp_connection_ids")
+  })
+})
+
+describe("cancel receipt is not a terminal", () => {
+  it("reads the existing owner snapshot once after202, accepting only exact terminal facts", async () => {
+    buildEngine(); engine.submit("stop me"); await settle()
+    client.nextSnapshot = async () => ({ ...makeSnapshot(), session: { ...makeSnapshot().session, session_id: "conv_1" }, messages: [{ message_id: "a", role: "assistant", run_id: "run_1", content: "prefix", status: "failed", terminal_status: "cancelled", created_at: "now" }] })
+    engine.cancelRun(); await settle()
+    expect(client.snapshotCalls).toHaveLength(1)
+    expect(engine.getSnapshot().machine.phase).toBe("idle")
+    expect(thread().runTerminalsById.run_1).toBe("cancelled")
+    expect(thread().messages.some((message) => message.content === "prefix")).toBe(true)
+    expect(client.controlCalls).toHaveLength(1)
+  })
+  it("keeps an unknown cancellation identity for explicit retry; pending202 alone never confirms cancelled", async () => {
+    buildEngine(); engine.submit("stop me"); await settle()
+    client.nextControl = async () => { throw new SessionClientError("network", "lost ACK") }
+    engine.cancelRun(); await settle()
+    expect(engine.getSnapshot().machine.phase).toBe("cancelling")
+    expect(thread().runTerminalsById).toEqual({})
+    client.nextControl = async () => ({ run_id: "run_1", command_id: "original", request_digest: "digest", status: "pending", replayed: true })
+    engine.cancelRun(); await settle()
+    expect(client.controlCalls).toHaveLength(2)
+    expect(client.controlCalls[1]).toEqual(client.controlCalls[0])
+    expect(engine.getSnapshot().machine.phase).toBe("cancelling")
+    expect(thread().runTerminalsById).toEqual({})
+  })
+  it("ignores cancellation snapshot after the actor/session engine generation retires", async () => {
+    buildEngine(); engine.submit("stop me"); await settle()
+    let resolve!: (snapshot: ReturnType<typeof makeSnapshot>) => void
+    client.nextSnapshot = () => new Promise((yes) => { resolve = yes })
+    engine.cancelRun(); await settle()
+    engine.newConversation()
+    resolve({ ...makeSnapshot(), messages: [{ message_id: "a", role: "assistant", run_id: "run_1", content: "retired", status: "failed", terminal_status: "cancelled", created_at: "now" }] })
+    await settle()
+    expect(thread().messages.some((message) => message.content === "retired")).toBe(false)
+    expect(thread().runTerminalsById).toEqual({})
+  })
+})
+
+it.each(["wrong-session", "wrong-run", "pending"])("does not confirm cancellation from %s snapshot", async (kind) => {
+  buildEngine(); engine.submit("stop me"); await settle()
+  client.nextSnapshot = async () => ({ ...makeSnapshot(), session: { ...makeSnapshot().session, session_id: kind === "wrong-session" ? "other" : "conv_1" }, messages: [{ message_id: "a", role: "assistant", run_id: kind === "wrong-run" ? "other" : "run_1", content: "", status: kind === "pending" ? "pending" : "failed", ...(kind === "pending" ? {} : { terminal_status: "cancelled" as const }), created_at: "now" }] })
+  engine.cancelRun(); await settle()
+  expect(engine.getSnapshot().machine.phase).toBe("cancelling")
+  expect(thread().runTerminalsById).toEqual({})
+  expect(client.controlCalls).toHaveLength(1)
+})
+
+it("late cancelled read cannot overwrite a consecutive accepted run", async () => {
+  buildEngine(); engine.submit("first"); await settle()
+  let resolve!: (snapshot: ReturnType<typeof makeSnapshot>) => void
+  client.nextSnapshot = () => new Promise((yes) => { resolve = yes })
+  engine.cancelRun(); await settle()
+  const firstRead = resolve
+  client.lastStream().emit([makeEvent("run.completed", { status: "cancelled" })]); await settle()
+  engine.submit("second"); await settle()
+  firstRead({ ...makeSnapshot(), session: { ...makeSnapshot().session, session_id: "conv_1" }, messages: [{ message_id: "old", role: "assistant", run_id: "run_1", content: "stale", status: "failed", terminal_status: "cancelled", created_at: "now" }] })
+  await settle()
+  expect(engine.getSnapshot().machine.runId).toBe("run_2")
+  expect(thread().messages.some((message) => message.content === "stale")).toBe(false)
+})
+
+it("does not adopt a cancel read over an acknowledged same-run follow-up before SSE advances", async () => {
+  buildEngine(); engine.submit("first"); await settle()
+  let admit!: (receipt: ReturnType<typeof makeReceipt>) => void
+  client.nextCreate = () => new Promise((resolve) => { admit = resolve })
+  expect(engine.submit("optimistic follow-up")).toBe(true)
+  let read!: (snapshot: ReturnType<typeof makeSnapshot>) => void
+  client.nextSnapshot = () => new Promise((resolve) => { read = resolve })
+  engine.cancelRun(); await settle()
+  const cursor = thread().resumeCursor
+  admit(makeReceipt("run_2")); await settle()
+  expect(engine.getSnapshot().machine.runId).toBe("run_1")
+  expect(thread().resumeCursor).toBe(cursor)
+  read({ ...makeSnapshot(), session: { ...makeSnapshot().session, session_id: "conv_1" }, messages: [{ message_id: "a", role: "assistant", run_id: "run_1", content: "old RR", status: "failed", terminal_status: "cancelled", created_at: "now" }] })
+  await settle()
+  expect(engine.getSnapshot().machine.phase).toBe("cancelling")
+  expect(thread().messages.some((message) => message.id === "run_2:user" && message.content === "optimistic follow-up")).toBe(true)
+  expect(thread().messages.some((message) => message.content === "old RR")).toBe(false)
 })

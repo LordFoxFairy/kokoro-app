@@ -1,3 +1,43 @@
+## Project resource item consumer (candidate)
+
+`src/features/app/project-resource-row.tsx` / `project-resource-detail.tsx`负责资源行、fresh metadata和显式永久删除确认；`use-project-resource-actions.ts`持document-local原命令及actor/project/route fence，`use-project-resources.ts`持ACK后精确负事实与fresh列表。`project-resource-access.ts`仅走same-origin固定生成decoder；原生attachment仅报告started、无inlineHTML/SVG。固定契约与实际验证见本轮收据，不将候选称正常已生效。
+
+Prepare恢复（2026-10-24，已正常加载）：`src/ui/mcp/mcp-preparation-recovery.ts`负责非秘密IndexedDB事务，既有preparation commands/详情负责主体及窗口核验、显式原命令恢复；正常只读已验，未知恢复和原回执仍待验，见CURRENT。
+
+MCP试用（2026-10-24）：`src/ui/mcp/mcp-trial-context.tsx`桥接详情和现AppFrame；`src/components/blocks/app-frame/use-app-frame-mcp-trial.ts`隔离主体/路由寿命及新草稿exact Connection交接，Try不再冒Prepare。真实证据/未验范围见 `docs/CURRENT.md`。
+
+CHAT-1（2026-10-24，正常局部已验）：`src/engine/submission-recovery.ts`与`src/ui/shell/browser-submission-recovery.ts`分离恢复意图和浏览器I/O；原engine/actions接纳/URL与失败恢复共同修复，首发失败刷新、归档误警和待确认侧栏正常已验；成功创建/Agent整链仍开放，详见CURRENT。
+
+UI-1（2026-10-24）：`src/components/blocks/workspace-rail/workspace-rail-shell.tsx`负责断点切换的导航焦点交接，包括CSS先隐藏但节点仍连接的旧入口；主动移焦/blur与移动抽屉自动焦点的返回归属分开。事实及未验范围见`docs/CURRENT.md`，不新增全局焦点框架。
+
+## 2026-10-24 MCP 描述多行消费修复
+
+真实发现的 tool/resource/prompt `display_name` 可包含换行；既有 schema 仅对返回声明接受合法多行，selectors、请求名称和凭据单行规则及UTF-8/控制字符保护不变。原创建/准备事实不重发，正常只读详情GET已恢复；实际MCP运行时部署面缺失及验证范围见 [CURRENT](docs/CURRENT.md)。
+
+## 2026-10-24 Agent 待核对终态（候选，未正常激活）
+
+固定BFF `b0f201e99c2ae3fa213942c5a909f47b06640a02`／Public23.1／raw `703dba47da8a5c659b4236bb0a72317588ad29a4ca444ff9e5c99cfbcd00634b`。原186操作不变；七public窄消费者正规生成，ChatMessage／RUN_ERROR只承接新增model_settlement_pending且retryable=false，未知／坏profile保持拒绝。既有ConversationThread与九语言保正文并说明结算待核对，不猜已扣款／释放、不给终态重发动作、不改历史generic。完整23.0父字节逆证及原证明链保持，在线Docs固定同一发行物。完整工程／正常激活状态见[CURRENT](docs/CURRENT.md)。
+
+PROJECT-1（2026-10-24）：显式会话深链接缺席由 engine 记录观察、现有导航／错误面投影，保持地址且不退成默认页；new 与 unknown create 保护、原 ID 重读及 deferred ACK 恢复见 `docs/TECHNICAL_DESIGN.md`。真实验收与完整项目剩余项见 `docs/CURRENT.md`。
+
+## 当前精确模型绑定（2026-10-22）
+
+固定BFFa77276b／Public23，七原public生成器、tests/contract/bff-metering-parent.ts完整父保护及在线Docs同步；生产桥无变更。主方停写工程／preview／Docs证据及未激活边界见[CURRENT](docs/CURRENT.md)，下方按历史读取。
+
+## AGENT-1／CREDIT-1 计价管理同源接线（2026-10-22，本地候选）
+
+固定BFF4d8a028／Public22.5／186操作；三具名计价管理通路沿原Product Session，复用 `admin-billing-proxy.ts`，原充值16KiB不变，新计价1MiB／同绝对预算。七public生成器与App在线Docs同步；完整工程、108项preview回归及Docs45测试／链接检查已验，正常后台／Agent结算仍待，详见 [docs/CURRENT.md](docs/CURRENT.md)。原MCP WIP未夹带；以下版本段保留历史，不覆盖本节。
+
+## CREDIT-1 管理员积分同源通路（2026-10-22，本地候选）
+
+唯一canonical固定BFF `c48a9bca07a2bb48fb5db46272ff71aab90e14ce`／Public22.4.0／183，SHA256 `f6b8f3bd250c144a2d648af94c9fd5fe068db33991a4289b849a077eef009f32`；七个既有public窄生成器正规重出／check，独立connector错误profile未改。新test-only精确逆回原22.3全文和182项顺序，再进入未改旧父hash证明，不是运行兼容。
+
+`admin-credit-proxy.ts`仅为当前租户成员GET与非现金充值POST接原Product会话；不扩identity/billing前缀，不解析／换算资金DTO，不自报tenant/actor，不自动重试或修改原body/key/时间。复用原有限传输，16KiB请求、1MiB响应、body→session→ACK EOF同10秒绝对预算；取消／迟到／未知返回未确认，不造成功。源码位置与内部边界见 `src/lib/server/INDEX.md` 和三面设计。
+
+主方停写完整七门均exit0：contract302、architecture50、250文件4721测试PASS／0SKIP，默认Turbopack build和post-types通过；独立preview桌面／移动108 E2E PASS，零重试，官方typegen恢复后1143非文档输入SHA256无漂移。新11项真实loopback薄桥与原Admin／模型24项、两个契约用例共37 PASS。独审无确定P0–P2；Product session在loopback中为显式夹具，不冒正常资金／登录旅程。旧固定pin断言与新test-only数组strict类型失败保留，按新正式pin／准确测试类型修正，未放宽门禁。
+
+App在线Docs固定同源契约，177公开操作／369schema、原6私有操作不发布；新增积分与非现金充值指南。完整Docs check通过（44测试、五例、确定性生成／架构／构建，54HTML／17654内部链接），构建仍有原大chunk警告。未将normal运行、模型／工具或实际扣分算作本片完成；正常后台→App→BFF→Billing旅程紧接验证，真钱支付不做。原四MCP视觉WIP已独立保存，本片不包含它们。
+
 ## MODEL-1 Admin上游发现同源桥候选（2026-10-22）
 
 现 `src/app/api/admin/[...path]/route.ts` 仅新增精确 provider UUID 的 `upstream-models` GET，沿Product Session/配置Domain/BFF管理权限与原request-id/no-store；拒query、body framing（含CL0）、Content-Type及命令头。准入至完整响应EOF共10秒/1MiB，取消不晚发请求，无Key、模型执行、自动发布或新持久事实。真实loopback薄adapter新增15项及原Admin9项均通过；正常浏览器/完整owner链由主方后续配对，不以此称UI已验收。

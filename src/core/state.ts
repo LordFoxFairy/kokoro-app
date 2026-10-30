@@ -23,6 +23,8 @@ export type SessionMessage = {
   id: string
   role: "assistant" | "user"
   content: string
+  // Only an authoritative whole body can establish completed text; END has no body.
+  textState?: "streaming" | "completed"
   // 该消息所属 run；用于把同一 run 的连续 assistant 段归并到一个 turn（用户消息以自身 id 充当）。
   runId: string
   // id is the local render anchor. A resumed segment may rebind that anchor;
@@ -30,6 +32,7 @@ export type SessionMessage = {
   snapshotMessageId?: string
   // Only the unique assistant prefix of an active snapshot run can be claimed.
   awaitingTextSegment?: boolean
+  orderedContainer?: boolean
 }
 
 // 结构化终态收口：stale-*（run 终态时仍悬挂）与 cancelled（用户停止）零 UI 文案，人话由渲染层生成。
@@ -65,12 +68,17 @@ export type SessionSubagent = {
   error?: string
 }
 
-// 有序 Step：过程与文本按 session 落定的 seq 排成一列，而非按 kind 归桶。
+// Step position: string = exact public-ledger decimal; number = legacy local
+// render anchor only. Legacy anchors never establish an ordered-read revision.
+export type StepPosition = number | string
+// 有序 Step：过程与文本按 session 落定的位置排成一列，而非按 kind 归桶。
 export type SessionStep =
-  | { kind: "thinking"; seq: number; segmentId: string; text: string }
-  | { kind: "tool"; seq: number; segmentId: string; tool: SessionToolCall }
-  | { kind: "subagent"; seq: number; segmentId: string; subagent: SessionSubagent }
-  | { kind: "text"; seq: number; segmentId: string }
+  | { kind: "thinking"; seq: StepPosition; segmentId: string; text: string }
+  | { kind: "tool"; seq: StepPosition; segmentId: string; tool: SessionToolCall }
+  | { kind: "subagent"; seq: StepPosition; segmentId: string; subagent: SessionSubagent }
+  | { kind: "text"; seq: StepPosition; segmentId: string }
+  // Only a newly observed live activity has a known first public position.
+  | { kind: "activity"; seq: StepPosition; segmentId: string; activity: RunProcessActivity }
 
 // session.created 投影：sessions 集合的真实元数据（标题真源在服务端）。
 type SessionMeta = {
@@ -99,7 +107,15 @@ export type SessionDelivery = {
   note?: string
 }
 
+export type MessagePartsState = {
+  finalSegmentId?: string;
+  messageId: string; runId: string; revision: string; cursor?: string;
+  descriptor?: true; confirmedSlots?: Readonly<Record<string, string>>; confirmedRevision?: string; watermark?: EventCursor | null; partIds?: readonly string[];
+  status: "unread" | "loading" | "partial" | "complete" | "changed" | "failed";
+}
 export type SessionStreamState = {
+  finalAnswersByRun?: Record<string, import("./final-answer-reference").FinalAnswerReference>
+  messageParts?: Record<string, MessagePartsState>
   executionHead: ExecutionHead | null
   interactionsByRun: Record<string, InteractionState>
   // 工作区文件清单（snapshot 水合；终态后重拉刷新）。
@@ -116,6 +132,8 @@ export type SessionStreamState = {
   runStatus: "idle" | RunCompletedStatus | "failed"
   // 已验证的安全失败按 owner run identity 索引；不保存 producer message、exception 或 stack。
   runFailuresById: Record<string, AttributedRunFailure>
+  // Exact owner Run terminals are independent of text/parts completion.
+  runTerminalsById: Record<string, "completed" | "cancelled" | "failed">
   // public snapshot 允许 failed assistant 没有 run_id；保留真失败但不伪造轮级归属。
   unattributedFailure: RunFailure | null
   // 在途 run 显式字段：snapshot 水合置位、匹配终态清空。
@@ -128,8 +146,30 @@ export type SessionStreamState = {
   meta: SessionMeta | null
 }
 
+// A retained page Engine can outlive a hot module update. Retire its old RAM
+// field on the next pure write; only previously confirmed cancellations migrate.
+// Text completion and the single current runStatus never establish a terminal.
+export function normalizeRunTerminals(state: SessionStreamState): SessionStreamState {
+  const hasLegacy = Object.hasOwn(state, "cancelledRuns")
+  if (state.runTerminalsById !== undefined && !hasLegacy) return state
+  const terminals: SessionStreamState["runTerminalsById"] = state.runTerminalsById ?? {}
+  if (state.runTerminalsById === undefined) {
+    const legacy: unknown = Reflect.get(state, "cancelledRuns")
+    if (legacy !== null && typeof legacy === "object" && !Array.isArray(legacy)) {
+      for (const [runId, value] of Object.entries(legacy)) {
+        if (value === true) Object.defineProperty(terminals, runId, { value: "cancelled", enumerable: true, writable: true, configurable: true })
+      }
+    }
+  }
+  const normalized = { ...state, runTerminalsById: terminals }
+  Reflect.deleteProperty(normalized, "cancelledRuns")
+  return normalized
+}
+
 export function createSessionStreamState(): SessionStreamState {
   return {
+    messageParts: {},
+    finalAnswersByRun: {},
     executionHead: null,
     interactionsByRun: {},
     files: [],
@@ -142,6 +182,7 @@ export function createSessionStreamState(): SessionStreamState {
     stepsByRun: {},
     runStatus: "idle",
     runFailuresById: {},
+    runTerminalsById: {},
     unattributedFailure: null,
     activeRunId: null,
     lastSeq: 0,

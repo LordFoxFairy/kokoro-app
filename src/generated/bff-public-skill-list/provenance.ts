@@ -1,8 +1,8 @@
 // Generated from the fixed BFF canonical artifact. Do not edit.
 export const publicSkillListProvenance = {
-  "ownerCommit": "e461d5178c6bf92558d7cd7dd288cb29cb008525",
-  "sourceSha256": "727159cea88e9f70ca3d1127306e8a6a6bcaa568398de8b0d8fec1cce6b3fae3",
-  "version": "22.3.0",
+  "ownerCommit": "853ca9a5d8da3500b0c37543c72198a520e46225",
+  "sourceSha256": "ea0031103488daa1fcc0cca45fdd13f4d4061546ac4525c745ec47105649f7e7",
+  "version": "28.17.0",
   "operationId": "listSkills",
   "method": "GET",
   "path": "/v1/skill.list",

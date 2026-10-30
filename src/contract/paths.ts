@@ -68,3 +68,7 @@ export function scheduledTaskPath(taskId: string): string {
 export function scheduledTaskRetryPath(taskId: string): string {
   return `${scheduledTaskPath(taskId)}/retry`
 }
+
+export function messagePartsPath(sessionId: string, messageId: string): string {
+  return `/sessions/${opaquePathSegment(sessionId)}/messages/${opaquePathSegment(messageId)}/parts`
+}

@@ -1,3 +1,290 @@
+## Custom API发送与私有恢复（正式Public28.17消费者候选）
+
+固定BFF853ca9a5d8da3500b0c37543c72198a520e46225，唯一全snapshot SHAea0031103488daa1fcc0cca45fdd13f4d4061546ac4525c745ec47105649f7e7。MessageCreateRequest与private composer_selection均可选selected_custom_api_profiles:[{profile_id,expected_state_version}]，≤32／profileID唯一／closed；版本为整数1..2147483647，不接字符串、分数、零、溢出、说明或凭据。原generator派生schema同时用于发送、本地原K恢复、snapshot decoder；空选择省略保持原无选择JSON/digest。
+
+仅当前本人列表profile_id/state_version/name/icon用于候选，列表/configured不授予执行权限；内部canonical string版本与formal int32精确转换。恢复只用source_message_id绑定原normal用户dispatch，先current列表原ID+原version再恢复；缺省不回捞旧选择、不将profileID送MCP IDs。Shared仍拒composer字段，私有授权/同源/请求预算不变。test-only从正式owner projector精确逆回完整28.16(82485c2b…418a77)，再承接原父链；无运行兼容fallback，未因此宣称normal已启用。
+
+## Public28.14 最终段消费
+
+固定 BFF15cc9e1bd50128db7d16e0cf3916c6ab4d037149，完整原件SHA256 921be666a3bd570eb984503528d9ee713e3739cc8525e2e1c2f46c96fa161a05。只有成功RUN_FINISHED.result与私有ordered rendering/page可带非空final_segment_id；字段缺席表示未知。引用不授予工具权限，不扩大Share、命令或路由。严格同页版本/水位/引用与原页面预算；完整逆回28.13原件后保留旧证明。
+
+## 2026-10-28 Public28.13 动作意图消费者（未激活）
+
+固定正式BFF83978e7340357a25e64aa98d12c9bb34c07ad3a4，完整原件SHA30b288a7f719ec1d5a6f85c70ad80f18bbbce614fbdad1412d1ff3de7a0b2f9c。原窄生成器更新，私有独立发行不改；test-only完整28.13→28.12逆差再接全部既有父图，不作运行fallback。action_title仅tool可选，严格256 UTF-8字节/无首尾空白/控制格式代理字符或明确私密内容；tool_description仅exact MCP target的两个具名工具，1024字节原previewflags。Share仍process=null。沿现AG-UI/parts/read同源调用，无新增endpoint或身份。
+
+## RunDisplay activity_details（正式Public28.12消费者）
+
+唯一BFF原件固定 `fb9dc4df1679e2d7c97842efcd2fb3bcae297939`／28.12.0，SHA256 `86638da86d786e91c81da9e5dd891dee88ef2ca033579866f5ebc6dd6113c00f`。原有私有Run GET增required activity_details≤128，activity_id唯一；closed item required activity_id/tool_name，optional owner安全target与input_preview/output_preview。预览为原件派生text/truncated/redacted闭集，UTF8分别2048/4096；file-only path与basename规则保持。字段缺失仅表示未知，preview不是普适secret-free保证，不进入Share、AG-UI消息正文或执行授权。
+
+12既有公共生成链正规重出，独立五private/policy3保持。test-only完整28.12→28.11逆证再进原父证明；HTTP不接受旧缺字段wire。App仅当前受信scope+Run/activity读取与展示。MCP结果可用无资源加载的Markdown排版；原始记录仍纯文本，不把URL、HTML、路径或预览里的指令解释为动作。正常运行与浏览器资格由Root配对记录。
+
+## RunDisplay tool_facts（正式Public28.11）
+
+唯一原件BFF d629653cbf5799a44db55a947321a6ec152b7dcd，SHA256 4d93ec15e2931768afafffb2101039b1da64757ea48c760d16ef88aa8753db16；路径／权限／错误／预算与GET副作用语义不变。required tool_facts≤128、activity_id唯一；closed item必须有display_detail和／或status，detail仅既有安全mcp_tool name，status仅failed。null、空item、未来status／kind／额外字段均拒；不是Run终态或完整性证明。safe secret matcher仅sk[-_]项改为(?<![A-Za-z0-9])sk[-_]，不特判literal名称。正式decoder不接旧缺省wire，旧RAM空集规范只在纯mapper；五private／独立policy3保持。新exact raw inverse完整回Public28.10后复用旧证明链。
+
+## 回答动作与私有Run展示（正式Public28.10消费者候选）
+
+固定正式BFF `0b67e0eab4918264a7270b828d558e631bdfb3f5`／Public28.10／SHA256 `9e6a8dddea847ecfd2905f378f4f76022b6cc49a1a4352a2e7abb4e73b3f1328`；既有tool-display generator同时派生closed action／display validators，无第二wire源。`GET/PUT /api/session/sessions/{id}/messages/{messageId}/feedback`映射同名`/v1`，PUT仅`{feedback: up|down|null}`自然幂等。`POST .../{messageId}/regenerate`仅`{}`＋原Idempotency-Key；202返回new run/assistant、original user关联及regenerated_from_message_id，不是成功终态或human镜像。private MessageRead的source关联不扩普通ChatMessage／share。
+
+`GET /api/session/sessions/{id}/runs/{runId}/display`只读本Run facts，不表示完整性；精确身份与10秒绝对预算贯穿准入／body／owner EOF，取消／UTF8／重复键／长度／status／响应关联严格核。feedback unknown只GET，regen unknown只同K显式POST恢复；正式closed4xx拒绝与可能postcommit权限拒绝区分，不借错误码造未提交事实。
+
+真实safe activity的新字段同时严格适用于AG-UI／snapshot／ordered parts：ready Skill display_skills必须唯一且为原source_refs子集，native name/path及可选decimal revision；file detail virtual_path只file可用、MCP禁止，旧absence未知。private按需Run GET不进入Shared读或snapshot批量扇出。test-only精确28.10→完整28.9逆回后承接原全部父证明，普通API／旧private/policy原件保持。
+
+## 私有取消终态（消费者候选）
+
+Private ChatMessageRead 仅允许 optional terminal_status=cancelled；限定 assistant、failed、非空run_id且无failure，inline与ordered一致。缺省保持原failed语义，null与其它值拒绝；public ChatMessage／share／command不扩字段。RUN_FINISHED cancelled同义，202只admission，不推断正文或parts完整。唯一正式来源BFF `51e049df72c1fb2fe82b9114135c2fdc1a3450d9`／Public28.9／SHA256 `b438a749c919d24c4e0f1dadfdbcbbb11e0ac755f5785c543a661336c2cbb354`。完整test-only28.9→28.8逆回父SHA6376e2d2…承接旧风险；普通ChatMessage、command、share及五private／独立download policy3原件不变。
+
+## Project Skill content：Public28.8 与私有下载资格／bytes policy3
+
+固定 BFF364f80cab855a4358eab956b7e3e3a4b5bae647b：Public SHA256 `6376e2d2a5fa9efd8e6ce4d9d4aa3686ad73dda8babffd9ac5b7097073538498`，独立 policy3 固定 BFF966ec5e7b0804185349a5f5413091d8e9e792bc9／SHA256 `4b84ccddb70421fc3f5f48766c4fd87fafb7d94f00eb9774f75b627f4f361925`。`GET /api/hub/projects/{projectId}/skill-installations/{installation_id}/package`（唯一 optional file_path）与 zero-body `POST .../download` 分别映射正式 `/v1/.../package` 与 `/browser/v1/.../download`。dispatcher 先于个人 package catchall；Product Session、可信 headers、10秒绝对准入至 EOF、1MiB JSON、取消／长度／UTF8／重复字段与严格响应闭集保持，不透传浏览器身份头。
+
+Project metadata、目录、文件与下载 descriptor 必须对应原 installation/source_ref/revision；路径只解码一次，文件仍过现 NFC／UTF8 256byte／排序／大小与 exact manifest 匹配。只有正式 package inspection 的 `412/skill_package_precondition_failed/retryable=false` 被接受；不得借 metadata union 给 opaque GET bytes 加412。policy3 的 byte_operation 单独生成 GET `/api/skill-downloads/{handle}` 验证：32MiB／UTF8 filename255byte、精确附件与必需安全 headers、bare／typed 各自错误形状、完整错误 EOF／长度、合法 Retry-After；不借 POST metadata／Share union。原 opaque path、流式取消、断流不拼 JSON 及10秒预算保持。四 POST 完整逆回 policy2 摘要454d，Public 全文6376不改。五个独立 private394 pin 不升级；新消费者尚不代表正常启用。
+
+## GitHub discovery：Public28.7目录候选边界
+
+唯一完整原件固定BFF `d040eb04c5875eec2ade19be947435071dca2a5e`，SHA256 `818dfe54d5eb50a72725983be136211c63bb17fa7392f94c5c1d46234db3ebd1`。仅 `GithubSkillResponse.data` selection_required=true 的 paths.maxItems=512；129／252／512保完整，513为invalid wire而非slice。`SkillPackageInspectionData.files.maxItems=128`及selected Preview、请求、路径、commit、duplicate、权限、error/status、幂等键和1MiB总响应限制不变；无新API／游标／分页。正式snapshot与11public正规生成消费同一原件，五private394不改；正常配对由Root另验。
+
+## S13：Hub 可选发布者事实（Public28.6，2026-10-27）
+
+固定 BFF `7f5c522b54762c5c0a01ffa7f71f5696eb4c70f6` 的唯一 canonical OpenAPI，SHA256 `a020e849f740165fa20099f5ab041b76bc480c70a9bbc067955e57f5ec22ae02`。`SpecificationHubResponse.skills[]` 新增 optional `product→Public9SkillProductFacts`、`publisher_profile→SkillPublisherProfile`，保原 closed 字段与身份。product.publisher 为 IAM 时必须有同 kind/id 的 found／合法 user missing profile；非 IAM 不接受 supplied profile。absence 仍未知；坏 ref 绑定／extra／union 是 invalid wire，不作为成功且省略作者。单一 additive reader 无历史专用 schema 或 required 迁移。
+
+仅新 Hub／Catalog refinement 复用正式 owner 闭集：source_kind 与 publisher 同有／同缺；third_party 必须 repository publisher＋github creation provenance、同 repository_id、github_repository presentation；personal／official 必须 IAM＋first_party。混合来源／缺 provenance／错 repository 仍 invalid，不改变共享 Product schema 其它消费者。
+
+11 现公共 generator 的固定 commit／digest 同步更新，private pin 不变。test-only 精确 28.6→28.5 仅移除本次两字段并还原 info.version，先核完整当前 SHA、再恢复完整父 SHA，之后进入未改旧证明链；不是运行兼容或 generic strip。HTTP 请求、权限、时限、缓存与写操作均不变。
+
+## PREPARE-OUTCOME：独立政策1.0＋lookup1.1（2026-10-27，正式394a消费候选）
+
+唯一源为 BFF `394ae559cd2018206c32d5ca3014de248effa203` 正式 `contract/mcp-prepare-outcomes-v1.json`（SHA256 `5169cbf5e431cc71a23e2717bda9b51c77f08bed82cae149667532511b3afe72`）及 `contract/openapi/browser/v1/mcp-prepare-receipt.json`（`97ac49936f7107ba5f25b9237997642069693b1e6d0b6dd38034718636ee6112`）。两 source pin／raw snapshot／TS 分别正规生成，lookup 必须引用 exact outcomes digest 与同 BFF commit。原件内 owner_feature 属 Platform f294，不将它误作 BFF pin；共享 connector错误／Public不变。
+
+- 初次 `prepareServer` POST 仅新增 `412/mcp_personal_prepare_rejected/false`，原 GET `getMcpPrepareReceipt` 可新增该 tuple 及 `409/mcp_personal_prepare_execution_fenced/false`。Hub 与 same-origin adapter 各自按方法严格闭集；POST5、其它 mutation4／5、错 status／retryable／开放 shape 均拒。原 trusted Session／同源准入、key、CAS、10秒绝对预算、取消和严格 JSON不变。
+- lookup `negative_ack=true` 仅 scoped `prepare_connection_rejected_typed_error_only`；`completed_only` 仅 `success_wrapper`。fenced 仍 unknown，automatic_intent_retirement_authorized=false；无自动重试、新命令／Prepare授权。成功仍严格 ready／needs_oauth＋replayed true 原绑定，不新增 negative DTO 或 synthetic Current。
+- façade 退休动作捕获 exact 原 record；retireWaiting 的 committed immutable record 是唯一退休事实。typed rejected 自动 failed archive，typed fenced 只允许用户显式 stopWaiting。任何退休不得走 generic command success／complete／onConfirmed。原严格成功链与 completion.via 保持。
+- listRetired／inspectRetired 仅窗口作用域历史读；历史 GET 固定原 key／CAS／server／connector，结果只显示，不清 active K2、不生成 locator／授权限／导航。分页沿稳定 primary-key cursor，不声称时间倒序。
+- 新连接是另一显式动作：fresh exact Current／provider／manage gate＋fresh CAS＋不同 crypto key；旧 retry／原查询／归档／历史按钮绝不隐式起 K2。并发已有 active 只合并展示 unknown，不由此旧动作 execute。
+
+无新 wire owner／后端表／通用状态或新 IDB 版本；当前源码候选与 Root 正常配对验收分开。
+
+## PREPARE-JOURNAL-V2：feature 本地 port，不新增传输（2026-10-27，Root 已核引用槽；存储候选）
+
+本节不是 HTTP／RPC contract。现正式 BFF `6557f189`／receipt1.0 及所有 generated/pin 不变；后续方法专属 POST reason4、query reason4／5 只由正式 BFF 原件生成，本片不定义其 wire 字段或数值 enum。以下只是 IDB adapter 的非秘密领域接口，不能由任意 HTTP status／message／Current 推导退休资格：
+
+```ts
+type McpPreparationDisposition = "unknown_fenced" | "definite_rejected";
+type McpPreparationPolicyRef = Readonly<{
+  artifact_sha256: string; profile: string; version: string;
+}>;
+type McpPreparationRetirement = Readonly<{
+  disposition: McpPreparationDisposition;
+  policy_ref: McpPreparationPolicyRef;
+}>;
+type McpPreparationHistoryCursor = Readonly<{
+  subject: string; serverId: string; key: string; version: string;
+}>;
+// base McpPreparationRecovery 保持原样；factory 返回扩展 McpPreparationJournal：
+retireWaiting(record: McpPreparationRecord, retirement: McpPreparationRetirement,
+  signal?: AbortSignal): Promise<McpRetiredPreparationRecord>;
+getRetired(record: McpPreparationRecord): Promise<McpRetiredPreparationRecord | undefined>;
+listRetired(subject: string, serverId: string,
+  options?: Readonly<{ limit?: number; after?: McpPreparationHistoryCursor }>):
+  Promise<Readonly<{ items: readonly McpRetiredPreparationRecord[];
+    nextCursor: McpPreparationHistoryCursor | null }>>;
+```
+
+`policy_ref` 是固定本地引用槽：artifact_sha256 为 lowercase 64-hex，profile／version 为 1–128 个非空格 printable ASCII；值由以后正式 consumer 从其已验证生成政策填入，不设任何当前候选值、默认 pin 或 reason enum。存储层只验证 closed shape、相等性及原命令身份，不将该槽当授权或网络证明。`retireWaiting` 只在事务 commit 后返回历史记录；失败 reject，不调用成功回调、不返回新 key／CAS／发送许可。重复 exact 退休返回原不可变历史，仍不是 K2 资格。reserve 有 active 时仍返回已有记录；仅无 active 时，在同一双 store 事务先查 exact retired primary key，存在即拒同 K/CAS 重建（不因换 connector 绕开）。不同 CAS 重用旧 key 的全局防错仍由后继不同 crypto K 及 owner 原 key/CAS 守卫，不新增索引。
+
+只读列表限可信当前 subject＋server，limit 默认20／最大50，以 subject_server index 内 primary key 正序续页（不是按本地时间承诺顺序）。cursor 保原 subject／server／key／CAS，入参须与本页 subject／server exact 相等。用 openCursor／continuePrimaryKey 对非 unique index＋唯一 primary key 原生 seek，不 getAll／全扫排序；最多读取 limit+1 个结果及常数次 seek，校验每条 closed record 与 key 一致。相同静态历史集合不重漏；并发新插入由新一轮第一页读取，不承诺跨事务全局 snapshot。getRetired 始终按原 identity 精确读。具体持久 codec 与原子约束见 [数据设计](DATA_MODEL.md) 本节；读取历史不进入 active restore 或请求重放。
+
+## Prepare completed 只读恢复 （2026-10-27，正式原件消费者）
+
+本节取代旧 Prepare inspection→POST replay 的恢复约定；其它 Register／Update／发布和通用错误恢复不变。正式 BFF `6557f1895d4e1a4f6d2ad9e9e37ca4fc18371d45` 的独立私有原件 `contract/openapi/browser/v1/mcp-prepare-receipt.json` 固定 SHA256 `ad1f842626677c97ee3734aff3663f296cc9c58ccfe886ae116abf8f8b991810`，由具名 generator 派生 closed schema、policy 与 error tuple，public 与其它 private pin 不变。owner 边界如下：
+
+- BFF：`GET /browser/v1/mcp/servers/{id}/prepare-receipt?expected_state_version=<原CAS>`，携原 `Idempotency-Key`，只读原结果；不触发 Prepare、外部 I/O、重试、新 key 或 CAS rebase。
+- App 同源入口：`GET /api/hub/mcp/servers/{id}/prepare-receipt?expected_state_version=<原CAS>`。只允许该精确 GET 使用原 key header；query 必填且唯一、合法原 CAS，无额外身份／query/body，无 body／Content-Length／Transfer-Encoding。其它 GET 禁 Idempotency-Key 的原规则不放宽，不把 GET 归类成 mutation 或伪造 JSON body。
+- 沿原 Product Session 当前准入及受信身份映射到 BFF；显式转发已验证原 key、仅该 query，保原 no-store、10秒 admission→完整 EOF 总预算、有界响应、fatal UTF-8／重复键拒绝、取消／迟到与安全错误映射。读取失败不能自动 fallback POST。
+- 仅 `data.completed` 承载原 Prepare ACK且 `replayed=true`，严格验证 closed shape、原 server/connector、原 CAS/key 所定位命令和 ACK 内部一致性。复用原 Prepare 的历史 replay 校验，不把历史 ACK 当 fresh Current，不因 current CAS 已前进而替换原 query CAS；不扩展成泛 optional transport／宽松 ACK。
+- 不新增 negative/completed=false 的成功分支。missing／expired／旧 failed marker／无可验证终态、非正式 tuple、损坏或不匹配响应全部保真实 unknown；HTTP GET 200、本次 fresh ready 或当前版本都不是原 receipt。
+- 唯有 exact completed＋本地 journal compare-by-key clear 成功才完成原意图；clear失败不重基也不伪完成。历史完成不授当前连接／执行／配置权限，后继 fresh 读取和显式新操作仍走原权限与 CAS。
+
+正式 private policy将 Prepare恢复精确收敛为 lookup_only；App同时替换旧 `prepare_inspection_recovery` 放行路径，不能只改一个按钮，亦不能让既有 same_command fallback产生POST。状态码／code／retryable闭集与该政策必须从同一正式原件生成，保其它原 tuple、旧版本证明与已有公共发行物，生成器校验原件全文 digest、政策及闭集，拒绝字节或语义漂移。
+
+验证须同时覆盖 client＋same-origin route＋命令／全部创建和详情恢复入口：该 GET 只携原 key/query，其它GET仍拒key；零自动POST、严格 completed绑定、历史CAS、body/framing／query重复与缺失、慢 admission/body总预算、取消／主体退休、clear失败、跨tab新key保护；mock 不称正常完成恢复。
+
+## PROJECT-PIN：正式BFF个人偏好消费 D0（2026-10-27）
+
+唯一完整artifact固定BFF c195d2325ba9c433cc4c64e25e6c67eaf73c47f6／Public28.5／194操作，SHA256 109a2ae063b10699ae52776b09533c5622d906679c093d65730a289206043b1a；同snapshot正规生成，原三private pin不动，test-only完整28.5→28.4逆证再委托旧链。浏览器只新增GET /api/hub/self/project-pins（分页limit/cursor或互斥单project_id）与PUT /api/hub/projects/{id}/pin（closed {is_pinned:boolean}，≤1KiB，无key/CAS/query）。沿现Product Session／部署Domain／same-origin写防护，10秒admission至完整EOF、64KiB响应、取消及静态异常；generated schema核目标、bool/null条件、分页顺序/唯一性与方法fault。pin不授可见权，不改Project DTO。
+
+验证：先正式pin/schema行为RED，窄生成器确定性/check、client/hook/rail focused、真实loopback薄桥；Root独立统一门、正常资源/浏览器/Git。本阶段不以mock或源码完成称正常已验。
+
+## 2026-10-27 Public28.4 安全工具对象与共享隔离（本地消费者候选）
+
+唯一原件固定 BFF `3d52a90ec42601a19536e95a8b9e48f93a63276c`／28.4.0／192 operations／SHA256 `48aa9638d133223c9f78655e9398ddbb44159963f92a2db891a09212f3aa2726`，十公共生成链与在线 Docs 同源，独立 MCP 私有 artifact 不改。optional `RunToolActivity.display_detail` 仅 closed `{kind:file|mcp_tool,name}`；name 为 1–120 Unicode scalar、≤480 UTF-8 bytes、NFC 且禁 Cc/Cf/Cs。code-kind 与 file-only basename pattern从 canonical allOf 条件正规派生；MCP 工具名称可含斜线。App 严格拒 null／extra／未知 kind／不匹配类别，不修正、截断或从参数补名称；旧 absent 保持合法。live／snapshot／parts 共用一份 validator，名称仅纯文本展示，不新增请求／endpoint／授权／执行事实。
+
+匿名 `SessionSnapshotResponse.execution_process` 及 public example 正式仅 null；App shared z.null，private snapshot extend 单独恢复 nullable process。canonical optional execution_head 不在本片删除；SharedThread 在私有 hydration 前显式去 head，公共消息仍不接受 private rendering／parts，匿名 UI 不取得私有进度。正式新旧全文逆证与原父 hash 保留；完整正常激活及后端闭环不由消费者门禁代证。
+
+## 2026-10-27 具体动作安全对象候选消费／分享隔离（D0；待正式 owner 发行）
+
+当前正式消费者仍是下节 BFF Public28.3；Agent8.2／Public28.4 仅后继依赖，未取得正式 commit 与完整原件／摘要前不更新生成物、运行 schema 或手写 wire DTO。候选工具活动沿现唯一 AG-UI／snapshot／ordered parts 增 optional `display_detail {kind:file|mcp_tool,name}`，名称上限 120 Unicode scalar／480 UTF-8 bytes 并由源边界限定；最终字段、校验和 provenance 以正式 owner artifact 为唯一来源。App 十条既有公共生成链从同一 Git blob 原件正规更新，保独立 MCP 私有 pin 与旧父证明；旧 absent 合法，只显示原类别，不猜对象或回填历史。
+
+对象仅用于纯文本动作展示、长名 ellipsis／完整 title，不是文件路径读取、MCP 执行或链接授权，不新增 endpoint／请求字段／权限／业务写入。live CUSTOM、私有 snapshot 和 activity parts 必须共用 strict schema 保值；坏 metadata 不静默降级或从参数／答案修复。匿名分享的 `execution_process` 明确只接受 null（App `z.null()`）；私有 snapshot 从 shared schema extend 后单独恢复 nullable process，分享不消费私有活动／metadata、不请求 private parts。当前宽 shared parser 是待修消费者边界，不把现状冒成目标已实现；完整 UI／consumer 写区与验收见本仓 `TECHNICAL_DESIGN.md` 首节，第一阶段结构／图标落地不代表具体对象目标已完成或正常组合生效。
+
+## 2026-10-27 当前 Public28.3 文件工具类别
+
+固定正式BFF `b2b9eb1eac4a3f0b0cd4099ed59cbf756f14124c`／Public28.3.0／192操作，完整 canonical SHA256 `85a1b51cd151581b51d7ea7992d85e04462c03fafb36d0527e1df352dd85223a`。唯一增量为 `RunToolActivity.display_code` 正式闭集追加 `tool.file.write`、`tool.file.deliver`；success仍只由原status表达，旧 `tool.execution` 合法，未知值、跨分支值及raw字段仍严格拒绝。live CUSTOM、snapshot与ordered parts共用生成tuple和现validator，无新endpoint、请求字段或执行许可。
+
+十条公共生成链固定同一原件并正规生成；三条独立私有pin不变。完整28.3→28.2父证明及原历史SHA保持；正常reader配对与producer启用由Root验收，本地解析不冒真实工具执行。
+
+## PROJECT-MCP-RECOMMENDATIONS-CONSUMER-D1（2026-10-27，独立消费者候选）
+
+固定正式BFF `21c6447316aefcd8189f7dcedbb522d91a8e6cf5`／Public28.2／192操作、canonical全文SHA256 `e0bb74069c65fb8d414a6a3cb0d6f4c8d9bcb40bb693c2409a9cbe051b8bac53`，只从Git blob取得唯一完整snapshot，九条原public生成链统一正规更新，独立MCP私有pin不变；新增具名窄generator从同一snapshot导出三种refs、请求/响应和status/code/retryable闭集，生成物不手改。test-only exact28.2→28.1先验完整新旧全文，保原历史hash／fixture与证明链。在线Docs固定同一正式版本，不另建wire事实源。
+
+standalone `src/hub/project-mcp-recommendations-client.ts`只GET/PUT当前Project推荐配置；不改HubClient、不接任何组件／Composer／locale。PUT自然幂等无key/receipt/journal，闭合原expected CAS+完整refs，ACK精确project、canonical引用集合、state_version为expected或expected+1（各自有界）；未知不自动PUT，后继GET只证明当前配置。三种ref仅偏好，私有引用不变成他人配置／执行授权，CustomAPI运行缺口仍OPEN。
+
+`src/lib/server/project-mcp-recommendations.ts`经现Hub catchall精确两方法入口进入BFF同尾`/v1`，ProductSession是唯一用户身份，PUT沿现same-origin；拒query/body身份/command key及坏framing。16KiB请求/64KiB响应，从body/admission到响应EOF同10秒绝对预算，fatalUTF8、重复JSON键、closed shape、headers/status tuple与绑定均验证；取消/超时/迟到不冒成功、不换key重发。上游PUT只发送已完整有界读取的原bytes，显式可信Content-Length，不允许TE；浏览器响应复用private/no-store/zero-age策略，client沿既有hasHubNoStoreDirective接受正式扩展directive，不误认必须exact no-store。Web不直连Platform、不存业务数据或secret。
+
+验证先正式pin/wire RED，再纯生成两次确定性/check、client边界/取消/慢body总预算、真实HTTP loopback薄桥（Session显式替身；真实CL/EOF/不透传caller身份），并跑相关contract/lint/types/build。运行／正常服务／App UI接线、Git index/提交均不在本片；Root与picker其他writer文件严格排除。
+
+**本worker交付事实。** App基线已由Root前进到 `9fa5c289865d3d7f0daee219d01f63a46147b67f`；本片仅wire／generated／proxy／contract／Docs，不接并行UI文件。完整正式pin与历史父证明、100份生成物再次正规重出字节一致；真实HTTP薄桥与standalone取消／ACK／方法专属fault闭集已验。在线Docs由陈旧Public24固定到同一28.2：只按精确节点承接原Public27两项公开扩展，natural仅具名新PUT，nested local JSON-pointer链接所属顶层schema且保完整ref解析；原private route过滤／秘密扫描／header allowlist不放宽。首次失败日志与最终命令日志在本地ignored测试收据，未提交运行材料。正常服务／配置／库与Git index、提交、push均由Root负责，本worker未操作；CustomAPI运行绑定仍缺，不以推荐保存冒执行可用。
+
+
+## 2026-10-27 当前 Project 资源消费者边界（优先于下方历史候选）
+
+固定 BFF `11777152bf8fe2ae316e4c67fb355eab94e7c0b5`、Public28.1.0/190 operations，完整原件 SHA256 `07e98d803ac3c7342c2e322b507e8760d89e63bc5ecdab3cdf447b68bf3c904c`。新增 Project resource item metadata、原生附件下载与空 body/原 key 的 Asset 永久逻辑删除；既有生成器正规更新、历史187操作及negative保护保留，未新增第二可编辑wire。MCP独立固定契约及AG-UI网络协议不变。
+
+浏览器同源响应必须消费现有 Proxy 的正式 `projectRenameBrowserCacheControl = private, no-store, max-age=0`；这不同于内部 BFF 的两directive响应。真实200因误认两directive而被客户端拒绝的缺陷已用同一常量修正，不改Proxy策略、不放宽private/no-store/zero-age保护。typed owner error与裸HTTP状态分开；未知DELETE保原空body/key，可信401/403才退休该授权scope。
+
+当前上传沿已发布1MiB请求体限制；本片不擅自放大政策。唯有Web在发送BFF前返回的exact413+不可转发本地provenance，才可在重选同名文件时退休该失败行；pending/unknown仍保原File/key。原生附件沿现有1GiB有界verified transfer，不执行HTML/SVG，无inline preview冒承诺；UI仅声明已发起，实际完成由浏览器下载结果确认。Project删除202仅证明工作区逻辑删除，后台清理状态不伪造同步完成。
+
+## 2026-10-26 Public28 安全工具类别消费者（实施候选，尚未正常激活）
+
+**唯一 wire 来源。** `src/generated/bff-public-openapi.yaml` 从正式 BFF `5dfce099c7ce448e18b8ce5b1e26bb01692c9033` Git blob取得，固定28.0.0／全文 SHA256 `34ca44c01ebc73f7ff76a4a06be33696b96ba1636e8818f02c38d57b1f539809`；App26 正式本地 `5b651f40d6e16e8afa92c5149a97a86e684aadad` 前置已满足，Root 已授权既定写区。`generate-bff-tool-display.mjs` 仅提取 owner `RunToolActivity.display_code.enum` 到只读 generated tuple/type/provenance，无另一份可编辑字段事实；七个既有 public 生成器随同一完整正式原件正规更新，MCP 独立私有 artifact及其恢复政策原样保持。正常生效仍待 Root 配对，不从候选/Agent原件猜 wire。
+
+目标 tool `display_code` 闭集为 `tool.execution`、`tool.file.read`、`tool.mcp.discover`、`tool.mcp.describe`、`tool.mcp.call`、`tool.web.search`、`tool.web.fetch`，其精确值与闭集性由固定 BFF28 原件验证，不手抄成运行时 wire 常量。其余 tool 字段仍 required `activity/activity_id/segment_id/status`、原 opaque ID与 `running/completed/failed`，不接受额外字段。unknown code拒绝；旧 generic仍合法并保持通用标签，不因没有具体类别而推测名称/行为。file.read不声明“读取技能”；MCP三类不暴露远端 server/tool 名、参数或说明，不把发现/说明/调用标签当成执行资格或成功证明。既有 Skill/Subagent/HITL/Delivery/错误语义不变。
+
+现唯一 `runProcessActivitySchema` 同时校验 AG-UI `CUSTOM kokoro.activity.updated`、内部活动事件、snapshot过程与 Message parts活动；本片仅令其 tool分支引用正规生成 tuple，仍 strict，不新增 JSON envelope、事件名或第二 schema。ToolCallRow只把受信 code穷尽映射本地 MessageKey，九语提供六个新类别标签并保留 `thread.toolCall` 通用语义，状态文字沿原键；不存在 name/args/result/URL→code的客户端推理。公开 payload不新增名称、参数、结果、错误原文、路径、任意标题、phase、时长或推理字段，没有新网络请求或 endpoint。
+
+完整 snapshot/live/parts保同一值：opaque activity identity、public ledger坐标/cursor、顺序/连续活动分组、真实状态、parts revision及原 scope/主体/代际/取消/退休/迟到围栏均不变。无浏览器业务持久化、Schema或新权限；不改旧正文/历史活动或重跑 R6来恢复未发布语义。mapper/reducer与现读取状态机只通过原共享 schema接新枚举，不借本片重构。
+
+**正规生成与历史保护。** 本片按正式 BFF28 Git对象取得完整原件，更新当前来源断言，逐条运行既有 `contract:generate:bff-<surface>`（surface 为 agent-failure、team、account-sessions、account-profile、shared-tasks、archived-tasks、public-skill-list），再运行本片新增 `contract:generate:bff-tool-display`；生成文件只由命令更新，对应 `--check` 纳入 `pnpm contract`。test-only 完整28→27逆恢复旧 Public27 全文 SHA256 `d2b3d546164cadc9655616fc44daf1511a6f7d4a2e5d172f1415552af8942ed1` 后，继续现27→26与历史证明，保全部旧 raw parent hash和固定 helper身份；不把兼容转换带入客户端或默默忽略新值。精确源码/生成/locale/测试候选写区见本技术设计首节，正常配对、浏览器验收及恢复由 Root另行授权；本源码候选不代表正常链路已生效。
+
+## 2026-10-26 MCP 列表 icon 媒体同源面（实施设计）
+
+新增仅浏览器私有 `GET /api/hub/mcp/servers/{server_id}/icon`，映射 BFF `GET /browser/v1/mcp/servers/{server_id}/icon`。请求只允许精确 ID 路径、无 query/body/Content-Type/framing/命令头；身份只取现 Product Session。200 为完整 `image/png` 或 `image/jpeg`，严格非零 Content-Length ≤ 1,048,576，no-store/nosniff/no-referrer；不透传 redirect、cookie、owner location 或任意依赖头。完整 admission/响应 EOF 同一 10 秒预算，未知错误拒绝，不污染列表读取。私有 profile 固定 BFF `7a94139b607ca4e51feb1f5480b35f46c4afa53c` / `mcp-server-icon-browser/1.0.0` / SHA256 `26569264ab799b753e9e57621167a34b2b5530f9e0d8d65cf9dc333d3aada766`，`contract/bff-mcp-server-icon-source.json` 记录来源，原件与 status/code/retryable 闭集经 `generate-bff-mcp-server-icon.mjs` 正规生成；Public27、Connector JSON 与原命令错误 profile 均不扩。浏览器始终 fetch 固定同源路径且禁止缓存/redirect，只有完整校验后的当前寿命 blob URL 进入 img src，避免浏览器复用同 URI 的旧解码图像；没有额外 query、Storage URL 或第二条 JSON 读取。
+
+## 2026-10-25 personal HTTP/SSE 与 Public26 消费（源码候选）
+
+现 Browser→App `/api/hub`→BFF browser-private unary 路径不变，外部 SSE 由 Platform/Agent 执行。唯一 `src/generated/bff-public-openapi.yaml` 固定正式 BFF `aa0bdeb4397d3a022edf9b3cfc53d5a6cfb281b1`／Public26，全文 SHA256 `20d26736cf23da32c242c2c7cf75c45affb62c5d27696dcecb0bc6193bc39a09`；七个既有 public 生成链正规消费。Public26 Connection 的 `transport` 严格闭集为 `streamable_http|sse_compat`，unknown／STDIO／extra 拒绝；完整26→25→24逆证保旧全文 SHA、操作与权限断言，不改独立 connector-error／project-publication artifact。
+
+- Register `/api/hub/mcp/servers` 的 optional `transport` 只接受 `streamable_http|sse_compat`；absent 保旧 HTTP body／摘要语义，显式值随原命令冻结。数字、Proto token、null、别名及 STDIO 拒绝；Update 不接受 transport，创建后不可变、同 URL 唯一规则不变。URL 添加继续 absent HTTP，自定义 MCP 才显式选择，不猜协议。
+- import `/api/hub/mcp/servers/import` 保原 `config_json` 全文、顺序、key 与 owner 原子性；逐项按 `type:streamableHttp|sse` 绑定真实传输及原名称／URL／ID等字段。旧 HTTP 规范摘要不追加 transport2；SSE 加3由既有上游绑定负责。混合/SSE 批不能借某个 HTTP 项降成历史整批豁免，不拆成多个 Register 或重写秘密原文。
+- fresh Get 的 Current 必须 present 真实 transport；新 Register/import ACK 同样须 present 且匹配请求 effective transport。历史 absent ACK 只在 owner `replayed=true` 与原 operation/key/请求及全部原绑定成立时承接：Register 须原请求 absent，JSON 须原整批旧 HTTP；显式 HTTP/SSE、混合/SSE 批均不得借 replayed 放过缺值。Prepare/Update 的历史 exact completed ACK 也须合法 replay 上下文，新 non-replayed ACK 缺值拒绝；旧 App 已确认成功不追溯改未执行。中央 ACK／Current schema 与 matcher 由 route/client 复用，保外层 replayed 和原 JSON 上下文，不设浏览器自报历史 flag、不泛 optional/fallback。
+- ACK 证明原命令完成，不证明 fresh 展示／选择／执行资格。缺字段不补 HTTP、不填入 payloadGet、不换 body/key/CAS 重派；fresh 双 GET 失败保持原确认／unknown／草稿，只显式重读。创建后的独立 Prepare／Done 与 receipt 恢复分层保持。详情只展示 fresh immutable HTTP/SSE，未知／撤权不假 ready；Connection 的真 ID、availability、分页与原关联校验保持，选择不是工具执行授权。项目发布仅 fresh HTTP，两处 UI/action guard 同时核 transport，SSE 不冒项目执行 ready。
+
+保原 Product Session、可信主体／tenant、MCP action、request ID/no-store、有界响应、10秒总预算、AbortSignal/late fence、secret-safe 错误与原 unknown 恢复，不新增 endpoint/权限/Schema/依赖或自动重试。本片为固定发行的消费者源码候选；定向行为／生成检查与停写输入另有绑定，纯 MCP 候选完整门及正常多 owner 配对由 Root 接手，未以混合工作树测试冒全部验收。
+
+## 2026-10-25 Canvas 小文本成果读取边界
+
+不新增 wire/Schema/endpoint。Canvas 只对用户打开的 `text/plain` / `text/markdown`、已知大小 ≤65,536 bytes 成果启用只读预览；当前可信 subject/admission/generation 必须存在，先严格读取原二元详情，再 GET 原同源二元 `/content`。内容 GET 仍由 BFF 独立授权，不把详情成功当许可；流硬限、EOF、头与 metadata 大小/MIME、metadata SHA-256、fatal UTF-8 全部通过才显示纯文本。一次10秒总预算覆盖详情至解码，不因分阶段重置；取消/退休/切项/晚到不显示旧正文或再发请求。缺边界、超界及不支持类型明确保原生下载；失败可显式重试，不造空正文成功。
+
+原 ≤1 GiB native attachment 下载、同源安全头、当前身份准入及二元选择器不变；预览不修改 Workspace file 清单，不加载 Markdown 外链图片/HTML/脚本，不持久化正文或新增浏览器认证事实。
+
+## 2026-10-25 cold session/CSRF 读并发（源码候选）
+
+原 `GET /api/auth/session` 仍仅为在线 RP lifecycle/access-expiry 投影，不升级为 fresh IAM 准入。`serverAdmitted` 布尔只允许在原10秒总 signal 内提前并发读取现 CSRF；GET 可信 subject 和原 browser fence、CSRF 全部成立后才唯一 POST refresh。错误/anonymous/退休/timeout 零 POST，未消费或晚到 CSRF 不授权轮换；原 Origin、主体绑定、POST 后 fresh 验证、CAS、unknown 禁止自动重放与120秒规则保持。无新 endpoint、wire/公开 contract、cookie、SSR claims 或 auth cache；不以此调度调整宣称正常等待已消失。
+
+## 2026-10-25 URL MCP 项目定义发布消费者（候选）
+
+固定 BFF `c124705f5ab7f8aa8dac4a648f7e8e952661926f` browser-private profile1.1.0，原件 SHA256 `b743f452bf28c6c349d8d9fdf587dbcf42d9bbd8c97788a34615d603a497ae67`，精确来源见 `contract/bff-mcp-project-publication-source.json`；已逐字比对生产者 Git 对象。Public24 不变。新窄生成器从该原件生成 Zod请求/响应/闭合错误；客户端与同源桥均核status+code+retryable，原ACK须绑定server/connector/source CAS及每project/pin CAS，execution_ready仅false。
+
+三条同源入口：POST `/api/hub/mcp/servers/{server_id}/project-publications`；GET `/api/hub/projects/{project_id}/mcp-pins`；POST `/api/hub/mcp/project-publication-receipts`。映射BFF同尾路径 `/browser/v1`，仅定义发布/原回执，不发送授权/执行请求。项目多选1–32、canonicalID、每pin absent/current，原失败不换body/key。首次自有明确400/412且无unknown历史才允许用户重新读取并修改意图；已未知、receipt任何失败或不匹配tuple均保留原命令。
+
+## 2026-10-24 MCP 图标五私有操作消费（实施中）
+
+固定 BFF400fab6e89c2fde77eb9f4917271e3e09a0c62da：/api/hub/mcp/icons/uploads POST、import POST、{intent_id} GET、{intent_id}/complete POST、{intent_id}/cancel POST，各映射原/browser/v1路径。四写保Idempotency-Key、原body与十进制CAS；主体来自Product session。请求/成功运行时schema在hub/mcp-icon.schema.ts，错误沿既有mcp profile1.1，不改Public24或错误artifact；GET不携body/key、不自动恢复。原Server／CustomAPI create/update承接icon selector，update可clear_icon=true互斥；响应icon metadata及短preview_reference独立，失败不猜保存成功。
+
+## 2026-10-24 Prepare 原请求恢复（既有JSON卡，设计门）
+
+**固定消费与UI恢复：** browser-private错误profile固定BFF `a9a6918d47e1f2654edf8720c561ee06eb57a78c`／1.1.0，原JSON SHA256 `5c12e237e03a6be446a564034ec5c18965e996be24ddeb40807ec4b9b074d83d`，由既有窄生成器更新；Public24发行物不变。核验按钮仅调用两条既有精确GET，随后另一次明确点击才重放原Prepare。窗口token只是浏览器显示资格，实际POST还核当前signal/主体/代际/exact日志；关窗清退proof不删除未知请求。completed只显式收口、不发POST。
+
+**跨tab约束（独审补齐）：** failure存写也核exact subject/server/connector/key，且同key乱序回调不能把inspect_owner/expired/conflict降回undefined或same_command；invalid只可收紧为其它不可恢复分类。已恢复RAM K在核验前后及POST前须与日志原子重核；另一tab已清退K并reserve K2时，旧窗口不得采用K2、沿用K的核验凭证、覆盖其failure或清退K2。保守锁旧窗口并重新加载，不改owner/回执协议。
+
+**问题/基线：** 长metadata已由BFF14bb159/App c3f301e修正且正常GET200；原502 invalid仍按browser-private profile1.0 inspect_owner锁定，旧tab消失证明RAM不能作为关闭/重开的恢复保证。当前主体/同实体ready只证当前状态，不证原命令receipt。
+
+**取舍/边界：** 保留通用错误语义，增加Prepare专属“核验后显式原命令重放”政策；不把所有invalid改same_command，也不新建Platform receipt查询RPC/事实镜像。BFF code-first profile1.1新增独立prepare_inspection_recovery，原错误tuple/recovery、automatic_retries=false、new_command_authorized=false与Public24完整原件不变。条件为operation=prepareServer、failure=invalid、当前主体、精确server+connector可信读及原server版本不倒退；授权只允许原key/body/CAS显式重放，不授权新命令。其它inspect_owner错误不变。
+
+**失败/验证：** 核验零POST，读取失败/错ID/错关联/旧版本/取消/身份或generation变化均不授恢复；核验不是成功、不是receipt。重放仍由owner当前授权/CAS/幂等回执裁决，完整exact ACK到达才收口。保过期/身份冲突锁定及迟到ACK、秘密清退、管理与Prepare互锁；固定消费者由正式提交及digest正规生成。先行为RED→窄修→相关门→正常同一实体与原请求验收；不以GET200称原Prepare恢复。
+
+**App状态/恢复落点：** 沿mcp-preparation-commands与原ConnectorCommandProvider，仅Prepare增加非秘密恢复日志；新mcp-preparation-recovery.ts负责浏览器IndexedDB原子reserve、严格codec、失败标记与exact ACK后的compare-by-key清退，不保存headers、URL、OAuth/令牌、工具原文或业务成功facts。使用IndexedDB读写事务串行化跨tab同actor/server的首次命令，而非localStorage覆盖竞争或仅sessionStorage丢tab；无新依赖/服务/后端表。原generic connector command仅增加显式unknown bootstrap及Prepare专属mayResume钩子，默认行为不变；不将其它Create/Update秘密写入日志。
+
+**本地数据模型：** IndexedDB `kokoro-mcp-preparation` version1，`intents` object store，key为JSON.stringify([verifiedSubject,serverId])，subject index；record closed `{subject,target:{serverId,connectorId,version},key,failure?}`，严格复用当前ID/CAS/key及已发布failure分类。首次POST前reserve事务必须commit；已存在则采用原target/key，绝不分配替代命令。初始化/重开只恢复unknown，不发POST、不把存储当主体证明或owner事实；同actor当前Session准入后才能读，跨actor不展示/不恢复。日志不自动TTL清掉未知意图；过期由owner明确返回后封锁。浏览器存储不可用/坏记录失败闭合且允许显式重新读取，不降级RAM后发送。
+
+**生命周期：** 页面/弹窗关闭和reload保持日志；新实例恢复后需重新可信核验，再显式重放；核验凭证只在当前actor+generation有效，取消/重验/一次重放即退休。原请求body/key/CAS不可被当前owner新版本改写。完整client ACK且exact connector绑定通过后才compare-by-key删除日志；删除失败保未知，不置假成功；不同新key不可被迟到清退。旧actor实例退休只取消内存，非秘密日志留给原actor再次真实准入恢复，不授权新actor。恢复加载/失败与业务owner读取分别呈现，未完成恢复读取时阻止新Prepare/试用/同实体变更；管理清理仍沿既有owner语义。
+
+**测试/正常验收：** 存储port测试reserve先于POST、跨实例恢复、原key/body/CAS、错actor/identity/generation、损坏/不可用/提交及清退失败、迟到ACK及新key保护；正常浏览器验证真实IndexedDB事务与reload，不把测试port替身称真实存储。UI核验按钮只GET，核验后显式原请求POST与完整回执，再刷新同ID；不重建连接、不清failure绕过政策。复用原最小组件与错误文案，不新建恢复中心。
+
+## 2026-10-24 私有MCP发现长描述消费修正（正常读取已验，原Prepare恢复仍开放）
+
+正常JSON导入201后Prepare返回502，已定位owner合法2006字节工具显示文本被消费者额外1000字节界限拒绝。仅对发现declaration display_name移除逐字段长度上限，保留Unicode/既有内容校验、其它字段上限、strict结构、ID/CAS/声明一致性以及整个传输响应预算；不截断、不改写owner原文或declaration digest。读取与首次/重放Prepare receipt共用该投影。
+
+该面是现有browser-private管理投影；公开Public24原件、固定owner artifact、错误profile、SQL/权限与运行配置不变，不为局部实现伪造新的public发行。502 invalid仍为inspect_owner，旧冻结请求没有因本修正获得重试资格；后继须先正式定义可信核验后仅显式重放原key/body/CAS的Prepare恢复，合法exact receipt到达才完成。其它inspect_owner错误继续封锁。BFF14bb159/App c3f301e已正常配对，仅重载BFF及单份App源；同一实体详情GET502→200、硬刷新重开GET200，长文本547/2006字节保持。原Prepare exact receipt未重放，inspect_owner后恢复及关闭/重开持久恢复仍开放，不称JSON CRUD已闭环。
+
+## 2026-10-24 JSON导入明确拒绝消费
+
+既有`POST /api/hub/mcp/servers/import`及完整`config_json`原子语义不变。JSON flow现承接首个从未uncertain的精确HTTP409 / `mcp_personal_server_url_conflict` / retryable=false，作为本次整文档未创建的明确拒绝；保正文、更正后显式新key提交。旧unknown、错误tuple不符和传输未知仍保原命令，不自动重发。未新增/改动机器契约、生成物或后端API。长metadata引起Prepare响应502仍为后继契约消费缺口，不属于本片已修范围。
+
+## 2026-10-24 MCP重复URL明确拒绝消费
+
+消费既有正式409 `mcp_personal_server_url_conflict` / retryable=false元组，不新增或修改API/生成物。只有首个确定响应且此前无未知提交才作为可修改表单的语义拒绝；错误tuple不一致、传输未知及旧unknown重放仍不确定。不能仅凭code文案或所有409释放命令。
+
+## 2026-10-24 MCP详情试用与正式消息边界
+
+本地Try不新增API或改wire：私有server的exact `connection_id`经现engine选择进入新草稿，用户明确Send时才沿既有Public24 `selected_mcp_connection_ids`冻结到原消息请求；connector/server/provider ID及显示名不替代运行Connection。Try本身零消息/Prepare/授权请求，未知原请求不被新草稿覆盖。缺可用性、未ready或缺Connection不伪造试用；Prepare/重新授权保留各自正式操作与恢复语义。
+
+## CHAT-1：首发刷新恢复不新增网络协议（2026-10-24）
+
+仅增加App同标签浏览器未决意图adapter，首发/原retry继续原MessageCreateParams与唯一builder；GET snapshot-first、exact MessageCreateReceipt及AG-UI保持。刷新无自动POST、无新key/body、无本地伪会话，503/404/同正文不作为命令未发生或已成功的证据。原控制、身份、project_ref及MCP/Skill有序选择不变；设计/本地记录见TECHNICAL_DESIGN/DATA_MODEL，实际验收见CURRENT。
+
+## 2026-10-24 普通会话 MCP 精确选择（App 实施中，正常未激活）
+
+目标由BFF公共后继机器合同提供消息selected_mcp_connection_ids，Web只由原same-origin adapter运输、严格运行时校验，不自定tenant/actor或直连Platform/Agent。弃用的mcp_servers不作为alias继续输入。数组ID/唯一/数量/编码限制跟已发行固定owner source对齐，不自创执行字段。
+
+候选连接来自现MCP Connection当前主体read接口，active状态仅显示资格，不是执行授权；工具调用仍由Agent重新核当前owner。空列表、不读到数据和读取失败不得混淆。选择对象只带Connection ID，不发URL、headers、密钥、profile或工具声明。
+
+## 2026-10-24 Agent 待核对终态（候选，未正常激活）
+
+固定BFF `b0f201e99c2ae3fa213942c5a909f47b06640a02`／Public23.1／raw `703dba47da8a5c659b4236bb0a72317588ad29a4ca444ff9e5c99cfbcd00634b`。原186操作不变；七public窄消费者正规生成，ChatMessage／RUN_ERROR只承接新增model_settlement_pending且retryable=false，未知／坏profile保持拒绝。既有ConversationThread与九语言保正文并说明结算待核对，不猜已扣款／释放、不给终态重发动作、不改历史generic。完整23.0父字节逆证及原证明链保持，在线Docs固定同一发行物。完整工程／正常激活状态见[CURRENT](CURRENT.md)。
+
+## AUTH-1：第一方登录短地址（2026-10-23，正常已加载）
+
+IAM原始GET `/auth/sign-in?<signed-query>`只作协议入口，同源/大小检查后303到`/auth/sign-in?flow=<随机引用>`。flow必须单独且规范编码，混合/重复拒绝，绝不转为IAM oauth_query。短GET/POST需要对应HttpOnly browser proof；原query仅服务端恢复后逐字透传。form action、失败303只用短地址，原query不放HTML/Referrer，内部HMAC覆盖flow和真实query，直达内部页仍404。
+
+原POST字段csrf_token/email/password和一次消费不变；刷新只CAS退休本请求携带且绑定验证通过的当前flow旧证明；每render独立cookie，未被该请求观察的并发render与其他交易不受影响，旧POST仅清自己的cookie。错误凭据保本flow，成功导航退休本flow；未知结果不自动重发密码。缺失/过期走固定恢复页，Redis故障503，不变成功。保no-store/CSP/同源form策略；此为Web私有表单引用，不是新公开业务API/身份/授权。
+
+## AUTH-1：原生会话连续性（2026-10-22，实施门）
+
+不改公开BFF／同源业务API、OIDC scope／resource／callback path或session投影；issuerSessionId仅在服务端HttpOnly加密cookie，绝不输出到/api/auth/session、URL／浏览器JSON或日志。初始已验签TokenSet的sid必需，与最终account.id_token及sub同一证据；续期ID token亦必需并走原生openid-client验证，iss/client aud/EdDSA/exp及原sub/sid匹配，不能裸decode当证明。正常失败仍原rp_callback_rejected／rp_unavailable或refresh_unconfirmed状态与受控页面恢复，未知不二次提交refresh。旧无sid Product cookie不兼容。
+
+原token响应expires_in为原数值正整数1..3600、access≤2048B／refresh≤8192B及有界响应保持；refresh先原一次HTTP，再公开SDK grant仅接该TokenSet进入原生refresh验证，无第二网络grant。JWKS只读固定BFF路径且同5秒预算，不开任意URL／额外IAM接口。公开合同与App在线文档无需换pin。
+
+## AGENT-1／MODEL-1：精确模型绑定同源消费者（2026-10-22，本地已验）
+
+最终1142输入无漂移，完整App七门／4749 PASS、preview108及独立Docs45测试／54HTML17941链接通过，四MCP SHA恢复，独审Approved。正常激活和实际Agent资金链仍待，详见CURRENT首节。
+
+沿Root唯一主链和Billing rate2已批决定，主方唯一writer，App基线bc0c8c3；固定BFFa77276b35b07eb65df8a0af2e41b461b393afb12／Public23.0.0／34ea71e0aa56256ca00fc5b3c40abd4d142bea82e664a6871190b8547ec2b9e6。唯一snapshot增加MeteringRate required model_revision{id,content_digest}，原七窄生成器正规重出；不为透明桥创建重复validator。原三具名计价通路、Product Session、1MiB/12层、原充值16KiB和10秒／原body-key-time恢复语义不变，无新路由／服务／表／运行fallback。
+
+写区为固定snapshot、七生成器和原派生／直接契约与薄桥fixture、App在线Docs catalog和指南／相邻当前文档；原四MCP WIP按既有精确保护，不覆盖或夹带提交。先原contract新required pair行为RED，再仅pair/version delta的test-only完整22.5逆证承接原历史门，业务网络协议不变。在线Docs同步解释精确修订而非模型显示名／Key推价；发布配置不是消费许可。完整App工程、preview和Docs门停写验收，正常配对／实际Agent资金链后继，不称一比一全站或正常结算已验。
+
+## AGENT-1／CREDIT-1：计价管理同源映射（2026-10-22）
+
+固定Public22.5正式三操作，browser-private `/api/admin/billing/metering/{pricing,rate-revisions,policy-revisions}`逐一映射BFF对应`/v1/admin/...`，仅GET pricing与POST两publish；不接其他路径／方法。请求与错误／ACK正文保持原字节，单次上限1MiB；资金数字字符串不经Number。GET最新发布可独立null／未来生效，不是active quote或未知命令结果证明。POST仅转原publication_id/configuration/reason和key，不自动改日期或补预算；Admin后继持原命令恢复，App不建第二份receipt。
+
+当前Product会话与部署Domain来源不变，不信浏览器authorization／tenant／actor／forwarded。新操作准入至EOF共10秒，no-store与request-id绑定，禁止重定向／Set-Cookie／Location泄漏。原成员查询、充值16KiB与其他Admin桥限制保持；凭据、真实财务、正常激活均不因契约配对自动开启。
+
+## CREDIT-1 具名管理薄adapter（2026-10-22）
+
+固定 Public22.4／183：Admin两条具名业务路由经既有Product会话代理，浏览器不自报tenant／操作者，BFF保持当前管理员与租户资格owner。App不扩公开执行入口、不解释积分换算；原 funding_id／body／Idempotency-Key／effective_at 原样保留，未知不自动重发。成员GET只允许limit和opaque cursor，POST不接受query／CAS或旧credit action路径。
+
+本仓canonical snapshot来自BFF c48a9bc committed blob；生成器与Docs固定同commit/digest，历史父证明由精确新增POST逆证承接，不改旧22.3父hash或运行兼容。字段事实仍在BFF；真钱支付及直接余额变更无入口。
+
 ## MODEL-1 Admin上游模型发现薄桥（2026-10-22）
 
 `GET /api/admin/model-providers/{provider_id}/upstream-models`只接受canonical UUID路径（大小写形式沿现UUID规则）、无query/请求体/任何body framing（含Content-Length:0）/Content-Type/If-Match/If-None-Match/Idempotency-Key。映射正式BFF唯一 `GET /v1/admin/model-providers/{provider_id}/upstream-models`；不增加浏览器传入Key、地址或tenant/actor参数。
@@ -61,7 +348,7 @@ GET `/iam/interactions/select-tenant` 的合法成功导航不变；顶层HTML�
 
 IAM sign-in 的原生表单仍为 csrf_token／email／password；每次 GET 独立随机 proof，cookie 名由精确签名 query 和 proof 的摘要共同派生。POST 原 issuer/path/method/query/form-cookie 绑定验证后才原值 CAS，一次消费；未证明失败零清理，已消费终态只清自己，Consent／invitation 不改。顶层 HTML 失效表单去固定失败页，不自动重发密码／OAuth；API 仍403。分配前检查每请求可见 proof 数及 cookie 分配预算（超额429），原 header 总字节预算仍为413；不驱逐别的有效表单；不是全局并发配额。
 
-OAuth/OIDC 继续归 IAM，App 只拥有 Product 登录交互和会话。原生顶层 HTML 登录／回调／authorize 失败 303 返回固定 `/auth/sign-in/failed`，不复制 query、owner body、Location 或 cookie；新页复用 App 现有 UI 组件与语义 token，显示登录状态及显式返回入口。渲染／刷新页面不重新发起 OAuth，不创建或恢复 session。API／iframe／非导航和 HTML q=0 保留原错误 status／JSON，不变成成功。
+OAuth/OIDC 继续归 IAM，App 只拥有 Product 登录交互和会话。原生顶层 HTML 登录／回调／authorize 失败 303 返回固定 `/auth/sign-in/failed`，不复制 query、owner body、Location 或 cookie；新页复用 App 现有 UI 组件与语义 token，显示登录状态及显式返回入口。失败页仅只读核当前 Product Session：canonical host 下 active 且 access 未过期才导航固定 /app，由原 AppLayout／AppGate 继续 fresh 准入，不猜原 Conversation／Project。无有效证明保显式恢复和登录；挂载及 focus／online／pageshow／可见恢复仅 GET 既有 /api/auth/session，每轮共用10秒绝对预算、最多2次GET，严格 authenticated／subject／未来 expires_at 后才 replace /app；隐藏／卸载退休且拒迟到。显式恢复只重读及 RSC refresh，登录只有用户点击 /login；不自动 OAuth／POST refresh、不消费旧 state、不改 cookie／storage，也不创建或恢复 session。API／iframe／非导航和 HTML q=0 保留原错误 status／JSON，不变成成功。
 
 合法 issuer error 必须先满足唯一 query、精确 issuer、state 与浏览器交易绑定并一次性消费；配置类失败仅记录固定分类，不记录 state、描述或凭据，不调用 token exchange。旧回调、错主体和重复回执不清除较新登录的 cookie。账户三 scope 是当前正式功能依赖，应通过 IAM 原有 Product Web client/resource 演进入口配对；不删除 scope、添加权限回退或把环境故障归咎于用户。
 
@@ -569,9 +856,11 @@ D0后先Root精确授权现文件，再以真实函数/同源route RED→GREEN�
 ### 唯一事实源与可见性
 完整读响应的唯一 owner schema 为上述 BFF commit 的 `src/http/skill-specification-schema.ts`（websiteHubResponseSchema、websiteListResponseSchema、websiteSkillSchema）；运行投影为 `src/application/skill-specification.ts`，HTTP envelope/下载 handle 由 `src/http/routes/platform-projection.ts` 发出。Web 现 `/api/skill.v1.SkillOptionalService/{ListHubSkills,ListSkills,GetSkill}` 与 `/api/skill.v1.SkillService/DownloadSkill` 仍是既有 browser-private adapter，不新建 public operation，不把消费 validator 当可编辑 owner 契约。
 
-Web 严格承接完整 Hub item/icon/source/currentVersion/tags/tagOptions、完整 installed/official 嵌套对象和完整 detail/download 三字段资格响应；按照 owner schema 的字段类型与可选性解析，identity 为读取必要条件且 Get/Download 必须与请求 skillId 匹配。各操作成功/envelope保持原 owner 形状，不用泛化 passthrough、不静默 strip owner 字段。未知字段、坏类型或资源错配失败闭合；错误形状与状态按当前操作和同源 adapter区分，坏响应不得变空目录或可下载成功。
+GetSkill metadata 切片（2026-10-25，已消费 BFF `21c85b5a6b3059ecb8924703a0065c966f480467` 的 Public25；canonical SHA256 `7261ac9ce2140555ba97ebff2bf0359533cc49dda014b08dcd6a6054a8d38b1c`）：现路径/series 请求不变，成功严格 `{skill}`，不带 `downloadInfo` 或读取包字节。独立 DownloadSkill 成功仍严格 `{skill,downloadInfo}`；两者复用相同 skill shape，但分别解析，未知字段和下载缺字段拒绝，不做旧协议 fallback。普通详情仅在受准 metadata 的 series/exact revision 与已选记录匹配后开放下载入口；点击独立请求真实句柄，并再次核其 series/version 和当前请求生命期后导航。下载失败、取消或错误版本不清 metadata，不生成 URL/文件名/到期时间，也不从列表快照推导下载权。
 
-Hub/tagOptions 支持正式第八类 SKILL_HUB_TAG_APPS，分类投影为 apps；不扩其它公开请求 schema。安装 membership/added 与 enabled 是不同事实，已安装但禁用仍 installed=true、enabled=false，official added 不覆盖本人 enabled。GET 封面 private exact `/api/hub/skills/{revision}/cover` 唯一映射正式 `/v1/skills/{revision}/cover`；revision 来自已绑定 owner coverImage/current version，不建立 series alias 或外部 URL 代理。未知路径/非GET/body/query/身份失败按闭集拒绝。
+Web 严格承接完整 Hub item/icon/source/currentVersion/tags/tagOptions、完整 installed/official 嵌套对象和独立的 detail metadata／download 资格响应；按照 owner schema 的字段类型与可选性解析，identity 为读取必要条件且 Get/Download 必须与请求 skillId 匹配。各操作成功/envelope保持原 owner 形状，不用泛化 passthrough、不静默 strip owner 字段。未知字段、坏类型或资源错配失败闭合；错误形状与状态按当前操作和同源 adapter区分，坏响应不得变空目录或可下载成功。
+
+Hub/tagOptions 支持正式第八类 SKILL_HUB_TAG_APPS，分类投影为 apps；不扩其它公开请求 schema。安装 membership/added 与 enabled 是不同事实，已安装但禁用仍 installed=true、enabled=false，official added 不覆盖本人 enabled。GET 封面 private exact `/api/hub/skills/{revision}/cover` 唯一映射正式 `/v1/skills/{revision}/cover`；revision 来自 BFF coverImage/current version 的精确 UID，不建立 series alias 或外部 URL 代理。coverImage 是可尝试的媒体资源定位而非存在性/CLEAN 保证；metadata absent cover 表示未内联媒体，图片成功加载才展示，加载/404/503/取消保原 fallback，不伪造源封面状态；媒体 GET 的完整事实与权限检查保持。未知路径/非GET/body/query/身份失败按闭集拒绝。
 
 ### 门禁
 具名真实四响应、嵌套完整字段、unknown/type/identity负控、apps、图片字节/媒体/Origin/session/revision绑定测试；Root pin/artifact不变，五 mixed 仅新增此前缀之外原正文保留。Root 真实浏览器目录/详情/安装/下载/封面仍待后继验收，不以 HTTP200 或 unit fixture 称完成。
@@ -2110,3 +2399,33 @@ MCP管理Hub五方法显式caller key（其后signal?），不保隐式随机key
 ### Installation exact content（2026-10-16，实施设计）
 
 新增 browser-private `/api/hub/skill-installations/{id}/package` GET 与 `/api/hub/skill-installations/{id}/download` POST，分别固定转发已发布 BFF `/v1/skill-installations/{id}/package` 与 `/browser/v1/skill-installations/{id}/download`。GET 仅可有单个 file_path；POST 无 query、key 或非空 body。两者复用正式 Product Session 准入、同源 Origin、十秒预算、1 MiB 严格 JSON 边界；installation inspection 使用其专属 skill_package_* 错误，download 使用独立 download 错误矩阵。成功 source/revision 必须匹配本次权威 installation；文件路径/清单绑定原目录，下载只消费未过期受控 /skill-downloads 句柄，不接受对象存储 URL。目录与分享现有接口语义不变。
+
+
+### 普通消息 MCP 消费发行物（实施中）
+
+唯一canonical snapshot固定BFF f71a17901b4f0458d88521be2c37e94d0d863998 / Public24.0，SHA256 f4caf11f3cd9255d2cd9daf69b74ff9988505d640e31c686ce495e6d8a578b2c。原七生成器与在线Docs消费同一原件。messageCreate仅接受可选`selected_mcp_connection_ids`：有序唯一≤16、每项ASCII ID ≤191、JSON≤4096；缺省或[]不增加连接。旧`mcp_servers`输入已删，不读trace充当授权。浏览器内部idempotency_key继续按原adapter映射，未知提交使用冻结原body/key，不重新读取勾选。选项读取仍为原Hub正式GET，无新代理前缀或owner直连。
+
+## Composer 当前草稿 Skill picker（2026-10-25）
+
+本片没有新 wire/API/schema。已安装候选复用现 `listSkillPool`→Personal Skill installation 同源读及严格 actor lifetime；名称/summary 只作真实元数据展示，不读取包或下载句柄。enabled/active 且安装 pin、revision、source_ref 相符才可选择；无示例仍可使用。列表不是执行授权，发送继续由既有 message-create、BFF/owner guard 验证 exact refs。
+
+选择只改变同 hook 管理的未来意图，不发送模型、不改变 installation enabled，不制造提示词或默认全选。Project 未选择仍省略、显式移除仍[]；Direct 默认[]；首次 Send 的同步草稿承接不扩展导航资格，未知提交继续复用原冻结请求。新增资源菜单及 action-time New task 校正均不放宽原 Send 的 canonical chatHref/actor/activeId 检查。
+
+
+## Project resource item consumer (Public28.1 candidate)
+
+`GET /api/hub/projects/{projectRef}/resources/{asset_id}`、`GET .../{asset_id}/download`、empty `DELETE .../{asset_id}`分别映射固定BFF三个具名操作。唯一snapshot与现有public generators正规更新；`src/generated/bff-project-resource.ts`从固定schema派生，`src/contract/project-resource.ts`只复用这些decoder，不成为第二editable wire源。metadata为`data.resource`且无created_at；DELETE200为exact asset_id/deleted_at/replayed及request meta，未知或不匹配不当成功。owner ErrorEnvelope无retryable字段，不添加虚构字段。
+
+同源adapter沿当前Product Session/部署Domain/服务鉴别，拒query、self alias、非空正文/不支持framing与读命令头，DELETE仅透传原始key不制造tenant。Project下载只复用既有无授权的完整attachment字节传输：1GiB、准确Content-Length、原UTF8 Content-Disposition、no-referrer/nosniff、有限时间、取消与短流拒绝；不JSON解析bytes，不暴露Location/owner secret。BFF仍负责每次Project授权、完整spool SHA/size验证和二次owner核验。浏览器原生下载启动之后的完成/取消由浏览器管理，不宣称Web已观察EOF。
+
+Web在上传body实际超过原1MiB且尚未发送BFF的413分支独占`x-kokoro-local-upload-validation: request-body-too-large`；generic owner响应转发不允许此header，client只在exact本地413 body+该marker同现时标localValidation。重新选同名文件只替换这种failed local-validation行，既有pending/unknown与owner拒绝不伪归本地、不丢原File/key。原大小政策不变；旧内存行若未观察到来源不凭状态/文案猜测其origin。
+
+## Public28.15 最终答复只读旁证（配对候选）
+
+原私有 RunDisplay optional `final_answer` 为 closed `{segment_id, revision}`；已由 BFF `38b942742574bccb12d58546301ee0c7cf4014c3` 正式 Public28.15 生成。不是 durable final 事件、权限或历史补写入口。客户端仅在 exact Run 完整 parts 与确认 revision 满足时使用，正式 final 始终优先。无新 HTTP 路由、Share 字段或执行行为。
+
+## 2026-10-28 私有 snapshot：已发送 MCP 选择
+
+固定消费 BFF `b1233d90403bd69e32998ccc8f71236213c28964` 的 Public28.16.0；唯一 snapshot SHA256 `82485c2b7be17ad04f56d3656a58b42ea8d308c9dc22db5807a09ab706418a77`。私有 SessionSnapshot 新增可选 `composer_selection {source_message_id,selected_mcp_connection_ids}`，仅为已发送事实的只读投影，不是账号候选目录／执行授权。缺失不推断，空数组表示已发送空选；公开 Share 严格拒绝该字段。所有 public生成器正规重生，独立private来源不变；inverse完整恢复Public28.15的精确字节。
+
+Web不从trace或浏览器存储猜选中；当前会话、主体、hydrate代次和手动改动版本绑定候选。controller重新读取完整目录，只有enabled／active且当前可用项可恢复。新提交冻结原body/key时退休旧候选，迟到目录不得覆盖新选择；每轮恢复有独立catalog scope，目录异常时不自动启用、也不新增可见重试面板。该字段不支持Custom API或文件引用，不扩大它们的执行契约。

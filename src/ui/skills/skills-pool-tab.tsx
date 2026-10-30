@@ -41,7 +41,6 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { HubClient } from "@/hub/client";
@@ -51,6 +50,7 @@ import { cn } from "@/lib/utils";
 import { SkillCatalogDialog, type CatalogDetailProjection } from "./skills-catalog-dialog";
 import { formatBytes } from "./skills-format";
 import { InstalledSkillCard } from "./skills-installed-card";
+import { PersonalSkillActions } from "./personal-skill-actions";
 import { SkillRevisions } from "./skill-revisions";
 import { type SkillsPool, skillStateKey, skillSourceScope } from "./skills-pool-model";
 import type { SkillsScopeFilter } from "./skills-scope";
@@ -117,7 +117,6 @@ export function SkillsPoolTab({
   busy,
   expanded,
   client,
-  onRetry,
   onDisable,
   onSetEnabled,
   enabledOverrides,
@@ -136,6 +135,7 @@ export function SkillsPoolTab({
   brandName,
   onOpenDetail,
   onUpdateSkill,
+  onRemoveInstalledSkill,
   embeddedCatalogOpen,
   onEmbeddedCatalogOpenChange,
   catalogTriggerRef: suppliedCatalogTriggerRef,
@@ -179,6 +179,7 @@ export function SkillsPoolTab({
   onCreateWithAi?: (prompt?: string) => void;
   onOpenDetail: (skill: SkillCard | SkillCatalogCard, source: HTMLElement) => void;
   onUpdateSkill: (skill: SkillCard, source: HTMLElement) => void;
+  onRemoveInstalledSkill?: (skill: SkillCard, source: HTMLElement) => void;
   /** Settings owns the embedded catalog route so its heading and content
    * transition from one state source. Standalone Skills keeps local state. */
   embeddedCatalogOpen?: boolean;
@@ -206,6 +207,7 @@ export function SkillsPoolTab({
   const disableTriggerRefs = useRef<Record<string, HTMLButtonElement | null>>(
     {},
   );
+  const removeTriggerRefs = useRef<Record<string, RefObject<HTMLButtonElement | null>>>({});
   const confirmDisableRefs = useRef<Record<string, HTMLButtonElement | null>>(
     {},
   );
@@ -306,8 +308,6 @@ export function SkillsPoolTab({
   // flight. Returning a standalone loading card made the dialog jump from a
   // blank body to a different layout between tabs. The controls and their
   // eventual list now keep one geometry; only card content reserves space.
-  const initialLoad = pool === null && !failed;
-  const initialFailure = pool === null && failed;
   const resolvedPool: SkillsPool = pool ?? { skills: [], quota: null };
 
   const q = query.trim().toLowerCase();
@@ -519,58 +519,12 @@ export function SkillsPoolTab({
         </ToggleGroup>
       </div>
 
-      {refreshFailed ? (
-        <Alert
-          variant="destructive"
-          className={styles.refreshFeedback}
-          data-testid="skills-refresh-error"
-        >
-          <AlertDescription>
-            <span>{t("skills.refreshError")}</span>
-            <Button
-              variant="outline"
-              type="button"
-              disabled={loading}
-              aria-busy={loading}
-              onClick={onRetry}
-            >
-              {loading ? <Spinner aria-hidden="true" /> : null}
-              {loading ? t("skills.loading") : t("skills.retry")}
-            </Button>
-          </AlertDescription>
-        </Alert>
-      ) : null}
+      {refreshFailed ? <span className="sr-only" role="status">{t("skills.refreshError")}</span> : null}
 
-      {initialFailure ? (
-        <Alert
-          variant="destructive"
-          className={styles.refreshFeedback}
-          data-testid="skills-load-error"
-        >
-          <AlertDescription>
-            <span>{t("skills.loadError")}</span>
-            <Button
-              variant="outline"
-              type="button"
-              disabled={loading}
-              aria-busy={loading}
-              onClick={onRetry}
-            >
-              {loading ? <Spinner aria-hidden="true" /> : null}
-              {t("skills.retry")}
-            </Button>
-          </AlertDescription>
-        </Alert>
-      ) : initialLoad ? (
-        <div
-          className={styles.loadingState}
-          aria-busy="true"
-          aria-label={t("skills.title")}
-        >
-          <Skeleton className={styles.loadingLine} aria-hidden="true" />
-          <Skeleton className={styles.loadingLine} aria-hidden="true" />
-          <Skeleton className={styles.loadingLineShort} aria-hidden="true" />
-        </div>
+      {pool === null ? (
+        <ul className={styles.list} data-testid="skills-pool-list" aria-busy={loading || undefined} aria-label={t("skills.title")}>
+          <li className="sr-only" role="status">{t(failed ? "skills.loadError" : "skills.loading")}</li>
+        </ul>
       ) : !hasSkills ? (
         <Empty
           className={styles.emptyState}
@@ -598,6 +552,7 @@ export function SkillsPoolTab({
             // in the same scope are still independent installed Skills.
             const isEnabled =
               enabledOverrides.get(stateKey) ?? skill.enabled !== false;
+            const removeTrigger = removeTriggerRefs.current[stateKey] ??= { current: null };
             const detailAvailable =
               skill.source_status !== "deleted" &&
               skill.skill_id !== undefined &&
@@ -618,6 +573,7 @@ export function SkillsPoolTab({
                         : null
                     }
                     onUpdate={(source) => onUpdateSkill(skill, source)}
+                    {...(onRemoveInstalledSkill === undefined ? {} : { onRemoveInstallation: (source: HTMLElement) => onRemoveInstalledSkill(skill, source) })}
                     onEnabledChange={(enabled) =>
                       onSetEnabled(skill, enabled, stateKey)
                     }
@@ -693,6 +649,10 @@ export function SkillsPoolTab({
                           embedded && styles.embeddedItemActions,
                         )}
                       >
+                        {skill.source_status === "deleted" && skill.installation_id && onRemoveInstalledSkill ? <PersonalSkillActions
+                          disabled={busy !== null || isLocked} writable={false} triggerRef={removeTrigger}
+                          onRemoveInstallation={() => { if (removeTrigger.current) onRemoveInstalledSkill(skill, removeTrigger.current); }}
+                        /> : null}
                         {skill.available_update ? <Button type="button" variant="outline" disabled={busy !== null || skill.source_status === "deleted"} onClick={event => onUpdateSkill(skill, event.currentTarget)}>{t("skills.update.available", { revision: skill.available_update.revision })}</Button> : null}
                         <Button
                           variant="outline"

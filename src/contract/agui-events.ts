@@ -1,8 +1,10 @@
+import {actionTitleSchema,runDisplaySkillSchema,safeVirtualPathSchema} from "./answer-actions"
 // Web ↔ BFF streaming wire contract. This module validates canonical AG-UI
 // frames only; reducer/UI projection belongs to the engine adapter.
 
 import { EventSchemas, EventType, RunFinishedOutcomeSchema } from "@ag-ui/core"
 import { z } from "zod"
+import { BFF_TOOL_DISPLAY_CODES, BFF_TOOL_DISPLAY_DETAIL_PROFILE } from "@/generated/bff-tool-display"
 
 import { interactionStateSchema } from "./control"
 import { agentFailureCodeSchema, agentFailureProfileSchema } from "./agent-failure"
@@ -13,9 +15,30 @@ const unicodeString = (max: number) => z.string().min(1).refine((value) => Array
 export const runTodoSchema = z.object({ content: unicodeString(1024), status: z.enum(["pending", "in_progress", "completed"]) }).strict()
 const activityIdSchema = z.string().regex(/^act_[0-9a-f]{64}$/u)
 const segmentIdSchema = z.string().regex(/^seg_[0-9a-f]{64}$/u)
-const toolActivitySchema = z.object({ activity: z.literal("tool"), activity_id: activityIdSchema, segment_id: segmentIdSchema, status: z.enum(["running", "completed", "failed"]), display_code: z.literal("tool.execution") }).strict()
+const detailProfile = BFF_TOOL_DISPLAY_DETAIL_PROFILE
+const forbiddenDetailUnicode = new RegExp(detailProfile.forbiddenUnicodeCategories.map((category) => `\\p{${category}}`).join("|"), "u")
+const fileDetailNamePattern = new RegExp(detailProfile.fileNamePattern, "u")
+const toolDisplayDetailSchema = z.object({
+  kind: z.enum(detailProfile.kinds),
+  virtual_path:safeVirtualPathSchema.optional(),
+  name: z.string().superRefine((value, context) => {
+    const scalars = Array.from(value).length
+    if (scalars < detailProfile.nameMinScalars || scalars > detailProfile.nameMaxScalars || new TextEncoder().encode(value).length > detailProfile.nameMaxUtf8Bytes || value.normalize(detailProfile.normalization) !== value || forbiddenDetailUnicode.test(value)) {
+      context.addIssue({ code: z.ZodIssueCode.custom, message: "invalid safe tool target name" })
+    }
+  }),
+}).strict()
+const toolActivitySchema = z.object({ activity: z.literal("tool"), activity_id: activityIdSchema, segment_id: segmentIdSchema, status: z.enum(["running", "completed", "failed"]), display_code: z.enum(BFF_TOOL_DISPLAY_CODES), action_title: actionTitleSchema.optional(), display_detail: toolDisplayDetailSchema.optional() }).strict().superRefine((value, context) => {
+  const detail = value.display_detail
+  if (!detail) return
+  if(detail.virtual_path!==undefined&&(detail.kind!=="file"||detail.virtual_path.split("/").at(-1)!==detail.name)){context.addIssue({code:z.ZodIssueCode.custom,path:["display_detail"],message:"invalid exact file path"})}
+  if (!detailProfile.codesByKind[detail.kind].some((code) => code === value.display_code) || (detail.kind === "file" && !fileDetailNamePattern.test(detail.name))) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["display_detail"], message: "tool target does not match its owner category" })
+  }
+})
 const subagentActivitySchema = z.object({ activity: z.literal("subagent"), activity_id: activityIdSchema, segment_id: segmentIdSchema, status: z.enum(["running", "completed", "failed"]), display_code: z.literal("subagent.execution") }).strict()
-const skillActivitySchema = z.object({ activity: z.literal("skill"), activity_id: activityIdSchema, preflight_id: z.string().regex(/^spf_[0-9a-f]{64}$/u), source_refs: z.array(z.string().regex(/^skill:(?!skill:)[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u)).min(1).max(16).refine((items) => new Set(items).size === items.length), phase: z.enum(["resolving", "loading", "ready", "failed"]), error_code: z.enum(["skill_resolve_failed", "skill_load_failed"]).optional() }).strict().superRefine((value, context) => {
+const skillActivitySchema = z.object({ activity: z.literal("skill"), activity_id: activityIdSchema, preflight_id: z.string().regex(/^spf_[0-9a-f]{64}$/u), source_refs: z.array(z.string().regex(/^skill:(?!skill:)[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u)).min(1).max(16).refine((items) => new Set(items).size === items.length), display_skills:z.array(runDisplaySkillSchema).max(16).optional(), phase: z.enum(["resolving", "loading", "ready", "failed"]), error_code: z.enum(["skill_resolve_failed", "skill_load_failed"]).optional() }).strict().superRefine((value, context) => {
+  if(value.display_skills!==undefined&&(value.phase!=="ready"||new Set(value.display_skills.map(item=>item.source_ref)).size!==value.display_skills.length||value.display_skills.some(item=>!value.source_refs.includes(item.source_ref))))context.addIssue({code:z.ZodIssueCode.custom,path:["display_skills"],message:"Skill display differs from original refs"})
   if ((value.phase === "failed") !== (value.error_code !== undefined)) context.addIssue({ code: z.ZodIssueCode.custom, path: ["error_code"], message: "invalid conditional error_code" })
 })
 export const runProcessActivitySchema = z.union([toolActivitySchema, subagentActivitySchema, skillActivitySchema])
@@ -26,6 +49,7 @@ export const kokoroAgUiMetadataSchema = z
   .object({
     event_id: z.string().min(1),
     seq: z.number().int().nonnegative(),
+    public_sequence: z.string().regex(/^[1-9][0-9]{0,18}(?![\s\S])/u).refine((value) => BigInt(value) <= BigInt("9223372036854775807")),
     session_id: z.string().min(1),
     run_id: z.string().min(1).nullable(),
     timestamp: z.string().datetime({ offset: true }),
@@ -44,6 +68,7 @@ const dispatchRunErrorMetadataSchema = z
     event_id: z.string().min(1),
     seq: z.string().regex(/^[1-9][0-9]*$/u),
     source_owner: z.literal("kokoro-bff"),
+    public_sequence: z.string().regex(/^[1-9][0-9]{0,18}(?![\s\S])/u).refine((value) => BigInt(value) <= BigInt("9223372036854775807")),
     session_id: z.string().min(1),
     run_id: nonblankString,
     timestamp: z.string().datetime({ offset: true }),
@@ -71,9 +96,11 @@ const runFinishedSchema = base.extend({
   // canonical AG-UI outcome. Keep both declared rather than accepting
   // arbitrary top-level fields from an untrusted stream.
   status: z.enum(["completed", "cancelled"]).optional(),
-  result: z.unknown().optional(),
+  result: z.union([z.object({ final_segment_id: z.string().min(1) }).strict(), z.object({ status: z.literal("cancelled") }).strict()]).optional(),
   outcome: RunFinishedOutcomeSchema.optional(),
   usage: z.array(z.record(z.unknown())).optional(),
+}).superRefine((event, context) => {
+  if (event.result && "final_segment_id" in event.result && (event.status === "cancelled" || event.outcome?.type === "interrupt")) context.addIssue({ code: z.ZodIssueCode.custom, message: "Cancelled Run has no final answer" })
 })
 
 const agentRunErrorSchema = z

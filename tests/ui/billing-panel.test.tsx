@@ -81,8 +81,9 @@ describe("BillingPanel", () => {
     expect(debit.getAttribute("data-sign")).toBe("negative")
     const credit = screen.getByText("+5")
     expect(credit.getAttribute("data-sign")).toBe("positive")
-    // 未知 reason 回退原文（不裸露 key）。
-    expect(screen.getByText("top_up_custom")).toBeTruthy()
+    // 未识别的来源不泄漏内部代码，也不猜成充值或消费。
+    expect(screen.getByText("Credit activity")).toBeTruthy()
+    expect(screen.queryByText("top_up_custom")).not.toBeInTheDocument()
   })
 
   it("shows an empty state when there are no transactions", async () => {
@@ -428,16 +429,18 @@ describe("R255 bounded Credit read and mounted recovery", () => {
     expect(screen.queryByText("42", { exact: true })).not.toBeInTheDocument()
   })
 
-  it("refresh failure is an error instead of advertising the previously read balance as current", async () => {
+  it("keeps a confirmed balance when the independent ledger read fails without adding a retry panel", async () => {
     const summary = vi.fn().mockResolvedValueOnce(r255ExistingSummary).mockRejectedValueOnce(new Error("billing_unavailable"))
     const ledger = vi.fn().mockRejectedValueOnce(new Error("ledger unavailable")).mockResolvedValueOnce({ items: [], page: { next_cursor: null } })
     render(<BillingContent {...{ preview: false, readBoundary: { admitted: true, subject: "billing-test-owner", generation: 1 } }} client={makeClient({ summary, ledger })} embedded />, { wrapper: LocaleProvider })
     await screen.findByText("42", { exact: true })
-    fireEvent.click(await screen.findByRole("button", { name: "Reload" }))
-    await waitFor(() => expect(summary).toHaveBeenCalledTimes(2))
-    await act(async () => { await Promise.resolve() })
-    expect(screen.queryByText("42", { exact: true })).not.toBeInTheDocument()
-    expect(screen.getByTestId("billing-balance")).toHaveTextContent("Failed to load")
+    await waitFor(() => expect(screen.getByTestId("billing-ledger")).toHaveAttribute("aria-busy", "false"))
+    expect(screen.getByText("42", { exact: true })).toBeVisible()
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Reload" })).not.toBeInTheDocument()
+    expect(screen.getByTestId("billing-ledger")).not.toHaveTextContent("No transactions yet")
+    expect(summary).toHaveBeenCalledTimes(1)
+    expect(ledger).toHaveBeenCalledTimes(1)
   })
 
   it("a verified subject change cannot adopt a prior actor's shared summary or a late ledger", async () => {
@@ -452,25 +455,31 @@ describe("R255 bounded Credit read and mounted recovery", () => {
     await act(async () => { oldLedger.resolve({ items: [r255ExistingEntry], page: { next_cursor: null } }); await Promise.resolve() })
     expect(await screen.findByText("7", { exact: true })).toBeInTheDocument()
     expect(screen.queryByText("42", { exact: true })).not.toBeInTheDocument()
-    expect(screen.queryByText("r255-entry")).not.toBeInTheDocument()
+    expect(screen.queryByText("-0.000001", { exact: true })).not.toBeInTheDocument()
   })
 
   it("keeps pagination single-flight and makes a failed page explicitly retry the same cursor", async () => {
     const page = r255Deferred<{ items: typeof r255ExistingEntry[]; page: { next_cursor: string | null } }>()
     const ledger = vi.fn().mockResolvedValueOnce({ items: [r255ExistingEntry], page: { next_cursor: "same-opaque-page" } })
-      .mockImplementationOnce(() => page.promise).mockResolvedValueOnce({ items: [{ ...r255ExistingEntry, journal_id: "33333333-3333-4333-8333-333333333333", source_kind: "r255-second" }], page: { next_cursor: null } })
+      .mockImplementationOnce(() => page.promise).mockResolvedValueOnce({ items: [{ ...r255ExistingEntry, journal_id: "33333333-3333-4333-8333-333333333333", source_kind: "tool_call" }], page: { next_cursor: null } })
     render(<BillingContent {...{ preview: false, readBoundary: { admitted: true, subject: "billing-test-owner", generation: 1 } }} client={makeClient({ ledger })} embedded />, { wrapper: LocaleProvider })
     const more = await screen.findByRole("button", { name: "Load more" })
     fireEvent.click(more)
     expect(more).toBeDisabled()
+    expect(more).toHaveTextContent("Load more")
+    expect(screen.queryByText("Loading…")).not.toBeInTheDocument()
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument()
     fireEvent.click(more)
     expect(ledger).toHaveBeenCalledTimes(2)
     await act(async () => { page.reject(new Error("page unavailable")); await Promise.resolve() })
     const section = screen.getByTestId("billing-ledger")
-    expect(section).toHaveTextContent("Failed to load")
-    const retry = screen.getByRole("button", { name: "Reload" })
+    expect(section).not.toHaveTextContent("Failed to load")
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Reload" })).not.toBeInTheDocument()
+    expect(section).toHaveTextContent("Credit activity")
+    const retry = screen.getByRole("button", { name: "Load more" })
     fireEvent.click(retry)
-    await screen.findByText("r255-second")
+    await screen.findByText("Tool call")
     expect(ledger.mock.calls[2]).toEqual(["same-opaque-page", expect.any(AbortSignal), expect.any(Function)])
     expect(screen.queryByRole("button", { name: "Load more" })).not.toBeInTheDocument()
   })
@@ -482,8 +491,10 @@ describe("R255 bounded Credit read and mounted recovery", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Load more" }))
     await waitFor(() => expect(ledger).toHaveBeenCalledTimes(2))
     await act(async () => { await Promise.resolve() })
-    expect(screen.getAllByText("r255-entry")).toHaveLength(1)
-    expect(screen.getByTestId("billing-ledger")).toHaveTextContent("Failed to load")
+    expect(screen.getAllByText("Credit activity")).toHaveLength(1)
+    expect(screen.getByTestId("billing-ledger")).not.toHaveTextContent("Failed to load")
+    expect(screen.getByRole("button", { name: "Load more" })).toBeEnabled()
+    expect(ledger).toHaveBeenCalledTimes(2)
   })
 
   it("stops at the owner's explicit null cursor after rendering a valid native journal page", async () => {
@@ -534,7 +545,10 @@ describe("R255 closed read boundary and honest account states", () => {
     render(<BillingContent {...{ preview: false, readBoundary: { admitted: true, subject: "billing-test-owner", generation: 1 } }} client={createBillingClient()} embedded />, { wrapper: LocaleProvider })
     const balance = screen.getByTestId("billing-balance")
     if (expected === null) {
-      await waitFor(() => expect(balance).toHaveTextContent("Failed to load"))
+      await waitFor(() => expect(balance).toHaveAttribute("aria-busy", "false"))
+      expect(within(balance).getAllByText("—")).toHaveLength(2)
+      expect(within(balance).queryByRole("alert")).not.toBeInTheDocument()
+      expect(within(balance).queryByRole("button", { name: "Reload" })).not.toBeInTheDocument()
       expect(within(balance).queryAllByText("0", { exact: true })).toHaveLength(0)
     } else {
       await waitFor(() => expect(within(balance).getAllByText(expected, { exact: true }).length).toBeGreaterThan(0))
@@ -605,19 +619,22 @@ describe("R255 missing Credit account domain state", () => {
     { name: "generic 404", status: 404, body: { error: { code: "not_found", message: "Route not found" }, meta: { request_id: requestId } } },
     { name: "unavailable 503", status: 503, body: { error: { code: "billing_unavailable", message: "Billing is unavailable" }, meta: { request_id: requestId } } },
     { name: "404 missing its request metadata", status: 404, body: { error: { code: "billing_account_not_found", message: "Billing account was not found" } } },
-  ])("keeps $name as a retryable display error rather than an unopened account", async ({ status, body }) => {
+  ])("keeps $name unknown without a passive retry panel or fabricated unopened account", async ({ status, body }) => {
     vi.stubGlobal("fetch", vi.fn(async () => Response.json(body, { status, headers: responseHeaders })))
     render(<BillingContent {...{ preview: false, readBoundary: { admitted: true, subject: "billing-test-owner", generation: 1 } }} client={createBillingClient()} embedded />, { wrapper: LocaleProvider })
 
     for (const sectionId of ["billing-balance", "billing-ledger"]) {
       const section = screen.getByTestId(sectionId)
-      expect(await within(section).findByText(/^Failed to load/)).toBeInTheDocument()
-      expect(within(section).getByRole("button", { name: "Reload" })).toBeInTheDocument()
+      await waitFor(() => expect(section).toHaveAttribute("aria-busy", "false"))
+      expect(within(section).queryByRole("alert")).not.toBeInTheDocument()
+      expect(within(section).queryByRole("button", { name: "Reload" })).not.toBeInTheDocument()
+      expect(within(section).getAllByText("—").length).toBeGreaterThan(0)
+      expect(within(section).queryByText("No transactions yet")).not.toBeInTheDocument()
       expect(within(section).queryByText("No credit account yet")).not.toBeInTheDocument()
     }
   })
 
-  it.each(["summary", "ledger"])("does not let a missing %s conceal the other read's failure", async (missingRead) => {
+  it.each(["summary", "ledger"])("keeps both reads unknown when missing %s accompanies another failed read", async (missingRead) => {
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       const missing = String(input).endsWith(`/${missingRead}`)
       return Response.json(missing ? missingBody : {
@@ -629,10 +646,14 @@ describe("R255 missing Credit account domain state", () => {
 
     const missingSection = screen.getByTestId(missingRead === "summary" ? "billing-balance" : "billing-ledger")
     const failedSection = screen.getByTestId(missingRead === "summary" ? "billing-ledger" : "billing-balance")
-    expect(await within(missingSection).findByText(/^Failed to load/)).toBeInTheDocument()
-    expect(within(missingSection).getByRole("button", { name: "Reload" })).toBeInTheDocument()
-    expect(await within(failedSection).findByText(/^Failed to load/)).toBeInTheDocument()
-    expect(within(failedSection).getByRole("button", { name: "Reload" })).toBeInTheDocument()
+    for (const section of [missingSection, failedSection]) {
+      await waitFor(() => expect(section).toHaveAttribute("aria-busy", "false"))
+      expect(within(section).queryByRole("alert")).not.toBeInTheDocument()
+      expect(within(section).queryByRole("button", { name: "Reload" })).not.toBeInTheDocument()
+      expect(within(section).getAllByText("—").length).toBeGreaterThan(0)
+      expect(within(section).queryByText("No transactions yet")).not.toBeInTheDocument()
+      expect(within(section).queryByText("0", { exact: true })).not.toBeInTheDocument()
+    }
     expect(within(failedSection).queryByText("No credit account yet")).not.toBeInTheDocument()
   })
 
@@ -660,7 +681,7 @@ describe("R255 missing Credit account domain state", () => {
     { name: "missing no-store cache directive", body: missingBody, header: "cache-control", value: "private, max-age=0" },
     { name: "missing request ID header", body: missingBody, header: "x-request-id", value: null },
     { name: "non-JSON media", body: missingBody, header: "content-type", value: "text/plain" },
-  ])("keeps $name as a display error, not a trusted missing account", async ({ body, header, value }) => {
+  ])("keeps $name neutral, not a trusted missing account", async ({ body, header, value }) => {
     vi.stubGlobal("fetch", vi.fn(async () => {
       const headers = new Headers({ ...responseHeaders, "content-type": "application/json" })
       if (header !== undefined) {
@@ -672,8 +693,11 @@ describe("R255 missing Credit account domain state", () => {
     render(<BillingContent {...{ preview: false, readBoundary: { admitted: true, subject: "billing-test-owner", generation: 1 } }} client={createBillingClient()} embedded />, { wrapper: LocaleProvider })
     for (const sectionId of ["billing-balance", "billing-ledger"]) {
       const section = screen.getByTestId(sectionId)
-      expect(await within(section).findByText(/^Failed to load/)).toBeInTheDocument()
-      expect(within(section).getByRole("button", { name: "Reload" })).toBeInTheDocument()
+      await waitFor(() => expect(section).toHaveAttribute("aria-busy", "false"))
+      expect(within(section).queryByRole("alert")).not.toBeInTheDocument()
+      expect(within(section).queryByRole("button", { name: "Reload" })).not.toBeInTheDocument()
+      expect(within(section).getAllByText("—").length).toBeGreaterThan(0)
+      expect(within(section).queryByText("No transactions yet")).not.toBeInTheDocument()
       expect(within(section).queryByText("No credit account yet")).not.toBeInTheDocument()
     }
   })
@@ -772,7 +796,7 @@ describe("R255 missing Credit account domain state", () => {
     await waitFor(() => expect(oldSignals).toHaveLength(2))
     window.localStorage.setItem("kokoro.web.auth-index-subject", "r255-missing-actor-B")
     mounted.rerender(<BillingContent {...{ preview: false, readBoundary: { admitted: true, subject: "billing-test-owner", generation: 1 } }} client={client} embedded />)
-    if (currentMissing) await screen.findAllByText(/^Failed to load/)
+    if (currentMissing) await waitFor(() => expect(screen.getByTestId("billing-balance")).toHaveAttribute("aria-busy", "false"))
     else await screen.findByText("7", { exact: true })
     await act(async () => {
       lateSummary.resolve(Response.json(currentMissing ? r255ExistingSummary : missingBody, { status: currentMissing ? 200 : 404, headers: responseHeaders }))
@@ -781,7 +805,9 @@ describe("R255 missing Credit account domain state", () => {
     })
     expect(oldSignals.every((signal) => signal?.aborted)).toBe(true)
     if (currentMissing) {
-      expect(screen.getAllByText(/^Failed to load/)).toHaveLength(2)
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+      expect(screen.queryByRole("button", { name: "Reload" })).not.toBeInTheDocument()
+      expect(within(screen.getByTestId("billing-balance")).getAllByText("—")).toHaveLength(2)
       expect(screen.queryByText("7", { exact: true })).not.toBeInTheDocument()
     } else {
       expect(screen.getByText("7", { exact: true })).toBeInTheDocument()
@@ -789,7 +815,7 @@ describe("R255 missing Credit account domain state", () => {
       expect(screen.queryByText("No credit account yet")).not.toBeInTheDocument()
     }
     expect(screen.queryByText("42", { exact: true })).not.toBeInTheDocument()
-    expect(screen.queryByText("r255-entry")).not.toBeInTheDocument()
+    expect(screen.queryByText("-0.000001", { exact: true })).not.toBeInTheDocument()
   })
 })
 
@@ -853,11 +879,20 @@ it("resource category previews preserve real task data and perform no additional
   expect(screen.getByRole("heading", { name: "Integrations" })).toBeVisible();
   expect(screen.queryByTestId("billing-balance")).not.toBeInTheDocument();
   expect(screen.queryByText(/\$0|No websites/)).not.toBeInTheDocument();
-  fireEvent.change(screen.getByLabelText("Start date"), { target: { value: "2026-10-01" } });
-  fireEvent.change(screen.getByLabelText("End date"), { target: { value: "2026-10-17" } });
+  expect(screen.getAllByText("Not available yet")).toHaveLength(1);
+  expect(screen.queryByText(/not connected|cannot be read/)).not.toBeInTheDocument();
+  for (const title of ["Cloud services", "Artificial intelligence", "Integrations"]) {
+    const card = screen.getByRole("heading", { name: title }).parentElement!;
+    expect(within(card).getByText("—")).toHaveAccessibleDescription("Not available yet");
+  }
+  expect(screen.getByLabelText("Start date")).toBeDisabled();
+  expect(screen.getByLabelText("End date")).toBeDisabled();
   expect(screen.getByRole("button", { name: "Auto top-up" })).toBeDisabled();
   fireEvent.keyDown(screen.getByRole("tab", { name: "Computer" }), { key: "Enter" });
   expect(screen.getByRole("button", { name: "Create cloud computer" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Create cloud computer" })).toHaveAccessibleDescription("Not available yet");
+  expect(screen.queryByText(/not connected|cannot be read/)).not.toBeInTheDocument();
+  expect(screen.getAllByText("Not available yet")).toHaveLength(1);
   fireEvent.keyDown(screen.getByRole("tab", { name: "Phone" }), { key: "Enter" });
   fireEvent.click(screen.getByRole("button", { name: "Create now" }));
   const phone = screen.getByRole("dialog", { name: "Assign a virtual phone to your agent" });

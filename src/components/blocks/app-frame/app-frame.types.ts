@@ -19,6 +19,7 @@ import type {
 import type { Project } from "@/contract/project";
 import type { ProjectReadState } from "@/features/app/use-project-list";
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
+import type { ProjectMcpRecommendationsModel } from "@/features/app/use-project-mcp-recommendations";
 
 import type { ScheduledTaskClient } from "@/features/scheduled-tasks";
 
@@ -46,6 +47,13 @@ export type ProjectScheduledTaskInput = {
   expiresAt?: string;
   autoApprove: boolean;
 };
+
+export class ProjectInstructionSaveError extends Error {
+  constructor(readonly status: "unknown" | "read-error" | "rejected" | "forbidden", readonly instruction: string) {
+    super(`project_instruction_${status}`)
+    this.name = "ProjectInstructionSaveError"
+  }
+}
 
 export type WorkspaceCapabilities = {
   instructions: boolean;
@@ -108,7 +116,19 @@ export type AppFrameProps = {
   commandMenu?: ComponentType<AppCommandMenuProps>;
 };
 
+/** Ephemeral UI handoff; Project content remains supplied by the current owner read. */
+export type ProjectInstructionRequest = Readonly<{
+  projectRef: string;
+  returnFocus: HTMLButtonElement | null;
+  fallbackFocus: () => HTMLButtonElement | null;
+  isCurrent: () => boolean;
+  onConsumed: () => void;
+}>;
+
 export type EmptyStateProps = {
+  projectConversationContent?: React.ReactNode;
+  projectContextVisible?: boolean;
+  onCloseProjectContext?: (() => void) | undefined;
   /**
    * The shell's current admission decision. Route-owned surfaces must use this
    * boundary before mounting their own browser reads.
@@ -118,6 +138,7 @@ export type EmptyStateProps = {
   projectHistoryStatus?: "blocked" | "loading" | "ready" | "error";
   projectHistoryRetryable?: boolean;
   projectDetail?: ProjectReadState<Project>;
+  projectMcpRecommendations?: ProjectMcpRecommendationsModel;
   onRetryProjectRead?: () => void;
   brandName?: string;
   /** Route-owned desktop surfaces use the same preview/live transport as the shell. */
@@ -141,6 +162,7 @@ export type EmptyStateProps = {
   projectConversationsError?: boolean;
   onRetryProjectConversations?: () => void;
   /** Persisted project-level instructions loaded from the project projection. */
+  projectInstructionRequest?: ProjectInstructionRequest;
   projectInstructions?: string;
   projectInstructionHistory?: readonly ProjectInstructionRevision[];
   onSaveProjectInstructions?: (instructions: string) => Promise<void>;
@@ -183,8 +205,6 @@ export type EmptyStateProps = {
   workspaceCapabilities?: WorkspaceCapabilities;
   /** Project route renders the project workbench instead of the direct-chat home. */
   projectWorkspace?: boolean;
-  /** Desktop project conversation route keeps a fresh conversation distinct from the project overview. */
-  projectConversation?: boolean;
   /** Session share capability for project-style desktop headers. */
   shareClient?: Pick<SessionClient, "createShare" | "revokeShare">;
 };

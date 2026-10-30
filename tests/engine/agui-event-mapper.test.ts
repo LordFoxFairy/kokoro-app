@@ -1,3 +1,4 @@
+let publicLedgerFixtureSequence = 1000
 import { describe, expect, it } from "vitest"
 
 import { AgUiEventMapper } from "@/engine/agui-event-mapper"
@@ -18,7 +19,7 @@ function metadata(
   sessionId = "session-1",
 ) {
   return {
-    kokoro: {
+    kokoro: { public_sequence: String(++publicLedgerFixtureSequence),
       event_id: eventId,
       seq,
       session_id: sessionId,
@@ -315,7 +316,7 @@ describe("AgUiEventMapper", () => {
     const mapped = mapper.map(CURSORS.terminal, {
       type: "RUN_ERROR", timestamp: 5, threadId: "session-1", runId: "run-1",
       code: "new_opaque_launch_failure", message: "Agent launch could not be confirmed",
-      metadata: { kokoro: {
+      metadata: { kokoro: { public_sequence: String(++publicLedgerFixtureSequence),
         event_id: "dispatch-error", seq: sourceSequence, source_owner: "kokoro-bff",
         session_id: "session-1", run_id: "run-1", timestamp: "2026-09-02T12:00:00.000Z",
       } },
@@ -349,8 +350,7 @@ describe("AgUiEventMapper", () => {
       runId: "run-1",
       code: "internal_error",
       message: "Agent run failed",
-      metadata: { kokoro: {
-        ...metadata("agent-error", 10).kokoro,
+      metadata: { kokoro: { ...metadata("agent-error", 10).kokoro,
         failure: { source: "agent", code: "internal_error", retryable: false },
       } },
     })
@@ -448,4 +448,25 @@ describe("R66 public4 queued/START/full-state mapper", () => {
     }), 23))
     expect(terminal.terminal).toBe(false)
   })
+})
+
+for (const display_code of ["tool.execution", "tool.file.read", "tool.mcp.discover", "tool.mcp.describe", "tool.mcp.call", "tool.web.search", "tool.web.fetch", "tool.file.write", "tool.file.deliver"]) {
+  it(`Public28 mapper preserves ${display_code} as process only`, () => {
+    const value = { activity: "tool", activity_id: `act_${"a".repeat(64)}`, segment_id: `seg_${"b".repeat(64)}`, status: "running", display_code }
+    const mapped = new AgUiEventMapper().map(CURSORS.start, { type: "CUSTOM", timestamp: 1, name: "kokoro.activity.updated", value, metadata: metadata("public28", 1) })
+    expect(mapped.projectionEvent).toMatchObject({ kind: "activity.updated", payload: value })
+    expect(mapped.uiMessageChunks).not.toEqual(expect.arrayContaining([expect.objectContaining({ type: expect.stringMatching(/^(text|reasoning|tool)/u) })]))
+  })
+}
+
+it("Public28.4 preserves one immutable target in both AG-UI projection and AI SDK data parts, never answer text", () => {
+  const mapper = new AgUiEventMapper()
+  const display_detail = { kind: "mcp_tool", name: "provider/tools.read" }
+  const base = { activity: "tool", activity_id: `act_${"a".repeat(64)}`, segment_id: `seg_${"b".repeat(64)}`, display_code: "tool.mcp.call", display_detail }
+  for (const [index, status] of ["running", "completed", "failed"].entries()) {
+    const value = { ...base, status }
+    const frame = mapper.map(CURSORS.start, { type: "CUSTOM", timestamp: 1, name: "kokoro.activity.updated", value, metadata: metadata(`target-${index}`, index + 1) })
+    expect(frame.projectionEvent).toMatchObject({ kind: "activity.updated", payload: value })
+    expect(frame.uiMessageChunks).toEqual([expect.objectContaining({ type: "data-kokoro", data: expect.objectContaining({ kind: "activity.updated", payload: value }) })])
+  }
 })

@@ -140,6 +140,17 @@ describe("checked-in HTTP request and response contracts", () => {
     expect(messageCreateParamsSchema.parse({...input,selected_skill_source_refs:[]})).toHaveProperty("selected_skill_source_refs",[])
   })
 
+  it("accepts only bounded exact Connection IDs, never the retired trace-only MCP alias", () => {
+    const base = { idempotency_key: "mcp-selection", content: "hello" }
+    for (const ids of [[], ["connection:first", "connection_second-2"]]) {
+      expect(messageCreateParamsSchema.parse({ ...base, selected_mcp_connection_ids: ids })).toHaveProperty("selected_mcp_connection_ids", ids)
+    }
+    for (const ids of [["same", "same"], ["bad\n"], ["not an id"], ["a".repeat(192)], Array.from({ length: 17 }, (_, i) => `connection_${i}`)]) {
+      expect(messageCreateParamsSchema.safeParse({ ...base, selected_mcp_connection_ids: ids }).success).toBe(false)
+    }
+    expect(messageCreateParamsSchema.safeParse({ ...base, mcp_servers: ["server_1"] }).success).toBe(false)
+  })
+
   it("accepts the canonical message request and rejects missing/unknown fields", () => {
     expect(
       messageCreateParamsSchema.parse({
@@ -149,7 +160,7 @@ describe("checked-in HTTP request and response contracts", () => {
         agent: "general",
         thinking: true,
         selected_skill_source_refs: ["skill:skill_1"],
-        mcp_servers: ["server_1"],
+        selected_mcp_connection_ids: ["connection_1"],
         project_ref: "project_1",
       }),
     ).toMatchObject({ idempotency_key: "request_1", content: "hello" })
@@ -480,6 +491,7 @@ describe("cursor pagination and same-origin client paths", () => {
         kokoro: {
           event_id: "evt_43",
           seq: 43,
+          public_sequence: "501",
           session_id: "project_session",
           run_id: "run_1",
           timestamp: "2026-08-31T12:00:01.000Z",
@@ -721,11 +733,31 @@ async function r76PublicSpec() {
   return { bytes, spec }
 }
 
+describe("Skill metadata and download contract separation", () => {
+  it("requires metadata only for GetSkill while DownloadSkill retains real download fields", async () => {
+    const { spec } = await r76PublicSpec()
+    expect(spec.paths["/skill.v1.SkillOptionalService/GetSkill"]!.post.responses["200"]).toMatchObject({
+      content: { "application/json": { schema: { $ref: "#/components/schemas/SpecificationDetailResponse" } } },
+    })
+    expect(spec.components.schemas.SpecificationDetailResponse).toEqual({
+      type: "object", additionalProperties: false, required: ["skill"],
+      properties: { skill: { $ref: "#/components/schemas/SpecificationSkill" } },
+    })
+    expect(spec.paths["/skill.v1.SkillService/DownloadSkill"]!.post.responses["200"]).toMatchObject({
+      content: { "application/json": { schema: { $ref: "#/components/schemas/SpecificationDownloadInfo" } } },
+    })
+    expect(spec.components.schemas.SpecificationDownloadInfo).toMatchObject({
+      additionalProperties: false, required: ["skill", "downloadInfo"],
+      properties: { downloadInfo: { additionalProperties: false, required: ["downloadUrl", "filename", "expiresAt"] } },
+    })
+  })
+})
+
 describe("R255 ScheduledTask owner recurrence graph under the current public pin", () => {
   it("consumes the exact locally accepted current canonical bytes", async () => {
     const { bytes, spec } = await r76PublicSpec()
-    expect(r76Hash("sha256").update(bytes).digest("hex")).toBe("727159cea88e9f70ca3d1127306e8a6a6bcaa568398de8b0d8fec1cce6b3fae3")
-    expect(spec.info.version).toBe("22.3.0")
+    expect(r76Hash("sha256").update(bytes).digest("hex")).toBe("ea0031103488daa1fcc0cca45fdd13f4d4061546ac4525c745ec47105649f7e7")
+    expect(spec.info.version).toBe("28.17.0")
   })
 
   it("publishes current rule details separately from immutable command snapshots", async () => {

@@ -1,6 +1,7 @@
 import { headers } from "next/headers"
 
 import { parseProductReturnTarget } from "@/lib/product-return-target"
+import { parseRailCollapsedCookie } from "@/lib/sidebar-preference"
 
 import { oidcRpConfig } from "@/lib/server/oidc-provider"
 import { productSessionState } from "@/lib/server/product-session"
@@ -22,21 +23,23 @@ export default async function AppLayout({
   children: React.ReactNode
 }>) {
   void children
+  const incoming = await headers()
+  const collapsed = parseRailCollapsedCookie(incoming.get("cookie") ?? "")
+  const presentation = collapsed === null ? {} : { desktopRailCollapsed: collapsed }
   if (process.env.NODE_ENV !== "production" && process.env.NEXT_PUBLIC_SESSION_PREVIEW === "1") {
-    return <AppGate />
+    return <AppGate {...presentation} />
   }
 
-  const incoming = await headers()
   const config = oidcRpConfig(process.env)
-  if (config === null) return <AppGate serverUnavailable />
+  if (config === null) return <AppGate {...presentation} serverUnavailable />
   const host = incoming.get("host")
   let trustedOrigin: URL
   try {
     trustedOrigin = new URL(config.relay.webOrigin)
   } catch {
-    return <AppGate serverUnavailable />
+    return <AppGate {...presentation} serverUnavailable />
   }
-  if (host !== trustedOrigin.host) return <AppGate serverUnavailable />
+  if (host !== trustedOrigin.host) return <AppGate {...presentation} serverUnavailable />
 
   let session: Awaited<ReturnType<typeof productSessionState>>
   try {
@@ -52,14 +55,14 @@ export default async function AppLayout({
       },
     )
   } catch {
-    return <AppGate serverUnavailable />
+    return <AppGate {...presentation} serverUnavailable />
   }
-  if (session.state === "refreshing" || session.state === "stale" || session.state === "unconfirmed") return <AppGate serverUnavailable />
+  if (session.state === "refreshing" || session.state === "stale" || session.state === "unconfirmed") return <AppGate {...presentation} serverUnavailable />
   if (session.state === "absent") {
     const target = parseProductReturnTarget(incoming.get("x-kokoro-product-return-target") ?? "")
     // Fragments never reach SSR. Hand off only navigation to the browser; do
     // not mount the workbench or start private reads for an absent session.
     return <ProductSignInRedirect fallbackTarget={target} />
   }
-  return <AppGate serverAdmitted />
+  return <AppGate {...presentation} serverAdmitted />
 }

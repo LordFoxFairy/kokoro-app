@@ -1,17 +1,23 @@
 "use client";
 
+import type { McpIconClient } from "@/hub/mcp-icon-client";
+import { useMcpIconDraft } from "./use-mcp-icon-draft";
+import { McpIconPicker } from "./mcp-icon-picker";
 import { connectorCommandFailureMessage } from "./connector-command-failure";
 
 import { useCallback, useState, type FormEvent } from "react";
-import { ImagePlus, Link2, Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { DialogTitle } from "@/components/ui/dialog";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
-import type { McpServerCreationFlow } from "./mcp-server-creation-flow";
+import type { McpServerCreationFlow, McpServerCreationCompletion } from "./mcp-server-creation-flow";
+import { McpPreparationStatus } from "./mcp-preparation-status";
 import { useMcpServerCreation } from "./use-mcp-server-creation";
 import { useT } from "@/i18n/context";
 
@@ -53,23 +59,29 @@ function isHttpsMcpUrl(value: string): boolean {
  */
 export function CustomMcpForm({
   flow,
+  iconClient,
   boundary,
   onDone,
   onCancel,
 }: {
   flow: McpServerCreationFlow;
+  iconClient?: McpIconClient | undefined;
   boundary: ProjectReadBoundary;
-  onDone: () => Promise<void>;
+  onDone: (result: McpServerCreationCompletion, current: () => boolean) => Promise<void>;
   onCancel: () => void;
 }) {
   const t = useT();
   const [name, setName] = useState("");
+  const [transport, setTransport] = useState<"streamable_http" | "sse_compat">("streamable_http");
   const [notes, setNotes] = useState("");
   const [url, setUrl] = useState("");
   const [headers, setHeaders] = useState<HeaderDraft[]>([]);
   const clearSecrets = useCallback(() => setHeaders(current => current.map(header => ({ ...header, value: "" }))), []);
   const creation = useMcpServerCreation(flow, boundary, onCancel, onDone, clearSecrets);
   const { state, completion, admitted, submitting, locked, editable, error, ready, needsOAuth } = creation;
+  const displayedTransport = state.unknown === "register" ? flow.getRegistrationTransport() : transport;
+
+  const icon = useMcpIconDraft(iconClient, boundary, locked, state.registered);
 
   const configuredHeaders = headers.filter((header) => header.name.trim());
   const partialHeader = headers.some(
@@ -89,25 +101,31 @@ export function CustomMcpForm({
     !partialHeader &&
     !duplicateHeader &&
     !invalidHeaderName &&
-    !submitting && !locked && flow.available;
+    !submitting && !locked && flow.available && icon.draft.canSave();
   const save = (event?: FormEvent<HTMLFormElement>): void => {
     event?.preventDefault();
     if (!canSubmit && !state.unknown && !state.registered) return;
-    void creation.save({ display_name: name.trim(), server_url: url.trim(),
+    icon.draft.protectForSave();
+    void creation.saveConfiguration({ ...icon.draft.change(), display_name: name.trim(), server_url: url.trim(), transport,
       ...(notes.trim() ? { notes: notes.trim() } : {}),
       ...(configuredHeaders.length ? { headers: configuredHeaders.map(header => ({ name: header.name.trim().toLowerCase(), value: header.value })) } : {}),
     });
   };
 
-  if (state.registered || completion !== "idle") {
+  const hasPreparationStatus = state.preparationView?.kind === "unknown" || Boolean(state.preparationView?.retired);
+  const recoveryRequired = Boolean(state.preparationView?.retired) || error || state.unknown !== null || completion === "retry";
+  const legacyConnection = state.registered && state.intent !== "configure" && state.intent !== "publish";
+  if ((state.registered || completion !== "idle") && (recoveryRequired || legacyConnection)) {
     return <section className={styles.customMcpResult} aria-live="polite">
       <DialogTitle className={styles.customMcpTitle}>{state.facts?.server.display_name ?? (state.name || name)}</DialogTitle>
       {!admitted ? <p className="sr-only" role="status">{t("mcp.creationSession")}</p> : <p>{submitting ? t("mcp.submitting") : ready ? t("mcp.active") : t("mcp.pending")}</p>}
-      {error || state.unknown ? <p role="alert">{t(connectorCommandFailureMessage(creation.failure, state.unknown ? "mcp.serverCreateUnknown" : "mcp.error"))}</p> : null}
+      {(error || state.unknown) && !hasPreparationStatus ? <p role="alert">{t(state.registrationRejection === "url_conflict" ? "mcp.serverUrlConflict" : connectorCommandFailureMessage(creation.failure, state.unknown ? "mcp.serverCreateUnknown" : "mcp.error"))}</p> : null}
+      <McpPreparationStatus view={creation.preparationView} history={creation.history} disabled={!admitted || submitting}
+        onCheck={() => void creation.checkPreparation()} onStop={() => void creation.stopWaiting()} onReconnect={() => void creation.reconnect()} />
       <footer>
-        <Button type="button" variant="outline" onClick={creation.cancel}>{t("mcp.cancel")}</Button>
+        <Button type="button" variant="outline" onClick={() => { icon.draft.cancel(); creation.cancel(); }}>{t("mcp.cancel")}</Button>
         {needsOAuth ? <Button type="button" disabled={!admitted || submitting || Boolean(state.unknown)} onClick={() => void creation.authorize()}>{t("settings.connect")}</Button> : null}
-        {ready && !state.unknown || completion !== "idle" ? <Button type="button" disabled={!admitted || submitting || !creation.mayResume} onClick={() => void creation.done()}>{t("mcp.creationDone")}</Button> : !needsOAuth || state.unknown ? <Button type="button" disabled={!admitted || submitting || !creation.mayResume} onClick={() => save()}>{t(state.unknown ? creation.mayResume ? "mcp.retryOriginal" : "mcp.recovery.inspectRequired" : "mcp.retry")}</Button> : null}
+        {ready && !state.unknown || completion !== "idle" ? <Button type="button" disabled={!admitted || submitting || !creation.mayResume} onClick={() => void creation.done()}>{t("mcp.creationDone")}</Button> : !hasPreparationStatus && (!needsOAuth || state.unknown) ? <Button type="button" disabled={!admitted || submitting || !creation.mayResume} onClick={() => save()}>{t(state.unknown ? creation.mayResume ? "mcp.retryOriginal" : "mcp.recovery.inspectRequired" : "mcp.retry")}</Button> : null}
       </footer>
     </section>;
   }
@@ -141,32 +159,13 @@ export function CustomMcpForm({
           <FieldLabel htmlFor="custom-mcp-transport">
             {t("mcp.customTransport")}
           </FieldLabel>
-          <Input
-            id="custom-mcp-transport"
-            aria-label={t("mcp.customTransport")}
-            value="HTTP"
-            readOnly
-          />
+          <Select value={displayedTransport ?? ""} disabled={locked} onValueChange={value => { if (editable() && (value === "streamable_http" || value === "sse_compat")) setTransport(value); }}>
+            <SelectTrigger id="custom-mcp-transport" aria-label={t("mcp.customTransport")}><SelectValue placeholder="—" /></SelectTrigger>
+            <SelectContent><SelectItem value="streamable_http">HTTP</SelectItem><SelectItem value="sse_compat">SSE</SelectItem></SelectContent>
+          </Select>
         </Field>
         <Field className={`${styles.customMcpField} ${styles.customMcpWide}`}>
-          <FieldLabel>图标</FieldLabel>
-          <div className={styles.iconUploadRow}>
-            <span className={styles.iconPreview} aria-hidden="true">
-              <ImagePlus />
-            </span>
-            <div className={styles.iconUploadCopy}>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className={styles.uploadButton}
-                disabled
-              >
-                上传
-              </Button>
-              <span>PNG 或 JPG，最大 1 MB。推荐尺寸 256×256 像素。</span>
-            </div>
-          </div>
+          <McpIconPicker draft={icon.draft} state={icon.state} disabled={locked} />
         </Field>
         <Field className={`${styles.customMcpField} ${styles.customMcpWide}`}>
           <FieldLabel htmlFor="custom-mcp-notes">
@@ -185,16 +184,13 @@ export function CustomMcpForm({
           <FieldLabel htmlFor="custom-mcp-url">
             {t("mcp.customServerUrl")}
           </FieldLabel>
-          <div className={styles.urlInput}>
-            <Link2 aria-hidden="true" />
-            <Input
-              id="custom-mcp-url"
-              value={url}
+          <Input
+            id="custom-mcp-url"
+            value={url}
             readOnly={locked}
-              placeholder="https://mcp.yourserver.com/mcp"
-              onChange={(event) => { if (editable()) setUrl(event.target.value); }}
-            />
-          </div>
+            placeholder="https://mcp.yourserver.com/mcp"
+            onChange={(event) => { if (editable()) setUrl(event.target.value); }}
+          />
           {invalidUrl ? (
             <p className={styles.customMcpUrlValidation} role="alert">
               {t("mcp.errInvalid")}
@@ -281,10 +277,11 @@ export function CustomMcpForm({
           </Button>
         </fieldset>
       </div>
-      {error || state.unknown ? <p className={styles.customMcpError} role="alert">{t(connectorCommandFailureMessage(creation.failure, state.unknown ? "mcp.serverCreateUnknown" : "mcp.error"))}</p> : null}
+      {(error || state.unknown) && !hasPreparationStatus ? <p className={styles.customMcpError} role="alert">{t(state.registrationRejection === "url_conflict" ? "mcp.serverUrlConflict" : connectorCommandFailureMessage(creation.failure, state.unknown ? "mcp.serverCreateUnknown" : "mcp.error"))}</p> : null}
       <footer className={styles.customMcpActions}>
-        <Button type="submit" disabled={!admitted || submitting || !creation.mayResume || (!state.unknown && !canSubmit)}>
-          {submitting ? t("mcp.submitting") : t(state.unknown ? creation.mayResume ? "mcp.retryOriginal" : "mcp.recovery.inspectRequired" : "mcp.save")}
+        <Button type="submit" className="relative" aria-busy={submitting || undefined} disabled={!admitted || submitting || !creation.mayResume || (!state.unknown && !canSubmit)}>
+          <span className={submitting ? "invisible" : undefined} aria-hidden={submitting || undefined}>{t(state.unknown ? creation.mayResume ? "mcp.retryOriginal" : "mcp.recovery.inspectRequired" : "mcp.save")}</span>
+          {submitting ? <><span className="absolute inset-0 flex items-center justify-center" aria-hidden="true"><Spinner /></span><span className="sr-only" role="status">{t("mcp.submitting")}</span></> : null}
         </Button>
       </footer>
     </form>

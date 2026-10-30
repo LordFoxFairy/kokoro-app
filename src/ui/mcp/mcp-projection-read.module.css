@@ -639,6 +639,7 @@
   cursor: pointer;
 }
 .providerLogo {
+  position: relative;
   display: inline-flex;
   width: 2.5rem;
   height: 2.5rem;
@@ -777,7 +778,7 @@
 .connectorIdentity strong {
   overflow: hidden;
   font-size: 0.875rem;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1.25rem;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -830,13 +831,14 @@
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  border-radius: 0.7rem;
-  background: rgb(55 53 47 / 6%);
-  color: rgb(55 53 47 / 70%);
+  border: 1px solid color-mix(in srgb, var(--foreground) 6%, transparent);
+  border-radius: 0.5rem;
+  background: var(--background);
+  color: var(--settings-description-foreground, var(--muted-foreground));
 }
 .connectorMark img {
   object-fit: contain;
-  padding: 0.25rem;
+  padding: 0.4375rem;
 }
 .connectorMark svg {
   width: 1.15rem;

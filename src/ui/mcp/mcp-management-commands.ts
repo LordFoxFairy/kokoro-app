@@ -6,6 +6,7 @@ import {
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
 import { createConnectorCommand, type ConnectorCommandState } from "./connector-command";
 import { createMcpPreparationCommands, type McpPreparationCommands } from "./mcp-preparation-commands";
+import type { McpPreparationRecovery } from "./mcp-preparation-recovery";
 
 type Locator = { connectorId: string; serverId?: string };
 export type McpManagementIntent =
@@ -18,7 +19,7 @@ export type McpManagementSummary = Readonly<Locator & {
   operation: McpManagementIntent["operation"]; kind: ConnectorCommandState["kind"]; failure?: ConnectorCommandState["failure"];
 }>;
 type Entry = { locator: Locator; operation: McpManagementIntent["operation"]; command: ReturnType<typeof createConnectorCommand<McpManagementIntent>>; release: () => void; unsubscribe: () => void };
-type Client = Pick<HubClient, "updatePrivateMcpServer" | "deletePrivateMcpServer" | "updateMcpConnector" | "setMcpConnectorEnabled" | "removeMcpConnector" | "preparePrivateMcpServer">;
+type Client = Pick<HubClient, "updatePrivateMcpServer" | "deletePrivateMcpServer" | "updateMcpConnector" | "setMcpConnectorEnabled" | "removeMcpConnector" | "preparePrivateMcpServer" | "getPrivateMcpServer" | "getMcpConnector" | "getMcpPrepareReceipt">;
 const cleanup = (operation: McpManagementIntent["operation"]) => operation === "disconnect" || operation === "delete_server";
 
 function freezeIntent(intent: McpManagementIntent): McpManagementIntent {
@@ -41,11 +42,15 @@ function freezeIntent(intent: McpManagementIntent): McpManagementIntent {
   }
 }
 
-function createManagement(options: { client: Client; preparation: McpPreparationCommands; boundary: ProjectReadBoundary; onConfirmed: () => void }) {
+function createManagement(options: { client: Client; preparation: McpPreparationCommands; boundary: ProjectReadBoundary; onConfirmed: (mediaServerId?: string) => void }) {
   const actor = options.boundary.subject;
   let boundary = { ...options.boundary }, leases = 0, retired = false;
   const entries = new Map<string, Entry>(), listeners = new Set<() => void>();
   let snapshot: readonly McpManagementSummary[] = Object.freeze([]);
+  // Safe negative display facts only: never an admission or command authority.
+  const deleted = new Set<string>(), revoked = new Map<string, string>();
+  let deletedSnapshot: readonly string[] = Object.freeze([]);
+  let revokedSnapshot: readonly Readonly<{ connectorId: string; stateVersion: string }>[] = Object.freeze([]);
   const publish = () => {
     snapshot = Object.freeze([...entries.values()].map(entry => {
       const state = entry.command.getSnapshot();
@@ -58,13 +63,20 @@ function createManagement(options: { client: Client; preparation: McpPreparation
     entries.delete(entry.locator.connectorId); entry.unsubscribe();
     entry.command.bind({ ...boundary, subject: null, admitted: false }); entry.release();
   };
-  const retire = () => { retired = true; for (const entry of [...entries.values()]) remove(entry); publish(); };
+  const retire = () => { retired = true; for (const entry of [...entries.values()]) remove(entry); deleted.clear(); revoked.clear(); deletedSnapshot = Object.freeze([]); revokedSnapshot = Object.freeze([]); publish(); };
   const bind = (value: ProjectReadBoundary) => {
     if (retired) return;
     if (value.subject !== actor) { retire(); return; }
     boundary = { ...value }; for (const entry of entries.values()) entry.command.bind(boundary); publish();
   };
-  const preparationBlocks = (entry: Pick<Entry, "operation" | "locator">) => !cleanup(entry.operation) && options.preparation.getSnapshot().some(item => item.connectorId === entry.locator.connectorId && item.kind !== "rejected");
+  // Configuration Save is independent of an unresolved connection attempt.
+  // Only unknown Prepare permits Update; an active attempt and an
+  // unreadable recovery journal still protect the current owner observation.
+  const preparationBlocks = (entry: Pick<Entry, "operation" | "locator">) => !cleanup(entry.operation) &&
+    (!options.preparation.recoveryReady() || options.preparation.getSnapshot().some(item =>
+      item.connectorId === entry.locator.connectorId && item.kind !== "rejected" &&
+      !(entry.operation === "update_server" && item.kind === "unknown")));
+
   const run = async (entry: Entry, value: ProjectReadBoundary, signal: AbortSignal | undefined, input?: McpManagementIntent) => {
     if (!matches(value) || signal?.aborted || entries.get(entry.locator.connectorId) !== entry || preparationBlocks(entry)) return false;
     const kind = entry.command.getSnapshot().kind;
@@ -79,6 +91,8 @@ function createManagement(options: { client: Client; preparation: McpPreparation
   };
   return {
     getSnapshot: () => snapshot,
+    getConfirmedDeletedSnapshot: () => deletedSnapshot,
+    getConfirmedRevokedSnapshot: () => revokedSnapshot,
     subscribe: (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; },
     matches, bind,
     isBlocked: (connectorId: string) => { const entry = entries.get(connectorId); return entry !== undefined && entry.command.getSnapshot().kind !== "rejected"; },
@@ -95,6 +109,9 @@ function createManagement(options: { client: Client; preparation: McpPreparation
       let entry = entries.get(input.connectorId);
       if (entry?.command.getSnapshot().kind === "rejected") { remove(entry); entry = undefined; }
       if (entry) return Promise.resolve(false);
+      // Set only from the frozen input after its exact target ACK is validated.
+      let confirmedMediaServerId: string | undefined;
+      let confirmedRevokedVersion: string | undefined;
       const execute = async (body: McpManagementIntent, key: string, requestSignal: AbortSignal) => {
         const client = options.client;
         const bound = (connector: McpConnector) => {
@@ -106,18 +123,39 @@ function createManagement(options: { client: Client; preparation: McpPreparation
           case "delete_server": return client.deletePrivateMcpServer!(body.serverId, body.input.expected_state_version, key, requestSignal);
           case "update_server": {
             const result = await client.updatePrivateMcpServer!(body.serverId, body.input, key, requestSignal);
-            bound(result.connector); return result;
+            bound(result.connector);
+            if (body.input.icon !== undefined || body.input.clear_icon === true) confirmedMediaServerId = body.serverId;
+            return result;
           }
           case "update_connector": return bound(await client.updateMcpConnector(body.connectorId, body.input, key, requestSignal));
           case "set_enabled": return bound(await client.setMcpConnectorEnabled(body.connectorId, body.input, key, requestSignal));
-          case "disconnect": return bound(await client.removeMcpConnector(body.connectorId, body.input, key, requestSignal));
+          case "disconnect": {
+            const connector = bound(await client.removeMcpConnector(body.connectorId, body.input, key, requestSignal));
+            if (connector.status === "revoked") confirmedRevokedVersion = connector.state_version;
+            return connector;
+          }
         }
       };
       const available = input.operation === "update_server" ? options.client.updatePrivateMcpServer !== undefined : input.operation === "delete_server" ? options.client.deletePrivateMcpServer !== undefined : true;
       if (!available) return Promise.resolve(false);
       const operation = input.operation;
       const command = createConnectorCommand<McpManagementIntent>({ boundary, surface: "mcp", invalidRequestCode: "invalid_mcp_personal_request", freeze: freezeIntent, execute,
-        onConfirmed: () => { if (cleanup(operation) && locator.serverId) options.preparation.retireTarget(locator.serverId, locator.connectorId); options.onConfirmed(); },
+        onConfirmed: () => {
+          // A closed window can still confirm this actor's operation, but a retired
+          // owner must never acquire a late fact from its former request.
+          if (!retired) {
+            if (operation === "delete_server" && !deleted.has(locator.connectorId)) {
+              deleted.add(locator.connectorId); deletedSnapshot = Object.freeze([...deleted]); publish();
+            }
+            if (operation === "disconnect" && confirmedRevokedVersion !== undefined &&
+              (!revoked.has(locator.connectorId) || BigInt(confirmedRevokedVersion) > BigInt(revoked.get(locator.connectorId)!))) {
+              revoked.set(locator.connectorId, confirmedRevokedVersion);
+              revokedSnapshot = Object.freeze([...revoked].map(([connectorId, stateVersion]) => Object.freeze({ connectorId, stateVersion }))); publish();
+            }
+          }
+          if (cleanup(operation) && locator.serverId) options.preparation.retireTarget(locator.serverId, locator.connectorId);
+          options.onConfirmed(confirmedMediaServerId);
+        },
       });
       entry = { locator, operation: input.operation, command, release: command.retain(boundary), unsubscribe: command.subscribe(publish) };
       entries.set(input.connectorId, entry);
@@ -133,7 +171,7 @@ function createManagement(options: { client: Client; preparation: McpPreparation
 }
 
 /** Fixed MCP lifecycle wiring: management and Prepare remain typed, separate intents. */
-export function createMcpLifecycleCommands(options: { client: Client; boundary: ProjectReadBoundary; onConfirmed: () => void }) {
+export function createMcpLifecycleCommands(options: { client: Client; boundary: ProjectReadBoundary; onConfirmed: (mediaServerId?: string) => void; recovery?: McpPreparationRecovery }) {
   const preparation = createMcpPreparationCommands({ ...options, canPrepare: target => !management.isBlocked(target.connectorId) });
   const management = createManagement({ ...options, preparation });
   return { preparation, management };

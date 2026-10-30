@@ -4,6 +4,7 @@ import {
   type SetStateAction,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
 } from "react";
@@ -21,6 +22,8 @@ import {
 
 export type AppFrameOverlayOptions = {
   mounted: boolean;
+  mcpCatalogScope: object;
+  mcpCatalogEnabled: boolean;
   settingsTab: SettingsTab | null;
   setSettingsTab: Dispatch<SetStateAction<SettingsTab | null>>;
   settingsHistoryEntryRef: RefObject<boolean | null>;
@@ -33,6 +36,8 @@ export type AppFrameOverlayOptions = {
 /** Owns modal state, focus handoffs, and command-palette coordination. */
 export function useAppFrameOverlays({
   mounted,
+  mcpCatalogScope,
+  mcpCatalogEnabled,
   settingsTab,
   setSettingsTab,
   settingsHistoryEntryRef,
@@ -58,9 +63,40 @@ export function useAppFrameOverlays({
   // rail and command-menu handoffs before the surface unmounts.
   const settingsReturnFocusRef = useRef<HTMLElement | null>(null);
   const mcpCreateReturnFocusRef = useRef<HTMLElement | null>(null);
-  const [mcpCreateMode, setMcpCreateMode] = useState<McpCreateMode | null>(
-    null,
-  );
+  const catalogCreationFocus = useRef(false);
+  const [mcpCreation, setMcpCreation] = useState<{ mode: McpCreateMode; catalogScope?: object } | null>(null);
+  const mcpCreateMode = mcpCreation?.catalogScope !== undefined && mcpCreation.catalogScope !== mcpCatalogScope ? null : mcpCreation?.mode ?? null;
+  const setMcpCreateMode = useCallback((mode: McpCreateMode | null) => { if (mode !== null) catalogCreationFocus.current = false; setMcpCreation(mode === null ? null : { mode }); }, []);
+  const mcpCatalogReturnFocusRef = useRef<HTMLElement | null>(null);
+  const [catalogWindow, setCatalogWindow] = useState<{ scope: object } | null>(null);
+  const mcpCatalogOpen = catalogWindow?.scope === mcpCatalogScope;
+  const openMcpCatalog = useCallback((returnTarget: HTMLElement | null) => {
+    if (!mcpCatalogEnabled) return;
+    mcpCatalogReturnFocusRef.current = returnTarget;
+    setCatalogWindow({ scope: mcpCatalogScope });
+  }, [mcpCatalogEnabled, mcpCatalogScope]);
+  const closeMcpCatalog = useCallback(() => setCatalogWindow(null), []);
+  const openMcpCatalogCreate = useCallback((mode: McpCreateMode, returnTarget?: HTMLElement | null) => {
+    if (!mcpCatalogEnabled || catalogWindow?.scope !== mcpCatalogScope) return;
+    mcpCreateReturnFocusRef.current = returnTarget ?? null;
+    catalogCreationFocus.current = true;
+    setMcpCreation({ mode, catalogScope: mcpCatalogScope });
+  }, [mcpCatalogEnabled, catalogWindow, mcpCatalogScope]);
+  // Read admission/generation fences facts and commands, not this actor's view intent.
+  // A genuine scope/route retirement must also invalidate already queued focus returns.
+  const retireCatalogFocus = useCallback(() => {
+    mcpCatalogReturnFocusRef.current = null;
+    if (catalogCreationFocus.current) mcpCreateReturnFocusRef.current = null;
+    catalogCreationFocus.current = false;
+  }, []);
+  useLayoutEffect(() => () => retireCatalogFocus(), [mcpCatalogScope, retireCatalogFocus]);
+  useLayoutEffect(() => {
+    const retire = () => { retireCatalogFocus(); setCatalogWindow(null); setMcpCreation(value => value?.catalogScope === undefined ? value : null); };
+    window.addEventListener("popstate", retire);
+    window.addEventListener("hashchange", retire);
+    window.addEventListener("kokoro:surface-navigation", retire);
+    return () => { window.removeEventListener("popstate", retire); window.removeEventListener("hashchange", retire); window.removeEventListener("kokoro:surface-navigation", retire); };
+  }, [retireCatalogFocus]);
   const settingsWasOpenRef = useRef(false);
 
   // The controlled Settings Dialog can unmount before Radix emits its portal
@@ -222,7 +258,7 @@ export function useAppFrameOverlays({
       mcpCreateReturnFocusRef.current = returnTarget ?? null;
       setMcpCreateMode(mode);
     },
-    [],
+    [setMcpCreateMode],
   );
 
   const openCommand = useCallback(() => {
@@ -250,6 +286,11 @@ export function useAppFrameOverlays({
     commandNewChatTimerRef,
     settingsReturnFocusRef,
     settingsSkillsScope,
+    mcpCatalogOpen,
+    mcpCatalogReturnFocusRef,
+    openMcpCatalog,
+    closeMcpCatalog,
+    openMcpCatalogCreate,
     mcpCreateReturnFocusRef,
     mcpCreateMode,
     setMcpCreateMode,

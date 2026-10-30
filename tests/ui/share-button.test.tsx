@@ -1,5 +1,5 @@
 // 会话头部分享控件（SHARE-1）：创建→公共链接可复制→撤销回到初态。客户端为注入 fake。
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import type { SessionClient } from "@/engine/client"
@@ -133,7 +133,7 @@ describe("ShareButton", () => {
     )
 
     expect(document.querySelector('[data-workspace-upgrade="true"]')).toBeNull()
-    expect(screen.getByRole("button", { name: "More settings sections" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "项目选项" })).toBeInTheDocument()
 
     rerender(
       <WorkspaceHeader
@@ -146,7 +146,7 @@ describe("ShareButton", () => {
 
     expect(document.querySelector('[data-workspace-upgrade="true"]')).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Credits & usage" })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "More settings sections" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "项目选项" })).toBeInTheDocument()
   })
 
   it("presents a project link as private navigation without invented owners or editable invites", async () => {
@@ -200,10 +200,63 @@ describe("ShareButton", () => {
     expect(await screen.findByRole("button", { name: "Copy failed, try again" })).toBeInTheDocument()
   })
 
+  it("opens the share panel without publishing and requires an explicit share action", async () => {
+    const client = makeClient()
+    render(<ShareButton client={client} sessionId="ses_1" />, { wrapper: LocaleProvider })
+    fireEvent.click(screen.getByTestId("share-button"))
+    expect(screen.getByRole("dialog", { name: "Share this session" })).toBeVisible()
+    expect(client.createShare).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole("button", { name: "Share now" }))
+    await screen.findByLabelText("Public share link")
+    expect(client.createShare).toHaveBeenCalledExactlyOnceWith("ses_1")
+  })
+
+  it("closing and reopening a published link does not publish again", async () => {
+    const client = makeClient()
+    render(<ShareButton client={client} sessionId="ses_1" />, { wrapper: LocaleProvider })
+    fireEvent.click(screen.getByTestId("share-button"))
+    fireEvent.click(screen.getByRole("button", { name: "Share now" }))
+    await screen.findByLabelText("Public share link")
+    fireEvent.click(screen.getByText("Done"))
+    fireEvent.click(screen.getByTestId("share-button"))
+    expect((screen.getByLabelText("Public share link") as HTMLInputElement).value).toContain("/shared/shr_abc123")
+    expect(client.createShare).toHaveBeenCalledTimes(1)
+  })
+
+  it("does not reopen when publication finishes after the panel was closed", async () => {
+    let finish: ((value: { share_id: string }) => void) | undefined
+    const createShare = vi.fn(() => new Promise<{ share_id: string }>(resolve => { finish = resolve }))
+    render(<ShareButton client={makeClient({ createShare })} sessionId="ses_1" />, { wrapper: LocaleProvider })
+    fireEvent.click(screen.getByTestId("share-button"))
+    fireEvent.click(screen.getByRole("button", { name: "Share now" }))
+    fireEvent.click(screen.getByRole("button", { name: "Close share panel" }))
+    await act(async () => { finish?.({ share_id: "shr_after_close" }) })
+    expect(screen.queryByRole("dialog")).toBeNull()
+    fireEvent.click(screen.getByTestId("share-button"))
+    expect((screen.getByLabelText("Public share link") as HTMLInputElement).value).toContain("shr_after_close")
+    expect(createShare).toHaveBeenCalledTimes(1)
+  })
+
+  it("does not expose the previous session link when its publication finishes after navigation", async () => {
+    let finish: ((value: { share_id: string }) => void) | undefined
+    const createShare = vi.fn(() => new Promise<{ share_id: string }>(resolve => { finish = resolve }))
+    const client = makeClient({ createShare })
+    const { rerender } = render(<WorkspaceHeader activeId="ses_1" shareClient={client} />, { wrapper: LocaleProvider })
+    fireEvent.click(screen.getByTestId("share-button"))
+    fireEvent.click(screen.getByRole("button", { name: "Share now" }))
+    rerender(<WorkspaceHeader activeId="ses_2" shareClient={client} />)
+    await act(async () => { finish?.({ share_id: "shr_old_session" }) })
+    fireEvent.click(screen.getByTestId("share-button"))
+    expect(screen.queryByLabelText("Public share link")).toBeNull()
+    expect(screen.getByRole("button", { name: "Share now" })).toBeEnabled()
+    expect(createShare).toHaveBeenCalledExactlyOnceWith("ses_1")
+  })
+
   it("creates a share and reveals the public link", async () => {
     const client = makeClient()
     render(<ShareButton client={client} sessionId="ses_1" />, { wrapper: LocaleProvider })
     fireEvent.click(screen.getByTestId("share-button"))
+    fireEvent.click(screen.getByRole("button", { name: "Share now" }))
     await waitFor(() => {
       const link = screen.getByLabelText("Public share link") as HTMLInputElement
       expect(link.value).toContain("/shared/shr_abc123")
@@ -218,6 +271,7 @@ describe("ShareButton", () => {
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } })
     render(<ShareButton client={makeClient()} sessionId="ses_1" />, { wrapper: LocaleProvider })
     fireEvent.click(screen.getByTestId("share-button"))
+    fireEvent.click(screen.getByRole("button", { name: "Share now" }))
     await screen.findByText("Copy link")
     fireEvent.click(screen.getByText("Copy link"))
     await waitFor(() => expect(screen.getByText("Copied")).toBeTruthy())
@@ -229,6 +283,7 @@ describe("ShareButton", () => {
     const client = makeClient()
     render(<ShareButton client={client} sessionId="ses_1" />, { wrapper: LocaleProvider })
     fireEvent.click(screen.getByTestId("share-button"))
+    fireEvent.click(screen.getByRole("button", { name: "Share now" }))
     await screen.findByText("Revoke share")
     fireEvent.click(screen.getByText("Revoke share"))
     await screen.findByText("The existing link will stop working immediately.")
@@ -244,7 +299,8 @@ describe("ShareButton", () => {
     render(<ShareButton client={client} sessionId="ses_1" />, { wrapper: LocaleProvider })
     const trigger = screen.getByTestId("share-button")
     fireEvent.click(trigger)
-    await screen.findByText("Done")
+    fireEvent.click(screen.getByRole("button", { name: "Share now" }))
+    await screen.findByText("Copy link")
 
     fireEvent.click(screen.getByText("Done"))
     await waitFor(() => expect(trigger).toHaveFocus())
@@ -261,6 +317,7 @@ describe("ShareButton", () => {
     )
     const triggers = screen.getAllByTestId("share-button")
     fireEvent.click(triggers[0]!)
+    fireEvent.click(screen.getByRole("button", { name: "Share now" }))
     fireEvent.click(await screen.findByText("Done"))
     await waitFor(() => expect(triggers[0]).toHaveFocus())
     expect(triggers[1]).not.toHaveFocus()
@@ -274,6 +331,7 @@ describe("ShareButton", () => {
     const client = makeClient({ revokeShare })
     render(<ShareButton client={client} sessionId="ses_1" />, { wrapper: LocaleProvider })
     fireEvent.click(screen.getByTestId("share-button"))
+    fireEvent.click(screen.getByRole("button", { name: "Share now" }))
     await screen.findByText("Revoke share")
 
     const revoke = screen.getByText("Revoke share") as HTMLButtonElement
@@ -299,7 +357,9 @@ describe("ShareButton", () => {
 
     const trigger = screen.getByTestId("share-button")
     fireEvent.click(trigger)
-    fireEvent.click(trigger)
+    const publish = screen.getByRole("button", { name: "Share now" })
+    fireEvent.click(publish)
+    fireEvent.click(publish)
     expect(createShare).toHaveBeenCalledTimes(1)
 
     resolveCreate?.({ share_id: "shr_guarded" })
@@ -311,6 +371,7 @@ describe("ShareButton", () => {
       wrapper: LocaleProvider,
     })
     fireEvent.click(screen.getByTestId("share-button"))
+    fireEvent.click(screen.getByRole("button", { name: "Share now" }))
     await screen.findByText("Share failed")
   })
 
@@ -324,6 +385,7 @@ describe("ShareButton", () => {
       { wrapper: LocaleProvider },
     )
     fireEvent.click(screen.getByTestId("share-button"))
+    fireEvent.click(screen.getByRole("button", { name: "Share now" }))
     await screen.findByText("Revoke share")
 
     rerender(
@@ -335,6 +397,7 @@ describe("ShareButton", () => {
     expect(screen.queryByText("Revoke share")).toBeNull()
     expect(screen.getByTestId("share-button")).toBeInTheDocument()
     fireEvent.click(screen.getByTestId("share-button"))
+    fireEvent.click(screen.getByRole("button", { name: "Share now" }))
     await waitFor(() => expect(client.createShare).toHaveBeenLastCalledWith("ses_2"))
   })
 })

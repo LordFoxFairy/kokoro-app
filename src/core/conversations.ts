@@ -11,6 +11,8 @@ type ConversationEntry = {
   title: string
   updatedAt: number
   mode: AgentMode
+  // Positive UI origin only; submission retirement lives in a separate scope key.
+  localDraft?: true | undefined
 }
 
 export type ConversationStore = {
@@ -37,12 +39,27 @@ export function addConversation(
   id: string,
   now: number,
   mode: AgentMode = "fast",
+  localDraft = false,
 ): ConversationStore {
-  const entry: ConversationEntry = { id, title: "", updatedAt: now, mode }
+  const entry: ConversationEntry = { id, title: "", updatedAt: now, mode, ...(localDraft ? { localDraft: true as const } : {}) }
   if (!store) {
     return { activeId: id, conversations: [entry] }
   }
   return { activeId: id, conversations: [entry, ...store.conversations] }
+}
+
+export function activeIsLocalDraft(store: ConversationStore | null): boolean {
+  return store !== null && activeEntry(store)?.localDraft === true
+}
+
+export function retireLocalDraft(store: ConversationStore, id: string): ConversationStore {
+  if (!store.conversations.some(entry => entry.id === id && entry.localDraft === true)) return store
+  return { ...store, conversations: store.conversations.map(entry => {
+    if (entry.id !== id || entry.localDraft !== true) return entry
+    const next = { ...entry }
+    delete next.localDraft
+    return next
+  }) }
 }
 
 // 刷新活跃会话的标题与更新时间（事件折叠/水合后由引擎调用）。

@@ -1,3 +1,9 @@
+2026-10-28：九语言新增原生edit_file/ls/glob/grep中性操作标签，仅原同活动身份使用，不从名称推断执行成功。
+
+具体动作摘要第一阶段（2026-10-27）：九 locale 新增调用／混合活动次数、失败数与独立 Run 继续处理文案；只按真实 activity 计数，不冒独立文件或结果数。既有类别／三态键及 fallback 规则保留，正式对象名称由后继 owner 安全 metadata 提供，不从文案推断。
+
+工具类别（2026-10-26，源码候选）：九locale各自拥有六个安全工具类别标签，原 `thread.toolCall` generic与状态文案原值保持。只由 `ToolCallRow` 对正式 Public28 code做穷尽 MessageKey映射，不改 fallback/overlays或其它业务文案。
+
 ## SET40 具体设置项搜索（2026-10-15；D0，先tests-only）
 
 基线Web f82c891965f80eed9ff0c022d3f77b39bdbad42e，939 tracked clean。Computer Use实际Manus：昵称→个性化+昵称、点child切页并保query/结果焦点；通知→通用+浏览器通知；仅菜单名命中只parent；无匹配未找到结果、当前内容不变。现仅菜单过滤且强留selected，窄屏隐藏search，存在明确功能缺口。
@@ -74,3 +80,7 @@ Web UI 的多语言:**中文(zh)是唯一源字典**,其余语言是增量覆盖
 - 硬编码护栏 `tests/i18n/no-hardcoded-ui.test.ts` **只查中文字符**——英文硬编码不触发。已修的盲区:mode 的 `Fast`/`Thinking` 曾英文硬编码(`ui/composer/mode-options.ts`),现走 `mode.labelFast`/`mode.labelThinking` 键。新增英文硬编码仍可能漏网,评审留意。
 - overlay 完整性由 `tests/i18n/resolve.test.ts` 守:每 overlay 的 key ⊆ zh 源、各语言覆盖率 ≥95%、`LOCALE_NAMES` 覆盖全 `LOCALES`。
 - locale storage 不是认证或服务端事实；不要把其异常恢复扩展为 Product Session、认证索引或业务数据的 fallback。
+
+Agent 待核对终态使用 fail.modelSettlementPending，九语言仅描述停止、内容保留与结算待核对，不推断扣款／释放。
+
+CHAT-1：chat.localDraftPersistenceFailed九语言说明未发送、保输入与恢复浏览器存储后重试，不伪造已提交。

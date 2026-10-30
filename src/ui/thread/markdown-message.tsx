@@ -9,6 +9,8 @@ import styles from "./thread.module.css"
 const MARKDOWN_COMPONENTS: Components = {
   // LLM 生成的链接强制新窗 + noopener/noreferrer/nofollow：不泄露 referrer、不让目标页操作 opener。
   a({ children, href }) {
+    // The default URL filter may remove a destination; keep its text, not a current-page link.
+    if (!href?.trim()) return <>{children}</>
     return (
       <a href={href} target="_blank" rel="noopener noreferrer nofollow">
         {children}
@@ -17,14 +19,23 @@ const MARKDOWN_COMPONENTS: Components = {
   },
 }
 
-type MarkdownMessageProps = {
-  content: string
+// Tool output is readable Markdown, not permission to navigate or fetch assets.
+// Keep resource labels visible; the exact destinations remain in the raw record.
+const TEXT_RESOURCE_COMPONENTS: Components = {
+  ...MARKDOWN_COMPONENTS,
+  a: ({ children }) => <>{children}</>,
+  img: ({ alt }) => <span>{alt}</span>,
 }
 
-export function MarkdownMessage({ content }: MarkdownMessageProps) {
+type MarkdownMessageProps = {
+  content: string
+  resourcePolicy?: "default" | "text-only"
+}
+
+export function MarkdownMessage({ content, resourcePolicy = "default" }: MarkdownMessageProps) {
   return (
-    <div className={styles.md} data-slot="markdown-message">
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>
+    <div className={styles.md} data-slot="markdown-message" data-resource-policy={resourcePolicy}>
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={resourcePolicy === "text-only" ? TEXT_RESOURCE_COMPONENTS : MARKDOWN_COMPONENTS}>
         {content}
       </ReactMarkdown>
     </div>

@@ -1,3 +1,4 @@
+let publicLedgerFixtureSequence = 1000
 // 事件/快照工厂：经契约 parse 构造，天然验证与 wire 同形（零类型断言）。
 
 import { parseSessionSnapshot, type SessionSnapshot } from "@/contract/http"
@@ -25,6 +26,7 @@ export const AGENT_FAILURE_MESSAGE_KEYS = {
   model_unavailable: "fail.modelUnavailable",
   dependency_unavailable: "fail.dependencyUnavailable",
   model_access_denied: "fail.modelAccessDenied",
+  model_settlement_pending: "fail.modelSettlementPending",
 } satisfies Record<AgentFailureCode, string>
 
 export function expectedZhCopy(key: string): string {
@@ -42,6 +44,7 @@ type PayloadOf<K extends ChatProjectionEvent["kind"]> = Extract<ChatProjectionEv
 export type EnvelopeOverrides = Partial<{
   event_id: string
   seq: number
+  publicSequence: string
   run_id: string
   session_id: string
   timestamp: string
@@ -64,6 +67,7 @@ export function makeEvent<K extends ChatProjectionEvent["kind"]>(
     payload,
     event_id: overrides.event_id ?? `evt_${kind}_${seq}`,
     seq,
+    ...(overrides.publicSequence === undefined ? {} : { publicSequence: overrides.publicSequence }),
     session_id: overrides.session_id ?? "ses_1",
     run_id: overrides.run_id ?? "run_1",
     timestamp: overrides.timestamp ?? "2026-07-02T00:00:00Z",
@@ -399,7 +403,7 @@ export function makePublic4Frame(
 ): Record<string, unknown> {
   return {
     timestamp: Date.parse("2026-10-02T00:00:02Z"),
-    metadata: { kokoro: {
+    metadata: { kokoro: { public_sequence: String(++publicLedgerFixtureSequence),
       event_id: `r66_agent_${runId}_${seq}`, seq,
       session_id: sessionId, run_id: runId, timestamp: "2026-10-02T00:00:02Z",
     } },
@@ -429,7 +433,7 @@ export function makePublic4QueuedFrame(
     name: "kokoro.run.queued",
     value: { run_id: runId, dispatch_sequence: sequence },
     timestamp: Date.parse("2026-10-02T00:00:02Z"),
-    metadata: { kokoro: {
+    metadata: { kokoro: { public_sequence: String(++publicLedgerFixtureSequence),
       event_id: `r66_bff_queued_${runId}`,
       seq: sequence, source_owner: "kokoro-bff",
       session_id: sessionId, run_id: runId, timestamp: "2026-10-02T00:00:02Z",

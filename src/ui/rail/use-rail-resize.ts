@@ -3,6 +3,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
 } from "react"
@@ -55,6 +56,7 @@ export function clampRailWidth(raw: number, containerWidth: number, reservedCanv
 export function useRailResize() {
   const [width, setWidth] = useState(RAIL_DEFAULT)
   const widthRef = useRef(RAIL_DEFAULT)
+  const preferredWidthRef = useRef(RAIL_DEFAULT)
   // 拖拽中标记：让 shell 在拖拽期间关掉列宽过渡，宽度实时跟手；仅收起/展开切换才用过渡。
   const [isResizing, setIsResizing] = useState(false)
   const cleanupRef = useRef<(() => void) | null>(null)
@@ -67,11 +69,39 @@ export function useRailResize() {
   // container and seam on the same render instead of briefly allowing a
   // native style write and a later React render to disagree.
   const commitWidth = useCallback((next: number) => {
+    preferredWidthRef.current = next
     if (next === widthRef.current) {
       return
     }
     widthRef.current = next
     flushSync(() => setWidth(next))
+  }, [])
+
+  // Window/container adaptation must not overwrite the user's chosen width.
+  // The same effective value feeds Sidebar's gap, container and seam; widening
+  // restores the preference instead of permanently shrinking it to the clamp.
+  useLayoutEffect(() => {
+    const reconcile = () => {
+      const shell = shellRef.current
+      if (!shell || shell.dataset.railResizing === "true" || shell.dataset.canvasResizing === "true") return
+      const available = shell.getBoundingClientRect().width
+      if (available <= 0) return
+      const next = available < RAIL_COMPACT_BREAKPOINT
+        ? preferredWidthRef.current
+        // Canvas fit/collapse belongs to useAppFrameLayout. Do not retain a
+        // temporary Canvas reserve after it closes without a shell resize.
+        : clampRailWidth(preferredWidthRef.current, available)
+      if (next === widthRef.current) return
+      widthRef.current = next
+      setWidth(next)
+    }
+    const observer = new ResizeObserver(reconcile)
+    if (shellRef.current) observer.observe(shellRef.current)
+    window.addEventListener("resize", reconcile)
+    return () => {
+      observer.disconnect()
+      window.removeEventListener("resize", reconcile)
+    }
   }, [])
 
   useEffect(() => () => {

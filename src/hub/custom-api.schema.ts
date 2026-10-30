@@ -1,3 +1,4 @@
+import { mcpIconBindingSchema, mcpIconSelectionSchema } from "./mcp-icon.schema";
 import { connectorCommandErrorAllowed } from "./connector-command-error";
 import { z } from "zod";
 
@@ -31,6 +32,7 @@ export const customApiEnvironmentDescriptorSchema = z
   .strict();
 export const customApiProfileSchema = z
   .object({
+    icon: mcpIconBindingSchema.optional(),
     profile_id: profileId,
     name: profileText(400),
     instructions: profileText(4000).optional(),
@@ -43,6 +45,7 @@ export const customApiProfileSchema = z
 
 export const customApiCreateInputSchema = z
   .object({
+    icon: mcpIconSelectionSchema.optional(),
     name: profileText(400),
     instructions: profileText(4000).optional(),
     environment: z.array(customApiEnvironmentWriteSchema).max(128),
@@ -75,6 +78,8 @@ export const customApiPageSchema = z
   .strict();
 export const customApiUpdateInputSchema = z
   .object({
+    icon: mcpIconSelectionSchema.optional(),
+    clear_icon: z.literal(true).optional(),
     expected_state_version: stateVersion,
     name: profileText(400).optional(),
     instructions: profileText(4000).optional(),
@@ -90,12 +95,13 @@ export const customApiUpdateInputSchema = z
     const upserts = value.environment_upserts ?? [];
     const removals = value.environment_removals ?? [];
     if (
+      (value.icon !== undefined && value.clear_icon === true) ||
       (value.instructions !== undefined && value.clear_instructions) ||
       (value.name === undefined &&
         value.instructions === undefined &&
         !value.clear_instructions &&
         upserts.length === 0 &&
-        removals.length === 0) ||
+        removals.length === 0 && value.icon === undefined && value.clear_icon !== true) ||
       new Set(upserts.map((entry) => entry.name)).size !== upserts.length ||
       new Set(removals).size !== removals.length ||
       removals.some((name) => upserts.some((entry) => entry.name === name))

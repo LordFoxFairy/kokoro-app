@@ -1,3 +1,25 @@
+回答动作薄桥：session-answer-actions注册GET/PUT反馈、POST具名再生成及GET私有单Run display；正式Public28.10闭集decoder、原Product Session／同源Origin／10s完整EOF／取消和原key，无自动命令重发，不扩generic adapter。
+
+## Project Skill 精确内容消费者
+
+`project-skill-content.ts` 为精确 Project installation 的薄同源入口，先于个人 package catchall；只调用固定正式 BFF operation，原 Product Session／bounded JSON／absolute deadline，不自行设置浏览器自报 Project/actor 权限。
+
+## Project MCP推荐配置同源薄桥（2026-10-27）
+
+`project-mcp-recommendations.ts`仅承接exact `GET/PUT /api/hub/projects/{id}/mcp-recommendations`，沿ProductSession／部署Domain和BFF公开v1配置owner，不透传caller身份、query、command key或外部URL。请求完整有界读取后保原bytes并设置可信Content-Length；strict JSON／duplicate／UTF8／closed fault tuple／ACK绑定验证，16KiB请求、64KiB响应、admission至EOF共10秒；取消退休、未知不重派。推荐不是个人连接授权，浏览器无Platform直连或业务存储。
+
+## Project resource attachment consumer (candidate)
+
+Hub route仅对exact Project resource item/download路径附加闭集输入保护，沿当前Product Session与BFFProject owner。下载复用safeDownloadHeaders和boundedArtifactBody的字节原语与1GiB/EOF/取消预算，不复用personal或Artifact业务授权；仅具名attachment头出境，无Storage URL/Location，错误body不当binary成功。
+
+## MCP Server icon 私有媒体（2026-10-26）
+
+`mcp-server-icon.ts` 只承接 exact `GET /api/hub/mcp/servers/{server_id}/icon`，沿现 Product Session、部署 Domain 与 BFF `/browser/v1`；从正式私有机器 profile 派生闭合 ID/error validator，不扩大 generic proxy。拒 query/body/framing/命令头，完整 EOF 后才返回≤1MiB PNG/JPEG，admission→EOF共10秒，取消/迟到不发额外请求；只发精确媒体头，redirect/未知错误拒绝，失败不影响Connector JSON读取。无Storage直连/新schema/自动重试。
+
+## CREDIT-1 管理员积分薄通路（2026-10-22）
+
+`admin-billing-proxy.ts`仅处理具名当前成员GET／非现金充值POST及三项计价配置读／发布，复用Product受信会话、requestWithDomain和有限body读取。权限/资金/整数换算owner仍BFF/Billing；原命令字节与key不变，10秒总预算覆盖body、会话与ACK EOF，响应1MiB；仅新计价POST请求1MiB，原充值16KiB。无业务重试、凭据/tenant回退或账本存储；正常完整旅程另验。下方为原模块说明。
+
 ## 公开Skill list的唯一原生Bearer入口（2026-10-22，候选）
 
 src/app/v1/skill.list/route.ts只透传固定public GET，复用iam-relay-config的部署Host／Origin与service secret、domain-context的部署Domain、upstream-http的有限传输。它不调用Product Session、不接其他/v1方法或任意URL；原Hub／网站RPC准入保持。单操作generated/bff-public-skill-list由固定canonical正规生成，不手维护第二份schema。正常生效与真实owner链另验。
@@ -40,6 +62,8 @@ runtime token、内部服务地址、workload secret 或后端隔离键。
 
 ## 公开 API
 
+- `security-headers.ts`：请求 nonce 与 CSP；仅匹配可信本地开发 origin 的上传及图标预览加入同一精确 Storage origin，生产与其他指令不变。
+
 - `account-sessions.ts`：两条 `/api/account/sessions` route 的具名 BFF adapter；GET 可选 canonical Origin，DELETE 必需 canonical Origin，并在总预算内证明入站 stream 为 EOF，拒绝实际正文。严格正式生成合同、单 10 秒/1 MiB、主动取消及最终同一有效 Product Session 复核；禁止转发 issuer cookie、自动写重试或把未知结果视为成功。共用 `lib/account-sessions.schema.ts`，生成出处由正式 BFF artifact 唯一提供。
 
 - `same-origin.ts`：六条业务同源 adapter 的变更请求 Origin/Host 守卫；不读取 IAM、cookie、Redis 或 SQL。
@@ -63,11 +87,16 @@ runtime token、内部服务地址、workload secret 或后端隔离键。
 - `iam-relay-policy.ts`：固定 BFF policy provenance、只读 browser GET 子集与 issuer cookie 入站过滤。
 - `iam-relay-config.ts`：固定 Web origin、BFF origin 与 service identity 的共用 server-only 解析。
 - `iam-interaction-csrf.ts`：sign-in 表单的一次性 Redis CSRF 摘要/目标 POST method/原始 query/issuer-cookie 绑定，
-  原子 `GETDEL` 消费、短 TTL 与故障拒绝；Web 只写自己的前缀，不保存凭据。
+  sign-in 绑定 flow 并比较后原子消费，每 render 独立 cookie；刷新仅回收已观察的本 flow 证明，其他交互保原行为。短 TTL 与故障拒绝，Web 只写自己的前缀，不保存凭据。
+- `iam-sign-in-flow.ts`：原生签名 query 的短期表单引用，独立 HttpOnly 浏览器证明、原期限／300秒上界；读不续期，不是 Product session 或授权。
+- `iam-sign-in-feedback.ts`：按 flow 隔离的加密表单反馈，不保存密码。
 - `iam-relay-transport.ts`：IAM 原生 HTTP 专用 transport，保持多个 `Set-Cookie`，实施 deadline、取消和
   header/body 限额；仅受控交互使用 POST，不复用会合并 cookie 的 Product transport。
 - `iam-relay-response.ts`：原生 status/header/body、Location 与 issuer `Set-Cookie` 的出站校验。
 - `oidc-provider.ts`：固定 provider/EdDSA、验证型 `client.callback` 与 server-only Basic/Bearer backchannel；Product Session 由 RP route 在身份准入后建立。
+  已验签的 subject／sid 绑定最终 account.id_token；Product加密cookie必填 issuerSessionId，不接受旧无绑定会话。
+- `oidc-token.ts`：保留一次有界 refresh 交换，原生 `Client.refresh` 验证该次响应并核对原 subject／sid；
+  token与固定BFF JWKS共5秒取消预算，不二次兑换，不向浏览器输出凭据或sid。
 - `oidc-rp-transaction.ts`：300秒Redis state摘要、RP cookie绑定；先读取并验证完整MAC记录与浏览器binding，再Lua比较原值并原子消费，错proof不消耗原交易，只有一个并发回调入exchange；所有callback均不删除可能属于新登录的共享proof，成功只签发Product cookie，临时proof按原期限过期。
 - `oidc-csrf.ts`：严格读取唯一、两段格式及摘要有效的Auth.js CSRF cookie，登录复用与session/signout校验共用。
 - `oidc-login-recovery.ts`：GET/POST 顶层登录失败的固定产品返回，保 API JSON／status；精确 Proxy 路径承接 no-referrer 与 CSP，无自动重试。
@@ -122,3 +151,9 @@ runtime token、内部服务地址、workload secret 或后端隔离键。
 手写部署/租户 header；浏览器 client 只能调用同源 BFF path。
 
 - `model-publish-body.ts`：仅模型修订发布的有界EOF校验，证明Next空POST流，无正文生成或模型执行。
+
+- `mcp-project-publication.ts`：三条 URL MCP 定义发布 browser-private 薄桥（发布、项目 pin 读取、原请求回执）；当前 Session/同源写、body/key 原封保留、10s 总预算、65KiB 请求/256KiB 响应、完整EOF及原实体/CAS绑定。无 owner 直连、SQL、重试或公开 API 扩展。移除 pin 接口本片不开放。
+
+## Project pin consumer
+
+`project-pins.ts`只处理GET `/api/hub/self/project-pins`与PUT `/api/hub/projects/{id}/pin`；strip-self别名在generic proxy前拒绝。沿Product Session／same-origin／部署Domain，不透传caller身份/key/CAS，strict JSON≤1KiB与完整响应≤64KiB，同一次10秒admission→EOF预算、取消与静态异常。所有错误沿正式ErrorEnvelope，不另造retryable DTO。

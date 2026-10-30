@@ -1,3 +1,7 @@
+## 原动作只读详情（本地候选）
+
+CanvasContentRef新增activity的Run/activity/subject/generation引用，resolve只在原Run定位最新活动，不储存活动快照、不授权文件读取。现壳保关闭/全屏与焦点返回；活动不提供文件列表/下载。same-subject新admission generation不重开旧槽。Canvas与阅读列共用同scope RunDisplay reader，公开分享没有私有详情读取。
+
 # ui/canvas — 工作区第三栏
 
 ## 职责

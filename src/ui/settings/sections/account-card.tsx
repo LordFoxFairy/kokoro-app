@@ -350,7 +350,6 @@ export function AccountCard({
   return (
     <div className={styles.accountSettings} data-settings-card data-testid="settings-account">
       {!preview && live.scope && live.phase==="loading" ? <span className="sr-only" role="status" aria-label={t("billing.loading")} /> : null}
-      {!preview && live.phase==="error" ? <div role="alert">{t("billing.loadError")}<Button variant="outline" size="sm" onClick={live.retry}>{t("billing.retry")}</Button></div> : null}
       {copyState?.scope===copyScope && copyState.status==="failed" ? <p role="alert">{t("share.projectCopyFailed")}</p> : null}
       <div className={styles.accountIdentityRow}>
         <div className={styles.identity}>
@@ -447,14 +446,14 @@ export function AccountCard({
 
       {logoutFailed ? <p role="alert">{t("settings.logoutUnconfirmed")}</p> : null}
 
-      <div className={styles.planCard}>
-        <div className={styles.planHeader}><strong>{preview ? account?.planLabel ?? "—" : t("settings.creditsMenu")}</strong><Button variant="default" size="sm" type="button" onClick={onOpenSubscription}>{t("firstSite.upgrade")}</Button></div>
+      {preview ? <div className={styles.planCard}>
+        <div className={styles.planHeader}><strong>{account?.planLabel ?? "—"}</strong><Button variant="default" size="sm" type="button" onClick={onOpenSubscription}>{t("firstSite.upgrade")}</Button></div>
         <div className={styles.planBody} data-slot="account-plan-body">
           <div className={styles.creditGroup} data-slot="account-credit-group">
-            {preview ? <div className={styles.creditTotal}><span><Sparkles />{t("settings.creditsMenu")}<CircleHelp /></span><strong>{account?.credits ?? "—"}</strong></div> : <AccountCreditSummary readBoundary={readBoundary} />}
+            <div className={styles.creditTotal}><span><Sparkles />{t("settings.creditsMenu")}<CircleHelp /></span><strong>{account?.credits ?? "—"}</strong></div>
           </div>
         </div>
-      </div>
+      </div> : <AccountCreditSummary readBoundary={readBoundary} onOpenPricing={onOpenSubscription} />}
 
       {/* Credits come from their own summary read. Unknown plan details stay
        * unknown; unsupported identity changes remain unavailable below. */}

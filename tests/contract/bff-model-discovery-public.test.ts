@@ -1,3 +1,4 @@
+import { restorePublic26MessagePartsContract } from "./bff-tool-display-parent"
 import { createHash } from "node:crypto"
 import { readFile } from "node:fs/promises"
 import { expect, it } from "vitest"
@@ -6,9 +7,9 @@ import { restoreModelDiscoveryParent } from "./bff-model-discovery-parent"
 const digest = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex")
 it("pins only the formal provider discovery GET and preserves the complete Public22.2 parent", async () => {
   const bytes = await readFile("src/generated/bff-public-openapi.yaml")
-  expect(digest(bytes)).toBe("727159cea88e9f70ca3d1127306e8a6a6bcaa568398de8b0d8fec1cce6b3fae3")
-  const spec = YAML.parse(bytes.toString())
-  expect(spec.info.version).toBe("22.3.0")
+  expect(digest(bytes)).toBe("ea0031103488daa1fcc0cca45fdd13f4d4061546ac4525c745ec47105649f7e7")
+  const spec = YAML.parse(restorePublic26MessagePartsContract(bytes.toString()))
+  expect(spec.info.version).toBe("26.0.0")
   const path = spec.paths["/v1/admin/model-providers/{provider_id}/upstream-models"]
   expect(Object.keys(path)).toEqual(["get"])
   expect(path.get.operationId).toBe("listAdminModelProviderUpstreamModels")
@@ -20,8 +21,12 @@ it("pins only the formal provider discovery GET and preserves the complete Publi
   expect(old.info.version).toBe("22.2.0")
   const methods = new Set(["get", "post", "put", "patch", "delete", "head", "options"])
   const count = (value: typeof spec) => Object.values(value.paths).flatMap(item => Object.keys(item as object).filter(method => methods.has(method))).length
-  expect(count(spec)).toBe(182)
+  expect(count(spec)).toBe(186)
   expect(count(old)).toBe(181)
   expect(old.paths["/v1/admin/model-providers/{provider_id}/upstream-models"]).toBeUndefined()
-  for (const changed of [Buffer.concat([bytes, Buffer.from("\n")]), Buffer.from(bytes.toString().replace("listAdminModelProviderUpstreamModels", "arbitraryProxy")), Buffer.from(bytes.toString().replace("  version: 22.3.0", "  version: 22.2.0"))]) expect(() => restoreModelDiscoveryParent(changed)).toThrow()
+  const baseline = Buffer.from(restorePublic26MessagePartsContract(bytes.toString()))
+  for (const changed of [Buffer.concat([baseline, Buffer.from("\n")]), Buffer.from(baseline.toString().replace("listAdminModelProviderUpstreamModels", "arbitraryProxy")), Buffer.from(baseline.toString().replace("  version: 26.0.0", "  version: 22.2.0"))]) {
+    expect(changed.equals(baseline)).toBe(false)
+    expect(() => restoreModelDiscoveryParent(changed)).toThrow()
+  }
 })

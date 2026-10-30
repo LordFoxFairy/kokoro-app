@@ -1,15 +1,157 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { chromium } from "@playwright/test"
+import { createServer } from "vite"
+import { basename } from "node:path"
+import readerStyles from "@/ui/skills/manus-skill-detail-dialog.module.css"
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, expect, it, vi } from "vitest"
 
-import type { ManagedPersonalSkill, PersonalInstallation } from "@/hub/schemas"
+import type { ManagedPersonalSkill, PersonalInstallation, SkillCatalogCard } from "@/hub/schemas"
 import { LocaleProvider } from "@/i18n/context"
 import { createPreviewHubClient } from "@/dev/preview-clients"
 import { SkillsContent } from "@/ui/skills/skills-panel"
 import { ManusSkillDetailDialog } from "@/ui/skills/manus-skill-detail-dialog"
+import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
+import { downloadManusSkill, getManusSkillDetail } from "@/ui/skills/manus-skill-client"
 
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
+})
+
+it("keeps metadata-only GetSkill and exact DownloadSkill responses as separate strict contracts", async () => {
+  const skill = { id: "split-series", version: "split-revision", displayName: "Split detail", description: "Authoritative metadata" }
+  const downloadInfo = { downloadUrl: "/api/skill-downloads/split-handle", filename: "real.zip", expiresAt: "2999-01-01T00:00:00Z" }
+  let body: unknown = { skill }
+  const fetcher = vi.fn(async () => Response.json(body))
+  vi.stubGlobal("fetch", fetcher)
+  await expect(getManusSkillDetail(skill.id)).resolves.toEqual({ skill })
+  body = { skill, downloadInfo }
+  await expect(getManusSkillDetail(skill.id)).rejects.toThrow()
+  await expect(downloadManusSkill(skill.id, skill.version)).resolves.toEqual({ skill, downloadInfo })
+  body = { skill }
+  await expect(downloadManusSkill(skill.id, skill.version)).rejects.toThrow()
+  body = { skill: { ...skill, version: "different-revision" }, downloadInfo }
+  await expect(downloadManusSkill(skill.id, skill.version)).rejects.toThrow("skill_response_invalid")
+  body = { skill: { ...skill, id: "different-series" }, downloadInfo }
+  await expect(downloadManusSkill(skill.id, skill.version)).rejects.toThrow("skill_response_invalid")
+  expect(fetcher.mock.calls).toHaveLength(6)
+})
+
+function ordinaryMetadataFixture() {
+  window.localStorage.setItem("kokoro.locale", "zh")
+  const actualWindow = window
+  const navigate = vi.fn()
+  // Observe only the browser navigation boundary; preserve the real jsdom
+  // Window for rendering, events, storage and the existing session machinery.
+  const location = { ...actualWindow.location, assign: navigate }
+  vi.stubGlobal("window", new Proxy(actualWindow, { get: (target, key) => key === "location" ? location : Reflect.get(target, key, target) }))
+  const card: SkillCatalogCard = { skill_id: "ordinary-series", revision_skill_id: "ordinary-revision", source_ref: "skill:ordinary-revision", name: "Ordinary detail", description: "Unconfirmed card copy", content_hash: "ordinary-series", scope: "official", installed: false, enabled: false }
+  const response = (body: unknown, status = 200) => Response.json(body, { status, headers: { "cache-control": "private, no-store", "x-request-id": "ordinary-detail" } })
+  const metadata = (revision = card.revision_skill_id) => response({ skill: { id: card.skill_id, version: revision, displayName: card.name, description: "Confirmed metadata without download material", exampleQuestions: ["A real owner example"] } })
+  const download = (revision = card.revision_skill_id) => response({ skill: { id: card.skill_id, version: revision }, downloadInfo: { downloadUrl: "/api/skill-downloads/ordinary-handle", filename: "owner.zip", expiresAt: "2999-01-01T00:00:00Z" } })
+  const content = (boundary: ProjectReadBoundary = { admitted: true, subject: "ordinary-reader", generation: 1 }, selected = card, open = true) => <LocaleProvider><ManusSkillDetailDialog open={open} skill={selected} readBoundary={boundary} onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={() => false} /></LocaleProvider>
+  return { card, response, metadata, download, content, navigate }
+}
+
+it.each(["confirmed", "unavailable", "different-version"] as const)("opens metadata independently and retains it after explicit download %s", async outcome => {
+  const { card, response, metadata, download, content, navigate } = ordinaryMetadataFixture()
+  let resolveMetadata!: (response: Response) => void
+  const requests: { path: string; body: unknown }[] = []
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input)
+    requests.push({ path, body: JSON.parse(String(init?.body)) })
+    if (path.endsWith("GetSkill")) return new Promise<Response>(resolve => { resolveMetadata = resolve })
+    expect(path).toBe("/api/skill.v1.SkillService/DownloadSkill")
+    return outcome === "unavailable" ? response({ error: { code: "skill_dependency_unavailable", message: "Unavailable" } }, 503) : download(outcome === "different-version" ? "different-revision" : card.revision_skill_id)
+  }))
+  render(content())
+  expect(screen.queryByRole("button", { name: "下载技能" })).toBeNull()
+  expect(screen.getByRole("button", { name: "查看详情" })).toBeDisabled()
+  await act(async () => { resolveMetadata(metadata()) })
+  expect(await screen.findByText("Confirmed metadata without download material")).toBeVisible()
+  expect(screen.getByText("A real owner example")).toBeVisible()
+  expect(requests.map(request => request.path)).toEqual(["/api/skill.v1.SkillOptionalService/GetSkill"])
+  fireEvent.click(screen.getByRole("button", { name: "下载技能" }))
+  if (outcome === "confirmed") await waitFor(() => expect(navigate).toHaveBeenCalledExactlyOnceWith("/api/skill-downloads/ordinary-handle"))
+  else await screen.findByText("下载未完成，请重试。")
+  expect(screen.getByText("Confirmed metadata without download material")).toBeVisible()
+  expect(screen.queryByText("技能详情暂时不可用")).toBeNull()
+  expect(requests.at(-1)?.body).toEqual({ skillId: card.skill_id })
+  expect(requests).toHaveLength(2)
+  if (outcome !== "confirmed") expect(navigate).not.toHaveBeenCalled()
+})
+
+it("keeps download unavailable when fresh metadata no longer matches the selected card revision", async () => {
+  const { metadata, content } = ordinaryMetadataFixture()
+  const fetcher = vi.fn(async () => metadata("new-current-revision"))
+  vi.stubGlobal("fetch", fetcher)
+  render(content())
+  await screen.findByText("Confirmed metadata without download material")
+  expect(screen.queryByRole("button", { name: "下载技能" })).toBeNull()
+  expect(screen.getByRole("button", { name: "查看详情" })).toBeDisabled()
+  expect(fetcher).toHaveBeenCalledTimes(1)
+})
+
+it.each(["close", "admission", "actor", "source"] as const)("retires an explicit download on %s without navigating to its late handle", async retirement => {
+  const { card, metadata, download, content, navigate } = ordinaryMetadataFixture()
+  let resolveDownload!: (response: Response) => void
+  let downloadSignal: AbortSignal | undefined
+  let revision = card.revision_skill_id
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input).endsWith("GetSkill")) return metadata(revision)
+    expect(String(input)).toBe("/api/skill.v1.SkillService/DownloadSkill")
+    downloadSignal = init?.signal as AbortSignal
+    return new Promise<Response>(resolve => { resolveDownload = resolve })
+  }))
+  const view = render(content())
+  fireEvent.click(await screen.findByRole("button", { name: "下载技能" }))
+  await waitFor(() => expect(downloadSignal).toBeDefined())
+  if (retirement === "source") revision = "replacement-revision"
+  view.rerender(content({ admitted: retirement !== "admission", subject: retirement === "actor" ? "replacement-reader" : "ordinary-reader", generation: retirement === "admission" ? 2 : 1 }, retirement === "source" ? { ...card, revision_skill_id: revision!, source_ref: `skill:${revision}` } : card, retirement !== "close"))
+  await waitFor(() => expect(downloadSignal?.aborted).toBe(true))
+  await act(async () => { resolveDownload(download()) })
+  expect(navigate).not.toHaveBeenCalled()
+  expect(screen.queryByText("下载未完成，请重试。")).toBeNull()
+})
+
+it("reserves detail cover layout only for loaded current media, not its optional resource URL", async () => {
+  const response = (body: unknown) => Response.json(body, { headers: { "cache-control": "private, no-store", "x-request-id": "detail-artwork" } })
+  vi.stubGlobal("fetch", vi.fn(async () => response({ skill: { id: "art-detail-series", version: "art-detail-a", displayName: "Artwork detail" } })))
+  const card: SkillCatalogCard = { skill_id: "art-detail-series", revision_skill_id: "art-detail-a", source_ref: "skill:art-detail-a", name: "Artwork detail", description: "", content_hash: "art-detail-series", scope: "official", installed: false, enabled: false, cover_image: "/api/hub/skills/art-detail-a/cover" }
+  const content = (skill: SkillCatalogCard, subject = "detail-art-reader", admitted = true) => <LocaleProvider><ManusSkillDetailDialog
+    open readBoundary={{ admitted, subject, generation: 1 }} skill={skill}
+    onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={() => false}
+  /></LocaleProvider>
+  const view = render(content(card))
+  const image = document.querySelector<HTMLImageElement>('img[src$="/api/hub/skills/art-detail-a/cover"]')!
+  const hero = image.closest("[data-has-cover]")!
+  expect(hero).toHaveAttribute("data-has-cover", "false")
+  expect(image).not.toBeVisible()
+  Object.defineProperty(image, "naturalWidth", { configurable: true, value: 120 })
+  image.parentElement!.style.position = "absolute"
+  image.width = 120
+  image.height = 120
+  fireEvent.load(image)
+  await waitFor(() => expect(hero).toHaveAttribute("data-has-cover", "true"))
+  expect(image).toBeVisible()
+  fireEvent.error(image)
+  expect(hero).toHaveAttribute("data-has-cover", "false")
+  expect(image).not.toBeVisible()
+
+  const nextCard = { ...card, cover_image: "/api/hub/skills/art-detail-b/cover" }
+  view.rerender(content(nextCard))
+  const next = document.querySelector<HTMLImageElement>('img[src$="/api/hub/skills/art-detail-b/cover"]')!
+  expect(next).not.toBeNull()
+  fireEvent.load(image)
+  expect(next.closest("[data-has-cover]")).toHaveAttribute("data-has-cover", "false")
+  expect(next).not.toBeVisible()
+  view.rerender(content(nextCard, "different-detail-reader"))
+  fireEvent.load(next)
+  const actorImage = document.querySelector<HTMLImageElement>('img[src$="/api/hub/skills/art-detail-b/cover"]')!
+  expect(actorImage).not.toBe(next)
+  expect(actorImage).not.toBeVisible()
+  view.rerender(content(nextCard, "different-detail-reader", false))
+  expect(document.querySelector('img[src$="/api/hub/skills/art-detail-b/cover"]')).toBeNull()
 })
 
 const cases: ReadonlyArray<{
@@ -73,6 +215,33 @@ it("opens personal revision management from the installed detail without writing
   fireEvent.click(await screen.findByRole("menuitem", { name: "更新技能" }))
   expect(manage).toHaveBeenCalledExactlyOnceWith("update", installation)
   expect(fetcher).toHaveBeenCalledTimes(1)
+})
+
+it.each(["official", "personal"] as const)("offers installation removal independently of %s publisher management", async sourceKind => {
+  window.localStorage.setItem("kokoro.locale", "zh")
+  const { installation: original, response } = managementFixture()
+  const installation = { ...original, product: { ...original.product, source_kind: sourceKind } }
+  const fetcher = vi.fn(async () => response(installation))
+  vi.stubGlobal("fetch", fetcher)
+  const remove = vi.fn(), manage = vi.fn()
+  render(<LocaleProvider><ManusSkillDetailDialog detailSource="installation" open
+    readBoundary={{ admitted: true, subject: "installation-removal-reader", generation: 1 }}
+    skill={{ installation_id: installation.installation_id, skill_id: installation.series_id,
+      revision_skill_id: "manage-revision", source_ref: installation.source_ref, installed_source_ref: installation.source_ref,
+      name: installation.display_name, description: "", content_hash: installation.series_id, scope: sourceKind === "official" ? "official" : "personal", installed: true, enabled: false }}
+    onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={() => false} onRemoveInstallation={remove} onManagePersonal={manage} /></LocaleProvider>)
+  await screen.findByText(installation.summary)
+  fireEvent.keyDown(screen.getByRole("button", { name: "更多技能操作" }), { key: "ArrowDown" })
+  const item = await screen.findByRole("menuitem", { name: "移除安装" })
+  if (sourceKind === "official") expect(screen.getAllByRole("menuitem")).toHaveLength(1)
+  else {
+    expect(screen.getByRole("menuitem", { name: "删除" })).toBeVisible()
+    expect(screen.getByRole("menuitem", { name: "技能版本历史" })).toBeVisible()
+  }
+  fireEvent.click(item)
+  expect(remove).toHaveBeenCalledExactlyOnceWith(installation)
+  expect(manage).not.toHaveBeenCalled()
+  expect(fetcher).toHaveBeenCalledOnce()
 })
 
 
@@ -289,8 +458,617 @@ it("does not render deleted-source private details, history or package actions f
  vi.stubGlobal("fetch",vi.fn(async()=>response({...installation,source_status:"deleted"})))
  render(<LocaleProvider><ManusSkillDetailDialog detailSource="installation" open readBoundary={{admitted:true,subject:"reader",generation:1}}
  skill={{installation_id:installation.installation_id,skill_id:installation.series_id,revision_skill_id:"manage-revision",source_ref:installation.source_ref,installed_source_ref:installation.source_ref,name:"Retained",description:"",content_hash:"series",scope:"personal",installed:true,enabled:false}} onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={()=>false} onManagePersonal={vi.fn()}/></LocaleProvider>)
- await screen.findByText("技能详情暂时不可用")
+ await waitFor(() => expect(screen.getByRole("dialog")).toHaveAttribute("aria-busy", "false"))
+ expect(screen.queryByRole("alert")).toBeNull()
  expect(screen.queryByText(installation.summary)).toBeNull()
  expect(screen.queryByRole("button",{name:"更多技能操作"})).toBeNull()
  expect(screen.getByRole("button",{name:"查看详情"})).toBeDisabled()
+})
+
+function detailRetryFixture(source: "catalog" | "installation") {
+  const { installation, response } = managementFixture()
+  const skill: SkillCatalogCard = {
+    installation_id: installation.installation_id, skill_id: installation.series_id,
+    revision_skill_id: "manage-revision", source_ref: installation.source_ref,
+    installed_source_ref: installation.source_ref, name: installation.display_name,
+    description: "Unconfirmed card summary", content_hash: installation.series_id,
+    scope: "personal", installed: true, enabled: false,
+  }
+  const expectedPath = source === "installation"
+    ? "/api/hub/self/skill-installations/manage-installation"
+    : "/api/skill.v1.SkillOptionalService/GetSkill"
+  const detailResponse = (summary: string) => source === "installation"
+    ? response({ ...installation, summary })
+    : Response.json({
+      skill: { id: skill.skill_id, version: skill.revision_skill_id, displayName: skill.name, description: summary },
+    })
+  const onAdd = vi.fn(), onTry = vi.fn(() => false)
+  const content = (boundary: ProjectReadBoundary = { admitted: true, subject: "reader", generation: 1 }, open = true, selected = skill) =>
+    <LocaleProvider><ManusSkillDetailDialog detailSource={source} open={open} readBoundary={boundary}
+      skill={selected} onOpenChange={vi.fn()} onAdd={onAdd} onTry={onTry} /></LocaleProvider>
+  return { expectedPath, detailResponse, content, onAdd, onTry, skill }
+}
+
+it.each(["catalog", "installation"] as const)("keeps a failed %s metadata read quiet and recovers the exact locator on normal reopening", async source => {
+  window.localStorage.setItem("kokoro.locale", "zh")
+  const { expectedPath, detailResponse, content, onAdd, onTry } = detailRetryFixture(source)
+  let resolveRetry!: (response: Response) => void
+  const retryRead = new Promise<Response>(resolve => { resolveRetry = resolve })
+  const requests: { path: string; method: string; body: BodyInit | null | undefined }[] = []
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    requests.push({ path: String(input), method: init?.method ?? "GET", body: init?.body })
+    if (requests.length === 1) throw new Error("temporary read failure")
+    return retryRead
+  }))
+  const view = render(content())
+  await waitFor(() => expect(screen.getByRole("dialog")).toHaveAttribute("aria-busy", "false"))
+  expect(screen.queryByRole("alert")).toBeNull()
+  expect(requests).toHaveLength(1)
+  expect(screen.getByRole("button", { name: "查看详情" })).toBeDisabled()
+  expect(screen.queryByRole("button", { name: "重试" })).toBeNull()
+  view.rerender(content(undefined, false))
+  view.rerender(content())
+  await waitFor(() => expect(requests).toHaveLength(2))
+  expect(screen.getByRole("dialog")).toHaveAttribute("aria-busy", "true")
+  expect(screen.getByRole("status")).toHaveTextContent("正在加载技能详情…")
+  expect(requests[1]).toEqual(requests[0])
+  expect(requests[0]?.path).toBe(expectedPath)
+  if (source === "catalog") expect(JSON.parse(String(requests[0]?.body))).toEqual({ skillId: "manage-series" })
+  await act(async () => { resolveRetry(detailResponse("Recovered exact detail")) })
+  expect(await screen.findByText("Recovered exact detail")).toBeVisible()
+  expect(screen.queryByText("技能详情暂时不可用")).toBeNull()
+  expect(screen.getByRole("button", { name: "查看详情" })).toBeEnabled()
+  expect(onAdd).not.toHaveBeenCalled()
+  expect(onTry).not.toHaveBeenCalled()
+})
+
+it.each([
+  ["catalog", "close"], ["installation", "close"],
+  ["catalog", "admission"], ["installation", "admission"],
+  ["catalog", "actor"], ["installation", "actor"],
+] as const)("retires a pending reopened %s metadata read on %s without restoring its late facts", async (source, retirement) => {
+  window.localStorage.setItem("kokoro.locale", "zh")
+  const { expectedPath, detailResponse, content } = detailRetryFixture(source)
+  let resolveRetry!: (response: Response) => void
+  const retryRead = new Promise<Response>(resolve => { resolveRetry = resolve })
+  const signals: AbortSignal[] = []
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    expect(String(input)).toBe(expectedPath)
+    signals.push(init?.signal as AbortSignal)
+    if (signals.length === 1) throw new Error("temporary read failure")
+    if (signals.length === 2) return retryRead
+    return detailResponse("Replacement actor detail")
+  }))
+  const view = render(content())
+  await waitFor(() => expect(screen.getByRole("dialog")).toHaveAttribute("aria-busy", "false"))
+  expect(screen.queryByRole("alert")).toBeNull()
+  view.rerender(content(undefined, false))
+  view.rerender(content())
+  await waitFor(() => expect(signals).toHaveLength(2))
+  view.rerender(content({
+    admitted: retirement !== "admission", subject: retirement === "actor" ? "replacement-reader" : "reader", generation: retirement === "admission" ? 2 : 1,
+  }, retirement !== "close"))
+  await waitFor(() => expect(signals[1]?.aborted).toBe(true))
+  await act(async () => { resolveRetry(detailResponse("Retired private detail")) })
+  expect(screen.queryByText("Retired private detail")).toBeNull()
+  if (retirement === "actor") expect(await screen.findByText("Replacement actor detail")).toBeVisible()
+  else expect(signals).toHaveLength(2)
+})
+
+it.each(["catalog", "installation"] as const)("keeps a failed %s metadata recheck quiet and restores the reader location only after fresh admission", async source => {
+  window.localStorage.setItem("kokoro.locale", "zh")
+  const { expectedPath, detailResponse, content } = detailRetryFixture(source)
+  const packagePath = source === "installation"
+    ? "/api/hub/skill-installations/manage-installation/package"
+    : "/api/hub/skills/manage-revision/package"
+  const files = [
+    { path: "SKILL.md", size_bytes: "13" },
+    { path: "notes.md", size_bytes: "13" },
+  ]
+  let metadataReads = 0
+  const packageReads: string[] = []
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+    const path = String(input)
+    if (path === expectedPath) {
+      metadataReads += 1
+      if (metadataReads === 2) throw new Error("re-admission metadata unavailable")
+      return detailResponse("Current exact detail")
+    }
+    expect(path.startsWith(packagePath)).toBe(true)
+    packageReads.push(path)
+    const selectedPath = new URL(path, "http://localhost").searchParams.get("file_path")
+    return Response.json({ data: {
+      source_ref: "skill:manage-revision", revision: "3", files,
+      selected_file: selectedPath === null ? null : { path: selectedPath, text: selectedPath === "notes.md" ? "# Notes exact" : "# Skill exact" },
+    } }, { headers: { "cache-control": "no-store", "x-request-id": "reader-retry" } })
+  }))
+  const view = render(content())
+  await screen.findByText("Current exact detail")
+  fireEvent.click(screen.getByRole("button", { name: "查看详情" }))
+  await screen.findByRole("heading", { name: "Skill exact" })
+  fireEvent.click(screen.getByRole("button", { name: "notes.md" }))
+  const note = await screen.findByRole("heading", { name: "Notes exact" })
+  fireEvent.scroll(note.closest("[aria-busy]")!, { target: { scrollTop: 180 } })
+  const previousPackageReads = packageReads.length
+  view.rerender(content({ admitted: false, subject: "reader", generation: 2 }))
+  expect(screen.queryByRole("heading", { name: "Notes exact" })).toBeNull()
+  view.rerender(content({ admitted: true, subject: "reader", generation: 2 }))
+  await waitFor(() => expect(metadataReads).toBe(2))
+  await waitFor(() => expect(screen.getByRole("dialog")).toHaveAttribute("aria-busy", "false"))
+  expect(screen.queryByRole("alert")).toBeNull()
+  expect(screen.queryByRole("button", { name: "重试" })).toBeNull()
+  expect(screen.queryByRole("status", { name: "正在读取技能文件…" })).toBeNull()
+  expect(packageReads).toHaveLength(previousPackageReads)
+  view.rerender(content({ admitted: false, subject: "reader", generation: 3 }))
+  view.rerender(content({ admitted: true, subject: "reader", generation: 3 }))
+  const restoredNote = await screen.findByRole("heading", { name: "Notes exact" })
+  expect(restoredNote.closest("[aria-busy]")).toHaveProperty("scrollTop", 180)
+  expect(screen.getByRole("button", { name: "notes.md" })).toHaveAttribute("aria-pressed", "true")
+  expect(metadataReads).toBe(3)
+  expect(packageReads.slice(previousPackageReads)).toEqual([packagePath, `${packagePath}?file_path=notes.md`])
+})
+
+function quietPackageFixture(source: "catalog" | "installation") {
+  window.localStorage.setItem("kokoro.locale", "zh")
+  const fixture = detailRetryFixture(source)
+  const packagePath = source === "installation"
+    ? "/api/hub/skill-installations/manage-installation/package"
+    : "/api/hub/skills/manage-revision/package"
+  const texts = { "SKILL.md": "# Confirmed skill", "notes.md": "# Confirmed notes" }
+  const files = Object.entries(texts).map(([path, text]) => ({ path, size_bytes: String(new TextEncoder().encode(text).byteLength) }))
+  const response = (file: keyof typeof texts | null) => Response.json({ data: {
+    source_ref: "skill:manage-revision", revision: "3", files,
+    selected_file: file === null ? null : { path: file, text: texts[file] },
+  } }, { headers: { "cache-control": "no-store", "x-request-id": "quiet-package" } })
+  return { ...fixture, packagePath, response }
+}
+
+it.each([["catalog", "network"], ["catalog", "503"], ["installation", "network"], ["installation", "503"]] as const)("retains confirmed %s text on %s when normal reader re-entry reads that same file, not another path", async (source, failure) => {
+  const { expectedPath, detailResponse, content, packagePath, response, onAdd, onTry } = quietPackageFixture(source)
+  const reads: string[] = []
+  let fileReads = 0
+  let failReentry!: () => void
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+    const path = String(input)
+    reads.push(path)
+    if (path === expectedPath) return detailResponse("Confirmed detail")
+    expect(path.startsWith(packagePath)).toBe(true)
+    const file = new URL(path, "http://localhost").searchParams.get("file_path") as "SKILL.md" | "notes.md" | null
+    if (file === "SKILL.md" && ++fileReads === 2) return new Promise<Response>((resolve, reject) => { failReentry = () => failure === "network" ? reject(Error("same-file re-entry did not complete")) : resolve(packageFailure(source, 503)) })
+    return response(file)
+  }))
+  render(content())
+  await screen.findByText("Confirmed detail")
+  fireEvent.click(screen.getByRole("button", { name: "查看详情" }))
+  await screen.findByRole("heading", { name: "Confirmed skill" })
+  fireEvent.click(screen.getByRole("button", { name: "技能详情" }))
+  fireEvent.click(screen.getByRole("button", { name: "查看详情" }))
+  await waitFor(() => expect(failReentry).toBeTypeOf("function"))
+  expect(screen.getByRole("heading", { name: "Confirmed skill" })).toBeVisible()
+  await act(async () => { failReentry() })
+  expect(screen.getByRole("heading", { name: "Confirmed skill" })).toBeVisible()
+  expect(screen.queryByRole("alert")).toBeNull()
+  expect(screen.queryByRole("button", { name: "重试" })).toBeNull()
+  expect(screen.queryByRole("status", { name: "正在读取技能文件…" })).toBeNull()
+  // Re-entering the reader uses its current admitted manifest, not a second
+  // directory cache or an invented content refresh trigger.
+  expect(reads.filter(path => path === packagePath)).toHaveLength(1)
+  fireEvent.click(screen.getByRole("button", { name: "SKILL.md" }))
+  await waitFor(() => expect(fileReads).toBe(3))
+  await waitFor(() => expect(screen.getByRole("heading", { name: "Confirmed skill" }).closest("[aria-busy]")).toHaveAttribute("aria-busy", "false"))
+  fireEvent.click(screen.getByRole("button", { name: "notes.md" }))
+  expect(screen.queryByRole("heading", { name: "Confirmed skill" })).toBeNull()
+  expect(await screen.findByRole("heading", { name: "Confirmed notes" })).toBeVisible()
+  expect(onAdd).not.toHaveBeenCalled()
+  expect(onTry).not.toHaveBeenCalled()
+})
+
+it.each(["catalog", "installation"] as const)("keeps initial %s package failures distinct from empty success and recovers through normal reader controls", async source => {
+  const { expectedPath, detailResponse, content, packagePath, response } = quietPackageFixture(source)
+  let directoryReads = 0, fileReads = 0
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+    const path = String(input)
+    if (path === expectedPath) return detailResponse("Confirmed detail")
+    expect(path.startsWith(packagePath)).toBe(true)
+    const file = new URL(path, "http://localhost").searchParams.get("file_path") as "SKILL.md" | "notes.md" | null
+    if (file === null && ++directoryReads === 1) throw Error("directory unavailable")
+    if (file !== null && ++fileReads === 1) throw Error("file unavailable")
+    return response(file)
+  }))
+  render(content())
+  await screen.findByText("Confirmed detail")
+  fireEvent.click(screen.getByRole("button", { name: "查看详情" }))
+  await waitFor(() => expect(screen.getByRole("dialog")).toHaveAttribute("aria-busy", "false"))
+  expect(directoryReads).toBe(1)
+  expect(screen.queryByRole("alert")).toBeNull()
+  expect(screen.queryByRole("button", { name: "重试" })).toBeNull()
+  expect(screen.queryByText("暂无可读取的文本文件")).toBeNull()
+  expect(screen.queryByText("此包没有可读取的 SKILL.md，请选择其他文本文件")).toBeNull()
+  expect(screen.queryByText("此文件为空")).toBeNull()
+  expect(screen.queryByRole("heading", { name: "Confirmed skill" })).toBeNull()
+  fireEvent.click(screen.getByRole("button", { name: "技能详情" }))
+  fireEvent.click(screen.getByRole("button", { name: "查看详情" }))
+  await waitFor(() => expect(fileReads).toBe(1))
+  await waitFor(() => expect(screen.getByRole("dialog")).toHaveAttribute("aria-busy", "false"))
+  expect(screen.queryByRole("alert")).toBeNull()
+  expect(screen.queryByRole("heading", { name: "Confirmed skill" })).toBeNull()
+  fireEvent.click(screen.getByRole("button", { name: "SKILL.md" }))
+  expect(await screen.findByRole("heading", { name: "Confirmed skill" })).toBeVisible()
+  expect(directoryReads).toBe(2)
+  expect(fileReads).toBe(2)
+})
+
+function packageFailure(source: "catalog" | "installation", status: number) {
+  const code = status === 401 ? "session_invalid" : status === 403 ? "session_forbidden"
+    : status === 404 ? source === "installation" ? "skill_package_not_found" : "skill_not_found"
+    : status === 412 ? source === "installation" ? "skill_package_precondition_failed" : "skill_precondition_failed"
+    : source === "installation" ? "skill_package_dependency_unavailable" : "skill_dependency_unavailable"
+  return Response.json({ error: { code, message: "Owner read failure", retryable: status === 503 } }, {
+    status, headers: { "cache-control": "no-store", "x-request-id": "quiet-package-denied" },
+  })
+}
+
+it.each([
+  ["catalog", 401], ["catalog", 403], ["catalog", 404], ["catalog", 412], ["catalog", "parse"],
+  ["installation", 401], ["installation", 403], ["installation", 404], ["installation", 412], ["installation", "parse"],
+] as const)("retires confirmed %s package bytes after %s rather than presenting denied or damaged data as a temporary outage", async (source, failure) => {
+  const { expectedPath, detailResponse, content, response } = quietPackageFixture(source)
+  let fileReads = 0
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+    const path = String(input)
+    if (path === expectedPath) return detailResponse("Confirmed detail")
+    const file = new URL(path, "http://localhost").searchParams.get("file_path") as "SKILL.md" | "notes.md" | null
+    if (file === "SKILL.md" && ++fileReads === 2) {
+      return failure === "parse" ? Response.json({ wrong: "unvalidated body" }) : packageFailure(source, failure)
+    }
+    return response(file)
+  }))
+  render(content())
+  await screen.findByText("Confirmed detail")
+  fireEvent.click(screen.getByRole("button", { name: "查看详情" }))
+  await screen.findByRole("heading", { name: "Confirmed skill" })
+  fireEvent.click(screen.getByRole("button", { name: "技能详情" }))
+  fireEvent.click(screen.getByRole("button", { name: "查看详情" }))
+  await waitFor(() => expect(fileReads).toBe(2))
+  await waitFor(() => expect(screen.getByRole("dialog")).toHaveAttribute("aria-busy", "false"))
+  expect(screen.queryByRole("heading", { name: "Confirmed skill" })).toBeNull()
+  expect(screen.queryByRole("button", { name: "SKILL.md" })).toBeNull()
+  expect(screen.queryByRole("alert")).toBeNull()
+  fireEvent.click(screen.getByRole("button", { name: "技能详情" }))
+  if (failure !== "parse") {
+    expect(screen.getByRole("button", { name: "查看详情" })).toBeDisabled()
+    expect(screen.queryByRole("button", { name: "下载技能" })).toBeNull()
+  }
+  expect(fileReads).toBe(2)
+})
+
+it.each([
+  ["catalog", "close"], ["catalog", "actor"], ["catalog", "generation"], ["catalog", "version"],
+  ["installation", "close"], ["installation", "actor"], ["installation", "generation"], ["installation", "version"],
+] as const)("retires a selected %s file on %s and never adopts its late bytes", async (source, retirement) => {
+  const { expectedPath, detailResponse, content, response, skill, onAdd, onTry } = quietPackageFixture(source)
+  let finishRetired!: (response: Response) => void, retiredSignal: AbortSignal | undefined
+  let notesReads = 0
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input)
+    if (path === expectedPath) return detailResponse("Current scoped metadata")
+    const file = new URL(path, "http://localhost").searchParams.get("file_path") as "SKILL.md" | "notes.md" | null
+    if (file === "notes.md" && ++notesReads === 1) {
+      retiredSignal = init?.signal as AbortSignal
+      return new Promise<Response>(resolve => { finishRetired = resolve })
+    }
+    return response(file)
+  }))
+  const view = render(content())
+  await screen.findByText("Current scoped metadata")
+  fireEvent.click(screen.getByRole("button", { name: "查看详情" }))
+  await screen.findByRole("heading", { name: "Confirmed skill" })
+  fireEvent.click(screen.getByRole("button", { name: "notes.md" }))
+  await waitFor(() => expect(finishRetired).toBeTypeOf("function"))
+  expect(screen.queryByRole("heading", { name: "Confirmed skill" })).toBeNull()
+  if (retirement === "generation") {
+    view.rerender(content({ admitted: false, subject: "reader", generation: 2 }))
+    expect(screen.queryByRole("heading", { name: "Confirmed notes" })).toBeNull()
+    view.rerender(content({ admitted: true, subject: "reader", generation: 2 }))
+    await screen.findByRole("heading", { name: "Confirmed notes" })
+  } else {
+    view.rerender(content({ admitted: true, subject: retirement === "actor" ? "new-reader" : "reader", generation: 1 }, retirement !== "close",
+      retirement === "version" ? { ...skill, revision_skill_id: "replacement-revision", source_ref: "skill:replacement-revision" } : skill))
+  }
+  await waitFor(() => expect(retiredSignal?.aborted).toBe(true))
+  const late = await response("notes.md").json()
+  late.data.selected_file.text = "# RetiredXX notes"
+  await act(async () => { finishRetired(Response.json(late, { headers: { "cache-control": "no-store", "x-request-id": "retired-file" } })) })
+  expect(screen.queryByRole("heading", { name: "RetiredXX notes" })).toBeNull()
+  if (retirement !== "generation") expect(screen.queryByRole("heading", { name: "Confirmed notes" })).toBeNull()
+  expect(onAdd).not.toHaveBeenCalled()
+  expect(onTry).not.toHaveBeenCalled()
+})
+
+
+it("first shared reader pending is only a one-pixel announcement, with the real CSS frame and navigation stable until the file arrives", async () => {
+  const f = quietPackageFixture("installation")
+  let finish!: (response: Response) => void
+  const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+    const path = String(input)
+    if (path === f.expectedPath) return f.detailResponse("Quiet first read")
+    expect(path.startsWith(f.packagePath)).toBe(true)
+    if (path === f.packagePath) return new Promise<Response>(resolve => { finish = resolve })
+    return f.response("SKILL.md")
+  })
+  vi.stubGlobal("fetch", fetcher)
+  render(f.content()); await screen.findByText("Quiet first read")
+  fireEvent.click(screen.getByRole("button", { name: "查看详情" }))
+  await screen.findByRole("status", { name: "正在读取技能文件…" })
+  const back = screen.getByRole("button", { name: "技能详情" }); back.focus()
+  const dialog = screen.getByRole("dialog"), pendingHtml = dialog.outerHTML
+  const vite = await createServer({ configFile: false, root: process.cwd(), server: { middlewareMode: true, hmr: false, watch: null }, css: { modules: { generateScopedName: (name, filename) => basename(filename.replace(/\?.*$/u, "")) === "manus-skill-detail-dialog.module.css" ? readerStyles[name]! : name } } })
+  let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
+  try {
+    const css = await Promise.all(["/src/app/globals.css", "/src/ui/skills/manus-skill-detail-dialog.module.css"].map(async path => {
+      const result = await vite.transformRequest(`${path}?inline`), json = result?.code.match(/export default ([\s\S]*?);?\s*$/u)?.[1]
+      if (!json) throw Error("reader CSS compilation missing inline output")
+      return JSON.parse(json.replace(/;\s*$/u, "")) as string
+    }))
+    browser = await chromium.launch({ headless: true })
+    await act(async () => { finish(f.response(null)) })
+    await screen.findByRole("heading", { name: "Confirmed skill" })
+    expect(screen.getByRole("button", { name: "技能详情" })).toBe(back); expect(document.activeElement).toBe(back)
+    const readyHtml = dialog.outerHTML
+    for (const viewport of [{ width: 839, height: 900 }, { width: 390, height: 400 }]) {
+      const page = await browser.newPage({ viewport }); await page.route("**/*", route => route.abort())
+      const markup = (html: string) => `<!doctype html><html><head><style>${css.join("\n")}</style></head><body data-web-skin="kokoro">${html}</body></html>`
+      await page.setContent(markup(pendingHtml))
+      const frame = await page.getByRole("dialog").boundingBox(), announcement = page.getByRole("status", { name: "正在读取技能文件…" })
+      const paint = await announcement.evaluate(element => { const style = getComputedStyle(element), box = element.getBoundingClientRect(); return { width: box.width, height: box.height, position: style.position, overflow: style.overflow, animation: style.animationName, decorativeChildren: element.querySelectorAll('[aria-hidden="true"]').length } })
+      expect(paint).toEqual({ width: 1, height: 1, position: "absolute", overflow: "hidden", animation: "none", decorativeChildren: 0 })
+      expect(await announcement.evaluate(element => element.closest('[aria-busy="true"]') !== null)).toBe(true)
+      await page.setContent(markup(readyHtml)); expect(await page.getByRole("dialog").boundingBox()).toEqual(frame)
+      expect(await page.getByRole("heading", { name: "Confirmed skill" }).isVisible()).toBe(true)
+      await page.close()
+    }
+    expect(fetcher.mock.calls.map(([path]) => String(path))).toEqual([f.expectedPath, f.packagePath, `${f.packagePath}?file_path=SKILL.md`])
+    expect(f.onAdd).not.toHaveBeenCalled(); expect(f.onTry).not.toHaveBeenCalled()
+  } finally { try { await browser?.close() } finally { await vite.close() } }
+}, 20_000)
+
+it("pending overview reserves its existing empty shell without decorative loading bars or enabling unknown actions", async () => {
+  localStorage.setItem("kokoro.locale", "zh")
+  const add = vi.fn(), trial = vi.fn()
+  render(<LocaleProvider><ManusSkillDetailDialog open pending skill={null} readBoundary={{ admitted: true, subject: "quiet-overview", generation: 1 }} onOpenChange={vi.fn()} onAdd={add} onTry={trial} /></LocaleProvider>)
+  const dialog = screen.getByRole("dialog"), placeholder = dialog.querySelector(`.${readerStyles.metadataPlaceholder}`)
+  expect(dialog).toHaveAttribute("aria-busy", "true"); expect(screen.getByRole("status")).toHaveClass("sr-only")
+  expect(placeholder).not.toBeNull()
+  const vite = await createServer({ configFile: false, root: process.cwd(), server: { middlewareMode: true, hmr: false, watch: null }, css: { modules: { generateScopedName: (name, filename) => basename(filename.replace(/\?.*$/u, "")) === "manus-skill-detail-dialog.module.css" ? readerStyles[name]! : name } } })
+  let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
+  try {
+    const css = await Promise.all(["/src/app/globals.css", "/src/ui/skills/manus-skill-detail-dialog.module.css"].map(async path => {
+      const result = await vite.transformRequest(`${path}?inline`), json = result?.code.match(/export default ([\s\S]*?);?\s*$/u)?.[1]
+      if (!json) throw Error("overview CSS compilation missing inline output")
+      return JSON.parse(json.replace(/;\s*$/u, "")) as string
+    }))
+    browser = await chromium.launch({ headless: true }); const page = await browser.newPage({ viewport: { width: 839, height: 900 } })
+    await page.route("**/*", route => route.abort()); await page.setContent(`<!doctype html><html><head><style>${css.join("\n")}</style></head><body data-web-skin="kokoro">${dialog.outerHTML}</body></html>`)
+    const paint = await page.locator(`.${readerStyles.metadataPlaceholder}`).evaluate(element => { const style = getComputedStyle(element); return { height: element.getBoundingClientRect().height, minHeight: style.minHeight, children: element.childElementCount, text: element.textContent, animation: style.animationName } })
+    expect(paint).toEqual({ height: 128, minHeight: "128px", children: 0, text: "", animation: "none" })
+    expect(screen.queryByRole("button", { name: "查看详情" })).toBeNull(); expect(add).not.toHaveBeenCalled(); expect(trial).not.toHaveBeenCalled()
+  } finally { try { await browser?.close() } finally { await vite.close() } }
+}, 20_000)
+
+const githubMetadataRepository = {
+  kind: "github" as const, repository_id: "123", repository_url: "https://github.com/qa-owner/skills", owner_login: "qa-owner", owner_url: "https://github.com/qa-owner",
+  commit: "a".repeat(40), path: "tools/check", asset_ref: "qa-repo-package", content_sha256: "b".repeat(64), size_bytes: "100", mime_type: "application/zip" as const,
+  repo_stats: { stars: "33400", forks: "3700", observed_at: "2026-10-27T00:00:00Z", metadata_source_url: "https://api.github.com/repos/qa-owner/skills" },
+}
+function githubMetadataProduct(repository: Omit<typeof githubMetadataRepository, "repo_stats"> & { repo_stats?: typeof githubMetadataRepository.repo_stats } = githubMetadataRepository): NonNullable<SkillCatalogCard["product"]> {
+  return { publication_audience: "catalog", state_version: "1", source_kind: "third_party", presentation_kind: "github_repository", publisher: { kind: "github_repository", github_repository: repository }, creation_provenance: repository }
+}
+
+it("renders GitHub publisher as an immutable-directory link and observed stars/forks rather than usage", async () => {
+  const f = ordinaryMetadataFixture()
+  const card = { ...f.card, product: githubMetadataProduct(), usage_count: "777" }
+  const fetcher = vi.fn(async () => f.metadata())
+  vi.stubGlobal("fetch", fetcher)
+  render(f.content(undefined, card))
+  await screen.findByText("Confirmed metadata without download material")
+  const link = screen.getByRole("link", { name: "qa-owner" })
+  expect(link).toHaveAttribute("href", `https://github.com/qa-owner/skills/tree/${githubMetadataRepository.commit}/tools/check`)
+  expect(link).toHaveAttribute("target", "_blank"); expect(link).toHaveAttribute("rel", "noopener noreferrer")
+  expect(screen.getByText("Star 数 33.4k")).toBeVisible(); expect(screen.getByText("Fork 数 3.7k")).toBeVisible()
+  expect(screen.queryByText("已使用 777 次")).toBeNull()
+  expect(fetcher).toHaveBeenCalledTimes(1)
+})
+
+it.each([
+  { repository_url: "javascript:alert(1)" },
+  { repository_url: "https://github.com.evil.example/qa-owner/skills" },
+  { repository_url: "https://attacker@github.com/qa-owner/skills" },
+  { path: "../other" },
+  { owner_login: "different-owner" },
+])("does not turn unsafe GitHub provenance into a navigable target: %j", async changes => {
+  const f = ordinaryMetadataFixture(), repository = { ...githubMetadataRepository, ...changes }
+  vi.stubGlobal("fetch", vi.fn(async () => f.metadata()))
+  render(f.content(undefined, { ...f.card, product: githubMetadataProduct(repository) }))
+  await screen.findByText("Confirmed metadata without download material")
+  expect(screen.queryByRole("link", { name: repository.owner_login })).toBeNull()
+  expect(screen.getByText(repository.owner_login, { exact: true })).toBeVisible()
+})
+
+it("leaves absent repository stats absent and links the encoded owner directory without guessing a branch", async () => {
+  const f = ordinaryMetadataFixture()
+  const repository: NonNullable<Parameters<typeof githubMetadataProduct>[0]> = { ...githubMetadataRepository, path: "工具/quality #1" }
+  delete repository.repo_stats
+  vi.stubGlobal("fetch", vi.fn(async () => f.metadata()))
+  render(f.content(undefined, { ...f.card, product: githubMetadataProduct(repository) }))
+  await screen.findByText("Confirmed metadata without download material")
+  expect(screen.getByRole("link", { name: "qa-owner" })).toHaveAttribute("href", `https://github.com/qa-owner/skills/tree/${repository.commit}/${encodeURIComponent("工具")}/quality%20%231`)
+  expect(screen.queryByText(/Star 数/u)).toBeNull(); expect(screen.queryByText(/Fork 数/u)).toBeNull()
+})
+
+it("formats decimal repository counters exactly beyond safe Number precision", async () => {
+  const f = ordinaryMetadataFixture(), repository = { ...githubMetadataRepository, repo_stats: { ...githubMetadataRepository.repo_stats, stars: "9007199254741499", forks: "0" } }
+  vi.stubGlobal("fetch", vi.fn(async () => f.metadata()))
+  render(f.content(undefined, { ...f.card, product: githubMetadataProduct(repository) }))
+  await screen.findByText("Confirmed metadata without download material")
+  expect(screen.getByText("Star 数 9007199254741k")).toBeVisible()
+  expect(screen.queryByText("Star 数 9007199254742k")).toBeNull()
+  expect(screen.getByText("Fork 数 0")).toBeVisible()
+})
+
+it("uses only the admitted exact installation repository, never the newer catalog product", async () => {
+  localStorage.setItem("kokoro.locale", "zh")
+  const f = managementFixture(), originalRepository = { ...githubMetadataRepository, commit: "c".repeat(40), path: "original/pinned", repo_stats: { ...githubMetadataRepository.repo_stats, stars: "12", forks: "3" } }
+  const installation = { ...f.installation, product: githubMetadataProduct(originalRepository) }
+  const latestRepository = { ...githubMetadataRepository, repository_url: "https://github.com/catalog-owner/latest", owner_login: "catalog-owner", owner_url: "https://github.com/catalog-owner" }
+  let finish!: (response: Response) => void
+  const fetcher = vi.fn(async () => new Promise<Response>(resolve => { finish = resolve }))
+  vi.stubGlobal("fetch", fetcher)
+  render(<LocaleProvider><ManusSkillDetailDialog detailSource="installation" open readBoundary={{ admitted: true, subject: "github-installed-reader", generation: 1 }}
+    skill={{ skill_id: installation.series_id, installation_id: installation.installation_id, installed_source_ref: installation.source_ref, source_ref: installation.source_ref, revision_skill_id: installation.source_ref.slice(6), name: "Selected", description: "", content_hash: installation.series_id, scope: "third_party", installed: true, enabled: false, product: githubMetadataProduct(latestRepository) }}
+    publisherLabel="catalog-owner" onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={() => false} /></LocaleProvider>)
+  expect(screen.queryByRole("link", { name: "catalog-owner" })).toBeNull()
+  await act(async () => { finish(f.response(installation)) })
+  await screen.findByText(installation.summary)
+  expect(screen.getByRole("link", { name: "qa-owner" })).toHaveAttribute("href", `https://github.com/qa-owner/skills/tree/${originalRepository.commit}/original/pinned`)
+  expect(screen.queryByText("catalog-owner", { exact: true })).toBeNull()
+  expect(screen.getByText("Star 数 12")).toBeVisible(); expect(screen.queryByText("Star 数 33.4k")).toBeNull()
+  expect(fetcher.mock.calls).toEqual([["/api/hub/self/skill-installations/manage-installation", expect.any(Object)]])
+})
+
+it("keeps GitHub metadata at measured 13/18 typography and wrapping inside the unchanged desktop/mobile frame", async () => {
+  const f = ordinaryMetadataFixture()
+  vi.stubGlobal("fetch", vi.fn(async () => f.metadata()))
+  render(f.content(undefined, { ...f.card, product: githubMetadataProduct() }))
+  await screen.findByText("Confirmed metadata without download material")
+  const html = screen.getByRole("dialog").outerHTML
+  const vite = await createServer({ configFile: false, root: process.cwd(), server: { middlewareMode: true, hmr: false, watch: null }, css: { modules: { generateScopedName: (name, filename) => basename(filename.replace(/\?.*$/u, "")) === "manus-skill-detail-dialog.module.css" ? readerStyles[name]! : name } } })
+  let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
+  try {
+    const css = await Promise.all(["/src/app/globals.css", "/src/ui/skills/manus-skill-detail-dialog.module.css"].map(async path => {
+      const result = await vite.transformRequest(`${path}?inline`), json = result?.code.match(/export default ([\s\S]*?);?\s*$/u)?.[1]
+      if (!json) throw Error("metadata CSS compilation missing inline output")
+      return JSON.parse(json.replace(/;\s*$/u, "")) as string
+    }))
+    browser = await chromium.launch({ headless: true })
+    for (const viewport of [{ width: 652, height: 767 }, { width: 390, height: 400 }]) {
+      const page = await browser.newPage({ viewport }); await page.route("**/*", route => route.abort())
+      await page.setContent(`<!doctype html><html><head><style>${css.join("\n")}</style></head><body data-web-skin="kokoro">${html}</body></html>`)
+      const link = page.getByRole("link", { name: "qa-owner" })
+      expect(await link.evaluate(element => { const style = getComputedStyle(element); return { fontSize: style.fontSize, lineHeight: style.lineHeight, color: style.color } })).toEqual({ fontSize: "13px", lineHeight: "18px", color: "rgb(26, 26, 26)" })
+      expect(await page.getByRole("dialog").evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
+      if (viewport.width === 652) { const frame = await page.getByRole("dialog").boundingBox(); expect(frame?.width).toBeCloseTo(619.4, 0); expect(frame?.height).toBe(600) }
+      await link.focus(); expect(await link.evaluate(element => document.activeElement === element)).toBe(true)
+      await page.close()
+    }
+  } finally { try { await browser?.close() } finally { await vite.close() } }
+}, 20_000)
+
+it("uses the measured 560px cover breakpoint, immutable loaded artwork slot, and single-line title without reserving absent media", async () => {
+  const f = ordinaryMetadataFixture(), longTitle = "A very long exact owner skill title ".repeat(8)
+  const selected = { ...f.card, name: longTitle, product: githubMetadataProduct(), cover_image: "/api/hub/skills/ordinary-revision/cover" }
+  vi.stubGlobal("fetch", vi.fn(async () => f.response({ skill: { id: selected.skill_id, version: selected.revision_skill_id, displayName: longTitle, description: "Confirmed cover metadata" } })))
+  const view = render(f.content(undefined, selected))
+  await screen.findByText("Confirmed cover metadata")
+  const image = document.querySelector<HTMLImageElement>('img[src$="/api/hub/skills/ordinary-revision/cover"]')!
+  const unloadedHtml = screen.getByRole("dialog").outerHTML
+  Object.defineProperty(image, "naturalWidth", { configurable: true, value: 105 })
+  image.width = 105; image.height = 140
+  fireEvent.load(image)
+  await waitFor(() => expect(image.closest("[data-has-cover]")).toHaveAttribute("data-has-cover", "true"))
+  const loadedHtml = screen.getByRole("dialog").outerHTML
+  view.rerender(f.content(undefined, { ...f.card, name: longTitle, product: githubMetadataProduct() }))
+  const absentHtml = screen.getByRole("dialog").outerHTML
+  const vite = await createServer({ configFile: false, root: process.cwd(), server: { middlewareMode: true, hmr: false, watch: null }, css: { modules: { generateScopedName: (name, filename) => basename(filename.replace(/\?.*$/u, "")) === "manus-skill-detail-dialog.module.css" ? readerStyles[name]! : name } } })
+  let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
+  try {
+    const css = await Promise.all(["/src/app/globals.css", "/src/ui/skills/manus-skill-detail-dialog.module.css"].map(async path => {
+      const result = await vite.transformRequest(`${path}?inline`), json = result?.code.match(/export default ([\s\S]*?);?\s*$/u)?.[1]
+      if (!json) throw Error("cover CSS compilation missing inline output")
+      return JSON.parse(json.replace(/;\s*$/u, "")) as string
+    }))
+    browser = await chromium.launch({ headless: true })
+    for (const width of [652, 559, 560, 390]) {
+      const page = await browser.newPage({ viewport: { width, height: width === 390 ? 400 : 767 } }); await page.route("**/*", route => route.abort())
+      const markup = (html: string) => `<!doctype html><html><head><style>${css.join("\n")}</style></head><body data-web-skin="kokoro">${html}</body></html>`
+      await page.setContent(markup(loadedHtml))
+      const paint = await page.getByRole("dialog").evaluate((dialog, classes) => {
+        const hero = dialog.querySelector<HTMLElement>(`[data-has-cover]`)!, copy = dialog.querySelector<HTMLElement>(`.${classes.copy}`)!, cover = dialog.querySelector<HTMLElement>(`.${classes.cover}`)!, book = dialog.querySelector<HTMLElement>(`.${classes.coverBook}`), heading = dialog.querySelector("h2")!
+        const coverStyle = getComputedStyle(cover), titleStyle = getComputedStyle(heading), bookStyle = book ? getComputedStyle(book) : null
+        return { coverDisplay: coverStyle.display, coverWidth: cover.getBoundingClientRect().width, clip: coverStyle.overflow, copyWidth: copy.getBoundingClientRect().width, available: hero.getBoundingClientRect().width - parseFloat(getComputedStyle(hero).paddingLeft) - parseFloat(getComputedStyle(hero).paddingRight), noOverflow: dialog.scrollWidth <= dialog.clientWidth, title: { height: heading.getBoundingClientRect().height, font: titleStyle.fontSize, line: titleStyle.lineHeight, whiteSpace: titleStyle.whiteSpace, overflow: titleStyle.overflow, textOverflow: titleStyle.textOverflow }, book: bookStyle ? { width: bookStyle.width, height: bookStyle.height, left: bookStyle.left, bottom: bookStyle.bottom, radius: bookStyle.borderRadius, overflow: bookStyle.overflow, transform: bookStyle.transform } : null }
+      }, { copy: readerStyles.copy!, cover: readerStyles.cover!, coverBook: readerStyles.coverBook! })
+      expect(paint.coverDisplay, `cover display at ${width}`).toBe(width < 560 ? "none" : "block")
+      expect(paint.title).toEqual({ height: 26, font: "20px", line: "26px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" })
+      expect(paint.noOverflow).toBe(true)
+      expect(paint.copyWidth).toBeCloseTo(paint.available - (width < 560 ? 0 : 244), 0)
+      if (width >= 560) {
+        expect(paint.coverWidth).toBe(220); expect(paint.clip).toBe("clip")
+        expect(paint.book).toMatchObject({ width: "105px", height: "140px", left: "60px", bottom: "-10px", radius: "2px", overflow: "clip" })
+        expect(paint.book?.transform).toBe("matrix(0.994132, 0.108173, -0.108173, 0.994132, 0, 0)")
+      }
+      for (const html of [unloadedHtml, absentHtml]) {
+        await page.setContent(markup(html))
+        const full = await page.locator(`.${readerStyles.copy}`).evaluate(element => { const hero = element.parentElement!, style = getComputedStyle(hero); return { actual: element.getBoundingClientRect().width, available: hero.getBoundingClientRect().width - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) } })
+        expect(full.actual).toBeCloseTo(full.available, 0)
+      }
+      await page.close()
+    }
+  } finally { try { await browser?.close() } finally { await vite.close() } }
+}, 20_000)
+
+function projectInstalledFixture() {
+  localStorage.setItem("kokoro.locale", "zh")
+  const actualWindow = window, navigate = vi.fn()
+  const location = { ...actualWindow.location, assign: navigate }
+  vi.stubGlobal("window", new Proxy(actualWindow, { get: (target, key) => key === "location" ? location : Reflect.get(target, key, target) }))
+  const projectId = "project_11111111-1111-4111-8111-111111111111"
+  const row: PersonalInstallation = { installation_id: "project-installed", source_ref: "skill:project-version", series_id: "project-series", revision: "17", installed: true, enabled: true,
+    installed_at: "2026-10-10T00:00:00Z", updated_at: "2026-10-10T00:00:00Z", skill_updated_at: "2026-10-10T00:00:00Z", display_name: "Project pin", summary: "Project-only package", source_status: "active", tags: [], example_prompts: ["Not a personal trial"], category_keys: [], product: { publication_audience: "owner", state_version: "3" } }
+  const card: SkillCatalogCard = { skill_id: row.series_id, revision_skill_id: row.source_ref.slice(6), installation_id: row.installation_id, source_ref: row.source_ref, installed_source_ref: row.source_ref, name: row.display_name, description: row.summary, content_hash: row.series_id, scope: "unknown", installed: true, enabled: true }
+  const reply = (data: unknown) => Response.json(data, { headers: { "cache-control": "no-store", "x-request-id": "project-content-fixture" } })
+  const frame = (project = projectId, boundary = { admitted: true, subject: "project-reader", generation: 1 }) => <LocaleProvider><ManusSkillDetailDialog detailSource="project-installation" projectTarget={{ project_id: project, installation_id: row.installation_id, source_ref: row.source_ref, revision: row.revision }} readBoundary={boundary} skill={card} open onOpenChange={vi.fn()} /></LocaleProvider>
+  return { projectId, row, card, reply, frame, navigate }
+}
+
+it("Project download qualifies its installed pin only through the Project operation, never personal/catalog", async () => {
+  const f = projectInstalledFixture()
+  const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+    const path = String(input)
+    if (path === `/api/hub/projects/${f.projectId}/skill-installations/${f.row.installation_id}`) return f.reply({ data: f.row })
+    if (path === `/api/hub/projects/${f.projectId}/skill-installations/${f.row.installation_id}/download`) return f.reply({ data: { source_ref: f.row.source_ref, revision: f.row.revision, download_info: { download_url: `/skill-downloads/${"a".repeat(43)}`, filename: "project.zip", expires_at: "2999-01-01T00:00:00Z" } } })
+    throw Error("personal/catalog fallback is not Project authority")
+  })
+  vi.stubGlobal("fetch", fetcher)
+  render(f.frame())
+  await waitFor(() => expect(screen.getByRole("button", { name: "下载技能" })).toBeEnabled())
+  fireEvent.click(screen.getByRole("button", { name: "下载技能" }))
+  await waitFor(() => expect(f.navigate).toHaveBeenCalledWith(`/api/skill-downloads/${"a".repeat(43)}`))
+  expect(fetcher.mock.calls.map(([path]) => String(path))).toEqual([`/api/hub/projects/${f.projectId}/skill-installations/${f.row.installation_id}`, `/api/hub/projects/${f.projectId}/skill-installations/${f.row.installation_id}/download`])
+})
+
+it.each(["source_ref", "revision", "series_id", "installation_id"])("Project detail rejects a fresh mismatched %s instead of reading source bytes", async field => {
+  const f = projectInstalledFixture()
+  const fetcher = vi.fn(async (input: RequestInfo | URL) => { void input; return f.reply({ data: { ...f.row, [field]: field === "source_ref" ? "skill:foreign" : field === "revision" ? "18" : "foreign" } }) })
+  vi.stubGlobal("fetch", fetcher); render(f.frame())
+  const details = screen.getByRole("button", { name: "查看详情" })
+  await waitFor(() => expect(screen.getByText("技能详情暂时不可用")).toBeInTheDocument())
+  expect(details).toBeDisabled(); expect(screen.queryByRole("button", { name: "下载技能" })).not.toBeInTheDocument()
+  expect(fetcher).toHaveBeenCalledOnce()
+})
+it("Project changes retire a late file read even when installation and source pin are otherwise identical", async () => {
+  const f = projectInstalledFixture(), text = "private old Project"
+  let finish!: (response: Response) => void, signal: AbortSignal | undefined
+  const directory = { source_ref: f.row.source_ref, revision: f.row.revision, files: [{ path: "SKILL.md", size_bytes: String(new TextEncoder().encode(text).length) }], selected_file: null }
+  const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input)
+    if (path.endsWith("?file_path=SKILL.md")) { signal = init?.signal ?? undefined; return await new Promise<Response>(resolve => { finish = resolve }) }
+    if (path.endsWith("/package")) return f.reply({ data: directory })
+    return f.reply({ data: f.row })
+  }); vi.stubGlobal("fetch", fetcher)
+  const view = render(f.frame()); await waitFor(() => expect(screen.getByRole("button", { name: "查看详情" })).toBeEnabled())
+  fireEvent.click(screen.getByRole("button", { name: "查看详情" })); await waitFor(() => expect(finish).toBeTypeOf("function"))
+  view.rerender(f.frame("project_22222222-2222-4222-8222-222222222222"))
+  expect(signal?.aborted).toBe(true)
+  await act(async () => { finish(f.reply({ data: { ...directory, selected_file: { path: "SKILL.md", text } } })) })
+  expect(screen.queryByText(text)).not.toBeInTheDocument()
+  expect(f.navigate).not.toHaveBeenCalled()
 })

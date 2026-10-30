@@ -145,6 +145,7 @@ function projectionEnvelope(
   return parseChatProjectionEvent({
     event_id: cursor,
     seq: metadata.seq,
+    ...(!("public_sequence" in metadata) || metadata.public_sequence === undefined ? {} : { publicSequence: metadata.public_sequence }),
     session_id: metadata.session_id,
     run_id: metadata.run_id ?? `session:${metadata.session_id}`,
     timestamp: metadata.timestamp,
@@ -259,6 +260,7 @@ export class AgUiEventMapper {
         const outputTokens = usage?.outputTokens
         const projectionEvent = projectionEnvelope(cursor, event, "run.completed", {
           status: cancelled ? "cancelled" : "completed",
+          ...(!cancelled && event.result && "final_segment_id" in event.result ? { final_segment_id: event.result.final_segment_id } : {}),
           token_usage:
             typeof inputTokens === "number" && typeof outputTokens === "number"
               ? { input_tokens: inputTokens, output_tokens: outputTokens }

@@ -1,9 +1,11 @@
+import {sessionAnswerActions} from "@/lib/server/session-answer-actions"
 // Chat 同源适配器（BFF）：浏览器保留稳定的 `/api/session/*` 兼容路径，服务端统一
 // 投影到 `kokoro-bff/v1/*`。BFF Chat 模块负责消息/run/SSE 事实编排；浏览器不直连
 // Session、Gateway 或任意业务子仓库。HTTP/SSE/二进制一律流式转发，大 JSON 仅在
 // BFF envelope 适配时解包。变更类请求校验同源 Origin。
 
 import { z } from "zod"
+import { messagePartsPageSchema } from "@/contract/chat"
 import { sessionArchive } from "@/lib/server/session-archive"
 import { sessionShare } from "@/lib/server/session-share"
 
@@ -33,6 +35,7 @@ const AGUI_STREAM_IDLE_TIMEOUT_MS = 60_000
 const FORWARD_HEADERS = ["accept", "content-type", "last-event-id", "idempotency-key"] as const
 
 async function proxy(request: Request, context: { params: Promise<{ path: string[] }> }): Promise<Response> {
+  if(/^\/api\/session\/sessions\/[^/]+\/(?:messages\/[^/]+\/(?:feedback|regenerate)|runs\/[^/]+\/display)(?:$|\?)/u.test(new URL(request.url).pathname)) return sessionAnswerActions(request,context.params)
   if (/^\/api\/session\/sessions\/[^/]+\/(?:archive|restore)$/u.test(new URL(request.url).pathname)) return sessionArchive(request, context.params)
   if (["POST", "DELETE"].includes(request.method) && /^\/api\/session\/sessions\/[^/]+\/share$/u.test(new URL(request.url).pathname)) return sessionShare(request, context.params)
   const requestId = requestIdForRequest(request)
@@ -59,6 +62,17 @@ async function proxy(request: Request, context: { params: Promise<{ path: string
 
   const { path } = await context.params
   const segments = path ?? []
+  const isMessageParts = request.method === "GET" && segments.length === 5 && segments[0] === "sessions" && segments[2] === "messages" && segments[4] === "parts"
+  if (isMessageParts) {
+    const query = new URL(request.url).searchParams
+    const allowed = new Set(["scope", "project_ref", "cursor", "limit"])
+    if ([...query.keys()].some((key) => !allowed.has(key) || query.getAll(key).length !== 1) ||
+      (query.has("scope") && query.get("scope") !== "direct") ||
+      (query.has("project_ref") && (!query.get("project_ref") || query.has("scope"))) ||
+      (query.has("cursor") && !query.get("cursor")) ||
+      (query.has("limit") && !/^(?:[1-9]|[12][0-9]|3[0-2])$/u.test(query.get("limit") ?? "")) ||
+      ["content-type", "content-length", "transfer-encoding", "idempotency-key", "last-event-id", "if-match"].some((name) => request.headers.has(name)) || request.body !== null) return webErrorResponse("invalid_message_parts_request", 400, requestId)
+  }
   const isAgUiEvents = request.method === "GET" && segments.length === 3
     && segments[0] === "sessions" && segments[2] === "events"
   const search = new URL(request.url).search
@@ -100,6 +114,7 @@ async function proxy(request: Request, context: { params: Promise<{ path: string
       headers: Object.fromEntries(headers.entries()),
       ...(body !== undefined ? { body } : {}),
       signal: request.signal,
+      ...(isMessageParts ? { timeoutMs: 10_000, maxResponseBytes: 1_048_576, maxErrorResponseBytes: 1_048_576, strictResponseLength: true } : {}),
       ...(isAgUiEvents ? { streamIdleTimeoutMs: AGUI_STREAM_IDLE_TIMEOUT_MS } : {}),
     })
   } catch {
@@ -107,6 +122,10 @@ async function proxy(request: Request, context: { params: Promise<{ path: string
   }
 
   const contentType = upstream.headers.get("content-type")?.toLowerCase() ?? ""
+  if (isMessageParts && contentType.split(";", 1)[0]?.trim() !== "application/json") {
+    void upstream.body?.cancel().catch(() => undefined)
+    return webErrorResponse("bff_bad_response", 502, requestId)
+  }
   if (isMoveSession) {
     if (contentType.split(";", 1)[0]?.trim() !== "application/json") {
       return webErrorResponse("bff_bad_response", 502, requestId)
@@ -136,14 +155,16 @@ async function proxy(request: Request, context: { params: Promise<{ path: string
     })
   }
 
-  const raw: unknown = await upstream.json().catch(() => null)
+  let raw: unknown
+  try { raw = isMessageParts ? JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(await upstream.arrayBuffer())) : await upstream.json() }
+  catch { raw = null }
   if (!upstream.ok || bffErrorEnvelopeSchema.safeParse(raw).success) {
     const errorHeaders = new Headers()
     const retryAfter = upstream.headers.get("retry-after")
     if (retryAfter !== null) errorHeaders.set("retry-after", retryAfter)
     return bffErrorResponse(upstream, raw, "bff_error", requestId, errorHeaders)
   }
-  const parsed = bffSuccessEnvelopeSchema(z.unknown()).safeParse(raw)
+  const parsed = bffSuccessEnvelopeSchema(isMessageParts ? messagePartsPageSchema : z.unknown()).safeParse(raw)
   if (!parsed.success) return webErrorResponse("bff_bad_response", 502, requestId)
 
   // The browser SessionClient intentionally keeps the established flat Chat
@@ -159,7 +180,22 @@ async function proxy(request: Request, context: { params: Promise<{ path: string
   })
 }
 
-export const GET = proxy
+export async function GET(request: Request, context: { params: Promise<{ path: string[] }> }): Promise<Response> {
+  if (!/^\/api\/session\/sessions\/[^/]+\/messages\/[^/]+\/parts$/u.test(new URL(request.url).pathname)) return proxy(request, context)
+  const controller = new AbortController()
+  const abort = () => controller.abort()
+  request.signal.addEventListener("abort", abort, { once: true })
+  const timer = setTimeout(abort, 10_000)
+  let reject!: (error: unknown) => void
+  const retired = new Promise<never>((_, no) => { reject = no })
+  const onAbort = () => reject(new Error("Message parts read retired"))
+  controller.signal.addEventListener("abort", onAbort, { once: true })
+  try {
+    if (request.signal.aborted) abort()
+    return await Promise.race([proxy(new Request(request, { signal: controller.signal }), context), retired])
+  } catch { return webErrorResponse("bff_unreachable", 502, requestIdForRequest(request)) }
+  finally { clearTimeout(timer); request.signal.removeEventListener("abort", abort); controller.signal.removeEventListener("abort", onAbort) }
+}
 export const POST = proxy
 export const PUT = proxy
 export const PATCH = proxy

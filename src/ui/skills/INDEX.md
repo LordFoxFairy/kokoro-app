@@ -1,3 +1,51 @@
+## Project Skill 精确内容消费者
+
+`ManusSkillDetailDialog` 的 Project installation variant 只读当前 Project 的 metadata／package／download；resource identity 含 Project 与安装 pin，沿原 actor/generation/abort 围栏，不暴露个人写动作、分享或试用。
+
+## GitHub 写入等待：稳定业务标签
+
+`github-import-dialog.tsx`在import/read/publish/install等待时保“添加到我的技能（仅自己可见）”主动作标签并禁用，preview仍为预览；Dialog统一aria-busy，原sr-only阶段状态不改。Unknown真实提示与显式原意图重试、关闭取消／迟到结果、Flow／body／key保持，不把等待显示为完成。
+
+## S11：已删除来源安装的显式清理
+
+Settings deleted 灰卡保留原 source_status／禁用详情正文，仅通过现 PersonalSkillActions 的“移除安装”入口，fresh GET 安装后核 actor／generation／原 installation＋series＋source，再复用现 RemoveFlow／确认框。fresh 读取占同一管理互锁，取消／换 actor／代际／目标或原触发器失联不弹旧确认；稳定 overflow triggerRef 与现 fallback 回焦保持。Remove 确认框的资格读取保64px空白及原 aria-busy／sr-only 状态，不绘制填色圆角骨架。旧 RemoveFlow、原 key unknown 恢复、严格 ACK 后失活列表均不变。不将系列删除当卸载，不自动删除／隐藏或伪造 installed=false，不读被删正文。
+
+## GitHub preview：安静读取与字段错误
+
+预览读取 busy 仅 sr-only status／aria-busy，无可见加载句／spinner。preview 确定读取失败仅在仓库地址字段内显示“未读取到仓库内容，请检查仓库地址。”，原错误码仅读屏；import／publish／install 等写阶段及 unknown 的真实原状态／重试语义保持。此为呈现修复，不代表 GitHub503 owner 根因已修。
+
+## S13：GitHub 详情来源与仓库统计
+
+metadata 仅从已准入 exact installation.product 或目录 skill.product 的 third_party repository publisher 读取 owner_login／可选 repo_stats。固定目录链接由既有合法 GitHub repository URL＋immutable commit＋逐段编码的目录 path 构造，不猜 main、不将 creator 当 publisher；危险目标不生成链接。统计沿 k 样式以 BigInt 保十进制精度，缺省不补零、不作 usage。封面沿实测 <560px 隐藏、有效媒体 slot220px／gap24px、图105×140px／左60px／底-10px／旋转6.21°；无有效媒体文字回全宽。标题20／26单行截断；保现 header 高度及 SkillCoverMedia loaded／owner guard，不拷参考 artwork。首方 metadata、reader／cache／effects／actions 不变；正常参考与实际配对由 Root 验收。
+
+## T02：详情与包读取的安静呈现
+
+首读／切换尚无正文时只保留 sr-only 状态与原 aria-busy，不绘制正文骨架／动画或可见加载句。overview 保原 metadata 空 shell 高度；两现 reader 的请求、缓存、actor／revision／原 path 保文、准入退休、错误清退与显式重试边界不变。
+
+## 2026-10-26 个人系列删除确认的静默读取（候选）
+
+`personal-skill-delete-dialog` 的被动 history 读取不展示 loading／失败重试面板；名称、删除范围警告、取消与禁用确认保持。只有正式 history 成功且 series 精确绑定后，才取得原 publication CAS（显式 null 才是无发布）；未知／失败不当空、不开放新删除。关闭后重新打开沿原读取路径重查，不新增缓存或自动命令重放。已开始的删除 busy／unknown／rejected 及原 body／key／CAS、显式原意图重试、准入退休与迟到 ACK 保护不变。正常 UI 验收由主方另验。
+
+## 2026-10-26 个人安装移除与重新添加（候选）
+
+正式安装详情的更多菜单单独提供“移除安装”；官方／社区安装不要求发布者权限，个人发布者原历史／更新／撤回／删除系列动作保持独立。菜单200px、4px外padding／12px圆角与36px条目、8px内padding／圆角、14px字样来自本轮Manus已安装官方技能详情实测；确认窗口沿现Dialog/Button，不借测试定义视觉。
+
+`skill-installation-remove-flow` 只拥有当前actor的RAM原安装ID/key意图；`skills-panel`在读取代际之外持有它，与更新／发布管理及安装启停互锁。打开后先fresh GET绑定安装／系列／source／revision，取消零命令；确认才调用现安装client的无body DELETE，不删除源系列、历史或项目安装。原公开接口无pin CAS，不臆造字段。未知只显式重放原ID/key；关闭对话／同actor重新准入保意图，GET已移除或404不冒原ACK。精确ACK后仅GET核当前与失活个人池／目录，后读失败不重DELETE；并发重装后的真实installed也不误显示“已移除”。换actor清退，取消／迟到不改当前窗口。
+
+确认文案明确仅移除此账号的安装，源及历史不删除，重装仍需该版本可获取。正常关闭后的恢复入口独立于卡片，确认／取消及完成后焦点回原可用触发器或搜索；硬刷新不承诺恢复RAM未知key。专项组件／flow测试承接“移除→池刷新→外层同版本重新添加→设置回读”、取消零写、unknown原key与权限／生命周期负控；正常具体QA移除与浏览器验收须主方当次确认，不由本候选测试代替。
+
+## 2026-10-26 生产详情与文件的静默读取
+
+`ManusSkillDetailDialog` 的目录／安装／分享详情保留原窗口结构、字段占位和无障碍读取状态，不再用被动 metadata 或包读取失败面板承担恢复。正常关闭重开详情、重新进入阅读器和选择失败的同一文件可重新读取；未确认不当作空目录／空文件或成功，不自动安装、分享、下载或重放命令。未准入的显式会话恢复按钮、安装／分享／下载的实际操作失败和未知结果反馈保持。
+
+同一可信主体、准入代与精确版本内，返回概览后再进入阅读器复用当前已检查的 manifest，并重新读所选文件；仅该路径已确认的正文可在 typed 网络中断或严格 HTTP503 时保持。换路径先清旧正文；401／403／404／412 的已校验 owner 失败清包及依赖 metadata 资格，并清退该目录详情缓存；坏 wire／解析失败保守清包，不按文案猜权限。整个窗口关闭、actor／版本／准入代变化仍退休私有事实与迟到读取；不新增正文缓存或通用重试框架。
+
+`manus-skill-client` 的包读取独立启用既有 `HubClientError` 分类；默认 RPC List／Get／Download 错误语义不变。专项组件／client 测试覆盖可达的“已读→概览→再进入同文件失败”、正常恢复、路径切换与退休、typed 暂时／失效／损坏及取消边界；正常运行、Manus 对照及浏览器验收由主方另验。
+
+## 2026-10-25 独立封面媒体消费
+
+`skill-cover-media.tsx` 由外层目录、Settings目录与详情共同使用。合法 exact revision URL 只是同源媒体定位，不代表有图；按原client/actor与URL换代，只有当前图片成功加载后展示，未加载／失败保留原fallback。详情仅按实际loaded预留封面宽度，统一unoptimized以保同源身份；不改变列表、安装、包读取或当前准入。
+
 ## 个人系列删除（2026-10-21，候选）
 
 personal-skill-actions新增真实delete，不替换withdraw；personal-skill-management仍是精确锚点／actor／恢复入口owner。personal-skill-delete-dialog只负责系列删除确认、正式history publication读取、冻结命令与显式原意图重放。确认后GET404不再锁死未知重试，只有匹配回执清选择并失活列表。deleted安装保留但禁详情、历史、包、启用和更新；停用仍可用。最终180项候选尚未正常生效；未操作正常环境，正常浏览器与最终配对由主方统一验收。Manus真实图标上传后的enabled与本地disabled仍是剩余差异，不在此片新增上传API／Storage或自动启用。
@@ -124,10 +172,12 @@ Settings 的正式入口是 `src/ui/settings/sections/skills-settings-section.ts
 - `GithubImportDialog`（`github-import-dialog.tsx`）：`parseGithubRepository` 负责 HTTPS GitHub owner/repo
   边界校验；focused GitHub client 为正式 Preview/immutable Import 入口，后续由flow消费原Publish/Install；旧optional注入已删除，不把Preview或draft响应伪装成已安装。
 - 下载反馈独立于详情/reader：已校验且不可重试的下载拒绝或隐藏缺失仅提示当前未开放下载；网络/协议失败提示下载未完成，不清正文、不冒整个详情失效，不按message文本判断原因。
+- `manus-skill-client`：GetSkill 只读严格 `{skill}` metadata，详情 flight/cache 不缓存下载句柄；DownloadSkill 使用独立 required-downloadInfo schema。普通下载入口要求本代详情精确匹配已选 revision，点击后独立准入并复核返回 version；生命周期退休后不导航，不把卡片或旧详情缓存当下载授权。
 - 安装池详情显式选择 installation metadata/package/download；目录 current 和分享保持独立。`@/hub/skill-installation-content` 校验精确 source/revision/目录并在退休时取消，不回退到当前系列。
 - `ManusSkillDetailDialog`（`manus-skill-detail-dialog.tsx`）：唯一的详情与文件阅读面；只在 owner
   返回 `skill_id` 与 `revision_skill_id` 时读取真实 package tree 和正文。缺少 binding 的旧投影保持详情入口禁用，
-  不再由浏览器合成 YAML、文件树或示例正文。
+  不再由浏览器合成 YAML、文件树或示例正文。目录／安装 metadata 读取失败保稳定概览／reader 结构，
+  以正常进入／重新准入恢复精确 locator，保同目标的文件／滚动意图，不重放安装、分享或发布命令。
 - `@/lib/query` 与 `skills-resource-cache`：安装池使用 client-scoped `skillResourceKey(SKILLS_KEY, client)`；目录使用同样隔离的 `SKILLS_CATALOG_KEY`。正式 adapter 的 `skillQuota` 返回明确缺省，不请求旧 quota API；不存在可由旧 name-based cache 冒充的正式系列历史。
 
 ## 陷阱
@@ -156,6 +206,7 @@ Settings 的正式入口是 `src/ui/settings/sections/skills-settings-section.ts
 详情只允许同版本、已安装启用的示例进入正式 handoff；内部 installed_source_ref 保存原安装 pin，不能由系列 added 或 current source 推导。外部目录和 Settings 都保留真实 action card 身份，失败不关闭详情或回落纯文本；preview 单独保持文字预填。实际执行仍由 owner 判定。
 
 - 目录重核：外层保同 actor 的搜索/筛选/精确详情 locator；`use-catalog-skill-installation` 拥有本代安装动作与冻结未知命令。详情/包文件展示仍按代际退休，`SkillPackageFiles` 仅渲染 owner 文件树。分享未知墓碑与当代 ACK 分离，导入只读/已确认结果重核退役，未知恢复意图保留。
+- 外层目录在搜索／重核期间打开的 pending 详情，目录读取失败后可在当前弹窗内显式重试；沿当前筛选重读并保留原精确 locator，不要求关闭弹窗，也不重放安装／发布命令。未准入期间不提供重试。
 
 ## 2026-10-16 Settings Explore 展示与地址恢复
 

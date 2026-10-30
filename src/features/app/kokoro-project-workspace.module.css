@@ -36,7 +36,6 @@
   height: 1.25rem;
   margin-block: 0.1875rem;
   border-radius: var(--radius-sm);
-  background: var(--secondary);
 }
 .projectIdentity p {
   margin: 4px 0 0;

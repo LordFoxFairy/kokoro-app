@@ -1,31 +1,40 @@
 import type { Metadata } from "next"
-import Link from "next/link"
+import { headers } from "next/headers"
+import { redirect } from "next/navigation"
 import { AudioLines } from "lucide-react"
 
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader } from "@/components/ui/card"
+import { oidcRpConfig } from "@/lib/server/oidc-provider"
+import { activeProductSession } from "@/lib/server/product-session"
+import { SignInRecovery } from "@/ui/auth/sign-in-recovery"
 
 export const metadata: Metadata = { title: "登录 · Kokoro", robots: { index: false, follow: false } }
 export const dynamic = "force-dynamic"
 
-/** Inert destination: rendering or refreshing never starts another OAuth request. */
-export default function SignInFailurePage() {
+/** Read-only navigation recovery; /app still owns fresh product admission. */
+export default async function SignInFailurePage() {
+  let current = false
+  try {
+    const config = oidcRpConfig(process.env)
+    const incoming = await headers()
+    if (config && incoming.get("host") === new URL(config.relay.webOrigin).host) {
+      const requestHeaders = new Headers()
+      const cookie = incoming.get("cookie")
+      if (cookie !== null) requestHeaders.set("cookie", cookie)
+      const session = await activeProductSession(new Request(`${config.relay.webOrigin}/app`, { headers: requestHeaders }), {
+        redisUrl: config.redisUrl, webOrigin: config.relay.webOrigin, secret: config.authSecret,
+      })
+      current = session !== null
+    }
+  } catch { /* Keep explicit recovery; never start or replay authentication here. */ }
+  // Next redirect throws its navigation signal; keep it outside the inspection catch.
+  if (current) redirect("/app")
   return (
     <main className="flex min-h-dvh w-full flex-col bg-background px-5 py-6 text-foreground sm:px-8">
       <div className="flex items-center gap-2.5 text-lg font-semibold tracking-tight">
         <AudioLines aria-hidden="true" className="size-6 text-primary" /> Kokoro
       </div>
-      <section className="flex flex-1 items-center justify-center py-12" aria-labelledby="sign-in-failure-heading">
-        <Card className="w-full max-w-[420px] border-0 bg-transparent shadow-none">
-          <CardHeader className="px-0 pb-6">
-            <h1 id="sign-in-failure-heading" className="text-3xl font-semibold tracking-tight">登录失败</h1>
-            <p className="mt-2 text-base leading-relaxed text-muted-foreground">这次登录没有完成，请重新登录。</p>
-          </CardHeader>
-          <CardContent className="grid gap-3 px-0">
-            <Button asChild size="lg" className="h-11 w-full"><a href="/login">登录</a></Button>
-            <Button asChild variant="ghost" size="lg" className="h-11 w-full"><Link href="/" prefetch={false}>返回首页</Link></Button>
-          </CardContent>
-        </Card>
+      <section className="flex flex-1 items-center justify-center py-12" aria-labelledby="sign-in-recovery-heading">
+        <SignInRecovery />
       </section>
     </main>
   )

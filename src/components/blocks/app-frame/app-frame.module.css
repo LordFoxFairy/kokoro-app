@@ -99,12 +99,12 @@
 
 /* Server admission deliberately renders before any browser-owned Runtime
  * clients mount. Keep its quiet, non-interactive rail in the exact desktop
- * lane that the real collapsed rail occupies. It is a structural continuity
+ * lane that the real rail occupies, including its saved open state. It is a structural continuity
  * surface, not a progress indicator: no text, spinner, pulse or animation. */
 .bootingRail {
   display: flex;
-  width: 52px;
-  min-width: 52px;
+  width: var(--rail-width);
+  min-width: var(--rail-width);
   min-height: 0;
   flex-direction: column;
   align-items: center;

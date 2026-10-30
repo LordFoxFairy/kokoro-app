@@ -1,3 +1,4 @@
+let publicLedgerFixtureSequence = 1000
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import {
@@ -12,7 +13,7 @@ const PARTIAL_TERMINAL_CURSOR = "agui_00000000000000000000000000000004"
 
 function metadata(eventId: string, seq: number) {
   return {
-    kokoro: {
+    kokoro: { public_sequence: String(++publicLedgerFixtureSequence),
       event_id: eventId,
       seq,
       session_id: "session-1",

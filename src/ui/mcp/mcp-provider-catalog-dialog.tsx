@@ -2,8 +2,6 @@
 
 import { useRef, type RefObject } from "react";
 
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import type { McpConnectorProvider } from "@/hub/mcp-connector.schema";
 import { useT } from "@/i18n/context";
@@ -18,6 +16,7 @@ import styles from "./mcp-projection-read.module.css";
 
 export function McpProviderCatalogDialog({
   open,
+  disabled = false,
   providers,
   addedProviderKeys,
   relationsComplete = false,
@@ -31,11 +30,11 @@ export function McpProviderCatalogDialog({
   onOpenChange,
   onQueryChange,
   onCategoryFilterChange,
-  onRetry,
   onSelectProvider,
   onCreate,
 }: {
   open: boolean;
+  disabled?: boolean;
   providers?: McpConnectorProvider[];
   addedProviderKeys?: ReadonlySet<string>;
   relationsComplete?: boolean;
@@ -51,7 +50,6 @@ export function McpProviderCatalogDialog({
   onCategoryFilterChange: (
     category: "all" | keyof typeof MCP_CATEGORY_MESSAGES,
   ) => void;
-  onRetry: () => void;
   onSelectProvider: (
     provider: McpConnectorProvider,
     trigger: HTMLElement,
@@ -59,7 +57,6 @@ export function McpProviderCatalogDialog({
   onCreate?: (mode: McpCreateMode, returnTarget?: HTMLElement | null) => void;
 }) {
   const t = useT();
-  const hasResults = (providers?.length ?? 0) > 0;
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const { categoriesFit, setContainerElement, measureRef, categoryMenuRef, categoryMenuOpenRef } =
     useMcpCategoryLayout({ enabled: open, scopeRef: dialogRef, localeKey: t });
@@ -86,9 +83,10 @@ export function McpProviderCatalogDialog({
           const returnFocus = returnFocusRef.current;
           if (!returnFocus?.isConnected) return;
           event.preventDefault();
-          window.requestAnimationFrame(() =>
-            returnFocus.focus({ preventScroll: true }),
-          );
+          window.requestAnimationFrame(() => {
+            if (returnFocusRef.current === returnFocus && returnFocus.isConnected)
+              returnFocus.focus({ preventScroll: true });
+          });
         }}
       >
         <header className={styles.catalogHeader}>
@@ -100,6 +98,7 @@ export function McpProviderCatalogDialog({
             {MCP_CATEGORY_OPTIONS.map(category => <span key={category} data-selected={categoryFilter === category}>{t(MCP_CATEGORY_MESSAGES[category])}</span>)}
           </div>
           <McpSettingsToolbar
+            disabled={disabled}
             view="catalog"
             query={query}
             onQueryChange={onQueryChange}
@@ -114,15 +113,9 @@ export function McpProviderCatalogDialog({
             </div>
           </McpSettingsToolbar>
         </div>
-        <div className={styles.catalogBody}>
-          {error && !hasResults ? (
-            <Alert variant="destructive" role="alert" className={styles.alert}>
-              <AlertDescription>{t("mcp.loadError")}</AlertDescription>
-              <Button type="button" variant="outline" onClick={onRetry}>
-                {t("mcp.retry")}
-              </Button>
-            </Alert>
-          ) : null}
+        <div className={styles.catalogBody} aria-busy={loading || undefined}>
+          {error ? <span className="sr-only" role="status">{t("mcp.loadError")}</span>
+            : loading ? <span className="sr-only" role="status">{t("mcp.loading")}</span> : null}
             <McpProviderDirectory
               providers={providers ?? []}
               {...(addedProviderKeys ? { addedProviderKeys } : {})}
@@ -131,7 +124,7 @@ export function McpProviderCatalogDialog({
               hasMore={hasMore}
               loading={loading}
               onLoadMore={onLoadMore}
-              {...(providers === undefined ? { resultsPlaceholder: loading ? <div className={styles.pendingCatalog} aria-busy="true"><span className="sr-only" role="status">{t("mcp.loading")}</span></div> : null } : {})}
+              {...(providers === undefined || (providers.length === 0 && (loading || error)) ? { resultsPlaceholder: null } : {})}
               query={query}
               onQueryChange={onQueryChange}
               categoryFilter={categoryFilter}

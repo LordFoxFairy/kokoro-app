@@ -104,3 +104,23 @@ it("honors caller cancellation and cleans a late fetch response", async () => {
   const cancel = vi.fn(); resolve(new Response(new ReadableStream({ cancel }), { headers })); await new Promise(accept => setTimeout(accept,0))
   expect(cancel).toHaveBeenCalled()
 })
+
+
+it.each([129, 252, 512])("accepts every one of %i discovered paths without pagination, truncation or a mutation key", async count => {
+  const data = { ...choices, paths: Array.from({ length: count }, (_, index) => `skills/choice-${index}`) }
+  const fetcher = vi.fn(async () => reply(data)); vi.stubGlobal("fetch", fetcher)
+  expect(await createSkillGithubImportClient().preview(input)).toEqual(data)
+  expect(fetcher).toHaveBeenCalledOnce()
+  const [url, init] = fetcher.mock.calls[0] as unknown as [string, RequestInit]
+  expect(url).toBe("/api/hub/skills/github/preview")
+  expect(JSON.parse(String(init.body))).toEqual(input)
+  expect(new Headers(init.headers).has("idempotency-key")).toBe(false)
+})
+
+it("rejects 513 discovered paths as invalid wire instead of silently taking the first 512", async () => {
+  const data = { ...choices, paths: Array.from({ length: 513 }, (_, index) => `skills/choice-${index}`) }
+  const fetcher = vi.fn(async () => reply(data)); vi.stubGlobal("fetch", fetcher)
+  expect(githubPreviewSchema.safeParse(data).success).toBe(false)
+  await expect(createSkillGithubImportClient().preview(input)).rejects.toMatchObject({ reason: "parse", status: 200 })
+  expect(fetcher).toHaveBeenCalledOnce()
+})

@@ -1,16 +1,17 @@
 // 公共只读线程（SHARE-1）：从公共快照复用 ConversationThread 渲染件——用户气泡 + assistant 文本。
 import { cleanup, render, screen } from "@testing-library/react"
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
-import type { SessionSnapshot } from "@/contract/http"
+import { parseSharedSessionSnapshot, type SharedSessionSnapshot } from "@/contract/http"
 import { BFF_AGENT_FAILURE_TUPLES } from "@/generated/bff-agent-failure"
 import { LocaleProvider } from "@/i18n/context"
 import { LOCALE_STORAGE_KEY } from "@/i18n/messages"
+import * as hydration from "@/core/hydration"
 import { SharedThread } from "@/ui/shared/shared-thread"
 
 import { expectedAgentFailureZhCopy, expectedZhCopy, makeFailedSnapshot } from "../core/fixtures"
 
-function snapshot(): SessionSnapshot {
+function snapshot(): SharedSessionSnapshot {
   return {
     session: {
       session_id: "ses_1",
@@ -52,7 +53,7 @@ describe("SharedThread", () => {
     "renders the safe shared $code retryable=$retryable failure without mutation or raw details",
     (profile) => {
       window.localStorage.setItem(LOCALE_STORAGE_KEY, "zh")
-      render(<SharedThread snapshot={makeFailedSnapshot(profile)} />, { wrapper: LocaleProvider })
+      render(<SharedThread snapshot={parseSharedSessionSnapshot(makeFailedSnapshot(profile))} />, { wrapper: LocaleProvider })
       expect(screen.getByRole("alert")).toBeTruthy()
       expect(screen.getByText(expectedAgentFailureZhCopy(profile.code))).toBeTruthy()
       expect(screen.queryByText(profile.code)).toBeNull()
@@ -64,11 +65,28 @@ describe("SharedThread", () => {
 
   it("renders a failureless persisted failure as generic safe read-only feedback", () => {
     window.localStorage.setItem(LOCALE_STORAGE_KEY, "zh")
-    render(<SharedThread snapshot={makeFailedSnapshot(null)} />, { wrapper: LocaleProvider })
+    render(<SharedThread snapshot={parseSharedSessionSnapshot(makeFailedSnapshot(null))} />, { wrapper: LocaleProvider })
     expect(screen.getByRole("alert")).toBeTruthy()
     expect(screen.getByText(expectedZhCopy("fail.generic"))).toBeTruthy()
     expect(screen.queryByText("Agent run failed")).toBeNull()
     expect(screen.queryByRole("button", { name: expectedZhCopy("thread.retry") })).toBeNull()
     expect(document.querySelector('[data-slot="collapsible"]')).toBeNull()
   })
+})
+
+
+it("projects a formally allowed public head away before private thread hydration without mutating the public response", () => {
+  const head = { run_id: "private-head", state: "queued" as const, pending_pauses: [] }
+  const owner = parseSharedSessionSnapshot({ ...snapshot(), execution_head: head })
+  const hydrate = vi.spyOn(hydration, "stateFromSnapshot")
+  try {
+    render(<SharedThread snapshot={owner} />, { wrapper: LocaleProvider })
+    // This public→private projection is the security boundary under test, not
+    // an internal rendering sequence or private helper implementation.
+    expect(hydrate.mock.calls[0]?.[0]).not.toHaveProperty("execution_head")
+    expect(owner.execution_head).toEqual(head)
+    expect(screen.getByText("hi from assistant")).toBeVisible()
+    expect(screen.queryByRole("status")).toBeNull()
+    expect(document.querySelector('[data-slot="collapsible"]')).toBeNull()
+  } finally { hydrate.mockRestore() }
 })

@@ -116,6 +116,10 @@
   height: min(23rem, calc(100vh - 1.5rem));
 }
 
+.dialog[data-slot="dialog-content"][data-expanded="true"] {
+  height: min(600px, calc(100dvh - 24px));
+}
+
 .label {
   display: block;
   height: 1.3125rem;
@@ -222,3 +226,9 @@
 .paths { display:flex; flex-direction:column; gap:.5rem; border:0; min-width:0; padding:0; }
 .paths button { justify-content:flex-start; overflow-wrap:anywhere; white-space:normal; }
 .commit { display:block; font-family:var(--font-mono); font-size:.75rem; overflow-wrap:anywhere; }
+
+@media (max-height: 512px) {
+  .dialog[data-expanded="true"] .brandFlow { display: none; }
+  .dialog[data-expanded="true"] .header { height: auto; min-height: 0; padding: 40px 24px 16px; }
+  .dialog[data-expanded="true"] .footer { height: auto; min-height: 0; padding: 16px 24px; }
+}

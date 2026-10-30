@@ -1,3 +1,4 @@
+import { restorePublic26MessagePartsContract } from "./bff-tool-display-parent"
 import {restoreClosureParent} from "./bff-closure-parent";
 import {readFile} from "node:fs/promises";
 import {createHash} from "node:crypto";
@@ -6,7 +7,7 @@ import YAML from "yaml";
 import * as sdk from "@/generated/bff-archived-tasks/sdk.gen";
 import {restorePublic153} from "./bff-archived-tasks-parent";
 it("pins formal19.0/165 and restores all previous15.3 bytes before old semantic gates",async()=>{
- const bytes=await readFile("src/generated/bff-public-openapi.yaml");const spec=YAML.parse(bytes.toString());expect(spec.info.version).toBe("22.3.0");expect(Object.values(spec.paths).flatMap(p=>Object.keys(p as object).filter(k=>["get","post","put","patch","delete","head","options"].includes(k)))).toHaveLength(182);
+ const bytes=await readFile("src/generated/bff-public-openapi.yaml");const spec=YAML.parse(restorePublic26MessagePartsContract(bytes.toString()));expect(spec.info.version).toBe("26.0.0");expect(Object.values(spec.paths).flatMap(p=>Object.keys(p as object).filter(k=>["get","post","put","patch","delete","head","options"].includes(k)))).toHaveLength(186);
  expect(Object.keys(sdk).sort()).toEqual(["archiveSession","getSessionArchiveState","listOwnedArchivedTasks","restoreSession"]);
  expect(spec.paths["/v1/mcp/servers"].post).toBeUndefined();
  for(const path of ["/v1/mcp/servers/{name}/enable","/v1/mcp/servers/{name}/disable","/v1/mcp/servers/{name}"])expect(spec.paths[path]).toBeUndefined();

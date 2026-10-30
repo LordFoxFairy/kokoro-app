@@ -1,3 +1,4 @@
+let publicLedgerFixtureSequence = 1000
 import { createServer, type RequestListener, type Server } from "node:http"
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
@@ -31,7 +32,7 @@ async function listen(handler: RequestListener): Promise<RunningServer> {
 
 function metadata(eventId: string, sequence: number, runId: string) {
   return {
-    kokoro: {
+    kokoro: { public_sequence: String(++publicLedgerFixtureSequence),
       event_id: eventId,
       seq: sequence,
       session_id: "session-1",

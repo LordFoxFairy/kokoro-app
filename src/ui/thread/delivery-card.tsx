@@ -1,7 +1,7 @@
 "use client"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
-import { Download, FileCheck2 } from "lucide-react"
+import { Download, File } from "lucide-react"
 
 // 会话流尾部成果区：delivery.created 归约出的冻结结论卡（区别于过程文件卡）。
 // Chat owns only metadata and the binary owner selector; BFF re-authorizes every detail/content GET.
@@ -71,14 +71,15 @@ export function DeliverySection({
                 : t("canvas.download")
           return (
           <div className={styles.card} key={key}>
-            <Button variant="link"
+            <Button variant="ghost"
               type="button"
               className={styles.open}
               data-canvas-opener="true"
               aria-label={t("delivery.openAria", { title: delivery.title })}
+              title={delivery.title}
               onClick={() => onOpen(delivery)}
             >
-              <FileCheck2 className={styles.icon} />
+              <span className={styles.fileIcon} aria-hidden="true"><File className={styles.icon} /></span>
               <span className={styles.body}>
                 <span className={styles.title}>{delivery.title}</span>
                 <span className={styles.meta}>
@@ -90,11 +91,13 @@ export function DeliverySection({
               <span className={styles.downloadError} role="alert">{t("canvas.downloadFailed")}</span>
             ) : null}
             <Button variant="ghost"
+              size="icon"
               type="button"
               className={styles.download}
               disabled={isLoading && preview}
               aria-busy={isLoading}
               aria-label={label}
+              title={label}
               onClick={() => {
                 if (isLoading && !preview) {
                   controllersRef.current.get(key)?.abort()
@@ -137,7 +140,6 @@ export function DeliverySection({
               ) : (
                 <Download data-icon="inline-start" aria-hidden="true" />
               )}
-              {label}
             </Button>
           </div>
           )

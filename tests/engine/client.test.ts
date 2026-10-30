@@ -27,7 +27,7 @@ describe("R135 snapshot-first process page client", () => {
       "ses_abort", { signal: controller.signal },
     )
     expect(fetchMock).toHaveBeenCalledWith(
-      "/api/session/sessions/ses_abort",
+      "/api/session/sessions/ses_abort?scope=direct",
       expect.objectContaining({ signal: controller.signal }),
     )
   })
@@ -1163,5 +1163,54 @@ it("a later page from another business cannot turn a partial chat list into succ
     .mockResolvedValueOnce(Response.json({ models: [candidate], next_cursor: null })))
   try {
     await expect(createSessionClient({ baseUrl: "/api/session" }).listModels()).rejects.toMatchObject({ reason: "parse" })
+  } finally { vi.unstubAllGlobals() }
+})
+
+describe("private Message parts HTTP read", () => {
+  afterEach(() => vi.unstubAllGlobals())
+  it("uses only the same-origin exact owner path/scope and bounded typed response", async () => {
+    const page = { session_id: "s/?", message_id: "m/#", run_id: "r", format_version: 1, revision: "0", event_watermark: null, items: [], next_cursor: null }
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify(page), { headers: { "content-type": "application/json" } }))
+    vi.stubGlobal("fetch", fetcher)
+    const signal = new AbortController().signal
+    await expect(createSessionClient({ baseUrl: "/api/session" }).fetchMessageParts({ sessionId: "s/?", messageId: "m/#", scope: { kind: "project", projectRef: "project x" }, cursor: "opaque/?", signal })).resolves.toEqual(page)
+    expect(fetcher.mock.calls[0]?.[0]).toBe("/api/session/sessions/s%2F%3F/messages/m%2F%23/parts?limit=16&cursor=opaque%2F%3F&project_ref=project+x")
+    expect(fetcher.mock.calls[0]?.[1]).toMatchObject({ cache: "no-store", signal })
+  })
+  it("preserves HTTP status plus error code rather than equating any409 with revision change", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: { code: "message_parts_changed", message: "changed" }, meta: { request_id: "req" } }), { status: 409, headers: { "content-type": "application/json" } })))
+    await expect(createSessionClient({ baseUrl: "/api/session" }).fetchMessageParts({ sessionId: "s", messageId: "m", scope: { kind: "direct" }, signal: new AbortController().signal })).rejects.toMatchObject({ reason: "http", status: 409, code: "message_parts_changed" })
+  })
+})
+
+it.each([
+  ["7", 7_000], ["0", 1_000], ["86400", 86_400_000],
+  [null, 30_000], ["-1", 30_000], ["1.5", 30_000], ["999999999999999", 30_000],
+])("model catalog retains bounded 429 retry timing (%s), without replaying GET", async (header, expected) => {
+  const fetchMock = vi.fn().mockResolvedValue(Response.json({ error: { code: "session_rate_limited", message: "admission limited" } }, {
+    status: 429, headers: header === null ? {} : { "retry-after": header },
+  }))
+  vi.stubGlobal("fetch", fetchMock)
+  try {
+    await expect(createSessionClient({ baseUrl: "/api/session" }).listModels()).rejects.toMatchObject({
+      name: "ModelCatalogReadError", reason: "http", status: 429, code: "session_rate_limited", retryAfterMs: expected,
+    })
+    expect(fetchMock).toHaveBeenCalledOnce()
+  } finally { vi.unstubAllGlobals() }
+})
+
+it.each([
+  ["7", 7_000], ["0", 1_000], ["86400", 86_400_000],
+  [null, 30_000], ["-1", 30_000], ["1.5", 30_000], ["999999999999999", 30_000],
+])("session list retains bounded 429 timing (%s), without replaying in the client", async (header, expected) => {
+  const fetchMock = vi.fn().mockResolvedValue(Response.json({ error: { code: "session_rate_limited", message: "limited" } }, {
+    status: 429, headers: header === null ? {} : { "retry-after": header },
+  }))
+  vi.stubGlobal("fetch", fetchMock)
+  try {
+    await expect(createSessionClient({ baseUrl: "/api/session" }).listSessions()).rejects.toMatchObject({
+      name: "SessionListReadError", reason: "http", status: 429, code: "session_rate_limited", retryAfterMs: expected,
+    })
+    expect(fetchMock).toHaveBeenCalledOnce()
   } finally { vi.unstubAllGlobals() }
 })

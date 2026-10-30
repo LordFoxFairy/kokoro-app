@@ -1,3 +1,10 @@
+import { TurnProcess } from "./turn-process"
+import { completedTurnSections, displayFinalSegmentId } from "./completed-turn-sections"
+import { useRunDisplay } from "./use-run-display"
+import { overlayRunDisplay } from "./run-display-overlay"
+import type { AnswerActionBoundary } from "./answer-action-scope"
+import type { AnswerActionTarget } from "./answer-action-target"
+import { OwnerAnswerActions } from "./owner-answer-actions"
 import type { InteractionState } from "@/contract/control"
 import { ApprovalCard } from "@/ui/hitl/approval-card"
 import { AskUserCard } from "@/ui/hitl/ask-user-card"
@@ -6,25 +13,36 @@ import { InputCard } from "@/ui/hitl/input-card"
 import type { AgentMode } from "@/core/conversations"
 import { DEFAULT_BRAND } from "@/config/brand"
 import { groupSegments } from "@/core/projections"
-import type { SessionMessage, SessionStep } from "@/core/state"
+import type { MessagePartsState, SessionMessage, SessionStep } from "@/core/state"
 import type { RunProcessActivity } from "@/contract/chat"
 import type { MachinePhase } from "@/engine/machine-state"
 import type { ToolDecision } from "@/engine/hitl-staging"
 import { useT } from "@/i18n/context"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { CheckCircle2, Copy } from "lucide-react"
-import { useState, useEffect, useRef } from "react"
+import { CheckCircle2 } from "lucide-react"
+import { useEffect, useRef, useState } from "react"
 import type { ReactNode } from "react"
 
 import { MarkdownMessage } from "./markdown-message"
 import { SegmentProcess } from "./segment-process"
+import { AnswerActions } from "./answer-actions"
 import styles from "./thread.module.css"
 
 type AssistantTurnProps = {
+  answerActionBoundary?: AnswerActionBoundary
+  runId?: string
+  finalSegmentId?: string
+  succeeded?: boolean
+  finalPartsComplete?: boolean
+  terminal?: boolean
+  answerActionTarget?: AnswerActionTarget | null
+  parts?: readonly MessagePartsState[]
+  onRetryMessageParts?: (messageId: string) => void
   interaction?: InteractionState
   executionPhase?: MachinePhase
   brandName?: string
+  onOpenActivity?: (activityId: string) => void
   onOpenFile?: (path: string) => void
   sessionId: string | null
   // 这一轮（一个 runId）按 seq 排好的有序步骤：思考/工具/子智能体/文本交错。
@@ -47,6 +65,7 @@ type AssistantTurnProps = {
   onCancelRun?: () => void
   taskTitle?: string
   failureFooter?: ReactNode
+  cancelled?: boolean
 }
 
 // 成形态内容：就近的「正在…」线索 + 脉冲点，占位与正文同一 answer 元素，
@@ -62,7 +81,7 @@ function FormingContent({
 }) {
   const t = useT()
   return (
-    <span className={styles.forming}>
+    <span className={styles.forming} role="status">
       <span className={styles.formingLabel}>{reconnecting ? t("thread.reconnecting") : label}</span>
       {!waitingForDecision ? (
         <span className={styles.pulse} aria-hidden>
@@ -80,6 +99,9 @@ function FormingContent({
 // 只有整轮的尾段在流式时带就近光标（唯一 live 锚点）。
 export function AssistantTurn({
   interaction,
+  onOpenActivity,
+  parts = [],
+  onRetryMessageParts,
   executionPhase,
   brandName = DEFAULT_BRAND.name,
   steps,
@@ -95,8 +117,18 @@ export function AssistantTurn({
   onCancelRun,
   taskTitle,
   failureFooter,
+  answerActionBoundary,
+  answerActionTarget,
+  runId,
+  terminal = false,
+  finalSegmentId,
+  succeeded = false,
+  finalPartsComplete = false,
+  cancelled = false,
 }: AssistantTurnProps) {
   const t = useT()
+  const [contentFocused, setContentFocused] = useState(false)
+  const [processInspected, setProcessInspected] = useState(false)
   const hadInteraction = useRef(Boolean(interaction?.groups.length))
   useEffect(() => {
     const hasInteraction = Boolean(interaction?.groups.length)
@@ -108,8 +140,31 @@ export function AssistantTurn({
     })
     return () => window.cancelAnimationFrame(frame)
   }, [interaction])
-  const segments = groupSegments(steps, activities)
-  const processTailId = segments.at(-1)?.segmentId
+  const displayRunId = runId ?? answerActionTarget?.runId
+  const display = useRunDisplay(answerActionBoundary, displayRunId, terminal)
+  const ensureDisplayRead = display.ensureRead
+  const turnRef = useRef<HTMLElement>(null)
+  const needsFinalProof = terminal && succeeded && !cancelled && !isLive && !hitlActive && !interaction?.groups.length && !finalSegmentId
+  useEffect(() => {
+    if (!needsFinalProof || !turnRef.current || typeof IntersectionObserver === "undefined") return
+    let current = true
+    const observer = new IntersectionObserver(entries => {
+      if (entries.some(entry => entry.isIntersecting)) queueMicrotask(() => { if (current) ensureDisplayRead() })
+    })
+    observer.observe(turnRef.current)
+    return () => { current = false; observer.disconnect() }
+  }, [needsFinalProof, ensureDisplayRead])
+  const legacyFinalId = finalSegmentId === undefined ? displayFinalSegmentId(display.facts, displayRunId, parts) : undefined
+  const displayedActivities = overlayRunDisplay(activities, display.facts)
+  const displayedSteps = steps.map(step => step.kind === "activity" ? { ...step, activity: overlayRunDisplay([step.activity], display.facts)[0]! } : step)
+  const segments = groupSegments(displayedSteps, displayedActivities, messagesById)
+  const completedSections = !isLive && !hitlActive && !interaction?.groups.length
+    ? completedTurnSections({ runId: displayRunId, succeeded, partsComplete: finalSegmentId ? finalPartsComplete : Boolean(legacyFinalId), finalSegmentId: finalSegmentId ?? legacyFinalId, segments, messagesById }) : null
+  const sections = contentFocused ? null : completedSections
+  // A single tools-only passage already has the whole-turn disclosure.
+  const directProcessId = sections?.process.length === 1 && !messagesById[sections.process[0]!.segmentId]?.content.length
+    ? sections.process[0]!.segmentId : undefined
+  const hasTurnProcess = segments.some((segment) => segment.activities.length > 0)
   // Public7 process activities have opaque safe segment identities that are
   // independent from message identities. Keep the newest process live, but
   // anchor answer streaming to the last segment that actually owns a message.
@@ -123,6 +178,9 @@ export function AssistantTurn({
   }
   const tailMessage = answerTailId ? messagesById[answerTailId] : undefined
   const tailHasText = Boolean(tailMessage) && (tailMessage?.content.length ?? 0) > 0
+  // An empty answer segment is not a second progress surface. Until text
+  // arrives, keep the last real process disclosure as the live affordance.
+  const processTailId = (!tailHasText ? segments.findLast((segment) => segment.activities.length > 0)?.segmentId : undefined) ?? segments.at(-1)?.segmentId
   const phaseLabel = executionPhase === "queued" ? t("hitl.queued") : executionPhase === "resuming" ? t("hitl.resuming") : executionPhase === "cancelling" ? t("hitl.cancelling") : null
   const formingLabel = phaseLabel ?? (hitlActive
     ? t("hitl.approvalTitle")
@@ -132,31 +190,74 @@ export function AssistantTurn({
   // 提交后首个 step/token 未到：这一轮还没有任何 segment，但仍在途——给一个成形脚手架
   // （单条「正在…」），绝不让在途轮塌成空帧。落定/非流式则不渲染脚手架。
   const showScaffold = isLive && segments.length === 0 && !interaction?.groups.length
-  // 重连可读：尾段已有正文时（streaming 盒，无 forming 盒承载「重连中…」），用 turn 级状态条补出
-  // 重连信号——否则刷新回半截 run 只剩呼吸脉冲、看不出在重连还是卡死。无正文时仍由成形盒显示，互斥不重复。
-  const showReconnectStrip = reconnecting && tailHasText
-  const [copied, setCopied] = useState(false)
-  const answerText = segments
+  // Process-only turns have no answer placeholder either; retain the distinct
+  // connection status here. Only the no-process/no-text path uses forming.
+  const showReconnectStrip = reconnecting && (tailHasText || hasTurnProcess || (phaseLabel !== null && !showScaffold))
+  const answerText = (completedSections ? [completedSections.final] : segments)
     .map((segment) => messagesById[segment.segmentId]?.content ?? "")
     .filter(Boolean)
     .join("\n\n")
 
-  const copyAnswer = async () => {
-    if (!answerText) return
-    try {
-      await navigator.clipboard.writeText(answerText)
-      setCopied(true)
-      window.setTimeout(() => setCopied(false), 1400)
-    } catch {
-      // Clipboard permission is optional; the action remains present without
-      // turning a browser policy denial into a visible runtime error.
+
+  const renderSegment = (segment: (typeof segments)[number]) => {
+    const message = messagesById[segment.segmentId]
+    const hasText = Boolean(message) && (message?.content.length ?? 0) > 0
+    const liveAnswerSegment = isLive && segment.segmentId === answerTailId
+    const liveProcessSegment = isLive && segment.segmentId === processTailId
+    const showCaret = liveAnswerSegment && hasText
+    const hasProcess = segment.activities.length > 0
+    // A real process or explicit phase already owns progress. Completed
+    // tools waiting for an answer do not need a second wait line either.
+    const forming = isLive && !tailHasText && liveProcessSegment && !hasText && !hasTurnProcess && phaseLabel === null
+    // 既无气泡又无过程的空段不渲染：避免落定空正文段留一个占位 segment（多段时多撑一个 gap 槽）。
+    if (!hasText && !forming && !hasProcess) {
+      return null
     }
+    return (
+      <div className={styles.turnSegment} key={segment.segmentId}>
+        {/* 段内贯穿 forming→streaming→settled 三态：复用同一 answer 元素、同一盒模型，
+            data-state 只切换盒内内容（成形线索 ↔ 正文），首 token 不跳换整盒。 */}
+        {hasText || forming ? (
+          <div
+            className={cn(styles.bubble, styles.turnAnswer)}
+            data-state={hasText ? (liveAnswerSegment ? "streaming" : "settled") : "forming"}
+            data-anchor={forming && reconnecting ? "reconnecting" : undefined}
+          >
+            {hasText ? (
+              <>
+                <MarkdownMessage content={message?.content ?? ""} />
+                {/* 正在出字的就近线索：紧跟正文的内联闪烁光标，对读屏隐藏；落定即消失。 */}
+                {showCaret ? <span className={styles.caret} aria-hidden /> : null}
+              </>
+            ) : (
+              <FormingContent
+                label={formingLabel}
+                reconnecting={reconnecting}
+                waitingForDecision={hitlActive}
+              />
+            )}
+          </div>
+        ) : null}
+        <SegmentProcess
+          {...(answerActionBoundary && displayRunId ? { onVisible: display.ensureRead } : {})}
+          segmentId={segment.segmentId}
+          direct={segment.segmentId === directProcessId}
+          {...(display.facts ? { activityDetails: display.facts.activity_details } : {})}
+          {...(onOpenActivity ? { onOpenActivity: (activityId: string) => { setProcessInspected(true); display.inspect(); onOpenActivity(activityId) } } : {})}
+          {...(answerActionBoundary && displayRunId && display.facts === null ? { onInspect: display.inspect } : {})}
+          activities={segment.activities}
+          live={liveProcessSegment}
+          continueProcessing={liveProcessSegment && !tailHasText && phaseLabel === null && !reconnecting && !hitlActive}
+          {...(mode === undefined ? {} : { mode })}
+        />
+      </div>
+    )
   }
 
   // 流式内容位于 conversation 的 polite live region 内。保持增量播报，
   // atomic=true 会在每个 token 到达时重复朗读整轮长答案。
   return (
-    <article className={styles.turn} aria-atomic={isLive ? false : undefined}>
+    <article ref={turnRef} className={styles.turn} aria-atomic={isLive ? false : undefined}>
       <div className={styles.turnSpine}>
         {taskTitle ? (
           <div className={styles.taskStage} data-slot="task-stage" aria-hidden="true">
@@ -169,7 +270,7 @@ export function AssistantTurn({
           <span>{t("firstSite.kokoro", { brand: brandName })}</span>
         </div>
         {showReconnectStrip ? (
-          <div className={styles.turnReconnect} data-anchor="reconnecting">
+          <div className={styles.turnReconnect} data-anchor="reconnecting" role="status">
             {t("thread.reconnecting")}
             {/* 脉冲三点：与无正文路径的成形盒动态线索一致，让「正在重连」可读。 */}
             <span className={styles.pulse} aria-hidden>
@@ -179,6 +280,15 @@ export function AssistantTurn({
             </span>
           </div>
         ) : null}
+        {parts.filter((part) => part.status !== "complete").map((part) => (
+          <div key={part.messageId} role="status" data-message-parts={part.status} className={part.status === "loading" || part.status === "unread" ? "sr-only" : segments.some((segment) => {
+            const message = messagesById[segment.segmentId]
+            return message?.role === "assistant" && message.runId === part.runId && (message.snapshotMessageId ?? message.id) === part.messageId && message.content.trim().length > 0
+          }) ? styles.partsSupplement : undefined}>
+            <span>{t(part.status === "loading" || part.status === "unread" ? "thread.partsReading" : "thread.partsPartial")}</span>
+            {part.status !== "loading" && part.status !== "unread" && onRetryMessageParts ? <Button type="button" variant="ghost" onClick={() => onRetryMessageParts(part.messageId)}>{t("thread.partsReload")}</Button> : null}
+          </div>
+        ))}
         {phaseLabel && !showScaffold ? <p role="status">{phaseLabel}</p> : null}
         {showScaffold ? (
           <div className={styles.turnSegment}>
@@ -195,56 +305,10 @@ export function AssistantTurn({
             </div>
           </div>
         ) : null}
-        {segments.map((segment) => {
-          const message = messagesById[segment.segmentId]
-          const hasText = Boolean(message) && (message?.content.length ?? 0) > 0
-          const liveAnswerSegment = isLive && segment.segmentId === answerTailId
-          const liveProcessSegment = isLive && segment.segmentId === processTailId
-          const showCaret = liveAnswerSegment && hasText
-          const hasProcess = segment.activities.length > 0 || segment.legacySteps.length > 0
-          // HITL 的过程卡本身就是当前状态锚点；不要再在它上方渲染
-          // 一条重复的「工具调用待批准」forming 行，避免审批态撑高后
-          // 首条消息被自动滚动挤出视口。
-          const forming = isLive && !tailHasText && liveProcessSegment && !hasText && !(hitlActive && hasProcess)
-          // 既无气泡又无过程的空段不渲染：避免落定空正文段留一个占位 segment（多段时多撑一个 gap 槽）。
-          if (!hasText && !forming && !hasProcess) {
-            return null
-          }
-          return (
-            <div className={styles.turnSegment} key={segment.segmentId}>
-              {/* 段内贯穿 forming→streaming→settled 三态：复用同一 answer 元素、同一盒模型，
-                  data-state 只切换盒内内容（成形线索 ↔ 正文），首 token 不跳换整盒。 */}
-              {hasText || forming ? (
-                <div
-                  className={cn(styles.bubble, styles.turnAnswer)}
-                  data-state={hasText ? (liveAnswerSegment ? "streaming" : "settled") : "forming"}
-                  data-anchor={forming && reconnecting ? "reconnecting" : undefined}
-                >
-                  {hasText ? (
-                    <>
-                      <MarkdownMessage content={message?.content ?? ""} />
-                      {/* 正在出字的就近线索：紧跟正文的内联闪烁光标，对读屏隐藏；落定即消失。 */}
-                      {showCaret ? <span className={styles.caret} aria-hidden /> : null}
-                    </>
-                  ) : (
-                    <FormingContent
-                      label={formingLabel}
-                      reconnecting={reconnecting}
-                      waitingForDecision={hitlActive}
-                    />
-                  )}
-                </div>
-              ) : null}
-              <SegmentProcess
-                segmentId={segment.segmentId}
-                legacySteps={segment.legacySteps}
-                activities={segment.activities}
-                live={liveProcessSegment}
-                {...(mode === undefined ? {} : { mode })}
-              />
-            </div>
-          )
-        })}
+        {segments.length > 0 ? <TurnProcess enabled={sections !== null} inspected={processInspected} onContentFocusChange={focused => setContentFocused(focused && sections === null)}>
+          {(sections?.process ?? segments).map(renderSegment)}
+        </TurnProcess> : null}
+        {sections ? renderSegment(sections.final) : null}
         {interaction?.groups.map((group) => <div key={group.group_id} data-interaction-group={group.group_id}>
           {group.items.map((item) => {
             const Card = item.kind === "tool_approval" ? ApprovalCard : item.kind === "ask_user_question" ? AskUserCard : item.kind === "result_review" ? ReviewCard : InputCard
@@ -268,21 +332,10 @@ export function AssistantTurn({
             </div>
           })}
         </div>)}
-        {!isLive && answerText ? (
-          <div className={styles.assistantActions} data-slot="assistant-actions">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              aria-label={t(copied ? "thread.copiedAnswer" : "thread.copyAnswer")}
-              title={t(copied ? "thread.copiedAnswer" : "thread.copyAnswer")}
-              onClick={() => void copyAnswer()}
-            >
-              <Copy aria-hidden="true" />
-            </Button>
-          </div>
+        {!isLive && (answerText || answerActionTarget) ? (
+          answerActionBoundary && answerActionTarget ? <OwnerAnswerActions boundary={answerActionBoundary} runId={answerActionTarget.runId} messageId={answerActionTarget.messageId} text={answerText} /> : <AnswerActions text={answerText} />
         ) : null}
-        {!isLive ? failureFooter : null}
+        {!isLive && cancelled ? <p role="status" data-run-terminal="cancelled">{t("thread.cancelled")}</p> : !isLive ? failureFooter : null}
       </div>
     </article>
   )

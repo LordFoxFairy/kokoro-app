@@ -74,27 +74,37 @@
 /* Custom API is a secret-profile dialog, not a narrow MCP URL dialog. */
 .customApiDialog[data-slot="dialog-content"] {
   display: flex;
-  width: min(37.5rem, calc(100vw - 2rem));
-  max-width: calc(100vw - 2rem);
-  /* Keep the shell and the scrollable form on exactly the same vertical
-   * budget. `max-height` alone let the child choose a taller layout and hid
-   * the action row behind the dialog's clipped lower radius. */
-  height: min(45.25rem, calc(100dvh - 2rem));
-  max-height: min(45.25rem, calc(100dvh - 2rem));
+  width: 37.5rem;
+  max-width: 95vw;
+  /* Content grows with added secrets; only the viewport caps the body scroll.
+   * Unlike the reference's 500px floor, this also keeps short-screen actions visible. */
+  min-height: min(31.25rem, 95dvh);
+  max-height: 95dvh;
+  flex-direction: column;
   gap: 0;
   padding: 0;
   border: 0;
   border-radius: 1rem;
-  background: var(--background);
+  background: var(--settings-surface);
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 6%),
+    0 24px 24px -12px rgb(0 0 0 / 4%),
+    0 3px 3px -1.5px rgb(0 0 0 / 6%),
+    0 10px 20px 1px rgb(0 0 0 / 4%);
   overflow: hidden;
 }
 
 .customApiDialog > :global([data-slot="dialog-close"]) {
-  width: 2rem;
-  height: 2rem;
-  top: 1.125rem;
+  width: 1.75rem;
+  height: 1.75rem;
+  top: 1.25rem;
   right: 0.75rem;
   background: transparent;
+}
+
+.customApiDialog > :global([data-slot="dialog-close"]) > svg {
+  width: 1.25rem;
+  height: 1.25rem;
 }
 
 .urlMcpDialog[data-slot="dialog-content"] {
@@ -123,6 +133,32 @@
 
 .urlMcpForm {
   overflow-y: auto;
+}
+
+/* Only the editable creation form separates its scrolling fields from the
+ * title/actions. The retained-command recovery section keeps its old layout. */
+form.urlMcpForm {
+  min-height: 0;
+  max-height: 95dvh;
+  overflow: hidden;
+}
+
+form.urlMcpForm > .urlMcpTitle,
+form.urlMcpForm > .urlMcpActions {
+  flex: 0 0 auto;
+}
+
+.urlMcpBody {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 0 1 auto;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.urlMcpBody > * {
+  flex-shrink: 0;
 }
 
 .compactDialogTitle,
@@ -428,6 +464,26 @@
 .urlMcpActions button:first-child,
 .urlMcpActions button:nth-child(3) {
   width: 4.5rem;
+}
+
+@media (max-width: 24rem) {
+  form.urlMcpForm > .urlMcpActions {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.6fr);
+    gap: 0.5rem;
+    padding-inline: 0.75rem;
+  }
+
+  form.urlMcpForm > .urlMcpActions > span {
+    display: none;
+  }
+
+  form.urlMcpForm > .urlMcpActions > button {
+    width: 100%;
+    min-width: 0;
+    height: auto;
+    padding-inline: 0.5rem;
+    white-space: normal;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

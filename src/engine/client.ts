@@ -4,6 +4,9 @@ import type { InteractionState } from "@/contract/control"
 import { ZodError } from "zod"
 
 import {
+  messagePartsPath,
+  messagePartsPageSchema,
+  type MessagePartsPage,
   controlPath,
   eventsPath,
   messagesPath,
@@ -48,11 +51,37 @@ import {
 import type { EventCursor } from "@/contract/agui-events"
 import type { ChatProjectionEvent } from "@/core/chat-projection-event"
 import { AgUiChatTransport } from "./agui-chat-transport"
+import { readPartsJson } from "./message-parts-reader"
 import { SessionClientError, type ClientFailureReason } from "./client-error"
 import { ConversationMoveError } from "./conversation-move-error"
 import type { SessionScope } from "./session-scope"
 import { shareErrorSchema } from "@/lib/shared-tasks.schema"
 import { parseSharedTasksJson } from "@/lib/shared-tasks-json"
+
+/** Retry metadata is private to the model catalog reader; other HTTP consumers are unchanged. */
+export class ModelCatalogReadError extends SessionClientError {
+  readonly retryAfterMs: number
+
+  constructor(error: SessionClientError, retryAfter: string | null) {
+    super(error.reason, error.message, error.code, error.status)
+    this.name = "ModelCatalogReadError"
+    // The owner emits delta-seconds. Bound accepted hints to one day; missing,
+    // malformed and oversized hints receive a conservative 30-second cooldown.
+    const seconds = retryAfter !== null && /^(?:0|[1-9][0-9]{0,4})$/u.test(retryAfter) ? Number(retryAfter) : NaN
+    this.retryAfterMs = Number.isFinite(seconds) && seconds <= 86_400 ? Math.max(1_000, seconds * 1_000) : 30_000
+  }
+}
+
+/** Only list GET recovery consumes this cooldown; it never replays a mutation. */
+export class SessionListReadError extends SessionClientError {
+  readonly retryAfterMs: number
+  constructor(error: SessionClientError, retryAfter: string | null) {
+    super(error.reason, error.message, error.code, error.status)
+    this.name = "SessionListReadError"
+    const seconds = retryAfter !== null && /^(?:0|[1-9][0-9]{0,4})$/u.test(retryAfter) ? Number(retryAfter) : NaN
+    this.retryAfterMs = Number.isFinite(seconds) && seconds <= 86_400 ? Math.max(1_000, seconds * 1_000) : 30_000
+  }
+}
 
 export { SessionClientError }
 export type { ClientFailureReason }
@@ -84,7 +113,8 @@ export type SessionClient = {
   listSessions: (cursor?: string, scope?: SessionScope) => Promise<SessionList>
   createMessage: (sessionId: string, body: MessageCreateParams) => Promise<MessageCreateReceipt>
   // 服务端不存在该会话（404）返回 null（本地新会话的合法答案）；其余失败照常上抛。
-  fetchSnapshot: (sessionId: string, options?: { signal?: AbortSignal }) => Promise<SessionSnapshot | null>
+  fetchSnapshot: (sessionId: string, options?: { signal?: AbortSignal; scope?: SessionScope }) => Promise<SessionSnapshot | null>
+  fetchMessageParts: (args: { sessionId: string; messageId: string; cursor?: string; limit?: number; scope: SessionScope; signal: AbortSignal }) => Promise<MessagePartsPage>
   fetchRunProcessPage: (args: { sessionId: string; runId: string; watermark: EventCursor; cursor?: EventCursor; limit?: number; scope?: SessionScope; signal?: AbortSignal }) => Promise<RunProcessPage>
   sendControl: (
     sessionId: string,
@@ -358,7 +388,7 @@ async function httpError(method: string, url: string, response: Response): Promi
   } catch {
     // 无 JSON 错误体：保留状态码描述。
   }
-  return new SessionClientError("http", detail, code)
+  return new SessionClientError("http", detail, code, response.status)
 }
 
 async function parseJsonResponse<T>(response: Response, parse: (raw: unknown) => T): Promise<T> {
@@ -439,7 +469,8 @@ export function createSessionClient(options: { baseUrl: string }): SessionClient
       try {
         const response = await fetch(target, { cache: "no-store", signal: controller.signal })
         if (!response.ok) {
-          throw await httpError("GET", target, response)
+          const failure = await httpError("GET", target, response)
+          throw response.status === 429 ? new SessionListReadError(failure, response.headers.get("retry-after")) : failure
         }
         return await parseJsonResponse(response, (raw) => sessionListSchema.parse(raw))
       } catch (error) {
@@ -485,7 +516,10 @@ export function createSessionClient(options: { baseUrl: string }): SessionClient
           const target = url(`${modelCandidatesPath()}?${query}`)
           const response = await fetch(target, { cache: "no-store", signal: controller.signal })
           controller.signal.throwIfAborted()
-          if (!response.ok) throw await httpError("GET", target, response)
+          if (!response.ok) {
+            const failure = await httpError("GET", target, response)
+            throw response.status === 429 ? new ModelCatalogReadError(failure, response.headers.get("retry-after")) : failure
+          }
           const list = await parseJsonResponse(response, (raw) => modelCandidateListSchema.parse(raw))
           controller.signal.throwIfAborted()
           for (const candidate of list.models) {
@@ -517,7 +551,9 @@ export function createSessionClient(options: { baseUrl: string }): SessionClient
     },
 
     fetchSnapshot: async (sessionId, options) => {
-      const target = url(snapshotPath(sessionId))
+      const scope = options?.scope ?? { kind: "direct" }
+      const query = new URLSearchParams(scope.kind === "project" ? { project_ref: scope.projectRef } : { scope: "direct" })
+      const target = url(`${snapshotPath(sessionId)}?${query.toString()}`)
       let response: Response
       try {
         response = await fetch(target, { cache: "no-store", ...(options?.signal ? { signal: options.signal } : {}) })
@@ -525,8 +561,8 @@ export function createSessionClient(options: { baseUrl: string }): SessionClient
         throw new SessionClientError("network", describeUnknown(error))
       }
       // 404=从无此会话；410 Gone=会话已软删。两者服务端都无内容可水合，
-      // 一律返 null（空线程即真态），不 fail-loud——与 machine 把 session_deleted
-      // 当 STALE 对账信号而非硬错的语义一致。
+      // null 只表示 owner snapshot 缺席；engine 的本页创建/在途提交事实和
+      // 显式路由决定草稿或缺失错误，不能把所有深链接都画成空会话。
       if (response.status === 404 || response.status === 410) {
         return null
       }
@@ -534,6 +570,26 @@ export function createSessionClient(options: { baseUrl: string }): SessionClient
         throw await httpError("GET", target, response)
       }
       return parseJsonResponse(response, parseSessionSnapshot)
+    },
+
+    fetchMessageParts: async ({ sessionId, messageId, cursor, limit = 16, scope, signal }) => {
+      if (!Number.isInteger(limit) || limit < 1 || limit > 32) throw new SessionClientError("parse", "Invalid message parts page limit")
+      const query = new URLSearchParams({ limit: String(limit) })
+      if (cursor !== undefined) query.set("cursor", cursor)
+      if (scope.kind === "project") query.set("project_ref", scope.projectRef)
+      else query.set("scope", "direct")
+      const target = url(`${messagePartsPath(sessionId, messageId)}?${query.toString()}`)
+      let response: Response
+      try { response = await fetch(target, { cache: "no-store", signal }) }
+      catch { throw new SessionClientError("network", "Message parts read failed") }
+      const raw = await readPartsJson(response, signal)
+      if (!response.ok) {
+        const error = typeof raw === "object" && raw !== null && "error" in raw ? raw.error : null
+        const code = typeof error === "object" && error !== null && "code" in error && typeof error.code === "string" ? error.code : typeof error === "string" ? error : null
+        throw new SessionClientError("http", "Message parts read failed", code, response.status)
+      }
+      try { return messagePartsPageSchema.parse(raw) }
+      catch { throw new SessionClientError("parse", "Invalid message parts page") }
     },
 
     fetchRunProcessPage: async ({ sessionId, runId, watermark, cursor, limit = 100, scope = { kind: "direct" }, signal }) => {

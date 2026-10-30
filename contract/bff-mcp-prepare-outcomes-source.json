@@ -1,0 +1,9 @@
+{
+  "owner": "kokoro-bff",
+  "owner_commit": "394ae559cd2018206c32d5ca3014de248effa203",
+  "source_path": "contract/mcp-prepare-outcomes-v1.json",
+  "source_sha256": "5169cbf5e431cc71a23e2717bda9b51c77f08bed82cae149667532511b3afe72",
+  "profile": "mcp-prepare-outcomes",
+  "profile_version": "1.0.0",
+  "candidate": false
+}

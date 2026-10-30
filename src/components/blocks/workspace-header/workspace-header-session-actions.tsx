@@ -17,6 +17,9 @@ export function WorkspaceHeaderSessionActions({
   onOpenSettings,
   projectWorkspace = false,
   projectRename,
+  projectContext,
+  projectInstruction,
+  projectDelete,
   shareClient,
 }: WorkspaceHeaderActionProps) {
   const t = useT()
@@ -47,7 +50,9 @@ export function WorkspaceHeaderSessionActions({
         ) : null}
         <WorkspaceHeaderProjectMenu
           {...(projectRename === undefined ? {} : { projectRename })}
-          {...(onOpenSettings === undefined ? {} : { onOpenSettings })}
+          {...(projectContext === undefined ? {} : { projectContext })}
+          {...(projectInstruction === undefined ? {} : { projectInstruction })}
+          {...(projectDelete === undefined ? {} : { projectDelete })}
         />
       </>
     )

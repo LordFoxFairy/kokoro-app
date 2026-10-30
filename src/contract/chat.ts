@@ -1,3 +1,4 @@
+import { selectedCustomApiProfilesWireSchema } from "@/generated/bff-tool-display"
 // Canonical v1 runtime contract. Keep these schemas synchronized with the checked-in API documentation and contract tests.
 
 import { z } from "zod"
@@ -5,6 +6,7 @@ import { eventCursorSchema, runProcessActivitySchema, runTodoSchema } from "./ag
 import { resumeDecisionSchema, interactionStateSchema } from "./control"
 import { deliverySchema, workspaceFileSchema } from "./artifacts"
 import { agentFailureProfileSchema } from "./agent-failure"
+import { BFF_PRIVATE_CANCELLED_STATUS } from "@/generated/bff-agent-failure"
 
 
 export const sessionMetaSchema = z
@@ -65,6 +67,65 @@ export const messageRecordSchema = z
   })
 export type MessageRecord = z.infer<typeof messageRecordSchema>
 
+// Private reads retain Message ownership while bounded parts are read separately.
+export const messagePartsDecimalSchema = z.string().regex(/^(?:0|[1-9][0-9]{0,18})(?![\s\S])/u)
+  .refine((value) => BigInt(value) <= BigInt("9223372036854775807"))
+const positivePartsDecimalSchema = messagePartsDecimalSchema.refine((value) => value !== "0")
+const scalarTextSchema = z.string().refine((value) => Array.from(value).length <= 4096 && !/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/u.test(value))
+export const orderedMessageRenderingSchema = z.object({
+  mode: z.literal("ordered"), format_version: z.literal(1), revision: messagePartsDecimalSchema,
+  event_watermark: eventCursorSchema.nullable(), parts_cursor: z.string().min(1),
+  final_segment_id: z.string().min(1).optional(),
+}).strict()
+const privateInlineMessageReadSchema = messageRecordSchema.innerType().extend({
+  terminal_status: z.literal(BFF_PRIVATE_CANCELLED_STATUS).optional(),
+  regenerated_from_message_id:z.string().min(1).max(256).optional(),
+}).superRefine((message, context) => {
+  const { terminal_status: terminalStatus, regenerated_from_message_id:source, ...original } = message
+  if(source!==undefined&&(message.role!=="assistant"||!message.run_id?.trim()))context.addIssue({code:z.ZodIssueCode.custom,path:["regenerated_from_message_id"],message:"regeneration requires exact assistant Run"})
+  const parsed = messageRecordSchema.safeParse(original)
+  if (!parsed.success) for (const issue of parsed.error.issues) context.addIssue(issue)
+  if (terminalStatus !== undefined && (message.role !== "assistant" || message.status !== "failed" ||
+    !message.run_id?.trim() || message.failure !== undefined)) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["terminal_status"], message: "cancelled requires an exact failed assistant without failure" })
+  }
+})
+export const orderedAssistantMessageReadSchema = z.object({
+  message_id: z.string().min(1), role: z.literal("assistant"), content: z.null(),
+  status: z.enum(["pending", "streaming", "completed", "failed"]), created_at: z.string().min(1),
+  run_id: z.string().min(1), failure: agentFailureProfileSchema.optional(),
+  terminal_status: z.literal(BFF_PRIVATE_CANCELLED_STATUS).optional(),
+  regenerated_from_message_id:z.string().min(1).max(256).optional(),
+  selected_skill_source_refs: selectedSkillSourceRefsSchema.optional(), rendering: orderedMessageRenderingSchema,
+}).strict().refine((message) => (message.failure === undefined || message.status === "failed") &&
+  (message.terminal_status === undefined || (message.status === "failed" && message.failure === undefined && message.run_id.trim().length > 0)) &&
+  (message.rendering.final_segment_id === undefined || message.status === "completed"))
+export const chatMessageReadSchema = z.union([privateInlineMessageReadSchema, orderedAssistantMessageReadSchema])
+export type ChatMessageRead = z.infer<typeof chatMessageReadSchema>
+const messagePartPosition = { part_id: z.string().min(1), first_sequence: positivePartsDecimalSchema, latest_sequence: positivePartsDecimalSchema }
+export const messageTextPartSliceSchema = z.object({
+  kind: z.literal("text"), ...messagePartPosition, segment_id: z.string().min(1), text: scalarTextSchema,
+  offset: messagePartsDecimalSchema, end: messagePartsDecimalSchema, total_scalars: messagePartsDecimalSchema, completed: z.boolean(),
+}).strict().refine((part) => BigInt(part.offset) <= BigInt(part.end) && BigInt(part.end) <= BigInt(part.total_scalars) &&
+  BigInt(part.end) - BigInt(part.offset) === BigInt(Array.from(part.text).length))
+export const messageActivityPartSchema = z.object({ kind: z.literal("activity"), ...messagePartPosition, activity: runProcessActivitySchema }).strict()
+export const messagePartSchema = z.union([messageTextPartSliceSchema, messageActivityPartSchema])
+export type MessagePart = z.infer<typeof messagePartSchema>
+export type MessageTextPartSlice = z.infer<typeof messageTextPartSliceSchema>
+export const messagePartsPageSchema = z.object({
+  session_id: z.string().min(1), message_id: z.string().min(1), run_id: z.string().min(1), format_version: z.literal(1),
+  final_segment_id: z.string().min(1).optional(),
+  revision: messagePartsDecimalSchema, event_watermark: eventCursorSchema.nullable(), items: z.array(messagePartSchema).max(32), next_cursor: z.string().min(1).nullable(),
+}).strict().superRefine((page, context) => {
+  let previous = BigInt(0)
+  for (const part of page.items) {
+    const first = BigInt(part.first_sequence), latest = BigInt(part.latest_sequence)
+    if (first < previous || first > latest || latest > BigInt(page.revision)) context.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid public part position" })
+    previous = first
+  }
+})
+export type MessagePartsPage = z.infer<typeof messagePartsPageSchema>
+
 export const pendingPauseSchema = interactionStateSchema.refine((state) => state.phase === "waiting" || state.phase === "resuming")
 export type PendingPause = z.infer<typeof pendingPauseSchema>
 export const executionHeadSchema = z.object({
@@ -97,18 +158,42 @@ export const sessionListSchema = z
   })
   .strict()
 export type SessionList = z.infer<typeof sessionListSchema>
-export const sessionSnapshotSchema = z
+export const sharedSessionSnapshotSchema = z
   .object({
     session: sessionMetaSchema,
     messages: z.array(messageRecordSchema).optional(),
     execution_head: executionHeadSchema.optional(),
-    execution_process: runExecutionProcessSchema.nullable(),
+    execution_process: z.null(),
     files: z.array(workspaceFileSchema),
     deliveries: z.array(deliverySchema),
     deliveries_has_more: z.boolean(),
     event_watermark: eventCursorSchema.nullable(),
   })
   .strict()
+export type SharedSessionSnapshot = z.infer<typeof sharedSessionSnapshotSchema>
+export function parseSharedSessionSnapshot(input: unknown): SharedSessionSnapshot { return sharedSessionSnapshotSchema.parse(input) }
+// Public GET /v1/shared/{shareId}; the same-origin adapter preserves this envelope.
+const sharedSessionResponseSchema = z.object({
+  data: sharedSessionSnapshotSchema,
+  meta: z.object({ request_id: z.string().min(1).max(256) }).strict(),
+}).strict()
+export function parseSharedSessionResponse(input: unknown): SharedSessionSnapshot { return sharedSessionResponseSchema.parse(input).data }
+// Message intent only: owner checks current eligibility; never derive execution from trace names.
+export const selectedMcpConnectionIdsSchema = z
+  .array(z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}(?![\s\S])/u))
+  .max(16)
+  .superRefine((ids, context) => {
+    if (new Set(ids).size !== ids.length) {
+      context.addIssue({ code: z.ZodIssueCode.custom, message: "Connection IDs must be unique" })
+    }
+    if (JSON.stringify(ids).length > 4096) {
+      context.addIssue({ code: z.ZodIssueCode.custom, message: "Connection selection exceeds its JSON byte budget" })
+    }
+  })
+
+export const selectedCustomApiProfilesSchema = selectedCustomApiProfilesWireSchema
+
+export const sessionSnapshotSchema = sharedSessionSnapshotSchema.extend({ messages: z.array(chatMessageReadSchema).optional(), execution_process: runExecutionProcessSchema.nullable(), composer_selection: z.object({ source_message_id: z.string().min(1), selected_mcp_connection_ids: selectedMcpConnectionIdsSchema, selected_custom_api_profiles: selectedCustomApiProfilesSchema.optional() }).strict().optional() }).strict()
 export type SessionSnapshot = z.infer<typeof sessionSnapshotSchema>
 
 export function parseSessionSnapshot(input: unknown): SessionSnapshot {
@@ -123,7 +208,8 @@ export const messageCreateParamsSchema = z
     agent: z.string().min(1).optional(),
     thinking: z.boolean().optional(),
     selected_skill_source_refs: selectedSkillSourceRefsSchema.optional(),
-    mcp_servers: z.array(z.string().min(1)).optional(),
+    selected_mcp_connection_ids: selectedMcpConnectionIdsSchema.optional(),
+    selected_custom_api_profiles: selectedCustomApiProfilesSchema.optional(),
     // Opaque project ownership for a project's first task. Tenant/site
     // identity is resolved by the BFF and is deliberately not browser data.
     project_ref: z.string().min(1).optional(),

@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { ShieldCheck } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +10,7 @@ import { useT } from "@/i18n/context";
 import { cn } from "@/lib/utils";
 import { formatSkillDate } from "./skills-format";
 import styles from "./skills-panel.module.css";
+import { PersonalSkillActions } from "./personal-skill-actions";
 
 type InstalledSkillCardProps = {
   skill: SkillCard;
@@ -21,6 +23,7 @@ type InstalledSkillCardProps = {
   onEnabledChange: (enabled: boolean) => void;
   onUpdate: (source: HTMLElement) => void;
   onOpenDetail: (source: HTMLElement) => void;
+  onRemoveInstallation?: (source: HTMLElement) => void;
 };
 
 export function InstalledSkillCard({
@@ -34,8 +37,10 @@ export function InstalledSkillCard({
   onEnabledChange,
   onOpenDetail,
   onUpdate,
+  onRemoveInstallation,
 }: InstalledSkillCardProps) {
   const t = useT();
+  const removeTrigger = useRef<HTMLButtonElement | null>(null);
   const sourceUnavailable = skill.source_status !== undefined && skill.source_status !== "active";
   return (
     <Card
@@ -63,6 +68,10 @@ export function InstalledSkillCard({
               </Badge>
             ) : null}
           </div>
+          {skill.source_status === "deleted" && skill.installation_id && onRemoveInstallation ? <PersonalSkillActions
+            disabled={busy || locked} writable={false} triggerRef={removeTrigger}
+            onRemoveInstallation={() => { if (removeTrigger.current) onRemoveInstallation(removeTrigger.current); }}
+          /> : null}
           <Switch
             size="sm"
             checked={enabled}

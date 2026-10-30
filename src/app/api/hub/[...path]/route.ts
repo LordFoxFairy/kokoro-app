@@ -1,3 +1,11 @@
+import { proxyProjectSkillContent } from "@/lib/server/project-skill-content";
+import { mcpPrepareReceiptRequest, mcpPrepareReceiptMatches, mcpPrepareReceiptErrorAllowed, mcpPreparePostErrorAllowed, mcpPrepareReceiptLookupOnly } from "@/hub/mcp-prepare-receipt.schema";
+import { proxyProjectPins } from "@/lib/server/project-pins";
+import { proxyProjectMcpRecommendations } from "@/lib/server/project-mcp-recommendations";
+import { proxyMcpServerIcon } from "@/lib/server/mcp-server-icon";
+import { mcpPublicationPath } from "@/hub/mcp-project-publication.schema";
+import { proxyMcpProjectPublication } from "@/lib/server/mcp-project-publication";
+import { mcpIconOperation, mcpIconInputs, mcpIconMatches, type McpIconOperation } from "@/hub/mcp-icon.schema";
 import { parsePersonalSkillHistoryJson, personalSkillHistoryResponseSchema, personalSkillHistoryErrorSchema, personalSkillHistoryErrorAllowed } from "@/hub/personal-skill-history.schema";
 import { proxyPersonalKnowledge } from "@/lib/server/personal-knowledge";
 import { proxyProjectSkillSelection } from "@/lib/server/project-skill-selection";
@@ -421,11 +429,17 @@ async function proxyMcpConnector(
       },
     );
   const url = new URL(request.url);
+  const iconOperation = mcpIconOperation(path, request.method);
+  const receiptPath = path.length === 4 && path[1] === "servers" && path[3] === "prepare-receipt";
+  if (receiptPath && request.method !== "GET") return fail(405, "invalid_mcp_personal_request");
+  const receiptOperation = receiptPath && request.method === "GET";
   const operation:
     | McpConnectorOperation
     | McpConnectorAuthorizationOperation
     | McpPrivateServerOperation
-    | undefined =
+    | McpIconOperation
+    | "prepareReceipt"
+    | undefined = receiptOperation ? "prepareReceipt" : iconOperation ?? (
     path.length === 3 &&
       path[1] === "servers" &&
       path[2] === "import" &&
@@ -510,7 +524,7 @@ async function proxyMcpConnector(
                                             path[1] === "providers" &&
                                             request.method === "GET"
                                           ? "provider"
-                                          : undefined;
+                                          : undefined);
   if (operation === undefined) return fail(400, "invalid_mcp_personal_request");
   const authorization = [
     "beginAuthorization",
@@ -534,6 +548,8 @@ async function proxyMcpConnector(
     "providers",
     "provider",
     "server",
+    "prepareReceipt",
+    "getIcon",
   ].includes(operation);
   const requiresIdempotency = [
     "create",
@@ -544,8 +560,10 @@ async function proxyMcpConnector(
     "registerServer",
     "importJson",
     "prepareServer",
+    "prepareReceipt",
     "updateServer",
     "deleteServer",
+    "beginIcon", "completeIcon", "cancelIcon", "importIcon",
   ].includes(operation);
   const id =
     [
@@ -560,11 +578,12 @@ async function proxyMcpConnector(
       "beginAuthorization",
       "reconnectAuthorization",
     ].includes(operation) ||
-    ["prepareServer", "updateServer", "deleteServer"].includes(operation)
+    ["prepareServer", "prepareReceipt", "updateServer", "deleteServer", "getIcon", "completeIcon", "cancelIcon"].includes(operation)
       ? path[2]
       : undefined;
   const query = url.searchParams;
   const allowed =
+    operation === "prepareReceipt" ? ["expected_state_version"] :
     operation === "connectors"
       ? ["status", "limit", "cursor"]
       : operation === "connections"
@@ -608,6 +627,13 @@ async function proxyMcpConnector(
   )
     return fail(400, "invalid_mcp_personal_request");
   const key = request.headers.get("idempotency-key");
+  let receiptVersion: string | undefined;
+  if (receiptOperation) {
+    if (!mcpPrepareReceiptLookupOnly() || query.getAll("expected_state_version").length !== 1 ||
+      ["content-type", "content-encoding", "content-length", "transfer-encoding"].some(name => request.headers.has(name))) return fail(400, "invalid_mcp_personal_request");
+    try { receiptVersion = mcpPrepareReceiptRequest(id!, query.get("expected_state_version")!, key!).version; }
+    catch { return fail(400, "invalid_mcp_personal_request"); }
+  }
   if (
     mutation
       ? !sameOriginOk(request) ||
@@ -616,7 +642,7 @@ async function proxyMcpConnector(
           !/^[\x21-\x7e]{1,191}(?![\s\S])/u.test(key ?? "")) ||
         (!requiresIdempotency && key !== null)
       : request.body !== null ||
-        ["content-length", "transfer-encoding", "idempotency-key"].some(
+        ["content-length", "transfer-encoding", ...(receiptOperation ? [] : ["idempotency-key"])].some(
           (name) => request.headers.has(name),
         )
   )
@@ -660,7 +686,7 @@ async function proxyMcpConnector(
             : "invalid_mcp_personal_request",
         );
       }
-      const accepted = authorization
+      const accepted = iconOperation && iconOperation !== "getIcon" ? mcpIconInputs[iconOperation].safeParse(input).success : authorization
         ? operation === "beginAuthorization" ||
           operation === "reconnectAuthorization"
           ? mcpConnectorAuthorizationRequestSchema.safeParse(input).success
@@ -685,14 +711,15 @@ async function proxyMcpConnector(
       () => undefined,
     );
     signal.throwIfAborted();
+    // Admission consumes the same receipt budget; never create a fresh 1ms owner budget after expiry.
+    if (receiptOperation && performance.now() >= expires) controller.abort();
+    signal.throwIfAborted();
     if (claims === undefined) return fail(503, "iam_admission_unavailable");
     if (claims === null) return fail(401, "session_authentication_required");
     const headers = productBffHeaders(config, claims, requestId);
     headers.set("accept", "application/json");
-    if (mutation) {
-      headers.set("content-type", "application/json");
-      if (requiresIdempotency) headers.set("idempotency-key", key!);
-    }
+    if (mutation) headers.set("content-type", "application/json");
+    if (requiresIdempotency) headers.set("idempotency-key", key!);
     upstream = await within(
       requestWithDomain(
         `${config.bffBaseUrl.replace(/\/+$/u, "")}/browser/v1/${path.map(encodeURIComponent).join("/")}${url.search}`,
@@ -741,6 +768,7 @@ async function proxyMcpConnector(
     try {
       for (;;) {
         const part = await within(reader.read());
+        if (receiptOperation && performance.now() >= expires) controller.abort();
         signal.throwIfAborted();
         if (part.done) break;
         size += part.value.byteLength;
@@ -762,7 +790,8 @@ async function proxyMcpConnector(
     }
     let raw: unknown;
     try {
-      raw = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+      const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+      raw = receiptOperation ? parseMcpConnectorJson(text) : JSON.parse(text);
     } catch {
       return fail(502, "mcp_personal_response_invalid");
     }
@@ -781,7 +810,7 @@ async function proxyMcpConnector(
           : operation;
     const valid =
       upstream.status === expected
-        ? authorization
+        ? receiptOperation ? mcpPrepareReceiptMatches(raw, id!, receiptVersion!) : iconOperation ? mcpIconMatches(iconOperation, raw, id, input) : authorization
           ? mcpConnectorAuthorizationMatches(
               operation as McpConnectorAuthorizationOperation,
               raw,
@@ -804,7 +833,7 @@ async function proxyMcpConnector(
                 query,
                 input,
               )
-        : authorization
+        : receiptOperation ? mcpPrepareReceiptErrorAllowed(upstream.status, raw) : operation === "prepareServer" ? mcpPreparePostErrorAllowed(upstream.status, raw) : authorization
           ? mcpConnectorErrorAllowed("authorization", upstream.status, raw)
           : mcpConnectorErrorAllowed(
               connectorOperation as McpConnectorOperation,
@@ -2308,6 +2337,10 @@ async function proxyHubRequest(
   context: { params: Promise<{ path: string[] }> },
 ): Promise<Response> {
   const { path } = await context.params;
+  if ((path[0] === "self" && path[1] === "project-pins") || (path[0] === "projects" && path[2] === "pin") || (path[0] === "self" && path[1] === "projects" && path[3] === "pin") || (path[0] === "self" && path[1] === "self" && path[2] === "project-pins")) return proxyProjectPins(request, path);
+  if (path[0] === "mcp" && path[1] === "servers" && path[3] === "icon") return proxyMcpServerIcon(request, path);
+  if (mcpPublicationPath(path)) return proxyMcpProjectPublication(request, path);
+  if (path.length === 3 && path[0] === "projects" && path[2] === "mcp-recommendations") return proxyProjectMcpRecommendations(request, path);
   if ((path[0] === "preferences" && path[1]?.startsWith("knowledge")) || (path[0] === "self" && path[1] === "preferences" && path[2]?.startsWith("knowledge")))
     return proxyPersonalKnowledge(request, path);
   // Retire the old browser `/self/mcp` namespace. MCP is a first-class private adapter route.
@@ -2320,7 +2353,7 @@ async function proxyHubRequest(
     return proxyCustomApi(request, path);
   if (
     path[0] === "mcp" &&
-    (path[1] === "servers" ||
+    (path[1] === "icons" || path[1] === "servers" ||
       path[1] === "connectors" ||
       path[1] === "providers" ||
       path[1] === "authorization" ||
@@ -2342,6 +2375,7 @@ async function proxyHubRequest(
     return proxyGithubSkillImport(request, path);
   if (path[0] === "skills" && path[1] === "local-imports")
     return proxyLocalSkillImport(request, path);
+  if (path[0] === "projects" && path[2] === "skill-installations" && ["package", "download"].includes(path.at(-1) ?? "")) return proxyProjectSkillContent(request, path);
   if (path.at(-1) === "package" || (path[0] === "skill-installations" || path[0] === "self" && path[1] === "skills" && path[2] === "managed") && path.at(-1) === "download")
     return proxySkillPackage(request, path);
   if (path.at(-1) === "cover") return proxySkillCover(request, path);
@@ -2630,6 +2664,42 @@ async function proxyHubRequest(
       { status: 400 },
     );
   }
+  // Project item operations retain their own Project authorization at BFF. Only
+  // the existing verified attachment byte transport is shared with Artifact.
+  const projectResourceItem = businessPath[0] === "projects" && businessPath[2] === "resources" && businessPath.length >= 4;
+  const projectResourceDownload = projectResourceItem && businessPath.length === 5 && businessPath[4] === "download" && request.method === "GET";
+  if (projectResourceItem && (path[0] === "self" || search !== "" || ![businessPath[1], businessPath[3]].every(id => /^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u.test(id ?? ""))
+    || !(businessPath.length === 4 && ["GET", "DELETE"].includes(request.method) || projectResourceDownload)
+    || request.method === "GET" && request.body !== null || request.headers.has("content-type") || request.headers.has("transfer-encoding") || request.headers.has("content-encoding")
+    || request.headers.has("content-length") && (request.method === "GET" || request.headers.get("content-length") !== "0")
+    || request.method === "GET" && request.headers.has("idempotency-key")
+    || request.method === "DELETE" && !/^[\x21-\x7e]{1,191}$/u.test(request.headers.get("idempotency-key") ?? ""))) {
+    return NextResponse.json({ error: "invalid_project_resource" }, { status: 400, headers: { "cache-control": "private, no-store" } });
+  }
+  if (projectResourceItem && request.method === "DELETE") {
+    // Next may represent an empty DELETE as a non-null stream. Require real
+    // zero-byte EOF, not a null-body assumption, before any owner mutation.
+    const deadline = new AbortController();
+    const signal = AbortSignal.any([request.signal, deadline.signal]);
+    const timer = setTimeout(() => deadline.abort(new UpstreamTimeoutError()), 10_000);
+    let stop = () => {};
+    const interrupted = new Promise<never>((_, reject) => {
+      stop = () => reject(signal.reason ?? new DOMException("Request aborted", "AbortError"));
+      signal.addEventListener("abort", stop, { once: true });
+      if (signal.aborted) stop();
+    });
+    try {
+      signal.throwIfAborted();
+      await Promise.race([readBoundedRequestBody(request, 0, signal), interrupted]);
+      signal.throwIfAborted();
+    } catch {
+      return NextResponse.json({ error: "invalid_project_resource" }, { status: 400, headers: { "cache-control": "private, no-store" } });
+    } finally {
+      clearTimeout(timer);
+      signal.removeEventListener("abort", stop);
+    }
+  }
+  const verifiedAttachmentDownload = artifactDownload || projectResourceDownload;
   const boundedFileUpload =
     request.method === "POST" &&
     ((businessPath.length === 3 &&
@@ -2695,7 +2765,13 @@ async function proxyHubRequest(
               ? "request_body_too_large"
               : "request_body_unreadable",
         },
-        { status: error instanceof UpstreamRequestTooLargeError ? 413 : 400 },
+        {
+          status: error instanceof UpstreamRequestTooLargeError ? 413 : 400,
+          // Web-owned provenance: this branch has not sent anything to BFF.
+          // Generic upstream response forwarding deliberately excludes it.
+          headers: boundedFileUpload && error instanceof UpstreamRequestTooLargeError
+            ? { "x-kokoro-local-upload-validation": "request-body-too-large" } : {},
+        },
       );
     }
   }
@@ -2710,7 +2786,7 @@ async function proxyHubRequest(
       ...(personalDownload
         ? { maxResponseBytes: MAX_PERSONAL_DOWNLOAD_BYTES }
         : {}),
-      ...(artifactDownload
+      ...(verifiedAttachmentDownload
         ? {
             maxResponseBytes: MAX_ARTIFACT_DOWNLOAD_BYTES,
             maxErrorResponseBytes: 16 * 1024 * 1024,
@@ -2759,16 +2835,19 @@ async function proxyHubRequest(
     }
   }
 
-  if (artifactDownload) {
+  if (verifiedAttachmentDownload) {
+    const invalidDownload = () => projectResourceDownload
+      ? NextResponse.json({ error: "project_resource_invalid_response" }, { status: 502, headers: { "cache-control": "private, no-store" } })
+      : invalidArtifactDownloadResponse();
     if (upstream.status < 400 && upstream.status !== 200) {
       await upstream.body?.cancel();
-      return invalidArtifactDownloadResponse();
+      return invalidDownload();
     }
     if (upstream.status === 200) {
       const safeHeaders = artifactDownloadHeaders(upstream.headers);
       if (safeHeaders === null || upstream.body === null) {
         await upstream.body?.cancel();
-        return invalidArtifactDownloadResponse();
+        return invalidDownload();
       }
       return new Response(
         boundedArtifactBody(
@@ -2873,11 +2952,18 @@ async function proxyHubRequest(
             mcpConnectionErrorAllowed(upstream.status, error.data.error.code);
       if (!valid)
         return connectionProjectionError("invalidOwnerResponse", requestId);
+      const retryAfter =
+        upstream.status === 429 ? upstream.headers.get("retry-after") : null;
+      const validRetryAfter =
+        retryAfter !== null &&
+        /^[1-9][0-9]{0,4}(?![\s\S])/u.test(retryAfter) &&
+        Number(retryAfter) <= 86400;
       return NextResponse.json(raw, {
         status: upstream.status,
         headers: {
           "cache-control": "no-store",
           "x-request-id": upstreamRequestId,
+          ...(validRetryAfter ? { "retry-after": retryAfter } : {}),
         },
       });
     }

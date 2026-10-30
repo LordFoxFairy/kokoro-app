@@ -3,6 +3,7 @@
 // 会话级记忆：按会话键各存一槽（内容+开合+全屏），切会话即读回各自的槽；
 // 「closed」只由用户手动关闭记账——切会话/程序性动作不改开合意图。
 
+import type { RunProcessActivity } from "@/contract/chat"
 import type { ReactNode } from "react"
 
 import type {
@@ -13,7 +14,10 @@ import type {
 
 // 内容引用（非快照）：渲染时按引用向线程状态解析最新数据（工具结果回流即活更新）。
 // node 槽是通用 ReactNode 插槽——canvas 不绑死任何单一产物类型。
+export type CanvasActivityRef = { kind: "activity"; runId: string; activityId: string; subject: string; generation: number }
+
 export type CanvasContentRef =
+  | CanvasActivityRef
   | { kind: "file"; path: string }
   | { kind: "delivery"; conversationId: string; artifactId: string }
   | { kind: "node"; title: string; node: ReactNode }
@@ -103,6 +107,7 @@ export function resetCanvasStore(): void {
 // —— 内容解析（纯派生）：引用 → 线程状态里的最新数据 ——
 
 export type ResolvedCanvasContent =
+  | (CanvasActivityRef & { activity: RunProcessActivity; terminal: boolean })
   | { kind: "file"; file: WorkspaceFileEntry }
   | { kind: "delivery"; delivery: SessionDelivery }
   | { kind: "node"; title: string; node: ReactNode }
@@ -112,6 +117,11 @@ export function resolveCanvasContent(
   thread: SessionStreamState,
 ): ResolvedCanvasContent | null {
   switch (ref.kind) {
+    case "activity": {
+      const step = thread.stepsByRun[ref.runId]?.find(step => step.kind === "activity" && step.activity.activity_id === ref.activityId)
+      const activity = step?.kind === "activity" ? step.activity : thread.executionProcess?.runId === ref.runId ? thread.executionProcess.activities.find(activity => activity.activity_id === ref.activityId) : undefined
+      return activity ? { ...ref, activity, terminal: thread.runTerminalsById?.[ref.runId] !== undefined } : null
+    }
     case "file": {
       // 清单里未及刷新的新文件以 MIME 兜底构造（路径即入口，不等 filesSync）。
       const known = thread.files.find((file) => file.path === ref.path)

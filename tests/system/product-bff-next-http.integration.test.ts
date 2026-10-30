@@ -151,7 +151,7 @@ describe("Product BFF real Next HTTP admission", () => {
       `import { productSessionCookie } from "@/lib/server/product-session"
 export async function GET(): Promise<Response> {
   const now=Date.now(); const origin=process.env.KOKORO_WEB_ORIGIN!; const secret=process.env.KOKORO_WEB_AUTH_SECRET!
-  const cookie=await productSessionCookie({ id:"123e4567-e89b-12d3-a456-426614174000", generation:0, access:"product-access", accessExpiresAt:now+60000, expiresAt:now+60000, subject:"user-1" }, secret, origin)
+  const cookie=await productSessionCookie({ id:"123e4567-e89b-12d3-a456-426614174000", generation:0, access:"product-access", accessExpiresAt:now+60000, expiresAt:now+60000, subject:"user-1", issuerSessionId:"fixture-issuer-session" }, secret, origin)
   return new Response(null,{status:204,headers:{"set-cookie":cookie}})
 }`,
     );
@@ -432,7 +432,7 @@ describe("SET21 stored Product session real Next HTTP", () => {
       fixture,
       `import { createSession } from "@/lib/server/product-session-store"
 import { productSessionCookie } from "@/lib/server/product-session"
-export async function GET(){const config={redisUrl:process.env.KOKORO_WEB_REDIS_URL!,webOrigin:process.env.KOKORO_WEB_ORIGIN!,secret:process.env.KOKORO_WEB_AUTH_SECRET!};const now=Date.now();const candidate=await createSession(config,"fixture-refresh",{id:process.env.SET21_OWNED_SESSION_ID!,expiresAt:now+600000});const cookie=await productSessionCookie({id:candidate.id,generation:0,subject:"fixture-subject",access:"fixture-access",accessExpiresAt:now+600000,expiresAt:candidate.expiresAt},config.secret,config.webOrigin);return new Response(null,{status:204,headers:{"set-cookie":cookie}})}`,
+export async function GET(){const config={redisUrl:process.env.KOKORO_WEB_REDIS_URL!,webOrigin:process.env.KOKORO_WEB_ORIGIN!,secret:process.env.KOKORO_WEB_AUTH_SECRET!};const now=Date.now();const candidate=await createSession(config,"fixture-refresh",{id:process.env.SET21_OWNED_SESSION_ID!,expiresAt:now+600000});const cookie=await productSessionCookie({id:candidate.id,generation:0,subject:"fixture-subject",access:"fixture-access",accessExpiresAt:now+600000,expiresAt:candidate.expiresAt,issuerSessionId:"fixture-issuer-session"},config.secret,config.webOrigin);return new Response(null,{status:204,headers:{"set-cookie":cookie}})}`,
     );
     bff = createServer((request, response) => {
       calls.push(request.url ?? "");

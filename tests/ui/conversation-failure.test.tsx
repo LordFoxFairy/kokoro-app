@@ -282,7 +282,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe("failureCopyKey — generated 10-code safe profile localization", () => {
+describe("failureCopyKey — generated 11-code safe profile localization", () => {
   it("每个闭集码映射到一个存在的、非通用的文案键", () => {
     for (const code of CODES) {
       const key = failureCopyKey(failedThread(code).runFailuresById.run_1 ?? null)
@@ -291,7 +291,7 @@ describe("failureCopyKey — generated 10-code safe profile localization", () =>
     }
   })
 
-  it("十码映射两两不同（无碰撞）", () => {
+  it("闭集码映射两两不同（无碰撞）", () => {
     const keys = CODES.map((code) => failureCopyKey(failedThread(code).runFailuresById.run_1 ?? null))
     expect(new Set(keys).size).toBe(CODES.length)
   })
@@ -423,6 +423,16 @@ describe("ConversationThread 原生滚动行为", () => {
 })
 
 describe("ConversationThread 失败卡渲染", () => {
+  it("待核对状态保留正文且不声称已扣款或提供重发动作", () => {
+    const onRetry = vi.fn()
+    renderFailure(failedThread("model_settlement_pending"), onRetry)
+    expect(screen.getByText("working…")).toBeInTheDocument()
+    expect(screen.getByText(tr("fail.modelSettlementPending"))).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /retry|重试|重新发送/i })).not.toBeInTheDocument()
+    expect(onRetry).not.toHaveBeenCalled()
+    expect(zh["fail.modelSettlementPending"]).toBe("本轮已停止，已生成的内容已保留；结算仍待核对。")
+  })
+
   const delivery: SessionDelivery = {
     conversationId: "ses_1", artifactId: "artifact_1", assetId: "asset_1", artifactKind: "document",
     title: "Report", mime: "application/pdf", size: 2048, runId: "run_1", createdAt: "2026-09-30T00:00:00Z",
@@ -451,8 +461,8 @@ describe("ConversationThread 失败卡渲染", () => {
       },
     }
     const { container } = renderFailure(thread)
-    const failedTurn = container.querySelector('[data-message-id="assistant:run_failed:message:a1"]')
-    const successfulTurn = container.querySelector('[data-message-id="assistant:run_success:message:a2"]')
+    const failedTurn = container.querySelector('[data-message-id="assistant:run_failed:turn:0"]')
+    const successfulTurn = container.querySelector('[data-message-id="assistant:run_success:turn:0"]')
     expect(container.querySelectorAll('[data-message-id="u1"], [data-message-id="u2"]')).toHaveLength(2)
     expect(failedTurn?.querySelector('[data-run-failure="run_failed"]')).not.toBeNull()
     expect(successfulTurn?.querySelector('[role="alert"]')).toBeNull()
@@ -477,11 +487,11 @@ describe("ConversationThread 失败卡渲染", () => {
       runFailuresById: { run_a: { failedRunId: "run_a", kind: "agent" as const, profile } },
     }
     const { container } = renderFailure(thread)
-    const turns = container.querySelectorAll('[data-slot="message-scroller-item"][data-message-id^="assistant:run_a:message:"]')
+    const turns = container.querySelectorAll('[data-slot="message-scroller-item"][data-message-id^="assistant:run_a:turn:"]')
     expect(turns).toHaveLength(2)
     expect([...turns].map((turn) => turn.getAttribute("data-message-id"))).toEqual([
-      "assistant:run_a:message:a1",
-      "assistant:run_a:message:a2",
+      "assistant:run_a:turn:0",
+      "assistant:run_a:turn:1",
     ])
     expect(turns[0]?.querySelector('[data-run-failure="run_a"]')).toBeNull()
     expect(turns[1]?.querySelectorAll('[data-run-failure="run_a"]')).toHaveLength(1)
@@ -556,10 +566,10 @@ describe("ConversationThread 失败卡渲染", () => {
   })
 
   it("partial/full terminal 的 settled copy footer 仍可见可操作", () => {
-    const css = readFileSync(`${process.cwd()}/src/ui/thread/thread.module.css`, "utf8")
-    expect(css).toMatch(/\.assistantActions\s*\{[^}]*display:\s*flex;/u)
+    const css = readFileSync(`${process.cwd()}/src/ui/thread/answer-actions.module.css`, "utf8")
+    expect(css).toMatch(/\.actions\s*\{[^}]*display:\s*flex;/u)
     const { container } = renderFailure(failedThread("dependency_unavailable"))
-    const turn = container.querySelector('[data-message-id="assistant:run_1:message:m_a"]')
+    const turn = container.querySelector('[data-message-id="assistant:run_1:turn:0"]')
     expect(turn?.querySelector(`button[aria-label="${tr("thread.copyAnswer")}"]`)).not.toBeNull()
   })
 
@@ -571,7 +581,7 @@ describe("ConversationThread 失败卡渲染", () => {
     { name: "有效会话且有更多页", sessionId: "ses_1", deliveries: [], hasMore: true, canOpen: true, visible: true },
     { name: "有效会话且已有成果", sessionId: "ses_1", deliveries: [delivery], hasMore: false, canOpen: true, visible: true },
     { name: "无打开动作且已有成果", sessionId: "ses_1", deliveries: [delivery], hasMore: false, canOpen: false, visible: false },
-  ])("成果滚动项仅在成果区可渲染时存在：$name", ({ sessionId, deliveries, hasMore, canOpen, visible }) => {
+  ])("无所属轮的成果保留 Library 入口，并遵守会话和打开动作边界：$name", ({ sessionId, deliveries, hasMore, canOpen, visible }) => {
     const { container } = render(
       <ConversationThread
         sessionId={sessionId}
@@ -592,13 +602,11 @@ describe("ConversationThread 失败卡渲染", () => {
       />,
       { wrapper: LocaleProvider },
     )
-    const wrapper = container.querySelector('[data-message-id="deliveries"]')
-    if (visible) {
-      expect(wrapper).not.toBeNull()
-      expect(wrapper?.querySelector("section")).not.toBeNull()
-    } else {
-      expect(wrapper).toBeNull()
-    }
+    const libraryLinks = screen.queryAllByRole("link", { name: tr("delivery.viewAll") })
+    expect(libraryLinks).toHaveLength(visible ? 1 : 0)
+    if (visible) expect(libraryLinks[0]).toHaveAttribute("href", "/app/library?tab=artifacts")
+    // No Run turn is present in this window: keep access, never invent a card owner.
+    expect(container.querySelector('[data-canvas-opener="true"]')).toBeNull()
   })
 
   it("空终态助手轮保留消息身份并在同一滚动项承接唯一普通失败反馈", () => {
@@ -629,7 +637,7 @@ describe("ConversationThread 失败卡渲染", () => {
     )
     expect(container.querySelector('[data-message-id="m_u1"]')).toHaveTextContent("same persisted prompt")
     expect(container.querySelector('[data-message-id="m_u2"]')).toHaveTextContent("same persisted prompt")
-    const assistantItem = container.querySelector('[data-slot="message-scroller-item"][data-message-id="assistant:run_1:message:m_a"]')
+    const assistantItem = container.querySelector('[data-slot="message-scroller-item"][data-message-id="assistant:run_1:turn:0"]')
     const feedback = container.querySelector('[data-run-failure="run_1"]')
     expect(assistantItem?.querySelector("article")).not.toBeNull()
     expect(feedback?.closest('[data-slot="message-scroller-item"]')).toBe(assistantItem)
@@ -989,4 +997,52 @@ describe("ConversationThread 失败卡渲染", () => {
     expect(screen.queryByRole("button", { name: tr("thread.retry") })).toBeNull()
     expect(onRetry).not.toHaveBeenCalled()
   })
+})
+
+it("an unconfirmed admission is not described as a failed execution, and only explicit original recovery is offered", () => {
+  const thread = createSessionStreamState()
+  thread.messages = [{ id: "local_unknown", role: "user", content: "preserve original intent", runId: "local_unknown" }]
+  const retry = vi.fn()
+  renderFailure(thread, retry, "submission_outcome_unknown", true)
+  expect(screen.getByRole("status")).toHaveTextContent(tr("thread.submissionUnconfirmed"))
+  expect(screen.queryByText(tr("fail.generic"))).toBeNull()
+  expect(screen.getByText("preserve original intent")).toBeVisible()
+  expect(retry).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole("button", { name: tr("thread.retryOriginal") }))
+  expect(retry).toHaveBeenCalledTimes(1)
+})
+
+describe("confirmed cancellation presentation", () => {
+  it.each(["", "preserved answer"])("keeps %j and shows a neutral stopped footer, not generic failure", (content) => {
+    const state = applyChatProjectionEvent({ ...createSessionStreamState(), messages: content ? [{ id: "a", role: "assistant", content, runId: "r" }] : [] }, {
+      event_id: "cancelled", session_id: "ses_1", run_id: "r", timestamp: "now", seq: 1,
+      kind: "run.completed", payload: { status: "cancelled" },
+    })
+    renderFailure(state)
+    expect(screen.getByText(tr("thread.cancelled"))).toBeInTheDocument()
+    if (content) expect(screen.getByText(content)).toBeInTheDocument()
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+  })
+})
+
+it("offers an explicit same-intent cancel retry only while cancellation is uncertain", () => {
+  const retryCancel = vi.fn()
+  render(<ConversationThread sessionId="ses_1" thread={createSessionStreamState()} isStreaming currentRunId="r" executionPhase="cancelling"
+    isReconnecting={false} hasFailed={false} canRetryPendingSubmission={false} creditRejected={false} onOpenBilling={vi.fn()} onOpenPricing={vi.fn()}
+    onRetry={vi.fn()} mode="fast" stagingByRun={{}} hitlRunId={null} controlError="lost ACK" onCancelRun={retryCancel} />, { wrapper: LocaleProvider })
+  expect(screen.getByText(tr("thread.cancelUnknown"))).toBeInTheDocument()
+  fireEvent.click(screen.getByRole("button", { name: tr("thread.retryCancel") }))
+  expect(retryCancel).toHaveBeenCalledTimes(1)
+  expect(screen.queryByText(tr("thread.cancelled"))).not.toBeInTheDocument()
+  expect(screen.queryByText("lost ACK")).not.toBeInTheDocument()
+})
+
+it("keeps a real unread cancelled body recoverable without inventing a generic Run failure", () => {
+  const state = stateFromSnapshot(makeSnapshot({ messages: [{ message_id: "a", role: "assistant", run_id: "r", status: "failed", terminal_status: "cancelled", content: "prefix", created_at: "now" }] }))
+  state.messageParts = { a: { messageId: "a", runId: "r", revision: "1", status: "partial" } }
+  renderFailure(state)
+  expect(screen.getByText("prefix")).toBeInTheDocument()
+  expect(screen.getByText(tr("thread.cancelled"))).toBeInTheDocument()
+  expect(screen.getByText(tr("thread.partsPartial"))).toBeInTheDocument()
+  expect(state.runFailuresById).toEqual({})
 })

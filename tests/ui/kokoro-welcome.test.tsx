@@ -1,8 +1,13 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 
 import { LocaleProvider } from "@/i18n/context"
 import { KokoroDirectChatWelcome } from "@/features/app/kokoro-welcome"
+import { AppFrame, type EmptyStateProps } from "@/components/blocks/app-frame/app-frame"
+import { ThemeProvider } from "@/ui/theme/theme-context"
+import { createSessionEngine } from "@/engine/machine"
+import type { ConversationStore } from "@/core/conversations"
+import { createFakeClient, createMemoryStorage } from "../engine/fakes"
 
 afterEach(cleanup)
 
@@ -48,16 +53,18 @@ it("首页不再用硬编码轮播宣称已接通能力", () => {
   expect(screen.queryByRole("button", { name: "2 / 5" })).not.toBeInTheDocument()
 })
 
-it("建立网站入口把网站意图交给壳层以显示选中胶囊", () => {
+it("建立网站入口只切网站模式，不把占位说明交给填稿回调", () => {
   const onPrompt = vi.fn()
+  const onCreationIntentSelect = vi.fn()
   render(
     <LocaleProvider>
-      <KokoroDirectChatWelcome preview onPrompt={onPrompt} />
+      <KokoroDirectChatWelcome preview onPrompt={onPrompt} onCreationIntentSelect={onCreationIntentSelect} />
     </LocaleProvider>,
   )
 
   fireEvent.click(screen.getByRole("button", { name: /建立网站/ }))
-  expect(onPrompt).toHaveBeenCalledWith("描述你想要建立的网站", "website")
+  expect(onCreationIntentSelect).toHaveBeenCalledExactlyOnceWith("website")
+  expect(onPrompt).not.toHaveBeenCalled()
 })
 
 it("设计能力提示填写专用草稿和意图，不沿用数据分析语义", () => {
@@ -320,7 +327,7 @@ it.each([
     prompt: "帮我制作一个关于「主题」的游戏，说明核心玩法、目标、规则和基本操作。",
     intent: "game" as const,
   },
-])("正式 Home 的 $label 提示使用同意图描述并只填写精确草稿", ({ label, description, prompt, intent }) => {
+])("正式 Home 的 $label 使用同意图描述，网站只切模式而其它既有提示保持填稿", ({ label, description, prompt, intent }) => {
   const onPrompt = vi.fn()
   const onCreationIntentSelect = vi.fn()
   const onCreateProject = vi.fn()
@@ -350,8 +357,8 @@ it.each([
     openProjectCalls: onOpenProject.mock.calls,
     settingsCalls: onOpenSettings.mock.calls,
   }).toEqual({
-    promptCalls: [[prompt, intent]],
-    creationIntentCalls: [],
+    promptCalls: intent === "website" ? [] : [[prompt, intent]],
+    creationIntentCalls: intent === "website" ? [["website"]] : [],
     createProjectCalls: [],
     openProjectCalls: [],
     settingsCalls: [],
@@ -375,4 +382,54 @@ it("无 Billing owner 投影的正式 Home 不声明免费计划或升级套餐"
     upgradeVisible: false,
     settingsCalls: [],
   })
+})
+
+function mountWebsiteHome() {
+  window.localStorage.clear()
+  window.localStorage.setItem("kokoro.locale", "zh")
+  window.history.replaceState(null, "", "/app")
+  const client = createFakeClient()
+  const engine = createSessionEngine({ client, storage: createMemoryStorage<ConversationStore>(null) })
+  engine.newConversation()
+  let selectMode: EmptyStateProps["onCreationIntentSelect"]
+  function Surface(props: EmptyStateProps) {
+    selectMode = props.onCreationIntentSelect
+    return <KokoroDirectChatWelcome {...props} />
+  }
+  const view = render(<ThemeProvider><LocaleProvider><AppFrame preview engine={engine} chatHref="/app" emptyState={Surface} emptyStateOwnsComposer /></LocaleProvider></ThemeProvider>)
+  return { client, engine, view, selectWebsite: () => selectMode?.("website") }
+}
+
+it("真实首页 composer 从空稿点击建立网站后仍为空、只显示占位、发送保持禁用且零创建", async () => {
+  const context = mountWebsiteHome()
+  try {
+    const input = await screen.findByRole("textbox")
+    expect(input).toHaveValue("")
+    expect(screen.getByRole("button", { name: "发送消息" })).toBeDisabled()
+    fireEvent.click(await screen.findByRole("button", { name: /^建立网站 /u }))
+    await waitFor(() => expect(input).toHaveAttribute("placeholder", "描述你想要建立的网站"))
+    expect(input).toHaveValue("")
+    expect(screen.getByRole("button", { name: "发送消息" })).toBeDisabled()
+    expect(context.client.createCalls).toEqual([])
+    // Prove the disabled assertion is not caused by an unavailable engine.
+    fireEvent.change(input, { target: { value: "用户明确输入的需求" } })
+    expect(screen.getByRole("button", { name: "发送消息" })).toBeEnabled()
+    expect(context.client.createCalls).toEqual([])
+  } finally { context.view.unmount(); context.engine.dispose(); window.localStorage.clear(); window.history.replaceState(null, "", "/app") }
+})
+
+it("首页既有网站模式动作保已有草稿全文，关闭胶囊也不发送或覆盖它", async () => {
+  const context = mountWebsiteHome()
+  try {
+    const input = await screen.findByRole("textbox")
+    const original = "保留原始草稿\n第二行 🦊 与具体要求"
+    fireEvent.change(input, { target: { value: original } })
+    act(() => context.selectWebsite())
+    await waitFor(() => expect(input).toHaveAttribute("placeholder", "描述你想要建立的网站"))
+    expect(input).toHaveValue(original)
+    expect(screen.getByRole("button", { name: "发送消息" })).toBeEnabled()
+    fireEvent.click(screen.getByRole("button", { name: "关闭网站创作模式" }))
+    expect(input).toHaveValue(original)
+    expect(context.client.createCalls).toEqual([])
+  } finally { context.view.unmount(); context.engine.dispose(); window.localStorage.clear(); window.history.replaceState(null, "", "/app") }
 })

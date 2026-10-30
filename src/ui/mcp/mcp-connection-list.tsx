@@ -1,7 +1,6 @@
 "use client";
 
-import Image from "next/image";
-import { Cable, Check, KeyRound, Search } from "lucide-react";
+import { Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import type {
@@ -12,12 +11,13 @@ import type { CustomApiProfile } from "@/hub/custom-api.schema";
 import { useT } from "@/i18n/context";
 
 import { McpEmptyConnections } from "./mcp-empty-connections";
-import { providerArtwork } from "./mcp-projection-types";
-import { McpAvailabilityStatus } from "./mcp-availability-status";
+import { McpCustomApiCard } from "./mcp-custom-api-card";
 import styles from "./mcp-projection-read.module.css";
+import { McpConnectorCard } from "./mcp-connector-card";
 
 export function McpConnectionList({
   connectors,
+  serverMediaRevisions,
   customApis,
   providers,
   query,
@@ -31,6 +31,8 @@ export function McpConnectionList({
   onNext,
 }: {
   connectors: McpConnector[];
+  /** Exact confirmed icon changes; ordinary connector refreshes retain private media. */
+  serverMediaRevisions?: ReadonlyMap<string, number>;
   customApis: CustomApiProfile[];
   providers: McpConnectorProvider[];
   query: string;
@@ -87,87 +89,15 @@ export function McpConnectionList({
           <p className={styles.connectionLabel}>{t("skills.added")}</p>
           <ul className={styles.connectorGrid}>
             {displayedCustomApis.map((profile) => (
-              <li
-                key={`custom-api:${profile.profile_id}`}
-                className={styles.connectorCard}
-                data-testid="custom-api-projection"
-              >
-                <button
-                  type="button"
-                  className={styles.connectorTrigger}
-                  onClick={(event) =>
-                    onSelectCustomApi(profile, event.currentTarget)
-                  }
-                  aria-label={profile.name}
-                >
-                  <span className={styles.connectorMark} aria-hidden="true">
-                    <KeyRound />
-                  </span>
-                  <span className={styles.connectorIdentity}>
-                    <span>
-                      <strong>{profile.name}</strong>
-                      <small>{profile.instructions ?? "自定义 API"}</small>
-                    </span>
-                  </span>
-                  <Check
-                    className={styles.statusCheck}
-                    aria-label={t("skills.added")}
-                  />
-                </button>
-              </li>
+              <McpCustomApiCard key={`custom-api:${profile.profile_id}`} profile={profile} onSelect={onSelectCustomApi} />
             ))}
-            {displayedConnectors.map((connector) => {
-              const provider = providersByKey.get(connector.provider_key);
-              const connectorName =
-                connector.display_name ||
-                provider?.display_name ||
-                t("firstSite.unavailable");
-              const providerName = provider?.display_name;
-              const connectorDescription =
-                connector.description ||
-                (providerName !== connectorName ? providerName : undefined);
-              return (
-                <li
-                  key={connector.connector_id}
-                  className={styles.connectorCard}
-                  data-testid="mcp-projection"
-                >
-                  <button
-                    type="button"
-                    className={styles.connectorTrigger}
-                    onClick={(event) => onEdit(connector, event.currentTarget)}
-                    aria-label={connectorName}
-                  >
-                    <span className={styles.connectorMark} aria-hidden="true">
-                      {provider ? (
-                        <Image
-                          src={providerArtwork(provider)}
-                          alt=""
-                          fill
-                          sizes="2.5rem"
-                          unoptimized
-                        />
-                      ) : (
-                        <Cable />
-                      )}
-                    </span>
-                    <span className={styles.connectorIdentity}>
-                      <span>
-                        <strong>{connectorName}</strong>
-                        {connectorDescription ? (
-                          <small>{connectorDescription}</small>
-                        ) : null}
-                      </span>
-                    </span>
-                    <McpAvailabilityStatus availability={connector.availability} className={styles.status} availableIconClassName={styles.statusCheck} />
-                  </button>
-                </li>
-              );
-            })}
+            {displayedConnectors.map(connector => <McpConnectorCard key={connector.connector_id} connector={connector}
+              provider={providersByKey.get(connector.provider_key)} onSelect={onEdit}
+              mediaRevision={connector.server_id ? serverMediaRevisions?.get(connector.server_id) ?? 0 : 0} />)}
           </ul>
         </>
       )}
-      {visibleConnectors.length > 0 && (previousEnabled || nextEnabled) ? (
+      {previousEnabled || nextEnabled ? (
         <nav className={styles.pagination} aria-label="MCP pages">
           <Button
             type="button"

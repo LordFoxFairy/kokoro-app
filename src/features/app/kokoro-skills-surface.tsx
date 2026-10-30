@@ -4,16 +4,14 @@ import type { GithubImported } from "@/ui/skills/personal-skill-github-import-fl
 
 import Image from "next/image"
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
-import { Check, CircleDot, ChevronDown, LoaderCircle, Plus, Search, SquarePen, Upload, X } from "lucide-react"
+import { Check, CircleDot, ChevronDown, ListFilterPlus, LoaderCircle, Plus, Search, SquarePen, Upload, X } from "lucide-react"
 
 import type { EmptyStateProps } from "@/components/blocks/app-frame/app-frame"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
-import { Skeleton } from "@/components/ui/skeleton"
-import { Spinner } from "@/components/ui/spinner"
 import type { SkillCatalog, SkillCatalogCard, CatalogSkillCategory } from "@/hub/schemas"
 import { browserHubClient } from "@/ui/shell/page-clients"
 import { invalidate, useResource } from "@/lib/query"
@@ -26,6 +24,7 @@ import { mergeSkillCatalogPages } from "@/ui/skills/skills-pool-model"
 import { ManusSkillDetailDialog } from "@/ui/skills/manus-skill-detail-dialog"
 import { createManusSkillHubClient, SKILL_CATALOG_RESOURCE_KEY } from "@/ui/skills/manus-skill-client"
 import { skillResourceKey } from "@/ui/skills/skills-resource-cache"
+import { SkillCoverMedia } from "@/ui/skills/skill-cover-media"
 import { stashPendingDraft } from "@/ui/shell/use-draft"
 import { toSkillActionCard } from "@/ui/skills/skills-card-model"
 import { BrandFallback } from "@/components/blocks/brand-mark/brand-mark"
@@ -75,7 +74,12 @@ export function KokoroSkillsSurface(props: KokoroSkillsSurfaceProps) {
 function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kokoro", onOpenSettings, onCreateSkillWithAi, onTrySkill, projectReadBoundary }: KokoroSkillsSurfaceProps) {
   const t = useT()
   const readBoundary = useMemo(() => projectReadBoundary ?? { admitted: preview, subject: preview ? "preview" : null, generation: 0 }, [preview, projectReadBoundary])
-  const publisherLabel = (skill: Pick<SkillCatalogCard, "scope">) => skill.scope === "official" ? brandName : skill.scope === "third_party" ? t("skills.community") : undefined
+  const publisherLabel = (skill: Pick<SkillCatalogCard, "product" | "publisher_profile">) => {
+    const publisher = skill.product?.publisher
+    if (publisher?.kind === "github_repository") return publisher.github_repository.owner_login
+    const profile = skill.publisher_profile
+    return publisher?.kind === "iam" && profile?.status === "found" && profile.kind === publisher.iam.kind && profile.id === publisher.iam.id ? profile.display_name : undefined
+  }
   const categoryLabel = (value: CatalogSkillCategory) => t(CATEGORIES.find((item) => item.value === value)?.key ?? "skills.categoryCoding")
   // The standalone page and the embedded Settings page must consume the same
   // owner-backed Skills projection.  The generic Hub client still addresses
@@ -89,6 +93,30 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
   )
   const [query, setQuery] = useState("")
   const [category, setCategory] = useState<SkillCategory>("all")
+  const [compactCategories, setCompactCategories] = useState(false)
+  const categoryNavRef = useRef<HTMLElement | null>(null)
+  const categoryMeasureRef = useRef<HTMLDivElement | null>(null)
+  useLayoutEffect(() => {
+    const nav = categoryNavRef.current
+    const labels = categoryMeasureRef.current
+    if (!nav || !labels) return
+    let available = nav.getBoundingClientRect().width
+    let required = labels.getBoundingClientRect().width
+    const update = () => {
+      if (available > 0 && required > 0) setCompactCategories(required > available)
+    }
+    const observer = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        if (entry.target === nav) available = entry.contentRect.width
+        if (entry.target === labels) required = entry.contentRect.width
+      }
+      update()
+    })
+    observer.observe(nav)
+    observer.observe(labels)
+    update()
+    return () => observer.disconnect()
+  }, [])
   const [committedQuery, setCommittedQuery] = useState("")
   useEffect(() => {
     const timer = setTimeout(() => setCommittedQuery(query.trim()), 250)
@@ -147,7 +175,7 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
   if (freshCatalog !== undefined && (confirmedCatalog?.client !== client || confirmedCatalog.data !== freshCatalog)) setConfirmedCatalog({ client, data: freshCatalog })
   const displayedCatalog = freshCatalog ?? (readBoundary.admitted && readBoundary.subject !== null && confirmedCatalog?.client === client ? confirmedCatalog.data : undefined)
   const loadingMore = loadingMoreFor !== undefined && loadingMoreFor.base === catalog.data && !loadingMoreFor.controller.signal.aborted
-  const loadMoreFailed = loadMoreFailedFor === catalog.data
+  const loadMoreFailed = loadMoreFailedFor !== undefined && loadMoreFailedFor === catalog.data
   const loadMore = useCallback(async () => {
     const cursor = displayedCatalog?.next_cursor
     const base = catalog.data
@@ -265,19 +293,33 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
           </span>
         ) : null}
         <div className={styles.content}>
-          <nav className={styles.categoryFilter} aria-label={t("skills.categoryAria")}>
-            <div className={styles.compactCategoryTabs} role="group" aria-label={t("skills.categoryAria")}>
+          <nav ref={categoryNavRef} className={styles.categoryFilter} aria-label={t("skills.categoryAria")}>
+            {/* Measure labels, not a second hidden set of interactive controls.
+                The current locale and available canvas decide which one UI fits. */}
+            <div className={styles.categoryMeasurement} aria-hidden="true"><div ref={categoryMeasureRef} className={styles.categoryMeasureRow}>{CATEGORIES.map(({ value, key }) => <span key={value}>{t(key)}</span>)}</div></div>
+            {compactCategories ? <DropdownMenu>
+              <DropdownMenuTrigger asChild><Button type="button" variant="outline" className={styles.categoryTrigger}><ListFilterPlus aria-hidden="true" /><span>{t(CATEGORIES.find(item => item.value === category)!.key)}</span><ChevronDown aria-hidden="true" /></Button></DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className={styles.categoryMenu} aria-label={t("skills.categoryAria")}>
+                <DropdownMenuRadioGroup value={category} onValueChange={value => {
+                  const selected = CATEGORIES.find(item => item.value === value)
+                  if (selected) setCategory(selected.value)
+                }}>
+                  {CATEGORIES.map(({ value, key }) => <DropdownMenuRadioItem className={styles.categoryMenuItem} key={value} value={value}>{t(key)}{category === value ? <Check aria-hidden="true" /> : null}</DropdownMenuRadioItem>)}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu> : <div className={styles.compactCategoryTabs} role="group" aria-label={t("skills.categoryAria")}>
               {CATEGORIES.map(({ value, key }) => (
                 <button
                   key={value}
                   type="button"
                   data-active={category === value || undefined}
+                  aria-pressed={category === value}
                   onClick={() => setCategory(value)}
                 >
                   {t(key)}
                 </button>
               ))}
-            </div>
+            </div>}
           </nav>
 
           {importNotice ? (
@@ -287,13 +329,11 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
             </Alert>
           ) : null}
 
-          {displayedCatalog !== undefined && catalog.error !== undefined ? <div className={styles.errorState} role="alert"><p>{t("skills.loadError")}</p><Button type="button" variant="outline" onClick={catalog.refetch} disabled={catalog.loading}>{t("skills.retry")}</Button></div> : null}
-          {displayedCatalog === undefined && catalog.error === undefined ? (
-            <div className={styles.grid} data-testid="skills-loading">
-              {Array.from({ length: 6 }, (_, index) => <Card key={index} className={styles.card}><Skeleton className={styles.artSkeleton} /><CardContent className={styles.cardBody}><Skeleton className={styles.titleSkeleton} /><Skeleton className={styles.lineSkeleton} /></CardContent></Card>)}
+          {displayedCatalog !== undefined && catalog.error !== undefined ? <span className="sr-only" role="status">{t("skills.loadError")}</span> : null}
+          {displayedCatalog === undefined || catalog.data === undefined && filtered.length === 0 ? (
+            <div className={styles.grid} data-testid="skills-catalog-grid" aria-busy={catalog.loading || undefined}>
+              <span className="sr-only" role="status">{t(catalog.error === undefined ? "skills.loading" : "skills.loadError")}</span>
             </div>
-          ) : catalog.error !== undefined && displayedCatalog === undefined ? (
-            <div className={styles.errorState} role="alert"><p>{t("skills.loadError")}</p><Button type="button" variant="outline" onClick={catalog.refetch} disabled={catalog.loading}>{catalog.loading ? <Spinner aria-hidden="true" /> : null}{t("skills.retry")}</Button></div>
           ) : filtered.length === 0 ? (
             <div className={styles.emptyState} data-testid="skills-catalog-empty">
               <Search aria-hidden="true" />
@@ -332,7 +372,7 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
                   >
                     <button type="button" className={styles.cardArt} onClick={(event) => { detailRef.current = event.currentTarget; setDetailSkill(skill) }} aria-label={`${t("skills.viewDetails")} ${skill.name}`}>
                       <span className={styles.bookCover}>
-                        {skill.cover_image ? <Image src={skill.cover_image} alt="" fill sizes="(max-width: 42rem) 7.5rem, 7.5rem" unoptimized /> : <span className={styles.coverUnavailable} aria-hidden="true"><BrandFallback /></span>}
+                        <SkillCoverMedia src={skill.cover_image} identity={skillResourceKey("hub/skills/cover", client)} sizes="(max-width: 42rem) 7.5rem, 7.5rem" fallback={<span className={styles.coverUnavailable} aria-hidden="true"><BrandFallback /></span>} />
                       </span>
                     </button>
                     <CardContent className={styles.cardBody}>
@@ -356,9 +396,9 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
               </div>
               {displayedCatalog?.next_cursor ? (
                 <div className={styles.loadMore}>
-                  {loadMoreFailed ? <p role="alert">{t("skills.loadError")}</p> : null}
+                  {loadMoreFailed ? <span className="sr-only" role="status">{t("skills.loadError")}</span> : null}
                   <Button type="button" variant="outline" onClick={() => void loadMore()} disabled={catalog.data === undefined || loadingMore} aria-busy={loadingMore}>
-                    {loadingMore ? <Spinner aria-hidden="true" /> : null}{t("rail.loadMore")}
+                    {t("rail.loadMore")}
                   </Button>
                 </div>
               ) : null}
@@ -380,6 +420,7 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
         pending={detailKey !== null && currentDetailSkill === null}
         pendingFailed={loadMoreFailed || catalog.error !== undefined || catalog.data !== undefined && !displayedCatalog?.next_cursor}
         pendingBusy={catalog.loading || loadingMore}
+        onRetryPending={readBoundary.admitted && readBoundary.subject !== null ? catalog.refetch : undefined}
         {...(displayedCatalog?.next_cursor ? { onLoadMore: () => void loadMore() } : {})}
         busy={detailSkill !== null && busy === actionIdentity(detailSkill)}
         {...(currentDetailSkill === null ? {} : { installationState: { installed: currentDetailSkill.installed, enabled: currentDetailSkill.enabled } })}

@@ -1,3 +1,6 @@
+import type { CustomApiSelection, CustomApiSelectionRestore } from "./custom-api-selection"
+import type { AnswerActionsClient } from "./answer-actions-client"
+import type { AnswerRegenerationReceipt } from "@/contract/answer-actions"
 // 引擎对外类型契约：只描述快照、依赖和用户动作，不承载运行时编排。
 
 import type { ClientFailureReason, SessionClient } from "@/engine/client"
@@ -9,8 +12,10 @@ import type { PersistedStore } from "@/lib/persisted-store"
 
 import { IDLE_MACHINE, type MachineState } from "./machine-state"
 import type { SessionScope } from "./session-scope"
+import type { SubmissionRecovery } from "./submission-recovery"
 import type { TaskNotification } from "./task-notification"
 import type { ToolDecision } from "./hitl-staging"
+import type { MessagePartsReadRecheck } from "./message-parts-reader"
 
 export type NoticeSpec = {
   key: MessageKey
@@ -29,9 +34,20 @@ export type ConversationMoveIntent = Readonly<{
   status: "pending" | "unknown"
 }>
 
+export type McpSelectionRestore = Readonly<{ sessionId: string; sourceMessageId: string; ids: readonly string[] }>
+
 export type EngineSnapshot = {
+  customApiSelectionRestore?: CustomApiSelectionRestore
+  selectedCustomApiProfiles?: readonly CustomApiSelection[]
+  mcpSelectionRestore?: McpSelectionRestore
+  // Transient current-conversation draft intent, absent only in injected view-only engines.
+  selectedMcpConnectionIds?: readonly string[]
   // In-memory current-view creation provenance, never persisted or inferred from cache.
   locallyCreatedSessionId?: string
+  // Positive owner snapshot/create ACK for this view, never inferred from optimistic text.
+  ownerConfirmedSessionId?: string
+  // Last authoritative absent snapshot for this active view; never persisted.
+  missingSessionId?: string
   machine: MachineState
   // 瞬态通知（如插话投递失败）：下一次提交时清空；与相位错误（machine.error）分离。
   notice: NoticeSpec | null
@@ -58,6 +74,8 @@ export type EngineSnapshot = {
 const EMPTY_THREAD: SessionStreamState = createSessionStreamState()
 
 export const SERVER_ENGINE_SNAPSHOT: EngineSnapshot = {
+  selectedMcpConnectionIds: Object.freeze([]),
+  selectedCustomApiProfiles: Object.freeze([]),
   machine: IDLE_MACHINE,
   notice: null,
   store: null,
@@ -72,6 +90,9 @@ export const SERVER_ENGINE_SNAPSHOT: EngineSnapshot = {
   hasPendingSubmission: false,
 }
 
+/** A mounted route may read ordered bodies only for this exact conversation and scope. */
+export type MessagePartsReadTarget = Readonly<{ scope: SessionScope; conversationId: string }>
+
 export type SessionEngine = {
   getSnapshot: () => EngineSnapshot
   subscribe: (listener: () => void) => () => void
@@ -85,8 +106,13 @@ export type SessionEngine = {
   retryResume: () => void
   retry: () => void
   // 连接 hard failure 的只读恢复：重新 snapshot-first，不重发 user/message。
+  retryMessageParts?: (messageId: string) => void
+  /** View-only injected engines may omit this port; canonical browser engines always implement it. */
+  setMessagePartsReadTarget?: (target: MessagePartsReadTarget | null) => void
   reconnect: () => void
   cancelRun: () => void
+  /** Named owner regeneration; never an ordinary create-message or local human echo. */
+  regenerateAnswer?: (input: { sourceMessageId: string; sourceRunId: string; key: string; signal: AbortSignal }) => Promise<AnswerRegenerationReceipt>
   stageToolDecision: (runId: string, toolId: string, decision: ToolDecision) => void
   selectConversation: (id: string) => void
   // 打开服务端清单里的会话（本地索引未见则先纳入缓存再水合）。
@@ -99,14 +125,31 @@ export type SessionEngine = {
   setMode: (mode: AgentMode) => void
   // 当前会话的 exact Skill source refs；只在内存中保存，提交时冻结进 typed wire。
   setSelectedSkillSourceRefs: (sourceRefs: readonly string[] | undefined) => void
+  setSelectedCustomApiProfiles?: (profiles: readonly CustomApiSelection[]) => void
+  restoreCustomApiSelection?: (candidate: CustomApiSelectionRestore, eligibleProfiles: readonly CustomApiSelection[]) => void
+  setSelectedMcpConnectionIds: (connectionIds: readonly string[]) => void
+  restoreMcpSelection?: (candidate: McpSelectionRestore, eligibleIds: readonly string[]) => void
   // 选中模型（MODEL-UX）：首条消息上 wire 为 messageCreate.model。
   setModel: (model: string | null) => void
   dispose: () => void
 }
 
+/** Browser UI provenance, not an owner receipt or a submission mutex. */
+export type DraftLifecycle = {
+  isUnsubmitted: (sessionId: string) => boolean
+  retire: (sessionId: string) => boolean
+}
+
 export type EngineDeps = {
+  answerActions?: Pick<AnswerActionsClient, "regenerate">
   client: SessionClient
   storage: PersistedStore<ConversationStore>
+  draftLifecycle?: DraftLifecycle
+  submissionRecovery?: SubmissionRecovery
+  /** One readonly401 recovery, captured from the current trusted data epoch. */
+  captureMessagePartsReadRecheck?: () => MessagePartsReadRecheck | undefined
+  /** Seed before eager hydration. Browser factories always supply a target or null, never omission. */
+  messagePartsReadTarget?: MessagePartsReadTarget | null
   /** Direct inbox and project workbenches never share a persisted session index. */
   scope?: SessionScope
   now?: () => number

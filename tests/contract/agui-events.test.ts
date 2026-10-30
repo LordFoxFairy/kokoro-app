@@ -13,6 +13,7 @@ const AGENT_FAILURE_CODES = [
   "model_unavailable",
   "dependency_unavailable",
   "model_access_denied",
+  "model_settlement_pending",
 ] as const
 
 const AGENT_FAILURE_TUPLES = [
@@ -22,7 +23,7 @@ const AGENT_FAILURE_TUPLES = [
 ] as const
 
 const metadata = {
-  kokoro: {
+  kokoro: { public_sequence: "1001",
     event_id: "agent-event-1",
     seq: 7,
     session_id: "session-1",
@@ -152,7 +153,7 @@ describe("AG-UI wire contract", () => {
         type: "RUN_ERROR",
         code: failure.code,
         message: "Agent run failed",
-        metadata: { kokoro: { failure } },
+        metadata: { kokoro: { public_sequence: "1001", failure } },
       })
     },
   )
@@ -177,8 +178,7 @@ describe("AG-UI wire contract", () => {
       message: "Agent run failed",
       code: "model_unavailable",
       metadata: {
-        kokoro: {
-          ...metadata.kokoro,
+        kokoro: { ...metadata.kokoro,
           failure: { source: "agent", code: "model_unavailable", retryable: true },
         },
       },
@@ -228,8 +228,7 @@ describe("AG-UI wire contract", () => {
         ...event,
         timestamp: 1,
         metadata: {
-          kokoro: {
-            ...metadata.kokoro,
+          kokoro: { ...metadata.kokoro,
             failure: { source: "agent", code: "internal_error", retryable: false },
           },
         },
@@ -247,8 +246,7 @@ describe("AG-UI wire contract", () => {
       message: "Agent launch could not be confirmed",
       code: "new_opaque_launch_failure",
       metadata: {
-        kokoro: {
-          ...metadata.kokoro,
+        kokoro: { ...metadata.kokoro,
           seq: sourceSequence,
           source_owner: "kokoro-bff",
         },
@@ -256,7 +254,7 @@ describe("AG-UI wire contract", () => {
     })).toMatchObject({
       type: "RUN_ERROR",
       code: "new_opaque_launch_failure",
-      metadata: { kokoro: { seq: sourceSequence, source_owner: "kokoro-bff" } },
+      metadata: { kokoro: { public_sequence: "1001", seq: sourceSequence, source_owner: "kokoro-bff" } },
     })
   })
 
@@ -280,8 +278,7 @@ describe("AG-UI wire contract", () => {
       message: "Agent launch could not be confirmed",
       code: "agent_http_400",
       metadata: {
-        kokoro: {
-          ...metadata.kokoro,
+        kokoro: { ...metadata.kokoro,
           seq: "9007199254740993123456789",
           source_owner: "kokoro-bff",
         },
@@ -333,4 +330,61 @@ describe("AG-UI wire contract", () => {
       expect(() => eventCursorSchema.parse(cursor)).toThrow()
     },
   )
+})
+
+
+it("requires a public ledger coordinate independently of the Agent source seq", () => {
+  const valid = { type: "TEXT_MESSAGE_CONTENT", timestamp: 1, messageId: "segment", delta: "visible", metadata: { kokoro: { ...metadata.kokoro, seq: 1, public_sequence: "9007199254740993" } } }
+  expect(parseAgUiEvent(valid).metadata.kokoro).toMatchObject({ seq: 1, public_sequence: "9007199254740993" })
+  for (const public_sequence of [undefined, 1, "0", "01", "1\n", "9223372036854775808"]) expect(() => parseAgUiEvent({ ...valid, metadata: { kokoro: { ...valid.metadata.kokoro, public_sequence } } })).toThrow()
+})
+
+// Public28 accepts only owner-published safe classification, never a guessed tool name.
+for (const display_code of ["tool.execution", "tool.file.read", "tool.mcp.discover", "tool.mcp.describe", "tool.mcp.call", "tool.web.search", "tool.web.fetch", "tool.file.write", "tool.file.deliver"]) {
+  for (const status of ["running", "completed", "failed"]) {
+    it(`Public28 live activity preserves ${display_code}/${status}`, () => {
+      const value = { activity: "tool", activity_id: `act_${"a".repeat(64)}`, segment_id: `seg_${"b".repeat(64)}`, status, display_code }
+      expect(parseAgUiEvent({ type: "CUSTOM", timestamp: 1, name: "kokoro.activity.updated", value, metadata })).toMatchObject({ value })
+    })
+  }
+}
+for (const patch of [{ display_code: "tool.file.unknown" }, { display_code: "subagent.execution" }, { activity: "subagent", display_code: "tool.web.search" }, { display_code: null }, { name: "web_search" }, { args: { query: "private" } }, { phase: "reading" }]) {
+  it(`Public28 rejects unknown/cross-branch/raw activity ${JSON.stringify(patch)}`, () => {
+    const value = { activity: "tool", activity_id: `act_${"a".repeat(64)}`, segment_id: `seg_${"b".repeat(64)}`, status: "running", display_code: "tool.execution", ...patch }
+    expect(() => parseAgUiEvent({ type: "CUSTOM", timestamp: 1, name: "kokoro.activity.updated", value, metadata })).toThrow()
+  })
+}
+
+it("Public28.4 accepts only owner-safe optional tool targets and preserves valid Unicode scalar names", () => {
+  const base = { activity: "tool", activity_id: `act_${"a".repeat(64)}`, segment_id: `seg_${"b".repeat(64)}`, status: "running", display_code: "tool.file.read" }
+  const parse = (value: unknown) => parseAgUiEvent({ type: "CUSTOM", timestamp: 1, name: "kokoro.activity.updated", value, metadata })
+  for (const name of ["report.md", "é.md", "😀".repeat(120)]) {
+    const value = { ...base, display_detail: { kind: "file", name } }
+    expect(parse(value)).toMatchObject({ value })
+  }
+  const mcp = { ...base, display_code: "tool.mcp.call", display_detail: { kind: "mcp_tool", name: "vendor/tool:execute" } }
+  expect(parse(mcp)).toMatchObject({ value: mcp })
+  expect(parse(base)).toMatchObject({ value: base })
+  for (const display_detail of [null, {}, { kind: "unknown", name: "name" }, { kind: "file", name: "file", extra: true }, ...["", ".", "..", "/path", "a/b", "a\\b", "C:name", "e\u0301", "bad\nname", "bad\u200dname", "\ud800", "😀".repeat(121)].map(name => ({ kind: "file", name }))]) {
+    expect(() => parse({ ...base, display_detail })).toThrow()
+  }
+  for (const display_code of ["tool.execution", "tool.web.search", "tool.web.fetch", "tool.mcp.discover", "tool.mcp.describe"]) {
+    expect(() => parse({ ...base, display_code, display_detail: { kind: "file", name: "file.md" } })).toThrow()
+  }
+  expect(() => parse({ ...base, display_detail: { kind: "mcp_tool", name: "tool/name" } })).toThrow()
+  expect(() => parse({ ...mcp, activity: "subagent", display_code: "subagent.execution" })).toThrow()
+})
+
+it("preserves exact optional per-call intent in the original AG-UI activity, rejecting invalid text", () => {
+  const activity = { activity: "tool", activity_id: `act_${"a".repeat(64)}`, segment_id: `seg_${"b".repeat(64)}`, status: "running", display_code: "tool.mcp.call" }
+  const event = (action_title: unknown) => ({ type: "CUSTOM", timestamp: 1, name: "kokoro.activity.updated", value: { ...activity, action_title }, metadata })
+  for (const action_title of ["读取项目配置", "😀".repeat(64), "e\u0301", "<b>plain text</b>"]) expect(parseAgUiEvent(event(action_title))).toMatchObject({ value: { action_title } })
+  for (const action_title of [null, "", " trailing ", "😀".repeat(64)+"x", "line\nnext", "hidden\u200b", "\ud800", "token: value", "https://example.test?a=1&token=private"]) expect(() => parseAgUiEvent(event(action_title))).toThrow()
+  expect(parseAgUiEvent({ ...event("a"), value: activity })).toMatchObject({ value: activity })
+})
+
+it("accepts final identity only as closed successful RUN_FINISHED evidence", () => {
+  const event = { type: "RUN_FINISHED", timestamp: 1, threadId: "session-1", runId: "run-1", metadata, status: "completed", result: { final_segment_id: "answer" } }
+  expect(parseAgUiEvent(event)).toMatchObject({ result: { final_segment_id: "answer" } })
+  for (const patch of [{ status: "cancelled" }, { outcome: { type: "interrupt", interrupts: [] } }, { result: { final_segment_id: "" } }, { result: { final_segment_id: null } }, { result: { final_segment_id: "answer", extra: true } }]) expect(() => parseAgUiEvent({ ...event, ...patch })).toThrow()
 })

@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import type { SessionListItem } from "@/contract/http"
-import type { SessionClient } from "@/engine/client"
+import { SessionListReadError, type SessionClient } from "@/engine/client"
 import { DIRECT_SESSION_SCOPE, type SessionScope } from "@/engine/session-scope"
 
 type SessionListEntry = { id: string; title: string; updatedAt: string }
@@ -41,6 +41,7 @@ type ListState = {
   loadingMore: boolean
   error: boolean
   settledFirstPage: SessionListView["settledFirstPage"]
+  retryAfterMs?: number
 }
 
 const INITIAL: ListState = { lifecycle: null, identity: "", scopeKey: "direct", entries: [], cursor: undefined, loading: true, loadingMore: false, error: false, settledFirstPage: null }
@@ -83,7 +84,9 @@ export function useSessionList(
   const currentScopeKey = scopeKey(scope)
   const lifecycle = useMemo(() => ({ admitted, client, scopeKey: currentScopeKey, identity }), [admitted, client, currentScopeKey, identity])
   // useMemo survives StrictMode effect replay, not real unmount/re-admission.
-  const firstPageRequestKey = useMemo(() => ({ lifecycle, refreshSignal }), [lifecycle, refreshSignal])
+  const firstPageRequestKey = useMemo(() => ({ lifecycle, refreshSignal, recoveryUsed: false }), [lifecycle, refreshSignal])
+
+  const cooldown = useRef<{ lifecycle: object; until: number } | null>(null)
 
   // 首页取数（不含同步 setState 供 effect 直接调用，对齐 login-gate idiom）。
   const fetchFirst = useCallback(async (requestGeneration: number): Promise<ListState> => {
@@ -104,7 +107,7 @@ export function useSessionList(
         error: false,
         settledFirstPage: settled,
       }
-    } catch {
+    } catch (error) {
       const settled = { scopeKey: currentScopeKey, refreshSignal, requestGeneration, success: false }
       return {
         lifecycle,
@@ -119,30 +122,64 @@ export function useSessionList(
         loadingMore: false,
         error: true,
         settledFirstPage: settled,
+        ...(error instanceof SessionListReadError ? { retryAfterMs: error.retryAfterMs } : {}),
       }
     }
   }, [client, currentScopeKey, firstPageRequestKey, identity, lifecycle, refreshSignal, scope])
 
   useEffect(() => {
-    const generation = ++requestGenerationRef.current
-    let live = true
+    let generation = ++requestGenerationRef.current
+    let live = true, recoveryPending = false, initialPending = true
+    let timer: ReturnType<typeof setTimeout> | undefined
     if (!admitted) return () => { requestGenerationRef.current += 1 }
-    void fetchFirst(generation).then((next) => {
-      if (live && generation === requestGenerationRef.current) {
+    const schedule = (wait: number) => {
+      clearTimeout(timer)
+      timer = setTimeout(wake, Math.max(0, wait))
+    }
+    const run = () => {
+      if (!live || generation !== requestGenerationRef.current) return
+      initialPending = false
+      void fetchFirst(generation).then(next => {
+        if (!live || generation !== requestGenerationRef.current) return
         onFirstPageSettled?.(next.settledFirstPage as NonNullable<SessionListView["settledFirstPage"]>)
         entriesRef.current = next.entries
         setState(next)
+        if (next.retryAfterMs !== undefined) {
+          cooldown.current = { lifecycle, until: performance.now() + next.retryAfterMs }
+          // One recovery per explicit first-page episode, never a polling loop.
+          recoveryPending = !firstPageRequestKey.recoveryUsed
+          if (recoveryPending) schedule(next.retryAfterMs)
+        } else if (!next.error && cooldown.current?.lifecycle === lifecycle) cooldown.current = null
+      })
+    }
+    function wake() {
+      if (!live || generation !== requestGenerationRef.current || document.visibilityState === "hidden") return
+      if (!initialPending && !recoveryPending) return
+      const wait = cooldown.current?.lifecycle === lifecycle ? cooldown.current.until - performance.now() : 0
+      if (wait > 0) { schedule(wait); return }
+      if (recoveryPending) {
+        recoveryPending = false
+        firstPageRequestKey.recoveryUsed = true
+        generation = ++requestGenerationRef.current
       }
-    })
+      run()
+    }
+    document.addEventListener("visibilitychange", wake)
+    window.addEventListener("focus", wake)
+    wake()
     return () => {
       live = false
+      clearTimeout(timer)
+      document.removeEventListener("visibilitychange", wake)
+      window.removeEventListener("focus", wake)
       requestGenerationRef.current += 1
     }
-  }, [admitted, currentScopeKey, fetchFirst, onFirstPageSettled, refreshSignal])
+  }, [admitted, currentScopeKey, fetchFirst, firstPageRequestKey, lifecycle, onFirstPageSettled, refreshSignal])
 
   const loadMore = useCallback(() => {
     if (!admitted || state.lifecycle !== lifecycle || state.identity !== identity || state.scopeKey !== currentScopeKey || state.cursor === undefined || state.loadingMore) return
     const generation = requestGenerationRef.current
+    if (cooldown.current?.lifecycle === lifecycle && cooldown.current.until > performance.now()) return
     if (paginationFlightRef.current?.generation === generation) return
     const flight = { generation }
     paginationFlightRef.current = flight
@@ -157,15 +194,18 @@ export function useSessionList(
         cursor: page.next_cursor === null ? undefined : page.next_cursor,
         loadingMore: false,
       }))
-    }).catch(() => {
+    }).catch((error: unknown) => {
       if (generation !== requestGenerationRef.current) return
+      if (error instanceof SessionListReadError) cooldown.current = { lifecycle, until: performance.now() + error.retryAfterMs }
       setState((current) => ({ ...current, loadingMore: false }))
     }).finally(() => {
       if (paginationFlightRef.current === flight) paginationFlightRef.current = null
     })
   }, [admitted, client, currentScopeKey, identity, lifecycle, scope, state.cursor, state.identity, state.lifecycle, state.loadingMore, state.scopeKey])
 
-  const visibleState = admitted && state.lifecycle === lifecycle && state.identity === identity && state.scopeKey === currentScopeKey ? state : { ...INITIAL, loading: admitted, error: !admitted }
+  // Admission may be suspended while the Product session is rechecked. No
+  // list request has failed in that state; keep private rows retired and wait.
+  const visibleState = admitted && state.lifecycle === lifecycle && state.identity === identity && state.scopeKey === currentScopeKey ? state : INITIAL
 
   return {
     entries: visibleState.entries,

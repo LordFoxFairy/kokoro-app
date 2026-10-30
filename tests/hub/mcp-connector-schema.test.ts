@@ -8,8 +8,10 @@ import {
   mcpConnectorErrorAllowed,
   mcpPrivateServerMatches,
   mcpPrivateServerRegistrationInputSchema,
+  mcpPrivateServerUpdateInputSchema,
   mcpPrivateJsonImportInputSchema,
   mcpPrivateJsonImportSchema,
+  mcpPrivateJsonImportMatches,
 } from "@/hub/mcp-connector.schema";
 import { isMcpCustomHeaderName } from "@/ui/mcp/mcp-header-validation";
 
@@ -432,7 +434,7 @@ describe("private URL MCP registration wire", () => {
     status: "registered" as const,
     state_version: "1",
     headers: [],
-    prepare_status: "ready" as const,
+    transport: "streamable_http" as const, prepare_status: "ready" as const,
     declarations: [],
     declaration_digest: "a".repeat(64),
     declarations_available: true,
@@ -449,6 +451,56 @@ describe("private URL MCP registration wire", () => {
     status: "active" as const,
   };
 
+  it.each(["tool", "resource", "prompt"] as const)(
+    "accepts multiline public %s descriptions in prepared server reads and receipts",
+    (kind) => {
+      // Actual discovery may use the MCP description as display_name. A valid
+      // owner response must survive both the same-origin bridge and its client.
+      const declaration = {
+        kind,
+        selector: "read_documentation",
+        display_name: "Read public documentation\nSecond paragraph\r\n\tIndented context",
+        ...(kind === "tool"
+          ? { input_schema_digest: "b".repeat(64), required_scopes: [] }
+          : {}),
+      };
+      const prepared = { ...server, state_version: "2", declarations: [declaration] };
+      expect(mcpPrivateServerMatches("server", { data: { server: prepared } }, server.server_id)).toBe(true);
+      expect(mcpPrivateServerMatches("prepareServer", {
+        data: {
+          server: prepared,
+          connector: { ...privateConnector, enabled: true, state_version: "2" },
+          declarations: prepared.declarations,
+          replayed: false,
+        },
+      }, server.server_id, { expected_state_version: "1" })).toBe(true);
+      for (const display_name of ["invalid\0description", "invalid\x7fdescription", "invalid\uD800description"]) {
+        expect(mcpPrivateServerSchema.safeParse({ ...prepared, declarations: [{ ...declaration, display_name }] }).success).toBe(false);
+      }
+      expect(mcpPrivateServerSchema.safeParse({ ...prepared, declarations: [{ ...declaration, selector: "invalid\nselector" }] }).success).toBe(false);
+      expect(mcpPrivateServerRegistrationInputSchema.safeParse({ ...input, display_name: "invalid\nname" }).success).toBe(false);
+    },
+  );
+
+  it.each(["tool", "resource", "prompt"] as const)(
+    "preserves long owner %s display text in reads and original prepare receipts",
+    (kind) => {
+      for (const display_name of ["x".repeat(2006), "界".repeat(334) + "\nSecond paragraph"]) {
+        const declaration = { kind, selector: "read_docs", display_name,
+          ...(kind === "tool" ? { input_schema_digest: "b".repeat(64), required_scopes: [] } : {}) };
+        const prepared = { ...server, state_version: "2", declarations: [declaration] };
+        expect(mcpPrivateServerSchema.parse(prepared).declarations[0]?.display_name).toBe(display_name);
+        expect(mcpPrivateServerMatches("server", { data: { server: prepared } }, server.server_id)).toBe(true);
+        for (const replayed of [false, true]) {
+          expect(mcpPrivateServerMatches("prepareServer", { data: {
+            server: prepared, connector: { ...privateConnector, enabled: true, state_version: "2" },
+            declarations: prepared.declarations, replayed,
+          } }, server.server_id, { expected_state_version: "1" })).toBe(true);
+        }
+      }
+    },
+  );
+
   it("accepts exact V1 registration and binds preparation/update/delete to the server CAS", () => {
     expect(
       mcpPrivateServerMatches(
@@ -461,7 +513,7 @@ describe("private URL MCP registration wire", () => {
     const pendingServer = {
       ...server,
       status: "pending" as const,
-      prepare_status: "needs_oauth" as const,
+      transport: "streamable_http" as const, prepare_status: "needs_oauth" as const,
       declarations: [],
       declaration_digest: undefined,
       declarations_available: false,
@@ -719,7 +771,7 @@ it("requires the five exact availability values without lifecycle/default fallba
 it("retains safe revoked header history while keeping write limits and strict descriptors", () => {
   const server = {
     server_id: "history", display_name: "History", server_url: "https://tools.example/mcp",
-    status: "pending", state_version: "1", prepare_status: "pending_prepare",
+    status: "pending", state_version: "1", transport: "streamable_http" as const, prepare_status: "pending_prepare",
     declarations: [], declarations_available: false, availability: "unavailable" as const,
     headers: Array.from({ length: 33 }, (_, index) => ({ name: `x-fixture-${index}`, configured: index !== 0, status: index === 0 ? "revoked" : "active", state_version: "1" })),
   };
@@ -729,4 +781,71 @@ it("retains safe revoked header history while keeping write limits and strict de
   expect(mcpPrivateServerSchema.safeParse({ ...server, headers: [...server.headers, server.headers[0]] }).success).toBe(false);
   expect(mcpPrivateServerSchema.safeParse({ ...server, headers: [{ ...server.headers[0], value: "private" }] }).success).toBe(false);
   expect(mcpPrivateServerRegistrationInputSchema.safeParse({ display_name: "History", server_url: server.server_url, headers: Array.from({ length: 33 }, (_, index) => ({ name: `x-header-${index}`, value: "fixture" })) }).success).toBe(false);
+});
+
+it("staged icon selectors are accepted by original server saves, clear is explicit and icon-only updates are valid", () => {
+  const icon = { intent_id: "12345678-1234-1234-1234-123456789abc", expected_state_version: "2" };
+  expect(mcpPrivateServerRegistrationInputSchema.safeParse({ display_name: "Icon", server_url: "https://tools.example/mcp", icon }).success).toBe(true);
+  expect(mcpPrivateServerUpdateInputSchema.safeParse({ expected_state_version: "7", icon }).success).toBe(true);
+  expect(mcpPrivateServerUpdateInputSchema.safeParse({ expected_state_version: "7", clear_icon: true }).success).toBe(true);
+  for (const bad of [{ icon, clear_icon: true }, { clear_icon: false }, { icon: { ...icon, expected_state_version: 2 } }, { icon: { ...icon, expected_state_version: "2147483647" } }])
+    expect(mcpPrivateServerUpdateInputSchema.safeParse({ expected_state_version: "7", ...bad }).success).toBe(false);
+});
+
+
+describe("personal SSE Current versus historical ACK", () => {
+ const server = { availability: "unavailable", server_id: "sse-server", display_name: "SSE tools", server_url: "https://example.test/sse", transport: "sse_compat", status: "pending", state_version: "2", headers: [], prepare_status: "pending_prepare", declarations: [], declarations_available: false };
+ const managed = { ...connector, server_id: server.server_id, status: "pending", enabled: false };
+ const input = { display_name: server.display_name, server_url: server.server_url, transport: "sse_compat" };
+ const legacy = Object.fromEntries(Object.entries(server).filter(([key]) => key !== "transport"));
+ const ack = (server: unknown, replayed: boolean) => ({ data: { server, connector: managed, replayed } });
+ it("requires actual Current and accepts only real explicit transport", async () => {
+  for (const transport of ["streamable_http", "sse_compat"]) {
+   expect(mcpPrivateServerRegistrationInputSchema.safeParse({ ...input, transport }).success).toBe(true);
+   expect(mcpPrivateServerSchema.safeParse({ ...server, transport }).success).toBe(true);
+  }
+  expect(mcpPrivateServerSchema.safeParse(legacy).success).toBe(false);
+  for (const transport of [null, 2, 3, "sse", "stdio", "MCP_TRANSPORT_SSE_COMPAT"]) expect(mcpPrivateServerRegistrationInputSchema.safeParse({ ...input, transport }).success).toBe(false);
+  expect(mcpPrivateServerUpdateInputSchema.safeParse({ expected_state_version: "1", transport: "sse_compat" }).success).toBe(false);
+  const { mcpConnectionSchema } = await import("@/hub/schemas");
+  expect(mcpConnectionSchema.safeParse({ connection_id: "conn", connector_id: "connector", server_id: "server", provider_key: "private", transport: "sse_compat", status: "active" }).success).toBe(true);
+ });
+ it("confirms only original absent historical replay, not Current or explicit new requests", () => {
+  expect(mcpPrivateServerMatches("registerServer", ack(server, false), undefined, input)).toBe(true);
+  expect(mcpPrivateServerMatches("registerServer", ack({ ...server, transport: "streamable_http" }, false), undefined, input)).toBe(false);
+  const absent = { display_name: input.display_name, server_url: input.server_url };
+  expect(mcpPrivateServerMatches("registerServer", ack(legacy, true), undefined, absent)).toBe(true);
+  expect(mcpPrivateServerMatches("registerServer", ack(legacy, false), undefined, absent)).toBe(false);
+  for (const transport of ["streamable_http", "sse_compat"]) expect(mcpPrivateServerMatches("registerServer", ack(legacy, true), undefined, { ...input, transport })).toBe(false);
+  expect(mcpPrivateServerMatches("server", { data: { server: legacy } }, server.server_id)).toBe(false);
+  for (const operation of ["prepareServer", "updateServer"] as const) {
+   const body = { expected_state_version: "1", ...(operation === "updateServer" ? { display_name: server.display_name } : {}) };
+   const response = { data: { server: legacy, connector: managed, replayed: true, ...(operation === "prepareServer" ? { declarations: [] } : {}) } };
+   expect(mcpPrivateServerMatches(operation, response, server.server_id, body)).toBe(true);
+   expect(mcpPrivateServerMatches(operation, { data: { ...response.data, replayed: false } }, server.server_id, body)).toBe(false);
+  }
+ });
+ it("binds whole ordered mixed JSON and rejects a missing HTTP transport even on replay", () => {
+  const http = { ...server, server_id: "http-server", display_name: "HTTP tools", server_url: "https://http.example.test/mcp", transport: "streamable_http" };
+  const httpConnector = { ...managed, connector_id: "http-connector", server_id: http.server_id };
+  const body = { config_json: JSON.stringify({ mcpServers: { [http.display_name]: { type: "streamableHttp", url: http.server_url }, [server.display_name]: { type: "sse", url: server.server_url } } }) };
+  const imports = [{ server: http, connector: httpConnector }, { server, connector: managed }];
+  expect(mcpPrivateJsonImportMatches({ data: { imports, replayed: true } }, body)).toBe(true);
+  const oldHttp = Object.fromEntries(Object.entries(http).filter(([key]) => key !== "transport"));
+  expect(mcpPrivateJsonImportMatches({ data: { imports: [{ server: oldHttp, connector: httpConnector }, imports[1]], replayed: true } }, body)).toBe(false);
+  expect(mcpPrivateJsonImportMatches({ data: { imports: [...imports].reverse(), replayed: false } }, body)).toBe(false);
+  const oldBody = { config_json: JSON.stringify({ mcpServers: { [http.display_name]: { type: "streamableHttp", url: http.server_url } } }) };
+  expect(mcpPrivateJsonImportMatches({ data: { imports: [{ server: oldHttp, connector: httpConnector }], replayed: true } }, oldBody)).toBe(true);
+  expect(mcpPrivateJsonImportMatches({ data: { imports: [{ server: oldHttp, connector: httpConnector }], replayed: false } }, oldBody)).toBe(false);
+  for (const item of [{ type: "streamableHttp", url: http.server_url, transport: "sse_compat" }, { type: "streamableHttp", url: http.server_url, headers: { "x-test": "not-in-ACK" } }]) {
+   const malformedContext = { config_json: JSON.stringify({ mcpServers: { [http.display_name]: item } }) };
+   expect(mcpPrivateJsonImportMatches({ data: { imports: [{ server: oldHttp, connector: httpConnector }], replayed: true } }, malformedContext)).toBe(false);
+  }
+  const headerBody = { config_json: JSON.stringify({ mcpServers: { [http.display_name]: { type: "streamableHttp", url: http.server_url, headers: { "X-Client-Key": "fixture-only" } } } }) };
+  const headerServer = { ...oldHttp, headers: [{ name: "x-client-key", configured: true, status: "active", state_version: "2" }] };
+  expect(mcpPrivateJsonImportMatches({ data: { imports: [{ server: headerServer, connector: httpConnector }], replayed: true } }, headerBody)).toBe(true);
+  expect(mcpPrivateJsonImportMatches({ data: { imports: [{ server: { ...headerServer, headers: [{ ...headerServer.headers[0], configured: false, status: "revoked" }] }, connector: httpConnector }], replayed: true } }, headerBody)).toBe(false);
+  const extraRoot = { config_json: JSON.stringify({ ...JSON.parse(oldBody.config_json), transport: "sse_compat" }) };
+  expect(mcpPrivateJsonImportMatches({ data: { imports: [{ server: oldHttp, connector: httpConnector }], replayed: true } }, extraRoot)).toBe(false);
+ });
 });

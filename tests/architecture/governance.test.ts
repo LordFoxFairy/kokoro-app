@@ -176,15 +176,39 @@ describe("Web governance boundary", () => {
         "test:architecture": z.string().min(1),
         "contract:check:bff-connector-command-errors": z.string().min(1),
         "contract:check:bff-public-skill-list": z.string().min(1),
+        "contract:check:bff-mcp-project-publication": z.string().min(1),
+        "contract:check:bff-mcp-server-icon": z.string().min(1),
+        "contract:check:bff-tool-display": z.string().min(1),
+        "contract:check:bff-project-resource": z.string().min(1),
+        "contract:check:bff-project-skill-content": z.string().min(1),
+        "contract:generate:bff-mcp-prepare-outcomes": z.string().min(1),
+        "contract:check:bff-mcp-prepare-outcomes": z.string().min(1),
+        "contract:generate:bff-mcp-prepare-receipt": z.string().min(1),
+        "contract:check:bff-mcp-prepare-receipt": z.string().min(1),
+        "contract:check:bff-project-pins": z.string().min(1),
+        "contract:check:bff-project-mcp-recommendations": z.string().min(1),
       }),
     })
     const packageJson: unknown = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"))
 
     const scripts = packageSchema.parse(packageJson).scripts
+    expect(scripts["contract:check:bff-project-skill-content"]).toBe("node scripts/generate-bff-project-skill-content.mjs --check")
+    expect(scripts["contract:check:bff-project-resource"]).toBe("node scripts/generate-bff-project-resource.mjs --check")
+    expect(scripts["contract:check:bff-project-pins"]).toBe("node scripts/generate-bff-project-pins.mjs --check")
+    expect(scripts["contract:check:bff-project-mcp-recommendations"]).toBe("node scripts/generate-bff-project-mcp-recommendations.mjs --check")
+    expect(scripts["contract:check:bff-tool-display"]).toBe("node scripts/generate-bff-tool-display.mjs --check")
+    expect(scripts["contract:generate:bff-mcp-prepare-outcomes"]).toBe("node scripts/generate-bff-mcp-prepare-outcomes.mjs --write")
+    expect(scripts["contract:check:bff-mcp-prepare-outcomes"]).toBe("node scripts/generate-bff-mcp-prepare-outcomes.mjs --check")
+    expect(scripts["contract:generate:bff-mcp-prepare-receipt"]).toBe("node scripts/generate-bff-mcp-prepare-receipt.mjs --write")
+    expect(scripts["contract:check:bff-mcp-prepare-receipt"]).toBe("node scripts/generate-bff-mcp-prepare-receipt.mjs --check")
     expect(scripts["test:architecture"]).toBe("vitest run tests/architecture")
     expect(scripts["contract:check:bff-connector-command-errors"]).toBe("node scripts/generate-bff-connector-command-errors.mjs --check")
     expect(scripts["contract:check:bff-public-skill-list"]).toBe("node scripts/generate-bff-public-skill-list.mjs --check")
+    expect(scripts["contract:check:bff-mcp-server-icon"]).toBe("node scripts/generate-bff-mcp-server-icon.mjs --check")
+    expect(scripts["contract:check:bff-mcp-project-publication"]).toBe("node scripts/generate-bff-mcp-project-publication.mjs --check")
     expect(scripts.contract.split(" && ").sort()).toEqual([
+      "pnpm contract:check:bff-mcp-prepare-outcomes",
+      "pnpm contract:check:bff-mcp-prepare-receipt",
       "pnpm contract:check:bff-archived-tasks",
       "pnpm contract:check:bff-shared-tasks",
       "pnpm contract:check:bff-account-profile",
@@ -193,6 +217,13 @@ describe("Web governance boundary", () => {
       "pnpm contract:check:bff-agent-failure",
       "pnpm contract:check:bff-connector-command-errors",
       "pnpm contract:check:bff-public-skill-list",
+      "pnpm contract:check:bff-mcp-project-publication",
+      "pnpm contract:check:bff-mcp-server-icon",
+      "pnpm contract:check:bff-tool-display",
+      "pnpm contract:check:bff-project-resource",
+      "pnpm contract:check:bff-project-skill-content",
+      "pnpm contract:check:bff-project-pins",
+      "pnpm contract:check:bff-project-mcp-recommendations",
       "vitest run contract tests/contract",
     ].sort())
   })

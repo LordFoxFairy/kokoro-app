@@ -6,9 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Empty, EmptyDescription, EmptyMedia } from "@/components/ui/empty"
-import { Skeleton } from "@/components/ui/skeleton"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Spinner } from "@/components/ui/spinner"
 
 // Read the canonical catalog; the paired BFF does not provide checkout.
 // Money and credits remain exact BigInt-based presentations.
@@ -87,7 +85,7 @@ function PricingScopedContent({ client, embedded = false }: PricingContentProps)
   const [period, setPeriod] = useState<"all" | PlanCatalogEntry["billing_interval"]>("all")
   const periodId = useId()
   const unavailableId = useId()
-  const attempt = useRef<{ controller: AbortController; settled: boolean; clear: () => void } | null>(null)
+  const attempt = useRef<{ controller: AbortController; clear: () => void } | null>(null)
   const load = useCallback(() => {
     attempt.current?.controller.abort()
     attempt.current?.clear()
@@ -98,7 +96,7 @@ function PricingScopedContent({ client, embedded = false }: PricingContentProps)
     const abort = () => rejectAbort(controller.signal.reason)
     controller.signal.addEventListener("abort", abort, { once: true })
     const timer = setTimeout(() => controller.abort(new PricingClientError("timeout", "Catalog timed out", null)), 10_000)
-    const flight = { controller, settled: false, clear: () => { clearTimeout(timer); controller.signal.removeEventListener("abort", abort) } }
+    const flight = { controller, clear: () => { clearTimeout(timer); controller.signal.removeEventListener("abort", abort) } }
     attempt.current = flight
     const current = () => attempt.current === flight
     const operation = async () => {
@@ -114,7 +112,7 @@ function PricingScopedContent({ client, embedded = false }: PricingContentProps)
       if (current()) setCatalog({ kind: "ready", plans: value.plans })
     }).catch((error: unknown) => {
       if (current()) setCatalog({ kind: error instanceof PricingClientError && error.reason === "not_configured" ? "unavailable" : "error" })
-    }).finally(() => { flight.settled = true; flight.clear() })
+    }).finally(() => { flight.clear() })
   }, [client])
   useLayoutEffect(() => {
     load()
@@ -125,11 +123,6 @@ function PricingScopedContent({ client, embedded = false }: PricingContentProps)
       flight?.clear()
     }
   }, [load])
-  const catalogLoading = catalog.kind === "loading"
-  const retry = () => {
-    if (attempt.current && !attempt.current.settled) return
-    setCatalog({ kind: "loading" }); load()
-  }
   return (
     <div className={cn(styles.body, embedded && styles.embeddedBody)} data-embedded={embedded || undefined}>
           {catalog.kind === "ready" && catalog.plans.length > 0 ? (
@@ -138,22 +131,12 @@ function PricingScopedContent({ client, embedded = false }: PricingContentProps)
             </Alert>
           ) : null}
 
-          {catalog.kind === "loading" ? (
-            <div className={styles.loadingState} role="status" aria-label={t("pricing.loading")}>
-              <Skeleton className={styles.loadingLine} />
-              <Skeleton className={styles.loadingLine} />
-              <Skeleton className={styles.loadingLineShort} />
+          {catalog.kind === "loading" || catalog.kind === "error" ? (
+            <div className={styles.readState} aria-busy={catalog.kind === "loading"}>
+              <span className="sr-only" role="status">
+                {t(catalog.kind === "loading" ? "pricing.loading" : "pricing.loadError")}
+              </span>
             </div>
-          ) : catalog.kind === "error" ? (
-            <Alert variant="destructive" className={styles.feedback}>
-              <AlertDescription>
-                <p>{t("pricing.loadError")}</p>
-              <Button variant="outline" size="sm" type="button" disabled={catalogLoading} aria-busy={catalogLoading} onClick={retry}>
-                {catalogLoading ? <Spinner aria-hidden="true" /> : null}
-                {catalogLoading ? t("pricing.loading") : t("pricing.retry")}
-              </Button>
-              </AlertDescription>
-            </Alert>
           ) : catalog.kind === "unavailable" ? (
             <Alert variant="destructive" className={styles.unavailable}>
               <AlertDescription>{t("pricing.unavailable")}</AlertDescription>
@@ -162,7 +145,6 @@ function PricingScopedContent({ client, embedded = false }: PricingContentProps)
             <Empty className={styles.emptyState}>
               <EmptyMedia variant="icon"><PackageOpen aria-hidden="true" /></EmptyMedia>
               <EmptyDescription>{t("pricing.empty")}</EmptyDescription>
-              <Button variant="outline" size="sm" type="button" onClick={retry}>{t("pricing.retry")}</Button>
             </Empty>
           ) : (
             <>

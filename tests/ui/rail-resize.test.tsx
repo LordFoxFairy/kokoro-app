@@ -55,6 +55,38 @@ describe("useRailResize", () => {
     expect(result.current.width).toBe(316)
   })
 
+  it("窗口收窄时保留正文最小宽度，放宽后恢复用户侧栏偏好", () => {
+    const shell = document.createElement("div")
+    let available = 1280
+    vi.spyOn(shell, "getBoundingClientRect").mockImplementation(() => ({
+      width: available, height: 720, top: 0, left: 0, right: available, bottom: 720,
+      x: 0, y: 0, toJSON: () => ({}),
+    }) as DOMRect)
+    const { result } = renderHook(() => useRailResize())
+    result.current.shellRef.current = shell
+    for (let index = 0; index < 5; index++) act(() => result.current.onResizeKeyDown({
+      key: "ArrowRight", shiftKey: true, preventDefault: vi.fn(),
+    } as unknown as ReactKeyboardEvent<HTMLElement>))
+    expect(result.current.width).toBe(440)
+    // The layout owner handles Canvas fit. A passive window resize must not
+    // latch its temporary DOM width into this rail's effective width.
+    const canvas = document.createElement("aside")
+    canvas.dataset.slot = "context-panel"
+    vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue({ width: 480 } as DOMRect)
+    shell.appendChild(canvas)
+    act(() => window.dispatchEvent(new Event("resize")))
+    expect(result.current.width).toBe(440)
+    canvas.remove()
+    available = 768
+    act(() => window.dispatchEvent(new Event("resize")))
+    expect(result.current.width).toBe(348)
+    available = 390
+    act(() => window.dispatchEvent(new Event("resize")))
+    available = 1280
+    act(() => window.dispatchEvent(new Event("resize")))
+    expect(result.current.width).toBe(440)
+  })
+
   it("拖动结束时恢复页面原有的指针与选择策略", () => {
     const shell = document.createElement("div")
     vi.spyOn(shell, "getBoundingClientRect").mockReturnValue({
