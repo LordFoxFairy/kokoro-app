@@ -723,7 +723,7 @@ export const en: Partial<Record<MessageKey, string>> = {
   "thread.retry": "Retry",
   "fail.tokenBudget": "This turn exceeded its usage budget and stopped. Trim the task and retry.",
   "fail.recursion": "This turn hit the loop-guard from too many steps. Try a more specific request.",
-  "fail.assembly": "This space is misconfigured and the turn couldn't start — please contact an admin.",
+  "fail.assembly": "This turn could not start. Check the selected connector, API, or model settings.",
   "fail.enqueue": "The service is temporarily unavailable; this turn didn't start. Retry shortly.",
   "fail.dispatch": "This turn could not be dispatched and ended safely.",
   "fail.contract": "The client and server versions are incompatible; this turn couldn't run — refresh the page, and contact an admin if it persists.",

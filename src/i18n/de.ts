@@ -535,7 +535,7 @@ export const de: Partial<Record<MessageKey, string>> = {
   "thread.retry": "Versuchen Sie es erneut",
   "fail.tokenBudget": "Diese Runde hat das Nutzungsbudget überschritten und wurde automatisch gestoppt. Sie können die Aufgabe optimieren und es erneut versuchen.",
   "fail.recursion": "Zu viele Schritte in dieser Runde lösten den Schutzschalter aus. Versuchen Sie es noch einmal mit einer spezifischeren Aussage.",
-  "fail.assembly": "Die Konfiguration dieses Bereichs ist falsch und diese Runde kann nicht gestartet werden. Bitte wenden Sie sich an den Administrator, um die Konfiguration zu überprüfen.",
+  "fail.assembly": "Diese Runde konnte nicht gestartet werden. Prüfen Sie den ausgewählten Connector, die API oder die Modelleinstellungen.",
   "fail.enqueue": "Der Dienst ist vorübergehend nicht verfügbar und diese Runde konnte nicht gestartet werden. Versuchen Sie es einfach später noch einmal.",
   "fail.dispatch": "Diese Runde konnte nicht zur Ausführung übermittelt werden und wurde sicher beendet.",
   "fail.contract": "Die Client- und Serverversionen sind nicht kompatibel und diese Runde kann nicht ausgeführt werden. Bitte aktualisieren Sie die Seite. Wenn es immer noch nicht funktioniert, wenden Sie sich bitte an den Administrator.",

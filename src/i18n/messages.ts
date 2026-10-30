@@ -657,7 +657,7 @@ export const zh = {
   // run.failed 按已发布安全码展示，不把未知 producer 错误降级成内部错误。
   "fail.tokenBudget": "这一轮超出了用量预算，已自动停止。可以精简任务后重试。",
   "fail.recursion": "这一轮步骤过多触发了保护熔断。换个更具体的说法再试一次。",
-  "fail.assembly": "这个空间的配置有误，本轮无法启动——请联系管理员检查配置。",
+  "fail.assembly": "本轮未能启动，请检查所选连接器、API 或模型设置。",
   "fail.enqueue": "服务暂时不可用，这一轮没能开始。稍后重试即可。",
   "fail.dispatch": "这一轮没能送达执行，已安全结束。",
   "fail.contract":

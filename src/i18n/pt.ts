@@ -535,7 +535,7 @@ export const pt: Partial<Record<MessageKey, string>> = {
   "thread.retry": "Tente novamente",
   "fail.tokenBudget": "Esta rodada excedeu o orçamento de uso e foi interrompida automaticamente. Você pode agilizar a tarefa e tentar novamente.",
   "fail.recursion": "Muitas etapas nesta rodada acionaram o disjuntor de proteção. Tente novamente com uma afirmação mais específica.",
-  "fail.assembly": "A configuração deste espaço está incorreta e esta rodada não pode ser iniciada - entre em contato com o administrador para verificar a configuração.",
+  "fail.assembly": "Não foi possível iniciar esta rodada. Verifique as configurações do conector, API ou modelo selecionado.",
   "fail.enqueue": "O serviço está temporariamente indisponível e esta rodada não pôde ser iniciada. Tente novamente mais tarde.",
   "fail.dispatch": "Esta rodada não pôde ser enviada para execução e terminou com segurança.",
   "fail.contract": "As versões do cliente e do servidor são incompatíveis e esta rodada não pode ser executada - atualize a página e, se ainda não funcionar, entre em contato com o administrador.",

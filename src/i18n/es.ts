@@ -535,7 +535,7 @@ export const es: Partial<Record<MessageKey, string>> = {
   "thread.retry": "Intentar otra vez",
   "fail.tokenBudget": "Esta ronda superó el presupuesto de uso y se detuvo automáticamente. Puedes agilizar la tarea e intentarlo de nuevo.",
   "fail.recursion": "Demasiados pasos en esta ronda activaron el disyuntor de protección. Inténtelo de nuevo con una declaración más específica.",
-  "fail.assembly": "La configuración de este espacio es incorrecta y esta ronda no se puede iniciar; comuníquese con el administrador para verificar la configuración.",
+  "fail.assembly": "No se pudo iniciar esta ronda. Revisa la configuración del conector, la API o el modelo seleccionado.",
   "fail.enqueue": "El servicio no está disponible temporalmente y no se pudo iniciar esta ronda. Inténtalo de nuevo más tarde.",
   "fail.dispatch": "Esta ronda no pudo entregarse para su ejecución y finalizó de forma segura.",
   "fail.contract": "Las versiones del cliente y del servidor son incompatibles y esta ronda no se puede ejecutar. Actualice la página y, si aún no funciona, comuníquese con el administrador.",

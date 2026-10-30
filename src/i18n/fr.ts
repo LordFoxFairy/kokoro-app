@@ -535,7 +535,7 @@ export const fr: Partial<Record<MessageKey, string>> = {
   "thread.retry": "Essayer à nouveau",
   "fail.tokenBudget": "Ce cycle a dépassé le budget d'utilisation et a été automatiquement arrêté. Vous pouvez rationaliser la tâche et réessayer.",
   "fail.recursion": "Trop d'étapes dans ce tour ont déclenché le disjoncteur de protection. Réessayez avec une déclaration plus précise.",
-  "fail.assembly": "La configuration de cet espace est incorrecte et ce tour ne peut pas être démarré - veuillez contacter l'administrateur pour vérifier la configuration.",
+  "fail.assembly": "Impossible de démarrer ce tour. Vérifiez les paramètres du connecteur, de l’API ou du modèle sélectionné.",
   "fail.enqueue": "Le service est temporairement indisponible et ce tour n'a pas pu être démarré. Réessayez plus tard.",
   "fail.dispatch": "Ce tour n’a pas pu être transmis pour exécution et s’est terminé en toute sécurité.",
   "fail.contract": "Les versions client et serveur sont incompatibles et ce tour ne peut pas être exécuté - veuillez actualiser la page, et si cela ne fonctionne toujours pas, veuillez contacter l'administrateur.",
