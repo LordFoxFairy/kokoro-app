@@ -21,15 +21,15 @@ it("does not announce legacy MCP execution completion as a verified successful r
   rerender(<LocaleProvider><ToolCallRow activity={{ ...activity, status: "running" }} onInspect={() => {}} /></LocaleProvider>)
   expect(screen.getByRole("button", { name: /Running$/ })).toBeVisible()
 })
-it("shows the actual file virtual path by default, not just its basename or hover title", () => {
+it("keeps the file action row concise while preserving the exact path in its title", () => {
   const fetch = vi.spyOn(globalThis, "fetch")
   const activity = { ...base, display_detail: { kind: "file" as const, name: "SKILL.md", virtual_path: fullPath } }
   const { container, rerender } = render(<LocaleProvider><ToolCallRow activity={activity} continuation={<button>Continue fixture</button>} /></LocaleProvider>)
-  const path = screen.getByText(fullPath)
+  const path = screen.getByText("SKILL.md")
   expect(path).toBeVisible()
-  expect(path).toHaveAttribute("title", fullPath)
+  expect(path.parentElement).toHaveAttribute("title", expect.stringContaining(fullPath))
   expect(container.querySelector("a")).toBeNull()
-  expect(screen.queryByText("SKILL.md")).toBeNull()
+  expect(screen.queryByText(fullPath)).toBeNull()
   const continuation = screen.getByRole("button", { name: "Continue fixture" })
   continuation.focus()
   expect(continuation).toHaveFocus()
@@ -83,18 +83,17 @@ function attachModuleCss(path: string, classes: Record<string, string>) {
   document.head.appendChild(style)
 }
 
-it("actual local CSS overrides legacy ellipsis so full paths remain wrapping text in a narrow reading column", () => {
+it("keeps concise file rows stable in a narrow reading column", () => {
   attachModuleCss("../../src/ui/thread/thread.module.css", threadStyles)
   const activity = { ...base, display_detail: { kind: "file" as const, name: "SKILL.md", virtual_path: fullPath } }
   render(<LocaleProvider><div style={{ width: 180 }}><ToolCallRow activity={activity} /></div></LocaleProvider>)
-  const target = screen.getByText(fullPath)
+  const target = screen.getByText("SKILL.md")
   attachModuleCss("../../src/ui/thread/activity-detail.module.css", detailStyles)
   const line = target.parentElement!
-  expect(getComputedStyle(line).whiteSpace).toBe("normal")
-  expect(getComputedStyle(line).overflow).toBe("visible")
-  expect(getComputedStyle(line).textOverflow).toBe("clip")
-  expect(getComputedStyle(line).overflowWrap).toBe("anywhere")
-  expect(line).toHaveTextContent(fullPath)
+  expect(getComputedStyle(line).whiteSpace).toBe("nowrap")
+  expect(getComputedStyle(line).overflow).toBe("hidden")
+  expect(getComputedStyle(line).textOverflow).toBe("ellipsis")
+  expect(line).toHaveAttribute("title", expect.stringContaining(fullPath))
 })
 
 it("keeps a long public action title compact without losing its full accessible name or exact inspection target", () => {
@@ -114,6 +113,26 @@ it("keeps a long public action title compact without losing its full accessible 
   expect(row).toHaveFocus()
   row.click()
   expect(onInspect).toHaveBeenCalledExactlyOnceWith(base.activity_id)
+})
+
+it("keeps generic file verbs out of the main row while retaining the exact path in the title", () => {
+  const path = "/qa-public-stages-20261028.md"
+  render(<LocaleProvider><ToolCallRow activity={{ ...base, display_code: "tool.file.write", action_title: `Write file ${path}`, display_detail: { kind: "file", name: "qa-public-stages-20261028.md", virtual_path: path } }} /></LocaleProvider>)
+  expect(screen.getByText("qa-public-stages-20261028.md")).toBeVisible()
+  expect(screen.getByText("qa-public-stages-20261028.md").parentElement).toHaveAttribute("title", path)
+  expect(screen.queryByText(new RegExp(`Write file.*${path}`))).toBeNull()
+})
+
+it.each([
+  ["tool.file.read", "查看文件 /qa/read.md"],
+  ["tool.file.write", "编辑文件 /qa/edit.md"],
+  ["tool.file.deliver", "提交成果 /qa/deliver.md"],
+  ["tool.file.read", "read file /qa/read-en.md"],
+] as const)("does not surface generic file wording: %s", (display_code, action_title) => {
+  const name = action_title.includes("read-en") ? "read-en.md" : action_title.split("/").at(-1)!
+  render(<LocaleProvider><ToolCallRow activity={{ ...base, display_code, action_title, display_detail: { kind: "file", name, virtual_path: `/qa/${name}` } }} /></LocaleProvider>)
+  expect(screen.getByText(name)).toBeVisible()
+  expect(screen.queryByText(action_title)).toBeNull()
 })
 
 it("reads the original call intent as the main line without repeating selectors or parameters", () => {
@@ -140,16 +159,16 @@ it("shows a legacy MCP operation and exact object without inventing intent or ex
 })
 
 it.each([
-  ["edit_file", "Edit file", "file_path"],
-  ["ls", "List directory", "path"],
-  ["glob", "Find files", "path"],
-  ["grep", "Search file contents", "path"],
-])("renders the same-call native %s identity and exact path instead of a generic tool row", (toolName, label, pathKey) => {
+  ["edit_file", "file_path"],
+  ["ls", "path"],
+  ["glob", "path"],
+  ["grep", "path"],
+])("renders the same-call native %s identity and exact path instead of a generic tool row", (toolName, pathKey) => {
   render(<LocaleProvider><ToolCallRow activity={{ ...base, display_code: "tool.execution" }} detail={{ activity_id: base.activity_id, tool_name: toolName, input_preview: { text: JSON.stringify({ [pathKey!]: fullPath }), truncated: false, redacted: false } }} onInspect={vi.fn()} /></LocaleProvider>)
   const row = screen.getByRole("button")
-  expect(row).toHaveTextContent(`${label} ${fullPath}`)
+  expect(row).toHaveTextContent("SKILL.md")
+  expect(row.querySelector("[title]")).toHaveAttribute("title", expect.stringContaining(fullPath))
   expect(row).toHaveAccessibleName(/Completed$/)
-  expect(screen.getByText(fullPath)).toBeVisible()
   expect(screen.queryByText("Tool call")).toBeNull()
 })
 

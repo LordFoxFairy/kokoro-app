@@ -15,7 +15,7 @@ it("a completed single action stays direct and owns the sole Run continuation th
   const props = { sessionId: "single-progress", messagesById: {}, isLive: true, mode: "fast" as const, stagedDecisions: {}, hitlActive: false, controlError: null }
   const activityStep = { kind: "activity" as const, seq: "1", segmentId: activity.segment_id, activity }
   const { rerender } = render(<LocaleProvider><AssistantTurn {...props} steps={[activityStep]} /></LocaleProvider>)
-  const action = screen.getByText("Write file")
+  const action = screen.getByText("File")
   expect(document.querySelector('[data-slot="collapsible-trigger"]')).toBeNull()
   expect(screen.queryByText("Composing an answer")).not.toBeInTheDocument()
   expect(screen.getAllByRole("status")).toHaveLength(1)
@@ -25,7 +25,7 @@ it("a completed single action stays direct and owns the sole Run continuation th
 
   rerender(<LocaleProvider><AssistantTurn {...props} steps={[activityStep, { kind: "text", seq: "2", segmentId: "pending-answer" }]} messagesById={{ "pending-answer": { id: "pending-answer", runId: "run", role: "assistant", content: "" } }} /></LocaleProvider>)
   expect(screen.queryByText("Composing an answer")).not.toBeInTheDocument()
-  expect(screen.getByText("Write file")).toBe(action)
+  expect(screen.getByText("File")).toBe(action)
   expect(screen.getAllByRole("status")).toHaveLength(1)
   expect(screen.getByRole("status")).toHaveTextContent("Continuing…")
   rerender(<LocaleProvider><AssistantTurn {...props} steps={[activityStep, { kind: "text", seq: "2", segmentId: "pending-answer" }]} messagesById={{ "pending-answer": { id: "pending-answer", runId: "run", role: "assistant", content: "real answer" } }} /></LocaleProvider>)
@@ -219,13 +219,13 @@ it("renders one real same-run user across partial pages, EOF and late snapshots 
 
 import { ToolCallRow } from "@/ui/thread/tool-call-row"
 const public28Labels = [
-  ["tool.execution", "Tool call"], ["tool.file.read", "Read file"],
+  ["tool.execution", "Tool call"], ["tool.file.read", "File"],
   ["tool.mcp.discover", "List available tools"], ["tool.mcp.describe", "Read tool description"],
   ["tool.mcp.call", "Call tool"], ["tool.web.search", "Search the web"], ["tool.web.fetch", "Read webpage"],
-  ["tool.file.write", "Write file"], ["tool.file.deliver", "Deliver file"],
+  ["tool.file.write", "File"], ["tool.file.deliver", "File"],
 ] as const
 it.each([
-  ["tool.file.write", "Write file"], ["tool.file.deliver", "Deliver file"],
+  ["tool.file.write", "published-output.md"], ["tool.file.deliver", "published-output.md"],
 ] as const)("%s survives snapshot and reopened ordered history as a category, not assistant text", (display_code, label) => {
   const activity = { activity: "tool", activity_id: `act_${"c".repeat(64)}`, segment_id: `seg_${"d".repeat(64)}`, status: "completed", display_code, display_detail: { kind: "file", name: "published-output.md" } }
   const owner = { message_id: "file-owner", run_id: "file-run", role: "assistant", content: "public answer", status: "completed", created_at: "now" }
@@ -235,7 +235,7 @@ it.each([
   const revealCategory = () => {
     expect(document.querySelector('[data-slot="collapsible-trigger"]')).toBeNull()
     expect(screen.getByText(label)).toBeVisible()
-    expect(screen.getByText("published-output.md")).toHaveAttribute("title", "published-output.md")
+    expect(screen.getByText("published-output.md").parentElement).toHaveAttribute("title", "published-output.md")
   }
   const view = show(stateFromSnapshot(snapshot))
   revealCategory()
@@ -275,16 +275,16 @@ it("grows a direct action into one disclosure without remounting rows and preser
   const second = { ...first, activity_id: `act_${"8".repeat(64)}`, display_code: "tool.web.search" as const }
   const props = { segmentId: "stable-action-growth", live: true }
   const { rerender, unmount } = render(<LocaleProvider><SegmentProcess {...props} activities={[first]} /></LocaleProvider>)
-  const row = screen.getByText("Read file")
+  const row = screen.getAllByText("File")[0]!
   expect(screen.queryByRole("button")).toBeNull()
   rerender(<LocaleProvider><SegmentProcess {...props} activities={[first, second]} /></LocaleProvider>)
-  expect(screen.getByText("Read file")).toBe(row)
-  const trigger = screen.getByRole("button", { name: /File reads: 1/u })
+  expect(screen.getAllByText("File")[0]).toBe(row)
+  const trigger = screen.getByRole("button", { name: /Files processed: 1/u })
   fireEvent.click(trigger)
   expect(trigger).toHaveAttribute("aria-expanded", "false")
   rerender(<LocaleProvider><SegmentProcess {...props} live={false} activities={[{ ...first, status: "completed" }, { ...second, status: "failed" }]} /></LocaleProvider>)
   expect(screen.getByRole("button")).toBe(trigger)
-  expect(screen.getByText("Read file")).toBe(row)
+  expect(screen.getAllByText("File")[0]).toBe(row)
   expect(row.closest("[inert]")).not.toBeNull()
   unmount()
   render(<LocaleProvider><SegmentProcess {...props} activities={[first, second]} /></LocaleProvider>)
@@ -300,13 +300,13 @@ it("counts every failed mixed activity without inventing distinct file or result
   ]
   render(<LocaleProvider><SegmentProcess segmentId="mixed-failures" activities={activities} live={false} /></LocaleProvider>)
   const summary = screen.getByRole("button")
-  expect(summary).toHaveTextContent("File reads: 2 · Subtasks: 1 · Skill preparations: 1")
+  expect(summary).toHaveTextContent("Files processed: 2 · Subtasks: 1 · Skill preparations: 1")
   expect(summary).not.toHaveTextContent("4 activities")
   expect(summary).not.toHaveTextContent("failed")
   fireEvent.click(summary)
   expect(screen.getAllByText("Failed")).toHaveLength(2)
   expect(screen.getByText("Failed to load")).toBeInTheDocument()
-  expect(summary).not.toHaveTextContent(/2 files|results/u)
+  expect(summary).not.toHaveTextContent(/results/u)
 })
 
 it("uses nine category-specific decorative icons without reading unknown activity fields", () => {
@@ -367,13 +367,13 @@ it("keeps an explicitly opened group open when it settles and when a single row 
   expect(trigger).toHaveAttribute("aria-expanded", "false")
   fireEvent.click(trigger)
   expect(trigger).toHaveAttribute("aria-expanded", "true")
-  const row = screen.getByText("Read file")
+  const row = screen.getAllByText("File")[0]!
   rerender(<LocaleProvider><SegmentProcess {...props} activities={[one]} /></LocaleProvider>)
   expect(screen.queryByRole("button")).toBeNull()
-  expect(screen.getByText("Read file")).toBe(row)
+  expect(screen.getAllByText("File")[0]).toBe(row)
   expect(row.closest("[inert]")).toBeNull()
   rerender(<LocaleProvider><SegmentProcess {...props} activities={[one, two]} /></LocaleProvider>)
-  expect(screen.getByText("Read file")).toBe(row)
+  expect(screen.getAllByText("File")[0]).toBe(row)
   expect(screen.getByRole("button")).toHaveAttribute("aria-expanded", "true")
 })
 

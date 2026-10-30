@@ -16,15 +16,16 @@ export function ToolCallRow({ activity, continuation, onInspect, detail: ownerDe
   continuation?: ReactNode
 }) {
   const t = useT()
-  const { label, Icon, targetText, file, statusLabel } = toolActionPresentation(activity, ownerDetail)
-  const actionTitle = activity.action_title
+  const { label, Icon, targetText, targetLabel, file, statusLabel, actionTitle } = toolActionPresentation(activity, ownerDetail)
   const status = t(statusLabel)
+  const visibleLabel = actionTitle ?? (file ? targetLabel ?? t("thread.file") : t(label))
+  const accessibleTarget = actionTitle ?? targetText ?? (file ? t("thread.file") : t(label))
   const content = <>
     <Icon className={styles.actionIcon} aria-hidden="true" />
-    <span className={`${details.readingLine} ${actionTitle ? details.titleLine : file ? details.fileLine : ""}`} title={actionTitle ?? [t(label), targetText].filter(Boolean).join(" · ")}>
+    <span className={`${details.readingLine} ${actionTitle ? details.titleLine : file ? details.fileLine : ""}`} title={accessibleTarget}>
       {actionTitle ? <span>{actionTitle}</span> : <>
-      <span>{t(label)}</span>
-      {targetText ? <> <span className={details.inlineTarget} title={targetText}>{targetText}</span></> : null}
+      {visibleLabel ? <span>{visibleLabel}</span> : null}
+      {!file && targetText ? <> <span className={details.inlineTarget} title={targetText}>{targetText}</span></> : null}
       </>}
     </span>
     <span className={activity.status === "completed" ? "sr-only" : styles.actionStatus}>{status}</span>

@@ -25,11 +25,11 @@ export function ActivityInspector({ content, boundary }: {
   const activity = overlayRunDisplay([content.activity], display.facts)[0]!
   if (activity.activity !== "tool") return null
   const detail = display.facts?.activity_details.find(item => item.activity_id === content.activityId)
-  const { targetText: target, label, statusLabel } = toolActionPresentation(activity, detail)
+  const { targetText: target, label, statusLabel, actionTitle } = toolActionPresentation(activity, detail)
   return <div className={styles.inspector}>
-    {activity.action_title ? <h2 className={styles.target}>{activity.action_title}</h2> : null}
+    {actionTitle ? <h2 className={styles.target}>{actionTitle}</h2> : null}
     <p className={styles.operation}>{t(label)}</p>
-    {target ? activity.action_title ? <p className={styles.targetReference}>{target}</p> : <h2 className={styles.target}>{target}</h2> : null}
+    {target ? actionTitle ? <p className={styles.targetReference}>{target}</p> : <h2 className={styles.target}>{target}</h2> : null}
     <p role="status" className={styles.status}>{t(statusLabel)}</p>
     {display.phase === "loading" ? <span className="sr-only" role="status">{t("thread.partsReading")}</span> : null}
     {display.phase === "error" ? <p className={styles.missing} role="status">{t("thread.activityReadFailed")}</p> : null}
