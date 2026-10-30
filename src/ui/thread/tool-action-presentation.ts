@@ -26,6 +26,17 @@ const NATIVE_EXECUTION_PRESENTATION = {
   grep: { label: "thread.toolFileSearch", Icon: Search, pathKey: "path" },
 } satisfies Record<string, { label: MessageKey; Icon: LucideIcon; pathKey: string }>
 
+/** Generic file verbs describe implementation details rather than user intent. */
+export function actionTitleForDisplay(activity: Extract<RunProcessActivity, { activity: "tool" }>): string | undefined {
+  const title = activity.action_title
+  if (!title) return undefined
+  if (["tool.file.read", "tool.file.write", "tool.file.deliver"].includes(activity.display_code)
+    && /^(?:读取|写入|查看|编辑|交付|提交)(?:文件|成果)(?:\s|[:：]|\/|$)|^(?:read|write|view|edit|deliver|submit)(?:\s+files?|\s+artifact)(?:\s|:|\/|$)/iu.test(title)) {
+    return undefined
+  }
+  return title
+}
+
 /** Read a literal path from the original complete preview, never infer it from output. */
 function nativePath(detail: RunActivityDetail, key: string): string | undefined {
   const preview = detail.input_preview
@@ -37,6 +48,12 @@ function nativePath(detail: RunActivityDetail, key: string): string | undefined 
     return typeof value === "string" && value.startsWith("/") && value.trim() === value
       && !/[\p{Cc}\p{Cf}\p{Cs}]/u.test(value) ? value : undefined
   } catch { return undefined }
+}
+
+function fileName(path: string | undefined): string | undefined {
+  if (!path) return undefined
+  const name = path.split("/").filter(Boolean).at(-1)
+  return name || undefined
 }
 
 /** One display mapping for timeline and inspector; facts remain owned by the same activity. */
@@ -54,7 +71,15 @@ export function toolActionPresentation(activity: Extract<RunProcessActivity, { a
   return {
     ...(native ?? TOOL_ACTION_PRESENTATION[activity.display_code]),
     targetText: targetText ?? (native && detail ? nativePath(detail, native.pathKey) : undefined),
-    file: target?.kind === "file" || Boolean(native),
+    targetLabel: target?.kind === "file" ? target.name ?? fileName(target.virtual_path) : fileName(native && detail ? nativePath(detail, native.pathKey) : targetText) ?? targetText,
+    // Public file events are file rows even before their adjunct path arrives.
+    // Native tools are only file rows when the same-call input proves a path.
+    // Without that fact keep their operation label (for example, a directory
+    // listing) instead of collapsing every execution into the neutral file row.
+    file: target?.kind === "file"
+      || ["tool.file.read", "tool.file.write", "tool.file.deliver"].includes(activity.display_code)
+      || Boolean(native && detail && nativePath(detail, native.pathKey)),
     statusLabel,
+    actionTitle: actionTitleForDisplay(activity),
   }
 }
