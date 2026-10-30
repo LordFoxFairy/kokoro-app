@@ -59,6 +59,7 @@ export function McpProviderCatalogDialog({
   onCreate?: (mode: McpCreateMode, returnTarget?: HTMLElement | null) => void;
 }) {
   const t = useT();
+  const hasResults = (providers?.length ?? 0) > 0;
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const { categoriesFit, setContainerElement, measureRef, categoryMenuRef, categoryMenuOpenRef } =
     useMcpCategoryLayout({ enabled: open, scopeRef: dialogRef, localeKey: t });
@@ -114,7 +115,7 @@ export function McpProviderCatalogDialog({
           </McpSettingsToolbar>
         </div>
         <div className={styles.catalogBody}>
-          {error ? (
+          {error && !hasResults ? (
             <Alert variant="destructive" role="alert" className={styles.alert}>
               <AlertDescription>{t("mcp.loadError")}</AlertDescription>
               <Button type="button" variant="outline" onClick={onRetry}>

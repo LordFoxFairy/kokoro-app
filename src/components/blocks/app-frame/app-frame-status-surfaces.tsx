@@ -22,52 +22,31 @@ export function AppFrameLoadingSurface() {
   const t = useT()
   return (
     <div
-      className={styles.loadingSurface}
+      className="sr-only"
       data-testid="app-frame-loading"
       role="status"
+      aria-busy="true"
       aria-label={t("shell.loadingApp")}
-    >
-      <div className={styles.loadingReadingTrack} aria-hidden="true">
-        <span className={styles.loadingLine} />
-        <span className={styles.loadingLineShort} />
-      </div>
-      <div className={styles.loadingComposer} aria-hidden="true">
-        <span className={styles.loadingComposerLine} />
-        <span className={styles.loadingComposerControls}>
-          <i />
-          <i />
-          <i />
-        </span>
-      </div>
-    </div>
+    />
   )
 }
 
 export function AppFrameConnectionStatus({
   connection,
-  onReconnect,
 }: {
   connection: Exclude<EngineSnapshot["connection"], { status: "connected" }>
-  onReconnect: () => void
 }) {
   const t = useT()
   const unavailable = connection.status === "unavailable"
   const label = unavailable ? t("thread.connectionUnavailable") : t("thread.reconnecting")
   return (
     <div
-      className={styles.connectionStatus}
+      className="sr-only"
       data-connection-status={connection.status}
       role="status"
       aria-label={label}
       aria-live="polite"
-    >
-      <span>{label}</span>
-      {unavailable ? (
-        <Button type="button" variant="outline" size="sm" onClick={onReconnect}>
-          {t("thread.reconnect")}
-        </Button>
-      ) : null}
-    </div>
+    />
   )
 }
 

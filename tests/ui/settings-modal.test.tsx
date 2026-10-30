@@ -2074,7 +2074,8 @@ describe("SET54 compact More owns native keyboard activation and dismissal", () 
     // Real key events are covered in the appended browser journey.
     fireEvent.click(trigger, { detail: 0 });
     expect(trigger).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByTestId("settings-more-skills")).toHaveFocus();
+    expect(screen.getByRole("menuitem", { name: "账户" })).toHaveFocus();
+    expect(screen.queryByRole("menuitem", { name: "Mail Kokoro" })).toBeNull();
     trigger.focus();
     fireEvent.click(trigger, { detail: 0 });
     expect(screen.queryByRole("menu")).toBeNull();
@@ -2089,7 +2090,7 @@ describe("SET54 compact More owns native keyboard activation and dismissal", () 
     const trigger = screen.getByTestId("settings-more");
     trigger.focus();
     fireEvent.keyDown(trigger, { key: "ArrowDown" });
-    const first = screen.getByTestId("settings-more-skills");
+    const first = screen.getByRole("menuitem", { name: "账户" });
     const last = screen.getByTestId("settings-more-help");
     expect(first).toHaveFocus();
     fireEvent.keyDown(first, { key: "End" });
@@ -2100,13 +2101,12 @@ describe("SET54 compact More owns native keyboard activation and dismissal", () 
     expect(last).toHaveFocus();
     fireEvent.keyDown(last, { key: "Home" });
     expect(first).toHaveFocus();
-    fireEvent.keyDown(first, { key: "ArrowDown" });
-    fireEvent.keyDown(document.activeElement!, { key: "ArrowDown" });
-    expect(screen.getByTestId("settings-more-mail")).toHaveFocus();
+    const beforeUnavailable = screen.getByTestId("settings-more-subscription");
+    beforeUnavailable.focus();
     fireEvent.keyDown(document.activeElement!, { key: "ArrowDown" });
     expect(screen.getByTestId("settings-more-email")).toHaveFocus();
     fireEvent.keyDown(document.activeElement!, { key: "ArrowUp" });
-    expect(screen.getByTestId("settings-more-mail")).toHaveFocus();
+    expect(beforeUnavailable).toHaveFocus();
     fireEvent.click(screen.getByTestId("settings-more-computer"));
     expect(onSelect).not.toHaveBeenCalled();
     fireEvent.keyDown(document.activeElement!, { key: "Escape" });
@@ -2120,6 +2120,26 @@ describe("SET54 compact More owns native keyboard activation and dismissal", () 
     expect(trigger).toHaveFocus();
     fireEvent.keyDown(trigger, { key: "Escape" });
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+  });
+
+  it("keeps keyboard-focused overflow menu items inside the menu viewport", () => {
+    renderSettings(() => {}, undefined, true, undefined, "mail");
+    const trigger = screen.getByTestId("settings-more");
+    fireEvent.keyDown(trigger, { key: "ArrowDown" });
+    const menu = screen.getByRole("menu");
+    const first = screen.getByTestId("settings-more-account");
+    const last = screen.getByTestId("settings-more-help");
+    const rect = (top: number, bottom: number) =>
+      ({ top, bottom, left: 0, right: 144, width: 144, height: bottom - top, x: 0, y: top, toJSON: () => ({}) }) as DOMRect;
+    vi.spyOn(menu, "getBoundingClientRect").mockImplementation(() => rect(100, 200));
+    vi.spyOn(first, "getBoundingClientRect").mockImplementation(() => rect(104 - menu.scrollTop, 140 - menu.scrollTop));
+    vi.spyOn(last, "getBoundingClientRect").mockImplementation(() => rect(500 - menu.scrollTop, 536 - menu.scrollTop));
+    fireEvent.keyDown(first, { key: "End" });
+    expect(last).toHaveFocus();
+    expect(last.getBoundingClientRect().bottom).toBeLessThanOrEqual(menu.getBoundingClientRect().bottom);
+    fireEvent.keyDown(last, { key: "Home" });
+    expect(first).toHaveFocus();
+    expect(first.getBoundingClientRect().top).toBeGreaterThanOrEqual(menu.getBoundingClientRect().top);
   });
 
   it("keeps one pointer gesture to one toggle and restores trigger focus after selecting", () => {

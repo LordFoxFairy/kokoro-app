@@ -5895,13 +5895,13 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     expect(browserRejected.headers.location).toBe("/auth/sign-out?failed=1")
     const failurePage = await http(nextPort, browserRejected.headers.location as string)
     expect(failurePage.status).toBe(200)
-    expect(failurePage.body).toContain("退出暂未完成")
+    expect(failurePage.body).toContain("退出失败")
     expect(failurePage.body).not.toContain('action="/iam/oauth2/end-session/confirm"')
     for (const query of ["failed=1&failed=1", "failed=invalid", "failed="]) {
       const invalidFailure = await http(nextPort, `/auth/sign-out?${query}`)
       expect(invalidFailure.status).toBe(200)
       expect(invalidFailure.headers["referrer-policy"]).toBe("no-referrer")
-      expect(invalidFailure.body).toContain("退出暂未完成")
+      expect(invalidFailure.body).toContain("退出失败")
       expect(invalidFailure.body).not.toContain('action="/iam/oauth2/end-session/confirm"')
     }
     expect(issuerSessionActive).toBe(true)
@@ -6200,7 +6200,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     const before = paths.length
     const failurePage = await http(nextPort, response.headers.location as string)
     expect(failurePage.status).toBe(200)
-    expect(failurePage.body).toContain("登录暂未完成")
+    expect(failurePage.body).toContain("登录失败")
     expect(failurePage.body).not.toContain("stale-state-123456")
     expect(failurePage.body).not.toContain("fixture-code")
     expect(failurePage.headers.location).toBeUndefined()

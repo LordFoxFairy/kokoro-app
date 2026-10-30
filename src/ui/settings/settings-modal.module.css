@@ -751,10 +751,8 @@
     flex: 0 1 calc(100% - 2rem);
     flex-direction: row;
     align-items: stretch;
-    /* At the reference 380px compact sheet, six primary Chinese labels plus
-     * the independent More column fit only with the same 4px beat used by
-     * Manus. Eight pixels leaves the selected “连接器” with its final glyph
-     * hidden beneath the menu affordance. */
+    /* Keep every destination in this scroll viewport. The independent More
+     * column must not cover labels or determine which tabs exist. */
     gap: 0.25rem;
     overflow-x: auto;
     overflow-y: hidden;
@@ -779,15 +777,6 @@
     font-size: 0.875rem;
   }
 
-  /* The strip contains the desktop navigation so keyboard and search behavior
-   * remain one source of truth. At compact width, reserve its measured six
-   * complete labels and hand every remaining destination to More instead of
-   * letting a seventh CJK label paint beneath the menu icon. */
-  .tabRail .tab[data-compact-primary="false"],
-  .tabRail .placeholderTab[data-compact-primary="false"] {
-    display: none;
-  }
-
   .tabRail .tab[data-slot="tabs-trigger"][data-state="active"]::after {
     position: absolute;
     right: 0;
@@ -800,9 +789,8 @@
     opacity: 1;
   }
 
-  /* Keep the placeholder rule scoped to visible compact-primary entries. The
-   * overflow entries are deliberately hidden above and remain reachable from
-   * More; a later generic display:flex declaration must not restore them. */
+  /* Unavailable destinations share the same scroll layout without becoming
+   * interactive tabs. */
   .tabRail .placeholderTab {
     display: flex;
     width: auto;

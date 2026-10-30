@@ -11,10 +11,7 @@ import { ArrowUpRight } from "lucide-react";
 import { TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { SettingsCompactMoreMenu } from "./settings-compact-more-menu";
-import {
-  COMPACT_PRIMARY_TABS,
-  type SettingsNavigationEntry,
-} from "./settings-navigation-model";
+import type { SettingsNavigationEntry } from "./settings-navigation-model";
 import type { SettingsTab } from "./settings-types";
 import styles from "./settings-modal.module.css";
 
@@ -54,7 +51,7 @@ export function SettingsNavigationRail({
     [activeTabRef],
   );
   const compactOverflowItems = entries.filter(
-    (entry) => entry.kind !== "tab" || !COMPACT_PRIMARY_TABS.has(entry.key),
+    (entry) => entry.kind !== "tab" || entry.key !== selectedTab,
   );
 
   useLayoutEffect(() => {
@@ -72,13 +69,14 @@ export function SettingsNavigationRail({
     let frame: number | undefined;
     let settledFrame: number | undefined;
     const reveal = (): void => {
+      const horizontal = window.getComputedStyle(list).flexDirection === "row";
+      // Changing orientation can retain a small scroll offset on the now
+      // hidden axis, clipping the active label after desktop → compact.
+      if (horizontal) list.scrollTop = 0;
+      else list.scrollLeft = 0;
       const listRect = list.getBoundingClientRect();
       const activeRect = active.getBoundingClientRect();
-      const hasHorizontalOverflow =
-        list.scrollWidth > list.clientWidth ||
-        activeRect.left < listRect.left ||
-        activeRect.right > listRect.right;
-      if (hasHorizontalOverflow) {
+      if (horizontal) {
         const left = activeRect.left - listRect.left + list.scrollLeft;
         const right = activeRect.right - listRect.left + list.scrollLeft;
         const maxScroll = Math.max(0, list.scrollWidth - list.clientWidth);
@@ -110,24 +108,8 @@ export function SettingsNavigationRail({
         else if (right > list.scrollLeft + list.clientWidth)
           list.scrollLeft = snapFromEnd(right - list.clientWidth);
 
-        // A browser focus reveal is permitted to stop part way through a
-        // label. Move one whole item earlier whenever that happens so the
-        // rail never begins with a detached CJK character such as “捷键”.
-        const items = Array.from(
-          list.querySelectorAll<HTMLElement>(
-            '[data-slot="tabs-trigger"], [data-testid^="settings-placeholder-"]',
-          ),
-        );
-        const leadingPartialIndex = items.findIndex((item) => {
-          const rect = item.getBoundingClientRect();
-          return rect.left < listRect.left && rect.right > listRect.left;
-        });
-        const precedingItem =
-          leadingPartialIndex > 0 ? items[leadingPartialIndex - 1] : undefined;
-        if (precedingItem !== undefined) {
-          const precedingRect = precedingItem.getBoundingClientRect();
-          list.scrollLeft += precedingRect.left - listRect.left;
-        }
+        // Do not scroll backwards to reveal a preceding label after this:
+        // that can push the selected destination outside the right edge.
         return;
       }
       const edge = 4;
@@ -176,8 +158,6 @@ export function SettingsNavigationRail({
           const label = groupLabel(entry);
           const Icon = entry.icon;
           const itemKey = entry.kind === "tab" ? entry.key : entry.id;
-          const compactPrimary =
-            entry.kind === "tab" && COMPACT_PRIMARY_TABS.has(entry.key);
           return (
             <Fragment key={itemKey}>
               {entry.group === "support" && !isFiltered ? (
@@ -199,7 +179,6 @@ export function SettingsNavigationRail({
                   }
                   id={`settings-tab-${entry.key}`}
                   data-testid={`settings-tab-${entry.key}`}
-                  data-compact-primary={compactPrimary ? "true" : "false"}
                   data-settings-team={entry.key === "team" ? "true" : undefined}
                 >
                   <Icon aria-hidden="true" />
@@ -209,7 +188,6 @@ export function SettingsNavigationRail({
                 <div
                   className={styles.placeholderTab}
                   data-testid={`settings-placeholder-${entry.id}`}
-                  data-compact-primary="false"
                   aria-disabled="true"
                   aria-describedby={unavailableId}
                 >

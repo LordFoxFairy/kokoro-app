@@ -245,6 +245,11 @@ export function McpProjectionRead({
   if (admitted && resolvingDirectory && relations.complete && !relations.error && directoryConnections.length === 1 && !directoryConnections[0]!.server_id)
     setSelectedProviderConnectionId(directoryConnections[0]!.connector_id, true, bindingFor(directoryConnections[0]!));
   const customApis = customApiState.data?.items ?? [];
+  // A refresh error must not replace a confirmed projection. Manus keeps the
+  // last usable cards in place while the next read settles; the error is only
+  // actionable when the first read has no content to preserve.
+  const hasCatalogContent = directory.items.length > 0;
+  const hasConnectionContent = connectorProjection !== undefined || customApis.length > 0;
   const providerConnectionDetail = useMcpProviderConnection({ client, identity, admitted, readGeneration,
     connectorId: selectedProviderConnectionId ?? providerCreationState?.connectorId ?? null, providerKey: selectedProviderKey,
     ...(providerConnectionIntent?.binding ? { binding: providerConnectionIntent.binding } : {}),
@@ -544,7 +549,7 @@ export function McpProjectionRead({
         />
       </header>
       <div className={styles.body}>
-      {view === "catalog" && directoryError ? (
+      {view === "catalog" && directoryError && !hasCatalogContent ? (
         <ProjectionError onRetry={retryDirectory} />
       ) : null}
       {view === "connections" &&
@@ -552,7 +557,7 @@ export function McpProjectionRead({
       connectorRefreshing ? (
         <ProjectionPending view="connections" />
       ) : null}
-      {view === "connections" && (connectorState.error || refreshError) ? (
+      {view === "connections" && (connectorState.error || refreshError) && !hasConnectionContent ? (
         <ProjectionError
           onRetry={() => {
             setRefreshError(false);
@@ -634,7 +639,7 @@ export function McpProjectionRead({
               setCursor(next);
             }}
           />
-          {customApiState.loadMoreError ? <Alert variant="destructive" role="alert"><AlertDescription>{t("mcp.loadError")}</AlertDescription></Alert> : null}
+          {customApiState.loadMoreError && customApis.length === 0 ? <Alert variant="destructive" role="alert"><AlertDescription>{t("mcp.loadError")}</AlertDescription></Alert> : null}
           {customApiState.hasMore ? <Button type="button" variant="outline" disabled={customApiState.loadingMore}
             aria-busy={customApiState.loadingMore} onClick={() => void customApiState.loadMore()}>
             {customApiState.loadingMore ? t("mcp.loading") : t("rail.loadMore")} · API

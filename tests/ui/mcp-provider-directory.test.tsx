@@ -70,6 +70,15 @@ it("offers keyboard category selection and continuation without replacing the se
   expect(screen.getByRole("searchbox")).toBeInTheDocument()
 })
 
+it("keeps confirmed provider cards visible without a blocking retry panel during refresh", () => {
+  window.localStorage.setItem("kokoro.locale", "zh")
+  render(<LocaleProvider><McpProviderCatalogDialog open providers={seed.items} loading={false} hasMore={false}
+    onLoadMore={vi.fn()} error onRetry={vi.fn()} query="" categoryFilter="all" returnFocusRef={{ current: null }}
+    onOpenChange={vi.fn()} onQueryChange={vi.fn()} onCategoryFilterChange={vi.fn()} onSelectProvider={vi.fn()} /></LocaleProvider>)
+  expect(screen.getByRole("button", { name: "first" })).toBeVisible()
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+})
+
 it("stops a repeated provider cursor and explicitly restarts from the first page without discarding rows", async () => {
   const list = vi.fn().mockResolvedValueOnce({ items: [provider("discard-loop")], next_cursor: "page-two" })
     .mockResolvedValueOnce({ items: [provider("restarted")], next_cursor: "page-two" })

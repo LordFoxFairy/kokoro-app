@@ -19,13 +19,13 @@ export default async function SignOutPage({ searchParams }: { searchParams: Prom
       <section className="flex flex-1 items-center justify-center py-12" aria-labelledby="sign-out-heading">
         <Card className="w-full max-w-[420px] border-0 bg-transparent shadow-none">
           <CardHeader className="px-0 pb-6">
-            <h1 id="sign-out-heading" className="text-3xl font-semibold tracking-tight">{failed ? "退出暂未完成" : "退出账号登录"}</h1>
+            <h1 id="sign-out-heading" className="text-3xl font-semibold tracking-tight">{failed ? "退出失败" : "退出账号登录"}</h1>
             <p className="mt-2 text-base leading-relaxed text-muted-foreground">
-              {failed ? "登录服务未能确认本次退出。你可以返回首页，或重新登录后再操作。" : "确认退出当前浏览器的 Kokoro 账号登录。已保存的任务和资料不会被删除。"}
+              {failed ? "这次退出没有完成，请重新登录后再试。" : "确认退出当前浏览器的 Kokoro 账号登录。已保存的任务和资料不会被删除。"}
             </p>
           </CardHeader>
           <CardContent className="grid gap-3 px-0">
-            {failed ? <Button asChild size="lg" className="h-11 w-full"><a href="/login">返回登录</a></Button>
+            {failed ? <Button asChild size="lg" className="h-11 w-full"><a href="/login">登录</a></Button>
               : <form method="post" action="/iam/oauth2/end-session/confirm">
                 <Button type="submit" name="action" value="confirm" size="lg" className="h-11 w-full">退出登录</Button>
               </form>}
