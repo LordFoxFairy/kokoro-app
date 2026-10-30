@@ -130,6 +130,9 @@ export type Segment = {
   thinking: string
   tools: SessionToolCall[]
   subagents: SessionSubagent[]
+  // Legacy process steps are still emitted by older AG-UI runs. Preserve
+  // their order so the renderer cannot silently drop them.
+  legacySteps: Array<Extract<SessionStep, { kind: "thinking" | "tool" | "subagent" }>>
   activities: RunProcessActivity[]
 }
 
@@ -143,19 +146,29 @@ export function groupSegments(steps: SessionStep[], activities: readonly RunProc
     if (existing) {
       return existing
     }
-    const created: Segment = { segmentId: id, thinking: "", tools: [], subagents: [], activities: [] }
+    const created: Segment = { segmentId: id, thinking: "", tools: [], subagents: [], legacySteps: [], activities: [] }
     byId.set(id, created)
     ordered.push(created)
     return created
   }
-  for (const step of steps) {
+  // Reducer normally keeps this list ordered, but snapshots from older builds
+  // may contain append order. Sorting a copy makes the projection deterministic
+  // without mutating the durable state or changing equal-seq arrival order.
+  const orderedSteps = steps
+    .map((step, index) => ({ step, index }))
+    .sort((left, right) => left.step.seq - right.step.seq || left.index - right.index)
+    .map(({ step }) => step)
+  for (const step of orderedSteps) {
     const segment = segmentFor(step.segmentId)
     if (step.kind === "thinking") {
       segment.thinking += step.text
+      segment.legacySteps.push(step)
     } else if (step.kind === "tool") {
       segment.tools.push(step.tool)
+      segment.legacySteps.push(step)
     } else if (step.kind === "subagent") {
       segment.subagents.push(step.subagent)
+      segment.legacySteps.push(step)
     }
     // text 步骤只标记该段存在；正文从 messagesById 取。
   }

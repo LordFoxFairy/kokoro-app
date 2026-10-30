@@ -201,7 +201,7 @@ export function AssistantTurn({
           const liveAnswerSegment = isLive && segment.segmentId === answerTailId
           const liveProcessSegment = isLive && segment.segmentId === processTailId
           const showCaret = liveAnswerSegment && hasText
-          const hasProcess = segment.activities.length > 0
+          const hasProcess = segment.activities.length > 0 || segment.legacySteps.length > 0
           // HITL 的过程卡本身就是当前状态锚点；不要再在它上方渲染
           // 一条重复的「工具调用待批准」forming 行，避免审批态撑高后
           // 首条消息被自动滚动挤出视口。
@@ -237,6 +237,7 @@ export function AssistantTurn({
               ) : null}
               <SegmentProcess
                 segmentId={segment.segmentId}
+                legacySteps={segment.legacySteps}
                 activities={segment.activities}
                 live={liveProcessSegment}
                 {...(mode === undefined ? {} : { mode })}

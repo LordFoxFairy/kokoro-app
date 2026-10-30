@@ -18,11 +18,11 @@ export default function SignInFailurePage() {
       <section className="flex flex-1 items-center justify-center py-12" aria-labelledby="sign-in-failure-heading">
         <Card className="w-full max-w-[420px] border-0 bg-transparent shadow-none">
           <CardHeader className="px-0 pb-6">
-            <h1 id="sign-in-failure-heading" className="text-3xl font-semibold tracking-tight">登录暂未完成</h1>
-            <p className="mt-2 text-base leading-relaxed text-muted-foreground">登录服务暂时未能完成验证，请稍后再试。你的现有内容不会因此更改。</p>
+            <h1 id="sign-in-failure-heading" className="text-3xl font-semibold tracking-tight">登录失败</h1>
+            <p className="mt-2 text-base leading-relaxed text-muted-foreground">这次登录没有完成，请重新登录。</p>
           </CardHeader>
           <CardContent className="grid gap-3 px-0">
-            <Button asChild size="lg" className="h-11 w-full"><a href="/login">返回登录</a></Button>
+            <Button asChild size="lg" className="h-11 w-full"><a href="/login">登录</a></Button>
             <Button asChild variant="ghost" size="lg" className="h-11 w-full"><Link href="/" prefetch={false}>返回首页</Link></Button>
           </CardContent>
         </Card>

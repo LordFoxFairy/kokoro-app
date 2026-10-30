@@ -13,7 +13,6 @@ import type { SettingsTab } from "@/ui/settings/settings-modal"
 
 import {
   AppFrameConnectionStatus,
-  AppFrameConversationErrorSurface,
   AppFrameLoadingSurface,
 } from "./app-frame-status-surfaces"
 import type { EmptyStateProps } from "./app-frame.types"
@@ -41,12 +40,9 @@ export type AppFrameMainSurfaceProps = {
   showConversation: boolean
   conversationHydrating: boolean
   conversationHydrationFailed: boolean
-  machineError: string | null
   connection: EngineSnapshot["connection"]
-  onReconnect: () => void
   projectCreation: { pending: boolean; error: boolean; retryable: boolean }
   onRetryProjectCreation: () => void
-  retryConversationHydration: () => void
   onOpenSettings: (tab: SettingsTab, returnTarget?: HTMLElement | null) => void
   shareClient: Pick<SessionClient, "createShare" | "revokeShare">
   thread: Thread
@@ -110,12 +106,9 @@ export function AppFrameMainSurface({
   showConversation,
   conversationHydrating,
   conversationHydrationFailed,
-  machineError,
   connection,
-  onReconnect,
   projectCreation,
   onRetryProjectCreation,
-  retryConversationHydration,
   onOpenSettings,
   shareClient,
   thread,
@@ -173,7 +166,7 @@ export function AppFrameMainSurface({
         </div>
       ) : null}
       {mounted && !standaloneSurface && connection.status !== "connected" ? (
-        <AppFrameConnectionStatus connection={connection} onReconnect={onReconnect} />
+        <AppFrameConnectionStatus connection={connection} />
       ) : null}
       <div
         className={statusStyles.timelineStage}
@@ -183,12 +176,7 @@ export function AppFrameMainSurface({
           <AppFrameLoadingSurface />
         ) : !standaloneSurface && conversationHydrating ? (
           <AppFrameLoadingSurface />
-        ) : !standaloneSurface && conversationHydrationFailed ? (
-          <AppFrameConversationErrorSurface
-            detail={machineError}
-            onRetry={retryConversationHydration}
-          />
-        ) : showConversation ? (
+        ) : showConversation || conversationHydrationFailed ? (
           <div data-slot="conversation-timeline" className="min-h-0 flex-1">
             <ConversationThread {...conversationProps} />
           </div>

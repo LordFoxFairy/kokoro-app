@@ -657,21 +657,6 @@ function AppFrameRuntime({
     window.requestAnimationFrame(() => focusComposer())
   }, [engine, focusComposer])
 
-  const retryConversationHydration = useCallback(() => {
-    const requestedConversationId = navigationState.resolvedConversationRouteId ?? activeId
-    if (!engine || requestedConversationId === null) return
-    const current = engine.getSnapshot()
-    if (current.store?.activeId === requestedConversationId) {
-      const fallback = current.store.conversations.find(({ id }) => id !== requestedConversationId)
-      if (fallback) {
-        engine.selectConversation(fallback.id)
-      } else {
-        engine.newConversation()
-      }
-    }
-    engine.openConversation(requestedConversationId)
-  }, [activeId, engine, navigationState.resolvedConversationRouteId])
-
   const EmptyState = emptyState ?? DefaultEmptyState
   const shareClient: Pick<SessionClient, "createShare" | "revokeShare"> = browserListClient({ preview })
 
@@ -810,13 +795,10 @@ function AppFrameRuntime({
       showConversation={showConversation}
       conversationHydrating={navigationState.conversationHydrating}
       conversationHydrationFailed={navigationState.conversationHydrationFailed || initialSnapshotFailed}
-      machineError={machine.error}
       connection={connection}
-      onReconnect={() => engine?.reconnect()}
       projectCreation={project.projectCreation}
       projectRename={project.projectRename}
       onRetryProjectCreation={project.retryProjectCreation}
-      retryConversationHydration={retryConversationHydration}
       onOpenSettings={overlays.openSettings}
       shareClient={shareClient}
       thread={thread}

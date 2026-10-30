@@ -44,9 +44,13 @@ export function AppGate({ brandName, serverAdmitted = false, serverUnavailable =
   }, [pathname, state])
 
   const unavailable = serverUnavailable || state === "unavailable" || probe.unavailable
-  // Retain the last verified actor's mounted presentation and frozen intents.
-  // The existing admission boundary still retires scoped reads and mutation actions.
-  const booting = serverUnavailable || probe.mode === "checking" || serverAdmitted && probe.mode !== "authenticated"
+  // Keep the stable workbench mounted once the client probe has verified the
+  // actor, even if the server rendered this document during a short-lived
+  // refresh/Redis read outage. The admission boundary still revokes scoped
+  // reads and mutations while the probe is uncertain; replacing the whole
+  // workbench with a second loading surface is what caused the visible flash.
+  const booting = probe.mode === "checking" && probe.projectReadBoundary.subject === null
+    || serverAdmitted && probe.mode !== "authenticated" && probe.projectReadBoundary.subject === null
 
   useEffect(() => {
     if (!serverUnavailable) return
