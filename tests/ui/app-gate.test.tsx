@@ -124,11 +124,11 @@ it("uses verified System presentation when it is available", () => {
   expect(surface).toHaveAttribute("data-feature-flags", "runtime")
 })
 
-it("silently rechecks a server admission failure without a diagnostic card or a login loop", async () => {
+it("silently rechecks a server admission failure without replacing an already verified workbench", async () => {
   vi.useFakeTimers();
   render(<LocaleProvider><AppGate serverUnavailable /></LocaleProvider>);
   expect(screen.getByRole("status")).toHaveTextContent("Reconnecting");
-  expect(screen.getByTestId("app-surface")).toHaveAttribute("data-booting", "true");
+  expect(screen.getByTestId("app-surface")).toHaveAttribute("data-booting", "false");
   expect(screen.getByTestId("app-surface")).toHaveAttribute("data-preview", "false");
   expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
   expect(screen.queryByRole("alert")).toBeNull();

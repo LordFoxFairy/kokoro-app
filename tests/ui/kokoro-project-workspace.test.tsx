@@ -77,8 +77,7 @@ it("项目上下文和最近会话在编辑区之前，空指令保留独立添�
   expect(screen.getByRole("textbox", { name: "项目指令" })).toBeInTheDocument()
 })
 
-it("项目任务列表区分加载态和错误态，并提供重试入口", () => {
-  const onRetryProjectConversations = vi.fn()
+it("项目会话读取过程不打断工作台，也不展示重试面板", () => {
   const baseProps = {
     brandName: "Kokoro",
     composer: <div>composer</div>,
@@ -96,6 +95,9 @@ it("项目任务列表区分加载态和错误态，并提供重试入口", () =
   )
 
   expect(screen.getByRole("status")).toHaveTextContent("正在加载会话…")
+  expect(screen.getByRole("status")).toHaveClass("sr-only")
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
   expect(screen.queryByText("新建一个任务以开始")).not.toBeInTheDocument()
 
   rerender(
@@ -103,19 +105,18 @@ it("项目任务列表区分加载态和错误态，并提供重试入口", () =
       <KokoroProjectWorkspace preview
         {...baseProps}
         projectConversationsError
-        onRetryProjectConversations={onRetryProjectConversations}
       />
     </LocaleProvider>,
   )
 
-  expect(screen.getByRole("alert")).toHaveTextContent("会话暂时无法加载。")
-  fireEvent.click(screen.getByRole("button", { name: "重试" }))
-  expect(onRetryProjectConversations).toHaveBeenCalledTimes(1)
+  expect(screen.getByRole("status")).toHaveTextContent("会话暂时无法加载。")
+  expect(screen.getByRole("status")).toHaveClass("sr-only")
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
   expect(screen.queryByText("新建一个任务以开始")).not.toBeInTheDocument()
 })
 
-it("项目会话路由优先显示清单错误而不是误报空会话", () => {
-  const onRetryProjectConversations = vi.fn()
+it("项目会话路由在读取未完成时不误报空会话，也不显示异常卡片", () => {
   const { rerender } = render(
     <LocaleProvider>
       <KokoroProjectWorkspace preview
@@ -124,16 +125,15 @@ it("项目会话路由优先显示清单错误而不是误报空会话", () => {
         onPrompt={vi.fn()}
         workspaceCapabilities={capabilities}
         projectConversationsError
-        onRetryProjectConversations={onRetryProjectConversations}
       />
     </LocaleProvider>,
   )
 
-  expect(screen.getByTestId("project-conversations-error")).toHaveTextContent("会话暂时无法加载。")
+  expect(screen.getByRole("status")).toHaveTextContent("会话暂时无法加载。")
+  expect(screen.getByRole("status")).toHaveClass("sr-only")
+  expect(screen.queryByTestId("project-conversations-error")).not.toBeInTheDocument()
   expect(document.querySelector('[data-slot="project-conversation-welcome"]')).toBeNull()
   expect(screen.queryByText("还没有项目会话。新建一个会话以开始。")).toBeNull()
-  fireEvent.click(screen.getByRole("button", { name: "重试" }))
-  expect(onRetryProjectConversations).toHaveBeenCalledTimes(1)
 
   rerender(
     <LocaleProvider>
@@ -146,7 +146,9 @@ it("项目会话路由优先显示清单错误而不是误报空会话", () => {
       />
     </LocaleProvider>,
   )
-  expect(screen.getByTestId("project-conversations-loading")).toHaveTextContent("正在加载会话…")
+  expect(screen.getByRole("status")).toHaveTextContent("正在加载会话…")
+  expect(screen.getByRole("status")).toHaveClass("sr-only")
+  expect(screen.queryByTestId("project-conversations-loading")).not.toBeInTheDocument()
   expect(document.querySelector('[data-slot="project-conversation-welcome"]')).toBeNull()
   expect(screen.queryByText("还没有项目会话。新建一个会话以开始。")).toBeNull()
 })

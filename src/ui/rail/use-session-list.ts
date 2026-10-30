@@ -78,6 +78,7 @@ export function useSessionList(
   const admitted = readBoundary?.admitted ?? true
   const identity = readBoundary?.identity ?? ""
   const [state, setState] = useState<ListState>(INITIAL)
+  const entriesRef = useRef<SessionListEntry[]>([])
   const requestGenerationRef = useRef(0)
   const paginationFlightRef = useRef<{ generation: number } | null>(null)
   const currentScopeKey = scopeKey(scope)
@@ -112,7 +113,10 @@ export function useSessionList(
         lifecycle,
         identity,
         scopeKey: currentScopeKey,
-        entries: [],
+        // A transient auth/network read failure must not blank a working
+        // rail. Keep the last confirmed list and expose the failure only to
+        // the lightweight retry affordance.
+        entries: entriesRef.current,
         cursor: undefined,
         loading: false,
         loadingMore: false,
@@ -138,6 +142,7 @@ export function useSessionList(
       void fetchFirst(generation).then(next => {
         if (!live || generation !== requestGenerationRef.current) return
         onFirstPageSettled?.(next.settledFirstPage as NonNullable<SessionListView["settledFirstPage"]>)
+        entriesRef.current = next.entries
         setState(next)
         if (next.retryAfterMs !== undefined) {
           cooldown.current = { lifecycle, until: performance.now() + next.retryAfterMs }

@@ -166,6 +166,7 @@ describe("groupSegments", () => {
     expect(segments.map((segment) => segment.segmentId)).toEqual(["seg_1", "seg_2"])
     expect(segments[0]?.thinking).toBe("think late")
     expect(segments[0]?.tools.map((tool) => tool.id)).toEqual(["tool_1"])
+    expect(segments[0]?.legacySteps.map((step) => step.kind)).toEqual(["thinking", "tool", "thinking"])
   })
 
   it.each([
