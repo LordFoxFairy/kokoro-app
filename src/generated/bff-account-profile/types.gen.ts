@@ -4,26 +4,17 @@ export type ClientOptions = {
     baseUrl: 'http://127.0.0.1:4300' | 'https://bff.kokoro.invalid' | (string & {});
 };
 
-export type AccountProfileInput = {
-    /**
-     * 1..100 UTF-16 code units; well-formed Unicode, no C0/C1 controls or ECMAScript trim boundary whitespace; never normalized.
-     */
-    name: string;
-    /**
-     * Exact original userinfo name, including empty or surrounding whitespace; never normalized.
-     */
-    expected_name: string;
-};
-
 /**
  * Request correlation identifier echoed by every v1 envelope.
  */
 export type RequestId = string;
 
-export type AccountProfileResponse = {
+export type AccountProfileReadResponse = {
     data: {
         subject: string;
         name: string;
+        email: string;
+        email_verified: boolean;
     };
 };
 
@@ -51,35 +42,11 @@ export type AccountProfileError403 = {
     };
 };
 
-export type AccountProfileError409 = {
-    error: {
-        code: 'account_profile_conflict';
-        message: string;
-        retryable: false;
-    };
-};
-
-export type AccountProfileError413 = {
-    error: {
-        code: 'account_profile_request_too_large';
-        message: string;
-        retryable: false;
-    };
-};
-
 export type AccountProfileError429 = {
     error: {
         code: 'session_rate_limited' | 'account_profile_rate_limited';
         message: string;
         retryable: true;
-    };
-};
-
-export type AccountProfileError500 = {
-    error: {
-        code: 'internal_error';
-        message: string;
-        retryable: false;
     };
 };
 
@@ -98,6 +65,93 @@ export type AccountProfileError503 = {
         retryable: true;
     };
 };
+
+export type AccountProfileInput = {
+    /**
+     * 1..100 UTF-16 code units; well-formed Unicode, no C0/C1 controls or ECMAScript trim boundary whitespace; never normalized.
+     */
+    name: string;
+    /**
+     * Exact original userinfo name, including empty or surrounding whitespace; never normalized.
+     */
+    expected_name: string;
+};
+
+export type AccountProfileResponse = {
+    data: {
+        subject: string;
+        name: string;
+    };
+};
+
+export type AccountProfileError409 = {
+    error: {
+        code: 'account_profile_conflict';
+        message: string;
+        retryable: false;
+    };
+};
+
+export type AccountProfileError413 = {
+    error: {
+        code: 'account_profile_request_too_large';
+        message: string;
+        retryable: false;
+    };
+};
+
+export type AccountProfileError500 = {
+    error: {
+        code: 'internal_error';
+        message: string;
+        retryable: false;
+    };
+};
+
+export type ReadAccountProfileData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/v1/account/profile';
+};
+
+export type ReadAccountProfileErrors = {
+    /**
+     * Sanitized account profile failure
+     */
+    400: AccountProfileError400;
+    /**
+     * Sanitized account profile failure
+     */
+    401: AccountProfileError401;
+    /**
+     * Sanitized account profile failure
+     */
+    403: AccountProfileError403;
+    /**
+     * Sanitized account profile failure
+     */
+    429: AccountProfileError429;
+    /**
+     * Sanitized account profile failure
+     */
+    502: AccountProfileError502;
+    /**
+     * Sanitized account profile failure
+     */
+    503: AccountProfileError503;
+};
+
+export type ReadAccountProfileError = ReadAccountProfileErrors[keyof ReadAccountProfileErrors];
+
+export type ReadAccountProfileResponses = {
+    /**
+     * Owner-confirmed current subject and profile fields
+     */
+    200: AccountProfileReadResponse;
+};
+
+export type ReadAccountProfileResponse = ReadAccountProfileResponses[keyof ReadAccountProfileResponses];
 
 export type UpdateAccountProfileData = {
     body: AccountProfileInput;

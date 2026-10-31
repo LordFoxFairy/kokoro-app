@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { UpdateAccountProfileData, UpdateAccountProfileErrors, UpdateAccountProfileResponses } from './types.gen';
+import type { ReadAccountProfileData, ReadAccountProfileErrors, ReadAccountProfileResponses, UpdateAccountProfileData, UpdateAccountProfileErrors, UpdateAccountProfileResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -17,6 +17,13 @@ export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends 
      */
     meta?: keyof ClientMeta extends never ? Record<string, unknown> : ClientMeta;
 };
+
+/**
+ * Read current Product user profile
+ *
+ * Current admitted Product user projection. The request has no query, body, or replay key and the response is never cacheable.
+ */
+export const readAccountProfile = <ThrowOnError extends boolean = false>(options?: Options<ReadAccountProfileData, ThrowOnError>): RequestResult<ReadAccountProfileResponses, ReadAccountProfileErrors, ThrowOnError> => (options?.client ?? client).get<ReadAccountProfileResponses, ReadAccountProfileErrors, ThrowOnError>({ url: '/v1/account/profile', ...options });
 
 /**
  * Update current Product user display name

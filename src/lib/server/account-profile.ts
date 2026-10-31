@@ -1,235 +1,160 @@
-import { parseAccountProfileJson } from "@/lib/account-profile-update.schema";
-import { randomUUID } from "node:crypto";
-import { accountUserinfoSchema } from "@/lib/account-profile.schema";
-import { matchesCanonicalWebRequest } from "./iam-relay-config";
-import { oidcRpConfig } from "./oidc-provider";
-import { currentProductSession } from "./product-session";
-import { verifyProductIdentity } from "./product-identity";
-import { ProductIdentitySessionRejectedError } from "./product-identity.error";
-import {
-  requestWithDomain,
-  UpstreamResponseTooLargeError,
-  UpstreamResponseIncompleteError,
-} from "./upstream-http";
+import { randomUUID } from "node:crypto"
+import { accountProfileResponseSchema } from "@/lib/account-profile.schema"
+import { admittedProductSession, productBffConfig, productBffHeaders, sameProductSessionSnapshot } from "./product-bff"
+import { requestWithDomain } from "./upstream-http"
 
-/** Read-only IAM projection, admitted and retired within one Product session. */
+/** Read the IAM-owned projection through the BFF native-session seam. */
 export async function readAccountProfile(request: Request): Promise<Response> {
-  const requestId = randomUUID();
-  const headers = {
-    "cache-control": "private, no-store",
-    "x-request-id": requestId,
-  };
-  const fail = (status: number, code: string) =>
-    Response.json({ error: { code, message: code } }, { status, headers });
-  const config = oidcRpConfig(process.env);
-  if (!config) return fail(503, "account_profile_not_configured");
-  const url = new URL(request.url);
+  const requestId = randomUUID()
+  const headers = { "cache-control": "private, no-store", "x-request-id": requestId }
+  const fail = (status: number, code: string, retryAfter?: string) =>
+    Response.json(
+      { error: { code, message: code, ...(status === 429 || status === 503 ? { retryable: true } : { retryable: false }) } },
+      { status, headers: { ...headers, ...(retryAfter === undefined ? {} : { "retry-after": retryAfter }) } },
+    )
+  const config = productBffConfig()
+  if (!config) return fail(503, "account_profile_unavailable")
+  const url = new URL(request.url)
+  const origin = new URL(config.session.webOrigin)
   if (
     request.method !== "GET" ||
     url.pathname !== "/api/account/profile" ||
     request.url.includes("?") ||
     request.body !== null ||
     request.headers.has("transfer-encoding") ||
-    (request.headers.has("content-length") &&
-      request.headers.get("content-length") !== "0")
+    request.headers.has("idempotency-key") ||
+    (request.headers.has("content-length") && request.headers.get("content-length") !== "0")
   )
-    return fail(400, "account_profile_invalid_request");
-  // Next may construct the internal URL with its bind hostname. Browser
-  // authority is the canonical Host/Origin boundary, not that internal host.
+    return fail(400, "account_profile_input_invalid")
   if (
-    url.protocol !== new URL(config.relay.webOrigin).protocol ||
-    !matchesCanonicalWebRequest(request, config.relay, "GET")
+    url.protocol !== origin.protocol ||
+    request.headers.get("host") !== origin.host ||
+    (request.headers.has("origin") && request.headers.get("origin") !== origin.origin)
   )
-    return fail(403, "account_profile_forbidden");
-  const controller = new AbortController();
-  const deadlineAt = performance.now() + 5_000;
-  let retired = false;
-  let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
-  let upstream: Response | undefined;
-  let interrupt!: (reason: unknown) => void;
-  const cancellation = new Promise<never>((_, reject) => {
-    interrupt = reject;
-  });
-  let fault = "account_profile_unavailable";
+    return fail(403, "account_profile_forbidden")
+
+  const deadline = performance.now() + 10_000
+  const controller = new AbortController()
+  let retired = false
+  let reader: ReadableStreamDefaultReader<Uint8Array> | undefined
+  let upstream: Response | undefined
+  let reject!: (reason: unknown) => void
+  const cancelled = new Promise<never>((_, failPromise) => {
+    reject = failPromise
+  })
   const stop = () => {
-    controller.abort();
-    void reader?.cancel().catch(() => undefined);
-    if (upstream?.body && !upstream.body.locked)
-      void upstream.body.cancel().catch(() => undefined);
-  };
-  const abort = () => {
-    fault = "account_profile_aborted";
-    interrupt(new Error(fault));
-    stop();
-  };
-  const timer = setTimeout(() => {
-    fault = "account_profile_timeout";
-    interrupt(new Error(fault));
-    stop();
-  }, 5_000);
-  request.signal.addEventListener("abort", abort, { once: true });
-  if (request.signal.aborted) abort();
-  const check = () => {
-    if (retired || request.signal.aborted || controller.signal.aborted)
-      throw new Error(fault);
-    if (performance.now() >= deadlineAt) {
-      fault = "account_profile_timeout";
-      stop();
-      throw new Error(fault);
-    }
-  };
-  const store = {
-    redisUrl: config.redisUrl,
-    webOrigin: config.relay.webOrigin,
-    secret: config.authSecret,
-  };
-  const operation = async () => {
-    check();
-    const session = await currentProductSession(request, store);
-    check();
-    if (
-      !session ||
-      session.accessExpiresAt <= Date.now() ||
-      session.expiresAt <= Date.now()
-    )
-      return fail(401, "account_profile_session_required");
+    controller.abort()
+    const active = reader
+    reader = undefined
+    void active?.cancel().catch(() => undefined)
     try {
-      await verifyProductIdentity(
-        config,
-        session.access,
-        session.subject,
-        controller.signal,
-      );
-    } catch (error) {
-      check();
-      if (error instanceof ProductIdentitySessionRejectedError)
-        return fail(401, "account_profile_session_required");
-      return fail(503, "account_profile_admission_failed");
+      active?.releaseLock()
+    } catch {
+      /* A retired body never regains ownership. */
     }
-    check();
-    upstream = await requestWithDomain(
-      `${config.relay.bffOrigin}/iam/oauth2/userinfo`,
-      config.domain,
-      {
-        method: "GET",
-        signal: controller.signal,
-        timeoutMs: Math.max(1, Math.ceil(deadlineAt - performance.now())),
-        maxResponseBytes: 262_144,
-        headers: new Headers({
-          accept: "application/json",
-          authorization: `Bearer ${session.access}`,
-          "x-kokoro-service": "web-bff",
-          "x-kokoro-internal-secret": config.relay.secret,
-          "x-kokoro-request-id": requestId,
-        }),
-      },
-    );
-    if (retired || controller.signal.aborted) {
-      stop();
-      check();
-    }
-    check();
-    if (upstream.status !== 200)
-      return fail(
-        upstream.status === 401 || upstream.status === 403
-          ? 401
-          : upstream.status === 429 || upstream.status >= 500
-            ? 503
-            : 502,
-        "account_profile_upstream_rejected",
-      );
-    if (
-      !/^application\/json(?:\s*;|$)/iu.test(
-        upstream.headers.get("content-type") ?? "",
-      )
-    )
-      return fail(502, "account_profile_invalid_response");
-    const declared = upstream.headers.get("content-length");
-    if (
-      declared !== null &&
-      (!/^\d+$/u.test(declared) || Number(declared) > 262_144)
-    )
-      return fail(502, "account_profile_invalid_response");
-    let text = "";
-    let size = 0;
-    upstream.headers.forEach((value, key) => {
-      size += new TextEncoder().encode(`${key}: ${value}\r\n`).byteLength;
-    });
-    if (size > 262_144) return fail(502, "account_profile_invalid_response");
-    if (upstream.body) {
-      reader = upstream.body.getReader();
-      const decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
+    if (upstream?.body && !upstream.body.locked) void upstream.body.cancel().catch(() => undefined)
+  }
+  const abort = () => {
+    stop()
+    reject(new Error("account_profile_retired"))
+  }
+  const timer = setTimeout(abort, Math.max(0, deadline - performance.now()))
+  request.signal.addEventListener("abort", abort, { once: true })
+  if (request.signal.aborted) abort()
+  const check = () => {
+    if (retired || request.signal.aborted || controller.signal.aborted || performance.now() >= deadline) throw new Error("account_profile_retired")
+  }
+  const readBody = async (body: ReadableStream<Uint8Array> | null, maxBytes: number, initialBytes: number): Promise<string> => {
+    let size = initialBytes
+    let text = ""
+    const decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true })
+    if (size > maxBytes) throw new Error("account_profile_response_invalid")
+    if (body) {
+      reader = body.getReader()
       try {
         for (;;) {
-          const part = await reader.read();
-          check();
-          if (part.done) break;
-          size += part.value.byteLength;
-          if (size > 262_144)
-            return fail(502, "account_profile_invalid_response");
-          text += decoder.decode(part.value, { stream: true });
+          const part = await reader.read()
+          check()
+          if (part.done) break
+          size += part.value.byteLength
+          if (size > maxBytes) throw new Error("account_profile_response_invalid")
+          text += decoder.decode(part.value, { stream: true })
         }
-        text += decoder.decode();
-      } catch {
-        check();
-        return fail(502, "account_profile_invalid_response");
+        text += decoder.decode()
       } finally {
-        if (reader) {
-          void reader.cancel().catch(() => undefined);
-          reader.releaseLock();
-          reader = undefined;
+        const active = reader
+        reader = undefined
+        void active?.cancel().catch(() => undefined)
+        try {
+          active?.releaseLock()
+        } catch {
+          /* The stream may already be closed. */
         }
       }
     }
-    check();
-    let raw: unknown;
+    check()
+    return text
+  }
+  const operation = async () => {
+    check()
+    let session
     try {
-      raw = parseAccountProfileJson(text);
+      session = await admittedProductSession(request, config)
     } catch {
-      return fail(502, "account_profile_invalid_response");
+      return fail(503, "account_profile_unavailable")
     }
-    const profile = accountUserinfoSchema.safeParse(raw);
-    if (!profile.success || profile.data.sub !== session.subject)
-      return fail(502, "account_profile_invalid_response");
-    const latest = await currentProductSession(request, store);
-    check();
+    check()
+    if (!session || session.accessExpiresAt <= Date.now() || session.expiresAt <= Date.now()) return fail(401, "session_invalid")
+    upstream = await requestWithDomain(`${config.bffBaseUrl}/v1/account/profile`, config.domain, {
+      method: "GET",
+      signal: controller.signal,
+      timeoutMs: Math.max(1, Math.ceil(deadline - performance.now())),
+      maxResponseBytes: 1_048_576,
+      headers: productBffHeaders(config, session, requestId),
+    })
+    check()
     if (
-      !latest ||
-      latest.id !== session.id ||
-      latest.generation !== session.generation ||
-      latest.subject !== session.subject ||
-      latest.access !== session.access ||
-      latest.accessExpiresAt !== session.accessExpiresAt ||
-      latest.expiresAt !== session.expiresAt ||
-      latest.accessExpiresAt <= Date.now() ||
-      latest.expiresAt <= Date.now()
+      upstream.headers.get("x-request-id") !== requestId ||
+      !/^application\/json(?:\s*;|$)/iu.test(upstream.headers.get("content-type") ?? "") ||
+      !/(?:^|,)\s*no-store\s*(?:,|$)/iu.test(upstream.headers.get("cache-control") ?? "") ||
+      upstream.headers.has("location") ||
+      upstream.headers.has("set-cookie")
     )
-      return fail(401, "account_profile_session_retired");
-    return Response.json(
-      {
-        data: {
-          subject: profile.data.sub,
-          name: profile.data.name ?? null,
-          email: profile.data.email ?? null,
-          email_verified: profile.data.email_verified ?? null,
-        },
-      },
-      { headers },
-    );
-  };
+      return fail(502, "account_profile_response_invalid")
+    let headerBytes = 0
+    upstream.headers.forEach((value, key) => {
+      headerBytes += new TextEncoder().encode(`${key}: ${value}\r\n`).byteLength
+    })
+    let raw: unknown
+    try {
+      raw = JSON.parse(await readBody(upstream.body, 1_048_576, headerBytes))
+    } catch {
+      return fail(502, "account_profile_response_invalid")
+    }
+    const retryAfter = upstream.headers.get("retry-after") ?? undefined
+    if (upstream.status !== 200) {
+      if (upstream.status === 401) return fail(401, "session_invalid")
+      if (upstream.status === 403) return fail(403, "account_profile_forbidden")
+      if (upstream.status === 429 && retryAfter !== undefined && /^[1-9][0-9]{0,4}$/u.test(retryAfter) && Number(retryAfter) <= 86400)
+        return fail(429, "account_profile_rate_limited", retryAfter)
+      if (upstream.status === 503) return fail(503, "account_profile_unavailable")
+      return fail(502, "account_profile_response_invalid")
+    }
+    const profile = accountProfileResponseSchema.safeParse(raw)
+    if (!profile.success || profile.data.data.subject !== session.subject) return fail(502, "account_profile_response_invalid")
+    const latest = await admittedProductSession(request, config).catch(() => null)
+    check()
+    if (!sameProductSessionSnapshot(session, latest)) return fail(401, "session_invalid")
+    return Response.json(profile.data, { headers })
+  }
   try {
-    return await Promise.race([cancellation, operation()]);
-  } catch (error) {
-    if (
-      error instanceof UpstreamResponseTooLargeError ||
-      error instanceof UpstreamResponseIncompleteError
-    )
-      return fail(502, "account_profile_invalid_response");
-    return fail(fault === "account_profile_aborted" ? 499 : 503, fault);
+    return await Promise.race([cancelled, operation()])
+  } catch {
+    return fail(503, "account_profile_unavailable")
   } finally {
-    retired = true;
-    clearTimeout(timer);
-    request.signal.removeEventListener("abort", abort);
-    stop();
+    retired = true
+    clearTimeout(timer)
+    request.signal.removeEventListener("abort", abort)
+    stop()
   }
 }
