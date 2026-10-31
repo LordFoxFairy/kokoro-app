@@ -3,7 +3,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { currentProductSession } = vi.hoisted(() => ({
   currentProductSession: vi.fn(),
 }));
+const { requestWithDomain } = vi.hoisted(() => ({
+  requestWithDomain: vi.fn(),
+}));
 vi.mock("@/lib/server/product-session", () => ({ currentProductSession }));
+vi.mock("@/lib/server/upstream-http", () => ({ requestWithDomain }));
 
 import {
   admittedProductSession,
@@ -23,7 +27,10 @@ const env = {
 } satisfies NodeJS.ProcessEnv;
 
 describe("Product BFF admission", () => {
-  beforeEach(() => currentProductSession.mockReset());
+  beforeEach(() => {
+    currentProductSession.mockReset();
+    requestWithDomain.mockReset();
+  });
 
   it("requires the complete online Product Session configuration", () => {
     expect(productBffConfig(env)).not.toBeNull();
@@ -60,6 +67,34 @@ describe("Product BFF admission", () => {
     expect(headers.get("x-kokoro-namespace")).toBeNull();
     expect(headers.get("x-kokoro-principal-id")).toBeNull();
     expect(headers.get("x-kokoro-tenant-id")).toBeNull();
+  });
+
+  it("admitted native sessions call BFF identity once and emit cookie auth without a bearer", async () => {
+    const config = productBffConfig(env)!;
+    requestWithDomain.mockResolvedValueOnce(
+      new Response(JSON.stringify({
+        data: { user_id: "user-1", tenant_id: "tenant-1", platform_admin: false },
+        meta: { request_id: "native-request" },
+      }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    const request = new Request(env.KOKORO_WEB_ORIGIN!, {
+      headers: { cookie: "kokoro-issuer.session_token=session; next-auth.session-token=legacy" },
+    });
+    const claims = await admittedProductSession(request, config);
+    expect(claims).toMatchObject({ subject: "user-1", nativeCookie: "kokoro-issuer.session_token=session" });
+    const headers = productBffHeaders(config, claims!, "native-request");
+    expect(headers.get("cookie")).toBe("kokoro-issuer.session_token=session");
+    expect(headers.get("origin")).toBe(env.KOKORO_WEB_ORIGIN);
+    expect(headers.get("authorization")).toBeNull();
+    expect(requestWithDomain).toHaveBeenCalledExactlyOnceWith(
+      "https://bff.internal/v1/me",
+      "dev.kokoro.localhost",
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(currentProductSession).not.toHaveBeenCalled();
   });
 
 });

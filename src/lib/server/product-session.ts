@@ -18,7 +18,17 @@ export function validIssuerSessionId(value: unknown): value is string {
   })
 }
 
-type ProductClaims = Readonly<{ id: string; generation: number; access: string; accessExpiresAt: number; expiresAt: number; subject: string; issuerSessionId: string }>
+type ProductClaims = Readonly<{
+  id: string
+  generation: number
+  access: string
+  accessExpiresAt: number
+  expiresAt: number
+  subject: string
+  issuerSessionId: string
+  /** Internal App adapter proof for an IAM native session; never serialized into Product cookies. */
+  nativeCookie?: string
+}>
 
 function validClaims(value: unknown): value is ProductClaims {
   if (typeof value !== "object" || value === null) return false
