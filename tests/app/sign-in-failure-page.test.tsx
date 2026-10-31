@@ -6,6 +6,8 @@ const proof = vi.hoisted(() => ({
   host: "web.example.test",
   state: "absent",
   accessExpiresAt: 0,
+  native: false,
+  nativeAdmitted: false,
   unavailable: false,
   inspect: vi.fn(),
   redirect: vi.fn(),
@@ -20,10 +22,15 @@ vi.mock("@/lib/server/product-session", () => ({ activeProductSession: (...args:
   if (proof.unavailable) throw new Error("controlled store failure")
   return Promise.resolve(proof.state === "active" && proof.accessExpiresAt > Date.now() ? { accessExpiresAt: proof.accessExpiresAt } : null)
 } }))
+vi.mock("@/lib/server/product-bff", () => ({
+  productBffConfig: () => proof.native ? { bffBaseUrl: "http://bff.test", domain: "product.test", internalSecret: null, session: { redisUrl: "redis://fixture.invalid", webOrigin: "https://web.example.test", secret: "synthetic-only" } } : null,
+  nativeSessionBffHeaders: () => proof.native ? { state: "valid" } : { state: "missing" },
+  admittedProductSession: () => Promise.resolve(proof.nativeAdmitted ? { subject: "native-user" } : null),
+}))
 vi.mock("@/ui/auth/sign-in-recovery", () => ({ SignInRecovery: () => <section><h1>恢复工作区</h1><button>检查并继续</button><a href="/login">重新登录</a></section> }))
 import SignInFailurePage from "@/app/auth/sign-in/failed/page"
 
-beforeEach(() => { Object.assign(proof, { config: true, host: "web.example.test", state: "absent", accessExpiresAt: 0, unavailable: false }); vi.clearAllMocks() })
+beforeEach(() => { Object.assign(proof, { config: true, host: "web.example.test", state: "absent", accessExpiresAt: 0, native: false, nativeAdmitted: false, unavailable: false }); vi.clearAllMocks() })
 afterEach(cleanup)
 
 it("returns a current active Session from the old failure URL to fixed /app without catching the redirect", async () => {
@@ -31,6 +38,14 @@ it("returns a current active Session from the old failure URL to fixed /app with
   await expect(Promise.resolve().then(() => SignInFailurePage())).rejects.toThrow("redirect:/app")
   expect(proof.inspect).toHaveBeenCalledOnce()
   expect(proof.redirect).toHaveBeenCalledExactlyOnceWith("/app")
+})
+
+it("redirects a native IAM-admitted session from the failure URL to fixed /app", async () => {
+  proof.native = true
+  proof.nativeAdmitted = true
+  await expect(Promise.resolve().then(() => SignInFailurePage())).rejects.toThrow("redirect:/app")
+  expect(proof.redirect).toHaveBeenCalledExactlyOnceWith("/app")
+  expect(proof.inspect).not.toHaveBeenCalled()
 })
 
 it.each(["absent", "refreshing", "stale", "unconfirmed", "expired", "exception", "host", "configuration"])("keeps explicit GET-only recovery for %s, without an automatic login form or native replay", async kind => {
