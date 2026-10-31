@@ -1,9 +1,11 @@
 import type { Metadata } from "next"
+import { randomUUID } from "node:crypto"
 import { headers } from "next/headers"
 import { redirect } from "next/navigation"
 import { AudioLines } from "lucide-react"
 
 import { oidcRpConfig } from "@/lib/server/oidc-provider"
+import { admittedProductSession, nativeSessionBffHeaders, productBffConfig } from "@/lib/server/product-bff"
 import { activeProductSession } from "@/lib/server/product-session"
 import { SignInRecovery } from "@/ui/auth/sign-in-recovery"
 
@@ -20,10 +22,16 @@ export default async function SignInFailurePage() {
       const requestHeaders = new Headers()
       const cookie = incoming.get("cookie")
       if (cookie !== null) requestHeaders.set("cookie", cookie)
-      const session = await activeProductSession(new Request(`${config.relay.webOrigin}/app`, { headers: requestHeaders }), {
-        redisUrl: config.redisUrl, webOrigin: config.relay.webOrigin, secret: config.authSecret,
-      })
-      current = session !== null
+      const request = new Request(`${config.relay.webOrigin}/app`, { headers: requestHeaders })
+      const bff = productBffConfig()
+      if (bff !== null && nativeSessionBffHeaders(request, bff, randomUUID()).state === "valid") {
+        current = await admittedProductSession(request, bff) !== null
+      } else {
+        const session = await activeProductSession(request, {
+          redisUrl: config.redisUrl, webOrigin: config.relay.webOrigin, secret: config.authSecret,
+        })
+        current = session !== null
+      }
     }
   } catch { /* Keep explicit recovery; never start or replay authentication here. */ }
   // Next redirect throws its navigation signal; keep it outside the inspection catch.

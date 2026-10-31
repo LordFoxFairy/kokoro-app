@@ -45,9 +45,9 @@ product-identity.error.ts只维护内部异常类型；不返回原始BFF错误�
 
 `session-share.ts` 只承接原 session catch-all 的精确分享 POST/DELETE，保持原 scope、project_ref、Idempotency-Key 和请求正文语义，校验 canonical Origin 与正式 share_id ACK；非分享及 SSE 原路径不变。`lib/shared-tasks-json.ts` 只负责本片 raw JSON 的 UTF-8、重复键和深度边界，`lib/shared-tasks.schema.ts` 由正式生成形状派生运行时校验，不建立另一份可编辑 contract。
 
-## Product Session 生命周期读取（2026-10-19）
+## Product Session 生命周期读取（2026-10-19；C-1.3 native 优先）
 
-productSessionState/inspectSessionState只服务App壳和原生session端点，区分active/refreshing/stale/absent/unconfirmed；原业务activeProductSession仍要求有效access与当前generation。GET/RSC不刷新、不输出凭据，POST保原Origin/CSRF、双CAS和正式身份核验；过期reservation不被新请求抢占。
+productSessionState/inspectSessionState只服务无 native cookie 的兼容 App 壳和 session 端点，区分active/refreshing/stale/absent/unconfirmed；`admittedProductSession` 先通过 BFF `/v1/me` 校验 IAM native cookie，再回退到 Product Session，所有切换中的业务 adapter 复用同一 admission proof。原业务activeProductSession仍要求有效access与当前generation。GET/RSC不刷新、不输出凭据，legacy POST保留Origin/CSRF、双CAS和正式身份核验；过期reservation不被新请求抢占。
 
 ## Authorize浏览器异常恢复（2026-10-19）
 

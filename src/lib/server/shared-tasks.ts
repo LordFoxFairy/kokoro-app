@@ -5,9 +5,8 @@ import {
   sharedTasksCursor,
   validateSharedTasks,
 } from "@/lib/shared-tasks.schema";
-import { productBffConfig, productBffHeaders } from "./product-bff";
+import { admittedProductSession, productBffConfig, productBffHeaders } from "./product-bff";
 import { oidcRpConfig } from "./oidc-provider";
-import { currentProductSession } from "./product-session";
 import { requestWithDomain } from "./upstream-http";
 
 export async function sharedTasks(request: Request): Promise<Response> {
@@ -104,7 +103,7 @@ export async function sharedTasks(request: Request): Promise<Response> {
   };
   const operation = async () => {
     check();
-    const session = await currentProductSession(request, config.session);
+    const session = await admittedProductSession(request, config);
     check();
     if (
       !session ||
@@ -194,7 +193,7 @@ export async function sharedTasks(request: Request): Promise<Response> {
     } catch {
       return fail(502, "shared_tasks_response_invalid");
     }
-    const latest = await currentProductSession(request, config.session);
+    const latest = await admittedProductSession(request, config);
     check();
     if (
       !latest ||
@@ -205,6 +204,7 @@ export async function sharedTasks(request: Request): Promise<Response> {
         "access",
         "accessExpiresAt",
         "expiresAt",
+        "nativeCookie",
       ].some(
         (k) =>
           latest[k as keyof typeof latest] !==

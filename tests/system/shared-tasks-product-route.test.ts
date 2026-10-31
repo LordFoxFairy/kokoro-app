@@ -1,11 +1,17 @@
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   currentProductSession: vi.fn(),
+  admittedProductSession: vi.fn(),
   requestWithDomain: vi.fn(),
   oidcRpConfig: vi.fn(),
 }));
 vi.mock("@/lib/server/product-session", () => ({
   currentProductSession: mocks.currentProductSession,
+}));
+vi.mock("@/lib/server/product-bff", () => ({
+  admittedProductSession: mocks.admittedProductSession,
+  productBffConfig: () => ({ bffBaseUrl: "http://bff.test", domain: "product.test", internalSecret: null, session: { redisUrl: "redis://fixture/0", webOrigin: "http://web.test", secret: "at-least-thirty-two-characters-secret" } }),
+  productBffHeaders: (_config: unknown, claims: { access: string }, requestId: string) => new Headers({ authorization: `Bearer ${claims.access}`, "x-kokoro-request-id": requestId }),
 }));
 vi.mock("@/lib/server/upstream-http", () => ({
   requestWithDomain: mocks.requestWithDomain,
@@ -38,6 +44,7 @@ beforeEach(() => {
     vi.stubEnv(k, v);
   mocks.oidcRpConfig.mockReturnValue({ tenantId: "tenant" });
   mocks.currentProductSession.mockResolvedValue(session);
+  mocks.admittedProductSession.mockResolvedValue(session);
   mocks.requestWithDomain.mockImplementation(async (_u, _d, o) =>
     Response.json(
       { data: { items: [], next_cursor: null } },
@@ -61,7 +68,7 @@ it("returns strict private list after two actual identity reads, with server-onl
     data: { items: [], next_cursor: null },
   });
   expect(response.headers.get("cache-control")).toContain("no-store");
-  expect(mocks.currentProductSession).toHaveBeenCalledTimes(2);
+  expect(mocks.admittedProductSession).toHaveBeenCalledTimes(2);
   expect(mocks.requestWithDomain.mock.calls[0]?.[0]).toBe(
     "http://bff.test/v1/account/shared-tasks?limit=100",
   );
@@ -109,7 +116,7 @@ it.each([
   "accessExpiresAt",
   "expiresAt",
 ])("retires changed final %s", async (field) => {
-  mocks.currentProductSession
+  mocks.admittedProductSession
     .mockResolvedValueOnce(session)
     .mockResolvedValueOnce({
       ...session,
@@ -124,7 +131,7 @@ it.each([
 });
 it("absolute budget races a hung store and cancels before owner IO", async () => {
   vi.useFakeTimers();
-  mocks.currentProductSession.mockImplementation(() => new Promise(() => {}));
+  mocks.admittedProductSession.mockImplementation(() => new Promise(() => {}));
   const pending = GET(request());
   await vi.advanceTimersByTimeAsync(10_001);
   expect((await pending).status).toBe(503);
