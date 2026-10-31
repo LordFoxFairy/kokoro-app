@@ -423,7 +423,7 @@ export function browserEngine(options: { preview?: boolean; scope?: SessionScope
       })
     const url = new URL(window.location.href)
     const bareHome = scope.kind === "direct" && url.pathname.replace(/\/$/u, "") === "/app"
-      && !url.searchParams.has("conversation") && !/^#\/?conversation(?:=|\/)/u.test(url.hash)
+      && !url.searchParams.has("conversation")
     let initialHome = submissionRecovery && bareHome ? prepareDirectHome(storage, draftLifecycle, submissionRecovery) : undefined
     if (submissionRecovery && bareHome && initialHome === undefined) return null
     const engineStorage: PersistedStore<ConversationStore> = initialHome === undefined ? storage : {

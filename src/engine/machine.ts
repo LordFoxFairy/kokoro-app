@@ -31,7 +31,7 @@ import {
   appendUserMessage,
   markRunCancelled,
 } from "@/core/reducer"
-import { sameInteractionState, createSessionStreamState, normalizeRunTerminals, type SessionStreamState, type SessionMessage } from "@/core/state"
+import { sameInteractionState, createSessionStreamState, type SessionStreamState, type SessionMessage } from "@/core/state"
 
 import { SessionClientError } from "./client"
 import { reconcileUserMessageId, reduceProjectionEvents } from "./event-reducer"
@@ -1333,7 +1333,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     // This ACK owns only its new assistant/Run. The returned user ID is the
     // original human association, never a new input echo or rename instruction.
     registerMessagePartsReceipt(sessionId, receipt)
-    const terminal = normalizeRunTerminals(thread).runTerminalsById[receipt.run_id]
+    const terminal = thread.runTerminalsById[receipt.run_id]
     if (!terminal && unchanged && machine.phase === "idle" && pendingSubmission === null && pendingSteerReceipts.size === 0 && thread.activeRunId === null) {
       machine = transition(transition(machine, { type: "SUBMIT" }), { type: "RECEIPT", runId: receipt.run_id })
       openStream(sessionId, thread.resumeCursor)

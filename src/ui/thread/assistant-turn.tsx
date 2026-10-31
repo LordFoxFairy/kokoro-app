@@ -1,5 +1,5 @@
 import { TurnProcess } from "./turn-process"
-import { completedTurnSections, displayFinalSegmentId } from "./completed-turn-sections"
+import { completedTurnSections } from "./completed-turn-sections"
 import { useRunDisplay } from "./use-run-display"
 import { overlayRunDisplay } from "./run-display-overlay"
 import type { AnswerActionBoundary } from "./answer-action-scope"
@@ -142,6 +142,7 @@ export function AssistantTurn({
   }, [interaction])
   const displayRunId = runId ?? answerActionTarget?.runId
   const display = useRunDisplay(answerActionBoundary, displayRunId, terminal)
+  void activities
   const ensureDisplayRead = display.ensureRead
   const turnRef = useRef<HTMLElement>(null)
   const needsFinalProof = terminal && succeeded && !cancelled && !isLive && !hitlActive && !interaction?.groups.length && !finalSegmentId
@@ -154,12 +155,10 @@ export function AssistantTurn({
     observer.observe(turnRef.current)
     return () => { current = false; observer.disconnect() }
   }, [needsFinalProof, ensureDisplayRead])
-  const legacyFinalId = finalSegmentId === undefined ? displayFinalSegmentId(display.facts, displayRunId, parts) : undefined
-  const displayedActivities = overlayRunDisplay(activities, display.facts)
   const displayedSteps = steps.map(step => step.kind === "activity" ? { ...step, activity: overlayRunDisplay([step.activity], display.facts)[0]! } : step)
-  const segments = groupSegments(displayedSteps, displayedActivities, messagesById)
+  const segments = groupSegments(displayedSteps, messagesById)
   const completedSections = !isLive && !hitlActive && !interaction?.groups.length
-    ? completedTurnSections({ runId: displayRunId, succeeded, partsComplete: finalSegmentId ? finalPartsComplete : Boolean(legacyFinalId), finalSegmentId: finalSegmentId ?? legacyFinalId, segments, messagesById }) : null
+    ? completedTurnSections({ runId: displayRunId, succeeded, partsComplete: finalPartsComplete, finalSegmentId, segments, messagesById }) : null
   const sections = contentFocused ? null : completedSections
   // A single tools-only passage already has the whole-turn disclosure.
   const directProcessId = sections?.process.length === 1 && !messagesById[sections.process[0]!.segmentId]?.content.length

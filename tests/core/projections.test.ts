@@ -125,28 +125,13 @@ describe("groupSegments", () => {
     const turn = buildThreadItems(updated)[0]
     const oldTurn = buildThreadItems(first)[0]
     if (turn?.kind !== "assistant-turn" || oldTurn?.kind !== "assistant-turn") throw new Error("expected assistant turn")
-    const segments = groupSegments(turn.steps, updated.executionProcess?.activities)
+    const segments = groupSegments(turn.steps)
     expect(segments.map((segment) => turn.messagesById[segment.segmentId]?.content ?? segment.activities.map((activity) => activity.activity).join(","))).toEqual([
       "A", "tool,tool", "B", "skill,subagent", "C",
     ])
-    expect(segments.map((segment) => segment.segmentId)).toEqual(groupSegments(oldTurn.steps, first.executionProcess?.activities).map((segment) => segment.segmentId))
+    expect(segments.map((segment) => segment.segmentId)).toEqual(groupSegments(oldTurn.steps).map((segment) => segment.segmentId))
     expect(segments.flatMap((segment) => segment.activities)).toEqual(updated.executionProcess?.activities)
     expect(groupSegments(turn.steps)).toEqual(segments)
-  })
-
-  it("keeps unanchored snapshot activities on the original legacy fallback path", () => {
-    const tool = { activity: "tool" as const, activity_id: `act_${"a".repeat(64)}`, segment_id: `seg_${"b".repeat(64)}`, status: "completed" as const, display_code: "tool.execution" as const }
-    const skill = { activity: "skill" as const, activity_id: `act_${"c".repeat(64)}`, preflight_id: `spf_${"d".repeat(64)}`, source_refs: ["skill:alpha"], phase: "ready" as const }
-    const snapshot = {
-      ...makeSnapshot({ messages: [{ message_id: "durable", role: "assistant", run_id: "run_1", content: "legacy text", status: "completed", created_at: "2026-07-02T00:00:00Z" }] }),
-      execution_process: { run_id: "run_1", todos: null, activities: [tool, skill], next_cursor: null },
-    }
-    const restored = stateFromSnapshot(snapshot)
-    expect(groupSegments(restored.stepsByRun.run_1 ?? [], restored.executionProcess?.activities)).toMatchObject([
-      { segmentId: "durable", activities: [] },
-      { segmentId: tool.segment_id, activities: [tool] },
-      { segmentId: `skill:${skill.preflight_id}`, activities: [skill] },
-    ])
   })
 
   it("按 segmentId 聚合并保持首次出现顺序", () => {
@@ -166,7 +151,7 @@ describe("groupSegments", () => {
     expect(segments.map((segment) => segment.segmentId)).toEqual(["seg_1", "seg_2"])
     expect(segments[0]?.thinking).toBe("think late")
     expect(segments[0]?.tools.map((tool) => tool.id)).toEqual(["tool_1"])
-    expect(segments[0]?.legacySteps.map((step) => step.kind)).toEqual(["thinking", "tool", "thinking"])
+    expect(segments[0]?.thinking).toBe("think late")
   })
 
   it.each([
@@ -274,7 +259,7 @@ describe("native tool rounds and authoritative empty text boundaries", () => {
   function groups(state: ReturnType<typeof readState>) {
     const turn = buildThreadItems(state)[0]
     if (turn?.kind !== "assistant-turn") throw new Error("missing owner turn")
-    return groupSegments(turn.steps, [], turn.messagesById)
+    return groupSegments(turn.steps, turn.messagesById)
   }
   it("joins activities across an owner-proven completed empty slot but never across public text", () => {
     const segments = groups(readState(true))
@@ -292,7 +277,7 @@ describe("native tool rounds and authoritative empty text boundaries", () => {
     const turn = buildThreadItems(state)[0]
     if (turn?.kind !== "assistant-turn") throw new Error("missing owner turn")
     const withoutBody = Object.fromEntries(Object.entries(turn.messagesById).filter(([id]) => id !== "empty"))
-    expect(groupSegments(turn.steps, [], withoutBody).map((segment) => segment.activities.length)).toEqual([1, 0, 1, 0, 1])
+    expect(groupSegments(turn.steps, withoutBody).map((segment) => segment.activities.length)).toEqual([1, 0, 1, 0, 1])
   })
   it("does not infer a completed empty body from START/END and honors later authoritative content", () => {
     const state = applyChatProjectionEvents(createSessionStreamState(), [

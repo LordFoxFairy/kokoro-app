@@ -139,7 +139,8 @@ it("late hydration of a cached failed thread cannot claim the bare homepage or p
   expect(window.location.pathname + window.location.search).toBe("/app")
   expect(view.result.current.routeOwnsConversation).toBe(false)
 })
-it.each(["?conversation=conv-retained-direct", "#conversation/conv-retained-direct"])("an explicit direct id still owns its existing thread: %s", suffix => {
+it("an explicit direct query id still owns its existing thread", () => {
+  const suffix = "?conversation=conv-retained-direct"
   window.history.replaceState(null, "", `/app${suffix}`)
   const view = renderHook(() => useAppFrameNavigation(options))
   expect(view.result.current.routeOwnsConversation).toBe(true)

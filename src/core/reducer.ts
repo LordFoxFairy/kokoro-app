@@ -1,7 +1,7 @@
 import { mergeFinalAnswerReference } from "./final-answer-reference"
 // 事件折叠：event_id 幂等去重 + 批量折叠（可变草稿一次快照）+ never 穷尽守卫。
 
-import { assertInteractionRevision, createSessionStreamState, normalizeRunTerminals } from "./state"
+import { assertInteractionRevision, createSessionStreamState } from "./state"
 import type { MessagePart } from "@/contract/chat"
 
 import type { ChatProjectionEvent } from "@/core/chat-projection-event"
@@ -504,7 +504,6 @@ export function applyChatProjectionEvents(
   state: SessionStreamState,
   events: readonly ChatProjectionEvent[],
 ): SessionStreamState {
-  state = normalizeRunTerminals(state)
   let draft: Draft | null = null
   for (const event of events) {
     const base = draft?.state ?? state
@@ -565,7 +564,6 @@ export function appendUserMessage(
   state: SessionStreamState,
   message: { id: string; content: string },
 ): SessionStreamState {
-  state = normalizeRunTerminals(state)
   return {
     ...state,
     messages: [
@@ -583,7 +581,6 @@ export function markRunCancelled(
   state: SessionStreamState,
   runId: string,
 ): SessionStreamState {
-  state = normalizeRunTerminals(state)
   const steps = state.stepsByRun[runId]
   if (!steps) {
     return state
@@ -601,7 +598,6 @@ export function markRunCancelled(
 export function mergeMessageParts(state: SessionStreamState, read: {
   message_id: string; run_id: string; revision: string; final_segment_id?: string | undefined; items: readonly MessagePart[];
 }, events: readonly ChatProjectionEvent[], complete: boolean): SessionStreamState {
-  state = normalizeRunTerminals(state)
   const known = state.messageParts?.[read.message_id]
   if (!known || known.runId !== read.run_id || BigInt(read.revision) < BigInt(known.revision)) return state
   let fragment = createSessionStreamState()
@@ -656,8 +652,6 @@ export function mergeMessageParts(state: SessionStreamState, read: {
 // A fresh private snapshot may omit all inline text. Keep confirmed visible
 // slots until its asynchronous version-bound read replaces this exact Message.
 export function preserveMessageParts(previous: SessionStreamState, next: SessionStreamState): SessionStreamState {
-  previous = normalizeRunTerminals(previous)
-  next = normalizeRunTerminals(next)
   let result = next
   for (const [runId, reference] of Object.entries(next.finalAnswersByRun ?? {})) {
     result = { ...result, finalAnswersByRun: { ...result.finalAnswersByRun, [runId]: mergeFinalAnswerReference(previous.finalAnswersByRun?.[runId], reference) } }

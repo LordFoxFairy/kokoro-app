@@ -112,9 +112,8 @@ export function useAppFrameNavigation({
         url.hash = ""
       }
     } else {
-      // Match Manus' shareable settings route. Keep the legacy query form
-      // accepted on input, but emit one canonical URL so tab changes do not
-      // alternate between two address-bar formats.
+      // Match Manus' shareable settings route while keeping the query form
+      // reserved for non-hash settings callers.
       url.searchParams.delete("settings")
       const routeTab = tab === "appearance" ? "general" : tab
       url.hash = tab === "skills" && skillsView !== undefined && skillsView !== "all"
@@ -130,16 +129,10 @@ export function useAppFrameNavigation({
       return
     }
     const url = new URL(window.location.href)
-    const hashConversation = /^#\/?conversation(?:=|\/)/.test(url.hash)
     if (id === null) {
       url.searchParams.delete("conversation")
     } else {
       url.searchParams.set("conversation", id)
-    }
-    // Emit the query form as the canonical conversation URL after accepting
-    // a hash deep-link; otherwise back/forward would keep two identities.
-    if (hashConversation) {
-      url.hash = ""
     }
     const next = url.pathname + (url.search ? url.search : "") + url.hash
     const current = window.location.pathname + window.location.search + window.location.hash

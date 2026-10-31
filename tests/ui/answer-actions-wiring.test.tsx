@@ -72,14 +72,6 @@ it("retired actor blocks a late fact; no new intent is eligible from text comple
   f.retire()
   expect(canRegenerateAnswer(f.boundary, target)).toBe(false)
 })
-it("retained old RAM in StrictMode is safe and does not fabricate a terminal from old completed text", () => {
-  const f = fixture(); localStorage.setItem("kokoro.web.auth-index-subject", "actor")
-  Reflect.deleteProperty(f.snapshot.thread, "runTerminalsById")
-  Reflect.set(f.snapshot.thread, "cancelledRuns", {})
-  const { result } = renderHook(() => useAnswerActionScope({ engine: f.boundary.engine, actorId: "actor", sessionId: "session", scope: f.boundary.scope, identity: "actor1", admitted: true, preview: false }), { wrapper: StrictMode })
-  expect(result.current?.isCurrent()).toBe(true)
-  expect(canRegenerateAnswer(result.current!, { actorId: "actor", sessionId: "session", scope: f.boundary.scope, runId: "run", messageId: "answer" })).toBe(false)
-})
 it("requests only one chosen original Run and retires late display facts without changing event order/status", async () => {
   const f = fixture(); let resolve!: (value: Awaited<ReturnType<typeof f.client.readDisplay>>) => void
   f.client.readDisplay.mockImplementation(() => new Promise(r => { resolve = r }))

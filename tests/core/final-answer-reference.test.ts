@@ -15,7 +15,7 @@ describe("final answer identity, not last visible text", () => {
     stage: { id: "stage", role: "assistant", runId: "run", content: "Checking the repository", textState: "completed" },
     answer: { id: "answer", role: "assistant", runId: "run", content: "The result", textState: "completed" },
   }
-  const segments = groupSegments([{ kind: "text", seq: "1", segmentId: "stage" }, { kind: "text", seq: "5", segmentId: "answer" }], [], messages)
+  const segments = groupSegments([{ kind: "text", seq: "1", segmentId: "stage" }, { kind: "text", seq: "5", segmentId: "answer" }], messages)
   const args = { runId: "run", succeeded: true, partsComplete: true, finalSegmentId: "answer", segments, messagesById: messages }
   it("separates only explicit complete final text and keeps process order", () => {
     expect(completedTurnSections(args)).toEqual({ process: [segments[0]], final: segments[1] })
