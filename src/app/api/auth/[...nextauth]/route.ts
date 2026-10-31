@@ -17,7 +17,7 @@ import { readProductLoginIntent } from "@/lib/server/product-login-return"
 import { clearProductSessionCookie, productSessionState, decodeProductSession, productSessionCookie, type ProductClaims } from "@/lib/server/product-session"
 import { createSession, finalizeRefresh, invalidatePending, newSessionCandidate, reserveRefresh, tombstoneSession } from "@/lib/server/product-session-store"
 import { refreshOidcToken, revokeOidcToken } from "@/lib/server/oidc-token"
-import { admittedProductSession, nativeSessionBffHeaders, productBffConfig } from "@/lib/server/product-bff"
+import { admittedNativeSession, admittedProductSession, nativeProductBffConfig, nativeSessionBffHeaders, productBffConfig } from "@/lib/server/product-bff"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -183,10 +183,42 @@ async function handle(request: NextRequest, context: Context, method: "GET" | "P
   if (request.method !== method ||
     (action === "signin" || action === "signout" ? method !== "POST" :
       action === "session" ? false : method !== "GET")) return errorResponse(405, "rp_method_not_allowed")
-  const config = oidcRpConfig(process.env)
-  if (config === null) return errorResponse(503, "rp_unavailable")
   const expectedPath = `/api/auth/${parts.join("/")}`
   const url = request.nextUrl
+  if (action === "session" && method === "GET") {
+    const nativeConfig = nativeProductBffConfig()
+    const nativeOrigin = nativeConfig === null ? null : new URL(nativeConfig.session.webOrigin)
+    const nativeRequest = nativeConfig !== null && url.pathname === expectedPath &&
+      request.headers.get("host") === nativeOrigin?.host &&
+      (request.headers.get("origin") === null || request.headers.get("origin") === nativeConfig.session.webOrigin)
+    if (nativeRequest) {
+      const id = randomUUID()
+      if (url.search !== "") return errorResponse(400, "rp_query_rejected")
+      if (request.headers.has("authorization") || request.headers.has("x-kokoro-service") || request.headers.has("x-kokoro-internal-secret"))
+        return errorResponse(403, "rp_credential_rejected")
+      let headerBytes = 2
+      for (const [name, value] of request.headers) headerBytes += Buffer.byteLength(name) + Buffer.byteLength(value) + 4
+      if (headerBytes > IAM_RELAY_POLICY.maxHeaderBytes) return errorResponse(413, "rp_request_too_large")
+      if (request.body !== null || request.headers.has("transfer-encoding") ||
+        (request.headers.has("content-length") && request.headers.get("content-length") !== "0")) return errorResponse(400, "rp_body_rejected")
+      const native = nativeSessionBffHeaders(request, nativeConfig, id)
+      if (native.state === "invalid") return errorResponse(401, "native_session_invalid")
+      if (native.state === "valid") {
+        try {
+          const claims = await admittedNativeSession(request, nativeConfig)
+          if (claims === null) return errorResponse(401, "native_session_required")
+          return Response.json(
+            { authenticated: true, subject: claims.subject, expires_at: claims.expiresAt, mode: "native" },
+            { headers: { "cache-control": "private, no-store", "x-request-id": id } },
+          )
+        } catch {
+          return errorResponse(503, "native_session_unavailable")
+        }
+      }
+    }
+  }
+  const config = oidcRpConfig(process.env)
+  if (config === null) return errorResponse(503, "rp_unavailable")
   // The no-referrer login handoff makes Chromium send the fixed browser form
   // POST with `Origin: null`. It remains bound to the live Auth.js double-submit
   // CSRF cookie below; admit this exact provider-start exception only.

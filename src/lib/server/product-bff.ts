@@ -16,6 +16,13 @@ export type ProductBffConfig = Readonly<{
   session: Readonly<{ redisUrl: string; webOrigin: string; secret: string }>;
 }>;
 
+export type NativeProductBffConfig = Readonly<{
+  bffBaseUrl: string;
+  domain: string;
+  internalSecret: string | null;
+  session: Readonly<{ webOrigin: string }>;
+}>;
+
 export class ProductSessionUnavailableError extends Error {}
 
 const NATIVE_SESSION_COOKIE_NAMES = new Set([
@@ -69,6 +76,30 @@ const nativeCurrentUserResponse = z.strictObject({
   meta: z.strictObject({ request_id: z.string().min(1) }),
 });
 
+function validWebOrigin(raw: string | undefined): string | null {
+  const value = raw?.trim();
+  if (!value) return null;
+  try {
+    const origin = new URL(value);
+    if (!/^https?:$/u.test(origin.protocol) || origin.origin !== value) return null;
+    return origin.origin;
+  } catch {
+    return null;
+  }
+}
+
+export function nativeProductBffConfig(
+  env: NodeJS.ProcessEnv = process.env,
+): NativeProductBffConfig | null {
+  const bffBaseUrl = configuredBffBaseUrl(env);
+  const domain = configuredDomain(env);
+  const webOrigin = validWebOrigin(env.KOKORO_WEB_ORIGIN);
+  const internalSecret = env.KOKORO_INTERNAL_SECRET_WEB_BFF?.trim() || null;
+  if (!bffBaseUrl || !domain || !webOrigin) return null;
+  if (env.NODE_ENV === "production" && internalSecret === null) return null;
+  return { bffBaseUrl, domain, internalSecret, session: { webOrigin } };
+}
+
 export function productBffConfig(
   env: NodeJS.ProcessEnv = process.env,
 ): ProductBffConfig | null {
@@ -87,13 +118,7 @@ export function productBffConfig(
     secret.length < 32
   )
     return null;
-  try {
-    const origin = new URL(webOrigin);
-    if (!/^https?:$/u.test(origin.protocol) || origin.origin !== webOrigin)
-      return null;
-  } catch {
-    return null;
-  }
+  if (validWebOrigin(webOrigin) === null) return null;
   if (env.NODE_ENV === "production" && internalSecret === null) return null;
   return {
     bffBaseUrl,
@@ -103,6 +128,45 @@ export function productBffConfig(
   };
 }
 
+export async function admittedNativeSession(
+  request: Request,
+  config: NativeProductBffConfig,
+): Promise<ProductClaims | null> {
+  const requestId = request.headers.get("x-kokoro-request-id") ?? randomUUID();
+  const native = nativeSessionBffHeaders(request, config, requestId);
+  if (native.state !== "valid") return null;
+  try {
+    const upstream = await requestWithDomain(`${config.bffBaseUrl}/v1/me`, config.domain, {
+      method: "GET",
+      headers: native.headers,
+      signal: request.signal,
+      timeoutMs: 10_000,
+      maxResponseBytes: 65_536,
+    });
+    const raw = await upstream.json().catch(() => null);
+    if (upstream.status === 401 || upstream.status === 403) return null;
+    if (upstream.status !== 200) throw new Error("native_session_admission_unavailable");
+    const parsed = nativeCurrentUserResponse.safeParse(raw);
+    if (!parsed.success) throw new Error("native_session_response_invalid");
+    const expiresAt = Date.now() + 60_000;
+    return {
+      id: "native-session",
+      generation: 0,
+      access: "",
+      accessExpiresAt: expiresAt,
+      expiresAt,
+      subject: parsed.data.data.user_id,
+      issuerSessionId: "native-session",
+      ...(native.headers.get("cookie") === null ? {} : { nativeCookie: native.headers.get("cookie")! }),
+    };
+  } catch (error) {
+    if (error instanceof Error && error.message === "native_session_admission_unavailable")
+      throw new ProductSessionUnavailableError("Native session admission unavailable");
+    if (request.signal.aborted) throw error;
+    throw new ProductSessionUnavailableError("Native session admission unavailable");
+  }
+}
+
 export async function admittedProductSession(
   request: Request,
   config: ProductBffConfig,
@@ -110,38 +174,7 @@ export async function admittedProductSession(
   const requestId = request.headers.get("x-kokoro-request-id") ?? randomUUID();
   const native = nativeSessionBffHeaders(request, config, requestId);
   if (native.state === "invalid") return null;
-  if (native.state === "valid") {
-    try {
-      const upstream = await requestWithDomain(`${config.bffBaseUrl}/v1/me`, config.domain, {
-        method: "GET",
-        headers: native.headers,
-        signal: request.signal,
-        timeoutMs: 10_000,
-        maxResponseBytes: 65_536,
-      });
-      const raw = await upstream.json().catch(() => null);
-      if (upstream.status === 401 || upstream.status === 403) return null;
-      if (upstream.status !== 200) throw new Error("native_session_admission_unavailable");
-      const parsed = nativeCurrentUserResponse.safeParse(raw);
-      if (!parsed.success) throw new Error("native_session_response_invalid");
-      const expiresAt = Date.now() + 60_000;
-      return {
-        id: "native-session",
-        generation: 0,
-        access: "",
-        accessExpiresAt: expiresAt,
-        expiresAt,
-        subject: parsed.data.data.user_id,
-        issuerSessionId: "native-session",
-        ...(native.headers.get("cookie") === null ? {} : { nativeCookie: native.headers.get("cookie")! }),
-      };
-    } catch (error) {
-      if (error instanceof Error && error.message === "native_session_admission_unavailable")
-        throw new ProductSessionUnavailableError("Native session admission unavailable");
-      if (request.signal.aborted) throw error;
-      throw new ProductSessionUnavailableError("Native session admission unavailable");
-    }
-  }
+  if (native.state === "valid") return admittedNativeSession(request, config);
   try {
     const claims = await currentProductSession(request, config.session);
     if (claims === null || claims.accessExpiresAt <= Date.now()) return null;
@@ -189,7 +222,7 @@ export function productBffHeaders(
  */
 export function nativeSessionBffHeaders(
   request: Request,
-  config: ProductBffConfig,
+  config: Pick<NativeProductBffConfig, "internalSecret" | "session">,
   requestId: string,
 ): NativeSessionBffHeaders {
   const raw = request.headers.get("cookie");
