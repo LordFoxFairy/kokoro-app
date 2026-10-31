@@ -31,12 +31,23 @@ export async function endProductSession(
   signal?: AbortSignal,
 ): Promise<void> {
   signal?.throwIfAborted();
-  const csrfToken = await currentCsrf(signal);
+  const sessionProbe = await fetch("/api/auth/session", { cache: "no-store", ...(signal ? { signal } : {}) });
+  const sessionRaw: unknown = sessionProbe.ok || sessionProbe.status === 401
+    ? await sessionProbe.json().catch(() => null)
+    : null;
+  signal?.throwIfAborted();
+  const nativeSession = typeof sessionRaw === "object" && sessionRaw !== null && !Array.isArray(sessionRaw) &&
+    ((sessionRaw as { mode?: unknown }).mode === "native" ||
+      (sessionProbe.status === 401 && typeof (sessionRaw as { error?: { code?: unknown } }).error?.code === "string" &&
+        (sessionRaw as { error: { code: string } }).error.code.startsWith("native_session_")));
+  const csrfToken = nativeSession ? null : await currentCsrf(signal);
   signal?.throwIfAborted();
   const response = await fetch("/api/auth/signout", {
     method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ csrfToken }),
+    ...(nativeSession ? {} : {
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ csrfToken: csrfToken! }),
+    }),
     ...(signal ? { signal } : {}),
   });
   signal?.throwIfAborted();
@@ -53,6 +64,10 @@ export async function endProductSession(
   ) {
     signal?.throwIfAborted();
     navigate(url);
+    return;
+  }
+  if (nativeSession && response.status === 401) {
+    navigate("/");
     return;
   }
   signal?.throwIfAborted();

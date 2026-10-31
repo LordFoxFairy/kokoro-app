@@ -14,12 +14,27 @@ afterEach(() => {
 });
 
 describe("Product auth browser client", () => {
+  it("uses the native session read before issuing issuer signout without legacy CSRF", async () => {
+    const navigate = vi.fn();
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(Response.json({ authenticated: true, subject: "native-user", mode: "native" }))
+      .mockResolvedValueOnce(Response.json({ status: "signed_out", issuer_session: "native", issuer_end_session_url: "/iam/oauth2/end-session?client_id=web" }));
+    vi.stubGlobal("fetch", fetchMock);
+    await endProductSession(navigate);
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/auth/session", { cache: "no-store" });
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/auth/signout", expect.objectContaining({ method: "POST" }));
+    expect(navigate).toHaveBeenCalledExactlyOnceWith("/iam/oauth2/end-session?client_id=web");
+  });
+
   it("uses CSRF-protected Product signout and follows only the issuer handoff", async () => {
     const navigate = vi.fn();
     vi.stubGlobal(
       "fetch",
       vi
         .fn()
+        .mockResolvedValueOnce(
+          Response.json({ authenticated: false }),
+        )
         .mockResolvedValueOnce(
           new Response(JSON.stringify({ csrfToken: "Token123" }), {
             status: 200,
@@ -36,7 +51,7 @@ describe("Product auth browser client", () => {
     );
     await endProductSession(navigate);
     expect(fetch).toHaveBeenNthCalledWith(
-      2,
+      3,
       "/api/auth/signout",
       expect.objectContaining({ method: "POST" }),
     );
@@ -46,6 +61,7 @@ describe("Product auth browser client", () => {
   it("does not navigate to an attacker-controlled signout URL", async () => {
     const navigate = vi.fn();
     vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(Response.json({ authenticated: false }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ csrfToken: "Token123" }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ issuer_end_session_url: "https://evil.example/signout" }), { status: 200 })));
     await endProductSession(navigate);
@@ -136,17 +152,18 @@ describe("SET20 retired Team signout RED", () => {
     const controller = new AbortController()
     const navigate = vi.fn()
     let release!: (raw: unknown) => void
-    const fetcher = vi.fn().mockResolvedValueOnce({ ok: true, json: () => new Promise((resolve) => { release = resolve }) })
-      .mockResolvedValueOnce(Response.json({ issuer_end_session_url: "/iam/oauth2/end-session?client_id=web" }))
-    vi.stubGlobal("fetch", fetcher)
     // Reflect invokes the existing public function with the future optional caller signal;
     // no nonexistent module or TypeScript error is used as a behavioral oracle.
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(Response.json({ authenticated: false }))
+      .mockResolvedValueOnce({ ok: true, json: () => new Promise((resolve) => { release = resolve }) })
+    vi.stubGlobal("fetch", fetcher)
     const pending = Reflect.apply(endProductSession, undefined, [navigate, controller.signal]).catch(() => undefined)
     await vi.waitFor(() => expect(release).toBeTypeOf("function"))
     controller.abort()
     release({ csrfToken: "Token123" })
     await pending
-    expect(fetcher).toHaveBeenCalledOnce()
+    expect(fetcher).toHaveBeenCalledTimes(2)
     expect(navigate).not.toHaveBeenCalled()
   })
 })
@@ -156,14 +173,16 @@ describe("SET20 signout result retirement", () => {
     const controller = new AbortController()
     const navigate = vi.fn()
     let release!: (raw: unknown) => void
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(Response.json({ csrfToken: "Token123" }))
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(Response.json({ authenticated: false }))
+      .mockResolvedValueOnce(Response.json({ csrfToken: "Token123" }))
       .mockResolvedValueOnce({ ok: true, json: () => new Promise((resolve) => { release = resolve }) }))
     const pending = endProductSession(navigate, controller.signal).catch(() => undefined)
     await vi.waitFor(() => expect(release).toBeTypeOf("function"))
     controller.abort()
     release({ issuer_end_session_url: "/iam/oauth2/end-session?client_id=web" })
     await pending
-    expect(fetch).toHaveBeenCalledTimes(2)
+    expect(fetch).toHaveBeenCalledTimes(3)
     expect(navigate).not.toHaveBeenCalled()
   })
   it("does not read CSRF for an already retired caller", async () => {
@@ -178,16 +197,16 @@ describe("SET20 signout result retirement", () => {
 it("checks retirement between successful CSRF return and the signout continuation", async () => {
   const controller = new AbortController()
   const navigate = vi.fn()
-  const fetcher = vi.fn().mockResolvedValueOnce({ ok: true, json: () => {
+  const fetcher = vi.fn().mockResolvedValueOnce(Response.json({ authenticated: false })).mockResolvedValueOnce({ ok: true, json: () => {
     const body = Promise.resolve({ csrfToken: "Token123" })
     // The first job queues abort after currentCsrf's own final check, but before
     // endProductSession resumes and would dispatch the noncooperative POST.
     void body.then(() => queueMicrotask(() => controller.abort()))
     return body
-  } }).mockResolvedValueOnce(Response.json({ issuer_end_session_url: "/iam/oauth2/end-session?client_id=web" }))
+  } }).mockResolvedValueOnce(Response.json({ csrfToken: "Token123" })).mockResolvedValueOnce(Response.json({ issuer_end_session_url: "/iam/oauth2/end-session?client_id=web" }))
   vi.stubGlobal("fetch", fetcher)
   await expect(endProductSession(navigate, controller.signal)).rejects.toThrow()
-  expect(fetcher).toHaveBeenCalledOnce()
+  expect(fetcher).toHaveBeenCalledTimes(2)
   expect(navigate).not.toHaveBeenCalled()
 })
 
