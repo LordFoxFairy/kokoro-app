@@ -17,6 +17,7 @@ import { readProductLoginIntent } from "@/lib/server/product-login-return"
 import { clearProductSessionCookie, productSessionState, decodeProductSession, productSessionCookie, type ProductClaims } from "@/lib/server/product-session"
 import { createSession, finalizeRefresh, invalidatePending, newSessionCandidate, reserveRefresh, tombstoneSession } from "@/lib/server/product-session-store"
 import { refreshOidcToken, revokeOidcToken } from "@/lib/server/oidc-token"
+import { admittedProductSession, nativeSessionBffHeaders, productBffConfig } from "@/lib/server/product-bff"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -51,6 +52,33 @@ async function validCsrf(request: Request, secret: string): Promise<boolean> {
 async function productAction(request: NextRequest, action: "session" | "signout", config: NonNullable<ReturnType<typeof oidcRpConfig>>): Promise<Response> {
   const store = { redisUrl: config.redisUrl, webOrigin: config.relay.webOrigin, secret: config.authSecret }
   const requestId = randomUUID()
+  const nativeBff = productBffConfig()
+  if (nativeBff !== null) {
+    const native = nativeSessionBffHeaders(request, nativeBff, requestId)
+    if (native.state === "invalid") return errorResponse(401, "native_session_invalid")
+    if (native.state === "valid") {
+      if (action === "signout") {
+        // Native logout is completed by the IAM relay. This endpoint only
+        // clears the legacy Product Session, when one is still present.
+        const issuerEndSessionUrl = `/iam/oauth2/end-session?${new URLSearchParams({
+          client_id: config.clientId, post_logout_redirect_uri: `${config.relay.webOrigin}/auth/sign-in`,
+        })}`
+        const headers = new Headers({ "cache-control": "private, no-store", "x-request-id": requestId })
+        headers.append("set-cookie", clearProductSessionCookie(config.relay.webOrigin))
+        return Response.json({ status: "signed_out", remote_revocation: "delegated", issuer_session: "native", issuer_end_session_url: issuerEndSessionUrl }, { headers })
+      }
+      try {
+        const claims = await admittedProductSession(request, nativeBff)
+        if (claims === null) return errorResponse(401, "native_session_required")
+        return Response.json(
+          { authenticated: true, subject: claims.subject, expires_at: claims.expiresAt, mode: "native" },
+          { headers: { "cache-control": "private, no-store", "x-request-id": requestId } },
+        )
+      } catch {
+        return errorResponse(503, "native_session_unavailable")
+      }
+    }
+  }
   if (request.method === "GET" && action === "session") {
     try {
       const result = await productSessionState(request, store)

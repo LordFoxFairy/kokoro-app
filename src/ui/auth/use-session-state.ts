@@ -39,7 +39,7 @@ export type SessionProbe = {
 const EXPLICIT_PREVIEW = process.env.NODE_ENV !== "production" && process.env.NEXT_PUBLIC_SESSION_PREVIEW === "1"
 
 type ResolvedSession =
-  | { mode: "authenticated"; subject: string; subjectAtProbeStart: string | null | undefined; renewalConfirmed: boolean }
+  | { mode: "authenticated"; subject: string; subjectAtProbeStart: string | null | undefined; renewalConfirmed: boolean; native?: boolean }
   | { mode: "anonymous"; subject: null }
   | { mode: "unavailable"; subject: null }
 
@@ -110,7 +110,8 @@ function requestSessionMode(indexSubject: string | null | undefined, prefetchCsr
       if (authenticated !== true || typeof subject !== "string" || subject.trim() === "") {
         return { mode: "unavailable", subject: null }
       }
-      return { mode: "authenticated", subject, subjectAtProbeStart, renewalConfirmed: false }
+      return { mode: "authenticated", subject, subjectAtProbeStart, renewalConfirmed: false,
+        native: (raw as { mode?: unknown }).mode === "native" }
     }
     const cold = admittedSubject === null && !recovering
     const due = admittedSubject !== null && subjectAtProbeStart === admittedSubject &&
@@ -131,6 +132,7 @@ function requestSessionMode(indexSubject: string | null | undefined, prefetchCsr
       if (recovering) return initial.mode === "authenticated" && initial.subject === refreshSubject
         ? { ...initial, renewalConfirmed: true } : { mode: "unavailable", subject: null }
       if (initial.mode !== "authenticated" && initial.mode !== "refresh-required") return initial
+      if (initial.mode === "authenticated" && initial.native) return { ...initial, renewalConfirmed: true }
       if (!cold && initial.mode === "authenticated") return initial
       if (!cold && initial.subject !== admittedSubject) return { mode: "unavailable", subject: null }
       if (subjectAtProbeStart === undefined) return { mode: "unavailable", subject: null }

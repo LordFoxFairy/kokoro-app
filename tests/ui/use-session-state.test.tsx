@@ -41,6 +41,25 @@ describe("useSessionProbe", () => {
       second.unmount()
     }
   })
+
+  it("admits a native IAM projection without Product CSRF or refresh", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(Response.json({
+      authenticated: true, subject: "reader-native", mode: "native",
+    }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    const view = renderHook(() => useSessionProbe())
+    try {
+      await waitFor(() => expect(view.result.current.projectReadBoundary.admitted).toBe(true))
+      expect(view.result.current).toMatchObject({ state: "pass", mode: "authenticated", projectReadBoundary: {
+        subject: "reader-native", admitted: true,
+      } })
+      expect(fetchMock).toHaveBeenCalledOnce()
+      expect(fetchMock).toHaveBeenCalledWith("/api/auth/session", expect.objectContaining({ cache: "no-store" }))
+    } finally {
+      view.unmount()
+    }
+  })
 })
 
 it("preserves the admitted data lifecycle during same-subject recheck and retires it on a real failure", async () => {
