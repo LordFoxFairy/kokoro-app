@@ -12,6 +12,7 @@ vi.mock("@/lib/server/same-origin", () => ({ sameOriginOk: () => true }))
 vi.mock("@/lib/server/product-bff", () => ({
   productBffConfig,
   admittedProductSession,
+  nativeSessionBffHeaders: () => ({ state: "missing" }),
   productBffHeaders: (config: { internalSecret?: string | null }, claims: { access: string }, requestId: string) => {
     const headers = new Headers({
       authorization: `Bearer ${claims.access}`,

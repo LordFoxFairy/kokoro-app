@@ -15,6 +15,21 @@ export type ProductBffConfig = Readonly<{
 
 export class ProductSessionUnavailableError extends Error {}
 
+const NATIVE_SESSION_COOKIE_NAMES = new Set([
+  "kokoro-issuer.session_token",
+  "kokoro-issuer.session_data",
+  "kokoro-issuer.dont_remember",
+  "kokoro-issuer.session_token.oauth_logout_confirmation",
+  "__Secure-kokoro-issuer.session_token",
+  "__Secure-kokoro-issuer.session_data",
+  "__Secure-kokoro-issuer.dont_remember",
+  "__Secure-kokoro-issuer.session_token.oauth_logout_confirmation",
+]);
+
+export type NativeSessionBffHeaders =
+  | Readonly<{ state: "valid"; headers: Headers }>
+  | Readonly<{ state: "missing" | "invalid" }>;
+
 export function productBffConfig(
   env: NodeJS.ProcessEnv = process.env,
 ): ProductBffConfig | null {
@@ -77,4 +92,44 @@ export function productBffHeaders(
   if (config.internalSecret !== null)
     headers.set(INTERNAL_SECRET_HEADER, config.internalSecret);
   return headers;
+}
+
+/**
+ * Same-origin adapter for the IAM native session boundary.
+ *
+ * The browser's complete Cookie header never crosses into BFF. Unknown
+ * cookies are dropped, duplicate/empty allowlisted cookies fail closed, and
+ * the adapter supplies the configured web Origin rather than trusting a
+ * browser-provided identity or tenant header.
+ */
+export function nativeSessionBffHeaders(
+  request: Request,
+  config: ProductBffConfig,
+  requestId: string,
+): NativeSessionBffHeaders {
+  const raw = request.headers.get("cookie");
+  if (raw === null || raw.trim() === "") return { state: "missing" };
+  const values = new Map<string, string>();
+  let found = false;
+  for (const part of raw.split(";")) {
+    const separator = part.indexOf("=");
+    const name = (separator <= 0 ? part : part.slice(0, separator)).trim();
+    if (!NATIVE_SESSION_COOKIE_NAMES.has(name)) continue;
+    if (separator <= 0) return { state: "invalid" };
+    const value = part.slice(separator + 1).trim();
+    found = true;
+    if (value.length === 0 || values.has(name)) return { state: "invalid" };
+    values.set(name, value);
+  }
+  if (!found || values.size === 0) return { state: "missing" };
+  const headers = new Headers({
+    cookie: [...values].map(([name, value]) => `${name}=${value}`).join("; "),
+    origin: config.session.webOrigin,
+    accept: "application/json",
+    [SERVICE_HEADER]: SERVICE_VALUE,
+    "x-kokoro-request-id": requestId,
+  });
+  if (config.internalSecret !== null)
+    headers.set(INTERNAL_SECRET_HEADER, config.internalSecret);
+  return { state: "valid", headers };
 }
