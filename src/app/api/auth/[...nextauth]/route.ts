@@ -185,7 +185,7 @@ async function handle(request: NextRequest, context: Context, method: "GET" | "P
       action === "session" ? false : method !== "GET")) return errorResponse(405, "rp_method_not_allowed")
   const expectedPath = `/api/auth/${parts.join("/")}`
   const url = request.nextUrl
-  if (action === "session" && method === "GET") {
+  if ((action === "session" && method === "GET") || (action === "signout" && method === "POST")) {
     const nativeConfig = nativeProductBffConfig()
     const nativeOrigin = nativeConfig === null ? null : new URL(nativeConfig.session.webOrigin)
     const nativeRequest = nativeConfig !== null && url.pathname === expectedPath &&
@@ -199,21 +199,36 @@ async function handle(request: NextRequest, context: Context, method: "GET" | "P
       let headerBytes = 2
       for (const [name, value] of request.headers) headerBytes += Buffer.byteLength(name) + Buffer.byteLength(value) + 4
       if (headerBytes > IAM_RELAY_POLICY.maxHeaderBytes) return errorResponse(413, "rp_request_too_large")
-      if (request.body !== null || request.headers.has("transfer-encoding") ||
-        (request.headers.has("content-length") && request.headers.get("content-length") !== "0")) return errorResponse(400, "rp_body_rejected")
+      if (action === "session" && (request.body !== null || request.headers.has("transfer-encoding") ||
+        (request.headers.has("content-length") && request.headers.get("content-length") !== "0"))) return errorResponse(400, "rp_body_rejected")
+      if (action === "signout" && request.headers.has("transfer-encoding")) return errorResponse(400, "rp_body_rejected")
       const native = nativeSessionBffHeaders(request, nativeConfig, id)
       if (native.state === "invalid") return errorResponse(401, "native_session_invalid")
       if (native.state === "valid") {
-        try {
-          const claims = await admittedNativeSession(request, nativeConfig)
-          if (claims === null) return errorResponse(401, "native_session_required")
-          return Response.json(
-            { authenticated: true, subject: claims.subject, expires_at: claims.expiresAt, mode: "native" },
-            { headers: { "cache-control": "private, no-store", "x-request-id": id } },
-          )
-        } catch {
-          return errorResponse(503, "native_session_unavailable")
+        if (action === "session") {
+          try {
+            const claims = await admittedNativeSession(request, nativeConfig)
+            if (claims === null) return errorResponse(401, "native_session_required")
+            return Response.json(
+              { authenticated: true, subject: claims.subject, expires_at: claims.expiresAt, mode: "native" },
+              { headers: { "cache-control": "private, no-store", "x-request-id": id } },
+            )
+          } catch {
+            return errorResponse(503, "native_session_unavailable")
+          }
         }
+        const clientId = process.env.KOKORO_OIDC_CLIENT_ID?.trim()
+        if (!clientId || clientId.length > 256) return errorResponse(503, "native_session_unavailable")
+        const issuerEndSessionUrl = `/iam/oauth2/end-session?${new URLSearchParams({
+          client_id: clientId,
+          post_logout_redirect_uri: `${nativeConfig.session.webOrigin}/auth/sign-in`,
+        })}`
+        const headers = new Headers({ "cache-control": "private, no-store", "x-request-id": id })
+        headers.append("set-cookie", clearProductSessionCookie(nativeConfig.session.webOrigin))
+        return Response.json(
+          { status: "signed_out", remote_revocation: "delegated", issuer_session: "native", issuer_end_session_url: issuerEndSessionUrl },
+          { headers },
+        )
       }
     }
   }
