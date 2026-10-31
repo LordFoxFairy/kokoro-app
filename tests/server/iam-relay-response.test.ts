@@ -122,7 +122,7 @@ describe("closed Product IAM RP callback navigation", () => {
 
 
 describe("native issuer logout view projection", () => {
-  const cookie = "kokoro-issuer.session_token.oauth_logout_confirmation=opaque-proof; Path=/iam/oauth2/end-session/confirm; HttpOnly; SameSite=Lax; Max-Age=300"
+  const cookie = "kokoro-issuer.session_token.oauth_logout_confirmation=opaque-proof; Path=/; HttpOnly; SameSite=Lax; Max-Age=300"
   const input = (cookies: string[] = [cookie]): IamRelayUpstream => ({ status: 200,
     headers: new Headers({ "content-type": "text/html; charset=utf-8" }), setCookies: cookies,
     body: new TextEncoder().encode("<form>issuer-owned template</form>") })
@@ -143,7 +143,7 @@ describe("native issuer logout view projection", () => {
   it("rejects missing, cleared, stale or wrong-scope confirmation without exposing upstream HTML", () => {
     for (const cookies of [[], [cookie.replace("opaque-proof", "")], [cookie.replace("300", "0")],
       [cookie.replace("300", "301")], [cookie.replace("Max-Age=300", "Expires=Wed, 01 Jan 2020 00:00:00 GMT")],
-      [cookie + "; Expires=Wed, 01 Jan 2020 00:00:00 GMT"], [cookie.replace("/iam/oauth2/end-session/confirm", "/")],
+      [cookie + "; Expires=Wed, 01 Jan 2020 00:00:00 GMT"], [cookie.replace("Path=/", "Path=/iam")],
       [cookie, cookie], [cookie.replace("SameSite=Lax", "SameSite=None")],
     ]) expect(browserLogoutStartResponse(request(), input(cookies), WEB_ORIGIN, false, "bad-proof")).toBeNull()
   })
