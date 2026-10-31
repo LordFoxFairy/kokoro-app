@@ -33,6 +33,33 @@ export type NativeSessionBffHeaders =
   | Readonly<{ state: "valid"; headers: Headers }>
   | Readonly<{ state: "missing" | "invalid" }>;
 
+/** Compare one admitted request snapshot without treating a native proof's synthetic TTL as identity. */
+export function sameProductSessionSnapshot(
+  initial: ProductClaims,
+  latest: ProductClaims | null,
+): boolean {
+  if (latest === null) return false;
+  if (initial.id === "native-session" || latest.id === "native-session")
+    return (
+      initial.id === latest.id &&
+      initial.generation === latest.generation &&
+      initial.subject === latest.subject &&
+      initial.access === latest.access &&
+      latest.accessExpiresAt > Date.now() &&
+      latest.expiresAt > Date.now()
+    );
+  return (
+    latest.id === initial.id &&
+    latest.generation === initial.generation &&
+    latest.subject === initial.subject &&
+    latest.access === initial.access &&
+    latest.accessExpiresAt === initial.accessExpiresAt &&
+    latest.expiresAt === initial.expiresAt &&
+    latest.accessExpiresAt > Date.now() &&
+    latest.expiresAt > Date.now()
+  );
+}
+
 const nativeCurrentUserResponse = z.strictObject({
   data: z.strictObject({
     user_id: z.string().min(1),

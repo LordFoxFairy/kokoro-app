@@ -5,8 +5,7 @@ import {
   accountProfileUpdateErrorSchemas,
   parseAccountProfileJson,
 } from "@/lib/account-profile-update.schema";
-import { productBffConfig, productBffHeaders } from "./product-bff";
-import { currentProductSession } from "./product-session";
+import { admittedProductSession, productBffConfig, productBffHeaders, sameProductSessionSnapshot } from "./product-bff";
 import { requestWithDomain } from "./upstream-http";
 
 /** One canonical name write, bounded from entry through final opaque-session revalidation. */
@@ -126,7 +125,7 @@ export async function updateAccountProfile(
           : "account_profile_input_invalid",
       );
     }
-    const session = await currentProductSession(request, config.session);
+    const session = await admittedProductSession(request, config);
     check();
     if (
       !session ||
@@ -194,19 +193,9 @@ export async function updateAccountProfile(
       check();
       return fail(502, "account_profile_response_invalid");
     }
-    const latest = await currentProductSession(request, config.session);
+    const latest = await admittedProductSession(request, config);
     check();
-    if (
-      !latest ||
-      latest.id !== session.id ||
-      latest.generation !== session.generation ||
-      latest.subject !== session.subject ||
-      latest.access !== session.access ||
-      latest.accessExpiresAt !== session.accessExpiresAt ||
-      latest.expiresAt !== session.expiresAt ||
-      latest.accessExpiresAt <= Date.now() ||
-      latest.expiresAt <= Date.now()
-    )
+    if (!sameProductSessionSnapshot(session, latest))
       return fail(401, "session_invalid");
     const retry = upstream.headers.get("retry-after");
     if (

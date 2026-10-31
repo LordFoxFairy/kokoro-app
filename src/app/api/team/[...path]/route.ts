@@ -4,8 +4,8 @@ import {
   admittedProductSession,
   productBffConfig,
   productBffHeaders,
+  sameProductSessionSnapshot,
 } from "@/lib/server/product-bff";
-import { currentProductSession } from "@/lib/server/product-session";
 import { requestWithDomain } from "@/lib/server/upstream-http";
 import { parseTeamJson } from "@/team/json";
 import {
@@ -333,19 +333,9 @@ async function proxy(request: Request, context: Context): Promise<Response> {
       check();
       return invalid();
     }
-    const latest = await currentProductSession(request, config.session);
+    const latest = await admittedProductSession(request, config);
     check();
-    if (
-      !latest ||
-      latest.id !== session.id ||
-      latest.generation !== session.generation ||
-      latest.subject !== session.subject ||
-      latest.access !== session.access ||
-      latest.accessExpiresAt !== session.accessExpiresAt ||
-      latest.expiresAt !== session.expiresAt ||
-      latest.accessExpiresAt <= Date.now() ||
-      latest.expiresAt <= Date.now()
-    )
+    if (!sameProductSessionSnapshot(session, latest))
       return fail(401, "unauthenticated");
     const meta = (output as { meta: { request_id: string } }).meta;
     return Response.json(output, {

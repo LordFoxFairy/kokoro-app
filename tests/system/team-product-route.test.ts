@@ -6,12 +6,21 @@ const {
   requestWithDomain,
   sameOriginOk,
   currentProductSession,
+  sameProductSessionSnapshot,
 } = vi.hoisted(() => ({
   admittedProductSession: vi.fn(),
   currentProductSession: vi.fn(),
   productBffConfig: vi.fn(),
   requestWithDomain: vi.fn(),
   sameOriginOk: vi.fn<(request: Request) => boolean>(() => true),
+  sameProductSessionSnapshot: vi.fn((initial: { id: string; generation: number; subject: string; access: string; accessExpiresAt: number; expiresAt: number }, latest: typeof initial | null) =>
+    latest !== null &&
+    latest.id === initial.id &&
+    latest.generation === initial.generation &&
+    latest.subject === initial.subject &&
+    latest.access === initial.access &&
+    latest.accessExpiresAt === initial.accessExpiresAt &&
+    latest.expiresAt === initial.expiresAt),
 }));
 
 vi.mock("@/lib/server/product-session", () => ({ currentProductSession }));
@@ -19,6 +28,7 @@ vi.mock("@/lib/server/same-origin", () => ({ sameOriginOk }));
 vi.mock("@/lib/server/product-bff", () => ({
   admittedProductSession,
   productBffConfig,
+  sameProductSessionSnapshot,
   productBffHeaders: (
     _config: unknown,
     claims: { access: string },
@@ -376,7 +386,7 @@ describe("SET20 Team adapter protocol RED", () => {
   });
 
   it("does not release successful owner data after the final session generation changed", async () => {
-    currentProductSession.mockResolvedValue({
+    admittedProductSession.mockResolvedValueOnce({
       ...(await admittedProductSession()),
       generation: 2,
     });
@@ -428,7 +438,7 @@ describe("SET20 same-session and strict upstream negatives", () => {
     "expiresAt",
   ])("retires the final %s change after an owner ACK", async (field) => {
     const session = await admittedProductSession();
-    currentProductSession.mockResolvedValue({
+    admittedProductSession.mockResolvedValueOnce({
       ...session,
       [field]:
         typeof session[field] === "number"

@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto"
 import { accountSessionErrorSchemas, accountSessionRevokeSchema, validateAccountSessionPage } from "@/lib/account-sessions.schema"
-import { productBffConfig, productBffHeaders } from "./product-bff"
-import { currentProductSession } from "./product-session"
+import { admittedProductSession, productBffConfig, productBffHeaders, sameProductSessionSnapshot } from "./product-bff"
 import { requestWithDomain } from "./upstream-http"
 
 /** Only the two account-session operations; the final cookie read shares the same budget. */
@@ -71,7 +70,7 @@ export async function accountSessions(request: Request, sessionTarget?: string |
       if (!url.pathname.startsWith("/api/account/sessions/") || rawId.includes("/") || decodeURIComponent(rawId) !== sessionId || !sessionId || sessionId.length > 255 || request.url.includes("?")) return fail(400, "account_session_invalid_request")
     } catch { return fail(400, "account_session_invalid_request") }
   }
-    const session = await currentProductSession(request, config.session)
+    const session = await admittedProductSession(request, config)
     check()
     if (!session || session.accessExpiresAt <= Date.now() || session.expiresAt <= Date.now()) return fail(401, "account_session_session_required")
     const query = new URLSearchParams({ limit: String(limit) }); if (cursor !== undefined) query.set("cursor", cursor)
@@ -102,9 +101,9 @@ export async function accountSessions(request: Request, sessionTarget?: string |
         output = { error: { code: error.error.code, message: error.error.code }, meta: { request_id: requestId } }
       }
     } catch { return fail(502, "account_session_response_invalid") }
-    const latest = await currentProductSession(request, config.session)
+    const latest = await admittedProductSession(request, config)
     check()
-    if (!latest || latest.id !== session.id || latest.generation !== session.generation || latest.subject !== session.subject || latest.access !== session.access || latest.accessExpiresAt !== session.accessExpiresAt || latest.expiresAt !== session.expiresAt || latest.accessExpiresAt <= Date.now() || latest.expiresAt <= Date.now()) return fail(401, "account_session_session_required")
+    if (!sameProductSessionSnapshot(session, latest)) return fail(401, "account_session_session_required")
     const retry = response.headers.get("retry-after")
     if (retry !== null && (!/^[1-9]\d{0,4}$/u.test(retry) || Number(retry) > 86400 || ![429, 503].includes(status))) return fail(502, "account_session_response_invalid")
     return Response.json(output, { status, headers: { ...headers, ...(retry === null ? {} : { "retry-after": retry }) } })
