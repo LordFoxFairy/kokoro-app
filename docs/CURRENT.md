@@ -1,3 +1,5 @@
+后继状态（2026-11-01 B-06）：已恢复明确断线的显式重连，旧孤立类型断言由当前安全活动回归承接；完整 lint/typecheck/build 已通过，下文更早阶段的类型/build 阻断为当时记录。Root 冻结后重跑完整 engine 与核心/UI风险23文件517项通过（14.33秒），独立审查无确定 P0–P2；writer另有25文件542项通过，范围分开记录。正常运行源尚未切换，整个 B-06 仍待完整身份旅程。
+
 ## 2026-11-01 Task B：局部读取错误与显式 GET 恢复（已独审候选，未激活正常源）
 
 Root 最终复验八文件 90 项通过（11.37 秒），独立审查原焦点 P2 已关闭，无新增确定 P0–P2。首次 Root 复验 89 通过/1 个 hydrated fixture 挂载超时保留；后续受控诊断证实不同 Vite fixture 争用默认优化缓存可使模块返回504，但没有原失败资源日志，不能据此确认该次根因。现浏览器 fixture 使用独有临时 cacheDir，创建/关闭失败亦在 finally 回收自身目录，保留错误诊断、全部断言和原40秒门禁，隔离后 writer 与 Root 各一轮90项通过。不将测试环境修复写成生产登录问题已解决。
@@ -3618,3 +3620,10 @@ App36dacf0基线私有详情/配置只有Prepare，创建窗关闭后needs_oauth
 原切片同一冻结的相关108、lint/types/build、契约和架构已通过；正常授权版本旅程与 main 集成预览分别保留证据。此次 main 原有六套相关测试91 PASS；集成后定向7套108 PASS、七项生成检查、lint、typegen/types、webpack build/post-types通过，独立桌面／移动预览2 PASS并回收自有预览进程。
 
 完整门早先两轮均4450 PASS／1 FAIL／0SKIP，在 pending refresh GET 预期409处收到Next HTML500／JSON解析异常；空manifest观察没有捕获相应空读取，原因仍未查明。只新增5行失败分支元数据诊断，409成功路径无新增IO，不改断言、超时、重试或skip。随后同Node22／4GiB／2workers的无observer配对完整运行：原 main 232文件／4434 PASS，候选233文件／4451 PASS，均0FAIL／0SKIP。1051份冻结输入中只有上述诊断测试改变，生产输入无漂移；只读最终审查通过。独立 Skills UI 切片可以进入PR收尾，但这些通过不证明间歇500已修复，也不等于正常服务、历史／替换／删除、Admin和外部身份映射已闭环。
+## 2026-11-01 B-06：已确认断线的显式恢复（候选，未激活正常源）
+
+恢复状态组件必填 `onReconnect`，直接消费既有 AppFrame→engine.reconnect 回调。仅 unavailable 显示原语义样式/本地化状态与 type=button 的“重新连接”；暂时 reconnecting 仍 sr-only、不新增按钮，connected 沿原父级卸载。不显示 raw reason，不将连接中断伪作 Run 失败，不改 engine、Run/control、wire、renderer 或其它展示。
+
+原 `Segment.legacySteps` 断言与未落地旧设计不一致，沿当前正式单轨 activity 迁移；原 segment 首次出现顺序、thinking 拼接及 tool 身份断言保留。新增 typed tool→subagent→tool 混排、状态更新保持原序、groupSegments 不改输入验证。先保留2文件5 FAIL/25 PASS 基线，再恢复相关UI/core与原 snapshot-first、active 身份、提交不重发及未知提交恢复回归，首轮9文件243 PASS，完整 typecheck 与 ESLint 均0。完整 engine 与 build 另记最终结果，不以该窄修关闭整个 B-06 或声明正常运行源已更新。
+
+最终完整 engine 目录加相关UI/core共25文件542 PASS（35.89秒），完整 ESLint/typecheck/build 均exit0，原两处3条类型阻断由本窄修消除；Turbopack编译29.4秒，随后类型及页面构建均成功。证据 `B06-read-recover-{red,focused,engine-full,lint,types,build}.log`。仅状态组件与测试/INDEX/CURRENT五文件；未改变引擎、接口、正常服务或重放写命令，独立审查和正常页面配对由Root接续。

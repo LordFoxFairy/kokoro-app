@@ -495,3 +495,6 @@ MCP/Custom API配置的焦点后继：保留readonly配置控件而不是临时�
 ### Connector恢复原因与原请求重试边界
 
 现 `src/ui/mcp/connector-command-failure.ts` 消费已固定profile给出非敏感reason/消息key；单命令和Register持失败限制，Prepare创建/详情共享，终止原因不重试、不换key。九语言与原alert/button接线，原UI布局/HTTP/owner事实保持；人工核验与真正OAuth闭环不冒本片完成。
+## 已确认断线的显式恢复（2026-11-01，候选）
+
+`src/components/blocks/app-frame/app-frame-status-surfaces.tsx` 消费原父级已连接的 `onReconnect`；unavailable 用现语义样式和原生按钮显示本地化恢复入口，reconnecting 保持 sr-only。连接引擎、Run 控制、网络和线程 renderer 未变，正常 connected 仍由既有父级卸载状态条。对应 UI 回归在 `tests/ui/app-frame-connection-status.test.tsx`；`tests/core/projections.test.ts` 保留原分段/思考/tool 身份断言，已失效 legacy 字段断言迁移至安全 activity 原序与更新/输入不变验证。
