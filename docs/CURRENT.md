@@ -1,3 +1,11 @@
+## 2026-11-02 Task B：已断开 MCP 配置只读入口（候选，正常源未切换）
+
+基线 cbef49c9。三个显示过滤入口只为真实 revoked/disabled 且有 server_id 的 MCP 配置保定位卡片；点击仍先 exact connector GET 校验冻结身份/版本，再沿 private-server GET 核本人归属。已确认删除优先，旧 active≤撤销版本及低版本 revoked 不恢复，ACK 不生成配置；返回 active 或错误绑定不得将只读窗口变为命令窗口。原详情只展示保存事实，卡片/详情统一“已断开”并说明仅供查看、重连暂不可用，不误用 availability 或“已停用”；九语言仅新增相关两键。编辑/保存/Prepare/OAuth/启停/删除/发布/试用与恢复命令在 UI 和父回调双拒，执行消费面及公共协议未改。
+
+实际 RED-v2 为 7 失败/152 通过；修复后三个原 UI 文件 160 项通过，含直接调用父级命令回调零写、Provider/global 排除、精确绑定与撤销版本负控。后继状态语义另有 3 失败/93 通过 RED，修正后同三原文件 160 项通过（25.35 秒），19 文件 scope ESLint 与完整 tsc 通过；首次 tsc 指出新增测试的可选名称类型，改用同一 fixture 必填名称后该原文件 81 项通过，原失败日志保留。
+
+Root 独审与最终小差分复核通过；固定 Node22.22.2 重跑原三文件 160 项通过（34.38 秒）、scope ESLint 与生产 build 通过。隔离候选源采用 cbef49c9 加本片停写文件，真实 IAM 登录下桌面、刷新与 390px 窄屏均可回读已断开配置，exact connector/server GET 200，关闭后焦点返回原卡片，MCP 写入请求为零。开发态三次详情旅程约 6–8 秒，不代表性能目标达标；全局 connections 与依赖 Storage 的图标仍 503。正常3314未切换，重新授权与整个 B01/B02 未完成；此前默认全套失败、OIDC readiness 阻点及 preview 与真实 owner 的证据边界继续保留。日志、截图和停写 manifest 存本机 Task B 证据目录。
+
 ## 2026-11-02 Task B：Public29 正式消费者与既有自动化承接（候选，正常源未切换）
 
 正式输入固定 BFF7e4ab1cee8f8d45a34902176cd15a10f3c4b22cb 的 Public29.0.0 / SHA258bde9c39f785667cb205976e1547d1cf2c9662a5a2d7f356c4b11e807fcaf7；12public入口正规生成，另5private/profile入口保持原固定来源。test-only有限inverse先验证完整200有序操作和新原件，再恢复approved28.17及RSS20两父完整字节，旧父链原oracle不重签，测试不导入owner SQL。

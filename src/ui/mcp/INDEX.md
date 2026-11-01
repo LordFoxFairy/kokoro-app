@@ -1,3 +1,9 @@
+## 已断开 MCP 配置只读可达（2026-11-02，候选）
+
+连接列表与个人目录保留 `mcp + server_id + revoked + enabled=false` 的配置定位卡片，不把该投影视为私有读取或执行资格。点击后按冻结的 connector/provider/server/type 与版本下限重新 exact GET，再由现有 private-server GET 核归属；全列表不做 N+1。只读意图终身不升级命令，active、错绑定、低版本或已删除结果不能成为详情。确认撤销屏障继续拒绝旧 active 和低版本 revoked；仅 fresh revoked/disabled 达到屏障可读，ACK 本身不造配置。
+
+详情沿原组件呈现 owner 配置事实、已配置 header 名称与“已断开”标识，并说明保存配置仅供查看、重连暂不可用；只读卡片与详情不混用 availability 或可恢复停用的状态。九语言只新增断开标识和只读原因两键。编辑、保存、Prepare、授权、启停、删除、发布、试用和命令恢复入口都不开放，父级回调另有同步拒绝。普通 Provider/global 无 server_id 的 revoked 行仍隐藏，Composer/项目/Run 资格不变；真正 Reauthorize 等待正式 owner artifact。三个原测试文件补卡片/精确身份/撤销版本/命令双拒负控，正常服务未由本片切换。
+
 ## 精确详情读取恢复（2026-11-02，候选）
 
 `use-custom-api-detail.ts`、`use-mcp-provider-detail.ts`、`use-mcp-provider-connection.ts` 各自拥有本窗口显式 GET attempt 与同步 pending 围栏。错误在重试等待时保持可见、同按钮禁用，失败后复用原焦点所有权恢复；换窗口、actor、准入代、locator、binding 或修订时旧回执与旧 retry 闭包退役。API 当前 typed HTTP401 同样向既有 ProductReadRecheck 报告原 subject/generation/signal，非认证故障不报告。

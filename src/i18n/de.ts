@@ -901,6 +901,8 @@ export const de: Partial<Record<MessageKey, string>> = {
   "mcp.own": "eigen",
   "mcp.enabledBadge": "Ermöglicht",
   "mcp.disabledBadge": "Deaktiviert",
+  "mcp.disconnectedBadge": "Getrennt",
+  "mcp.disconnectedConfigurationReadOnly": "Die Verbindung wurde getrennt. Die gespeicherte Konfiguration kann nur angezeigt werden. Erneutes Verbinden ist derzeit nicht verfügbar.",
   "mcp.enable": "aktivieren",
   "mcp.disable": "deaktivieren",
   "mcp.delete": "löschen",

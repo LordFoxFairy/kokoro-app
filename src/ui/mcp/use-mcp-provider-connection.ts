@@ -5,8 +5,9 @@ import { useMcpConnectorRevision } from "./use-mcp-projection";
 import { HubClientError, type HubClient } from "@/hub/client";
 import { useProductReadRecheck } from "@/ui/auth/product-read-recheck-context";
 import type { McpConnector } from "@/hub/mcp-connector.schema";
+import { isDisconnectedMcpConfiguration } from "./mcp-projection-types";
 
-export type McpConnectorBinding = { connectorType: McpConnector["connector_type"]; serverId?: string };
+export type McpConnectorBinding = { connectorType: McpConnector["connector_type"]; serverId?: string; disconnectedVersion?: string };
 
 /** OAuth detail resolves its exact connection even when the plaza has no list. */
 export function useMcpProviderConnection({ client, identity, admitted, readGeneration, connectorId, providerKey, known, retry, binding, window }: {
@@ -31,7 +32,9 @@ export function useMcpProviderConnection({ client, identity, admitted, readGener
     void request.then(connection => {
       if (controller.signal.aborted || current.current !== scope) return;
       setResult(connection.connector_id === connectorId && connection.provider_key === providerKey &&
-        (!binding || (connection.status !== "revoked" && connection.connector_type === binding.connectorType &&
+        (!binding || ((binding.disconnectedVersion === undefined ? connection.status !== "revoked"
+          : isDisconnectedMcpConfiguration(connection) && BigInt(connection.state_version) >= BigInt(binding.disconnectedVersion)) &&
+          connection.connector_type === binding.connectorType &&
           (connection.server_id ?? null) === (binding.serverId ?? null)))
         ? { scope, connection, error: false } : { scope, error: true });
     }, (error: unknown) => {

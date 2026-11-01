@@ -77,6 +77,39 @@ it("uses only a positive typed server locator and searches owner name/descriptio
   for (const gate of [{ admitted: false }, { confirmed: false }, { category: "efficiency" }, { query: personal.connector_id }])
     expect(visiblePersonalMcpServers({ ...props, ...gate })).toEqual([])
 })
+it("keeps a disabled revoked MCP configuration visible without treating Provider or enabled revoked rows as saved servers", () => {
+  const saved = { ...personal, status: "revoked" as const, enabled: false }
+  const provider = { ...saved, connector_id: "provider-only", server_id: undefined }
+  const builtin = { ...saved, connector_id: "builtin", connector_type: "builtin" as const }
+  expect(visiblePersonalMcpServers({ connectors: [saved, provider, builtin, { ...saved, enabled: true }],
+    admitted: true, confirmed: true, category: "all", query: "documentation" })).toEqual([saved])
+})
+
+it.each(["catalog", "connections"] as const)("opens a saved disconnected configuration through exact private reads only (%s)", async view => {
+  const saved = { ...personal, status: "revoked" as const, enabled: false, state_version: "4" }
+  const client = clientFor(vi.fn().mockResolvedValue({ items: [saved], next_cursor: null }))
+  client.getMcpConnector.mockResolvedValue(saved)
+  render(<LocaleProvider><ConnectorCommandProvider client={client} boundary={{ subject: `saved-${view}`, admitted: true, generation: 0 }}>
+    <McpProjectionRead client={client} identity={`saved-${view}`} embedded initialView={view} />
+  </ConnectorCommandProvider></LocaleProvider>)
+  const card = await screen.findByRole("button", { name: saved.display_name })
+  expect(card).toHaveTextContent("Disconnected")
+  expect(within(card).queryByText("Currently unavailable")).toBeNull()
+  expect(client.getPrivateMcpServer).not.toHaveBeenCalled()
+  fireEvent.click(card)
+  const detail = await screen.findByRole("dialog", { name: saved.display_name })
+  expect(client.getMcpConnector).toHaveBeenCalledExactlyOnceWith(saved.connector_id, expect.any(AbortSignal))
+  expect(client.getPrivateMcpServer).toHaveBeenCalledExactlyOnceWith(saved.server_id, expect.any(AbortSignal))
+  expect(within(detail).getByText("https://mcp.example.test/mcp")).toBeVisible()
+  expect(within(detail).getByText("Disconnected")).toBeVisible()
+  expect(within(detail).getByText("This connection has been disconnected. Saved configuration is read-only. Reconnecting is currently unavailable.")).toBeVisible()
+  expect(within(detail).queryByText("Currently unavailable")).toBeNull()
+  expect(within(detail).queryByRole("button", { name: "管理" })).toBeNull()
+  expect(within(detail).queryByRole("button", { name: /Connect|连接|试用/ })).toBeNull()
+  expect(client.createMcpConnector).not.toHaveBeenCalled()
+  expect(client.preparePrivateMcpServer).not.toHaveBeenCalled()
+  expect(client.updatePrivateMcpServer).not.toHaveBeenCalled()
+})
 it("uses exact connector identities for duplicate personal names without turning an empty gallery into an empty-directory assertion", () => {
   const other = { ...personal, connector_id: "other-exact", server_id: "other-server", description: "Other description" }
   const select = vi.fn()
@@ -177,8 +210,16 @@ it.each(["delete_server", "disconnect", "late_delete_ack"] as const)("a Settings
     view.rerender(both(false, 1))
     await waitFor(() => expect(within(screen.getByTestId("retained-plaza")).queryByText("Added connections could not load")).not.toBeInTheDocument())
     expect(within(screen.getByTestId("retained-plaza")).queryByRole("button", { name: personal.display_name })).not.toBeInTheDocument()
+    current = { ...personal, status: "revoked", enabled: false, state_version: "2" }
+    const callsBeforeStaleRevoked = list.mock.calls.length
+    await act(async () => { view.rerender(both(false, 2)) })
+    expect(list.mock.calls.length).toBeGreaterThan(callsBeforeStaleRevoked)
+    expect(within(screen.getByTestId("retained-plaza")).queryByRole("button", { name: personal.display_name })).not.toBeInTheDocument()
+    current = { ...personal, status: "revoked", enabled: false, state_version: "3" }
+    view.rerender(both(false, 3))
+    expect(await within(screen.getByTestId("retained-plaza")).findByRole("button", { name: personal.display_name })).toBeInTheDocument()
     current = { ...personal, state_version: "4" }
-    view.rerender(both(false, 2))
+    view.rerender(both(false, 4))
     expect(await within(screen.getByTestId("retained-plaza")).findByRole("button", { name: personal.display_name })).toBeInTheDocument()
   }
 })

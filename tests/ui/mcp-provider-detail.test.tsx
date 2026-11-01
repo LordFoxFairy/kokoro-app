@@ -12,6 +12,24 @@ import { CustomApiDetailDialog } from "@/ui/mcp/custom-api-detail-dialog"
 
 afterEach(() => { cleanup(); window.sessionStorage.clear(); vi.unstubAllGlobals() })
 
+it.each(["revoked", "active", "old-version", "enabled", "type", "server", "provider", "id"] as const)("a frozen disconnected read accepts only its exact disabled revoked configuration: %s", async outcome => {
+  const { renderHook, waitFor } = await import("@testing-library/react")
+  const { useMcpProviderConnection } = await import("@/ui/mcp/use-mcp-provider-connection")
+  const connector: McpConnector = { availability: "unavailable", connector_id: "saved-id", server_id: "saved-server",
+    provider_key: "saved-provider", connector_type: "mcp", status: "revoked", enabled: false, state_version: "4", approved_scopes: [] }
+  const get = vi.fn().mockResolvedValue({ ...connector, ...(outcome === "active" ? { status: "active", state_version: "5" }
+    : outcome === "old-version" ? { state_version: "3" } : outcome === "enabled" ? { enabled: true }
+    : outcome === "type" ? { connector_type: "builtin" } : outcome === "server" ? { server_id: "other" }
+    : outcome === "provider" ? { provider_key: "other" } : outcome === "id" ? { connector_id: "other" } : {}) })
+  const client = { ...createHubClient(), getMcpConnector: get }
+  const binding = { connectorType: "mcp" as const, serverId: connector.server_id!, disconnectedVersion: "4" }
+  const hook = renderHook(() => useMcpProviderConnection({ client, identity: "saved-reader", admitted: true, readGeneration: 0,
+    connectorId: connector.connector_id, providerKey: connector.provider_key, known: undefined, retry: 0,
+    binding }))
+  await waitFor(() => expect(outcome === "revoked" ? hook.result.current.connection : hook.result.current.error).toBeTruthy())
+  expect(hook.result.current.connection).toEqual(outcome === "revoked" ? connector : null)
+})
+
 function privateOAuthFixture() {
   const connector = { availability: "reauthorization_required", connector_id: "recover-private", server_id: "recover-server", connector_type: "mcp", provider_key: "recover-provider", display_name: "Recover private OAuth", status: "active", enabled: true, approved_scopes: [], state_version: "3" } satisfies McpConnector
   const server = { availability: "reauthorization_required", server_id: "recover-server", display_name: "Recover private server", server_url: "https://mcp.example.test/recover", status: "registered", state_version: "4", headers: [], transport: "streamable_http" as const, prepare_status: "prepare_failed", authorization_status: "approved", declarations: [], declarations_available: false, oauth_client: { client_id: "public-client", configured: true, origin: "byo", status: "configured", state_version: "1" } } satisfies McpPrivateServer

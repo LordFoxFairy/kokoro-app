@@ -16,6 +16,73 @@ import { ProductReadRecheckProvider, type ProductRead401 } from "@/ui/auth/produ
 beforeEach(() => localStorage.setItem("kokoro.locale", "zh"))
 afterEach(() => { cleanup(); vi.useRealTimers() })
 
+it("a disconnected saved detail shows configuration facts with no command controls even when Prepare or management recovery exists", () => {
+  const connector: McpConnector = { availability: "unavailable", connector_id: "read-only-connector", server_id: "read-only-server",
+    provider_key: "ordinary-name", connector_type: "mcp", status: "revoked", enabled: false, state_version: "4", approved_scopes: [] }
+  const server: McpPrivateServer = { availability: "unavailable", server_id: "read-only-server", display_name: "Saved disconnected MCP",
+    server_url: "https://mcp.example.test/saved", notes: "Saved note", status: "registered", state_version: "9", transport: "sse_compat",
+    headers: [{ name: "x-configured", configured: true, status: "active", state_version: "2" }], prepare_status: "pending_prepare", declarations: [], declarations_available: false }
+  const command = vi.fn()
+  render(<LocaleProvider><CustomMcpDetailDialog connector={connector} server={server} admitted readOnlyConfiguration
+    actionId={null} actionError={false} deleteId={connector.connector_id} managementCommand={undefined}
+    preparationState="unknown" preparationRecoveryReady={false} preparationRecoveryError
+    onRetryPreparationRecovery={command} onResumeManagement={command} onSaveConfiguration={command} onPrepare={command}
+    onTrial={command} onPublish={command} publicationAvailable publicationRecoveryError onRetryPublicationRecovery={command}
+    onAuthorize={command} onDisconnect={command} onDeleteIntent={command} onDelete={command} onCancelDelete={command}
+    returnFocusRef={{ current: null }} onClose={vi.fn()} /></LocaleProvider>)
+  const detail = screen.getByRole("dialog", { name: server.display_name })
+  expect(within(detail).getByText("已断开")).toBeVisible()
+  expect(within(detail).getByText("连接已断开，保存的配置仅供查看。重新连接暂不可用。")).toBeVisible()
+  expect(within(detail).queryByText("已停用")).toBeNull()
+  expect(within(detail).queryByText("暂不可用")).toBeNull()
+  for (const fact of [server.server_url, server.notes!, "x-configured", "SSE"])
+    expect(within(detail).getByText(fact)).toBeVisible()
+  expect(within(detail).queryByRole("button", { name: /管理|保存|连接|重试|删除|试用|发布|检查/ })).toBeNull()
+  expect(within(detail).queryByRole("textbox")).toBeNull()
+  expect(command).not.toHaveBeenCalled()
+})
+
+it("the coordinator rejects direct command callbacks from a disconnected configuration window", async () => {
+  const detailModule = await import("@/ui/mcp/custom-mcp-detail-dialog")
+  const OriginalDetail = detailModule.CustomMcpDetailDialog
+  let captured: Parameters<typeof CustomMcpDetailDialog>[0] | undefined
+  const capture = vi.spyOn(detailModule, "CustomMcpDetailDialog").mockImplementation(props => {
+    captured = props
+    return <OriginalDetail {...props} />
+  })
+  try {
+    const connector: McpConnector = { availability: "unavailable", connector_id: "callback-connector", server_id: "callback-server",
+      provider_key: "callback-provider", connector_type: "mcp", display_name: "Disconnected callbacks", status: "revoked", enabled: false, state_version: "4", approved_scopes: [] }
+    const server: McpPrivateServer = { availability: "unavailable", server_id: "callback-server", display_name: connector.display_name!,
+      server_url: "https://mcp.example.test/callback", status: "registered", state_version: "8", headers: [], transport: "streamable_http",
+      prepare_status: "pending_prepare", declarations: [], declarations_available: false }
+    const command = vi.fn()
+    const client = { ...createHubClient(), listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+      listMcpConnectors: vi.fn().mockResolvedValue({ items: [connector], next_cursor: null }),
+      listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }),
+      getMcpConnector: vi.fn().mockResolvedValue(connector), getPrivateMcpServer: vi.fn().mockResolvedValue(server),
+      updatePrivateMcpServer: command, preparePrivateMcpServer: command, setMcpConnectorEnabled: command,
+      removeMcpConnector: command, deletePrivateMcpServer: command, createMcpConnector: command,
+      beginMcpConnectorAuthorization: command, reconnectMcpConnectorAuthorization: command, createMcpConnection: command }
+    const boundary = { subject: "callback-owner", admitted: true, generation: 0 }
+    render(<LocaleProvider><ConnectorCommandProvider client={client} boundary={boundary}>
+      <McpContent client={client} initialView="connections" readBoundary={boundary} />
+    </ConnectorCommandProvider></LocaleProvider>)
+    fireEvent.click(await screen.findByRole("button", { name: server.display_name }))
+    await screen.findByRole("dialog", { name: server.display_name })
+    expect(captured?.readOnlyConfiguration).toBe(true)
+    const current = captured!
+    await act(async () => {
+      current.onSaveConfiguration({ display_name: "Changed", notes: "Changed", server_url: "https://mcp.example.test/changed", header_upserts: [], header_removals: [] })
+      current.onPrepare(); current.onAuthorize(); current.onDisconnect(); current.onDeleteIntent(); current.onDelete()
+      current.onResumeManagement(); current.onPublish?.(); current.onTrial?.()
+      current.onRetryPreparationRecovery?.(); current.onRetryPublicationRecovery?.()
+    })
+    expect(command).not.toHaveBeenCalled()
+    expect(screen.queryByText("确认删除此自定义 MCP？")).toBeNull()
+  } finally { capture.mockRestore() }
+})
+
 async function jsonConfigurationFixture(unknown = false, icons?: McpIconClient, transport: McpPrivateServer["transport"] = "streamable_http") {
   let version = 3, name = "JSON editor MCP", url = "https://mcp.example.test/mcp", lostAck = false
   const server = (): McpPrivateServer => ({ availability: "available", server_id: "json-editor-server", display_name: name,
