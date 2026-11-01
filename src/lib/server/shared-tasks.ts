@@ -6,7 +6,6 @@ import {
   validateSharedTasks,
 } from "@/lib/shared-tasks.schema";
 import { admittedProductSession, productBffConfig, productBffHeaders } from "./product-bff";
-import { oidcRpConfig } from "./oidc-provider";
 import { requestWithDomain } from "./upstream-http";
 
 export async function sharedTasks(request: Request): Promise<Response> {
@@ -22,9 +21,8 @@ export async function sharedTasks(request: Request): Promise<Response> {
       { error: { code, message: code, retryable: status >= 500 } },
       { status, headers },
     );
-  const config = productBffConfig(),
-    rp = oidcRpConfig(process.env);
-  if (!config || !rp) return fail(503, "shared_tasks_dependency_unavailable");
+  const config = productBffConfig(), tenantId = process.env.KOKORO_TENANT_ID?.trim();
+  if (!config || !tenantId || tenantId.length > 256) return fail(503, "shared_tasks_dependency_unavailable");
   const url = new URL(request.url),
     origin = new URL(config.session.webOrigin);
   if (request.method !== "GET")
@@ -113,7 +111,7 @@ export async function sharedTasks(request: Request): Promise<Response> {
       return fail(401, "session_invalid");
     try {
       if (cursor !== undefined)
-        sharedTasksCursor(cursor, session.subject, limit, rp.tenantId);
+        sharedTasksCursor(cursor, session.subject, limit, tenantId);
     } catch {
       return fail(400, "shared_tasks_invalid_request");
     }
@@ -179,7 +177,7 @@ export async function sharedTasks(request: Request): Promise<Response> {
               session.subject,
               limit,
               cursor,
-              rp.tenantId,
+              tenantId,
             )
           : sharedTasksErrors[status]?.parse(raw);
       if (

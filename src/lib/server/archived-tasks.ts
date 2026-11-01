@@ -6,7 +6,6 @@ import {
   validateArchivedTasks,
 } from "@/lib/archived-tasks.schema";
 import { admittedProductSession, productBffConfig, productBffHeaders } from "./product-bff";
-import { oidcRpConfig } from "./oidc-provider";
 import { requestWithDomain } from "./upstream-http";
 
 export async function archivedTasks(request: Request): Promise<Response> {
@@ -22,9 +21,8 @@ export async function archivedTasks(request: Request): Promise<Response> {
       { error: { code, message: code, retryable: status >= 500 } },
       { status, headers },
     );
-  const config = productBffConfig(),
-    rp = oidcRpConfig(process.env);
-  if (!config || !rp) return fail(503, "archived_tasks_dependency_unavailable");
+  const config = productBffConfig(), tenantId = process.env.KOKORO_TENANT_ID?.trim();
+  if (!config || !tenantId || tenantId.length > 256) return fail(503, "archived_tasks_dependency_unavailable");
   const url = new URL(request.url),
     origin = new URL(config.session.webOrigin);
   if (request.method !== "GET")
@@ -113,7 +111,7 @@ export async function archivedTasks(request: Request): Promise<Response> {
       return fail(401, "session_invalid");
     try {
       if (cursor !== undefined)
-        archivedTasksCursor({value:cursor,subject:session.subject,limit:limit,...(rp.tenantId===undefined?{}:{tenant:rp.tenantId})});
+        archivedTasksCursor({value:cursor,subject:session.subject,limit:limit,tenant:tenantId});
     } catch {
       return fail(400, "archived_tasks_invalid_request");
     }
@@ -175,7 +173,7 @@ export async function archivedTasks(request: Request): Promise<Response> {
       const raw = parseArchivedTasksJson(text);
       output =
         status === 200
-          ? validateArchivedTasks({raw:raw,subject:session.subject,limit:limit,...(cursor===undefined?{}:{cursor:cursor}),...(rp.tenantId===undefined?{}:{tenant:rp.tenantId})})
+          ? validateArchivedTasks({raw:raw,subject:session.subject,limit:limit,...(cursor===undefined?{}:{cursor:cursor}),tenant:tenantId})
           : archiveErrors[status]?.parse(raw);
       if (
         !output ||

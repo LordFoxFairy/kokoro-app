@@ -1,12 +1,7 @@
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
-  currentProductSession: vi.fn(),
   admittedProductSession: vi.fn(),
   requestWithDomain: vi.fn(),
-  oidcRpConfig: vi.fn(),
-}));
-vi.mock("@/lib/server/product-session", () => ({
-  currentProductSession: mocks.currentProductSession,
 }));
 vi.mock("@/lib/server/product-bff", () => ({
   admittedProductSession: mocks.admittedProductSession,
@@ -15,9 +10,6 @@ vi.mock("@/lib/server/product-bff", () => ({
 }));
 vi.mock("@/lib/server/upstream-http", () => ({
   requestWithDomain: mocks.requestWithDomain,
-}));
-vi.mock("@/lib/server/oidc-provider", () => ({
-  oidcRpConfig: mocks.oidcRpConfig,
 }));
 import { GET } from "@/app/api/account/shared-tasks/route";
 const session = {
@@ -40,10 +32,9 @@ beforeEach(() => {
     KOKORO_WEB_REDIS_URL: "redis://fixture/0",
     KOKORO_WEB_AUTH_SECRET: "at-least-thirty-two-characters-secret",
     KOKORO_DOMAIN: "product.test",
+    KOKORO_TENANT_ID: "tenant",
   }))
     vi.stubEnv(k, v);
-  mocks.oidcRpConfig.mockReturnValue({ tenantId: "tenant" });
-  mocks.currentProductSession.mockResolvedValue(session);
   mocks.admittedProductSession.mockResolvedValue(session);
   mocks.requestWithDomain.mockImplementation(async (_u, _d, o) =>
     Response.json(

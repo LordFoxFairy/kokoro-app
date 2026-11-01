@@ -1,13 +1,11 @@
 import { beforeEach,afterEach,it,expect,vi } from "vitest";
-const mocks=vi.hoisted(()=>({currentProductSession:vi.fn(),admittedProductSession:vi.fn(),requestWithDomain:vi.fn(),oidcRpConfig:vi.fn()}));
-vi.mock("@/lib/server/product-session",()=>({currentProductSession:mocks.currentProductSession}));
+const mocks=vi.hoisted(()=>({admittedProductSession:vi.fn(),requestWithDomain:vi.fn()}));
 vi.mock("@/lib/server/product-bff",()=>({
   admittedProductSession:mocks.admittedProductSession,
   productBffConfig:()=>({bffBaseUrl:"http://bff.test",domain:"product.test",internalSecret:null,session:{redisUrl:"redis://fixture/0",webOrigin:"http://web.test",secret:"at-least-thirty-two-characters-secret"}}),
   productBffHeaders:(_config:unknown,claims:{access:string},requestId:string)=>new Headers({authorization:`Bearer ${claims.access}`,"x-kokoro-request-id":requestId}),
 }));
 vi.mock("@/lib/server/upstream-http",()=>({requestWithDomain:mocks.requestWithDomain}));
-vi.mock("@/lib/server/oidc-provider",()=>({oidcRpConfig:mocks.oidcRpConfig}));
 import {GET} from "@/app/api/account/archived-tasks/route";
 import {sessionArchive} from "@/lib/server/session-archive";
 const claims={id:"opaque",generation:1,subject:"alice",access:"server-only",accessExpiresAt:Date.now()+600000,expiresAt:Date.now()+600000};
@@ -15,8 +13,8 @@ const at="2026-10-15T00:00:00.000Z";
 const req=(method="GET",id="历史/😀",action="archive",body?:string)=>new Request(`http://web.test/api/session/sessions/${encodeURIComponent(id)}/${action}`,{method,headers:{host:"web.test",...(method==="POST"?{origin:"http://web.test","content-type":"application/json","idempotency-key":"qa-key"}:{})},...(body===undefined?{}:{body})});
 const call=(request:Request,id="历史/😀",action="archive")=>sessionArchive(request,Promise.resolve({path:["sessions",id,action]}));
 beforeEach(()=>{
- vi.resetAllMocks();for(const [key,value]of Object.entries({KOKORO_BFF_BASE_URL:"http://bff.test",KOKORO_WEB_ORIGIN:"http://web.test",KOKORO_WEB_REDIS_URL:"redis://fixture/0",KOKORO_WEB_AUTH_SECRET:"at-least-thirty-two-characters-secret",KOKORO_DOMAIN:"product.test"}))vi.stubEnv(key,value);
- mocks.currentProductSession.mockResolvedValue(claims);mocks.admittedProductSession.mockResolvedValue(claims);mocks.oidcRpConfig.mockReturnValue({tenantId:"tenant"});
+ vi.resetAllMocks();for(const [key,value]of Object.entries({KOKORO_BFF_BASE_URL:"http://bff.test",KOKORO_WEB_ORIGIN:"http://web.test",KOKORO_WEB_REDIS_URL:"redis://fixture/0",KOKORO_WEB_AUTH_SECRET:"at-least-thirty-two-characters-secret",KOKORO_DOMAIN:"product.test",KOKORO_TENANT_ID:"tenant"}))vi.stubEnv(key,value);
+ mocks.admittedProductSession.mockResolvedValue(claims);
  mocks.requestWithDomain.mockImplementation(async(url,_d,options)=>Response.json(String(url).includes("archived-tasks")?{data:{items:[],next_cursor:null}}:{data:{session_id:"历史/😀",archived_at:String(url).endsWith("restore")?null:at}},{headers:{"cache-control":"no-store","x-request-id":options.headers.get("x-kokoro-request-id")}}));
 });
 afterEach(()=>{vi.unstubAllEnvs();vi.useRealTimers();});
