@@ -4,9 +4,7 @@ import { headers } from "next/headers"
 import { redirect } from "next/navigation"
 import { AudioLines } from "lucide-react"
 
-import { oidcRpConfig } from "@/lib/server/oidc-provider"
-import { admittedProductSession, nativeSessionBffHeaders, productBffConfig } from "@/lib/server/product-bff"
-import { activeProductSession } from "@/lib/server/product-session"
+import { admittedNativeSession, nativeProductBffConfig, nativeSessionBffHeaders } from "@/lib/server/product-bff"
 import { SignInRecovery } from "@/ui/auth/sign-in-recovery"
 
 export const metadata: Metadata = { title: "登录 · Kokoro", robots: { index: false, follow: false } }
@@ -16,22 +14,14 @@ export const dynamic = "force-dynamic"
 export default async function SignInFailurePage() {
   let current = false
   try {
-    const config = oidcRpConfig(process.env)
+    const config = nativeProductBffConfig(process.env)
     const incoming = await headers()
-    if (config && incoming.get("host") === new URL(config.relay.webOrigin).host) {
+    if (config && incoming.get("host") === new URL(config.session.webOrigin).host) {
       const requestHeaders = new Headers()
       const cookie = incoming.get("cookie")
       if (cookie !== null) requestHeaders.set("cookie", cookie)
-      const request = new Request(`${config.relay.webOrigin}/app`, { headers: requestHeaders })
-      const bff = productBffConfig()
-      if (bff !== null && nativeSessionBffHeaders(request, bff, randomUUID()).state === "valid") {
-        current = await admittedProductSession(request, bff) !== null
-      } else {
-        const session = await activeProductSession(request, {
-          redisUrl: config.redisUrl, webOrigin: config.relay.webOrigin, secret: config.authSecret,
-        })
-        current = session !== null
-      }
+      const request = new Request(`${config.session.webOrigin}/app`, { headers: requestHeaders })
+      if (nativeSessionBffHeaders(request, config, randomUUID()).state === "valid") current = await admittedNativeSession(request, config) !== null
     }
   } catch { /* Keep explicit recovery; never start or replay authentication here. */ }
   // Next redirect throws its navigation signal; keep it outside the inspection catch.
