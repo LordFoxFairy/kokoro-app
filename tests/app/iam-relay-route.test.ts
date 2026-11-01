@@ -79,7 +79,7 @@ describe("/iam/[...path] read-only relay", () => {
 
   it("does not forward the browser's opaque no-referrer Origin to the IAM owner", async () => {
     requestIamRelay.mockResolvedValue(upstream({ headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-request-id": "upstream-opaque" },
-      setCookies: ["kokoro-issuer.session_token=one; Path=/iam; HttpOnly; SameSite=Lax"],
+      setCookies: ["kokoro-issuer.session_token=one; Path=/; HttpOnly; SameSite=Lax"],
       body: JSON.stringify({ redirect: true, url: "https://web.example.test/auth/sign-in?opaque=one" }) }))
     const { GET } = await import("@/app/iam/[...path]/route")
     const response = await GET(browserRequest("https://web.example.test/iam/oauth2/authorize?client_id=web", {
@@ -100,8 +100,8 @@ describe("/iam/[...path] read-only relay", () => {
         "x-request-id": "issuer-request",
       },
       setCookies: [
-        "kokoro-issuer.session_token=one; Path=/iam; HttpOnly; SameSite=Lax",
-        "kokoro-issuer.session_data=two; Path=/iam; HttpOnly; SameSite=Lax",
+        "kokoro-issuer.session_token=one; Path=/; HttpOnly; SameSite=Lax",
+        "kokoro-issuer.session_data=two; Path=/; HttpOnly; SameSite=Lax",
       ],
       body: "redirect",
     }))
@@ -117,8 +117,8 @@ describe("/iam/[...path] read-only relay", () => {
     expect(response.headers.get("cache-control")).toBe("no-store")
     expect(response.headers.get("x-request-id")).toBe("issuer-request")
     expect(response.headers.getSetCookie()).toEqual([
-      "kokoro-issuer.session_token=one; Path=/iam; HttpOnly; SameSite=Lax",
-      "kokoro-issuer.session_data=two; Path=/iam; HttpOnly; SameSite=Lax",
+      "kokoro-issuer.session_token=one; Path=/; HttpOnly; SameSite=Lax",
+      "kokoro-issuer.session_data=two; Path=/; HttpOnly; SameSite=Lax",
     ])
     expect(await response.text()).toBe("redirect")
   })
@@ -128,7 +128,7 @@ describe("/iam/[...path] read-only relay", () => {
     requestIamRelay.mockResolvedValue(upstream({
       status: 200,
       headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-request-id": "issuer-authorize" },
-      setCookies: ["kokoro-issuer.session_token=one; Path=/iam; HttpOnly; SameSite=Lax"],
+      setCookies: ["kokoro-issuer.session_token=one; Path=/; HttpOnly; SameSite=Lax"],
       body: JSON.stringify({ redirect: true, url: target }),
     }))
     const { GET } = await import("@/app/iam/[...path]/route")
@@ -141,7 +141,7 @@ describe("/iam/[...path] read-only relay", () => {
     expect(response.headers.get("content-length")).toBeNull()
     expect(response.headers.get("cache-control")).toBe("no-store")
     expect(response.headers.get("x-request-id")).toBe("issuer-authorize")
-    expect(response.headers.getSetCookie()).toEqual(["kokoro-issuer.session_token=one; Path=/iam; HttpOnly; SameSite=Lax"])
+    expect(response.headers.getSetCookie()).toEqual(["kokoro-issuer.session_token=one; Path=/; HttpOnly; SameSite=Lax"])
     expect(await response.text()).toBe("")
 
     const other = await GET(browserRequest("https://web.example.test/iam/get-session"), params(["get-session"]))
@@ -159,7 +159,7 @@ describe("/iam/[...path] read-only relay", () => {
     { redirect: false, url: "https://web.example.test/auth/sign-in?sig=%2BAb" },
   ])("rejects invalid authorize redirect JSON without leaking issuer body or cookie", async (payload) => {
     requestIamRelay.mockResolvedValue(upstream({ status: 200, headers: { "content-type": "application/json" },
-      setCookies: ["kokoro-issuer.session_token=one; Path=/iam; HttpOnly; SameSite=Lax"],
+      setCookies: ["kokoro-issuer.session_token=one; Path=/; HttpOnly; SameSite=Lax"],
       body: JSON.stringify(payload) }))
     const { GET } = await import("@/app/iam/[...path]/route")
     const response = await GET(browserRequest("https://web.example.test/iam/oauth2/authorize?client_id=web"),
@@ -174,7 +174,7 @@ describe("/iam/[...path] read-only relay", () => {
     if (failure === "invalid-response") requestIamRelay.mockResolvedValue(upstream({
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ redirect: true, url: "https://untrusted.example/SECRET_STATE" }),
-      setCookies: ["kokoro-issuer.session_token=SECRET_COOKIE; Path=/iam; HttpOnly; SameSite=Lax"],
+      setCookies: ["kokoro-issuer.session_token=SECRET_COOKIE; Path=/; HttpOnly; SameSite=Lax"],
     }))
     else if (failure === "native-error") requestIamRelay.mockResolvedValue(upstream({ status: 401, headers: { "content-type": "application/json" }, body: JSON.stringify({ error: "SECRET_ERROR" }) }))
     else requestIamRelay.mockRejectedValue(Error("SECRET_UPSTREAM"))
@@ -223,7 +223,7 @@ describe("/iam/[...path] read-only relay", () => {
 
   it("relays only the fixed issuer logout URL and strips confirmation cookie from GET", async () => {
     requestIamRelay.mockResolvedValue(upstream({ headers: { "content-type": "text/html; charset=utf-8" },
-      setCookies: ["kokoro-issuer.session_token.oauth_logout_confirmation=signed; Path=/iam/oauth2/end-session/confirm; HttpOnly; SameSite=Lax"], body: "confirm" }))
+      setCookies: ["kokoro-issuer.session_token.oauth_logout_confirmation=signed; Path=/; HttpOnly; SameSite=Lax"], body: "confirm" }))
     const { GET } = await import("@/app/iam/[...path]/route")
     const target = "https://web.example.test/iam/oauth2/end-session?client_id=web-client&post_logout_redirect_uri=https%3A%2F%2Fweb.example.test%2Fauth%2Fsign-in"
     const response = await GET(browserRequest(target, { headers: { cookie:
@@ -246,7 +246,7 @@ describe("/iam/[...path] read-only relay", () => {
 
   it("posts only signed logout confirmation with exact Origin and form to BFF", async () => {
     requestIamRelay.mockResolvedValue(upstream({ status: 302, headers: { location: "/auth/sign-in" },
-      setCookies: ["kokoro-issuer.session_token=; Path=/iam; Max-Age=0; HttpOnly; SameSite=Lax"] }))
+      setCookies: ["kokoro-issuer.session_token=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax"] }))
     const { POST } = await import("@/app/iam/[...path]/route")
     const target = "https://web.example.test/iam/oauth2/end-session/confirm"
     const cookie = "kokoro-issuer.session_token=issuer; kokoro-issuer.session_token.oauth_logout_confirmation=signed; kokoro_product_session=product"
@@ -269,12 +269,55 @@ describe("/iam/[...path] read-only relay", () => {
     expect(requestIamRelay).toHaveBeenCalledTimes(1)
   })
 
+  it("relays native IAM sign-out without legacy CSRF or Product Session credentials", async () => {
+    requestIamRelay.mockResolvedValue(upstream({
+      status: 200,
+      headers: { "content-type": "application/json", "x-request-id": "issuer-native-signout" },
+      setCookies: ["kokoro-issuer.session_token=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax"],
+      body: JSON.stringify({ status: "signed_out", issuer_session: "native" }),
+    }))
+    const { POST } = await import("@/app/iam/[...path]/route")
+    const target = "https://web.example.test/iam/sign-out"
+    const response = await POST(browserRequest(target, {
+      method: "POST",
+      headers: {
+        origin: "https://web.example.test",
+        cookie: "kokoro-issuer.session_token=issuer; kokoro_product_session=legacy",
+      },
+    }), params(["sign-out"]))
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ status: "signed_out", issuer_session: "native" })
+    expect(response.headers.get("x-request-id")).toBe("issuer-native-signout")
+    expect(response.headers.getSetCookie()).toEqual([
+      "kokoro-issuer.session_token=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax",
+    ])
+    const call = requestIamRelay.mock.calls[0]?.[0] as { url: string; method: string; headers: Headers; body?: Uint8Array; maxRequestBytes?: number }
+    expect(call.url).toBe("http://bff.test/iam/sign-out")
+    expect(call.method).toBe("POST")
+    expect(call.body).toBeUndefined()
+    expect(call.maxRequestBytes).toBe(0)
+    expect(call.headers.get("cookie")).toBe("kokoro-issuer.session_token=issuer")
+    expect(call.headers.get("origin")).toBe("https://web.example.test")
+    expect(call.headers.get("x-kokoro-service")).toBe("web-bff")
+    expect(call.headers.get("x-kokoro-internal-secret")).toBe("web-bff-secret")
+
+    for (const invalid of [
+      browserRequest(target, { method: "POST", headers: { origin: "https://evil.test" } }),
+      browserRequest(target, { method: "POST", headers: { origin: "https://web.example.test", authorization: "Bearer rejected" } }),
+      browserRequest(target, { method: "POST", headers: { origin: "https://web.example.test", "content-type": "text/plain" }, body: "unexpected" }),
+    ]) {
+      expect((await POST(invalid, params(["sign-out"]))).status).toBeGreaterThanOrEqual(400)
+    }
+    expect(requestIamRelay).toHaveBeenCalledTimes(1)
+  })
+
   it("converts only the issuer's exact successful logout JSON into a browser 303", async () => {
     requestIamRelay.mockResolvedValue(upstream({ status: 200,
       headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-request-id": "issuer-logout" },
       setCookies: [
-        "kokoro-issuer.session_token=; Path=/iam; Max-Age=0; HttpOnly; SameSite=Lax",
-        "kokoro-issuer.session_token.oauth_logout_confirmation=; Path=/iam/oauth2/end-session/confirm; Max-Age=0; HttpOnly; SameSite=Lax",
+        "kokoro-issuer.session_token=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax",
+        "kokoro-issuer.session_token.oauth_logout_confirmation=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax",
       ],
       body: JSON.stringify({ redirect: true, url: "https://web.example.test/auth/sign-in" }),
     }))
@@ -304,7 +347,7 @@ describe("/iam/[...path] read-only relay", () => {
     { redirect: true, url: "https://web.example.test/auth/sign-in", extra: "drift" },
   ])("rejects malformed issuer logout navigation without leaking cookies", async (payload) => {
     requestIamRelay.mockResolvedValue(upstream({ status: 200, headers: { "content-type": "application/json" },
-      setCookies: ["kokoro-issuer.session_token=; Path=/iam; Max-Age=0; HttpOnly; SameSite=Lax"],
+      setCookies: ["kokoro-issuer.session_token=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax"],
       body: JSON.stringify(payload) }))
     const { POST } = await import("@/app/iam/[...path]/route")
     const response = await POST(browserRequest("https://web.example.test/iam/oauth2/end-session/confirm", {
@@ -334,7 +377,7 @@ describe("/iam/[...path] read-only relay", () => {
   it.each(["/auth/sign-in?next=evil", "https://evil.example/auth/sign-in", "/auth/%73ign-in"])(
     "rejects non-fixed native logout redirects without forwarding cookies: %s", async (location) => {
       requestIamRelay.mockResolvedValue(upstream({ status: 302, headers: { location },
-        setCookies: ["kokoro-issuer.session_token=; Path=/iam; Max-Age=0; HttpOnly; SameSite=Lax"] }))
+        setCookies: ["kokoro-issuer.session_token=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax"] }))
       const { POST } = await import("@/app/iam/[...path]/route")
       const response = await POST(browserRequest("https://web.example.test/iam/oauth2/end-session/confirm", {
         method: "POST", headers: { origin: "https://web.example.test", "content-type": "application/x-www-form-urlencoded",
@@ -421,10 +464,10 @@ describe("/iam/[...path] read-only relay", () => {
     upstream({ status: 302, headers: { location: "/iam/oauth2/../jwks" } }),
     upstream({ headers: { "x-request-id": "bad request id" } }),
     upstream({ setCookies: ["kokoro_session=leak; Path=/; HttpOnly; SameSite=Lax"] }),
-    upstream({ setCookies: ["kokoro-issuer.session_token=one; Domain=example.test; Path=/iam; HttpOnly; SameSite=Lax"] }),
+    upstream({ setCookies: ["kokoro-issuer.session_token=one; Domain=example.test; Path=/; HttpOnly; SameSite=Lax"] }),
     upstream({ setCookies: [
-      "kokoro-issuer.session_token=one; Path=/iam; HttpOnly; SameSite=Lax",
-      "kokoro-issuer.session_token=two; Path=/iam; HttpOnly; SameSite=Lax",
+      "kokoro-issuer.session_token=one; Path=/; HttpOnly; SameSite=Lax",
+      "kokoro-issuer.session_token=two; Path=/; HttpOnly; SameSite=Lax",
     ] }),
   ])("rejects unsafe upstream metadata instead of emitting it", async (unsafeUpstream) => {
     requestIamRelay.mockResolvedValue(unsafeUpstream)

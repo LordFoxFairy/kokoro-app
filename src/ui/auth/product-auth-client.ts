@@ -40,7 +40,19 @@ export async function endProductSession(
     ((sessionRaw as { mode?: unknown }).mode === "native" ||
       (sessionProbe.status === 401 && typeof (sessionRaw as { error?: { code?: unknown } }).error?.code === "string" &&
         (sessionRaw as { error: { code: string } }).error.code.startsWith("native_session_")));
-  const csrfToken = nativeSession ? null : await currentCsrf(signal);
+  if (nativeSession) {
+    const response = await fetch("/iam/sign-out", {
+      method: "POST",
+      ...(signal ? { signal } : {}),
+    });
+    signal?.throwIfAborted();
+    if (response.ok || response.status === 401) {
+      navigate("/");
+      return;
+    }
+    throw new Error("Native sign-out unavailable");
+  }
+  const csrfToken = await currentCsrf(signal);
   signal?.throwIfAborted();
   const response = await fetch("/api/auth/signout", {
     method: "POST",

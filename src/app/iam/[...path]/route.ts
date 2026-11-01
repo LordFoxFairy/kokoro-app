@@ -245,7 +245,46 @@ async function confirmLogout(request: Request, context: RouteContext): Promise<R
   } catch { return errorResponse("iam_relay_unavailable", 503, id) }
 }
 
+async function nativeSignOut(request: Request, context: RouteContext): Promise<Response> {
+  const id = requestId(request)
+  const path = (await context.params).path
+  const rawTarget = rawPathAndQuery(request.url)
+  if (request.method !== "POST" || path.join("/") !== "sign-out" || rawTarget !== "/iam/sign-out") return rejectMethod(request)
+  const config = iamRelayConfig(process.env)
+  if (config === null) return errorResponse("iam_relay_unavailable", 503, id)
+  if (!matchesCanonicalWebRequest(request, config, "POST")) return errorResponse("iam_relay_origin_rejected", 403, id)
+  if (request.headers.has("authorization") || request.headers.has("x-kokoro-service") || request.headers.has("x-kokoro-internal-secret") || incomingHeaderBytes(request.headers) > IAM_RELAY_POLICY.maxHeaderBytes) {
+    return errorResponse("iam_relay_credential_rejected", 403, id)
+  }
+  if (request.headers.has("transfer-encoding") || request.body !== null ||
+    (request.headers.has("content-length") && request.headers.get("content-length") !== "0")) {
+    return errorResponse("iam_relay_body_rejected", 400, id)
+  }
+  const cookie = filterIssuerCookies(request.headers.get("cookie"), config.secureCookies)
+  if (cookie === null) return errorResponse("iam_relay_cookie_invalid", 400, id)
+  const headers = new Headers({
+    origin: config.webOrigin,
+    "x-kokoro-service": SERVICE_VALUE,
+    [INTERNAL_SECRET_HEADER]: config.secret,
+    "x-request-id": id,
+  })
+  if (cookie !== "") headers.set("cookie", cookie)
+  try {
+    const upstream = await requestIamRelay({
+      url: `${config.bffOrigin}/iam/sign-out`, method: "POST", headers,
+      signal: request.signal, timeoutMs: IAM_RELAY_POLICY.maxDurationMs,
+      maxRequestBytes: 0, maxResponseBytes: IAM_RELAY_POLICY.maxResponseBytes,
+      maxHeaderBytes: IAM_RELAY_POLICY.maxHeaderBytes,
+    })
+    return nativeIamResponse(upstream, config.webOrigin, config.secureCookies, id, "/sign-out")
+      ?? errorResponse("iam_relay_response_invalid", 502, id)
+  } catch {
+    return errorResponse("iam_relay_unavailable", 503, id)
+  }
+}
+
 export async function POST(request: Request, context: RouteContext): Promise<Response> {
+  if ((await context.params).path.join("/") === "sign-out") return nativeSignOut(request, context)
   const response = await confirmLogout(request, context)
   return request.method === "POST" && rawPathAndQuery(request.url) === "/iam/oauth2/end-session/confirm"
     ? browserLogoutFailureResponse(request, response) : response

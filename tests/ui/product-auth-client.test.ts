@@ -14,16 +14,16 @@ afterEach(() => {
 });
 
 describe("Product auth browser client", () => {
-  it("uses the native session read before issuing issuer signout without legacy CSRF", async () => {
+  it("uses the native session read before issuing IAM signout without legacy CSRF", async () => {
     const navigate = vi.fn();
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(Response.json({ authenticated: true, subject: "native-user", mode: "native" }))
-      .mockResolvedValueOnce(Response.json({ status: "signed_out", issuer_session: "native", issuer_end_session_url: "/iam/oauth2/end-session?client_id=web" }));
+      .mockResolvedValueOnce(Response.json({ status: "signed_out", issuer_session: "native" }));
     vi.stubGlobal("fetch", fetchMock);
     await endProductSession(navigate);
     expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/auth/session", { cache: "no-store" });
-    expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/auth/signout", expect.objectContaining({ method: "POST" }));
-    expect(navigate).toHaveBeenCalledExactlyOnceWith("/iam/oauth2/end-session?client_id=web");
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "/iam/sign-out", expect.objectContaining({ method: "POST" }));
+    expect(navigate).toHaveBeenCalledExactlyOnceWith("/");
   });
 
   it("uses CSRF-protected Product signout and follows only the issuer handoff", async () => {
