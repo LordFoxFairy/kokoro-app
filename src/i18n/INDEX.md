@@ -1,3 +1,5 @@
+2026-11-02：仅承接正常1f700的scheduled.*自动化/RSS/运行记录键；新增scheduled.approvalUnavailable准确解释禁用审批，不覆盖全局firstSite提示或其他locale键。文案不授执行/配置权限。
+
 2026-11-01：九语言新增 `mcp.read.*` 的 API/连接器页/目录/关系及尾页读取错误和显式重试文案，仅 UI 反馈，不从文案推断 owner 状态。
 
 2026-11-01：九语言新增 `mcp.jsonImportChooseDetail`，明确多项导入后由用户选择对应详情；不新增 wire / fallback 或状态事实。

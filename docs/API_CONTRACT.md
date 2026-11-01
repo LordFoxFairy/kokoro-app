@@ -1,3 +1,13 @@
+## Public29 与 ScheduledTask 消费（2026-11-02，候选）
+
+正式BFF7e4ab1cee8f8d45a34902176cd15a10f3c4b22cb，原件SHA258bde9c39f785667cb205976e1547d1cf2c9662a5a2d7f356c4b11e807fcaf7 /29.0.0。200操作保199原操作，新增GET /v1/scheduled-task-runs；12public正规生成、5private/profile与policy3独立固定。项目资源下载只变owner说明的20秒预算，本片不借说明扩写Web下载或其它A契约。
+
+现ScheduledTask读/创建/完整trigger PATCH显式calendar或rss；calendar保完整frequency/time/timezone与所选规则，rss保feed_url/conditions并排除日历字段。命令ACK仅immutable definition，poll状态须fresh details；next_run_at对RSS必为null。浏览器GET /api/scheduled-task-runs沿同源薄桥进入owner既有GET，公开闭集data/items/next_cursor，calendar九位scheduled_for、RSS null+observed_at分开；opaque cursor不授租户/账户权限。保存/未知重试沿原Idempotency-Key/body，不通过adapter补trigger_kind，不引入旧wire fallback。
+
+## 2026-11-02 B-01 精确详情 GET 恢复
+
+无 public / same-origin / owner wire、pin 或命令契约变化。显式重试只调用当前失败的既有 exact GET；成功读取不重刷，创建/保存/Prepare 不重放。API detail 当前 typed HTTP401 沿既有 ProductReadRecheck 传原主体、代际、signal；403、parse/network及退休响应不冒登录过期或业务成功。
+
 ## 2026-11-01 B-14 Manifest 客户端读取期限
 
 无public/same-origin/owner wire、请求参数、manifest值或契约pin变化。浏览器现GET的fetch与body共用20秒绝对期限；期限失败只更新本地source:error/PRODUCT默认与retrying，显式retry仍是原同源GET。离页/preview/newattempt取消静默，外来AbortError不冒当前主动取消。

@@ -2,7 +2,7 @@
 
 import { McpAvailabilityStatus } from "./mcp-availability-status";
 
-import { useState, type RefObject } from "react";
+import { useState, type ReactNode, type RefObject } from "react";
 
 import Image from "next/image";
 import { Copy, Link2, MessageCircle, Plus, Power, Trash2 } from "lucide-react";
@@ -52,10 +52,12 @@ export function McpProviderDetailDialog({
   onPrompt,
   open,
   pendingError = false,
+  readFeedback,
 }: {
   provider: McpConnectorProvider | null;
   open?: boolean;
   pendingError?: boolean;
+  readFeedback?: ReactNode | undefined;
   /** An admitted installed row or an exact selected locator; never an inferred provider-key binding. */
   connection?: McpConnector | null;
   connectionLookup?: McpProviderConnectionLookup;
@@ -109,6 +111,7 @@ export function McpProviderDetailDialog({
           );
         }}
       >
+        {readFeedback}
         {provider ? (
           <>
             <header
@@ -224,7 +227,7 @@ export function McpProviderDetailDialog({
           <section className={styles.providerDetailBody} aria-busy={!pendingError}>
             <McpManagementStatus command={managementCommand} admitted={admitted} onResume={onResumeManagement} />
             <DialogTitle>{t("rail.navPlugins")}</DialogTitle>
-            <span className="sr-only" role="status">{t(pendingError ? "mcp.loadError" : "mcp.loading")}</span>
+            {!readFeedback ? <span className={pendingError ? undefined : "sr-only"} role="status">{t(pendingError ? "mcp.loadError" : "mcp.loading")}</span> : null}
           </section>
         )}
       </DialogContent>

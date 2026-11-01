@@ -10,7 +10,7 @@ import { McpAvailabilityStatus } from "./mcp-availability-status";
 
 import { connectorCommandMayResume, connectorCommandFailureMessage, type ConnectorCommandFailure } from "./connector-command-failure";
 
-import { type FormEvent, type RefObject, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { type FormEvent, type ReactNode, type RefObject, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   ChevronDown,
   Copy,
@@ -108,6 +108,7 @@ export function CustomMcpDetailDialog({
   preparationRecoveryError = false,
   onRetryPreparationRecovery,
   pendingError = false,
+  readFeedback,
 }: {
   iconClient?: McpIconClient | undefined;
   iconBoundary?: ProjectReadBoundary | undefined;
@@ -122,6 +123,7 @@ export function CustomMcpDetailDialog({
   preparationRecoveryError?: boolean;
   onRetryPreparationRecovery?: () => void;
   pendingError?: boolean;
+  readFeedback?: ReactNode | undefined;
   actionId: string | null;
   admitted: boolean;
   managementCommand: McpManagementSummary | undefined;
@@ -446,9 +448,9 @@ export function CustomMcpDetailDialog({
             <div className={styles.configurationBody}>
               {configurationStatus}
               {managementStatus}
-              {!ready && (pendingError || !retainingTransport) ? (
-                <span className="sr-only" role="status">{t(pendingError ? "mcp.loadError" : "mcp.loading")}</span>
-              ) : null}
+              {readFeedback ?? (!ready && (pendingError || !retainingTransport) ? (
+                <span className={pendingError ? undefined : "sr-only"} role="status">{t(pendingError ? "mcp.loadError" : "mcp.loading")}</span>
+              ) : null)}
               {recoveryStatus}
               {actionError ? (
                 <Alert variant="destructive" role="alert">
@@ -661,7 +663,7 @@ export function CustomMcpDetailDialog({
               {operationStatus}
               {preparationState === "unknown" || preparationState === "completed" ? recoveryStatus : null}
               {managementStatus}
-              <span className="sr-only" role="status">{t(pendingError ? "mcp.loadError" : "mcp.loading")}</span>
+              {readFeedback ?? <span className={pendingError ? undefined : "sr-only"} role="status">{t(pendingError ? "mcp.loadError" : "mcp.loading")}</span>}
             </div>
           </section>
         ) : (

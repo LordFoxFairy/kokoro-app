@@ -1,3 +1,13 @@
+## Public29 自动化本地视图（2026-11-02，候选）
+
+Web无owner数据库/表/Schema迁移；原ScheduledTask本地model改为calendar/RSS分支，嵌套条件在dispatch/恢复前克隆。运行记录为当前scope RAM页，无工具过程/凭据/新账本，不从状态标签推断真实执行或结算。
+
+原preview localStorage key和锁保持；为保候选旧版无triggerKind的calendar预览，只在本地读取时加calendar判别并经现完整guard，混入RSS字段或坏可选值仍拒绝，读不重写raw storage。已升级RSS/日历记录原样读取，下次用户明确预览写操作才持久当前形状；这不是owner wire兼容，不检查真实feed，不把preview当真实调度。
+
+## 2026-11-02 B-01 精确详情无持久化变化
+
+仅 mounted reader 的窗口/attempt/pending 与既有错误反馈，无数据库、cache、IDB/localStorage 格式、命令 key/body 或保存事实变化。旧 scope 与迟到结果不解锁当前 CAS；安全 locator 保留不代表当前详情或权限，必须由当前 exact GET 确认。
+
 ## 2026-11-01 B-14 Manifest 无持久化变更
 
 仅原hook每个mounted scope的非持久deadline/settled/controller状态，终结清timer并退休迟到结果。不新增数据库、缓存、localStorage/IDB格式、持久manifest或业务事实；默认外观不代表System已发布、preview或权限。

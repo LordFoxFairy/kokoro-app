@@ -5,6 +5,7 @@ import { mcpPrivateServerSchema } from "@/hub/mcp-connector.schema";
 import { LocaleProvider } from "@/i18n/context";
 import { ConnectorCommandProvider } from "@/ui/mcp/connector-command-context";
 import { McpCreateDialog } from "@/ui/mcp/mcp-create-dialog";
+import { McpProjectionRead } from "@/ui/mcp/mcp-projection-read";
 import type { McpCreateMode } from "@/ui/mcp/mcp-panel-model";
 import { jsonImportReceipt } from "./fixtures/mcp-json-import-receipt";
 
@@ -48,6 +49,111 @@ function fixture(mode: McpCreateMode, names = ["Imported first", "Imported secon
   };
   return { view, content, client, receipt, onDone, onOpenChange, submitApi, submitJson };
 }
+
+it.each(["retry", "another control"] as const)("retries only the failed created API GET and preserves focus owned by %s", async focusOwner => {
+  const f = fixture("custom-api");
+  f.client.getCustomApi.mockRejectedValueOnce(Error("detail unavailable"));
+  f.submitApi();
+  const detail = await screen.findByRole("dialog", { name: "编辑自定义 API" });
+  const retry = await within(detail).findByRole("button", { name: "重新加载 API" });
+  expect(retry).toBeVisible();
+  let fail!: (error: Error) => void;
+  f.client.getCustomApi.mockImplementationOnce(() => new Promise((_resolve, reject) => { fail = reject; }));
+  act(() => { retry.focus(); fireEvent.click(retry); fireEvent.click(retry); });
+  await waitFor(() => expect(f.client.getCustomApi).toHaveBeenCalledTimes(2));
+  expect(retry).toBeDisabled();
+  const close = within(detail).getByRole("button", { name: "关闭连接面板" });
+  if (focusOwner === "another control") act(() => close.focus());
+  await act(async () => { fail(Error("still unavailable")); });
+  await waitFor(() => expect(retry).toBeEnabled());
+  expect(focusOwner === "retry" ? retry : close).toHaveFocus();
+  fireEvent.click(retry);
+  expect(await within(detail).findByDisplayValue(profile.name)).toBeVisible();
+  expect(f.client.getCustomApi).toHaveBeenCalledTimes(3);
+  expect(f.client.createCustomApi).toHaveBeenCalledOnce();
+  expect(f.onDone).toHaveBeenCalledOnce();
+  expect(f.client.listCustomApis).not.toHaveBeenCalled();
+  expect(f.client.listMcpConnectors).not.toHaveBeenCalled();
+});
+
+it("retires a pending explicit API retry before a new read generation and ignores its late facts", async () => {
+  const f = fixture("custom-api");
+  f.client.getCustomApi.mockRejectedValueOnce(Error("detail unavailable"));
+  f.submitApi();
+  const retry = await screen.findByRole("button", { name: "重新加载 API" });
+  let finish!: (value: typeof profile) => void;
+  f.client.getCustomApi.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  fireEvent.click(retry);
+  await waitFor(() => expect(f.client.getCustomApi).toHaveBeenCalledTimes(2));
+  const signal = f.client.getCustomApi.mock.calls[1]![1] as AbortSignal;
+  const current = { ...profile, name: "Current generation API", state_version: "3" };
+  f.client.getCustomApi.mockResolvedValueOnce(current);
+  f.view.rerender(f.content({ ...boundary, generation: 2 }));
+  expect(await screen.findByDisplayValue(current.name)).toBeVisible();
+  expect(signal.aborted).toBe(true);
+  await act(async () => { finish({ ...profile, name: "Retired retry facts" }); });
+  expect(screen.queryByDisplayValue("Retired retry facts")).not.toBeInTheDocument();
+  expect(screen.getByDisplayValue(current.name)).toBeVisible();
+  expect(f.client.createCustomApi).toHaveBeenCalledOnce();
+  expect(f.client.getCustomApi).toHaveBeenCalledTimes(3);
+});
+
+it("recovers the created private connector then its failed server without repeating successful reads or Prepare", async () => {
+  const f = fixture("json", ["Owned private"]);
+  f.client.getMcpConnector.mockRejectedValueOnce(Error("connection unavailable"));
+  f.client.getPrivateMcpServer.mockRejectedValueOnce(Error("server unavailable"));
+  f.submitJson();
+  const retry = await screen.findByRole("button", { name: "重新加载已添加的连接器" });
+  expect(f.client.getPrivateMcpServer).not.toHaveBeenCalled();
+  fireEvent.click(retry);
+  const serverRetry = await screen.findByRole("button", { name: "重试" });
+  const readFeedback = serverRetry.closest('[role="status"]');
+  expect(f.client.getMcpConnector).toHaveBeenCalledTimes(2);
+  expect(f.client.getPrivateMcpServer).toHaveBeenCalledOnce();
+  fireEvent.click(serverRetry);
+  const detail = await screen.findByRole("dialog", { name: "Owned private" });
+  expect(detail).toBeVisible();
+  expect(readFeedback).not.toBeInTheDocument();
+  expect(serverRetry).not.toBeInTheDocument();
+  expect(detail.querySelector('[aria-busy="true"]')).toBeNull();
+  expect(f.client.getPrivateMcpServer).toHaveBeenCalledTimes(2);
+  expect(f.client.getMcpConnector).toHaveBeenCalledTimes(2);
+  expect(f.client.importPrivateMcpJson).toHaveBeenCalledOnce();
+  expect(f.client.preparePrivateMcpServer).not.toHaveBeenCalled();
+  expect(f.client.listMcpConnectors).not.toHaveBeenCalled();
+  f.view.rerender(f.content({ ...boundary, generation: 2 }));
+  await waitFor(() => expect(f.client.getPrivateMcpServer).toHaveBeenCalledTimes(3));
+  expect(await screen.findByRole("dialog", { name: "Owned private" })).toBeVisible();
+  expect(readFeedback).not.toBeInTheDocument();
+  expect(serverRetry).not.toBeInTheDocument();
+  expect(detail.querySelector('[aria-busy="true"]')).toBeNull();
+  expect(f.client.importPrivateMcpJson).toHaveBeenCalledOnce();
+  expect(f.client.preparePrivateMcpServer).not.toHaveBeenCalled();
+});
+
+it("visibly retries an off-page provider detail without refreshing its successful connector list", async () => {
+  localStorage.setItem("kokoro.locale", "zh");
+  const provider = { provider_key: "owned-provider", display_name: "Recovered provider", directory_type: "app" as const,
+    category_keys: [], example_prompts: [], enabled: true, state_version: "1" };
+  const connection = { availability: "available" as const, connector_id: "owned-connection", connector_type: "mcp" as const,
+    provider_key: provider.provider_key, display_name: "Installed outside catalog", status: "active" as const,
+    enabled: true, approved_scopes: [], state_version: "1" };
+  const client = { ...createHubClient(), getMcpConnectorProvider: vi.fn().mockRejectedValueOnce(Error("provider unavailable")).mockResolvedValue(provider),
+    listMcpConnectors: vi.fn().mockResolvedValue({ items: [connection], next_cursor: null }),
+    listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+    listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }), createMcpConnector: vi.fn() };
+  render(<LocaleProvider><ConnectorCommandProvider client={client} boundary={boundary}>
+    <McpProjectionRead client={client} identity={boundary.subject} initialView="connections" />
+  </ConnectorCommandProvider></LocaleProvider>);
+  fireEvent.click(await screen.findByRole("button", { name: connection.display_name }));
+  const count = client.listMcpConnectors.mock.calls.length;
+  const retry = await screen.findByRole("button", { name: "重新加载连接器目录" });
+  fireEvent.click(retry);
+  expect(await screen.findByRole("dialog", { name: provider.display_name })).toBeVisible();
+  expect(client.getMcpConnectorProvider).toHaveBeenCalledTimes(2);
+  expect(client.listMcpConnectors).toHaveBeenCalledTimes(count);
+  expect(client.createMcpConnector).not.toHaveBeenCalled();
+});
 
 it("opens the exact API fresh reader instead of the ACK or a list, and close ends its parent", async () => {
   const f = fixture("custom-api"); f.submitApi();

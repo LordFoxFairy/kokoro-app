@@ -206,6 +206,7 @@
 .footer {
   height: 4.625rem;
   flex: none;
+  flex-direction: row;
   align-items: center;
   justify-content: flex-end;
   gap: 0.5rem;
@@ -281,4 +282,43 @@
   margin-inline-start: auto;
   width: 16px;
   height: 16px;
+}
+
+.automationSettings {
+  width: min(24rem, calc(100vw - 1.5rem));
+  max-height: min(30rem, var(--radix-popover-content-available-height));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-radius: 0.875rem;
+  padding: 1rem;
+}
+.automationSettingsFields { display: grid; min-width: 0; gap: 1rem; margin: 0; padding: 0; border: 0; }
+.automationOptions { display: grid; min-width: 0; gap: 0.875rem; }
+.approvalLabel { display: grid; min-width: 0; gap: 0.5rem; font-size: 0.875rem; font-weight: 500; }
+.approvalLabel > button { width: 100%; }
+.automationScope { display: grid; min-width: 0; gap: 0.25rem; margin: 0; font-size: 0.8125rem; }
+.automationScope span { color: var(--muted-foreground); overflow-wrap: anywhere; }
+.unavailableOption { display: grid; gap: 0.25rem; }
+.unavailableOption button { height: auto; min-height: 2rem; justify-content: flex-start; padding: 0; white-space: normal; text-align: start; }
+.unavailableOption p { margin: 0; color: var(--muted-foreground); font-size: 0.75rem; line-height: 1.5; overflow-wrap: anywhere; }
+.automationSettingsFields input { min-width: 0; }
+
+.rssFields { display: grid; min-width: 0; gap: .75rem; }
+.rssFields > label { display: flex; align-items: center; gap: .5rem; font-size: .875rem; font-weight: 600; }
+.rssFields > label svg { width: 1rem; height: 1rem; }
+.rssHint, .rssValueHint { color: var(--muted-foreground); font-size: .8125rem; overflow-wrap: anywhere; }
+.rssGroup { min-width: 0; display: grid; gap: .75rem; padding: 1rem; border: 1px solid var(--border); border-radius: .75rem; }
+.rssGroup legend { font-size: .875rem; padding-inline: .25rem; }
+.rssClause { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr) auto; gap: .5rem; align-items: center; }
+.rssClause > input { grid-column: 1 / 3; grid-row: 2; min-width: 0; }
+.rssClause > button:last-of-type { grid-column: 3; grid-row: 1 / 3; }
+.rssClause > p { grid-column: 1 / -1; }
+.rssClause [data-slot="select-trigger"] { width: 100%; min-width: 0; white-space: normal; height: auto; min-height: 2.25rem; }
+.rssAnd, .rssOr { color: var(--muted-foreground); font-size: .75rem; text-align: center; padding-block: .5rem; }
+@media (max-width: 480px) {
+  .rssGroup { padding: .75rem; }
+  .rssClause { grid-template-columns: minmax(0, 1fr) auto; }
+  .rssClause > [data-slot="select-trigger"] { grid-column: 1; }
+  .rssClause > input { grid-column: 1; grid-row: 3; }
+  .rssClause > button:last-of-type { grid-column: 2; grid-row: 1 / 4; }
 }

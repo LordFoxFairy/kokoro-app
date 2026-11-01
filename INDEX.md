@@ -1,3 +1,11 @@
+## Public29 与既有自动化功能配对（2026-11-02，候选）
+
+唯一公开原件固定 BFF7e4ab1cee8f8d45a34902176cd15a10f3c4b22cb / Public29.0.0，现12个public生成入口正规更新、5个独立发行保持。日历显式类型、RSS创建/编辑/当前读与独立运行记录沿已验证正常1f700功能承接；职责见 `src/features/scheduled-tasks/INDEX.md`，正常源状态与门禁见 `docs/CURRENT.md`。
+
+## 精确详情读取恢复（2026-11-02，候选）
+
+原 API / Provider / private MCP 详情在读取失败后复用 `McpReadFeedback` 呈现可见 GET 重试；创建交接仍只读取精确 locator，不扫描列表或重发命令。窗口、主体、准入代及读取 attempt 退休围栏和具体测试见 `src/ui/mcp/INDEX.md`；正常源尚未切换，验证见 `docs/CURRENT.md`。
+
 ## Manifest 展示读取期限（2026-11-01，候选）
 
 `src/system/use-runtime-manifest.ts`在原scope内拥有fetch与body共用的20秒绝对期限、settlement和取消；`tests/system/runtime-manifest-hook.test.tsx`覆盖期限、精确截止竞争、非合作迟到、显式重试与原生命周期。没有新读取框架或owner，当前正常源尚未更新，验证见 `docs/CURRENT.md`。

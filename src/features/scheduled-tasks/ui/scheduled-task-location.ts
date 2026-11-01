@@ -1,11 +1,12 @@
 "use client"
 
 import { useMemo, useSyncExternalStore } from "react"
+import { parseProductReturnTarget } from "@/lib/product-return-target"
 
 export const EDITOR_HASH = "#scheduled-tasks/new"
 export const SCHEDULED_LOCATION_EVENT = "kokoro:scheduled-location"
 
-export type ScheduledView = "calendar" | "list"
+export type ScheduledView = "calendar" | "list" | "updates"
 export type ScheduledTaskCreationContext =
   | { kind: "personal" }
   | { kind: "project"; projectId: string }
@@ -13,15 +14,17 @@ export type ScheduledTaskCreationContext =
 export type ScheduledLocationState = {
   view: ScheduledView
   editorOpen: boolean
+  automationWorkflow: boolean
   creationContext: ScheduledTaskCreationContext
 }
 
-const DEFAULT_SCHEDULED_LOCATION_SNAPSHOT = JSON.stringify(["calendar", false, "personal", null])
+const DEFAULT_SCHEDULED_LOCATION_SNAPSHOT = JSON.stringify(["calendar", false, "personal", null, false])
 const EDITOR_HISTORY_KEY = "scheduledTaskEditor"
 
 function readScheduledView(): ScheduledView {
   if (typeof window === "undefined") return "calendar"
-  return new URLSearchParams(window.location.search).get("tab") === "list" ? "list" : "calendar"
+  const tab = new URLSearchParams(window.location.search).get("tab")
+  return tab === "list" || tab === "updates" ? tab : "calendar"
 }
 
 function readScheduledLocationSnapshot(): string {
@@ -32,6 +35,9 @@ function readScheduledLocationSnapshot(): string {
     window.location.hash === EDITOR_HASH,
     creationContext.kind,
     creationContext.kind === "project" ? creationContext.projectId : null,
+    /^\/app\/?$/u.test(window.location.pathname) &&
+      new URLSearchParams(window.location.search).getAll("workflow").length === 1 &&
+      new URLSearchParams(window.location.search).get("workflow") === "automation",
   ])
 }
 
@@ -79,18 +85,40 @@ export function useScheduledLocation(): ScheduledLocationState {
     () => DEFAULT_SCHEDULED_LOCATION_SNAPSHOT,
   )
   return useMemo(() => {
-    const [view, editorOpen, kind, projectId] = JSON.parse(snapshot) as [ScheduledView, boolean, ScheduledTaskCreationContext["kind"], string | null]
+    const [view, editorOpen, kind, projectId, automationWorkflow] = JSON.parse(snapshot) as [ScheduledView, boolean, ScheduledTaskCreationContext["kind"], string | null, boolean]
     const creationContext: ScheduledTaskCreationContext = kind === "project" && projectId !== null
       ? { kind, projectId }
       : kind === "invalid"
         ? { kind }
         : { kind: "personal" }
-    return { view, editorOpen, creationContext }
+    return { view, editorOpen, creationContext, automationWorkflow }
   }, [snapshot])
 }
 
 export function scheduledTaskCreationContextKey(context: ScheduledTaskCreationContext): string {
   return JSON.stringify([context.kind, context.kind === "project" ? context.projectId : null])
+}
+
+export function scheduledProjectReturnHref(context: ScheduledTaskCreationContext): string | null {
+  return context.kind === "project"
+    ? parseProductReturnTarget(`/app/project/${encodeURIComponent(context.projectId)}`)
+    : null
+}
+
+/** Preserve raw scope input, including invalid/duplicate values, across these two views. */
+function scheduledScopeParameters(): string[] {
+  if (typeof window === "undefined") return []
+  return window.location.search.slice(1).split("&").filter((parameter) =>
+    decodeSearchComponent(parameter.split("=", 1)[0] ?? "") === "project_id",
+  )
+}
+
+export function scheduledAutomationHref(): string {
+  return `/app?${["workflow=automation", ...scheduledScopeParameters()].join("&")}`
+}
+
+export function scheduledManagementHref(): string {
+  return `/app/scheduled?${[...scheduledScopeParameters(), "tab=list"].join("&")}`
 }
 
 export function scheduledTaskEditorInstanceKey(

@@ -1,3 +1,11 @@
+## 精确详情读取恢复（2026-11-02，候选）
+
+`use-custom-api-detail.ts`、`use-mcp-provider-detail.ts`、`use-mcp-provider-connection.ts` 各自拥有本窗口显式 GET attempt 与同步 pending 围栏。错误在重试等待时保持可见、同按钮禁用，失败后复用原焦点所有权恢复；换窗口、actor、准入代、locator、binding 或修订时旧回执与旧 retry 闭包退役。API 当前 typed HTTP401 同样向既有 ProductReadRecheck 报告原 subject/generation/signal，非认证故障不报告。
+
+`mcp-projection-read.tsx` 将三个详情窗接到各自失败 reader，并为 private server 保留独立 attempt；只重试失败的 exact GET，不刷新已成功的 connector/provider，不重放 Create / Save / Prepare，不清除未知命令。创建交接禁用列表读的边界保持，因此失败必须在 exact 详情原地恢复。三个现详情 dialog 接收局部反馈槽，复用原样式与按钮，不建另一详情壳。
+
+`mcp-create-completion-dialog.test.tsx` 覆盖创建 handoff 后 API/private MCP/Provider 恢复、同步去重、再次失败、移焦与退休迟到；`mcp-provider-readmission.test.tsx` 保当前 typed401及旧主体/代际负控；`mcp-configuration-save.test.tsx` 保原 secrets/CAS/unknown 原 key/body 并验证保存后 GET 恢复不重发 Save。旧 Provider 隐藏错误/无重试断言改为可见 reader 反馈，旧 icon Save 断言改为 exact GET 后显式关闭，保原一次 create/Done 与 icon 不取消。
+
 ## 局部读取失败与显式恢复（2026-11-01，候选）
 
 `mcp-read-feedback.tsx` 只呈现就近的读取错误和可选 GET 重试按钮，复用原 Button/语义样式；`mcp-projection-read.tsx` 分别绑定 API、连接器页、目录和关系 reader，不重放命令或刷新健康部分。已知卡片保留；确认全空/无匹配必须由当前相关读取共同证明，不沿用旧空状态掩盖失败。API 尾页沿原 cursor 重试，循环已停止时显式从首页重新读取。

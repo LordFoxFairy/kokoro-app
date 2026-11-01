@@ -12,7 +12,7 @@ const hash = (s: string) => createHash("sha256").update(s).digest("hex")
 it("consumes only fixed Public28.1 and inverses its exact resource delta before unchanged Public28 history", async () => {
   const source = await readFile(snapshot, "utf8")
   expect(hash(source)).toBe(BFF_PROJECT_RESOURCE_PROVENANCE.sourceSha256)
-  expect(BFF_PROJECT_RESOURCE_PROVENANCE).toEqual({ ownerCommit: "853ca9a5d8da3500b0c37543c72198a520e46225", sourceSha256: "ea0031103488daa1fcc0cca45fdd13f4d4061546ac4525c745ec47105649f7e7", openapiVersion: "28.17.0" })
+  expect(BFF_PROJECT_RESOURCE_PROVENANCE).toEqual({ ownerCommit: "7e4ab1cee8f8d45a34902176cd15a10f3c4b22cb", sourceSha256: "258bde9c39f785667cb205976e1547d1cf2c9662a5a2d7f356c4b11e807fcaf7", openapiVersion: "29.0.0" })
   expect(hash(restorePublic28ProjectResourceContract(source))).toBe(projectResourcePublic28Sha256)
   expect(projectResourcePublic28Sha256).toBe("34ca44c01ebc73f7ff76a4a06be33696b96ba1636e8818f02c38d57b1f539809")
   const spec = YAML.parse(restorePublic281ProjectMcpRecommendationsContract(source))

@@ -1,3 +1,7 @@
+## Public29 正式配对（候选）
+
+固定BFF7e4ab1cee8f8d45a34902176cd15a10f3c4b22cb，29.0.0，完整SHA258bde9c39f785667cb205976e1547d1cf2c9662a5a2d7f356c4b11e807fcaf7。12public生成、五独立private/profile与policy3保持；新增scheduled runs及RSS/日历分支只按owner原件消费。`tests/contract/bff-public29-integration-parent.ts`的有限逆差先还原两份完整原父字节和有序inventory，再进入旧证明链；正式proof只抽public字段，旧oracle不重签，不依赖sibling源或SQL。
+
 ## Public28.17 Custom API safe refs（正式输入候选消费）
 
 固定正式BFF853ca9a5d8da3500b0c37543c72198a520e46225／SHAea0031103488daa1fcc0cca45fdd13f4d4061546ac4525c745ec47105649f7e7，既有12public generator正规重出。原tool-display generator从MessageCreateRequest与private composer同字段派生closed≤32／unique profile_id／正int32版本schema及version叶；不另建wire中心。新test-only bff-custom-api-selection-parent只迁入正式owner函数的TS类型，精确逆回完整28.16，再进原composer父链。其余private／policy3／Auth／relay／lock不迁，无normal激活声明。

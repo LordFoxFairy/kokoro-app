@@ -4,7 +4,7 @@ import type { McpIconClient } from "@/hub/mcp-icon-client";
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
 import { useMcpIconDraft } from "./use-mcp-icon-draft";
 import { McpIconPicker } from "./mcp-icon-picker";
-import { type FormEvent, type RefObject, useMemo, useRef, useState } from "react";
+import { type FormEvent, type ReactNode, type RefObject, useMemo, useRef, useState } from "react";
 import { Copy, Plus, Trash2 } from "lucide-react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -50,11 +50,13 @@ export function CustomApiDetailDialog({
   onSave,
   onDelete,
   pendingError = false,
+  readFeedback,
 }: {
   iconClient?: McpIconClient | undefined;
   iconBoundary?: ProjectReadBoundary | undefined;
   profile: CustomApiProfile | null;
   pendingError?: boolean;
+  readFeedback?: ReactNode | undefined;
   actionError: boolean;
   busy: boolean;
   admitted: boolean;
@@ -177,7 +179,7 @@ export function CustomApiDetailDialog({
             </header>
             <div className={styles.apiConfigurationBody}>
               {commandStatus}
-              {!ready ? <span className="sr-only" role="status">{t(pendingError ? "mcp.loadError" : "mcp.loading")}</span> : null}
+              {readFeedback ?? (!ready ? <span className={pendingError ? undefined : "sr-only"} role="status">{t(pendingError ? "mcp.loadError" : "mcp.loading")}</span> : null)}
               {actionError ? (
                 <Alert variant="destructive" role="alert">
                   <AlertDescription>{t("mcp.actionFailed")}</AlertDescription>

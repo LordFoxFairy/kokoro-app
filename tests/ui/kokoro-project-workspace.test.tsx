@@ -566,17 +566,19 @@ it("定时任务入口打开选择弹窗和编辑器，并提交项目级任务"
 
   const dialogs = screen.getAllByRole("dialog")
   const editor = at(dialogs, -1, "scheduled task editor")
+  expect(within(editor).queryByRole("textbox", { name: "RSS 订阅源链接" })).not.toBeInTheDocument()
+  expect(within(editor).getByRole("combobox", { name: "排程" })).toBeInTheDocument()
   fireEvent.change(within(editor).getByRole("textbox", { name: "未读邮件摘要" }), { target: { value: "每日简报" } })
   fireEvent.change(within(editor).getByRole("textbox", { name: "汇总未读邮件并突出显示重要邮件" }), { target: { value: "汇总今天的重要消息" } })
   fireEvent.click(within(editor).getByRole("button", { name: "保存" }))
 
   await waitFor(() => expect(onCreateProjectScheduledTask).toHaveBeenCalledWith({
+    triggerKind: "calendar",
     title: "每日简报",
     prompt: "汇总今天的重要消息",
     frequency: "daily",
     time: "08:00",
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    expiresAt: undefined,
     autoApprove: false,
   }))
   await waitFor(() => expect(screen.getAllByRole("dialog")).toHaveLength(1))

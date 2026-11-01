@@ -1,3 +1,7 @@
+## ScheduledTask 运行记录薄桥（Public29候选）
+
+`scheduled-task-runs.ts`只承接现GET /api/scheduled-task-runs→BFF /v1/scheduled-task-runs；Product Session/可信headers与初末精确session重核、10秒请求至EOF总预算、opaque分页/strict JSON/bytes/取消保持。无直接owner资源、业务存储、自动写或通用代理；对应route对非GET显式拒绝。
+
 回答动作薄桥：session-answer-actions注册GET/PUT反馈、POST具名再生成及GET私有单Run display；正式Public28.10闭集decoder、原Product Session／同源Origin／10s完整EOF／取消和原key，无自动命令重发，不扩generic adapter。
 
 ## Project Skill 精确内容消费者

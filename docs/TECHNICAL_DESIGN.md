@@ -1,3 +1,15 @@
+## Public29：正式双父输入与原自动化功能承接（2026-11-02，候选）
+
+唯一BFF公开输入为正式双父7e4ab1cee8f8d45a34902176cd15a10f3c4b22cb / 29.0.0，完整SHA258bde9c39f785667cb205976e1547d1cf2c9662a5a2d7f356c4b11e807fcaf7。12现public generator正规生成，五独立private/profile及policy3不漂移。200操作只有scheduled-task-runs新增；API/MCP/Skills/Run执行展示无本次wire增量。test-only有限inverse保整份approved28.17与RSS20各自完整hash及有序inventory，再接原历史链；只消费正式committed public proof片段，不依赖sibling可编辑源码或SQL事实。
+
+ScheduledTask既有feature按共同祖先逐文件核对后承接正常1f700的calendar/RSS闭集、原命令key/body/未知恢复、编辑器、筛选、日历与运行记录。只在现KokoroAppSurface增加必要home workflow→现ScheduledTaskSurface选择，不触engine、Run、transport或展示。RSS的feed检查时间与运行observation不冒日历执行时间；已保存配置/排程不代表任务运行成功。Unsupported审批控件保持disabled，用scheduled局部准确原因，不改全局提示。
+
+运行记录薄桥与reader沿现Product Session及scope：服务端10秒完整绝对期限含初末会话核验/EOF，浏览器15秒/调用者取消、无自动重试；strict closed页、opaque cursor与身份/过滤/大小/时间精度均保持。正常源由Root成对激活，本候选源码完成不代表正常3314已更新。
+
+## 2026-11-02 B-01 精确详情失败恢复
+
+API、Provider、provider connection 与 private server 保持原 exact reader owner；本窗口显式 attempt 只驱动失败 GET，scope 同时绑定 actor、准入代、locator、窗口及既有修订/binding。同步 pending 防双击，退休闭包/迟到响应不更新新窗口。重试保留可见失败反馈、等待中禁用，失败按现 McpReadFeedback 焦点所有权恢复，用户已移焦不抢回。创建交接仍不读列表；Save / Create / Prepare / unknown 原请求生命周期不变。
+
 ## 2026-11-01 B-14 Manifest 展示读取的有限等待
 
 现 `use-runtime-manifest`每个非preview scope只设一次20秒绝对预算，覆盖fetch至body解析；异步边界核单调时钟，timer尚未获调度也不能让截止时刻的响应生效。成功、错误、超时各settle一次并清timer；超时退休/abort本次读取、恢复PRODUCT默认source:error并清retrying。cleanup、模式切换和新attempt静默取消，旧迟到不能再消费JSON或应用主题；未由当前controller取消的AbortError按失败处理。只有显式GET retry建立新attempt，不自动重试、不阻塞核心Chat、不退成preview。原manifest解码、空导航、theme/locale过滤与权限边界保持；正常缺System配置的503、历史pending与本源码缺口分别取证。

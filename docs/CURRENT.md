@@ -1,3 +1,25 @@
+## 2026-11-02 Task B：Public29 正式消费者与既有自动化承接（候选，正常源未切换）
+
+正式输入固定 BFF7e4ab1cee8f8d45a34902176cd15a10f3c4b22cb 的 Public29.0.0 / SHA258bde9c39f785667cb205976e1547d1cf2c9662a5a2d7f356c4b11e807fcaf7；12public入口正规生成，另5private/profile入口保持原固定来源。test-only有限inverse先验证完整200有序操作和新原件，再恢复approved28.17及RSS20两父完整字节，旧父链原oracle不重签，测试不导入owner SQL。
+
+沿既有正常1f700功能逐文件承接 calendar/RSS 定义、编辑/取消/unknown、详情回读、列表/日历分流及运行记录同源GET/分页/取消/主体代际边界。首页workflow只补既有导航/空态/header选择，不触A engine/Run/display。项目preview沿旧normal的calendar-only显式拒绝保护，UI仍只有日历；原localStorage日历缺triggerKind时在本地读时补判别并经现guard，读不写storage、不猜RSS或poll事实，真实owner请求仍严格显式trigger_kind。
+
+当前正式contract17check及49文件479项通过（76.57秒），architecture50项通过，typecheck通过；最终相关功能13文件321项通过（91.60秒）、现真实Node HTTP契约fixture另2项通过（1.97秒），最终完整ESLint通过（88.36秒）。后继完整default/build/E2E统一门由Root收口。相关迭代首次缺trigger_kind/RSS分支两条业务RED与旧preview隐藏一条RED均保留。首轮Vite将JSON newURL改成HTTP资产导致fixture读取失败、历史父链误进29桥、旧calendar-only断言、初次冷模块导入超5秒及旧空态入口测试假设等已逐项更正；没有增加timeout、删原风险或改历史hash。实际入口test模块改静态加载，项目/首页workflow行为已通过；preview25项绿，保零feed网络与不造poll事实。
+
+本片是候选组件/同源替身与契约验收，Root另在独立候选端口做真实owner浏览器验收。正常3314未由本writer修改；此前全量default22个既有UI失败和OIDC前置失败的历史证据继续保留，不以本片局部绿冒整个Task B或全量交付完成。
+
+Root后继复核：139全路径/77生产与生成物停写SHA相同，独审无确定P0–P2；正式canonical与owner原blob相同，五独立源未漂移。Root相关九文件232项通过（24.95秒），正式build通过。本轮完整默认实际为374文件、6973通过/48失败/181跳过（400.99秒）；当时Root只提供TEST_REDIS而漏WEB_REDIS，6文件随后同时指定受管测试Redis正式串行复验130项全部通过（133.90秒），含真实HTTP边界。原失败保留，不将补环境复验改写为首轮全绿。其余UI/视觉/展示失败及OIDC97前置仍各自核验，不把全部失败统称既有，不把跳过冒通过；PR继续Draft，最终Public29候选浏览器由Root继续。
+
+Root独立MCP/API候选（8f607+原7个详情冻结生产路径，尚非完整Public29源）已实际新OIDC登录/授权/回跳，真实IAM→BFF→Platform链的API创建201、修改/详情/列表200、取消不写、刷新保留、删除200及刷新空列表通过；保存密钥不回显。私有HTTP MCP实际公开服务声明创建201、Prepare200后已连接，修改/刷新保持新名称与状态。断开连接后DELETE200/列表GET200为空，已证配置恢复入口缺口，另沿owner撤权事实收敛，不以这些成功冒整个B01/B02完成。受管Redis复用且正常源未改；Storage图标、SMTP、其它未配置owner和外部OAuth/E2B末端不算已接通。开发服务并发检查下的少量耗时样本保留为观察，不冒生产SLO或100毫秒目标达标。
+
+## 2026-11-02 Task B：精确详情读取失败恢复（候选，正常源未切换）
+
+API / Provider / private MCP exact GET 失败现就近可见，并只显式重读失败 reader；创建 handoff 禁用列表读的原边界保持，成功创建不冒详情已就绪。原按钮等待中禁用、失败保原焦点所有权，用户已移焦不抢回；同 scope 同步去重，窗口/主体/准入代/修订退休后迟到不更新新窗。API 当前 typed401 补接现 ProductReadRecheck，命令 Create / Save / Prepare、unknown 原 key/body 均不重放。
+
+先保留原生产码3条业务 RED（另有误用Node26导致localStorage环境失败，未冒产品RED），最终相关6文件211 PASS；完整 ESLint、typecheck与diff-check通过。旧 Provider 隐藏错误/无重试断言按可见精确 GET 恢复迁移，原 drift/撤权/分页风险不删；icon Save 仍只create/Done各一次，改验 fresh详情后显式关闭。保存失败恢复仍验证 secrets清退、CAS及原body/key，重试不多发Save。记录 `B01-exact-detail-read-{red,focused-v1,focused-v2,focused-v3,lint,types}.log`。
+
+本片纯组件/替身验收不代表正常IAM或真实owner浏览器闭环；未为此小片重跑全套。Root将在Public29正式消费者配对后统一独审及完整门，现3314正常源未更新，本条不声称整个B-01或Task B完成。
+
 ## 2026-11-01 B-14 Manifest 客户端总期限（候选，未正常激活）
 
 原hook缺client总期限且一律忽略AbortError，确定性RTL假时钟新增用例在原source复现6条业务失败（共30条，原风险正控24通过）；不是collection错误或正常pending根因结论。现原scope内单一20秒绝对预算覆盖fetch/body，超时退休/abort并source:error、清retrying；精确截止复核、显式GET retry、成功/cleanup清timer与外来AbortError区分均由原hook测试承接。theme/locale/空导航/preview与原SET31生命周期不变，无新wire/pin/owner或正常3314改动。

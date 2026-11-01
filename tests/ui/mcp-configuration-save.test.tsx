@@ -408,13 +408,13 @@ it.each(["confirmed", "unknown-then-replayed", "read-failed"])("configuration Sa
   if (mode === "read-failed") {
     await within(dialog).findByText("连接列表加载失败")
     expect(within(dialog).queryByRole("alert")).not.toBeInTheDocument()
-    expect(within(dialog).queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
+    const retry = within(dialog).getByRole("button", { name: "重试" })
+    expect(retry).toBeEnabled()
     expect(screen.getByLabelText("传输类型 —")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "保存" })).toBeDisabled()
     expect(update).toHaveBeenCalledOnce()
-    // A normal owner invalidation can refresh this window; never resend Save.
-    const { invalidateMcpConnectorProjection } = await import("@/ui/mcp/use-mcp-projection")
-    act(() => invalidateMcpConnectorProjection(hub, "save-config-actor"))
+    // Recover the failed detail GET in place; never resend Save.
+    fireEvent.click(retry)
   }
   await waitFor(() => expect(read).toHaveBeenCalledTimes(mode === "read-failed" ? 3 : 2))
   expect(screen.getByRole("dialog", { name: "MCP 配置" })).toBe(dialog)
@@ -429,8 +429,10 @@ it.each(["confirmed", "unknown-then-replayed", "read-failed"])("configuration Sa
     // read does not revive it; only that read's fresh owner facts may do so.
     expect(screen.getByLabelText("传输类型 —")).toHaveTextContent("—")
     const loadingAnnouncement = within(dialog).getByRole("status")
-    expect(loadingAnnouncement).toHaveTextContent("正在加载…")
-    expect(loadingAnnouncement).toHaveClass("sr-only")
+    expect(loadingAnnouncement).toHaveTextContent("连接列表加载失败")
+    expect(loadingAnnouncement).toBeVisible()
+    expect(loadingAnnouncement).toHaveAttribute("aria-busy", "true")
+    expect(within(loadingAnnouncement).getByRole("button", { name: "重试" })).toBeDisabled()
   } else {
     expect(screen.getByLabelText("传输类型 HTTP")).toHaveTextContent("HTTP")
     expect(within(dialog).queryByText("正在加载…")).not.toBeInTheDocument()
@@ -745,13 +747,19 @@ it.each(["401", "403", "parse401", "network", "aborted"] as const)("the real sav
     "controlled private-server read", null, failure === "403" ? 403 : 401)
   await act(async () => { state.rejectRead(error) })
   expect(await within(state.dialog).findByText("连接列表加载失败")).toBeInTheDocument()
-  expect(within(state.dialog).queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
+  const retry = within(state.dialog).getByRole("button", { name: "重试" })
+  expect(retry).toBeEnabled()
   expect(within(state.dialog).queryByRole("alert")).not.toBeInTheDocument()
   expect(screen.getByRole("button", { name: "保存" })).toBeDisabled()
   expect(state.report).toHaveBeenCalledTimes(failure === "401" ? 1 : 0)
   expect(state.read).toHaveBeenCalledTimes(2)
   expect(state.patch).toHaveBeenCalledOnce()
   expect({ body: JSON.stringify(state.patch.mock.calls[0]?.[1]), key: state.patch.mock.calls[0]?.[2] }).toEqual(state.original)
+  fireEvent.click(retry)
+  await waitFor(() => expect(state.read).toHaveBeenCalledTimes(3))
+  await waitFor(() => expect(screen.getByRole("button", { name: "保存" })).toBeEnabled())
+  expect(state.patch).toHaveBeenCalledOnce()
+  expect(state.report).toHaveBeenCalledTimes(failure === "401" ? 1 : 0)
 })
 
 it.each(["actor", "generation", "close", "unmount"] as const)("a late private-server HTTP401 after %s never requests readmission or replays Save", async retirement => {

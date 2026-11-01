@@ -7,6 +7,7 @@ import { ProductReadRecheckProvider } from "@/ui/auth/product-read-recheck-conte
 import { useMcpProviderDirectory } from "@/ui/mcp/use-mcp-provider-directory"
 import { useMcpProviderDetail } from "@/ui/mcp/use-mcp-provider-detail"
 import { useMcpProviderRelations } from "@/ui/mcp/use-mcp-provider-relations"
+import { useCustomApiDetail } from "@/ui/mcp/use-custom-api-detail"
 
 type ReadInput = { client: HubClient; identity: string; admitted: boolean; readGeneration: number }
 const provider = { provider_key: "provider", display_name: "Provider", directory_type: "app" as const,
@@ -22,14 +23,18 @@ function useDetail(input: ReadInput) {
 function useRelations(input: ReadInput) {
   return useMcpProviderRelations({ ...input, enabled: true, refreshKey: 0 })
 }
+function useApiDetail(input: ReadInput) {
+  return useCustomApiDetail({ ...input, profileId: "profile", known: undefined, retry: 0 })
+}
 const readers = [{ name: "filtered directory", useRead: useDirectory },
   { name: "exact provider detail", useRead: useDetail },
-  { name: "relations continuation", useRead: useRelations }]
+  { name: "relations continuation", useRead: useRelations },
+  { name: "exact API detail", useRead: useApiDetail }]
 
 function setup(useRead: (input: ReadInput) => { error: boolean | undefined }, request: Mock) {
   const report = vi.fn()
   const client = { ...createHubClient(), listMcpConnectorProviders: request,
-    getMcpConnectorProvider: request,
+    getMcpConnectorProvider: request, getCustomApi: request,
     listMcpConnectors: vi.fn().mockResolvedValueOnce({ items: [], next_cursor: "tail" }).mockImplementation(request) }
   const wrapper = ({ children }: { children: ReactNode }) => <ProductReadRecheckProvider value={report}>{children}</ProductReadRecheckProvider>
   return { report, client, ...renderHook(props => useRead({ ...props, client }), { initialProps: initial, wrapper }) }
@@ -39,7 +44,7 @@ afterEach(cleanup)
 
 it.each(readers)("reports only the captured active HTTP401 from $name and recovers after readmission", async ({ useRead, name }) => {
   const request = vi.fn().mockRejectedValueOnce(new HubClientError("http", "expired", null, 401))
-    .mockResolvedValue(name === "exact provider detail" ? provider : { items: [], next_cursor: null })
+    .mockResolvedValue(name === "exact provider detail" ? provider : name === "exact API detail" ? { profile_id: "profile" } : { items: [], next_cursor: null })
   const { report, result, rerender } = setup(useRead, request)
   await waitFor(() => expect(result.current.error).toBe(true))
   const signal = request.mock.calls[0]![1] as AbortSignal

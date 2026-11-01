@@ -71,7 +71,8 @@ function renderCreationDialog(mode: "form" | "custom-api", icon: ReturnType<type
   const create = vi.fn<NonNullable<HubClient["createCustomApi"]>>(async () => profile);
   const register = vi.fn<NonNullable<HubClient["registerPrivateMcpServer"]>>();
   const done = vi.fn(async () => undefined);
-  const client = { ...createHubClient(), mcpIcons: icon.client, createCustomApi: create, registerPrivateMcpServer: register };
+  const get = vi.fn<NonNullable<HubClient["getCustomApi"]>>(async () => profile);
+  const client = { ...createHubClient(), mcpIcons: icon.client, createCustomApi: create, getCustomApi: get, registerPrivateMcpServer: register };
   function Harness() {
     const [open, setOpen] = useState(true);
     return <ConnectorCommandProvider client={client} boundary={boundary}>
@@ -79,7 +80,7 @@ function renderCreationDialog(mode: "form" | "custom-api", icon: ReturnType<type
     </ConnectorCommandProvider>;
   }
   const view = render(<LocaleProvider><Harness /></LocaleProvider>);
-  return { view, create, register, done };
+  return { view, create, get, register, done };
 }
 
 function fillApiCreationSecret() {
@@ -200,7 +201,7 @@ it.each([
   expect(icon.client.cancel.mock.calls[0]?.[3]?.aborted).toBe(false);
 });
 
-it("the real creation dialog's successful Save dismissal never cancels the handed-off icon", async () => {
+it("successful Save hands the icon to the exact fresh detail, which closes explicitly", async () => {
   const icon = iconFixture();
   const fixture = renderCreationDialog("custom-api", icon);
   fireEvent.change(screen.getByRole("textbox", { name: /^名称$/u }), { target: { value: profile.name } });
@@ -209,10 +210,17 @@ it("the real creation dialog's successful Save dismissal never cancels the hande
   await acknowledgeIcon(icon);
   fireEvent.click(screen.getByRole("button", { name: /^保存$/u }));
   await waitFor(() => expect(fixture.create).toHaveBeenCalledOnce());
-  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  const detail = await screen.findByRole("dialog", { name: "编辑自定义 API" });
+  expect(fixture.get).toHaveBeenCalledWith(profile.profile_id, expect.any(AbortSignal));
+  expect(await screen.findByDisplayValue(profile.name)).toBeVisible();
   expect(fixture.create.mock.calls[0]?.[0]).toEqual({ name: profile.name, environment: [{ name: "QA_API_KEY", value: "qa-public-fixture-value" }], icon: selector });
   expect(fixture.done).toHaveBeenCalledOnce();
   expect(fixture.register).not.toHaveBeenCalled();
+  expect(icon.client.cancel).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "关闭连接面板" }));
+  await waitFor(() => expect(detail).not.toBeInTheDocument());
+  expect(fixture.create).toHaveBeenCalledOnce();
+  expect(fixture.done).toHaveBeenCalledOnce();
   expect(icon.client.cancel).not.toHaveBeenCalled();
 });
 

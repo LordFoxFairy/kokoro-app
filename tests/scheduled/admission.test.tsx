@@ -27,7 +27,7 @@ const boundary = (
   generation: number,
   admitted = true,
 ): ProjectReadBoundary => ({ subject, generation, admitted })
-const task = {
+const task = { triggerKind: "calendar" as const,
   id: "task-a",
   title: "Only Alice",
   prompt: "Run",
@@ -159,4 +159,79 @@ it("restores the original unknown create after closing its dialog and remounting
   )
   const posts = fetcher.mock.calls.filter(([, init]) => init?.method === "POST")
   expect(posts[1]?.[1]).toEqual(posts[0]?.[1])
+})
+
+it("I1 restores an unknown inline submission across leaving and remounting with its original key and body", async () => {
+  window.localStorage.setItem("kokoro.locale", "en")
+  window.history.replaceState(null, "", "/app?workflow=automation&project_id=project-original")
+  const fetcher = vi.fn<typeof fetch>(async (_url, init) =>
+    init?.method === "POST"
+      ? new Response("lost ACK", { status: 502 })
+      : Response.json({ tasks: [] }),
+  )
+  const client = createScheduledTaskClient(fetcher)
+  const view = () => <LocaleProvider><ScheduledTaskSurface mode="live" scheduledTaskClient={client} projectReadBoundary={boundary("Alice", 1)} /></LocaleProvider>
+  const first = render(view())
+  await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1))
+  fireEvent.click(screen.getByRole("button", { name: "Scheduled tasks" }))
+  fireEvent.change(screen.getByRole("textbox", { name: "Unread email summary" }), { target: { value: "Original inline task" } })
+  fireEvent.change(screen.getByRole("textbox", { name: "Summarize unread email and highlight important messages" }), { target: { value: "Original frozen prompt" } })
+  fireEvent.click(screen.getByRole("button", { name: "Create automation" }))
+  fireEvent.click(screen.getByRole("button", { name: "Create automation" }))
+  await screen.findByRole("button", { name: "Retry original request" })
+  expect(fetcher.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1)
+  fireEvent.click(screen.getByRole("link", { name: "Back to automations" }))
+  first.unmount()
+  window.history.replaceState(null, "", "/app?workflow=automation&project_id=project-original")
+  render(view())
+  fireEvent.click(screen.getByRole("button", { name: "Scheduled tasks" }))
+  const title = screen.getByRole("textbox", { name: "Unread email summary" })
+  expect(title).toHaveValue("Original inline task")
+  expect(title).toBeDisabled()
+  expect(screen.getByRole("textbox", { name: "Summarize unread email and highlight important messages" })).toHaveValue("Original frozen prompt")
+  expect(screen.getByLabelText("Select time")).toHaveValue("10:00")
+  expect(fetcher.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1)
+  fireEvent.click(screen.getByRole("button", { name: "Retry original request" }))
+  await waitFor(() => expect(fetcher.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(2))
+  const posts = fetcher.mock.calls.filter(([, init]) => init?.method === "POST")
+  expect(posts[1]?.[1]).toEqual(posts[0]?.[1])
+  expect(JSON.parse(String(posts[0]?.[1]?.body))).toMatchObject({ project_id: "project-original", title: "Original inline task", prompt: "Original frozen prompt", time: "10:00" })
+})
+
+it.each(["subject", "generation", "project", "invalid", "personal"] as const)("I1 retires a late inline create on %s change before it can reload or navigate the new view", async (change) => {
+  window.localStorage.setItem("kokoro.locale", "en")
+  window.history.replaceState(null, "", "/app?workflow=automation&project_id=project-A")
+  let resolveCreate: (value: Awaited<ReturnType<ScheduledTaskClient["createScheduledTask"]>>) => void = () => undefined
+  const receipt = new Promise<Awaited<ReturnType<ScheduledTaskClient["createScheduledTask"]>>>((resolve) => { resolveCreate = resolve })
+  const list = vi.fn().mockResolvedValue([])
+  const create = vi.fn().mockReturnValue(receipt)
+  const client: ScheduledTaskClient = { listScheduledTasks: list, createScheduledTask: create, updateScheduledTask: unavailable, retryScheduledTask: unavailable, deleteScheduledTask: unavailable }
+  const view = (value: ProjectReadBoundary) => <LocaleProvider><ScheduledTaskSurface mode="live" scheduledTaskClient={client} projectReadBoundary={value} /></LocaleProvider>
+  const rendered = render(view(boundary("Alice", 1)))
+  await waitFor(() => expect(list).toHaveBeenCalledTimes(1))
+  fireEvent.click(screen.getByRole("button", { name: "Scheduled tasks" }))
+  fireEvent.change(screen.getByRole("textbox", { name: "Unread email summary" }), { target: { value: "Old A create" } })
+  fireEvent.change(screen.getByRole("textbox", { name: "Summarize unread email and highlight important messages" }), { target: { value: "Old A prompt" } })
+  fireEvent.click(screen.getByRole("button", { name: "Create automation" }))
+  await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
+  if (change === "subject") rendered.rerender(view(boundary("Bob", 2)))
+  else if (change === "generation") {
+    rendered.rerender(view(boundary("Alice", 2, false)))
+    rendered.rerender(view(boundary("Alice", 2)))
+  } else {
+    const query = change === "project" ? "&project_id=project-B" : change === "invalid" ? "&project_id=A&project_id=B" : ""
+    window.history.pushState(null, "", `/app?workflow=automation${query}`)
+    fireEvent(window, new Event("kokoro:surface-navigation"))
+  }
+  await act(async () => {})
+  const readsAfterRetirement = list.mock.calls.length
+  const newAddress = window.location.href
+  const newFocus = document.activeElement
+  await act(async () => { resolveCreate({ ...task, id: "old-created", projectId: "project-A", title: "Old A create" }); await receipt })
+  expect(list).toHaveBeenCalledTimes(readsAfterRetirement)
+  expect(create).toHaveBeenCalledTimes(1)
+  expect(window.location.href).toBe(newAddress)
+  expect(document.activeElement).toBe(newFocus)
+  expect(screen.queryByText("Old A create")).toBeNull()
+  expect(screen.queryByDisplayValue("Old A prompt")).toBeNull()
 })

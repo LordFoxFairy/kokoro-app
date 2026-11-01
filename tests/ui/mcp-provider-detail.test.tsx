@@ -136,14 +136,15 @@ it.each(["outside the first page", "when the directory fails"])("opens an instal
   expect(get).toHaveBeenCalledWith("outside", expect.any(AbortSignal))
 })
 
-it("keeps a failed seed unknown without a passive error panel and renders later filtered owner results", async () => {
+it("keeps a failed seed visibly unknown and renders later filtered owner results", async () => {
   const provider = { provider_key: "match", display_name: "Owner match", directory_type: "app" as const, category_keys: [], example_prompts: [], enabled: true, state_version: "1" }
   const client = { ...createHubClient(), listMcpConnectorProviders: vi.fn().mockRejectedValueOnce(Error("seed failed")).mockResolvedValue({ items: [provider], next_cursor: null }),
     // This case isolates provider seed recovery; API is an independently successful owner read.
     listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }),
   }
   render(<LocaleProvider><ConnectorCommandProvider client={client} boundary={{ subject: "filter-recovery", admitted: true, generation: 0 }}><McpProjectionRead client={client} identity="filter-recovery" embedded initialView="catalog" /></ConnectorCommandProvider></LocaleProvider>)
-  expect(await screen.findByText("连接列表加载失败")).toHaveClass("sr-only")
+  expect(await screen.findByText("连接器目录加载失败")).toBeVisible()
+  expect(screen.getByRole("button", { name: "重新加载连接器目录" })).toBeEnabled()
   expect(screen.queryByText("当前没有可添加的连接器提供方。")).not.toBeInTheDocument()
   expect(screen.queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
   fireEvent.change(screen.getByRole("searchbox"), { target: { value: "matching" } })
@@ -151,7 +152,7 @@ it("keeps a failed seed unknown without a passive error panel and renders later 
   expect(screen.queryByRole("alert")).not.toBeInTheDocument()
 })
 
-it.each(["catalog", "connections"] as const)("keeps the %s controls mounted without passive error/retry/loading panels or an invented empty result", async view => {
+it.each(["catalog", "connections"] as const)("keeps the %s controls mounted with visible reader recovery and no invented empty result", async view => {
   window.localStorage.setItem("kokoro.locale", "zh")
   const client = { ...createHubClient(),
     listMcpConnectorProviders: vi.fn().mockRejectedValue(Error("provider unavailable")),
@@ -162,7 +163,8 @@ it.each(["catalog", "connections"] as const)("keeps the %s controls mounted with
   const boundary = { subject: `quiet-${view}`, admitted: true, generation: 0 }
   render(<LocaleProvider><ConnectorCommandProvider client={client} boundary={boundary}><McpProjectionRead client={client} identity={boundary.subject} embedded settingsLayout initialView={view} /></ConnectorCommandProvider></LocaleProvider>)
   const searches = screen.getAllByRole("searchbox")
-  expect(await screen.findByText("连接列表加载失败")).toHaveClass("sr-only")
+  expect(await screen.findByText(view === "catalog" ? "连接器目录加载失败" : "已添加的连接器加载失败")).toBeVisible()
+  expect(screen.getByRole("button", { name: view === "catalog" ? "重新加载连接器目录" : "重新加载已添加的连接器" })).toBeEnabled()
   expect(screen.getAllByRole("searchbox")).toEqual(searches)
   expect(screen.queryByRole("alert")).not.toBeInTheDocument()
   expect(screen.queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
@@ -187,7 +189,7 @@ it.each(["catalog", "connections"] as const)("still renders a genuinely confirme
   expect(screen.queryByText("连接列表加载失败")).not.toBeInTheDocument()
 })
 
-it("retains confirmed connector cards when a same-scope refresh fails without adding a passive alert or retry", async () => {
+it("retains confirmed connector cards and offers reader recovery when a same-scope refresh fails", async () => {
   window.localStorage.setItem("kokoro.locale", "zh")
   const { act, waitFor } = await import("@testing-library/react")
   const { invalidateMcpConnectorProjection } = await import("@/ui/mcp/use-mcp-projection")
@@ -202,7 +204,8 @@ it("retains confirmed connector cards when a same-scope refresh fails without ad
   const card = await screen.findByRole("button", { name: connector.display_name })
   act(() => invalidateMcpConnectorProjection(client, boundary.subject))
   await waitFor(() => expect(list).toHaveBeenCalledTimes(2))
-  expect(await screen.findByText("连接列表加载失败")).toHaveClass("sr-only")
+  expect(await screen.findByText("已添加的连接器加载失败")).toBeVisible()
+  expect(screen.getByRole("button", { name: "重新加载已添加的连接器" })).toBeEnabled()
   expect(screen.getByRole("button", { name: connector.display_name })).toBe(card)
   expect(screen.queryByRole("alert")).not.toBeInTheDocument()
   expect(screen.queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
@@ -605,7 +608,7 @@ it.each(["revoked", "type", "server"] as const)("keeps a selected connection fro
   render(<LocaleProvider><ConnectorCommandProvider client={client} boundary={{ subject: drift, admitted: true, generation: 0 }}><McpProjectionRead client={client} identity={drift} embedded /></ConnectorCommandProvider></LocaleProvider>)
   fireEvent.click(await screen.findByRole("button", { name: provider.display_name }))
   const dialog = await screen.findByRole("dialog")
-  expect(await within(dialog).findByText("连接列表加载失败")).toBeInTheDocument()
+  expect(await within(dialog).findByText("已添加的连接器加载失败")).toBeVisible()
   expect(within(dialog).queryByRole("alert")).not.toBeInTheDocument()
   expect(within(dialog).queryByRole("button", { name: "连接" })).not.toBeInTheDocument()
   expect(get).toHaveBeenCalledExactlyOnceWith(connection.connector_id, expect.any(AbortSignal))
@@ -626,13 +629,11 @@ it.each([false, true])("opens an off-page private connection only after exact co
   fireEvent.click(await screen.findByRole("button", { name: provider.display_name }))
   fireEvent.click(await within(await screen.findByRole("dialog")).findByRole("button", { name: /My private connection/ }))
   if (retry) {
-    await screen.findByText("连接列表加载失败")
+    expect(await screen.findByText("已添加的连接器加载失败")).toBeVisible()
     expect(screen.queryByRole("alert")).not.toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
     expect(getServer).not.toHaveBeenCalled()
-    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "取消" }))
-    fireEvent.click(await screen.findByRole("button", { name: provider.display_name }))
-    fireEvent.click(await within(await screen.findByRole("dialog")).findByRole("button", { name: /My private connection/ }))
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "重新加载已添加的连接器" }))
   }
   expect(await screen.findByRole("dialog", { name: server.display_name })).toBeVisible()
   expect(get).toHaveBeenCalledTimes(retry ? 2 : 1)
@@ -667,7 +668,7 @@ it.each(["revoked", "fresh-server"])("retires opened private detail through an e
   expect(screen.queryByRole("button", { name: "管理" })).not.toBeInTheDocument()
   await act(async () => finishConnection(outcome === "revoked" ? { ...connection, status: "revoked" } : connection))
   if (outcome === "revoked") {
-    expect(await within(dialog).findByText("连接列表加载失败")).toBeInTheDocument()
+    expect(await within(dialog).findByText("已添加的连接器加载失败")).toBeVisible()
     expect(screen.queryByRole("alert")).not.toBeInTheDocument()
     expect(getServer).toHaveBeenCalledTimes(1)
   } else {
