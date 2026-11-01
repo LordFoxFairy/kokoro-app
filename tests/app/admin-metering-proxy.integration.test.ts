@@ -3,7 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest"
 const { currentProductSession } = vi.hoisted(() => ({
   currentProductSession: vi.fn(),
 }))
-vi.mock("@/lib/server/product-session", () => ({ currentProductSession }))
+vi.mock("@/lib/server/product-bff", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/server/product-bff")>()), admittedNativeSession: currentProductSession }))
 import { GET, POST, PUT } from "@/app/api/admin/[...path]/route"
 const prefix = "http://web.test/api/admin/billing/metering/"
 const context = (name: string) => ({
@@ -90,7 +90,7 @@ beforeEach(async () => {
   payloads = []
   currentProductSession.mockReset().mockResolvedValue({
     access: "admitted-product-token",
-    accessExpiresAt: Date.now() + 60000,
+    accessExpiresAt: Date.now() + 60000, nativeCookie: "kokoro-issuer.session_token=fixture",
   })
   peer = reply
   server = createServer((req, res) => {
@@ -161,7 +161,7 @@ it.each(["rate-revisions", "policy-revisions"])("preserves exact %s command and 
   expect(result.status).toBe(201)
   expect(payloads).toEqual([raw])
   expect(calls[0]!.url).toBe("/v1/admin/billing/metering/" + name)
-  expect(calls[0]!.headers.authorization).toBe("Bearer admitted-product-token")
+  expect(calls[0]!.headers.cookie).toBe("kokoro-issuer.session_token=fixture")
   expect(calls[0]!.headers.forwarded).toBe("host=configured.product.test")
   expect(calls[0]!.headers["idempotency-key"]).toBe("original-metering-key")
   expect(calls[0]!.headers["x-kokoro-tenant-id"]).toBeUndefined()
@@ -322,7 +322,7 @@ it("keeps the original budget when session inspection ignores cancellation", asy
     clock = vi.spyOn(Date, "now").mockReturnValue(now)
   currentProductSession.mockImplementation(async () => {
     clock.mockReturnValue(now + 10001)
-    return { access: "admitted-product-token", accessExpiresAt: now + 60000 }
+    return { access: "admitted-product-token", accessExpiresAt: now + 60000 , nativeCookie: "kokoro-issuer.session_token=fixture"}
   })
   expect((await POST(input(), context("policy-revisions"))).status).toBe(503)
   expect(calls).toHaveLength(0)

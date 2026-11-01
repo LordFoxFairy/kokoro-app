@@ -127,7 +127,7 @@ function KokoroArtifactLibrary({
   setFavoriteIds: (next: ReadonlySet<string>) => void
 }) {
   // Only an explicit preview selects synthetic transport. Development with a
-  // Product Session remains live and must show an unavailable BFF as an error.
+  // native session admission remains live and must show an unavailable BFF as an error.
   const useFixtureTransport = preview && !artifactClient && !fixtureArtifacts
   const { filter, query, view, favoritesOnly } = useLibraryUrlState()
   const updateUrlState = useCallback((patch: Partial<LibraryUrlState>) => {

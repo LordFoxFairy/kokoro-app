@@ -3,7 +3,7 @@ import {
   interactionUpstreamHeaders, prepareInteraction,
 } from "@/lib/server/iam-interaction-route"
 import { IAM_RELAY_POLICY } from "@/lib/server/iam-relay-policy"
-import { oidcLoginRecovery } from "@/lib/server/oidc-login-recovery"
+import { loginRecovery } from "@/lib/server/login-recovery"
 import { requestIamRelay, type IamRelayUpstream } from "@/lib/server/iam-relay-transport"
 
 export const runtime = "nodejs"
@@ -76,7 +76,7 @@ export async function GET(request: Request): Promise<Response> {
   // Never retry a tenant mutation or clear another transaction after an
   // unconfirmed continuation. Native documents leave the protocol URL;
   // JSON, q=0 and non-navigation clients retain their original rejection.
-  return response.status >= 400 ? oidcLoginRecovery(request) ?? response : response
+  return response.status >= 400 ? loginRecovery(request) ?? response : response
 }
 
 export function HEAD(): Response {

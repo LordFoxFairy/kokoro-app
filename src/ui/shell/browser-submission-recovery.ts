@@ -14,7 +14,7 @@ const recordSchema = z.discriminatedUnion("state", [
 ])
 type RecordValue = z.infer<typeof recordSchema>
 
-/** Constructed only after Product Session admission. The marker detects retirement, not authorization. */
+/** Constructed only after native admission. The marker detects retirement, not authorization. */
 export function createBrowserSubmissionRecovery(args: {
   subject: string
   scope: SessionScope

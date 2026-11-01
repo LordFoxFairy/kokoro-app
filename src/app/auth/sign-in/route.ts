@@ -6,7 +6,7 @@ import { filterIssuerCookies, IAM_RELAY_POLICY } from "@/lib/server/iam-relay-po
 import { nativeIamResponse } from "@/lib/server/iam-relay-response"
 import { requestIamRelay } from "@/lib/server/iam-relay-transport"
 import { issueSignInFeedback } from "@/lib/server/iam-sign-in-feedback"
-import { oidcLoginRecovery } from "@/lib/server/oidc-login-recovery"
+import { loginRecovery } from "@/lib/server/login-recovery"
 import { IAM_SIGN_IN_PATH, isIamSignInExpired, iamSignInFlowId, nativeIamSignInTarget } from "@/lib/server/iam-sign-in-target"
 
 import { readIamSignInFlow, retireIamSignInFlow, clearIamSignInFlowCookie } from "@/lib/server/iam-sign-in-flow"
@@ -133,7 +133,7 @@ export async function POST(request: Request): Promise<Response> {
   const flowInput = { redisUrl, webOrigin: config.webOrigin, flowId, cookie: request.headers.get("cookie") }
   let flow: Awaited<ReturnType<typeof readIamSignInFlow>>
   try { flow = await readIamSignInFlow(flowInput) } catch { return errorResponse(503, "iam_interaction_unavailable", id) }
-  if (flow === null) return oidcLoginRecovery(request) ?? errorResponse(403, "iam_interaction_csrf_rejected", id)
+  if (flow === null) return loginRecovery(request) ?? errorResponse(403, "iam_interaction_csrf_rejected", id)
   const { query } = flow
   const nativeTarget = nativeIamSignInTarget(query)
   if (nativeTarget === null) return errorResponse(400, "iam_interaction_target_rejected", id)
@@ -141,7 +141,7 @@ export async function POST(request: Request): Promise<Response> {
   if (form === null) return errorResponse(400, "iam_interaction_body_rejected", id)
   const formToken = form.get("csrf_token")
   const cookieName = iamSignInCsrfCookieName(query, formToken, flowId)
-  if (cookieName === null) return oidcLoginRecovery(request) ?? errorResponse(403, "iam_interaction_csrf_rejected", id)
+  if (cookieName === null) return loginRecovery(request) ?? errorResponse(403, "iam_interaction_csrf_rejected", id)
   const cookieToken = cookieValue(request.headers.get("cookie"), cookieName)
   const finish = (response: Response): Response => {
     response.headers.append("set-cookie", clearIamCsrfCookie(PAGE_PATH, config.secureCookies, cookieName))
@@ -151,8 +151,8 @@ export async function POST(request: Request): Promise<Response> {
     const valid = await consumeIamInteractionCsrf({ redisUrl, webOrigin: config.webOrigin, path: PAGE_PATH, method: "POST", query, issuerCookie, context: flowId, cookieToken, formToken })
     // Unproved requests neither consume nor clear another form. A proven but
     // expired interaction ends here without automatically sending credentials again.
-    if (!valid) return oidcLoginRecovery(request) ?? errorResponse(403, "iam_interaction_csrf_rejected", id)
-    if (isIamSignInExpired(query)) return finish(oidcLoginRecovery(request) ?? errorResponse(403, "iam_interaction_csrf_rejected", id))
+    if (!valid) return loginRecovery(request) ?? errorResponse(403, "iam_interaction_csrf_rejected", id)
+    if (isIamSignInExpired(query)) return finish(loginRecovery(request) ?? errorResponse(403, "iam_interaction_csrf_rejected", id))
   } catch {
     return errorResponse(503, "iam_interaction_unavailable", id)
   }

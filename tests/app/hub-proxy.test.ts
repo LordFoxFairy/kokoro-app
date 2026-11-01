@@ -14,7 +14,7 @@ vi.mock("@/lib/server/upstream-http", async (importOriginal) => ({
 const { currentProductSession } = vi.hoisted(() => ({
   currentProductSession: vi.fn(),
 }));
-vi.mock("@/lib/server/product-session", () => ({ currentProductSession }));
+vi.mock("@/lib/server/product-bff", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/server/product-bff")>()), admittedNativeSession: currentProductSession }))
 
 const ENV = {
   KOKORO_WEB_AUTH_SECRET: "a".repeat(32),
@@ -50,7 +50,7 @@ const ownerErrorCodes = {
     .code.enum,
 };
 
-// A retired cookie must never be promoted into a Product Session.
+// A retired cookie must never be promoted into native admission.
 function sessionCookie(): string {
   return "kokoro_session=retired-forged-envelope";
 }
@@ -63,7 +63,7 @@ beforeEach(() => {
   currentProductSession.mockReset();
   currentProductSession.mockResolvedValue({
     access: "product-access",
-    accessExpiresAt: Date.now() + 60_000,
+    accessExpiresAt: Date.now() + 60_000, nativeCookie: "kokoro-issuer.session_token=fixture",
   });
   for (const [k, v] of Object.entries(ENV)) process.env[k] = v;
   vi.mocked(requestWithDomain).mockReset();
@@ -111,7 +111,7 @@ describe("/api/hub/[...path] proxy", () => {
   it("emits typed local errors for projection config, IAM, query, network, and invalid owner branches", async () => {
     const { GET } = await import("@/app/api/hub/[...path]/route");
     const path = params(["self", "skills", "managed"]);
-    delete process.env.KOKORO_WEB_AUTH_SECRET;
+    delete process.env.KOKORO_BFF_BASE_URL;
     await expectProjectionError(
       await GET(
         new Request(
@@ -125,7 +125,7 @@ describe("/api/hub/[...path] proxy", () => {
       false,
       "client-valid",
     );
-    process.env.KOKORO_WEB_AUTH_SECRET = ENV.KOKORO_WEB_AUTH_SECRET;
+    process.env.KOKORO_BFF_BASE_URL = ENV.KOKORO_BFF_BASE_URL;
 
     const productBff = await import("@/lib/server/product-bff");
     const configSpy = vi
@@ -1164,7 +1164,7 @@ describe("/api/hub/[...path] proxy", () => {
     const { POST } = await import("@/app/api/hub/[...path]/route");
     const draftPath = params(["self", "skills", "drafts"]);
     const draftUrl = "http://localhost/api/hub/self/skills/drafts";
-    delete process.env.KOKORO_WEB_AUTH_SECRET;
+    delete process.env.KOKORO_BFF_BASE_URL;
     const config = await POST(
       new Request(draftUrl, {
         method: "POST",
@@ -1181,7 +1181,7 @@ describe("/api/hub/[...path] proxy", () => {
     expect(await config.json()).toMatchObject({
       error: { code: "product_tenant_not_configured", retryable: false },
     });
-    process.env.KOKORO_WEB_AUTH_SECRET = ENV.KOKORO_WEB_AUTH_SECRET;
+    process.env.KOKORO_BFF_BASE_URL = ENV.KOKORO_BFF_BASE_URL;
 
     const wrongOrigin = await POST(
       new Request(draftUrl, {
@@ -1500,7 +1500,7 @@ it.each([
   },
 );
 
-it("forwards only trusted installation headers, false body and safe retry response", async () => {
+it("forwards only trusted installation headers, native session cookie, false body and safe retry response", async () => {
   const { PUT } = await import("@/app/api/hub/[...path]/route");
   vi.mocked(requestWithDomain).mockResolvedValue(
     new Response(
@@ -1549,11 +1549,10 @@ it("forwards only trusted installation headers, false body and safe retry respon
   expect(response.headers.get("set-cookie")).toBeNull();
   const options = vi.mocked(requestWithDomain).mock.calls[0]?.[2];
   expect(options?.headers).toMatchObject({
-    authorization: "Bearer product-access",
+    cookie: "kokoro-issuer.session_token=fixture",
     "idempotency-key": "frozen",
   });
   expect(options?.headers).not.toHaveProperty("x-kokoro-subject");
-  expect(options?.headers).not.toHaveProperty("cookie");
   expect(options?.signal?.aborted).toBe(false);
   controller.abort();
   expect(options?.signal?.aborted).toBe(true);
@@ -1823,7 +1822,7 @@ describe("R243 exact Project name adapter", () => {
     );
     const upstreamHeaders = new Headers(init?.headers);
     expect(upstreamHeaders.get("idempotency-key")).toBe("stable-key");
-    expect(upstreamHeaders.get("authorization")).toBe("Bearer product-access");
+    expect(upstreamHeaders.get("cookie")).toBe("kokoro-issuer.session_token=fixture");
     expect(upstreamHeaders.get("x-kokoro-service")).toBe("web-bff");
     expect(init?.signal?.aborted).toBe(true);
   });
@@ -1964,14 +1963,14 @@ describe("R243 exact Project name adapter", () => {
 
   it("does no owner write without configuration or current admission", async () => {
     const { PATCH } = await import("@/app/api/hub/[...path]/route");
-    delete process.env.KOKORO_WEB_AUTH_SECRET;
+    delete process.env.KOKORO_BFF_BASE_URL;
     await expectError(
       await PATCH(request(), path),
       503,
       "product_tenant_not_configured",
     );
     expect(currentProductSession).not.toHaveBeenCalled();
-    process.env.KOKORO_WEB_AUTH_SECRET = ENV.KOKORO_WEB_AUTH_SECRET;
+    process.env.KOKORO_BFF_BASE_URL = ENV.KOKORO_BFF_BASE_URL;
     currentProductSession.mockResolvedValueOnce(null);
     await expectError(
       await PATCH(request(), path),
@@ -2233,11 +2232,10 @@ it.each(["image/jpeg", "image/webp"])(
     expect((await result.arrayBuffer()).byteLength).toBe(3);
     const headers = vi.mocked(requestWithDomain).mock.calls[0]?.[2]?.headers;
     expect(headers).toMatchObject({
-      authorization: "Bearer product-access",
+      cookie: "kokoro-issuer.session_token=fixture",
       "x-kokoro-service": "web-bff",
       "x-kokoro-internal-secret": "svc-secret",
     });
-    expect(headers).not.toHaveProperty("cookie");
     expect(headers).not.toHaveProperty("x-kokoro-user-id");
   },
 );
@@ -2670,7 +2668,7 @@ it("maps Complete/zero-body Finalize/Get to exactly formal local-import paths, n
       expect.objectContaining({
         method: get ? "GET" : "POST",
         headers: expect.objectContaining({
-          authorization: "Bearer product-access",
+          cookie: "kokoro-issuer.session_token=fixture",
           "x-kokoro-service": "web-bff",
         }),
       }),
@@ -2948,7 +2946,7 @@ it.each(["preview", "import"])(
     expect(forwarded.get("idempotency-key")).toBe(
       operation === "import" ? "github-original-key" : null,
     );
-    expect(forwarded.get("authorization")).toBe("Bearer product-access");
+    expect(forwarded.get("cookie")).toBe("kokoro-issuer.session_token=fixture");
   },
 );
 
@@ -3836,7 +3834,7 @@ describe("personal MCP closed adapter boundaries", () => {
       expect(vi.mocked(requestWithDomain)).not.toHaveBeenCalled();
     },
   );
-  it("forwards only admitted bearer and validates owner requestID/no-store/resource/error matching", async () => {
+  it("forwards only admitted native session and validates owner requestID/no-store/resource/error matching", async () => {
     const { GET } = await import("@/app/api/hub/[...path]/route");
     const read = () =>
       GET(
@@ -3851,11 +3849,10 @@ describe("personal MCP closed adapter boundaries", () => {
     expect((await read()).status).toBe(200);
     const options = vi.mocked(requestWithDomain).mock.calls[0]?.[2];
     expect(options?.headers).toMatchObject({
-      authorization: "Bearer product-access",
+      cookie: "kokoro-issuer.session_token=fixture",
       "x-kokoro-service": "web-bff",
     });
-    expect(options?.headers).not.toHaveProperty("cookie");
-    expect(options?.headers).not.toHaveProperty("x-kokoro-subject");
+      expect(options?.headers).not.toHaveProperty("x-kokoro-subject");
     expect(options?.headers).not.toHaveProperty("content-length");
     for (const response of [
       owner({ data: { connector: { ...connector, connector_id: "wrong" } } }),
@@ -4007,7 +4004,7 @@ describe("personal MCP closed adapter boundaries", () => {
               () =>
                 resolve({
                   access: "product-access",
-                  accessExpiresAt: Date.now() + 60_000,
+                  accessExpiresAt: Date.now() + 60_000, nativeCookie: "kokoro-issuer.session_token=fixture",
                 }),
               6_000,
             ),
@@ -4037,7 +4034,7 @@ describe("personal MCP closed adapter boundaries", () => {
       expect(cancel).toHaveBeenCalled();
       currentProductSession.mockResolvedValue({
         access: "product-access",
-        accessExpiresAt: Date.now() + 60_000,
+        accessExpiresAt: Date.now() + 60_000, nativeCookie: "kokoro-issuer.session_token=fixture",
       });
       let resolveLate!: (value: Response) => void;
       vi.mocked(requestWithDomain).mockImplementation(
@@ -4563,7 +4560,7 @@ describe("personal MCP 14.0 provider and command adapter", () => {
       expect(options?.headers).toMatchObject({
         "idempotency-key": "original-key",
         "content-type": "application/json",
-        authorization: "Bearer product-access",
+        cookie: "kokoro-issuer.session_token=fixture",
       });
     },
   );
@@ -4620,7 +4617,7 @@ it("forwards the explicit installation update without promoting browser identity
   expect(requestWithDomain).toHaveBeenCalledTimes(1);
   const [url,,options] = vi.mocked(requestWithDomain).mock.calls[0]!;
   expect(url).toBe("http://bff.test/v1/skill-installations/i1/update");
-  expect(options?.headers).toMatchObject({ authorization: "Bearer product-access", "idempotency-key": "frozen-update" });
+  expect(options?.headers).toMatchObject({ cookie: "kokoro-issuer.session_token=fixture", "idempotency-key": "frozen-update" });
   expect(options?.headers).not.toHaveProperty("x-kokoro-subject");
   expect(new TextDecoder().decode(options?.body)).toBe(body);
 });
@@ -4677,7 +4674,7 @@ describe("connector private recovery errors", () => {
       expect(response.headers.get("x-request-id")).toBe("owner-recovery");
       expect(response.headers.get("cache-control")).toBe("no-store");
       expect(requestWithDomain).toHaveBeenCalledTimes(before + 1);
-      expect(vi.mocked(requestWithDomain).mock.calls.at(-1)![2]?.headers).toMatchObject({ authorization: "Bearer product-access", "idempotency-key": "original-command-key" });
+      expect(vi.mocked(requestWithDomain).mock.calls.at(-1)![2]?.headers).toMatchObject({ cookie: "kokoro-issuer.session_token=fixture", "idempotency-key": "original-command-key" });
     }
     vi.mocked(requestWithDomain).mockResolvedValueOnce(reply("mcp_personal_needs_client", 412, false));
     expect((await post(["mcp", "connectors", "connector-one", "authorization"], { server_id: "server-one", expected_state_version: "4" }, false)).status).toBe(412);
@@ -4993,7 +4990,7 @@ describe("MCP icon staging adapter", () => {
     expect(requestWithDomain).toHaveBeenCalledTimes(1);
     const [url, , options] = vi.mocked(requestWithDomain).mock.calls[0]!;
     expect(String(url)).toBe(`http://bff.test/browser/v1/mcp/icons/${suffix}`);
-    expect(options?.headers).toMatchObject({ authorization: "Bearer product-access", "idempotency-key": "icon-original" });
+    expect(options?.headers).toMatchObject({ cookie: "kokoro-issuer.session_token=fixture", "idempotency-key": "icon-original" });
     expect(JSON.parse(new TextDecoder().decode(options?.body as ArrayBuffer))).toEqual(body);
   });
   it("GET is read-only; mismatched ACK and attempted keyless mutation do not become success", async () => {
@@ -5071,7 +5068,7 @@ it("streams Project attachment bytes above1MiB with its UTF8 filename, fresh Pro
   const [target, , options] = vi.mocked(requestWithDomain).mock.calls[0]!;
   expect(target).toBe("http://bff.test/v1/projects/project-one/resources/asset-one/download");
   expect(options).toMatchObject({ maxResponseBytes: 1_073_741_824, strictResponseLength: true });
-  expect(new Headers(options?.headers).get("authorization")).toBe("Bearer product-access");
+  expect(new Headers(options?.headers).get("cookie")).toBe("kokoro-issuer.session_token=fixture");
   expect(new Headers(options?.headers).has("x-kokoro-tenant-id")).toBe(false);
 });
 

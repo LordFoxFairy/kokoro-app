@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const { currentProductSession } = vi.hoisted(() => ({ currentProductSession: vi.fn() }));
-vi.mock("@/lib/server/product-session", () => ({ currentProductSession }));
+vi.mock("@/lib/server/product-bff", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/server/product-bff")>()), admittedNativeSession: currentProductSession }))
 import { GET, POST } from "@/app/api/hub/[...path]/route";
 
 const segments = ["mcp", "servers", "saved-server", "icon"];
@@ -19,7 +19,7 @@ function media(response: ServerResponse, overrides: Record<string, string> = {},
 }
 beforeEach(async () => {
   calls = [];
-  currentProductSession.mockReset().mockResolvedValue({ access: "admitted-access", accessExpiresAt: Date.now() + 60_000 });
+  currentProductSession.mockReset().mockResolvedValue({ access: "admitted-access", accessExpiresAt: Date.now() + 60_000 , nativeCookie: "kokoro-issuer.session_token=fixture"});
   peer = (_request, response) => media(response);
   server = createServer((request, response) => { calls.push(request); peer(request, response); });
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
@@ -43,10 +43,10 @@ it("returns only complete media from the exact private BFF route, with admitted 
   expect(result.headers.get("referrer-policy")).toBe("no-referrer");
   expect(calls).toHaveLength(1);
   expect(calls[0]!.url).toBe("/browser/v1/mcp/servers/saved-server/icon");
-  expect(calls[0]!.headers.authorization).toBe("Bearer admitted-access");
+  expect(calls[0]!.headers.cookie).toBe("kokoro-issuer.session_token=fixture");
   expect(calls[0]!.headers.forwarded).toBe("host=configured.product.test");
   expect(calls[0]!.headers.accept).toBe("image/png, image/jpeg");
-  for (const name of ["cookie", "x-kokoro-subject", "x-kokoro-tenant-id", "x-custom", "content-type", "content-length", "idempotency-key"]) expect(calls[0]!.headers[name]).toBeUndefined();
+  for (const name of ["x-kokoro-subject", "x-kokoro-tenant-id", "x-custom", "content-type", "content-length", "idempotency-key"]) expect(calls[0]!.headers[name]).toBeUndefined();
 });
 it.each(["content-type", "content-length", "transfer-encoding", "content-encoding", "idempotency-key", "if-match", "if-none-match", "range", "if-range"])("rejects %s before admission and BFF I/O", async name => {
   expect((await GET(input({ [name]: name === "content-length" ? "0" : "arbitrary" }), context())).status).toBe(400);
@@ -98,7 +98,7 @@ it("cancels a partially received image without exposing successful bytes", async
 });
 it("does not issue a late BFF request after admission consumes the absolute budget", async () => {
   const now = performance.now(); const clock = vi.spyOn(performance, "now").mockReturnValue(now);
-  currentProductSession.mockImplementation(async () => { clock.mockReturnValue(now + 10_001); return { access: "admitted-access", accessExpiresAt: Date.now() + 60_000 }; });
+  currentProductSession.mockImplementation(async () => { clock.mockReturnValue(now + 10_001); return { access: "admitted-access", accessExpiresAt: Date.now() + 60_000 , nativeCookie: "kokoro-issuer.session_token=fixture"}; });
   expect((await GET(input(), context())).status).toBe(503); expect(calls).toHaveLength(0);
 });
 it("bounds an unresponsive session admission to the same ten-second budget", async () => {

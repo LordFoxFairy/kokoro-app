@@ -8,7 +8,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const { currentProductSession } = vi.hoisted(() => ({
   currentProductSession: vi.fn(),
 }));
-vi.mock("@/lib/server/product-session", () => ({ currentProductSession }));
+vi.mock("@/lib/server/product-bff", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/server/product-bff")>()), admittedNativeSession: currentProductSession }))
 import { GET, PUT } from "@/app/api/hub/[...path]/route";
 let server: Server,
   calls: IncomingMessage[],
@@ -57,7 +57,7 @@ beforeEach(async () => {
     .mockReset()
     .mockResolvedValue({
       access: "admitted-access",
-      accessExpiresAt: Date.now() + 60000,
+      accessExpiresAt: Date.now() + 60000, nativeCookie: "kokoro-issuer.session_token=fixture",
     });
   server = createServer((req, res) => {
     calls.push(req);
@@ -112,7 +112,7 @@ it("real catchall thin bridge sends raw PUT bytes with trusted Content-Length/no
   expect(calls[0]!.headers["transfer-encoding"]).toBeUndefined();
   expect(calls[0]!.headers["idempotency-key"]).toBeUndefined();
   expect(calls[0]!.headers["x-kokoro-subject"]).toBeUndefined();
-  expect(calls[0]!.headers.authorization).toBe("Bearer admitted-access");
+  expect(calls[0]!.headers.cookie).toBe("kokoro-issuer.session_token=fixture");
   expect(calls[0]!.headers.forwarded).toBe("host=configured.product.test");
   expect(result.headers.get("cache-control")).toContain("no-store");
   expect(await result.json()).toEqual({ data });
@@ -241,7 +241,7 @@ it("admission and slow owner EOF consume one ten-second budget, not a renewed re
           () =>
             resolve({
               access: "admitted-access",
-              accessExpiresAt: Date.now() + 60000,
+              accessExpiresAt: Date.now() + 60000, nativeCookie: "kokoro-issuer.session_token=fixture",
             }),
           1000,
         ),

@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const { currentProductSession } = vi.hoisted(() => ({ currentProductSession: vi.fn() }));
-vi.mock("@/lib/server/product-session", () => ({ currentProductSession }));
+vi.mock("@/lib/server/product-bff", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/server/product-bff")>()), admittedNativeSession: currentProductSession }))
 import { GET, POST } from "@/app/api/hub/[...path]/route";
 import { prepareReceiptFixture } from "../hub/fixtures/mcp-prepare-receipt";
 const path = ["mcp", "servers", "receipt-server", "prepare-receipt"];
@@ -14,7 +14,7 @@ function json(response: ServerResponse, value: unknown, status = 200, extra: Rec
 }
 beforeEach(async () => {
   calls = [];
-  currentProductSession.mockReset().mockResolvedValue({ access: "fixture-admitted-access", accessExpiresAt: Date.now() + 60_000 });
+  currentProductSession.mockReset().mockResolvedValue({ access: "fixture-admitted-access", accessExpiresAt: Date.now() + 60_000 , nativeCookie: "kokoro-issuer.session_token=fixture"});
   peer = (_request, response) => json(response, prepareReceiptFixture());
   server = createServer((request, response) => { calls.push(request); peer(request, response); });
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
@@ -26,13 +26,13 @@ afterEach(async () => {
   await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
 });
 
-it("bridges only original GET/key/CAS through admitted Product Session and drops caller identities", async () => {
+it("bridges only original GET/key/CAS through native admission and drops caller identities", async () => {
   const result = await GET(input(undefined, { authorization: "Bearer forged", "x-kokoro-subject": "forged", "x-kokoro-tenant-id": "forged", "x-custom": "forged" }), context());
   expect(result.status).toBe(200); expect(await result.json()).toEqual(prepareReceiptFixture());
   expect(calls).toHaveLength(1); expect(calls[0]!.method).toBe("GET");
   expect(calls[0]!.url).toBe("/browser/v1/mcp/servers/receipt-server/prepare-receipt?expected_state_version=1");
   expect(calls[0]!.headers["idempotency-key"]).toBe("original-key");
-  expect(calls[0]!.headers.authorization).toBe("Bearer fixture-admitted-access");
+  expect(calls[0]!.headers.cookie).toBe("kokoro-issuer.session_token=fixture");
   expect(calls[0]!.headers.forwarded).toBe("host=configured.product.test");
   for (const name of ["content-type", "content-length", "transfer-encoding", "x-kokoro-subject", "x-kokoro-tenant-id", "x-custom"]) expect(calls[0]!.headers[name]).toBeUndefined();
 });
@@ -65,7 +65,7 @@ it.each(["pending", "not_replayed", "wrong_server", "negative", "future410"] as 
 });
 it("uses the same absolute ten-second admission budget without sending a late owner request", async () => {
   const now = performance.now(), clock = vi.spyOn(performance, "now").mockReturnValue(now);
-  currentProductSession.mockImplementation(async () => { clock.mockReturnValue(now + 10_001); return { access: "fixture-admitted-access", accessExpiresAt: Date.now() + 60_000 }; });
+  currentProductSession.mockImplementation(async () => { clock.mockReturnValue(now + 10_001); return { access: "fixture-admitted-access", accessExpiresAt: Date.now() + 60_000 , nativeCookie: "kokoro-issuer.session_token=fixture"}; });
   expect((await GET(input(), context())).status).toBe(503); expect(calls).toHaveLength(0);
 });
 

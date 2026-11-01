@@ -28,7 +28,7 @@ AppGate在整个KokoroAppSurface外提供单用途read-recheck context；只有�
 
 ## IAM native-session 恢复（2026-11-01）
 
-会话探针只读取同源 `/api/auth/session` 的 native projection；不会读取 CSRF、刷新 Product Session 或重放凭据。一次读失败只进入 unavailable，后续 focus、online、pageshow 和有限周期 GET 可恢复；同主体检查保留已有数据代际，身份标记变化、匿名结果、pagehide 或取消立即撤销读写准入。
+会话探针只读取同源 `/api/auth/session` 的 native projection；不会读取 CSRF、刷新 native session 或重放凭据。一次读失败只进入 unavailable，后续 focus、online、pageshow 和有限周期 GET 可恢复；同主体检查保留已有数据代际，身份标记变化、匿名结果、pagehide 或取消立即撤销读写准入。
 
 # ui/auth — 登录与会话态门面
 
@@ -50,7 +50,7 @@ AppGate在整个KokoroAppSurface外提供单用途read-recheck context；只有�
 上游：`@/app/page.tsx`（公开首页）、`@/app/login/route.ts`（native 登录启动）、`@/ui/settings`（useSessionState 匿名闸）。下游：Web 同源 `@/app/api/auth/*` native session adapter 与 `@/app/auth/sign-in/route.ts` IAM 表单。只有 `AppGate` 消费 System runtime manifest。
 
 ## 陷阱
-- 登录主链为 `GET /login` → `/auth/sign-in?native=1&return_to=...` → IAM `/sign-in/email`；会话探针优先 `/v1/me` native admission，退出使用 native IAM sign-out。旧 RP/Product Session 兼容代码仍在清理切片中，不得作为新的登录入口或 native fallback。
+- 登录主链为 `GET /login` → `/auth/sign-in?native=1&return_to=...` → IAM `/sign-in/email`；会话探针优先 `/v1/me` native admission，退出使用 native IAM sign-out。旧 RP 代码已移除；不得作为新的登录入口或 native fallback。
 - 诚实态：不放假 OAuth 按钮或可见中转；失败 URL 不自动循环提交，未接入 IAM 时不呈现假凭据表单。
 
 - `ProductSignInRedirect`只负责匿名文档导航，StrictMode同次挂载仅启动一次；无脚本保留校验过的path/query登录链接。`openProductSignIn`编码白名单设置hash到原签名return_to，不参与认证授权，未知fragment退回合法base。

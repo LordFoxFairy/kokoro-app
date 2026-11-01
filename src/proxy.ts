@@ -2,7 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto"
 
 import { NextResponse, type NextRequest } from "next/server"
 
-import { oidcLoginDocumentPolicy } from "@/lib/server/oidc-login-recovery"
+import { loginDocumentPolicy } from "@/lib/server/login-recovery"
 import { parseProductReturnTarget } from "@/lib/product-return-target"
 
 import { securityHeaders, shouldDisableCaching } from "@/lib/server/security-headers"
@@ -148,7 +148,7 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   if (path === "/iam/oauth2/authorize" || path === "/api/auth/signin/kokoro-iam" || path === "/api/auth/callback/kokoro-iam"
     || path === "/auth/select-tenant" || path === "/iam/interactions/select-tenant") {
     response.headers.set("Referrer-Policy", "no-referrer")
-    response.headers.set("Content-Security-Policy", oidcLoginDocumentPolicy(nonce))
+    response.headers.set("Content-Security-Policy", loginDocumentPolicy(nonce))
   }
   if (path === "/auth/sign-out") {
     response.headers.set("Cache-Control", "no-store")

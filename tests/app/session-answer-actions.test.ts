@@ -1,7 +1,7 @@
 import { createServer, type Server, type IncomingMessage, type ServerResponse } from "node:http"
 import { beforeEach, afterEach, it, expect, vi } from "vitest"
 const { currentProductSession } = vi.hoisted(() => ({ currentProductSession: vi.fn() }))
-vi.mock("@/lib/server/product-session", () => ({ currentProductSession }))
+vi.mock("@/lib/server/product-bff", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/server/product-bff")>()), admittedNativeSession: currentProductSession }))
 import { GET, POST, PUT } from "@/app/api/session/[...path]/route"
 let server: Server, calls: IncomingMessage[], bodies: string[], peer: (req: IncomingMessage, res: ServerResponse) => void
 const feedback = { session_id: "session", message_id: "answer", feedback: null }
@@ -27,7 +27,7 @@ beforeEach(async () => {
     generation: 1,
     subject: "subject",
     access: "private-fixture-access",
-    accessExpiresAt: Date.now() + 60000,
+    accessExpiresAt: Date.now() + 60000, nativeCookie: "kokoro-issuer.session_token=fixture",
     expiresAt: Date.now() + 60000,
   })
   server = createServer((req, res) => {
@@ -71,7 +71,7 @@ const run = (req: Request, suffix = "feedback") =>
     params: Promise.resolve({ path: ["sessions", "session", "messages", "answer", suffix] }),
   })
 
-it("projects only exact four read/write operations through current Product Session and preserves one original regeneration key", async () => {
+it("projects only exact four read/write operations through current native admission and preserves one original regeneration key", async () => {
   const read = await run(request())
   expect(read.status).toBe(200)
   expect(await read.json()).toEqual(feedback)
@@ -81,7 +81,7 @@ it("projects only exact four read/write operations through current Product Sessi
   expect(calls).toHaveLength(2)
   expect(calls[1]?.headers["idempotency-key"]).toBe("same-key")
   expect(bodies[1]).toBe("{}")
-  expect(calls[0]?.headers.authorization).toBe("Bearer private-fixture-access")
+  expect(calls[0]?.headers.cookie).toBe("kokoro-issuer.session_token=fixture")
 })
 it("rejects query/identity/unknown fields before BFF and rejects truncated or wrong-bound responses without retry", async () => {
   expect((await run(request("PUT", "feedback", '{"feedback":"up","actor":"other"}'))).status).toBe(400)

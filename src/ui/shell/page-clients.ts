@@ -39,11 +39,11 @@ import { consumeLandingPrompt } from "./use-draft"
 
 const STORAGE_KEY = "kokoro.web.conversations"
 export const AUTH_INDEX_SUBJECT_KEY = "kokoro.web.auth-index-subject"
-// Set only by successful Product Session admission in this document, never restored from a marker.
+// Set only by successful native admission in this document, never restored from a marker.
 let admittedBrowserSubject: string | null = null
 let capturePartsReadRecheck: ((subject: string) => MessagePartsReadRecheck | undefined) | undefined
 
-/** AppGate supplies its existing Product Session admission, never a cache marker. */
+/** AppGate supplies its existing native admission, never a cache marker. */
 export function bindBrowserMessagePartsReadRecheck(capture: NonNullable<typeof capturePartsReadRecheck>): () => void {
   capturePartsReadRecheck = capture
   return () => { if (capturePartsReadRecheck === capture) capturePartsReadRecheck = undefined }
@@ -75,7 +75,7 @@ export function invalidateBrowserAuthSessionIndexes(): void {
   for (const key of keys) window.localStorage.removeItem(key)
 }
 
-/** Cache marker only; Product Session remains the sole authentication proof. */
+/** Cache marker only; native admission remains the sole authentication proof. */
 export function readBrowserAuthIndexSubject(): string | null {
   if (typeof window === "undefined") return null
   return window.localStorage.getItem(AUTH_INDEX_SUBJECT_KEY)

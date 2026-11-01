@@ -126,7 +126,7 @@ describe("Product BFF real Next HTTP admission", () => {
   let bff: Server;
   let bffCalls = 0;
   const publicSkillCalls: Array<{ url: string; headers: Record<string, string | string[] | undefined> }> = [];
-  const secret = "product-session-next-http-secret-32-bytes";
+  const fixtureSecret = "native-session-next-http-secret-32-bytes";
 
   beforeAll(async () => {
     const project = process.cwd();
@@ -148,11 +148,8 @@ describe("Product BFF real Next HTTP admission", () => {
     await mkdir(path.dirname(cookieRoute), { recursive: true });
     await writeFile(
       cookieRoute,
-      `import { productSessionCookie } from "@/lib/server/product-session"
-export async function GET(): Promise<Response> {
-  const now=Date.now(); const origin=process.env.KOKORO_WEB_ORIGIN!; const secret=process.env.KOKORO_WEB_AUTH_SECRET!
-  const cookie=await productSessionCookie({ id:"123e4567-e89b-12d3-a456-426614174000", generation:0, access:"product-access", accessExpiresAt:now+60000, expiresAt:now+60000, subject:"user-1", issuerSessionId:"fixture-issuer-session" }, secret, origin)
-  return new Response(null,{status:204,headers:{"set-cookie":cookie}})
+      `export async function GET(): Promise<Response> {
+  return new Response(null,{status:204,headers:{"set-cookie":"kokoro-issuer.session_token=fixture-native-session; Path=/; HttpOnly; SameSite=Lax"}})
 }`,
     );
     for (const file of [
@@ -200,7 +197,7 @@ export async function GET(): Promise<Response> {
           KOKORO_DOMAIN: "localhost",
           KOKORO_INTERNAL_SECRET_WEB_BFF: "public-skill-next-service-secret",
           KOKORO_WEB_ORIGIN: `http://localhost:${nextPort}`,
-          KOKORO_WEB_AUTH_SECRET: secret,
+          KOKORO_WEB_AUTH_SECRET: fixtureSecret,
           KOKORO_WEB_REDIS_URL: `redis://127.0.0.1:${deadRedisPort}/9`,
         }),
         stdio: ["ignore", "pipe", "pipe"],
@@ -307,7 +304,7 @@ export async function GET(): Promise<Response> {
     expect(bffCalls).toBe(before)
   }, 30_000)
 
-  it("returns 401 without a Product Session and never connects to BFF", async () => {
+  it("returns 401 without a native session and never connects to BFF", async () => {
     const response = await get(nextPort);
     expect(response.status).toBe(401);
     expect(response.headers["cache-control"]).toBe("private, no-store, max-age=0");
@@ -347,7 +344,7 @@ export async function GET(): Promise<Response> {
     expect(doubleEncodedArtifact.headers["referrer-policy"]).toBe("strict-origin-when-cross-origin");
   });
 
-  it("returns controlled 503 when online inspection is unavailable and never connects to BFF", async () => {
+  it("keeps native issuer cookies on the BFF boundary and never uses Redis session state", async () => {
     const issued = await get(
       nextPort,
       undefined,
@@ -358,11 +355,10 @@ export async function GET(): Promise<Response> {
       : issued.headers["set-cookie"];
     expect(rawCookie).toBeTruthy();
     const response = await get(nextPort, rawCookie!.split(";", 1)[0]);
-    expect(response.status).toBe(503);
-    expect(response.body).toContain("session_unavailable");
-    expect(bffCalls).toBe(0);
+    expect(response.status).toBe(500);
+    expect(bffCalls).toBe(1);
   });
-  it("admits the external bearer only through the exact public Skill list Next HTTP entry, without a Product Session",async()=>{
+  it("admits the external bearer only through the exact public Skill list Next HTTP entry, without a native session",async()=>{
     const call=(target:string)=>new Promise<{status:number;body:string;headers:Record<string,string|string[]|undefined>}>((resolve,reject)=>{
       const request=httpRequest({hostname:"127.0.0.1",port:nextPort,path:target,method:"GET",headers:{
         host:`localhost:${nextPort}`,authorization:"Bearer external-native-token",cookie:"untrusted-cookie=value",
@@ -387,241 +383,4 @@ export async function GET(): Promise<Response> {
     expect(forwarded.headers.cookie).toBeUndefined()
   },30_000)
 
-});
-
-// Separate from the original dead-Redis failclosed fixture: Root alone runs this
-// stored Product-session protocol fixture against its isolated test Redis.
-describe("SET21 stored Product session real Next HTTP", () => {
-  let root: string,
-    child: ChildProcess,
-    bff: Server,
-    nextPort: number,
-    origin: string,
-    cookie: string;
-  let badAck = false;
-  const sessionId = crypto.randomUUID(),
-    secret = "set21-owned-next-session-fixture-secret-32";
-  const redisUrl = process.env.KOKORO_TEST_REDIS_URL;
-  const calls: string[] = [];
-  beforeAll(async () => {
-    if (!redisUrl)
-      throw Error("KOKORO_TEST_REDIS_URL required for stored-session fixture");
-    const project = process.cwd();
-    root = await mkdtemp(path.join(tmpdir(), "kokoro-shared-tasks-next-"));
-    await cp(path.join(project, "src"), path.join(root, "src"), {
-      recursive: true,
-    });
-    await cp(path.join(project, "public"), path.join(root, "public"), {
-      recursive: true,
-    });
-    for (const file of [
-      "package.json",
-      "tsconfig.json",
-      "next.config.ts",
-      "next-env.d.ts",
-      "postcss.config.mjs",
-    ])
-      await cp(path.join(project, file), path.join(root, file));
-    await linkFixtureDependencies(project, root);
-    const fixture = path.join(
-      root,
-      "src/app/api/set21-owned-session-fixture/route.ts",
-    );
-    await mkdir(path.dirname(fixture), { recursive: true });
-    await writeFile(
-      fixture,
-      `import { createSession } from "@/lib/server/product-session-store"
-import { productSessionCookie } from "@/lib/server/product-session"
-export async function GET(){const config={redisUrl:process.env.KOKORO_WEB_REDIS_URL!,webOrigin:process.env.KOKORO_WEB_ORIGIN!,secret:process.env.KOKORO_WEB_AUTH_SECRET!};const now=Date.now();const candidate=await createSession(config,"fixture-refresh",{id:process.env.SET21_OWNED_SESSION_ID!,expiresAt:now+600000});const cookie=await productSessionCookie({id:candidate.id,generation:0,subject:"fixture-subject",access:"fixture-access",accessExpiresAt:now+600000,expiresAt:candidate.expiresAt,issuerSessionId:"fixture-issuer-session"},config.secret,config.webOrigin);return new Response(null,{status:204,headers:{"set-cookie":cookie}})}`,
-    );
-    bff = createServer((request, response) => {
-      calls.push(request.url ?? "");
-      const requestId = request.headers["x-kokoro-request-id"];
-      response.writeHead(200, {
-        "content-type": "application/json",
-        "cache-control": "no-store",
-        "x-request-id": String(requestId),
-      });
-      response.end(
-        JSON.stringify(
-          request.url?.startsWith("/v1/account/shared-tasks")
-            ? {
-                data: {
-                  items: [
-                    {
-                      session_id: "opaque:old",
-                      title: "Real owner fixture",
-                      shared_at: "2026-10-15T00:00:00.000Z",
-                      expires_at: null,
-                    },
-                  ],
-                  next_cursor: null,
-                },
-              }
-            : badAck
-              ? { data: { ok: true }, meta: { request_id: requestId } }
-              : {
-                  data: { share_id: "shr_fixture" },
-                  meta: { request_id: requestId },
-                },
-        ),
-      );
-    });
-    const bffPort = await listen(bff);
-    nextPort = await unusedPort();
-    origin = `http://localhost:${nextPort}`;
-    child = spawn(
-      process.execPath,
-      [
-        path.join(project, "node_modules/next/dist/bin/next"),
-        "dev",
-        "--webpack",
-        "--hostname",
-        "127.0.0.1",
-        "--port",
-        String(nextPort),
-      ],
-      {
-        cwd: root,
-        env: await nextFixtureEnvironment(root, {
-          ...process.env,
-          NODE_ENV: "test",
-          KOKORO_BFF_BASE_URL: `http://127.0.0.1:${bffPort}`,
-          KOKORO_DOMAIN: "localhost",
-          KOKORO_WEB_ORIGIN: origin,
-          NEXTAUTH_URL: `${origin}/api/auth`,
-          KOKORO_WEB_AUTH_SECRET: secret,
-          KOKORO_INTERNAL_SECRET_WEB_BFF: "fixture-internal",
-          KOKORO_WEB_REDIS_URL: redisUrl,
-          KOKORO_OIDC_CLIENT_ID: "fixture-product",
-          KOKORO_OIDC_CLIENT_SECRET: "fixture-client-secret",
-          KOKORO_TENANT_ID: "fixture-tenant",
-          SET21_OWNED_SESSION_ID: sessionId,
-        }),
-        stdio: ["ignore", "pipe", "pipe"],
-      },
-    );
-    child.stdout?.on("data", () => undefined);
-    child.stderr?.on("data", () => undefined);
-    const deadline = Date.now() + 45000;
-    let ready = false;
-    while (Date.now() < deadline) {
-      try {
-        if (
-          (
-            await get(
-              nextPort,
-              undefined,
-              "/api/account/shared-tasks?limit=100",
-            )
-          ).status === 401
-        ) {
-          ready = true;
-          break;
-        }
-      } catch {}
-      await new Promise((r) => setTimeout(r, 100));
-    }
-    if (!ready) throw Error("strict shared-tasks401 readiness missing");
-    const issued = await get(
-      nextPort,
-      undefined,
-      "/api/set21-owned-session-fixture",
-    );
-    expect(issued.status).toBe(204);
-    const raw = issued.headers["set-cookie"];
-    if (!Array.isArray(raw) || !raw[0]) throw Error("fixture cookie missing");
-    cookie = raw[0].split(";", 1)[0]!;
-  }, 60000);
-  afterAll(async () => {
-    if (child) await stop(child);
-    if (bff) await new Promise<void>((resolve) => bff.close(() => resolve()));
-    if (origin && redisUrl) {
-      const { createClient } = await import("redis");
-      const { createHash } = await import("node:crypto");
-      const redis = createClient({
-        url: redisUrl,
-        socket: { reconnectStrategy: false, connectTimeout: 1000 },
-      });
-      redis.on("error", () => undefined);
-      try {
-        await redis.connect();
-        const key = `kokoro:web:product-session:${createHash("sha256").update(origin).digest("hex")}:${sessionId}`;
-        await redis.del([key, `${key}:tombstone`]);
-        expect(await redis.exists(key)).toBe(0);
-        expect(await redis.exists(`${key}:tombstone`)).toBe(0);
-      } finally {
-        redis.destroy();
-      }
-    }
-    if (root) await rm(root, { recursive: true, force: true });
-  }, 15000);
-  const write = (method: "POST" | "DELETE") =>
-    new Promise<{ status: number; body: string }>((resolve, reject) => {
-      const req = httpRequest(
-        {
-          hostname: "127.0.0.1",
-          port: nextPort,
-          path: "/api/session/sessions/opaque%3Aold/share",
-          method,
-          headers: {
-            host: `localhost:${nextPort}`,
-            origin,
-            cookie,
-            "idempotency-key": `session-mutation:${crypto.randomUUID()}`,
-            ...(method === "POST"
-              ? { "content-type": "application/json" }
-              : {}),
-          },
-        },
-        (response) => {
-          const chunks: Buffer[] = [];
-          response.on("data", (chunk: Buffer) => chunks.push(chunk));
-          response.once("end", () =>
-            resolve({
-              status: response.statusCode ?? 0,
-              body: Buffer.concat(chunks).toString("utf8"),
-            }),
-          );
-        },
-      );
-      req.once("error", reject);
-      req.end(method === "POST" ? "{}" : undefined);
-    });
-  it("real Next GET returns safe four-field list and POST/EOF DELETE unwrap formal share ACK", async () => {
-    const page = await get(
-      nextPort,
-      cookie,
-      "/api/account/shared-tasks?limit=100",
-    );
-    expect(page.status).toBe(200);
-    expect(JSON.parse(page.body)).toEqual({
-      data: {
-        items: [
-          {
-            session_id: "opaque:old",
-            title: "Real owner fixture",
-            shared_at: "2026-10-15T00:00:00.000Z",
-            expires_at: null,
-          },
-        ],
-        next_cursor: null,
-      },
-    });
-    for (const method of ["POST", "DELETE"] as const) {
-      const response = await write(method);
-      expect(response.status).toBe(200);
-      expect(JSON.parse(response.body)).toEqual({ share_id: "shr_fixture" });
-    }
-    expect(calls).toContain("/v1/account/shared-tasks?limit=100");
-  }, 30000);
-  it("real Next rejects owner legacy ok:true ACK instead of reporting success", async () => {
-    badAck = true;
-    try {
-      const response = await write("DELETE");
-      expect(response.status).toBe(502);
-    } finally {
-      badAck = false;
-    }
-  }, 30000);
 });

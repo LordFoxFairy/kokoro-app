@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 const { currentProductSession } = vi.hoisted(() => ({ currentProductSession: vi.fn() }))
-vi.mock("@/lib/server/product-session", () => ({ currentProductSession }))
+vi.mock("@/lib/server/product-bff", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/server/product-bff")>()), admittedNativeSession: currentProductSession }))
 import { GET, POST, PUT } from "@/app/api/admin/[...path]/route"
 const id = "11111111-1111-4111-8111-111111111111"
 const body = JSON.stringify({
@@ -34,7 +34,7 @@ function reply(req: IncomingMessage, res: ServerResponse, status = 201, raw?: st
 beforeEach(async () => {
   calls = []
   payloads = []
-  currentProductSession.mockReset().mockResolvedValue({ access: "admitted-session-token", accessExpiresAt: Date.now() + 60000 })
+  currentProductSession.mockReset().mockResolvedValue({ access: "admitted-session-token", accessExpiresAt: Date.now() + 60000 , nativeCookie: "kokoro-issuer.session_token=fixture"})
   peer = reply
   server = createServer((req, res) => {
     calls.push(req)
@@ -76,7 +76,7 @@ it("forwards exact frozen funding bytes/key using Product identity and configure
   expect(calls).toHaveLength(1)
   expect(calls[0]!.url).toBe("/v1/admin/billing/credit-grants")
   expect(payloads).toEqual([body])
-  expect(calls[0]!.headers.authorization).toBe("Bearer admitted-session-token")
+  expect(calls[0]!.headers.cookie).toBe("kokoro-issuer.session_token=fixture")
   expect(calls[0]!.headers.forwarded).toBe("host=configured.product.test")
   expect(calls[0]!.headers["idempotency-key"]).toBe("original-funding-key")
   expect(calls[0]!.headers["x-kokoro-tenant-id"]).toBeUndefined()
@@ -156,7 +156,7 @@ it("enforces the shared absolute deadline before dispatch even if session inspec
     clock = vi.spyOn(Date, "now").mockReturnValue(real)
   currentProductSession.mockImplementation(async () => {
     clock.mockReturnValue(real + 10001)
-    return { access: "admitted-session-token", accessExpiresAt: real + 60000 }
+    return { access: "admitted-session-token", accessExpiresAt: real + 60000 , nativeCookie: "kokoro-issuer.session_token=fixture"}
   })
   expect((await POST(input(), context())).status).toBe(503)
   expect(calls).toHaveLength(0)

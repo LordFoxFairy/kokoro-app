@@ -8,7 +8,7 @@ vi.mock("@/lib/server/upstream-http", async (importOriginal) => ({
 }))
 
 const { currentProductSession } = vi.hoisted(() => ({ currentProductSession: vi.fn() }))
-vi.mock("@/lib/server/product-session", () => ({ currentProductSession }))
+vi.mock("@/lib/server/product-bff", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/server/product-bff")>()), admittedNativeSession: currentProductSession }))
 
 const ENV = {
   KOKORO_WEB_AUTH_SECRET: "a".repeat(32),
@@ -24,7 +24,7 @@ const params = (path: string[]) => ({ params: Promise.resolve({ path }) })
 beforeEach(() => {
   for (const [key, value] of Object.entries(ENV)) process.env[key] = value
   currentProductSession.mockReset()
-  currentProductSession.mockResolvedValue({ access: "product-access", accessExpiresAt: Date.now() + 60_000 })
+  currentProductSession.mockResolvedValue({ access: "product-access", accessExpiresAt: Date.now() + 60_000 , nativeCookie: "kokoro-issuer.session_token=fixture"})
   vi.mocked(fetchWithDomain).mockReset()
 })
 
@@ -34,7 +34,7 @@ afterEach(() => {
   for (const key of Object.keys(ENV)) delete process.env[key]
 })
 
-describe("/api/admin/[...path] product-session adapter", () => {
+describe("/api/admin/[...path] native session adapter", () => {
   it("forwards an admitted provider mutation to the BFF's formal MCP path", async () => {
     vi.mocked(fetchWithDomain).mockImplementation(async (_url, _domain, init) =>
       new Response(JSON.stringify({ data: { provider_key: "fixture" } }), {
@@ -70,11 +70,11 @@ describe("/api/admin/[...path] product-session adapter", () => {
       expect.objectContaining({ method: "POST", cache: "no-store" }),
     )
     const init = vi.mocked(fetchWithDomain).mock.calls[0]![2]!
-    expect(new Headers(init.headers).get("authorization")).toBe("Bearer product-access")
+    expect(new Headers(init.headers).get("authorization")).toBeNull()
     expect(new Headers(init.headers).get("idempotency-key")).toBe("command-key")
   })
 
-  it("keeps unsupported paths and missing product sessions out of the BFF", async () => {
+  it("keeps unsupported paths and missing native sessions out of the BFF", async () => {
     const { GET } = await import("@/app/api/admin/[...path]/route")
     const unknown = await GET(new Request("http://localhost/api/admin/admin/mcp/providers"), params(["admin", "mcp", "providers"]))
     expect(unknown.status).toBe(404)

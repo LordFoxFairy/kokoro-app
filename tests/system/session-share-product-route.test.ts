@@ -3,9 +3,7 @@ const mocks = vi.hoisted(() => ({
   currentProductSession: vi.fn(),
   requestWithDomain: vi.fn(),
 }));
-vi.mock("@/lib/server/product-session", () => ({
-  currentProductSession: mocks.currentProductSession,
-}));
+vi.mock("@/lib/server/product-bff", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/server/product-bff")>()), admittedNativeSession: mocks.currentProductSession }));
 vi.mock("@/lib/server/upstream-http", () => ({
   requestWithDomain: mocks.requestWithDomain,
 }));
@@ -20,6 +18,7 @@ let session: {
   access: string;
   accessExpiresAt: number;
   expiresAt: number;
+  nativeCookie: string;
 };
 const request = (
   method = "DELETE",
@@ -55,7 +54,7 @@ beforeEach(() => {
     generation: 1,
     subject: "alice",
     access: "server-secret",
-    accessExpiresAt: Date.now() + 600_000,
+    accessExpiresAt: Date.now() + 600_000, nativeCookie: "kokoro-issuer.session_token=fixture",
     expiresAt: Date.now() + 600_000,
   };
   mocks.currentProductSession.mockResolvedValue(session);

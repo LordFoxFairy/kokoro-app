@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http"
 import { afterEach,beforeEach,expect,it,vi } from "vitest"
 const {currentProductSession}=vi.hoisted(()=>({currentProductSession:vi.fn()}))
-vi.mock("@/lib/server/product-session",()=>({currentProductSession}))
+vi.mock("@/lib/server/product-bff", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/server/product-bff")>()), admittedNativeSession: currentProductSession }))
 import {GET,PUT} from "@/app/api/hub/[...path]/route"
 let server:Server,calls:IncomingMessage[],bodies:string[],peer:(req:IncomingMessage,res:ServerResponse)=>void
 const item={project_id:"project",pinned_at:"2026-10-27T00:00:00.000Z"}
@@ -17,7 +17,7 @@ beforeEach(async () => {
     .mockReset()
     .mockResolvedValue({
       access: "admitted-access",
-      accessExpiresAt: Date.now() + 60000,
+      accessExpiresAt: Date.now() + 60000, nativeCookie: "kokoro-issuer.session_token=fixture",
     });
   server = createServer((req, res) => {
     calls.push(req);
@@ -65,7 +65,7 @@ it("accepts the formal strict owner404 envelope instead of guessing unpinned",as
 })
 it("sends only the original PUT bytes and trusted Session authority; list/exact GET remain canonical",async()=>{
  const raw=' {"is_pinned": true}\n',result=await PUT(put(raw,{authorization:"Bearer forged","x-kokoro-subject":"forged",forwarded:"host=forged.invalid"}),ctx(["projects","project","pin"]))
- expect(result.status).toBe(200);expect(bodies).toEqual([raw]);expect(calls[0]?.url).toBe("/v1/projects/project/pin");expect(calls[0]?.headers.authorization).toBe("Bearer admitted-access");expect(calls[0]?.headers["x-kokoro-subject"]).toBeUndefined();expect(calls[0]?.headers.forwarded).toBe("host=configured.product.test");expect(calls[0]?.headers["content-length"]).toBe(String(Buffer.byteLength(raw)));expect(calls[0]?.headers["transfer-encoding"]).toBeUndefined();expect(calls[0]?.headers["idempotency-key"]).toBeUndefined()
+ expect(result.status).toBe(200);expect(bodies).toEqual([raw]);expect(calls[0]?.url).toBe("/v1/projects/project/pin");expect(calls[0]?.headers.cookie).toBe("kokoro-issuer.session_token=fixture");expect(calls[0]?.headers["x-kokoro-subject"]).toBeUndefined();expect(calls[0]?.headers.forwarded).toBe("host=configured.product.test");expect(calls[0]?.headers["content-length"]).toBe(String(Buffer.byteLength(raw)));expect(calls[0]?.headers["transfer-encoding"]).toBeUndefined();expect(calls[0]?.headers["idempotency-key"]).toBeUndefined()
  const get=await GET(new Request("http://web.test/api/hub/self/project-pins?limit=50"),ctx(["self","project-pins"]));expect(get.status).toBe(200);expect(calls[1]?.url).toBe("/v1/self/project-pins?limit=50")
 })
 it("rejects mixed/duplicate query, command headers, extra JSON and CSRF with zero upstream",async()=>{

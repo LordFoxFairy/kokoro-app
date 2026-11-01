@@ -1,9 +1,6 @@
 import { createServer, type Server } from "node:http"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-const { currentProductSession } = vi.hoisted(() => ({ currentProductSession: vi.fn() }))
-vi.mock("@/lib/server/product-session", () => ({ currentProductSession }))
-vi.mock("@/lib/server/oidc-bff-agent", () => ({ boundedOidcBffAgent: vi.fn() }))
 import { GET } from "@/app/api/account/profile/route"
 
 type Scenario = { admissionStatus?: number; profileStatus?: number; profileBody?: unknown }
@@ -18,14 +15,6 @@ describe("account profile native-session admission through the BFF", () => {
     scenario = {}
     paths = []
     headers = []
-    currentProductSession.mockReset().mockResolvedValue({
-      id: "legacy-session",
-      generation: 1,
-      subject: "alice",
-      access: "legacy-access",
-      accessExpiresAt: Date.now() + 60_000,
-      expiresAt: Date.now() + 120_000,
-    })
     server = createServer((request, response) => {
       paths.push(request.url ?? "")
       headers.push(Object.fromEntries(Object.entries(request.headers).map(([key, value]) => [key, String(value)])))
@@ -72,12 +61,10 @@ describe("account profile native-session admission through the BFF", () => {
     }
   })
 
-  it("uses legacy Product Session as the transitional admission when no native cookie is present", async () => {
+  it("rejects a request without an IAM native cookie before any owner I/O", async () => {
     const response = await GET(new Request("http://web.test/api/account/profile", { headers: { host: "web.test" } }))
-    expect(response.status).toBe(200)
-    expect(await response.json()).toEqual({ data: { subject: "alice", name: "Alice", email: "alice@example.test", email_verified: true } })
-    expect(paths).toEqual(["/v1/account/profile"])
-    expect(headers[0]?.authorization).toBe("Bearer legacy-access")
+    expect(response.status).toBe(401)
+    expect(paths).toEqual([])
   })
 
   it("admits native cookie through /v1/me and forwards the same cookie to the profile owner", async () => {

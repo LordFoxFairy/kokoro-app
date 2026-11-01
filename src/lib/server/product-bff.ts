@@ -15,7 +15,7 @@ export type ProductBffConfig = Readonly<{
   session: Readonly<{ webOrigin: string }>;
 }>;
 
-export type ProductClaims = Readonly<{
+export type NativeSessionClaims = Readonly<{
   id: string;
   generation: number;
   access: string;
@@ -33,7 +33,7 @@ export type NativeProductBffConfig = Readonly<{
   session: Readonly<{ webOrigin: string }>;
 }>;
 
-export class ProductSessionUnavailableError extends Error {}
+export class NativeSessionUnavailableError extends Error {}
 
 const NATIVE_SESSION_COOKIE_NAMES = new Set([
   "kokoro-issuer.session_token",
@@ -52,8 +52,8 @@ export type NativeSessionBffHeaders =
 
 /** Compare one admitted request snapshot without treating a native proof's synthetic TTL as identity. */
 export function sameNativeSessionSnapshot(
-  initial: ProductClaims,
-  latest: ProductClaims | null,
+  initial: NativeSessionClaims,
+  latest: NativeSessionClaims | null,
 ): boolean {
   if (latest === null) return false;
   if (initial.id === "native-session" || latest.id === "native-session")
@@ -119,7 +119,7 @@ export function productBffConfig(
 export async function admittedNativeSession(
   request: Request,
   config: NativeProductBffConfig,
-): Promise<ProductClaims | null> {
+): Promise<NativeSessionClaims | null> {
   const requestId = request.headers.get("x-kokoro-request-id") ?? randomUUID();
   const native = nativeSessionBffHeaders(request, config, requestId);
   if (native.state !== "valid") return null;
@@ -149,18 +149,18 @@ export async function admittedNativeSession(
     };
   } catch (error) {
     if (error instanceof Error && error.message === "native_session_admission_unavailable")
-      throw new ProductSessionUnavailableError("Native session admission unavailable");
+      throw new NativeSessionUnavailableError("Native session admission unavailable");
     if (request.signal.aborted) throw error;
-    throw new ProductSessionUnavailableError("Native session admission unavailable");
+    throw new NativeSessionUnavailableError("Native session admission unavailable");
   }
 }
 
 export function productBffHeaders(
   config: ProductBffConfig,
-  claims: ProductClaims,
+  claims: NativeSessionClaims,
   requestId: string,
 ): Headers {
-  if (typeof claims.nativeCookie !== "string" || claims.nativeCookie.length === 0) throw new ProductSessionUnavailableError("Native session cookie missing");
+  if (typeof claims.nativeCookie !== "string" || claims.nativeCookie.length === 0) throw new NativeSessionUnavailableError("Native session cookie missing");
   const headers = new Headers({
     cookie: claims.nativeCookie,
     origin: config.session.webOrigin,

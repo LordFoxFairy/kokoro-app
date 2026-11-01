@@ -66,7 +66,7 @@ async function handle(request: Request, context: Context, method: "GET" | "POST"
   if (action === "signout") {
     // Browser sign-out is performed by the canonical IAM adapter. Keep this
     // historical API path as a same-origin method-preserving handoff only;
-    // it never creates or clears a local Product Session.
+    // it never creates or clears local session state.
     return new Response(null, {
       status: 307,
       headers: { location: "/iam/sign-out", "cache-control": "no-store", "x-request-id": id },

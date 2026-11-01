@@ -269,7 +269,7 @@ describe("/iam/[...path] read-only relay", () => {
     expect(requestIamRelay).toHaveBeenCalledTimes(1)
   })
 
-  it("relays native IAM sign-out without legacy CSRF or Product Session credentials", async () => {
+  it("relays native IAM sign-out without legacy CSRF or local session credentials", async () => {
     requestIamRelay.mockResolvedValue(upstream({
       status: 200,
       headers: { "content-type": "application/json", "x-request-id": "issuer-native-signout" },

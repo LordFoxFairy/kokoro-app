@@ -39,7 +39,7 @@ describe("useSessionProbe native IAM boundary", () => {
     }
   })
 
-  it("admits a native projection without CSRF reads, refresh POSTs, or Product Session state", async () => {
+  it("admits a native projection without CSRF reads, refresh POSTs, or legacy session state", async () => {
     const fetchMock = vi.fn().mockResolvedValue(authenticated("reader-native"))
     vi.stubGlobal("fetch", fetchMock)
     const view = renderHook(() => useSessionProbe({ serverAdmitted: true }))

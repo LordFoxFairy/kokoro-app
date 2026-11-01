@@ -11,9 +11,9 @@ vi.mock("@/lib/server/same-origin", () => ({ sameOriginOk }))
 vi.mock("@/lib/server/product-bff", () => ({
   productBffConfig,
   admittedNativeSession,
-  productBffHeaders: (config: { internalSecret?: string | null }, claims: { access: string }, requestId: string) => {
+  productBffHeaders: (config: { internalSecret?: string | null }, claims: { nativeCookie?: string }, requestId: string) => {
     const headers = new Headers({
-      authorization: `Bearer ${claims.access}`,
+      cookie: claims.nativeCookie ?? "",
       "x-kokoro-service": "web-bff",
       "x-kokoro-request-id": requestId,
     })
@@ -44,6 +44,7 @@ describe("Agent connection setup BFF", () => {
     admittedNativeSession.mockResolvedValue({
       access: "product-access",
       accessExpiresAt: Date.now() + 60_000,
+      nativeCookie: "kokoro-issuer.session_token=fixture",
     })
     requestWithDomain.mockResolvedValue(
       new Response(
@@ -79,7 +80,7 @@ describe("Agent connection setup BFF", () => {
     expect(target).toBe("https://bff.internal/v1/agents/connections/setup?platform=telegram")
     expect(domain).toBe("dev.kokoro.localhost")
     const headers = new Headers(init.headers)
-    expect(headers.get("authorization")).toBe("Bearer product-access")
+    expect(headers.get("cookie")).toBe("kokoro-issuer.session_token=fixture")
     expect(headers.get("x-kokoro-service")).toBe("web-bff")
     expect(headers.get("x-kokoro-internal-secret")).toBe("web-secret")
     expect(headers.get("x-kokoro-namespace")).toBeNull()

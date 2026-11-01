@@ -12,7 +12,7 @@ CHAT-1当前：`use-active-archive-state`区分原请求未确认与owner历史�
 
 ## CHAT-1 同标签未决意图（2026-10-24，候选）
 
-`browser-submission-recovery.ts`按已验证subject、scope、conv持有有界sessionStorage记录，复用原请求builder/严格schema；ACK/明确放弃原key退休，晚ACK不删后继。page-clients的主体资格只由原Product Session成功准入授予，marker仅核变化；普通dispose保留，身份切换清前缀。读异常不是空记录；不存owner线程/凭据，不建立跨tab锁或自动POST。
+`browser-submission-recovery.ts`按已验证subject、scope、conv持有有界sessionStorage记录，复用原请求builder/严格schema；ACK/明确放弃原key退休，晚ACK不删后继。page-clients的主体资格只由native admission成功准入授予，marker仅核变化；普通dispose保留，身份切换清前缀。读异常不是空记录；不存owner线程/凭据，不建立跨tab锁或自动POST。
 
 ## 项目与全局 New（2026-10-24）
 

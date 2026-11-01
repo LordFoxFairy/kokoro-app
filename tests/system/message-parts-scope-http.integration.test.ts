@@ -2,7 +2,19 @@
 // Authentication/owner are fixtures; this is not a production BFF/PG acceptance claim.
 import { createServer, type Server } from "node:http"
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
-vi.mock("@/lib/server/product-session", () => ({ currentProductSession: vi.fn(async () => ({ access: "fixture-product-access", accessExpiresAt: Date.now() + 60_000 })) }))
+const { currentProductSession } = vi.hoisted(() => ({
+  currentProductSession: vi.fn(async () => ({
+    id: "native-session",
+    generation: 0,
+    subject: "fixture-user",
+    access: "",
+    accessExpiresAt: Date.now() + 60_000,
+    expiresAt: Date.now() + 60_000,
+    issuerSessionId: "native-session",
+    nativeCookie: "kokoro-issuer.session_token=fixture",
+  })),
+}))
+vi.mock("@/lib/server/product-bff", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/server/product-bff")>()), admittedNativeSession: currentProductSession }))
 import { GET } from "@/app/api/session/[...path]/route"
 import { createSessionClient } from "@/engine/client"
 import { fetchCompleteSnapshot } from "@/engine/hydrate-process"

@@ -37,12 +37,14 @@ describe("v1 contract boundaries", () => {
     expect(source).toContain('export * from "./paths"')
   })
 
-  it("retains only the fixed OIDC callback rather than a magic-link browser contract", async () => {
-    const provider = await readFile(path.join(root, "src/lib/server/oidc-provider.ts"), "utf8")
+  it("retains only the native session/sign-out adapter rather than an Auth.js or OIDC browser contract", async () => {
     const authRoute = await readFile(path.join(root, "src/app/api/auth/[...nextauth]/route.ts"), "utf8")
-    expect(provider).toContain('const PROVIDER_ID = "kokoro-iam"')
-    expect(provider).toContain("/api/auth/callback/${PROVIDER_ID}")
-    expect(authRoute).toContain('parts[0] === "callback"')
+    expect(authRoute).toContain("nativeProductBffConfig")
+    expect(authRoute).toContain('parts[0] === "session"')
+    expect(authRoute).toContain('parts[0] === "signout"')
+    expect(authRoute).not.toContain("next-auth")
+    expect(authRoute).not.toContain("callback")
+    expect(await exists("src/lib/server/oidc-provider.ts")).toBe(false)
     expect(await exists("src/app/api/auth/callback/route.ts")).toBe(false)
     expect(await exists("src/app/api/auth/magic-link/request/route.ts")).toBe(false)
   })

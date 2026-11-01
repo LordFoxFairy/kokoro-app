@@ -67,6 +67,7 @@ beforeEach(() => {
   mocks.admission.mockResolvedValue({
     access: "fixture-session-access",
     accessExpiresAt: Date.now() + 60000,
+    nativeCookie: "kokoro-issuer.session_token=fixture",
   });
 });
 afterEach(() => {
@@ -102,14 +103,10 @@ describe("knowledge same-origin boundary", () => {
       '{"expected_revision":1}',
     );
     const forwarded = new Headers(options.headers);
-    expect(forwarded.get("authorization")).toBe(
-      "Bearer fixture-session-access",
-    );
+    expect(forwarded.get("cookie")).toBe("kokoro-issuer.session_token=fixture");
     for (const name of [
-      "cookie",
       "x-kokoro-namespace",
       "idempotency-key",
-      "origin",
     ])
       expect(forwarded.has(name)).toBe(false);
   });

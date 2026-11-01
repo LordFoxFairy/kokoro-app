@@ -109,7 +109,7 @@ describe("static invitation GET", () => {
 
   it("signs in with a consumed invitation-bound proof and returns only issuer cookie and same-page navigation", async () => {
     requestIamRelay.mockResolvedValue({ status: 200, headers: new Headers({ "content-type": "application/json" }),
-      setCookies: ["kokoro-issuer.session_token=issuer; Path=/iam; HttpOnly; SameSite=Lax"],
+      setCookies: ["kokoro-issuer.session_token=issuer; Path=/; HttpOnly; SameSite=Lax"],
       body: new TextEncoder().encode('{"token":"upstream-secret"}') })
     const { POST } = await import("@/app/iam/interactions/invitation/route")
     const response = await POST(request(`/iam/interactions/invitation?id=${ID}`, {
@@ -118,7 +118,7 @@ describe("static invitation GET", () => {
     }, { method: "POST", body: "decision=sign-in&email=invitee%40example.test&password=secret-password&csrf_token=csrf-proof" }))
     expect(response.status).toBe(303)
     expect(response.headers.get("location")).toBe(`/iam/interactions/invitation?id=${ID}`)
-    expect(response.headers.getSetCookie()).toContain("kokoro-issuer.session_token=issuer; Path=/iam; HttpOnly; SameSite=Lax")
+    expect(response.headers.getSetCookie()).toContain("kokoro-issuer.session_token=issuer; Path=/; HttpOnly; SameSite=Lax")
     expect(await response.text()).not.toContain("upstream-secret")
     expect(consumeIamInteractionCsrf).toHaveBeenCalledWith(expect.objectContaining({ context: "sign-in", query: `?id=${ID}` }))
     const call = requestIamRelay.mock.calls[0]?.[0] as { url: string; body: Uint8Array }

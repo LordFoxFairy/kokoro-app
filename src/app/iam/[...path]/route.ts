@@ -4,7 +4,7 @@ import { iamRelayConfig, matchesCanonicalWebRequest } from "@/lib/server/iam-rel
 import { filterIssuerCookies, IAM_RELAY_POLICY, resolveBrowserIamGet } from "@/lib/server/iam-relay-policy"
 import { browserAuthorizeResponse, browserIamGetResponse, browserLogoutConfirmationResponse, nativeIamResponse } from "@/lib/server/iam-relay-response"
 import { browserLogoutFailureResponse, browserLogoutStartResponse } from "@/lib/server/iam-logout-response"
-import { oidcLoginRecovery } from "@/lib/server/oidc-login-recovery"
+import { loginRecovery } from "@/lib/server/login-recovery"
 import { requestIamRelay } from "@/lib/server/iam-relay-transport"
 
 export const runtime = "nodejs"
@@ -167,7 +167,7 @@ export async function GET(request: Request, context: RouteContext): Promise<Resp
   const authorizeResult = (response: Response): Response => {
     if (route.relativePath === "/oauth2/authorize" && response.status >= 400 &&
       request.headers.get("sec-fetch-mode") === "navigate" && request.headers.get("sec-fetch-dest") === "document") {
-      const recovery = oidcLoginRecovery(request)
+      const recovery = loginRecovery(request)
       if (recovery) {
         recovery.headers.set("x-request-id", response.headers.get("x-request-id") ?? id)
         return browserResponse(recovery)

@@ -50,7 +50,7 @@ describe("Web governance boundary", () => {
     expect(await exists("contract/openapi")).toBe(false)
   })
 
-  it("keeps Web free of database ownership and restricts Redis to server-only IAM/RP and Product Session coordination", async () => {
+  it("keeps Web free of database ownership and restricts Redis to server-only IAM interaction coordination", async () => {
     const packageSchema = z.object({
       dependencies: z.record(z.string()).optional(),
       devDependencies: z.record(z.string()).optional(),
@@ -64,8 +64,8 @@ describe("Web governance boundary", () => {
       expect(dependencies).not.toHaveProperty(dependency)
     }
     expect(parsed.dependencies?.redis).toBe("5.12.1")
-    expect(parsed.dependencies?.["next-auth"]).toBe("4.24.15")
-    expect(parsed.dependencies?.["openid-client"]).toBe("5.7.1")
+    expect(parsed.dependencies).not.toHaveProperty("next-auth")
+    expect(parsed.dependencies).not.toHaveProperty("openid-client")
     const sourceRoot = path.join(root, "src")
     const entries = await readdir(sourceRoot, { recursive: true })
     const redisImports: string[] = []
@@ -76,8 +76,6 @@ describe("Web governance boundary", () => {
     }
     expect(redisImports.sort()).toEqual([
       path.join("lib", "server", "iam-interaction-csrf.ts"),
-      path.join("lib", "server", "oidc-rp-transaction.ts"),
-      path.join("lib", "server", "product-session-store.ts"),
     ])
     for (const entry of redisImports) {
       expect(await readFile(path.join(sourceRoot, entry), "utf8")).not.toContain('"use client"')
@@ -126,7 +124,7 @@ describe("Web governance boundary", () => {
     expect(violations).toEqual([])
   })
 
-  it("probes the public page rather than a configured Product Session for candidate liveness", async () => {
+  it("probes the public page rather than a configured native session for candidate liveness", async () => {
     const dockerfile = await readFile(path.join(root, "Dockerfile"), "utf8")
     const release = await readFile(path.join(root, ".github/workflows/release-image.yml"), "utf8")
     const smoke = await readFile(path.join(root, "scripts/first-site-smoke.mjs"), "utf8")

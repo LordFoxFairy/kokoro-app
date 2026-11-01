@@ -13,7 +13,7 @@ const {
   productBffConfig: vi.fn(),
   requestWithDomain: vi.fn(),
   sameOriginOk: vi.fn<(request: Request) => boolean>(() => true),
-  sameNativeSessionSnapshot: vi.fn((initial: { id: string; generation: number; subject: string; access: string; accessExpiresAt: number; expiresAt: number }, latest: typeof initial | null) =>
+  sameNativeSessionSnapshot: vi.fn((initial: { id: string; generation: number; subject: string; access: string; accessExpiresAt: number; expiresAt: number , nativeCookie: "kokoro-issuer.session_token=fixture"}, latest: typeof initial | null) =>
     latest !== null &&
     latest.id === initial.id &&
     latest.generation === initial.generation &&
@@ -23,7 +23,6 @@ const {
     latest.expiresAt === initial.expiresAt),
 }));
 
-vi.mock("@/lib/server/product-session", () => ({ currentProductSession }));
 vi.mock("@/lib/server/same-origin", () => ({ sameOriginOk }));
 vi.mock("@/lib/server/product-bff", () => ({
   admittedNativeSession,
@@ -31,11 +30,11 @@ vi.mock("@/lib/server/product-bff", () => ({
   sameNativeSessionSnapshot,
   productBffHeaders: (
     _config: unknown,
-    claims: { access: string },
+    claims: { nativeCookie?: string },
     requestId: string,
   ) =>
     new Headers({
-      authorization: `Bearer ${claims.access}`,
+      cookie: claims.nativeCookie ?? "",
       "x-kokoro-service": "web-bff",
       "x-kokoro-request-id": requestId,
     }),
@@ -77,7 +76,7 @@ beforeEach(async () => {
     generation: 1,
     subject: "user-me",
     access: "product-access",
-    accessExpiresAt: now + 60_000,
+    accessExpiresAt: now + 60_000, nativeCookie: "kokoro-issuer.session_token=fixture",
     expiresAt: now + 120_000,
   };
   admittedNativeSession.mockResolvedValue(session);
@@ -140,7 +139,7 @@ describe("fixed-tenant Team Product adapter", () => {
     ["DELETE", ["members", "member-1"]],
     ["DELETE", ["members", "me"]],
   ] as const)(
-    "forwards only the exact %s /v1/team/%s operation with Product Bearer",
+    "forwards only the exact %s /v1/team/%s operation with the native session",
     async (method, path) => {
       const handler = (
         teamRoute as unknown as Record<
@@ -183,10 +182,9 @@ describe("fixed-tenant Team Product adapter", () => {
       expect(target).toBe(`https://bff.internal/v1/team/${path.join("/")}`);
       expect(domain).toBe("web.example.test");
       const headers = new Headers(init.headers);
-      expect(headers.get("authorization")).toBe("Bearer product-access");
+      expect(headers.get("cookie")).toBe("kokoro-issuer.session_token=fixture");
       expect(headers.get("x-kokoro-principal-id")).toBeNull();
       expect(headers.get("x-kokoro-namespace")).toBeNull();
-      expect(headers.get("cookie")).toBeNull();
       expect(init.method).toBe(method);
       expect(init.body === undefined).toBe(body === undefined);
       expect(requestWithDomain).toHaveBeenCalledTimes(1);
@@ -476,7 +474,7 @@ describe("SET20 same-session and strict upstream negatives", () => {
       generation: 1,
       subject: "user-me",
       access: "late",
-      accessExpiresAt: Date.now() + 60000,
+      accessExpiresAt: Date.now() + 60000, nativeCookie: "kokoro-issuer.session_token=fixture",
       expiresAt: Date.now() + 60000,
     });
     await vi.advanceTimersByTimeAsync(0);

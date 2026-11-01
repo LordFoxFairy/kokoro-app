@@ -11,9 +11,9 @@ vi.mock("@/lib/server/same-origin", () => ({ sameOriginOk }))
 vi.mock("@/lib/server/product-bff", () => ({
   productBffConfig,
   admittedNativeSession,
-  productBffHeaders: (config: { internalSecret?: string | null }, claims: { access: string }, requestId: string) => {
+  productBffHeaders: (config: { internalSecret?: string | null }, claims: { nativeCookie?: string }, requestId: string) => {
     const headers = new Headers({
-      authorization: `Bearer ${claims.access}`,
+      cookie: claims.nativeCookie ?? "",
       "x-kokoro-service": "web-bff",
       "x-kokoro-request-id": requestId,
     })
@@ -43,6 +43,7 @@ describe("Web to business BFF route projection", () => {
     admittedNativeSession.mockResolvedValue({
       access: "product-access",
       accessExpiresAt: Date.now() + 60_000,
+      nativeCookie: "kokoro-issuer.session_token=fixture",
     })
     requestWithDomain.mockResolvedValue(
       new Response(
@@ -76,6 +77,7 @@ describe("Web to business BFF route projection", () => {
     admittedNativeSession.mockResolvedValue({
       access: "product-access",
       accessExpiresAt: Date.now() + 60_000,
+      nativeCookie: "kokoro-issuer.session_token=fixture",
     })
     requestWithDomain.mockResolvedValue(
       new Response(

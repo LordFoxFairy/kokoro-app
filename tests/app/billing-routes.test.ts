@@ -8,7 +8,7 @@ const { currentProductSession, requestWithDomain } = vi.hoisted(() => ({
   currentProductSession: vi.fn(),
   requestWithDomain: vi.fn(),
 }))
-vi.mock("@/lib/server/product-session", () => ({ currentProductSession }))
+vi.mock("@/lib/server/product-bff", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/server/product-bff")>()), admittedNativeSession: currentProductSession }))
 vi.mock("@/lib/server/upstream-http", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/lib/server/upstream-http")>()
   return { ...original, requestWithDomain }
@@ -23,7 +23,7 @@ const ENV = {
   KOKORO_INTERNAL_SECRET_WEB_BFF: "svc-secret",
 }
 
-// A retired cookie must never be promoted into a Product Session.
+// A retired cookie must never be promoted into native admission.
 function sessionCookie(): string {
   return "kokoro_session=retired-forged-envelope"
 }
@@ -39,7 +39,7 @@ beforeEach(() => {
   currentProductSession.mockReset()
   currentProductSession.mockResolvedValue({
     access: "product-access",
-    accessExpiresAt: Date.now() + 60_000,
+    accessExpiresAt: Date.now() + 60_000, nativeCookie: "kokoro-issuer.session_token=fixture",
   })
   for (const [key, value] of Object.entries(ENV)) process.env[key] = value
 })
@@ -316,8 +316,7 @@ describe("R255 existing session adapter personal Credit reads", () => {
     const [target, , options] = requestWithDomain.mock.calls[0]!
     expect(target).toBe(`http://bff.test/v1/billing/${name}${query}`)
     const headers = new Headers(options.headers)
-    expect(headers.get("authorization")).toBe("Bearer product-access")
-    expect(headers.get("cookie")).toBeNull()
+    expect(headers.get("cookie")).toBe("kokoro-issuer.session_token=fixture")
     expect(headers.get("x-kokoro-subject")).toBeNull()
   })
 

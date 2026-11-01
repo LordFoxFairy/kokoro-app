@@ -13,9 +13,9 @@ vi.mock("@/lib/server/product-bff", () => ({
   productBffConfig,
   admittedNativeSession,
   nativeSessionBffHeaders: () => ({ state: "missing" }),
-  productBffHeaders: (config: { internalSecret?: string | null }, claims: { access: string }, requestId: string) => {
+  productBffHeaders: (config: { internalSecret?: string | null }, claims: { nativeCookie?: string }, requestId: string) => {
     const headers = new Headers({
-      authorization: `Bearer ${claims.access}`,
+      cookie: claims.nativeCookie ?? "",
       "x-kokoro-service": "web-bff",
       "x-kokoro-request-id": requestId,
     })
@@ -46,6 +46,7 @@ describe("Chat BFF deployment domain context", () => {
     admittedNativeSession.mockResolvedValue({
       access: "product-access",
       accessExpiresAt: Date.now() + 60_000,
+      nativeCookie: "kokoro-issuer.session_token=fixture",
     })
     requestWithDomain.mockResolvedValueOnce(
       new Response(JSON.stringify({ data: "ok", meta: { request_id: "request-bff" } }), { status: 200 }),
@@ -63,7 +64,7 @@ describe("Chat BFF deployment domain context", () => {
     expect(bffTarget).toBe("https://bff.internal/v1/sessions")
     expect(domain).toBe("dev.kokoro.localhost")
     const bffHeaders = new Headers(bffOptions.headers)
-    expect(bffHeaders.get("authorization")).toBe("Bearer product-access")
+    expect(bffHeaders.get("cookie")).toBe("kokoro-issuer.session_token=fixture")
     expect(bffHeaders.get("x-kokoro-service")).toBe("web-bff")
     expect(bffHeaders.get("host")).toBeNull()
     expect(bffHeaders.get("x-kokoro-tenant-id")).toBeNull()

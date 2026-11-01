@@ -5,14 +5,14 @@ import { NextRequest } from "next/server"
 import { DEFAULT_PRODUCT_RETURN_TARGET, parseProductReturnTarget } from "@/lib/product-return-target"
 import { iamRelayConfig, matchesCanonicalWebRequest } from "@/lib/server/iam-relay-config"
 import { nativeIamSignInQuery } from "@/lib/server/iam-sign-in-target"
-import { oidcLoginRecovery } from "@/lib/server/oidc-login-recovery"
+import { loginRecovery } from "@/lib/server/login-recovery"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 function unavailable(request: NextRequest, phase: string): Response {
   console.error("Kokoro Product login start unavailable:", phase)
-  return oidcLoginRecovery(request) ?? new Response(null, { status: 503, headers: {
+  return loginRecovery(request) ?? new Response(null, { status: 503, headers: {
     "cache-control": "no-store",
     "referrer-policy": "no-referrer",
     "x-request-id": randomUUID(),

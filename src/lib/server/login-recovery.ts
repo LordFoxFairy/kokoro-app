@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto"
 
 /** Same nonce policy at the final Proxy and the standalone failure document. */
-export function oidcLoginDocumentPolicy(nonce: string): string {
+export function loginDocumentPolicy(nonce: string): string {
   return `default-src 'none'; style-src 'nonce-${nonce}'; form-action 'none'; base-uri 'none'; frame-ancestors 'none'`
 }
 
 /** Strict native HTML navigation policy shared by authentication result adapters. */
-export function oidcDocumentNonce(request: Request): string | null {
+export function loginDocumentNonce(request: Request): string | null {
   if (request.headers.get("sec-fetch-mode") !== "navigate" || request.headers.get("sec-fetch-dest") !== "document") return null
   const acceptsHtml = request.headers.get("accept")?.split(",").some(value => {
     const [mediaType, ...parameters] = value.split(";").map(part => part.trim())
@@ -24,8 +24,8 @@ export function oidcDocumentNonce(request: Request): string | null {
 }
 
 /** Native navigation leaves technical URLs; API clients retain their error contract. */
-export function oidcLoginRecovery(request: Request): Response | null {
-  const nonce = oidcDocumentNonce(request)
+export function loginRecovery(request: Request): Response | null {
+  const nonce = loginDocumentNonce(request)
   if (nonce === null) return null
   return new Response(null, {
     status: 303,
@@ -33,7 +33,7 @@ export function oidcLoginRecovery(request: Request): Response | null {
       location: "/auth/sign-in/failed",
       "cache-control": "no-store",
       "referrer-policy": "no-referrer",
-      "content-security-policy": oidcLoginDocumentPolicy(nonce),
+      "content-security-policy": loginDocumentPolicy(nonce),
       "x-request-id": randomUUID(),
       vary: "Accept",
     },

@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 const { currentProductSession, requestWithDomain } = vi.hoisted(() => ({ currentProductSession: vi.fn(), requestWithDomain: vi.fn() }))
-vi.mock("@/lib/server/product-session", () => ({ currentProductSession }))
-vi.mock("@/lib/server/oidc-bff-agent", () => ({ boundedOidcBffAgent: vi.fn() }))
+vi.mock("@/lib/server/product-bff", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/server/product-bff")>()), admittedNativeSession: currentProductSession }))
 vi.mock("@/lib/server/upstream-http", async (original) => ({ ...(await original<typeof import("@/lib/server/upstream-http")>()), requestWithDomain }))
 import { GET } from "@/app/api/account/profile/route"
 
@@ -10,7 +9,7 @@ const session = () => ({
   generation: 2,
   subject: "alice",
   access: "fixture-server-access",
-  accessExpiresAt: Date.now() + 60_000,
+  accessExpiresAt: Date.now() + 60_000, nativeCookie: "kokoro-issuer.session_token=fixture",
   expiresAt: Date.now() + 120_000,
 })
 const request = (suffix = "", headers: Record<string, string> = {}, signal?: AbortSignal) =>
@@ -50,7 +49,7 @@ it("reads the IAM-owned profile through BFF and revalidates the same Product ses
   expect(target).toBe("http://bff.test/v1/account/profile")
   expect(domain).toBe("product.test")
   expect(options.method).toBe("GET")
-  expect(options.headers.get("authorization")).toBe("Bearer fixture-server-access")
+  expect(options.headers.get("authorization")).toBeNull()
   expect(options.headers.get("x-kokoro-service")).toBe("web-bff")
   expect(options.headers.get("x-kokoro-internal-secret")).toBe("fixture-relay-secret")
 })
@@ -71,7 +70,7 @@ it.each([{ host: "evil.test" }, { origin: "http://evil.test" }, { "content-lengt
 it("maps missing, expired and unavailable sessions without owner I/O", async () => {
   currentProductSession.mockResolvedValueOnce(null)
   expect((await GET(request())).status).toBe(401)
-  currentProductSession.mockResolvedValueOnce({ ...session(), accessExpiresAt: Date.now() - 1 })
+  currentProductSession.mockResolvedValueOnce({ ...session(), accessExpiresAt: Date.now() - 1 , nativeCookie: "kokoro-issuer.session_token=fixture"})
   expect((await GET(request())).status).toBe(401)
   currentProductSession.mockRejectedValueOnce(new Error("private store details"))
   const unavailable = await GET(request())
@@ -102,7 +101,7 @@ it.each([
 
 it.each([null, "changed-id", "changed-generation", "changed-subject", "expired"])("revalidates session before returning: %s", async (kind) => {
   currentProductSession.mockResolvedValueOnce(session()).mockResolvedValueOnce(
-    kind === null ? null : { ...session(), ...(kind === "changed-id" ? { id: "other" } : kind === "changed-generation" ? { generation: 3 } : kind === "changed-subject" ? { subject: "bob" } : { accessExpiresAt: Date.now() - 1 }) },
+    kind === null ? null : { ...session(), ...(kind === "changed-id" ? { id: "other" } : kind === "changed-generation" ? { generation: 3 } : kind === "changed-subject" ? { subject: "bob" } : { accessExpiresAt: Date.now() - 1 , nativeCookie: "kokoro-issuer.session_token=fixture"}) },
   )
   expect((await GET(request())).status).toBe(401)
 })

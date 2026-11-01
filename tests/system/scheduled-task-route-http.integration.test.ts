@@ -2,12 +2,14 @@ import { createServer, type RequestListener, type Server } from "node:http"
 
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
 
-vi.mock("@/lib/server/product-session", () => ({
+const { currentProductSession } = vi.hoisted(() => ({
   currentProductSession: vi.fn(async () => ({
     access: "product-access",
     accessExpiresAt: Date.now() + 60_000,
+    nativeCookie: "kokoro-issuer.session_token=fixture",
   })),
 }))
+vi.mock("@/lib/server/product-bff", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/server/product-bff")>()), admittedNativeSession: currentProductSession }))
 
 import { GET } from "@/app/api/scheduled-tasks/[[...path]]/route"
 

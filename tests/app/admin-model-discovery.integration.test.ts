@@ -2,7 +2,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 
 const { currentProductSession } = vi.hoisted(() => ({ currentProductSession: vi.fn() }))
-vi.mock("@/lib/server/product-session", () => ({ currentProductSession }))
+vi.mock("@/lib/server/product-bff", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/server/product-bff")>()), admittedNativeSession: currentProductSession }))
 import { GET, POST } from "@/app/api/admin/[...path]/route"
 
 const id = "11111111-1111-4111-8111-111111111111"
@@ -19,7 +19,7 @@ function input(headers: Record<string, string> = {}, query = "", signal?: AbortS
 }
 beforeEach(async () => {
   calls = []
-  currentProductSession.mockReset().mockResolvedValue({ access: "server-session-access", accessExpiresAt: Date.now() + 60_000 })
+  currentProductSession.mockReset().mockResolvedValue({ access: "server-session-access", accessExpiresAt: Date.now() + 60_000 , nativeCookie: "kokoro-issuer.session_token=fixture"})
   peer = (request, response) => {
     response.writeHead(200, { "content-type": "application/json", "cache-control": "no-store", "x-request-id": String(request.headers["x-kokoro-request-id"]) })
     response.end(JSON.stringify({ data: { provider_id: id, items: [{ id: "actual-upstream-model" }] }, meta: { request_id: "discovery-bridge-1" } }))
@@ -44,7 +44,7 @@ it("forwards only the exact model discovery GET using configured domain and admi
   expect(await response.json()).toEqual({ data: { provider_id: id, items: [{ id: "actual-upstream-model" }] }, meta: { request_id: "discovery-bridge-1" } })
   expect(calls).toHaveLength(1)
   expect(calls[0]!.url).toBe(path)
-  expect(calls[0]!.headers.authorization).toBe("Bearer server-session-access")
+  expect(calls[0]!.headers.cookie).toBe("kokoro-issuer.session_token=fixture")
   expect(calls[0]!.headers.forwarded).toBe("host=configured.product.test")
   for (const name of ["x-kokoro-tenant-id", "x-kokoro-actor-id", "content-type", "content-length", "transfer-encoding"]) expect(calls[0]!.headers[name]).toBeUndefined()
 })
@@ -101,7 +101,7 @@ it("propagates caller cancellation to the real BFF socket", async () => {
 it("does not issue a late BFF request after the shared session budget expires", async () => {
   const realNow = Date.now()
   const clock = vi.spyOn(Date, "now").mockReturnValue(realNow)
-  currentProductSession.mockImplementation(async () => { clock.mockReturnValue(realNow + 10_001); return { access: "server-session-access", accessExpiresAt: realNow + 60_000 } })
+  currentProductSession.mockImplementation(async () => { clock.mockReturnValue(realNow + 10_001); return { access: "server-session-access", accessExpiresAt: realNow + 60_000 , nativeCookie: "kokoro-issuer.session_token=fixture"} })
   const response = await GET(input(), context())
   expect(response.status).toBe(503)
   expect(calls).toHaveLength(0)

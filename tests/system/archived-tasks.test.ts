@@ -3,12 +3,12 @@ const mocks=vi.hoisted(()=>({admittedNativeSession:vi.fn(),requestWithDomain:vi.
 vi.mock("@/lib/server/product-bff",()=>({
   admittedNativeSession:mocks.admittedNativeSession,
   productBffConfig:()=>({bffBaseUrl:"http://bff.test",domain:"product.test",internalSecret:null,session:{redisUrl:"redis://fixture/0",webOrigin:"http://web.test",secret:"at-least-thirty-two-characters-secret"}}),
-  productBffHeaders:(_config:unknown,claims:{access:string},requestId:string)=>new Headers({authorization:`Bearer ${claims.access}`,"x-kokoro-request-id":requestId}),
+  productBffHeaders:(_config:unknown,claims:{nativeCookie?:string},requestId:string)=>new Headers({cookie:claims.nativeCookie ?? "","x-kokoro-request-id":requestId}),
 }));
 vi.mock("@/lib/server/upstream-http",()=>({requestWithDomain:mocks.requestWithDomain}));
 import {GET} from "@/app/api/account/archived-tasks/route";
 import {sessionArchive} from "@/lib/server/session-archive";
-const claims={id:"opaque",generation:1,subject:"alice",access:"server-only",accessExpiresAt:Date.now()+600000,expiresAt:Date.now()+600000};
+const claims={id:"opaque",generation:1,subject:"alice",access:"server-only",accessExpiresAt:Date.now()+600000,expiresAt:Date.now()+600000,nativeCookie:"kokoro-issuer.session_token=fixture"};
 const at="2026-10-15T00:00:00.000Z";
 const req=(method="GET",id="历史/😀",action="archive",body?:string)=>new Request(`http://web.test/api/session/sessions/${encodeURIComponent(id)}/${action}`,{method,headers:{host:"web.test",...(method==="POST"?{origin:"http://web.test","content-type":"application/json","idempotency-key":"qa-key"}:{})},...(body===undefined?{}:{body})});
 const call=(request:Request,id="历史/😀",action="archive")=>sessionArchive(request,Promise.resolve({path:["sessions",id,action]}));
@@ -20,7 +20,7 @@ beforeEach(()=>{
 afterEach(()=>{vi.unstubAllEnvs();vi.useRealTimers();});
 it("returns private list and state after full session recheck with server-only bearer",async()=>{
  const list=await GET(new Request("http://web.test/api/account/archived-tasks?limit=100",{headers:{host:"web.test"}}));expect(list.status).toBe(200);expect(list.headers.get("cache-control")).toContain("no-store");
- expect((await call(req())).status).toBe(200);expect(mocks.admittedNativeSession).toHaveBeenCalledTimes(4);expect(mocks.requestWithDomain.mock.calls[1]?.[2].headers.get("authorization")).toBe("Bearer server-only");
+ expect((await call(req())).status).toBe(200);expect(mocks.admittedNativeSession).toHaveBeenCalledTimes(4);expect(mocks.requestWithDomain.mock.calls[1]?.[2].headers.get("cookie")).toBe("kokoro-issuer.session_token=fixture");
  expect(mocks.requestWithDomain.mock.calls[1]?.[0]).toBe(`http://bff.test/v1/sessions/${encodeURIComponent("历史/😀")}/archive`);
 });
 it.each(["archive","restore"])("POST %s requires exact {}, target/action ACK and preserves key",async action=>{const response=await call(req("POST","历史/😀",action,"{}"),"历史/😀",action);expect(response.status).toBe(200);expect(mocks.requestWithDomain.mock.calls[0]?.[2].headers.get("idempotency-key")).toBe("qa-key");expect(await response.json()).toEqual({data:{session_id:"历史/😀",archived_at:action==="restore"?null:at}});});

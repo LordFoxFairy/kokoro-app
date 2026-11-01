@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/server/product-bff", () => ({
   admittedNativeSession: mocks.admittedNativeSession,
   productBffConfig: () => ({ bffBaseUrl: "http://bff.test", domain: "product.test", internalSecret: null, session: { redisUrl: "redis://fixture/0", webOrigin: "http://web.test", secret: "at-least-thirty-two-characters-secret" } }),
-  productBffHeaders: (_config: unknown, claims: { access: string }, requestId: string) => new Headers({ authorization: `Bearer ${claims.access}`, "x-kokoro-request-id": requestId }),
+  productBffHeaders: (_config: unknown, claims: { nativeCookie?: string }, requestId: string) => new Headers({ cookie: claims.nativeCookie ?? "", "x-kokoro-request-id": requestId }),
 }));
 vi.mock("@/lib/server/upstream-http", () => ({
   requestWithDomain: mocks.requestWithDomain,
@@ -19,6 +19,7 @@ const session = {
   access: "server-secret",
   accessExpiresAt: Date.now() + 600_000,
   expiresAt: Date.now() + 600_000,
+  nativeCookie: "kokoro-issuer.session_token=fixture",
 };
 const request = (suffix = "?limit=100", headers: Record<string, string> = {}) =>
   new Request("http://localhost/api/account/shared-tasks" + suffix, {
@@ -64,8 +65,8 @@ it("returns strict private list after two actual identity reads, with server-onl
     "http://bff.test/v1/account/shared-tasks?limit=100",
   );
   expect(
-    mocks.requestWithDomain.mock.calls[0]?.[2].headers.get("authorization"),
-  ).toBe("Bearer server-secret");
+    mocks.requestWithDomain.mock.calls[0]?.[2].headers.get("cookie"),
+  ).toBe("kokoro-issuer.session_token=fixture");
 });
 it.each(["?limit=01", "?limit=100&limit=100", "?foreign=x", "?cursor=%ZZ"])(
   "rejects invalid query before owner IO %s",

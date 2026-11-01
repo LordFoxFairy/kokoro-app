@@ -2,12 +2,14 @@ import { createServer, type IncomingHttpHeaders, type RequestListener, type Serv
 
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
 
-vi.mock("@/lib/server/product-session", () => ({
+const { currentProductSession } = vi.hoisted(() => ({
   currentProductSession: vi.fn(async () => ({
     access: "product-access",
     accessExpiresAt: Date.now() + 60_000,
+    nativeCookie: "kokoro-issuer.session_token=fixture",
   })),
 }))
+vi.mock("@/lib/server/product-bff", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/server/product-bff")>()), admittedNativeSession: currentProductSession }))
 
 import { GET, POST } from "@/app/api/session/[...path]/route"
 import { GET as hubGet, PUT as hubPut } from "@/app/api/hub/[...path]/route"
@@ -30,7 +32,7 @@ describe("Product BFF adapters against a local HTTP contract fixture", () => {
   let bff: RunningServer
   let receivedDomain = ""
   let receivedHost = ""
-  let receivedAuthorization = ""
+  let receivedCookie = ""
   let receivedHeaders: IncomingHttpHeaders = {}
   let receivedBody = ""
   let receivedPath = ""
@@ -42,7 +44,7 @@ describe("Product BFF adapters against a local HTTP contract fixture", () => {
       receivedHeaders = request.headers
       receivedHost = request.headers.host?.toString() ?? ""
       receivedDomain = request.headers.forwarded?.toString() ?? ""
-      receivedAuthorization = request.headers.authorization?.toString() ?? ""
+      receivedCookie = request.headers.cookie?.toString() ?? ""
       const chunks: Buffer[] = []
       request.on("data", (chunk: Buffer) => chunks.push(chunk))
       request.on("end", () => {
@@ -85,7 +87,7 @@ describe("Product BFF adapters against a local HTTP contract fixture", () => {
     expect(response.status).toBe(200)
     expect(await response.json()).toEqual({ models: [], next_cursor: null })
     expect(receivedPath).toBe("/v1/models?feature_key=chat")
-    expect(receivedAuthorization).toBe("Bearer product-access")
+    expect(receivedCookie).toBe("kokoro-issuer.session_token=fixture")
     expect(receivedHeaders["x-kokoro-tenant-id"]).toBeUndefined()
   })
 
@@ -108,7 +110,7 @@ describe("Product BFF adapters against a local HTTP contract fixture", () => {
     expect(await response.text()).toContain("chat-ok")
     expect(receivedDomain).toBe("host=dev.kokoro.localhost")
     expect(receivedHost).not.toBe("first.example")
-    expect(receivedAuthorization).toBe("Bearer product-access")
+    expect(receivedCookie).toBe("kokoro-issuer.session_token=fixture")
   })
 
   it("sends canonical MessageCreateRequest bytes with header-only idempotency and trusted identity", async () => {
@@ -126,7 +128,7 @@ describe("Product BFF adapters against a local HTTP contract fixture", () => {
     expect(response.status).toBe(200)
     expect(receivedBody).toBe('{"content":"hello","model":"model_1"}')
     expect(receivedHeaders["idempotency-key"]).toBe("stable-message-1")
-    expect(receivedAuthorization).toBe("Bearer product-access")
+    expect(receivedCookie).toBe("kokoro-issuer.session_token=fixture")
     expect(receivedHeaders["x-kokoro-service"]).toBe("web-bff")
     expect(receivedHeaders["x-kokoro-tenant-id"]).toBeUndefined()
     expect(receivedHeaders["x-kokoro-principal-id"]).toBeUndefined()
@@ -156,7 +158,7 @@ describe("Product BFF adapters against a local HTTP contract fixture", () => {
     expect(receivedPath).toBe(`/v1/projects/${projectId}/skill-selection`);
     expect(receivedBody).toBe('{"installation_ids":["i2","i1"]}');
     expect(receivedHeaders["idempotency-key"]).toBe("original-project-defaults");
-    expect(receivedAuthorization).toBe("Bearer product-access");
+    expect(receivedCookie).toBe("kokoro-issuer.session_token=fixture");
     expect(receivedDomain).toBe("host=dev.kokoro.localhost");
     expect(receivedHeaders["x-kokoro-service"]).toBe("web-bff");
     expect(receivedHeaders["x-kokoro-subject"]).toBeUndefined();

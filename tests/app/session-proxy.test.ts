@@ -13,7 +13,7 @@ vi.mock("@/lib/server/upstream-http", async (importOriginal) => ({
 const { currentProductSession } = vi.hoisted(() => ({
   currentProductSession: vi.fn(),
 }))
-vi.mock("@/lib/server/product-session", () => ({ currentProductSession }))
+vi.mock("@/lib/server/product-bff", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/server/product-bff")>()), admittedNativeSession: currentProductSession }))
 
 const ENV = {
   KOKORO_WEB_AUTH_SECRET: "a".repeat(32),
@@ -24,7 +24,7 @@ const ENV = {
   KOKORO_INTERNAL_SECRET_WEB_BFF: "web-bff-secret",
 }
 
-// A retired cookie must never be promoted into a Product Session.
+// A retired cookie must never be promoted into native admission.
 function sessionCookie(): string {
   return "kokoro_session=retired-forged-envelope"
 }
@@ -37,7 +37,7 @@ beforeEach(() => {
   currentProductSession.mockReset()
   currentProductSession.mockResolvedValue({
     access: "product-access",
-    accessExpiresAt: Date.now() + 60_000,
+    accessExpiresAt: Date.now() + 60_000, nativeCookie: "kokoro-issuer.session_token=fixture",
   })
   for (const [k, v] of Object.entries(ENV)) process.env[k] = v
 })
@@ -71,7 +71,7 @@ describe("/api/session/[...path] proxy", () => {
     const headers = new Headers(init.headers)
     expect(JSON.parse(new TextDecoder().decode(init.body))).toEqual({ content: "hello" })
     expect(headers.get("idempotency-key")).toBe("message_1")
-    expect(headers.get("authorization")).toBe("Bearer product-access")
+    expect(headers.get("authorization")).toBeNull()
     expect(headers.get("x-kokoro-service")).toBe("web-bff")
     expect(headers.get("x-kokoro-internal-secret")).toBe("web-bff-secret")
     expect(headers.get("x-kokoro-tenant-id")).toBeNull()
@@ -277,7 +277,7 @@ describe("exact private message parts GET adapter", () => {
     const [target, , options] = requestWithDomain.mock.calls[0] as [string, string, { timeoutMs: number; maxResponseBytes: number; strictResponseLength: boolean; headers: HeadersInit }]
     expect(target).toBe("http://bff.test/v1/sessions/s/messages/m/parts?project_ref=project&limit=16&cursor=opaque")
     expect(options).toMatchObject({ timeoutMs: 10_000, maxResponseBytes: 1_048_576, strictResponseLength: true })
-    expect(new Headers(options.headers).get("authorization")).toBe("Bearer product-access")
+    expect(new Headers(options.headers).get("authorization")).toBeNull()
   })
   it.each(["scope=direct&project_ref=p", "limit=33", "cursor=", "limit=1&limit=2", "other=x"])("rejects malformed query %s without forwarding", async (query) => {
     const { GET } = await import("@/app/api/session/[...path]/route")

@@ -10,7 +10,7 @@ import {
   nativeProductBffConfig,
   productBffConfig,
   productBffHeaders,
-  ProductSessionUnavailableError,
+  NativeSessionUnavailableError,
 } from "@/lib/server/product-bff";
 
 const env = {
@@ -44,7 +44,7 @@ describe("Product BFF admission", () => {
       admittedNativeSession(new Request(env.KOKORO_WEB_ORIGIN, {
         headers: { cookie: "kokoro-issuer.session_token=session" },
       }), config),
-    ).rejects.toBeInstanceOf(ProductSessionUnavailableError);
+    ).rejects.toBeInstanceOf(NativeSessionUnavailableError);
     requestWithDomain.mockResolvedValueOnce(new Response(JSON.stringify({ error: { code: "native_session_invalid" } }), {
       status: 401, headers: { "content-type": "application/json" },
     }));

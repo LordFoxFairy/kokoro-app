@@ -51,7 +51,7 @@ beforeEach(() => {
   vi.useFakeTimers()
   window.localStorage.clear()
   window.sessionStorage.clear()
-  // The live Runtime mounts only after Product Session admission. A cached marker is not admission.
+  // The live Runtime mounts only after native admission. A cached marker is not admission.
   expect(admitBrowserAuthSessionIndexes("scope-submission-actor", null)).toBe(true)
 })
 
@@ -267,7 +267,7 @@ it("a coordinator wake-up rechecks true admission and acquires one healthy lease
   const view = mountScope()
   expect(view.result.current.engine).toBeNull()
   act(() => coordinator.admitVerifiedSubject("scope-submission-actor"))
-  expect(view.result.current.engine).toBeNull() // A Move publication is not Product Session proof.
+  expect(view.result.current.engine).toBeNull() // A Move publication is not native admission proof.
   act(admitAndWake)
   const engine = view.result.current.engine!
   expect(engine).not.toBeNull()
