@@ -1,3 +1,9 @@
+## 2026-11-01 B-01 创建完成后的精确详情衔接
+
+沿现有 actor-owned connector command 生命周期保留创建ACK的安全locator投影：Custom API仅profileId，JSON仅原序exact serverId/connectorId/providerKey及非秘密名称；不保存raw ACK、URL、headers或environment。主命令仍唯一保存原body/key与unknown显式重试，不新增POST/自动Prepare。投影只在可信Hub严格ACK后接受，换actor退休清除；读取须核flow/boundary/completed，finish前捕获到本form mounted窗口，完成回调失败仅重试UI衔接，不重发命令。完成前后核current窗口；晚ACK只使原actor读失效，不自动弹已关闭或其它主体窗口。
+
+复用现McpCreateDialog与McpProjectionRead详情协调：API沿窄createdApiDetail初始化既有apiIntent并fresh exact GET；JSON单项沿现createdDetail（不将导入ACK冒充当前配置）；多项在同窗口展示原序结果供明确选择，详情关闭可回列表。关闭、已确认删除均通知外层结束，不残留空壳。换client/actor/mode/open退役；同主体新代只保locator，事实随reader生命周期重验。沿现Dialog/按钮、键盘及回焦，不建新owner/存储/通用工作流。
+
 ## Composer Custom API safe selection（Root已核准，正式契约消费者候选）
 
 在现连接器入口复用同一行展示，独立消费本人Custom API列表的profile_id/state_version/name/icon，不把profileID映射成MCP Connection ID，不推导执行权限或自动选择。32项安全引用在engine内独立保存、深冻结至原提交意图；同actor当前catalog刷新不重基已选CAS。Project overview保持本地draft，与保留会话/MCP推荐隔离；新任务分配后沿现提交桥转交。现列表按页一次，不做逐profile GET；actor/generation/route/abort与迟到回调退休，loading/error保持安静且不伪空。

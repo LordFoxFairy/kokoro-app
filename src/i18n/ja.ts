@@ -1502,6 +1502,7 @@ export const ja: Partial<Record<MessageKey, string>> = {
   "mcp.jsonImportAction": "インポート",
   "mcp.jsonImportUnknown": "インポート結果は未確認です。再試行は元のリクエスト全体を再開し、重複してインポートしません。",
   "mcp.jsonImportConfirmed": "MCP 設定をインポートしました。",
+  "mcp.jsonImportChooseDetail": "インポートしたコネクタを選択して設定を表示します。",
   "mcp.jsonImportInvalid": "JSON が無効か、mcpServers 設定がありません。",
   "mcp.urlTitle": "URL から MCP を追加",
   "mcp.urlNamePlaceholder": "例：カスタムサーバー",

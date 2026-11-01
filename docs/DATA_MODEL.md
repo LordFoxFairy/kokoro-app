@@ -1,3 +1,7 @@
+## 2026-11-01 B-01 创建详情衔接无持久化变更
+
+无数据库、localStorage/IDB schema或命令恢复格式变更。仅在现actor command及mounted创建窗口持有安全profile/server/connector/provider locator；原秘密草稿ACK时清退，raw ACK不进入公共state。窗口/主体退休清除投影，代际变化不借旧事实授新写权限，unknown原key/body语义保持。
+
 ## Custom API草稿选择（复用原安全提交意图，无新owner表）
 
 仅现engine／Project draft的profile/version引用，≤32且profileID唯一，换会话/actor退休，不落Conversation账号偏好。发送时深冻结到原PendingSubmission，现browser sessionStorage journal v1仅增加可选正式safe-ref字段，原无字段记录仍按原body/key恢复；不保存指令、env名称/值或凭据，不新增store／Schema／迁移。未知结果只显式原K/body恢复，后续目录刷新或UI选择不改旧意图。已接受选择由原owner private snapshot投影，App无第二选择事实源；当前CAS不符只排除恢复，不能替换原CAS。原MCP/Skills与父会话权限保持。

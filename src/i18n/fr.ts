@@ -1489,6 +1489,7 @@ export const fr: Partial<Record<MessageKey, string>> = {
   "mcp.jsonImportAction": "Importer",
   "mcp.jsonImportUnknown": "L’importation n’est pas confirmée. Réessayer reprend la requête d’origine complète sans importer à nouveau.",
   "mcp.jsonImportConfirmed": "Configuration MCP importée.",
+  "mcp.jsonImportChooseDetail": "Choisissez un connecteur importé pour voir sa configuration.",
   "mcp.jsonImportInvalid": "Le JSON est invalide ou ne contient pas de configuration mcpServers.",
   "mcp.urlTitle": "Ajouter un MCP via une URL",
   "mcp.urlNamePlaceholder": "ex. Mon serveur personnalisé",

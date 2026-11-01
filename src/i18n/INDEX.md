@@ -1,3 +1,5 @@
+2026-11-01：九语言新增 `mcp.jsonImportChooseDetail`，明确多项导入后由用户选择对应详情；不新增 wire / fallback 或状态事实。
+
 2026-10-28：九语言新增原生edit_file/ls/glob/grep中性操作标签，仅原同活动身份使用，不从名称推断执行成功。
 
 具体动作摘要第一阶段（2026-10-27）：九 locale 新增调用／混合活动次数、失败数与独立 Run 继续处理文案；只按真实 activity 计数，不冒独立文件或结果数。既有类别／三态键及 fallback 规则保留，正式对象名称由后继 owner 安全 metadata 提供，不从文案推断。

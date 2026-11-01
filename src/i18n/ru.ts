@@ -1489,6 +1489,7 @@ export const ru: Partial<Record<MessageKey, string>> = {
   "mcp.jsonImportAction": "Импортировать",
   "mcp.jsonImportUnknown": "Результат импорта не подтверждён. Повтор продолжит исходный запрос целиком без повторного импорта.",
   "mcp.jsonImportConfirmed": "Конфигурация MCP импортирована.",
+  "mcp.jsonImportChooseDetail": "Выберите импортированный коннектор для просмотра настроек.",
   "mcp.jsonImportInvalid": "JSON недействителен или не содержит конфигурацию mcpServers.",
   "mcp.urlTitle": "Добавить MCP по URL",
   "mcp.urlNamePlaceholder": "например, Мой сервер",

@@ -1489,6 +1489,7 @@ export const ko: Partial<Record<MessageKey, string>> = {
   "mcp.jsonImportAction": "가져오기",
   "mcp.jsonImportUnknown": "가져오기 결과가 확인되지 않았습니다. 재시도는 중복 가져오기 없이 원래 요청 전체를 재개합니다.",
   "mcp.jsonImportConfirmed": "MCP 구성을 가져왔습니다.",
+  "mcp.jsonImportChooseDetail": "가져온 커넥터를 선택하여 설정을 확인하세요.",
   "mcp.jsonImportInvalid": "JSON이 올바르지 않거나 mcpServers 설정이 없습니다.",
   "mcp.urlTitle": "URL로 MCP 추가",
   "mcp.urlNamePlaceholder": "예: 사용자 지정 서버",

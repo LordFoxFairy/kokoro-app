@@ -3,8 +3,8 @@
 import { Button } from "@/components/ui/button";
 import { McpProjectPublicationDialog } from "./mcp-project-publication-dialog";
 
-import { useCallback, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type RefObject } from "react";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { useCallback, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type RefObject } from "react";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useT } from "@/i18n/context";
 import { cn } from "@/lib/utils";
 import type { HubClient } from "@/hub/client";
@@ -16,6 +16,12 @@ import { useMcpProjectPublicationCommands, CustomApiCreationForm, JsonMcpCreatio
 import type { McpServerCreationCompletion } from "./mcp-server-creation-flow";
 import { retireCreatedMcpDetail } from "./mcp-created-detail-handoff";
 import { McpProjectionRead } from "./mcp-projection-read";
+import type { CustomApiCreationCompletion } from "./custom-api-create-flow";
+import type { McpJsonImportCompletion } from "./mcp-json-import-flow";
+
+type Completion = { kind: "mcp"; target: McpServerCreationCompletion } |
+  { kind: "api"; target: CustomApiCreationCompletion } |
+  { kind: "imports"; entries: McpJsonImportCompletion; selected: McpServerCreationCompletion | null };
 
 export function McpCreateDialog({
   client,
@@ -40,13 +46,18 @@ export function McpCreateDialog({
   const committed = useRef<typeof lifetime | null>(null);
   const currentBoundary = useRef(boundary);
   useLayoutEffect(() => { currentBoundary.current = boundary; }, [boundary]);
-  const [completed, setCompleted] = useState<{ lifetime: typeof lifetime; target: McpServerCreationCompletion } | null>(null);
-  if (completed && completed.lifetime !== lifetime) { retireCreatedMcpDetail(completed.target); setCompleted(null); }
-  useLayoutEffect(() => () => { if (completed) retireCreatedMcpDetail(completed.target); }, [completed]);
+  const [completed, setCompleted] = useState<(Completion & { lifetime: typeof lifetime }) | null>(null);
+  if (completed && completed.lifetime !== lifetime) {
+    if (completed.kind === "mcp") retireCreatedMcpDetail(completed.target);
+    setCompleted(null);
+  }
+  useLayoutEffect(() => () => { if (completed?.kind === "mcp") retireCreatedMcpDetail(completed.target); }, [completed]);
   const [publishing, setPublishing] = useState(false);
   const [publicationClosedFor, setPublicationClosedFor] = useState<typeof lifetime | null>(null);
   const handingOff = useRef(false);
   const focusFrame = useRef<number | null>(null);
+  const resultId = useId();
+  const lastImport = useRef<string | null>(null);
   const dismissals = useRef(new Set<() => void>());
   const registerDismiss = useCallback((onDismiss: () => void) => {
     dismissals.current.add(onDismiss);
@@ -55,16 +66,30 @@ export function McpCreateDialog({
   useLayoutEffect(() => {
     committed.current = lifetime;
     handingOff.current = false;
+    lastImport.current = null;
     return () => {
       if (committed.current === lifetime) committed.current = null;
       if (focusFrame.current !== null) window.cancelAnimationFrame(focusFrame.current);
       focusFrame.current = null;
     };
   }, [lifetime]);
+  useLayoutEffect(() => {
+    if (completed?.lifetime !== lifetime || completed.kind !== "imports" || completed.selected) return;
+    // The initial form and its results share an already-open Dialog. Radix's
+    // open autofocus alone cannot move focus off the removed submit button.
+    const frame = window.requestAnimationFrame(() => {
+      if (committed.current !== lifetime) return;
+      const connectorId = lastImport.current ?? completed.entries[0]?.connectorId;
+      if (connectorId) document.getElementById(`${resultId}-${connectorId}`)?.focus();
+      handingOff.current = false;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [completed, lifetime, resultId]);
   const changeOpen = (value: boolean): void => {
     if (lifetime.open && committed.current === lifetime) {
       if (!value) {
-        if (completed) retireCreatedMcpDetail(completed.target);
+        handingOff.current = false;
+        if (completed?.kind === "mcp") retireCreatedMcpDetail(completed.target);
         committed.current = null;
         dismissals.current.forEach(dismiss => dismiss());
         publication.dismiss();
@@ -73,18 +98,21 @@ export function McpCreateDialog({
     }
   };
   const close = (): void => changeOpen(false);
-  const complete = async (target?: McpServerCreationCompletion, creationCurrent?: () => boolean): Promise<void> => {
+  const handoff = async (result: Completion, creationCurrent: () => boolean): Promise<void> => {
     // A confirmed write still invalidates its original actor's projection.
     // Only dismissal belongs to this exact mounted window, not its successor.
-    const current = () => committed.current === lifetime && lifetime.open && currentBoundary.current === boundary && boundary.admitted && boundary.subject !== null && creationCurrent?.() !== false;
-    if (target && !current()) throw new Error("MCP creation handoff retired");
-    if (target) await onDone?.(target);
-    else await onDone?.();
-    if (target) {
-      if (!current()) throw new Error("MCP creation handoff retired");
-      handingOff.current = true;
-      setCompleted({ lifetime, target });
-    } else close();
+    const current = () => committed.current === lifetime && lifetime.open && currentBoundary.current === boundary && boundary.admitted && boundary.subject !== null && creationCurrent();
+    if (!current()) throw new Error("MCP creation handoff retired");
+    await onDone?.(result.kind === "mcp" ? result.target : undefined);
+    if (!current()) throw new Error("MCP creation handoff retired");
+    handingOff.current = true;
+    setCompleted({ lifetime, ...result });
+  };
+  const complete = (target: McpServerCreationCompletion, current: () => boolean) => handoff({ kind: "mcp", target }, current);
+  const completeApi = (target: CustomApiCreationCompletion, current: () => boolean) => handoff({ kind: "api", target }, current);
+  const completeJson = (entries: McpJsonImportCompletion, current: () => boolean) => {
+    const only = entries.length === 1 ? entries[0] : undefined;
+    return handoff(only ? { kind: "mcp", target: only } : { kind: "imports", entries, selected: null }, current);
   };
 
   const publishCreated = async (target: McpServerCreationCompletion, current: () => boolean) => {
@@ -93,14 +121,22 @@ export function McpCreateDialog({
     await complete(target, current);
   };
   const resumed = mode === "url" && (publicationState.phase === "unknown" || publicationState.phase === "rejected") ? publicationState.target : null;
-  const detail = completed?.lifetime === lifetime ? completed.target : resumed;
+  const activeCompletion = completed?.lifetime === lifetime ? completed : null;
+  if (activeCompletion?.kind === "api" && open && boundary.subject !== null) {
+    return <McpProjectionRead client={client} identity={boundary.subject} admitted={boundary.admitted}
+      readGeneration={boundary.generation} initialView="connections"
+      createdApiDetail={{ target: activeCompletion.target, onClose: close, ...(returnFocusRef ? { returnFocusRef } : {}) }} />;
+  }
+  const detail = activeCompletion?.kind === "mcp" ? activeCompletion.target : activeCompletion?.kind === "imports" ? activeCompletion.selected : resumed;
   if (detail && open && boundary.subject !== null) {
     if ((publishing || resumed !== null && publicationClosedFor !== lifetime) && publicationState.target) {
-      return <McpProjectPublicationDialog client={client} commands={publication} boundary={boundary} target={publicationState.target} onSourceRead={() => retireCreatedMcpDetail(detail)} onClose={() => { setPublishing(false); setPublicationClosedFor(lifetime); if (!completed) setCompleted({ lifetime, target: detail }); }} />;
+      return <McpProjectPublicationDialog client={client} commands={publication} boundary={boundary} target={publicationState.target} onSourceRead={() => retireCreatedMcpDetail(detail)} onClose={() => { setPublishing(false); setPublicationClosedFor(lifetime); if (!completed) setCompleted({ lifetime, kind: "mcp", target: detail }); }} />;
     }
     return <McpProjectionRead client={client} identity={boundary.subject} admitted={boundary.admitted}
       readGeneration={boundary.generation} initialView="connections"
-      createdDetail={{ target: detail, onClose: close, ...(returnFocusRef ? { returnFocusRef } : {}) }} />;
+      createdDetail={{ target: detail, onClose: activeCompletion?.kind === "imports" ? () => {
+        if (committed.current === lifetime) setCompleted({ ...activeCompletion, selected: null });
+      } : close, ...(returnFocusRef ? { returnFocusRef } : {}) }} />;
   }
 
   return (
@@ -119,6 +155,10 @@ export function McpCreateDialog({
         closeLabel={t("mcp.cancel")}
         overlayClassName={styles.createDialogOverlay ?? ""}
         onOpenAutoFocus={(event) => {
+          if (activeCompletion?.kind === "imports") {
+            event.preventDefault();
+            return;
+          }
           if (mode !== "form" && mode !== "custom-api") return;
           event.preventDefault();
           focusFrame.current = window.requestAnimationFrame(() => {
@@ -137,10 +177,27 @@ export function McpCreateDialog({
           target.focus();
         }}
       >
-        <McpCreateDismissContext.Provider value={registerDismiss}>{mode === "custom-api" ? (
-          <CustomApiCreationForm onCancel={close} onDone={complete} />
+        <McpCreateDismissContext.Provider value={registerDismiss}>{activeCompletion?.kind === "imports" ? (
+          <div className={styles.importResults}>
+            <DialogTitle className={styles.compactDialogTitle}>{t("mcp.jsonImportConfirmed")}</DialogTitle>
+            <p className={styles.compactDialogDescription}>{t("mcp.jsonImportChooseDetail")}</p>
+            <ul className={styles.importResultList}>
+              {activeCompletion.entries.map(entry => <li key={entry.connectorId}>
+                <Button id={`${resultId}-${entry.connectorId}`} type="button" variant="outline" disabled={!boundary.admitted} onClick={() => {
+                  if (committed.current === lifetime && currentBoundary.current === boundary && boundary.admitted) {
+                    lastImport.current = entry.connectorId;
+                    handingOff.current = true;
+                    setCompleted({ ...activeCompletion, selected: entry });
+                  }
+                }}><span>{entry.name}</span><span className={styles.importResultId}>{entry.connectorId}</span></Button>
+              </li>)}
+            </ul>
+            <div className={styles.jsonImportActions}><Button type="button" onClick={close}>{t("mcp.creationDone")}</Button></div>
+          </div>
+        ) : mode === "custom-api" ? (
+          <CustomApiCreationForm onCancel={close} onDone={completeApi} />
         ) : mode === "json" ? (
-          <JsonMcpCreationForm onCancel={close} onDone={complete} />
+          <JsonMcpCreationForm onCancel={close} onDone={completeJson} />
         ) : (
           <><PrivateMcpCreationForm mode={mode} onCancel={close} onDone={complete} {...(mode === "url" && publication.available && publicationState.recovery === "ready" ? { onPublish: publishCreated } : {})} />{mode === "url" && publicationState.recovery === "error" ? <div role="alert"><p>{t("mcp.publishRecoveryError")}</p><Button variant="outline" onClick={() => void publication.restore(boundary)}>{t("mcp.publishRetryRead")}</Button></div> : null}</>
         )}</McpCreateDismissContext.Provider>

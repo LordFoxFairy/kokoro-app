@@ -1,3 +1,11 @@
+## API / JSON 创建后的精确详情（2026-11-01，候选）
+
+`connector-command.ts` 的可选安全完成投影只保存在当前 actor 的 RAM，按 completed/boundary 读取、finish 清除；API flow 只投影 profileId，JSON flow 从严格非空 ACK 按 owner 原序投影每项 serverId/connectorId/providerKey/name。原 body/key、未知结果、迟到 ACK 失效与秘密清除沿原生命周期，不新增写调用或持久化。
+
+`use-connector-creation-form.ts` 在 finish 前把 locator 捕获到当前 form 窗口；完成回调前后检查窗口，失败仅重试 UI。`mcp-create-dialog.tsx` 用现 `McpProjectionRead` fresh exact reader 打开 API / 单项 JSON，多项呈现明确选择结果列表、同名用 connectorId 区分，详情关闭回列表并回焦原项；API 关闭/已确认删除结束外层窗口。同主体新代保留 locator 而重新读事实，换 actor/client/mode/open 退役；没有任意选第一项或将创建/导入 ACK 当配置/连接状态。
+
+具名回归在 `tests/ui/connector-creation-completion.test.ts` 与 `tests/ui/mcp-create-completion-dialog.test.tsx`，原 command/form/详情回归保留。正常源未激活，真实服务旅程由 Root 配对验收，不以替身测试关闭整个 B-01。
+
 ## Provider 独立读的会话恢复
 
 目录筛选及续页、精确 Provider 详情、本人连接关系全页读取沿现有 `ProductReadRecheck` 报告当前 typed HTTP401，携带请求原主体、代际和真实 AbortSignal。旧请求、已取消和退休订阅不报告；403、服务故障和解析错误保持原错误。重新准入后的 GET 仍由原 reader 生命周期驱动，不重发创建、授权、Prepare 或其它写命令。共享关系扫描保留原超时、页数预算和未知状态，超时不误作登录过期。具名回归位于 `tests/ui/mcp-provider-readmission.test.tsx`；正常 IAM/浏览器验收另记。

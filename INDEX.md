@@ -1,3 +1,9 @@
+## API / JSON 创建详情（2026-11-01，候选）
+
+`src/ui/mcp/{connector-command,custom-api-create-flow,mcp-json-import-flow,use-connector-creation-form}.ts` 保管命令完成后的安全 locator 与窗口完成恢复；现 `mcp-create-dialog.tsx` / `mcp-projection-read.tsx` 接 API exact GET、JSON 单项详情与多项明确选择。完整职责与边界见 `src/ui/mcp/INDEX.md`。
+
+`tests/ui/connector-creation-completion.test.ts` 覆盖安全 locator / 退休 / 严格 ACK；`tests/ui/mcp-create-completion-dialog.test.tsx` 覆盖真实组件详情、选择、删除、回焦、代际与回调重试；`tests/ui/fixtures/mcp-json-import-receipt.ts` 只为这些及既有测试生成符合当前 Schema 的非秘密 receipt，不进入产品路径。
+
 ## Project resource item consumer (candidate)
 
 `src/features/app/project-resource-row.tsx` / `project-resource-detail.tsx`负责资源行、fresh metadata和显式永久删除确认；`use-project-resource-actions.ts`持document-local原命令及actor/project/route fence，`use-project-resources.ts`持ACK后精确负事实与fresh列表。`project-resource-access.ts`仅走same-origin固定生成decoder；原生attachment仅报告started、无inlineHTML/SVG。固定契约与实际验证见本轮收据，不将候选称正常已生效。

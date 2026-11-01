@@ -74,6 +74,7 @@ export function McpProjectionRead({
   settingsLayout = false,
   refreshKey = 0,
   createdDetail,
+  createdApiDetail,
   catalogDialog,
 }: {
   catalogDialog?: McpCatalogDialog;
@@ -98,6 +99,8 @@ export function McpProjectionRead({
   brandName?: string;
   /** A creation window hands off its exact ACK; it does not mount another plaza. */
   createdDetail?: { target: McpServerCreationCompletion; onClose: () => void; returnFocusRef?: RefObject<HTMLElement | null> };
+  /** A safe creation locator always enters the existing fresh exact API reader. */
+  createdApiDetail?: { target: { profileId: string }; onClose: () => void; returnFocusRef?: RefObject<HTMLElement | null> };
 }) {
   const t = useT();
   const reportRead401 = useProductReadRecheck();
@@ -188,7 +191,7 @@ export function McpProjectionRead({
     blocked: Boolean((managementState && managementState.kind !== "rejected") || preparationState?.kind === "running" || preparationState?.kind === "completed"),
     ...(onAuthorizationNavigate ? { onAuthorizationNavigate } : {}),
   });
-  const [apiIntent, setApiIntent] = useState<{ profileId: string; window: object } | null>(null);
+  const [apiIntent, setApiIntent] = useState<{ profileId: string; window: object } | null>(() => createdApiDetail ? { profileId: createdApiDetail.target.profileId, window: {} } : null);
   const selectedCustomApiId = apiIntent?.profileId ?? null;
   const apiWindow = useRef<{ intent: object; controller: AbortController } | null>(null);
   useLayoutEffect(() => {
@@ -216,6 +219,7 @@ export function McpProjectionRead({
     setFactsOwner(owner);
     if (factsOwner.identity !== owner.identity || factsOwner.client !== owner.client) {
       setSelectedProviderKey(null); setSelectedProviderConnectionId(null); setProviderWindowToken({});
+      setApiIntent(null);
     }
     setEditor(null);
     setActionId(null);
@@ -223,7 +227,7 @@ export function McpProjectionRead({
     setDeleteId(null);
   }
   const surfaceRef = useRef<HTMLElement | null>(null);
-  const editorReturnFocusRef = useRef<HTMLElement | null>(createdDetail?.returnFocusRef?.current ?? null);
+  const editorReturnFocusRef = useRef<HTMLElement | null>(createdDetail?.returnFocusRef?.current ?? createdApiDetail?.returnFocusRef?.current ?? null);
   const catalogReturnFocusRef = useRef<HTMLElement | null>(null);
   const providerReturnFocusRef = useRef<HTMLElement | null>(null);
   useLayoutEffect(() => {
@@ -248,7 +252,7 @@ export function McpProjectionRead({
   } = useMcpProjection({
     client,
     identity,
-    admitted: admitted && !createdDetail,
+    admitted: admitted && !createdDetail && !createdApiDetail,
     readGeneration,
     cursor,
     view,
@@ -257,7 +261,7 @@ export function McpProjectionRead({
   const customApiState = useCustomApiProjection({
     client,
     identity,
-    admitted: admitted && !createdDetail,
+    admitted: admitted && !createdDetail && !createdApiDetail,
     readGeneration,
     refreshKey,
   });
@@ -267,7 +271,7 @@ export function McpProjectionRead({
 
   // Provider card artwork is rendered from owner-owned `cover_image_url` in
   // McpProviderDirectory; this coordinator never substitutes local assets.
-  const directory = useMcpProviderDirectory({ client, identity, admitted: admitted && !createdDetail, readGeneration,
+  const directory = useMcpProviderDirectory({ client, identity, admitted: admitted && !createdDetail && !createdApiDetail, readGeneration,
     seed: providerProjection, query: providerQuery, category: categoryFilter });
   const providers = [...new Map([...(providerProjection?.items ?? EMPTY_PROVIDERS), ...directory.items]
     .map(provider => [provider.provider_key, provider])).values()];
@@ -275,7 +279,7 @@ export function McpProjectionRead({
   const connectors = (connectorProjection?.items ?? []).filter(
     (connector) => !confirmedRemoved(connector),
   );
-  const relations = useMcpProviderRelations({ client, identity, admitted: admitted && !createdDetail, readGeneration, refreshKey,
+  const relations = useMcpProviderRelations({ client, identity, admitted: admitted && !createdDetail && !createdApiDetail, readGeneration, refreshKey,
     enabled: view === "catalog" || catalogOpen || (providerWindowToken.fromDirectory === true && selectedProviderKey !== null) });
   const addedProviderKeys = new Set(relations.items.filter(item => item.status !== "revoked" && !confirmedRemoved(item)).map(item => item.provider_key));
   const directoryConnections = relations.items.filter(item => item.provider_key === selectedProviderKey && item.status !== "revoked" && !confirmedRemoved(item));
@@ -296,7 +300,7 @@ export function McpProjectionRead({
   const selectedProvider = admitted && (selectedProviderConnectionId === null || selectedProviderConnection?.provider_key === selectedProviderKey)
     ? providerDetail.provider : null;
   const apiDetail = useCustomApiDetail({ client, identity, admitted, readGeneration,
-    profileId: selectedCustomApiId, known: customApiState.dataCurrent
+    profileId: selectedCustomApiId, known: !createdApiDetail && customApiState.dataCurrent
       ? customApis.find(item => item.profile_id === selectedCustomApiId) : undefined, retry: detailRetry });
   const selectedCustomApi = apiDetail.profile;
   const providersByKey = new Map(
@@ -385,7 +389,10 @@ export function McpProjectionRead({
       ? await apiManagement.submit(input, commandBoundary, wait.controller.signal)
       : await apiManagement.resume(apiIntent.profileId, commandBoundary, wait.controller.signal);
     if (!confirmed || ownerRef.current !== owner || apiWindow.current !== wait) return;
-    if (apiManagement.finish(apiIntent.profileId, commandBoundary)) setApiIntent(null);
+    if (apiManagement.finish(apiIntent.profileId, commandBoundary)) {
+      setApiIntent(null);
+      createdApiDetail?.onClose();
+    }
   };
   const runManagement = async (origin: "editor" | "provider", connectorId: string, input?: McpManagementIntent) => {
     const wait = origin === "editor" ? editorWindow.current : providerWindow.current;
@@ -645,9 +652,9 @@ export function McpProjectionRead({
       data-embedded={embedded || undefined}
       data-settings-layout={settingsLayout || undefined}
       data-presentation={plaza ? "plaza" : undefined}
-      aria-busy={(!createdDetail && refreshing) || undefined}
+      aria-busy={(!createdDetail && !createdApiDetail && refreshing) || undefined}
     >
-      {createdDetail ? null : <>
+      {createdDetail || createdApiDetail ? null : <>
       {catalogDialog ? null : <>
       <header className={styles.header}>
         {plaza ? <h1>{t("rail.plugins")}</h1> : settingsLayout ? null : <h2>{t("rail.navPlugins")}</h2>}
@@ -1002,7 +1009,7 @@ export function McpProjectionRead({
           pendingError={admitted && apiDetail.error}
           actionError={apiCommandState?.kind === "rejected"}
           returnFocusRef={editorReturnFocusRef}
-          onClose={() => setApiIntent(null)}
+          onClose={() => { setApiIntent(null); createdApiDetail?.onClose(); }}
           onSave={(input) => {
             if (!selectedCustomApi) return;
             void runApiManagement({ operation: "update", profileId: selectedCustomApi.profile_id, input });

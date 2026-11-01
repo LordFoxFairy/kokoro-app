@@ -1,3 +1,11 @@
+## 2026-11-01 Task B：API / JSON 创建详情（候选，未激活正常源）
+
+API 创建成功后以唯一 profileId 进入现 exact GET 详情；JSON 单项进入 exact connector/server 详情，多项按原 ACK 顺序列出全部结果，由用户明确选择，同名展示各自 connectorId。详情返回结果列表并恢复原项焦点，API 关闭或已确认删除结束父窗口。创建/导入 ACK 不作为详情、版本或已连接事实，不新增 Prepare、POST、持久化或网络契约。
+
+原命令在 actor RAM 中只追加安全 locator 完成投影；原 key/body 与 unknown 显式重试保持，换 actor 退役、同 actor 新代仅保 locator，旧事实重新读取。form 在 finish 前捕获完成 locator，回调前后检查窗口；回调失败只重试 UI，不重新创建；ACK 清除实际凭据/JSON 草稿。undefined/空 imports 不兼容为成功，既有模拟成功夹具已改成严格合法 receipt，并保原取消/迟到/原请求风险断言。
+
+具名 RED 5 FAIL 后新增 locator / 实际组件行为与既有命令、JSON 表单、API 广场、详情交接共6文件130 PASS，Root 停写后同6文件重跑130 PASS；完整 ESLint 与 diff-check 0，独立只读审查无确定 P0–P2。契约444 PASS/1既有生成器5秒超时，原文件单跑23 PASS，未放宽门禁。全量 typecheck 仍只有已知 A 区两处（3条诊断）：AppFrame 的 onReconnect 多余 prop、Segment.legacySteps 及其隐式 any；正式 build 编译成功但被前者类型错误阻断，不能合并或称构建成功。本片测试 fixture 的 exact-optional / ACK transport 类型问题已修，没有跨写区改 A。首次新 Dialog 测试的旧按钮文案假设已纠正，未改变产品按钮文案。证据在 `B01-create-*.log`；正常浏览器/owner旅程仍待配对，不据这130项声称 B-01 已完成或正常3314已更新。
+
 ## 2026-11-01 Task B：Provider 读取会话恢复（候选）
 
 目录筛选/续页、独立 Provider 详情和连接关系尾页的当前 typed HTTP401 现接已有 ProductReadRecheck，原 subject/generation/signal 不变；旧主体/代际/已取消/卸载迟到不报告。403、依赖、parse/network 保原失败，GET 由重新准入重读，创建/授权/Prepare 不重放。新增28行为回归先4真实RED，再与原相关/Session/配置保存6文件257通过；独立只读审查未发现确定P0–P2，未冒称缺失的hix-code-review已调用。新测试类型错误已修，定向ESLint及diff-check通过。

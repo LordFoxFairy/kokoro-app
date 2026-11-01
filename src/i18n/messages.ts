@@ -1197,6 +1197,7 @@ export const zh = {
   "mcp.jsonImportAction": "导入",
   "mcp.jsonImportUnknown": "导入结果尚未确认。重试会恢复完整原请求，不会重复导入。",
   "mcp.jsonImportConfirmed": "MCP 配置已导入。",
+  "mcp.jsonImportChooseDetail": "选择一个已导入的连接器查看配置。",
   "mcp.jsonImportInvalid": "JSON 格式无效，或缺少 mcpServers 配置。",
   "mcp.urlTitle": "通过 URL 添加 MCP",
   "mcp.urlNamePlaceholder": "例如：我的自定义服务器",
