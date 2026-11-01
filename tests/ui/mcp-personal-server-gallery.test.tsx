@@ -59,7 +59,7 @@ it("keeps an unread or cyclic personal scan unknown rather than claiming the who
   await waitFor(() => expect(list).toHaveBeenCalledTimes(1))
   expect(screen.queryByText("No connector providers are available to add right now.")).not.toBeInTheDocument()
   await act(async () => { resolve({ items: [personal], next_cursor: "cycle" }) })
-  await screen.findByText("Failed to load connections")
+  await screen.findByText("Added connections could not load")
   expect(screen.queryByRole("button", { name: personal.display_name })).not.toBeInTheDocument()
   expect(screen.queryByText("No connector providers are available to add right now.")).not.toBeInTheDocument()
   expect(screen.queryByText("No matching connections")).not.toBeInTheDocument()
@@ -99,7 +99,7 @@ it.each(["actor", "generation", "admission"] as const)("retires the prior confir
     expect(screen.queryByRole("button", { name: personal.display_name })).not.toBeInTheDocument()
   }
   view.rerender(plaza(client, change === "actor" ? "next-personal-actor" : "personal-retire", true, change === "generation" ? 1 : 0))
-  await screen.findByText("Failed to load connections")
+  await screen.findByText("Added connections could not load")
   expect(screen.queryByRole("button", { name: personal.display_name })).not.toBeInTheDocument()
   expect(screen.queryByText("No connector providers are available to add right now.")).not.toBeInTheDocument()
 })
@@ -107,7 +107,7 @@ it("keeps exhausted relation pagination unknown without publishing a partial per
   let page = 0
   const list = vi.fn<HubClient["listMcpConnectors"]>().mockImplementation(async () => ({ items: [personal], next_cursor: `page-${++page}` }))
   render(plaza(clientFor(list), "personal-page-budget"))
-  await screen.findByText("Failed to load connections")
+  await screen.findByText("Added connections could not load")
   expect(list).toHaveBeenCalledTimes(50)
   expect(screen.queryByRole("button", { name: personal.display_name })).not.toBeInTheDocument()
   expect(screen.queryByText("No connector providers are available to add right now.")).not.toBeInTheDocument()
@@ -117,7 +117,7 @@ it("keeps the shared ten-second scan deadline unknown even if its current list p
   const list = vi.fn<HubClient["listMcpConnectors"]>().mockImplementation(() => new Promise(() => {}))
   render(plaza(clientFor(list), "personal-deadline"))
   await act(async () => { await vi.advanceTimersByTimeAsync(10_000) })
-  expect(screen.getByText("Failed to load connections")).toBeInTheDocument()
+  expect(screen.getByText("Added connections could not load")).toBeInTheDocument()
   expect(list).toHaveBeenCalledTimes(1)
   expect(list.mock.calls[0]?.[1]?.aborted).toBe(true)
   expect(screen.queryByRole("button", { name: personal.display_name })).not.toBeInTheDocument()
@@ -168,14 +168,14 @@ it.each(["delete_server", "disconnect", "late_delete_ack"] as const)("a Settings
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
     view.rerender(both(false))
   }
-  await within(screen.getByTestId("retained-plaza")).findByText("Failed to load connections")
+  await within(screen.getByTestId("retained-plaza")).findByText("Added connections could not load")
   expect(originalPlaza).not.toBeInTheDocument()
   expect(within(screen.getByTestId("retained-plaza")).queryByRole("button", { name: personal.display_name })).not.toBeInTheDocument()
   if (scenario === "disconnect") {
     // A stale pre-revocation active row is not restoration; a later connector CAS is.
     removed = false
     view.rerender(both(false, 1))
-    await waitFor(() => expect(within(screen.getByTestId("retained-plaza")).queryByText("Failed to load connections")).not.toBeInTheDocument())
+    await waitFor(() => expect(within(screen.getByTestId("retained-plaza")).queryByText("Added connections could not load")).not.toBeInTheDocument())
     expect(within(screen.getByTestId("retained-plaza")).queryByRole("button", { name: personal.display_name })).not.toBeInTheDocument()
     current = { ...personal, state_version: "4" }
     view.rerender(both(false, 2))

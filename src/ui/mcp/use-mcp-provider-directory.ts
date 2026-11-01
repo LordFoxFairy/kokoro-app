@@ -24,8 +24,8 @@ export function useMcpProviderDirectory({ client, identity, admitted, readGenera
   const scope = useMemo(() => ({ client, identity, admitted, readGeneration, seed, search, category }),
     [client, identity, admitted, readGeneration, seed, search, category]);
   const initialPage = admitted && unfiltered ? seed : undefined;
-  const [state, setState] = useState(() => ({ scope, page: initialPage, loading: admitted && !initialPage, error: false, stopped: false }));
-  if (state.scope !== scope) setState({ scope, page: initialPage, loading: admitted && !initialPage, error: false, stopped: false });
+  const [state, setState] = useState(() => ({ scope, page: initialPage, loading: admitted && !initialPage, error: false, stopped: false, retrying: false }));
+  if (state.scope !== scope) setState({ scope, page: initialPage, loading: admitted && !initialPage, error: false, stopped: false, retrying: false });
   const current = useRef<typeof scope | null>(scope);
   const flight = useRef<AbortController | null>(null);
   const cursors = useRef(new Set<string>());
@@ -35,12 +35,12 @@ export function useMcpProviderDirectory({ client, identity, admitted, readGenera
     return () => { current.current = null; flight.current?.abort(); flight.current = null; };
   }, [scope]);
 
-  const read = useCallback(async (cursor?: string) => {
+  const read = useCallback(async (cursor?: string, retrying = false) => {
     if (!scope.admitted || current.current !== scope || flight.current) return;
     const controller = new AbortController();
     flight.current = controller;
     if (!cursor) cursors.current.clear();
-    setState(value => ({ ...value, loading: true, error: false, stopped: false }));
+    setState(value => ({ ...value, loading: true, error: false, stopped: false, retrying }));
     try {
       const page = await client.listMcpConnectorProviders({
         limit: 100,
@@ -51,11 +51,11 @@ export function useMcpProviderDirectory({ client, identity, admitted, readGenera
       if (current.current !== scope || controller.signal.aborted) return;
       // Refuse cursor loops instead of endlessly appending the same result.
       if (page.next_cursor && (page.next_cursor === cursor || cursors.current.has(page.next_cursor))) {
-        setState(value => ({ ...value, loading: false, error: true, stopped: true }));
+        setState(value => ({ ...value, loading: false, error: true, stopped: true, retrying: false }));
         return;
       }
       if (cursor) cursors.current.add(cursor);
-      setState(value => ({ scope, loading: false, error: false, stopped: false, page: {
+      setState(value => ({ scope, loading: false, error: false, stopped: false, retrying: false, page: {
         ...page,
         items: cursor ? [...new Map([...(value.page?.items ?? []), ...page.items].map(item => [item.provider_key, item])).values()] : page.items,
       } }));
@@ -63,7 +63,7 @@ export function useMcpProviderDirectory({ client, identity, admitted, readGenera
       if (current.current !== scope || controller.signal.aborted) return;
       if (error instanceof HubClientError && error.reason === "http" && error.status === 401)
         reportRead401?.({ subject: identity, generation: readGeneration, signal: controller.signal });
-      setState(value => ({ ...value, loading: false, error: true }));
+      setState(value => ({ ...value, loading: false, error: true, retrying: false }));
     } finally {
       if (flight.current === controller) flight.current = null;
     }
@@ -83,8 +83,9 @@ export function useMcpProviderDirectory({ client, identity, admitted, readGenera
     items: page?.items ?? [],
     loading,
     error: admitted && state.scope === scope && state.error,
+    retrying: admitted && state.scope === scope && state.retrying,
     hasMore: Boolean(page?.next_cursor) && !stopped,
     loadMore: () => { if (page?.next_cursor && !loading && !stopped) void read(page.next_cursor); },
-    retry: () => { if (!loading) void read(stopped ? undefined : page?.next_cursor ?? undefined); },
+    retry: () => { if (!loading) void read(stopped ? undefined : page?.next_cursor ?? undefined, true); },
   };
 }

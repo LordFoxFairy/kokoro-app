@@ -186,6 +186,16 @@ export function useCustomApiProjection({
   const revision = revisionFor(client, identity);
   const currentRevision = useCustomApiRevision(client, identity);
   const [manualRefreshKey, setManualRefreshKey] = useState(0);
+  const reloadOwner = useMemo(() => ({ client, identity, admitted, readGeneration, currentRevision, refreshKey }),
+    [client, identity, admitted, readGeneration, currentRevision, refreshKey]);
+  const currentReloadOwner = useRef<typeof reloadOwner | null>(null);
+  type Reload = { owner: typeof reloadOwner };
+  const pendingReload = useRef<Reload | null>(null);
+  const [reloadAttempt, setReloadAttempt] = useState<Reload | null>(null);
+  useLayoutEffect(() => {
+    currentReloadOwner.current = reloadOwner;
+    return () => { if (currentReloadOwner.current === reloadOwner) currentReloadOwner.current = null; };
+  }, [reloadOwner]);
   const [state, setState] = useState<CustomApiState>({
     data: cached(client, identity, readGeneration) ?? emptyPage,
     identity,
@@ -196,8 +206,12 @@ export function useCustomApiProjection({
   });
 
   const reload = useCallback(() => {
+    if (!admitted || currentReloadOwner.current !== reloadOwner || pendingReload.current?.owner === reloadOwner || !client.listCustomApis) return;
+    const attempt = { owner: reloadOwner };
+    pendingReload.current = attempt;
+    setReloadAttempt(attempt);
     setManualRefreshKey((value) => value + 1);
-  }, []);
+  }, [admitted, client, reloadOwner]);
 
   useEffect(() => {
     if (!admitted) return;
@@ -217,6 +231,7 @@ export function useCustomApiProjection({
     );
     if (!subscription) return;
     let active = true;
+    const attempt = pendingReload.current?.owner === reloadOwner ? pendingReload.current : null;
     // Keep previously confirmed rows while a mutation invalidates the owner
     // projection. The promise completion below is the only state transition;
     // this avoids a render-phase loading reset when Settings remounts.
@@ -237,12 +252,17 @@ export function useCustomApiProjection({
           );
         }
       },
-    );
+    ).finally(() => {
+      if (attempt && pendingReload.current === attempt) {
+        pendingReload.current = null;
+        setReloadAttempt(current => current === attempt ? null : current);
+      }
+    });
     return () => {
       active = false;
       subscription.release();
     };
-  }, [admitted, readGeneration, client, identity, manualRefreshKey, refreshKey, currentRevision, revision, reportRead401]);
+  }, [admitted, readGeneration, client, identity, manualRefreshKey, refreshKey, currentRevision, revision, reportRead401, reloadOwner]);
 
   // A Settings remount for an already admitted identity should render the
   // shared projection directly. This avoids a synchronous effect setState
@@ -280,7 +300,7 @@ export function useCustomApiProjection({
   const data = tail?.data ?? visible.data;
   const loadMore = async () => {
     const cursor = data.page.next_cursor;
-    if (committed.current !== scope || !admitted || visible.loading || pending.current || tail?.stopped || !cursor || !client.listCustomApis) return;
+    if (committed.current !== scope || !admitted || visible.loading || pendingReload.current?.owner === reloadOwner || pending.current || tail?.stopped || !cursor || !client.listCustomApis) return;
     const controller = new AbortController();
     pending.current = controller;
     const cursors = tail?.cursors ?? new Set<string>();
@@ -301,8 +321,9 @@ export function useCustomApiProjection({
   };
   // Rows may remain visible while refreshing, but cannot seed an exact detail
   // after a confirmed write retired their aggregate revision.
-  return { ...visible, data, dataCurrent: admitted && !visible.loading && !visible.error && visible.dataRevision === currentRevision,
-    reload, loadMore, loadingMore: tail?.loading ?? false,
+  const reloading = reloadAttempt?.owner === reloadOwner;
+  return { ...visible, data, dataCurrent: admitted && !reloading && !visible.loading && !visible.error && visible.dataRevision === currentRevision,
+    reload, reloading, loadMore, loadingMore: tail?.loading ?? false,
     loadMoreError: tail?.error ?? false, hasMore: Boolean(data.page.next_cursor) && !tail?.stopped };
 
 }

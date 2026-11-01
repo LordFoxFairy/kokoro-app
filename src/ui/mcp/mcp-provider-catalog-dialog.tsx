@@ -11,6 +11,7 @@ import { McpCategoryDropdown } from "./mcp-category-dropdown";
 import { useMcpCategoryLayout } from "./use-mcp-category-layout";
 import { McpProviderDirectory } from "./mcp-provider-directory";
 import { McpSettingsToolbar } from "./mcp-settings-toolbar";
+import { McpReadFeedback } from "./mcp-read-feedback";
 import { MCP_CATEGORY_MESSAGES, MCP_CATEGORY_OPTIONS } from "./mcp-projection-types";
 import styles from "./mcp-projection-read.module.css";
 
@@ -24,6 +25,8 @@ export function McpProviderCatalogDialog({
   hasMore,
   onLoadMore,
   error,
+  retrying = false,
+  onRetry,
   query,
   categoryFilter,
   returnFocusRef,
@@ -42,6 +45,8 @@ export function McpProviderCatalogDialog({
   hasMore: boolean;
   onLoadMore: () => void;
   error: boolean;
+  retrying?: boolean;
+  onRetry?: () => void;
   query: string;
   categoryFilter: "all" | keyof typeof MCP_CATEGORY_MESSAGES;
   returnFocusRef: RefObject<HTMLElement | null>;
@@ -114,7 +119,8 @@ export function McpProviderCatalogDialog({
           </McpSettingsToolbar>
         </div>
         <div className={styles.catalogBody} aria-busy={loading || undefined}>
-          {error ? <span className="sr-only" role="status">{t("mcp.loadError")}</span>
+          {error || retrying ? <McpReadFeedback message={t("mcp.read.providersError")} retryLabel={t("mcp.read.providersRetry")}
+            busy={retrying} disabled={disabled || loading} onRetry={onRetry} />
             : loading ? <span className="sr-only" role="status">{t("mcp.loading")}</span> : null}
             <McpProviderDirectory
               providers={providers ?? []}

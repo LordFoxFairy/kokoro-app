@@ -1,3 +1,13 @@
+## 局部读取失败与显式恢复（2026-11-01，候选）
+
+`mcp-read-feedback.tsx` 只呈现就近的读取错误和可选 GET 重试按钮，复用原 Button/语义样式；`mcp-projection-read.tsx` 分别绑定 API、连接器页、目录和关系 reader，不重放命令或刷新健康部分。已知卡片保留；确认全空/无匹配必须由当前相关读取共同证明，不沿用旧空状态掩盖失败。API 尾页沿原 cursor 重试，循环已停止时显式从首页重新读取。
+
+`use-custom-api-projection.ts` 与 `use-mcp-projection.ts` 的本地 attempt/owner 围栏同步去重显式重试、在原 promise 结束时释放，仅匹配原主体/代际的 attempt；不增加缓存、持久化或第二个登录恢复 owner。Provider 目录弹窗复用相同局部反馈；非 all 分类不显示无关 API 错误。
+
+`use-mcp-provider-directory.ts` 与 `use-mcp-provider-relations.ts` 单独公开 scope 绑定的显式 `retrying`，与普通自动读取的 loading 分开；目录页/弹窗及关系反馈据此保留同一原生按钮，等待中禁用、settlement 后恢复。关系继续共享当前 live scan，owner/attempt 同步防重击，主体/代际退休和 typed401 归属不变。反馈仅在原键盘焦点仍归该重试、浏览器禁用按钮造成 body 焦点时恢复；其它 focus、Tab、pointerdown 或窗口失焦均交出所有权。具名行为测试在 `mcp-read-retry-focus.test.tsx`，真实 coordinator 与 dialog 接线在 `mcp-custom-api-gallery.test.tsx`；`mcp-read-feedback-visual.test.tsx` 仅对实际组件静态 DOM 和生产 CSS 做 390/1280 宽度及原生 Tab 检查，不冒称 React 事件或真实服务旅程。
+
+`mcp-read-retry-browser.test.ts` 用自有 localhost 临时 Vite 页面 hydrate 实际反馈组件，真实 Chromium Enter 触发 pending→再次失败，并验输入框移焦/指针/Tab 不抢焦，finally 回收浏览器和临时服务；仅此组件事件成功，不冒正常 App、目录 owner 或真实 IAM 旅程。
+
 ## API / JSON 创建后的精确详情（2026-11-01，候选）
 
 `connector-command.ts` 的可选安全完成投影只保存在当前 actor 的 RAM，按 completed/boundary 读取、finish 清除；API flow 只投影 profileId，JSON flow 从严格非空 ACK 按 owner 原序投影每项 serverId/connectorId/providerKey/name。原 body/key、未知结果、迟到 ACK 失效与秘密清除沿原生命周期，不新增写调用或持久化。

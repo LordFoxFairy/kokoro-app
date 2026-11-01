@@ -1,3 +1,7 @@
+## 2026-11-01 B-01 读取恢复无持久化变更
+
+仅 reader mounted 窗口的非秘密 owner/attempt/pending 状态，无数据库、cache格式、localStorage/IDB 或命令恢复 schema 变化。卡片显示连续性不授予当前权限/版本，全空事实须当前读取成功；主体/准入代变化后不借旧读取结果或迟到 settlement 解锁新窗口。
+
 ## 2026-11-01 B-01 创建详情衔接无持久化变更
 
 无数据库、localStorage/IDB schema或命令恢复格式变更。仅在现actor command及mounted创建窗口持有安全profile/server/connector/provider locator；原秘密草稿ACK时清退，raw ACK不进入公共state。窗口/主体退休清除投影，代际变化不借旧事实授新写权限，unknown原key/body语义保持。

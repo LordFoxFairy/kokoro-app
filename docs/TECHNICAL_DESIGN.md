@@ -1,3 +1,9 @@
+## 2026-11-01 B-01 读取错误的局部恢复
+
+沿现 MCP / Provider / relations / Custom API reader 分别呈现可见内联失败与 GET 重试，保留同主体代际的已读卡片；只有当前相关读取均权威成功才展示全空/无匹配，不把旧 confirmed 空视为当前事实。API 故障只影响管理列表或 All 广场，不污染无关 Provider 分类。目录弹窗复用同一紧凑反馈，不用整页错误卡替换内容。
+
+现 MCP projection 和 Custom API head reload 增补当前 owner/generation 的同步 attempt/pending 围栏，并由匹配读取的实际 settlement 释放；不轮询 loading、不用计时器假解锁、不刷新健康 aggregate、不重放创建/连接/Prepare。Provider 目录沿原 tail/循环恢复，API 普通尾页沿原 cursor，循环停止后显式重读 head。当前 owner/admitted 校验及已有401再准入、abort/迟到隔离保持，无新错误中心或读取服务。
+
 ## 2026-11-01 B-01 创建完成后的精确详情衔接
 
 沿现有 actor-owned connector command 生命周期保留创建ACK的安全locator投影：Custom API仅profileId，JSON仅原序exact serverId/connectorId/providerKey及非秘密名称；不保存raw ACK、URL、headers或environment。主命令仍唯一保存原body/key与unknown显式重试，不新增POST/自动Prepare。投影只在可信Hub严格ACK后接受，换actor退休清除；读取须核flow/boundary/completed，finish前捕获到本form mounted窗口，完成回调失败仅重试UI衔接，不重发命令。完成前后核current窗口；晚ACK只使原actor读失效，不自动弹已关闭或其它主体窗口。

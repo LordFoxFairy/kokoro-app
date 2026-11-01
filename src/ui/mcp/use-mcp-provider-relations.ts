@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { HubClientError, type HubClient } from "@/hub/client";
 import type { McpConnector } from "@/hub/mcp-connector.schema";
 import { useProductReadRecheck } from "@/ui/auth/product-read-recheck-context";
@@ -11,6 +11,7 @@ export type McpProviderRelationRead = {
   loading: boolean;
   complete: boolean;
   error: boolean;
+  retrying: boolean;
   retry: () => void;
 };
 type Flight = { controller: AbortController; promise: Promise<McpConnector[]>; subscribers: number };
@@ -82,24 +83,42 @@ export function useMcpProviderRelations({ client, identity, admitted, readGenera
   const reportRead401 = useProductReadRecheck();
   const revision = useMcpConnectorRevision(client, identity);
   const [attempt, setAttempt] = useState(0);
-  const scope = useMemo(() => ({ client, identity, admitted, readGeneration, enabled, refreshKey, revision, attempt }),
-    [client, identity, admitted, readGeneration, enabled, refreshKey, revision, attempt]);
+  const owner = useMemo(() => ({ client, identity, admitted, readGeneration, enabled, refreshKey, revision }),
+    [client, identity, admitted, readGeneration, enabled, refreshKey, revision]);
+  const scope = useMemo(() => ({ owner, attempt }), [owner, attempt]);
+  const activeOwner = useRef<typeof owner | null>(owner);
+  const pending = useRef<{ owner: typeof owner; attempt: number } | null>(null);
+  const [retryOwner, setRetryOwner] = useState<typeof owner | null>(null);
+  useLayoutEffect(() => { activeOwner.current = owner; return () => { activeOwner.current = null; }; }, [owner]);
   const [result, setResult] = useState<{ scope: typeof scope; items: McpConnector[]; error: boolean }>();
   useEffect(() => {
     if (!admitted || !enabled) return;
     let retired = false;
     const subscription = subscribeScan(client, JSON.stringify([identity, readGeneration, refreshKey, revision]));
-    void subscription.promise.then(items => { if (!retired) setResult({ scope, items, error: false }); },
+    const settle = () => {
+      if (pending.current?.owner === owner && pending.current.attempt === attempt) {
+        pending.current = null;
+        setRetryOwner(value => value === owner ? null : value);
+      }
+    };
+    void subscription.promise.then(items => { if (!retired) { settle(); setResult({ scope, items, error: false }); } },
       (error: unknown) => {
         if (retired) return;
         if (!subscription.signal.aborted && error instanceof HubClientError && error.reason === "http" && error.status === 401)
           reportRead401?.({ subject: identity, generation: readGeneration, signal: subscription.signal });
+        settle();
         setResult({ scope, items: [], error: true });
       });
     return () => { retired = true; subscription.release(); };
-  }, [scope, admitted, enabled, client, identity, readGeneration, refreshKey, revision, reportRead401]);
+  }, [scope, owner, attempt, admitted, enabled, client, identity, readGeneration, refreshKey, revision, reportRead401]);
   const current = admitted && enabled && result?.scope === scope ? result : undefined;
-  const retry = useCallback(() => { setAttempt(value => value + 1); }, []);
+  const retry = useCallback(() => {
+    if (!admitted || !enabled || activeOwner.current !== owner || !current?.error || pending.current?.owner === owner) return;
+    pending.current = { owner, attempt: attempt + 1 };
+    setRetryOwner(owner);
+    setAttempt(attempt + 1);
+  }, [admitted, enabled, owner, current, attempt]);
   return { items: current?.items ?? [], complete: current !== undefined && !current.error, error: current?.error ?? false,
-    loading: admitted && enabled && current === undefined, retry };
+    loading: admitted && enabled && current === undefined,
+    retrying: admitted && enabled && retryOwner === owner, retry };
 }

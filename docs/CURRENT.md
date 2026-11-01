@@ -1,3 +1,17 @@
+## 2026-11-01 Task B：局部读取错误与显式 GET 恢复（已独审候选，未激活正常源）
+
+Root 最终复验八文件 90 项通过（11.37 秒），独立审查原焦点 P2 已关闭，无新增确定 P0–P2。首次 Root 复验 89 通过/1 个 hydrated fixture 挂载超时保留；后续受控诊断证实不同 Vite fixture 争用默认优化缓存可使模块返回504，但没有原失败资源日志，不能据此确认该次根因。现浏览器 fixture 使用独有临时 cacheDir，创建/关闭失败亦在 finally 回收自身目录，保留错误诊断、全部断言和原40秒门禁，隔离后 writer 与 Root 各一轮90项通过。不将测试环境修复写成生产登录问题已解决。
+
+独审发现 Provider 目录/关系显式 retry 清除 error 后使反馈卸载、失败新按钮丢失原键盘焦点。4 条具名 RED 后增加 scope 绑定的 retrying 与实际 settlement，沿原共享 scan/request/401 边界保留同按钮 pending；失败只在焦点所有权未被用户交出时恢复。另补真实 coordinator/目录弹窗接线及用户已移焦后不抢焦负控。390/1280 实际组件静态 DOM 加生产 CSS 均无横向溢出，原生 Tab 可达可用按钮、跳过 disabled；截图明确不是 React 事件、正常运行源或真实 owner 旅程。
+
+最终8文件90 PASS，涵盖前述行为及独立 hydrated Chromium：确认原生 disabled 会把焦点移到 BODY，失败后未移焦的原按钮恢复；输入框移焦后 blur、其它处指针点击、Tab 均不抢焦。仅实际反馈组件事件，不代表正常 App/owner 旅程；自有随机 localhost Vite 和浏览器在 finally 回收。完整 ESLint（浏览器测试前）与新增文件精确 ESLint 均0；最终 typecheck 仍仅 A 区原3条诊断，未跨区修改。证据 `B01-read-focus-{red,complete,complete-lint,complete-types,browser}.log`、`mcp-read-retry-hydrated-chromium.json` 与两张 `mcp-read-feedback-static-*.png`，没有修改门禁或阈值。
+
+连接器设置/广场与目录弹窗现在就近显示 API、连接器页、Provider 目录和关系的实际读取错误，按钮分别进入现有 reader 的 GET；保留已知卡片，当前未知/失败不再沿旧空状态显示全空或无匹配。API 尾页继续使用原 cursor，重复 cursor 停止后提供显式首页重读；非 all 分类不受无关 API 错误影响。没有重发创建、Prepare、连接或其它写命令，没有新增协议/存储/登录 owner。
+
+API 与 MCP projection 的本地 owner/attempt 围栏同步阻止重击，原 promise settlement 释放匹配 attempt；换主体、准入代际或请求寿命后不让旧回执改写新状态。初始4条行为 RED 保留，最终5文件81 PASS（包括 Provider401原回归）；新增 connector 重试再失败解锁与 API 重试后主体/代际迟到负控均通过。精确 ESLint 与 diff-check 通过；完整 typecheck 仍仅 A 区原有两处3条诊断（onReconnect、legacySteps、step 隐式 any），没有修改 A 展示区。
+
+首次新增测试误用旧按钮文案、一次命令 glob 无对应路径退出，均保留日志并更正为现有合法文案/具名文件；未改产品文案、门禁或行为断言凑绿。证据 `B01-read-red.log`、`B01-read-resumed-focused-v3.log`、`B01-read-resumed-lint.log`、`B01-read-resumed-types.log`。独立审查、全门及正常浏览器/窄屏对照由 Root 接续，不把组件验证当真实 IAM/正常页面验收。
+
 ## 2026-11-01 Task B：API / JSON 创建详情（候选，未激活正常源）
 
 API 创建成功后以唯一 profileId 进入现 exact GET 详情；JSON 单项进入 exact connector/server 详情，多项按原 ACK 顺序列出全部结果，由用户明确选择，同名展示各自 connectorId。详情返回结果列表并恢复原项焦点，API 关闭或已确认删除结束父窗口。创建/导入 ACK 不作为详情、版本或已连接事实，不新增 Prepare、POST、持久化或网络契约。

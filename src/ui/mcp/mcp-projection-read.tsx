@@ -14,6 +14,7 @@ import { useT } from "@/i18n/context";
 
 import { useProviderCreationCommands, useCustomApiManagementCommands, useMcpManagementCommands, useMcpPreparationCommands, useMcpProjectPublicationCommands } from "./connector-command-context";
 import { McpConnectionList } from "./mcp-connection-list";
+import { McpReadFeedback } from "./mcp-read-feedback";
 import { McpCustomApiGallery, visibleCustomApiGalleryProfiles } from "./mcp-custom-api-gallery";
 import { McpPersonalServerGallery, visiblePersonalMcpServers } from "./mcp-personal-server-gallery";
 import { McpConnectorEditorDialog } from "./mcp-connector-editor-dialog";
@@ -249,6 +250,8 @@ export function McpProjectionRead({
     providerProjection,
     connectorProjection,
     reload,
+    providerReloading,
+    connectorReloading,
   } = useMcpProjection({
     client,
     identity,
@@ -331,11 +334,14 @@ export function McpProjectionRead({
     setApiIntent({ profileId: profile.profile_id, window: {} });
   };
   const customApiContinuation = <>
-    {customApiState.loadMoreError ? <span className="sr-only" role="status">{t("mcp.loadError")}</span> : null}
-    {customApiState.hasMore ? <Button type="button" variant="outline" disabled={customApiState.loadingMore}
-      aria-busy={customApiState.loadingMore} onClick={() => void customApiState.loadMore()}>
-      {t("rail.loadMore")} · API
-    </Button> : null}
+    {customApiState.loadMoreError ? <McpReadFeedback message={t("mcp.read.apiMoreError")} /> : null}
+    {customApiState.hasMore ? <Button type="button" variant="outline" disabled={!admitted || customApiState.loadingMore || customApiState.reloading}
+      aria-busy={customApiState.loadingMore || customApiState.reloading} onClick={() => {
+        if (ownerRef.current === owner && admitted) void customApiState.loadMore();
+      }}>
+      {customApiState.loadMoreError ? t("mcp.read.apiMoreRetry") : <>{t("rail.loadMore")} · API</>}
+    </Button> : customApiState.loadMoreError ? <Button type="button" variant="outline" disabled={!admitted || customApiState.reloading}
+      onClick={() => { if (ownerRef.current === owner && admitted) customApiState.reload(); }}>{t("mcp.read.apiRetry")}</Button> : null}
   </>;
 
   const connectionQuery = connectorQuery.trim().toLocaleLowerCase();
@@ -345,9 +351,13 @@ export function McpProjectionRead({
     !connectionQuery || [profile.name, profile.instructions].some(value => value?.toLocaleLowerCase().includes(connectionQuery)));
   // An unresolved head is not an empty combined directory. Retained same-scope
   // cards remain readable; existing detail/command freshness gates are unchanged.
-  const connectionResultsKnown = connectorProjection !== undefined && hasConfirmedApiRead;
-  const passiveReadFailed = view === "catalog" ? directoryError || (plaza && categoryFilter === "all" && (customApiState.error || relations.error))
-    : connectorState.error || refreshError || customApiState.error;
+  const connectionResultsKnown = connectorProjection !== undefined && !connectorState.loading && !connectorState.error &&
+    !connectorReloading && !refreshError && customApiState.dataCurrent && !customApiState.loadMoreError && !customApiState.hasMore;
+  const retryProviders = () => {
+    if (ownerRef.current !== owner || !admitted) return;
+    if (directory.error) directory.retry();
+    else reload("providers");
+  };
 
   const resetEditor = () => {
     setEditor(null);
@@ -688,8 +698,17 @@ export function McpProjectionRead({
         />
       </header>
       <div className={styles.body}>
-      {passiveReadFailed ? <span className="sr-only" role="status">{t("mcp.loadError")}</span>
-        : refreshing || customApiState.loading || (plaza && categoryFilter === "all" && relations.loading) ? <span className="sr-only" role="status">{t("mcp.loading")}</span> : null}
+      {refreshing || customApiState.loading || (plaza && categoryFilter === "all" && relations.loading) ? <span className="sr-only" role="status">{t("mcp.loading")}</span> : null}
+      {admitted && (view === "connections" || plaza && categoryFilter === "all") && (customApiState.error || customApiState.reloading) ?
+        <McpReadFeedback message={t("mcp.read.apiError")} retryLabel={t("mcp.read.apiRetry")} disabled={!admitted}
+          busy={customApiState.reloading} onRetry={() => { if (ownerRef.current === owner && admitted) customApiState.reload(); }} /> : null}
+      {admitted && view === "connections" && (connectorState.error || refreshError || connectorReloading) ?
+        <McpReadFeedback message={t("mcp.read.connectorsError")} retryLabel={t("mcp.read.connectorsRetry")}
+          busy={connectorReloading} onRetry={() => {
+            if (ownerRef.current !== owner || !admitted) return;
+            if (refreshError) { setRefreshError(false); setCursor(null); setHistory([]); }
+            reload("connectors");
+          }} /> : null}
       {actionError && (connectorIntent === null || !connectorIntent.entered) &&
       selectedProviderKey === null && selectedCustomApiId === null ? <ActionError /> : null}
       {admitted && connectorIntent !== null && !connectorIntent.entered &&
@@ -698,6 +717,8 @@ export function McpProjectionRead({
 
       {view === "catalog" ? (
         <div className={styles.content}>
+          {admitted && (directoryError || providerReloading || directory.retrying) ? <McpReadFeedback message={t("mcp.read.providersError")}
+            retryLabel={t("mcp.read.providersRetry")} busy={providerReloading || directory.retrying} onRetry={retryProviders} /> : null}
           <McpProviderDirectory
             providers={directory.items}
             hasMore={directory.hasMore}
@@ -718,6 +739,10 @@ export function McpProjectionRead({
             onSelectProvider={openProvider}
           />
           {plaza ? <McpCustomApiGallery {...galleryProps} onSelect={selectCustomApi} /> : null}
+          {plaza && admitted && categoryFilter === "all" && (relations.error || relations.retrying) ? <McpReadFeedback message={t("mcp.read.relationsError")}
+            retryLabel={t("mcp.read.relationsRetry")} busy={relations.retrying} onRetry={() => {
+              if (ownerRef.current === owner && admitted) relations.retry();
+            }} /> : null}
           {plaza ? <McpPersonalServerGallery key={JSON.stringify([identity, readGeneration])} {...personalGalleryProps}
             providers={providers} serverMediaRevisions={getMcpServerMediaRevisions(client, identity)}
             onSelect={(connector, trigger) => beginEdit(connector, trigger, true)} /> : null}
@@ -795,6 +820,8 @@ export function McpProjectionRead({
         onLoadMore={directory.loadMore}
         loading={directory.loading}
         error={directoryError}
+        retrying={providerReloading || directory.retrying}
+        onRetry={retryProviders}
         query={providerQuery}
         categoryFilter={categoryFilter}
         returnFocusRef={catalogDialog?.returnFocusRef ?? catalogReturnFocusRef}

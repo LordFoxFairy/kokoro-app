@@ -1,3 +1,9 @@
+## 连接器读取恢复（2026-11-01，候选）
+
+`src/ui/mcp/mcp-read-feedback.tsx` 提供就近可见的读取错误和按钮；现 coordinator / Provider catalog dialog 分别调用对应 reader 的 GET 重试。API / MCP projection hook 的本地 attempt 围栏防重击，并让当前读取共同确认全空；具体职责见 `src/ui/mcp/INDEX.md`。既有 gallery / pagination / provider 测试承接原 cursor、循环、主体代际、保留卡片及重试行为。
+
+Provider 目录和关系显式重试各保 scope pending，反馈原按钮禁用直到 settlement；失败按原焦点所有权恢复。RTL 覆盖真实 coordinator/弹窗接线，独立 hydrated Chromium 验证原生 Enter/disabled/再次失败及移焦负控，静态 DOM 加生产 CSS 另验 390/1280 宽度；后两者都不是正常 App/owner 旅程。
+
 ## API / JSON 创建详情（2026-11-01，候选）
 
 `src/ui/mcp/{connector-command,custom-api-create-flow,mcp-json-import-flow,use-connector-creation-form}.ts` 保管命令完成后的安全 locator 与窗口完成恢复；现 `mcp-create-dialog.tsx` / `mcp-projection-read.tsx` 接 API exact GET、JSON 单项详情与多项明确选择。完整职责与边界见 `src/ui/mcp/INDEX.md`。

@@ -84,7 +84,7 @@ it("keeps unknown results quiet and the continuation label stable while its owne
   expect(screen.getByRole("button", { name: "加载更多" })).toHaveAttribute("aria-busy", "true")
 })
 
-it.each(["pending", "failed"] as const)("keeps the external catalog %s without a loading/error panel or a false empty directory", state => {
+it.each(["pending", "failed"] as const)("keeps the external catalog %s with local feedback and no false empty directory", state => {
   window.localStorage.setItem("kokoro.locale", "zh")
   const select = vi.fn()
   const props = { open: true, providers: [], loading: state === "pending", error: state === "failed", hasMore: false,
@@ -96,7 +96,8 @@ it.each(["pending", "failed"] as const)("keeps the external catalog %s without a
   expect(screen.queryByText("没有匹配的连接")).not.toBeInTheDocument()
   expect(screen.queryByRole("alert")).not.toBeInTheDocument()
   expect(screen.queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
-  expect(screen.getByRole("status")).toHaveClass("sr-only")
+  if (state === "pending") expect(screen.getByRole("status")).toHaveClass("sr-only")
+  else expect(screen.getByText("连接器目录加载失败")).toBeVisible()
   expect(select).not.toHaveBeenCalled()
   rerender(<LocaleProvider><McpProviderCatalogDialog {...props} providers={seed.items} loading={false} error={false} /></LocaleProvider>)
   const card = screen.getByRole("button", { name: "first" })

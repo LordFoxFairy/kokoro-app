@@ -1,3 +1,7 @@
+## 2026-11-01 B-01 读取恢复内部状态
+
+无网络契约、Hub wire 或 owner API 变化。局部重试只使用既有 GET reader；typed401仍由现 ProductReadRecheck 持原主体/代际/信号处理，503/403/解析故障不伪装成功。新增 attempt/pending 仅防止同窗口重击，不改变原 reader 请求 body、cursor、cache 与正式错误语义。
+
 ## 2026-11-01 B-01 创建详情衔接的内部状态
 
 无BFF、同源、Capability或机器契约增改。createCustomApi与importPrivateMcpJson继续由现Hub严格验证ACK；UI仅消费已确认安全locator，JSON1..32项保持原顺序和精确绑定。未知结果/取消仍按原body/key显式恢复；完成回调不授权限、不重放写入。详情必须经现正式exact GET取当前事实，读失败不伪造ready或保存成功。
