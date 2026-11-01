@@ -47,7 +47,6 @@ export type AppFrameMainSurfaceProps = {
   conversationMissing?: boolean
   machineError: string | null
   connection: EngineSnapshot["connection"]
-  onReconnect: () => void
   projectCreation: { pending: boolean; error: boolean; retryable: boolean }
   onRetryProjectCreation: () => void
   retryConversationHydration: () => void
@@ -119,7 +118,6 @@ export function AppFrameMainSurface({
   conversationMissing = false,
   machineError,
   connection,
-  onReconnect,
   projectCreation,
   onRetryProjectCreation,
   retryConversationHydration,
@@ -183,7 +181,7 @@ export function AppFrameMainSurface({
         </div>
       ) : null}
       {mounted && !standaloneSurface && connection.status !== "connected" ? (
-        <AppFrameConnectionStatus connection={connection} onReconnect={onReconnect} />
+        <AppFrameConnectionStatus connection={connection} />
       ) : null}
       <div
         className={statusStyles.timelineStage}

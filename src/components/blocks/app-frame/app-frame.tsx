@@ -985,7 +985,6 @@ function AppFrameRuntime({
       conversationMissing={navigationState.conversationMissing}
       machineError={machine.error}
       connection={connection}
-      onReconnect={() => engine?.reconnect()}
       projectCreation={project.projectCreation}
       projectRename={project.projectRename}
       projectContext={project.projectContext}
