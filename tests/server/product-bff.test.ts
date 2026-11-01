@@ -42,18 +42,27 @@ describe("Product BFF admission", () => {
     ).toBeNull();
   });
 
-  it("fails closed on inspection errors and expired access", async () => {
+  it("fails closed without a native cookie and maps native admission errors", async () => {
     const config = productBffConfig(env)!;
-    currentProductSession.mockRejectedValueOnce(new Error("redis down"));
-    await expect(
-      admittedProductSession(new Request(env.KOKORO_WEB_ORIGIN), config),
-    ).rejects.toBeInstanceOf(ProductSessionUnavailableError);
-    currentProductSession.mockResolvedValueOnce({
-      accessExpiresAt: Date.now() - 1,
-    });
     await expect(
       admittedProductSession(new Request(env.KOKORO_WEB_ORIGIN), config),
     ).resolves.toBeNull();
+    currentProductSession.mockRejectedValueOnce(new Error("legacy path must not run"));
+    requestWithDomain.mockRejectedValueOnce(new Error("bff unavailable"));
+    await expect(
+      admittedProductSession(new Request(env.KOKORO_WEB_ORIGIN, {
+        headers: { cookie: "kokoro-issuer.session_token=session" },
+      }), config),
+    ).rejects.toBeInstanceOf(ProductSessionUnavailableError);
+    requestWithDomain.mockResolvedValueOnce(new Response(JSON.stringify({ error: { code: "native_session_invalid" } }), {
+      status: 401, headers: { "content-type": "application/json" },
+    }));
+    await expect(
+      admittedProductSession(new Request(env.KOKORO_WEB_ORIGIN, {
+        headers: { cookie: "kokoro-issuer.session_token=session" },
+      }), config),
+    ).resolves.toBeNull();
+    expect(currentProductSession).not.toHaveBeenCalled();
   });
 
   it("emits one Product Bearer plus service identity and no self-asserted identity", () => {

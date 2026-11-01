@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { configuredDomain } from "./domain-context";
-import { currentProductSession, type ProductClaims } from "./product-session";
+import type { ProductClaims } from "./product-session";
 import { configuredBffBaseUrl } from "./service-config";
 import { requestWithDomain } from "./upstream-http";
 
@@ -173,17 +173,13 @@ export async function admittedProductSession(
 ): Promise<ProductClaims | null> {
   const requestId = request.headers.get("x-kokoro-request-id") ?? randomUUID();
   const native = nativeSessionBffHeaders(request, config, requestId);
-  if (native.state === "invalid") return null;
-  if (native.state === "valid") return admittedNativeSession(request, config);
-  try {
-    const claims = await currentProductSession(request, config.session);
-    if (claims === null || claims.accessExpiresAt <= Date.now()) return null;
-    return claims;
-  } catch {
-    throw new ProductSessionUnavailableError(
-      "Product Session inspection unavailable",
-    );
-  }
+  if (native.state !== "valid") return null;
+  return admittedNativeSession(request, {
+    bffBaseUrl: config.bffBaseUrl,
+    domain: config.domain,
+    internalSecret: config.internalSecret,
+    session: { webOrigin: config.session.webOrigin },
+  });
 }
 
 export function productBffHeaders(
