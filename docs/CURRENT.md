@@ -10,7 +10,11 @@
 
 Root后继复核：139全路径/77生产与生成物停写SHA相同，独审无确定P0–P2；正式canonical与owner原blob相同，五独立源未漂移。Root相关九文件232项通过（24.95秒），正式build通过。本轮完整默认实际为374文件、6973通过/48失败/181跳过（400.99秒）；当时Root只提供TEST_REDIS而漏WEB_REDIS，6文件随后同时指定受管测试Redis正式串行复验130项全部通过（133.90秒），含真实HTTP边界。原失败保留，不将补环境复验改写为首轮全绿。其余UI/视觉/展示失败及OIDC97前置仍各自核验，不把全部失败统称既有，不把跳过冒通过；PR继续Draft，最终Public29候选浏览器由Root继续。
 
+后继原16项UI失败按正式交互迁移：合法非空导入ACK、创建后exact GET详情、分域可见错误与仅失败GET重试；保缓存/主体/代际/迟到/清稿/不重放/CAS断言，另补非法空ACK未知原key/body重试负控及保missing无重试负控。两原UI文件writer与Root独立复验各303通过，生产未改，三测试文件scoped ESLint与完整tsc通过。OIDC只补有限脱敏失败诊断，原55/60/5秒预算与断言不变；一次诊断实跑仍前置失败，/app9轮无headers/0bytes、97项未验。Next成功本来不打印Compiled，不能仅凭最后Compiling断定编译未结束。当前Public29生产源的桌面/手机preview E2E120项通过（5.0分钟），不代表真实owner全链或全default已绿。
+
 Root独立MCP/API候选（8f607+原7个详情冻结生产路径，尚非完整Public29源）已实际新OIDC登录/授权/回跳，真实IAM→BFF→Platform链的API创建201、修改/详情/列表200、取消不写、刷新保留、删除200及刷新空列表通过；保存密钥不回显。私有HTTP MCP实际公开服务声明创建201、Prepare200后已连接，修改/刷新保持新名称与状态。断开连接后DELETE200/列表GET200为空，已证配置恢复入口缺口，另沿owner撤权事实收敛，不以这些成功冒整个B01/B02完成。受管Redis复用且正常源未改；Storage图标、SMTP、其它未配置owner和外部OAuth/E2B末端不算已接通。开发服务并发检查下的少量耗时样本保留为观察，不冒生产SLO或100毫秒目标达标。
+
+Root后继已启动精确629ac5db archive候选，原1545输入摘要一致、仅替换自有候选Web组。真实IAM独立context复验MCP设置、scheduled-tasks GET200及确认空态、RSS表单打开；无自动化业务写入。断开后的同源server/connector精确GET均200，server registered、connector revoked且enabled=false，现已真实证保存配置存在而入口不可达；不得把旧授权直接复活。正常3314及其服务/数据仍未切换。
 
 ## 2026-11-02 Task B：精确详情读取失败恢复（候选，正常源未切换）
 
