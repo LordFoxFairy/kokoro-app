@@ -1,3 +1,11 @@
+## 2026-11-01 B-14 Manifest 客户端总期限（候选，未正常激活）
+
+原hook缺client总期限且一律忽略AbortError，确定性RTL假时钟新增用例在原source复现6条业务失败（共30条，原风险正控24通过）；不是collection错误或正常pending根因结论。现原scope内单一20秒绝对预算覆盖fetch/body，超时退休/abort并source:error、清retrying；精确截止复核、显式GET retry、成功/cleanup清timer与外来AbortError区分均由原hook测试承接。theme/locale/空导航/preview与原SET31生命周期不变，无新wire/pin/owner或正常3314改动。
+
+首轮30 PASS（2.34秒），最终相关4文件57 PASS（9.78秒，0跳过），精确ESLint与官方 `pnpm typecheck`均0；输入manifest、原source摘要及RED/GREEN日志存本轮本机测试证据目录。独审/完整工程门和最终交付由Root接续；不称真实System服务、正常配置503或历史持续pending已经解决。
+
+Root交付复核（2026-11-02）：7文件候选独审无确定P0–P2，Root相关57项通过；正式contract、architecture、lint、typecheck、build与桌面/手机预览E2E120项通过。完整test首轮仍红：13文件45失败/6745通过/189前置阻断；当时漏配Redis的QA环境错误保留，正确受管测试DB复验6文件130通过，但OIDC97项仍因/app编译就绪前置失败而未执行，单独复验亦失败，根因未定。5个纯UI文件候选与HEAD同条件均22失败/361通过，失败集合完全相同；已知3项视觉差异保留，未删断言或扩大超时。恢复Next dev自动生成路径噪声，不提交该生成变更。原失败日志与对照证据均保留，PR维持Draft；上述结果不称全量通过、正常3314已激活或整个Task B完成。
+
 后继状态（2026-11-01 B-06）：已恢复明确断线的显式重连，旧孤立类型断言由当前安全活动回归承接；完整 lint/typecheck/build 已通过，下文更早阶段的类型/build 阻断为当时记录。Root 冻结后重跑完整 engine 与核心/UI风险23文件517项通过（14.33秒），独立审查无确定 P0–P2；writer另有25文件542项通过，范围分开记录。正常运行源尚未切换，整个 B-06 仍待完整身份旅程。
 
 ## 2026-11-01 Task B：局部读取错误与显式 GET 恢复（已独审候选，未激活正常源）

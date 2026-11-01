@@ -1,3 +1,7 @@
+## 2026-11-01 B-14 Manifest 展示读取的有限等待
+
+现 `use-runtime-manifest`每个非preview scope只设一次20秒绝对预算，覆盖fetch至body解析；异步边界核单调时钟，timer尚未获调度也不能让截止时刻的响应生效。成功、错误、超时各settle一次并清timer；超时退休/abort本次读取、恢复PRODUCT默认source:error并清retrying。cleanup、模式切换和新attempt静默取消，旧迟到不能再消费JSON或应用主题；未由当前controller取消的AbortError按失败处理。只有显式GET retry建立新attempt，不自动重试、不阻塞核心Chat、不退成preview。原manifest解码、空导航、theme/locale过滤与权限边界保持；正常缺System配置的503、历史pending与本源码缺口分别取证。
+
 ## 2026-11-01 B-01 读取错误的局部恢复
 
 沿现 MCP / Provider / relations / Custom API reader 分别呈现可见内联失败与 GET 重试，保留同主体代际的已读卡片；只有当前相关读取均权威成功才展示全空/无匹配，不把旧 confirmed 空视为当前事实。API 故障只影响管理列表或 All 广场，不污染无关 Provider 分类。目录弹窗复用同一紧凑反馈，不用整页错误卡替换内容。

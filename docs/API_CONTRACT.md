@@ -1,3 +1,7 @@
+## 2026-11-01 B-14 Manifest 客户端读取期限
+
+无public/same-origin/owner wire、请求参数、manifest值或契约pin变化。浏览器现GET的fetch与body共用20秒绝对期限；期限失败只更新本地source:error/PRODUCT默认与retrying，显式retry仍是原同源GET。离页/preview/newattempt取消静默，外来AbortError不冒当前主动取消。
+
 ## 2026-11-01 B-01 读取恢复内部状态
 
 无网络契约、Hub wire 或 owner API 变化。局部重试只使用既有 GET reader；typed401仍由现 ProductReadRecheck 持原主体/代际/信号处理，503/403/解析故障不伪装成功。新增 attempt/pending 仅防止同窗口重击，不改变原 reader 请求 body、cursor、cache 与正式错误语义。

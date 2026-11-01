@@ -1,3 +1,7 @@
+## 2026-11-01 B-14 Manifest 无持久化变更
+
+仅原hook每个mounted scope的非持久deadline/settled/controller状态，终结清timer并退休迟到结果。不新增数据库、缓存、localStorage/IDB格式、持久manifest或业务事实；默认外观不代表System已发布、preview或权限。
+
 ## 2026-11-01 B-01 读取恢复无持久化变更
 
 仅 reader mounted 窗口的非秘密 owner/attempt/pending 状态，无数据库、cache格式、localStorage/IDB 或命令恢复 schema 变化。卡片显示连续性不授予当前权限/版本，全空事实须当前读取成功；主体/准入代变化后不借旧读取结果或迟到 settlement 解锁新窗口。

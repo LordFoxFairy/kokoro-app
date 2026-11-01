@@ -1,3 +1,7 @@
+## Manifest 展示读取期限（2026-11-01，候选）
+
+`src/system/use-runtime-manifest.ts`在原scope内拥有fetch与body共用的20秒绝对期限、settlement和取消；`tests/system/runtime-manifest-hook.test.tsx`覆盖期限、精确截止竞争、非合作迟到、显式重试与原生命周期。没有新读取框架或owner，当前正常源尚未更新，验证见 `docs/CURRENT.md`。
+
 ## 连接器读取恢复（2026-11-01，候选）
 
 `src/ui/mcp/mcp-read-feedback.tsx` 提供就近可见的读取错误和按钮；现 coordinator / Provider catalog dialog 分别调用对应 reader 的 GET 重试。API / MCP projection hook 的本地 attempt 围栏防重击，并让当前读取共同确认全空；具体职责见 `src/ui/mcp/INDEX.md`。既有 gallery / pagination / provider 测试承接原 cursor、循环、主体代际、保留卡片及重试行为。
