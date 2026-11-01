@@ -531,14 +531,6 @@ it("已登录正式壳从同源 Project 列表显示两个独立项目，而非�
         expires_at: Date.now() + 3_600_000,
       })
     }
-    if (path === "/api/auth/csrf" && method === "GET") {
-      return Response.json({ csrfToken: "a".repeat(64) })
-    }
-    if (path === "/api/auth/session" && method === "POST") {
-      expect(init?.headers).toEqual({ "content-type": "application/x-www-form-urlencoded" })
-      expect(init?.body?.toString()).toBe(`csrfToken=${"a".repeat(64)}`)
-      return Response.json({ authenticated: true, subject: "project-reader", expires_at: Date.now() + 3_600_000 })
-    }
     if (path === "/api/hub/projects" && method === "GET") {
       return Response.json({ data: { projects }, meta: { request_id: "req_project_read_r40" } })
     }
@@ -563,10 +555,8 @@ it("已登录正式壳从同源 Project 列表显示两个独立项目，而非�
       (init?.method ?? (input instanceof Request ? input.method : "GET")) === method
   })
   expect(authRequests("/api/auth/session", "GET")).toHaveLength(1)
-  expect(authRequests("/api/auth/csrf", "GET")).toHaveLength(1)
-  expect(authRequests("/api/auth/session", "POST")).toHaveLength(1)
-  expect(authRequests("/api/auth/session", "POST")[0]?.[1]?.signal)
-    .toBe(authRequests("/api/auth/session", "GET")[0]?.[1]?.signal)
+  expect(authRequests("/api/auth/csrf", "GET")).toHaveLength(0)
+  expect(authRequests("/api/auth/session", "POST")).toHaveLength(0)
   expect(engineFactory).toHaveBeenCalledWith(expect.objectContaining({ preview: false }))
   fireEvent.click(screen.getByRole("button", { name: "展开侧栏" }), { detail: 0 })
 
@@ -602,16 +592,8 @@ async function mountAuthenticatedProjectRail(
     const url = input instanceof Request ? input.url : String(input)
     const path = new URL(url, window.location.origin).pathname
     const method = init?.method ?? (input instanceof Request ? input.method : "GET")
-    // Recheck counters count readonly GETs, never the credential rotation POST.
+    // Native IAM admission is a readonly same-origin session read.
     if (path === "/api/auth/session" && method === "GET") return readSession()
-    if (path === "/api/auth/csrf" && method === "GET") {
-      return Response.json({ csrfToken: "a".repeat(64) })
-    }
-    if (path === "/api/auth/session" && method === "POST") {
-      expect(init?.headers).toEqual({ "content-type": "application/x-www-form-urlencoded" })
-      expect(init?.body?.toString()).toBe(`csrfToken=${"a".repeat(64)}`)
-      return Response.json({ authenticated: true, subject: "project-reader", expires_at: Date.now() + 3_600_000 })
-    }
     if (path === "/api/hub/projects") return read(input, init)
     return Response.json({ error: { code: "unavailable" } }, { status: 503 })
   })

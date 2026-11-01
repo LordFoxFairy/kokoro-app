@@ -1465,24 +1465,24 @@ describe("SET24 bounded account logout", () => {
     endProductSession.mockImplementation(actual.endProductSession);
   }
 
-  it("real signout client cannot dispatch POST after retirement during pending CSRF body", async () => {
-    let finishBody!: (value: { csrfToken: string }) => void;
-    let csrfSignal: AbortSignal | undefined;
+  it("real native signout client cannot navigate after retirement during a pending request", async () => {
+    let finishRequest!: (value: Response) => void;
+    let requestSignal: AbortSignal | undefined;
     const fetcher = vi.fn().mockImplementation((_input: RequestInfo | URL, init?: RequestInit) => {
-      csrfSignal = init?.signal ?? undefined;
-      return Promise.resolve({ ok: true, json: () => new Promise((resolve) => { finishBody = resolve; }) });
+      requestSignal = init?.signal ?? undefined;
+      return new Promise<Response>((resolve) => { finishRequest = resolve; });
     });
     try {
       await installActualSignout();
       vi.stubGlobal("fetch", fetcher);
       const mounted = renderSettings();
       fireEvent.click(screen.getByTestId("settings-logout"));
-      await waitFor(() => expect(finishBody).toBeTypeOf("function"));
+      await waitFor(() => expect(finishRequest).toBeTypeOf("function"));
       mounted.unmount();
-      expect(csrfSignal?.aborted).toBe(true);
+      expect(requestSignal?.aborted).toBe(true);
       const { act } = await import("@testing-library/react");
-      await act(async () => { finishBody({ csrfToken: "Csrf123" }); });
-      expect(fetcher).toHaveBeenCalledTimes(1); // no late signout POST
+      await act(async () => { finishRequest(new Response(null, { status: 204 })); });
+      expect(fetcher).toHaveBeenCalledExactlyOnceWith("/iam/sign-out", expect.objectContaining({ method: "POST" }));
     } finally {
       endProductSession.mockReset();
       endProductSession.mockResolvedValue(undefined);
@@ -1590,54 +1590,46 @@ describe("SET24 deadline and retirement followups", () => {
     } finally { restoreSignout(); }
   });
 
-  it("actual client suppresses late valid503 issuer navigation after identity retirement", async () => {
+  it("actual native signout suppresses a late unavailable response after identity retirement", async () => {
     const actual = await vi.importActual<typeof import("@/ui/auth/product-auth-client")>("@/ui/auth/product-auth-client");
     const navigate = vi.fn();
-    let finishBody!: (raw: { issuer_end_session_url: string }) => void;
+    let finishRequest!: (response: Response) => void;
     let requestSignal: AbortSignal | undefined;
-    const fetcher = vi.fn()
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ csrfToken: "Csrf123" }) })
-      .mockImplementationOnce((_input: unknown, init?: RequestInit) => {
+    const fetcher = vi.fn().mockImplementation((_input: unknown, init?: RequestInit) => {
         requestSignal = init?.signal ?? undefined;
-        return Promise.resolve({ ok: false, status: 503,
-          json: () => new Promise((resolve) => { finishBody = resolve; }) });
+        return new Promise<Response>((resolve) => { finishRequest = resolve; });
       });
     endProductSession.mockImplementation((_guardedNavigate: unknown, signal?: AbortSignal) => actual.endProductSession(navigate, signal));
     try {
       vi.stubGlobal("fetch", fetcher);
       const mounted = mountScopedLogout();
       fireEvent.click(screen.getByTestId("settings-logout"));
-      await waitFor(() => expect(finishBody).toBeTypeOf("function"));
+      await waitFor(() => expect(finishRequest).toBeTypeOf("function"));
       mounted.change("logout-owner", 2, true);
       expect(requestSignal?.aborted).toBe(true);
       const { act } = await import("@testing-library/react");
-      await act(async () => { finishBody({ issuer_end_session_url: "/iam/oauth2/end-session?fixture=valid" }); });
+      await act(async () => { finishRequest(new Response(null, { status: 503 })); });
       expect(navigate).not.toHaveBeenCalled();
-      expect(fetcher).toHaveBeenCalledTimes(2);
+      expect(fetcher).toHaveBeenCalledTimes(1);
       expect(screen.queryByRole("alert")).toBeNull();
       expect(screen.getByTestId("settings-logout")).toBeEnabled();
     } finally { restoreSignout(); }
   });
 
-  it("actual503 issuer handoff clears the deadline while leaving success busy", async () => {
+  it("actual unavailable native signout restores the explicit retry", async () => {
     const actual = await vi.importActual<typeof import("@/ui/auth/product-auth-client")>("@/ui/auth/product-auth-client");
     const navigate = vi.fn();
-    const fetcher = vi.fn()
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ csrfToken: "Csrf123" }) })
-      .mockResolvedValueOnce({ ok: false, status: 503,
-        json: async () => ({ issuer_end_session_url: "/iam/oauth2/end-session?fixture=valid" }) });
+    const fetcher = vi.fn().mockResolvedValue(new Response(null, { status: 503 }));
     endProductSession.mockImplementation((_guardedNavigate: unknown, signal?: AbortSignal) => actual.endProductSession(navigate, signal));
     try {
       vi.stubGlobal("fetch", fetcher);
       renderSettings();
-      vi.useFakeTimers();
       const { act } = await import("@testing-library/react");
       await act(async () => { fireEvent.click(screen.getByTestId("settings-logout")); });
-      expect(navigate).toHaveBeenCalledExactlyOnceWith("/iam/oauth2/end-session?fixture=valid");
-      await act(async () => { await vi.advanceTimersByTimeAsync(20_000); });
-      expect(screen.queryByRole("alert")).toBeNull();
-      expect(screen.getByTestId("settings-logout")).toBeDisabled();
-      expect(fetcher).toHaveBeenCalledTimes(2);
+      expect(navigate).not.toHaveBeenCalled();
+      expect(await screen.findByRole("alert")).toHaveTextContent(/无法确认.*退出|退出.*无法确认/);
+      expect(screen.getByTestId("settings-logout")).toBeEnabled();
+      expect(fetcher).toHaveBeenCalledExactlyOnceWith("/iam/sign-out", expect.objectContaining({ method: "POST" }));
     } finally { restoreSignout(); }
   });
 
@@ -1674,7 +1666,7 @@ describe("SET24 deadline and retirement followups", () => {
       expect(oldNavigate).toBeTypeOf("function");
       mounted.change("another-owner", 1, true);
       expect(signal?.aborted).toBe(true);
-      oldNavigate("/iam/oauth2/end-session?fixture=valid");
+      oldNavigate("/");
       expect(navigate).not.toHaveBeenCalled();
       expect(screen.queryByRole("alert")).toBeNull();
       expect(screen.getByTestId("settings-logout")).toBeEnabled();

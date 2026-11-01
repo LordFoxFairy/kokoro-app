@@ -13,7 +13,7 @@ it("uses one disclosure for a mixed activity passage and keeps every operation i
   const { container } = render(<LocaleProvider><SegmentProcess segmentId="mixed-flat" activities={activities} live onOpenActivity={inspect} /></LocaleProvider>)
   const toggles = screen.getAllByRole("button").filter(button => button.hasAttribute("aria-expanded"))
   expect(toggles).toHaveLength(1)
-  expect(toggles[0]).toHaveTextContent("Tool information: 3 · Tool calls: 1 · File reads: 1")
+  expect(toggles[0]).toHaveTextContent("Tool information: 3 · Tool calls: 1 · Files processed: 1")
   expect(screen.queryByText("Tool preparation")).toBeNull()
   const rows = [...container.querySelectorAll<HTMLButtonElement>("button[data-canvas-opener]")]
   rows.forEach(button => fireEvent.click(button))
@@ -63,7 +63,7 @@ it("keeps a focused single action visible when terminal history gains a late sec
   expect(action).toHaveFocus()
   expect(action.closest("[inert]")).toBeNull()
   expect(read).not.toHaveBeenCalled()
-  const disclosure = screen.getByRole("button", { name: "Tool calls: 1 · File reads: 1" })
+  const disclosure = screen.getByRole("button", { name: "Tool calls: 1 · Files processed: 1" })
   expect(disclosure).toHaveAttribute("aria-expanded", "true")
   fireEvent.click(disclosure)
   expect(disclosure).toHaveAttribute("aria-expanded", "false")
