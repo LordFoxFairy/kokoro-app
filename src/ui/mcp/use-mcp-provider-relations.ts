@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { HubClient } from "@/hub/client";
+import { HubClientError, type HubClient } from "@/hub/client";
 import type { McpConnector } from "@/hub/mcp-connector.schema";
+import { useProductReadRecheck } from "@/ui/auth/product-read-recheck-context";
 import { useMcpConnectorRevision } from "./use-mcp-projection";
 
 export type McpProviderRelationRead = {
@@ -62,7 +63,7 @@ function subscribeScan(client: HubClient, key: string) {
   const own = flight;
   own.subscribers++;
   let released = false;
-  return { promise: own.promise, release: () => {
+  return { promise: own.promise, signal: own.controller.signal, release: () => {
     if (released) return;
     released = true;
     if (--own.subscribers !== 0) return;
@@ -78,6 +79,7 @@ function subscribeScan(client: HubClient, key: string) {
 export function useMcpProviderRelations({ client, identity, admitted, readGeneration, enabled, refreshKey }: {
   client: HubClient; identity: string; admitted: boolean; readGeneration: number; enabled: boolean; refreshKey: number;
 }): McpProviderRelationRead {
+  const reportRead401 = useProductReadRecheck();
   const revision = useMcpConnectorRevision(client, identity);
   const [attempt, setAttempt] = useState(0);
   const scope = useMemo(() => ({ client, identity, admitted, readGeneration, enabled, refreshKey, revision, attempt }),
@@ -88,9 +90,14 @@ export function useMcpProviderRelations({ client, identity, admitted, readGenera
     let retired = false;
     const subscription = subscribeScan(client, JSON.stringify([identity, readGeneration, refreshKey, revision]));
     void subscription.promise.then(items => { if (!retired) setResult({ scope, items, error: false }); },
-      () => { if (!retired) setResult({ scope, items: [], error: true }); });
+      (error: unknown) => {
+        if (retired) return;
+        if (!subscription.signal.aborted && error instanceof HubClientError && error.reason === "http" && error.status === 401)
+          reportRead401?.({ subject: identity, generation: readGeneration, signal: subscription.signal });
+        setResult({ scope, items: [], error: true });
+      });
     return () => { retired = true; subscription.release(); };
-  }, [scope, admitted, enabled, client, identity, readGeneration, refreshKey, revision]);
+  }, [scope, admitted, enabled, client, identity, readGeneration, refreshKey, revision, reportRead401]);
   const current = admitted && enabled && result?.scope === scope ? result : undefined;
   const retry = useCallback(() => { setAttempt(value => value + 1); }, []);
   return { items: current?.items ?? [], complete: current !== undefined && !current.error, error: current?.error ?? false,

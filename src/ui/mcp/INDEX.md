@@ -1,3 +1,7 @@
+## Provider 独立读的会话恢复
+
+目录筛选及续页、精确 Provider 详情、本人连接关系全页读取沿现有 `ProductReadRecheck` 报告当前 typed HTTP401，携带请求原主体、代际和真实 AbortSignal。旧请求、已取消和退休订阅不报告；403、服务故障和解析错误保持原错误。重新准入后的 GET 仍由原 reader 生命周期驱动，不重发创建、授权、Prepare 或其它写命令。共享关系扫描保留原超时、页数预算和未知状态，超时不误作登录过期。具名回归位于 `tests/ui/mcp-provider-readmission.test.tsx`；正常 IAM/浏览器验收另记。
+
 ## Composer 添加连接器：受控目录窗口
 
 `McpContent.catalogDialog` 将现 `McpProjectionRead` 的目录 portal／详情窗用于 composer Add；主 section／toolbar 不再重复绘制，查询、严格身份／命令及创建窗仍复用原 owner。普通 Manage 仍是 Settings 已添加页。此本地 overlay 不改当前 Project／Conversation URL、草稿或 MCP 选择；与 Manus 的 `#connectors/all` URL 表达不同，不另加 hash 协议或路由 alias。同 actor 暂时准入刷新保留窗口／搜索及创建意图，现 read generation 退旧事实、禁新 Create；换 actor／route 才退窗并撤销旧回焦。正常目录 ESC 退回原 composer trigger，详情／创建关闭退回原目录窗栈；打开目录本身不连接、授权或执行模型。

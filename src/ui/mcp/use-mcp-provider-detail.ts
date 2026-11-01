@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import type { HubClient } from "@/hub/client";
+import { HubClientError, type HubClient } from "@/hub/client";
 import type { McpConnectorProvider } from "@/hub/mcp-connector.schema";
+import { useProductReadRecheck } from "@/ui/auth/product-read-recheck-context";
 
 /** Resolve only an opened provider, never scan the catalog to find its identity. */
 export function useMcpProviderDetail({ client, identity, admitted, readGeneration, providerKey, known, retry }: {
@@ -15,6 +16,7 @@ export function useMcpProviderDetail({ client, identity, admitted, readGeneratio
   known: McpConnectorProvider | undefined;
   retry: number;
 }) {
+  const reportRead401 = useProductReadRecheck();
   const scope = useMemo(() => ({ client, identity, admitted, readGeneration, providerKey, retry }),
     [client, identity, admitted, readGeneration, providerKey, retry]);
   const [result, setResult] = useState<{ scope: typeof scope; provider?: McpConnectorProvider; error: boolean }>();
@@ -26,9 +28,14 @@ export function useMcpProviderDetail({ client, identity, admitted, readGeneratio
       if (!active) return;
       if (provider.provider_key !== providerKey) { setResult({ scope, error: true }); return; }
       setResult({ scope, provider, error: false });
-    }, () => { if (active) setResult({ scope, error: true }); });
+    }, (error: unknown) => {
+      if (!active || controller.signal.aborted) return;
+      if (error instanceof HubClientError && error.reason === "http" && error.status === 401)
+        reportRead401?.({ subject: identity, generation: readGeneration, signal: controller.signal });
+      setResult({ scope, error: true });
+    });
     return () => { active = false; controller.abort(); };
-  }, [scope, admitted, providerKey, client, known]);
+  }, [scope, admitted, providerKey, client, known, reportRead401, identity, readGeneration]);
   return {
     provider: admitted ? known ?? (result?.scope === scope ? result.provider : undefined) ?? null : null,
     error: admitted && !known && result?.scope === scope && result.error,

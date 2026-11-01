@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-import type { HubClient } from "@/hub/client";
+import { HubClientError, type HubClient } from "@/hub/client";
 import type { McpConnectorProviderPage } from "@/hub/mcp-connector.schema";
+import { useProductReadRecheck } from "@/ui/auth/product-read-recheck-context";
 
 type Input = {
   client: HubClient;
@@ -17,6 +18,7 @@ type Input = {
 
 /** Owner-filtered directory pages; the unfiltered first page joins the shell read. */
 export function useMcpProviderDirectory({ client, identity, admitted, readGeneration, seed, query, category }: Input) {
+  const reportRead401 = useProductReadRecheck();
   const search = query.trim();
   const unfiltered = search === "" && category === "all";
   const scope = useMemo(() => ({ client, identity, admitted, readGeneration, seed, search, category }),
@@ -57,12 +59,15 @@ export function useMcpProviderDirectory({ client, identity, admitted, readGenera
         ...page,
         items: cursor ? [...new Map([...(value.page?.items ?? []), ...page.items].map(item => [item.provider_key, item])).values()] : page.items,
       } }));
-    } catch {
-      if (current.current === scope && !controller.signal.aborted) setState(value => ({ ...value, loading: false, error: true }));
+    } catch (error: unknown) {
+      if (current.current !== scope || controller.signal.aborted) return;
+      if (error instanceof HubClientError && error.reason === "http" && error.status === 401)
+        reportRead401?.({ subject: identity, generation: readGeneration, signal: controller.signal });
+      setState(value => ({ ...value, loading: false, error: true }));
     } finally {
       if (flight.current === controller) flight.current = null;
     }
-  }, [scope, client, search, category]);
+  }, [scope, client, search, category, reportRead401, identity, readGeneration]);
 
   useEffect(() => {
     if (!admitted || unfiltered) return;

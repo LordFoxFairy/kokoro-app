@@ -1,3 +1,9 @@
+## 2026-11-01 Task B：Provider 读取会话恢复（候选）
+
+目录筛选/续页、独立 Provider 详情和连接关系尾页的当前 typed HTTP401 现接已有 ProductReadRecheck，原 subject/generation/signal 不变；旧主体/代际/已取消/卸载迟到不报告。403、依赖、parse/network 保原失败，GET 由重新准入重读，创建/授权/Prepare 不重放。新增28行为回归先4真实RED，再与原相关/Session/配置保存6文件257通过；独立只读审查未发现确定P0–P2，未冒称缺失的hix-code-review已调用。新测试类型错误已修，定向ESLint及diff-check通过。
+
+扩大MCP/API回归50文件885通过/3失败，失败均在未修改的视觉夹具：本机滚动条导致输入宽545而参考560，两个按钮宽差1.0703125超旧1px阈值；原视觉文件单跑同3失败，保留断言和日志，不改阈值凑绿。完整contract445、architecture50通过；全量lint另记。typecheck仍有当前HEAD既有AppFrameConnectionStatus的onReconnect多余prop与Segment.legacySteps两处展示错误；本片不跨A展示写区修复。正常IAM自然过期/浏览器尚未补证，3314仍旧运行源，不称本候选已激活或B-01完成。
+
 ## 2026-10-29 连接器菜单固定列表优先（正常页面已验）
 
 实际 Manus 首页1280×720、中文浅色菜单向上展开，DOM/computed style为flex-col：列表→添加→管理，底栏81px、36px行、200–400px面板。旧“向上管理→添加→列表”记录有误，本轮以新取证纠正，不沿旧测试维持错误。共享ComposerConnections删除placement监听和反转，底栏始终在列表后，上边分隔线；不改选择、身份、分页、请求或目的地。
