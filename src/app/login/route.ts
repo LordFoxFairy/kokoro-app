@@ -1,13 +1,11 @@
-import { createHash, randomBytes, randomUUID } from "node:crypto"
+import { randomUUID } from "node:crypto"
 
 import { NextRequest } from "next/server"
 
 import { DEFAULT_PRODUCT_RETURN_TARGET, parseProductReturnTarget } from "@/lib/product-return-target"
-import { escapeInteractionHtml } from "@/lib/server/iam-interaction-route"
-import { issueProductLoginIntent } from "@/lib/server/product-login-return"
+import { iamRelayConfig, matchesCanonicalWebRequest } from "@/lib/server/iam-relay-config"
+import { nativeIamSignInQuery } from "@/lib/server/iam-sign-in-target"
 import { oidcLoginRecovery } from "@/lib/server/oidc-login-recovery"
-import { oidcHandoffCsrfName, oidcStartWithinCookieBudget, OIDC_TRANSACTION_TTL_SECONDS } from "@/lib/server/oidc-transaction-cookies"
-import { oidcRpConfig } from "@/lib/server/oidc-provider"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -21,21 +19,10 @@ function unavailable(request: NextRequest, phase: string): Response {
   } })
 }
 
-function csrfCookie(name: string, token: string, secret: string, secure: boolean): string {
-  const digest = createHash("sha256").update(`${token}${secret}`).digest("hex")
-  return `${name}=${encodeURIComponent(`${token}|${digest}`)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${OIDC_TRANSACTION_TTL_SECONDS}${secure ? "; Secure" : ""}`
-}
-
-function loginStartDocument(token: string, intent: string, nonce: string): string {
-  const csrf = escapeInteractionHtml(token)
-  return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="referrer" content="no-referrer"><meta name="robots" content="noindex"><title>登录 Kokoro</title></head><body><form id="kokoro-login-start" method="post" action="/api/auth/signin/kokoro-iam"><input type="hidden" name="csrfToken" value="${csrf}"><input type="hidden" name="loginIntent" value="${escapeInteractionHtml(intent)}"></form><script nonce="${nonce}">document.getElementById("kokoro-login-start")?.submit()</script></body></html>`
-}
-
 export async function GET(request: NextRequest): Promise<Response> {
-  const config = oidcRpConfig(process.env)
+  const config = iamRelayConfig(process.env)
   if (config === null || request.nextUrl.pathname !== "/login" ||
-    request.headers.get("host") !== config.relay.webHost ||
-    (request.headers.get("origin") !== null && request.headers.get("origin") !== config.relay.webOrigin)) return unavailable(request, "configuration_or_origin")
+    !matchesCanonicalWebRequest(request, config, "GET")) return unavailable(request, "configuration_or_origin")
 
   try { decodeURIComponent(request.nextUrl.search.slice(1).replace(/\+/g, " ")) }
   catch { return unavailable(request, "return_target") }
@@ -45,21 +32,13 @@ export async function GET(request: NextRequest): Promise<Response> {
       ? parseProductReturnTarget(query.get("return_to") ?? "") : null
   if (target === null) return unavailable(request, "return_target")
 
-  if (!oidcStartWithinCookieBudget(request.headers.get("cookie"))) return unavailable(request, "transaction_budget")
-  const intent = issueProductLoginIntent(target, config.authSecret, config.relay.webOrigin)
-  const token = randomBytes(32).toString("hex")
-  const nonce = request.headers.get("x-nonce")
-  if (nonce === null || !/^[A-Za-z0-9_-]{16,128}$/u.test(nonce)) return unavailable(request, "request_nonce")
-  const csrfName = oidcHandoffCsrfName(config.relay.secureCookies, intent.handoffNamespace)
-  const headers = new Headers({
+  const response = new Response(null, { status: 303, headers: {
+    location: new URL(`/auth/sign-in${nativeIamSignInQuery(target)}`, config.webOrigin).href,
     "cache-control": "no-store",
-    "content-security-policy": `default-src 'none'; script-src 'nonce-${nonce}'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'`,
-    "content-type": "text/html; charset=utf-8",
     "referrer-policy": "no-referrer",
     "x-request-id": randomUUID(),
-  })
-  headers.append("set-cookie", csrfCookie(csrfName, token, config.authSecret, config.relay.secureCookies))
-  return new Response(loginStartDocument(token, intent.intent, nonce), { status: 200, headers })
+  } })
+  return response
 }
 
 export function HEAD(): Response {

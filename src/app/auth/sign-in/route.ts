@@ -7,7 +7,7 @@ import { nativeIamResponse, validIamInteractionNavigation } from "@/lib/server/i
 import { requestIamRelay, type IamRelayUpstream } from "@/lib/server/iam-relay-transport"
 import { issueSignInFeedback } from "@/lib/server/iam-sign-in-feedback"
 import { oidcLoginRecovery } from "@/lib/server/oidc-login-recovery"
-import { IAM_SIGN_IN_PATH, isIamSignInExpired, iamSignInFlowId } from "@/lib/server/iam-sign-in-target"
+import { IAM_SIGN_IN_PATH, isIamSignInExpired, iamSignInFlowId, nativeIamSignInTarget } from "@/lib/server/iam-sign-in-target"
 
 import { readIamSignInFlow, retireIamSignInFlow, clearIamSignInFlowCookie } from "@/lib/server/iam-sign-in-flow"
 
@@ -214,6 +214,18 @@ export async function POST(request: Request): Promise<Response> {
     }
     if (!signedIn.setCookies.some((value) => value.startsWith(config.secureCookies ? "__Secure-kokoro-issuer.session_token=" : "kokoro-issuer.session_token="))) {
       return finish(errorResponse(502, "iam_interaction_response_invalid", id))
+    }
+    const nativeTarget = nativeIamSignInTarget(query)
+    if (nativeTarget !== null) {
+      const response = nativeIamResponse(signedIn, config.webOrigin, config.secureCookies, id)
+      if (response === null) return finish(errorResponse(502, "iam_interaction_response_invalid", id))
+      const navigation = safeNavigationResponse(response, 303, nativeTarget)
+      navigation.headers.set("referrer-policy", "no-referrer")
+      // Authentication already succeeded. Cleanup failure must not turn it into a
+      // retry that resends credentials; the flow also has a fixed short TTL.
+      await retireIamSignInFlow(flowInput).catch(() => false)
+      navigation.headers.append("set-cookie", clearIamSignInFlowCookie(flowId, config.secureCookies))
+      return finish(navigation)
     }
     const continueHeaders = new Headers(baseHeaders)
     continueHeaders.set("cookie", issuerCookiesFromResponse(issuerCookie, signedIn))

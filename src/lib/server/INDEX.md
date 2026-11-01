@@ -93,14 +93,14 @@ runtime token、内部服务地址、workload secret 或后端隔离键。
 - `iam-relay-transport.ts`：IAM 原生 HTTP 专用 transport，保持多个 `Set-Cookie`，实施 deadline、取消和
   header/body 限额；仅受控交互使用 POST，不复用会合并 cookie 的 Product transport。
 - `iam-relay-response.ts`：原生 status/header/body、Location 与 issuer `Set-Cookie` 的出站校验。
-- `oidc-provider.ts`：固定 provider/EdDSA、验证型 `client.callback` 与 server-only Basic/Bearer backchannel；Product Session 由 RP route 在身份准入后建立。
+- `oidc-provider.ts`：仅保留 OAuth relay/第三方交互清理期间的验证型 provider 与 server-only backchannel；新的 `/login` 主链不再建立 Product Session。
   已验签的 subject／sid 绑定最终 account.id_token；Product加密cookie必填 issuerSessionId，不接受旧无绑定会话。
 - `oidc-token.ts`：保留一次有界 refresh 交换，原生 `Client.refresh` 验证该次响应并核对原 subject／sid；
   token与固定BFF JWKS共5秒取消预算，不二次兑换，不向浏览器输出凭据或sid。
 - `oidc-rp-transaction.ts`：300秒Redis state摘要、RP cookie绑定；先读取并验证完整MAC记录与浏览器binding，再Lua比较原值并原子消费，错proof不消耗原交易，只有一个并发回调入exchange；所有callback均不删除可能属于新登录的共享proof，成功只签发Product cookie，临时proof按原期限过期。
 - `oidc-csrf.ts`：严格读取唯一、两段格式及摘要有效的Auth.js CSRF cookie，登录复用与session/signout校验共用。
 - `oidc-login-recovery.ts`：GET/POST 顶层登录失败的固定产品返回，保 API JSON／status；精确 Proxy 路径承接 no-referrer 与 CSP，无自动重试。
-- `product-login-return.ts`：`/login` 到 provider POST 的 HttpOnly 签名回跳目标 cookie；仅接受严格 Product 内部路径，provider 启动后立即清除。
+- `product-login-return.ts`：旧 RP provider POST 的兼容交易记录；native `/login` 主链不再签发或消费该 cookie，待 C-1.3 清理阶段删除。
 - `oidc-bff-agent.ts`：token/userinfo/JWKS 每请求独立 5 秒绝对 deadline、响应头/正文 1 MiB 上限与浏览器 abort 连接取消。
 - `product-identity.ts`：callback 建 session 与 refresh finalize 前调用固定 BFF `/v1/me`，严格核对
   OIDC subject 与 server-only fixed tenant；复用受信 Forwarded、5 秒 deadline、取消和 16 KiB 响应上限。
@@ -134,8 +134,9 @@ runtime token、内部服务地址、workload secret 或后端隔离键。
 - `src/app/api/shared/[id]`：公共分享只读代理；不需要 Product Session，但仍携带 `web-bff` service auth
   和部署 RFC 7239 `Forwarded`，因此上游不会被匿名公网直接暴露。
 - `src/app/iam/[...path]`：仅按固定 BFF policy 代理批准的原生 OAuth/IAM GET/POST；未知路由与未经批准的
-  browser POST fail closed。`src/app/auth/sign-in/route.ts` 与静态 `/iam/interactions/*` 承载 Web-owned 表单；
-  `/api/auth/[...nextauth]` 承载 Auth.js RP、Product Session 查询/刷新与正式退出。
+  browser POST fail closed。`src/app/auth/sign-in/route.ts` 承载 Web-owned native sign-in 表单，native marker 成功
+  只发行 IAM session cookie；静态 `/iam/interactions/*` 继续承载 OAuth/邀请交互。`/api/auth/[...nextauth]` 仅保留
+  C-1.3 清理期间的兼容 RP/Session surface，禁止被新的 native 登录路径调用。
 
 ### Chat 与业务承接
 
