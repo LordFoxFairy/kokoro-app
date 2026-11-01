@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto"
 import { accountProfileResponseSchema } from "@/lib/account-profile.schema"
-import { admittedProductSession, productBffConfig, productBffHeaders, sameProductSessionSnapshot } from "./product-bff"
+import { admittedNativeSession, productBffConfig, productBffHeaders, sameNativeSessionSnapshot } from "./product-bff"
 import { requestWithDomain } from "./upstream-http"
 
 /** Read the IAM-owned projection through the BFF native-session seam. */
@@ -99,7 +99,7 @@ export async function readAccountProfile(request: Request): Promise<Response> {
     check()
     let session
     try {
-      session = await admittedProductSession(request, config)
+      session = await admittedNativeSession(request, config)
     } catch {
       return fail(503, "account_profile_unavailable")
     }
@@ -142,9 +142,9 @@ export async function readAccountProfile(request: Request): Promise<Response> {
     }
     const profile = accountProfileResponseSchema.safeParse(raw)
     if (!profile.success || profile.data.data.subject !== session.subject) return fail(502, "account_profile_response_invalid")
-    const latest = await admittedProductSession(request, config).catch(() => null)
+    const latest = await admittedNativeSession(request, config).catch(() => null)
     check()
-    if (!sameProductSessionSnapshot(session, latest)) return fail(401, "session_invalid")
+    if (!sameNativeSessionSnapshot(session, latest)) return fail(401, "session_invalid")
     return Response.json(profile.data, { headers })
   }
   try {

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { MCP_SERVER_ICON_POLICY, mcpServerIconIdSchema, mcpServerIconErrors } from "@/generated/bff-mcp-server-icon";
 import { parseMcpConnectorJson } from "@/hub/mcp-connector-json";
-import { admittedProductSession, productBffConfig, productBffHeaders } from "./product-bff";
+import { admittedNativeSession, productBffConfig, productBffHeaders } from "./product-bff";
 import { requestWithDomain, UpstreamResponseTooLargeError, UpstreamResponseIncompleteError, UpstreamTimeoutError } from "./upstream-http";
 
 /** A bounded private media adapter, not a second MCP metadata or Storage client. */
@@ -32,7 +32,7 @@ export async function proxyMcpServerIcon(request: Request, path: readonly string
   try {
     check();
     let claims;
-    try { claims = await within(admittedProductSession(request, config)); }
+    try { claims = await within(admittedNativeSession(request, config)); }
     catch { check(); return fail(503, "iam_admission_unavailable", true); }
     check();
     if (claims === null) return fail(401, "session_authentication_required");

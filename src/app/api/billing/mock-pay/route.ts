@@ -3,7 +3,7 @@
 import { NextResponse } from "next/server"
 
 import { sameOriginOk } from "@/lib/server/same-origin"
-import { admittedProductSession, productBffConfig } from "@/lib/server/product-bff"
+import { admittedNativeSession, productBffConfig } from "@/lib/server/product-bff"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -14,7 +14,7 @@ export async function POST(request: Request): Promise<Response> {
   if (!sameOriginOk(request)) return NextResponse.json({ error: "forbidden_origin" }, { status: 403 })
   let claims
   try {
-    claims = await admittedProductSession(request, config)
+    claims = await admittedNativeSession(request, config)
   } catch {
     return NextResponse.json({ error: "session_unavailable" }, { status: 503 })
   }

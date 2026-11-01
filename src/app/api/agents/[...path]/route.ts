@@ -5,7 +5,7 @@
 
 import { NextResponse } from "next/server"
 
-import { admittedProductSession, productBffConfig, productBffHeaders } from "@/lib/server/product-bff"
+import { admittedNativeSession, productBffConfig, productBffHeaders } from "@/lib/server/product-bff"
 import { requestWithDomain } from "@/lib/server/upstream-http"
 
 export const runtime = "nodejs"
@@ -36,7 +36,7 @@ export async function GET(request: Request, context: { params: Promise<{ path: s
 
   let claims
   try {
-    claims = await admittedProductSession(request, config)
+    claims = await admittedNativeSession(request, config)
   } catch {
     return errorResponse("session_unavailable", 503)
   }

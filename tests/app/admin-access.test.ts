@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-import { admittedProductSession } from "@/lib/server/product-bff"
+import { admittedNativeSession } from "@/lib/server/product-bff"
 import { fetchWithDomain } from "@/lib/server/upstream-http"
 
 vi.mock("@/lib/server/product-bff", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/server/product-bff")>()),
-  admittedProductSession: vi.fn(),
+  admittedNativeSession: vi.fn(),
 }))
 vi.mock("@/lib/server/upstream-http", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/server/upstream-http")>()),
@@ -23,8 +23,8 @@ const ENV = {
 
 beforeEach(() => {
   for (const [key, value] of Object.entries(ENV)) process.env[key] = value
-  vi.mocked(admittedProductSession).mockReset()
-  vi.mocked(admittedProductSession).mockResolvedValue({
+  vi.mocked(admittedNativeSession).mockReset()
+  vi.mocked(admittedNativeSession).mockResolvedValue({
     id: "00000000-0000-4000-8000-000000000001",
     generation: 0,
     subject: "admin-user",
@@ -32,6 +32,7 @@ beforeEach(() => {
     access: "product-access",
     accessExpiresAt: Date.now() + 60_000,
     expiresAt: Date.now() + 7 * 24 * 60 * 60_000,
+    nativeCookie: "kokoro-issuer.session_token=session",
   })
   vi.mocked(fetchWithDomain).mockReset()
 })

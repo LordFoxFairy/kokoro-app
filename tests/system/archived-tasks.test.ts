@@ -1,7 +1,7 @@
 import { beforeEach,afterEach,it,expect,vi } from "vitest";
-const mocks=vi.hoisted(()=>({admittedProductSession:vi.fn(),requestWithDomain:vi.fn()}));
+const mocks=vi.hoisted(()=>({admittedNativeSession:vi.fn(),requestWithDomain:vi.fn()}));
 vi.mock("@/lib/server/product-bff",()=>({
-  admittedProductSession:mocks.admittedProductSession,
+  admittedNativeSession:mocks.admittedNativeSession,
   productBffConfig:()=>({bffBaseUrl:"http://bff.test",domain:"product.test",internalSecret:null,session:{redisUrl:"redis://fixture/0",webOrigin:"http://web.test",secret:"at-least-thirty-two-characters-secret"}}),
   productBffHeaders:(_config:unknown,claims:{access:string},requestId:string)=>new Headers({authorization:`Bearer ${claims.access}`,"x-kokoro-request-id":requestId}),
 }));
@@ -14,18 +14,18 @@ const req=(method="GET",id="历史/😀",action="archive",body?:string)=>new Req
 const call=(request:Request,id="历史/😀",action="archive")=>sessionArchive(request,Promise.resolve({path:["sessions",id,action]}));
 beforeEach(()=>{
  vi.resetAllMocks();for(const [key,value]of Object.entries({KOKORO_BFF_BASE_URL:"http://bff.test",KOKORO_WEB_ORIGIN:"http://web.test",KOKORO_WEB_REDIS_URL:"redis://fixture/0",KOKORO_WEB_AUTH_SECRET:"at-least-thirty-two-characters-secret",KOKORO_DOMAIN:"product.test",KOKORO_TENANT_ID:"tenant"}))vi.stubEnv(key,value);
- mocks.admittedProductSession.mockResolvedValue(claims);
+ mocks.admittedNativeSession.mockResolvedValue(claims);
  mocks.requestWithDomain.mockImplementation(async(url,_d,options)=>Response.json(String(url).includes("archived-tasks")?{data:{items:[],next_cursor:null}}:{data:{session_id:"历史/😀",archived_at:String(url).endsWith("restore")?null:at}},{headers:{"cache-control":"no-store","x-request-id":options.headers.get("x-kokoro-request-id")}}));
 });
 afterEach(()=>{vi.unstubAllEnvs();vi.useRealTimers();});
 it("returns private list and state after full session recheck with server-only bearer",async()=>{
  const list=await GET(new Request("http://web.test/api/account/archived-tasks?limit=100",{headers:{host:"web.test"}}));expect(list.status).toBe(200);expect(list.headers.get("cache-control")).toContain("no-store");
- expect((await call(req())).status).toBe(200);expect(mocks.admittedProductSession).toHaveBeenCalledTimes(4);expect(mocks.requestWithDomain.mock.calls[1]?.[2].headers.get("authorization")).toBe("Bearer server-only");
+ expect((await call(req())).status).toBe(200);expect(mocks.admittedNativeSession).toHaveBeenCalledTimes(4);expect(mocks.requestWithDomain.mock.calls[1]?.[2].headers.get("authorization")).toBe("Bearer server-only");
  expect(mocks.requestWithDomain.mock.calls[1]?.[0]).toBe(`http://bff.test/v1/sessions/${encodeURIComponent("历史/😀")}/archive`);
 });
 it.each(["archive","restore"])("POST %s requires exact {}, target/action ACK and preserves key",async action=>{const response=await call(req("POST","历史/😀",action,"{}"),"历史/😀",action);expect(response.status).toBe(200);expect(mocks.requestWithDomain.mock.calls[0]?.[2].headers.get("idempotency-key")).toBe("qa-key");expect(await response.json()).toEqual({data:{session_id:"历史/😀",archived_at:action==="restore"?null:at}});});
 it.each(["{\"extra\":true}","{\"x\":1,\"x\":1}","\uFEFF{}","[]","{} trailing"])("refuses raw body %s before owner write",async body=>{expect((await call(req("POST","历史/😀","archive",body))).status).toBe(400);expect(mocks.requestWithDomain).not.toHaveBeenCalled();});
-it.each(["id","generation","subject","access","accessExpiresAt","expiresAt"])("retires response on final %s change",async key=>{mocks.admittedProductSession.mockResolvedValueOnce(claims).mockResolvedValueOnce({...claims,[key]:typeof claims[key as keyof typeof claims]==="number"?2:"changed"});expect((await call(req())).status).toBe(401);});
+it.each(["id","generation","subject","access","accessExpiresAt","expiresAt"])("retires response on final %s change",async key=>{mocks.admittedNativeSession.mockResolvedValueOnce(claims).mockResolvedValueOnce({...claims,[key]:typeof claims[key as keyof typeof claims]==="number"?2:"changed"});expect((await call(req())).status).toBe(401);});
 it("requires Origin+scheme for writes and rejects GET restore",async()=>{
  const r=req("POST","历史/😀","archive","{}");r.headers.delete("origin");expect((await call(r)).status).toBe(403);
  expect((await call(new Request("https://web.test/api/session/sessions/x/archive",{method:"POST",headers:{host:"web.test",origin:"http://web.test"}}),"x")).status).toBe(403);

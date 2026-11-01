@@ -5,7 +5,7 @@ import { projectPinIdSchema, projectPinQuerySchema, setProjectPinRequestSchema, 
 import { projectRenameBrowserCacheControl } from "@/contract/project-rename";
 import { sameOriginOk } from "./same-origin";
 import {
-  admittedProductSession,
+  admittedNativeSession,
   productBffConfig,
   productBffHeaders,
 } from "./product-bff";
@@ -86,7 +86,7 @@ export async function proxyProjectPins(
       return fail(503, "product_tenant_not_configured");
     let claims;
     try {
-      claims = await within(admittedProductSession(request, config));
+      claims = await within(admittedNativeSession(request, config));
     } catch {
       check();
       return fail(503, "iam_admission_unavailable");

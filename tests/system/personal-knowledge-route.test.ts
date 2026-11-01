@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/server/product-bff", async (original) => ({
   ...(await original<typeof import("@/lib/server/product-bff")>()),
-  admittedProductSession: mocks.admission,
+  admittedNativeSession: mocks.admission,
   productBffConfig: mocks.config,
 }));
 vi.mock("@/lib/server/upstream-http", async (original) => ({

@@ -5,7 +5,7 @@ import {
   archivedTasksCursor,
   validateArchivedTasks,
 } from "@/lib/archived-tasks.schema";
-import { admittedProductSession, productBffConfig, productBffHeaders } from "./product-bff";
+import { admittedNativeSession, productBffConfig, productBffHeaders } from "./product-bff";
 import { requestWithDomain } from "./upstream-http";
 
 export async function archivedTasks(request: Request): Promise<Response> {
@@ -101,7 +101,7 @@ export async function archivedTasks(request: Request): Promise<Response> {
   };
   const operation = async () => {
     check();
-    const session = await admittedProductSession(request, config);
+    const session = await admittedNativeSession(request, config);
     check();
     if (
       !session ||
@@ -186,7 +186,7 @@ export async function archivedTasks(request: Request): Promise<Response> {
     } catch {
       return fail(502, "archived_tasks_response_invalid");
     }
-    const latest = await admittedProductSession(request, config);
+    const latest = await admittedNativeSession(request, config);
     check();
     if (
       !latest ||

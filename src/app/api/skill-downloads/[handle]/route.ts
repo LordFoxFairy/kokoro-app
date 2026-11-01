@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { skillDownloadByteOperation, skillDownloadByteErrors, skillDownloadHandleSchema } from "@/generated/bff-project-skill-content"
 
-import { admittedProductSession, productBffConfig, productBffHeaders } from "@/lib/server/product-bff"
+import { admittedNativeSession, productBffConfig, productBffHeaders } from "@/lib/server/product-bff"
 import { requestWithDomain } from "@/lib/server/upstream-http"
 
 export const runtime = "nodejs"
@@ -30,7 +30,7 @@ export async function GET(request: Request, context: { params: Promise<{ handle:
     const config = productBffConfig()
     if (config === null) return fail(503, "skill_dependency_unavailable")
     if (request.headers.has("origin") && request.headers.get("origin") !== config.session.webOrigin) return fail(403, "session_forbidden")
-    const claims = await within(admittedProductSession(request, config)).catch(error => { if (signal.aborted) throw error; return undefined })
+    const claims = await within(admittedNativeSession(request, config)).catch(error => { if (signal.aborted) throw error; return undefined })
     if (claims === undefined) return fail(503, "iam_admission_unavailable")
     if (claims === null) return fail(401, "session_authentication_required")
     const pending = requestWithDomain(`${config.bffBaseUrl.replace(/\/+$/u, "")}/skill-downloads/${handle}`, config.domain, {

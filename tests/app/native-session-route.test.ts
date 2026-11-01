@@ -1,18 +1,13 @@
 import { describe, expect, it, vi } from "vitest"
 import { NextRequest } from "next/server"
 
-const { nativeProductBffConfig, nativeSessionBffHeaders, admittedNativeSession, oidcRpConfig } = vi.hoisted(() => ({
+const { nativeProductBffConfig, nativeSessionBffHeaders, admittedNativeSession } = vi.hoisted(() => ({
   nativeProductBffConfig: vi.fn(),
   nativeSessionBffHeaders: vi.fn(),
   admittedNativeSession: vi.fn(),
-  oidcRpConfig: vi.fn(),
 }))
 
 vi.mock("@/lib/server/product-bff", () => ({ nativeProductBffConfig, nativeSessionBffHeaders, admittedNativeSession }))
-vi.mock("@/lib/server/oidc-provider", () => ({ oidcRpConfig }))
-vi.mock("@/lib/server/oidc-bff-agent", () => ({ boundedOidcBffAgent: vi.fn() }))
-vi.mock("@/lib/server/oidc-rp-transaction", () => ({ consumeOidcState: vi.fn(), issueOidcState: vi.fn() }))
-vi.mock("@/lib/server/oidc-token", () => ({ refreshOidcToken: vi.fn(), revokeOidcToken: vi.fn() }))
 
 describe("native session route cutover", () => {
   it("reads a native session without requiring the legacy RP configuration", async () => {
@@ -33,7 +28,6 @@ describe("native session route cutover", () => {
       issuerSessionId: "native-session",
       nativeCookie: "kokoro-issuer.session_token=session",
     })
-    oidcRpConfig.mockReturnValue(null)
     const { GET } = await import("@/app/api/auth/[...nextauth]/route")
     const response = await GET(
       new NextRequest("https://web.example/api/auth/session", { headers: { host: "web.example", cookie: "kokoro-issuer.session_token=session" } }),
@@ -52,19 +46,15 @@ describe("native session route cutover", () => {
       session: { webOrigin: "https://web.example" },
     })
     nativeSessionBffHeaders.mockReturnValue({ state: "valid", headers: new Headers({ cookie: "kokoro-issuer.session_token=session" }) })
-    oidcRpConfig.mockReturnValue(null)
-    vi.stubEnv("KOKORO_OIDC_CLIENT_ID", "web-client")
     const { POST } = await import("@/app/api/auth/[...nextauth]/route")
     const response = await POST(
       new NextRequest("https://web.example/api/auth/signout", {
         method: "POST",
-        headers: { host: "web.example", cookie: "kokoro-issuer.session_token=session", "content-type": "application/x-www-form-urlencoded" },
-        body: "csrfToken=legacy-token",
+        headers: { host: "web.example", cookie: "kokoro-issuer.session_token=session" },
       }),
       { params: Promise.resolve({ nextauth: ["signout"] }) },
     )
-    expect(response.status).toBe(200)
-    expect(await response.json()).toMatchObject({ status: "signed_out", issuer_session: "native" })
-    expect(response.headers.getSetCookie().some((cookie) => cookie.startsWith("kokoro_product_session="))).toBe(true)
+    expect(response.status).toBe(307)
+    expect(response.headers.get("location")).toBe("/iam/sign-out")
   })
 })

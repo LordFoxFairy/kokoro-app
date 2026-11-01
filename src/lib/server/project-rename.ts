@@ -5,7 +5,7 @@ import { projectRenameIdSchema, projectRenameKeySchema, projectRenameRequestSche
   parseProjectRenameJson, projectRenameRetryAfterValid,
   type ProjectRenameFault } from "@/contract/project-rename"
 import { sameOriginOk } from "./same-origin"
-import { admittedProductSession, productBffConfig, productBffHeaders } from "./product-bff"
+import { admittedNativeSession, productBffConfig, productBffHeaders } from "./product-bff"
 import { requestWithDomain, UpstreamTimeoutError } from "./upstream-http"
 
 /** Exact browser-private command adapter; generic Hub envelopes are not used. */
@@ -53,7 +53,7 @@ export async function proxyProjectRename(request: Request, segments: readonly st
       const config = productBffConfig()
       if (config === null) return fail(503, "product_tenant_not_configured", true)
       let claims
-      try { claims = await admittedProductSession(request, config) } catch { return fail(503, "iam_admission_unavailable", true) }
+      try { claims = await admittedNativeSession(request, config) } catch { return fail(503, "iam_admission_unavailable", true) }
       check()
       if (claims === null) return fail(401, "session_authentication_required")
       let bytes = new Uint8Array(0)

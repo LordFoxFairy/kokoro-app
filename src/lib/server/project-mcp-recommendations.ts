@@ -11,7 +11,7 @@ import {
 import { projectRenameBrowserCacheControl } from "@/contract/project-rename";
 import { sameOriginOk } from "./same-origin";
 import {
-  admittedProductSession,
+  admittedNativeSession,
   productBffConfig,
   productBffHeaders,
 } from "./product-bff";
@@ -98,7 +98,7 @@ export async function proxyProjectMcpRecommendations(
       return fail(503, "product_tenant_not_configured", true);
     let claims;
     try {
-      claims = await within(admittedProductSession(request, config));
+      claims = await within(admittedNativeSession(request, config));
     } catch {
       check();
       return fail(503, "iam_admission_unavailable", true);

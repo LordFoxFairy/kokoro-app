@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { configuredDomain } from "./domain-context";
-import type { ProductClaims } from "./product-session";
 import { configuredBffBaseUrl } from "./service-config";
 import { requestWithDomain } from "./upstream-http";
 
@@ -13,7 +12,18 @@ export type ProductBffConfig = Readonly<{
   bffBaseUrl: string;
   domain: string;
   internalSecret: string | null;
-  session: Readonly<{ redisUrl: string; webOrigin: string; secret: string }>;
+  session: Readonly<{ webOrigin: string }>;
+}>;
+
+export type ProductClaims = Readonly<{
+  id: string;
+  generation: number;
+  access: string;
+  accessExpiresAt: number;
+  expiresAt: number;
+  subject: string;
+  issuerSessionId: string;
+  nativeCookie?: string;
 }>;
 
 export type NativeProductBffConfig = Readonly<{
@@ -41,7 +51,7 @@ export type NativeSessionBffHeaders =
   | Readonly<{ state: "missing" | "invalid" }>;
 
 /** Compare one admitted request snapshot without treating a native proof's synthetic TTL as identity. */
-export function sameProductSessionSnapshot(
+export function sameNativeSessionSnapshot(
   initial: ProductClaims,
   latest: ProductClaims | null,
 ): boolean {
@@ -103,29 +113,7 @@ export function nativeProductBffConfig(
 export function productBffConfig(
   env: NodeJS.ProcessEnv = process.env,
 ): ProductBffConfig | null {
-  const bffBaseUrl = configuredBffBaseUrl(env);
-  const domain = configuredDomain(env);
-  const redisUrl = env.KOKORO_WEB_REDIS_URL?.trim();
-  const webOrigin = env.KOKORO_WEB_ORIGIN?.trim();
-  const secret = env.KOKORO_WEB_AUTH_SECRET?.trim();
-  const internalSecret = env.KOKORO_INTERNAL_SECRET_WEB_BFF?.trim() || null;
-  if (
-    !bffBaseUrl ||
-    !domain ||
-    !redisUrl ||
-    !webOrigin ||
-    !secret ||
-    secret.length < 32
-  )
-    return null;
-  if (validWebOrigin(webOrigin) === null) return null;
-  if (env.NODE_ENV === "production" && internalSecret === null) return null;
-  return {
-    bffBaseUrl,
-    domain,
-    internalSecret,
-    session: { redisUrl, webOrigin, secret },
-  };
+  return nativeProductBffConfig(env);
 }
 
 export async function admittedNativeSession(
@@ -157,7 +145,7 @@ export async function admittedNativeSession(
       expiresAt,
       subject: parsed.data.data.user_id,
       issuerSessionId: "native-session",
-      ...(native.headers.get("cookie") === null ? {} : { nativeCookie: native.headers.get("cookie")! }),
+      nativeCookie: native.headers.get("cookie")!,
     };
   } catch (error) {
     if (error instanceof Error && error.message === "native_session_admission_unavailable")
@@ -167,39 +155,16 @@ export async function admittedNativeSession(
   }
 }
 
-export async function admittedProductSession(
-  request: Request,
-  config: ProductBffConfig,
-): Promise<ProductClaims | null> {
-  const requestId = request.headers.get("x-kokoro-request-id") ?? randomUUID();
-  const native = nativeSessionBffHeaders(request, config, requestId);
-  if (native.state !== "valid") return null;
-  return admittedNativeSession(request, {
-    bffBaseUrl: config.bffBaseUrl,
-    domain: config.domain,
-    internalSecret: config.internalSecret,
-    session: { webOrigin: config.session.webOrigin },
-  });
-}
-
 export function productBffHeaders(
   config: ProductBffConfig,
   claims: ProductClaims,
   requestId: string,
 ): Headers {
-  if (typeof claims.nativeCookie === "string" && claims.nativeCookie.length > 0) {
-    const headers = new Headers({
-      cookie: claims.nativeCookie,
-      origin: config.session.webOrigin,
-      accept: "application/json",
-      [SERVICE_HEADER]: SERVICE_VALUE,
-      "x-kokoro-request-id": requestId,
-    });
-    if (config.internalSecret !== null) headers.set(INTERNAL_SECRET_HEADER, config.internalSecret);
-    return headers;
-  }
+  if (typeof claims.nativeCookie !== "string" || claims.nativeCookie.length === 0) throw new ProductSessionUnavailableError("Native session cookie missing");
   const headers = new Headers({
-    authorization: `Bearer ${claims.access}`,
+    cookie: claims.nativeCookie,
+    origin: config.session.webOrigin,
+    accept: "application/json",
     [SERVICE_HEADER]: SERVICE_VALUE,
     "x-kokoro-request-id": requestId,
   });

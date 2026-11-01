@@ -1,12 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 const { session, upstream } = vi.hoisted(() => ({ session: vi.fn(), upstream: vi.fn() }))
-vi.mock("@/lib/server/product-session", () => ({ currentProductSession: session }))
+vi.mock("@/lib/server/product-bff", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/server/product-bff")>()),
+  admittedNativeSession: session,
+}))
 vi.mock("@/lib/server/upstream-http", () => ({ requestWithDomain: upstream }))
 import { accountSessions } from "@/lib/server/account-sessions"
 import * as listRoute from "@/app/api/account/sessions/route"
 import * as revokeRoute from "@/app/api/account/sessions/[sessionId]/route"
 const sid = { session_id: "current", created_at: "2026-10-14T00:00:00.000Z", expires_at: "2026-10-15T00:00:00.000Z" }
-const claims = { id: "opaque", generation: 3, subject: "alice", access: "private-access", accessExpiresAt: Date.now() + 100000, expiresAt: Date.now() + 200000 }
+const claims = { id: "native-session", generation: 0, subject: "alice", access: "", issuerSessionId: "native-session", nativeCookie: "kokoro-issuer.session_token=session", accessExpiresAt: Date.now() + 100000, expiresAt: Date.now() + 200000 }
 const request = (path = "/api/account/sessions", init: RequestInit = {}) => new Request(`https://internal.test${path}`, { ...init, headers: { host: "web.test", ...init.headers } })
 const reply = (options: { status?: number; transform?: (raw: { data: { current_session: typeof sid; sessions: (typeof sid)[] }; meta: { request_id: string; next_cursor: null } }) => unknown; headers?: Record<string, string> } = {}) => {
   upstream.mockImplementation(async (_: string, _domain: string, init: { headers: Headers }) => {
@@ -25,8 +28,8 @@ describe("account session same-origin adapter", () => {
     const response = await listRoute.GET(request("/api/account/sessions?limit=10&cursor=opaque"))
     expect(response.status).toBe(200); expect(session).toHaveBeenCalledTimes(2)
     const [, domain, init] = upstream.mock.calls[0]!
-    expect(domain).toBe("web.test"); expect(init.headers.get("authorization")).toBe("Bearer private-access")
-    expect(init.headers.get("cookie")).toBeNull(); expect(upstream.mock.calls[0]![0]).toBe("https://bff.test/v1/account/sessions?limit=10&cursor=opaque")
+    expect(domain).toBe("web.test"); expect(init.headers.get("authorization")).toBeNull()
+    expect(init.headers.get("cookie")).toBe("kokoro-issuer.session_token=session"); expect(upstream.mock.calls[0]![0]).toBe("https://bff.test/v1/account/sessions?limit=10&cursor=opaque")
     expect(response.headers.get("cache-control")).toBe("private, no-store")
     expect((await response.json()).meta.request_id).toBe(response.headers.get("x-request-id"))
   })

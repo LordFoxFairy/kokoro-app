@@ -13,7 +13,7 @@ import {
   upstreamResponseHeaders,
   webErrorResponse,
 } from "@/lib/server/bff-response"
-import { admittedProductSession, productBffConfig, productBffHeaders } from "@/lib/server/product-bff"
+import { admittedNativeSession, productBffConfig, productBffHeaders } from "@/lib/server/product-bff"
 import { fetchWithDomain } from "@/lib/server/upstream-http"
 
 export const runtime = "nodejs"
@@ -29,7 +29,7 @@ export async function POST(request: Request): Promise<Response> {
   if (!sameOriginOk(request)) return webErrorResponse("forbidden_origin", 403, requestId)
   let claims
   try {
-    claims = await admittedProductSession(request, config)
+    claims = await admittedNativeSession(request, config)
   } catch {
     return webErrorResponse("session_unavailable", 503, requestId)
   }

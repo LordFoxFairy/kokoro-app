@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-const { productBffConfig, admittedProductSession, sameOriginOk, requestWithDomain } = vi.hoisted(() => ({
+const { productBffConfig, admittedNativeSession, sameOriginOk, requestWithDomain } = vi.hoisted(() => ({
   productBffConfig: vi.fn(),
-  admittedProductSession: vi.fn(),
+  admittedNativeSession: vi.fn(),
   sameOriginOk: vi.fn(() => true),
   requestWithDomain: vi.fn(),
 }))
@@ -10,7 +10,7 @@ const { productBffConfig, admittedProductSession, sameOriginOk, requestWithDomai
 vi.mock("@/lib/server/same-origin", () => ({ sameOriginOk }))
 vi.mock("@/lib/server/product-bff", () => ({
   productBffConfig,
-  admittedProductSession,
+  admittedNativeSession,
   productBffHeaders: (config: { internalSecret?: string | null }, claims: { access: string }, requestId: string) => {
     const headers = new Headers({
       authorization: `Bearer ${claims.access}`,
@@ -29,7 +29,7 @@ describe("Web to business BFF route projection", () => {
   afterEach(() => {
     vi.restoreAllMocks()
     productBffConfig.mockReset()
-    admittedProductSession.mockReset()
+    admittedNativeSession.mockReset()
     sameOriginOk.mockReset().mockReturnValue(true)
     requestWithDomain.mockReset()
   })
@@ -40,7 +40,7 @@ describe("Web to business BFF route projection", () => {
       domain: "dev.kokoro.localhost",
       internalSecret: "web-secret",
     })
-    admittedProductSession.mockResolvedValue({
+    admittedNativeSession.mockResolvedValue({
       access: "product-access",
       accessExpiresAt: Date.now() + 60_000,
     })
@@ -73,7 +73,7 @@ describe("Web to business BFF route projection", () => {
       domain: "dev.kokoro.localhost",
       internalSecret: "web-secret",
     })
-    admittedProductSession.mockResolvedValue({
+    admittedNativeSession.mockResolvedValue({
       access: "product-access",
       accessExpiresAt: Date.now() + 60_000,
     })

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 
 import { bffErrorEnvelopeSchema, bffSuccessEnvelopeSchema, requestIdForRequest, webErrorResponse } from "@/lib/server/bff-response"
-import { admittedProductSession, productBffConfig, productBffHeaders } from "@/lib/server/product-bff"
+import { admittedNativeSession, productBffConfig, productBffHeaders } from "@/lib/server/product-bff"
 import { fetchWithDomain } from "@/lib/server/upstream-http"
 
 export const runtime = "nodejs"
@@ -19,7 +19,7 @@ export async function GET(request: Request): Promise<Response> {
   const requestId = requestIdForRequest(request)
   const config = productBffConfig()
   if (config === null) return webErrorResponse("admin_access_unavailable", 503, requestId)
-  const claims = await admittedProductSession(request, config).catch(() => null)
+  const claims = await admittedNativeSession(request, config).catch(() => null)
   if (claims === null) return webErrorResponse("unauthenticated", 401, requestId)
   let upstream: Response
   try {

@@ -13,7 +13,7 @@ import {
   parseKnowledgeResponseJson,
 } from "@/contract/personal-knowledge";
 import {
-  admittedProductSession,
+  admittedNativeSession,
   productBffConfig,
   productBffHeaders,
 } from "./product-bff";
@@ -163,7 +163,7 @@ export async function proxyPersonalKnowledge(
       return fail(403, "session_forbidden");
     let claims;
     try {
-      claims = await within(admittedProductSession(request, config));
+      claims = await within(admittedNativeSession(request, config));
     } catch {
       signal.throwIfAborted();
       return fail(503, "iam_admission_unavailable", true);

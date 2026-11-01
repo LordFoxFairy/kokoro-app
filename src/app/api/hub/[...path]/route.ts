@@ -100,7 +100,7 @@ import { proxyProjectRename } from "@/lib/server/project-rename";
 
 import { sameOriginOk } from "@/lib/server/same-origin";
 import {
-  admittedProductSession,
+  admittedNativeSession,
   productBffConfig,
   productBffHeaders,
 } from "@/lib/server/product-bff";
@@ -707,7 +707,7 @@ async function proxyMcpConnector(
       if (!accepted) return fail(400, "invalid_mcp_personal_request");
     }
     signal.throwIfAborted();
-    const claims = await within(admittedProductSession(request, config)).catch(
+    const claims = await within(admittedNativeSession(request, config)).catch(
       () => undefined,
     );
     signal.throwIfAborted();
@@ -968,7 +968,7 @@ async function proxyCustomApi(
     return fail(503, "product_tenant_not_configured", true);
   let claims;
   try {
-    claims = await admittedProductSession(request, config);
+    claims = await admittedNativeSession(request, config);
   } catch {
     return fail(503, "iam_admission_unavailable", true);
   }
@@ -1075,11 +1075,11 @@ async function proxySkillCover(
   let upstream: Response;
   try {
     const claims = await new Promise<
-      Awaited<ReturnType<typeof admittedProductSession>>
+      Awaited<ReturnType<typeof admittedNativeSession>>
     >((resolve, reject) => {
       const abort = () => reject(signal.reason);
       signal.addEventListener("abort", abort, { once: true });
-      void admittedProductSession(request, config)
+      void admittedNativeSession(request, config)
         .then(resolve, reject)
         .finally(() => signal.removeEventListener("abort", abort));
       if (signal.aborted) abort();
@@ -1297,7 +1297,7 @@ async function proxyLocalSkillImport(
         !localImportCompleteRequestSchema.safeParse(parsedBody).success)
     )
       return fail("invalidSkillRequest");
-    const claims = await within(admittedProductSession(request, config)).catch(
+    const claims = await within(admittedNativeSession(request, config)).catch(
       () => undefined,
     );
     if (claims === undefined) return fail("iamUnavailable");
@@ -1526,7 +1526,7 @@ async function proxyGithubSkillImport(
       ).safeParse(parsedBody).success
     )
       return fail("invalidSkillRequest");
-    const claims = await within(admittedProductSession(request, config)).catch(
+    const claims = await within(admittedNativeSession(request, config)).catch(
       () => undefined,
     );
     if (claims === undefined) return fail("iamUnavailable");
@@ -1772,7 +1772,7 @@ async function proxySkillShare(
         : body !== undefined
     )
       return fail("invalidSkillRequest");
-    const claims = await within(admittedProductSession(request, config)).catch(
+    const claims = await within(admittedNativeSession(request, config)).catch(
       () => undefined,
     );
     if (claims === undefined) return fail("iamUnavailable");
@@ -1989,7 +1989,7 @@ async function proxySkillPackage(
         for (;;) { const part = await within(reader.read()); joined.throwIfAborted(); if (part.done) break; if (part.value.byteLength > 0) return fail("invalidSkillRequest"); }
       } finally { joined.removeEventListener("abort", cancel); void reader.cancel().catch(() => undefined); reader.releaseLock(); }
     }
-    const claims = await within(admittedProductSession(request, config)).catch(
+    const claims = await within(admittedNativeSession(request, config)).catch(
       () => undefined,
     );
     if (claims === undefined) return fail("iamUnavailable");
@@ -2214,7 +2214,7 @@ async function proxyPersonalSkillLifecycle(
         : withdrawPersonalSkillRequestSchema
     ).safeParse(input);
     if (!parsed.success) return fail(400, "invalid_skill_request");
-    const claims = await within(admittedProductSession(request, config)).catch(
+    const claims = await within(admittedNativeSession(request, config)).catch(
       () => undefined,
     );
     if (claims === undefined) return fail(503, "iam_admission_unavailable");
@@ -2504,7 +2504,7 @@ async function proxyHubRequest(
   }
   let claims;
   try {
-    claims = await admittedProductSession(request, config);
+    claims = await admittedNativeSession(request, config);
   } catch {
     if (publicSkillBoundary)
       return mcpConnectionRead

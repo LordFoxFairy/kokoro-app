@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { projectSkillIdSchema, projectSkillSelectionInputSchema, projectSkillSelectionSchema } from "@/hub/project-skills.schema";
 import { installationKeySchema, installationErrorSchema } from "@/hub/schemas";
 import { sameOriginOk } from "./same-origin";
-import { admittedProductSession, productBffConfig, productBffHeaders } from "./product-bff";
+import { admittedNativeSession, productBffConfig, productBffHeaders } from "./product-bff";
 import { readBoundedRequestBody, requestWithDomain, UpstreamTimeoutError, UpstreamRequestTooLargeError } from "./upstream-http";
 
 /** Project defaults only. Installation lifecycle and message freezing remain separate owners. */
@@ -37,7 +37,7 @@ export async function proxyProjectSkillSelection(request: Request, path: readonl
     const config = productBffConfig();
     if (!config?.bffBaseUrl) return fail(503, "product_tenant_not_configured", true);
     let claims;
-    try { claims = await within(admittedProductSession(request, config)); }
+    try { claims = await within(admittedNativeSession(request, config)); }
     catch { signal.throwIfAborted(); return fail(503, "iam_admission_unavailable", true); }
     signal.throwIfAborted();
     if (claims === null) return fail(401, "session_authentication_required");

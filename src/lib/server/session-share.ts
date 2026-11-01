@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { parseSharedTasksJson } from "@/lib/shared-tasks-json";
 import { shareAckSchema, shareErrorSchema } from "@/lib/shared-tasks.schema";
-import { admittedProductSession, productBffConfig, productBffHeaders } from "./product-bff";
+import { admittedNativeSession, productBffConfig, productBffHeaders } from "./product-bff";
 import { requestWithDomain } from "./upstream-http";
 
 export async function sessionShare(
@@ -152,7 +152,7 @@ export async function sessionShare(
         return fail(400, "session_share_invalid_request");
       }
     }
-    const session = await admittedProductSession(request, config);
+    const session = await admittedNativeSession(request, config);
     check();
     if (
       !session ||
@@ -240,7 +240,7 @@ export async function sessionShare(
     } catch {
       return fail(502, "session_share_response_invalid");
     }
-    const latest = await admittedProductSession(request, config);
+    const latest = await admittedNativeSession(request, config);
     check();
     if (
       !latest ||

@@ -3,7 +3,7 @@ import { projectContentIdSchema, projectContentInstallationIdSchema, projectPack
 import { catalogPackagePathSchema, catalogPackageResponseSchema, catalogPackageMatches, installationPackageErrorAllowed } from "@/hub/schemas"
 import { skillDownloadErrorEnvelopeAllowed, skillDownloadSchema } from "@/hub/skill-download.schema"
 import { parsePersonalSkillHistoryJson } from "@/hub/personal-skill-history.schema"
-import { admittedProductSession, productBffConfig, productBffHeaders } from "./product-bff"
+import { admittedNativeSession, productBffConfig, productBffHeaders } from "./product-bff"
 import { readBoundedRequestBody, requestWithDomain, UpstreamTimeoutError } from "./upstream-http"
 
 /** Project installation content only; no personal/catalog locator or transport fallback. */
@@ -33,7 +33,7 @@ export async function proxyProjectSkillContent(request: Request, path: readonly 
     if (config === null) return fail(503, "product_tenant_not_configured", true)
     if ((download || request.headers.has("origin")) && request.headers.get("origin") !== config.session.webOrigin) return fail(403, "session_forbidden")
     let claims
-    try { claims = await within(admittedProductSession(request, config)) }
+    try { claims = await within(admittedNativeSession(request, config)) }
     catch { signal.throwIfAborted(); return fail(503, "iam_admission_unavailable", true) }
     signal.throwIfAborted()
     if (claims === null) return fail(401, "session_authentication_required")

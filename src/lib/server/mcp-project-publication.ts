@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { publicationIdSchema, publicationReceiptRequestSchema, publicationErrorSchema, mcpPublicationInputSchema, parseMcpPublicationAck, parseMcpPublicationPage, type McpPublicationIdentity } from "@/hub/mcp-project-publication.schema";
 import { parseMcpConnectorJson } from "@/hub/mcp-connector-json";
 import { sameOriginOk } from "./same-origin";
-import { admittedProductSession, productBffConfig, productBffHeaders } from "./product-bff";
+import { admittedNativeSession, productBffConfig, productBffHeaders } from "./product-bff";
 import { readBoundedRequestBody, requestWithDomain, UpstreamTimeoutError, UpstreamRequestTooLargeError } from "./upstream-http";
 
 /** Narrow browser-private definition publication. No owner URL, credentials or retries in the browser. */
@@ -36,7 +36,7 @@ export async function proxyMcpProjectPublication(request: Request, path: readonl
     const config = productBffConfig();
     if (!config?.bffBaseUrl) return fail(503, "product_tenant_not_configured", true);
     let claims;
-    try { claims = await within(admittedProductSession(request, config)); }
+    try { claims = await within(admittedNativeSession(request, config)); }
     catch { signal.throwIfAborted(); return fail(503, "iam_admission_unavailable", true); }
     signal.throwIfAborted();
     if (claims === null) return fail(401, "session_authentication_required");

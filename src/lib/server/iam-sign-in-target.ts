@@ -35,7 +35,7 @@ export function rawIamSignInQuery(absolute: string): string | null {
     query.length < 2 || Buffer.byteLength(query) > IAM_RELAY_POLICY.maxQueryBytes ||
     /[\u0000-\u001f\u007f\\]/u.test(query) || /%(?![0-9a-fA-F]{2})/u.test(query)
   ) return null
-  return new URLSearchParams(query).has("flow") ? null : query
+  return new URLSearchParams(query).has("flow") || nativeIamSignInTarget(query) === null ? null : query
 }
 
 /** This early expiry check does not validate or normalize IAM's signed query. */

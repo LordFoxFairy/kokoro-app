@@ -1,10 +1,10 @@
 // Fixed-tenant Team adapter: one deadline, raw closed wire, no caller-supplied identity.
 import { randomUUID } from "node:crypto";
 import {
-  admittedProductSession,
+  admittedNativeSession,
   productBffConfig,
   productBffHeaders,
-  sameProductSessionSnapshot,
+  sameNativeSessionSnapshot,
 } from "@/lib/server/product-bff";
 import { requestWithDomain } from "@/lib/server/upstream-http";
 import { parseTeamJson } from "@/team/json";
@@ -224,7 +224,7 @@ async function proxy(request: Request, context: Context): Promise<Response> {
       );
     }
     check();
-    const session = await admittedProductSession(request, config);
+    const session = await admittedNativeSession(request, config);
     check();
     if (
       !session ||
@@ -333,9 +333,9 @@ async function proxy(request: Request, context: Context): Promise<Response> {
       check();
       return invalid();
     }
-    const latest = await admittedProductSession(request, config);
+    const latest = await admittedNativeSession(request, config);
     check();
-    if (!sameProductSessionSnapshot(session, latest))
+    if (!sameNativeSessionSnapshot(session, latest))
       return fail(401, "unauthenticated");
     const meta = (output as { meta: { request_id: string } }).meta;
     return Response.json(output, {

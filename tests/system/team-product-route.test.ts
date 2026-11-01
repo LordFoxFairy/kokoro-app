@@ -1,19 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
-  admittedProductSession,
+  admittedNativeSession,
   productBffConfig,
   requestWithDomain,
   sameOriginOk,
   currentProductSession,
-  sameProductSessionSnapshot,
+  sameNativeSessionSnapshot,
 } = vi.hoisted(() => ({
-  admittedProductSession: vi.fn(),
+  admittedNativeSession: vi.fn(),
   currentProductSession: vi.fn(),
   productBffConfig: vi.fn(),
   requestWithDomain: vi.fn(),
   sameOriginOk: vi.fn<(request: Request) => boolean>(() => true),
-  sameProductSessionSnapshot: vi.fn((initial: { id: string; generation: number; subject: string; access: string; accessExpiresAt: number; expiresAt: number }, latest: typeof initial | null) =>
+  sameNativeSessionSnapshot: vi.fn((initial: { id: string; generation: number; subject: string; access: string; accessExpiresAt: number; expiresAt: number }, latest: typeof initial | null) =>
     latest !== null &&
     latest.id === initial.id &&
     latest.generation === initial.generation &&
@@ -26,9 +26,9 @@ const {
 vi.mock("@/lib/server/product-session", () => ({ currentProductSession }));
 vi.mock("@/lib/server/same-origin", () => ({ sameOriginOk }));
 vi.mock("@/lib/server/product-bff", () => ({
-  admittedProductSession,
+  admittedNativeSession,
   productBffConfig,
-  sameProductSessionSnapshot,
+  sameNativeSessionSnapshot,
   productBffHeaders: (
     _config: unknown,
     claims: { access: string },
@@ -80,7 +80,7 @@ beforeEach(async () => {
     accessExpiresAt: now + 60_000,
     expiresAt: now + 120_000,
   };
-  admittedProductSession.mockResolvedValue(session);
+  admittedNativeSession.mockResolvedValue(session);
   currentProductSession.mockResolvedValue(session);
   requestWithDomain.mockImplementation(
     async (target: string, _domain: string, init: RequestInit) => {
@@ -224,7 +224,7 @@ describe("fixed-tenant Team Product adapter", () => {
   });
 
   it("rejects unauthenticated or cross-origin mutations before BFF I/O", async () => {
-    admittedProductSession.mockResolvedValueOnce(null);
+    admittedNativeSession.mockResolvedValueOnce(null);
     const anonymous = await teamRoute.GET(
       teamRequest("https://web.example.test/api/team/members"),
       context(["members"]),
@@ -386,8 +386,8 @@ describe("SET20 Team adapter protocol RED", () => {
   });
 
   it("does not release successful owner data after the final session generation changed", async () => {
-    admittedProductSession.mockResolvedValueOnce({
-      ...(await admittedProductSession()),
+    admittedNativeSession.mockResolvedValueOnce({
+      ...(await admittedNativeSession()),
       generation: 2,
     });
     const response = await teamRoute.GET(
@@ -437,8 +437,8 @@ describe("SET20 same-session and strict upstream negatives", () => {
     "accessExpiresAt",
     "expiresAt",
   ])("retires the final %s change after an owner ACK", async (field) => {
-    const session = await admittedProductSession();
-    admittedProductSession.mockResolvedValueOnce({
+    const session = await admittedNativeSession();
+    admittedNativeSession.mockResolvedValueOnce({
       ...session,
       [field]:
         typeof session[field] === "number"
@@ -459,7 +459,7 @@ describe("SET20 same-session and strict upstream negatives", () => {
   it("does not dispatch after late session admission completes beyond the entry deadline", async () => {
     vi.useFakeTimers();
     let release!: (value: unknown) => void;
-    admittedProductSession.mockImplementationOnce(
+    admittedNativeSession.mockImplementationOnce(
       () =>
         new Promise((resolve) => {
           release = resolve;
@@ -556,7 +556,7 @@ it.each(["identity", "gzip"])(
       context(["invitations"]),
     );
     expect(response.status).toBe(400);
-    expect(admittedProductSession).not.toHaveBeenCalled();
+    expect(admittedNativeSession).not.toHaveBeenCalled();
     expect(requestWithDomain).not.toHaveBeenCalled();
   },
 );

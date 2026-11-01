@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 
 import { sameOriginOk } from "@/lib/server/same-origin"
-import { admittedProductSession, productBffConfig, productBffHeaders } from "@/lib/server/product-bff"
+import { admittedNativeSession, productBffConfig, productBffHeaders } from "@/lib/server/product-bff"
 import { readBoundedRequestBody, requestWithDomain, UpstreamRequestTooLargeError } from "@/lib/server/upstream-http"
 
 export const runtime = "nodejs"
@@ -55,7 +55,7 @@ export async function POST(request: Request, context: { params: Promise<{ operat
   if (config === null) return error("skill_dependency_unavailable", 503)
   let claims
   try {
-    claims = await admittedProductSession(request, config)
+    claims = await admittedNativeSession(request, config)
   } catch {
     return error("iam_admission_unavailable", 503)
   }

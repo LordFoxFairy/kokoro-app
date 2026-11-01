@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { sameOriginOk } from "./same-origin";
-import { admittedProductSession, productBffConfig, productBffHeaders } from "./product-bff";
+import { admittedNativeSession, productBffConfig, productBffHeaders } from "./product-bff";
 import { readBoundedRequestBody, requestWithDomain, UpstreamTimeoutError, UpstreamRequestTooLargeError } from "./upstream-http";
 import { projectSkillIdSchema } from "@/hub/project-skills.schema";
 import { installationIdSchema, installationKeySchema, installationInstallRequestSchema, installationUpdateRequestSchema,
@@ -71,7 +71,7 @@ export async function proxyInstallation(
     if (!config?.bffBaseUrl) return fail(503, "product_tenant_not_configured");
     let claims;
     try {
-      claims = await within(admittedProductSession(request, config));
+      claims = await within(admittedNativeSession(request, config));
       joined.throwIfAborted();
     } catch {
       joined.throwIfAborted();

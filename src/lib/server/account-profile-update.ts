@@ -5,7 +5,7 @@ import {
   accountProfileUpdateErrorSchemas,
   parseAccountProfileJson,
 } from "@/lib/account-profile-update.schema";
-import { admittedProductSession, productBffConfig, productBffHeaders, sameProductSessionSnapshot } from "./product-bff";
+import { admittedNativeSession, productBffConfig, productBffHeaders, sameNativeSessionSnapshot } from "./product-bff";
 import { requestWithDomain } from "./upstream-http";
 
 /** One canonical name write, bounded from entry through final opaque-session revalidation. */
@@ -125,7 +125,7 @@ export async function updateAccountProfile(
           : "account_profile_input_invalid",
       );
     }
-    const session = await admittedProductSession(request, config);
+    const session = await admittedNativeSession(request, config);
     check();
     if (
       !session ||
@@ -193,9 +193,9 @@ export async function updateAccountProfile(
       check();
       return fail(502, "account_profile_response_invalid");
     }
-    const latest = await admittedProductSession(request, config);
+    const latest = await admittedNativeSession(request, config);
     check();
-    if (!sameProductSessionSnapshot(session, latest))
+    if (!sameNativeSessionSnapshot(session, latest))
       return fail(401, "session_invalid");
     const retry = upstream.headers.get("retry-after");
     if (

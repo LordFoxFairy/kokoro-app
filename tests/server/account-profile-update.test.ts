@@ -3,11 +3,11 @@ const { currentProductSession, requestWithDomain } = vi.hoisted(() => ({
   currentProductSession: vi.fn(),
   requestWithDomain: vi.fn(),
 }));
-vi.mock("@/lib/server/product-session", () => ({ currentProductSession }));
-vi.mock("@/lib/server/upstream-http", () => ({ requestWithDomain }));
-vi.mock("@/lib/server/oidc-bff-agent", () => ({
-  boundedOidcBffAgent: vi.fn(),
+vi.mock("@/lib/server/product-bff", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/server/product-bff")>()),
+  admittedNativeSession: currentProductSession,
 }));
+vi.mock("@/lib/server/upstream-http", () => ({ requestWithDomain }));
 import { PATCH } from "@/app/api/account/profile/route";
 const name = "New Alice";
 const input = { name, expected_name: "\ud800\u0000 Old " };
@@ -18,6 +18,8 @@ let session: {
   access: string;
   accessExpiresAt: number;
   expiresAt: number;
+  issuerSessionId: string;
+  nativeCookie: string;
 };
 const request = (
   body: string = JSON.stringify(input),
@@ -54,6 +56,8 @@ beforeEach(() => {
     access: "server-only",
     accessExpiresAt: Date.now() + 60000,
     expiresAt: Date.now() + 120000,
+    issuerSessionId: "native-session",
+    nativeCookie: "kokoro-issuer.session_token=session",
   };
   currentProductSession.mockResolvedValue(session);
   requestWithDomain.mockImplementation(async (_url, _domain, options) =>
@@ -80,8 +84,8 @@ it("writes canonical BFF with private identity and exact original UTF16; returns
   const [url, , options] = requestWithDomain.mock.calls[0]!;
   expect(url).toBe("http://bff.test/v1/account/profile");
   expect(JSON.parse(new TextDecoder().decode(options.body))).toEqual(input);
-  expect(options.headers.get("authorization")).toBe("Bearer server-only");
-  expect(options.headers.has("cookie")).toBe(false);
+  expect(options.headers.get("authorization")).toBeNull();
+  expect(options.headers.get("cookie")).toBe("kokoro-issuer.session_token=session");
   expect(currentProductSession).toHaveBeenCalledTimes(2);
 });
 it.each([

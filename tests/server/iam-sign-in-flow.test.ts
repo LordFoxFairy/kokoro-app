@@ -12,7 +12,7 @@ async function redis<T>(operation: (client: ReturnType<typeof createClient>) => 
   client.on("error", () => undefined)
   try { await client.connect(); return await operation(client) } finally { client.destroy() }
 }
-async function create(query = "?sig=%2BAb+cd&scope=openid+profile", cookie: string | null = null) {
+async function create(query = "?native=1&return_to=%2Fapp", cookie: string | null = null) {
   const result = await createIamSignInFlow({ redisUrl, webOrigin, query, cookie, secureCookies: true })
   keys.add(`${iamSignInFlowKeyPrefix(webOrigin)}${result.id}`)
   return { ...result, browserCookie: result.cookie.split(";", 1)[0]! }
@@ -21,7 +21,7 @@ afterAll(async () => { if (keys.size) await redis(client => client.del([...keys]
 
 describe("browser-bound short sign-in flow", () => {
   it("keeps exact signed bytes server-side and requires a distinct browser proof", async () => {
-    const query = "?sig=%2BAb+cd&scope=openid+profile&scope=email"
+    const query = "?native=1&return_to=%2Fapp"
     const flow = await create(query)
     expect(flow.id).toMatch(/^[A-Za-z0-9_-]{24}$/u)
     expect(flow.path).toBe(`/auth/sign-in?flow=${flow.id}`)
@@ -38,16 +38,10 @@ describe("browser-bound short sign-in flow", () => {
   })
 
   it("does not prolong the original expiration when reading or refreshing", async () => {
-    const exp = Math.floor(Date.now() / 1_000) + 100
-    const flow = await create(`?sig=one&exp=${exp}`)
-    const key = `${iamSignInFlowKeyPrefix(webOrigin)}${flow.id}`
-    expect(flow.expiresAt).toBe(exp * 1_000)
-    await redis(client => client.pExpire(key, 50_000))
-    expect(await readIamSignInFlow({ redisUrl, webOrigin, flowId: flow.id, cookie: flow.browserCookie })).not.toBeNull()
-    expect(await redis(client => client.pTTL(key))).toBeLessThanOrEqual(50_000)
+    await expect(create("?native=1&return_to=%2Fapp&exp=1")).rejects.toThrow()
   })
 
-  it.each(["?exp=0&sig=x", "?exp=1&exp=2&sig=x", "?exp=01&sig=x", "?flow=abc", "?sig=x&flow=abc"])("rejects expired or ambiguous input %s", async query => {
+  it.each(["?exp=0&sig=x", "?exp=1&exp=2&sig=x", "?exp=01&sig=x", "?flow=abc", "?sig=x&flow=abc", "?native=1&return_to=%2Funknown"])("rejects non-native or ambiguous input %s", async query => {
     await expect(create(query)).rejects.toThrow()
   })
 
@@ -94,7 +88,7 @@ describe("browser-bound short sign-in flow", () => {
 })
 
 
-it.each(["?flow=" + "a".repeat(24), "?%66low=" + "a".repeat(24), "?sig=one&flow=x", "?flow=x&flow=y"])("never accepts a flow reference as a native OAuth query: %s", async query => {
+it.each(["?flow=" + "a".repeat(24), "?%66low=" + "a".repeat(24), "?sig=one&flow=x", "?flow=x&flow=y", "?sig=%2BAb", "?native=1&return_to=%2Funknown"])("never accepts a non-native query: %s", async query => {
   const { rawIamSignInQuery } = await import("@/lib/server/iam-sign-in-target")
   expect(rawIamSignInQuery(`https://web.test/auth/sign-in${query}`)).toBeNull()
 })

@@ -3,8 +3,8 @@ import { randomUUID } from "node:crypto"
 import { clearIamCsrfCookie, consumeIamInteractionCsrf, iamSignInCsrfCookieName } from "@/lib/server/iam-interaction-csrf"
 import { iamRelayConfig, matchesCanonicalWebRequest } from "@/lib/server/iam-relay-config"
 import { filterIssuerCookies, IAM_RELAY_POLICY } from "@/lib/server/iam-relay-policy"
-import { nativeIamResponse, validIamInteractionNavigation } from "@/lib/server/iam-relay-response"
-import { requestIamRelay, type IamRelayUpstream } from "@/lib/server/iam-relay-transport"
+import { nativeIamResponse } from "@/lib/server/iam-relay-response"
+import { requestIamRelay } from "@/lib/server/iam-relay-transport"
 import { issueSignInFeedback } from "@/lib/server/iam-sign-in-feedback"
 import { oidcLoginRecovery } from "@/lib/server/oidc-login-recovery"
 import { IAM_SIGN_IN_PATH, isIamSignInExpired, iamSignInFlowId, nativeIamSignInTarget } from "@/lib/server/iam-sign-in-target"
@@ -109,36 +109,6 @@ function signInFormFailure(input: Readonly<{
   } })
 }
 
-function issuerCookiesFromResponse(previous: string, upstream: IamRelayUpstream): string {
-  const pairs = new Map<string, string>()
-  if (previous !== "") for (const pair of previous.split("; ")) pairs.set(pair.slice(0, pair.indexOf("=")), pair)
-  for (const cookie of upstream.setCookies) {
-    const pair = cookie.slice(0, cookie.indexOf(";"))
-    pairs.set(pair.slice(0, pair.indexOf("=")), pair)
-  }
-  return [...pairs.values()].join("; ")
-}
-
-function finalCookies(first: IamRelayUpstream, second: IamRelayUpstream): IamRelayUpstream {
-  const cookies = new Map<string, string>()
-  for (const value of [...first.setCookies, ...second.setCookies]) cookies.set(value.slice(0, value.indexOf("=")), value)
-  return { ...second, setCookies: [...cookies.values()] }
-}
-
-function safeContinueLocation(upstream: IamRelayUpstream, webOrigin: string): string | null {
-  if (upstream.status !== 200 || !/^application\/json(?:; charset=utf-8)?$/iu.test(upstream.headers.get("content-type") ?? "")) return null
-  let value: unknown
-  try {
-    value = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(upstream.body)) as unknown
-  } catch {
-    return null
-  }
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return null
-  const fields = value as Record<string, unknown>
-  if (Object.keys(fields).sort().join(",") !== "redirect,url" || fields.redirect !== true || typeof fields.url !== "string") return null
-  return validIamInteractionNavigation(fields.url, webOrigin) ? fields.url : null
-}
-
 function safeNavigationResponse(native: Response, status: 302 | 303, location: string): Response {
   const headers = new Headers(native.headers)
   headers.delete("content-length")
@@ -165,6 +135,8 @@ export async function POST(request: Request): Promise<Response> {
   try { flow = await readIamSignInFlow(flowInput) } catch { return errorResponse(503, "iam_interaction_unavailable", id) }
   if (flow === null) return oidcLoginRecovery(request) ?? errorResponse(403, "iam_interaction_csrf_rejected", id)
   const { query } = flow
+  const nativeTarget = nativeIamSignInTarget(query)
+  if (nativeTarget === null) return errorResponse(400, "iam_interaction_target_rejected", id)
   const form = await boundedForm(request)
   if (form === null) return errorResponse(400, "iam_interaction_body_rejected", id)
   const formToken = form.get("csrf_token")
@@ -215,38 +187,10 @@ export async function POST(request: Request): Promise<Response> {
     if (!signedIn.setCookies.some((value) => value.startsWith(config.secureCookies ? "__Secure-kokoro-issuer.session_token=" : "kokoro-issuer.session_token="))) {
       return finish(errorResponse(502, "iam_interaction_response_invalid", id))
     }
-    const nativeTarget = nativeIamSignInTarget(query)
-    if (nativeTarget !== null) {
-      const response = nativeIamResponse(signedIn, config.webOrigin, config.secureCookies, id)
-      if (response === null) return finish(errorResponse(502, "iam_interaction_response_invalid", id))
-      const navigation = safeNavigationResponse(response, 303, nativeTarget)
-      navigation.headers.set("referrer-policy", "no-referrer")
-      // Authentication already succeeded. Cleanup failure must not turn it into a
-      // retry that resends credentials; the flow also has a fixed short TTL.
-      await retireIamSignInFlow(flowInput).catch(() => false)
-      navigation.headers.append("set-cookie", clearIamSignInFlowCookie(flowId, config.secureCookies))
-      return finish(navigation)
-    }
-    const continueHeaders = new Headers(baseHeaders)
-    continueHeaders.set("cookie", issuerCookiesFromResponse(issuerCookie, signedIn))
-    const continued = await requestIamRelay({
-      url: `${config.bffOrigin}/iam/oauth2/continue`, method: "POST", headers: continueHeaders,
-      body: new TextEncoder().encode(JSON.stringify({ postLogin: true, oauth_query: query.slice(1) })),
-      signal: request.signal, timeoutMs: IAM_RELAY_POLICY.maxDurationMs,
-      maxRequestBytes: IAM_RELAY_POLICY.maxRequestBodyBytes,
-      maxResponseBytes: IAM_RELAY_POLICY.maxResponseBytes, maxHeaderBytes: IAM_RELAY_POLICY.maxHeaderBytes,
-    })
-    if (continued.status !== 200 && continued.status !== 302) {
-      return finish(errorResponse(503, "iam_interaction_unavailable", id))
-    }
-    const response = nativeIamResponse(finalCookies(signedIn, continued), config.webOrigin, config.secureCookies, id)
+    const response = nativeIamResponse(signedIn, config.webOrigin, config.secureCookies, id)
     if (response === null) return finish(errorResponse(502, "iam_interaction_response_invalid", id))
-    const location = continued.status === 302 ? response.headers.get("location") : safeContinueLocation(continued, config.webOrigin)
-    if (
-      location === null ||
-      (continued.status === 302 && !validIamInteractionNavigation(new URL(location, config.webOrigin).href, config.webOrigin))
-    ) return finish(errorResponse(502, "iam_interaction_response_invalid", id))
-    const navigation = safeNavigationResponse(response, continued.status === 302 ? 302 : 303, location)
+    const navigation = safeNavigationResponse(response, 303, nativeTarget)
+    navigation.headers.set("referrer-policy", "no-referrer")
     // Authentication already succeeded. Cleanup failure must not turn it into a
     // retry that resends credentials; the flow also has a fixed short TTL.
     await retireIamSignInFlow(flowInput).catch(() => false)

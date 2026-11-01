@@ -22,7 +22,7 @@ import {
   webErrorResponse,
 } from "@/lib/server/bff-response"
 import { readBoundedRequestBody, requestWithDomain, UpstreamRequestTooLargeError } from "@/lib/server/upstream-http"
-import { admittedProductSession, nativeSessionBffHeaders, productBffConfig, productBffHeaders } from "@/lib/server/product-bff"
+import { admittedNativeSession, nativeSessionBffHeaders, productBffConfig, productBffHeaders } from "@/lib/server/product-bff"
 
 export const runtime = "nodejs"
 // 每请求实时求值：绝不静态化/缓存代理响应（SSE、鉴权头随信封变）。
@@ -48,10 +48,10 @@ async function proxy(request: Request, context: { params: Promise<{ path: string
   }
   const native = nativeSessionBffHeaders(request, config, requestId)
   if (native.state === "invalid") return webErrorResponse("unauthenticated", 401, requestId)
-  let claims: Awaited<ReturnType<typeof admittedProductSession>> = null
+  let claims: Awaited<ReturnType<typeof admittedNativeSession>> = null
   if (native.state === "missing") {
     try {
-      claims = await admittedProductSession(request, config)
+      claims = await admittedNativeSession(request, config)
     } catch {
       return webErrorResponse("session_unavailable", 503, requestId)
     }

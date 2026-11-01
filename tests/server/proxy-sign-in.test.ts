@@ -18,7 +18,7 @@ vi.mock("@/lib/server/iam-sign-in-flow", async original => ({
 const FLOW = "f".repeat(24)
 const SHORT_QUERY = `?flow=${FLOW}`
 const ORIGIN = "https://web.example.test:4433"
-const QUERY = "?sig=%2BAb"
+const QUERY = "?native=1&return_to=%2Fapp"
 const TOKEN = "a".repeat(43)
 const ENV = {
   KOKORO_WEB_ORIGIN: ORIGIN,
@@ -107,36 +107,21 @@ describe("HTTPS issuer sign-in Proxy rewrite", () => {
     expect(issueIamInteractionCsrf).not.toHaveBeenCalled()
   })
 
-  it("restarts an expired signed sign-in navigation before issuing a new form proof", async () => {
+  it("rejects a legacy signed sign-in navigation before issuing a new form proof", async () => {
     const { proxy } = await import("@/proxy")
     const response = await proxy(request("/auth/sign-in?exp=1&sig=%2BAb"))
 
-    expect(response.status).toBe(303)
-    expect(response.headers.get("location")).toBe(`${ORIGIN}/login`)
-    expect(response.headers.get("cache-control")).toContain("no-store")
+    expect(response.status).toBe(404)
     expect(issueIamInteractionCsrf).not.toHaveBeenCalled()
   })
 })
 
-
-describe("signed sign-in expiration boundary", () => {
-  afterEach(() => vi.restoreAllMocks())
-
-  it.each([
-    ["?exp=0&sig=%2BAb", true],
-    ["?exp=999&sig=%2BAb", true],
-    ["?exp=1000&sig=%2BAb", true],
-    ["?exp=1001&sig=%2BAb", false],
-    ["?sig=%2BAb", false],
-    ["?exp=1&exp=2000&sig=%2BAb", false],
-    ["?exp=01&sig=%2BAb", false],
-    ["?exp=-1&sig=%2BAb", false],
-    ["?exp=invalid&sig=%2BAb", false],
-  ])("checks canonical expiry without changing signed bytes (%s)", async (query, expired) => {
-    vi.spyOn(Date, "now").mockReturnValue(1_000_999)
-    const { isIamSignInExpired, rawIamSignInQuery } = await import("@/lib/server/iam-sign-in-target")
-    expect(isIamSignInExpired(query)).toBe(expired)
-    expect(rawIamSignInQuery(`${ORIGIN}/auth/sign-in${query}`)).toBe(query)
+describe("native sign-in query boundary", () => {
+  it("preserves only the fixed native marker and return target", async () => {
+    const { nativeIamSignInTarget, rawIamSignInQuery } = await import("@/lib/server/iam-sign-in-target")
+    expect(nativeIamSignInTarget(QUERY)).toBe("/app")
+    expect(rawIamSignInQuery(`${ORIGIN}/auth/sign-in${QUERY}`)).toBe(QUERY)
+    expect(rawIamSignInQuery(`${ORIGIN}/auth/sign-in?native=1&return_to=%2Funknown`)).toBeNull()
   })
 })
 

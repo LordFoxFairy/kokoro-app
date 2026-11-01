@@ -1,16 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { currentProductSession } = vi.hoisted(() => ({
-  currentProductSession: vi.fn(),
-}));
 const { requestWithDomain } = vi.hoisted(() => ({
   requestWithDomain: vi.fn(),
 }));
-vi.mock("@/lib/server/product-session", () => ({ currentProductSession }));
 vi.mock("@/lib/server/upstream-http", () => ({ requestWithDomain }));
 
 import {
-  admittedProductSession,
   admittedNativeSession,
   nativeProductBffConfig,
   productBffConfig,
@@ -30,27 +25,23 @@ const env = {
 
 describe("Product BFF admission", () => {
   beforeEach(() => {
-    currentProductSession.mockReset();
     requestWithDomain.mockReset();
   });
 
-  it("requires the complete online Product Session configuration", () => {
+  it("requires only native BFF configuration", () => {
     expect(productBffConfig(env)).not.toBeNull();
-    expect(productBffConfig({ ...env, KOKORO_WEB_REDIS_URL: "" })).toBeNull();
-    expect(
-      productBffConfig({ ...env, KOKORO_WEB_AUTH_SECRET: "short" }),
-    ).toBeNull();
+    expect(productBffConfig({ ...env, KOKORO_WEB_REDIS_URL: "", KOKORO_WEB_AUTH_SECRET: "" })).not.toBeNull();
+    expect(productBffConfig({ ...env, KOKORO_BFF_BASE_URL: "" })).toBeNull();
   });
 
   it("fails closed without a native cookie and maps native admission errors", async () => {
     const config = productBffConfig(env)!;
     await expect(
-      admittedProductSession(new Request(env.KOKORO_WEB_ORIGIN), config),
+      admittedNativeSession(new Request(env.KOKORO_WEB_ORIGIN), config),
     ).resolves.toBeNull();
-    currentProductSession.mockRejectedValueOnce(new Error("legacy path must not run"));
     requestWithDomain.mockRejectedValueOnce(new Error("bff unavailable"));
     await expect(
-      admittedProductSession(new Request(env.KOKORO_WEB_ORIGIN, {
+      admittedNativeSession(new Request(env.KOKORO_WEB_ORIGIN, {
         headers: { cookie: "kokoro-issuer.session_token=session" },
       }), config),
     ).rejects.toBeInstanceOf(ProductSessionUnavailableError);
@@ -58,21 +49,21 @@ describe("Product BFF admission", () => {
       status: 401, headers: { "content-type": "application/json" },
     }));
     await expect(
-      admittedProductSession(new Request(env.KOKORO_WEB_ORIGIN, {
+      admittedNativeSession(new Request(env.KOKORO_WEB_ORIGIN, {
         headers: { cookie: "kokoro-issuer.session_token=session" },
       }), config),
     ).resolves.toBeNull();
-    expect(currentProductSession).not.toHaveBeenCalled();
+    expect(requestWithDomain).toHaveBeenCalledTimes(2);
   });
 
-  it("emits one Product Bearer plus service identity and no self-asserted identity", () => {
+  it("emits the native cookie plus service identity and no bearer", () => {
     const config = productBffConfig(env)!;
     const headers = productBffHeaders(
       config,
-      { access: "product-access" } as never,
+      { nativeCookie: "kokoro-issuer.session_token=session" } as never,
       "request-1",
     );
-    expect(headers.get("authorization")).toBe("Bearer product-access");
+    expect(headers.get("cookie")).toBe("kokoro-issuer.session_token=session");
     expect(headers.get("x-kokoro-service")).toBe("web-bff");
     expect(headers.get("x-kokoro-request-id")).toBe("request-1");
     expect(headers.get("x-kokoro-namespace")).toBeNull();
@@ -94,7 +85,7 @@ describe("Product BFF admission", () => {
     const request = new Request(env.KOKORO_WEB_ORIGIN!, {
       headers: { cookie: "kokoro-issuer.session_token=session; next-auth.session-token=legacy" },
     });
-    const claims = await admittedProductSession(request, config);
+    const claims = await admittedNativeSession(request, config);
     expect(claims).toMatchObject({ subject: "user-1", nativeCookie: "kokoro-issuer.session_token=session" });
     const headers = productBffHeaders(config, claims!, "native-request");
     expect(headers.get("cookie")).toBe("kokoro-issuer.session_token=session");
@@ -105,7 +96,6 @@ describe("Product BFF admission", () => {
       "dev.kokoro.localhost",
       expect.objectContaining({ method: "GET" }),
     );
-    expect(currentProductSession).not.toHaveBeenCalled();
   });
 
   it("builds and admits a native session without legacy Redis, RP secret, or OIDC client settings", async () => {
@@ -127,7 +117,6 @@ describe("Product BFF admission", () => {
       headers: { cookie: "kokoro-issuer.session_token=session" },
     }), native!);
     expect(claims).toMatchObject({ id: "native-session", subject: "user-native", nativeCookie: "kokoro-issuer.session_token=session" });
-    expect(currentProductSession).not.toHaveBeenCalled();
   });
 
 });

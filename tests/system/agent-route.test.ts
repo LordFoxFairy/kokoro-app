@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-const { productBffConfig, admittedProductSession, requestWithDomain, sameOriginOk } = vi.hoisted(() => ({
+const { productBffConfig, admittedNativeSession, requestWithDomain, sameOriginOk } = vi.hoisted(() => ({
   productBffConfig: vi.fn(),
-  admittedProductSession: vi.fn(),
+  admittedNativeSession: vi.fn(),
   requestWithDomain: vi.fn(),
   sameOriginOk: vi.fn(() => true),
 }))
@@ -10,7 +10,7 @@ const { productBffConfig, admittedProductSession, requestWithDomain, sameOriginO
 vi.mock("@/lib/server/same-origin", () => ({ sameOriginOk }))
 vi.mock("@/lib/server/product-bff", () => ({
   productBffConfig,
-  admittedProductSession,
+  admittedNativeSession,
   productBffHeaders: (config: { internalSecret?: string | null }, claims: { access: string }, requestId: string) => {
     const headers = new Headers({
       authorization: `Bearer ${claims.access}`,
@@ -29,7 +29,7 @@ describe("Agent connection setup BFF", () => {
   afterEach(() => {
     vi.restoreAllMocks()
     productBffConfig.mockReset()
-    admittedProductSession.mockReset()
+    admittedNativeSession.mockReset()
     requestWithDomain.mockReset()
     sameOriginOk.mockReset()
     sameOriginOk.mockReturnValue(true)
@@ -41,7 +41,7 @@ describe("Agent connection setup BFF", () => {
       domain: "dev.kokoro.localhost",
       internalSecret: "web-secret",
     })
-    admittedProductSession.mockResolvedValue({
+    admittedNativeSession.mockResolvedValue({
       access: "product-access",
       accessExpiresAt: Date.now() + 60_000,
     })
@@ -100,7 +100,7 @@ describe("Agent connection setup BFF", () => {
     expect(response.status).toBe(400)
     expect(await response.json()).toEqual({ error: "invalid_agent_platform" })
     expect(requestWithDomain).not.toHaveBeenCalled()
-    expect(admittedProductSession).not.toHaveBeenCalled()
+    expect(admittedNativeSession).not.toHaveBeenCalled()
   })
 
   it("returns a typed unavailable response when the agent service is not configured", async () => {

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { parseArchivedTasksJson } from "@/lib/archived-tasks-json";
 import { archiveErrors, archiveIdAvailable, validateArchiveState } from "@/lib/archived-tasks.schema";
-import { admittedProductSession, productBffConfig, productBffHeaders } from "./product-bff";
+import { admittedNativeSession, productBffConfig, productBffHeaders } from "./product-bff";
 import { requestWithDomain } from "./upstream-http";
 
 export async function sessionArchive(
@@ -141,7 +141,7 @@ export async function sessionArchive(
       }
     }
     if (request.method === "POST" && !/^application\/json(?:\s*;|$)/iu.test(request.headers.get("content-type")??"")) return fail(415,"archive_state_content_type_unsupported");
-    const session = await admittedProductSession(request, config);
+    const session = await admittedNativeSession(request, config);
     check();
     if (
       !session ||
@@ -227,7 +227,7 @@ export async function sessionArchive(
     } catch {
       return fail(502, "archive_state_response_invalid");
     }
-    const latest = await admittedProductSession(request, config);
+    const latest = await admittedNativeSession(request, config);
     check();
     if (
       !latest ||

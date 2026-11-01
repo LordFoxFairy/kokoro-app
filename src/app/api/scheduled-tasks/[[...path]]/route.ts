@@ -7,7 +7,7 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 
 import { sameOriginOk } from "@/lib/server/same-origin"
-import { admittedProductSession, productBffConfig, productBffHeaders } from "@/lib/server/product-bff"
+import { admittedNativeSession, productBffConfig, productBffHeaders } from "@/lib/server/product-bff"
 import { readBoundedRequestBody, requestWithDomain, UpstreamRequestTooLargeError } from "@/lib/server/upstream-http"
 
 export const runtime = "nodejs"
@@ -59,7 +59,7 @@ async function proxyScheduledTaskRequest(
 
   let claims
   try {
-    claims = await admittedProductSession(request, config)
+    claims = await admittedNativeSession(request, config)
   } catch {
     return errorResponse("session_unavailable", 503)
   }

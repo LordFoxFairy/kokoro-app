@@ -5,7 +5,7 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
 
-import { admittedProductSession, productBffConfig, productBffHeaders } from "@/lib/server/product-bff"
+import { admittedNativeSession, productBffConfig, productBffHeaders } from "@/lib/server/product-bff"
 import {
   bffErrorEnvelopeSchema,
   bffErrorResponse,
@@ -45,7 +45,7 @@ export async function GET(request: Request): Promise<Response> {
   if (config === null) return webErrorResponse("auth_not_configured", 503, requestId)
   let claims
   try {
-    claims = await admittedProductSession(request, config)
+    claims = await admittedNativeSession(request, config)
   } catch {
     return webErrorResponse("session_unavailable", 503, requestId)
   }

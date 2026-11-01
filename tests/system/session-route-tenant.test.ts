@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-const { productBffConfig, admittedProductSession } = vi.hoisted(() => ({
+const { productBffConfig, admittedNativeSession } = vi.hoisted(() => ({
   productBffConfig: vi.fn(),
-  admittedProductSession: vi.fn(),
+  admittedNativeSession: vi.fn(),
 }))
 const { requestWithDomain } = vi.hoisted(() => ({
   requestWithDomain: vi.fn(),
@@ -11,7 +11,7 @@ const { requestWithDomain } = vi.hoisted(() => ({
 vi.mock("@/lib/server/same-origin", () => ({ sameOriginOk: () => true }))
 vi.mock("@/lib/server/product-bff", () => ({
   productBffConfig,
-  admittedProductSession,
+  admittedNativeSession,
   nativeSessionBffHeaders: () => ({ state: "missing" }),
   productBffHeaders: (config: { internalSecret?: string | null }, claims: { access: string }, requestId: string) => {
     const headers = new Headers({
@@ -33,7 +33,7 @@ describe("Chat BFF deployment domain context", () => {
     delete process.env.KOKORO_DOMAIN
     requestWithDomain.mockReset()
     productBffConfig.mockReset()
-    admittedProductSession.mockReset()
+    admittedNativeSession.mockReset()
   })
 
   it("passes KOKORO_DOMAIN as an explicit transport argument, never request Host", async () => {
@@ -43,7 +43,7 @@ describe("Chat BFF deployment domain context", () => {
       domain: "dev.kokoro.localhost",
       internalSecret: null,
     })
-    admittedProductSession.mockResolvedValue({
+    admittedNativeSession.mockResolvedValue({
       access: "product-access",
       accessExpiresAt: Date.now() + 60_000,
     })
@@ -67,6 +67,6 @@ describe("Chat BFF deployment domain context", () => {
     expect(bffHeaders.get("x-kokoro-service")).toBe("web-bff")
     expect(bffHeaders.get("host")).toBeNull()
     expect(bffHeaders.get("x-kokoro-tenant-id")).toBeNull()
-    expect(admittedProductSession).toHaveBeenCalledWith(expect.any(Request), expect.anything())
+    expect(admittedNativeSession).toHaveBeenCalledWith(expect.any(Request), expect.anything())
   })
 })

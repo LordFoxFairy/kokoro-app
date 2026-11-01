@@ -1,7 +1,7 @@
 import { proxyAdminBilling } from "@/lib/server/admin-billing-proxy"
 import {emptyModelPublishBody} from "@/lib/server/model-publish-body"
 import { requestIdForRequest } from "@/lib/server/bff-response"
-import { admittedProductSession, productBffConfig, productBffHeaders } from "@/lib/server/product-bff"
+import { admittedNativeSession, productBffConfig, productBffHeaders } from "@/lib/server/product-bff"
 import { fetchWithDomain, requestWithDomain } from "@/lib/server/upstream-http"
 
 export const runtime = "nodejs"
@@ -52,7 +52,7 @@ async function discoverModels(request: Request, config: NonNullable<ReturnType<t
   })
   const work = async (): Promise<Response> => {
     if (controller.signal.aborted) return unavailable()
-    const claims = await admittedProductSession(new Request(request, { signal: controller.signal }), config)
+    const claims = await admittedNativeSession(new Request(request, { signal: controller.signal }), config)
     if (controller.signal.aborted || Date.now() >= deadline) return unavailable()
     if (claims === null) return failure(401, "session_authentication_required", requestId)
     const headers = productBffHeaders(config, claims, requestId)
@@ -125,7 +125,7 @@ async function handle(request: Request, context: Context): Promise<Response> {
 
   let claims
   try {
-    claims = await admittedProductSession(request, config)
+    claims = await admittedNativeSession(request, config)
   } catch {
     return failure(503, "admin_gateway_unavailable", requestId)
   }
