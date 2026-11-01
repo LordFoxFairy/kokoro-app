@@ -72,7 +72,6 @@ describe("native IAM sign-in route", () => {
     ]))
     expect(relay).toHaveBeenCalledOnce()
     expect(relay.mock.calls[0]?.[0]?.url).toBe(`${"https://bff.example.test"}/iam/sign-in/email`)
-    expect(relay.mock.calls.some(([input]) => input.url.endsWith("/iam/oauth2/continue"))).toBe(false)
     expect(retireFlow).toHaveBeenCalledOnce()
   })
 })

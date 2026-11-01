@@ -1,6 +1,9 @@
 import {
-  interactionError, interactionMethodNotAllowed, interactionNavigation,
-  interactionUpstreamHeaders, prepareInteraction,
+  interactionError,
+  interactionMethodNotAllowed,
+  interactionNavigation,
+  interactionUpstreamHeaders,
+  prepareInteraction,
 } from "@/lib/server/iam-interaction-route"
 import { IAM_RELAY_POLICY } from "@/lib/server/iam-relay-policy"
 import { loginRecovery } from "@/lib/server/login-recovery"
@@ -24,9 +27,11 @@ function upstreamFailure(upstream: IamRelayUpstream, id: string): Response {
   if (upstream.body.byteLength <= 4096 && /^application\/json(?:; charset=utf-8)?$/iu.test(upstream.headers.get("content-type") ?? "")) {
     try {
       const value: unknown = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(upstream.body))
-      if (typeof value === "object" && value !== null && !Array.isArray(value) &&
-        "error" in value && value.error === "invalid_grant") classification = "invalid_grant"
-    } catch { /* Unrecognized data remains a fixed diagnostic category. */ }
+      if (typeof value === "object" && value !== null && !Array.isArray(value) && "error" in value && value.error === "invalid_grant")
+        classification = "invalid_grant"
+    } catch {
+      /* Unrecognized data remains a fixed diagnostic category. */
+    }
   }
   console.warn("Kokoro tenant continuation rejected:", "upstream_status", status, classification)
   if (status === 401) return interactionError(401, "iam_interaction_sign_in_required", id)
@@ -47,18 +52,22 @@ async function continueTenant(request: Request): Promise<Response> {
     const headers = interactionUpstreamHeaders(context)
     headers.set("content-type", "application/json")
     const changed = await requestIamRelay({
-      url: `${context.config.bffOrigin}/iam/organization/set-active`, method: "POST", headers,
+      url: `${context.config.bffOrigin}/iam/organization/set-active`,
+      method: "POST",
+      headers,
       // The IAM native session and signed interaction cookie already bind the
       // selected tenant. OAuth query material is not a second authorization
       // input and must not cross the native organization boundary.
       body: new TextEncoder().encode(JSON.stringify({ organizationId: tenantId })),
-      signal: request.signal, timeoutMs: IAM_RELAY_POLICY.maxDurationMs,
-      maxRequestBytes: IAM_RELAY_POLICY.maxRequestBodyBytes, maxResponseBytes: IAM_RELAY_POLICY.maxResponseBytes,
+      signal: request.signal,
+      timeoutMs: IAM_RELAY_POLICY.maxDurationMs,
+      maxRequestBytes: IAM_RELAY_POLICY.maxRequestBodyBytes,
+      maxResponseBytes: IAM_RELAY_POLICY.maxResponseBytes,
       maxHeaderBytes: IAM_RELAY_POLICY.maxHeaderBytes,
     })
     phase = "continuation_validation"
     if (changed.status !== 200 && changed.status !== 302) return upstreamFailure(changed, context.id)
-    const continuation = interactionNavigation(changed, context, PAGE_PATH)
+    const continuation = interactionNavigation(changed, context)
     if (continuation === null) return interactionError(502, "iam_interaction_response_invalid", context.id)
     const target = continuation.headers.get("location")
     if (target === null || new URL(target, context.config.webOrigin).pathname === "/auth/select-tenant") {
@@ -76,7 +85,7 @@ export async function GET(request: Request): Promise<Response> {
   // Never retry a tenant mutation or clear another transaction after an
   // unconfirmed continuation. Native documents leave the protocol URL;
   // JSON, q=0 and non-navigation clients retain their original rejection.
-  return response.status >= 400 ? loginRecovery(request) ?? response : response
+  return response.status >= 400 ? (loginRecovery(request) ?? response) : response
 }
 
 export function HEAD(): Response {

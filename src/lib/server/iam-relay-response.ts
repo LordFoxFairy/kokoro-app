@@ -1,7 +1,6 @@
 import { IAM_RELAY_POLICY, isAllowedIssuerCookieName, resolveBrowserIamGet } from "./iam-relay-policy"
 import type { IamRelayUpstream } from "./iam-relay-transport"
 
-const LOGOUT_CSP = "default-src 'none'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
 const COOKIE_ATTRIBUTES = new Set(["path", "httponly", "samesite", "secure", "expires", "max-age"])
 
 export function browserIamGetResponse(response: Response, relativePath: string): Response {
@@ -29,59 +28,39 @@ function rawLocationPath(value: string): string | null {
   return value.slice(pathStart, queryStart < 0 ? undefined : queryStart)
 }
 
-export function validIamRpCallbackNavigation(value: string, webOrigin: string): boolean {
-  if (!safeHeaderValue(value, 8192) || value.startsWith("//") || value.includes("\\") || value.includes("#")) return false
-  const rawPath = rawLocationPath(value)
-  if (rawPath !== "/api/auth/callback/kokoro-iam") return false
-  try {
-    const target = new URL(value, webOrigin)
-    if (target.origin !== webOrigin || target.username !== "" || target.password !== "") return false
-    const query = target.searchParams
-    const values = [...query.entries()]
-    if (new Set(values.map(([name]) => name)).size !== values.length ||
-      query.getAll("state").length !== 1 || query.getAll("iss").length !== 1 ||
-      query.get("iss") !== `${webOrigin}/iam` || !/^[A-Za-z0-9_-]{16,256}$/u.test(query.get("state") ?? "")) return false
-    const code = query.get("code")
-    const error = query.get("error")
-    if (code !== null && error === null) return values.length === 3 && /^[A-Za-z0-9._~-]{1,2048}$/u.test(code)
-    if (code !== null || error === null || !/^[a-z_]{1,64}$/u.test(error)) return false
-    if (values.some(([name]) => !["error", "error_description", "error_uri", "iss", "state"].includes(name))) return false
-    return ["error_description", "error_uri"].every((name) => {
-      const value = query.get(name)
-      return value === null || (query.getAll(name).length === 1 && Buffer.byteLength(value) <= 1024 && !/[\u0000-\u001f\u007f]/u.test(value))
-    })
-  } catch { return false }
-}
-
 export function validInvitationLocation(value: string, webOrigin: string, sourceRoute: string): boolean {
-  if (sourceRoute !== IAM_RELAY_POLICY.invitationLocation.sourceRoute ||
+  if (
+    sourceRoute !== IAM_RELAY_POLICY.invitationLocation.sourceRoute ||
     !value.startsWith(`${webOrigin}${IAM_RELAY_POLICY.invitationLocation.path}?id=`) ||
-    !safeHeaderValue(value, 8192) || value.includes("\\") || value.includes("#")) return false
+    !safeHeaderValue(value, 8192) ||
+    value.includes("\\") ||
+    value.includes("#")
+  )
+    return false
   const remainder = value.slice(`${webOrigin}${IAM_RELAY_POLICY.invitationLocation.path}?id=`.length)
   const [invitationId, error, extra] = remainder.split("&")
-  if (extra !== undefined || !invitationId ||
-    !/^(?:[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$/u.test(invitationId)) return false
-  return error === undefined ||
-    (error.startsWith("error=") && IAM_RELAY_POLICY.invitationLocation.allowedErrorCodes.includes(error.slice("error=".length)))
+  if (
+    extra !== undefined ||
+    !invitationId ||
+    !/^(?:[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$/u.test(
+      invitationId,
+    )
+  )
+    return false
+  return error === undefined || (error.startsWith("error=") && IAM_RELAY_POLICY.invitationLocation.allowedErrorCodes.includes(error.slice("error=".length)))
 }
 
 function allowedLocation(value: string, webOrigin: string, sourceRoute?: string): boolean {
   if (!safeHeaderValue(value, 8192) || value.startsWith("//") || value.includes("\\") || value.includes("#")) return false
   const rawPath = rawLocationPath(value)
-  if (
-    rawPath === null || rawPath.includes("%") || rawPath.includes("//") ||
-    rawPath.split("/").some((segment) => segment === "." || segment === "..")
-  ) return false
+  if (rawPath === null || rawPath.includes("%") || rawPath.includes("//") || rawPath.split("/").some((segment) => segment === "." || segment === ".."))
+    return false
   const rawQuery = value.includes("?") ? value.slice(value.indexOf("?")) : ""
   if (Buffer.byteLength(rawQuery) > IAM_RELAY_POLICY.maxQueryBytes || /%(?![0-9a-fA-F]{2})/u.test(rawQuery)) return false
   try {
     const target = new URL(value, webOrigin)
-    if (
-      target.origin !== webOrigin || target.username !== "" || target.password !== "" ||
-      target.hash !== "" || target.pathname.includes("%")
-    ) return false
+    if (target.origin !== webOrigin || target.username !== "" || target.password !== "" || target.hash !== "" || target.pathname.includes("%")) return false
     if (IAM_RELAY_POLICY.webInteractionPaths.includes(target.pathname)) return true
-    if (validIamRpCallbackNavigation(value, webOrigin)) return true
     if (sourceRoute !== undefined && validInvitationLocation(value, webOrigin, sourceRoute)) return true
     return resolveBrowserIamGet(`${target.pathname}${target.search}`, "GET") !== null
   } catch {
@@ -93,8 +72,7 @@ export function validIamInteractionNavigation(value: string, webOrigin: string):
   if (!/^https?:\/\//u.test(value) || !allowedLocation(value, webOrigin)) return false
   try {
     const target = new URL(value)
-    return (IAM_RELAY_POLICY.webInteractionPaths.includes(target.pathname) && target.search.length > 1) ||
-      validIamRpCallbackNavigation(value, webOrigin)
+    return IAM_RELAY_POLICY.webInteractionPaths.includes(target.pathname) && target.search.length > 1
   } catch {
     return false
   }
@@ -115,14 +93,13 @@ function validSetCookieName(value: string, secure: boolean): string | null {
     attributes.set(key, index < 0 ? "" : part.slice(index + 1))
   }
   const name = pair.slice(0, separator)
-  const expectedPath = name.endsWith(".oauth_logout_confirmation")
-    ? IAM_RELAY_POLICY.cookiePaths.logoutConfirmation
-    : IAM_RELAY_POLICY.cookiePaths.default
-  const valid = (
-    attributes.get("path") === expectedPath && attributes.has("httponly") &&
-    attributes.get("samesite")?.toLowerCase() === "lax" && !attributes.has("domain") &&
+  const expectedPath = IAM_RELAY_POLICY.cookiePaths.default
+  const valid =
+    attributes.get("path") === expectedPath &&
+    attributes.has("httponly") &&
+    attributes.get("samesite")?.toLowerCase() === "lax" &&
+    !attributes.has("domain") &&
     (!secure || attributes.has("secure"))
-  )
   return valid ? name : null
 }
 
@@ -142,11 +119,7 @@ export function nativeIamResponse(
     if (value === null) continue
     if (!safeHeaderValue(value, name === "location" ? 8192 : 4096)) return null
     if (name === "location" && !allowedLocation(value, webOrigin, sourceRoute)) return null
-    if (
-      name === "retry-after" &&
-      (upstream.status !== 429 || !/^[1-9][0-9]{0,4}$/u.test(value) || Number(value) > 86400)
-    ) return null
-    if (name === "content-security-policy" && value !== LOGOUT_CSP) return null
+    if (name === "retry-after" && (upstream.status !== 429 || !/^[1-9][0-9]{0,4}$/u.test(value) || Number(value) > 86400)) return null
     if (name === "x-content-type-options" && value.toLowerCase() !== "nosniff") return null
     if (name === "pragma" && value.toLowerCase() !== "no-cache") return null
     if (name === "x-request-id" && !/^[A-Za-z0-9._:-]{1,128}$/u.test(value)) return null
@@ -163,77 +136,9 @@ export function nativeIamResponse(
   if (!headers.has("x-request-id")) headers.set("x-request-id", fallbackRequestId)
   headers.set("content-length", String(upstream.body.byteLength))
 
-  const body = upstream.status === 204 || upstream.status === 304
-    ? null
-    : upstream.body.buffer.slice(
-        upstream.body.byteOffset,
-        upstream.body.byteOffset + upstream.body.byteLength,
-      ) as ArrayBuffer
+  const body =
+    upstream.status === 204 || upstream.status === 304
+      ? null
+      : (upstream.body.buffer.slice(upstream.body.byteOffset, upstream.body.byteOffset + upstream.body.byteLength) as ArrayBuffer)
   return new Response(body, { status: upstream.status, headers })
-}
-
-// Better Auth emits an authorize continuation as 200 JSON. Only the browser
-// authorize GET may translate that owner response into a navigation; all
-// other IAM relay paths keep their native HTTP semantics.
-export function browserAuthorizeResponse(
-  upstream: IamRelayUpstream,
-  webOrigin: string,
-  secureCookies: boolean,
-  fallbackRequestId: string,
-): Response | null {
-  const native = nativeIamResponse(upstream, webOrigin, secureCookies, fallbackRequestId)
-  if (native === null || upstream.status !== 200) return native
-  if (upstream.headers.has("location") ||
-    !/^application\/json(?:; charset=utf-8)?$/iu.test(upstream.headers.get("content-type") ?? "")) return null
-
-  let location: string | null = null
-  try {
-    const value: unknown = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(upstream.body))
-    if (typeof value === "object" && value !== null && !Array.isArray(value)) {
-      const fields = value as Record<string, unknown>
-      if (Object.keys(fields).sort().join(",") === "redirect,url" && fields.redirect === true &&
-        typeof fields.url === "string" && validIamInteractionNavigation(fields.url, webOrigin)) location = fields.url
-    }
-  } catch { /* Malformed authorize continuation is rejected without exposing its body. */ }
-  if (location === null) return null
-
-  const headers = new Headers(native.headers)
-  headers.delete("content-length")
-  headers.delete("content-type")
-  headers.set("cache-control", "no-store")
-  headers.set("location", location)
-  return new Response(null, { status: 302, headers })
-}
-
-// The issuer may return a Better Auth JSON command or a native 302. Neither
-// points to a usable bare sign-in page; /login starts the fixed OIDC flow.
-export function browserLogoutConfirmationResponse(
-  upstream: IamRelayUpstream,
-  webOrigin: string,
-  secureCookies: boolean,
-  fallbackRequestId: string,
-): Response | null {
-  const native = nativeIamResponse(upstream, webOrigin, secureCookies, fallbackRequestId)
-  if (native === null) return null
-  if (upstream.status === 302) {
-    const location = upstream.headers.get("location")
-    if (location !== "/auth/sign-in" && location !== `${webOrigin}/auth/sign-in`) return null
-  } else if (upstream.status === 200) {
-    if (upstream.headers.has("location") ||
-      !/^application\/json(?:; charset=utf-8)?$/iu.test(upstream.headers.get("content-type") ?? "")) return null
-    try {
-      const value: unknown = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(upstream.body))
-      if (typeof value !== "object" || value === null || Array.isArray(value)) return null
-      const fields = value as Record<string, unknown>
-      if (Object.keys(fields).sort().join(",") !== "redirect,url" || fields.redirect !== true ||
-        fields.url !== `${webOrigin}/auth/sign-in`) return null
-    } catch { return null }
-  } else return upstream.status >= 400 ? native : null
-
-  const headers = new Headers(native.headers)
-  headers.delete("content-length")
-  headers.delete("content-type")
-  headers.set("cache-control", "no-store")
-  headers.set("location", "/login")
-  return new Response(null, { status: 303, headers })
 }

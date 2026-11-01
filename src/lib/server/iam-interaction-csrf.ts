@@ -9,7 +9,7 @@ const COOKIE_NAME = "kokoro_iam_csrf"
 type Binding = Readonly<{
   redisUrl: string
   webOrigin: string
-  path: "/auth/sign-in" | "/iam/interactions/consent" | "/iam/interactions/invitation"
+  path: "/auth/sign-in" | "/iam/interactions/invitation"
   method: "GET" | "POST"
   query: string
   issuerCookie: string
@@ -77,25 +77,26 @@ export async function withIamInteractionRedis<T>(url: string, operation: (client
   }
 }
 
-export async function issueIamInteractionCsrf(input: Binding & Readonly<{ secureCookies: boolean; cookieName?: string; expiresAt?: number }>): Promise<Readonly<{
-  token: string
-  cookie: string
-}>> {
+export async function issueIamInteractionCsrf(input: Binding & Readonly<{ secureCookies: boolean; cookieName?: string; expiresAt?: number }>): Promise<
+  Readonly<{
+    token: string
+    cookie: string
+  }>
+> {
   const token = randomBytes(32).toString("base64url")
-  const cookieName = input.path === "/auth/sign-in"
-    ? iamSignInCsrfCookieName(input.query, token, input.context)!
-    : input.cookieName ?? COOKIE_NAME
+  const cookieName = input.path === "/auth/sign-in" ? iamSignInCsrfCookieName(input.query, token, input.context)! : (input.cookieName ?? COOKIE_NAME)
   if (input.path !== "/auth/sign-in" && !/^kokoro_iam_csrf(?:_invite_(?:signin|signup|accept|reject))?$/u.test(cookieName)) {
     throw new Error("invalid IAM interaction CSRF cookie name")
   }
-  const ttl = input.expiresAt === undefined ? TOKEN_TTL_SECONDS
-    : Math.min(TOKEN_TTL_SECONDS, Math.floor((input.expiresAt - Date.now()) / 1_000))
+  const ttl = input.expiresAt === undefined ? TOKEN_TTL_SECONDS : Math.min(TOKEN_TTL_SECONDS, Math.floor((input.expiresAt - Date.now()) / 1_000))
   if (!Number.isSafeInteger(ttl) || ttl <= 0) throw new Error("expired IAM interaction")
   const key = `${iamCsrfKeyPrefix(input.webOrigin)}${sha256(token)}`
-  const stored = await withIamInteractionRedis(input.redisUrl, (client) => client.set(key, bindingDigest(input), {
-    EX: ttl,
-    NX: true,
-  }))
+  const stored = await withIamInteractionRedis(input.redisUrl, (client) =>
+    client.set(key, bindingDigest(input), {
+      EX: ttl,
+      NX: true,
+    }),
+  )
   if (stored !== "OK") throw new Error("Web CSRF nonce collision")
   return {
     token,
@@ -103,26 +104,31 @@ export async function issueIamInteractionCsrf(input: Binding & Readonly<{ secure
   }
 }
 
-export async function consumeIamInteractionCsrf(input: Binding & Readonly<{
-  cookieToken: string | null
-  formToken: string | null
-}>): Promise<boolean> {
+export async function consumeIamInteractionCsrf(
+  input: Binding &
+    Readonly<{
+      cookieToken: string | null
+      formToken: string | null
+    }>,
+): Promise<boolean> {
   if (
-    input.cookieToken === null || input.formToken === null ||
-    !TOKEN_PATTERN.test(input.cookieToken) || !TOKEN_PATTERN.test(input.formToken) ||
+    input.cookieToken === null ||
+    input.formToken === null ||
+    !TOKEN_PATTERN.test(input.cookieToken) ||
+    !TOKEN_PATTERN.test(input.formToken) ||
     !timingSafeEqual(Buffer.from(input.cookieToken), Buffer.from(input.formToken))
-  ) return false
+  )
+    return false
   const key = `${iamCsrfKeyPrefix(input.webOrigin)}${sha256(input.cookieToken)}`
   const expected = bindingDigest(input)
   if (input.path === "/auth/sign-in") {
     return withIamInteractionRedis(input.redisUrl, async (client) => {
       const stored = await client.get(key)
-      if (stored === null || stored.length !== expected.length ||
-        !timingSafeEqual(Buffer.from(stored), Buffer.from(expected))) return false
-      const consumed = await client.eval(
-        "if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) else return 0 end",
-        { keys: [key], arguments: [stored] },
-      )
+      if (stored === null || stored.length !== expected.length || !timingSafeEqual(Buffer.from(stored), Buffer.from(expected))) return false
+      const consumed = await client.eval("if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) else return 0 end", {
+        keys: [key],
+        arguments: [stored],
+      })
       return consumed === 1
     })
   }
@@ -140,11 +146,9 @@ export function clearIamCsrfCookie(path: Binding["path"], secureCookies: boolean
 }
 
 /** Called only after the browser-bound flow has been verified. Never retires an unseen render. */
-export async function retireObservedSignInCsrf(
-  input: Binding & Readonly<{ cookie: string | null }>, onRetired?: (name: string) => void,
-): Promise<string[]> {
+export async function retireObservedSignInCsrf(input: Binding & Readonly<{ cookie: string | null }>, onRetired?: (name: string) => void): Promise<string[]> {
   if (input.cookie !== null && Buffer.byteLength(input.cookie) > 12_288) return []
-  const pairs = input.cookie?.split(";").map(pair => pair.trim()) ?? []
+  const pairs = input.cookie?.split(";").map((pair) => pair.trim()) ?? []
   const retired: string[] = []
   let candidates = 0
   for (const pair of pairs) {
@@ -152,19 +156,24 @@ export async function retireObservedSignInCsrf(
     if (separator < 1) continue
     const name = pair.slice(0, separator)
     const token = pair.slice(separator + 1)
-    if (name !== iamSignInCsrfCookieName(input.query, token, input.context) ||
-      pairs.filter(candidate => candidate.startsWith(`${name}=`)).length !== 1) continue
+    if (name !== iamSignInCsrfCookieName(input.query, token, input.context) || pairs.filter((candidate) => candidate.startsWith(`${name}=`)).length !== 1)
+      continue
     if (candidates++ >= 4) break
     const expected = bindingDigest(input)
     const key = `${iamCsrfKeyPrefix(input.webOrigin)}${sha256(token)}`
-    const reclaim = await withIamInteractionRedis(input.redisUrl, client => client.eval(
-      "local v = redis.call('GET', KEYS[1]); if not v then return 1 end; if v == ARGV[1] then redis.call('DEL', KEYS[1]); return 1 end; return 0",
-      { keys: [key], arguments: [expected] },
-    ))
+    const reclaim = await withIamInteractionRedis(input.redisUrl, (client) =>
+      client.eval("local v = redis.call('GET', KEYS[1]); if not v then return 1 end; if v == ARGV[1] then redis.call('DEL', KEYS[1]); return 1 end; return 0", {
+        keys: [key],
+        arguments: [expected],
+      }),
+    )
     // A missing nonce may have been consumed by a concurrent POST/refresh, or a
     // delete whose acknowledgement was lost. Only its observed, flow-bound name
     // is reclaimed; a mismatched live binding is never deleted or cleared.
-    if (reclaim === 1) { retired.push(name); onRetired?.(name) }
+    if (reclaim === 1) {
+      retired.push(name)
+      onRetired?.(name)
+    }
   }
   return retired
 }

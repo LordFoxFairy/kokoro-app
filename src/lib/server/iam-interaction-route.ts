@@ -1,14 +1,11 @@
 import { randomUUID } from "node:crypto"
 
-import { clearIamCsrfCookie } from "./iam-interaction-csrf"
 import { IAM_RELAY_POLICY, filterIssuerCookies } from "./iam-relay-policy"
 import { iamRelayConfig, matchesCanonicalWebRequest, type IamRelayConfig } from "./iam-relay-config"
 import { nativeIamResponse, validIamInteractionNavigation } from "./iam-relay-response"
 import type { IamRelayUpstream } from "./iam-relay-transport"
 
-export type InteractionPath =
-  "/auth/select-tenant" | "/auth/consent" |
-  "/iam/interactions/select-tenant" | "/iam/interactions/consent"
+export type InteractionPath = "/auth/select-tenant" | "/iam/interactions/select-tenant"
 export type InteractionContext = Readonly<{
   id: string
   config: IamRelayConfig
@@ -18,9 +15,13 @@ export type InteractionContext = Readonly<{
 }>
 
 export function interactionError(status: number, code: string, id: string): Response {
-  return Response.json({ error: { code, message: "IAM interaction was rejected" } }, {
-    status, headers: { "cache-control": "no-store", "x-request-id": id },
-  })
+  return Response.json(
+    { error: { code, message: "IAM interaction was rejected" } },
+    {
+      status,
+      headers: { "cache-control": "no-store", "x-request-id": id },
+    },
+  )
 }
 
 export function interactionMethodNotAllowed(allow: "GET" | "GET, POST"): Response {
@@ -36,9 +37,12 @@ function rawQuery(request: Request, path: InteractionPath): string | null {
   if (!target.startsWith(`${path}?`) || target.includes("#")) return null
   const query = target.slice(path.length)
   if (
-    query.length < 2 || Buffer.byteLength(query) > IAM_RELAY_POLICY.maxQueryBytes ||
-    /[\u0000-\u001f\u007f\\]/u.test(query) || /%(?![0-9a-fA-F]{2})/u.test(query)
-  ) return null
+    query.length < 2 ||
+    Buffer.byteLength(query) > IAM_RELAY_POLICY.maxQueryBytes ||
+    /[\u0000-\u001f\u007f\\]/u.test(query) ||
+    /%(?![0-9a-fA-F]{2})/u.test(query)
+  )
+    return null
   const params = new URLSearchParams(query.slice(1))
   if (params.getAll("sig").length !== 1 || !params.get("sig")) return null
   return query
@@ -62,8 +66,12 @@ export function prepareInteraction(request: Request, path: InteractionPath, meth
   if (query === null) return interactionError(404, "iam_interaction_not_found", id)
   if (request.headers.has("authorization")) return interactionError(403, "iam_interaction_credential_rejected", id)
   if (headerBytes(request.headers) > IAM_RELAY_POLICY.maxHeaderBytes) return interactionError(413, "iam_interaction_request_too_large", id)
-  if (method === "GET" && (request.body !== null || request.headers.has("transfer-encoding") ||
-    (request.headers.has("content-length") && request.headers.get("content-length") !== "0"))) {
+  if (
+    method === "GET" &&
+    (request.body !== null ||
+      request.headers.has("transfer-encoding") ||
+      (request.headers.has("content-length") && request.headers.get("content-length") !== "0"))
+  ) {
     return interactionError(400, "iam_interaction_body_rejected", id)
   }
   const issuerCookie = filterIssuerCookies(request.headers.get("cookie"), config.secureCookies)
@@ -71,13 +79,17 @@ export function prepareInteraction(request: Request, path: InteractionPath, meth
   return { id, config, redisUrl, query, issuerCookie }
 }
 
-export function redirectAuthInteraction(request: Request, outerPath: "/auth/select-tenant" | "/auth/consent"): Response {
-  const context = prepareInteraction(request, outerPath, "GET")
+export function redirectAuthInteraction(request: Request): Response {
+  const context = prepareInteraction(request, "/auth/select-tenant", "GET")
   if (context instanceof Response) return context
-  const innerPath = outerPath === "/auth/select-tenant" ? "/iam/interactions/select-tenant" : "/iam/interactions/consent"
-  return new Response(null, { status: 302, headers: {
-    "cache-control": "no-store", "location": `${innerPath}${context.query}`, "x-request-id": context.id,
-  } })
+  return new Response(null, {
+    status: 302,
+    headers: {
+      "cache-control": "no-store",
+      location: `/iam/interactions/select-tenant${context.query}`,
+      "x-request-id": context.id,
+    },
+  })
 }
 
 export function csrfCookieValue(raw: string | null, name: string): string | null {
@@ -103,7 +115,10 @@ export async function boundedInteractionForm(request: Request, fields: readonly 
   const chunks: Uint8Array[] = []
   let total = 0
   let aborted = false
-  const onAbort = (): void => { aborted = true; void reader.cancel().catch(() => undefined) }
+  const onAbort = (): void => {
+    aborted = true
+    void reader.cancel().catch(() => undefined)
+  }
   const deadline = setTimeout(onAbort, IAM_RELAY_POLICY.maxDurationMs)
   request.signal.addEventListener("abort", onAbort, { once: true })
   try {
@@ -125,9 +140,18 @@ export async function boundedInteractionForm(request: Request, fields: readonly 
     reader.releaseLock()
   }
   if (aborted) return null
-  const form = new URLSearchParams(Buffer.concat(chunks.map((chunk) => Buffer.from(chunk)), total).toString("utf8"))
-  if ([...form.keys()].length !== fields.length || fields.some((field) => form.getAll(field).length !== 1) ||
-    [...form.keys()].some((field) => !fields.includes(field))) return null
+  const form = new URLSearchParams(
+    Buffer.concat(
+      chunks.map((chunk) => Buffer.from(chunk)),
+      total,
+    ).toString("utf8"),
+  )
+  if (
+    [...form.keys()].length !== fields.length ||
+    fields.some((field) => form.getAll(field).length !== 1) ||
+    [...form.keys()].some((field) => !fields.includes(field))
+  )
+    return null
   return form
 }
 
@@ -137,8 +161,11 @@ export function escapeInteractionHtml(value: string): string {
 
 export function interactionUpstreamHeaders(context: InteractionContext, accept = "application/json"): Headers {
   const headers = new Headers({
-    accept, origin: context.config.webOrigin, "x-kokoro-service": "web-bff",
-    "x-kokoro-internal-secret": context.config.secret, "x-request-id": context.id,
+    accept,
+    origin: context.config.webOrigin,
+    "x-kokoro-service": "web-bff",
+    "x-kokoro-internal-secret": context.config.secret,
+    "x-request-id": context.id,
   })
   if (context.issuerCookie !== "") headers.set("cookie", context.issuerCookie)
   return headers
@@ -169,11 +196,7 @@ export function issuerCookieAfter(previous: string, setCookies: readonly string[
   return [...pairs.values()].join("; ")
 }
 
-export function interactionNavigation(
-  upstream: IamRelayUpstream,
-  context: InteractionContext,
-  path: "/iam/interactions/select-tenant" | "/iam/interactions/consent",
-): Response | null {
+export function interactionNavigation(upstream: IamRelayUpstream, context: InteractionContext): Response | null {
   if (upstream.status !== 200 && upstream.status !== 302) return null
   const native = nativeIamResponse(upstream, context.config.webOrigin, context.config.secureCookies, context.id)
   if (native === null) return null
@@ -186,10 +209,17 @@ export function interactionNavigation(
       const value: unknown = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(upstream.body))
       if (typeof value === "object" && value !== null && !Array.isArray(value)) {
         const fields = value as Record<string, unknown>
-        if (Object.keys(fields).sort().join(",") === "redirect,url" && fields.redirect === true &&
-          typeof fields.url === "string" && validIamInteractionNavigation(fields.url, context.config.webOrigin)) location = fields.url
+        if (
+          Object.keys(fields).sort().join(",") === "redirect,url" &&
+          fields.redirect === true &&
+          typeof fields.url === "string" &&
+          validIamInteractionNavigation(fields.url, context.config.webOrigin)
+        )
+          location = fields.url
       }
-    } catch { /* Reject malformed continuation. */ }
+    } catch {
+      /* Reject malformed continuation. */
+    }
   }
   if (location === null) return null
   const headers = new Headers(native.headers)
@@ -197,9 +227,5 @@ export function interactionNavigation(
   headers.delete("content-type")
   headers.set("cache-control", "no-store")
   headers.set("location", location)
-  const response = new Response(null, { status: upstream.status === 302 ? 302 : 303, headers })
-  if (path === "/iam/interactions/consent") {
-    response.headers.append("set-cookie", clearIamCsrfCookie(path, context.config.secureCookies))
-  }
-  return response
+  return new Response(null, { status: upstream.status === 302 ? 302 : 303, headers })
 }

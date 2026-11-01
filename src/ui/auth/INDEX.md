@@ -6,7 +6,7 @@ AppGate在整个KokoroAppSurface外提供单用途read-recheck context；只有�
 
 ## 2026-10-21 原生退出确认产品页
 
-`src/app/auth/sign-out/page.tsx` 只拥有中文确认／失败展示，复用Button/Card/token；无客户端状态或自动认证请求。确认form只POST既有issuer端点，issuer opaque确认cookie、期限和当前Session/client/redirect授权仍由IAM验证。`iam-logout-response.ts`仅把已校验正向native确认发行投影为固定页面导航，API维持原生响应。固定交互页origin referrer＋form-action self，失败态无form且no-referrer；不放宽Origin:null、取消不恢复Product会话。
+`src/app/auth/sign-out/page.tsx` 只拥有中文确认／失败展示，复用Button/Card/token；无客户端状态或自动认证请求。确认 form 只 POST 原生 `/iam/sign-out`，由 IAM 校验当前 session。固定交互页使用 origin referrer；失败态无 form 且 no-referrer；不放宽 Origin:null、取消不恢复 Product 会话。
 
 ## SET33 两条原生withdraw测试的就绪前置（2026-10-15；D0，仅现测试）
 
