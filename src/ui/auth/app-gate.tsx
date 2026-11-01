@@ -28,7 +28,7 @@ export function AppGate({ brandName, desktopRailCollapsed, serverAdmitted = fals
   const probe = useSessionProbe({ serverUnavailable, serverAdmitted })
   const scheduledTaskClient = useScheduledTaskClient(probe.projectReadBoundary)
   const anonymousNavigationStarted = useRef(false)
-  // Identity is decided only by the Product Session. System supplies optional
+  // Identity is decided only by the IAM native session. System supplies optional
   // presentation after authentication; its outage must not block core Chat or
   // switch the live transport into preview mode.
   const { manifest, source } = useRuntimeManifest({ preview: probe.mode !== "authenticated" })
@@ -59,7 +59,7 @@ export function AppGate({ brandName, desktopRailCollapsed, serverAdmitted = fals
   const unavailable = serverUnavailable || state === "unavailable" || probe.unavailable
   // Keep the stable workbench mounted once the client probe has verified the
   // actor, even if the server rendered this document during a short-lived
-  // refresh/Redis read outage. The admission boundary still revokes scoped
+  // native-admission outage. The admission boundary still revokes scoped
   // reads and mutations while the probe is uncertain; replacing the whole
   // workbench with a second loading surface is what caused the visible flash.
   const booting = probe.mode === "checking" && probe.projectReadBoundary.subject === null

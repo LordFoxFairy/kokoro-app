@@ -1,14 +1,12 @@
 "use client"
 
-// Product Session 是 HttpOnly；GET 获取只读投影，可见页周期消费现有 CSRF POST 续期。
+// IAM native session 是 HttpOnly；GET 只读取受信投影，不在浏览器续期或重放凭据。
 // authenticated 或显式本地 preview → pass；anonymous → anonymous；探针未回前 checking。
 // preview 只由非生产环境的显式开关启用；网络、超时与畸形响应进入显式故障态，避免 fail-open 或误跳登录。
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react"
 
 import type { ProductRead401, ProductReadRecheck } from "./product-read-recheck-context"
-
-import { currentCsrf, refreshProductSession } from "@/ui/auth/product-auth-client"
 
 import {
   AUTH_INDEX_SUBJECT_KEY,
@@ -39,7 +37,7 @@ export type SessionProbe = {
 const EXPLICIT_PREVIEW = process.env.NODE_ENV !== "production" && process.env.NEXT_PUBLIC_SESSION_PREVIEW === "1"
 
 type ResolvedSession =
-  | { mode: "authenticated"; subject: string; subjectAtProbeStart: string | null | undefined; renewalConfirmed: boolean; native?: boolean }
+  | { mode: "authenticated"; subject: string; subjectAtProbeStart: string | null | undefined }
   | { mode: "anonymous"; subject: null }
   | { mode: "unavailable"; subject: null }
 
@@ -48,21 +46,16 @@ type ReadRecoveryAdmission = {
   result: Promise<boolean>; settle: (accepted: boolean) => void;
 }
 
-const REFRESH_INTERVAL_MS = 120_000
+const SESSION_CHECK_INTERVAL_MS = 120_000
 type SessionObservation = { indexSubject: string | null | undefined; retired: boolean }
 type SharedSessionCheck = { observation: SessionObservation; result: Promise<ResolvedSession> }
 let sessionProbeInflight: SharedSessionCheck | null = null
 let lastIdentityStorageEvent: StorageEvent | null = null
 let sessionProbeController: AbortController | null = null
 let admittedSubject: string | null = null
-let nextRefreshAt: number | null = null
-// An uncertain mutation is never replayed. Only a trusted current-cookie read
-// can establish a new, future renewal window.
-let refreshUnconfirmed = false
-let refreshSubject: string | null = null
 let documentSuspended = false
 
-function requestSessionMode(indexSubject: string | null | undefined, prefetchCsrf: boolean): SharedSessionCheck {
+function requestSessionMode(indexSubject: string | null | undefined): SharedSessionCheck {
   if (sessionProbeInflight !== null) return sessionProbeInflight
   const observation = { indexSubject, retired: false }
   if (documentSuspended) return { observation, result: Promise.resolve({ mode: "unavailable", subject: null }) }
@@ -79,17 +72,13 @@ function requestSessionMode(indexSubject: string | null | undefined, prefetchCsr
     abort = () => reject(signal.reason ?? new Error("Product session probe aborted"))
     signal.addEventListener("abort", abort, { once: true })
   })
-  let prefetchedCsrf: Promise<string> | undefined
-  let csrfConsumed = false
   const timer = window.setTimeout(() => controller.abort(), 10_000)
   // Both abort-aware fetch and an uncooperative late body must settle within
   // the same budget. Every dispatch checks the signal; losing work cannot POST.
   const work = Promise.resolve().then(async (): Promise<ResolvedSession> => {
     assertCurrent()
     const subjectAtProbeStart = observation.indexSubject
-    const recovering = refreshUnconfirmed
-    type ReadSession = ResolvedSession | { mode: "refresh-required"; subject: string }
-    const read = async (): Promise<ReadSession> => {
+    const read = async (): Promise<ResolvedSession> => {
       assertCurrent()
       const response = await fetch("/api/auth/session", { cache: "no-store", signal })
       assertCurrent()
@@ -101,67 +90,15 @@ function requestSessionMode(indexSubject: string | null | undefined, prefetchCsr
       const subject = (raw as { subject?: unknown }).subject
       if (authenticated === false) {
         const value = raw as Record<string, unknown>
-        if (Object.keys(value).length === 1) return { mode: refreshUnconfirmed ? "unavailable" : "anonymous", subject: null }
-        if (Object.keys(value).length === 4 && value.refresh_required === true && typeof subject === "string" && subject.trim() !== "" &&
-          typeof value.expires_at === "number" && Number.isFinite(value.expires_at) && value.expires_at > Date.now())
-          return { mode: "refresh-required", subject }
+        if (Object.keys(value).length === 1) return { mode: "anonymous", subject: null }
         return { mode: "unavailable", subject: null }
       }
       if (authenticated !== true || typeof subject !== "string" || subject.trim() === "") {
         return { mode: "unavailable", subject: null }
       }
-      return { mode: "authenticated", subject, subjectAtProbeStart, renewalConfirmed: false,
-        native: (raw as { mode?: unknown }).mode === "native" }
+      return { mode: "authenticated", subject, subjectAtProbeStart }
     }
-    const cold = admittedSubject === null && !recovering
-    const due = admittedSubject !== null && subjectAtProbeStart === admittedSubject &&
-      document.visibilityState === "visible" && !recovering &&
-      nextRefreshAt !== null && Date.now() >= nextRefreshAt
-    let expectedSubject = admittedSubject
-    let initial: ReadSession | undefined
-    if (!due) {
-      const reading = read()
-      // The SSR RP-presence hint allows only this independent CSRF read.
-      // Admission and the single rotating POST still await the current GET/fences.
-      if (cold && prefetchCsrf) {
-        prefetchedCsrf = currentCsrf(signal)
-        // A failed/anonymous GET may never consume this promise.
-        void prefetchedCsrf.catch(() => undefined)
-      }
-      initial = await reading
-      if (recovering) return initial.mode === "authenticated" && initial.subject === refreshSubject
-        ? { ...initial, renewalConfirmed: true } : { mode: "unavailable", subject: null }
-      if (initial.mode !== "authenticated" && initial.mode !== "refresh-required") return initial
-      if (initial.mode === "authenticated" && initial.native) return { ...initial, renewalConfirmed: true }
-      if (!cold && initial.mode === "authenticated") return initial
-      if (!cold && initial.subject !== admittedSubject) return { mode: "unavailable", subject: null }
-      if (subjectAtProbeStart === undefined) return { mode: "unavailable", subject: null }
-      const currentIndex = readBrowserAuthIndexSubject()
-      if (currentIndex !== subjectAtProbeStart && currentIndex !== initial.subject) {
-        return { mode: "unavailable", subject: null }
-      }
-      expectedSubject = initial.subject
-    }
-    if (cold || due || initial?.mode === "refresh-required") {
-      nextRefreshAt = Date.now() + REFRESH_INTERVAL_MS
-      csrfConsumed = prefetchedCsrf !== undefined
-      const refreshed = await refreshProductSession(signal, () => {
-        assertCurrent()
-        refreshUnconfirmed = true
-        refreshSubject = expectedSubject
-      }, prefetchedCsrf)
-      assertCurrent()
-      if (refreshed.mode === "authenticated") {
-        if (refreshed.subject !== expectedSubject) return { mode: "unavailable", subject: null }
-        return { ...refreshed, subjectAtProbeStart, renewalConfirmed: true }
-      }
-      // Another tab can win CAS. Confirm only the original subject, once.
-      const confirmed = await read()
-      return confirmed.mode === "authenticated" && confirmed.subject === expectedSubject
-        ? { ...confirmed, renewalConfirmed: true }
-        : { mode: "unavailable", subject: null }
-    }
-    return { mode: "unavailable", subject: null }
+    return read()
 
   })
   const request = Promise.race([work, aborted])
@@ -169,9 +106,6 @@ function requestSessionMode(indexSubject: string | null | undefined, prefetchCsr
     .finally(() => {
       window.clearTimeout(timer)
       signal.removeEventListener("abort", abort)
-      // Cancel only unused speculative work after the result has settled. Its
-      // late body can neither rotate credentials nor alter the resolved mode.
-      if (prefetchedCsrf !== undefined && !csrfConsumed) controller.abort()
       if (sessionProbeController === controller) sessionProbeController = null
     })
   const shared = { observation, result: request }
@@ -313,7 +247,7 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean;
     const check = (): void => {
       const indexSubject = retireChangedSubject()
       if (pendingCheck !== null) return
-      const request = requestSessionMode(indexSubject, serverAdmitted)
+      const request = requestSessionMode(indexSubject)
       const checking = request.observation
       pendingCheck = checking
       const currentGeneration = ++generationRef.current
@@ -367,14 +301,9 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean;
             }
             browserConversationMoveCoordinator().admitVerifiedSubject(resolved.subject)
             setReadRecoveryBlocked(false)
-            // A recovery's own GET/POST success never buys another 401 retry.
-            if (resolved.renewalConfirmed && !readRecovery) readEpisode.current.spent = false
+            // A recovery's own GET success never buys another 401 retry.
+            if (!readRecovery) readEpisode.current.spent = false
             readEpisode.current.recovering = false
-            if (nextRefreshAt === null || resolved.renewalConfirmed) {
-              nextRefreshAt = Date.now() + REFRESH_INTERVAL_MS
-              refreshUnconfirmed = false
-              refreshSubject = null
-            }
           } catch {
             admissionRef.current = { ...admissionRef.current, admitted: false }
             setProbe((current) => current.mode === "authenticated"
@@ -392,9 +321,6 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean;
           setReadRecoveryBlocked(false)
           browserConversationMoveCoordinator().revokeSubject()
           admittedSubject = null
-          nextRefreshAt = null
-          refreshUnconfirmed = false
-          refreshSubject = null
         }
         clearTimeout(recoveryTimer)
         recoveryTimer = undefined
@@ -412,8 +338,7 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean;
       })
     }
     check()
-    // A hidden tab does not rotate credentials. A due visible return renews
-    // before an expired-access GET can misclassify the still-valid session.
+    // A hidden tab does not poll. A visible return performs one bounded native GET.
     const onVisible = (): void => {
       if (document.visibilityState === "visible") check()
     }
@@ -463,7 +388,7 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean;
     window.addEventListener("pagehide", onPageHide)
     window.addEventListener("pageshow", onPageShow)
     window.addEventListener("storage", onStorage)
-    const timer = setInterval(onVisible, REFRESH_INTERVAL_MS)
+    const timer = setInterval(onVisible, SESSION_CHECK_INTERVAL_MS)
     return () => {
       live = false
       window.removeEventListener("online", onVisible)
