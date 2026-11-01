@@ -48,7 +48,10 @@ async function continueTenant(request: Request): Promise<Response> {
     headers.set("content-type", "application/json")
     const changed = await requestIamRelay({
       url: `${context.config.bffOrigin}/iam/organization/set-active`, method: "POST", headers,
-      body: new TextEncoder().encode(JSON.stringify({ organizationId: tenantId, oauth_query: context.query.slice(1) })),
+      // The IAM native session and signed interaction cookie already bind the
+      // selected tenant. OAuth query material is not a second authorization
+      // input and must not cross the native organization boundary.
+      body: new TextEncoder().encode(JSON.stringify({ organizationId: tenantId })),
       signal: request.signal, timeoutMs: IAM_RELAY_POLICY.maxDurationMs,
       maxRequestBytes: IAM_RELAY_POLICY.maxRequestBodyBytes, maxResponseBytes: IAM_RELAY_POLICY.maxResponseBytes,
       maxHeaderBytes: IAM_RELAY_POLICY.maxHeaderBytes,

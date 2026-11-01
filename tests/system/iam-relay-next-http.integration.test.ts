@@ -1355,7 +1355,7 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
     expect(tenant.status).toBe(303)
     expect(tenant.body).toBe("")
     expect(tenant.headers.location).toBe(`http://localhost:${nextPort}/auth/consent?sig=%2BAb&scope=openid`)
-    expect(receivedBodies[0]).toBe(JSON.stringify({ organizationId: "tenant-one", oauth_query: "sig=%2BAb" }))
+    expect(receivedBodies[0]).toBe(JSON.stringify({ organizationId: "tenant-one" }))
     expect((await rawPost(nextPort, "/iam/interactions/select-tenant?sig=%2BAb", "organization_id=tenant-other", {
       origin: `http://localhost:${nextPort}`,
     })).status).toBe(405)
@@ -1516,7 +1516,7 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
     expect(continued.body).toBe("")
     expect(continued.headers.location).toBe(`http://localhost:${nextPort}/auth/consent?sig=%2BAb&scope=openid`)
     expect(receivedPaths.splice(0)).toEqual(["/iam/organization/set-active"])
-    expect(JSON.parse(receivedBodies.at(-1) ?? "{}")).toEqual({ organizationId: "tenant-one", oauth_query: "sig=%2BAb" })
+    expect(JSON.parse(receivedBodies.at(-1) ?? "{}")).toEqual({ organizationId: "tenant-one" })
   })
 
   it("preserves native tenant 302 issuer cookies and rejects unsafe or looping continuations", async () => {
