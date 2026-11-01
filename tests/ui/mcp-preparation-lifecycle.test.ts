@@ -286,3 +286,54 @@ it.each(["pending_prepare", "prepare_failed", "wrong_server", "wrong_connector",
   expect(recovery.complete).toHaveBeenCalledOnce(); expect(confirmed).toHaveBeenCalledOnce();
   expect(commands.getSnapshot()[0]?.kind).toBe("completed"); expect(await recovery.current(boundary.subject, target.serverId)).toBeUndefined();
 });
+
+
+describe("new authorization is an original management command, never a Prepare", () => {
+  const old = { connectorId: "old-revoked", serverId: "authorization-server", providerKey: "private" };
+  const input = { source_connector_id: old.connectorId, expected_server_state_version: "7", expected_connector_state_version: "5" };
+  const result = () => ({ server: { ...response().server, server_id: old.serverId, status: "pending" as const, state_version: "8", prepare_status: "pending_prepare" as const,
+    declarations_available: false, declaration_digest: undefined }, connector: { ...response().connector, connector_id: "fresh-connector", server_id: old.serverId, status: "pending" as const, enabled: false, state_version: "1" }, replayed: false });
+  function fixture(execute = vi.fn().mockResolvedValue(result())) {
+    const changed = vi.fn(), prepare = vi.fn(), client = { reauthorizePrivateMcpServer: execute, preparePrivateMcpServer: prepare };
+    const lifecycle = createMcpLifecycleCommands({ client: client as unknown as HubClient, boundary, onConfirmed: changed });
+    return { management: lifecycle.management, execute, prepare, changed };
+  }
+  it("keeps the original source/double CAS/key across lost ACK and exposes only the new locator", async () => {
+    const execute = vi.fn().mockRejectedValueOnce(new Error("lost ACK")).mockResolvedValue(result());
+    const { management, prepare } = fixture(execute);
+    const body = { ...input };
+    expect(await management.submit({ operation: "reauthorize_server", ...old, input: body }, boundary)).toBe(false);
+    body.expected_server_state_version = "99";
+    expect(await management.submit({ operation: "reauthorize_server", ...old, input: body }, boundary)).toBe(false);
+    expect(management.getCompletion(old.connectorId, boundary)).toBeUndefined();
+    expect(await management.resume(old.connectorId, boundary)).toBe(true);
+    expect(execute.mock.calls[0]?.slice(0,3)).toEqual(execute.mock.calls[1]?.slice(0,3));
+    expect(execute.mock.calls[1]?.[1]).toEqual(input);
+    expect(management.getCompletion(old.connectorId, boundary)).toEqual({serverId:old.serverId,connectorId:"fresh-connector",providerKey:old.providerKey});
+    expect(prepare).not.toHaveBeenCalled();
+    expect(management.finish(old.connectorId,boundary)).toBe(true);
+    expect(management.getCompletion(old.connectorId,boundary)).toBeUndefined();
+  });
+  it.each(["same_identity","server","provider","old_cas","active","enabled"])("never completes an invalid %s ACK", async fault => {
+    const valid = result();
+    const ack = { ...valid, server:{...valid.server,...(fault==="server"?{server_id:"wrong"}:fault==="old_cas"?{state_version:"7"}:{})},
+      connector:{...valid.connector,...(fault==="same_identity"?{connector_id:old.connectorId}:fault==="provider"?{provider_key:"wrong"}:fault==="active"?{status:"active"}:fault==="enabled"?{enabled:true}:{})} };
+    const { management, changed }=fixture(vi.fn().mockResolvedValue(ack));
+    expect(await management.submit({operation:"reauthorize_server",...old,input},boundary)).toBe(false);
+    expect(management.getSnapshot()[0]?.kind).toBe("unknown");
+    expect(management.getCompletion(old.connectorId,boundary)).toBeUndefined(); expect(changed).not.toHaveBeenCalled();
+  });
+  it.each(["actor","generation","window"])("a retired %s cannot consume a late authorization ACK", async retirement => {
+    let resolve!: (value: ReturnType<typeof result>)=>void;
+    const execute=vi.fn(()=>new Promise<ReturnType<typeof result>>(done=>{resolve=done}));
+    const { management, changed, prepare }=fixture(execute);
+    const controller=new AbortController();
+    const pending=management.submit({operation:"reauthorize_server",...old,input},boundary,controller.signal);
+    if(retirement==="window") controller.abort();
+    else management.bind({...boundary,generation:2,...(retirement==="actor"?{subject:"other"}:{})});
+    resolve(result()); expect(await pending).toBe(false);
+    expect(changed).toHaveBeenCalledOnce(); expect(prepare).not.toHaveBeenCalled();
+    if (retirement === "window") expect(management.getCompletion(old.connectorId,boundary)).toEqual({serverId:old.serverId,connectorId:"fresh-connector",providerKey:old.providerKey});
+    else expect(management.getCompletion(old.connectorId,boundary)).toBeUndefined();
+  });
+});

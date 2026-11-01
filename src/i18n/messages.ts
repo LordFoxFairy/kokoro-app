@@ -1277,6 +1277,8 @@ export const zh = {
   "mcp.enabledBadge": "已启用",
   "mcp.disabledBadge": "已停用",
   "mcp.disconnectedBadge": "已断开",
+  "mcp.newAuthorization": "创建新授权",
+  "mcp.newAuthorizationExplanation": "连接已断开，保存的配置仅供查看。创建新授权后，请重新连接。",
   "mcp.disconnectedConfigurationReadOnly": "连接已断开，保存的配置仅供查看。重新连接暂不可用。",
   "mcp.enable": "启用",
   "mcp.disable": "停用",

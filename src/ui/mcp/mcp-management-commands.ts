@@ -8,8 +8,12 @@ import { createConnectorCommand, type ConnectorCommandState } from "./connector-
 import { createMcpPreparationCommands, type McpPreparationCommands } from "./mcp-preparation-commands";
 import type { McpPreparationRecovery } from "./mcp-preparation-recovery";
 
+import { mcpReauthorizationRequestSchema, mcpReauthorizationMatches, type McpReauthorizationInput } from "@/hub/mcp-reauthorization.schema";
+import type { McpServerCreationCompletion } from "./mcp-server-creation-flow";
+
 type Locator = { connectorId: string; serverId?: string };
 export type McpManagementIntent =
+  | { operation: "reauthorize_server"; connectorId: string; serverId: string; providerKey: string; input: McpReauthorizationInput }
   | { operation: "update_server"; connectorId: string; serverId: string; input: McpPrivateServerUpdateInput }
   | { operation: "delete_server"; connectorId: string; serverId: string; input: McpConnectorRemoveInput }
   | ({ operation: "update_connector"; input: McpConnectorUpdateInput } & Locator)
@@ -18,8 +22,8 @@ export type McpManagementIntent =
 export type McpManagementSummary = Readonly<Locator & {
   operation: McpManagementIntent["operation"]; kind: ConnectorCommandState["kind"]; failure?: ConnectorCommandState["failure"];
 }>;
-type Entry = { locator: Locator; operation: McpManagementIntent["operation"]; command: ReturnType<typeof createConnectorCommand<McpManagementIntent>>; release: () => void; unsubscribe: () => void };
-type Client = Pick<HubClient, "updatePrivateMcpServer" | "deletePrivateMcpServer" | "updateMcpConnector" | "setMcpConnectorEnabled" | "removeMcpConnector" | "preparePrivateMcpServer" | "getPrivateMcpServer" | "getMcpConnector" | "getMcpPrepareReceipt">;
+type Entry = { locator: Locator; operation: McpManagementIntent["operation"]; command: ReturnType<typeof createConnectorCommand<McpManagementIntent, McpServerCreationCompletion | undefined>>; release: () => void; unsubscribe: () => void };
+type Client = Pick<HubClient, "updatePrivateMcpServer" | "deletePrivateMcpServer" | "updateMcpConnector" | "setMcpConnectorEnabled" | "removeMcpConnector" | "preparePrivateMcpServer" | "getPrivateMcpServer" | "getMcpConnector" | "getMcpPrepareReceipt" | "reauthorizePrivateMcpServer">;
 const cleanup = (operation: McpManagementIntent["operation"]) => operation === "disconnect" || operation === "delete_server";
 
 function freezeIntent(intent: McpManagementIntent): McpManagementIntent {
@@ -27,6 +31,11 @@ function freezeIntent(intent: McpManagementIntent): McpManagementIntent {
   const serverId = intent.serverId === undefined ? undefined : mcpConnectorIdSchema.parse(intent.serverId);
   const locator = { connectorId, ...(serverId === undefined ? {} : { serverId }) };
   switch (intent.operation) {
+    case "reauthorize_server": {
+      const input = mcpReauthorizationRequestSchema.parse(intent.input);
+      if (input.source_connector_id !== connectorId) throw new Error("MCP authorization source mismatch");
+      return Object.freeze({ operation: intent.operation, connectorId, serverId: mcpConnectorIdSchema.parse(serverId), providerKey: intent.providerKey, input: Object.freeze(input) });
+    }
     case "update_server": {
       const input = mcpPrivateServerUpdateInputSchema.parse(intent.input);
       input.header_upserts?.forEach(item => Object.freeze(item));
@@ -112,6 +121,7 @@ function createManagement(options: { client: Client; preparation: McpPreparation
       // Set only from the frozen input after its exact target ACK is validated.
       let confirmedMediaServerId: string | undefined;
       let confirmedRevokedVersion: string | undefined;
+      let authorizationTarget: McpServerCreationCompletion | undefined;
       const execute = async (body: McpManagementIntent, key: string, requestSignal: AbortSignal) => {
         const client = options.client;
         const bound = (connector: McpConnector) => {
@@ -120,6 +130,13 @@ function createManagement(options: { client: Client; preparation: McpPreparation
           return connector;
         };
         switch (body.operation) {
+          case "reauthorize_server": {
+            const result = await client.reauthorizePrivateMcpServer!(body.serverId, body.input, key, requestSignal);
+            if (!mcpReauthorizationMatches(result, body.serverId, body.input) || result.connector.provider_key !== body.providerKey)
+              throw new HubClientError("parse", "MCP new authorization target mismatch", null, null);
+            authorizationTarget = Object.freeze({ serverId: body.serverId, connectorId: result.connector.connector_id, providerKey: result.connector.provider_key });
+            return result;
+          }
           case "delete_server": return client.deletePrivateMcpServer!(body.serverId, body.input.expected_state_version, key, requestSignal);
           case "update_server": {
             const result = await client.updatePrivateMcpServer!(body.serverId, body.input, key, requestSignal);
@@ -136,10 +153,11 @@ function createManagement(options: { client: Client; preparation: McpPreparation
           }
         }
       };
-      const available = input.operation === "update_server" ? options.client.updatePrivateMcpServer !== undefined : input.operation === "delete_server" ? options.client.deletePrivateMcpServer !== undefined : true;
+      const available = input.operation === "reauthorize_server" ? options.client.reauthorizePrivateMcpServer !== undefined : input.operation === "update_server" ? options.client.updatePrivateMcpServer !== undefined : input.operation === "delete_server" ? options.client.deletePrivateMcpServer !== undefined : true;
       if (!available) return Promise.resolve(false);
       const operation = input.operation;
-      const command = createConnectorCommand<McpManagementIntent>({ boundary, surface: "mcp", invalidRequestCode: "invalid_mcp_personal_request", freeze: freezeIntent, execute,
+      const command = createConnectorCommand<McpManagementIntent, McpServerCreationCompletion | undefined>({ boundary, surface: "mcp", invalidRequestCode: "invalid_mcp_personal_request", freeze: freezeIntent, execute,
+        projectCompletion: () => authorizationTarget,
         onConfirmed: () => {
           // A closed window can still confirm this actor's operation, but a retired
           // owner must never acquire a late fact from its former request.
@@ -161,6 +179,7 @@ function createManagement(options: { client: Client; preparation: McpPreparation
       entries.set(input.connectorId, entry);
       return run(entry, value, signal, input);
     },
+    getCompletion: (connectorId: string, value: ProjectReadBoundary) => matches(value) ? entries.get(connectorId)?.command.getCompletion(value) : undefined,
     resume: (connectorId: string, value: ProjectReadBoundary, signal?: AbortSignal) => { const entry = entries.get(connectorId); return entry ? run(entry, value, signal) : Promise.resolve(false); },
     finish: (connectorId: string, value: ProjectReadBoundary) => {
       const entry = entries.get(connectorId);

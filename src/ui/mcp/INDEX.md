@@ -1,3 +1,9 @@
+## 已断开配置的新授权意图（2026-11-02，候选）
+
+`mcp-projection-read.tsx` 从只读私有 exact 详情显式发起新授权；原窗口不开放任何旧身份命令。`mcp-management-commands.ts` 复用原 actor shell，冻结 source connector/server/双 CAS/key，未知结果按原请求重试，严格 ACK 只保新 locator；`mcp-management-status.tsx` 标明独立意图。关闭后的原命令在既有 Connections 恢复入口可达，即使 source 已非 current 导致 GET404；不会从404或 ACK 造详情。成功打开新窗口，再 fresh exact connector/private-server GET，原显式 Connect 才可 Prepare。命令窗口/主体/准入代退休、撤销/删除负事实与原 Prepare journal 冲突保护继续生效。
+
+`custom-mcp-detail-dialog.tsx` 只增独立“创建新授权”按钮与九语言准确说明，未知状态按钮由原 status 提供，不解锁 Save/Enable/OAuth/发布/试用/删除。`mcp-personal-server-gallery.test.tsx`、`mcp-preparation-lifecycle.test.ts` 与原 client/proxy/creation 测试承接原请求恢复、新旧身份、严格 ACK、fresh GET 与命令隔离负控。正式 profile 和生成边界见三设计文首，候选并非正常服务已更新。
+
 ## 已断开 MCP 配置只读可达（2026-11-02，候选）
 
 连接列表与个人目录保留 `mcp + server_id + revoked + enabled=false` 的配置定位卡片，不把该投影视为私有读取或执行资格。点击后按冻结的 connector/provider/server/type 与版本下限重新 exact GET，再由现有 private-server GET 核归属；全列表不做 N+1。只读意图终身不升级命令，active、错绑定、低版本或已删除结果不能成为详情。确认撤销屏障继续拒绝旧 active 和低版本 revoked；仅 fresh revoked/disabled 达到屏障可读，ACK 本身不造配置。

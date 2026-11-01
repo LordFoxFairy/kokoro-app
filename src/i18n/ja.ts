@@ -979,6 +979,8 @@ export const ja: Partial<Record<MessageKey, string>> = {
   "mcp.enabledBadge": "有効",
   "mcp.disabledBadge": "無効化されました",
   "mcp.disconnectedBadge": "切断済み",
+  "mcp.newAuthorization": "新しい認可を作成",
+  "mcp.newAuthorizationExplanation": "接続は切断されています。保存済みの設定は表示のみ可能です。新しい認可を作成してから、再度接続してください。",
   "mcp.disconnectedConfigurationReadOnly": "接続は切断されています。保存済みの設定は表示のみ可能です。現在、再接続は利用できません。",
   "mcp.enable": "有効にする",
   "mcp.disable": "非アクティブ化する",

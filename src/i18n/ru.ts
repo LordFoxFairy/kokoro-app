@@ -902,6 +902,8 @@ export const ru: Partial<Record<MessageKey, string>> = {
   "mcp.enabledBadge": "Включено",
   "mcp.disabledBadge": "Деактивирован",
   "mcp.disconnectedBadge": "Отключено",
+  "mcp.newAuthorization": "Создать новую авторизацию",
+  "mcp.newAuthorizationExplanation": "Подключение отключено. Сохранённая конфигурация доступна только для просмотра. Создайте новую авторизацию, затем подключитесь снова.",
   "mcp.disconnectedConfigurationReadOnly": "Подключение отключено. Сохранённую конфигурацию можно только просматривать. Повторное подключение пока недоступно.",
   "mcp.enable": "давать возможность",
   "mcp.disable": "деактивировать",

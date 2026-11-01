@@ -709,7 +709,7 @@ describe("MCP typed management and Prepare interlock", () => {
 
   it("freezes each of the five original operations and cannot replace it with another edit or new CAS", async () => {
     const { createMcpLifecycleCommands } = await import("@/ui/mcp/mcp-management-commands")
-    const intents: import("@/ui/mcp/mcp-management-commands").McpManagementIntent[] = [
+    const intents: Exclude<import("@/ui/mcp/mcp-management-commands").McpManagementIntent, { operation: "reauthorize_server" }>[] = [
       { operation: "update_server", connectorId: connector.connector_id, serverId: server.server_id, input: { expected_state_version: "1", display_name: "Edited", header_upserts: [{ name: "x-test", value: "frozen-header-value" }] } },
       { operation: "delete_server", connectorId: connector.connector_id, serverId: server.server_id, input: { expected_state_version: "1" } },
       { operation: "update_connector", connectorId: connector.connector_id, input: { expected_state_version: "1", display_name: "Edited", description: "Note" } },

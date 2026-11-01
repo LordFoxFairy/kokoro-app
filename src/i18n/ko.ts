@@ -902,6 +902,8 @@ export const ko: Partial<Record<MessageKey, string>> = {
   "mcp.enabledBadge": "활성화됨",
   "mcp.disabledBadge": "비활성화됨",
   "mcp.disconnectedBadge": "연결 해제됨",
+  "mcp.newAuthorization": "새 권한 부여 생성",
+  "mcp.newAuthorizationExplanation": "연결이 해제되었습니다. 저장된 설정은 조회만 할 수 있습니다. 새 권한 부여를 생성한 후 다시 연결하세요.",
   "mcp.disconnectedConfigurationReadOnly": "연결이 해제되었습니다. 저장된 설정은 조회만 할 수 있습니다. 현재 다시 연결할 수 없습니다.",
   "mcp.enable": "~할 수 있게 하다",
   "mcp.disable": "비활성화하다",

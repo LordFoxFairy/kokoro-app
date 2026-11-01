@@ -1,3 +1,15 @@
+## 2026-11-02 Task B：已断开私有 MCP 的新授权（候选）
+
+基线6cdbb090，正式 Platform2cf63945 / BFFe3b5fb75 私有 profile1.0.0 精确消费，Public29、Prepare/receipt及其它独立 pin 保持。原只读配置新增独立“创建新授权”：Management 冻结原 source/双 CAS/key，未知结果只重发原 POST；严格 ACK 只交新 locator，新窗口必须 fresh exact connector/private-server GET 后显式 Connect。旧身份不复活、旧窗口终身只读，无自动 Prepare/OAuth；既有同 actor RAM 恢复不冒浏览器刷新持久恢复。
+
+真实 RED-v2 复现缺入口（2失败/15通过）；新增关窗/source404负控又发现等待页漏接原命令恢复 status，已修到原 pending 分支。最终固定源8文件744项通过（43.673秒，文件串行、原预算），含原key/body重试、双CAS、重复单击、严格ACK、active/旧身份/错绑定、actor-generation-window退休、source404恢复与fresh GET失败不Prepare。Root按同freeze独立artifact复验原3文件314项通过（10.25秒，输入SHA前后不变），生产freeze33路径独审APPROVE。
+
+固定Node22.22.2/pnpm11.25：完整ESLint、typecheck与生产build通过；新profile正规generator check及10项contract通过。architecture首次49通过/1失败为旧脚本闭集未包含新增正式check，批准后原治理测试仅增5行且保18原项，26项与该文件ESLint通过。完整contract首次485通过/4条原5秒父字节证明超时，原输入195文件逐字等于基线，仍不称完整contract通过；后续全套复跑按Root收窄指令中止(-15)，无预算/断言放宽。完整default/E2E未在本片重跑，原OIDC97未验和历史失败继续保留。
+
+Root隔离真实IAM页面已完成新授权旅程：真实owner提交后故意丢失首响应，原key/body/双CAS回放同一个新Connector且replayed=true；新窗口exact两GET200后，只有显式点击才发一次DeepWiki Prepare并返回200，成功后原详情按既有流程关闭。新浏览器context、刷新、390px窄屏三次均显示已连接，Escape回焦，补验MCP零写；三旅程共11.060秒，不是接口延迟或性能达标。首两个脚本分别误等已关闭的详情及连接概览中不存在的URL，失败原件保留；后继只读补验修正脚本假设，没有重放业务命令。
+
+34路径冻结、逐字历史后缀保护、命令/日志SHA及真实截图在本机Task B证据目录。原数据演进归Platform，BFF SQL不变；候选connections GET已恢复200，Storage icon仍503，正常3314不切。当前只关闭本次新授权切片，不称整个B01/B02、完整设置或全产品验收。
+
 ## 2026-11-02 Task B：已断开 MCP 配置只读入口（候选，正常源未切换）
 
 基线 cbef49c9。三个显示过滤入口只为真实 revoked/disabled 且有 server_id 的 MCP 配置保定位卡片；点击仍先 exact connector GET 校验冻结身份/版本，再沿 private-server GET 核本人归属。已确认删除优先，旧 active≤撤销版本及低版本 revoked 不恢复，ACK 不生成配置；返回 active 或错误绑定不得将只读窗口变为命令窗口。原详情只展示保存事实，卡片/详情统一“已断开”并说明仅供查看、重连暂不可用，不误用 availability 或“已停用”；九语言仅新增相关两键。编辑/保存/Prepare/OAuth/启停/删除/发布/试用与恢复命令在 UI 和父回调双拒，执行消费面及公共协议未改。

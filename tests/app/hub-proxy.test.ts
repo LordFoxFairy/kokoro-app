@@ -5157,3 +5157,30 @@ it("bounds a never-ending empty DELETE stream at10seconds and keeps GET bodies f
     expect(requestWithDomain).not.toHaveBeenCalled()
   } finally { vi.useRealTimers() }
 })
+
+
+describe("private MCP new authorization adapter", () => {
+  const path=["mcp","servers","authorization-server","reauthorize"];
+  const body={source_connector_id:"old-revoked",expected_server_state_version:"7",expected_connector_state_version:"5"};
+  const ack=()=>({ server: { availability: "unavailable", server_id: "authorization-server", display_name: "New authorization", server_url: "https://example.test/mcp", status: "pending", state_version: "8", headers: [], transport: "streamable_http", prepare_status: "pending_prepare", declarations: [], declarations_available: false }, connector: { availability: "unavailable", connector_id: "fresh-connector", server_id: "authorization-server", provider_key: "private", connector_type: "mcp", status: "pending", enabled: false, state_version: "1", approved_scopes: [] }, replayed: true });
+  const request=(input:unknown=body, origin="http://localhost", key="original-authorization-key",query="")=>new Request(`http://localhost/api/hub/${path.join("/")}${query}`,{method:"POST",headers:{origin,"content-type":"application/json","idempotency-key":key,authorization:"Bearer untrusted"},body:JSON.stringify(input)});
+  const reply=(value:unknown,status=200)=>new Response(JSON.stringify(value),{status,headers:{"content-type":"application/json","cache-control":"no-store","x-request-id":"authorization-owner"}});
+  it("preserves original double CAS and key under real admitted server identity in one bounded request",async()=>{
+    const {POST}=await import("@/app/api/hub/[...path]/route");vi.mocked(requestWithDomain).mockResolvedValueOnce(reply({data:ack()}));
+    const result=await POST(request(),params(path));expect(result.status).toBe(200);expect(result.headers.get("cache-control")).toContain("no-store");
+    expect(requestWithDomain).toHaveBeenCalledOnce();const [url,,init]=vi.mocked(requestWithDomain).mock.calls[0]!;
+    expect(String(url)).toBe("http://bff.test/browser/v1/mcp/servers/authorization-server/reauthorize");
+    expect(init?.headers).toMatchObject({authorization:"Bearer product-access","idempotency-key":"original-authorization-key"});
+    expect(JSON.parse(new TextDecoder().decode(init?.body as ArrayBuffer))).toEqual(body);
+  });
+  it.each(["origin","query","extra","version","key","session"])("refuses %s before owner dispatch",async fault=>{
+    const {POST}=await import("@/app/api/hub/[...path]/route");if(fault==="session")currentProductSession.mockResolvedValue(null);
+    const result=await POST(request(fault==="extra"?{...body,actor_id:"untrusted"}:fault==="version"?{...body,expected_server_state_version:"2147483647"}:body,fault==="origin"?"https://foreign.test":"http://localhost",fault==="key"?"":"original-authorization-key",fault==="query"?"?unexpected=1":""),params(path));
+    expect(result.status).toBe(fault==="session"?401:400);expect(requestWithDomain).not.toHaveBeenCalled();
+  });
+  it.each(["source","server","version","enabled","extra"])("refuses invalid %s acknowledgement without exposing it",async fault=>{
+    const {POST}=await import("@/app/api/hub/[...path]/route");const value=ack();if(fault==="source")value.connector.connector_id=body.source_connector_id;if(fault==="server")value.server.server_id="wrong";if(fault==="version")value.server.state_version="7";if(fault==="enabled")value.connector.enabled=true;
+    vi.mocked(requestWithDomain).mockResolvedValueOnce(reply({data:value,...(fault==="extra"?{extra:"private"}:{})}));
+    expect((await POST(request(),params(path))).status).toBe(502);expect(requestWithDomain).toHaveBeenCalledOnce();
+  });
+});

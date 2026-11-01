@@ -1,3 +1,7 @@
+## 2026-11-02 B-01 新授权的局部命令状态（候选）
+
+Web 无数据库/Schema/IndexedDB/localStorage 格式变更。既有 Management RAM entry 新增独立 reauthorize_server discriminator，冻结原 source/双 CAS/key；只有严格 ACK 生成安全新 locator completion，不持久化 headers、凭据、声明或 owner 回执。完成后的新 exact 窗口重新读取当前 owner 状态；原只读窗口不变为可写。现 Prepare journal 仅提供既有恢复就绪与冲突保护，不承载新授权命令，也不声称 reload 恢复。
+
 ## Public29 自动化本地视图（2026-11-02，候选）
 
 Web无owner数据库/表/Schema迁移；原ScheduledTask本地model改为calendar/RSS分支，嵌套条件在dispatch/恢复前克隆。运行记录为当前scope RAM页，无工具过程/凭据/新账本，不从状态标签推断真实执行或结算。

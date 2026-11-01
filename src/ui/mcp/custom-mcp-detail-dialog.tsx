@@ -110,6 +110,7 @@ export function CustomMcpDetailDialog({
   pendingError = false,
   readFeedback,
   readOnlyConfiguration = false,
+  onNewAuthorization, newAuthorizationDisabled = false, reauthorizationStatus,
 }: {
   iconClient?: McpIconClient | undefined;
   iconBoundary?: ProjectReadBoundary | undefined;
@@ -117,6 +118,9 @@ export function CustomMcpDetailDialog({
   server: McpPrivateServer | null;
   /** Exact disconnected configuration reads never authorize a command. */
   readOnlyConfiguration?: boolean;
+  onNewAuthorization?: (() => void) | undefined;
+  newAuthorizationDisabled?: boolean;
+  reauthorizationStatus?: import("react").ReactNode;
   preparationStatus?: import("react").ReactNode;
   preparationRetired?: boolean;
   preparationState?: "idle" | "running" | "unknown" | "rejected" | "completed";
@@ -667,6 +671,7 @@ export function CustomMcpDetailDialog({
               {operationStatus}
               {preparationState === "unknown" || preparationState === "completed" ? recoveryStatus : null}
               {managementStatus}
+              {configurationReadOnly ? reauthorizationStatus : null}
               {readFeedback ?? <span className={pendingError ? undefined : "sr-only"} role="status">{t(pendingError ? "mcp.loadError" : "mcp.loading")}</span>}
             </div>
           </section>
@@ -681,6 +686,7 @@ export function CustomMcpDetailDialog({
                 : <McpAvailabilityStatus availability={server.availability} />}
               <div className={styles.detailActions}>
                 {primaryAction()}
+                {configurationReadOnly && onNewAuthorization ? <Button type="button" variant="outline" disabled={!ready || newAuthorizationDisabled} onClick={onNewAuthorization}>{t("mcp.newAuthorization")}</Button> : null}
                 {!configurationReadOnly ? <DropdownMenu open={managementOpen} onOpenChange={setManagementOpen}>
                   <DropdownMenuTrigger asChild>
                     <Button ref={detailMenuRef} type="button" variant="outline" disabled={managementLocked}>
@@ -720,7 +726,7 @@ export function CustomMcpDetailDialog({
               </div>
             </header>
             <div className={styles.detailBody}>
-              {configurationReadOnly ? <p>{t("mcp.disconnectedConfigurationReadOnly")}</p> : null}
+              {configurationReadOnly ? <><p>{t(onNewAuthorization ? "mcp.newAuthorizationExplanation" : "mcp.disconnectedConfigurationReadOnly")}</p>{reauthorizationStatus}</> : null}
               {operationStatus}
               {managementStatus}
               {recoveryStatus}

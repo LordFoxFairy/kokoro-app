@@ -1,3 +1,9 @@
+## 2026-11-02 B-01 私有 MCP 新授权消费者（候选）
+
+新增独立 browser-private profile，原件固定 BFF `e3b5fb759ee89523918ac06ebf3a738b4df4e346`，`contract/openapi/browser/v1/mcp-reauthorization.json`，SHA256 `196ce32b86cd20492fb4b368bf59c4a8640c62a24afb3e630e81b90eb4234caa`；Platform owner `2cf63945feecd49f5b79c3532bbd7cbc5b70a3f8`。`scripts/generate-bff-mcp-reauthorization.mjs` 从该固定原件生成 decoder；Public29、Prepare/receipt、图标及其它独立 pin 不漂移。
+
+浏览器显式 POST `/api/hub/mcp/servers/{server_id}/reauthorize` 沿现同源窄 adapter → BFF `/browser/v1/mcp/servers/{server_id}/reauthorize`，保原 Product Session、CSRF、no-store、Idempotency-Key、有限读及可信身份。闭集请求仅 source_connector_id 与两个 expected_*_state_version；重试保原 target/key/body。ACK 必须 pending/disabled 新身份、connector state1、server CAS+1 且精确 server 绑定，严格 error tuple/重复 JSON key/未知字段拒绝。历史 replay 不是 Current 或连接授权，命令成功后另行 fresh GET；没有新 receipt GET、自动 Prepare/OAuth、任意 proxy 或旧身份复活。
+
 ## Public29 与 ScheduledTask 消费（2026-11-02，候选）
 
 正式BFF7e4ab1cee8f8d45a34902176cd15a10f3c4b22cb，原件SHA258bde9c39f785667cb205976e1547d1cf2c9662a5a2d7f356c4b11e807fcaf7 /29.0.0。200操作保199原操作，新增GET /v1/scheduled-task-runs；12public正规生成、5private/profile与policy3独立固定。项目资源下载只变owner说明的20秒预算，本片不借说明扩写Web下载或其它A契约。

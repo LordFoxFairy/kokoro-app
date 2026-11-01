@@ -1,3 +1,7 @@
+## 已断开 MCP 的独立新授权（2026-11-02，候选）
+
+固定 BFFe3b5fb75 的私有 reauthorization profile，经原同源 hub adapter/client 与 Management 原命令机制接线；断开详情只开放明确的新授权意图，ACK 仅交新 locator，fresh exact 详情后显式 Connect。生成器与独立 pin 见 `scripts/generate-bff-mcp-reauthorization.mjs` / `contract/bff-mcp-reauthorization-source.json`，职责与边界见 `src/ui/mcp/INDEX.md`，实际验证见 `docs/CURRENT.md`。
+
 ## Public29 与既有自动化功能配对（2026-11-02，候选）
 
 唯一公开原件固定 BFF7e4ab1cee8f8d45a34902176cd15a10f3c4b22cb / Public29.0.0，现12个public生成入口正规更新、5个独立发行保持。日历显式类型、RSS创建/编辑/当前读与独立运行记录沿已验证正常1f700功能承接；职责见 `src/features/scheduled-tasks/INDEX.md`，正常源状态与门禁见 `docs/CURRENT.md`。

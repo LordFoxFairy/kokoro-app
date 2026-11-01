@@ -13,7 +13,7 @@ export function McpManagementStatus({ command, admitted, onResume }: {
   const t = useT();
   if (!command || command.kind === "rejected") return null;
   return <Alert role="status">
-    <AlertDescription>{t(command.kind === "completed" ? "mcp.creationDone" : command.kind === "running" ? "mcp.loading" : connectorCommandFailureMessage(command.failure, "mcp.recovery.outcome_unknown"))}</AlertDescription>
+    <AlertDescription>{command.operation === "reauthorize_server" ? `${t("mcp.newAuthorization")}: ` : null}{t(command.kind === "completed" ? "mcp.creationDone" : command.kind === "running" ? "mcp.loading" : connectorCommandFailureMessage(command.failure, "mcp.recovery.outcome_unknown"))}</AlertDescription>
     {command.kind === "unknown" || command.kind === "completed" ? <Button type="button" variant="outline" disabled={!admitted || (command.kind === "unknown" && !connectorCommandMayResume(command.failure))} onClick={onResume}>
       {t(command.kind === "completed" ? "mcp.creationDone" : connectorCommandMayResume(command.failure) ? "mcp.retryOriginal" : "mcp.recovery.inspectRequired")}
     </Button> : null}

@@ -1,3 +1,9 @@
+## 2026-11-02 B-01 已断开私有 MCP 的独立新授权（候选）
+
+正式 owner 为 Platform2cf63945 与 BFFe3b5fb75 的 browser-private reauthorization profile1.0.0；复用既有 Management command、actor/window/generation 围栏与 RAM 生命周期，不新增 journal 或持久化恢复机制。断开配置窗口终身只读；唯一新增显式“创建新授权”意图冻结原 server/source connector/双 CAS/key，未知结果仅重发原 POST，不能与 Prepare receipt GET 或 OAuth reconnect 混用。
+
+严格 ACK 只投影新 connector/server/provider locator，不渲染为当前配置，不自动 Prepare。当前窗口确认后新建 exact 详情窗口，不继承旧 revokedVersion 或只读锁；fresh connector 与本人 private-server GET 均成功后才沿原显式 Connect。关窗、换主体/准入代及迟到 ACK 不更新当前窗口；原未知请求在同 actor command shell 的既有恢复入口保留，非浏览器刷新持久恢复。Composer/项目/Run/A 路径和执行资格不扩大。
+
 ## Public29：正式双父输入与原自动化功能承接（2026-11-02，候选）
 
 唯一BFF公开输入为正式双父7e4ab1cee8f8d45a34902176cd15a10f3c4b22cb / 29.0.0，完整SHA258bde9c39f785667cb205976e1547d1cf2c9662a5a2d7f356c4b11e807fcaf7。12现public generator正规生成，五独立private/profile及policy3不漂移。200操作只有scheduled-task-runs新增；API/MCP/Skills/Run执行展示无本次wire增量。test-only有限inverse保整份approved28.17与RSS20各自完整hash及有序inventory，再接原历史链；只消费正式committed public proof片段，不依赖sibling可编辑源码或SQL事实。
