@@ -274,3 +274,23 @@ describe("authorize document privacy at the final Proxy boundary", () => {
     expect(response.headers.get("content-security-policy")).toContain("default-src 'self'")
   })
 })
+
+
+describe("MCP icon media privacy at the final Proxy boundary", () => {
+  const path = "/api/hub/mcp/servers/9597c3f8-317f-4a52-9b35-48b5a66af875/icon"
+  it("preserves no-referrer for the private icon GET after Next merges Proxy headers", async () => {
+    const { proxy } = await import("@/proxy")
+    const response = await proxy(request(path))
+    expect(response.headers.get("referrer-policy")).toBe("no-referrer")
+    expect(response.headers.get("cache-control")).toContain("no-store")
+  })
+  it.each([
+    ["POST", path], ["HEAD", path], ["GET", `${path}?refresh=1`], ["GET", `${path}/`],
+    ["GET", path.replace("/icon", "/icons")], ["GET", path.replace("9597c3f8", "INVALID!")],
+    ["GET", path.replace("9597c3f8", "%39%35%39%37c3f8")],
+  ])("retains generic privacy for a non-matching %s %s", async (method, target) => {
+    const { proxy } = await import("@/proxy")
+    const response = await proxy(new NextRequest(`${ORIGIN}${target}`, { method }))
+    expect(response.headers.get("referrer-policy")).toBe("strict-origin-when-cross-origin")
+  })
+})

@@ -1,3 +1,11 @@
+## 2026-11-02 Task B：图标真实上传及最终响应隐私
+
+基线fe0bb696；只在原Proxy的精确binary GET闭集中加入无query、小写UUID的MCP服务器图标路径，保最终no-referrer，不改变其它路径、方法或生产CSP。真实浏览器先证实Begin200后本地HTTP上传被CSP拦截，按既有development-only精确origin配置恢复；随后真实S3版本PUT、ClamAV扫描Complete、intent回读、保存绑定及刷新卡片同源图片全部200。补验发现Next最终Proxy覆盖route的no-referrer，原最终边界回归先1FAIL/7PASS，再由本片修复。
+
+限定独审APPROVE；原Proxy、图标adapter真实HTTP及安全头3文件130PASS，scope ESLint与完整typecheck通过。最终真实IAM补验图标bytes SHA、no-store/no-referrer/nosniff通过；另上传新draft后取消200、仅释放新intent、原图标绑定与server版本保持、零server PATCH，390px窄屏通过（补验20.483秒，非性能分位数）。第一轮验收脚本把no-store误当完整header值的失败保留并纠正；不是放宽私密响应要求。未重跑原完整default/contract/build/E2E，本次不改变既有全仓门状态。
+
+候选固定Storage4a990617/P2cf63945/BFFe3b5fb75，正式owner安装独立kokoro_storage（九表，邻居326 catalog entries未变），复用受管PG/Redis/MinIO/ClamAV与本次独立版本桶；源码、秘密和运行收据保持各自边界，正常3314未切。此前图标503只代表旧候选阶段，现本次上传/保存/读取/取消子链已实证；Provider OAuth、完整B01/B02及整个Task B仍未关闭。
+
 ## 2026-11-02 Task B：已断开私有 MCP 的新授权（候选）
 
 基线6cdbb090，正式 Platform2cf63945 / BFFe3b5fb75 私有 profile1.0.0 精确消费，Public29、Prepare/receipt及其它独立 pin 保持。原只读配置新增独立“创建新授权”：Management 冻结原 source/双 CAS/key，未知结果只重发原 POST；严格 ACK 只交新 locator，新窗口必须 fresh exact connector/private-server GET 后显式 Connect。旧身份不复活、旧窗口终身只读，无自动 Prepare/OAuth；既有同 actor RAM 恢复不冒浏览器刷新持久恢复。
