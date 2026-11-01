@@ -16,6 +16,7 @@ import { WorkspaceRailAccount } from "@/components/blocks/workspace-rail/workspa
 import { WorkspaceRail } from "@/components/blocks/workspace-rail/workspace-rail"
 import railStyles from "@/components/blocks/workspace-rail/workspace-rail.module.css"
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
+import { ProductReadRecheckProvider } from "@/ui/auth/product-read-recheck-context"
 import type { ConversationSummary } from "@/ui/rail/rail-search"
 import * as pageClients from "@/ui/shell/page-clients"
 import { ThemeProvider } from "@/ui/theme/theme-context"
@@ -1345,7 +1346,7 @@ it.each(["same-subject", "actor-B", null])("R255 project links retain no private
 })
 
 it("ordinary account capability read uses its own exact endpoint and exposes no Admin entry", async () => {
-  renderProjectFolderRail()
+  renderProjectFolderRail({ readBoundary: { admitted: true, subject: "ordinary-account", generation: 1 } })
   await waitFor(() => expect(adminAccessFetch).toHaveBeenCalled())
   for (const [input, init] of adminAccessFetch.mock.calls) {
     expect(input).toBe("/api/admin-access")
@@ -1674,4 +1675,81 @@ it.each([
   const items = within(await screen.findByRole("menu")).getAllByRole("menuitem")
   expect(items.map(item => item.textContent)).toEqual(labels)
   for (const item of items) expect(item.getAttribute("aria-label")).toContain("Target")
+})
+
+
+const adminCapability = (subject = "set29-A", manageUrl = "/manage") => Response.json({
+  platform_admin: true, user_id: subject, tenant_id: "task-b-tenant", manage_url: manageUrl,
+})
+function deferredAdmin() {
+  let resolve!: (response: Response) => void
+  const promise = new Promise<Response>(done => { resolve = done })
+  return { promise, resolve }
+}
+
+it("admin entry waits for Product admission and reads when login recovery finishes", async () => {
+  set29Summary()
+  const fetchMock = vi.spyOn(globalThis, "fetch").mockReset().mockImplementation(async () => adminCapability())
+  const view = render(set29Account({ ...set29A, admitted: false }))
+  await act(async () => { await Promise.resolve() })
+  expect(fetchMock).not.toHaveBeenCalled()
+  view.rerender(set29Account(set29A))
+  await r255OpenAccountMenu()
+  expect(await screen.findByRole("menuitem", { name: /后台管理/ })).toHaveAttribute("href", "/manage")
+  expect(fetchMock).toHaveBeenCalledTimes(1)
+})
+
+it("admin entry retires a visible grant immediately and never reuses it after A-B-A", async () => {
+  set29Summary()
+  const fresh = deferredAdmin()
+  const fetchMock = vi.spyOn(globalThis, "fetch").mockReset().mockResolvedValueOnce(adminCapability()).mockResolvedValueOnce(Response.json({ platform_admin: false })).mockImplementationOnce(() => fresh.promise)
+  const view = render(set29Account(set29A))
+  await r255OpenAccountMenu()
+  await screen.findByRole("menuitem", { name: /后台管理/ })
+  view.rerender(set29Account({ admitted: true, subject: "set29-B", generation: 2 }))
+  expect(screen.queryByRole("menuitem", { name: /后台管理/ })).toBeNull()
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+  view.rerender(set29Account(set29A))
+  expect(screen.queryByRole("menuitem", { name: /后台管理/ })).toBeNull()
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3))
+  await act(async () => { fresh.resolve(Response.json({ platform_admin: false })); await Promise.resolve() })
+  expect(screen.queryByRole("menuitem", { name: /后台管理/ })).toBeNull()
+})
+
+it("late admin grant from a retired generation cannot restore the menu", async () => {
+  set29Summary()
+  const late = deferredAdmin()
+  const fetchMock = vi.spyOn(globalThis, "fetch").mockReset().mockImplementationOnce(() => late.promise).mockResolvedValue(Response.json({ platform_admin: false }))
+  const view = render(set29Account(set29A))
+  await r255OpenAccountMenu()
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+  const signal = fetchMock.mock.calls[0]![1]!.signal!
+  view.rerender(set29Account({ ...set29A, generation: 2 }))
+  expect(signal.aborted).toBe(true)
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+  await act(async () => { late.resolve(adminCapability()); await Promise.resolve() })
+  expect(screen.queryByRole("menuitem", { name: /后台管理/ })).toBeNull()
+})
+
+it.each([["wrong subject", "other-user", "/manage"], ["external URL", "set29-A", "https://example.com/manage"]])("admin entry refuses %s in a positive response", async (_label, subject, url) => {
+  set29Summary()
+  vi.spyOn(globalThis, "fetch").mockReset().mockImplementation(async () => adminCapability(subject, url))
+  render(set29Account(set29A))
+  await r255OpenAccountMenu()
+  await act(async () => { await Promise.resolve() })
+  expect(screen.queryByRole("menuitem", { name: /后台管理/ })).toBeNull()
+})
+
+it.each([401, 403, 503])("admin %i reports only a genuine 401 to the existing Product readmission owner", async status => {
+  set29Summary()
+  const recheck = vi.fn()
+  vi.spyOn(globalThis, "fetch").mockReset().mockResolvedValue(Response.json({ error: { code: "rejected" } }, { status }))
+  const view = render(<ProductReadRecheckProvider value={recheck}>{set29Account(set29A)}</ProductReadRecheckProvider>)
+  await r255OpenAccountMenu()
+  await act(async () => { await Promise.resolve() })
+  expect(recheck).toHaveBeenCalledTimes(status === 401 ? 1 : 0)
+  if (status === 401) expect(recheck).toHaveBeenCalledWith({ subject: "set29-A", generation: 1, signal: expect.any(AbortSignal) })
+  expect(screen.queryByRole("menuitem", { name: /后台管理/ })).toBeNull()
+  view.unmount()
+  if (status === 401) expect(recheck.mock.calls[0]![0].signal.aborted).toBe(true)
 })

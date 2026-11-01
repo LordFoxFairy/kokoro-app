@@ -1,3 +1,7 @@
+## 2026-11-02 侧栏管理入口的会话恢复
+
+`src/components/blocks/workspace-rail/workspace-rail-account.tsx` 将管理资格投影绑定现有 Product 读取主体与代际；准入前不读，退休立即隐藏旧入口，真实401沿原 readmission owner 处理。没有新增权限、接口或角色；当前验证及管理后台缺口见 `docs/CURRENT.md`。
+
 ## 已断开 MCP 的独立新授权（2026-11-02，候选）
 
 固定 BFFe3b5fb75 的私有 reauthorization profile，经原同源 hub adapter/client 与 Management 原命令机制接线；断开详情只开放明确的新授权意图，ACK 仅交新 locator，fresh exact 详情后显式 Connect。生成器与独立 pin 见 `scripts/generate-bff-mcp-reauthorization.mjs` / `contract/bff-mcp-reauthorization-source.json`，职责与边界见 `src/ui/mcp/INDEX.md`，实际验证见 `docs/CURRENT.md`。

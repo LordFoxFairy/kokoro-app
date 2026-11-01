@@ -1,3 +1,11 @@
+## 2026-11-02 管理入口会话生命周期（局部候选）
+
+基于075e的原侧栏账户组件修复管理入口仅挂载读取一次的问题：等现有可信 ProductReadBoundary 准入后读取 `/api/admin-access`；subject/generation/preview 变化立即撤下旧投影，取消旧请求，A-B-A 不复用原授权。正例必须精确当前 user_id、非空tenant、platform_admin=true和内部 `/manage`；仅真实HTTP401报告原 ProductReadRecheck，403/503不冒登录过期。后端/IAM角色与接口没有变化；不声称同一boundary下外部撤权有即时推送。
+
+新增8项风险回归先6FAIL/2PASS，最终原侧栏与admin-access两文件118PASS；完整回归初次3项失败为新spy继承既有全局mock累计calls，隔离mock后保持所有断言复跑通过。受影响ESLint、完整非增量typecheck和独立只读评审限定通过。未重跑完整contract/default/build/E2E，之前完整门的历史失败不因此消失。
+
+固定候选真实IAM浏览器验证：admin-access200且当前platform_admin=false，普通账号无后台入口，Escape回账户按钮，390px无横溢；Provider普通目录200真实空表、管理接口403、匿名401。管理员正例仅组件fixture，原Admin源码本机空目录、当前HTTPS与SSH身份均不可读，管理GUI与写入正例仍OPEN；不提升角色或生成假后台。正常3314未切换，此片不关闭B01/B13或TaskB。
+
 ## 2026-11-02 Task B：图标真实上传及最终响应隐私
 
 基线fe0bb696；只在原Proxy的精确binary GET闭集中加入无query、小写UUID的MCP服务器图标路径，保最终no-referrer，不改变其它路径、方法或生产CSP。真实浏览器先证实Begin200后本地HTTP上传被CSP拦截，按既有development-only精确origin配置恢复；随后真实S3版本PUT、ClamAV扫描Complete、intent回读、保存绑定及刷新卡片同源图片全部200。补验发现Next最终Proxy覆盖route的no-referrer，原最终边界回归先1FAIL/7PASS，再由本片修复。
