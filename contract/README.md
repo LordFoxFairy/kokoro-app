@@ -1,3 +1,7 @@
+## Public29.2 团队角色权限消费者
+
+固定 BFF8ae73fde765ba55a77679c36199dcc9c1553fa11 的完整原件，SHA256 df5a33d4fa33662e4f70967bf5db60033f71f29511bf5975aa2395d61abb3e9c。原12条 public recipe 正规生成，分享 projection 同步 provenance；其余独立 profile/policy保持。test-only `bff-public292-team-permissions-parent.ts` 先恢复完整29.1/29.0，再接原双父 proof，旧200操作与旧oracle不变。
+
 ## Public29 正式配对（候选）
 
 固定BFF7e4ab1cee8f8d45a34902176cd15a10f3c4b22cb，29.0.0，完整SHA258bde9c39f785667cb205976e1547d1cf2c9662a5a2d7f356c4b11e807fcaf7。12public生成、五独立private/profile与policy3保持；新增scheduled runs及RSS/日历分支只按owner原件消费。`tests/contract/bff-public29-integration-parent.ts`的有限逆差先还原两份完整原父字节和有序inventory，再进入旧证明链；正式proof只抽public字段，旧oracle不重签，不依赖sibling源或SQL。

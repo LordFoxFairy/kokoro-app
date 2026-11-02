@@ -1,3 +1,9 @@
+## 2026-11-02 团队角色 delete_series 严格消费（候选）
+
+消费正式 BFF8ae73fde / Public29.2.0，唯一完整原件 SHA256 df5a33d4fa33662e4f70967bf5db60033f71f29511bf5975aa2395d61abb3e9c。原 Team runtime decoder 仅增加 delete_series；未知动作、权限域、空数组继续拒绝，未改 Team 面板、写请求或权限 owner。十二条 public recipe 与原分享 projection 正规再生，其余生成语义逐字保持；policy3、旧200操作清单与双父 proof 字节不变。test-only 先严格逆回完整29.1，再逆回29.0，随后承接原历史证明。
+
+继承的原角色测试先有2 FAIL/未知动作拒绝1 PASS；本片原 client/同源 adapter 两文件79 PASS，十三条原 recipe write/check、架构50项、定向 ESLint与完整非增量类型检查通过。完整契约首轮486 PASS/7 FAIL均为新逆证的错误说明未沿用既有 drift 分类；仅修正说明，未放宽摘要或旧负控，最终493项通过。日志、逐字生成证明与冻结清单在本机 Task B 证据目录。未重跑默认全套/OIDC/build，未操作浏览器、正常服务或真实依赖；部署和真实角色读取闭环由Root接续，不称B09或Task B整体完成。
+
 ## 2026-11-02 B-10 会话分享读回（候选，待独审与浏览器）
 
 已消费正式BFF2e737cad的具名metadata投影，原Public29历史输入/12生成链/SDK保留。原ShareButton打开、重开与可见focus仅GET；权威空态才可创建，命令ACK不直接当当前链接，创建/撤销后再读。读取失败可见且只GET重试；subject/generation/admitted/session/client/scope/preview变化清旧URL、取消并丢弃迟到响应，旧链接的撤销确认不跨新share ID。预览/测试readShare仅零网络fixture，实际preview分享仍禁用。

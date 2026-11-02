@@ -120,6 +120,38 @@ afterEach(() => {
 
 describe("fixed-tenant Team Product adapter", () => {
   it.each([
+    ["delete_series", 200],
+    ["unknown_action", 502],
+  ] as const)("validates the owner/admin skill action %s through the same-origin role adapter", async (action, status) => {
+    const skill = ["create_draft", "create_version", action, "begin_upload", "complete_upload", "abort_upload", "validate_draft", "publish", "withdraw", "set_status", "install", "set_installation_enabled", "remove_installation", "update_draft", "discard_draft", "set_publication_audience"];
+    const data = (["owner", "admin"] as const).map((name) => ({
+      role_id: null,
+      name,
+      kind: "builtin",
+      permissions: {
+        organization: ["update"],
+        member: ["create", "read", "update", "delete"],
+        invitation: ["create", "read", "cancel"],
+        ac: name === "owner" ? ["create", "read", "update"] : ["read"],
+        tenant: ["read"],
+        audit: ["read"],
+        platform: ["execute"],
+        skill,
+      },
+    }));
+    const body = { data, meta: { request_id: "bff-roles", next_cursor: null } };
+    requestWithDomain.mockResolvedValueOnce(Response.json(body, { headers: {
+      "cache-control": "no-store", "x-request-id": "bff-roles",
+    } }));
+    const response = await teamRoute.GET(teamRequest("https://web.example.test/api/team/roles?limit=25"), context(["roles"]));
+    expect(response.status).toBe(status);
+    if (status === 200) expect(await response.json()).toEqual(body);
+    else expect(await response.json()).toMatchObject({ error: { code: "bff_bad_response" } });
+    expect(requestWithDomain).toHaveBeenCalledOnce();
+    expect(requestWithDomain.mock.calls[0]?.[2]).toMatchObject({ method: "GET" });
+  });
+
+  it.each([
     ["GET", ["members"]],
     ["GET", ["invitations"]],
     ["GET", ["roles"]],

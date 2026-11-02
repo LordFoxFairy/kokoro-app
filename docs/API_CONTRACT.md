@@ -1,3 +1,9 @@
+## 2026-11-02 TeamRole.skill 完整闭集消费
+
+正式完整源为 BFF `8ae73fde765ba55a77679c36199dcc9c1553fa11` / Public29.2.0 / SHA256 `df5a33d4fa33662e4f70967bf5db60033f71f29511bf5975aa2395d61abb3e9c`。TeamRole 的 skill 动作仅补 `delete_series`，未知域、未知动作、空权限数组及其余原约束仍拒绝；九个 Team operation、请求、取消与命令恢复不变。
+
+同一正式提交的分享 projection 原字节 SHA256 为 `00c1dae24de9aa9f0d5631fd24019584bbbfc53def41c52cbecf4b12eb6c027d`，原 GET/decoder 语义不变，仅来源同步。唯一 full snapshot 与原生成链保持单源；本次不建立独立 Team 投影，不改固定 ProjectSkill download policy3。
+
 ## 2026-11-02 B-10 会话分享 metadata 消费（候选）
 
 新读取为 GET /api/session/sessions/{id}/share，精确 adapter 仅转正式 GET /v1/sessions/{id}/share；scope=direct 或 project_ref 沿真实 SessionScope，主体来自原 Product Session。拒 body/命令头/未知重复 query；首末同 session 核验与总10秒/1MiB/raw UTF8重复key/完整EOF限制保持。200 平面 data 为 {share:null|{share_id,created_at,expires_at}}；404/读错不当未分享。浏览器无内部凭据；无写入、自动发布或撤销。

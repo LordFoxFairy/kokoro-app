@@ -1,3 +1,9 @@
+## 2026-11-02 团队角色权限的正式消费者修正
+
+唯一完整来源固定 BFF `8ae73fde765ba55a77679c36199dcc9c1553fa11` / Public29.2.0，SHA256 `df5a33d4fa33662e4f70967bf5db60033f71f29511bf5975aa2395d61abb3e9c`。沿原十二个 public 生成器与原分享投影生成器更新来源；除 TeamRole.skill 增加已发布的 `delete_series` 外，其余投影只变来源证明，不改运行语义。Web 的既有严格角色 decoder 同步这一枚举，不新增权限、Team 协议或宽松 fallback。
+
+测试专用有限逆证先按完整摘要与单行差恢复 Public29.1，再按 owner 已发布的两个精确分享块恢复 Public29.0，随后进入原双父历史证明。旧 proof、200 操作清单、policy3 原字节保持，不重签 oracle，不进入运行 decoder。
+
 ## 2026-11-02 B-10 会话分享权威读回（候选）
 
 沿原 SessionClient、精确 session-share 同源 adapter 和 AppFrame→WorkspaceHeader→ShareButton 接线，不新增客户端、服务或分享 owner。唯一新增 use-session-share 管理窗口的只读 metadata、显式命令与退休：打开/重开/可见焦点恢复仅 GET；权威 share:null 才可创建，已有分享显示原链接，读错不可冒私有。显式创建/撤销后必须 GET 回读；未知只允许读核实，不自动重放命令。subject/generation/admitted、client、sessionId、SessionScope 与 preview 绑定窗口，切换立即清旧链接并取消/丢弃迟到结果；原双击锁和精确键盘回焦保持。命令与回读共用一次10秒窗口；失败重试保可见反馈/同步pending，仅本控件仍持焦点时恢复。恢复焦点读取若出现不同share ID，原撤销确认退役。

@@ -1,5 +1,6 @@
 // Test-only finite inverse from BFF 7e4ab1c's committed public proof; no SQL or runtime fallback.
 import assert from "node:assert/strict"
+import { restorePublic290ShareMetadata } from "./bff-public292-team-permissions-parent"
 import { createHash } from "node:crypto"
 import { readFileSync } from "node:fs"
 
@@ -21,6 +22,7 @@ const hash = (value: string) => createHash("sha256").update(value).digest("hex")
 export function restoreIntegrationParent(source: string, parent: "approved" | "rss"): string {
   const target = proof.parents[parent]
   if (hash(source) === target.source_sha256) return source
+  source = restorePublic290ShareMetadata(source)
   assert.equal(hash(source), proof.current_source_sha256, "complete Public29 integration artifact drift")
   const lines = source.split(/(?<=\n)/u)
   for (const change of [...target.inverse_changes].reverse()) {

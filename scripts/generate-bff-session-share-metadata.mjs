@@ -7,15 +7,15 @@ const root = new URL("../", import.meta.url);
 export function renderSessionShareMetadata(bytes, provenance) {
   assert.equal(provenance.owner, "kokoro-bff");
   assert.equal(provenance.candidate, false);
-  assert.equal(provenance.owner_commit, "2e737cad9649460dc477fc7d96ba593783fef619");
+  assert.equal(provenance.owner_commit, "8ae73fde765ba55a77679c36199dcc9c1553fa11");
   assert.equal(provenance.source_path, "contract/openapi/browser/v1/session-share-metadata.json");
   assert.equal(createHash("sha256").update(bytes).digest("hex"), provenance.source_sha256);
-  assert.equal(provenance.source_sha256, "112d6e9be1f3969b7820f85a06e627966b72d669b02898d7f57f64e18d03bb2f");
+  assert.equal(provenance.source_sha256, "00c1dae24de9aa9f0d5631fd24019584bbbfc53def41c52cbecf4b12eb6c027d");
   const spec = JSON.parse(bytes), projection = spec["x-kokoro-projection"];
   assert.equal(projection.profile, provenance.profile);
   assert.equal(projection.version, provenance.profile_version);
   assert.deepEqual(projection.source, provenance.canonical_source);
-  assert.deepEqual(projection.source, { path: "contract/openapi/v1/openapi.yaml", version: "29.1.0", sha256: "4e4ce620887b1a1a431a9346d0d259aa5bed3bd5af06f4428f11e9054173418e" });
+  assert.deepEqual(projection.source, { path: "contract/openapi/v1/openapi.yaml", version: "29.2.0", sha256: "df5a33d4fa33662e4f70967bf5db60033f71f29511bf5975aa2395d61abb3e9c" });
   assert.equal(spec.info.version, projection.source.version);
   const path = "/v1/sessions/{id}/share", resource = spec.paths[path], operation = resource.get;
   assert.deepEqual(Object.keys(spec.paths), [path]);
