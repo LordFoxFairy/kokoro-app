@@ -117,7 +117,7 @@ export function SettingsPanelContent({
     case "personalization":
       return <PersonalizationCard preview={preview} {...(readBoundary === undefined ? {} : { readBoundary })} />;
     case "chat":
-      return <ChatPrefsCard preview={preview} />;
+      return <ChatPrefsCard preview={preview} {...(readBoundary === undefined ? {} : { readBoundary })} />;
     case "shortcuts":
       return <ShortcutsCard />;
     case "credits":

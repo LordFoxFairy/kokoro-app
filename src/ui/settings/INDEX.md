@@ -1,3 +1,5 @@
+默认模型目录沿现 ProjectReadBoundary 的 preview／admitted／subject／generation 退休；缺正式身份不请求，换代取消原 signal／计时器并清退目录与旧 Select portal，重新准入 fresh GET，迟到结果和旧选项回调不写偏好。设备级模型草稿、localStorage 与保存失败重试语义保持。
+
 账户被动读取反馈：`use-account-profile`在同准入scope刷新失败时保留最后确认资料，但phase仍为error、编辑禁用；`account-card`不追加读取失败/重试卡。初次未知显示原字段占位，切主体/代际立即清退；明确保存、复制、退出失败继续在对应动作处反馈。设备页保当前/已读列表、正常刷新和写入核对动作；初次读取失败与分页失败使用现有可见 Alert 分别说明读取失败或列表不完整，重试仍仅沿原 GET，加载播报保持无障碍，不冒成功空列表或重发未知移除。
 
 <!-- 2026-10-22 continuation retirement correction -->
