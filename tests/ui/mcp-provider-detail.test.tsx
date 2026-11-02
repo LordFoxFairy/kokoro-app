@@ -381,6 +381,36 @@ it("retains confirmed connector cards and offers reader recovery when a same-sco
   expect(screen.queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
 })
 
+it("localizes provider management types and disconnect confirmation without issuing commands on cancel", async () => {
+  const { within } = await import("@testing-library/react")
+  const { McpProviderDetailDialog } = await import("@/ui/mcp/mcp-provider-detail-dialog")
+  window.localStorage.setItem("kokoro.locale", "en")
+  const provider = { provider_key: "localized-provider", display_name: "Localized provider", directory_type: "app" as const, category_keys: [], example_prompts: [], enabled: true, state_version: "1" }
+  const connection = { availability: "available" as const, connector_id: "localized-connection", connector_type: "mcp" as const, provider_key: provider.provider_key, display_name: "My connection", status: "active" as const, enabled: true, approved_scopes: [], state_version: "4" }
+  const command = vi.fn()
+  const content = (oauth: boolean) => <LocaleProvider><McpProviderDetailDialog provider={oauth ? { ...provider, connection_server_id: "server" } : provider} connection={connection} actionId={null} admitted managementCommand={undefined} onResumeManagement={command} actionError={false} returnFocusRef={{ current: null }} onClose={command} onConnect={command} onReconnect={command} onEditConnection={command} onToggleEnabled={command} onRemoveConnection={command} /></LocaleProvider>
+  try {
+    const view = render(content(false))
+    const management = within(await screen.findByRole("region", { name: "Connector management" }))
+    expect(management.getByRole("heading", { name: "Connector details" })).toBeVisible()
+    expect(management.getByText("Connector type")).toBeVisible()
+    expect(management.getByText("App connector")).toBeVisible()
+    expect(management.getByRole("button", { name: "Copy UUID" })).toBeEnabled()
+    fireEvent.click(management.getByRole("button", { name: /^Disconnect$/ }))
+    expect(management.getByRole("button", { name: "Confirm disconnect" })).toBeEnabled()
+    fireEvent.click(management.getByRole("button", { name: /^Cancel$/ }))
+    expect(management.queryByRole("button", { name: "Confirm disconnect" })).not.toBeInTheDocument()
+    expect(management.getByRole("button", { name: /^Disconnect$/ })).toBeEnabled()
+    view.rerender(content(true))
+    expect(management.getByText("OAuth connector")).toBeVisible()
+    expect(management.queryByText("App connector")).not.toBeInTheDocument()
+    expect(command).not.toHaveBeenCalled()
+  } finally {
+    cleanup()
+    window.localStorage.setItem("kokoro.locale", "zh")
+  }
+})
+
 it("offers explicit reconnect for an active OAuth binding, never for a plain app connector", async () => {
   const { McpProviderDetailDialog } = await import("@/ui/mcp/mcp-provider-detail-dialog")
   const provider = { provider_key: "oauth", display_name: "OAuth app", connection_server_id: "server", directory_type: "app" as const, category_keys: [], example_prompts: [], enabled: true, state_version: "1" }
