@@ -6,6 +6,8 @@
 
 `project-skill-detail-dialog.tsx` 仅捕获真实 Project 安装与原 pin，回焦 host 交给同一 Manus reader 的显式 Project 分支；列表／默认／更新／移除不换 owner。
 
+`project-skills-section.tsx` 将普通初读、搜索及分页失败显示为可见提示；“重新读取”仅调用原 `model.reload` 从当前查询首页重新 GET，保留已有卡片并禁写。命令未知结果及 ACK 后回读失败继续优先使用原意图恢复，不产生新命令。
+
 # App product surfaces
 
 - `kokoro-project-workspace.tsx` keeps the Project host and its existing context state mounted across root and Task views. The root keeps its measured grid/composer; Task uses an independent flex timeline and one shell composer.
