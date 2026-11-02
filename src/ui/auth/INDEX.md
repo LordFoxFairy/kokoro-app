@@ -1,3 +1,9 @@
+## 2026-11-02 已确认退出的跨标签数据退役
+
+Product 客户端仅在正式 200/signed_out 或 503/browser_cookie_cleared ACK 后删除原 browser subject hint，唤醒已有 storage → Session 重核；marker 不提供认证。原主体更换、已观察到的 ABA 和 caller AbortSignal 退休旧结果；stale_session、未知或不匹配 ACK 不广播、不导航，无自动重试。存储不可用仍允许已确认退出的受限 issuer handoff。没有新增 HTTP/Schema/登录协议；同主体未产生 marker 变化或尚未交付的事件不被冒称成强 session fencing。
+
+真实候选双标签验证了原私有 MCP 卡片在另一标签退出后退场，原缺陷保留的卡片为 1、修复后为 0；此证据仅覆盖 Product 本地退出通知。issuer 原生确认、自动重新登录及刷新竞争恢复仍待完整验收，不能据此称 B-06 完成。正式 ACK fixture 保留原取消与 503 超时/导航断言，未把错误结果改成成功。
+
 ## 2026-10-25 当前业务只读401的有限再准入
 
 AppGate在整个KokoroAppSurface外提供单用途read-recheck context；只有既有MCP/API投影、精确connector详情、composer metadata及Project GET hook的当前typed HTTP401，携其原subject/generation/未abort signal，才可报告。403、parse、network、迟到、preview和所有写命令不触发。Probe同步撤旧数据代，合并一次原Session检查；既有POST/CAS/未知轮换不取消、不重派，真正同主体确认后才发布新代由原hook重读GET。

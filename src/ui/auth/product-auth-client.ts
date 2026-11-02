@@ -1,6 +1,7 @@
 "use client";
 
 import { parseProductReturnTarget } from "@/lib/product-return-target";
+import { AUTH_INDEX_SUBJECT_KEY, readBrowserAuthIndexSubject } from "@/ui/shell/page-clients";
 
 export function openProductSignIn(
   navigate: (url: string) => void = (url) => window.location.replace(url),
@@ -31,33 +32,53 @@ export async function endProductSession(
   signal?: AbortSignal,
 ): Promise<void> {
   signal?.throwIfAborted();
-  const csrfToken = await currentCsrf(signal);
-  signal?.throwIfAborted();
-  const response = await fetch("/api/auth/signout", {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ csrfToken }),
-    ...(signal ? { signal } : {}),
-  });
-  signal?.throwIfAborted();
-  const raw: unknown = await response.json().catch(() => null);
-  signal?.throwIfAborted();
-  const url =
-    typeof raw === "object" && raw !== null
-      ? (raw as { issuer_end_session_url?: unknown }).issuer_end_session_url
-      : null;
-  if (
-    (response.ok || response.status === 503) &&
-    typeof url === "string" &&
-    url.startsWith("/iam/oauth2/end-session?")
-  ) {
+  const readMarker = (): string | null | undefined => {
+    try { return readBrowserAuthIndexSubject(); } catch { return undefined; }
+  };
+  const originalMarker = readMarker();
+  let retired = false;
+  const onStorage = (event: StorageEvent): void => {
+    try { if (event.storageArea !== window.localStorage) return; } catch { return; }
+    if ((event.key === null || event.key === AUTH_INDEX_SUBJECT_KEY) &&
+        (event.key === null || event.oldValue !== event.newValue)) retired = true;
+  };
+  const assertCurrent = (): void => {
     signal?.throwIfAborted();
-    navigate(url);
-    return;
+    const currentMarker = readMarker();
+    if (retired || (originalMarker !== undefined && currentMarker !== undefined && currentMarker !== originalMarker))
+      throw new Error("Product sign-out retired");
+  };
+  window.addEventListener("storage", onStorage);
+  try {
+    const csrfToken = await currentCsrf(signal);
+    assertCurrent();
+    const response = await fetch("/api/auth/signout", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ csrfToken }),
+      ...(signal ? { signal } : {}),
+    });
+    assertCurrent();
+    const raw: unknown = await response.json().catch(() => null);
+    assertCurrent();
+    const ack = typeof raw === "object" && raw !== null && !Array.isArray(raw)
+      ? raw as { status?: unknown; issuer_end_session_url?: unknown } : null;
+    // A stale-generation ACK deliberately leaves the current cookie intact.
+    if (!((response.status === 200 && ack?.status === "signed_out") ||
+          (response.status === 503 && ack?.status === "browser_cookie_cleared")))
+      throw new Error("Product sign-out unavailable");
+    assertCurrent();
+    if (typeof originalMarker === "string" && readMarker() === originalMarker) {
+      // This is only a cache hint. Other tabs retire data and verify their cookie.
+      // Storage restrictions must not prevent a confirmed server-side signout.
+      try { window.localStorage.removeItem(AUTH_INDEX_SUBJECT_KEY); } catch { /* no broadcast */ }
+    }
+    signal?.throwIfAborted();
+    const url = ack?.issuer_end_session_url;
+    navigate(typeof url === "string" && url.startsWith("/iam/oauth2/end-session?") ? url : "/");
+  } finally {
+    window.removeEventListener("storage", onStorage);
   }
-  signal?.throwIfAborted();
-  if (response.ok) navigate("/");
-  else throw new Error("Product sign-out unavailable");
 }
 
 

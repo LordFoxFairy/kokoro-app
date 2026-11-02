@@ -11,6 +11,130 @@ afterEach(() => {
   vi.unstubAllGlobals();
   document.body.innerHTML = "";
   window.history.replaceState({}, "", "/");
+  window.localStorage.clear();
+});
+
+describe("confirmed Product signout across tabs", () => {
+  const marker = "kokoro.web.auth-index-subject";
+  const handoff = "/iam/oauth2/end-session?client_id=web";
+  const csrf = () => Response.json({ csrfToken: "Token123" });
+
+  it.each([
+    [200, "signed_out"],
+    [503, "browser_cookie_cleared"],
+  ])("retires only the original browser hint after %s / %s", async (status, outcome) => {
+    window.localStorage.setItem(marker, "reader-a");
+    window.localStorage.setItem("unrelated-preference", "keep");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(csrf()).mockResolvedValueOnce(
+      Response.json({ status: outcome, issuer_end_session_url: handoff }, { status: Number(status) }),
+    ));
+    const navigate = vi.fn();
+    await endProductSession(navigate);
+    expect(window.localStorage.getItem(marker)).toBeNull();
+    expect(window.localStorage.getItem("unrelated-preference")).toBe("keep");
+    expect(navigate).toHaveBeenCalledExactlyOnceWith(handoff);
+  });
+
+  it("does not announce or navigate on the server's stale-generation ACK", async () => {
+    window.localStorage.setItem(marker, "reader-a");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(csrf()).mockResolvedValueOnce(
+      Response.json({ status: "stale_session", remote_revocation: "not_required" }),
+    ));
+    const navigate = vi.fn();
+    await expect(endProductSession(navigate)).rejects.toThrow();
+    expect(window.localStorage.getItem(marker)).toBe("reader-a");
+    expect(navigate).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not clear a replacement actor or follow a late old-actor ACK", async () => {
+    window.localStorage.setItem(marker, "reader-a");
+    let settle!: (body: unknown) => void;
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(csrf()).mockResolvedValueOnce({
+      ok: true, status: 200, json: () => new Promise((resolve) => { settle = resolve; }),
+    }));
+    const navigate = vi.fn();
+    const pending = endProductSession(navigate);
+    await vi.waitFor(() => expect(settle).toBeTypeOf("function"));
+    window.localStorage.setItem(marker, "reader-b");
+    settle({ status: "signed_out", issuer_end_session_url: handoff });
+    await expect(pending).rejects.toThrow();
+    expect(window.localStorage.getItem(marker)).toBe("reader-b");
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it("does not retire a browser hint for a failed signout", async () => {
+    window.localStorage.setItem(marker, "reader-a");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(csrf()).mockResolvedValueOnce(
+      Response.json({ error: "unavailable" }, { status: 500 }),
+    ));
+    await expect(endProductSession(vi.fn())).rejects.toThrow();
+    expect(window.localStorage.getItem(marker)).toBe("reader-a");
+  });
+
+  it("retires an old ACK after observed cross-tab A to B to A", async () => {
+    window.localStorage.setItem(marker, "reader-a");
+    let settle!: (body: unknown) => void;
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(csrf()).mockResolvedValueOnce({
+      status: 200, json: () => new Promise((resolve) => { settle = resolve; }),
+    }));
+    const navigate = vi.fn();
+    const pending = endProductSession(navigate);
+    await vi.waitFor(() => expect(settle).toBeTypeOf("function"));
+    window.dispatchEvent(new StorageEvent("storage", {
+      key: marker, oldValue: "reader-a", newValue: "reader-b", storageArea: window.localStorage,
+    }));
+    window.dispatchEvent(new StorageEvent("storage", {
+      key: marker, oldValue: "reader-b", newValue: "reader-a", storageArea: window.localStorage,
+    }));
+    settle({ status: "signed_out", issuer_end_session_url: handoff });
+    await expect(pending).rejects.toThrow();
+    expect(window.localStorage.getItem(marker)).toBe("reader-a");
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it.each(["getItem", "removeItem"] as const)("still hands off a confirmed signout when storage %s fails", async (method) => {
+    window.localStorage.setItem(marker, "reader-a");
+    vi.spyOn(Storage.prototype, method).mockImplementation(() => { throw new Error("storage unavailable"); });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(csrf()).mockResolvedValueOnce(
+      Response.json({ status: "signed_out", issuer_end_session_url: handoff }),
+    ));
+    const navigate = vi.fn();
+    await endProductSession(navigate);
+    expect(navigate).toHaveBeenCalledExactlyOnceWith(handoff);
+  });
+
+  it.each(["preference", "session-storage"])("ignores an unrelated %s storage event", async (kind) => {
+    window.localStorage.setItem(marker, "reader-a");
+    let settle!: (body: unknown) => void;
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(csrf()).mockResolvedValueOnce({
+      status: 200, json: () => new Promise((resolve) => { settle = resolve; }),
+    }));
+    const navigate = vi.fn();
+    const pending = endProductSession(navigate);
+    await vi.waitFor(() => expect(settle).toBeTypeOf("function"));
+    window.dispatchEvent(new StorageEvent("storage", {
+      key: kind === "preference" ? "unrelated-preference" : marker,
+      oldValue: "before", newValue: "after",
+      storageArea: kind === "preference" ? window.localStorage : window.sessionStorage,
+    }));
+    settle({ status: "signed_out", issuer_end_session_url: handoff });
+    await pending;
+    expect(window.localStorage.getItem(marker)).toBeNull();
+    expect(navigate).toHaveBeenCalledExactlyOnceWith(handoff);
+  });
+
+  it.each([{}, [], { status: "signed_out" }, { status: "browser_cookie_cleared" }])(
+    "does not retire a marker for an unknown or mismatched success ACK %j", async (raw) => {
+      window.localStorage.setItem(marker, "reader-a");
+      const status = typeof raw === "object" && raw !== null && "status" in raw && raw.status === "signed_out" ? 503 : 200;
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(csrf()).mockResolvedValueOnce(Response.json(raw, { status })));
+      const navigate = vi.fn();
+      await expect(endProductSession(navigate)).rejects.toThrow();
+      expect(window.localStorage.getItem(marker)).toBe("reader-a");
+      expect(navigate).not.toHaveBeenCalled();
+    },
+  );
 });
 
 describe("Product auth browser client", () => {
@@ -28,6 +152,7 @@ describe("Product auth browser client", () => {
         .mockResolvedValueOnce(
           new Response(
             JSON.stringify({
+              status: "signed_out",
               issuer_end_session_url: "/iam/oauth2/end-session?client_id=web",
             }),
             { status: 200 },
@@ -47,7 +172,7 @@ describe("Product auth browser client", () => {
     const navigate = vi.fn();
     vi.stubGlobal("fetch", vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ csrfToken: "Token123" }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ issuer_end_session_url: "https://evil.example/signout" }), { status: 200 })));
+      .mockResolvedValueOnce(new Response(JSON.stringify({ status: "signed_out", issuer_end_session_url: "https://evil.example/signout" }), { status: 200 })));
     await endProductSession(navigate);
     expect(navigate).toHaveBeenCalledExactlyOnceWith("/");
   });
@@ -155,16 +280,18 @@ describe("SET20 signout result retirement", () => {
   it("does not navigate after a late signout body settles for a retired caller", async () => {
     const controller = new AbortController()
     const navigate = vi.fn()
+    window.localStorage.setItem("kokoro.web.auth-index-subject", "reader-a")
     let release!: (raw: unknown) => void
     vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(Response.json({ csrfToken: "Token123" }))
-      .mockResolvedValueOnce({ ok: true, json: () => new Promise((resolve) => { release = resolve }) }))
+      .mockResolvedValueOnce({ ok: true, status: 200, json: () => new Promise((resolve) => { release = resolve }) }))
     const pending = endProductSession(navigate, controller.signal).catch(() => undefined)
     await vi.waitFor(() => expect(release).toBeTypeOf("function"))
     controller.abort()
-    release({ issuer_end_session_url: "/iam/oauth2/end-session?client_id=web" })
+    release({ status: "signed_out", issuer_end_session_url: "/iam/oauth2/end-session?client_id=web" })
     await pending
     expect(fetch).toHaveBeenCalledTimes(2)
     expect(navigate).not.toHaveBeenCalled()
+    expect(window.localStorage.getItem("kokoro.web.auth-index-subject")).toBe("reader-a")
   })
   it("does not read CSRF for an already retired caller", async () => {
     const controller = new AbortController()

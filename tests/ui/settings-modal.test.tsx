@@ -1593,7 +1593,7 @@ describe("SET24 deadline and retirement followups", () => {
   it("actual client suppresses late valid503 issuer navigation after identity retirement", async () => {
     const actual = await vi.importActual<typeof import("@/ui/auth/product-auth-client")>("@/ui/auth/product-auth-client");
     const navigate = vi.fn();
-    let finishBody!: (raw: { issuer_end_session_url: string }) => void;
+    let finishBody!: (raw: { status: string; issuer_end_session_url: string }) => void;
     let requestSignal: AbortSignal | undefined;
     const fetcher = vi.fn()
       .mockResolvedValueOnce({ ok: true, json: async () => ({ csrfToken: "Csrf123" }) })
@@ -1611,7 +1611,7 @@ describe("SET24 deadline and retirement followups", () => {
       mounted.change("logout-owner", 2, true);
       expect(requestSignal?.aborted).toBe(true);
       const { act } = await import("@testing-library/react");
-      await act(async () => { finishBody({ issuer_end_session_url: "/iam/oauth2/end-session?fixture=valid" }); });
+      await act(async () => { finishBody({ status: "browser_cookie_cleared", issuer_end_session_url: "/iam/oauth2/end-session?fixture=valid" }); });
       expect(navigate).not.toHaveBeenCalled();
       expect(fetcher).toHaveBeenCalledTimes(2);
       expect(screen.queryByRole("alert")).toBeNull();
@@ -1625,7 +1625,7 @@ describe("SET24 deadline and retirement followups", () => {
     const fetcher = vi.fn()
       .mockResolvedValueOnce({ ok: true, json: async () => ({ csrfToken: "Csrf123" }) })
       .mockResolvedValueOnce({ ok: false, status: 503,
-        json: async () => ({ issuer_end_session_url: "/iam/oauth2/end-session?fixture=valid" }) });
+        json: async () => ({ status: "browser_cookie_cleared", issuer_end_session_url: "/iam/oauth2/end-session?fixture=valid" }) });
     endProductSession.mockImplementation((_guardedNavigate: unknown, signal?: AbortSignal) => actual.endProductSession(navigate, signal));
     try {
       vi.stubGlobal("fetch", fetcher);
