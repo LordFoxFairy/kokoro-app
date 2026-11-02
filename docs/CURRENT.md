@@ -1,4 +1,12 @@
-## I24 原生退出空体传输接线（2026-11-01，本地候选）
+## I24 原生退出上游 JSON 规范化（2026-11-01，本地候选，待真实复验）
+
+Root 在精确 App `1d54`／Root `325d` 组合实测：冷登录 303、session/project 200，但实际 App sign-out 415，旧 cookie replay 仍 200；原 minimal 四检查及 cleanup 通过未覆盖此缺口。首轮零字节上游修补只证明 transport 接受请求，不证明 IAM 接受媒体类型；其工程门与 RED 记录在下方保留历史。本轮依据锁定 IAM HTTP parser 及既有 owner 退出测试，浏览器入站仍严格零体，adapter 独自构造固定 `Content-Type: application/json` 与 UTF-8 `{}`，上游 `maxRequestBytes` 精确为 2。既不透传浏览器 body/Content-Type，也不放宽 transport、IAM 或原 Origin/cookie/取消规则，无新协议/helper。
+
+原两 loopback 用例现按 owner 媒体类型与精确两字节正文接受请求，错误分别返回 415/400：旧实现实测 2 失败／17 原例通过，均为 415／上游请求 1。修正后 Node22.23.4 定向 5 文件 204 通过／0 跳过，包含新增非空浏览器 `{}`、异 Origin、重复 issuer cookie、预取消四例零上游负控及原 Product auth/Settings 回归；定向 ESLint、`pnpm typecheck` 通过。loopback 不是实际 IAM 撤销证明，真实 App logout/旧 cookie replay、异 tenant 恢复及独立撤权仍交 Root。未运行完整 check、业务服务、PG/Redis、浏览器或 Git 操作。
+
+Root JSON规范化验收：独审CLEAR，Node22.23.4完整pnpm check exit0，contract452/architecture50/full354files6407pass/0skip、lint/types/build；1494输入hash保持。真实退出与旧cookie重放待精确组合复验，不以此静态门覆盖上轮415。
+
+## I24 首轮空体传输修补（2026-11-01，历史候选；已由后续真实 415 证据纠正）
 
 基线 App `727cd674`；Root 已在精确 Root `4fdb2ede` 组合实测空 Chromium context 的冷登录表单 303、session/project 200，无 cookie 注入，此证据不代替退出或撤权。退出旧 route 以 POST 调既有 relay 时未传 body，真实 transport 按现约束拒绝；原 route mock 未覆盖这条接缝。新增现 transport 套件 loopback 两例分别覆盖实际 client 无 body 和确认 form 空 urlencoded：修复前均 503／零上游请求，原 17 例通过；生产仅补 `body: new Uint8Array(0)`，保零字节 wire、原 Origin/Host/cookie/body/取消规则，不放宽 transport、不增加协议或 helper。
 

@@ -130,6 +130,7 @@ async function nativeSignOut(request: Request, context: RouteContext): Promise<R
   const cookie = filterIssuerCookies(request.headers.get("cookie"), config.secureCookies)
   if (cookie === null) return errorResponse("iam_relay_cookie_invalid", 400, id)
   const headers = new Headers({
+    "content-type": "application/json",
     origin: config.webOrigin,
     [SERVICE_HEADER]: SERVICE_VALUE,
     [INTERNAL_SECRET_HEADER]: config.secret,
@@ -140,11 +141,11 @@ async function nativeSignOut(request: Request, context: RouteContext): Promise<R
     const upstream = await requestIamRelay({
       url: `${config.bffOrigin}/iam/sign-out`,
       method: "POST",
-      body: new Uint8Array(0),
+      body: new TextEncoder().encode("{}"),
       headers,
       signal: request.signal,
       timeoutMs: IAM_RELAY_POLICY.maxDurationMs,
-      maxRequestBytes: 0,
+      maxRequestBytes: 2,
       maxResponseBytes: IAM_RELAY_POLICY.maxResponseBytes,
       maxHeaderBytes: IAM_RELAY_POLICY.maxHeaderBytes,
     })

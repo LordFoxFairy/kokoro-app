@@ -87,16 +87,21 @@ describe("native IAM relay transport", () => {
     expect(result.setCookies).toHaveLength(2)
   })
 
-  it.each(["client", "form"] as const)("delivers the actual %s sign-out adapter's zero-byte POST through the real transport", async kind => {
-    const received: { method: string | undefined; url: string | undefined; cookie: string | undefined; origin: string | undefined; bytes: number }[] = []
+  it.each(["client", "form"] as const)("normalizes the actual %s empty sign-out to the IAM JSON wire through the real transport", async kind => {
+    const received: { method: string | undefined; url: string | undefined; cookie: string | undefined; origin: string | undefined; contentType: string | undefined; bytes: number; body: string }[] = []
     const deletion = "kokoro-issuer.session_token=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax"
     const server = createServer((request, response) => {
       let bytes = 0
-      request.on("data", (chunk: Buffer) => { bytes += chunk.byteLength })
+      let body = ""
+      request.on("data", (chunk: Buffer) => { bytes += chunk.byteLength; body += chunk.toString("utf8") })
       request.on("end", () => {
-        received.push({ method: request.method, url: request.url, cookie: request.headers.cookie, origin: request.headers.origin, bytes })
-        response.writeHead(200, { "content-type": "application/json", "set-cookie": deletion })
-        response.end('{"success":true}')
+        const contentType = request.headers["content-type"]
+        received.push({ method: request.method, url: request.url, cookie: request.headers.cookie, origin: request.headers.origin, contentType, bytes, body })
+        // The locked IAM HTTP parser requires JSON media type and a parseable
+        // object even though its sign-out schema accepts an optional body.
+        const status = contentType !== "application/json" ? 415 : body !== "{}" || bytes !== 2 ? 400 : 200
+        response.writeHead(status, { "content-type": "application/json", ...(status === 200 ? { "set-cookie": deletion } : {}) })
+        response.end(JSON.stringify({ success: status === 200 }))
       })
     })
     servers.push(server)
@@ -120,10 +125,40 @@ describe("native IAM relay transport", () => {
     expect({ status: response.status, upstreamRequests: received.length }).toEqual({ status: 200, upstreamRequests: 1 })
     expect(received).toEqual([{
       method: "POST", url: "/iam/sign-out", cookie: "kokoro-issuer.session_token=issuer",
-      origin: "https://web.example.test", bytes: 0,
+      origin: "https://web.example.test", contentType: "application/json", bytes: 2, body: "{}",
     }])
     expect(response.headers.getSetCookie()).toEqual([deletion])
     expect(await response.json()).toEqual({ success: true })
+  })
+
+  it.each([
+    { rejected: "body", status: 400 },
+    { rejected: "origin", status: 403 },
+    { rejected: "cookie", status: 400 },
+    { rejected: "cancelled", status: 503 },
+  ])("does not normalize a $rejected sign-out request into an upstream action", async ({ rejected, status }) => {
+    vi.stubEnv("NODE_ENV", "test")
+    vi.stubEnv("KOKORO_BFF_BASE_URL", "http://127.0.0.1:9")
+    vi.stubEnv("KOKORO_WEB_ORIGIN", "https://web.example.test")
+    vi.stubEnv("KOKORO_INTERNAL_SECRET_WEB_BFF", "fixture-service-secret")
+    const fetcher = vi.fn().mockRejectedValue(new Error("unexpected upstream request"))
+    vi.stubGlobal("fetch", fetcher)
+    const controller = new AbortController()
+    if (rejected === "cancelled") controller.abort()
+    const { POST } = await import("@/app/iam/[...path]/route")
+    const response = await POST(new Request("https://web.example.test/iam/sign-out", {
+      method: "POST", signal: controller.signal,
+      headers: {
+        host: "web.example.test",
+        origin: rejected === "origin" ? "https://other.example.test" : "https://web.example.test",
+        cookie: rejected === "cookie" ? "kokoro-issuer.session_token=one; kokoro-issuer.session_token=two" : "kokoro-issuer.session_token=issuer",
+        "content-type": "application/json",
+      },
+      ...(rejected === "body" ? { body: "{}" } : {}),
+    }), { params: Promise.resolve({ path: ["sign-out"] }) })
+    expect(response.status).toBe(status)
+    expect(fetcher).not.toHaveBeenCalled()
+    expect(response.headers.getSetCookie()).toEqual([])
   })
 
   it("cancels an oversized upstream body before rejecting", async () => {
