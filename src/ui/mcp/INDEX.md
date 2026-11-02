@@ -1,3 +1,9 @@
+## 本人 Provider 连接的名称与说明
+
+普通 Provider 详情的显式编辑只定位本人无 private server 的连接，进入现有 `McpConnectorEditorDialog` 前重新 exact GET，并核原类型、Provider 与连接身份。该窗口不再次跳回目录详情；读取失败原地显示 GET-only 重试，未读到当前事实不呈现保存字段。
+
+保存沿原 `update_connector`、CAS、幂等键与未知结果恢复，变更个人连接而非共享 Provider。取消、主体/准入代变化、撤权与迟到回执沿现有窗口围栏；外层有效入口承接回焦，卸载的 Edit 按钮不作为返回目标。Provider 单元夹具不代表正常外部授权旅程。
+
 ## 已断开配置的新授权意图（2026-11-02，候选）
 
 `mcp-projection-read.tsx` 从只读私有 exact 详情显式发起新授权；原窗口不开放任何旧身份命令。`mcp-management-commands.ts` 复用原 actor shell，冻结 source connector/server/双 CAS/key，未知结果按原请求重试，严格 ACK 只保新 locator；`mcp-management-status.tsx` 标明独立意图。关闭后的原命令在既有 Connections 恢复入口可达，即使 source 已非 current 导致 GET404；不会从404或 ACK 造详情。成功打开新窗口，再 fresh exact connector/private-server GET，原显式 Connect 才可 Prepare。命令窗口/主体/准入代退休、撤销/删除负事实与原 Prepare journal 冲突保护继续生效。

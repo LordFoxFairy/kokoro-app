@@ -47,6 +47,7 @@ export function McpProviderDetailDialog({
   onClose,
   onConnect,
   onReconnect,
+  onEditConnection,
   onToggleEnabled,
   onRemoveConnection,
   onPrompt,
@@ -73,6 +74,7 @@ export function McpProviderDetailDialog({
   onClose: () => void;
   onConnect: (provider: McpConnectorProvider) => void;
   onReconnect?: (connection: McpConnector, provider: McpConnectorProvider) => void;
+  onEditConnection?: (connection: McpConnector) => void;
   onToggleEnabled?: (connection: McpConnector) => void;
   onRemoveConnection?: (connection: McpConnector) => void;
   onPrompt?: (prompt: string) => void;
@@ -216,6 +218,7 @@ export function McpProviderDetailDialog({
                 <h3>连接器详情</h3>
                 <dl><div><dt>连接器类型</dt><dd>{provider.connection_server_id !== undefined ? "OAuth 连接器" : "应用连接器"}</dd></div><div><dt>UUID</dt><dd><code>{connection.connector_id}</code><Button type="button" size="icon" variant="ghost" aria-label="复制 UUID" onClick={() => void navigator.clipboard?.writeText(connection.connector_id)}><Copy aria-hidden="true" /></Button></dd></div></dl>
                 <div className={styles.connectedProviderActions}>
+                  {!connection.server_id && connection.status !== "revoked" && onEditConnection ? <Button type="button" variant="outline" disabled={locked || creationLocked} onClick={() => onEditConnection(connection)}>{t("mcp.edit")}</Button> : null}
                   {provider.connection_server_id !== undefined && (connection.status === "active" || connection.status === "pending" || connection.status === "error") && onReconnect ? <Button type="button" variant="outline" disabled={locked} onClick={() => onReconnect(connection, provider)}><Link2 aria-hidden="true" />{t(connection.status === "active" ? "thread.reconnect" : "mcp.retry")}</Button> : null}
                   {onToggleEnabled ? <Button type="button" variant="outline" disabled={locked} onClick={() => onToggleEnabled(connection)}><Power aria-hidden="true" />{connection.enabled ? t("mcp.disable") : t("mcp.enable")}</Button> : null}
                   {onRemoveConnection ? confirmDisconnect ? <><Button type="button" variant="destructive" disabled={locked} onClick={() => onRemoveConnection(connection)}>确认断开</Button><Button type="button" variant="outline" disabled={locked} onClick={() => setConfirmDisconnect(false)}>{t("mcp.cancel")}</Button></> : <Button type="button" variant="ghost" className={styles.disconnectAction} disabled={locked} onClick={() => setConfirmDisconnect(true)}><Trash2 aria-hidden="true" />断开连接</Button> : null}

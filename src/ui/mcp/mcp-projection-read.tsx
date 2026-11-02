@@ -146,7 +146,7 @@ export function McpProjectionRead({
   const createdFacts = createdDetail ? readCreatedMcpDetail(createdDetail.target, client, commandBoundary) : null;
   const [editor, setEditor] = useState<McpConnectorEditor | null>(() => createdFacts ? { kind: "edit", ...createdFacts } : null);
   // Only exact locators and typed input survive an admission recheck.
-  const [connectorIntent, setConnectorIntent] = useState<{ connectorId: string; providerKey?: string; serverId?: string; binding?: McpConnectorBinding; exact?: boolean; readOnlyConfiguration?: true; entered: boolean; window: object; configurationSaved?: object } | null>(() => createdDetail ? {
+  const [connectorIntent, setConnectorIntent] = useState<{ connectorId: string; providerKey?: string; serverId?: string; binding?: McpConnectorBinding; exact?: boolean; metadataOnly?: true; readOnlyConfiguration?: true; entered: boolean; window: object; configurationSaved?: object } | null>(() => createdDetail ? {
     ...createdDetail.target, exact: true, entered: false, window: {},
     binding: { connectorType: "mcp", serverId: createdDetail.target.serverId },
   } : null);
@@ -230,6 +230,9 @@ export function McpProjectionRead({
     if (factsOwner.identity !== owner.identity || factsOwner.client !== owner.client) {
       setSelectedProviderKey(null); setSelectedProviderConnectionId(null); setProviderWindowToken({});
       setApiIntent(null);
+      if (connectorIntent?.metadataOnly) {
+        setConnectorIntent(null); setDisplayName(null); setDescription(null);
+      }
     }
     setEditor(null);
     setActionId(null);
@@ -525,6 +528,21 @@ export function McpProjectionRead({
       ...(exact ? { binding: { ...bindingFor(connector), ...(readOnlyConfiguration ? { disconnectedVersion: connector.state_version } : {}) } } : {}),
       ...(connector.server_id ? { serverId: connector.server_id } : {}), entered: false, window: {} });
   };
+  const beginProviderMetadataEdit = (connector: McpConnector) => {
+    const wait = providerWindow.current;
+    if (!admitted || ownerRef.current !== owner || !wait || wait.intent !== providerWindowToken || wait.controller.signal.aborted ||
+      connector !== selectedProviderConnection || connector.provider_key !== selectedProviderKey || connector.server_id || connector.status === "revoked" ||
+      !visibleSavedConfiguration(connector) || management.isBlocked(connector.connector_id) || actionId !== null ||
+      (providerCreationState !== undefined && providerCreationState.kind !== "rejected")) return;
+    // The detail's Edit button will unmount. Return to its original live card,
+    // and suppress the replaced Provider dialog's independent close autofocus.
+    editorReturnFocusRef.current = providerReturnFocusRef.current;
+    providerReturnFocusRef.current = null;
+    setSelectedProviderKey(null); setSelectedProviderConnectionId(null); setProviderWindowToken({});
+    setEditor(null); setDisplayName(null); setDescription(null); setDeleteId(null); setActionError(false);
+    setConnectorIntent({ connectorId: connector.connector_id, providerKey: connector.provider_key,
+      exact: true, metadataOnly: true, entered: true, binding: bindingFor(connector), window: {} });
+  };
   const connectorId = connectorIntent?.connectorId;
   const serverId = connectorIntent?.serverId;
   const detailHandoff = createdFacts && connectorIntent?.exact && createdFacts.server.server_id === serverId &&
@@ -543,10 +561,12 @@ export function McpProjectionRead({
   }
   const observedConnector = connectorIntent?.exact ? exactEditorConnection.connection ?? undefined
     : connectorProjection?.items.find(item => item.connector_id === connectorId);
-  const exactReadRejected = Boolean(connectorIntent?.readOnlyConfiguration && observedConnector && !visibleSavedConfiguration(observedConnector));
+  const exactReadRejected = Boolean(observedConnector &&
+    (connectorIntent?.readOnlyConfiguration && !visibleSavedConfiguration(observedConnector) ||
+      connectorIntent?.metadataOnly && (observedConnector.server_id || observedConnector.status === "revoked" || !visibleSavedConfiguration(observedConnector))));
   const selectedConnector = exactReadRejected ? undefined : observedConnector;
   if (exactReadRejected && editor !== null) setEditor(null);
-  const providerReady = Boolean(serverId) || providerProjection !== undefined;
+  const providerReady = Boolean(serverId) || Boolean(connectorIntent?.metadataOnly) || providerProjection !== undefined;
   const selectedConnectorProvider = serverId ? undefined : providers.find(item => item.provider_key === selectedConnector?.provider_key);
   // Read failures are not failed commands. Scope them to this exact observation
   // so a closed/reopened editor or a new admission never inherits an old error.
@@ -581,7 +601,7 @@ export function McpProjectionRead({
         const server = serverId && client.getPrivateMcpServer ? await client.getPrivateMcpServer(serverId, controller.signal) : undefined;
         if (!active || ownerRef.current !== owner) return;
         if (serverId && (!server || server.server_id !== serverId)) throw Error("MCP detail identity mismatch");
-        if (!server && (selectedConnectorProvider || selectedConnector.connector_type === "mcp")) {
+        if (!connectorIntent?.metadataOnly && !server && (selectedConnectorProvider || selectedConnector.connector_type === "mcp")) {
           setProviderWindowToken({});
           setSelectedProviderConnectionId(selectedConnector.connector_id);
           setSelectedProviderKey(selectedConnector.provider_key);
@@ -601,7 +621,7 @@ export function McpProjectionRead({
     };
     void read();
     return () => { active = false; controller.abort(); };
-  }, [admitted, client, connectorId, serverId, selectedConnector, selectedConnectorProvider, providerReady, detailRetry, serverReadAttempt, owner, detailHandoff, reportRead401, identity, readGeneration, editorIntentWindow]);
+  }, [admitted, client, connectorId, serverId, selectedConnector, selectedConnectorProvider, providerReady, detailRetry, serverReadAttempt, owner, detailHandoff, reportRead401, identity, readGeneration, editorIntentWindow, connectorIntent?.metadataOnly]);
   const connectProvider = (
     provider: McpConnectorProvider,
     onSuccess?: () => void,
@@ -1018,7 +1038,13 @@ export function McpProjectionRead({
       ) : null}
       <McpConnectorEditorDialog
         open={Boolean(connectorIntent?.entered && !connectorIntent.serverId)}
-        pendingError={admitted && (serverReadFailed || connectorState.error || (connectorProjection !== undefined && !selectedConnector))}
+        pendingError={admitted && (exactReadRejected || exactEditorConnection.error || serverReadFailed || connectorState.error || (connectorProjection !== undefined && !selectedConnector))}
+        readFeedback={connectorIntent?.metadataOnly && admitted && (exactReadRejected || exactEditorConnection.error || exactEditorConnection.retrying) ? <McpReadFeedback
+          message={t("mcp.read.connectorsError")} retryLabel={t("mcp.read.connectorsRetry")} busy={exactEditorConnection.retrying}
+          onRetry={() => {
+            if (exactReadRejected && ownerRef.current === owner && admitted) setDetailRetry(value => value + 1);
+            else exactEditorConnection.retryRead();
+          }} /> : undefined}
         editor={
           editor?.server ? null : editor
         }
@@ -1098,6 +1124,7 @@ export function McpProjectionRead({
           const serverId = provider.connection_server_id;
           if (serverId) restartAuthorization(connection, serverId);
         }}
+        onEditConnection={beginProviderMetadataEdit}
         onToggleEnabled={(connection) => void runManagement("provider", connection.connector_id, { operation: "set_enabled", connectorId: connection.connector_id, ...(connection.server_id ? { serverId: connection.server_id } : {}), input: { enabled: !connection.enabled, expected_state_version: connection.state_version } })}
         onRemoveConnection={(connection) => void runManagement("provider", connection.connector_id, { operation: "disconnect", connectorId: connection.connector_id, ...(connection.server_id ? { serverId: connection.server_id } : {}), input: { expected_state_version: connection.state_version } })}
         {...(onPrompt ? { onPrompt: (prompt: string) => { if (ownerRef.current === owner && admitted) onPrompt(prompt); } } : {})}
