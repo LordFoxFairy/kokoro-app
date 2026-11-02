@@ -91,6 +91,58 @@ function fillApiCreationSecret() {
 beforeEach(() => { localStorage.setItem("kokoro.locale", "zh"); });
 afterEach(() => { cleanup(); localStorage.removeItem("kokoro.locale"); });
 
+it.each(["cancel", "escape"] as const)("closing the icon URL dialog by %s returns to Upload without closing or publishing the outer form", async close => {
+  const icon = iconFixture();
+  const { create, register, done } = renderCreationDialog("custom-api", icon);
+  const outer = await screen.findByRole("dialog");
+  const upload = within(outer).getByRole("button", { name: /^上传$/u });
+  upload.focus();
+  fireEvent.keyDown(upload, { key: "Enter" });
+  fireEvent.click(await screen.findByRole("menuitem", { name: "粘贴图片 URL" }));
+  const dialog = await screen.findByRole("dialog", { name: "通过 URL 添加图片" });
+  if (close === "cancel") fireEvent.click(within(dialog).getByRole("button", { name: "取消" }));
+  else fireEvent.keyDown(within(dialog).getByRole("textbox", { name: "图标 URL" }), { key: "Escape" });
+  await waitFor(() => expect(screen.queryByRole("dialog", { name: "通过 URL 添加图片" })).not.toBeInTheDocument());
+  await waitFor(() => expect(upload).toHaveFocus());
+  expect(outer).toBeVisible();
+  expect(create).not.toHaveBeenCalled();
+  expect(register).not.toHaveBeenCalled();
+  expect(done).not.toHaveBeenCalled();
+  expect(icon.client.importUrl).not.toHaveBeenCalled();
+  expect(icon.client.cancel).not.toHaveBeenCalled();
+});
+
+it.each(["disabled", "disconnected"] as const)("closing an icon URL window never focuses its %s Upload trigger", async retirement => {
+  const icon = iconFixture();
+  const save = vi.fn(), remove = vi.fn(), close = vi.fn();
+  const detail = (busy: boolean) => <LocaleProvider><CustomApiDetailDialog
+    profile={profile} iconClient={icon.client} iconBoundary={boundary}
+    actionError={false} busy={busy} admitted command={undefined} canUpdate canRemove
+    onResume={vi.fn()} returnFocusRef={{ current: null }} onClose={close} onSave={save} onDelete={remove}
+  /></LocaleProvider>;
+  const view = render(detail(false));
+  const upload = screen.getByRole("button", { name: /^上传$/u });
+  upload.focus();
+  fireEvent.keyDown(upload, { key: "Enter" });
+  fireEvent.click(await screen.findByRole("menuitem", { name: "粘贴图片 URL" }));
+  const dialog = await screen.findByRole("dialog", { name: "通过 URL 添加图片" });
+  const focus = vi.spyOn(upload, "focus");
+  if (retirement === "disabled") {
+    view.rerender(detail(true));
+    expect(upload).toBeDisabled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "取消" }));
+  } else view.unmount();
+  await waitFor(() => expect(screen.queryByRole("dialog", { name: "通过 URL 添加图片" })).not.toBeInTheDocument());
+  // Radix retires its FocusScope on the following task after content unmount.
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+  expect(focus).not.toHaveBeenCalled();
+  expect(save).not.toHaveBeenCalled();
+  expect(remove).not.toHaveBeenCalled();
+  expect(close).not.toHaveBeenCalled();
+  expect(icon.client.importUrl).not.toHaveBeenCalled();
+  expect(icon.client.cancel).not.toHaveBeenCalled();
+});
+
 it("English API details localize visible fields, secret controls and the shared icon URL dialog", async () => {
   localStorage.setItem("kokoro.locale", "en");
   const icon = iconFixture();

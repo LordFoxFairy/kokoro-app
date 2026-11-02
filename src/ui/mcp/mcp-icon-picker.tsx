@@ -1,6 +1,6 @@
 "use client";
 /* eslint-disable @next/next/no-img-element -- Short-lived capabilities must not enter the image optimizer cache. */
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { ChevronDown, Image as ImageIcon, Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,8 +24,13 @@ export function McpIconPicker({ draft, state, current, disabled = false, display
   onPreviewLoaded?: ((preview: McpIconPreviewDisplay, loaded: boolean) => void) | undefined;
 }) {
   const t = useT(), id = useId(), file = useRef<HTMLInputElement>(null);
+  const upload = useRef<HTMLButtonElement>(null);
+  const urlReturnFocus = useRef<{ trigger: HTMLButtonElement | null; draft: McpIconDraft } | null>(null);
   const [urlOpen, setUrlOpen] = useState(false), [url, setUrl] = useState("");
   const locked = disabled || !draft.available || state.kind === "running" || state.kind === "unknown";
+  useLayoutEffect(() => {
+    if (locked || urlReturnFocus.current?.draft !== draft) urlReturnFocus.current = null;
+  }, [draft, locked]);
   const reference = state.preview ?? current?.preview_reference;
   const referenceExpiry = reference ? Date.parse(reference.expires_at) : Number.NaN;
   const referenceDisplay = reference?.method === "GET" && Object.keys(reference.required_headers).length === 0 && Number.isFinite(referenceExpiry)
@@ -37,15 +42,22 @@ export function McpIconPicker({ draft, state, current, disabled = false, display
     <div className={styles.row}>
       <span className={styles.preview}>{preview ? <IconPreview key={`${preview.url}\0${preview.expiresAt}`} preview={preview} onPreviewLoaded={onPreviewLoaded} /> : <ImageIcon aria-hidden="true" />}</span>
       <div className={styles.copy}>
-        <DropdownMenu><DropdownMenuTrigger asChild><Button type="button" variant="outline" className={styles.upload} disabled={locked} aria-busy={state.kind === "running"}>{t("connectorCatalog.upload")}<ChevronDown aria-hidden="true" /></Button></DropdownMenuTrigger>
-          <DropdownMenuContent align="start"><DropdownMenuItem onSelect={() => file.current?.click()}>{t("mcp.iconUploadDevice")}</DropdownMenuItem><DropdownMenuItem onSelect={() => { setUrl(""); setUrlOpen(true); }}>{t("mcp.iconPasteUrl")}</DropdownMenuItem>{preview || state.dirty || current ? <DropdownMenuItem onSelect={() => void draft.remove()}>{t("mcp.iconRemove")}</DropdownMenuItem> : null}</DropdownMenuContent>
+        <DropdownMenu><DropdownMenuTrigger asChild><Button ref={upload} type="button" variant="outline" className={styles.upload} disabled={locked} aria-busy={state.kind === "running"}>{t("connectorCatalog.upload")}<ChevronDown aria-hidden="true" /></Button></DropdownMenuTrigger>
+          <DropdownMenuContent align="start"><DropdownMenuItem onSelect={() => file.current?.click()}>{t("mcp.iconUploadDevice")}</DropdownMenuItem><DropdownMenuItem onSelect={() => { urlReturnFocus.current = { trigger: upload.current, draft }; setUrl(""); setUrlOpen(true); }}>{t("mcp.iconPasteUrl")}</DropdownMenuItem>{preview || state.dirty || current ? <DropdownMenuItem onSelect={() => void draft.remove()}>{t("mcp.iconRemove")}</DropdownMenuItem> : null}</DropdownMenuContent>
         </DropdownMenu>
         <span>{t("mcp.iconHint")}</span>
       </div>
     </div>
     <input ref={file} className={styles.file} type="file" accept="image/png,image/jpeg" aria-label={t("mcp.iconFileLabel")} disabled={locked} onChange={event => { const selected = event.currentTarget.files?.[0]; event.currentTarget.value = ""; if (selected && !locked) void draft.chooseFile(selected); }} />
     {state.kind === "unknown" || state.kind === "error" ? <div className={styles.failure} role="alert"><span>{state.failure === "file" ? t("mcp.iconFileError") : state.failure === "expired" ? t("mcp.iconExpired") : t(connectorCommandFailureMessage(state.recovery, "mcp.actionFailed"))}</span>{state.mayRetry ? <Button type="button" size="sm" variant="outline" disabled={disabled} onClick={() => void draft.retry()}>{t("mcp.retryOriginal")}</Button> : null}</div> : null}
-    <Dialog open={urlOpen} onOpenChange={setUrlOpen}><DialogContent className={styles.urlDialog} showCloseButton={false}>
+    <Dialog open={urlOpen} onOpenChange={setUrlOpen}><DialogContent className={styles.urlDialog} showCloseButton={false}
+      onCloseAutoFocus={event => {
+        event.preventDefault();
+        const target = urlReturnFocus.current;
+        urlReturnFocus.current = null;
+        if (!locked && target?.draft === draft && target.trigger === upload.current && target.trigger?.isConnected && !target.trigger.disabled)
+          target.trigger.focus({ preventScroll: true });
+      }}>
       <DialogHeader><DialogTitle className={styles.title}>{t("mcp.iconUrlTitle")}</DialogTitle></DialogHeader>
       <div className={styles.urlField}><label htmlFor={id}>{t("mcp.iconUrlLabel")}</label><div className={styles.urlInput}><Link2 aria-hidden="true" /><Input id={id} placeholder="https://" autoComplete="off" value={url} onChange={event => setUrl(event.target.value)} onKeyDown={event => { if (event.key === "Enter" && imageUrlValid && !locked) { event.preventDefault(); setUrlOpen(false); void draft.chooseUrl(url); } }} /></div></div>
       <footer><Button type="button" variant="outline" onClick={() => setUrlOpen(false)}>{t("mcp.cancel")}</Button><Button type="button" disabled={!imageUrlValid || locked} onClick={() => { setUrlOpen(false); void draft.chooseUrl(url); }}>{t("mcp.iconUrlAdd")}</Button></footer>
