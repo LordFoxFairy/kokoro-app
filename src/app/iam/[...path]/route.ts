@@ -140,6 +140,7 @@ async function nativeSignOut(request: Request, context: RouteContext): Promise<R
     const upstream = await requestIamRelay({
       url: `${config.bffOrigin}/iam/sign-out`,
       method: "POST",
+      body: new Uint8Array(0),
       headers,
       signal: request.signal,
       timeoutMs: IAM_RELAY_POLICY.maxDurationMs,

@@ -1,3 +1,11 @@
+## I24 原生退出空体传输接线（2026-11-01，本地候选）
+
+基线 App `727cd674`；Root 已在精确 Root `4fdb2ede` 组合实测空 Chromium context 的冷登录表单 303、session/project 200，无 cookie 注入，此证据不代替退出或撤权。退出旧 route 以 POST 调既有 relay 时未传 body，真实 transport 按现约束拒绝；原 route mock 未覆盖这条接缝。新增现 transport 套件 loopback 两例分别覆盖实际 client 无 body 和确认 form 空 urlencoded：修复前均 503／零上游请求，原 17 例通过；生产仅补 `body: new Uint8Array(0)`，保零字节 wire、原 Origin/Host/cookie/body/取消规则，不放宽 transport、不增加协议或 helper。
+
+Node22.23.4 定向 5 文件 200 通过／0 跳过，含现 IAM route、native session route、Product auth client 与 Settings modal 回归；定向 ESLint 和 `pnpm typecheck` 通过。loopback 验证 POST 实际到达、body 为零、issuer cookie 过滤与删除 cookie 透传，不冒称真实 IAM session 已撤销。未执行完整 check、业务服务、PG/Redis、浏览器或 Git 操作；Root 完整门、真实 App logout、异 tenant 恢复及独立 session/membership 撤权仍待。
+
+Root验收：独审CLEAR，Node22.23.4完整pnpm check exit0；contract452、architecture50、full354files/6403pass/0skip，lint/types/build通过，1494输入前后hash一致。真实App退出和旧cookie重放在精确组合提交后另验，不以loopback替代IAM撤销。
+
 ## T-05 冷登录固定 tenant 接线（2026-11-01，本地候选，待 Root 真实验收）
 
 基线 App `9ba653433c75dd3919bcc3de3cafc778fda4b975`。Root 空 Chromium context 经真实登录表单收到 303 后 `/api/auth/session` 与项目读取仍 401；签入新 IAM session 缺 activeOrganizationId，既有提前 set-active fixture 掩盖缺口。本片仅现 sign-in route 顺序补固定 `KOKORO_TENANT_ID` set-active 和既有在线 admission，三阶段共 5 秒预算；准入成功才进入产品，失败不写新 issuer cookie、不破坏旧会话、不重发密码，退休本次 flow/CSRF。新未交付 session 由 IAM TTL 回收。配置词法沿 native admission 固定 tenant credential，保持 opaque ID，不限定 UUID。详见本仓技术设计 T-05 小节。

@@ -14,6 +14,7 @@ describe("native IAM relay transport", () => {
 
   afterEach(async () => {
     vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
     await Promise.all(servers.splice(0).map(close))
   })
 
@@ -84,6 +85,45 @@ describe("native IAM relay transport", () => {
     expect(result.status).toBe(302)
     expect(result.headers.get("location")).toBe("/auth/select-tenant?sig=opaque")
     expect(result.setCookies).toHaveLength(2)
+  })
+
+  it.each(["client", "form"] as const)("delivers the actual %s sign-out adapter's zero-byte POST through the real transport", async kind => {
+    const received: { method: string | undefined; url: string | undefined; cookie: string | undefined; origin: string | undefined; bytes: number }[] = []
+    const deletion = "kokoro-issuer.session_token=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax"
+    const server = createServer((request, response) => {
+      let bytes = 0
+      request.on("data", (chunk: Buffer) => { bytes += chunk.byteLength })
+      request.on("end", () => {
+        received.push({ method: request.method, url: request.url, cookie: request.headers.cookie, origin: request.headers.origin, bytes })
+        response.writeHead(200, { "content-type": "application/json", "set-cookie": deletion })
+        response.end('{"success":true}')
+      })
+    })
+    servers.push(server)
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
+    const address = server.address()
+    if (address === null || typeof address === "string") throw new Error("fixture server did not bind")
+    vi.stubEnv("NODE_ENV", "test")
+    vi.stubEnv("KOKORO_BFF_BASE_URL", `http://127.0.0.1:${address.port}`)
+    vi.stubEnv("KOKORO_WEB_ORIGIN", "https://web.example.test")
+    vi.stubEnv("KOKORO_INTERNAL_SECRET_WEB_BFF", "fixture-service-secret")
+    const { POST } = await import("@/app/iam/[...path]/route")
+    const response = await POST(new Request("https://web.example.test/iam/sign-out", {
+      method: "POST",
+      headers: {
+        host: "web.example.test", origin: "https://web.example.test",
+        cookie: "unrelated=private; kokoro-issuer.session_token=issuer",
+        ...(kind === "form" ? { "content-type": "application/x-www-form-urlencoded" } : {}),
+      },
+      ...(kind === "form" ? { body: "" } : {}),
+    }), { params: Promise.resolve({ path: ["sign-out"] }) })
+    expect({ status: response.status, upstreamRequests: received.length }).toEqual({ status: 200, upstreamRequests: 1 })
+    expect(received).toEqual([{
+      method: "POST", url: "/iam/sign-out", cookie: "kokoro-issuer.session_token=issuer",
+      origin: "https://web.example.test", bytes: 0,
+    }])
+    expect(response.headers.getSetCookie()).toEqual([deletion])
+    expect(await response.json()).toEqual({ success: true })
   })
 
   it("cancels an oversized upstream body before rejecting", async () => {
