@@ -28,6 +28,11 @@ import { SkillPackageDocument } from "./skill-package-document"
 import { SkillPackageFiles } from "./skill-package-files"
 import { PersonalSkillActions, type PersonalSkillOperation } from "./personal-skill-actions"
 
+type ShareIntent = {
+  identity: string; ack: ShareAck | null; unknown: boolean; revokeUnknown: boolean; ended: boolean
+  operation: "create" | "copy" | "revoke" | "read" | null; pending: boolean; controller: AbortController | null
+}
+
 type DetailFlight = {
   controller: AbortController
   promise: Promise<ManusSkillDetail>
@@ -202,12 +207,19 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", projectTarget
   const projectInstalled = detailSource === "project-installation"
   const installedDetail = detailSource === "installation" || projectInstalled
   const sharedSummary = projectInstalled ? undefined : sourceSummary
-  const shareIntents = useRef(new Map<string, { identity: string; ack: ShareAck | null; unknown: boolean; pending: boolean; controller: AbortController | null }>())
-  type ShareState = "pending" | "copied" | "copyFailed" | "failed" | "unknown"
+  const shareIntents = useRef(new Map<string, ShareIntent>())
+  type ShareState = "pending" | "copied" | "copyFailed" | "failed" | "unknown" | "revokeUnknown" | "revoked" | "unavailable" | "active"
+  const [ownedShares, setOwnedShares] = useState<Record<string, Pick<ShareIntent, "identity" | "ack" | "pending" | "ended" | "revokeUnknown">>>({})
+  const presentShare = (source: string, intent: ShareIntent) => {
+    if (shareIntents.current.get(source) === intent) setOwnedShares(states => ({ ...states, [source]: { identity: intent.identity, ack: intent.ack, pending: intent.pending, ended: intent.ended, revokeUnknown: intent.revokeUnknown } }))
+  }
   const [shareStates, setShareStates] = useState<Record<string, ShareState>>({})
+  const [revokeTarget, setRevokeTarget] = useState<{ identity: string; shareId: string } | null>(null)
+  const revokeTrigger = useRef<HTMLButtonElement | null>(null)
+  const revokeCancel = useRef<HTMLButtonElement | null>(null)
   const [unknownShares, setUnknownShares] = useState<Record<string, boolean>>({})
   const [shareSubject, setShareSubject] = useState(boundary.subject)
-  if (shareSubject !== boundary.subject) { setShareSubject(boundary.subject); setShareStates({}); setUnknownShares({}) }
+  if (shareSubject !== boundary.subject) { setShareSubject(boundary.subject); setShareStates({}); setUnknownShares({}); setOwnedShares({}) }
   useLayoutEffect(() => {
     const intents = shareIntents.current
     return () => { for (const intent of intents.values()) intent.controller?.abort(); intents.clear() }
@@ -449,7 +461,7 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", projectTarget
   const sourceRef = boundRevision === null ? null : `skill:${boundRevision}`
   // The command's unknown-result tombstone belongs to actor/source, while
   // ACK and clipboard presentation belong only to this admitted read lifetime.
-  const shareSource = !projectInstalled && boundary.subject && sourceRef ? JSON.stringify([boundary.subject, sourceRef]) : null
+  const shareSource = !preview && !projectInstalled && boundary.subject && sourceRef ? JSON.stringify([boundary.subject, sourceRef]) : null
   const shareIdentity = boundary.admitted && identity && shareSource ? JSON.stringify([identity, shareSource]) : null
   const liveShareIdentity = useRef(shareIdentity)
   useLayoutEffect(() => {
@@ -463,21 +475,31 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", projectTarget
         intent.unknown = true
         setUnknownShares(current => ({ ...current, [shareSource]: true }))
       }
+      if (intent.pending && intent.operation === "revoke") {
+        intent.revokeUnknown = true
+        setShareStates(states => ({ ...states, [intent.identity]: "revokeUnknown" }))
+      }
+      intent.pending = false
+      presentShare(shareSource, intent)
       intent.controller?.abort()
+      setRevokeTarget(null)
     }
   }, [shareIdentity, shareSource])
   const share = async (newIntent = false) => {
     if (!isLive() || !shareIdentity || !shareSource || !sourceRef) return
     let intent = shareIntents.current.get(shareSource)
-    if (intent?.pending || intent?.unknown && !newIntent) return
-    if (!intent || newIntent || intent.identity !== shareIdentity) {
-      intent = { identity: shareIdentity, ack: null, unknown: false, pending: false, controller: null }
+    if (intent?.pending || intent?.revokeUnknown || intent?.unknown && !newIntent) return
+    if (!intent || newIntent || intent.ended || intent.identity !== shareIdentity && intent.ack === null) {
+      intent = { identity: shareIdentity, ack: null, unknown: false, revokeUnknown: false, ended: false, operation: null, pending: false, controller: null }
       shareIntents.current.set(shareSource, intent)
       setUnknownShares(current => ({ ...current, [shareSource]: false }))
     }
+    intent.identity = shareIdentity
+    intent.operation = intent.ack === null ? "create" : "copy"
     intent.pending = true
     const controller = new AbortController()
     intent.controller = controller
+    presentShare(shareSource, intent)
     setShareStates(current => ({ ...current, [shareIdentity]: "pending" }))
     try {
       if (intent.ack === null) {
@@ -487,6 +509,18 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", projectTarget
           intent.unknown = !known
           if (shareIntents.current.get(shareSource) === intent) setUnknownShares(current => ({ ...current, [shareSource]: !known }))
           if (isLive() && shareIntents.current.get(shareSource) === intent) setShareStates(current => ({ ...current, [shareIdentity]: known ? "failed" : "unknown" }))
+          return
+        }
+      } else {
+        try {
+          const fresh = await createSkillShareClient().resolve(intent.ack.share_id, controller.signal)
+          if (fresh.source_ref !== sourceRef) throw new HubClientError("parse", "Shared source mismatch", null, 200)
+        } catch (error) {
+          if (!controller.signal.aborted && isLive() && shareIntents.current.get(shareSource) === intent) {
+            const unavailable = error instanceof HubClientError && error.reason === "http" && error.status === 404
+            intent.ended = unavailable
+            setShareStates(current => ({ ...current, [shareIdentity]: unavailable ? "unavailable" : "copyFailed" }))
+          }
           return
         }
       }
@@ -500,11 +534,54 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", projectTarget
       }
     } finally {
       if (isLive() && controller.signal.aborted && shareIntents.current.get(shareSource) === intent) setShareStates(current => ({ ...current, [shareIdentity]: intent.ack === null ? "unknown" : "copyFailed" }))
-      intent.pending = false
-      if (intent.controller === controller) intent.controller = null
+      if (intent.controller === controller) { intent.pending = false; intent.controller = null; intent.operation = null; presentShare(shareSource, intent) }
     }
   }
-  const shareStatus = shareIdentity === null ? null : shareSource !== null && unknownShares[shareSource] ? "unknown" : shareStates[shareIdentity] ?? null
+  // Only a creator-bound Create ACK may identify the managed link. A read can
+  // settle uncertainty, but cannot confer ownership or replay either command.
+  const manageShare = async (operation: "revoke" | "read") => {
+    if (!isLive() || !shareIdentity || !shareSource || !sourceRef) return
+    const intent = shareIntents.current.get(shareSource)
+    if (!intent?.ack || intent.pending || intent.ended || operation === "revoke" && (intent.identity !== shareIdentity || intent.revokeUnknown || revokeTarget?.identity !== shareIdentity || revokeTarget.shareId !== intent.ack.share_id)) return
+    const ack = intent.ack
+    intent.identity = shareIdentity
+    intent.pending = true
+    intent.operation = operation
+    const controller = new AbortController()
+    intent.controller = controller
+    presentShare(shareSource, intent)
+    const current = () => !controller.signal.aborted && isLive() && liveShareIdentity.current === shareIdentity && shareIntents.current.get(shareSource) === intent && intent.controller === controller
+    setShareStates(states => ({ ...states, [shareIdentity]: "pending" }))
+    try {
+      if (operation === "revoke") {
+        await createSkillShareClient().revoke(ack.share_id, sourceRef, controller.signal)
+        if (!current()) return
+        intent.ended = true
+        intent.revokeUnknown = false
+        setShareStates(states => ({ ...states, [shareIdentity]: "revoked" }))
+      } else {
+        const fresh = await createSkillShareClient().resolve(ack.share_id, controller.signal)
+        if (fresh.source_ref !== sourceRef) throw new HubClientError("parse", "Shared source mismatch", null, 200)
+        if (!current()) return
+        intent.revokeUnknown = false
+        setShareStates(states => ({ ...states, [shareIdentity]: "active" }))
+      }
+    } catch (error) {
+      // A missing link is not proof that our DELETE committed. Only its exact
+      // revoked ACK may display completion; GET merely confirms availability.
+      if (current()) {
+        const unavailable = error instanceof HubClientError && error.reason === "http" && error.status === 404
+        intent.ended = unavailable
+        intent.revokeUnknown = !unavailable
+        setShareStates(states => ({ ...states, [shareIdentity]: unavailable ? "unavailable" : "revokeUnknown" }))
+      }
+    } finally {
+      if (current()) setRevokeTarget(null)
+      if (intent.controller === controller) { intent.pending = false; intent.controller = null; intent.operation = null; presentShare(shareSource, intent) }
+    }
+  }
+  const ownedShare = shareSource === null ? undefined : ownedShares[shareSource]
+  const shareStatus = shareIdentity === null ? null : shareSource !== null && unknownShares[shareSource] ? "unknown" : ownedShare?.revokeUnknown ? "revokeUnknown" : shareStates[shareIdentity] ?? null
 
   if (!skill && !sharedSummary && !pending) return null
   const record = !installedDetail && detail !== null && detail.skill.id === skill?.skill_id ? detail.skill : null
@@ -583,7 +660,7 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", projectTarget
           readerOpen={readerOpen}
           canShare={canShare}
           canDownload={canDownload}
-          shareDisabled={shareIdentity === null || shareStatus === "pending" || shareStatus === "unknown"}
+          shareDisabled={shareIdentity === null || shareStatus === "pending" || shareStatus === "unknown" || shareStatus === "revokeUnknown" || Boolean(ownedShare?.pending)}
           downloadDisabled={downloading || failed || Boolean(sharedSummary && !boundary.admitted)}
           onShare={() => void share()}
           onDownload={() => void download()}
@@ -618,6 +695,9 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", projectTarget
           {cover ? <div className={styles.cover} style={{ opacity: loaded ? 1 : 0 }}><div className={styles.coverBook}>{media}</div></div> : null}
         </DialogHeader>}</SkillCoverMedia>}
         {shareStatus === "unknown" ? <div className={styles.status} role="alert"><p>{t("skills.shareUnknown")}</p><Button type="button" variant="outline" onClick={() => void share(true)}>{t("skills.shareNew")}</Button></div> : null}
+        {ownedShare?.ack && ownedShare.identity === shareIdentity && !ownedShare.ended && !ownedShare.revokeUnknown ? <div className={styles.status}><Button ref={revokeTrigger} type="button" variant="outline" disabled={ownedShare.pending} onClick={() => { if (isLive() && shareIdentity && !ownedShare.pending) setRevokeTarget({ identity: shareIdentity, shareId: ownedShare.ack!.share_id }) }}>{t("skills.shareRevoke")}</Button></div> : null}
+        {shareStatus === "revokeUnknown" ? <div className={styles.status} role="alert"><p>{t("skills.shareRevokeUnknown")}</p><Button type="button" variant="outline" disabled={Boolean(ownedShare?.pending)} onClick={() => void manageShare("read")}>{t("skills.shareRecheck")}</Button></div> : null}
+        {shareStatus === "revoked" || shareStatus === "unavailable" || shareStatus === "active" ? <p className={styles.status} role="status">{t(shareStatus === "revoked" ? "skills.shareRevoked" : shareStatus === "active" ? "skills.shareStillActive" : "skills.shareUnavailable")}</p> : null}
         {shareStatus === "copied" ? <p className={styles.status} role="status">{t("skills.detailLinkCopied")}</p> : null}
         {shareStatus === "copyFailed" || shareStatus === "failed" ? <p className={styles.status} role="alert">{t(shareStatus === "copyFailed" ? "skills.shareCopyFailed" : "skills.shareFailed")}</p> : null}
         {installationNotice ? <div className={styles.status} role="alert"><p>{installationNotice}</p>{onRetryInstallation ? <Button type="button" variant="outline" onClick={onRetryInstallation}>{t("skills.packageRetry")}</Button> : null}</div> : null}
@@ -663,6 +743,15 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", projectTarget
           </section> : null}
         </>}
       </DialogContent>
+      <Dialog open={Boolean(open && boundary.admitted && revokeTarget && revokeTarget.identity === shareIdentity && ownedShare?.ack?.share_id === revokeTarget.shareId && !ownedShare.ended)} onOpenChange={value => { if (!value) setRevokeTarget(null) }}>
+        <DialogContent aria-busy={Boolean(ownedShare?.pending)} onOpenAutoFocus={event => { event.preventDefault(); revokeCancel.current?.focus() }} onCloseAutoFocus={event => { event.preventDefault(); if (isLive() && liveShareIdentity.current === shareIdentity && revokeTrigger.current?.isConnected) revokeTrigger.current.focus() }}>
+          <DialogHeader><DialogTitle>{t("skills.shareRevokeTitle")}</DialogTitle><DialogDescription>{t("skills.shareRevokeHint")}</DialogDescription></DialogHeader>
+          <div className={styles.actions}>
+            <Button ref={revokeCancel} type="button" variant="outline" onClick={() => setRevokeTarget(null)}>{t("skills.cancel")}</Button>
+            <Button type="button" disabled={Boolean(ownedShare?.pending)} onClick={() => void manageShare("revoke")}>{t("skills.shareRevoke")}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   )
 }

@@ -17,7 +17,7 @@ async function command<O extends ShareOperation>(operation: O, identity: string,
   try {
     joined.throwIfAborted()
     response = await within(fetch(operation === "create" ? "/api/hub/skill-shares" : `/api/hub/skill-shares/${encodeURIComponent(identity)}${operation === "summary" ? "/skill" : operation === "download" ? "/download" : ""}`, {
-      method: operation === "create" || operation === "download" ? "POST" : "GET", credentials: "same-origin", cache: "no-store", redirect: "error", signal: joined,
+      method: operation === "revoke" ? "DELETE" : operation === "create" || operation === "download" ? "POST" : "GET", credentials: "same-origin", cache: "no-store", redirect: "error", signal: joined,
       headers: { accept: "application/json", ...(body === undefined ? {} : { "content-type": "application/json" }) },
       ...(body === undefined ? {} : { body: encoded! }),
     }).then((value) => { if (joined.aborted) void value.body?.cancel().catch(() => undefined); return value }))
@@ -73,6 +73,12 @@ export function createSkillShareClient(origin: string = window.location.origin) 
       const source = shareAckSchema.shape.source_ref.parse(sourceRef), version = shareRevisionSchema.parse(revision)
       const value = await command("download", shareIdSchema.parse(id), origin, undefined, signal)
       if (value.source_ref !== source || value.revision !== version) throw new HubClientError("parse", "Shared download revision mismatch", null, 200)
+      return value
+    },
+    revoke: async (id: string, sourceRef: string, signal?: AbortSignal) => {
+      const source = shareAckSchema.shape.source_ref.parse(sourceRef)
+      const value = await command("revoke", shareIdSchema.parse(id), origin, undefined, signal)
+      if (value.source_ref !== source) throw new HubClientError("parse", "Revoked share source mismatch", null, 200)
       return value
     },
     summary: (id: string, signal?: AbortSignal) => command("summary", shareIdSchema.parse(id), origin, undefined, signal),

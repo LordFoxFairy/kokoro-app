@@ -1664,11 +1664,13 @@ async function proxySkillShare(
       ? "download"
       : path.length === 1 && request.method === "POST"
         ? "create"
-        : path.length === 2 && request.method === "GET"
-          ? "resolve"
-          : path.length === 3 && path[2] === "skill" && request.method === "GET"
-            ? "summary"
-            : undefined;
+        : path.length === 2 && request.method === "DELETE"
+          ? "revoke"
+          : path.length === 2 && request.method === "GET"
+            ? "resolve"
+            : path.length === 3 && path[2] === "skill" && request.method === "GET"
+              ? "summary"
+              : undefined;
   if (
     !operation ||
     path[0] !== "skill-shares" ||
@@ -1705,6 +1707,7 @@ async function proxySkillShare(
   if (
     (operation === "create" ||
       operation === "download" ||
+      operation === "revoke" ||
       request.headers.has("origin")) &&
     request.headers.get("origin") !== config.session.webOrigin
   )

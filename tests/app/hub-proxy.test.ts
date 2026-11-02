@@ -3242,6 +3242,28 @@ it("Skill Share Create relays the exact revision and keeps the actual six-field 
   );
 });
 
+it.each([true, false])("Skill Share DELETE accepts only an exact revoked ACK (%s)", async revoked => {
+  const { DELETE } = await import("@/app/api/hub/[...path]/route");
+  const data = { share_id: "share-old", source_ref: "skill:revision-old", url: "http://localhost/skills/shared/share-old", created_at: "2026-10-10T00:00:00Z", expires_at: null, revoked_at: revoked ? "2026-11-03T00:00:00Z" : null };
+  vi.mocked(requestWithDomain).mockResolvedValue(Response.json({ data }, { headers: { "cache-control": "no-store", "x-request-id": "share-delete" } }));
+  const response = await DELETE(new Request("http://localhost/api/hub/skill-shares/share-old", { method: "DELETE", headers: { origin: "http://localhost" } }), params(["skill-shares", "share-old"]));
+  expect(response.status).toBe(revoked ? 200 : 502);
+  expect(requestWithDomain).toHaveBeenCalledOnce();
+  expect(vi.mocked(requestWithDomain).mock.calls[0]?.[0]).toBe("http://bff.test/v1/skill-shares/share-old");
+  expect(vi.mocked(requestWithDomain).mock.calls[0]?.[2]).toMatchObject({ method: "DELETE" });
+  expect(vi.mocked(requestWithDomain).mock.calls[0]?.[2]?.body).toBeUndefined();
+});
+
+it.each(["origin", "body", "query", "key", "framing"])("Skill Share DELETE rejects %s before owner IO", async mode => {
+  const { DELETE } = await import("@/app/api/hub/[...path]/route");
+  const response = await DELETE(new Request(`http://localhost/api/hub/skill-shares/share-old${mode === "query" ? "?extra=1" : ""}`, {
+    method: "DELETE", headers: { origin: mode === "origin" ? "https://foreign.example" : "http://localhost", ...(mode === "key" ? { "idempotency-key": "key" } : {}), ...(mode === "framing" ? { "content-length": "0" } : {}) },
+    ...(mode === "body" ? { body: "{}" } : {}),
+  }), params(["skill-shares", "share-old"]));
+  expect(response.status).toBeGreaterThanOrEqual(400);
+  expect(requestWithDomain).not.toHaveBeenCalled();
+});
+
 it("Skill Share summary preserves exact revision fields and rejects a current/foreign cover", async () => {
   const { GET } = await import("@/app/api/hub/[...path]/route");
   const skill = {

@@ -2541,6 +2541,13 @@ export const zh = {
   "firstSite.next": "下一步",
   "firstSite.liveNext": "菜单与视觉 token 来自实时 System 配置。",
   "firstSite.previewNext": "后端配置连接期间，预览 fixture 会保持工作区可用。",
+  "skills.shareRevoke": "停止分享",
+  "skills.shareRevokeTitle": "停止分享这个技能？",
+  "skills.shareRevokeHint": "原链接将无法继续访问；技能及其发布范围不会改变。",
+  "skills.shareRevoked": "分享已停止。",
+  "skills.shareRevokeUnknown": "停止分享的结果暂未确认。请先重新读取原链接状态，不要重复提交。",
+  "skills.shareRecheck": "重新读取分享状态",
+  "skills.shareStillActive": "此链接仍有效；如需停止分享，请再次确认。",
   "skills.shareUnknown":
     "分享创建结果暂未确认。不要重复提交；只有明确需要另一条链接时才重新创建。",
   "skills.shareNew": "创建新的分享",

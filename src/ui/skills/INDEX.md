@@ -1,3 +1,7 @@
+## Skill 分享链接撤销
+
+详情仅管理当前主体的显式 Create ACK，不以技能作者推断链接创建者。再次复制缓存链接前 Resolve；明确确认才 DELETE，取消零写；精确 revoked ACK 才显示停止成功。未知结果只 GET 原 share_id，404 仅显示不可用；关闭、换资源／主体／准入退休命令及迟到结果。同主体重开可读取 RAM 原意图，硬刷新后须显式分享取得本人权威 ACK，不伪造分享列表。项目详情与 preview 不发分享命令，原匿名边界及发布范围不变。
+
 ## Project Skill 精确内容消费者
 
 `ManusSkillDetailDialog` 的 Project installation variant 只读当前 Project 的 metadata／package／download；resource identity 含 Project 与安装 pin，沿原 actor/generation/abort 围栏，不暴露个人写动作、分享或试用。
