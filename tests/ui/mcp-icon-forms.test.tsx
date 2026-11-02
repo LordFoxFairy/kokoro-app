@@ -91,6 +91,52 @@ function fillApiCreationSecret() {
 beforeEach(() => { localStorage.setItem("kokoro.locale", "zh"); });
 afterEach(() => { cleanup(); localStorage.removeItem("kokoro.locale"); });
 
+it("English API details localize visible fields, secret controls and the shared icon URL dialog", async () => {
+  localStorage.setItem("kokoro.locale", "en");
+  const icon = iconFixture();
+  const save = vi.fn(), remove = vi.fn();
+  render(<LocaleProvider><CustomApiDetailDialog
+    profile={{ ...profile, environment: [{ name: "QA_API_KEY", status: "active", state_version: "1", configured: true }] }}
+    iconClient={icon.client} iconBoundary={boundary}
+    actionError={false} busy={false} admitted command={undefined} canUpdate canRemove
+    onResume={vi.fn()} returnFocusRef={{ current: null }} onClose={vi.fn()} onSave={save} onDelete={remove}
+  /></LocaleProvider>);
+  const detail = await screen.findByRole("dialog", { name: "Edit custom API" });
+  expect(within(detail).getByRole("button", { name: "Copy UUID" })).toBeVisible();
+  expect(within(detail).getByRole("textbox", { name: "Name" })).toHaveValue(profile.name);
+  expect(within(detail).getByRole("textbox", { name: "Notes (optional)" })).toBeVisible();
+  expect(within(detail).getByText("Saved secrets are never shown. Leave a value blank to keep it, or enter a new value and save to replace it.")).toBeVisible();
+  expect(within(detail).getByRole("textbox", { name: "QA_API_KEY Secret value" })).toHaveAttribute("placeholder", "Configured; leave blank to keep unchanged");
+  fireEvent.click(within(detail).getByRole("button", { name: "Remove secret QA_API_KEY" }));
+  expect(within(detail).getByRole("button", { name: "Undo removal QA_API_KEY" })).toBeVisible();
+  expect(within(detail).getByRole("textbox", { name: "QA_API_KEY Secret value" })).toHaveAttribute("placeholder", "Removed when saved");
+  fireEvent.click(within(detail).getByRole("button", { name: "Add secret" }));
+  expect(within(detail).getByRole("textbox", { name: "Secret name" })).toBeVisible();
+  expect(within(detail).getByRole("button", { name: "Remove new secret" })).toBeVisible();
+  fireEvent.keyDown(within(detail).getByRole("button", { name: /^Upload$/u }), { key: "Enter" });
+  fireEvent.click(await screen.findByRole("menuitem", { name: "Paste image URL" }));
+  const urlDialog = await screen.findByRole("dialog", { name: "Add image via URL" });
+  expect(within(urlDialog).getByRole("textbox", { name: "Icon URL" })).toBeVisible();
+  expect(within(urlDialog).getByRole("button", { name: "Add" })).toBeDisabled();
+  fireEvent.click(within(urlDialog).getByRole("button", { name: "Cancel" }));
+  expect(save).not.toHaveBeenCalled();
+  expect(remove).not.toHaveBeenCalled();
+  expect(icon.client.importUrl).not.toHaveBeenCalled();
+});
+
+it("English API creation uses the shared localized icon picker without publishing", async () => {
+  localStorage.setItem("kokoro.locale", "en");
+  const icon = iconFixture();
+  const fixture = renderCreationDialog("custom-api", icon);
+  expect(await screen.findByRole("button", { name: /^Upload$/u })).toBeVisible();
+  expect(screen.getByLabelText("Upload icon from device")).toHaveAttribute("type", "file");
+  fireEvent.keyDown(screen.getByRole("button", { name: /^Upload$/u }), { key: "Enter" });
+  expect(await screen.findByRole("menuitem", { name: "Upload from device" })).toBeVisible();
+  expect(screen.getByRole("menuitem", { name: "Paste image URL" })).toBeVisible();
+  expect(fixture.create).not.toHaveBeenCalled();
+  expect(fixture.register).not.toHaveBeenCalled();
+});
+
 it("Custom API URL staging never creates a connector until original Save carries the ready selector", async () => {
   const icon = iconFixture();
   const create = vi.fn<NonNullable<HubClient["createCustomApi"]>>(async () => profile);

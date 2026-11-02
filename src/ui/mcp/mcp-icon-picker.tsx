@@ -33,22 +33,22 @@ export function McpIconPicker({ draft, state, current, disabled = false, display
   const preview = state.clear ? null : displayFallback !== undefined ? displayFallback : referenceDisplay;
   const imageUrlValid = mcpIconInputs.importIcon.safeParse({ image_url: url }).success;
   return <div className={styles.field}>
-    <span className={styles.label}>图标</span>
+    <span className={styles.label}>{t("mcp.iconLabel")}</span>
     <div className={styles.row}>
       <span className={styles.preview}>{preview ? <IconPreview key={`${preview.url}\0${preview.expiresAt}`} preview={preview} onPreviewLoaded={onPreviewLoaded} /> : <ImageIcon aria-hidden="true" />}</span>
       <div className={styles.copy}>
-        <DropdownMenu><DropdownMenuTrigger asChild><Button type="button" variant="outline" className={styles.upload} disabled={locked} aria-busy={state.kind === "running"}>上传<ChevronDown aria-hidden="true" /></Button></DropdownMenuTrigger>
-          <DropdownMenuContent align="start"><DropdownMenuItem onSelect={() => file.current?.click()}>从设备上传</DropdownMenuItem><DropdownMenuItem onSelect={() => { setUrl(""); setUrlOpen(true); }}>粘贴图片 URL</DropdownMenuItem>{preview || state.dirty || current ? <DropdownMenuItem onSelect={() => void draft.remove()}>移除图片</DropdownMenuItem> : null}</DropdownMenuContent>
+        <DropdownMenu><DropdownMenuTrigger asChild><Button type="button" variant="outline" className={styles.upload} disabled={locked} aria-busy={state.kind === "running"}>{t("connectorCatalog.upload")}<ChevronDown aria-hidden="true" /></Button></DropdownMenuTrigger>
+          <DropdownMenuContent align="start"><DropdownMenuItem onSelect={() => file.current?.click()}>{t("mcp.iconUploadDevice")}</DropdownMenuItem><DropdownMenuItem onSelect={() => { setUrl(""); setUrlOpen(true); }}>{t("mcp.iconPasteUrl")}</DropdownMenuItem>{preview || state.dirty || current ? <DropdownMenuItem onSelect={() => void draft.remove()}>{t("mcp.iconRemove")}</DropdownMenuItem> : null}</DropdownMenuContent>
         </DropdownMenu>
-        <span>PNG 或 JPG，最大 1 MB。推荐尺寸 256×256 像素。</span>
+        <span>{t("mcp.iconHint")}</span>
       </div>
     </div>
-    <input ref={file} className={styles.file} type="file" accept="image/png,image/jpeg" aria-label="从设备上传图标" disabled={locked} onChange={event => { const selected = event.currentTarget.files?.[0]; event.currentTarget.value = ""; if (selected && !locked) void draft.chooseFile(selected); }} />
-    {state.kind === "unknown" || state.kind === "error" ? <div className={styles.failure} role="alert"><span>{state.failure === "file" ? "请选择不超过 1 MB 的 PNG 或 JPG 图片，文件名需有效。" : state.failure === "expired" ? "图片暂存已过期，请重新选择。" : t(connectorCommandFailureMessage(state.recovery, "mcp.actionFailed"))}</span>{state.mayRetry ? <Button type="button" size="sm" variant="outline" disabled={disabled} onClick={() => void draft.retry()}>{t("mcp.retryOriginal")}</Button> : null}</div> : null}
+    <input ref={file} className={styles.file} type="file" accept="image/png,image/jpeg" aria-label={t("mcp.iconFileLabel")} disabled={locked} onChange={event => { const selected = event.currentTarget.files?.[0]; event.currentTarget.value = ""; if (selected && !locked) void draft.chooseFile(selected); }} />
+    {state.kind === "unknown" || state.kind === "error" ? <div className={styles.failure} role="alert"><span>{state.failure === "file" ? t("mcp.iconFileError") : state.failure === "expired" ? t("mcp.iconExpired") : t(connectorCommandFailureMessage(state.recovery, "mcp.actionFailed"))}</span>{state.mayRetry ? <Button type="button" size="sm" variant="outline" disabled={disabled} onClick={() => void draft.retry()}>{t("mcp.retryOriginal")}</Button> : null}</div> : null}
     <Dialog open={urlOpen} onOpenChange={setUrlOpen}><DialogContent className={styles.urlDialog} showCloseButton={false}>
-      <DialogHeader><DialogTitle className={styles.title}>通过 URL 添加图片</DialogTitle></DialogHeader>
-      <div className={styles.urlField}><label htmlFor={id}>图标 URL</label><div className={styles.urlInput}><Link2 aria-hidden="true" /><Input id={id} placeholder="https://" autoComplete="off" value={url} onChange={event => setUrl(event.target.value)} onKeyDown={event => { if (event.key === "Enter" && imageUrlValid && !locked) { event.preventDefault(); setUrlOpen(false); void draft.chooseUrl(url); } }} /></div></div>
-      <footer><Button type="button" variant="outline" onClick={() => setUrlOpen(false)}>取消</Button><Button type="button" disabled={!imageUrlValid || locked} onClick={() => { setUrlOpen(false); void draft.chooseUrl(url); }}>添加</Button></footer>
+      <DialogHeader><DialogTitle className={styles.title}>{t("mcp.iconUrlTitle")}</DialogTitle></DialogHeader>
+      <div className={styles.urlField}><label htmlFor={id}>{t("mcp.iconUrlLabel")}</label><div className={styles.urlInput}><Link2 aria-hidden="true" /><Input id={id} placeholder="https://" autoComplete="off" value={url} onChange={event => setUrl(event.target.value)} onKeyDown={event => { if (event.key === "Enter" && imageUrlValid && !locked) { event.preventDefault(); setUrlOpen(false); void draft.chooseUrl(url); } }} /></div></div>
+      <footer><Button type="button" variant="outline" onClick={() => setUrlOpen(false)}>{t("mcp.cancel")}</Button><Button type="button" disabled={!imageUrlValid || locked} onClick={() => { setUrlOpen(false); void draft.chooseUrl(url); }}>{t("mcp.iconUrlAdd")}</Button></footer>
     </DialogContent></Dialog>
   </div>;
 }
@@ -59,6 +59,7 @@ function IconPreview({ preview, onPreviewLoaded }: {
   preview: McpIconPreviewDisplay;
   onPreviewLoaded?: ((preview: McpIconPreviewDisplay, loaded: boolean) => void) | undefined;
 }) {
+  const t = useT();
   const { url, expiresAt } = preview;
   const [clock, setClock] = useState(() => Date.now());
   const [failed, setFailed] = useState(false);
@@ -68,7 +69,7 @@ function IconPreview({ preview, onPreviewLoaded }: {
     return () => clearTimeout(timer);
   }, [expiresAt, clock, failed]);
   if (!Number.isFinite(expiresAt) || expiresAt <= clock || failed) return <ImageIcon aria-hidden="true" />;
-  return <img src={url} alt="连接器图标" crossOrigin="anonymous" referrerPolicy="no-referrer"
+  return <img src={url} alt={t("mcp.iconAlt")} crossOrigin="anonymous" referrerPolicy="no-referrer"
     onLoad={event => {
       if (event.currentTarget.isConnected && event.currentTarget.currentSrc === event.currentTarget.src && event.currentTarget.naturalWidth > 0)
         onPreviewLoaded?.(preview, true);

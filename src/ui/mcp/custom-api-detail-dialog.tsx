@@ -166,14 +166,14 @@ export function CustomApiDetailDialog({
             <header className={styles.apiConfigurationHeader}>
               <div>
                 <div className={styles.titleRow}>
-                  <DialogTitle>编辑自定义 API</DialogTitle>
+                  <DialogTitle>{t("connectorCatalog.customApiEditTitle")}</DialogTitle>
                   <Button type="button" variant="outline" size="sm" disabled={!ready}
                     onClick={() => { if (ready && profile) void navigator.clipboard?.writeText(profile.profile_id); }}>
-                    <Copy aria-hidden="true" />复制 UUID
+                    <Copy aria-hidden="true" />{t("connectorCatalog.copyUuid")}
                   </Button>
                 </div>
                 <DialogDescription>
-                  使用自定义 API 连接器集成任何支持密钥或令牌授权的外部服务。
+                  {t("connectorCatalog.customApiCreateDescription")}
                 </DialogDescription>
               </div>
             </header>
@@ -186,7 +186,7 @@ export function CustomApiDetailDialog({
                 </Alert>
               ) : null}
               <div className={styles.field}>
-                <Label htmlFor="custom-api-detail-name">名称</Label>
+                <Label htmlFor="custom-api-detail-name">{t("connectorCatalog.name")}</Label>
                 <Input
                   readOnly={locked}
                   id="custom-api-detail-name"
@@ -200,7 +200,7 @@ export function CustomApiDetailDialog({
               <McpIconPicker draft={icon.draft} state={icon.state} current={profile?.icon} disabled={locked} />
               <div className={styles.field}>
                 <Label htmlFor="custom-api-detail-instructions">
-                  备注（可选）
+                  {t("connectorCatalog.notesOptional")}
                 </Label>
                 <Textarea
                   readOnly={locked}
@@ -211,33 +211,33 @@ export function CustomApiDetailDialog({
                 />
               </div>
               <fieldset className={styles.headers}>
-                <legend>密钥（环境变量）</legend>
-                <p className={styles.secretHint}>已保存的密钥不会显示；留空保持原值，输入新值后保存以替换。</p>
+                <legend>{t("connectorCatalog.secretsLegend")}</legend>
+                <p className={styles.secretHint}>{t("connectorCatalog.savedSecretsHint")}</p>
                 {(profile?.environment ?? []).map(({ name: environmentName, configured }) => {
                   const removed = removedNames.includes(environmentName);
                   return <div className={styles.secretCard} key={environmentName}>
                     <div className={styles.secretField}>
-                      <Label htmlFor={`api-existing-${environmentName}-name`}><span className="sr-only">{environmentName} </span>密钥名称</Label>
-                      <Input id={`api-existing-${environmentName}-name`} aria-label={`${environmentName} 密钥名称`} value={environmentName} readOnly />
+                      <Label htmlFor={`api-existing-${environmentName}-name`}><span className="sr-only">{environmentName} </span>{t("connectorCatalog.secretName")}</Label>
+                      <Input id={`api-existing-${environmentName}-name`} aria-label={t("connectorCatalog.namedSecretName", { name: environmentName })} value={environmentName} readOnly />
                     </div>
                     <div className={styles.secretField}>
-                      <Label htmlFor={`api-existing-${environmentName}-value`}>值</Label>
-                      <Textarea id={`api-existing-${environmentName}-value`} aria-label={`${environmentName} 密钥值`}
+                      <Label htmlFor={`api-existing-${environmentName}-value`}>{t("connectorCatalog.secretValue")}</Label>
+                      <Textarea id={`api-existing-${environmentName}-value`} aria-label={t("connectorCatalog.namedSecretValue", { name: environmentName })}
                         value={replacementValues[environmentName] ?? ""} readOnly={locked || removed}
-                        placeholder={removed ? "保存后移除" : configured ? "已配置，留空保持不变" : "输入密钥值"}
+                        placeholder={t(removed ? "connectorCatalog.secretRemovedOnSave" : configured ? "connectorCatalog.secretConfiguredPlaceholder" : "connectorCatalog.secretEnterPlaceholder")}
                         maxLength={4096} autoComplete="off" spellCheck={false}
                         onChange={(event) => { if (!locked && !removed) setReplacementValues(current => ({ ...current, [environmentName]: event.target.value })); }} />
                     </div>
                     <div className={styles.secretActions}>
-                      {removed ? <span role="status">保存后移除</span> : null}
+                      {removed ? <span role="status">{t("connectorCatalog.secretRemovedOnSave")}</span> : null}
                       <Button type="button" variant="ghost" size="sm" disabled={locked}
-                        aria-label={`${removed ? "撤销移除" : "移除密钥"} ${environmentName}`}
+                        aria-label={t(removed ? "connectorCatalog.namedUndoSecretRemoval" : "connectorCatalog.namedRemoveSecret", { name: environmentName })}
                         onClick={() => {
                           if (locked) return;
                           setReplacementValues(current => ({ ...current, [environmentName]: "" }));
                           setRemovedNames(current => removed ? current.filter(item => item !== environmentName) : [...current, environmentName]);
                         }}>
-                        {!removed ? <Trash2 aria-hidden="true" /> : null}{removed ? "撤销移除" : "移除"}
+                        {!removed ? <Trash2 aria-hidden="true" /> : null}{t(removed ? "connectorCatalog.undoSecretRemoval" : "connectorCatalog.remove")}
                       </Button>
                     </div>
                   </div>;
@@ -245,11 +245,11 @@ export function CustomApiDetailDialog({
                 {secrets.map((secret) => (
                   <div className={styles.secretCard} key={secret.id}>
                     <div className={styles.secretField}>
-                    <Label htmlFor={`api-secret-${secret.id}-name`}>密钥名称</Label>
+                    <Label htmlFor={`api-secret-${secret.id}-name`}>{t("connectorCatalog.secretName")}</Label>
                     <Input
                       readOnly={locked}
                       id={`api-secret-${secret.id}-name`}
-                      aria-label="密钥名称"
+                      aria-label={t("connectorCatalog.secretName")}
                       value={secret.name}
                       maxLength={128}
                       autoComplete="off"
@@ -265,11 +265,11 @@ export function CustomApiDetailDialog({
                     />
                     </div>
                     <div className={styles.secretField}>
-                    <Label htmlFor={`api-secret-${secret.id}-value`}>值</Label>
+                    <Label htmlFor={`api-secret-${secret.id}-value`}>{t("connectorCatalog.secretValue")}</Label>
                     <Textarea
                       readOnly={locked}
                       id={`api-secret-${secret.id}-value`}
-                      aria-label="密钥值"
+                      aria-label={t("connectorCatalog.secretValueLabel")}
                       value={secret.value}
                       maxLength={4096}
                       autoComplete="off"
@@ -291,7 +291,7 @@ export function CustomApiDetailDialog({
                       size="sm"
                       variant="ghost"
                       disabled={locked}
-                      aria-label="移除新增密钥"
+                      aria-label={t("connectorCatalog.removeNewSecret")}
                       onClick={() =>
                         !locked && setSecrets((items) =>
                           items.filter((item) => item.id !== secret.id),
@@ -299,7 +299,7 @@ export function CustomApiDetailDialog({
                       }
                     >
                       <Trash2 aria-hidden="true" />
-                      移除
+                      {t("connectorCatalog.remove")}
                     </Button>
                     </div>
                   </div>
@@ -316,13 +316,13 @@ export function CustomApiDetailDialog({
                   }
                 >
                   <Plus aria-hidden="true" />
-                  添加密钥
+                  {t("connectorCatalog.addSecret")}
                 </Button>
               </fieldset>
             </div>
             <footer className={styles.apiConfigurationFooter}>
               {deleteArmed ? <div className={styles.deleteConfirm}>
-                <span>确认删除此自定义 API？</span>
+                <span>{t("connectorCatalog.customApiDeleteConfirm")}</span>
                 <Button type="button" variant="destructive" disabled={locked || !canRemove} onClick={onDelete}>{t("mcp.deleteConfirm")}</Button>
                 <Button type="button" variant="outline" disabled={locked || !canRemove} onClick={() => setDeleteArmed(false)}>{t("mcp.cancel")}</Button>
               </div> : <Button type="button" variant="outline" className={styles.apiRemove} disabled={locked || !canRemove} onClick={() => setDeleteArmed(true)}>
