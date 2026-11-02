@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { GET } from "@/app/api/account/profile/route"
 
-type Scenario = { admissionStatus?: number; profileStatus?: number; profileBody?: unknown }
+type Scenario = { admissionStatus?: number; finalAdmissionStatus?: number | "disconnect"; profileStatus?: number; profileBody?: unknown }
 
 describe("account profile native-session admission through the BFF", () => {
   let server: Server | undefined
@@ -20,9 +20,13 @@ describe("account profile native-session admission through the BFF", () => {
       headers.push(Object.fromEntries(Object.entries(request.headers).map(([key, value]) => [key, String(value)])))
       const requestId = String(request.headers["x-kokoro-request-id"] ?? "")
       if (request.url === "/v1/me") {
-        const status = scenario.admissionStatus ?? 200
+        const status = paths.includes("/v1/account/profile") ? scenario.finalAdmissionStatus ?? 200 : scenario.admissionStatus ?? 200
+        if (status === "disconnect") {
+          request.socket.destroy()
+          return
+        }
         response.writeHead(status, { "content-type": "application/json", "cache-control": "no-store", "x-request-id": requestId })
-        response.end(status === 200 ? JSON.stringify({ data: { user_id: "alice", tenant_id: "tenant-one", platform_admin: false }, meta: { request_id: requestId } }) : JSON.stringify({ error: { code: "session_invalid", message: "invalid" } }))
+        response.end(status === 200 ? JSON.stringify({ data: { user_id: "alice", tenant_id: "tenant-one", platform_admin: false }, meta: { request_id: requestId } }) : JSON.stringify({ error: status === 401 ? { code: "session_invalid", message: "invalid" } : { code: "fixture_upstream_error", message: "fixture private upstream details" } }))
         return
       }
       if (request.url === "/v1/account/profile") {
@@ -75,6 +79,25 @@ describe("account profile native-session admission through the BFF", () => {
     expect(headers[1]?.cookie).toBe("kokoro-issuer.session_token=native")
     expect(headers[1]?.origin).toBe("http://web.test")
     expect(headers[1]?.authorization).toBeUndefined()
+    expect(await response.json()).toEqual({ data: { subject: "alice", name: "Alice", email: "alice@example.test", email_verified: true } })
+  })
+
+  it.each([429, 503, "disconnect"] as const)("withholds the profile as unavailable when final native admission returns %s", async (status) => {
+    scenario.finalAdmissionStatus = status
+    const response = await GET(new Request("http://web.test/api/account/profile", { headers: { host: "web.test", cookie: "kokoro-issuer.session_token=native" } }))
+    expect(paths).toEqual(["/v1/me", "/v1/account/profile", "/v1/me"])
+    expect(response.status).toBe(503)
+    expect(await response.json()).toEqual({ error: { code: "account_profile_unavailable", message: "account_profile_unavailable", retryable: true } })
+    expect(response.headers.get("cache-control")).toBe("private, no-store")
+    expect(response.headers.get("x-request-id")).toBeTruthy()
+  })
+
+  it("withholds the profile as invalid when final native admission rejects the session", async () => {
+    scenario.finalAdmissionStatus = 401
+    const response = await GET(new Request("http://web.test/api/account/profile", { headers: { host: "web.test", cookie: "kokoro-issuer.session_token=native" } }))
+    expect(paths).toEqual(["/v1/me", "/v1/account/profile", "/v1/me"])
+    expect(response.status).toBe(401)
+    expect(await response.json()).toEqual({ error: { code: "session_invalid", message: "session_invalid", retryable: false } })
   })
 
   it("turns native admission rejection into a session error without profile I/O", async () => {

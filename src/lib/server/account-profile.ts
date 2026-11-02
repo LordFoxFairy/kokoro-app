@@ -142,7 +142,7 @@ export async function readAccountProfile(request: Request): Promise<Response> {
     }
     const profile = accountProfileResponseSchema.safeParse(raw)
     if (!profile.success || profile.data.data.subject !== session.subject) return fail(502, "account_profile_response_invalid")
-    const latest = await admittedNativeSession(request, config).catch(() => null)
+    const latest = await admittedNativeSession(request, config)
     check()
     if (!sameNativeSessionSnapshot(session, latest)) return fail(401, "session_invalid")
     return Response.json(profile.data, { headers })
