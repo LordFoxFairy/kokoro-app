@@ -1,3 +1,9 @@
+## T-07 当前完整 Public28.18 pin（2026-11-01）
+
+当前唯一 `src/generated/bff-public-openapi.yaml` 精确对应 BFF `091cd5022cf517d243a6390b933f9dded7e3b4a9:contract/openapi/v1/openapi.yaml`，版本28.18.0，SHA256 `35a86f91e44beb1aeb6b17eca41d3bfdc79f11a43633662113a1778b4fab6082`。12 条既有 public 生成链和 current consumer assertions 统一此来源，snapshot原字节未改；private artifacts与独立policy3保持原pin。
+
+相对 BFF `853ca9a5d8da3500b0c37543c72198a520e46225`／28.17.0，唯一新增操作为 `GET /v1/account/profile`（readAccountProfile），唯一新增schema为 AccountProfileReadResponse；共200操作，原199项顺序及既有PATCH不变。test-only inverse完整恢复SHA256 `ea0031103488daa1fcc0cca45fdd13f4d4061546ac4525c745ec47105649f7e7` 后再进入原父证明，不覆盖历史hash。版本负控实际改变28.18→28.19；本轮不新增Web同源路由、权限或运行行为，以下版本段按当时状态读取。
+
 ## Custom API发送与私有恢复（正式Public28.17消费者候选）
 
 固定BFF853ca9a5d8da3500b0c37543c72198a520e46225，唯一全snapshot SHAea0031103488daa1fcc0cca45fdd13f4d4061546ac4525c745ec47105649f7e7。MessageCreateRequest与private composer_selection均可选selected_custom_api_profiles:[{profile_id,expected_state_version}]，≤32／profileID唯一／closed；版本为整数1..2147483647，不接字符串、分数、零、溢出、说明或凭据。原generator派生schema同时用于发送、本地原K恢复、snapshot decoder；空选择省略保持原无选择JSON/digest。

@@ -1,3 +1,7 @@
+## T-07 当前 Public28.18 provenance（2026-11-01）
+
+[TECHNICAL_DESIGN](TECHNICAL_DESIGN.md) 与 [API_CONTRACT](API_CONTRACT.md) 文首说明单一完整 owner artifact、12 条原生成链及新增 test-only 完整父字节证明；[DATA_MODEL](DATA_MODEL.md) 说明无持久模型变化。[CURRENT](CURRENT.md) 记录本轮实际验证，不从历史28.17段推断当前pin，也不将本轮静态治理修复视为正常页面／全产品验收。
+
 ## 2026-10-24 Agent 待核对终态（候选，未正常激活）
 
 固定BFF `b0f201e99c2ae3fa213942c5a909f47b06640a02`／Public23.1／raw `703dba47da8a5c659b4236bb0a72317588ad29a4ca444ff9e5c99cfbcd00634b`。原186操作不变；七public窄消费者正规生成，ChatMessage／RUN_ERROR只承接新增model_settlement_pending且retryable=false，未知／坏profile保持拒绝。既有ConversationThread与九语言保正文并说明结算待核对，不猜已扣款／释放、不给终态重发动作、不改历史generic。完整23.0父字节逆证及原证明链保持，在线Docs固定同一发行物。完整工程／正常激活状态见[CURRENT](CURRENT.md)。

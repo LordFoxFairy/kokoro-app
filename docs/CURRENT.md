@@ -1,3 +1,11 @@
+## T-07 Public28.18 provenance修复（2026-11-01，本地工程门通过，待Root集成）
+
+基线App `f5d122bb41beb3e141015b758411dbcc0afc583b`。此前账户资料切片已把唯一完整snapshot更新到BFF `091cd5022cf517d243a6390b933f9dded7e3b4a9`／Public28.18.0，却遗漏其余11条public生成链与current pin assertions；本轮只同步这些来源，12个原generator均执行 `--write`，实际7份generated仅provenance变化。snapshot SHA256 `35a86f91e44beb1aeb6b17eca41d3bfdc79f11a43633662113a1778b4fab6082` 与owner Git blob逐字一致且本轮未改。独立private artifacts、download policy3及policy_owner_commit保持；无运行时、依赖、Schema或服务变化。
+
+新test-only inverse先核完整28.18 child SHA，仅逆账户资料GET、AccountProfileReadResponse和版本，再核完整28.17 parent SHA `ea0031103488daa1fcc0cca45fdd13f4d4061546ac4525c745ec47105649f7e7`；旧父链只有链首委派，历史hash／逆差逻辑不改。回归证明200→199操作原顺序、原PATCH保持，并拒绝新增GET/schema、旧PATCH、无关操作、版本及额外字节漂移。四处当前版本负控改为真实28.18→28.19，不把no-op替换算作负控；无第二snapshot或运行时降级。
+
+Node22.23.4实际验证：先focused3文件4失败／12通过，定位pin/父链失配；新7回归先全部失败，再focused4文件23通过。最终 `pnpm contract` 48文件452通过、`pnpm test:architecture` 4文件50通过、`pnpm typecheck`、`pnpm lint`、`pnpm test` 354文件6373通过／0跳过、`pnpm build` 与 `git diff --check` 均exit0。default保留原jsdom navigation提示，不影响退出结果。未注入或启动PG/Redis，未运行独立Playwright／正常页面与真实owner组合；这些由Root另行验收。Root已在同一56路径冻结基线上以Node22.23.4/pnpm11.25.0重跑完整pnpm check，contract452、architecture50、full6373及lint/typecheck/build均exit0，前后SHA无漂移；本候选沿独立Task A分支/PR交付，未合并main，Root组合与真实旅程仍待，不将本轮静态契约治理门当作正常产品验收；下方版本及运行记录保留历史语境。
+
 ## 2026-10-29 连接器菜单固定列表优先（正常页面已验）
 
 实际 Manus 首页1280×720、中文浅色菜单向上展开，DOM/computed style为flex-col：列表→添加→管理，底栏81px、36px行、200–400px面板。旧“向上管理→添加→列表”记录有误，本轮以新取证纠正，不沿旧测试维持错误。共享ComposerConnections删除placement监听和反转，底栏始终在列表后，上边分隔线；不改选择、身份、分页、请求或目的地。

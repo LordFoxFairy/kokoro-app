@@ -1,3 +1,7 @@
+## T-07 当前 Public28.18 provenance（2026-11-01）
+
+唯一完整snapshot固定BFF `091cd5022cf517d243a6390b933f9dded7e3b4a9`／28.18.0／SHA256 `35a86f91e44beb1aeb6b17eca41d3bfdc79f11a43633662113a1778b4fab6082`，本轮不改其原字节。12个既有public生成器通过原 `--write` 重出，current pins原子同步；独立private与policy3不变。新 test-only `tests/contract/bff-account-profile-read-parent.ts` 验完整child hash后仅逆账户资料GET/schema/version，并验完整28.17 parent hash，再进入原Custom API及后续父链。以下28.17段为历史，不是第二当前snapshot；实际验证见 `docs/CURRENT.md`。
+
 ## Public28.17 Custom API safe refs（正式输入候选消费）
 
 固定正式BFF853ca9a5d8da3500b0c37543c72198a520e46225／SHAea0031103488daa1fcc0cca45fdd13f4d4061546ac4525c745ec47105649f7e7，既有12public generator正规重出。原tool-display generator从MessageCreateRequest与private composer同字段派生closed≤32／unique profile_id／正int32版本schema及version叶；不另建wire中心。新test-only bff-custom-api-selection-parent只迁入正式owner函数的TS类型，精确逆回完整28.16，再进原composer父链。其余private／policy3／Auth／relay／lock不迁，无normal激活声明。

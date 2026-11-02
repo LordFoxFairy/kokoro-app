@@ -1,3 +1,9 @@
+## T-07 Public28.18 单一来源同步（2026-11-01）
+
+既有 snapshot 已为正式 BFF `091cd5022cf517d243a6390b933f9dded7e3b4a9`／Public28.18.0；本轮修复此前仅 account-profile 生成链更新、其余 public pin 滞后的 provenance，不修改 snapshot 或业务运行代码。12 个原 public generator 保持原窄消费边界，通过原 `--write` 重出派生物；独立 private artifact、download policy3及其 owner pin不变，无依赖／Schema／owner变化。
+
+新 `tests/contract/bff-account-profile-read-parent.ts` 在旧 Custom API inverse 前处理28.18：先验证完整 child SHA，只删除具名账户资料 GET、AccountProfileReadResponse 与版本差异，再验证完整28.17 parent SHA。旧28.17及更早父hash／转换逻辑保持；新字段、原PATCH、无关操作、版本及额外字节漂移均拒绝。该链只用于测试历史保护，不成为运行时兼容层或第二可编辑contract；下方方案保留历史语境。
+
 ## Composer Custom API safe selection（Root已核准，正式契约消费者候选）
 
 在现连接器入口复用同一行展示，独立消费本人Custom API列表的profile_id/state_version/name/icon，不把profileID映射成MCP Connection ID，不推导执行权限或自动选择。32项安全引用在engine内独立保存、深冻结至原提交意图；同actor当前catalog刷新不重基已选CAS。Project overview保持本地draft，与保留会话/MCP推荐隔离；新任务分配后沿现提交桥转交。现列表按页一次，不做逐profile GET；actor/generation/route/abort与迟到回调退休，loading/error保持安静且不伪空。

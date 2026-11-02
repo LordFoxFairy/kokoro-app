@@ -1,3 +1,7 @@
+## T-07 Public28.18 provenance修复（2026-11-01，无数据变化）
+
+本轮只同步既有单一BFF public snapshot的生成器来源与测试pin，原28.18 snapshot保持逐字不变；账户资料仍由IAM／BFF提供现有只读投影，App不新增账户事实、表、缓存、迁移或浏览器store。完整28.18→28.17逆差仅存在于 `tests/contract/`，用于保留旧父全文hash及操作顺序证明，不进入运行时；private artifact与独立download policy3不变。下方数据方案保留历史语境。
+
 ## Custom API草稿选择（复用原安全提交意图，无新owner表）
 
 仅现engine／Project draft的profile/version引用，≤32且profileID唯一，换会话/actor退休，不落Conversation账号偏好。发送时深冻结到原PendingSubmission，现browser sessionStorage journal v1仅增加可选正式safe-ref字段，原无字段记录仍按原body/key恢复；不保存指令、env名称/值或凭据，不新增store／Schema／迁移。未知结果只显式原K/body恢复，后续目录刷新或UI选择不改旧意图。已接受选择由原owner private snapshot投影，App无第二选择事实源；当前CAS不符只排除恢复，不能替换原CAS。原MCP/Skills与父会话权限保持。
