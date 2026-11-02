@@ -672,6 +672,8 @@ export const de: Partial<Record<MessageKey, string>> = {
   "fail.dependencyUnavailable": "Ein benötigter Dienst ist vorübergehend nicht verfügbar. Diese Runde wurde beendet.",
   "fail.modelAccessDenied": "Dieses Konto darf das ausgewählte Modell nicht verwenden. Wenden Sie sich an einen Administrator.",
   "fail.modelSettlementPending": "Dieser Durchlauf wurde gestoppt. Generierte Inhalte bleiben erhalten; die Abrechnung wird noch abgeglichen.",
+  "fail.contextWindow": "Dieser Durchlauf wurde wegen zu umfangreichen Kontexts gestoppt. Kürze dein Profil, dein Wissen oder den Aufgabeninhalt und starte dann eine neue Aufgabe oder generiere erneut.",
+  "fail.personalContextTooLarge": "Dein Profil oder Wissen ist zu umfangreich; die Aufgabe wurde noch nicht gesendet. Kürze den Inhalt und wiederhole die ursprüngliche Anfrage anschließend manuell.",
   "fail.generic": "Diese Runde wurde nicht abgeschlossen. Versuchen Sie es später noch einmal.",
   "fail.internalHint": "Wenn das Problem weiterhin besteht, wenden Sie sich mit der Sitzungszeit an den Support.",
   "mode.labelFast": "schnell",

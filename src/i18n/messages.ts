@@ -779,6 +779,8 @@ export const zh = {
   "fail.dependencyUnavailable": "执行所需的服务暂时不可用，这一轮已停止。",
   "fail.modelAccessDenied": "当前账号没有使用这个模型的权限，请联系管理员。",
   "fail.modelSettlementPending": "本轮已停止，已生成的内容已保留；结算仍待核对。",
+  "fail.contextWindow": "这一轮的上下文内容过多，已停止。请减少个人资料、知识或任务内容后，重新发起任务或重新生成。",
+  "fail.personalContextTooLarge": "个人资料或知识内容过多，尚未提交任务。请减少内容后手动重试原请求。",
   "fail.agentNotConfigured": "执行服务暂未就绪",
   "fail.executionUnavailableHint": "你可以继续查看历史消息和编辑草稿。服务就绪后，再重试原请求。",
   "thread.retryOriginal": "重试原请求",

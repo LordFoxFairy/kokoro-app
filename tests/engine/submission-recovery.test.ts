@@ -19,11 +19,11 @@ function journal() {
 }
 
 describe("first submission survives document recreation without dispatching", () => {
-  it("503 followed by reload and owner404 keeps original text/key/options for manual retry", async () => {
+  it.each([[503, "agent_not_configured"], [413, "personal_context_too_large"]] as const)("%s %s followed by reload and owner404 keeps original text/key/options for manual retry", async (status, code) => {
     const storage = createMemoryStorage<ConversationStore>()
     const recovery = journal()
     const first = createFakeClient()
-    first.nextCreate = () => Promise.reject(new SessionClientError("http", "agent_not_configured", "agent_not_configured"))
+    first.nextCreate = () => Promise.reject(new SessionClientError("http", code, code, status))
     const engine = createSessionEngine({ client: first, storage, ...{ submissionRecovery: recovery } })
     engine.newConversation()
     engine.setModel("exact-model")
@@ -33,6 +33,7 @@ describe("first submission survives document recreation without dispatching", ()
     const original = first.createCalls[0]
     if (!original) throw new Error("missing original request")
     expect(engine.getSnapshot().canRetryPendingSubmission).toBe(true)
+    expect(recovery.read()?.failureCode).toBe(code)
     engine.dispose()
 
     const second = createFakeClient()

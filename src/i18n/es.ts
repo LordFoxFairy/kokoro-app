@@ -672,6 +672,8 @@ export const es: Partial<Record<MessageKey, string>> = {
   "fail.dependencyUnavailable": "Un servicio necesario no está disponible temporalmente y esta ronda se detuvo.",
   "fail.modelAccessDenied": "Esta cuenta no puede usar el modelo seleccionado. Contacte con un administrador.",
   "fail.modelSettlementPending": "Este turno se ha detenido. El contenido generado se conserva; la liquidación sigue pendiente de conciliación.",
+  "fail.contextWindow": "Este turno se detuvo porque el contexto era demasiado grande. Reduce tu perfil, conocimientos o el contenido de la tarea y luego inicia una tarea nueva o vuelve a generar.",
+  "fail.personalContextTooLarge": "Tu perfil o conocimientos son demasiado extensos; la tarea aún no se ha enviado. Reduce el contenido y vuelve a intentar manualmente la solicitud original.",
   "fail.generic": "No completé esta ronda, inténtalo de nuevo más tarde.",
   "fail.internalHint": "Si el problema continúa, contacte con soporte e indique la hora de la sesión.",
   "mode.labelFast": "rápido",

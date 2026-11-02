@@ -1,3 +1,7 @@
+## 2026-11-03 B-08 Public29.3 个人材料容量失败（候选）
+
+唯一完整来源为 BFF 1e6765b3230d55fa17d0f6aa989278b97d00f338 / Public29.3.0，SHA256 4f27adbea9a63c36d8b11e95c9dde342a6e8d662cab77cb42091384f3b17e333。仅新增 context_window_exceeded / retryable=false；发送前413 personal_context_too_large 沿原公开错误 code 通路消费。十二条 fullsource recipe 与原分享 browser projection 正规更新；test-only 精确逆回29.2后沿未改历史证明，不重签旧 oracle，不产生 runtime fallback。
+
 ## 2026-11-02 TeamRole.skill 完整闭集消费
 
 正式完整源为 BFF `8ae73fde765ba55a77679c36199dcc9c1553fa11` / Public29.2.0 / SHA256 `df5a33d4fa33662e4f70967bf5db60033f71f29511bf5975aa2395d61abb3e9c`。TeamRole 的 skill 动作仅补 `delete_series`，未知域、未知动作、空权限数组及其余原约束仍拒绝；九个 Team operation、请求、取消与命令恢复不变。

@@ -1,4 +1,5 @@
 // Test-only finite owner-release inverse; never a runtime decoder or fallback.
+import { restorePublic292PersonalContextContract } from "./bff-public293-personal-context-parent"
 import assert from "node:assert/strict"
 import { createHash } from "node:crypto"
 import { readFileSync } from "node:fs"
@@ -14,6 +15,7 @@ const parentSkill = "            skill: { type: array, minItems: 1, items: { typ
 const currentSkill = parentSkill.replace("create_version, begin_upload", "create_version, delete_series, begin_upload")
 
 export function restorePublic291TeamPermissions(source: string): string {
+  source = restorePublic292PersonalContextContract(source)
   if (hash(source) === parentDigest) return source
   assert.equal(hash(source), currentDigest, "complete committed Public29.2 Team permissions artifact drift")
   assert.equal(source.split(currentSkill).length, 2, "exact single Team permissions correction")

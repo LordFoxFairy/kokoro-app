@@ -749,6 +749,8 @@ export const ja: Partial<Record<MessageKey, string>> = {
   "fail.dependencyUnavailable": "必要なサービスが一時的に利用できないため、このラウンドは停止しました。",
   "fail.modelAccessDenied": "このアカウントには選択したモデルを使用する権限がありません。管理者に連絡してください。",
   "fail.modelSettlementPending": "このターンは停止しました。生成済みの内容は保持され、精算は引き続き照合待ちです。",
+  "fail.contextWindow": "このターンはコンテキストが多すぎるため停止しました。プロフィール、ナレッジ、またはタスクの内容を減らしてから、新しいタスクを開始するか再生成してください。",
+  "fail.personalContextTooLarge": "プロフィールまたはナレッジの内容が多すぎるため、タスクはまだ送信されていません。内容を減らしてから、元のリクエストを手動で再試行してください。",
   "fail.generic": "このラウンドは完了しませんでした。後でもう一度お試しください。",
   "fail.internalHint": "問題が続く場合は、セッション時刻を添えてサポートに連絡してください。",
   "mode.labelFast": "速い",

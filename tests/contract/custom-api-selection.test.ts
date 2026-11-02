@@ -6,7 +6,7 @@ import { restorePublic2816CustomApiSelectionContract } from "./bff-custom-api-se
 import { makeSnapshot } from "../core/fixtures"
 it("consumes the exact formal full Public29 and restores every original Public28.16 byte", async () => {
   const raw = await readFile("src/generated/bff-public-openapi.yaml", "utf8"), hash = (value: string) => createHash("sha256").update(value).digest("hex")
-  expect(hash(raw)).toBe("df5a33d4fa33662e4f70967bf5db60033f71f29511bf5975aa2395d61abb3e9c")
+  expect(hash(raw)).toBe("4f27adbea9a63c36d8b11e95c9dde342a6e8d662cab77cb42091384f3b17e333")
   expect(hash(restorePublic2816CustomApiSelectionContract(raw))).toBe("82485c2b7be17ad04f56d3656a58b42ea8d308c9dc22db5807a09ab706418a77")
   for (const bad of [raw + "\n", raw.replace("selected_custom_api_profiles:", "unreviewed_profiles:"), raw.replace("getMessageFeedback", "wrongFeedback")]) expect(() => restorePublic2816CustomApiSelectionContract(bad)).toThrow()
 })

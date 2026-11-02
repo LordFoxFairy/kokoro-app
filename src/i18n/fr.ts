@@ -672,6 +672,8 @@ export const fr: Partial<Record<MessageKey, string>> = {
   "fail.dependencyUnavailable": "Un service requis est temporairement indisponible et ce tour a été arrêté.",
   "fail.modelAccessDenied": "Ce compte ne peut pas utiliser le modèle sélectionné. Contactez un administrateur.",
   "fail.modelSettlementPending": "Ce tour a été arrêté. Le contenu généré est conservé ; le règlement reste en attente de rapprochement.",
+  "fail.contextWindow": "Ce tour a été arrêté car le contexte était trop volumineux. Réduisez votre profil, vos connaissances ou le contenu de la tâche, puis lancez une nouvelle tâche ou régénérez.",
+  "fail.personalContextTooLarge": "Votre profil ou vos connaissances sont trop volumineux ; la tâche n’a pas été envoyée. Réduisez le contenu, puis réessayez manuellement la demande initiale.",
   "fail.generic": "Vous n'avez pas terminé ce tour, réessayez plus tard.",
   "fail.internalHint": "Si le problème persiste, contactez le support en indiquant l’heure de la session.",
   "mode.labelFast": "rapide",

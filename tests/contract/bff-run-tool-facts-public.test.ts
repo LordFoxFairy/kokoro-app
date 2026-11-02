@@ -6,10 +6,10 @@ import { restorePublic289MessageActionsContract } from "./bff-answer-actions-par
 const hash = (value: string) => createHash("sha256").update(value).digest("hex")
 it("consumes the fixed whole Public28.12 and restores its complete untouched Public28.10 parent before existing inverses", async () => {
   const raw = await readFile("src/generated/bff-public-openapi.yaml", "utf8")
-  expect(hash(raw)).toBe("df5a33d4fa33662e4f70967bf5db60033f71f29511bf5975aa2395d61abb3e9c")
+  expect(hash(raw)).toBe("4f27adbea9a63c36d8b11e95c9dde342a6e8d662cab77cb42091384f3b17e333")
   expect(hash(restorePublic2810ToolFactsContract(raw))).toBe("9e6a8dddea847ecfd2905f378f4f76022b6cc49a1a4352a2e7abb4e73b3f1328")
   expect(hash(restorePublic289MessageActionsContract(raw))).toBe("b438a749c919d24c4e0f1dadfdbcbbb11e0ac755f5785c543a661336c2cbb354")
-  for (const changed of [raw + "\n", raw.replace("version: 29.2.0", "version: 28.18.0"), raw.replace("        tool_facts:", "        other_facts:"), raw.replace("listTeamMembers", "unrelatedOperationChanged")]) {
+  for (const changed of [raw + "\n", raw.replace("version: 29.3.0", "version: 28.18.0"), raw.replace("        tool_facts:", "        other_facts:"), raw.replace("listTeamMembers", "unrelatedOperationChanged")]) {
     expect(changed).not.toBe(raw)
     expect(() => restorePublic2810ToolFactsContract(changed)).toThrow()
   }

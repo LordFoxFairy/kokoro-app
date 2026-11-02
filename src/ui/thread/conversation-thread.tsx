@@ -77,6 +77,8 @@ export type ConversationThreadProps = {
 
 function agentFailureCopyKey(code: AgentFailureCode): MessageKey {
   switch (code) {
+    case "context_window_exceeded":
+      return "fail.contextWindow"
     case "token_budget_exceeded":
       return "fail.tokenBudget"
     case "recursion_limit_exceeded":
@@ -110,6 +112,7 @@ export function failureCopyKey(runError: RunFailure | null, submissionFailureCod
   if (runError?.kind === "agent") return agentFailureCopyKey(runError.profile.code)
   // This code is part of the BFF's public mutation error contract. It means a
   // retry cannot make the local Agent dependency available on its own.
+  if (submissionFailureCode === "personal_context_too_large") return "fail.personalContextTooLarge"
   if (submissionFailureCode === "agent_not_configured") return "fail.agentNotConfigured"
   return "fail.generic"
 }

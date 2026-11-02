@@ -10,10 +10,10 @@ import YAML from "yaml"
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const sourcePath = join(root, "src/generated/bff-public-openapi.yaml")
 const outputPath = join(root, "src/generated/bff-agent-failure.ts")
-const ownerCommit = "8ae73fde765ba55a77679c36199dcc9c1553fa11"
-const expectedDigest = "df5a33d4fa33662e4f70967bf5db60033f71f29511bf5975aa2395d61abb3e9c"
-const expectedVersion = "29.2.0"
-const expectedChatMessageFingerprint = "d69b983fd87600f5c180494b27989d5eb2b32c12284bf5c7530930e3099c0bf6"
+const ownerCommit = "1e6765b3230d55fa17d0f6aa989278b97d00f338"
+const expectedDigest = "4f27adbea9a63c36d8b11e95c9dde342a6e8d662cab77cb42091384f3b17e333"
+const expectedVersion = "29.3.0"
+const expectedChatMessageFingerprint = "2f3471297de580e2931d8d768d86f9c0d7fc037de99993237b933d29fe25dc7b"
 
 const digest = (value) => createHash("sha256").update(value).digest("hex")
 
@@ -38,7 +38,8 @@ export function inspectBffAgentFailureContract(spec) {
   const privateReads = structuredClone([schemas.ChatMessageRead, schemas.OrderedAssistantMessageRead, schemas.CancelledAssistantMessageRead])
   const sourceSchemas = [schemas.ChatMessageRead,schemas.OrderedAssistantMessageRead,schemas.CancelledAssistantMessageRead,schemas.RegeneratedAssistantMessageRead]
   const closedFingerprint=digest(stableJson(sourceSchemas))
-  assert.equal(closedFingerprint,"795871baac08082c815fe7ef106e589de2859dbf166f9dcb7973bb8ec0aabca1","BFF regenerated private graph drift")
+  assert.equal(closedFingerprint,"26c72d0c3061e1eaf40632d379cacee525e27a4e5fd558a125c705a485cc4b7f","BFF regenerated private graph drift")
+  assert.equal(privateReads[1].properties.failure.properties.code.enum.pop(), "context_window_exceeded", "exact capacity failure addition")
   privateReads[0].oneOf=privateReads[0].oneOf.filter(item=>item.$ref!=="#/components/schemas/RegeneratedAssistantMessageRead")
   delete privateReads[1].properties.regenerated_from_message_id
   delete privateReads[2].properties.regenerated_from_message_id
@@ -53,9 +54,9 @@ export function inspectBffAgentFailureContract(spec) {
     ...retryableCodes.map((code) => ({ source: failure.properties.source.const, code, retryable: true })),
   ]
 
-  assert.equal(codes.length, 11, "BFF Agent failure code count drift")
+  assert.equal(codes.length, 12, "BFF Agent failure code count drift")
   assert.equal(retryableCodes.length, 2, "BFF retryable Agent failure code count drift")
-  assert.equal(tuples.length, 13, "BFF Agent failure tuple count drift")
+  assert.equal(tuples.length, 14, "BFF Agent failure tuple count drift")
   return { roles: [...roles], tuples, cancelledStatus }
 }
 

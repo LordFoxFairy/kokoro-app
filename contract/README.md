@@ -1,3 +1,9 @@
+## Public29.3 个人材料容量失败消费者
+
+唯一完整原件固定 BFF1e6765b3230d55fa17d0f6aa989278b97d00f338，Public29.3.0，SHA256 4f27adbea9a63c36d8b11e95c9dde342a6e8d662cab77cb42091384f3b17e333。原十二条 fullsource recipe 与原分享 browser projection 正规再生；新增的唯一 tuple 是 context_window_exceeded / retryable=false，原两个 retryable=true 保持。原 runtime schema 继续只消费生成 tuple，不手填第二套枚举。
+
+test-only bff-public293-personal-context-parent.ts 只接受精确正式全文，移除两个具名 enum 行和版本后必须恢复原29.2全文摘要，再进入未改29.1/29.0与双父历史 oracle。201项有序操作及原200项清单不变；分享投影与其余生成变化均通过精确 provenance 反投影逐字比较，policy3和旧 fixtures 不变。下方保留历史记录。
+
 ## Public29.2 团队角色权限消费者
 
 固定 BFF8ae73fde765ba55a77679c36199dcc9c1553fa11 的完整原件，SHA256 df5a33d4fa33662e4f70967bf5db60033f71f29511bf5975aa2395d61abb3e9c。原12条 public recipe 正规生成，分享 projection 同步 provenance；其余独立 profile/policy保持。test-only `bff-public292-team-permissions-parent.ts` 先恢复完整29.1/29.0，再接原双父 proof，旧200操作与旧oracle不变。

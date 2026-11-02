@@ -1,3 +1,7 @@
+## 2026-11-03 B-08 个人材料容量反馈（候选）
+
+唯一 Public29.3 与十三条既有生成入口消费正式 BFF1e6765b3。原 ConversationThread 区分发送前容量拒绝与已准入终态，沿现 pending/手动恢复或重新发起语义，不改变 Engine、Run、草稿、知识待接提示或材料传输。合同、证明与实际验证见 docs/API_CONTRACT.md、docs/CURRENT.md；正常源和真实新Run由Root验收。
+
 ## 2026-11-02 B-10 分享 metadata 消费（候选）
 
 `ui/share/use-session-share`在原分享控件下统一管理metadata GET、显式命令后的权威读回与身份/范围退休；原AppFrame→Header只透传可信boundary和SessionScope。独立正式BFF2e737cad投影由新小generator生成decoder/type，原Public29/12生成器/SDK不动。源码局部门与剩余浏览器范围见CURRENT。

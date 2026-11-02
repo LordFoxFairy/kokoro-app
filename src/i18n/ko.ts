@@ -672,6 +672,8 @@ export const ko: Partial<Record<MessageKey, string>> = {
   "fail.dependencyUnavailable": "필요한 서비스를 일시적으로 사용할 수 없어 이번 라운드가 중지되었습니다.",
   "fail.modelAccessDenied": "이 계정은 선택한 모델을 사용할 수 없습니다. 관리자에게 문의하세요.",
   "fail.modelSettlementPending": "이번 실행이 중지되었습니다. 생성된 내용은 보존되며 정산은 대조를 기다리고 있습니다.",
+  "fail.contextWindow": "컨텍스트가 너무 커서 이번 실행이 중지되었습니다. 프로필, 지식 또는 작업 내용을 줄인 다음 새 작업을 시작하거나 다시 생성하세요.",
+  "fail.personalContextTooLarge": "프로필 또는 지식 내용이 너무 많아 작업이 아직 제출되지 않았습니다. 내용을 줄인 다음 원래 요청을 직접 다시 시도하세요.",
   "fail.generic": "이번 라운드를 완료하지 못했습니다. 나중에 다시 시도하세요.",
   "fail.internalHint": "문제가 계속되면 세션 시간을 포함해 지원팀에 문의하세요.",
   "mode.labelFast": "빠른",

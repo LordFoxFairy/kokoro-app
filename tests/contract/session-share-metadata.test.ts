@@ -6,13 +6,13 @@ import { SESSION_SHARE_METADATA_PROVENANCE, sessionShareMetadataDataSchema, sess
 
 const share = { share_id: "shr_original", created_at: "2026-11-02T00:00:00.000Z", expires_at: null }
 it("consumes the exact committed metadata projection alongside the same committed canonical source", () => {
-  expect(SESSION_SHARE_METADATA_PROVENANCE.owner_commit).toBe("8ae73fde765ba55a77679c36199dcc9c1553fa11")
+  expect(SESSION_SHARE_METADATA_PROVENANCE.owner_commit).toBe("1e6765b3230d55fa17d0f6aa989278b97d00f338")
   expect(SESSION_SHARE_METADATA_PROVENANCE.candidate).toBe(false)
-  expect(createHash("sha256").update(readFileSync("src/generated/bff-session-share-metadata.json")).digest("hex")).toBe("00c1dae24de9aa9f0d5631fd24019584bbbfc53def41c52cbecf4b12eb6c027d")
-  expect(SESSION_SHARE_METADATA_PROVENANCE.canonical_source.sha256).toBe("df5a33d4fa33662e4f70967bf5db60033f71f29511bf5975aa2395d61abb3e9c")
+  expect(createHash("sha256").update(readFileSync("src/generated/bff-session-share-metadata.json")).digest("hex")).toBe("71b02e21fd87beab3df656447e0b20c7beba82e39d47091872f400728c69c537")
+  expect(SESSION_SHARE_METADATA_PROVENANCE.canonical_source.sha256).toBe("4f27adbea9a63c36d8b11e95c9dde342a6e8d662cab77cb42091384f3b17e333")
   expect(sessionShareMetadataOperation).toEqual({ method: "GET", path: "/v1/sessions/{id}/share", operationId: "getSessionShareMetadata" })
   execFileSync(process.execPath, ["scripts/generate-bff-session-share-metadata.mjs", "--check"])
-  expect(createHash("sha256").update(readFileSync("src/generated/bff-public-openapi.yaml")).digest("hex")).toBe("df5a33d4fa33662e4f70967bf5db60033f71f29511bf5975aa2395d61abb3e9c")
+  expect(createHash("sha256").update(readFileSync("src/generated/bff-public-openapi.yaml")).digest("hex")).toBe("4f27adbea9a63c36d8b11e95c9dde342a6e8d662cab77cb42091384f3b17e333")
 })
 it("distinguishes an accessible unshared session from metadata or envelope corruption", () => {
   expect(sessionShareMetadataDataSchema.parse({ share: null })).toEqual({ share: null })

@@ -672,6 +672,8 @@ export const pt: Partial<Record<MessageKey, string>> = {
   "fail.dependencyUnavailable": "Um serviço necessário está temporariamente indisponível e esta rodada foi interrompida.",
   "fail.modelAccessDenied": "Esta conta não pode usar o modelo selecionado. Entre em contato com um administrador.",
   "fail.modelSettlementPending": "Esta rodada foi interrompida. O conteúdo gerado foi preservado; a liquidação ainda aguarda conciliação.",
+  "fail.contextWindow": "Esta rodada foi interrompida porque o contexto era muito grande. Reduza seu perfil, conhecimento ou o conteúdo da tarefa e inicie uma nova tarefa ou gere novamente.",
+  "fail.personalContextTooLarge": "Seu perfil ou conhecimento é muito extenso; a tarefa ainda não foi enviada. Reduza o conteúdo e tente novamente a solicitação original manualmente.",
   "fail.generic": "Não concluiu esta rodada. Tente novamente mais tarde.",
   "fail.internalHint": "Se o problema continuar, contate o suporte e informe o horário da sessão.",
   "mode.labelFast": "rápido",

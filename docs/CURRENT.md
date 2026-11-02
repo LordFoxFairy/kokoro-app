@@ -1,3 +1,13 @@
+## 2026-11-03 B-08 Public29.3 容量失败消费（候选，未正常激活）
+
+固定正式 BFF1e6765b3230d55fa17d0f6aa989278b97d00f338 的唯一 Public29.3 原件（SHA256 4f27adbea9a63c36d8b11e95c9dde342a6e8d662cab77cb42091384f3b17e333）及同提交分享 projection；十二条原 fullsource recipe 加原分享 recipe 正规 write/check 全通过。strict tuple 仅增加 context_window_exceeded / retryable=false，原两个 true tuple 保留；原 runtime decoder 自然消费生成 tuple。其余八个有变生成文件反投影精确来源元数据后与旧版逐字相同，旧 fixtures/policy3 字节不变。
+
+发送前 personal_context_too_large 只提示缩减个人资料/知识后手动重试原请求；已准入的 context_window_exceeded 是终态，说明减少材料后重新发起/重新生成，不给旧冻结Run自动改材料或重发。原 Engine、pending body/key、草稿、Run及知识待接提示未改。有限 test-only inverse 精确恢复29.2全文后进入未改历史 oracle，201有序操作与原200项清单保留。
+
+三项新增风险先RED。首轮六原文件233 PASS/1 FAIL，仅新测试在zh界面用默认en按钮名定位；修正为显式zh断言，未改生产或放宽断言，新增两项复验2 PASS，最终完整UI/原请求恢复两文件67 PASS。另受影响28契约文件190 PASS；首轮中已通过的生成tuple/AGUI/原历史逆证/i18n保持，架构50 PASS；13 recipe write/check、scope ESLint59文件与非增量TypeScript检查均exit0。原失败及准确命令、生成字节证明、文件冻结清单保存于本机Task B证据目录。
+
+未运行无关全仓default/OIDC/build/E2E；未操作真实浏览器、服务、数据库、模型或Git。正常运行/真实个人材料on-off任务与最终独审由Root接续，不据此宣称B08全目标完成。下方保留历史记录。
+
 ## 2026-11-02 团队角色 delete_series 严格消费（候选）
 
 消费正式 BFF8ae73fde / Public29.2.0，唯一完整原件 SHA256 df5a33d4fa33662e4f70967bf5db60033f71f29511bf5975aa2395d61abb3e9c。原 Team runtime decoder 仅增加 delete_series；未知动作、权限域、空数组继续拒绝，未改 Team 面板、写请求或权限 owner。十二条 public recipe 与原分享 projection 正规再生，其余生成语义逐字保持；policy3、旧200操作清单与双父 proof 字节不变。test-only 先严格逆回完整29.1，再逆回29.0，随后承接原历史证明。

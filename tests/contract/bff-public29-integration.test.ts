@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs"
 import YAML from "yaml"
 import { expect, it } from "vitest"
 import { restoreIntegrationBaseline, restoreIntegrationParent } from "./bff-public29-integration-parent"
+import { restorePublic292PersonalContextContract } from "./bff-public293-personal-context-parent"
 import { restorePublic291TeamPermissions, restorePublic290ShareMetadata } from "./bff-public292-team-permissions-parent"
 import { restorePublic2816CustomApiSelectionContract } from "./bff-custom-api-selection-parent"
 
@@ -47,7 +48,7 @@ it("enters the sealed approved parent chain only after the full integration inve
 
 
 it("consumes the exact Public29.2 Team permissions correction through both immutable share and integration parents", () => {
-  const current = readFileSync("src/generated/bff-public-openapi.yaml", "utf8")
+  const current = restorePublic292PersonalContextContract(readFileSync("src/generated/bff-public-openapi.yaml", "utf8"))
   expect(hash(current)).toBe("df5a33d4fa33662e4f70967bf5db60033f71f29511bf5975aa2395d61abb3e9c")
   const parent = restorePublic291TeamPermissions(current)
   expect(hash(parent)).toBe("4e4ce620887b1a1a431a9346d0d259aa5bed3bd5af06f4428f11e9054173418e")
@@ -70,12 +71,30 @@ it("consumes the exact Public29.2 Team permissions correction through both immut
 
 it("rejects future releases, unknown permissions and unrelated source drift before restoring historical bytes", () => {
   const current = readFileSync("src/generated/bff-public-openapi.yaml", "utf8")
-  for (const changed of [current + "\n", current.replace("version: 29.2.0", "version: 29.2.1"),
+  for (const changed of [current + "\n", current.replace("version: 29.3.0", "version: 29.3.1"),
     current.replace("create_version, delete_series, begin_upload", "create_version, unknown_action, begin_upload"),
     current.replace("required: [share]", "required: []"), current.replace("listTeamMembers", "changedUnrelatedOperation")]) {
     expect(changed).not.toBe(current)
     expect(() => restorePublic291TeamPermissions(changed)).toThrow()
     expect(() => restorePublic290ShareMetadata(changed)).toThrow()
     expect(() => restoreIntegrationParent(changed, "approved")).toThrow()
+  }
+})
+
+it("restores the exact Public29.2 bytes before all historical proofs and retains the ordered201 operations", () => {
+  const current = readFileSync("src/generated/bff-public-openapi.yaml", "utf8")
+  expect(hash(current)).toBe("4f27adbea9a63c36d8b11e95c9dde342a6e8d662cab77cb42091384f3b17e333")
+  const parent = restorePublic292PersonalContextContract(current)
+  expect(hash(parent)).toBe("df5a33d4fa33662e4f70967bf5db60033f71f29511bf5975aa2395d61abb3e9c")
+  expect(restorePublic292PersonalContextContract(parent)).toBe(parent)
+  expect(restorePublic290ShareMetadata(parent)).toBe(source)
+  expect(YAML.parse(current).paths).toEqual(YAML.parse(parent).paths)
+  for (const corrupted of [current + "\n", current.replace("                - context_window_exceeded\n", ""),
+    current.replace("context_window_exceeded", "unknown_capacity"),
+    current.replace("                - context_window_exceeded\n", "                - context_window_exceeded\n                - context_window_exceeded\n"),
+    current.replace("listTeamMembers", "changedUnrelatedOperation")]) {
+    expect(corrupted).not.toBe(current)
+    expect(() => restorePublic292PersonalContextContract(corrupted)).toThrow()
+    expect(() => restorePublic290ShareMetadata(corrupted)).toThrow()
   }
 })

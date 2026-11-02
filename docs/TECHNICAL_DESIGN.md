@@ -1,3 +1,7 @@
+## 2026-11-03 B-08 个人材料容量失败的正式消费（候选）
+
+沿原生成 tuple 与 ConversationThread 展示。发送前 personal_context_too_large 只提示减少个人资料/知识后手动重试原请求；已准入的 context_window_exceeded 是不可重试终态，材料已冻结，修改设置后须重新发起或重新生成。原 pending body/key、发送/Run/草稿状态机及知识待接提示不变。
+
 ## 2026-11-02 团队角色权限的正式消费者修正
 
 唯一完整来源固定 BFF `8ae73fde765ba55a77679c36199dcc9c1553fa11` / Public29.2.0，SHA256 `df5a33d4fa33662e4f70967bf5db60033f71f29511bf5975aa2395d61abb3e9c`。沿原十二个 public 生成器与原分享投影生成器更新来源；除 TeamRole.skill 增加已发布的 `delete_series` 外，其余投影只变来源证明，不改运行语义。Web 的既有严格角色 decoder 同步这一枚举，不新增权限、Team 协议或宽松 fallback。
