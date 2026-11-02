@@ -212,6 +212,7 @@ export function McpProjectionRead({
   }, [apiIntent?.window, owner]);
   const apiCommandState = apiManagementStates.find(item => item.profileId === selectedCustomApiId);
   const [providerQuery, setProviderQuery] = useState("");
+  const [providerRefreshOwner, setProviderRefreshOwner] = useState<typeof owner | null>(null);
   const [connectorQuery, setConnectorQuery] = useState("");
   const [localCatalogOpen, setLocalCatalogOpen] = useState(false);
   const catalogOpen = catalogDialog?.open ?? localCatalogOpen;
@@ -369,8 +370,16 @@ export function McpProjectionRead({
   // cards remain readable; existing detail/command freshness gates are unchanged.
   const connectionResultsKnown = connectorProjection !== undefined && !connectorState.loading && !connectorState.error &&
     !connectorReloading && !refreshError && customApiState.dataCurrent && !customApiState.loadMoreError && !customApiState.hasMore;
+  const providerReadRetrying = (providerReloading && providerRefreshOwner !== owner) || directory.retrying;
+  const refreshProviders = () => {
+    if (ownerRef.current !== owner || !admitted || directory.loading || providerReloading) return;
+    setProviderRefreshOwner(owner);
+    if (providerQuery.trim() === "" && categoryFilter === "all") reload("providers");
+    else directory.refresh();
+  };
   const retryProviders = () => {
     if (ownerRef.current !== owner || !admitted) return;
+    setProviderRefreshOwner(null);
     if (directory.error) directory.retry();
     else reload("providers");
   };
@@ -757,6 +766,7 @@ export function McpProjectionRead({
              its search field beside Browse/Create. */
           showSearch={!embedded || settingsLayout}
           disabled={!admitted}
+          {...(view === "catalog" ? { onRefresh: refreshProviders, refreshing: directory.loading || providerReloading } : {})}
           onBrowse={(target) => {
             if (ownerRef.current !== owner || !admitted) return;
             if (view === "catalog" && onManageConnectors) {
@@ -793,12 +803,12 @@ export function McpProjectionRead({
 
       {view === "catalog" ? (
         <div className={styles.content}>
-          {admitted && (directoryError || providerReloading || directory.retrying) ? <McpReadFeedback message={t("mcp.read.providersError")}
-            retryLabel={t("mcp.read.providersRetry")} busy={providerReloading || directory.retrying} onRetry={retryProviders} /> : null}
+          {admitted && (directoryError || providerReadRetrying) ? <McpReadFeedback message={t("mcp.read.providersError")}
+            retryLabel={t("mcp.read.providersRetry")} busy={providerReadRetrying} onRetry={retryProviders} /> : null}
           <McpProviderDirectory
             providers={directory.items}
             hasMore={directory.hasMore}
-            loading={directory.loading}
+            loading={directory.loading || providerReloading}
             onLoadMore={directory.loadMore}
             {...(directory.items.length === 0 ? hasVisibleCustomApis || hasVisiblePersonalServers || directoryError || !admitted || directory.loading ||
               (plaza && categoryFilter === "all" && (customApiState.error || customApiState.loading || !relations.complete))
@@ -895,10 +905,12 @@ export function McpProjectionRead({
         {...(admitted && (directory.items.length > 0 || !directory.loading) ? { providers: directory.items } : {})}
         hasMore={directory.hasMore}
         onLoadMore={directory.loadMore}
-        loading={directory.loading}
+        loading={directory.loading || providerReloading}
         error={directoryError}
-        retrying={providerReloading || directory.retrying}
+        retrying={providerReadRetrying}
         onRetry={retryProviders}
+        onRefresh={refreshProviders}
+        refreshing={directory.loading || providerReloading}
         query={providerQuery}
         categoryFilter={categoryFilter}
         returnFocusRef={catalogDialog?.returnFocusRef ?? catalogReturnFocusRef}

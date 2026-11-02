@@ -17,6 +17,8 @@ export function McpSettingsToolbar({
   onQueryChange,
   onBrowse,
   onCreate,
+  onRefresh,
+  refreshing = false,
   showBrowse = true,
   showSearch = true,
   settingsLayout = false,
@@ -33,6 +35,8 @@ export function McpSettingsToolbar({
   onQueryChange: (value: string) => void
   onBrowse: (target: HTMLElement) => void
   onCreate?: (mode: McpCreateMode, target: HTMLElement | null) => void
+  onRefresh?: () => void
+  refreshing?: boolean
   showBrowse?: boolean
   /** The plaza owns its directory search below the featured/header row. */
   showSearch?: boolean
@@ -49,6 +53,9 @@ export function McpSettingsToolbar({
         </label> : null}
       {children}
       <div className={styles.toolbarActions}>
+        {onRefresh ? <Button disabled={disabled || refreshing} aria-busy={refreshing || undefined} type="button" variant="outline" className={styles.toolbarButton} onClick={onRefresh}>
+          {t("data.reload")}
+        </Button> : null}
         {showBrowse ? <Button disabled={disabled} type="button" variant="outline" className={styles.toolbarButton} data-settings-layout={settingsLayout || undefined} data-settings-control="browse" onClick={(event) => onBrowse(event.currentTarget)}>
           {view === "connections" ? t("mcp.browse") : t("plugins.manageConnectors")}
         </Button> : null}

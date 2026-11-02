@@ -27,6 +27,8 @@ export function McpProviderCatalogDialog({
   error,
   retrying = false,
   onRetry,
+  onRefresh,
+  refreshing = false,
   query,
   categoryFilter,
   returnFocusRef,
@@ -47,6 +49,8 @@ export function McpProviderCatalogDialog({
   error: boolean;
   retrying?: boolean;
   onRetry?: () => void;
+  onRefresh?: () => void;
+  refreshing?: boolean;
   query: string;
   categoryFilter: "all" | keyof typeof MCP_CATEGORY_MESSAGES;
   returnFocusRef: RefObject<HTMLElement | null>;
@@ -109,6 +113,8 @@ export function McpProviderCatalogDialog({
             onQueryChange={onQueryChange}
             onBrowse={() => undefined}
             showBrowse={false}
+            {...(onRefresh ? { onRefresh } : {})}
+            refreshing={refreshing}
             settingsLayout
             {...(onCreate ? { onCreate } : {})}
           >

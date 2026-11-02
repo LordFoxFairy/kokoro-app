@@ -29,9 +29,11 @@ export function useMcpProviderDirectory({ client, identity, admitted, readGenera
   const current = useRef<typeof scope | null>(scope);
   const flight = useRef<AbortController | null>(null);
   const cursors = useRef(new Set<string>());
+  const attemptedCursor = useRef<string | undefined>(undefined);
   useLayoutEffect(() => {
     current.current = scope;
     cursors.current.clear();
+    attemptedCursor.current = undefined;
     return () => { current.current = null; flight.current?.abort(); flight.current = null; };
   }, [scope]);
 
@@ -39,6 +41,7 @@ export function useMcpProviderDirectory({ client, identity, admitted, readGenera
     if (!scope.admitted || current.current !== scope || flight.current) return;
     const controller = new AbortController();
     flight.current = controller;
+    attemptedCursor.current = cursor;
     if (!cursor) cursors.current.clear();
     setState(value => ({ ...value, loading: true, error: false, stopped: false, retrying }));
     try {
@@ -86,6 +89,7 @@ export function useMcpProviderDirectory({ client, identity, admitted, readGenera
     retrying: admitted && state.scope === scope && state.retrying,
     hasMore: Boolean(page?.next_cursor) && !stopped,
     loadMore: () => { if (page?.next_cursor && !loading && !stopped) void read(page.next_cursor); },
-    retry: () => { if (!loading) void read(stopped ? undefined : page?.next_cursor ?? undefined, true); },
+    refresh: () => { if (!loading) void read(); },
+    retry: () => { if (!loading) void read(stopped ? undefined : attemptedCursor.current, true); },
   };
 }

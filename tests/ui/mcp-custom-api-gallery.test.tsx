@@ -425,3 +425,50 @@ it.each(["failed_head", "stale_head", "stale_tail"] as const)("a confirmed API r
   expect(management.getByRole("button", { name: other.name })).toBeVisible()
   expect(client.removeCustomApi).toHaveBeenCalledExactlyOnceWith(profile.profile_id, { expected_state_version: profile.state_version }, expect.any(String), expect.any(AbortSignal))
 })
+
+
+it.each([false, true])("refreshes a successful empty Provider directory through its existing GET without commands (dialog=%s)", async dialog => {
+  localStorage.setItem("kokoro.locale", "zh")
+  const f = recoveryFixture()
+  const provider = { provider_key: "new-owner-provider", display_name: "New owner provider", directory_type: "app" as const,
+    category_keys: [], example_prompts: [], enabled: true, state_version: "1" }
+  let finish!: (value: { items: typeof provider[]; next_cursor: string | null }) => void
+  const show = () => <LocaleProvider><ConnectorCommandProvider client={f.client} boundary={{ subject: f.subject, admitted: true, generation: 0 }}>
+    <McpProjectionRead client={f.client} identity={f.subject} embedded initialView="catalog"
+      {...(dialog ? { catalogDialog: { open: true, onOpenChange: vi.fn(), returnFocusRef: { current: null } } } : {})} />
+  </ConnectorCommandProvider></LocaleProvider>
+  const view = render(show())
+  await waitFor(() => expect(f.client.listMcpConnectorProviders).toHaveBeenCalledOnce())
+  // Returning to the same shell must keep its cached geometry, but explicit refresh must bypass it.
+  view.unmount()
+  const second = render(show())
+  const surface = within(dialog ? screen.getByRole("dialog") : second.container)
+  expect(f.client.listMcpConnectorProviders).toHaveBeenCalledOnce()
+  const refresh = surface.getByRole("button", { name: "重新读取" })
+  f.client.listMcpConnectorProviders.mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+  act(() => { fireEvent.click(refresh); fireEvent.click(refresh) })
+  await waitFor(() => expect(f.client.listMcpConnectorProviders).toHaveBeenCalledTimes(2))
+  expect(refresh).toBeDisabled()
+  expect(surface.queryByText("连接器目录加载失败")).not.toBeInTheDocument()
+  await act(async () => finish({ items: [provider], next_cursor: "new-tail" }))
+  expect(await surface.findByRole("button", { name: provider.display_name })).toBeVisible()
+  expect(refresh).toBeEnabled()
+  const loadMore = surface.getByRole("button", { name: "加载更多" })
+  f.client.listMcpConnectorProviders.mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+  fireEvent.click(refresh)
+  await waitFor(() => expect(refresh).toBeDisabled())
+  expect(surface.getByRole("button", { name: provider.display_name })).toBeVisible()
+  expect(loadMore).toBeDisabled()
+  await act(async () => finish({ items: [provider], next_cursor: null }))
+  expect(surface.queryByRole("button", { name: "加载更多" })).not.toBeInTheDocument()
+  // A filtered refresh must keep the owner query instead of silently reloading the unfiltered cache.
+  fireEvent.change(surface.getByRole("searchbox"), { target: { value: "workflow" } })
+  await waitFor(() => expect(f.client.listMcpConnectorProviders).toHaveBeenLastCalledWith({ limit: 100, query: "workflow" }, expect.any(AbortSignal)))
+  await waitFor(() => expect(refresh).toBeEnabled())
+  fireEvent.click(refresh)
+  await waitFor(() => expect(f.client.listMcpConnectorProviders).toHaveBeenCalledTimes(5))
+  expect(f.client.listMcpConnectorProviders).toHaveBeenLastCalledWith({ limit: 100, query: "workflow" }, expect.any(AbortSignal))
+  expect(f.client.createCustomApi).not.toHaveBeenCalled()
+  expect(f.client.createMcpConnector).not.toHaveBeenCalled()
+  expect(f.client.preparePrivateMcpServer).not.toHaveBeenCalled()
+})

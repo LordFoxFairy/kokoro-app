@@ -1,3 +1,7 @@
+## Provider 目录的显式刷新
+
+广场与原目录弹窗的“重新读取”只触发现有 Provider GET。无筛选时沿 projection reload 更新缓存首页；筛选时按当前 query/category 重读首页，替换旧分页而非附加旧 cursor。等待与失败保留已知卡片，失败重试复用实际失败页，刷新本身不显示失败反馈。主体、准入代与取消仍归原 reader；不重放任何业务命令。
+
 ## 本人 Provider 连接的名称与说明
 
 普通 Provider 详情的显式编辑只定位本人无 private server 的连接，进入现有 `McpConnectorEditorDialog` 前重新 exact GET，并核原类型、Provider 与连接身份。该窗口不再次跳回目录详情；读取失败原地显示 GET-only 重试，未读到当前事实不呈现保存字段。
