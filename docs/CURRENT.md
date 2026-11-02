@@ -1,3 +1,11 @@
+## T-05 冷登录固定 tenant 接线（2026-11-01，本地候选，待 Root 真实验收）
+
+基线 App `9ba653433c75dd3919bcc3de3cafc778fda4b975`。Root 空 Chromium context 经真实登录表单收到 303 后 `/api/auth/session` 与项目读取仍 401；签入新 IAM session 缺 activeOrganizationId，既有提前 set-active fixture 掩盖缺口。本片仅现 sign-in route 顺序补固定 `KOKORO_TENANT_ID` set-active 和既有在线 admission，三阶段共 5 秒预算；准入成功才进入产品，失败不写新 issuer cookie、不破坏旧会话、不重发密码，退休本次 flow/CSRF。新未交付 session 由 IAM TTL 回收。配置词法沿 native admission 固定 tenant credential，保持 opaque ID，不限定 UUID。详见本仓技术设计 T-05 小节。
+
+定向 RED 17 失败/3 原安全行为通过；补合并 header 超限负控另见 1 失败。Node22.23.4 定向 4 文件 55 通过（0 跳过），`pnpm typecheck` 与定向 ESLint 通过。首次 typecheck 捕获新增测试的 exact optional signal 与参数化数组形状问题，已修正并重跑；原失败记录保留。最终停写结果由本轮交付记录绑定文件哈希；无服务/PG/Redis/浏览器/Git 操作，没有执行完整 check。Root 负责完整门和真实四旅程；此候选不代表 T-05 或 C-1.3 全部完成。
+
+Root接收：独立规格/质量审查CLEAR；Node22.23.4/pnpm11.25.0完整`pnpm check` exit0，contract452、architecture50、full354文件6401pass/0skip、lint/types/build通过；1494tracked输入前后hash一致。未运行默认preview Playwright作为认证证据，真实冷登录GREEN和四旅程仍待精确组合验证。
+
 ## T-07 Public28.18 provenance修复（2026-11-01，本地工程门通过，待Root集成）
 
 基线App `f5d122bb41beb3e141015b758411dbcc0afc583b`。此前账户资料切片已把唯一完整snapshot更新到BFF `091cd5022cf517d243a6390b933f9dded7e3b4a9`／Public28.18.0，却遗漏其余11条public生成链与current pin assertions；本轮只同步这些来源，12个原generator均执行 `--write`，实际7份generated仅provenance变化。snapshot SHA256 `35a86f91e44beb1aeb6b17eca41d3bfdc79f11a43633662113a1778b4fab6082` 与owner Git blob逐字一致且本轮未改。独立private artifacts、download policy3及policy_owner_commit保持；无运行时、依赖、Schema或服务变化。

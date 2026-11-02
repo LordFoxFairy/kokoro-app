@@ -1,3 +1,11 @@
+## T-05 固定 Product 原生冷登录完成条件（2026-11-01，候选）
+
+沿 Root 已批准方案 B，IAM 唯一拥有 session、active tenant 与资格；App 只拥有同源适配。现 `/auth/sign-in` 的登录完成条件为：密码签入签发可用 issuer token → 用新 cookie 经现 BFF relay `organization/set-active` 选择部署侧 `KOKORO_TENANT_ID` → 复用 `admittedNativeSession` 在线 `/v1/me` 准入 → 才导航到原 native return target。固定 tenant 是与 BFF admission credential 配对的 server-only opaque ID（1..255 字符，无空白/控制字符），不是请求字段、浏览器候选列表或新身份协议；配置缺失/非法在发送凭据前失败。没有恢复 OAuth continuation、旧 RP 或 Product Session。
+
+三个上游阶段共享一个 5 秒绝对期限和取消信号，relay 仅领取剩余预算；最终准入返回与 flow 清理后再次核期限，迟到不导航。响应先沿既有 allowlist/属性校验，再按 cookie 名合并最新值；删除指令不进入后继 Cookie，成功响应每名只写最后一次指令，合并 header 仍有界。Origin/Host、一次性 CSRF、body/response 限额与原失败凭据反馈保持。
+
+密码签入返回 200 后，后续任何失败都退休本次 flow/清本次 CSRF、明确返回错误、不自动重发密码且不下发新的 issuer cookie；已有浏览器 issuer cookie 保持，不撤销其他 session、不额外 sign-out。未交给浏览器的新 session 由 IAM 自身 TTL/owner 回收。本地 focused 替身测试只证明 adapter 决策与传输参数，真实冷浏览器及登录/异域恢复/登出/撤权四旅程由 Root 串行验收，未据此称整体闭环。
+
 ## T-07 Public28.18 单一来源同步（2026-11-01）
 
 既有 snapshot 已为正式 BFF `091cd5022cf517d243a6390b933f9dded7e3b4a9`／Public28.18.0；本轮修复此前仅 account-profile 生成链更新、其余 public pin 滞后的 provenance，不修改 snapshot 或业务运行代码。12 个原 public generator 保持原窄消费边界，通过原 `--write` 重出派生物；独立 private artifact、download policy3及其 owner pin不变，无依赖／Schema／owner变化。
