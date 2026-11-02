@@ -4,6 +4,8 @@ import type { ComponentType, ReactNode } from "react"
 import { Button } from "@/components/ui/button"
 import type { EngineSnapshot } from "@/engine/machine"
 import type { CanvasWorkspace } from "@/ui/shell/use-canvas-workspace"
+import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
+import type { SessionScope } from "@/engine/session-scope"
 import type { SessionClient } from "@/engine/client"
 import { ConversationThread, type ConversationThreadProps } from "@/ui/thread/conversation-thread"
 import { TodoBar } from "@/ui/todo/todo-bar"
@@ -52,7 +54,10 @@ export type AppFrameMainSurfaceProps = {
   onRetryProjectCreation: () => void
   retryConversationHydration: () => void
   onOpenSettings: (tab: SettingsTab, returnTarget?: HTMLElement | null) => void
-  shareClient: Pick<SessionClient, "createShare" | "revokeShare">
+  shareClient: Pick<SessionClient, "readShare" | "createShare" | "revokeShare">
+  shareReadBoundary?: ProjectReadBoundary
+  shareScope?: SessionScope
+  sharePreview?: boolean
   thread: Thread
   conversationProps: ConversationThreadProps
   emptyState: ComponentType<EmptyStateProps>
@@ -125,6 +130,9 @@ export function AppFrameMainSurface({
   retryConversationHydration,
   onOpenSettings,
   shareClient,
+  shareReadBoundary,
+  shareScope,
+  sharePreview,
   thread,
   conversationProps,
   emptyState: EmptyState,
@@ -151,6 +159,9 @@ export function AppFrameMainSurface({
         <WorkspaceHeader
           activeId={activeId}
           shareClient={shareClient}
+          {...(shareReadBoundary === undefined ? {} : { shareReadBoundary })}
+          {...(shareScope === undefined ? {} : { shareScope })}
+          {...(sharePreview === undefined ? {} : { sharePreview })}
           onOpenSettings={onOpenSettings}
           {...(brandName === undefined ? {} : { brandName })}
           emptyWorkspace={!showConversation}

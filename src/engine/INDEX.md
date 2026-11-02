@@ -1,3 +1,7 @@
+## B-10 会话分享 metadata（候选）
+
+`SessionClient.readShare`复用原分享请求的完整10秒/1MiB/raw JSON与取消边界，消费正式BFF2e737cad metadata投影生成的closed decoder；GET以真实SessionScope形成scope/project_ref，不发送命令头。create/revoke保原两参数兼容，并可接当前scope；原ACK只确认请求，UI须另读当前事实，不在engine造分享owner。
+
 Custom API draft selection lives in `custom-api-selection.ts` as immutable profileId/expectedStateVersion references (max32, unique profile IDs), separately from MCP Connection IDs. `machine.ts` scopes and freezes this safe intent per submission; no credentials/instructions or account preference. Formal853ca/Public28.17 serialization, browser original-key recovery and private snapshot hydration use the same generated safe-ref schema; API restoration has its own manual-selection version guard.
 
 2026-10-28 最终答复引用沿原AG-UI/快照/parts读取链消费：仅exact Run与公共revision可建立分层事实；旧版本、跨页不一致和未完整正文不替代新事实。无新读取通道，正常配对状态见CURRENT。

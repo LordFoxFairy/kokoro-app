@@ -9,7 +9,7 @@ vi.mock("@/lib/server/product-session", () => ({
 vi.mock("@/lib/server/upstream-http", () => ({
   requestWithDomain: mocks.requestWithDomain,
 }));
-import { DELETE, POST } from "@/app/api/session/[...path]/route";
+import { DELETE, POST, GET } from "@/app/api/session/[...path]/route";
 const context = {
   params: Promise.resolve({ path: ["sessions", "opaque/old", "share"] }),
 };
@@ -216,3 +216,46 @@ it("rejects a slow endless response at the same absolute deadline and cancels it
   expect((await pending).status).toBe(503);
   expect(cancel).toHaveBeenCalledOnce();
 });
+
+
+const metadataRequest = (query = "?scope=direct", headers: Record<string, string> = {}) => new Request("http://localhost/api/session/sessions/opaque%2Fold/share" + query, { headers: { host: "web.test", ...headers } })
+function metadataUpstream(share: unknown) {
+  mocks.requestWithDomain.mockImplementation(async (_u, _d, o) => Response.json({ data: { share }, meta: { request_id: o.headers.get("x-kokoro-request-id") } }, { headers: { "cache-control": "private, no-store", "x-request-id": o.headers.get("x-kokoro-request-id") } }))
+}
+it.each([null, { share_id: "shr_original", created_at: "2026-11-02T00:00:00.000Z", expires_at: null }])("reads exact share metadata without a command or browser credential", async share => {
+  metadataUpstream(share)
+  const response = await GET(metadataRequest("?project_ref=project%2Fopaque"), context)
+  expect(response.status).toBe(200)
+  expect(await response.json()).toEqual({ share })
+  expect(mocks.requestWithDomain).toHaveBeenCalledTimes(1)
+  const [url, , options] = mocks.requestWithDomain.mock.calls[0]!
+  expect(url).toBe("http://bff.test/v1/sessions/opaque%2Fold/share?project_ref=project%2Fopaque")
+  expect(options.method).toBe("GET")
+  expect(options.body).toBeUndefined()
+  expect(options.headers.has("idempotency-key")).toBe(false)
+  expect(options.headers.has("content-type")).toBe(false)
+  expect(options.headers.has("cookie")).toBe(false)
+  expect(response.headers.get("cache-control")).toContain("no-store")
+})
+it.each([{"idempotency-key":"forged"},{"content-type":"application/json"},{"content-length":"0"},{"if-match":"version"},{"last-event-id":"event"},{origin:"http://foreign.test"}])("rejects GET command or foreign headers before admission: %j", async headers => {
+  expect((await GET(metadataRequest("?scope=direct", headers), context)).status).toBe(headers.origin ? 403 : 400)
+  expect(mocks.currentProductSession).not.toHaveBeenCalled()
+  expect(mocks.requestWithDomain).not.toHaveBeenCalled()
+})
+it.each(["?scope=direct&project_ref=project", "?scope=direct&scope=direct", "?future=1", "?project_ref="])("rejects an ambiguous metadata query %s", async query => {
+  expect((await GET(metadataRequest(query), context)).status).toBe(400)
+  expect(mocks.requestWithDomain).not.toHaveBeenCalled()
+})
+it("preserves inaccessible metadata 404 as an error, never share:null", async () => {
+  mocks.requestWithDomain.mockImplementation(async (_u, _d, o) => Response.json({ error: { code: "session_not_found", message: "Not found" }, meta: { request_id: o.headers.get("x-kokoro-request-id") } }, { status: 404, headers: { "cache-control": "no-store", "x-request-id": o.headers.get("x-kokoro-request-id") } }))
+  const response = await GET(metadataRequest(), context)
+  expect(response.status).toBe(404)
+  expect(await response.json()).toMatchObject({ error: { code: "session_not_found" } })
+})
+it("rejects duplicate raw metadata and a retired final identity", async () => {
+  mocks.requestWithDomain.mockImplementation(async (_u, _d, o) => new Response('{"data":{"share":null,"share":null},"meta":{"request_id":'+JSON.stringify(o.headers.get("x-kokoro-request-id"))+'}}', { headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": o.headers.get("x-kokoro-request-id") } }))
+  expect((await GET(metadataRequest(), context)).status).toBe(502)
+  metadataUpstream(null)
+  mocks.currentProductSession.mockResolvedValueOnce(session).mockResolvedValueOnce({ ...session, generation: 2 })
+  expect((await GET(metadataRequest(), context)).status).toBe(401)
+})

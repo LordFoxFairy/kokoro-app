@@ -1,3 +1,7 @@
+## B-10 分享 metadata 精确 GET（候选）
+
+`session-share.ts`复用原精确分享adapter承接GET/POST/DELETE，catch-all仅增加此GET分派；读取拒命令头/body、保scope/project_ref及首末相同Product Session、完整10秒/1MiB/rawJSON边界。GET成功schema来自固定BFF2e737cad正规投影，404/坏wire不降为share:null；原其它Chat/SSE与旧public artifact保持。
+
 ## ScheduledTask 运行记录薄桥（Public29候选）
 
 `scheduled-task-runs.ts`只承接现GET /api/scheduled-task-runs→BFF /v1/scheduled-task-runs；Product Session/可信headers与初末精确session重核、10秒请求至EOF总预算、opaque分页/strict JSON/bytes/取消保持。无直接owner资源、业务存储、自动写或通用代理；对应route对非GET显式拒绝。

@@ -1,3 +1,9 @@
+## 2026-11-02 B-10 会话分享权威读回（候选）
+
+沿原 SessionClient、精确 session-share 同源 adapter 和 AppFrame→WorkspaceHeader→ShareButton 接线，不新增客户端、服务或分享 owner。唯一新增 use-session-share 管理窗口的只读 metadata、显式命令与退休：打开/重开/可见焦点恢复仅 GET；权威 share:null 才可创建，已有分享显示原链接，读错不可冒私有。显式创建/撤销后必须 GET 回读；未知只允许读核实，不自动重放命令。subject/generation/admitted、client、sessionId、SessionScope 与 preview 绑定窗口，切换立即清旧链接并取消/丢弃迟到结果；原双击锁和精确键盘回焦保持。命令与回读共用一次10秒窗口；失败重试保可见反馈/同步pending，仅本控件仍持焦点时恢复。恢复焦点读取若出现不同share ID，原撤销确认退役。
+
+消费正式 BFF2e737cad9649460dc477fc7d96ba593783fef619 的具名 session-share-metadata-browser/1.0.0 投影（SHA112d6e9be1f3969b7820f85a06e627966b72d669b02898d7f57f64e18d03bb2f），它机械提取 Public29.1 的 exact GET/refs 闭包；源 canonical SHA4e4ce620887b1a1a431a9346d0d259aa5bed3bd5af06f4428f11e9054173418e。原 Public29/12 generators/SDK 与历史 proofs 逐字保留，仅作为原操作固定消费基线，不冒当前完整合同。新增投影由精确 provenance/正规 generator 生成闭集 decoder/type；不新增 browser BFF 路由或手写 wire。
+
 ## 2026-11-02 B-01 已断开私有 MCP 的独立新授权（候选）
 
 正式 owner 为 Platform2cf63945 与 BFFe3b5fb75 的 browser-private reauthorization profile1.0.0；复用既有 Management command、actor/window/generation 围栏与 RAM 生命周期，不新增 journal 或持久化恢复机制。断开配置窗口终身只读；唯一新增显式“创建新授权”意图冻结原 server/source connector/双 CAS/key，未知结果仅重发原 POST，不能与 Prepare receipt GET 或 OAuth reconnect 混用。

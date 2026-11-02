@@ -1,3 +1,9 @@
+## 2026-11-02 B-10 会话分享读回（候选，待独审与浏览器）
+
+已消费正式BFF2e737cad的具名metadata投影，原Public29历史输入/12生成链/SDK保留。原ShareButton打开、重开与可见focus仅GET；权威空态才可创建，命令ACK不直接当当前链接，创建/撤销后再读。读取失败可见且只GET重试；subject/generation/admitted/session/client/scope/preview变化清旧URL、取消并丢弃迟到响应，旧链接的撤销确认不跨新share ID。预览/测试readShare仅零网络fixture，实际preview分享仍禁用。
+
+新增6项行为原源码全RED（6失败/25未选），最终8个相关文件145项通过；scope ESLint通过。完整非增量TypeScript检查通过；末轮预算fixture只补显式Promise泛型，运行断言及行为不变。旧组件测试为异步GET增加等待，原单全局share替身改按session存储，保原零发布/关闭/迟到/双击/复制/撤销/精确回焦断言，不因红测试删风险。未运行无关全仓contract/default/build/E2E；正式候选浏览器与运行激活由Root负责，不能据此称B10全场景或Task B完成。
+
 ## 2026-11-02 B-04 历史恢复说明的语言回读
 
 历史版本恢复原有三个文案键只在中文源存在，英文等界面回落为中文。现仅在八个现有非中文 locale 补齐恢复、确认标题与说明，明确保存为新版本且不自动升级安装；中文源、合成机制、生命周期和权限不变。原 resolver 29 项由实现方与主方分别通过，精确 ESLint、非增量 TypeScript 检查通过；主方逐项复核八文件差异，无新增业务契约或运行依赖。语言浏览器回读另行核验，不称全部 Skills 管理权限完成。

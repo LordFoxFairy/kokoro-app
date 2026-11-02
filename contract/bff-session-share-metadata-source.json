@@ -1,0 +1,14 @@
+{
+  "owner": "kokoro-bff",
+  "owner_commit": "2e737cad9649460dc477fc7d96ba593783fef619",
+  "candidate": false,
+  "source_path": "contract/openapi/browser/v1/session-share-metadata.json",
+  "source_sha256": "112d6e9be1f3969b7820f85a06e627966b72d669b02898d7f57f64e18d03bb2f",
+  "profile": "session-share-metadata-browser",
+  "profile_version": "1.0.0",
+  "canonical_source": {
+    "path": "contract/openapi/v1/openapi.yaml",
+    "version": "29.1.0",
+    "sha256": "4e4ce620887b1a1a431a9346d0d259aa5bed3bd5af06f4428f11e9054173418e"
+  }
+}

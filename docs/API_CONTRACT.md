@@ -1,3 +1,9 @@
+## 2026-11-02 B-10 会话分享 metadata 消费（候选）
+
+新读取为 GET /api/session/sessions/{id}/share，精确 adapter 仅转正式 GET /v1/sessions/{id}/share；scope=direct 或 project_ref 沿真实 SessionScope，主体来自原 Product Session。拒 body/命令头/未知重复 query；首末同 session 核验与总10秒/1MiB/raw UTF8重复key/完整EOF限制保持。200 平面 data 为 {share:null|{share_id,created_at,expires_at}}；404/读错不当未分享。浏览器无内部凭据；无写入、自动发布或撤销。
+
+正式 BFF2e737cad9649460dc477fc7d96ba593783fef619 / contract/openapi/browser/v1/session-share-metadata.json / SHA112d6e9be1f3969b7820f85a06e627966b72d669b02898d7f57f64e18d03bb2f 通过具名正规 generator 生成类型/decoder，canonical29.1源摘要4e4ce620887b1a1a431a9346d0d259aa5bed3bd5af06f4428f11e9054173418e。原29原件与旧三操作SDK不更新、不宣称它们覆盖本新增GET；本投影是owner正式单源派生，未增加协议分支。显式POST/DELETE仍原 wire/幂等语义，成功/未知之后仅GET核现事实，不自动重试写。
+
 ## 2026-11-02 B-01 私有 MCP 新授权消费者（候选）
 
 新增独立 browser-private profile，原件固定 BFF `e3b5fb759ee89523918ac06ebf3a738b4df4e346`，`contract/openapi/browser/v1/mcp-reauthorization.json`，SHA256 `196ce32b86cd20492fb4b368bf59c4a8640c62a24afb3e630e81b90eb4234caa`；Platform owner `2cf63945feecd49f5b79c3532bbd7cbc5b70a3f8`。`scripts/generate-bff-mcp-reauthorization.mjs` 从该固定原件生成 decoder；Public29、Prepare/receipt、图标及其它独立 pin 不漂移。

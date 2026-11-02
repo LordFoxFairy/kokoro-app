@@ -1,3 +1,7 @@
+## 2026-11-02 B-10 分享 metadata 消费（候选）
+
+`ui/share/use-session-share`在原分享控件下统一管理metadata GET、显式命令后的权威读回与身份/范围退休；原AppFrame→Header只透传可信boundary和SessionScope。独立正式BFF2e737cad投影由新小generator生成decoder/type，原Public29/12生成器/SDK不动。源码局部门与剩余浏览器范围见CURRENT。
+
 ## 2026-11-02 侧栏管理入口的会话恢复
 
 `src/components/blocks/workspace-rail/workspace-rail-account.tsx` 将管理资格投影绑定现有 Product 读取主体与代际；准入前不读，退休立即隐藏旧入口，真实401沿原 readmission owner 处理。没有新增权限、接口或角色；当前验证及管理后台缺口见 `docs/CURRENT.md`。
