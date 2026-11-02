@@ -251,6 +251,30 @@ describe("fixed-tenant Team Product UI", () => {
     );
   });
 
+  it.each(["members", "invitations"] as const)("recovers %s from an invalid next-page cursor through an explicit first-page read only", async (part) => {
+    const list = vi.fn()
+      .mockResolvedValueOnce({ items: part === "members" ? members : invitations, nextCursor: "expired-cursor", requestId: "first" })
+      .mockRejectedValueOnce(new TeamClientError("Invalid cursor", "team_query_invalid", 400, "invalid-cursor"))
+      .mockResolvedValue({ items: part === "members" ? [members[0]] : [], nextCursor: null, requestId: "fresh" });
+    const api = client(part === "members" ? { listMembers: list } : { listInvitations: list });
+    show(api);
+    const more = await screen.findByTestId(`${part}-more`);
+    expect(screen.queryByTestId("team-notice")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("team-reconcile")).not.toBeInTheDocument();
+    fireEvent.click(more);
+    const recovery = await screen.findByTestId("team-reconcile");
+    expect(list.mock.calls[1]?.[0]).toEqual(expect.objectContaining({ cursor: "expired-cursor" }));
+    fireEvent.click(recovery);
+    await waitFor(() => expect(screen.queryByTestId("team-notice")).not.toBeInTheDocument());
+    expect(list).toHaveBeenCalledTimes(3);
+    expect(list.mock.calls[2]?.[0]).toEqual(expect.objectContaining({ limit: 25 }));
+    expect(list.mock.calls[2]?.[0]).not.toHaveProperty("cursor");
+    expect(screen.queryByTestId(`${part}-more`)).not.toBeInTheDocument();
+    expect(screen.queryByTestId(part === "members" ? "member-row-member-bob" : "invitation-row-inv-1")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("team-continue")).not.toBeInTheDocument();
+    for (const mutation of [api.createInvitation, api.resendInvitation, api.cancelInvitation, api.replaceMemberRoles, api.removeMember, api.leave]) expect(mutation).not.toHaveBeenCalled();
+  });
+
   it("finds the actor and all roles beyond the first pages before deriving controls", async () => {
     const api = client({
       listMembers: vi

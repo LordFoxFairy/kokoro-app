@@ -202,7 +202,7 @@ function TeamActiveContent({
               data-testid="team-notice"
             >
               {notice}
-              {needsRefresh && (
+              {(needsRefresh || state.notice === "incompleteRead") && (
                 <Button
                   variant="outline"
                   className={styles.retry}
