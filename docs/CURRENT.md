@@ -1,3 +1,9 @@
+## 2026-11-02 B-07 设备列表的可见读取错误
+
+首次设备读取失败和分页失败现在复用共享 Alert / 原本地化文案显示，分页失败保留已确认会话，显式重读成功后清错。原 hook、身份代际、分页 cursor 与未知移除的核对围栏不变，不自动重放 DELETE，无 API / Schema 变化。新增行为原源码复现 2 失败 / 5 通过；最终设备组件及原 hook 两文件 19 项通过，精确 ESLint、完整非增量 TypeScript 检查与 diff-check 通过；两个实现 / 测试文件冻结后独立只读审查无确定 P0–P2。
+
+这是局部修复，未重跑此前无关全仓门，原完整测试失败仍保留；候选浏览器及正式运行源激活尚待核验，不以组件测试声明真实设备服务或 B-07 全部完成。
+
 ## 2026-11-02 已确认退出的跨标签数据退役
 
 Product 客户端仅在正式 200/signed_out 或 503/browser_cookie_cleared ACK 后删除原 browser subject hint，唤醒已有 storage → Session 重核；marker 不提供认证。原主体更换、已观察到的 ABA 和 caller AbortSignal 退休旧结果；stale_session、未知或不匹配 ACK 不广播、不导航，无自动重试。存储不可用仍允许已确认退出的受限 issuer handoff。没有新增 HTTP/Schema/登录协议；同主体未产生 marker 变化或尚未交付的事件不被冒称成强 session fencing。
