@@ -178,6 +178,38 @@ describe("fixed-tenant Team Product UI", () => {
     ).toBeGreaterThan(1);
   });
 
+  it.each(["create", "cancel"] as const)("exposes only the invitation command allowed by a custom %s permission", async (permission) => {
+    const custom: TeamRole = {
+      role_id: "role-invitation-limited",
+      name: "invitation_limited",
+      kind: "custom",
+      permissions: { member: ["read"], invitation: ["read", permission] },
+    };
+    const api = client({
+      listMembers: vi.fn().mockResolvedValue({
+        items: members.map((member) => member.user_id === "user-me" ? { ...member, roles: [custom.name] } : member),
+        nextCursor: null,
+        requestId: "req-limited-members",
+      }),
+      listRoles: vi.fn().mockResolvedValue({ items: [...roles, custom], nextCursor: null, requestId: "req-limited-roles" }),
+    });
+    show(api);
+    const invitation = await screen.findByTestId("invitation-row-inv-1");
+    const allowed = permission === "create" ? "resend" : "cancel";
+    const forbidden = permission === "create" ? "cancel" : "resend";
+    const button = within(invitation).getByTestId(`invitation-${allowed}-inv-1`);
+    expect(button).toBeEnabled();
+    expect(within(invitation).queryByTestId(`invitation-${forbidden}-inv-1`)).not.toBeInTheDocument();
+    fireEvent.click(button);
+    const action = permission === "create" ? api.resendInvitation : api.cancelInvitation;
+    const other = permission === "create" ? api.cancelInvitation : api.resendInvitation;
+    await waitFor(() => expect(action).toHaveBeenCalledWith("inv-1", expect.any(AbortSignal)));
+    expect(action).toHaveBeenCalledTimes(1);
+    expect(other).not.toHaveBeenCalled();
+    expect(api.createInvitation).not.toHaveBeenCalled();
+    await waitFor(() => expect(api.listRoles).toHaveBeenCalledTimes(2));
+  });
+
   it("replaces roles[] and removes by member_id, not IAM user_id", async () => {
     const api = client();
     show(api);
