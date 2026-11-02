@@ -3254,10 +3254,69 @@ it.each([true, false])("Skill Share DELETE accepts only an exact revoked ACK (%s
   expect(vi.mocked(requestWithDomain).mock.calls[0]?.[2]?.body).toBeUndefined();
 });
 
+it.each([null, "0"])("Skill Share DELETE consumes actual empty Next stream EOF with content-length %s before forwarding bodyless", async length => {
+  const { DELETE } = await import("@/app/api/hub/[...path]/route");
+  const data = { share_id: "share-old", source_ref: "skill:revision-old", url: "http://localhost/skills/shared/share-old", created_at: "2026-10-10T00:00:00Z", expires_at: null, revoked_at: "2026-11-03T00:00:00Z" };
+  vi.mocked(requestWithDomain).mockResolvedValue(Response.json({ data }, { headers: { "cache-control": "no-store", "x-request-id": "share-delete" } }));
+  let eof!: () => void;
+  const request = new Request("http://localhost/api/hub/skill-shares/share-old", {
+    method: "DELETE", headers: { origin: "http://localhost", ...(length === null ? {} : { "content-length": length }) },
+    body: new ReadableStream<Uint8Array>({ start(controller) { eof = () => controller.close() } }), duplex: "half",
+  } as RequestInit & { duplex: string });
+  const pending = DELETE(request, params(["skill-shares", "share-old"]));
+  await vi.waitFor(() => expect(request.body?.locked).toBe(true));
+  expect(requestWithDomain).not.toHaveBeenCalled();
+  eof();
+  expect((await pending).status).toBe(200);
+  expect(requestWithDomain).toHaveBeenCalledOnce();
+  const [target,, options] = vi.mocked(requestWithDomain).mock.calls[0]!;
+  expect(target).toBe("http://bff.test/v1/skill-shares/share-old");
+  expect(options?.method).toBe("DELETE");
+  expect(options?.body).toBeUndefined();
+  const headers = new Headers(options?.headers);
+  expect(headers.has("content-length")).toBe(false);
+  expect(headers.has("transfer-encoding")).toBe(false);
+});
+it.each(["byte", "encoding", "noncanonical"])("Skill Share DELETE rejects actual bytes or forbidden empty framing (%s)", async mode => {
+  const { DELETE } = await import("@/app/api/hub/[...path]/route");
+  const request = new Request("http://localhost/api/hub/skill-shares/share-old", {
+    method: "DELETE", headers: { origin: "http://localhost", "content-length": mode === "noncanonical" ? "00" : "0", ...(mode === "encoding" ? { "transfer-encoding": "chunked" } : {}) },
+    body: new ReadableStream<Uint8Array>({ start(controller) { if (mode === "byte") controller.enqueue(new Uint8Array([1])); controller.close() } }), duplex: "half",
+  } as RequestInit & { duplex: string });
+  expect((await DELETE(request, params(["skill-shares", "share-old"]))).status).toBe(400);
+  expect(requestWithDomain).not.toHaveBeenCalled();
+});
+it.each(["cancel", "deadline"])("Skill Share DELETE bounds an unfinished empty stream on %s without command IO", async mode => {
+  const { DELETE } = await import("@/app/api/hub/[...path]/route");
+  const caller = new AbortController(), cancel = vi.fn();
+  if (mode === "deadline") vi.useFakeTimers();
+  try {
+    const request = new Request("http://localhost/api/hub/skill-shares/share-old", {
+      method: "DELETE", headers: { origin: "http://localhost", "content-length": "0" }, signal: caller.signal,
+      body: new ReadableStream<Uint8Array>({ cancel }), duplex: "half",
+    } as RequestInit & { duplex: string });
+    const pending = DELETE(request, params(["skill-shares", "share-old"]));
+    await vi.waitFor(() => expect(request.body?.locked).toBe(true));
+    if (mode === "cancel") caller.abort(); else await vi.advanceTimersByTimeAsync(10_001);
+    expect((await pending).status).toBe(503);
+    expect(cancel).toHaveBeenCalled();
+    expect(requestWithDomain).not.toHaveBeenCalled();
+    if (mode === "deadline") expect(vi.getTimerCount()).toBe(0);
+  } finally { vi.useRealTimers() }
+});
+
+it.each(["body", "length"])("Skill Share GET still rejects empty %s without owner IO", async mode => {
+  const { GET } = await import("@/app/api/hub/[...path]/route");
+  const request = new Request("http://localhost/api/hub/skill-shares/share-old", { headers: mode === "length" ? { "content-length": "0" } : {} });
+  if (mode === "body") Object.defineProperty(request, "body", { value: new ReadableStream<Uint8Array>({ start(controller) { controller.close() } }) });
+  expect((await GET(request, params(["skill-shares", "share-old"]))).status).toBe(400);
+  expect(requestWithDomain).not.toHaveBeenCalled();
+});
+
 it.each(["origin", "body", "query", "key", "framing"])("Skill Share DELETE rejects %s before owner IO", async mode => {
   const { DELETE } = await import("@/app/api/hub/[...path]/route");
   const response = await DELETE(new Request(`http://localhost/api/hub/skill-shares/share-old${mode === "query" ? "?extra=1" : ""}`, {
-    method: "DELETE", headers: { origin: mode === "origin" ? "https://foreign.example" : "http://localhost", ...(mode === "key" ? { "idempotency-key": "key" } : {}), ...(mode === "framing" ? { "content-length": "0" } : {}) },
+    method: "DELETE", headers: { origin: mode === "origin" ? "https://foreign.example" : "http://localhost", ...(mode === "key" ? { "idempotency-key": "key" } : {}), ...(mode === "framing" ? { "content-length": "1" } : {}) },
     ...(mode === "body" ? { body: "{}" } : {}),
   }), params(["skill-shares", "share-old"]));
   expect(response.status).toBeGreaterThanOrEqual(400);

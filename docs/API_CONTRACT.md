@@ -814,7 +814,7 @@ JSON导入仅提示当前owner支持的HTTP格式，不预填命令，窄短视�
 ## T-K03.14-WEB-SHARE D0（目标，尚未实施）
 BFF正式 `e1769b56aefa2e00e6460195c049cea81a9eea3b` / public `13.3.0` / 137 operations / canonical SHA256 `0a9683b38cfd30534931dd0cd7821e3ccded94d6d15613a711cebc1f1e83a209`；Platform `91bc3655ebd3648cb8f8ccddfacb5628bdeb1c5c`。 机器唯一事实源为正式BFF `contract/openapi/v1/openapi.yaml`；原Resolve六字段及现series GetSkill不变。
 
-闭集同源：POST `/api/hub/skill-shares`→POST `/v1/skill-shares`；GET／DELETE `/api/hub/skill-shares/{share_id}`→正式同方法同路径；GET `/api/hub/skill-shares/{share_id}/skill`→GET正式nested路径。拒其它method/segment/query、GET／DELETE body及任何Idempotency-Key；DELETE另拒content-length／transfer-encoding并要求可信Origin。POST只接受strict source_ref/可选expires_at，无自动重试。DELETE消费既有Public29.2 owner方法，不扩大creator撤销资格。
+闭集同源：POST `/api/hub/skill-shares`→POST `/v1/skill-shares`；GET／DELETE `/api/hub/skill-shares/{share_id}`→正式同方法同路径；GET `/api/hub/skill-shares/{share_id}/skill`→GET正式nested路径。拒其它method/segment/query、GET body及任何Idempotency-Key；DELETE只接受content-length缺省或规范0、拒transfer-encoding并要求可信Origin；对Next空流在同一10秒总预算内实际读至EOF并核零字节后才转发，不带body/framing。POST只接受strict source_ref/可选expires_at，无自动重试。DELETE消费既有Public29.2 owner方法，不扩大creator撤销资格。
 
 详情仅管理当前主体显式Create ACK对应的链接，不以技能作者推断share creator。缓存链接复制前Resolve；撤销确认取消零写、pending禁重，严格200六字段ACK必须为原share_id／source_ref、同源精确URL且revoked_at非null。未知只GET原ID恢复，404只表示不可用、不冒本人撤销成功，200只表示仍有效、不自动复制或重放DELETE。主体／资源／窗口／准入退休后拒迟到投影；硬刷新无权威ACK时须由用户显式分享取得本人的active ACK，不造listing。
 

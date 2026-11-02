@@ -1684,13 +1684,14 @@ async function proxySkillShare(
   if (
     operation !== "create" &&
     operation !== "download" &&
+    operation !== "revoke" &&
     (request.body !== null ||
       request.headers.has("content-length") ||
       request.headers.has("transfer-encoding"))
   )
     return fail("invalidSkillRequest");
   if (
-    operation === "download" &&
+    (operation === "download" || operation === "revoke") &&
     (request.headers.has("transfer-encoding") ||
       (request.headers.has("content-length") &&
         request.headers.get("content-length") !== "0"))
@@ -1745,7 +1746,7 @@ async function proxySkillShare(
           joined.throwIfAborted();
           if (part.done) break;
           count += part.value.byteLength;
-          if (operation === "download" && count > 0)
+          if ((operation === "download" || operation === "revoke") && count > 0)
             return fail("invalidSkillRequest");
           if (count > MAX_SKILL_COMMAND_BYTES) return fail("tooLarge");
           chunks.push(part.value);
