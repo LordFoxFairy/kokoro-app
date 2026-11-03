@@ -55,7 +55,7 @@ describe("/iam/[...path] native relay", () => {
       browserRequest("https://web.example.test/iam/verify-email?token=one", {
         headers: {
           accept: "application/json",
-          cookie: "kokoro_session=product; authjs.session-token=rp; kokoro-issuer.session_token=issuer",
+          cookie: "kokoro_session=product; authjs.session-token=rp; __Secure-kokoro-issuer.session_token=issuer",
           origin: "https://web.example.test",
           "x-kokoro-service": "attacker",
           "x-kokoro-internal-secret": "attacker-secret",
@@ -68,7 +68,7 @@ describe("/iam/[...path] native relay", () => {
     expect(await response.text()).toBe("{}")
     const call = requestIamRelay.mock.calls[0]?.[0] as { url: string; headers: Headers }
     expect(call.url).toBe("http://bff.test/iam/verify-email?token=one")
-    expect(call.headers.get("cookie")).toBe("kokoro-issuer.session_token=issuer")
+    expect(call.headers.get("cookie")).toBe("__Secure-kokoro-issuer.session_token=issuer")
     expect(call.headers.get("x-kokoro-service")).toBe("web-bff")
     expect(call.headers.get("x-kokoro-internal-secret")).toBe("web-bff-secret")
     expect(call.headers.has("authorization")).toBe(false)
@@ -86,7 +86,7 @@ describe("/iam/[...path] native relay", () => {
       upstream({
         status: 302,
         headers: { location: "/auth/select-tenant?interaction=one", "cache-control": "no-store", "x-request-id": "issuer-request" },
-        setCookies: ["kokoro-issuer.session_token=one; Path=/; HttpOnly; SameSite=Lax", "kokoro-issuer.session_data=two; Path=/; HttpOnly; SameSite=Lax"],
+        setCookies: ["__Secure-kokoro-issuer.session_token=one; Path=/; HttpOnly; SameSite=Lax; Secure", "__Secure-kokoro-issuer.session_data=two; Path=/; HttpOnly; SameSite=Lax; Secure"],
         body: "redirect",
       }),
     )
@@ -95,8 +95,8 @@ describe("/iam/[...path] native relay", () => {
     expect(response.status).toBe(302)
     expect(response.headers.get("location")).toBe("/auth/select-tenant?interaction=one")
     expect(response.headers.getSetCookie()).toEqual([
-      "kokoro-issuer.session_token=one; Path=/; HttpOnly; SameSite=Lax",
-      "kokoro-issuer.session_data=two; Path=/; HttpOnly; SameSite=Lax",
+      "__Secure-kokoro-issuer.session_token=one; Path=/; HttpOnly; SameSite=Lax; Secure",
+      "__Secure-kokoro-issuer.session_data=two; Path=/; HttpOnly; SameSite=Lax; Secure",
     ])
   })
 
@@ -106,14 +106,14 @@ describe("/iam/[...path] native relay", () => {
     const response = await POST(
       browserRequest("https://web.example.test/iam/sign-out", {
         method: "POST",
-        headers: { origin: "https://web.example.test", cookie: "authjs.session-token=rp; kokoro-issuer.session_token=issuer" },
+        headers: { origin: "https://web.example.test", cookie: "authjs.session-token=rp; __Secure-kokoro-issuer.session_token=issuer" },
       }),
       params(["sign-out"]),
     )
     expect(response.status).toBe(204)
     const call = requestIamRelay.mock.calls[0]?.[0] as { url: string; headers: Headers }
     expect(call.url).toBe("http://bff.test/iam/sign-out")
-    expect(call.headers.get("cookie")).toBe("kokoro-issuer.session_token=issuer")
+    expect(call.headers.get("cookie")).toBe("__Secure-kokoro-issuer.session_token=issuer")
   })
 
   it("accepts the empty urlencoded body emitted by the confirmation form", async () => {

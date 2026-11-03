@@ -34,7 +34,7 @@ describe("static invitation GET", () => {
     consumeIamInteractionCsrf.mockReset()
     consumeIamInteractionCsrf.mockResolvedValue(true)
     issueIamInteractionCsrf.mockImplementation(async ({ cookieName }: { cookieName: string }) => ({
-      token: "csrf-proof", cookie: `${cookieName}=csrf-proof; Path=/iam/interactions/invitation; HttpOnly; SameSite=Lax`,
+      token: "csrf-proof", cookie: `${cookieName}=csrf-proof; Path=/iam/interactions/invitation; HttpOnly; SameSite=Lax; Secure`,
     }))
   })
   afterEach(() => { for (const key of Object.keys(ENV)) delete process.env[key] })
@@ -63,7 +63,7 @@ describe("static invitation GET", () => {
         roles: ["member"], status: "pending", expires_at: "2026-10-01T12:00:00Z" } })) })
     const { GET } = await import("@/app/iam/interactions/invitation/route")
     const response = await GET(request(`/iam/interactions/invitation?id=${ID}`, {
-      cookie: "kokoro_session=product; kokoro-issuer.session_token=issuer-one",
+      cookie: "kokoro_session=product; __Secure-kokoro-issuer.session_token=issuer-one",
     }))
     const html = await response.text()
     expect(response.status).toBe(200)
@@ -73,13 +73,13 @@ describe("static invitation GET", () => {
     expect(html).toContain('name="decision" value="accept"')
     expect(html).toContain('name="decision" value="reject"')
     expect(issueIamInteractionCsrf).toHaveBeenCalledWith(expect.objectContaining({
-      query: `?id=${ID}`, issuerCookie: "kokoro-issuer.session_token=issuer-one", context: "tenant-one:accept",
+      query: `?id=${ID}`, issuerCookie: "__Secure-kokoro-issuer.session_token=issuer-one", context: "tenant-one:accept",
       cookieName: "kokoro_iam_csrf_invite_accept" }))
     expect(issueIamInteractionCsrf).toHaveBeenCalledWith(expect.objectContaining({
       context: "tenant-one:reject", cookieName: "kokoro_iam_csrf_invite_reject" }))
     const call = requestIamRelay.mock.calls[0]?.[0] as { url: string; headers: Headers }
     expect(call.url).toBe(`http://bff.test/iam/v1/tenants/tenant-one/invitations/${ID}/context`)
-    expect(call.headers.get("cookie")).toBe("kokoro-issuer.session_token=issuer-one")
+    expect(call.headers.get("cookie")).toBe("__Secure-kokoro-issuer.session_token=issuer-one")
     expect(call.headers.get("x-kokoro-service")).toBe("web-bff")
     expect(call.headers.has("authorization")).toBe(false)
   })
@@ -91,7 +91,7 @@ describe("static invitation GET", () => {
     expect(requestIamRelay).not.toHaveBeenCalled()
     requestIamRelay.mockResolvedValue({ status: 404, headers: new Headers({ "content-type": "application/json" }), setCookies: [],
       body: new TextEncoder().encode(JSON.stringify({ error: { code: "INVITATION_NOT_FOUND", message: "raw owner message" } })) })
-    const hidden = await GET(request(`/iam/interactions/invitation?id=${ID}`, { cookie: "kokoro-issuer.session_token=wrong" }))
+    const hidden = await GET(request(`/iam/interactions/invitation?id=${ID}`, { cookie: "__Secure-kokoro-issuer.session_token=wrong" }))
     expect(hidden.status).toBe(404)
     expect(await hidden.text()).not.toContain("raw owner message")
   })
@@ -100,7 +100,7 @@ describe("static invitation GET", () => {
     requestIamRelay.mockResolvedValue({ status: 409, headers: new Headers({ "content-type": "application/json" }), setCookies: [],
       body: new TextEncoder().encode(JSON.stringify({ error: { code: "INVITATION_EXPIRED", message: "secret owner text" } })) })
     const { GET } = await import("@/app/iam/interactions/invitation/route")
-    const response = await GET(request(`/iam/interactions/invitation?id=${ID}`, { cookie: "kokoro-issuer.session_token=issuer" }))
+    const response = await GET(request(`/iam/interactions/invitation?id=${ID}`, { cookie: "__Secure-kokoro-issuer.session_token=issuer" }))
     const html = await response.text()
     expect(response.status).toBe(409)
     expect(html).toContain("邀请已过期")
@@ -109,7 +109,7 @@ describe("static invitation GET", () => {
 
   it("signs in with a consumed invitation-bound proof and returns only issuer cookie and same-page navigation", async () => {
     requestIamRelay.mockResolvedValue({ status: 200, headers: new Headers({ "content-type": "application/json" }),
-      setCookies: ["kokoro-issuer.session_token=issuer; Path=/; HttpOnly; SameSite=Lax"],
+      setCookies: ["__Secure-kokoro-issuer.session_token=issuer; Path=/; HttpOnly; SameSite=Lax; Secure"],
       body: new TextEncoder().encode('{"token":"upstream-secret"}') })
     const { POST } = await import("@/app/iam/interactions/invitation/route")
     const response = await POST(request(`/iam/interactions/invitation?id=${ID}`, {
@@ -118,7 +118,7 @@ describe("static invitation GET", () => {
     }, { method: "POST", body: "decision=sign-in&email=invitee%40example.test&password=secret-password&csrf_token=csrf-proof" }))
     expect(response.status).toBe(303)
     expect(response.headers.get("location")).toBe(`/iam/interactions/invitation?id=${ID}`)
-    expect(response.headers.getSetCookie()).toContain("kokoro-issuer.session_token=issuer; Path=/; HttpOnly; SameSite=Lax")
+    expect(response.headers.getSetCookie()).toContain("__Secure-kokoro-issuer.session_token=issuer; Path=/; HttpOnly; SameSite=Lax; Secure")
     expect(await response.text()).not.toContain("upstream-secret")
     expect(consumeIamInteractionCsrf).toHaveBeenCalledWith(expect.objectContaining({ context: "sign-in", query: `?id=${ID}` }))
     const call = requestIamRelay.mock.calls[0]?.[0] as { url: string; body: Uint8Array }
@@ -187,17 +187,17 @@ describe("static invitation GET", () => {
     const { POST } = await import("@/app/iam/interactions/invitation/route")
     const response = await POST(request(`/iam/interactions/invitation?id=${ID}`, {
       origin: ORIGIN, "content-type": "application/x-www-form-urlencoded",
-      cookie: `kokoro-issuer.session_token=issuer-one; kokoro_iam_csrf_invite_${decision}=csrf-proof`,
+      cookie: `__Secure-kokoro-issuer.session_token=issuer-one; kokoro_iam_csrf_invite_${decision}=csrf-proof`,
     }, { method: "POST", body: `decision=${decision}&csrf_token=csrf-proof` }))
     expect(response.status).toBe(decision === "accept" ? 303 : 200)
     expect(response.headers.get("location")).toBe(decision === "accept" ? "/login" : null)
     expect(consumeIamInteractionCsrf).toHaveBeenCalledWith(expect.objectContaining({
-      context: `tenant-one:${decision}`, issuerCookie: "kokoro-issuer.session_token=issuer-one", query: `?id=${ID}` }))
+      context: `tenant-one:${decision}`, issuerCookie: "__Secure-kokoro-issuer.session_token=issuer-one", query: `?id=${ID}` }))
     const call = requestIamRelay.mock.calls[0]?.[0] as { url: string; method: string; body: Uint8Array; headers: Headers }
     expect(call.url).toBe(`http://bff.test/iam/v1/tenants/tenant-one/invitations/${ID}/${decision}`)
     expect(call.method).toBe("POST")
     expect(call.body.byteLength).toBe(0)
-    expect(call.headers.get("cookie")).toBe("kokoro-issuer.session_token=issuer-one")
+    expect(call.headers.get("cookie")).toBe("__Secure-kokoro-issuer.session_token=issuer-one")
     expect(call.headers.has("authorization")).toBe(false)
     expect(call.headers.has("idempotency-key")).toBe(false)
   })
@@ -210,14 +210,14 @@ describe("static invitation GET", () => {
     expect((await POST(request(`/iam/interactions/invitation?id=${ID}`, headers, init))).status).toBe(403)
     consumeIamInteractionCsrf.mockResolvedValue(false)
     expect((await POST(request(`/iam/interactions/invitation?id=${ID}`, { ...headers,
-      cookie: `${headers.cookie}; kokoro-issuer.session_token=issuer-one` }, init))).status).toBe(403)
+      cookie: `${headers.cookie}; __Secure-kokoro-issuer.session_token=issuer-one` }, init))).status).toBe(403)
     expect(requestIamRelay).not.toHaveBeenCalled()
   })
 
   it("never treats 404, unknown outcome, or a forged 200 as acceptance", async () => {
     const { POST } = await import("@/app/iam/interactions/invitation/route")
     const headers = { origin: ORIGIN, "content-type": "application/x-www-form-urlencoded",
-      cookie: "kokoro-issuer.session_token=issuer-one; kokoro_iam_csrf_invite_accept=csrf-proof" }
+      cookie: "__Secure-kokoro-issuer.session_token=issuer-one; kokoro_iam_csrf_invite_accept=csrf-proof" }
     const init = { method: "POST", body: "decision=accept&csrf_token=csrf-proof" }
     for (const result of [
       { status: 404, body: new TextEncoder().encode('{"error":{"code":"INVITATION_NOT_FOUND"}}') },
@@ -237,10 +237,10 @@ describe("static invitation GET", () => {
       body: new TextEncoder().encode(JSON.stringify({ data: { invitation_id: ID, tenant_id: "tenant-two",
         tenant_name: "Wrong tenant", roles: ["member"], status: "pending", expires_at: "2026-10-01T12:00:00Z" } })) })
     const { GET, POST } = await import("@/app/iam/interactions/invitation/route")
-    const wrong = await GET(request(`/iam/interactions/invitation?id=${ID}`, { cookie: "kokoro-issuer.session_token=issuer-one" }))
+    const wrong = await GET(request(`/iam/interactions/invitation?id=${ID}`, { cookie: "__Secure-kokoro-issuer.session_token=issuer-one" }))
     expect(wrong.status).toBe(503)
     expect(await wrong.text()).not.toContain("Wrong tenant")
-    const cookie = "kokoro-issuer.session_token=issuer-one; kokoro_iam_csrf_invite_accept=csrf-proof"
+    const cookie = "__Secure-kokoro-issuer.session_token=issuer-one; kokoro_iam_csrf_invite_accept=csrf-proof"
     expect((await POST(request(`/iam/interactions/invitation?id=${ID}`, {
       origin: "https://evil.example.test", "content-type": "application/x-www-form-urlencoded", cookie,
     }, { method: "POST", body: "decision=accept&csrf_token=csrf-proof" }))).status).toBe(403)

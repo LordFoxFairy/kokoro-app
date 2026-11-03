@@ -1,5 +1,15 @@
 > D0实现候选（2026-11-03）：已固定 BFF `34c9f997a4d86f33be2f815c43cd155ed338fe86` 的 browser-private auth-session 1.0.0（SHA256 `a7b5876632f6ad91b9fc162c9abcf48b36b2677a3b15a6a497d3305aeaea81ba`），按本节正式边界完成本地消费者切片；本仓Root完整工程门已验（证据见Root唯一计划及本仓PR）；仍是未合并的源码候选，不代表BFF真实资源、共享登录/rolling/撤权或浏览器组合通过。下方旧RP/refresh/proof叙述只保留历史语境。
 
+## I-56 HTTPS Cookie 安全模式（2026-11-03，源码候选，待 Root 复验）
+
+基线 App `bfb749c3dae0519abee7803d82f552ea3e39adcf` 的标准认证消费者已完成本仓工程验收；其 `iamRelayConfig` 仅按 `NODE_ENV=production` 选择 Secure 模式。[Root 唯一计划 I-56／§3.6](../../../docs/superpowers/plans/2026-11-01-task-a-c1-c4-technical-plan.md) 设计门通过后，本源码候选只修正该模式判定，原 HTTPS 测试按真实模式承接名称／属性。定向规则、登录与 relay 组件已验证，完整相关工程门、真实 IAM/BFF Cookie 删除及新组合浏览器仍待 Root 复验，不以基线工程通过或本地替身当 I-56 已验收。
+
+IAM 仍是唯一 Cookie owner：其 owner 切片移除 `useSecureCookies` 的 NODE_ENV 覆盖，交锁定 Better Auth 按 issuer URL 的官方默认选择名称与 Secure 属性，发行与真实资源验收另由 owner／Root 负责。App 不复制该算法或新增认证 SDK；本候选只在既有 relay config 中，以可信 canonical `KOKORO_WEB_ORIGIN` 为 public origin，采用“HTTPS **或** `NODE_ENV=production`”选择 Secure 模式。HTTP 开发保持 plain；HTTPS 开发／测试改用 Secure＋`__Secure-kokoro-issuer.`；生产 HTTPS 不变，production＋HTTP 也保留原 Secure 安全 floor，不降为 plain。此片不新增 flag、跨字段校验或 mixed-scheme 原生组合支持承诺。
+
+既有 published relay 3.0 的精确 Cookie 名及模式保持：plain 前缀 `kokoro-issuer.`，Secure 前缀 `__Secure-kokoro-issuer.`，叶名仅 `session_token`、`session_data`、`dont_remember`。每次 relay 仍按选定模式处理，不改成各入口无条件宽收两前缀；Path、HttpOnly、SameSite、Cookie 内容及原响应校验不变。现 `product-bff` 的六个合法完整名 allowlist 无需扩展；安全状态仅逐条承接 BFF 已过滤的 `Set-Cookie`，不为删除指令放宽 HTTPS Secure 校验。Admin 继续观察同源状态，不新增 Cookie 解析器。
+
+普通业务、原生登录／退出／邀请交互、JSON、路径、Schema 和依赖均不变；固定 vendor、版本、摘要与生成物未改，relay3.0／状态1.0 正常只读生成检查通过。旧 HTTPS 开发 plain Cookie 的切换只需清除该旧 Cookie 后重新登录，不清 canonical 草稿或业务数据库，不加旧名前缀 fallback；本阶段不执行用户浏览器操作或正常服务切换。HTTP 开发、HTTPS 非生产与 production 安全 floor 的定向回归通过；真实删除／rolling／精确组合旅程仍由 Root 后继验收，详细传输规则见 [API_CONTRACT](API_CONTRACT.md)。
+
 ## T-01 认证标准重设计（2026-11-02，本地消费者候选）
 
 本轮沿 Root 唯一计划 §3.6 和已通过 D0 实施，不新增认证 owner、Schema、依赖或认证存储。具体固定来源见 `contract/bff-auth-session-source.json`；生成器只消费本仓 vendor 的原字节，不导入 sibling 源码。普通业务一次同源/BFF派发，当前权限仍由 BFF/IAM 与业务 owner 判断。

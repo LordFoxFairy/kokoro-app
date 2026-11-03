@@ -1,5 +1,22 @@
 > D0实现候选（2026-11-03）：已固定 BFF `34c9f997a4d86f33be2f815c43cd155ed338fe86` 的 browser-private auth-session 1.0.0（SHA256 `a7b5876632f6ad91b9fc162c9abcf48b36b2677a3b15a6a497d3305aeaea81ba`），按本节正式边界完成本地消费者切片；本仓Root完整工程门已验（证据见Root唯一计划及本仓PR）；仍是未合并的源码候选，不代表BFF真实资源、共享登录/rolling/撤权或浏览器组合通过。下方旧RP/refresh/proof叙述只保留历史语境。
 
+## I-56 原生 Cookie 模式配对（2026-11-03，源码候选，待 Root 复验）
+
+基线 App `bfb749c3dae0519abee7803d82f552ea3e39adcf` 已有标准认证消费者工程验收；其 relay config 仅按 NODE_ENV 选择 Cookie 模式。[Root 唯一计划 I-56／§3.6](../../../docs/superpowers/plans/2026-11-01-task-a-c1-c4-technical-plan.md) 设计门通过后，本候选已修正该判定并验证定向组件，不表示完整相关工程门或新组合真实浏览器已通过。IAM 的官方 issuer URL 默认仍拥有 Cookie 名称／属性，App 不签发替代 issuer Cookie。
+
+App 既有 `iamRelayConfig` 的源码候选判定为：可信 canonical `KOKORO_WEB_ORIGIN` 使用 HTTPS **或** `NODE_ENV=production` 时选择 Secure；不读取浏览器自报 Origin／forwarded header 来切换模式。
+
+| 部署模式 | 目标 issuer Cookie 模式 | 与当前实现的差异 |
+| --- | --- | --- |
+| 非 production＋HTTP | plain：`kokoro-issuer.` | 保持 |
+| 非 production＋HTTPS | Secure＋`__Secure-kokoro-issuer.` | 本候选已修正基线按 NODE_ENV 选择 plain 的假设 |
+| production＋HTTPS | Secure＋`__Secure-kokoro-issuer.` | 保持 |
+| production＋HTTP | 仍选择原 Secure 模式 | 仅保留原安全 floor，不降级或承诺该配置是已支持的原生组合 |
+
+published relay 3.0 的精确两模式与叶名 `session_token`、`session_data`、`dont_remember` 不变；relay 请求／响应只接受所选模式，不无条件同时接收两种前缀。现有重复 Cookie、未知名称、属性、大小、同源／CSRF 与取消规则保持。普通 `product-bff` adapter 已有两种合法模式的六个完整名，不扩 allowlist；`GET /api/auth/session` 只逐条转发 BFF 已安全过滤的多条 `Set-Cookie`，RSC `refresh=false` 仍不回写，不合并 Cookie、不放宽非 Secure 删除指令。Admin 无新增 issuer Cookie 解析规则。
+
+本片不改变登录／退出／邀请业务交互、状态 JSON、错误码、路径、Schema 或依赖，不新增 flag、跨字段校验或 mixed-scheme 支持承诺；vendor／版本／摘要／生成物未改，relay3.0 及状态1.0 正常只读生成检查通过。旧 HTTPS 开发 plain Cookie 在切换时只清该旧 Cookie 并重新登录，不清草稿／业务数据、不添加旧名 fallback；本候选阶段不执行用户操作。HTTP/plain、HTTPS 非生产/Secure 与 production floor 的定向组件回归已通过；完整相关门、真实 Cookie 删除／rolling 与精确新组合旅程仍待 Root 验收。现有机器来源和生成流程保持，若 owner artifact 实际变化仍先正式发行再固定消费。职责与删除项见 [TECHNICAL_DESIGN](TECHNICAL_DESIGN.md)。
+
 ## T-01 标准 Session 状态消费（2026-11-02，本地消费者候选）
 
 本轮沿 Root 唯一计划 §3.6 和已通过 D0 实施，不新增认证 owner、Schema、依赖或认证存储。具体固定来源见 `contract/bff-auth-session-source.json`；生成器只消费本仓 vendor 的原字节，不导入 sibling 源码。普通业务一次同源/BFF派发，当前权限仍由 BFF/IAM 与业务 owner 判断。

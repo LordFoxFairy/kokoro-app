@@ -89,7 +89,7 @@ describe("native IAM relay transport", () => {
 
   it.each(["client", "form"] as const)("normalizes the actual %s empty sign-out to the IAM JSON wire through the real transport", async kind => {
     const received: { method: string | undefined; url: string | undefined; cookie: string | undefined; origin: string | undefined; contentType: string | undefined; bytes: number; body: string }[] = []
-    const deletion = "kokoro-issuer.session_token=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax"
+    const deletion = "__Secure-kokoro-issuer.session_token=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax; Secure"
     const server = createServer((request, response) => {
       let bytes = 0
       let body = ""
@@ -117,14 +117,14 @@ describe("native IAM relay transport", () => {
       method: "POST",
       headers: {
         host: "web.example.test", origin: "https://web.example.test",
-        cookie: "unrelated=private; kokoro-issuer.session_token=issuer",
+        cookie: "unrelated=private; __Secure-kokoro-issuer.session_token=issuer",
         ...(kind === "form" ? { "content-type": "application/x-www-form-urlencoded" } : {}),
       },
       ...(kind === "form" ? { body: "" } : {}),
     }), { params: Promise.resolve({ path: ["sign-out"] }) })
     expect({ status: response.status, upstreamRequests: received.length }).toEqual({ status: 200, upstreamRequests: 1 })
     expect(received).toEqual([{
-      method: "POST", url: "/iam/sign-out", cookie: "kokoro-issuer.session_token=issuer",
+      method: "POST", url: "/iam/sign-out", cookie: "__Secure-kokoro-issuer.session_token=issuer",
       origin: "https://web.example.test", contentType: "application/json", bytes: 2, body: "{}",
     }])
     expect(response.headers.getSetCookie()).toEqual([deletion])
@@ -151,7 +151,7 @@ describe("native IAM relay transport", () => {
       headers: {
         host: "web.example.test",
         origin: rejected === "origin" ? "https://other.example.test" : "https://web.example.test",
-        cookie: rejected === "cookie" ? "kokoro-issuer.session_token=one; kokoro-issuer.session_token=two" : "kokoro-issuer.session_token=issuer",
+        cookie: rejected === "cookie" ? "__Secure-kokoro-issuer.session_token=one; __Secure-kokoro-issuer.session_token=two" : "__Secure-kokoro-issuer.session_token=issuer",
         "content-type": "application/json",
       },
       ...(rejected === "body" ? { body: "{}" } : {}),

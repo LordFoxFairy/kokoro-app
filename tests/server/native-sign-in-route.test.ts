@@ -50,7 +50,7 @@ beforeEach(() => {
   relay.mockReset().mockResolvedValue({
     status: 200,
     headers: new Headers({ "content-type": "application/json", "cache-control": "no-store" }),
-    setCookies: ["kokoro-issuer.session_token=session; Path=/; HttpOnly; SameSite=Lax"],
+    setCookies: ["__Secure-kokoro-issuer.session_token=session; Path=/; HttpOnly; SameSite=Lax; Secure"],
     body: new TextEncoder().encode("{}"),
   })
 })
@@ -58,10 +58,11 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs() })
 
 function loginRequest(extraCookie = "", signal?: AbortSignal): NextRequest {
-  return new NextRequest(`${ORIGIN}/auth/sign-in?flow=${FLOW}`, {
+  const origin = process.env.KOKORO_WEB_ORIGIN ?? ORIGIN
+  return new NextRequest(`${origin}/auth/sign-in?flow=${FLOW}`, {
     method: "POST", ...(signal === undefined ? {} : { signal }),
     headers: {
-      host: "web.example.test", origin: ORIGIN, accept: "text/html",
+      host: "web.example.test", origin, accept: "text/html",
       cookie: `${iamSignInFlowCookieName(FLOW)}=${"p".repeat(43)}; ${iamSignInCsrfCookieName(QUERY, TOKEN, FLOW)}=${TOKEN}${extraCookie ? `; ${extraCookie}` : ""}`,
       "content-type": "application/x-www-form-urlencoded",
     },
@@ -93,8 +94,8 @@ describe("native IAM sign-in route", () => {
     expect(response.status).toBe(303)
     expect(response.headers.get("location")).toBe("/app")
     expect(response.headers.getSetCookie()).toEqual(expect.arrayContaining([
-      "kokoro-issuer.session_token=session; Path=/; HttpOnly; SameSite=Lax",
-      `${iamSignInFlowCookieName(FLOW)}=; Path=/auth/sign-in; Max-Age=0; HttpOnly; SameSite=Lax`,
+      "__Secure-kokoro-issuer.session_token=session; Path=/; HttpOnly; SameSite=Lax; Secure",
+      `${iamSignInFlowCookieName(FLOW)}=; Path=/auth/sign-in; Max-Age=0; HttpOnly; SameSite=Lax; Secure`,
     ]))
     expect(relay).toHaveBeenCalledTimes(2)
     expect(admit).toHaveBeenCalledOnce()
@@ -107,18 +108,18 @@ describe("native IAM sign-in route", () => {
 describe("fixed Product cold sign-in completion", () => {
   it("activates only the configured tenant with new issuer cookies before online admission", async () => {
     relay.mockReset()
-      .mockResolvedValueOnce(upstream(200, ["kokoro-issuer.session_token=new; Path=/; HttpOnly; SameSite=Lax"]))
-      .mockResolvedValueOnce(upstream(200, ["kokoro-issuer.session_token=rotated; Path=/; HttpOnly; SameSite=Lax"]))
-    const response = await POST(loginRequest("kokoro-issuer.session_token=old; unrelated=private"))
+      .mockResolvedValueOnce(upstream(200, ["__Secure-kokoro-issuer.session_token=new; Path=/; HttpOnly; SameSite=Lax; Secure"]))
+      .mockResolvedValueOnce(upstream(200, ["__Secure-kokoro-issuer.session_token=rotated; Path=/; HttpOnly; SameSite=Lax; Secure"]))
+    const response = await POST(loginRequest("__Secure-kokoro-issuer.session_token=old; unrelated=private"))
     expect(response.status).toBe(303)
     const activation = relay.mock.calls[1]?.[0]
     expect(activation?.url).toBe("https://bff.example.test/iam/organization/set-active")
     expect(JSON.parse(new TextDecoder().decode(activation?.body))).toEqual({ organizationId: TENANT })
-    expect(activation?.headers.get("cookie")).toBe("kokoro-issuer.session_token=new")
+    expect(activation?.headers.get("cookie")).toBe("__Secure-kokoro-issuer.session_token=new")
     expect(activation?.headers.get("origin")).toBe(ORIGIN)
-    expect(admit.mock.calls[0]?.[0].headers.get("cookie")).toBe("kokoro-issuer.session_token=rotated")
-    expect(response.headers.getSetCookie().filter(value => value.startsWith("kokoro-issuer.session_token=")))
-      .toEqual(["kokoro-issuer.session_token=rotated; Path=/; HttpOnly; SameSite=Lax"])
+    expect(admit.mock.calls[0]?.[0].headers.get("cookie")).toBe("__Secure-kokoro-issuer.session_token=rotated")
+    expect(response.headers.getSetCookie().filter(value => value.startsWith("__Secure-kokoro-issuer.session_token=")))
+      .toEqual(["__Secure-kokoro-issuer.session_token=rotated; Path=/; HttpOnly; SameSite=Lax; Secure"])
   })
 
   it.each([undefined, "", " ", "bad tenant", "bad\u0001tenant", "t".repeat(256)])("rejects bad fixed tenant config %s before credentials", async tenant => {
@@ -130,15 +131,15 @@ describe("fixed Product cold sign-in completion", () => {
   })
 
   it.each([401, 403, 429, 500])("never enters Product or replays credentials after activation %s", async status => {
-    relay.mockResolvedValueOnce(upstream(200, ["kokoro-issuer.session_token=new; Path=/; HttpOnly; SameSite=Lax"]))
+    relay.mockResolvedValueOnce(upstream(200, ["__Secure-kokoro-issuer.session_token=new; Path=/; HttpOnly; SameSite=Lax; Secure"]))
       .mockResolvedValueOnce(upstream(status))
-    const response = await POST(loginRequest("kokoro-issuer.session_token=old"))
+    const response = await POST(loginRequest("__Secure-kokoro-issuer.session_token=old"))
     expect(response.status).toBeGreaterThanOrEqual(400)
     expect(response.headers.has("location")).toBe(false)
     expect(relay).toHaveBeenCalledTimes(2)
     expect(admit).not.toHaveBeenCalled()
     expect(retireFlow).toHaveBeenCalledOnce()
-    expect(response.headers.getSetCookie().some(value => value.startsWith("kokoro-issuer."))).toBe(false)
+    expect(response.headers.getSetCookie().some(value => value.startsWith("__Secure-kokoro-issuer."))).toBe(false)
     expect(response.headers.getSetCookie().join(";")).not.toContain("session_token=new")
   })
 
@@ -152,8 +153,8 @@ describe("fixed Product cold sign-in completion", () => {
   })
 
   it("rejects unallowlisted activation cookies and never admits", async () => {
-    relay.mockResolvedValueOnce(upstream(200, ["kokoro-issuer.session_token=new; Path=/; HttpOnly; SameSite=Lax"]))
-      .mockResolvedValueOnce(upstream(200, ["foreign=secret; Path=/; HttpOnly; SameSite=Lax"]))
+    relay.mockResolvedValueOnce(upstream(200, ["__Secure-kokoro-issuer.session_token=new; Path=/; HttpOnly; SameSite=Lax; Secure"]))
+      .mockResolvedValueOnce(upstream(200, ["foreign=secret; Path=/; HttpOnly; SameSite=Lax; Secure"]))
     const response = await POST(loginRequest())
     expect(response.status).toBe(502)
     expect(admit).not.toHaveBeenCalled()
@@ -164,7 +165,7 @@ describe("fixed Product cold sign-in completion", () => {
     vi.useFakeTimers()
     relay.mockImplementationOnce(async () => {
       await vi.advanceTimersByTimeAsync(3000)
-      return upstream(200, ["kokoro-issuer.session_token=new; Path=/; HttpOnly; SameSite=Lax"])
+      return upstream(200, ["__Secure-kokoro-issuer.session_token=new; Path=/; HttpOnly; SameSite=Lax; Secure"])
     }).mockImplementationOnce(async () => {
       await vi.advanceTimersByTimeAsync(1500)
       return upstream()
@@ -184,7 +185,7 @@ describe("fixed Product cold sign-in completion", () => {
     const controller = new AbortController()
     relay.mockImplementationOnce(async () => {
       controller.abort()
-      return upstream(200, ["kokoro-issuer.session_token=new; Path=/; HttpOnly; SameSite=Lax"])
+      return upstream(200, ["__Secure-kokoro-issuer.session_token=new; Path=/; HttpOnly; SameSite=Lax; Secure"])
     })
     const response = await POST(loginRequest("", controller.signal))
     expect(response.status).toBe(503)
@@ -198,13 +199,13 @@ describe("fixed Product cold sign-in completion", () => {
 describe("unchanged sign-in safety boundaries", () => {
   it("keeps an existing browser session on rejected credentials without activation", async () => {
     relay.mockResolvedValueOnce(upstream(401))
-    const response = await POST(loginRequest("kokoro-issuer.session_token=existing"))
+    const response = await POST(loginRequest("__Secure-kokoro-issuer.session_token=existing"))
     expect(response.status).toBe(303)
     expect(response.headers.get("location")).toBe(`/auth/sign-in?flow=${FLOW}`)
     expect(relay).toHaveBeenCalledOnce()
     expect(admit).not.toHaveBeenCalled()
     expect(retireFlow).not.toHaveBeenCalled()
-    expect(response.headers.getSetCookie().some(value => value.startsWith("kokoro-issuer."))).toBe(false)
+    expect(response.headers.getSetCookie().some(value => value.startsWith("__Secure-kokoro-issuer."))).toBe(false)
   })
 
   it("rejects bad CSRF before credentials", async () => {
@@ -225,20 +226,20 @@ describe("unchanged sign-in safety boundaries", () => {
 describe("native completion cookie and deadline edges", () => {
   it("removes deleted allowlist cookies from admission while forwarding the latest deletion", async () => {
     relay.mockResolvedValueOnce(upstream(200, [
-      "kokoro-issuer.session_token=new; Path=/; HttpOnly; SameSite=Lax",
-      "kokoro-issuer.session_data=cached; Path=/; HttpOnly; SameSite=Lax",
+      "__Secure-kokoro-issuer.session_token=new; Path=/; HttpOnly; SameSite=Lax; Secure",
+      "__Secure-kokoro-issuer.session_data=cached; Path=/; HttpOnly; SameSite=Lax; Secure",
     ])).mockResolvedValueOnce(upstream(200, [
-      "kokoro-issuer.session_data=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax",
+      "__Secure-kokoro-issuer.session_data=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax; Secure",
     ]))
     const response = await POST(loginRequest())
     expect(response.status).toBe(303)
-    expect(admit.mock.calls[0]?.[0].headers.get("cookie")).toBe("kokoro-issuer.session_token=new")
-    expect(response.headers.getSetCookie().filter(value => value.startsWith("kokoro-issuer.session_data=")))
-      .toEqual(["kokoro-issuer.session_data=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax"])
+    expect(admit.mock.calls[0]?.[0].headers.get("cookie")).toBe("__Secure-kokoro-issuer.session_token=new")
+    expect(response.headers.getSetCookie().filter(value => value.startsWith("__Secure-kokoro-issuer.session_data=")))
+      .toEqual(["__Secure-kokoro-issuer.session_data=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax; Secure"])
   })
 
-  it("supports only the secure issuer prefix in production", async () => {
-    vi.stubEnv("NODE_ENV", "production")
+  it.each(["production", "development", "test"])("supports only the secure issuer prefix over HTTPS in %s", async mode => {
+    vi.stubEnv("NODE_ENV", mode)
     relay.mockResolvedValueOnce(upstream(200, ["__Secure-kokoro-issuer.session_token=new; Path=/; HttpOnly; SameSite=Lax; Secure"]))
       .mockResolvedValueOnce(upstream())
     const response = await POST(loginRequest("kokoro-issuer.session_token=wrong-prefix; __Secure-kokoro-issuer.session_token=old"))
@@ -248,9 +249,23 @@ describe("native completion cookie and deadline edges", () => {
     expect(response.headers.getSetCookie().every(value => value.includes("Secure"))).toBe(true)
   })
 
-  it.each([{ cookies: [] }, { cookies: ["kokoro-issuer.session_token=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax"] }])("requires a fresh usable issuer token from sign-in $cookies", async ({ cookies }) => {
+  it("keeps HTTP development sign-in plain without accepting the secure-mode cookie", async () => {
+    vi.stubEnv("NODE_ENV", "development")
+    vi.stubEnv("KOKORO_WEB_ORIGIN", "http://web.example.test")
+    relay.mockResolvedValueOnce(upstream(200, ["kokoro-issuer.session_token=new; Path=/; HttpOnly; SameSite=Lax"]))
+      .mockResolvedValueOnce(upstream())
+    const response = await POST(loginRequest("__Secure-kokoro-issuer.session_token=wrong-prefix; kokoro-issuer.session_token=old"))
+    expect(response.status).toBe(303)
+    expect(relay.mock.calls[0]?.[0].headers.get("cookie")).toBe("kokoro-issuer.session_token=old")
+    expect(relay.mock.calls[1]?.[0].headers.get("cookie")).toBe("kokoro-issuer.session_token=new")
+    expect(admit.mock.calls[0]?.[0].headers.get("cookie")).toBe("kokoro-issuer.session_token=new")
+    expect(response.headers.getSetCookie()).toContain("kokoro-issuer.session_token=new; Path=/; HttpOnly; SameSite=Lax")
+    expect(response.headers.getSetCookie().every(value => !value.includes("Secure"))).toBe(true)
+  })
+
+  it.each([{ cookies: [] }, { cookies: ["__Secure-kokoro-issuer.session_token=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax; Secure"] }])("requires a fresh usable issuer token from sign-in $cookies", async ({ cookies }) => {
     relay.mockResolvedValueOnce(upstream(200, cookies))
-    const response = await POST(loginRequest("kokoro-issuer.session_token=old"))
+    const response = await POST(loginRequest("__Secure-kokoro-issuer.session_token=old"))
     expect(response.status).toBe(502)
     expect(relay).toHaveBeenCalledOnce()
     expect(retireFlow).toHaveBeenCalledOnce()
@@ -259,7 +274,7 @@ describe("native completion cookie and deadline edges", () => {
 
   it("blocks the final admission request when activation exhausts the shared budget", async () => {
     vi.useFakeTimers()
-    relay.mockResolvedValueOnce(upstream(200, ["kokoro-issuer.session_token=new; Path=/; HttpOnly; SameSite=Lax"]))
+    relay.mockResolvedValueOnce(upstream(200, ["__Secure-kokoro-issuer.session_token=new; Path=/; HttpOnly; SameSite=Lax; Secure"]))
       .mockImplementationOnce(async () => {
         await vi.advanceTimersByTimeAsync(5001)
         return upstream()
@@ -276,12 +291,12 @@ describe("native completion cookie and deadline edges", () => {
   })
 
   it("retains terminal cleanup when activation transport fails and never retries", async () => {
-    relay.mockResolvedValueOnce(upstream(200, ["kokoro-issuer.session_token=new; Path=/; HttpOnly; SameSite=Lax"]))
+    relay.mockResolvedValueOnce(upstream(200, ["__Secure-kokoro-issuer.session_token=new; Path=/; HttpOnly; SameSite=Lax; Secure"]))
       .mockRejectedValueOnce(new Error("upstream unavailable"))
     const response = await POST(loginRequest())
     expect(response.status).toBe(503)
-    expect(response.headers.getSetCookie()).toContain(`${iamSignInFlowCookieName(FLOW)}=; Path=/auth/sign-in; Max-Age=0; HttpOnly; SameSite=Lax`)
-    expect(response.headers.getSetCookie().some(value => value.startsWith("kokoro-issuer."))).toBe(false)
+    expect(response.headers.getSetCookie()).toContain(`${iamSignInFlowCookieName(FLOW)}=; Path=/auth/sign-in; Max-Age=0; HttpOnly; SameSite=Lax; Secure`)
+    expect(response.headers.getSetCookie().some(value => value.startsWith("__Secure-kokoro-issuer."))).toBe(false)
     expect(relay).toHaveBeenCalledTimes(2)
     expect(retireFlow).toHaveBeenCalledOnce()
   })
@@ -295,16 +310,16 @@ describe("native completion cookie and deadline edges", () => {
     const response = await POST(loginRequest())
     expect(response.status).toBe(503)
     expect(response.headers.has("location")).toBe(false)
-    expect(response.headers.getSetCookie().some(value => value.startsWith("kokoro-issuer."))).toBe(false)
+    expect(response.headers.getSetCookie().some(value => value.startsWith("__Secure-kokoro-issuer."))).toBe(false)
   })
 })
 
 
 it("bounds the merged issuer request headers before activating the session", async () => {
-  relay.mockResolvedValueOnce(upstream(200, [`kokoro-issuer.session_token=${"n".repeat(8100)}; Path=/; HttpOnly; SameSite=Lax`]))
-  const response = await POST(loginRequest(`kokoro-issuer.dont_remember=${"o".repeat(8100)}`))
+  relay.mockResolvedValueOnce(upstream(200, [`__Secure-kokoro-issuer.session_token=${"n".repeat(8100)}; Path=/; HttpOnly; SameSite=Lax; Secure`]))
+  const response = await POST(loginRequest(`__Secure-kokoro-issuer.dont_remember=${"o".repeat(8100)}`))
   expect(response.status).toBe(503)
   expect(relay).toHaveBeenCalledOnce()
   expect(admit).not.toHaveBeenCalled()
-  expect(response.headers.getSetCookie().some(value => value.startsWith("kokoro-issuer."))).toBe(false)
+  expect(response.headers.getSetCookie().some(value => value.startsWith("__Secure-kokoro-issuer."))).toBe(false)
 })

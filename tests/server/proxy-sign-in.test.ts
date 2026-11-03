@@ -46,7 +46,7 @@ describe("HTTPS issuer sign-in Proxy rewrite", () => {
     retireObservedSignInCsrf.mockReset().mockResolvedValue([])
     issueIamInteractionCsrf.mockReset().mockResolvedValue({
       token: TOKEN,
-      cookie: `${iamSignInCsrfCookieName(QUERY, TOKEN)}=${TOKEN}; Path=/auth/sign-in; Max-Age=300; HttpOnly; SameSite=Lax`,
+      cookie: `${iamSignInCsrfCookieName(QUERY, TOKEN)}=${TOKEN}; Path=/auth/sign-in; Max-Age=300; HttpOnly; SameSite=Lax; Secure`,
     })
   })
   afterEach(() => {
@@ -109,7 +109,7 @@ describe("HTTPS issuer sign-in Proxy rewrite", () => {
     issueIamInteractionCsrf.mockRejectedValue(new Error("Redis unavailable"))
     const result = await proxy(request(`/auth/sign-in${SHORT_QUERY}`, { cookie: `${name}=${TOKEN}` }))
     expect(result.status).toBe(503)
-    expect(result.headers.getSetCookie()).toEqual([`${name}=; Path=/auth/sign-in; Max-Age=0; HttpOnly; SameSite=Lax`])
+    expect(result.headers.getSetCookie()).toEqual([`${name}=; Path=/auth/sign-in; Max-Age=0; HttpOnly; SameSite=Lax; Secure`])
   })
 
   it("rejects direct form requests even when a browser forges internal headers", async () => {
