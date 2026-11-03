@@ -2,7 +2,7 @@
 
 Product 客户端仅在正式 200/signed_out 或 503/browser_cookie_cleared ACK 后删除原 browser subject hint，唤醒已有 storage → Session 重核；marker 不提供认证。原主体更换、已观察到的 ABA 和 caller AbortSignal 退休旧结果；stale_session、未知或不匹配 ACK 不广播、不导航，无自动重试。存储不可用仍允许已确认退出的受限 issuer handoff。没有新增 HTTP/Schema/登录协议；同主体未产生 marker 变化或尚未交付的事件不被冒称成强 session fencing。
 
-真实候选双标签验证了原私有 MCP 卡片在另一标签退出后退场，原缺陷保留的卡片为 1、修复后为 0；此证据仅覆盖 Product 本地退出通知。issuer 原生确认、自动重新登录及刷新竞争恢复仍待完整验收，不能据此称 B-06 完成。正式 ACK fixture 保留原取消与 503 超时/导航断言，未把错误结果改成成功。
+真实候选双标签验证了原私有 MCP 卡片在另一标签退出后退场，原缺陷保留的卡片为 1、修复后为 0；此证据仅覆盖 Product 本地退出通知。该历史候选未覆盖 issuer 原生确认。2026-11-03 正常原生双标签已补退出、issuer 确认、匿名会话/受保护401、失败文档显式重登、原 path/query/settings fragment 恢复及另一标签重新准入；自然过期和多设备等仍不在此证据内，不能据此称 B-06 全部完成。正式 ACK fixture 保留原取消与 503 超时/导航断言，未把错误结果改成成功。
 
 ## 2026-10-25 当前业务只读401的有限再准入
 
@@ -44,7 +44,7 @@ AppGate在整个KokoroAppSurface外提供单用途read-recheck context；只有�
 会话态探针与 Product 退出交互。登录入口由 `src/app/login/route.ts` 服务端持有；鉴权由 HttpOnly Product Session cookie 同源携带，前端不持 token。
 
 ## 公开件
-- `SignInRecovery`（`sign-in-recovery.tsx`）：失败文档的局部 GET-only 当前 Session 观察；服务端 active/access 未过期可导航固定 `/app`，由原 AppGate 重新准入。挂载／focus／online／pageshow／可见恢复每轮共用10秒、最多2次 GET，隐藏／卸载退休，拒绝迟到；显式检查仅重读及 RSC refresh，不自动 OAuth／POST refresh，不存身份、不重放旧 state。
+- `SignInRecovery`（`sign-in-recovery.tsx`）：失败文档的局部 GET-only 当前 Session 观察；失败文档不再服务端提前跳往固定首页；客户端严格确认当前 Session 后，返回本标签经既有白名单验证的原目标，缺失/失效时回 `/app`，由原 AppGate 重新准入。挂载／focus／online／pageshow／可见恢复每轮共用10秒、最多2次 GET，隐藏／卸载退休，拒绝迟到；显式检查仅重读及 RSC refresh，不自动 OAuth／POST refresh，不存身份、不重放旧 state。
 - `useSessionState`（`use-session-state.ts`）：探正式 `GET /api/auth/session` → `"checking"|"pass"|"anonymous"|"unavailable"`；preview 仅由非生产显式开关放行，探针故障不降级为 anonymous，也不展示登录诊断卡片；可见页在 1s/3s 后至多自动重核两次，成功清理定时器，卸载取消，现有 focus/online/周期检查继续负责后续恢复。
 - `useSessionProbe`：在同一探针结果中保留 `preview|authenticated` 模式，供 `/app` 选择 Preview Transport 或真实 Session BFF。focus/visibility/周期探针共用未决检查；同一已准入主体保留原数据代际和页面内容，不因核验重取全部业务列表。探针序号只隔离异步结果；真正失败、匿名、身份标记变化/不可读及pagehide才退休旧数据。跨标签storage只在身份标记变化时核验，隐藏页先退休、可见后再请求；核验期间标记切走又切回也令原响应失效。pagehide允许pageshow建立新检查，业务请求仍逐次经过服务端权限校验。
 - `/` 是固定 Kokoro 公开首页；`/login` 是固定 Product RP 登录；`/app` 是受保护工作台。`/auth/sign-in` 只承载 IAM issuer 交互，不是 Product 登录页。
@@ -60,3 +60,7 @@ AppGate在整个KokoroAppSurface外提供单用途read-recheck context；只有�
 - 诚实态：不放假 OAuth 按钮或可见中转；失败 URL 不自动循环提交，未接入 IAM 时不呈现假凭据表单。
 
 - `ProductSignInRedirect`只负责匿名文档导航，StrictMode同次挂载仅启动一次；无脚本保留校验过的path/query登录链接。`openProductSignIn`编码白名单设置hash到原签名return_to，不参与认证授权，未知fragment退回合法base。
+
+## 登录失败后的原页面恢复
+
+`openProductSignIn` 将白名单导航目标以五分钟有效的 tab-local sessionStorage hint 保留，显式重登仍走原签名 RP return_to；hint 不含身份、凭据或 OAuth state，不授权任何业务。`SignInRecovery` 沿既有 GET-only 有界观察确认 Session，水合后读取导航意图；失败不自动发 OAuth 或续期 POST。未知、过期、非法或不可读存储回退 `/app`；存储不可用时正常登录的原 RP 回跳仍可用，但失败恢复不保证深链。该行为不修改认证协议、cookie 或 BFF。
