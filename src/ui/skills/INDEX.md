@@ -182,6 +182,8 @@ Settings 的正式入口是 `src/ui/settings/sections/skills-settings-section.ts
   返回 `skill_id` 与 `revision_skill_id` 时读取真实 package tree 和正文。缺少 binding 的旧投影保持详情入口禁用，
   不再由浏览器合成 YAML、文件树或示例正文。目录／安装 metadata 读取失败保稳定概览／reader 结构，
   以正常进入／重新准入恢复精确 locator，保同目标的文件／滚动意图，不重放安装、分享或发布命令。
+  文件读取失败且没有已确认正文时，显示可见提示；精确版本仍有效时可显式重试原 GET。
+  权限拒绝仍退休正文与安装事实，不通过重试按钮恢复旧权限或自动重放写入。
 - `@/lib/query` 与 `skills-resource-cache`：安装池使用 client-scoped `skillResourceKey(SKILLS_KEY, client)`；目录使用同样隔离的 `SKILLS_CATALOG_KEY`。正式 adapter 的 `skillQuota` 返回明确缺省，不请求旧 quota API；不存在可由旧 name-based cache 冒充的正式系列历史。
 
 ## 陷阱

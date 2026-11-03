@@ -811,7 +811,7 @@ it.each([["catalog", "network"], ["catalog", "503"], ["installation", "network"]
   expect(onTry).not.toHaveBeenCalled()
 })
 
-it.each(["catalog", "installation"] as const)("keeps initial %s package failures distinct from empty success and recovers through normal reader controls", async source => {
+it.each([["catalog", "network"], ["installation", "network"], ["installation", "429"]] as const)("shows initial %s package %s failures and recovers with explicit read-only retry", async (source, failure) => {
   const { expectedPath, detailResponse, content, packagePath, response } = quietPackageFixture(source)
   let directoryReads = 0, fileReads = 0
   vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
@@ -819,7 +819,10 @@ it.each(["catalog", "installation"] as const)("keeps initial %s package failures
     if (path === expectedPath) return detailResponse("Confirmed detail")
     expect(path.startsWith(packagePath)).toBe(true)
     const file = new URL(path, "http://localhost").searchParams.get("file_path") as "SKILL.md" | "notes.md" | null
-    if (file === null && ++directoryReads === 1) throw Error("directory unavailable")
+    if (file === null && ++directoryReads === 1) {
+      if (failure === "429") return Response.json({ error: { code: "session_rate_limited", message: "Read throttled", retryable: true } }, { status: 429, headers: { "cache-control": "no-store", "x-request-id": "reader-throttled", "retry-after": "1" } })
+      throw Error("directory unavailable")
+    }
     if (file !== null && ++fileReads === 1) throw Error("file unavailable")
     return response(file)
   }))
@@ -828,19 +831,18 @@ it.each(["catalog", "installation"] as const)("keeps initial %s package failures
   fireEvent.click(screen.getByRole("button", { name: "查看详情" }))
   await waitFor(() => expect(screen.getByRole("dialog")).toHaveAttribute("aria-busy", "false"))
   expect(directoryReads).toBe(1)
-  expect(screen.queryByRole("alert")).toBeNull()
-  expect(screen.queryByRole("button", { name: "重试" })).toBeNull()
+  expect(screen.getByRole("alert")).toHaveTextContent("技能文件暂时不可用")
+  expect(screen.getByRole("button", { name: "重试" })).toBeEnabled()
   expect(screen.queryByText("暂无可读取的文本文件")).toBeNull()
   expect(screen.queryByText("此包没有可读取的 SKILL.md，请选择其他文本文件")).toBeNull()
   expect(screen.queryByText("此文件为空")).toBeNull()
   expect(screen.queryByRole("heading", { name: "Confirmed skill" })).toBeNull()
-  fireEvent.click(screen.getByRole("button", { name: "技能详情" }))
-  fireEvent.click(screen.getByRole("button", { name: "查看详情" }))
+  fireEvent.click(screen.getByRole("button", { name: "重试" }))
   await waitFor(() => expect(fileReads).toBe(1))
   await waitFor(() => expect(screen.getByRole("dialog")).toHaveAttribute("aria-busy", "false"))
-  expect(screen.queryByRole("alert")).toBeNull()
+  expect(screen.getByRole("alert")).toHaveTextContent("技能文件暂时不可用")
   expect(screen.queryByRole("heading", { name: "Confirmed skill" })).toBeNull()
-  fireEvent.click(screen.getByRole("button", { name: "SKILL.md" }))
+  fireEvent.click(screen.getByRole("button", { name: "重试" }))
   expect(await screen.findByRole("heading", { name: "Confirmed skill" })).toBeVisible()
   expect(directoryReads).toBe(2)
   expect(fileReads).toBe(2)
@@ -881,7 +883,7 @@ it.each([
   await waitFor(() => expect(screen.getByRole("dialog")).toHaveAttribute("aria-busy", "false"))
   expect(screen.queryByRole("heading", { name: "Confirmed skill" })).toBeNull()
   expect(screen.queryByRole("button", { name: "SKILL.md" })).toBeNull()
-  expect(screen.queryByRole("alert")).toBeNull()
+  expect(screen.getByRole("alert")).toHaveTextContent("技能文件暂时不可用")
   fireEvent.click(screen.getByRole("button", { name: "技能详情" }))
   if (failure !== "parse") {
     expect(screen.getByRole("button", { name: "查看详情" })).toBeDisabled()

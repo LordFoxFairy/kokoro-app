@@ -732,7 +732,10 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", projectTarget
               {selectedPath !== null ? <div className={styles.fileHeading}><FileText aria-hidden="true" /><span>{selectedPath}</span></div> : null}
               {detailReadStatus}
               {currentReaderFile === null && (readerLoading || readerFailed || failed) ? readerPlaceholder : null}
-              {readerFailed ? <span className="sr-only" role="status">{t("skills.packageUnavailable")}</span> : null}
+              {readerFailed && currentReaderFile === null ? <div className={styles.status} role="alert">
+                <p>{t("skills.packageUnavailable")}</p>
+                {boundRevision !== null ? <Button type="button" variant="outline" onClick={() => restartReader(false)}>{t("skills.packageRetry")}</Button> : null}
+              </div> : null}
               {!readerLoading && !readerFailed && directory?.files.length === 0 ? <p>{t("skills.packageEmpty")}</p> : null}
               {!readerLoading && !readerFailed && directory !== null && directory.files.length > 0 && selectedPath === null ? <p>{t("skills.packageNoMarkdown")}</p> : null}
               {currentReaderFile !== null ? <>
