@@ -971,6 +971,30 @@ it("does not open slash commands from IME, pasted content, a URL, or replacement
 
 const catalogAdmission = { admitted: true, subject: "catalog-reader", generation: 1 }
 
+it("applies the saved model to the first request after asynchronous admission", async () => {
+  window.localStorage.setItem("kokoro.web.chat-prefs.v2", JSON.stringify({ model: "gpt-5" }))
+  const client = createFakeClient()
+  const engine = createSessionEngine({ client, storage: createMemoryStorage<ConversationStore>(null) })
+  const fetchMock = vi.fn().mockResolvedValue(Response.json({ models: MODELS, next_cursor: null }))
+  vi.stubGlobal("fetch", fetchMock)
+  const hook = renderHook(({ admitted }) => useComposerSelectors(engine,
+    admitted ? { readBoundary: catalogAdmission } : {},
+  ), { initialProps: { admitted: false } })
+  try {
+    await act(async () => { await settle() })
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(hook.result.current.selectedModel).toBeNull()
+    hook.rerender({ admitted: true })
+    await act(async () => { await settle() })
+    expect(hook.result.current.selectedModel).toBe("gpt-5")
+    await act(async () => { engine.submit("use my saved model"); await settle() })
+    expect(client.createCalls[0]?.body.model).toBe("gpt-5")
+  } finally {
+    hook.unmount(); engine.dispose(); vi.unstubAllGlobals()
+    window.localStorage.removeItem("kokoro.web.chat-prefs.v2")
+  }
+})
+
 it("catalog waits for a trusted active Composer and retains its data across engine changes", async () => {
   const engineA = createSessionEngine({ client: createFakeClient(), storage: createMemoryStorage<ConversationStore>(null) })
   const engineB = createSessionEngine({ client: createFakeClient(), storage: createMemoryStorage<ConversationStore>(null) })

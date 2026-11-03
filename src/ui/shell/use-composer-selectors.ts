@@ -51,6 +51,9 @@ export function useComposerSelectors(engine: SessionEngine | null, options: Opti
   const modelCatalogStatus = sameScope ? catalog.status : "loading"
   const selectionScope = useMemo(() => ({ engine, preview, subject }), [engine, preview, subject])
   const [selection, setSelection] = useState(() => ({ scope: selectionScope, value: readChatModel() }))
+  if (selection.scope !== selectionScope) {
+    setSelection({ scope: selectionScope, value: readChatModel() })
+  }
   const selectedModel = admitted && !(catalog.scope === scope && catalog.retired) && currentSubject(preview, subject) && selection.scope === selectionScope ? selection.value : null
   const selectionAuthority = useRef<{ scope: typeof scope; selectionScope: typeof selectionScope } | null>(null)
   useLayoutEffect(() => {

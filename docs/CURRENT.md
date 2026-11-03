@@ -1,3 +1,9 @@
+## 2026-11-03 B-11：异步登录后首条请求丢失模型偏好（本地候选）
+
+已复现保存模型偏好但首条实际请求 model 缺失：hook 初建时绑定未准入 subject，可信 subject 后续到达时，selection 仍停在原 scope。现沿既有 selectionScope 重读本地偏好，原可信准入、目录校验、代际与撤权围栏不变，不修改发送协议。新增真实 engine 首发回归先失败，修复后 Composer 两文件 84 项通过；仅测试参数 exactOptionalPropertyTypes 修正后新用例再通过。Node22 定向 ESLint 和完整非增量 tsc 通过；完整工程门未重跑，未据此声明可合并。
+
+本次真实验证时，候选按原文件字节校验后覆盖这一文件，属于 38d2f6cd 上的未提交开发 overlay，不冒称整个候选与已提交树完全相同。实际 UI 首条已带独立 16K raw label；上游模型一次调用 completed/用量 normalized 且已收到财务 ACK，但后续 Run 终态 internal_error，未形成个人知识成功回答，关闭对照未发送。后继加入财务调用方期限修复的新Run也失败，typed结算依赖unavailable，不能据此完成知识on/off验收。两次自有测试知识均已清理、usage 恢复；正常3314未切换。
+
 ## 2026-11-03 B-08 Public29.3 容量失败消费（候选，未正常激活）
 
 固定正式 BFF1e6765b3230d55fa17d0f6aa989278b97d00f338 的唯一 Public29.3 原件（SHA256 4f27adbea9a63c36d8b11e95c9dde342a6e8d662cab77cb42091384f3b17e333）及同提交分享 projection；十二条原 fullsource recipe 加原分享 recipe 正规 write/check 全通过。strict tuple 仅增加 context_window_exceeded / retryable=false，原两个 true tuple 保留；原 runtime decoder 自然消费生成 tuple。其余八个有变生成文件反投影精确来源元数据后与旧版逐字相同，旧 fixtures/policy3 字节不变。
