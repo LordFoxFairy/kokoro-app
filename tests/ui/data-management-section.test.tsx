@@ -15,7 +15,7 @@ vi.mock("@/engine/client", () => ({
   createSessionClient: () => ({ revokeShare: mocks.revoke }),
 }));
 import { DataManagementSection } from "@/ui/settings/sections/data-management-section";
-import { LocaleProvider } from "@/i18n/context";
+import { LocaleProvider, useLocale } from "@/i18n/context";
 const item = {
   session_id: "session",
   title: "真实任务",
@@ -116,3 +116,34 @@ it("SET47 dot-only historical IDs show a visible reason and cannot dispatch rest
  fireEvent.click(screen.getByRole("button",{name:"恢复任务"}));expect(archiveMocks.writeArchiveState).not.toHaveBeenCalled();
 });
 // SET47-END
+
+it("updates loaded sharing and archive dates with the product locale without repeating owner requests", async () => {
+  const shared = { ...item, expires_at: "2026-11-19T12:45:00.000Z" };
+  const archived = { session_id: "archived", title: "归档任务标题", archived_at: "2026-09-23T06:30:00.000Z", project_ref: null };
+  mocks.read.mockResolvedValue({ data: { items: [shared], next_cursor: null } });
+  archiveMocks.readArchivedTasks.mockResolvedValue({ data: { items: [archived], next_cursor: null } });
+  function LocaleControl() {
+    const { setLocale } = useLocale();
+    return <button type="button" onClick={() => setLocale("en")}>Switch dates to English</button>;
+  }
+  render(<LocaleProvider><LocaleControl /><DataManagementSection preview={false} readBoundary={{ admitted: true, subject: "alice", generation: 1 }} /></LocaleProvider>);
+  const sharedRow = (await screen.findByText(shared.title)).closest("li")!;
+  const archivedRow = (await screen.findByText(archived.title)).closest("li")!;
+  const checkDates = (locale: "zh" | "en") => {
+    const format = new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" });
+    expect(sharedRow.querySelector("time")).toHaveAttribute("datetime", shared.shared_at);
+    expect(sharedRow.querySelector("time")).toHaveTextContent(format.format(new Date(shared.shared_at)));
+    expect(within(sharedRow).getByText(format.format(new Date(shared.expires_at)))).toBeVisible();
+    expect(archivedRow.querySelector("time")).toHaveAttribute("datetime", archived.archived_at);
+    expect(archivedRow.querySelector("time")).toHaveTextContent(format.format(new Date(archived.archived_at)));
+  };
+  checkDates("zh");
+  fireEvent.click(screen.getByRole("button", { name: "Switch dates to English" }));
+  checkDates("en");
+  expect(screen.getByText(shared.title).closest("li")).toBe(sharedRow);
+  expect(screen.getByText(archived.title).closest("li")).toBe(archivedRow);
+  expect(mocks.read).toHaveBeenCalledOnce();
+  expect(archiveMocks.readArchivedTasks).toHaveBeenCalledOnce();
+  expect(mocks.revoke).not.toHaveBeenCalled();
+  expect(archiveMocks.writeArchiveState).not.toHaveBeenCalled();
+});
