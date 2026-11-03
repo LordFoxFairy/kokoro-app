@@ -156,3 +156,4 @@ SET54：现 settings-compact-more-menu 独占 More 的指针/键盘激活、enab
 参考：同日 Manus 技能设置 390×844，后续分区实际保留于横向滚动容器，更多菜单含账户等全部非当前分区。新增一个真实浏览器旅程覆盖 Skills 深链、更多→集成、320/390/767/768 缩放及键盘→开发者；只验证可见性/可达性，不锁 CSS 字符串或像素常量。隔离预览不代表正常业务数据/CRUD验收。
 
 紧凑More的portal在触发器随响应式模式隐藏时关闭；菜单拥有的焦点回到当前tab，外部焦点不被夺取。验收包含菜单打开状态跨断点，而非只有静态尺寸。
+账户头像沿原 `account-profile.schema.ts` / `/api/account/profile` / `useAccountProfile` 消费 IAM 标准可选 `picture`，在 `sections/account-card.tsx` 复用 Avatar。仅浏览器匿名 HTTPS 加载、无 referrer，失败保留首字母；原主体/代际退休隔离和姓名更新不变，不代表已提供头像上传。

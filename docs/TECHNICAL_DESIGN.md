@@ -3677,6 +3677,8 @@ Web 不复制 BFF OpenAPI，也不把同源 contract 放进 Developer API。详�
 
 ## SET-07：账户本人资料读取与设置展示（设计已定，待实现）
 
+2026-11-03 头像读取补记：IAM 锁定的 `@better-auth/oauth-provider` 1.7.3 已由 `profile` scope 将 `user.image` 发布为标准 `picture` claim；现有 Web 投影将它丢弃。沿原 userinfo → 同源账户资料 → 原账户卡补可选 `picture`，不改 IAM/BFF 公共契约、scope、持久化或上传能力。只接受不含用户认证信息、最长 2048 字符的 HTTPS URL；可选 claim 无效时仅省略图片，其他资料照常读取。浏览器复用原 Radix Avatar 加载，无服务端图片代理或优化请求，使用 no-referrer/anonymous；加载失败保留姓名首字母。原主体/准入代退休与最终 session 复验继续生效，Avatar 按读取 scope 和 URL 重新挂载，避免沿用旧账号图片。旧响应未带 picture 仍合法；原账户姓名 CAS 写入格式不变。验证覆盖标准 claim、危险 URL、旧响应、图片成功/失败及身份退休。
+
 | 项 | 决定 |
 | --- | --- |
 | Owner / writer | IAM持用户资料事实；Web仅安全投影、读取生命周期与展示；runtime_audit唯一Web writer，Root审查/提交。复用本设置功能分支，不另开按钮PR。 |

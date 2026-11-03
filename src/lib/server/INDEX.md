@@ -165,3 +165,4 @@ runtime token、内部服务地址、workload secret 或后端隔离键。
 ## Project pin consumer
 
 `project-pins.ts`只处理GET `/api/hub/self/project-pins`与PUT `/api/hub/projects/{id}/pin`；strip-self别名在generic proxy前拒绝。沿Product Session／same-origin／部署Domain，不透传caller身份/key/CAS，strict JSON≤1KiB与完整响应≤64KiB，同一次10秒admission→EOF预算、取消与静态异常。所有错误沿正式ErrorEnvelope，不另造retryable DTO。
+`account-profile.ts` 仅在原 IAM userinfo 资料白名单中补可选 HTTPS `picture` 投影；不含 URL 认证信息、最长 2048 字符，坏图片省略而不破坏其他资料。原同源准入、最终 Product session 复验和时限不变；服务端不请求头像 URL、不新增代理或上传。

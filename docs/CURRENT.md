@@ -3747,3 +3747,8 @@ App36dacf0基线私有详情/配置只有Prepare，创建窗关闭后needs_oauth
 原 `Segment.legacySteps` 断言与未落地旧设计不一致，沿当前正式单轨 activity 迁移；原 segment 首次出现顺序、thinking 拼接及 tool 身份断言保留。新增 typed tool→subagent→tool 混排、状态更新保持原序、groupSegments 不改输入验证。先保留2文件5 FAIL/25 PASS 基线，再恢复相关UI/core与原 snapshot-first、active 身份、提交不重发及未知提交恢复回归，首轮9文件243 PASS，完整 typecheck 与 ESLint 均0。完整 engine 与 build 另记最终结果，不以该窄修关闭整个 B-06 或声明正常运行源已更新。
 
 最终完整 engine 目录加相关UI/core共25文件542 PASS（35.89秒），完整 ESLint/typecheck/build 均exit0，原两处3条类型阻断由本窄修消除；Turbopack编译29.4秒，随后类型及页面构建均成功。证据 `B06-read-recover-{red,focused,engine-full,lint,types,build}.log`。仅状态组件与测试/INDEX/CURRENT五文件；未改变引擎、接口、正常服务或重放写命令，独立审查和正常页面配对由Root接续。
+## 2026-11-03 B-07 账户头像读取局部修复
+
+原 IAM 锁定 oauth-provider 1.7.3 已将 `user.image` 作为 `profile` scope 的标准 `picture` 发布，Web 的白名单先前丢弃该字段。本次沿原本人资料同源读取补可选 HTTPS 图片，保姓名 CAS 与主体/准入代退休；非法/无图片或加载失败回落首字母。只在浏览器匿名且无 referrer 加载，不新增服务端 URL 请求、上传、scope、表或 owner API。
+
+新增回归先红（2 失败/73 通过），修复后原 adapter/client/AccountCard 三文件 100 项通过；定向 ESLint 和完整非增量 tsc 通过。后台 headless Playwright 验证当前原生登录资料 GET200（该 QA 账号无 picture），并以明确的浏览器 fixture 验证图片实际加载、匿名/no-referrer、失败 fallback、390px 无横溢；账户写请求为零。fixture 成功不是该账号真实头像或上传成功，尚未声称整个账户、全部设置或全 Task B 完成。候选 60256 是四文件开发 overlay，正常 3314/main 未切换；审查和最终 SHA 由 Root 交付记录绑定。
