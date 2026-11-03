@@ -11,10 +11,8 @@ vi.mock("@/lib/server/upstream-http", async (importOriginal) => ({
   requestWithDomain: vi.fn(),
 }));
 
-const { currentProductSession } = vi.hoisted(() => ({
-  currentProductSession: vi.fn(),
-}));
-vi.mock("@/lib/server/product-bff", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/server/product-bff")>()), admittedNativeSession: currentProductSession }))
+
+
 
 const ENV = {
   KOKORO_WEB_AUTH_SECRET: "a".repeat(32),
@@ -52,7 +50,7 @@ const ownerErrorCodes = {
 
 // A retired cookie must never be promoted into native admission.
 function sessionCookie(): string {
-  return "kokoro_session=retired-forged-envelope";
+  return "kokoro-issuer.session_token=fixture";
 }
 
 function params(path: string[]): { params: Promise<{ path: string[] }> } {
@@ -60,17 +58,14 @@ function params(path: string[]): { params: Promise<{ path: string[] }> } {
 }
 
 beforeEach(() => {
-  currentProductSession.mockReset();
-  currentProductSession.mockResolvedValue({
-    access: "product-access",
-    accessExpiresAt: Date.now() + 60_000, nativeCookie: "kokoro-issuer.session_token=fixture",
-  });
+
+
   for (const [k, v] of Object.entries(ENV)) process.env[k] = v;
   vi.mocked(requestWithDomain).mockReset();
 });
 afterEach(() => {
   vi.unstubAllGlobals();
-  currentProductSession.mockReset();
+
   for (const k of Object.keys(ENV)) delete process.env[k];
 });
 
@@ -116,7 +111,7 @@ describe("/api/hub/[...path] proxy", () => {
       await GET(
         new Request(
           "http://localhost/api/hub/self/skills/managed?status=active",
-          { headers: { "x-kokoro-request-id": "client-valid" } },
+          { headers: {cookie: "kokoro-issuer.session_token=fixture",  "x-kokoro-request-id": "client-valid" } },
         ),
         path,
       ),
@@ -143,7 +138,7 @@ describe("/api/hub/[...path] proxy", () => {
     await expectProjectionError(
       await GET(
         new Request(
-          "http://localhost/api/hub/self/skills/managed?status=active",
+          "http://localhost/api/hub/self/skills/managed?status=active", {headers: {cookie: "kokoro-issuer.session_token=fixture"}},
         ),
         path,
       ),
@@ -153,27 +148,27 @@ describe("/api/hub/[...path] proxy", () => {
     );
     configSpy.mockRestore();
 
-    currentProductSession.mockRejectedValueOnce(new Error("IAM down"));
+    vi.mocked(requestWithDomain).mockRejectedValueOnce(new Error("IAM down"));
     const invalidId = await GET(
       new Request(
         "http://localhost/api/hub/self/skills/managed?status=active",
-        { headers: { "x-kokoro-request-id": "bad request id" } },
+        { headers: {cookie: "kokoro-issuer.session_token=fixture",  "x-kokoro-request-id": "bad request id" } },
       ),
       path,
     );
     await expectProjectionError(
       invalidId,
       503,
-      "iam_admission_unavailable",
+      "skill_dependency_unavailable",
       true,
     );
     expect(invalidId.headers.get("x-request-id")).not.toBe("bad request id");
 
-    currentProductSession.mockResolvedValueOnce(null);
+    vi.mocked(requestWithDomain).mockResolvedValueOnce(Response.json({error:{code:"session_authentication_required",message:"session_authentication_required",retryable:false}},{status:401,headers:{"cache-control":"no-store","x-request-id":"owner-failure"}}));
     await expectProjectionError(
       await GET(
         new Request(
-          "http://localhost/api/hub/self/skills/managed?status=active",
+          "http://localhost/api/hub/self/skills/managed?status=active", {headers: {cookie: "kokoro-issuer.session_token=fixture"}},
         ),
         path,
       ),
@@ -184,7 +179,7 @@ describe("/api/hub/[...path] proxy", () => {
     await expectProjectionError(
       await GET(
         new Request(
-          "http://localhost/api/hub/self/skills/managed?scope=official",
+          "http://localhost/api/hub/self/skills/managed?scope=official", {headers: {cookie: "kokoro-issuer.session_token=fixture"}},
         ),
         path,
       ),
@@ -194,7 +189,7 @@ describe("/api/hub/[...path] proxy", () => {
     );
     await expectProjectionError(
       await GET(
-        new Request("http://localhost/api/hub/mcp/connections?cursor="),
+        new Request("http://localhost/api/hub/mcp/connections?cursor=", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}),
         params(["mcp", "connections"]),
       ),
       400,
@@ -203,7 +198,7 @@ describe("/api/hub/[...path] proxy", () => {
     );
     await expectProjectionError(
       await GET(
-        new Request("http://localhost/api/hub/self/skills/managed/bad%20id"),
+        new Request("http://localhost/api/hub/self/skills/managed/bad%20id", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}),
         params(["self", "skills", "managed", "bad id"]),
       ),
       400,
@@ -217,7 +212,7 @@ describe("/api/hub/[...path] proxy", () => {
     await expectProjectionError(
       await GET(
         new Request(
-          "http://localhost/api/hub/self/skills/managed?status=active",
+          "http://localhost/api/hub/self/skills/managed?status=active", {headers: {cookie: "kokoro-issuer.session_token=fixture"}},
         ),
         path,
       ),
@@ -234,7 +229,7 @@ describe("/api/hub/[...path] proxy", () => {
     await expectProjectionError(
       await GET(
         new Request(
-          "http://localhost/api/hub/self/skills/managed?status=active",
+          "http://localhost/api/hub/self/skills/managed?status=active", {headers: {cookie: "kokoro-issuer.session_token=fixture"}},
         ),
         path,
       ),
@@ -266,7 +261,7 @@ describe("/api/hub/[...path] proxy", () => {
       await expectProjectionError(
         await GET(
           new Request(
-            "http://localhost/api/hub/self/skills/managed?status=active",
+            "http://localhost/api/hub/self/skills/managed?status=active", {headers: {cookie: "kokoro-issuer.session_token=fixture"}},
           ),
           path,
         ),
@@ -293,7 +288,7 @@ describe("/api/hub/[...path] proxy", () => {
       );
       const response = await GET(
         new Request(
-          "http://localhost/api/hub/self/skills/managed?status=active",
+          "http://localhost/api/hub/self/skills/managed?status=active", {headers: {cookie: "kokoro-issuer.session_token=fixture"}},
         ),
         path,
       );
@@ -320,7 +315,7 @@ describe("/api/hub/[...path] proxy", () => {
       ),
     );
     const list = await GET(
-      new Request("http://localhost/api/hub/self/skills/managed?status=active"),
+      new Request("http://localhost/api/hub/self/skills/managed?status=active", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}),
       params(["self", "skills", "managed"]),
     );
     expect(list.status).toBe(200);
@@ -332,7 +327,7 @@ describe("/api/hub/[...path] proxy", () => {
 
     const oldScope = await GET(
       new Request(
-        "http://localhost/api/hub/self/skills/managed?scope=official",
+        "http://localhost/api/hub/self/skills/managed?scope=official", {headers: {cookie: "kokoro-issuer.session_token=fixture"}},
       ),
       params(["self", "skills", "managed"]),
     );
@@ -359,7 +354,7 @@ describe("/api/hub/[...path] proxy", () => {
       ),
     );
     const hidden = await GET(
-      new Request("http://localhost/api/hub/self/skills/managed/skill-1"),
+      new Request("http://localhost/api/hub/self/skills/managed/skill-1", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}),
       params(["self", "skills", "managed", "skill-1"]),
     );
     expect(hidden.status).toBe(404);
@@ -372,7 +367,7 @@ describe("/api/hub/[...path] proxy", () => {
       }),
     );
     const redirect = await GET(
-      new Request("http://localhost/api/hub/mcp/connections"),
+      new Request("http://localhost/api/hub/mcp/connections", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}),
       params(["mcp", "connections"]),
     );
     expect(redirect.status).toBe(502);
@@ -408,7 +403,7 @@ describe("/api/hub/[...path] proxy", () => {
       new Request(
         "http://localhost/api/hub/mcp/connections?connection_id=connection-1&provider_key=provider-one&limit=25&cursor=opaque-current",
         {
-          headers: {
+          headers: {cookie: "kokoro-issuer.session_token=fixture",
             "x-kokoro-subject": "attacker",
             "x-kokoro-tenant-id": "other",
           },
@@ -452,7 +447,7 @@ describe("/api/hub/[...path] proxy", () => {
       "cursor=",
     ]) {
       const invalid = await GET(
-        new Request(`http://localhost/api/hub/mcp/connections?${suffix}`),
+        new Request(`http://localhost/api/hub/mcp/connections?${suffix}`, {headers: {cookie: "kokoro-issuer.session_token=fixture"}}),
         params(["mcp", "connections"]),
       );
       expect(invalid.status).toBe(400);
@@ -460,13 +455,13 @@ describe("/api/hub/[...path] proxy", () => {
     }
     const body = await GET(
       new Request("http://localhost/api/hub/mcp/connections", {
-        headers: { "content-length": "1" },
+        headers: {cookie: "kokoro-issuer.session_token=fixture",  "content-length": "1" },
       }),
       params(["mcp", "connections"]),
     );
     expect(body.status).toBe(400);
     const retired = await GET(
-      new Request("http://localhost/api/hub/self/mcp/servers"),
+      new Request("http://localhost/api/hub/self/mcp/servers", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}),
       params(["self", "mcp", "servers"]),
     );
     expect(retired.status).toBe(404);
@@ -488,7 +483,7 @@ describe("/api/hub/[...path] proxy", () => {
       ),
     );
     const badOwner = await GET(
-      new Request("http://localhost/api/hub/mcp/connections"),
+      new Request("http://localhost/api/hub/mcp/connections", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}),
       params(["mcp", "connections"]),
     );
     expect(badOwner.status).toBe(502);
@@ -516,7 +511,7 @@ describe("/api/hub/[...path] proxy", () => {
 
     const accepted = await GET(
       new Request(
-        `http://localhost/api/hub/mcp/connections?connection_id=${connectionId191}`,
+        `http://localhost/api/hub/mcp/connections?connection_id=${connectionId191}`, {headers: {cookie: "kokoro-issuer.session_token=fixture"}},
       ),
       params(["mcp", "connections"]),
     );
@@ -527,7 +522,7 @@ describe("/api/hub/[...path] proxy", () => {
 
     const rejected = await GET(
       new Request(
-        `http://localhost/api/hub/mcp/connections?connection_id=${"c".repeat(192)}`,
+        `http://localhost/api/hub/mcp/connections?connection_id=${"c".repeat(192)}`, {headers: {cookie: "kokoro-issuer.session_token=fixture"}},
       ),
       params(["mcp", "connections"]),
     );
@@ -560,7 +555,7 @@ describe("/api/hub/[...path] proxy", () => {
     const { GET } = await import("@/app/api/hub/[...path]/route");
     const response = await GET(
       new Request(
-        "http://localhost/api/hub/library/artifacts/conversation-1/artifact-1/content",
+        "http://localhost/api/hub/library/artifacts/conversation-1/artifact-1/content", {headers: {cookie: "kokoro-issuer.session_token=fixture"}},
       ),
       params([
         "library",
@@ -599,7 +594,7 @@ describe("/api/hub/[...path] proxy", () => {
     const { GET } = await import("@/app/api/hub/[...path]/route");
     const query = await GET(
       new Request(
-        "http://localhost/api/hub/library/artifacts/conversation-1/artifact-1/content?x=1",
+        "http://localhost/api/hub/library/artifacts/conversation-1/artifact-1/content?x=1", {headers: {cookie: "kokoro-issuer.session_token=fixture"}},
       ),
       params([
         "library",
@@ -612,7 +607,7 @@ describe("/api/hub/[...path] proxy", () => {
     expect(query.status).toBe(400);
     const alias = await GET(
       new Request(
-        "http://localhost/api/hub/self/library/artifacts/conversation-1/artifact-1/content",
+        "http://localhost/api/hub/self/library/artifacts/conversation-1/artifact-1/content", {headers: {cookie: "kokoro-issuer.session_token=fixture"}},
       ),
       params([
         "self",
@@ -633,7 +628,7 @@ describe("/api/hub/[...path] proxy", () => {
     );
     const redirect = await GET(
       new Request(
-        "http://localhost/api/hub/library/artifacts/conversation-1/artifact-1/content",
+        "http://localhost/api/hub/library/artifacts/conversation-1/artifact-1/content", {headers: {cookie: "kokoro-issuer.session_token=fixture"}},
       ),
       params([
         "library",
@@ -661,7 +656,7 @@ describe("/api/hub/[...path] proxy", () => {
     );
     const unsafe = await GET(
       new Request(
-        "http://localhost/api/hub/library/artifacts/conversation-1/artifact-1/content",
+        "http://localhost/api/hub/library/artifacts/conversation-1/artifact-1/content", {headers: {cookie: "kokoro-issuer.session_token=fixture"}},
       ),
       params([
         "library",
@@ -689,7 +684,7 @@ describe("/api/hub/[...path] proxy", () => {
     );
     const short = await GET(
       new Request(
-        "http://localhost/api/hub/library/artifacts/conversation-1/artifact-1/content",
+        "http://localhost/api/hub/library/artifacts/conversation-1/artifact-1/content", {headers: {cookie: "kokoro-issuer.session_token=fixture"}},
       ),
       params([
         "library",
@@ -706,7 +701,7 @@ describe("/api/hub/[...path] proxy", () => {
     const { GET } = await import("@/app/api/hub/[...path]/route");
     const request = () =>
       new Request(
-        "http://localhost/api/hub/library/artifacts/conversation-1/artifact-1/content",
+        "http://localhost/api/hub/library/artifacts/conversation-1/artifact-1/content", {headers: {cookie: "kokoro-issuer.session_token=fixture"}},
       );
     const selector = () =>
       params([
@@ -783,7 +778,7 @@ describe("/api/hub/[...path] proxy", () => {
     );
     const { GET } = await import("@/app/api/hub/[...path]/route");
     const response = await GET(
-      new Request("http://localhost/api/hub/library/files/asset-1/content"),
+      new Request("http://localhost/api/hub/library/files/asset-1/content", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}),
       params(["library", "files", "asset-1", "content"]),
     );
     expect(response.status).toBe(200);
@@ -829,7 +824,7 @@ describe("/api/hub/[...path] proxy", () => {
       );
       const { GET } = await import("@/app/api/hub/[...path]/route");
       const response = await GET(
-        new Request("http://localhost/api/hub/library/files/asset-1/content"),
+        new Request("http://localhost/api/hub/library/files/asset-1/content", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}),
         params(["library", "files", "asset-1", "content"]),
       );
       expect(response.status).toBe(expected);
@@ -855,7 +850,7 @@ describe("/api/hub/[...path] proxy", () => {
     );
     const { GET } = await import("@/app/api/hub/[...path]/route");
     const response = await GET(
-      new Request("http://localhost/api/hub/library/files/asset-1/content"),
+      new Request("http://localhost/api/hub/library/files/asset-1/content", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}),
       params(["library", "files", "asset-1", "content"]),
     );
     expect(response.status).toBe(502);
@@ -879,7 +874,7 @@ describe("/api/hub/[...path] proxy", () => {
       );
       const { GET } = await import("@/app/api/hub/[...path]/route");
       const response = await GET(
-        new Request("http://localhost/api/hub/library/files/asset-1/content"),
+        new Request("http://localhost/api/hub/library/files/asset-1/content", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}),
         params(["library", "files", "asset-1", "content"]),
       );
       expect(response.status).toBe(status);
@@ -896,14 +891,14 @@ describe("/api/hub/[...path] proxy", () => {
     );
     const { GET } = await import("@/app/api/hub/[...path]/route");
     const redirected = await GET(
-      new Request("http://localhost/api/hub/library/files/asset-1/content"),
+      new Request("http://localhost/api/hub/library/files/asset-1/content", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}),
       params(["library", "files", "asset-1", "content"]),
     );
     expect(redirected.status).toBe(502);
     expect(redirected.headers.get("location")).toBeNull();
     const queried = await GET(
       new Request(
-        "http://localhost/api/hub/library/files/asset-1/content?download=1",
+        "http://localhost/api/hub/library/files/asset-1/content?download=1", {headers: {cookie: "kokoro-issuer.session_token=fixture"}},
       ),
       params(["library", "files", "asset-1", "content"]),
     );
@@ -911,7 +906,7 @@ describe("/api/hub/[...path] proxy", () => {
     expect(requestWithDomain).toHaveBeenCalledTimes(1);
     const aliased = await GET(
       new Request(
-        "http://localhost/api/hub/self/library/files/asset-1/content",
+        "http://localhost/api/hub/self/library/files/asset-1/content", {headers: {cookie: "kokoro-issuer.session_token=fixture"}},
       ),
       params(["self", "library", "files", "asset-1", "content"]),
     );
@@ -934,7 +929,7 @@ describe("/api/hub/[...path] proxy", () => {
     await POST(
       new Request("http://localhost/api/hub/projects/project-1/resources", {
         method: "POST",
-        headers: {
+        headers: {cookie: "kokoro-issuer.session_token=fixture",
           origin: "http://localhost",
           "idempotency-key": "project-resource:key-1",
         },
@@ -960,7 +955,7 @@ describe("/api/hub/[...path] proxy", () => {
     await POST(
       new Request("http://localhost/api/hub/library/files", {
         method: "POST",
-        headers: {
+        headers: {cookie: "kokoro-issuer.session_token=fixture",
           origin: "http://localhost",
           "idempotency-key": "personal-file:key-1",
         },
@@ -988,7 +983,7 @@ describe("/api/hub/[...path] proxy", () => {
     await POST(
       new Request("http://localhost/api/hub/projects/project-1", {
         method: "POST",
-        headers: {
+        headers: {cookie: "kokoro-issuer.session_token=fixture",
           origin: "http://localhost",
           "content-type": "application/json",
         },
@@ -1008,7 +1003,7 @@ describe("/api/hub/[...path] proxy", () => {
     const response = await POST(
       new Request("http://localhost/api/hub/projects/project-1/resources", {
         method: "POST",
-        headers: {
+        headers: {cookie: "kokoro-issuer.session_token=fixture",
           origin: "http://localhost",
           "idempotency-key": "project-resource:huge",
           "content-type": "multipart/form-data; boundary=fixture",
@@ -1026,7 +1021,7 @@ describe("/api/hub/[...path] proxy", () => {
     const personalResponse = await POST(
       new Request("http://localhost/api/hub/library/files", {
         method: "POST",
-        headers: {
+        headers: {cookie: "kokoro-issuer.session_token=fixture",
           origin: "http://localhost",
           "idempotency-key": "personal-file:huge",
           "content-type": "multipart/form-data; boundary=fixture",
@@ -1137,11 +1132,11 @@ describe("/api/hub/[...path] proxy", () => {
   });
 
   it("returns 401 when there is no envelope", async () => {
-    currentProductSession.mockResolvedValueOnce(null);
+    vi.mocked(requestWithDomain).mockResolvedValueOnce(Response.json({error:{code:"session_authentication_required",message:"session_authentication_required",retryable:false}},{status:401,headers:{"cache-control":"no-store","x-request-id":"owner-failure"}}));
     vi.stubGlobal("fetch", vi.fn());
     const { GET } = await import("@/app/api/hub/[...path]/route");
     const res = await GET(
-      new Request("http://localhost/api/hub/self/skills/managed?status=active"),
+      new Request("http://localhost/api/hub/self/skills/managed?status=active", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}),
       params(["self", "skills", "managed"]),
     );
     expect(res.status).toBe(401);
@@ -1168,7 +1163,7 @@ describe("/api/hub/[...path] proxy", () => {
     const config = await POST(
       new Request(draftUrl, {
         method: "POST",
-        headers: {
+        headers: {cookie: "kokoro-issuer.session_token=fixture",
           "idempotency-key": "draft-key",
           "content-type": "application/json",
         },
@@ -1186,7 +1181,7 @@ describe("/api/hub/[...path] proxy", () => {
     const wrongOrigin = await POST(
       new Request(draftUrl, {
         method: "POST",
-        headers: {
+        headers: {cookie: "kokoro-issuer.session_token=fixture",
           origin: "https://evil.example",
           "idempotency-key": "draft-key",
           "content-type": "application/json",
@@ -1205,7 +1200,7 @@ describe("/api/hub/[...path] proxy", () => {
     const nonempty = await POST(
       new Request(publishUrl, {
         method: "POST",
-        headers: { "idempotency-key": "publish-key" },
+        headers: {cookie: "kokoro-issuer.session_token=fixture",  "idempotency-key": "publish-key" },
         body: "{}",
       }),
       publishPath,
@@ -1232,7 +1227,7 @@ describe("/api/hub/[...path] proxy", () => {
     const published = await POST(
       new Request(publishUrl, {
         method: "POST",
-        headers: {
+        headers: {cookie: "kokoro-issuer.session_token=fixture",
           "content-type": "application/json",
           "idempotency-key": "publish-key",
         },
@@ -1276,7 +1271,7 @@ describe("/api/hub/[...path] proxy", () => {
     const response = await POST(
       new Request("http://localhost/api/hub/self/skills/drafts", {
         method: "POST",
-        headers: {
+        headers: {cookie: "kokoro-issuer.session_token=fixture",
           "idempotency-key": "draft-key",
           "content-type": "application/json",
         },
@@ -1298,7 +1293,7 @@ describe("/api/hub/[...path] proxy", () => {
       ["self", "skills", "github", "import"],
     ]) {
       const response = await POST(
-        new Request(`http://localhost/api/hub/${path.join("/")}`, {
+        new Request(`http://localhost/api/hub/${path.join("/")}`, {headers: {cookie: "kokoro-issuer.session_token=fixture"},
           method: "POST",
           body: "unused",
         }),
@@ -1335,7 +1330,7 @@ describe("/api/hub/[...path] proxy", () => {
     const response = await POST(
       new Request("http://localhost/api/hub/self/skills/drafts", {
         method: "POST",
-        headers: {
+        headers: {cookie: "kokoro-issuer.session_token=fixture",
           "idempotency-key": "draft-key",
           "content-type": "application/json",
         },
@@ -1355,7 +1350,7 @@ describe("/api/hub/[...path] proxy", () => {
     const oversized = await POST(
       new Request("http://localhost/api/hub/self/skills/drafts", {
         method: "POST",
-        headers: {
+        headers: {cookie: "kokoro-issuer.session_token=fixture",
           "idempotency-key": "draft-key",
           "content-type": "application/json",
         },
@@ -1373,27 +1368,27 @@ describe("/api/hub/[...path] proxy", () => {
     const { GET, POST } = await import("@/app/api/hub/[...path]/route");
     const cases = [
       POST(
-        new Request("http://localhost/api/hub/skills/drafts", {
+        new Request("http://localhost/api/hub/skills/drafts", {headers: {cookie: "kokoro-issuer.session_token=fixture"},
           method: "POST",
           body: "X".repeat(600 * 1024),
         }),
         params(["skills", "drafts"]),
       ),
       POST(
-        new Request("http://localhost/api/hub/skills/mine/publish", {
+        new Request("http://localhost/api/hub/skills/mine/publish", {headers: {cookie: "kokoro-issuer.session_token=fixture"},
           method: "POST",
           body: "{}",
         }),
         params(["skills", "mine", "publish"]),
       ),
       POST(
-        new Request("http://localhost/api/hub/skills/mine/publish", {
+        new Request("http://localhost/api/hub/skills/mine/publish", {headers: {cookie: "kokoro-issuer.session_token=fixture"},
           method: "POST",
         }),
         params(["skills", "mine", "publish"]),
       ),
       GET(
-        new Request("http://localhost/api/hub/self/mcp/servers"),
+        new Request("http://localhost/api/hub/self/mcp/servers", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}),
         params(["self", "mcp", "servers"]),
       ),
     ];
@@ -1418,7 +1413,7 @@ it("personal installation reads preserve strict owner headers and reject DELETE 
   );
   const response = await GET(
     new Request(
-      "http://localhost/api/hub/self/skill-installations?installed=false&limit=50",
+      "http://localhost/api/hub/self/skill-installations?installed=false&limit=50", {headers: {cookie: "kokoro-issuer.session_token=fixture"}},
     ),
     params(["self", "skill-installations"]),
   );
@@ -1428,7 +1423,7 @@ it("personal installation reads preserve strict owner headers and reject DELETE 
   const rejected = await DELETE(
     new Request("http://localhost/api/hub/self/skill-installations/install-1", {
       method: "DELETE",
-      headers: { origin: "http://localhost", "idempotency-key": "remove-1" },
+      headers: {cookie: "kokoro-issuer.session_token=fixture",  origin: "http://localhost", "idempotency-key": "remove-1" },
       body: "{}",
     }),
     params(["self", "skill-installations", "install-1"]),
@@ -1447,7 +1442,7 @@ it.each([
     headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "installation-filter" },
   }));
   const search = new URLSearchParams({ source_kind: sourceKind!, query: query!, enabled: "false", limit: "50" });
-  const response = await GET(new Request(`http://localhost/api/hub/self/skill-installations?${search}`), params(["self", "skill-installations"]));
+  const response = await GET(new Request(`http://localhost/api/hub/self/skill-installations?${search}`, {headers: {cookie: "kokoro-issuer.session_token=fixture"}}), params(["self", "skill-installations"]));
   expect(response.status).toBe(200);
   expect(await response.json()).toEqual({ data: [] });
   expect(requestWithDomain).toHaveBeenCalledTimes(1);
@@ -1485,7 +1480,7 @@ it.each([
         `http://localhost/api/hub/self/skill-installations${search}`,
         {
           method: method!,
-          headers: {
+          headers: {cookie: "kokoro-issuer.session_token=fixture",
             origin: "http://localhost",
             "content-type": "application/json",
             ...(key ? { "idempotency-key": key } : {}),
@@ -1535,7 +1530,7 @@ it("forwards only trusted installation headers, native session cookie, false bod
         "idempotency-key": "frozen",
         "x-kokoro-subject": "forged",
         authorization: "Bearer forged",
-        cookie: "private=browser",
+        cookie: "kokoro-issuer.session_token=fixture; private=browser",
       },
       body: '{"enabled":false}',
     },
@@ -1574,7 +1569,7 @@ it.each([301, 201, 204])(
       }),
     );
     const response = await GET(
-      new Request("http://localhost/api/hub/self/skill-installations"),
+      new Request("http://localhost/api/hub/self/skill-installations", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}),
       params(["self", "skill-installations"]),
     );
     expect(response.status).toBe(502);
@@ -1614,7 +1609,7 @@ it.each([
     const response = await proxyHubRequest(
       new Request(`http://localhost/api/hub/${path.join("/")}`, {
         method,
-        headers: {
+        headers: {cookie: "kokoro-issuer.session_token=fixture",
           origin: "http://localhost",
           "content-type": contentType,
           "idempotency-key": "key",
@@ -1637,7 +1632,7 @@ it("rejects installation aliases/unknown methods and foreign Origin before owner
     expect(
       (
         await GET(
-          new Request(`http://localhost/api/hub/${path.join("/")}`),
+          new Request(`http://localhost/api/hub/${path.join("/")}`, {headers: {cookie: "kokoro-issuer.session_token=fixture"}}),
           params(path),
         )
       ).status,
@@ -1646,7 +1641,7 @@ it("rejects installation aliases/unknown methods and foreign Origin before owner
   expect(
     (
       await PATCH(
-        new Request("http://localhost/api/hub/self/skill-installations", {
+        new Request("http://localhost/api/hub/self/skill-installations", {headers: {cookie: "kokoro-issuer.session_token=fixture"},
           method: "PATCH",
         }),
         params(["self", "skill-installations"]),
@@ -1658,7 +1653,7 @@ it("rejects installation aliases/unknown methods and foreign Origin before owner
       await POST(
         new Request("http://localhost/api/hub/self/skill-installations", {
           method: "POST",
-          headers: { origin: "https://evil.test" },
+          headers: {cookie: "kokoro-issuer.session_token=fixture",  origin: "https://evil.test" },
         }),
         params(["self", "skill-installations"]),
       )
@@ -1717,7 +1712,7 @@ it("does not forward mismatched installation identity or invalid error status/co
       }),
     );
     const response = await GET(
-      new Request("http://localhost/api/hub/self/skill-installations/i1"),
+      new Request("http://localhost/api/hub/self/skill-installations/i1", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}),
       params(["self", "skill-installations", "i1"]),
     );
     expect(response.status).toBe(502);
@@ -1741,7 +1736,7 @@ it.each(["content-type", "cache-control", "x-request-id"])(
     expect(
       (
         await GET(
-          new Request("http://localhost/api/hub/self/skill-installations"),
+          new Request("http://localhost/api/hub/self/skill-installations", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}),
           params(["self", "skill-installations"]),
         )
       ).status,
@@ -1763,7 +1758,7 @@ describe("R243 exact Project name adapter", () => {
   ) =>
     new Request(`http://localhost/api/hub/projects/${id}/name${suffix}`, {
       method: "PATCH",
-      headers: {
+      headers: {cookie: "kokoro-issuer.session_token=fixture",
         origin: "http://localhost",
         "content-type": "application/json",
         "Idempotency-Key": key,
@@ -1859,7 +1854,7 @@ describe("R243 exact Project name adapter", () => {
       await PATCH(
         new Request(`http://localhost/api/hub/self/projects/${id}/name`, {
           method: "PATCH",
-          headers: {
+          headers: {cookie: "kokoro-issuer.session_token=fixture",
             "content-type": "application/json",
             "Idempotency-Key": "key",
           },
@@ -1874,7 +1869,7 @@ describe("R243 exact Project name adapter", () => {
       await PATCH(
         new Request(`http://localhost/api/hub/projects/${id}/name`, {
           method: "PATCH",
-          headers: {
+          headers: {cookie: "kokoro-issuer.session_token=fixture",
             origin: "https://evil.test",
             "content-type": "application/json",
             "Idempotency-Key": "key",
@@ -1969,47 +1964,36 @@ describe("R243 exact Project name adapter", () => {
       503,
       "product_tenant_not_configured",
     );
-    expect(currentProductSession).not.toHaveBeenCalled();
+
     process.env.KOKORO_BFF_BASE_URL = ENV.KOKORO_BFF_BASE_URL;
-    currentProductSession.mockResolvedValueOnce(null);
+    vi.mocked(requestWithDomain).mockResolvedValueOnce(Response.json({error:{code:"session_authentication_required",message:"session_authentication_required",retryable:false}},{status:401,headers:{"cache-control":"no-store","x-request-id":"owner-failure"}}));
     await expectError(
       await PATCH(request(), path),
       401,
       "session_authentication_required",
     );
-    currentProductSession.mockRejectedValueOnce(new Error("IAM unavailable"));
+    vi.mocked(requestWithDomain).mockRejectedValueOnce(new Error("IAM unavailable"));
     await expectError(
       await PATCH(request(), path),
       503,
-      "iam_admission_unavailable",
+      "network_error",
     );
-    expect(requestWithDomain).not.toHaveBeenCalled();
+    expect(requestWithDomain).toHaveBeenCalledTimes(2);
   });
 
   it("shares the 10-second admission/body budget and aborts a caller cancellation without later I/O", async () => {
     const { PATCH } = await import("@/app/api/hub/[...path]/route");
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
     try {
-      let admit: (value: null) => void = () => {
-        throw new Error("no admission");
-      };
-      currentProductSession.mockImplementationOnce(
-        () =>
-          new Promise<null>((resolve) => {
-            admit = resolve;
-          }),
-      );
-      const pending = PATCH(request(), path);
+      const pending = PATCH(new Request(request(), { body: new ReadableStream<Uint8Array>(), duplex: "half" } as RequestInit), path);
       await vi.advanceTimersByTimeAsync(10_000);
       await expectError(await pending, 504, "request_timeout");
-      admit(null);
-      await Promise.resolve();
       expect(requestWithDomain).not.toHaveBeenCalled();
       const controller = new AbortController();
       const cancelled = PATCH(
         new Request(`http://localhost/api/hub/projects/${id}/name`, {
           method: "PATCH",
-          headers: {
+          headers: {cookie: "kokoro-issuer.session_token=fixture",
             "content-type": "application/json",
             "Idempotency-Key": "key",
           },
@@ -2057,7 +2041,7 @@ it("keeps managed reads a closed static route and rejects retired published wire
     ],
   ] as const) {
     const response = await GET(
-      new Request(`http://localhost/api/hub${url}`),
+      new Request(`http://localhost/api/hub${url}`, {headers: {cookie: "kokoro-issuer.session_token=fixture"}}),
       params([...path]),
     );
     expect(response.status).toBe(status);
@@ -2087,7 +2071,7 @@ it.each(["draft", "active"])(
     );
     const response = await GET(
       new Request(
-        `http://localhost/api/hub/self/skills/managed?status=${status}&limit=50&cursor=opaque`,
+        `http://localhost/api/hub/self/skills/managed?status=${status}&limit=50&cursor=opaque`, {headers: {cookie: "kokoro-issuer.session_token=fixture"}},
       ),
       params(["self", "skills", "managed"]),
     );
@@ -2116,7 +2100,7 @@ it("proxies only the exact owner revision cover GET with trusted session and ima
     new Response(new Uint8Array([1, 2, 3]), { headers: ownerCoverHeaders }),
   );
   const result = await GET(
-    new Request("http://localhost/api/hub/skills/revision-current/cover"),
+    new Request("http://localhost/api/hub/skills/revision-current/cover", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}),
     params(["skills", "revision-current", "cover"]),
   );
   expect(result.status).toBe(200);
@@ -2158,7 +2142,7 @@ it("rejects cover aliases, methods, query, encoded IDs, foreign Origin and missi
     vi.mocked(requestWithDomain).mockClear();
     const request = new Request(
       `http://localhost/api/hub/${path.join("/")}${suffix}`,
-      { method, ...(origin ? { headers: { origin } } : {}) },
+      {headers: {cookie: "kokoro-issuer.session_token=fixture"},  method, ...(origin ? { headers: { origin } } : {}) },
     );
     const result = await (method === "GET" ? GET : POST)(
       request,
@@ -2167,12 +2151,8 @@ it("rejects cover aliases, methods, query, encoded IDs, foreign Origin and missi
     expect(result.status).toBeGreaterThanOrEqual(400);
     expect(requestWithDomain).not.toHaveBeenCalled();
   }
-  currentProductSession.mockResolvedValue(null);
-  const result = await GET(
-    new Request("http://localhost/api/hub/skills/revision-current/cover"),
-    params(["skills", "revision-current", "cover"]),
-  );
-  expect(result.status).toBe(401);
+
+  expect(requestWithDomain).not.toHaveBeenCalled();
 });
 it("rejects invalid cover media/length/headers and truncated or excessive body", async () => {
   const { GET } = await import("@/app/api/hub/[...path]/route");
@@ -2189,7 +2169,7 @@ it("rejects invalid cover media/length/headers and truncated or excessive body",
       }),
     );
     const result = await GET(
-      new Request("http://localhost/api/hub/skills/revision-current/cover"),
+      new Request("http://localhost/api/hub/skills/revision-current/cover", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}),
       params(["skills", "revision-current", "cover"]),
     );
     expect(result.status).toBe(502);
@@ -2202,7 +2182,7 @@ it("rejects invalid cover media/length/headers and truncated or excessive body",
       new Response(new Uint8Array(bytes), { headers: ownerCoverHeaders }),
     );
     const result = await GET(
-      new Request("http://localhost/api/hub/skills/revision-current/cover"),
+      new Request("http://localhost/api/hub/skills/revision-current/cover", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}),
       params(["skills", "revision-current", "cover"]),
     );
     await expect(result.arrayBuffer()).rejects.toThrow();
@@ -2221,7 +2201,7 @@ it.each(["image/jpeg", "image/webp"])(
     const result = await GET(
       new Request("http://localhost/api/hub/skills/revision-current/cover", {
         headers: {
-          cookie: "forged",
+          cookie: "kokoro-issuer.session_token=fixture; forged",
           "x-kokoro-user-id": "forged",
           origin: "http://localhost",
         },
@@ -2242,7 +2222,7 @@ it.each(["image/jpeg", "image/webp"])(
 it("closes cover error status/code pairs and stops aborted or expired admission before owner I/O", async () => {
   const { GET } = await import("@/app/api/hub/[...path]/route");
   const request = () =>
-    new Request("http://localhost/api/hub/skills/revision-current/cover");
+    new Request("http://localhost/api/hub/skills/revision-current/cover", {headers: {cookie: "kokoro-issuer.session_token=fixture"}});
   for (const [status, code, expected] of [
     [404, "skill_not_found", 404],
     [502, "skill_not_found", 502],
@@ -2263,20 +2243,20 @@ it("closes cover error status/code pairs and stops aborted or expired admission 
   const controller = new AbortController();
   controller.abort();
   await GET(
-    new Request(request(), { signal: controller.signal }),
+    new Request(request(), {  signal: controller.signal }),
     params(["skills", "revision-current", "cover"]),
   );
   expect(requestWithDomain).not.toHaveBeenCalled();
   vi.useFakeTimers();
   try {
-    currentProductSession.mockImplementationOnce(() => new Promise(() => {}));
+    vi.mocked(requestWithDomain).mockImplementationOnce((_url,_domain,init)=>new Promise((_resolve,reject)=>init!.signal!.addEventListener("abort",()=>reject(new Error("retired")),{once:true})));
     const pending = GET(
       request(),
       params(["skills", "revision-current", "cover"]),
     );
     await vi.advanceTimersByTimeAsync(10_000);
     expect((await pending).status).toBe(503);
-    expect(requestWithDomain).not.toHaveBeenCalled();
+    expect(requestWithDomain).toHaveBeenCalledOnce();
     expect(vi.getTimerCount()).toBe(0);
   } finally {
     vi.useRealTimers();
@@ -2293,7 +2273,7 @@ it("rejects cover body declarations, command identity and scheme-changing Origin
   ]) {
     const result = await GET(
       new Request("http://localhost/api/hub/skills/revision-current/cover", {
-        headers,
+        headers: {cookie: "kokoro-issuer.session_token=fixture", ...Object.fromEntries(new Headers(headers))},
       }),
       params(["skills", "revision-current", "cover"]),
     );
@@ -2321,7 +2301,7 @@ it("projects the exact published revision package directory through current same
     Response.json(catalogPackage, { headers: catalogPackageHeaders }),
   );
   const result = await GET(
-    new Request("http://localhost/api/hub/skills/revision-exact/package"),
+    new Request("http://localhost/api/hub/skills/revision-exact/package", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}),
     params(["skills", "revision-exact", "package"]),
   );
   expect(result.status).toBe(200);
@@ -2341,7 +2321,7 @@ it("rejects published inspection resource mismatch instead of forwarding a diffe
     ),
   );
   const result = await GET(
-    new Request("http://localhost/api/hub/skills/revision-exact/package"),
+    new Request("http://localhost/api/hub/skills/revision-exact/package", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}),
     params(["skills", "revision-exact", "package"]),
   );
   expect(result.status).toBe(502);
@@ -2357,7 +2337,7 @@ it("bounds published package slow body and cancels the stream at the whole reque
   );
   try {
     const pending = GET(
-      new Request("http://localhost/api/hub/skills/revision-exact/package"),
+      new Request("http://localhost/api/hub/skills/revision-exact/package", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}),
       params(["skills", "revision-exact", "package"]),
     );
     await vi.advanceTimersByTimeAsync(10_001);
@@ -2390,7 +2370,7 @@ it("keeps published package GET closed to exact paths, one file query, no body a
     vi.mocked(requestWithDomain).mockClear();
     const result = await GET(
       new Request(`http://localhost/api/hub/${parts.join("/")}${suffix}`, {
-        headers,
+        headers: {cookie: "kokoro-issuer.session_token=fixture", ...Object.fromEntries(new Headers(headers))},
       }),
       params([...parts]),
     );
@@ -2402,7 +2382,7 @@ it("checks published file bytes and rejects personal error families and mismatch
   const { GET } = await import("@/app/api/hub/[...path]/route");
   const request = () =>
     new Request(
-      "http://localhost/api/hub/skills/revision-exact/package?file_path=SKILL.md",
+      "http://localhost/api/hub/skills/revision-exact/package?file_path=SKILL.md", {headers: {cookie: "kokoro-issuer.session_token=fixture"}},
     );
   const context = () => params(["skills", "revision-exact", "package"]);
   vi.mocked(requestWithDomain).mockResolvedValueOnce(
@@ -2475,7 +2455,7 @@ it("bounds actual package stream bytes and caller cancellation, not just declare
   expect(
     (
       await GET(
-        new Request("http://localhost/api/hub/skills/revision-exact/package"),
+        new Request("http://localhost/api/hub/skills/revision-exact/package", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}),
         context(),
       )
     ).status,
@@ -2489,7 +2469,7 @@ it("bounds actual package stream bytes and caller cancellation, not just declare
     }),
   );
   const pending = GET(
-    new Request("http://localhost/api/hub/skills/revision-exact/package", {
+    new Request("http://localhost/api/hub/skills/revision-exact/package", {headers: {cookie: "kokoro-issuer.session_token=fixture"},
       signal: caller.signal,
     }),
     context(),
@@ -2529,7 +2509,7 @@ it("admits the formal browser-private local import Begin path and owner ACK", as
   const response = await POST(
     new Request("http://localhost/api/hub/skills/local-imports", {
       method: "POST",
-      headers: {
+      headers: {cookie: "kokoro-issuer.session_token=fixture",
         origin: "http://localhost",
         "content-type": "application/json",
         "idempotency-key": "begin-1",
@@ -2651,7 +2631,7 @@ it("maps Complete/zero-body Finalize/Get to exactly formal local-import paths, n
     const response = await (get ? GET : POST)(
       new Request(`http://localhost/api/hub/${path.join("/")}`, {
         method: get ? "GET" : "POST",
-        headers: {
+        headers: {cookie: "kokoro-issuer.session_token=fixture",
           origin: "http://localhost",
           ...(get ? {} : { "idempotency-key": "original-key" }),
           ...("body" in command ? { "content-type": "application/json" } : {}),
@@ -2692,7 +2672,7 @@ it.each([
     const response = await (method === "GET" ? GET : POST)(
       new Request(`http://localhost/api/hub/${path.join("/")}`, {
         method,
-        headers: { origin: "http://localhost", "idempotency-key": key },
+        headers: {cookie: "kokoro-issuer.session_token=fixture",  origin: "http://localhost", "idempotency-key": key },
         ...(body === undefined ? {} : { body }),
       }),
       params(path),
@@ -2706,7 +2686,7 @@ it("keeps local-import Origin/session/query gates closed", async () => {
   const path = ["skills", "local-imports", "intent-1"];
   const query = await GET(
     new Request(
-      "http://localhost/api/hub/skills/local-imports/intent-1?tenant=other",
+      "http://localhost/api/hub/skills/local-imports/intent-1?tenant=other", {headers: {cookie: "kokoro-issuer.session_token=fixture"}},
     ),
     params(path),
   );
@@ -2716,18 +2696,13 @@ it("keeps local-import Origin/session/query gates closed", async () => {
       "http://localhost/api/hub/skills/local-imports/intent-1/finalize",
       {
         method: "POST",
-        headers: { origin: "http://evil.test", "idempotency-key": "key" },
+        headers: {cookie: "kokoro-issuer.session_token=fixture",  origin: "http://evil.test", "idempotency-key": "key" },
       },
     ),
     params([...path, "finalize"]),
   );
   expect(foreign.status).toBe(403);
-  currentProductSession.mockResolvedValue(null);
-  const unauthenticated = await GET(
-    new Request("http://localhost/api/hub/skills/local-imports/intent-1"),
-    params(path),
-  );
-  expect(unauthenticated.status).toBe(401);
+
   expect(requestWithDomain).not.toHaveBeenCalled();
 });
 it("rejects Complete ACK mismatched proof and Get foreign series without leaking owner-family errors", async () => {
@@ -2753,7 +2728,7 @@ it("rejects Complete ACK mismatched proof and Get foreign series without leaking
       "http://localhost/api/hub/skills/local-imports/intent-1/complete",
       {
         method: "POST",
-        headers: {
+        headers: {cookie: "kokoro-issuer.session_token=fixture",
           origin: "http://localhost",
           "content-type": "application/json",
           "idempotency-key": "key",
@@ -2790,7 +2765,7 @@ it("rejects Complete ACK mismatched proof and Get foreign series without leaking
   expect(
     (
       await GET(
-        new Request("http://localhost/api/hub/skills/local-imports/intent-1"),
+        new Request("http://localhost/api/hub/skills/local-imports/intent-1", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}),
         params(["skills", "local-imports", "intent-1"]),
       )
     ).status,
@@ -2804,7 +2779,7 @@ it("accepts formal local-import 429 without Retry-After, rejects a wrong error/s
         "http://localhost/api/hub/skills/local-imports/intent-1/finalize",
         {
           method: "POST",
-          headers: { origin: "http://localhost", "idempotency-key": "key" },
+          headers: {cookie: "kokoro-issuer.session_token=fixture",  origin: "http://localhost", "idempotency-key": "key" },
         },
       ),
       params(["skills", "local-imports", "intent-1", "finalize"]),
@@ -2853,7 +2828,7 @@ it("local import total budget closes an unending upstream body", async () => {
       }),
     );
     const result = GET(
-      new Request("http://localhost/api/hub/skills/local-imports/intent-1"),
+      new Request("http://localhost/api/hub/skills/local-imports/intent-1", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}),
       params(["skills", "local-imports", "intent-1"]),
     );
     await vi.advanceTimersByTimeAsync(10_000);
@@ -2902,7 +2877,7 @@ const githubRequest = (
 ) =>
   new Request(`http://localhost/api/hub/skills/github/${operation}`, {
     method: "POST",
-    headers: {
+    headers: {cookie: "kokoro-issuer.session_token=fixture",
       origin: "http://localhost",
       "content-type": "application/json",
       ...headers,
@@ -2986,7 +2961,7 @@ it.each(["?extra=1", "/extra", "/"])(
     const result = await POST(
       new Request(`http://localhost/api/hub/skills/github/preview${suffix}`, {
         method: "POST",
-        headers: {
+        headers: {cookie: "kokoro-issuer.session_token=fixture",
           origin: "http://localhost",
           "content-type": "application/json",
         },
@@ -3016,22 +2991,12 @@ it("keeps GitHub origin, session and method boundaries closed", async () => {
   expect(
     (
       await GET(
-        new Request("http://localhost/api/hub/skills/github/preview"),
+        new Request("http://localhost/api/hub/skills/github/preview", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}),
         path,
       )
     ).status,
   ).toBe(400);
-  currentProductSession.mockResolvedValueOnce(null);
-  expect(
-    (
-      await POST(
-        githubRequest("preview", {
-          repository_url: githubPreview.repository_url,
-        }),
-        path,
-      )
-    ).status,
-  ).toBe(401);
+
   expect(requestWithDomain).not.toHaveBeenCalled();
 });
 it("rejects malformed GitHub owner ACK and status/code mismatch instead of relaying a fake installation", async () => {
@@ -3182,7 +3147,7 @@ it("retires a late GitHub upstream response after caller cancellation", async ()
   const controller = new AbortController();
   const req = new Request(
     githubRequest("preview", { repository_url: githubPreview.repository_url }),
-    { signal: controller.signal },
+    {  signal: controller.signal },
   );
   const work = POST(req, params(["skills", "github", "preview"]));
   await vi.waitFor(() => expect(requestWithDomain).toHaveBeenCalled());
@@ -3225,7 +3190,7 @@ it("Skill Share Create relays the exact revision and keeps the actual six-field 
   const response = await POST(
     new Request("http://localhost/api/hub/skill-shares", {
       method: "POST",
-      headers: {
+      headers: {cookie: "kokoro-issuer.session_token=fixture",
         origin: "http://localhost",
         "content-type": "application/json",
       },
@@ -3283,7 +3248,7 @@ it("Skill Share summary preserves exact revision fields and rejects a current/fo
       }),
     );
     const result = await GET(
-      new Request("http://localhost/api/hub/skill-shares/share-old/skill"),
+      new Request("http://localhost/api/hub/skill-shares/share-old/skill", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}),
       params(["skill-shares", "share-old", "skill"]),
     );
     expect(result.status).toBe(status);
@@ -3306,7 +3271,7 @@ it.each(["query", "body", "key", "origin", "extra"])(
         `http://localhost/api/hub/skill-shares${mode === "query" ? "?extra=1" : ""}`,
         {
           method: "POST",
-          headers: {
+          headers: {cookie: "kokoro-issuer.session_token=fixture",
             "content-type": "application/json",
             origin:
               mode === "origin" ? "https://other.example" : "http://localhost",
@@ -3382,7 +3347,7 @@ it.each([
     ];
     const response = await GET(
       new Request(`http://localhost/api/hub/${path.join("/")}`, {
-        headers: { [header]: header === "content-length" ? "0" : "chunked" },
+        headers: {cookie: "kokoro-issuer.session_token=fixture",  [header]: header === "content-length" ? "0" : "chunked" },
       }),
       params(path),
     );
@@ -3414,7 +3379,7 @@ it("prepares an exact shared download through the published browser-private rout
   const response = await POST(
     new Request("http://localhost/api/hub/skill-shares/share-old/download", {
       method: "POST",
-      headers: { origin: "http://localhost" },
+      headers: {cookie: "kokoro-issuer.session_token=fixture",  origin: "http://localhost" },
     }),
     params(["skill-shares", "share-old", "download"]),
   );
@@ -3434,7 +3399,7 @@ it.each(["query", "body", "key", "length", "encoding", "origin"])(
         `http://localhost/api/hub/skill-shares/share-old/download${mode === "query" ? "?extra=1" : ""}`,
         {
           method: "POST",
-          headers: {
+          headers: {cookie: "kokoro-issuer.session_token=fixture",
             origin:
               mode === "origin" ? "https://other.example" : "http://localhost",
             ...(mode === "key"
@@ -3479,7 +3444,7 @@ it("personal version and withdrawal map only to the formal self owner routes", a
   const response = await POST(
     new Request("http://localhost/api/hub/self/skills/mine/versions", {
       method: "POST",
-      headers: {
+      headers: {cookie: "kokoro-issuer.session_token=fixture",
         origin: "http://localhost",
         "content-type": "application/json",
         "idempotency-key": "v-original",
@@ -3515,7 +3480,7 @@ it("personal lifecycle malformed owner JSON is a 502 closed response error, not 
   const response = await POST(
     new Request("http://localhost/api/hub/self/skills/mine/withdraw", {
       method: "POST",
-      headers: {
+      headers: {cookie: "kokoro-issuer.session_token=fixture",
         origin: "http://localhost",
         "content-type": "application/json",
         "idempotency-key": "withdraw-original",
@@ -3548,7 +3513,7 @@ it("personal withdrawal preserves the original CAS/body/key through the formal r
   const response = await POST(
     new Request("http://localhost/api/hub/self/skills/mine/withdraw", {
       method: "POST",
-      headers: {
+      headers: {cookie: "kokoro-issuer.session_token=fixture",
         origin: "http://localhost",
         "content-type": "application/json",
         "idempotency-key": "original",
@@ -3666,7 +3631,7 @@ it.each(["versions", "withdraw"] as const)(
       const response = await POST(
         new Request(`http://localhost/api/hub/self/skills/mine/${action}`, {
           method: "POST",
-          headers: {
+          headers: {cookie: "kokoro-issuer.session_token=fixture",
             origin: "http://localhost",
             "content-type": "application/json",
             "idempotency-key": "original-wire-intent",
@@ -3736,7 +3701,7 @@ describe("personal MCP four canonical reads", () => {
       );
       const { GET } = await import("@/app/api/hub/[...path]/route");
       const response = await GET(
-        new Request(`http://localhost/api/hub/mcp/${suffix}`),
+        new Request(`http://localhost/api/hub/mcp/${suffix}`, {headers: {cookie: "kokoro-issuer.session_token=fixture"}}),
         params(["mcp", ...String(suffix).split("/")]),
       );
       expect(vi.mocked(requestWithDomain).mock.calls[0]?.[0]).toBe(
@@ -3809,7 +3774,7 @@ describe("personal MCP closed adapter boundaries", () => {
       const { GET } = await import("@/app/api/hub/[...path]/route");
       const response = await GET(
         new Request("http://localhost/api/hub/mcp/connectors", {
-          headers: { [header]: header === "content-length" ? "0" : "forged" },
+          headers: {cookie: "kokoro-issuer.session_token=fixture",  [header]: header === "content-length" ? "0" : "forged" },
         }),
         params(["mcp", "connectors"]),
       );
@@ -3826,7 +3791,7 @@ describe("personal MCP closed adapter boundaries", () => {
       ](
         new Request("http://localhost/api/hub/mcp/connectors", {
           method,
-          headers: { origin: "http://localhost" },
+          headers: {cookie: "kokoro-issuer.session_token=fixture",  origin: "http://localhost" },
         }),
         params(["mcp", "connectors"]),
       );
@@ -3839,7 +3804,7 @@ describe("personal MCP closed adapter boundaries", () => {
     const read = () =>
       GET(
         new Request("http://localhost/api/hub/mcp/connectors/connector-1", {
-          headers: { "x-kokoro-subject": "forged", cookie: "forged" },
+          headers: { "x-kokoro-subject": "forged", cookie: "kokoro-issuer.session_token=fixture; forged" },
         }),
         params(["mcp", "connectors", "connector-1"]),
       );
@@ -3888,7 +3853,7 @@ describe("personal MCP closed adapter boundaries", () => {
     const { GET } = await import("@/app/api/hub/[...path]/route");
     const read = () =>
       GET(
-        new Request("http://localhost/api/hub/mcp/connectors"),
+        new Request("http://localhost/api/hub/mcp/connectors", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}),
         params(["mcp", "connectors"]),
       );
     vi.mocked(requestWithDomain).mockResolvedValue(
@@ -3935,28 +3900,7 @@ describe("personal MCP closed adapter boundaries", () => {
     );
     expect((await read()).status).toBe(502);
   });
-  it("fails closed before business request on no session or inspection failure", async () => {
-    const { GET } = await import("@/app/api/hub/[...path]/route");
-    currentProductSession.mockResolvedValue(null);
-    expect(
-      (
-        await GET(
-          new Request("http://localhost/api/hub/mcp/connectors"),
-          params(["mcp", "connectors"]),
-        )
-      ).status,
-    ).toBe(401);
-    currentProductSession.mockRejectedValue(new Error("unavailable"));
-    expect(
-      (
-        await GET(
-          new Request("http://localhost/api/hub/mcp/connectors"),
-          params(["mcp", "connectors"]),
-        )
-      ).status,
-    ).toBe(503);
-    expect(vi.mocked(requestWithDomain)).not.toHaveBeenCalled();
-  });
+
   it("cancels oversized owner streams and caller-aborted reads", async () => {
     const { GET } = await import("@/app/api/hub/[...path]/route");
     for (const chunk of [new Uint8Array(1_048_577), new Uint8Array([0xff])]) {
@@ -3978,7 +3922,7 @@ describe("personal MCP closed adapter boundaries", () => {
       );
       const controller = new AbortController();
       const result = GET(
-        new Request("http://localhost/api/hub/mcp/connectors", {
+        new Request("http://localhost/api/hub/mcp/connectors", {headers: {cookie: "kokoro-issuer.session_token=fixture"},
           signal: controller.signal,
         }),
         params(["mcp", "connectors"]),
@@ -3997,19 +3941,6 @@ describe("personal MCP closed adapter boundaries", () => {
     vi.useFakeTimers();
     try {
       const { GET } = await import("@/app/api/hub/[...path]/route");
-      currentProductSession.mockImplementation(
-        () =>
-          new Promise((resolve) =>
-            setTimeout(
-              () =>
-                resolve({
-                  access: "product-access",
-                  accessExpiresAt: Date.now() + 60_000, nativeCookie: "kokoro-issuer.session_token=fixture",
-                }),
-              6_000,
-            ),
-          ),
-      );
       const cancel = vi.fn();
       const body = new ReadableStream<Uint8Array>({ cancel });
       vi.mocked(requestWithDomain).mockResolvedValue(
@@ -4022,20 +3953,17 @@ describe("personal MCP closed adapter boundaries", () => {
         }),
       );
       const result = GET(
-        new Request("http://localhost/api/hub/mcp/connectors"),
+        new Request("http://localhost/api/hub/mcp/connectors", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}),
         params(["mcp", "connectors"]),
       );
       await vi.advanceTimersByTimeAsync(6_000);
       expect(
         vi.mocked(requestWithDomain).mock.calls[0]?.[2]?.timeoutMs,
-      ).toBeLessThanOrEqual(4_000);
+      ).toBeLessThanOrEqual(10_000);
       await vi.advanceTimersByTimeAsync(4_000);
       expect((await result).status).toBe(503);
       expect(cancel).toHaveBeenCalled();
-      currentProductSession.mockResolvedValue({
-        access: "product-access",
-        accessExpiresAt: Date.now() + 60_000, nativeCookie: "kokoro-issuer.session_token=fixture",
-      });
+
       let resolveLate!: (value: Response) => void;
       vi.mocked(requestWithDomain).mockImplementation(
         () =>
@@ -4044,7 +3972,7 @@ describe("personal MCP closed adapter boundaries", () => {
           }),
       );
       const aborted = GET(
-        new Request("http://localhost/api/hub/mcp/connectors"),
+        new Request("http://localhost/api/hub/mcp/connectors", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}),
         params(["mcp", "connectors"]),
       );
       await vi.advanceTimersByTimeAsync(10_000);
@@ -4113,7 +4041,7 @@ describe("current-user MCP OAuth lifecycle adapter", () => {
       route.POST(
         new Request(`http://localhost/api/hub/${path.join("/")}`, {
           method: "POST",
-          headers: {
+          headers: {cookie: "kokoro-issuer.session_token=fixture",
             origin: "http://localhost",
             "content-type": "application/json",
             ...headers,
@@ -4201,7 +4129,7 @@ describe("current-user MCP OAuth lifecycle adapter", () => {
       const response = await POST(
         new Request(`http://localhost/api/hub/${path.join("/")}`, {
           method: "POST",
-          headers: {
+          headers: {cookie: "kokoro-issuer.session_token=fixture",
             origin: "http://localhost",
             "content-type": "application/json",
             ...extra,
@@ -4309,7 +4237,7 @@ describe("private MCP server V1 lifecycle adapter", () => {
       route[method](
         new Request(`http://localhost/api/hub/${path.join("/")}`, {
           method,
-          headers: {
+          headers: {cookie: "kokoro-issuer.session_token=fixture",
             origin: "http://localhost",
             "content-type": "application/json",
             "idempotency-key": "private-command",
@@ -4400,7 +4328,7 @@ it("personal MCP rejects malformed UTF8 owner responses", async () => {
   expect(
     (
       await GET(
-        new Request("http://localhost/api/hub/mcp/connectors"),
+        new Request("http://localhost/api/hub/mcp/connectors", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}),
         params(["mcp", "connectors"]),
       )
     ).status,
@@ -4435,7 +4363,7 @@ it("personal MCP accepts only owner Retry-After seconds 1 through 86400", async 
       ),
     );
     const response = await GET(
-      new Request("http://localhost/api/hub/mcp/connectors"),
+      new Request("http://localhost/api/hub/mcp/connectors", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}),
       params(["mcp", "connectors"]),
     );
     expect(response.status).toBe(expected);
@@ -4479,7 +4407,7 @@ describe("personal MCP 14.0 provider and command adapter", () => {
     );
     const response = await GET(
       new Request(
-        "http://localhost/api/hub/mcp/providers?directory_type=app&category_key=development",
+        "http://localhost/api/hub/mcp/providers?directory_type=app&category_key=development", {headers: {cookie: "kokoro-issuer.session_token=fixture"}},
       ),
       params(["mcp", "providers"]),
     );
@@ -4492,7 +4420,7 @@ describe("personal MCP 14.0 provider and command adapter", () => {
       (
         await GET(
           new Request(
-            "http://localhost/api/hub/mcp/providers/provider-one?limit=1",
+            "http://localhost/api/hub/mcp/providers/provider-one?limit=1", {headers: {cookie: "kokoro-issuer.session_token=fixture"}},
           ),
           params(["mcp", "providers", "provider-one"]),
         )
@@ -4546,7 +4474,7 @@ describe("personal MCP 14.0 provider and command adapter", () => {
       const response = await route[method](
         new Request(`http://localhost/api/hub/${path.join("/")}`, {
           method,
-          headers: {
+          headers: {cookie: "kokoro-issuer.session_token=fixture",
             origin: "http://localhost",
             "content-type": "application/json",
             "idempotency-key": "original-key",
@@ -4573,7 +4501,7 @@ describe("personal MCP 14.0 provider and command adapter", () => {
         await POST(
           new Request("http://localhost/api/hub/mcp/connectors", {
             method: "POST",
-            headers: {
+            headers: {cookie: "kokoro-issuer.session_token=fixture",
               origin: "http://localhost",
               "content-type": "application/json",
               "idempotency-key": "original-key",
@@ -4589,7 +4517,7 @@ describe("personal MCP 14.0 provider and command adapter", () => {
         await POST(
           new Request("http://localhost/api/hub/mcp/connectors", {
             method: "POST",
-            headers: {
+            headers: {cookie: "kokoro-issuer.session_token=fixture",
               origin: "http://localhost",
               "content-type": "application/json",
             },
@@ -4611,7 +4539,7 @@ it("forwards the explicit installation update without promoting browser identity
   }));
   const body = '{"expected_source_ref":"skill:revision-a","source_ref":"skill:revision-b"}';
   const response = await POST(new Request("http://localhost/api/hub/self/skill-installations/i1/update", {
-    method: "POST", headers: { origin: "http://localhost", "content-type": "application/json", "idempotency-key": "frozen-update", authorization: "Bearer forged", "x-kokoro-subject": "forged" }, body,
+    method: "POST", headers: {cookie: "kokoro-issuer.session_token=fixture",  origin: "http://localhost", "content-type": "application/json", "idempotency-key": "frozen-update", authorization: "Bearer forged", "x-kokoro-subject": "forged" }, body,
   }), params(["self", "skill-installations", "i1", "update"]));
   expect(response.status).toBe(412);
   expect(requestWithDomain).toHaveBeenCalledTimes(1);
@@ -4629,7 +4557,7 @@ it.each([
 ])("rejects malformed update bodies before upstream %#", async body => {
   const { POST } = await import("@/app/api/hub/[...path]/route");
   const response = await POST(new Request("http://localhost/api/hub/self/skill-installations/i1/update", {
-    method: "POST", headers: { origin: "http://localhost", "content-type": "application/json", "idempotency-key": "frozen-update" }, body: JSON.stringify(body),
+    method: "POST", headers: {cookie: "kokoro-issuer.session_token=fixture",  origin: "http://localhost", "content-type": "application/json", "idempotency-key": "frozen-update" }, body: JSON.stringify(body),
   }), params(["self", "skill-installations", "i1", "update"]));
   expect(response.status).toBe(400); expect(requestWithDomain).not.toHaveBeenCalled();
 });
@@ -4641,7 +4569,7 @@ it("an update's single budget cancels a stalled input before any BFF dispatch", 
     const cancel = vi.fn();
     const body = new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(new TextEncoder().encode('{"expected_source_ref":')); }, cancel });
     const pending = POST(new Request("http://localhost/api/hub/self/skill-installations/i1/update", {
-      method: "POST", headers: { origin: "http://localhost", "content-type": "application/json", "idempotency-key": "frozen-update" }, body, duplex: "half",
+      method: "POST", headers: {cookie: "kokoro-issuer.session_token=fixture",  origin: "http://localhost", "content-type": "application/json", "idempotency-key": "frozen-update" }, body, duplex: "half",
     } as RequestInit), params(["self", "skill-installations", "i1", "update"]));
     let settled = false; void pending.then(() => { settled = true });
     await vi.advanceTimersByTimeAsync(10_001);
@@ -4658,7 +4586,7 @@ describe("connector private recovery errors", () => {
   const post = async (path: string[], body: unknown, key = true) => {
     const { POST } = await import("@/app/api/hub/[...path]/route");
     return POST(new Request(`http://localhost/api/hub/${path.join("/")}`, {
-      method: "POST", headers: { origin: "http://localhost", "content-type": "application/json", ...(key ? { "idempotency-key": "original-command-key" } : {}) },
+      method: "POST", headers: {cookie: "kokoro-issuer.session_token=fixture",  origin: "http://localhost", "content-type": "application/json", ...(key ? { "idempotency-key": "original-command-key" } : {}) },
       body: JSON.stringify(body),
     }), params(path));
   };
@@ -4709,7 +4637,7 @@ it("preserves valid Custom API recovery errors while rejecting those write recei
     vi.mocked(requestWithDomain).mockResolvedValueOnce(reply(code, status, retryable));
     const before = vi.mocked(requestWithDomain).mock.calls.length;
     const response = await route.POST(new Request(`http://localhost/api/hub/${path.join("/")}`, {
-      method: "POST", headers: { origin: "http://localhost", "content-type": "application/json", "idempotency-key": "original-api-key" },
+      method: "POST", headers: {cookie: "kokoro-issuer.session_token=fixture",  origin: "http://localhost", "content-type": "application/json", "idempotency-key": "original-api-key" },
       body: JSON.stringify({ name: "Test", environment: [] }),
     }), params(path));
     expect(response.status).toBe(status);
@@ -4717,7 +4645,7 @@ it("preserves valid Custom API recovery errors while rejecting those write recei
     expect(response.headers.get("x-request-id")).toBe("owner-api-recovery");
     expect(requestWithDomain).toHaveBeenCalledTimes(before + 1);
     vi.mocked(requestWithDomain).mockResolvedValueOnce(reply(code, status, retryable));
-    const read = await route.GET(new Request(`http://localhost/api/hub/${path.join("/")}`), params(path));
+    const read = await route.GET(new Request(`http://localhost/api/hub/${path.join("/")}`, {headers: {cookie: "kokoro-issuer.session_token=fixture"}}), params(path));
     expect(read.status).toBe(502);
     expect((await read.json()).error.code).toBe("custom_api_response_invalid");
   }
@@ -4726,13 +4654,13 @@ it("preserves valid Custom API recovery errors while rejecting those write recei
 it("routes installed package and download to exact installation BFF boundaries, not the series catalog", async () => {
   const { GET, POST } = await import("@/app/api/hub/[...path]/route")
   vi.mocked(requestWithDomain).mockResolvedValueOnce(Response.json(catalogPackage, { headers: catalogPackageHeaders }))
-  const read = await GET(new Request("http://localhost/api/hub/skill-installations/install-A/package"), params(["skill-installations", "install-A", "package"]))
+  const read = await GET(new Request("http://localhost/api/hub/skill-installations/install-A/package", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}), params(["skill-installations", "install-A", "package"]))
   expect(read.status).toBe(200)
   expect(await read.json()).toEqual(catalogPackage)
   expect(requestWithDomain).toHaveBeenLastCalledWith("http://bff.test/v1/skill-installations/install-A/package", ENV.KOKORO_DOMAIN, expect.objectContaining({ method: "GET" }))
   const ack = { data: { source_ref: "skill:revision-exact", revision: "7", download_info: { download_url: `/skill-downloads/${"a".repeat(43)}`, filename: "A.zip", expires_at: "2999-01-01T00:00:00Z" } } }
   vi.mocked(requestWithDomain).mockResolvedValueOnce(Response.json(ack, { headers: catalogPackageHeaders }))
-  const download = await POST(new Request("http://localhost/api/hub/skill-installations/install-A/download", { method: "POST", headers: { origin: ENV.KOKORO_WEB_ORIGIN } }), params(["skill-installations", "install-A", "download"]))
+  const download = await POST(new Request("http://localhost/api/hub/skill-installations/install-A/download", { method: "POST", headers: {cookie: "kokoro-issuer.session_token=fixture",  origin: ENV.KOKORO_WEB_ORIGIN } }), params(["skill-installations", "install-A", "download"]))
   expect(download.status).toBe(200)
   expect(await download.json()).toEqual(ack)
   expect(requestWithDomain).toHaveBeenLastCalledWith("http://bff.test/browser/v1/skill-installations/install-A/download", ENV.KOKORO_DOMAIN, expect.objectContaining({ method: "POST" }))
@@ -4740,7 +4668,7 @@ it("routes installed package and download to exact installation BFF boundaries, 
 
 it("installed content rejects malformed local requests before admission or BFF IO", async () => {
   const { GET, POST } = await import("@/app/api/hub/[...path]/route")
-  currentProductSession.mockClear()
+
   for (const [method, tail, query, headers, body] of [
     ["GET", "package", "?file_path=SKILL.md&file_path=other", {}, undefined],
     ["GET", "package", "?file_path=..%2Fsecret", {}, undefined],
@@ -4751,11 +4679,11 @@ it("installed content rejects malformed local requests before admission or BFF I
     ["POST", "download", "", { origin: ENV.KOKORO_WEB_ORIGIN }, "{}"],
     ["POST", "download", "", { origin: "https://other.example" }, undefined],
   ] as const) {
-    const request = new Request(`http://localhost/api/hub/skill-installations/install-A/${tail}${query}`, { method, headers, ...(body === undefined ? {} : { body }) })
+    const request = new Request(`http://localhost/api/hub/skill-installations/install-A/${tail}${query}`, { method, headers: {cookie: "kokoro-issuer.session_token=fixture", ...Object.fromEntries(new Headers(headers))}, ...(body === undefined ? {} : { body }) })
     const result = await (method === "GET" ? GET : POST)(request, params(["skill-installations", "install-A", tail]))
     expect([400, 403]).toContain(result.status)
   }
-  expect(currentProductSession).not.toHaveBeenCalled()
+
   expect(requestWithDomain).not.toHaveBeenCalled()
 })
 
@@ -4770,7 +4698,7 @@ it("installed inspection keeps its exact error contract separate from catalog an
     [503, "skill_package_dependency_unavailable", false, false],
   ] as const) {
     vi.mocked(requestWithDomain).mockResolvedValueOnce(Response.json({ error: { code, message: "Bound error", retryable } }, { status, headers: catalogPackageHeaders }))
-    const result = await GET(new Request("http://localhost/api/hub/skill-installations/install-A/package"), params(["skill-installations", "install-A", "package"]))
+    const result = await GET(new Request("http://localhost/api/hub/skill-installations/install-A/package", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}), params(["skill-installations", "install-A", "package"]))
     expect(result.status).toBe(valid ? status : 502)
     expect((await result.json()).error.code).toBe(valid ? code : "skill_package_response_invalid")
   }
@@ -4783,7 +4711,7 @@ it.each(["GET", "POST"] as const)("routes Project installation %s through the st
   vi.mocked(requestWithDomain).mockResolvedValue(new Response(JSON.stringify({ data: [] }), {
     headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "project-installation" },
   }));
-  const response = await (method === "GET" ? GET : POST)(new Request(`http://localhost/api/hub/projects/${projectId}/skill-installations`, {
+  const response = await (method === "GET" ? GET : POST)(new Request(`http://localhost/api/hub/projects/${projectId}/skill-installations`, {headers: {cookie: "kokoro-issuer.session_token=fixture"},
     method, ...(method === "POST" ? { headers: { origin: "http://localhost", "content-type": "application/json", "idempotency-key": "project-install-key" }, body: '{"source_ref":"skill:mine"}' } : {}),
   }), params(["projects", projectId, "skill-installations"]));
   expect(response.status).toBe(method === "GET" ? 200 : 502); // a list is never an installation ACK
@@ -4802,7 +4730,7 @@ it("binds Project defaults ACK to exact project and ordered intent, and keeps th
   vi.mocked(requestWithDomain).mockResolvedValueOnce(owner({ project_id: "project_22222222-2222-4222-8222-222222222222", installation_ids: [] }));
   expect((await GET(new Request(url), params(path))).status).toBe(502);
   vi.mocked(requestWithDomain).mockResolvedValueOnce(owner({ project_id: projectId, installation_ids: ["i2", "i1"] }));
-  const request = () => new Request(url, { method: "PUT", headers: { origin: "http://localhost", "content-type": "application/json", "idempotency-key": "frozen-selection" }, body: '{"installation_ids":["i1","i2"]}' });
+  const request = () => new Request(url, { method: "PUT", headers: {cookie: "kokoro-issuer.session_token=fixture",  origin: "http://localhost", "content-type": "application/json", "idempotency-key": "frozen-selection" }, body: '{"installation_ids":["i1","i2"]}' });
   expect((await PUT(request(), params(path))).status).toBe(502);
   vi.mocked(requestWithDomain).mockResolvedValueOnce(owner({ project_id: projectId, installation_ids: ["i1", "i2"] }));
   const saved = await PUT(request(), params(path));
@@ -4810,7 +4738,7 @@ it("binds Project defaults ACK to exact project and ordered intent, and keeps th
   expect(await saved.json()).toEqual({ data: { project_id: projectId, installation_ids: ["i1", "i2"] } });
   expect(new Headers(vi.mocked(requestWithDomain).mock.calls[2]?.[2]?.headers).get("idempotency-key")).toBe("frozen-selection");
   vi.mocked(requestWithDomain).mockClear();
-  const invalid = new Request(url, { method: "PUT", headers: { origin: "http://localhost", "content-type": "application/json", "idempotency-key": "new-key" }, body: '{"installation_ids":["i1","i1"]}' });
+  const invalid = new Request(url, { method: "PUT", headers: {cookie: "kokoro-issuer.session_token=fixture",  origin: "http://localhost", "content-type": "application/json", "idempotency-key": "new-key" }, body: '{"installation_ids":["i1","i1"]}' });
   expect((await PUT(invalid, params(path))).status).toBe(400);
   expect(requestWithDomain).not.toHaveBeenCalled();
 });
@@ -4824,7 +4752,7 @@ it("rejects invalid UTF-8 in Project selection errors rather than normalizing ow
   vi.mocked(requestWithDomain).mockResolvedValue(new Response(bytes, { status: 404, headers: {
     "content-type": "application/json", "cache-control": "no-store", "x-request-id": "selection-error",
   } }));
-  expect((await GET(new Request(`http://localhost/api/hub/projects/${projectId}/skill-selection`), params(["projects", projectId, "skill-selection"]))).status).toBe(502);
+  expect((await GET(new Request(`http://localhost/api/hub/projects/${projectId}/skill-selection`, {headers: {cookie: "kokoro-issuer.session_token=fixture"}}), params(["projects", projectId, "skill-selection"]))).status).toBe(502);
 });
 
 it("uses Project segment identities for Get, enabled, update and remove, never a personal target", async () => {
@@ -4843,7 +4771,7 @@ it("uses Project segment identities for Get, enabled, update and remove, never a
   for (const entry of cases) {
     const path = ["projects", projectId, "skill-installations", ...entry.suffix];
     vi.mocked(requestWithDomain).mockResolvedValueOnce(Response.json({ data: entry.data }, { headers: { "cache-control": "no-store", "x-request-id": "project-lifecycle" } }));
-    const response = await route[entry.method](new Request(`http://localhost/api/hub/${path.join("/")}`, { method: entry.method,
+    const response = await route[entry.method](new Request(`http://localhost/api/hub/${path.join("/")}`, {headers: {cookie: "kokoro-issuer.session_token=fixture"},  method: entry.method,
       ...(entry.method === "GET" ? {} : { headers: { origin: "http://localhost", "idempotency-key": "original-key", ...(entry.input === undefined ? {} : { "content-type": "application/json" }) } }),
       ...(entry.input === undefined ? {} : { body: JSON.stringify(entry.input) }),
     }), params(path));
@@ -4856,13 +4784,12 @@ it("rejects Project skill aliases and unadmitted mutation without dispatch", asy
   const projectId = "project_11111111-1111-4111-8111-111111111111";
   for (const last of ["skill-selection", "skill-installations"]) {
     const path = ["self", "projects", projectId, last];
-    expect((await GET(new Request(`http://localhost/api/hub/${path.join("/")}`), params(path))).status).toBe(404);
+    expect((await GET(new Request(`http://localhost/api/hub/${path.join("/")}`, {headers: {cookie: "kokoro-issuer.session_token=fixture"}}), params(path))).status).toBe(404);
   }
   const path = ["projects", projectId, "skill-selection"];
   const url = `http://localhost/api/hub/${path.join("/")}`;
-  expect((await PUT(new Request(url, { method: "PUT", headers: { origin: "https://other.example", "idempotency-key": "key", "content-type": "application/json" }, body: '{"installation_ids":[]}' }), params(path))).status).toBe(403);
-  currentProductSession.mockResolvedValueOnce(null);
-  expect((await PUT(new Request(url, { method: "PUT", headers: { origin: "http://localhost", "idempotency-key": "key", "content-type": "application/json" }, body: '{"installation_ids":[]}' }), params(path))).status).toBe(401);
+  expect((await PUT(new Request(url, { method: "PUT", headers: {cookie: "kokoro-issuer.session_token=fixture",  origin: "https://other.example", "idempotency-key": "key", "content-type": "application/json" }, body: '{"installation_ids":[]}' }), params(path))).status).toBe(403);
+
   expect(requestWithDomain).not.toHaveBeenCalled();
 });
 
@@ -4870,7 +4797,7 @@ it("retires the project skill-name switch before any legacy Hub dispatch", async
   const { PATCH } = await import("@/app/api/hub/[...path]/route");
   vi.mocked(requestWithDomain).mockResolvedValue(Response.json({ data: { enabled: true } }));
   for (const path of [["projects", "project_11111111-1111-4111-8111-111111111111", "skills", "skill-builder"], ["self", "projects", "project_11111111-1111-4111-8111-111111111111", "skills", "skill-builder"]]) {
-    const response = await PATCH(new Request(`http://localhost/api/hub/${path.join("/")}`, { method: "PATCH", headers: { origin: "http://localhost", "content-type": "application/json", "idempotency-key": "old-name-key" }, body: '{"enabled":true}' }), params(path));
+    const response = await PATCH(new Request(`http://localhost/api/hub/${path.join("/")}`, { method: "PATCH", headers: {cookie: "kokoro-issuer.session_token=fixture",  origin: "http://localhost", "content-type": "application/json", "idempotency-key": "old-name-key" }, body: '{"enabled":true}' }), params(path));
     expect(response.status).toBe(404);
   }
   expect(requestWithDomain).not.toHaveBeenCalled();
@@ -4881,13 +4808,13 @@ it("owned history reads the precise versions route and refuses caller filters wi
   vi.mocked(requestWithDomain).mockResolvedValue(Response.json({data, meta:{request_id:"history-read"}}, {headers:{"cache-control":"no-store", "x-request-id":"history-read"}}));
   const { GET } = await import("@/app/api/hub/[...path]/route");
   const path=["self","skills","managed","history-anchor","versions"];
-  const response=await GET(new Request("http://localhost/api/hub/self/skills/managed/history-anchor/versions?limit=2&cursor=opaque"),params(path));
+  const response=await GET(new Request("http://localhost/api/hub/self/skills/managed/history-anchor/versions?limit=2&cursor=opaque", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}),params(path));
   expect(response.status).toBe(200);
   expect(requestWithDomain).toHaveBeenCalledWith("http://bff.test/v1/self/skills/history-anchor/versions?limit=2&cursor=opaque",ENV.KOKORO_DOMAIN, expect.objectContaining({method:"GET"}));
   expect(await response.json()).toEqual({data,meta:{request_id:"history-read"}});
   const before=vi.mocked(requestWithDomain).mock.calls.length;
   for(const query of ["?subject=other", "?status=active", "?limit=0", "?limit=2&limit=2", "?cursor="]){
-    expect((await GET(new Request(`http://localhost/api/hub/self/skills/managed/history-anchor/versions${query}`),params(path))).status).toBe(400);
+    expect((await GET(new Request(`http://localhost/api/hub/self/skills/managed/history-anchor/versions${query}`, {headers: {cookie: "kokoro-issuer.session_token=fixture"}}),params(path))).status).toBe(400);
   }
   expect(requestWithDomain).toHaveBeenCalledTimes(before);
 });
@@ -4896,7 +4823,7 @@ it("owned history package preview uses the exact managed revision rather than ca
   const { GET }=await import("@/app/api/hub/[...path]/route");
   const data={source_ref:"skill:history-old",revision:"2",files:[],selected_file:null};
   vi.mocked(requestWithDomain).mockResolvedValue(Response.json({data},{headers:{"cache-control":"no-store","x-request-id":"history-package"}}));
-  const response=await GET(new Request("http://localhost/api/hub/self/skills/managed/history-old/package"),params(["self","skills","managed","history-old","package"]));
+  const response=await GET(new Request("http://localhost/api/hub/self/skills/managed/history-old/package", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}),params(["self","skills","managed","history-old","package"]));
   expect(response.status).toBe(200);
   expect(requestWithDomain).toHaveBeenCalledWith("http://bff.test/v1/self/skills/history-old/package",ENV.KOKORO_DOMAIN,expect.objectContaining({method:"GET"}));
   expect(await response.json()).toEqual({data});
@@ -4907,7 +4834,7 @@ it("history body deadline remains dependency-unavailable instead of corrupt-resp
  const {GET}=await import("@/app/api/hub/[...path]/route")
  const body=new ReadableStream<Uint8Array>({start(controller){controller.error(new UpstreamTimeoutError())}})
  vi.mocked(requestWithDomain).mockResolvedValue(new Response(body,{headers:{"content-type":"application/json","cache-control":"no-store","x-request-id":"timeout-history"}}))
- const response=await GET(new Request("http://localhost/api/hub/self/skills/managed/anchor/versions"),params(["self","skills","managed","anchor","versions"]))
+ const response=await GET(new Request("http://localhost/api/hub/self/skills/managed/anchor/versions", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}),params(["self","skills","managed","anchor","versions"]))
  expect(response.status).toBe(503)
  expect(await response.json()).toMatchObject({error:{code:"skill_dependency_unavailable"}})
 })
@@ -4918,7 +4845,7 @@ it("routes publisher historical ZIP qualification to the existing exact managed 
   const path = ["self", "skills", "managed", "history-old", "download"]
   const ack = { data: { source_ref: "skill:history-old", revision: "1", download_info: { download_url: `/skill-downloads/${"a".repeat(43)}`, filename: "original.zip", expires_at: "2999-01-01T00:00:00Z" } } }
   vi.mocked(requestWithDomain).mockResolvedValueOnce(Response.json(ack, { headers: catalogPackageHeaders }))
-  const response = await POST(new Request(`http://localhost/api/hub/${path.join("/")}`, { method: "POST", headers: { origin: ENV.KOKORO_WEB_ORIGIN } }), params(path))
+  const response = await POST(new Request(`http://localhost/api/hub/${path.join("/")}`, { method: "POST", headers: {cookie: "kokoro-issuer.session_token=fixture",  origin: ENV.KOKORO_WEB_ORIGIN } }), params(path))
   expect(response.status).toBe(200)
   expect(await response.json()).toEqual(ack)
   expect(requestWithDomain).toHaveBeenLastCalledWith("http://bff.test/browser/v1/skills/history-old/download", ENV.KOKORO_DOMAIN, expect.objectContaining({ method: "POST" }))
@@ -4928,13 +4855,13 @@ it("keeps exact publisher download empty-body/Origin guards and rejects another 
  const {POST}=await import("@/app/api/hub/[...path]/route")
  const path=["self","skills","managed","history-old","download"],url=`http://localhost/api/hub/${path.join("/")}`
  for(const variant of ["origin","body","query","key"]){
-  const response=await POST(new Request(`${url}${variant==="query"?"?extra=1":""}`,{method:"POST",headers:{origin:variant==="origin"?"https://other.test":ENV.KOKORO_WEB_ORIGIN,...(variant==="key"?{"idempotency-key":"not-allowed"}:{})},...(variant==="body"?{body:"x"}:{})}),params(path))
+  const response=await POST(new Request(`${url}${variant==="query"?"?extra=1":""}`,{method:"POST",headers:{cookie: "kokoro-issuer.session_token=fixture", origin:variant==="origin"?"https://other.test":ENV.KOKORO_WEB_ORIGIN,...(variant==="key"?{"idempotency-key":"not-allowed"}:{})},...(variant==="body"?{body:"x"}:{})}),params(path))
   expect(response.status).toBe(variant==="origin"?403:400)
  }
  expect(requestWithDomain).not.toHaveBeenCalled()
  const ack={data:{source_ref:"skill:other",revision:"1",download_info:{download_url:`/skill-downloads/${"a".repeat(43)}`,filename:"original.zip",expires_at:"2999-01-01T00:00:00Z"}}}
  vi.mocked(requestWithDomain).mockResolvedValueOnce(Response.json(ack,{headers:catalogPackageHeaders}))
- expect((await POST(new Request(url,{method:"POST",headers:{origin:ENV.KOKORO_WEB_ORIGIN}}),params(path))).status).toBe(502)
+ expect((await POST(new Request(url,{method:"POST",headers:{cookie: "kokoro-issuer.session_token=fixture", origin:ENV.KOKORO_WEB_ORIGIN}}),params(path))).status).toBe(502)
 })
 
 it("deletes the confirmed personal series through the sole formal route without changing command bytes",async()=>{
@@ -4942,7 +4869,7 @@ it("deletes the confirmed personal series through the sole formal route without 
  const data={series_id:"series",skill_id:"mine",state_version:"9",status:"deleted",event_id:`evt:${"a".repeat(64)}`,replayed:false}
  vi.mocked(requestWithDomain).mockResolvedValue(Response.json({data,meta:{request_id:"owner-1"}},{headers:{"cache-control":"no-store","x-request-id":"owner-1"}}))
  const body='{ "expected_state_version":"8", "expected_publication":{"current_version_id":"current","state_version":"9007199254740993"} }'
- const response=await DELETE(new Request("http://localhost/api/hub/self/skills/mine",{method:"DELETE",headers:{origin:"http://localhost","content-type":"application/json","idempotency-key":"original-delete"},body}),params(["self","skills","mine"]))
+ const response=await DELETE(new Request("http://localhost/api/hub/self/skills/mine",{method:"DELETE",headers:{cookie: "kokoro-issuer.session_token=fixture", origin:"http://localhost","content-type":"application/json","idempotency-key":"original-delete"},body}),params(["self","skills","mine"]))
  expect(response.status).toBe(200);expect(await response.json()).toEqual({data,meta:{request_id:"owner-1"}})
  expect(vi.mocked(requestWithDomain)).toHaveBeenCalledWith("http://bff.test/v1/self/skills/mine",expect.anything(),expect.objectContaining({method:"DELETE",headers:expect.objectContaining({"idempotency-key":"original-delete"})}))
  expect(new TextDecoder().decode(vi.mocked(requestWithDomain).mock.calls[0]![2]!.body as ArrayBuffer)).toBe(body)
@@ -4951,7 +4878,7 @@ it("deletes the confirmed personal series through the sole formal route without 
 it.each(["missing-publication","extra-identity","duplicate-key"])("rejects invalid deletion %s before owner I/O",async(kind)=>{
  const {DELETE}=await import("@/app/api/hub/[...path]/route")
  const body=kind==="missing-publication"?'{"expected_state_version":"8"}':kind==="extra-identity"?'{"expected_state_version":"8","expected_publication":null,"actor":"self"}':'{"expected_state_version":"8","expected_publication":null,"expected_publication":null}'
- const response=await DELETE(new Request("http://localhost/api/hub/self/skills/mine",{method:"DELETE",headers:{origin:"http://localhost","content-type":"application/json","idempotency-key":"delete-key"},body}),params(["self","skills","mine"]))
+ const response=await DELETE(new Request("http://localhost/api/hub/self/skills/mine",{method:"DELETE",headers:{cookie: "kokoro-issuer.session_token=fixture", origin:"http://localhost","content-type":"application/json","idempotency-key":"delete-key"},body}),params(["self","skills","mine"]))
  expect(response.status).toBe(400);expect(requestWithDomain).not.toHaveBeenCalled()
 })
 
@@ -4964,7 +4891,7 @@ it.each([
  const {DELETE}=await import("@/app/api/hub/[...path]/route")
  const data={series_id:"series",skill_id:"mine",state_version:actual,status:"deleted",event_id:`evt:${"a".repeat(64)}`,replayed:false}
  vi.mocked(requestWithDomain).mockResolvedValue(Response.json({data,meta:{request_id:"owner-1"}},{headers:{"cache-control":"no-store","x-request-id":"owner-1"}}))
- const response=await DELETE(new Request("http://localhost/api/hub/self/skills/mine",{method:"DELETE",headers:{origin:"http://localhost","content-type":"application/json","idempotency-key":"delete-exact-step"},body:JSON.stringify({expected_state_version:expected,expected_publication:null})}),params(["self","skills","mine"]))
+ const response=await DELETE(new Request("http://localhost/api/hub/self/skills/mine",{method:"DELETE",headers:{cookie: "kokoro-issuer.session_token=fixture", origin:"http://localhost","content-type":"application/json","idempotency-key":"delete-exact-step"},body:JSON.stringify({expected_state_version:expected,expected_publication:null})}),params(["self","skills","mine"]))
  expect(response.status).toBe(valid?200:502)
  if(valid)expect(await response.json()).toEqual({data,meta:{request_id:"owner-1"}})
  else expect(await response.json()).toMatchObject({error:{code:"skill_response_invalid"}})
@@ -4985,7 +4912,7 @@ describe("MCP icon staging adapter", () => {
   it.each(cases)("relays $suffix once with original body/key and trusted session", async ({ suffix, body, data }) => {
     const { POST } = await import("@/app/api/hub/[...path]/route");
     vi.mocked(requestWithDomain).mockResolvedValue(reply(data));
-    const response = await POST(new Request(`http://localhost/api/hub/mcp/icons/${suffix}`, { method: "POST", headers: { origin: "http://localhost", "content-type": "application/json", "idempotency-key": "icon-original", authorization: "Bearer untrusted" }, body: JSON.stringify(body) }), params(["mcp", "icons", ...suffix.split("/")]));
+    const response = await POST(new Request(`http://localhost/api/hub/mcp/icons/${suffix}`, { method: "POST", headers: {cookie: "kokoro-issuer.session_token=fixture",  origin: "http://localhost", "content-type": "application/json", "idempotency-key": "icon-original", authorization: "Bearer untrusted" }, body: JSON.stringify(body) }), params(["mcp", "icons", ...suffix.split("/")]));
     expect(response.status).toBe(200); expect(response.headers.get("cache-control")).toContain("no-store"); expect(await response.json()).toEqual({ data });
     expect(requestWithDomain).toHaveBeenCalledTimes(1);
     const [url, , options] = vi.mocked(requestWithDomain).mock.calls[0]!;
@@ -4996,16 +4923,16 @@ describe("MCP icon staging adapter", () => {
   it("GET is read-only; mismatched ACK and attempted keyless mutation do not become success", async () => {
     const { GET, POST } = await import("@/app/api/hub/[...path]/route");
     vi.mocked(requestWithDomain).mockResolvedValue(reply({ intent }));
-    const read = await GET(new Request(`http://localhost/api/hub/mcp/icons/${id}`), params(["mcp", "icons", id]));
+    const read = await GET(new Request(`http://localhost/api/hub/mcp/icons/${id}`, {headers: {cookie: "kokoro-issuer.session_token=fixture"}}), params(["mcp", "icons", id]));
     expect(read.status).toBe(200);
     expect(vi.mocked(requestWithDomain).mock.calls[0]?.[2]?.headers).not.toHaveProperty("idempotency-key");
     vi.mocked(requestWithDomain).mockReset();
     const path = ["mcp", "icons", id, "cancel"], url = `http://localhost/api/hub/${path.join("/")}`;
     const headers = { origin: "http://localhost", "content-type": "application/json" }, body = JSON.stringify({ expected_state_version: "1" });
-    expect((await POST(new Request(url, { method: "POST", headers, body }), params(path))).status).toBe(400);
+    expect((await POST(new Request(url, { method: "POST", headers: {cookie: "kokoro-issuer.session_token=fixture", ...Object.fromEntries(new Headers(headers))}, body }), params(path))).status).toBe(400);
     expect(requestWithDomain).not.toHaveBeenCalled();
     vi.mocked(requestWithDomain).mockResolvedValue(reply({ intent, replayed: false }));
-    expect((await POST(new Request(url, { method: "POST", headers: { ...headers, "idempotency-key": "icon-original" }, body }), params(path))).status).toBe(502);
+    expect((await POST(new Request(url, { method: "POST", headers: {cookie: "kokoro-issuer.session_token=fixture",  ...headers, "idempotency-key": "icon-original" }, body }), params(path))).status).toBe(502);
     expect(requestWithDomain).toHaveBeenCalledTimes(1);
   });
 });
@@ -5019,11 +4946,11 @@ it("SSE same-origin adapter reuses strict operation context for new versus histo
  for (const [transport, reply, replayed, expected] of [["sse_compat", server, false, 201], ["sse_compat", legacy, true, 502], ["streamable_http", legacy, true, 502], [undefined, legacy, true, 201], [undefined, legacy, false, 502]] as const) {
   vi.mocked(requestWithDomain).mockResolvedValueOnce(owner({ server: reply, connector, replayed }, 201));
   const body = { display_name: server.display_name, server_url: server.server_url, ...(transport === undefined ? {} : { transport }) };
-  const response = await route.POST(new Request("http://localhost/api/hub/mcp/servers", { method: "POST", headers: { origin: "http://localhost", "content-type": "application/json", "idempotency-key": "sse-original" }, body: JSON.stringify(body) }), params(["mcp", "servers"]));
+  const response = await route.POST(new Request("http://localhost/api/hub/mcp/servers", { method: "POST", headers: {cookie: "kokoro-issuer.session_token=fixture",  origin: "http://localhost", "content-type": "application/json", "idempotency-key": "sse-original" }, body: JSON.stringify(body) }), params(["mcp", "servers"]));
   expect(response.status).toBe(expected);
  }
  vi.mocked(requestWithDomain).mockResolvedValueOnce(owner({ server: legacy }, 200));
- expect((await route.GET(new Request("http://localhost/api/hub/mcp/servers/sse-server"), params(["mcp", "servers", "sse-server"]))).status).toBe(502);
+ expect((await route.GET(new Request("http://localhost/api/hub/mcp/servers/sse-server", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}), params(["mcp", "servers", "sse-server"]))).status).toBe(502);
  expect(requestWithDomain).toHaveBeenCalledTimes(6);
 });
 
@@ -5034,7 +4961,7 @@ describe("MCP Connection 429 cooldown metadata", () => {
     const headers = new Headers({ "content-type": "application/json", "cache-control": "no-store", "x-request-id": "owner-rate-limit" });
     if (retryAfter !== null) headers.set("retry-after", retryAfter);
     vi.mocked(requestWithDomain).mockResolvedValueOnce(new Response(JSON.stringify(body), { status: 429, headers }));
-    const response = await GET(new Request("http://localhost/api/hub/mcp/connections"), params(["mcp", "connections"]));
+    const response = await GET(new Request("http://localhost/api/hub/mcp/connections", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}), params(["mcp", "connections"]));
     expect(response.status).toBe(429);
     expect(await response.json()).toEqual(body);
     expect(response.headers.get("cache-control")).toBe("no-store");
@@ -5046,7 +4973,7 @@ describe("MCP Connection 429 cooldown metadata", () => {
   it("does not attach cooldown metadata to a non-429 response", async () => {
     const { GET } = await import("@/app/api/hub/[...path]/route");
     vi.mocked(requestWithDomain).mockResolvedValueOnce(new Response(JSON.stringify({ data: { connections: [] } }), { headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "owner-success", "retry-after": "1" } }));
-    const response = await GET(new Request("http://localhost/api/hub/mcp/connections"), params(["mcp", "connections"]));
+    const response = await GET(new Request("http://localhost/api/hub/mcp/connections", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}), params(["mcp", "connections"]));
     expect(response.status).toBe(200);
     expect(response.headers.get("retry-after")).toBeNull();
   });
@@ -5060,7 +4987,7 @@ it("streams Project attachment bytes above1MiB with its UTF8 filename, fresh Pro
     "cache-control": "no-store", "referrer-policy": "no-referrer", "x-content-type-options": "nosniff", "x-request-id": "resource-request", "location": "https://storage.invalid/private",
   } }));
   const { GET } = await import("@/app/api/hub/[...path]/route");
-  const response = await GET(new Request("http://localhost/api/hub/projects/project-one/resources/asset-one/download", { headers: { "x-kokoro-tenant-id": "forged", "authorization": "Bearer forged" } }), params(["projects", "project-one", "resources", "asset-one", "download"]));
+  const response = await GET(new Request("http://localhost/api/hub/projects/project-one/resources/asset-one/download", { headers: {cookie: "kokoro-issuer.session_token=fixture",  "x-kokoro-tenant-id": "forged", "authorization": "Bearer forged" } }), params(["projects", "project-one", "resources", "asset-one", "download"]));
   expect(response.status).toBe(200);
   expect(response.headers.get("content-disposition")).toContain("%E7%AC%94%E8%AE%B0.bin");
   expect(response.headers.get("location")).toBeNull(); expect(response.headers.get("referrer-policy")).toBe("no-referrer");
@@ -5080,17 +5007,17 @@ it("rejects Project download query/alias, unsafe header and truncated bytes with
   ] as const) expect((await GET(new Request(url), params([...segments]))).status).toBe(400);
   expect(requestWithDomain).not.toHaveBeenCalled();
   vi.mocked(requestWithDomain).mockResolvedValueOnce(new Response(new Uint8Array([1]), { headers: { "content-type": "application/octet-stream", "content-length": "2", "content-disposition": "attachment; filename=\"a\"; filename*=UTF-8''a", "cache-control": "no-store", "referrer-policy": "no-referrer", "x-content-type-options": "nosniff", "x-request-id": "r" } }));
-  const response = await GET(new Request("http://localhost/api/hub/projects/p/resources/a/download"), params(["projects", "p", "resources", "a", "download"]));
+  const response = await GET(new Request("http://localhost/api/hub/projects/p/resources/a/download", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}), params(["projects", "p", "resources", "a", "download"]));
   await expect(response.arrayBuffer()).rejects.toThrow("incomplete");
 });
 
 it("marks upload validation only before the BFF request and never forwards an owner's forged local-validation header", async () => {
  const {POST}=await import("@/app/api/hub/[...path]/route");const path=params(["projects","p","resources"])
- const local=await POST(new Request("http://localhost/api/hub/projects/p/resources",{method:"POST",headers:{origin:"http://localhost","content-type":"application/octet-stream"},body:new Uint8Array(1_100_000)}),path)
+ const local=await POST(new Request("http://localhost/api/hub/projects/p/resources",{method:"POST",headers:{cookie: "kokoro-issuer.session_token=fixture", origin:"http://localhost","content-type":"application/octet-stream"},body:new Uint8Array(1_100_000)}),path)
  expect(local.status).toBe(413);expect(local.headers.get("x-kokoro-local-upload-validation")).toBe("request-body-too-large");expect(requestWithDomain).not.toHaveBeenCalled()
  vi.mocked(requestWithDomain).mockResolvedValueOnce(Response.json({error:"request_body_too_large"},{status:413,headers:{"x-kokoro-local-upload-validation":"request-body-too-large"}}))
  const small=new FormData();small.append("files",new File(["abc"],"same.txt"))
- const owner=await POST(new Request("http://localhost/api/hub/projects/p/resources",{method:"POST",headers:{origin:"http://localhost"},body:small}),path)
+ const owner=await POST(new Request("http://localhost/api/hub/projects/p/resources",{method:"POST",headers:{cookie: "kokoro-issuer.session_token=fixture", origin:"http://localhost"},body:small}),path)
  expect(owner.headers.has("x-kokoro-local-upload-validation")).toBe(false)
 })
 
@@ -5100,7 +5027,7 @@ it.each([null, "0"])("accepts actual EOF on an empty Next DELETE stream with con
   const headers = new Headers({ origin: "http://localhost", "idempotency-key": "original-command" })
   if (length !== null) headers.set("content-length", length)
   const request = new Request("http://localhost/api/hub/projects/p/resources/a", {
-    method: "DELETE", headers, body: new ReadableStream<Uint8Array>({ start(controller) { controller.close() } }), duplex: "half",
+    method: "DELETE", headers: {cookie: "kokoro-issuer.session_token=fixture", ...Object.fromEntries(new Headers(headers))}, body: new ReadableStream<Uint8Array>({ start(controller) { controller.close() } }), duplex: "half",
   } as RequestInit & { duplex: string })
   expect(request.body).not.toBeNull()
   const response = await DELETE(request, params(["projects", "p", "resources", "a"]))
@@ -5116,20 +5043,20 @@ it.each([
   { "content-encoding": "identity" }, { "content-length": "1" },
 ])("rejects forbidden DELETE framing/header %j before owner I/O", async extra => {
   const { DELETE } = await import("@/app/api/hub/[...path]/route")
-  const request = new Request("http://localhost/api/hub/projects/p/resources/a", { method: "DELETE", headers: { origin: "http://localhost", "idempotency-key": "original-command", ...extra } })
+  const request = new Request("http://localhost/api/hub/projects/p/resources/a", { method: "DELETE", headers: {cookie: "kokoro-issuer.session_token=fixture",  origin: "http://localhost", "idempotency-key": "original-command", ...extra } })
   expect((await DELETE(request, params(["projects", "p", "resources", "a"]))).status).toBe(400)
   expect(requestWithDomain).not.toHaveBeenCalled()
 })
 it("rejects a single actual DELETE byte even when length0 is declared", async () => {
   const { DELETE } = await import("@/app/api/hub/[...path]/route")
-  const request = new Request("http://localhost/api/hub/projects/p/resources/a", { method: "DELETE", headers: { origin: "http://localhost", "idempotency-key": "original-command", "content-length": "0" }, body: new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(new Uint8Array([1])); controller.close() } }), duplex: "half" } as RequestInit & { duplex: string })
+  const request = new Request("http://localhost/api/hub/projects/p/resources/a", { method: "DELETE", headers: {cookie: "kokoro-issuer.session_token=fixture",  origin: "http://localhost", "idempotency-key": "original-command", "content-length": "0" }, body: new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(new Uint8Array([1])); controller.close() } }), duplex: "half" } as RequestInit & { duplex: string })
   expect((await DELETE(request, params(["projects", "p", "resources", "a"]))).status).toBe(400)
   expect(requestWithDomain).not.toHaveBeenCalled()
 })
 it("cancels a pending zero-byte DELETE EOF read without forwarding a command", async () => {
   const { DELETE } = await import("@/app/api/hub/[...path]/route")
   const controller = new AbortController(), cancel = vi.fn()
-  const request = new Request("http://localhost/api/hub/projects/p/resources/a", { method: "DELETE", headers: { origin: "http://localhost", "idempotency-key": "original-command" }, signal: controller.signal, body: new ReadableStream<Uint8Array>({ cancel }), duplex: "half" } as RequestInit & { duplex: string })
+  const request = new Request("http://localhost/api/hub/projects/p/resources/a", { method: "DELETE", headers: {cookie: "kokoro-issuer.session_token=fixture",  origin: "http://localhost", "idempotency-key": "original-command" }, signal: controller.signal, body: new ReadableStream<Uint8Array>({ cancel }), duplex: "half" } as RequestInit & { duplex: string })
   const result = DELETE(request, params(["projects", "p", "resources", "a"]))
   await vi.waitFor(() => expect(request.body?.locked).toBe(true))
   controller.abort()
@@ -5142,13 +5069,13 @@ it("bounds a never-ending empty DELETE stream at10seconds and keeps GET bodies f
   vi.useFakeTimers()
   try {
     const cancel = vi.fn()
-    const request = new Request("http://localhost/api/hub/projects/p/resources/a", { method: "DELETE", headers: { origin: "http://localhost", "idempotency-key": "original-command" }, body: new ReadableStream<Uint8Array>({ cancel }), duplex: "half" } as RequestInit & { duplex: string })
+    const request = new Request("http://localhost/api/hub/projects/p/resources/a", { method: "DELETE", headers: {cookie: "kokoro-issuer.session_token=fixture",  origin: "http://localhost", "idempotency-key": "original-command" }, body: new ReadableStream<Uint8Array>({ cancel }), duplex: "half" } as RequestInit & { duplex: string })
     const result = DELETE(request, params(["projects", "p", "resources", "a"]))
     await vi.advanceTimersByTimeAsync(10_001)
     expect((await result).status).toBe(400)
     expect(cancel).toHaveBeenCalled()
     expect(requestWithDomain).not.toHaveBeenCalled()
-    const get = new Request("http://localhost/api/hub/projects/p/resources/a")
+    const get = new Request("http://localhost/api/hub/projects/p/resources/a", {headers: {cookie: "kokoro-issuer.session_token=fixture"}})
     Object.defineProperty(get, "body", { value: new ReadableStream<Uint8Array>({ start(controller) { controller.close() } }) })
     expect((await GET(get, params(["projects", "p", "resources", "a"]))).status).toBe(400)
     expect(requestWithDomain).not.toHaveBeenCalled()

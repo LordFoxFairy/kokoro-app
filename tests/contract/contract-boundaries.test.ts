@@ -37,13 +37,12 @@ describe("v1 contract boundaries", () => {
     expect(source).toContain('export * from "./paths"')
   })
 
-  it("retains only the native session/sign-out adapter rather than an Auth.js or OIDC browser contract", async () => {
-    const authRoute = await readFile(path.join(root, "src/app/api/auth/[...nextauth]/route.ts"), "utf8")
-    expect(authRoute).toContain("nativeProductBffConfig")
-    expect(authRoute).toContain('parts[0] === "session"')
-    expect(authRoute).toContain('parts[0] === "signout"')
-    expect(authRoute).not.toContain("next-auth")
-    expect(authRoute).not.toContain("callback")
+  it("exposes only the explicit native status GET rather than an Auth.js catchall or signout alias", async () => {
+    const route=await import("@/app/api/auth/session/route")
+    expect(typeof route.GET).toBe("function")
+    expect(route).not.toHaveProperty("POST")
+    expect(await exists("src/app/api/auth/[...nextauth]/route.ts")).toBe(false)
+    expect(await exists("src/app/api/auth/signout/route.ts")).toBe(false)
     expect(await exists("src/lib/server/oidc-provider.ts")).toBe(false)
     expect(await exists("src/app/api/auth/callback/route.ts")).toBe(false)
     expect(await exists("src/app/api/auth/magic-link/request/route.ts")).toBe(false)

@@ -15,12 +15,13 @@ vi.mock("next/navigation", () => ({ redirect: (target: string) => { proof.redire
 vi.mock("@/lib/server/product-bff", () => ({
   nativeProductBffConfig: () => proof.config ? { bffBaseUrl: "http://bff.test", domain: "product.test", internalSecret: null, session: { webOrigin: "https://web.example.test" } } : null,
   nativeSessionBffHeaders: () => proof.native ? { state: "valid", headers: new Headers({ cookie: "kokoro-issuer.session_token=native" }) } : { state: "missing" },
-  admittedNativeSession: () => {
-    proof.inspect()
-    if (proof.unavailable) throw new Error("controlled native failure")
-    return Promise.resolve(proof.nativeAdmitted ? { subject: "native-user" } : null)
-  },
+
 }))
+vi.mock("@/lib/server/browser-auth-session", () => ({ readBrowserAuthSession: () => {
+  proof.inspect()
+  if (proof.unavailable) throw new Error("controlled native failure")
+  return Promise.resolve(proof.nativeAdmitted ? { authenticated: true, subject: "native-user", tenant_id: "tenant", expires_at: "2030-01-01T00:00:00Z" } : { authenticated: false })
+} }))
 vi.mock("@/ui/auth/sign-in-recovery", () => ({ SignInRecovery: () => <section><h1>恢复工作区</h1><button>检查并继续</button><a href="/login">重新登录</a></section> }))
 import SignInFailurePage from "@/app/auth/sign-in/failed/page"
 

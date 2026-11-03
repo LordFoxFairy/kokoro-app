@@ -1,8 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-const { productBffConfig, admittedNativeSession } = vi.hoisted(() => ({
+const { productBffConfig } = vi.hoisted(() => ({
   productBffConfig: vi.fn(),
-  admittedNativeSession: vi.fn(),
 }))
 const { requestWithDomain } = vi.hoisted(() => ({
   requestWithDomain: vi.fn(),
@@ -11,11 +10,10 @@ const { requestWithDomain } = vi.hoisted(() => ({
 vi.mock("@/lib/server/same-origin", () => ({ sameOriginOk: () => true }))
 vi.mock("@/lib/server/product-bff", () => ({
   productBffConfig,
-  admittedNativeSession,
   nativeSessionBffHeaders: () => ({ state: "missing" }),
-  productBffHeaders: (config: { internalSecret?: string | null }, claims: { nativeCookie?: string }, requestId: string) => {
+  productBffHeaders: (config: { internalSecret?: string | null }, request: Request, requestId: string) => {
     const headers = new Headers({
-      cookie: claims.nativeCookie ?? "",
+      cookie: request.headers.get("cookie") ?? "",
       "x-kokoro-service": "web-bff",
       "x-kokoro-request-id": requestId,
     })
@@ -33,7 +31,7 @@ describe("Chat BFF deployment domain context", () => {
     delete process.env.KOKORO_DOMAIN
     requestWithDomain.mockReset()
     productBffConfig.mockReset()
-    admittedNativeSession.mockReset()
+
   })
 
   it("passes KOKORO_DOMAIN as an explicit transport argument, never request Host", async () => {
@@ -43,18 +41,14 @@ describe("Chat BFF deployment domain context", () => {
       domain: "dev.kokoro.localhost",
       internalSecret: null,
     })
-    admittedNativeSession.mockResolvedValue({
-      access: "product-access",
-      accessExpiresAt: Date.now() + 60_000,
-      nativeCookie: "kokoro-issuer.session_token=fixture",
-    })
+
     requestWithDomain.mockResolvedValueOnce(
       new Response(JSON.stringify({ data: "ok", meta: { request_id: "request-bff" } }), { status: 200 }),
     )
 
     const response = await GET(
       new Request("https://app.example/api/session/sessions", {
-        headers: { host: "spoofed.example" },
+        headers: {cookie: "kokoro-issuer.session_token=fixture",  host: "spoofed.example" },
       }),
       { params: Promise.resolve({ path: ["sessions"] }) },
     )
@@ -68,6 +62,6 @@ describe("Chat BFF deployment domain context", () => {
     expect(bffHeaders.get("x-kokoro-service")).toBe("web-bff")
     expect(bffHeaders.get("host")).toBeNull()
     expect(bffHeaders.get("x-kokoro-tenant-id")).toBeNull()
-    expect(admittedNativeSession).toHaveBeenCalledWith(expect.any(Request), expect.anything())
+    expect(requestWithDomain).toHaveBeenCalledOnce()
   })
 })

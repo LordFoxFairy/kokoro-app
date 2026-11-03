@@ -172,6 +172,8 @@ describe("Web governance boundary", () => {
       scripts: z.object({
         contract: z.string().min(1),
         "test:architecture": z.string().min(1),
+        "contract:check:bff-auth-session": z.string().min(1),
+        "contract:check:iam-relay-policy": z.string().min(1),
         "contract:check:bff-connector-command-errors": z.string().min(1),
         "contract:check:bff-public-skill-list": z.string().min(1),
         "contract:check:bff-mcp-project-publication": z.string().min(1),
@@ -204,7 +206,18 @@ describe("Web governance boundary", () => {
     expect(scripts["contract:check:bff-public-skill-list"]).toBe("node scripts/generate-bff-public-skill-list.mjs --check")
     expect(scripts["contract:check:bff-mcp-server-icon"]).toBe("node scripts/generate-bff-mcp-server-icon.mjs --check")
     expect(scripts["contract:check:bff-mcp-project-publication"]).toBe("node scripts/generate-bff-mcp-project-publication.mjs --check")
-    expect(scripts.contract.split(" && ").sort()).toEqual([
+    const contractChain = scripts.contract.split(" && ")
+    for (const [name, file] of [
+      ["contract:check:bff-auth-session", "scripts/generate-bff-auth-session.mjs"],
+      ["contract:check:iam-relay-policy", "scripts/generate-iam-relay-policy.mjs"],
+    ] as const) {
+      expect(scripts[name]).toBe(`node ${file} --check`)
+      expect(await exists(file)).toBe(true)
+      expect(contractChain.filter(command => command === `pnpm ${name}`)).toHaveLength(1)
+    }
+    expect(contractChain.sort()).toEqual([
+      "pnpm contract:check:bff-auth-session",
+      "pnpm contract:check:iam-relay-policy",
       "pnpm contract:check:bff-mcp-prepare-outcomes",
       "pnpm contract:check:bff-mcp-prepare-receipt",
       "pnpm contract:check:bff-archived-tasks",

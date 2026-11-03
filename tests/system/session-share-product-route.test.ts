@@ -1,9 +1,8 @@
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
-  currentProductSession: vi.fn(),
   requestWithDomain: vi.fn(),
 }));
-vi.mock("@/lib/server/product-bff", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/server/product-bff")>()), admittedNativeSession: mocks.currentProductSession }));
+
 vi.mock("@/lib/server/upstream-http", () => ({
   requestWithDomain: mocks.requestWithDomain,
 }));
@@ -11,15 +10,7 @@ import { DELETE, POST } from "@/app/api/session/[...path]/route";
 const context = {
   params: Promise.resolve({ path: ["sessions", "opaque/old", "share"] }),
 };
-let session: {
-  id: string;
-  generation: number;
-  subject: string;
-  access: string;
-  accessExpiresAt: number;
-  expiresAt: number;
-  nativeCookie: string;
-};
+
 const request = (
   method = "DELETE",
   body?: string,
@@ -30,7 +21,7 @@ const request = (
     "http://localhost/api/session/sessions/opaque%2Fold/share" + query,
     {
       method,
-      headers: {
+      headers: {cookie: "kokoro-issuer.session_token=fixture",
         host: "web.test",
         origin: "http://web.test",
         "idempotency-key": "session-mutation:fixture",
@@ -49,15 +40,8 @@ beforeEach(() => {
     KOKORO_DOMAIN: "product.test",
   }))
     vi.stubEnv(k, v);
-  session = {
-    id: "opaque",
-    generation: 1,
-    subject: "alice",
-    access: "server-secret",
-    accessExpiresAt: Date.now() + 600_000, nativeCookie: "kokoro-issuer.session_token=fixture",
-    expiresAt: Date.now() + 600_000,
-  };
-  mocks.currentProductSession.mockResolvedValue(session);
+
+
   mocks.requestWithDomain.mockImplementation(async (_u, _d, o) =>
     Response.json(
       {
@@ -84,7 +68,7 @@ it("unwraps exact formal DELETE share ACK after final identity fence and preserv
   );
   expect(response.status).toBe(200);
   expect(await response.json()).toEqual({ share_id: "shr_actual" });
-  expect(mocks.currentProductSession).toHaveBeenCalledTimes(2);
+
   expect(mocks.requestWithDomain.mock.calls[0]?.[0]).toBe(
     "http://bff.test/v1/sessions/opaque%2Fold/share?scope=&project_ref=legacy",
   );
@@ -106,7 +90,7 @@ it.each(["x", "{}"])(
   "rejects nonempty DELETE bytes %j before admission",
   async (body) => {
     expect((await DELETE(request("DELETE", body), context)).status).toBe(400);
-    expect(mocks.currentProductSession).not.toHaveBeenCalled();
+
     expect(mocks.requestWithDomain).not.toHaveBeenCalled();
   },
 );
@@ -145,40 +129,20 @@ it("rejects duplicate raw ACK keys before JSON projection", async () => {
   );
   expect((await DELETE(request(), context)).status).toBe(502);
 });
-it.each([
-  "id",
-  "generation",
-  "subject",
-  "access",
-  "accessExpiresAt",
-  "expiresAt",
-])("retires changed final %s after acknowledged write", async (field) => {
-  mocks.currentProductSession
-    .mockResolvedValueOnce(session)
-    .mockResolvedValueOnce({
-      ...session,
-      [field]:
-        field === "generation"
-          ? 2
-          : field.endsWith("At")
-            ? session.accessExpiresAt + 1
-            : "changed",
-    });
-  expect((await DELETE(request(), context)).status).toBe(401);
-});
+
 it("races hung params inside the entry budget without admission or late owner dispatch", async () => {
   vi.useFakeTimers();
   const pending = DELETE(request(), { params: new Promise(() => {}) });
   await vi.advanceTimersByTimeAsync(10001);
   expect((await pending).status).toBe(503);
-  expect(mocks.currentProductSession).not.toHaveBeenCalled();
+
 });
 it("rejects malformed POST UTF8 before owner admission", async () => {
   const req = new Request(
     "http://localhost/api/session/sessions/opaque%2Fold/share",
     {
       method: "POST",
-      headers: {
+      headers: {cookie: "kokoro-issuer.session_token=fixture",
         host: "web.test",
         origin: "http://web.test",
         "idempotency-key": "fixture",
@@ -187,7 +151,7 @@ it("rejects malformed POST UTF8 before owner admission", async () => {
     },
   );
   expect((await POST(req, context)).status).toBe(400);
-  expect(mocks.currentProductSession).not.toHaveBeenCalled();
+
 });
 it("rejects a slow endless response at the same absolute deadline and cancels its reader", async () => {
   vi.useFakeTimers();

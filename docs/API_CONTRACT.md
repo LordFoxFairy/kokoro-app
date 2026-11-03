@@ -1,3 +1,25 @@
+> D0实现候选（2026-11-03）：已固定 BFF `34c9f997a4d86f33be2f815c43cd155ed338fe86` 的 browser-private auth-session 1.0.0（SHA256 `a7b5876632f6ad91b9fc162c9abcf48b36b2677a3b15a6a497d3305aeaea81ba`），按本节正式边界完成本地消费者切片；本仓Root完整工程门已验（证据见Root唯一计划及本仓PR）；仍是未合并的源码候选，不代表BFF真实资源、共享登录/rolling/撤权或浏览器组合通过。下方旧RP/refresh/proof叙述只保留历史语境。
+
+## T-01 标准 Session 状态消费（2026-11-02，本地消费者候选）
+
+本轮沿 Root 唯一计划 §3.6 和已通过 D0 实施，不新增认证 owner、Schema、依赖或认证存储。具体固定来源见 `contract/bff-auth-session-source.json`；生成器只消费本仓 vendor 的原字节，不导入 sibling 源码。普通业务一次同源/BFF派发，当前权限仍由 BFF/IAM 与业务 owner 判断。
+
+| 边界 | 候选规则 |
+| --- | --- |
+| BFF `GET /browser/v1/auth/session` | IAM Better Auth 鲜验的安全投影；成功使用 data envelope，已认证 data 仅为 authenticated=true、subject、tenant_id、expires_at，expires_at 为实际 Session 到期的 RFC 3339 UTC；匿名／失效／撤销为 200 且 data 仅 authenticated=false，资格拒绝 403，依赖不可用 503。request id 只在响应 header，不复制旧 me 的 meta；错误码、约束和生成入口以 owner 机器合同为准，App 不维护第二份 editable schema。 |
+| App `GET /api/auth/session` | 仅薄适配上述固定 generated contract，保持真实状态与错误分类；不输出 raw Session、Cookie/token、登录 Session id/ref、access、伪 generation 或固定 60 秒期限。所有状态 no-store，传输携 request id；坏响应／超时不是匿名、管理员 false 或认证成功。 |
+| 公开 `GET /v1/me` | 保持原 user_id、tenant_id、platform_admin 三字段及既有 public provenance；不加 Session expiry／凭据字段。 |
+| 普通业务同源 adapter | 方法/path/body/Origin 校验后一次 BFF 调用；allowlisted Cookie 只交 BFF 认证边缘，不传普通业务 owner，不先后调用 `/me`。必要私有交付鲜验在 BFF，App 不比较 Session snapshot。 |
+| Admin 同源入口 | `/manage` 共享同一 Product 登录及 GET 状态；现管理员投影仍由 BFF/IAM 当前政策给出，明确 false 与 503 不互换，不由浏览器 body/header 自报身份。 |
+
+同一 BFF 状态 GET 的 generated query `refresh` 为 boolean、默认 true；wire 仅接受单值字面 true/false，无 body，重复／非法值／额外参数为400，不用 `Boolean("false")` 强转。正常浏览器 Route Handler 使用默认 true，可承接 IAM 原生 rolling；合法多个 `Set-Cookie` 经 BFF/App 完整逐项透传，不把逗号拼接值当一条 Cookie，不丢失删除指令，仍核 allowlist、属性及预算。RSC 首观察明确 `refresh=false`，BFF 转成官方 `disableCookieCache=true`、`disableRefresh=true`；两种模式均鲜读、不缓存允许结果，并 hydrate 同一安全 DTO。RSC 不写／清浏览器 Cookie，失效 Cookie 留后续正常状态 GET 清理。refresh 是 BFF 传输选项，不是新认证协议或身份 header，不扩普通业务 adapter 参数；纯业务认证检查不 rolling。限流429和合法 Retry-After 按 owner 合同承接，不自动重试。
+
+同源 Session 路由仅 GET；后继移除 `[...nextauth]` catch-all 壳、旧 `/api/auth/csrf`、session POST/refresh 和 `/api/auth/signout` 历史 alias，退出继续原生 `/iam/sign-out`。此删除不影响原生登录／退出 CSRF、固定 tenant、白名单 return target、第三方 MCP OAuth、API Key/OpenApp 或设备管理的目标 session_id。
+
+浏览器现有原样 `GET /iam/get-session` relay 同片关闭，不能在安全 DTO 之外返回完整 Session／token；IAM → BFF 认证 client 继续官方 get-session，浏览器认证观察仅用正式安全 `GET /api/auth/session`。由 BFF owner 正规重发 browser relay policy，App 固定新 commit/digest 并生成消费，不手删 vendor／upstream 原生路径；verify-email／sign-up／set-active／invitation 等真实交互保留。真实 HTTP secret-canary 应核旧浏览器路径拒绝且不返 raw body、安全路径仅返回正式安全字段，不能只测新 DTO 解码。
+
+UI 可以合并只读状态 GET、使用真实 expires_at 安排重读，并以本地 epoch/abort/跨标签无秘密失效事件退休旧视图；这些值不成为认证证明。只读恢复不自动重放业务写入或 unknown 原命令。唯一已固定来源为 BFF code-first 生成的 `contract/openapi/browser/v1/auth-session.json`；待 owner 固定 version/digest 并发布、App 正规生成 decoder，再核错误分类及 rolling/RSC 行为，执行契约、adapter 和真实浏览器冷登录／Admin／退出／撤权／迟到响应验证；本节不报告实现通过。
+
 ## T-07 当前完整 Public28.18 pin（2026-11-01）
 
 当前唯一 `src/generated/bff-public-openapi.yaml` 精确对应 BFF `091cd5022cf517d243a6390b933f9dded7e3b4a9:contract/openapi/v1/openapi.yaml`，版本28.18.0，SHA256 `35a86f91e44beb1aeb6b17eca41d3bfdc79f11a43633662113a1778b4fab6082`。12 条既有 public 生成链和 current consumer assertions 统一此来源，snapshot原字节未改；private artifacts与独立policy3保持原pin。

@@ -1,12 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
-  admission: vi.fn(),
   config: vi.fn(),
   upstream: vi.fn(),
 }));
 vi.mock("@/lib/server/product-bff", async (original) => ({
   ...(await original<typeof import("@/lib/server/product-bff")>()),
-  admittedNativeSession: mocks.admission,
   productBffConfig: mocks.config,
 }));
 vi.mock("@/lib/server/upstream-http", async (original) => ({
@@ -42,7 +40,7 @@ function invoke(
 ) {
   const r = new Request(`https://app.example/api/hub/${path}`, {
     method,
-    headers: {
+    headers: {cookie: "kokoro-issuer.session_token=fixture",
       origin: "https://app.example",
       "content-type": "application/json",
       ...extra,
@@ -64,11 +62,7 @@ beforeEach(() => {
     internalSecret: "fixture-server-secret",
     session: { webOrigin: "https://app.example" },
   });
-  mocks.admission.mockResolvedValue({
-    access: "fixture-session-access",
-    accessExpiresAt: Date.now() + 60000,
-    nativeCookie: "kokoro-issuer.session_token=fixture",
-  });
+
 });
 afterEach(() => {
   vi.clearAllMocks();
@@ -89,7 +83,7 @@ describe("knowledge same-origin boundary", () => {
       '{"expected_revision":1}',
       {
         authorization: "Bearer forged",
-        cookie: "private=browser",
+        cookie: "kokoro-issuer.session_token=fixture; private=browser",
         "x-kokoro-namespace": "forged",
       },
     );
@@ -261,11 +255,12 @@ describe("knowledge same-origin boundary", () => {
   });
   it("enforces the total budget during admission and cancels a stalled owner body", async () => {
     vi.useFakeTimers();
-    mocks.admission.mockReturnValueOnce(new Promise(() => undefined));
+    mocks.upstream.mockReturnValueOnce(new Promise(() => undefined));
     const pending = invoke("preferences/knowledge");
     await vi.advanceTimersByTimeAsync(10001);
     expect((await pending).status).toBe(504);
-    expect(mocks.upstream).not.toHaveBeenCalled();
+    expect(mocks.upstream).toHaveBeenCalledOnce();
+    mocks.upstream.mockClear();
     vi.useRealTimers();
     const cancel = vi.fn();
     mocks.upstream.mockResolvedValue(
@@ -284,32 +279,9 @@ describe("knowledge same-origin boundary", () => {
     expect((await body).status).toBe(503);
     expect(cancel).toHaveBeenCalledOnce();
   });
-  it("denies anonymous admission and cancels before or during delayed admission without forwarding", async () => {
-    mocks.admission.mockResolvedValueOnce(null);
-    expect((await invoke("preferences/knowledge")).status).toBe(401);
-    const c = new AbortController();
-    c.abort();
-    await invoke("preferences/knowledge", "GET", undefined, {}, c.signal);
-    expect(mocks.upstream).not.toHaveBeenCalled();
-    let resolve!: (value: unknown) => void;
-    mocks.admission.mockReturnValueOnce(
-      new Promise((done) => {
-        resolve = done;
-      }),
-    );
-    const late = new AbortController();
-    const result = invoke(
-      "preferences/knowledge",
-      "GET",
-      undefined,
-      {},
-      late.signal,
-    );
-    await vi.waitFor(() => expect(mocks.admission).toHaveBeenCalledTimes(2));
-    late.abort();
-    await result;
-    resolve({ access: "late" });
-    await Promise.resolve();
+  it("a pre-aborted caller never dispatches a knowledge request", async () => {
+    const control=new AbortController();control.abort();
+    await invoke("preferences/knowledge","GET",undefined,{},control.signal);
     expect(mocks.upstream).not.toHaveBeenCalled();
   });
 });

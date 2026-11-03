@@ -5,7 +5,7 @@
 
 import { NextResponse } from "next/server"
 
-import { admittedNativeSession, productBffConfig, productBffHeaders } from "@/lib/server/product-bff"
+import { InvalidBrowserCookieError, productBffConfig, productBffHeaders } from "@/lib/server/product-bff"
 import { requestWithDomain } from "@/lib/server/upstream-http"
 
 export const runtime = "nodejs"
@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic"
 const PLATFORMS = new Set(["telegram", "line", "slack"])
 
 function errorResponse(error: string, status: number): Response {
-  return NextResponse.json({ error }, { status })
+  return NextResponse.json({ error }, { status, headers: { "cache-control": "private, no-store" } })
 }
 
 export async function GET(request: Request, context: { params: Promise<{ path: string[] }> }): Promise<Response> {
@@ -34,28 +34,21 @@ export async function GET(request: Request, context: { params: Promise<{ path: s
   if (config === null) return errorResponse("auth_not_configured", 503)
   if (config.bffBaseUrl == null) return errorResponse("agent_not_configured", 503)
 
-  let claims
-  try {
-    claims = await admittedNativeSession(request, config)
-  } catch {
-    return errorResponse("session_unavailable", 503)
-  }
-  if (claims === null) return errorResponse("unauthenticated", 401)
   const requestId = request.headers.get("x-kokoro-request-id") || crypto.randomUUID()
   const target = `${config.bffBaseUrl.replace(/\/+$/, "")}/v1/agents/connections/setup?platform=${encodeURIComponent(platform)}`
 
-  const headers = productBffHeaders(config, claims, requestId)
-  const accept = request.headers.get("accept")
-  if (accept !== null) headers.set("accept", accept)
-
   let upstream: Response
   try {
+    const headers = productBffHeaders(config, request, requestId)
+    const accept = request.headers.get("accept")
+    if (accept !== null) headers.set("accept", accept)
     upstream = await requestWithDomain(target, config.domain, {
       method: "GET",
       headers: Object.fromEntries(headers.entries()),
       signal: request.signal,
     })
-  } catch {
+  } catch (error) {
+    if (error instanceof InvalidBrowserCookieError) return errorResponse("invalid_browser_cookie", 400)
     return errorResponse("agent_unreachable", 502)
   }
 

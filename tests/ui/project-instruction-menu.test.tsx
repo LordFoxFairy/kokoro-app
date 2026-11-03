@@ -1,4 +1,4 @@
-import { useSyncExternalStore, type ReactNode } from "react"
+import { useLayoutEffect, useSyncExternalStore, type ReactNode } from "react"
 import { act, cleanup, fireEvent, render, renderHook, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 
@@ -13,6 +13,16 @@ import * as pageClients from "@/ui/shell/page-clients"
 import { openCanvas, readCanvasState, resetCanvasStore } from "@/ui/canvas/canvas-store"
 import { addConversation, type ConversationStore } from "@/core/conversations"
 
+const instructionDialogCommit = vi.hoisted(() => ({ observe: undefined as (() => void) | undefined }))
+vi.mock("@/features/app/project-context-dialogs", async importOriginal => {
+  const actual = await importOriginal<typeof import("@/features/app/project-context-dialogs")>()
+  return { ...actual, ProjectContextDialogs: function CommittedProjectContextDialogs(props: import("@/features/app/project-context-dialogs").ProjectContextDialogsProps) {
+    // Observe the real child's committed DOM before Radix refreshes passive callbacks.
+    useLayoutEffect(() => { instructionDialogCommit.observe?.() })
+    return <actual.ProjectContextDialogs {...props} />
+  } }
+})
+
 const projectA = { id: "project_11111111-1111-1111-1111-111111111111", name: "项目甲", slug: "a", description: "", instruction: "甲的原指令", created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-01T00:00:00Z" }
 const projectB = { ...projectA, id: "project_22222222-2222-2222-2222-222222222222", name: "项目乙", slug: "b", instruction: "乙的原指令" }
 const capabilities = { instructions: true, connectors: false, resources: false, skills: false, projectConversations: false }
@@ -25,6 +35,7 @@ beforeEach(() => {
   window.history.replaceState(null, "", `/app/project/${projectA.id}`)
 })
 afterEach(() => {
+  instructionDialogCommit.observe = undefined
   cleanup()
   engine?.dispose()
   vi.restoreAllMocks()
@@ -188,6 +199,71 @@ it("保存待决时锁定 editor 和关闭动作，重复点击不发第二次 P
   expect(screen.getByRole("dialog", { name: "项目指令" })).toBeInTheDocument()
   await waitFor(() => expect(view.writes).toHaveLength(1))
   await act(async () => finish?.())
+})
+
+it("committed pending instruction dialog blocks a single Escape before passive callbacks refresh", async () => {
+  let finish: (() => void) | undefined
+  const pending = new Promise<Response>(resolve => { finish = () => resolve(Response.json({ data: { project: projectA }, meta: { request_id: "req_pending" } })) })
+  const view = mountProjectMenu(async (_path, init) => init?.method === "PATCH" ? pending : undefined)
+  const { menu } = await headerMenu()
+  fireEvent.click(within(menu).getByRole("menuitem", { name: "编辑指令" }))
+  const dialog = await screen.findByRole("dialog", { name: "项目指令" })
+  let escapes = 0
+  instructionDialogCommit.observe = () => {
+    if (escapes || !within(dialog).getByRole<HTMLButtonElement>("button", { name: "取消" }).disabled) return
+    escapes++
+    dialog.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }))
+  }
+  try {
+    fireEvent.click(within(dialog).getByRole("button", { name: "保存" }))
+    await waitFor(() => expect(view.writes).toHaveLength(1))
+    expect(escapes).toBe(1)
+    expect(screen.getByRole("dialog", { name: "项目指令" })).toBe(dialog)
+    expect(within(dialog).getByRole("button", { name: "取消" })).toBeDisabled()
+  } finally {
+    instructionDialogCommit.observe = undefined
+    await act(async () => finish?.())
+  }
+})
+
+it("committed unknown instruction closes on one Escape and retains the original explicit retry", async () => {
+  const submitted: Array<{ key: string | null; body: string }> = []
+  const view = mountProjectMenu(async (_path, init) => {
+    if (init?.method !== "PATCH") return undefined
+    submitted.push({ key: new Headers(init.headers).get("Idempotency-Key"), body: String(init.body) })
+    if (submitted.length === 1) throw new TypeError("ACK lost")
+    return undefined
+  })
+  const { menu } = await headerMenu()
+  fireEvent.click(within(menu).getByRole("menuitem", { name: "编辑指令" }))
+  let dialog = await screen.findByRole("dialog", { name: "项目指令" })
+  let escapes = 0
+  let committedAlert: string | null = null
+  instructionDialogCommit.observe = () => {
+    const alert = within(dialog).queryByRole("alert")
+    if (escapes || !alert || within(dialog).getByRole<HTMLButtonElement>("button", { name: "取消" }).disabled) return
+    committedAlert = alert.textContent
+    escapes++
+    dialog.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }))
+  }
+  fireEvent.change(within(dialog).getByRole("textbox"), { target: { value: "committed unknown instruction" } })
+  fireEvent.click(within(dialog).getByRole("button", { name: "保存" }))
+  await waitFor(() => expect(escapes).toBe(1))
+  expect(committedAlert).toContain("操作结果尚未确认")
+  await waitFor(() => expect(screen.queryByRole("dialog", { name: "项目指令" })).not.toBeInTheDocument())
+  instructionDialogCommit.observe = undefined
+  const reopen = await headerMenu()
+  fireEvent.click(within(reopen.menu).getByRole("menuitem", { name: "编辑指令" }))
+  dialog = await screen.findByRole("dialog", { name: "项目指令" })
+  expect(within(dialog).getByRole("textbox")).toHaveValue("committed unknown instruction")
+  expect(within(dialog).getByRole("textbox")).toBeDisabled()
+  expect(view.writes).toHaveLength(1)
+  expect(submitted[0]?.key).toBeTruthy()
+  fireEvent.click(within(dialog).getByRole("button", { name: "重试原操作" }))
+  await waitFor(() => expect(screen.queryByRole("dialog", { name: "项目指令" })).not.toBeInTheDocument())
+  expect(escapes).toBe(1)
+  expect(submitted).toHaveLength(2)
+  expect(submitted[1]).toEqual(submitted[0])
 })
 
 it("移动侧栏关闭后 editor 仍可编辑，取消返回仍可见的顶部菜单按钮", async () => {

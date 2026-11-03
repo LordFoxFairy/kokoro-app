@@ -1,10 +1,11 @@
+import { readBrowserAuthSession } from "@/lib/server/browser-auth-session"
 import type { Metadata } from "next"
 import { randomUUID } from "node:crypto"
 import { headers } from "next/headers"
 import { redirect } from "next/navigation"
 import { AudioLines } from "lucide-react"
 
-import { admittedNativeSession, nativeProductBffConfig, nativeSessionBffHeaders } from "@/lib/server/product-bff"
+import { nativeProductBffConfig, nativeSessionBffHeaders } from "@/lib/server/product-bff"
 import { SignInRecovery } from "@/ui/auth/sign-in-recovery"
 
 export const metadata: Metadata = { title: "登录 · Kokoro", robots: { index: false, follow: false } }
@@ -21,7 +22,7 @@ export default async function SignInFailurePage() {
       const cookie = incoming.get("cookie")
       if (cookie !== null) requestHeaders.set("cookie", cookie)
       const request = new Request(`${config.session.webOrigin}/app`, { headers: requestHeaders })
-      if (nativeSessionBffHeaders(request, config, randomUUID()).state === "valid") current = await admittedNativeSession(request, config) !== null
+      if (nativeSessionBffHeaders(request, config, randomUUID()).state === "valid") current = (await readBrowserAuthSession(request, config, randomUUID())).authenticated
     }
   } catch { /* Keep explicit recovery; never start or replay authentication here. */ }
   // Next redirect throws its navigation signal; keep it outside the inspection catch.

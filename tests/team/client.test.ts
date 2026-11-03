@@ -574,9 +574,7 @@ describe("SET20 authoritative actor projection and bounded wire", () => {
       expect(new URL(input.url).pathname).toBe("/api/auth/session");
       return Response.json(
         {
-          authenticated: true,
-          subject: "user-1",
-          expires_at: Date.now() + 60000,
+          data: { authenticated: true, subject: "user-1", tenant_id: "tenant", expires_at: "2030-01-01T00:00:00Z" },
         },
         { headers: { "cache-control": "private, no-store" } },
       );
@@ -594,10 +592,7 @@ describe("SET20 authoritative actor projection and bounded wire", () => {
       vi.fn(async () =>
         Response.json(
           {
-            authenticated: true,
-            subject: "user-1",
-            expires_at: Date.now() + 60000,
-            access: "not-a-browser-fact",
+            data: { authenticated: true, subject: "user-1", tenant_id: "tenant", expires_at: "2030-01-01T00:00:00Z", access: "not-a-browser-fact" },
           },
           { headers: { "cache-control": "no-store" } },
         ),

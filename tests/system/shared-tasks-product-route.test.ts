@@ -1,29 +1,19 @@
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
-  admittedNativeSession: vi.fn(),
   requestWithDomain: vi.fn(),
 }));
 vi.mock("@/lib/server/product-bff", () => ({
-  admittedNativeSession: mocks.admittedNativeSession,
   productBffConfig: () => ({ bffBaseUrl: "http://bff.test", domain: "product.test", internalSecret: null, session: { redisUrl: "redis://fixture/0", webOrigin: "http://web.test", secret: "at-least-thirty-two-characters-secret" } }),
-  productBffHeaders: (_config: unknown, claims: { nativeCookie?: string }, requestId: string) => new Headers({ cookie: claims.nativeCookie ?? "", "x-kokoro-request-id": requestId }),
+  productBffHeaders: (_config: unknown, request: Request, requestId: string) => new Headers({ cookie: request.headers.get("cookie") ?? "", "x-kokoro-request-id": requestId }),
 }));
 vi.mock("@/lib/server/upstream-http", () => ({
   requestWithDomain: mocks.requestWithDomain,
 }));
 import { GET } from "@/app/api/account/shared-tasks/route";
-const session = {
-  id: "opaque",
-  generation: 1,
-  subject: "alice",
-  access: "server-secret",
-  accessExpiresAt: Date.now() + 600_000,
-  expiresAt: Date.now() + 600_000,
-  nativeCookie: "kokoro-issuer.session_token=fixture",
-};
+
 const request = (suffix = "?limit=100", headers: Record<string, string> = {}) =>
   new Request("http://localhost/api/account/shared-tasks" + suffix, {
-    headers: { host: "web.test", ...headers },
+    headers: {cookie: "kokoro-issuer.session_token=fixture",  host: "web.test", ...headers },
   });
 beforeEach(() => {
   vi.resetAllMocks();
@@ -36,7 +26,7 @@ beforeEach(() => {
     KOKORO_TENANT_ID: "tenant",
   }))
     vi.stubEnv(k, v);
-  mocks.admittedNativeSession.mockResolvedValue(session);
+
   mocks.requestWithDomain.mockImplementation(async (_u, _d, o) =>
     Response.json(
       { data: { items: [], next_cursor: null } },
@@ -60,7 +50,7 @@ it("returns strict private list after two actual identity reads, with server-onl
     data: { items: [], next_cursor: null },
   });
   expect(response.headers.get("cache-control")).toContain("no-store");
-  expect(mocks.admittedNativeSession).toHaveBeenCalledTimes(2);
+
   expect(mocks.requestWithDomain.mock.calls[0]?.[0]).toBe(
     "http://bff.test/v1/account/shared-tasks?limit=100",
   );
@@ -99,33 +89,4 @@ it("rejects unknown response fields before projection", async () => {
     ),
   );
   expect((await GET(request())).status).toBe(502);
-});
-it.each([
-  "id",
-  "generation",
-  "subject",
-  "access",
-  "accessExpiresAt",
-  "expiresAt",
-])("retires changed final %s", async (field) => {
-  mocks.admittedNativeSession
-    .mockResolvedValueOnce(session)
-    .mockResolvedValueOnce({
-      ...session,
-      [field]:
-        field === "generation"
-          ? 2
-          : field.endsWith("At")
-            ? session.accessExpiresAt + 1
-            : "changed",
-    });
-  expect((await GET(request())).status).toBe(401);
-});
-it("absolute budget races a hung store and cancels before owner IO", async () => {
-  vi.useFakeTimers();
-  mocks.admittedNativeSession.mockImplementation(() => new Promise(() => {}));
-  const pending = GET(request());
-  await vi.advanceTimersByTimeAsync(10_001);
-  expect((await pending).status).toBe(503);
-  expect(mocks.requestWithDomain).not.toHaveBeenCalled();
 });

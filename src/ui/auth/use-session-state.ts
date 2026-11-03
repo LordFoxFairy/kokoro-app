@@ -1,10 +1,12 @@
 "use client"
 
-// IAM native session 是 HttpOnly；GET 只读取受信投影，不在浏览器续期或重放凭据。
+// IAM native session 是 HttpOnly；GET 读取受信安全状态，原生 rolling 由 owner 承接，浏览器不另发 refresh 或重放凭据。
 // authenticated 或显式本地 preview → pass；anonymous → anonymous；探针未回前 checking。
 // preview 只由非生产环境的显式开关启用；网络、超时与畸形响应进入显式故障态，避免 fail-open 或误跳登录。
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react"
+
+import { browserAuthSessionErrorSchemas, browserAuthSessionResponseSchema, type BrowserAuthSession } from "@/generated/bff-auth-session"
 
 import type { ProductRead401, ProductReadRecheck } from "./product-read-recheck-context"
 
@@ -18,7 +20,7 @@ import {
 /** Local read lifecycle only; BFF still authorizes every Project request. */
 export type ProjectReadBoundary = { admitted: boolean; subject: string | null; generation: number }
 
-export type SessionState = "checking" | "pass" | "anonymous" | "unavailable"
+export type SessionState = "checking" | "pass" | "anonymous" | "forbidden" | "unavailable"
 export type SessionProbe = {
   state: SessionState
   mode: "checking" | "preview" | "authenticated"
@@ -37,9 +39,9 @@ export type SessionProbe = {
 const EXPLICIT_PREVIEW = process.env.NODE_ENV !== "production" && process.env.NEXT_PUBLIC_SESSION_PREVIEW === "1"
 
 type ResolvedSession =
-  | { mode: "authenticated"; subject: string; subjectAtProbeStart: string | null | undefined }
+  | { mode: "authenticated"; subject: string; tenant: string; subjectAtProbeStart: string | null | undefined }
   | { mode: "anonymous"; subject: null }
-  | { mode: "unavailable"; subject: null }
+  | { mode: "forbidden" | "unavailable"; subject: null }
 
 type ReadRecoveryAdmission = {
   subject: string; generation: number; admittedGeneration: number | null; retired: boolean;
@@ -47,25 +49,32 @@ type ReadRecoveryAdmission = {
 }
 
 const SESSION_CHECK_INTERVAL_MS = 120_000
-type SessionObservation = { indexSubject: string | null | undefined; retired: boolean }
+const AUTH_INVALIDATION_KEY = "kokoro.web.auth-invalidation"
+type SessionObservation = { indexSubject: string | null | undefined; invalidationHint: string | null | undefined; retired: boolean }
 type SharedSessionCheck = { observation: SessionObservation; result: Promise<ResolvedSession> }
 let sessionProbeInflight: SharedSessionCheck | null = null
 let lastIdentityStorageEvent: StorageEvent | null = null
 let sessionProbeController: AbortController | null = null
 let admittedSubject: string | null = null
+let admittedTenant: string | null = null
 let documentSuspended = false
 
-function requestSessionMode(indexSubject: string | null | undefined): SharedSessionCheck {
+function readBrowserInvalidationHint(): string | null | undefined {
+  try { return window.localStorage.getItem(AUTH_INVALIDATION_KEY) } catch { return undefined }
+}
+
+function requestSessionMode(indexSubject: string | null | undefined, invalidationHint: string | null | undefined): SharedSessionCheck {
   if (sessionProbeInflight !== null) return sessionProbeInflight
-  const observation = { indexSubject, retired: false }
+  const observation = { indexSubject, invalidationHint, retired: false }
   if (documentSuspended) return { observation, result: Promise.resolve({ mode: "unavailable", subject: null }) }
 
   const controller = new AbortController()
   sessionProbeController = controller
   const { signal } = controller
-  const assertCurrent = (): void => {
+  const assertCurrent = (checkInvalidation = false): void => {
     signal.throwIfAborted()
-    if (observation.retired) throw new Error("Product session probe retired")
+    if (observation.retired || checkInvalidation && (observation.invalidationHint === undefined || readBrowserInvalidationHint() !== observation.invalidationHint))
+      throw new Error("Product session probe retired")
   }
   let abort!: () => void
   const aborted = new Promise<never>((_, reject) => {
@@ -81,22 +90,21 @@ function requestSessionMode(indexSubject: string | null | undefined): SharedSess
     const read = async (): Promise<ResolvedSession> => {
       assertCurrent()
       const response = await fetch("/api/auth/session", { cache: "no-store", signal })
-      assertCurrent()
+      assertCurrent(true)
+      if (response.status === 403) {
+        const error=browserAuthSessionErrorSchemas[403].safeParse(await response.json())
+        assertCurrent(true)
+        return { mode: error.success ? "forbidden" : "unavailable", subject: null }
+      }
       if (response.status !== 200) return { mode: "unavailable", subject: null }
       const raw: unknown = await response.json()
-      assertCurrent()
-      if (typeof raw !== "object" || raw === null) return { mode: "unavailable", subject: null }
-      const authenticated = (raw as { authenticated?: unknown }).authenticated
-      const subject = (raw as { subject?: unknown }).subject
-      if (authenticated === false) {
-        const value = raw as Record<string, unknown>
-        if (Object.keys(value).length === 1) return { mode: "anonymous", subject: null }
-        return { mode: "unavailable", subject: null }
-      }
-      if (authenticated !== true || typeof subject !== "string" || subject.trim() === "") {
-        return { mode: "unavailable", subject: null }
-      }
-      return { mode: "authenticated", subject, subjectAtProbeStart }
+      assertCurrent(true)
+      const parsed = browserAuthSessionResponseSchema.safeParse(raw)
+      if (!parsed.success) return { mode: "unavailable", subject: null }
+      const observed = parsed.data.data
+      if (!observed.authenticated) return { mode: "anonymous", subject: null }
+      if (Date.parse(observed.expires_at) <= Date.now()) return { mode: "unavailable", subject: null }
+      return { mode: "authenticated", subject: observed.subject, tenant: observed.tenant_id, subjectAtProbeStart }
     }
     return read()
 
@@ -117,11 +125,20 @@ function requestSessionMode(indexSubject: string | null | undefined): SharedSess
   return shared
 }
 
-export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean; serverAdmitted?: boolean }> = {}): SessionProbe {
+/** SSR has no browser request-start marker. A conflicting browser owner needs a fresh GET. */
+function canHydrateServerObservation(observed: BrowserAuthSession | undefined, indexSubject: string | null | undefined, invalidationHint: string | null | undefined): observed is BrowserAuthSession {
+  if (observed === undefined || documentSuspended || indexSubject === undefined || invalidationHint !== null) return false
+  if (!observed.authenticated) return indexSubject === null
+  return Date.parse(observed.expires_at) > Date.now() && (indexSubject === null || indexSubject === observed.subject) &&
+    (admittedSubject === null || admittedSubject === observed.subject && admittedTenant === observed.tenant_id)
+}
+
+export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean; initialSession?: BrowserAuthSession }> = {}): SessionProbe {
   const serverUnavailable = options.serverUnavailable === true
-  const serverAdmitted = options.serverAdmitted === true
+  const initialSession = useRef(options.initialSession)
   const [retryGeneration, setRetryGeneration] = useState(0)
   const generationRef = useRef(0)
+  // Server and browser render the same inactive first frame. Browser context is checked only after commit.
   const [probe, setProbe] = useState<Omit<SessionProbe, "reportReadUnauthorized" | "readRecoveryBlocked">>(() => ({
     state: EXPLICIT_PREVIEW ? "pass" : serverUnavailable ? "unavailable" : "checking",
     mode: EXPLICIT_PREVIEW ? "preview" : "checking",
@@ -246,8 +263,19 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean;
     }
     const check = (): void => {
       const indexSubject = retireChangedSubject()
+      const invalidationHint = readBrowserInvalidationHint()
+      if (pendingCheck !== null && invalidationHint !== pendingCheck.invalidationHint) pendingCheck.retired = true
+      if (sessionProbeInflight !== null && invalidationHint !== sessionProbeInflight.observation.invalidationHint)
+        sessionProbeInflight.observation.retired = true
       if (pendingCheck !== null) return
-      const request = requestSessionMode(indexSubject)
+      const candidate = initialSession.current
+      initialSession.current = undefined
+      const serverObservation = canHydrateServerObservation(candidate, indexSubject, invalidationHint) ? candidate : undefined
+      const request: SharedSessionCheck = serverObservation === undefined
+        ? requestSessionMode(indexSubject, invalidationHint)
+        : { observation: { indexSubject, invalidationHint, retired: false }, result: Promise.resolve(serverObservation.authenticated
+          ? { mode: "authenticated", subject: serverObservation.subject, tenant: serverObservation.tenant_id, subjectAtProbeStart: undefined }
+          : { mode: "anonymous", subject: null }) }
       const checking = request.observation
       pendingCheck = checking
       const currentGeneration = ++generationRef.current
@@ -255,7 +283,7 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean;
       // Probe epochs fence asynchronous results; data generations change only
       // on actual admission/retirement. A routine check does not invalidate
       // every business read. Each request still has server-side authorization.
-      setProbe((current) => ({ ...current, requestPending: true,
+      if (serverObservation === undefined) setProbe((current) => ({ ...current, requestPending: true,
         projectReadBoundary: current.projectReadBoundary.admitted && current.projectReadBoundary.subject === indexSubject
           ? current.projectReadBoundary
           : { admitted: false, subject: current.projectReadBoundary.subject, generation: currentGeneration },
@@ -265,6 +293,26 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean;
         // clear a newer observation or publish admission across the epoch fence.
         if (pendingCheck === checking) pendingCheck = null
         if (!live || generationRef.current !== currentGeneration) return
+        let bootstrapIndex: string | null | undefined
+        if (serverObservation !== undefined) {
+          try { bootstrapIndex = readBrowserAuthIndexSubject() } catch { /* A fresh GET is required. */ }
+          if (!canHydrateServerObservation(serverObservation, bootstrapIndex, readBrowserInvalidationHint())) {
+            // A missed/queued storage event can invalidate SSR before this microtask. Never publish it first.
+            admissionRef.current = { ...admissionRef.current, admitted: false }
+            check()
+            return
+          }
+        } else if (checking.invalidationHint === undefined || readBrowserInvalidationHint() !== checking.invalidationHint) {
+          checking.retired = true
+        }
+        if (resolved.mode === "forbidden" && !checking.retired) {
+          retireReadRecovery()
+          browserConversationMoveCoordinator().suspendVerifiedSubject(admittedSubject)
+          admissionRef.current = { admitted: false, subject: null, generation: currentGeneration }
+          setProbe({ state: "forbidden", mode: "checking", unavailable: true, requestPending: false, retry,
+            projectReadBoundary: admissionRef.current })
+          return
+        }
         if (resolved.mode === "unavailable" || checking.retired) {
           admissionRef.current = { ...admissionRef.current, admitted: false }
           scheduleRecovery()
@@ -278,8 +326,11 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean;
         }
         if (resolved.mode === "authenticated") {
           try {
-            if (resolved.subjectAtProbeStart === undefined ||
-              !admitBrowserAuthSessionIndexes(resolved.subject, resolved.subjectAtProbeStart)) {
+            // A server observation never claims that hydration-time storage was its request start.
+            // Recheck bootstrap eligibility before touching indexes; real GETs retain their own start marker.
+            const indexAtAdmission = serverObservation === undefined ? resolved.subjectAtProbeStart : bootstrapIndex
+            if (indexAtAdmission === undefined ||
+              !admitBrowserAuthSessionIndexes(resolved.subject, indexAtAdmission)) {
               admissionRef.current = { ...admissionRef.current, admitted: false }
               setProbe((current) => current.mode === "authenticated"
                 ? { ...current, unavailable: true, requestPending: false, retry,
@@ -290,7 +341,8 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean;
             }
             if (admittedSubject === null) {
               admittedSubject = resolved.subject
-            } else if (admittedSubject !== resolved.subject) {
+              admittedTenant = resolved.tenant
+            } else if (admittedSubject !== resolved.subject || admittedTenant !== resolved.tenant) {
               retireReadRecovery()
               browserConversationMoveCoordinator().revokeSubject()
               admissionRef.current = { ...admissionRef.current, admitted: false }
@@ -321,6 +373,7 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean;
           setReadRecoveryBlocked(false)
           browserConversationMoveCoordinator().revokeSubject()
           admittedSubject = null
+          admittedTenant = null
         }
         clearTimeout(recoveryTimer)
         recoveryTimer = undefined
@@ -344,7 +397,7 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean;
     }
     const onStorage = (event: StorageEvent): void => {
       // Other tabs also save drafts and preferences; those are not auth events.
-      if (event.storageArea !== window.localStorage || (event.key !== null && event.key !== AUTH_INDEX_SUBJECT_KEY)) return
+      if (event.storageArea !== window.localStorage || (event.key !== null && event.key !== AUTH_INDEX_SUBJECT_KEY && event.key !== AUTH_INVALIDATION_KEY)) return
       // Storage events are queued: current storage may already be A after A→B→A.
       // Revoke the shared observation so late subscribers cannot accept it either.
       const changed = event.key === null || event.oldValue !== event.newValue
@@ -385,6 +438,7 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean;
     window.addEventListener("online", onVisible)
     window.addEventListener("focus", onVisible)
     document.addEventListener("visibilitychange", onVisible)
+    window.addEventListener("kokoro:auth-invalidated", onPageHide)
     window.addEventListener("pagehide", onPageHide)
     window.addEventListener("pageshow", onPageShow)
     window.addEventListener("storage", onStorage)
@@ -394,13 +448,14 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean;
       window.removeEventListener("online", onVisible)
       window.removeEventListener("focus", onVisible)
       document.removeEventListener("visibilitychange", onVisible)
+      window.removeEventListener("kokoro:auth-invalidated", onPageHide)
       window.removeEventListener("pagehide", onPageHide)
       window.removeEventListener("pageshow", onPageShow)
       window.removeEventListener("storage", onStorage)
       clearInterval(timer)
       clearTimeout(recoveryTimer)
     }
-  }, [retry, retryGeneration, serverUnavailable, serverAdmitted, retireReadRecovery])
+  }, [retry, retryGeneration, serverUnavailable, retireReadRecovery])
 
   return { ...probe, reportReadUnauthorized, readRecoveryBlocked }
 }

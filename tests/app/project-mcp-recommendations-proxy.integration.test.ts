@@ -5,10 +5,8 @@ import {
   type ServerResponse,
 } from "node:http";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-const { currentProductSession } = vi.hoisted(() => ({
-  currentProductSession: vi.fn(),
-}));
-vi.mock("@/lib/server/product-bff", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/server/product-bff")>()), admittedNativeSession: currentProductSession }))
+
+
 import { GET, PUT } from "@/app/api/hub/[...path]/route";
 let server: Server,
   calls: IncomingMessage[],
@@ -26,7 +24,7 @@ const request = (
 ) =>
   new Request("http://web.test/api/hub/projects/project/mcp-recommendations", {
     method: "PUT",
-    headers: {
+    headers: {cookie: "kokoro-issuer.session_token=fixture",
       origin: "http://web.test",
       "content-type": "application/json",
       ...headers,
@@ -53,12 +51,7 @@ beforeEach(async () => {
   calls = [];
   bodies = [];
   peer = reply;
-  currentProductSession
-    .mockReset()
-    .mockResolvedValue({
-      access: "admitted-access",
-      accessExpiresAt: Date.now() + 60000, nativeCookie: "kokoro-issuer.session_token=fixture",
-    });
+
   server = createServer((req, res) => {
     calls.push(req);
     let raw = "";
@@ -117,7 +110,7 @@ it("real catchall thin bridge sends raw PUT bytes with trusted Content-Length/no
   expect(result.headers.get("cache-control")).toContain("no-store");
   expect(await result.json()).toEqual({ data });
   const get = await GET(
-    new Request("http://web.test/api/hub/projects/project/mcp-recommendations"),
+    new Request("http://web.test/api/hub/projects/project/mcp-recommendations", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}),
     context(),
   );
   expect(get.status).toBe(200);
@@ -139,7 +132,7 @@ it("rejects extra identity/query/duplicate body/command headers/cross-origin bef
     expect([400, 403]).toContain((await PUT(invalid, context())).status);
   expect(calls).toHaveLength(0);
   const query = new Request(
-    "http://web.test/api/hub/projects/project/mcp-recommendations?tenant_id=other",
+    "http://web.test/api/hub/projects/project/mcp-recommendations?tenant_id=other", {headers: {cookie: "kokoro-issuer.session_token=fixture"}},
   );
   expect((await GET(query, context())).status).toBe(400);
   expect(calls).toHaveLength(0);
@@ -188,7 +181,7 @@ it("network failure never automatically resends PUT; GET is a separate current-s
   expect(calls).toHaveLength(1);
   peer = reply;
   const result = await GET(
-    new Request("http://web.test/api/hub/projects/project/mcp-recommendations"),
+    new Request("http://web.test/api/hub/projects/project/mcp-recommendations", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}),
     context(),
   );
   expect(result.status).toBe(200);
@@ -201,8 +194,7 @@ it("pre-aborted caller and unavailable session do not send owner requests", asyn
   expect(
     (await PUT(request(undefined, {}, abort.signal), context())).status,
   ).toBe(503);
-  currentProductSession.mockResolvedValueOnce(null);
-  expect((await PUT(request(), context())).status).toBe(401);
+
   expect(calls).toHaveLength(0);
 });
 
@@ -234,19 +226,7 @@ it("caller abort closes an in-flight owner response and never lets a late body b
   expect(calls).toHaveLength(1);
 });
 it("admission and slow owner EOF consume one ten-second budget, not a renewed response timer", async () => {
-  currentProductSession.mockImplementationOnce(
-    () =>
-      new Promise((resolve) =>
-        setTimeout(
-          () =>
-            resolve({
-              access: "admitted-access",
-              accessExpiresAt: Date.now() + 60000, nativeCookie: "kokoro-issuer.session_token=fixture",
-            }),
-          1000,
-        ),
-      ),
-  );
+
   peer = (req, res) => {
     res.writeHead(200, {
       "content-type": "application/json",

@@ -1,0 +1,7 @@
+{
+  "owner": "kokoro-bff",
+  "owner_commit": "34c9f997a4d86f33be2f815c43cd155ed338fe86",
+  "source_path": "contract/openapi/browser/v1/auth-session.json",
+  "source_sha256": "a7b5876632f6ad91b9fc162c9abcf48b36b2677a3b15a6a497d3305aeaea81ba",
+  "version": "1.0.0"
+}

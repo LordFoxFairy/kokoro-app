@@ -5,7 +5,7 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
 
-import { admittedNativeSession, productBffConfig, productBffHeaders } from "@/lib/server/product-bff"
+import { InvalidBrowserCookieError, productBffConfig, productBffHeaders } from "@/lib/server/product-bff"
 import {
   bffErrorEnvelopeSchema,
   bffErrorResponse,
@@ -43,26 +43,20 @@ export async function GET(request: Request): Promise<Response> {
   const requestId = requestIdForRequest(request)
   const config = productBffConfig()
   if (config === null) return webErrorResponse("auth_not_configured", 503, requestId)
-  let claims
-  try {
-    claims = await admittedNativeSession(request, config)
-  } catch {
-    return webErrorResponse("session_unavailable", 503, requestId)
-  }
-  if (claims === null) return webErrorResponse("unauthenticated", 401, requestId)
-  if (config.bffBaseUrl == null) return webErrorResponse("business_bff_not_configured", 503, requestId)
 
-  const headers = productBffHeaders(config, claims, requestId)
+  if (config.bffBaseUrl == null) return webErrorResponse("business_bff_not_configured", 503, requestId)
 
   let upstream: Response
   try {
+    const headers = productBffHeaders(config, request, requestId)
     upstream = await fetchWithDomain(`${config.bffBaseUrl.replace(/\/+$/u, "")}/v1/billing/plans`, config.domain, {
       method: "GET",
       headers,
       cache: "no-store",
       signal: request.signal,
     })
-  } catch {
+  } catch (error) {
+    if (error instanceof InvalidBrowserCookieError) return webErrorResponse("invalid_browser_cookie", 400, requestId)
     return webErrorResponse("billing_unreachable", 502, requestId)
   }
   const raw: unknown = await upstream.json().catch(() => null)

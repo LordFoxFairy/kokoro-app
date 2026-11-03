@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { parseSharedTasksJson } from "@/lib/shared-tasks-json";
 import { shareAckSchema, shareErrorSchema } from "@/lib/shared-tasks.schema";
-import { admittedNativeSession, productBffConfig, productBffHeaders } from "./product-bff";
+import { productBffConfig, productBffHeaders } from "./product-bff";
 import { requestWithDomain } from "./upstream-http";
 
 export async function sessionShare(
@@ -152,15 +152,10 @@ export async function sessionShare(
         return fail(400, "session_share_invalid_request");
       }
     }
-    const session = await admittedNativeSession(request, config);
+
     check();
-    if (
-      !session ||
-      session.accessExpiresAt <= Date.now() ||
-      session.expiresAt <= Date.now()
-    )
-      return fail(401, "session_invalid");
-    const outgoing = productBffHeaders(config, session, requestId);
+
+    const outgoing = productBffHeaders(config, request, requestId);
     outgoing.set("idempotency-key", key);
     if (request.method === "POST")
       outgoing.set("content-type", "application/json");
@@ -240,27 +235,9 @@ export async function sessionShare(
     } catch {
       return fail(502, "session_share_response_invalid");
     }
-    const latest = await admittedNativeSession(request, config);
+
     check();
-    if (
-      !latest ||
-      [
-        "id",
-        "generation",
-        "subject",
-        "access",
-        "accessExpiresAt",
-        "expiresAt",
-        "nativeCookie",
-      ].some(
-        (k) =>
-          latest[k as keyof typeof latest] !==
-          session[k as keyof typeof session],
-      ) ||
-      latest.accessExpiresAt <= Date.now() ||
-      latest.expiresAt <= Date.now()
-    )
-      return fail(401, "session_invalid");
+
     if (status !== 200) {
       const e = output as { error: { code: string } };
       output = {

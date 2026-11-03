@@ -1,3 +1,4 @@
+import { browserAuthSessionResponseSchema, type BrowserAuthSession } from "@/generated/bff-auth-session";
 // Browser-only Team Product transport; generated operations remain the sole public URL graph.
 import { createClient } from "@/generated/bff-team/client/client.gen";
 import {
@@ -23,7 +24,6 @@ import {
   teamErrorResponseSchema,
   teamErrorStatuses,
   teamResponseSchema,
-  teamSessionProjectionSchema,
 } from "./schema";
 export type {
   TeamInvitation,
@@ -221,11 +221,12 @@ export function createTeamClient(): TeamClient {
         throw bad();
       }
       if (session) {
-        const value = teamSessionProjectionSchema.safeParse(raw);
+        const value = browserAuthSessionResponseSchema.safeParse(raw);
         if (
           upstream.status !== 200 ||
           !value.success ||
-          value.data.expires_at <= Date.now()
+          !value.data.data.authenticated ||
+          Date.parse(value.data.data.expires_at) <= Date.now()
         )
           throw bad();
       } else {
@@ -335,17 +336,13 @@ export function createTeamClient(): TeamClient {
   };
   return {
     currentUserId: async (signal) => {
-      const result = await call<{
-        authenticated: true;
-        subject: string;
-        expires_at: number;
-      }>(
+      const result = await call<{ data: Extract<BrowserAuthSession, { authenticated: true }> }>(
         signal,
         (client, signal) => client.get({ url: "/api/auth/session", signal }),
         undefined,
         true,
       );
-      return result.subject;
+      return result.data.subject;
     },
     listMembers: (options) =>
       page(

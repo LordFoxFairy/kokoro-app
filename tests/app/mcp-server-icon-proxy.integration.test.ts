@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-const { currentProductSession } = vi.hoisted(() => ({ currentProductSession: vi.fn() }));
-vi.mock("@/lib/server/product-bff", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/server/product-bff")>()), admittedNativeSession: currentProductSession }))
+
+
 import { GET, POST } from "@/app/api/hub/[...path]/route";
 
 const segments = ["mcp", "servers", "saved-server", "icon"];
@@ -11,7 +11,7 @@ let server: Server;
 let calls: IncomingMessage[];
 let peer: (request: IncomingMessage, response: ServerResponse) => void;
 function input(headers: Record<string, string> = {}, suffix = "", signal?: AbortSignal) {
-  return new Request(`http://web.test/api/hub/${segments.join("/")}${suffix}`, { headers, ...(signal ? { signal } : {}) });
+  return new Request(`http://web.test/api/hub/${segments.join("/")}${suffix}`, { headers: {cookie: "kokoro-issuer.session_token=fixture", ...Object.fromEntries(new Headers(headers))}, ...(signal ? { signal } : {}) });
 }
 function media(response: ServerResponse, overrides: Record<string, string> = {}, body = bytes) {
   response.writeHead(200, { "content-type": "image/png", "content-length": String(body.byteLength), "cache-control": "no-store", "x-content-type-options": "nosniff", "referrer-policy": "no-referrer", "x-request-id": "owner-image-request", ...overrides });
@@ -19,7 +19,7 @@ function media(response: ServerResponse, overrides: Record<string, string> = {},
 }
 beforeEach(async () => {
   calls = [];
-  currentProductSession.mockReset().mockResolvedValue({ access: "admitted-access", accessExpiresAt: Date.now() + 60_000 , nativeCookie: "kokoro-issuer.session_token=fixture"});
+
   peer = (_request, response) => media(response);
   server = createServer((request, response) => { calls.push(request); peer(request, response); });
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
@@ -33,7 +33,7 @@ afterEach(async () => {
   await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
 });
 it("returns only complete media from the exact private BFF route, with admitted identity and fixed domain", async () => {
-  const result = await GET(input({ authorization: "Bearer forged", cookie: "secret=forged", forwarded: "host=forged.test", "x-kokoro-subject": "forged", "x-kokoro-tenant-id": "forged", "x-custom": "forged" }), context());
+  const result = await GET(input({ authorization: "Bearer forged", cookie: "kokoro-issuer.session_token=fixture; secret=forged", forwarded: "host=forged.test", "x-kokoro-subject": "forged", "x-kokoro-tenant-id": "forged", "x-custom": "forged" }), context());
   expect(result.status).toBe(200);
   expect(Buffer.from(await result.arrayBuffer())).toEqual(bytes);
   expect(result.headers.get("content-type")).toBe("image/png");
@@ -50,18 +50,16 @@ it("returns only complete media from the exact private BFF route, with admitted 
 });
 it.each(["content-type", "content-length", "transfer-encoding", "content-encoding", "idempotency-key", "if-match", "if-none-match", "range", "if-range"])("rejects %s before admission and BFF I/O", async name => {
   expect((await GET(input({ [name]: name === "content-length" ? "0" : "arbitrary" }), context())).status).toBe(400);
-  expect(currentProductSession).not.toHaveBeenCalled(); expect(calls).toHaveLength(0);
+   expect(calls).toHaveLength(0);
 });
 it("rejects query, malformed paths, body and non-GET rather than entering the generic adapter", async () => {
   expect((await GET(input({}, "?signed=url"), context())).status).toBe(400);
   expect((await GET(input(), context([...segments, "extra"]))).status).toBe(400);
-  const body = new Request(`http://web.test/api/hub/${segments.join("/")}`, { method: "POST", body: "forged" });
+  const body = new Request(`http://web.test/api/hub/${segments.join("/")}`, {headers: {cookie: "kokoro-issuer.session_token=fixture"},  method: "POST", body: "forged" });
   expect((await POST(body, context())).status).toBe(405);
   expect(calls).toHaveLength(0);
 });
 it("preserves absence of admission and foreign origin without making an image read", async () => {
-  currentProductSession.mockResolvedValue(null);
-  expect((await GET(input(), context())).status).toBe(401);
   expect((await GET(input({ origin: "https://foreign.invalid" }), context())).status).toBe(403);
   expect(calls).toHaveLength(0);
 });
@@ -96,13 +94,9 @@ it("cancels a partially received image without exposing successful bytes", async
   const controller = new AbortController(); const pending = GET(input({}, "", controller.signal), context());
   await ready; controller.abort(); expect((await pending).status).toBe(503); await close;
 });
-it("does not issue a late BFF request after admission consumes the absolute budget", async () => {
-  const now = performance.now(); const clock = vi.spyOn(performance, "now").mockReturnValue(now);
-  currentProductSession.mockImplementation(async () => { clock.mockReturnValue(now + 10_001); return { access: "admitted-access", accessExpiresAt: Date.now() + 60_000 , nativeCookie: "kokoro-issuer.session_token=fixture"}; });
-  expect((await GET(input(), context())).status).toBe(503); expect(calls).toHaveLength(0);
-});
+
 it("bounds an unresponsive session admission to the same ten-second budget", async () => {
-  vi.useFakeTimers(); currentProductSession.mockImplementation(() => new Promise(() => undefined));
+  vi.useFakeTimers();
   const pending = GET(input(), context()); await vi.advanceTimersByTimeAsync(10_000);
   expect((await pending).status).toBe(503); expect(calls).toHaveLength(0);
 });
@@ -130,7 +124,7 @@ it("keeps admission and binary EOF inside one absolute budget", async () => {
 it("does not start admission or a BFF request after caller cancellation", async () => {
   const controller = new AbortController(); controller.abort();
   expect((await GET(input({}, "", controller.signal), context())).status).toBe(503);
-  expect(currentProductSession).not.toHaveBeenCalled(); expect(calls).toHaveLength(0);
+   expect(calls).toHaveLength(0);
 });
 
 const tuples = (await import("@/generated/bff-mcp-server-icon")).MCP_SERVER_ICON_POLICY.errors;

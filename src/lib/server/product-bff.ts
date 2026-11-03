@@ -1,8 +1,5 @@
-import { randomUUID } from "node:crypto";
-import { z } from "zod";
 import { configuredDomain } from "./domain-context";
 import { configuredBffBaseUrl } from "./service-config";
-import { requestWithDomain } from "./upstream-http";
 
 export const SERVICE_HEADER = "x-kokoro-service";
 export const SERVICE_VALUE = "web-bff";
@@ -15,76 +12,18 @@ export type ProductBffConfig = Readonly<{
   session: Readonly<{ webOrigin: string }>;
 }>;
 
-export type NativeSessionClaims = Readonly<{
-  id: string;
-  generation: number;
-  access: string;
-  accessExpiresAt: number;
-  expiresAt: number;
-  subject: string;
-  issuerSessionId: string;
-  nativeCookie?: string;
-}>;
-
-export type NativeProductBffConfig = Readonly<{
-  bffBaseUrl: string;
-  domain: string;
-  internalSecret: string | null;
-  session: Readonly<{ webOrigin: string }>;
-}>;
-
-export class NativeSessionUnavailableError extends Error {}
-
 const NATIVE_SESSION_COOKIE_NAMES = new Set([
   "kokoro-issuer.session_token",
   "kokoro-issuer.session_data",
   "kokoro-issuer.dont_remember",
-  "kokoro-issuer.session_token.oauth_logout_confirmation",
   "__Secure-kokoro-issuer.session_token",
   "__Secure-kokoro-issuer.session_data",
   "__Secure-kokoro-issuer.dont_remember",
-  "__Secure-kokoro-issuer.session_token.oauth_logout_confirmation",
 ]);
 
 export type NativeSessionBffHeaders =
   | Readonly<{ state: "valid"; headers: Headers }>
   | Readonly<{ state: "missing" | "invalid" }>;
-
-/** Compare one admitted request snapshot without treating a native proof's synthetic TTL as identity. */
-export function sameNativeSessionSnapshot(
-  initial: NativeSessionClaims,
-  latest: NativeSessionClaims | null,
-): boolean {
-  if (latest === null) return false;
-  if (initial.id === "native-session" || latest.id === "native-session")
-    return (
-      initial.id === latest.id &&
-      initial.generation === latest.generation &&
-      initial.subject === latest.subject &&
-      initial.access === latest.access &&
-      latest.accessExpiresAt > Date.now() &&
-      latest.expiresAt > Date.now()
-    );
-  return (
-    latest.id === initial.id &&
-    latest.generation === initial.generation &&
-    latest.subject === initial.subject &&
-    latest.access === initial.access &&
-    latest.accessExpiresAt === initial.accessExpiresAt &&
-    latest.expiresAt === initial.expiresAt &&
-    latest.accessExpiresAt > Date.now() &&
-    latest.expiresAt > Date.now()
-  );
-}
-
-const nativeCurrentUserResponse = z.strictObject({
-  data: z.strictObject({
-    user_id: z.string().min(1),
-    tenant_id: z.string().min(1),
-    platform_admin: z.boolean(),
-  }),
-  meta: z.strictObject({ request_id: z.string().min(1) }),
-});
 
 function validWebOrigin(raw: string | undefined): string | null {
   const value = raw?.trim();
@@ -100,7 +39,7 @@ function validWebOrigin(raw: string | undefined): string | null {
 
 export function nativeProductBffConfig(
   env: NodeJS.ProcessEnv = process.env,
-): NativeProductBffConfig | null {
+): ProductBffConfig | null {
   const bffBaseUrl = configuredBffBaseUrl(env);
   const domain = configuredDomain(env);
   const webOrigin = validWebOrigin(env.KOKORO_WEB_ORIGIN);
@@ -116,61 +55,18 @@ export function productBffConfig(
   return nativeProductBffConfig(env);
 }
 
-export async function admittedNativeSession(
-  request: Request,
-  config: NativeProductBffConfig,
-): Promise<NativeSessionClaims | null> {
-  const requestId = request.headers.get("x-kokoro-request-id") ?? randomUUID();
-  const native = nativeSessionBffHeaders(request, config, requestId);
-  if (native.state !== "valid") return null;
-  try {
-    const upstream = await requestWithDomain(`${config.bffBaseUrl}/v1/me`, config.domain, {
-      method: "GET",
-      headers: native.headers,
-      signal: request.signal,
-      timeoutMs: 10_000,
-      maxResponseBytes: 65_536,
-    });
-    const raw = await upstream.json().catch(() => null);
-    if (upstream.status === 401 || upstream.status === 403) return null;
-    if (upstream.status !== 200) throw new Error("native_session_admission_unavailable");
-    const parsed = nativeCurrentUserResponse.safeParse(raw);
-    if (!parsed.success) throw new Error("native_session_response_invalid");
-    const expiresAt = Date.now() + 60_000;
-    return {
-      id: "native-session",
-      generation: 0,
-      access: "",
-      accessExpiresAt: expiresAt,
-      expiresAt,
-      subject: parsed.data.data.user_id,
-      issuerSessionId: "native-session",
-      nativeCookie: native.headers.get("cookie")!,
-    };
-  } catch (error) {
-    if (error instanceof Error && error.message === "native_session_admission_unavailable")
-      throw new NativeSessionUnavailableError("Native session admission unavailable");
-    if (request.signal.aborted) throw error;
-    throw new NativeSessionUnavailableError("Native session admission unavailable");
-  }
-}
+export class InvalidBrowserCookieError extends Error {}
 
-export function productBffHeaders(
-  config: ProductBffConfig,
-  claims: NativeSessionClaims,
-  requestId: string,
-): Headers {
-  if (typeof claims.nativeCookie !== "string" || claims.nativeCookie.length === 0) throw new NativeSessionUnavailableError("Native session cookie missing");
-  const headers = new Headers({
-    cookie: claims.nativeCookie,
-    origin: config.session.webOrigin,
-    accept: "application/json",
-    [SERVICE_HEADER]: SERVICE_VALUE,
-    "x-kokoro-request-id": requestId,
-  });
-  if (config.internalSecret !== null)
-    headers.set(INTERNAL_SECRET_HEADER, config.internalSecret);
-  return headers;
+/** Build only the credential transport; BFF authenticates the current user. */
+export function productBffHeaders(config: ProductBffConfig, request: Request, requestId: string): Headers {
+  const native = nativeSessionBffHeaders(request, config, requestId)
+  if (native.state === "invalid") throw new InvalidBrowserCookieError("Ambiguous browser cookies")
+  if (native.state === "valid") return native.headers
+  return new Headers({
+    origin: config.session.webOrigin, accept: "application/json",
+    [SERVICE_HEADER]: SERVICE_VALUE, "x-kokoro-request-id": requestId,
+    ...(config.internalSecret === null ? {} : { [INTERNAL_SECRET_HEADER]: config.internalSecret }),
+  })
 }
 
 /**
@@ -183,7 +79,7 @@ export function productBffHeaders(
  */
 export function nativeSessionBffHeaders(
   request: Request,
-  config: Pick<NativeProductBffConfig, "internalSecret" | "session">,
+  config: Pick<ProductBffConfig, "internalSecret" | "session">,
   requestId: string,
 ): NativeSessionBffHeaders {
   const raw = request.headers.get("cookie");
@@ -197,7 +93,7 @@ export function nativeSessionBffHeaders(
     if (separator <= 0) return { state: "invalid" };
     const value = part.slice(separator + 1).trim();
     found = true;
-    if (value.length === 0 || values.has(name)) return { state: "invalid" };
+    if (value.length === 0 || /[\u0000-\u001f\u007f]/u.test(value) || values.has(name)) return { state: "invalid" };
     values.set(name, value);
   }
   if (!found || values.size === 0) return { state: "missing" };

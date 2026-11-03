@@ -1,3 +1,4 @@
+import { readBrowserAuthSession } from "@/lib/server/browser-auth-session"
 import { randomUUID } from "node:crypto"
 
 import { clearIamCsrfCookie, consumeIamInteractionCsrf, iamSignInCsrfCookieName } from "@/lib/server/iam-interaction-csrf"
@@ -5,7 +6,7 @@ import { iamRelayConfig, matchesCanonicalWebRequest } from "@/lib/server/iam-rel
 import { filterIssuerCookies, IAM_RELAY_POLICY } from "@/lib/server/iam-relay-policy"
 import { nativeIamResponse } from "@/lib/server/iam-relay-response"
 import { requestIamRelay } from "@/lib/server/iam-relay-transport"
-import { admittedNativeSession, nativeProductBffConfig } from "@/lib/server/product-bff"
+import { nativeProductBffConfig } from "@/lib/server/product-bff"
 import { issueSignInFeedback } from "@/lib/server/iam-sign-in-feedback"
 import { loginRecovery } from "@/lib/server/login-recovery"
 import { IAM_SIGN_IN_PATH, isIamSignInExpired, iamSignInFlowId, nativeIamSignInTarget } from "@/lib/server/iam-sign-in-target"
@@ -263,11 +264,11 @@ export async function POST(request: Request): Promise<Response> {
     }
     applyCookies(checkedActivation)
     remaining()
-    const admitted = await admittedNativeSession(new Request(config.webOrigin, {
+    const admitted = await readBrowserAuthSession(new Request(config.webOrigin, {
       headers: { cookie: baseHeaders.get("cookie") ?? "", "x-kokoro-request-id": id }, signal: controller.signal,
-    }), productConfig)
+    }), productConfig, id)
     remaining()
-    if (admitted === null) return await finishNative(errorResponse(403, "iam_interaction_tenant_forbidden", id))
+    if (!admitted.authenticated) return await finishNative(errorResponse(403, "iam_interaction_tenant_forbidden", id))
     const navigation = safeNavigationResponse(checkedSignIn, 303, nativeTarget)
     navigation.headers.delete("set-cookie")
     for (const cookie of responseCookies.values()) navigation.headers.append("set-cookie", cookie)

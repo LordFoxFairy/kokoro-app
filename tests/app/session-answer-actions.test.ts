@@ -1,7 +1,7 @@
 import { createServer, type Server, type IncomingMessage, type ServerResponse } from "node:http"
 import { beforeEach, afterEach, it, expect, vi } from "vitest"
-const { currentProductSession } = vi.hoisted(() => ({ currentProductSession: vi.fn() }))
-vi.mock("@/lib/server/product-bff", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/server/product-bff")>()), admittedNativeSession: currentProductSession }))
+
+
 import { GET, POST, PUT } from "@/app/api/session/[...path]/route"
 let server: Server, calls: IncomingMessage[], bodies: string[], peer: (req: IncomingMessage, res: ServerResponse) => void
 const feedback = { session_id: "session", message_id: "answer", feedback: null }
@@ -22,14 +22,7 @@ beforeEach(async () => {
   calls = []
   bodies = []
   peer = reply
-  currentProductSession.mockReset().mockResolvedValue({
-    id: "session-cookie",
-    generation: 1,
-    subject: "subject",
-    access: "private-fixture-access",
-    accessExpiresAt: Date.now() + 60000, nativeCookie: "kokoro-issuer.session_token=fixture",
-    expiresAt: Date.now() + 60000,
-  })
+
   server = createServer((req, res) => {
     calls.push(req)
     let body = ""
@@ -59,7 +52,7 @@ afterEach(async () => {
 const request = (method = "GET", suffix = "feedback", body?: string) =>
   new Request(`http://web.test/api/session/sessions/session/messages/answer/${suffix}`, {
     method,
-    headers: {
+    headers: {cookie: "kokoro-issuer.session_token=fixture",
       host: "web.test",
       ...(method !== "GET" ? { origin: "http://web.test", "content-type": "application/json" } : {}),
       ...(suffix === "regenerate" ? { "idempotency-key": "same-key" } : {}),
@@ -97,17 +90,5 @@ it("rejects query/identity/unknown fields before BFF and rejects truncated or wr
     res.socket?.end()
   }
   expect((await run(request())).status).toBe(502)
-  expect(calls).toHaveLength(1)
-})
-
-it("a late actor change after a real ACK remains unconfirmed instead of exposing old target facts", async () => {
-  const original = currentProductSession.getMockImplementation()!
-  currentProductSession.mockImplementation(async () => {
-    const claims = await original()
-    return calls.length ? { ...claims, subject: "other" } : claims
-  })
-  const result = await run(request("POST", "regenerate", "{}"), "regenerate")
-  expect(result.status).toBe(401)
-  expect((await result.json()).data).toBeUndefined()
   expect(calls).toHaveLength(1)
 })

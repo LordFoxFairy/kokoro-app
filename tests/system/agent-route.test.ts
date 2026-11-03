@@ -1,8 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-const { productBffConfig, admittedNativeSession, requestWithDomain, sameOriginOk } = vi.hoisted(() => ({
+const { productBffConfig, requestWithDomain, sameOriginOk } = vi.hoisted(() => ({
   productBffConfig: vi.fn(),
-  admittedNativeSession: vi.fn(),
   requestWithDomain: vi.fn(),
   sameOriginOk: vi.fn(() => true),
 }))
@@ -10,10 +9,9 @@ const { productBffConfig, admittedNativeSession, requestWithDomain, sameOriginOk
 vi.mock("@/lib/server/same-origin", () => ({ sameOriginOk }))
 vi.mock("@/lib/server/product-bff", () => ({
   productBffConfig,
-  admittedNativeSession,
-  productBffHeaders: (config: { internalSecret?: string | null }, claims: { nativeCookie?: string }, requestId: string) => {
+  productBffHeaders: (config: { internalSecret?: string | null }, request: Request, requestId: string) => {
     const headers = new Headers({
-      cookie: claims.nativeCookie ?? "",
+      cookie: request.headers.get("cookie") ?? "",
       "x-kokoro-service": "web-bff",
       "x-kokoro-request-id": requestId,
     })
@@ -29,7 +27,7 @@ describe("Agent connection setup BFF", () => {
   afterEach(() => {
     vi.restoreAllMocks()
     productBffConfig.mockReset()
-    admittedNativeSession.mockReset()
+
     requestWithDomain.mockReset()
     sameOriginOk.mockReset()
     sameOriginOk.mockReturnValue(true)
@@ -41,11 +39,7 @@ describe("Agent connection setup BFF", () => {
       domain: "dev.kokoro.localhost",
       internalSecret: "web-secret",
     })
-    admittedNativeSession.mockResolvedValue({
-      access: "product-access",
-      accessExpiresAt: Date.now() + 60_000,
-      nativeCookie: "kokoro-issuer.session_token=fixture",
-    })
+
     requestWithDomain.mockResolvedValue(
       new Response(
         JSON.stringify({
@@ -69,7 +63,7 @@ describe("Agent connection setup BFF", () => {
 
     const response = await GET(
       new Request("https://app.example/api/agents/connections/setup?platform=telegram&ignored=drop", {
-        headers: { "x-kokoro-request-id": "req_1" },
+        headers: {cookie: "kokoro-issuer.session_token=fixture",  "x-kokoro-request-id": "req_1" },
       }),
       { params: Promise.resolve({ path: ["connections", "setup"] }) },
     )
@@ -94,14 +88,14 @@ describe("Agent connection setup BFF", () => {
       domain: "dev.kokoro.localhost",
     })
 
-    const response = await GET(new Request("https://app.example/api/agents/connections/setup?platform=irc"), {
+    const response = await GET(new Request("https://app.example/api/agents/connections/setup?platform=irc", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}), {
       params: Promise.resolve({ path: ["connections", "setup"] }),
     })
 
     expect(response.status).toBe(400)
     expect(await response.json()).toEqual({ error: "invalid_agent_platform" })
     expect(requestWithDomain).not.toHaveBeenCalled()
-    expect(admittedNativeSession).not.toHaveBeenCalled()
+
   })
 
   it("returns a typed unavailable response when the agent service is not configured", async () => {
@@ -110,7 +104,7 @@ describe("Agent connection setup BFF", () => {
       domain: "dev.kokoro.localhost",
     })
 
-    const response = await GET(new Request("https://app.example/api/agents/connections/setup?platform=telegram"), {
+    const response = await GET(new Request("https://app.example/api/agents/connections/setup?platform=telegram", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}), {
       params: Promise.resolve({ path: ["connections", "setup"] }),
     })
 

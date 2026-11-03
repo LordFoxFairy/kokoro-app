@@ -1,10 +1,6 @@
 import policySnapshot from "@/generated/iam-relay-policy.json"
 
-export const IAM_RELAY_POLICY_PROVENANCE = Object.freeze({
-  ownerRepository: "kokoro-bff",
-  ownerCommit: "071c490",
-  policySha256: "b2adc766332c1ca87b55900f359f5cc931b7f50505a19ea21cbb0c36faf9f72f",
-})
+export { IAM_RELAY_POLICY_PROVENANCE } from "@/generated/iam-relay-provenance"
 
 export type IamRelayPolicy = Readonly<{
   version: string
@@ -52,24 +48,24 @@ export type IamRelayPolicy = Readonly<{
   maxDurationMs: number
 }>
 
-const EXPECTED_IAM_COMMIT = "e3c035b99cf9479ac8357c7d38147f1541dcbcac"
+const EXPECTED_IAM_COMMIT = "896405d146c4ff96f5f39d5c2ce1bc788d46c2c7"
 const EXPECTED_INVITATION_ROUTES = [
   ["/v1/tenants/{tenant_id}/invitations/{invitation_id}/context", "GET", "getTenantInvitationContext"],
   ["/v1/tenants/{tenant_id}/invitations/{invitation_id}/accept", "POST", "acceptTenantInvitation"],
   ["/v1/tenants/{tenant_id}/invitations/{invitation_id}/reject", "POST", "rejectTenantInvitation"],
 ] as const
 const EXPECTED_INVITATION_ERRORS = ["TOKEN_EXPIRED", "INVALID_TOKEN", "USER_NOT_FOUND", "INVALID_USER"] as const
-const BROWSER_GET_PATHS = new Set(["/get-session", "/verify-email"])
+const BROWSER_GET_PATHS = new Set(["/verify-email"])
 
 export function validateIamRelayPolicySnapshot(value: unknown): IamRelayPolicy {
   if (typeof value !== "object" || value === null) throw new Error("invalid IAM relay policy snapshot")
   const policy = value as Partial<IamRelayPolicy>
   if (
-    policy.version !== "2.1.0" ||
+    policy.version !== "3.0.0" ||
     policy.iamOwnerCommit !== EXPECTED_IAM_COMMIT ||
     policy.iamOpenapiPath !== "contract/openapi/iam.internal.v1.json" ||
-    policy.iamOpenapiVersion !== "0.7.0" ||
-    policy.iamOpenapiSha256 !== "c8d7af8a365ad5d13eaabccf7f31133e0918ef198bdc3e7c790d90933eae91b2" ||
+    policy.iamOpenapiVersion !== "0.20.0" ||
+    policy.iamOpenapiSha256 !== "61cf99b4fe836deafedb9f59d9fa2ea3446ce172f4069944f7facb14e816c7ca" ||
     !Array.isArray(policy.invitationRoutes) ||
     policy.invitationRoutes.length !== 3 ||
     !policy.invitationSignUp ||
@@ -90,6 +86,7 @@ export function validateIamRelayPolicySnapshot(value: unknown): IamRelayPolicy {
   ) {
     throw new Error("unsupported IAM relay policy snapshot")
   }
+  if (policy.routes["/get-session"] !== undefined) throw new Error("raw browser session is excluded")
   for (const path of BROWSER_GET_PATHS) {
     if (!policy.routes[path]?.includes("GET")) throw new Error("IAM relay policy is missing a browser GET route")
   }

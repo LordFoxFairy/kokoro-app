@@ -3,7 +3,7 @@ import { projectContentIdSchema, projectContentInstallationIdSchema, projectPack
 import { catalogPackagePathSchema, catalogPackageResponseSchema, catalogPackageMatches, installationPackageErrorAllowed } from "@/hub/schemas"
 import { skillDownloadErrorEnvelopeAllowed, skillDownloadSchema } from "@/hub/skill-download.schema"
 import { parsePersonalSkillHistoryJson } from "@/hub/personal-skill-history.schema"
-import { admittedNativeSession, productBffConfig, productBffHeaders } from "./product-bff"
+import { productBffConfig, productBffHeaders } from "./product-bff"
 import { readBoundedRequestBody, requestWithDomain, UpstreamTimeoutError } from "./upstream-http"
 
 /** Project installation content only; no personal/catalog locator or transport fallback. */
@@ -32,11 +32,9 @@ export async function proxyProjectSkillContent(request: Request, path: readonly 
     const config = productBffConfig()
     if (config === null) return fail(503, "product_tenant_not_configured", true)
     if ((download || request.headers.has("origin")) && request.headers.get("origin") !== config.session.webOrigin) return fail(403, "session_forbidden")
-    let claims
-    try { claims = await within(admittedNativeSession(request, config)) }
-    catch { signal.throwIfAborted(); return fail(503, "iam_admission_unavailable", true) }
+
     signal.throwIfAborted()
-    if (claims === null) return fail(401, "session_authentication_required")
+
     if (download) {
       try { if ((await within(readBoundedRequestBody(request, 1, signal))).byteLength !== 0) return invalid() }
       catch { signal.throwIfAborted(); return invalid() }
@@ -45,7 +43,7 @@ export async function proxyProjectSkillContent(request: Request, path: readonly 
     const operation = download ? projectDownloadOperation : projectPackageOperation
     const endpoint = operation.path.replace("{projectId}", encodeURIComponent(path[1]!)).replace("{installation_id}", encodeURIComponent(path[3]!))
     upstream = await within(requestWithDomain(`${config.bffBaseUrl.replace(/\/+$/u, "")}${endpoint}${filePath === undefined ? "" : `?file_path=${encodeURIComponent(filePath)}`}`, config.domain, {
-      method: request.method, headers: productBffHeaders(config, claims, requestId), signal,
+      method: request.method, headers: productBffHeaders(config, request, requestId), signal,
       timeoutMs: Math.max(1, Math.ceil(deadlineAt - performance.now())), maxResponseBytes: 1_048_576, maxErrorResponseBytes: 1_048_576, strictResponseLength: true,
     }).then(value => { if (signal.aborted) void value.body?.cancel().catch(() => undefined); return value }))
     signal.throwIfAborted()

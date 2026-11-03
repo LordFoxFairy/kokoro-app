@@ -29,10 +29,7 @@ vi.mock("@/lib/server/iam-relay-transport", async original => ({
   requestIamRelay: relay,
 }))
 
-vi.mock("@/lib/server/product-bff", async original => ({
-  ...(await original<typeof import("@/lib/server/product-bff")>()),
-  admittedNativeSession: admit,
-}))
+vi.mock("@/lib/server/browser-auth-session", () => ({ readBrowserAuthSession: admit }))
 
 import { POST } from "@/app/auth/sign-in/route"
 import { iamSignInCsrfCookieName } from "@/lib/server/iam-interaction-csrf"
@@ -43,7 +40,7 @@ beforeEach(() => {
   vi.stubEnv("KOKORO_TENANT_ID", TENANT)
   vi.stubEnv("KOKORO_DOMAIN", "web.example.test")
   vi.stubEnv("NODE_ENV", "test")
-  admit.mockReset().mockResolvedValue({ subject: "user" })
+  admit.mockReset().mockResolvedValue({ authenticated: true, subject: "user", tenant_id: TENANT, expires_at: "2030-01-01T00:00:00Z" })
   vi.stubEnv("KOKORO_BFF_BASE_URL", "https://bff.example.test")
   vi.stubEnv("KOKORO_INTERNAL_SECRET_WEB_BFF", "service-secret")
   vi.stubEnv("KOKORO_WEB_REDIS_URL", "redis://fixture.invalid/9")
@@ -147,7 +144,7 @@ describe("fixed Product cold sign-in completion", () => {
 
   it.each([null, new Error("unavailable")])("requires final online admission even after activation succeeds", async result => {
     if (result instanceof Error) admit.mockRejectedValueOnce(result)
-    else admit.mockResolvedValueOnce(result)
+    else admit.mockResolvedValueOnce({ authenticated: false })
     const response = await POST(loginRequest())
     expect(response.status).toBeGreaterThanOrEqual(400)
     expect(response.headers.has("location")).toBe(false)

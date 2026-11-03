@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto"
 import { accountProfileResponseSchema } from "@/lib/account-profile.schema"
-import { admittedNativeSession, productBffConfig, productBffHeaders, sameNativeSessionSnapshot } from "./product-bff"
+import { productBffConfig, productBffHeaders } from "./product-bff"
 import { requestWithDomain } from "./upstream-http"
 
 /** Read the IAM-owned projection through the BFF native-session seam. */
@@ -97,20 +97,15 @@ export async function readAccountProfile(request: Request): Promise<Response> {
   }
   const operation = async () => {
     check()
-    let session
-    try {
-      session = await admittedNativeSession(request, config)
-    } catch {
-      return fail(503, "account_profile_unavailable")
-    }
+
     check()
-    if (!session || session.accessExpiresAt <= Date.now() || session.expiresAt <= Date.now()) return fail(401, "session_invalid")
+
     upstream = await requestWithDomain(`${config.bffBaseUrl}/v1/account/profile`, config.domain, {
       method: "GET",
       signal: controller.signal,
       timeoutMs: Math.max(1, Math.ceil(deadline - performance.now())),
       maxResponseBytes: 1_048_576,
-      headers: productBffHeaders(config, session, requestId),
+      headers: productBffHeaders(config, request, requestId),
     })
     check()
     if (
@@ -141,10 +136,10 @@ export async function readAccountProfile(request: Request): Promise<Response> {
       return fail(502, "account_profile_response_invalid")
     }
     const profile = accountProfileResponseSchema.safeParse(raw)
-    if (!profile.success || profile.data.data.subject !== session.subject) return fail(502, "account_profile_response_invalid")
-    const latest = await admittedNativeSession(request, config)
+    if (!profile.success) return fail(502, "account_profile_response_invalid")
+
     check()
-    if (!sameNativeSessionSnapshot(session, latest)) return fail(401, "session_invalid")
+
     return Response.json(profile.data, { headers })
   }
   try {

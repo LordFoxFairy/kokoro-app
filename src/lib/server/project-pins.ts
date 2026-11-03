@@ -5,7 +5,6 @@ import { projectPinIdSchema, projectPinQuerySchema, setProjectPinRequestSchema, 
 import { projectRenameBrowserCacheControl } from "@/contract/project-rename";
 import { sameOriginOk } from "./same-origin";
 import {
-  admittedNativeSession,
   productBffConfig,
   productBffHeaders,
 } from "./product-bff";
@@ -84,15 +83,9 @@ export async function proxyProjectPins(
     const config = productBffConfig();
     if (!config?.bffBaseUrl)
       return fail(503, "product_tenant_not_configured");
-    let claims;
-    try {
-      claims = await within(admittedNativeSession(request, config));
-    } catch {
-      check();
-      return fail(503, "iam_admission_unavailable");
-    }
+
     check();
-    if (claims === null) return fail(401, "session_authentication_required");
+
     let body: ArrayBuffer;
     try {
       body = await within(readBoundedRequestBody(request, 1024, signal));
@@ -116,7 +109,7 @@ export async function proxyProjectPins(
       }
     } else if (body.byteLength)
       return fail(400, "project_pin_request_invalid");
-    const headers = productBffHeaders(config, claims, requestId);
+    const headers = productBffHeaders(config, request, requestId);
     if (put) {
       headers.set("content-type", "application/json");
       headers.set("content-length", String(body.byteLength));

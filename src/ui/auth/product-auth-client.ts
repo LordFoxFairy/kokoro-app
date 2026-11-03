@@ -23,6 +23,9 @@ export async function endProductSession(
   })
   signal?.throwIfAborted()
   if (response.ok || response.status === 401 || response.status === 303 || response.status === 307) {
+    // A no-secret invalidation signal retires other tabs, including same-subject replacement sessions.
+    try { window.localStorage.setItem("kokoro.web.auth-invalidation", crypto.randomUUID()) } catch { /* Local retirement still runs when storage is unavailable. */ }
+    window.dispatchEvent(new Event("kokoro:auth-invalidated"))
     navigate("/")
     return
   }

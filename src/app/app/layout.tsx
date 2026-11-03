@@ -1,10 +1,12 @@
+import { readBrowserAuthSession } from "@/lib/server/browser-auth-session"
+import type { BrowserAuthSession } from "@/generated/bff-auth-session"
 import { headers } from "next/headers"
 import { randomUUID } from "node:crypto"
 
 import { parseProductReturnTarget } from "@/lib/product-return-target"
 import { parseRailCollapsedCookie } from "@/lib/sidebar-preference"
 
-import { admittedNativeSession, nativeProductBffConfig, nativeSessionBffHeaders } from "@/lib/server/product-bff"
+import { nativeProductBffConfig, nativeSessionBffHeaders } from "@/lib/server/product-bff"
 import { AppGate } from "@/ui/auth/app-gate"
 import { ProductSignInRedirect } from "@/ui/auth/product-sign-in-redirect"
 
@@ -48,12 +50,12 @@ export default async function AppLayout({
     const target = parseProductReturnTarget(incoming.get("x-kokoro-product-return-target") ?? "")
     return <ProductSignInRedirect fallbackTarget={target} />
   }
-  let admitted = false
-  try { admitted = await admittedNativeSession(nativeRequest, config) !== null }
+  let initialSession: BrowserAuthSession
+  try { initialSession = await readBrowserAuthSession(nativeRequest, config, randomUUID()) }
   catch { return <AppGate {...presentation} serverUnavailable /> }
-  if (!admitted) {
+  if (!initialSession.authenticated) {
     const target = parseProductReturnTarget(incoming.get("x-kokoro-product-return-target") ?? "")
     return <ProductSignInRedirect fallbackTarget={target} />
   }
-  return <AppGate {...presentation} serverAdmitted />
+  return <AppGate {...presentation} initialSession={initialSession} />
 }

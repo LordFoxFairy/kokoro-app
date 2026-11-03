@@ -18,22 +18,21 @@ describe("fixed BFF IAM relay policy consumer", () => {
     expect(createHash("sha256").update(bytes).digest("hex")).toBe(IAM_RELAY_POLICY_PROVENANCE.policySha256)
     expect(IAM_RELAY_POLICY_PROVENANCE).toEqual({
       ownerRepository: "kokoro-bff",
-      ownerCommit: "071c490",
-      policySha256: "b2adc766332c1ca87b55900f359f5cc931b7f50505a19ea21cbb0c36faf9f72f",
+      ownerCommit: "34c9f997a4d86f33be2f815c43cd155ed338fe86",
+      policySha256: "c88bab0bd1d5529573eee318e50ac2dd41349a03fc84e8b7284416af700a0ebe",
     })
     expect(IAM_RELAY_POLICY.routes).toEqual({
       "/sign-up/email": ["POST"],
       "/sign-in/email": ["POST"],
       "/verify-email": ["GET"],
       "/sign-out": ["POST"],
-      "/get-session": ["GET"],
       "/organization/set-active": ["POST"],
     })
   })
 
   it("rejects a tampered owner pin or a contracted browser GET route", () => {
     expect(() => validateIamRelayPolicySnapshot({ ...IAM_RELAY_POLICY, iamOwnerCommit: "0".repeat(40) })).toThrow("unsupported IAM relay policy snapshot")
-    expect(() => validateIamRelayPolicySnapshot({ ...IAM_RELAY_POLICY, routes: { ...IAM_RELAY_POLICY.routes, "/get-session": [] } })).toThrow(
+    expect(() => validateIamRelayPolicySnapshot({ ...IAM_RELAY_POLICY, routes: { ...IAM_RELAY_POLICY.routes, "/verify-email": [] } })).toThrow(
       "IAM relay policy is missing a browser GET route",
     )
     expect(() =>
@@ -46,12 +45,12 @@ describe("fixed BFF IAM relay policy consumer", () => {
 
   it("admits only native browser GET routes and exact invitation verification queries", () => {
     expect(IAM_RELAY_POLICY.webInteractionPaths).toEqual(["/auth/sign-in", "/auth/select-tenant", "/iam/interactions/invitation"])
-    expect(resolveBrowserIamGet("/iam/get-session", "GET")).toEqual({ relativePath: "/get-session", query: "" })
+    expect(resolveBrowserIamGet("/iam/get-session", "GET")).toBeNull()
     expect(resolveBrowserIamGet("/iam/verify-email?token=a%2Bb&callbackURL=%2Fauth%2Fsign-in", "GET")).toEqual({
       relativePath: "/verify-email",
       query: "?token=a%2Bb&callbackURL=%2Fauth%2Fsign-in",
     })
-    for (const path of ["/iam/oauth2/authorize", "/iam/jwks", "/iam/oauth2/end-session", "/iam/get-session/", "/iam/%67et-session"]) {
+    for (const path of ["/iam/get-session?disableRefresh=true", "/iam/get-session?disableCookieCache=true&disableRefresh=true", "/iam/oauth2/authorize", "/iam/jwks", "/iam/oauth2/end-session", "/iam/get-session/", "/iam/%67et-session"]) {
       expect(resolveBrowserIamGet(path, "GET"), path).toBeNull()
     }
   })

@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto"
 import { accountSessionErrorSchemas, accountSessionRevokeSchema, validateAccountSessionPage } from "@/lib/account-sessions.schema"
-import { admittedNativeSession, productBffConfig, productBffHeaders, sameNativeSessionSnapshot } from "./product-bff"
+import { productBffConfig, productBffHeaders } from "./product-bff"
 import { requestWithDomain } from "./upstream-http"
 
-/** Only the two account-session operations; the final cookie read shares the same budget. */
+/** Only the two account-session operations; request/body/response share one bounded BFF call. */
 export async function accountSessions(request: Request, sessionTarget?: string | Promise<string>): Promise<Response> {
   const deadline = performance.now() + 10_000
   const requestId = randomUUID()
@@ -70,12 +70,12 @@ export async function accountSessions(request: Request, sessionTarget?: string |
       if (!url.pathname.startsWith("/api/account/sessions/") || rawId.includes("/") || decodeURIComponent(rawId) !== sessionId || !sessionId || sessionId.length > 255 || request.url.includes("?")) return fail(400, "account_session_invalid_request")
     } catch { return fail(400, "account_session_invalid_request") }
   }
-    const session = await admittedNativeSession(request, config)
+
     check()
-    if (!session || session.accessExpiresAt <= Date.now() || session.expiresAt <= Date.now()) return fail(401, "account_session_session_required")
+
     const query = new URLSearchParams({ limit: String(limit) }); if (cursor !== undefined) query.set("cursor", cursor)
     const path = method === "GET" ? `/v1/account/sessions?${query}` : `/v1/account/sessions/${encodeURIComponent(sessionId!)}`
-    response = await requestWithDomain(`${config.bffBaseUrl}${path}`, config.domain, { method, signal: controller.signal, timeoutMs: Math.max(1, Math.ceil(deadline - performance.now())), maxResponseBytes: 1_048_576, headers: productBffHeaders(config, session, requestId) })
+    response = await requestWithDomain(`${config.bffBaseUrl}${path}`, config.domain, { method, signal: controller.signal, timeoutMs: Math.max(1, Math.ceil(deadline - performance.now())), maxResponseBytes: 1_048_576, headers: productBffHeaders(config, request, requestId) })
     if (retired || controller.signal.aborted) { stop(); check() }
     check()
     if (response.headers.get("x-request-id") !== requestId || !/^application\/json(?:\s*;|$)/iu.test(response.headers.get("content-type") ?? "") || !/(?:^|,)\s*no-store\s*(?:,|$)/iu.test(response.headers.get("cache-control") ?? "") || response.headers.has("location") || response.headers.has("set-cookie")) return fail(502, "account_session_response_invalid")
@@ -101,9 +101,9 @@ export async function accountSessions(request: Request, sessionTarget?: string |
         output = { error: { code: error.error.code, message: error.error.code }, meta: { request_id: requestId } }
       }
     } catch { return fail(502, "account_session_response_invalid") }
-    const latest = await admittedNativeSession(request, config)
+
     check()
-    if (!sameNativeSessionSnapshot(session, latest)) return fail(401, "account_session_session_required")
+
     const retry = response.headers.get("retry-after")
     if (retry !== null && (!/^[1-9]\d{0,4}$/u.test(retry) || Number(retry) > 86400 || ![429, 503].includes(status))) return fail(502, "account_session_response_invalid")
     return Response.json(output, { status, headers: { ...headers, ...(retry === null ? {} : { "retry-after": retry }) } })

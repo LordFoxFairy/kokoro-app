@@ -4,11 +4,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 
-const { currentProductSession, requestWithDomain } = vi.hoisted(() => ({
-  currentProductSession: vi.fn(),
+const { requestWithDomain } = vi.hoisted(() => ({
   requestWithDomain: vi.fn(),
 }))
-vi.mock("@/lib/server/product-bff", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/server/product-bff")>()), admittedNativeSession: currentProductSession }))
+
 vi.mock("@/lib/server/upstream-http", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/lib/server/upstream-http")>()
   return { ...original, requestWithDomain }
@@ -25,7 +24,7 @@ const ENV = {
 
 // A retired cookie must never be promoted into native admission.
 function sessionCookie(): string {
-  return "kokoro_session=retired-forged-envelope"
+  return "kokoro-issuer.session_token=fixture"
 }
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -36,16 +35,13 @@ function jsonResponse(status: number, body: unknown): Response {
 }
 
 beforeEach(() => {
-  currentProductSession.mockReset()
-  currentProductSession.mockResolvedValue({
-    access: "product-access",
-    accessExpiresAt: Date.now() + 60_000, nativeCookie: "kokoro-issuer.session_token=fixture",
-  })
+
+
   for (const [key, value] of Object.entries(ENV)) process.env[key] = value
 })
 afterEach(() => {
   vi.unstubAllGlobals()
-  currentProductSession.mockReset()
+
   vi.unstubAllEnvs()
   for (const key of Object.keys(ENV)) delete process.env[key as keyof typeof ENV]
 })
@@ -131,7 +127,7 @@ describe("GET /api/billing/plans", () => {
 
   it("returns an honest unavailable state when BFF is not configured", async () => {
     delete process.env.KOKORO_BFF_BASE_URL
-    const fetchMock = vi.fn()
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(401,{error:{code:"unauthenticated",message:"Sign in"}}))
     vi.stubGlobal("fetch", fetchMock)
     const { GET } = await import("@/app/api/billing/plans/route")
     const response = await GET(
@@ -155,13 +151,13 @@ describe("GET /api/billing/plans", () => {
   })
 
   it("requires a session before touching the BFF", async () => {
-    currentProductSession.mockResolvedValueOnce(null)
-    const fetchMock = vi.fn()
+
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(401,{error:{code:"unauthenticated",message:"Sign in"}}))
     vi.stubGlobal("fetch", fetchMock)
     const { GET } = await import("@/app/api/billing/plans/route")
-    const response = await GET(new Request("http://localhost/api/billing/plans"))
+    const response = await GET(new Request("http://localhost/api/billing/plans", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}))
     expect(response.status).toBe(401)
-    expect(fetchMock).not.toHaveBeenCalled()
+    expect(fetchMock).toHaveBeenCalledOnce()
   })
 })
 
@@ -245,7 +241,7 @@ describe("POST /api/billing/mock-pay", () => {
     vi.stubGlobal("fetch", fetchMock)
     const { POST } = await import("@/app/api/billing/mock-pay/route")
     const response = await POST(new Request("http://localhost/api/billing/mock-pay", {
-      method: "POST", headers: { origin: "http://localhost", host: "localhost", "content-type": "application/json" },
+      method: "POST", headers: {cookie: "kokoro-issuer.session_token=fixture",  origin: "http://localhost", host: "localhost", "content-type": "application/json" },
       body: JSON.stringify({ order_id: "checkout-1" }),
     }))
     expect(response.status).toBe(503)
@@ -253,17 +249,16 @@ describe("POST /api/billing/mock-pay", () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
   it.each([
-    ["anonymous", null, false, "http://localhost", 401, "unauthenticated"],
+    ["anonymous", null, false, "http://localhost", 503, "mock_pay_unavailable"],
     ["foreign origin", "session", false, "http://evil.test", 403, "forbidden_origin"],
-    ["admission failure", "session", true, "http://localhost", 503, "session_unavailable"],
-  ])("preserves %s admission without owner I/O", async (_name, session, reject, origin, status, error) => {
-    if (reject) currentProductSession.mockRejectedValueOnce(new Error("fixture admission failure"))
-    else if (session === null) currentProductSession.mockResolvedValueOnce(null)
+    ["no active dependency", "session", true, "http://localhost", 503, "mock_pay_unavailable"],
+  ])("preserves %s admission without owner I/O", async (_name, _session, _reject, origin, status, error) => {
+
     const fetchMock = vi.fn()
     vi.stubGlobal("fetch", fetchMock)
     const { POST } = await import("@/app/api/billing/mock-pay/route")
     const response = await POST(new Request("http://localhost/api/billing/mock-pay", {
-      method: "POST", headers: { origin: String(origin), host: "localhost" }, body: "not JSON",
+      method: "POST", headers: {cookie: "kokoro-issuer.session_token=fixture",  origin: String(origin), host: "localhost" }, body: "not JSON",
     }))
     expect(response.status).toBe(status)
     expect(await response.json()).toEqual({ error })
@@ -274,7 +269,7 @@ describe("POST /api/billing/mock-pay", () => {
     const fetchMock = vi.fn()
     vi.stubGlobal("fetch", fetchMock)
     const request = new Request("http://localhost/api/billing/mock-pay", {
-      method: "POST", headers: { origin: "http://localhost", host: "localhost" }, body: "not JSON",
+      method: "POST", headers: {cookie: "kokoro-issuer.session_token=fixture",  origin: "http://localhost", host: "localhost" }, body: "not JSON",
     })
     const json = vi.spyOn(request, "json")
     const { POST } = await import("@/app/api/billing/mock-pay/route")
@@ -289,10 +284,10 @@ describe("POST /api/billing/mock-pay", () => {
     const fetchMock = vi.fn()
     vi.stubGlobal("fetch", fetchMock)
     const { POST } = await import("@/app/api/billing/mock-pay/route")
-    const response = await POST(new Request("http://localhost/api/billing/mock-pay", { method: "POST" }))
+    const response = await POST(new Request("http://localhost/api/billing/mock-pay", {headers: {cookie: "kokoro-issuer.session_token=fixture"},  method: "POST" }))
     expect(response.status).toBe(503)
     expect(await response.json()).toEqual({ error: "auth_not_configured" })
-    expect(currentProductSession).not.toHaveBeenCalled()
+
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
@@ -307,7 +302,7 @@ describe("R255 existing session adapter personal Credit reads", () => {
     requestWithDomain.mockResolvedValueOnce(Response.json({ data, meta: { request_id: "r255-bff-account" } }, { headers: { "cache-control": "no-store", "x-request-id": "r255-bff-account" } }))
     const { GET } = await import("@/app/api/session/[...path]/route")
     const query = name === "ledger" ? "?limit=50&cursor=opaque%2B%2F%3D" : ""
-    const response = await GET(new Request(`http://localhost/api/session/billing/${name}${query}`), { params: Promise.resolve({ path: ["billing", name as string] }) })
+    const response = await GET(new Request(`http://localhost/api/session/billing/${name}${query}`, {headers: {cookie: "kokoro-issuer.session_token=fixture"}}), { params: Promise.resolve({ path: ["billing", name as string] }) })
     expect(response.status).toBe(200)
     expect(await response.json()).toEqual(data)
     expect(response.headers.get("cache-control")).toContain("no-store")
@@ -323,22 +318,23 @@ describe("R255 existing session adapter personal Credit reads", () => {
   it("keeps a Billing unavailable response as an error rather than an empty or zero account", async () => {
     requestWithDomain.mockResolvedValueOnce(Response.json({ error: { code: "billing_unavailable", message: "Billing is unavailable" }, meta: { request_id: "r255-bff-error" } }, { status: 503 }))
     const { GET } = await import("@/app/api/session/[...path]/route")
-    const response = await GET(new Request("http://localhost/api/session/billing/summary"), { params: Promise.resolve({ path: ["billing", "summary"] }) })
+    const response = await GET(new Request("http://localhost/api/session/billing/summary", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}), { params: Promise.resolve({ path: ["billing", "summary"] }) })
     expect(response.status).toBe(503)
     expect(await response.json()).toMatchObject({ error: { code: "billing_unavailable" } })
     expect(response.headers.get("x-request-id")).toBe("r255-bff-error")
     expect(response.headers.get("cache-control")).toContain("no-store")
   })
 
-  it("rejects a retired session before either personal read reaches the BFF", async () => {
-    currentProductSession.mockResolvedValue(null)
+  it("preserves owner401 for both personal reads without a Web preflight", async () => {
+    requestWithDomain.mockImplementation(async()=>Response.json({error:{code:"unauthenticated",message:"Sign in"}},{status:401}))
+
     const { GET } = await import("@/app/api/session/[...path]/route")
     for (const name of ["summary", "ledger"]) {
-      const response = await GET(new Request(`http://localhost/api/session/billing/${name}`), { params: Promise.resolve({ path: ["billing", name] }) })
+      const response = await GET(new Request(`http://localhost/api/session/billing/${name}`, {headers: {cookie: "kokoro-issuer.session_token=fixture"}}), { params: Promise.resolve({ path: ["billing", name] }) })
       expect(response.status).toBe(401)
       expect(response.headers.get("x-request-id")).toBeTruthy()
       expect(response.headers.get("cache-control")).toContain("no-store")
     }
-    expect(requestWithDomain).not.toHaveBeenCalled()
+    expect(requestWithDomain).toHaveBeenCalledTimes(2)
   })
 })

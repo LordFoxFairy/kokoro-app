@@ -1,3 +1,32 @@
+> D0实现候选（2026-11-03）：已固定 BFF `34c9f997a4d86f33be2f815c43cd155ed338fe86` 的 browser-private auth-session 1.0.0（SHA256 `a7b5876632f6ad91b9fc162c9abcf48b36b2677a3b15a6a497d3305aeaea81ba`），按本节正式边界完成本地消费者切片；本仓Root完整工程门已验（证据见Root唯一计划及本仓PR）；仍是未合并的源码候选，不代表BFF真实资源、共享登录/rolling/撤权或浏览器组合通过。下方旧RP/refresh/proof叙述只保留历史语境。
+
+## T-01 认证标准重设计（2026-11-02，本地消费者候选）
+
+本轮沿 Root 唯一计划 §3.6 和已通过 D0 实施，不新增认证 owner、Schema、依赖或认证存储。具体固定来源见 `contract/bff-auth-session-source.json`；生成器只消费本仓 vendor 的原字节，不导入 sibling 源码。普通业务一次同源/BFF派发，当前权限仍由 BFF/IAM 与业务 owner 判断。
+
+### Owner、依赖与请求边界
+
+- IAM 的 Better Auth 实例唯一拥有登录、HttpOnly Session Cookie、Session 到期／撤销和 active tenant；Nest BFF 是第一方业务请求的唯一认证入口，以官方能力鲜验 Session 后建立真实 principal，再进入业务授权。App 不拥有第二套 Session、principal、token store 或认证 SDK，不用空 access、假 session id、generation=0、固定 60 秒 TTL 拼接旧 RP claims。
+- Browser → App 同源薄桥 → BFF 认证边缘 → 业务 owner。App 只转 allowlisted issuer Cookie、配置 Origin、受信服务身份、request id 与取消；Cookie 到 BFF 认证边界即止，普通 owner 业务不接 Cookie、登录 Session id/ref 或伪 scope。浏览器自报 subject／tenant／服务身份不参与 authority。
+- 普通业务一次 BFF 调用，不再做 `/me → business → /me`；必要私有结果交付前的鲜验归 BFF，不在 App 造 `sameNativeSessionSnapshot`。BFF 的真实 principal 和业务 owner 的当前资源、成员、管理员政策分别授权，原事务、CAS、审计、幂等和未知提交保障保留。
+- BFF 已固定发行唯一 browser-private `GET /browser/v1/auth/session`；App 的既有同源 `GET /api/auth/session` 消费其固定 generated contract。公开 `GET /v1/me` 保持原 user_id／tenant_id／platform_admin 三字段，不为浏览器 Session 观察扩字段。
+
+### 页面状态与 Cookie 生命周期
+
+- layout 首次只读观察取得完整安全状态，仅作候选；正常 SSR/client 首帧一致为 checking 且未准入，effect 核现有 marker 与无秘密失效 hint 后消费。marker 可读、无冲突且无 hint 时零额外 GET；冲突、过期、已有 hint 或 marker/hint 读取失败时 fresh GET，不先准入旧观察，不清新 subject 的 draft/unknown 原命令。状态明确区分 checking、authenticated、anonymous、forbidden 与 unavailable；authenticated 只持真实 subject、tenant 和 expiresAt。expiresAt 来自 IAM 实际 Session，按 RFC 3339 UTC 传输，只用于 UI 状态／安排重读，不是当前许可或撤销有效性证明。
+- 同一状态 GET 的正常传输选项 `refresh` 是 boolean、默认 true；浏览器 Route Handler 按 generated query 调用默认值，允许 IAM 原生 rolling。BFF → App → Browser 的合法多个 `Set-Cookie` 完整保留，仍受 allowlist、属性、大小与 no-store 约束，不合并成单个 Cookie。RSC 首观察明确 `refresh=false`，由 BFF 转成官方 `disableCookieCache=true`、`disableRefresh=true`，鲜读但不 rolling。RSC 没有向浏览器写 Cookie 的能力，不承诺清除失效 Cookie，后续正常状态 GET 负责浏览器清理；不宣称服务端收到的 `Set-Cookie` 已落到浏览器。该 query 不是新认证协议，不变成身份 header，也不扩普通业务 adapter 参数；纯业务认证检查始终不 rolling。
+- 保留本地 UI epoch、abort、ABA、pagehide/pageshow 与迟到响应退休；这是读取／展示寿命，不是认证凭据代际，不进入业务 wire。同 subject 的 tenant 变化也退休原私有视图。登录／退出／认证上下文变化通过无秘密跨标签失效事件先撤旧 epoch、再重读，事件及 storage marker 只撤准入，不授准入。
+- BFF 鲜验原请求 Cookie 与浏览器切换为另一枚仍有效 Cookie 是不同观察；后者的迟到 UI 由上述本地失效／页面寿命围栏承接。外部撤销至少在下一受保护请求拒绝，不宣称轮询或 expiry 能瞬时撤回全部旧展示。具名只读 401 恢复可合并一次状态 GET，写命令和 unknown 原 key/body 不自动重放。
+- `/manage` 继续是同源独立 Admin 前端，复用同一 Product 登录和 GET 状态；没有 Admin 独立 refresh。管理员资格仍由 BFF/IAM 当前政策决定，明确 false 与依赖 503 分开，UI 菜单显示不成为授权。
+
+### 替换与验收
+
+本地候选已删除 `NativeSessionClaims` 假字段、`admittedNativeSession` 的 `/me` 包装、snapshot 比较及业务前后 `/me`；将 `[...nextauth]` 外壳替换为具名 Session route，移除旧 csrf/session POST/refresh 与 signout alias。保留原生登录／退出 CSRF、固定 tenant、深链和第三方 MCP OAuth／公共 API 身份；账户设备和 Chat 的资源 session_id 不按名字删除。Admin 旧 strict 三字段／refresh_required 消费者须同片切换，不保双轨。
+
+同时关闭现有浏览器原样 `/iam/get-session` relay，避免安全状态 DTO 之外仍能取得完整原生 Session／token；官方 get-session 仅保留 IAM → BFF 认证 client 使用，浏览器只走正式安全 `/api/auth/session`。BFF owner 正规重发 browser relay policy，App 锁定新 commit/digest 后生成消费，不手删 vendor／upstream get-session；verify-email、sign-up、set-active、invitation 等真实交互保持。后继用真实 HTTP secret-canary 验证旧浏览器路径拒绝且不返回 raw body，安全状态响应无 raw Session／token／登录 Session id 泄漏。
+
+机器合同先由 BFF/IAM owner 固定并正规生成，App/Admin 再迁移。待验包括真实 expiry／rolling Cookie、冷登录／深链、Admin 共享登录和撤管理员、退出／独立撤销、同主体 tenant／会话变化、多标签迟到响应、IAM 503 与取消；工程门和真实浏览器证据均未由本节提供。
+
 ## T-05 固定 Product 原生冷登录完成条件（2026-11-01，候选）
 
 沿 Root 已批准方案 B，IAM 唯一拥有 session、active tenant 与资格；App 只拥有同源适配。现 `/auth/sign-in` 的登录完成条件为：密码签入签发可用 issuer token → 用新 cookie 经现 BFF relay `organization/set-active` 选择部署侧 `KOKORO_TENANT_ID` → 复用 `admittedNativeSession` 在线 `/v1/me` 准入 → 才导航到原 native return target。固定 tenant 是与 BFF admission credential 配对的 server-only opaque ID（1..255 字符，无空白/控制字符），不是请求字段、浏览器候选列表或新身份协议；配置缺失/非法在发送凭据前失败。没有恢复 OAuth continuation、旧 RP 或 Product Session。

@@ -5,7 +5,7 @@ const navigation = vi.hoisted(() => ({ replace: vi.fn(), refresh: vi.fn() }))
 vi.mock("next/navigation", () => ({ useRouter: () => navigation }))
 import { SignInRecovery } from "@/ui/auth/sign-in-recovery"
 
-const active = () => ({ authenticated: true, subject: "recovery-actor", expires_at: Date.now() + 60_000 })
+const active = () => ({ data: { authenticated: true, subject: "recovery-actor", tenant_id: "tenant", expires_at: "2030-01-01T00:00:00Z" } })
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(finish => { resolve = finish }); return { promise, resolve } }
 async function settle() { await act(async () => { for (let i = 0; i < 8; i++) await Promise.resolve() }) }
 async function tick(ms: number) { await act(async () => { await vi.advanceTimersByTimeAsync(ms) }) }
@@ -27,8 +27,8 @@ it("reads only the current Session and replaces fixed /app after strict success,
 
 it.each(["anonymous", "unknown", "extra", "blank", "expired", "bad-json", "401", "409", "503", "network"])("%s stays explicit, stops at two GETs, and never starts OAuth or POST refresh", async kind => {
   const raw = kind === "anonymous" ? { authenticated: false } : kind === "unknown" ? { authenticated: false, refresh_required: true, subject: "recovery-actor", expires_at: Date.now() + 60_000 }
-    : kind === "extra" ? { ...active(), access_token: "fixture-must-not-authorize" } : kind === "blank" ? { ...active(), subject: " " }
-    : kind === "expired" ? { ...active(), expires_at: Date.now() - 1 } : active()
+    : kind === "extra" ? { ...active(), access_token: "fixture-must-not-authorize" } : kind === "blank" ? { data: { ...active().data, subject: " " } }
+    : kind === "expired" ? { data: { ...active().data, expires_at: "2000-01-01T00:00:00Z" } } : active()
   const fetcher = vi.fn().mockImplementation(async () => {
     if (kind === "network") throw new Error("controlled offline")
     return kind === "bad-json" ? new Response("not-json", { status: 200 }) : Response.json(raw, { status: /^\d/u.test(kind) ? Number(kind) : 200 })
@@ -44,13 +44,13 @@ it.each(["anonymous", "unknown", "extra", "blank", "expired", "bad-json", "401",
 
 it("coalesces mount/resume/explicit events into one active episode; explicit recovery only refreshes and re-reads", async () => {
   const held = deferred<Response>()
-  const fetcher = vi.fn().mockReturnValueOnce(held.promise).mockResolvedValue(Response.json({ authenticated: false }))
+  const fetcher = vi.fn().mockReturnValueOnce(held.promise).mockResolvedValue(Response.json({ data: { authenticated: false } }))
   vi.stubGlobal("fetch", fetcher); render(<SignInRecovery />); await settle()
   for (const event of ["focus", "online", "pageshow"]) fireEvent(window, new Event(event))
   visibility("visible"); fireEvent.click(screen.getByRole("button", { name: "检查并继续" })); await settle()
   expect(fetcher).toHaveBeenCalledOnce()
   expect(navigation.refresh).not.toHaveBeenCalled()
-  await act(async () => held.resolve(Response.json({ authenticated: false }))); await tick(1_000)
+  await act(async () => held.resolve(Response.json({ data: { authenticated: false } }))); await tick(1_000)
   expect(fetcher).toHaveBeenCalledTimes(2)
   navigation.refresh.mockImplementationOnce(() => fireEvent(window, new Event("focus")))
   fireEvent.click(screen.getByRole("button", { name: "检查并继续" })); await settle()
@@ -91,7 +91,7 @@ it("a visible new episode is not affected by the retired hidden response or its 
 
 it("the second GET shares the first request's absolute ten-second deadline", async () => {
   const body = deferred<unknown>()
-  const fetcher = vi.fn().mockResolvedValueOnce(Response.json({ authenticated: false })).mockResolvedValueOnce({ status: 200, json: () => body.promise })
+  const fetcher = vi.fn().mockResolvedValueOnce(Response.json({ data: { authenticated: false } })).mockResolvedValueOnce({ status: 200, json: () => body.promise })
   vi.stubGlobal("fetch", fetcher); render(<SignInRecovery />); await settle(); await tick(1_000); await tick(9_000)
   expect(fetcher).toHaveBeenCalledTimes(2)
   expect(fetcher.mock.calls[1]?.[1].signal.aborted).toBe(true)

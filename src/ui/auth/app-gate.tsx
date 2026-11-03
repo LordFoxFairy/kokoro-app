@@ -1,5 +1,7 @@
 "use client"
 
+import type { BrowserAuthSession } from "@/generated/bff-auth-session"
+
 import { useEffect, useLayoutEffect, useRef } from "react"
 import { useT } from "@/i18n/context"
 import { usePathname, useRouter } from "next/navigation"
@@ -16,16 +18,16 @@ import { openProductSignIn } from "./product-auth-client"
 import { useScheduledTaskClient } from "./use-scheduled-task-client"
 import { bindBrowserMessagePartsReadRecheck } from "@/ui/shell/page-clients"
 
-export function AppGate({ brandName, desktopRailCollapsed, serverAdmitted = false, serverUnavailable = false }: {
+export function AppGate({ brandName, desktopRailCollapsed, initialSession, serverUnavailable = false }: {
   brandName?: string
   desktopRailCollapsed?: boolean
-  serverAdmitted?: boolean
+  initialSession?: BrowserAuthSession
   serverUnavailable?: boolean
 } = {}) {
   const pathname = usePathname()
   const router = useRouter()
   const t = useT()
-  const probe = useSessionProbe({ serverUnavailable, serverAdmitted })
+  const probe = useSessionProbe({ serverUnavailable, ...(initialSession === undefined ? {} : { initialSession }) })
   const scheduledTaskClient = useScheduledTaskClient(probe.projectReadBoundary)
   const anonymousNavigationStarted = useRef(false)
   // Identity is decided only by the IAM native session. System supplies optional
@@ -63,7 +65,7 @@ export function AppGate({ brandName, desktopRailCollapsed, serverAdmitted = fals
   // reads and mutations while the probe is uncertain; replacing the whole
   // workbench with a second loading surface is what caused the visible flash.
   const booting = probe.mode === "checking" && probe.projectReadBoundary.subject === null
-    || serverAdmitted && probe.mode !== "authenticated" && probe.projectReadBoundary.subject === null
+    || initialSession?.authenticated === true && probe.mode !== "authenticated" && probe.projectReadBoundary.subject === null
 
   useEffect(() => {
     if (!serverUnavailable) return

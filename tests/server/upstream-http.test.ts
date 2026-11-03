@@ -89,6 +89,26 @@ describe("server upstream transport", () => {
     expect(receivedSite).toBeUndefined()
   })
 
+  it("preserves individual Set-Cookie fields including Expires commas and cookie deletion", async () => {
+    const cookies = [
+      "kokoro-issuer.session_token=next; Path=/; HttpOnly; Expires=Tue, 01 Jan 2030 00:00:00 GMT",
+      "kokoro-issuer.session_data=; Path=/; HttpOnly; Max-Age=0",
+    ]
+    const server = createServer((_request, response) => {
+      response.writeHead(200, { "content-type": "application/json", "set-cookie": cookies, "x-fixture-list": ["one", "two"] })
+      response.end("{}")
+    })
+    servers.push(server)
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
+    const address = server.address()
+    if (address === null || typeof address === "string") throw new Error("fixture server did not bind")
+
+    const response = await requestWithDomain(`http://127.0.0.1:${address.port}/session`, "dev.kokoro.localhost", { method: "GET" })
+    expect(await response.json()).toEqual({})
+    expect(response.headers.getSetCookie()).toEqual(cookies)
+    expect(response.headers.get("x-fixture-list")).toBe("one, two")
+  })
+
   it("frames buffered request bodies with their exact content length", async () => {
     let receivedLength = ""
     let receivedEncoding = ""

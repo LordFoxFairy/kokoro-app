@@ -5,7 +5,7 @@ import {
   archivedTasksCursor,
   validateArchivedTasks,
 } from "@/lib/archived-tasks.schema";
-import { admittedNativeSession, productBffConfig, productBffHeaders } from "./product-bff";
+import { productBffConfig, productBffHeaders } from "./product-bff";
 import { requestWithDomain } from "./upstream-http";
 
 export async function archivedTasks(request: Request): Promise<Response> {
@@ -101,17 +101,12 @@ export async function archivedTasks(request: Request): Promise<Response> {
   };
   const operation = async () => {
     check();
-    const session = await admittedNativeSession(request, config);
+
     check();
-    if (
-      !session ||
-      session.accessExpiresAt <= Date.now() ||
-      session.expiresAt <= Date.now()
-    )
-      return fail(401, "session_invalid");
+
     try {
       if (cursor !== undefined)
-        archivedTasksCursor({value:cursor,subject:session.subject,limit:limit,tenant:tenantId});
+        archivedTasksCursor({value:cursor,subject:undefined,limit:limit,tenant:tenantId});
     } catch {
       return fail(400, "archived_tasks_invalid_request");
     }
@@ -125,7 +120,7 @@ export async function archivedTasks(request: Request): Promise<Response> {
         signal: controller.signal,
         timeoutMs: Math.max(1, Math.ceil(deadline - performance.now())),
         maxResponseBytes: 1_048_576,
-        headers: productBffHeaders(config, session, requestId),
+        headers: productBffHeaders(config, request, requestId),
       },
     );
     if (retired || controller.signal.aborted) {
@@ -173,7 +168,7 @@ export async function archivedTasks(request: Request): Promise<Response> {
       const raw = parseArchivedTasksJson(text);
       output =
         status === 200
-          ? validateArchivedTasks({raw:raw,subject:session.subject,limit:limit,...(cursor===undefined?{}:{cursor:cursor}),tenant:tenantId})
+          ? validateArchivedTasks({raw:raw,subject:undefined,limit:limit,...(cursor===undefined?{}:{cursor:cursor}),tenant:tenantId})
           : archiveErrors[status]?.parse(raw);
       if (
         !output ||
@@ -186,27 +181,9 @@ export async function archivedTasks(request: Request): Promise<Response> {
     } catch {
       return fail(502, "archived_tasks_response_invalid");
     }
-    const latest = await admittedNativeSession(request, config);
+
     check();
-    if (
-      !latest ||
-      [
-        "id",
-        "generation",
-        "subject",
-        "access",
-        "accessExpiresAt",
-        "expiresAt",
-        "nativeCookie",
-      ].some(
-        (k) =>
-          latest[k as keyof typeof latest] !==
-          session[k as keyof typeof session],
-      ) ||
-      latest.accessExpiresAt <= Date.now() ||
-      latest.expiresAt <= Date.now()
-    )
-      return fail(401, "session_invalid");
+
     if (status !== 200) {
       const e = output as { error: { code: string; retryable: boolean } };
       output = {

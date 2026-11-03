@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { projectSkillIdSchema, projectSkillSelectionInputSchema, projectSkillSelectionSchema } from "@/hub/project-skills.schema";
 import { installationKeySchema, installationErrorSchema } from "@/hub/schemas";
 import { sameOriginOk } from "./same-origin";
-import { admittedNativeSession, productBffConfig, productBffHeaders } from "./product-bff";
+import { productBffConfig, productBffHeaders } from "./product-bff";
 import { readBoundedRequestBody, requestWithDomain, UpstreamTimeoutError, UpstreamRequestTooLargeError } from "./upstream-http";
 
 /** Project defaults only. Installation lifecycle and message freezing remain separate owners. */
@@ -36,11 +36,9 @@ export async function proxyProjectSkillSelection(request: Request, path: readonl
     signal.throwIfAborted();
     const config = productBffConfig();
     if (!config?.bffBaseUrl) return fail(503, "product_tenant_not_configured", true);
-    let claims;
-    try { claims = await within(admittedNativeSession(request, config)); }
-    catch { signal.throwIfAborted(); return fail(503, "iam_admission_unavailable", true); }
+
     signal.throwIfAborted();
-    if (claims === null) return fail(401, "session_authentication_required");
+
     let body: ArrayBuffer;
     try { body = await within(readBoundedRequestBody(request, 65_536, signal)); }
     catch (error) {
@@ -54,7 +52,7 @@ export async function proxyProjectSkillSelection(request: Request, path: readonl
       try { expected = projectSkillSelectionInputSchema.parse(JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(body))).installation_ids; }
       catch { return fail(400, "invalid_skill_request"); }
     } else if (body.byteLength) return fail(400, "invalid_skill_request");
-    const headers = productBffHeaders(config, claims, requestId);
+    const headers = productBffHeaders(config, request, requestId);
     if (mutation) { headers.set("idempotency-key", key!); headers.set("content-type", "application/json"); }
     signal.throwIfAborted();
     upstream = await within(requestWithDomain(`${config.bffBaseUrl.replace(/\/+$/, "")}/v1/projects/${encodeURIComponent(projectId!)}/skill-selection`, config.domain, {

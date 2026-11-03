@@ -54,7 +54,7 @@ async function stop(child: ChildProcess): Promise<void> {
 function get(
   port: number,
   cookie?: string,
-  target = "/api/session/sessions",
+  target = "/api/auth/session",
 ): Promise<{
   status: number;
   body: string;
@@ -125,6 +125,8 @@ describe("Product BFF real Next HTTP admission", () => {
   let nextPort = 0;
   let bff: Server;
   let bffCalls = 0;
+  let nativeSessionActive = true;
+  const bffRequests: Array<{ method: string; url: string; headers: Record<string, string | string[] | undefined> }> = [];
   const publicSkillCalls: Array<{ url: string; headers: Record<string, string | string[] | undefined> }> = [];
   const fixtureSecret = "native-session-next-http-secret-32-bytes";
 
@@ -152,6 +154,17 @@ describe("Product BFF real Next HTTP admission", () => {
   return new Response(null,{status:204,headers:{"set-cookie":"kokoro-issuer.session_token=fixture-native-session; Path=/; HttpOnly; SameSite=Lax"}})
 }`,
     );
+    const rscPage = path.join(root, "src", "app", "product-rsc-fixture", "page.tsx");
+    await mkdir(path.dirname(rscPage), { recursive: true });
+    await writeFile(rscPage, `import { headers } from "next/headers"
+import { nativeProductBffConfig } from "@/lib/server/product-bff"
+import { readBrowserAuthSession } from "@/lib/server/browser-auth-session"
+export const dynamic = "force-dynamic"
+export default async function Page() {
+  const incoming = await headers()
+  const state = await readBrowserAuthSession(new Request(process.env.KOKORO_WEB_ORIGIN!, { headers: incoming }), nativeProductBffConfig()!, "rsc-fixture")
+  return <output>{JSON.stringify(state)}</output>
+}`);
     for (const file of [
       "package.json",
       "tsconfig.json",
@@ -162,17 +175,44 @@ describe("Product BFF real Next HTTP admission", () => {
       await cp(path.join(project, file), path.join(root, file));
     }
     await linkFixtureDependencies(project, root);
-    bff = createServer((_request, response) => {
+    // A declared BFF HTTP peer, not an IAM/OAuth implementation or Web principal.
+    bff = createServer((request, response) => {
       bffCalls += 1;
-      if (_request.url?.startsWith("/v1/skill.list")) {
-        publicSkillCalls.push({url:_request.url,headers:_request.headers});
-        const id=String(_request.headers["x-kokoro-request-id"]);
-        const body=JSON.stringify({ok:true,request_id:id,data:[]});
-        response.writeHead(200,{"content-type":"application/json","cache-control":"no-store","x-request-id":id,"content-length":Buffer.byteLength(body)});
-        response.end(body);return;
+      bffRequests.push({ method: request.method ?? "", url: request.url ?? "", headers: request.headers });
+      const id = String(request.headers["x-kokoro-request-id"] ?? request.headers["x-request-id"] ?? "fixture-request");
+      const send = (status: number, body: unknown, extra: Record<string, string | string[]> = {}) => {
+        const bytes = JSON.stringify(body);
+        response.writeHead(status, { "content-type": "application/json", "cache-control": "no-store", "x-request-id": id, "content-length": Buffer.byteLength(bytes), ...extra });
+        response.end(bytes);
+      };
+      const authenticated = nativeSessionActive && /(?:^|; )kokoro-issuer\.session_token=fixture-native-(?:session|rolled)(?:;|$)/u.test(request.headers.cookie ?? "");
+      if (["/browser/v1/auth/session?refresh=true", "/browser/v1/auth/session?refresh=false"].includes(request.url ?? "")) {
+        send(200, { data: authenticated ? { authenticated: true, subject: "native-subject", tenant_id: "tenant", expires_at: "2030-01-01T00:00:00.000Z" } : { authenticated: false } }, authenticated && request.url?.endsWith("refresh=true") ? {
+          "set-cookie": ["kokoro-issuer.session_token=fixture-native-rolled; Path=/; HttpOnly; Expires=Tue, 01 Jan 2030 00:00:00 GMT", "kokoro-issuer.session_data=; Path=/; HttpOnly; Max-Age=0"],
+          "set-auth-jwt": "never-browser-visible",
+        } : {});
+        return;
       }
-      response.writeHead(500);
-      response.end();
+      if (request.method === "POST" && request.url === "/iam/sign-out") {
+        nativeSessionActive = false;
+        send(200, { success: true }, { "set-cookie": "kokoro-issuer.session_token=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0" });
+        return;
+      }
+      if (request.url?.startsWith("/v1/skill.list") && request.headers.authorization === "Bearer external-native-token") {
+        publicSkillCalls.push({ url: request.url, headers: request.headers });
+        send(200, { ok: true, request_id: id, data: [] });
+        return;
+      }
+      if (!authenticated) {
+        const error = { code: "session_invalid", message: "session_invalid" };
+        send(401, request.url === "/v1/account/profile" ? { error: { ...error, retryable: false } } : { error, meta: { request_id: id } });
+        return;
+      }
+      if (request.url === "/v1/sessions") {
+        send(200, { data: { sessions: [] }, meta: { request_id: id } });
+        return;
+      }
+      send(404, { error: { code: "not_found", message: "not_found" }, meta: { request_id: id } });
     });
     const bffPort = await listen(bff);
     nextPort = await unusedPort();
@@ -208,22 +248,33 @@ describe("Product BFF real Next HTTP admission", () => {
     const deadline = Date.now() + 20_000;
     while (Date.now() < deadline) {
       try {
-        if ((await get(nextPort)).status === 401) return;
+        const ready = await get(nextPort);
+        if (ready.status === 200 && ready.body === JSON.stringify({ data: { authenticated: false } })) {
+          // Warm the existing copied Next process, within the original setup budget.
+          const rsc = await get(nextPort, undefined, "/product-rsc-fixture");
+          if (rsc.status === 200) return;
+        }
       } catch {
         /* wait */
       }
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
-    throw new Error("Next fixture did not reach anonymous session 401");
+    throw new Error("Next fixture did not reach strict anonymous status200 and read-only RSC");
   }, 30_000);
 
   afterAll(async () => {
     if (child) await stop(child);
-    if (bff) await new Promise<void>((resolve) => bff.close(() => resolve()));
+    if (bff) {
+      bff.closeAllConnections();
+      await new Promise<void>((resolve) => bff.close(() => resolve()));
+    }
     if (root) await rm(root, { recursive: true, force: true });
+    if (child) expect(child.exitCode !== null || child.signalCode !== null).toBe(true);
+    if (bff) expect(bff.listening).toBe(false);
+    if (nextPort) await expect(get(nextPort)).rejects.toThrow();
   });
 
-  it("name PATCH uses real Next raw body and canonical Origin before any BFF call", async () => {
+  it("name PATCH validates real raw JSON and Origin before its single BFF admission", async () => {
     const patch = (body: string, origin = `http://localhost:${nextPort}`) =>
       new Promise<{
         status: number;
@@ -276,7 +327,8 @@ describe("Product BFF real Next HTTP admission", () => {
       `https://localhost:${nextPort}`,
     );
     expect(foreign.status).toBe(403);
-    expect(bffCalls).toBe(before);
+    expect(bffCalls).toBe(before + 1);
+    expect(bffRequests.slice(before).map(entry => [entry.method, entry.url])).toEqual([["PATCH", "/v1/account/profile"]]);
   }, 30_000);
 
   it("Team mutation uses real Next EOF and exact explicit Origin before owner admission", async () => {
@@ -301,14 +353,20 @@ describe("Product BFF real Next HTTP admission", () => {
     expect(scheme.status).toBe(403)
     const nonempty = await remove(`http://localhost:${nextPort}`, "x")
     expect(nonempty.status).toBe(400)
-    expect(bffCalls).toBe(before)
+    expect(bffCalls).toBe(before + 1)
+    expect(bffRequests.slice(before).map(entry => [entry.method, entry.url])).toEqual([["DELETE", "/v1/team/members/member-1"]])
   }, 30_000)
 
-  it("returns 401 without a native session and never connects to BFF", async () => {
+  it("returns strict anonymous status200 and lets the BFF reject a private business request once", async () => {
+    const before = bffCalls;
     const response = await get(nextPort);
-    expect(response.status).toBe(401);
-    expect(response.headers["cache-control"]).toBe("private, no-store, max-age=0");
-    expect(bffCalls).toBe(0);
+    expect(response.status).toBe(200);
+    expect(JSON.parse(response.body)).toEqual({ data: { authenticated: false } });
+    expect(response.headers["cache-control"]).toContain("no-store");
+    const privateRead = await get(nextPort, undefined, "/api/session/sessions");
+    expect(privateRead.status).toBe(401);
+    expect(privateRead.headers["cache-control"]).toContain("no-store");
+    expect(bffRequests.slice(before).map(entry => entry.url)).toEqual(["/browser/v1/auth/session?refresh=true", "/v1/sessions"]);
   });
 
   it("sets no-referrer only for the exact personal content GET at the real Next HTTP boundary", async () => {
@@ -344,7 +402,7 @@ describe("Product BFF real Next HTTP admission", () => {
     expect(doubleEncodedArtifact.headers["referrer-policy"]).toBe("strict-origin-when-cross-origin");
   });
 
-  it("keeps native issuer cookies on the BFF boundary and never uses Redis session state", async () => {
+  it("keeps rolling, read-only RSC, one business hop and native logout on the BFF boundary without Redis", async () => {
     const issued = await get(
       nextPort,
       undefined,
@@ -354,9 +412,47 @@ describe("Product BFF real Next HTTP admission", () => {
       ? issued.headers["set-cookie"][0]
       : issued.headers["set-cookie"];
     expect(rawCookie).toBeTruthy();
-    const response = await get(nextPort, rawCookie!.split(";", 1)[0]);
-    expect(response.status).toBe(500);
-    expect(bffCalls).toBe(1);
+    const cookie = rawCookie!.split(";", 1)[0];
+    const before = bffCalls;
+    const response = await get(nextPort, cookie);
+    expect(response.status).toBe(200);
+    expect(JSON.parse(response.body)).toEqual({ data: { authenticated: true, subject: "native-subject", tenant_id: "tenant", expires_at: "2030-01-01T00:00:00.000Z" } });
+    expect(response.headers["set-cookie"]).toEqual([
+      "kokoro-issuer.session_token=fixture-native-rolled; Path=/; HttpOnly; Expires=Tue, 01 Jan 2030 00:00:00 GMT",
+      "kokoro-issuer.session_data=; Path=/; HttpOnly; Max-Age=0",
+    ]);
+    expect(response.headers["set-auth-jwt"]).toBeUndefined();
+    const readOnly = await get(nextPort, cookie, "/product-rsc-fixture");
+    expect(readOnly.status).toBe(200);
+    expect(readOnly.body).toContain("native-subject");
+    expect(readOnly.headers["set-cookie"]).toBeUndefined();
+    const business = await get(nextPort, cookie, "/api/session/sessions");
+    expect(business.status).toBe(200);
+    expect(JSON.parse(business.body)).toEqual({ sessions: [] });
+    expect(bffRequests.slice(before).map(entry => entry.url)).toEqual([
+      "/browser/v1/auth/session?refresh=true", "/browser/v1/auth/session?refresh=false", "/v1/sessions",
+    ]);
+    for (const entry of bffRequests.slice(before)) {
+      expect(entry.headers.cookie).toBe(cookie);
+      expect(entry.headers.origin).toBe(`http://localhost:${nextPort}`);
+      expect(entry.headers.authorization).toBeUndefined();
+    }
+    const loggedOut = await new Promise<{ status: number; cookies: string[] | undefined }>((resolve, reject) => {
+      const request = httpRequest({ hostname: "127.0.0.1", port: nextPort, path: "/iam/sign-out", method: "POST", headers: {
+        host: `localhost:${nextPort}`, origin: `http://localhost:${nextPort}`, cookie, "content-length": "0",
+      } }, result => { result.resume(); result.once("end", () => resolve({ status: result.statusCode ?? 0, cookies: result.headers["set-cookie"] })); });
+      request.once("error", reject); request.end();
+    });
+    expect(loggedOut.status).toBe(200);
+    expect(loggedOut.cookies).toEqual(["kokoro-issuer.session_token=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0"]);
+    const retired = await get(nextPort, cookie);
+    expect(retired.status).toBe(200);
+    expect(JSON.parse(retired.body)).toEqual({ data: { authenticated: false } });
+    const rejected = await get(nextPort, cookie, "/api/session/sessions");
+    expect(rejected.status).toBe(401);
+    expect(bffRequests.slice(before + 3).map(entry => entry.url)).toEqual([
+      "/iam/sign-out", "/browser/v1/auth/session?refresh=true", "/v1/sessions",
+    ]);
   });
   it("admits the external bearer only through the exact public Skill list Next HTTP entry, without a native session",async()=>{
     const call=(target:string)=>new Promise<{status:number;body:string;headers:Record<string,string|string[]|undefined>}>((resolve,reject)=>{
@@ -367,7 +463,7 @@ describe("Product BFF real Next HTTP admission", () => {
     })
     const before=bffCalls
     const hub=await call("/api/hub/skill.list")
-    expect(hub.status).toBe(401);expect(bffCalls).toBe(before)
+    expect(hub.status).toBe(401);expect(bffCalls).toBe(before + 1)
     const publicList=await call("/v1/skill.list?project_id=project-1")
     expect(publicList.status).toBe(200)
     expect(JSON.parse(publicList.body)).toMatchObject({ok:true,data:[]})

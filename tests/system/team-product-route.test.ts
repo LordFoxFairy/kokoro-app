@@ -1,40 +1,25 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
-  admittedNativeSession,
   productBffConfig,
   requestWithDomain,
   sameOriginOk,
-  currentProductSession,
-  sameNativeSessionSnapshot,
 } = vi.hoisted(() => ({
-  admittedNativeSession: vi.fn(),
-  currentProductSession: vi.fn(),
   productBffConfig: vi.fn(),
   requestWithDomain: vi.fn(),
   sameOriginOk: vi.fn<(request: Request) => boolean>(() => true),
-  sameNativeSessionSnapshot: vi.fn((initial: { id: string; generation: number; subject: string; access: string; accessExpiresAt: number; expiresAt: number , nativeCookie: "kokoro-issuer.session_token=fixture"}, latest: typeof initial | null) =>
-    latest !== null &&
-    latest.id === initial.id &&
-    latest.generation === initial.generation &&
-    latest.subject === initial.subject &&
-    latest.access === initial.access &&
-    latest.accessExpiresAt === initial.accessExpiresAt &&
-    latest.expiresAt === initial.expiresAt),
 }));
 
 vi.mock("@/lib/server/same-origin", () => ({ sameOriginOk }));
 vi.mock("@/lib/server/product-bff", () => ({
-  admittedNativeSession,
   productBffConfig,
-  sameNativeSessionSnapshot,
   productBffHeaders: (
     _config: unknown,
-    claims: { nativeCookie?: string },
+    request: Request,
     requestId: string,
   ) =>
     new Headers({
-      cookie: claims.nativeCookie ?? "",
+      cookie: request.headers.get("cookie") ?? "",
       "x-kokoro-service": "web-bff",
       "x-kokoro-request-id": requestId,
     }),
@@ -50,7 +35,7 @@ import * as teamRoute from "@/app/api/team/[...path]/route";
 function teamRequest(url: string, init: RequestInit = {}): Request {
   return new Request(url, {
     ...init,
-    headers: {
+    headers: {cookie: "kokoro-issuer.session_token=fixture",
       host: "web.example.test",
       ...Object.fromEntries(new Headers(init.headers).entries()),
     },
@@ -70,17 +55,9 @@ beforeEach(async () => {
       secret: "x".repeat(32),
     },
   });
-  const now = Date.now();
-  const session = {
-    id: "opaque-session",
-    generation: 1,
-    subject: "user-me",
-    access: "product-access",
-    accessExpiresAt: now + 60_000, nativeCookie: "kokoro-issuer.session_token=fixture",
-    expiresAt: now + 120_000,
-  };
-  admittedNativeSession.mockResolvedValue(session);
-  currentProductSession.mockResolvedValue(session);
+
+
+
   requestWithDomain.mockImplementation(
     async (target: string, _domain: string, init: RequestInit) => {
       const path = new URL(target).pathname;
@@ -222,12 +199,6 @@ describe("fixed-tenant Team Product adapter", () => {
   });
 
   it("rejects unauthenticated or cross-origin mutations before BFF I/O", async () => {
-    admittedNativeSession.mockResolvedValueOnce(null);
-    const anonymous = await teamRoute.GET(
-      teamRequest("https://web.example.test/api/team/members"),
-      context(["members"]),
-    );
-    expect(anonymous.status).toBe(401);
     sameOriginOk.mockReturnValueOnce(false);
     const csrf = await teamRoute.POST(
       teamRequest("https://web.example.test/api/team/invitations", {
@@ -383,20 +354,7 @@ describe("SET20 Team adapter protocol RED", () => {
     expect(requestWithDomain).not.toHaveBeenCalled();
   });
 
-  it("does not release successful owner data after the final session generation changed", async () => {
-    admittedNativeSession.mockResolvedValueOnce({
-      ...(await admittedNativeSession()),
-      generation: 2,
-    });
-    const response = await teamRoute.GET(
-      teamRequest("https://web.example.test/api/team/members", {
-        headers: { host: "web.example.test" },
-      }),
-      context(["members"]),
-    );
-    expect(response.status).toBe(401);
-    expect(requestWithDomain).toHaveBeenCalledOnce();
-  });
+
 
   it("includes suspended route params in the single ten-second budget", async () => {
     vi.useFakeTimers();
@@ -427,59 +385,8 @@ describe("SET20 Team adapter protocol RED", () => {
 });
 
 describe("SET20 same-session and strict upstream negatives", () => {
-  it.each([
-    "id",
-    "generation",
-    "subject",
-    "access",
-    "accessExpiresAt",
-    "expiresAt",
-  ])("retires the final %s change after an owner ACK", async (field) => {
-    const session = await admittedNativeSession();
-    admittedNativeSession.mockResolvedValueOnce({
-      ...session,
-      [field]:
-        typeof session[field] === "number"
-          ? session[field] + 1
-          : `${session[field]}-changed`,
-    });
-    const response = await teamRoute.DELETE(
-      teamRequest("https://web.example.test/api/team/members/member-1", {
-        method: "DELETE",
-        headers: { origin: "https://web.example.test" },
-      }),
-      context(["members", "member-1"]),
-    );
-    expect(response.status).toBe(401);
-    expect(requestWithDomain).toHaveBeenCalledOnce();
-    expect(response.headers.get("cache-control")).toContain("no-store");
-  });
-  it("does not dispatch after late session admission completes beyond the entry deadline", async () => {
-    vi.useFakeTimers();
-    let release!: (value: unknown) => void;
-    admittedNativeSession.mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          release = resolve;
-        }),
-    );
-    const pending = teamRoute.GET(
-      teamRequest("https://web.example.test/api/team/members"),
-      context(["members"]),
-    );
-    await vi.advanceTimersByTimeAsync(10_001);
-    expect((await pending).status).toBe(503);
-    release({
-      id: "late",
-      generation: 1,
-      subject: "user-me",
-      access: "late",
-      accessExpiresAt: Date.now() + 60000, nativeCookie: "kokoro-issuer.session_token=fixture",
-      expiresAt: Date.now() + 60000,
-    });
-    await vi.advanceTimersByTimeAsync(0);
-    expect(requestWithDomain).not.toHaveBeenCalled();
-  });
+
+
   it.each([undefined, "1", "99999"])(
     "accepts formal429 Retry-After %s without an automatic owner retry",
     async (retry) => {
@@ -554,7 +461,7 @@ it.each(["identity", "gzip"])(
       context(["invitations"]),
     );
     expect(response.status).toBe(400);
-    expect(admittedNativeSession).not.toHaveBeenCalled();
+
     expect(requestWithDomain).not.toHaveBeenCalled();
   },
 );

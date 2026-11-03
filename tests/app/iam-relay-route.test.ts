@@ -42,11 +42,17 @@ describe("/iam/[...path] native relay", () => {
     for (const name of Object.keys(ENV)) delete process.env[name]
   })
 
-  it("relays get-session with rebuilt service identity and issuer cookies", async () => {
+  it.each(["/iam/get-session", "/iam/get-session?disableCookieCache=true&disableRefresh=true", "/iam/get-session/", "/iam/%67et-session"])("closes the raw session relay without any upstream call: %s", async path => {
+    const {GET}=await import("@/app/iam/[...path]/route")
+    const response=await GET(browserRequest("https://web.example.test"+path),params(["get-session"]))
+    expect(response.status).toBe(404); expect(requestIamRelay).not.toHaveBeenCalled()
+  })
+
+  it("relays verification with rebuilt service identity and issuer cookies", async () => {
     requestIamRelay.mockResolvedValue(upstream({ headers: { "content-type": "application/json", "x-request-id": "upstream-1" }, body: "{}" }))
     const { GET } = await import("@/app/iam/[...path]/route")
     const response = await GET(
-      browserRequest("https://web.example.test/iam/get-session?state=one", {
+      browserRequest("https://web.example.test/iam/verify-email?token=one", {
         headers: {
           accept: "application/json",
           cookie: "kokoro_session=product; authjs.session-token=rp; kokoro-issuer.session_token=issuer",
@@ -56,12 +62,12 @@ describe("/iam/[...path] native relay", () => {
           "x-request-id": "browser-request",
         },
       }),
-      params(["get-session"]),
+      params(["verify-email"]),
     )
     expect(response.status).toBe(200)
     expect(await response.text()).toBe("{}")
     const call = requestIamRelay.mock.calls[0]?.[0] as { url: string; headers: Headers }
-    expect(call.url).toBe("http://bff.test/iam/get-session?state=one")
+    expect(call.url).toBe("http://bff.test/iam/verify-email?token=one")
     expect(call.headers.get("cookie")).toBe("kokoro-issuer.session_token=issuer")
     expect(call.headers.get("x-kokoro-service")).toBe("web-bff")
     expect(call.headers.get("x-kokoro-internal-secret")).toBe("web-bff-secret")
@@ -127,8 +133,8 @@ describe("/iam/[...path] native relay", () => {
   it("rejects authorization headers before native relay", async () => {
     const { GET } = await import("@/app/iam/[...path]/route")
     const response = await GET(
-      browserRequest("https://web.example.test/iam/get-session", { headers: { authorization: "Bearer token" } }),
-      params(["get-session"]),
+      browserRequest("https://web.example.test/iam/verify-email?token=one", { headers: { authorization: "Bearer token" } }),
+      params(["verify-email"]),
     )
     expect(response.status).toBe(403)
     expect(requestIamRelay).not.toHaveBeenCalled()

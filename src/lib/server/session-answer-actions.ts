@@ -8,7 +8,7 @@ import {
   runDisplaySchema,
 } from "@/contract/answer-actions"
 import { parseArchivedTasksJson } from "@/lib/archived-tasks-json"
-import { admittedNativeSession, productBffConfig, productBffHeaders } from "./product-bff"
+import { productBffConfig, productBffHeaders } from "./product-bff"
 import { requestWithDomain, readBoundedRequestBody, UpstreamResponseIncompleteError, UpstreamResponseTooLargeError } from "./upstream-http"
 /** Four exact answer operations, never a general Session proxy or command recovery loop. */
 export async function sessionAnswerActions(request: Request, params: Promise<{ path: string[] }>): Promise<Response> {
@@ -111,9 +111,8 @@ export async function sessionAnswerActions(request: Request, params: Promise<{ p
         return fail(400, "answer_actions_invalid_request")
       }
     }
-    const claims = await within(() => admittedNativeSession(request, config))
-    if (!claims) return fail(401, "unauthenticated")
-    const outgoing = productBffHeaders(config, claims, requestId)
+
+    const outgoing = productBffHeaders(config, request, requestId)
     outgoing.set("accept", "application/json")
     if (writing) {
       outgoing.set("content-type", "application/json")
@@ -197,14 +196,7 @@ export async function sessionAnswerActions(request: Request, params: Promise<{ p
     } catch {
       return fail(502, "answer_actions_response_invalid")
     }
-    const latest = await within(() => admittedNativeSession(request, config))
-    if (
-      !latest ||
-      ["id", "generation", "subject", "access", "accessExpiresAt", "expiresAt", "issuerSessionId"].some(
-        (key) => Reflect.get(latest, key) !== Reflect.get(claims, key),
-      )
-    )
-      return fail(401, "session_invalid")
+
     check()
     return response(status, result, retry)
   } catch (error) {

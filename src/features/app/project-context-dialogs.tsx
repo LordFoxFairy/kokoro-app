@@ -62,6 +62,9 @@ export function ProjectContextDialogs({ preview, active = true, historyAvailable
   const resourceReturnFocus = useRef<{ target: HTMLButtonElement; context: object; route: string } | null>(null)
   const activeResourceFocus = useRef(resourceFocusContext)
   useLayoutEffect(() => { activeResourceFocus.current = resourceFocusContext }, [resourceFocusContext])
+  const committedInstructionsSaving = useRef(instructionsSaving)
+  // Radix can retain the previous passive callback after the DOM has unlocked.
+  useLayoutEffect(() => { committedInstructionsSaving.current = instructionsSaving }, [instructionsSaving])
   const instructionsHistoryDialogRef = useRef<HTMLDivElement | null>(null)
   const frozenInstruction = instructionsResult?.status === "unknown" || instructionsResult?.status === "read-error" || instructionsResult?.status === "forbidden"
   const saveInstruction = async () => {
@@ -81,11 +84,11 @@ export function ProjectContextDialogs({ preview, active = true, historyAvailable
     } finally { setInstructionsSaving(false) }
   }
   return <>
-    <Dialog open={active && instructionsOpen} onOpenChange={(open) => { if (!instructionsSaving) setInstructionsOpen(open) }}>
+    <Dialog open={active && instructionsOpen} onOpenChange={(open) => { if (!committedInstructionsSaving.current) setInstructionsOpen(open) }}>
       <DialogContent onCloseAutoFocus={onInstructionsCloseAutoFocus}
-        onEscapeKeyDown={(event) => { if (instructionsSaving) event.preventDefault() }}
-        onPointerDownOutside={(event) => { if (instructionsSaving) event.preventDefault() }}
-        onInteractOutside={(event) => { if (instructionsSaving) event.preventDefault() }}
+        onEscapeKeyDown={(event) => { if (committedInstructionsSaving.current) event.preventDefault() }}
+        onPointerDownOutside={(event) => { if (committedInstructionsSaving.current) event.preventDefault() }}
+        onInteractOutside={(event) => { if (committedInstructionsSaving.current) event.preventDefault() }}
         className={dialogStyles.instructionsDialog} overlayClassName={dialogStyles.instructionsOverlay ?? ""} closeLabel={t("shell.closeDialog")}>
         <DialogHeader className={dialogStyles.instructionsDialogHeader}><DialogTitle>{t("firstSite.projectInstructionsTitle")}</DialogTitle><DialogDescription>{t("firstSite.projectInstructionsDescription")}</DialogDescription></DialogHeader>
         <div className={dialogStyles.instructionsDialogBody}>

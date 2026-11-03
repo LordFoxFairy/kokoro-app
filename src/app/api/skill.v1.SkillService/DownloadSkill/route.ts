@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 
 import { sameOriginOk } from "@/lib/server/same-origin"
-import { admittedNativeSession, productBffConfig, productBffHeaders } from "@/lib/server/product-bff"
+import { InvalidBrowserCookieError, productBffConfig, productBffHeaders } from "@/lib/server/product-bff"
 import { readBoundedRequestBody, requestWithDomain, UpstreamRequestTooLargeError } from "@/lib/server/upstream-http"
 
 export const runtime = "nodejs"
@@ -19,9 +19,7 @@ export async function POST(request: Request): Promise<Response> {
   if (!JSON_MEDIA_TYPE.test(request.headers.get("content-type") ?? "")) return error("invalid_skill_request", 400)
   const config = productBffConfig()
   if (config === null) return error("skill_dependency_unavailable", 503)
-  let claims
-  try { claims = await admittedNativeSession(request, config) } catch { return error("iam_admission_unavailable", 503) }
-  if (claims === null) return error("session_authentication_required", 401)
+
   let body: ArrayBuffer
   try {
     body = await readBoundedRequestBody(request, 65_536)
@@ -30,10 +28,10 @@ export async function POST(request: Request): Promise<Response> {
     return error(caught instanceof UpstreamRequestTooLargeError ? "request_body_too_large" : "invalid_skill_request", caught instanceof UpstreamRequestTooLargeError ? 413 : 400)
   }
   const requestId = request.headers.get("x-kokoro-request-id") ?? crypto.randomUUID()
-  const headers = productBffHeaders(config, claims, requestId)
-  headers.set("content-type", "application/json")
-  headers.set("accept", "application/json")
   try {
+    const headers = productBffHeaders(config, request, requestId)
+    headers.set("content-type", "application/json")
+    headers.set("accept", "application/json")
     const upstream = await requestWithDomain(`${config.bffBaseUrl.replace(/\/+$/u, "")}/skill.v1.SkillService/DownloadSkill`, config.domain, {
       method: "POST", headers: Object.fromEntries(headers), body, signal: request.signal,
     })
@@ -44,5 +42,5 @@ export async function POST(request: Request): Promise<Response> {
       return error("skill_response_invalid", 502)
     }
     return new Response(upstream.body, { status: upstream.status, headers: { "content-type": contentType, "cache-control": "private, no-store", "x-request-id": upstreamRequestId } })
-  } catch { return error("skill_dependency_unavailable", 503) }
+  } catch (caught) { return error(caught instanceof InvalidBrowserCookieError ? "invalid_skill_request" : "skill_dependency_unavailable", caught instanceof InvalidBrowserCookieError ? 400 : 503) }
 }

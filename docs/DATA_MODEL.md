@@ -1,3 +1,18 @@
+> D0实现候选（2026-11-03）：已固定 BFF `34c9f997a4d86f33be2f815c43cd155ed338fe86` 的 browser-private auth-session 1.0.0（SHA256 `a7b5876632f6ad91b9fc162c9abcf48b36b2677a3b15a6a497d3305aeaea81ba`），按本节正式边界完成本地消费者切片；本仓Root完整工程门已验（证据见Root唯一计划及本仓PR）；仍是未合并的源码候选，不代表BFF真实资源、共享登录/rolling/撤权或浏览器组合通过。下方旧RP/refresh/proof叙述只保留历史语境。
+
+## T-01 标准认证状态与本地退休（2026-11-02，本地消费者候选）
+
+本轮沿 Root 唯一计划 §3.6 和已通过 D0 实施，不新增认证 owner、Schema、依赖或认证存储。具体固定来源见 `contract/bff-auth-session-source.json`；生成器只消费本仓 vendor 的原字节，不导入 sibling 源码。普通业务一次同源/BFF派发，当前权限仍由 BFF/IAM 与业务 owner 判断。
+
+- **唯一事实 owner**：IAM Better Auth 拥有登录 Session、HttpOnly Cookie、真实 expiresAt、active tenant 和撤销；BFF 在认证边缘建立真实 principal，业务 owner 拥有当前资源及授权不变量。App 不建 Session 表／Redis 投影、token/refresh store、SessionRef、认证票据或共享认证 SDK，不复制框架 Session。
+- **安全 RAM 视图**：App 只持 BFF 正式 browser-private `GET /browser/v1/auth/session` 的安全观察：authenticated 状态及真实 subject／tenant_id／RFC 3339 UTC expires_at。layout的完整首观察仅作候选；SSR/client首帧一致且未准入，effect核现有marker与无秘密失效hint后消费。无冲突且无hint时零额外GET；冲突、过期、失效或hint读取失败时fresh GET，不清新身份的草稿或unknown原命令。历史hint未清除时保守多一次安全GET，不充当第二认证协议。expires_at 不是允许缓存，不用 now+TTL、空 access、假 session id 或 generation=0 补字段；公开 `/v1/me` 的三字段不变。
+- **Cookie 与有效期**：同一 BFF 状态 GET 的 generated query `refresh` 默认 true，浏览器正常状态 GET 可原生 rolling，多个 `Set-Cookie` 完整经边界传给浏览器。RSC 明确 `refresh=false`，BFF 映射官方 `disableCookieCache=true`、`disableRefresh=true` 鲜读但不 rolling；RSC 不写／清浏览器 Cookie，失效 Cookie 由后续正常状态 GET 清理。该 query 仅为状态读取的传输选项，纯业务检查不 rolling，不扩业务 adapter 参数。App 不自制期限、续期记录或每业务 `/me` snapshot。
+- **本地寿命不是凭据**：UI request/data epoch、abort 和当前 subject＋tenant 仅管理读／展示寿命，保留 ABA、pagehide/pageshow、同主体 tenant 变化及跨标签无秘密失效事件。持久 marker 只使旧观察失效，不能授准入，不保存 raw Session／token／Session id/ref；另一枚仍有效 Cookie 的切换依靠 UI 失效与页面寿命退休迟到响应，不伪称原请求鲜验已观察浏览器新 Cookie。
+- **既有用户数据保护**：身份退休按现有归属清理旧索引／私有投影；同一可信身份的常规检查不无故清草稿。原 draft、submission journal、CAS 和 unknown 命令保原 subject／tenant／scope 绑定及原 key/body，不因 GET 恢复而自动重放、换 key 或造 ACK。设备管理和 Chat 资源 session_id 仍是业务 locator，不是登录凭据。
+- **Admin**：同源 `/manage` 只消费相同登录及安全 GET 状态，不新增独立 Session/refresh/CSRF 存储；管理员 false 与依赖不可用分开，管理权限不是浏览器缓存事实。其原命令恢复记录不扩为认证记录。
+
+本地候选已随固定 owner 合同及 generated artifact 删除旧假 claims／refresh 形状；后继仍须核真实 expiry、rolling、身份／tenant 退休与未知命令保护；尚无新 schema、迁移或真实浏览器验收证明。
+
 ## T-07 Public28.18 provenance修复（2026-11-01，无数据变化）
 
 本轮只同步既有单一BFF public snapshot的生成器来源与测试pin，原28.18 snapshot保持逐字不变；账户资料仍由IAM／BFF提供现有只读投影，App不新增账户事实、表、缓存、迁移或浏览器store。完整28.18→28.17逆差仅存在于 `tests/contract/`，用于保留旧父全文hash及操作顺序证明，不进入运行时；private artifact与独立download policy3不变。下方数据方案保留历史语境。

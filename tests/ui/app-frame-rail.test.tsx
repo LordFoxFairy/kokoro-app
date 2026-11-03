@@ -526,9 +526,7 @@ it("已登录正式壳从同源 Project 列表显示两个独立项目，而非�
     const method = init?.method ?? (input instanceof Request ? input.method : "GET")
     if (path === "/api/auth/session" && method === "GET") {
       return Response.json({
-        authenticated: true,
-        subject: "project-reader",
-        expires_at: Date.now() + 3_600_000,
+        data: { authenticated: true, subject: "project-reader", tenant_id: "tenant", expires_at: "2030-01-01T00:00:00Z" },
       })
     }
     if (path === "/api/hub/projects" && method === "GET") {
@@ -582,7 +580,7 @@ function projectReadEnvelope(projects = projectReadFixtures) {
 
 async function mountAuthenticatedProjectRail(
   read: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>,
-  readSession: () => Promise<Response> = async () => Response.json({ authenticated: true, subject: "project-reader", expires_at: Date.now() + 3_600_000 }),
+  readSession: () => Promise<Response> = async () => Response.json({ data: { authenticated: true, subject: "project-reader", tenant_id: "tenant", expires_at: "2030-01-01T00:00:00Z" } }),
 ) {
   const pageClients = await import("@/ui/shell/page-clients")
   const { AppGate } = await import("@/ui/auth/app-gate")
@@ -651,7 +649,7 @@ it("同账号焦点核验保留项目、会话和草稿，不重新请求业务�
   await mountAuthenticatedProjectRail(async () => { projectReads++; return projectReadEnvelope() }, async () => {
     checks++
     if (checks === 2) return new Promise<Response>((resolve) => { finishCheck = resolve })
-    return Response.json({ authenticated: true, subject: "project-reader" })
+    return Response.json({ data: { authenticated: true, subject: "project-reader", tenant_id: "tenant", expires_at: "2030-01-01T00:00:00Z" } })
   })
   const projectLink = await screen.findByRole("link", { name: "新对话 · 研究项目甲" })
   const conversation = await screen.findByRole("button", { name: "保留的会话" })
@@ -671,7 +669,7 @@ it("同账号焦点核验保留项目、会话和草稿，不重新请求业务�
   expect(screen.queryByTestId("conversations-loading")).not.toBeInTheDocument()
   expect(screen.getByRole("textbox", { name: "对话输入" })).toBe(composer)
   expect(composer).toHaveValue("核验期间保留的草稿")
-  await act(async () => { finishCheck(Response.json({ authenticated: true, subject: "project-reader" })) })
+  await act(async () => { finishCheck(Response.json({ data: { authenticated: true, subject: "project-reader", tenant_id: "tenant", expires_at: "2030-01-01T00:00:00Z" } })) })
   await screen.findByRole("link", { name: "新对话 · 研究项目甲" })
   expect(projectReads).toBe(1)
   expect(sessionReads).toHaveBeenCalledTimes(sessionReadCount)
@@ -695,7 +693,7 @@ it("身份标记退休后清空并取消旧读取，迟到响应不能复活项�
   }, async () => {
     checks++
     if (checks === 3) return new Promise<Response>((resolve) => { resolveSession = resolve })
-    return Response.json({ authenticated: true, subject: "project-reader" })
+    return Response.json({ data: { authenticated: true, subject: "project-reader", tenant_id: "tenant", expires_at: "2030-01-01T00:00:00Z" } })
   })
   await screen.findByRole("link", { name: "新对话 · 研究项目甲" })
   const composer = screen.getByRole("textbox", { name: "对话输入" })
@@ -710,7 +708,7 @@ it("身份标记退休后清空并取消旧读取，迟到响应不能复活项�
   expect(screen.queryByTestId("projects-empty")).not.toBeInTheDocument()
   await act(async () => { resolveOld(projectReadEnvelope()); await Promise.resolve() })
   expect(screen.queryByRole("link", { name: "新对话 · 研究项目甲" })).not.toBeInTheDocument()
-  await act(async () => { resolveSession(Response.json({ authenticated: true, subject: "project-reader" })) })
+  await act(async () => { resolveSession(Response.json({ data: { authenticated: true, subject: "project-reader", tenant_id: "tenant", expires_at: "2030-01-01T00:00:00Z" } })) })
   await screen.findByRole("link", { name: "新对话 · 研究项目乙" })
   expect(calls).toBe(3)
   expect(screen.queryByRole("link", { name: "新对话 · 研究项目甲" })).not.toBeInTheDocument()
@@ -792,7 +790,7 @@ it("健康正式列表在 session 401 服务异常后撤销，但保留 Chat 且
   let checks = 0
   await mountAuthenticatedProjectRail(async () => { reads++; return projectReadEnvelope() }, async () => {
     checks++
-    return checks === 1 ? Response.json({ authenticated: true, subject: "project-reader" }) : Response.json({ authenticated: false }, { status: 401 })
+    return checks === 1 ? Response.json({ data: { authenticated: true, subject: "project-reader", tenant_id: "tenant", expires_at: "2030-01-01T00:00:00Z" } }) : Response.json({ authenticated: false }, { status: 401 })
   })
   await screen.findByRole("link", { name: "新对话 · 研究项目甲" })
   act(() => window.dispatchEvent(new Event("focus")))

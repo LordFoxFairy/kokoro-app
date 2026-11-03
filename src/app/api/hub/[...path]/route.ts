@@ -100,7 +100,7 @@ import { proxyProjectRename } from "@/lib/server/project-rename";
 
 import { sameOriginOk } from "@/lib/server/same-origin";
 import {
-  admittedNativeSession,
+  InvalidBrowserCookieError,
   productBffConfig,
   productBffHeaders,
 } from "@/lib/server/product-bff";
@@ -707,16 +707,13 @@ async function proxyMcpConnector(
       if (!accepted) return fail(400, "invalid_mcp_personal_request");
     }
     signal.throwIfAborted();
-    const claims = await within(admittedNativeSession(request, config)).catch(
-      () => undefined,
-    );
+
     signal.throwIfAborted();
     // Admission consumes the same receipt budget; never create a fresh 1ms owner budget after expiry.
     if (receiptOperation && performance.now() >= expires) controller.abort();
     signal.throwIfAborted();
-    if (claims === undefined) return fail(503, "iam_admission_unavailable");
-    if (claims === null) return fail(401, "session_authentication_required");
-    const headers = productBffHeaders(config, claims, requestId);
+
+    const headers = productBffHeaders(config, request, requestId);
     headers.set("accept", "application/json");
     if (mutation) headers.set("content-type", "application/json");
     if (requiresIdempotency) headers.set("idempotency-key", key!);
@@ -966,18 +963,12 @@ async function proxyCustomApi(
   const config = productBffConfig();
   if (!config?.bffBaseUrl)
     return fail(503, "product_tenant_not_configured", true);
-  let claims;
-  try {
-    claims = await admittedNativeSession(request, config);
-  } catch {
-    return fail(503, "iam_admission_unavailable", true);
-  }
-  if (claims === null) return fail(401, "session_authentication_required");
+
   const deadline = new AbortController();
   const timer = setTimeout(() => deadline.abort(), 10_000);
   let upstream: Response | undefined;
   try {
-    const headers = productBffHeaders(config, claims, requestId);
+    const headers = productBffHeaders(config, request, requestId);
     headers.set("accept", "application/json");
     if (mutation) {
       headers.set("content-type", "application/json");
@@ -1074,20 +1065,9 @@ async function proxySkillCover(
   );
   let upstream: Response;
   try {
-    const claims = await new Promise<
-      Awaited<ReturnType<typeof admittedNativeSession>>
-    >((resolve, reject) => {
-      const abort = () => reject(signal.reason);
-      signal.addEventListener("abort", abort, { once: true });
-      void admittedNativeSession(request, config)
-        .then(resolve, reject)
-        .finally(() => signal.removeEventListener("abort", abort));
-      if (signal.aborted) abort();
-    }).catch(() => undefined);
-    if (claims === undefined) return fail("iamUnavailable");
-    if (claims === null) return fail("unauthenticated");
+
     if (signal.aborted) return fail("bffUnavailable");
-    const headers = productBffHeaders(config, claims, requestId);
+    const headers = productBffHeaders(config, request, requestId);
     headers.set("accept", "image/png, image/jpeg, image/webp");
     upstream = await requestWithDomain(
       `${config.bffBaseUrl.replace(/\/+$/u, "")}/v1/skills/${encodeURIComponent(revision)}/cover`,
@@ -1297,13 +1277,9 @@ async function proxyLocalSkillImport(
         !localImportCompleteRequestSchema.safeParse(parsedBody).success)
     )
       return fail("invalidSkillRequest");
-    const claims = await within(admittedNativeSession(request, config)).catch(
-      () => undefined,
-    );
-    if (claims === undefined) return fail("iamUnavailable");
-    if (claims === null) return fail("unauthenticated");
+
     joined.throwIfAborted();
-    const headers = productBffHeaders(config, claims, requestId);
+    const headers = productBffHeaders(config, request, requestId);
     headers.set("accept", "application/json");
     if (key !== null) headers.set("idempotency-key", key);
     if (body !== undefined) headers.set("content-type", "application/json");
@@ -1526,13 +1502,9 @@ async function proxyGithubSkillImport(
       ).safeParse(parsedBody).success
     )
       return fail("invalidSkillRequest");
-    const claims = await within(admittedNativeSession(request, config)).catch(
-      () => undefined,
-    );
-    if (claims === undefined) return fail("iamUnavailable");
-    if (claims === null) return fail("unauthenticated");
+
     joined.throwIfAborted();
-    const headers = productBffHeaders(config, claims, requestId);
+    const headers = productBffHeaders(config, request, requestId);
     headers.set("accept", "application/json");
     if (key !== null) headers.set("idempotency-key", key);
     if (body !== undefined) headers.set("content-type", "application/json");
@@ -1772,13 +1744,9 @@ async function proxySkillShare(
         : body !== undefined
     )
       return fail("invalidSkillRequest");
-    const claims = await within(admittedNativeSession(request, config)).catch(
-      () => undefined,
-    );
-    if (claims === undefined) return fail("iamUnavailable");
-    if (claims === null) return fail("unauthenticated");
+
     joined.throwIfAborted();
-    const headers = productBffHeaders(config, claims, requestId);
+    const headers = productBffHeaders(config, request, requestId);
     headers.set("accept", "application/json");
     if (body !== undefined) headers.set("content-type", "application/json");
     const target = `${config.bffBaseUrl.replace(/\/+$/u, "")}/${operation === "download" ? "browser/v1" : "v1"}/${path.map(encodeURIComponent).join("/")}`;
@@ -1989,13 +1957,9 @@ async function proxySkillPackage(
         for (;;) { const part = await within(reader.read()); joined.throwIfAborted(); if (part.done) break; if (part.value.byteLength > 0) return fail("invalidSkillRequest"); }
       } finally { joined.removeEventListener("abort", cancel); void reader.cancel().catch(() => undefined); reader.releaseLock(); }
     }
-    const claims = await within(admittedNativeSession(request, config)).catch(
-      () => undefined,
-    );
-    if (claims === undefined) return fail("iamUnavailable");
-    if (claims === null) return fail("unauthenticated");
+
     joined.throwIfAborted();
-    const headers = productBffHeaders(config, claims, requestId);
+    const headers = productBffHeaders(config, request, requestId);
     headers.set("accept", "application/json");
     const target = `${config.bffBaseUrl.replace(/\/+$/u, "")}/${download ? "browser/v1" : "v1"}/${managed && !download ? "self/skills" : installation ? "skill-installations" : "skills"}/${encodeURIComponent(targetId)}/${download ? "download" : "package"}${filePath === undefined ? "" : `?file_path=${encodeURIComponent(filePath)}`}`;
     upstream = await within(
@@ -2214,12 +2178,8 @@ async function proxyPersonalSkillLifecycle(
         : withdrawPersonalSkillRequestSchema
     ).safeParse(input);
     if (!parsed.success) return fail(400, "invalid_skill_request");
-    const claims = await within(admittedNativeSession(request, config)).catch(
-      () => undefined,
-    );
-    if (claims === undefined) return fail(503, "iam_admission_unavailable");
-    if (claims === null) return fail(401, "session_authentication_required");
-    const headers = productBffHeaders(config, claims, requestId);
+
+    const headers = productBffHeaders(config, request, requestId);
     headers.set("content-type", "application/json");
     headers.set("idempotency-key", key);
     headers.set("content-length", String(bytes.byteLength));
@@ -2502,23 +2462,7 @@ async function proxyHubRequest(
         : localSkillError("forbidden", requestId);
     return NextResponse.json({ error: "forbidden_origin" }, { status: 403 });
   }
-  let claims;
-  try {
-    claims = await admittedNativeSession(request, config);
-  } catch {
-    if (publicSkillBoundary)
-      return mcpConnectionRead
-        ? connectionProjectionError("iamUnavailable", requestId)
-        : localSkillError("iamUnavailable", requestId);
-    return NextResponse.json({ error: "session_unavailable" }, { status: 503 });
-  }
-  if (claims === null) {
-    if (publicSkillBoundary)
-      return mcpConnectionRead
-        ? connectionProjectionError("unauthenticated", requestId)
-        : localSkillError("unauthenticated", requestId);
-    return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
-  }
+
   // The multipart preview/confirm and GitHub pseudo-publish routes belong to
   // explicit local fixtures only; they are not a production publish fallback.
   if (
@@ -2713,14 +2657,6 @@ async function proxyHubRequest(
     .join("/");
   const target = `${config.bffBaseUrl.replace(/\/+$/, "")}/v1/${managedSkillRead ? `self/skills${path.length >= 4 ? `/${encodeURIComponent(path[3]!)}${managedHistoryRead ? "/versions" : ""}` : ""}` : encodedBusinessPath}${search}`;
 
-  const headers = productBffHeaders(config, claims, requestId);
-  for (const name of FORWARD_HEADERS) {
-    const value = request.headers.get(name);
-    if (value !== null) {
-      headers.set(name, value);
-    }
-  }
-
   let body: ArrayBuffer | undefined;
   if (
     request.method !== "GET" &&
@@ -2778,6 +2714,11 @@ async function proxyHubRequest(
 
   let upstream: Response;
   try {
+    const headers = productBffHeaders(config, request, requestId);
+    for (const name of FORWARD_HEADERS) {
+      const value = request.headers.get(name);
+      if (value !== null) headers.set(name, value);
+    }
     upstream = await requestWithDomain(target, config.domain, {
       method: request.method,
       headers: Object.fromEntries(headers.entries()),
@@ -2804,7 +2745,14 @@ async function proxyHubRequest(
         ? { timeoutMs: 10_000, maxResponseBytes: 1024 * 1024 }
         : {}),
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof InvalidBrowserCookieError) {
+      if (publicSkillBoundary)
+        return mcpConnectionRead
+          ? connectionProjectionError("invalidQuery", requestId)
+          : localSkillError("invalidQuery", requestId);
+      return NextResponse.json({ error: "invalid_browser_cookie" }, { status: 400, headers: { "cache-control": "private, no-store" } });
+    }
     if (publicSkillBoundary)
       return mcpConnectionRead
         ? connectionProjectionError("bffUnavailable", requestId)
