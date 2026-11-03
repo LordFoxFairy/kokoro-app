@@ -84,7 +84,7 @@ export function PersonalSkillManagement({ selection, boundary, onReleased, onCon
       </DialogContent>
     </Dialog>
     {base !== null && selection.operation === "delete" ? <PersonalSkillDeleteDialog skill={deleteStarted ? base : current?.skill ?? base} client={client} admitted={admitted && ready} generation={generation} open={ready && open} onOpenChange={close} onIntentStarted={()=>{pending.current=true;setDeleteStarted(true)}} onConfirmed={confirmed} returnFocusRef={returnFocusRef}/> : null}
-    {base !== null && selection.operation === "history" ? <PersonalSkillHistoryDialog key={subject} base={base} client={client} admitted={ready} open={open} onOpenChange={close} returnFocusRef={returnFocusRef} onIntentChanged={value => {pending.current=value}} onRestored={confirmed}/> : null}
+    {base !== null && selection.operation === "history" ? <PersonalSkillHistoryDialog key={subject} base={base} client={client} admitted={ready} generation={generation} open={open} onOpenChange={close} returnFocusRef={returnFocusRef} onIntentChanged={value => {pending.current=value}} onRestored={confirmed}/> : null}
     {base !== null && selection.operation === "update" ? <PersonalSkillPublishDialog
       base={base} client={client} admitted={ready} open={ready && open} onOpenChange={close}
       onIntentStarted={() => { pending.current = true }} onPublished={confirmed} returnFocusRef={returnFocusRef}

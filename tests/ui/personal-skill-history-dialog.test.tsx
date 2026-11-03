@@ -2,7 +2,7 @@ import {useState} from "react"
 import {File as NodeFile} from "node:buffer"
 import {HubClientError} from "@/hub/client"
 import {downloadManagedSkillArchive} from "@/hub/personal-skill-archive"
-import {cleanup,fireEvent,render,screen,waitFor} from "@testing-library/react"
+import {act,cleanup,fireEvent,render,screen,waitFor} from "@testing-library/react"
 import {afterEach,expect,it,vi} from "vitest"
 import {LocaleProvider} from "@/i18n/context"
 import {PersonalSkillHistoryDialog} from "@/ui/skills/personal-skill-history-dialog"
@@ -92,7 +92,7 @@ it("offers recovery on a historical row, never on the active current version or 
  expect(await screen.findByRole("dialog",{name:"恢复此版本？"})).toBeInTheDocument()
  fireEvent.click(screen.getByRole("button",{name:"取消"}))
  expect(screen.queryByRole("dialog",{name:"恢复此版本？"})).toBeNull()
- expect(screen.getByRole("button",{name:/版本 1/u})).toBeInTheDocument()
+ expect(await screen.findByRole("button",{name:/版本 1/u})).toBeInTheDocument()
 })
 
 it("retains the same uncertain restore command when the history container closes and reopens",async()=>{
@@ -101,12 +101,41 @@ it("retains the same uncertain restore command when the history container closes
  const client={...createSkillPublishClient(),listHistory:vi.fn().mockResolvedValue(page([historical])),getManaged:vi.fn().mockResolvedValue({...base,skill_id:"old",source_ref:"skill:old",revision:"1",name:historical.name}),createVersion:vi.fn().mockRejectedValue(new HubClientError("network","Unknown create receipt",null,null))}
  vi.mocked(inspectManagedSkillPackage).mockResolvedValue({source_ref:"skill:old",revision:"1",files:[],selected_file:null})
  vi.mocked(downloadManagedSkillArchive).mockResolvedValue(new NodeFile(["zip"],"skill-history.zip",{type:"application/zip"}) as unknown as File)
- function Harness(){const [open,setOpen]=useState(true);return <LocaleProvider><button onClick={()=>setOpen(true)}>重新打开历史</button><PersonalSkillHistoryDialog base={base} client={client} open={open} onOpenChange={setOpen} returnFocusRef={{current:null}}/></LocaleProvider>}
+ function Harness(){const [open,setOpen]=useState(true),[generation,setGeneration]=useState(0);return <LocaleProvider><button onClick={()=>setGeneration(value=>value+1)}>重新准入</button><button onClick={()=>setOpen(true)}>重新打开历史</button><PersonalSkillHistoryDialog base={base} client={client} open={open} generation={generation} onOpenChange={setOpen} returnFocusRef={{current:null}}/></LocaleProvider>}
  render(<Harness/>);fireEvent.click(await screen.findByRole("button",{name:"恢复"}));fireEvent.click(screen.getByRole("button",{name:"恢复"}))
  await screen.findByRole("alert");expect(client.createVersion).toHaveBeenCalledOnce()
  const original=client.createVersion.mock.calls[0]!.slice(0,3)
- fireEvent.click(screen.getAllByRole("button",{name:"关闭"}).at(-1)!);fireEvent.click(screen.getByRole("button",{name:"重新打开历史"}))
+ fireEvent.click(screen.getAllByRole("button",{name:"关闭"}).at(-1)!);fireEvent.click(screen.getByRole("button",{name:"重新准入"}));fireEvent.click(screen.getByRole("button",{name:"重新打开历史"}))
  fireEvent.click(await screen.findByRole("button",{name:"重试同一次尝试"}));await waitFor(()=>expect(client.createVersion).toHaveBeenCalledTimes(2))
  expect(client.createVersion.mock.calls[1]!.slice(0,3)).toEqual(original)
  expect(client.getManaged).toHaveBeenCalledOnce();expect(downloadManagedSkillArchive).toHaveBeenCalledOnce()
+})
+
+
+it.each(["window", "admission", "generation"])("retires history and body before a fresh %s read, ignoring the retired response",async(change)=>{
+ window.localStorage.setItem("kokoro.locale","zh")
+ let second!:(value:PersonalSkillHistoryPage)=>void,third!:(value:PersonalSkillHistoryPage)=>void
+ const client={...createSkillPublishClient(),listHistory:vi.fn<SkillPublishClient["listHistory"]>()
+  .mockResolvedValueOnce(page([row("old","1",true)]))
+  .mockImplementationOnce(()=>new Promise(resolve=>{second=resolve}))
+  .mockImplementationOnce(()=>new Promise(resolve=>{third=resolve}))}
+ vi.mocked(inspectManagedSkillPackage).mockImplementation(async(target,file)=>({source_ref:`skill:${target.skill_id}`,revision:target.revision,files:[{path:"SKILL.md",size_bytes:"4"}],selected_file:file?{path:file,text:`PRIVATE ${target.skill_id}`} :null}))
+ const view=(open:boolean,admitted:boolean,generation:number)=><LocaleProvider><PersonalSkillHistoryDialog base={base} client={client} open={open} admitted={admitted} generation={generation} onOpenChange={vi.fn()} returnFocusRef={{current:null}}/></LocaleProvider>
+ const rendered=render(view(true,true,0));await screen.findByText("PRIVATE old")
+ if(change==="window")rendered.rerender(view(false,true,0))
+ if(change==="admission")rendered.rerender(view(true,false,0))
+ rendered.rerender(view(true,true,change==="generation"?1:0))
+ await waitFor(()=>expect(client.listHistory).toHaveBeenCalledTimes(2))
+ expect(screen.queryByText("PRIVATE old")).toBeNull()
+ expect(screen.queryByRole("button",{name:/版本 1/u})).toBeNull()
+ expect(screen.queryByRole("button",{name:"恢复"})).toBeNull()
+ const retired=client.listHistory.mock.calls[1]![2]!
+ rendered.rerender(view(true,true,2))
+ await waitFor(()=>expect(client.listHistory).toHaveBeenCalledTimes(3))
+ expect(retired.aborted).toBe(true)
+ await act(async()=>{second(page([row("late","2",true)]))})
+ expect(screen.queryByRole("button",{name:/版本 2/u})).toBeNull()
+ await act(async()=>{third(page([row("fresh","3",true)]))})
+ await screen.findByText("PRIVATE fresh")
+ expect(screen.getByRole("button",{name:/版本 3/u})).toBeInTheDocument()
 })
