@@ -132,6 +132,19 @@ it("projects missing scope fields as null", async () => {
     data: { subject: "alice", name: null, email: null, email_verified: null },
   });
 });
+it("preserves the issuer's HTTPS picture without forwarding other claims", async () => {
+  requestWithDomain.mockResolvedValue(owner({ sub: "alice", picture: "https://images.example.test/alice.png", access_token: "never-browser" }));
+  expect(await (await GET(request())).json()).toEqual({ data: {
+    subject: "alice", name: null, email: null, email_verified: null,
+    picture: "https://images.example.test/alice.png",
+  } });
+});
+it.each(["not-a-url", "https://[", "http://images.example.test/a.png", "javascript:alert(1)", "data:image/png;base64,AA", "https://user:secret@images.example.test/a.png", "https://images.example.test/" + "a".repeat(2048), 42])("omits an unsafe optional picture without losing account data (%j)", async (picture) => {
+  requestWithDomain.mockResolvedValue(owner({ sub: "alice", name: "Alice", picture }));
+  expect(await (await GET(request())).json()).toEqual({ data: {
+    subject: "alice", name: "Alice", email: null, email_verified: null,
+  } });
+});
 it.each(["?subject=forged", "?"])(
   "rejects query %s before any session I/O",
   async (suffix) => {

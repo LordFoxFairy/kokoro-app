@@ -1,6 +1,12 @@
+## 自动化创建入口（Public29候选）
+
+`kokoro-app-surface.tsx`仅从现`useScheduledLocation`识别home automation workflow，选择现ScheduledTaskSurface及原导航/header条件。创建、RSS、运行记录、编辑生命周期全归scheduled-tasks feature，不新增chat发送或engine/Run/display逻辑。项目preview桥只承接旧normal的calendar-only显式保护，编辑器原初态/字段不提供RSS，不增加真实项目排程能力。
+
 ## Project Skill 精确内容消费者
 
 `project-skill-detail-dialog.tsx` 仅捕获真实 Project 安装与原 pin，回焦 host 交给同一 Manus reader 的显式 Project 分支；列表／默认／更新／移除不换 owner。
+
+`project-skills-section.tsx` 将普通初读、搜索及分页失败显示为可见提示；“重新读取”仅调用原 `model.reload` 从当前查询首页重新 GET，保留已有卡片并禁写。命令未知结果及 ACK 后回读失败继续优先使用原意图恢复，不产生新命令。
 
 # App product surfaces
 

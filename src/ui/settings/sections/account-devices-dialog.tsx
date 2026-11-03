@@ -3,6 +3,7 @@ import { useLayoutEffect, useRef, useState } from "react"
 import { Monitor } from "lucide-react"
 import { useT, useLocale } from "@/i18n/context"
 import { Button } from "@/components/ui/button"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
 import { useAccountSessions } from "../use-account-sessions"
 import styles from "./settings-sections.module.css"
@@ -28,7 +29,7 @@ export function AccountDevicesDialog({ open, preview = false, readBoundary }: { 
     <p className={styles.devicesDescription}>{t("settings.devices.description")}</p>
     {!state.admitted ? <p role="status">{t("settings.devices.unavailable")}</p> : <>
       {state.phase === "loading" ? <p className="sr-only" role="status">{t("settings.devices.loading")}</p> : null}
-      {state.phase === "error" ? <p className="sr-only" role="status">{t(state.current ? "settings.devices.partial" : "settings.devices.error")}</p> : null}
+      {state.phase === "error" ? <Alert><AlertDescription>{t(state.current ? "settings.devices.partial" : "settings.devices.error")}</AlertDescription></Alert> : null}
       {state.notice ? <p role={state.notice === "unknown" ? "alert" : "status"}>{t(state.notice === "removed" ? "settings.devices.removed" : state.notice === "rejected" ? "settings.devices.rejected" : state.notice === "conflict" ? "settings.devices.conflict" : state.notice === "notFound" ? "settings.devices.notFound" : state.notice === "forbidden" ? "settings.devices.forbidden" : "settings.devices.unknownResult")}</p> : null}
       {state.current ? <section className={styles.deviceGroup} aria-label={t("settings.devices.current")}>
         <h2>{t("settings.devices.current")}</h2>

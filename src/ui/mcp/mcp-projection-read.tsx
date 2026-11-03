@@ -14,10 +14,12 @@ import { useT } from "@/i18n/context";
 
 import { useProviderCreationCommands, useCustomApiManagementCommands, useMcpManagementCommands, useMcpPreparationCommands, useMcpProjectPublicationCommands } from "./connector-command-context";
 import { McpConnectionList } from "./mcp-connection-list";
+import { McpReadFeedback } from "./mcp-read-feedback";
 import { McpCustomApiGallery, visibleCustomApiGalleryProfiles } from "./mcp-custom-api-gallery";
 import { McpPersonalServerGallery, visiblePersonalMcpServers } from "./mcp-personal-server-gallery";
 import { McpConnectorEditorDialog } from "./mcp-connector-editor-dialog";
 import { useMcpTrial } from "./mcp-trial-context";
+import { McpManagementStatus } from "./mcp-management-status";
 import { McpPreparationStatus } from "./mcp-preparation-status";
 import { useMcpPreparationHistory } from "./use-mcp-preparation-history";
 import { samePreparationRecord, type McpPreparationRecord } from "./mcp-preparation-recovery";
@@ -32,7 +34,7 @@ import type {
   McpConnectorEditor,
   McpProjectionView,
 } from "./mcp-projection-types";
-import { MCP_CATEGORY_MESSAGES } from "./mcp-projection-types";
+import { MCP_CATEGORY_MESSAGES, isDisconnectedMcpConfiguration, isVisibleMcpConfiguration } from "./mcp-projection-types";
 import styles from "./mcp-projection-read.module.css";
 import { CustomApiDetailDialog } from "./custom-api-detail-dialog";
 import { McpSettingsToolbar } from "./mcp-settings-toolbar";
@@ -74,6 +76,7 @@ export function McpProjectionRead({
   settingsLayout = false,
   refreshKey = 0,
   createdDetail,
+  createdApiDetail,
   catalogDialog,
 }: {
   catalogDialog?: McpCatalogDialog;
@@ -98,6 +101,8 @@ export function McpProjectionRead({
   brandName?: string;
   /** A creation window hands off its exact ACK; it does not mount another plaza. */
   createdDetail?: { target: McpServerCreationCompletion; onClose: () => void; returnFocusRef?: RefObject<HTMLElement | null> };
+  /** A safe creation locator always enters the existing fresh exact API reader. */
+  createdApiDetail?: { target: { profileId: string }; onClose: () => void; returnFocusRef?: RefObject<HTMLElement | null> };
 }) {
   const t = useT();
   const reportRead401 = useProductReadRecheck();
@@ -115,6 +120,9 @@ export function McpProjectionRead({
   const confirmedRevoked = useSyncExternalStore(management.subscribe, management.getConfirmedRevokedSnapshot, management.getConfirmedRevokedSnapshot);
   const confirmedRemoved = (connector: McpConnector) => confirmedDeletedIds.includes(connector.connector_id) ||
     confirmedRevoked.some(fact => fact.connectorId === connector.connector_id && BigInt(connector.state_version) <= BigInt(fact.stateVersion));
+  const visibleSavedConfiguration = (connector: McpConnector) => !confirmedDeletedIds.includes(connector.connector_id) &&
+    (!confirmedRemoved(connector) || isDisconnectedMcpConfiguration(connector) &&
+      confirmedRevoked.every(fact => fact.connectorId !== connector.connector_id || BigInt(connector.state_version) >= BigInt(fact.stateVersion)));
   const publication = useMcpProjectPublicationCommands(client);
   const publicationState = useSyncExternalStore(publication.subscribe, publication.getSnapshot, publication.getSnapshot);
   const commandBoundary = { subject: identity, admitted, generation: readGeneration };
@@ -138,26 +146,31 @@ export function McpProjectionRead({
   const createdFacts = createdDetail ? readCreatedMcpDetail(createdDetail.target, client, commandBoundary) : null;
   const [editor, setEditor] = useState<McpConnectorEditor | null>(() => createdFacts ? { kind: "edit", ...createdFacts } : null);
   // Only exact locators and typed input survive an admission recheck.
-  const [connectorIntent, setConnectorIntent] = useState<{ connectorId: string; providerKey?: string; serverId?: string; binding?: McpConnectorBinding; exact?: boolean; entered: boolean; window: object; configurationSaved?: object } | null>(() => createdDetail ? {
+  const [connectorIntent, setConnectorIntent] = useState<{ connectorId: string; providerKey?: string; serverId?: string; binding?: McpConnectorBinding; exact?: boolean; metadataOnly?: true; readOnlyConfiguration?: true; entered: boolean; window: object; configurationSaved?: object } | null>(() => createdDetail ? {
     ...createdDetail.target, exact: true, entered: false, window: {},
     binding: { connectorType: "mcp", serverId: createdDetail.target.serverId },
   } : null);
+  const readOnlyDetail = Boolean(connectorIntent?.readOnlyConfiguration || editor?.connector.status === "revoked");
   const [publicationIntent, setPublicationIntent] = useState<{ target: McpServerCreationCompletion; window: object; owner: typeof owner } | null>(null);
   const activePublication = publicationIntent?.owner === owner && publicationIntent.window === connectorIntent?.window ? publicationIntent : null;
   useEffect(() => {
     if (!activePublication) return;
     return () => publication.pause();
   }, [activePublication, publication]);
-  const editorWindow = useRef<{ intent: object; controller: AbortController } | null>(null);
+  const editorWindow = useRef<{ intent: object; controller: AbortController; readOnlyConfiguration: boolean } | null>(null);
   useLayoutEffect(() => {
     const window = connectorIntent?.window;
-    const wait = window ? { intent: window, controller: new AbortController() } : null;
+    const wait = window ? { intent: window, controller: new AbortController(), readOnlyConfiguration: readOnlyDetail } : null;
     editorWindow.current = wait;
     return () => {
       if (editorWindow.current === wait) editorWindow.current = null;
       wait?.controller.abort();
     };
-  }, [connectorIntent?.window, owner]);
+  }, [connectorIntent?.window, owner, readOnlyDetail]);
+  const editorCommandsBlocked = () => readOnlyDetail || editorWindow.current?.readOnlyConfiguration === true || Boolean(editor && (
+    management.getConfirmedDeletedSnapshot().includes(editor.connector.connector_id) ||
+    management.getConfirmedRevokedSnapshot().some(fact => fact.connectorId === editor.connector.connector_id &&
+      BigInt(editor.connector.state_version) <= BigInt(fact.stateVersion))));
   const preparationState = preparationStates.find(item => item.serverId === connectorIntent?.serverId && item.connectorId === connectorIntent?.connectorId);
   const [detailAttempt, setDetailAttempt] = useState<{ window: object; attempt: McpPreparationRecord } | null>(null);
   const detailBoundary = useMemo(() => ({ subject: identity, admitted, generation: readGeneration }), [identity, admitted, readGeneration]);
@@ -185,10 +198,10 @@ export function McpProjectionRead({
   const providerManagementState = managementStates.find(item => item.connectorId === selectedProviderConnectionId);
   const privateAuthorization = usePrivateMcpAuthorization({ client, identity, admitted, readGeneration,
     intent: connectorIntent,
-    blocked: Boolean((managementState && managementState.kind !== "rejected") || preparationState?.kind === "running" || preparationState?.kind === "completed"),
+    blocked: readOnlyDetail || Boolean((managementState && managementState.kind !== "rejected") || preparationState?.kind === "running" || preparationState?.kind === "completed"),
     ...(onAuthorizationNavigate ? { onAuthorizationNavigate } : {}),
   });
-  const [apiIntent, setApiIntent] = useState<{ profileId: string; window: object } | null>(null);
+  const [apiIntent, setApiIntent] = useState<{ profileId: string; window: object } | null>(() => createdApiDetail ? { profileId: createdApiDetail.target.profileId, window: {} } : null);
   const selectedCustomApiId = apiIntent?.profileId ?? null;
   const apiWindow = useRef<{ intent: object; controller: AbortController } | null>(null);
   useLayoutEffect(() => {
@@ -199,6 +212,7 @@ export function McpProjectionRead({
   }, [apiIntent?.window, owner]);
   const apiCommandState = apiManagementStates.find(item => item.profileId === selectedCustomApiId);
   const [providerQuery, setProviderQuery] = useState("");
+  const [providerRefreshOwner, setProviderRefreshOwner] = useState<typeof owner | null>(null);
   const [connectorQuery, setConnectorQuery] = useState("");
   const [localCatalogOpen, setLocalCatalogOpen] = useState(false);
   const catalogOpen = catalogDialog?.open ?? localCatalogOpen;
@@ -216,6 +230,10 @@ export function McpProjectionRead({
     setFactsOwner(owner);
     if (factsOwner.identity !== owner.identity || factsOwner.client !== owner.client) {
       setSelectedProviderKey(null); setSelectedProviderConnectionId(null); setProviderWindowToken({});
+      setApiIntent(null);
+      if (connectorIntent?.metadataOnly) {
+        setConnectorIntent(null); setDisplayName(null); setDescription(null);
+      }
     }
     setEditor(null);
     setActionId(null);
@@ -223,7 +241,7 @@ export function McpProjectionRead({
     setDeleteId(null);
   }
   const surfaceRef = useRef<HTMLElement | null>(null);
-  const editorReturnFocusRef = useRef<HTMLElement | null>(createdDetail?.returnFocusRef?.current ?? null);
+  const editorReturnFocusRef = useRef<HTMLElement | null>(createdDetail?.returnFocusRef?.current ?? createdApiDetail?.returnFocusRef?.current ?? null);
   const catalogReturnFocusRef = useRef<HTMLElement | null>(null);
   const providerReturnFocusRef = useRef<HTMLElement | null>(null);
   useLayoutEffect(() => {
@@ -245,10 +263,12 @@ export function McpProjectionRead({
     providerProjection,
     connectorProjection,
     reload,
+    providerReloading,
+    connectorReloading,
   } = useMcpProjection({
     client,
     identity,
-    admitted: admitted && !createdDetail,
+    admitted: admitted && !createdDetail && !createdApiDetail,
     readGeneration,
     cursor,
     view,
@@ -257,7 +277,7 @@ export function McpProjectionRead({
   const customApiState = useCustomApiProjection({
     client,
     identity,
-    admitted: admitted && !createdDetail,
+    admitted: admitted && !createdDetail && !createdApiDetail,
     readGeneration,
     refreshKey,
   });
@@ -267,7 +287,7 @@ export function McpProjectionRead({
 
   // Provider card artwork is rendered from owner-owned `cover_image_url` in
   // McpProviderDirectory; this coordinator never substitutes local assets.
-  const directory = useMcpProviderDirectory({ client, identity, admitted: admitted && !createdDetail, readGeneration,
+  const directory = useMcpProviderDirectory({ client, identity, admitted: admitted && !createdDetail && !createdApiDetail, readGeneration,
     seed: providerProjection, query: providerQuery, category: categoryFilter });
   const providers = [...new Map([...(providerProjection?.items ?? EMPTY_PROVIDERS), ...directory.items]
     .map(provider => [provider.provider_key, provider])).values()];
@@ -275,7 +295,8 @@ export function McpProjectionRead({
   const connectors = (connectorProjection?.items ?? []).filter(
     (connector) => !confirmedRemoved(connector),
   );
-  const relations = useMcpProviderRelations({ client, identity, admitted: admitted && !createdDetail, readGeneration, refreshKey,
+  const savedConfigurations = (connectorProjection?.items ?? []).filter(visibleSavedConfiguration);
+  const relations = useMcpProviderRelations({ client, identity, admitted: admitted && !createdDetail && !createdApiDetail, readGeneration, refreshKey,
     enabled: view === "catalog" || catalogOpen || (providerWindowToken.fromDirectory === true && selectedProviderKey !== null) });
   const addedProviderKeys = new Set(relations.items.filter(item => item.status !== "revoked" && !confirmedRemoved(item)).map(item => item.provider_key));
   const directoryConnections = relations.items.filter(item => item.provider_key === selectedProviderKey && item.status !== "revoked" && !confirmedRemoved(item));
@@ -286,17 +307,20 @@ export function McpProjectionRead({
     setSelectedProviderConnectionId(directoryConnections[0]!.connector_id, true, bindingFor(directoryConnections[0]!));
   const customApis = (customApiState.data?.items ?? []).filter(profile => !confirmedDeletedApiIds.includes(profile.profile_id));
   const providerConnectionDetail = useMcpProviderConnection({ client, identity, admitted, readGeneration,
+    window: providerWindowToken,
     connectorId: selectedProviderConnectionId ?? providerCreationState?.connectorId ?? null, providerKey: selectedProviderKey,
     ...(providerConnectionIntent?.binding ? { binding: providerConnectionIntent.binding } : {}),
     known: !providerConnectionIntent?.exact && view === "connections" && !connectorState.loading && !connectorState.error
       ? connectors.find(item => item.connector_id === selectedProviderConnectionId) : undefined, retry: detailRetry });
   const selectedProviderConnection = providerConnectionDetail.connection;
   const providerDetail = useMcpProviderDetail({ client, identity, admitted, readGeneration,
+    window: providerWindowToken,
     providerKey: selectedProviderKey, known: providers.find(item => item.provider_key === selectedProviderKey), retry: detailRetry });
   const selectedProvider = admitted && (selectedProviderConnectionId === null || selectedProviderConnection?.provider_key === selectedProviderKey)
     ? providerDetail.provider : null;
   const apiDetail = useCustomApiDetail({ client, identity, admitted, readGeneration,
-    profileId: selectedCustomApiId, known: customApiState.dataCurrent
+    window: apiIntent?.window,
+    profileId: selectedCustomApiId, known: !createdApiDetail && customApiState.dataCurrent
       ? customApis.find(item => item.profile_id === selectedCustomApiId) : undefined, retry: detailRetry });
   const selectedCustomApi = apiDetail.profile;
   const providersByKey = new Map(
@@ -317,7 +341,7 @@ export function McpProjectionRead({
     (confirmedPersonalRead?.owner !== owner || confirmedPersonalRead.items !== relations.items))
     setConfirmedPersonalRead({ owner, items: relations.items });
   const retainedPersonalRead = confirmedPersonalRead?.owner === owner ? confirmedPersonalRead.items : undefined;
-  const personalGalleryProps = { connectors: (retainedPersonalRead ?? []).filter(item => !confirmedRemoved(item)),
+  const personalGalleryProps = { connectors: (retainedPersonalRead ?? []).filter(visibleSavedConfiguration),
     admitted, confirmed: retainedPersonalRead !== undefined, query: providerQuery, category: categoryFilter };
   const hasVisiblePersonalServers = plaza && visiblePersonalMcpServers(personalGalleryProps).length > 0;
   const selectCustomApi = (profile: (typeof customApis)[number], trigger: HTMLElement) => {
@@ -327,23 +351,38 @@ export function McpProjectionRead({
     setApiIntent({ profileId: profile.profile_id, window: {} });
   };
   const customApiContinuation = <>
-    {customApiState.loadMoreError ? <span className="sr-only" role="status">{t("mcp.loadError")}</span> : null}
-    {customApiState.hasMore ? <Button type="button" variant="outline" disabled={customApiState.loadingMore}
-      aria-busy={customApiState.loadingMore} onClick={() => void customApiState.loadMore()}>
-      {t("rail.loadMore")} · API
-    </Button> : null}
+    {customApiState.loadMoreError ? <McpReadFeedback message={t("mcp.read.apiMoreError")} /> : null}
+    {customApiState.hasMore ? <Button type="button" variant="outline" disabled={!admitted || customApiState.loadingMore || customApiState.reloading}
+      aria-busy={customApiState.loadingMore || customApiState.reloading} onClick={() => {
+        if (ownerRef.current === owner && admitted) void customApiState.loadMore();
+      }}>
+      {customApiState.loadMoreError ? t("mcp.read.apiMoreRetry") : <>{t("rail.loadMore")} · API</>}
+    </Button> : customApiState.loadMoreError ? <Button type="button" variant="outline" disabled={!admitted || customApiState.reloading}
+      onClick={() => { if (ownerRef.current === owner && admitted) customApiState.reload(); }}>{t("mcp.read.apiRetry")}</Button> : null}
   </>;
 
   const connectionQuery = connectorQuery.trim().toLocaleLowerCase();
-  const hasVisibleConnection = connectors.some(connector => connector.status !== "revoked" &&
+  const hasVisibleConnection = savedConfigurations.some(connector => isVisibleMcpConfiguration(connector) &&
     (!connectionQuery || [connector.display_name, connector.description, providersByKey.get(connector.provider_key)?.display_name]
       .some(value => value?.toLocaleLowerCase().includes(connectionQuery)))) || customApis.some(profile =>
     !connectionQuery || [profile.name, profile.instructions].some(value => value?.toLocaleLowerCase().includes(connectionQuery)));
   // An unresolved head is not an empty combined directory. Retained same-scope
   // cards remain readable; existing detail/command freshness gates are unchanged.
-  const connectionResultsKnown = connectorProjection !== undefined && hasConfirmedApiRead;
-  const passiveReadFailed = view === "catalog" ? directoryError || (plaza && categoryFilter === "all" && (customApiState.error || relations.error))
-    : connectorState.error || refreshError || customApiState.error;
+  const connectionResultsKnown = connectorProjection !== undefined && !connectorState.loading && !connectorState.error &&
+    !connectorReloading && !refreshError && customApiState.dataCurrent && !customApiState.loadMoreError && !customApiState.hasMore;
+  const providerReadRetrying = (providerReloading && providerRefreshOwner !== owner) || directory.retrying;
+  const refreshProviders = () => {
+    if (ownerRef.current !== owner || !admitted || directory.loading || providerReloading) return;
+    setProviderRefreshOwner(owner);
+    if (providerQuery.trim() === "" && categoryFilter === "all") reload("providers");
+    else directory.refresh();
+  };
+  const retryProviders = () => {
+    if (ownerRef.current !== owner || !admitted) return;
+    setProviderRefreshOwner(null);
+    if (directory.error) directory.retry();
+    else reload("providers");
+  };
 
   const resetEditor = () => {
     setEditor(null);
@@ -385,9 +424,13 @@ export function McpProjectionRead({
       ? await apiManagement.submit(input, commandBoundary, wait.controller.signal)
       : await apiManagement.resume(apiIntent.profileId, commandBoundary, wait.controller.signal);
     if (!confirmed || ownerRef.current !== owner || apiWindow.current !== wait) return;
-    if (apiManagement.finish(apiIntent.profileId, commandBoundary)) setApiIntent(null);
+    if (apiManagement.finish(apiIntent.profileId, commandBoundary)) {
+      setApiIntent(null);
+      createdApiDetail?.onClose();
+    }
   };
   const runManagement = async (origin: "editor" | "provider", connectorId: string, input?: McpManagementIntent) => {
+    if (origin === "editor" && editorCommandsBlocked()) return;
     const wait = origin === "editor" ? editorWindow.current : providerWindow.current;
     const currentWindow = () => origin === "editor" ? editorWindow.current : providerWindow.current;
     const expectedWindow = origin === "editor" ? connectorIntent?.window : providerWindowToken;
@@ -417,8 +460,31 @@ export function McpProjectionRead({
     if (origin === "editor") resetEditor();
     else { setSelectedProviderKey(null); setSelectedProviderConnectionId(null); }
   };
+  // A new authorization is a separate command; the source detail stays read-only.
+  const runReauthorization = async (resume = false) => {
+    const intent = connectorIntent, wait = editorWindow.current;
+    if (!intent?.readOnlyConfiguration || !intent.serverId || !wait || wait.intent !== intent.window ||
+      !admitted || ownerRef.current !== owner || wait.controller.signal.aborted) return;
+    const pending = management.getSnapshot().find(item => item.connectorId === intent.connectorId);
+    if (resume ? pending?.operation !== "reauthorize_server" : pending !== undefined && pending.kind !== "rejected") return;
+    if (!resume && (!editor?.server || editor.server.server_id !== intent.serverId ||
+      editor.connector.connector_id !== intent.connectorId || !isDisconnectedMcpConfiguration(editor.connector) ||
+      !visibleSavedConfiguration(editor.connector) || management.getConfirmedDeletedSnapshot().includes(intent.connectorId) ||
+      management.getConfirmedRevokedSnapshot().some(fact => fact.connectorId === intent.connectorId &&
+        BigInt(editor.connector.state_version) < BigInt(fact.stateVersion)) || !preparation.recoveryReady())) return;
+    const confirmed = resume ? await management.resume(intent.connectorId, commandBoundary, wait.controller.signal)
+      : await management.submit({ operation: "reauthorize_server", connectorId: intent.connectorId, serverId: intent.serverId,
+        providerKey: editor!.connector.provider_key, input: { source_connector_id: intent.connectorId,
+          expected_server_state_version: editor!.server!.state_version, expected_connector_state_version: editor!.connector.state_version } }, commandBoundary, wait.controller.signal);
+    if (!confirmed || ownerRef.current !== owner || editorWindow.current !== wait || wait.controller.signal.aborted) return;
+    const target = management.getCompletion(intent.connectorId, commandBoundary);
+    if (!target || !management.finish(intent.connectorId, commandBoundary)) return;
+    setEditor(null); setDeleteId(null); setActionError(false); setDetailAttempt(null);
+    // Historical ACK is only a locator. This new window must read Current first.
+    setConnectorIntent({ ...target, exact: true, entered: false, window: {}, binding: { connectorType: "mcp", serverId: target.serverId } });
+  };
   const prepareDetail = async (newAttempt: boolean) => {
-    if (!admitted || ownerRef.current !== owner || !preparation.available || !connectorIntent?.serverId) return;
+    if (editorCommandsBlocked() || !admitted || ownerRef.current !== owner || !preparation.available || !connectorIntent?.serverId) return;
     const intent = connectorIntent, serverId = intent.serverId!, connectorId = intent.connectorId, window = editorWindow.current;
     if (!window || window.intent !== intent.window) return;
     const boundary = { subject: identity, admitted, generation: readGeneration };
@@ -450,7 +516,9 @@ export function McpProjectionRead({
     } catch { if (current()) setActionError(true); }
   };
   const beginEdit = (connector: McpConnector, returnFocus: HTMLElement, exact = false) => {
-    if (!owner.admitted || ownerRef.current !== owner) return;
+    if (!owner.admitted || ownerRef.current !== owner || !visibleSavedConfiguration(connector)) return;
+    const readOnlyConfiguration = isDisconnectedMcpConfiguration(connector);
+    if (readOnlyConfiguration) exact = true;
     editorReturnFocusRef.current = returnFocus;
     providerReturnFocusRef.current = returnFocus;
     setDeleteId(null);
@@ -464,13 +532,32 @@ export function McpProjectionRead({
       return;
     }
     setProviderWindowToken({});
-    setConnectorIntent({ connectorId: connector.connector_id, providerKey: connector.provider_key, exact, ...(exact ? { binding: bindingFor(connector) } : {}), ...(connector.server_id ? { serverId: connector.server_id } : {}), entered: false, window: {} });
+    setConnectorIntent({ connectorId: connector.connector_id, providerKey: connector.provider_key, exact,
+      ...(readOnlyConfiguration ? { readOnlyConfiguration: true as const } : {}),
+      ...(exact ? { binding: { ...bindingFor(connector), ...(readOnlyConfiguration ? { disconnectedVersion: connector.state_version } : {}) } } : {}),
+      ...(connector.server_id ? { serverId: connector.server_id } : {}), entered: false, window: {} });
+  };
+  const beginProviderMetadataEdit = (connector: McpConnector) => {
+    const wait = providerWindow.current;
+    if (!admitted || ownerRef.current !== owner || !wait || wait.intent !== providerWindowToken || wait.controller.signal.aborted ||
+      connector !== selectedProviderConnection || connector.provider_key !== selectedProviderKey || connector.server_id || connector.status === "revoked" ||
+      !visibleSavedConfiguration(connector) || management.isBlocked(connector.connector_id) || actionId !== null ||
+      (providerCreationState !== undefined && providerCreationState.kind !== "rejected")) return;
+    // The detail's Edit button will unmount. Return to its original live card,
+    // and suppress the replaced Provider dialog's independent close autofocus.
+    editorReturnFocusRef.current = providerReturnFocusRef.current;
+    providerReturnFocusRef.current = null;
+    setSelectedProviderKey(null); setSelectedProviderConnectionId(null); setProviderWindowToken({});
+    setEditor(null); setDisplayName(null); setDescription(null); setDeleteId(null); setActionError(false);
+    setConnectorIntent({ connectorId: connector.connector_id, providerKey: connector.provider_key,
+      exact: true, metadataOnly: true, entered: true, binding: bindingFor(connector), window: {} });
   };
   const connectorId = connectorIntent?.connectorId;
   const serverId = connectorIntent?.serverId;
   const detailHandoff = createdFacts && connectorIntent?.exact && createdFacts.server.server_id === serverId &&
     createdFacts.connector.connector_id === connectorId && createdFacts.connector.provider_key === connectorIntent.providerKey ? createdFacts : null;
   const exactEditorConnection = useMcpProviderConnection({ client, identity, admitted, readGeneration,
+    window: connectorIntent?.window,
     connectorId: connectorIntent?.exact ? connectorId ?? null : null, providerKey: connectorIntent?.providerKey ?? null,
     known: detailHandoff?.connector, retry: detailRetry, ...(connectorIntent?.binding ? { binding: connectorIntent.binding } : {}) });
   const [editorReadScope, setEditorReadScope] = useState<object | null>(() => exactEditorConnection.readScope);
@@ -481,21 +568,36 @@ export function McpProjectionRead({
     setEditorReadScope(exactEditorConnection.readScope);
     setEditor(null);
   }
-  const selectedConnector = connectorIntent?.exact ? exactEditorConnection.connection ?? undefined
+  const observedConnector = connectorIntent?.exact ? exactEditorConnection.connection ?? undefined
     : connectorProjection?.items.find(item => item.connector_id === connectorId);
-  const providerReady = Boolean(serverId) || providerProjection !== undefined;
+  const exactReadRejected = Boolean(observedConnector &&
+    (connectorIntent?.readOnlyConfiguration && !visibleSavedConfiguration(observedConnector) ||
+      connectorIntent?.metadataOnly && (observedConnector.server_id || observedConnector.status === "revoked" || !visibleSavedConfiguration(observedConnector))));
+  const selectedConnector = exactReadRejected ? undefined : observedConnector;
+  if (exactReadRejected && editor !== null) setEditor(null);
+  const providerReady = Boolean(serverId) || Boolean(connectorIntent?.metadataOnly) || providerProjection !== undefined;
   const selectedConnectorProvider = serverId ? undefined : providers.find(item => item.provider_key === selectedConnector?.provider_key);
   // Read failures are not failed commands. Scope them to this exact observation
   // so a closed/reopened editor or a new admission never inherits an old error.
   const [serverReadFailure, setServerReadFailure] = useState<{
     owner: typeof owner; window: object | undefined; connector: McpConnector;
-    serverId: string | undefined; retry: number;
+    serverId: string | undefined; retry: number; attempt: number;
   } | null>(null);
-  const serverReadFailed = serverReadFailure !== null && serverReadFailure.owner === owner &&
+  const [serverReadAttempt, setServerReadAttempt] = useState(0);
+  const serverReadPending = useRef<typeof serverReadFailure>(null);
+  const sameServerRead = serverReadFailure !== null && serverReadFailure.owner === owner &&
     serverReadFailure.window === connectorIntent?.window && serverReadFailure.connector === selectedConnector &&
     serverReadFailure.serverId === serverId && serverReadFailure.retry === detailRetry;
-  if (serverReadFailure && !serverReadFailed) setServerReadFailure(null);
+  const serverReadFailed = sameServerRead && serverReadFailure.attempt === serverReadAttempt;
+  const serverReadRetrying = sameServerRead && serverReadFailure.attempt !== serverReadAttempt;
+  if (serverReadFailure && !sameServerRead) setServerReadFailure(null);
   const editorIntentWindow = connectorIntent?.window;
+  const retryServerRead = () => {
+    if (!serverReadFailed || !serverReadFailure || serverReadPending.current === serverReadFailure ||
+      !admitted || ownerRef.current !== owner || editorWindow.current?.intent !== editorIntentWindow) return;
+    serverReadPending.current = serverReadFailure;
+    setServerReadAttempt(value => value + 1);
+  };
   useEffect(() => {
     if (!admitted || !connectorId || !selectedConnector || (!serverId && !providerReady) || detailHandoff) return;
     let active = true;
@@ -508,7 +610,7 @@ export function McpProjectionRead({
         const server = serverId && client.getPrivateMcpServer ? await client.getPrivateMcpServer(serverId, controller.signal) : undefined;
         if (!active || ownerRef.current !== owner) return;
         if (serverId && (!server || server.server_id !== serverId)) throw Error("MCP detail identity mismatch");
-        if (!server && (selectedConnectorProvider || selectedConnector.connector_type === "mcp")) {
+        if (!connectorIntent?.metadataOnly && !server && (selectedConnectorProvider || selectedConnector.connector_type === "mcp")) {
           setProviderWindowToken({});
           setSelectedProviderConnectionId(selectedConnector.connector_id);
           setSelectedProviderKey(selectedConnector.provider_key);
@@ -520,7 +622,7 @@ export function McpProjectionRead({
         setConnectorIntent(current => current?.connectorId === connectorId ? { ...current, entered: true } : current);
       } catch (error: unknown) {
         if (active && ownerRef.current === owner && !controller.signal.aborted) {
-          setServerReadFailure({ owner, window: editorIntentWindow, connector: selectedConnector, serverId, retry: detailRetry });
+          setServerReadFailure({ owner, window: editorIntentWindow, connector: selectedConnector, serverId, retry: detailRetry, attempt: serverReadAttempt });
           if (error instanceof HubClientError && error.reason === "http" && error.status === 401)
             reportRead401?.({ subject: identity, generation: readGeneration, signal: controller.signal });
         }
@@ -528,7 +630,7 @@ export function McpProjectionRead({
     };
     void read();
     return () => { active = false; controller.abort(); };
-  }, [admitted, client, connectorId, serverId, selectedConnector, selectedConnectorProvider, providerReady, detailRetry, owner, detailHandoff, reportRead401, identity, readGeneration, editorIntentWindow]);
+  }, [admitted, client, connectorId, serverId, selectedConnector, selectedConnectorProvider, providerReady, detailRetry, serverReadAttempt, owner, detailHandoff, reportRead401, identity, readGeneration, editorIntentWindow, connectorIntent?.metadataOnly]);
   const connectProvider = (
     provider: McpConnectorProvider,
     onSuccess?: () => void,
@@ -645,9 +747,9 @@ export function McpProjectionRead({
       data-embedded={embedded || undefined}
       data-settings-layout={settingsLayout || undefined}
       data-presentation={plaza ? "plaza" : undefined}
-      aria-busy={(!createdDetail && refreshing) || undefined}
+      aria-busy={(!createdDetail && !createdApiDetail && refreshing) || undefined}
     >
-      {createdDetail ? null : <>
+      {createdDetail || createdApiDetail ? null : <>
       {catalogDialog ? null : <>
       <header className={styles.header}>
         {plaza ? <h1>{t("rail.plugins")}</h1> : settingsLayout ? null : <h2>{t("rail.navPlugins")}</h2>}
@@ -664,6 +766,7 @@ export function McpProjectionRead({
              its search field beside Browse/Create. */
           showSearch={!embedded || settingsLayout}
           disabled={!admitted}
+          {...(view === "catalog" ? { onRefresh: refreshProviders, refreshing: directory.loading || providerReloading } : {})}
           onBrowse={(target) => {
             if (ownerRef.current !== owner || !admitted) return;
             if (view === "catalog" && onManageConnectors) {
@@ -681,8 +784,17 @@ export function McpProjectionRead({
         />
       </header>
       <div className={styles.body}>
-      {passiveReadFailed ? <span className="sr-only" role="status">{t("mcp.loadError")}</span>
-        : refreshing || customApiState.loading || (plaza && categoryFilter === "all" && relations.loading) ? <span className="sr-only" role="status">{t("mcp.loading")}</span> : null}
+      {refreshing || customApiState.loading || (plaza && categoryFilter === "all" && relations.loading) ? <span className="sr-only" role="status">{t("mcp.loading")}</span> : null}
+      {admitted && (view === "connections" || plaza && categoryFilter === "all") && (customApiState.error || customApiState.reloading) ?
+        <McpReadFeedback message={t("mcp.read.apiError")} retryLabel={t("mcp.read.apiRetry")} disabled={!admitted}
+          busy={customApiState.reloading} onRetry={() => { if (ownerRef.current === owner && admitted) customApiState.reload(); }} /> : null}
+      {admitted && view === "connections" && (connectorState.error || refreshError || connectorReloading) ?
+        <McpReadFeedback message={t("mcp.read.connectorsError")} retryLabel={t("mcp.read.connectorsRetry")}
+          busy={connectorReloading} onRetry={() => {
+            if (ownerRef.current !== owner || !admitted) return;
+            if (refreshError) { setRefreshError(false); setCursor(null); setHistory([]); }
+            reload("connectors");
+          }} /> : null}
       {actionError && (connectorIntent === null || !connectorIntent.entered) &&
       selectedProviderKey === null && selectedCustomApiId === null ? <ActionError /> : null}
       {admitted && connectorIntent !== null && !connectorIntent.entered &&
@@ -691,10 +803,12 @@ export function McpProjectionRead({
 
       {view === "catalog" ? (
         <div className={styles.content}>
+          {admitted && (directoryError || providerReadRetrying) ? <McpReadFeedback message={t("mcp.read.providersError")}
+            retryLabel={t("mcp.read.providersRetry")} busy={providerReadRetrying} onRetry={retryProviders} /> : null}
           <McpProviderDirectory
             providers={directory.items}
             hasMore={directory.hasMore}
-            loading={directory.loading}
+            loading={directory.loading || providerReloading}
             onLoadMore={directory.loadMore}
             {...(directory.items.length === 0 ? hasVisibleCustomApis || hasVisiblePersonalServers || directoryError || !admitted || directory.loading ||
               (plaza && categoryFilter === "all" && (customApiState.error || customApiState.loading || !relations.complete))
@@ -711,6 +825,10 @@ export function McpProjectionRead({
             onSelectProvider={openProvider}
           />
           {plaza ? <McpCustomApiGallery {...galleryProps} onSelect={selectCustomApi} /> : null}
+          {plaza && admitted && categoryFilter === "all" && (relations.error || relations.retrying) ? <McpReadFeedback message={t("mcp.read.relationsError")}
+            retryLabel={t("mcp.read.relationsRetry")} busy={relations.retrying} onRetry={() => {
+              if (ownerRef.current === owner && admitted) relations.retry();
+            }} /> : null}
           {plaza ? <McpPersonalServerGallery key={JSON.stringify([identity, readGeneration])} {...personalGalleryProps}
             providers={providers} serverMediaRevisions={getMcpServerMediaRevisions(client, identity)}
             onSelect={(connector, trigger) => beginEdit(connector, trigger, true)} /> : null}
@@ -730,7 +848,8 @@ export function McpProjectionRead({
       {view === "connections" && admitted ? managementStates.filter(item => item.kind !== "rejected" && !confirmedDeletedIds.includes(item.connectorId) && !connectors.some(connector => connector.connector_id === item.connectorId)).map(item =>
         <Button key={item.connectorId} type="button" variant="outline" className="max-w-full" onClick={event => {
           editorReturnFocusRef.current = event.currentTarget; setActionError(false); setEditor(null);
-          setConnectorIntent({ connectorId: item.connectorId, ...(item.serverId ? { serverId: item.serverId } : {}), entered: true, window: {} });
+          setConnectorIntent({ connectorId: item.connectorId, ...(item.serverId ? { serverId: item.serverId } : {}),
+            ...(item.operation === "reauthorize_server" ? { readOnlyConfiguration: true as const, exact: true } : {}), entered: true, window: {} });
         }}><span className="truncate">{t(item.kind === "completed" ? "mcp.creationDone" : "mcp.retryOriginal")} · {item.connectorId}</span></Button>) : null}
       {view === "connections" && admitted ? apiManagementStates.filter(item =>
         item.kind !== "rejected" && !confirmedDeletedApiIds.includes(item.profileId) && !customApis.some(profile => profile.profile_id === item.profileId)
@@ -743,7 +862,7 @@ export function McpProjectionRead({
           {hasVisibleConnection || connectionResultsKnown ? <McpConnectionList
             key={JSON.stringify([identity, readGeneration])}
             serverMediaRevisions={getMcpServerMediaRevisions(client, identity)}
-            connectors={connectors}
+            connectors={savedConfigurations}
             customApis={customApis}
             providers={providers}
             query={connectorQuery}
@@ -786,8 +905,12 @@ export function McpProjectionRead({
         {...(admitted && (directory.items.length > 0 || !directory.loading) ? { providers: directory.items } : {})}
         hasMore={directory.hasMore}
         onLoadMore={directory.loadMore}
-        loading={directory.loading}
+        loading={directory.loading || providerReloading}
         error={directoryError}
+        retrying={providerReadRetrying}
+        onRetry={retryProviders}
+        onRefresh={refreshProviders}
+        refreshing={directory.loading || providerReloading}
         query={providerQuery}
         categoryFilter={categoryFilter}
         returnFocusRef={catalogDialog?.returnFocusRef ?? catalogReturnFocusRef}
@@ -803,23 +926,38 @@ export function McpProjectionRead({
       {!activePublication && connectorIntent?.serverId && (connectorIntent.exact || connectorIntent.entered || editor?.server) ? (
         <CustomMcpDetailDialog
           iconClient={client.mcpIcons} iconBoundary={commandBoundary}
+          readOnlyConfiguration={readOnlyDetail}
+          onNewAuthorization={connectorIntent.readOnlyConfiguration && client.reauthorizePrivateMcpServer ? () => { void runReauthorization(); } : undefined}
+          newAuthorizationDisabled={!admitted || !editor?.server || !isDisconnectedMcpConfiguration(editor.connector) || !preparation.recoveryReady() || management.isBlocked(connectorIntent.connectorId)}
+          reauthorizationStatus={connectorIntent.readOnlyConfiguration && managementState?.operation === "reauthorize_server" ? <McpManagementStatus
+            command={managementState} admitted={admitted} onResume={() => { void runReauthorization(true); }} /> : undefined}
           key={connectorIntent.serverId}
           connector={editor?.server ? editor.connector : null}
           server={editor?.server ?? null}
-          pendingError={admitted && (serverReadFailed || (connectorIntent.exact ? exactEditorConnection.error : connectorState.error || (connectorProjection !== undefined && !selectedConnector)))}
+          pendingError={admitted && (exactReadRejected || serverReadFailed || (connectorIntent.exact ? exactEditorConnection.error : connectorState.error || (connectorProjection !== undefined && !selectedConnector)))}
+          readFeedback={admitted && (exactReadRejected || exactEditorConnection.error || exactEditorConnection.retrying || serverReadFailed || serverReadRetrying) ? <>
+            {admitted && (exactReadRejected || exactEditorConnection.error || exactEditorConnection.retrying) ? <McpReadFeedback
+              message={t("mcp.read.connectorsError")} retryLabel={t("mcp.read.connectorsRetry")}
+              busy={exactEditorConnection.retrying} onRetry={() => {
+                if (exactReadRejected && ownerRef.current === owner && admitted) setDetailRetry(value => value + 1);
+                else exactEditorConnection.retryRead();
+              }} /> : null}
+            {admitted && (serverReadFailed || serverReadRetrying) ? <McpReadFeedback message={t("mcp.loadError")}
+              retryLabel={t("mcp.retry")} busy={serverReadRetrying} onRetry={retryServerRead} /> : null}
+          </> : undefined}
           admitted={admitted}
-          publicationAvailable={editor?.server?.transport === "streamable_http" && publication.available && publicationState.recovery === "ready" && publicationState.phase !== "busy" &&
+          publicationAvailable={!readOnlyDetail && editor?.server?.transport === "streamable_http" && publication.available && publicationState.recovery === "ready" && publicationState.phase !== "busy" &&
             editor?.connector.connector_type === "mcp" && editor.server?.status !== "disabled" && editor.connector.status !== "revoked" &&
             (publicationState.phase === "idle" || publicationState.target?.serverId === editor.server?.server_id &&
               publicationState.target?.connectorId === editor.connector.connector_id && publicationState.target?.providerKey === editor.connector.provider_key)}
           publicationRecoveryError={publication.available && publicationState.recovery === "error"}
           onRetryPublicationRecovery={() => {
-            if (!connectorIntent || !admitted || ownerRef.current !== owner ||
+            if (editorCommandsBlocked() || !connectorIntent || !admitted || ownerRef.current !== owner ||
               editorWindow.current?.intent !== connectorIntent.window || publication.getSnapshot().recovery !== "error") return;
             void publication.restore(commandBoundary);
           }}
           onPublish={() => {
-            if (!editor?.server || editor.server.transport !== "streamable_http" || !connectorIntent || !admitted || ownerRef.current !== owner ||
+            if (editorCommandsBlocked() || !editor?.server || editor.server.transport !== "streamable_http" || !connectorIntent || !admitted || ownerRef.current !== owner ||
               editorWindow.current?.intent !== connectorIntent.window || !preparation.recoveryReady() ||
               management.isBlocked(editor.connector.connector_id) || privateAuthorization.busy || actionId !== null ||
               preparation.getSnapshot().some(item => item.serverId === editor.server!.server_id && item.kind !== "rejected") ||
@@ -832,10 +970,10 @@ export function McpProjectionRead({
           managementCommand={managementState}
           {...(connectorIntent.configurationSaved ? { configurationSaved: connectorIntent.configurationSaved } : {})}
           onResumeManagement={() => { if (connectorIntent) void runManagement("editor", connectorIntent.connectorId); }}
-          preparationStatus={<McpPreparationStatus view={preparationView} history={preparationHistory} disabled={!admitted || preparationView?.kind === "running"}
+          preparationStatus={readOnlyDetail ? undefined : <McpPreparationStatus view={preparationView} history={preparationHistory} disabled={!admitted || preparationView?.kind === "running"}
             onCheck={() => { void prepareDetail(false); }}
             onStop={() => {
-              if (!capturedAttempt || !connectorIntent || !editorWindow.current || editorWindow.current.intent !== connectorIntent.window) return;
+              if (editorCommandsBlocked() || !capturedAttempt || !connectorIntent || !editorWindow.current || editorWindow.current.intent !== connectorIntent.window) return;
               setDetailAttempt({ window: connectorIntent.window, attempt: capturedAttempt });
               void preparation.stopWaiting(capturedAttempt, detailBoundary, editorWindow.current.controller.signal);
             }}
@@ -846,12 +984,12 @@ export function McpProjectionRead({
           preparationCanResume={connectorIntent.serverId ? preparation.canResume(connectorIntent.serverId) : false}
           preparationRecoveryReady={preparation.recoveryReady()}
           preparationRecoveryError={preparation.recoveryFailed()}
-          onRetryPreparationRecovery={() => { void preparation.restore({ subject: identity, admitted, generation: readGeneration }); }}
+          onRetryPreparationRecovery={() => { if (!editorCommandsBlocked()) void preparation.restore({ subject: identity, admitted, generation: readGeneration }); }}
           actionId={preparationState?.kind === "running" ? connectorIntent.connectorId : actionId}
           actionError={actionError || managementState?.kind === "rejected" || privateAuthorization.error}
           authorizationBusy={privateAuthorization.busy}
           onAuthorize={() => {
-            if (!editor?.server || !connectorIntent || ownerRef.current !== owner || !admitted ||
+            if (editorCommandsBlocked() || !editor?.server || !connectorIntent || ownerRef.current !== owner || !admitted ||
               editorWindow.current?.intent !== connectorIntent.window || !preparation.recoveryReady() || management.isBlocked(editor.connector.connector_id)) return;
             const preparing = preparation.getSnapshot().find(item => item.serverId === editor.server!.server_id);
             if (preparing?.kind === "running" || preparing?.kind === "completed") return;
@@ -861,7 +999,7 @@ export function McpProjectionRead({
           returnFocusRef={editorReturnFocusRef}
           onClose={resetEditor}
           onSaveConfiguration={(input) => {
-            if (!editor?.server || !client.updatePrivateMcpServer) return;
+            if (editorCommandsBlocked() || !editor?.server || !client.updatePrivateMcpServer) return;
             const server = editor.server;
             const notesChanged = input.notes !== (server.notes ?? "");
             const nameChanged = input.display_name !== server.display_name;
@@ -888,7 +1026,7 @@ export function McpProjectionRead({
             } });
           }}
           {...(startTrial === null ? {} : { onTrial: () => {
-            if (!editor?.server || !admitted || ownerRef.current !== owner || !connectorIntent ||
+            if (editorCommandsBlocked() || !editor?.server || !admitted || ownerRef.current !== owner || !connectorIntent ||
               editorWindow.current?.intent !== connectorIntent.window || !preparation.recoveryReady() ||
               preparation.getSnapshot().some(item => item.serverId === editor.server!.server_id && item.kind !== "rejected") || management.isBlocked(editor.connector.connector_id) ||
               editor.server.availability !== "available" || editor.connector.availability !== "available" ||
@@ -899,20 +1037,26 @@ export function McpProjectionRead({
           } })}
           onPrepare={() => { void prepareDetail(false); }}
           onDisconnect={() => {
-            if (!editor) return;
+            if (editorCommandsBlocked() || !editor) return;
             void runManagement("editor", editor.connector.connector_id, { operation: "disconnect", connectorId: editor.connector.connector_id, ...(editor.server ? { serverId: editor.server.server_id } : {}), input: { expected_state_version: editor.connector.state_version } });
           }}
-          onDeleteIntent={() => editor && setDeleteId(editor.connector.connector_id)}
+          onDeleteIntent={() => { if (!editorCommandsBlocked() && editor) setDeleteId(editor.connector.connector_id); }}
           onCancelDelete={() => setDeleteId(null)}
           onDelete={() => {
-            if (!editor?.server) return;
+            if (editorCommandsBlocked() || !editor?.server) return;
             void runManagement("editor", editor.connector.connector_id, { operation: "delete_server", connectorId: editor.connector.connector_id, serverId: editor.server.server_id, input: { expected_state_version: editor.server.state_version } });
           }}
         />
       ) : null}
       <McpConnectorEditorDialog
         open={Boolean(connectorIntent?.entered && !connectorIntent.serverId)}
-        pendingError={admitted && (serverReadFailed || connectorState.error || (connectorProjection !== undefined && !selectedConnector))}
+        pendingError={admitted && (exactReadRejected || exactEditorConnection.error || serverReadFailed || connectorState.error || (connectorProjection !== undefined && !selectedConnector))}
+        readFeedback={connectorIntent?.metadataOnly && admitted && (exactReadRejected || exactEditorConnection.error || exactEditorConnection.retrying) ? <McpReadFeedback
+          message={t("mcp.read.connectorsError")} retryLabel={t("mcp.read.connectorsRetry")} busy={exactEditorConnection.retrying}
+          onRetry={() => {
+            if (exactReadRejected && ownerRef.current === owner && admitted) setDetailRetry(value => value + 1);
+            else exactEditorConnection.retryRead();
+          }} /> : undefined}
         editor={
           editor?.server ? null : editor
         }
@@ -948,6 +1092,14 @@ export function McpProjectionRead({
       <McpProviderDetailDialog
         open={selectedProviderKey !== null}
         pendingError={admitted && (providerDetail.error || providerConnectionDetail.error)}
+        readFeedback={admitted && (providerDetail.error || providerDetail.retrying || providerConnectionDetail.error || providerConnectionDetail.retrying) ? <>
+          {admitted && (providerDetail.error || providerDetail.retrying) ? <McpReadFeedback
+            message={t("mcp.read.providersError")} retryLabel={t("mcp.read.providersRetry")}
+            busy={providerDetail.retrying} onRetry={providerDetail.retryRead} /> : null}
+          {admitted && (providerConnectionDetail.error || providerConnectionDetail.retrying) ? <McpReadFeedback
+            message={t("mcp.read.connectorsError")} retryLabel={t("mcp.read.connectorsRetry")}
+            busy={providerConnectionDetail.retrying} onRetry={providerConnectionDetail.retryRead} /> : null}
+        </> : undefined}
         admitted={admitted}
         creationCommand={providerCreationState}
         onResumeCreation={() => { if (selectedProvider) connectProvider(selectedProvider); }}
@@ -984,6 +1136,7 @@ export function McpProjectionRead({
           const serverId = provider.connection_server_id;
           if (serverId) restartAuthorization(connection, serverId);
         }}
+        onEditConnection={beginProviderMetadataEdit}
         onToggleEnabled={(connection) => void runManagement("provider", connection.connector_id, { operation: "set_enabled", connectorId: connection.connector_id, ...(connection.server_id ? { serverId: connection.server_id } : {}), input: { enabled: !connection.enabled, expected_state_version: connection.state_version } })}
         onRemoveConnection={(connection) => void runManagement("provider", connection.connector_id, { operation: "disconnect", connectorId: connection.connector_id, ...(connection.server_id ? { serverId: connection.server_id } : {}), input: { expected_state_version: connection.state_version } })}
         {...(onPrompt ? { onPrompt: (prompt: string) => { if (ownerRef.current === owner && admitted) onPrompt(prompt); } } : {})}
@@ -1000,9 +1153,12 @@ export function McpProjectionRead({
           canRemove={apiManagement.canRemove}
           onResume={() => { void runApiManagement(); }}
           pendingError={admitted && apiDetail.error}
+          readFeedback={admitted && (apiDetail.error || apiDetail.retrying) ? <McpReadFeedback
+            message={t("mcp.read.apiError")} retryLabel={t("mcp.read.apiRetry")}
+            busy={apiDetail.retrying} onRetry={apiDetail.retryRead} /> : undefined}
           actionError={apiCommandState?.kind === "rejected"}
           returnFocusRef={editorReturnFocusRef}
-          onClose={() => setApiIntent(null)}
+          onClose={() => { setApiIntent(null); createdApiDetail?.onClose(); }}
           onSave={(input) => {
             if (!selectedCustomApi) return;
             void runApiManagement({ operation: "update", profileId: selectedCustomApi.profile_id, input });

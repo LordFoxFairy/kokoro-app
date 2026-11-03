@@ -212,6 +212,7 @@ export async function readAccountProfile(request: Request): Promise<Response> {
           name: profile.data.name ?? null,
           email: profile.data.email ?? null,
           email_verified: profile.data.email_verified ?? null,
+          ...(profile.data.picture ? { picture: profile.data.picture } : {}),
         },
       },
       { headers },

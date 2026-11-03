@@ -1,3 +1,47 @@
+## 2026-11-03 B-08 Public29.3 个人材料容量失败（候选）
+
+唯一完整来源为 BFF 1e6765b3230d55fa17d0f6aa989278b97d00f338 / Public29.3.0，SHA256 4f27adbea9a63c36d8b11e95c9dde342a6e8d662cab77cb42091384f3b17e333。仅新增 context_window_exceeded / retryable=false；发送前413 personal_context_too_large 沿原公开错误 code 通路消费。十二条 fullsource recipe 与原分享 browser projection 正规更新；test-only 精确逆回29.2后沿未改历史证明，不重签旧 oracle，不产生 runtime fallback。
+
+## 2026-11-02 TeamRole.skill 完整闭集消费
+
+正式完整源为 BFF `8ae73fde765ba55a77679c36199dcc9c1553fa11` / Public29.2.0 / SHA256 `df5a33d4fa33662e4f70967bf5db60033f71f29511bf5975aa2395d61abb3e9c`。TeamRole 的 skill 动作仅补 `delete_series`，未知域、未知动作、空权限数组及其余原约束仍拒绝；九个 Team operation、请求、取消与命令恢复不变。
+
+同一正式提交的分享 projection 原字节 SHA256 为 `00c1dae24de9aa9f0d5631fd24019584bbbfc53def41c52cbecf4b12eb6c027d`，原 GET/decoder 语义不变，仅来源同步。唯一 full snapshot 与原生成链保持单源；本次不建立独立 Team 投影，不改固定 ProjectSkill download policy3。
+
+## 2026-11-02 B-10 会话分享 metadata 消费（候选）
+
+新读取为 GET /api/session/sessions/{id}/share，精确 adapter 仅转正式 GET /v1/sessions/{id}/share；scope=direct 或 project_ref 沿真实 SessionScope，主体来自原 Product Session。拒 body/命令头/未知重复 query；首末同 session 核验与总10秒/1MiB/raw UTF8重复key/完整EOF限制保持。200 平面 data 为 {share:null|{share_id,created_at,expires_at}}；404/读错不当未分享。浏览器无内部凭据；无写入、自动发布或撤销。
+
+正式 BFF2e737cad9649460dc477fc7d96ba593783fef619 / contract/openapi/browser/v1/session-share-metadata.json / SHA112d6e9be1f3969b7820f85a06e627966b72d669b02898d7f57f64e18d03bb2f 通过具名正规 generator 生成类型/decoder，canonical29.1源摘要4e4ce620887b1a1a431a9346d0d259aa5bed3bd5af06f4428f11e9054173418e。原29原件与旧三操作SDK不更新、不宣称它们覆盖本新增GET；本投影是owner正式单源派生，未增加协议分支。显式POST/DELETE仍原 wire/幂等语义，成功/未知之后仅GET核现事实，不自动重试写。
+
+## 2026-11-02 B-01 私有 MCP 新授权消费者（候选）
+
+新增独立 browser-private profile，原件固定 BFF `e3b5fb759ee89523918ac06ebf3a738b4df4e346`，`contract/openapi/browser/v1/mcp-reauthorization.json`，SHA256 `196ce32b86cd20492fb4b368bf59c4a8640c62a24afb3e630e81b90eb4234caa`；Platform owner `2cf63945feecd49f5b79c3532bbd7cbc5b70a3f8`。`scripts/generate-bff-mcp-reauthorization.mjs` 从该固定原件生成 decoder；Public29、Prepare/receipt、图标及其它独立 pin 不漂移。
+
+浏览器显式 POST `/api/hub/mcp/servers/{server_id}/reauthorize` 沿现同源窄 adapter → BFF `/browser/v1/mcp/servers/{server_id}/reauthorize`，保原 Product Session、CSRF、no-store、Idempotency-Key、有限读及可信身份。闭集请求仅 source_connector_id 与两个 expected_*_state_version；重试保原 target/key/body。ACK 必须 pending/disabled 新身份、connector state1、server CAS+1 且精确 server 绑定，严格 error tuple/重复 JSON key/未知字段拒绝。历史 replay 不是 Current 或连接授权，命令成功后另行 fresh GET；没有新 receipt GET、自动 Prepare/OAuth、任意 proxy 或旧身份复活。
+
+## Public29 与 ScheduledTask 消费（2026-11-02，候选）
+
+正式BFF7e4ab1cee8f8d45a34902176cd15a10f3c4b22cb，原件SHA258bde9c39f785667cb205976e1547d1cf2c9662a5a2d7f356c4b11e807fcaf7 /29.0.0。200操作保199原操作，新增GET /v1/scheduled-task-runs；12public正规生成、5private/profile与policy3独立固定。项目资源下载只变owner说明的20秒预算，本片不借说明扩写Web下载或其它A契约。
+
+现ScheduledTask读/创建/完整trigger PATCH显式calendar或rss；calendar保完整frequency/time/timezone与所选规则，rss保feed_url/conditions并排除日历字段。命令ACK仅immutable definition，poll状态须fresh details；next_run_at对RSS必为null。浏览器GET /api/scheduled-task-runs沿同源薄桥进入owner既有GET，公开闭集data/items/next_cursor，calendar九位scheduled_for、RSS null+observed_at分开；opaque cursor不授租户/账户权限。保存/未知重试沿原Idempotency-Key/body，不通过adapter补trigger_kind，不引入旧wire fallback。
+
+## 2026-11-02 B-01 精确详情 GET 恢复
+
+无 public / same-origin / owner wire、pin 或命令契约变化。显式重试只调用当前失败的既有 exact GET；成功读取不重刷，创建/保存/Prepare 不重放。API detail 当前 typed HTTP401 沿既有 ProductReadRecheck 传原主体、代际、signal；403、parse/network及退休响应不冒登录过期或业务成功。
+
+## 2026-11-01 B-14 Manifest 客户端读取期限
+
+无public/same-origin/owner wire、请求参数、manifest值或契约pin变化。浏览器现GET的fetch与body共用20秒绝对期限；期限失败只更新本地source:error/PRODUCT默认与retrying，显式retry仍是原同源GET。离页/preview/newattempt取消静默，外来AbortError不冒当前主动取消。
+
+## 2026-11-01 B-01 读取恢复内部状态
+
+无网络契约、Hub wire 或 owner API 变化。局部重试只使用既有 GET reader；typed401仍由现 ProductReadRecheck 持原主体/代际/信号处理，503/403/解析故障不伪装成功。新增 attempt/pending 仅防止同窗口重击，不改变原 reader 请求 body、cursor、cache 与正式错误语义。
+
+## 2026-11-01 B-01 创建详情衔接的内部状态
+
+无BFF、同源、Capability或机器契约增改。createCustomApi与importPrivateMcpJson继续由现Hub严格验证ACK；UI仅消费已确认安全locator，JSON1..32项保持原顺序和精确绑定。未知结果/取消仍按原body/key显式恢复；完成回调不授权限、不重放写入。详情必须经现正式exact GET取当前事实，读失败不伪造ready或保存成功。
+
 ## Custom API发送与私有恢复（正式Public28.17消费者候选）
 
 固定BFF853ca9a5d8da3500b0c37543c72198a520e46225，唯一全snapshot SHAea0031103488daa1fcc0cca45fdd13f4d4061546ac4525c745ec47105649f7e7。MessageCreateRequest与private composer_selection均可选selected_custom_api_profiles:[{profile_id,expected_state_version}]，≤32／profileID唯一／closed；版本为整数1..2147483647，不接字符串、分数、零、溢出、说明或凭据。原generator派生schema同时用于发送、本地原K恢复、snapshot decoder；空选择省略保持原无选择JSON/digest。
@@ -774,11 +818,13 @@ JSON导入仅提示当前owner支持的HTTP格式，不预填命令，窄短视�
 ## T-K03.14-WEB-SHARE D0（目标，尚未实施）
 BFF正式 `e1769b56aefa2e00e6460195c049cea81a9eea3b` / public `13.3.0` / 137 operations / canonical SHA256 `0a9683b38cfd30534931dd0cd7821e3ccded94d6d15613a711cebc1f1e83a209`；Platform `91bc3655ebd3648cb8f8ccddfacb5628bdeb1c5c`。 机器唯一事实源为正式BFF `contract/openapi/v1/openapi.yaml`；原Resolve六字段及现series GetSkill不变。
 
-闭集同源：POST `/api/hub/skill-shares`→POST `/v1/skill-shares`；GET `/api/hub/skill-shares/{share_id}`→GET正式同路径；GET `/api/hub/skill-shares/{share_id}/skill`→GET正式nested路径。拒其它method/segment/query、GET body及任何Idempotency-Key。POST只接受strict source_ref/可选expires_at，无自动重试；无DELETE UI，owner撤销资格不扩大。
+闭集同源：POST `/api/hub/skill-shares`→POST `/v1/skill-shares`；GET／DELETE `/api/hub/skill-shares/{share_id}`→正式同方法同路径；GET `/api/hub/skill-shares/{share_id}/skill`→GET正式nested路径。拒其它method/segment/query、GET body及任何Idempotency-Key；DELETE只接受content-length缺省或规范0、拒transfer-encoding并要求可信Origin；对Next空流在同一10秒总预算内实际读至EOF并核零字节后才转发，不带body/framing。POST只接受strict source_ref/可选expires_at，无自动重试。DELETE消费既有Public29.2 owner方法，不扩大creator撤销资格。
+
+详情仅管理当前主体显式Create ACK对应的链接，不以技能作者推断share creator。缓存链接复制前Resolve；撤销确认取消零写、pending禁重，严格200六字段ACK必须为原share_id／source_ref、同源精确URL且revoked_at非null。未知只GET原ID恢复，404只表示不可用、不冒本人撤销成功，200只表示仍有效、不自动复制或重放DELETE。主体／资源／窗口／准入退休后拒迟到投影；硬刷新无权威ACK时须由用户显式分享取得本人的active ACK，不造listing。
 
 成功strict `{data:...}`：Create201/Resolve200的share_id/source_ref/url/created_at/expires_at/revoked_at完整六字段，创建核原source_ref且未撤销/未过期；url只接受当前可信浏览器同源、exact `/skills/shared/encodeURIComponent(share_id)`、零query/fragment，不改写服务端URL。Nested200精确share_id/source_ref/skill；skill含实际skill_id/series_id/decimalrevision/display_name/description/tags/example_prompts/category_keys/created_at/updated_at/owner_type/source_kind，optional original_name/author/cover_image，按机器strict，不接受private locators/current/installed/usage或未知字段；source_ref=skill:skill_id，cover仅actualUID path rewrite。
 
-错误按正式三个operation各自response.status与SkillProductErrorResponse实际闭集，不通用enum×任意status、不把IAM失效当notfound；保request-id/no-store/Retry-After存在时合法校验。无conversation匿名读取，分享页可信session未admitted不发业务；anonymous显式正规login return_to，unavailable可重试且不授权。
+错误按正式Create／Resolve／Summary／Revoke各自response.status与SkillProductErrorResponse实际闭集，不通用enum×任意status、不把IAM失效当notfound；保request-id/no-store/Retry-After存在时合法校验。无conversation匿名读取，分享页可信session未admitted不发业务；anonymous显式正规login return_to，unavailable可重试且不授权。
 
 每次JSON含fetch/body总10秒、累计1MiB/fatalUTF8、finally cancel/clear/迟到body cleanup；同源adapter保持Origin、在线session、可信tenant/subject、取消/timeout、请求body≤65,536bytes。分享reader沿现revision package GET/file_path闭集与既有字节预算，不扩任意转发。return-target新增仅canonical `/skills/shared/{合法share_id}`，无query/fragment/外链/双decode；新页不借/shared conversation。
 
@@ -2362,6 +2408,8 @@ id and does not resend POST.
 沿用唯一现有 browser-private `/api/hub/preferences/personalization` → BFF `/v1/preferences/personalization`，GET 返回 personalization(nullable)/revision，PUT 四字段与 expected_revision，冲突码 personalization_revision_conflict。不新增 owner API、公开版本、generated pin 或 alias。昵称128、职业256、about2000、instructions8000的Unicode码点上限保持；编辑与响应校验使用同一规则，不使用UTF-16 maxLength。snapshot revision为非负safe integer，null iff revision0；PUT ACK必须四字段匹配且revision精确expected+1，不能接受跳跃。client 接收 AbortSignal，10s总deadline涵盖fetch与body、响应限64KiB；超时仅取消当前request、迟到body清理，不取消编辑session或自动重试。取消/迟到结果不得推进当前草稿或显示保存成功。首次读取失败不具备写入基准，禁止 PUT；冲突必须显式恢复，未知写结果保原草稿及状态，不自动换revision重放。
 
 ## SET-07：本人资料 browser-private projection
+
+2026-11-03：此私有成功投影额外允许可选 `picture`（HTTPS URL，最长 2048 字符、禁止 URL 用户名/密码），只来源于原 IAM userinfo 同名 claim。缺失/非法的可选图片省略；无图片旧响应保持兼容，其他未知字段仍不透传。图片只由浏览器匿名且不发送 referrer 加载，失败回落到首字母；不新增头像写入 API，也不改变姓名更新 body 或 BFF 发行物。
 
 唯一新Web入口GET /api/account/profile，不是新的公开Product或IAM业务API；禁止query/body，canonical Web请求，GET以外不提供动作。调用现BFF /v1/me在线准入与/iam/oauth2/userinfo；不直接访问IAM。成功仅{data:{subject,name,email,email_verified}}，后3字段可为null，姓名/邮箱缺scope不是匿名或伪造默认值；userinfo sub与Product subject必须一致。其他IAM字段不透传，包含token、credential、cookie、Location或原始error body均不得回浏览器。
 

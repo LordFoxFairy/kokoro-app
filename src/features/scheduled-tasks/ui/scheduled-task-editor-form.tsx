@@ -44,7 +44,6 @@ export function ScheduledTaskEditorForm({
         />
         <ScheduledTaskEditorOptions
           state={state}
-          setState={setState}
         />
       </fieldset>
       {saveError ? (

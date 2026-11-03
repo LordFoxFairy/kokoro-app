@@ -1,3 +1,4 @@
+import { mcpReauthorizationRequestSchema, mcpReauthorizationEnvelopeMatches, mcpReauthorizationErrorAllowed } from "@/hub/mcp-reauthorization.schema";
 import { proxyProjectSkillContent } from "@/lib/server/project-skill-content";
 import { mcpPrepareReceiptRequest, mcpPrepareReceiptMatches, mcpPrepareReceiptErrorAllowed, mcpPreparePostErrorAllowed, mcpPrepareReceiptLookupOnly } from "@/hub/mcp-prepare-receipt.schema";
 import { proxyProjectPins } from "@/lib/server/project-pins";
@@ -433,13 +434,15 @@ async function proxyMcpConnector(
   const receiptPath = path.length === 4 && path[1] === "servers" && path[3] === "prepare-receipt";
   if (receiptPath && request.method !== "GET") return fail(405, "invalid_mcp_personal_request");
   const receiptOperation = receiptPath && request.method === "GET";
+  const reauthorizationOperation = path.length === 4 && path[1] === "servers" && path[3] === "reauthorize" && request.method === "POST";
   const operation:
     | McpConnectorOperation
     | McpConnectorAuthorizationOperation
     | McpPrivateServerOperation
     | McpIconOperation
     | "prepareReceipt"
-    | undefined = receiptOperation ? "prepareReceipt" : iconOperation ?? (
+    | "reauthorizeServer"
+    | undefined = reauthorizationOperation ? "reauthorizeServer" : receiptOperation ? "prepareReceipt" : iconOperation ?? (
     path.length === 3 &&
       path[1] === "servers" &&
       path[2] === "import" &&
@@ -552,6 +555,7 @@ async function proxyMcpConnector(
     "getIcon",
   ].includes(operation);
   const requiresIdempotency = [
+    "reauthorizeServer",
     "create",
     "update",
     "enabled",
@@ -578,7 +582,7 @@ async function proxyMcpConnector(
       "beginAuthorization",
       "reconnectAuthorization",
     ].includes(operation) ||
-    ["prepareServer", "prepareReceipt", "updateServer", "deleteServer", "getIcon", "completeIcon", "cancelIcon"].includes(operation)
+    ["reauthorizeServer", "prepareServer", "prepareReceipt", "updateServer", "deleteServer", "getIcon", "completeIcon", "cancelIcon"].includes(operation)
       ? path[2]
       : undefined;
   const query = url.searchParams;
@@ -686,7 +690,7 @@ async function proxyMcpConnector(
             : "invalid_mcp_personal_request",
         );
       }
-      const accepted = iconOperation && iconOperation !== "getIcon" ? mcpIconInputs[iconOperation].safeParse(input).success : authorization
+      const accepted = reauthorizationOperation ? mcpReauthorizationRequestSchema.safeParse(input).success : iconOperation && iconOperation !== "getIcon" ? mcpIconInputs[iconOperation].safeParse(input).success : authorization
         ? operation === "beginAuthorization" ||
           operation === "reconnectAuthorization"
           ? mcpConnectorAuthorizationRequestSchema.safeParse(input).success
@@ -791,7 +795,7 @@ async function proxyMcpConnector(
     let raw: unknown;
     try {
       const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-      raw = receiptOperation ? parseMcpConnectorJson(text) : JSON.parse(text);
+      raw = receiptOperation || reauthorizationOperation ? parseMcpConnectorJson(text) : JSON.parse(text);
     } catch {
       return fail(502, "mcp_personal_response_invalid");
     }
@@ -810,7 +814,7 @@ async function proxyMcpConnector(
           : operation;
     const valid =
       upstream.status === expected
-        ? receiptOperation ? mcpPrepareReceiptMatches(raw, id!, receiptVersion!) : iconOperation ? mcpIconMatches(iconOperation, raw, id, input) : authorization
+        ? reauthorizationOperation ? mcpReauthorizationEnvelopeMatches(raw, id!, input) : receiptOperation ? mcpPrepareReceiptMatches(raw, id!, receiptVersion!) : iconOperation ? mcpIconMatches(iconOperation, raw, id, input) : authorization
           ? mcpConnectorAuthorizationMatches(
               operation as McpConnectorAuthorizationOperation,
               raw,
@@ -833,7 +837,7 @@ async function proxyMcpConnector(
                 query,
                 input,
               )
-        : receiptOperation ? mcpPrepareReceiptErrorAllowed(upstream.status, raw) : operation === "prepareServer" ? mcpPreparePostErrorAllowed(upstream.status, raw) : authorization
+        : reauthorizationOperation ? mcpReauthorizationErrorAllowed(upstream.status, raw) : receiptOperation ? mcpPrepareReceiptErrorAllowed(upstream.status, raw) : operation === "prepareServer" ? mcpPreparePostErrorAllowed(upstream.status, raw) : authorization
           ? mcpConnectorErrorAllowed("authorization", upstream.status, raw)
           : mcpConnectorErrorAllowed(
               connectorOperation as McpConnectorOperation,
@@ -1660,11 +1664,13 @@ async function proxySkillShare(
       ? "download"
       : path.length === 1 && request.method === "POST"
         ? "create"
-        : path.length === 2 && request.method === "GET"
-          ? "resolve"
-          : path.length === 3 && path[2] === "skill" && request.method === "GET"
-            ? "summary"
-            : undefined;
+        : path.length === 2 && request.method === "DELETE"
+          ? "revoke"
+          : path.length === 2 && request.method === "GET"
+            ? "resolve"
+            : path.length === 3 && path[2] === "skill" && request.method === "GET"
+              ? "summary"
+              : undefined;
   if (
     !operation ||
     path[0] !== "skill-shares" ||
@@ -1678,13 +1684,14 @@ async function proxySkillShare(
   if (
     operation !== "create" &&
     operation !== "download" &&
+    operation !== "revoke" &&
     (request.body !== null ||
       request.headers.has("content-length") ||
       request.headers.has("transfer-encoding"))
   )
     return fail("invalidSkillRequest");
   if (
-    operation === "download" &&
+    (operation === "download" || operation === "revoke") &&
     (request.headers.has("transfer-encoding") ||
       (request.headers.has("content-length") &&
         request.headers.get("content-length") !== "0"))
@@ -1701,6 +1708,7 @@ async function proxySkillShare(
   if (
     (operation === "create" ||
       operation === "download" ||
+      operation === "revoke" ||
       request.headers.has("origin")) &&
     request.headers.get("origin") !== config.session.webOrigin
   )
@@ -1738,7 +1746,7 @@ async function proxySkillShare(
           joined.throwIfAborted();
           if (part.done) break;
           count += part.value.byteLength;
-          if (operation === "download" && count > 0)
+          if ((operation === "download" || operation === "revoke") && count > 0)
             return fail("invalidSkillRequest");
           if (count > MAX_SKILL_COMMAND_BYTES) return fail("tooLarge");
           chunks.push(part.value);

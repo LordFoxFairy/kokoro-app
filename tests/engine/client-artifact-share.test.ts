@@ -58,3 +58,41 @@ it('an already retired createShare dispatches zero requests',async()=>{
  const signal=new AbortController();signal.abort();const fetcher=vi.fn();vi.stubGlobal('fetch',fetcher)
  await expect(createSessionClient({baseUrl:'/api/session'}).createShare('ses_1',signal.signal)).rejects.toThrow();expect(fetcher).not.toHaveBeenCalled()
 })
+
+
+it("reads exact scoped metadata with GET, no command headers, and validates nullable share", async () => {
+  const fetcher = vi.fn().mockResolvedValue(jsonResponse({ share: null }))
+  vi.stubGlobal("fetch", fetcher)
+  const controller = new AbortController()
+  expect(await createSessionClient({ baseUrl: "/api/session" }).readShare("opaque/old", { scope: { kind: "project", projectRef: "project/one" }, signal: controller.signal })).toEqual({ share: null })
+  expect(fetcher.mock.calls[0]![0]).toBe("/api/session/sessions/opaque%2Fold/share?project_ref=project%2Fone")
+  expect(fetcher.mock.calls[0]![1]).toMatchObject({ method: "GET", redirect: "error", cache: "no-store" })
+  expect(new Headers(fetcher.mock.calls[0]![1].headers).has("idempotency-key")).toBe(false)
+})
+it("retains a typed metadata 401/404 instead of returning private", async () => {
+  for (const status of [401, 404]) {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ error: { code: status === 401 ? "session_invalid" : "session_not_found", message: "Unavailable" }, meta: { request_id: "fixture-share" } }, status)))
+    await expect(createSessionClient({ baseUrl: "/api/session" }).readShare("ses_1", { scope: { kind: "direct" }, signal: new AbortController().signal })).rejects.toMatchObject({ status, reason: "http" })
+  }
+})
+it("metadata GET covers a hung body in its deadline and cancels the reader", async () => {
+  vi.useFakeTimers()
+  const cancel = vi.fn()
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(new ReadableStream({ cancel }), { headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "fixture-share" } })))
+  const pending = createSessionClient({ baseUrl: "/api/session" }).readShare("ses_1", { scope: { kind: "direct" }, signal: new AbortController().signal })
+  const rejected = expect(pending).rejects.toThrow()
+  await vi.advanceTimersByTimeAsync(10_001)
+  await rejected
+  expect(cancel).toHaveBeenCalledTimes(1)
+})
+it("a cancelled metadata read cancels a late response without publishing it", async () => {
+  let resolveFetch!: (response: Response) => void
+  const cancel = vi.fn(), controller = new AbortController()
+  vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(resolve => { resolveFetch = resolve })))
+  const pending = createSessionClient({ baseUrl: "/api/session" }).readShare("ses_1", { scope: { kind: "direct" }, signal: controller.signal })
+  const rejected = expect(pending).rejects.toThrow()
+  controller.abort(); await rejected
+  resolveFetch(new Response(new ReadableStream({ cancel }), { headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "fixture-share" } }))
+  await new Promise(resolve => setTimeout(resolve, 0))
+  expect(cancel).toHaveBeenCalledTimes(1)
+})

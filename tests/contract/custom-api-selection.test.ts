@@ -4,9 +4,9 @@ import { expect, it } from "vitest"
 import { messageCreateParamsSchema, parseSessionSnapshot, parseSharedSessionSnapshot } from "@/contract/chat"
 import { restorePublic2816CustomApiSelectionContract } from "./bff-custom-api-selection-parent"
 import { makeSnapshot } from "../core/fixtures"
-it("consumes the exact formal full Public28.17 and restores every original Public28.16 byte", async () => {
+it("consumes the exact formal full Public29 and restores every original Public28.16 byte", async () => {
   const raw = await readFile("src/generated/bff-public-openapi.yaml", "utf8"), hash = (value: string) => createHash("sha256").update(value).digest("hex")
-  expect(hash(raw)).toBe("ea0031103488daa1fcc0cca45fdd13f4d4061546ac4525c745ec47105649f7e7")
+  expect(hash(raw)).toBe("4f27adbea9a63c36d8b11e95c9dde342a6e8d662cab77cb42091384f3b17e333")
   expect(hash(restorePublic2816CustomApiSelectionContract(raw))).toBe("82485c2b7be17ad04f56d3656a58b42ea8d308c9dc22db5807a09ab706418a77")
   for (const bad of [raw + "\n", raw.replace("selected_custom_api_profiles:", "unreviewed_profiles:"), raw.replace("getMessageFeedback", "wrongFeedback")]) expect(() => restorePublic2816CustomApiSelectionContract(bad)).toThrow()
 })

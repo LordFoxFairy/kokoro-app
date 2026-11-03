@@ -56,6 +56,7 @@ function ScheduledTaskEditorDialogBridge({ open, onOpenChange, brandName, onSave
   const save = onSave === undefined
     ? undefined
     : async (value: ScheduledTaskEditorValue): Promise<void> => {
+      if (value.triggerKind !== "calendar") throw new Error("Project preview supports calendar tasks only")
       const { expiresAt, ...draft } = value
       await onSave({ ...draft, ...(typeof expiresAt === "string" ? { expiresAt } : {}) })
     }

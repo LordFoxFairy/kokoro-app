@@ -74,6 +74,7 @@ export function usePersonalization(
   });
   const active = (s: Session) =>
     session.current === s &&
+    s.scope === scope &&
     currentScope.current === s.scope &&
     !s.controller.signal.aborted;
   const publish = (s: Session) => {

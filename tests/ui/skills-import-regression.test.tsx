@@ -257,14 +257,16 @@ it("keeps confirmed installed cards on same-scope refresh failure and retires th
   expect(screen.getByRole("searchbox", { name: "搜索技能" })).toBeVisible()
 })
 
-it("keeps the catalog read container unknown on failure, and confirmed cursor cards survive paging errors with ordinary Load more", async () => {
+it("recovers a visibly failed catalog read without losing confirmed cursor cards or replaying writes", async () => {
   __resetResourceStore()
   vi.stubGlobal("IntersectionObserver", class { observe() {} unobserve() {} disconnect() {} takeRecords() { return [] } })
   const base = createPreviewHubClient(), catalog = await base.listSkillCatalog()
   const first = { ...catalog.skills[0]!, name: "Retained cursor card" }
   let rejectInitial!: (error: Error) => void
-  const initialClient = { ...base, listSkillCatalog: vi.fn(() => new Promise<typeof catalog>((_, reject) => { rejectInitial = reject })) }
-  const content = (client: typeof base) => <LocaleProvider><SkillCatalogDialog open inline client={client} enabledOverrides={new Map()} installedOverrides={new Map()} busy={null} errorName={null} onOpenChange={vi.fn()} onCloseAutoFocus={vi.fn()} onOpenUpload={vi.fn()} onOpenGithub={vi.fn()} onSetEnabled={vi.fn()} onOpenDetail={vi.fn()} /></LocaleProvider>
+  const initialRead = vi.fn().mockImplementationOnce(() => new Promise<typeof catalog>((_, reject) => { rejectInitial = reject })).mockResolvedValue({ ...catalog, skills: [first] })
+  const initialClient = { ...base, listSkillCatalog: initialRead }
+  const onSetEnabled = vi.fn()
+  const content = (client: typeof base) => <LocaleProvider><SkillCatalogDialog open inline client={client} enabledOverrides={new Map()} installedOverrides={new Map()} busy={null} errorName={null} onOpenChange={vi.fn()} onCloseAutoFocus={vi.fn()} onOpenUpload={vi.fn()} onOpenGithub={vi.fn()} onSetEnabled={onSetEnabled} onOpenDetail={vi.fn()} /></LocaleProvider>
   const view = render(content(initialClient))
   const list = screen.getByTestId("skills-catalog-scroll")
   expect(view.container.querySelector('[data-slot="skeleton"]')).toBeNull()
@@ -272,7 +274,13 @@ it("keeps the catalog read container unknown on failure, and confirmed cursor ca
   await act(async () => { rejectInitial(Error("controlled unknown catalog")) })
   expect(screen.getByTestId("skills-catalog-scroll")).toBe(list)
   expect(screen.queryByTestId("skills-catalog-empty")).toBeNull()
-  expect(screen.queryByRole("button", { name: "重试" })).toBeNull()
+  expect(screen.getByRole("alert")).toBeVisible()
+  expect(within(screen.getByRole("alert")).getByText("技能池加载失败")).toBeVisible()
+  fireEvent.click(screen.getByRole("button", { name: "重试" }))
+  await screen.findByRole("button", { name: `查看详情 ${first.name}` })
+  expect(initialRead).toHaveBeenCalledTimes(2)
+  expect(initialRead.mock.calls[1]).toEqual(initialRead.mock.calls[0])
+  expect(screen.queryByRole("alert")).toBeNull()
   const listSkillCatalog = vi.fn().mockResolvedValueOnce({ ...catalog, skills: [first], next_cursor: "next-owned-page" }).mockRejectedValueOnce(Error("controlled next page failure"))
   const confirmed = { ...base, listSkillCatalog }
   view.rerender(content(confirmed))
@@ -281,14 +289,63 @@ it("keeps the catalog read container unknown on failure, and confirmed cursor ca
   await waitFor(() => expect(listSkillCatalog).toHaveBeenCalledTimes(2))
   expect(screen.getByRole("button", { name: `查看详情 ${first.name}` })).toBe(card)
   expect(screen.getByRole("button", { name: "加载更多" })).toBeEnabled()
+  expect(within(screen.getByRole("alert")).getByText("技能池加载失败")).toBeVisible()
   expect(screen.queryByRole("button", { name: "重试" })).toBeNull()
+  const next = { ...first, name: "Recovered next-page card", skill_id: `${first.skill_id}-next`, revision_skill_id: `${first.revision_skill_id}-next` }
+  listSkillCatalog.mockResolvedValueOnce({ ...catalog, skills: [next] })
+  fireEvent.click(screen.getByRole("button", { name: "加载更多" }))
+  await screen.findByRole("button", { name: `查看详情 ${next.name}` })
+  expect(screen.getByRole("button", { name: `查看详情 ${first.name}` })).toBe(card)
+  expect(listSkillCatalog.mock.calls[2]?.[0]).toEqual(expect.objectContaining({ pageSize: 9, cursor: "next-owned-page" }))
+  expect(screen.queryByRole("alert")).toBeNull()
   listSkillCatalog.mockRejectedValueOnce(Error("controlled same-owner refresh"))
   act(() => invalidate(skillResourceKey(SKILLS_CATALOG_KEY, confirmed)))
-  await waitFor(() => expect(listSkillCatalog).toHaveBeenCalledTimes(3))
+  await waitFor(() => expect(listSkillCatalog).toHaveBeenCalledTimes(4))
   expect(screen.getByRole("button", { name: `查看详情 ${first.name}` })).toBe(card)
+  expect(screen.getByRole("alert")).toBeVisible()
+  listSkillCatalog.mockResolvedValueOnce({ ...catalog, skills: [first] })
+  fireEvent.click(screen.getByRole("button", { name: "重试" }))
+  await waitFor(() => expect(screen.queryByRole("alert")).toBeNull())
+  expect(listSkillCatalog).toHaveBeenCalledTimes(5)
+  expect(listSkillCatalog.mock.calls[4]).toEqual(listSkillCatalog.mock.calls[0])
   view.rerender(content({ ...base, listSkillCatalog: vi.fn(() => new Promise<typeof catalog>(() => undefined)) }))
   expect(screen.queryByRole("button", { name: `查看详情 ${first.name}` })).toBeNull()
   expect(screen.queryByTestId("skills-catalog-empty")).toBeNull()
+  expect(screen.queryByRole("alert")).toBeNull()
+  expect(onSetEnabled).not.toHaveBeenCalled()
+})
+
+it.each(["search", "category"] as const)("retries a failed catalog %s with its exact filters and retires a late recovery with the owner", async kind => {
+  __resetResourceStore()
+  vi.stubGlobal("IntersectionObserver", class { observe() {} unobserve() {} disconnect() {} takeRecords() { return [] } })
+  const base = createPreviewHubClient(), catalog = await base.listSkillCatalog()
+  const first = { ...catalog.skills[0]!, name: "Matched catalog card", categories: ["coding" as const] }
+  let resolveRetry!: (value: typeof catalog) => void
+  const listSkillCatalog = vi.fn().mockResolvedValueOnce({ ...catalog, skills: [first] }).mockRejectedValueOnce(Error("controlled filtered read failure")).mockImplementationOnce(() => new Promise<typeof catalog>(resolve => { resolveRetry = resolve }))
+  const client = { ...base, listSkillCatalog }, onSetEnabled = vi.fn()
+  const content = (owner: typeof base) => <LocaleProvider><SkillCatalogDialog open inline client={owner} enabledOverrides={new Map()} installedOverrides={new Map()} busy={null} errorName={null} onOpenChange={vi.fn()} onCloseAutoFocus={vi.fn()} onOpenUpload={vi.fn()} onOpenGithub={vi.fn()} onSetEnabled={onSetEnabled} onOpenDetail={vi.fn()} /></LocaleProvider>
+  const view = render(content(client))
+  const card = await screen.findByRole("button", { name: `查看详情 ${first.name}` })
+  if (kind === "search") {
+    fireEvent.change(screen.getByRole("searchbox", { name: "搜索技能" }), { target: { value: "Matched" } })
+  } else {
+    fireEvent.keyDown(screen.getByRole("button", { name: "技能分类" }), { key: "ArrowDown" })
+    fireEvent.click(await screen.findByRole("menuitem", { name: "编程" }))
+  }
+  expect(await screen.findByRole("alert")).toBeVisible()
+  expect(screen.getByRole("button", { name: `查看详情 ${first.name}` })).toBe(card)
+  expect(card).toBeDisabled()
+  expect(screen.queryByTestId("skills-catalog-empty")).toBeNull()
+  fireEvent.click(screen.getByRole("button", { name: "重试" }))
+  await waitFor(() => expect(listSkillCatalog).toHaveBeenCalledTimes(3))
+  expect(listSkillCatalog.mock.calls[2]).toEqual(listSkillCatalog.mock.calls[1])
+  expect(listSkillCatalog.mock.calls[2]?.[0]).toEqual({ pageSize: 9, ...(kind === "search" ? { query: "Matched" } : { category: "coding" }) })
+  view.rerender(content({ ...base, listSkillCatalog: vi.fn(() => new Promise<typeof catalog>(() => undefined)) }))
+  await act(async () => { resolveRetry({ ...catalog, skills: [first] }) })
+  expect(screen.queryByRole("button", { name: `查看详情 ${first.name}` })).toBeNull()
+  expect(screen.queryByRole("alert")).toBeNull()
+  expect(screen.queryByTestId("skills-catalog-empty")).toBeNull()
+  expect(onSetEnabled).not.toHaveBeenCalled()
 })
 
 

@@ -33,6 +33,54 @@
   scrollbar-width: thin;
 }
 
+.scopedMain {
+  height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-top: 3rem;
+}
+
+.scopeNotice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  width: min(calc(100% - 3rem), 48rem);
+  margin: 1.5rem auto 0;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 0.875rem 1rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.scopeNotice p {
+  min-width: 0;
+  margin: 0;
+  color: var(--muted-foreground);
+  overflow-wrap: anywhere;
+}
+
+.scopeNotice a {
+  flex-shrink: 0;
+  color: var(--foreground);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.scopeNotice a:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+  border-radius: 0.125rem;
+}
+
+.scopedMain .content,
+.scopedMain .taskContent {
+  min-height: 0;
+  padding-top: 1.5rem;
+}
+
 .content {
   width: min(calc(100% - 3rem), 48rem);
   min-height: 100%;
@@ -98,6 +146,143 @@
 
 .content h2 { margin-bottom: 1.5rem; }
 
+.automationOverview {
+  padding-block: clamp(5rem, 12vh, 7rem) 3rem;
+}
+
+.automationTypes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+
+.automationCard {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.875rem;
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  background: var(--card);
+  padding: 1rem;
+}
+
+.automationSketch {
+  display: flex;
+  min-width: 0;
+  min-height: 9rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  border-radius: 0.75rem;
+  background: radial-gradient(circle, color-mix(in srgb, var(--foreground) 10%, transparent) 1px, transparent 1px);
+  background-size: 0.75rem 0.75rem;
+}
+
+.automationSketch .typeCalendar { margin: 0; }
+
+.sketchNode {
+  display: grid;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 0.625rem;
+  background: var(--background);
+  color: var(--muted-foreground);
+  box-shadow: var(--shadow-xs);
+}
+
+.sketchNode svg { width: 1rem; height: 1rem; stroke-width: 1.75; }
+.sketchHub { width: 2.75rem; height: 2.75rem; border-radius: 0.875rem; color: var(--foreground); }
+.sketchHub svg { width: 1.25rem; height: 1.25rem; }
+.sketchLink { display: flex; color: var(--muted-foreground); }
+.sketchLink svg { width: 0.875rem; height: 0.875rem; stroke-width: 1.5; }
+
+.automationCardHeading {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+
+.automationCardHeading h3 { margin: 0; font-size: 1rem; font-weight: 600; line-height: 1.5; overflow-wrap: anywhere; }
+.automationBeta { border: 1px solid var(--border); border-radius: 0.375rem; padding: 0.0625rem 0.375rem; color: var(--muted-foreground); font-size: 0.6875rem; line-height: 1.25rem; }
+.automationDescription { margin: 0; color: var(--foreground); font-size: 0.8125rem; line-height: 1.5; overflow-wrap: anywhere; }
+.automationUnavailable { margin: 0; color: var(--muted-foreground); font-size: 0.75rem; line-height: 1.5; overflow-wrap: anywhere; }
+
+.automationAction {
+  width: 100%;
+  height: auto;
+  min-height: 2.5rem;
+  margin-top: auto;
+  padding: 0.625rem 0.5rem;
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.scheduledSuggestions { margin-top: 2rem; text-align: left; }
+.suggestionsLabel { margin: 0 0 0.75rem; color: var(--muted-foreground); font-size: 0.8125rem; }
+
+.workflowStart {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: 0.625rem;
+  background: var(--primary);
+  padding: 0.625rem 1rem;
+  color: var(--primary-foreground);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+.workflowStart svg, .workflowBack svg { width: 1rem; height: 1rem; flex: none; }
+.workflowStart:focus-visible, .workflowBack:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
+.workflowMain { height: 100%; overflow-y: auto; overscroll-behavior: contain; padding: 2rem max(1rem, calc((100% - 44rem) / 2)) 3rem; }
+.workflowMain > h1 { margin: 2rem 0; text-align: center; font-size: clamp(1.5rem, 3vw, 2rem); font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
+.workflowMain > h1:focus { outline: 2px solid var(--ring); outline-offset: 4px; border-radius: 0.25rem; }
+.workflowBack { display: inline-flex; min-height: 2.25rem; align-items: center; gap: 0.5rem; color: var(--muted-foreground); font-size: 0.8125rem; }
+.workflowChooser, .workflowForm { min-width: 0; border: 1px solid var(--border); border-radius: 1.25rem; background: var(--card); padding: 1.5rem; }
+.workflowChooser h2, .workflowWhen h2 { margin: 0; font-size: 1rem; font-weight: 600; line-height: 1.5; }
+.workflowChoices { display: grid; gap: 1rem; margin-top: 1.25rem; }
+button.workflowChoice { display: flex; width: 100%; height: auto; min-height: 5rem; align-items: center; gap: 1rem; justify-content: flex-start; border-radius: 0.875rem; background: var(--background); padding: 1rem; white-space: normal; text-align: start; }
+.workflowChoice > svg { width: 1.5rem; height: 1.5rem; flex: none; color: var(--muted-foreground); }
+.workflowChoice > svg:last-child:not(:first-child) { width: 1rem; height: 1rem; margin-inline-start: auto; }
+.workflowChoice > span { display: grid; min-width: 0; gap: 0.375rem; }
+.workflowChoice strong { font-size: 0.9375rem; font-weight: 600; overflow-wrap: anywhere; }
+.workflowChoice strong small { margin-inline-start: 0.5rem; border: 1px solid var(--border); border-radius: 0.25rem; padding: 0.0625rem 0.25rem; font-size: 0.625rem; font-weight: 500; }
+.workflowChoice > span > span { color: var(--muted-foreground); font-size: 0.8125rem; line-height: 1.5; overflow-wrap: anywhere; }
+.workflowUnavailableChoice > p, .workflowNotice { margin: 0.5rem 0 0; color: var(--muted-foreground); font-size: 0.75rem; line-height: 1.5; overflow-wrap: anywhere; }
+.workflowWhen { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
+.workflowFields { display: grid; min-width: 0; gap: 1rem; margin: 0; padding: 0; border: 0; }
+.workflowFields > [data-slot="field"] { display: grid; min-width: 0; gap: 0.5rem; }
+.workflowTiming { border: 1px solid var(--border); border-radius: 0.875rem; padding: 0.625rem; }
+.workflowWill { margin: 0.25rem 0 -0.5rem; font-size: 0.875rem; font-weight: 600; }
+.workflowFields textarea { min-height: 8rem; border: 1px solid var(--border); border-radius: 0.875rem; background: var(--background); }
+.workflowFooter { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: 0.625rem; margin-top: 1.5rem; }
+.workflowFooter button { min-width: 0; max-width: 100%; height: auto; min-height: 2.25rem; white-space: normal; overflow-wrap: anywhere; padding-block: 0.5rem; }
+.workflowPill { display: inline-flex; align-items: center; gap: 0.375rem; border: 1px solid var(--border); border-radius: 999px; padding: 0.375rem 0.625rem; color: var(--muted-foreground); font-size: 0.75rem; }
+.workflowPill svg { width: 0.875rem; height: 0.875rem; }
+.workflowSubmit { margin-inline-start: auto; }
+
+@media (max-width: 40rem) {
+  .workflowMain { padding-top: 1rem; }
+  .workflowMain > h1 { margin-block: 1rem 1.5rem; }
+  .workflowChooser, .workflowForm { padding: 1rem; }
+  button.workflowChoice { gap: 0.625rem; padding: 0.875rem; }
+  .workflowFooter button, .workflowBack { min-height: 2.75rem; }
+  .workflowFooter .workflowSubmit { flex: 1 0 100%; margin-inline-start: 0; }
+}
+
 .suggestions {
   display: grid;
   gap: 0.75rem;
@@ -146,15 +331,6 @@
   line-height: 1.5rem;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.create {
-  width: 10rem;
-  height: 2.25rem;
-  margin-top: 1.5rem;
-  border-radius: 0.5rem;
-  padding-inline: 0.875rem;
-  font-size: 0.875rem;
 }
 
 .taskContent {
@@ -248,6 +424,10 @@
 
 @media (max-width: 40rem) {
   .header { padding-inline: 1rem; }
+  .automationTypes { grid-template-columns: minmax(0, 1fr); }
+  .automationAction { min-height: 2.75rem; }
+  .automationOverview .suggestion { min-height: 3.375rem; height: auto; padding-block: 0.75rem; }
+  .automationOverview .suggestion span { overflow: visible; white-space: normal; overflow-wrap: anywhere; }
   .content,
   .taskContent { width: min(calc(100% - 2rem), 48rem); }
   .taskHeading { align-items: flex-start; flex-direction: column; gap: 1rem; }
@@ -260,3 +440,41 @@
   .inlineSpinner { animation: none; }
   .suggestion { transition: none; }
 }
+
+.managementViews { min-height: 0; }
+.viewPanel { min-width: 0; }
+.sharedViews { width: min(calc(100% - 3rem), 48rem); margin: 1.5rem auto 0; }
+.runUpdates { width: min(calc(100% - 3rem), 48rem); margin: 1.5rem auto 3rem; }
+.runHeading { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.runHeading h2 { margin: 0; font-size: 1.25rem; font-weight: 600; }
+.runHeading p { margin: 0.5rem 0 0; color: var(--muted-foreground); font-size: 0.8125rem; line-height: 1.5; }
+.runHeading button { flex-shrink: 0; }
+.runHeading button svg { width: 0.875rem; height: 0.875rem; }
+.runFilter { display: grid; max-width: 22rem; gap: 0.5rem; margin: 1.5rem 0; font-size: 0.8125rem; color: var(--muted-foreground); }
+.runFilter select { min-width: 0; width: 100%; min-height: 2.5rem; border: 1px solid var(--border); border-radius: 0.625rem; background: var(--background); padding: 0.5rem 0.75rem; color: var(--foreground); font: inherit; }
+.runFilter select:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
+.runFilter select:disabled { opacity: 0.5; }
+.runNotice { display: grid; justify-items: center; gap: 0.75rem; border: 1px dashed var(--border); border-radius: 0.875rem; padding: 3rem 1rem; margin: 1.5rem 0; text-align: center; color: var(--muted-foreground); font-size: 0.875rem; line-height: 1.6; }
+.runNotice p { margin: 0; }
+.runNotice > svg { width: 1.5rem; height: 1.5rem; }
+.runNotice[role="alert"] { border-style: solid; color: var(--destructive); }
+.runGroups { display: grid; gap: 0.75rem; }
+.runDay { margin: 1.25rem 0 0.875rem; color: var(--muted-foreground); font-size: 0.8125rem; font-weight: 500; }
+.runCard { border: 1px solid var(--border); border-radius: 0.875rem; background: var(--card); padding: 1rem; }
+.runCardHeading { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }
+.runCardHeading strong { min-width: 0; font-size: 0.9375rem; font-weight: 500; overflow-wrap: anywhere; }
+.runBadge { flex-shrink: 0; border-radius: 999px; background: var(--muted); padding: 0.125rem 0.5rem; color: var(--muted-foreground); font-size: 0.75rem; }
+.runBadge[data-state="failed"], .runBadge[data-state="dispatch_failed"] { color: var(--destructive); background: color-mix(in srgb, var(--destructive) 10%, transparent); }
+.runCard dl { display: grid; gap: 0.375rem; margin: 0.875rem 0 0; color: var(--muted-foreground); font-size: 0.75rem; line-height: 1.5; }
+.runCard dl > div { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.runCard dd { margin: 0; }
+.runNext { justify-self: center; margin-top: 1rem; }
+@media (max-width: 40rem) {
+  .sharedViews, .runUpdates { width: calc(100% - 2rem); }
+  .runHeading { flex-wrap: wrap; }
+  .runHeading button, .runNext { min-height: 2.75rem; }
+  .runFilter select { min-height: 2.75rem; }
+  .runCardHeading { flex-wrap: wrap; gap: 0.5rem; }
+}
+
+.rssFacts { display: grid; min-width: 0; gap: .25rem; color: var(--muted-foreground); font-size: .8125rem; overflow-wrap: anywhere; }

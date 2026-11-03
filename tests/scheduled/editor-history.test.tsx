@@ -31,7 +31,7 @@ it("freezes an uncertain submitted draft and explicitly retries the same values"
         open
         onOpenChange={vi.fn()}
         brandName="Kokoro"
-        initialTask={{
+        initialTask={{ triggerKind: "calendar" as const,
           title: "Frozen",
           prompt: "Exact prompt",
           frequency: "weekly",
@@ -64,7 +64,7 @@ it("converts an expiry date in the task IANA timezone to a UTC end-of-day instan
         open
         onOpenChange={vi.fn()}
         brandName="Kokoro"
-        initialTask={{
+        initialTask={{ triggerKind: "calendar" as const,
           title: "DST task",
           prompt: "Run it",
           frequency: "daily",
@@ -94,7 +94,7 @@ it("projects an owner expiry instant into the task timezone and clears it with e
         open
         onOpenChange={vi.fn()}
         brandName="Kokoro"
-        initialTask={{
+        initialTask={{ triggerKind: "calendar" as const,
           title: "Expiry task",
           prompt: "Run it",
           frequency: "daily",
@@ -180,7 +180,7 @@ it("fails closed when the project query cannot be decoded exactly", () => {
 
 it("makes the task timezone explicit, validates it and submits a changed zone", async () => {
   const onSave = vi.fn().mockResolvedValue(undefined)
-  render(<LocaleProvider><ScheduledTaskEditorDialog open onOpenChange={vi.fn()} brandName="Kokoro" initialTask={{ title: "Zone task", prompt: "Run", frequency: "daily", time: "08:00", timezone: "UTC" }} onSave={onSave} /></LocaleProvider>)
+  render(<LocaleProvider><ScheduledTaskEditorDialog open onOpenChange={vi.fn()} brandName="Kokoro" initialTask={{ triggerKind: "calendar" as const, title: "Zone task", prompt: "Run", frequency: "daily", time: "08:00", timezone: "UTC" }} onSave={onSave} /></LocaleProvider>)
   const zone = screen.getByRole("combobox", { name: "时区" })
   expect(zone).toHaveValue("UTC")
   fireEvent.change(zone, { target: { value: "Not/A_Zone" } })
@@ -194,7 +194,7 @@ it("makes the task timezone explicit, validates it and submits a changed zone", 
 
 it("fills the saved weekly weekday in its timezone and does not replace it for prompt-only edits", async () => {
   const onSave = vi.fn().mockResolvedValue(undefined)
-  const task = { title: "Weekly", prompt: "Run", frequency: "weekly" as const, time: "09:00", timezone: "America/Los_Angeles", weekdays: [0], nextRun: "2026-10-23T16:00:00.000Z" }
+  const task = { triggerKind: "calendar" as const, title: "Weekly", prompt: "Run", frequency: "weekly" as const, time: "09:00", timezone: "America/Los_Angeles", weekdays: [0], nextRun: "2026-10-23T16:00:00.000Z" }
   render(<LocaleProvider><ScheduledTaskEditorDialog open onOpenChange={vi.fn()} brandName="Kokoro" initialTask={task} onSave={onSave} /></LocaleProvider>)
   expect(screen.getByRole("button", { name: "星期" })).toHaveTextContent("周日")
   fireEvent.change(screen.getByLabelText("汇总未读邮件并突出显示重要邮件"), { target: { value: "Changed prompt" } })
@@ -205,7 +205,7 @@ it("fills the saved weekly weekday in its timezone and does not replace it for p
 
 it("submits the selected weekday in the edited timezone rather than the old UTC weekday", async () => {
   const onSave = vi.fn().mockResolvedValue(undefined)
-  render(<LocaleProvider><ScheduledTaskEditorDialog open onOpenChange={vi.fn()} brandName="Kokoro" initialTask={{ title: "Weekly", prompt: "Run", frequency: "weekly", time: "09:00", timezone: "America/Los_Angeles", weekdays: [0] }} onSave={onSave} /></LocaleProvider>)
+  render(<LocaleProvider><ScheduledTaskEditorDialog open onOpenChange={vi.fn()} brandName="Kokoro" initialTask={{ triggerKind: "calendar" as const, title: "Weekly", prompt: "Run", frequency: "weekly", time: "09:00", timezone: "America/Los_Angeles", weekdays: [0] }} onSave={onSave} /></LocaleProvider>)
   fireEvent.keyDown(screen.getByRole("button", { name: "星期" }), { key: "ArrowDown" })
   fireEvent.click(await screen.findByRole("menuitemcheckbox", { name: "周二" }));
   fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" })
@@ -218,14 +218,14 @@ it("submits the selected weekday in the edited timezone rather than the old UTC 
 })
 
 it("requires an explicit weekday instead of guessing when a controlled weekly record has no anchor", async () => {
-  render(<LocaleProvider><ScheduledTaskEditorDialog open onOpenChange={vi.fn()} brandName="Kokoro" initialTask={{ title: "Weekly", prompt: "Run", frequency: "weekly", time: "09:00", timezone: "UTC" }} onSave={vi.fn()} /></LocaleProvider>)
+  render(<LocaleProvider><ScheduledTaskEditorDialog open onOpenChange={vi.fn()} brandName="Kokoro" initialTask={{ triggerKind: "calendar" as const, title: "Weekly", prompt: "Run", frequency: "weekly", time: "09:00", timezone: "UTC" }} onSave={vi.fn()} /></LocaleProvider>)
   expect(screen.getByRole("button", { name: "星期" })).toHaveTextContent("选择星期")
   expect(screen.getByRole("button", { name: "保存" })).toBeDisabled()
 })
 
 it("replays a frozen weekly create with the exact selected weekdays", async () => {
   const onSave = vi.fn().mockResolvedValue(undefined)
-  const original = { title: "Unknown create", prompt: "Run", frequency: "weekly" as const, time: "09:00", timezone: "UTC", weekdays: [1, 4], autoApprove: false }
+  const original = { triggerKind: "calendar" as const, title: "Unknown create", prompt: "Run", frequency: "weekly" as const, time: "09:00", timezone: "UTC", weekdays: [1, 4], autoApprove: false }
   render(<LocaleProvider><ScheduledTaskEditorDialog open onOpenChange={vi.fn()} brandName="Kokoro" initialDraft={original} onSave={onSave} /></LocaleProvider>)
   fireEvent.click(screen.getByRole("button", { name: "重试原请求" }))
   await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1))
@@ -235,7 +235,7 @@ it("replays a frozen weekly create with the exact selected weekdays", async () =
 
 it("edits monthly selections and an expired once date without retaining another rule's selectors", async () => {
   const onSave = vi.fn().mockResolvedValue(undefined)
-  const view = render(<LocaleProvider><ScheduledTaskEditorDialog open onOpenChange={vi.fn()} brandName="Kokoro" initialTask={{ title: "Monthly", prompt: "Run", frequency: "monthly", time: "09:00", timezone: "UTC", monthDays: [1] }} onSave={onSave} /></LocaleProvider>)
+  const view = render(<LocaleProvider><ScheduledTaskEditorDialog open onOpenChange={vi.fn()} brandName="Kokoro" initialTask={{ triggerKind: "calendar" as const, title: "Monthly", prompt: "Run", frequency: "monthly", time: "09:00", timezone: "UTC", monthDays: [1] }} onSave={onSave} /></LocaleProvider>)
   fireEvent.keyDown(screen.getByRole("button", { name: "月内日期" }), { key: "ArrowDown" })
   fireEvent.click(await screen.findByRole("menuitemcheckbox", { name: "31 号" }))
   expect(screen.getByRole("menuitemcheckbox", { name: "1 号" })).toHaveAttribute("aria-checked", "true")
@@ -245,7 +245,7 @@ it("edits monthly selections and an expired once date without retaining another 
   await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1))
   expect(onSave.mock.calls[0]?.[0]).toMatchObject({ frequency: "monthly", monthDays: [1, 31] })
   view.unmount()
-  render(<LocaleProvider><ScheduledTaskEditorDialog open onOpenChange={vi.fn()} brandName="Kokoro" initialTask={{ title: "Once", prompt: "Run", frequency: "once", time: "09:00", timezone: "UTC", localDate: "2020-01-01" }} onSave={onSave} /></LocaleProvider>)
+  render(<LocaleProvider><ScheduledTaskEditorDialog open onOpenChange={vi.fn()} brandName="Kokoro" initialTask={{ triggerKind: "calendar" as const, title: "Once", prompt: "Run", frequency: "once", time: "09:00", timezone: "UTC", localDate: "2020-01-01" }} onSave={onSave} /></LocaleProvider>)
   expect(screen.getByLabelText("日期")).toHaveValue("2020-01-01")
   fireEvent.change(screen.getByLabelText("汇总未读邮件并突出显示重要邮件"), { target: { value: "Edited after consumption" } })
   fireEvent.click(screen.getByRole("button", { name: "保存" }))
@@ -254,4 +254,103 @@ it("edits monthly selections and an expired once date without retaining another 
   expect(saved).toMatchObject({ frequency: "once", localDate: "2020-01-01", prompt: "Edited after consumption" })
   expect(saved).not.toHaveProperty("monthDays")
   expect(saved).not.toHaveProperty("weekdays")
+})
+
+it.each([
+  ["daily", "Daily"],
+  ["weekly", "Weekly"],
+  ["monthly", "Monthly"],
+  ["once", "Once"],
+] as const)("I1 inline %s creation preserves real scheduling fields and required name", async (frequency, label) => {
+  window.localStorage.setItem("kokoro.locale", "en")
+  window.history.replaceState({ shell: "preserved" }, "", "/app?workflow=automation&project_id=project-inline")
+  const onSave = vi.fn().mockResolvedValue(undefined)
+  render(<LocaleProvider><ScheduledTaskSurface mode="controlled" tasks={[]} onSave={onSave} /></LocaleProvider>)
+  fireEvent.click(screen.getByRole("button", { name: "Scheduled tasks" }))
+  const form = screen.getByRole("form", { name: "Create scheduled automation" })
+  const create = within(form).getByRole("button", { name: "Create automation" })
+  expect(create).toBeDisabled()
+  expect(within(form).getByLabelText("Select time")).toHaveValue("10:00")
+  fireEvent.change(within(form).getByRole("textbox", { name: "Summarize unread email and highlight important messages" }), { target: { value: "Run exactly this workflow" } })
+  expect(create).toBeDisabled()
+  fireEvent.change(within(form).getByRole("textbox", { name: "Unread email summary" }), { target: { value: `Inline ${frequency}` } })
+  if (frequency !== "daily") {
+    fireEvent.keyDown(within(form).getByRole("combobox", { name: "Schedule" }), { key: "ArrowDown" })
+    fireEvent.click(await screen.findByRole("option", { name: label }))
+  }
+  if (frequency === "weekly" || frequency === "monthly") {
+    const monthly = frequency === "monthly"
+    fireEvent.keyDown(within(form).getByRole("button", { name: monthly ? "Days of month" : "Weekday" }), { key: "ArrowDown" })
+    fireEvent.click(await screen.findByRole("menuitemcheckbox", { name: monthly ? "31" : "Tue" }))
+    fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" })
+  } else if (frequency === "once") {
+    fireEvent.change(within(form).getByLabelText("Date"), { target: { value: "2099-11-15" } })
+  }
+  fireEvent.change(within(form).getByLabelText("Select time"), { target: { value: "09:35" } })
+  const settings = within(form).getByRole("button", { name: "Automation settings" })
+  fireEvent.click(settings)
+  fireEvent.change(screen.getByLabelText("Time zone"), { target: { value: "America/New_York" } })
+  expect(screen.getByRole("button", { name: "Use existing approval rules" })).toBeDisabled()
+  expect(screen.getByRole("button", { name: "Use existing approval rules" })).toHaveAccessibleDescription("Automatic approval is not available yet; runs continue to use the existing approval rules.")
+  fireEvent.click(screen.getByRole("checkbox", { name: "Set expiry date" }))
+  fireEvent.change(screen.getByLabelText("Select expiry date"), { target: { value: "2099-12-31" } })
+  fireEvent.click(settings)
+  expect(create).toBeEnabled()
+  fireEvent.click(create)
+  await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1))
+  const saved = onSave.mock.calls[0]?.[0]
+  expect(saved).toMatchObject({ triggerKind: "calendar" as const, title: `Inline ${frequency}`, prompt: "Run exactly this workflow", frequency, time: "09:35", timezone: "America/New_York", autoApprove: false, expiresAt: "2100-01-01T04:59:59.999Z" })
+  if (frequency === "weekly") expect(saved.weekdays).toEqual([2])
+  else expect(saved).not.toHaveProperty("weekdays")
+  if (frequency === "monthly") expect(saved.monthDays).toEqual([31])
+  else expect(saved).not.toHaveProperty("monthDays")
+  if (frequency === "once") expect(saved.localDate).toBe("2099-11-15")
+  else expect(saved).not.toHaveProperty("localDate")
+  for (const unsupported of ["agent", "connectors", "independentTask", "cloudComputer", "localFolder"]) {
+    expect(saved).not.toHaveProperty(unsupported)
+  }
+  expect(window.history.state).toEqual({ shell: "preserved" })
+  expect(screen.queryByRole("dialog")).toBeNull()
+})
+
+it("I6 preserves an unchanged RSS expiry instant and never sends the UI timezone as a trigger field", async () => {
+  window.localStorage.setItem("kokoro.locale", "en")
+  const onSave = vi.fn()
+  const original = "2030-06-10T12:34:56.123456Z"
+  render(<LocaleProvider><ScheduledTaskEditorDialog open onOpenChange={vi.fn()} brandName="Kokoro" initialTask={{ triggerKind: "rss", title: "Feed", prompt: "Summarize", feedUrl: "https://news.example.com/feed", conditions: [], expiresAt: original, autoApprove: true }} onSave={onSave} /></LocaleProvider>)
+  expect(screen.queryByRole("combobox", { name: "Schedule" })).toBeNull()
+  expect(screen.queryByLabelText("Select time")).toBeNull()
+  fireEvent.change(screen.getByRole("textbox", { name: "Unread email summary" }), { target: { value: "Renamed feed" } })
+  fireEvent.click(screen.getByRole("button", { name: "Save" }))
+  await waitFor(() => expect(onSave).toHaveBeenCalledOnce())
+  expect(onSave.mock.calls[0]?.[0]).toEqual({ triggerKind: "rss", title: "Renamed feed", prompt: "Summarize", feedUrl: "https://news.example.com/feed", conditions: [], expiresAt: original, autoApprove: true })
+})
+
+it("I6 explicitly clears RSS expiry and keeps an uncertain nested condition body frozen", async () => {
+  window.localStorage.setItem("kokoro.locale", "en")
+  const onSave = vi.fn().mockRejectedValueOnce(new ScheduledTaskClientError("http", "unknown", 503)).mockResolvedValueOnce(undefined)
+  render(<LocaleProvider><ScheduledTaskEditorDialog open onOpenChange={vi.fn()} brandName="Kokoro" initialTask={{ triggerKind: "rss", title: "Feed", prompt: "Summarize", feedUrl: "https://news.example.com/feed", conditions: [[{ field: "title", operator: "contains", value: "release" }]], expiresAt: "2030-06-10T12:00:00Z" }} onSave={onSave} /></LocaleProvider>)
+  fireEvent.click(screen.getByRole("checkbox", { name: "Set expiry date" }))
+  fireEvent.click(screen.getByRole("button", { name: "Save" }))
+  await screen.findByRole("button", { name: "Retry original request" })
+  const first = structuredClone(onSave.mock.calls[0]?.[0])
+  onSave.mock.calls[0]![0].conditions[0][0].value = "mutated callback"
+  fireEvent.click(screen.getByRole("button", { name: "Retry original request" }))
+  await waitFor(() => expect(onSave).toHaveBeenCalledTimes(2))
+  expect(onSave.mock.calls[1]?.[0]).toEqual(first)
+  expect(first.expiresAt).toBeNull()
+})
+
+it("I6 converts only an edited RSS expiry date using the mount-time browser zone", async () => {
+  window.localStorage.setItem("kokoro.locale", "en")
+  const onSave = vi.fn()
+  const { expiryDateToUtcInstant } = await import("@/features/scheduled-tasks")
+  render(<LocaleProvider><ScheduledTaskEditorDialog open onOpenChange={vi.fn()} brandName="Kokoro" initialTask={{ triggerKind: "rss", title: "Feed", prompt: "Summarize", feedUrl: "https://news.example.com/feed", conditions: [], expiresAt: "2030-06-10T12:34:56.123Z" }} onSave={onSave} /></LocaleProvider>)
+  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone
+  expect(screen.getByText(`Expiry dates use ${zone}; this timezone is only for date entry.`)).toBeVisible()
+  fireEvent.change(screen.getByLabelText("Select expiry date"), { target: { value: "2030-06-12" } })
+  fireEvent.click(screen.getByRole("button", { name: "Save" }))
+  await waitFor(() => expect(onSave).toHaveBeenCalledOnce())
+  expect(onSave.mock.calls[0]?.[0].expiresAt).toBe(expiryDateToUtcInstant("2030-06-12", zone))
+  expect(onSave.mock.calls[0]?.[0]).not.toHaveProperty("timezone")
 })

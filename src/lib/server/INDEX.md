@@ -1,3 +1,11 @@
+## B-10 分享 metadata 精确 GET（候选）
+
+`session-share.ts`复用原精确分享adapter承接GET/POST/DELETE，catch-all仅增加此GET分派；读取拒命令头/body、保scope/project_ref及首末相同Product Session、完整10秒/1MiB/rawJSON边界。GET成功schema来自固定BFF2e737cad正规投影，404/坏wire不降为share:null；原其它Chat/SSE与旧public artifact保持。
+
+## ScheduledTask 运行记录薄桥（Public29候选）
+
+`scheduled-task-runs.ts`只承接现GET /api/scheduled-task-runs→BFF /v1/scheduled-task-runs；Product Session/可信headers与初末精确session重核、10秒请求至EOF总预算、opaque分页/strict JSON/bytes/取消保持。无直接owner资源、业务存储、自动写或通用代理；对应route对非GET显式拒绝。
+
 回答动作薄桥：session-answer-actions注册GET/PUT反馈、POST具名再生成及GET私有单Run display；正式Public28.10闭集decoder、原Product Session／同源Origin／10s完整EOF／取消和原key，无自动命令重发，不扩generic adapter。
 
 ## Project Skill 精确内容消费者
@@ -157,3 +165,4 @@ runtime token、内部服务地址、workload secret 或后端隔离键。
 ## Project pin consumer
 
 `project-pins.ts`只处理GET `/api/hub/self/project-pins`与PUT `/api/hub/projects/{id}/pin`；strip-self别名在generic proxy前拒绝。沿Product Session／same-origin／部署Domain，不透传caller身份/key/CAS，strict JSON≤1KiB与完整响应≤64KiB，同一次10秒admission→EOF预算、取消与静态异常。所有错误沿正式ErrorEnvelope，不另造retryable DTO。
+`account-profile.ts` 仅在原 IAM userinfo 资料白名单中补可选 HTTPS `picture` 投影；不含 URL 认证信息、最长 2048 字符，坏图片省略而不破坏其他资料。原同源准入、最终 Product session 复验和时限不变；服务端不请求头像 URL、不新增代理或上传。

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest"
 import { HubClientError, type HubClient } from "@/hub/client"
 import { createMcpPreparationCommands } from "@/ui/mcp/mcp-preparation-commands"
 import { createCustomApiCreateFlow } from "@/ui/mcp/custom-api-create-flow"
+import { jsonImportReceiptForDocument } from "./fixtures/mcp-json-import-receipt"
 
 const admitted = { admitted: true, subject: "api-actor", generation: 1 }
 const input = () => ({ name: "Original API", environment: [{ name: "DUMMY_KEY", value: "fixture-only" }] })
@@ -118,7 +119,7 @@ describe("MCP JSON owner-atomic creation command", () => {
     const first = '{"mcpServers":{"Duplicate":{"type":"streamableHttp","url":"https://mcp.example.test/existing"}}}'
     const corrected = first.replace("existing", "corrected")
     const create = vi.fn().mockRejectedValueOnce(new HubClientError("http", "duplicate", "mcp_personal_server_url_conflict", 409, false))
-      .mockResolvedValue({ imports: [], replayed: false })
+      .mockResolvedValue(jsonImportReceiptForDocument(corrected))
     const key = vi.fn().mockReturnValueOnce("json-first-key").mockReturnValueOnce("json-corrected-key")
     const confirmed = vi.fn()
     const flow = createMcpJsonImportFlow({ client: { importPrivateMcpJson: create }, boundary: admitted, onConfirmed: confirmed, key })
@@ -161,7 +162,7 @@ describe("MCP JSON owner-atomic creation command", () => {
   it("freezes one complete document and key across recheck and unknown outcomes", async () => {
     const { createMcpJsonImportFlow } = await import("@/ui/mcp/mcp-json-import-flow")
     const document = ' {"mcpServers":{"One":{"type":"streamableHttp","url":"https://mcp.example.test/one","headers":{"x-check":"fixture-only"}},"Two":{"type":"streamableHttp","url":"https://mcp.example.test/two"}}} '
-    const create = vi.fn().mockRejectedValueOnce(new Error("lost ACK")).mockResolvedValue({ imports: [], replayed: true })
+    const create = vi.fn().mockRejectedValueOnce(new Error("lost ACK")).mockResolvedValue(jsonImportReceiptForDocument(document, true))
     const confirmed = vi.fn(), key = vi.fn(() => "original-json-command")
     const flow = createMcpJsonImportFlow({ client: { importPrivateMcpJson: create }, boundary: admitted, onConfirmed: confirmed, key })
     await flow.submit(document, admitted)
@@ -708,7 +709,7 @@ describe("MCP typed management and Prepare interlock", () => {
 
   it("freezes each of the five original operations and cannot replace it with another edit or new CAS", async () => {
     const { createMcpLifecycleCommands } = await import("@/ui/mcp/mcp-management-commands")
-    const intents: import("@/ui/mcp/mcp-management-commands").McpManagementIntent[] = [
+    const intents: Exclude<import("@/ui/mcp/mcp-management-commands").McpManagementIntent, { operation: "reauthorize_server" }>[] = [
       { operation: "update_server", connectorId: connector.connector_id, serverId: server.server_id, input: { expected_state_version: "1", display_name: "Edited", header_upserts: [{ name: "x-test", value: "frozen-header-value" }] } },
       { operation: "delete_server", connectorId: connector.connector_id, serverId: server.server_id, input: { expected_state_version: "1" } },
       { operation: "update_connector", connectorId: connector.connector_id, input: { expected_state_version: "1", display_name: "Edited", description: "Note" } },

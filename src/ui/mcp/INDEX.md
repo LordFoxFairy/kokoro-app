@@ -1,3 +1,55 @@
+## Provider 目录的显式刷新
+
+广场与原目录弹窗的“重新读取”只触发现有 Provider GET。无筛选时沿 projection reload 更新缓存首页；筛选时按当前 query/category 重读首页，替换旧分页而非附加旧 cursor。等待与失败保留已知卡片，失败重试复用实际失败页，刷新本身不显示失败反馈。主体、准入代与取消仍归原 reader；不重放任何业务命令。
+
+## 本人 Provider 连接的名称与说明
+
+普通 Provider 详情的显式编辑只定位本人无 private server 的连接，进入现有 `McpConnectorEditorDialog` 前重新 exact GET，并核原类型、Provider 与连接身份。该窗口不再次跳回目录详情；读取失败原地显示 GET-only 重试，未读到当前事实不呈现保存字段。
+
+保存沿原 `update_connector`、CAS、幂等键与未知结果恢复，变更个人连接而非共享 Provider。取消、主体/准入代变化、撤权与迟到回执沿现有窗口围栏；外层有效入口承接回焦，卸载的 Edit 按钮不作为返回目标。Provider 单元夹具不代表正常外部授权旅程。
+
+## 已断开配置的新授权意图（2026-11-02，候选）
+
+`mcp-projection-read.tsx` 从只读私有 exact 详情显式发起新授权；原窗口不开放任何旧身份命令。`mcp-management-commands.ts` 复用原 actor shell，冻结 source connector/server/双 CAS/key，未知结果按原请求重试，严格 ACK 只保新 locator；`mcp-management-status.tsx` 标明独立意图。关闭后的原命令在既有 Connections 恢复入口可达，即使 source 已非 current 导致 GET404；不会从404或 ACK 造详情。成功打开新窗口，再 fresh exact connector/private-server GET，原显式 Connect 才可 Prepare。命令窗口/主体/准入代退休、撤销/删除负事实与原 Prepare journal 冲突保护继续生效。
+
+`custom-mcp-detail-dialog.tsx` 只增独立“创建新授权”按钮与九语言准确说明，未知状态按钮由原 status 提供，不解锁 Save/Enable/OAuth/发布/试用/删除。`mcp-personal-server-gallery.test.tsx`、`mcp-preparation-lifecycle.test.ts` 与原 client/proxy/creation 测试承接原请求恢复、新旧身份、严格 ACK、fresh GET 与命令隔离负控。正式 profile 和生成边界见三设计文首，候选并非正常服务已更新。
+
+## 已断开 MCP 配置只读可达（2026-11-02，候选）
+
+连接列表与个人目录保留 `mcp + server_id + revoked + enabled=false` 的配置定位卡片，不把该投影视为私有读取或执行资格。点击后按冻结的 connector/provider/server/type 与版本下限重新 exact GET，再由现有 private-server GET 核归属；全列表不做 N+1。只读意图终身不升级命令，active、错绑定、低版本或已删除结果不能成为详情。确认撤销屏障继续拒绝旧 active 和低版本 revoked；仅 fresh revoked/disabled 达到屏障可读，ACK 本身不造配置。
+
+详情沿原组件呈现 owner 配置事实、已配置 header 名称与“已断开”标识，并说明保存配置仅供查看、重连暂不可用；只读卡片与详情不混用 availability 或可恢复停用的状态。九语言只新增断开标识和只读原因两键。编辑、保存、Prepare、授权、启停、删除、发布、试用和命令恢复入口都不开放，父级回调另有同步拒绝。普通 Provider/global 无 server_id 的 revoked 行仍隐藏，Composer/项目/Run 资格不变；真正 Reauthorize 等待正式 owner artifact。三个原测试文件补卡片/精确身份/撤销版本/命令双拒负控，正常服务未由本片切换。
+
+## 精确详情读取恢复（2026-11-02，候选）
+
+`use-custom-api-detail.ts`、`use-mcp-provider-detail.ts`、`use-mcp-provider-connection.ts` 各自拥有本窗口显式 GET attempt 与同步 pending 围栏。错误在重试等待时保持可见、同按钮禁用，失败后复用原焦点所有权恢复；换窗口、actor、准入代、locator、binding 或修订时旧回执与旧 retry 闭包退役。API 当前 typed HTTP401 同样向既有 ProductReadRecheck 报告原 subject/generation/signal，非认证故障不报告。
+
+`mcp-projection-read.tsx` 将三个详情窗接到各自失败 reader，并为 private server 保留独立 attempt；只重试失败的 exact GET，不刷新已成功的 connector/provider，不重放 Create / Save / Prepare，不清除未知命令。创建交接禁用列表读的边界保持，因此失败必须在 exact 详情原地恢复。三个现详情 dialog 接收局部反馈槽，复用原样式与按钮，不建另一详情壳。
+
+`mcp-create-completion-dialog.test.tsx` 覆盖创建 handoff 后 API/private MCP/Provider 恢复、同步去重、再次失败、移焦与退休迟到；`mcp-provider-readmission.test.tsx` 保当前 typed401及旧主体/代际负控；`mcp-configuration-save.test.tsx` 保原 secrets/CAS/unknown 原 key/body 并验证保存后 GET 恢复不重发 Save。旧 Provider 隐藏错误/无重试断言改为可见 reader 反馈，旧 icon Save 断言改为 exact GET 后显式关闭，保原一次 create/Done 与 icon 不取消。
+
+## 局部读取失败与显式恢复（2026-11-01，候选）
+
+`mcp-read-feedback.tsx` 只呈现就近的读取错误和可选 GET 重试按钮，复用原 Button/语义样式；`mcp-projection-read.tsx` 分别绑定 API、连接器页、目录和关系 reader，不重放命令或刷新健康部分。已知卡片保留；确认全空/无匹配必须由当前相关读取共同证明，不沿用旧空状态掩盖失败。API 尾页沿原 cursor 重试，循环已停止时显式从首页重新读取。
+
+`use-custom-api-projection.ts` 与 `use-mcp-projection.ts` 的本地 attempt/owner 围栏同步去重显式重试、在原 promise 结束时释放，仅匹配原主体/代际的 attempt；不增加缓存、持久化或第二个登录恢复 owner。Provider 目录弹窗复用相同局部反馈；非 all 分类不显示无关 API 错误。
+
+`use-mcp-provider-directory.ts` 与 `use-mcp-provider-relations.ts` 单独公开 scope 绑定的显式 `retrying`，与普通自动读取的 loading 分开；目录页/弹窗及关系反馈据此保留同一原生按钮，等待中禁用、settlement 后恢复。关系继续共享当前 live scan，owner/attempt 同步防重击，主体/代际退休和 typed401 归属不变。反馈仅在原键盘焦点仍归该重试、浏览器禁用按钮造成 body 焦点时恢复；其它 focus、Tab、pointerdown 或窗口失焦均交出所有权。具名行为测试在 `mcp-read-retry-focus.test.tsx`，真实 coordinator 与 dialog 接线在 `mcp-custom-api-gallery.test.tsx`；`mcp-read-feedback-visual.test.tsx` 仅对实际组件静态 DOM 和生产 CSS 做 390/1280 宽度及原生 Tab 检查，不冒称 React 事件或真实服务旅程。
+
+`mcp-read-retry-browser.test.ts` 用自有 localhost 临时 Vite 页面 hydrate 实际反馈组件，真实 Chromium Enter 触发 pending→再次失败，并验输入框移焦/指针/Tab 不抢焦，finally 回收浏览器和临时服务；仅此组件事件成功，不冒正常 App、目录 owner 或真实 IAM 旅程。
+
+## API / JSON 创建后的精确详情（2026-11-01，候选）
+
+`connector-command.ts` 的可选安全完成投影只保存在当前 actor 的 RAM，按 completed/boundary 读取、finish 清除；API flow 只投影 profileId，JSON flow 从严格非空 ACK 按 owner 原序投影每项 serverId/connectorId/providerKey/name。原 body/key、未知结果、迟到 ACK 失效与秘密清除沿原生命周期，不新增写调用或持久化。
+
+`use-connector-creation-form.ts` 在 finish 前把 locator 捕获到当前 form 窗口；完成回调前后检查窗口，失败仅重试 UI。`mcp-create-dialog.tsx` 用现 `McpProjectionRead` fresh exact reader 打开 API / 单项 JSON，多项呈现明确选择结果列表、同名用 connectorId 区分，详情关闭回列表并回焦原项；API 关闭/已确认删除结束外层窗口。同主体新代保留 locator 而重新读事实，换 actor/client/mode/open 退役；没有任意选第一项或将创建/导入 ACK 当配置/连接状态。
+
+具名回归在 `tests/ui/connector-creation-completion.test.ts` 与 `tests/ui/mcp-create-completion-dialog.test.tsx`，原 command/form/详情回归保留。正常源未激活，真实服务旅程由 Root 配对验收，不以替身测试关闭整个 B-01。
+
+## Provider 独立读的会话恢复
+
+目录筛选及续页、精确 Provider 详情、本人连接关系全页读取沿现有 `ProductReadRecheck` 报告当前 typed HTTP401，携带请求原主体、代际和真实 AbortSignal。旧请求、已取消和退休订阅不报告；403、服务故障和解析错误保持原错误。重新准入后的 GET 仍由原 reader 生命周期驱动，不重发创建、授权、Prepare 或其它写命令。共享关系扫描保留原超时、页数预算和未知状态，超时不误作登录过期。具名回归位于 `tests/ui/mcp-provider-readmission.test.tsx`；正常 IAM/浏览器验收另记。
+
 ## Composer 添加连接器：受控目录窗口
 
 `McpContent.catalogDialog` 将现 `McpProjectionRead` 的目录 portal／详情窗用于 composer Add；主 section／toolbar 不再重复绘制，查询、严格身份／命令及创建窗仍复用原 owner。普通 Manage 仍是 Settings 已添加页。此本地 overlay 不改当前 Project／Conversation URL、草稿或 MCP 选择；与 Manus 的 `#connectors/all` URL 表达不同，不另加 hash 协议或路由 alias。同 actor 暂时准入刷新保留窗口／搜索及创建意图，现 read generation 退旧事实、禁新 Create；换 actor／route 才退窗并撤销旧回焦。正常目录 ESC 退回原 composer trigger，详情／创建关闭退回原目录窗栈；打开目录本身不连接、授权或执行模型。

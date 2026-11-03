@@ -1,3 +1,53 @@
+## 2026-11-03 B-08 个人材料容量失败的正式消费（候选）
+
+沿原生成 tuple 与 ConversationThread 展示。发送前 personal_context_too_large 只提示减少个人资料/知识后手动重试原请求；已准入的 context_window_exceeded 是不可重试终态，材料已冻结，修改设置后须重新发起或重新生成。原 pending body/key、发送/Run/草稿状态机及知识待接提示不变。
+
+## 2026-11-02 团队角色权限的正式消费者修正
+
+唯一完整来源固定 BFF `8ae73fde765ba55a77679c36199dcc9c1553fa11` / Public29.2.0，SHA256 `df5a33d4fa33662e4f70967bf5db60033f71f29511bf5975aa2395d61abb3e9c`。沿原十二个 public 生成器与原分享投影生成器更新来源；除 TeamRole.skill 增加已发布的 `delete_series` 外，其余投影只变来源证明，不改运行语义。Web 的既有严格角色 decoder 同步这一枚举，不新增权限、Team 协议或宽松 fallback。
+
+测试专用有限逆证先按完整摘要与单行差恢复 Public29.1，再按 owner 已发布的两个精确分享块恢复 Public29.0，随后进入原双父历史证明。旧 proof、200 操作清单、policy3 原字节保持，不重签 oracle，不进入运行 decoder。
+
+## 2026-11-02 B-10 会话分享权威读回（候选）
+
+沿原 SessionClient、精确 session-share 同源 adapter 和 AppFrame→WorkspaceHeader→ShareButton 接线，不新增客户端、服务或分享 owner。唯一新增 use-session-share 管理窗口的只读 metadata、显式命令与退休：打开/重开/可见焦点恢复仅 GET；权威 share:null 才可创建，已有分享显示原链接，读错不可冒私有。显式创建/撤销后必须 GET 回读；未知只允许读核实，不自动重放命令。subject/generation/admitted、client、sessionId、SessionScope 与 preview 绑定窗口，切换立即清旧链接并取消/丢弃迟到结果；原双击锁和精确键盘回焦保持。命令与回读共用一次10秒窗口；失败重试保可见反馈/同步pending，仅本控件仍持焦点时恢复。恢复焦点读取若出现不同share ID，原撤销确认退役。
+
+消费正式 BFF2e737cad9649460dc477fc7d96ba593783fef619 的具名 session-share-metadata-browser/1.0.0 投影（SHA112d6e9be1f3969b7820f85a06e627966b72d669b02898d7f57f64e18d03bb2f），它机械提取 Public29.1 的 exact GET/refs 闭包；源 canonical SHA4e4ce620887b1a1a431a9346d0d259aa5bed3bd5af06f4428f11e9054173418e。原 Public29/12 generators/SDK 与历史 proofs 逐字保留，仅作为原操作固定消费基线，不冒当前完整合同。新增投影由精确 provenance/正规 generator 生成闭集 decoder/type；不新增 browser BFF 路由或手写 wire。
+
+## 2026-11-02 B-01 已断开私有 MCP 的独立新授权（候选）
+
+正式 owner 为 Platform2cf63945 与 BFFe3b5fb75 的 browser-private reauthorization profile1.0.0；复用既有 Management command、actor/window/generation 围栏与 RAM 生命周期，不新增 journal 或持久化恢复机制。断开配置窗口终身只读；唯一新增显式“创建新授权”意图冻结原 server/source connector/双 CAS/key，未知结果仅重发原 POST，不能与 Prepare receipt GET 或 OAuth reconnect 混用。
+
+严格 ACK 只投影新 connector/server/provider locator，不渲染为当前配置，不自动 Prepare。当前窗口确认后新建 exact 详情窗口，不继承旧 revokedVersion 或只读锁；fresh connector 与本人 private-server GET 均成功后才沿原显式 Connect。关窗、换主体/准入代及迟到 ACK 不更新当前窗口；原未知请求在同 actor command shell 的既有恢复入口保留，非浏览器刷新持久恢复。Composer/项目/Run/A 路径和执行资格不扩大。
+
+## Public29：正式双父输入与原自动化功能承接（2026-11-02，候选）
+
+唯一BFF公开输入为正式双父7e4ab1cee8f8d45a34902176cd15a10f3c4b22cb / 29.0.0，完整SHA258bde9c39f785667cb205976e1547d1cf2c9662a5a2d7f356c4b11e807fcaf7。12现public generator正规生成，五独立private/profile及policy3不漂移。200操作只有scheduled-task-runs新增；API/MCP/Skills/Run执行展示无本次wire增量。test-only有限inverse保整份approved28.17与RSS20各自完整hash及有序inventory，再接原历史链；只消费正式committed public proof片段，不依赖sibling可编辑源码或SQL事实。
+
+ScheduledTask既有feature按共同祖先逐文件核对后承接正常1f700的calendar/RSS闭集、原命令key/body/未知恢复、编辑器、筛选、日历与运行记录。只在现KokoroAppSurface增加必要home workflow→现ScheduledTaskSurface选择，不触engine、Run、transport或展示。RSS的feed检查时间与运行observation不冒日历执行时间；已保存配置/排程不代表任务运行成功。Unsupported审批控件保持disabled，用scheduled局部准确原因，不改全局提示。
+
+运行记录薄桥与reader沿现Product Session及scope：服务端10秒完整绝对期限含初末会话核验/EOF，浏览器15秒/调用者取消、无自动重试；strict closed页、opaque cursor与身份/过滤/大小/时间精度均保持。正常源由Root成对激活，本候选源码完成不代表正常3314已更新。
+
+## 2026-11-02 B-01 精确详情失败恢复
+
+API、Provider、provider connection 与 private server 保持原 exact reader owner；本窗口显式 attempt 只驱动失败 GET，scope 同时绑定 actor、准入代、locator、窗口及既有修订/binding。同步 pending 防双击，退休闭包/迟到响应不更新新窗口。重试保留可见失败反馈、等待中禁用，失败按现 McpReadFeedback 焦点所有权恢复，用户已移焦不抢回。创建交接仍不读列表；Save / Create / Prepare / unknown 原请求生命周期不变。
+
+## 2026-11-01 B-14 Manifest 展示读取的有限等待
+
+现 `use-runtime-manifest`每个非preview scope只设一次20秒绝对预算，覆盖fetch至body解析；异步边界核单调时钟，timer尚未获调度也不能让截止时刻的响应生效。成功、错误、超时各settle一次并清timer；超时退休/abort本次读取、恢复PRODUCT默认source:error并清retrying。cleanup、模式切换和新attempt静默取消，旧迟到不能再消费JSON或应用主题；未由当前controller取消的AbortError按失败处理。只有显式GET retry建立新attempt，不自动重试、不阻塞核心Chat、不退成preview。原manifest解码、空导航、theme/locale过滤与权限边界保持；正常缺System配置的503、历史pending与本源码缺口分别取证。
+
+## 2026-11-01 B-01 读取错误的局部恢复
+
+沿现 MCP / Provider / relations / Custom API reader 分别呈现可见内联失败与 GET 重试，保留同主体代际的已读卡片；只有当前相关读取均权威成功才展示全空/无匹配，不把旧 confirmed 空视为当前事实。API 故障只影响管理列表或 All 广场，不污染无关 Provider 分类。目录弹窗复用同一紧凑反馈，不用整页错误卡替换内容。
+
+现 MCP projection 和 Custom API head reload 增补当前 owner/generation 的同步 attempt/pending 围栏，并由匹配读取的实际 settlement 释放；不轮询 loading、不用计时器假解锁、不刷新健康 aggregate、不重放创建/连接/Prepare。Provider 目录沿原 tail/循环恢复，API 普通尾页沿原 cursor，循环停止后显式重读 head。当前 owner/admitted 校验及已有401再准入、abort/迟到隔离保持，无新错误中心或读取服务。
+
+## 2026-11-01 B-01 创建完成后的精确详情衔接
+
+沿现有 actor-owned connector command 生命周期保留创建ACK的安全locator投影：Custom API仅profileId，JSON仅原序exact serverId/connectorId/providerKey及非秘密名称；不保存raw ACK、URL、headers或environment。主命令仍唯一保存原body/key与unknown显式重试，不新增POST/自动Prepare。投影只在可信Hub严格ACK后接受，换actor退休清除；读取须核flow/boundary/completed，finish前捕获到本form mounted窗口，完成回调失败仅重试UI衔接，不重发命令。完成前后核current窗口；晚ACK只使原actor读失效，不自动弹已关闭或其它主体窗口。
+
+复用现McpCreateDialog与McpProjectionRead详情协调：API沿窄createdApiDetail初始化既有apiIntent并fresh exact GET；JSON单项沿现createdDetail（不将导入ACK冒充当前配置）；多项在同窗口展示原序结果供明确选择，详情关闭可回列表。关闭、已确认删除均通知外层结束，不残留空壳。换client/actor/mode/open退役；同主体新代只保locator，事实随reader生命周期重验。沿现Dialog/按钮、键盘及回焦，不建新owner/存储/通用工作流。
+
 ## Composer Custom API safe selection（Root已核准，正式契约消费者候选）
 
 在现连接器入口复用同一行展示，独立消费本人Custom API列表的profile_id/state_version/name/icon，不把profileID映射成MCP Connection ID，不推导执行权限或自动选择。32项安全引用在engine内独立保存、深冻结至原提交意图；同actor当前catalog刷新不重基已选CAS。Project overview保持本地draft，与保留会话/MCP推荐隔离；新任务分配后沿现提交桥转交。现列表按页一次，不做逐profile GET；actor/generation/route/abort与迟到回调退休，loading/error保持安静且不伪空。
@@ -3626,6 +3676,8 @@ Web 不复制 BFF OpenAPI，也不把同源 contract 放进 Developer API。详�
 | 删除/验证 | 删除 section 内重复四字段类型与旧不安全读取/保存编排；复用 schema 类型。新增真实交互回归覆盖读失败零写、连续编辑、冲突恢复、卸载取消；focused、contract、architecture、lint/type/test/build/e2e 由主控验收并记录未执行项。 |
 
 ## SET-07：账户本人资料读取与设置展示（设计已定，待实现）
+
+2026-11-03 头像读取补记：IAM 锁定的 `@better-auth/oauth-provider` 1.7.3 已由 `profile` scope 将 `user.image` 发布为标准 `picture` claim；现有 Web 投影将它丢弃。沿原 userinfo → 同源账户资料 → 原账户卡补可选 `picture`，不改 IAM/BFF 公共契约、scope、持久化或上传能力。只接受不含用户认证信息、最长 2048 字符的 HTTPS URL；可选 claim 无效时仅省略图片，其他资料照常读取。浏览器复用原 Radix Avatar 加载，无服务端图片代理或优化请求，使用 no-referrer/anonymous；加载失败保留姓名首字母。原主体/准入代退休与最终 session 复验继续生效，Avatar 按读取 scope 和 URL 重新挂载，避免沿用旧账号图片。旧响应未带 picture 仍合法；原账户姓名 CAS 写入格式不变。验证覆盖标准 claim、危险 URL、旧响应、图片成功/失败及身份退休。
 
 | 项 | 决定 |
 | --- | --- |

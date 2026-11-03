@@ -1115,7 +1115,7 @@ describe("SettingsModal 设置中心模态", () => {
 
     expect(screen.getByRole("tablist")).toHaveAttribute(
       "aria-orientation",
-      "horizontal",
+      "vertical",
     );
     expect(screen.getByTestId("settings-tab-mcp")).toBeVisible();
     expect(screen.getByTestId("settings-tab-skills")).toBeVisible();
@@ -1229,6 +1229,7 @@ describe("R255 preset retirement: Settings model-only preferences", () => {
     expect(screen.getByTestId("settings-default-model")).toHaveTextContent(
       "跟随空间缺省",
     );
+    await waitFor(() => expect(screen.getByTestId("settings-default-model")).toBeEnabled());
     fireEvent.click(screen.getByTestId("settings-default-model"));
     fireEvent.click(await screen.findByRole("option", { name: "opus" }));
     expect(screen.getByTestId("settings-saved")).toBeInTheDocument();
@@ -1593,7 +1594,7 @@ describe("SET24 deadline and retirement followups", () => {
   it("actual client suppresses late valid503 issuer navigation after identity retirement", async () => {
     const actual = await vi.importActual<typeof import("@/ui/auth/product-auth-client")>("@/ui/auth/product-auth-client");
     const navigate = vi.fn();
-    let finishBody!: (raw: { issuer_end_session_url: string }) => void;
+    let finishBody!: (raw: { status: string; issuer_end_session_url: string }) => void;
     let requestSignal: AbortSignal | undefined;
     const fetcher = vi.fn()
       .mockResolvedValueOnce({ ok: true, json: async () => ({ csrfToken: "Csrf123" }) })
@@ -1611,7 +1612,7 @@ describe("SET24 deadline and retirement followups", () => {
       mounted.change("logout-owner", 2, true);
       expect(requestSignal?.aborted).toBe(true);
       const { act } = await import("@testing-library/react");
-      await act(async () => { finishBody({ issuer_end_session_url: "/iam/oauth2/end-session?fixture=valid" }); });
+      await act(async () => { finishBody({ status: "browser_cookie_cleared", issuer_end_session_url: "/iam/oauth2/end-session?fixture=valid" }); });
       expect(navigate).not.toHaveBeenCalled();
       expect(fetcher).toHaveBeenCalledTimes(2);
       expect(screen.queryByRole("alert")).toBeNull();
@@ -1625,7 +1626,7 @@ describe("SET24 deadline and retirement followups", () => {
     const fetcher = vi.fn()
       .mockResolvedValueOnce({ ok: true, json: async () => ({ csrfToken: "Csrf123" }) })
       .mockResolvedValueOnce({ ok: false, status: 503,
-        json: async () => ({ issuer_end_session_url: "/iam/oauth2/end-session?fixture=valid" }) });
+        json: async () => ({ status: "browser_cookie_cleared", issuer_end_session_url: "/iam/oauth2/end-session?fixture=valid" }) });
     endProductSession.mockImplementation((_guardedNavigate: unknown, signal?: AbortSignal) => actual.endProductSession(navigate, signal));
     try {
       vi.stubGlobal("fetch", fetcher);
@@ -1717,6 +1718,81 @@ describe("SET25 existing chat model preference reliability", () => {
     return { succeed: () => { fail = false; }, restore: () => spy.mockRestore() };
   }
 
+  type ModelBoundary = NonNullable<ComponentProps<typeof SettingsModal>["readBoundary"]>;
+  const admittedModelBoundary: ModelBoundary = { admitted: true, subject: "model-owner-A", generation: 1 };
+  const changedModelBoundary = (change: "blocked" | "subject" | "generation"): ModelBoundary => ({ admitted: change !== "blocked", subject: change === "subject" ? "model-owner-B" : "model-owner-A", generation: change === "generation" || change === "blocked" ? 2 : 1 });
+  const drawModelSettings = (readBoundary?: ModelBoundary) => <ThemeProvider><LocaleProvider><SettingsModal initialTab="chat" preview={false} brandName="Acme" {...(readBoundary === undefined ? {} : { readBoundary })} onClose={() => {}} /></LocaleProvider></ThemeProvider>;
+
+  it.each(["blocked", "subject", "generation"] as const)("retires a pending model catalog on %s and ignores its noncooperative late result", async change => {
+    localStorage.setItem("kokoro.locale", "zh");
+    localStorage.setItem("kokoro.web.chat-prefs.v2", oldRaw);
+    let finishOld!: (value: typeof catalog) => void;
+    const signals: (AbortSignal | undefined)[] = [];
+    const request = vi.fn((options?: { signal?: AbortSignal }) => {
+      signals.push(options?.signal);
+      return signals.length === 1 ? new Promise<typeof catalog>(resolve => { finishOld = resolve }) : Promise.resolve({ models: [], next_cursor: null });
+    });
+    const spy = modelCatalog(request);
+    try {
+      const mounted = render(drawModelSettings(admittedModelBoundary));
+      expect(request).toHaveBeenCalledOnce();
+      mounted.rerender(drawModelSettings(changedModelBoundary(change)));
+      await act(async () => { finishOld(catalog); });
+      expect(signals[0]?.aborted).toBe(true);
+      expect(request).toHaveBeenCalledTimes(change === "blocked" ? 1 : 2);
+      if (change === "blocked") {
+        expect(screen.getByTestId("settings-default-model")).toBeDisabled();
+      } else {
+        fireEvent.click(screen.getByTestId("settings-default-model"));
+        expect(await screen.findByRole("option", { name: "跟随空间缺省" })).toBeInTheDocument();
+      }
+      expect(screen.queryByRole("option", { name: "opus" })).toBeNull();
+      expect(localStorage.getItem("kokoro.web.chat-prefs.v2")).toBe(oldRaw);
+      expect(screen.queryByTestId("settings-saved")).toBeNull();
+    } finally { spy.mockRestore(); }
+  });
+
+  it.each(["blocked", "subject", "generation"] as const)("retires an open model portal on %s without letting its old option save a device preference", async change => {
+    localStorage.setItem("kokoro.locale", "zh");
+    localStorage.setItem("kokoro.web.chat-prefs.v2", oldRaw);
+    let finishFresh!: (value: typeof catalog) => void;
+    const request = vi.fn().mockResolvedValueOnce(catalog).mockImplementationOnce(() => new Promise<typeof catalog>(resolve => { finishFresh = resolve }));
+    const spy = modelCatalog(request);
+    try {
+      const mounted = render(drawModelSettings(admittedModelBoundary));
+      await waitFor(() => expect(screen.getByTestId("settings-default-model")).toBeEnabled());
+      fireEvent.click(screen.getByTestId("settings-default-model"));
+      const oldOption = await screen.findByRole("option", { name: "opus" });
+      mounted.rerender(drawModelSettings(changedModelBoundary(change)));
+      expect(screen.queryByRole("option", { name: "opus" })).toBeNull();
+      expect(screen.getByTestId("settings-default-model")).toBeDisabled();
+      fireEvent.click(oldOption);
+      expect(localStorage.getItem("kokoro.web.chat-prefs.v2")).toBe(oldRaw);
+      expect(screen.queryByTestId("settings-saved")).toBeNull();
+      expect(request).toHaveBeenCalledTimes(change === "blocked" ? 1 : 2);
+      if (change !== "blocked") {
+        await act(async () => { finishFresh({ models: [], next_cursor: null }); });
+        expect(screen.getByTestId("settings-default-model")).toBeEnabled();
+        expect(localStorage.getItem("kokoro.web.chat-prefs.v2")).toBe(oldRaw);
+      }
+    } finally { spy.mockRestore(); }
+  });
+
+  it("keeps a real model directory without an admitted identity closed and reads fresh after admission", async () => {
+    localStorage.setItem("kokoro.locale", "zh");
+    const request = vi.fn().mockResolvedValue(catalog);
+    const spy = modelCatalog(request);
+    try {
+      const mounted = render(drawModelSettings());
+      expect(request).not.toHaveBeenCalled();
+      expect(screen.getByTestId("settings-default-model")).toBeDisabled();
+      mounted.rerender(drawModelSettings(admittedModelBoundary));
+      await waitFor(() => expect(request).toHaveBeenCalledOnce());
+      fireEvent.click(screen.getByTestId("settings-default-model"));
+      expect(await screen.findByRole("option", { name: "opus" })).toBeInTheDocument();
+    } finally { spy.mockRestore(); }
+  });
+
   it("failed model write preserves raw/cache and never claims saved", async () => {
     localStorage.setItem("kokoro.web.chat-prefs.v2", oldRaw);
     const read = await preferenceReader();
@@ -1799,7 +1875,7 @@ describe("SET25 existing chat model preference reliability", () => {
     const request = vi.fn().mockImplementationOnce(() => new Promise((resolve) => { finishOld = resolve; })).mockResolvedValueOnce({ models: [], next_cursor: null });
     const spy = modelCatalog(request);
     const draw = (preview: boolean) => <ThemeProvider><LocaleProvider><SettingsModal
-      initialTab="chat" preview={preview} brandName="Acme" onClose={() => {}} /></LocaleProvider></ThemeProvider>;
+      initialTab="chat" preview={preview} readBoundary={{ admitted: true, subject: "settings-reader", generation: 1 }} brandName="Acme" onClose={() => {}} /></LocaleProvider></ThemeProvider>;
     try {
       const mounted = render(draw(false));
       expect(request).toHaveBeenCalledOnce();

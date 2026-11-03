@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import type { ModelCandidate } from "@/contract/http";
+import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
 import { useT } from "@/i18n/context";
 import { browserListClient } from "@/ui/shell/page-clients";
 import { Button } from "@/components/ui/button";
@@ -30,11 +31,16 @@ const FOLLOW_PROFILE_VALUE = "__follow_profile__";
 // 工作台新对话首帧预填（会话级锁语义不变）。
 export function ChatPreferencesSection({
   preview = false,
+  readBoundary,
 }: {
   preview?: boolean;
+  readBoundary?: ProjectReadBoundary;
 }) {
   const t = useT();
-  const [models, setModels] = useState<readonly ModelCandidate[]>([]);
+  const canRead = preview || Boolean(readBoundary?.admitted && readBoundary.subject !== null);
+  const scope = JSON.stringify([preview, readBoundary?.admitted ?? false, readBoundary?.subject ?? null, readBoundary?.generation ?? 0]);
+  const token = useMemo(() => ({ scope }), [scope]);
+  const live = useRef<typeof token | null>(null);
   const [model, setModel] = useState<string>(
     () => readChatModel() ?? FOLLOW_PROFILE,
   );
@@ -42,18 +48,21 @@ export function ChatPreferencesSection({
   const [saved, setSaved] = useState(false);
 
   const [saveFailed, setSaveFailed] = useState(false);
-  const [catalogState, setCatalogState] = useState<{ preview: boolean; phase: "loading" | "error" | "ready" }>({ preview, phase: "loading" });
-  if (catalogState.preview !== preview) setCatalogState({ preview, phase: "loading" });
-  const catalog = catalogState.preview === preview ? catalogState.phase : "loading";
-  const setCatalog = (phase: "loading" | "error" | "ready") => setCatalogState({ preview, phase });
+  const [catalogState, setCatalogState] = useState<{ scope: string; phase: "loading" | "error" | "ready" | "blocked"; models: readonly ModelCandidate[] }>({ scope, phase: canRead ? "loading" : "blocked", models: [] });
+  if (catalogState.scope !== scope) setCatalogState({ scope, phase: canRead ? "loading" : "blocked", models: [] });
+  const catalog = !canRead ? "blocked" : catalogState.scope === scope ? catalogState.phase : "loading";
+  const models = catalogState.scope === scope ? catalogState.models : [];
+  const setCatalog = (phase: "loading" | "error" | "ready") => setCatalogState(current => ({ scope, phase, models: current.scope === scope ? current.models : [] }));
   const attempt = useRef<{ epoch: number; clear: () => void } | null>(null);
   const epoch = useRef(0);
 
   const loadModels = (): void => {
+    if (!canRead || live.current !== token) return;
     attempt.current?.clear();
     const currentEpoch = ++epoch.current;
     const deadline = performance.now() + 10_000;
-    const active = () => attempt.current?.epoch === currentEpoch;
+    const active = () => attempt.current?.epoch === currentEpoch && live.current === token;
+    const controller = new AbortController();
     const fail = () => {
       if (!active()) return;
       attempt.current?.clear();
@@ -61,28 +70,30 @@ export function ChatPreferencesSection({
       setCatalog("error");
     };
     const timer = setTimeout(fail, 10_000);
-    attempt.current = { epoch: currentEpoch, clear: () => clearTimeout(timer) };
+    attempt.current = { epoch: currentEpoch, clear: () => { clearTimeout(timer); controller.abort(); } };
     try {
-      void browserListClient({ preview }).listModels().then((list) => {
+      void browserListClient({ preview }).listModels({ signal: controller.signal }).then((list) => {
         if (!active()) return;
         if (performance.now() >= deadline) { fail(); return; }
         attempt.current?.clear();
         attempt.current = null;
-        setModels(list.models);
-        setCatalog("ready");
+        setCatalogState({ scope, phase: "ready", models: list.models });
       }).catch(fail);
     } catch { queueMicrotask(fail); }
   };
 
   useLayoutEffect(() => {
+    live.current = token;
     loadModels();
     return () => {
+      if (live.current === token) live.current = null;
       attempt.current?.clear();
       attempt.current = null;
     };
-    // A preview commit owns a fresh attempt; explicit retry uses the same caller.
+    // Each admission owns its catalog, including preview. Explicit retry keeps
+    // this lifetime; retired requests cannot repopulate it or save an option.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [preview]);
+  }, [token, canRead]);
 
   useEffect(() => {
     if (!saved) {
@@ -136,18 +147,19 @@ export function ChatPreferencesSection({
           {t("settings.defaultModel")}
         </FieldLabel>
         <Select
+          key={scope}
           value={model === FOLLOW_PROFILE ? FOLLOW_PROFILE_VALUE : model}
-          onValueChange={(value) =>
-            onModelChange(
-              value === FOLLOW_PROFILE_VALUE ? FOLLOW_PROFILE : value,
-            )
-          }
+          onValueChange={(value) => {
+            if (!canRead || live.current !== token || catalog !== "ready") return;
+            if (value !== FOLLOW_PROFILE_VALUE && !models.some(candidate => modelSelector(candidate) === value)) return;
+            onModelChange(value === FOLLOW_PROFILE_VALUE ? FOLLOW_PROFILE : value);
+          }}
         >
           <SelectTrigger
             id="settings-default-model"
             className={styles.select}
             data-testid="settings-default-model"
-            disabled={catalog === "error"}
+            disabled={catalog !== "ready"}
           >
             <SelectValue placeholder={t("settings.followProfile")}>
               {catalog !== "ready" ? (model === FOLLOW_PROFILE ? t("settings.followProfile") : model) : undefined}
@@ -184,7 +196,7 @@ export function ChatPreferencesSection({
 
 /** Kept as a deep-linkable panel for existing /settings/chat URLs. The left rail
  * follows Manus; this model preference is not a General control. */
-export function ChatPrefsCard({ preview = false }: { preview?: boolean }) {
+export function ChatPrefsCard({ preview = false, readBoundary }: { preview?: boolean; readBoundary?: ProjectReadBoundary }) {
   return (
     <Card
       className={styles.card}
@@ -192,7 +204,7 @@ export function ChatPrefsCard({ preview = false }: { preview?: boolean }) {
       data-testid="settings-chat"
     >
       <CardContent className={styles.cardContent}>
-        <ChatPreferencesSection preview={preview} />
+        <ChatPreferencesSection preview={preview} {...(readBoundary === undefined ? {} : { readBoundary })} />
       </CardContent>
     </Card>
   );

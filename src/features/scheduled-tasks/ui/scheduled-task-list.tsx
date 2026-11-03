@@ -3,7 +3,6 @@
 import { Check, Plus } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useLocale, useT } from "@/i18n/context"
 import { formatDeliveryTime } from "@/ui/canvas/canvas-panel"
 
@@ -25,7 +24,6 @@ type ScheduledTaskListProps = {
   canRetry: boolean
   canDelete: boolean
   openEditor: (prompt?: string, target?: HTMLElement | null, task?: ScheduledTaskRecord | null) => void
-  switchView: (next: string) => void
   setDeleteTarget: (task: ScheduledTaskRecord) => void
   retryTask: (task: ScheduledTaskRecord) => Promise<void>
   setTaskEnabled: (task: ScheduledTaskRecord, enabled: boolean) => Promise<void>
@@ -43,7 +41,6 @@ export function ScheduledTaskList({
   canRetry,
   canDelete,
   openEditor,
-  switchView,
   setDeleteTarget,
   retryTask,
   setTaskEnabled,
@@ -67,16 +64,6 @@ export function ScheduledTaskList({
           {t("scheduled.create")}
         </Button>
       </div>
-      <Tabs value={view} onValueChange={switchView} className={styles.views}>
-        <TabsList variant="line" className={styles.viewTabs} aria-label={t("rail.navScheduled")}>
-          <TabsTrigger value="calendar" className={styles.viewTab}>
-            {t("scheduled.tabCalendar")}
-          </TabsTrigger>
-          <TabsTrigger value="list" className={styles.viewTab}>
-            {t("scheduled.tabTasks")}
-          </TabsTrigger>
-        </TabsList>
-      </Tabs>
       {view === "calendar" ? null : (
         <div className={styles.taskList} role="list" aria-label={t("rail.navScheduled")}>
           {tasks.map((task) => (
@@ -153,7 +140,7 @@ function ScheduledTaskListItem({
       </span>
       <div className={styles.taskDetails}>
         <strong>{task.title}</strong>
-        <span>
+        {task.triggerKind === "rss" ? <RssTaskFacts task={task} status={status} /> : <span>
           {t(
             task.frequency === "weekly"
               ? "firstSite.weekly"
@@ -165,7 +152,7 @@ function ScheduledTaskListItem({
           )}
           {ruleLabel ? ` ${ruleLabel}` : ""} · {task.time}
           {task.timezone ? ` (${task.timezone})` : ""} · {t(statusMessageKey(status))}
-        </span>
+        </span>}
         {isMutating && pendingMutation ? (
           <span className={styles.mutationStatus} role="status">
             {t(mutationMessageKey(pendingMutation.operation))}
@@ -195,4 +182,19 @@ function ScheduledTaskListItem({
       />
     </article>
   )
+}
+
+function RssTaskFacts({ task, status }: {
+  task: Extract<ScheduledTaskRecord, { triggerKind: "rss" }>
+  status: NonNullable<ScheduledTaskRecord["schedulingState"]>
+}) {
+  const t = useT(), { locale } = useLocale()
+  const labels = { initializing: "scheduled.rssInitializing", active: "scheduled.rssActive", backoff: "scheduled.rssBackoff", limit_reached: "scheduled.rssLimitReached" } as const
+  return <div className={styles.rssFacts}>
+    <span>{task.feedUrl}</span>
+    <span>{t(status === "active" ? (task.feedState ? labels[task.feedState] : "scheduled.rssPreviewUnavailable") : statusMessageKey(status))}</span>
+    {task.lastCheckedAt ? <span>{t("scheduled.rssLastChecked")} · <time dateTime={task.lastCheckedAt}>{formatDeliveryTime(task.lastCheckedAt, locale)}</time></span> : null}
+    {status === "active" && task.nextCheckAt ? <span>{t("scheduled.rssNextCheck")} · <time dateTime={task.nextCheckAt}>{formatDeliveryTime(task.nextCheckAt, locale)}</time></span> : null}
+    {task.errorCode ? <span>{t("scheduled.rssCheckError")} · {task.errorCode}</span> : null}
+  </div>
 }

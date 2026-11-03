@@ -22,6 +22,15 @@ export type McpConnectorEditor = {
   server?: McpPrivateServer;
 };
 
+/** This is a saved configuration locator, not execution or private-read authority. */
+export function isDisconnectedMcpConfiguration(connector: McpConnector): boolean {
+  return connector.connector_type === "mcp" && Boolean(connector.server_id) && connector.status === "revoked" && !connector.enabled;
+}
+
+export function isVisibleMcpConfiguration(connector: McpConnector): boolean {
+  return connector.status !== "revoked" || isDisconnectedMcpConfiguration(connector);
+}
+
 export const MCP_CATEGORY_MESSAGES = {
   efficiency: "mcp.categoryEfficiency",
   creation: "mcp.categoryCreation",

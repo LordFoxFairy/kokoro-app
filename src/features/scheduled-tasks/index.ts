@@ -12,6 +12,7 @@ export {
 export { isScheduledTaskRecord } from "./model/scheduled-task"
 export { ScheduledTaskEditorDialog } from "./ui/scheduled-task-editor"
 export { ScheduledTaskSurface } from "./ui/scheduled-task-surface"
+export { useScheduledLocation } from "./ui/scheduled-task-location"
 export type { ScheduledTaskClientFailureReason } from "./api/scheduled-task-client"
 export type { ScheduledTaskSurfaceProps } from "./ui/scheduled-task-surface.types"
 export type {
@@ -24,3 +25,5 @@ export type {
   ScheduledTaskRecord,
   ScheduledTaskStatus,
 } from "./model/scheduled-task"
+
+export type { ScheduledTaskRun, ScheduledTaskRunPage, ScheduledTaskRunState, ScheduledTaskRunsQuery, ScheduledTaskRunsReader } from "./model/scheduled-task-run"

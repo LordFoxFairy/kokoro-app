@@ -70,6 +70,8 @@ export function ProjectSkillsSection({
   const locked =
     !model.allowed || model.status !== "ready" || model.listStatus !== "ready" || model.pending !== null
   const readBusy = !preview && (model.status === "blocked" || model.status === "loading" || model.listStatus === "loading")
+  const readFailed = !preview && model.pending === null &&
+    (model.status === "error" || (model.status === "ready" && model.listStatus === "error"))
   const changed = selection !== null && JSON.stringify(ids) !== JSON.stringify(selection.installation_ids)
   const settings = () => {
     setOpen(false)
@@ -178,6 +180,14 @@ export function ProjectSkillsSection({
                 ) : null}
               </div>
             ) : null}
+            {readFailed ? (
+              <div className={styles.feedback} role="alert">
+                <p>{t("projectSkills.readFailed")}</p>
+                <Button variant="outline" disabled={!model.allowed || readBusy} onClick={model.reload}>
+                  {t("projectSkills.reload")}
+                </Button>
+              </div>
+            ) : null}
             {source !== null && projectReadBoundary !== undefined ? (
               <ProjectSkillSourcePicker
                 mode={source}
@@ -198,12 +208,9 @@ export function ProjectSkillsSection({
                   <p className="sr-only" role="status">
                     {model.status === "blocked" ? t("projectSkills.checking") : t("projectSkills.loading")}
                   </p>
-                ) : model.status === "error" ? (
-                  <p className="sr-only" role="status">{t("projectSkills.readFailed")}</p>
-                ) : (
+                ) : model.status === "error" ? null : (
                   <>
-                    {model.listStatus === "loading" ? <p className="sr-only" role="status">{t("projectSkills.loading")}</p>
-                      : model.listStatus === "error" ? <p className="sr-only" role="status">{t("projectSkills.readFailed")}</p> : null}
+                    {model.listStatus === "loading" ? <p className="sr-only" role="status">{t("projectSkills.loading")}</p> : null}
                     {model.listStatus === "ready" && model.facts?.items.length === 0 ? (
                       emptyContent
                     ) : (

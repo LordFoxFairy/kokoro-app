@@ -282,7 +282,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe("failureCopyKey — generated 11-code safe profile localization", () => {
+describe("failureCopyKey — generated 12-code safe profile localization", () => {
   it("每个闭集码映射到一个存在的、非通用的文案键", () => {
     for (const code of CODES) {
       const key = failureCopyKey(failedThread(code).runFailuresById.run_1 ?? null)
@@ -331,6 +331,28 @@ describe("failureCopyKey — generated 11-code safe profile localization", () =>
     expect(retry).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole("button", { name: tr("thread.retryOriginal") }))
     expect(retry).toHaveBeenCalledTimes(1)
+  })
+
+  it("personal context admission size failure retains the original request for explicit retry", () => {
+    window.localStorage.setItem(LOCALE_STORAGE_KEY, "zh")
+    const retry = vi.fn()
+    const thread = createSessionStreamState()
+    thread.messages = [{ id: "original", role: "user", content: "keep this exact task", runId: "original" }]
+    renderFailure(thread, retry, "personal_context_too_large", true)
+    expect(screen.getByRole("alert")).toHaveTextContent("个人资料或知识内容过多，尚未提交任务。请减少内容后手动重试原请求。")
+    expect(screen.getByText("keep this exact task")).toBeVisible()
+    expect(retry).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole("button", { name: zh["thread.retry"] }))
+    expect(retry).toHaveBeenCalledTimes(1)
+  })
+
+  it("context window terminal failure requires a new task or regeneration, not retrying a frozen Run", () => {
+    window.localStorage.setItem(LOCALE_STORAGE_KEY, "zh")
+    const retry = vi.fn()
+    renderFailure(failedThread("context_window_exceeded"), retry)
+    expect(screen.getByRole("alert")).toHaveTextContent("这一轮的上下文内容过多，已停止。请减少个人资料、知识或任务内容后，重新发起任务或重新生成。")
+    expect(screen.queryByRole("button", { name: zh["thread.retry"] })).toBeNull()
+    expect(retry).not.toHaveBeenCalled()
   })
 
   it("中文安全文案不承诺重发原消息或暴露错误详情", () => {

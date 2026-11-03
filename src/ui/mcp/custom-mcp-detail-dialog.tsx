@@ -10,7 +10,7 @@ import { McpAvailabilityStatus } from "./mcp-availability-status";
 
 import { connectorCommandMayResume, connectorCommandFailureMessage, type ConnectorCommandFailure } from "./connector-command-failure";
 
-import { type FormEvent, type RefObject, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { type FormEvent, type ReactNode, type RefObject, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   ChevronDown,
   Copy,
@@ -108,11 +108,19 @@ export function CustomMcpDetailDialog({
   preparationRecoveryError = false,
   onRetryPreparationRecovery,
   pendingError = false,
+  readFeedback,
+  readOnlyConfiguration = false,
+  onNewAuthorization, newAuthorizationDisabled = false, reauthorizationStatus,
 }: {
   iconClient?: McpIconClient | undefined;
   iconBoundary?: ProjectReadBoundary | undefined;
   connector: McpConnector | null;
   server: McpPrivateServer | null;
+  /** Exact disconnected configuration reads never authorize a command. */
+  readOnlyConfiguration?: boolean;
+  onNewAuthorization?: (() => void) | undefined;
+  newAuthorizationDisabled?: boolean;
+  reauthorizationStatus?: import("react").ReactNode;
   preparationStatus?: import("react").ReactNode;
   preparationRetired?: boolean;
   preparationState?: "idle" | "running" | "unknown" | "rejected" | "completed";
@@ -122,6 +130,7 @@ export function CustomMcpDetailDialog({
   preparationRecoveryError?: boolean;
   onRetryPreparationRecovery?: () => void;
   pendingError?: boolean;
+  readFeedback?: ReactNode | undefined;
   actionId: string | null;
   admitted: boolean;
   managementCommand: McpManagementSummary | undefined;
@@ -154,6 +163,7 @@ export function CustomMcpDetailDialog({
   onDelete: () => void;
 }) {
   const t = useT();
+  const configurationReadOnly = readOnlyConfiguration || connector?.status === "revoked";
   const ready = admitted && server !== null && connector !== null;
   const currentServer = ready ? server : null;
   const [editing, setEditing] = useState(false);
@@ -257,19 +267,19 @@ export function CustomMcpDetailDialog({
   const savingThisConfiguration = editing && submittedTransport !== null && managementCommand?.kind === "running" &&
     managementCommand.operation === "update_server" && managementCommand.serverId === submittedTransport.serverId &&
     managementCommand.connectorId === submittedTransport.connectorId;
-  const managementStatus = savingThisConfiguration ? <span className="sr-only" role="status">{t("settings.name.saving")}</span>
+  const managementStatus = configurationReadOnly ? null : savingThisConfiguration ? <span className="sr-only" role="status">{t("settings.name.saving")}</span>
     : <McpManagementStatus command={managementCommand} admitted={admitted} onResume={onResumeManagement} />;
-  const locked = managementLocked || busy || !ready || !preparationRecoveryReady || preparationState === "running" || preparationState === "completed";
+  const locked = configurationReadOnly || managementLocked || busy || !ready || !preparationRecoveryReady || preparationState === "running" || preparationState === "completed";
   // The unknown-Prepare exception authorizes configuration Save only.
   const publicationLocked = locked || preparationState === "unknown";
   const icon = useMcpIconDraft(iconClient, iconBoundary ?? { subject: null, admitted: false, generation: 0 }, locked, configurationSaved, currentServer);
   const mayResumePreparation = preparationCanResume ?? (preparationState !== "unknown" && connectorCommandMayResume(preparationFailure));
   const prepareLabel = preparationState === "unknown" ? t("mcp.preparation.check") : preparationState === "completed" ? t("mcp.creationDone") : t("settings.connect");
-  const needsAuthorization = !preparationRetired && ready && canAuthorizePrivateMcp(connector, server) &&
+  const needsAuthorization = !configurationReadOnly && !preparationRetired && ready && canAuthorizePrivateMcp(connector, server) &&
     preparationState !== "running" && preparationState !== "completed";
   // Reauthorization is a distinct explicit owner operation, not an ACK or a
   // replacement for an unknown Prepare. Keep its original recovery reachable.
-  const trialAvailable = ready && preparationRecoveryReady && server.availability === "available" && connector.availability === "available" &&
+  const trialAvailable = !configurationReadOnly && ready && preparationRecoveryReady && server.availability === "available" && connector.availability === "available" &&
     server.prepare_status === "ready" && Boolean(server.connection_id) && connector.enabled && connector.status === "active" &&
     (preparationState === "idle" || preparationState === "rejected");
   const configurationDirty = editing && (
@@ -278,7 +288,7 @@ export function CustomMcpDetailDialog({
   );
   const showingTrial = trialAvailable || (retainingTransport && savedTransport.primaryIntent === "trial");
   const trialLocked = !trialAvailable || managementLocked || busy || configurationDirty || !onTrial;
-  const primaryAction = () => preparationRetired || preparationStatus && preparationState === "unknown" && !needsAuthorization ? null : showingTrial ? <Button type="button" variant={editing ? "outline" : "default"}
+  const primaryAction = () => configurationReadOnly || preparationRetired || preparationStatus && preparationState === "unknown" && !needsAuthorization ? null : showingTrial ? <Button type="button" variant={editing ? "outline" : "default"}
     disabled={trialLocked} onClick={() => { if (!trialLocked) setTrialError(onTrial?.() !== true); }}>
     <Send aria-hidden="true" />试用一下
   </Button> : <><Button type="button" variant={editing ? "outline" : "default"}
@@ -290,7 +300,7 @@ export function CustomMcpDetailDialog({
     disabled={!admitted || !preparationRecoveryReady || !mayResumePreparation} onClick={onPrepare}>
     {prepareLabel}
   </Button> : null}</>;
-  const recoveryStatus = !preparationRecoveryReady ? <Alert role="status">
+  const recoveryStatus = !configurationReadOnly && !preparationRecoveryReady ? <Alert role="status">
     <AlertDescription>{t(preparationRecoveryError ? "mcp.loadError" : "mcp.loading")}</AlertDescription>
     {preparationRecoveryError ? <Button type="button" variant="outline" disabled={!admitted || !onRetryPreparationRecovery} onClick={onRetryPreparationRecovery}>{t("mcp.retry")}</Button> : null}
   </Alert> : null;
@@ -392,7 +402,7 @@ export function CustomMcpDetailDialog({
   };
 
   const trialStatus = trialError ? <Alert variant="destructive" role="alert"><AlertDescription>{t("mcp.tryUnavailable")}</AlertDescription></Alert> : null;
-  const operationStatus = <>
+  const operationStatus = configurationReadOnly ? null : <>
     {preparationStatus}
     {!preparationStatus && preparationState === "unknown" ? <Alert role="alert"><AlertDescription>{t(connectorCommandFailureMessage(preparationFailure, "mcp.serverCreateUnknown"))}</AlertDescription></Alert> : null}
     {trialStatus}
@@ -421,7 +431,7 @@ export function CustomMcpDetailDialog({
         closeLabel={t("mcp.cancel")}
         onCloseAutoFocus={closeFocus}
       >
-        {editing ? (
+        {editing && !configurationReadOnly ? (
           <form
             {...selectionProps}
             className={styles.configuration}
@@ -446,9 +456,9 @@ export function CustomMcpDetailDialog({
             <div className={styles.configurationBody}>
               {configurationStatus}
               {managementStatus}
-              {!ready && (pendingError || !retainingTransport) ? (
-                <span className="sr-only" role="status">{t(pendingError ? "mcp.loadError" : "mcp.loading")}</span>
-              ) : null}
+              {readFeedback ?? (!ready && (pendingError || !retainingTransport) ? (
+                <span className={pendingError ? undefined : "sr-only"} role="status">{t(pendingError ? "mcp.loadError" : "mcp.loading")}</span>
+              ) : null)}
               {recoveryStatus}
               {actionError ? (
                 <Alert variant="destructive" role="alert">
@@ -661,7 +671,8 @@ export function CustomMcpDetailDialog({
               {operationStatus}
               {preparationState === "unknown" || preparationState === "completed" ? recoveryStatus : null}
               {managementStatus}
-              <span className="sr-only" role="status">{t(pendingError ? "mcp.loadError" : "mcp.loading")}</span>
+              {configurationReadOnly ? reauthorizationStatus : null}
+              {readFeedback ?? <span className={pendingError ? undefined : "sr-only"} role="status">{t(pendingError ? "mcp.loadError" : "mcp.loading")}</span>}
             </div>
           </section>
         ) : (
@@ -671,10 +682,12 @@ export function CustomMcpDetailDialog({
                 <McpBoundIcon icon={currentServer?.icon} alt="" fallback={server.display_name.slice(0, 1)} />
               </span>
               <DialogTitle>{server.display_name}</DialogTitle>
-              <McpAvailabilityStatus availability={server.availability} />
+              {configurationReadOnly ? <span role="status">{t("mcp.disconnectedBadge")}</span>
+                : <McpAvailabilityStatus availability={server.availability} />}
               <div className={styles.detailActions}>
                 {primaryAction()}
-                <DropdownMenu open={managementOpen} onOpenChange={setManagementOpen}>
+                {configurationReadOnly && onNewAuthorization ? <Button type="button" variant="outline" disabled={!ready || newAuthorizationDisabled} onClick={onNewAuthorization}>{t("mcp.newAuthorization")}</Button> : null}
+                {!configurationReadOnly ? <DropdownMenu open={managementOpen} onOpenChange={setManagementOpen}>
                   <DropdownMenuTrigger asChild>
                     <Button ref={detailMenuRef} type="button" variant="outline" disabled={managementLocked}>
                       管理
@@ -709,14 +722,15 @@ export function CustomMcpDetailDialog({
                       删除
                     </DropdownMenuItem>
                   </DropdownMenuContent>
-                </DropdownMenu>
+                </DropdownMenu> : null}
               </div>
             </header>
             <div className={styles.detailBody}>
+              {configurationReadOnly ? <><p>{t(onNewAuthorization ? "mcp.newAuthorizationExplanation" : "mcp.disconnectedConfigurationReadOnly")}</p>{reauthorizationStatus}</> : null}
               {operationStatus}
               {managementStatus}
               {recoveryStatus}
-              {publicationRecoveryError ? <Alert variant="destructive" role="alert">
+              {!configurationReadOnly && publicationRecoveryError ? <Alert variant="destructive" role="alert">
                 <AlertDescription>{t("mcp.publishRecoveryError")}</AlertDescription>
                 <Button type="button" variant="outline" disabled={!ready || !onRetryPublicationRecovery} onClick={() => onRetryPublicationRecovery?.()}>
                   {t("mcp.publishRetryRead")}
@@ -729,6 +743,12 @@ export function CustomMcpDetailDialog({
               ) : null}
               <h3>详情</h3>
               <dl className={styles.facts}>
+                {configurationReadOnly ? <>
+                  <div><dt>服务器 URL</dt><dd>{server.server_url}</dd></div>
+                  <div><dt>传输类型</dt><dd>{transportLabel}</dd></div>
+                  {server.notes ? <div><dt>备注</dt><dd>{server.notes}</dd></div> : null}
+                  {displayedHeaderNames.length > 0 ? <div><dt>Headers</dt><dd>{displayedHeaderNames.join(", ")}</dd></div> : null}
+                </> : null}
                 <div>
                   <dt>分类</dt>
                   <dd>未分类</dd>
@@ -754,7 +774,7 @@ export function CustomMcpDetailDialog({
                   </dd>
                 </div>
               </dl>
-              {deleteId === connector.connector_id ? (
+              {!configurationReadOnly && deleteId === connector.connector_id ? (
                 <div className={styles.deleteConfirm}>
                   <span>确认删除此自定义 MCP？</span>
                   <Button
@@ -780,7 +800,7 @@ export function CustomMcpDetailDialog({
           </section>
         )}
       </DialogContent>
-      {editing && jsonEditor?.scope === jsonScope && currentServer ? <McpConfigurationJsonDialog
+      {!configurationReadOnly && editing && jsonEditor?.scope === jsonScope && currentServer ? <McpConfigurationJsonDialog
         initialJson={jsonEditor.initialJson} transport={currentServer.transport} locked={locked || !icon.draft.canSave()}
         isCurrent={() => liveJsonScope.current === jsonScope && !locked && icon.draft.canSave()}
         status={<>{managementStatus}{actionError ? <Alert variant="destructive" role="alert"><AlertDescription>{t("mcp.actionFailed")}</AlertDescription></Alert> : null}</>}

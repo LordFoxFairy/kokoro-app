@@ -29,6 +29,11 @@ it("uses only the fixed same-origin readonly projection", async () => {
     }),
   );
 });
+it("reads a validated issuer picture through the existing account projection", async () => {
+  const profile = { ...data, picture: "https://images.example.test/alice.png" };
+  fetcher.mockResolvedValue(Response.json({ data: profile }));
+  expect(await readAccountProfile(signal())).toEqual(profile);
+});
 it.each([
   { data: { ...data, token: "secret" } },
   { data: { subject: "alice" } },

@@ -12,6 +12,176 @@ import { CustomApiDetailDialog } from "@/ui/mcp/custom-api-detail-dialog"
 
 afterEach(() => { cleanup(); window.sessionStorage.clear(); vi.unstubAllGlobals() })
 
+function personalProviderEditorFixture() {
+  window.localStorage.setItem("kokoro.locale", "zh")
+  const provider = { provider_key: "personal-metadata", display_name: "Catalog provider", directory_type: "app" as const,
+    description: "Shared directory description", category_keys: [], example_prompts: [], enabled: true, state_version: "1" }
+  let connector: McpConnector = { availability: "available", connector_id: "personal-metadata-connection", provider_key: provider.provider_key,
+    connector_type: "mcp", display_name: "My account", description: "My account notes", status: "active", enabled: true, approved_scopes: [], state_version: "3" }
+  const get = vi.fn<NonNullable<ReturnType<typeof createHubClient>["getMcpConnector"]>>().mockImplementation(async () => ({ ...connector, state_version: "9" }))
+  const update = vi.fn<ReturnType<typeof createHubClient>["updateMcpConnector"]>().mockImplementation(async (_id, input) => {
+    connector = { ...connector, display_name: input.display_name, description: input.description, state_version: "10" }
+    return connector
+  })
+  const authorize = vi.fn(), create = vi.fn(), prepare = vi.fn()
+  const client = { ...createHubClient(), getMcpConnector: get, updateMcpConnector: update,
+    createMcpConnector: create, beginMcpConnectorAuthorization: authorize, preparePrivateMcpServer: prepare,
+    listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [provider], next_cursor: null }),
+    listMcpConnectors: vi.fn(async () => ({ items: [connector], next_cursor: null })),
+    listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }) }
+  const show = (identity = "personal-metadata-owner", generation = 0) => <LocaleProvider>
+    <ConnectorCommandProvider client={client} boundary={{ subject: identity, admitted: true, generation }}>
+      <McpProjectionRead client={client} identity={identity} admitted readGeneration={generation} initialView="connections" />
+    </ConnectorCommandProvider>
+  </LocaleProvider>
+  return { provider, connector, get, update, client, authorize, create, prepare, show }
+}
+
+it("edits only personal Provider metadata after a fresh exact read, and Cancel never writes", async () => {
+  const { within, waitFor } = await import("@testing-library/react")
+  const fixture = personalProviderEditorFixture()
+  render(fixture.show())
+  fireEvent.click(await screen.findByRole("button", { name: "My account" }))
+  let detail = await screen.findByRole("dialog", { name: fixture.provider.display_name })
+  fireEvent.click(within(detail).getByRole("button", { name: "编辑" }))
+  let editor = await screen.findByRole("dialog", { name: "编辑" })
+  expect(await within(editor).findByRole("textbox", { name: "名称" })).toHaveValue("My account")
+  expect(within(editor).getByRole("textbox", { name: "说明" })).toHaveValue("My account notes")
+  expect(fixture.get).toHaveBeenCalledExactlyOnceWith("personal-metadata-connection", expect.any(AbortSignal))
+  fireEvent.change(within(editor).getByRole("textbox", { name: "名称" }), { target: { value: "Cancelled name" } })
+  fireEvent.click(within(editor.querySelector("footer")!).getByRole("button", { name: "取消" }))
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+  await waitFor(() => expect(screen.getByRole("button", { name: "My account" })).toHaveFocus())
+  expect(fixture.update).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole("button", { name: "My account" }))
+  detail = await screen.findByRole("dialog", { name: fixture.provider.display_name })
+  fireEvent.click(within(detail).getByRole("button", { name: "编辑" }))
+  editor = await screen.findByRole("dialog", { name: "编辑" })
+  expect(await within(editor).findByRole("textbox", { name: "名称" })).toHaveValue("My account")
+  fireEvent.change(within(editor).getByRole("textbox", { name: "名称" }), { target: { value: "Work account" } })
+  fireEvent.change(within(editor).getByRole("textbox", { name: "说明" }), { target: { value: "Private connection label" } })
+  expect(fixture.get).toHaveBeenCalledTimes(2)
+  fireEvent.click(within(editor).getByRole("button", { name: "保存修改" }))
+  await waitFor(() => expect(fixture.update).toHaveBeenCalledOnce())
+  expect(fixture.update.mock.calls[0]?.slice(0, 2)).toEqual(["personal-metadata-connection", {
+    expected_state_version: "9", display_name: "Work account", description: "Private connection label" }])
+  expect(fixture.update.mock.calls[0]?.[2]).toEqual(expect.any(String))
+  expect(await screen.findByRole("button", { name: "Work account" })).toBeVisible()
+  expect(fixture.provider.display_name).toBe("Catalog provider")
+  expect(fixture.authorize).not.toHaveBeenCalled()
+  expect(fixture.create).not.toHaveBeenCalled()
+  expect(fixture.prepare).not.toHaveBeenCalled()
+})
+
+it("recovers a failed personal metadata GET without offering Save or replaying any command", async () => {
+  const { within, waitFor } = await import("@testing-library/react")
+  const fixture = personalProviderEditorFixture()
+  fixture.get.mockRejectedValueOnce(new HubClientError("http", "Unavailable", "dependency_unavailable", 503))
+  render(fixture.show())
+  fireEvent.click(await screen.findByRole("button", { name: "My account" }))
+  fireEvent.click(within(await screen.findByRole("dialog", { name: fixture.provider.display_name })).getByRole("button", { name: "编辑" }))
+  const editor = await screen.findByRole("dialog", { name: "编辑" })
+  const retry = await within(editor).findByRole("button", { name: "重新加载已添加的连接器" })
+  expect(within(editor).getByText("已添加的连接器加载失败")).toBeVisible()
+  expect(within(editor).queryByRole("button", { name: "保存修改" })).not.toBeInTheDocument()
+  fireEvent.click(retry)
+  expect(await within(editor).findByRole("textbox", { name: "名称" })).toHaveValue("My account")
+  await waitFor(() => expect(fixture.get).toHaveBeenCalledTimes(2))
+  expect(fixture.update).not.toHaveBeenCalled()
+  expect(fixture.authorize).not.toHaveBeenCalled()
+  expect(fixture.create).not.toHaveBeenCalled()
+  expect(fixture.prepare).not.toHaveBeenCalled()
+})
+
+it.each(["revoked", "private", "type", "provider", "id"] as const)("a %s exact response cannot unlock personal Provider metadata editing", async drift => {
+  const { within } = await import("@testing-library/react")
+  const fixture = personalProviderEditorFixture()
+  fixture.get.mockResolvedValueOnce({ ...fixture.connector,
+    ...(drift === "revoked" ? { status: "revoked", enabled: false } : drift === "private" ? { server_id: "unexpected-private-server" }
+      : drift === "type" ? { connector_type: "byok" } : drift === "provider" ? { provider_key: "another-provider" } : { connector_id: "another-connection" }) })
+  render(fixture.show())
+  fireEvent.click(await screen.findByRole("button", { name: "My account" }))
+  fireEvent.click(within(await screen.findByRole("dialog", { name: fixture.provider.display_name })).getByRole("button", { name: "编辑" }))
+  const editor = await screen.findByRole("dialog", { name: "编辑" })
+  expect(await within(editor).findByText("已添加的连接器加载失败")).toBeVisible()
+  expect(within(editor).queryByRole("textbox")).not.toBeInTheDocument()
+  expect(within(editor).queryByRole("button", { name: "保存修改" })).not.toBeInTheDocument()
+  expect(fixture.update).not.toHaveBeenCalled()
+})
+
+it("an unknown personal metadata Save keeps its original key, body and CAS across close and Provider recovery", async () => {
+  const { within, waitFor } = await import("@testing-library/react")
+  const fixture = personalProviderEditorFixture()
+  fixture.update.mockRejectedValueOnce(new HubClientError("http", "Unconfirmed", "dependency_unavailable", 503))
+  render(fixture.show())
+  fireEvent.click(await screen.findByRole("button", { name: "My account" }))
+  fireEvent.click(within(await screen.findByRole("dialog", { name: fixture.provider.display_name })).getByRole("button", { name: "编辑" }))
+  const editor = await screen.findByRole("dialog", { name: "编辑" })
+  fireEvent.change(await within(editor).findByRole("textbox", { name: "名称" }), { target: { value: "Frozen name" } })
+  fireEvent.click(within(editor).getByRole("button", { name: "保存修改" }))
+  expect(await within(editor).findByRole("button", { name: "重试原请求" })).toBeEnabled()
+  expect(within(editor).getByRole("textbox", { name: "名称" })).toHaveAttribute("readonly")
+  fireEvent.click(within(editor.querySelector("footer")!).getByRole("button", { name: "取消" }))
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+  fireEvent.click(screen.getByRole("button", { name: "My account" }))
+  const detail = await screen.findByRole("dialog", { name: fixture.provider.display_name })
+  expect(within(detail).getByRole("button", { name: "编辑" })).toBeDisabled()
+  fireEvent.click(within(detail).getByRole("button", { name: "重试原请求" }))
+  await waitFor(() => expect(fixture.update).toHaveBeenCalledTimes(2))
+  expect(fixture.update.mock.calls[1]?.slice(0, 3)).toEqual(fixture.update.mock.calls[0]?.slice(0, 3))
+  expect(fixture.update.mock.calls[1]?.[1]).toEqual({ expected_state_version: "9", display_name: "Frozen name", description: "My account notes" })
+  expect(await screen.findByRole("button", { name: "Frozen name" })).toBeVisible()
+  expect(fixture.authorize).not.toHaveBeenCalled()
+  expect(fixture.prepare).not.toHaveBeenCalled()
+})
+
+it.each(["close", "actor", "generation"] as const)("a late personal metadata GET retires on %s before fields or commands are exposed", async retirement => {
+  const { act, within, waitFor } = await import("@testing-library/react")
+  const fixture = personalProviderEditorFixture()
+  let finish!: (value: McpConnector) => void
+  fixture.get.mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+  const view = render(fixture.show())
+  fireEvent.click(await screen.findByRole("button", { name: "My account" }))
+  fireEvent.click(within(await screen.findByRole("dialog", { name: fixture.provider.display_name })).getByRole("button", { name: "编辑" }))
+  const editor = await screen.findByRole("dialog", { name: "编辑" })
+  expect(within(editor).queryByRole("textbox")).not.toBeInTheDocument()
+  await waitFor(() => expect(fixture.get).toHaveBeenCalledOnce())
+  const signal = fixture.get.mock.calls[0]?.[1]
+  if (retirement === "close") fireEvent.click(within(editor).getByRole("button", { name: "取消" }))
+  else view.rerender(fixture.show(retirement === "actor" ? "next-personal-owner" : "personal-metadata-owner", 1))
+  await waitFor(() => expect(signal?.aborted).toBe(true))
+  await act(async () => { finish({ ...fixture.connector, display_name: "Late old owner value", state_version: "4" }) })
+  if (retirement === "generation") {
+    const current = await screen.findByRole("dialog", { name: "编辑" })
+    expect(await within(current).findByRole("textbox", { name: "名称" })).toHaveValue("My account")
+    fireEvent.click(within(current).getByRole("button", { name: "保存修改" }))
+    await waitFor(() => expect(fixture.update).toHaveBeenCalledOnce())
+    expect(fixture.update.mock.calls[0]?.[1].expected_state_version).toBe("9")
+  } else {
+    expect(screen.queryByRole("dialog", { name: "编辑" })).not.toBeInTheDocument()
+    expect(fixture.update).not.toHaveBeenCalled()
+  }
+  expect(screen.queryByDisplayValue("Late old owner value")).not.toBeInTheDocument()
+})
+
+it.each(["revoked", "active", "old-version", "enabled", "type", "server", "provider", "id"] as const)("a frozen disconnected read accepts only its exact disabled revoked configuration: %s", async outcome => {
+  const { renderHook, waitFor } = await import("@testing-library/react")
+  const { useMcpProviderConnection } = await import("@/ui/mcp/use-mcp-provider-connection")
+  const connector: McpConnector = { availability: "unavailable", connector_id: "saved-id", server_id: "saved-server",
+    provider_key: "saved-provider", connector_type: "mcp", status: "revoked", enabled: false, state_version: "4", approved_scopes: [] }
+  const get = vi.fn().mockResolvedValue({ ...connector, ...(outcome === "active" ? { status: "active", state_version: "5" }
+    : outcome === "old-version" ? { state_version: "3" } : outcome === "enabled" ? { enabled: true }
+    : outcome === "type" ? { connector_type: "builtin" } : outcome === "server" ? { server_id: "other" }
+    : outcome === "provider" ? { provider_key: "other" } : outcome === "id" ? { connector_id: "other" } : {}) })
+  const client = { ...createHubClient(), getMcpConnector: get }
+  const binding = { connectorType: "mcp" as const, serverId: connector.server_id!, disconnectedVersion: "4" }
+  const hook = renderHook(() => useMcpProviderConnection({ client, identity: "saved-reader", admitted: true, readGeneration: 0,
+    connectorId: connector.connector_id, providerKey: connector.provider_key, known: undefined, retry: 0,
+    binding }))
+  await waitFor(() => expect(outcome === "revoked" ? hook.result.current.connection : hook.result.current.error).toBeTruthy())
+  expect(hook.result.current.connection).toEqual(outcome === "revoked" ? connector : null)
+})
+
 function privateOAuthFixture() {
   const connector = { availability: "reauthorization_required", connector_id: "recover-private", server_id: "recover-server", connector_type: "mcp", provider_key: "recover-provider", display_name: "Recover private OAuth", status: "active", enabled: true, approved_scopes: [], state_version: "3" } satisfies McpConnector
   const server = { availability: "reauthorization_required", server_id: "recover-server", display_name: "Recover private server", server_url: "https://mcp.example.test/recover", status: "registered", state_version: "4", headers: [], transport: "streamable_http" as const, prepare_status: "prepare_failed", authorization_status: "approved", declarations: [], declarations_available: false, oauth_client: { client_id: "public-client", configured: true, origin: "byo", status: "configured", state_version: "1" } } satisfies McpPrivateServer
@@ -136,14 +306,15 @@ it.each(["outside the first page", "when the directory fails"])("opens an instal
   expect(get).toHaveBeenCalledWith("outside", expect.any(AbortSignal))
 })
 
-it("keeps a failed seed unknown without a passive error panel and renders later filtered owner results", async () => {
+it("keeps a failed seed visibly unknown and renders later filtered owner results", async () => {
   const provider = { provider_key: "match", display_name: "Owner match", directory_type: "app" as const, category_keys: [], example_prompts: [], enabled: true, state_version: "1" }
   const client = { ...createHubClient(), listMcpConnectorProviders: vi.fn().mockRejectedValueOnce(Error("seed failed")).mockResolvedValue({ items: [provider], next_cursor: null }),
     // This case isolates provider seed recovery; API is an independently successful owner read.
     listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }),
   }
   render(<LocaleProvider><ConnectorCommandProvider client={client} boundary={{ subject: "filter-recovery", admitted: true, generation: 0 }}><McpProjectionRead client={client} identity="filter-recovery" embedded initialView="catalog" /></ConnectorCommandProvider></LocaleProvider>)
-  expect(await screen.findByText("连接列表加载失败")).toHaveClass("sr-only")
+  expect(await screen.findByText("连接器目录加载失败")).toBeVisible()
+  expect(screen.getByRole("button", { name: "重新加载连接器目录" })).toBeEnabled()
   expect(screen.queryByText("当前没有可添加的连接器提供方。")).not.toBeInTheDocument()
   expect(screen.queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
   fireEvent.change(screen.getByRole("searchbox"), { target: { value: "matching" } })
@@ -151,7 +322,7 @@ it("keeps a failed seed unknown without a passive error panel and renders later 
   expect(screen.queryByRole("alert")).not.toBeInTheDocument()
 })
 
-it.each(["catalog", "connections"] as const)("keeps the %s controls mounted without passive error/retry/loading panels or an invented empty result", async view => {
+it.each(["catalog", "connections"] as const)("keeps the %s controls mounted with visible reader recovery and no invented empty result", async view => {
   window.localStorage.setItem("kokoro.locale", "zh")
   const client = { ...createHubClient(),
     listMcpConnectorProviders: vi.fn().mockRejectedValue(Error("provider unavailable")),
@@ -162,7 +333,8 @@ it.each(["catalog", "connections"] as const)("keeps the %s controls mounted with
   const boundary = { subject: `quiet-${view}`, admitted: true, generation: 0 }
   render(<LocaleProvider><ConnectorCommandProvider client={client} boundary={boundary}><McpProjectionRead client={client} identity={boundary.subject} embedded settingsLayout initialView={view} /></ConnectorCommandProvider></LocaleProvider>)
   const searches = screen.getAllByRole("searchbox")
-  expect(await screen.findByText("连接列表加载失败")).toHaveClass("sr-only")
+  expect(await screen.findByText(view === "catalog" ? "连接器目录加载失败" : "已添加的连接器加载失败")).toBeVisible()
+  expect(screen.getByRole("button", { name: view === "catalog" ? "重新加载连接器目录" : "重新加载已添加的连接器" })).toBeEnabled()
   expect(screen.getAllByRole("searchbox")).toEqual(searches)
   expect(screen.queryByRole("alert")).not.toBeInTheDocument()
   expect(screen.queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
@@ -187,7 +359,7 @@ it.each(["catalog", "connections"] as const)("still renders a genuinely confirme
   expect(screen.queryByText("连接列表加载失败")).not.toBeInTheDocument()
 })
 
-it("retains confirmed connector cards when a same-scope refresh fails without adding a passive alert or retry", async () => {
+it("retains confirmed connector cards and offers reader recovery when a same-scope refresh fails", async () => {
   window.localStorage.setItem("kokoro.locale", "zh")
   const { act, waitFor } = await import("@testing-library/react")
   const { invalidateMcpConnectorProjection } = await import("@/ui/mcp/use-mcp-projection")
@@ -202,10 +374,41 @@ it("retains confirmed connector cards when a same-scope refresh fails without ad
   const card = await screen.findByRole("button", { name: connector.display_name })
   act(() => invalidateMcpConnectorProjection(client, boundary.subject))
   await waitFor(() => expect(list).toHaveBeenCalledTimes(2))
-  expect(await screen.findByText("连接列表加载失败")).toHaveClass("sr-only")
+  expect(await screen.findByText("已添加的连接器加载失败")).toBeVisible()
+  expect(screen.getByRole("button", { name: "重新加载已添加的连接器" })).toBeEnabled()
   expect(screen.getByRole("button", { name: connector.display_name })).toBe(card)
   expect(screen.queryByRole("alert")).not.toBeInTheDocument()
   expect(screen.queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
+})
+
+it("localizes provider management types and disconnect confirmation without issuing commands on cancel", async () => {
+  const { within } = await import("@testing-library/react")
+  const { McpProviderDetailDialog } = await import("@/ui/mcp/mcp-provider-detail-dialog")
+  window.localStorage.setItem("kokoro.locale", "en")
+  const provider = { provider_key: "localized-provider", display_name: "Localized provider", directory_type: "app" as const, category_keys: [], example_prompts: [], enabled: true, state_version: "1" }
+  const connection = { availability: "available" as const, connector_id: "localized-connection", connector_type: "mcp" as const, provider_key: provider.provider_key, display_name: "My connection", status: "active" as const, enabled: true, approved_scopes: [], state_version: "4" }
+  const command = vi.fn()
+  const content = (oauth: boolean) => <LocaleProvider><McpProviderDetailDialog provider={oauth ? { ...provider, connection_server_id: "server" } : provider} connection={connection} actionId={null} admitted managementCommand={undefined} onResumeManagement={command} actionError={false} returnFocusRef={{ current: null }} onClose={command} onConnect={command} onReconnect={command} onEditConnection={command} onToggleEnabled={command} onRemoveConnection={command} /></LocaleProvider>
+  try {
+    const view = render(content(false))
+    const management = within(await screen.findByRole("region", { name: "Connector management" }))
+    expect(management.getByRole("heading", { name: "Connector details" })).toBeVisible()
+    expect(management.getByText("Connector type")).toBeVisible()
+    expect(management.getByText("App connector")).toBeVisible()
+    expect(management.getByRole("button", { name: "Copy UUID" })).toBeEnabled()
+    fireEvent.click(management.getByRole("button", { name: /^Disconnect$/ }))
+    expect(management.getByRole("button", { name: "Confirm disconnect" })).toBeEnabled()
+    fireEvent.click(management.getByRole("button", { name: /^Cancel$/ }))
+    expect(management.queryByRole("button", { name: "Confirm disconnect" })).not.toBeInTheDocument()
+    expect(management.getByRole("button", { name: /^Disconnect$/ })).toBeEnabled()
+    view.rerender(content(true))
+    expect(management.getByText("OAuth connector")).toBeVisible()
+    expect(management.queryByText("App connector")).not.toBeInTheDocument()
+    expect(command).not.toHaveBeenCalled()
+  } finally {
+    cleanup()
+    window.localStorage.setItem("kokoro.locale", "zh")
+  }
 })
 
 it("offers explicit reconnect for an active OAuth binding, never for a plain app connector", async () => {
@@ -605,7 +808,7 @@ it.each(["revoked", "type", "server"] as const)("keeps a selected connection fro
   render(<LocaleProvider><ConnectorCommandProvider client={client} boundary={{ subject: drift, admitted: true, generation: 0 }}><McpProjectionRead client={client} identity={drift} embedded /></ConnectorCommandProvider></LocaleProvider>)
   fireEvent.click(await screen.findByRole("button", { name: provider.display_name }))
   const dialog = await screen.findByRole("dialog")
-  expect(await within(dialog).findByText("连接列表加载失败")).toBeInTheDocument()
+  expect(await within(dialog).findByText("已添加的连接器加载失败")).toBeVisible()
   expect(within(dialog).queryByRole("alert")).not.toBeInTheDocument()
   expect(within(dialog).queryByRole("button", { name: "连接" })).not.toBeInTheDocument()
   expect(get).toHaveBeenCalledExactlyOnceWith(connection.connector_id, expect.any(AbortSignal))
@@ -626,13 +829,11 @@ it.each([false, true])("opens an off-page private connection only after exact co
   fireEvent.click(await screen.findByRole("button", { name: provider.display_name }))
   fireEvent.click(await within(await screen.findByRole("dialog")).findByRole("button", { name: /My private connection/ }))
   if (retry) {
-    await screen.findByText("连接列表加载失败")
+    expect(await screen.findByText("已添加的连接器加载失败")).toBeVisible()
     expect(screen.queryByRole("alert")).not.toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
     expect(getServer).not.toHaveBeenCalled()
-    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "取消" }))
-    fireEvent.click(await screen.findByRole("button", { name: provider.display_name }))
-    fireEvent.click(await within(await screen.findByRole("dialog")).findByRole("button", { name: /My private connection/ }))
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "重新加载已添加的连接器" }))
   }
   expect(await screen.findByRole("dialog", { name: server.display_name })).toBeVisible()
   expect(get).toHaveBeenCalledTimes(retry ? 2 : 1)
@@ -667,7 +868,7 @@ it.each(["revoked", "fresh-server"])("retires opened private detail through an e
   expect(screen.queryByRole("button", { name: "管理" })).not.toBeInTheDocument()
   await act(async () => finishConnection(outcome === "revoked" ? { ...connection, status: "revoked" } : connection))
   if (outcome === "revoked") {
-    expect(await within(dialog).findByText("连接列表加载失败")).toBeInTheDocument()
+    expect(await within(dialog).findByText("已添加的连接器加载失败")).toBeVisible()
     expect(screen.queryByRole("alert")).not.toBeInTheDocument()
     expect(getServer).toHaveBeenCalledTimes(1)
   } else {

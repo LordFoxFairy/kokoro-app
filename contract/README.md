@@ -1,3 +1,17 @@
+## Public29.3 个人材料容量失败消费者
+
+唯一完整原件固定 BFF1e6765b3230d55fa17d0f6aa989278b97d00f338，Public29.3.0，SHA256 4f27adbea9a63c36d8b11e95c9dde342a6e8d662cab77cb42091384f3b17e333。原十二条 fullsource recipe 与原分享 browser projection 正规再生；新增的唯一 tuple 是 context_window_exceeded / retryable=false，原两个 retryable=true 保持。原 runtime schema 继续只消费生成 tuple，不手填第二套枚举。
+
+test-only bff-public293-personal-context-parent.ts 只接受精确正式全文，移除两个具名 enum 行和版本后必须恢复原29.2全文摘要，再进入未改29.1/29.0与双父历史 oracle。201项有序操作及原200项清单不变；分享投影与其余生成变化均通过精确 provenance 反投影逐字比较，policy3和旧 fixtures 不变。下方保留历史记录。
+
+## Public29.2 团队角色权限消费者
+
+固定 BFF8ae73fde765ba55a77679c36199dcc9c1553fa11 的完整原件，SHA256 df5a33d4fa33662e4f70967bf5db60033f71f29511bf5975aa2395d61abb3e9c。原12条 public recipe 正规生成，分享 projection 同步 provenance；其余独立 profile/policy保持。test-only `bff-public292-team-permissions-parent.ts` 先恢复完整29.1/29.0，再接原双父 proof，旧200操作与旧oracle不变。
+
+## Public29 正式配对（候选）
+
+固定BFF7e4ab1cee8f8d45a34902176cd15a10f3c4b22cb，29.0.0，完整SHA258bde9c39f785667cb205976e1547d1cf2c9662a5a2d7f356c4b11e807fcaf7。12public生成、五独立private/profile与policy3保持；新增scheduled runs及RSS/日历分支只按owner原件消费。`tests/contract/bff-public29-integration-parent.ts`的有限逆差先还原两份完整原父字节和有序inventory，再进入旧证明链；正式proof只抽public字段，旧oracle不重签，不依赖sibling源或SQL。
+
 ## Public28.17 Custom API safe refs（正式输入候选消费）
 
 固定正式BFF853ca9a5d8da3500b0c37543c72198a520e46225／SHAea0031103488daa1fcc0cca45fdd13f4d4061546ac4525c745ec47105649f7e7，既有12public generator正规重出。原tool-display generator从MessageCreateRequest与private composer同字段派生closed≤32／unique profile_id／正int32版本schema及version叶；不另建wire中心。新test-only bff-custom-api-selection-parent只迁入正式owner函数的TS类型，精确逆回完整28.16，再进原composer父链。其余private／policy3／Auth／relay／lock不迁，无normal激活声明。

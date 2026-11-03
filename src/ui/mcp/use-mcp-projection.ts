@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
 import { HubClientError, type HubClient } from "@/hub/client";
 import { useProductReadRecheck } from "@/ui/auth/product-read-recheck-context";
@@ -352,6 +352,20 @@ export function useMcpProjection({
   const [connectorGeneration, setConnectorGeneration] =
     useState(connectorRefreshKey);
   const observedConnectorRefreshKey = useRef(connectorRefreshKey);
+  const providerOwner = useMemo(() => ({ client, identity, admitted, readGeneration }), [client, identity, admitted, readGeneration]);
+  const connectorOwner = useMemo(() => ({ providerOwner, cursor, currentRevision, connectorRefreshKey, view }),
+    [providerOwner, cursor, currentRevision, connectorRefreshKey, view]);
+  const owners = useMemo(() => ({ providers: providerOwner, connectors: connectorOwner }), [providerOwner, connectorOwner]);
+  const currentOwners = useRef<typeof owners | null>(null);
+  type Reload = { owner: object; generation: number };
+  const pendingReloads = useRef<Partial<Record<McpProjectionResource, Reload>>>({});
+  const [reloadAttempts, setReloadAttempts] = useState<Partial<Record<McpProjectionResource, Reload>>>({});
+  const latestGenerations = useRef({ providers: providerGeneration, connectors: connectorGeneration });
+  useLayoutEffect(() => {
+    currentOwners.current = owners;
+    latestGenerations.current = { providers: providerGeneration, connectors: connectorGeneration };
+    return () => { if (currentOwners.current === owners) currentOwners.current = null; };
+  }, [owners, providerGeneration, connectorGeneration]);
   const initialProviders =
     cached<McpConnectorProviderPage>(
       client,
@@ -475,6 +489,8 @@ export function useMcpProjection({
         identity,
       );
       subscriptions.push(subscription);
+      const candidate = pendingReloads.current[resource];
+      const attempt = candidate?.owner === owners[resource] && candidate.generation === generation ? candidate : null;
       void subscription.promise.then(
         (next) => {
           if (!active || (resource === "connectors" && revision.value !== currentRevision)) return;
@@ -530,7 +546,12 @@ export function useMcpProjection({
             }));
           }
         },
-      );
+      ).finally(() => {
+        if (attempt && pendingReloads.current[resource] === attempt) {
+          delete pendingReloads.current[resource];
+          setReloadAttempts(current => current[resource] === attempt ? { ...current, [resource]: undefined } : current);
+        }
+      });
     };
     // Provider metadata resolves card identity and OAuth server binding. Its read
     // remains independent from the current connector page, so either surface can render.
@@ -540,15 +561,20 @@ export function useMcpProjection({
       active = false;
       subscriptions.forEach((subscription) => subscription.release());
     };
-  }, [admitted, readGeneration, client, connectorGeneration, currentRevision, cursor, identity, providerGeneration, revision, view, reportRead401]);
+  }, [admitted, readGeneration, client, connectorGeneration, currentRevision, cursor, identity, providerGeneration, revision, view, reportRead401, owners]);
 
   const providerProjection =
     admitted && providerState.readGeneration === readGeneration && providerState.dataIdentity === identity ? providerState.data : undefined;
   const connectorProjection =
     admitted && connectorState.readGeneration === readGeneration && connectorState.dataIdentity === identity ? connectorState.data : undefined;
   const reload = (resource: McpProjectionResource) => {
-    if (resource === "providers") setProviderGeneration((value) => value + 1);
-    else setConnectorGeneration((value) => value + 1);
+    if (!admitted || currentOwners.current?.[resource] !== owners[resource] || pendingReloads.current[resource]?.owner === owners[resource]) return;
+    const generation = ++latestGenerations.current[resource];
+    const attempt = { owner: owners[resource], generation };
+    pendingReloads.current[resource] = attempt;
+    setReloadAttempts(current => ({ ...current, [resource]: attempt }));
+    if (resource === "providers") setProviderGeneration(generation);
+    else setConnectorGeneration(generation);
   };
 
   return {
@@ -557,5 +583,7 @@ export function useMcpProjection({
     providerProjection,
     connectorProjection,
     reload,
+    providerReloading: reloadAttempts.providers?.owner === providerOwner,
+    connectorReloading: reloadAttempts.connectors?.owner === connectorOwner,
   };
 }

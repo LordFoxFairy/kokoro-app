@@ -1,3 +1,43 @@
+## 2026-11-03 B-08 个人材料容量反馈（候选）
+
+唯一 Public29.3 与十三条既有生成入口消费正式 BFF1e6765b3。原 ConversationThread 区分发送前容量拒绝与已准入终态，沿现 pending/手动恢复或重新发起语义，不改变 Engine、Run、草稿、知识待接提示或材料传输。合同、证明与实际验证见 docs/API_CONTRACT.md、docs/CURRENT.md；正常源和真实新Run由Root验收。
+
+## 2026-11-02 B-10 分享 metadata 消费（候选）
+
+`ui/share/use-session-share`在原分享控件下统一管理metadata GET、显式命令后的权威读回与身份/范围退休；原AppFrame→Header只透传可信boundary和SessionScope。独立正式BFF2e737cad投影由新小generator生成decoder/type，原Public29/12生成器/SDK不动。源码局部门与剩余浏览器范围见CURRENT。
+
+## 2026-11-02 侧栏管理入口的会话恢复
+
+`src/components/blocks/workspace-rail/workspace-rail-account.tsx` 将管理资格投影绑定现有 Product 读取主体与代际；准入前不读，退休立即隐藏旧入口，真实401沿原 readmission owner 处理。没有新增权限、接口或角色；当前验证及管理后台缺口见 `docs/CURRENT.md`。
+
+## 已断开 MCP 的独立新授权（2026-11-02，候选）
+
+固定 BFFe3b5fb75 的私有 reauthorization profile，经原同源 hub adapter/client 与 Management 原命令机制接线；断开详情只开放明确的新授权意图，ACK 仅交新 locator，fresh exact 详情后显式 Connect。生成器与独立 pin 见 `scripts/generate-bff-mcp-reauthorization.mjs` / `contract/bff-mcp-reauthorization-source.json`，职责与边界见 `src/ui/mcp/INDEX.md`，实际验证见 `docs/CURRENT.md`。
+
+## Public29 与既有自动化功能配对（2026-11-02，候选）
+
+唯一公开原件固定 BFF7e4ab1cee8f8d45a34902176cd15a10f3c4b22cb / Public29.0.0，现12个public生成入口正规更新、5个独立发行保持。日历显式类型、RSS创建/编辑/当前读与独立运行记录沿已验证正常1f700功能承接；职责见 `src/features/scheduled-tasks/INDEX.md`，正常源状态与门禁见 `docs/CURRENT.md`。
+
+## 精确详情读取恢复（2026-11-02，候选）
+
+原 API / Provider / private MCP 详情在读取失败后复用 `McpReadFeedback` 呈现可见 GET 重试；创建交接仍只读取精确 locator，不扫描列表或重发命令。窗口、主体、准入代及读取 attempt 退休围栏和具体测试见 `src/ui/mcp/INDEX.md`；正常源尚未切换，验证见 `docs/CURRENT.md`。
+
+## Manifest 展示读取期限（2026-11-01，候选）
+
+`src/system/use-runtime-manifest.ts`在原scope内拥有fetch与body共用的20秒绝对期限、settlement和取消；`tests/system/runtime-manifest-hook.test.tsx`覆盖期限、精确截止竞争、非合作迟到、显式重试与原生命周期。没有新读取框架或owner，当前正常源尚未更新，验证见 `docs/CURRENT.md`。
+
+## 连接器读取恢复（2026-11-01，候选）
+
+`src/ui/mcp/mcp-read-feedback.tsx` 提供就近可见的读取错误和按钮；现 coordinator / Provider catalog dialog 分别调用对应 reader 的 GET 重试。API / MCP projection hook 的本地 attempt 围栏防重击，并让当前读取共同确认全空；具体职责见 `src/ui/mcp/INDEX.md`。既有 gallery / pagination / provider 测试承接原 cursor、循环、主体代际、保留卡片及重试行为。
+
+Provider 目录和关系显式重试各保 scope pending，反馈原按钮禁用直到 settlement；失败按原焦点所有权恢复。RTL 覆盖真实 coordinator/弹窗接线，独立 hydrated Chromium 验证原生 Enter/disabled/再次失败及移焦负控，静态 DOM 加生产 CSS 另验 390/1280 宽度；后两者都不是正常 App/owner 旅程。
+
+## API / JSON 创建详情（2026-11-01，候选）
+
+`src/ui/mcp/{connector-command,custom-api-create-flow,mcp-json-import-flow,use-connector-creation-form}.ts` 保管命令完成后的安全 locator 与窗口完成恢复；现 `mcp-create-dialog.tsx` / `mcp-projection-read.tsx` 接 API exact GET、JSON 单项详情与多项明确选择。完整职责与边界见 `src/ui/mcp/INDEX.md`。
+
+`tests/ui/connector-creation-completion.test.ts` 覆盖安全 locator / 退休 / 严格 ACK；`tests/ui/mcp-create-completion-dialog.test.tsx` 覆盖真实组件详情、选择、删除、回焦、代际与回调重试；`tests/ui/fixtures/mcp-json-import-receipt.ts` 只为这些及既有测试生成符合当前 Schema 的非秘密 receipt，不进入产品路径。
+
 ## Project resource item consumer (candidate)
 
 `src/features/app/project-resource-row.tsx` / `project-resource-detail.tsx`负责资源行、fresh metadata和显式永久删除确认；`use-project-resource-actions.ts`持document-local原命令及actor/project/route fence，`use-project-resources.ts`持ACK后精确负事实与fresh列表。`project-resource-access.ts`仅走same-origin固定生成decoder；原生attachment仅报告started、无inlineHTML/SVG。固定契约与实际验证见本轮收据，不将候选称正常已生效。
@@ -483,3 +523,6 @@ MCP/Custom API配置的焦点后继：保留readonly配置控件而不是临时�
 ### Connector恢复原因与原请求重试边界
 
 现 `src/ui/mcp/connector-command-failure.ts` 消费已固定profile给出非敏感reason/消息key；单命令和Register持失败限制，Prepare创建/详情共享，终止原因不重试、不换key。九语言与原alert/button接线，原UI布局/HTTP/owner事实保持；人工核验与真正OAuth闭环不冒本片完成。
+## 已确认断线的显式恢复（2026-11-01，候选）
+
+`src/components/blocks/app-frame/app-frame-status-surfaces.tsx` 消费原父级已连接的 `onReconnect`；unavailable 用现语义样式和原生按钮显示本地化恢复入口，reconnecting 保持 sr-only。连接引擎、Run 控制、网络和线程 renderer 未变，正常 connected 仍由既有父级卸载状态条。对应 UI 回归在 `tests/ui/app-frame-connection-status.test.tsx`；`tests/core/projections.test.ts` 保留原分段/思考/tool 身份断言，已失效 legacy 字段断言迁移至安全 activity 原序与更新/输入不变验证。

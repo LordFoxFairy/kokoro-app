@@ -26,11 +26,12 @@ import SignInFailurePage from "@/app/auth/sign-in/failed/page"
 beforeEach(() => { Object.assign(proof, { config: true, host: "web.example.test", state: "absent", accessExpiresAt: 0, unavailable: false }); vi.clearAllMocks() })
 afterEach(cleanup)
 
-it("returns a current active Session from the old failure URL to fixed /app without catching the redirect", async () => {
+it("keeps recovery in this tab so an active Session does not discard its original navigation intent", async () => {
   proof.state = "active"; proof.accessExpiresAt = Date.now() + 60_000
-  await expect(Promise.resolve().then(() => SignInFailurePage())).rejects.toThrow("redirect:/app")
-  expect(proof.inspect).toHaveBeenCalledOnce()
-  expect(proof.redirect).toHaveBeenCalledExactlyOnceWith("/app")
+  render(await SignInFailurePage())
+  expect(screen.getByRole("heading", { level: 1, name: "恢复工作区" })).toBeInTheDocument()
+  expect(proof.inspect).not.toHaveBeenCalled()
+  expect(proof.redirect).not.toHaveBeenCalled()
 })
 
 it.each(["absent", "refreshing", "stale", "unconfirmed", "expired", "exception", "host", "configuration"])("keeps explicit GET-only recovery for %s, without an automatic login form or native replay", async kind => {
@@ -47,5 +48,5 @@ it.each(["absent", "refreshing", "stale", "unconfirmed", "expired", "exception",
   expect(container.querySelector("script")).toBeNull()
   expect(container.querySelector("input")).toBeNull()
   expect(proof.redirect).not.toHaveBeenCalled()
-  expect(proof.inspect).toHaveBeenCalledTimes(kind === "host" || kind === "configuration" ? 0 : 1)
+  expect(proof.inspect).not.toHaveBeenCalled()
 })

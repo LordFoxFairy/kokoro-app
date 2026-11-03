@@ -13,6 +13,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { LocaleProvider } from "@/i18n/context";
 import { createMcpJsonImportFlow } from "@/ui/mcp/mcp-json-import-flow";
 import { JsonMcpImportForm } from "@/ui/mcp/mcp-json-import-form";
+import { jsonImportReceiptForDocument } from "./fixtures/mcp-json-import-receipt";
 
 const documentValue = JSON.stringify({
   mcpServers: {
@@ -53,7 +54,7 @@ afterEach(() => {
 
 describe("JsonMcpImportForm", () => {
   it("submits one untouched document through the Hub client, then refreshes its owner projection", async () => {
-    const importPrivateMcpJson = vi.fn().mockResolvedValue(undefined);
+    const importPrivateMcpJson = vi.fn().mockResolvedValue(jsonImportReceiptForDocument(documentValue));
     const { onDone, onRegistered } = renderForm({ importPrivateMcpJson });
     const editor = screen.getByRole("textbox") as HTMLTextAreaElement;
     expect(JSON.parse(editor.placeholder)).toEqual({
@@ -117,7 +118,8 @@ it.each(["api-cancel", "api-unmount", "json-cancel", "json-unmount"])("%s stops 
   const isApi = scenario.startsWith("api");
   const boundary = { admitted: true, subject: "window-wait-actor", generation: 1 };
   const pending: Array<() => void> = [];
-  const write = vi.fn().mockImplementation(() => new Promise<void>(resolve => pending.push(resolve)));
+  const apiReceipt = { profile_id: "window-exact-api", name: "Original API", environment: [{ name: "QA_API_KEY", configured: true, state_version: "1", status: "active" }], state_version: "1", created_at: "2026-11-01T00:00:00Z", updated_at: "2026-11-01T00:00:00Z" };
+  const write = vi.fn().mockImplementation(() => new Promise(resolve => pending.push(() => resolve(isApi ? apiReceipt : jsonImportReceiptForDocument(documentValue)))));
   const confirmed = vi.fn(), onCancel = vi.fn(), oldDone = vi.fn().mockResolvedValue(undefined), nextDone = vi.fn().mockResolvedValue(undefined);
   const flow = isApi ? createCustomApiCreateFlow({ client: { createCustomApi: write }, boundary, onConfirmed: confirmed })
     : createMcpJsonImportFlow({ client: { importPrivateMcpJson: write }, boundary, onConfirmed: confirmed });
@@ -167,7 +169,7 @@ it("a definite URL conflict keeps the JSON editable with a specific explanation,
   localStorage.setItem("kokoro.locale", "zh");
   const boundary = { admitted: true, generation: 1, subject: "json-form-actor" }
   const create = vi.fn().mockRejectedValueOnce(new HubClientError("http", "duplicate", "mcp_personal_server_url_conflict", 409, false))
-    .mockResolvedValue({ imports: [], replayed: false })
+    .mockImplementation(async (document: string) => jsonImportReceiptForDocument(document))
   const flow = createMcpJsonImportFlow({ client: { importPrivateMcpJson: create }, boundary, onConfirmed: vi.fn() })
   const onDone = vi.fn(async () => {})
   const view = render(<LocaleProvider><Dialog open><DialogContent aria-describedby={undefined}>
@@ -191,7 +193,7 @@ it("a definite URL conflict keeps the JSON editable with a specific explanation,
 })
 
 it("preserves a mixed HTTP/SSE whole document and original key across an unknown reply", async () => {
- const send = vi.fn().mockRejectedValueOnce(new Error("unknown original import")).mockResolvedValue(undefined);
+ const send = vi.fn().mockRejectedValueOnce(new Error("unknown original import")).mockImplementation(async (document: string) => jsonImportReceiptForDocument(document, true));
  renderForm({ importPrivateMcpJson: send });
  const original = ' {"mcpServers":{"HTTP":{"type":"streamableHttp","url":"https://HOST/mcp"},"SSE":{"type":"sse","url":"https://HOST/sse"}}} ';
  fireEvent.change(screen.getByRole("textbox"), { target: { value: original } }); fireEvent.click(screen.getByRole("button", { name: /Import|导入/u }));

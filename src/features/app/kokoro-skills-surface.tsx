@@ -156,6 +156,10 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
   const [notice, setNotice] = useState<{ catalogKey: string; value: GithubImported } | null>(null)
   const importNotice = notice?.catalogKey === catalogKey ? notice.value : null
   const { busy, errorName, lastAddedSkill, installationFacts, setEnabled, isCurrent } = useCatalogSkillInstallation(readBoundary, catalog.data, catalogNamespace, actionIdentity)
+  const { refetch: refetchCatalog } = resource
+  const retryCatalog = useCallback(() => {
+    if (isCurrent()) refetchCatalog()
+  }, [isCurrent, refetchCatalog])
   const createRef = useRef<HTMLButtonElement | null>(null)
   const githubRef = useRef<HTMLElement | null>(null)
   const uploadRef = useRef<HTMLElement | null>(null)
@@ -329,10 +333,19 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
             </Alert>
           ) : null}
 
-          {displayedCatalog !== undefined && catalog.error !== undefined ? <span className="sr-only" role="status">{t("skills.loadError")}</span> : null}
+          {catalog.error !== undefined ? (
+            <Alert variant="destructive">
+              <AlertDescription>
+                {t("skills.loadError")}
+                <Button type="button" variant="outline" onClick={retryCatalog} disabled={catalog.loading}>
+                  {t("skills.retry")}
+                </Button>
+              </AlertDescription>
+            </Alert>
+          ) : null}
           {displayedCatalog === undefined || catalog.data === undefined && filtered.length === 0 ? (
             <div className={styles.grid} data-testid="skills-catalog-grid" aria-busy={catalog.loading || undefined}>
-              <span className="sr-only" role="status">{t(catalog.error === undefined ? "skills.loading" : "skills.loadError")}</span>
+              {catalog.error === undefined ? <span className="sr-only" role="status">{t("skills.loading")}</span> : null}
             </div>
           ) : filtered.length === 0 ? (
             <div className={styles.emptyState} data-testid="skills-catalog-empty">
@@ -396,7 +409,7 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
               </div>
               {displayedCatalog?.next_cursor ? (
                 <div className={styles.loadMore}>
-                  {loadMoreFailed ? <span className="sr-only" role="status">{t("skills.loadError")}</span> : null}
+                  {loadMoreFailed ? <Alert variant="destructive"><AlertDescription>{t("skills.loadError")}</AlertDescription></Alert> : null}
                   <Button type="button" variant="outline" onClick={() => void loadMore()} disabled={catalog.data === undefined || loadingMore} aria-busy={loadingMore}>
                     {t("rail.loadMore")}
                   </Button>
@@ -420,7 +433,7 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
         pending={detailKey !== null && currentDetailSkill === null}
         pendingFailed={loadMoreFailed || catalog.error !== undefined || catalog.data !== undefined && !displayedCatalog?.next_cursor}
         pendingBusy={catalog.loading || loadingMore}
-        onRetryPending={readBoundary.admitted && readBoundary.subject !== null ? catalog.refetch : undefined}
+        onRetryPending={readBoundary.admitted && readBoundary.subject !== null ? retryCatalog : undefined}
         {...(displayedCatalog?.next_cursor ? { onLoadMore: () => void loadMore() } : {})}
         busy={detailSkill !== null && busy === actionIdentity(detailSkill)}
         {...(currentDetailSkill === null ? {} : { installationState: { installed: currentDetailSkill.installed, enabled: currentDetailSkill.enabled } })}

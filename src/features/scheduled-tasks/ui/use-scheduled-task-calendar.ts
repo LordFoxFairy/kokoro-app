@@ -16,6 +16,7 @@ export function useScheduledTaskCalendar(tasks: readonly ScheduledTaskRecord[], 
   const calendarTasks = useMemo(() => {
     const grouped = new Map<string, ScheduledTaskRecord[]>()
     for (const task of tasks) {
+      if (task.triggerKind !== "calendar") continue
       const key = scheduledDateKey(task.nextRun, displayTimezone)
       if (!key) continue
       const tasksForDay = grouped.get(key) ?? []

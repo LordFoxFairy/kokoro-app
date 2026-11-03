@@ -756,17 +756,23 @@ describe("Skill metadata and download contract separation", () => {
 describe("R255 ScheduledTask owner recurrence graph under the current public pin", () => {
   it("consumes the exact locally accepted current canonical bytes", async () => {
     const { bytes, spec } = await r76PublicSpec()
-    expect(r76Hash("sha256").update(bytes).digest("hex")).toBe("ea0031103488daa1fcc0cca45fdd13f4d4061546ac4525c745ec47105649f7e7")
-    expect(spec.info.version).toBe("28.17.0")
+    expect(r76Hash("sha256").update(bytes).digest("hex")).toBe("4f27adbea9a63c36d8b11e95c9dde342a6e8d662cab77cb42091384f3b17e333")
+    expect(spec.info.version).toBe("29.3.0")
   })
 
   it("publishes current rule details separately from immutable command snapshots", async () => {
     const schemas = (await r76PublicSpec()).spec.components.schemas
     expect(schemas.ScheduledTaskDetails).toMatchObject({
-      allOf: [{ $ref: "#/components/schemas/ScheduledTask" }],
-      required: ["scheduling_state"],
+      type: "object", additionalProperties: false,
+      required: expect.arrayContaining(["id", "title", "prompt", "trigger_kind", "scheduling_state"]),
+      oneOf: [
+        { properties: { trigger_kind: { const: "calendar" } }, required: ["trigger_kind", "frequency", "time", "timezone"] },
+        { properties: { trigger_kind: { const: "rss" }, next_run_at: { type: "null" } }, required: ["trigger_kind", "feed_url", "conditions", "feed_state", "last_checked_at", "next_check_at", "error_code"] },
+      ],
     })
     expect(schemas.ScheduledTask!.properties.recurrence_anchor_at).toBeUndefined()
+    expect(schemas.ScheduledTask!.properties.scheduling_state).toBeUndefined()
+    expect(schemas.ScheduledTask!.properties.feed_state).toBeUndefined()
     expect(schemas.ScheduledTaskListResponse).toMatchObject({ properties: { data: { properties: { tasks: { items: { $ref: "#/components/schemas/ScheduledTaskDetails" } } } } } })
     expect(schemas.ScheduledTaskDetailResponse).toMatchObject({ properties: { data: { properties: { task: { $ref: "#/components/schemas/ScheduledTaskDetails" } } } } })
     expect(schemas.ScheduledTaskResponse).toMatchObject({ properties: { data: { properties: { task: { $ref: "#/components/schemas/ScheduledTask" } } } } })
@@ -780,7 +786,7 @@ describe("R255 ScheduledTask owner recurrence graph under the current public pin
     expect(task.properties.next_run_at).toEqual({ type: ["string", "null"], format: "date-time" })
     expect(create.type).toBe("object")
     expect(create.additionalProperties).toBe(false)
-    expect(create.required).toEqual(["title", "prompt", "frequency", "time", "timezone"])
+    expect(create.required).toEqual(["title", "prompt", "trigger_kind"])
     expect(Object.keys(create.properties)).toEqual([
       "project_id",
       "title",
@@ -793,9 +799,22 @@ describe("R255 ScheduledTask owner recurrence graph under the current public pin
       "local_date",
       "expires_at",
       "auto_approve",
+      "trigger_kind",
+      "feed_url",
+      "conditions",
     ])
     expect(create.properties.recurrence_anchor_at).toBeUndefined()
-    expect(create.oneOf).toHaveLength(4)
+    expect(create.oneOf).toHaveLength(2)
+    expect(create.oneOf?.[0]).toMatchObject({
+      properties: { trigger_kind: { const: "calendar" } }, required: ["trigger_kind", "frequency", "time", "timezone"],
+      oneOf: [
+        { properties: { frequency: { const: "daily" } } },
+        { properties: { frequency: { const: "weekly" } }, required: ["weekdays"] },
+        { properties: { frequency: { const: "monthly" } }, required: ["month_days"] },
+        { properties: { frequency: { const: "once" } }, required: ["local_date"] },
+      ],
+    })
+    expect(create.oneOf?.[1]).toMatchObject({ properties: { trigger_kind: { const: "rss" } }, required: ["trigger_kind", "feed_url", "conditions"] })
     expect(create.properties.next_run_at).toBeUndefined()
     expect(create.properties.enabled).toBeUndefined()
     expect(create.properties.status).toBeUndefined()
@@ -822,9 +841,16 @@ describe("R255 ScheduledTask owner recurrence graph under the current public pin
       "auto_approve",
       "enabled",
       "status",
+      "trigger_kind",
+      "feed_url",
+      "conditions",
     ])
     expect(patch.properties.recurrence_anchor_at).toBeUndefined()
     expect(patch.allOf).toHaveLength(1)
+    expect(patch.allOf?.[0]).toMatchObject({ then: { oneOf: [
+      { properties: { trigger_kind: { const: "calendar" } }, required: ["trigger_kind", "frequency", "time", "timezone"] },
+      { properties: { trigger_kind: { const: "rss" } }, required: ["trigger_kind", "feed_url", "conditions"] },
+    ] } })
     expect(patch.properties.next_run_at).toBeUndefined()
   })
 

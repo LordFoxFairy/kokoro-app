@@ -14,6 +14,7 @@ import { McpEmptyConnections } from "./mcp-empty-connections";
 import { McpCustomApiCard } from "./mcp-custom-api-card";
 import styles from "./mcp-projection-read.module.css";
 import { McpConnectorCard } from "./mcp-connector-card";
+import { isVisibleMcpConfiguration } from "./mcp-projection-types";
 
 export function McpConnectionList({
   connectors,
@@ -50,9 +51,7 @@ export function McpConnectionList({
     providers.map((provider) => [provider.provider_key, provider]),
   );
   const normalizedQuery = query.trim().toLocaleLowerCase();
-  const visibleConnectors = connectors.filter(
-    (connector) => connector.status !== "revoked",
-  );
+  const visibleConnectors = connectors.filter(isVisibleMcpConfiguration);
   const displayedConnectors = visibleConnectors.filter((connector) => {
     if (!normalizedQuery) return true;
     const provider = providersByKey.get(connector.provider_key);

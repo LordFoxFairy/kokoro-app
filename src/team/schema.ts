@@ -87,6 +87,7 @@ export const teamRoleSchema = z
             z.enum([
               "create_draft",
               "create_version",
+              "delete_series",
               "begin_upload",
               "complete_upload",
               "abort_upload",

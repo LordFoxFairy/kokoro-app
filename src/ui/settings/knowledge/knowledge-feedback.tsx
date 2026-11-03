@@ -8,11 +8,13 @@ export function KnowledgeFeedback({
   state,
   admitted,
   onAdopt,
+  showSaved = true,
 }: {
   session: KnowledgeSession;
   state: KnowledgeState;
   admitted: boolean;
   onAdopt?: () => void;
+  showSaved?: boolean;
 }) {
   const t = useT();
   const keys = {
@@ -28,6 +30,7 @@ export function KnowledgeFeedback({
       : "unconfirmed"
     : state.message;
   if (!admitted || !message || state.pending?.phase === "saving") return null;
+  if (message === "saved" && !showSaved) return null;
   return (
     <div className={styles.feedback} aria-live="polite">
       <p role="status">{t(keys[message])}</p>

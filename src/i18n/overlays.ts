@@ -447,6 +447,13 @@ const interactionFallback: Partial<Record<MessageKey, string>> = {
 }
 
 const skillShareFallback: Partial<Record<MessageKey, string>> = {
+  "skills.shareRevoke": "Stop sharing",
+  "skills.shareRevokeTitle": "Stop sharing this skill?",
+  "skills.shareRevokeHint": "The link will become unavailable. The skill and its publication audience will not change.",
+  "skills.shareRevoked": "Sharing stopped.",
+  "skills.shareRevokeUnknown": "The revocation result is unknown. Read the original link status before any further command.",
+  "skills.shareRecheck": "Read share status again",
+  "skills.shareStillActive": "This link is still active. Confirm again if you want to stop sharing.",
   "skills.shareUnknown": "The share result is unknown. Do not resubmit; create another link only as a new explicit intent.",
   "skills.shareNew": "Create a new share",
   "skills.shareCopyFailed": "The link was created but copying failed. Click Share to copy the same link.",

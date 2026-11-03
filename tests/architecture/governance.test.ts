@@ -181,6 +181,10 @@ describe("Web governance boundary", () => {
         "contract:check:bff-tool-display": z.string().min(1),
         "contract:check:bff-project-resource": z.string().min(1),
         "contract:check:bff-project-skill-content": z.string().min(1),
+        "contract:generate:bff-mcp-reauthorization": z.string().min(1),
+        "contract:check:bff-mcp-reauthorization": z.string().min(1),
+        "contract:generate:bff-session-share-metadata": z.string().min(1),
+        "contract:check:bff-session-share-metadata": z.string().min(1),
         "contract:generate:bff-mcp-prepare-outcomes": z.string().min(1),
         "contract:check:bff-mcp-prepare-outcomes": z.string().min(1),
         "contract:generate:bff-mcp-prepare-receipt": z.string().min(1),
@@ -197,16 +201,22 @@ describe("Web governance boundary", () => {
     expect(scripts["contract:check:bff-project-pins"]).toBe("node scripts/generate-bff-project-pins.mjs --check")
     expect(scripts["contract:check:bff-project-mcp-recommendations"]).toBe("node scripts/generate-bff-project-mcp-recommendations.mjs --check")
     expect(scripts["contract:check:bff-tool-display"]).toBe("node scripts/generate-bff-tool-display.mjs --check")
+    expect(scripts["contract:generate:bff-mcp-reauthorization"]).toBe("node scripts/generate-bff-mcp-reauthorization.mjs --write")
+    expect(scripts["contract:check:bff-mcp-reauthorization"]).toBe("node scripts/generate-bff-mcp-reauthorization.mjs --check")
     expect(scripts["contract:generate:bff-mcp-prepare-outcomes"]).toBe("node scripts/generate-bff-mcp-prepare-outcomes.mjs --write")
     expect(scripts["contract:check:bff-mcp-prepare-outcomes"]).toBe("node scripts/generate-bff-mcp-prepare-outcomes.mjs --check")
     expect(scripts["contract:generate:bff-mcp-prepare-receipt"]).toBe("node scripts/generate-bff-mcp-prepare-receipt.mjs --write")
     expect(scripts["contract:check:bff-mcp-prepare-receipt"]).toBe("node scripts/generate-bff-mcp-prepare-receipt.mjs --check")
+    expect(scripts["contract:generate:bff-session-share-metadata"]).toBe("node scripts/generate-bff-session-share-metadata.mjs --write")
+    expect(scripts["contract:check:bff-session-share-metadata"]).toBe("node scripts/generate-bff-session-share-metadata.mjs --check")
     expect(scripts["test:architecture"]).toBe("vitest run tests/architecture")
     expect(scripts["contract:check:bff-connector-command-errors"]).toBe("node scripts/generate-bff-connector-command-errors.mjs --check")
     expect(scripts["contract:check:bff-public-skill-list"]).toBe("node scripts/generate-bff-public-skill-list.mjs --check")
     expect(scripts["contract:check:bff-mcp-server-icon"]).toBe("node scripts/generate-bff-mcp-server-icon.mjs --check")
     expect(scripts["contract:check:bff-mcp-project-publication"]).toBe("node scripts/generate-bff-mcp-project-publication.mjs --check")
     expect(scripts.contract.split(" && ").sort()).toEqual([
+      "pnpm contract:check:bff-session-share-metadata",
+      "pnpm contract:check:bff-mcp-reauthorization",
       "pnpm contract:check:bff-mcp-prepare-outcomes",
       "pnpm contract:check:bff-mcp-prepare-receipt",
       "pnpm contract:check:bff-archived-tasks",

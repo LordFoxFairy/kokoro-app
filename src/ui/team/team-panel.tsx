@@ -202,7 +202,7 @@ function TeamActiveContent({
               data-testid="team-notice"
             >
               {notice}
-              {needsRefresh && (
+              {(needsRefresh || state.notice === "incompleteRead") && (
                 <Button
                   variant="outline"
                   className={styles.retry}
@@ -488,9 +488,9 @@ function TeamActiveContent({
                       <span className={styles.invitationStatus}>{invitation.status === "pending" ? t("team.statusPending") : invitation.status}</span>
                     </div>
                   </div>
-                  {canEditInvites && invitation.status === "pending" && (
+                  {(canCreateInvite || canEditInvites) && invitation.status === "pending" && (
                     <div className={styles.itemActions}>
-                      <Button
+                      {canCreateInvite && <Button
                         variant="outline"
                         disabled={busy !== null || needsRefresh}
                         data-testid={`invitation-resend-${invitation.invitation_id}`}
@@ -506,8 +506,8 @@ function TeamActiveContent({
                         }
                       >
                         {t("team.resend")}
-                      </Button>
-                      <Button
+                      </Button>}
+                      {canEditInvites && <Button
                         variant="outline"
                         disabled={busy !== null || needsRefresh}
                         data-testid={`invitation-cancel-${invitation.invitation_id}`}
@@ -523,7 +523,7 @@ function TeamActiveContent({
                         }
                       >
                         {t("team.cancelInvitation")}
-                      </Button>
+                      </Button>}
                     </div>
                   )}
                 </div>

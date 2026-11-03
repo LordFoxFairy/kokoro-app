@@ -1,3 +1,11 @@
+## Public29 正式消费者（候选）
+
+BFF7e4ab1c的公开原件与完整双父test-only证明固定，RSS/日历/运行记录承接沿原ScheduledTask owner；设计、传输与本地数据格式见三设计文首，实际验证及正常源状态见 `CURRENT.md`。Public28.17以下历史记录和独立private/policy发行不改写。
+
+## 2026-11-02 B-01 精确详情失败恢复
+
+现有三个详情窗复用局部可见 GET 恢复，读取生命周期见 `TECHNICAL_DESIGN.md`，无 wire / 持久化变化见 `API_CONTRACT.md` / `DATA_MODEL.md`；实际验证与正常源状态见 `CURRENT.md`。
+
 ## 2026-10-24 Agent 待核对终态（候选，未正常激活）
 
 固定BFF `b0f201e99c2ae3fa213942c5a909f47b06640a02`／Public23.1／raw `703dba47da8a5c659b4236bb0a72317588ad29a4ca444ff9e5c99cfbcd00634b`。原186操作不变；七public窄消费者正规生成，ChatMessage／RUN_ERROR只承接新增model_settlement_pending且retryable=false，未知／坏profile保持拒绝。既有ConversationThread与九语言保正文并说明结算待核对，不猜已扣款／释放、不给终态重发动作、不改历史generic。完整23.0父字节逆证及原证明链保持，在线Docs固定同一发行物。完整工程／正常激活状态见[CURRENT](CURRENT.md)。

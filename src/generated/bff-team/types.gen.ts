@@ -124,7 +124,7 @@ export type TeamRole = {
         tenant?: Array<'read'>;
         audit?: Array<'read'>;
         platform?: Array<'execute'>;
-        skill?: Array<'create_draft' | 'create_version' | 'begin_upload' | 'complete_upload' | 'abort_upload' | 'validate_draft' | 'publish' | 'withdraw' | 'set_status' | 'install' | 'set_installation_enabled' | 'remove_installation' | 'update_draft' | 'discard_draft' | 'set_publication_audience'>;
+        skill?: Array<'create_draft' | 'create_version' | 'delete_series' | 'begin_upload' | 'complete_upload' | 'abort_upload' | 'validate_draft' | 'publish' | 'withdraw' | 'set_status' | 'install' | 'set_installation_enabled' | 'remove_installation' | 'update_draft' | 'discard_draft' | 'set_publication_audience'>;
     };
 };
 

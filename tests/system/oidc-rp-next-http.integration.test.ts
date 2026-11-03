@@ -84,6 +84,20 @@ function set32ObservePage(page: Page, recorder: Set32Recorder | undefined): void
 // SET32-END: recorder
 type HttpResult = Readonly<{ status: number; headers: Readonly<Record<string, string | string[] | undefined>>; body: string }>
 type NextDevEngine = "webpack" | "programmatic"
+type ReadinessHttpDiagnostic = Readonly<{
+  headers_received: boolean
+  status: number | null
+  body_bytes: number
+  outcome: "end" | "timeout" | "error"
+  error_category: string | null
+}>
+
+function readinessErrorCategory(error: unknown): string {
+  const code = typeof error === "object" && error !== null && "code" in error ? error.code : undefined
+  return typeof code === "string" && ["ECONNREFUSED", "ECONNRESET", "EPIPE", "ETIMEDOUT",
+    "ENOTFOUND", "EAI_AGAIN", "ERR_STREAM_PREMATURE_CLOSE", "ERR_HTTP_PARSER_ERROR"].includes(code)
+    ? code : "unclassified"
+}
 
 function nextDevEngine(): NextDevEngine {
   const value = process.env.KOKORO_TEST_NEXT_DEV_ENGINE?.trim() || "webpack"
@@ -120,29 +134,45 @@ function http(
   body = "",
   extra: Record<string, string> = {},
   timeoutMs?: number,
+  observeReadiness?: (diagnostic: ReadinessHttpDiagnostic) => void,
 ): Promise<HttpResult> {
   if (typeof target !== "string" || !target.startsWith("/") || target.startsWith("//")) {
     return Promise.reject(new Error("fixture HTTP target must be root-relative"))
   }
   return new Promise((resolve, reject) => {
     let timer: ReturnType<typeof setTimeout> | undefined
+    let headersReceived = false
+    let status: number | null = null
+    let bodyBytes = 0
+    let observed = false
+    const observe = (outcome: ReadinessHttpDiagnostic["outcome"], errorCategory: string | null): void => {
+      if (observed || observeReadiness === undefined) return
+      observed = true
+      observeReadiness({ headers_received: headersReceived, status, body_bytes: bodyBytes,
+        outcome, error_category: errorCategory })
+    }
     const clearDeadline = (): void => {
       if (timer !== undefined) clearTimeout(timer)
       timer = undefined
     }
-    const resolveOnce = (result: HttpResult): void => { clearDeadline(); resolve(result) }
-    const rejectOnce = (error: unknown): void => { clearDeadline(); reject(error) }
+    const resolveOnce = (result: HttpResult): void => { observe("end", null); clearDeadline(); resolve(result) }
+    const rejectOnce = (error: unknown): void => { observe("error", readinessErrorCategory(error)); clearDeadline(); reject(error) }
     const request = httpRequest({ hostname: "127.0.0.1", port, path: target, method,
       headers: { host: `localhost:${port}`, ...(body ? { "content-type": "application/x-www-form-urlencoded" } : {}), ...extra } }, (response) => {
+      headersReceived = true
+      status = response.statusCode ?? null
       const chunks: Buffer[] = []
-      response.on("data", (chunk: Buffer) => chunks.push(chunk))
+      response.on("data", (chunk: Buffer) => { bodyBytes += chunk.length; chunks.push(chunk) })
       response.once("error", rejectOnce)
       response.once("end", () => resolveOnce({ status: response.statusCode ?? 0, headers: response.headers,
         body: Buffer.concat(chunks).toString("utf8") }))
     })
     request.once("error", rejectOnce)
     if (timeoutMs !== undefined) {
-      timer = setTimeout(() => request.destroy(new Error("fixture HTTP deadline")), Math.max(1, timeoutMs))
+      timer = setTimeout(() => {
+        observe("timeout", "fixture_deadline")
+        request.destroy(new Error("fixture HTTP deadline"))
+      }, Math.max(1, timeoutMs))
     }
     request.end(body)
   })
@@ -1356,6 +1386,29 @@ function safeNextErrorExcerpt(value: string, redactions: readonly string[] = [])
   return excerpt === "" ? null : excerpt
 }
 
+function readinessChildLog(value: Buffer): string {
+  // Keep compile/request progress, never arbitrary child output, URLs, config or payloads.
+  const rows: string[] = []
+  let omitted = 0
+  for (const line of value.toString("utf8").replace(/\u001b\[[0-9;]*m/gu, "").split(/\r?\n/u)) {
+    if (line.trim() === "") continue
+    const progress = /\b(Starting|Ready in|Compiling|Compiled)\b/u.exec(line)
+    const duration = /\b(\d+(?:\.\d+)?)(ms|s)\b/u.exec(line)
+    const route = /(?:^|\s)(\/api\/auth\/csrf|\/app)(?=[?\s]|$)/u.exec(line)
+    const request = /^\s*(GET|POST|HEAD)\s+\S+\s+(\d{3})\b/u.exec(line)
+    if (progress !== null) {
+      rows.push([progress[1], route?.[1] ?? "", duration === null ? "" : `${duration[1]}${duration[2]}`].filter(Boolean).join(" "))
+    } else if (request !== null) {
+      rows.push(`${request[1]} ${route?.[1] ?? "<route>"} ${request[2]}`)
+    } else {
+      const categories = nextErrorCategories(line)
+      if (categories.length > 0) rows.push(`error_categories=${JSON.stringify(categories)}`)
+      else omitted += 1
+    }
+  }
+  return `${rows.join("\n")}\n[unclassified lines omitted: ${omitted}]\n`
+}
+
 describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }, () => {
   const redisUrl = process.env.KOKORO_WEB_REDIS_URL ?? "redis://127.0.0.1:6379/9"
   const clientId = "web-rp-fixture"
@@ -2095,8 +2148,23 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
 
   beforeAll(async () => {
     const setupDeadline = Date.now() + 55_000
+    const setupStartedAt = Date.now()
+    let readinessEngine: NextDevEngine | undefined
+    let stdoutTail: Buffer = Buffer.alloc(0)
+    let stderrTail: Buffer = Buffer.alloc(0)
+    const httpAttempts: (ReadinessHttpDiagnostic & { phase: "csrf" | "app"; started_ms: number; duration_ms: number })[] = []
+    let omittedAttempts = 0
+    const observeReadiness = (phase: "csrf" | "app"): ((diagnostic: ReadinessHttpDiagnostic) => void) => {
+      const startedAt = Date.now()
+      return (diagnostic) => {
+        if (httpAttempts.length === 256) { httpAttempts.shift(); omittedAttempts += 1 }
+        httpAttempts.push({ phase, started_ms: startedAt - setupStartedAt,
+          duration_ms: Date.now() - startedAt, ...diagnostic })
+      }
+    }
     try {
       const engine = nextDevEngine()
+      readinessEngine = engine
       root = await isolatedNext(process.cwd(), engine)
       bff = createServer((request, response) => {
         paths.push(request.url ?? "")
@@ -2631,14 +2699,20 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
           NEXTAUTH_URL: `http://localhost:${nextPort}/api/auth` }),
         stdio: ["ignore", "pipe", "pipe"],
       })
-      next.stdout?.on("data", (chunk: Buffer) => { output += chunk.toString("utf8") })
-      next.stderr?.on("data", (chunk: Buffer) => { output += chunk.toString("utf8") })
+      next.stdout?.on("data", (chunk: Buffer) => {
+        output += chunk.toString("utf8")
+        stdoutTail = Buffer.concat([stdoutTail, chunk]).subarray(-64 * 1024)
+      })
+      next.stderr?.on("data", (chunk: Buffer) => {
+        output += chunk.toString("utf8")
+        stderrTail = Buffer.concat([stderrTail, chunk]).subarray(-64 * 1024)
+      })
       let lastResponse: HttpResult | undefined
       let csrfReady = false
       while (Date.now() < setupDeadline) {
         try {
           lastResponse = await http(nextPort, "/api/auth/csrf", "GET", "", {},
-            Math.min(1_000, setupDeadline - Date.now()))
+            Math.min(1_000, setupDeadline - Date.now()), observeReadiness("csrf"))
           if (lastResponse.status === 200) { csrfReady = true; break }
         } catch { /* wait for socket */ }
         await new Promise((resolve) => setTimeout(resolve, 50))
@@ -2649,7 +2723,8 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       let appResponse: HttpResult | undefined
       while (Date.now() < setupDeadline) {
         try {
-          appResponse = await http(nextPort, "/app", "GET", "", {}, Math.min(5_000, setupDeadline - Date.now()))
+          appResponse = await http(nextPort, "/app", "GET", "", {},
+            Math.min(5_000, setupDeadline - Date.now()), observeReadiness("app"))
           appCompileReadinessStatus = appResponse.status
           const anonymousRedirectReady = appResponse.status === 307 &&
             appResponse.headers.location === "/login?return_to=%2Fapp" &&
@@ -2669,6 +2744,26 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
         error_excerpt: safeNextErrorExcerpt(output, [clientSecret, "rp-bff-secret", authSecret]),
       })}`)
     } catch (error) {
+      const artifactDirectory = await diagnosticWithin((async () => {
+        const parent = path.join(process.cwd(), "tmp", "oidc-ready-diagnostics")
+        await mkdir(parent, { recursive: true, mode: 0o700 })
+        const directory = await mkdtemp(path.join(parent, "failure-"))
+        await Promise.all([
+          writeFile(path.join(directory, "readiness.json"), JSON.stringify({
+            engine: readinessEngine ?? null,
+            elapsed_ms: Date.now() - setupStartedAt,
+            omitted_attempts: omittedAttempts,
+            http_attempts: httpAttempts,
+            child: { exit_code: next?.exitCode ?? null, signal_code: next?.signalCode ?? null },
+            log_policy: "64KiB tails; allowlisted progress and error categories only",
+          }, null, 2), { mode: 0o600, flag: "wx" }),
+          writeFile(path.join(directory, "stdout.log"), readinessChildLog(stdoutTail), { mode: 0o600, flag: "wx" }),
+          writeFile(path.join(directory, "stderr.log"), readinessChildLog(stderrTail), { mode: 0o600, flag: "wx" }),
+        ])
+        return directory
+      })(), null)
+      console.error("RP Next readiness diagnostics " + JSON.stringify({ artifact_directory: artifactDirectory,
+        http_attempts: httpAttempts, omitted_attempts: omittedAttempts }))
       try { await cleanup() }
       catch (cleanupError) { throw new AggregateError([error, cleanupError], "RP fixture setup and cleanup failed") }
       throw error

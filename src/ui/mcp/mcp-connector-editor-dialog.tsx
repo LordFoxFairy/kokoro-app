@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, type RefObject } from "react";
+import { type FormEvent, type ReactNode, type RefObject } from "react";
 import { Link2, Pencil, Power, Trash2 } from "lucide-react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -48,10 +48,12 @@ export function McpConnectorEditorDialog({
   onDelete,
   open,
   pendingError = false,
+  readFeedback,
 }: {
   editor: McpConnectorEditor | null;
   open?: boolean;
   pendingError?: boolean;
+  readFeedback?: ReactNode | undefined;
   displayName: string;
   description: string;
   actionId: string | null;
@@ -120,6 +122,7 @@ export function McpConnectorEditorDialog({
           <DialogDescription>{t("mcp.description")}</DialogDescription>
         </DialogHeader>
         <McpManagementStatus command={managementCommand} admitted={admitted} onResume={onResumeManagement} />
+        {readFeedback}
         {editor && connector ? (
           <form
             className={styles.editorForm}
@@ -239,7 +242,7 @@ export function McpConnectorEditorDialog({
               </Button>
             </footer>
           </form>
-         ) : <span className="sr-only" role="status">{t(pendingError ? "mcp.loadError" : "mcp.loading")}</span>}
+         ) : !readFeedback ? <span className="sr-only" role="status">{t(pendingError ? "mcp.loadError" : "mcp.loading")}</span> : null}
       </DialogContent>
     </Dialog>
   );

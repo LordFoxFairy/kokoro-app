@@ -3242,6 +3242,87 @@ it("Skill Share Create relays the exact revision and keeps the actual six-field 
   );
 });
 
+it.each([true, false])("Skill Share DELETE accepts only an exact revoked ACK (%s)", async revoked => {
+  const { DELETE } = await import("@/app/api/hub/[...path]/route");
+  const data = { share_id: "share-old", source_ref: "skill:revision-old", url: "http://localhost/skills/shared/share-old", created_at: "2026-10-10T00:00:00Z", expires_at: null, revoked_at: revoked ? "2026-11-03T00:00:00Z" : null };
+  vi.mocked(requestWithDomain).mockResolvedValue(Response.json({ data }, { headers: { "cache-control": "no-store", "x-request-id": "share-delete" } }));
+  const response = await DELETE(new Request("http://localhost/api/hub/skill-shares/share-old", { method: "DELETE", headers: { origin: "http://localhost" } }), params(["skill-shares", "share-old"]));
+  expect(response.status).toBe(revoked ? 200 : 502);
+  expect(requestWithDomain).toHaveBeenCalledOnce();
+  expect(vi.mocked(requestWithDomain).mock.calls[0]?.[0]).toBe("http://bff.test/v1/skill-shares/share-old");
+  expect(vi.mocked(requestWithDomain).mock.calls[0]?.[2]).toMatchObject({ method: "DELETE" });
+  expect(vi.mocked(requestWithDomain).mock.calls[0]?.[2]?.body).toBeUndefined();
+});
+
+it.each([null, "0"])("Skill Share DELETE consumes actual empty Next stream EOF with content-length %s before forwarding bodyless", async length => {
+  const { DELETE } = await import("@/app/api/hub/[...path]/route");
+  const data = { share_id: "share-old", source_ref: "skill:revision-old", url: "http://localhost/skills/shared/share-old", created_at: "2026-10-10T00:00:00Z", expires_at: null, revoked_at: "2026-11-03T00:00:00Z" };
+  vi.mocked(requestWithDomain).mockResolvedValue(Response.json({ data }, { headers: { "cache-control": "no-store", "x-request-id": "share-delete" } }));
+  let eof!: () => void;
+  const request = new Request("http://localhost/api/hub/skill-shares/share-old", {
+    method: "DELETE", headers: { origin: "http://localhost", ...(length === null ? {} : { "content-length": length }) },
+    body: new ReadableStream<Uint8Array>({ start(controller) { eof = () => controller.close() } }), duplex: "half",
+  } as RequestInit & { duplex: string });
+  const pending = DELETE(request, params(["skill-shares", "share-old"]));
+  await vi.waitFor(() => expect(request.body?.locked).toBe(true));
+  expect(requestWithDomain).not.toHaveBeenCalled();
+  eof();
+  expect((await pending).status).toBe(200);
+  expect(requestWithDomain).toHaveBeenCalledOnce();
+  const [target,, options] = vi.mocked(requestWithDomain).mock.calls[0]!;
+  expect(target).toBe("http://bff.test/v1/skill-shares/share-old");
+  expect(options?.method).toBe("DELETE");
+  expect(options?.body).toBeUndefined();
+  const headers = new Headers(options?.headers);
+  expect(headers.has("content-length")).toBe(false);
+  expect(headers.has("transfer-encoding")).toBe(false);
+});
+it.each(["byte", "encoding", "noncanonical"])("Skill Share DELETE rejects actual bytes or forbidden empty framing (%s)", async mode => {
+  const { DELETE } = await import("@/app/api/hub/[...path]/route");
+  const request = new Request("http://localhost/api/hub/skill-shares/share-old", {
+    method: "DELETE", headers: { origin: "http://localhost", "content-length": mode === "noncanonical" ? "00" : "0", ...(mode === "encoding" ? { "transfer-encoding": "chunked" } : {}) },
+    body: new ReadableStream<Uint8Array>({ start(controller) { if (mode === "byte") controller.enqueue(new Uint8Array([1])); controller.close() } }), duplex: "half",
+  } as RequestInit & { duplex: string });
+  expect((await DELETE(request, params(["skill-shares", "share-old"]))).status).toBe(400);
+  expect(requestWithDomain).not.toHaveBeenCalled();
+});
+it.each(["cancel", "deadline"])("Skill Share DELETE bounds an unfinished empty stream on %s without command IO", async mode => {
+  const { DELETE } = await import("@/app/api/hub/[...path]/route");
+  const caller = new AbortController(), cancel = vi.fn();
+  if (mode === "deadline") vi.useFakeTimers();
+  try {
+    const request = new Request("http://localhost/api/hub/skill-shares/share-old", {
+      method: "DELETE", headers: { origin: "http://localhost", "content-length": "0" }, signal: caller.signal,
+      body: new ReadableStream<Uint8Array>({ cancel }), duplex: "half",
+    } as RequestInit & { duplex: string });
+    const pending = DELETE(request, params(["skill-shares", "share-old"]));
+    await vi.waitFor(() => expect(request.body?.locked).toBe(true));
+    if (mode === "cancel") caller.abort(); else await vi.advanceTimersByTimeAsync(10_001);
+    expect((await pending).status).toBe(503);
+    expect(cancel).toHaveBeenCalled();
+    expect(requestWithDomain).not.toHaveBeenCalled();
+    if (mode === "deadline") expect(vi.getTimerCount()).toBe(0);
+  } finally { vi.useRealTimers() }
+});
+
+it.each(["body", "length"])("Skill Share GET still rejects empty %s without owner IO", async mode => {
+  const { GET } = await import("@/app/api/hub/[...path]/route");
+  const request = new Request("http://localhost/api/hub/skill-shares/share-old", { headers: mode === "length" ? { "content-length": "0" } : {} });
+  if (mode === "body") Object.defineProperty(request, "body", { value: new ReadableStream<Uint8Array>({ start(controller) { controller.close() } }) });
+  expect((await GET(request, params(["skill-shares", "share-old"]))).status).toBe(400);
+  expect(requestWithDomain).not.toHaveBeenCalled();
+});
+
+it.each(["origin", "body", "query", "key", "framing"])("Skill Share DELETE rejects %s before owner IO", async mode => {
+  const { DELETE } = await import("@/app/api/hub/[...path]/route");
+  const response = await DELETE(new Request(`http://localhost/api/hub/skill-shares/share-old${mode === "query" ? "?extra=1" : ""}`, {
+    method: "DELETE", headers: { origin: mode === "origin" ? "https://foreign.example" : "http://localhost", ...(mode === "key" ? { "idempotency-key": "key" } : {}), ...(mode === "framing" ? { "content-length": "1" } : {}) },
+    ...(mode === "body" ? { body: "{}" } : {}),
+  }), params(["skill-shares", "share-old"]));
+  expect(response.status).toBeGreaterThanOrEqual(400);
+  expect(requestWithDomain).not.toHaveBeenCalled();
+});
+
 it("Skill Share summary preserves exact revision fields and rejects a current/foreign cover", async () => {
   const { GET } = await import("@/app/api/hub/[...path]/route");
   const skill = {
@@ -5157,3 +5238,30 @@ it("bounds a never-ending empty DELETE stream at10seconds and keeps GET bodies f
     expect(requestWithDomain).not.toHaveBeenCalled()
   } finally { vi.useRealTimers() }
 })
+
+
+describe("private MCP new authorization adapter", () => {
+  const path=["mcp","servers","authorization-server","reauthorize"];
+  const body={source_connector_id:"old-revoked",expected_server_state_version:"7",expected_connector_state_version:"5"};
+  const ack=()=>({ server: { availability: "unavailable", server_id: "authorization-server", display_name: "New authorization", server_url: "https://example.test/mcp", status: "pending", state_version: "8", headers: [], transport: "streamable_http", prepare_status: "pending_prepare", declarations: [], declarations_available: false }, connector: { availability: "unavailable", connector_id: "fresh-connector", server_id: "authorization-server", provider_key: "private", connector_type: "mcp", status: "pending", enabled: false, state_version: "1", approved_scopes: [] }, replayed: true });
+  const request=(input:unknown=body, origin="http://localhost", key="original-authorization-key",query="")=>new Request(`http://localhost/api/hub/${path.join("/")}${query}`,{method:"POST",headers:{origin,"content-type":"application/json","idempotency-key":key,authorization:"Bearer untrusted"},body:JSON.stringify(input)});
+  const reply=(value:unknown,status=200)=>new Response(JSON.stringify(value),{status,headers:{"content-type":"application/json","cache-control":"no-store","x-request-id":"authorization-owner"}});
+  it("preserves original double CAS and key under real admitted server identity in one bounded request",async()=>{
+    const {POST}=await import("@/app/api/hub/[...path]/route");vi.mocked(requestWithDomain).mockResolvedValueOnce(reply({data:ack()}));
+    const result=await POST(request(),params(path));expect(result.status).toBe(200);expect(result.headers.get("cache-control")).toContain("no-store");
+    expect(requestWithDomain).toHaveBeenCalledOnce();const [url,,init]=vi.mocked(requestWithDomain).mock.calls[0]!;
+    expect(String(url)).toBe("http://bff.test/browser/v1/mcp/servers/authorization-server/reauthorize");
+    expect(init?.headers).toMatchObject({authorization:"Bearer product-access","idempotency-key":"original-authorization-key"});
+    expect(JSON.parse(new TextDecoder().decode(init?.body as ArrayBuffer))).toEqual(body);
+  });
+  it.each(["origin","query","extra","version","key","session"])("refuses %s before owner dispatch",async fault=>{
+    const {POST}=await import("@/app/api/hub/[...path]/route");if(fault==="session")currentProductSession.mockResolvedValue(null);
+    const result=await POST(request(fault==="extra"?{...body,actor_id:"untrusted"}:fault==="version"?{...body,expected_server_state_version:"2147483647"}:body,fault==="origin"?"https://foreign.test":"http://localhost",fault==="key"?"":"original-authorization-key",fault==="query"?"?unexpected=1":""),params(path));
+    expect(result.status).toBe(fault==="session"?401:400);expect(requestWithDomain).not.toHaveBeenCalled();
+  });
+  it.each(["source","server","version","enabled","extra"])("refuses invalid %s acknowledgement without exposing it",async fault=>{
+    const {POST}=await import("@/app/api/hub/[...path]/route");const value=ack();if(fault==="source")value.connector.connector_id=body.source_connector_id;if(fault==="server")value.server.server_id="wrong";if(fault==="version")value.server.state_version="7";if(fault==="enabled")value.connector.enabled=true;
+    vi.mocked(requestWithDomain).mockResolvedValueOnce(reply({data:value,...(fault==="extra"?{extra:"private"}:{})}));
+    expect((await POST(request(),params(path))).status).toBe(502);expect(requestWithDomain).toHaveBeenCalledOnce();
+  });
+});

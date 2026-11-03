@@ -17,7 +17,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { useT } from "@/i18n/context";
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
-import type { CustomApiCreateFlow } from "./custom-api-create-flow";
+import type { CustomApiCreateFlow, CustomApiCreationCompletion } from "./custom-api-create-flow";
 import { useConnectorCreationForm } from "./use-connector-creation-form";
 
 import styles from "./custom-api-form.module.css";
@@ -40,7 +40,7 @@ export function CustomApiForm({
   iconClient?: McpIconClient | undefined;
   boundary: ProjectReadBoundary;
   onCancel: () => void;
-  onDone: () => Promise<void>;
+  onDone: (result: CustomApiCreationCompletion, current: () => boolean) => Promise<void>;
 }) {
   const t = useT();
   const [name, setName] = useState("");

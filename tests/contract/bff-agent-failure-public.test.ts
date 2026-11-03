@@ -9,12 +9,13 @@ import { pathToFileURL } from "node:url"
 import { describe, expect, it } from "vitest"
 import YAML from "yaml"
 
+import { agentFailureProfileSchema } from "../../src/contract/agent-failure"
 import { messageRecordSchema } from "../../src/contract/chat"
 import { BFF_CHAT_MESSAGE_ROLES } from "../../src/generated/bff-agent-failure"
 
-const BFF_OWNER_COMMIT = "853ca9a5d8da3500b0c37543c72198a520e46225"
-const BFF_PUBLIC_OPENAPI_SHA256 = "ea0031103488daa1fcc0cca45fdd13f4d4061546ac4525c745ec47105649f7e7"
-const BFF_PUBLIC_OPENAPI_VERSION = "28.17.0"
+const BFF_OWNER_COMMIT = "1e6765b3230d55fa17d0f6aa989278b97d00f338"
+const BFF_PUBLIC_OPENAPI_SHA256 = "4f27adbea9a63c36d8b11e95c9dde342a6e8d662cab77cb42091384f3b17e333"
+const BFF_PUBLIC_OPENAPI_VERSION = "29.3.0"
 const ROOT = process.cwd()
 const SNAPSHOT = resolve(ROOT, "src/generated/bff-public-openapi.yaml")
 const GENERATOR = resolve(ROOT, "scripts/generate-bff-agent-failure.mjs")
@@ -32,6 +33,7 @@ const CODES = [
   "dependency_unavailable",
   "model_access_denied",
   "model_settlement_pending",
+  "context_window_exceeded",
 ] as const
 const TRUE_CODES = ["model_unavailable", "dependency_unavailable"] as const
 const EXPECTED_TUPLES = [
@@ -207,7 +209,7 @@ describe("pinned BFF Agent failure public contract", () => {
     const bytes = await readFile(SNAPSHOT)
     const spec = YAML.parse(bytes.toString("utf8")) as { info?: { version?: string } }
 
-    expect(BFF_OWNER_COMMIT).toBe("853ca9a5d8da3500b0c37543c72198a520e46225")
+    expect(BFF_OWNER_COMMIT).toBe("1e6765b3230d55fa17d0f6aa989278b97d00f338")
     expect(createHash("sha256").update(bytes).digest("hex")).toBe(BFF_PUBLIC_OPENAPI_SHA256)
     expect(spec.info?.version).toBe(BFF_PUBLIC_OPENAPI_VERSION)
   })
@@ -241,7 +243,7 @@ describe("pinned BFF Agent failure public contract", () => {
     ])
   })
 
-  it("derives the exact 13 safe tuples with the owner two-role contract", async () => {
+  it("derives the exact 14 safe tuples with the owner two-role contract", async () => {
     const generator = await loadGenerator()
     const inspected = generator.inspectBffAgentFailureContract(await readSpec())
 
@@ -319,4 +321,11 @@ describe("pinned BFF Agent failure public contract", () => {
 
     expect(() => generator.inspectBffAgentFailureContract(mutant)).toThrow()
   })
+})
+
+it("accepts only the nonretryable context capacity failure from the published tuple", () => {
+  const profile = { source: "agent", code: "context_window_exceeded", retryable: false }
+  expect(agentFailureProfileSchema.parse(profile)).toEqual(profile)
+  expect(() => agentFailureProfileSchema.parse({ ...profile, retryable: true })).toThrow()
+  expect(() => agentFailureProfileSchema.parse({ ...profile, code: "unknown_capacity" })).toThrow()
 })

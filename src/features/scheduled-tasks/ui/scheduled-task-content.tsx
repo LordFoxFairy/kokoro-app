@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { useT } from "@/i18n/context"
 
 import type { ScheduledTaskRecord } from "../model/scheduled-task"
-import type { ScheduledView } from "./scheduled-task-location"
+import type { ScheduledView, ScheduledTaskCreationContext } from "./scheduled-task-location"
 import { ScheduledTaskCalendarView } from "./scheduled-task-calendar-view"
 import { ScheduledTaskEmptyState } from "./scheduled-task-empty-state"
 import { ScheduledTaskList } from "./scheduled-task-list"
@@ -15,6 +15,7 @@ import calendarStyles from "./scheduled-task-calendar.module.css"
 import styles from "./scheduled-task-surface.module.css"
 
 type ScheduledTaskContentProps = {
+  creationContext: ScheduledTaskCreationContext
   brandName: string
   fixtureMode: boolean
   controlledTasks: boolean
@@ -38,7 +39,6 @@ type ScheduledTaskContentProps = {
     target?: HTMLElement | null,
     task?: ScheduledTaskRecord | null,
   ) => void
-  switchView: (next: string) => void
   shiftCalendarMonth: (offset: number) => void
   resetCalendarMonth: () => void
   setDeleteTarget: (task: ScheduledTaskRecord) => void
@@ -47,6 +47,13 @@ type ScheduledTaskContentProps = {
 }
 
 export function ScheduledTaskContent(props: ScheduledTaskContentProps) {
+  const t = useT()
+  if (props.creationContext.kind === "invalid") return (
+    <section className={styles.content}>
+      <p role="alert">{t("scheduled.invalidScope")}</p>
+      <Button type="button" disabled>{t("scheduled.create")}</Button>
+    </section>
+  )
   if (
     !props.fixtureMode &&
     !props.controlledTasks &&
@@ -153,7 +160,6 @@ function ScheduledTaskWorkspace(props: ScheduledTaskContentProps) {
         canRetry={props.canRetry}
         canDelete={props.canDelete}
         openEditor={props.openEditor}
-        switchView={props.switchView}
         setDeleteTarget={props.setDeleteTarget}
         retryTask={props.retryTask}
         setTaskEnabled={props.setTaskEnabled}

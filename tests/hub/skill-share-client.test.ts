@@ -7,6 +7,27 @@ const headers = { "content-type": "application/json", "cache-control": "no-store
 function response(data: unknown, status = 200) { return new Response(JSON.stringify(data), { status, headers }) }
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers() })
 describe("formal Skill Share client", () => {
+  it("revokes only the exact creator-held share with a bodyless DELETE and closed revoked ACK", async () => {
+    const revoked = { ...ack, revoked_at: "2026-11-03T00:00:00Z" }
+    const fetcher = vi.fn().mockResolvedValue(response({ data: revoked })); vi.stubGlobal("fetch", fetcher)
+    expect(await createSkillShareClient(origin).revoke(ack.share_id, ack.source_ref)).toEqual(revoked)
+    const [path, init] = fetcher.mock.calls[0]!
+    expect(path).toBe("/api/hub/skill-shares/share-old")
+    expect(init).toMatchObject({ method: "DELETE" })
+    expect(init.body).toBeUndefined()
+    expect(new Headers(init.headers).has("content-type")).toBe(false)
+    expect(new Headers(init.headers).has("idempotency-key")).toBe(false)
+    expect(fetcher).toHaveBeenCalledOnce()
+  })
+  it.each([
+    { ...ack }, { ...ack, revoked_at: "invalid" }, { ...ack, revoked_at: ack.created_at, share_id: "other" },
+    { ...ack, revoked_at: ack.created_at, source_ref: "skill:other" },
+    { ...ack, revoked_at: ack.created_at, url: "https://foreign.example/skills/shared/share-old" },
+    { ...ack, revoked_at: ack.created_at, extra: true },
+  ])("rejects an unrevoked, mismatched or extended DELETE ACK %j", async data => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response({ data })))
+    await expect(createSkillShareClient(origin).revoke(ack.share_id, ack.source_ref)).rejects.toMatchObject({ reason: "parse" })
+  })
   it("creates once without idempotency and preserves the six-field ACK URL", async () => {
     const fetcher = vi.fn().mockResolvedValue(response({ data: ack }, 201)); vi.stubGlobal("fetch", fetcher)
     expect(await createSkillShareClient(origin).create({ source_ref: ack.source_ref })).toEqual(ack)

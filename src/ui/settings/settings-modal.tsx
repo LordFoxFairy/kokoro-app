@@ -133,6 +133,7 @@ export function SettingsModal({
   const { open, requestClose } = useOverlayClose(onClose);
   const activeTabRef = useRef<HTMLButtonElement | null>(null);
   const settingsDialogRef = useRef<HTMLDivElement | null>(null);
+  const [railOrientation, setRailOrientation] = useState<"horizontal" | "vertical">("vertical");
   // Keep one injected Hub client for the lifetime of the settings surface.
   // Besides avoiding duplicate providers in one render, this makes the
   // resource cache's client scope stable when a test/site supplies a factory
@@ -269,9 +270,7 @@ export function SettingsModal({
             {t("settings.title")}
           </DialogTitle>
           <Tabs
-            // Settings is one horizontal tab model; it does not switch layout
-            // modes as the browser viewport changes.
-            orientation="horizontal"
+            orientation={railOrientation}
             value={tab}
             onValueChange={(value) => selectTab(value as SettingsTab)}
             className={styles.tabs}
@@ -282,6 +281,7 @@ export function SettingsModal({
                 selectedTab={tab}
                 activeTabRef={activeTabRef}
                 onSelectTab={selectTab}
+                onOrientationChange={setRailOrientation}
               />
 
               <SettingsPanel

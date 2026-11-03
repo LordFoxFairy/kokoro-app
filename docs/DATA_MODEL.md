@@ -1,3 +1,29 @@
+## 2026-11-02 B-01 新授权的局部命令状态（候选）
+
+Web 无数据库/Schema/IndexedDB/localStorage 格式变更。既有 Management RAM entry 新增独立 reauthorize_server discriminator，冻结原 source/双 CAS/key；只有严格 ACK 生成安全新 locator completion，不持久化 headers、凭据、声明或 owner 回执。完成后的新 exact 窗口重新读取当前 owner 状态；原只读窗口不变为可写。现 Prepare journal 仅提供既有恢复就绪与冲突保护，不承载新授权命令，也不声称 reload 恢复。
+
+## Public29 自动化本地视图（2026-11-02，候选）
+
+Web无owner数据库/表/Schema迁移；原ScheduledTask本地model改为calendar/RSS分支，嵌套条件在dispatch/恢复前克隆。运行记录为当前scope RAM页，无工具过程/凭据/新账本，不从状态标签推断真实执行或结算。
+
+原preview localStorage key和锁保持；为保候选旧版无triggerKind的calendar预览，只在本地读取时加calendar判别并经现完整guard，混入RSS字段或坏可选值仍拒绝，读不重写raw storage。已升级RSS/日历记录原样读取，下次用户明确预览写操作才持久当前形状；这不是owner wire兼容，不检查真实feed，不把preview当真实调度。
+
+## 2026-11-02 B-01 精确详情无持久化变化
+
+仅 mounted reader 的窗口/attempt/pending 与既有错误反馈，无数据库、cache、IDB/localStorage 格式、命令 key/body 或保存事实变化。旧 scope 与迟到结果不解锁当前 CAS；安全 locator 保留不代表当前详情或权限，必须由当前 exact GET 确认。
+
+## 2026-11-01 B-14 Manifest 无持久化变更
+
+仅原hook每个mounted scope的非持久deadline/settled/controller状态，终结清timer并退休迟到结果。不新增数据库、缓存、localStorage/IDB格式、持久manifest或业务事实；默认外观不代表System已发布、preview或权限。
+
+## 2026-11-01 B-01 读取恢复无持久化变更
+
+仅 reader mounted 窗口的非秘密 owner/attempt/pending 状态，无数据库、cache格式、localStorage/IDB 或命令恢复 schema 变化。卡片显示连续性不授予当前权限/版本，全空事实须当前读取成功；主体/准入代变化后不借旧读取结果或迟到 settlement 解锁新窗口。
+
+## 2026-11-01 B-01 创建详情衔接无持久化变更
+
+无数据库、localStorage/IDB schema或命令恢复格式变更。仅在现actor command及mounted创建窗口持有安全profile/server/connector/provider locator；原秘密草稿ACK时清退，raw ACK不进入公共state。窗口/主体退休清除投影，代际变化不借旧事实授新写权限，unknown原key/body语义保持。
+
 ## Custom API草稿选择（复用原安全提交意图，无新owner表）
 
 仅现engine／Project draft的profile/version引用，≤32且profileID唯一，换会话/actor退休，不落Conversation账号偏好。发送时深冻结到原PendingSubmission，现browser sessionStorage journal v1仅增加可选正式safe-ref字段，原无字段记录仍按原body/key恢复；不保存指令、env名称/值或凭据，不新增store／Schema／迁移。未知结果只显式原K/body恢复，后续目录刷新或UI选择不改旧意图。已接受选择由原owner private snapshot投影，App无第二选择事实源；当前CAS不符只排除恢复，不能替换原CAS。原MCP/Skills与父会话权限保持。

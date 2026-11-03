@@ -51,9 +51,10 @@ it("blocked reads are quiet, have no write eligibility, and issue no request", (
   expect(fetcher).not.toHaveBeenCalled()
 })
 
-it("ordinary read failure is not empty or a retry card; close/reopen explicitly starts fresh GET", async () => {
+it("ordinary read failure is visible and recovers with GET only; close/reopen still starts fresh GET", async () => {
   let fail = true, reads = 0
-  const fetcher = vi.fn(async (input: string) => {
+  const fetcher = vi.fn(async (input: string, init?: RequestInit) => {
+    if (init?.method !== "GET") throw new Error("Unexpected write")
     if (input.includes("skill-selection")) return defaults()
     reads++
     if (fail) throw new TypeError("read unavailable")
@@ -62,37 +63,54 @@ it("ordinary read failure is not empty or a retry card; close/reopen explicitly 
   vi.stubGlobal("fetch", fetcher)
   mount()
   let dialog = open()
-  const status = await within(dialog).findByText("技能读取失败，请重试。")
-  expect(status).toHaveClass("sr-only")
-  expect(within(dialog).queryByRole("alert")).not.toBeInTheDocument()
-  expect(within(dialog).queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
+  const alert = await within(dialog).findByRole("alert")
+  expect(alert).toHaveTextContent("技能读取失败，请重试。")
+  expect(alert).not.toHaveClass("sr-only")
+  expect(within(dialog).getByRole("button", { name: "重新读取" })).toBeEnabled()
   expect(within(dialog).queryByText("尚无技能")).not.toBeInTheDocument()
   expect(reads).toBe(1)
-  await close(dialog)
   fail = false
+  fireEvent.click(within(dialog).getByRole("button", { name: "重新读取" }))
+  expect(await within(dialog).findByRole("switch", { name: "启用 Read Skill" })).toBeEnabled()
+  expect(within(dialog).queryByRole("alert")).not.toBeInTheDocument()
+  expect(reads).toBe(2)
+  expect(fetcher.mock.calls.every(([, init]) => init?.method === "GET")).toBe(true)
+  await close(dialog)
   dialog = open()
   await within(dialog).findByRole("switch", { name: "启用 Read Skill" })
-  expect(reads).toBe(2)
+  expect(reads).toBe(3)
 })
 
-it("list read failure retains only existing same-scope facts, without visible generic retry or fake empty", async () => {
+it.each(["search", "page"] as const)("%s read failure keeps same-scope cards and exposes GET-only recovery, never fake empty", async mode => {
   let failSearch = false
-  vi.stubGlobal("fetch", vi.fn(async (input: string) => {
+  const fetcher = vi.fn(async (input: string, init?: RequestInit) => {
+    if (init?.method !== "GET") throw new Error("Unexpected write")
     if (input.includes("skill-selection")) return defaults()
     if (failSearch) throw new TypeError("search unavailable")
-    return reply({ data: [installation] })
-  }))
+    return reply({ data: [installation], ...(mode === "page" ? { meta: { next_cursor: "cursor-next" } } : {}) })
+  })
+  vi.stubGlobal("fetch", fetcher)
   mount()
   const dialog = open()
   await within(dialog).findByRole("switch", { name: "启用 Read Skill" })
   failSearch = true
-  fireEvent.change(within(dialog).getByRole("textbox", { name: "搜索技能" }), { target: { value: "next query" } })
-  const status = await within(dialog).findByText("技能读取失败，请重试。")
-  expect(status).toHaveClass("sr-only")
-  expect(within(dialog).queryByRole("alert")).not.toBeInTheDocument()
-  expect(within(dialog).queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
+  if (mode === "search") fireEvent.change(within(dialog).getByRole("textbox", { name: "搜索技能" }), { target: { value: "next query" } })
+  else fireEvent.click(within(dialog).getByRole("button", { name: "加载更多" }))
+  const alert = await within(dialog).findByRole("alert")
+  expect(alert).toHaveTextContent("技能读取失败，请重试。")
+  expect(alert).not.toHaveClass("sr-only")
   expect(within(dialog).getByRole("switch", { name: "启用 Read Skill" })).toBeDisabled()
   expect(within(dialog).queryByText("尚无技能")).not.toBeInTheDocument()
+  const failedRead = fetcher.mock.calls.filter(([path]) => !path.includes("skill-selection")).at(-1)![0]
+  expect(new URL(failedRead, "http://localhost").searchParams.get(mode === "search" ? "query" : "cursor")).toBe(mode === "search" ? "next query" : "cursor-next")
+  failSearch = false
+  fireEvent.click(within(dialog).getByRole("button", { name: "重新读取" }))
+  await waitFor(() => expect(within(dialog).getByRole("switch", { name: "启用 Read Skill" })).toBeEnabled())
+  expect(within(dialog).queryByRole("alert")).not.toBeInTheDocument()
+  const restoredRead = fetcher.mock.calls.filter(([path]) => !path.includes("skill-selection")).at(-1)![0]
+  expect(new URL(restoredRead, "http://localhost").searchParams.get("cursor")).toBeNull()
+  if (mode === "search") expect(new URL(restoredRead, "http://localhost").searchParams.get("query")).toBe("next query")
+  expect(fetcher.mock.calls.every(([, init]) => init?.method === "GET")).toBe(true)
 })
 
 it.each(["unknown", "ack-read-failed"] as const)("quiet ordinary reads preserve explicit %s mutation recovery", async mode => {

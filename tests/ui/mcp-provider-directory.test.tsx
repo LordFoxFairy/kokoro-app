@@ -84,7 +84,7 @@ it("keeps unknown results quiet and the continuation label stable while its owne
   expect(screen.getByRole("button", { name: "加载更多" })).toHaveAttribute("aria-busy", "true")
 })
 
-it.each(["pending", "failed"] as const)("keeps the external catalog %s without a loading/error panel or a false empty directory", state => {
+it.each(["pending", "failed"] as const)("keeps the external catalog %s with local feedback and no false empty directory", state => {
   window.localStorage.setItem("kokoro.locale", "zh")
   const select = vi.fn()
   const props = { open: true, providers: [], loading: state === "pending", error: state === "failed", hasMore: false,
@@ -96,7 +96,8 @@ it.each(["pending", "failed"] as const)("keeps the external catalog %s without a
   expect(screen.queryByText("没有匹配的连接")).not.toBeInTheDocument()
   expect(screen.queryByRole("alert")).not.toBeInTheDocument()
   expect(screen.queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
-  expect(screen.getByRole("status")).toHaveClass("sr-only")
+  if (state === "pending") expect(screen.getByRole("status")).toHaveClass("sr-only")
+  else expect(screen.getByText("连接器目录加载失败")).toBeVisible()
   expect(select).not.toHaveBeenCalled()
   rerender(<LocaleProvider><McpProviderCatalogDialog {...props} providers={seed.items} loading={false} error={false} /></LocaleProvider>)
   const card = screen.getByRole("button", { name: "first" })
@@ -235,4 +236,55 @@ it("bounds a hanging relation read and releases its request instead of confirmin
     expect(result.current.complete).toBe(false)
     expect((list.mock.calls[0]![1] as AbortSignal).aborted).toBe(true)
   } finally { cleanup(); vi.useRealTimers() }
+})
+
+
+it.each([false, true])("explicitly refreshes the current provider head without an old cursor and retains rows until success (filtered=%s)", async filtered => {
+  let finish!: (value: { items: McpConnectorProvider[]; next_cursor: null }) => void
+  const list = vi.fn().mockResolvedValueOnce({ items: [provider("head")], next_cursor: "tail" })
+    .mockResolvedValueOnce({ items: [provider("tail")], next_cursor: "old-next" })
+    .mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+  const client = { ...createHubClient(), listMcpConnectorProviders: list }
+  const { result } = renderHook(() => useMcpProviderDirectory({ client, identity: "refresh-head", admitted: true,
+    readGeneration: 0, seed: undefined, query: "workflow", category: filtered ? "development" : "all" }))
+  await waitFor(() => expect(result.current.items).toHaveLength(1))
+  act(() => result.current.loadMore())
+  await waitFor(() => expect(result.current.items).toHaveLength(2))
+  act(() => { result.current.refresh(); result.current.refresh() })
+  expect(result.current.loading).toBe(true)
+  expect(result.current.items.map(item => item.provider_key)).toEqual(["head", "tail"])
+  expect(list).toHaveBeenCalledTimes(3)
+  expect(list).toHaveBeenLastCalledWith({ limit: 100, query: "workflow", ...(filtered ? { category_key: "development" } : {}) }, expect.any(AbortSignal))
+  await act(async () => finish({ items: [provider("fresh")], next_cursor: null }))
+  expect(result.current.items.map(item => item.provider_key)).toEqual(["fresh"])
+  expect(result.current.hasMore).toBe(false)
+})
+
+it("retries a failed head refresh from the head rather than the retained next cursor", async () => {
+  const list = vi.fn().mockRejectedValueOnce(Error("offline"))
+    .mockResolvedValueOnce({ items: [provider("fresh")], next_cursor: null })
+  const client = { ...createHubClient(), listMcpConnectorProviders: list }
+  const { result } = renderHook(() => useMcpProviderDirectory({ client, identity: "refresh-failed", admitted: true,
+    readGeneration: 0, seed, query: "", category: "all" }))
+  act(() => result.current.refresh())
+  await waitFor(() => expect(result.current.error).toBe(true))
+  expect(result.current.items).toEqual(seed.items)
+  act(() => result.current.retry())
+  await waitFor(() => expect(result.current.items[0]?.provider_key).toBe("fresh"))
+  expect(list.mock.calls.map(call => call[0])).toEqual([{ limit: 100 }, { limit: 100 }])
+})
+
+it.each(["actor", "generation"])("retires a pending explicit refresh after %s changes", async change => {
+  let finish!: (value: typeof seed) => void
+  const list = vi.fn().mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+  const client = { ...createHubClient(), listMcpConnectorProviders: list }
+  const { result, rerender } = renderHook(({ identity, readGeneration }) => useMcpProviderDirectory({ client, identity,
+    readGeneration, admitted: true, seed, query: "", category: "all" }), { initialProps: { identity: "alice", readGeneration: 0 } })
+  act(() => result.current.refresh())
+  const signal = list.mock.calls[0]![1] as AbortSignal
+  rerender({ identity: change === "actor" ? "bob" : "alice", readGeneration: change === "generation" ? 1 : 0 })
+  expect(signal.aborted).toBe(true)
+  await act(async () => finish({ items: [provider("late")], next_cursor: "late-tail" }))
+  expect(result.current.items).toEqual(seed.items)
+  expect(result.current.loading).toBe(false)
 })

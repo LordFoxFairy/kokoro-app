@@ -1,3 +1,7 @@
+## 2026-11-03 B-08 容量失败的两种反馈
+
+ConversationThread 只消费正式生成的 context_window_exceeded / retryable=false，终态说明减少个人资料、知识或任务内容后重新发起/重新生成，不给旧冻结Run重发按钮。发送前 personal_context_too_large 则说明尚未提交，保原内容及现有显式重试入口；展示层不改 pending body/key，不自动POST，不声称终态总用量为零。实际验证与正常激活见CURRENT。
+
 2026-10-28：`use-run-display.ts` 在同scope终态补读被卸载取消后解除读取占用，保留既有事实并允许重新可见时读取；不重置终态补读资格、不重试HTTP失败。`tool-action-presentation.ts` 同时拥有行动行与Canvas状态文案，MCP completed仅表述“调用已结束”，业务失败仍优先显示。
 
 2026-10-28 整轮过程：`completed-turn-sections.ts`只按正式 final 引用与完整正文划分；`turn-process.tsx`拥有整轮披露与可访问隐藏，原相邻动作组及正文顺序保持。未取得 final、partial、在途、HITL、取消/失败继续原可读布局；最终答复和状态反馈在披露外。参考入口实测14px/20px、4px gap、16px chevron，未有可靠耗时不造时长。正常激活和同任务浏览器验收仍待。
