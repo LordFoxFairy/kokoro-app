@@ -49,6 +49,37 @@ test.afterEach(async ({ page }, testInfo) => {
 
 // A CSS-hidden destination still exists in jsdom. Check its rendered bounds
 // through the user's More-menu, keyboard and resize journey instead.
+test("settings arrow keys follow the rendered rail direction after resize", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.addInitScript(() => localStorage.setItem("kokoro.locale", "zh"));
+  await page.goto("/app#/account/settings/account");
+  const modal = page.getByTestId("settings-modal");
+  const rail = modal.getByRole("navigation", { name: "设置", exact: true });
+  const list = rail.getByRole("tablist");
+  const account = rail.getByTestId("settings-tab-account");
+  const credits = rail.getByTestId("settings-tab-credits");
+  await expect(list).toHaveAttribute("aria-orientation", "vertical");
+  await account.focus();
+  await page.keyboard.press("ArrowDown");
+  await expect(credits).toBeFocused();
+  await expect(credits).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("ArrowUp");
+  await expect(account).toBeFocused();
+  await expect(account).toHaveAttribute("aria-selected", "true");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(list).toHaveAttribute("aria-orientation", "horizontal");
+  await page.keyboard.press("ArrowRight");
+  await expect(credits).toBeFocused();
+  await expect(credits).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("ArrowLeft");
+  await expect(account).toBeFocused();
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await expect(list).toHaveAttribute("aria-orientation", "vertical");
+  await page.keyboard.press("ArrowDown");
+  await expect(credits).toBeFocused();
+  await expect(credits).toHaveAttribute("aria-selected", "true");
+});
+
 test("settings keeps Skills and later destinations visible through compact navigation and resize", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.addInitScript(() => localStorage.setItem("kokoro.locale", "zh"));

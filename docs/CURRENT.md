@@ -1,3 +1,9 @@
+## 2026-11-03 B-14：设置导航键盘方向随实际布局（局部候选）
+
+真实桌面导航为 column、Radix 却固定 horizontal，按↓不切换；新增原浏览器旅程先失败。现由原 rail ResizeObserver/reveal 读取实际 CSS 排列，回报同一 Tabs root 的 orientation，不复制媒体断点、不换导航实例。桌面上下键、390px左右键、回桌面选择/焦点通过6.1秒；原更多菜单、可见项、缩放、回焦与侧栏旅程通过11.6秒。候选三个生产文件按原字节校验后覆盖，仍属于有登记SHA的开发overlay，正常3314未切。
+
+设置组件最终167项通过（69.76秒），受影响ESLint与完整非增量tsc通过，六路径冻结只读审查APPROVE。首跑165过/2失败、隔离1过/1失败的原模型用例在异步目录ready前点击disabled；仅补等待enabled，未放宽断言/时限。首次浏览器观察器错选嵌套tablist、旧auth状态未恢复以及私有setup载入两份Playwright的原失败保留；改观察器范围/原生登录刷新/复用同一安装后通过，未改产品认证。完整owner工程门、全TaskB及Manus视觉对照未据此声明完成。
+
 ## 2026-11-03 B-11：异步登录后首条请求丢失模型偏好（本地候选）
 
 已复现保存模型偏好但首条实际请求 model 缺失：hook 初建时绑定未准入 subject，可信 subject 后续到达时，selection 仍停在原 scope。现沿既有 selectionScope 重读本地偏好，原可信准入、目录校验、代际与撤权围栏不变，不修改发送协议。新增真实 engine 首发回归先失败，修复后 Composer 两文件 84 项通过；仅测试参数 exactOptionalPropertyTypes 修正后新用例再通过。Node22 定向 ESLint 和完整非增量 tsc 通过；完整工程门未重跑，未据此声明可合并。

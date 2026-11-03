@@ -20,6 +20,7 @@ type SettingsNavigationRailProps = {
   selectedTab: SettingsTab;
   activeTabRef: RefObject<HTMLButtonElement | null>;
   onSelectTab: (tab: SettingsTab) => void;
+  onOrientationChange: (orientation: "horizontal" | "vertical") => void;
   moreLabel: string;
   unavailableId: string;
   isFiltered: boolean;
@@ -36,6 +37,7 @@ export function SettingsNavigationRail({
   selectedTab,
   activeTabRef,
   onSelectTab,
+  onOrientationChange,
   moreLabel,
   unavailableId,
   isFiltered,
@@ -70,6 +72,7 @@ export function SettingsNavigationRail({
     let settledFrame: number | undefined;
     const reveal = (): void => {
       const horizontal = window.getComputedStyle(list).flexDirection === "row";
+      onOrientationChange(horizontal ? "horizontal" : "vertical");
       // Changing orientation can retain a small scroll offset on the now
       // hidden axis, clipping the active label after desktop → compact.
       if (horizontal) list.scrollTop = 0;
@@ -149,7 +152,7 @@ export function SettingsNavigationRail({
       if (frame !== undefined) window.cancelAnimationFrame(frame);
       if (settledFrame !== undefined) window.cancelAnimationFrame(settledFrame);
     };
-  }, [activeTab, activeTabRef, selectedTab]);
+  }, [activeTab, activeTabRef, selectedTab, onOrientationChange]);
 
   return (
     <div className={styles.tabRail}>

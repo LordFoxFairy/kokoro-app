@@ -1,3 +1,5 @@
+设置导航的原有 ResizeObserver/可见项显露流程同时报告实际 CSS 排列方向：桌面竖栏使用上下键，窄屏横栏使用左右键，保持同一 Tabs 选择、原焦点和溢出菜单，不复制 CSS 断点。
+
 默认模型目录沿现 ProjectReadBoundary 的 preview／admitted／subject／generation 退休；缺正式身份不请求，换代取消原 signal／计时器并清退目录与旧 Select portal，重新准入 fresh GET，迟到结果和旧选项回调不写偏好。设备级模型草稿、localStorage 与保存失败重试语义保持。
 
 知识编辑与删除确认弹窗不显示上一笔操作遗留的“已保存”；成功提示留在已回读的列表，弹窗内继续显示当前失败、未确认与冲突恢复。

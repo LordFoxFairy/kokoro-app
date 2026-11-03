@@ -1115,7 +1115,7 @@ describe("SettingsModal 设置中心模态", () => {
 
     expect(screen.getByRole("tablist")).toHaveAttribute(
       "aria-orientation",
-      "horizontal",
+      "vertical",
     );
     expect(screen.getByTestId("settings-tab-mcp")).toBeVisible();
     expect(screen.getByTestId("settings-tab-skills")).toBeVisible();
@@ -1229,6 +1229,7 @@ describe("R255 preset retirement: Settings model-only preferences", () => {
     expect(screen.getByTestId("settings-default-model")).toHaveTextContent(
       "跟随空间缺省",
     );
+    await waitFor(() => expect(screen.getByTestId("settings-default-model")).toBeEnabled());
     fireEvent.click(screen.getByTestId("settings-default-model"));
     fireEvent.click(await screen.findByRole("option", { name: "opus" }));
     expect(screen.getByTestId("settings-saved")).toBeInTheDocument();
@@ -1759,7 +1760,8 @@ describe("SET25 existing chat model preference reliability", () => {
     const spy = modelCatalog(request);
     try {
       const mounted = render(drawModelSettings(admittedModelBoundary));
-      fireEvent.click(await screen.findByTestId("settings-default-model"));
+      await waitFor(() => expect(screen.getByTestId("settings-default-model")).toBeEnabled());
+      fireEvent.click(screen.getByTestId("settings-default-model"));
       const oldOption = await screen.findByRole("option", { name: "opus" });
       mounted.rerender(drawModelSettings(changedModelBoundary(change)));
       expect(screen.queryByRole("option", { name: "opus" })).toBeNull();
